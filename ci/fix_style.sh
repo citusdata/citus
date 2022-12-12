@@ -16,3 +16,4 @@ ci/disallow_hash_comments_in_spec_files.sh
 ci/disallow_long_changelog_entries.sh
 ci/normalize_expected.sh
 ci/fix_gitignore.sh
+ci/printstack_trace.sh

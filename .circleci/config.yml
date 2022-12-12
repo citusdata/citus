@@ -6,7 +6,7 @@ orbs:
 parameters:
   image_suffix:
     type: string
-    default: '-vcbba174'
+    default: '-v7e4468f'
   pg13_version:
     type: string
     default: '13.9'
@@ -166,13 +166,9 @@ jobs:
             fi
           when: on_fail
       - run:
-          name: 'Copy coredumps'
+          name: 'Print stack traces'
           command: |
-            mkdir -p /tmp/core_dumps
-            core_files=( $(find . -type f -regex .*core.*\d*.*postgres) )
-            if [ ${#core_files[@]} -gt 0 ]; then
-                cp "${core_files[@]}" /tmp/core_dumps
-            fi
+            ./ci/print_stack_trace.sh
           when: on_fail
       - run:
           name: 'Copy pg_upgrade logs for newData dir'
@@ -185,9 +181,6 @@ jobs:
       - store_artifacts:
           name: 'Save regressions'
           path: src/test/regress/regression.diffs
-      - store_artifacts:
-          name: 'Save core dumps'
-          path: /tmp/core_dumps
       - store_artifacts:
           name: 'Save pg_upgrade logs for newData dir'
           path: /tmp/pg_upgrade_newData_logs
@@ -270,17 +263,10 @@ jobs:
             find src/test/regress/tmp_citus_test/ -name "logfile_*" -exec cp -t src/test/regress/tmp_citus_test/logfiles/ {} +
           when: on_fail
       - run:
-          name: 'Copy coredumps'
+          name: 'Print stack traces'
           command: |
-            mkdir -p /tmp/core_dumps
-            core_files=( $(find . -type f -regex .*core.*\d*.*postgres) )
-            if [ ${#core_files[@]} -gt 0 ]; then
-                cp "${core_files[@]}" /tmp/core_dumps
-            fi
+            ./ci/print_stack_trace.sh
           when: on_fail
-      - store_artifacts:
-          name: 'Save core dumps'
-          path: /tmp/core_dumps
       - store_artifacts:
           name: 'Save logfiles'
           path: src/test/regress/tmp_citus_test/logfiles
@@ -364,20 +350,13 @@ jobs:
             fi
           when: on_fail
       - run:
-          name: 'Copy coredumps'
+          name: 'Print stack traces'
           command: |
-            mkdir -p /tmp/core_dumps
-            core_files=( $(find . -type f -regex .*core.*\d*.*postgres) )
-            if [ ${#core_files[@]} -gt 0 ]; then
-                cp "${core_files[@]}" /tmp/core_dumps
-            fi
+            ./ci/print_stack_trace.sh
           when: on_fail
       - store_artifacts:
           name: 'Save regressions'
           path: src/test/regress/regression.diffs
-      - store_artifacts:
-          name: 'Save core dumps'
-          path: /tmp/core_dumps
       - codecov/upload:
           flags: 'test_<< parameters.pg_major >>,upgrade'
       - run:
@@ -443,13 +422,9 @@ jobs:
             fi
           when: on_fail
       - run:
-          name: 'Copy coredumps'
+          name: 'Print stack traces'
           command: |
-            mkdir -p /tmp/core_dumps
-            core_files=( $(find . -type f -regex .*core.*\d*.*postgres) )
-            if [ ${#core_files[@]} -gt 0 ]; then
-                cp "${core_files[@]}" /tmp/core_dumps
-            fi
+            ./ci/print_stack_trace.sh
           when: on_fail
       - store_artifacts:
           name: 'Save regressions'
@@ -460,9 +435,6 @@ jobs:
       - store_artifacts:
           name: 'Save results'
           path: src/test/regress/results/
-      - store_artifacts:
-          name: 'Save core dumps'
-          path: /tmp/core_dumps
       - store_artifacts:
           name: 'Save coordinator log'
           path: src/test/regress/tmp_check/master/log
@@ -534,20 +506,13 @@ jobs:
             gosu circleci make -C src/test/<< parameters.suite >> << parameters.make >>
           no_output_timeout: 2m
       - run:
-          name: 'Copy coredumps'
+          name: 'Print stack traces'
           command: |
-            mkdir -p /tmp/core_dumps
-            core_files=( $(find . -type f -regex .*core.*\d*.*postgres) )
-            if [ ${#core_files[@]} -gt 0 ]; then
-                cp "${core_files[@]}" /tmp/core_dumps
-            fi
+            ./ci/print_stack_trace.sh
           when: on_fail
       - store_artifacts:
           name: 'Save tap logs'
           path: /home/circleci/project/src/test/<< parameters.suite >>/tmp_check/log
-      - store_artifacts:
-          name: 'Save core dumps'
-          path: /tmp/core_dumps
       - codecov/upload:
           flags: 'test_<< parameters.pg_major >>,tap_<< parameters.suite >>_<< parameters.make >>'
           when: always
@@ -697,13 +662,9 @@ jobs:
             fi
           when: on_fail
       - run:
-          name: 'Copy coredumps'
+          name: 'Print stack traces'
           command: |
-            mkdir -p /tmp/core_dumps
-            core_files=( $(find . -type f -regex .*core.*\d*.*postgres) )
-            if [ ${#core_files[@]} -gt 0 ]; then
-                cp "${core_files[@]}" /tmp/core_dumps
-            fi
+            ./ci/print_stack_trace.sh
           when: on_fail
       - store_artifacts:
           name: 'Save regressions'
@@ -714,9 +675,6 @@ jobs:
       - store_artifacts:
           name: 'Save results'
           path: src/test/regress/results/
-      - store_artifacts:
-          name: 'Save core dumps'
-          path: /tmp/core_dumps
       - store_artifacts:
           name: 'Save coordinator log'
           path: src/test/regress/tmp_check/master/log
