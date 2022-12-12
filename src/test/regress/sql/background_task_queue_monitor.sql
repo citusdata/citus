@@ -4,11 +4,41 @@ SET citus.shard_count TO 4;
 SET citus.shard_replication_factor TO 1;
 SET citus.next_shard_id TO 3536400;
 
+-- reset sequence values
+ALTER SEQUENCE pg_dist_background_job_job_id_seq RESTART 1450000;
+ALTER SEQUENCE pg_dist_background_task_task_id_seq RESTART 1450000;
+
+-- create helper procedure to wait until given task is retried or timeout occurs
+CREATE OR REPLACE PROCEDURE citus_wait_task_until_retried(taskid bigint)
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    retried boolean := false;
+    loop_count int := 0;
+BEGIN
+    WHILE retried = false and loop_count < 20
+    LOOP
+        SELECT (retry_count IS NOT NULL) INTO retried FROM pg_dist_background_task WHERE task_id = taskid;
+        PERFORM pg_sleep(1);
+        loop_count := loop_count + 1;
+        COMMIT;
+    END LOOP;
+
+    -- timeout if the task is not retried in 20 sec
+    IF retried = false
+    THEN
+        RAISE WARNING 'Timeout while waiting for retrying task:%', taskid;
+    END IF;
+END;
+$$;
+--
+
 ALTER SYSTEM SET citus.background_task_queue_interval TO '1s';
 SELECT pg_reload_conf();
 
 CREATE TABLE results (a int);
 
+-- TEST1
 -- simple job that inserts 1 into results to show that query runs
 SELECT a FROM results WHERE a = 1; -- verify result is not in there
 INSERT INTO pg_dist_background_job (job_type, description) VALUES ('test_job', 'simple test to verify background execution') RETURNING job_id \gset
@@ -16,20 +46,7 @@ INSERT INTO pg_dist_background_task (job_id, command) VALUES (:job_id, $job$ INS
 SELECT citus_job_wait(:job_id); -- wait for the job to be finished
 SELECT a FROM results WHERE a = 1; -- verify result is there
 
--- cancel a scheduled job
-INSERT INTO pg_dist_background_job (job_type, description) VALUES ('test_job','cancel a scheduled job') RETURNING job_id \gset
-INSERT INTO pg_dist_background_task (job_id, command) VALUES (:job_id, $job$ SELECT pg_sleep(5); $job$) RETURNING task_id \gset
-
-SELECT citus_job_cancel(:job_id);
-SELECT citus_job_wait(:job_id);
-
--- verify we get an error when waiting for a job to reach a specific status while it is already in a different terminal status
-SELECT citus_job_wait(:job_id, desired_status => 'finished');
-
--- show that the status has been cancelled
-SELECT state, NOT(started_at IS NULL) AS did_start FROM pg_dist_background_job WHERE job_id = :job_id;
-SELECT status, NOT(message = '') AS did_start FROM pg_dist_background_task WHERE job_id = :job_id ORDER BY task_id ASC;
-
+-- TEST2
 -- cancel a running job
 INSERT INTO pg_dist_background_job (job_type, description) VALUES ('test_job','cancelling a task after it started') RETURNING job_id \gset
 INSERT INTO pg_dist_background_task (job_id, command) VALUES (:job_id, $job$ SELECT pg_sleep(5); $job$) RETURNING task_id \gset
@@ -42,14 +59,15 @@ SELECT citus_job_wait(:job_id);
 SELECT state, NOT(started_at IS NULL) AS did_start FROM pg_dist_background_job WHERE job_id = :job_id;
 SELECT status, NOT(message = '') AS did_start FROM pg_dist_background_task WHERE job_id = :job_id ORDER BY task_id ASC;
 
+-- TEST3
 -- test a failing task becomes runnable in the future again
 -- we cannot fully test the backoff strategy currently as it is hard coded to take about 50 minutes.
 INSERT INTO pg_dist_background_job (job_type, description) VALUES ('test_job', 'failure test due to division by zero') RETURNING job_id \gset
 INSERT INTO pg_dist_background_task (job_id, command) VALUES (:job_id, $job$ SELECT 1/0; $job$) RETURNING task_id \gset
 
 SELECT citus_job_wait(:job_id, desired_status => 'running');
-SELECT pg_sleep(.1); -- make sure it has time to error after it started running
 
+CALL citus_wait_task_until_retried(:task_id); -- shows that we increased retry count for task after failure
 SELECT status, pid, retry_count, NOT(message = '') AS has_message, (not_before > now()) AS scheduled_into_the_future FROM pg_dist_background_task WHERE job_id = :job_id ORDER BY task_id ASC;
 
 -- test cancelling a failed/retrying job
@@ -59,7 +77,9 @@ SELECT citus_job_wait(:job_id);
 SELECT state, NOT(started_at IS NULL) AS did_start FROM pg_dist_background_job WHERE job_id = :job_id;
 SELECT status, NOT(message = '') AS did_start FROM pg_dist_background_task WHERE job_id = :job_id ORDER BY task_id ASC;
 
--- test running two dependant tasks
+
+-- TEST4
+-- test running two dependent tasks
 TRUNCATE TABLE results;
 BEGIN;
 INSERT INTO pg_dist_background_job (job_type, description) VALUES ('test_job', 'simple test to verify background execution') RETURNING job_id \gset
@@ -73,7 +93,8 @@ COMMIT;
 SELECT citus_job_wait(:job_id); -- wait for the job to be finished
 SELECT a FROM results;
 
--- test running two dependant tasks, with a failing task that we cancel
+-- TEST5
+-- test running two dependent tasks, with a failing task that we cancel
 TRUNCATE TABLE results;
 BEGIN;
 INSERT INTO pg_dist_background_job (job_type, description) VALUES ('test_job', 'simple test to verify background execution') RETURNING job_id \gset
@@ -85,13 +106,14 @@ INSERT INTO pg_dist_background_task_depend (job_id, task_id, depends_on) VALUES 
 COMMIT;
 
 SELECT citus_job_wait(:job_id, desired_status => 'running'); -- wait for the job to be running, and possibly hitting a failure
-SELECT pg_sleep(.1); -- improve chances of hitting the failure
+CALL citus_wait_task_until_retried(:task_id2); -- shows that we increased retry count for task after failure
 
 SELECT citus_job_cancel(:job_id);
 SELECT citus_job_wait(:job_id); -- wait for the job to be cancelled
 SELECT state, NOT(started_at IS NULL) AS did_start FROM pg_dist_background_job WHERE job_id = :job_id;
 SELECT status, NOT(message = '') AS did_start FROM pg_dist_background_task WHERE job_id = :job_id ORDER BY task_id ASC;
 
+-- TEST6
 -- verify that we do not allow parallel task executors more than citus.max_background_task_executors(4 by default)
 BEGIN;
 INSERT INTO pg_dist_background_job (job_type, description) VALUES ('test_job', 'simple test to verify max parallel background execution') RETURNING job_id AS job_id1 \gset
@@ -104,7 +126,11 @@ INSERT INTO pg_dist_background_job (job_type, description) VALUES ('test_job', '
 INSERT INTO pg_dist_background_task (job_id, command) VALUES (:job_id3, $job$ SELECT pg_sleep(5); $job$) RETURNING task_id AS task_id5 \gset
 COMMIT;
 
-SELECT pg_sleep(2); -- we assume this is enough time for all tasks to be in running status except the last one due to parallel worker limit
+SELECT citus_task_wait(:task_id1, desired_status => 'running');
+SELECT citus_task_wait(:task_id2, desired_status => 'running');
+SELECT citus_task_wait(:task_id3, desired_status => 'running');
+SELECT citus_task_wait(:task_id4, desired_status => 'running');
+SELECT citus_task_wait(:task_id5, desired_status => 'runnable');
 
 SELECT job_id, task_id, status FROM pg_dist_background_task
     WHERE task_id IN (:task_id1, :task_id2, :task_id3, :task_id4, :task_id5)
@@ -125,7 +151,7 @@ SELECT job_id, task_id, status FROM pg_dist_background_task
     WHERE task_id IN (:task_id1, :task_id2, :task_id3, :task_id4, :task_id5)
     ORDER BY job_id, task_id;  -- show that multiple cancels worked
 
-
+-- TEST7
 -- verify that a task, previously not started due to lack of workers, is executed after we increase max worker count
 BEGIN;
 INSERT INTO pg_dist_background_job (job_type, description) VALUES ('test_job', 'simple test to verify max parallel background execution') RETURNING job_id AS job_id1 \gset
@@ -138,7 +164,11 @@ INSERT INTO pg_dist_background_job (job_type, description) VALUES ('test_job', '
 INSERT INTO pg_dist_background_task (job_id, command) VALUES (:job_id3, $job$ SELECT pg_sleep(5); $job$) RETURNING task_id AS task_id5 \gset
 COMMIT;
 
-SELECT pg_sleep(2); -- we assume this is enough time for all tasks to be in running status except the last one due to parallel worker limit
+SELECT citus_task_wait(:task_id1, desired_status => 'running');
+SELECT citus_task_wait(:task_id2, desired_status => 'running');
+SELECT citus_task_wait(:task_id3, desired_status => 'running');
+SELECT citus_task_wait(:task_id4, desired_status => 'running');
+SELECT citus_task_wait(:task_id5, desired_status => 'runnable');
 
 SELECT task_id, status FROM pg_dist_background_task
     WHERE task_id IN (:task_id1, :task_id2, :task_id3, :task_id4, :task_id5)
@@ -162,12 +192,13 @@ SELECT task_id, status FROM pg_dist_background_task
     WHERE task_id IN (:task_id1, :task_id2, :task_id3, :task_id4, :task_id5)
     ORDER BY task_id; -- show that all tasks are cancelled
 
+-- TEST8
 -- verify that upon termination signal, all tasks fail and retry policy sets their status back to runnable
 BEGIN;
 INSERT INTO pg_dist_background_job (job_type, description) VALUES ('test_job', 'simple test to verify termination on monitor') RETURNING job_id AS job_id1 \gset
-INSERT INTO pg_dist_background_task (job_id, command) VALUES (:job_id1, $job$ SELECT pg_sleep(500); $job$) RETURNING task_id AS task_id1 \gset
+INSERT INTO pg_dist_background_task (job_id, command) VALUES (:job_id1, $job$ SELECT pg_sleep(5); $job$) RETURNING task_id AS task_id1 \gset
 INSERT INTO pg_dist_background_job (job_type, description) VALUES ('test_job', 'simple test to verify termination on monitor') RETURNING job_id AS job_id2 \gset
-INSERT INTO pg_dist_background_task (job_id, command) VALUES (:job_id2, $job$ SELECT pg_sleep(500); $job$) RETURNING task_id AS task_id2 \gset
+INSERT INTO pg_dist_background_task (job_id, command) VALUES (:job_id2, $job$ SELECT pg_sleep(5); $job$) RETURNING task_id AS task_id2 \gset
 COMMIT;
 
 SELECT citus_job_wait(:job_id1, desired_status => 'running');
@@ -181,7 +212,8 @@ SELECT task_id, status FROM pg_dist_background_task
 SELECT pid AS monitor_pid FROM pg_stat_activity WHERE application_name ~ 'task queue monitor' \gset
 SELECT pg_terminate_backend(:monitor_pid); -- terminate monitor process
 
-SELECT pg_sleep(2); -- wait enough to show that tasks are terminated
+CALL citus_wait_task_until_retried(:task_id1); -- shows that we increased retry count for task after failure
+CALL citus_wait_task_until_retried(:task_id2); -- shows that we increased retry count for task after failure
 
 SELECT task_id, status, retry_count, message FROM pg_dist_background_task
     WHERE task_id IN (:task_id1, :task_id2)
@@ -196,12 +228,13 @@ SELECT task_id, status FROM pg_dist_background_task
     WHERE task_id IN (:task_id1, :task_id2)
     ORDER BY task_id; -- show that all tasks are cancelled
 
+-- TEST9
 -- verify that upon cancellation signal, all tasks are cancelled
 BEGIN;
 INSERT INTO pg_dist_background_job (job_type, description) VALUES ('test_job', 'simple test to verify cancellation on monitor') RETURNING job_id AS job_id1 \gset
-INSERT INTO pg_dist_background_task (job_id, command) VALUES (:job_id1, $job$ SELECT pg_sleep(500); $job$) RETURNING task_id AS task_id1 \gset
+INSERT INTO pg_dist_background_task (job_id, command) VALUES (:job_id1, $job$ SELECT pg_sleep(5); $job$) RETURNING task_id AS task_id1 \gset
 INSERT INTO pg_dist_background_job (job_type, description) VALUES ('test_job', 'simple test to verify cancellation on monitor') RETURNING job_id AS job_id2 \gset
-INSERT INTO pg_dist_background_task (job_id, command) VALUES (:job_id2, $job$ SELECT pg_sleep(500); $job$) RETURNING task_id AS task_id2 \gset
+INSERT INTO pg_dist_background_task (job_id, command) VALUES (:job_id2, $job$ SELECT pg_sleep(5); $job$) RETURNING task_id AS task_id2 \gset
 COMMIT;
 
 SELECT citus_job_wait(:job_id1, desired_status => 'running');
@@ -215,7 +248,8 @@ SELECT task_id, status FROM pg_dist_background_task
 SELECT pid AS monitor_pid FROM pg_stat_activity WHERE application_name ~ 'task queue monitor' \gset
 SELECT pg_cancel_backend(:monitor_pid); -- cancel monitor process
 
-SELECT pg_sleep(2); -- wait enough to show that tasks are cancelled
+SELECT citus_task_wait(:task_id1, desired_status => 'cancelled'); -- shows that we cancelled the task
+SELECT citus_task_wait(:task_id2, desired_status => 'cancelled'); -- shows that we cancelled the task
 
 SELECT citus_job_wait(:job_id1);
 SELECT citus_job_wait(:job_id2);
@@ -224,10 +258,11 @@ SELECT task_id, status FROM pg_dist_background_task
     WHERE task_id IN (:task_id1, :task_id2)
     ORDER BY task_id; -- show that all tasks are cancelled
 
+-- TEST10
 -- verify that task is not starved by currently long running task
 BEGIN;
 INSERT INTO pg_dist_background_job (job_type, description) VALUES ('test_job', 'simple test to verify task execution starvation') RETURNING job_id AS job_id1 \gset
-INSERT INTO pg_dist_background_task (job_id, command) VALUES (:job_id1, $job$ SELECT pg_sleep(5000); $job$) RETURNING task_id AS task_id1 \gset
+INSERT INTO pg_dist_background_task (job_id, command) VALUES (:job_id1, $job$ SELECT pg_sleep(5); $job$) RETURNING task_id AS task_id1 \gset
 INSERT INTO pg_dist_background_job (job_type, description) VALUES ('test_job', 'simple test to verify task execution starvation') RETURNING job_id AS job_id2 \gset
 INSERT INTO pg_dist_background_task (job_id, command) VALUES (:job_id2, $job$ SELECT 1; $job$) RETURNING task_id AS task_id2 \gset
 COMMIT;
@@ -245,7 +280,11 @@ SELECT job_id, task_id, status FROM pg_dist_background_task
     ORDER BY job_id, task_id;  -- show that task is cancelled
 
 SET client_min_messages TO WARNING;
+TRUNCATE pg_dist_background_job CASCADE;
+TRUNCATE pg_dist_background_task CASCADE;
+TRUNCATE pg_dist_background_task_depend;
 DROP SCHEMA background_task_queue_monitor CASCADE;
 
 ALTER SYSTEM RESET citus.background_task_queue_interval;
+ALTER SYSTEM RESET citus.max_background_task_executors;
 SELECT pg_reload_conf();
