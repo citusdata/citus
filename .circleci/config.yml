@@ -641,7 +641,7 @@ jobs:
       - run:
           name: 'Detect regression tests need to be ran'
           command: |
-            skip = << parameters.skip >>
+            skip=<< parameters.skip >>
             if [ "$skip" = true ] then
                 echo "Skipping flaky test detection."
                 circleci-agent step halt
