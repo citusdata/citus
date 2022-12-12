@@ -478,6 +478,11 @@ AlterTableSetAccessMethod(TableConversionParameters *params)
 		ereport(ERROR, (errmsg("you cannot alter access method of a partitioned table")));
 	}
 
+	if ( get_rel_relkind(params->relationId) == RELKIND_VIEW)
+	{
+		ereport(ERROR, (errmsg("you cannot alter access method of a view")));
+	}
+
 	if (PartitionTable(params->relationId) &&
 		IsCitusTableType(params->relationId, DISTRIBUTED_TABLE))
 	{
