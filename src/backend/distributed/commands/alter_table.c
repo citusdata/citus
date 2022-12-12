@@ -57,6 +57,7 @@
 #include "distributed/relation_access_tracking.h"
 #include "distributed/shared_library_init.h"
 #include "distributed/shard_utils.h"
+#include "distributed/replication_origin_session_utils.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/worker_transaction.h"
 #include "executor/spi.h"
@@ -402,7 +403,10 @@ UndistributeTable(TableConversionParameters *params)
 	params->conversionType = UNDISTRIBUTE_TABLE;
 	params->shardCountIsNull = true;
 	TableConversionState *con = CreateTableConversion(params);
-	return ConvertTable(con);
+	ReplicationOriginSessionSetup(NULL);
+	TableConversionReturn *conv = ConvertTable(con);
+	ReplicationOriginSessionReset(NULL);
+	return conv;
 }
 
 
@@ -441,7 +445,11 @@ AlterDistributedTable(TableConversionParameters *params)
 		ereport(DEBUG1, (errmsg("setting multi shard modify mode to sequential")));
 		SetLocalMultiShardModifyModeToSequential();
 	}
-	return ConvertTable(con);
+	ReplicationOriginSessionSetup(NULL);
+	TableConversionReturn *conv = ConvertTable(con);
+	ReplicationOriginSessionReset(NULL);
+
+	return conv;
 }
 
 
