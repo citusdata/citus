@@ -1613,6 +1613,8 @@ CitusBackgroundJobExecutorErrorCallback(void *arg)
 void
 CitusBackgroundTaskExecutor(Datum main_arg)
 {
+	/* handles SIGTERM similar to backends */
+	pqsignal(SIGTERM, die);
 	BackgroundWorkerUnblockSignals();
 
 	/* Set up a dynamic shared memory segment. */

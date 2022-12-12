@@ -454,13 +454,13 @@ SELECT pg_sleep(2); -- wait enough to show that tasks are terminated
 SELECT task_id, status, retry_count, message FROM pg_dist_background_task
     WHERE task_id IN (:task_id1, :task_id2)
     ORDER BY task_id; -- show that all tasks are runnable by retry policy after termination signal
- task_id |  status  | retry_count |                                                                  message
+ task_id |  status  | retry_count |                                    message
 ---------------------------------------------------------------------
-      21 | runnable |           1 | FATAL: terminating background worker "Citus Background Task Queue Executor: regression/postgres for (13/21)" due to administrator command+
-         |          |             | CONTEXT: Citus Background Task Queue Executor: regression/postgres for (13/21)                                                           +
+      21 | runnable |           1 | FATAL: terminating connection due to administrator command                    +
+         |          |             | CONTEXT: Citus Background Task Queue Executor: regression/postgres for (13/21)+
          |          |             |
-      22 | runnable |           1 | FATAL: terminating background worker "Citus Background Task Queue Executor: regression/postgres for (14/22)" due to administrator command+
-         |          |             | CONTEXT: Citus Background Task Queue Executor: regression/postgres for (14/22)                                                           +
+      22 | runnable |           1 | FATAL: terminating connection due to administrator command                    +
+         |          |             | CONTEXT: Citus Background Task Queue Executor: regression/postgres for (14/22)+
          |          |             |
 (2 rows)
 
