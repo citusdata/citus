@@ -13,7 +13,7 @@ ALTER TABLE citus.pg_dist_shardgroup SET SCHEMA pg_catalog;
 CREATE SEQUENCE citus.pg_dist_shardgroupid_seq
     MINVALUE 100000 -- TO BO DECIDED
     NO CYCLE;
-ALTER SEQUENCE  citus.pg_dist_shardgroupid_seq SET SCHEMA pg_catalog;
+ALTER SEQUENCE citus.pg_dist_shardgroupid_seq SET SCHEMA pg_catalog;
 
 INSERT INTO pg_catalog.pg_dist_shardgroup
      SELECT min(shardid) as shardgroupid,
