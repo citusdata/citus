@@ -257,6 +257,7 @@ extern List * InsertShardPlacementRows(Oid relationId, int64 shardId,
 									   List *workerNodeList, int workerStartIndex,
 									   int replicationFactor);
 extern uint64 UpdateShardStatistics(int64 shardId);
+extern char * TextToSQLLiteral(text *value);
 extern void CreateShardsWithRoundRobinPolicy(Oid distributedTableId, int32 shardCount,
 											 int32 replicationFactor,
 											 bool useExclusiveConnections);

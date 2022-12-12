@@ -68,7 +68,7 @@ master_create_worker_shards(PG_FUNCTION_ARGS)
 }
 
 
-static char *
+char *
 TextToSQLLiteral(text *value)
 {
 	if (!value)

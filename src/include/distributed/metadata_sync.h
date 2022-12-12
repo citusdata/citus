@@ -77,6 +77,7 @@ extern char * DistributionDeleteMetadataCommand(Oid relationId);
 extern char * TableOwnerResetCommand(Oid distributedRelationId);
 extern char * NodeListInsertCommand(List *workerNodeList);
 extern List * ShardListInsertCommand(List *shardIntervalList);
+extern const char * ShardgroupInsertCommand(List *shardgroups);
 extern List * ShardDeleteCommandList(ShardInterval *shardInterval);
 extern char * NodeDeleteCommand(uint32 nodeId);
 extern char * NodeStateUpdateCommand(uint32 nodeId, bool isActive);

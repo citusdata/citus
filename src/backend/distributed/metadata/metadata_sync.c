@@ -1386,6 +1386,44 @@ ShardListInsertCommand(List *shardIntervalList)
 }
 
 
+const char *
+ShardgroupInsertCommand(List *shardgroups)
+{
+	StringInfoData command = { 0 };
+	initStringInfo(&command);
+
+	appendStringInfoString(&command,
+						   "WITH shardgroup_data(shardgroupid, colocationid, "
+						   "shardminvalue, shardmaxvalue) AS (VALUES ");
+
+	Shardgroup *shardgroup = NULL;
+	bool firstShardGroup = true;
+	foreach_ptr(shardgroup, shardgroups)
+	{
+		if (!firstShardGroup)
+		{
+			appendStringInfoString(&command, ", ");
+		}
+		firstShardGroup = false;
+
+		appendStringInfo(&command, "(%ld, %d, %s, %s)",
+						 shardgroup->shardgroupId,
+						 shardgroup->colocationId,
+						 TextToSQLLiteral(IntegerToText(
+											  DatumGetInt32(shardgroup->minShardValue))),
+						 TextToSQLLiteral(IntegerToText(
+											  DatumGetInt32(shardgroup->maxShardValue))));
+	}
+	appendStringInfo(&command, ") ");
+
+	appendStringInfo(&command,
+					 "SELECT citus_internal_add_shardgroup_metadata(shardgroupid, "
+					 "colocationid, shardminvalue, shardmaxvalue) FROM shardgroup_data;");
+
+	return command.data;
+}
+
+
 /*
  * ShardListDeleteCommand generates a command list that can be executed to delete
  * shard and shard placement metadata for the given shard.

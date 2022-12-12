@@ -1207,7 +1207,11 @@ InsertSplitChildrenShardgroupMetadata(List *newShardgroups)
 			IntegerToText(DatumGetInt32(shardgroup->maxShardValue)));
 	}
 
-	/* TODO sync new shardgroups to workers */
+	if (/* TODO check if shardgroup needs to propagate */ true)
+	{
+		const char *command = ShardgroupInsertCommand(newShardgroups);
+		SendCommandToWorkersWithMetadata(command);
+	}
 }
 
 
