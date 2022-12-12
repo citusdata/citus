@@ -271,22 +271,20 @@ BEGIN;
   select alter_table_set_access_method('events', 'columnar');
 COMMIT;
 
-SET client_min_messages TO WARNING;
-DROP SCHEMA alter_table_set_access_method CASCADE;
-SELECT 1 FROM master_remove_node('localhost', :master_port);
-
---test failure when a view is being tried to be altered to columnar
-CREATE SCHEMA view_access_method_test;
-SET search_path TO view_access_method_test;
-
 --create the view to test alter table set access method on it
 CREATE TABLE view_test_table (id int, val int, flag bool, kind int);
-SELECT create_distributed_table('view_access_method_test.view_test_table','id');
+SELECT create_distributed_table('view_test_table','id');
 INSERT INTO view_test_table VALUES (1, 1, true, 99), (2, 2, false, 99), (2, 3, true, 88);
 CREATE VIEW view_test_view AS SELECT * FROM view_test_table;
 
 -- error out when attempting to set access method of a view.
 select alter_table_set_access_method('view_test_view','columnar');
 
---clean environment
-DROP SCHEMA view_access_method_test CASCADE;
+SET client_min_messages TO WARNING;
+DROP SCHEMA alter_table_set_access_method CASCADE;
+SELECT 1 FROM master_remove_node('localhost', :master_port);
+
+
+
+
+
