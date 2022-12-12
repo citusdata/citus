@@ -1121,12 +1121,7 @@ CreateTableConversion(TableConversionParameters *params)
 												relation->rd_rel->relam));
 		if (!HeapTupleIsValid(amTuple))
 		{
-			bool isView = get_rel_relkind(con->relationId) == RELKIND_VIEW;
-			if ((strcmp(params->accessMethod ,"columnar") == 0) && isView){
-				ereport(ERROR, (errmsg("Views are not supported for columnar type.")));
-			}
-			else
-				ereport(ERROR, (errmsg("cache lookup failed for access method %d",
+			ereport(ERROR, (errmsg("cache lookup failed for access method %d",
 								   relation->rd_rel->relam)));
 		}
 		Form_pg_am amForm = (Form_pg_am) GETSTRUCT(amTuple);
