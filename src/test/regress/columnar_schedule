@@ -36,4 +36,5 @@ test: columnar_transactions
 test: columnar_matview
 test: columnar_memory
 test: columnar_citus_integration
+test: columnar_alter_table_set_access_method_view
 test: check_mx
