@@ -64,7 +64,6 @@
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
 #include "utils/syscache.h"
-#include "string.h"
 
 
 /* Table Conversion Types */
