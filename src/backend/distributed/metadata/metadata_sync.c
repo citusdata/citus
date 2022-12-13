@@ -1409,10 +1409,10 @@ ShardgroupInsertCommand(List *shardgroups)
 		appendStringInfo(&command, "(%ld, %d, %s, %s)",
 						 shardgroup->shardgroupId,
 						 shardgroup->colocationId,
-						 TextToSQLLiteral(IntegerToText(
-											  DatumGetInt32(shardgroup->minShardValue))),
-						 TextToSQLLiteral(IntegerToText(
-											  DatumGetInt32(shardgroup->maxShardValue))));
+						 shardgroup->minShardValue == NULL ? "NULL" : quote_literal_cstr(
+							 shardgroup->minShardValue),
+						 shardgroup->maxShardValue == NULL ? "NULL" : quote_literal_cstr(
+							 shardgroup->maxShardValue));
 	}
 	appendStringInfo(&command, ") ");
 

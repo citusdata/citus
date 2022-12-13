@@ -494,14 +494,21 @@ CheckHashPartitionedTable(Oid distributedTableId)
 }
 
 
-/* Helper function to convert an integer value to a text type */
-text *
-IntegerToText(int32 value)
+char *
+IntegerToCStr(int32 value)
 {
 	StringInfo valueString = makeStringInfo();
 	appendStringInfo(valueString, "%d", value);
 
-	text *valueText = cstring_to_text(valueString->data);
+	return valueString->data;
+}
+
+
+/* Helper function to convert an integer value to a text type */
+text *
+IntegerToText(int32 value)
+{
+	text *valueText = cstring_to_text(IntegerToCStr(value));
 
 	return valueText;
 }

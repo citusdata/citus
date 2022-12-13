@@ -274,6 +274,7 @@ extern Oid ForeignConstraintGetReferencedTableId(const char *queryString);
 extern void CheckHashPartitionedTable(Oid distributedTableId);
 extern void CheckTableSchemaNameForDrop(Oid relationId, char **schemaName,
 										char **tableName);
+extern char * IntegerToCStr(int32 value);
 extern text * IntegerToText(int32 value);
 
 /* Function declarations for generating metadata for shard and placement creation */

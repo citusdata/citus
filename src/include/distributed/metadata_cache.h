@@ -253,6 +253,7 @@ extern Oid DistBackgroundTaskDependDependsOnIndexId(void);
 extern Oid DistShardLogicalRelidIndexId(void);
 extern Oid DistShardShardidIndexId(void);
 extern Oid DistShardgroupPkeyId(void);
+extern Oid DistShardgroupColocaionidIndexId(void);
 extern Oid DistPlacementShardidIndexId(void);
 extern Oid DistPlacementPlacementidIndexId(void);
 extern Oid DistColocationIndexId(void);

@@ -1406,6 +1406,7 @@ InsertMetadataForCitusLocalTable(Oid citusLocalTableId, uint64 shardId,
 	char replicationModel = REPLICATION_MODEL_STREAMING;
 
 	uint32 colocationId = INVALID_COLOCATION_ID;
+	int64 shardgroupId = INVALID_SHARDGROUP_ID;
 	Var *distributionColumn = NULL;
 	InsertIntoPgDistPartition(citusLocalTableId, distributionMethod,
 							  distributionColumn, colocationId,
@@ -1417,7 +1418,7 @@ InsertMetadataForCitusLocalTable(Oid citusLocalTableId, uint64 shardId,
 	text *shardMinValue = NULL;
 	text *shardMaxValue = NULL;
 	InsertShardRow(citusLocalTableId, shardId, shardStorageType,
-				   shardMinValue, shardMaxValue, NULL);
+				   shardMinValue, shardMaxValue, &shardgroupId);
 
 	List *nodeList = list_make1(CoordinatorNodeIfAddedAsWorkerOrError());
 

@@ -2885,6 +2885,14 @@ DistShardgroupPkeyId(void)
 }
 
 
+Oid
+DistShardgroupColocaionidIndexId(void)
+{
+	/* TODO add index on colocation id */
+	return InvalidOid;
+}
+
+
 /* return oid of pg_dist_placement_shardid_index */
 Oid
 DistPlacementShardidIndexId(void)

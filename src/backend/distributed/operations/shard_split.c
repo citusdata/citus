@@ -44,6 +44,7 @@
 #include "distributed/shardsplit_logical_replication.h"
 #include "distributed/deparse_shard_query.h"
 #include "distributed/shard_rebalancer.h"
+#include "distributed/shardgroup.h"
 #include "postmaster/postmaster.h"
 
 /*
@@ -129,7 +130,8 @@ static void UpdateDistributionColumnsForShardGroup(List *colocatedShardList,
 												   DistributionColumnMap *distCols,
 												   char distributionMethod,
 												   int shardCount,
-												   uint32 colocationId);
+												   uint32 colocationId,
+												   List **shardgroupSplits);
 static void InsertSplitChildrenShardgroupMetadata(List *newShardgroups);
 static void InsertSplitChildrenShardMetadata(List *shardGroupSplitIntervalListList,
 											 List *workersForPlacementList);
@@ -1066,11 +1068,11 @@ CreateNewShardgroups(uint32 colocationId, ShardInterval *sampleInterval,
 		Shardgroup *shardgroup = palloc0(sizeof(Shardgroup));
 		shardgroup->shardgroupId = GetNextShardgroupIdForSplitChild();
 		shardgroup->colocationId = colocationId;
-		shardgroup->minShardValue = Int32GetDatum(currentSplitChildMinValue);
-		shardgroup->maxShardValue = splitPoint;
+		shardgroup->minShardValue = IntegerToCStr(currentSplitChildMinValue);
+		shardgroup->maxShardValue = IntegerToCStr(DatumGetInt32(splitPoint));
 
 		/* increment for next shardgroup */
-		currentSplitChildMinValue = Int32GetDatum(DatumGetInt32(splitPoint) + 1);
+		currentSplitChildMinValue = DatumGetInt32(splitPoint) + 1;
 		newShardgroups = lappend(newShardgroups, shardgroup);
 	}
 
@@ -1083,8 +1085,8 @@ CreateNewShardgroups(uint32 colocationId, ShardInterval *sampleInterval,
 	Shardgroup *shardgroup = palloc0(sizeof(Shardgroup));
 	shardgroup->shardgroupId = GetNextShardgroupIdForSplitChild();
 	shardgroup->colocationId = colocationId;
-	shardgroup->minShardValue = Int32GetDatum(currentSplitChildMinValue);
-	shardgroup->maxShardValue = splitParentMaxValue;
+	shardgroup->minShardValue = IntegerToCStr(currentSplitChildMinValue);
+	shardgroup->maxShardValue = IntegerToCStr(DatumGetInt32(splitParentMaxValue));
 	newShardgroups = lappend(newShardgroups, shardgroup);
 
 	return newShardgroups;
@@ -1135,9 +1137,12 @@ CreateShardIntervalsForNewShardgroups(ShardInterval *sourceShard,
 		splitChildShardInterval->shardId = GetNextShardIdForSplitChild();
 		splitChildShardInterval->shardGroupId = shardgroup->shardgroupId;
 		splitChildShardInterval->minValueExists = true;
-		splitChildShardInterval->minValue = shardgroup->minShardValue;
+		splitChildShardInterval->minValue =
+			Int32GetDatum(pg_strtoint32(shardgroup->minShardValue));
 		splitChildShardInterval->maxValueExists = true;
-		splitChildShardInterval->maxValue = shardgroup->maxShardValue;
+		splitChildShardInterval->maxValue =
+			Int32GetDatum(pg_strtoint32(shardgroup->maxShardValue));
+
 
 		shardSplitChildrenIntervalList = lappend(shardSplitChildrenIntervalList,
 												 splitChildShardInterval);
@@ -1165,8 +1170,25 @@ UpdateDistributionColumnsForShardGroup(List *colocatedShardList,
 									   DistributionColumnMap *distributionColumnMap,
 									   char distributionMethod,
 									   int shardCount,
-									   uint32 colocationId)
+									   uint32 colocationId,
+									   List **shardgroupSplits)
 {
+	if (colocationId != INVALID_COLOCATION_ID)
+	{
+		/*
+		 * We know we are colocating the shards with already existing shards in their
+		 * respective shardgroups. To prevent the new groups from being inserted we forget
+		 * them here.
+		 */
+
+		*shardgroupSplits = NIL;
+
+		/*
+		 * TODO make sure we have either already used the existing shardgroup id's or
+		 * update the newly created shards to have to correct shardgroup id's
+		 */
+	}
+
 	ShardInterval *shardInterval = NULL;
 	foreach_ptr(shardInterval, colocatedShardList)
 	{
@@ -1187,6 +1209,13 @@ UpdateDistributionColumnsForShardGroup(List *colocatedShardList,
 												 ShardReplicationFactor,
 												 distributionColumn->vartype,
 												 distributionColumn->varcollid);
+
+			/* Update the shardgroup splits with the newly assigned colocation id */
+			Shardgroup *shardgroup = NULL;
+			foreach_ptr(shardgroup, *shardgroupSplits)
+			{
+				shardgroup->colocationId = colocationId;
+			}
 		}
 
 		UpdateDistributionColumnGlobally(relationId, distributionMethod,
@@ -1198,14 +1227,19 @@ UpdateDistributionColumnsForShardGroup(List *colocatedShardList,
 static void
 InsertSplitChildrenShardgroupMetadata(List *newShardgroups)
 {
+	if (list_length(newShardgroups) <= 0)
+	{
+		return;
+	}
+
 	Shardgroup *shardgroup = NULL;
 	foreach_ptr(shardgroup, newShardgroups)
 	{
 		InsertShardGroupRow(
 			shardgroup->shardgroupId,
 			shardgroup->colocationId,
-			IntegerToText(DatumGetInt32(shardgroup->minShardValue)),
-			IntegerToText(DatumGetInt32(shardgroup->maxShardValue)));
+			cstring_to_text(shardgroup->minShardValue),
+			cstring_to_text(shardgroup->maxShardValue));
 	}
 
 	if (/* TODO check if shardgroup needs to propagate */ true)
@@ -1479,10 +1513,23 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 	char *superUser = CitusExtensionOwnerName();
 	char *databaseName = get_database_name(MyDatabaseId);
 
-	List *shardgroupSplits = CreateNewShardgroups(
-		colocationId,
-		(ShardInterval *) linitial(sourceColocatedShardIntervalList),
-		shardSplitPointsList);
+	List *shardgroupSplits = NIL;
+	if (targetColocationId == INVALID_COLOCATION_ID)
+	{
+		shardgroupSplits = CreateNewShardgroups(
+			colocationId,
+			(ShardInterval *) linitial(sourceColocatedShardIntervalList),
+			shardSplitPointsList);
+	}
+	else
+	{
+		/*
+		 * We are distributing a new table onto an existing colocation id, load
+		 * shardgroupSplits from there.
+		 */
+
+		shardgroupSplits = ShardgroupForColocationId(targetColocationId);
+	}
 
 	/* First create shard interval metadata for split children */
 	List *shardGroupSplitIntervalListList = CreateSplitIntervalsForShardGroup(
@@ -1685,7 +1732,9 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 											   distributionColumnOverrides,
 											   distributionMethod,
 											   shardCount,
-											   targetColocationId);
+											   targetColocationId,
+											   &shardgroupSplits);
+	}
 
 	/* 12) Insert new shardgroup, shard and placement metadata */
 	InsertSplitChildrenShardgroupMetadata(shardgroupSplits);

@@ -75,8 +75,8 @@ typedef struct Shardgroup
 {
 	int64 shardgroupId;
 	uint32 colocationId;
-	Datum minShardValue; /* a shard's typed min value datum */
-	Datum maxShardValue; /* a shard's typed max value datum */
+	const char *minShardValue;
+	const char *maxShardValue;
 } Shardgroup;
 
 
