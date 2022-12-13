@@ -11,63 +11,89 @@
 #include "distributed/replication_origin_session_utils.h"
 #include "distributed/remote_commands.h"
 #include "distributed/metadata_cache.h"
+#include "utils/builtins.h"
 
 static bool isReplicationOriginSessionSetup(MultiConnection *connection);
 static bool isReplicationOriginCreated(MultiConnection *connection, char *originName,
 									   RepOriginId *originId);
-static RepOriginId ReplicationOriginSessionCreate(MultiConnection *connection,
+static RepOriginId CreateReplicationOriginSession(MultiConnection *connection,
 												  char *originName);
 static void ReplicationOriginSessionSetupHelper(MultiConnection *connection,
-												RepOriginId originId, char *originName);
+												char *originName);
 static bool ExecuteRemoteCommandAndCheckResult(MultiConnection *connection, char *command,
 											   char *expected);
 
-/* ReplicationOriginSessionSetup sets up a new replication origin session in a
- * local or remote session depending on the useLocalCopy flag. If useLocalCopy
- * is set, a local replication origin session is setup, otherwise a remote
- * replication origin session is setup to the destination node.
+/* SetupReplicationOriginRemoteSession sets up a new replication origin session in a
+ * remote session. The identifier is used to create a unique replication origin name
+ * for the session in the remote node.
  */
 void
-ReplicationOriginSessionSetup(MultiConnection *connection)
+SetupReplicationOriginRemoteSession(MultiConnection *connection, char *identifier)
 {
 	if (!isReplicationOriginSessionSetup(connection))
 	{
-		int localid = GetLocalNodeId();
-		RepOriginId originId = InvalidRepOriginId;
 		StringInfo originNameString = makeStringInfo();
-		appendStringInfo(originNameString, "citus_internal_%d", localid);
-		if (!isReplicationOriginCreated(connection, originNameString->data, &originId))
-		{
-			originId = ReplicationOriginSessionCreate(connection, originNameString->data);
-		}
-		ReplicationOriginSessionSetupHelper(connection, originId, originNameString->data);
+		appendStringInfo(originNameString, "citus_internal_%d_%s", GetLocalNodeId(),
+						 identifier);
+		char *originName = quote_literal_cstr(originNameString->data);
+		ReplicationOriginSessionSetupHelper(connection, originName);
 	}
 }
 
 
-/* ReplicationOriginSessionReset resets the replication origin session in a
- * local or remote session depending on the useLocalCopy flag.
+/* ResetReplicationOriginRemoteSession resets the replication origin session in a
+ * remote node.
  */
 void
-ReplicationOriginSessionReset(MultiConnection *connection)
+ResetReplicationOriginRemoteSession(MultiConnection *connection, char *identifier)
 {
-	if (connection == NULL)
+	/* Reset the replication origin in remote session*/
+	StringInfo replicationOriginSessionResetQuery = makeStringInfo();
+	appendStringInfo(replicationOriginSessionResetQuery,
+					 "select pg_catalog.pg_replication_origin_session_reset();");
+	ExecuteCriticalRemoteCommand(connection,
+								 replicationOriginSessionResetQuery->data);
+
+	/* Drop the replication origin entry created in remote session.*/
+	StringInfo originNameString = makeStringInfo();
+	appendStringInfo(originNameString, "citus_internal_%d_%s", GetLocalNodeId(),
+					 identifier);
+	StringInfo replicationOriginSessionDropQuery = makeStringInfo();
+	appendStringInfo(replicationOriginSessionDropQuery,
+					 "select pg_catalog.pg_replication_origin_drop(%s);",
+					 quote_literal_cstr(originNameString->data));
+
+	ExecuteCriticalRemoteCommand(connection,
+								 replicationOriginSessionDropQuery->data);
+}
+
+
+/* SetupReplicationOriginLocalSession sets up a new replication origin session in a
+ * local session.
+ */
+void
+SetupReplicationOriginLocalSession(void)
+{
+	if (!isReplicationOriginSessionSetup(NULL))
 	{
-		/*Reset Replication Origin in local session */
-		if (replorigin_session_origin != InvalidRepOriginId)
-		{
-			replorigin_session_reset();
-			replorigin_session_origin = InvalidRepOriginId;
-		}
+		StringInfo originNameString = makeStringInfo();
+		appendStringInfo(originNameString, "citus_internal_%d", GetLocalNodeId());
+		ReplicationOriginSessionSetupHelper(NULL, originNameString->data);
 	}
-	else
+}
+
+
+/* ResetReplicationOriginLocalSession resets the replication origin session in a
+ * local node.
+ */
+void
+ResetReplicationOriginLocalSession(void)
+{
+	/*Reset Replication Origin in local session */
+	if (replorigin_session_origin != InvalidRepOriginId)
 	{
-		/*Reset Replication Origin in remote session */
-		StringInfo replicationOriginSessionResetQuery = makeStringInfo();
-		appendStringInfo(replicationOriginSessionResetQuery,
-						 "select pg_catalog.pg_replication_origin_session_reset()");
-		ExecuteCriticalRemoteCommand(connection,
-									 replicationOriginSessionResetQuery->data);
+		replorigin_session_reset();
+		replorigin_session_origin = InvalidRepOriginId;
 	}
 }
 
@@ -81,7 +107,7 @@ isReplicationOriginSessionSetup(MultiConnection *connection)
 	bool result = false;
 	if (connection == NULL)
 	{
-		return replorigin_session_origin != InvalidRepOriginId;
+		result = (replorigin_session_origin != InvalidRepOriginId);
 	}
 	else
 	{
@@ -115,7 +141,7 @@ isReplicationOriginCreated(MultiConnection *connection, char *originName,
 		/*Setup Replication Origin in remote session */
 		StringInfo isReplicationOriginSessionSetupQuery = makeStringInfo();
 		appendStringInfo(isReplicationOriginSessionSetupQuery,
-						 "SELECT pg_catalog.pg_replication_origin_oid('%s');",
+						 "SELECT pg_catalog.pg_replication_origin_oid(%s);",
 						 originName);
 
 		/* If the replication origin was already created the above command
@@ -130,11 +156,11 @@ isReplicationOriginCreated(MultiConnection *connection, char *originName,
 }
 
 
-/* ReplicationOriginSessionCreate creates a new replication origin if it does
+/* CreateReplicationOriginSession creates a new replication origin if it does
  * not already exist already. To make the replication origin name unique
  * for different nodes, origin node's id is appended to the prefix citus_internal_.*/
 static RepOriginId
-ReplicationOriginSessionCreate(MultiConnection *connection, char *originName)
+CreateReplicationOriginSession(MultiConnection *connection, char *originName)
 {
 	RepOriginId originId = InvalidRepOriginId;
 	if (connection == NULL)
@@ -145,7 +171,7 @@ ReplicationOriginSessionCreate(MultiConnection *connection, char *originName)
 	{
 		StringInfo replicationOriginCreateQuery = makeStringInfo();
 		appendStringInfo(replicationOriginCreateQuery,
-						 "select pg_catalog.pg_replication_origin_create('%s')",
+						 "select pg_catalog.pg_replication_origin_create(%s);",
 						 originName);
 		ExecuteCriticalRemoteCommand(connection, replicationOriginCreateQuery->data);
 	}
@@ -154,14 +180,18 @@ ReplicationOriginSessionCreate(MultiConnection *connection, char *originName)
 
 
 /* ReplicationOriginSessionSetupHelper sets up a new replication origin session in a
- * local or remote session depending on the useLocalCopy flag. If useLocalCopy
- * is set, a local replication origin session is setup, otherwise a remote
- * replication origin session is setup to the destination node.
+ * local or remote session.
  */
 static void
 ReplicationOriginSessionSetupHelper(MultiConnection *connection,
-									RepOriginId originId, char *originName)
+									char *originName)
 {
+	RepOriginId originId = InvalidRepOriginId;
+	if (!isReplicationOriginCreated(connection, originName, &originId))
+	{
+		originId = CreateReplicationOriginSession(connection, originName);
+	}
+
 	if (connection == NULL)
 	{
 		/*Setup Replication Origin in local session */
@@ -173,7 +203,7 @@ ReplicationOriginSessionSetupHelper(MultiConnection *connection,
 		/*Setup Replication Origin in remote session */
 		StringInfo replicationOriginSessionSetupQuery = makeStringInfo();
 		appendStringInfo(replicationOriginSessionSetupQuery,
-						 "select pg_catalog.pg_replication_origin_session_setup('%s')",
+						 "select pg_catalog.pg_replication_origin_session_setup(%s);",
 						 originName);
 		ExecuteCriticalRemoteCommand(connection,
 									 replicationOriginSessionSetupQuery->data);

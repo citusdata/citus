@@ -36,6 +36,7 @@
 #include "distributed/local_multi_copy.h"
 #include "distributed/shard_utils.h"
 #include "distributed/version_compat.h"
+#include "distributed/replication_origin_session_utils.h"
 
 /* managed via GUC, default is 512 kB */
 int LocalCopyFlushThresholdByte = 512 * 1024;
@@ -206,6 +207,8 @@ DoLocalCopy(StringInfo buffer, Oid relationId, int64 shardId, CopyStmt *copyStat
 	 */
 	LocalCopyBuffer = buffer;
 
+	SetupReplicationOriginLocalSession();
+
 	Oid shardOid = GetTableLocalShardOid(relationId, shardId);
 	Relation shard = table_open(shardOid, RowExclusiveLock);
 	ParseState *pState = make_parsestate(NULL);
@@ -219,6 +222,7 @@ DoLocalCopy(StringInfo buffer, Oid relationId, int64 shardId, CopyStmt *copyStat
 	EndCopyFrom(cstate);
 
 	table_close(shard, NoLock);
+	ResetReplicationOriginLocalSession();
 	free_parsestate(pState);
 }
 

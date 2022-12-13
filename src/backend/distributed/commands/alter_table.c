@@ -403,9 +403,9 @@ UndistributeTable(TableConversionParameters *params)
 	params->conversionType = UNDISTRIBUTE_TABLE;
 	params->shardCountIsNull = true;
 	TableConversionState *con = CreateTableConversion(params);
-	ReplicationOriginSessionSetup(NULL);
+	SetupReplicationOriginLocalSession();
 	TableConversionReturn *conv = ConvertTable(con);
-	ReplicationOriginSessionReset(NULL);
+	ResetReplicationOriginLocalSession();
 	return conv;
 }
 
@@ -445,9 +445,9 @@ AlterDistributedTable(TableConversionParameters *params)
 		ereport(DEBUG1, (errmsg("setting multi shard modify mode to sequential")));
 		SetLocalMultiShardModifyModeToSequential();
 	}
-	ReplicationOriginSessionSetup(NULL);
+	SetupReplicationOriginLocalSession();
 	TableConversionReturn *conv = ConvertTable(con);
-	ReplicationOriginSessionReset(NULL);
+	ResetReplicationOriginLocalSession();
 
 	return conv;
 }

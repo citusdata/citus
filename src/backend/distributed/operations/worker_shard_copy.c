@@ -105,7 +105,12 @@ ConnectToRemoteAndStartCopy(ShardCopyDestReceiver *copyDest)
 														 NULL /* database (current) */);
 	ClaimConnectionExclusively(copyDest->connection);
 
-	ReplicationOriginSessionSetup(copyDest->connection);
+	StringInfo fullShardNameString = makeStringInfo();
+	appendStringInfo(fullShardNameString, "%s.%s",
+					 (char *) linitial(copyDest->destinationShardFullyQualifiedName),
+					 (char *) lsecond(copyDest->destinationShardFullyQualifiedName));
+
+	SetupReplicationOriginRemoteSession(copyDest->connection, fullShardNameString->data);
 
 	StringInfo copyStatement = ConstructShardCopyStatement(
 		copyDest->destinationShardFullyQualifiedName,
@@ -151,7 +156,6 @@ CreateShardCopyDestReceiver(EState *executorState,
 	copyDest->tuplesSent = 0;
 	copyDest->connection = NULL;
 	copyDest->useLocalCopy = CanUseLocalCopy(destinationNodeId);
-	elog(LOG, "using local copy: %d", copyDest->useLocalCopy);
 	return (DestReceiver *) copyDest;
 }
 
@@ -190,7 +194,6 @@ ShardCopyDestReceiverReceive(TupleTableSlot *slot, DestReceiver *dest)
 	if (copyDest->useLocalCopy)
 	{
 		/* Setup replication origin session for local copy*/
-		ReplicationOriginSessionSetup(NULL);
 
 		WriteLocalTuple(slot, copyDest);
 		if (copyOutState->fe_msgbuf->len > LocalCopyFlushThresholdByte)
@@ -267,6 +270,11 @@ ShardCopyDestReceiverStartup(DestReceiver *dest, int operation, TupleDesc
 	copyDest->columnOutputFunctions = ColumnOutputFunctions(inputTupleDescriptor,
 															copyOutState->binary);
 	copyDest->copyOutState = copyOutState;
+	if (copyDest->useLocalCopy)
+	{
+		/* Setup replication origin session for local copy*/
+		SetupReplicationOriginLocalSession();
+	}
 }
 
 
@@ -288,7 +296,6 @@ ShardCopyDestReceiverShutdown(DestReceiver *dest)
 			/* end the COPY input */
 			LocalCopyToShard(copyDest, copyDest->copyOutState);
 		}
-		ReplicationOriginSessionReset(NULL);
 	}
 	else if (copyDest->connection != NULL)
 	{
@@ -326,7 +333,13 @@ ShardCopyDestReceiverShutdown(DestReceiver *dest)
 
 		PQclear(result);
 		ForgetResults(copyDest->connection);
-		ReplicationOriginSessionReset(copyDest->connection);
+		StringInfo fullShardNameString = makeStringInfo();
+		appendStringInfo(fullShardNameString, "%s.%s",
+						 (char *) linitial(copyDest->destinationShardFullyQualifiedName),
+						 (char *) lsecond(copyDest->destinationShardFullyQualifiedName));
+
+		ResetReplicationOriginRemoteSession(copyDest->connection,
+											fullShardNameString->data);
 
 		CloseConnection(copyDest->connection);
 	}
@@ -340,6 +353,10 @@ static void
 ShardCopyDestReceiverDestroy(DestReceiver *dest)
 {
 	ShardCopyDestReceiver *copyDest = (ShardCopyDestReceiver *) dest;
+	if (copyDest->useLocalCopy)
+	{
+		ResetReplicationOriginLocalSession();
+	}
 
 	if (copyDest->copyOutState)
 	{

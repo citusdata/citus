@@ -15,8 +15,11 @@
 #include "replication/origin.h"
 #include "distributed/connection_management.h"
 
-void ReplicationOriginSessionSetup(MultiConnection *connection);
-void ReplicationOriginSessionReset(MultiConnection *connection);
+void SetupReplicationOriginRemoteSession(MultiConnection *connection, char *identifier);
+void ResetReplicationOriginRemoteSession(MultiConnection *connection, char *identifier);
+
+void SetupReplicationOriginLocalSession(void);
+void ResetReplicationOriginLocalSession(void);
 
 
 #endif /* REPLICATION_ORIGIN_SESSION_UTILS_H */

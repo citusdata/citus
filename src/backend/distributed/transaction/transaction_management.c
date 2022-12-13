@@ -34,6 +34,7 @@
 #include "distributed/multi_logical_replication.h"
 #include "distributed/multi_explain.h"
 #include "distributed/repartition_join_execution.h"
+#include "distributed/replication_origin_session_utils.h"
 #include "distributed/transaction_management.h"
 #include "distributed/placement_connection.h"
 #include "distributed/relation_access_tracking.h"
@@ -381,6 +382,9 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			ResetGlobalVariables();
 			ResetRelationAccessHash();
 
+			/* Reset any local replication origin session since transaction has been aborted.*/
+			ResetReplicationOriginLocalSession();
+
 			/*
 			 * Clear MetadataCache table if we're aborting from a CREATE EXTENSION Citus
 			 * so that any created OIDs from the table are cleared and invalidated. We
@@ -684,6 +688,9 @@ CoordinatedSubTransactionCallback(SubXactEvent event, SubTransactionId subId,
 				InvalidateMetadataSystemCache();
 				SetCreateCitusTransactionLevel(0);
 			}
+
+			/* Reset any local replication origin session since subtransaction has been aborted.*/
+			ResetReplicationOriginLocalSession();
 			break;
 		}
 

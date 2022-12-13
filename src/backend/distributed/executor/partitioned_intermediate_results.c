@@ -26,6 +26,7 @@
 #include "distributed/multi_executor.h"
 #include "distributed/pg_dist_shard.h"
 #include "distributed/remote_commands.h"
+#include "distributed/replication_origin_session_utils.h"
 #include "distributed/tuplestore.h"
 #include "distributed/utils/array_type.h"
 #include "distributed/utils/function.h"
@@ -539,6 +540,12 @@ PartitionedResultDestReceiverShutdown(DestReceiver *dest)
 	{
 		DestReceiver *partitionDest = self->partitionDestReceivers[i];
 		partitionDest->rShutdown(partitionDest);
+	}
+	i = -1;
+	while ((i = bms_next_member(self->startedDestReceivers, i)) >= 0)
+	{
+		DestReceiver *partitionDest = self->partitionDestReceivers[i];
+		partitionDest->rDestroy(partitionDest);
 	}
 
 	/* empty the set of started receivers which allows them to be restarted again */
