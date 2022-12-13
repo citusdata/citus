@@ -291,7 +291,6 @@ step s2-commit:
 	COMMIT;
 
 step s1-copy: <... completed>
-ERROR:  could not find valid entry for shard xxxxx
 step s1-commit:
 	COMMIT;
 
@@ -308,14 +307,19 @@ step s2-print-cluster:
 
 nodeport|shardid|success|result
 ---------------------------------------------------------------------
-   57637|1500001|t      |     0
+   57637|1500001|t      |     4
    57637|1500003|t      |     0
-   57638|1500004|t      |     0
+   57638|1500004|t      |     1
 (3 rows)
 
 id|value
 ---------------------------------------------------------------------
-(0 rows)
+ 1|    1
+ 2|    2
+ 3|    3
+ 4|    4
+ 5|    5
+(5 rows)
 
 
 starting permutation: s1-insert s1-begin s1-select s2-begin s2-blocking-shard-split s1-update s2-commit s1-commit s2-print-cluster
@@ -593,7 +597,6 @@ step s2-commit:
 	COMMIT;
 
 step s1-copy: <... completed>
-ERROR:  could not find valid entry for shard xxxxx
 step s1-commit:
 	COMMIT;
 
@@ -610,14 +613,19 @@ step s2-print-cluster:
 
 nodeport|shardid|success|result
 ---------------------------------------------------------------------
-   57637|1500001|t      |     0
+   57637|1500001|t      |     4
    57637|1500003|t      |     0
-   57638|1500004|t      |     0
+   57638|1500004|t      |     1
 (3 rows)
 
 id|value
 ---------------------------------------------------------------------
-(0 rows)
+ 1|    1
+ 2|    2
+ 3|    3
+ 4|    4
+ 5|    5
+(5 rows)
 
 
 starting permutation: s1-load-cache s1-insert s1-begin s1-blocking-shard-split s2-blocking-shard-split s1-commit s2-print-cluster

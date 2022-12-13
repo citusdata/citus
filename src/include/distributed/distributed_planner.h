@@ -180,6 +180,17 @@ typedef struct DistributedPlanningContext
 
 
 /*
+ * TopLevelQueryContext used to replan queries for missing shard just before execution
+ */
+typedef struct TopLevelQueryContext
+{
+	Query *query;
+	int cursorOptions;
+	ParamListInfo boundParams;
+} TopLevelQueryContext;
+
+
+/*
  * CitusCustomScanPath is injected into the planner during the combine query planning
  * phase of the logical planner.
  *

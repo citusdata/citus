@@ -278,7 +278,10 @@ CreateDistributedInsertSelectPlan(Query *originalQuery,
 	RangeTblEntry *subqueryRte = ExtractSelectRangeTableEntry(originalQuery);
 	Oid targetRelationId = insertRte->relid;
 	CitusTableCacheEntry *targetCacheEntry = GetCitusTableCacheEntry(targetRelationId);
-	int shardCount = targetCacheEntry->shardIntervalArrayLength;
+
+	/* grab shared metadata lock to stop concurrent placement additions */
+	List *shardIntervalList = LoadShardIntervalListWithRetry(targetRelationId, ShareLock);
+
 	RelationRestrictionContext *relationRestrictionContext =
 		plannerRestrictionContext->relationRestrictionContext;
 	bool allReferenceTables = relationRestrictionContext->allReferenceTables;
@@ -310,11 +313,9 @@ CreateDistributedInsertSelectPlan(Query *originalQuery,
 	 * the current shard boundaries. Finally, perform the normal shard pruning to
 	 * decide on whether to push the query to the current shard or not.
 	 */
-	for (int shardOffset = 0; shardOffset < shardCount; shardOffset++)
+	ShardInterval *targetShardInterval = NULL;
+	foreach_ptr(targetShardInterval, shardIntervalList)
 	{
-		ShardInterval *targetShardInterval =
-			targetCacheEntry->sortedShardIntervalArray[shardOffset];
-
 		Task *modifyTask = RouterModifyTaskForShardInterval(originalQuery,
 															targetCacheEntry,
 															targetShardInterval,
@@ -797,9 +798,6 @@ RouterModifyTaskForShardInterval(Query *originalQuery,
 	relationRestrictionList =
 		copyOfPlannerRestrictionContext->relationRestrictionContext->
 		relationRestrictionList;
-
-	/* grab shared metadata lock to stop concurrent placement additions */
-	LockShardDistributionMetadata(shardId, ShareLock);
 
 	/*
 	 * Replace the partitioning qual parameter value in all baserestrictinfos.

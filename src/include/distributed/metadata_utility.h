@@ -280,6 +280,7 @@ extern Datum citus_relation_size(PG_FUNCTION_ARGS);
 /* Function declarations to read shard and shard placement data */
 extern uint32 TableShardReplicationFactor(Oid relationId);
 extern List * LoadShardIntervalList(Oid relationId);
+extern List * LoadShardIntervalListWithRetry(Oid relationId, LOCKMODE lockmode);
 extern List * LoadUnsortedShardIntervalListViaCatalog(Oid relationId);
 extern ShardInterval * LoadShardIntervalWithLongestShardName(Oid relationId);
 extern int ShardIntervalCount(Oid relationId);

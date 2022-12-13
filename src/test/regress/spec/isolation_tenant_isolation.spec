@@ -39,16 +39,48 @@ step "s1-insert"
 	INSERT INTO isolation_table VALUES (5, 10);
 }
 
+step "s1-pushable-insert-select"
+{
+	INSERT INTO isolation_table SELECT * FROM isolation_table;
+}
+
+step "s1-nonpushable-insert-select-with-copy"
+{
+	INSERT INTO isolation_table SELECT 5;
+}
+
+step "s1-nonpushable-insert-select-returning"
+{
+	INSERT INTO isolation_table SELECT 5 RETURNING *;
+}
+
+step "s1-nonpushable-insert-select-conflict"
+{
+	INSERT INTO isolation_table SELECT 5 ON CONFLICT DO NOTHING;
+}
+
 step "s1-update"
 {
 	UPDATE isolation_table SET value = 5 WHERE id = 5;
 }
 
-step "s1-update-complex"
+step "s1-update-recursive"
 {
 	UPDATE isolation_table SET value = 5 WHERE id IN (
         SELECT max(id) FROM isolation_table
     );
+}
+
+step "s1-update-cte"
+{
+	-- here update cte is subplan of the select plan. We do not replan a subplan if a shard is missing at CitusBeginModifyScan
+	WITH cte_1 AS (UPDATE isolation_table SET value = value RETURNING *) SELECT * FROM cte_1 ORDER BY 1,2;
+}
+
+step "s1-update-select-cte"
+{
+	-- here update plan is a top-level plan of the select cte. We can replan a top-level plan if a shard is missing at CitusBeginModifyScan
+	WITH cte_1 AS ( SELECT * FROM isolation_table ORDER BY 1,2 ) UPDATE isolation_table SET value = value WHERE EXISTS(SELECT * FROM cte_1);
 }
 
 step "s1-delete"
@@ -123,23 +155,45 @@ step "s2-print-index-count"
 }
 
 // run tenant isolation while concurrently performing an DML and index creation
-// we expect DML/DDL queries to fail because the shard they are waiting for is destroyed
+// we expect DML/DDL queries to be rerouted to valid shards even if the shard they are waiting for is destroyed
 permutation "s1-load-cache" "s1-insert" "s1-begin" "s1-select" "s2-begin" "s2-isolate-tenant" "s1-update" "s2-commit" "s1-commit" "s2-print-cluster"
 permutation "s1-load-cache" "s1-insert" "s1-begin" "s1-select" "s2-begin" "s2-isolate-tenant" "s1-delete" "s2-commit" "s1-commit" "s2-print-cluster"
-permutation "s1-load-cache" "s1-insert" "s1-begin" "s1-select" "s2-begin" "s2-isolate-tenant" "s1-update-complex" "s2-commit" "s1-commit" "s2-print-cluster"
+permutation "s1-load-cache" "s1-insert" "s1-begin" "s1-select" "s2-begin" "s2-isolate-tenant" "s1-pushable-insert-select" "s2-commit" "s1-commit" "s2-print-cluster"
 permutation "s1-load-cache" "s1-begin" "s1-select" "s2-begin" "s2-isolate-tenant" "s1-insert" "s2-commit" "s1-commit" "s2-print-cluster"
+permutation "s1-load-cache" "s1-begin" "s1-select" "s2-begin" "s2-isolate-tenant" "s1-nonpushable-insert-select-with-copy" "s2-commit" "s1-commit" "s2-print-cluster"
+permutation "s1-load-cache" "s1-begin" "s1-select" "s2-begin" "s2-isolate-tenant" "s1-nonpushable-insert-select-returning" "s2-commit" "s1-commit" "s2-print-cluster"
+permutation "s1-load-cache" "s1-begin" "s1-select" "s2-begin" "s2-isolate-tenant" "s1-nonpushable-insert-select-conflict" "s2-commit" "s1-commit" "s2-print-cluster"
 permutation "s1-load-cache" "s1-begin" "s1-select" "s2-begin" "s2-isolate-tenant" "s1-copy" "s2-commit" "s1-commit" "s2-print-cluster"
 permutation "s1-load-cache" "s1-begin" "s1-select" "s2-begin" "s2-isolate-tenant" "s1-ddl" "s2-commit" "s1-commit" "s2-print-cluster" "s2-print-index-count"
-
 
 // the same tests without loading the cache at first
 permutation "s1-insert" "s1-begin" "s1-select" "s2-begin" "s2-isolate-tenant" "s1-update" "s2-commit" "s1-commit" "s2-print-cluster"
 permutation "s1-insert" "s1-begin" "s1-select" "s2-begin" "s2-isolate-tenant" "s1-delete" "s2-commit" "s1-commit" "s2-print-cluster"
-permutation "s1-insert" "s1-begin" "s1-select" "s2-begin" "s2-isolate-tenant" "s1-update-complex" "s2-commit" "s1-commit" "s2-print-cluster"
+permutation "s1-insert" "s1-begin" "s1-select" "s2-begin" "s2-isolate-tenant" "s1-pushable-insert-select" "s2-commit" "s1-commit" "s2-print-cluster"
 permutation "s1-begin" "s1-select" "s2-begin" "s2-isolate-tenant" "s1-insert" "s2-commit" "s1-commit" "s2-print-cluster"
+permutation "s1-begin" "s1-select" "s2-begin" "s2-isolate-tenant" "s1-nonpushable-insert-select-with-copy" "s2-commit" "s1-commit" "s2-print-cluster"
+permutation "s1-begin" "s1-select" "s2-begin" "s2-isolate-tenant" "s1-nonpushable-insert-select-returning" "s2-commit" "s1-commit" "s2-print-cluster"
+permutation "s1-begin" "s1-select" "s2-begin" "s2-isolate-tenant" "s1-nonpushable-insert-select-conflict" "s2-commit" "s1-commit" "s2-print-cluster"
 permutation "s1-begin" "s1-select" "s2-begin" "s2-isolate-tenant" "s1-copy" "s2-commit" "s1-commit" "s2-print-cluster"
 permutation "s1-begin" "s1-select" "s2-begin" "s2-isolate-tenant" "s1-ddl" "s2-commit" "s1-commit" "s2-print-cluster" "s2-print-index-count"
 
+// we expect DML/DDL queries to fail because the shard they are waiting for is destroyed
+permutation "s1-load-cache" "s1-insert" "s1-begin" "s1-select" "s2-begin" "s2-isolate-tenant" "s1-update-recursive" "s2-commit" "s1-commit" "s2-print-cluster"
+
+// the same tests without loading the cache at first
+permutation "s1-insert" "s1-begin" "s1-select" "s2-begin" "s2-isolate-tenant" "s1-update-recursive" "s2-commit" "s1-commit" "s2-print-cluster"
+
+// we expect DML/DDL queries to fail because the shard they are waiting for is destroyed
+permutation "s1-load-cache" "s1-insert" "s1-begin" "s1-select" "s2-begin" "s2-isolate-tenant" "s1-update-cte" "s2-commit" "s1-commit" "s2-print-cluster"
+
+// the same tests without loading the cache at first
+permutation "s1-insert" "s1-begin" "s1-select" "s2-begin" "s2-isolate-tenant" "s1-update-cte" "s2-commit" "s1-commit" "s2-print-cluster"
+
+// we expect DML/DDL queries to fail because the shard they are waiting for is destroyed
+permutation "s1-load-cache" "s1-insert" "s1-begin" "s1-select" "s2-begin" "s2-isolate-tenant" "s1-update-select-cte" "s2-commit" "s1-commit" "s2-print-cluster"
+
+// the same tests without loading the cache at first
+permutation "s1-insert" "s1-begin" "s1-select" "s2-begin" "s2-isolate-tenant" "s1-update-select-cte" "s2-commit" "s1-commit" "s2-print-cluster"
 
 // concurrent tenant isolation blocks on different shards of the same table (or any colocated table)
 permutation "s1-load-cache" "s1-insert" "s1-begin" "s1-isolate-tenant" "s2-isolate-tenant" "s1-commit" "s2-print-cluster"

@@ -39,8 +39,9 @@
 #include "distributed/function_call_delegation.h"
 #include "executor/executor.h"
 #include "nodes/makefuncs.h"
-#include "optimizer/optimizer.h"
 #include "optimizer/clauses.h"
+#include "optimizer/optimizer.h"
+#include "optimizer/planner.h"
 #include "utils/lsyscache.h"
 #include "utils/memutils.h"
 #include "utils/rel.h"
@@ -61,6 +62,7 @@ static void CitusBeginModifyScan(CustomScanState *node, EState *estate, int efla
 static void CitusPreExecScan(CitusScanState *scanState);
 static bool ModifyJobNeedsEvaluation(Job *workerJob);
 static void RegenerateTaskForFasthPathQuery(Job *workerJob);
+static DistributedPlan * RePlanTopLevelQuery(DistributedPlan *distributedPlan);
 static void RegenerateTaskListForInsert(Job *workerJob);
 static DistributedPlan * CopyDistributedPlanWithoutCache(
 	DistributedPlan *originalDistributedPlan);
@@ -70,7 +72,6 @@ static void SetJobColocationId(Job *job);
 static void EnsureForceDelegationDistributionKey(Job *job);
 static void EnsureAnchorShardsInJobExist(Job *job);
 static bool AnchorShardsInTaskListExist(List *taskList);
-static void TryToRerouteFastPathModifyQuery(Job *job);
 
 
 /* create custom scan methods for all executors */
@@ -411,13 +412,26 @@ CitusBeginModifyScan(CustomScanState *node, EState *estate, int eflags)
 		AcquireMetadataLocks(workerJob->taskList);
 
 		/*
-		 * In case of a split, the shard might no longer be available. In that
-		 * case try to reroute. We can only do this for fast path queries.
+		 * in case of a split, the shard might no longer be available. In that case,
+		 * we have to replan top level query to prevent unfriendly 'missing shards' message.
+		 *
+		 * we should only replan if we have valid topLevelQueryContext which means our plan
+		 * is top level plan (not a subplan).
 		 */
-		if (currentPlan->fastPathRouterPlan &&
-			!AnchorShardsInTaskListExist(workerJob->taskList))
+		if (!AnchorShardsInTaskListExist(workerJob->taskList) &&
+			originalDistributedPlan->topLevelQueryContext)
 		{
-			TryToRerouteFastPathModifyQuery(workerJob);
+			DistributedPlan *newDistributedPlan = RePlanTopLevelQuery(
+				originalDistributedPlan);
+			scanState->distributedPlan = newDistributedPlan;
+
+			/*
+			 * switch to oldcontext and restart CitusBeginModifyScan (maybe to regenerate tasks
+			 * due to deferredPruning)
+			 */
+			MemoryContextSwitchTo(oldContext);
+			CitusBeginModifyScan((CustomScanState *) scanState, estate, eflags);
+			return;
 		}
 
 		/* ensure there is no invalid shard */
@@ -454,27 +468,6 @@ CitusBeginModifyScan(CustomScanState *node, EState *estate, int eflags)
 	}
 
 	MemoryContextSwitchTo(oldContext);
-}
-
-
-/*
- * TryToRerouteFastPathModifyQuery tries to reroute non-existent shards in given job if it finds any such shard,
- * only for fastpath queries.
- *
- * Should only be called if the job belongs to a fastpath modify query
- */
-static void
-TryToRerouteFastPathModifyQuery(Job *job)
-{
-	if (job->jobQuery->commandType == CMD_INSERT)
-	{
-		RegenerateTaskListForInsert(job);
-	}
-	else
-	{
-		RegenerateTaskForFasthPathQuery(job);
-		RebuildQueryStrings(job);
-	}
 }
 
 
@@ -655,6 +648,32 @@ RegenerateTaskForFasthPathQuery(Job *workerJob)
 									  placementList,
 									  shardId,
 									  isLocalTableModification);
+}
+
+
+/*
+ * RePlanTopLevelQuery replans the initial query, which is stored in the distributed
+ * plan, at the start of the planning.
+ *
+ * That method is supposed to be used when we detect any missing shard just before execution.
+ */
+static DistributedPlan *
+RePlanTopLevelQuery(DistributedPlan *oldPlan)
+{
+	/* extract top level query info from the TopLevelQueryContext stored in the old plan */
+	TopLevelQueryContext *topLevelQueryContext = oldPlan->topLevelQueryContext;
+
+	Query *originalQuery = topLevelQueryContext->query;
+	int cursorOptions = topLevelQueryContext->cursorOptions;
+	ParamListInfo boundParams = topLevelQueryContext->boundParams;
+
+	/* replan the top level query */
+	PlannedStmt *plannedStmt = planner(originalQuery, NULL, cursorOptions, boundParams);
+
+	/* return the new plan */
+	DistributedPlan *newDistributedPlan = GetDistributedPlan(
+		(CustomScan *) plannedStmt->planTree);
+	return newDistributedPlan;
 }
 
 

@@ -74,6 +74,9 @@ static uint64 NextPlanId = 1;
 /* keep track of planner call stack levels */
 int PlannerLevel = 0;
 
+/* store untransformed query and boundParams to be able to replan when necessary */
+static TopLevelQueryContext *TopLevelQueryCtx = NULL;
+
 static void ErrorIfQueryHasMergeCommand(Query *queryTree);
 static bool ContainsMergeCommandWalker(Node *node);
 static bool ListContainsDistributedTableRTE(List *rangeTableList,
@@ -130,7 +133,8 @@ static PlannedStmt * PlanDistributedStmt(DistributedPlanningContext *planContext
 static RTEListProperties * GetRTEListProperties(List *rangeTableList);
 static List * TranslatedVars(PlannerInfo *root, int relationIndex);
 static void WarnIfListHasForeignDistributedTable(List *rangeTableList);
-
+static void PersistTopLevelQueryInfo(Query *query, ParamListInfo boundParams, int
+									 cursorOptions);
 
 /* Distributed planner hook */
 PlannedStmt *
@@ -173,6 +177,20 @@ distributed_planner(Query *parse,
 				WarnIfListHasForeignDistributedTable(rangeTableList);
 			}
 		}
+	}
+
+	/*
+	 * we should only store TopLevelQueryCtx if PlannerLevel = 0
+	 * because we want to store top level query info which
+	 * are required to replan if we find missing shard for nonfastpath
+	 * queries just before execution.
+	 *
+	 * TopLevelQueryCtx will point to top level query info even if we
+	 * recursively call planner.
+	 */
+	if (PlannerLevel == 0 && needsDistributedPlanning)
+	{
+		PersistTopLevelQueryInfo(parse, boundParams, cursorOptions);
 	}
 
 	int rteIdCounter = 1;
@@ -283,6 +301,24 @@ distributed_planner(Query *parse,
 	PopPlannerRestrictionContext();
 
 	/*
+	 * when PlannerLevel = 0, we are sure that this is the top level plan (the end of recursion for planner)
+	 * Then we can, store top level query info inside top level Citus plan, if any
+	 */
+	if (PlannerLevel == 0 && needsDistributedPlanning)
+	{
+		Assert(TopLevelQueryCtx);
+
+		if (result && IsCitusCustomScan(result->planTree))
+		{
+			DistributedPlan *distPlan = GetDistributedPlan(
+				(CustomScan *) result->planTree);
+			distPlan->topLevelQueryContext = TopLevelQueryCtx;
+		}
+
+		TopLevelQueryCtx = NULL;
+	}
+
+	/*
 	 * In some cases, for example; parameterized SQL functions, we may miss that
 	 * there is a need for distributed planning. Such cases only become clear after
 	 * standard_planner performs some modifications on parse tree. In such cases
@@ -299,6 +335,28 @@ distributed_planner(Query *parse,
 	}
 
 	return result;
+}
+
+
+/*
+ * PersistTopLevelQueryInfo stores given top level query information in global TopLevelQueryCtx
+ * to replan in case we detect missing shards just before the execution.
+ */
+static void
+PersistTopLevelQueryInfo(Query *query, ParamListInfo boundParams, int cursorOptions)
+{
+	/* assure only called when we are at top level planner */
+	Assert(PlannerLevel == 0);
+
+	/* we need to store unmodified top-level query information during transaction */
+	MemoryContext oldContext = MemoryContextSwitchTo(TopTransactionContext);
+
+	TopLevelQueryCtx = palloc0(sizeof(TopLevelQueryContext));
+	TopLevelQueryCtx->query = copyObject(query);
+	TopLevelQueryCtx->cursorOptions = cursorOptions;
+	TopLevelQueryCtx->boundParams = copyParamList(boundParams);
+
+	MemoryContextSwitchTo(oldContext);
 }
 
 
