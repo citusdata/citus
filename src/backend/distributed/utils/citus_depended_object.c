@@ -12,6 +12,8 @@
 #include "catalog/namespace.h"
 #include "catalog/pg_aggregate.h"
 #include "catalog/pg_am.h"
+#include "catalog/pg_amop.h"
+#include "catalog/pg_amproc.h"
 #include "catalog/pg_attribute.h"
 #include "catalog/pg_attrdef.h"
 #include "catalog/pg_constraint.h"
@@ -21,6 +23,9 @@
 #include "catalog/pg_event_trigger.h"
 #include "catalog/pg_language.h"
 #include "catalog/pg_namespace.h"
+#include "catalog/pg_operator.h"
+#include "catalog/pg_opclass.h"
+#include "catalog/pg_opfamily.h"
 #include "catalog/pg_proc.h"
 #include "catalog/pg_rewrite.h"
 #include "catalog/pg_sequence.h"
@@ -204,6 +209,21 @@ HideCitusDependentObjectsOnQueriesOfPgMetaTables(Node *node, void *context)
 
 					/* pg_index */
 					case IndexRelationId:
+
+					/* pg_operator */
+					case OperatorRelationId:
+
+					/* pg_opclass */
+					case OperatorClassRelationId:
+
+					/* pg_opfamily */
+					case OperatorFamilyRelationId:
+
+					/* pg_amop */
+					case AccessMethodOperatorRelationId:
+
+					/* pg_amproc */
+					case AccessMethodProcedureRelationId:
 
 					/* pg_aggregate */
 					case AggregateRelationId:
