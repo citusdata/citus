@@ -2,6 +2,9 @@
 
 -- bump version to 11.3-1
 
+#include "udfs/citus_prepare_pg_upgrade/11.3-1.sql"
+#include "udfs/citus_finish_pg_upgrade/11.3-1.sql"
+
 CREATE TABLE citus.pg_dist_shardgroup (
     shardgroupid bigint PRIMARY KEY,
     colocationid integer NOT NULL,

@@ -1,5 +1,9 @@
 -- citus--11.3-1--11.2-1
 -- this is an empty downgrade path since citus--11.2-1--11.3-1.sql is empty for now
+
+#include "../udfs/citus_prepare_pg_upgrade/11.2-1.sql"
+#include "../udfs/citus_finish_pg_upgrade/11.2-1.sql"
+
 DROP TABLE pg_catalog.pg_dist_shardgroup;
 DROP SEQUENCE pg_catalog.pg_dist_shardgroupid_seq;
 
