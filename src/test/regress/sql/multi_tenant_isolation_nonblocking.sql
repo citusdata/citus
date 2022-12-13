@@ -131,7 +131,7 @@ SELECT count(*) FROM orders_streaming WHERE o_orderkey = 101;
 SELECT count(*) FROM orders_streaming WHERE o_orderkey = 102;
 SELECT count(*) FROM orders_streaming WHERE o_orderkey = 103;
 
-SELECT * FROM pg_dist_shard
+SELECT logicalrelid, shardid, shardstorage, shardminvalue, shardmaxvalue FROM pg_dist_shard
 	WHERE logicalrelid = 'lineitem_streaming'::regclass OR logicalrelid = 'orders_streaming'::regclass
 	ORDER BY shardminvalue::BIGINT, logicalrelid;
 
@@ -217,7 +217,7 @@ SELECT count(*) FROM orders_streaming WHERE o_orderkey = 101;
 SELECT count(*) FROM orders_streaming WHERE o_orderkey = 102;
 SELECT count(*) FROM orders_streaming WHERE o_orderkey = 103;
 
-SELECT * FROM pg_dist_shard
+SELECT logicalrelid, shardid, shardstorage, shardminvalue, shardmaxvalue FROM pg_dist_shard
 	WHERE logicalrelid = 'lineitem_streaming'::regclass OR logicalrelid = 'orders_streaming'::regclass
 	ORDER BY shardminvalue::BIGINT, logicalrelid;
 
@@ -267,7 +267,7 @@ SELECT "Column", "Type", "Modifiers" FROM public.table_desc WHERE relid='orders_
 SET search_path to "Tenant Isolation";
 
 -- check MX metadata
-SELECT * FROM pg_dist_shard
+SELECT logicalrelid, shardid, shardstorage, shardminvalue, shardmaxvalue FROM pg_dist_shard
 	WHERE logicalrelid = 'lineitem_streaming'::regclass OR logicalrelid = 'orders_streaming'::regclass
 	ORDER BY shardminvalue::BIGINT, logicalrelid;
 
@@ -344,7 +344,7 @@ SELECT create_distributed_table('test_append', 'tenant_id', 'append');
 SELECT isolate_tenant_to_new_shard('test_append', 100, shard_transfer_mode => 'force_logical');
 
 -- check metadata for comparison
-SELECT * FROM pg_dist_shard
+SELECT logicalrelid, shardid, shardstorage, shardminvalue, shardmaxvalue FROM pg_dist_shard
 	WHERE logicalrelid = 'lineitem_streaming'::regclass OR logicalrelid = 'orders_streaming'::regclass
 	ORDER BY shardminvalue::BIGINT, logicalrelid;
 

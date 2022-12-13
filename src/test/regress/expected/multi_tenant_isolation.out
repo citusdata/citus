@@ -165,7 +165,7 @@ SELECT count(*) FROM orders_streaming WHERE o_orderkey = 103;
      1
 (1 row)
 
-SELECT * FROM pg_dist_shard
+SELECT logicalrelid, shardid, shardstorage, shardminvalue, shardmaxvalue FROM pg_dist_shard
 	WHERE logicalrelid = 'lineitem_streaming'::regclass OR logicalrelid = 'orders_streaming'::regclass
 	ORDER BY shardminvalue::BIGINT, logicalrelid;
     logicalrelid    | shardid | shardstorage | shardminvalue | shardmaxvalue
@@ -384,7 +384,7 @@ SELECT count(*) FROM orders_streaming WHERE o_orderkey = 103;
      1
 (1 row)
 
-SELECT * FROM pg_dist_shard
+SELECT logicalrelid, shardid, shardstorage, shardminvalue, shardmaxvalue FROM pg_dist_shard
 	WHERE logicalrelid = 'lineitem_streaming'::regclass OR logicalrelid = 'orders_streaming'::regclass
 	ORDER BY shardminvalue::BIGINT, logicalrelid;
     logicalrelid    | shardid | shardstorage | shardminvalue | shardmaxvalue
@@ -538,7 +538,7 @@ SELECT "Column", "Type", "Modifiers" FROM public.table_desc WHERE relid='orders_
 \c - mx_isolation_role_ent - :worker_1_port
 SET search_path to "Tenant Isolation";
 -- check MX metadata
-SELECT * FROM pg_dist_shard
+SELECT logicalrelid, shardid, shardstorage, shardminvalue, shardmaxvalue FROM pg_dist_shard
 	WHERE logicalrelid = 'lineitem_streaming'::regclass OR logicalrelid = 'orders_streaming'::regclass
 	ORDER BY shardminvalue::BIGINT, logicalrelid;
     logicalrelid    | shardid | shardstorage | shardminvalue | shardmaxvalue
@@ -681,7 +681,7 @@ SELECT create_distributed_table('test_append', 'tenant_id', 'append');
 SELECT isolate_tenant_to_new_shard('test_append', 100, shard_transfer_mode => 'block_writes');
 ERROR:  cannot isolate tenant because tenant isolation is only support for hash distributed tables
 -- check metadata for comparison
-SELECT * FROM pg_dist_shard
+SELECT logicalrelid, shardid, shardstorage, shardminvalue, shardmaxvalue FROM pg_dist_shard
 	WHERE logicalrelid = 'lineitem_streaming'::regclass OR logicalrelid = 'orders_streaming'::regclass
 	ORDER BY shardminvalue::BIGINT, logicalrelid;
     logicalrelid    | shardid | shardstorage | shardminvalue | shardmaxvalue
