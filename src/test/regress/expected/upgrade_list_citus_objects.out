@@ -68,11 +68,13 @@ ORDER BY 1;
  function citus_internal_add_partition_metadata(regclass,"char",text,integer,"char")
  function citus_internal_add_placement_metadata(bigint,bigint,integer,bigint)
  function citus_internal_add_placement_metadata(bigint,integer,bigint,integer,bigint)
- function citus_internal_add_shard_metadata(regclass,bigint,"char",text,text)
+ function citus_internal_add_shard_metadata(regclass,bigint,"char",text,text,bigint)
+ function citus_internal_add_shardgroup_metadata(bigint,integer,text,text)
  function citus_internal_adjust_local_clock_to_remote(cluster_clock)
  function citus_internal_delete_colocation_metadata(integer)
  function citus_internal_delete_partition_metadata(regclass)
  function citus_internal_delete_shard_metadata(bigint)
+ function citus_internal_delete_shardgroup_metadata(bigint,integer)
  function citus_internal_global_blocked_processes()
  function citus_internal_local_blocked_processes()
  function citus_internal_update_placement_metadata(bigint,integer,integer)
@@ -280,6 +282,7 @@ ORDER BY 1;
  sequence pg_dist_node_nodeid_seq
  sequence pg_dist_operationid_seq
  sequence pg_dist_placement_placementid_seq
+ sequence pg_dist_shardgroupid_seq
  sequence pg_dist_shardid_seq
  table pg_dist_authinfo
  table pg_dist_background_job
@@ -296,6 +299,7 @@ ORDER BY 1;
  table pg_dist_poolinfo
  table pg_dist_rebalance_strategy
  table pg_dist_shard
+ table pg_dist_shardgroup
  table pg_dist_transaction
  type citus.distribution_type
  type citus.shard_transfer_mode
@@ -318,5 +322,5 @@ ORDER BY 1;
  view citus_stat_statements
  view pg_dist_shard_placement
  view time_partitions
-(310 rows)
+(314 rows)
 
