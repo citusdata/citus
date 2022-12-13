@@ -15,6 +15,12 @@ SELECT nextval('pg_dist_shardid_seq') = MAX(shardid)+1 FROM pg_dist_shard;
  t
 (1 row)
 
+SELECT nextval('pg_dist_shardgroupid_seq') = MAX(shardgroupid)+1 FROM pg_dist_shardgroup;
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
 SELECT nextval('pg_dist_placement_placementid_seq') = MAX(placementid)+1 FROM pg_dist_placement;
  ?column?
 ---------------------------------------------------------------------
@@ -76,6 +82,7 @@ SELECT sequence_name FROM information_schema.sequences
   AND sequence_name NOT IN (
     -- these ones are restored above
     'pg_dist_shardid_seq',
+    'pg_dist_shardgroupid_seq',
     'pg_dist_placement_placementid_seq',
     'pg_dist_groupid_seq',
     'pg_dist_node_nodeid_seq',

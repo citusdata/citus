@@ -4,6 +4,7 @@ BEGIN;
 SELECT * FROM pg_indexes WHERE schemaname = 'upgrade_basic' and tablename NOT LIKE 'r_%' ORDER BY tablename;
 
 SELECT nextval('pg_dist_shardid_seq') = MAX(shardid)+1 FROM pg_dist_shard;
+SELECT nextval('pg_dist_shardgroupid_seq') = MAX(shardgroupid)+1 FROM pg_dist_shardgroup;
 SELECT nextval('pg_dist_placement_placementid_seq') = MAX(placementid)+1 FROM pg_dist_placement;
 SELECT nextval('pg_dist_groupid_seq') = MAX(groupid)+1 FROM pg_dist_node;
 SELECT nextval('pg_dist_node_nodeid_seq') = MAX(nodeid)+1 FROM pg_dist_node;
@@ -21,6 +22,7 @@ SELECT sequence_name FROM information_schema.sequences
   AND sequence_name NOT IN (
     -- these ones are restored above
     'pg_dist_shardid_seq',
+    'pg_dist_shardgroupid_seq',
     'pg_dist_placement_placementid_seq',
     'pg_dist_groupid_seq',
     'pg_dist_node_nodeid_seq',
