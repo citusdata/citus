@@ -186,7 +186,7 @@ SELECT create_distributed_table_concurrently('table_1', 'id');
 
 (1 row)
 
-SELECT * FROM pg_dist_shard WHERE logicalrelid = 'table_1'::regclass;
+SELECT logicalrelid, shardid, shardstorage, shardminvalue, shardmaxvalue FROM pg_dist_shard WHERE logicalrelid = 'table_1'::regclass;
  logicalrelid | shardid | shardstorage | shardminvalue | shardmaxvalue
 ---------------------------------------------------------------------
  table_1      | 1880080 | t            | -2147483648   | -1

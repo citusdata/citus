@@ -103,7 +103,7 @@ SELECT citus.mitmproxy('conn.allow()');
 
 -- Verify that the table can be distributed concurrently after unsuccessful attempts
 SELECT create_distributed_table_concurrently('table_1', 'id');
-SELECT * FROM pg_dist_shard WHERE logicalrelid = 'table_1'::regclass;
+SELECT logicalrelid, shardid, shardstorage, shardminvalue, shardmaxvalue FROM pg_dist_shard WHERE logicalrelid = 'table_1'::regclass;
 
 DROP SCHEMA create_dist_tbl_con CASCADE;
 SET search_path TO default;
