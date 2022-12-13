@@ -51,7 +51,7 @@ BEGIN
     CREATE TABLE public.pg_dist_authinfo AS SELECT * FROM pg_catalog.pg_dist_authinfo;
     CREATE TABLE public.pg_dist_poolinfo AS SELECT * FROM pg_catalog.pg_dist_poolinfo;
     -- sequences
-    CREATE TABLE public.pg_dist_clock_logical_seq AS SELECT last_val FROM pg_catalog.pg_dist_clock_logical_seq;
+    CREATE TABLE public.pg_dist_clock_logical_seq AS SELECT nextval('pg_catalog.pg_dist_clock_logical_seq') AS last_val;
     CREATE TABLE public.pg_dist_rebalance_strategy AS SELECT
         name,
         default_strategy,
