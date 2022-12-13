@@ -124,7 +124,7 @@ step "s2-create-table_2-none"
 step "s2-print-status"
 {
 	-- sanity check on partitions
-	SELECT * FROM pg_dist_shard
+	SELECT logicalrelid, shardid, shardstorage, shardminvalue, shardmaxvalue FROM pg_dist_shard
 		WHERE logicalrelid = 'table_1'::regclass OR logicalrelid = 'table_2'::regclass
 		ORDER BY shardminvalue::BIGINT, logicalrelid;
 
