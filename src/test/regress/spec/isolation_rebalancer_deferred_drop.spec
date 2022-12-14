@@ -30,6 +30,7 @@ COMMENT ON PROCEDURE isolation_cleanup_orphaned_shards()
     IS 'cleanup orphaned shards';
     RESET citus.enable_metadata_sync;
 
+    CALL isolation_cleanup_orphaned_shards();
     SET citus.next_shard_id to 120000;
 	SET citus.shard_count TO 8;
 	SET citus.shard_replication_factor TO 1;
@@ -58,21 +59,10 @@ step "s1-move-placement"
     SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638);
 }
 
-step "s1-move-placement-back"
-{
-    SET client_min_messages to NOTICE;
-    SHOW log_error_verbosity;
-    SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57638, 'localhost', 57637);
-}
-
 step "s1-drop-marked-shards"
 {
     SET client_min_messages to NOTICE;
     CALL isolation_cleanup_orphaned_shards();
-}
-
-step "s1-lock-pg-dist-placement" {
-    LOCK TABLE pg_dist_placement IN SHARE ROW EXCLUSIVE MODE;
 }
 
 step "s1-commit"
@@ -81,10 +71,6 @@ step "s1-commit"
 }
 
 session "s2"
-
-step "s2-drop-old-shards" {
-    SELECT run_try_drop_marked_resources();
-}
 
 step "s2-start-session-level-connection"
 {
@@ -112,7 +98,3 @@ step "s2-drop-marked-shards"
 permutation "s1-begin" "s1-move-placement" "s1-drop-marked-shards" "s2-drop-marked-shards" "s1-commit"
 permutation "s1-begin" "s1-move-placement" "s2-drop-marked-shards" "s1-drop-marked-shards" "s1-commit"
 permutation "s1-begin" "s1-move-placement" "s2-start-session-level-connection" "s2-lock-table-on-worker" "s1-drop-marked-shards" "s1-commit" "s2-stop-connection"
-// make sure we give a clear error when we try to replace an orphaned shard that is still in use
-permutation "s1-begin" "s1-move-placement" "s2-start-session-level-connection" "s2-lock-table-on-worker" "s1-commit" "s1-begin" "s1-move-placement-back" "s1-commit" "s2-stop-connection"
-// make sure we error if we cannot get the lock on pg_dist_placement
-permutation "s1-begin" "s1-lock-pg-dist-placement" "s2-drop-old-shards" "s1-commit"
