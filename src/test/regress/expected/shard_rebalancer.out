@@ -202,8 +202,6 @@ BEGIN;
     SELECT replicate_table_shards('dist_table_test_2',  max_shard_copies := 4,  shard_transfer_mode:='block_writes');
 NOTICE:  issuing CALL citus_cleanup_orphaned_resources()
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing CALL citus_cleanup_orphaned_resources()
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  Copying shard xxxxx from localhost:xxxxx to localhost:xxxxx ...
 NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
@@ -1155,14 +1153,14 @@ CALL citus_cleanup_orphaned_resources();
 select * from pg_dist_placement ORDER BY placementid;
  placementid | shardid | shardstate | shardlength | groupid
 ---------------------------------------------------------------------
-         146 |  123023 |          1 |           0 |      14
-         149 |  123024 |          1 |           0 |      14
-         152 |  123027 |          1 |           0 |      14
-         153 |  123028 |          1 |           0 |      14
-         154 |  123021 |          1 |           0 |      16
-         155 |  123025 |          1 |           0 |      16
-         156 |  123022 |          1 |           0 |      16
-         157 |  123026 |          1 |           0 |      16
+         138 |  123023 |          1 |           0 |      14
+         141 |  123024 |          1 |           0 |      14
+         144 |  123027 |          1 |           0 |      14
+         145 |  123028 |          1 |           0 |      14
+         146 |  123021 |          1 |           0 |      16
+         147 |  123025 |          1 |           0 |      16
+         148 |  123022 |          1 |           0 |      16
+         149 |  123026 |          1 |           0 |      16
 (8 rows)
 
 -- Move all shards to worker1 again
@@ -1631,7 +1629,7 @@ NOTICE:  Moving shard xxxxx from localhost:xxxxx to localhost:xxxxx ...
 (1 row)
 
 CALL citus_cleanup_orphaned_resources();
-NOTICE:  cleaned up 1 orphaned shards
+NOTICE:  cleaned up 1 orphaned resources
 SELECT * FROM public.table_placements_per_node;
  nodeport | logicalrelid | count
 ---------------------------------------------------------------------
@@ -1756,7 +1754,7 @@ NOTICE:  Moving shard xxxxx from localhost:xxxxx to localhost:xxxxx ...
 (1 row)
 
 CALL citus_cleanup_orphaned_resources();
-NOTICE:  cleaned up 2 orphaned shards
+NOTICE:  cleaned up 2 orphaned resources
 SELECT * FROM public.table_placements_per_node;
  nodeport | logicalrelid | count
 ---------------------------------------------------------------------
@@ -1855,7 +1853,7 @@ NOTICE:  Moving shard xxxxx from localhost:xxxxx to localhost:xxxxx ...
 (1 row)
 
 CALL citus_cleanup_orphaned_resources();
-NOTICE:  cleaned up 1 orphaned shards
+NOTICE:  cleaned up 1 orphaned resources
 SELECT * FROM public.table_placements_per_node;
  nodeport | logicalrelid | count
 ---------------------------------------------------------------------
@@ -1930,7 +1928,7 @@ NOTICE:  Moving shard xxxxx from localhost:xxxxx to localhost:xxxxx ...
 (1 row)
 
 CALL citus_cleanup_orphaned_resources();
-NOTICE:  cleaned up 1 orphaned shards
+NOTICE:  cleaned up 1 orphaned resources
 SELECT * FROM public.table_placements_per_node;
  nodeport | logicalrelid | count
 ---------------------------------------------------------------------

@@ -56,7 +56,7 @@ ERROR:  citus_cleanup_orphaned_resources cannot run inside a transaction block
 COMMIT;
 -- execute delayed removal
 CALL citus_cleanup_orphaned_resources();
-NOTICE:  cleaned up 1 orphaned shards
+NOTICE:  cleaned up 1 orphaned resources
 -- we expect the shard to be on only the second worker
 SELECT run_command_on_workers($cmd$
     SELECT count(*) FROM pg_class WHERE relname = 't1_20000000';
