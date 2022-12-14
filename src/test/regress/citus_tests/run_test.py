@@ -98,7 +98,7 @@ with open(tmp_schedule_path, "a") as myfile:
 # find suitable make recipe
 if "isolation" in test_schedule:
     make_recipe = 'check-isolation-custom-schedule'
-if "failure" in test_schedule:
+elif "failure" in test_schedule:
     make_recipe = 'check-failure-custom-schedule'
 else:
     make_recipe = 'check-custom-schedule'
