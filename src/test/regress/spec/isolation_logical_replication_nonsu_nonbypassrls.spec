@@ -28,6 +28,12 @@ setup
 
 teardown
 {
+    CREATE OR REPLACE PROCEDURE isolation_cleanup_orphaned_shards()
+        LANGUAGE C
+        AS 'citus', $$isolation_cleanup_orphaned_shards$$;
+    COMMENT ON PROCEDURE isolation_cleanup_orphaned_shards()
+        IS 'cleanup orphaned shards';
+    CALL isolation_cleanup_orphaned_shards();
     DROP TABLE selected_shard;
     DROP TABLE dist;
     REVOKE ALL ON SCHEMA public FROM new_user;
