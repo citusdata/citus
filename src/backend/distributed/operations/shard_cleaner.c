@@ -109,30 +109,12 @@ static int CompareCleanupRecordsByObjectType(const void *leftElement,
 											 const void *rightElement);
 
 /*
- * citus_cleanup_orphaned_shards implements a user-facing UDF to delete
- * orphaned shards that are still haning around in the system. These shards are
- * orphaned by previous actions that were not directly able to delete the
- * placements eg. shard moving or dropping of a distributed table while one of
- * the data nodes was not online.
- *
- * This function iterates through placements where shardstate is
- * SHARD_STATE_TO_DELETE (shardstate = 4), drops the corresponding tables from
- * the node and removes the placement information from the catalog.
- *
- * The function takes no arguments and runs cluster wide. It cannot be run in a
- * transaction, because holding the locks it takes for a long time is not good.
- * While the locks are held, it is impossible for the background daemon to
- * cleanup orphaned shards.
+ * citus_cleanup_orphaned_shards is noop.
+ * Use citus_cleanup_orphaned_resources instead.
  */
 Datum
 citus_cleanup_orphaned_shards(PG_FUNCTION_ARGS)
 {
-	CheckCitusVersion(ERROR);
-	EnsureCoordinator();
-	PreventInTransactionBlock(true, "citus_cleanup_orphaned_shards");
-
-	DropOrphanedResourcesForCleanup();
-
 	PG_RETURN_VOID();
 }
 
