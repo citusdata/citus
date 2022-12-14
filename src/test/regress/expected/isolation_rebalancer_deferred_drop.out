@@ -14,11 +14,11 @@ master_move_shard_placement
 
 step s1-drop-marked-shards:
     SET client_min_messages to NOTICE;
-    CALL isolation_cleanup_orphaned_shards();
+    CALL isolation_cleanup_orphaned_resources();
 
 step s2-drop-marked-shards:
     SET client_min_messages to DEBUG1;
-    CALL isolation_cleanup_orphaned_shards();
+    CALL isolation_cleanup_orphaned_resources();
 
 step s1-commit:
     COMMIT;
@@ -38,11 +38,11 @@ master_move_shard_placement
 
 step s2-drop-marked-shards:
     SET client_min_messages to DEBUG1;
-    CALL isolation_cleanup_orphaned_shards();
+    CALL isolation_cleanup_orphaned_resources();
 
 step s1-drop-marked-shards:
     SET client_min_messages to NOTICE;
-    CALL isolation_cleanup_orphaned_shards();
+    CALL isolation_cleanup_orphaned_resources();
 
 step s1-commit:
     COMMIT;
@@ -84,7 +84,7 @@ run_commands_on_session_level_connection_to_node
 
 step s1-drop-marked-shards:
     SET client_min_messages to NOTICE;
-    CALL isolation_cleanup_orphaned_shards();
+    CALL isolation_cleanup_orphaned_resources();
  <waiting ...>
 s1: WARNING:  canceling statement due to lock timeout
 step s1-drop-marked-shards: <... completed>

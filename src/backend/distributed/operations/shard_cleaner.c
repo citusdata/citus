@@ -73,6 +73,7 @@ OperationId CurrentOperationId = INVALID_OPERATION_ID;
 PG_FUNCTION_INFO_V1(citus_cleanup_orphaned_shards);
 PG_FUNCTION_INFO_V1(isolation_cleanup_orphaned_shards);
 PG_FUNCTION_INFO_V1(citus_cleanup_orphaned_resources);
+PG_FUNCTION_INFO_V1(isolation_cleanup_orphaned_resources);
 
 static bool TryDropResourceByCleanupRecordOutsideTransaction(CleanupRecord *record,
 															 char *nodeName,
@@ -120,18 +121,12 @@ citus_cleanup_orphaned_shards(PG_FUNCTION_ARGS)
 
 
 /*
- * isolation_cleanup_orphaned_shards implements a test UDF that's the same as
- * citus_cleanup_orphaned_shards. The only difference is that this command can
- * be run in transactions, this is to test
+ * isolation_cleanup_orphaned_shards is noop.
+ * Use isolation_cleanup_orphaned_resources instead.
  */
 Datum
 isolation_cleanup_orphaned_shards(PG_FUNCTION_ARGS)
 {
-	CheckCitusVersion(ERROR);
-	EnsureCoordinator();
-
-	DropOrphanedResourcesForCleanup();
-
 	PG_RETURN_VOID();
 }
 
@@ -159,6 +154,23 @@ citus_cleanup_orphaned_resources(PG_FUNCTION_ARGS)
 	{
 		ereport(NOTICE, (errmsg("cleaned up %d orphaned resources", droppedCount)));
 	}
+
+	PG_RETURN_VOID();
+}
+
+
+/*
+ * isolation_cleanup_orphaned_resources implements a test UDF that's the same as
+ * citus_cleanup_orphaned_resources. The only difference is that this command can
+ * be run in transactions, this is to test
+ */
+Datum
+isolation_cleanup_orphaned_resources(PG_FUNCTION_ARGS)
+{
+	CheckCitusVersion(ERROR);
+	EnsureCoordinator();
+
+	DropOrphanedResourcesForCleanup();
 
 	PG_RETURN_VOID();
 }

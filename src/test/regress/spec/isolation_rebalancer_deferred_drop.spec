@@ -23,14 +23,14 @@ setup
         LANGUAGE C STRICT VOLATILE
         AS 'citus', $$stop_session_level_connection_to_node$$;
 
-CREATE OR REPLACE PROCEDURE isolation_cleanup_orphaned_shards()
+CREATE OR REPLACE PROCEDURE isolation_cleanup_orphaned_resources()
     LANGUAGE C
-    AS 'citus', $$isolation_cleanup_orphaned_shards$$;
-COMMENT ON PROCEDURE isolation_cleanup_orphaned_shards()
+    AS 'citus', $$isolation_cleanup_orphaned_resources$$;
+COMMENT ON PROCEDURE isolation_cleanup_orphaned_resources()
     IS 'cleanup orphaned shards';
     RESET citus.enable_metadata_sync;
 
-    CALL isolation_cleanup_orphaned_shards();
+    CALL isolation_cleanup_orphaned_resources();
     SET citus.next_shard_id to 120000;
 	SET citus.shard_count TO 8;
 	SET citus.shard_replication_factor TO 1;
@@ -62,7 +62,7 @@ step "s1-move-placement"
 step "s1-drop-marked-shards"
 {
     SET client_min_messages to NOTICE;
-    CALL isolation_cleanup_orphaned_shards();
+    CALL isolation_cleanup_orphaned_resources();
 }
 
 step "s1-commit"
@@ -91,7 +91,7 @@ step "s2-lock-table-on-worker"
 step "s2-drop-marked-shards"
 {
     SET client_min_messages to DEBUG1;
-    CALL isolation_cleanup_orphaned_shards();
+    CALL isolation_cleanup_orphaned_resources();
 }
 
 
