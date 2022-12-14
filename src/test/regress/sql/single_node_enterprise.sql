@@ -116,6 +116,7 @@ BEGIN
         BEGIN
             -- we want to force remote execution
         	SET LOCAL citus.enable_local_execution TO false;
+			SET LOCAL client_min_messages TO ERROR;
             SELECT COUNT(*) FROM test;
         EXCEPTION WHEN OTHERS THEN
                 IF SQLERRM LIKE 'connection to the remote node%%' THEN

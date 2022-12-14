@@ -129,10 +129,6 @@ BEGIN;
 
   SELECT count(*) FROM socket_test_table;
 ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
-WARNING:  terminating connection due to administrator command
-CONTEXT:  while executing command on localhost:xxxxx
-WARNING:  terminating connection due to administrator command
-CONTEXT:  while executing command on localhost:xxxxx
 ROLLBACK;
 -- repartition joins also can recover
 SET citus.enable_repartition_joins TO on;
