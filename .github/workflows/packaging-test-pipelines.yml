@@ -3,6 +3,8 @@ name: Build tests in packaging images
 on:
   push:
     branches: "**"
+  pull_request:
+    types: [opened, reopened,synchronize]
 
   workflow_dispatch:
 
