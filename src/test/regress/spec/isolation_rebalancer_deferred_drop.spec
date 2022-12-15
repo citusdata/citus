@@ -1,5 +1,7 @@
 // we use 15 as the partition key value through out the test
 // so setting the corresponding shard here is useful
+#include "isolation_mx_common.include.spec"
+
 setup
 {
     SET citus.enable_metadata_sync TO off;
