@@ -71,7 +71,6 @@ OperationId CurrentOperationId = INVALID_OPERATION_ID;
 
 /* declarations for dynamic loading */
 PG_FUNCTION_INFO_V1(citus_cleanup_orphaned_shards);
-PG_FUNCTION_INFO_V1(isolation_cleanup_orphaned_shards);
 PG_FUNCTION_INFO_V1(citus_cleanup_orphaned_resources);
 PG_FUNCTION_INFO_V1(isolation_cleanup_orphaned_resources);
 
@@ -118,17 +117,6 @@ citus_cleanup_orphaned_shards(PG_FUNCTION_ARGS)
 {
 	ereport(WARNING, (errmsg("citus_cleanup_orphaned_shards is deprecated. "
 							 "Use citus_cleanup_orphaned_resources instead")));
-	PG_RETURN_VOID();
-}
-
-
-/*
- * isolation_cleanup_orphaned_shards is noop.
- * Use isolation_cleanup_orphaned_resources instead.
- */
-Datum
-isolation_cleanup_orphaned_shards(PG_FUNCTION_ARGS)
-{
 	PG_RETURN_VOID();
 }
 
