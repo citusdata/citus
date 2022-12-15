@@ -385,7 +385,9 @@ citus_move_shard_placement(PG_FUNCTION_ARGS)
 					targetNodePort, useLogicalReplication, "citus_move_shard_placement");
 
 	/* delete old shards metadata and mark the shards as to be deferred drop */
-	InsertDeferredDropCleanupRecordsForShards(colocatedShardList);
+	int32 sourceGroupId = GroupForNode(sourceNodeName, sourceNodePort);
+	InsertCleanupRecordsForShardPlacementsOnNode(colocatedShardList,
+												 sourceGroupId);
 
 	ShardInterval *colocatedShard = NULL;
 	foreach_ptr(colocatedShard, colocatedShardList)
@@ -438,6 +440,43 @@ InsertDeferredDropCleanupRecordsForShards(List *shardIntervalList)
 		{
 			ShardPlacement *placement = (ShardPlacement *) lfirst(shardPlacementCell);
 
+			/* get shard name */
+			char *qualifiedShardName = ConstructQualifiedShardName(shardInterval);
+
+			/* Log shard in pg_dist_cleanup.
+			 * Parent shards are to be dropped only on sucess after split workflow is complete,
+			 * so mark the policy as 'CLEANUP_DEFERRED_ON_SUCCESS'.
+			 * We also log cleanup record in the current transaction. If the current transaction rolls back,
+			 * we do not generate a record at all.
+			 */
+			InsertCleanupRecordInCurrentTransaction(CLEANUP_OBJECT_SHARD_PLACEMENT,
+													qualifiedShardName,
+													placement->groupId,
+													CLEANUP_DEFERRED_ON_SUCCESS);
+		}
+	}
+}
+
+
+/*
+ * InsertCleanupRecordsForShardPlacementsOnNode inserts deferred cleanup records.
+ * The shards will be dropped by background cleaner later.
+ * This function does this only for the placements on the given node.
+ */
+void
+InsertCleanupRecordsForShardPlacementsOnNode(List *shardIntervalList,
+											 int32 groupId)
+{
+	ShardInterval *shardInterval = NULL;
+	foreach_ptr(shardInterval, shardIntervalList)
+	{
+		/* mark for deferred drop */
+		List *shardPlacementList =
+			ActiveShardPlacementListOnGroup(shardInterval->shardId, groupId);
+
+		ShardPlacement *placement = NULL;
+		foreach_ptr(placement, shardPlacementList)
+		{
 			/* get shard name */
 			char *qualifiedShardName = ConstructQualifiedShardName(shardInterval);
 
