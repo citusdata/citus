@@ -116,6 +116,8 @@ static int CompareCleanupRecordsByObjectType(const void *leftElement,
 Datum
 citus_cleanup_orphaned_shards(PG_FUNCTION_ARGS)
 {
+	ereport(WARNING, (errmsg("citus_cleanup_orphaned_shards is deprecated. "
+							 "Use citus_cleanup_orphaned_resources instead")));
 	PG_RETURN_VOID();
 }
 
