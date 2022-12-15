@@ -63,7 +63,7 @@ step "s1-move-placement"
 
 step "s1-drop-marked-shards"
 {
-    SET client_min_messages to NOTICE;
+    SET client_min_messages to ERROR;
     CALL isolation_cleanup_orphaned_resources();
 }
 
