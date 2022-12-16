@@ -29,6 +29,7 @@
 #include "distributed/deparse_shard_query.h"
 #include "distributed/distribution_column.h"
 #include "distributed/foreign_key_relationship.h"
+#include "distributed/local_executor.h"
 #include "distributed/listutils.h"
 #include "distributed/metadata_sync.h"
 #include "distributed/metadata/dependency.h"
@@ -701,6 +702,129 @@ PostprocessAlterTableSchemaStmt(Node *node, const char *queryString)
 
 
 /*
+ * SwitchToSequentialAndLocalExecutionIfPrimaryKeyNameTooLong generates the longest primary key name
+ * among the shards of the partitions, and if exceeds the limit switches to sequential and
+ * local execution to prevent self-deadlocks.
+ */
+static void
+SwitchToSequentialAndLocalExecutionIfPrimaryKeyNameTooLong(Oid relationId)
+{
+	if (!PartitionedTable(relationId))
+	{
+		/* Citus already handles long names for regular tables */
+		return;
+	}
+
+	if (ShardIntervalCount(relationId) == 0)
+	{
+		/*
+		 * Relation has no shards, so we cannot run into "long shard index
+		 * name" issue.
+		 */
+		return;
+	}
+
+	Oid longestNamePartitionId = PartitionWithLongestNameRelationId(relationId);
+
+	if (!OidIsValid(longestNamePartitionId))
+	{
+		/* no partitions have been created yet */
+		return;
+	}
+
+	char *longestPartitionShardName = get_rel_name(longestNamePartitionId);
+	ShardInterval *shardInterval = LoadShardIntervalWithLongestShardName(
+		longestNamePartitionId);
+
+	AppendShardIdToName(&longestPartitionShardName, shardInterval->shardId);
+
+
+	Relation rel = RelationIdGetRelation(longestNamePartitionId);
+	Oid namespaceOid = RelationGetNamespace(rel);
+	RelationClose(rel);
+
+	char *primaryKeyName = ChooseIndexName(longestPartitionShardName,
+										   namespaceOid,
+										   NULL, NULL, true, true);
+
+
+	if (primaryKeyName && strnlen(primaryKeyName, NAMEDATALEN) >= NAMEDATALEN - 1)
+	{
+		if (ParallelQueryExecutedInTransaction())
+		{
+			/*
+			 * If there has already been a parallel query executed, the sequential mode
+			 * would still use the already opened parallel connections to the workers,
+			 * thus contradicting our purpose of using sequential mode.
+			 */
+			ereport(ERROR, (errmsg(
+								"The primary key name (%s) on a shard is too long and could lead "
+								"to deadlocks when executed in a transaction "
+								"block after a parallel query", primaryKeyName),
+							errhint("Try re-running the transaction with "
+									"\"SET LOCAL citus.multi_shard_modify_mode TO "
+									"\'sequential\';\"")));
+		}
+		else
+		{
+			elog(DEBUG1, "the primary key name on the shards of the partition "
+						 "is too long, switching to sequential and local execution "
+						 "mode to prevent self deadlocks: %s", primaryKeyName);
+
+			SetLocalMultiShardModifyModeToSequential();
+			SetLocalExecutionStatus(LOCAL_EXECUTION_REQUIRED);
+		}
+	}
+}
+
+
+/*
+ * PreprocessAlterTableAddPrimaryKey creates a new primary key constraint name changing the original alterTableCommand run by the utility hook.
+ * Then converts the ALTER TABLE ... ADD PRIMARY KEY ... command
+ * into ALTER TABLE ... ADD CONSTRAINT <constraint name> PRIMARY KEY format and returns the DDLJob
+ * to run this command in the workers.
+ */
+static List *
+PreprocessAlterTableAddPrimaryKey(AlterTableStmt *alterTableStatement, Oid relationId,
+								  Constraint *constraint)
+{
+	/* We should only preprocess an ADD PRIMARY KEY command if we are changing the it.
+	 * This only happens when we have to create a primary key name ourselves in the case that the client does
+	 * not specify a name.
+	 */
+	Assert(constraint->conname == NULL);
+
+	bool primary = true;
+	bool isconstraint = true;
+
+	Relation rel = RelationIdGetRelation(relationId);
+
+	/*
+	 * Change the alterTableCommand so that the standard utility
+	 * hook runs it with the name we created.
+	 */
+	constraint->conname = ChooseIndexName(RelationGetRelationName(rel),
+										  RelationGetNamespace(rel),
+										  NULL, NULL, primary,
+										  isconstraint);
+	RelationClose(rel);
+
+	char *ddlCommand = DeparseTreeNode((Node *) alterTableStatement);
+
+	SwitchToSequentialAndLocalExecutionIfPrimaryKeyNameTooLong(relationId);
+
+	DDLJob *ddlJob = palloc0(sizeof(DDLJob));
+
+	ObjectAddressSet(ddlJob->targetObjectAddress, RelationRelationId, relationId);
+	ddlJob->startNewTransaction = false;
+	ddlJob->metadataSyncCommand = ddlCommand;
+	ddlJob->taskList = DDLTaskList(relationId, ddlCommand);
+
+	return list_make1(ddlJob);
+}
+
+
+/*
  * PreprocessAlterTableStmt determines whether a given ALTER TABLE statement
  * involves a distributed table. If so (and if the statement does not use
  * unsupported options), it modifies the input statement to ensure proper
@@ -938,6 +1062,19 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 				 * transaction is in process, which causes deadlock.
 				 */
 				constraint->skip_validation = true;
+			}
+			else if (constraint->contype == CONSTR_PRIMARY)
+			{
+				if (constraint->conname == NULL)
+				{
+					/*
+					 * Create a constraint name. Convert ALTER TABLE ... ADD PRIMARY ... command into
+					 * ALTER TABLE ... ADD CONSTRAINT <conname> PRIMARY KEY ... form and create the ddl jobs
+					 * for running this form of the command on the workers.
+					 */
+					return PreprocessAlterTableAddPrimaryKey(alterTableStatement,
+															 leftRelationId, constraint);
+				}
 			}
 		}
 		else if (alterTableType == AT_DropConstraint)
@@ -2883,9 +3020,18 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 				 */
 				if (constraint->conname == NULL)
 				{
-					ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-									errmsg("cannot create constraint without a name on a "
-										   "distributed table")));
+					/*
+					 * We support ALTER TABLE ... ADD PRIMARY ... commands by creating a constraint name
+					 * and changing the command into the following form.
+					 * ALTER TABLE ... ADD CONSTRAINT <constaint_name> PRIMARY KEY ...
+					 */
+					if (constraint->contype != CONSTR_PRIMARY)
+					{
+						ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+										errmsg(
+											"cannot create constraint without a name on a "
+											"distributed table")));
+					}
 				}
 
 				break;

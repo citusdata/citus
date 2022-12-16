@@ -119,6 +119,48 @@ AppendAlterTableCmd(StringInfo buf, AlterTableCmd *alterTableCmd)
 			break;
 		}
 
+		case AT_AddConstraint:
+		{
+			Constraint *constraint = (Constraint *) alterTableCmd->def;
+
+			/* We need to deparse ALTER TABLE ... PRIMARY KEY commands into
+			 * ALTER TABLE ... ADD CONSTRAINT <conname> PRIMARY KEY ... to be able
+			 * add a constraint name.
+			 */
+			if (constraint->contype == CONSTR_PRIMARY)
+			{
+				/* Need to deparse PRIMARY KEY constraint commands only if adding a name.*/
+				if (constraint->conname == NULL)
+				{
+					ereport(ERROR, (errmsg(
+										"Constraint name can not be NULL when constraint type is PRIMARY KEY")));
+				}
+
+				appendStringInfoString(buf, " ADD CONSTRAINT ");
+				appendStringInfo(buf, "%s ", quote_identifier(constraint->conname));
+				appendStringInfoString(buf, " PRIMARY KEY (");
+
+				ListCell *lc;
+				bool firstkey = true;
+
+				foreach(lc, constraint->keys)
+				{
+					if (firstkey == false)
+					{
+						appendStringInfoString(buf, ", ");
+					}
+
+					appendStringInfo(buf, "%s", quote_identifier(strVal(lfirst(lc))));
+					firstkey = false;
+				}
+
+				appendStringInfoString(buf, ")");
+				break;
+			}
+		}
+
+		/* fallthrough */
+
 		default:
 		{
 			ereport(ERROR, (errmsg("unsupported subtype for alter table command"),
