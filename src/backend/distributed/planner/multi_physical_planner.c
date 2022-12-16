@@ -316,11 +316,6 @@ BuildJobTree(MultiTreeRoot *multiTree)
 				boundaryNodeJobType = JOIN_MAP_MERGE_JOB;
 			}
 		}
-		else if (currentNodeType == T_MultiPartition &&
-				 parentNodeType == T_MultiExtendedOp)
-		{
-			boundaryNodeJobType = SUBQUERY_MAP_MERGE_JOB;
-		}
 		else if (currentNodeType == T_MultiCollect &&
 				 parentNodeType != T_MultiPartition)
 		{
@@ -1954,10 +1949,7 @@ BuildMapMergeJob(Query *jobQuery, List *dependentJobList, Var *partitionKey,
 	Var *partitionColumn = copyObject(partitionKey);
 
 	/* update the logical partition key's table and column identifiers */
-	if (boundaryNodeJobType != SUBQUERY_MAP_MERGE_JOB)
-	{
-		UpdateColumnAttributes(partitionColumn, rangeTableList, dependentJobList);
-	}
+	UpdateColumnAttributes(partitionColumn, rangeTableList, dependentJobList);
 
 	MapMergeJob *mapMergeJob = CitusMakeNode(MapMergeJob);
 	mapMergeJob->job.jobId = UniqueJobId();
