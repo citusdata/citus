@@ -32,7 +32,6 @@
 #include "distributed/reference_table_utils.h"
 #include "distributed/utils/array_type.h"
 #include "distributed/version_compat.h"
-#include "miscadmin.h"
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
 #include "utils/inval.h"
@@ -83,6 +82,7 @@ static List * GetForeignKeyIdsForColumn(char *columnName, Oid relationId,
 										int searchForeignKeyColumnFlags);
 static List * GetForeignKeysWithLocalTables(Oid relationId);
 static bool IsTableTypeIncluded(Oid relationId, int flags);
+static void UpdateConstraintIsValid(Oid constraintId, bool isValid);
 
 
 /*
@@ -1308,19 +1308,6 @@ IsTableTypeIncluded(Oid relationId, int flags)
 		return (flags & INCLUDE_CITUS_LOCAL_TABLES) != 0;
 	}
 	return false;
-}
-
-
-/*
- * EnableSkippingConstraintValidation is simply a C interface for setting the following:
- *      SET LOCAL citus.skip_constraint_validation TO on;
- */
-void
-EnableSkippingConstraintValidation()
-{
-	set_config_option("citus.skip_constraint_validation", "true",
-					  PGC_SUSET, PGC_S_SESSION,
-					  GUC_ACTION_LOCAL, true, 0, false);
 }
 
 

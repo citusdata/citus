@@ -389,7 +389,6 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 	Node *parsetree = pstmt->utilityStmt;
 	List *ddlJobs = NIL;
 	DistOpsValidationState distOpsValidationState = HasNoneValidObject;
-	bool oldSkipConstraintsValidationValue = SkipConstraintValidation;
 
 	if (IsA(parsetree, ExplainStmt) &&
 		IsA(((ExplainStmt *) parsetree)->query, Query))
@@ -608,7 +607,9 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 		 * Citus intervening. The only exception is partition column drop, in
 		 * which case we error out. Advanced Citus users use this to implement their
 		 * own DDL propagation. We also use it to avoid re-propagating DDL commands
-		 * when changing MX tables on workers.
+		 * when changing MX tables on workers. Below, we also make sure that DDL
+		 * commands don't run queries that might get intercepted by Citus and error
+		 * out, specifically we skip validation in foreign keys.
 		 */
 
 		if (IsA(parsetree, AlterTableStmt))
@@ -627,7 +628,8 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 				 * Note validation is done on the shard level when DDL propagation
 				 * is enabled. The following eagerly executes some tasks on workers.
 				 */
-				SkipForeignKeyValidationIfConstraintIsFkey(alterTableStmt);
+				parsetree =
+					SkipForeignKeyValidationIfConstraintIsFkey(alterTableStmt, false);
 			}
 		}
 	}
@@ -913,8 +915,6 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 		 */
 		CitusHasBeenLoaded(); /* lgtm[cpp/return-value-ignored] */
 	}
-
-	SkipConstraintValidation = oldSkipConstraintsValidationValue;
 }
 
 

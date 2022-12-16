@@ -1872,44 +1872,52 @@ PreprocessAlterTableSchemaStmt(Node *node, const char *queryString,
  * statement to be worked on the distributed table. Currently, it only processes
  * ALTER TABLE ... ADD FOREIGN KEY command to skip the validation step.
  */
-void
-SkipForeignKeyValidationIfConstraintIsFkey(AlterTableStmt *alterTableStatement)
+Node *
+SkipForeignKeyValidationIfConstraintIsFkey(AlterTableStmt *alterTableStatement,
+										   bool processLocalRelation)
 {
 	/* first check whether a distributed relation is affected */
 	if (alterTableStatement->relation == NULL)
 	{
-		return;
+		return (Node *) alterTableStatement;
 	}
 
 	LOCKMODE lockmode = AlterTableGetLockLevel(alterTableStatement->cmds);
 	Oid leftRelationId = AlterTableLookupRelation(alterTableStatement, lockmode);
 	if (!OidIsValid(leftRelationId))
 	{
-		return;
+		return (Node *) alterTableStatement;
 	}
 
-	if (!IsCitusTable(leftRelationId))
+	if (!IsCitusTable(leftRelationId) && !processLocalRelation)
 	{
-		return;
+		return (Node *) alterTableStatement;
 	}
 
+	/*
+	 * We check if there is a ADD FOREIGN CONSTRAINT command in sub commands list.
+	 * If there is we assign referenced releation id to rightRelationId and we also
+	 * set skip_validation to true to prevent PostgreSQL to verify validity of the
+	 * foreign constraint in master. Validity will be checked in workers anyway.
+	 */
+	List *commandList = alterTableStatement->cmds;
 	AlterTableCmd *command = NULL;
-	foreach_ptr(command, alterTableStatement->cmds)
+	foreach_ptr(command, commandList)
 	{
 		AlterTableType alterTableType = command->subtype;
 
 		if (alterTableType == AT_AddConstraint)
 		{
-			/* skip only if the constraint is a foreign key */
 			Constraint *constraint = (Constraint *) command->def;
 			if (constraint->contype == CONSTR_FOREIGN)
 			{
-				/* set the GUC skip_constraint_validation to on */
-				EnableSkippingConstraintValidation();
-				return;
+				/* foreign constraint validations will be done in shards. */
+				constraint->skip_validation = true;
 			}
 		}
 	}
+
+	return (Node *) alterTableStatement;
 }
 
 
