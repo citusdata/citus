@@ -3,23 +3,22 @@
 --
 -- Test checks whether constraints of distributed tables can be adjusted using
 -- the ALTER TABLE ... ADD without specifying a name.
-SET citus.shard_count TO 32;
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 5410000;
 ALTER SEQUENCE pg_catalog.pg_dist_placement_placementid_seq RESTART 5410000;
-CREATE SCHEMA sc1;
+CREATE SCHEMA AT_AddConstNoName;
 -- Check "ADD PRIMARY KEY"
-CREATE TABLE sc1.products (
+CREATE TABLE AT_AddConstNoName.products (
     product_no integer,
     name text,
     price numeric
 );
-SELECT create_distributed_table('sc1.products', 'product_no');
+SELECT create_distributed_table('AT_AddConstNoName.products', 'product_no');
  create_distributed_table
 ---------------------------------------------------------------------
 
 (1 row)
 
-ALTER TABLE sc1.products ADD PRIMARY KEY(product_no);
+ALTER TABLE AT_AddConstNoName.products ADD PRIMARY KEY(product_no);
 SELECT con.conname
     FROM pg_catalog.pg_constraint con
       INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
@@ -44,41 +43,41 @@ SELECT con.conname
 (1 row)
 
 \c - - :master_host :master_port
-ALTER TABLE sc1.products DROP CONSTRAINT products_pkey;
-ALTER TABLE sc1.products ADD PRIMARY KEY(product_no);
-DROP TABLE sc1.products;
+ALTER TABLE AT_AddConstNoName.products DROP CONSTRAINT products_pkey;
+ALTER TABLE AT_AddConstNoName.products ADD PRIMARY KEY(product_no);
+DROP TABLE AT_AddConstNoName.products;
 -- Check "ADD PRIMARY KEY" with reference table
-CREATE TABLE sc1.products_ref (
+CREATE TABLE AT_AddConstNoName.products_ref (
     product_no integer,
     name text,
     price numeric
 );
-CREATE TABLE sc1.products_ref_2 (
+CREATE TABLE AT_AddConstNoName.products_ref_2 (
 	    product_no integer,
 	    name text,
 	    price numeric
 );
-CREATE TABLE sc1.products_ref_3 (
+CREATE TABLE AT_AddConstNoName.products_ref_3 (
             product_no integer,
             name text,
             price numeric
 );
-SELECT create_reference_table('sc1.products_ref');
+SELECT create_reference_table('AT_AddConstNoName.products_ref');
  create_reference_table
 ---------------------------------------------------------------------
 
 (1 row)
 
-SELECT create_reference_table('sc1.products_ref_3');
+SELECT create_reference_table('AT_AddConstNoName.products_ref_3');
  create_reference_table
 ---------------------------------------------------------------------
 
 (1 row)
 
 -- Check for name collisions
-ALTER TABLE sc1.products_ref_3 ADD CONSTRAINT products_ref_pkey PRIMARY KEY(name);
-ALTER TABLE sc1.products_ref_2 ADD CONSTRAINT products_ref_pkey1 PRIMARY KEY(name);
-ALTER TABLE sc1.products_ref ADD PRIMARY KEY(name);
+ALTER TABLE AT_AddConstNoName.products_ref_3 ADD CONSTRAINT products_ref_pkey PRIMARY KEY(name);
+ALTER TABLE AT_AddConstNoName.products_ref_2 ADD CONSTRAINT products_ref_pkey1 PRIMARY KEY(name);
+ALTER TABLE AT_AddConstNoName.products_ref ADD PRIMARY KEY(name);
 SELECT con.conname
     FROM pg_catalog.pg_constraint con
       INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
@@ -89,22 +88,22 @@ SELECT con.conname
  products_ref_pkey2
 (1 row)
 
-ALTER TABLE sc1.products_ref DROP CONSTRAINT products_ref_pkey2;
-DROP TABLE sc1.products_ref;
+ALTER TABLE AT_AddConstNoName.products_ref DROP CONSTRAINT products_ref_pkey2;
+DROP TABLE AT_AddConstNoName.products_ref;
 -- Check with max table name (63 chars)
-CREATE TABLE sc1.verylonglonglonglonglonglonglonglonglonglonglonglonglonglonglonger (
+CREATE TABLE AT_AddConstNoName.verylonglonglonglonglonglonglonglonglonglonglonglonglonglonglonger (
 	            product_no integer,
 	            name text,
                     price numeric
 		);
 NOTICE:  identifier "verylonglonglonglonglonglonglonglonglonglonglonglonglonglonglonger" will be truncated to "verylonglonglonglonglonglonglonglonglonglonglonglonglonglonglon"
-SELECT create_distributed_table('sc1.verylonglonglonglonglonglonglonglonglonglonglonglonglonglonglon', 'product_no');
+SELECT create_distributed_table('AT_AddConstNoName.verylonglonglonglonglonglonglonglonglonglonglonglonglonglonglon', 'product_no');
  create_distributed_table
 ---------------------------------------------------------------------
 
 (1 row)
 
-ALTER TABLE sc1.verylonglonglonglonglonglonglonglonglonglonglonglonglonglonglon ADD PRIMARY KEY(product_no);
+ALTER TABLE AT_AddConstNoName.verylonglonglonglonglonglonglonglonglonglonglonglonglonglonglon ADD PRIMARY KEY(product_no);
 -- Constraint should be created on the coordinator with a shortened name
 SELECT con.conname
     FROM pg_catalog.pg_constraint con
@@ -125,16 +124,16 @@ SELECT con.conname
 		WHERE rel.relname LIKE 'very%' ORDER BY con.conname ASC;
                              conname
 ---------------------------------------------------------------------
- verylonglonglonglonglonglonglonglonglonglonglo_559ab79d_5410034
- verylonglonglonglonglonglonglonglonglonglonglo_559ab79d_5410035
- verylonglonglonglonglonglonglonglonglonglonglo_559ab79d_5410036
- verylonglonglonglonglonglonglonglonglonglonglo_559ab79d_5410037
+ verylonglonglonglonglonglonglonglonglonglonglo_559ab79d_5410006
+ verylonglonglonglonglonglonglonglonglonglonglo_559ab79d_5410007
+ verylonglonglonglonglonglonglonglonglonglonglo_559ab79d_5410008
+ verylonglonglonglonglonglonglonglonglonglonglo_559ab79d_5410009
  verylonglonglonglonglonglonglonglonglonglonglonglonglonglo_pkey
 (5 rows)
 
 -- Constraint can be deleted via the coordinator
 \c - - :master_host :master_port
-ALTER TABLE sc1.verylonglonglonglonglonglonglonglonglonglonglonglonglonglonglon DROP CONSTRAINT verylonglonglonglonglonglonglonglonglonglonglonglonglonglo_pkey;
+ALTER TABLE AT_AddConstNoName.verylonglonglonglonglonglonglonglonglonglonglonglonglonglonglon DROP CONSTRAINT verylonglonglonglonglonglonglonglonglonglonglonglonglonglo_pkey;
 \c - - :public_worker_1_host :worker_1_port
 SELECT con.conname
     FROM pg_catalog.pg_constraint con
@@ -148,17 +147,17 @@ SELECT con.conname
 -- Test the scenario where a partitioned distributed table has a child with max allowed name
 -- Verify that we switch to sequential execution mode to avoid deadlock in this scenario
 \c - - :master_host :master_port
-CREATE TABLE dist_partitioned_table (dist_col int, another_col int, partition_col timestamp) PARTITION BY RANGE (partition_col);
-CREATE TABLE  p1 PARTITION OF dist_partitioned_table FOR VALUES FROM ('2021-01-01') TO ('2022-01-01');
-CREATE TABLE  longlonglonglonglonglonglonglonglonglonglonglonglonglonglongabc PARTITION OF dist_partitioned_table FOR VALUES FROM ('2020-01-01') TO ('2021-01-01');
-SELECT create_distributed_table('dist_partitioned_table', 'partition_col');
+CREATE TABLE AT_AddConstNoName.dist_partitioned_table (dist_col int, another_col int, partition_col timestamp) PARTITION BY RANGE (partition_col);
+CREATE TABLE AT_AddConstNoName.p1 PARTITION OF AT_AddConstNoName.dist_partitioned_table FOR VALUES FROM ('2021-01-01') TO ('2022-01-01');
+CREATE TABLE AT_AddConstNoName.longlonglonglonglonglonglonglonglonglonglonglonglonglonglongabc PARTITION OF AT_AddConstNoName.dist_partitioned_table FOR VALUES FROM ('2020-01-01') TO ('2021-01-01');
+SELECT create_distributed_table('AT_AddConstNoName.dist_partitioned_table', 'partition_col');
  create_distributed_table
 ---------------------------------------------------------------------
 
 (1 row)
 
 SET client_min_messages TO DEBUG1;
-ALTER TABLE dist_partitioned_table ADD PRIMARY KEY(partition_col);
+ALTER TABLE AT_AddConstNoName.dist_partitioned_table ADD PRIMARY KEY(partition_col);
 DEBUG:  the primary key name on the shards of the partition is too long, switching to sequential and local execution mode to prevent self deadlocks: longlonglonglonglonglonglonglonglonglonglonglo_537570f5_54_pkey
 DEBUG:  ALTER TABLE / ADD PRIMARY KEY will create implicit index "dist_partitioned_table_pkey" for table "dist_partitioned_table"
 DEBUG:  ALTER TABLE / ADD PRIMARY KEY will create implicit index "longlonglonglonglonglonglonglonglonglonglonglonglonglonglo_pkey" for table "longlonglonglonglonglonglonglonglonglonglonglonglonglonglongabc"
@@ -184,15 +183,15 @@ SELECT con.conname
           WHERE rel.relname LIKE 'longlonglonglonglonglonglonglonglong%' ORDER BY con.conname ASC;
                              conname
 ---------------------------------------------------------------------
- longlonglonglonglonglonglonglonglonglonglonglo_9e4e3069_5410042
- longlonglonglonglonglonglonglonglonglonglonglo_9e4e3069_5410043
- longlonglonglonglonglonglonglonglonglonglonglo_9e4e3069_5410044
- longlonglonglonglonglonglonglonglonglonglonglo_9e4e3069_5410045
+ longlonglonglonglonglonglonglonglonglonglonglo_9e4e3069_5410014
+ longlonglonglonglonglonglonglonglonglonglonglo_9e4e3069_5410015
+ longlonglonglonglonglonglonglonglonglonglonglo_9e4e3069_5410016
+ longlonglonglonglonglonglonglonglonglonglonglo_9e4e3069_5410017
  longlonglonglonglonglonglonglonglonglonglonglonglonglonglo_pkey
 (5 rows)
 
 \c - - :master_host :master_port
-ALTER TABLE dist_partitioned_table DROP CONSTRAINT dist_partitioned_table_pkey;
+ALTER TABLE AT_AddConstNoName.dist_partitioned_table DROP CONSTRAINT dist_partitioned_table_pkey;
 \c - - :public_worker_1_host :worker_1_port
 SELECT con.conname
     FROM pg_catalog.pg_constraint con
@@ -207,26 +206,26 @@ SELECT con.conname
 -- switch to sequential execution
 \c - - :master_host :master_port
 BEGIN;
-	SELECT count(*) FROM dist_partitioned_table;
+	SELECT count(*) FROM AT_AddConstNoName.dist_partitioned_table;
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
-	ALTER TABLE dist_partitioned_table ADD PRIMARY KEY(partition_col);
+	ALTER TABLE AT_AddConstNoName.dist_partitioned_table ADD PRIMARY KEY(partition_col);
 ERROR:  The primary key name (longlonglonglonglonglonglonglonglonglonglonglo_537570f5_54_pkey) on a shard is too long and could lead to deadlocks when executed in a transaction block after a parallel query
 HINT:  Try re-running the transaction with "SET LOCAL citus.multi_shard_modify_mode TO 'sequential';"
 ROLLBACK;
 -- try inside a sequential block
 BEGIN;
 	SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
-	SELECT count(*) FROM dist_partitioned_table;
+	SELECT count(*) FROM AT_AddConstNoName.dist_partitioned_table;
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
-	ALTER TABLE dist_partitioned_table ADD PRIMARY KEY(partition_col);
+	ALTER TABLE AT_AddConstNoName.dist_partitioned_table ADD PRIMARY KEY(partition_col);
 	ROLLBACK;
 -- Test primary key name is generated by postgres for citus local table.
 \c - - :master_host :master_port
@@ -238,14 +237,14 @@ SELECT 1 FROM master_add_node('localhost', :master_port, groupId => 0);
 (1 row)
 
 RESET client_min_messages;
-CREATE TABLE citus_local_table(id int, other_column int);
-SELECT citus_add_local_table_to_metadata('citus_local_table');
+CREATE TABLE AT_AddConstNoName.citus_local_table(id int, other_column int);
+SELECT citus_add_local_table_to_metadata('AT_AddConstNoName.citus_local_table');
  citus_add_local_table_to_metadata
 ---------------------------------------------------------------------
 
 (1 row)
 
-ALTER TABLE citus_local_table ADD PRIMARY KEY(id);
+ALTER TABLE AT_AddConstNoName.citus_local_table ADD PRIMARY KEY(id);
 -- Check the primary key is created for the local table and its shard.
 SELECT con.conname
     FROM pg_catalog.pg_constraint con
@@ -255,10 +254,10 @@ SELECT con.conname
             conname
 ---------------------------------------------------------------------
  citus_local_table_pkey
- citus_local_table_pkey_5410050
+ citus_local_table_pkey_5410022
 (2 rows)
 
-SELECT create_distributed_table('citus_local_table','id');
+SELECT create_distributed_table('AT_AddConstNoName.citus_local_table','id');
  create_distributed_table
 ---------------------------------------------------------------------
 
@@ -274,7 +273,7 @@ SELECT con.conname
  citus_local_table_pkey
 (1 row)
 
-\c - - :public_worker_1_host :worker_1_port	
+\c - - :public_worker_1_host :worker_1_port
 SELECT con.conname
     FROM pg_catalog.pg_constraint con
       INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
@@ -283,14 +282,14 @@ SELECT con.conname
             conname
 ---------------------------------------------------------------------
  citus_local_table_pkey
- citus_local_table_pkey_5410051
- citus_local_table_pkey_5410052
- citus_local_table_pkey_5410053
- citus_local_table_pkey_5410054
+ citus_local_table_pkey_5410023
+ citus_local_table_pkey_5410024
+ citus_local_table_pkey_5410025
+ citus_local_table_pkey_5410026
 (5 rows)
 
 \c - - :master_host :master_port
-DROP TABLE citus_local_table;
+DROP TABLE AT_AddConstNoName.citus_local_table;
 SELECT 1 FROM master_remove_node('localhost', :master_port);
  ?column?
 ---------------------------------------------------------------------
@@ -298,14 +297,14 @@ SELECT 1 FROM master_remove_node('localhost', :master_port);
 (1 row)
 
 -- Test with unusual table and column names
-CREATE TABLE "2nd table" ( "2nd id" INTEGER, "3rd id" INTEGER);
-SELECT create_distributed_table('"2nd table"','2nd id');
+CREATE TABLE AT_AddConstNoName."2nd table" ( "2nd id" INTEGER, "3rd id" INTEGER);
+SELECT create_distributed_table('AT_AddConstNoName."2nd table"','2nd id');
  create_distributed_table
 ---------------------------------------------------------------------
 
 (1 row)
 
-ALTER TABLE  "2nd table" ADD PRIMARY KEY ("2nd id", "3rd id");
+ALTER TABLE  AT_AddConstNoName."2nd table" ADD PRIMARY KEY ("2nd id", "3rd id");
 SELECT con.conname
     FROM pg_catalog.pg_constraint con
       INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
@@ -326,17 +325,19 @@ SELECT con.conname
         conname
 ---------------------------------------------------------------------
  2nd table_pkey
- 2nd table_pkey_5410055
- 2nd table_pkey_5410056
- 2nd table_pkey_5410057
- 2nd table_pkey_5410058
+ 2nd table_pkey_5410027
+ 2nd table_pkey_5410028
+ 2nd table_pkey_5410029
+ 2nd table_pkey_5410030
 (5 rows)
 
-\c - - :master_host :master_port	
-ALTER TABLE  "2nd table" DROP CONSTRAINT "2nd table_pkey";
-DROP SCHEMA sc1 CASCADE;
-NOTICE:  drop cascades to 4 other objects
-DETAIL:  drop cascades to table sc1.products_ref_2
-drop cascades to table sc1.products_ref_3
-drop cascades to table sc1.verylonglonglonglonglonglonglonglonglonglonglonglonglonglonglon
-drop cascades to table sc1.products_ref_3_5410033
+\c - - :master_host :master_port
+ALTER TABLE  AT_AddConstNoName."2nd table" DROP CONSTRAINT "2nd table_pkey";
+DROP SCHEMA AT_AddConstNoName CASCADE;
+NOTICE:  drop cascades to 6 other objects
+DETAIL:  drop cascades to table at_addconstnoname.products_ref_2
+drop cascades to table at_addconstnoname.products_ref_3
+drop cascades to table at_addconstnoname.verylonglonglonglonglonglonglonglonglonglonglonglonglonglonglon
+drop cascades to table at_addconstnoname.dist_partitioned_table
+drop cascades to table at_addconstnoname.products_ref_3_5410005
+drop cascades to table at_addconstnoname."2nd table"
