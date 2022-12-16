@@ -95,8 +95,7 @@ typedef enum
 {
 	JOB_INVALID_FIRST = 0,
 	JOIN_MAP_MERGE_JOB = 1,
-	SUBQUERY_MAP_MERGE_JOB = 2,
-	TOP_LEVEL_WORKER_JOB = 3
+	TOP_LEVEL_WORKER_JOB = 2
 } BoundaryNodeJobType;
 
 
