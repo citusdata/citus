@@ -3,7 +3,7 @@
 setup
 {
     SET citus.enable_metadata_sync TO off;
-    CREATE OR REPLACE FUNCTION run_try_drop_marked_shards()
+    CREATE OR REPLACE FUNCTION run_try_drop_marked_resources()
     RETURNS VOID
     AS 'citus'
     LANGUAGE C STRICT VOLATILE;
@@ -83,7 +83,7 @@ step "s1-commit"
 session "s2"
 
 step "s2-drop-old-shards" {
-    SELECT run_try_drop_marked_shards();
+    SELECT run_try_drop_marked_resources();
 }
 
 step "s2-start-session-level-connection"

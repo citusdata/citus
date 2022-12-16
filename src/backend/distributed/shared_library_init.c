@@ -1054,8 +1054,8 @@ RegisterCitusConfigVariables(void)
 		gettext_noop(
 			"Sets how many percentage of free disk space should be after a shard move"),
 		gettext_noop(
-			"This setting controls how much free space should be available after a shard move."
-			"If the free disk space will be lower than this parameter, then shard move will result in"
+			"This setting controls how much free space should be available after a shard move. "
+			"If the free disk space will be lower than this parameter, then shard move will result in "
 			"an error."),
 		&DesiredPercentFreeAfterMove,
 		10.0, 0.0, 100.0,
@@ -1448,7 +1448,7 @@ RegisterCitusConfigVariables(void)
 					 "parallelization"),
 		gettext_noop("When enabled, Citus will force the executor to use "
 					 "as many connections as possible while executing a "
-					 "parallel distributed query. If not enabled, the executor"
+					 "parallel distributed query. If not enabled, the executor "
 					 "might choose to use less connections to optimize overall "
 					 "query execution throughput. Internally, setting this true "
 					 "will end up with using one connection per task."),
@@ -1487,7 +1487,7 @@ RegisterCitusConfigVariables(void)
 	DefineCustomBoolVariable(
 		"citus.hide_citus_dependent_objects",
 		gettext_noop(
-			"Hides some objects, which depends on citus extension, from pg meta class queries."
+			"Hides some objects, which depends on citus extension, from pg meta class queries. "
 			"It is intended to be used only before postgres vanilla tests to not break them."),
 		NULL,
 		&HideCitusDependentObjects,
@@ -1594,10 +1594,10 @@ RegisterCitusConfigVariables(void)
 		gettext_noop("defines the behaviour when a distributed table "
 					 "is joined with a local table"),
 		gettext_noop(
-			"There are 4 values available. The default, 'auto' will recursively plan"
-			"distributed tables if there is a constant filter on a unique index."
-			"'prefer-local' will choose local tables if possible."
-			"'prefer-distributed' will choose distributed tables if possible"
+			"There are 4 values available. The default, 'auto' will recursively plan "
+			"distributed tables if there is a constant filter on a unique index. "
+			"'prefer-local' will choose local tables if possible. "
+			"'prefer-distributed' will choose distributed tables if possible. "
 			"'never' will basically skip local table joins."
 			),
 		&LocalTableJoinPolicy,
@@ -1687,6 +1687,24 @@ RegisterCitusConfigVariables(void)
 		&MaxAdaptiveExecutorPoolSize,
 		16, 1, INT_MAX,
 		PGC_USERSET,
+		GUC_STANDARD,
+		NULL, NULL, NULL);
+
+	DefineCustomIntVariable(
+		"citus.max_background_task_executors",
+		gettext_noop(
+			"Sets the maximum number of parallel task executor workers for scheduled "
+			"background tasks"),
+		gettext_noop(
+			"Controls the maximum number of parallel task executors the task monitor "
+			"can create for scheduled background tasks. Note that the value is not effective "
+			"if it is set a value higher than 'max_worker_processes' postgres parameter . It is "
+			"also not guaranteed to have exactly specified number of parallel task executors "
+			"because total background worker count is shared by all background workers. The value "
+			"represents the possible maximum number of task executors."),
+		&MaxBackgroundTaskExecutors,
+		4, 1, MAX_BG_TASK_EXECUTORS,
+		PGC_SIGHUP,
 		GUC_STANDARD,
 		NULL, NULL, NULL);
 
@@ -1798,11 +1816,11 @@ RegisterCitusConfigVariables(void)
 					 "health status are tracked in a shared hash table on "
 					 "the master node. This configuration value limits the "
 					 "size of the hash table, and consequently the maximum "
-					 "number of worker nodes that can be tracked."
+					 "number of worker nodes that can be tracked. "
 					 "Citus keeps some information about the worker nodes "
 					 "in the shared memory for certain optimizations. The "
 					 "optimizations are enforced up to this number of worker "
-					 "nodes. Any additional worker nodes may not benefit from"
+					 "nodes. Any additional worker nodes may not benefit from "
 					 "the optimizations."),
 		&MaxWorkerNodesTracked,
 		2048, 1024, INT_MAX,
@@ -1976,7 +1994,7 @@ RegisterCitusConfigVariables(void)
 		gettext_noop("When enabled, the executor waits until all the connections "
 					 "are successfully established."),
 		gettext_noop("Under some load, the executor may decide to establish some "
-					 "extra connections to further parallelize the execution. However,"
+					 "extra connections to further parallelize the execution. However, "
 					 "before the connection establishment is done, the execution might "
 					 "have already finished. When this GUC is set to true, the execution "
 					 "waits for such connections to be established."),
@@ -1992,7 +2010,7 @@ RegisterCitusConfigVariables(void)
 			"When enabled, rebalancer propagates all the allowed GUC settings to new connections."),
 		NULL,
 		&PropagateSessionSettingsForLoopbackConnection,
-		true,
+		false,
 		PGC_USERSET,
 		GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
@@ -2074,7 +2092,7 @@ RegisterCitusConfigVariables(void)
 		"citus.replication_model",
 		gettext_noop("Deprecated. Please use citus.shard_replication_factor instead"),
 		gettext_noop(
-			"Shard replication model is determined by the shard replication factor."
+			"Shard replication model is determined by the shard replication factor. "
 			"'statement' replication is used only when the replication factor is one."),
 		&ReplicationModel,
 		REPLICATION_MODEL_STREAMING,
@@ -2160,7 +2178,7 @@ RegisterCitusConfigVariables(void)
 		"citus.skip_advisory_lock_permission_checks",
 		gettext_noop("Postgres would normally enforce some "
 					 "ownership checks while acquiring locks. "
-					 "When this setting is 'off', Citus skips"
+					 "When this setting is 'on', Citus skips "
 					 "ownership checks on internal advisory "
 					 "locks."),
 		NULL,
@@ -2207,7 +2225,7 @@ RegisterCitusConfigVariables(void)
 		gettext_noop("This feature is not intended for users. It is developed "
 					 "to get consistent regression test outputs. When enabled, "
 					 "the RETURNING clause returns the tuples sorted. The sort "
-					 "is done for all the entries, starting from the first one."
+					 "is done for all the entries, starting from the first one. "
 					 "Finally, the sorting is done in ASC order."),
 		&SortReturning,
 		false,
@@ -2265,7 +2283,7 @@ RegisterCitusConfigVariables(void)
 					 "It means that the queries are likely to return wrong results "
 					 "unless the user is absolutely sure that pushing down the "
 					 "subquery is safe. This GUC is maintained only for backward "
-					 "compatibility, no new users are supposed to use it. The planner"
+					 "compatibility, no new users are supposed to use it. The planner "
 					 "is capable of pushing down as much computation as possible to the "
 					 "shards depending on the query."),
 		&SubqueryPushdown,

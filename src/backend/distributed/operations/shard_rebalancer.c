@@ -772,7 +772,7 @@ ExecutePlacementUpdates(List *placementUpdateList, Oid shardReplicationModeOid,
 
 	ListCell *placementUpdateCell = NULL;
 
-	DropOrphanedShardsInSeparateTransaction();
+	DropOrphanedResourcesInSeparateTransaction();
 
 	foreach(placementUpdateCell, placementUpdateList)
 	{
@@ -1901,7 +1901,7 @@ RebalanceTableShardsBackground(RebalanceOptions *options, Oid shardReplicationMo
 		return 0;
 	}
 
-	DropOrphanedShardsInSeparateTransaction();
+	DropOrphanedResourcesInSeparateTransaction();
 
 	/* find the name of the shard transfer mode to interpolate in the scheduled command */
 	Datum shardTranferModeLabelDatum =
@@ -2085,8 +2085,10 @@ ExecuteRebalancerCommandInSeparateTransaction(char *command)
 													PostPortNumber);
 	List *commandList = NIL;
 
-	commandList = lappend(commandList, psprintf("SET LOCAL application_name TO %s;",
-												CITUS_REBALANCER_NAME));
+	commandList = lappend(commandList, psprintf(
+							  "SET LOCAL application_name TO '%s%ld'",
+							  CITUS_REBALANCER_APPLICATION_NAME_PREFIX,
+							  GetGlobalPID()));
 
 	if (PropagateSessionSettingsForLoopbackConnection)
 	{

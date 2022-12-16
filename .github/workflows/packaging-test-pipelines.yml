@@ -1,0 +1,160 @@
+name: Build tests in packaging images
+
+on:
+  push:
+    branches: "**"
+  pull_request:
+    types: [opened, reopened,synchronize]
+
+  workflow_dispatch:
+
+jobs:
+
+  get_postgres_versions_from_file:
+    runs-on: ubuntu-latest
+    outputs:
+      pg_versions: ${{ steps.get-postgres-versions.outputs.pg_versions }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 2
+      - name: Get Postgres Versions
+        id: get-postgres-versions
+        run: |
+          # Postgres versions are stored in .circleci/config.yml file in "build-[pg-version] format. Below command
+          # extracts the versions and get the unique values.
+          pg_versions=`grep -Eo 'build-[[:digit:]]{2}' .circleci/config.yml|sed -e "s/^build-//"|sort|uniq|tr '\n' ','| head -c -1`
+          pg_versions_array="[ ${pg_versions} ]"
+          echo "Supported PG Versions: ${pg_versions_array}"
+          # Below line is needed to set the output variable to be used in the next job
+          echo "pg_versions=${pg_versions_array}" >> $GITHUB_OUTPUT
+
+  rpm_build_tests:
+    name: rpm_build_tests
+    needs: get_postgres_versions_from_file
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # While we use separate images for different Postgres versions in rpm
+        # based distros
+        # For this reason, we need to use a "matrix" to generate names of
+        # rpm images, e.g. citus/packaging:centos-7-pg12
+        packaging_docker_image:
+          - oraclelinux-7
+          - oraclelinux-8
+          - centos-7
+          - centos-8
+          - almalinux-9
+        POSTGRES_VERSION: ${{ fromJson(needs.get_postgres_versions_from_file.outputs.pg_versions) }}
+
+    container:
+      image: citus/packaging:${{ matrix.packaging_docker_image }}-pg${{ matrix.POSTGRES_VERSION }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Add Postgres installation directory into PATH for rpm based distros
+        run: |
+          echo "/usr/pgsql-${{ matrix.POSTGRES_VERSION }}/bin" >> $GITHUB_PATH
+
+      - name: Configure
+        run: |
+          echo "Current Shell:$0"
+          echo "GCC Version: $(gcc --version)"
+          ./configure 2>&1 | tee output.log
+
+      - name: Make clean
+        run: |
+          make clean
+
+      - name: Make
+        run: |
+          make CFLAGS="-Wno-missing-braces" -sj$(cat /proc/cpuinfo | grep "core id" | wc -l) 2>&1 | tee -a output.log
+
+      - name: Make install
+        run: |
+          make CFLAGS="-Wno-missing-braces" install 2>&1 | tee -a output.log
+
+      - name: Validate output
+        env:
+          POSTGRES_VERSION: ${{ matrix.POSTGRES_VERSION }}
+          PACKAGING_DOCKER_IMAGE: ${{ matrix.packaging_docker_image }}
+        run: |
+          echo "Postgres version: ${POSTGRES_VERSION}"
+
+          ## Install required packages to execute packaging tools for rpm based distros
+          yum install python3-pip python3-devel postgresql-devel -y
+          python3 -m pip install wheel
+
+          ./.github/packaging/validate_build_output.sh "rpm"
+
+  deb_build_tests:
+    name: deb_build_tests
+    needs: get_postgres_versions_from_file
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # On deb based distros, we use the same docker image for
+        # builds based on different Postgres versions because deb
+        # based images include all postgres installations.
+        # For this reason, we have multiple runs --which is 3 today--
+        # for each deb based image and we use POSTGRES_VERSION to set
+        # PG_CONFIG variable in each of those runs.
+        packaging_docker_image:
+          - debian-buster-all
+          - debian-bookworm-all
+          - debian-bullseye-all
+          - ubuntu-bionic-all
+          - ubuntu-focal-all
+          - ubuntu-jammy-all
+          - ubuntu-kinetic-all
+
+        POSTGRES_VERSION: ${{ fromJson(needs.get_postgres_versions_from_file.outputs.pg_versions) }}
+
+    container:
+      image: citus/packaging:${{ matrix.packaging_docker_image }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set pg_config path to related Postgres version
+        run: |
+          echo "PG_CONFIG=/usr/lib/postgresql/${{ matrix.POSTGRES_VERSION }}/bin/pg_config" >> $GITHUB_ENV
+
+      - name: Configure
+        run: |
+          echo "Current Shell:$0"
+          echo "GCC Version: $(gcc --version)"
+          ./configure 2>&1 | tee output.log
+
+      - name: Make clean
+        run: |
+          make clean
+
+      - name: Make
+        run: |
+          make -sj$(cat /proc/cpuinfo | grep "core id" | wc -l) 2>&1 | tee -a output.log
+
+      - name: Make install
+        run: |
+          make install 2>&1 | tee -a output.log
+
+      - name: Validate output
+        env:
+          POSTGRES_VERSION: ${{ matrix.POSTGRES_VERSION }}
+          PACKAGING_DOCKER_IMAGE: ${{ matrix.packaging_docker_image }}
+        run: |
+          echo "Postgres version: ${POSTGRES_VERSION}"
+
+          apt-get update -y
+          ## Install required packages to execute packaging tools for deb based distros
+          apt install python3-dev python3-pip -y
+          sudo apt-get purge -y python3-yaml
+          python3 -m pip install --upgrade pip  setuptools==57.5.0
+
+          ./.github/packaging/validate_build_output.sh "deb"

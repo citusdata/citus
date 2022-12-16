@@ -151,7 +151,7 @@ LIMIT
    2
 (5 rows)
 
--- cte LEFT JOIN distributed_table should error out
+-- cte LEFT JOIN distributed_table should work
 -- as long as the CTE is recursively planned
 WITH cte AS MATERIALIZED (
   SELECT * FROM users_table WHERE user_id = 1 ORDER BY value_1
@@ -166,8 +166,15 @@ ORDER BY
   1,2,3
 LIMIT
   5;
-ERROR:  cannot pushdown the subquery
-DETAIL:  Complex subqueries, CTEs and local tables cannot be in the outer part of an outer join with a distributed table
+ user_id |              time               | event_type
+---------------------------------------------------------------------
+       1 | Wed Nov 22 22:51:43.132261 2017 |          0
+       1 | Wed Nov 22 22:51:43.132261 2017 |          0
+       1 | Wed Nov 22 22:51:43.132261 2017 |          1
+       1 | Wed Nov 22 22:51:43.132261 2017 |          1
+       1 | Wed Nov 22 22:51:43.132261 2017 |          2
+(5 rows)
+
 -- cte RIGHT JOIN distributed_table should work
 WITH cte AS MATERIALIZED (
   SELECT * FROM users_table WHERE user_id = 1 ORDER BY value_1
@@ -214,7 +221,7 @@ LIMIT
        1 | Thu Nov 23 09:26:42.145043 2017 |          2
 (5 rows)
 
--- distributed_table RIGHT JOIN cte should error out
+-- distributed_table RIGHT JOIN cte should work
 WITH cte AS MATERIALIZED (
   SELECT * FROM users_table WHERE value_1 = 1 ORDER BY value_1
 )
@@ -228,9 +235,16 @@ ORDER BY
   1,2,3
 LIMIT
   5;
-ERROR:  cannot pushdown the subquery
-DETAIL:  Complex subqueries, CTEs and local tables cannot be in the outer part of an outer join with a distributed table
--- cte FULL JOIN distributed_table should error out
+ user_id |              time               | event_type
+---------------------------------------------------------------------
+       1 | Thu Nov 23 09:26:42.145043 2017 |          0
+       1 | Thu Nov 23 09:26:42.145043 2017 |          0
+       1 | Thu Nov 23 09:26:42.145043 2017 |          1
+       1 | Thu Nov 23 09:26:42.145043 2017 |          1
+       1 | Thu Nov 23 09:26:42.145043 2017 |          2
+(5 rows)
+
+-- cte FULL JOIN distributed_table should work
 WITH cte AS MATERIALIZED (
   SELECT * FROM users_table WHERE user_id = 1 ORDER BY value_1
 )
@@ -244,8 +258,15 @@ ORDER BY
   1,2,3
 LIMIT
   5;
-ERROR:  cannot pushdown the subquery
-DETAIL:  Complex subqueries, CTEs and local tables cannot be in the outer part of an outer join with a distributed table
+ user_id |              time               | event_type
+---------------------------------------------------------------------
+       1 | Wed Nov 22 22:51:43.132261 2017 |          0
+       1 | Wed Nov 22 22:51:43.132261 2017 |          0
+       1 | Wed Nov 22 22:51:43.132261 2017 |          1
+       1 | Wed Nov 22 22:51:43.132261 2017 |          1
+       1 | Wed Nov 22 22:51:43.132261 2017 |          2
+(5 rows)
+
 -- Joins with reference tables are planned as router queries
 WITH cte AS MATERIALIZED (
   SELECT value_2, max(user_id) AS user_id FROM users_table WHERE value_2 = 1 GROUP BY value_2 HAVING count(*) > 1
@@ -265,6 +286,29 @@ LIMIT
           2 |       6
           1 |
 (2 rows)
+
+-- full outer join should work between a reference table and a cte
+WITH cte AS (
+  SELECT max(user_id) AS max_user_id FROM users_table
+)
+SELECT user_id, time FROM
+  (SELECT r1.user_id AS user_id FROM cte FULL JOIN reference_table r1 ON (cte.max_user_id = r1.user_id)) AS foo
+  INNER JOIN users_table USING (user_id)
+ORDER BY 1,2;
+ user_id |              time
+---------------------------------------------------------------------
+       6 | Wed Nov 22 20:15:53.317797 2017
+       6 | Wed Nov 22 23:01:24.82289 2017
+       6 | Thu Nov 23 00:07:11.068353 2017
+       6 | Thu Nov 23 00:09:44.19812 2017
+       6 | Thu Nov 23 01:13:50.526322 2017
+       6 | Thu Nov 23 01:14:55.769581 2017
+       6 | Thu Nov 23 10:22:11.02918 2017
+       6 | Thu Nov 23 11:08:04.244582 2017
+       6 | Thu Nov 23 13:51:16.92838 2017
+       6 | Thu Nov 23 14:43:18.024104 2017
+       6 |
+(11 rows)
 
 -- some more tests for more complex outer-joins
 -- with reference tables

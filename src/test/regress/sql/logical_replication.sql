@@ -55,6 +55,8 @@ select citus_move_shard_placement(6830002, 'localhost', :worker_1_port, 'localho
 
 SELECT citus_remove_node('localhost', :master_port);
 
+-- the subscription is still there, as there is no cleanup record for it
+-- we have created it manually
 SELECT count(*) from pg_subscription;
 SELECT count(*) from pg_publication;
 SELECT count(*) from pg_replication_slots;
@@ -63,7 +65,8 @@ SELECT count(*) from dist;
 \c - - - :worker_1_port
 SET search_path TO logical_replication;
 
-
+-- the publication and repslot are still there, as there are no cleanup records for them
+-- we have created them manually
 SELECT count(*) from pg_subscription;
 SELECT count(*) from pg_publication;
 SELECT count(*) from pg_replication_slots;
@@ -81,4 +84,7 @@ SELECT count(*) from dist;
 SET search_path TO logical_replication;
 
 SET client_min_messages TO WARNING;
+ALTER SUBSCRIPTION citus_shard_move_subscription_:postgres_oid DISABLE;
+ALTER SUBSCRIPTION citus_shard_move_subscription_:postgres_oid SET (slot_name = NONE);
+DROP SUBSCRIPTION citus_shard_move_subscription_:postgres_oid;
 DROP SCHEMA logical_replication CASCADE;

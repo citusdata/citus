@@ -1932,7 +1932,7 @@ EnsureExtensionFunctionCanBeDistributed(const ObjectAddress functionAddress,
 		/*
 		 * Citus extension is a special case. It's the extension that
 		 * provides the 'distributed capabilities' in the first place.
-		 * Trying to distribute it's own function(s) doesn't make sense.
+		 * Trying to distribute its own function(s) doesn't make sense.
 		 */
 		ereport(ERROR, (errmsg("Citus extension functions(%s) "
 							   "cannot be distributed.",

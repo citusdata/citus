@@ -68,8 +68,20 @@ SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost'
 -- failure on dropping subscription
 SELECT citus.mitmproxy('conn.onQuery(query="^ALTER SUBSCRIPTION .* (ENABLE|DISABLE)").kill()');
 SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
--- try again
+
+-- cleanup leftovers
 SELECT citus.mitmproxy('conn.allow()');
+SELECT public.wait_for_resource_cleanup();
+
+-- cancel on dropping subscription
+SELECT citus.mitmproxy('conn.onQuery(query="^ALTER SUBSCRIPTION .* (ENABLE|DISABLE)").cancel(' || :pid || ')');
+SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
+
+-- cleanup leftovers
+SELECT citus.mitmproxy('conn.allow()');
+SELECT public.wait_for_resource_cleanup();
+
+-- try again
 SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
 SELECT master_move_shard_placement(101, 'localhost', :worker_2_proxy_port, 'localhost', :worker_1_port);
 
@@ -84,19 +96,62 @@ SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost'
 -- failure on disabling subscription (right before dropping it)
 SELECT citus.mitmproxy('conn.onQuery(query="^ALTER SUBSCRIPTION .* DISABLE").kill()');
 SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
+-- should succeed with warnings (subscription not dropped)
+-- move the shard back
+SELECT master_move_shard_placement(101, 'localhost', :worker_2_proxy_port, 'localhost', :worker_1_port);
+
+-- cleanup leftovers
+SELECT citus.mitmproxy('conn.allow()');
+SELECT public.wait_for_resource_cleanup();
+CALL citus_cleanup_orphaned_shards();
+
+-- failure on setting lock_timeout (right before dropping subscriptions & replication slots)
+SELECT citus.mitmproxy('conn.onQuery(query="^SET LOCAL lock_timeout").kill()');
+SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
+-- should succeed with warnings (objects not dropped)
+-- move the shard back
+SELECT master_move_shard_placement(101, 'localhost', :worker_2_proxy_port, 'localhost', :worker_1_port);
+
+-- cleanup leftovers
+SELECT citus.mitmproxy('conn.allow()');
+SELECT public.wait_for_resource_cleanup();
+CALL citus_cleanup_orphaned_shards();
 
 -- cancellation on disabling subscription (right before dropping it)
 SELECT citus.mitmproxy('conn.onQuery(query="^ALTER SUBSCRIPTION .* DISABLE").cancel(' || :pid || ')');
 SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
 
+-- cleanup leftovers
+SELECT citus.mitmproxy('conn.allow()');
+SELECT public.wait_for_resource_cleanup();
+
+-- disable maintenance daemon cleanup, to prevent the flaky test
+ALTER SYSTEM SET citus.defer_shard_delete_interval TO -1;
+SELECT pg_reload_conf();
+
 -- failure on dropping subscription
-SELECT citus.mitmproxy('conn.onQuery(query="^DROP SUBSCRIPTION").kill()');
+SELECT citus.mitmproxy('conn.onQuery(query="^DROP SUBSCRIPTION").killall()');
 SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
+
+SELECT citus.mitmproxy('conn.allow()');
+-- first, manually drop the subscsription object. But the record for it will remain on pg_dist_cleanup
+-- we expect the drop query will succeed on only one node
+SELECT COUNT(*)
+    FROM run_command_on_workers(
+        $$DROP SUBSCRIPTION citus_shard_move_subscription_10_15$$)
+    WHERE success AND result = 'DROP SUBSCRIPTION';
+
+-- reset back
+ALTER SYSTEM RESET citus.defer_shard_delete_interval;
+SELECT pg_reload_conf();
+
+-- cleanup leftovers
+-- then, verify we don't see any error for already dropped subscription
+SELECT public.wait_for_resource_cleanup();
 
 -- cancellation on dropping subscription
 SELECT citus.mitmproxy('conn.onQuery(query="^DROP SUBSCRIPTION").cancel(' || :pid || ')');
 SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
-
 
 -- failure on creating the primary key
 SELECT citus.mitmproxy('conn.onQuery(query="t_pkey").kill()');
@@ -110,7 +165,10 @@ SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost'
 SELECT citus.mitmproxy('conn.matches(b"CREATE INDEX").killall()');
 SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
 
+-- cleanup leftovers
 SELECT citus.mitmproxy('conn.allow()');
+SELECT public.wait_for_resource_cleanup();
+
 -- lets create few more indexes and fail with both
 -- parallel mode and sequential mode
 CREATE INDEX index_failure_2 ON t(id);
@@ -124,8 +182,6 @@ SELECT pg_reload_conf();
 
 SELECT citus.mitmproxy('conn.matches(b"CREATE INDEX").killall()');
 SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
-
-SELECT citus.mitmproxy('conn.allow()');
 
 -- failure on parallel create index
 ALTER SYSTEM RESET citus.max_adaptive_executor_pool_size;

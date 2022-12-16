@@ -54,8 +54,33 @@ SELECT citus.mitmproxy('conn.onQuery(query="ALTER SUBSCRIPTION").kill()');
 (1 row)
 
 SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
+WARNING:  connection not open
+CONTEXT:  while executing command on localhost:xxxxx
+WARNING:  connection not open
+CONTEXT:  while executing command on localhost:xxxxx
 ERROR:  connection not open
 CONTEXT:  while executing command on localhost:xxxxx
+-- cleanup leftovers
+SELECT citus.mitmproxy('conn.allow()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT public.wait_for_resource_cleanup();
+ wait_for_resource_cleanup
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT citus.mitmproxy('conn.onQuery(query="ALTER SUBSCRIPTION").cancel(' || :pid || ')');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
+ERROR:  canceling statement due to user request
 -- Verify that the shard is not moved and the number of rows are still 100k
 SELECT * FROM shards_in_workers;
  shardid | worker
@@ -73,8 +98,15 @@ SELECT count(*) FROM t;
 (1 row)
 
 -- Verify that shard can be moved after a temporary failure
+-- cleanup leftovers, as it can cause flakiness in the following test files
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT public.wait_for_resource_cleanup();
+ wait_for_resource_cleanup
 ---------------------------------------------------------------------
 
 (1 row)

@@ -68,7 +68,9 @@ show citus.node_conninfo;
 select count(*) from test where a = 0;
 COMMIT;
 -- Should fail now, when transaction is finished
+SET client_min_messages TO ERROR;
 select count(*) from test where a = 0;
+RESET client_min_messages;
 -- Reset it again
 ALTER SYSTEM RESET citus.node_conninfo;
 select pg_reload_conf();
@@ -115,7 +117,9 @@ select count(*) from test;
 COMMIT;
 
 -- Should fail now, when transaction is finished
+SET client_min_messages TO ERROR;
 select count(*) from test;
+RESET client_min_messages;
 
 -- Reset it again
 ALTER SYSTEM RESET citus.node_conninfo;
@@ -138,7 +142,9 @@ select count(*)/0 from test;
 ROLLBACK;
 
 -- Should fail now, when transaction is finished
+SET client_min_messages TO ERROR;
 select count(*) from test;
+RESET client_min_messages;
 
 -- Reset it again
 ALTER SYSTEM RESET citus.node_conninfo;

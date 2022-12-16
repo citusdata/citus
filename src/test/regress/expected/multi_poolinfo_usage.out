@@ -43,6 +43,7 @@ INSERT INTO pg_dist_poolinfo VALUES (:worker_1_id, 'host=failhost'),
 DO $$
 BEGIN
         BEGIN
+                        SET LOCAL client_min_messages TO ERROR;
 			SELECT COUNT(*) FROM lotsa_connections;
         EXCEPTION WHEN OTHERS THEN
                 IF SQLERRM LIKE 'connection to the remote node%%' THEN

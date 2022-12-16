@@ -1075,14 +1075,19 @@ sub RunVanillaTests
                     '-c', $citus_depended_object_def)) == 0
                 or die "Could not create FUNCTION is_citus_depended_object on master";
 
-    my $pgregressdir="";
+    # we need to set regress path to find test input files(sqls and schedule)
+    # we need to add regress.so path to dlpath because some tests need to find that lib
+    my $pgregressInputdir="";
+    my $dlpath="";
     if (-f "$vanillaSchedule")
 	{
-	    $pgregressdir=catfile(dirname("$pgxsdir"), "regress");
+	    $pgregressInputdir=catfile(dirname("$pgxsdir"), "regress");
+        $dlpath=dirname("$pgxsdir")
 	}
 	else
 	{
-	    $pgregressdir=catfile("$postgresSrcdir", "src", "test", "regress");
+	    $pgregressInputdir=catfile("$postgresSrcdir", "src", "test", "regress");
+        $dlpath=$pgregressInputdir
 	}
 
     # output dir
@@ -1098,13 +1103,11 @@ sub RunVanillaTests
     system("mkdir", ("-p", "$pgregressOutputdir/sql")) == 0
             or die "Could not create vanilla sql dir.";
 
-    # we need to add regress.so path to dlpath because some tests need to find that lib
-    my $regresslibdir = $pgregressdir;
     $exitcode = system("$plainRegress",
-                        ("--dlpath", $regresslibdir),
-                        ("--inputdir",  $pgregressdir),
+                        ("--dlpath", $dlpath),
+                        ("--inputdir",  $pgregressInputdir),
                         ("--outputdir",  $pgregressOutputdir),
-                        ("--schedule",  catfile("$pgregressdir", "parallel_schedule")),
+                        ("--schedule",  catfile("$pgregressInputdir", "parallel_schedule")),
                         ("--use-existing"),
                         ("--host","$host"),
                         ("--port","$masterPort"),

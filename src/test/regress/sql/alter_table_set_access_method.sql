@@ -99,10 +99,10 @@ CREATE INDEX idx1 ON index_table (a);
 -- also create an index with statistics
 CREATE INDEX idx2 ON index_table ((a+1));
 ALTER INDEX idx2 ALTER COLUMN 1 SET STATISTICS 300;
-SELECT indexname FROM pg_indexes WHERE schemaname = 'alter_table_set_access_method' AND tablename = 'index_table';
+SELECT indexname FROM pg_indexes WHERE schemaname = 'alter_table_set_access_method' AND tablename = 'index_table' order by indexname;
 SELECT a.amname FROM pg_class c, pg_am a where c.relname = 'index_table' AND c.relnamespace = 'alter_table_set_access_method'::regnamespace AND c.relam = a.oid;
 SELECT alter_table_set_access_method('index_table', 'columnar');
-SELECT indexname FROM pg_indexes WHERE schemaname = 'alter_table_set_access_method' AND tablename = 'index_table';
+SELECT indexname FROM pg_indexes WHERE schemaname = 'alter_table_set_access_method' AND tablename = 'index_table' order by indexname;
 SELECT a.amname FROM pg_class c, pg_am a where c.relname = 'index_table' AND c.relnamespace = 'alter_table_set_access_method'::regnamespace AND c.relam = a.oid;
 
 CREATE TABLE "heap_\'tbl" (
@@ -270,6 +270,15 @@ BEGIN;
   SET LOCAL max_parallel_workers_per_gather = 4;
   select alter_table_set_access_method('events', 'columnar');
 COMMIT;
+
+--create the view to test alter table set access method on it
+CREATE TABLE view_test_table (id int, val int, flag bool, kind int);
+SELECT create_distributed_table('view_test_table','id');
+INSERT INTO view_test_table VALUES (1, 1, true, 99), (2, 2, false, 99), (2, 3, true, 88);
+CREATE VIEW view_test_view AS SELECT * FROM view_test_table;
+
+-- error out when attempting to set access method of a view.
+select alter_table_set_access_method('view_test_view','columnar');
 
 SET client_min_messages TO WARNING;
 DROP SCHEMA alter_table_set_access_method CASCADE;

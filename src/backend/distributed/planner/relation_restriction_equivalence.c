@@ -2230,6 +2230,7 @@ FilterJoinRestrictionContext(JoinRestrictionContext *joinRestrictionContext, Rel
 	 * the same query and as these values are calculated per-query basis.
 	 */
 	filtererdJoinRestrictionContext->hasSemiJoin = joinRestrictionContext->hasSemiJoin;
+	filtererdJoinRestrictionContext->hasOuterJoin = joinRestrictionContext->hasOuterJoin;
 
 	return filtererdJoinRestrictionContext;
 }

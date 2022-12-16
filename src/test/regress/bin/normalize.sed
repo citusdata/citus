@@ -45,8 +45,9 @@ s/truncate_trigger_[0-9]+/truncate_trigger_xxxxxxx/g
 
 # shard move subscription and publication names contain the oid of the
 # table owner, which can change across runs
-s/(citus_shard_(move|split)_subscription_)[0-9]+/\1xxxxxxx/g
-s/(citus_shard_(move|split)_(slot|publication)_)[0-9]+_[0-9]+/\1xxxxxxx_xxxxxxx/g
+s/(citus_shard_(move|split)_subscription_role_)[0-9]+_[0-9]+/\1xxxxxxx_xxxxxxx/g
+s/(citus_shard_(move|split)_subscription_)[0-9]+_[0-9]+/\1xxxxxxx_xxxxxxx/g
+s/(citus_shard_(move|split)_(slot|publication)_)[0-9]+_[0-9]+_[0-9]+/\1xxxxxxx_xxxxxxx_xxxxxxx/g
 
 # In foreign_key_restriction_enforcement, normalize shard names
 s/"(on_update_fkey_table_|fkey_)[0-9]+"/"\1xxxxxxx"/g
@@ -301,3 +302,8 @@ s/^(NOTICE:  )(clock).*LC:[0-9]+,.*C:[0-9]+,.*$/\1\2 xxxxxx/g
 # The following 2 lines are to normalize duration and cost in the EXPLAIN output
 s/LOG:  duration: [0-9].[0-9]+ ms/LOG:  duration: xxxx ms/g
 s/"Total Cost": [0-9].[0-9]+/"Total Cost": xxxx/g
+
+s/(NOTICE:  issuing SET LOCAL application_name TO 'citus_rebalancer gpid=)[0-9]+/\1xxxxx/g
+
+# PG13 changes bgworker sigterm message, we can drop that line with PG13 drop
+s/(FATAL: terminating).*Citus Background Task Queue Executor.*(due to administrator command)\+/\1 connection \2                    \+/g

@@ -3132,6 +3132,9 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 				break;
 			}
 
+#if PG_VERSION_NUM >= PG_VERSION_15
+			case AT_SetAccessMethod:
+#endif
 			case AT_SetNotNull:
 			case AT_ReplicaIdentity:
 			case AT_ChangeOwner:
@@ -3147,6 +3150,7 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 				{
 					/*
 					 * We will not perform any special check for:
+					 * ALTER TABLE .. SET ACCESS METHOD ..
 					 * ALTER TABLE .. ALTER COLUMN .. SET NOT NULL
 					 * ALTER TABLE .. REPLICA IDENTITY ..
 					 * ALTER TABLE .. VALIDATE CONSTRAINT ..

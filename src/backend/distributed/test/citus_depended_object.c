@@ -11,6 +11,8 @@
 
 #include "catalog/pg_aggregate.h"
 #include "catalog/pg_am.h"
+#include "catalog/pg_amop.h"
+#include "catalog/pg_amproc.h"
 #include "catalog/pg_attribute.h"
 #include "catalog/pg_attrdef.h"
 #include "catalog/pg_constraint.h"
@@ -20,6 +22,9 @@
 #include "catalog/pg_event_trigger.h"
 #include "catalog/pg_language.h"
 #include "catalog/pg_namespace.h"
+#include "catalog/pg_operator.h"
+#include "catalog/pg_opclass.h"
+#include "catalog/pg_opfamily.h"
 #include "catalog/pg_proc.h"
 #include "catalog/pg_rewrite.h"
 #include "catalog/pg_sequence.h"
@@ -77,6 +82,11 @@ is_citus_depended_object(PG_FUNCTION_ARGS)
 		case AccessMethodRelationId:
 		case EventTriggerRelationId:
 		case TriggerRelationId:
+		case OperatorRelationId:
+		case OperatorClassRelationId:
+		case OperatorFamilyRelationId:
+		case AccessMethodOperatorRelationId:
+		case AccessMethodProcedureRelationId:
 		case TSConfigRelationId:
 		case TSTemplateRelationId:
 		case TSDictionaryRelationId:

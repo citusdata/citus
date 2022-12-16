@@ -3,6 +3,7 @@
 --
 
 SET citus.next_shard_id TO 433000;
+SET citus.propagate_session_settings_for_loopback_connection TO ON;
 
 CREATE TABLE ref_table_test(a int primary key);
 SELECT create_reference_table('ref_table_test');

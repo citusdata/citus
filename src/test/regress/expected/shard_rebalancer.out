@@ -2,6 +2,7 @@
 -- MUTLI_SHARD_REBALANCER
 --
 SET citus.next_shard_id TO 433000;
+SET citus.propagate_session_settings_for_loopback_connection TO ON;
 CREATE TABLE ref_table_test(a int primary key);
 SELECT create_reference_table('ref_table_test');
  create_reference_table
@@ -199,12 +200,14 @@ BEGIN;
     SET citus.log_remote_commands TO ON;
     SET SESSION citus.max_adaptive_executor_pool_size TO 5;
     SELECT replicate_table_shards('dist_table_test_2',  max_shard_copies := 4,  shard_transfer_mode:='block_writes');
+NOTICE:  issuing CALL citus_cleanup_orphaned_resources()
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing CALL citus_cleanup_orphaned_shards()
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  Copying shard xxxxx from localhost:xxxxx to localhost:xxxxx ...
 NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SET LOCAL application_name TO citus_rebalancer;
+NOTICE:  issuing SET LOCAL application_name TO 'citus_rebalancer gpid=xxxxx'
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing SET LOCAL citus.log_remote_commands TO 'on';
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
@@ -213,6 +216,8 @@ DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing SET LOCAL citus.next_shard_id TO '433105';
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing SET LOCAL citus.node_connection_timeout TO '35000';
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET LOCAL citus.propagate_session_settings_for_loopback_connection TO 'on';
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing SET LOCAL citus.shard_count TO '4';
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
@@ -225,7 +230,7 @@ DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  Copying shard xxxxx from localhost:xxxxx to localhost:xxxxx ...
 NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SET LOCAL application_name TO citus_rebalancer;
+NOTICE:  issuing SET LOCAL application_name TO 'citus_rebalancer gpid=xxxxx'
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing SET LOCAL citus.log_remote_commands TO 'on';
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
@@ -234,6 +239,8 @@ DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing SET LOCAL citus.next_shard_id TO '433105';
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing SET LOCAL citus.node_connection_timeout TO '35000';
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET LOCAL citus.propagate_session_settings_for_loopback_connection TO 'on';
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing SET LOCAL citus.shard_count TO '4';
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
@@ -246,7 +253,7 @@ DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  Copying shard xxxxx from localhost:xxxxx to localhost:xxxxx ...
 NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SET LOCAL application_name TO citus_rebalancer;
+NOTICE:  issuing SET LOCAL application_name TO 'citus_rebalancer gpid=xxxxx'
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing SET LOCAL citus.log_remote_commands TO 'on';
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
@@ -255,6 +262,8 @@ DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing SET LOCAL citus.next_shard_id TO '433105';
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing SET LOCAL citus.node_connection_timeout TO '35000';
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET LOCAL citus.propagate_session_settings_for_loopback_connection TO 'on';
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing SET LOCAL citus.shard_count TO '4';
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
@@ -267,7 +276,7 @@ DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  Copying shard xxxxx from localhost:xxxxx to localhost:xxxxx ...
 NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SET LOCAL application_name TO citus_rebalancer;
+NOTICE:  issuing SET LOCAL application_name TO 'citus_rebalancer gpid=xxxxx'
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing SET LOCAL citus.log_remote_commands TO 'on';
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
@@ -276,6 +285,8 @@ DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing SET LOCAL citus.next_shard_id TO '433105';
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing SET LOCAL citus.node_connection_timeout TO '35000';
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET LOCAL citus.propagate_session_settings_for_loopback_connection TO 'on';
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing SET LOCAL citus.shard_count TO '4';
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
@@ -1745,7 +1756,7 @@ NOTICE:  Moving shard xxxxx from localhost:xxxxx to localhost:xxxxx ...
 (1 row)
 
 CALL citus_cleanup_orphaned_shards();
-NOTICE:  cleaned up 4 orphaned shards
+NOTICE:  cleaned up 2 orphaned shards
 SELECT * FROM public.table_placements_per_node;
  nodeport | logicalrelid | count
 ---------------------------------------------------------------------
@@ -1844,7 +1855,7 @@ NOTICE:  Moving shard xxxxx from localhost:xxxxx to localhost:xxxxx ...
 (1 row)
 
 CALL citus_cleanup_orphaned_shards();
-NOTICE:  cleaned up 3 orphaned shards
+NOTICE:  cleaned up 1 orphaned shards
 SELECT * FROM public.table_placements_per_node;
  nodeport | logicalrelid | count
 ---------------------------------------------------------------------
@@ -1919,7 +1930,7 @@ NOTICE:  Moving shard xxxxx from localhost:xxxxx to localhost:xxxxx ...
 (1 row)
 
 CALL citus_cleanup_orphaned_shards();
-NOTICE:  cleaned up 4 orphaned shards
+NOTICE:  cleaned up 1 orphaned shards
 SELECT * FROM public.table_placements_per_node;
  nodeport | logicalrelid | count
 ---------------------------------------------------------------------

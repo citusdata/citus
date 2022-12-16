@@ -302,7 +302,7 @@ FROM
 	LEFT JOIN multi_outer_join_third_reference t1 ON (r1.r_custkey  = t1.t_custkey)
 ORDER BY l_custkey, r_custkey, t_custkey;
 
--- Right join with single shard right most table should error out
+-- Right join with single shard right most table should work
 SELECT
 	l_custkey, r_custkey, t_custkey
 FROM
@@ -339,6 +339,16 @@ FROM
 	RIGHT JOIN multi_outer_join_right r1 ON (t1.t_custkey = r1.r_custkey)
 	RIGHT JOIN multi_outer_join_left l1 ON (r1.r_custkey  = l1.l_custkey)
 ORDER BY 1,2,3;
+
+-- full outer join should work between reference tables
+SELECT
+	t_custkey, r_custkey
+FROM
+	(SELECT * FROM multi_outer_join_third_reference r1
+	 FULL JOIN multi_outer_join_right_reference r2 ON (r1.t_custkey = r2.r_custkey)
+	) AS foo
+	INNER JOIN multi_outer_join_right USING (r_custkey)
+ORDER BY 1,2;
 
 -- full outer join should work with 1-1 matched shards
 SELECT

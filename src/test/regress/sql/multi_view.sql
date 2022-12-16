@@ -231,15 +231,16 @@ SELECT * FROM
 	) s1
 ORDER BY 2 DESC, 1;
 
--- event vs table non-partition-key join is not supported
--- given that we cannot recursively plan tables yet
-SELECT * FROM
+-- event vs table non-partition-key join is supported
+-- given that we can recursively plan events_table
+SELECT count(*), user_id, done_event FROM
 	(SELECT ru.user_id, CASE WHEN et.user_id IS NULL THEN 'NO' ELSE 'YES' END as done_event
 		FROM recent_users ru
 		LEFT JOIN events_table et
 		ON(ru.user_id = et.event_type)
 	) s1
-ORDER BY 2 DESC, 1;
+GROUP BY user_id, done_event
+ORDER BY 1,2,3;
 
 -- create a select only view
 CREATE VIEW selected_users AS SELECT * FROM users_table WHERE value_1 >= 1 and value_1 <3;

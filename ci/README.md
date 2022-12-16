@@ -373,3 +373,7 @@ This script checks and fixes issues with `.gitignore` rules:
 This script checks the order of the GUCs defined in `shared_library_init.c`.
 To solve this failure, please check `shared_library_init.c` and make sure that the GUC
 definitions are in alphabetical order.
+
+## `print_stack_trace.sh`
+
+This script prints stack traces for failed tests, if they left core files.

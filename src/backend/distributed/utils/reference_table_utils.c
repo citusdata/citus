@@ -15,6 +15,7 @@
 #include "access/heapam.h"
 #include "access/htup_details.h"
 #include "access/genam.h"
+#include "distributed/backend_data.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/commands.h"
 #include "distributed/listutils.h"
@@ -257,9 +258,10 @@ EnsureReferenceTablesExistOnAllNodesExtended(char transferMode)
 			 * the shard. This is allowed when indicating that the backend is a
 			 * rebalancer backend.
 			 */
-			ExecuteCriticalRemoteCommand(connection,
-										 "SET LOCAL application_name TO "
-										 CITUS_REBALANCER_NAME);
+			ExecuteCriticalRemoteCommand(connection, psprintf(
+											 "SET LOCAL application_name TO '%s%ld'",
+											 CITUS_REBALANCER_APPLICATION_NAME_PREFIX,
+											 GetGlobalPID()));
 			ExecuteCriticalRemoteCommand(connection, placementCopyCommand->data);
 			RemoteTransactionCommit(connection);
 		}

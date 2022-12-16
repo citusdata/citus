@@ -186,7 +186,7 @@ distributed_planner(Query *parse,
 	if (needsDistributedPlanning)
 	{
 		/*
-		 * standard_planner scribbles on it's input, but for deparsing we need the
+		 * standard_planner scribbles on its input, but for deparsing we need the
 		 * unmodified form. Before copying we call AssignRTEIdentities to be able
 		 * to match RTEs in the rewritten query tree with those in the original
 		 * tree.
@@ -1845,6 +1845,8 @@ multi_join_restriction_hook(PlannerInfo *root,
 	 */
 	joinRestrictionContext->hasSemiJoin = joinRestrictionContext->hasSemiJoin ||
 										  extra->sjinfo->jointype == JOIN_SEMI;
+	joinRestrictionContext->hasOuterJoin = joinRestrictionContext->hasOuterJoin ||
+										   IS_OUTER_JOIN(extra->sjinfo->jointype);
 
 	MemoryContextSwitchTo(oldMemoryContext);
 }

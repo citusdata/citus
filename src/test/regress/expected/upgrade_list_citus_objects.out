@@ -117,6 +117,7 @@ ORDER BY 1;
  function citus_stat_statements_reset()
  function citus_table_is_visible(oid)
  function citus_table_size(regclass)
+ function citus_task_wait(bigint,citus_task_status)
  function citus_text_send_as_jsonb(text)
  function citus_total_relation_size(regclass,boolean)
  function citus_truncate_trigger()
@@ -253,7 +254,7 @@ ORDER BY 1;
  function worker_save_query_explain_analyze(text,jsonb)
  function worker_split_copy(bigint,text,split_copy_info[])
  function worker_split_shard_release_dsm()
- function worker_split_shard_replication_setup(split_shard_info[])
+ function worker_split_shard_replication_setup(split_shard_info[],bigint)
  operator <(cluster_clock,cluster_clock)
  operator <=(cluster_clock,cluster_clock)
  operator <>(cluster_clock,cluster_clock)
@@ -311,5 +312,5 @@ ORDER BY 1;
  view citus_stat_statements
  view pg_dist_shard_placement
  view time_partitions
-(303 rows)
+(304 rows)
 

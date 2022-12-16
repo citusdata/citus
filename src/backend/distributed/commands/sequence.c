@@ -1076,7 +1076,7 @@ FilterDistributedSequences(GrantStmt *stmt)
 
 /*
  * RenameExistingSequenceWithDifferentTypeIfExists renames the sequence's type if
- * that sequence exists and the desired sequence type is different than it's type.
+ * that sequence exists and the desired sequence type is different than its type.
  */
 void
 RenameExistingSequenceWithDifferentTypeIfExists(RangeVar *sequence, Oid desiredSeqTypeId)

@@ -573,7 +573,8 @@ LEFT JOIN
    WHERE NOT EXISTS
        (SELECT NULL
         FROM distinct_undistribured
-        WHERE distinct_undistribured.user_id = test_cte_distributed.user_id)) exsist_in_distributed ON distinct_undistribured.user_id = exsist_in_distributed.user_id;
+        WHERE distinct_undistribured.user_id = test_cte_distributed.user_id)) exsist_in_distributed ON distinct_undistribured.user_id = exsist_in_distributed.user_id
+ORDER BY 1,2;
 
 -- same NOT EXISTS struct, but with CTE
 -- so should work
@@ -658,7 +659,8 @@ LEFT JOIN
    WHERE NOT EXISTS
        (SELECT NULL
         FROM distinct_undistribured
-        WHERE distinct_undistribured.user_id = test_cte_distributed.user_id)) exsist_in_distributed ON distinct_undistribured.user_id = exsist_in_distributed.user_id;
+        WHERE distinct_undistribured.user_id = test_cte_distributed.user_id)) exsist_in_distributed ON distinct_undistribured.user_id = exsist_in_distributed.user_id
+ORDER BY 1,2;
 
 -- NOT EXISTS struct, with cte inlining disabled
 WITH distinct_undistribured AS MATERIALIZED(

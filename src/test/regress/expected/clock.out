@@ -252,11 +252,12 @@ DETAIL:  Key (cc)=((100,100)) already exists.
 --
 SELECT (extract(epoch from now()) * 1000)::bigint AS epoch,
 	citus_get_node_clock() AS latest_clock \gset
--- Returns true
-SELECT ABS(:epoch - cluster_clock_logical(:'latest_clock')) < 25;
- ?column?
+-- Returns difference in epoch-milliseconds
+SELECT CASE WHEN msdiff BETWEEN 0 AND 25 THEN 0 ELSE msdiff END
+FROM ABS(:epoch - cluster_clock_logical(:'latest_clock')) msdiff;
+ msdiff
 ---------------------------------------------------------------------
- t
+      0
 (1 row)
 
 BEGIN;
@@ -328,9 +329,51 @@ WARNING:  GUC enable_cluster_clock is off
 (1 row)
 
 END;
+SET citus.enable_cluster_clock to ON;
+-- Test if the clock UDFs are volatile, result should never be the same
+SELECT citus_get_node_clock() = citus_get_node_clock();
+ ?column?
+---------------------------------------------------------------------
+ f
+(1 row)
+
+select citus_get_transaction_clock() = citus_get_transaction_clock();
+DEBUG:  node xxxx transaction clock xxxxxx
+DEBUG:  final global transaction clock xxxxxx
+DEBUG:  node xxxx transaction clock xxxxxx
+DEBUG:  final global transaction clock xxxxxx
+ ?column?
+---------------------------------------------------------------------
+ f
+(1 row)
+
+-- Test if the clock UDFs are usable by non-superusers
+CREATE ROLE non_super_user_clock;
+SET ROLE non_super_user_clock;
+SELECT citus_get_node_clock();
+ citus_get_node_clock
+---------------------------------------------------------------------
+ (xxxxxxxxxxxxx,x)
+(1 row)
+
+BEGIN;
+SELECT citus_get_transaction_clock();
+DEBUG:  node xxxx transaction clock xxxxxx
+DEBUG:  final global transaction clock xxxxxx
+ citus_get_transaction_clock
+---------------------------------------------------------------------
+ (xxxxxxxxxxxxx,x)
+(1 row)
+
+COMMIT;
+-- Test setting the persisted clock value (it must fail)
+SELECT setval('pg_dist_clock_logical_seq', 100, true);
+ERROR:  permission denied for sequence pg_dist_clock_logical_seq
+\c
 RESET client_min_messages;
 RESET citus.enable_cluster_clock;
+DROP ROLE non_super_user_clock;
 DROP SCHEMA clock CASCADE;
 NOTICE:  drop cascades to 2 other objects
-DETAIL:  drop cascades to table clock_test
-drop cascades to table cluster_clock_type
+DETAIL:  drop cascades to table clock.clock_test
+drop cascades to table clock.cluster_clock_type

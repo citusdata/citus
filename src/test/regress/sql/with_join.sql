@@ -126,7 +126,7 @@ ORDER BY
 LIMIT
   5;
 
--- cte LEFT JOIN distributed_table should error out
+-- cte LEFT JOIN distributed_table should work
 -- as long as the CTE is recursively planned
 WITH cte AS MATERIALIZED (
   SELECT * FROM users_table WHERE user_id = 1 ORDER BY value_1
@@ -173,7 +173,7 @@ ORDER BY
 LIMIT
   5;
 
--- distributed_table RIGHT JOIN cte should error out
+-- distributed_table RIGHT JOIN cte should work
 WITH cte AS MATERIALIZED (
   SELECT * FROM users_table WHERE value_1 = 1 ORDER BY value_1
 )
@@ -188,7 +188,7 @@ ORDER BY
 LIMIT
   5;
 
--- cte FULL JOIN distributed_table should error out
+-- cte FULL JOIN distributed_table should work
 WITH cte AS MATERIALIZED (
   SELECT * FROM users_table WHERE user_id = 1 ORDER BY value_1
 )
@@ -218,6 +218,16 @@ ORDER BY
   user_id
 LIMIT
   5;
+
+
+-- full outer join should work between a reference table and a cte
+WITH cte AS (
+  SELECT max(user_id) AS max_user_id FROM users_table
+)
+SELECT user_id, time FROM
+  (SELECT r1.user_id AS user_id FROM cte FULL JOIN reference_table r1 ON (cte.max_user_id = r1.user_id)) AS foo
+  INNER JOIN users_table USING (user_id)
+ORDER BY 1,2;
 
 
 -- some more tests for more complex outer-joins

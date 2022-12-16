@@ -103,7 +103,7 @@ BEGIN
     PERFORM setval('pg_catalog.pg_dist_colocationid_seq', (SELECT MAX(colocationid)+1 AS max_colocation_id FROM pg_dist_colocation), false);
     PERFORM setval('pg_catalog.pg_dist_operationid_seq', (SELECT MAX(operation_id)+1 AS max_operation_id FROM pg_dist_cleanup), false);
     PERFORM setval('pg_catalog.pg_dist_cleanup_recordid_seq', (SELECT MAX(record_id)+1 AS max_record_id FROM pg_dist_cleanup), false);
-    PERFORM setval('pg_catalog.pg_dist_clock_logical_seq', (SELECT last_val FROM public.pg_dist_clock_logical_seq), false);
+    PERFORM setval('pg_catalog.pg_dist_clock_logical_seq', (SELECT last_value FROM public.pg_dist_clock_logical_seq), false);
     DROP TABLE public.pg_dist_clock_logical_seq;
 
 

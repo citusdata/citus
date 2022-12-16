@@ -553,7 +553,7 @@ CheckSpaceConstraints(MultiConnection *connection, uint64 colocationSizeInBytes)
 	{
 		ereport(ERROR, (errmsg("not enough empty space on node if the shard is moved, "
 							   "actual available space after move will be %ld bytes, "
-							   "desired available space after move is %ld bytes,"
+							   "desired available space after move is %ld bytes, "
 							   "estimated size increase on node after move is %ld bytes.",
 							   diskAvailableInBytesAfterShardMove,
 							   desiredNewDiskAvailableInBytes, colocationSizeInBytes),
@@ -1157,6 +1157,8 @@ CopyShardTables(List *shardIntervalList, char *sourceNodeName, int32 sourceNodeP
 		return;
 	}
 
+	DropOrphanedResourcesInSeparateTransaction();
+
 	if (useLogicalReplication)
 	{
 		CopyShardTablesViaLogicalReplication(shardIntervalList, sourceNodeName,
@@ -1209,9 +1211,17 @@ CopyShardTablesViaLogicalReplication(List *shardIntervalList, char *sourceNodeNa
 
 	MemoryContextSwitchTo(oldContext);
 
+	/* Start operation to prepare for generating cleanup records */
+	RegisterOperationNeedingCleanup();
+
 	/* data copy is done seperately when logical replication is used */
 	LogicallyReplicateShards(shardIntervalList, sourceNodeName,
 							 sourceNodePort, targetNodeName, targetNodePort);
+
+	/*
+	 * Drop temporary objects that were marked as CLEANUP_ALWAYS.
+	 */
+	FinalizeOperationNeedingCleanupOnSuccess("citus_[move/copy]_shard_placement");
 }
 
 
@@ -1493,10 +1503,10 @@ EnsureShardCanBeCopied(int64 shardId, const char *sourceNodeName, int32 sourceNo
 		if (targetPlacement->shardState == SHARD_STATE_TO_DELETE)
 		{
 			/*
-			 * Trigger deletion of orphaned shards and hope that this removes
+			 * Trigger deletion of orphaned resources and hope that this removes
 			 * the shard.
 			 */
-			DropOrphanedShardsInSeparateTransaction();
+			DropOrphanedResourcesInSeparateTransaction();
 			shardPlacementList = ShardPlacementListIncludingOrphanedPlacements(shardId);
 			targetPlacement = SearchShardPlacementInList(shardPlacementList,
 														 targetNodeName,

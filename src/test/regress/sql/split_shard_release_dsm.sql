@@ -13,16 +13,16 @@ SET client_min_messages TO ERROR;
 SELECT count(*) FROM pg_catalog.worker_split_shard_replication_setup(ARRAY[
     ROW(1, 'id', 2, '-2147483648', '-1', :worker_1_node)::pg_catalog.split_shard_info,
     ROW(1, 'id', 3, '0', '2147483647', :worker_1_node)::pg_catalog.split_shard_info
-    ]);
+    ], 0);
 
 SET client_min_messages TO WARNING;
 SELECT count(*) FROM pg_catalog.worker_split_shard_replication_setup(ARRAY[
     ROW(1, 'id', 2, '-2147483648', '-1', :worker_1_node)::pg_catalog.split_shard_info,
     ROW(1, 'id', 3, '0', '2147483647', :worker_1_node)::pg_catalog.split_shard_info
-    ]);
+    ], 0);
 
 SELECT pg_catalog.worker_split_shard_release_dsm();
 SELECT count(*) FROM pg_catalog.worker_split_shard_replication_setup(ARRAY[
     ROW(1, 'id', 2, '-2147483648', '-1', :worker_1_node)::pg_catalog.split_shard_info,
     ROW(1, 'id', 3, '0', '2147483647', :worker_1_node)::pg_catalog.split_shard_info
-    ]);
+    ], 0);

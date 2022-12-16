@@ -11,17 +11,20 @@
 #ifndef CITUS_SHARD_CLEANER_H
 #define CITUS_SHARD_CLEANER_H
 
+#define MAX_BG_TASK_EXECUTORS 1000
+
 /* GUC to configure deferred shard deletion */
 extern int DeferShardDeleteInterval;
 extern int BackgroundTaskQueueCheckInterval;
+extern int MaxBackgroundTaskExecutors;
 extern double DesiredPercentFreeAfterMove;
 extern bool CheckAvailableSpaceBeforeMove;
 
 extern int NextOperationId;
 extern int NextCleanupRecordId;
 
-extern int TryDropOrphanedShards(bool waitForLocks);
-extern void DropOrphanedShardsInSeparateTransaction(void);
+extern int TryDropOrphanedResources(bool waitForLocks);
+extern void DropOrphanedResourcesInSeparateTransaction(void);
 
 /* Members for cleanup infrastructure */
 typedef uint64 OperationId;
@@ -33,7 +36,11 @@ extern OperationId CurrentOperationId;
 typedef enum CleanupObject
 {
 	CLEANUP_OBJECT_INVALID = 0,
-	CLEANUP_OBJECT_SHARD_PLACEMENT = 1
+	CLEANUP_OBJECT_SHARD_PLACEMENT = 1,
+	CLEANUP_OBJECT_SUBSCRIPTION = 2,
+	CLEANUP_OBJECT_REPLICATION_SLOT = 3,
+	CLEANUP_OBJECT_PUBLICATION = 4,
+	CLEANUP_OBJECT_USER = 5
 } CleanupObject;
 
 /*

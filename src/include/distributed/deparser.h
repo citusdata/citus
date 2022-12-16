@@ -196,6 +196,9 @@ extern char * DeparseCreateRoleStmt(Node *stmt);
 extern char * DeparseDropRoleStmt(Node *stmt);
 extern char * DeparseGrantRoleStmt(Node *stmt);
 
+/* forward declarations for deparse_owned_stmts.c */
+extern char * DeparseDropOwnedStmt(Node *node);
+
 /* forward declarations for deparse_extension_stmts.c */
 extern DefElem * GetExtensionOption(List *extensionOptions,
 									const char *defname);

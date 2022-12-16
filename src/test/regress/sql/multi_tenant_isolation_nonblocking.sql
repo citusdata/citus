@@ -175,9 +175,13 @@ SELECT isolate_tenant_to_new_shard('orders_streaming', 103, 'CASCADE', shard_tra
 SELECT isolate_tenant_to_new_shard('lineitem_streaming', 100, 'CASCADE', shard_transfer_mode => 'force_logical');
 SELECT isolate_tenant_to_new_shard('orders_streaming', 101, 'CASCADE', shard_transfer_mode => 'force_logical');
 
+SELECT public.wait_for_resource_cleanup();
+
 -- test corner cases: hash(-1995148554) = -2147483648 and hash(-1686493264) = 2147483647
 SELECT isolate_tenant_to_new_shard('lineitem_streaming', -1995148554, 'CASCADE', shard_transfer_mode => 'force_logical');
 SELECT isolate_tenant_to_new_shard('orders_streaming', -1686493264, 'CASCADE', shard_transfer_mode => 'force_logical');
+
+SELECT public.wait_for_resource_cleanup();
 
 SELECT count(*) FROM orders_streaming WHERE o_orderkey = -1995148554;
 SELECT count(*) FROM orders_streaming WHERE o_orderkey = -1686493264;
@@ -225,7 +229,7 @@ SELECT * FROM pg_dist_shard_placement WHERE shardid >= 1230000 ORDER BY nodeport
 \.
 
 \c - postgres - :master_port
-CALL pg_catalog.citus_cleanup_orphaned_resources();
+SELECT public.wait_for_resource_cleanup();
 
 -- connect to the worker node with metadata
 \c - mx_isolation_role_ent - :worker_1_port
@@ -325,7 +329,7 @@ INSERT INTO text_column VALUES ('hello','{}');
 SELECT create_distributed_table('text_column','tenant_id');
 SELECT isolate_tenant_to_new_shard('text_column', 'hello', shard_transfer_mode => 'force_logical');
 SELECT * FROM text_column;
-CALL pg_catalog.citus_cleanup_orphaned_resources();
+SELECT public.wait_for_resource_cleanup();
 
 -- test with invalid shard placements
 \c - postgres - :master_port
@@ -354,7 +358,7 @@ SELECT * FROM pg_dist_shard
 	ORDER BY shardminvalue::BIGINT, logicalrelid;
 
 \c - postgres - :master_port
-CALL pg_catalog.citus_cleanup_orphaned_resources();
+SELECT public.wait_for_resource_cleanup();
 
 -- test failure scenarios with triggers on workers
 \c - postgres - :worker_1_port
@@ -392,45 +396,6 @@ SET citus.override_table_visibility TO false;
 \d
 
 DROP EVENT TRIGGER abort_ddl;
-
--- create a trigger for drops
-SET citus.enable_metadata_sync TO OFF;
-CREATE OR REPLACE FUNCTION abort_drop_command()
-  RETURNS event_trigger
- LANGUAGE plpgsql
-  AS $$
-BEGIN
-  RAISE EXCEPTION 'command % is disabled', tg_tag;
-END;
-$$;
-RESET citus.enable_metadata_sync;
-
-CREATE EVENT TRIGGER abort_drop ON sql_drop
-   EXECUTE PROCEDURE abort_drop_command();
-
-\c - mx_isolation_role_ent - :master_port
-SET search_path to "Tenant Isolation";
-
-\set VERBOSITY terse
-SELECT isolate_tenant_to_new_shard('orders_streaming', 104, 'CASCADE', shard_transfer_mode => 'force_logical');
-
-\set VERBOSITY default
-
--- check if metadata is changed
-SELECT * FROM pg_dist_shard
-	WHERE logicalrelid = 'lineitem_streaming'::regclass OR logicalrelid = 'orders_streaming'::regclass
-	ORDER BY shardminvalue::BIGINT, logicalrelid;
-
-\c - - - :worker_1_port
-SET search_path to "Tenant Isolation";
-
--- however, new tables are already created
-SET citus.override_table_visibility TO false;
-\d
-
-\c - postgres - :worker_1_port
-
-DROP EVENT TRIGGER abort_drop;
 
 \c - mx_isolation_role_ent - :master_port
 SET search_path to "Tenant Isolation";
@@ -561,7 +526,7 @@ SELECT isolate_tenant_to_new_shard('test_colocated_table_2', 1, 'CASCADE', shard
 SELECT count(*) FROM test_colocated_table_2;
 
 \c - postgres - :master_port
-CALL pg_catalog.citus_cleanup_orphaned_resources();
+SELECT public.wait_for_resource_cleanup();
 
 \c - postgres - :worker_1_port
 

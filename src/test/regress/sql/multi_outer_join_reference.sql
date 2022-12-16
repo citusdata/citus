@@ -159,7 +159,7 @@ FROM
 	multi_outer_join_left_hash a LEFT JOIN multi_outer_join_right_reference b
 	ON (l_custkey = r_custkey AND l_custkey = -1 /* nonexistant */);
 
--- Right join should be disallowed in this case
+-- Right join is allowed as we recursively plan the distributed table (multi_outer_join_left_hash)
 SELECT
 	min(r_custkey), max(r_custkey)
 FROM
@@ -259,7 +259,7 @@ FROM
 	ON (l_custkey = r_custkey AND r_custkey = 21);
 
 
--- Right join should not be allowed in this case
+-- Right join should be allowed in this case as we recursively plan the distributed table (multi_outer_join_left_hash
 SELECT
 	min(r_custkey), max(r_custkey)
 FROM
@@ -302,13 +302,14 @@ FROM
 	LEFT JOIN multi_outer_join_third_reference t1 ON (r1.r_custkey  = t1.t_custkey)
 ORDER BY 1;
 
--- Right join with single shard right most table should error out
+-- Right join with single shard right most table should work
 SELECT
 	l_custkey, r_custkey, t_custkey
 FROM
 	multi_outer_join_left_hash l1
 	LEFT JOIN multi_outer_join_right_hash r1 ON (l1.l_custkey = r1.r_custkey)
-	RIGHT JOIN multi_outer_join_third_reference t1 ON (r1.r_custkey  = t1.t_custkey);
+	RIGHT JOIN multi_outer_join_third_reference t1 ON (r1.r_custkey  = t1.t_custkey)
+ORDER BY 1,2,3;
 
 -- Right join with single shard left most table should work
 SELECT
@@ -377,12 +378,13 @@ WHERE
 	l_custkey is NULL or r_custkey is NULL
 ORDER BY 1,2 DESC;
 
--- full outer join should error out for mismatched shards
+-- full outer join should work as we recursively plan the distributed table (multi_outer_join_left_hash
 SELECT
 	l_custkey, t_custkey
 FROM
 	multi_outer_join_left_hash l1
-	FULL JOIN multi_outer_join_third_reference t1 ON (l1.l_custkey = t1.t_custkey);
+	FULL JOIN multi_outer_join_third_reference t1 ON (l1.l_custkey = t1.t_custkey)
+ORDER BY 1,2;
 
 -- inner join  + single shard left join should work
 SELECT

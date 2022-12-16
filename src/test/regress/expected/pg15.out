@@ -1456,6 +1456,36 @@ NOTICE:  drop cascades to 2 other objects
 CREATE DATABASE db_with_oid OID 987654;
 NOTICE:  Citus partially supports CREATE DATABASE for distributed databases
 DROP DATABASE db_with_oid;
+-- SET ACCESS METHOD
+-- Create a heap2 table am handler with heapam handler
+CREATE ACCESS METHOD heap2 TYPE TABLE HANDLER heap_tableam_handler;
+SELECT run_command_on_workers($$CREATE ACCESS METHOD heap2 TYPE TABLE HANDLER heap_tableam_handler$$);
+           run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,"CREATE ACCESS METHOD")
+ (localhost,57638,t,"CREATE ACCESS METHOD")
+(2 rows)
+
+CREATE TABLE mx_ddl_table2 (
+    key int primary key,
+    value int
+);
+SELECT create_distributed_table('mx_ddl_table2', 'key', 'hash', shard_count=> 4);
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+ALTER TABLE mx_ddl_table2 SET ACCESS METHOD heap2;
+DROP TABLE mx_ddl_table2;
+DROP ACCESS METHOD heap2;
+SELECT run_command_on_workers($$DROP ACCESS METHOD heap2$$);
+          run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,"DROP ACCESS METHOD")
+ (localhost,57638,t,"DROP ACCESS METHOD")
+(2 rows)
+
 -- Clean up
 \set VERBOSITY terse
 SET client_min_messages TO ERROR;

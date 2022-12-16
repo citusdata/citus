@@ -72,6 +72,7 @@ typedef struct JoinRestrictionContext
 {
 	List *joinRestrictionList;
 	bool hasSemiJoin;
+	bool hasOuterJoin;
 } JoinRestrictionContext;
 
 typedef struct JoinRestriction

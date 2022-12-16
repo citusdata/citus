@@ -98,8 +98,9 @@ INSERT INTO cluster_clock_type values('(100, 100)');
 SELECT (extract(epoch from now()) * 1000)::bigint AS epoch,
 	citus_get_node_clock() AS latest_clock \gset
 
--- Returns true
-SELECT ABS(:epoch - cluster_clock_logical(:'latest_clock')) < 25;
+-- Returns difference in epoch-milliseconds
+SELECT CASE WHEN msdiff BETWEEN 0 AND 25 THEN 0 ELSE msdiff END
+FROM ABS(:epoch - cluster_clock_logical(:'latest_clock')) msdiff;
 
 BEGIN;
 SELECT citus_get_transaction_clock();
@@ -141,6 +142,25 @@ BEGIN;
 SELECT citus_get_transaction_clock();
 END;
 
+SET citus.enable_cluster_clock to ON;
+
+-- Test if the clock UDFs are volatile, result should never be the same
+SELECT citus_get_node_clock() = citus_get_node_clock();
+select citus_get_transaction_clock() = citus_get_transaction_clock();
+
+-- Test if the clock UDFs are usable by non-superusers
+CREATE ROLE non_super_user_clock;
+SET ROLE non_super_user_clock;
+SELECT citus_get_node_clock();
+BEGIN;
+SELECT citus_get_transaction_clock();
+COMMIT;
+
+-- Test setting the persisted clock value (it must fail)
+SELECT setval('pg_dist_clock_logical_seq', 100, true);
+
+\c
 RESET client_min_messages;
 RESET citus.enable_cluster_clock;
+DROP ROLE non_super_user_clock;
 DROP SCHEMA clock CASCADE;
