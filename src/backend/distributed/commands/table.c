@@ -788,6 +788,12 @@ static List *
 PreprocessAlterTableAddPrimaryKey(AlterTableStmt *alterTableStatement, Oid relationId,
 								  Constraint *constraint)
 {
+	/* We should only preprocess an ADD PRIMARY KEY command if we are changing the it.
+	 * This only happens when we have to create a primary key name ourselves in the case that the client does
+	 * not specify a name.
+	 */
+	Assert(constraint->conname == NULL);
+
 	bool primary = true;
 	bool isconstraint = true;
 
