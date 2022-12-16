@@ -212,7 +212,7 @@ ALTER TABLE AT_AddConstNoName.citus_local_partitioned_table ADD PRIMARY KEY(part
 
 SELECT create_distributed_table('AT_AddConstNoName.citus_local_partitioned_table', 'partition_col');
 
-ALTER TABLE AT_AddConstNoName.citus_local_partitioned_table DROP CONSTRAINT citus_local_partitioned_table_pkey; 
+ALTER TABLE AT_AddConstNoName.citus_local_partitioned_table DROP CONSTRAINT citus_local_partitioned_table_pkey;
 
 SET client_min_messages TO DEBUG1;
 ALTER TABLE AT_AddConstNoName.citus_local_partitioned_table ADD PRIMARY KEY(partition_col);
