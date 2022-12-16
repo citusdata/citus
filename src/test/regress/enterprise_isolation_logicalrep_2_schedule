@@ -7,3 +7,4 @@ test: isolation_cluster_management
 
 test: isolation_logical_replication_single_shard_commands_on_mx
 test: isolation_logical_replication_multi_shard_commands_on_mx
+test: isolation_logical_replication_skip_fk_validation

@@ -1,0 +1,52 @@
+Parsed test spec with 3 sessions
+
+starting permutation: s1-start-session-level-connection s3-acquire-advisory-lock s2-move-placement s1-start-session-level-connection s1-insert-violation-into-shard s3-release-advisory-lock
+step s1-start-session-level-connection:
+ SELECT start_session_level_connection_to_node('localhost', 57638);
+
+start_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step s3-acquire-advisory-lock:
+ SELECT pg_advisory_lock(44000, 55152);
+
+pg_advisory_lock
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-move-placement:
+ SELECT master_move_shard_placement((SELECT * FROM selected_shard_for_test_table), 'localhost', 57637, 'localhost', 57638);
+ <waiting ...>
+step s1-start-session-level-connection: 
+ SELECT start_session_level_connection_to_node('localhost', 57638);
+
+start_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-insert-violation-into-shard:
+ SELECT run_commands_on_session_level_connection_to_node(format('INSERT INTO t1_%s VALUES (-1, -1)', (SELECT * FROM selected_shard_for_test_table)));
+
+run_commands_on_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step s3-release-advisory-lock:
+ SELECT pg_advisory_unlock(44000, 55152);
+
+pg_advisory_unlock
+---------------------------------------------------------------------
+t
+(1 row)
+
+step s2-move-placement: <... completed>
+master_move_shard_placement
+---------------------------------------------------------------------
+
+(1 row)
+
