@@ -389,7 +389,6 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 	Node *parsetree = pstmt->utilityStmt;
 	List *ddlJobs = NIL;
 	DistOpsValidationState distOpsValidationState = HasNoneValidObject;
-	bool oldSkipConstraintsValidationValue = SkipConstraintValidation;
 
 	if (IsA(parsetree, ExplainStmt) &&
 		IsA(((ExplainStmt *) parsetree)->query, Query))
@@ -630,6 +629,32 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 				 * is enabled. The following eagerly executes some tasks on workers.
 				 */
 				SkipForeignKeyValidationIfConstraintIsFkey(alterTableStmt, false);
+			}
+		}
+	}
+
+	/*
+	 * If we've explicitely set the citus.skip_constraint_validation GUC, then
+	 * we skip validation of any added constraints.
+	 */
+	if (IsA(parsetree, AlterTableStmt) && SkipConstraintValidation)
+	{
+		AlterTableStmt *alterTableStmt = (AlterTableStmt *) parsetree;
+		AlterTableCmd *command = NULL;
+		foreach_ptr(command, alterTableStmt->cmds)
+		{
+			AlterTableType alterTableType = command->subtype;
+
+			/*
+			 * XXX: In theary we could probably use this GUC to skip validation
+			 * of VALIDATE CONSTRAINT and ALTER CONSTRAINT too. But currently
+			 * this is not needed, so we make its behaviour only apply to ADD
+			 * CONSTRAINT.
+			 */
+			if (alterTableType == AT_AddConstraint)
+			{
+				Constraint *constraint = (Constraint *) command->def;
+				constraint->skip_validation = true;
 			}
 		}
 	}
@@ -915,8 +940,6 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 		 */
 		CitusHasBeenLoaded(); /* lgtm[cpp/return-value-ignored] */
 	}
-
-	SkipConstraintValidation = oldSkipConstraintsValidationValue;
 }
 
 
