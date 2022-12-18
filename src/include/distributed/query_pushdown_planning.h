@@ -33,6 +33,7 @@ extern bool HasEmptyJoinTree(Query *query);
 extern bool WhereOrHavingClauseContainsSubquery(Query *query);
 extern bool TargetListContainsSubquery(List *targetList);
 extern bool SafeToPushdownWindowFunction(Query *query, StringInfo *errorDetail);
+extern bool IsOuterJoinExpr(Node *node);
 extern MultiNode * SubqueryMultiNodeTree(Query *originalQuery,
 										 Query *queryTree,
 										 PlannerRestrictionContext *

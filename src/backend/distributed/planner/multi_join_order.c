@@ -71,6 +71,8 @@ static JoinOrderNode * EvaluateJoinRules(List *joinedTableList,
 										 TableEntry *candidateTable,
 										 List *joinClauseList, JoinType joinType);
 static List * RangeTableIdList(List *tableList);
+static JoinType JoinTypeBetweenTables(TableEntry *table1, TableEntry *table2,
+									  JoinRestrictionContext *joinRestrictionContext);
 static RuleEvalFunction JoinRuleEvalFunction(JoinRuleType ruleType);
 static char * JoinRuleName(JoinRuleType ruleType);
 static JoinOrderNode * ReferenceJoin(JoinOrderNode *joinNode, TableEntry *candidateTable,
@@ -98,7 +100,7 @@ static JoinOrderNode * CartesianProduct(JoinOrderNode *joinNode,
 static JoinOrderNode * MakeJoinOrderNode(TableEntry *tableEntry,
 										 JoinRuleType joinRuleType,
 										 List *partitionColumnList, char partitionMethod,
-										 TableEntry *anchorTable);
+										 TableEntry *anchorTable, JoinType joinType);
 
 
 /*
@@ -326,6 +328,112 @@ JoinOrderList(List *tableEntryList, List *joinClauseList)
 
 
 /*
+ * JoinTypeBetweenTables returns join type between given tables.
+ */
+static JoinType
+JoinTypeBetweenTables(TableEntry *table1, TableEntry *table2,
+					  JoinRestrictionContext *joinRestrictionContext)
+{
+	uint32 rteIdx1 = table1->rangeTableId;
+	uint32 rteIdx2 = table2->rangeTableId;
+
+	JoinRestriction *joinRestriction = NULL;
+	foreach_ptr(joinRestriction, joinRestrictionContext->joinRestrictionList)
+	{
+		if (bms_is_member(rteIdx1, joinRestriction->innerrelRelids) &&
+			bms_is_member(rteIdx2, joinRestriction->outerrelRelids))
+		{
+			return joinRestriction->joinType;
+		}
+		else if (bms_is_member(rteIdx2, joinRestriction->innerrelRelids) &&
+				 bms_is_member(rteIdx1, joinRestriction->outerrelRelids))
+		{
+			return joinRestriction->joinType;
+		}
+	}
+
+	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					errmsg("no join is found between tables")));
+}
+
+
+/*
+ * FixedJoinOrderList returns the best fixed join order according to
+ * applicable join rules for the nodes in the list.
+ */
+List *
+FixedJoinOrderList(List *tableEntryList, List *joinClauseList,
+				   JoinRestrictionContext *joinRestrictionContext)
+{
+	List *joinOrderList = NIL;
+	List *joinedTableList = NIL;
+	bool firstTable = true;
+	JoinOrderNode *currentJoinNode = NULL;
+	JoinOrderNode *nextJoinNode = NULL;
+
+	int tableCount = list_length(tableEntryList);
+	int tableIdx;
+	for (tableIdx = 1; tableIdx < tableCount; tableIdx++)
+	{
+		TableEntry *currentTable = (TableEntry *) list_nth(tableEntryList, tableIdx - 1);
+		TableEntry *nextTable = (TableEntry *) list_nth(tableEntryList, tableIdx);
+		JoinType joinType = JoinTypeBetweenTables(currentTable, nextTable,
+												  joinRestrictionContext);
+
+		if (firstTable)
+		{
+			/* add first table into joinedtable list */
+			joinedTableList = lappend(joinedTableList, currentTable);
+
+			/* create join node for the first table */
+			JoinRuleType joinRule = JOIN_RULE_INVALID_FIRST;
+			Oid relationId = currentTable->relationId;
+			uint32 tableId = currentTable->rangeTableId;
+			Var *partitionColumn = PartitionColumn(relationId, tableId);
+			char partitionMethod = PartitionMethod(relationId);
+
+			currentJoinNode = MakeJoinOrderNode(currentTable, joinRule,
+												list_make1(partitionColumn),
+												partitionMethod,
+												currentTable, joinType);
+			joinOrderList = lappend(joinOrderList, currentJoinNode);
+
+			firstTable = false;
+		}
+
+		nextJoinNode = EvaluateJoinRules(joinedTableList,
+										 currentJoinNode,
+										 nextTable,
+										 joinClauseList, joinType);
+
+		if (nextJoinNode == NULL)
+		{
+			/* there are no plans that we can create, time to error */
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg(
+								"complex joins are only supported when all distributed "
+								"tables are joined on their distribution columns with "
+								"equal operator")));
+		}
+
+		Assert(nextJoinNode != NULL);
+		joinOrderList = lappend(joinOrderList, nextJoinNode);
+		joinedTableList = lappend(joinedTableList, nextTable);
+
+		currentJoinNode = nextJoinNode;
+	}
+
+	/* if logging is enabled, print join order */
+	if (LogMultiJoinOrder)
+	{
+		PrintJoinOrderList(joinOrderList);
+	}
+
+	return joinOrderList;
+}
+
+
+/*
  * JoinOrderForTable creates a join order whose first element is the given first
  * table. To determine each subsequent element in the join order, the function
  * then chooses the table that has the lowest ranking join rule, and with which
@@ -349,7 +457,7 @@ JoinOrderForTable(TableEntry *firstTable, List *tableEntryList, List *joinClause
 	JoinOrderNode *firstJoinNode = MakeJoinOrderNode(firstTable, firstJoinRule,
 													 list_make1(firstPartitionColumn),
 													 firstPartitionMethod,
-													 firstTable);
+													 firstTable, JOIN_INNER);
 
 	/* add first node to the join order */
 	List *joinOrderList = list_make1(firstJoinNode);
@@ -831,7 +939,7 @@ ReferenceJoin(JoinOrderNode *currentJoinNode, TableEntry *candidateTable,
 	return MakeJoinOrderNode(candidateTable, REFERENCE_JOIN,
 							 currentJoinNode->partitionColumnList,
 							 currentJoinNode->partitionMethod,
-							 currentJoinNode->anchorTable);
+							 currentJoinNode->anchorTable, joinType);
 }
 
 
@@ -883,7 +991,7 @@ CartesianProductReferenceJoin(JoinOrderNode *currentJoinNode, TableEntry *candid
 	return MakeJoinOrderNode(candidateTable, CARTESIAN_PRODUCT_REFERENCE_JOIN,
 							 currentJoinNode->partitionColumnList,
 							 currentJoinNode->partitionMethod,
-							 currentJoinNode->anchorTable);
+							 currentJoinNode->anchorTable, joinType);
 }
 
 
@@ -955,7 +1063,7 @@ LocalJoin(JoinOrderNode *currentJoinNode, TableEntry *candidateTable,
 	JoinOrderNode *nextJoinNode = MakeJoinOrderNode(candidateTable, LOCAL_PARTITION_JOIN,
 													currentPartitionColumnList,
 													currentPartitionMethod,
-													currentAnchorTable);
+													currentAnchorTable, joinType);
 
 
 	return nextJoinNode;
@@ -983,12 +1091,6 @@ SinglePartitionJoin(JoinOrderNode *currentJoinNode, TableEntry *candidateTable,
 	uint32 tableId = candidateTable->rangeTableId;
 	Var *candidatePartitionColumn = PartitionColumn(relationId, tableId);
 	char candidatePartitionMethod = PartitionMethod(relationId);
-
-	/* outer joins are not supported yet */
-	if (IS_OUTER_JOIN(joinType))
-	{
-		return NULL;
-	}
 
 	/*
 	 * If we previously dual-hash re-partitioned the tables for a join or made
@@ -1018,14 +1120,14 @@ SinglePartitionJoin(JoinOrderNode *currentJoinNode, TableEntry *candidateTable,
 			return MakeJoinOrderNode(candidateTable, SINGLE_HASH_PARTITION_JOIN,
 									 currentPartitionColumnList,
 									 currentPartitionMethod,
-									 currentAnchorTable);
+									 currentAnchorTable, joinType);
 		}
 		else if (candidatePartitionMethod == DISTRIBUTE_BY_RANGE)
 		{
 			return MakeJoinOrderNode(candidateTable, SINGLE_RANGE_PARTITION_JOIN,
 									 currentPartitionColumnList,
 									 currentPartitionMethod,
-									 currentAnchorTable);
+									 currentAnchorTable, joinType);
 		}
 	}
 
@@ -1057,7 +1159,7 @@ SinglePartitionJoin(JoinOrderNode *currentJoinNode, TableEntry *candidateTable,
 										 SINGLE_HASH_PARTITION_JOIN,
 										 candidatePartitionColumnList,
 										 candidatePartitionMethod,
-										 candidateTable);
+										 candidateTable, joinType);
 			}
 			else if (currentPartitionMethod == DISTRIBUTE_BY_RANGE)
 			{
@@ -1065,7 +1167,7 @@ SinglePartitionJoin(JoinOrderNode *currentJoinNode, TableEntry *candidateTable,
 										 SINGLE_RANGE_PARTITION_JOIN,
 										 candidatePartitionColumnList,
 										 candidatePartitionMethod,
-										 candidateTable);
+										 candidateTable, joinType);
 			}
 		}
 	}
@@ -1151,7 +1253,7 @@ DualPartitionJoin(JoinOrderNode *currentJoinNode, TableEntry *candidateTable,
 								 DUAL_PARTITION_JOIN,
 								 NIL,
 								 REDISTRIBUTE_BY_HASH,
-								 NULL);
+								 NULL, joinType);
 	}
 
 	return NULL;
@@ -1212,7 +1314,7 @@ CartesianProduct(JoinOrderNode *currentJoinNode, TableEntry *candidateTable,
 		return MakeJoinOrderNode(candidateTable, CARTESIAN_PRODUCT,
 								 currentJoinNode->partitionColumnList,
 								 currentJoinNode->partitionMethod,
-								 NULL);
+								 NULL, joinType);
 	}
 
 	return NULL;
@@ -1223,12 +1325,12 @@ CartesianProduct(JoinOrderNode *currentJoinNode, TableEntry *candidateTable,
 JoinOrderNode *
 MakeJoinOrderNode(TableEntry *tableEntry, JoinRuleType joinRuleType,
 				  List *partitionColumnList, char partitionMethod,
-				  TableEntry *anchorTable)
+				  TableEntry *anchorTable, JoinType joinType)
 {
 	JoinOrderNode *joinOrderNode = palloc0(sizeof(JoinOrderNode));
 	joinOrderNode->tableEntry = tableEntry;
 	joinOrderNode->joinRuleType = joinRuleType;
-	joinOrderNode->joinType = JOIN_INNER;
+	joinOrderNode->joinType = joinType;
 	joinOrderNode->partitionColumnList = partitionColumnList;
 	joinOrderNode->partitionMethod = partitionMethod;
 	joinOrderNode->joinClauseList = NIL;

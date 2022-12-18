@@ -19,6 +19,7 @@
 
 #include "nodes/pg_list.h"
 #include "nodes/primnodes.h"
+#include "server/distributed/distributed_planner.h"
 
 
 /*
@@ -91,6 +92,8 @@ extern bool EnableSingleHashRepartitioning;
 /* Function declaration for determining table join orders */
 extern List * JoinExprList(FromExpr *fromExpr);
 extern List * JoinOrderList(List *rangeTableEntryList, List *joinClauseList);
+extern List * FixedJoinOrderList(List *rangeTableEntryList, List *joinClauseList,
+								 JoinRestrictionContext *joinRestrictionContext);
 extern bool IsApplicableJoinClause(List *leftTableIdList, uint32 rightTableId,
 								   Node *joinClause);
 extern List * ApplicableJoinClauses(List *leftTableIdList, uint32 rightTableId,

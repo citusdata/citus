@@ -82,7 +82,6 @@ int ValuesMaterializationThreshold = 100;
 /* Local functions forward declarations */
 static bool JoinTreeContainsSubqueryWalker(Node *joinTreeNode, void *context);
 static bool IsFunctionOrValuesRTE(Node *node);
-static bool IsOuterJoinExpr(Node *node);
 static bool WindowPartitionOnDistributionColumn(Query *query);
 static DeferredErrorMessage * DeferErrorIfFromClauseRecurs(Query *queryTree);
 static RecurringTuplesType FromClauseRecurringTupleType(Query *queryTree);
@@ -180,26 +179,6 @@ ShouldUseSubqueryPushDown(Query *originalQuery, Query *rewrittenQuery,
 	 * does not know how to handle them.
 	 */
 	if (FindNodeMatchingCheckFunction((Node *) originalQuery, IsFunctionOrValuesRTE))
-	{
-		return true;
-	}
-
-	/*
-	 * We handle outer joins as subqueries, since the join order planner
-	 * does not know how to handle them.
-	 */
-	if (FindNodeMatchingCheckFunction((Node *) originalQuery->jointree, IsOuterJoinExpr))
-	{
-		return true;
-	}
-
-	/*
-	 * Original query may not have an outer join while rewritten query does.
-	 * We should push down in this case.
-	 * An example of this is https://github.com/citusdata/citus/issues/2739
-	 * where postgres pulls-up the outer-join in the subquery.
-	 */
-	if (FindNodeMatchingCheckFunction((Node *) rewrittenQuery->jointree, IsOuterJoinExpr))
 	{
 		return true;
 	}
@@ -391,7 +370,7 @@ IsNodeSubquery(Node *node)
 /*
  * IsOuterJoinExpr returns whether the given node is an outer join expression.
  */
-static bool
+bool
 IsOuterJoinExpr(Node *node)
 {
 	bool isOuterJoin = false;

@@ -153,7 +153,8 @@ MultiLogicalPlanCreate(Query *originalQuery, Query *queryTree,
 	}
 	else
 	{
-		multiQueryNode = MultiNodeTree(queryTree);
+		multiQueryNode = MultiNodeTree(queryTree,
+									   plannerRestrictionContext->joinRestrictionContext);
 	}
 
 	/* add a root node to serve as the permanent handle to the tree */
@@ -562,7 +563,7 @@ SubqueryEntryList(Query *queryTree)
  * group, and limit nodes if they appear in the original query tree.
  */
 MultiNode *
-MultiNodeTree(Query *queryTree)
+MultiNodeTree(Query *queryTree, JoinRestrictionContext *joinRestrictionContext)
 {
 	List *rangeTableList = queryTree->rtable;
 	List *targetEntryList = queryTree->targetList;
@@ -637,7 +638,8 @@ MultiNodeTree(Query *queryTree)
 		}
 
 		/* recursively create child nested multitree */
-		MultiNode *subqueryExtendedNode = MultiNodeTree(subqueryTree);
+		MultiNode *subqueryExtendedNode = MultiNodeTree(subqueryTree,
+														joinRestrictionContext);
 
 		SetChild((MultiUnaryNode *) subqueryCollectNode, (MultiNode *) subqueryNode);
 		SetChild((MultiUnaryNode *) subqueryNode, subqueryExtendedNode);
@@ -652,7 +654,6 @@ MultiNodeTree(Query *queryTree)
 		 * entry list's memory, and JoinOrderList() shallow copies the list's
 		 * elements.
 		 */
-		joinClauseList = JoinClauseList(whereClauseList);
 		tableEntryList = UsedTableEntryList(queryTree);
 
 		/* build the list of multi table nodes */
@@ -661,8 +662,24 @@ MultiNodeTree(Query *queryTree)
 		/* add collect nodes on top of the multi table nodes */
 		collectTableList = AddMultiCollectNodes(tableNodeList);
 
-		/* find best join order for commutative inner joins */
-		joinOrderList = JoinOrderList(tableEntryList, joinClauseList);
+		if (FindNodeMatchingCheckFunction((Node *) queryTree->jointree, IsOuterJoinExpr))
+		{
+			/* consider outer join qualifications as well */
+			List *allRestrictionClauseList = QualifierList(queryTree->jointree);
+			joinClauseList = JoinClauseList(allRestrictionClauseList);
+
+			/* we simply donot commute joins as we have at least 1 outer join */
+			joinOrderList = FixedJoinOrderList(tableEntryList, joinClauseList,
+											   joinRestrictionContext);
+		}
+		else
+		{
+			/* only consider base qualifications */
+			joinClauseList = JoinClauseList(whereClauseList);
+
+			/* find best join order for commutative inner joins */
+			joinOrderList = JoinOrderList(tableEntryList, joinClauseList);
+		}
 
 		/* build join tree using the join order and collected tables */
 		joinTreeNode = MultiJoinTree(joinOrderList, collectTableList, joinClauseList);
