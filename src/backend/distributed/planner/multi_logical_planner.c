@@ -153,8 +153,7 @@ MultiLogicalPlanCreate(Query *originalQuery, Query *queryTree,
 	}
 	else
 	{
-		multiQueryNode = MultiNodeTree(queryTree,
-									   plannerRestrictionContext->joinRestrictionContext);
+		multiQueryNode = MultiNodeTree(queryTree);
 	}
 
 	/* add a root node to serve as the permanent handle to the tree */
@@ -563,7 +562,7 @@ SubqueryEntryList(Query *queryTree)
  * group, and limit nodes if they appear in the original query tree.
  */
 MultiNode *
-MultiNodeTree(Query *queryTree, JoinRestrictionContext *joinRestrictionContext)
+MultiNodeTree(Query *queryTree)
 {
 	List *rangeTableList = queryTree->rtable;
 	List *targetEntryList = queryTree->targetList;
@@ -638,8 +637,7 @@ MultiNodeTree(Query *queryTree, JoinRestrictionContext *joinRestrictionContext)
 		}
 
 		/* recursively create child nested multitree */
-		MultiNode *subqueryExtendedNode = MultiNodeTree(subqueryTree,
-														joinRestrictionContext);
+		MultiNode *subqueryExtendedNode = MultiNodeTree(subqueryTree);
 
 		SetChild((MultiUnaryNode *) subqueryCollectNode, (MultiNode *) subqueryNode);
 		SetChild((MultiUnaryNode *) subqueryNode, subqueryExtendedNode);
@@ -667,10 +665,11 @@ MultiNodeTree(Query *queryTree, JoinRestrictionContext *joinRestrictionContext)
 			/* consider outer join qualifications as well */
 			List *allRestrictionClauseList = QualifierList(queryTree->jointree);
 			joinClauseList = JoinClauseList(allRestrictionClauseList);
+			List *joinExprList = JoinExprList(queryTree->jointree);
 
 			/* we simply donot commute joins as we have at least 1 outer join */
 			joinOrderList = FixedJoinOrderList(tableEntryList, joinClauseList,
-											   joinRestrictionContext);
+											   joinExprList);
 		}
 		else
 		{

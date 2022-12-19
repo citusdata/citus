@@ -229,8 +229,7 @@ extern MultiProject * MultiProjectNode(List *targetEntryList);
 extern MultiExtendedOp * MultiExtendedOpNode(Query *queryTree, Query *originalQuery);
 extern DeferredErrorMessage * DeferErrorIfUnsupportedSubqueryRepartition(Query *
 																		 subqueryTree);
-extern MultiNode * MultiNodeTree(Query *queryTree,
-								 JoinRestrictionContext *joinRestrictionContext);
+extern MultiNode * MultiNodeTree(Query *queryTree);
 
 
 #endif   /* MULTI_LOGICAL_PLANNER_H */

@@ -111,7 +111,8 @@ static Var * PartitionColumnForPushedDownSubquery(Query *query);
 static bool ContainsReferencesToRelids(Query *query, Relids relids, int *foundRelid);
 static bool ContainsReferencesToRelidsWalker(Node *node,
 											 RelidsReferenceWalkerContext *context);
-
+static bool HasRightRecursiveJoin(FromExpr *fromExpr);
+static bool RightRecursiveJoinExprWalker(Node *node, void *context);
 
 /*
  * ShouldUseSubqueryPushDown determines whether it's desirable to use
@@ -173,6 +174,11 @@ ShouldUseSubqueryPushDown(Query *originalQuery, Query *rewrittenQuery,
 		return true;
 	}
 
+	/* if there is right recursive join, fix join order can not handle it */
+	if (HasRightRecursiveJoin(rewrittenQuery->jointree))
+	{
+		return true;
+	}
 
 	/*
 	 * We process function and VALUES RTEs as subqueries, since the join order planner
@@ -201,6 +207,53 @@ ShouldUseSubqueryPushDown(Query *originalQuery, Query *rewrittenQuery,
 	}
 
 	return false;
+}
+
+
+/*
+ * HasRightRecursiveJoin returns true if join tree contains any right recursive join.
+ * That method should be removed when we support right recursive outer joins at join
+ * order planner.
+ */
+static bool
+HasRightRecursiveJoin(FromExpr *fromExpr)
+{
+	JoinExpr *joinExpr = NULL;
+	foreach_ptr(joinExpr, fromExpr->fromlist)
+	{
+		if (RightRecursiveJoinExprWalker((Node *) joinExpr, NULL))
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
+
+/*
+ * RightRecursiveJoinExprWalker returns true if it finds right recursive join
+ * in given join tree.
+ */
+static bool
+RightRecursiveJoinExprWalker(Node *node, void *context)
+{
+	if (node == NULL)
+	{
+		return false;
+	}
+
+	if (IsA(node, JoinExpr))
+	{
+		JoinExpr *joinExpr = (JoinExpr *) node;
+
+		if (joinExpr->rarg && IsA(joinExpr->rarg, JoinExpr))
+		{
+			return true;
+		}
+	}
+
+	return expression_tree_walker(node, RightRecursiveJoinExprWalker, NULL);
 }
 
 

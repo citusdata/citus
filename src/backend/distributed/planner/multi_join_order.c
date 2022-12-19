@@ -71,8 +71,6 @@ static JoinOrderNode * EvaluateJoinRules(List *joinedTableList,
 										 TableEntry *candidateTable,
 										 List *joinClauseList, JoinType joinType);
 static List * RangeTableIdList(List *tableList);
-static JoinType JoinTypeBetweenTables(TableEntry *table1, TableEntry *table2,
-									  JoinRestrictionContext *joinRestrictionContext);
 static RuleEvalFunction JoinRuleEvalFunction(JoinRuleType ruleType);
 static char * JoinRuleName(JoinRuleType ruleType);
 static JoinOrderNode * ReferenceJoin(JoinOrderNode *joinNode, TableEntry *candidateTable,
@@ -328,42 +326,12 @@ JoinOrderList(List *tableEntryList, List *joinClauseList)
 
 
 /*
- * JoinTypeBetweenTables returns join type between given tables.
- */
-static JoinType
-JoinTypeBetweenTables(TableEntry *table1, TableEntry *table2,
-					  JoinRestrictionContext *joinRestrictionContext)
-{
-	uint32 rteIdx1 = table1->rangeTableId;
-	uint32 rteIdx2 = table2->rangeTableId;
-
-	JoinRestriction *joinRestriction = NULL;
-	foreach_ptr(joinRestriction, joinRestrictionContext->joinRestrictionList)
-	{
-		if (bms_is_member(rteIdx1, joinRestriction->innerrelRelids) &&
-			bms_is_member(rteIdx2, joinRestriction->outerrelRelids))
-		{
-			return joinRestriction->joinType;
-		}
-		else if (bms_is_member(rteIdx2, joinRestriction->innerrelRelids) &&
-				 bms_is_member(rteIdx1, joinRestriction->outerrelRelids))
-		{
-			return joinRestriction->joinType;
-		}
-	}
-
-	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-					errmsg("no join is found between tables")));
-}
-
-
-/*
  * FixedJoinOrderList returns the best fixed join order according to
  * applicable join rules for the nodes in the list.
  */
 List *
 FixedJoinOrderList(List *tableEntryList, List *joinClauseList,
-				   JoinRestrictionContext *joinRestrictionContext)
+				   List *joinExprList)
 {
 	List *joinOrderList = NIL;
 	List *joinedTableList = NIL;
@@ -377,8 +345,7 @@ FixedJoinOrderList(List *tableEntryList, List *joinClauseList,
 	{
 		TableEntry *currentTable = (TableEntry *) list_nth(tableEntryList, tableIdx - 1);
 		TableEntry *nextTable = (TableEntry *) list_nth(tableEntryList, tableIdx);
-		JoinType joinType = JoinTypeBetweenTables(currentTable, nextTable,
-												  joinRestrictionContext);
+		JoinType joinType = ((JoinExpr *) list_nth(joinExprList, tableIdx - 1))->jointype;
 
 		if (firstTable)
 		{
