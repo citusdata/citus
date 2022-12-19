@@ -55,6 +55,7 @@ static RuleEvalFunction RuleEvalFunctionArray[JOIN_RULE_LAST] = { 0 }; /* join r
 /* Local functions forward declarations */
 static bool JoinExprListWalker(Node *node, List **joinList);
 static bool ExtractLeftMostRangeTableIndex(Node *node, int *rangeTableIndex);
+static bool ExtractRightMostRangeTableIndex(Node *node, int *rangeTableIndex);
 static List * JoinOrderForTable(TableEntry *firstTable, List *tableEntryList,
 								List *joinClauseList);
 static List * BestJoinOrder(List *candidateJoinOrders);
@@ -64,6 +65,9 @@ static List * LatestLargeDataTransfer(List *candidateJoinOrders);
 static void PrintJoinOrderList(List *joinOrder);
 static uint32 LargeDataTransferLocation(List *joinOrder);
 static List * TableEntryListDifference(List *lhsTableList, List *rhsTableList);
+static bool JoinTypeJoinExprWalker(Node *node, JoinTypeContext *joinTypeContext);
+static JoinType * FindJoinTypeBetweenTables(List *joinExprList, List *leftTableIdxList,
+											uint32 rtableIdx);
 
 /* Local functions forward declarations for join evaluations */
 static JoinOrderNode * EvaluateJoinRules(List *joinedTableList,
@@ -210,6 +214,40 @@ ExtractLeftMostRangeTableIndex(Node *node, int *rangeTableIndex)
 
 
 /*
+ * ExtractRightMostRangeTableIndex extracts the range table index of the right-most
+ * leaf in a join tree.
+ */
+static bool
+ExtractRightMostRangeTableIndex(Node *node, int *rangeTableIndex)
+{
+	bool walkerResult = false;
+
+	Assert(node != NULL);
+
+	if (IsA(node, JoinExpr))
+	{
+		JoinExpr *joinExpr = (JoinExpr *) node;
+
+		walkerResult = ExtractRightMostRangeTableIndex(joinExpr->rarg, rangeTableIndex);
+	}
+	else if (IsA(node, RangeTblRef))
+	{
+		RangeTblRef *rangeTableRef = (RangeTblRef *) node;
+
+		*rangeTableIndex = rangeTableRef->rtindex;
+		walkerResult = true;
+	}
+	else
+	{
+		walkerResult = expression_tree_walker(node, ExtractRightMostRangeTableIndex,
+											  rangeTableIndex);
+	}
+
+	return walkerResult;
+}
+
+
+/*
  * JoinOnColumns determines whether two columns are joined by a given join clause list.
  */
 static bool
@@ -325,6 +363,71 @@ JoinOrderList(List *tableEntryList, List *joinClauseList)
 }
 
 
+static JoinType *
+FindJoinTypeBetweenTables(List *joinExprList, List *leftTableIdxList, uint32 rtableIdx)
+{
+	uint32 ltableIdx;
+	foreach_int(ltableIdx, leftTableIdxList)
+	{
+		JoinTypeContext joinTypeContext = {
+			.ltableIdx = ltableIdx,
+			.rtableIdx = rtableIdx,
+			.joinType = NULL,
+		};
+
+		JoinExpr *joinExpr = NULL;
+		foreach_ptr(joinExpr, joinExprList)
+		{
+			JoinTypeJoinExprWalker((Node *) joinExpr, &joinTypeContext);
+			if (joinTypeContext.joinType)
+			{
+				return joinTypeContext.joinType;
+			}
+		}
+	}
+
+	return NULL;
+}
+
+
+/*
+ * JoinTypeJoinExprWalker finds join type between range table indexes.
+ * Only handles left recursive join trees.
+ */
+static bool
+JoinTypeJoinExprWalker(Node *node, JoinTypeContext *joinTypeContext)
+{
+	if (node == NULL)
+	{
+		return false;
+	}
+
+	if (IsA(node, JoinExpr))
+	{
+		JoinExpr *joinExpr = (JoinExpr *) node;
+
+		if (IsA(joinExpr->rarg, RangeTblRef) &&
+			((RangeTblRef *) joinExpr->rarg)->rtindex == joinTypeContext->rtableIdx)
+		{
+			/*
+			 * we found right table entry, then we need to find rightmost entry of left arg
+			 * of the join tree
+			 */
+			int ltableIdx = 0;
+			ExtractRightMostRangeTableIndex(joinExpr->larg, &ltableIdx);
+
+			if (joinTypeContext->ltableIdx == ltableIdx)
+			{
+				joinTypeContext->joinType = &(joinExpr->jointype);
+				return true;
+			}
+		}
+	}
+
+	return expression_tree_walker(node, JoinTypeJoinExprWalker, joinTypeContext);
+}
+
+
 /*
  * FixedJoinOrderList returns the best fixed join order according to
  * applicable join rules for the nodes in the list.
@@ -345,13 +448,29 @@ FixedJoinOrderList(List *tableEntryList, List *joinClauseList,
 	{
 		TableEntry *currentTable = (TableEntry *) list_nth(tableEntryList, tableIdx - 1);
 		TableEntry *nextTable = (TableEntry *) list_nth(tableEntryList, tableIdx);
-		JoinType joinType = ((JoinExpr *) list_nth(joinExprList, tableIdx - 1))->jointype;
 
 		if (firstTable)
 		{
 			/* add first table into joinedtable list */
 			joinedTableList = lappend(joinedTableList, currentTable);
+		}
 
+		/*
+		 * if we cannot find join type between tables, then it is cartesian product. We can use JOIN_INNER,
+		 * which will be executed as cartesian product.
+		 */
+		JoinType joinType = JOIN_INNER;
+		List *joinedTableIdxList = RangeTableIdList(joinedTableList);
+		JoinType *applicableJoinType = FindJoinTypeBetweenTables(joinExprList,
+																 joinedTableIdxList,
+																 nextTable->rangeTableId);
+		if (applicableJoinType)
+		{
+			joinType = *applicableJoinType;
+		}
+
+		if (firstTable)
+		{
 			/* create join node for the first table */
 			JoinRuleType joinRule = JOIN_RULE_INVALID_FIRST;
 			Oid relationId = currentTable->relationId;

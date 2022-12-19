@@ -83,6 +83,17 @@ typedef struct JoinOrderNode
 } JoinOrderNode;
 
 
+/*
+ * JoinTypeContext stores jointype between given rangetable indexes
+ */
+typedef struct JoinTypeContext
+{
+	uint32 ltableIdx;
+	uint32 rtableIdx;
+	JoinType *joinType;
+} JoinTypeContext;
+
+
 /* Config variables managed via guc.c */
 extern bool LogMultiJoinOrder;
 extern bool EnableSingleHashRepartitioning;
