@@ -91,6 +91,8 @@ static bool TryDropReplicationSlotOutsideTransaction(char *replicationSlotName,
 													 int nodePort);
 static bool TryDropUserOutsideTransaction(char *username, char *nodeName, int nodePort);
 
+static CleanupRecord * GetCleanupRecordByNameAndType(char *objectName,
+													 CleanupObject type);
 /* Functions for cleanup infrastructure */
 static CleanupRecord * TupleToCleanupRecord(HeapTuple heapTuple,
 											TupleDesc
@@ -878,6 +880,39 @@ TryDropUserOutsideTransaction(char *username,
 
 
 /*
+ * CleanupIfRecordWithShardNameExists tries to cleanup the given shard,
+ * if there exists a cleanup record for it. Errors out if the cleanup fails.
+ */
+void
+CleanupIfRecordWithShardNameExists(char *shardName)
+{
+	CleanupRecord *record =
+		GetCleanupRecordByNameAndType(shardName, CLEANUP_OBJECT_SHARD_PLACEMENT);
+
+	if (record == NULL)
+	{
+		return;
+	}
+
+	WorkerNode *workerNode = LookupNodeForGroup(record->nodeGroupId);
+
+	if (TryDropResourceByCleanupRecordOutsideTransaction(record,
+														 workerNode->workerName,
+														 workerNode->workerPort))
+	{
+		/* delete the cleanup record */
+		DeleteCleanupRecordByRecordId(record->recordId);
+	}
+	else
+	{
+		ereport(ERROR, (errmsg("shard move failed as the orphaned shard %s leftover "
+							   "from the previous move could not be cleaned up",
+								record->objectName)));
+	}
+}
+
+
+/*
  * GetNextOperationId allocates and returns a unique operationId for an operation
  * requiring potential cleanup. This allocation occurs both in shared memory and
  * in write ahead logs; writing to logs avoids the risk of having operationId collisions.
@@ -1001,6 +1036,47 @@ ListCleanupRecordsForCurrentOperation(void)
 	table_close(pgDistCleanup, NoLock);
 
 	return recordList;
+}
+
+
+/*
+ * GetCleanupRecordByNameAndType returns the cleanup record with given name and type,
+ * if any, returns NULL otherwise.
+ */
+static CleanupRecord *
+GetCleanupRecordByNameAndType(char *objectName, CleanupObject type)
+{
+	CleanupRecord *objectFound = NULL;
+
+	Relation pgDistCleanup = table_open(DistCleanupRelationId(), AccessShareLock);
+	TupleDesc tupleDescriptor = RelationGetDescr(pgDistCleanup);
+
+	ScanKeyData scanKey[1];
+	ScanKeyInit(&scanKey[0], Anum_pg_dist_cleanup_object_type, BTEqualStrategyNumber,
+				F_INT4EQ, Int32GetDatum(type));
+
+	int scanKeyCount = 1;
+	Oid scanIndexId = InvalidOid;
+	bool useIndex = false;
+	SysScanDesc scanDescriptor = systable_beginscan(pgDistCleanup, scanIndexId, useIndex,
+													NULL,
+													scanKeyCount, scanKey);
+
+	HeapTuple heapTuple = NULL;
+	while (HeapTupleIsValid(heapTuple = systable_getnext(scanDescriptor)))
+	{
+		CleanupRecord *record = TupleToCleanupRecord(heapTuple, tupleDescriptor);
+		if (strcmp(record->objectName, objectName) == 0)
+		{
+			objectFound = record;
+			break;
+		}
+	}
+
+	systable_endscan(scanDescriptor);
+	table_close(pgDistCleanup, NoLock);
+
+	return objectFound;
 }
 
 

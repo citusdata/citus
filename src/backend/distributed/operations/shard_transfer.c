@@ -301,6 +301,15 @@ citus_move_shard_placement(PG_FUNCTION_ARGS)
 
 		EnsureShardCanBeCopied(colocatedShardId, sourceNodeName, sourceNodePort,
 							   targetNodeName, targetNodePort);
+
+		/*
+		 * This is to prevent any race condition possibility among the shard moves.
+		 * We don't allow the move to happen if the shard we are going to move has an
+		 * orphaned placement somewhere that is not cleanup up yet.
+		 * If so, here we clean it up and continue; or fail in case we can't clean it up.
+		 */
+		char *qualifiedShardName = ConstructQualifiedShardName(colocatedShard);
+		CleanupIfRecordWithShardNameExists(qualifiedShardName);
 	}
 
 	char shardReplicationMode = LookupShardTransferMode(shardReplicationModeOid);
