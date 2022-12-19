@@ -25,7 +25,7 @@ extern int NextCleanupRecordId;
 
 extern int TryDropOrphanedResources(void);
 extern void DropOrphanedResourcesInSeparateTransaction(void);
-extern void CleanupIfRecordWithShardNameExists(char *shardName);
+extern void ErrorIfCleanupRecordForShardExists(char *shardName);
 
 /* Members for cleanup infrastructure */
 typedef uint64 OperationId;

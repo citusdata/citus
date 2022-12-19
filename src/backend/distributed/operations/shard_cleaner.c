@@ -93,6 +93,7 @@ static bool TryDropUserOutsideTransaction(char *username, char *nodeName, int no
 
 static CleanupRecord * GetCleanupRecordByNameAndType(char *objectName,
 													 CleanupObject type);
+
 /* Functions for cleanup infrastructure */
 static CleanupRecord * TupleToCleanupRecord(HeapTuple heapTuple,
 											TupleDesc
@@ -880,11 +881,11 @@ TryDropUserOutsideTransaction(char *username,
 
 
 /*
- * CleanupIfRecordWithShardNameExists tries to cleanup the given shard,
- * if there exists a cleanup record for it. Errors out if the cleanup fails.
+ * ErrorIfCleanupRecordForShardExists errors out if a cleanup record for the given
+ * shard name exists.
  */
 void
-CleanupIfRecordWithShardNameExists(char *shardName)
+ErrorIfCleanupRecordForShardExists(char *shardName)
 {
 	CleanupRecord *record =
 		GetCleanupRecordByNameAndType(shardName, CLEANUP_OBJECT_SHARD_PLACEMENT);
@@ -894,21 +895,9 @@ CleanupIfRecordWithShardNameExists(char *shardName)
 		return;
 	}
 
-	WorkerNode *workerNode = LookupNodeForGroup(record->nodeGroupId);
-
-	if (TryDropResourceByCleanupRecordOutsideTransaction(record,
-														 workerNode->workerName,
-														 workerNode->workerPort))
-	{
-		/* delete the cleanup record */
-		DeleteCleanupRecordByRecordId(record->recordId);
-	}
-	else
-	{
-		ereport(ERROR, (errmsg("shard move failed as the orphaned shard %s leftover "
-							   "from the previous move could not be cleaned up",
-								record->objectName)));
-	}
+	ereport(ERROR, (errmsg("shard move failed as the orphaned shard %s leftover "
+						   "from the previous move could not be cleaned up",
+						   record->objectName)));
 }
 
 
