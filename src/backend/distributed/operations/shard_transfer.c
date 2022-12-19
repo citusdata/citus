@@ -470,27 +470,19 @@ InsertCleanupRecordsForShardPlacementsOnNode(List *shardIntervalList,
 	ShardInterval *shardInterval = NULL;
 	foreach_ptr(shardInterval, shardIntervalList)
 	{
-		/* mark for deferred drop */
-		List *shardPlacementList =
-			ActiveShardPlacementListOnGroup(shardInterval->shardId, groupId);
+		/* get shard name */
+		char *qualifiedShardName = ConstructQualifiedShardName(shardInterval);
 
-		ShardPlacement *placement = NULL;
-		foreach_ptr(placement, shardPlacementList)
-		{
-			/* get shard name */
-			char *qualifiedShardName = ConstructQualifiedShardName(shardInterval);
-
-			/* Log shard in pg_dist_cleanup.
-			 * Parent shards are to be dropped only on sucess after split workflow is complete,
-			 * so mark the policy as 'CLEANUP_DEFERRED_ON_SUCCESS'.
-			 * We also log cleanup record in the current transaction. If the current transaction rolls back,
-			 * we do not generate a record at all.
-			 */
-			InsertCleanupRecordInCurrentTransaction(CLEANUP_OBJECT_SHARD_PLACEMENT,
-													qualifiedShardName,
-													placement->groupId,
-													CLEANUP_DEFERRED_ON_SUCCESS);
-		}
+		/* Log shard in pg_dist_cleanup.
+		 * Parent shards are to be dropped only on sucess after split workflow is complete,
+		 * so mark the policy as 'CLEANUP_DEFERRED_ON_SUCCESS'.
+		 * We also log cleanup record in the current transaction. If the current transaction rolls back,
+		 * we do not generate a record at all.
+		 */
+		InsertCleanupRecordInCurrentTransaction(CLEANUP_OBJECT_SHARD_PLACEMENT,
+												qualifiedShardName,
+												groupId,
+												CLEANUP_DEFERRED_ON_SUCCESS);
 	}
 }
 
