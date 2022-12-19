@@ -143,7 +143,7 @@ SELECT distinct(o_orderkey) FROM priority_orders join air_shipped_lineitems
 SELECT o_orderkey, l_orderkey FROM priority_orders left join air_shipped_lineitems ON (o_orderkey = l_orderkey) ORDER BY o_orderkey LIMIT 1;
  o_orderkey | l_orderkey
 ---------------------------------------------------------------------
-          2 |
+         32 |         32
 (1 row)
 
 -- however, this works
@@ -157,7 +157,7 @@ SELECT count(*) FROM priority_orders left join lineitem_hash_part ON (o_orderkey
 SELECT count(*) FROM priority_orders right join lineitem_hash_part ON (o_orderkey = l_orderkey) WHERE l_shipmode ='AIR';
  count
 ---------------------------------------------------------------------
-  1706
+   700
 (1 row)
 
 -- view on the outer side is supported

@@ -19,7 +19,6 @@
 
 #include "nodes/pg_list.h"
 #include "nodes/primnodes.h"
-#include "server/distributed/distributed_planner.h"
 
 
 /*

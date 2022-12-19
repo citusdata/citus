@@ -174,17 +174,17 @@ ShouldUseSubqueryPushDown(Query *originalQuery, Query *rewrittenQuery,
 		return true;
 	}
 
-	/* if there is right recursive join, fix join order can not handle it */
-	if (HasRightRecursiveJoin(rewrittenQuery->jointree))
-	{
-		return true;
-	}
-
 	/*
 	 * We process function and VALUES RTEs as subqueries, since the join order planner
 	 * does not know how to handle them.
 	 */
 	if (FindNodeMatchingCheckFunction((Node *) originalQuery, IsFunctionOrValuesRTE))
+	{
+		return true;
+	}
+
+	/* if there is right recursive join, fix join order can not handle it */
+	if (HasRightRecursiveJoin(rewrittenQuery->jointree))
 	{
 		return true;
 	}

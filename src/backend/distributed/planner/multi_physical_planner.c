@@ -1654,8 +1654,8 @@ UpdateAllColumnAttributes(Node *columnContainer, List *rangeTableList,
 static void
 UpdateColumnAttributes(Var *column, List *rangeTableList, List *dependentJobList)
 {
-	Index originalTableId = column->varnosyn;
-	AttrNumber originalColumnId = column->varattnosyn;
+	Index originalTableId = column->varno;
+	AttrNumber originalColumnId = column->varattno;
 
 	/* find the new table identifier */
 	Index newTableId = NewTableId(originalTableId, rangeTableList);

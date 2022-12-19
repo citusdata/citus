@@ -1018,7 +1018,7 @@ WHERE NOT EXISTS
      WHERE u.user_id = e.user_id and e.value_2 > 10000 LIMIT 1);
         avg
 ---------------------------------------------------------------------
- 2.5544554455445545
+ 2.5385934819897084
 (1 row)
 
 -- a [correlated] lateral join can also be pushed down even if the subquery

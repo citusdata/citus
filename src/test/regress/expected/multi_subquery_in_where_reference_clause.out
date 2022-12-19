@@ -44,7 +44,10 @@ ORDER BY user_id
 LIMIT 3;
  user_id
 ---------------------------------------------------------------------
-(0 rows)
+       1
+       2
+       3
+(3 rows)
 
 -- subqueries in WHERE with NOT EXISTS operator, should not work since
 -- there is a correlated subquery in WHERE clause
@@ -62,7 +65,8 @@ WHERE
           users_reference_table.user_id = events_table.user_id
       )
 LIMIT 3;
-ERROR:  correlated subqueries are not supported when the FROM clause contains a reference table
+ERROR:  the query contains a join that requires repartitioning
+HINT:  Set citus.enable_repartition_joins to on to enable repartitioning
 -- immutable functions are also treated as reference tables, query should not
 -- work since there is a correlated subquery in the WHERE clause
 SELECT

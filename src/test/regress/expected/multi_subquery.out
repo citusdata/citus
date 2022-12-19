@@ -425,7 +425,7 @@ FROM events_table t1
 LEFT JOIN users_table t2 ON t1.user_id > t2.user_id
 ORDER BY 1 DESC, 2 DESC, 3 DESC, 4 DESC
 LIMIT 5;
-ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
+ERROR:  complex joins are only supported when all distributed tables are joined on their distribution columns with equal operator
 -- outer joins on reference tables with expressions should work
 SELECT DISTINCT ON (t1.user_id) t1.user_id, t2.value_1, t2.value_2, t2.value_3
 FROM events_table t1
@@ -466,7 +466,7 @@ SELECT DISTINCT ON (t1.user_id) t1.user_id, t2.value_1, t2.value_2, t2.value_3
  LEFT JOIN users_reference_table t2 ON t1.user_id = trunc(t2.user_id)
  ORDER BY 1 DESC, 2 DESC, 3 DESC, 4 DESC
  LIMIT 5;
-ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
+ERROR:  complex joins are only supported when all distributed tables are joined on their distribution columns with equal operator
 -- outer joins as subqueries should work
 -- https://github.com/citusdata/citus/issues/2739
 SELECT user_id, value_1, event_type

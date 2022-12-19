@@ -85,8 +85,7 @@ static bool ExtractFromExpressionWalker(Node *node,
 										QualifierWalkerContext *walkerContext);
 static List * MultiTableNodeList(List *tableEntryList, List *rangeTableList);
 static List * AddMultiCollectNodes(List *tableNodeList);
-static MultiNode * MultiJoinTree(List *joinOrderList, List *collectTableList,
-								 List *joinClauseList);
+static MultiNode * MultiJoinTree(List *joinOrderList, List *collectTableList);
 static MultiCollect * CollectNodeForTable(List *collectTableList, uint32 rangeTableId);
 static MultiSelect * MultiSelectNode(List *whereClauseList);
 static bool IsSelectClause(Node *clause);
@@ -681,7 +680,7 @@ MultiNodeTree(Query *queryTree)
 		}
 
 		/* build join tree using the join order and collected tables */
-		joinTreeNode = MultiJoinTree(joinOrderList, collectTableList, joinClauseList);
+		joinTreeNode = MultiJoinTree(joinOrderList, collectTableList);
 
 		currentTopNode = joinTreeNode;
 	}
@@ -1569,7 +1568,7 @@ AddMultiCollectNodes(List *tableNodeList)
  * this tree after every table in the list has been joined.
  */
 static MultiNode *
-MultiJoinTree(List *joinOrderList, List *collectTableList, List *joinWhereClauseList)
+MultiJoinTree(List *joinOrderList, List *collectTableList)
 {
 	MultiNode *currentTopNode = NULL;
 	ListCell *joinOrderCell = NULL;
