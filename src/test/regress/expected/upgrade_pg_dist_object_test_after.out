@@ -40,7 +40,6 @@ SELECT i.* FROM pg_catalog.pg_dist_object, pg_identify_object_as_address(classid
 ---------------------------------------------------------------------
   collation                 | {post_11_upgrade,german_phonebook_unpropagated}          | {}
   database                  | {postgres}                                               | {}
-  extension                 | {isn}                                                    | {}
   extension                 | {plpgsql}                                                | {}
   function                  | {post_11_upgrade,func_in_transaction_def}                | {}
   role                      | {postgres}                                               | {}
@@ -48,12 +47,16 @@ SELECT i.* FROM pg_catalog.pg_dist_object, pg_identify_object_as_address(classid
   schema                    | {new_schema}                                             | {}
   schema                    | {post_11_upgrade}                                        | {}
   schema                    | {public}                                                 | {}
+  sequence                  | {post_11_upgrade,SC1}                                    | {}
+  sequence                  | {post_11_upgrade,seq_bigint}                             | {}
+  sequence                  | {post_11_upgrade,unrelated_sequence}                     | {}
   table                     | {fooschema,footable}                                     | {}
   table                     | {new_schema,another_dist_table}                          | {}
   table                     | {post_11_upgrade,colocated_dist_table}                   | {}
   table                     | {post_11_upgrade,colocated_partitioned_table}            | {}
   table                     | {post_11_upgrade,colocated_partitioned_table_2020_01_01} | {}
   table                     | {post_11_upgrade,dist}                                   | {}
+  table                     | {post_11_upgrade,employees}                              | {}
   table                     | {post_11_upgrade,index_backed_rep_identity}              | {}
   table                     | {post_11_upgrade,part_table}                             | {}
   table                     | {post_11_upgrade,part_table_p202008}                     | {}
@@ -65,11 +68,23 @@ SELECT i.* FROM pg_catalog.pg_dist_object, pg_identify_object_as_address(classid
   table                     | {post_11_upgrade,sensors_old}                            | {}
   table                     | {post_11_upgrade,sensors_parser}                         | {}
   table                     | {post_11_upgrade,sensors_parser_a_partition}             | {}
+  table                     | {post_11_upgrade,test}                                   | {}
   table                     | {post_11_upgrade,test_propagate_collate}                 | {}
   table                     | {public,dist_table}                                      | {}
-  table                     | {public,isn_dist_table}                                  | {}
   text search configuration | {post_11_upgrade,partial_index_test_config}              | {}
   type                      | {fooschema.footype}                                      | {}
   type                      | {post_11_upgrade.my_type}                                | {}
- (33 rows)
+  type                      | {post_11_upgrade.my_type_for_view}                       | {}
+  view                      | {post_11_upgrade,depends_on_citus}                       | {}
+  view                      | {post_11_upgrade,depends_on_nothing_1}                   | {}
+  view                      | {post_11_upgrade,depends_on_nothing_2}                   | {}
+  view                      | {post_11_upgrade,depends_on_pg}                          | {}
+  view                      | {post_11_upgrade,depends_on_seq}                         | {}
+  view                      | {post_11_upgrade,non_dist_upgrade_multiple_dist_view}    | {}
+  view                      | {post_11_upgrade,non_dist_upgrade_ref_view}              | {}
+  view                      | {post_11_upgrade,non_dist_upgrade_ref_view_2}            | {}
+  view                      | {post_11_upgrade,reporting_line}                         | {}
+  view                      | {post_11_upgrade,view_for_upgrade_test}                  | {}
+  view                      | {post_11_upgrade,view_for_upgrade_test_my_type}          | {}
+ (48 rows)
 

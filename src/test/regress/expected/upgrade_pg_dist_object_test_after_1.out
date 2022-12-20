@@ -39,7 +39,6 @@ SELECT i.* FROM pg_catalog.pg_dist_object, pg_identify_object_as_address(classid
       type      | object_names | object_args
 ---------------------------------------------------------------------
   database                  | {postgres}                                               | {}
-  extension                 | {isn}                                                    | {}
   role                      | {postgres}                                               | {}
   schema                    | {fooschema}                                              | {}
   schema                    | {new_schema}                                             | {}
@@ -47,7 +46,6 @@ SELECT i.* FROM pg_catalog.pg_dist_object, pg_identify_object_as_address(classid
   table                     | {fooschema,footable}                                     | {}
   table                     | {new_schema,another_dist_table}                          | {}
   table                     | {public,dist_table}                                      | {}
-  table                     | {public,isn_dist_table}                                  | {}
   type                      | {fooschema.footype}                                      | {}
- (11 rows)
+ (9 rows)
 
