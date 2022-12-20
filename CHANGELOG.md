@@ -1,3 +1,9 @@
+### citus v11.1.5 (December 12, 2022) ###
+
+* Fixes two potential dangling pointer issues
+
+* Fixes compilation warning on PG13 + OpenSSL 3.0
+
 ### citus v11.1.4 (October 24, 2022) ###
 
 * Fixes an upgrade problem for `worker_fetch_foreign_file` when upgrade path
