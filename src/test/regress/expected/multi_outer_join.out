@@ -174,6 +174,7 @@ FROM
 	multi_outer_join_left a LEFT JOIN multi_outer_join_right_reference b ON (l_custkey = r_custkey)
 WHERE
 	r_custkey = 5 or r_custkey > 15;
+LOG:  join order: [ "multi_outer_join_left" ][ reference join "multi_outer_join_right_reference" ]
  min | max
 ---------------------------------------------------------------------
    5 |   5
@@ -276,7 +277,9 @@ SELECT
 	count(*)
 FROM
 	multi_outer_join_left a LEFT JOIN multi_outer_join_right b ON (l_nationkey = r_nationkey);
-ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
+LOG:  join order: [ "multi_outer_join_left" ][ dual partition join "multi_outer_join_right" ]
+ERROR:  the query contains a join that requires repartitioning
+HINT:  Set citus.enable_repartition_joins to on to enable repartitioning
 -- Anti-join should return customers for which there is no row in the right table
 SELECT
 	min(l_custkey), max(l_custkey)
@@ -309,6 +312,7 @@ FROM
 	multi_outer_join_left a LEFT JOIN multi_outer_join_right b ON (l_custkey = r_custkey)
 WHERE
 	r_custkey = 21 or r_custkey < 10;
+LOG:  join order: [ "multi_outer_join_left" ][ local partition join "multi_outer_join_right" ]
  min | max
 ---------------------------------------------------------------------
   21 |  21

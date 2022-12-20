@@ -4,8 +4,11 @@
 -- a distributed table can be cross joined with a reference table
 -- and the CROSS JOIN can be in the outer part of an outer JOIN
 SELECT count(*) FROM events_reference_table e1 CROSS JOIN events_table e2 LEFT JOIN users_table u ON (e2.user_id = u.user_id);
-ERROR:  cannot perform distributed planning on this query
-DETAIL:  Cartesian products are currently unsupported
+ count
+---------------------------------------------------------------------
+ 176649
+(1 row)
+
 -- two distributed tables cannot be cross joined
 -- as it lacks distribution key equality
 SELECT count(*) FROM events_reference_table e1 CROSS JOIN events_table e2 CROSS JOIN users_table u;
@@ -30,11 +33,17 @@ SELECT count(*) FROM users_ref_test_table ref1 INNER JOIN users_ref_test_table r
 (1 row)
 
 SELECT count(*) FROM users_ref_test_table ref1 LEFT JOIN users_ref_test_table ref2 on ref1.id = ref2.id CROSS JOIN users_table;
-ERROR:  cannot perform distributed planning on this query
-DETAIL:  Cartesian products are currently unsupported
+ count
+---------------------------------------------------------------------
+   606
+(1 row)
+
 SELECT count(*) FROM users_ref_test_table ref1 RIGHT JOIN users_ref_test_table ref2 on ref1.id = ref2.id CROSS JOIN users_table;
-ERROR:  cannot perform distributed planning on this query
-DETAIL:  Cartesian products are currently unsupported
+ count
+---------------------------------------------------------------------
+   606
+(1 row)
+
 SELECT count(*) FROM users_ref_test_table ref1 CROSS JOIN users_ref_test_table ref2 CROSS JOIN users_table;
  count
 ---------------------------------------------------------------------

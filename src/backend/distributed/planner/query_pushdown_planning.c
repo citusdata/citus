@@ -183,12 +183,6 @@ ShouldUseSubqueryPushDown(Query *originalQuery, Query *rewrittenQuery,
 		return true;
 	}
 
-	/* if there is right recursive join, fix join order can not handle it */
-	if (HasRightRecursiveJoin(rewrittenQuery->jointree))
-	{
-		return true;
-	}
-
 	/*
 	 * Some unsupported join clauses in logical planner
 	 * may be supported by subquery pushdown planner.
@@ -197,6 +191,28 @@ ShouldUseSubqueryPushDown(Query *originalQuery, Query *rewrittenQuery,
 	if (DeferErrorIfUnsupportedClause(qualifierList) != NULL)
 	{
 		return true;
+	}
+
+	/*
+	 * some unsupported outer joins in logical planner
+	 * may be supported by pushdown planner.
+	 */
+	if (FindNodeMatchingCheckFunction((Node *) rewrittenQuery->jointree, IsOuterJoinExpr))
+	{
+		/* we can pushdown outer joins if all restrictions are on partition columns */
+		if (RestrictionEquivalenceForPartitionKeys(plannerRestrictionContext))
+		{
+			return true;
+		}
+
+		/*
+		 * join order planner only handles left recursive join trees (except inner joins,
+		 * which are commutative)
+		 */
+		if (HasRightRecursiveJoin(rewrittenQuery->jointree))
+		{
+			return true;
+		}
 	}
 
 	/* check if the query has a window function and it is safe to pushdown */

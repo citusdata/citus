@@ -779,18 +779,6 @@ FROM
 	cte LEFT JOIN test_table USING (key);
 DEBUG:  CTE cte is going to be inlined via distributed planning
 DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [-1073741824,-1]
-DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [0,1073741823]
-DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [1073741824,2147483647]
-DEBUG:  join prunable for intervals [-1073741824,-1] and [-2147483648,-1073741825]
-DEBUG:  join prunable for intervals [-1073741824,-1] and [0,1073741823]
-DEBUG:  join prunable for intervals [-1073741824,-1] and [1073741824,2147483647]
-DEBUG:  join prunable for intervals [0,1073741823] and [-2147483648,-1073741825]
-DEBUG:  join prunable for intervals [0,1073741823] and [-1073741824,-1]
-DEBUG:  join prunable for intervals [0,1073741823] and [1073741824,2147483647]
-DEBUG:  join prunable for intervals [1073741824,2147483647] and [-2147483648,-1073741825]
-DEBUG:  join prunable for intervals [1073741824,2147483647] and [-1073741824,-1]
-DEBUG:  join prunable for intervals [1073741824,2147483647] and [0,1073741823]
  count
 ---------------------------------------------------------------------
   1021

@@ -160,9 +160,7 @@ SELECT COUNT(*) FROM ref_1 LEFT JOIN (dist_1 t1 LEFT JOIN dist_1 t2 USING (a)) q
   ON (t1.a = t2.a)
   WHERE t1.a IN (SELECT a FROM dist_1 t3);
 
-  -- not supported because we join t3 (inner rel of the anti join) with a column
-  -- of reference table, not with the distribution column of the other distributed
-  -- table (t2)
+  -- supported by join order planner
   SELECT COUNT(*) FROM
   ref_1 t1
   JOIN dist_1 t2
