@@ -1,3 +1,9 @@
+### citus v11.1.5 (December 12, 2022) ###
+
+* Fixes two potential dangling pointer issues
+
+* Fixes compilation warning on PG13 + OpenSSL 3.0
+
 ### citus v11.0.7 (November 8, 2022) ###
 
 * Adds the GUC `citus.allow_unsafe_constraints` to allow unique/exclusion/
