@@ -538,7 +538,7 @@ UPDATE pg_dist_placement SET shardstate = 4 WHERE shardid % 2 = 1;
 
 ALTER EXTENSION citus UPDATE TO '11.1-1';
 
--- maybe we should fail when downgrading, if there are orphaned shards?
+-- show placements and cleanup records
 SELECT * FROM pg_dist_placement ORDER BY shardid;
 SELECT * FROM pg_dist_cleanup;
 
@@ -551,6 +551,9 @@ ALTER EXTENSION citus UPDATE TO '11.2-1';
 -- verify that the placements are deleted and cleanup records are created
 SELECT * FROM pg_dist_placement ORDER BY shardid;
 SELECT * FROM pg_dist_cleanup;
+
+-- error out as cleanup records remain
+ALTER EXTENSION citus UPDATE TO '11.0-4';
 
 -- cleanup
 DELETE FROM pg_dist_cleanup;

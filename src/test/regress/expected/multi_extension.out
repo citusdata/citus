@@ -1212,7 +1212,7 @@ SELECT * FROM pg_dist_placement ORDER BY shardid;
 -- mark two of them as orphaned
 UPDATE pg_dist_placement SET shardstate = 4 WHERE shardid % 2 = 1;
 ALTER EXTENSION citus UPDATE TO '11.1-1';
--- maybe we should fail when downgrading, if there are orphaned shards?
+-- show placements and cleanup records
 SELECT * FROM pg_dist_placement ORDER BY shardid;
  placementid | shardid | shardstate | shardlength | groupid
 ---------------------------------------------------------------------
@@ -1250,6 +1250,11 @@ SELECT * FROM pg_dist_cleanup;
          2 |            0 |           0 | table_with_orphaned_shards_102011 |             0 |           0
 (2 rows)
 
+-- error out as cleanup records remain
+ALTER EXTENSION citus UPDATE TO '11.0-4';
+ERROR:  pg_dist_cleanup is introduced in Citus 11.1
+HINT:  To downgrade Citus to an older version, you should first cleanup all the orphaned resources and make sure pg_dist_cleanup is empty, by executing CALL citus_cleanup_orphaned_resources();
+CONTEXT:  PL/pgSQL function inline_code_block line XX at RAISE
 -- cleanup
 DELETE FROM pg_dist_cleanup;
 DELETE FROM pg_dist_shard WHERE shardid % 2 = 1;
