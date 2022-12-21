@@ -1853,9 +1853,7 @@ ErrorOnConcurrentRebalance(RebalanceOptions *options)
 					errmsg("A rebalance is already running as job %ld", jobId),
 					errdetail("A rebalance was already scheduled as background job"),
 					errhint("To monitor progress, run: SELECT * FROM "
-							"pg_dist_background_task WHERE job_id = %ld ORDER BY task_id "
-							"ASC; or SELECT * FROM get_rebalance_progress();",
-							jobId)));
+							"citus_rebalance_status();")));
 	}
 }
 
@@ -1983,10 +1981,8 @@ RebalanceTableShardsBackground(RebalanceOptions *options, Oid shardReplicationMo
 			(errmsg("Scheduled %d moves as job %ld",
 					list_length(placementUpdateList), jobId),
 			 errdetail("Rebalance scheduled as background job"),
-			 errhint("To monitor progress, run: "
-					 "SELECT * FROM pg_dist_background_task WHERE job_id = %ld ORDER BY "
-					 "task_id ASC; or SELECT * FROM get_rebalance_progress();",
-					 jobId)));
+			 errhint("To monitor progress, run: SELECT * FROM "
+					 "citus_rebalance_status();")));
 
 	return jobId;
 }
