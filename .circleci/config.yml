@@ -579,7 +579,7 @@ jobs:
       image:
         description: 'docker image to use as for the tests'
         type: string
-        default: citus/exttester
+        default: citus/failtester
       image_tag:
         description: 'docker image tag to use'
         type: string
@@ -615,7 +615,7 @@ jobs:
             testForDebugging="<< parameters.test >>"
 
             if [ -z "$testForDebugging" ]; then
-              detected_changes=$(git diff origin/HEAD --name-only --diff-filter=AM | (grep 'src/test/regress/sql/.*.sql\|src/test/regress/spec/.*.spec' || true))
+              detected_changes=$(git diff origin/main... --name-only --diff-filter=AM | (grep 'src/test/regress/sql/.*.sql\|src/test/regress/spec/.*.spec' || true))
               tests=${detected_changes}
             else
               tests=$testForDebugging;
