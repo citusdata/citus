@@ -30,7 +30,7 @@ SELECT con.conname
 (1 row)
 
 -- Check that the primary key name created on the coordinator is sent to workers and
--- the constraints created for the shard tables conform to the <conname>_shardid scheme.
+-- the constraints created for the shard tables conform to the <conname>_shardid naming scheme.
 \c - - :public_worker_1_host :worker_1_port
 SELECT con.conname
     FROM pg_catalog.pg_constraint con
@@ -44,7 +44,119 @@ SELECT con.conname
 
 \c - - :master_host :master_port
 ALTER TABLE AT_AddConstNoName.products DROP CONSTRAINT products_pkey;
-ALTER TABLE AT_AddConstNoName.products ADD PRIMARY KEY(product_no);
+-- Check "ADD UNIQUE"
+ALTER TABLE AT_AddConstNoName.products ADD UNIQUE(product_no);
+SELECT con.conname
+    FROM pg_catalog.pg_constraint con
+      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
+              WHERE rel.relname = 'products';
+         conname
+---------------------------------------------------------------------
+ products_product_no_key
+(1 row)
+
+-- Check that UNIQUE constraint name created on the coordinator is sent to workers and
+-- the constraints created for the shard tables conform to the <conname>_shardid scheme.	
+\c - - :public_worker_1_host :worker_1_port
+SELECT con.conname
+    FROM pg_catalog.pg_constraint con
+      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
+                WHERE rel.relname = 'products_5410000';
+             conname
+---------------------------------------------------------------------
+ products_product_no_key_5410000
+(1 row)
+
+\c - - :master_host :master_port
+ALTER TABLE AT_AddConstNoName.products DROP CONSTRAINT products_product_no_key;		
+-- Check "ADD UNIQUE" with column name list
+ALTER TABLE AT_AddConstNoName.products ADD UNIQUE(product_no,name);
+SELECT con.conname
+    FROM pg_catalog.pg_constraint con
+      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
+              WHERE rel.relname = 'products';
+           conname
+---------------------------------------------------------------------
+ products_product_no_name_key
+(1 row)
+
+\c - - :public_worker_1_host :worker_1_port
+SELECT con.conname
+    FROM pg_catalog.pg_constraint con
+      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
+                WHERE rel.relname = 'products_5410000';
+               conname
+---------------------------------------------------------------------
+ products_product_no_name_key_5410000
+(1 row)
+
+\c - - :master_host :master_port
+ALTER TABLE AT_AddConstNoName.products DROP CONSTRAINT products_product_no_name_key;
+-- Check "ADD UNIQUE ... INCLUDE".
+ALTER TABLE AT_AddConstNoName.products ADD UNIQUE(product_no) INCLUDE(price);
+SELECT con.conname
+    FROM pg_catalog.pg_constraint con
+      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
+              WHERE rel.relname = 'products';
+         conname
+---------------------------------------------------------------------
+ products_product_no_key
+(1 row)
+
+\d+ AT_AddConstNoName.products;
+                              Table "at_addconstnoname.products"
+   Column   |  Type   | Collation | Nullable | Default | Storage  | Stats target | Description
+---------------------------------------------------------------------
+ product_no | integer |           | not null |         | plain    |              |
+ name       | text    |           |          |         | extended |              |
+ price      | numeric |           |          |         | main     |              |
+Indexes:
+    "products_product_no_key" UNIQUE CONSTRAINT, btree (product_no) INCLUDE (price)
+
+\c - - :public_worker_1_host :worker_1_port
+\d+ AT_AddConstNoName.products_5410000;
+                          Table "at_addconstnoname.products_5410000"
+   Column   |  Type   | Collation | Nullable | Default | Storage  | Stats target | Description
+---------------------------------------------------------------------
+ product_no | integer |           | not null |         | plain    |              |
+ name       | text    |           |          |         | extended |              |
+ price      | numeric |           |          |         | main     |              |
+Indexes:
+    "products_product_no_key_5410000" UNIQUE CONSTRAINT, btree (product_no) INCLUDE (price)
+
+\c - - :master_host :master_port
+ALTER TABLE AT_AddConstNoName.products DROP CONSTRAINT products_product_no_key;
+-- Check "ADD EXCLUDE"
+CREATE EXTENSION btree_gist;
+ALTER TABLE AT_AddConstNoName.products ADD EXCLUDE USING gist (name WITH <> , product_no WITH =);
+\d+ AT_AddConstNoName.products;
+                              Table "at_addconstnoname.products"
+   Column   |  Type   | Collation | Nullable | Default | Storage  | Stats target | Description
+---------------------------------------------------------------------
+ product_no | integer |           | not null |         | plain    |              |
+ name       | text    |           |          |         | extended |              |
+ price      | numeric |           |          |         | main     |              |
+Indexes:
+    "products_name_product_no_excl" EXCLUDE USING gist (name WITH <>, product_no WITH =)
+
+\c - - :public_worker_1_host :worker_1_port
+\d+ AT_AddConstNoName.products_5410000;
+                          Table "at_addconstnoname.products_5410000"
+   Column   |  Type   | Collation | Nullable | Default | Storage  | Stats target | Description
+---------------------------------------------------------------------
+ product_no | integer |           | not null |         | plain    |              |
+ name       | text    |           |          |         | extended |              |
+ price      | numeric |           |          |         | main     |              |
+Indexes:
+    "products_name_product_no_excl_5410000" EXCLUDE USING gist (name WITH <>, product_no WITH =)
+
+\c - - :master_host :master_port
+ALTER TABLE AT_AddConstNoName.products DROP CONSTRAINT products_name_product_no_excl;
 DROP TABLE AT_AddConstNoName.products;
 -- Check "ADD PRIMARY KEY" with reference table
 CREATE TABLE AT_AddConstNoName.products_ref (
@@ -74,7 +186,7 @@ SELECT create_reference_table('AT_AddConstNoName.products_ref_3');
 
 (1 row)
 
--- Check for name collisions
+-- Check that name collisions are handled for PRIMARY KEY.
 ALTER TABLE AT_AddConstNoName.products_ref_3 ADD CONSTRAINT products_ref_pkey PRIMARY KEY(name);
 ALTER TABLE AT_AddConstNoName.products_ref_2 ADD CONSTRAINT products_ref_pkey1 PRIMARY KEY(name);
 ALTER TABLE AT_AddConstNoName.products_ref ADD PRIMARY KEY(name);
@@ -89,8 +201,37 @@ SELECT con.conname
 (1 row)
 
 ALTER TABLE AT_AddConstNoName.products_ref DROP CONSTRAINT products_ref_pkey2;
+-- Check that name collisions are handled for UNIQUE.
+ALTER TABLE AT_AddConstNoName.products_ref_3 ADD CONSTRAINT products_ref_name_key UNIQUE(name);
+ALTER TABLE AT_AddConstNoName.products_ref_2 ADD CONSTRAINT products_ref_name_key1 UNIQUE(name);
+ALTER TABLE AT_AddConstNoName.products_ref ADD UNIQUE(name);
+SELECT con.conname
+    FROM pg_catalog.pg_constraint con
+      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
+              WHERE rel.relname = 'products_ref';
+        conname
+---------------------------------------------------------------------
+ products_ref_name_key2
+(1 row)
+
+ALTER TABLE AT_AddConstNoName.products_ref DROP CONSTRAINT products_ref_name_key2;
+-- Check that name collisions are handled for EXCLUDE
+ALTER TABLE AT_AddConstNoName.products_ref_3 ADD CONSTRAINT products_ref_product_no_excl  EXCLUDE (product_no WITH =);
+ALTER TABLE AT_AddConstNoName.products_ref_2 ADD CONSTRAINT products_ref_product_no_excl1 EXCLUDE (product_no WITH =);
+ALTER TABLE AT_AddConstNoName.products_ref ADD EXCLUDE(product_no WITH =);
+\d+  AT_AddConstNoName.products_ref;
+                            Table "at_addconstnoname.products_ref"
+   Column   |  Type   | Collation | Nullable | Default | Storage  | Stats target | Description
+---------------------------------------------------------------------
+ product_no | integer |           |          |         | plain    |              |
+ name       | text    |           | not null |         | extended |              |
+ price      | numeric |           |          |         | main     |              |
+Indexes:
+    "products_ref_product_no_excl2" EXCLUDE USING btree (product_no WITH =)
+
 DROP TABLE AT_AddConstNoName.products_ref;
--- Check with max table name (63 chars)
+-- Check "ADD PRIMARY KEY" with max table name (63 chars)
 CREATE TABLE AT_AddConstNoName.verylonglonglonglonglonglonglonglonglonglonglonglonglonglonglonger (
 	            product_no integer,
 	            name text,
@@ -144,6 +285,92 @@ SELECT con.conname
 ---------------------------------------------------------------------
 (0 rows)
 
+-- Check "ADD UNIQUE" with max table name (63 chars)	
+\c - - :master_host :master_port	
+ALTER TABLE AT_AddConstNoName.verylonglonglonglonglonglonglonglonglonglonglonglonglonglonglon ADD UNIQUE(product_no);
+-- Constraint should be created on the coordinator with a shortened name
+SELECT con.conname
+    FROM pg_catalog.pg_constraint con
+      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
+              WHERE rel.relname LIKE 'very%';
+                             conname
+---------------------------------------------------------------------
+ verylonglonglonglonglonglonglonglonglonglonglong_product_no_key
+(1 row)
+
+-- Constraints for the main table and the shards should be created on the worker with a shortened name
+\c - - :public_worker_1_host :worker_1_port
+SELECT con.conname
+    FROM pg_catalog.pg_constraint con
+      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
+                WHERE rel.relname LIKE 'very%' ORDER BY con.conname ASC;
+                             conname
+---------------------------------------------------------------------
+ verylonglonglonglonglonglonglonglonglonglonglo_cd61b0cf_5410006
+ verylonglonglonglonglonglonglonglonglonglonglo_cd61b0cf_5410007
+ verylonglonglonglonglonglonglonglonglonglonglo_cd61b0cf_5410008
+ verylonglonglonglonglonglonglonglonglonglonglo_cd61b0cf_5410009
+ verylonglonglonglonglonglonglonglonglonglonglong_product_no_key
+(5 rows)
+
+-- UNIQUE constraint can be deleted via the coordinator
+\c - - :master_host :master_port
+ALTER TABLE AT_AddConstNoName.verylonglonglonglonglonglonglonglonglonglonglonglonglonglonglon DROP CONSTRAINT verylonglonglonglonglonglonglonglonglonglonglong_product_no_key;
+\c - - :public_worker_1_host :worker_1_port
+SELECT con.conname
+    FROM pg_catalog.pg_constraint con
+      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
+          WHERE rel.relname LIKE 'very%';
+ conname
+---------------------------------------------------------------------
+(0 rows)
+
+-- Check "ADD EXCLUDE" with max table name (63 chars)
+\c - - :master_host :master_port	
+ALTER TABLE AT_AddConstNoName.verylonglonglonglonglonglonglonglonglonglonglonglonglonglonglon ADD EXCLUDE (product_no WITH =);
+-- Constraint should be created on the coordinator with a shortened name
+SELECT con.conname
+    FROM pg_catalog.pg_constraint con
+      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
+              WHERE rel.relname LIKE 'very%';
+                             conname
+---------------------------------------------------------------------
+ verylonglonglonglonglonglonglonglonglonglonglon_product_no_excl
+(1 row)
+
+-- Constraints for the main table and the shards should be created on the worker with a shortened name
+\c - - :public_worker_1_host :worker_1_port
+SELECT con.conname
+    FROM pg_catalog.pg_constraint con
+      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
+                WHERE rel.relname LIKE 'very%' ORDER BY con.conname ASC;
+                             conname
+---------------------------------------------------------------------
+ verylonglonglonglonglonglonglonglonglonglonglo_057ed027_5410006
+ verylonglonglonglonglonglonglonglonglonglonglo_057ed027_5410007
+ verylonglonglonglonglonglonglonglonglonglonglo_057ed027_5410008
+ verylonglonglonglonglonglonglonglonglonglonglo_057ed027_5410009
+ verylonglonglonglonglonglonglonglonglonglonglon_product_no_excl
+(5 rows)
+
+-- EXCLUDE constraint can be deleted via the coordinator
+\c - - :master_host :master_port
+ALTER TABLE AT_AddConstNoName.verylonglonglonglonglonglonglonglonglonglonglonglonglonglonglon DROP CONSTRAINT verylonglonglonglonglonglonglonglonglonglonglon_product_no_excl;
+\c - - :public_worker_1_host :worker_1_port
+SELECT con.conname
+    FROM pg_catalog.pg_constraint con
+      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
+          WHERE rel.relname LIKE 'very%';
+ conname
+---------------------------------------------------------------------
+(0 rows)
+
 -- Test the scenario where a partitioned distributed table has a child with max allowed name
 -- Verify that we switch to sequential execution mode to avoid deadlock in this scenario
 \c - - :master_host :master_port
@@ -156,9 +383,10 @@ SELECT create_distributed_table('AT_AddConstNoName.dist_partitioned_table', 'par
 
 (1 row)
 
+-- Check "ADD PRIMARY KEY"
 SET client_min_messages TO DEBUG1;
 ALTER TABLE AT_AddConstNoName.dist_partitioned_table ADD PRIMARY KEY(partition_col);
-DEBUG:  the primary key name on the shards of the partition is too long, switching to sequential and local execution mode to prevent self deadlocks: longlonglonglonglonglonglonglonglonglonglonglo_537570f5_54_pkey
+DEBUG:  the constraint name on the shards of the partition is too long, switching to sequential and local execution mode to prevent self deadlocks: longlonglonglonglonglonglonglonglonglonglonglo_537570f5_54_pkey
 DEBUG:  ALTER TABLE / ADD PRIMARY KEY will create implicit index "dist_partitioned_table_pkey" for table "dist_partitioned_table"
 DEBUG:  ALTER TABLE / ADD PRIMARY KEY will create implicit index "longlonglonglonglonglonglonglonglonglonglonglonglonglonglo_pkey" for table "longlonglonglonglonglonglonglonglonglonglonglonglonglonglongabc"
 DEBUG:  ALTER TABLE / ADD PRIMARY KEY will create implicit index "p1_pkey" for table "p1"
@@ -202,8 +430,55 @@ SELECT con.conname
 ---------------------------------------------------------------------
 (0 rows)
 
--- Test we error out when creating a primary key on a partition table with a long name if we cannot
+-- Check "ADD UNIQUE"
+\c - - :master_host :master_port	
+SET client_min_messages TO DEBUG1;
+ALTER TABLE AT_AddConstNoName.dist_partitioned_table ADD UNIQUE(partition_col);
+DEBUG:  the constraint name on the shards of the partition is too long, switching to sequential and local execution mode to prevent self deadlocks: longlonglonglonglonglonglonglonglonglonglongl_partition_col_key
+DEBUG:  ALTER TABLE / ADD UNIQUE will create implicit index "dist_partitioned_table_partition_col_key" for table "dist_partitioned_table"
+DEBUG:  ALTER TABLE / ADD UNIQUE will create implicit index "longlonglonglonglonglonglonglonglonglonglongl_partition_col_key" for table "longlonglonglonglonglonglonglonglonglonglonglonglonglonglongabc"
+DEBUG:  ALTER TABLE / ADD UNIQUE will create implicit index "p1_partition_col_key" for table "p1"
+RESET client_min_messages;
+SELECT con.conname
+    FROM pg_catalog.pg_constraint con
+      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
+          WHERE rel.relname = 'dist_partitioned_table';
+                 conname
+---------------------------------------------------------------------
+ dist_partitioned_table_partition_col_key
+(1 row)
+
+\c - - :public_worker_1_host :worker_1_port
+SELECT con.conname
+    FROM pg_catalog.pg_constraint con
+      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
+          WHERE rel.relname LIKE 'longlonglonglonglonglonglonglonglong%' ORDER BY con.conname ASC;
+                             conname
+---------------------------------------------------------------------
+ longlonglonglonglonglonglonglonglonglonglongl__d794d9f1_5410014
+ longlonglonglonglonglonglonglonglonglonglongl__d794d9f1_5410015
+ longlonglonglonglonglonglonglonglonglonglongl__d794d9f1_5410016
+ longlonglonglonglonglonglonglonglonglonglongl__d794d9f1_5410017
+ longlonglonglonglonglonglonglonglonglonglongl_partition_col_key
+(5 rows)
+
+\c - - :master_host :master_port
+ALTER TABLE AT_AddConstNoName.dist_partitioned_table DROP CONSTRAINT  dist_partitioned_table_partition_col_key;
+\c - - :public_worker_1_host :worker_1_port
+SELECT con.conname
+    FROM pg_catalog.pg_constraint con
+      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
+           WHERE rel.relname LIKE 'longlonglonglonglonglonglonglonglong%' ORDER BY con.conname ASC;
+ conname
+---------------------------------------------------------------------
+(0 rows)
+
+-- Test we error out when creating a constraint on a partition table with a long name if we cannot
 -- switch to sequential execution
+-- Check "ADD PRIMARY KEY"
 \c - - :master_host :master_port
 BEGIN;
 	SELECT count(*) FROM AT_AddConstNoName.dist_partitioned_table;
@@ -213,7 +488,7 @@ BEGIN;
 (1 row)
 
 	ALTER TABLE AT_AddConstNoName.dist_partitioned_table ADD PRIMARY KEY(partition_col);
-ERROR:  The primary key name (longlonglonglonglonglonglonglonglonglonglonglo_537570f5_54_pkey) on a shard is too long and could lead to deadlocks when executed in a transaction block after a parallel query
+ERROR:  The constraint name (longlonglonglonglonglonglonglonglonglonglonglo_537570f5_54_pkey) on a shard is too long and could lead to deadlocks when executed in a transaction block after a parallel query
 HINT:  Try re-running the transaction with "SET LOCAL citus.multi_shard_modify_mode TO 'sequential';"
 ROLLBACK;
 -- try inside a sequential block
@@ -227,8 +502,33 @@ BEGIN;
 
 	ALTER TABLE AT_AddConstNoName.dist_partitioned_table ADD PRIMARY KEY(partition_col);
 	ROLLBACK;
+-- Check "ADD UNIQUE"
+\c - - :master_host :master_port
+BEGIN;
+	SELECT count(*) FROM AT_AddConstNoName.dist_partitioned_table;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+	ALTER TABLE AT_AddConstNoName.dist_partitioned_table ADD UNIQUE(partition_col);
+ERROR:  The constraint name (longlonglonglonglonglonglonglonglonglonglongl_partition_col_key) on a shard is too long and could lead to deadlocks when executed in a transaction block after a parallel query
+HINT:  Try re-running the transaction with "SET LOCAL citus.multi_shard_modify_mode TO 'sequential';"
+ROLLBACK;
+-- try inside a sequential block
+BEGIN;
+	SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
+	SELECT count(*) FROM AT_AddConstNoName.dist_partitioned_table;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+	ALTER TABLE AT_AddConstNoName.dist_partitioned_table ADD UNIQUE(partition_col);
+	ROLLBACK;
 DROP TABLE AT_AddConstNoName.dist_partitioned_table;
--- Test primary key name is generated by postgres for citus local table.
+-- Test with Citus Local Tables
+-- Test "ADD PRIMARY KEY"
 \c - - :master_host :master_port
 SET client_min_messages to ERROR;
 SELECT 1 FROM master_add_node('localhost', :master_port, groupId => 0);
@@ -246,7 +546,7 @@ SELECT citus_add_local_table_to_metadata('AT_AddConstNoName.citus_local_table');
 (1 row)
 
 ALTER TABLE AT_AddConstNoName.citus_local_table ADD PRIMARY KEY(id);
--- Check the primary key is created for the local table and its shard.
+-- Check the primary key is created for the local table and its shard
 SELECT con.conname
     FROM pg_catalog.pg_constraint con
       INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
@@ -289,6 +589,107 @@ SELECT con.conname
  citus_local_table_pkey_5410026
 (5 rows)
 
+-- Check "ADD UNIQUE"
+\c - - :master_host :master_port
+ALTER TABLE AT_AddConstNoName.citus_local_table ADD UNIQUE(id);
+-- Check the UNIQUE constraint is created for the local table and its shard
+SELECT con.conname
+    FROM pg_catalog.pg_constraint con
+      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
+          WHERE rel.relname LIKE 'citus_local_table%' ORDER BY con.conname ASC;
+         conname
+---------------------------------------------------------------------
+ citus_local_table_id_key
+ citus_local_table_pkey
+(2 rows)
+
+SELECT create_distributed_table('AT_AddConstNoName.citus_local_table','id');
+ERROR:  table "citus_local_table" is already distributed
+SELECT con.conname
+    FROM pg_catalog.pg_constraint con
+      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
+          WHERE rel.relname LIKE 'citus_local_table%' ORDER BY con.conname ASC;
+         conname
+---------------------------------------------------------------------
+ citus_local_table_id_key
+ citus_local_table_pkey
+(2 rows)
+
+\c - - :public_worker_1_host :worker_1_port
+SELECT con.conname
+    FROM pg_catalog.pg_constraint con
+      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
+          WHERE rel.relname LIKE 'citus_local_table%' ORDER BY con.conname ASC;
+             conname
+---------------------------------------------------------------------
+ citus_local_table_id_key
+ citus_local_table_id_key_5410023
+ citus_local_table_id_key_5410024
+ citus_local_table_id_key_5410025
+ citus_local_table_id_key_5410026
+ citus_local_table_pkey
+ citus_local_table_pkey_5410023
+ citus_local_table_pkey_5410024
+ citus_local_table_pkey_5410025
+ citus_local_table_pkey_5410026
+(10 rows)
+
+-- Check "ADD EXCLUDE"
+\c - - :master_host :master_port
+ALTER TABLE AT_AddConstNoName.citus_local_table ADD EXCLUDE(id WITH =);
+-- Check the EXCLUDE constraint is created for the local table and its shard
+SELECT con.conname
+    FROM pg_catalog.pg_constraint con
+      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
+          WHERE rel.relname LIKE 'citus_local_table%' ORDER BY con.conname ASC;
+          conname
+---------------------------------------------------------------------
+ citus_local_table_id_excl
+ citus_local_table_id_key
+ citus_local_table_pkey
+(3 rows)
+
+SELECT con.conname
+    FROM pg_catalog.pg_constraint con
+      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
+          WHERE rel.relname LIKE 'citus_local_table%' ORDER BY con.conname ASC;
+          conname
+---------------------------------------------------------------------
+ citus_local_table_id_excl
+ citus_local_table_id_key
+ citus_local_table_pkey
+(3 rows)
+
+\c - - :public_worker_1_host :worker_1_port
+SELECT con.conname
+    FROM pg_catalog.pg_constraint con
+      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
+          WHERE rel.relname LIKE 'citus_local_table%' ORDER BY con.conname ASC;
+              conname
+---------------------------------------------------------------------
+ citus_local_table_id_excl
+ citus_local_table_id_excl_5410023
+ citus_local_table_id_excl_5410024
+ citus_local_table_id_excl_5410025
+ citus_local_table_id_excl_5410026
+ citus_local_table_id_key
+ citus_local_table_id_key_5410023
+ citus_local_table_id_key_5410024
+ citus_local_table_id_key_5410025
+ citus_local_table_id_key_5410026
+ citus_local_table_pkey
+ citus_local_table_pkey_5410023
+ citus_local_table_pkey_5410024
+ citus_local_table_pkey_5410025
+ citus_local_table_pkey_5410026
+(15 rows)
+
 \c - - :master_host :master_port
 DROP TABLE AT_AddConstNoName.citus_local_table;
 -- Test with partitioned citus local table
@@ -301,6 +702,7 @@ SELECT citus_add_local_table_to_metadata('AT_AddConstNoName.citus_local_partitio
 
 (1 row)
 
+-- Check "ADD PRIMARY KEY"
 ALTER TABLE AT_AddConstNoName.citus_local_partitioned_table ADD PRIMARY KEY(partition_col);
 SELECT create_distributed_table('AT_AddConstNoName.citus_local_partitioned_table', 'partition_col');
  create_distributed_table
@@ -311,7 +713,7 @@ SELECT create_distributed_table('AT_AddConstNoName.citus_local_partitioned_table
 ALTER TABLE AT_AddConstNoName.citus_local_partitioned_table DROP CONSTRAINT citus_local_partitioned_table_pkey;
 SET client_min_messages TO DEBUG1;
 ALTER TABLE AT_AddConstNoName.citus_local_partitioned_table ADD PRIMARY KEY(partition_col);
-DEBUG:  the primary key name on the shards of the partition is too long, switching to sequential and local execution mode to prevent self deadlocks: longlonglonglonglonglonglonglonglonglonglonglo_537570f5_54_pkey
+DEBUG:  the constraint name on the shards of the partition is too long, switching to sequential and local execution mode to prevent self deadlocks: longlonglonglonglonglonglonglonglonglonglonglo_537570f5_54_pkey
 DEBUG:  ALTER TABLE / ADD PRIMARY KEY will create implicit index "citus_local_partitioned_table_pkey" for table "citus_local_partitioned_table"
 DEBUG:  ALTER TABLE / ADD PRIMARY KEY will create implicit index "longlonglonglonglonglonglonglonglonglonglonglonglonglonglo_pkey" for table "longlonglonglonglonglonglonglonglonglonglonglonglonglonglongabc"
 DEBUG:  ALTER TABLE / ADD PRIMARY KEY will create implicit index "p1_pkey" for table "p1"
@@ -343,6 +745,46 @@ SELECT con.conname
 
 \c - - :master_host :master_port
 ALTER TABLE AT_AddConstNoName.citus_local_partitioned_table DROP CONSTRAINT citus_local_partitioned_table_pkey;
+-- Check "ADD UNIQUE"
+ALTER TABLE AT_AddConstNoName.citus_local_partitioned_table ADD UNIQUE(partition_col);
+ALTER TABLE AT_AddConstNoName.citus_local_partitioned_table DROP CONSTRAINT citus_local_partitioned_table_partition_col_key;
+SET client_min_messages TO DEBUG1;
+ALTER TABLE AT_AddConstNoName.citus_local_partitioned_table ADD UNIQUE(partition_col);
+DEBUG:  the constraint name on the shards of the partition is too long, switching to sequential and local execution mode to prevent self deadlocks: longlonglonglonglonglonglonglonglonglonglongl_partition_col_key
+DEBUG:  ALTER TABLE / ADD UNIQUE will create implicit index "citus_local_partitioned_table_partition_col_key" for table "citus_local_partitioned_table"
+DEBUG:  ALTER TABLE / ADD UNIQUE will create implicit index "longlonglonglonglonglonglonglonglonglonglongl_partition_col_key" for table "longlonglonglonglonglonglonglonglonglonglonglonglonglonglongabc"
+DEBUG:  ALTER TABLE / ADD UNIQUE will create implicit index "p1_partition_col_key" for table "p1"
+RESET client_min_messages;
+SELECT con.conname
+    FROM pg_catalog.pg_constraint con
+      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
+          WHERE rel.relname = 'citus_local_partitioned_table';
+                     conname
+---------------------------------------------------------------------
+ citus_local_partitioned_table_partition_col_key
+(1 row)
+
+\c - - :public_worker_1_host :worker_1_port
+SELECT con.conname
+    FROM pg_catalog.pg_constraint con
+      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
+          WHERE rel.relname LIKE 'longlonglonglonglonglonglonglonglong%' ORDER BY con.conname ASC;
+                             conname
+---------------------------------------------------------------------
+ longlonglonglonglonglonglonglonglonglonglongl__d794d9f1_5410034
+ longlonglonglonglonglonglonglonglonglonglongl__d794d9f1_5410035
+ longlonglonglonglonglonglonglonglonglonglongl__d794d9f1_5410036
+ longlonglonglonglonglonglonglonglonglonglongl__d794d9f1_5410037
+ longlonglonglonglonglonglonglonglonglonglongl_partition_col_key
+(5 rows)
+
+\c - - :master_host :master_port	
+ALTER TABLE AT_AddConstNoName.citus_local_partitioned_table DROP CONSTRAINT citus_local_partitioned_table_partition_col_key;
+-- Check "ADD EXCLUDE" errors out for partitioned table since the postgres does not allow it
+ALTER TABLE AT_AddConstNoName.citus_local_partitioned_table ADD EXCLUDE(partition_col WITH =);
+ERROR:  exclusion constraints are not supported on partitioned tables
 SELECT 1 FROM master_remove_node('localhost', :master_port);
  ?column?
 ---------------------------------------------------------------------
@@ -357,6 +799,7 @@ SELECT create_distributed_table('AT_AddConstNoName."2nd table"','2nd id');
 
 (1 row)
 
+-- Check "ADD PRIMARY KEY"
 ALTER TABLE  AT_AddConstNoName."2nd table" ADD PRIMARY KEY ("2nd id", "3rd id");
 SELECT con.conname
     FROM pg_catalog.pg_constraint con
@@ -384,8 +827,69 @@ SELECT con.conname
  2nd table_pkey_5410045
 (5 rows)
 
-\c - - :master_host :master_port
+\c - - :master_host :master_port	
 ALTER TABLE  AT_AddConstNoName."2nd table" DROP CONSTRAINT "2nd table_pkey";
+-- Check "ADD UNIQUE"
+\c - - :master_host :master_port
+ALTER TABLE  AT_AddConstNoName."2nd table" ADD UNIQUE ("2nd id", "3rd id");
+SELECT con.conname
+    FROM pg_catalog.pg_constraint con
+      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
+          WHERE rel.relname = '2nd table';
+           conname
+---------------------------------------------------------------------
+ 2nd table_2nd id_3rd id_key
+(1 row)
+
+\c - - :public_worker_1_host :worker_1_port
+SELECT con.conname
+    FROM pg_catalog.pg_constraint con
+      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
+          WHERE rel.relname LIKE '2nd table%' ORDER BY con.conname ASC;
+               conname
+---------------------------------------------------------------------
+ 2nd table_2nd id_3rd id_key
+ 2nd table_2nd id_3rd id_key_5410042
+ 2nd table_2nd id_3rd id_key_5410043
+ 2nd table_2nd id_3rd id_key_5410044
+ 2nd table_2nd id_3rd id_key_5410045
+(5 rows)
+
+\c - - :master_host :master_port
+ALTER TABLE  AT_AddConstNoName."2nd table" DROP CONSTRAINT "2nd table_2nd id_3rd id_key";
+-- Check "ADD EXCLUDE"
+\c - - :master_host :master_port
+ALTER TABLE  AT_AddConstNoName."2nd table" ADD EXCLUDE ("2nd id" WITH =);
+SELECT con.conname
+    FROM pg_catalog.pg_constraint con
+      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
+          WHERE rel.relname = '2nd table';
+        conname
+---------------------------------------------------------------------
+ 2nd table_2nd id_excl
+(1 row)
+
+\c - - :public_worker_1_host :worker_1_port
+SELECT con.conname
+    FROM pg_catalog.pg_constraint con
+      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
+          WHERE rel.relname LIKE '2nd table%' ORDER BY con.conname ASC;
+            conname
+---------------------------------------------------------------------
+ 2nd table_2nd id_excl
+ 2nd table_2nd id_excl_5410042
+ 2nd table_2nd id_excl_5410043
+ 2nd table_2nd id_excl_5410044
+ 2nd table_2nd id_excl_5410045
+(5 rows)
+
+\c - - :master_host :master_port
+ALTER TABLE  AT_AddConstNoName."2nd table" DROP CONSTRAINT "2nd table_2nd id_excl";
+DROP EXTENSION btree_gist;
 DROP SCHEMA AT_AddConstNoName CASCADE;
 NOTICE:  drop cascades to 6 other objects
 DETAIL:  drop cascades to table at_addconstnoname.products_ref_2

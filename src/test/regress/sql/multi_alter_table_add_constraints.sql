@@ -378,10 +378,7 @@ ALTER TABLE products ADD CONSTRAINT unn_1 UNIQUE(product_no, price), ADD CONSTRA
 
 -- Tests for constraints without name
 -- Commands below should error out since constraints do not have the name
-ALTER TABLE products ADD UNIQUE(product_no);
-ALTER TABLE products ADD PRIMARY KEY(product_no);
 ALTER TABLE products ADD CHECK(product_no <> 0);
-ALTER TABLE products ADD EXCLUDE USING btree (product_no with =);
 
 -- ... with names, we can add/drop the constraints just fine
 ALTER TABLE products ADD CONSTRAINT nonzero_product_no CHECK(product_no <> 0);
