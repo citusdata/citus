@@ -65,9 +65,6 @@ s/"(raw_events_second_user_id_value_1_key_|agg_events_user_id_value_1_agg_key_)[
 # ignore could not consume warnings
 /WARNING:  could not consume data from worker node/d
 
-# ignore page split with pg13
-/DEBUG:  concurrent ROOT page split/d
-
 # ignore WAL warnings
 /DEBUG: .+creating and filling new WAL file/d
 
