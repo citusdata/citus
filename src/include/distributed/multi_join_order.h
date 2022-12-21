@@ -104,6 +104,7 @@ extern List * JoinExprList(FromExpr *fromExpr);
 extern List * JoinOrderList(List *rangeTableEntryList, List *joinClauseList);
 extern List * FixedJoinOrderList(List *rangeTableEntryList, List *joinClauseList,
 								 List *joinExprList);
+extern const char * JoinTypeName(JoinType jointype);
 extern bool IsApplicableJoinClause(List *leftTableIdList, uint32 rightTableId,
 								   Node *joinClause);
 extern List * ApplicableJoinClauses(List *leftTableIdList, uint32 rightTableId,

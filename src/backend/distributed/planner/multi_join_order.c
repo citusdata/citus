@@ -418,7 +418,23 @@ JoinTypeJoinExprWalker(Node *node, JoinTypeContext *joinTypeContext)
 
 			if (joinTypeContext->ltableIdx == ltableIdx)
 			{
+				/*
+				 * if we have semi join here, we can safely convert them to inner joins. We already
+				 * checked planner actually planned those nodes as inner joins
+				 */
+				if (joinExpr->jointype == JOIN_SEMI)
+				{
+					joinExpr->jointype = JOIN_INNER;
+				}
+				else if (joinExpr->jointype == JOIN_ANTI)
+				{
+					ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+									errmsg(
+										"complex joins are only supported when all distributed tables are "
+										"co-located and joined on their distribution columns")));
+				}
 				joinTypeContext->joinType = &(joinExpr->jointype);
+
 				return true;
 			}
 		}
@@ -791,6 +807,53 @@ LargeDataTransferLocation(List *joinOrder)
 }
 
 
+/* Output join name for given join type */
+const char *
+JoinTypeName(JoinType jointype)
+{
+	switch (jointype)
+	{
+		case JOIN_INNER:
+		{
+			return "INNER";
+		}
+
+		case JOIN_LEFT:
+		{
+			return "LEFT";
+		}
+
+		case JOIN_RIGHT:
+		{
+			return "RIGHT";
+		}
+
+		case JOIN_FULL:
+		{
+			return "FULL";
+		}
+
+		case JOIN_SEMI:
+		{
+			return "SEMI";
+		}
+
+		case JOIN_ANTI:
+		{
+			return "ANTI";
+		}
+
+		default:
+
+			/* Shouldn't come here, but protect from buggy code. */
+			elog(ERROR, "unsupported join type %d", jointype);
+	}
+
+	/* Keep compiler happy */
+	return NULL;
+}
+
+
 /* Prints the join order list and join rules for debugging purposes. */
 static void
 PrintJoinOrderList(List *joinOrder)
@@ -815,7 +878,10 @@ PrintJoinOrderList(List *joinOrder)
 			JoinRuleType ruleType = (JoinRuleType) joinOrderNode->joinRuleType;
 			char *ruleName = JoinRuleName(ruleType);
 
-			appendStringInfo(printBuffer, "[ %s ", ruleName);
+			JoinType joinType = joinOrderNode->joinType;
+			const char *joinTypeName = JoinTypeName(joinType);
+
+			appendStringInfo(printBuffer, "[ %s(%s) ", ruleName, joinTypeName);
 			appendStringInfo(printBuffer, "\"%s\" ]", relationName);
 		}
 	}
