@@ -14,7 +14,7 @@ SELECT * FROM master_get_table_ddl_events('lineitem') order by 1;
  ALTER TABLE public.lineitem ADD CONSTRAINT lineitem_pkey PRIMARY KEY (l_orderkey, l_linenumber)
  ALTER TABLE public.lineitem OWNER TO postgres
  CREATE INDEX lineitem_time_index ON public.lineitem USING btree (l_shipdate)
- CREATE TABLE public.lineitem (l_orderkey bigint NOT NULL, l_partkey integer NOT NULL, l_suppkey integer NOT NULL, l_linenumber integer NOT NULL, l_quantity numeric(15,2) NOT NULL, l_extendedprice numeric(15,2) NOT NULL, l_discount numeric(15,2) NOT NULL, l_tax numeric(15,2) NOT NULL, l_returnflag character(1) NOT NULL, l_linestatus character(1) NOT NULL, l_shipdate date NOT NULL, l_commitdate date NOT NULL, l_receiptdate date NOT NULL, l_shipinstruct character(25) NOT NULL, l_shipmode character(10) NOT NULL, l_comment character varying(44) NOT NULL)
+ CREATE TABLE public.lineitem (l_orderkey bigint NOT NULL, l_partkey integer NOT NULL, l_suppkey integer NOT NULL, l_linenumber integer NOT NULL, l_quantity numeric(15,2) NOT NULL, l_extendedprice numeric(15,2) NOT NULL, l_discount numeric(15,2) NOT NULL, l_tax numeric(15,2) NOT NULL, l_returnflag character(1) NOT NULL, l_linestatus character(1) NOT NULL, l_shipdate date NOT NULL, l_commitdate date NOT NULL, l_receiptdate date NOT NULL, l_shipinstruct character(25) NOT NULL, l_shipmode character(10) NOT NULL, l_comment character varying(44) NOT NULL) USING heap
  GRANT DELETE ON public.lineitem TO full_access
  GRANT DELETE ON public.lineitem TO postgres
  GRANT INSERT ON public.lineitem TO full_access
@@ -58,7 +58,7 @@ SELECT create_distributed_table('checkperm', 'key', 'append');
 SELECT * FROM master_get_table_ddl_events('checkperm');
               master_get_table_ddl_events
 ---------------------------------------------------------------------
- CREATE TABLE public.checkperm (key integer)
+ CREATE TABLE public.checkperm (key integer) USING heap
  ALTER TABLE public.checkperm OWNER TO postgres
 (2 rows)
 
@@ -66,7 +66,7 @@ REVOKE ALL ON checkperm FROM PUBLIC;
 SELECT * FROM master_get_table_ddl_events('checkperm');
               master_get_table_ddl_events
 ---------------------------------------------------------------------
- CREATE TABLE public.checkperm (key integer)
+ CREATE TABLE public.checkperm (key integer) USING heap
  REVOKE ALL ON public.checkperm FROM PUBLIC
  GRANT INSERT ON public.checkperm TO postgres
  GRANT SELECT ON public.checkperm TO postgres
@@ -83,7 +83,7 @@ GRANT ALL ON checkperm TO full_access;
 SELECT * FROM master_get_table_ddl_events('checkperm');
               master_get_table_ddl_events
 ---------------------------------------------------------------------
- CREATE TABLE public.checkperm (key integer)
+ CREATE TABLE public.checkperm (key integer) USING heap
  REVOKE ALL ON public.checkperm FROM PUBLIC
  GRANT INSERT ON public.checkperm TO postgres
  GRANT SELECT ON public.checkperm TO postgres
@@ -108,7 +108,7 @@ GRANT SELECT ON checkperm TO PUBLIC;
 SELECT * FROM master_get_table_ddl_events('checkperm');
               master_get_table_ddl_events
 ---------------------------------------------------------------------
- CREATE TABLE public.checkperm (key integer)
+ CREATE TABLE public.checkperm (key integer) USING heap
  REVOKE ALL ON public.checkperm FROM PUBLIC
  GRANT INSERT ON public.checkperm TO postgres
  GRANT SELECT ON public.checkperm TO postgres
@@ -132,7 +132,7 @@ GRANT ALL ON checkperm TO full_access WITH GRANT OPTION;
 SELECT * FROM master_get_table_ddl_events('checkperm');
                       master_get_table_ddl_events
 ---------------------------------------------------------------------
- CREATE TABLE public.checkperm (key integer)
+ CREATE TABLE public.checkperm (key integer) USING heap
  REVOKE ALL ON public.checkperm FROM PUBLIC
  GRANT INSERT ON public.checkperm TO postgres
  GRANT SELECT ON public.checkperm TO postgres

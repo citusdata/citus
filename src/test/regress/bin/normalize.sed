@@ -14,9 +14,6 @@ s/shard [0-9]+/shard xxxxx/g
 s/assigned task [0-9]+ to node/assigned task to node/
 s/node group [12] (but|does)/node group \1/
 
-# discard "USING heap" in "CREATE TABLE ... USING heap"
-s/CREATE(.*)TABLE(.*)USING heap/CREATE\1TABLE\2/g
-
 # Differing names can have differing table column widths
 s/^-[+-]{2,}$/---------------------------------------------------------------------/g
 

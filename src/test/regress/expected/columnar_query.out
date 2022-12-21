@@ -163,7 +163,7 @@ explain (costs off, summary off)
                      Columnar Projected Columns: q1
 (8 rows)
 
-CREATE TABLE INT8_TBL_heap (LIKE INT8_TBL_columnar) ;
+CREATE TABLE INT8_TBL_heap (LIKE INT8_TBL_columnar) USING heap;
 INSERT INTO INT8_TBL_heap SELECT * FROM INT8_TBL_columnar;
 CREATE TABLE result_columnar AS
 select * from

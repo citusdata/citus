@@ -143,7 +143,7 @@ CREATE TRIGGER test_table_delete
 SELECT master_get_table_ddl_events('test_table');
                                                                                                                                                       master_get_table_ddl_events
 ---------------------------------------------------------------------
- CREATE TABLE table_triggers_schema.test_table (id integer, text_number text, text_col text)
+ CREATE TABLE table_triggers_schema.test_table (id integer, text_number text, text_col text) USING heap
  ALTER TABLE table_triggers_schema.test_table OWNER TO postgres
  CREATE TRIGGER test_table_delete AFTER DELETE ON table_triggers_schema.test_table FOR EACH STATEMENT EXECUTE FUNCTION table_triggers_schema.test_table_trigger_function()
  ALTER TABLE table_triggers_schema.test_table ENABLE TRIGGER test_table_delete;

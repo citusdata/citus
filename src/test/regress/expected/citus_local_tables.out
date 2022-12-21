@@ -632,7 +632,7 @@ SELECT partmethod, repmodel FROM pg_dist_partition WHERE logicalrelid = 'citus_l
 SELECT master_get_table_ddl_events('citus_local_table_4');
                                         master_get_table_ddl_events
 ---------------------------------------------------------------------
- CREATE TABLE citus_local_tables_test_schema.citus_local_table_4 (a integer)
+ CREATE TABLE citus_local_tables_test_schema.citus_local_table_4 (a integer) USING heap
  ALTER TABLE citus_local_tables_test_schema.citus_local_table_4 OWNER TO postgres
  CREATE INDEX citus_local_table_4_idx ON citus_local_tables_test_schema.citus_local_table_4 USING btree (a)
 (3 rows)
