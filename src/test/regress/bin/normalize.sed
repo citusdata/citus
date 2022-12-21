@@ -92,9 +92,6 @@ s/connectionId: [0-9]+/connectionId: xxxxxxx/g
 # Remove trailing whitespace
 s/ *$//g
 
-# pg12 changes
-s/"(collections_list_|collection_users_|collection_users_fkey_)[0-9]+"/"\1xxxxxxx"/g
-
 # pg13 changes
 s/of relation ".*" violates not-null constraint/violates not-null constraint/g
 /DEBUG:  index ".*" can safely use deduplication.*$/d
