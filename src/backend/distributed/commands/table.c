@@ -704,7 +704,7 @@ PostprocessAlterTableSchemaStmt(Node *node, const char *queryString)
 static char *
 GenerateIndexConstraintName(const char *tabname, Oid namespaceId, Constraint *constraint)
 {
-	char *conname;
+	char *conname = NULL;
 
 	switch (constraint->contype)
 	{
