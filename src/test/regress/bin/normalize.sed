@@ -118,6 +118,7 @@ s/(ERROR: |WARNING: |error:) invalid socket/\1 connection not open/g
 /^\s*invalid socket$/d
 
 # pg15 changes
+# can be removed when dropping PG13&14 support
 s/is not a PostgreSQL server process/is not a PostgreSQL backend process/g
 s/ AS "\?column\?"//g
 s/".*\.(.*)": (found .* removable)/"\1": \2/g
@@ -154,8 +155,6 @@ s/worker_hash_partition_table  \([0-9]+/worker_hash_partition_table  \(xxxxxxx/g
 
 # ignore memory usage output
 /.*Memory Usage:.*/d
-
-s/Citus.*currently supports/Citus currently supports/g
 
 # Warnings in multi_explain
 s/prepared transaction with identifier .* does not exist/prepared transaction with identifier "citus_x_yyyyyy_zzz_w" does not exist/g
