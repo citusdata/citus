@@ -43,3 +43,8 @@ SELECT count(*) FROM pg_catalog.worker_split_shard_replication_setup(ARRAY[
      1
 (1 row)
 
+-- cleanup, we are done with these manually created test tables
+DROP TABLE table_to_split_1, table_to_split_2, table_to_split_3;
+\c - - - :worker_2_port
+SET search_path TO split_shard_replication_setup_schema;
+DROP TABLE table_to_split_1, table_to_split_2, table_to_split_3;

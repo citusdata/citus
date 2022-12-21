@@ -17,6 +17,7 @@ test: worker_split_binary_copy_test
 test: worker_split_text_copy_test
 test: citus_split_shard_by_split_points_negative
 test: citus_split_shard_by_split_points
+test: citus_split_shard_by_split_points_deferred_drop
 test: citus_split_shard_by_split_points_failure
 # Name citus_split_shard_by_split_points_columnar_partitioned was too long and being truncated.
 # use citus_split_shard_columnar_partitioned instead.

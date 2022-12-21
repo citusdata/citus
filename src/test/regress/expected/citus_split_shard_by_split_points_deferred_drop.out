@@ -13,9 +13,9 @@ SELECT * from pg_dist_cleanup;
 ---------------------------------------------------------------------
 (0 rows)
 
--- Set a very long(10mins) time interval to stop auto cleanup in case of deferred drop.
+-- Disable Deferred drop auto cleanup to avoid flaky tests.
 \c - postgres - :master_port
-ALTER SYSTEM SET citus.defer_shard_delete_interval TO 600000;
+ALTER SYSTEM SET citus.defer_shard_delete_interval TO -1;
 SELECT pg_reload_conf();
  pg_reload_conf
 ---------------------------------------------------------------------
@@ -28,8 +28,9 @@ SET citus.next_placement_id TO 8610000;
 SET citus.shard_count TO 2;
 SET citus.shard_replication_factor TO 1;
 SET citus.next_operation_id TO 777;
-SET citus.next_cleanup_record_id TO 11;
+SET citus.next_cleanup_record_id TO 511;
 SET ROLE test_split_role;
+SET search_path TO "citus_split_shard_by_split_points_deferred_schema";
 CREATE TABLE table_to_split(id int PRIMARY KEY, int_data int, data text);
 SELECT create_distributed_table('table_to_split', 'id');
  create_distributed_table
@@ -61,26 +62,25 @@ SELECT pg_catalog.citus_split_shard_by_split_points(
 
 (1 row)
 
--- The original shards are marked for deferred drop with policy_type = 2.
+-- The original shard is marked for deferred drop with policy_type = 2.
+-- The previous shard should be dropped at the beginning of the second split call
 SELECT * from pg_dist_cleanup;
- record_id | operation_id | object_type |          object_name          | node_group_id | policy_type
+ record_id | operation_id | object_type |                               object_name                                | node_group_id | policy_type
 ---------------------------------------------------------------------
-        11 |          777 |           1 | public.table_to_split_8981000 |            14 |           2
-        12 |          778 |           1 | public.table_to_split_8981001 |            16 |           2
-(2 rows)
+       512 |          778 |           1 | citus_split_shard_by_split_points_deferred_schema.table_to_split_8981001 |            16 |           2
+(1 row)
 
--- The physical shards should not be deleted.
+-- One of the physical shards should not be deleted, the other one should.
 \c - - - :worker_1_port
-SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r';
+SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r' ORDER BY relname;
         relname
 ---------------------------------------------------------------------
- table_to_split_8981000
  table_to_split_9999000
  table_to_split_9999002
-(3 rows)
+(2 rows)
 
 \c - - - :worker_2_port
-SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r';
+SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r' ORDER BY relname;
         relname
 ---------------------------------------------------------------------
  table_to_split_8981001
@@ -88,30 +88,19 @@ SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind 
  table_to_split_9999003
 (3 rows)
 
--- Set a very short(1ms) time interval to force deferred drop cleanup.
+-- Perform deferred drop cleanup.
 \c - postgres - :master_port
-ALTER SYSTEM SET citus.defer_shard_delete_interval TO 1;
-SELECT pg_reload_conf();
- pg_reload_conf
----------------------------------------------------------------------
- t
-(1 row)
-
--- Give enough time for the deferred drop cleanup to run.
-SELECT pg_sleep(2);
- pg_sleep
----------------------------------------------------------------------
-
-(1 row)
-
+CALL citus_cleanup_orphaned_resources();
+NOTICE:  cleaned up 1 orphaned resources
 -- Clenaup has been done.
 SELECT * from pg_dist_cleanup;
  record_id | operation_id | object_type | object_name | node_group_id | policy_type
 ---------------------------------------------------------------------
 (0 rows)
 
+-- Verify that the shard to be dropped is dropped
 \c - - - :worker_1_port
-SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r';
+SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r' ORDER BY relname;
         relname
 ---------------------------------------------------------------------
  table_to_split_9999000
@@ -119,7 +108,7 @@ SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind 
 (2 rows)
 
 \c - - - :worker_2_port
-SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r';
+SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r' ORDER BY relname;
         relname
 ---------------------------------------------------------------------
  table_to_split_9999001
@@ -128,5 +117,6 @@ SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind 
 
 -- Test Cleanup
 \c - postgres - :master_port
+SET client_min_messages TO WARNING;
 DROP SCHEMA "citus_split_shard_by_split_points_deferred_schema" CASCADE;
-NOTICE:  drop cascades to table citus_split_shard_by_split_points_deferred_schema.temp_table
+DROP USER test_split_role;
