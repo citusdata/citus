@@ -1,46 +1,17 @@
--- run this test only when old citus version is 9.0
+-- run this test only when old citus version is earlier than 10.0
 \set upgrade_test_old_citus_version `echo "$CITUS_OLD_VERSION"`
-SELECT substring(:'upgrade_test_old_citus_version', 'v(\d+)\.\d+\.\d+')::int = 9 AND
-       substring(:'upgrade_test_old_citus_version', 'v\d+\.(\d+)\.\d+')::int = 0
-AS upgrade_test_old_citus_version_e_9_0;
- upgrade_test_old_citus_version_e_9_0
+SELECT substring(:'upgrade_test_old_citus_version', 'v(\d+)\.\d+\.\d+')::int < 10
+AS upgrade_test_old_citus_version_lt_10_0;
+ upgrade_test_old_citus_version_lt_10_0
 ---------------------------------------------------------------------
  t
 (1 row)
 
 \gset
-\if :upgrade_test_old_citus_version_e_9_0
+\if :upgrade_test_old_citus_version_lt_10_0
 \else
 \q
 \endif
--- create some objects that we just included into distributed object
--- infrastructure in 9.1 versions but not included in 9.0.2
--- extension propagation --
--- create an extension on all nodes and a table that depends on it
-CREATE EXTENSION isn;
-SELECT run_command_on_workers($$CREATE EXTENSION isn;$$);
-         run_command_on_workers
----------------------------------------------------------------------
- (localhost,57636,t,"CREATE EXTENSION")
- (localhost,57637,t,"CREATE EXTENSION")
-(2 rows)
-
-CREATE TABLE isn_dist_table (key int, value issn);
-SELECT create_reference_table('isn_dist_table');
- create_reference_table
----------------------------------------------------------------------
-
-(1 row)
-
--- create an extension on all nodes, but do not create a table depending on it
-CREATE EXTENSION seg;
-SELECT run_command_on_workers($$CREATE EXTENSION seg;$$);
-         run_command_on_workers
----------------------------------------------------------------------
- (localhost,57636,t,"CREATE EXTENSION")
- (localhost,57637,t,"CREATE EXTENSION")
-(2 rows)
-
 -- schema propagation --
 -- public schema
 CREATE TABLE dist_table (a int);

@@ -1,15 +1,14 @@
--- run this test only when old citus version is 9.0
+-- run this test only when old citus version is earlier than 10.0
 \set upgrade_test_old_citus_version `echo "$CITUS_OLD_VERSION"`
-SELECT substring(:'upgrade_test_old_citus_version', 'v(\d+)\.\d+\.\d+')::int = 9 AND
-       substring(:'upgrade_test_old_citus_version', 'v\d+\.(\d+)\.\d+')::int = 0
-AS upgrade_test_old_citus_version_e_9_0;
- upgrade_test_old_citus_version_e_9_0
+SELECT substring(:'upgrade_test_old_citus_version', 'v(\d+)\.\d+\.\d+')::int < 10
+AS upgrade_test_old_citus_version_lt_10_0;
+ upgrade_test_old_citus_version_lt_10_0
 ---------------------------------------------------------------------
  t
 (1 row)
 
 \gset
-\if :upgrade_test_old_citus_version_e_9_0
+\if :upgrade_test_old_citus_version_lt_10_0
 \else
 \q
 \endif
@@ -40,7 +39,6 @@ SELECT i.* FROM pg_catalog.pg_dist_object, pg_identify_object_as_address(classid
       type      | object_names | object_args
 ---------------------------------------------------------------------
   database                  | {postgres}                                               | {}
-  extension                 | {isn}                                                    | {}
   role                      | {postgres}                                               | {}
   schema                    | {fooschema}                                              | {}
   schema                    | {new_schema}                                             | {}
@@ -48,7 +46,6 @@ SELECT i.* FROM pg_catalog.pg_dist_object, pg_identify_object_as_address(classid
   table                     | {fooschema,footable}                                     | {}
   table                     | {new_schema,another_dist_table}                          | {}
   table                     | {public,dist_table}                                      | {}
-  table                     | {public,isn_dist_table}                                  | {}
   type                      | {fooschema.footype}                                      | {}
- (11 rows)
+ (9 rows)
 
