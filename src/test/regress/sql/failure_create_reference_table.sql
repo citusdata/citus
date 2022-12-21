@@ -14,6 +14,7 @@ SELECT citus.mitmproxy('conn.allow()');
 CREATE TYPE schema_proc AS (a int);
 DROP TYPE schema_proc;
 
+
 CREATE TABLE ref_table(id int);
 INSERT INTO ref_table VALUES(1),(2),(3);
 
