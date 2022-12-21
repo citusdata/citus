@@ -220,8 +220,6 @@ s/^(DEBUG:  the index name on the shards of the partition is too long, switching
 # normalize errors for not being able to connect to a non-existing host
 s/could not translate host name "foobar" to address: .*$/could not translate host name "foobar" to address: <system specific error>/g
 
-s/ERROR:  parallel workers for vacuum must/ERROR:  parallel vacuum degree must/g
-
 # ignore PL/pgSQL line numbers that differ on Mac builds
 s/(CONTEXT:  PL\/pgSQL function .* line )([0-9]+)/\1XX/g
 s/^(PL\/pgSQL function .* line) [0-9]+ (.*)/\1 XX \2/g
@@ -229,7 +227,6 @@ s/^(PL\/pgSQL function .* line) [0-9]+ (.*)/\1 XX \2/g
 # normalize a test difference in multi_move_mx
 s/ connection to server at "\w+" \(127\.0\.0\.1\), port [0-9]+ failed://g
 # can be removed after dropping PG13 support
-s/ERROR:  parallel workers for vacuum must be between/ERROR:  parallel vacuum degree must be between/g
 s/ERROR:  fake_fetch_row_version not implemented/ERROR:  fake_tuple_update not implemented/g
 s/ERROR:  COMMIT is not allowed in an SQL function/ERROR:  COMMIT is not allowed in a SQL function/g
 s/ERROR:  ROLLBACK is not allowed in an SQL function/ERROR:  ROLLBACK is not allowed in a SQL function/g
