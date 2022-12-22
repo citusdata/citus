@@ -53,6 +53,7 @@
 #include "common/keywords.h"
 #include "distributed/citus_nodefuncs.h"
 #include "distributed/citus_ruleutils.h"
+#include "distributed/multi_router_planner.h"
 #include "executor/spi.h"
 #include "foreign/foreign.h"
 #include "funcapi.h"
@@ -3723,7 +3724,6 @@ static void
 get_merge_query_def(Query *query, deparse_context *context)
 {
 	StringInfo buf = context->buf;
-	RangeTblEntry *targetRte;
 
 	/* Insert the WITH clause if given */
 	get_with_clause(query, context);
@@ -3731,7 +3731,7 @@ get_merge_query_def(Query *query, deparse_context *context)
 	/*
 	 * Start the query with MERGE INTO <target>
 	 */
-	targetRte = rt_fetch(query->resultRelation, query->rtable);
+	RangeTblEntry *targetRte = ExtractResultRelationRTE(query);
 
 	if (PRETTY_INDENT(context))
 	{
@@ -3851,6 +3851,15 @@ get_merge_query_def(Query *query, deparse_context *context)
 			default:
 				elog(ERROR, "unknown action in MERGE WHEN clause");
 		}
+	}
+
+	/*
+	 * RETURNING is not supported in MERGE, so it must be NULL, but if PG adds it later
+	 * we might miss it, let's raise an exception to investigate.
+	 */
+	if (unlikely(query->returningList))
+	{
+		elog(ERROR, "Unexpected RETURNING clause in MERGE");
 	}
 
 	ereport(DEBUG1, (errmsg("<Deparsed MERGE query: %s>", buf->data)));
