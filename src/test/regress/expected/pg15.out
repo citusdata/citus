@@ -315,7 +315,7 @@ SELECT create_reference_table('tbl2');
 
 MERGE INTO tbl1 USING tbl2 ON (true)
 WHEN MATCHED THEN DELETE;
-ERROR:  MERGE command is not supported on distributed/reference tables yet
+ERROR:  MERGE command is not supported on reference tables yet
 -- now, both are reference, still not supported
 SELECT create_reference_table('tbl1');
  create_reference_table
@@ -325,7 +325,7 @@ SELECT create_reference_table('tbl1');
 
 MERGE INTO tbl1 USING tbl2 ON (true)
 WHEN MATCHED THEN DELETE;
-ERROR:  MERGE command is not supported on distributed/reference tables yet
+ERROR:  MERGE command is not supported on reference tables yet
 -- now, both distributed, not works
 SELECT undistribute_table('tbl1');
 NOTICE:  creating a new table for pg15.tbl1
@@ -419,14 +419,14 @@ SELECT create_distributed_table('tbl2', 'x');
 
 MERGE INTO tbl1 USING tbl2 ON (true)
 WHEN MATCHED THEN DELETE;
-ERROR:  MERGE command is not supported on distributed/reference tables yet
+ERROR:  MERGE command is only supported when distributed tables are joined on their distribution column
 -- also, not inside subqueries & ctes
 WITH targq AS (
     SELECT * FROM tbl2
 )
 MERGE INTO tbl1 USING targq ON (true)
 WHEN MATCHED THEN DELETE;
-ERROR:  MERGE command is not supported on distributed/reference tables yet
+ERROR:  MERGE command is only supported when distributed tables are joined on their distribution column
 -- crashes on beta3, fixed on 15 stable
 --WITH foo AS (
 --  MERGE INTO tbl1 USING tbl2 ON (true)
@@ -441,7 +441,7 @@ USING tbl2
 ON (true)
 WHEN MATCHED THEN
     UPDATE SET x = (SELECT count(*) FROM tbl2);
-ERROR:  MERGE command is not supported on distributed/reference tables yet
+ERROR:  MERGE command is only supported when distributed tables are joined on their distribution column
 -- test numeric types with negative scale
 CREATE TABLE numeric_negative_scale(numeric_column numeric(3,-1), orig_value int);
 INSERT into numeric_negative_scale SELECT x,x FROM generate_series(111, 115) x;
