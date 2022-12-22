@@ -15,7 +15,7 @@ ORDER BY 1;
  function alter_table_set_access_method(regclass,text)
  function any_value(anyelement)
  function any_value_agg(anyelement,anyelement)
- function array_cat_agg(anyarray)
+ function array_cat_agg(anycompatiblearray)
  function assign_distributed_transaction_id(integer,bigint,timestamp with time zone)
  function authinfo_valid(text)
  function broadcast_intermediate_result(text,text)

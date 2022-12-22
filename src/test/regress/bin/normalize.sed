@@ -226,7 +226,7 @@ s/ERROR:  ROLLBACK is not allowed in an SQL function/ERROR:  ROLLBACK is not all
 /Parent Relationship/d
 /Parent-Relationship/d
 s/function array_cat_agg\(anyarray\) anyarray/function array_cat_agg\(anycompatiblearray\) anycompatiblearray/g
-s/function array_cat_agg\(anycompatiblearray\)/function array_cat_agg\(anyarray\)/g
+s/function array_cat_agg\(anyarray\)/function array_cat_agg\(anycompatiblearray\)/g
 s/TRIM\(BOTH FROM value\)/btrim\(value\)/g
 s/pg14\.idx.*/pg14\.xxxxx/g
 
