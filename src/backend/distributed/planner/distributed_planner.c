@@ -75,9 +75,6 @@ static uint64 NextPlanId = 1;
 /* keep track of planner call stack levels */
 int PlannerLevel = 0;
 
-static void ErrorIfQueryHasUnsupportedMergeCommand(Query *queryTree,
-												   List *rangeTableList);
-static bool ContainsMergeCommandWalker(Node *node);
 static bool ListContainsDistributedTableRTE(List *rangeTableList,
 											bool *maybeHasForeignDistributedTable);
 static bool IsUpdateOrDelete(Query *query);
@@ -132,7 +129,7 @@ static PlannedStmt * PlanDistributedStmt(DistributedPlanningContext *planContext
 static RTEListProperties * GetRTEListProperties(List *rangeTableList);
 static List * TranslatedVars(PlannerInfo *root, int relationIndex);
 static void WarnIfListHasForeignDistributedTable(List *rangeTableList);
-static void ErrorIfMergeHasUnsupportedTables(Query *parse, List *rangeTableList);
+
 
 /* Distributed planner hook */
 PlannedStmt *
@@ -200,12 +197,6 @@ distributed_planner(Query *parse,
 
 		if (!fastPathRouterQuery)
 		{
-			/*
-			 * Fast path queries cannot have merge command, and we
-			 * prevent the remaining here.
-			 */
-			ErrorIfQueryHasUnsupportedMergeCommand(parse, rangeTableList);
-
 			/*
 			 * When there are partitioned tables (not applicable to fast path),
 			 * pretend that they are regular tables to avoid unnecessary work
@@ -305,43 +296,10 @@ distributed_planner(Query *parse,
 
 
 /*
- * ErrorIfQueryHasUnsupportedMergeCommand walks over the query tree and bails out
- * if there is no Merge command (e.g., CMD_MERGE) in the query tree. For merge,
- * looks for all supported combinations, throws an exception if any violations
- * are seen.
- */
-static void
-ErrorIfQueryHasUnsupportedMergeCommand(Query *queryTree, List *rangeTableList)
-{
-	/*
-	 * Postgres currently doesn't support Merge queries inside subqueries and
-	 * ctes, but lets be defensive and do query tree walk anyway.
-	 *
-	 * We do not call this path for fast-path queries to avoid this additional
-	 * overhead.
-	 */
-	if (!ContainsMergeCommandWalker((Node *) queryTree))
-	{
-		/* No MERGE found */
-		return;
-	}
-
-
-	/*
-	 * In Citus we have limited support for MERGE, it's allowed
-	 * only if all the tables(target, source or any CTE) tables
-	 * are are local i.e. a combination of Citus local and Non-Citus
-	 * tables (regular Postgres tables).
-	 */
-	ErrorIfMergeHasUnsupportedTables(queryTree, rangeTableList);
-}
-
-
-/*
  * ContainsMergeCommandWalker walks over the node and finds if there are any
  * Merge command (e.g., CMD_MERGE) in the node.
  */
-static bool
+bool
 ContainsMergeCommandWalker(Node *node)
 {
 	#if PG_VERSION_NUM < PG_VERSION_15
@@ -676,7 +634,8 @@ bool
 IsUpdateOrDelete(Query *query)
 {
 	return query->commandType == CMD_UPDATE ||
-		   query->commandType == CMD_DELETE;
+		   query->commandType == CMD_DELETE ||
+		   query->commandType == CMD_MERGE;
 }
 
 
@@ -2610,149 +2569,4 @@ WarnIfListHasForeignDistributedTable(List *rangeTableList)
 								   "citus_add_local_table_to_metadata()"))));
 		}
 	}
-}
-
-
-/*
- * IsMergeAllowedOnRelation takes a relation entry and checks if MERGE command is
- * permitted on special relations, such as materialized view, returns true only if
- * it's a "source" relation.
- */
-bool
-IsMergeAllowedOnRelation(Query *parse, RangeTblEntry *rte)
-{
-	if (!IsMergeQuery(parse))
-	{
-		return false;
-	}
-
-	RangeTblEntry *targetRte = rt_fetch(parse->resultRelation, parse->rtable);
-
-	/* Is it a target relation? */
-	if (targetRte->relid == rte->relid)
-	{
-		return false;
-	}
-
-	return true;
-}
-
-
-/*
- * ErrorIfMergeHasUnsupportedTables checks if all the tables(target, source or any CTE
- * present) in the MERGE command are local i.e. a combination of Citus local and Non-Citus
- * tables (regular Postgres tables), raises an exception for all other combinations.
- */
-static void
-ErrorIfMergeHasUnsupportedTables(Query *parse, List *rangeTableList)
-{
-	ListCell *tableCell = NULL;
-
-	foreach(tableCell, rangeTableList)
-	{
-		RangeTblEntry *rangeTableEntry = (RangeTblEntry *) lfirst(tableCell);
-		Oid relationId = rangeTableEntry->relid;
-
-		switch (rangeTableEntry->rtekind)
-		{
-			case RTE_RELATION:
-			{
-				/* Check the relation type */
-				break;
-			}
-
-			case RTE_SUBQUERY:
-			case RTE_FUNCTION:
-			case RTE_TABLEFUNC:
-			case RTE_VALUES:
-			case RTE_JOIN:
-			case RTE_CTE:
-			{
-				/* Skip them as base table(s) will be checked */
-				continue;
-			}
-
-			/*
-			 * RTE_NAMEDTUPLESTORE is typically used in ephmeral named relations,
-			 * such as, trigger data; until we find a genuine use case, raise an
-			 * exception.
-			 * RTE_RESULT is a node added by the planner and we shouldn't
-			 * encounter it in the parse tree.
-			 */
-			case RTE_NAMEDTUPLESTORE:
-			case RTE_RESULT:
-			{
-				ereport(ERROR,
-						(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						 errmsg("MERGE command is not supported with "
-								"Tuplestores and results")));
-				break;
-			}
-
-			default:
-			{
-				ereport(ERROR,
-						(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						 errmsg("MERGE command: Unrecognized range table entry.")));
-			}
-		}
-
-		/* RTE Relation can be of various types, check them now */
-
-		/* skip the regular views as they are replaced with subqueries */
-		if (rangeTableEntry->relkind == RELKIND_VIEW)
-		{
-			continue;
-		}
-
-		if (rangeTableEntry->relkind == RELKIND_MATVIEW ||
-			rangeTableEntry->relkind == RELKIND_FOREIGN_TABLE)
-		{
-			/* Materialized view or Foreign table as target is not allowed */
-			if (IsMergeAllowedOnRelation(parse, rangeTableEntry))
-			{
-				/* Non target relation is ok */
-				continue;
-			}
-			else
-			{
-				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-								errmsg("MERGE command is not allowed "
-									   "on materialized view")));
-			}
-		}
-
-		if (rangeTableEntry->relkind != RELKIND_RELATION &&
-			rangeTableEntry->relkind != RELKIND_PARTITIONED_TABLE)
-		{
-			ereport(ERROR,
-					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-					 errmsg("Unexpected relation type(relkind:%c) in MERGE command",
-							rangeTableEntry->relkind)));
-		}
-
-		Assert(rangeTableEntry->relid != 0);
-
-		/* Distributed tables and Reference tables are not supported yet */
-		if (IsCitusTableType(relationId, REFERENCE_TABLE) ||
-			IsCitusTableType(relationId, DISTRIBUTED_TABLE))
-		{
-			ereport(ERROR,
-					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-					 errmsg("MERGE command is not supported on "
-							"distributed/reference tables yet")));
-		}
-
-		/* Regular Postgres tables and Citus local tables are allowed */
-		if (!IsCitusTable(relationId) ||
-			IsCitusTableType(relationId, CITUS_LOCAL_TABLE))
-		{
-			continue;
-		}
-
-
-		/* Any other Citus table type missing ? */
-	}
-
-	/* All the tables are local, supported */
 }

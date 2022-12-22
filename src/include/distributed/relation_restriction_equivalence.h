@@ -17,6 +17,15 @@
 
 #define SINGLE_RTE_INDEX 1
 
+/*
+ * Represents the pointer type that's being passed in the list.
+ */
+typedef enum ListEntryType
+{
+	RANGETABLE_ENTRY, /* RangeTblEntry */
+	RESTRICTION_CONTEXT /* RelationRestriction */
+} ListEntryType;
+
 extern bool AllDistributionKeysInQueryAreEqual(Query *originalQuery,
 											   PlannerRestrictionContext *
 											   plannerRestrictionContext);
@@ -54,4 +63,6 @@ extern RelationRestrictionContext * FilterRelationRestrictionContext(
 	RelationRestrictionContext *relationRestrictionContext,
 	Relids
 	queryRteIdentities);
+extern bool AllRelationsInListColocated(List *relationList, ListEntryType entryType);
+
 #endif /* RELATION_RESTRICTION_EQUIVALENCE_H */
