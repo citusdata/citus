@@ -608,6 +608,14 @@ USING wq_source s ON t.tid = s.sid
 WHEN MATCHED AND (merge_when_and_write()) THEN
 	UPDATE SET balance = t.balance + s.balance;
 ROLLBACK;
+
+-- Test preventing ON condition from writing to the database
+BEGIN;
+MERGE INTO wq_target t
+USING wq_source s ON t.tid = s.sid AND (merge_when_and_write())
+WHEN MATCHED THEN
+	UPDATE SET balance = t.balance + s.balance;
+ROLLBACK;
 drop function merge_when_and_write();
 
 DROP TABLE wq_target, wq_source;

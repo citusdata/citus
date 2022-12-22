@@ -254,5 +254,9 @@ extern struct DistributedPlan * CreateDistributedPlan(uint64 planId, Query *orig
 													  plannerRestrictionContext);
 
 extern bool IsMergeAllowedOnRelation(Query *parse, RangeTblEntry *rte);
+extern bool ConjunctionContainsColumnFilter(Node *node,
+											Var *column,
+											Node **distributionKeyValue);
+extern bool ContainsMergeCommandWalker(Node *node);
 
 #endif /* DISTRIBUTED_PLANNER_H */
