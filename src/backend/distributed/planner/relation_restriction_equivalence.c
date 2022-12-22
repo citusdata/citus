@@ -151,8 +151,6 @@ static void ListConcatUniqueAttributeClassMemberLists(AttributeEquivalenceClass 
 													  secondClass);
 static Var * PartitionKeyForRTEIdentityInQuery(Query *query, int targetRTEIndex,
 											   Index *partitionKeyIndex);
-static bool AllRelationsInRestrictionContextColocated(RelationRestrictionContext *
-													  restrictionContext);
 static bool IsNotSafeRestrictionToRecursivelyPlan(Node *node);
 static JoinRestrictionContext * FilterJoinRestrictionContext(
 	JoinRestrictionContext *joinRestrictionContext, Relids
@@ -383,7 +381,8 @@ SafeToPushdownUnionSubquery(Query *originalQuery,
 		return false;
 	}
 
-	if (!AllRelationsInRestrictionContextColocated(restrictionContext))
+	if (!AllRelationsInListColocated(restrictionContext->relationRestrictionList,
+									 RESTRICTION_CONTEXT))
 	{
 		/* distribution columns are equal, but tables are not co-located */
 		return false;
@@ -1919,19 +1918,33 @@ FindQueryContainingRTEIdentityInternal(Node *node,
 
 
 /*
- * AllRelationsInRestrictionContextColocated determines whether all of the relations in the
- * given relation restrictions list are co-located.
+ * AllRelationsInListColocated determines whether all of the relations in the
+ * given list are co-located.
+ * Note: The list can be of dofferent types, which is specified by ListEntryType
  */
-static bool
-AllRelationsInRestrictionContextColocated(RelationRestrictionContext *restrictionContext)
+bool
+AllRelationsInListColocated(List *relationList, ListEntryType entryType)
 {
+	void *varPtr = NULL;
+	RangeTblEntry *rangeTableEntry = NULL;
 	RelationRestriction *relationRestriction = NULL;
 	int initialColocationId = INVALID_COLOCATION_ID;
 
 	/* check whether all relations exists in the main restriction list */
-	foreach_ptr(relationRestriction, restrictionContext->relationRestrictionList)
+	foreach_ptr(varPtr, relationList)
 	{
-		Oid relationId = relationRestriction->relationId;
+		Oid relationId = InvalidOid;
+
+		if (entryType == RANGETABLE_ENTRY)
+		{
+			rangeTableEntry = (RangeTblEntry *) varPtr;
+			relationId = rangeTableEntry->relid;
+		}
+		else if (entryType == RESTRICTION_CONTEXT)
+		{
+			relationRestriction = (RelationRestriction *) varPtr;
+			relationId = relationRestriction->relationId;
+		}
 
 		if (IsCitusTableType(relationId, CITUS_TABLE_WITH_NO_DIST_KEY))
 		{

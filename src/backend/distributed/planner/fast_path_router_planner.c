@@ -54,8 +54,6 @@
 bool EnableFastPathRouterPlanner = true;
 
 static bool ColumnAppearsMultipleTimes(Node *quals, Var *distributionKey);
-static bool ConjunctionContainsColumnFilter(Node *node, Var *column,
-											Node **distributionKeyValue);
 static bool DistKeyInSimpleOpExpression(Expr *clause, Var *distColumn,
 										Node **distributionKeyValue);
 
@@ -294,7 +292,7 @@ ColumnAppearsMultipleTimes(Node *quals, Var *distributionKey)
  *
  * If the conjuction contains column filter which is const, distributionKeyValue is set.
  */
-static bool
+bool
 ConjunctionContainsColumnFilter(Node *node, Var *column, Node **distributionKeyValue)
 {
 	if (node == NULL)
