@@ -1022,7 +1022,7 @@ FROM
 WHERE
 	colocated_table_test.value_1 = reference_table_test.value_1
 ORDER BY 1;
-LOG:  join order: [ "colocated_table_test" ][ reference join "reference_table_test" ]
+LOG:  join order: [ "colocated_table_test" ][ reference join(INNER) "reference_table_test" ]
  value_1
 ---------------------------------------------------------------------
        1
@@ -1036,7 +1036,7 @@ FROM
 WHERE
 	colocated_table_test.value_2 = reference_table_test.value_2
 ORDER BY 1;
-LOG:  join order: [ "colocated_table_test" ][ reference join "reference_table_test" ]
+LOG:  join order: [ "colocated_table_test" ][ reference join(INNER) "reference_table_test" ]
  value_2
 ---------------------------------------------------------------------
        1
@@ -1050,7 +1050,7 @@ FROM
 WHERE
 	reference_table_test.value_1 = colocated_table_test.value_1
 ORDER BY 1;
-LOG:  join order: [ "colocated_table_test" ][ reference join "reference_table_test" ]
+LOG:  join order: [ "colocated_table_test" ][ reference join(INNER) "reference_table_test" ]
  value_2
 ---------------------------------------------------------------------
        1
@@ -1065,7 +1065,7 @@ FROM
 WHERE
 	colocated_table_test.value_2 = reference_table_test.value_2
 ORDER BY colocated_table_test.value_2;
-LOG:  join order: [ "colocated_table_test_2" ][ cartesian product reference join "reference_table_test" ][ dual partition join "colocated_table_test" ]
+LOG:  join order: [ "colocated_table_test_2" ][ cartesian product reference join(INNER) "reference_table_test" ][ dual partition join(INNER) "colocated_table_test" ]
  value_2
 ---------------------------------------------------------------------
        1
@@ -1082,7 +1082,7 @@ FROM
 WHERE
 	colocated_table_test.value_1 = colocated_table_test_2.value_1 AND colocated_table_test.value_2 = reference_table_test.value_2
 ORDER BY 1;
-LOG:  join order: [ "colocated_table_test" ][ reference join "reference_table_test" ][ local partition join "colocated_table_test_2" ]
+LOG:  join order: [ "colocated_table_test" ][ reference join(INNER) "reference_table_test" ][ local partition join(INNER) "colocated_table_test_2" ]
  value_2
 ---------------------------------------------------------------------
        1
@@ -1097,7 +1097,7 @@ FROM
 WHERE
 	colocated_table_test.value_2 = colocated_table_test_2.value_2 AND colocated_table_test.value_2 = reference_table_test.value_2
 ORDER BY colocated_table_test.value_2;
-LOG:  join order: [ "colocated_table_test" ][ reference join "reference_table_test" ][ dual partition join "colocated_table_test_2" ]
+LOG:  join order: [ "colocated_table_test" ][ reference join(INNER) "reference_table_test" ][ dual partition join(INNER) "colocated_table_test_2" ]
  value_2
 ---------------------------------------------------------------------
        1
@@ -1111,7 +1111,7 @@ FROM
 WHERE
 	colocated_table_test.value_1 = reference_table_test.value_1 AND colocated_table_test_2.value_1 = reference_table_test.value_1
 ORDER BY reference_table_test.value_2;
-LOG:  join order: [ "colocated_table_test" ][ reference join "reference_table_test" ][ dual partition join "colocated_table_test_2" ]
+LOG:  join order: [ "colocated_table_test" ][ reference join(INNER) "reference_table_test" ][ dual partition join(INNER) "colocated_table_test_2" ]
  value_2
 ---------------------------------------------------------------------
        1

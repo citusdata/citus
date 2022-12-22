@@ -36,7 +36,7 @@ FROM
 WHERE
 	t1.id = t2.sum;
 DEBUG:  Router planner cannot handle multi-shard select queries
-LOG:  join order: [ "single_hash_repartition_first" ][ single hash partition join "single_hash_repartition_second" ]
+LOG:  join order: [ "single_hash_repartition_first" ][ single hash partition join(INNER) "single_hash_repartition_second" ]
 DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [-1073741824,-1]
 DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [0,1073741823]
 DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [1073741824,2147483647]
@@ -67,7 +67,7 @@ FROM
 WHERE
 	t2.sum = t1.id;
 DEBUG:  Router planner cannot handle multi-shard select queries
-LOG:  join order: [ "single_hash_repartition_second" ][ single hash partition join "single_hash_repartition_first" ]
+LOG:  join order: [ "single_hash_repartition_second" ][ single hash partition join(INNER) "single_hash_repartition_first" ]
 DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [-1073741824,-1]
 DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [0,1073741823]
 DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [1073741824,2147483647]
@@ -98,7 +98,7 @@ FROM
 WHERE
 	r1.id = t1.id AND t2.sum = t1.id;
 DEBUG:  Router planner cannot handle multi-shard select queries
-LOG:  join order: [ "single_hash_repartition_second" ][ reference join "ref_table" ][ single hash partition join "single_hash_repartition_first" ]
+LOG:  join order: [ "single_hash_repartition_second" ][ reference join(INNER) "ref_table" ][ single hash partition join(INNER) "single_hash_repartition_first" ]
 DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [-1073741824,-1]
 DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [0,1073741823]
 DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [1073741824,2147483647]
@@ -129,7 +129,7 @@ FROM
 WHERE
 	t1.id = t2.id AND t1.sum = t3.id;
 DEBUG:  Router planner cannot handle multi-shard select queries
-LOG:  join order: [ "single_hash_repartition_first" ][ local partition join "single_hash_repartition_first" ][ single hash partition join "single_hash_repartition_second" ]
+LOG:  join order: [ "single_hash_repartition_first" ][ local partition join(INNER) "single_hash_repartition_first" ][ single hash partition join(INNER) "single_hash_repartition_second" ]
 DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [-1073741824,-1]
 DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [0,1073741823]
 DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [1073741824,2147483647]
@@ -172,7 +172,7 @@ FROM
 WHERE
 	t1.sum = t2.sum AND t1.sum = t3.id;
 DEBUG:  Router planner cannot handle multi-shard select queries
-LOG:  join order: [ "single_hash_repartition_first" ][ single hash partition join "single_hash_repartition_second" ][ dual partition join "single_hash_repartition_first" ]
+LOG:  join order: [ "single_hash_repartition_first" ][ single hash partition join(INNER) "single_hash_repartition_second" ][ dual partition join(INNER) "single_hash_repartition_first" ]
 DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [-1073741824,-1]
 DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [0,1073741823]
 DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [1073741824,2147483647]
@@ -243,7 +243,7 @@ DEBUG:  dual partition column types do not match
 DEBUG:  single partition column types do not match
 DEBUG:  single partition column types do not match
 DEBUG:  dual partition column types do not match
-LOG:  join order: [ "single_hash_repartition_second" ][ cartesian product "single_hash_repartition_first" ][ dual partition join "single_hash_repartition_first" ]
+LOG:  join order: [ "single_hash_repartition_second" ][ cartesian product(INNER) "single_hash_repartition_first" ][ dual partition join(INNER) "single_hash_repartition_first" ]
 ERROR:  cannot perform distributed planning on this query
 DETAIL:  Cartesian products are currently unsupported
 -- single repartition query in CTE
@@ -269,7 +269,7 @@ WHERE
 DEBUG:  CTE cte1 is going to be inlined via distributed planning
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  Router planner cannot handle multi-shard select queries
-LOG:  join order: [ "single_hash_repartition_first" ][ single hash partition join "single_hash_repartition_second" ]
+LOG:  join order: [ "single_hash_repartition_first" ][ single hash partition join(INNER) "single_hash_repartition_second" ]
 DEBUG:  push down of limit count: 50
 DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [-1073741824,-1]
 DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [0,1073741823]
@@ -294,7 +294,7 @@ DETAIL:  Creating dependency on merge taskId 20
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  generating subplan XXX_1 for CTE cte1: SELECT ((t1.id)::double precision OPERATOR(pg_catalog.*) t2.avg) AS data FROM single_hash_repartition.single_hash_repartition_first t1, single_hash_repartition.single_hash_repartition_second t2 WHERE ((t1.id OPERATOR(pg_catalog.=) t2.sum) AND (t1.sum OPERATOR(pg_catalog.>) 5000)) ORDER BY ((t1.id)::double precision OPERATOR(pg_catalog.*) t2.avg) DESC LIMIT 50
 DEBUG:  Router planner cannot handle multi-shard select queries
-LOG:  join order: [ "single_hash_repartition_first" ][ single hash partition join "single_hash_repartition_second" ]
+LOG:  join order: [ "single_hash_repartition_first" ][ single hash partition join(INNER) "single_hash_repartition_second" ]
 DEBUG:  push down of limit count: 50
 DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [-1073741824,-1]
 DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [0,1073741823]
@@ -326,7 +326,7 @@ FROM
 WHERE
 	t1.id = t2.sum AND t2.sum = t3.id;
 DEBUG:  Router planner cannot handle multi-shard select queries
-LOG:  join order: [ "single_hash_repartition_first" ][ single hash partition join "single_hash_repartition_second" ][ single hash partition join "single_hash_repartition_second" ]
+LOG:  join order: [ "single_hash_repartition_first" ][ single hash partition join(INNER) "single_hash_repartition_second" ][ single hash partition join(INNER) "single_hash_repartition_second" ]
 DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [-1073741824,-1]
 DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [0,1073741823]
 DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [1073741824,2147483647]
@@ -379,7 +379,7 @@ WHERE
 	t1.id = t2.sum AND t2.id = t3.sum
 LIMIT 10;
 DEBUG:  Router planner cannot handle multi-shard select queries
-LOG:  join order: [ "single_hash_repartition_second" ][ single hash partition join "single_hash_repartition_second" ][ single hash partition join "single_hash_repartition_first" ]
+LOG:  join order: [ "single_hash_repartition_second" ][ single hash partition join(INNER) "single_hash_repartition_second" ][ single hash partition join(INNER) "single_hash_repartition_first" ]
 DEBUG:  push down of limit count: 10
 DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [-1073741824,-1]
 DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [0,1073741823]
@@ -436,7 +436,7 @@ FROM
 WHERE
 	t1.id = t2.sum;
 DEBUG:  Router planner cannot handle multi-shard select queries
-LOG:  join order: [ "single_hash_repartition_first" ][ single hash partition join "single_hash_repartition_second" ]
+LOG:  join order: [ "single_hash_repartition_first" ][ single hash partition join(INNER) "single_hash_repartition_second" ]
 DEBUG:  join prunable for intervals [-2147483648,-1073741826] and [-1073741824,-2]
 DEBUG:  join prunable for intervals [-2147483648,-1073741826] and [0,1073741822]
 DEBUG:  join prunable for intervals [-2147483648,-1073741826] and [1073741824,2147483646]
@@ -469,7 +469,7 @@ FROM
 WHERE
 	t1.sum = t2.id;
 DEBUG:  Router planner cannot handle multi-shard select queries
-LOG:  join order: [ "single_hash_repartition_first" ][ single hash partition join "single_hash_repartition_second" ]
+LOG:  join order: [ "single_hash_repartition_first" ][ single hash partition join(INNER) "single_hash_repartition_second" ]
 DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [-1073741824,-1]
 DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [0,1073741823]
 DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [1073741824,2147483647]

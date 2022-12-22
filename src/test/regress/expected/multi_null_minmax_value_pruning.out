@@ -51,7 +51,7 @@ EXPLAIN (COSTS FALSE)
 SELECT sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
 	WHERE l_orderkey = o_orderkey;
 DEBUG:  Router planner cannot handle multi-shard select queries
-LOG:  join order: [ "lineitem" ][ local partition join "orders" ]
+LOG:  join order: [ "lineitem" ][ local partition join(INNER) "orders" ]
 DEBUG:  join prunable for intervals [1,6000] and [6001,20000]
 DEBUG:  join prunable for intervals [6001,20000] and [1,6000]
                                    QUERY PLAN
@@ -100,7 +100,7 @@ EXPLAIN (COSTS FALSE)
 SELECT sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
 	WHERE l_partkey = o_custkey;
 DEBUG:  Router planner cannot handle multi-shard select queries
-LOG:  join order: [ "lineitem" ][ dual partition join "orders" ]
+LOG:  join order: [ "lineitem" ][ dual partition join(INNER) "orders" ]
 DEBUG:  join prunable for task partitionId 0 and 1
 DEBUG:  join prunable for task partitionId 0 and 2
 DEBUG:  join prunable for task partitionId 0 and 3
@@ -165,7 +165,7 @@ EXPLAIN (COSTS FALSE)
 SELECT sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
 	WHERE l_partkey = o_custkey;
 DEBUG:  Router planner cannot handle multi-shard select queries
-LOG:  join order: [ "lineitem" ][ dual partition join "orders" ]
+LOG:  join order: [ "lineitem" ][ dual partition join(INNER) "orders" ]
 DEBUG:  join prunable for task partitionId 0 and 1
 DEBUG:  join prunable for task partitionId 0 and 2
 DEBUG:  join prunable for task partitionId 0 and 3
@@ -228,7 +228,7 @@ EXPLAIN (COSTS FALSE)
 SELECT sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
 	WHERE l_partkey = o_custkey;
 DEBUG:  Router planner cannot handle multi-shard select queries
-LOG:  join order: [ "lineitem" ][ dual partition join "orders" ]
+LOG:  join order: [ "lineitem" ][ dual partition join(INNER) "orders" ]
 DEBUG:  join prunable for task partitionId 0 and 1
 DEBUG:  join prunable for task partitionId 0 and 2
 DEBUG:  join prunable for task partitionId 0 and 3
