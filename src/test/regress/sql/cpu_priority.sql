@@ -71,7 +71,9 @@ SET citus.cpu_priority_for_logical_replication_senders = 15;
 SELECT master_move_shard_placement(11568900, 'localhost', :worker_2_port, 'localhost', :worker_1_port, 'force_logical');
 SET citus.max_high_priority_background_processes = 3;
 SELECT master_move_shard_placement(11568900, 'localhost', :worker_1_port, 'localhost', :worker_2_port, 'force_logical');
+SET client_min_messages TO ERROR;
 SELECT public.wait_for_resource_cleanup();
+RESET client_min_messages;
 
 -- Make sure shard splits use citus.cpu_priority_for_logical_replication_senders
 -- in their CREATE SUBSCRIPTION commands.
