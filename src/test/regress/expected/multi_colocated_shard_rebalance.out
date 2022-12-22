@@ -910,3 +910,14 @@ DROP TABLE table1_group1;
 DROP TABLE table5_groupX;
 DROP TABLE table6_append;
 DROP TABLE serial_move_test;
+DROP SCHEMA move_partitions CASCADE;
+-- this is because issue:
+-- https://github.com/citusdata/citus/issues/6580
+-- we can remove this once the issue is fixed
+SELECT 1 FROM run_command_on_workers($$DROP TABLE IF EXISTS test_with_pkey_13000043$$);
+ ?column?
+---------------------------------------------------------------------
+        1
+        1
+(2 rows)
+
