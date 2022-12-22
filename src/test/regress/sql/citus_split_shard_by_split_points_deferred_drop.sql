@@ -24,8 +24,9 @@ SET citus.next_placement_id TO 8610000;
 SET citus.shard_count TO 2;
 SET citus.shard_replication_factor TO 1;
 SET citus.next_operation_id TO 777;
-SET citus.next_cleanup_record_id TO 11;
+SET citus.next_cleanup_record_id TO 511;
 SET ROLE test_split_role;
+SET search_path TO "citus_split_shard_by_split_points_deferred_schema";
 
 CREATE TABLE table_to_split(id int PRIMARY KEY, int_data int, data text);
 SELECT create_distributed_table('table_to_split', 'id');
@@ -48,29 +49,33 @@ SELECT pg_catalog.citus_split_shard_by_split_points(
     ARRAY[:worker_1_node, :worker_2_node],
     'force_logical');
 
--- The original shards are marked for deferred drop with policy_type = 2.
+-- The original shard is marked for deferred drop with policy_type = 2.
+-- The previous shard should be dropped at the beginning of the second split call
 SELECT * from pg_dist_cleanup;
 
--- The physical shards should not be deleted.
+-- One of the physical shards should not be deleted, the other one should.
 \c - - - :worker_1_port
-SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r';
+SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r' ORDER BY relname;
 
 \c - - - :worker_2_port
-SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r';
+SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r' ORDER BY relname;
 
 -- Perform deferred drop cleanup.
 \c - postgres - :master_port
-CALL citus_cleanup_orphaned_shards();
+CALL citus_cleanup_orphaned_resources();
 
 -- Clenaup has been done.
 SELECT * from pg_dist_cleanup;
 
+-- Verify that the shard to be dropped is dropped
 \c - - - :worker_1_port
-SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r';
+SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r' ORDER BY relname;
 
 \c - - - :worker_2_port
-SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r';
+SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r' ORDER BY relname;
 
 -- Test Cleanup
 \c - postgres - :master_port
+SET client_min_messages TO WARNING;
 DROP SCHEMA "citus_split_shard_by_split_points_deferred_schema" CASCADE;
+DROP USER test_split_role;

@@ -256,4 +256,5 @@ SELECT COUNT(*) FROM colocated_dist_table;
 ALTER SYSTEM RESET citus.defer_shard_delete_interval;
 SELECT pg_reload_conf();
 DROP SCHEMA "citus_split_test_schema" CASCADE;
+DROP USER test_split_role;
 --END : Cleanup

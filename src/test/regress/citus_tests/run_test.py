@@ -73,6 +73,8 @@ elif "isolation" in test_schedule:
     test_schedule = 'base_isolation_schedule'
 elif "failure" in test_schedule:
     test_schedule = 'failure_base_schedule'
+elif "split" in test_schedule:
+    test_schedule = 'minimal_schedule'
 elif "mx" in test_schedule:
     if use_base_schedule:
         test_schedule = 'mx_base_schedule'
