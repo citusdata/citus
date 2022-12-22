@@ -134,9 +134,9 @@ SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost'
 SELECT citus.mitmproxy('conn.allow()');
 -- first, manually drop the subscsription object. But the record for it will remain on pg_dist_cleanup
 -- we expect the drop query will succeed on only one node
+select object_name AS subsname from pg_dist_cleanup where object_name like 'citus_shard_move_subscription_10%' \gset
 SELECT COUNT(*)
-    FROM run_command_on_workers(
-        $$DROP SUBSCRIPTION citus_shard_move_subscription_10_19$$)
+    FROM run_command_on_workers('DROP SUBSCRIPTION ' || :'subsname' || '')
     WHERE success AND result = 'DROP SUBSCRIPTION';
 
 -- reset back
