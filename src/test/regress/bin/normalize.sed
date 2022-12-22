@@ -94,12 +94,30 @@ s/of relation ".*" contains null values/contains null values/g
 #if (PG_VERSION_NUM >= PG_VERSION_13) && (PG_VERSION_NUM < PG_VERSION_14)
 # (This is not preprocessor directive, but a reminder for the developer that will drop PG13 support )
 # libpq message changes for minor versions of pg13
+
 # We ignore multiline error messages, and substitute first line with a single line
 # alternative that is used in some older libpq versions.
 s/(ERROR: |WARNING: |error:) server closed the connection unexpectedly/\1 connection not open/g
 /^\s*This probably means the server terminated abnormally$/d
 /^\s*before or while processing the request.$/d
 /^\s*connection not open$/d
+
+s/ERROR:  fake_fetch_row_version not implemented/ERROR:  fake_tuple_update not implemented/g
+s/ERROR:  COMMIT is not allowed in an SQL function/ERROR:  COMMIT is not allowed in a SQL function/g
+s/ERROR:  ROLLBACK is not allowed in an SQL function/ERROR:  ROLLBACK is not allowed in a SQL function/g
+/.*Async-Capable.*/d
+/.*Async Capable.*/d
+/Parent Relationship/d
+/Parent-Relationship/d
+s/function array_cat_agg\(anyarray\) anyarray/function array_cat_agg\(anycompatiblearray\) anycompatiblearray/g
+s/function array_cat_agg\(anyarray\)/function array_cat_agg\(anycompatiblearray\)/g
+s/TRIM\(BOTH FROM value\)/btrim\(value\)/g
+/DETAIL:  Subqueries are not supported in policies on distributed tables/d
+s/ERROR:  unexpected non-SELECT command in SubLink/ERROR:  cannot create policy/g
+
+# PG13 changes bgworker sigterm message, we can drop that line with PG13 drop
+s/(FATAL: terminating).*Citus Background Task Queue Executor.*(due to administrator command)\+/\1 connection \2                    \+/g
+
 #endif /* (PG_VERSION_NUM >= PG_VERSION_13) && (PG_VERSION_NUM < PG_VERSION_14) */
 
 # Changed outputs after minor bump to PG14.5 and PG13.8
@@ -217,26 +235,15 @@ s/^(PL\/pgSQL function .* line) [0-9]+ (.*)/\1 XX \2/g
 
 # normalize a test difference in multi_move_mx
 s/ connection to server at "\w+" \(127\.0\.0\.1\), port [0-9]+ failed://g
-# can be removed after dropping PG13 support
-s/ERROR:  fake_fetch_row_version not implemented/ERROR:  fake_tuple_update not implemented/g
-s/ERROR:  COMMIT is not allowed in an SQL function/ERROR:  COMMIT is not allowed in a SQL function/g
-s/ERROR:  ROLLBACK is not allowed in an SQL function/ERROR:  ROLLBACK is not allowed in a SQL function/g
-/.*Async-Capable.*/d
-/.*Async Capable.*/d
-/Parent Relationship/d
-/Parent-Relationship/d
-s/function array_cat_agg\(anyarray\) anyarray/function array_cat_agg\(anycompatiblearray\) anycompatiblearray/g
-s/function array_cat_agg\(anyarray\)/function array_cat_agg\(anycompatiblearray\)/g
-s/TRIM\(BOTH FROM value\)/btrim\(value\)/g
-s/pg14\.idx.*/pg14\.xxxxx/g
 
+# normalize differences in tablespace of new index
+s/pg14\.idx.*/pg14\.xxxxx/g
 s/CREATE TABLESPACE test_tablespace LOCATION.*/CREATE TABLESPACE test_tablespace LOCATION XXXX/g
-/DETAIL:  Subqueries are not supported in policies on distributed tables/d
-s/ERROR:  unexpected non-SELECT command in SubLink/ERROR:  cannot create policy/g
 
 # columnar log for var correlation
 s/(.*absolute correlation \()([0,1]\.[0-9]+)(\) of var attribute [0-9]+ is smaller than.*)/\1X\.YZ\3/g
 
+# normalize differences in multi_fix_partition_shard_index_names test
 s/NOTICE:  issuing WITH placement_data\(shardid, shardstate, shardlength, groupid, placementid\)  AS \(VALUES \([0-9]+, [0-9]+, [0-9]+, [0-9]+, [0-9]+\)\)/NOTICE:  issuing WITH placement_data\(shardid, shardstate, shardlength, groupid, placementid\)  AS \(VALUES \(xxxxxx, xxxxxx, xxxxxx, xxxxxx, xxxxxx\)\)/g
 
 # global_pid when pg_cancel_backend is sent to workers
@@ -270,6 +277,7 @@ s/^(WARNING|ERROR)(:  "[a-z\ ]+ .*" has dependency on unsupported object) "schem
 s/^ERROR:  A rebalance is already running as job [0-9]+$/ERROR:  A rebalance is already running as job xxx/g
 s/^NOTICE:  Scheduled ([0-9]+) moves as job [0-9]+$/NOTICE:  Scheduled \1 moves as job xxx/g
 s/^HINT: (.*) job_id = [0-9]+ (.*)$/HINT: \1 job_id = xxx \2/g
+
 # In clock tests, normalize epoch value(s) and the DEBUG messages printed
 s/^(DEBUG:  |LOG:  )(coordinator|final global|Set) transaction clock [0-9]+.*$/\1\2 transaction clock xxxxxx/g
 # Look for >= 13 digit logical value
@@ -280,11 +288,10 @@ s/^(NOTICE:  )(clock).*LC:[0-9]+,.*C:[0-9]+,.*$/\1\2 xxxxxx/g
 /^(DEBUG:  )(adjusted to remote clock: <logical)\([0-9]+\) counter\([0-9]+\)>$/d
 /^DEBUG:  persisting transaction.*counter.*$/d
 /^DEBUG:  both logical clock values are equal\([0-9]+\), pick remote.*$/d
+
 # The following 2 lines are to normalize duration and cost in the EXPLAIN output
 s/LOG:  duration: [0-9].[0-9]+ ms/LOG:  duration: xxxx ms/g
 s/"Total Cost": [0-9].[0-9]+/"Total Cost": xxxx/g
 
+# normalize gpids
 s/(NOTICE:  issuing SET LOCAL application_name TO 'citus_rebalancer gpid=)[0-9]+/\1xxxxx/g
-
-# PG13 changes bgworker sigterm message, we can drop that line with PG13 drop
-s/(FATAL: terminating).*Citus Background Task Queue Executor.*(due to administrator command)\+/\1 connection \2                    \+/g
