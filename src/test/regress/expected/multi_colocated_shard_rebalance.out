@@ -564,8 +564,12 @@ SELECT master_move_shard_placement(13000034, 'localhost', :worker_1_port, 'local
 
 (1 row)
 
-CALL citus_cleanup_orphaned_resources();
-NOTICE:  cleaned up 1 orphaned resources
+SELECT public.wait_for_resource_cleanup();
+ wait_for_resource_cleanup
+---------------------------------------------------------------------
+
+(1 row)
+
 -- confirm the successfull move
 SELECT * FROM run_command_on_placements('serial_move_test', 'SELECT DISTINCT key FROM %s WHERE key = 15') WHERE result = '15' AND shardid = 13000034;
  nodename  | nodeport | shardid  | success | result
@@ -612,7 +616,12 @@ SELECT master_move_shard_placement(13000038, 'localhost', :worker_2_port, 'local
 WARNING:  relation "public.logical_failure_test_13000038" does not exist
 CONTEXT:  while executing command on localhost:xxxxx
 ERROR:  cannot get the size because of a connection error
-CALL citus_cleanup_orphaned_resources();
+SELECT public.wait_for_resource_cleanup();
+ wait_for_resource_cleanup
+---------------------------------------------------------------------
+
+(1 row)
+
 DROP TABLE logical_failure_test;
 -- lets test the logical replication modes
 CREATE TABLE test_with_pkey (key int PRIMARY KEY, value int NOT NULL);
@@ -631,8 +640,12 @@ SELECT master_move_shard_placement(13000042, 'localhost', :worker_1_port, 'local
 
 (1 row)
 
-CALL citus_cleanup_orphaned_resources();
-NOTICE:  cleaned up 1 orphaned resources
+SELECT public.wait_for_resource_cleanup();
+ wait_for_resource_cleanup
+---------------------------------------------------------------------
+
+(1 row)
+
 -- should succeed since we still have a replica identity
 ALTER TABLE test_with_pkey REPLICA IDENTITY FULL;
 SELECT master_move_shard_placement(13000042, 'localhost', :worker_2_port, 'localhost', :worker_1_port, 'auto');
@@ -641,8 +654,12 @@ SELECT master_move_shard_placement(13000042, 'localhost', :worker_2_port, 'local
 
 (1 row)
 
-CALL citus_cleanup_orphaned_resources();
-NOTICE:  cleaned up 1 orphaned resources
+SELECT public.wait_for_resource_cleanup();
+ wait_for_resource_cleanup
+---------------------------------------------------------------------
+
+(1 row)
+
 -- make sure we have the replica identity after the move
 SELECT result FROM run_command_on_placements( 'test_with_pkey', 'SELECT relreplident FROM pg_class WHERE relname = ''%s''') WHERE shardid = 13000042;
  result
@@ -656,7 +673,12 @@ SELECT master_move_shard_placement(13000042, 'localhost', :worker_1_port, 'local
 ERROR:  cannot use logical replication to transfer shards of the relation test_with_pkey since it doesn't have a REPLICA IDENTITY or PRIMARY KEY
 DETAIL:  UPDATE and DELETE commands on the shard will error out during logical replication unless there is a REPLICA IDENTITY or PRIMARY KEY.
 HINT:  If you wish to continue without a replica identity set the shard_transfer_mode to 'force_logical' or 'block_writes'.
-CALL citus_cleanup_orphaned_resources();
+SELECT public.wait_for_resource_cleanup();
+ wait_for_resource_cleanup
+---------------------------------------------------------------------
+
+(1 row)
+
 -- make sure we have the replica identity after the move
 SELECT result FROM run_command_on_placements( 'test_with_pkey', 'SELECT relreplident FROM pg_class WHERE relname = ''%s''') WHERE shardid = 13000042;
  result
@@ -672,8 +694,12 @@ SELECT master_move_shard_placement(13000042, 'localhost', :worker_1_port, 'local
 
 (1 row)
 
-CALL citus_cleanup_orphaned_resources();
-NOTICE:  cleaned up 1 orphaned resources
+SELECT public.wait_for_resource_cleanup();
+ wait_for_resource_cleanup
+---------------------------------------------------------------------
+
+(1 row)
+
 -- make sure we have the replica identity after the move
 SELECT result FROM run_command_on_placements( 'test_with_pkey', 'SELECT relreplident FROM pg_class WHERE relname = ''%s''') WHERE shardid = 13000042;
  result
@@ -690,8 +716,12 @@ SELECT master_move_shard_placement(13000042, 'localhost', :worker_2_port, 'local
 
 (1 row)
 
-CALL citus_cleanup_orphaned_resources();
-NOTICE:  cleaned up 1 orphaned resources
+SELECT public.wait_for_resource_cleanup();
+ wait_for_resource_cleanup
+---------------------------------------------------------------------
+
+(1 row)
+
 -- make sure we have the replica identity after the move
 SELECT result FROM run_command_on_placements( 'test_with_pkey', 'SELECT relreplident FROM pg_class WHERE relname = ''%s''') WHERE shardid = 13000042;
  result
@@ -706,8 +736,12 @@ SELECT master_move_shard_placement(13000042, 'localhost', :worker_1_port, 'local
 
 (1 row)
 
-CALL citus_cleanup_orphaned_resources();
-NOTICE:  cleaned up 1 orphaned resources
+SELECT public.wait_for_resource_cleanup();
+ wait_for_resource_cleanup
+---------------------------------------------------------------------
+
+(1 row)
+
 -- make sure we have the replica identity after the move
 SELECT result FROM run_command_on_placements( 'test_with_pkey', 'SELECT relreplident FROM pg_class WHERE relname = ''%s''') WHERE shardid = 13000042;
  result
@@ -726,10 +760,13 @@ DETAIL:  from localhost:xxxxx
 
 (1 row)
 
-CALL citus_cleanup_orphaned_resources();
-LOG:  deferred drop of orphaned resource public.test_with_pkey_13000042 on localhost:xxxxx completed
-NOTICE:  cleaned up 1 orphaned resources
 SET client_min_messages TO DEFAULT;
+SELECT public.wait_for_resource_cleanup();
+ wait_for_resource_cleanup
+---------------------------------------------------------------------
+
+(1 row)
+
 -- we don't support multiple shard moves in a single transaction
 SELECT
     master_move_shard_placement(shardid, 'localhost', :worker_1_port, 'localhost', :worker_2_port, shard_transfer_mode:='force_logical')
@@ -738,7 +775,12 @@ FROM
     shardid IN (SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'test_with_pkey'::regclass);
 ERROR:  moving multiple shard placements via logical replication in the same transaction is currently not supported
 HINT:  If you wish to move multiple shard placements in a single transaction set the shard_transfer_mode to 'block_writes'.
-CALL citus_cleanup_orphaned_resources();
+SELECT public.wait_for_resource_cleanup();
+ wait_for_resource_cleanup
+---------------------------------------------------------------------
+
+(1 row)
+
 -- similar test with explicit transaction block
 BEGIN;
     SELECT master_move_shard_placement(13000042, 'localhost', :worker_1_port, 'localhost', :worker_2_port, shard_transfer_mode:='force_logical');
@@ -751,7 +793,12 @@ BEGIN;
 ERROR:  moving multiple shard placements via logical replication in the same transaction is currently not supported
 HINT:  If you wish to move multiple shard placements in a single transaction set the shard_transfer_mode to 'block_writes'.
 COMMIT;
-    CALL citus_cleanup_orphaned_resources();
+    SELECT public.wait_for_resource_cleanup();
+ wait_for_resource_cleanup
+---------------------------------------------------------------------
+
+(1 row)
+
 -- we do support the same with block writes
 SELECT
     master_move_shard_placement(shardid, 'localhost', :worker_1_port, 'localhost', :worker_2_port, shard_transfer_mode:='block_writes')
@@ -764,8 +811,12 @@ FROM
 
 (2 rows)
 
-CALL citus_cleanup_orphaned_resources();
-NOTICE:  cleaned up 2 orphaned resources
+SELECT public.wait_for_resource_cleanup();
+ wait_for_resource_cleanup
+---------------------------------------------------------------------
+
+(1 row)
+
 -- we should be able to move shard placements after COMMIT/ABORT
 BEGIN;
     SELECT master_move_shard_placement(13000043, 'localhost', :worker_2_port, 'localhost', :worker_1_port, shard_transfer_mode:='force_logical');
@@ -775,16 +826,24 @@ BEGIN;
 (1 row)
 
 COMMIT;
-CALL citus_cleanup_orphaned_resources();
-NOTICE:  cleaned up 1 orphaned resources
+SELECT public.wait_for_resource_cleanup();
+ wait_for_resource_cleanup
+---------------------------------------------------------------------
+
+(1 row)
+
 SELECT master_move_shard_placement(13000045, 'localhost', :worker_2_port, 'localhost', :worker_1_port, shard_transfer_mode:='force_logical');
  master_move_shard_placement
 ---------------------------------------------------------------------
 
 (1 row)
 
-CALL citus_cleanup_orphaned_resources();
-NOTICE:  cleaned up 1 orphaned resources
+SELECT public.wait_for_resource_cleanup();
+ wait_for_resource_cleanup
+---------------------------------------------------------------------
+
+(1 row)
+
 BEGIN;
     SELECT master_move_shard_placement(13000043, 'localhost', :worker_1_port, 'localhost', :worker_2_port, shard_transfer_mode:='force_logical');
  master_move_shard_placement
@@ -799,8 +858,12 @@ SELECT master_move_shard_placement(13000045, 'localhost', :worker_1_port, 'local
 
 (1 row)
 
-CALL citus_cleanup_orphaned_resources();
-NOTICE:  cleaned up 1 orphaned resources
+SELECT public.wait_for_resource_cleanup();
+ wait_for_resource_cleanup
+---------------------------------------------------------------------
+
+(1 row)
+
 -- we should be able to move shard placements of partitioend tables
 CREATE SCHEMA move_partitions;
 CREATE TABLE move_partitions.events (
@@ -835,7 +898,12 @@ ORDER BY shardid LIMIT 1;
 ERROR:  cannot use logical replication to transfer shards of the relation events_1 since it doesn't have a REPLICA IDENTITY or PRIMARY KEY
 DETAIL:  UPDATE and DELETE commands on the shard will error out during logical replication unless there is a REPLICA IDENTITY or PRIMARY KEY.
 HINT:  If you wish to continue without a replica identity set the shard_transfer_mode to 'force_logical' or 'block_writes'.
-CALL citus_cleanup_orphaned_resources();
+SELECT public.wait_for_resource_cleanup();
+ wait_for_resource_cleanup
+---------------------------------------------------------------------
+
+(1 row)
+
 -- force logical replication
 SELECT master_move_shard_placement(shardid, 'localhost', :worker_2_port, 'localhost', :worker_1_port, 'force_logical')
 FROM pg_dist_shard JOIN pg_dist_shard_placement USING (shardid)
@@ -846,8 +914,12 @@ ORDER BY shardid LIMIT 1;
 
 (1 row)
 
-CALL citus_cleanup_orphaned_resources();
-NOTICE:  cleaned up 2 orphaned resources
+SELECT public.wait_for_resource_cleanup();
+ wait_for_resource_cleanup
+---------------------------------------------------------------------
+
+(1 row)
+
 SELECT count(*) FROM move_partitions.events;
  count
 ---------------------------------------------------------------------
@@ -866,8 +938,12 @@ ORDER BY shardid LIMIT 1;
 
 (1 row)
 
-CALL citus_cleanup_orphaned_resources();
-NOTICE:  cleaned up 2 orphaned resources
+SELECT public.wait_for_resource_cleanup();
+ wait_for_resource_cleanup
+---------------------------------------------------------------------
+
+(1 row)
+
 SELECT count(*) FROM move_partitions.events;
  count
 ---------------------------------------------------------------------
@@ -884,8 +960,12 @@ ORDER BY shardid LIMIT 1;
 
 (1 row)
 
-CALL citus_cleanup_orphaned_resources();
-NOTICE:  cleaned up 2 orphaned resources
+SELECT public.wait_for_resource_cleanup();
+ wait_for_resource_cleanup
+---------------------------------------------------------------------
+
+(1 row)
+
 SELECT count(*) FROM move_partitions.events;
  count
 ---------------------------------------------------------------------
