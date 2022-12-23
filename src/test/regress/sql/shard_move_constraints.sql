@@ -258,6 +258,8 @@ SET search_path TO public;
 SELECT citus_move_shard_placement(8970000, 'localhost', :worker_2_port, 'localhost', :worker_1_port, 'force_logical');
 SELECT citus_move_shard_placement(8970000, 'localhost', :worker_1_port, 'localhost', :worker_2_port, 'block_writes');
 
+SELECT public.wait_for_resource_cleanup();
+
 \c - postgres - :master_port
 
 -- stop and re-sync the metadata to make sure all works fine
@@ -267,3 +269,4 @@ SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 SELECT start_metadata_sync_to_node('localhost', :worker_2_port);
 
 DROP SCHEMA "shard Move Fkeys Indexes" CASCADE;
+DROP ROLE mx_rebalancer_role_ent;

@@ -426,6 +426,12 @@ SELECT citus_move_shard_placement(8970000, 'localhost', :worker_1_port, 'localho
 
 (1 row)
 
+SELECT public.wait_for_resource_cleanup();
+ wait_for_resource_cleanup
+---------------------------------------------------------------------
+
+(1 row)
+
 \c - postgres - :master_port
 -- stop and re-sync the metadata to make sure all works fine
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
@@ -463,3 +469,4 @@ drop cascades to table "shard Move Fkeys Indexes".colocated_partitioned_table
 drop cascades to table "shard Move Fkeys Indexes".reference_table
 drop cascades to table "shard Move Fkeys Indexes".index_backed_rep_identity
 drop cascades to table "shard Move Fkeys Indexes".multiple_unique_keys
+DROP ROLE mx_rebalancer_role_ent;
