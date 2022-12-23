@@ -1560,8 +1560,8 @@ WHERE table_schema = 'public'
 ) a ORDER BY table_name;
  table_schema | table_name | row_estimate | total_bytes
 ---------------------------------------------------------------------
- public       | tab_123040 |        30000 |     1089536
- public       | tab_123042 |        10000 |      368640
+ public       | tab_123040 |        30000 |     xxxxxxx
+ public       | tab_123042 |        10000 |      xxxxxxx
 (2 rows)
 
 \c - - - :worker_2_port
@@ -1582,8 +1582,8 @@ WHERE table_schema = 'public'
 ) a ORDER BY table_name;
  table_schema | table_name | row_estimate | total_bytes
 ---------------------------------------------------------------------
- public       | tab_123041 |        10000 |      368640
- public       | tab_123043 |        10000 |      368640
+ public       | tab_123041 |        10000 |      xxxxxxx
+ public       | tab_123043 |        10000 |      xxxxxxx
 (2 rows)
 
 \c - - - :master_port
@@ -1686,8 +1686,8 @@ WHERE table_schema = 'public'
 ) a ORDER BY table_name;
  table_schema | table_name  | row_estimate | total_bytes
 ---------------------------------------------------------------------
- public       | tab2_123050 |            0 |           0
- public       | tab_123040  |        30000 |     1089536
+ public       | tab2_123050 |            0 |           xxxxxxx
+ public       | tab_123040  |        30000 |     xxxxxxx
 (2 rows)
 
 \c - - - :worker_2_port
@@ -1708,18 +1708,18 @@ WHERE table_schema = 'public'
 ) a ORDER BY table_name;
  table_schema | table_name  | row_estimate | total_bytes
 ---------------------------------------------------------------------
- public       | tab2_123051 |        10000 |      368640
- public       | tab2_123052 |        10000 |      368640
- public       | tab2_123053 |        60000 |     2179072
- public       | tab_123041  |        10000 |      368640
- public       | tab_123042  |        10000 |      368640
- public       | tab_123043  |        10000 |      368640
+ public       | tab2_123051 |        10000 |      xxxxxxx
+ public       | tab2_123052 |        10000 |      xxxxxxx
+ public       | tab2_123053 |        60000 |     xxxxxxx
+ public       | tab_123041  |        10000 |      xxxxxxx
+ public       | tab_123042  |        10000 |      xxxxxxx
+ public       | tab_123043  |        10000 |      xxxxxxx
 (6 rows)
 
 \c - - - :master_port
 SELECT * FROM get_rebalance_table_shards_plan('tab', rebalance_strategy := 'by_disk_size');
 NOTICE:  Ignoring move of shard xxxxx from localhost:xxxxx to localhost:xxxxx, because the move only brings a small improvement relative to the shard its size
-DETAIL:  The balance improvement of 0.151125 is lower than the improvement_threshold of 0.5
+DETAIL:  The balance improvement of 0.1xxxxx is lower than the improvement_threshold of 0.5
 NOTICE:  Ignored 1 moves, all of which are shown in notices above
 HINT:  If you do want these moves to happen, try changing improvement_threshold to a lower value than what it is now (0.5).
  table_name | shardid | shard_size | sourcename | sourceport | targetname | targetport
@@ -1742,7 +1742,7 @@ SELECT * FROM get_rebalance_table_shards_plan('tab', rebalance_strategy := 'by_d
 
 SELECT * FROM rebalance_table_shards('tab', rebalance_strategy := 'by_disk_size', shard_transfer_mode:='block_writes');
 NOTICE:  Ignoring move of shard xxxxx from localhost:xxxxx to localhost:xxxxx, because the move only brings a small improvement relative to the shard its size
-DETAIL:  The balance improvement of 0.151125 is lower than the improvement_threshold of 0.5
+DETAIL:  The balance improvement of 0.1xxxxx is lower than the improvement_threshold of 0.5
 NOTICE:  Ignored 1 moves, all of which are shown in notices above
 HINT:  If you do want these moves to happen, try changing improvement_threshold to a lower value than what it is now (0.5).
 NOTICE:  Moving shard xxxxx from localhost:xxxxx to localhost:xxxxx ...
@@ -1783,12 +1783,12 @@ WHERE table_schema = 'public'
 ) a ORDER BY table_name;
  table_schema | table_name  | row_estimate | total_bytes
 ---------------------------------------------------------------------
- public       | tab2_123050 |            0 |           0
- public       | tab2_123051 |        10000 |      368640
- public       | tab2_123052 |        10000 |      368640
- public       | tab_123040  |        30000 |     1089536
- public       | tab_123041  |        10000 |      368640
- public       | tab_123042  |        10000 |      368640
+ public       | tab2_123050 |            0 |           xxxxxxx
+ public       | tab2_123051 |        10000 |      xxxxxxx
+ public       | tab2_123052 |        10000 |      xxxxxxx
+ public       | tab_123040  |        30000 |     xxxxxxx
+ public       | tab_123041  |        10000 |      xxxxxxx
+ public       | tab_123042  |        10000 |      xxxxxxx
 (6 rows)
 
 \c - - - :worker_2_port
@@ -1809,8 +1809,8 @@ WHERE table_schema = 'public'
 ) a ORDER BY table_name;
  table_schema | table_name  | row_estimate | total_bytes
 ---------------------------------------------------------------------
- public       | tab2_123053 |        60000 |     2179072
- public       | tab_123043  |        10000 |      368640
+ public       | tab2_123053 |        60000 |     xxxxxxx
+ public       | tab_123043  |        10000 |      xxxxxxx
 (2 rows)
 
 \c - - - :master_port
