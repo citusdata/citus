@@ -98,6 +98,12 @@ SELECT pg_sleep(1);
 
 (1 row)
 
+SELECT public.wait_for_resource_cleanup();
+ wait_for_resource_cleanup
+---------------------------------------------------------------------
+
+(1 row)
+
 -- we expect the shard to be on only the first worker
 SELECT run_command_on_workers($cmd$
     SELECT count(*) FROM pg_class WHERE relname = 't1_20000000';

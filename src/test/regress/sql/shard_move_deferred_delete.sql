@@ -56,6 +56,7 @@ SELECT pg_reload_conf();
 
 -- Sleep 1 second to give Valgrind enough time to clear transactions
 SELECT pg_sleep(1);
+SELECT public.wait_for_resource_cleanup();
 
 -- we expect the shard to be on only the first worker
 SELECT run_command_on_workers($cmd$
