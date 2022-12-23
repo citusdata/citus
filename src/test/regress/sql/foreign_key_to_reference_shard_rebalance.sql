@@ -45,14 +45,14 @@ SELECT master_move_shard_placement(15000009, 'localhost', :worker_1_port, 'local
 
 SELECT count(*) FROM referencing_table2;
 
-CALL citus_cleanup_orphaned_resources();
+SELECT public.wait_for_resource_cleanup();
 SELECT * FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_to_reference_shard_rebalance.%' AND refd_relid LIKE 'fkey_to_reference_shard_rebalance.%' ORDER BY 1,2,3;
 
 SELECT master_move_shard_placement(15000009, 'localhost', :worker_2_port, 'localhost', :worker_1_port, 'block_writes');
 
 SELECT count(*) FROM referencing_table2;
 
-CALL citus_cleanup_orphaned_resources();
+SELECT public.wait_for_resource_cleanup();
 SELECT * FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_to_reference_shard_rebalance.%' AND refd_relid LIKE 'fkey_to_reference_shard_rebalance.%' ORDER BY 1,2,3;
 
 CREATE TABLE reference_table_commands (id int UNIQUE);
