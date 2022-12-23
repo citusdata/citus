@@ -156,4 +156,4 @@ help cleaning up in the future.
 ## Randomly failing tests
 
 In CI sometimes a test fails randomly, we call these tests "flaky". To fix these
-flaky tests see [`src/test/regress/flaky_tests.md`](https://github.com/citusdata/citus/blob/master/src/test/regress/mitmscripts/README.md)
+flaky tests see [`src/test/regress/flaky_tests.md`](https://github.com/citusdata/citus/blob/main/src/test/regress/flaky_tests.md)
