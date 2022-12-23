@@ -326,13 +326,13 @@ CREATE OR REPLACE FUNCTION shard_placement_rebalance_array(
 RETURNS json[]
 AS 'citus'
 LANGUAGE C STRICT VOLATILE;
-CREATE FUNCTION shard_placement_replication_array(worker_node_list json[],
-                                                  shard_placement_list json[],
-                                                  shard_replication_factor int)
+CREATE OR REPLACE FUNCTION shard_placement_replication_array(worker_node_list json[],
+                                                             shard_placement_list json[],
+                                                             shard_replication_factor int)
 RETURNS json[]
 AS 'citus'
 LANGUAGE C STRICT VOLATILE;
-CREATE FUNCTION worker_node_responsive(worker_node_name text, worker_node_port int)
+CREATE OR REPLACE FUNCTION worker_node_responsive(worker_node_name text, worker_node_port int)
 RETURNS boolean
 AS 'citus'
 LANGUAGE C STRICT VOLATILE;
@@ -631,7 +631,7 @@ GROUP BY logicalrelid::regclass, nodename, nodeport
 ORDER BY logicalrelid::regclass, nodename, nodeport;
 -- Create six shards with replication factor 1 and move them to the same
 -- node to create an unbalanced cluster.
-CREATE PROCEDURE create_unbalanced_shards(rel text)
+CREATE OR REPLACE PROCEDURE create_unbalanced_shards(rel text)
 LANGUAGE SQL
 AS $$
     SET citus.shard_replication_factor TO 1;
@@ -1150,17 +1150,17 @@ SELECT * FROM public.table_placements_per_node;
 (4 rows)
 
 CALL citus_cleanup_orphaned_resources();
-select * from pg_dist_placement ORDER BY placementid;
- placementid | shardid | shardstate | shardlength | groupid
+select shardid, shardstate, shardlength from pg_dist_placement ORDER BY placementid;
+ shardid | shardstate | shardlength
 ---------------------------------------------------------------------
-         138 |  123023 |          1 |           0 |      14
-         141 |  123024 |          1 |           0 |      14
-         144 |  123027 |          1 |           0 |      14
-         145 |  123028 |          1 |           0 |      14
-         146 |  123021 |          1 |           0 |      16
-         147 |  123025 |          1 |           0 |      16
-         148 |  123022 |          1 |           0 |      16
-         149 |  123026 |          1 |           0 |      16
+  123023 |          1 |           0
+  123024 |          1 |           0
+  123027 |          1 |           0
+  123028 |          1 |           0
+  123021 |          1 |           0
+  123025 |          1 |           0
+  123022 |          1 |           0
+  123026 |          1 |           0
 (8 rows)
 
 -- Move all shards to worker1 again
@@ -1322,12 +1322,12 @@ SELECT * from master_set_node_property('localhost', :worker_2_port, 'shouldhaves
 
 (1 row)
 
-SELECT * FROM get_rebalance_table_shards_plan(threshold := 0, drain_only := true);
+SELECT * FROM get_rebalance_table_shards_plan(threshold := 0, drain_only := true) ORDER BY shardid;
           table_name          | shardid | shard_size | sourcename | sourceport | targetname | targetport
 ---------------------------------------------------------------------
  colocated_rebalance_test     |  123021 |          0 | localhost  |      57638 | localhost  |      57637
- colocated_rebalance_test2    |  123025 |          0 | localhost  |      57638 | localhost  |      57637
  colocated_rebalance_test     |  123022 |          0 | localhost  |      57638 | localhost  |      57637
+ colocated_rebalance_test2    |  123025 |          0 | localhost  |      57638 | localhost  |      57637
  colocated_rebalance_test2    |  123026 |          0 | localhost  |      57638 | localhost  |      57637
  non_colocated_rebalance_test |  123029 |          0 | localhost  |      57638 | localhost  |      57637
  non_colocated_rebalance_test |  123030 |          0 | localhost  |      57638 | localhost  |      57637
@@ -1381,12 +1381,12 @@ SELECT * from master_set_node_property('localhost', :worker_2_port, 'shouldhaves
 
 (1 row)
 
-SELECT * FROM get_rebalance_table_shards_plan(threshold := 0);
+SELECT * FROM get_rebalance_table_shards_plan(threshold := 0) ORDER BY shardid;
           table_name          | shardid | shard_size | sourcename | sourceport | targetname | targetport
 ---------------------------------------------------------------------
  colocated_rebalance_test     |  123021 |          0 | localhost  |      57638 | localhost  |      57637
- colocated_rebalance_test2    |  123025 |          0 | localhost  |      57638 | localhost  |      57637
  colocated_rebalance_test     |  123022 |          0 | localhost  |      57638 | localhost  |      57637
+ colocated_rebalance_test2    |  123025 |          0 | localhost  |      57638 | localhost  |      57637
  colocated_rebalance_test2    |  123026 |          0 | localhost  |      57638 | localhost  |      57637
  non_colocated_rebalance_test |  123029 |          0 | localhost  |      57638 | localhost  |      57637
  non_colocated_rebalance_test |  123030 |          0 | localhost  |      57638 | localhost  |      57637
@@ -1487,6 +1487,7 @@ SELECT * FROM public.table_placements_per_node;
 (6 rows)
 
 -- Drop some tables for clear consistent error
+DROP TABLE test_schema_support.non_colocated_rebalance_test;
 DROP TABLE test_schema_support.colocated_rebalance_test2;
 -- testing behaviour when a transfer fails when using master_drain_node
 SELECT * from master_drain_node('localhost', :worker_2_port);
@@ -1503,13 +1504,11 @@ select shouldhaveshards from pg_dist_node where nodeport = :worker_2_port;
 
 -- Make sure no actual nodes are moved
 SELECT * FROM public.table_placements_per_node;
- nodeport |         logicalrelid         | count
+ nodeport |       logicalrelid       | count
 ---------------------------------------------------------------------
-    57637 | colocated_rebalance_test     |     2
-    57638 | colocated_rebalance_test     |     2
-    57637 | non_colocated_rebalance_test |     2
-    57638 | non_colocated_rebalance_test |     2
-(4 rows)
+    57637 | colocated_rebalance_test |     2
+    57638 | colocated_rebalance_test |     2
+(2 rows)
 
 -- Make it a data node again
 SELECT * from master_set_node_property('localhost', :worker_2_port, 'shouldhaveshards', true);
@@ -1884,7 +1883,7 @@ SELECT * FROM public.table_placements_per_node;
     57638 | tab          |     4
 (1 row)
 
-CREATE FUNCTION only_worker_1(shardid bigint, nodeidarg int)
+CREATE OR REPLACE FUNCTION only_worker_1(shardid bigint, nodeidarg int)
     RETURNS boolean AS $$
     SELECT
         (CASE WHEN nodeport = 57637 THEN TRUE ELSE FALSE END)
@@ -2517,10 +2516,10 @@ SELECT rebalance_table_shards('test_rebalance_with_disabled_worker');
 
 (1 row)
 
-SELECT citus_activate_node('localhost', :worker_2_port);
- citus_activate_node
+SELECT 1 FROM citus_activate_node('localhost', :worker_2_port);
+ ?column?
 ---------------------------------------------------------------------
-                  35
+        1
 (1 row)
 
 DROP TABLE test_rebalance_with_disabled_worker;
@@ -2598,3 +2597,15 @@ DEBUG:  Size Query: SELECT (SELECT SUM(worker_partitioned_relation_total_size(re
 RESET client_min_messages;
 DROP TABLE "events.Energy Added", colocated_t1, colocated_t2, colocated_t3;
 RESET citus.shard_count;
+DROP VIEW table_placements_per_node;
+DELETE FROM pg_catalog.pg_dist_rebalance_strategy WHERE name='capacity_high_worker_2';
+DELETE FROM pg_catalog.pg_dist_rebalance_strategy WHERE name='only_worker_1';
+\c - - - :worker_1_port
+SET citus.enable_ddl_propagation TO OFF;
+REVOKE ALL ON SCHEMA public FROM testrole;
+DROP USER testrole;
+\c - - - :worker_2_port
+SET citus.enable_ddl_propagation TO OFF;
+REVOKE ALL ON SCHEMA public FROM testrole;
+DROP USER testrole;
+DROP TABLE test_rebalance_with_disabled_worker_433500, test_rebalance_with_disabled_worker_433501, test_rebalance_with_disabled_worker_433502, test_rebalance_with_disabled_worker_433503;

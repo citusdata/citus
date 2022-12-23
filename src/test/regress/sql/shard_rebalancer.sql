@@ -133,14 +133,14 @@ AS 'citus'
 LANGUAGE C STRICT VOLATILE;
 
 
-CREATE FUNCTION shard_placement_replication_array(worker_node_list json[],
-                                                  shard_placement_list json[],
-                                                  shard_replication_factor int)
+CREATE OR REPLACE FUNCTION shard_placement_replication_array(worker_node_list json[],
+                                                             shard_placement_list json[],
+                                                             shard_replication_factor int)
 RETURNS json[]
 AS 'citus'
 LANGUAGE C STRICT VOLATILE;
 
-CREATE FUNCTION worker_node_responsive(worker_node_name text, worker_node_port int)
+CREATE OR REPLACE FUNCTION worker_node_responsive(worker_node_name text, worker_node_port int)
 RETURNS boolean
 AS 'citus'
 LANGUAGE C STRICT VOLATILE;
@@ -369,7 +369,7 @@ ORDER BY logicalrelid::regclass, nodename, nodeport;
 -- Create six shards with replication factor 1 and move them to the same
 -- node to create an unbalanced cluster.
 
-CREATE PROCEDURE create_unbalanced_shards(rel text)
+CREATE OR REPLACE PROCEDURE create_unbalanced_shards(rel text)
 LANGUAGE SQL
 AS $$
     SET citus.shard_replication_factor TO 1;
@@ -677,7 +677,7 @@ SELECT * FROM get_rebalance_progress();
 SELECT * FROM public.table_placements_per_node;
 
 CALL citus_cleanup_orphaned_resources();
-select * from pg_dist_placement ORDER BY placementid;
+select shardid, shardstate, shardlength from pg_dist_placement ORDER BY placementid;
 
 
 -- Move all shards to worker1 again
@@ -727,7 +727,7 @@ SELECT * FROM public.table_placements_per_node;
 -- testing behaviour when setting shouldhaveshards to false and rebalancing all
 -- colocation groups with drain_only=true
 SELECT * from master_set_node_property('localhost', :worker_2_port, 'shouldhaveshards', false);
-SELECT * FROM get_rebalance_table_shards_plan(threshold := 0, drain_only := true);
+SELECT * FROM get_rebalance_table_shards_plan(threshold := 0, drain_only := true) ORDER BY shardid;
 SELECT * FROM rebalance_table_shards(threshold := 0, shard_transfer_mode := 'block_writes', drain_only := true);
 CALL citus_cleanup_orphaned_resources();
 SELECT * FROM public.table_placements_per_node;
@@ -741,7 +741,7 @@ SELECT * FROM public.table_placements_per_node;
 -- testing behaviour when setting shouldhaveshards to false and rebalancing all
 -- colocation groups with drain_only=false
 SELECT * from master_set_node_property('localhost', :worker_2_port, 'shouldhaveshards', false);
-SELECT * FROM get_rebalance_table_shards_plan(threshold := 0);
+SELECT * FROM get_rebalance_table_shards_plan(threshold := 0) ORDER BY shardid;
 SELECT * FROM rebalance_table_shards(threshold := 0, shard_transfer_mode := 'block_writes');
 CALL citus_cleanup_orphaned_resources();
 SELECT * FROM public.table_placements_per_node;
@@ -769,6 +769,7 @@ SELECT * FROM public.table_placements_per_node;
 
 
 -- Drop some tables for clear consistent error
+DROP TABLE test_schema_support.non_colocated_rebalance_test;
 DROP TABLE test_schema_support.colocated_rebalance_test2;
 
 -- testing behaviour when a transfer fails when using master_drain_node
@@ -975,7 +976,7 @@ SELECT * FROM rebalance_table_shards('tab', shard_transfer_mode:='block_writes')
 CALL citus_cleanup_orphaned_resources();
 SELECT * FROM public.table_placements_per_node;
 
-CREATE FUNCTION only_worker_1(shardid bigint, nodeidarg int)
+CREATE OR REPLACE FUNCTION only_worker_1(shardid bigint, nodeidarg int)
     RETURNS boolean AS $$
     SELECT
         (CASE WHEN nodeport = 57637 THEN TRUE ELSE FALSE END)
@@ -1388,7 +1389,7 @@ SELECT public.wait_until_metadata_sync(30000);
 
 SELECT rebalance_table_shards('test_rebalance_with_disabled_worker');
 
-SELECT citus_activate_node('localhost', :worker_2_port);
+SELECT 1 FROM citus_activate_node('localhost', :worker_2_port);
 
 DROP TABLE test_rebalance_with_disabled_worker;
 
@@ -1427,3 +1428,17 @@ RESET client_min_messages;
 
 DROP TABLE "events.Energy Added", colocated_t1, colocated_t2, colocated_t3;
 RESET citus.shard_count;
+DROP VIEW table_placements_per_node;
+DELETE FROM pg_catalog.pg_dist_rebalance_strategy WHERE name='capacity_high_worker_2';
+DELETE FROM pg_catalog.pg_dist_rebalance_strategy WHERE name='only_worker_1';
+
+\c - - - :worker_1_port
+SET citus.enable_ddl_propagation TO OFF;
+REVOKE ALL ON SCHEMA public FROM testrole;
+DROP USER testrole;
+
+\c - - - :worker_2_port
+SET citus.enable_ddl_propagation TO OFF;
+REVOKE ALL ON SCHEMA public FROM testrole;
+DROP USER testrole;
+DROP TABLE test_rebalance_with_disabled_worker_433500, test_rebalance_with_disabled_worker_433501, test_rebalance_with_disabled_worker_433502, test_rebalance_with_disabled_worker_433503;
