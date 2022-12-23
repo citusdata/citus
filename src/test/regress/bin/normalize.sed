@@ -56,7 +56,9 @@ s/\(col_1\)=\([0-9]+\)/(col_1)=(X)/g
 # In multi_name_lengths, normalize shard names
 s/name_len_12345678901234567890123456789012345678_fcd8ab6f_[0-9]+/name_len_12345678901234567890123456789012345678_fcd8ab6f_xxxxx/g
 
-# ignore WAL warnings
+# ignore page split with pg13, and WAL warnings
+# they can randomly appear when DEBUG logs are on
+/DEBUG:  concurrent ROOT page split/d
 /DEBUG: .+creating and filling new WAL file/d
 
 # normalize debug connection failure
