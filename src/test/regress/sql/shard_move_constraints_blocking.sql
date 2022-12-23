@@ -199,3 +199,4 @@ ALTER TABLE sensors_2020_01_01 DROP CONSTRAINT fkey_from_child_to_child;
 -- cleanup
 \c - postgres - :master_port
 DROP SCHEMA "blocking shard Move Fkeys Indexes" CASCADE;
+DROP ROLE mx_rebalancer_blocking_role_ent;

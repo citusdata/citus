@@ -364,3 +364,4 @@ drop cascades to table "blocking shard Move Fkeys Indexes".colocated_dist_table
 drop cascades to table "blocking shard Move Fkeys Indexes".colocated_partitioned_table
 drop cascades to table "blocking shard Move Fkeys Indexes".reference_table
 drop cascades to table "blocking shard Move Fkeys Indexes".index_backed_rep_identity
+DROP ROLE mx_rebalancer_blocking_role_ent;
