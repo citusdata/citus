@@ -156,7 +156,7 @@ END;
 $$ LANGUAGE plpgsql;
 -- Introduce a function that waits until all cleanup records are deleted, for testing purposes
 CREATE OR REPLACE FUNCTION wait_for_resource_cleanup() RETURNS void
-SET client_min_messages TO WARNING
+SET client_min_messages TO ERROR
 AS $$
 DECLARE
 record_count integer;
