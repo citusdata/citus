@@ -11,7 +11,7 @@ CREATE TABLE simple_table (
 SELECT master_get_table_ddl_events('simple_table');
                                master_get_table_ddl_events
 ---------------------------------------------------------------------
- CREATE TABLE public.simple_table (first_name text, last_name text, id bigint)
+ CREATE TABLE public.simple_table (first_name text, last_name text, id bigint) USING heap
  ALTER TABLE public.simple_table OWNER TO postgres
 (2 rows)
 
@@ -23,7 +23,7 @@ CREATE TABLE not_null_table (
 SELECT master_get_table_ddl_events('not_null_table');
                           master_get_table_ddl_events
 ---------------------------------------------------------------------
- CREATE TABLE public.not_null_table (city text, id bigint NOT NULL)
+ CREATE TABLE public.not_null_table (city text, id bigint NOT NULL) USING heap
  ALTER TABLE public.not_null_table OWNER TO postgres
 (2 rows)
 
@@ -36,7 +36,7 @@ CREATE TABLE column_constraint_table (
 SELECT master_get_table_ddl_events('column_constraint_table');
                                                               master_get_table_ddl_events
 ---------------------------------------------------------------------
- CREATE TABLE public.column_constraint_table (first_name text, last_name text, age integer, CONSTRAINT non_negative_age CHECK ((age >= 0)))
+ CREATE TABLE public.column_constraint_table (first_name text, last_name text, age integer, CONSTRAINT non_negative_age CHECK ((age >= 0))) USING heap
  ALTER TABLE public.column_constraint_table OWNER TO postgres
 (2 rows)
 
@@ -50,7 +50,7 @@ CREATE TABLE table_constraint_table (
 SELECT master_get_table_ddl_events('table_constraint_table');
                                                                              master_get_table_ddl_events
 ---------------------------------------------------------------------
- CREATE TABLE public.table_constraint_table (bid_item_id bigint, min_bid numeric NOT NULL, max_bid numeric NOT NULL, CONSTRAINT bids_ordered CHECK ((min_bid > max_bid)))
+ CREATE TABLE public.table_constraint_table (bid_item_id bigint, min_bid numeric NOT NULL, max_bid numeric NOT NULL, CONSTRAINT bids_ordered CHECK ((min_bid > max_bid))) USING heap
  ALTER TABLE public.table_constraint_table OWNER TO postgres
 (2 rows)
 
@@ -69,7 +69,7 @@ SELECT create_distributed_table('check_constraint_table_1', 'id');
 SELECT master_get_table_ddl_events('check_constraint_table_1');
                                                       master_get_table_ddl_events
 ---------------------------------------------------------------------
- CREATE TABLE public.check_constraint_table_1 (id integer, b boolean, CONSTRAINT check_constraint_table_1_b_check CHECK (b))
+ CREATE TABLE public.check_constraint_table_1 (id integer, b boolean, CONSTRAINT check_constraint_table_1_b_check CHECK (b)) USING heap
  ALTER TABLE public.check_constraint_table_1 OWNER TO postgres
 (2 rows)
 
@@ -86,7 +86,7 @@ SELECT create_distributed_table('check_constraint_table_2', 'id');
 SELECT master_get_table_ddl_events('check_constraint_table_2');
                                                  master_get_table_ddl_events
 ---------------------------------------------------------------------
- CREATE TABLE public.check_constraint_table_2 (id integer, CONSTRAINT check_constraint_table_2_check CHECK (true))
+ CREATE TABLE public.check_constraint_table_2 (id integer, CONSTRAINT check_constraint_table_2_check CHECK (true)) USING heap
  ALTER TABLE public.check_constraint_table_2 OWNER TO postgres
 (2 rows)
 
@@ -98,7 +98,7 @@ CREATE TABLE default_value_table (
 SELECT master_get_table_ddl_events('default_value_table');
                                 master_get_table_ddl_events
 ---------------------------------------------------------------------
- CREATE TABLE public.default_value_table (name text, price numeric DEFAULT 0.00)
+ CREATE TABLE public.default_value_table (name text, price numeric DEFAULT 0.00) USING heap
  ALTER TABLE public.default_value_table OWNER TO postgres
 (2 rows)
 
@@ -111,7 +111,7 @@ CREATE TABLE pkey_table (
 SELECT master_get_table_ddl_events('pkey_table');
                                    master_get_table_ddl_events
 ---------------------------------------------------------------------
- CREATE TABLE public.pkey_table (first_name text, last_name text, id bigint NOT NULL)
+ CREATE TABLE public.pkey_table (first_name text, last_name text, id bigint NOT NULL) USING heap
  ALTER TABLE public.pkey_table OWNER TO postgres
  ALTER TABLE public.pkey_table ADD CONSTRAINT pkey_table_pkey PRIMARY KEY (id)
 (3 rows)
@@ -124,7 +124,7 @@ CREATE TABLE unique_table (
 SELECT master_get_table_ddl_events('unique_table');
                                   master_get_table_ddl_events
 ---------------------------------------------------------------------
- CREATE TABLE public.unique_table (user_id bigint NOT NULL, username text NOT NULL)
+ CREATE TABLE public.unique_table (user_id bigint NOT NULL, username text NOT NULL) USING heap
  ALTER TABLE public.unique_table OWNER TO postgres
  ALTER TABLE public.unique_table ADD CONSTRAINT unique_table_username_key UNIQUE (username)
 (3 rows)
@@ -139,7 +139,7 @@ CLUSTER clustered_table USING clustered_time_idx;
 SELECT master_get_table_ddl_events('clustered_table');
                                               master_get_table_ddl_events
 ---------------------------------------------------------------------
- CREATE TABLE public.clustered_table (data json NOT NULL, received_at timestamp without time zone NOT NULL)
+ CREATE TABLE public.clustered_table (data json NOT NULL, received_at timestamp without time zone NOT NULL) USING heap
  ALTER TABLE public.clustered_table OWNER TO postgres
  CREATE INDEX clustered_time_idx ON public.clustered_table USING btree (received_at)
  ALTER TABLE public.clustered_table CLUSTER ON clustered_time_idx
@@ -161,7 +161,7 @@ ALTER TABLE fiddly_table
 SELECT master_get_table_ddl_events('fiddly_table');
                                                                                                            master_get_table_ddl_events
 ---------------------------------------------------------------------
- CREATE TABLE public.fiddly_table (hostname character(255) NOT NULL, os character(255) NOT NULL, ip_addr inet NOT NULL, traceroute text NOT NULL)
+ CREATE TABLE public.fiddly_table (hostname character(255) NOT NULL, os character(255) NOT NULL, ip_addr inet NOT NULL, traceroute text NOT NULL) USING heap
  ALTER TABLE ONLY public.fiddly_table ALTER COLUMN hostname SET STORAGE PLAIN, ALTER COLUMN os SET STORAGE MAIN, ALTER COLUMN ip_addr SET STORAGE EXTENDED, ALTER COLUMN ip_addr SET STATISTICS 500, ALTER COLUMN traceroute SET STORAGE EXTERNAL
  ALTER TABLE public.fiddly_table OWNER TO postgres
 (3 rows)

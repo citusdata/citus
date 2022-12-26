@@ -133,7 +133,7 @@ SELECT * FROM multi_extension.print_extension_changes();
                  | function alter_role_if_exists(text,text) boolean
                  | function any_value(anyelement) anyelement
                  | function any_value_agg(anyelement,anyelement) anyelement
-                 | function array_cat_agg(anyarray) anycompatiblearray
+                 | function array_cat_agg(anycompatiblearray) anycompatiblearray
                  | function assign_distributed_transaction_id(integer,bigint,timestamp with time zone) void
                  | function authinfo_valid(text) boolean
                  | function broadcast_intermediate_result(text,text) bigint

@@ -172,7 +172,7 @@ Partitions: date_partition_2007_100 FOR VALUES FROM ('01-01-2007') TO ('01-02-20
 SELECT master_get_table_ddl_events('date_partition_2007_100');
                            master_get_table_ddl_events
 ---------------------------------------------------------------------
- CREATE TABLE public.date_partition_2007_100 (id integer, "time" date)
+ CREATE TABLE public.date_partition_2007_100 (id integer, "time" date) USING heap
  ALTER TABLE public.date_partition_2007_100 OWNER TO postgres
 (2 rows)
 

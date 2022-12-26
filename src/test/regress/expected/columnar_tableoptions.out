@@ -290,7 +290,7 @@ SELECT * FROM columnar.options WHERE relation = 'table_options'::regclass;
 (1 row)
 
 -- error: set columnar options on heap tables
-CREATE TABLE heap_options(i int) ;
+CREATE TABLE heap_options(i int) USING heap;
 ALTER TABLE heap_options SET (columnar.stripe_row_limit = 12000);
 ERROR:  columnar storage parameters specified on non-columnar table
 -- ordinarily, postgres allows bogus options for a RESET clause,
