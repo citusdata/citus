@@ -102,8 +102,9 @@ AppendAlterTableStmt(StringInfo buf, AlterTableStmt *stmt)
 	appendStringInfoString(buf, ";");
 }
 
+
 /*
- * AppendAlterTableCmdAddConstraint builds the add constraint command for index constraints 
+ * AppendAlterTableCmdAddConstraint builds the add constraint command for index constraints
  * in the ADD CONSTRAINT <conname> {PRIMARY KEY, UNIQUE, EXCLUSION} form and appends it to the buf.
  */
 static void
