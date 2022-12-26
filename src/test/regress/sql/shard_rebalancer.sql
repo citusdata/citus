@@ -842,7 +842,7 @@ WHERE table_schema = 'public'
 \c - - - :master_port
 
 SELECT * FROM get_rebalance_table_shards_plan('tab');
-SELECT * FROM get_rebalance_table_shards_plan('tab', rebalance_strategy := 'by_disk_size');
+SELECT * FROM get_rebalance_table_shards_plan('tab', rebalance_strategy := 'by_disk_size') ORDER BY shardid;
 SELECT * FROM get_rebalance_table_shards_plan('tab', rebalance_strategy := 'by_disk_size', threshold := 0);
 
 SELECT * FROM rebalance_table_shards('tab', shard_transfer_mode:='block_writes');
@@ -903,7 +903,7 @@ WHERE table_schema = 'public'
 ) a ORDER BY table_name;
 
 \c - - - :master_port
-SELECT * FROM get_rebalance_table_shards_plan('tab', rebalance_strategy := 'by_disk_size');
+SELECT * FROM get_rebalance_table_shards_plan('tab', rebalance_strategy := 'by_disk_size') ORDER BY shardid;
 -- supports improvement_threshold
 SELECT * FROM get_rebalance_table_shards_plan('tab', rebalance_strategy := 'by_disk_size', improvement_threshold := 0);
 SELECT * FROM rebalance_table_shards('tab', rebalance_strategy := 'by_disk_size', shard_transfer_mode:='block_writes');
