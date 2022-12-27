@@ -57,7 +57,7 @@ SELECT con.conname
 (1 row)
 
 -- Check that UNIQUE constraint name created on the coordinator is sent to workers and
--- the constraints created for the shard tables conform to the <conname>_shardid scheme.	
+-- the constraints created for the shard tables conform to the <conname>_shardid scheme.
 \c - - :public_worker_1_host :worker_1_port
 SELECT con.conname
     FROM pg_catalog.pg_constraint con
@@ -70,7 +70,7 @@ SELECT con.conname
 (1 row)
 
 \c - - :master_host :master_port
-ALTER TABLE AT_AddConstNoName.products DROP CONSTRAINT products_product_no_key;		
+ALTER TABLE AT_AddConstNoName.products DROP CONSTRAINT products_product_no_key;
 -- Check "ADD UNIQUE" with column name list
 ALTER TABLE AT_AddConstNoName.products ADD UNIQUE(product_no,name);
 SELECT con.conname
@@ -96,7 +96,7 @@ SELECT con.conname
 
 \c - - :master_host :master_port
 ALTER TABLE AT_AddConstNoName.products DROP CONSTRAINT products_product_no_name_key;
--- Check "ADD UNIQUE ... INCLUDE".
+-- Check "ADD UNIQUE ... INCLUDE"
 ALTER TABLE AT_AddConstNoName.products ADD UNIQUE(product_no) INCLUDE(price);
 SELECT con.conname
     FROM pg_catalog.pg_constraint con
@@ -131,6 +131,24 @@ Indexes:
 
 \c - - :master_host :master_port
 ALTER TABLE AT_AddConstNoName.products DROP CONSTRAINT products_product_no_key;
+-- Check "ADD UNIQUE NULLS NOT DISTICT"
+SHOW server_version \gset
+SELECT substring(:'server_version', '\d+')::int >= 15 AS server_version_ge_15
+\gset
+\if :server_version_ge_15
+ALTER TABLE AT_AddConstNoName.products ADD UNIQUE NULLS NOT DISTINCT (product_no, price);
+\d+ AT_AddConstNoName.products;
+                              Table "at_addconstnoname.products"
+   Column   |  Type   | Collation | Nullable | Default | Storage  | Stats target | Description
+---------------------------------------------------------------------
+ product_no | integer |           | not null |         | plain    |              |
+ name       | text    |           |          |         | extended |              |
+ price      | numeric |           |          |         | main     |              |
+Indexes:
+    "products_product_no_price_key" UNIQUE CONSTRAINT, btree (product_no, price) NULLS NOT DISTINCT
+
+ALTER TABLE AT_AddConstNoName.products DROP CONSTRAINT products_product_no_price_key;
+\endif
 -- Check "ADD EXCLUDE"
 CREATE EXTENSION btree_gist;
 ALTER TABLE AT_AddConstNoName.products ADD EXCLUDE USING gist (name WITH <> , product_no WITH =);
@@ -285,8 +303,8 @@ SELECT con.conname
 ---------------------------------------------------------------------
 (0 rows)
 
--- Check "ADD UNIQUE" with max table name (63 chars)	
-\c - - :master_host :master_port	
+-- Check "ADD UNIQUE" with max table name (63 chars)
+\c - - :master_host :master_port
 ALTER TABLE AT_AddConstNoName.verylonglonglonglonglonglonglonglonglonglonglonglonglonglonglon ADD UNIQUE(product_no);
 -- Constraint should be created on the coordinator with a shortened name
 SELECT con.conname
@@ -329,7 +347,7 @@ SELECT con.conname
 (0 rows)
 
 -- Check "ADD EXCLUDE" with max table name (63 chars)
-\c - - :master_host :master_port	
+\c - - :master_host :master_port
 ALTER TABLE AT_AddConstNoName.verylonglonglonglonglonglonglonglonglonglonglonglonglonglonglon ADD EXCLUDE (product_no WITH =);
 -- Constraint should be created on the coordinator with a shortened name
 SELECT con.conname
@@ -431,7 +449,7 @@ SELECT con.conname
 (0 rows)
 
 -- Check "ADD UNIQUE"
-\c - - :master_host :master_port	
+\c - - :master_host :master_port
 SET client_min_messages TO DEBUG1;
 ALTER TABLE AT_AddConstNoName.dist_partitioned_table ADD UNIQUE(partition_col);
 DEBUG:  the constraint name on the shards of the partition is too long, switching to sequential and local execution mode to prevent self deadlocks: longlonglonglonglonglonglonglonglonglonglongl_partition_col_key
@@ -780,7 +798,7 @@ SELECT con.conname
  longlonglonglonglonglonglonglonglonglonglongl_partition_col_key
 (5 rows)
 
-\c - - :master_host :master_port	
+\c - - :master_host :master_port
 ALTER TABLE AT_AddConstNoName.citus_local_partitioned_table DROP CONSTRAINT citus_local_partitioned_table_partition_col_key;
 -- Check "ADD EXCLUDE" errors out for partitioned table since the postgres does not allow it
 ALTER TABLE AT_AddConstNoName.citus_local_partitioned_table ADD EXCLUDE(partition_col WITH =);
@@ -827,7 +845,7 @@ SELECT con.conname
  2nd table_pkey_5410045
 (5 rows)
 
-\c - - :master_host :master_port	
+\c - - :master_host :master_port
 ALTER TABLE  AT_AddConstNoName."2nd table" DROP CONSTRAINT "2nd table_pkey";
 -- Check "ADD UNIQUE"
 \c - - :master_host :master_port

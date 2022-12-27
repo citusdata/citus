@@ -120,7 +120,7 @@ AppendAlterTableCmdAddConstraint(StringInfo buf, Constraint *constraint)
 	appendStringInfoString(buf, " ADD CONSTRAINT ");
 	appendStringInfo(buf, "%s ", quote_identifier(constraint->conname));
 
-	/* TODO : support additional options for postgres version > PG15
+	/* postgres version >= PG15
 	 * UNIQUE [ NULLS [ NOT ] DISTINCT ] ( column_name [, ... ] ) [ INCLUDE ( column_name [, ...]) ]
 	 * postgres version < PG15
 	 * UNIQUE ( column_name [, ... ] ) [ INCLUDE ( column_name [, ...]) ]
@@ -128,11 +128,23 @@ AppendAlterTableCmdAddConstraint(StringInfo buf, Constraint *constraint)
 	 */
 	if (constraint->contype == CONSTR_PRIMARY || constraint->contype == CONSTR_UNIQUE)
 	{
-		constraint->contype == CONSTR_PRIMARY ? appendStringInfoString(buf,
-																	   " PRIMARY KEY (")
-		:
-		appendStringInfoString(buf, " UNIQUE (");
+		if (constraint->contype == CONSTR_PRIMARY)
+		{
+			appendStringInfoString(buf,
+								   " PRIMARY KEY (");
+		}
+		else
+		{
+			appendStringInfoString(buf, " UNIQUE");
 
+#if (PG_VERSION_NUM >= PG_VERSION_15)
+			if (constraint->nulls_not_distinct == true)
+			{
+				appendStringInfoString(buf, " NULLS NOT DISTINCT");
+			}
+#endif
+			appendStringInfoString(buf, " (");
+		}
 
 		ListCell *lc;
 		bool firstkey = true;
