@@ -1507,7 +1507,7 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 	 *    information.
 	 */
 	HTAB *mapOfPlacementToDummyShardList = CreateSimpleHash(NodeAndOwner,
-																GroupedShardSplitInfos);
+															GroupedShardSplitInfos);
 	CreateDummyShardsForShardGroup(
 		mapOfPlacementToDummyShardList,
 		sourceColocatedShardIntervalList,
@@ -1666,7 +1666,7 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 
 	/* 12) Insert new shard and placement metdata */
 	InsertSplitChildrenShardMetadata(shardGroupSplitIntervalListList,
-										 workersForPlacementList);
+									 workersForPlacementList);
 
 	/* 13) create partitioning hierarchy, if any, this needs to be done
 	 * after the metadata is correct, because it fails for some
