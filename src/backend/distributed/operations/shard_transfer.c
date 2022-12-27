@@ -84,12 +84,14 @@ static void ReplicateColocatedShardPlacement(int64 shardId, char *sourceNodeName
 											 char shardReplicationMode);
 static void CopyShardTables(List *shardIntervalList, char *sourceNodeName,
 							int32 sourceNodePort, char *targetNodeName,
-							int32 targetNodePort, bool useLogicalReplication);
+							int32 targetNodePort, bool useLogicalReplication,
+							char *operationName);
 static void CopyShardTablesViaLogicalReplication(List *shardIntervalList,
 												 char *sourceNodeName,
 												 int32 sourceNodePort,
 												 char *targetNodeName,
-												 int32 targetNodePort);
+												 int32 targetNodePort,
+												 char *operationName);
 
 static void CopyShardTablesViaBlockWrites(List *shardIntervalList, char *sourceNodeName,
 										  int32 sourceNodePort,
@@ -381,7 +383,7 @@ citus_move_shard_placement(PG_FUNCTION_ARGS)
 	 * shards.
 	 */
 	CopyShardTables(colocatedShardList, sourceNodeName, sourceNodePort, targetNodeName,
-					targetNodePort, useLogicalReplication);
+					targetNodePort, useLogicalReplication, "citus_move_shard_placement");
 
 	ShardInterval *colocatedShard = NULL;
 	foreach_ptr(colocatedShard, colocatedShardList)
@@ -1059,7 +1061,8 @@ ReplicateColocatedShardPlacement(int64 shardId, char *sourceNodeName,
 	}
 
 	CopyShardTables(colocatedShardList, sourceNodeName, sourceNodePort,
-					targetNodeName, targetNodePort, useLogicalReplication);
+					targetNodeName, targetNodePort, useLogicalReplication,
+					"citus_copy_shard_placement");
 
 	/*
 	 * Finally insert the placements to pg_dist_placement and sync it to the
@@ -1150,7 +1153,8 @@ EnsureTableListSuitableForReplication(List *tableIdList)
  */
 static void
 CopyShardTables(List *shardIntervalList, char *sourceNodeName, int32 sourceNodePort,
-				char *targetNodeName, int32 targetNodePort, bool useLogicalReplication)
+				char *targetNodeName, int32 targetNodePort, bool useLogicalReplication,
+				char *operationName)
 {
 	if (list_length(shardIntervalList) < 1)
 	{
@@ -1159,17 +1163,25 @@ CopyShardTables(List *shardIntervalList, char *sourceNodeName, int32 sourceNodeP
 
 	DropOrphanedResourcesInSeparateTransaction();
 
+	/* Start operation to prepare for generating cleanup records */
+	RegisterOperationNeedingCleanup();
+
 	if (useLogicalReplication)
 	{
 		CopyShardTablesViaLogicalReplication(shardIntervalList, sourceNodeName,
 											 sourceNodePort, targetNodeName,
-											 targetNodePort);
+											 targetNodePort, operationName);
 	}
 	else
 	{
 		CopyShardTablesViaBlockWrites(shardIntervalList, sourceNodeName, sourceNodePort,
 									  targetNodeName, targetNodePort);
 	}
+
+	/*
+	 * Drop temporary objects that were marked as CLEANUP_ALWAYS.
+	 */
+	FinalizeOperationNeedingCleanupOnSuccess(operationName);
 }
 
 
@@ -1180,7 +1192,7 @@ CopyShardTables(List *shardIntervalList, char *sourceNodeName, int32 sourceNodeP
 static void
 CopyShardTablesViaLogicalReplication(List *shardIntervalList, char *sourceNodeName,
 									 int32 sourceNodePort, char *targetNodeName,
-									 int32 targetNodePort)
+									 int32 targetNodePort, char *operationName)
 {
 	MemoryContext localContext = AllocSetContextCreate(CurrentMemoryContext,
 													   "CopyShardTablesViaLogicalReplication",
@@ -1202,6 +1214,12 @@ CopyShardTablesViaLogicalReplication(List *shardIntervalList, char *sourceNodeNa
 
 		char *tableOwner = TableOwner(shardInterval->relationId);
 
+		/* drop the shard we created on the target, in case of failure */
+		InsertCleanupRecordInSubtransaction(CLEANUP_OBJECT_SHARD_PLACEMENT,
+											ConstructQualifiedShardName(shardInterval),
+											GroupForNode(targetNodeName, targetNodePort),
+											CLEANUP_ON_FAILURE);
+
 		SendCommandListToWorkerOutsideTransaction(targetNodeName, targetNodePort,
 												  tableOwner,
 												  tableRecreationCommandList);
@@ -1211,17 +1229,10 @@ CopyShardTablesViaLogicalReplication(List *shardIntervalList, char *sourceNodeNa
 
 	MemoryContextSwitchTo(oldContext);
 
-	/* Start operation to prepare for generating cleanup records */
-	RegisterOperationNeedingCleanup();
-
 	/* data copy is done seperately when logical replication is used */
 	LogicallyReplicateShards(shardIntervalList, sourceNodeName,
-							 sourceNodePort, targetNodeName, targetNodePort);
-
-	/*
-	 * Drop temporary objects that were marked as CLEANUP_ALWAYS.
-	 */
-	FinalizeOperationNeedingCleanupOnSuccess("citus_[move/copy]_shard_placement");
+							 sourceNodePort, targetNodeName, targetNodePort,
+							 operationName);
 }
 
 
@@ -1276,6 +1287,13 @@ CopyShardTablesViaBlockWrites(List *shardIntervalList, char *sourceNodeName,
 		List *ddlCommandList = RecreateShardDDLCommandList(shardInterval, sourceNodeName,
 														   sourceNodePort);
 		char *tableOwner = TableOwner(shardInterval->relationId);
+
+		/* drop the shard we created on the target, in case of failure */
+		InsertCleanupRecordInSubtransaction(CLEANUP_OBJECT_SHARD_PLACEMENT,
+											ConstructQualifiedShardName(shardInterval),
+											GroupForNode(targetNodeName, targetNodePort),
+											CLEANUP_ON_FAILURE);
+
 		SendCommandListToWorkerOutsideTransaction(targetNodeName, targetNodePort,
 												  tableOwner, ddlCommandList);
 	}

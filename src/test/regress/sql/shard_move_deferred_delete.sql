@@ -78,6 +78,27 @@ $cmd$);
 -- needed.
 SELECT master_move_shard_placement(20000000, 'localhost', :worker_2_port, 'localhost', :worker_1_port);
 
+-- when a move tx is aborted, there remains a shard on the target node
+BEGIN;
+SELECT master_move_shard_placement(20000000, 'localhost', :worker_1_port, 'localhost', :worker_2_port);
+ROLLBACK;
+
+-- see the cleanup record for the shard on the target node
+-- https://github.com/citusdata/citus/issues/6580
+select object_name, object_type from pg_dist_cleanup;
+
+-- see the shard on both workers
+SELECT run_command_on_workers($cmd$
+    SELECT count(*) FROM pg_class WHERE relname = 't1_20000000';
+$cmd$);
+
+-- clean it up
+SELECT public.wait_for_resource_cleanup();
+
+-- verify the shard is cleaned up
+SELECT run_command_on_workers($cmd$
+    SELECT count(*) FROM pg_class WHERE relname = 't1_20000000';
+$cmd$);
 
 -- override the function for testing purpose
 -- since it is extension owned function, propagate it to workers manually

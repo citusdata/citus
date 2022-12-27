@@ -152,7 +152,7 @@ static void WaitForGroupedLogicalRepTargetsToCatchUp(XLogRecPtr sourcePosition,
  */
 void
 LogicallyReplicateShards(List *shardList, char *sourceNodeName, int sourceNodePort,
-						 char *targetNodeName, int targetNodePort)
+						 char *targetNodeName, int targetNodePort, char *operationName)
 {
 	AcquireLogicalReplicationLock();
 	char *superUser = CitusExtensionOwnerName();
@@ -277,7 +277,7 @@ LogicallyReplicateShards(List *shardList, char *sourceNodeName, int sourceNodePo
 		 * Drop temporary objects that were marked as CLEANUP_ON_FAILURE
 		 * or CLEANUP_ALWAYS.
 		 */
-		FinalizeOperationNeedingCleanupOnFailure("citus_[move/copy]_shard_placement");
+		FinalizeOperationNeedingCleanupOnFailure(operationName);
 
 		PG_RE_THROW();
 	}
