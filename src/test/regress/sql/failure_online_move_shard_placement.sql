@@ -138,7 +138,7 @@ SELECT citus.mitmproxy('conn.allow()');
 -- we expect the drop query will succeed on only one node
 SELECT COUNT(*)
     FROM run_command_on_workers(
-        $$DROP SUBSCRIPTION citus_shard_move_subscription_10_15$$)
+        $$DROP SUBSCRIPTION citus_shard_move_subscription_10_19$$)
     WHERE success AND result = 'DROP SUBSCRIPTION';
 
 -- reset back
@@ -160,6 +160,10 @@ SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost'
 -- cancellation on creating the primary key
 SELECT citus.mitmproxy('conn.onQuery(query="t_pkey").cancel(' || :pid || ')');
 SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
+
+-- cleanup leftovers
+SELECT citus.mitmproxy('conn.allow()');
+SELECT public.wait_for_resource_cleanup();
 
 -- failure on create index
 SELECT citus.mitmproxy('conn.matches(b"CREATE INDEX").killall()');

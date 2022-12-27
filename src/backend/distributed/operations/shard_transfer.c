@@ -1159,6 +1159,9 @@ CopyShardTables(List *shardIntervalList, char *sourceNodeName, int32 sourceNodeP
 
 	DropOrphanedResourcesInSeparateTransaction();
 
+	/* Start operation to prepare for generating cleanup records */
+	RegisterOperationNeedingCleanup();
+
 	if (useLogicalReplication)
 	{
 		CopyShardTablesViaLogicalReplication(shardIntervalList, sourceNodeName,
@@ -1170,6 +1173,11 @@ CopyShardTables(List *shardIntervalList, char *sourceNodeName, int32 sourceNodeP
 		CopyShardTablesViaBlockWrites(shardIntervalList, sourceNodeName, sourceNodePort,
 									  targetNodeName, targetNodePort);
 	}
+
+	/*
+	 * Drop temporary objects that were marked as CLEANUP_ALWAYS.
+	 */
+	FinalizeOperationNeedingCleanupOnSuccess("citus_[move/copy]_shard_placement");
 }
 
 
@@ -1206,22 +1214,20 @@ CopyShardTablesViaLogicalReplication(List *shardIntervalList, char *sourceNodeNa
 												  tableOwner,
 												  tableRecreationCommandList);
 
+		/* drop the shard we created on the target, in case of failure */
+		InsertCleanupRecordInSubtransaction(CLEANUP_OBJECT_SHARD_PLACEMENT,
+											ConstructQualifiedShardName(shardInterval),
+											GroupForNode(targetNodeName, targetNodePort),
+											CLEANUP_ON_FAILURE);
+
 		MemoryContextReset(localContext);
 	}
 
 	MemoryContextSwitchTo(oldContext);
 
-	/* Start operation to prepare for generating cleanup records */
-	RegisterOperationNeedingCleanup();
-
 	/* data copy is done seperately when logical replication is used */
 	LogicallyReplicateShards(shardIntervalList, sourceNodeName,
 							 sourceNodePort, targetNodeName, targetNodePort);
-
-	/*
-	 * Drop temporary objects that were marked as CLEANUP_ALWAYS.
-	 */
-	FinalizeOperationNeedingCleanupOnSuccess("citus_[move/copy]_shard_placement");
 }
 
 
@@ -1278,6 +1284,12 @@ CopyShardTablesViaBlockWrites(List *shardIntervalList, char *sourceNodeName,
 		char *tableOwner = TableOwner(shardInterval->relationId);
 		SendCommandListToWorkerOutsideTransaction(targetNodeName, targetNodePort,
 												  tableOwner, ddlCommandList);
+
+		/* drop the shard we created on the target, in case of failure */
+		InsertCleanupRecordInSubtransaction(CLEANUP_OBJECT_SHARD_PLACEMENT,
+											ConstructQualifiedShardName(shardInterval),
+											GroupForNode(targetNodeName, targetNodePort),
+											CLEANUP_ON_FAILURE);
 	}
 
 	UpdatePlacementUpdateStatusForShardIntervalList(
