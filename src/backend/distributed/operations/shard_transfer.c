@@ -90,8 +90,7 @@ static void CopyShardTablesViaLogicalReplication(List *shardIntervalList,
 												 char *sourceNodeName,
 												 int32 sourceNodePort,
 												 char *targetNodeName,
-												 int32 targetNodePort,
-												 char *operationName);
+												 int32 targetNodePort);
 
 static void CopyShardTablesViaBlockWrites(List *shardIntervalList, char *sourceNodeName,
 										  int32 sourceNodePort,
@@ -1170,7 +1169,7 @@ CopyShardTables(List *shardIntervalList, char *sourceNodeName, int32 sourceNodeP
 	{
 		CopyShardTablesViaLogicalReplication(shardIntervalList, sourceNodeName,
 											 sourceNodePort, targetNodeName,
-											 targetNodePort, operationName);
+											 targetNodePort);
 	}
 	else
 	{
@@ -1192,7 +1191,7 @@ CopyShardTables(List *shardIntervalList, char *sourceNodeName, int32 sourceNodeP
 static void
 CopyShardTablesViaLogicalReplication(List *shardIntervalList, char *sourceNodeName,
 									 int32 sourceNodePort, char *targetNodeName,
-									 int32 targetNodePort, char *operationName)
+									 int32 targetNodePort)
 {
 	MemoryContext localContext = AllocSetContextCreate(CurrentMemoryContext,
 													   "CopyShardTablesViaLogicalReplication",
@@ -1231,8 +1230,7 @@ CopyShardTablesViaLogicalReplication(List *shardIntervalList, char *sourceNodeNa
 
 	/* data copy is done seperately when logical replication is used */
 	LogicallyReplicateShards(shardIntervalList, sourceNodeName,
-							 sourceNodePort, targetNodeName, targetNodePort,
-							 operationName);
+							 sourceNodePort, targetNodeName, targetNodePort);
 }
 
 

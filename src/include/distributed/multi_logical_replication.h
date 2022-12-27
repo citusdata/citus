@@ -130,7 +130,7 @@ typedef enum LogicalRepType
 
 extern void LogicallyReplicateShards(List *shardList, char *sourceNodeName,
 									 int sourceNodePort, char *targetNodeName,
-									 int targetNodePort, char *operationName);
+									 int targetNodePort);
 
 extern void ConflictWithIsolationTestingBeforeCopy(void);
 extern void ConflictWithIsolationTestingAfterCopy(void);

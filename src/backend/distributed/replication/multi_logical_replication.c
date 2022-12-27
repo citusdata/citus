@@ -152,7 +152,7 @@ static void WaitForGroupedLogicalRepTargetsToCatchUp(XLogRecPtr sourcePosition,
  */
 void
 LogicallyReplicateShards(List *shardList, char *sourceNodeName, int sourceNodePort,
-						 char *targetNodeName, int targetNodePort, char *operationName)
+						 char *targetNodeName, int targetNodePort)
 {
 	AcquireLogicalReplicationLock();
 	char *superUser = CitusExtensionOwnerName();
