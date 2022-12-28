@@ -101,10 +101,7 @@ SELECT substring(:'server_version', '\d+')::int >= 15 AS server_version_ge_15
 \if :server_version_ge_15
 
 ALTER TABLE AT_AddConstNoName.products ADD UNIQUE NULLS NOT DISTINCT (product_no, price);
-\d+ AT_AddConstNoName.products;
-
 ALTER TABLE AT_AddConstNoName.products DROP CONSTRAINT products_product_no_price_key;
-
 \endif
 
 -- Check "ADD EXCLUDE"
@@ -415,8 +412,6 @@ SELECT con.conname
       INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
       INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
           WHERE rel.relname LIKE 'citus_local_table%' ORDER BY con.conname ASC;
-
-SELECT create_distributed_table('AT_AddConstNoName.citus_local_table','id');
 
 SELECT con.conname
     FROM pg_catalog.pg_constraint con
