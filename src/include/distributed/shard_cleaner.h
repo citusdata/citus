@@ -104,13 +104,6 @@ extern void InsertCleanupRecordInSubtransaction(CleanupObject objectType,
 												CleanupPolicy policy);
 
 /*
- * FinalizeOperationNeedingCleanupOnFailure is be called by an operation to signal
- * completion on failure. This will trigger cleanup of appropriate resources
- * and cleanup records.
- */
-extern void FinalizeOperationNeedingCleanupOnFailure(const char *operationName);
-
-/*
  * FinalizeOperationNeedingCleanupOnSuccess is be called by an operation to signal
  * completion on success. This will trigger cleanup of appropriate resources
  * and cleanup records.
