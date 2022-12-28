@@ -90,8 +90,6 @@ elif "mx" in test_schedule:
         test_schedule = 'mx_minimal_schedule'
 elif "operations" in test_schedule:
     test_schedule = 'minimal_schedule'
-elif "split" in test_schedule:
-    test_schedule = 'minimal_schedule'
 elif test_schedule in config.ARBITRARY_SCHEDULE_NAMES:
     print(f"WARNING: Arbitrary config schedule ({test_schedule}) is not supported.")
     sys.exit(0)
