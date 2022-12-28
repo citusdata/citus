@@ -102,11 +102,8 @@ else:
 # copy base schedule to a temp file and append test_schedule_line
 # to be able to run tests in parallel (if test_schedule_line is a parallel group.)
 tmp_schedule_path = os.path.join(regress_dir, f"tmp_schedule_{ random.randint(1, 10000)}")
-<<<<<<< HEAD
 # some tests don't need a schedule to run
 # e.g tests that are in the first place in their own schedule
-=======
->>>>>>> fix flaky single_node_enterprise
 if test_file_name not in test_files_to_run_without_schedule:
     shutil.copy2(os.path.join(regress_dir, test_schedule), tmp_schedule_path)
 with open(tmp_schedule_path, "a") as myfile:

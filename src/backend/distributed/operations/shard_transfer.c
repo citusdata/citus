@@ -1249,8 +1249,6 @@ CopyShardTables(List *shardIntervalList, char *sourceNodeName, int32 sourceNodeP
 		return;
 	}
 
-	DropOrphanedResourcesInSeparateTransaction();
-
 	/* Start operation to prepare for generating cleanup records */
 	RegisterOperationNeedingCleanup();
 
