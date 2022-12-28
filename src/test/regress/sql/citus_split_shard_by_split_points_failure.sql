@@ -64,6 +64,8 @@ SELECT pg_catalog.citus_split_shard_by_split_points(
     'block_writes');
 -- BEGIN : Split Shard, which is expected to fail.
 
+SELECT public.wait_for_resource_cleanup();
+
 -- BEGIN : Ensure tables were cleaned from worker
 \c - - - :worker_1_port
 SET search_path TO "citus_split_failure_test_schema";
