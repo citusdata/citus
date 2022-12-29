@@ -1246,8 +1246,8 @@ SELECT * FROM pg_dist_placement ORDER BY shardid;
 SELECT * FROM pg_dist_cleanup;
  record_id | operation_id | object_type |            object_name            | node_group_id | policy_type
 ---------------------------------------------------------------------
-         1 |            0 |           0 | table_with_orphaned_shards_102009 |             0 |           0
-         2 |            0 |           0 | table_with_orphaned_shards_102011 |             0 |           0
+         1 |            0 |           1 | table_with_orphaned_shards_102009 |             0 |           0
+         2 |            0 |           1 | table_with_orphaned_shards_102011 |             0 |           0
 (2 rows)
 
 -- error out as cleanup records remain
