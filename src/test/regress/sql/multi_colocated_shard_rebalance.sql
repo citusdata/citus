@@ -46,6 +46,9 @@ SELECT citus_copy_shard_placement(13000000, 'localhost', :worker_1_port, 'localh
 -- copy colocated shards
 SELECT citus_copy_shard_placement(13000000, 'localhost', :worker_1_port, 'localhost', :worker_2_port, 'force_logical');
 
+-- error out if trying to move a shard that already has a placement on the target
+SELECT citus_move_shard_placement(13000000, 'localhost', :worker_1_port, 'localhost', :worker_2_port, 'force_logical');
+
 -- status after shard copy
 SELECT s.shardid, s.logicalrelid::regclass, sp.nodeport
 FROM
