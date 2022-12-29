@@ -35,6 +35,9 @@ BEGIN;
 CALL citus_cleanup_orphaned_resources();
 COMMIT;
 
+-- citus_cleanup_orphaned_shards is deprecated
+CALL citus_cleanup_orphaned_shards();
+
 -- execute delayed removal
 CALL citus_cleanup_orphaned_resources();
 
