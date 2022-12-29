@@ -262,6 +262,15 @@ SELECT public.wait_for_resource_cleanup();
 
 \c - postgres - :master_port
 
+-- create a fake cleanup record
+INSERT INTO pg_dist_cleanup
+    SELECT nextval('pg_dist_cleanup_recordid_seq'), 0, 1, shard_name(logicalrelid, shardid) AS object_name, -13 AS node_group_id, 0
+        FROM pg_dist_shard WHERE shardid = 8970000;
+-- make sure we error out if there's a cleanup record for the shard to be moved
+SELECT citus_move_shard_placement(8970000, 'localhost', :worker_2_port, 'localhost', :worker_1_port, 'force_logical');
+-- delete the fake record
+DELETE FROM pg_dist_cleanup WHERE node_group_id = -13;
+
 -- stop and re-sync the metadata to make sure all works fine
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
 SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);
