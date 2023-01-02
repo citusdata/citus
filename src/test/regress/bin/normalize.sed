@@ -37,6 +37,9 @@ s/ daily_uniques_[0-9]+ / daily_uniques_xxxxxxx /g
 # shard table names for isolation_create_citus_local_table
 s/"citus_local_table_([0-9]+)_[0-9]+"/"citus_local_table_\1_xxxxxxx"/g
 
+# shard table names for isolation_move_placement_vs_move_placement
+s/ public.test_move_table_[0-9]+/public.test_move_table_xxxxxxx/g
+
 # normalize relation oid suffix for the truncate triggers created by citus
 s/truncate_trigger_[0-9]+/truncate_trigger_xxxxxxx/g
 
