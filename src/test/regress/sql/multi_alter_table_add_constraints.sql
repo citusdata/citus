@@ -573,14 +573,16 @@ DROP SCHEMA sc1 CASCADE;
 DROP SCHEMA sc2 CASCADE;
 DROP SCHEMA sc3 CASCADE;
 
--- Test ALTER TABLE ... ADD CONSTRAINT ... does not cause a crash when auto_explain module is loaded
-CREATE TABLE target_table(col_1 int primary key, col_2 int);
-SELECT create_distributed_table('target_table','col_1');
-INSERT INTO target_table VALUES(1,2),(2,3),(3,4),(4,5),(5,6);
+CREATE SCHEMA sc4;
 
-CREATE TABLE test_ref_table (key int PRIMARY KEY);
-SELECT create_reference_table('test_ref_table');
-INSERT INTO test_ref_table VALUES (1),(2),(3),(4),(5),(6),(7),(8),(9),(10);
+-- Test ALTER TABLE ... ADD CONSTRAINT ... does not cause a crash when auto_explain module is loaded
+CREATE TABLE sc4.target_table(col_1 int primary key, col_2 int);
+SELECT create_distributed_table('sc4.target_table','col_1');
+INSERT INTO sc4.target_table VALUES(1,2),(2,3),(3,4),(4,5),(5,6);
+
+CREATE TABLE sc4.test_ref_table (key int PRIMARY KEY);
+SELECT create_reference_table('sc4.test_ref_table');
+INSERT INTO sc4.test_ref_table VALUES (1),(2),(3),(4),(5),(6),(7),(8),(9),(10);
 
 LOAD 'auto_explain';
 SET auto_explain.log_min_duration = 0;
@@ -593,7 +595,8 @@ BEGIN;
 SET LOCAL application_name to 'citus_internal gpid=10000000001';
 SET citus.enable_ddl_propagation TO OFF;
 -- alter table triggers SELECT, and auto_explain catches that
-ALTER TABLE target_table ADD CONSTRAINT fkey_167 FOREIGN KEY (col_1) REFERENCES test_ref_table(key) ON DELETE CASCADE;
+ALTER TABLE sc4.target_table ADD CONSTRAINT fkey_167 FOREIGN KEY (col_1) REFERENCES sc4.test_ref_table(key) ON DELETE CASCADE;
 END;
 SET client_min_messages to ERROR;
-ALTER TABLE target_table DROP CONSTRAINT fkey_167;
+
+DROP SCHEMA sc4 CASCADE;
