@@ -127,7 +127,7 @@ pg_sleep
 (1 row)
 
 step s1-move-placement-back: <... completed>
-ERROR:  shard move failed as the orphaned shardpublic.test_move_table_xxxxxxx leftover from the previous move could not be cleaned up
+ERROR:  shard move failed as the orphaned shardpublic.test_move_table_102011 leftover from the previous move could not be cleaned up
 step s2-print-placements:
  SELECT
   nodename, nodeport, count(*)

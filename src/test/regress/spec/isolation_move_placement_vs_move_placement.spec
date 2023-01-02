@@ -4,6 +4,7 @@ setup
 {
 	SET citus.shard_count TO 2;
 	SET citus.shard_replication_factor TO 1;
+	ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 102011;
 	CREATE TABLE test_move_table (x int, y int);
 	SELECT create_distributed_table('test_move_table', 'x');
 
@@ -14,6 +15,14 @@ teardown
 {
 	DROP TABLE test_move_table;
 	DROP TABLE selected_shard_for_test_table;
+
+	CREATE OR REPLACE PROCEDURE isolation_cleanup_orphaned_resources()
+		LANGUAGE C
+		AS 'citus', $$isolation_cleanup_orphaned_resources$$;
+	COMMENT ON PROCEDURE isolation_cleanup_orphaned_resources()
+		IS 'cleanup orphaned shards';
+		RESET citus.enable_metadata_sync;
+	CALL isolation_cleanup_orphaned_resources();
 }
 
 session "s1"
