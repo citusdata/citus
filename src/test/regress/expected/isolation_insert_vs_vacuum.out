@@ -1,6 +1,6 @@
 Parsed test spec with 2 sessions
 
-starting permutation: s1-begin s1-insert s2-vacuum-analyze s1-commit
+starting permutation: s1-begin s1-insert s2-vacuum-analyze s2-wait s1-commit
 create_distributed_table
 ---------------------------------------------------------------------
 
@@ -14,7 +14,9 @@ step s1-insert:
 
 step s2-vacuum-analyze:
     VACUUM ANALYZE test_insert_vacuum;
-
+ <waiting ...>
+step s2-vacuum-analyze: <... completed>
+step s2-wait:
 step s1-commit:
     COMMIT;
 
