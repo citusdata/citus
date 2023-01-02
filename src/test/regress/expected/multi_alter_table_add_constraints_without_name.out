@@ -108,26 +108,16 @@ SELECT con.conname
  products_product_no_key
 (1 row)
 
-\d+ AT_AddConstNoName.products;
-                              Table "at_addconstnoname.products"
-   Column   |  Type   | Collation | Nullable | Default | Storage  | Stats target | Description
----------------------------------------------------------------------
- product_no | integer |           | not null |         | plain    |              |
- name       | text    |           |          |         | extended |              |
- price      | numeric |           |          |         | main     |              |
-Indexes:
-    "products_product_no_key" UNIQUE CONSTRAINT, btree (product_no) INCLUDE (price)
-
 \c - - :public_worker_1_host :worker_1_port
-\d+ AT_AddConstNoName.products_5410000;
-                          Table "at_addconstnoname.products_5410000"
-   Column   |  Type   | Collation | Nullable | Default | Storage  | Stats target | Description
+SELECT con.conname
+    FROM pg_catalog.pg_constraint con
+      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
+              WHERE rel.relname = 'products_5410000';
+             conname
 ---------------------------------------------------------------------
- product_no | integer |           | not null |         | plain    |              |
- name       | text    |           |          |         | extended |              |
- price      | numeric |           |          |         | main     |              |
-Indexes:
-    "products_product_no_key_5410000" UNIQUE CONSTRAINT, btree (product_no) INCLUDE (price)
+ products_product_no_key_5410000
+(1 row)
 
 \c - - :master_host :master_port
 ALTER TABLE AT_AddConstNoName.products DROP CONSTRAINT products_product_no_key;
@@ -142,26 +132,26 @@ ALTER TABLE AT_AddConstNoName.products DROP CONSTRAINT products_product_no_price
 -- Check "ADD EXCLUDE"
 CREATE EXTENSION btree_gist;
 ALTER TABLE AT_AddConstNoName.products ADD EXCLUDE USING gist (name WITH <> , product_no WITH =);
-\d+ AT_AddConstNoName.products;
-                              Table "at_addconstnoname.products"
-   Column   |  Type   | Collation | Nullable | Default | Storage  | Stats target | Description
+SELECT con.conname
+    FROM pg_catalog.pg_constraint con
+      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
+              WHERE rel.relname = 'products';
+            conname
 ---------------------------------------------------------------------
- product_no | integer |           | not null |         | plain    |              |
- name       | text    |           |          |         | extended |              |
- price      | numeric |           |          |         | main     |              |
-Indexes:
-    "products_name_product_no_excl" EXCLUDE USING gist (name WITH <>, product_no WITH =)
+ products_name_product_no_excl
+(1 row)
 
 \c - - :public_worker_1_host :worker_1_port
-\d+ AT_AddConstNoName.products_5410000;
-                          Table "at_addconstnoname.products_5410000"
-   Column   |  Type   | Collation | Nullable | Default | Storage  | Stats target | Description
+SELECT con.conname
+    FROM pg_catalog.pg_constraint con
+      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
+              WHERE rel.relname = 'products_5410000';
+                conname
 ---------------------------------------------------------------------
- product_no | integer |           | not null |         | plain    |              |
- name       | text    |           |          |         | extended |              |
- price      | numeric |           |          |         | main     |              |
-Indexes:
-    "products_name_product_no_excl_5410000" EXCLUDE USING gist (name WITH <>, product_no WITH =)
+ products_name_product_no_excl_5410000
+(1 row)
 
 \c - - :master_host :master_port
 ALTER TABLE AT_AddConstNoName.products DROP CONSTRAINT products_name_product_no_excl;
@@ -228,15 +218,15 @@ ALTER TABLE AT_AddConstNoName.products_ref DROP CONSTRAINT products_ref_name_key
 ALTER TABLE AT_AddConstNoName.products_ref_3 ADD CONSTRAINT products_ref_product_no_excl  EXCLUDE (product_no WITH =);
 ALTER TABLE AT_AddConstNoName.products_ref_2 ADD CONSTRAINT products_ref_product_no_excl1 EXCLUDE (product_no WITH =);
 ALTER TABLE AT_AddConstNoName.products_ref ADD EXCLUDE(product_no WITH =);
-\d+  AT_AddConstNoName.products_ref;
-                            Table "at_addconstnoname.products_ref"
-   Column   |  Type   | Collation | Nullable | Default | Storage  | Stats target | Description
+SELECT con.conname
+    FROM pg_catalog.pg_constraint con
+      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
+              WHERE rel.relname = 'products_ref';
+            conname
 ---------------------------------------------------------------------
- product_no | integer |           |          |         | plain    |              |
- name       | text    |           | not null |         | extended |              |
- price      | numeric |           |          |         | main     |              |
-Indexes:
-    "products_ref_product_no_excl2" EXCLUDE USING btree (product_no WITH =)
+ products_ref_product_no_excl2
+(1 row)
 
 DROP TABLE AT_AddConstNoName.products_ref;
 -- Check "ADD PRIMARY KEY" with max table name (63 chars)
@@ -597,6 +587,8 @@ SELECT con.conname
  citus_local_table_pkey_5410026
 (5 rows)
 
+\c - - :master_host :master_port
+ALTER TABLE AT_AddConstNoName.citus_local_table DROP CONSTRAINT citus_local_table_pkey;
 -- Check "ADD UNIQUE"
 \c - - :master_host :master_port
 ALTER TABLE AT_AddConstNoName.citus_local_table ADD UNIQUE(id);
@@ -609,19 +601,7 @@ SELECT con.conname
          conname
 ---------------------------------------------------------------------
  citus_local_table_id_key
- citus_local_table_pkey
-(2 rows)
-
-SELECT con.conname
-    FROM pg_catalog.pg_constraint con
-      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
-      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-          WHERE rel.relname LIKE 'citus_local_table%' ORDER BY con.conname ASC;
-         conname
----------------------------------------------------------------------
- citus_local_table_id_key
- citus_local_table_pkey
-(2 rows)
+(1 row)
 
 \c - - :public_worker_1_host :worker_1_port
 SELECT con.conname
@@ -636,13 +616,10 @@ SELECT con.conname
  citus_local_table_id_key_5410024
  citus_local_table_id_key_5410025
  citus_local_table_id_key_5410026
- citus_local_table_pkey
- citus_local_table_pkey_5410023
- citus_local_table_pkey_5410024
- citus_local_table_pkey_5410025
- citus_local_table_pkey_5410026
-(10 rows)
+(5 rows)
 
+\c - - :master_host :master_port
+ALTER TABLE AT_AddConstNoName.citus_local_table DROP CONSTRAINT citus_local_table_id_key;
 -- Check "ADD EXCLUDE"
 \c - - :master_host :master_port
 ALTER TABLE AT_AddConstNoName.citus_local_table ADD EXCLUDE(id WITH =);
@@ -655,9 +632,7 @@ SELECT con.conname
           conname
 ---------------------------------------------------------------------
  citus_local_table_id_excl
- citus_local_table_id_key
- citus_local_table_pkey
-(3 rows)
+(1 row)
 
 SELECT con.conname
     FROM pg_catalog.pg_constraint con
@@ -667,9 +642,7 @@ SELECT con.conname
           conname
 ---------------------------------------------------------------------
  citus_local_table_id_excl
- citus_local_table_id_key
- citus_local_table_pkey
-(3 rows)
+(1 row)
 
 \c - - :public_worker_1_host :worker_1_port
 SELECT con.conname
@@ -684,17 +657,7 @@ SELECT con.conname
  citus_local_table_id_excl_5410024
  citus_local_table_id_excl_5410025
  citus_local_table_id_excl_5410026
- citus_local_table_id_key
- citus_local_table_id_key_5410023
- citus_local_table_id_key_5410024
- citus_local_table_id_key_5410025
- citus_local_table_id_key_5410026
- citus_local_table_pkey
- citus_local_table_pkey_5410023
- citus_local_table_pkey_5410024
- citus_local_table_pkey_5410025
- citus_local_table_pkey_5410026
-(15 rows)
+(5 rows)
 
 \c - - :master_host :master_port
 DROP TABLE AT_AddConstNoName.citus_local_table;

@@ -11,6 +11,7 @@
  */
 #include "postgres.h"
 
+#include "distributed/commands.h"
 #include "distributed/deparser.h"
 #include "distributed/version_compat.h"
 #include "nodes/nodes.h"
@@ -255,9 +256,7 @@ AppendAlterTableCmd(StringInfo buf, AlterTableCmd *alterTableCmd)
 			 * ALTER TABLE ... ADD CONSTRAINT <conname> {PRIMARY KEY, UNIQUE, EXCLUSION} ... format to be able
 			 * add a constraint name.
 			 */
-			if (constraint->contype == CONSTR_PRIMARY ||
-				constraint->contype == CONSTR_UNIQUE ||
-				constraint->contype == CONSTR_EXCLUSION)
+			if (ConstrTypeSupportsDefaultNaming(constraint->contype))
 			{
 				AppendAlterTableCmdAddConstraint(buf, constraint);
 				break;

@@ -85,10 +85,12 @@ SELECT con.conname
       INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
               WHERE rel.relname = 'products';
 
-\d+ AT_AddConstNoName.products;
-
 \c - - :public_worker_1_host :worker_1_port
-\d+ AT_AddConstNoName.products_5410000;
+SELECT con.conname
+    FROM pg_catalog.pg_constraint con
+      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
+              WHERE rel.relname = 'products_5410000';
 
 \c - - :master_host :master_port
 ALTER TABLE AT_AddConstNoName.products DROP CONSTRAINT products_product_no_key;
@@ -107,10 +109,19 @@ ALTER TABLE AT_AddConstNoName.products DROP CONSTRAINT products_product_no_price
 -- Check "ADD EXCLUDE"
 CREATE EXTENSION btree_gist;
 ALTER TABLE AT_AddConstNoName.products ADD EXCLUDE USING gist (name WITH <> , product_no WITH =);
-\d+ AT_AddConstNoName.products;
+
+SELECT con.conname
+    FROM pg_catalog.pg_constraint con
+      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
+              WHERE rel.relname = 'products';
 
 \c - - :public_worker_1_host :worker_1_port
-\d+ AT_AddConstNoName.products_5410000;
+SELECT con.conname
+    FROM pg_catalog.pg_constraint con
+      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
+              WHERE rel.relname = 'products_5410000';
 
 \c - - :master_host :master_port
 ALTER TABLE AT_AddConstNoName.products DROP CONSTRAINT products_name_product_no_excl;
@@ -170,7 +181,11 @@ ALTER TABLE AT_AddConstNoName.products_ref_3 ADD CONSTRAINT products_ref_product
 ALTER TABLE AT_AddConstNoName.products_ref_2 ADD CONSTRAINT products_ref_product_no_excl1 EXCLUDE (product_no WITH =);
 ALTER TABLE AT_AddConstNoName.products_ref ADD EXCLUDE(product_no WITH =);
 
-\d+  AT_AddConstNoName.products_ref;
+SELECT con.conname
+    FROM pg_catalog.pg_constraint con
+      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
+              WHERE rel.relname = 'products_ref';
 
 DROP TABLE AT_AddConstNoName.products_ref;
 
@@ -402,17 +417,14 @@ SELECT con.conname
       INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
           WHERE rel.relname LIKE 'citus_local_table%' ORDER BY con.conname ASC;
 
+\c - - :master_host :master_port
+ALTER TABLE AT_AddConstNoName.citus_local_table DROP CONSTRAINT citus_local_table_pkey;
+
 -- Check "ADD UNIQUE"
 \c - - :master_host :master_port
 ALTER TABLE AT_AddConstNoName.citus_local_table ADD UNIQUE(id);
 
 -- Check the UNIQUE constraint is created for the local table and its shard
-SELECT con.conname
-    FROM pg_catalog.pg_constraint con
-      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
-      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-          WHERE rel.relname LIKE 'citus_local_table%' ORDER BY con.conname ASC;
-
 SELECT con.conname
     FROM pg_catalog.pg_constraint con
       INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
@@ -425,6 +437,9 @@ SELECT con.conname
       INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
       INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
           WHERE rel.relname LIKE 'citus_local_table%' ORDER BY con.conname ASC;
+
+\c - - :master_host :master_port
+ALTER TABLE AT_AddConstNoName.citus_local_table DROP CONSTRAINT citus_local_table_id_key;
 
 -- Check "ADD EXCLUDE"
 \c - - :master_host :master_port

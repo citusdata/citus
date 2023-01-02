@@ -702,7 +702,7 @@ PostprocessAlterTableSchemaStmt(Node *node, const char *queryString)
 
 
 static char *
-GenerateIndexConstraintName(const char *tabname, Oid namespaceId, Constraint *constraint)
+GenerateConstraintName(const char *tabname, Oid namespaceId, Constraint *constraint)
 {
 	char *conname = NULL;
 
@@ -760,6 +760,9 @@ GenerateIndexConstraintName(const char *tabname, Oid namespaceId, Constraint *co
 
 		default:
 		{
+			ereport(ERROR, (errmsg(
+								"unsupported constraint type for generating a constraint name: %d",
+								constraint->contype)));
 			break;
 		}
 	}
@@ -811,8 +814,8 @@ SwitchToSequentialAndLocalExecutionIfConstraintNameTooLong(Oid relationId,
 	Oid namespaceOid = RelationGetNamespace(rel);
 	RelationClose(rel);
 
-	char *longestConname = GenerateIndexConstraintName(longestPartitionShardName,
-													   namespaceOid, constraint);
+	char *longestConname = GenerateConstraintName(longestPartitionShardName,
+												  namespaceOid, constraint);
 
 	if (longestConname && strnlen(longestConname, NAMEDATALEN) >= NAMEDATALEN - 1)
 	{
@@ -869,9 +872,9 @@ PreprocessAlterTableAddIndexConstraint(AlterTableStmt *alterTableStatement, Oid
 	 * hook runs it with the name we created.
 	 */
 
-	constraint->conname = GenerateIndexConstraintName(RelationGetRelationName(rel),
-													  RelationGetNamespace(rel),
-													  constraint);
+	constraint->conname = GenerateConstraintName(RelationGetRelationName(rel),
+												 RelationGetNamespace(rel),
+												 constraint);
 
 	RelationClose(rel);
 
@@ -1885,6 +1888,18 @@ AlterTableCommandTypeIsTrigger(AlterTableType alterTableType)
  */
 bool
 ConstrTypeUsesIndex(ConstrType constrType)
+{
+	return constrType == CONSTR_PRIMARY ||
+		   constrType == CONSTR_UNIQUE ||
+		   constrType == CONSTR_EXCLUSION;
+}
+
+
+/*
+ * ConstrTypeSupportsDefaultNaming returns true if we can generate a default name for the given constraint type
+ */
+bool
+ConstrTypeSupportsDefaultNaming(ConstrType constrType)
 {
 	return constrType == CONSTR_PRIMARY ||
 		   constrType == CONSTR_UNIQUE ||
@@ -3093,9 +3108,7 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 					 * and changing the command into the following form.
 					 * ALTER TABLE ... ADD CONSTRAINT <constaint_name> PRIMARY KEY ...
 					 */
-					if (constraint->contype != CONSTR_PRIMARY &&
-						constraint->contype != CONSTR_UNIQUE &&
-						constraint->contype != CONSTR_EXCLUSION)
+					if (ConstrTypeSupportsDefaultNaming(constraint->contype) == false)
 					{
 						ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 										errmsg(

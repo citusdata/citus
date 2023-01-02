@@ -729,3 +729,5 @@ LOG:  duration: xxxx ms  plan:
 }
 CONTEXT:  SQL statement "SELECT fk."col_1" FROM ONLY "public"."target_table" fk LEFT OUTER JOIN ONLY "public"."test_ref_table" pk ON ( pk."key" OPERATOR(pg_catalog.=) fk."col_1") WHERE pk."key" IS NULL AND (fk."col_1" IS NOT NULL)"
 END;
+SET client_min_messages to ERROR;
+ALTER TABLE target_table DROP CONSTRAINT fkey_167;
