@@ -29,11 +29,21 @@ step "s1-move-placement"
 	SELECT master_move_shard_placement((SELECT * FROM selected_shard_for_test_table), 'localhost', 57637, 'localhost', 57638, 'force_logical');
 }
 
+step "s1-move-placement-back"
+{
+	SELECT master_move_shard_placement((SELECT * FROM selected_shard_for_test_table), 'localhost', 57638, 'localhost', 57637, 'force_logical');
+}
+
 session "s2"
 
 step "s2-begin"
 {
 	BEGIN;
+}
+
+step "s2-select-from-table"
+{
+	SELECT * FROM test_move_table WHERE x=5;
 }
 
 step "s2-move-placement"
@@ -43,6 +53,12 @@ step "s2-move-placement"
 
 step "s2-commit"
 {
+	COMMIT;
+}
+
+step "s2-wait-and-commit"
+{
+	SELECT pg_sleep(1);
 	COMMIT;
 }
 
@@ -68,3 +84,5 @@ permutation "s1-load-cache" "s2-begin" "s2-move-placement" "s1-move-placement" "
 
 // the same test without the load caches
 permutation "s2-begin" "s2-move-placement" "s1-move-placement" "s2-commit" "s2-print-placements"
+
+permutation "s2-print-placements" "s2-begin" "s2-select-from-table" "s1-move-placement" "s1-move-placement-back" "s2-wait-and-commit" "s2-print-placements"
