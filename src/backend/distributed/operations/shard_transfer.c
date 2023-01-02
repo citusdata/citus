@@ -102,9 +102,9 @@ static List * RecreateTableDDLCommandList(Oid relationId);
 static void EnsureTableListOwner(List *tableIdList);
 static void EnsureTableListSuitableForReplication(List *tableIdList);
 
-static void DropColocatedShardPlacements(List *colocatedShardList,
-										 char *nodeName,
-										 int32 nodePort);
+static void DropShardPlacementsFromMetadata(List *shardList,
+											char *nodeName,
+											int32 nodePort);
 static void UpdateColocatedShardPlacementMetadataOnWorkers(int64 shardId,
 														   char *sourceNodeName,
 														   int32 sourceNodePort,
@@ -415,8 +415,11 @@ citus_move_shard_placement(PG_FUNCTION_ARGS)
 								groupId);
 	}
 
-	/* since this is move operation, we remove shards from source node after copy */
-	DropColocatedShardPlacements(colocatedShardList, sourceNodeName, sourceNodePort);
+	/*
+	 * Since this is move operation, we remove the placements from the metadata
+	 * for the source node after copy.
+	 */
+	DropShardPlacementsFromMetadata(colocatedShardList, sourceNodeName, sourceNodePort);
 
 	UpdateColocatedShardPlacementMetadataOnWorkers(shardId, sourceNodeName,
 												   sourceNodePort, targetNodeName,
@@ -1897,17 +1900,17 @@ RecreateTableDDLCommandList(Oid relationId)
 
 
 /*
- * DropColocatedShardPlacements drops the shard placement metadata for
- * the shard placements of given colocated shard interval list from pg_dist_placement.
+ * DropShardPlacementsFromMetadata drops the shard placement metadata for
+ * the shard placements of given shard interval list from pg_dist_placement.
  */
 static void
-DropColocatedShardPlacements(List *colocatedShardList,
-							 char *nodeName, int32 nodePort)
+DropShardPlacementsFromMetadata(List *shardList,
+								char *nodeName, int32 nodePort)
 {
-	ShardInterval *colocatedShard = NULL;
-	foreach_ptr(colocatedShard, colocatedShardList)
+	ShardInterval *shardInverval = NULL;
+	foreach_ptr(shardInverval, shardList)
 	{
-		uint64 shardId = colocatedShard->shardId;
+		uint64 shardId = shardInverval->shardId;
 		List *shardPlacementList = ShardPlacementList(shardId);
 		ShardPlacement *placement =
 			SearchShardPlacementInListOrError(shardPlacementList, nodeName, nodePort);
