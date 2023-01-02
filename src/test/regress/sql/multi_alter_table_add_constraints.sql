@@ -599,5 +599,6 @@ SET citus.enable_ddl_propagation TO OFF;
 ALTER TABLE target_table ADD CONSTRAINT fkey_167 FOREIGN KEY (col_1) REFERENCES test_ref_table(key) ON DELETE CASCADE;
 END;
 SET client_min_messages to ERROR;
+SET search_path TO 'public';
 
 DROP SCHEMA test_auto_explain CASCADE;
