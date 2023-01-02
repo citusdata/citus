@@ -155,7 +155,8 @@ citus_cleanup_orphaned_resources(PG_FUNCTION_ARGS)
 /*
  * isolation_cleanup_orphaned_resources implements a test UDF that's the same as
  * citus_cleanup_orphaned_resources. The only difference is that this command can
- * be run in transactions, this is to test
+ * be run in transactions, this is needed to test this function in isolation tests
+ * since commands are automatically run in transactions there.
  */
 Datum
 isolation_cleanup_orphaned_resources(PG_FUNCTION_ARGS)
