@@ -77,7 +77,7 @@ localhost|   57638|    2
 (1 row)
 
 
-starting permutation: s2-print-placements s2-begin s2-select-from-table s1-move-placement s1-move-placement-back s2-wait-and-commit s2-print-placements
+starting permutation: s2-print-placements s2-begin s2-select-from-table s1-move-placement s1-move-placement-back s1-wait s2-wait-and-commit s2-print-placements
 step s2-print-placements:
  SELECT
   nodename, nodeport, count(*)
@@ -117,17 +117,12 @@ master_move_shard_placement
 step s1-move-placement-back:
  SELECT master_move_shard_placement((SELECT * FROM selected_shard_for_test_table), 'localhost', 57638, 'localhost', 57637, 'force_logical');
  <waiting ...>
-step s2-wait-and-commit: 
- SELECT pg_sleep(1);
+step s1-move-placement-back: <... completed>
+ERROR:  shard move failed as the orphaned shard public.test_move_table_102011 leftover from the previous move could not be cleaned up
+step s1-wait:
+step s2-wait-and-commit:
  COMMIT;
 
-pg_sleep
----------------------------------------------------------------------
-
-(1 row)
-
-step s1-move-placement-back: <... completed>
-ERROR:  shard move failed as the orphaned shardpublic.test_move_table_102011 leftover from the previous move could not be cleaned up
 step s2-print-placements:
  SELECT
   nodename, nodeport, count(*)
