@@ -814,7 +814,7 @@ SELECT table_schema, table_name, row_estimate,
     CASE
         WHEN total_bytes BETWEEN 1900000 AND 2300000 THEN 2179072
         WHEN total_bytes BETWEEN 900000 AND 1200000 THEN 1089536
-        WHEN total_bytes BETWEEN 300000 AND 400000 THEN 368640
+        WHEN total_bytes BETWEEN 300000 AND 440000 THEN 368640
         ELSE total_bytes
     END
   FROM (
@@ -836,7 +836,7 @@ SELECT table_schema, table_name, row_estimate,
     CASE
         WHEN total_bytes BETWEEN 1900000 AND 2300000 THEN 2179072
         WHEN total_bytes BETWEEN 900000 AND 1200000 THEN 1089536
-        WHEN total_bytes BETWEEN 300000 AND 400000 THEN 368640
+        WHEN total_bytes BETWEEN 300000 AND 440000 THEN 368640
         ELSE total_bytes
     END
   FROM (
@@ -889,7 +889,7 @@ SELECT table_schema, table_name, row_estimate,
     CASE
         WHEN total_bytes BETWEEN 1900000 AND 2300000 THEN 2179072
         WHEN total_bytes BETWEEN 900000 AND 1200000 THEN 1089536
-        WHEN total_bytes BETWEEN 300000 AND 400000 THEN 368640
+        WHEN total_bytes BETWEEN 300000 AND 440000 THEN 368640
         ELSE total_bytes
     END
   FROM (
@@ -911,7 +911,7 @@ SELECT table_schema, table_name, row_estimate,
     CASE
         WHEN total_bytes BETWEEN 1900000 AND 2300000 THEN 2179072
         WHEN total_bytes BETWEEN 900000 AND 1200000 THEN 1089536
-        WHEN total_bytes BETWEEN 300000 AND 400000 THEN 368640
+        WHEN total_bytes BETWEEN 300000 AND 440000 THEN 368640
         ELSE total_bytes
     END
   FROM (
@@ -944,7 +944,7 @@ SELECT table_schema, table_name, row_estimate,
     CASE
         WHEN total_bytes BETWEEN 1900000 AND 2300000 THEN 2179072
         WHEN total_bytes BETWEEN 900000 AND 1200000 THEN 1089536
-        WHEN total_bytes BETWEEN 300000 AND 400000 THEN 368640
+        WHEN total_bytes BETWEEN 300000 AND 440000 THEN 368640
         ELSE total_bytes
     END
   FROM (
@@ -966,7 +966,7 @@ SELECT table_schema, table_name, row_estimate,
     CASE
         WHEN total_bytes BETWEEN 1900000 AND 2300000 THEN 2179072
         WHEN total_bytes BETWEEN 900000 AND 1200000 THEN 1089536
-        WHEN total_bytes BETWEEN 300000 AND 400000 THEN 368640
+        WHEN total_bytes BETWEEN 300000 AND 440000 THEN 368640
         ELSE total_bytes
     END
   FROM (
