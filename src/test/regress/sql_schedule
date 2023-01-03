@@ -10,6 +10,7 @@ test: schemas
 test: views
 test: sequences
 test: functions
+test: generated_identity
 test: arbitrary_configs_truncate
 test: arbitrary_configs_truncate_cascade
 test: arbitrary_configs_truncate_partition
