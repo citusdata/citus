@@ -765,7 +765,6 @@ UnSetGlobalPID(void)
 
 		MyBackendData->globalPID = 0;
 		MyBackendData->databaseId = 0;
-		MyBackendData->userId = 0;
 		MyBackendData->distributedCommandOriginator = false;
 
 		SpinLockRelease(&MyBackendData->mutex);
@@ -923,15 +922,27 @@ AssignGlobalPID(void)
 		globalPID = ExtractGlobalPID(application_name);
 	}
 
-	Oid userId = GetUserId();
-
 	SpinLockAcquire(&MyBackendData->mutex);
 
 	MyBackendData->globalPID = globalPID;
 	MyBackendData->distributedCommandOriginator = distributedCommandOriginator;
-	MyBackendData->databaseId = MyDatabaseId;
-	MyBackendData->userId = userId;
 
+	SpinLockRelease(&MyBackendData->mutex);
+}
+
+
+/*
+ * SetBackendDataDatabaseId sets the databaseId in the backend data.
+ *
+ * NOTE: this needs to be run after the auth hook, because in the auth hook the
+ * database is not known yet.
+ */
+void
+SetBackendDataDatabaseId(void)
+{
+	Assert(MyDatabaseId != InvalidOid);
+	SpinLockAcquire(&MyBackendData->mutex);
+	MyBackendData->databaseId = MyDatabaseId;
 	SpinLockRelease(&MyBackendData->mutex);
 }
 
