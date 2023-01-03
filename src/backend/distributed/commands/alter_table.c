@@ -1592,7 +1592,7 @@ ReplaceTable(Oid sourceId, Oid targetId, List *justBeforeDropCommands,
 		ExecuteQueryViaSPI(query->data, SPI_OK_INSERT);
 	}
 
-	List *ownedSequences = getOwnedSequences(sourceId);
+	List *ownedSequences = getOwnedSequences_internal(sourceId, 0, DEPENDENCY_AUTO);
 	Oid sequenceOid = InvalidOid;
 	foreach_oid(sequenceOid, ownedSequences)
 	{
