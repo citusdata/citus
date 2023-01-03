@@ -930,6 +930,7 @@ WHERE table_schema = 'public'
 ) a ORDER BY table_name;
 
 \c - - - :master_port
+-- disk sizes can be slightly different, so ORDER BY shardid gives us a consistent output
 SELECT * FROM get_rebalance_table_shards_plan('tab', rebalance_strategy := 'by_disk_size') ORDER BY shardid;
 -- supports improvement_threshold
 SELECT * FROM get_rebalance_table_shards_plan('tab', rebalance_strategy := 'by_disk_size', improvement_threshold := 0);

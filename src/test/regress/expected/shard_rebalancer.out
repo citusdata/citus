@@ -1744,6 +1744,7 @@ WHERE table_schema = 'public'
 (6 rows)
 
 \c - - - :master_port
+-- disk sizes can be slightly different, so ORDER BY shardid gives us a consistent output
 SELECT * FROM get_rebalance_table_shards_plan('tab', rebalance_strategy := 'by_disk_size') ORDER BY shardid;
 NOTICE:  Ignoring move of shard xxxxx from localhost:xxxxx to localhost:xxxxx, because the move only brings a small improvement relative to the shard its size
 DETAIL:  The balance improvement of 0.1xxxxx is lower than the improvement_threshold of 0.5
