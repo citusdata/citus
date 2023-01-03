@@ -717,6 +717,7 @@ InitializeBackendData(const char *applicationName)
 	SpinLockAcquire(&MyBackendData->mutex);
 	MyBackendData->distributedCommandOriginator = IsExternalClientBackend();
 	MyBackendData->globalPID = gpid;
+	MyBackendData->databaseId = MyDatabaseId;
 	SpinLockRelease(&MyBackendData->mutex);
 
 	/*
@@ -765,7 +766,6 @@ UnSetGlobalPID(void)
 
 		MyBackendData->globalPID = 0;
 		MyBackendData->databaseId = 0;
-		MyBackendData->userId = 0;
 		MyBackendData->distributedCommandOriginator = false;
 
 		SpinLockRelease(&MyBackendData->mutex);
@@ -923,14 +923,10 @@ AssignGlobalPID(void)
 		globalPID = ExtractGlobalPID(application_name);
 	}
 
-	Oid userId = GetUserId();
-
 	SpinLockAcquire(&MyBackendData->mutex);
 
 	MyBackendData->globalPID = globalPID;
 	MyBackendData->distributedCommandOriginator = distributedCommandOriginator;
-	MyBackendData->databaseId = MyDatabaseId;
-	MyBackendData->userId = userId;
 
 	SpinLockRelease(&MyBackendData->mutex);
 }

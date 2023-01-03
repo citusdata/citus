@@ -36,7 +36,6 @@
 typedef struct BackendData
 {
 	Oid databaseId;
-	Oid userId;
 	slock_t mutex;
 	bool cancelledDueToDeadlock;
 	uint64 globalPID;
@@ -60,6 +59,7 @@ extern void AssignDistributedTransactionId(void);
 extern void AssignGlobalPID(void);
 extern void SetBackendDataGlobalPID(uint64 globalPID);
 extern uint64 GetGlobalPID(void);
+extern void SetBackendDataAfterAuthData(void);
 extern void SetBackendDataDistributedCommandOriginator(bool
 													   distributedCommandOriginator);
 extern uint64 ExtractGlobalPID(const char *applicationName);
