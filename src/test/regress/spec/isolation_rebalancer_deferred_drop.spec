@@ -65,6 +65,7 @@ step "s1-drop-marked-shards"
 {
     SET client_min_messages to ERROR;
     CALL isolation_cleanup_orphaned_resources();
+    SELECT COUNT(*) FROM pg_dist_cleanup WHERE object_type = 1 AND object_name LIKE 'public.t1_%';
 }
 
 step "s1-commit"
