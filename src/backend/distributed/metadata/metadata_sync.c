@@ -1635,7 +1635,7 @@ GetDependentSequencesWithRelation(Oid relationId, List **seqInfoList,
 			attrdefResult = lappend_oid(attrdefResult, deprec->objid);
 			attrdefAttnumResult = lappend_int(attrdefAttnumResult, deprec->refobjsubid);
 		}
-		else if (deprec->deptype == DEPENDENCY_AUTO &&
+		else if ((deprec->deptype == DEPENDENCY_AUTO || deprec->deptype == DEPENDENCY_INTERNAL) &&
 				 deprec->refobjsubid != 0 &&
 				 deprec->classid == RelationRelationId &&
 				 get_rel_relkind(deprec->objid) == RELKIND_SEQUENCE)
