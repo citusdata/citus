@@ -857,7 +857,7 @@ WHERE table_schema = 'public'
 \c - - - :master_port
 
 SELECT * FROM get_rebalance_table_shards_plan('tab');
-SELECT * FROM get_rebalance_table_shards_plan('tab', rebalance_strategy := 'by_disk_size') ORDER BY shardid;
+SELECT * FROM get_rebalance_table_shards_plan('tab', rebalance_strategy := 'by_disk_size');
 SELECT * FROM get_rebalance_table_shards_plan('tab', rebalance_strategy := 'by_disk_size', threshold := 0);
 
 SELECT * FROM rebalance_table_shards('tab', shard_transfer_mode:='block_writes');

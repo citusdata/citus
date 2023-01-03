@@ -1607,7 +1607,7 @@ SELECT * FROM get_rebalance_table_shards_plan('tab');
 ---------------------------------------------------------------------
 (0 rows)
 
-SELECT * FROM get_rebalance_table_shards_plan('tab', rebalance_strategy := 'by_disk_size') ORDER BY shardid;
+SELECT * FROM get_rebalance_table_shards_plan('tab', rebalance_strategy := 'by_disk_size');
  table_name | shardid | shard_size | sourcename | sourceport | targetname | targetport
 ---------------------------------------------------------------------
  tab        |  123042 |          0 | localhost  |      57637 | localhost  |      57638
