@@ -1546,7 +1546,13 @@ INSERT INTO tab SELECT 6 from generate_series(1, 10000);
 VACUUM FULL tab;
 ANALYZE tab;
 \c - - - :worker_1_port
-SELECT table_schema, table_name, row_estimate, total_bytes
+SELECT table_schema, table_name, row_estimate,
+    CASE
+        WHEN total_bytes BETWEEN 1900000 AND 2300000 THEN 2179072
+        WHEN total_bytes BETWEEN 900000 AND 1200000 THEN 1089536
+        WHEN total_bytes BETWEEN 300000 AND 400000 THEN 368640
+        ELSE total_bytes
+    END
   FROM (
   SELECT *, total_bytes-index_bytes-COALESCE(toast_bytes,0) AS table_bytes FROM (
       SELECT c.oid,nspname AS table_schema, relname AS TABLE_NAME
@@ -1563,12 +1569,18 @@ WHERE table_schema = 'public'
 ) a ORDER BY table_name;
  table_schema | table_name | row_estimate | total_bytes
 ---------------------------------------------------------------------
- public       | tab_123040 |        30000 |     xxxxxxx
- public       | tab_123042 |        10000 |      xxxxxxx
+ public       | tab_123040 |        30000 |     1089536
+ public       | tab_123042 |        10000 |      368640
 (2 rows)
 
 \c - - - :worker_2_port
-SELECT table_schema, table_name, row_estimate, total_bytes
+SELECT table_schema, table_name, row_estimate,
+    CASE
+        WHEN total_bytes BETWEEN 1900000 AND 2300000 THEN 2179072
+        WHEN total_bytes BETWEEN 900000 AND 1200000 THEN 1089536
+        WHEN total_bytes BETWEEN 300000 AND 400000 THEN 368640
+        ELSE total_bytes
+    END
   FROM (
   SELECT *, total_bytes-index_bytes-COALESCE(toast_bytes,0) AS table_bytes FROM (
       SELECT c.oid,nspname AS table_schema, relname AS TABLE_NAME
@@ -1585,8 +1597,8 @@ WHERE table_schema = 'public'
 ) a ORDER BY table_name;
  table_schema | table_name | row_estimate | total_bytes
 ---------------------------------------------------------------------
- public       | tab_123041 |        10000 |      xxxxxxx
- public       | tab_123043 |        10000 |      xxxxxxx
+ public       | tab_123041 |        10000 |      368640
+ public       | tab_123043 |        10000 |      368640
 (2 rows)
 
 \c - - - :master_port
@@ -1672,7 +1684,13 @@ INSERT INTO tab2 SELECT 6 from generate_series(1, 10000);
 VACUUM FULL tab, tab2;
 ANALYZE tab, tab2;
 \c - - - :worker_1_port
-SELECT table_schema, table_name, row_estimate, total_bytes
+SELECT table_schema, table_name, row_estimate,
+    CASE
+        WHEN total_bytes BETWEEN 1900000 AND 2300000 THEN 2179072
+        WHEN total_bytes BETWEEN 900000 AND 1200000 THEN 1089536
+        WHEN total_bytes BETWEEN 300000 AND 400000 THEN 368640
+        ELSE total_bytes
+    END
   FROM (
   SELECT *, total_bytes-index_bytes-COALESCE(toast_bytes,0) AS table_bytes FROM (
       SELECT c.oid,nspname AS table_schema, relname AS TABLE_NAME
@@ -1689,12 +1707,18 @@ WHERE table_schema = 'public'
 ) a ORDER BY table_name;
  table_schema | table_name  | row_estimate | total_bytes
 ---------------------------------------------------------------------
- public       | tab2_123050 |            0 |           xxxxxxx
- public       | tab_123040  |        30000 |     xxxxxxx
+ public       | tab2_123050 |            0 |           0
+ public       | tab_123040  |        30000 |     1089536
 (2 rows)
 
 \c - - - :worker_2_port
-SELECT table_schema, table_name, row_estimate, total_bytes
+SELECT table_schema, table_name, row_estimate,
+    CASE
+        WHEN total_bytes BETWEEN 1900000 AND 2300000 THEN 2179072
+        WHEN total_bytes BETWEEN 900000 AND 1200000 THEN 1089536
+        WHEN total_bytes BETWEEN 300000 AND 400000 THEN 368640
+        ELSE total_bytes
+    END
   FROM (
   SELECT *, total_bytes-index_bytes-COALESCE(toast_bytes,0) AS table_bytes FROM (
       SELECT c.oid,nspname AS table_schema, relname AS TABLE_NAME
@@ -1711,12 +1735,12 @@ WHERE table_schema = 'public'
 ) a ORDER BY table_name;
  table_schema | table_name  | row_estimate | total_bytes
 ---------------------------------------------------------------------
- public       | tab2_123051 |        10000 |      xxxxxxx
- public       | tab2_123052 |        10000 |      xxxxxxx
- public       | tab2_123053 |        60000 |     xxxxxxx
- public       | tab_123041  |        10000 |      xxxxxxx
- public       | tab_123042  |        10000 |      xxxxxxx
- public       | tab_123043  |        10000 |      xxxxxxx
+ public       | tab2_123051 |        10000 |      368640
+ public       | tab2_123052 |        10000 |      368640
+ public       | tab2_123053 |        60000 |     2179072
+ public       | tab_123041  |        10000 |      368640
+ public       | tab_123042  |        10000 |      368640
+ public       | tab_123043  |        10000 |      368640
 (6 rows)
 
 \c - - - :master_port
@@ -1769,7 +1793,13 @@ SELECT * FROM public.table_placements_per_node;
 VACUUM FULL tab, tab2;
 ANALYZE tab, tab2;
 \c - - - :worker_1_port
-SELECT table_schema, table_name, row_estimate, total_bytes
+SELECT table_schema, table_name, row_estimate,
+    CASE
+        WHEN total_bytes BETWEEN 1900000 AND 2300000 THEN 2179072
+        WHEN total_bytes BETWEEN 900000 AND 1200000 THEN 1089536
+        WHEN total_bytes BETWEEN 300000 AND 400000 THEN 368640
+        ELSE total_bytes
+    END
   FROM (
   SELECT *, total_bytes-index_bytes-COALESCE(toast_bytes,0) AS table_bytes FROM (
       SELECT c.oid,nspname AS table_schema, relname AS TABLE_NAME
@@ -1786,16 +1816,22 @@ WHERE table_schema = 'public'
 ) a ORDER BY table_name;
  table_schema | table_name  | row_estimate | total_bytes
 ---------------------------------------------------------------------
- public       | tab2_123050 |            0 |           xxxxxxx
- public       | tab2_123051 |        10000 |      xxxxxxx
- public       | tab2_123052 |        10000 |      xxxxxxx
- public       | tab_123040  |        30000 |     xxxxxxx
- public       | tab_123041  |        10000 |      xxxxxxx
- public       | tab_123042  |        10000 |      xxxxxxx
+ public       | tab2_123050 |            0 |           0
+ public       | tab2_123051 |        10000 |      368640
+ public       | tab2_123052 |        10000 |      368640
+ public       | tab_123040  |        30000 |     1089536
+ public       | tab_123041  |        10000 |      368640
+ public       | tab_123042  |        10000 |      368640
 (6 rows)
 
 \c - - - :worker_2_port
-SELECT table_schema, table_name, row_estimate, total_bytes
+SELECT table_schema, table_name, row_estimate,
+    CASE
+        WHEN total_bytes BETWEEN 1900000 AND 2300000 THEN 2179072
+        WHEN total_bytes BETWEEN 900000 AND 1200000 THEN 1089536
+        WHEN total_bytes BETWEEN 300000 AND 400000 THEN 368640
+        ELSE total_bytes
+    END
   FROM (
   SELECT *, total_bytes-index_bytes-COALESCE(toast_bytes,0) AS table_bytes FROM (
       SELECT c.oid,nspname AS table_schema, relname AS TABLE_NAME
@@ -1812,8 +1848,8 @@ WHERE table_schema = 'public'
 ) a ORDER BY table_name;
  table_schema | table_name  | row_estimate | total_bytes
 ---------------------------------------------------------------------
- public       | tab2_123053 |        60000 |     xxxxxxx
- public       | tab_123043  |        10000 |      xxxxxxx
+ public       | tab2_123053 |        60000 |     2179072
+ public       | tab_123043  |        10000 |      368640
 (2 rows)
 
 \c - - - :master_port

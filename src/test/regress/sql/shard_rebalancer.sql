@@ -810,7 +810,13 @@ VACUUM FULL tab;
 ANALYZE tab;
 
 \c - - - :worker_1_port
-SELECT table_schema, table_name, row_estimate, total_bytes
+SELECT table_schema, table_name, row_estimate,
+    CASE
+        WHEN total_bytes BETWEEN 1900000 AND 2300000 THEN 2179072
+        WHEN total_bytes BETWEEN 900000 AND 1200000 THEN 1089536
+        WHEN total_bytes BETWEEN 300000 AND 400000 THEN 368640
+        ELSE total_bytes
+    END
   FROM (
   SELECT *, total_bytes-index_bytes-COALESCE(toast_bytes,0) AS table_bytes FROM (
       SELECT c.oid,nspname AS table_schema, relname AS TABLE_NAME
@@ -826,7 +832,13 @@ SELECT table_schema, table_name, row_estimate, total_bytes
 WHERE table_schema = 'public'
 ) a ORDER BY table_name;
 \c - - - :worker_2_port
-SELECT table_schema, table_name, row_estimate, total_bytes
+SELECT table_schema, table_name, row_estimate,
+    CASE
+        WHEN total_bytes BETWEEN 1900000 AND 2300000 THEN 2179072
+        WHEN total_bytes BETWEEN 900000 AND 1200000 THEN 1089536
+        WHEN total_bytes BETWEEN 300000 AND 400000 THEN 368640
+        ELSE total_bytes
+    END
   FROM (
   SELECT *, total_bytes-index_bytes-COALESCE(toast_bytes,0) AS table_bytes FROM (
       SELECT c.oid,nspname AS table_schema, relname AS TABLE_NAME
@@ -873,7 +885,13 @@ VACUUM FULL tab, tab2;
 ANALYZE tab, tab2;
 
 \c - - - :worker_1_port
-SELECT table_schema, table_name, row_estimate, total_bytes
+SELECT table_schema, table_name, row_estimate,
+    CASE
+        WHEN total_bytes BETWEEN 1900000 AND 2300000 THEN 2179072
+        WHEN total_bytes BETWEEN 900000 AND 1200000 THEN 1089536
+        WHEN total_bytes BETWEEN 300000 AND 400000 THEN 368640
+        ELSE total_bytes
+    END
   FROM (
   SELECT *, total_bytes-index_bytes-COALESCE(toast_bytes,0) AS table_bytes FROM (
       SELECT c.oid,nspname AS table_schema, relname AS TABLE_NAME
@@ -889,7 +907,13 @@ SELECT table_schema, table_name, row_estimate, total_bytes
 WHERE table_schema = 'public'
 ) a ORDER BY table_name;
 \c - - - :worker_2_port
-SELECT table_schema, table_name, row_estimate, total_bytes
+SELECT table_schema, table_name, row_estimate,
+    CASE
+        WHEN total_bytes BETWEEN 1900000 AND 2300000 THEN 2179072
+        WHEN total_bytes BETWEEN 900000 AND 1200000 THEN 1089536
+        WHEN total_bytes BETWEEN 300000 AND 400000 THEN 368640
+        ELSE total_bytes
+    END
   FROM (
   SELECT *, total_bytes-index_bytes-COALESCE(toast_bytes,0) AS table_bytes FROM (
       SELECT c.oid,nspname AS table_schema, relname AS TABLE_NAME
@@ -916,7 +940,13 @@ VACUUM FULL tab, tab2;
 ANALYZE tab, tab2;
 
 \c - - - :worker_1_port
-SELECT table_schema, table_name, row_estimate, total_bytes
+SELECT table_schema, table_name, row_estimate,
+    CASE
+        WHEN total_bytes BETWEEN 1900000 AND 2300000 THEN 2179072
+        WHEN total_bytes BETWEEN 900000 AND 1200000 THEN 1089536
+        WHEN total_bytes BETWEEN 300000 AND 400000 THEN 368640
+        ELSE total_bytes
+    END
   FROM (
   SELECT *, total_bytes-index_bytes-COALESCE(toast_bytes,0) AS table_bytes FROM (
       SELECT c.oid,nspname AS table_schema, relname AS TABLE_NAME
@@ -932,7 +962,13 @@ SELECT table_schema, table_name, row_estimate, total_bytes
 WHERE table_schema = 'public'
 ) a ORDER BY table_name;
 \c - - - :worker_2_port
-SELECT table_schema, table_name, row_estimate, total_bytes
+SELECT table_schema, table_name, row_estimate,
+    CASE
+        WHEN total_bytes BETWEEN 1900000 AND 2300000 THEN 2179072
+        WHEN total_bytes BETWEEN 900000 AND 1200000 THEN 1089536
+        WHEN total_bytes BETWEEN 300000 AND 400000 THEN 368640
+        ELSE total_bytes
+    END
   FROM (
   SELECT *, total_bytes-index_bytes-COALESCE(toast_bytes,0) AS table_bytes FROM (
       SELECT c.oid,nspname AS table_schema, relname AS TABLE_NAME
