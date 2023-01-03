@@ -146,6 +146,8 @@ static bool is_valid_numeric_typmod(int32 typmod);
 
 static bool DistributionColumnUsesGeneratedStoredColumn(TupleDesc relationDesc,
 														Var *distributionColumn);
+static bool DistributionColumnUsesGeneratedIdentityColumn(TupleDesc relationDesc,
+														Var *distributionColumn);
 static bool CanUseExclusiveConnections(Oid relationId, bool localTableEmpty);
 static void DoCopyFromLocalTableIntoShards(Relation distributedRelation,
 										   DestReceiver *copyDest,
@@ -1627,18 +1629,15 @@ EnsureRelationCanBeDistributed(Oid relationId, Var *distributionColumn,
 
 	ErrorIfTableIsACatalogTable(relation);
 
-	/* verify target relation does not use identity columns */
-	if (RelationUsesIdentityColumns(relationDesc))
-	{
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("cannot distribute relation: %s", relationName),
-						errdetail("Distributed relations must not use GENERATED "
-								  "... AS IDENTITY.")));
-	}
 
-	/* verify target relation is not distributed by a generated columns */
+
+	/* verify target relation is not distributed by a generated columns
+	 * except generated identity
+	*/
 	if (distributionMethod != DISTRIBUTE_BY_NONE &&
-		DistributionColumnUsesGeneratedStoredColumn(relationDesc, distributionColumn))
+		DistributionColumnUsesGeneratedStoredColumn(relationDesc, distributionColumn) &&
+		!DistributionColumnUsesGeneratedIdentityColumn(relationDesc, distributionColumn)
+		)
 	{
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 						errmsg("cannot distribute relation: %s", relationName),
@@ -2430,6 +2429,26 @@ DistributionColumnUsesGeneratedStoredColumn(TupleDesc relationDesc,
 													distributionColumn->varattno - 1);
 
 	if (attributeForm->attgenerated == ATTRIBUTE_GENERATED_STORED)
+	{
+		return true;
+	}
+
+	return false;
+}
+
+/*
+ * DistributionColumnUsesGeneratedIdentityColumn returns whether a given relation uses
+ * GENERATED (ALWAYS|BY DEFAULT) AS (...) IDENTITY on distribution column
+ */
+static bool
+DistributionColumnUsesGeneratedIdentityColumn(TupleDesc relationDesc,
+											Var *distributionColumn)
+{
+	Form_pg_attribute attributeForm = TupleDescAttr(relationDesc,
+													distributionColumn->varattno - 1);
+
+	if (attributeForm->attgenerated == ATTRIBUTE_IDENTITY_ALWAYS ||
+			attributeForm->attgenerated == ATTRIBUTE_IDENTITY_BY_DEFAULT)
 	{
 		return true;
 	}
