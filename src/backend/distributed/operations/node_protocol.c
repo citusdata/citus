@@ -470,7 +470,8 @@ GetFullTableCreationCommands(Oid relationId,
 	List *tableDDLEventList = NIL;
 
 	List *preLoadCreationCommandList =
-		GetPreLoadTableCreationCommands(relationId, includeSequenceDefaults, includeIdentityDefaults, NULL);
+		GetPreLoadTableCreationCommands(relationId, includeSequenceDefaults,
+										includeIdentityDefaults, NULL);
 
 	tableDDLEventList = list_concat(tableDDLEventList, preLoadCreationCommandList);
 

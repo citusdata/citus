@@ -1571,7 +1571,8 @@ ReplaceTable(Oid sourceId, Oid targetId, List *justBeforeDropCommands,
 			 */
 			List *nonStoredColumnNameList = GetNonGeneratedStoredColumnNameList(sourceId);
 			char *insertColumnString = StringJoin(nonStoredColumnNameList, ',');
-			appendStringInfo(query, "INSERT INTO %s (%s) OVERRIDING SYSTEM VALUE SELECT %s FROM %s",
+			appendStringInfo(query,
+							 "INSERT INTO %s (%s) OVERRIDING SYSTEM VALUE SELECT %s FROM %s",
 							 quote_qualified_identifier(schemaName, targetName),
 							 insertColumnString, insertColumnString,
 							 quote_qualified_identifier(schemaName, sourceName));
