@@ -117,6 +117,13 @@ typedef enum IncludeSequenceDefaults
 } IncludeSequenceDefaults;
 
 
+typedef enum IncludeIdentityDefaults
+{
+	NO_IDENTITY = 0,
+	INCLUDE_IDENTITY_AS_SEQUENCE_DEFAULTS = 1,
+	INCLUDE_IDENTITY = 2
+} IncludeIdentityDefaults;
+
 struct TableDDLCommand;
 typedef struct TableDDLCommand TableDDLCommand;
 typedef char *(*TableDDLFunction)(void *context);
@@ -213,11 +220,13 @@ extern uint64 GetNextPlacementId(void);
 extern Oid ResolveRelationId(text *relationName, bool missingOk);
 extern List * GetFullTableCreationCommands(Oid relationId,
 										   IncludeSequenceDefaults includeSequenceDefaults,
+										   IncludeIdentityDefaults includeIdentityDefaults,
 										   bool creatingShellTableOnRemoteNode);
 extern List * GetPostLoadTableCreationCommands(Oid relationId, bool includeIndexes,
 											   bool includeReplicaIdentity);
 extern List * GetPreLoadTableCreationCommands(Oid relationId, IncludeSequenceDefaults
 											  includeSequenceDefaults,
+											  IncludeIdentityDefaults includeIdentityDefaults,
 											  char *accessMethod);
 extern List * GetTableRowLevelSecurityCommands(Oid relationId);
 extern List * GetTableIndexAndConstraintCommands(Oid relationId, int indexFlags);
