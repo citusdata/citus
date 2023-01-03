@@ -161,7 +161,7 @@ SELECT master_move_shard_placement(20000000, 'localhost', :worker_1_port, 'local
 ROLLBACK;
 -- see the cleanup record for the shard on the target node
 -- https://github.com/citusdata/citus/issues/6580
-select object_name, object_type from pg_dist_cleanup;
+select object_name, object_type from pg_dist_cleanup where object_type = 1;
               object_name               | object_type
 ---------------------------------------------------------------------
  shard_move_deferred_delete.t1_20000000 |           1

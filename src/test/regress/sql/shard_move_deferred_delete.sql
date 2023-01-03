@@ -89,7 +89,7 @@ ROLLBACK;
 
 -- see the cleanup record for the shard on the target node
 -- https://github.com/citusdata/citus/issues/6580
-select object_name, object_type from pg_dist_cleanup;
+select object_name, object_type from pg_dist_cleanup where object_type = 1;
 
 -- see the shard on both workers
 SELECT run_command_on_workers($cmd$
