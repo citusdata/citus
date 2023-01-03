@@ -132,14 +132,12 @@ DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 
 (1 row)
 
-SET client_min_messages TO ERROR;
 SELECT public.wait_for_resource_cleanup();
  wait_for_resource_cleanup
 ---------------------------------------------------------------------
 
 (1 row)
 
-RESET client_min_messages;
 -- Make sure shard splits use citus.cpu_priority_for_logical_replication_senders
 -- in their CREATE SUBSCRIPTION commands.
 SELECT pg_catalog.citus_split_shard_by_split_points(
