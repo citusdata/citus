@@ -605,6 +605,7 @@ DROP TABLE test_schema_support.imbalanced_table_local;
 
 SET citus.shard_replication_factor TO 1;
 SET citus.shard_count = 4;
+ALTER SEQUENCE pg_catalog.pg_dist_placement_placementid_seq RESTART 136;
 
 CREATE TABLE colocated_rebalance_test(id integer);
 CREATE TABLE colocated_rebalance_test2(id integer);
@@ -677,7 +678,7 @@ SELECT * FROM get_rebalance_progress();
 SELECT * FROM public.table_placements_per_node;
 
 CALL citus_cleanup_orphaned_resources();
-select shardid, shardstate, shardlength from pg_dist_placement ORDER BY placementid;
+select * from pg_dist_placement ORDER BY placementid;
 
 
 -- Move all shards to worker1 again
@@ -1296,6 +1297,7 @@ SELECT public.wait_until_metadata_sync(30000);
 CREATE TABLE r1 (a int PRIMARY KEY, b int);
 SELECT create_reference_table('r1');
 
+ALTER SEQUENCE pg_dist_groupid_seq RESTART WITH 15;
 SELECT 1 from master_add_node('localhost', :worker_2_port);
 
 -- count the number of placements for the reference table to verify it is not available on
