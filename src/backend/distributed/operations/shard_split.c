@@ -751,6 +751,7 @@ CreateSplitShardsForShardGroup(List *shardGroupSplitIntervalListList,
 			List *splitShardCreationCommandList = GetPreLoadTableCreationCommands(
 				shardInterval->relationId,
 				false, /* includeSequenceDefaults */
+				false, /* includeIdentityDefaults */
 				NULL /* auto add columnar options for cstore tables */);
 			splitShardCreationCommandList = WorkerApplyShardDDLCommandList(
 				splitShardCreationCommandList,
@@ -1787,6 +1788,7 @@ CreateDummyShardsForShardGroup(HTAB *mapOfPlacementToDummyShardList,
 			List *splitShardCreationCommandList = GetPreLoadTableCreationCommands(
 				shardInterval->relationId,
 				false, /* includeSequenceDefaults */
+				false, /* includeIdentityDefaults */
 				NULL /* auto add columnar options for cstore tables */);
 			splitShardCreationCommandList = WorkerApplyShardDDLCommandList(
 				splitShardCreationCommandList,
@@ -1849,6 +1851,7 @@ CreateDummyShardsForShardGroup(HTAB *mapOfPlacementToDummyShardList,
 			List *splitShardCreationCommandList = GetPreLoadTableCreationCommands(
 				shardInterval->relationId,
 				false, /* includeSequenceDefaults */
+				false, /* includeIdentityDefaults */
 				NULL /* auto add columnar options for cstore tables */);
 			splitShardCreationCommandList = WorkerApplyShardDDLCommandList(
 				splitShardCreationCommandList,

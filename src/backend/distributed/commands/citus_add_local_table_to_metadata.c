@@ -666,10 +666,12 @@ GetShellTableDDLEventsForCitusLocalTable(Oid relationId)
 	 * a sequence.
 	 */
 	IncludeSequenceDefaults includeSequenceDefaults = NEXTVAL_SEQUENCE_DEFAULTS;
+	IncludeIdentityDefaults includeIdentityDefaults = INCLUDE_IDENTITY;
 
 	bool creatingShellTableOnRemoteNode = false;
 	List *tableDDLCommands = GetFullTableCreationCommands(relationId,
 														  includeSequenceDefaults,
+														  includeIdentityDefaults,
 														  creatingShellTableOnRemoteNode);
 
 	List *shellTableDDLEvents = NIL;

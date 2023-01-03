@@ -73,6 +73,7 @@
 #include "utils/relcache.h"
 #include "utils/ruleutils.h"
 #include "utils/syscache.h"
+#include "commands/sequence.h"
 
 
 static void deparse_index_columns(StringInfo buffer, List *indexParameterList,
@@ -305,7 +306,7 @@ pg_get_sequencedef(Oid sequenceRelationId)
  */
 char *
 pg_get_tableschemadef_string(Oid tableRelationId, IncludeSequenceDefaults
-							 includeSequenceDefaults, char *accessMethod)
+							 includeSequenceDefaults, IncludeIdentityDefaults includeIdentityDefaults, char *accessMethod)
 {
 	bool firstAttributePrinted = false;
 	AttrNumber defaultValueIndex = 0;
@@ -389,6 +390,48 @@ pg_get_tableschemadef_string(Oid tableRelationId, IncludeSequenceDefaults
 								 GetCompressionMethodName(attributeForm->attcompression));
 			}
 #endif
+
+			if (attributeForm->attidentity && includeIdentityDefaults)
+			{
+				Oid seqOid = getIdentitySequence(RelationGetRelid(relation), attributeForm->attnum, true);
+				Assert(seqOid != InvalidOid);
+
+				char *sequenceName = generate_qualified_relation_name(seqOid);
+
+				if (includeIdentityDefaults == INCLUDE_IDENTITY_AS_SEQUENCE_DEFAULTS)
+				{
+					if (pg_get_sequencedef(seqOid)->seqtypid != INT8OID)
+					{
+						appendStringInfo(&buffer,
+							" DEFAULT worker_nextval(%s::regclass)",
+							quote_literal_cstr(sequenceName));
+					}
+					else
+					{
+						appendStringInfo(&buffer, " DEFAULT nextval(%s::regclass)",
+							quote_literal_cstr(sequenceName));
+					}
+				}
+				else if (includeIdentityDefaults == INCLUDE_IDENTITY)
+				{
+					Form_pg_sequence pgSequenceForm = pg_get_sequencedef(seqOid);
+					uint64 sequenceStart = nextval_internal(seqOid, false);
+					char *sequenceDef = psprintf(" GENERATED %s AS IDENTITY (INCREMENT BY " INT64_FORMAT \
+						" MINVALUE " INT64_FORMAT " MAXVALUE " INT64_FORMAT \
+						" START WITH " INT64_FORMAT " CACHE " INT64_FORMAT " %sCYCLE)",
+						attributeForm->attidentity == ATTRIBUTE_IDENTITY_ALWAYS ? "ALWAYS" : "BY DEFAULT",
+						pgSequenceForm->seqincrement, pgSequenceForm->seqmin,
+						pgSequenceForm->seqmax, sequenceStart,
+						pgSequenceForm->seqcache,
+						pgSequenceForm->seqcycle ? "" : "NO ");
+
+					appendStringInfo(&buffer, "%s", sequenceDef);
+				}
+				else
+				{
+					Assert(false);
+				}
+			}
 
 			/* if this column has a default value, append the default value */
 			if (attributeForm->atthasdef)

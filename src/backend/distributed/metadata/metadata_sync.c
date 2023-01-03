@@ -2604,9 +2604,12 @@ CreateShellTableOnWorkers(Oid relationId)
 	List *commandList = list_make1(DISABLE_DDL_PROPAGATION);
 
 	IncludeSequenceDefaults includeSequenceDefaults = WORKER_NEXTVAL_SEQUENCE_DEFAULTS;
+	IncludeIdentityDefaults includeIdentityDefaults = INCLUDE_IDENTITY_AS_SEQUENCE_DEFAULTS;
+
 	bool creatingShellTableOnRemoteNode = true;
 	List *tableDDLCommands = GetFullTableCreationCommands(relationId,
 														  includeSequenceDefaults,
+														  includeIdentityDefaults,
 														  creatingShellTableOnRemoteNode);
 
 	TableDDLCommand *tableDDLCommand = NULL;

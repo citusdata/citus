@@ -1793,6 +1793,7 @@ RecreateTableDDLCommandList(Oid relationId)
 	StringInfo dropCommand = makeStringInfo();
 
 	IncludeSequenceDefaults includeSequenceDefaults = NO_SEQUENCE_DEFAULTS;
+	IncludeIdentityDefaults includeIdentityDefaults = NO_IDENTITY;
 
 	/* build appropriate DROP command based on relation kind */
 	if (RegularTable(relationId))
@@ -1815,6 +1816,7 @@ RecreateTableDDLCommandList(Oid relationId)
 	List *dropCommandList = list_make1(makeTableDDLCommandString(dropCommand->data));
 	List *createCommandList = GetPreLoadTableCreationCommands(relationId,
 															  includeSequenceDefaults,
+															  includeIdentityDefaults,
 															  NULL);
 	List *recreateCommandList = list_concat(dropCommandList, createCommandList);
 

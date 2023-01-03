@@ -308,9 +308,12 @@ CreateAppendDistributedShardPlacements(Oid relationId, int64 shardId,
 	List *foreignConstraintCommandList =
 		GetReferencingForeignConstaintCommands(relationId);
 	IncludeSequenceDefaults includeSequenceDefaults = NO_SEQUENCE_DEFAULTS;
+	IncludeIdentityDefaults includeIdentityDefaults = NO_IDENTITY;
+
 	bool creatingShellTableOnRemoteNode = false;
 	List *ddlCommandList = GetFullTableCreationCommands(relationId,
 														includeSequenceDefaults,
+														includeIdentityDefaults,
 														creatingShellTableOnRemoteNode);
 	uint32 connectionFlag = FOR_DDL;
 	char *relationOwner = TableOwner(relationId);
@@ -423,9 +426,12 @@ CreateShardsOnWorkers(Oid distributedRelationId, List *shardPlacements,
 					  bool useExclusiveConnection, bool colocatedShard)
 {
 	IncludeSequenceDefaults includeSequenceDefaults = NO_SEQUENCE_DEFAULTS;
+	IncludeIdentityDefaults includeIdentityDefaults = NO_IDENTITY;
+
 	bool creatingShellTableOnRemoteNode = false;
 	List *ddlCommandList = GetFullTableCreationCommands(distributedRelationId,
 														includeSequenceDefaults,
+														includeIdentityDefaults,
 														creatingShellTableOnRemoteNode);
 	List *foreignConstraintCommandList =
 		GetReferencingForeignConstaintCommands(distributedRelationId);
