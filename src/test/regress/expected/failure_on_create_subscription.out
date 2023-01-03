@@ -54,10 +54,6 @@ SELECT citus.mitmproxy('conn.onQuery(query="ALTER SUBSCRIPTION").kill()');
 (1 row)
 
 SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
-WARNING:  connection not open
-CONTEXT:  while executing command on localhost:xxxxx
-WARNING:  connection not open
-CONTEXT:  while executing command on localhost:xxxxx
 ERROR:  connection not open
 CONTEXT:  while executing command on localhost:xxxxx
 -- cleanup leftovers

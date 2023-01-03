@@ -14,9 +14,6 @@ s/shard [0-9]+/shard xxxxx/g
 s/assigned task [0-9]+ to node/assigned task to node/
 s/node group [12] (but|does)/node group \1/
 
-# discard "USING heap" in "CREATE TABLE ... USING heap"
-s/CREATE(.*)TABLE(.*)USING heap/CREATE\1TABLE\2/g
-
 # Differing names can have differing table column widths
 s/^-[+-]{2,}$/---------------------------------------------------------------------/g
 
@@ -59,16 +56,9 @@ s/\(col_1\)=\([0-9]+\)/(col_1)=(X)/g
 # In multi_name_lengths, normalize shard names
 s/name_len_12345678901234567890123456789012345678_fcd8ab6f_[0-9]+/name_len_12345678901234567890123456789012345678_fcd8ab6f_xxxxx/g
 
-# normalize pkey constraints in multi_insert_select.sql
-s/"(raw_events_second_user_id_value_1_key_|agg_events_user_id_value_1_agg_key_)[0-9]+"/"\1xxxxxxx"/g
-
-# ignore could not consume warnings
-/WARNING:  could not consume data from worker node/d
-
-# ignore page split with pg13
+# ignore page split with pg13, and WAL warnings
+# they can randomly appear when DEBUG logs are on
 /DEBUG:  concurrent ROOT page split/d
-
-# ignore WAL warnings
 /DEBUG: .+creating and filling new WAL file/d
 
 # normalize debug connection failure
@@ -95,9 +85,6 @@ s/connectionId: [0-9]+/connectionId: xxxxxxx/g
 # Remove trailing whitespace
 s/ *$//g
 
-# pg12 changes
-s/"(collections_list_|collection_users_|collection_users_fkey_)[0-9]+"/"\1xxxxxxx"/g
-
 # pg13 changes
 s/of relation ".*" violates not-null constraint/violates not-null constraint/g
 /DEBUG:  index ".*" can safely use deduplication.*$/d
@@ -109,12 +96,30 @@ s/of relation ".*" contains null values/contains null values/g
 #if (PG_VERSION_NUM >= PG_VERSION_13) && (PG_VERSION_NUM < PG_VERSION_14)
 # (This is not preprocessor directive, but a reminder for the developer that will drop PG13 support )
 # libpq message changes for minor versions of pg13
+
 # We ignore multiline error messages, and substitute first line with a single line
 # alternative that is used in some older libpq versions.
 s/(ERROR: |WARNING: |error:) server closed the connection unexpectedly/\1 connection not open/g
 /^\s*This probably means the server terminated abnormally$/d
 /^\s*before or while processing the request.$/d
 /^\s*connection not open$/d
+
+s/ERROR:  fake_fetch_row_version not implemented/ERROR:  fake_tuple_update not implemented/g
+s/ERROR:  COMMIT is not allowed in an SQL function/ERROR:  COMMIT is not allowed in a SQL function/g
+s/ERROR:  ROLLBACK is not allowed in an SQL function/ERROR:  ROLLBACK is not allowed in a SQL function/g
+/.*Async-Capable.*/d
+/.*Async Capable.*/d
+/Parent Relationship/d
+/Parent-Relationship/d
+s/function array_cat_agg\(anyarray\) anyarray/function array_cat_agg\(anycompatiblearray\) anycompatiblearray/g
+s/function array_cat_agg\(anyarray\)/function array_cat_agg\(anycompatiblearray\)/g
+s/TRIM\(BOTH FROM value\)/btrim\(value\)/g
+/DETAIL:  Subqueries are not supported in policies on distributed tables/d
+s/ERROR:  unexpected non-SELECT command in SubLink/ERROR:  cannot create policy/g
+
+# PG13 changes bgworker sigterm message, we can drop that line with PG13 drop
+s/(FATAL: terminating).*Citus Background Task Queue Executor.*(due to administrator command)\+/\1 connection \2                    \+/g
+
 #endif /* (PG_VERSION_NUM >= PG_VERSION_13) && (PG_VERSION_NUM < PG_VERSION_14) */
 
 # Changed outputs after minor bump to PG14.5 and PG13.8
@@ -124,6 +129,7 @@ s/(ERROR: |WARNING: |error:) invalid socket/\1 connection not open/g
 /^\s*invalid socket$/d
 
 # pg15 changes
+# can be removed when dropping PG13&14 support
 s/is not a PostgreSQL server process/is not a PostgreSQL backend process/g
 s/ AS "\?column\?"//g
 s/".*\.(.*)": (found .* removable)/"\1": \2/g
@@ -160,8 +166,6 @@ s/worker_hash_partition_table  \([0-9]+/worker_hash_partition_table  \(xxxxxxx/g
 
 # ignore memory usage output
 /.*Memory Usage:.*/d
-
-s/Citus.*currently supports/Citus currently supports/g
 
 # Warnings in multi_explain
 s/prepared transaction with identifier .* does not exist/prepared transaction with identifier "citus_x_yyyyyy_zzz_w" does not exist/g
@@ -227,35 +231,21 @@ s/^(DEBUG:  the index name on the shards of the partition is too long, switching
 # normalize errors for not being able to connect to a non-existing host
 s/could not translate host name "foobar" to address: .*$/could not translate host name "foobar" to address: <system specific error>/g
 
-s/ERROR:  parallel workers for vacuum must/ERROR:  parallel vacuum degree must/g
-
 # ignore PL/pgSQL line numbers that differ on Mac builds
 s/(CONTEXT:  PL\/pgSQL function .* line )([0-9]+)/\1XX/g
 s/^(PL\/pgSQL function .* line) [0-9]+ (.*)/\1 XX \2/g
 
 # normalize a test difference in multi_move_mx
 s/ connection to server at "\w+" \(127\.0\.0\.1\), port [0-9]+ failed://g
-# can be removed after dropping PG13 support
-s/ERROR:  parallel workers for vacuum must be between/ERROR:  parallel vacuum degree must be between/g
-s/ERROR:  fake_fetch_row_version not implemented/ERROR:  fake_tuple_update not implemented/g
-s/ERROR:  COMMIT is not allowed in an SQL function/ERROR:  COMMIT is not allowed in a SQL function/g
-s/ERROR:  ROLLBACK is not allowed in an SQL function/ERROR:  ROLLBACK is not allowed in a SQL function/g
-/.*Async-Capable.*/d
-/.*Async Capable.*/d
-/Parent Relationship/d
-/Parent-Relationship/d
-s/function array_cat_agg\(anyarray\) anyarray/function array_cat_agg\(anycompatiblearray\) anycompatiblearray/g
-s/function array_cat_agg\(anycompatiblearray\)/function array_cat_agg\(anyarray\)/g
-s/TRIM\(BOTH FROM value\)/btrim\(value\)/g
-s/pg14\.idx.*/pg14\.xxxxx/g
 
+# normalize differences in tablespace of new index
+s/pg14\.idx.*/pg14\.xxxxx/g
 s/CREATE TABLESPACE test_tablespace LOCATION.*/CREATE TABLESPACE test_tablespace LOCATION XXXX/g
-/DETAIL:  Subqueries are not supported in policies on distributed tables/d
-s/ERROR:  unexpected non-SELECT command in SubLink/ERROR:  cannot create policy/g
 
 # columnar log for var correlation
 s/(.*absolute correlation \()([0,1]\.[0-9]+)(\) of var attribute [0-9]+ is smaller than.*)/\1X\.YZ\3/g
 
+# normalize differences in multi_fix_partition_shard_index_names test
 s/NOTICE:  issuing WITH placement_data\(shardid, shardstate, shardlength, groupid, placementid\)  AS \(VALUES \([0-9]+, [0-9]+, [0-9]+, [0-9]+, [0-9]+\)\)/NOTICE:  issuing WITH placement_data\(shardid, shardstate, shardlength, groupid, placementid\)  AS \(VALUES \(xxxxxx, xxxxxx, xxxxxx, xxxxxx, xxxxxx\)\)/g
 
 # global_pid when pg_cancel_backend is sent to workers
@@ -289,6 +279,7 @@ s/^(WARNING|ERROR)(:  "[a-z\ ]+ .*" has dependency on unsupported object) "schem
 s/^ERROR:  A rebalance is already running as job [0-9]+$/ERROR:  A rebalance is already running as job xxx/g
 s/^NOTICE:  Scheduled ([0-9]+) moves as job [0-9]+$/NOTICE:  Scheduled \1 moves as job xxx/g
 s/^HINT: (.*) job_id = [0-9]+ (.*)$/HINT: \1 job_id = xxx \2/g
+
 # In clock tests, normalize epoch value(s) and the DEBUG messages printed
 s/^(DEBUG:  |LOG:  )(coordinator|final global|Set) transaction clock [0-9]+.*$/\1\2 transaction clock xxxxxx/g
 # Look for >= 13 digit logical value
@@ -299,11 +290,13 @@ s/^(NOTICE:  )(clock).*LC:[0-9]+,.*C:[0-9]+,.*$/\1\2 xxxxxx/g
 /^(DEBUG:  )(adjusted to remote clock: <logical)\([0-9]+\) counter\([0-9]+\)>$/d
 /^DEBUG:  persisting transaction.*counter.*$/d
 /^DEBUG:  both logical clock values are equal\([0-9]+\), pick remote.*$/d
+
 # The following 2 lines are to normalize duration and cost in the EXPLAIN output
 s/LOG:  duration: [0-9].[0-9]+ ms/LOG:  duration: xxxx ms/g
 s/"Total Cost": [0-9].[0-9]+/"Total Cost": xxxx/g
 
+# normalize gpids
 s/(NOTICE:  issuing SET LOCAL application_name TO 'citus_rebalancer gpid=)[0-9]+/\1xxxxx/g
 
-# PG13 changes bgworker sigterm message, we can drop that line with PG13 drop
-s/(FATAL: terminating).*Citus Background Task Queue Executor.*(due to administrator command)\+/\1 connection \2                    \+/g
+# shard_rebalancer output, flaky improvement number
+s/improvement of 0.1[0-9]* is lower/improvement of 0.1xxxxx is lower/g

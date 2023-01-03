@@ -122,13 +122,6 @@ SELECT citus.mitmproxy('conn.onQuery(query="^ALTER SUBSCRIPTION .* (ENABLE|DISAB
 (1 row)
 
 SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
-WARNING:  connection not open
-CONTEXT:  while executing command on localhost:xxxxx
-WARNING:  connection not open
-CONTEXT:  while executing command on localhost:xxxxx
-WARNING:  role "citus_shard_move_subscription_role_xxxxxxx_xxxxxxx" cannot be dropped because some objects depend on it
-DETAIL:  owner of subscription citus_shard_move_subscription_xxxxxxx_xxxxxxx
-CONTEXT:  while executing command on localhost:xxxxx
 ERROR:  connection not open
 CONTEXT:  while executing command on localhost:xxxxx
 -- cleanup leftovers
@@ -239,8 +232,6 @@ SELECT public.wait_for_resource_cleanup();
 
 (1 row)
 
-CALL citus_cleanup_orphaned_shards();
-NOTICE:  cleaned up 1 orphaned shards
 -- failure on setting lock_timeout (right before dropping subscriptions & replication slots)
 SELECT citus.mitmproxy('conn.onQuery(query="^SET LOCAL lock_timeout").kill()');
  mitmproxy
@@ -291,8 +282,6 @@ SELECT public.wait_for_resource_cleanup();
 
 (1 row)
 
-CALL citus_cleanup_orphaned_shards();
-NOTICE:  cleaned up 1 orphaned shards
 -- cancellation on disabling subscription (right before dropping it)
 SELECT citus.mitmproxy('conn.onQuery(query="^ALTER SUBSCRIPTION .* DISABLE").cancel(' || :pid || ')');
  mitmproxy
@@ -323,6 +312,7 @@ SELECT pg_reload_conf();
  t
 (1 row)
 
+SET citus.next_operation_id TO 777;
 -- failure on dropping subscription
 SELECT citus.mitmproxy('conn.onQuery(query="^DROP SUBSCRIPTION").killall()');
  mitmproxy
@@ -345,14 +335,12 @@ SELECT citus.mitmproxy('conn.allow()');
 
 -- first, manually drop the subscsription object. But the record for it will remain on pg_dist_cleanup
 -- we expect the drop query will succeed on only one node
-SELECT COUNT(*)
-    FROM run_command_on_workers(
-        $$DROP SUBSCRIPTION citus_shard_move_subscription_xxxxxxx_xxxxxxx$$)
-    WHERE success AND result = 'DROP SUBSCRIPTION';
- count
+SELECT 1 FROM run_command_on_workers('DROP SUBSCRIPTION citus_shard_move_subscription_xxxxxxx_xxxxxxx');
+ ?column?
 ---------------------------------------------------------------------
-     1
-(1 row)
+        1
+        1
+(2 rows)
 
 -- reset back
 ALTER SYSTEM RESET citus.defer_shard_delete_interval;
@@ -398,6 +386,19 @@ SELECT citus.mitmproxy('conn.onQuery(query="t_pkey").cancel(' || :pid || ')');
 
 SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
 ERROR:  canceling statement due to user request
+-- cleanup leftovers
+SELECT citus.mitmproxy('conn.allow()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT public.wait_for_resource_cleanup();
+ wait_for_resource_cleanup
+---------------------------------------------------------------------
+
+(1 row)
+
 -- failure on create index
 SELECT citus.mitmproxy('conn.matches(b"CREATE INDEX").killall()');
  mitmproxy
@@ -406,8 +407,6 @@ SELECT citus.mitmproxy('conn.matches(b"CREATE INDEX").killall()');
 (1 row)
 
 SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
-WARNING:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
-WARNING:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
 ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
 -- cleanup leftovers
 SELECT citus.mitmproxy('conn.allow()');
@@ -443,8 +442,6 @@ SELECT citus.mitmproxy('conn.matches(b"CREATE INDEX").killall()');
 (1 row)
 
 SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
-WARNING:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
-WARNING:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
 ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
 -- failure on parallel create index
 ALTER SYSTEM RESET citus.max_adaptive_executor_pool_size;
@@ -461,8 +458,6 @@ SELECT citus.mitmproxy('conn.matches(b"CREATE INDEX").killall()');
 (1 row)
 
 SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
-WARNING:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
-WARNING:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
 ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
 -- Verify that the shard is not moved and the number of rows are still 100k
 SELECT citus.mitmproxy('conn.allow()');
@@ -512,6 +507,19 @@ SELECT count(*) FROM t;
  count
 ---------------------------------------------------------------------
  100000
+(1 row)
+
+-- cleanup leftovers
+SELECT citus.mitmproxy('conn.allow()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT public.wait_for_resource_cleanup();
+ wait_for_resource_cleanup
+---------------------------------------------------------------------
+
 (1 row)
 
 DROP SCHEMA move_shard CASCADE ;

@@ -512,7 +512,7 @@ SELECT unnest(shard_placement_rebalance_array(
         ]::json[]
 ));
 NOTICE:  Ignoring move of shard xxxxx from b:5432 to a:5432, because the move only brings a small improvement relative to the shard its size
-DETAIL:  The balance improvement of 0.1 is lower than the improvement_threshold of 0.5
+DETAIL:  The balance improvement of 0.1xxxxx is lower than the improvement_threshold of 0.5
 NOTICE:  Ignored 1 moves, all of which are shown in notices above
 HINT:  If you do want these moves to happen, try changing improvement_threshold to a lower value than what it is now (0.5).
                                                unnest

@@ -74,6 +74,12 @@ SELECT pg_catalog.citus_split_shard_by_split_points(
     'block_writes');
 ERROR:  relation citus_split_failure_test_schema.sensors_8981002 already exists on worker localhost:xxxxx
 -- BEGIN : Split Shard, which is expected to fail.
+SELECT public.wait_for_resource_cleanup();
+ wait_for_resource_cleanup
+---------------------------------------------------------------------
+
+(1 row)
+
 -- BEGIN : Ensure tables were cleaned from worker
 \c - - - :worker_1_port
 SET search_path TO "citus_split_failure_test_schema";

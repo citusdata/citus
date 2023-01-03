@@ -28,7 +28,7 @@ NOTICE:  issuing VACUUM (PARALLEL 0) test_pg13.dist_table_65001
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 -- This should error out since -5 is not valid.
 VACUUM (PARALLEL -5) dist_table;
-ERROR:  parallel vacuum degree must be between 0 and 1024
+ERROR:  parallel workers for vacuum must be between 0 and 1024
 -- This should error out since no number is given
 VACUUM (PARALLEL) dist_table;
 ERROR:  parallel option requires a value between 0 and 1024

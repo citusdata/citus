@@ -193,95 +193,79 @@ LogicallyReplicateShards(List *shardList, char *sourceNodeName, int sourceNodePo
 	CreateGroupedLogicalRepTargetsConnections(groupedLogicalRepTargetsHash, superUser,
 											  databaseName);
 
-	PG_TRY();
-	{
-		MultiConnection *sourceReplicationConnection =
-			GetReplicationConnection(sourceConnection->hostname, sourceConnection->port);
+	MultiConnection *sourceReplicationConnection =
+		GetReplicationConnection(sourceConnection->hostname, sourceConnection->port);
 
-		/* set up the publication on the source and subscription on the target */
-		CreatePublications(sourceConnection, publicationInfoHash);
-		char *snapshot = CreateReplicationSlots(
-			sourceConnection,
-			sourceReplicationConnection,
-			logicalRepTargetList,
-			"pgoutput");
+	/* set up the publication on the source and subscription on the target */
+	CreatePublications(sourceConnection, publicationInfoHash);
+	char *snapshot = CreateReplicationSlots(
+		sourceConnection,
+		sourceReplicationConnection,
+		logicalRepTargetList,
+		"pgoutput");
 
-		CreateSubscriptions(
-			sourceConnection,
-			sourceConnection->database,
-			logicalRepTargetList);
+	CreateSubscriptions(
+		sourceConnection,
+		sourceConnection->database,
+		logicalRepTargetList);
 
-		/* only useful for isolation testing, see the function comment for the details */
-		ConflictWithIsolationTestingBeforeCopy();
+	/* only useful for isolation testing, see the function comment for the details */
+	ConflictWithIsolationTestingBeforeCopy();
 
-		/*
-		 * We have to create the primary key (or any other replica identity)
-		 * before the update/delete operations that are queued will be
-		 * replicated. Because if the replica identity does not exist on the
-		 * target, the replication would fail.
-		 *
-		 * So the latest possible moment we could do this is right after the
-		 * initial data COPY, but before enabling the susbcriptions. It might
-		 * seem like a good idea to it after the initial data COPY, since
-		 * it's generally the rule that it's cheaper to build an index at once
-		 * than to create it incrementally. This general rule, is why we create
-		 * all the regular indexes as late during the move as possible.
-		 *
-		 * But as it turns out in practice it's not as clear cut, and we saw a
-		 * speed degradation in the time it takes to move shards when doing the
-		 * replica identity creation after the initial COPY. So, instead we
-		 * keep it before the COPY.
-		 */
-		CreateReplicaIdentities(logicalRepTargetList);
+	/*
+	 * We have to create the primary key (or any other replica identity)
+	 * before the update/delete operations that are queued will be
+	 * replicated. Because if the replica identity does not exist on the
+	 * target, the replication would fail.
+	 *
+	 * So the latest possible moment we could do this is right after the
+	 * initial data COPY, but before enabling the susbcriptions. It might
+	 * seem like a good idea to it after the initial data COPY, since
+	 * it's generally the rule that it's cheaper to build an index at once
+	 * than to create it incrementally. This general rule, is why we create
+	 * all the regular indexes as late during the move as possible.
+	 *
+	 * But as it turns out in practice it's not as clear cut, and we saw a
+	 * speed degradation in the time it takes to move shards when doing the
+	 * replica identity creation after the initial COPY. So, instead we
+	 * keep it before the COPY.
+	 */
+	CreateReplicaIdentities(logicalRepTargetList);
 
-		UpdatePlacementUpdateStatusForShardIntervalList(
-			shardList,
-			sourceNodeName,
-			sourceNodePort,
-			PLACEMENT_UPDATE_STATUS_COPYING_DATA);
+	UpdatePlacementUpdateStatusForShardIntervalList(
+		shardList,
+		sourceNodeName,
+		sourceNodePort,
+		PLACEMENT_UPDATE_STATUS_COPYING_DATA);
 
-		CopyShardsToNode(sourceNode, targetNode, shardList, snapshot);
+	CopyShardsToNode(sourceNode, targetNode, shardList, snapshot);
 
-		/*
-		 * We can close this connection now, because we're done copying the
-		 * data and thus don't need access to the snapshot anymore. The
-		 * replication slot will still be at the same LSN, because the
-		 * subscriptions have not been enabled yet.
-		 */
-		CloseConnection(sourceReplicationConnection);
+	/*
+	 * We can close this connection now, because we're done copying the
+	 * data and thus don't need access to the snapshot anymore. The
+	 * replication slot will still be at the same LSN, because the
+	 * subscriptions have not been enabled yet.
+	 */
+	CloseConnection(sourceReplicationConnection);
 
-		/*
-		 * Start the replication and copy all data
-		 */
-		CompleteNonBlockingShardTransfer(shardList,
-										 sourceConnection,
-										 publicationInfoHash,
-										 logicalRepTargetList,
-										 groupedLogicalRepTargetsHash,
-										 SHARD_MOVE);
+	/*
+	 * Start the replication and copy all data
+	 */
+	CompleteNonBlockingShardTransfer(shardList,
+									 sourceConnection,
+									 publicationInfoHash,
+									 logicalRepTargetList,
+									 groupedLogicalRepTargetsHash,
+									 SHARD_MOVE);
 
-		/*
-		 * We use these connections exclusively for subscription management,
-		 * because otherwise subsequent metadata changes may inadvertedly use
-		 * these connections instead of the connections that were used to
-		 * grab locks in BlockWritesToShardList.
-		 */
-		CloseGroupedLogicalRepTargetsConnections(groupedLogicalRepTargetsHash);
-		CloseConnection(sourceConnection);
-	}
-	PG_CATCH();
-	{
-		/* We don't need to UnclaimConnections since we're already erroring out */
-
-		/*
-		 * Drop temporary objects that were marked as CLEANUP_ON_FAILURE
-		 * or CLEANUP_ALWAYS.
-		 */
-		FinalizeOperationNeedingCleanupOnFailure("citus_[move/copy]_shard_placement");
-
-		PG_RE_THROW();
-	}
-	PG_END_TRY();
+	/*
+	 * We use these connections exclusively for subscription management,
+	 * because otherwise subsequent metadata changes may inadvertedly use
+	 * these connections instead of the connections that were used to
+	 * grab locks in BlockWritesToShardList.
+	 */
+	CloseGroupedLogicalRepTargetsConnections(groupedLogicalRepTargetsHash);
+	CloseConnection(sourceConnection);
 }
 
 

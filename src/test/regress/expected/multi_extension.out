@@ -133,7 +133,7 @@ SELECT * FROM multi_extension.print_extension_changes();
                  | function alter_role_if_exists(text,text) boolean
                  | function any_value(anyelement) anyelement
                  | function any_value_agg(anyelement,anyelement) anyelement
-                 | function array_cat_agg(anyarray) anycompatiblearray
+                 | function array_cat_agg(anycompatiblearray) anycompatiblearray
                  | function assign_distributed_transaction_id(integer,bigint,timestamp with time zone) void
                  | function authinfo_valid(text) boolean
                  | function broadcast_intermediate_result(text,text) bigint
@@ -1189,7 +1189,44 @@ SELECT * FROM multi_extension.print_extension_changes();
 
 -- Test downgrade to 11.1-1 from 11.2-1
 ALTER EXTENSION citus UPDATE TO '11.2-1';
+-- create a table with orphaned shards to see if orphaned shards will be dropped
+-- and cleanup records will be created for them
+SET citus.shard_replication_factor to 1;
+CREATE TABLE table_with_orphaned_shards (a int);
+SELECT create_distributed_table('table_with_orphaned_shards', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- show there are 4 placements
+SELECT * FROM pg_dist_placement ORDER BY shardid;
+ placementid | shardid | shardstate | shardlength | groupid
+---------------------------------------------------------------------
+           1 |  102008 |          1 |           0 |       0
+           2 |  102009 |          1 |           0 |       0
+           3 |  102010 |          1 |           0 |       0
+           4 |  102011 |          1 |           0 |       0
+(4 rows)
+
+-- mark two of them as orphaned
+UPDATE pg_dist_placement SET shardstate = 4 WHERE shardid % 2 = 1;
 ALTER EXTENSION citus UPDATE TO '11.1-1';
+-- show placements and cleanup records
+SELECT * FROM pg_dist_placement ORDER BY shardid;
+ placementid | shardid | shardstate | shardlength | groupid
+---------------------------------------------------------------------
+           1 |  102008 |          1 |           0 |       0
+           2 |  102009 |          4 |           0 |       0
+           3 |  102010 |          1 |           0 |       0
+           4 |  102011 |          4 |           0 |       0
+(4 rows)
+
+SELECT * FROM pg_dist_cleanup;
+ record_id | operation_id | object_type | object_name | node_group_id | policy_type
+---------------------------------------------------------------------
+(0 rows)
+
 -- Should be empty result since upgrade+downgrade should be a no-op
 SELECT * FROM multi_extension.print_extension_changes();
  previous_object | current_object
@@ -1198,6 +1235,31 @@ SELECT * FROM multi_extension.print_extension_changes();
 
 -- Snapshot of state at 11.2-1
 ALTER EXTENSION citus UPDATE TO '11.2-1';
+-- verify that the placements are deleted and cleanup records are created
+SELECT * FROM pg_dist_placement ORDER BY shardid;
+ placementid | shardid | shardstate | shardlength | groupid
+---------------------------------------------------------------------
+           1 |  102008 |          1 |           0 |       0
+           3 |  102010 |          1 |           0 |       0
+(2 rows)
+
+SELECT * FROM pg_dist_cleanup;
+ record_id | operation_id | object_type |            object_name            | node_group_id | policy_type
+---------------------------------------------------------------------
+         1 |            0 |           1 | table_with_orphaned_shards_102009 |             0 |           0
+         2 |            0 |           1 | table_with_orphaned_shards_102011 |             0 |           0
+(2 rows)
+
+-- error out as cleanup records remain
+ALTER EXTENSION citus UPDATE TO '11.0-4';
+ERROR:  pg_dist_cleanup is introduced in Citus 11.1
+HINT:  To downgrade Citus to an older version, you should first cleanup all the orphaned resources and make sure pg_dist_cleanup is empty, by executing CALL citus_cleanup_orphaned_resources();
+CONTEXT:  PL/pgSQL function inline_code_block line XX at RAISE
+-- cleanup
+SET client_min_messages TO ERROR;
+CALL citus_cleanup_orphaned_resources();
+DROP TABLE table_with_orphaned_shards;
+RESET client_min_messages;
 SELECT * FROM multi_extension.print_extension_changes();
                                                                                                                                     previous_object                                                                                                                                     |                                                                                                                                                              current_object
 ---------------------------------------------------------------------

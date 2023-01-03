@@ -4,6 +4,7 @@ setup
 {
 	SET citus.shard_count TO 2;
 	SET citus.shard_replication_factor TO 1;
+	ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 102011;
 	CREATE TABLE test_move_table (x int, y int);
 	SELECT create_distributed_table('test_move_table', 'x');
 
@@ -14,6 +15,14 @@ teardown
 {
 	DROP TABLE test_move_table;
 	DROP TABLE selected_shard_for_test_table;
+
+	CREATE OR REPLACE PROCEDURE isolation_cleanup_orphaned_resources()
+		LANGUAGE C
+		AS 'citus', $$isolation_cleanup_orphaned_resources$$;
+	COMMENT ON PROCEDURE isolation_cleanup_orphaned_resources()
+		IS 'cleanup orphaned shards';
+		RESET citus.enable_metadata_sync;
+	CALL isolation_cleanup_orphaned_resources();
 }
 
 session "s1"
@@ -29,11 +38,23 @@ step "s1-move-placement"
 	SELECT master_move_shard_placement((SELECT * FROM selected_shard_for_test_table), 'localhost', 57637, 'localhost', 57638, 'force_logical');
 }
 
+step "s1-move-placement-back"
+{
+	SELECT master_move_shard_placement((SELECT * FROM selected_shard_for_test_table), 'localhost', 57638, 'localhost', 57637, 'force_logical');
+}
+
+step "s1-wait" {}
+
 session "s2"
 
 step "s2-begin"
 {
 	BEGIN;
+}
+
+step "s2-select-from-table"
+{
+	SELECT * FROM test_move_table WHERE x=5;
 }
 
 step "s2-move-placement"
@@ -68,3 +89,7 @@ permutation "s1-load-cache" "s2-begin" "s2-move-placement" "s1-move-placement" "
 
 // the same test without the load caches
 permutation "s2-begin" "s2-move-placement" "s1-move-placement" "s2-commit" "s2-print-placements"
+
+// for some reason s1-move-placement-back is detected as being blocked,
+// eventhough it can complete successfully.
+permutation "s2-print-placements" "s2-begin" "s2-select-from-table" "s1-move-placement" "s1-move-placement-back"(*) "s1-wait" "s2-commit" "s2-print-placements"

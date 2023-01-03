@@ -43,7 +43,7 @@ SELECT pg_sleep(1);
 
 -- failing move due to a stopped rebalance, first clean orphans to make the error stable
 SET client_min_messages TO WARNING;
-CALL citus_cleanup_orphaned_shards();
+CALL citus_cleanup_orphaned_resources();
 RESET client_min_messages;
 SELECT citus_move_shard_placement(85674000, 'localhost', :worker_1_port, 'localhost', :worker_2_port, shard_transfer_mode => 'block_writes');
 
@@ -80,3 +80,4 @@ RESET ROLE;
 
 SET client_min_messages TO WARNING;
 DROP SCHEMA background_rebalance CASCADE;
+DROP USER non_super_user_rebalance;

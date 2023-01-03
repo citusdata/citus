@@ -128,7 +128,7 @@ SET citus.next_shard_id TO 8981007;
 
 SELECT citus_move_shard_placement(8981000, 'localhost', :worker_1_port, 'localhost', :worker_2_port, shard_transfer_mode:='force_logical');
 -- END : Move one shard before we split it.
-CALL citus_cleanup_orphaned_shards();
+SELECT public.wait_for_resource_cleanup();
 
 -- BEGIN : Set node id variables
 SELECT nodeid AS worker_1_node FROM pg_dist_node WHERE nodeport=:worker_1_port \gset
@@ -163,7 +163,7 @@ SELECT public.wait_for_resource_cleanup();
 SELECT citus_move_shard_placement(8981007, 'localhost', :worker_1_port, 'localhost', :worker_2_port, shard_transfer_mode:='block_writes');
 -- END : Move a shard post split.
 
-CALL citus_cleanup_orphaned_shards();
+SELECT public.wait_for_resource_cleanup();
 
 -- BEGIN : Display current state.
 SELECT shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, nodeport
@@ -256,4 +256,5 @@ SELECT COUNT(*) FROM colocated_dist_table;
 ALTER SYSTEM RESET citus.defer_shard_delete_interval;
 SELECT pg_reload_conf();
 DROP SCHEMA "citus_split_test_schema" CASCADE;
+DROP USER test_split_role;
 --END : Cleanup

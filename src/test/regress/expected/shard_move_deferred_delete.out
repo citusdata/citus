@@ -51,12 +51,15 @@ $cmd$);
 
 -- Make sure this cannot be run in a transaction
 BEGIN;
-CALL citus_cleanup_orphaned_shards();
-ERROR:  citus_cleanup_orphaned_shards cannot run inside a transaction block
+CALL citus_cleanup_orphaned_resources();
+ERROR:  citus_cleanup_orphaned_resources cannot run inside a transaction block
 COMMIT;
--- execute delayed removal
+-- citus_cleanup_orphaned_shards is deprecated
 CALL citus_cleanup_orphaned_shards();
-NOTICE:  cleaned up 1 orphaned shards
+WARNING:  citus_cleanup_orphaned_shards is deprecated. Use citus_cleanup_orphaned_resources instead
+-- execute delayed removal
+CALL citus_cleanup_orphaned_resources();
+NOTICE:  cleaned up 1 orphaned resources
 -- we expect the shard to be on only the second worker
 SELECT run_command_on_workers($cmd$
     SELECT count(*) FROM pg_class WHERE relname = 't1_20000000';
@@ -94,6 +97,12 @@ SELECT pg_reload_conf();
 -- Sleep 1 second to give Valgrind enough time to clear transactions
 SELECT pg_sleep(1);
  pg_sleep
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT public.wait_for_resource_cleanup();
+ wait_for_resource_cleanup
 ---------------------------------------------------------------------
 
 (1 row)
@@ -141,6 +150,50 @@ SELECT master_move_shard_placement(20000000, 'localhost', :worker_2_port, 'local
 
 (1 row)
 
+-- when a move tx is aborted, there remains a shard on the target node
+BEGIN;
+SELECT master_move_shard_placement(20000000, 'localhost', :worker_1_port, 'localhost', :worker_2_port);
+ master_move_shard_placement
+---------------------------------------------------------------------
+
+(1 row)
+
+ROLLBACK;
+-- see the cleanup record for the shard on the target node
+-- https://github.com/citusdata/citus/issues/6580
+select object_name, object_type from pg_dist_cleanup where object_type = 1;
+              object_name               | object_type
+---------------------------------------------------------------------
+ shard_move_deferred_delete.t1_20000000 |           1
+(1 row)
+
+-- see the shard on both workers
+SELECT run_command_on_workers($cmd$
+    SELECT count(*) FROM pg_class WHERE relname = 't1_20000000';
+$cmd$);
+ run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,1)
+ (localhost,57638,t,1)
+(2 rows)
+
+-- clean it up
+SELECT public.wait_for_resource_cleanup();
+ wait_for_resource_cleanup
+---------------------------------------------------------------------
+
+(1 row)
+
+-- verify the shard is cleaned up
+SELECT run_command_on_workers($cmd$
+    SELECT count(*) FROM pg_class WHERE relname = 't1_20000000';
+$cmd$);
+ run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,1)
+ (localhost,57638,t,0)
+(2 rows)
+
 -- override the function for testing purpose
 -- since it is extension owned function, propagate it to workers manually
 create or replace function pg_catalog.citus_local_disk_space_stats(OUT available_disk_size bigint, OUT total_disk_size bigint)
@@ -178,7 +231,7 @@ SELECT citus_shard_cost_by_disk_size(20000001);
 
 -- When there's not enough space the move should fail
 SELECT master_move_shard_placement(20000001, 'localhost', :worker_2_port, 'localhost', :worker_1_port);
-ERROR:  not enough empty space on node if the shard is moved, actual available space after move will be 0 bytes, desired available space after move is 850 bytes,estimated size increase on node after move is 8192 bytes.
+ERROR:  not enough empty space on node if the shard is moved, actual available space after move will be 0 bytes, desired available space after move is 850 bytes, estimated size increase on node after move is 8192 bytes.
 HINT:  consider lowering citus.desired_percent_disk_available_after_move.
 BEGIN;
 -- when we disable the setting, the move should not give "not enough space" error
@@ -230,7 +283,7 @@ $BODY$ language plpgsql;
 SET search_path TO shard_move_deferred_delete;
 -- When there would not be enough free space left after the move, the move should fail
 SELECT master_move_shard_placement(20000001, 'localhost', :worker_2_port, 'localhost', :worker_1_port);
-ERROR:  not enough empty space on node if the shard is moved, actual available space after move will be 108 bytes, desired available space after move is 850 bytes,estimated size increase on node after move is 8192 bytes.
+ERROR:  not enough empty space on node if the shard is moved, actual available space after move will be 108 bytes, desired available space after move is 850 bytes, estimated size increase on node after move is 8192 bytes.
 HINT:  consider lowering citus.desired_percent_disk_available_after_move.
 -- Restore the original function on workers
 \c - - - :worker_1_port

@@ -26,6 +26,9 @@ test_file_name = args['test_name']
 use_base_schedule = args['use_base_schedule']
 use_whole_schedule_line = args['use_whole_schedule_line']
 
+test_files_to_skip = ['multi_cluster_management', 'multi_extension', 'multi_test_helpers']
+test_files_to_run_without_schedule = ['single_node_enterprise']
+
 if not (test_file_name or test_file_path):
     print(f"FATAL: No test given.")
     sys.exit(2)
@@ -46,6 +49,11 @@ if test_file_path:
             "ERROR: Unrecognized test extension. Valid extensions are: .sql and .spec"
         )
         sys.exit(1)
+
+# early exit if it's a test that needs to be skipped
+if test_file_name in test_files_to_skip:
+    print(f"WARNING: Skipping exceptional test: '{test_file_name}'")
+    sys.exit(0)
 
 test_schedule = ''
 
@@ -73,11 +81,15 @@ elif "isolation" in test_schedule:
     test_schedule = 'base_isolation_schedule'
 elif "failure" in test_schedule:
     test_schedule = 'failure_base_schedule'
+elif "split" in test_schedule:
+    test_schedule = 'minimal_schedule'
 elif "mx" in test_schedule:
     if use_base_schedule:
         test_schedule = 'mx_base_schedule'
     else:
         test_schedule = 'mx_minimal_schedule'
+elif "operations" in test_schedule:
+    test_schedule = 'minimal_schedule'
 elif test_schedule in config.ARBITRARY_SCHEDULE_NAMES:
     print(f"WARNING: Arbitrary config schedule ({test_schedule}) is not supported.")
     sys.exit(0)
@@ -90,7 +102,10 @@ else:
 # copy base schedule to a temp file and append test_schedule_line
 # to be able to run tests in parallel (if test_schedule_line is a parallel group.)
 tmp_schedule_path = os.path.join(regress_dir, f"tmp_schedule_{ random.randint(1, 10000)}")
-shutil.copy2(os.path.join(regress_dir, test_schedule), tmp_schedule_path)
+# some tests don't need a schedule to run
+# e.g tests that are in the first place in their own schedule
+if test_file_name not in test_files_to_run_without_schedule:
+    shutil.copy2(os.path.join(regress_dir, test_schedule), tmp_schedule_path)
 with open(tmp_schedule_path, "a") as myfile:
         for i in range(args['repeat']):
             myfile.write(test_schedule_line)

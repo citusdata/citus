@@ -294,7 +294,7 @@ SELECT event FROM time_partitioned ORDER BY 1;
 \set VERBOSITY default
 DROP TABLE time_partitioned;
 -- test altering a table with index to columnar
-CREATE TABLE index_table (a INT) ;
+CREATE TABLE index_table (a INT) USING heap;
 CREATE INDEX idx1 ON index_table (a);
 -- also create an index with statistics
 CREATE INDEX idx2 ON index_table ((a+1));

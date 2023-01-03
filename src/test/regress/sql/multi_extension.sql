@@ -525,12 +525,42 @@ SELECT * FROM multi_extension.print_extension_changes();
 
 -- Test downgrade to 11.1-1 from 11.2-1
 ALTER EXTENSION citus UPDATE TO '11.2-1';
+
+-- create a table with orphaned shards to see if orphaned shards will be dropped
+-- and cleanup records will be created for them
+SET citus.shard_replication_factor to 1;
+CREATE TABLE table_with_orphaned_shards (a int);
+SELECT create_distributed_table('table_with_orphaned_shards', 'a');
+-- show there are 4 placements
+SELECT * FROM pg_dist_placement ORDER BY shardid;
+-- mark two of them as orphaned
+UPDATE pg_dist_placement SET shardstate = 4 WHERE shardid % 2 = 1;
+
 ALTER EXTENSION citus UPDATE TO '11.1-1';
+
+-- show placements and cleanup records
+SELECT * FROM pg_dist_placement ORDER BY shardid;
+SELECT * FROM pg_dist_cleanup;
+
 -- Should be empty result since upgrade+downgrade should be a no-op
 SELECT * FROM multi_extension.print_extension_changes();
 
 -- Snapshot of state at 11.2-1
 ALTER EXTENSION citus UPDATE TO '11.2-1';
+
+-- verify that the placements are deleted and cleanup records are created
+SELECT * FROM pg_dist_placement ORDER BY shardid;
+SELECT * FROM pg_dist_cleanup;
+
+-- error out as cleanup records remain
+ALTER EXTENSION citus UPDATE TO '11.0-4';
+
+-- cleanup
+SET client_min_messages TO ERROR;
+CALL citus_cleanup_orphaned_resources();
+DROP TABLE table_with_orphaned_shards;
+RESET client_min_messages;
+
 SELECT * FROM multi_extension.print_extension_changes();
 
 DROP TABLE multi_extension.prev_objects, multi_extension.extension_diff;

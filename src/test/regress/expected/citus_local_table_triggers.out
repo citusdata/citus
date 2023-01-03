@@ -67,7 +67,7 @@ ROLLBACK;
 BEGIN;
     CREATE TABLE reference_table(value int);
     SELECT create_reference_table('reference_table');
-NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1507006, 'citus_local_table_triggers', 'CREATE TABLE citus_local_table_triggers.reference_table (value integer) ');SELECT worker_apply_shard_ddl_command (1507006, 'citus_local_table_triggers', 'ALTER TABLE citus_local_table_triggers.reference_table OWNER TO postgres')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1507006, 'citus_local_table_triggers', 'CREATE TABLE citus_local_table_triggers.reference_table (value integer) USING heap');SELECT worker_apply_shard_ddl_command (1507006, 'citus_local_table_triggers', 'ALTER TABLE citus_local_table_triggers.reference_table OWNER TO postgres')
  create_reference_table
 ---------------------------------------------------------------------
 

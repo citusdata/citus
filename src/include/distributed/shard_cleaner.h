@@ -23,8 +23,9 @@ extern bool CheckAvailableSpaceBeforeMove;
 extern int NextOperationId;
 extern int NextCleanupRecordId;
 
-extern int TryDropOrphanedResources(bool waitForLocks);
+extern int TryDropOrphanedResources(void);
 extern void DropOrphanedResourcesInSeparateTransaction(void);
+extern void ErrorIfCleanupRecordForShardExists(char *shardName);
 
 /* Members for cleanup infrastructure */
 typedef uint64 OperationId;
@@ -102,13 +103,6 @@ extern void InsertCleanupRecordInSubtransaction(CleanupObject objectType,
 												char *objectName,
 												int nodeGroupId,
 												CleanupPolicy policy);
-
-/*
- * FinalizeOperationNeedingCleanupOnFailure is be called by an operation to signal
- * completion on failure. This will trigger cleanup of appropriate resources
- * and cleanup records.
- */
-extern void FinalizeOperationNeedingCleanupOnFailure(const char *operationName);
 
 /*
  * FinalizeOperationNeedingCleanupOnSuccess is be called by an operation to signal

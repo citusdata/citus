@@ -39,8 +39,14 @@ step "s2-vacuum-full"
     VACUUM FULL test_insert_vacuum;
 }
 
+step "s2-wait" {}
+
 // INSERT and VACUUM ANALYZE should not block each other.
-permutation "s1-begin" "s1-insert" "s2-vacuum-analyze" "s1-commit"
+// vacuum analyze sometimes gets randomly blocked temporarily, but this is
+// resolved automatically. To avoid flaky output, we always trigger a
+// <waiting...> message using (*) and then we wait until vacuum analyze
+// actually completes.
+permutation "s1-begin" "s1-insert" "s2-vacuum-analyze"(*) "s2-wait" "s1-commit"
 
 // INSERT and VACUUM FULL should block each other.
 permutation "s1-begin" "s1-insert" "s2-vacuum-full" "s1-commit"

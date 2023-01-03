@@ -814,8 +814,6 @@ SET citus.override_table_visibility TO false;
 SET search_path to "Tenant Isolation";
 \set VERBOSITY terse
 SELECT isolate_tenant_to_new_shard('orders_streaming', 104, 'CASCADE', shard_transfer_mode => 'force_logical');
-WARNING:  command DROP TABLE is disabled
-WARNING:  failed to clean up 1 orphaned shards out of 1 after a isolate_tenant_to_new_shard operation failed
 ERROR:  command CREATE TABLE is disabled
 \set VERBOSITY default
 \c - postgres - :worker_1_port

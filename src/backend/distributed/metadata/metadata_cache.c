@@ -1173,14 +1173,13 @@ LookupNodeForGroup(int32 groupId)
 
 /*
  * ShardPlacementList returns the list of placements for the given shard from
- * the cache. This list includes placements that are orphaned, because they
- * their deletion is postponed to a later point (shardstate = 4).
+ * the cache.
  *
  * The returned list is deep copied from the cache and thus can be modified
  * and pfree()d freely.
  */
 List *
-ShardPlacementListIncludingOrphanedPlacements(uint64 shardId)
+ShardPlacementList(uint64 shardId)
 {
 	List *placementList = NIL;
 

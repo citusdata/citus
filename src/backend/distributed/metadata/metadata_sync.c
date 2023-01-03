@@ -3648,7 +3648,7 @@ citus_internal_delete_shard_metadata(PG_FUNCTION_ARGS)
 		EnsureShardOwner(shardId, missingOk);
 	}
 
-	List *shardPlacementList = ShardPlacementListIncludingOrphanedPlacements(shardId);
+	List *shardPlacementList = ShardPlacementList(shardId);
 	ShardPlacement *shardPlacement = NULL;
 	foreach_ptr(shardPlacement, shardPlacementList)
 	{

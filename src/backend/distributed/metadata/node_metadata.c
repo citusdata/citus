@@ -120,7 +120,6 @@ static char * NodeMetadataSyncedUpdateCommand(uint32 nodeId, bool metadataSynced
 static void ErrorIfCoordinatorMetadataSetFalse(WorkerNode *workerNode, Datum value,
 											   char *field);
 static WorkerNode * SetShouldHaveShards(WorkerNode *workerNode, bool shouldHaveShards);
-static void RemoveOldShardPlacementForNodeGroup(int groupId);
 static int FindCoordinatorNodeId(void);
 static WorkerNode * FindNodeAnyClusterByNodeId(uint32 nodeId);
 
@@ -1897,8 +1896,6 @@ RemoveNodeFromCluster(char *nodeName, int32 nodePort)
 
 	DeleteNodeRow(workerNode->workerName, nodePort);
 
-	RemoveOldShardPlacementForNodeGroup(workerNode->groupId);
-
 	/* make sure we don't have any lingering session lifespan connections */
 	CloseNodeConnectionsAfterTransaction(workerNode->workerName, nodePort);
 
@@ -1967,29 +1964,6 @@ PlacementHasActivePlacementOnAnotherGroup(GroupShardPlacement *sourcePlacement)
 	}
 
 	return foundActivePlacementOnAnotherGroup;
-}
-
-
-/*
- * RemoveOldShardPlacementForNodeGroup removes all old shard placements
- * for the given node group from pg_dist_placement.
- */
-static void
-RemoveOldShardPlacementForNodeGroup(int groupId)
-{
-	/*
-	 * Prevent concurrent deferred drop
-	 */
-	LockPlacementCleanup();
-	List *shardPlacementsOnNode = AllShardPlacementsOnNodeGroup(groupId);
-	GroupShardPlacement *placement = NULL;
-	foreach_ptr(placement, shardPlacementsOnNode)
-	{
-		if (placement->shardState == SHARD_STATE_TO_DELETE)
-		{
-			DeleteShardPlacementRow(placement->placementId);
-		}
-	}
 }
 
 
