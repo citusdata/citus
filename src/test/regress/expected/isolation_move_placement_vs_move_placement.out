@@ -77,7 +77,7 @@ localhost|   57638|    2
 (1 row)
 
 
-starting permutation: s2-print-placements s2-begin s2-select-from-table s1-move-placement s1-move-placement-back s1-wait s2-wait-and-commit s2-print-placements
+starting permutation: s2-print-placements s2-begin s2-select-from-table s1-move-placement s1-move-placement-back s1-wait s2-commit s2-print-placements
 step s2-print-placements:
  SELECT
   nodename, nodeport, count(*)
@@ -120,7 +120,7 @@ step s1-move-placement-back:
 step s1-move-placement-back: <... completed>
 ERROR:  shard move failed as the orphaned shard public.test_move_table_102011 leftover from the previous move could not be cleaned up
 step s1-wait:
-step s2-wait-and-commit:
+step s2-commit:
  COMMIT;
 
 step s2-print-placements:

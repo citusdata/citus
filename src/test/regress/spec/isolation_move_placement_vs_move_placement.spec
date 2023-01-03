@@ -67,11 +67,6 @@ step "s2-commit"
 	COMMIT;
 }
 
-step "s2-wait-and-commit"
-{
-	COMMIT;
-}
-
 step "s2-print-placements"
 {
 	SELECT
@@ -97,4 +92,4 @@ permutation "s2-begin" "s2-move-placement" "s1-move-placement" "s2-commit" "s2-p
 
 // for some reason s1-move-placement-back is detected as being blocked,
 // eventhough it can complete successfully.
-permutation "s2-print-placements" "s2-begin" "s2-select-from-table" "s1-move-placement" "s1-move-placement-back"(*) "s1-wait" "s2-wait-and-commit" "s2-print-placements"
+permutation "s2-print-placements" "s2-begin" "s2-select-from-table" "s1-move-placement" "s1-move-placement-back"(*) "s1-wait" "s2-commit" "s2-print-placements"
