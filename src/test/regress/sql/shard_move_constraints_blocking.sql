@@ -144,7 +144,7 @@ indrelid IN
 \c - - - :master_port
 -- make sure that constrainst are moved sanely with logical replication
 SELECT citus_move_shard_placement(8970000, 'localhost', :worker_1_port, 'localhost', :worker_2_port, shard_transfer_mode:='block_writes');
-CALL citus_cleanup_orphaned_shards();
+SELECT public.wait_for_resource_cleanup();
 
 
 \c - postgres - :worker_2_port
@@ -199,3 +199,4 @@ ALTER TABLE sensors_2020_01_01 DROP CONSTRAINT fkey_from_child_to_child;
 -- cleanup
 \c - postgres - :master_port
 DROP SCHEMA "blocking shard Move Fkeys Indexes" CASCADE;
+DROP ROLE mx_rebalancer_blocking_role_ent;

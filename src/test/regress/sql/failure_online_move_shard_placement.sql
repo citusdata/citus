@@ -103,7 +103,6 @@ SELECT master_move_shard_placement(101, 'localhost', :worker_2_proxy_port, 'loca
 -- cleanup leftovers
 SELECT citus.mitmproxy('conn.allow()');
 SELECT public.wait_for_resource_cleanup();
-CALL citus_cleanup_orphaned_shards();
 
 -- failure on setting lock_timeout (right before dropping subscriptions & replication slots)
 SELECT citus.mitmproxy('conn.onQuery(query="^SET LOCAL lock_timeout").kill()');
@@ -115,7 +114,6 @@ SELECT master_move_shard_placement(101, 'localhost', :worker_2_proxy_port, 'loca
 -- cleanup leftovers
 SELECT citus.mitmproxy('conn.allow()');
 SELECT public.wait_for_resource_cleanup();
-CALL citus_cleanup_orphaned_shards();
 
 -- cancellation on disabling subscription (right before dropping it)
 SELECT citus.mitmproxy('conn.onQuery(query="^ALTER SUBSCRIPTION .* DISABLE").cancel(' || :pid || ')');
@@ -128,6 +126,7 @@ SELECT public.wait_for_resource_cleanup();
 -- disable maintenance daemon cleanup, to prevent the flaky test
 ALTER SYSTEM SET citus.defer_shard_delete_interval TO -1;
 SELECT pg_reload_conf();
+SET citus.next_operation_id TO 777;
 
 -- failure on dropping subscription
 SELECT citus.mitmproxy('conn.onQuery(query="^DROP SUBSCRIPTION").killall()');
@@ -136,10 +135,7 @@ SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost'
 SELECT citus.mitmproxy('conn.allow()');
 -- first, manually drop the subscsription object. But the record for it will remain on pg_dist_cleanup
 -- we expect the drop query will succeed on only one node
-SELECT COUNT(*)
-    FROM run_command_on_workers(
-        $$DROP SUBSCRIPTION citus_shard_move_subscription_10_19$$)
-    WHERE success AND result = 'DROP SUBSCRIPTION';
+SELECT 1 FROM run_command_on_workers('DROP SUBSCRIPTION citus_shard_move_subscription_10_777');
 
 -- reset back
 ALTER SYSTEM RESET citus.defer_shard_delete_interval;
@@ -203,5 +199,9 @@ SELECT citus.mitmproxy('conn.allow()');
 SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
 SELECT * FROM shards_in_workers;
 SELECT count(*) FROM t;
+
+-- cleanup leftovers
+SELECT citus.mitmproxy('conn.allow()');
+SELECT public.wait_for_resource_cleanup();
 
 DROP SCHEMA move_shard CASCADE ;

@@ -32,11 +32,14 @@ $cmd$);
 
 -- Make sure this cannot be run in a transaction
 BEGIN;
-CALL citus_cleanup_orphaned_shards();
+CALL citus_cleanup_orphaned_resources();
 COMMIT;
 
--- execute delayed removal
+-- citus_cleanup_orphaned_shards is deprecated
 CALL citus_cleanup_orphaned_shards();
+
+-- execute delayed removal
+CALL citus_cleanup_orphaned_resources();
 
 -- we expect the shard to be on only the second worker
 SELECT run_command_on_workers($cmd$
@@ -56,6 +59,7 @@ SELECT pg_reload_conf();
 
 -- Sleep 1 second to give Valgrind enough time to clear transactions
 SELECT pg_sleep(1);
+SELECT public.wait_for_resource_cleanup();
 
 -- we expect the shard to be on only the first worker
 SELECT run_command_on_workers($cmd$
@@ -85,7 +89,7 @@ ROLLBACK;
 
 -- see the cleanup record for the shard on the target node
 -- https://github.com/citusdata/citus/issues/6580
-select object_name, object_type from pg_dist_cleanup;
+select object_name, object_type from pg_dist_cleanup where object_type = 1;
 
 -- see the shard on both workers
 SELECT run_command_on_workers($cmd$

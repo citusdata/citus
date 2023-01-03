@@ -23,7 +23,7 @@ SELECT create_distributed_table('test','x');
 
 (1 row)
 
-CALL citus_cleanup_orphaned_shards();
+CALL citus_cleanup_orphaned_resources();
 SELECT nodename, nodeport, COUNT(*)
   FROM pg_dist_placement AS placement,
        pg_dist_node AS node
@@ -48,7 +48,7 @@ SELECT * from citus_drain_node('localhost', :worker_1_port, shard_transfer_mode 
 
 (1 row)
 
-CALL citus_cleanup_orphaned_shards();
+CALL citus_cleanup_orphaned_resources();
 SELECT nodename, nodeport, COUNT(*)
   FROM pg_dist_placement AS placement,
        pg_dist_node AS node
@@ -78,7 +78,7 @@ SELECT * FROM rebalance_table_shards(shard_transfer_mode :='force_logical');
 
 (1 row)
 
-CALL citus_cleanup_orphaned_shards();
+CALL citus_cleanup_orphaned_resources();
 SELECT nodename, nodeport, COUNT(*)
   FROM pg_dist_placement AS placement,
        pg_dist_node AS node
@@ -103,7 +103,7 @@ SELECT * FROM rebalance_table_shards(shard_transfer_mode :='force_logical');
 
 (1 row)
 
-CALL citus_cleanup_orphaned_shards();
+CALL citus_cleanup_orphaned_resources();
 SELECT nodename, nodeport, COUNT(*)
   FROM pg_dist_placement AS placement,
        pg_dist_node AS node

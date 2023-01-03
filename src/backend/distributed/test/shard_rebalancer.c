@@ -80,8 +80,7 @@ typedef struct RebalancePlanContext
 Datum
 run_try_drop_marked_resources(PG_FUNCTION_ARGS)
 {
-	bool waitForLocks = false;
-	TryDropOrphanedResources(waitForLocks);
+	TryDropOrphanedResources();
 	PG_RETURN_VOID();
 }
 

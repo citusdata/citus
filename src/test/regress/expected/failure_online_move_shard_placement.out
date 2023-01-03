@@ -232,8 +232,6 @@ SELECT public.wait_for_resource_cleanup();
 
 (1 row)
 
-CALL citus_cleanup_orphaned_shards();
-NOTICE:  cleaned up 1 orphaned shards
 -- failure on setting lock_timeout (right before dropping subscriptions & replication slots)
 SELECT citus.mitmproxy('conn.onQuery(query="^SET LOCAL lock_timeout").kill()');
  mitmproxy
@@ -284,8 +282,6 @@ SELECT public.wait_for_resource_cleanup();
 
 (1 row)
 
-CALL citus_cleanup_orphaned_shards();
-NOTICE:  cleaned up 1 orphaned shards
 -- cancellation on disabling subscription (right before dropping it)
 SELECT citus.mitmproxy('conn.onQuery(query="^ALTER SUBSCRIPTION .* DISABLE").cancel(' || :pid || ')');
  mitmproxy
@@ -316,6 +312,7 @@ SELECT pg_reload_conf();
  t
 (1 row)
 
+SET citus.next_operation_id TO 777;
 -- failure on dropping subscription
 SELECT citus.mitmproxy('conn.onQuery(query="^DROP SUBSCRIPTION").killall()');
  mitmproxy
@@ -338,14 +335,12 @@ SELECT citus.mitmproxy('conn.allow()');
 
 -- first, manually drop the subscsription object. But the record for it will remain on pg_dist_cleanup
 -- we expect the drop query will succeed on only one node
-SELECT COUNT(*)
-    FROM run_command_on_workers(
-        $$DROP SUBSCRIPTION citus_shard_move_subscription_xxxxxxx_xxxxxxx$$)
-    WHERE success AND result = 'DROP SUBSCRIPTION';
- count
+SELECT 1 FROM run_command_on_workers('DROP SUBSCRIPTION citus_shard_move_subscription_xxxxxxx_xxxxxxx');
+ ?column?
 ---------------------------------------------------------------------
-     1
-(1 row)
+        1
+        1
+(2 rows)
 
 -- reset back
 ALTER SYSTEM RESET citus.defer_shard_delete_interval;
@@ -512,6 +507,19 @@ SELECT count(*) FROM t;
  count
 ---------------------------------------------------------------------
  100000
+(1 row)
+
+-- cleanup leftovers
+SELECT citus.mitmproxy('conn.allow()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT public.wait_for_resource_cleanup();
+ wait_for_resource_cleanup
+---------------------------------------------------------------------
+
 (1 row)
 
 DROP SCHEMA move_shard CASCADE ;

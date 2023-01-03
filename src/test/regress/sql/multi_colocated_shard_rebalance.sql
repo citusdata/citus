@@ -46,6 +46,9 @@ SELECT citus_copy_shard_placement(13000000, 'localhost', :worker_1_port, 'localh
 -- copy colocated shards
 SELECT citus_copy_shard_placement(13000000, 'localhost', :worker_1_port, 'localhost', :worker_2_port, 'force_logical');
 
+-- error out if trying to move a shard that already has a placement on the target
+SELECT citus_move_shard_placement(13000000, 'localhost', :worker_1_port, 'localhost', :worker_2_port, 'force_logical');
+
 -- status after shard copy
 SELECT s.shardid, s.logicalrelid::regclass, sp.nodeport
 FROM
@@ -286,7 +289,7 @@ INSERT INTO serial_move_test (key) VALUES (15) RETURNING *;
 SELECT * FROM run_command_on_placements('serial_move_test', 'SELECT DISTINCT key FROM %s WHERE key = 15') WHERE result = '15' AND shardid = 13000034;
 
 SELECT master_move_shard_placement(13000034, 'localhost', :worker_1_port, 'localhost', :worker_2_port, 'force_logical');
-CALL citus_cleanup_orphaned_shards();
+SELECT public.wait_for_resource_cleanup();
 
 -- confirm the successfull move
 SELECT * FROM run_command_on_placements('serial_move_test', 'SELECT DISTINCT key FROM %s WHERE key = 15') WHERE result = '15' AND shardid = 13000034;
@@ -311,7 +314,7 @@ DROP TABLE logical_failure_test_13000038;
 -- should fail since the command wouldn't be able to connect to the worker_1
 \c - - - :master_port
 SELECT master_move_shard_placement(13000038, 'localhost', :worker_2_port, 'localhost', :worker_1_port, 'force_logical');
-CALL citus_cleanup_orphaned_shards();
+SELECT public.wait_for_resource_cleanup();
 
 DROP TABLE logical_failure_test;
 
@@ -323,12 +326,12 @@ SELECT create_distributed_table('test_with_pkey', 'key', colocate_with => 'none'
 
 -- should succeed since there is a replica identity defined
 SELECT master_move_shard_placement(13000042, 'localhost', :worker_1_port, 'localhost', :worker_2_port);
-CALL citus_cleanup_orphaned_shards();
+SELECT public.wait_for_resource_cleanup();
 
 -- should succeed since we still have a replica identity
 ALTER TABLE test_with_pkey REPLICA IDENTITY FULL;
 SELECT master_move_shard_placement(13000042, 'localhost', :worker_2_port, 'localhost', :worker_1_port, 'auto');
-CALL citus_cleanup_orphaned_shards();
+SELECT public.wait_for_resource_cleanup();
 
 -- make sure we have the replica identity after the move
 SELECT result FROM run_command_on_placements( 'test_with_pkey', 'SELECT relreplident FROM pg_class WHERE relname = ''%s''') WHERE shardid = 13000042;
@@ -336,7 +339,7 @@ SELECT result FROM run_command_on_placements( 'test_with_pkey', 'SELECT relrepli
 -- this time should fail since we don't have replica identity any more
 ALTER TABLE test_with_pkey REPLICA IDENTITY NOTHING;
 SELECT master_move_shard_placement(13000042, 'localhost', :worker_1_port, 'localhost', :worker_2_port, 'auto');
-CALL citus_cleanup_orphaned_shards();
+SELECT public.wait_for_resource_cleanup();
 
 -- make sure we have the replica identity after the move
 SELECT result FROM run_command_on_placements( 'test_with_pkey', 'SELECT relreplident FROM pg_class WHERE relname = ''%s''') WHERE shardid = 13000042;
@@ -344,7 +347,7 @@ SELECT result FROM run_command_on_placements( 'test_with_pkey', 'SELECT relrepli
 -- should succeed since we still have a replica identity
 ALTER TABLE test_with_pkey REPLICA IDENTITY USING INDEX test_with_pkey_pkey;
 SELECT master_move_shard_placement(13000042, 'localhost', :worker_1_port, 'localhost', :worker_2_port);
-CALL citus_cleanup_orphaned_shards();
+SELECT public.wait_for_resource_cleanup();
 
 -- make sure we have the replica identity after the move
 SELECT result FROM run_command_on_placements( 'test_with_pkey', 'SELECT relreplident FROM pg_class WHERE relname = ''%s''') WHERE shardid = 13000042;
@@ -353,14 +356,14 @@ SELECT result FROM run_command_on_placements( 'test_with_pkey', 'SELECT relrepli
 CREATE UNIQUE INDEX req_rep_idx ON test_with_pkey(key, value);
 ALTER TABLE test_with_pkey REPLICA IDENTITY USING INDEX req_rep_idx;
 SELECT master_move_shard_placement(13000042, 'localhost', :worker_2_port, 'localhost', :worker_1_port, 'auto');
-CALL citus_cleanup_orphaned_shards();
+SELECT public.wait_for_resource_cleanup();
 
 -- make sure we have the replica identity after the move
 SELECT result FROM run_command_on_placements( 'test_with_pkey', 'SELECT relreplident FROM pg_class WHERE relname = ''%s''') WHERE shardid = 13000042;
 
 ALTER TABLE test_with_pkey REPLICA IDENTITY NOTHING;
 SELECT master_move_shard_placement(13000042, 'localhost', :worker_1_port, 'localhost', :worker_2_port, 'force_logical');
-CALL citus_cleanup_orphaned_shards();
+SELECT public.wait_for_resource_cleanup();
 
 -- make sure we have the replica identity after the move
 SELECT result FROM run_command_on_placements( 'test_with_pkey', 'SELECT relreplident FROM pg_class WHERE relname = ''%s''') WHERE shardid = 13000042;
@@ -370,9 +373,9 @@ ALTER TABLE test_with_pkey REPLICA IDENTITY NOTHING;
 
 SET client_min_messages TO DEBUG1;
 SELECT master_move_shard_placement(13000042, 'localhost', :worker_2_port, 'localhost', :worker_1_port, 'block_writes');
-CALL citus_cleanup_orphaned_shards();
 
 SET client_min_messages TO DEFAULT;
+SELECT public.wait_for_resource_cleanup();
 
 -- we don't support multiple shard moves in a single transaction
 SELECT
@@ -380,7 +383,7 @@ SELECT
 FROM
     pg_dist_shard_placement where nodeport = :worker_1_port AND
     shardid IN (SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'test_with_pkey'::regclass);
-CALL citus_cleanup_orphaned_shards();
+SELECT public.wait_for_resource_cleanup();
 
 -- similar test with explicit transaction block
 BEGIN;
@@ -388,7 +391,7 @@ BEGIN;
     SELECT master_move_shard_placement(13000042, 'localhost', :worker_1_port, 'localhost', :worker_2_port, shard_transfer_mode:='force_logical');
     SELECT master_move_shard_placement(13000044, 'localhost', :worker_1_port, 'localhost', :worker_2_port, shard_transfer_mode:='force_logical');
 COMMIT;
-    CALL citus_cleanup_orphaned_shards();
+    SELECT public.wait_for_resource_cleanup();
 
 -- we do support the same with block writes
 SELECT
@@ -396,17 +399,17 @@ SELECT
 FROM
     pg_dist_shard_placement where nodeport = :worker_1_port AND
     shardid IN (SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'test_with_pkey'::regclass);
-CALL citus_cleanup_orphaned_shards();
+SELECT public.wait_for_resource_cleanup();
 
 -- we should be able to move shard placements after COMMIT/ABORT
 BEGIN;
 
     SELECT master_move_shard_placement(13000043, 'localhost', :worker_2_port, 'localhost', :worker_1_port, shard_transfer_mode:='force_logical');
 COMMIT;
-CALL citus_cleanup_orphaned_shards();
+SELECT public.wait_for_resource_cleanup();
 
 SELECT master_move_shard_placement(13000045, 'localhost', :worker_2_port, 'localhost', :worker_1_port, shard_transfer_mode:='force_logical');
-CALL citus_cleanup_orphaned_shards();
+SELECT public.wait_for_resource_cleanup();
 
 BEGIN;
 
@@ -414,7 +417,7 @@ BEGIN;
 ABORT;
 
 SELECT master_move_shard_placement(13000045, 'localhost', :worker_1_port, 'localhost', :worker_2_port, shard_transfer_mode:='force_logical');
-CALL citus_cleanup_orphaned_shards();
+SELECT public.wait_for_resource_cleanup();
 
 -- we should be able to move shard placements of partitioend tables
 CREATE SCHEMA move_partitions;
@@ -442,14 +445,14 @@ FROM pg_dist_shard JOIN pg_dist_shard_placement USING (shardid)
 WHERE logicalrelid = 'move_partitions.events'::regclass AND nodeport = :worker_2_port
 AND shardstate != 4
 ORDER BY shardid LIMIT 1;
-CALL citus_cleanup_orphaned_shards();
+SELECT public.wait_for_resource_cleanup();
 
 -- force logical replication
 SELECT master_move_shard_placement(shardid, 'localhost', :worker_2_port, 'localhost', :worker_1_port, 'force_logical')
 FROM pg_dist_shard JOIN pg_dist_shard_placement USING (shardid)
 WHERE logicalrelid = 'move_partitions.events'::regclass AND nodeport = :worker_2_port
 ORDER BY shardid LIMIT 1;
-CALL citus_cleanup_orphaned_shards();
+SELECT public.wait_for_resource_cleanup();
 
 SELECT count(*) FROM move_partitions.events;
 
@@ -461,7 +464,7 @@ SELECT master_move_shard_placement(shardid, 'localhost', :worker_2_port, 'localh
 FROM pg_dist_shard JOIN pg_dist_shard_placement USING (shardid)
 WHERE logicalrelid = 'move_partitions.events'::regclass AND nodeport = :worker_2_port AND shardstate != 4
 ORDER BY shardid LIMIT 1;
-CALL citus_cleanup_orphaned_shards();
+SELECT public.wait_for_resource_cleanup();
 
 SELECT count(*) FROM move_partitions.events;
 
@@ -470,7 +473,7 @@ SELECT master_move_shard_placement(shardid, 'localhost', :worker_2_port, 'localh
 FROM pg_dist_shard JOIN pg_dist_shard_placement USING (shardid)
 WHERE logicalrelid = 'move_partitions.events'::regclass AND nodeport = :worker_2_port AND shardstate != 4
 ORDER BY shardid LIMIT 1;
-CALL citus_cleanup_orphaned_shards();
+SELECT public.wait_for_resource_cleanup();
 
 SELECT count(*) FROM move_partitions.events;
 
@@ -489,3 +492,4 @@ DROP TABLE table1_group1;
 DROP TABLE table5_groupX;
 DROP TABLE table6_append;
 DROP TABLE serial_move_test;
+DROP SCHEMA move_partitions CASCADE;

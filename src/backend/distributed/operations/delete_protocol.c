@@ -44,6 +44,7 @@
 #include "distributed/placement_connection.h"
 #include "distributed/relay_utility.h"
 #include "distributed/remote_commands.h"
+#include "distributed/shard_cleaner.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/worker_transaction.h"
 #include "lib/stringinfo.h"
@@ -372,8 +373,7 @@ DropTaskList(Oid relationId, char *schemaName, char *relationName,
 		task->dependentTaskList = NULL;
 		task->replicationModel = REPLICATION_MODEL_INVALID;
 		task->anchorShardId = shardId;
-		task->taskPlacementList =
-			ShardPlacementListIncludingOrphanedPlacements(shardId);
+		task->taskPlacementList = ShardPlacementList(shardId);
 
 		taskList = lappend(taskList, task);
 	}
@@ -410,8 +410,6 @@ ExecuteDropShardPlacementCommandRemotely(ShardPlacement *shardPlacement,
 
 	if (PQstatus(connection->pgConn) != CONNECTION_OK)
 	{
-		uint64 placementId = shardPlacement->placementId;
-
 		char *workerName = shardPlacement->nodeName;
 		uint32 workerPort = shardPlacement->nodePort;
 
@@ -427,7 +425,10 @@ ExecuteDropShardPlacementCommandRemotely(ShardPlacement *shardPlacement,
 						  errdetail("Marking this shard placement for "
 									"deletion")));
 
-		UpdateShardPlacementState(placementId, SHARD_STATE_TO_DELETE);
+		InsertCleanupRecordInCurrentTransaction(CLEANUP_OBJECT_SHARD_PLACEMENT,
+												shardRelationName,
+												shardPlacement->groupId,
+												CLEANUP_DEFERRED_ON_SUCCESS);
 
 		return;
 	}

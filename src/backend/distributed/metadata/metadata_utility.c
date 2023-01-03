@@ -1078,7 +1078,7 @@ TableShardReplicationFactor(Oid relationId)
 	{
 		uint64 shardId = shardInterval->shardId;
 
-		List *shardPlacementList = ShardPlacementListWithoutOrphanedPlacements(shardId);
+		List *shardPlacementList = ShardPlacementListSortedByWorker(shardId);
 		uint32 shardPlacementCount = list_length(shardPlacementList);
 
 		/*
@@ -1480,8 +1480,7 @@ ActiveShardPlacementListOnGroup(uint64 shardId, int32 groupId)
 List *
 ActiveShardPlacementList(uint64 shardId)
 {
-	List *shardPlacementList =
-		ShardPlacementListIncludingOrphanedPlacements(shardId);
+	List *shardPlacementList = ShardPlacementList(shardId);
 
 	List *activePlacementList = FilterShardPlacementList(shardPlacementList,
 														 IsActiveShardPlacement);
@@ -1491,30 +1490,14 @@ ActiveShardPlacementList(uint64 shardId)
 
 
 /*
- * IsShardPlacementNotOrphaned checks returns true if a shard placement is not orphaned
- * Orphaned shards are shards marked to be deleted at a later point (shardstate = 4).
- */
-static inline bool
-IsShardPlacementNotOrphaned(ShardPlacement *shardPlacement)
-{
-	return shardPlacement->shardState != SHARD_STATE_TO_DELETE;
-}
-
-
-/*
- * ShardPlacementListWithoutOrphanedPlacements returns shard placements exluding
- * the ones that are orphaned.
+ * ShardPlacementListSortedByWorker returns shard placements sorted by worker port.
  */
 List *
-ShardPlacementListWithoutOrphanedPlacements(uint64 shardId)
+ShardPlacementListSortedByWorker(uint64 shardId)
 {
-	List *shardPlacementList =
-		ShardPlacementListIncludingOrphanedPlacements(shardId);
+	List *shardPlacementList = ShardPlacementList(shardId);
 
-	List *activePlacementList = FilterShardPlacementList(shardPlacementList,
-														 IsShardPlacementNotOrphaned);
-
-	return SortList(activePlacementList, CompareShardPlacementsByWorker);
+	return SortList(shardPlacementList, CompareShardPlacementsByWorker);
 }
 
 
@@ -1636,46 +1619,6 @@ AllShardPlacementsOnNodeGroup(int32 groupId)
 	SysScanDesc scanDescriptor = systable_beginscan(pgPlacement,
 													DistPlacementGroupidIndexId(),
 													indexOK,
-													NULL, scanKeyCount, scanKey);
-
-	HeapTuple heapTuple = systable_getnext(scanDescriptor);
-	while (HeapTupleIsValid(heapTuple))
-	{
-		TupleDesc tupleDescriptor = RelationGetDescr(pgPlacement);
-
-		GroupShardPlacement *placement =
-			TupleToGroupShardPlacement(tupleDescriptor, heapTuple);
-
-		shardPlacementList = lappend(shardPlacementList, placement);
-
-		heapTuple = systable_getnext(scanDescriptor);
-	}
-
-	systable_endscan(scanDescriptor);
-	table_close(pgPlacement, NoLock);
-
-	return shardPlacementList;
-}
-
-
-/*
- * AllShardPlacementsWithShardPlacementState finds shard placements with the given
- * shardState from system catalogs, converts these placements to their in-memory
- * representation, and returns the converted shard placements in a new list.
- */
-List *
-AllShardPlacementsWithShardPlacementState(ShardState shardState)
-{
-	List *shardPlacementList = NIL;
-	ScanKeyData scanKey[1];
-	int scanKeyCount = 1;
-
-	Relation pgPlacement = table_open(DistPlacementRelationId(), AccessShareLock);
-
-	ScanKeyInit(&scanKey[0], Anum_pg_dist_placement_shardstate,
-				BTEqualStrategyNumber, F_INT4EQ, Int32GetDatum(shardState));
-
-	SysScanDesc scanDescriptor = systable_beginscan(pgPlacement, InvalidOid, false,
 													NULL, scanKeyCount, scanKey);
 
 	HeapTuple heapTuple = systable_getnext(scanDescriptor);
@@ -2049,62 +1992,6 @@ DeleteShardPlacementRow(uint64 placementId)
 	CitusInvalidateRelcacheByShardId(shardId);
 
 	CommandCounterIncrement();
-	table_close(pgDistPlacement, NoLock);
-}
-
-
-/*
- * UpdateShardPlacementState sets the shardState for the placement identified
- * by placementId.
- */
-void
-UpdateShardPlacementState(uint64 placementId, char shardState)
-{
-	ScanKeyData scanKey[1];
-	int scanKeyCount = 1;
-	bool indexOK = true;
-	Datum values[Natts_pg_dist_placement];
-	bool isnull[Natts_pg_dist_placement];
-	bool replace[Natts_pg_dist_placement];
-	bool colIsNull = false;
-
-	Relation pgDistPlacement = table_open(DistPlacementRelationId(), RowExclusiveLock);
-	TupleDesc tupleDescriptor = RelationGetDescr(pgDistPlacement);
-	ScanKeyInit(&scanKey[0], Anum_pg_dist_placement_placementid,
-				BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(placementId));
-
-	SysScanDesc scanDescriptor = systable_beginscan(pgDistPlacement,
-													DistPlacementPlacementidIndexId(),
-													indexOK,
-													NULL, scanKeyCount, scanKey);
-
-	HeapTuple heapTuple = systable_getnext(scanDescriptor);
-	if (!HeapTupleIsValid(heapTuple))
-	{
-		ereport(ERROR, (errmsg("could not find valid entry for shard placement "
-							   UINT64_FORMAT,
-							   placementId)));
-	}
-
-	memset(replace, 0, sizeof(replace));
-
-	values[Anum_pg_dist_placement_shardstate - 1] = CharGetDatum(shardState);
-	isnull[Anum_pg_dist_placement_shardstate - 1] = false;
-	replace[Anum_pg_dist_placement_shardstate - 1] = true;
-
-	heapTuple = heap_modify_tuple(heapTuple, tupleDescriptor, values, isnull, replace);
-
-	CatalogTupleUpdate(pgDistPlacement, &heapTuple->t_self, heapTuple);
-
-	uint64 shardId = DatumGetInt64(heap_getattr(heapTuple,
-												Anum_pg_dist_placement_shardid,
-												tupleDescriptor, &colIsNull));
-	Assert(!colIsNull);
-	CitusInvalidateRelcacheByShardId(shardId);
-
-	CommandCounterIncrement();
-
-	systable_endscan(scanDescriptor);
 	table_close(pgDistPlacement, NoLock);
 }
 
