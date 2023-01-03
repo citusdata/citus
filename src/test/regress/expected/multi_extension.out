@@ -1256,9 +1256,10 @@ ERROR:  pg_dist_cleanup is introduced in Citus 11.1
 HINT:  To downgrade Citus to an older version, you should first cleanup all the orphaned resources and make sure pg_dist_cleanup is empty, by executing CALL citus_cleanup_orphaned_resources();
 CONTEXT:  PL/pgSQL function inline_code_block line XX at RAISE
 -- cleanup
-DELETE FROM pg_dist_cleanup;
-DELETE FROM pg_dist_shard WHERE shardid % 2 = 1;
+SET client_min_messages TO ERROR;
+CALL citus_cleanup_orphaned_resources();
 DROP TABLE table_with_orphaned_shards;
+RESET client_min_messages;
 SELECT * FROM multi_extension.print_extension_changes();
                                                                                                                                     previous_object                                                                                                                                     |                                                                                                                                                              current_object
 ---------------------------------------------------------------------

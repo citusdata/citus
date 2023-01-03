@@ -556,9 +556,10 @@ SELECT * FROM pg_dist_cleanup;
 ALTER EXTENSION citus UPDATE TO '11.0-4';
 
 -- cleanup
-DELETE FROM pg_dist_cleanup;
-DELETE FROM pg_dist_shard WHERE shardid % 2 = 1;
+SET client_min_messages TO ERROR;
+CALL citus_cleanup_orphaned_resources();
 DROP TABLE table_with_orphaned_shards;
+RESET client_min_messages;
 
 SELECT * FROM multi_extension.print_extension_changes();
 
