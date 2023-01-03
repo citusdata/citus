@@ -23,8 +23,9 @@ extern bool CheckAvailableSpaceBeforeMove;
 extern int NextOperationId;
 extern int NextCleanupRecordId;
 
-extern int TryDropOrphanedResources(bool waitForLocks);
+extern int TryDropOrphanedResources(void);
 extern void DropOrphanedResourcesInSeparateTransaction(void);
+extern void ErrorIfCleanupRecordForShardExists(char *shardName);
 
 /* Members for cleanup infrastructure */
 typedef uint64 OperationId;

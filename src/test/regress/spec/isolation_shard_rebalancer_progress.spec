@@ -4,6 +4,15 @@ setup
 	SET citus.shard_count TO 4;
 	SET citus.shard_replication_factor TO 1;
 	SELECT 1 FROM master_add_node('localhost', 57637);
+
+	CREATE OR REPLACE PROCEDURE isolation_cleanup_orphaned_resources()
+		LANGUAGE C
+		AS 'citus', $$isolation_cleanup_orphaned_resources$$;
+	COMMENT ON PROCEDURE isolation_cleanup_orphaned_resources()
+		IS 'cleanup orphaned shards';
+		RESET citus.enable_metadata_sync;
+	CALL isolation_cleanup_orphaned_resources();
+
 	SELECT master_set_node_property('localhost', 57638, 'shouldhaveshards', false);
 	CREATE TABLE colocated1 (test_id integer NOT NULL, data text);
 	SELECT create_distributed_table('colocated1', 'test_id', 'hash', 'none');

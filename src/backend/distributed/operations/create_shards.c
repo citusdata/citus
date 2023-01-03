@@ -260,7 +260,7 @@ CreateColocatedShards(Oid targetRelationId, Oid sourceRelationId, bool
 		int32 shardMaxValue = DatumGetInt32(sourceShardInterval->maxValue);
 		text *shardMinValueText = IntegerToText(shardMinValue);
 		text *shardMaxValueText = IntegerToText(shardMaxValue);
-		List *sourceShardPlacementList = ShardPlacementListWithoutOrphanedPlacements(
+		List *sourceShardPlacementList = ShardPlacementListSortedByWorker(
 			sourceShardId);
 
 		InsertShardRow(targetRelationId, newShardId, targetShardStorageType,

@@ -104,7 +104,28 @@ DROP FUNCTION pg_catalog.isolate_tenant_to_new_shard(table_name regclass, tenant
 DROP FUNCTION pg_catalog.create_distributed_table_concurrently;
 DROP FUNCTION pg_catalog.citus_internal_delete_partition_metadata(regclass);
 
-DROP TABLE pg_catalog.pg_dist_cleanup;
+-- Check if user has any cleanup records.
+-- If not, DROP pg_dist_cleanup and continue safely.
+-- Otherwise, raise an exception to stop the downgrade process.
+DO $$
+DECLARE
+    cleanup_record_count INTEGER;
+BEGIN
+    SELECT COUNT(*) INTO cleanup_record_count FROM pg_dist_cleanup;
+
+    IF cleanup_record_count = 0 THEN
+        -- no cleanup records exist, can safely downgrade
+        DROP TABLE pg_catalog.pg_dist_cleanup;
+    ELSE
+        RAISE EXCEPTION 'pg_dist_cleanup is introduced in Citus 11.1'
+        USING HINT = 'To downgrade Citus to an older version, you should '
+                     'first cleanup all the orphaned resources and make sure '
+                     'pg_dist_cleanup is empty, by executing '
+                     'CALL citus_cleanup_orphaned_resources();';
+    END IF;
+END;
+$$ LANGUAGE plpgsql;
+
 DROP SEQUENCE pg_catalog.pg_dist_operationid_seq;
 DROP SEQUENCE pg_catalog.pg_dist_cleanup_recordid_seq;
 DROP PROCEDURE pg_catalog.citus_cleanup_orphaned_resources();

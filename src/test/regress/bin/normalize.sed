@@ -297,3 +297,6 @@ s/"Total Cost": [0-9].[0-9]+/"Total Cost": xxxx/g
 
 # normalize gpids
 s/(NOTICE:  issuing SET LOCAL application_name TO 'citus_rebalancer gpid=)[0-9]+/\1xxxxx/g
+
+# shard_rebalancer output, flaky improvement number
+s/improvement of 0.1[0-9]* is lower/improvement of 0.1xxxxx is lower/g

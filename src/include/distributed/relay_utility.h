@@ -35,7 +35,6 @@ typedef enum
 {
 	SHARD_STATE_INVALID_FIRST = 0,
 	SHARD_STATE_ACTIVE = 1,
-	SHARD_STATE_TO_DELETE = 4,
 } ShardState;
 
 
