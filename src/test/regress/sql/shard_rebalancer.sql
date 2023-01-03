@@ -728,6 +728,8 @@ SELECT * FROM public.table_placements_per_node;
 -- testing behaviour when setting shouldhaveshards to false and rebalancing all
 -- colocation groups with drain_only=true
 SELECT * from master_set_node_property('localhost', :worker_2_port, 'shouldhaveshards', false);
+-- we actually shouldn't need the ORDER BY clause as the output will be in execution order
+-- but this one involves different colocation groups and which colocation group is first moved is not consistent
 SELECT * FROM get_rebalance_table_shards_plan(threshold := 0, drain_only := true) ORDER BY shardid;
 SELECT * FROM rebalance_table_shards(threshold := 0, shard_transfer_mode := 'block_writes', drain_only := true);
 CALL citus_cleanup_orphaned_resources();

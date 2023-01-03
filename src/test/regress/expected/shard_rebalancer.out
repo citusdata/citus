@@ -1323,6 +1323,8 @@ SELECT * from master_set_node_property('localhost', :worker_2_port, 'shouldhaves
 
 (1 row)
 
+-- we actually shouldn't need the ORDER BY clause as the output will be in execution order
+-- but this one involves different colocation groups and which colocation group is first moved is not consistent
 SELECT * FROM get_rebalance_table_shards_plan(threshold := 0, drain_only := true) ORDER BY shardid;
           table_name          | shardid | shard_size | sourcename | sourceport | targetname | targetport
 ---------------------------------------------------------------------
