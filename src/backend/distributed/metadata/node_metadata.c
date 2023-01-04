@@ -21,6 +21,7 @@
 #include "catalog/indexing.h"
 #include "catalog/namespace.h"
 #include "commands/sequence.h"
+#include "distributed/adaptive_executor.h"
 #include "distributed/citus_acquire_lock.h"
 #include "distributed/citus_safe_lib.h"
 #include "distributed/colocation_utils.h"
@@ -29,6 +30,7 @@
 #include "distributed/connection_management.h"
 #include "distributed/maintenanced.h"
 #include "distributed/coordinator_protocol.h"
+#include "distributed/deparse_shard_query.h"
 #include "distributed/metadata_utility.h"
 #include "distributed/metadata/distobject.h"
 #include "distributed/metadata_cache.h"
@@ -101,6 +103,7 @@ static void InsertNodeRow(int nodeid, char *nodename, int32 nodeport, NodeMetada
 						  *nodeMetadata);
 static void DeleteNodeRow(char *nodename, int32 nodeport);
 static void SyncDistributedObjectsToNodeList(List *workerNodeList);
+static void ExecuteCommandListOnWorkerList(List *commandList, List *workerList);
 static void UpdateLocalGroupIdOnNode(WorkerNode *workerNode);
 static void SyncPgDistTableMetadataToNodeList(List *nodeList);
 static List * InterTableRelationshipCommandList();
@@ -873,16 +876,41 @@ SyncDistributedObjectsToNodeList(List *workerNodeList)
 
 	EnsureSequentialModeMetadataOperations();
 
+	Assert(superuser());
 	Assert(ShouldPropagate());
 
 	List *commandList = SyncDistributedObjectsCommandList(workerNode);
 
-	/* send commands to new workers, the current user should be a superuser */
-	Assert(superuser());
-	SendMetadataCommandListToWorkerListInCoordinatedTransaction(
-		workerNodesToSync,
-		CurrentUserName(),
-		commandList);
+	ExecuteCommandListOnWorkerList(commandList, workerNodesToSync);
+}
+
+
+/*
+ * ExecuteCommandListOnWorkerList executes a command list on all nodes
+ * in the given list.
+ */
+static void
+ExecuteCommandListOnWorkerList(List *commandList, List *workerList)
+{
+	List *taskList = NIL;
+
+	WorkerNode *workerNode = NULL;
+	foreach_ptr(workerNode, workerList)
+	{
+		ShardPlacement *placement = CitusMakeNode(ShardPlacement);
+		SetPlacementNodeMetadata(placement, workerNode);
+
+		Task *task = CitusMakeNode(Task);
+		task->taskType = DDL_TASK;
+		SetTaskQueryStringList(task, commandList);
+		task->taskPlacementList = list_make1(placement);
+
+		taskList = lappend(taskList, task);
+	}
+
+	bool localExecutionSupported = false;
+
+	ExecuteUtilityTaskList(taskList, localExecutionSupported);
 }
 
 
