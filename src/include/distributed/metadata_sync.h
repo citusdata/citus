@@ -117,6 +117,8 @@ extern void SyncDeleteColocationGroupToNodes(uint32 colocationId);
 #define DELETE_ALL_DISTRIBUTED_OBJECTS "DELETE FROM pg_catalog.pg_dist_object"
 #define DELETE_ALL_PARTITIONS "DELETE FROM pg_dist_partition"
 #define DELETE_ALL_COLOCATION "DELETE FROM pg_catalog.pg_dist_colocation"
+#define REMOVE_PARTITIONED_SHELL_TABLES_COMMAND \
+	"SELECT worker_drop_shell_table(logicalrelid::regclass::text) FROM pg_dist_partition JOIN pg_class ON (logicalrelid = oid) WHERE relkind = 'p'"
 #define REMOVE_ALL_SHELL_TABLES_COMMAND \
 	"SELECT worker_drop_shell_table(logicalrelid::regclass::text) FROM pg_dist_partition"
 #define REMOVE_ALL_CITUS_TABLES_COMMAND \
