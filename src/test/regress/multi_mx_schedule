@@ -67,6 +67,8 @@ test: distributed_locks
 test: local_shard_execution_dropped_column
 test: metadata_sync_helpers
 
+test: issue_6592
+
 # test that no tests leaked intermediate results. This should always be last
 test: ensure_no_intermediate_data_leak
 test: check_mx
