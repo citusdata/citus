@@ -1940,37 +1940,17 @@ multi_relation_restriction_hook(PlannerInfo *root, RelOptInfo *relOptInfo,
 	{
 		cacheEntry = GetCitusTableCacheEntry(rte->relid);
 
+#if PG_VERSION_NUM == PG_VERSION_15
+
 		/*
-		 * The statistics objects of the distributed table are not relevant
-		 * for the distributed planning, so we can override it.
+		 * Postgres 15.0 had a bug regarding inherited statistics expressions,
+		 * which is fixed in 15.1 via Postgres commit
+		 * 1f1865e9083625239769c26f68b9c2861b8d4b1c.
 		 *
-		 * Normally, we should not need this. However, the combination of
-		 * Postgres commit 269b532aef55a579ae02a3e8e8df14101570dfd9 and
-		 * Citus function AdjustPartitioningForDistributedPlanning()
-		 * forces us to do this. The commit expects statistics objects
-		 * of partitions to have "inh" flag set properly. Whereas, the
-		 * function overrides "inh" flag. To avoid Postgres to throw error,
-		 * we override statlist such that Postgres does not try to process
-		 * any statistics objects during the standard_planner() on the
-		 * coordinator. In the end, we do not need the standard_planner()
-		 * on the coordinator to generate an optimized plan. We call
-		 * into standard_planner() for other purposes, such as generating the
-		 * relationRestrictionContext here.
-		 *
-		 * AdjustPartitioningForDistributedPlanning() is a hack that we use
-		 * to prevent Postgres' standard_planner() to expand all the partitions
-		 * for the distributed planning when a distributed partitioned table
-		 * is queried. It is required for both correctness and performance
-		 * reasons. Although we can eliminate the use of the function for
-		 * the correctness (e.g., make sure that rest of the planner can handle
-		 * partitions), it's performance implication is hard to avoid. Certain
-		 * planning logic of Citus (such as router or query pushdown) relies
-		 * heavily on the relationRestrictionList. If
-		 * AdjustPartitioningForDistributedPlanning() is removed, all the
-		 * partitions show up in the, causing high planning times for
-		 * such queries.
+		 * Hence, we only set this value on exactly PG15.0
 		 */
 		relOptInfo->statlist = NIL;
+#endif
 
 		relationRestrictionContext->allReferenceTables &=
 			IsCitusTableTypeCacheEntry(cacheEntry, REFERENCE_TABLE);
