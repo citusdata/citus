@@ -14,7 +14,6 @@
 #include "distributed/citus_custom_scan.h"
 #include "distributed/tuple_destination.h"
 
-
 /* enabled with GUCs*/
 extern bool EnableLocalExecution;
 extern bool LogLocalCommands;
