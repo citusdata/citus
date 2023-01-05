@@ -24,10 +24,10 @@ parameters:
     default: '0.8.18'
   flaky_test:
     type: string
-    default: ''
+    default: 'multi_utilities'
   flaky_test_runs_per_job:
     type: integer
-    default: 50
+    default: 100
   skip_flaky_tests:
     type: boolean
     default: false
