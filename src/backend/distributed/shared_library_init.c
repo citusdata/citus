@@ -2874,6 +2874,8 @@ IsSuperuser(char *roleName)
 }
 
 
+#include "catalog/pg_constraint.h"
+
 /*
  * CitusObjectAccessHook is called when an object is created.
  *
@@ -2896,5 +2898,18 @@ CitusObjectAccessHook(ObjectAccessType access, Oid classId, Oid objectId, int su
 		 * the provided objectId with extension oid so we will set the value
 		 * regardless if it's citus being created */
 		SetCreateCitusTransactionLevel(GetCurrentTransactionNestLevel());
+	}
+	else if (access == OAT_DROP && classId == ConstraintRelationId &&
+			 ConstraintWithIdIsOfType(objectId, CONSTRAINT_FOREIGN))
+	{
+		Oid relationId = ConstraintOnRelationId(objectId);
+		if (OidIsValid(relationId) && IsCitusTable(relationId))
+		{
+			/*
+			 * User drops foreign constraint on Citus table,
+			 * invalidate fkey graph.
+			 */
+			InvalidateForeignKeyGraph();
+		}
 	}
 }

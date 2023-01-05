@@ -264,7 +264,6 @@ extern void EnsureNoFKeyFromTableType(Oid relationId, int tableTypeFlag);
 extern void EnsureNoFKeyToTableType(Oid relationId, int tableTypeFlag);
 extern void ErrorOutForFKeyBetweenPostgresAndCitusLocalTable(Oid localTableId);
 extern bool ColumnReferencedByAnyForeignKey(char *columnName, Oid relationId);
-extern bool ColumnAppearsInForeignKey(char *columnName, Oid relationId);
 extern bool ColumnAppearsInForeignKeyToReferenceTable(char *columnName, Oid
 													  relationId);
 extern List * GetReferencingForeignConstaintCommands(Oid relationOid);
@@ -278,11 +277,11 @@ extern bool HasForeignKeyToReferenceTable(Oid relationOid);
 extern List * GetForeignKeysFromLocalTables(Oid relationId);
 extern bool TableReferenced(Oid relationOid);
 extern bool TableReferencing(Oid relationOid);
-extern bool ConstraintIsAUniquenessConstraint(char *inputConstaintName, Oid relationId);
 extern bool ConstraintIsAForeignKey(char *inputConstaintName, Oid relationOid);
 extern bool ConstraintWithNameIsOfType(char *inputConstaintName, Oid relationId,
 									   char targetConstraintType);
 extern bool ConstraintWithIdIsOfType(Oid constraintId, char targetConstraintType);
+extern Oid ConstraintOnRelationId(Oid constraintId);
 extern bool TableHasExternalForeignKeys(Oid relationId);
 extern List * GetForeignKeyOids(Oid relationId, int flags);
 extern Oid GetReferencedTableId(Oid foreignKeyId);

@@ -93,7 +93,6 @@ extern void ProcessUtilityParseTree(Node *node, const char *queryString,
 									QueryCompletion *completionTag
 									);
 extern void MarkInvalidateForeignKeyGraph(void);
-extern void InvalidateForeignKeyGraphForDDL(void);
 extern List * DDLTaskList(Oid relationId, const char *commandString);
 extern List * NodeDDLTaskList(TargetWorkerSet targets, List *commands);
 extern bool AlterTableInProgress(void);
