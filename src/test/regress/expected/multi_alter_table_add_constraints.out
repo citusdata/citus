@@ -434,12 +434,7 @@ ERROR:  cannot execute ADD CONSTRAINT command with other subcommands
 HINT:  You can issue each subcommand separately
 -- Tests for constraints without name
 -- Commands below should error out since constraints do not have the name
-ALTER TABLE products ADD UNIQUE(product_no);
-ERROR:  cannot create constraint without a name on a distributed table
-ALTER TABLE products ADD PRIMARY KEY(product_no);
 ALTER TABLE products ADD CHECK(product_no <> 0);
-ERROR:  cannot create constraint without a name on a distributed table
-ALTER TABLE products ADD EXCLUDE USING btree (product_no with =);
 ERROR:  cannot create constraint without a name on a distributed table
 -- ... with names, we can add/drop the constraints just fine
 ALTER TABLE products ADD CONSTRAINT nonzero_product_no CHECK(product_no <> 0);
@@ -689,6 +684,8 @@ DROP SCHEMA sc3 CASCADE;
 NOTICE:  drop cascades to 2 other objects
 DETAIL:  drop cascades to table sc3.alter_add_prim_key
 drop cascades to table sc3.alter_add_unique
+CREATE SCHEMA test_auto_explain;
+SET search_path TO 'test_auto_explain';
 -- Test ALTER TABLE ... ADD CONSTRAINT ... does not cause a crash when auto_explain module is loaded
 CREATE TABLE target_table(col_1 int primary key, col_2 int);
 SELECT create_distributed_table('target_table','col_1');
@@ -720,7 +717,7 @@ SET citus.enable_ddl_propagation TO OFF;
 ALTER TABLE target_table ADD CONSTRAINT fkey_167 FOREIGN KEY (col_1) REFERENCES test_ref_table(key) ON DELETE CASCADE;
 LOG:  duration: xxxx ms  plan:
 {
-  "Query Text": "SELECT fk.\"col_1\" FROM ONLY \"public\".\"target_table\" fk LEFT OUTER JOIN ONLY \"public\".\"test_ref_table\" pk ON ( pk.\"key\" OPERATOR(pg_catalog.=) fk.\"col_1\") WHERE pk.\"key\" IS NULL AND (fk.\"col_1\" IS NOT NULL)",
+  "Query Text": "SELECT fk.\"col_1\" FROM ONLY \"test_auto_explain\".\"target_table\" fk LEFT OUTER JOIN ONLY \"test_auto_explain\".\"test_ref_table\" pk ON ( pk.\"key\" OPERATOR(pg_catalog.=) fk.\"col_1\") WHERE pk.\"key\" IS NULL AND (fk.\"col_1\" IS NOT NULL)",
   "Plan": {
     "Node Type": "Custom Scan",
     "Custom Plan Provider": "Citus Adaptive",
@@ -732,5 +729,9 @@ LOG:  duration: xxxx ms  plan:
     "Citus Explain Scan": "Explain for triggered constraint validation queries during ALTER TABLE commands are not supported by Citus"
   }
 }
-CONTEXT:  SQL statement "SELECT fk."col_1" FROM ONLY "public"."target_table" fk LEFT OUTER JOIN ONLY "public"."test_ref_table" pk ON ( pk."key" OPERATOR(pg_catalog.=) fk."col_1") WHERE pk."key" IS NULL AND (fk."col_1" IS NOT NULL)"
+CONTEXT:  SQL statement "SELECT fk."col_1" FROM ONLY "test_auto_explain"."target_table" fk LEFT OUTER JOIN ONLY "test_auto_explain"."test_ref_table" pk ON ( pk."key" OPERATOR(pg_catalog.=) fk."col_1") WHERE pk."key" IS NULL AND (fk."col_1" IS NOT NULL)"
 END;
+RESET citus.enable_ddl_propagation;
+SET client_min_messages to ERROR;
+SET search_path TO 'public';
+DROP SCHEMA test_auto_explain CASCADE;

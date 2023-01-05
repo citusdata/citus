@@ -702,12 +702,87 @@ PostprocessAlterTableSchemaStmt(Node *node, const char *queryString)
 
 
 /*
- * SwitchToSequentialAndLocalExecutionIfPrimaryKeyNameTooLong generates the longest primary key name
+ * GenerateConstraintName creates and returns a default name for the constraints Citus supports
+ * for default naming. See ConstTypeCitusCanDefaultName function for the supported constraint types.
+ */
+static char *
+GenerateConstraintName(const char *tabname, Oid namespaceId, Constraint *constraint)
+{
+	char *conname = NULL;
+
+	switch (constraint->contype)
+	{
+		case CONSTR_PRIMARY:
+		{
+			conname = ChooseIndexName(tabname, namespaceId,
+									  NULL, NULL, true, true);
+			break;
+		}
+
+		case CONSTR_UNIQUE:
+		{
+			ListCell *lc;
+			List *indexParams = NIL;
+
+			foreach(lc, constraint->keys)
+			{
+				IndexElem *iparam = makeNode(IndexElem);
+				iparam->name = pstrdup(strVal(lfirst(lc)));
+				indexParams = lappend(indexParams, iparam);
+			}
+
+			conname = ChooseIndexName(tabname, namespaceId,
+									  ChooseIndexColumnNames(indexParams),
+									  NULL, false, true);
+			break;
+		}
+
+		case CONSTR_EXCLUSION:
+		{
+			ListCell *lc;
+			List *indexParams = NIL;
+			List *excludeOpNames = NIL;
+
+			foreach(lc, constraint->exclusions)
+			{
+				List *pair = (List *) lfirst(lc);
+
+				Assert(list_length(pair) == 2);
+				IndexElem *elem = linitial_node(IndexElem, pair);
+				List *opname = lsecond_node(List, pair);
+
+				indexParams = lappend(indexParams, elem);
+				excludeOpNames = lappend(excludeOpNames, opname);
+			}
+
+			conname = ChooseIndexName(tabname, namespaceId,
+									  ChooseIndexColumnNames(indexParams),
+									  excludeOpNames,
+									  false, true);
+			break;
+		}
+
+		default:
+		{
+			ereport(ERROR, (errmsg(
+								"unsupported constraint type for generating a constraint name: %d",
+								constraint->contype)));
+			break;
+		}
+	}
+
+	return conname;
+}
+
+
+/*
+ * SwitchToSequentialAndLocalExecutionIfConstraintNameTooLong generates the longest index constraint name
  * among the shards of the partitions, and if exceeds the limit switches to sequential and
  * local execution to prevent self-deadlocks.
  */
 static void
-SwitchToSequentialAndLocalExecutionIfPrimaryKeyNameTooLong(Oid relationId)
+SwitchToSequentialAndLocalExecutionIfConstraintNameTooLong(Oid relationId,
+														   Constraint *constraint)
 {
 	if (!PartitionedTable(relationId))
 	{
@@ -743,12 +818,10 @@ SwitchToSequentialAndLocalExecutionIfPrimaryKeyNameTooLong(Oid relationId)
 	Oid namespaceOid = RelationGetNamespace(rel);
 	RelationClose(rel);
 
-	char *primaryKeyName = ChooseIndexName(longestPartitionShardName,
-										   namespaceOid,
-										   NULL, NULL, true, true);
+	char *longestConname = GenerateConstraintName(longestPartitionShardName,
+												  namespaceOid, constraint);
 
-
-	if (primaryKeyName && strnlen(primaryKeyName, NAMEDATALEN) >= NAMEDATALEN - 1)
+	if (longestConname && strnlen(longestConname, NAMEDATALEN) >= NAMEDATALEN - 1)
 	{
 		if (ParallelQueryExecutedInTransaction())
 		{
@@ -758,18 +831,18 @@ SwitchToSequentialAndLocalExecutionIfPrimaryKeyNameTooLong(Oid relationId)
 			 * thus contradicting our purpose of using sequential mode.
 			 */
 			ereport(ERROR, (errmsg(
-								"The primary key name (%s) on a shard is too long and could lead "
+								"The constraint name (%s) on a shard is too long and could lead "
 								"to deadlocks when executed in a transaction "
-								"block after a parallel query", primaryKeyName),
+								"block after a parallel query", longestConname),
 							errhint("Try re-running the transaction with "
 									"\"SET LOCAL citus.multi_shard_modify_mode TO "
 									"\'sequential\';\"")));
 		}
 		else
 		{
-			elog(DEBUG1, "the primary key name on the shards of the partition "
+			elog(DEBUG1, "the constraint name on the shards of the partition "
 						 "is too long, switching to sequential and local execution "
-						 "mode to prevent self deadlocks: %s", primaryKeyName);
+						 "mode to prevent self deadlocks: %s", longestConname);
 
 			SetLocalMultiShardModifyModeToSequential();
 			SetLocalExecutionStatus(LOCAL_EXECUTION_REQUIRED);
@@ -779,23 +852,22 @@ SwitchToSequentialAndLocalExecutionIfPrimaryKeyNameTooLong(Oid relationId)
 
 
 /*
- * PreprocessAlterTableAddPrimaryKey creates a new primary key constraint name changing the original alterTableCommand run by the utility hook.
- * Then converts the ALTER TABLE ... ADD PRIMARY KEY ... command
- * into ALTER TABLE ... ADD CONSTRAINT <constraint name> PRIMARY KEY format and returns the DDLJob
+ * PreprocessAlterTableAddIndexConstraint creates a new constraint name for the index constraints {PRIMARY KEY, UNIQUE, EXCLUDE}
+ * and changes the original alterTableCommand run by the utility hook to use the new constraint name.
+ * Then converts the ALTER TABLE ... ADD {PRIMARY KEY, UNIQUE, EXCLUDE} ... command
+ * into ALTER TABLE ... ADD CONSTRAINT <constraint name> {PRIMARY KEY, UNIQUE, EXCLUDE} format and returns the DDLJob
  * to run this command in the workers.
  */
 static List *
-PreprocessAlterTableAddPrimaryKey(AlterTableStmt *alterTableStatement, Oid relationId,
-								  Constraint *constraint)
+PreprocessAlterTableAddIndexConstraint(AlterTableStmt *alterTableStatement, Oid
+									   relationId,
+									   Constraint *constraint)
 {
-	/* We should only preprocess an ADD PRIMARY KEY command if we are changing the it.
-	 * This only happens when we have to create a primary key name ourselves in the case that the client does
+	/* We should only preprocess an ADD CONSTRAINT command if we are changing the it.
+	 * This only happens when we have to create a constraint name in citus since the client does
 	 * not specify a name.
 	 */
 	Assert(constraint->conname == NULL);
-
-	bool primary = true;
-	bool isconstraint = true;
 
 	Relation rel = RelationIdGetRelation(relationId);
 
@@ -803,15 +875,16 @@ PreprocessAlterTableAddPrimaryKey(AlterTableStmt *alterTableStatement, Oid relat
 	 * Change the alterTableCommand so that the standard utility
 	 * hook runs it with the name we created.
 	 */
-	constraint->conname = ChooseIndexName(RelationGetRelationName(rel),
-										  RelationGetNamespace(rel),
-										  NULL, NULL, primary,
-										  isconstraint);
+
+	constraint->conname = GenerateConstraintName(RelationGetRelationName(rel),
+												 RelationGetNamespace(rel),
+												 constraint);
+
 	RelationClose(rel);
 
-	char *ddlCommand = DeparseTreeNode((Node *) alterTableStatement);
+	SwitchToSequentialAndLocalExecutionIfConstraintNameTooLong(relationId, constraint);
 
-	SwitchToSequentialAndLocalExecutionIfPrimaryKeyNameTooLong(relationId);
+	char *ddlCommand = DeparseTreeNode((Node *) alterTableStatement);
 
 	DDLJob *ddlJob = palloc0(sizeof(DDLJob));
 
@@ -1063,17 +1136,18 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 				 */
 				constraint->skip_validation = true;
 			}
-			else if (constraint->contype == CONSTR_PRIMARY)
+			else if (constraint->conname == NULL)
 			{
-				if (constraint->conname == NULL)
+				if (ConstrTypeCitusCanDefaultName(constraint->contype))
 				{
 					/*
 					 * Create a constraint name. Convert ALTER TABLE ... ADD PRIMARY ... command into
 					 * ALTER TABLE ... ADD CONSTRAINT <conname> PRIMARY KEY ... form and create the ddl jobs
 					 * for running this form of the command on the workers.
 					 */
-					return PreprocessAlterTableAddPrimaryKey(alterTableStatement,
-															 leftRelationId, constraint);
+					return PreprocessAlterTableAddIndexConstraint(alterTableStatement,
+																  leftRelationId,
+																  constraint);
 				}
 			}
 		}
@@ -1817,6 +1891,18 @@ AlterTableCommandTypeIsTrigger(AlterTableType alterTableType)
  */
 bool
 ConstrTypeUsesIndex(ConstrType constrType)
+{
+	return constrType == CONSTR_PRIMARY ||
+		   constrType == CONSTR_UNIQUE ||
+		   constrType == CONSTR_EXCLUSION;
+}
+
+
+/*
+ * ConstrTypeSupportsDefaultNaming returns true if we can generate a default name for the given constraint type
+ */
+bool
+ConstrTypeCitusCanDefaultName(ConstrType constrType)
 {
 	return constrType == CONSTR_PRIMARY ||
 		   constrType == CONSTR_UNIQUE ||
@@ -3025,7 +3111,7 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 					 * and changing the command into the following form.
 					 * ALTER TABLE ... ADD CONSTRAINT <constaint_name> PRIMARY KEY ...
 					 */
-					if (constraint->contype != CONSTR_PRIMARY)
+					if (ConstrTypeCitusCanDefaultName(constraint->contype) == false)
 					{
 						ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 										errmsg(
