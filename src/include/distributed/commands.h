@@ -561,7 +561,7 @@ extern List * AlterTableSchemaStmtObjectAddress(Node *stmt,
 extern List * MakeNameListFromRangeVar(const RangeVar *rel);
 extern Oid GetSequenceOid(Oid relationId, AttrNumber attnum);
 extern bool ConstrTypeUsesIndex(ConstrType constrType);
-extern bool ConstrTypeSupportsDefaultNaming(ConstrType constrType);
+extern bool ConstrTypeCitusCanDefaultName(ConstrType constrType);
 
 
 /* text_search.c - forward declarations */

@@ -256,7 +256,7 @@ AppendAlterTableCmd(StringInfo buf, AlterTableCmd *alterTableCmd)
 			 * ALTER TABLE ... ADD CONSTRAINT <conname> {PRIMARY KEY, UNIQUE, EXCLUSION} ... format to be able
 			 * add a constraint name.
 			 */
-			if (ConstrTypeSupportsDefaultNaming(constraint->contype))
+			if (ConstrTypeCitusCanDefaultName(constraint->contype))
 			{
 				AppendAlterTableCmdAddConstraint(buf, constraint);
 				break;

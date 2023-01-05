@@ -700,7 +700,10 @@ PostprocessAlterTableSchemaStmt(Node *node, const char *queryString)
 	return NIL;
 }
 
-
+/*
+ * GenerateConstraintName creates and returns a default name for the constraints Citus supports 
+ * for default naming. See ConstTypeCitusCanDefaultName function for the supported constraint types.
+ */
 static char *
 GenerateConstraintName(const char *tabname, Oid namespaceId, Constraint *constraint)
 {
@@ -1132,10 +1135,9 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 				 */
 				constraint->skip_validation = true;
 			}
-			else if (constraint->contype == CONSTR_PRIMARY || constraint->contype ==
-					 CONSTR_UNIQUE || constraint->contype == CONSTR_EXCLUSION)
+			else if (constraint->conname == NULL)
 			{
-				if (constraint->conname == NULL)
+				if (ConstrTypeCitusCanDefaultName(constraint->contype))
 				{
 					/*
 					 * Create a constraint name. Convert ALTER TABLE ... ADD PRIMARY ... command into
@@ -1899,7 +1901,7 @@ ConstrTypeUsesIndex(ConstrType constrType)
  * ConstrTypeSupportsDefaultNaming returns true if we can generate a default name for the given constraint type
  */
 bool
-ConstrTypeSupportsDefaultNaming(ConstrType constrType)
+ConstrTypeCitusCanDefaultName(ConstrType constrType)
 {
 	return constrType == CONSTR_PRIMARY ||
 		   constrType == CONSTR_UNIQUE ||
@@ -3108,7 +3110,7 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 					 * and changing the command into the following form.
 					 * ALTER TABLE ... ADD CONSTRAINT <constaint_name> PRIMARY KEY ...
 					 */
-					if (ConstrTypeSupportsDefaultNaming(constraint->contype) == false)
+					if (ConstrTypeCitusCanDefaultName(constraint->contype) == false)
 					{
 						ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 										errmsg(
