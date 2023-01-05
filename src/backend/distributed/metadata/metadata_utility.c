@@ -1689,6 +1689,20 @@ void
 InsertShardRow(Oid relationId, uint64 shardId, char storageType,
 			   text *shardMinValue, text *shardMaxValue)
 {
+	bool invalidateRelCache = true;
+	InsertShardRowInternal(relationId, shardId, storageType,
+						   shardMinValue, shardMaxValue, invalidateRelCache);
+}
+
+
+/*
+ * InsertShardRowInternal is a helper function for InsertShardRow()
+ * where callers can also control invalidateRelCache.
+ */
+void
+InsertShardRowInternal(Oid relationId, uint64 shardId, char storageType,
+					   text *shardMinValue, text *shardMaxValue, bool invalidateRelCache)
+{
 	Datum values[Natts_pg_dist_shard];
 	bool isNulls[Natts_pg_dist_shard];
 
@@ -1723,10 +1737,18 @@ InsertShardRow(Oid relationId, uint64 shardId, char storageType,
 
 	CatalogTupleInsert(pgDistShard, heapTuple);
 
-	/* invalidate previous cache entry and close relation */
-	CitusInvalidateRelcacheByRelid(relationId);
+	if (invalidateRelCache)
+	{
+		/*
+		 * When we sync the metadata in bulk (e.g., sync multiple shards for
+		 * a single table), we invalidate the relcache via the pg_dist_partition
+		 * changes.
+		 */
+		CitusInvalidateRelcacheByRelid(relationId);
+	}
 
 	CommandCounterIncrement();
+
 	table_close(pgDistShard, NoLock);
 }
 
@@ -1741,6 +1763,21 @@ uint64
 InsertShardPlacementRow(uint64 shardId, uint64 placementId,
 						char shardState, uint64 shardLength,
 						int32 groupId)
+{
+	bool invalidateRelCache = true;
+	return InsertShardPlacementRowInternal(shardId, placementId, shardState, shardLength,
+										   groupId, invalidateRelCache);
+}
+
+
+/*
+ * InsertShardPlacementRowInternal is a helper function for InsertShardPlacementRow()
+ * where callers can also control invalidateRelCache.
+ */
+uint64
+InsertShardPlacementRowInternal(uint64 shardId, uint64 placementId,
+								char shardState, uint64 shardLength,
+								int32 groupId, bool invalidateRelCache)
 {
 	Datum values[Natts_pg_dist_placement];
 	bool isNulls[Natts_pg_dist_placement];
@@ -1767,9 +1804,18 @@ InsertShardPlacementRow(uint64 shardId, uint64 placementId,
 
 	CatalogTupleInsert(pgDistPlacement, heapTuple);
 
-	CitusInvalidateRelcacheByShardId(shardId);
+	if (invalidateRelCache)
+	{
+		/*
+		 * When we sync the metadata in bulk (e.g., sync multiple placements for
+		 * a single table), we invalidate the relcache via the pg_dist_partition
+		 * changes.
+		 */
+		CitusInvalidateRelcacheByShardId(shardId);
+	}
 
 	CommandCounterIncrement();
+
 	table_close(pgDistPlacement, NoLock);
 
 	return placementId;
@@ -1829,6 +1875,7 @@ InsertIntoPgDistPartition(Oid relationId, char distributionMethod,
 	RecordDistributedRelationDependencies(relationId);
 
 	CommandCounterIncrement();
+
 	table_close(pgDistPartition, NoLock);
 }
 
