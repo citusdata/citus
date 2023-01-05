@@ -700,8 +700,9 @@ PostprocessAlterTableSchemaStmt(Node *node, const char *queryString)
 	return NIL;
 }
 
+
 /*
- * GenerateConstraintName creates and returns a default name for the constraints Citus supports 
+ * GenerateConstraintName creates and returns a default name for the constraints Citus supports
  * for default naming. See ConstTypeCitusCanDefaultName function for the supported constraint types.
  */
 static char *
