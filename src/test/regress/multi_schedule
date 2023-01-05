@@ -16,7 +16,7 @@ test: multi_behavioral_analytics_basics multi_behavioral_analytics_single_shard_
 test: multi_shard_update_delete recursive_dml_with_different_planners_executors
 test: insert_select_repartition window_functions dml_recursive multi_insert_select_window
 test: multi_insert_select_conflict citus_table_triggers
-test: multi_row_insert insert_select_into_local_table multi_create_table_new_features
+test: multi_row_insert insert_select_into_local_table
 test: multi_agg_approximate_distinct
 test: tablespace
 

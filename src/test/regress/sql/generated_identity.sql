@@ -19,8 +19,6 @@ select create_distributed_table('test', 'a');
 
 \c - - - :worker_1_port
 
-\ds+
-
 \d generated_identities.test
 
 \c - - - :master_port

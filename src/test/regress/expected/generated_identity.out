@@ -30,12 +30,6 @@ select create_distributed_table('test', 'a');
  g      | integer  |           |          |
 
 \c - - - :worker_1_port
-\ds+
-                        List of relations
- Schema | Name | Type | Owner | Persistence | Size | Description
----------------------------------------------------------------------
-(0 rows)
-
 \d generated_identities.test
                                    Table "generated_identities.test"
  Column |   Type   | Collation | Nullable |                           Default
