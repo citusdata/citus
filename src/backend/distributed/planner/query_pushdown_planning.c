@@ -113,6 +113,10 @@ static bool ContainsReferencesToRelidsWalker(Node *node,
 											 RelidsReferenceWalkerContext *context);
 static bool HasRightRecursiveJoin(FromExpr *fromExpr);
 static bool RightRecursiveJoinExprWalker(Node *node, void *context);
+static bool HasCartesianJoin(FromExpr *fromExpr);
+static bool CartesianJoinExprWalker(Node *node, void *context);
+static bool HasLateralJoin(JoinRestrictionContext *joinRestrictionContext);
+
 
 /*
  * ShouldUseSubqueryPushDown determines whether it's desirable to use
@@ -153,7 +157,6 @@ ShouldUseSubqueryPushDown(Query *originalQuery, Query *rewrittenQuery,
 		return true;
 	}
 
-
 	/*
 	 * We check if postgres planned any semi joins, MultiNodeTree doesn't
 	 * support these so we fail. Postgres is able to replace some IN/ANY
@@ -184,16 +187,6 @@ ShouldUseSubqueryPushDown(Query *originalQuery, Query *rewrittenQuery,
 	}
 
 	/*
-	 * Some unsupported join clauses in logical planner
-	 * may be supported by subquery pushdown planner.
-	 */
-	List *qualifierList = QualifierList(rewrittenQuery->jointree);
-	if (DeferErrorIfUnsupportedClause(qualifierList) != NULL)
-	{
-		return true;
-	}
-
-	/*
 	 * some unsupported outer joins in logical planner
 	 * may be supported by pushdown planner.
 	 */
@@ -207,12 +200,39 @@ ShouldUseSubqueryPushDown(Query *originalQuery, Query *rewrittenQuery,
 
 		/*
 		 * join order planner only handles left recursive join trees (except inner joins,
-		 * which are commutative)
+		 * which are commutative).
 		 */
 		if (HasRightRecursiveJoin(rewrittenQuery->jointree))
 		{
 			return true;
 		}
+
+		/*
+		 * join order planner cannot handle cartesian joins when query tree contains outer
+		 * join.
+		 */
+		if (HasCartesianJoin(rewrittenQuery->jointree))
+		{
+			return true;
+		}
+
+		/*
+		 * join order planner cannot handle lateral join trees for outer joins.
+		 */
+		if (HasLateralJoin(plannerRestrictionContext->joinRestrictionContext))
+		{
+			return true;
+		}
+	}
+
+	/*
+	 * Some unsupported join clauses in logical planner
+	 * may be supported by subquery pushdown planner.
+	 */
+	List *qualifierList = QualifierList(rewrittenQuery->jointree);
+	if (DeferErrorIfUnsupportedClause(qualifierList) != NULL)
+	{
+		return true;
 	}
 
 	/* check if the query has a window function and it is safe to pushdown */
@@ -227,9 +247,8 @@ ShouldUseSubqueryPushDown(Query *originalQuery, Query *rewrittenQuery,
 
 
 /*
- * HasRightRecursiveJoin returns true if join tree contains any right recursive join.
- * That method should be removed when we support right recursive outer joins at join
- * order planner.
+ * HasRightRecursiveJoin returns true if it finds right recursive part
+ * in given join tree.
  */
 static bool
 HasRightRecursiveJoin(FromExpr *fromExpr)
@@ -248,8 +267,7 @@ HasRightRecursiveJoin(FromExpr *fromExpr)
 
 
 /*
- * RightRecursiveJoinExprWalker returns true if it finds right recursive join
- * in given join tree.
+ * RightRecursiveJoinExprWalker is helper method for HasRightRecursiveJoin.
  */
 static bool
 RightRecursiveJoinExprWalker(Node *node, void *context)
@@ -263,13 +281,81 @@ RightRecursiveJoinExprWalker(Node *node, void *context)
 	{
 		JoinExpr *joinExpr = (JoinExpr *) node;
 
-		if (joinExpr->rarg && IsA(joinExpr->rarg, JoinExpr))
+		if (IsA(joinExpr->rarg, JoinExpr))
 		{
 			return true;
 		}
 	}
 
 	return expression_tree_walker(node, RightRecursiveJoinExprWalker, NULL);
+}
+
+
+/*
+ * HasCartesianJoin returns true if join tree contains any cartesian join.
+ */
+static bool
+HasCartesianJoin(FromExpr *fromExpr)
+{
+	if (fromExpr && list_length(fromExpr->fromlist) > 1)
+	{
+		return true;
+	}
+
+	JoinExpr *joinExpr = NULL;
+	foreach_ptr(joinExpr, fromExpr->fromlist)
+	{
+		if (CartesianJoinExprWalker((Node *) joinExpr, NULL))
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
+
+/*
+ * CartesianJoinExprWalker is helper method for HasCartesianJoin.
+ */
+static bool
+CartesianJoinExprWalker(Node *node, void *context)
+{
+	if (node == NULL)
+	{
+		return false;
+	}
+
+	if (IsA(node, FromExpr))
+	{
+		FromExpr *fromExpr = (FromExpr *) node;
+
+		if (list_length(fromExpr->fromlist) > 1)
+		{
+			return true;
+		}
+	}
+
+	return expression_tree_walker(node, CartesianJoinExprWalker, NULL);
+}
+
+
+/*
+ * HasLateralJoin returns true if join restriction context contain lateral join.
+ */
+static bool
+HasLateralJoin(JoinRestrictionContext *joinRestrictionContext)
+{
+	JoinRestriction *joinRestriction = NULL;
+	foreach_ptr(joinRestriction, joinRestrictionContext->joinRestrictionList)
+	{
+		if (joinRestriction->plannerInfo && joinRestriction->plannerInfo->hasLateralRTEs)
+		{
+			return true;
+		}
+	}
+
+	return false;
 }
 
 

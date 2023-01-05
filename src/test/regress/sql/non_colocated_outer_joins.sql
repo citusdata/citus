@@ -1,3 +1,6 @@
+CREATE SCHEMA non_colocated_outer_joins;
+SET search_path TO non_colocated_outer_joins;
+
 CREATE TABLE t1(col1 INT, col2 INT);
 SELECT create_distributed_table('t1', 'col1');
 INSERT INTO t1 SELECT i, i FROM generate_series(1,10) i;
@@ -68,6 +71,11 @@ SELECT t1.*, t2.*, t3.* FROM t1 FULL JOIN t2 ON (t1.col2 = t2.col2) INNER JOIN t
 SELECT t1.*, t2.*, t3.* FROM t1 FULL JOIN t2 ON (t1.col2 = t2.col1) INNER JOIN t3 ON (t3.col2 = t1.col1) ORDER BY 1,2,3,4,5,6;
 SELECT t1.*, t2.*, t3.* FROM t1 FULL JOIN t2 ON (t1.col2 = t2.col1) INNER JOIN t3 ON (t3.col2 = t2.col1) ORDER BY 1,2,3,4,5,6;
 
+-- join order planner handles left outer join between tables with nonsimple join or where clause
+
+SELECT t1.*, t2.* FROM t1 LEFT JOIN t2 ON (t1.col1 = t2.col1) WHERE (t1.col1 IS NULL or t2.col2 IS NULL) ORDER BY 1,2,3,4;
+SELECT t1.*, t2.* FROM t1 LEFT JOIN t2 ON (t1.col1 = t2.col1 and t1.col1 < 0) ORDER BY 1,2,3,4;
+
 -- join order planner cannot handle semi joins
 
 SELECT t1.* FROM t1 WHERE EXISTS (SELECT * FROM t2 WHERE t1.col1 = t2.col1) ORDER BY 1,2;
@@ -75,19 +83,14 @@ SELECT t1.* FROM t1 WHERE EXISTS (SELECT * FROM t2 WHERE t1.col2 = t2.col2) ORDE
 SELECT t2.* FROM t2 WHERE EXISTS (SELECT * FROM t1 WHERE t1.col1 = t2.col1) ORDER BY 1,2;
 SELECT t2.* FROM t2 WHERE EXISTS (SELECT * FROM t1 WHERE t1.col2 = t2.col2) ORDER BY 1,2;
 
-
-------------------------- wrong results below, should not be supported if there exists nonsimple join clause
-
--- join order planner cannot handle anti join between tables with simple join clause
+-- join order planner cannot handle anti join
 
 SELECT t1.* FROM t1 WHERE NOT EXISTS (SELECT * FROM t2 WHERE t1.col1 = t2.col1) ORDER BY 1,2;
 SELECT t1.* FROM t1 WHERE NOT EXISTS (SELECT * FROM t2 WHERE t1.col2 = t2.col2) ORDER BY 1,2;
 SELECT t2.* FROM t2 WHERE NOT EXISTS (SELECT * FROM t1 WHERE t1.col1 = t2.col1) ORDER BY 1,2;
 SELECT t2.* FROM t2 WHERE NOT EXISTS (SELECT * FROM t1 WHERE t1.col2 = t2.col2) ORDER BY 1,2;
 
--- join order planner cannot handle left outer join between tables with nonsimple join clause
-
--- where constraint(t1.col1 IS NULL or t2.col2 IS NULL) is considered as join constraint
-SELECT t1.*, t2.* FROM t1 LEFT JOIN t2 ON (t1.col1 = t2.col1) WHERE (t1.col1 IS NULL or t2.col2 IS NULL) ORDER BY 1,2,3,4;
--- join constraint(t1.col1 < 0) is considered as where constraint
-SELECT t1.*, t2.* FROM t1 LEFT JOIN t2 ON (t1.col1 = t2.col1 and t1.col1 < 0) ORDER BY 1,2,3,4;
+DROP SCHEMA non_colocated_outer_joins CASCADE;
+RESET client_min_messages;
+RESET citus.log_multi_join_order;
+RESET citus.enable_repartition_joins;

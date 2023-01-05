@@ -74,7 +74,7 @@ EXPLAIN (COSTS OFF)
 SELECT l1.l_quantity FROM lineitem l1, lineitem l2
 	WHERE l1.l_orderkey = l2.l_orderkey AND l1.l_quantity > 5;
 DEBUG:  Router planner cannot handle multi-shard select queries
-LOG:  join order: [ "lineitem" ][ local partition join "lineitem" ]
+LOG:  join order: [ "lineitem" ][ local partition join(INNER) "lineitem" ]
 DEBUG:  join prunable for intervals [-2147483648,-1] and [0,2147483647]
 DEBUG:  join prunable for intervals [0,2147483647] and [-2147483648,-1]
                           QUERY PLAN
@@ -91,7 +91,7 @@ EXPLAIN (COSTS OFF)
 SELECT count(*) FROM lineitem, orders
 	WHERE (l_orderkey = o_orderkey AND l_quantity > 5)
 	OR (l_orderkey = o_orderkey AND l_quantity < 10);
-LOG:  join order: [ "lineitem" ][ local partition join "orders" ]
+LOG:  join order: [ "lineitem" ][ local partition join(INNER) "orders" ]
                              QUERY PLAN
 ---------------------------------------------------------------------
  Aggregate
@@ -106,7 +106,7 @@ ERROR:  complex joins are only supported when all distributed tables are joined 
 EXPLAIN (COSTS OFF)
 SELECT count(*) FROM orders, lineitem_hash
 	WHERE o_orderkey = l_orderkey;
-LOG:  join order: [ "orders" ][ dual partition join "lineitem_hash" ]
+LOG:  join order: [ "orders" ][ dual partition join(INNER) "lineitem_hash" ]
                              QUERY PLAN
 ---------------------------------------------------------------------
  Aggregate
@@ -118,7 +118,7 @@ LOG:  join order: [ "orders" ][ dual partition join "lineitem_hash" ]
 EXPLAIN (COSTS OFF)
 SELECT count(*) FROM orders_hash, lineitem_hash
 	WHERE o_orderkey = l_orderkey;
-LOG:  join order: [ "orders_hash" ][ local partition join "lineitem_hash" ]
+LOG:  join order: [ "orders_hash" ][ local partition join(INNER) "lineitem_hash" ]
                              QUERY PLAN
 ---------------------------------------------------------------------
  Aggregate
@@ -130,7 +130,7 @@ LOG:  join order: [ "orders_hash" ][ local partition join "lineitem_hash" ]
 EXPLAIN (COSTS OFF)
 SELECT count(*) FROM customer_hash, nation
 	WHERE c_nationkey = n_nationkey;
-LOG:  join order: [ "customer_hash" ][ reference join "nation" ]
+LOG:  join order: [ "customer_hash" ][ reference join(INNER) "nation" ]
                              QUERY PLAN
 ---------------------------------------------------------------------
  Aggregate
@@ -143,7 +143,7 @@ LOG:  join order: [ "customer_hash" ][ reference join "nation" ]
 EXPLAIN (COSTS OFF)
 SELECT count(*) FROM orders, lineitem, customer_append
 	WHERE o_custkey = l_partkey AND o_custkey = c_nationkey;
-LOG:  join order: [ "orders" ][ dual partition join "lineitem" ][ dual partition join "customer_append" ]
+LOG:  join order: [ "orders" ][ dual partition join(INNER) "lineitem" ][ dual partition join(INNER) "customer_append" ]
                              QUERY PLAN
 ---------------------------------------------------------------------
  Aggregate
@@ -156,7 +156,7 @@ LOG:  join order: [ "orders" ][ dual partition join "lineitem" ][ dual partition
 EXPLAIN (COSTS OFF)
 SELECT count(*) FROM orders, customer_hash
 	WHERE c_custkey = o_custkey;
-LOG:  join order: [ "orders" ][ dual partition join "customer_hash" ]
+LOG:  join order: [ "orders" ][ dual partition join(INNER) "customer_hash" ]
                              QUERY PLAN
 ---------------------------------------------------------------------
  Aggregate
@@ -169,7 +169,7 @@ LOG:  join order: [ "orders" ][ dual partition join "customer_hash" ]
 EXPLAIN (COSTS OFF)
 SELECT count(*) FROM orders_hash, customer_append
 	WHERE c_custkey = o_custkey;
-LOG:  join order: [ "orders_hash" ][ dual partition join "customer_append" ]
+LOG:  join order: [ "orders_hash" ][ dual partition join(INNER) "customer_append" ]
                              QUERY PLAN
 ---------------------------------------------------------------------
  Aggregate
@@ -194,7 +194,7 @@ JOIN (
       JOIN events_table USING (user_id)
      WHERE event_type = 5
 ) AS some_users ON (some_users.user_id = bar.user_id);
-LOG:  join order: [ "users_table" ][ local partition join "events_table" ][ local partition join "users_table" ][ local partition join "events_table" ]
+LOG:  join order: [ "users_table" ][ local partition join(INNER) "events_table" ][ local partition join(INNER) "users_table" ][ local partition join(INNER) "events_table" ]
                              QUERY PLAN
 ---------------------------------------------------------------------
  Aggregate

@@ -85,15 +85,20 @@ static bool ExtractFromExpressionWalker(Node *node,
 										QualifierWalkerContext *walkerContext);
 static List * MultiTableNodeList(List *tableEntryList, List *rangeTableList);
 static List * AddMultiCollectNodes(List *tableNodeList);
-static MultiNode * MultiJoinTree(List *joinOrderList, List *collectTableList);
+static MultiNode * MultiJoinTree(List *joinOrderList, List *collectTableList, bool
+								 passJoinClauseDirectly);
 static MultiCollect * CollectNodeForTable(List *collectTableList, uint32 rangeTableId);
-static MultiSelect * MultiSelectNode(List *whereClauseList);
+static MultiSelect * MultiSelectNode(List *whereClauseList, bool passWhereClauseDirectly);
 static bool IsSelectClause(Node *clause);
+
+static JoinInfoContext * FetchJoinOrderContext(FromExpr *fromExpr);
+static bool JoinInfoWalker(Node *node, JoinInfoContext *joinInfoContext);
 
 /* Local functions forward declarations for applying joins */
 static MultiNode * ApplyJoinRule(MultiNode *leftNode, MultiNode *rightNode,
 								 JoinRuleType ruleType, List *partitionColumnList,
-								 JoinType joinType, List *joinClauseList);
+								 JoinType joinType, List *joinClauseList,
+								 bool passJoinClauseDirectly);
 static RuleApplyFunction JoinRuleApplyFunction(JoinRuleType ruleType);
 static MultiNode * ApplyReferenceJoin(MultiNode *leftNode, MultiNode *rightNode,
 									  List *partitionColumnList, JoinType joinType,
@@ -572,6 +577,7 @@ MultiNodeTree(Query *queryTree)
 	List *collectTableList = NIL;
 	MultiNode *joinTreeNode = NULL;
 	MultiNode *currentTopNode = NULL;
+	bool passQualClauseDirectly = false;
 
 	/* verify we can perform distributed planning on this query */
 	DeferredErrorMessage *unsupportedQueryError = DeferErrorIfQueryNotSupported(
@@ -661,14 +667,16 @@ MultiNodeTree(Query *queryTree)
 
 		if (FindNodeMatchingCheckFunction((Node *) queryTree->jointree, IsOuterJoinExpr))
 		{
-			/* consider outer join qualifications as well */
-			List *allRestrictionClauseList = QualifierList(queryTree->jointree);
-			joinClauseList = JoinClauseList(allRestrictionClauseList);
-			List *joinExprList = JoinExprList(queryTree->jointree);
+			/* pass join clauses directly into fix join order */
+			JoinInfoContext *joinInfoContext = FetchJoinOrderContext(queryTree->jointree);
+
+			/* where clause should not contain join clause */
+			whereClauseList = joinInfoContext->baseQualifierList;
 
 			/* we simply donot commute joins as we have at least 1 outer join */
-			joinOrderList = FixedJoinOrderList(tableEntryList, joinClauseList,
-											   joinExprList);
+			joinOrderList = FixedJoinOrderList(tableEntryList, joinInfoContext);
+
+			passQualClauseDirectly = true;
 		}
 		else
 		{
@@ -680,7 +688,8 @@ MultiNodeTree(Query *queryTree)
 		}
 
 		/* build join tree using the join order and collected tables */
-		joinTreeNode = MultiJoinTree(joinOrderList, collectTableList);
+		joinTreeNode = MultiJoinTree(joinOrderList, collectTableList,
+									 passQualClauseDirectly);
 
 		currentTopNode = joinTreeNode;
 	}
@@ -688,7 +697,7 @@ MultiNodeTree(Query *queryTree)
 	Assert(currentTopNode != NULL);
 
 	/* build select node if the query has selection criteria */
-	MultiSelect *selectNode = MultiSelectNode(whereClauseList);
+	MultiSelect *selectNode = MultiSelectNode(whereClauseList, passQualClauseDirectly);
 	if (selectNode != NULL)
 	{
 		SetChild((MultiUnaryNode *) selectNode, currentTopNode);
@@ -711,6 +720,127 @@ MultiNodeTree(Query *queryTree)
 	currentTopNode = (MultiNode *) extendedOpNode;
 
 	return currentTopNode;
+}
+
+
+/*
+ * FetchJoinOrderContext returns all join info for given node.
+ */
+static JoinInfoContext *
+FetchJoinOrderContext(FromExpr *fromExpr)
+{
+	/* we do not allow cartesian product for outer joins */
+	Assert(fromExpr->fromlist && list_length(fromExpr->fromlist) == 1);
+
+	JoinInfoContext *joinInfoContext = palloc0(sizeof(JoinInfoContext));
+	JoinInfoWalker((Node *) fromExpr, joinInfoContext);
+
+	/* only leftmost table will have valid(ltableIdx != 0) ltableIdx */
+	int leftMostTableIdx = 0;
+	ExtractLeftMostRangeTableIndex((Node *) fromExpr, &leftMostTableIdx);
+	Assert(list_length(joinInfoContext->joinInfoList) > 0);
+	JoinInfo *leftMostJoinInfo = list_nth(joinInfoContext->joinInfoList, 0);
+	leftMostJoinInfo->ltableIdx = leftMostTableIdx;
+
+	return joinInfoContext;
+}
+
+
+/*
+ * JoinInfoWalker descends into given node and pushes all join info into
+ * joinInfoContext.
+ */
+static bool
+JoinInfoWalker(Node *node, JoinInfoContext *joinInfoContext)
+{
+	if (node == NULL)
+	{
+		return false;
+	}
+
+	/* process the deepest node first */
+	bool walkerResult = expression_tree_walker(node, JoinInfoWalker,
+											   (void *) joinInfoContext);
+
+	/*
+	 * Get qualifier lists of join and from expression nodes. Note that in the
+	 * case of subqueries, PostgreSQL can skip simplifying, flattening and
+	 * making ANDs implicit. If qualifiers node is not a list, then we run these
+	 * preprocess routines on qualifiers node.
+	 */
+	if (IsA(node, JoinExpr))
+	{
+		JoinExpr *joinExpression = (JoinExpr *) node;
+		if (!(IsA(joinExpression->rarg, RangeTblRef) || IsA(joinExpression->rarg,
+															FromExpr)))
+		{
+			ereport(WARNING, (errmsg("unexpected node in joininfowalker")));
+		}
+
+		Node *joinQualifiersNode = joinExpression->quals;
+		JoinType joinType = joinExpression->jointype;
+		RangeTblRef *rightTableRef = NULL;
+		if (IsA(joinExpression->rarg, RangeTblRef))
+		{
+			rightTableRef = (RangeTblRef *) joinExpression->rarg;
+		}
+		else
+		{
+			Assert(IsA(joinExpression->rarg, FromExpr));
+			FromExpr *fromExpr = (FromExpr *) joinExpression->rarg;
+			Assert(list_length(fromExpr->fromlist) == 1);
+			rightTableRef = (RangeTblRef *) list_nth(fromExpr->fromlist, 0);
+		}
+
+		List *joinQualifierList = NIL;
+		if (joinQualifiersNode != NULL)
+		{
+			if (IsA(joinQualifiersNode, List))
+			{
+				joinQualifierList = (List *) joinQualifiersNode;
+			}
+			else
+			{
+				/* this part of code only run for subqueries */
+				Node *joinClause = eval_const_expressions(NULL, joinQualifiersNode);
+				joinClause = (Node *) canonicalize_qual((Expr *) joinClause, false);
+				joinQualifierList = make_ands_implicit((Expr *) joinClause);
+			}
+		}
+
+		JoinInfo *joinInfo = palloc0(sizeof(JoinInfo));
+		joinInfo->joinType = joinType;
+		joinInfo->rtableIdx = rightTableRef->rtindex;
+		joinInfo->joinQualifierList = joinQualifierList;
+
+		joinInfoContext->joinInfoList = lappend(joinInfoContext->joinInfoList, joinInfo);
+	}
+	else if (IsA(node, FromExpr))
+	{
+		List *fromQualifierList = NIL;
+		FromExpr *fromExpression = (FromExpr *) node;
+		Node *fromQualifiersNode = fromExpression->quals;
+
+		if (fromQualifiersNode != NULL)
+		{
+			if (IsA(fromQualifiersNode, List))
+			{
+				fromQualifierList = (List *) fromQualifiersNode;
+			}
+			else
+			{
+				/* this part of code only run for subqueries */
+				Node *fromClause = eval_const_expressions(NULL, fromQualifiersNode);
+				fromClause = (Node *) canonicalize_qual((Expr *) fromClause, false);
+				fromQualifierList = make_ands_implicit((Expr *) fromClause);
+			}
+
+			joinInfoContext->baseQualifierList =
+				list_concat(joinInfoContext->baseQualifierList, fromQualifierList);
+		}
+	}
+
+	return walkerResult;
 }
 
 
@@ -1568,7 +1698,7 @@ AddMultiCollectNodes(List *tableNodeList)
  * this tree after every table in the list has been joined.
  */
 static MultiNode *
-MultiJoinTree(List *joinOrderList, List *collectTableList)
+MultiJoinTree(List *joinOrderList, List *collectTableList, bool passJoinClauseDirectly)
 {
 	MultiNode *currentTopNode = NULL;
 	ListCell *joinOrderCell = NULL;
@@ -1600,7 +1730,8 @@ MultiJoinTree(List *joinOrderList, List *collectTableList)
 												   (MultiNode *) collectNode,
 												   joinRuleType, partitionColumnList,
 												   joinType,
-												   joinClauseList);
+												   joinClauseList,
+												   passJoinClauseDirectly);
 
 			/* the new join node becomes the top of our join tree */
 			currentTopNode = newJoinNode;
@@ -1649,7 +1780,7 @@ CollectNodeForTable(List *collectTableList, uint32 rangeTableId)
  * not have any select clauses, the function return null.
  */
 static MultiSelect *
-MultiSelectNode(List *whereClauseList)
+MultiSelectNode(List *whereClauseList, bool passWhereClauseDirectly)
 {
 	List *selectClauseList = NIL;
 	MultiSelect *selectNode = NULL;
@@ -1658,7 +1789,7 @@ MultiSelectNode(List *whereClauseList)
 	foreach(whereClauseCell, whereClauseList)
 	{
 		Node *whereClause = (Node *) lfirst(whereClauseCell);
-		if (IsSelectClause(whereClause))
+		if (passWhereClauseDirectly || IsSelectClause(whereClause))
 		{
 			selectClauseList = lappend(selectClauseList, whereClause);
 		}
@@ -1949,7 +2080,8 @@ pull_var_clause_default(Node *node)
  */
 static MultiNode *
 ApplyJoinRule(MultiNode *leftNode, MultiNode *rightNode, JoinRuleType ruleType,
-			  List *partitionColumnList, JoinType joinType, List *joinClauseList)
+			  List *partitionColumnList, JoinType joinType, List *joinClauseList,
+			  bool passJoinClauseDirectly)
 {
 	List *leftTableIdList = OutputTableIdList(leftNode);
 	List *rightTableIdList = OutputTableIdList(rightNode);
@@ -1966,7 +2098,8 @@ ApplyJoinRule(MultiNode *leftNode, MultiNode *rightNode, JoinRuleType ruleType,
 	/* call the join rule application function to create the new join node */
 	RuleApplyFunction ruleApplyFunction = JoinRuleApplyFunction(ruleType);
 	MultiNode *multiNode = (*ruleApplyFunction)(leftNode, rightNode, partitionColumnList,
-												joinType, applicableJoinClauses);
+												joinType, (passJoinClauseDirectly) ?
+												joinClauseList : applicableJoinClauses);
 
 	if (joinType != JOIN_INNER && CitusIsA(multiNode, MultiJoin))
 	{

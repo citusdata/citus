@@ -83,15 +83,22 @@ typedef struct JoinOrderNode
 } JoinOrderNode;
 
 
-/*
- * JoinTypeContext stores jointype between given rangetable indexes
- */
-typedef struct JoinTypeContext
+/* JoinInfoContext stores joinInfo list and base qualifications */
+typedef struct JoinInfoContext
 {
+	List *baseQualifierList;
+	List *joinInfoList;
+} JoinInfoContext;
+
+
+/* JoinInfoContext stores joinInfo list and base qualifications */
+typedef struct JoinInfo
+{
+	JoinType joinType;
 	uint32 ltableIdx;
 	uint32 rtableIdx;
-	JoinType *joinType;
-} JoinTypeContext;
+	List *joinQualifierList;
+} JoinInfo;
 
 
 /* Config variables managed via guc.c */
@@ -102,9 +109,8 @@ extern bool EnableSingleHashRepartitioning;
 /* Function declaration for determining table join orders */
 extern List * JoinExprList(FromExpr *fromExpr);
 extern List * JoinOrderList(List *rangeTableEntryList, List *joinClauseList);
-extern List * FixedJoinOrderList(List *rangeTableEntryList, List *joinClauseList,
-								 List *joinExprList);
-extern const char * JoinTypeName(JoinType jointype);
+extern List * FixedJoinOrderList(List *rangeTableEntryList,
+								 JoinInfoContext *joinInfoContext);
 extern bool IsApplicableJoinClause(List *leftTableIdList, uint32 rightTableId,
 								   Node *joinClause);
 extern List * ApplicableJoinClauses(List *leftTableIdList, uint32 rightTableId,
@@ -122,6 +128,7 @@ extern Var * DistPartitionKey(Oid relationId);
 extern Var * DistPartitionKeyOrError(Oid relationId);
 extern char PartitionMethod(Oid relationId);
 extern char TableReplicationModel(Oid relationId);
+extern bool ExtractLeftMostRangeTableIndex(Node *node, int *rangeTableIndex);
 
 
 #endif   /* MULTI_JOIN_ORDER_H */

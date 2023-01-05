@@ -201,6 +201,7 @@ test: local_table_join
 test: local_dist_join_mixed
 test: citus_local_dist_joins
 test: recurring_outer_join
+test: non_colocated_outer_joins
 test: pg_dump
 
 # ---------
