@@ -1153,11 +1153,11 @@ ShardMoveSubscriptionName(Oid ownerId)
 {
 	if (RunningUnderIsolationTest)
 	{
-		return psprintf("%s%i_%i", SHARD_MOVE_SUBSCRIPTION_PREFIX, ownerId, MyProcPid);
+		return psprintf("%s%u_%i", SHARD_MOVE_SUBSCRIPTION_PREFIX, ownerId, MyProcPid);
 	}
 	else
 	{
-		return psprintf("%s%i", SHARD_MOVE_SUBSCRIPTION_PREFIX, ownerId);
+		return psprintf("%s%u", SHARD_MOVE_SUBSCRIPTION_PREFIX, ownerId);
 	}
 }
 
@@ -1169,7 +1169,7 @@ ShardMoveSubscriptionName(Oid ownerId)
 static char *
 ShardMoveSubscriptionRole(Oid ownerId)
 {
-	return psprintf("%s%i", SHARD_MOVE_SUBSCRIPTION_ROLE_PREFIX, ownerId);
+	return psprintf("%s%u", SHARD_MOVE_SUBSCRIPTION_ROLE_PREFIX, ownerId);
 }
 
 
