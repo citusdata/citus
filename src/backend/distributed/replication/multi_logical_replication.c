@@ -1231,7 +1231,7 @@ ReplicationSlotNameForNodeAndOwnerForOperation(LogicalRepType type, uint32_t nod
 char *
 SubscriptionName(LogicalRepType type, Oid ownerId)
 {
-	return psprintf("%s%i_%lu", subscriptionPrefix[type],
+	return psprintf("%s%u_%lu", subscriptionPrefix[type],
 					ownerId, CurrentOperationId);
 }
 
@@ -1243,7 +1243,7 @@ SubscriptionName(LogicalRepType type, Oid ownerId)
 char *
 SubscriptionRoleName(LogicalRepType type, Oid ownerId)
 {
-	return psprintf("%s%i_%lu", subscriptionRolePrefix[type], ownerId,
+	return psprintf("%s%u_%lu", subscriptionRolePrefix[type], ownerId,
 					CurrentOperationId);
 }
 
