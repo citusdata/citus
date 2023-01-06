@@ -19,7 +19,7 @@ echo "github.com ssh-rsa AAAAB3NzaC1yc2EAAAABIwAAAQEAq2A7hRGmdnm9tUDbO9IDSwBK6Tb
 
 set +x
 git config --global credential.helper store
-git clone https://${GIT_USERNAME}:${GIT_TOKEN}@github.com/citusdata/test-automation
+git clone https://${GIT_ADMIN_PAT}@github.com/citusdata/test-automation
 set -x
 
 cd test-automation

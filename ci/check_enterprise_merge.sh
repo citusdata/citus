@@ -12,7 +12,7 @@ set -e
 set -o pipefail
 
 PR_BRANCH="${CIRCLE_BRANCH}"
-ENTERPRISE_REMOTE="https://${GIT_USERNAME}:${GIT_TOKEN}@github.com/citusdata/citus-enterprise"
+ENTERPRISE_REMOTE="https://${GIT_ADMIN_PAT}@github.com/citusdata/citus-enterprise"
 
 # shellcheck disable=SC1091
 source ci/ci_helpers.sh
