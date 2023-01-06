@@ -1485,6 +1485,15 @@ EnsureShardCanBeCopied(int64 shardId, const char *sourceNodeName, int32 sourceNo
 								shardId)));
 		}
 	}
+
+	/*
+	 * Make sure the relation exists. In some cases the relation is actually dropped but
+	 * the metadata remains, such as dropping table while citus.enable_ddl_propagation
+	 * is set to off.
+	 */
+	ShardInterval *shardInterval = LoadShardInterval(shardId);
+	Oid distributedTableId = shardInterval->relationId;
+	EnsureRelationExists(distributedTableId);
 }
 
 

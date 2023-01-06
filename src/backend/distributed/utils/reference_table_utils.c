@@ -723,6 +723,12 @@ ReplicateAllReferenceTablesToNode(WorkerNode *workerNode)
 		ShardInterval *shardInterval = NULL;
 		foreach_ptr(shardInterval, referenceShardIntervalList)
 		{
+			/*
+			 * Make sure the relation exists. In some cases the relation is
+			 * actually dropped but the metadata remains, such as dropping table
+			 * while citus.enable_ddl_propagation is set to off.
+			 */
+			EnsureRelationExists(shardInterval->relationId);
 			uint64 shardId = shardInterval->shardId;
 
 			LockShardDistributionMetadata(shardId, ExclusiveLock);
