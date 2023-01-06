@@ -1425,7 +1425,7 @@ CreateShardMovePublications(MultiConnection *connection, List *shardList,
 		bool prefixWithComma = false;
 
 		appendStringInfo(createPublicationCommand, "CREATE PUBLICATION %s FOR TABLE ",
-						 ShardMovePublicationName(ownerId));
+						 quote_identifier(ShardMovePublicationName(ownerId)));
 
 		ShardInterval *shard = NULL;
 		foreach_ptr(shard, shardList)
@@ -1484,8 +1484,8 @@ CreateShardMoveSubscriptions(MultiConnection *connection, char *sourceNodeName,
 				"SET LOCAL citus.enable_ddl_propagation TO OFF;",
 				psprintf(
 					"CREATE USER %s SUPERUSER IN ROLE %s",
-					ShardMoveSubscriptionRole(ownerId),
-					GetUserNameFromId(ownerId, false)
+					quote_identifier(ShardMoveSubscriptionRole(ownerId)),
+					quote_identifier(GetUserNameFromId(ownerId, false))
 					)));
 
 		appendStringInfo(conninfo, "host='%s' port=%d user='%s' dbname='%s' "
@@ -1505,8 +1505,10 @@ CreateShardMoveSubscriptions(MultiConnection *connection, char *sourceNodeName,
 		pfree(createSubscriptionCommand);
 		ExecuteCriticalRemoteCommand(connection, psprintf(
 										 "ALTER SUBSCRIPTION %s OWNER TO %s",
-										 ShardMoveSubscriptionName(ownerId),
-										 ShardMoveSubscriptionRole(ownerId)
+										 quote_identifier(ShardMoveSubscriptionName(
+															  ownerId)),
+										 quote_identifier(ShardMoveSubscriptionRole(
+															  ownerId))
 										 ));
 
 		/*
@@ -1519,7 +1521,7 @@ CreateShardMoveSubscriptions(MultiConnection *connection, char *sourceNodeName,
 				"SET LOCAL citus.enable_ddl_propagation TO OFF;",
 				psprintf(
 					"ALTER ROLE %s NOSUPERUSER",
-					ShardMoveSubscriptionRole(ownerId)
+					quote_identifier(ShardMoveSubscriptionRole(ownerId))
 					)));
 
 		ExecuteCriticalRemoteCommand(connection, psprintf(
