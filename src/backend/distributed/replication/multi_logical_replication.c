@@ -1315,7 +1315,7 @@ CreatePublications(MultiConnection *connection,
 		bool prefixWithComma = false;
 
 		appendStringInfo(createPublicationCommand, "CREATE PUBLICATION %s FOR TABLE ",
-						 entry->name);
+						 quote_identifier(entry->name));
 
 		ShardInterval *shard = NULL;
 		foreach_ptr(shard, entry->shardIntervals)
@@ -1498,8 +1498,8 @@ CreateSubscriptions(MultiConnection *sourceConnection,
 				"SET LOCAL citus.enable_ddl_propagation TO OFF;",
 				psprintf(
 					"CREATE USER %s SUPERUSER IN ROLE %s;",
-					target->subscriptionOwnerName,
-					GetUserNameFromId(ownerId, false)
+					quote_identifier(target->subscriptionOwnerName),
+					quote_identifier(GetUserNameFromId(ownerId, false))
 					)));
 
 		InsertCleanupRecordInSubtransaction(CLEANUP_OBJECT_USER,
@@ -1554,8 +1554,8 @@ CreateSubscriptions(MultiConnection *sourceConnection,
 
 		ExecuteCriticalRemoteCommand(target->superuserConnection, psprintf(
 										 "ALTER SUBSCRIPTION %s OWNER TO %s",
-										 target->subscriptionName,
-										 target->subscriptionOwnerName
+										 quote_identifier(target->subscriptionName),
+										 quote_identifier(target->subscriptionOwnerName)
 										 ));
 
 		/*
@@ -1568,7 +1568,7 @@ CreateSubscriptions(MultiConnection *sourceConnection,
 				"SET LOCAL citus.enable_ddl_propagation TO OFF;",
 				psprintf(
 					"ALTER ROLE %s NOSUPERUSER;",
-					target->subscriptionOwnerName
+					quote_identifier(target->subscriptionOwnerName)
 					)));
 	}
 }
