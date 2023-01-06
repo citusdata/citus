@@ -258,7 +258,7 @@ AppendAlterTableCmdAddConstraint(StringInfo buf, Constraint *constraint,
 		AddRangeTableEntryToQueryCompat(pstate, relation);
 
 		Node *expr = transformExpr(pstate, constraint->raw_expr,
-				
+
 								   EXPR_KIND_CHECK_CONSTRAINT);
 
 		char *relationName = get_rel_name(leftRelationId);
