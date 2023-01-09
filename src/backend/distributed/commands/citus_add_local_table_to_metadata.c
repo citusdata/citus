@@ -563,7 +563,7 @@ ErrorIfUnsupportedCitusLocalTableKind(Oid relationId)
 static void
 ErrorIfUnsupportedCitusLocalColumnDefinition(Relation relation)
 {
-	// No-op
+	/* No-op */
 }
 
 
@@ -1034,6 +1034,8 @@ GetDropTriggerCommand(Oid relationId, char *triggerName)
 
 	return dropCommand->data;
 }
+
+
 static void
 DropIdentitesOnTable(Oid relationId)
 {
@@ -1056,20 +1058,20 @@ DropIdentitesOnTable(Oid relationId)
 			StringInfo dropCommand = makeStringInfo();
 
 			appendStringInfo(dropCommand, "ALTER TABLE %s ALTER %s DROP IDENTITY",
-							qualifiedTableName,
-							columnName);
-			/*
-			* We need to disable/enable ddl propagation for this command, to prevent
-			* sending unnecessary ALTER COLUMN commands for partitions, to MX workers.
-			*/
-			ExecuteAndLogUtilityCommandList(list_make3(DISABLE_DDL_PROPAGATION,
-													dropCommand->data,
-													ENABLE_DDL_PROPAGATION));
+							 qualifiedTableName,
+							 columnName);
 
+			/*
+			 * We need to disable/enable ddl propagation for this command, to prevent
+			 * sending unnecessary ALTER COLUMN commands for partitions, to MX workers.
+			 */
+			ExecuteAndLogUtilityCommandList(list_make3(DISABLE_DDL_PROPAGATION,
+													   dropCommand->data,
+													   ENABLE_DDL_PROPAGATION));
 		}
 	}
-
 }
+
 
 /*
  * DropViewsOnTable drops the views that depend on the given relation.
