@@ -205,6 +205,21 @@ SELECT con.conname
       INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
               WHERE rel.relname = 'products_ref';
 
+ALTER TABLE AT_AddConstNoName.products_ref DROP CONSTRAINT products_ref_product_no_excl2;
+
+-- Check that name collisions are handled for CHECK
+ALTER TABLE AT_AddConstNoName.products_ref_3 ADD CONSTRAINT products_ref_check  CHECK (product_no > 0);
+ALTER TABLE AT_AddConstNoName.products_ref_2 ADD CONSTRAINT products_ref_check1  CHECK (product_no > 0);
+ALTER TABLE AT_AddConstNoName.products_ref ADD CHECK (product_no > 0);
+
+SELECT con.conname
+    FROM pg_catalog.pg_constraint con
+      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
+              WHERE rel.relname = 'products_ref';
+
+ALTER TABLE AT_AddConstNoName.products_ref DROP CONSTRAINT products_ref_check2;
+
 DROP TABLE AT_AddConstNoName.products_ref;
 
 -- Check "ADD PRIMARY KEY" with max table name (63 chars)
@@ -304,6 +319,35 @@ SELECT con.conname
       INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
           WHERE rel.relname LIKE 'very%';
 
+-- Check "ADD CHECK" with max table name (63 chars)
+\c - - :master_host :master_port
+ALTER TABLE AT_AddConstNoName.verylonglonglonglonglonglonglonglonglonglonglonglonglonglonglon ADD CHECK (product_no > 0);
+-- Constraint should be created on the coordinator with a shortened name
+SELECT con.conname
+    FROM pg_catalog.pg_constraint con
+      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
+              WHERE rel.relname LIKE 'very%';
+
+	-- Constraints for the main table and the shards should be created on the worker with a shortened name
+\c - - :public_worker_1_host :worker_1_port
+SELECT con.conname
+    FROM pg_catalog.pg_constraint con
+      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
+                WHERE rel.relname LIKE 'very%' ORDER BY con.conname ASC;
+
+-- CHECK constraint can be deleted via the coordinator
+\c - - :master_host :master_port
+ALTER TABLE AT_AddConstNoName.verylonglonglonglonglonglonglonglonglonglonglonglonglonglonglon DROP CONSTRAINT verylonglonglonglonglonglonglonglonglonglonglonglonglongl_check;
+
+\c - - :public_worker_1_host :worker_1_port
+SELECT con.conname
+    FROM pg_catalog.pg_constraint con
+      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
+          WHERE rel.relname LIKE 'very%';
+
 -- Test the scenario where a partitioned distributed table has a child with max allowed name
 -- Verify that we switch to sequential execution mode to avoid deadlock in this scenario
 \c - - :master_host :master_port
@@ -362,6 +406,27 @@ SELECT con.conname
 \c - - :master_host :master_port
 ALTER TABLE AT_AddConstNoName.dist_partitioned_table DROP CONSTRAINT  dist_partitioned_table_partition_col_key;
 
+-- Check "ADD CHECK"
+SET client_min_messages TO DEBUG1;
+ALTER TABLE AT_AddConstNoName.dist_partitioned_table ADD CHECK(dist_col >= another_col);
+RESET client_min_messages;
+
+SELECT con.conname
+    FROM pg_catalog.pg_constraint con
+      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
+          WHERE rel.relname = 'dist_partitioned_table';
+
+\c - - :public_worker_1_host :worker_1_port
+SELECT con.conname
+    FROM pg_catalog.pg_constraint con
+      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
+          WHERE rel.relname LIKE 'longlonglonglonglonglonglonglonglong%' ORDER BY con.conname ASC;
+
+\c - - :master_host :master_port
+ALTER TABLE AT_AddConstNoName.dist_partitioned_table DROP CONSTRAINT  dist_partitioned_table_check;
+
 \c - - :public_worker_1_host :worker_1_port
 SELECT con.conname
     FROM pg_catalog.pg_constraint con
@@ -397,6 +462,19 @@ BEGIN;
 	SELECT count(*) FROM AT_AddConstNoName.dist_partitioned_table;
 	ALTER TABLE AT_AddConstNoName.dist_partitioned_table ADD UNIQUE(partition_col);
 	ROLLBACK;
+
+-- Check "ADD CHECK"
+\c - - :master_host :master_port
+BEGIN;
+	SELECT count(*) FROM AT_AddConstNoName.dist_partitioned_table;
+	ALTER TABLE AT_AddConstNoName.dist_partitioned_table ADD CHECK(dist_col > another_col);
+	ROLLBACK;
+-- try inside a sequential block
+BEGIN;
+        SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
+        SELECT count(*) FROM AT_AddConstNoName.dist_partitioned_table;
+        ALTER TABLE AT_AddConstNoName.dist_partitioned_table ADD CHECK(dist_col > another_col);
+        ROLLBACK;
 
 DROP TABLE AT_AddConstNoName.dist_partitioned_table;
 
@@ -484,6 +562,35 @@ SELECT con.conname
           WHERE rel.relname LIKE 'citus_local_table%' ORDER BY con.conname ASC;
 
 \c - - :master_host :master_port
+ALTER TABLE AT_AddConstNoName.citus_local_table DROP CONSTRAINT citus_local_table_id_excl;
+
+-- Check "ADD CHECK"
+\c - - :master_host :master_port
+ALTER TABLE AT_AddConstNoName.citus_local_table ADD CHECK(id > 100);
+
+-- Check the CHECK constraint is created for the local table and its shard
+SELECT con.conname
+    FROM pg_catalog.pg_constraint con
+      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
+          WHERE rel.relname LIKE 'citus_local_table%' ORDER BY con.conname ASC;
+
+SELECT con.conname
+    FROM pg_catalog.pg_constraint con
+      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
+	WHERE rel.relname LIKE 'citus_local_table%' ORDER BY con.conname ASC;
+
+\c - - :public_worker_1_host :worker_1_port
+SELECT con.conname
+    FROM pg_catalog.pg_constraint con
+      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
+          WHERE rel.relname LIKE 'citus_local_table%' ORDER BY con.conname ASC;
+
+\c - - :master_host :master_port
+ALTER TABLE AT_AddConstNoName.citus_local_table DROP CONSTRAINT citus_local_table_check;
+
 DROP TABLE AT_AddConstNoName.citus_local_table;
 
 -- Test with partitioned citus local table
@@ -547,6 +654,35 @@ ALTER TABLE AT_AddConstNoName.citus_local_partitioned_table DROP CONSTRAINT citu
 -- Check "ADD EXCLUDE" errors out for partitioned table since the postgres does not allow it
 ALTER TABLE AT_AddConstNoName.citus_local_partitioned_table ADD EXCLUDE(partition_col WITH =);
 
+-- Check "ADD CHECK"
+SET client_min_messages TO DEBUG1;
+ALTER TABLE AT_AddConstNoName.citus_local_partitioned_table ADD CHECK (dist_col > 0);
+RESET client_min_messages;
+
+SELECT con.conname
+    FROM pg_catalog.pg_constraint con
+      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
+          WHERE rel.relname = 'citus_local_partitioned_table';
+
+\c - - :public_worker_1_host :worker_1_port
+SELECT con.conname
+    FROM pg_catalog.pg_constraint con
+      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
+          WHERE rel.relname LIKE 'longlonglonglonglonglonglonglonglong%' ORDER BY con.conname ASC;
+
+\c - - :master_host :master_port
+ALTER TABLE AT_AddConstNoName.citus_local_partitioned_table DROP CONSTRAINT citus_local_partitioned_table_check;
+
+\c - - :public_worker_1_host :worker_1_port
+SELECT con.conname
+    FROM pg_catalog.pg_constraint con
+      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
+          WHERE rel.relname LIKE 'longlonglonglonglonglonglonglonglong%' ORDER BY con.conname ASC;
+
+\c - - :master_host :master_port
 SELECT 1 FROM master_remove_node('localhost', :master_port);
 
 -- Test with unusual table and column names
@@ -611,6 +747,26 @@ SELECT con.conname
 
 \c - - :master_host :master_port
 ALTER TABLE  AT_AddConstNoName."2nd table" DROP CONSTRAINT "2nd table_2nd id_excl";
+
+-- Check "ADD CHECK"
+\c - - :master_host :master_port
+ALTER TABLE  AT_AddConstNoName."2nd table" ADD CHECK ("2nd id" > 0 );
+
+SELECT con.conname
+    FROM pg_catalog.pg_constraint con
+      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
+          WHERE rel.relname = '2nd table';
+
+\c - - :public_worker_1_host :worker_1_port
+SELECT con.conname
+    FROM pg_catalog.pg_constraint con
+      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
+          WHERE rel.relname LIKE '2nd table%' ORDER BY con.conname ASC;
+
+\c - - :master_host :master_port
+ALTER TABLE  AT_AddConstNoName."2nd table" DROP CONSTRAINT "2nd table_check";
 
 DROP EXTENSION btree_gist;
 DROP SCHEMA AT_AddConstNoName CASCADE;
