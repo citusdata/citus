@@ -68,10 +68,6 @@ ALTER TABLE name_lengths ADD COLUMN float_col_1234567890123456789012345678901234
 ALTER TABLE name_lengths ADD COLUMN date_col_12345678901234567890123456789012345678901234567890 DATE;
 ALTER TABLE name_lengths ADD COLUMN int_col_12345678901234567890123456789012345678901234567890 INTEGER DEFAULT 1;
 -- Placeholders for unsupported ALTER TABLE to add constraints with implicit names that are likely too long
-ALTER TABLE name_lengths ADD UNIQUE (float_col_12345678901234567890123456789012345678901234567890);
-ERROR:  cannot create constraint without a name on a distributed table
-ALTER TABLE name_lengths ADD EXCLUDE (int_col_12345678901234567890123456789012345678901234567890 WITH =);
-ERROR:  cannot create constraint without a name on a distributed table
 ALTER TABLE name_lengths ADD CHECK (date_col_12345678901234567890123456789012345678901234567890 > '2014-01-01'::date);
 ERROR:  cannot create constraint without a name on a distributed table
 \c - - :public_worker_1_host :worker_1_port
@@ -421,3 +417,6 @@ DROP TABLE multi_name_lengths.too_long_12345678901234567890123456789012345678901
 DROP TABLE name_lengths CASCADE;
 DROP TABLE U&"elephant_!0441!043B!043E!043D!0441!043B!043E!043D!0441!043B!043E!043D!0441!043B!043E!043D!0441!043B!043E!043D!0441!043B!043E!043D" UESCAPE '!' CASCADE;
 RESET citus.force_max_query_parallelization;
+DROP SCHEMA multi_name_lengths CASCADE;
+DROP TABLE append_zero_shard_table_12345678901234567890123456789012345678901234567890;
+NOTICE:  identifier "append_zero_shard_table_12345678901234567890123456789012345678901234567890" will be truncated to "append_zero_shard_table_123456789012345678901234567890123456789"

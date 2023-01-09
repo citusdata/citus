@@ -11,6 +11,7 @@
  */
 #include "postgres.h"
 
+#include "distributed/commands.h"
 #include "distributed/deparser.h"
 #include "distributed/version_compat.h"
 #include "nodes/nodes.h"
@@ -104,9 +105,137 @@ AppendAlterTableStmt(StringInfo buf, AlterTableStmt *stmt)
 
 
 /*
+ * AppendAlterTableCmdAddConstraint builds the add constraint command for index constraints
+ * in the ADD CONSTRAINT <conname> {PRIMARY KEY, UNIQUE, EXCLUSION} form and appends it to the buf.
+ */
+static void
+AppendAlterTableCmdAddConstraint(StringInfo buf, Constraint *constraint)
+{
+	/* Need to deparse the alter table constraint command only if we are adding a constraint name.*/
+	if (constraint->conname == NULL)
+	{
+		ereport(ERROR, (errmsg(
+							"Constraint name can not be NULL when deparsing the constraint.")));
+	}
+
+	appendStringInfoString(buf, " ADD CONSTRAINT ");
+	appendStringInfo(buf, "%s ", quote_identifier(constraint->conname));
+
+	/* postgres version >= PG15
+	 * UNIQUE [ NULLS [ NOT ] DISTINCT ] ( column_name [, ... ] ) [ INCLUDE ( column_name [, ...]) ]
+	 * postgres version < PG15
+	 * UNIQUE ( column_name [, ... ] ) [ INCLUDE ( column_name [, ...]) ]
+	 * PRIMARY KEY ( column_name [, ... ] ) [ INCLUDE ( column_name [, ...]) ]
+	 */
+	if (constraint->contype == CONSTR_PRIMARY || constraint->contype == CONSTR_UNIQUE)
+	{
+		if (constraint->contype == CONSTR_PRIMARY)
+		{
+			appendStringInfoString(buf,
+								   " PRIMARY KEY (");
+		}
+		else
+		{
+			appendStringInfoString(buf, " UNIQUE");
+
+#if (PG_VERSION_NUM >= PG_VERSION_15)
+			if (constraint->nulls_not_distinct == true)
+			{
+				appendStringInfoString(buf, " NULLS NOT DISTINCT");
+			}
+#endif
+			appendStringInfoString(buf, " (");
+		}
+
+		ListCell *lc;
+		bool firstkey = true;
+
+		foreach(lc, constraint->keys)
+		{
+			if (firstkey == false)
+			{
+				appendStringInfoString(buf, ", ");
+			}
+
+			appendStringInfo(buf, "%s", quote_identifier(strVal(lfirst(lc))));
+			firstkey = false;
+		}
+
+		appendStringInfoString(buf, ")");
+
+		if (constraint->including != NULL)
+		{
+			appendStringInfoString(buf, " INCLUDE (");
+
+			firstkey = true;
+
+			foreach(lc, constraint->including)
+			{
+				if (firstkey == false)
+				{
+					appendStringInfoString(buf, ", ");
+				}
+
+				appendStringInfo(buf, "%s", quote_identifier(strVal(lfirst(
+																		lc))));
+				firstkey = false;
+			}
+
+			appendStringInfoString(buf, " )");
+		}
+	}
+	else if (constraint->contype == CONSTR_EXCLUSION)
+	{
+		/*
+		 * This block constructs the EXCLUDE clause which is in the following form:
+		 * EXCLUDE [ USING index_method ] ( exclude_element WITH operator [, ... ] )
+		 */
+		appendStringInfoString(buf, " EXCLUDE ");
+
+		if (constraint->access_method != NULL)
+		{
+			appendStringInfoString(buf, "USING ");
+			appendStringInfo(buf, "%s ", quote_identifier(
+								 constraint->access_method));
+		}
+
+		appendStringInfoString(buf, " (");
+
+		ListCell *lc;
+		bool firstOp = true;
+
+		foreach(lc, constraint->exclusions)
+		{
+			List *pair = (List *) lfirst(lc);
+
+			Assert(list_length(pair) == 2);
+			IndexElem *elem = linitial_node(IndexElem, pair);
+			List *opname = lsecond_node(List, pair);
+			if (firstOp == false)
+			{
+				appendStringInfoString(buf, " ,");
+			}
+
+			ListCell *lc2;
+
+			foreach(lc2, opname)
+			{
+				appendStringInfo(buf, "%s WITH %s", quote_identifier(elem->name),
+								 strVal(lfirst(lc2)));
+			}
+
+			firstOp = false;
+		}
+
+		appendStringInfoString(buf, " )");
+	}
+}
+
+
+/*
  * AppendAlterTableCmd builds and appends to the given buffer a command
  * from given AlterTableCmd object. Currently supported commands are of type
- * AT_AddColumn and AT_SetNotNull
+ * AT_AddColumn, AT_SetNotNull and AT_AddConstraint {PRIMARY KEY, UNIQUE, EXCLUDE}.
  */
 static void
 AppendAlterTableCmd(StringInfo buf, AlterTableCmd *alterTableCmd)
@@ -123,38 +252,13 @@ AppendAlterTableCmd(StringInfo buf, AlterTableCmd *alterTableCmd)
 		{
 			Constraint *constraint = (Constraint *) alterTableCmd->def;
 
-			/* We need to deparse ALTER TABLE ... PRIMARY KEY commands into
-			 * ALTER TABLE ... ADD CONSTRAINT <conname> PRIMARY KEY ... to be able
+			/* We need to deparse ALTER TABLE ... ADD {PRIMARY KEY, UNIQUE, EXCLUSION} commands into
+			 * ALTER TABLE ... ADD CONSTRAINT <conname> {PRIMARY KEY, UNIQUE, EXCLUSION} ... format to be able
 			 * add a constraint name.
 			 */
-			if (constraint->contype == CONSTR_PRIMARY)
+			if (ConstrTypeCitusCanDefaultName(constraint->contype))
 			{
-				/* Need to deparse PRIMARY KEY constraint commands only if adding a name.*/
-				if (constraint->conname == NULL)
-				{
-					ereport(ERROR, (errmsg(
-										"Constraint name can not be NULL when constraint type is PRIMARY KEY")));
-				}
-
-				appendStringInfoString(buf, " ADD CONSTRAINT ");
-				appendStringInfo(buf, "%s ", quote_identifier(constraint->conname));
-				appendStringInfoString(buf, " PRIMARY KEY (");
-
-				ListCell *lc;
-				bool firstkey = true;
-
-				foreach(lc, constraint->keys)
-				{
-					if (firstkey == false)
-					{
-						appendStringInfoString(buf, ", ");
-					}
-
-					appendStringInfo(buf, "%s", quote_identifier(strVal(lfirst(lc))));
-					firstkey = false;
-				}
-
-				appendStringInfoString(buf, ")");
+				AppendAlterTableCmdAddConstraint(buf, constraint);
 				break;
 			}
 		}

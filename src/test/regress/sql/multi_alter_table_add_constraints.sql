@@ -378,10 +378,7 @@ ALTER TABLE products ADD CONSTRAINT unn_1 UNIQUE(product_no, price), ADD CONSTRA
 
 -- Tests for constraints without name
 -- Commands below should error out since constraints do not have the name
-ALTER TABLE products ADD UNIQUE(product_no);
-ALTER TABLE products ADD PRIMARY KEY(product_no);
 ALTER TABLE products ADD CHECK(product_no <> 0);
-ALTER TABLE products ADD EXCLUDE USING btree (product_no with =);
 
 -- ... with names, we can add/drop the constraints just fine
 ALTER TABLE products ADD CONSTRAINT nonzero_product_no CHECK(product_no <> 0);
@@ -576,6 +573,9 @@ DROP SCHEMA sc1 CASCADE;
 DROP SCHEMA sc2 CASCADE;
 DROP SCHEMA sc3 CASCADE;
 
+CREATE SCHEMA test_auto_explain;
+SET search_path TO 'test_auto_explain';
+
 -- Test ALTER TABLE ... ADD CONSTRAINT ... does not cause a crash when auto_explain module is loaded
 CREATE TABLE target_table(col_1 int primary key, col_2 int);
 SELECT create_distributed_table('target_table','col_1');
@@ -598,3 +598,9 @@ SET citus.enable_ddl_propagation TO OFF;
 -- alter table triggers SELECT, and auto_explain catches that
 ALTER TABLE target_table ADD CONSTRAINT fkey_167 FOREIGN KEY (col_1) REFERENCES test_ref_table(key) ON DELETE CASCADE;
 END;
+
+RESET citus.enable_ddl_propagation;
+SET client_min_messages to ERROR;
+SET search_path TO 'public';
+
+DROP SCHEMA test_auto_explain CASCADE;
