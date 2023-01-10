@@ -120,3 +120,4 @@ test: ensure_no_intermediate_data_leak
 test: ensure_no_shared_connection_leak
 test: check_mx
 
+test: generated_identity
