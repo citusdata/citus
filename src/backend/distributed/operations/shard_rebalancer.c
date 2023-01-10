@@ -1953,12 +1953,10 @@ RebalanceTableShardsBackground(RebalanceOptions *options, Oid shardReplicationMo
 		resetStringInfo(&buf);
 
 		appendStringInfo(&buf,
-						 "SELECT pg_catalog.citus_move_shard_placement(%ld,%s,%u,%s,%u,%s)",
+						 "SELECT pg_catalog.citus_move_shard_placement(%ld,%u,%u,%s)",
 						 move->shardId,
-						 quote_literal_cstr(move->sourceNode->workerName),
-						 move->sourceNode->workerPort,
-						 quote_literal_cstr(move->targetNode->workerName),
-						 move->targetNode->workerPort,
+						 move->sourceNode->nodeId,
+						 move->targetNode->nodeId,
 						 quote_literal_cstr(shardTranferModeLabel));
 
 		BackgroundTask *task = ScheduleBackgroundTask(jobId, GetUserId(), buf.data,

@@ -131,6 +131,7 @@ static char * CreateShardCopyCommand(ShardInterval *shard, WorkerNode *targetNod
 
 /* declarations for dynamic loading */
 PG_FUNCTION_INFO_V1(citus_copy_shard_placement);
+PG_FUNCTION_INFO_V1(citus_copy_shard_placement_with_nodeid);
 PG_FUNCTION_INFO_V1(master_copy_shard_placement);
 PG_FUNCTION_INFO_V1(citus_move_shard_placement);
 PG_FUNCTION_INFO_V1(master_move_shard_placement);
@@ -163,6 +164,36 @@ citus_copy_shard_placement(PG_FUNCTION_ARGS)
 
 	ReplicateColocatedShardPlacement(shardId, sourceNodeName, sourceNodePort,
 									 targetNodeName, targetNodePort,
+									 shardReplicationMode);
+
+	PG_RETURN_VOID();
+}
+
+
+/*
+ * citus_copy_shard_placement_with_nodeid implements a user-facing UDF to copy a placement
+ * from a source node to a target node, including all co-located placements.
+ */
+Datum
+citus_copy_shard_placement_with_nodeid(PG_FUNCTION_ARGS)
+{
+	CheckCitusVersion(ERROR);
+	EnsureCoordinator();
+
+	int64 shardId = PG_GETARG_INT64(0);
+	uint32 sourceNodeId = PG_GETARG_INT32(1);
+	uint32 targetNodeId = PG_GETARG_INT32(2);
+	Oid shardReplicationModeOid = PG_GETARG_OID(3);
+
+	bool missingOk = false;
+	WorkerNode *sourceNode = FindNodeWithNodeId(sourceNodeId, missingOk);
+	WorkerNode *targetNode = FindNodeWithNodeId(targetNodeId, missingOk);
+
+	char shardReplicationMode = LookupShardTransferMode(shardReplicationModeOid);
+
+	ReplicateColocatedShardPlacement(shardId,
+									 sourceNode->workerName, sourceNode->workerPort,
+									 targetNode->workerName, targetNode->workerPort,
 									 shardReplicationMode);
 
 	PG_RETURN_VOID();

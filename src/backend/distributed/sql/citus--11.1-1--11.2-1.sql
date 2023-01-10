@@ -13,6 +13,8 @@ DROP FUNCTION pg_catalog.worker_append_table_to_shard(text, text, text, integer)
 #include "udfs/citus_task_wait/11.2-1.sql"
 #include "udfs/citus_prepare_pg_upgrade/11.2-1.sql"
 #include "udfs/citus_finish_pg_upgrade/11.2-1.sql"
+#include "udfs/citus_copy_shard_placement/11.2-1.sql"
+#include "udfs/citus_move_shard_placement_with_nodeid/11.2-1.sql"
 
 -- drop orphaned shards after inserting records for them into pg_dist_cleanup
 INSERT INTO pg_dist_cleanup
