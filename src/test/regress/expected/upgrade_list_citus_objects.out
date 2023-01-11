@@ -87,6 +87,7 @@ ORDER BY 1;
  function citus_jsonb_concatenate_final(jsonb)
  function citus_local_disk_space_stats()
  function citus_locks()
+ function citus_move_shard_placement(bigint,integer,integer,citus.shard_transfer_mode)
  function citus_move_shard_placement(bigint,text,integer,text,integer,citus.shard_transfer_mode)
  function citus_node_capacity_1(integer)
  function citus_nodeid_for_gpid(bigint)
@@ -313,5 +314,5 @@ ORDER BY 1;
  view citus_stat_statements
  view pg_dist_shard_placement
  view time_partitions
-(305 rows)
+(306 rows)
 

@@ -249,14 +249,17 @@ CREATE INDEX ii10 ON multiple_unique_keys(a,b,c);
 SELECT create_distributed_table('multiple_unique_keys', 'key', colocate_with:='sensors');
 INSERT INTO multiple_unique_keys SELECT i,i,i,i,i,i,i,i,i FROM generate_series(0,1000)i;
 
+SELECT nodeid AS worker_1_node FROM pg_dist_node WHERE nodeport=:worker_1_port \gset
+SELECT nodeid AS worker_2_node FROM pg_dist_node WHERE nodeport=:worker_2_port \gset
+
 -- make sure that both online and offline rebalance operations succeed
-SELECT citus_move_shard_placement(8970000, 'localhost', :worker_2_port, 'localhost', :worker_1_port, 'force_logical');
-SELECT citus_move_shard_placement(8970000, 'localhost', :worker_1_port, 'localhost', :worker_2_port, 'block_writes');
+SELECT citus_move_shard_placement(8970000, :worker_2_node, :worker_1_node, 'force_logical');
+SELECT citus_move_shard_placement(8970000, :worker_1_node, :worker_2_node, 'block_writes');
 
 -- even on another schema
 SET search_path TO public;
-SELECT citus_move_shard_placement(8970000, 'localhost', :worker_2_port, 'localhost', :worker_1_port, 'force_logical');
-SELECT citus_move_shard_placement(8970000, 'localhost', :worker_1_port, 'localhost', :worker_2_port, 'block_writes');
+SELECT citus_move_shard_placement(8970000, :worker_2_node, :worker_1_node, 'force_logical');
+SELECT citus_move_shard_placement(8970000, :worker_1_node, :worker_2_node, 'block_writes');
 
 SELECT public.wait_for_resource_cleanup();
 

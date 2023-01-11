@@ -27,4 +27,4 @@ DROP FUNCTION pg_catalog.citus_task_wait(bigint, pg_catalog.citus_task_status);
 #include "../udfs/citus_finish_pg_upgrade/11.1-1.sql"
 
 DROP FUNCTION pg_catalog.citus_copy_shard_placement(bigint, integer, integer, citus.shard_transfer_mode);
-DROP FUNCTION pg_catalog.citus_move_shard_placement_with_nodeid;
+DROP FUNCTION pg_catalog.citus_move_shard_placement(bigint, integer, integer, citus.shard_transfer_mode);
