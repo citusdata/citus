@@ -165,7 +165,7 @@ SELECT con.conname
 \c - - :master_host :master_port
 ALTER TABLE AT_AddConstNoName.products DROP CONSTRAINT products_name_product_no_excl;
 
--- Check "ADD EXCLUDE ... DEFERRABLE" 
+-- Check "ADD EXCLUDE ... DEFERRABLE"
 ALTER TABLE AT_AddConstNoName.products ADD EXCLUDE USING gist (name WITH <> , product_no WITH =) DEFERRABLE;
 \c - - :public_worker_1_host :worker_1_port
 SELECT conname, tgfoid::regproc, tgtype, tgdeferrable, tginitdeferred
