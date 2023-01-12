@@ -434,10 +434,6 @@ pg_get_tableschemadef_string(Oid tableRelationId, IncludeSequenceDefaults
 
 					appendStringInfo(&buffer, "%s", sequenceDef);
 				}
-				else
-				{
-					Assert(false);
-				}
 			}
 
 			/* if this column has a default value, append the default value */
