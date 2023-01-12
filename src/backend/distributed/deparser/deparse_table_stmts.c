@@ -270,6 +270,16 @@ AppendAlterTableCmdAddConstraint(StringInfo buf, Constraint *constraint,
 
 		appendStringInfo(buf, " CHECK (%s)", exprSql);
 	}
+
+	if (constraint->deferrable)
+	{
+		appendStringInfoString(buf, " DEFERRABLE");
+
+		if (constraint->initdeferred)
+		{
+			appendStringInfoString(buf, " INITIALLY DEFERRED");
+		}
+	}
 }
 
 
