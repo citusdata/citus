@@ -1524,6 +1524,50 @@ CreateMaterializedViewDDLCommand(Oid matViewOid)
 
 
 /*
+ * This function renames the sequences owned by identities on the target relation by using
+ * sourceTableName
+ */
+static void
+RenameIdentitiesOnTable(char *sourceTableName, char *targetName, Oid targetRelationId)
+{
+	Relation relation = relation_open(targetRelationId, AccessShareLock);
+	TupleDesc tupleDescriptor = RelationGetDescr(relation);
+	relation_close(relation, NoLock);
+
+	StringInfo renameCommand = makeStringInfo();
+
+	for (int attributeIndex = 0; attributeIndex < tupleDescriptor->natts;
+		 attributeIndex++)
+	{
+		Form_pg_attribute attributeForm = TupleDescAttr(tupleDescriptor, attributeIndex);
+		char *columnName = NameStr(attributeForm->attname);
+		bool missing_ok = false;
+
+		if (attributeForm->attidentity)
+		{
+			Oid identitySchemaOid = get_rel_namespace(attributeForm->attrelid);
+			Oid seqOid = getIdentitySequence(targetRelationId, attributeForm->attnum,
+											 missing_ok);
+			char *oldSequenceName = generate_qualified_relation_name(seqOid);
+
+			char *newSequenceName = ChooseRelationName(sourceTableName,
+													   columnName,
+													   "seq",
+													   identitySchemaOid,
+													   false);
+
+			appendStringInfo(renameCommand, "ALTER SEQUENCE %s RENAME TO %s",
+							 oldSequenceName,
+							 newSequenceName);
+
+			ExecuteQueryViaSPI(renameCommand->data, SPI_OK_UTILITY);
+			resetStringInfo(renameCommand);
+		}
+	}
+}
+
+
+/*
  * ReplaceTable replaces the source table with the target table.
  * It moves all the rows of the source table to target table with INSERT SELECT.
  * Changes the dependencies of the sequences owned by source table to target table.
@@ -1658,6 +1702,12 @@ ReplaceTable(Oid sourceId, Oid targetId, List *justBeforeDropCommands,
 					 quote_qualified_identifier(schemaName, targetName),
 					 quote_identifier(sourceName));
 	ExecuteQueryViaSPI(query->data, SPI_OK_UTILITY);
+
+	/*
+	 *  Since current identity column creation syntax does not allow us to specify a sequence name,
+	 *  we have to rename sequences behind the identity columns after we drop the source table.
+	 */
+	RenameIdentitiesOnTable(sourceName, targetName, targetId);
 }
 
 

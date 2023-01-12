@@ -94,12 +94,12 @@ Number of partitions: 2 (Use \d+ to list them.)
 
 \c - - - :worker_1_port
 \d generated_identities.generated_identities_test
-                                   Partitioned table "generated_identities.generated_identities_test"
- Column |   Type   | Collation | Nullable |                                           Default
+                             Partitioned table "generated_identities.generated_identities_test"
+ Column |   Type   | Collation | Nullable |                                     Default
 ---------------------------------------------------------------------
- a      | integer  |           | not null | worker_nextval('generated_identities.generated_identities_test_2436867908_a_seq'::regclass)
- b      | bigint   |           | not null | nextval('generated_identities.generated_identities_test_2436867908_b_seq'::regclass)
- c      | smallint |           | not null | worker_nextval('generated_identities.generated_identities_test_2436867908_c_seq'::regclass)
+ a      | integer  |           | not null | worker_nextval('generated_identities.generated_identities_test_a_seq'::regclass)
+ b      | bigint   |           | not null | nextval('generated_identities.generated_identities_test_b_seq'::regclass)
+ c      | smallint |           | not null | worker_nextval('generated_identities.generated_identities_test_c_seq'::regclass)
  d      | integer  |           | not null | worker_nextval('generated_identities.generated_identities_test_d_seq'::regclass)
  e      | bigint   |           | not null | nextval('generated_identities.generated_identities_test_e_seq'::regclass)
  f      | smallint |           | not null | worker_nextval('generated_identities.generated_identities_test_f_seq'::regclass)
