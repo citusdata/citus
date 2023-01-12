@@ -570,7 +570,7 @@ ConvertTable(TableConversionState *con)
 	char *newAccessMethod = con->accessMethod ? con->accessMethod :
 							con->originalAccessMethod;
 	IncludeSequenceDefaults includeSequenceDefaults = NEXTVAL_SEQUENCE_DEFAULTS;
-	IncludeIdentityDefaults includeIdentityDefaults = INCLUDE_IDENTITY;
+	IncludeIdentities includeIdentityDefaults = INCLUDE_IDENTITY;
 
 	List *preLoadCommands = GetPreLoadTableCreationCommands(con->relationId,
 															includeSequenceDefaults,

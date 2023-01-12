@@ -29,7 +29,7 @@ extern char * pg_get_sequencedef_string(Oid sequenceRelid);
 extern Form_pg_sequence pg_get_sequencedef(Oid sequenceRelationId);
 extern char * pg_get_tableschemadef_string(Oid tableRelationId,
 										   IncludeSequenceDefaults includeSequenceDefaults,
-										   IncludeIdentityDefaults includeIdentityDefaults,
+										   IncludeIdentities includeIdentityDefaults,
 										   char *accessMethod);
 extern void EnsureRelationKindSupported(Oid relationId);
 extern char * pg_get_tablecolumnoptionsdef_string(Oid tableRelationId);

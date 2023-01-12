@@ -131,7 +131,7 @@ master_get_table_ddl_events(PG_FUNCTION_ARGS)
 		text *relationName = PG_GETARG_TEXT_P(0);
 		Oid relationId = ResolveRelationId(relationName, false);
 		IncludeSequenceDefaults includeSequenceDefaults = NEXTVAL_SEQUENCE_DEFAULTS;
-		IncludeIdentityDefaults includeIdentityDefaults = INCLUDE_IDENTITY;
+		IncludeIdentities includeIdentityDefaults = INCLUDE_IDENTITY;
 
 
 		/* create a function context for cross-call persistence */
@@ -464,7 +464,7 @@ ResolveRelationId(text *relationName, bool missingOk)
 List *
 GetFullTableCreationCommands(Oid relationId,
 							 IncludeSequenceDefaults includeSequenceDefaults,
-							 IncludeIdentityDefaults includeIdentityDefaults,
+							 IncludeIdentities includeIdentityDefaults,
 							 bool creatingShellTableOnRemoteNode)
 {
 	List *tableDDLEventList = NIL;
@@ -596,7 +596,7 @@ GetTableReplicaIdentityCommand(Oid relationId)
 List *
 GetPreLoadTableCreationCommands(Oid relationId,
 								IncludeSequenceDefaults includeSequenceDefaults,
-								IncludeIdentityDefaults includeIdentityDefaults,
+								IncludeIdentities includeIdentityDefaults,
 								char *accessMethod)
 {
 	List *tableDDLEventList = NIL;

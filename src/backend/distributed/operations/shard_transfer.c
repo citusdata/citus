@@ -1879,7 +1879,7 @@ RecreateTableDDLCommandList(Oid relationId)
 	StringInfo dropCommand = makeStringInfo();
 
 	IncludeSequenceDefaults includeSequenceDefaults = NO_SEQUENCE_DEFAULTS;
-	IncludeIdentityDefaults includeIdentityDefaults = NO_IDENTITY;
+	IncludeIdentities includeIdentityDefaults = NO_IDENTITY;
 
 	/* build appropriate DROP command based on relation kind */
 	if (RegularTable(relationId))

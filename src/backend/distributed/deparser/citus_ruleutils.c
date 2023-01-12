@@ -306,7 +306,7 @@ pg_get_sequencedef(Oid sequenceRelationId)
  */
 char *
 pg_get_tableschemadef_string(Oid tableRelationId, IncludeSequenceDefaults
-							 includeSequenceDefaults, IncludeIdentityDefaults
+							 includeSequenceDefaults, IncludeIdentities
 							 includeIdentityDefaults, char *accessMethod)
 {
 	bool firstAttributePrinted = false;
