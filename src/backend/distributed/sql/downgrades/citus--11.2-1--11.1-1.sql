@@ -25,3 +25,6 @@ COMMENT ON FUNCTION pg_catalog.worker_append_table_to_shard(text, text, text, in
 DROP FUNCTION pg_catalog.citus_task_wait(bigint, pg_catalog.citus_task_status);
 #include "../udfs/citus_prepare_pg_upgrade/11.1-1.sql"
 #include "../udfs/citus_finish_pg_upgrade/11.1-1.sql"
+
+DROP FUNCTION pg_catalog.citus_copy_shard_placement(bigint, integer, integer, citus.shard_transfer_mode);
+DROP FUNCTION pg_catalog.citus_move_shard_placement(bigint, integer, integer, citus.shard_transfer_mode);

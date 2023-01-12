@@ -34,25 +34,28 @@ INSERT INTO data VALUES ('key-2', 'value-2');
 INSERT INTO history VALUES ('key-1', '2020-02-01', 'old');
 INSERT INTO history VALUES ('key-1', '2019-10-01', 'older');
 
+SELECT nodeid AS worker_1_node FROM pg_dist_node WHERE nodeport=:worker_1_port \gset
+SELECT nodeid AS worker_2_node FROM pg_dist_node WHERE nodeport=:worker_2_port \gset
+
 -- verify we error out if no healthy placement exists at source
 SELECT citus_copy_shard_placement(
            get_shard_id_for_distribution_column('data', 'key-1'),
-           'localhost', :worker_1_port,
-           'localhost', :worker_2_port,
+           :worker_1_node,
+           :worker_2_node,
            transfer_mode := 'block_writes');
 
 -- verify we error out if source and destination are the same
 SELECT citus_copy_shard_placement(
            get_shard_id_for_distribution_column('data', 'key-1'),
-           'localhost', :worker_2_port,
-           'localhost', :worker_2_port,
+           :worker_2_node,
+           :worker_2_node,
            transfer_mode := 'block_writes');
 
 -- verify we warn if target already contains a healthy placement
 SELECT citus_copy_shard_placement(
            (SELECT shardid FROM pg_dist_shard WHERE logicalrelid='ref_table'::regclass::oid),
-           'localhost', :worker_1_port,
-           'localhost', :worker_2_port,
+           :worker_1_node,
+           :worker_2_node,
            transfer_mode := 'block_writes');
 
 -- verify we error out if table has foreign key constraints
@@ -61,16 +64,16 @@ INSERT INTO ref_table SELECT 1, value FROM data;
 ALTER TABLE data ADD CONSTRAINT distfk FOREIGN KEY (value) REFERENCES ref_table (b) MATCH FULL;
 SELECT citus_copy_shard_placement(
            get_shard_id_for_distribution_column('data', 'key-1'),
-           'localhost', :worker_2_port,
-           'localhost', :worker_1_port);
+           :worker_2_node,
+           :worker_1_node);
 
 ALTER TABLE data DROP CONSTRAINT distfk;
 
 -- replicate shard that contains key-1
 SELECT citus_copy_shard_placement(
            get_shard_id_for_distribution_column('data', 'key-1'),
-           'localhost', :worker_2_port,
-           'localhost', :worker_1_port,
+           :worker_2_node,
+           :worker_1_node,
            transfer_mode := 'block_writes');
 
 -- forcefully mark the old replica as inactive
