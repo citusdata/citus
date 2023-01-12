@@ -2430,6 +2430,7 @@ DistributionColumnUsesGeneratedStoredColumn(TupleDesc relationDesc,
 	return false;
 }
 
+
 /*
  * ErrorIfForeignTable errors out if the relation with given relationOid
  * is a foreign table.

@@ -1035,6 +1035,7 @@ GetDropTriggerCommand(Oid relationId, char *triggerName)
 	return dropCommand->data;
 }
 
+
 /*
  * DropIdentitiesOnTable drops the identities that depend on the given relation.
  */
