@@ -594,9 +594,9 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 	SELECT assign_distributed_transaction_id(0, 8, '2021-07-09 15:41:55.542377+02');
 	SET application_name to 'citus_internal gpid=10000000001';
 	\set VERBOSITY terse
-	WITH placement_data(shardid, shardstate, shardlength, groupid, placementid) AS
-		(VALUES (-10, 1, 0::bigint, 1::int, 1500000::bigint))
-	SELECT citus_internal_add_placement_metadata(shardid, shardstate, shardlength, groupid, placementid) FROM placement_data;
+	WITH placement_data(shardid, shardlength, groupid, placementid) AS
+		(VALUES (-10, 0::bigint, 1::int, 1500000::bigint))
+	SELECT citus_internal_add_placement_metadata(shardid, shardlength, groupid, placementid) FROM placement_data;
 ROLLBACK;
 
 -- invalid placementid
@@ -604,9 +604,9 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 	SELECT assign_distributed_transaction_id(0, 8, '2021-07-09 15:41:55.542377+02');
 	SET application_name to 'citus_internal gpid=10000000001';
 	\set VERBOSITY terse
-	WITH placement_data(shardid, shardstate, shardlength, groupid, placementid) AS
-		(VALUES (1420000, 1, 0::bigint, 1::int, -10))
-	SELECT citus_internal_add_placement_metadata(shardid, shardstate, shardlength, groupid, placementid) FROM placement_data;
+	WITH placement_data(shardid, shardlength, groupid, placementid) AS
+		(VALUES (1420000, 0::bigint, 1::int, -10))
+	SELECT citus_internal_add_placement_metadata(shardid, shardlength, groupid, placementid) FROM placement_data;
 ROLLBACK;
 
 -- non-existing shard
@@ -614,19 +614,9 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 	SELECT assign_distributed_transaction_id(0, 8, '2021-07-09 15:41:55.542377+02');
 	SET application_name to 'citus_internal gpid=10000000001';
 	\set VERBOSITY terse
-	WITH placement_data(shardid, shardstate, shardlength, groupid, placementid) AS
-		(VALUES (1430100, 1, 0::bigint, 1::int, 10))
-	SELECT citus_internal_add_placement_metadata(shardid, shardstate, shardlength, groupid, placementid) FROM placement_data;
-ROLLBACK;
-
--- invalid shard state
-BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
-	SELECT assign_distributed_transaction_id(0, 8, '2021-07-09 15:41:55.542377+02');
-	SET application_name to 'citus_internal gpid=10000000001';
-	\set VERBOSITY terse
-	WITH placement_data(shardid, shardstate, shardlength, groupid, placementid) AS
-		(VALUES (1420000, 10, 0::bigint, 1::int, 1500000))
-	SELECT citus_internal_add_placement_metadata(shardid, shardstate, shardlength, groupid, placementid) FROM placement_data;
+	WITH placement_data(shardid, shardlength, groupid, placementid) AS
+		(VALUES (1430100, 0::bigint, 1::int, 10))
+	SELECT citus_internal_add_placement_metadata(shardid, shardlength, groupid, placementid) FROM placement_data;
 ROLLBACK;
 
 -- non-existing node with non-existing node-id 123123123
@@ -634,9 +624,9 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 	SELECT assign_distributed_transaction_id(0, 8, '2021-07-09 15:41:55.542377+02');
 	SET application_name to 'citus_internal gpid=10000000001';
 	\set VERBOSITY terse
-	WITH placement_data(shardid, shardstate, shardlength, groupid, placementid) AS
-		(VALUES ( 1420000, 1, 0::bigint, 123123123::int, 1500000))
-	SELECT citus_internal_add_placement_metadata(shardid, shardstate, shardlength, groupid, placementid) FROM placement_data;
+	WITH placement_data(shardid, shardlength, groupid, placementid) AS
+		(VALUES ( 1420000, 0::bigint, 123123123::int, 1500000))
+	SELECT citus_internal_add_placement_metadata(shardid, shardlength, groupid, placementid) FROM placement_data;
 ROLLBACK;
 
 -- create a volatile function that returns the local node id
@@ -660,10 +650,10 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 	SELECT assign_distributed_transaction_id(0, 8, '2021-07-09 15:41:55.542377+02');
 	SET application_name to 'citus_internal gpid=10000000001';
 	\set VERBOSITY terse
-	WITH placement_data(shardid, shardstate, shardlength, groupid, placementid) AS
-		(VALUES (1420000, 1, 0::bigint, get_node_id(), 1500000),
-				(1420000, 1, 0::bigint, get_node_id(), 1500001))
-	SELECT citus_internal_add_placement_metadata(shardid, shardstate, shardlength, groupid, placementid) FROM placement_data;
+	WITH placement_data(shardid, shardlength, groupid, placementid) AS
+		(VALUES (1420000, 0::bigint, get_node_id(), 1500000),
+				(1420000, 0::bigint, get_node_id(), 1500001))
+	SELECT citus_internal_add_placement_metadata(shardid, shardlength, groupid, placementid) FROM placement_data;
 ROLLBACK;
 
 -- shard is not owned by us
@@ -671,9 +661,9 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 	SELECT assign_distributed_transaction_id(0, 8, '2021-07-09 15:41:55.542377+02');
 	SET application_name to 'citus_internal gpid=10000000001';
 	\set VERBOSITY terse
-	WITH placement_data(shardid, shardstate, shardlength, groupid, placementid) AS
-		(VALUES (1420007, 1, 0::bigint, get_node_id(), 1500000))
-	SELECT citus_internal_add_placement_metadata(shardid, shardstate, shardlength, groupid, placementid) FROM placement_data;
+	WITH placement_data(shardid, shardlength, groupid, placementid) AS
+		(VALUES (1420007, 0::bigint, get_node_id(), 1500000))
+	SELECT citus_internal_add_placement_metadata(shardid, shardlength, groupid, placementid) FROM placement_data;
 ROLLBACK;
 
 -- sucessfully add placements
@@ -681,20 +671,20 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 	SELECT assign_distributed_transaction_id(0, 8, '2021-07-09 15:41:55.542377+02');
 	SET application_name to 'citus_internal gpid=10000000001';
 	\set VERBOSITY terse
-	WITH placement_data(shardid, shardstate, shardlength, groupid, placementid) AS
-		(VALUES (1420000, 1, 0::bigint, get_node_id(), 1500000),
-				(1420001, 1, 0::bigint, get_node_id(), 1500001),
-				(1420002, 1, 0::bigint, get_node_id(), 1500002),
-				(1420003, 1, 0::bigint, get_node_id(), 1500003),
-				(1420004, 1, 0::bigint, get_node_id(), 1500004),
-				(1420005, 1, 0::bigint, get_node_id(), 1500005),
-				(1420008, 1, 0::bigint, get_node_id(), 1500006),
-				(1420009, 1, 0::bigint, get_node_id(), 1500007),
-				(1420010, 1, 0::bigint, get_node_id(), 1500008),
-				(1420011, 1, 0::bigint, get_node_id(), 1500009),
-				(1420012, 1, 0::bigint, get_node_id(), 1500010),
-				(1420013, 1, 0::bigint, get_node_id(), 1500011))
-	SELECT citus_internal_add_placement_metadata(shardid, shardstate, shardlength, groupid, placementid) FROM placement_data;
+	WITH placement_data(shardid, shardlength, groupid, placementid) AS
+		(VALUES (1420000, 0::bigint, get_node_id(), 1500000),
+				(1420001, 0::bigint, get_node_id(), 1500001),
+				(1420002, 0::bigint, get_node_id(), 1500002),
+				(1420003, 0::bigint, get_node_id(), 1500003),
+				(1420004, 0::bigint, get_node_id(), 1500004),
+				(1420005, 0::bigint, get_node_id(), 1500005),
+				(1420008, 0::bigint, get_node_id(), 1500006),
+				(1420009, 0::bigint, get_node_id(), 1500007),
+				(1420010, 0::bigint, get_node_id(), 1500008),
+				(1420011, 0::bigint, get_node_id(), 1500009),
+				(1420012, 0::bigint, get_node_id(), 1500010),
+				(1420013, 0::bigint, get_node_id(), 1500011))
+	SELECT citus_internal_add_placement_metadata(shardid, shardlength, groupid, placementid) FROM placement_data;
 COMMIT;
 
 -- we should be able to colocate both tables now
@@ -877,12 +867,9 @@ DELETE FROM pg_dist_placement WHERE shardid IN (SELECT shardid FROM pg_dist_shar
 DELETE FROM pg_dist_shard WHERE logicalrelid IN ('test_ref'::regclass, 'test_2'::regclass);
 DELETE FROM pg_dist_partition WHERE logicalrelid IN ('test_ref'::regclass, 'test_2'::regclass);
 
-SET client_min_messages TO ERROR;
-SET citus.enable_ddl_propagation TO OFF;
-DROP OWNED BY metadata_sync_helper_role;
-DROP ROLE metadata_sync_helper_role;
-
 \c - - - :master_port
 -- cleanup
 SET client_min_messages TO ERROR;
+DROP OWNED BY metadata_sync_helper_role;
+DROP ROLE metadata_sync_helper_role;
 DROP SCHEMA metadata_sync_helpers CASCADE;

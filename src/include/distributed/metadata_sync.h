@@ -48,6 +48,10 @@ typedef struct SequenceInfo
 
 
 /* Functions declarations for metadata syncing */
+extern void citus_internal_add_placement_metadata_internal(int64 shardId,
+														   int64 shardLength,
+														   int32 groupId,
+														   int64 placementId);
 extern void SyncNodeMetadataToNode(const char *nodeNameString, int32 nodePort);
 extern void SyncCitusTableMetadata(Oid relationId);
 extern void EnsureSequentialModeMetadataOperations(void);

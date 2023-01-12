@@ -1206,7 +1206,6 @@ InsertSplitChildrenShardMetadata(List *shardGroupSplitIntervalListList,
 			InsertShardPlacementRow(
 				shardInterval->shardId,
 				INVALID_PLACEMENT_ID, /* triggers generation of new id */
-				SHARD_STATE_ACTIVE,
 				0, /* shard length (zero for HashDistributed Table) */
 				workerPlacementNode->groupId);
 
