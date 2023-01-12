@@ -146,4 +146,38 @@ ALTER TABLE color ADD COLUMN color_id BIGINT GENERATED ALWAYS AS IDENTITY;
 INSERT INTO color(color_name) VALUES ('Red');
 SELECT * FROM color;
 
+DROP TABLE color;
+
+-- insert data from workers
+CREATE TABLE color (
+    color_id BIGINT GENERATED ALWAYS AS IDENTITY UNIQUE,
+    color_name VARCHAR NOT NULL
+);
+select create_distributed_table('color', 'color_id');
+
+\c - - - :worker_1_port
+SET search_path TO generated_identities;
+SET client_min_messages to ERROR;
+
+INSERT INTO color(color_name) VALUES ('Red');
+
+\c - - - :master_port
+SET search_path TO generated_identities;
+SET client_min_messages to ERROR;
+
+select undistribute_table('color');
+select create_distributed_table('color', 'color_id');
+
+\c - - - :worker_1_port
+SET search_path TO generated_identities;
+SET client_min_messages to ERROR;
+
+INSERT INTO color(color_name) VALUES ('Red');
+
+\c - - - :master_port
+SET search_path TO generated_identities;
+SET client_min_messages to ERROR;
+
+select count(*) from color;
+
 DROP SCHEMA generated_identities CASCADE;

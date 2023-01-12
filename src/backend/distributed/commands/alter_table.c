@@ -198,7 +198,7 @@ static TableConversionState * CreateTableConversion(TableConversionParameters *p
 static void CreateDistributedTableLike(TableConversionState *con);
 static void CreateCitusTableLike(TableConversionState *con);
 static void ReplaceTable(Oid sourceId, Oid targetId, List *justBeforeDropCommands,
-						 bool suppressNoticeMessages);
+						 bool suppressNoticeMessages, char conversionType);
 static bool HasAnyGeneratedStoredColumns(Oid relationId);
 static List * GetNonGeneratedStoredColumnNameList(Oid relationId);
 static void CheckAlterDistributedTableConversionParameters(TableConversionState *con);
@@ -216,6 +216,7 @@ static bool WillRecreateForeignKeyToReferenceTable(Oid relationId,
 static void WarningsForDroppingForeignKeysWithDistributedTables(Oid relationId);
 static void ErrorIfUnsupportedCascadeObjects(Oid relationId);
 static bool DoesCascadeDropUnsupportedObject(Oid classId, Oid id, HTAB *nodeMap);
+static void SyncSequenceMetadata(char *schemaName, Oid sourceId, char *sourceName, Oid targetId, char *targetName, Oid sequenceOid);
 
 PG_FUNCTION_INFO_V1(undistribute_table);
 PG_FUNCTION_INFO_V1(alter_distributed_table);
@@ -790,7 +791,7 @@ ConvertTable(TableConversionState *con)
 	}
 
 	ReplaceTable(con->relationId, con->newRelationId, justBeforeDropCommands,
-				 con->suppressNoticeMessages);
+				 con->suppressNoticeMessages, con->conversionType);
 
 	TableDDLCommand *tableConstructionCommand = NULL;
 	foreach_ptr(tableConstructionCommand, postLoadCommands)
@@ -1577,7 +1578,7 @@ RenameIdentitiesOnTable(char *sourceTableName, char *targetName, Oid targetRelat
  */
 void
 ReplaceTable(Oid sourceId, Oid targetId, List *justBeforeDropCommands,
-			 bool suppressNoticeMessages)
+			 bool suppressNoticeMessages, char conversionType)
 {
 	char *sourceName = get_rel_name(sourceId);
 	char *targetName = get_rel_name(targetId);
@@ -1625,9 +1626,34 @@ ReplaceTable(Oid sourceId, Oid targetId, List *justBeforeDropCommands,
 		ExecuteQueryViaSPI(query->data, SPI_OK_INSERT);
 	}
 
+	/* We need to drop sequence dependencies for identities to preserve their
+	 * last value on the workers if it's a undistribute table conversion
+	 */
+	if (conversionType == UNDISTRIBUTE_TABLE)
+	{
+		List *ownedIdentitySequences = getOwnedSequences_internal(sourceId, 0, DEPENDENCY_INTERNAL);
+		if (ownedIdentitySequences != NIL  && ShouldSyncTableMetadata(sourceId))
+		{
+
+			char *qualifiedTableName = quote_qualified_identifier(schemaName, sourceName);
+
+			/*
+				* We are converting a citus local table to a distributed/reference table,
+				* so we should prevent dropping the sequence on the table. Otherwise, we'd
+				* lose track of the previous changes in the sequence.
+				*/
+			StringInfo command = makeStringInfo();
+
+			appendStringInfo(command,
+								"SELECT pg_catalog.worker_drop_sequence_dependency(%s);",
+								quote_literal_cstr(qualifiedTableName));
+
+			SendCommandToWorkersWithMetadata(command->data);
+		}
+	}
+
 	/* We only want to change sequence dependencies for serials.
 	 * DEPENDENCY_AUTO filters sequences owned as serials
-	 * DEPENDENCY_INTERNAL filters sequences owned as identity columns
 	 */
 	List *ownedSequences = getOwnedSequences_internal(sourceId, 0, DEPENDENCY_AUTO);
 	Oid sequenceOid = InvalidOid;
