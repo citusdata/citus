@@ -216,7 +216,8 @@ static bool WillRecreateForeignKeyToReferenceTable(Oid relationId,
 static void WarningsForDroppingForeignKeysWithDistributedTables(Oid relationId);
 static void ErrorIfUnsupportedCascadeObjects(Oid relationId);
 static bool DoesCascadeDropUnsupportedObject(Oid classId, Oid id, HTAB *nodeMap);
-static void SyncSequenceMetadata(char *schemaName, Oid sourceId, char *sourceName, Oid targetId, char *targetName, Oid sequenceOid);
+static void SyncSequenceMetadata(char *schemaName, Oid sourceId, char *sourceName, Oid
+								 targetId, char *targetName, Oid sequenceOid);
 
 PG_FUNCTION_INFO_V1(undistribute_table);
 PG_FUNCTION_INFO_V1(alter_distributed_table);
@@ -1631,22 +1632,22 @@ ReplaceTable(Oid sourceId, Oid targetId, List *justBeforeDropCommands,
 	 */
 	if (conversionType == UNDISTRIBUTE_TABLE)
 	{
-		List *ownedIdentitySequences = getOwnedSequences_internal(sourceId, 0, DEPENDENCY_INTERNAL);
-		if (ownedIdentitySequences != NIL  && ShouldSyncTableMetadata(sourceId))
+		List *ownedIdentitySequences = getOwnedSequences_internal(sourceId, 0,
+																  DEPENDENCY_INTERNAL);
+		if (ownedIdentitySequences != NIL && ShouldSyncTableMetadata(sourceId))
 		{
-
 			char *qualifiedTableName = quote_qualified_identifier(schemaName, sourceName);
 
 			/*
-				* We are converting a citus local table to a distributed/reference table,
-				* so we should prevent dropping the sequence on the table. Otherwise, we'd
-				* lose track of the previous changes in the sequence.
-				*/
+			 * We are converting a citus local table to a distributed/reference table,
+			 * so we should prevent dropping the sequence on the table. Otherwise, we'd
+			 * lose track of the previous changes in the sequence.
+			 */
 			StringInfo command = makeStringInfo();
 
 			appendStringInfo(command,
-								"SELECT pg_catalog.worker_drop_sequence_dependency(%s);",
-								quote_literal_cstr(qualifiedTableName));
+							 "SELECT pg_catalog.worker_drop_sequence_dependency(%s);",
+							 quote_literal_cstr(qualifiedTableName));
 
 			SendCommandToWorkersWithMetadata(command->data);
 		}

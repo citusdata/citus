@@ -2393,7 +2393,7 @@ PostprocessAlterTableStmt(AlterTableStmt *alterTableStatement)
 				if (constraint->contype == CONSTR_IDENTITY)
 				{
 					AttrNumber attnum = get_attnum(relationId,
-													columnDefinition->colname);
+												   columnDefinition->colname);
 					bool missing_ok = false;
 					Oid seqOid = getIdentitySequence(relationId, attnum, missing_ok);
 
@@ -2402,11 +2402,11 @@ PostprocessAlterTableStmt(AlterTableStmt *alterTableStatement)
 						needMetadataSyncForNewSequences = true;
 						alterTableDefaultNextvalCmd =
 							GetAddColumnWithNextvalDefaultCmd(seqOid,
-																relationId,
-																columnDefinition
-																->colname,
-																columnDefinition
-																->typeName);
+															  relationId,
+															  columnDefinition
+															  ->colname,
+															  columnDefinition
+															  ->typeName);
 					}
 				}
 			}
