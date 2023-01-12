@@ -394,9 +394,9 @@ pg_get_tableschemadef_string(Oid tableRelationId, IncludeSequenceDefaults
 
 			if (attributeForm->attidentity && includeIdentityDefaults)
 			{
+				bool missing_ok = false;
 				Oid seqOid = getIdentitySequence(RelationGetRelid(relation),
-												 attributeForm->attnum, true);
-				Assert(seqOid != InvalidOid);
+												 attributeForm->attnum, missing_ok);
 
 				char *sequenceName = generate_qualified_relation_name(seqOid);
 
