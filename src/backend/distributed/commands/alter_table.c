@@ -1581,6 +1581,10 @@ ReplaceTable(Oid sourceId, Oid targetId, List *justBeforeDropCommands,
 		ExecuteQueryViaSPI(query->data, SPI_OK_INSERT);
 	}
 
+	/* We only want to change sequence dependencies for serials.
+	 * DEPENDENCY_AUTO filters sequences owned as serials
+	 * DEPENDENCY_INTERNAL filters sequences owned as identity columns
+	 */
 	List *ownedSequences = getOwnedSequences_internal(sourceId, 0, DEPENDENCY_AUTO);
 	Oid sequenceOid = InvalidOid;
 	foreach_oid(sequenceOid, ownedSequences)
