@@ -678,6 +678,8 @@ StartupCitusBackend(void)
 	 * the gpid from the application_name.
 	 */
 	AssignGlobalPID();
+
+	SetBackendDataDatabaseId();
 	RegisterConnectionCleanup();
 }
 
