@@ -229,6 +229,16 @@ AppendAlterTableCmdAddConstraint(StringInfo buf, Constraint *constraint)
 
 		appendStringInfoString(buf, " )");
 	}
+
+	if (constraint->deferrable)
+	{
+		appendStringInfoString(buf, " DEFERRABLE");
+
+		if (constraint->initdeferred)
+		{
+			appendStringInfoString(buf, " INITIALLY DEFERRED");
+		}
+	}
 }
 
 

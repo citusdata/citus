@@ -37,6 +37,25 @@ SELECT con.conname
 \c - - :master_host :master_port
 ALTER TABLE AT_AddConstNoName.products DROP CONSTRAINT products_pkey;
 
+-- Check "ADD PRIMARY KEY DEFERRABLE"
+ALTER TABLE AT_AddConstNoName.products ADD PRIMARY KEY(product_no) DEFERRABLE;
+\c - - :public_worker_1_host :worker_1_port
+SELECT conname, tgfoid::regproc, tgtype, tgdeferrable, tginitdeferred
+	FROM pg_trigger JOIN pg_constraint con ON con.oid = tgconstraint
+	WHERE tgrelid = 'AT_AddConstNoName.products_5410000'::regclass;
+
+\c - - :master_host :master_port
+ALTER TABLE AT_AddConstNoName.products DROP CONSTRAINT products_pkey;
+
+ALTER TABLE AT_AddConstNoName.products ADD PRIMARY KEY(product_no) DEFERRABLE INITIALLY DEFERRED;
+\c - - :public_worker_1_host :worker_1_port
+SELECT conname, tgfoid::regproc, tgtype, tgdeferrable, tginitdeferred
+        FROM pg_trigger JOIN pg_constraint con ON con.oid = tgconstraint
+	        WHERE tgrelid = 'AT_AddConstNoName.products_5410000'::regclass;
+
+\c - - :master_host :master_port
+ALTER TABLE AT_AddConstNoName.products DROP CONSTRAINT products_pkey;
+
 -- Check "ADD UNIQUE"
 ALTER TABLE AT_AddConstNoName.products ADD UNIQUE(product_no);
 
@@ -106,6 +125,26 @@ ALTER TABLE AT_AddConstNoName.products ADD UNIQUE NULLS NOT DISTINCT (product_no
 ALTER TABLE AT_AddConstNoName.products DROP CONSTRAINT products_product_no_price_key;
 \endif
 
+-- Check "ADD UNIQUE ... DEFERRABLE"
+ALTER TABLE AT_AddConstNoName.products ADD UNIQUE(product_no) INCLUDE(price) DEFERRABLE;
+\c - - :public_worker_1_host :worker_1_port
+SELECT conname, tgfoid::regproc, tgtype, tgdeferrable, tginitdeferred
+        FROM pg_trigger JOIN pg_constraint con ON con.oid = tgconstraint
+	        WHERE tgrelid = 'AT_AddConstNoName.products_5410000'::regclass;
+
+\c - - :master_host :master_port
+ALTER TABLE AT_AddConstNoName.products DROP CONSTRAINT products_product_no_key;
+
+ALTER TABLE AT_AddConstNoName.products ADD UNIQUE(product_no) INCLUDE(price) DEFERRABLE INITIALLY DEFERRED;
+\c - - :public_worker_1_host :worker_1_port
+SELECT conname, tgfoid::regproc, tgtype, tgdeferrable, tginitdeferred
+        FROM pg_trigger JOIN pg_constraint con ON con.oid = tgconstraint
+	        WHERE tgrelid = 'AT_AddConstNoName.products_5410000'::regclass;
+
+\c - - :master_host :master_port
+
+ALTER TABLE AT_AddConstNoName.products DROP CONSTRAINT products_product_no_key;
+
 -- Check "ADD EXCLUDE"
 CREATE EXTENSION btree_gist;
 ALTER TABLE AT_AddConstNoName.products ADD EXCLUDE USING gist (name WITH <> , product_no WITH =);
@@ -122,6 +161,25 @@ SELECT con.conname
       INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
       INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
               WHERE rel.relname = 'products_5410000';
+
+\c - - :master_host :master_port
+ALTER TABLE AT_AddConstNoName.products DROP CONSTRAINT products_name_product_no_excl;
+
+-- Check "ADD EXCLUDE ... DEFERRABLE"
+ALTER TABLE AT_AddConstNoName.products ADD EXCLUDE USING gist (name WITH <> , product_no WITH =) DEFERRABLE;
+\c - - :public_worker_1_host :worker_1_port
+SELECT conname, tgfoid::regproc, tgtype, tgdeferrable, tginitdeferred
+        FROM pg_trigger JOIN pg_constraint con ON con.oid = tgconstraint
+	                WHERE tgrelid = 'AT_AddConstNoName.products_5410000'::regclass;
+
+\c - - :master_host :master_port
+ALTER TABLE AT_AddConstNoName.products DROP CONSTRAINT products_name_product_no_excl;
+
+ALTER TABLE AT_AddConstNoName.products ADD EXCLUDE USING gist (name WITH <> , product_no WITH =) DEFERRABLE INITIALLY DEFERRED;
+\c - - :public_worker_1_host :worker_1_port
+SELECT conname, tgfoid::regproc, tgtype, tgdeferrable, tginitdeferred
+        FROM pg_trigger JOIN pg_constraint con ON con.oid = tgconstraint
+	                WHERE tgrelid = 'AT_AddConstNoName.products_5410000'::regclass;
 
 \c - - :master_host :master_port
 ALTER TABLE AT_AddConstNoName.products DROP CONSTRAINT products_name_product_no_excl;
