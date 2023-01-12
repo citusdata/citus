@@ -32,8 +32,6 @@ static void AppendAlterTableCmd(StringInfo buf, AlterTableCmd *alterTableCmd,
 								AlterTableStmt *stmt);
 static void AppendAlterTableCmdAddColumn(StringInfo buf, AlterTableCmd *alterTableCmd);
 
-void AddRangeTableEntryToQueryCompat(ParseState *parseState, Relation relation);
-
 char *
 DeparseAlterTableSchemaStmt(Node *node)
 {
@@ -245,8 +243,8 @@ AppendAlterTableCmdAddConstraint(StringInfo buf, Constraint *constraint,
 		LOCKMODE lockmode = AlterTableGetLockLevel(stmt->cmds);
 		Oid leftRelationId = AlterTableLookupRelation(stmt, lockmode);
 
-		/* To use deparse_expression to convert expression into a string
-		 * the expression should be in cooked form. We transform the raw expression
+		/* To be able to use deparse_expression function, which creates an expression string,
+		 * the expression should be provided in its cooked form. We transform the raw expression
 		 * to cooked form.
 		 */
 		ParseState *pstate = make_parsestate(NULL);
@@ -257,14 +255,14 @@ AppendAlterTableCmdAddConstraint(StringInfo buf, Constraint *constraint,
 		 */
 		AddRangeTableEntryToQueryCompat(pstate, relation);
 
-		Node *expr = transformExpr(pstate, constraint->raw_expr,
+		Node *exprCooked = transformExpr(pstate, constraint->raw_expr,
 
-								   EXPR_KIND_CHECK_CONSTRAINT);
+										 EXPR_KIND_CHECK_CONSTRAINT);
 
 		char *relationName = get_rel_name(leftRelationId);
-		List *deparseCtx = deparse_context_for(relationName, leftRelationId);
+		List *relationCtx = deparse_context_for(relationName, leftRelationId);
 
-		char *exprSql = deparse_expression(expr, deparseCtx, false, false);
+		char *exprSql = deparse_expression(exprCooked, relationCtx, false, false);
 
 		relation_close(relation, NoLock);
 

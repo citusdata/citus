@@ -29,7 +29,6 @@
 
 
 static const char * unparse_policy_command(const char aclchar);
-void AddRangeTableEntryToQueryCompat(ParseState *parseState, Relation relation);
 static RowSecurityPolicy * GetPolicyByName(Oid relationId, const char *policyName);
 static List * GetPolicyListForRelation(Oid relationId);
 static char * CreatePolicyCommandForPolicy(Oid relationId, RowSecurityPolicy *policy);
