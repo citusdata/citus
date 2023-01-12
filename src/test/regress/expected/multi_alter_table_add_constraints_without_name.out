@@ -255,6 +255,31 @@ SELECT con.conname
 
 \c - - :master_host :master_port
 ALTER TABLE AT_AddConstNoName.products DROP CONSTRAINT products_check;
+-- Check "ADD CHECK ... NOINHERIT"
+ALTER TABLE AT_AddConstNoName.products ADD CHECK (product_no > 0 AND price > 0) NO INHERIT;
+SELECT con.conname, con.connoinherit
+    FROM pg_catalog.pg_constraint con
+      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
+              WHERE rel.relname = 'products';
+    conname     | connoinherit
+---------------------------------------------------------------------
+ products_check | t
+(1 row)
+
+\c - - :public_worker_1_host :worker_1_port
+SELECT con.conname, connoinherit
+    FROM pg_catalog.pg_constraint con
+      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
+              WHERE rel.relname = 'products_5410000';
+        conname         | connoinherit
+---------------------------------------------------------------------
+ products_check_5410000 | t
+(1 row)
+
+\c - - :master_host :master_port
+ALTER TABLE AT_AddConstNoName.products DROP CONSTRAINT products_check;
 DROP TABLE AT_AddConstNoName.products;
 -- Check "ADD PRIMARY KEY" with reference table
 CREATE TABLE AT_AddConstNoName.products_ref (

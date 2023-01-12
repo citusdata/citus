@@ -267,6 +267,11 @@ AppendAlterTableCmdAddConstraint(StringInfo buf, Constraint *constraint,
 		relation_close(relation, NoLock);
 
 		appendStringInfo(buf, " CHECK (%s)", exprSql);
+
+		if (constraint->is_no_inherit)
+		{
+			appendStringInfo(buf, " NO INHERIT");
+		}
 	}
 
 	if (constraint->deferrable)
