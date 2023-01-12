@@ -82,7 +82,7 @@ static char * GetRenameShardTriggerCommand(Oid shardRelationId, char *triggerNam
 static void DropRelationTruncateTriggers(Oid relationId);
 static char * GetDropTriggerCommand(Oid relationId, char *triggerName);
 static void DropViewsOnTable(Oid relationId);
-static void DropIdentitesOnTable(Oid relationId);
+static void DropIdentitiesOnTable(Oid relationId);
 static List * GetRenameStatsCommandList(List *statsOidList, uint64 shardId);
 static List * ReversedOidList(List *oidList);
 static void AppendExplicitIndexIdsToList(Form_pg_index indexForm,
@@ -343,7 +343,7 @@ CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys, bool autoConve
 	 * Drop identities before local shard conversion since the shell table owns
 	 * identities
 	 */
-	DropIdentitesOnTable(relationId);
+	DropIdentitiesOnTable(relationId);
 
 	/* below we convert relation with relationId to the shard relation */
 	uint64 shardId = ConvertLocalTableToShard(relationId);
@@ -1037,7 +1037,7 @@ GetDropTriggerCommand(Oid relationId, char *triggerName)
 
 
 static void
-DropIdentitesOnTable(Oid relationId)
+DropIdentitiesOnTable(Oid relationId)
 {
 	Relation relation = relation_open(relationId, AccessShareLock);
 	TupleDesc tupleDescriptor = RelationGetDescr(relation);
