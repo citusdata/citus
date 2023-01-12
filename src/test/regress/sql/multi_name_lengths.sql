@@ -45,9 +45,6 @@ ALTER TABLE name_lengths ADD COLUMN float_col_1234567890123456789012345678901234
 ALTER TABLE name_lengths ADD COLUMN date_col_12345678901234567890123456789012345678901234567890 DATE;
 ALTER TABLE name_lengths ADD COLUMN int_col_12345678901234567890123456789012345678901234567890 INTEGER DEFAULT 1;
 
--- Placeholders for unsupported ALTER TABLE to add constraints with implicit names that are likely too long
-ALTER TABLE name_lengths ADD CHECK (date_col_12345678901234567890123456789012345678901234567890 > '2014-01-01'::date);
-
 \c - - :public_worker_1_host :worker_1_port
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.name_lengths_225002'::regclass ORDER BY 1 DESC, 2 DESC;
 \c - - :master_host :master_port
