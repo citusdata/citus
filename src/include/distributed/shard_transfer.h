@@ -12,6 +12,11 @@
 #include "distributed/shard_rebalancer.h"
 #include "nodes/pg_list.h"
 
+extern void citus_move_shard_placement_internal(int64 shardId, char *sourceNodeName,
+												int32 sourceNodePort,
+												char *targetNodeName,
+												int32 targetNodePort,
+												Oid shardReplicationModeOid);
 extern uint64 ShardListSizeInBytes(List *colocatedShardList,
 								   char *workerNodeName, uint32 workerNodePort);
 extern void ErrorIfMoveUnsupportedTableType(Oid relationId);
