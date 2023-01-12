@@ -114,16 +114,9 @@ EnsureDependenciesExistOnAllNodes(const ObjectAddress *target)
 						   dependency->objectSubId, ExclusiveLock);
 	}
 
-	WorkerNode *workerNode = NULL;
-	foreach_ptr(workerNode, workerNodeList)
-	{
-		const char *nodeName = workerNode->workerName;
-		uint32 nodePort = workerNode->workerPort;
-
-		SendCommandListToWorkerOutsideTransaction(nodeName, nodePort,
-												  CitusExtensionOwnerName(),
-												  ddlCommands);
-	}
+	SendMetadataCommandListToWorkerListInCoordinatedTransaction(workerNodeList,
+																CitusExtensionOwnerName(),
+																ddlCommands);
 
 	/*
 	 * We do this after creating the objects on the workers, we make sure
