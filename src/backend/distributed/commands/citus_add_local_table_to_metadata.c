@@ -553,6 +553,7 @@ ErrorIfUnsupportedCitusLocalTableKind(Oid relationId)
 	}
 }
 
+
 /*
  * NoticeIfAutoConvertingLocalTables logs a NOTICE message to inform the user that we are
  * automatically adding local tables to metadata. The user should know that this table
