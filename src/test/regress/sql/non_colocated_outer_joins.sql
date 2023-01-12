@@ -83,12 +83,24 @@ SELECT t1.* FROM t1 WHERE EXISTS (SELECT * FROM t2 WHERE t1.col2 = t2.col2) ORDE
 SELECT t2.* FROM t2 WHERE EXISTS (SELECT * FROM t1 WHERE t1.col1 = t2.col1) ORDER BY 1,2;
 SELECT t2.* FROM t2 WHERE EXISTS (SELECT * FROM t1 WHERE t1.col2 = t2.col2) ORDER BY 1,2;
 
--- join order planner cannot handle anti join
+-- join order planner cannot handle anti joins
 
 SELECT t1.* FROM t1 WHERE NOT EXISTS (SELECT * FROM t2 WHERE t1.col1 = t2.col1) ORDER BY 1,2;
 SELECT t1.* FROM t1 WHERE NOT EXISTS (SELECT * FROM t2 WHERE t1.col2 = t2.col2) ORDER BY 1,2;
 SELECT t2.* FROM t2 WHERE NOT EXISTS (SELECT * FROM t1 WHERE t1.col1 = t2.col1) ORDER BY 1,2;
 SELECT t2.* FROM t2 WHERE NOT EXISTS (SELECT * FROM t1 WHERE t1.col2 = t2.col2) ORDER BY 1,2;
+
+-- join order planner cannot handle lateral outer joins
+
+SELECT t1.*, tt2.* FROM t1 LEFT JOIN LATERAL (SELECT * FROM t2 WHERE t1.col1 = t2.col1) tt2 ON (t1.col1 = tt2.col1) ORDER BY 1,2,3,4;
+
+-- join order planner cannot handle cartesian joins
+
+SELECT tt1.*, t3.* FROM (SELECT t1.* FROM t1,t2) tt1 LEFT JOIN t3 ON (tt1.col1 = t3.col1) ORDER BY 1,2,3,4;
+
+-- join order planner cannot handle right recursive joins
+
+SELECT t1.*, t2.* FROM t1 LEFT JOIN ( t2 JOIN t3 ON t2.col2 = t3.col1) ON (t1.col1 = t2.col1) ORDER BY 1,2,3,4;
 
 DROP SCHEMA non_colocated_outer_joins CASCADE;
 RESET client_min_messages;

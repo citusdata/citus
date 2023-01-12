@@ -161,14 +161,22 @@ SELECT count(*) FROM users_table u1 CROSS JOIN users_ref_test_table ref2 RIGHT J
 
 -- a reference tables CROSS JOINed with a distribted table, and later JOINED with distributed tables on reference table column
 -- so not safe to pushdown
+SET citus.enable_repartition_joins TO on;
 SELECT count(*) FROM users_table u1 CROSS JOIN users_ref_test_table ref2 LEFT JOIN users_table u2 ON (ref2.id = u2.user_id);
-ERROR:  the query contains a join that requires repartitioning
-HINT:  Set citus.enable_repartition_joins to on to enable repartitioning
+ count
+---------------------------------------------------------------------
+ 10201
+(1 row)
+
 SELECT count(*) FROM users_table u1 CROSS JOIN users_ref_test_table ref2 FULL JOIN users_table u2 ON (ref2.id = u2.user_id);
-ERROR:  the query contains a join that requires repartitioning
-HINT:  Set citus.enable_repartition_joins to on to enable repartitioning
+ count
+---------------------------------------------------------------------
+ 10201
+(1 row)
+
 SELECT count(*) FROM users_table u1 CROSS JOIN users_ref_test_table ref2 RIGHT JOIN users_table u2 ON (ref2.id = u2.user_id);
 ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
+RESET citus.enable_repartition_joins;
 -- via repartitioning, Citus can handle this query as the result of "u1 CROSS JOIN ref2"
 -- can be repartitioned on ref2.id
 Set citus.enable_repartition_joins to on;

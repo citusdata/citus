@@ -213,11 +213,12 @@ FROM
 
 
 -- Since we cannot broadcast or re-partition, joining on a different key should error out
+SET citus.enable_repartition_joins TO on;
 SELECT
 	count(*)
 FROM
 	multi_outer_join_left a LEFT JOIN multi_outer_join_right b ON (l_nationkey = r_nationkey);
-
+RESET citus.enable_repartition_joins;
 
 -- Anti-join should return customers for which there is no row in the right table
 SELECT

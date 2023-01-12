@@ -115,7 +115,6 @@ static bool HasRightRecursiveJoin(FromExpr *fromExpr);
 static bool RightRecursiveJoinExprWalker(Node *node, void *context);
 static bool HasCartesianJoin(FromExpr *fromExpr);
 static bool CartesianJoinExprWalker(Node *node, void *context);
-static bool HasLateralJoin(JoinRestrictionContext *joinRestrictionContext);
 
 
 /*
@@ -192,7 +191,7 @@ ShouldUseSubqueryPushDown(Query *originalQuery, Query *rewrittenQuery,
 	 */
 	if (FindNodeMatchingCheckFunction((Node *) rewrittenQuery->jointree, IsOuterJoinExpr))
 	{
-		/* we can pushdown outer joins if all restrictions are on partition columns */
+		/* we can try to pushdown outer joins if all restrictions are on partition columns */
 		if (RestrictionEquivalenceForPartitionKeys(plannerRestrictionContext))
 		{
 			return true;
@@ -217,12 +216,8 @@ ShouldUseSubqueryPushDown(Query *originalQuery, Query *rewrittenQuery,
 		}
 
 		/*
-		 * join order planner cannot handle lateral join trees for outer joins.
+		 * todo: join order planner cannot handle lateral join trees for outer joins.
 		 */
-		if (HasLateralJoin(plannerRestrictionContext->joinRestrictionContext))
-		{
-			return true;
-		}
 	}
 
 	/*
@@ -337,25 +332,6 @@ CartesianJoinExprWalker(Node *node, void *context)
 	}
 
 	return expression_tree_walker(node, CartesianJoinExprWalker, NULL);
-}
-
-
-/*
- * HasLateralJoin returns true if join restriction context contain lateral join.
- */
-static bool
-HasLateralJoin(JoinRestrictionContext *joinRestrictionContext)
-{
-	JoinRestriction *joinRestriction = NULL;
-	foreach_ptr(joinRestriction, joinRestrictionContext->joinRestrictionList)
-	{
-		if (joinRestriction->plannerInfo && joinRestriction->plannerInfo->hasLateralRTEs)
-		{
-			return true;
-		}
-	}
-
-	return false;
 }
 
 

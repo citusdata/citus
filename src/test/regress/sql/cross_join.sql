@@ -51,9 +51,11 @@ SELECT count(*) FROM users_table u1 CROSS JOIN users_ref_test_table ref2 RIGHT J
 
 -- a reference tables CROSS JOINed with a distribted table, and later JOINED with distributed tables on reference table column
 -- so not safe to pushdown
+SET citus.enable_repartition_joins TO on;
 SELECT count(*) FROM users_table u1 CROSS JOIN users_ref_test_table ref2 LEFT JOIN users_table u2 ON (ref2.id = u2.user_id);
 SELECT count(*) FROM users_table u1 CROSS JOIN users_ref_test_table ref2 FULL JOIN users_table u2 ON (ref2.id = u2.user_id);
 SELECT count(*) FROM users_table u1 CROSS JOIN users_ref_test_table ref2 RIGHT JOIN users_table u2 ON (ref2.id = u2.user_id);
+RESET citus.enable_repartition_joins;
 
 -- via repartitioning, Citus can handle this query as the result of "u1 CROSS JOIN ref2"
 -- can be repartitioned on ref2.id

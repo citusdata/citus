@@ -271,13 +271,18 @@ FROM
 (1 row)
 
 -- Citus can use broadcast join here
+SET citus.enable_repartition_joins TO on;
 SELECT
 	count(*)
 FROM
 	multi_outer_join_left_hash a LEFT JOIN multi_outer_join_right_hash b ON (l_nationkey = r_nationkey);
 LOG:  join order: [ "multi_outer_join_left_hash" ][ dual partition join(LEFT) "multi_outer_join_right_hash" ]
-ERROR:  the query contains a join that requires repartitioning
-HINT:  Set citus.enable_repartition_joins to on to enable repartitioning
+ count
+---------------------------------------------------------------------
+    52
+(1 row)
+
+RESET citus.enable_repartition_joins;
 -- Anti-join should return customers for which there is no row in the right table
 SELECT
 	min(l_custkey), max(l_custkey)

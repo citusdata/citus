@@ -83,7 +83,7 @@ typedef struct JoinOrderNode
 } JoinOrderNode;
 
 
-/* JoinInfoContext stores joinInfo list and base qualifications */
+/* JoinInfoContext stores list of JoinInfo and base qualifications */
 typedef struct JoinInfoContext
 {
 	List *baseQualifierList;
@@ -91,12 +91,18 @@ typedef struct JoinInfoContext
 } JoinInfoContext;
 
 
-/* JoinInfoContext stores joinInfo list and base qualifications */
+/*
+ * JoinInfo stores information about a join between 2 tables.
+ * joinType:          join type between left and right tables in join
+ * leftTableIdx:	  rtable index for left table in join
+ * rightTableIdx:	  rtable index for right table in join
+ * joinQualifierList: list of join qualifications in join, i.e. ON (...)
+ */
 typedef struct JoinInfo
 {
 	JoinType joinType;
-	uint32 ltableIdx;
-	uint32 rtableIdx;
+	uint32 leftTableIdx;
+	uint32 rightTableIdx;
 	List *joinQualifierList;
 } JoinInfo;
 

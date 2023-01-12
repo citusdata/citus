@@ -85,8 +85,8 @@ static bool ExtractFromExpressionWalker(Node *node,
 										QualifierWalkerContext *walkerContext);
 static List * MultiTableNodeList(List *tableEntryList, List *rangeTableList);
 static List * AddMultiCollectNodes(List *tableNodeList);
-static MultiNode * MultiJoinTree(List *joinOrderList, List *collectTableList, bool
-								 passJoinClauseDirectly);
+static MultiNode * MultiJoinTree(List *joinOrderList, List *collectTableList,
+								 bool passJoinClauseDirectly);
 static MultiCollect * CollectNodeForTable(List *collectTableList, uint32 rangeTableId);
 static MultiSelect * MultiSelectNode(List *whereClauseList, bool passWhereClauseDirectly);
 static bool IsSelectClause(Node *clause);
@@ -587,13 +587,16 @@ MultiNodeTree(Query *queryTree)
 		RaiseDeferredError(unsupportedQueryError, ERROR);
 	}
 
-	/* extract where clause qualifiers and verify we can plan for them */
-	List *whereClauseList = WhereClauseList(queryTree->jointree);
-	unsupportedQueryError = DeferErrorIfUnsupportedClause(whereClauseList);
+	/* extract where and join clause qualifiers(including outer join quals) and verify we can plan for them. */
+	List *qualClauseList = QualifierList(queryTree->jointree);
+	unsupportedQueryError = DeferErrorIfUnsupportedClause(qualClauseList);
 	if (unsupportedQueryError)
 	{
 		RaiseDeferredErrorInternal(unsupportedQueryError, ERROR);
 	}
+
+	/* WhereClauseList() merges join qualifiers and base qualifiers into result list */
+	List *whereClauseList = WhereClauseList(queryTree->jointree);
 
 	/*
 	 * If we have a subquery, build a multi table node for the subquery and
@@ -665,22 +668,36 @@ MultiNodeTree(Query *queryTree)
 		/* add collect nodes on top of the multi table nodes */
 		collectTableList = AddMultiCollectNodes(tableNodeList);
 
+		/*
+		 * We have 2 different join order methods.
+		 *
+		 * JoinOrderList:
+		 *  When we have only inner joins, we can commute the joins as we wish and it also
+		 *  does not matter if we merge or move join and where clauses. We can push down some
+		 *  where clauses which are applicable as join clause.
+		 *
+		 * FixedJoinOrderList:
+		 *  When we have at least 1 outer join in a query tree, we cannot commute joins or move join
+		 *  and where clauses as we wish because we would have incorrect results. We should pass join
+		 *  and where clauses separately as they are while creating tasks.
+		 */
 		if (FindNodeMatchingCheckFunction((Node *) queryTree->jointree, IsOuterJoinExpr))
 		{
-			/* pass join clauses directly into fix join order */
+			/* extract join infos for left recursive join tree */
 			JoinInfoContext *joinInfoContext = FetchJoinOrderContext(queryTree->jointree);
 
-			/* where clause should not contain join clause */
+			/* where clause should only contain base qualifiers */
 			whereClauseList = joinInfoContext->baseQualifierList;
 
 			/* we simply donot commute joins as we have at least 1 outer join */
 			joinOrderList = FixedJoinOrderList(tableEntryList, joinInfoContext);
 
+			/* pass join clauses directly as they are while creating tasks */
 			passQualClauseDirectly = true;
 		}
 		else
 		{
-			/* only consider base qualifications */
+			/* consider also base qualifications */
 			joinClauseList = JoinClauseList(whereClauseList);
 
 			/* find best join order for commutative inner joins */
@@ -740,7 +757,7 @@ FetchJoinOrderContext(FromExpr *fromExpr)
 	ExtractLeftMostRangeTableIndex((Node *) fromExpr, &leftMostTableIdx);
 	Assert(list_length(joinInfoContext->joinInfoList) > 0);
 	JoinInfo *leftMostJoinInfo = list_nth(joinInfoContext->joinInfoList, 0);
-	leftMostJoinInfo->ltableIdx = leftMostTableIdx;
+	leftMostJoinInfo->leftTableIdx = leftMostTableIdx;
 
 	return joinInfoContext;
 }
@@ -771,26 +788,23 @@ JoinInfoWalker(Node *node, JoinInfoContext *joinInfoContext)
 	if (IsA(node, JoinExpr))
 	{
 		JoinExpr *joinExpression = (JoinExpr *) node;
-		if (!(IsA(joinExpression->rarg, RangeTblRef) || IsA(joinExpression->rarg,
-															FromExpr)))
+		if (!IsA(joinExpression->rarg, RangeTblRef))
 		{
-			ereport(WARNING, (errmsg("unexpected node in joininfowalker")));
+			/*
+			 * occurs when we have subquery which is not recursively plan. Here is only
+			 * expected when we have lateral outer join. ??? (subqueries should have been
+			 * already planned by recursive planner)
+			 */
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg(
+								"complex joins are only supported when all distributed "
+								"tables are joined on their distribution columns with "
+								"equal operator")));
 		}
 
 		Node *joinQualifiersNode = joinExpression->quals;
 		JoinType joinType = joinExpression->jointype;
-		RangeTblRef *rightTableRef = NULL;
-		if (IsA(joinExpression->rarg, RangeTblRef))
-		{
-			rightTableRef = (RangeTblRef *) joinExpression->rarg;
-		}
-		else
-		{
-			Assert(IsA(joinExpression->rarg, FromExpr));
-			FromExpr *fromExpr = (FromExpr *) joinExpression->rarg;
-			Assert(list_length(fromExpr->fromlist) == 1);
-			rightTableRef = (RangeTblRef *) list_nth(fromExpr->fromlist, 0);
-		}
+		RangeTblRef *rightTableRef = (RangeTblRef *) joinExpression->rarg;
 
 		List *joinQualifierList = NIL;
 		if (joinQualifiersNode != NULL)
@@ -810,7 +824,7 @@ JoinInfoWalker(Node *node, JoinInfoContext *joinInfoContext)
 
 		JoinInfo *joinInfo = palloc0(sizeof(JoinInfo));
 		joinInfo->joinType = joinType;
-		joinInfo->rtableIdx = rightTableRef->rtindex;
+		joinInfo->rightTableIdx = rightTableRef->rtindex;
 		joinInfo->joinQualifierList = joinQualifierList;
 
 		joinInfoContext->joinInfoList = lappend(joinInfoContext->joinInfoList, joinInfo);
@@ -1778,6 +1792,12 @@ CollectNodeForTable(List *collectTableList, uint32 rangeTableId)
  * MultiSelectNode extracts the select clauses from the given where clause list,
  * and builds a MultiSelect node from these clauses. If the expression tree does
  * not have any select clauses, the function return null.
+ *
+ * When we have at least 1 outer join in a query tree, we cannot commute joins(that is
+ * why we have `FixedJoinOrderList`) or move join and where clauses as we wish because
+ * we would have incorrect results. We should pass join and where clauses separately as
+ * they are while creating tasks. `whereClauseList` should be passed as it is when
+ * `passWhereClauseDirectly` is set true.
  */
 static MultiSelect *
 MultiSelectNode(List *whereClauseList, bool passWhereClauseDirectly)
@@ -2090,16 +2110,19 @@ ApplyJoinRule(MultiNode *leftNode, MultiNode *rightNode, JoinRuleType ruleType,
 	rightTableIdCount = list_length(rightTableIdList);
 	Assert(rightTableIdCount == 1);
 
-	/* find applicable join clauses between the left and right data sources */
-	uint32 rightTableId = (uint32) linitial_int(rightTableIdList);
-	List *applicableJoinClauses = ApplicableJoinClauses(leftTableIdList, rightTableId,
-														joinClauseList);
+	List *joinClauses = joinClauseList;
+	if (!passJoinClauseDirectly)
+	{
+		/* find applicable join clauses between the left and right data sources */
+		uint32 rightTableId = (uint32) linitial_int(rightTableIdList);
+		joinClauses = ApplicableJoinClauses(leftTableIdList, rightTableId,
+											joinClauseList);
+	}
 
 	/* call the join rule application function to create the new join node */
 	RuleApplyFunction ruleApplyFunction = JoinRuleApplyFunction(ruleType);
 	MultiNode *multiNode = (*ruleApplyFunction)(leftNode, rightNode, partitionColumnList,
-												joinType, (passJoinClauseDirectly) ?
-												joinClauseList : applicableJoinClauses);
+												joinType, joinClauses);
 
 	if (joinType != JOIN_INNER && CitusIsA(multiNode, MultiJoin))
 	{

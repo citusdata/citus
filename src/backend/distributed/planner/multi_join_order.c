@@ -382,7 +382,7 @@ FixedJoinOrderList(List *tableEntryList, JoinInfoContext *joinInfoContext)
 
 	/* add first table into joinedtable list */
 	TableEntry *firstTable = TableEntryByRangeTableId(tableEntryList,
-													  firstJoinInfo->ltableIdx);
+													  firstJoinInfo->leftTableIdx);
 	joinedTableList = lappend(joinedTableList, firstTable);
 
 	/* create join node for the first table */
@@ -402,7 +402,7 @@ FixedJoinOrderList(List *tableEntryList, JoinInfoContext *joinInfoContext)
 	foreach_ptr(joinInfo, joinInfoContext->joinInfoList)
 	{
 		TableEntry *nextTable = TableEntryByRangeTableId(tableEntryList,
-														 joinInfo->rtableIdx);
+														 joinInfo->rightTableIdx);
 
 		bool passJoinClauseDirectly = true;
 		nextJoinNode = EvaluateJoinRules(joinedTableList,
@@ -872,6 +872,17 @@ TableEntryListDifference(List *lhsTableList, List *rhsTableList)
  * next table, evaluates different join rules between the two tables, and finds
  * the best join rule that applies. The function returns the applicable join
  * order node which includes the join rule and the partition information.
+ *
+ * When we have only inner joins, we can commute the joins as we wish and it also
+ * does not matter if we merge or move join and where clauses. For query trees with
+ * only inner joins, `joinClauseList` contains join and where clauses combined so that
+ * we can push down some where clauses which are applicable as join clause, which is
+ * determined by `ApplicableJoinClauses`.
+ * When we have at least 1 outer join in a query tree, we cannot commute joins(that is
+ * why we have `FixedJoinOrderList`) or move join and where clauses as we wish because
+ * we would have incorrect results. We should pass join and where clauses separately while
+ * creating tasks. `joinClauseList` contains only join clauses when `passJoinClauseDirectly`
+ * is set true.
  */
 static JoinOrderNode *
 EvaluateJoinRules(List *joinedTableList, JoinOrderNode *currentJoinNode,
@@ -882,15 +893,19 @@ EvaluateJoinRules(List *joinedTableList, JoinOrderNode *currentJoinNode,
 	uint32 lowestValidIndex = JOIN_RULE_INVALID_FIRST + 1;
 	uint32 highestValidIndex = JOIN_RULE_LAST - 1;
 
-	/*
-	 * We first find all applicable join clauses between already joined tables
-	 * and the candidate table.
-	 */
-	List *joinedTableIdList = RangeTableIdList(joinedTableList);
-	uint32 candidateTableId = candidateTable->rangeTableId;
-	List *applicableJoinClauses = ApplicableJoinClauses(joinedTableIdList,
-														candidateTableId,
-														joinClauseList);
+	List *joinClauses = joinClauseList;
+	if (!passJoinClauseDirectly)
+	{
+		/*
+		 * We first find all applicable join clauses between already joined tables
+		 * and the candidate table.
+		 */
+		List *joinedTableIdList = RangeTableIdList(joinedTableList);
+		uint32 candidateTableId = candidateTable->rangeTableId;
+		joinClauses = ApplicableJoinClauses(joinedTableIdList,
+											candidateTableId,
+											joinClauseList);
+	}
 
 	/* we then evaluate all join rules in order */
 	for (uint32 ruleIndex = lowestValidIndex; ruleIndex <= highestValidIndex; ruleIndex++)
@@ -900,8 +915,7 @@ EvaluateJoinRules(List *joinedTableList, JoinOrderNode *currentJoinNode,
 
 		nextJoinNode = (*ruleEvalFunction)(currentJoinNode,
 										   candidateTable,
-										   (passJoinClauseDirectly) ? joinClauseList :
-										   applicableJoinClauses,
+										   joinClauses,
 										   joinType);
 
 		/* break after finding the first join rule that applies */
@@ -918,8 +932,7 @@ EvaluateJoinRules(List *joinedTableList, JoinOrderNode *currentJoinNode,
 
 	Assert(nextJoinNode != NULL);
 	nextJoinNode->joinType = joinType;
-	nextJoinNode->joinClauseList = (passJoinClauseDirectly) ? joinClauseList :
-								   applicableJoinClauses;
+	nextJoinNode->joinClauseList = joinClauses;
 	return nextJoinNode;
 }
 

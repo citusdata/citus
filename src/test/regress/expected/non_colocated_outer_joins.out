@@ -389,7 +389,7 @@ SELECT t2.* FROM t2 WHERE EXISTS (SELECT * FROM t1 WHERE t1.col1 = t2.col1) ORDE
 ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
 SELECT t2.* FROM t2 WHERE EXISTS (SELECT * FROM t1 WHERE t1.col2 = t2.col2) ORDER BY 1,2;
 ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
--- join order planner cannot handle anti join
+-- join order planner cannot handle anti joins
 SELECT t1.* FROM t1 WHERE NOT EXISTS (SELECT * FROM t2 WHERE t1.col1 = t2.col1) ORDER BY 1,2;
 ERROR:  complex joins are only supported when all distributed tables are joined on their distribution columns with equal operator
 SELECT t1.* FROM t1 WHERE NOT EXISTS (SELECT * FROM t2 WHERE t1.col2 = t2.col2) ORDER BY 1,2;
@@ -398,6 +398,17 @@ SELECT t2.* FROM t2 WHERE NOT EXISTS (SELECT * FROM t1 WHERE t1.col1 = t2.col1) 
 ERROR:  complex joins are only supported when all distributed tables are joined on their distribution columns with equal operator
 SELECT t2.* FROM t2 WHERE NOT EXISTS (SELECT * FROM t1 WHERE t1.col2 = t2.col2) ORDER BY 1,2;
 ERROR:  complex joins are only supported when all distributed tables are joined on their distribution columns with equal operator
+-- join order planner cannot handle lateral outer joins
+SELECT t1.*, tt2.* FROM t1 LEFT JOIN LATERAL (SELECT * FROM t2 WHERE t1.col1 = t2.col1) tt2 ON (t1.col1 = tt2.col1) ORDER BY 1,2,3,4;
+ERROR:  complex joins are only supported when all distributed tables are joined on their distribution columns with equal operator
+-- join order planner cannot handle cartesian joins
+SELECT tt1.*, t3.* FROM (SELECT t1.* FROM t1,t2) tt1 LEFT JOIN t3 ON (tt1.col1 = t3.col1) ORDER BY 1,2,3,4;
+LOG:  join order: [ "t1" ][ cartesian product(INNER) "t2" ]
+ERROR:  cannot perform distributed planning on this query
+DETAIL:  Cartesian products are currently unsupported
+-- join order planner cannot handle right recursive joins
+SELECT t1.*, t2.* FROM t1 LEFT JOIN ( t2 JOIN t3 ON t2.col2 = t3.col1) ON (t1.col1 = t2.col1) ORDER BY 1,2,3,4;
+ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
 DROP SCHEMA non_colocated_outer_joins CASCADE;
 NOTICE:  drop cascades to 3 other objects
 DETAIL:  drop cascades to table t1
