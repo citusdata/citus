@@ -1233,6 +1233,27 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 			}
 
 			/*
+			 * We check for ADD COLUMN .. GENERATED .. AS IDENTITY expr
+			 * since it uses a sequence as an internal dependency
+			 * we should deparse the statement
+			 */
+			constraint = NULL;
+			foreach_ptr(constraint, columnConstraints)
+			{
+				if (constraint->contype == CONSTR_IDENTITY)
+				{
+					deparseAT = true;
+					useInitialDDLCommandString = false;
+
+					/* the new column definition will have no constraint */
+					ColumnDef *newColDef = copyObject(columnDefinition);
+					newColDef->constraints = NULL;
+
+					newCmd->def = (Node *) newColDef;
+				}
+			}
+
+			/*
 			 * We check for ADD COLUMN .. SERIAL pseudo-type
 			 * if that's the case, we should deparse the statement
 			 * The structure of this check is copied from transformColumnDefinition.
@@ -2358,6 +2379,34 @@ PostprocessAlterTableStmt(AlterTableStmt *alterTableStatement)
 								}
 							}
 						}
+					}
+				}
+			}
+
+			/*
+			 * We check for ADD COLUMN .. GENERATED AS IDENTITY expr
+			 * since it uses a seqeunce as an internal dependency
+			 */
+			constraint = NULL;
+			foreach_ptr(constraint, columnConstraints)
+			{
+				if (constraint->contype == CONSTR_IDENTITY)
+				{
+					AttrNumber attnum = get_attnum(relationId,
+													columnDefinition->colname);
+					bool missing_ok = false;
+					Oid seqOid = getIdentitySequence(relationId, attnum, missing_ok);
+
+					if (ShouldSyncTableMetadata(relationId))
+					{
+						needMetadataSyncForNewSequences = true;
+						alterTableDefaultNextvalCmd =
+							GetAddColumnWithNextvalDefaultCmd(seqOid,
+																relationId,
+																columnDefinition
+																->colname,
+																columnDefinition
+																->typeName);
 					}
 				}
 			}

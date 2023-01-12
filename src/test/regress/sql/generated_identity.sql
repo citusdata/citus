@@ -136,4 +136,14 @@ select undistribute_table('generated_identities_test');
 SET search_path TO generated_identities;
 SET client_min_messages to ERROR;
 
+-- alter table .. add column .. GENERATED .. AS IDENTITY
+DROP TABLE color IF EXISTS;
+CREATE TABLE color (
+    color_name VARCHAR NOT NULL
+);
+SELECT create_distributed_table('color', 'color_name');
+ALTER TABLE color ADD COLUMN color_id BIGINT GENERATED ALWAYS AS IDENTITY;
+INSERT INTO color(color_name) VALUES ('Red');
+SELECT * FROM color;
+
 DROP SCHEMA generated_identities CASCADE;

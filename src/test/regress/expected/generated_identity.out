@@ -315,4 +315,24 @@ select undistribute_table('generated_identities_test');
 \c - - - :master_port
 SET search_path TO generated_identities;
 SET client_min_messages to ERROR;
+-- alter table .. add column .. GENERATED .. AS IDENTITY
+DROP TABLE color IF EXISTS;
+ERROR:  syntax error at or near "IF"
+CREATE TABLE color (
+    color_name VARCHAR NOT NULL
+);
+SELECT create_distributed_table('color', 'color_name');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+ALTER TABLE color ADD COLUMN color_id BIGINT GENERATED ALWAYS AS IDENTITY;
+INSERT INTO color(color_name) VALUES ('Red');
+SELECT * FROM color;
+ color_name | color_id
+---------------------------------------------------------------------
+ Red        |        1
+(1 row)
+
 DROP SCHEMA generated_identities CASCADE;
