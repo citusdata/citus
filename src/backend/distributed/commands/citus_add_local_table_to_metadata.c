@@ -60,7 +60,6 @@ static void citus_add_local_table_to_metadata_internal(Oid relationId,
 static void ErrorIfAddingPartitionTableToMetadata(Oid relationId);
 static void ErrorIfUnsupportedCreateCitusLocalTable(Relation relation);
 static void ErrorIfUnsupportedCitusLocalTableKind(Oid relationId);
-static void ErrorIfUnsupportedCitusLocalColumnDefinition(Relation relation);
 static void NoticeIfAutoConvertingLocalTables(bool autoConverted, Oid relationId);
 static CascadeOperationType GetCascadeTypeForCitusLocalTables(bool autoConverted);
 static List * GetShellTableDDLEventsForCitusLocalTable(Oid relationId);
@@ -493,7 +492,6 @@ ErrorIfUnsupportedCreateCitusLocalTable(Relation relation)
 	ErrorIfCoordinatorNotAddedAsWorkerNode();
 	ErrorIfUnsupportedCitusLocalTableKind(relationId);
 	EnsureTableNotDistributed(relationId);
-	ErrorIfUnsupportedCitusLocalColumnDefinition(relation);
 	ErrorIfRelationHasUnsupportedTrigger(relationId);
 
 	/*
@@ -554,18 +552,6 @@ ErrorIfUnsupportedCitusLocalTableKind(Oid relationId)
 							   "temporary tables")));
 	}
 }
-
-
-/*
- * ErrorIfUnsupportedCitusLocalColumnDefinition errors out if given relation
- * has unsupported column definition for citus local table creation.
- */
-static void
-ErrorIfUnsupportedCitusLocalColumnDefinition(Relation relation)
-{
-	/* No-op */
-}
-
 
 /*
  * NoticeIfAutoConvertingLocalTables logs a NOTICE message to inform the user that we are
