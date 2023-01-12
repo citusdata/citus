@@ -303,6 +303,11 @@ pg_get_sequencedef(Oid sequenceRelationId)
  * DEFAULT clauses for columns getting their default values from a sequence.
  * When it's WORKER_NEXTVAL_SEQUENCE_DEFAULTS, the function creates the DEFAULT
  * clause using worker_nextval('sequence') and not nextval('sequence')
+ * When IncludeIdentities is NO_IDENTITY, the function does not include identity column
+ * specifications. When it's INCLUDE_IDENTITY_AS_SEQUENCE_DEFAULTS, the function
+ * uses sequences and set them as default values for identity columns by using exactly
+ * the same approach with worker_nextval('sequence') & nextval('sequence') logic
+ * desribed above. When it's INCLUDE_IDENTITY it creates GENERATED .. AS IDENTIY clauses.
  */
 char *
 pg_get_tableschemadef_string(Oid tableRelationId, IncludeSequenceDefaults
