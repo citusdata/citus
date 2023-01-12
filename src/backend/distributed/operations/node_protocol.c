@@ -460,6 +460,11 @@ ResolveRelationId(text *relationName, bool missingOk)
  * These DDL commands are all palloced; and include the table's schema
  * definition, optional column storage and statistics definitions, and index
  * constraint and trigger definitions.
+ * When IncludeIdentities is NO_IDENTITY, the function does not include identity column
+ * specifications. When it's INCLUDE_IDENTITY_AS_SEQUENCE_DEFAULTS, the function
+ * uses sequences and set them as default values for identity columns by using exactly
+ * the same approach with worker_nextval('sequence') & nextval('sequence') logic
+ * desribed above. When it's INCLUDE_IDENTITY it creates GENERATED .. AS IDENTIY clauses.
  */
 List *
 GetFullTableCreationCommands(Oid relationId,
