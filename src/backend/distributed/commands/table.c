@@ -3111,7 +3111,8 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 				/*
 				 * We check for ALTER COLUMN TYPE ...
 				 * if the column has default coming from a user-defined sequence
-				 * changing the type of the column should not be allowed for now
+				 * or it's an identity column changing the type of the column
+				 * should not be allowed for now
 				 */
 				AttrNumber attnum = get_attnum(relationId, command->name);
 				List *seqInfoList = NIL;
@@ -3120,7 +3121,7 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 				{
 					ereport(ERROR, (errmsg("cannot execute ALTER COLUMN TYPE .. command "
 										   "because the column involves a default coming "
-										   "from a sequence")));
+										   "from a sequence or it's an identity column")));
 				}
 				break;
 			}

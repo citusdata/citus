@@ -80,8 +80,11 @@ SELECT * FROM generated_identities_test ORDER BY 1;
 -- distributed table
 select create_distributed_table('generated_identities_test', 'a');
 
--- alter table is unsupported
+-- alter table .. alter column .. add is unsupported
 ALTER TABLE generated_identities_test ALTER COLUMN g ADD GENERATED ALWAYS AS IDENTITY;
+
+-- alter table .. alter column is unsupported
+ALTER TABLE generated_identities_test ALTER COLUMN b TYPE int;
 
 select alter_distributed_table('generated_identities_test', 'g');
 

@@ -187,10 +187,13 @@ select create_distributed_table('generated_identities_test', 'a');
 
 (1 row)
 
--- alter table is unsupported
+-- alter table .. alter column .. add is unsupported
 ALTER TABLE generated_identities_test ALTER COLUMN g ADD GENERATED ALWAYS AS IDENTITY;
 ERROR:  alter table command is currently unsupported
 DETAIL:  Only ADD|DROP COLUMN, SET|DROP NOT NULL, SET|DROP DEFAULT, ADD|DROP|VALIDATE CONSTRAINT, SET (), RESET (), ENABLE|DISABLE|NO FORCE|FORCE ROW LEVEL SECURITY, ATTACH|DETACH PARTITION and TYPE subcommands are supported.
+-- alter table .. alter column is unsupported
+ALTER TABLE generated_identities_test ALTER COLUMN b TYPE int;
+ERROR:  cannot execute ALTER COLUMN TYPE .. command because the column involves a default coming from a sequence or it's an identity column
 select alter_distributed_table('generated_identities_test', 'g');
  alter_distributed_table
 ---------------------------------------------------------------------
