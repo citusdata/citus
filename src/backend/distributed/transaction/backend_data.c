@@ -886,11 +886,14 @@ AssignDistributedTransactionId(void)
  *
  * There's one special case where we don't want to assign a new pid and keep
  * the old pid on purpose: The current backend is an external backend and the
- * node id of the current node changed. Updating the gpid to match the nodeid
- * might seem like a desirable property, but that's not the case. Updating the
+ * node id of the current node changed since the previous call to
+ * AssingGlobalPID. Updating the gpid to match the nodeid might seem like a
+ * desirable property, but that's not the case. Mainly, because existing cached
+ * connections will still report as the old gpid on the worker. So updating the
  * gpid with the new nodeid would mess up distributed deadlock and originator
- * detection of queries too. Because if this backend already opened connections
- * to other nodes, then those backends will still have the old gpid.
+ * detection of queries done using those old connections. So if this is an
+ * external backend for which a gpid was already generated, then we don't
+ * change the gpid.
  *
  * NOTE: This function can be called arbitrary amount of times for the same
  * backend, due to being called by StartupCitusBackend.
@@ -948,8 +951,9 @@ SetBackendDataDatabaseId(void)
  * SetBackendDataGlobalPID is used to set the gpid field on MyBackendData.
  *
  * IMPORTANT: This should not be used for normal operations. It's a very hacky
- * way of setting the gpid function that is only used. The main problem is
- * that it does not set distributedCommandOriginator to the correct value.
+ * way of setting the gpid, which is only used in our MX isolation tests. The
+ * main problem is that it does not set distributedCommandOriginator to the
+ * correct value.
  */
 void
 SetBackendDataGlobalPID(uint64 gpid)
