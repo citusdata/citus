@@ -103,6 +103,8 @@ static List * InterShardDDLTaskList(Oid leftRelationId, Oid rightRelationId,
 									const char *commandString);
 static bool AlterInvolvesPartitionColumn(AlterTableStmt *alterTableStatement,
 										 AlterTableCmd *command);
+static bool AlterInvolvesIdentityColumn(AlterTableStmt *alterTableStatement,
+										AlterTableCmd *command);
 static void ErrorIfUnsupportedAlterAddConstraintStmt(AlterTableStmt *alterTableStatement);
 static List * CreateRightShardListForInterShardDDLTask(Oid rightRelationId,
 													   Oid leftRelationId,
@@ -3116,6 +3118,12 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 										   "involving partition column")));
 				}
 
+				if (AlterInvolvesIdentityColumn(alterTableStatement, command))
+				{
+					ereport(ERROR, (errmsg("cannot execute ALTER TABLE command "
+										   "involving identity column")));
+				}
+
 				/*
 				 * We check for ALTER COLUMN TYPE ...
 				 * if the column has default coming from a user-defined sequence
@@ -3129,7 +3137,7 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 				{
 					ereport(ERROR, (errmsg("cannot execute ALTER COLUMN TYPE .. command "
 										   "because the column involves a default coming "
-										   "from a sequence or it's an identity column")));
+										   "from a sequence")));
 				}
 				break;
 			}
@@ -3627,6 +3635,39 @@ SetInterShardDDLTaskRelationShardList(Task *task, ShardInterval *leftShardInterv
 	task->relationShardList = list_make2(leftRelationShard, rightRelationShard);
 }
 
+/*
+ * AlterInvolvesIdentityColumn checks if the given alter table command
+ * involves relation's identity column.
+ */
+static bool
+AlterInvolvesIdentityColumn(AlterTableStmt *alterTableStatement,
+							 AlterTableCmd *command)
+{
+	bool involvesIdentityColumn = false;
+	char *alterColumnName = command->name;
+
+	LOCKMODE lockmode = AlterTableGetLockLevel(alterTableStatement->cmds);
+	Oid relationId = AlterTableLookupRelation(alterTableStatement, lockmode);
+	if (!OidIsValid(relationId))
+	{
+		return false;
+	}
+
+	HeapTuple tuple = SearchSysCacheAttName(relationId, alterColumnName);
+	if (HeapTupleIsValid(tuple))
+	{
+		Form_pg_attribute targetAttr = (Form_pg_attribute) GETSTRUCT(tuple);
+
+		if (targetAttr->attidentity)
+		{
+			involvesIdentityColumn = true;
+		}
+
+		ReleaseSysCache(tuple);
+	}
+
+	return involvesIdentityColumn;
+}
 
 /*
  * AlterInvolvesPartitionColumn checks if the given alter table command
