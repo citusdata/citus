@@ -216,8 +216,6 @@ static bool WillRecreateForeignKeyToReferenceTable(Oid relationId,
 static void WarningsForDroppingForeignKeysWithDistributedTables(Oid relationId);
 static void ErrorIfUnsupportedCascadeObjects(Oid relationId);
 static bool DoesCascadeDropUnsupportedObject(Oid classId, Oid id, HTAB *nodeMap);
-static void SyncSequenceMetadata(char *schemaName, Oid sourceId, char *sourceName, Oid
-								 targetId, char *targetName, Oid sequenceOid);
 
 PG_FUNCTION_INFO_V1(undistribute_table);
 PG_FUNCTION_INFO_V1(alter_distributed_table);
