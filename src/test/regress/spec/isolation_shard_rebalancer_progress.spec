@@ -144,9 +144,18 @@ step "s7-get-progress"
 		( SELECT size FROM possible_sizes WHERE ABS(size - target_shard_size) = (SELECT MIN(ABS(size - target_shard_size)) FROM possible_sizes )) target_shard_size,
 		progress,
 		operation_type,
-		source_lsn >= target_lsn as lsn_sanity_check,
-		source_lsn > '0/0' as source_lsn_available,
-		target_lsn > '0/0' as target_lsn_available,
+		CASE
+			WHEN target_lsn IS NULL THEN true
+			ELSE source_lsn >= target_lsn
+		END AS lsn_sanity_check,
+		CASE
+			WHEN source_lsn IS NULL THEN false
+			ELSE source_lsn > '0/0'
+		END AS source_lsn_available,
+		CASE
+			WHEN target_lsn IS NULL THEN false
+			ELSE target_lsn > '0/0'
+		END AS target_lsn_available,
 		status
 	FROM get_rebalance_progress();
 }
@@ -170,9 +179,18 @@ step "s7-get-progress-ordered"
 		( SELECT size FROM possible_sizes WHERE ABS(size - target_shard_size) = (SELECT MIN(ABS(size - target_shard_size)) FROM possible_sizes )) target_shard_size,
 		progress,
 		operation_type,
-		source_lsn >= target_lsn as lsn_sanity_check,
-		source_lsn > '0/0' as source_lsn_available,
-		target_lsn > '0/0' as target_lsn_available
+		CASE
+			WHEN target_lsn IS NULL THEN true
+			ELSE source_lsn >= target_lsn
+		END AS lsn_sanity_check,
+		CASE
+			WHEN source_lsn IS NULL THEN false
+			ELSE source_lsn > '0/0'
+		END AS source_lsn_available,
+		CASE
+			WHEN target_lsn IS NULL THEN false
+			ELSE target_lsn > '0/0'
+		END AS target_lsn_available
 	FROM get_rebalance_progress()
 	ORDER BY 1, 2, 3, 4, 5;
 }
