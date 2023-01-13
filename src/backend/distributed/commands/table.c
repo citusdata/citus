@@ -3635,13 +3635,14 @@ SetInterShardDDLTaskRelationShardList(Task *task, ShardInterval *leftShardInterv
 	task->relationShardList = list_make2(leftRelationShard, rightRelationShard);
 }
 
+
 /*
  * AlterInvolvesIdentityColumn checks if the given alter table command
  * involves relation's identity column.
  */
 static bool
 AlterInvolvesIdentityColumn(AlterTableStmt *alterTableStatement,
-							 AlterTableCmd *command)
+							AlterTableCmd *command)
 {
 	bool involvesIdentityColumn = false;
 	char *alterColumnName = command->name;
@@ -3668,6 +3669,7 @@ AlterInvolvesIdentityColumn(AlterTableStmt *alterTableStatement,
 
 	return involvesIdentityColumn;
 }
+
 
 /*
  * AlterInvolvesPartitionColumn checks if the given alter table command
