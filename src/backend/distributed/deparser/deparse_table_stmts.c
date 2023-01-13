@@ -32,6 +32,8 @@ static void AppendAlterTableCmd(StringInfo buf, AlterTableCmd *alterTableCmd,
 								AlterTableStmt *stmt);
 static void AppendAlterTableCmdAddColumn(StringInfo buf, AlterTableCmd *alterTableCmd);
 
+void AddRangeTableEntryToQueryCompat(ParseState *parseState, Relation relation);
+
 char *
 DeparseAlterTableSchemaStmt(Node *node)
 {
@@ -272,6 +274,33 @@ AppendAlterTableCmdAddConstraint(StringInfo buf, Constraint *constraint,
 		{
 			appendStringInfo(buf, " NO INHERIT");
 		}
+	}
+	else if (constraint->contype == CONSTR_FOREIGN)
+	{
+		appendStringInfoString(buf, " FOREIGN KEY");
+
+		appendStringInfoString(buf, " (");
+	
+		ListCell *lc;
+		bool firstkey = true;
+
+		foreach(lc, constraint->fk_attrs)
+		{
+			if (firstkey == false)
+			{
+				appendStringInfoString(buf, ", ");
+			}
+
+			appendStringInfo(buf, "%s", quote_identifier(strVal(lfirst(lc))));
+			firstkey = false;
+		}
+
+		appendStringInfoString(buf, " )");
+
+		appendStringInfoString(buf, " REFERENCES");
+
+		appendStringInfo(buf, " %s", constraint->pktable->relname);
+
 	}
 
 	if (constraint->deferrable)

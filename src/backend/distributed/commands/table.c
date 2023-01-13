@@ -701,6 +701,38 @@ PostprocessAlterTableSchemaStmt(Node *node, const char *queryString)
 }
 
 
+static char *
+ChooseForeignKeyConstraintNameAddition(List *colnames)
+{
+	char buf[NAMEDATALEN * 2];
+	int buflen = 0;
+	ListCell *lc;
+
+	buf[0] = '\0';
+	foreach(lc, colnames)
+	{
+		const char *name = strVal(lfirst(lc));
+
+		if (buflen > 0)
+		{
+			buf[buflen++] = '_';                                                                        /* insert _ between names */
+		}
+
+		/*
+		 *                  * At this point we have buflen <= NAMEDATALEN.  name should be less
+		 *                                   * than NAMEDATALEN already, but use strlcpy for paranoia.
+		 *                                                    */
+		strlcpy(buf + buflen, name, NAMEDATALEN);
+		buflen += strlen(buf + buflen);
+		if (buflen >= NAMEDATALEN)
+		{
+			break;
+		}
+	}
+	return pstrdup(buf);
+}
+
+
 /*
  * GenerateConstraintName creates and returns a default name for the constraints Citus supports
  * for default naming. See ConstTypeCitusCanDefaultName function for the supported constraint types.
@@ -766,6 +798,24 @@ GenerateConstraintName(const char *tabname, Oid namespaceId, Constraint *constra
 		{
 			conname = ChooseConstraintName(tabname, NULL, "check", namespaceId, NULL);
 
+			break;
+		}
+
+		case CONSTR_CHECK:
+		{
+			conname = ChooseConstraintName(tabname, NULL, "check", namespaceId, NULL);
+
+			break;
+		}
+
+		case CONSTR_FOREIGN:
+		{
+			conname = ChooseConstraintName(tabname,
+										   ChooseForeignKeyConstraintNameAddition(
+											   constraint->fk_attrs),
+										   "fkey",
+										   namespaceId,
+										   NIL);
 			break;
 		}
 
@@ -1142,6 +1192,13 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 				 * transaction is in process, which causes deadlock.
 				 */
 				constraint->skip_validation = true;
+
+				if (constraint->conname == NULL)
+				{
+					return PreprocessAlterTableAddIndexConstraint(alterTableStatement,
+																  leftRelationId,
+																  constraint);
+				}
 			}
 			else if (constraint->conname == NULL)
 			{
@@ -1901,7 +1958,9 @@ ConstrTypeUsesIndex(ConstrType constrType)
 {
 	return constrType == CONSTR_PRIMARY ||
 		   constrType == CONSTR_UNIQUE ||
-		   constrType == CONSTR_EXCLUSION;
+		   constrType == CONSTR_EXCLUSION ||
+		   constrType == CONSTR_CHECK ||
+		   constrType == CONSTR_FOREIGN;
 }
 
 
