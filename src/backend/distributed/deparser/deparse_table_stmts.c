@@ -16,12 +16,20 @@
 #include "distributed/version_compat.h"
 #include "nodes/nodes.h"
 #include "nodes/parsenodes.h"
+#include "parser/parse_expr.h"
 #include "parser/parse_type.h"
+#include "parser/parse_relation.h"
 #include "utils/builtins.h"
+#include "utils/lsyscache.h"
+#include "utils/ruleutils.h"
+
+#include "distributed/namespace_utils.h"
+#include "commands/tablecmds.h"
 
 static void AppendAlterTableSchemaStmt(StringInfo buf, AlterObjectSchemaStmt *stmt);
 static void AppendAlterTableStmt(StringInfo buf, AlterTableStmt *stmt);
-static void AppendAlterTableCmd(StringInfo buf, AlterTableCmd *alterTableCmd);
+static void AppendAlterTableCmd(StringInfo buf, AlterTableCmd *alterTableCmd,
+								AlterTableStmt *stmt);
 static void AppendAlterTableCmdAddColumn(StringInfo buf, AlterTableCmd *alterTableCmd);
 
 char *
@@ -97,7 +105,7 @@ AppendAlterTableStmt(StringInfo buf, AlterTableStmt *stmt)
 		}
 
 		AlterTableCmd *alterTableCmd = castNode(AlterTableCmd, lfirst(cmdCell));
-		AppendAlterTableCmd(buf, alterTableCmd);
+		AppendAlterTableCmd(buf, alterTableCmd, stmt);
 	}
 
 	appendStringInfoString(buf, ";");
@@ -109,7 +117,8 @@ AppendAlterTableStmt(StringInfo buf, AlterTableStmt *stmt)
  * in the ADD CONSTRAINT <conname> {PRIMARY KEY, UNIQUE, EXCLUSION} form and appends it to the buf.
  */
 static void
-AppendAlterTableCmdAddConstraint(StringInfo buf, Constraint *constraint)
+AppendAlterTableCmdAddConstraint(StringInfo buf, Constraint *constraint,
+								 AlterTableStmt *stmt)
 {
 	/* Need to deparse the alter table constraint command only if we are adding a constraint name.*/
 	if (constraint->conname == NULL)
@@ -229,6 +238,41 @@ AppendAlterTableCmdAddConstraint(StringInfo buf, Constraint *constraint)
 
 		appendStringInfoString(buf, " )");
 	}
+	else if (constraint->contype == CONSTR_CHECK)
+	{
+		LOCKMODE lockmode = AlterTableGetLockLevel(stmt->cmds);
+		Oid leftRelationId = AlterTableLookupRelation(stmt, lockmode);
+
+		/* To be able to use deparse_expression function, which creates an expression string,
+		 * the expression should be provided in its cooked form. We transform the raw expression
+		 * to cooked form.
+		 */
+		ParseState *pstate = make_parsestate(NULL);
+		Relation relation = table_open(leftRelationId, AccessShareLock);
+
+		/* Add table name to the name space in  parse state. Otherwise column names
+		 * cannot be found.
+		 */
+		AddRangeTableEntryToQueryCompat(pstate, relation);
+
+		Node *exprCooked = transformExpr(pstate, constraint->raw_expr,
+
+										 EXPR_KIND_CHECK_CONSTRAINT);
+
+		char *relationName = get_rel_name(leftRelationId);
+		List *relationCtx = deparse_context_for(relationName, leftRelationId);
+
+		char *exprSql = deparse_expression(exprCooked, relationCtx, false, false);
+
+		relation_close(relation, NoLock);
+
+		appendStringInfo(buf, " CHECK (%s)", exprSql);
+
+		if (constraint->is_no_inherit)
+		{
+			appendStringInfo(buf, " NO INHERIT");
+		}
+	}
 
 	if (constraint->deferrable)
 	{
@@ -248,7 +292,7 @@ AppendAlterTableCmdAddConstraint(StringInfo buf, Constraint *constraint)
  * AT_AddColumn, AT_SetNotNull and AT_AddConstraint {PRIMARY KEY, UNIQUE, EXCLUDE}.
  */
 static void
-AppendAlterTableCmd(StringInfo buf, AlterTableCmd *alterTableCmd)
+AppendAlterTableCmd(StringInfo buf, AlterTableCmd *alterTableCmd, AlterTableStmt *stmt)
 {
 	switch (alterTableCmd->subtype)
 	{
@@ -268,7 +312,7 @@ AppendAlterTableCmd(StringInfo buf, AlterTableCmd *alterTableCmd)
 			 */
 			if (ConstrTypeCitusCanDefaultName(constraint->contype))
 			{
-				AppendAlterTableCmdAddConstraint(buf, constraint);
+				AppendAlterTableCmdAddConstraint(buf, constraint, stmt);
 				break;
 			}
 		}

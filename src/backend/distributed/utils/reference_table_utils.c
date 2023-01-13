@@ -421,13 +421,11 @@ CopyShardPlacementToWorkerNodeQuery(ShardPlacement *sourceShardPlacement,
 
 	appendStringInfo(queryString,
 					 "SELECT citus_copy_shard_placement("
-					 UINT64_FORMAT ", %s, %d, %s, %d, "
+					 UINT64_FORMAT ", %d, %d, "
 								   "transfer_mode := %s)",
 					 sourceShardPlacement->shardId,
-					 quote_literal_cstr(sourceShardPlacement->nodeName),
-					 sourceShardPlacement->nodePort,
-					 quote_literal_cstr(workerNode->workerName),
-					 workerNode->workerPort,
+					 sourceShardPlacement->nodeId,
+					 workerNode->nodeId,
 					 quote_literal_cstr(transferModeString));
 
 	return queryString;

@@ -29,7 +29,6 @@
 
 
 static const char * unparse_policy_command(const char aclchar);
-static void AddRangeTableEntryToQueryCompat(ParseState *parseState, Relation relation);
 static RowSecurityPolicy * GetPolicyByName(Oid relationId, const char *policyName);
 static List * GetPolicyListForRelation(Oid relationId);
 static char * CreatePolicyCommandForPolicy(Oid relationId, RowSecurityPolicy *policy);
@@ -287,7 +286,7 @@ PostprocessCreatePolicyStmt(Node *node, const char *queryString)
  * AddRangeTableEntryToQueryCompat adds the given relation to query.
  * This method is a compatibility wrapper.
  */
-static void
+void
 AddRangeTableEntryToQueryCompat(ParseState *parseState, Relation relation)
 {
 	ParseNamespaceItem *rte = addRangeTableEntryForRelation(parseState, relation,

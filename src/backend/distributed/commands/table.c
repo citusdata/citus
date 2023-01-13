@@ -762,6 +762,13 @@ GenerateConstraintName(const char *tabname, Oid namespaceId, Constraint *constra
 			break;
 		}
 
+		case CONSTR_CHECK:
+		{
+			conname = ChooseConstraintName(tabname, NULL, "check", namespaceId, NULL);
+
+			break;
+		}
+
 		default:
 		{
 			ereport(ERROR, (errmsg(
@@ -1927,7 +1934,8 @@ ConstrTypeCitusCanDefaultName(ConstrType constrType)
 {
 	return constrType == CONSTR_PRIMARY ||
 		   constrType == CONSTR_UNIQUE ||
-		   constrType == CONSTR_EXCLUSION;
+		   constrType == CONSTR_EXCLUSION ||
+		   constrType == CONSTR_CHECK;
 }
 
 

@@ -408,6 +408,7 @@ extern void RenamePolicyEventExtendNames(RenameStmt *stmt, const char *schemaNam
 extern void DropPolicyEventExtendNames(DropStmt *stmt, const char *schemaName, uint64
 									   shardId);
 
+extern void AddRangeTableEntryToQueryCompat(ParseState *parseState, Relation relation);
 
 /* rename.c - forward declarations*/
 extern List * PreprocessRenameStmt(Node *renameStmt, const char *renameCommand,

@@ -376,10 +376,6 @@ SELECT create_distributed_table('products', 'product_no');
 -- Should error out since add constraint is not the single subcommand
 ALTER TABLE products ADD CONSTRAINT unn_1 UNIQUE(product_no, price), ADD CONSTRAINT unn_2 UNIQUE(product_no, name);
 
--- Tests for constraints without name
--- Commands below should error out since constraints do not have the name
-ALTER TABLE products ADD CHECK(product_no <> 0);
-
 -- ... with names, we can add/drop the constraints just fine
 ALTER TABLE products ADD CONSTRAINT nonzero_product_no CHECK(product_no <> 0);
 ALTER TABLE products ADD CONSTRAINT uniq_product_no EXCLUDE USING btree (product_no with =);

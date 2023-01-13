@@ -131,8 +131,10 @@ static char * CreateShardCopyCommand(ShardInterval *shard, WorkerNode *targetNod
 
 /* declarations for dynamic loading */
 PG_FUNCTION_INFO_V1(citus_copy_shard_placement);
+PG_FUNCTION_INFO_V1(citus_copy_shard_placement_with_nodeid);
 PG_FUNCTION_INFO_V1(master_copy_shard_placement);
 PG_FUNCTION_INFO_V1(citus_move_shard_placement);
+PG_FUNCTION_INFO_V1(citus_move_shard_placement_with_nodeid);
 PG_FUNCTION_INFO_V1(master_move_shard_placement);
 
 double DesiredPercentFreeAfterMove = 10;
@@ -163,6 +165,36 @@ citus_copy_shard_placement(PG_FUNCTION_ARGS)
 
 	ReplicateColocatedShardPlacement(shardId, sourceNodeName, sourceNodePort,
 									 targetNodeName, targetNodePort,
+									 shardReplicationMode);
+
+	PG_RETURN_VOID();
+}
+
+
+/*
+ * citus_copy_shard_placement_with_nodeid implements a user-facing UDF to copy a placement
+ * from a source node to a target node, including all co-located placements.
+ */
+Datum
+citus_copy_shard_placement_with_nodeid(PG_FUNCTION_ARGS)
+{
+	CheckCitusVersion(ERROR);
+	EnsureCoordinator();
+
+	int64 shardId = PG_GETARG_INT64(0);
+	uint32 sourceNodeId = PG_GETARG_INT32(1);
+	uint32 targetNodeId = PG_GETARG_INT32(2);
+	Oid shardReplicationModeOid = PG_GETARG_OID(3);
+
+	bool missingOk = false;
+	WorkerNode *sourceNode = FindNodeWithNodeId(sourceNodeId, missingOk);
+	WorkerNode *targetNode = FindNodeWithNodeId(targetNodeId, missingOk);
+
+	char shardReplicationMode = LookupShardTransferMode(shardReplicationModeOid);
+
+	ReplicateColocatedShardPlacement(shardId,
+									 sourceNode->workerName, sourceNode->workerPort,
+									 targetNode->workerName, targetNode->workerPort,
 									 shardReplicationMode);
 
 	PG_RETURN_VOID();
@@ -232,7 +264,50 @@ citus_move_shard_placement(PG_FUNCTION_ARGS)
 	int32 targetNodePort = PG_GETARG_INT32(4);
 	Oid shardReplicationModeOid = PG_GETARG_OID(5);
 
+	citus_move_shard_placement_internal(shardId, sourceNodeName, sourceNodePort,
+										targetNodeName, targetNodePort,
+										shardReplicationModeOid);
 
+	PG_RETURN_VOID();
+}
+
+
+/*
+ * citus_move_shard_placement_with_nodeid does the same as citus_move_shard_placement,
+ * but accepts node ids as parameters, instead of hostname and port.
+ */
+Datum
+citus_move_shard_placement_with_nodeid(PG_FUNCTION_ARGS)
+{
+	CheckCitusVersion(ERROR);
+	EnsureCoordinator();
+
+	int64 shardId = PG_GETARG_INT64(0);
+	uint32 sourceNodeId = PG_GETARG_INT32(1);
+	uint32 targetNodeId = PG_GETARG_INT32(2);
+	Oid shardReplicationModeOid = PG_GETARG_OID(3);
+
+	bool missingOk = false;
+	WorkerNode *sourceNode = FindNodeWithNodeId(sourceNodeId, missingOk);
+	WorkerNode *targetNode = FindNodeWithNodeId(targetNodeId, missingOk);
+
+	citus_move_shard_placement_internal(shardId, sourceNode->workerName,
+										sourceNode->workerPort, targetNode->workerName,
+										targetNode->workerPort,
+										shardReplicationModeOid);
+
+	PG_RETURN_VOID();
+}
+
+
+/*
+ * citus_move_shard_placement_internal is the internal function for shard moves.
+ */
+void
+citus_move_shard_placement_internal(int64 shardId, char *sourceNodeName,
+									int32 sourceNodePort, char *targetNodeName,
+									int32 targetNodePort, Oid shardReplicationModeOid)
+{
 	ListCell *colocatedTableCell = NULL;
 	ListCell *colocatedShardCell = NULL;
 
@@ -291,7 +366,7 @@ citus_move_shard_placement(PG_FUNCTION_ARGS)
 		ereport(WARNING, (errmsg("shard is already present on node %s:%d",
 								 targetNodeName, targetNodePort),
 						  errdetail("Move may have already completed.")));
-		PG_RETURN_VOID();
+		return;
 	}
 
 	foreach(colocatedShardCell, colocatedShardList)
@@ -432,7 +507,6 @@ citus_move_shard_placement(PG_FUNCTION_ARGS)
 		PLACEMENT_UPDATE_STATUS_COMPLETED);
 
 	FinalizeCurrentProgressMonitor();
-	PG_RETURN_VOID();
 }
 
 
