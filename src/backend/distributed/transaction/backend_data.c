@@ -878,55 +878,55 @@ AssignDistributedTransactionId(void)
 
 
 /*
- * AssignGlobalPID assigns a global process id for the current backend.
- * If this is a Citus initiated backend, which means it is distributed part of a distributed
- * query, then this function assigns the global pid extracted from the application name.
- * If not, this function assigns a new generated global pid.
+ * AssignGlobalPID assigns a global process id for the current backend based on
+ * the given applicationName. If this is a Citus initiated backend, which means
+ * it is distributed part of a distributed query, then this function assigns
+ * the global pid extracted from the application name. If not, this function
+ * assigns a new generated global pid.
  *
- * If a global PID is already assigned to this backend, then this function is a
- * no-op. In most scenarios this would already be the case, because a newly
- * assigned global PID would be the same as a proviously assigned one. But
- * there's two important cases where the newly assigned  global PID would be
- * different from the previous one:
- * 1. The current backend is an internal backend and in the meantime the
- *    application_name was changed to one without a gpid, e.g.
- *    citus_rebalancer. In this case we don't want to throw away the original
- *    gpid of the query originator, because that would mess up distributed
- *    deadlock detection involving this backend.
- * 2. The current backend is an external backend and the node id of the current
- *    node changed. Updating the gpid to match the nodeid might actually seem
- *    like a desirable property, but that's not the case. Updating the gpid
- *    with the new nodeid would mess up distributed deadlock and originator
- *    detection of queries too. Because if this backend already opened
- *    connections to other nodes, then those backends will still have the old
- *    gpid.
+ * There's one special case where we don't want to assign a new pid and keep
+ * the old pid on purpose: The current backend is an external backend and the
+ * node id of the current node changed since the previous call to
+ * AssingGlobalPID. Updating the gpid to match the nodeid might seem like a
+ * desirable property, but that's not the case. Mainly, because existing cached
+ * connections will still report as the old gpid on the worker. So updating the
+ * gpid with the new nodeid would mess up distributed deadlock and originator
+ * detection of queries done using those old connections. So if this is an
+ * external backend for which a gpid was already generated, then we don't
+ * change the gpid.
+ *
+ * NOTE: This function can be called arbitrary amount of times for the same
+ * backend, due to being called by StartupCitusBackend.
  */
 void
-AssignGlobalPID(void)
+AssignGlobalPID(const char *applicationName)
 {
-	if (GetGlobalPID() != INVALID_CITUS_INTERNAL_BACKEND_GPID)
-	{
-		return;
-	}
-
 	uint64 globalPID = INVALID_CITUS_INTERNAL_BACKEND_GPID;
-	bool distributedCommandOriginator = false;
+	bool distributedCommandOriginator = IsExternalClientBackend();
 
-	if (!IsCitusInternalBackend())
+	if (distributedCommandOriginator)
 	{
 		globalPID = GenerateGlobalPID();
-		distributedCommandOriginator = IsExternalClientBackend();
 	}
 	else
 	{
-		globalPID = ExtractGlobalPID(application_name);
+		globalPID = ExtractGlobalPID(applicationName);
 	}
 
 	SpinLockAcquire(&MyBackendData->mutex);
 
-	MyBackendData->globalPID = globalPID;
-	MyBackendData->distributedCommandOriginator = distributedCommandOriginator;
-
+	/*
+	 * Skip updating globalpid when we were a command originator and still are
+	 * and we already have a valid global pid assigned.
+	 * See function comment for detailed explanation.
+	 */
+	if (!MyBackendData->distributedCommandOriginator ||
+		!distributedCommandOriginator ||
+		MyBackendData->globalPID == INVALID_CITUS_INTERNAL_BACKEND_GPID)
+	{
+		MyBackendData->globalPID = globalPID;
+		MyBackendData->distributedCommandOriginator = distributedCommandOriginator;
+	}
 	SpinLockRelease(&MyBackendData->mutex);
 }
 
@@ -948,19 +948,22 @@ SetBackendDataDatabaseId(void)
 
 
 /*
- * SetBackendDataDistributedCommandOriginator is used to set the distributedCommandOriginator
- * field on MyBackendData.
+ * SetBackendDataGlobalPID is used to set the gpid field on MyBackendData.
+ *
+ * IMPORTANT: This should not be used for normal operations. It's a very hacky
+ * way of setting the gpid, which is only used in our MX isolation tests. The
+ * main problem is that it does not set distributedCommandOriginator to the
+ * correct value.
  */
 void
-SetBackendDataDistributedCommandOriginator(bool distributedCommandOriginator)
+SetBackendDataGlobalPID(uint64 gpid)
 {
 	if (!MyBackendData)
 	{
 		return;
 	}
 	SpinLockAcquire(&MyBackendData->mutex);
-	MyBackendData->distributedCommandOriginator =
-		distributedCommandOriginator;
+	MyBackendData->globalPID = gpid;
 	SpinLockRelease(&MyBackendData->mutex);
 }
 
@@ -1386,16 +1389,6 @@ void
 DecrementExternalClientBackendCounter(void)
 {
 	pg_atomic_sub_fetch_u32(&backendManagementShmemData->externalClientBackendCounter, 1);
-}
-
-
-/*
- * ResetCitusBackendType resets the backend type cache.
- */
-void
-ResetCitusBackendType(void)
-{
-	CurrentBackendType = CITUS_BACKEND_NOT_ASSIGNED;
 }
 
 

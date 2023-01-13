@@ -58,7 +58,7 @@ static int64 GetRemoteProcessId(void);
 PG_FUNCTION_INFO_V1(start_session_level_connection_to_node);
 PG_FUNCTION_INFO_V1(run_commands_on_session_level_connection_to_node);
 PG_FUNCTION_INFO_V1(stop_session_level_connection_to_node);
-PG_FUNCTION_INFO_V1(override_backend_data_command_originator);
+PG_FUNCTION_INFO_V1(override_backend_data_gpid);
 
 
 /*
@@ -121,12 +121,13 @@ start_session_level_connection_to_node(PG_FUNCTION_ARGS)
 	ExecuteCriticalRemoteCommand(singleConnection, setAppName);
 
 	/*
-	 * We are hackily overriding the remote processes' worker_query to be false
-	 * such that relevant observibility UDFs work fine.
+	 * We are hackily overriding the remote processes' gpid value such that
+	 * blocked process detection continues to work.
 	 */
 	StringInfo overrideBackendDataCommandOriginator = makeStringInfo();
 	appendStringInfo(overrideBackendDataCommandOriginator,
-					 "SELECT override_backend_data_command_originator(true);");
+					 "SELECT override_backend_data_gpid(%lu);",
+					 GetGlobalPID());
 	ExecuteCriticalRemoteCommand(singleConnection,
 								 overrideBackendDataCommandOriginator->data);
 
@@ -187,17 +188,16 @@ run_commands_on_session_level_connection_to_node(PG_FUNCTION_ARGS)
 
 
 /*
- * override_backend_data_command_originator is a wrapper around
- * SetBackendDataDistributedCommandOriginator().
+ * override_backend_data_gpid is a wrapper around SetBackendDataGpid().
  */
 Datum
-override_backend_data_command_originator(PG_FUNCTION_ARGS)
+override_backend_data_gpid(PG_FUNCTION_ARGS)
 {
 	CheckCitusVersion(ERROR);
 
-	bool distributedCommandOriginator = PG_GETARG_BOOL(0);
+	uint64 gpid = PG_GETARG_INT64(0);
 
-	SetBackendDataDistributedCommandOriginator(distributedCommandOriginator);
+	SetBackendDataGlobalPID(gpid);
 
 	PG_RETURN_VOID();
 }
