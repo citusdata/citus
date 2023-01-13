@@ -49,19 +49,24 @@ CREATE OR REPLACE FUNCTION pg_catalog.citus_job_status (
                     'target', rp.targetname || ':' || rp.targetport),
                 'message', t.message,
                 'command', t.command,
-                'LSN', jsonb_build_object(
-                    'source', rp.source_lsn,
-                    'target', rp.target_lsn),
                 'task_id', t.task_id ) ||
             CASE
-                WHEN ($2) THEN jsonb_build_object('size',
-                    jsonb_build_object(
+                WHEN ($2) THEN jsonb_build_object(
+                    'size', jsonb_build_object(
                         'source', rp.source_shard_size,
-                        'target', rp.target_shard_size))
-                ELSE jsonb_build_object('size',
-                    jsonb_build_object(
+                        'target', rp.target_shard_size),
+                    'LSN', jsonb_build_object(
+                        'source', rp.source_lsn,
+                        'target', rp.target_lsn,
+                        'lag', rp.source_lsn - rp.target_lsn))
+                ELSE jsonb_build_object(
+                    'size', jsonb_build_object(
                         'source', pg_size_pretty(rp.source_shard_size),
-                        'target', pg_size_pretty(rp.target_shard_size)))
+                        'target', pg_size_pretty(rp.target_shard_size)),
+                    'LSN', jsonb_build_object(
+                        'source', rp.source_lsn,
+                        'target', rp.target_lsn,
+                        'lag', pg_size_pretty(rp.source_lsn - rp.target_lsn)))
             END) AS tasks
         FROM
             rp JOIN pg_dist_background_task t ON rp.sessionid = t.pid
