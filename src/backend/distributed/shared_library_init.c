@@ -475,6 +475,8 @@ _PG_init(void)
 	/* initialize shard split shared memory handle management */
 	InitializeShardSplitSMHandleManagement();
 
+	InitializeMultiTenantMonitorSMHandleManagement();
+
 	/* enable modification of pg_catalog tables during pg_upgrade */
 	if (IsBinaryUpgrade)
 	{
@@ -1901,6 +1903,16 @@ RegisterCitusConfigVariables(void)
 		PGC_USERSET,
 		GUC_STANDARD,
 		NULL, NULL, NULL);
+	
+	DefineCustomEnumVariable(
+		"citus.multi_tenant_monitoring_log_level",
+		gettext_noop("Sets the level of multi tenant monitoring log messages"),
+		NULL,
+		&MultiTenantMonitoringLogLevel,
+		CITUS_LOG_LEVEL_OFF, log_level_options,
+		PGC_USERSET,
+		GUC_STANDARD,
+		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
 		"citus.next_cleanup_record_id",
@@ -2283,6 +2295,26 @@ RegisterCitusConfigVariables(void)
 		STAT_STATEMENTS_TRACK_NONE,
 		stat_statements_track_options,
 		PGC_SUSET,
+		GUC_STANDARD,
+		NULL, NULL, NULL);
+
+	DefineCustomIntVariable(
+		"citus.stats_tenants_limit",
+		gettext_noop("monitor limit"),
+		NULL,
+		&CitusStatsTenantsLimit,
+		10, 1, 100,
+		PGC_USERSET,
+		GUC_STANDARD,
+		NULL, NULL, NULL);
+
+	DefineCustomIntVariable(
+		"citus.stats_tenants_period",
+		gettext_noop("monitor period"),
+		NULL,
+		&CitusStatsTenantsPeriod,
+		60, 1, 60 * 60,
+		PGC_USERSET,
 		GUC_STANDARD,
 		NULL, NULL, NULL);
 

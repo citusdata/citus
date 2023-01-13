@@ -330,6 +330,9 @@ typedef struct Task
 	 * Vacuum, create/drop/reindex concurrently cannot be executed in a transaction.
 	 */
 	bool cannotBeExecutedInTransction;
+
+	char * partitionColumn;
+	int colocationId;
 } Task;
 
 

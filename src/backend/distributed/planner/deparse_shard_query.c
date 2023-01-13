@@ -26,6 +26,7 @@
 #include "distributed/multi_physical_planner.h"
 #include "distributed/multi_router_planner.h"
 #include "distributed/shard_utils.h"
+#include "distributed/utils/attribute.h"
 #include "distributed/version_compat.h"
 #include "lib/stringinfo.h"
 #include "nodes/makefuncs.h"
@@ -140,6 +141,20 @@ RebuildQueryStrings(Job *workerJob)
 								!isQueryObjectOrText
 								? "(null)"
 								: TaskQueryString(task))));
+
+		Datum partitionColumnValue;
+		Oid partitionColumnType = 0;
+		char *partitionColumnString = NULL;
+		if (workerJob->partitionKeyValue != NULL)
+		{
+			partitionColumnValue = workerJob->partitionKeyValue->constvalue;
+			partitionColumnType = workerJob->partitionKeyValue->consttype;
+			partitionColumnString = DatumToString(partitionColumnValue, partitionColumnType);
+		}
+
+		task->partitionColumn = partitionColumnString;
+		SetJobColocationId(workerJob);
+		task->colocationId = workerJob->colocationId;
 
 		UpdateTaskQueryString(query, task);
 
@@ -387,7 +402,7 @@ SetTaskQueryIfShouldLazyDeparse(Task *task, Query *query)
 		return;
 	}
 
-	SetTaskQueryString(task, DeparseTaskQuery(task, query));
+	SetTaskQueryString(task, AnnotateQuery(DeparseTaskQuery(task, query), task->partitionColumn, task->colocationId));
 }
 
 

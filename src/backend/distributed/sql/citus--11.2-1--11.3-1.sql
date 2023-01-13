@@ -2,3 +2,5 @@
 
 -- bump version to 11.3-1
 
+#include "udfs/citus_stats_tenants/11.3-1.sql"
+#include "udfs/citus_stats_tenants_storage/11.3-1.sql"
