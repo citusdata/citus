@@ -1208,11 +1208,24 @@ SinglePartitionJoin(JoinOrderNode *currentJoinNode, TableEntry *candidateTable,
 		return NULL;
 	}
 
+	/*
+	 * we only allow single range redistribution if both tables are range distributed.
+	 * The reason is that we cannot guarantee all values in nonrange distributed table
+	 * will be inside the shard ranges of range distributed table.
+	 */
+	if ((currentPartitionMethod == DISTRIBUTE_BY_RANGE && candidatePartitionMethod !=
+		 DISTRIBUTE_BY_RANGE) ||
+		(candidatePartitionMethod == DISTRIBUTE_BY_RANGE && currentPartitionMethod !=
+		 DISTRIBUTE_BY_RANGE))
+	{
+		return NULL;
+	}
+
 	OpExpr *joinClause =
 		SinglePartitionJoinClause(currentPartitionColumnList, applicableJoinClauses);
 	if (joinClause != NULL)
 	{
-		if (currentPartitionMethod == DISTRIBUTE_BY_HASH)
+		if (currentPartitionMethod != DISTRIBUTE_BY_RANGE)
 		{
 			/*
 			 * Single hash repartitioning may perform worse than dual hash
@@ -1250,7 +1263,7 @@ SinglePartitionJoin(JoinOrderNode *currentJoinNode, TableEntry *candidateTable,
 											   applicableJoinClauses);
 		if (joinClause != NULL)
 		{
-			if (candidatePartitionMethod == DISTRIBUTE_BY_HASH)
+			if (candidatePartitionMethod != DISTRIBUTE_BY_RANGE)
 			{
 				/*
 				 * Single hash repartitioning may perform worse than dual hash
