@@ -594,9 +594,9 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 	SELECT assign_distributed_transaction_id(0, 8, '2021-07-09 15:41:55.542377+02');
 	SET application_name to 'citus_internal gpid=10000000001';
 	\set VERBOSITY terse
-	WITH placement_data(shardid, shardlength, groupid, placementid) AS
-		(VALUES (-10, 0::bigint, 1::int, 1500000::bigint))
-	SELECT citus_internal_add_placement_metadata(shardid, shardlength, groupid, placementid) FROM placement_data;
+	WITH placement_data(shardid, shardstate, shardlength, groupid, placementid) AS
+		(VALUES (-10, 1, 0::bigint, 1::int, 1500000::bigint))
+	SELECT citus_internal_add_placement_metadata(shardid, shardstate, shardlength, groupid, placementid) FROM placement_data;
 ROLLBACK;
 
 -- invalid placementid
