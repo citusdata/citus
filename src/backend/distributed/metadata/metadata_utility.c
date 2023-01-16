@@ -2312,7 +2312,7 @@ IsForeignTable(Oid relationId)
  * For a task to be able to run the following conditions apply:
  *  - Task is in Running state. This could happen when a Background Tasks Queue Monitor
  *    had crashed or is otherwise restarted. To recover from such a failure tasks in
- *    Running state are deeed Runnable.
+ *    Running state are deemed Runnable.
  *  - Task is in Runnable state with either _no_ value set in not_before, or a value that
  *    has currently passed. If the not_before field is set to a time in the future the
  *    task is currently not ready to be started.
