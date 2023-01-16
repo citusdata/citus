@@ -1298,7 +1298,17 @@ get_rebalance_progress(PG_FUNCTION_ARGS)
 			values[11] = PointerGetDatum(
 				cstring_to_text(PlacementUpdateTypeNames[step->updateType]));
 			values[12] = LSNGetDatum(sourceLSN);
+			if (sourceLSN == InvalidXLogRecPtr)
+			{
+				nulls[12] = true;
+			}
+
 			values[13] = LSNGetDatum(targetLSN);
+			if (targetLSN == InvalidXLogRecPtr)
+			{
+				nulls[13] = true;
+			}
+
 			values[14] = PointerGetDatum(cstring_to_text(
 											 PlacementUpdateStatusNames[
 												 pg_atomic_read_u64(
