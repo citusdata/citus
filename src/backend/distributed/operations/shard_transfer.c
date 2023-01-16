@@ -1246,8 +1246,7 @@ ReplicateColocatedShardPlacement(int64 shardId, char *sourceNodeName,
 		if (ShouldSyncTableMetadata(colocatedShard->relationId))
 		{
 			char *placementCommand = PlacementUpsertCommand(colocatedShardId, placementId,
-															SHARD_STATE_ACTIVE, 0,
-															groupId);
+															0, groupId);
 
 			SendCommandToWorkersWithMetadata(placementCommand);
 		}

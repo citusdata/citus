@@ -135,7 +135,7 @@ static void EnsureShardMetadataIsSane(Oid relationId, int64 shardId, char storag
 									  text *shardMinValue,
 									  text *shardMaxValue);
 static void EnsureShardPlacementMetadataIsSane(Oid relationId, int64 shardId,
-											   int64 placementId, int32 shardState,
+											   int64 placementId,
 											   int64 shardLength, int32 groupId);
 static char * ColocationGroupCreateCommand(uint32 colocationId, int shardCount,
 										   int replicationFactor,
@@ -1474,12 +1474,12 @@ ColocationIdUpdateCommand(Oid relationId, uint32 colocationId)
  * updates all properties (excluding the placementId) with the given ones.
  */
 char *
-PlacementUpsertCommand(uint64 shardId, uint64 placementId, int shardState,
+PlacementUpsertCommand(uint64 shardId, uint64 placementId,
 					   uint64 shardLength, int32 groupId)
 {
 	StringInfo command = makeStringInfo();
 
-	appendStringInfo(command, UPSERT_PLACEMENT, shardId, shardState, shardLength,
+	appendStringInfo(command, UPSERT_PLACEMENT, shardId, shardLength,
 					 groupId, placementId);
 
 	return command->data;
@@ -3507,7 +3507,7 @@ citus_internal_add_placement_metadata_internal(int64 shardId, int64 shardLength,
 		 * own tables. Given that the user is owner of the table, we should allow.
 		 */
 		EnsureShardPlacementMetadataIsSane(relationId, shardId, placementId,
-										   SHARD_STATE_ACTIVE, shardLength, groupId);
+										   shardLength, groupId);
 	}
 
 	InsertShardPlacementRow(shardId, placementId, shardLength, groupId);
@@ -3520,7 +3520,7 @@ citus_internal_add_placement_metadata_internal(int64 shardId, int64 shardLength,
  */
 static void
 EnsureShardPlacementMetadataIsSane(Oid relationId, int64 shardId, int64 placementId,
-								   int32 shardState, int64 shardLength, int32 groupId)
+								   int64 shardLength, int32 groupId)
 {
 	/* we have just read the metadata, so we are sure that the shard exists */
 	Assert(ShardExists(shardId));
@@ -3530,12 +3530,6 @@ EnsureShardPlacementMetadataIsSane(Oid relationId, int64 shardId, int64 placemen
 		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
 						errmsg("Shard placement has invalid placement id "
 							   "(%ld) for shard(%ld)", placementId, shardId)));
-	}
-
-	if (shardState != SHARD_STATE_ACTIVE)
-	{
-		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
-						errmsg("Invalid shard state: %d", shardState)));
 	}
 
 	bool nodeIsInMetadata = false;
