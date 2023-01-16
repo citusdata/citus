@@ -224,8 +224,18 @@ ShouldUseSubqueryPushDown(Query *originalQuery, Query *rewrittenQuery,
 	 * Some unsupported join clauses in logical planner
 	 * may be supported by subquery pushdown planner.
 	 */
-	List *qualifierList = QualifierList(rewrittenQuery->jointree);
-	if (DeferErrorIfUnsupportedClause(qualifierList) != NULL)
+	RestrictInfoContext *restrictInfoContext = ExtractRestrictionInfosFromPlannerContext(
+		plannerRestrictionContext);
+	List *joinRestrictionInfoList = restrictInfoContext->joinRestrictInfoList;
+	List *nonJoinRestrictionInfoList = restrictInfoContext->baseRestrictInfoList;
+
+	/* verify we can plan for restriction clauses */
+	List *whereClauseList = ExtractRestrictClausesFromRestrictionInfoList(
+		nonJoinRestrictionInfoList);
+	List *joinClauseList = ExtractRestrictClausesFromRestrictionInfoList(
+		joinRestrictionInfoList);
+	List *qualClauseList = list_concat_copy(whereClauseList, joinClauseList);
+	if (DeferErrorIfUnsupportedClause(qualClauseList) != NULL)
 	{
 		return true;
 	}

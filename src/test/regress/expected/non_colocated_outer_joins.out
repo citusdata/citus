@@ -1074,8 +1074,96 @@ DETAIL:  Cartesian products are currently unsupported
 -- join order planner cannot handle right recursive joins
 SELECT t1.*, t2.* FROM test_hash1 t1 LEFT JOIN ( test_hash2 t2 JOIN test_hash3 t3 ON t2.col2 = t3.col1) ON (t1.col1 = t2.col1) ORDER BY 1,2,3,4;
 ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
+-- sometimes join filters are pushed down and applied before join by PG
+CREATE TABLE dist1 (x INT, y INT);
+CREATE TABLE dist2 (x INT, y INT);
+SELECT create_distributed_table('dist1','x');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_distributed_table('dist2','x');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO dist1 VALUES (1,2);
+INSERT INTO dist1 VALUES (3,4);
+INSERT INTO dist2 VALUES (1,2);
+INSERT INTO dist2 VALUES (5,6);
+-- single join condition
+SELECT * FROM dist1 LEFT JOIN dist2 ON (dist1.x = dist2.x) ORDER BY 1,2,3,4;
+ x | y | x | y
+---------------------------------------------------------------------
+ 1 | 2 | 1 | 2
+ 3 | 4 |   |
+(2 rows)
+
+-- single join condition and dist2.x >2 will be pushed down as it is on inner part of the join. e.g. filter out dist2.x <= 2 beforehand
+SELECT * FROM dist1 LEFT JOIN dist2 ON (dist1.x = dist2.x AND dist2.x >2) ORDER BY 1,2,3,4;
+ x | y | x | y
+---------------------------------------------------------------------
+ 1 | 2 |   |
+ 3 | 4 |   |
+(2 rows)
+
+-- single join condition and dist2.x >2 is regular filter and applied after join
+SELECT * FROM dist1 LEFT JOIN dist2 ON (dist1.x = dist2.x) WHERE dist2.x >2 ORDER BY 1,2,3,4;
+LOG:  join order: [ "dist1" ][ local partition join(INNER) "dist2" ]
+ x | y | x | y
+---------------------------------------------------------------------
+(0 rows)
+
+-- single join condition and dist1.x >2 will not be pushed down as it is on outer part of the join
+SELECT * FROM dist1 LEFT JOIN dist2 ON (dist1.x = dist2.x AND dist1.x >2) ORDER BY 1,2,3,4;
+ x | y | x | y
+---------------------------------------------------------------------
+ 1 | 2 |   |
+ 3 | 4 |   |
+(2 rows)
+
+-- single join condition and dist1.x >2 is regular filter and applied after join
+SELECT * FROM dist1 LEFT JOIN dist2 ON (dist1.x = dist2.x) WHERE dist1.x >2 ORDER BY 1,2,3,4;
+ x | y | x | y
+---------------------------------------------------------------------
+ 3 | 4 |   |
+(1 row)
+
+-- constant false filter as join filter for left join.
+-- Inner table will be converted to empty result. Constant filter will be applied before join but will not be pushdowned.
+SELECT * FROM dist1 LEFT JOIN dist2 ON (dist1.y = dist2.y AND false) ORDER BY 1,2,3,4;
+LOG:  join order: [ "dist1" ][ cartesian product(LEFT) "dist2" ]
+ x | y | x | y
+---------------------------------------------------------------------
+ 1 | 2 |   |
+ 3 | 4 |   |
+(2 rows)
+
+-- constant false filter as base filter for left join.
+-- Both tables will be converted to empty result .e.g RTE_RESULT
+SELECT * FROM dist1 LEFT JOIN dist2 ON (dist1.y = dist2.y) WHERE false ORDER BY 1,2,3,4;
+ x | y | x | y
+---------------------------------------------------------------------
+(0 rows)
+
+-- constant false filter as join filter for inner join.
+-- Both tables will be converted to empty result .e.g RTE_RESULT
+SELECT * FROM dist1 INNER JOIN dist2 ON (dist1.y = dist2.y AND false) ORDER BY 1,2,3,4;
+ x | y | x | y
+---------------------------------------------------------------------
+(0 rows)
+
+-- constant false filter as base filter for inner join.
+-- Both tables will be converted to empty result .e.g RTE_RESULT
+SELECT * FROM dist1 INNER JOIN dist2 ON (dist1.y = dist2.y) WHERE false ORDER BY 1,2,3,4;
+ x | y | x | y
+---------------------------------------------------------------------
+(0 rows)
+
 DROP SCHEMA non_colocated_outer_joins CASCADE;
-NOTICE:  drop cascades to 9 other objects
+NOTICE:  drop cascades to 11 other objects
 DETAIL:  drop cascades to table test_hash1
 drop cascades to table test_hash2
 drop cascades to table test_hash3
@@ -1085,6 +1173,8 @@ drop cascades to table test_append3
 drop cascades to table test_range1
 drop cascades to table test_range2
 drop cascades to table test_range3
+drop cascades to table dist1
+drop cascades to table dist2
 RESET client_min_messages;
 RESET citus.log_multi_join_order;
 RESET citus.enable_repartition_joins;

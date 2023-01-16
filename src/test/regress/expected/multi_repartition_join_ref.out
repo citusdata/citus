@@ -41,7 +41,7 @@ GROUP BY
 ORDER BY
     l_partkey, l_suppkey
 LIMIT 10;
-LOG:  join order: [ "lineitem" ][ reference join(INNER) "supplier" ][ dual partition join(INNER) "part_append" ]
+LOG:  join order: [ "lineitem" ][ dual partition join(INNER) "part_append" ][ cartesian product reference join(INNER) "supplier" ]
 DEBUG:  push down of limit count: 10
  l_partkey | l_suppkey | count
 ---------------------------------------------------------------------
@@ -69,7 +69,7 @@ GROUP BY
 ORDER BY
     l_partkey, l_suppkey
 LIMIT 10;
-LOG:  join order: [ "lineitem" ][ reference join(INNER) "supplier" ][ dual partition join(INNER) "part_append" ]
+LOG:  join order: [ "lineitem" ][ dual partition join(INNER) "part_append" ][ cartesian product reference join(INNER) "supplier" ]
 DEBUG:  push down of limit count: 10
  l_partkey | l_suppkey | count
 ---------------------------------------------------------------------
@@ -124,7 +124,7 @@ GROUP BY
 ORDER BY
     l_partkey, l_suppkey
 LIMIT 10;
-LOG:  join order: [ "lineitem" ][ reference join(INNER) "supplier" ][ dual partition join(INNER) "part_append" ]
+LOG:  join order: [ "lineitem" ][ dual partition join(INNER) "part_append" ][ cartesian product reference join(INNER) "supplier" ]
 DEBUG:  push down of limit count: 10
  l_partkey | l_suppkey | count
 ---------------------------------------------------------------------
@@ -152,7 +152,7 @@ GROUP BY
 ORDER BY
     l_partkey, l_suppkey
 LIMIT 10;
-LOG:  join order: [ "lineitem" ][ reference join(INNER) "supplier" ][ dual partition join(INNER) "part_append" ]
+LOG:  join order: [ "lineitem" ][ dual partition join(INNER) "part_append" ][ cartesian product reference join(INNER) "supplier" ]
 DEBUG:  push down of limit count: 10
  l_partkey | l_suppkey | count
 ---------------------------------------------------------------------
@@ -180,7 +180,7 @@ GROUP BY
 ORDER BY
     l_partkey, l_suppkey
 LIMIT 10;
-LOG:  join order: [ "lineitem" ][ reference join(INNER) "supplier" ][ dual partition join(INNER) "part_append" ]
+LOG:  join order: [ "lineitem" ][ dual partition join(INNER) "part_append" ][ cartesian product reference join(INNER) "supplier" ]
 DEBUG:  push down of limit count: 10
  l_partkey | l_suppkey | count
 ---------------------------------------------------------------------

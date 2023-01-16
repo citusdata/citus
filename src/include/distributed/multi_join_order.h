@@ -17,6 +17,7 @@
 
 #include "postgres.h"
 
+#include "nodes/pathnodes.h"
 #include "nodes/pg_list.h"
 #include "nodes/primnodes.h"
 
@@ -30,6 +31,7 @@
 typedef enum JoinRuleType
 {
 	JOIN_RULE_INVALID_FIRST = 0,
+
 	REFERENCE_JOIN = 1,
 	LOCAL_PARTITION_JOIN = 2,
 	SINGLE_HASH_PARTITION_JOIN = 3,
@@ -114,13 +116,18 @@ extern bool EnableSingleHashRepartitioning;
 
 /* Function declaration for determining table join orders */
 extern List * JoinExprList(FromExpr *fromExpr);
-extern List * JoinOrderList(List *rangeTableEntryList, List *joinClauseList);
+extern List * JoinOrderList(List *rangeTableEntryList, List *joinRestrictInfoListList,
+							List *generatedEcJoinClauseList, List *pseudoClauseList);
 extern List * FixedJoinOrderList(List *rangeTableEntryList,
-								 JoinInfoContext *joinInfoContext);
+								 JoinInfoContext *joinInfoContext,
+								 List *joinRestrictInfoListList,
+								 List *generatedEcJoinClauseList,
+								 List *pseudoClauseList);
 extern bool IsApplicableJoinClause(List *leftTableIdList, uint32 rightTableId,
 								   Node *joinClause);
-extern List * ApplicableJoinClauses(List *leftTableIdList, uint32 rightTableId,
-									List *joinClauseList);
+extern bool IsApplicableFalseConstantJoinClause(List *leftTableIdList, uint32
+												rightTableId,
+												RestrictInfo *restrictInfo);
 extern bool NodeIsEqualsOpExpr(Node *node);
 extern bool IsSupportedReferenceJoin(JoinType joinType, bool leftIsReferenceTable,
 									 bool rightIsReferenceTable);

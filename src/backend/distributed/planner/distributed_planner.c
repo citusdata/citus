@@ -59,6 +59,7 @@
 #include "optimizer/optimizer.h"
 #include "optimizer/plancat.h"
 #include "optimizer/pathnode.h"
+#include "optimizer/paths.h"
 #include "optimizer/planner.h"
 #include "optimizer/planmain.h"
 #include "utils/builtins.h"
@@ -126,7 +127,8 @@ static void PopPlannerRestrictionContext(void);
 static void ResetPlannerRestrictionContext(
 	PlannerRestrictionContext *plannerRestrictionContext);
 static PlannedStmt * PlanFastPathDistributedStmt(DistributedPlanningContext *planContext,
-												 Node *distributionKeyValue);
+												 Node *distributionKeyValue, int
+												 fastPathRelId);
 static PlannedStmt * PlanDistributedStmt(DistributedPlanningContext *planContext,
 										 int rteIdCounter);
 static RTEListProperties * GetRTEListProperties(List *rangeTableList);
@@ -144,6 +146,7 @@ distributed_planner(Query *parse,
 	bool needsDistributedPlanning = false;
 	bool fastPathRouterQuery = false;
 	Node *distributionKeyValue = NULL;
+	int fastPathRelId = InvalidOid;
 
 	List *rangeTableList = ExtractRangeTableEntryList(parse);
 
@@ -247,7 +250,11 @@ distributed_planner(Query *parse,
 	{
 		if (fastPathRouterQuery)
 		{
-			result = PlanFastPathDistributedStmt(&planContext, distributionKeyValue);
+			RangeTblEntry *rangeTableEntry = (RangeTblEntry *) linitial(parse->rtable);
+			fastPathRelId = rangeTableEntry->relid;
+
+			result = PlanFastPathDistributedStmt(&planContext, distributionKeyValue,
+												 fastPathRelId);
 		}
 		else
 		{
@@ -686,13 +693,16 @@ IsUpdateOrDelete(Query *query)
  */
 static PlannedStmt *
 PlanFastPathDistributedStmt(DistributedPlanningContext *planContext,
-							Node *distributionKeyValue)
+							Node *distributionKeyValue, int fastPathRelId)
 {
 	FastPathRestrictionContext *fastPathContext =
 		planContext->plannerRestrictionContext->fastPathRestrictionContext;
 
 	planContext->plannerRestrictionContext->fastPathRestrictionContext->
 	fastPathRouterQuery = true;
+
+	planContext->plannerRestrictionContext->fastPathRestrictionContext->
+	distRelId = fastPathRelId;
 
 	if (distributionKeyValue == NULL)
 	{
@@ -709,6 +719,8 @@ PlanFastPathDistributedStmt(DistributedPlanningContext *planContext,
 
 	planContext->plan = FastPathPlanner(planContext->originalQuery, planContext->query,
 										planContext->boundParams);
+
+	RelabelPlannerRestrictionContext(planContext->plannerRestrictionContext);
 
 	return CreateDistributedPlannedStmt(planContext);
 }
@@ -956,6 +968,42 @@ TryCreateDistributedPlannedStmt(PlannedStmt *localPlan,
 
 
 /*
+ * ReplanAfterQueryModification replans modified originalquery to update plannercontext
+ * properly. Returns modified query.
+ */
+Query *
+ReplanAfterQueryModification(Query *originalQuery, ParamListInfo boundParams)
+{
+	Query *newQuery = copyObject(originalQuery);
+	bool setPartitionedTablesInherited = false;
+	PlannerRestrictionContext *currentPlannerRestrictionContext =
+		CurrentPlannerRestrictionContext();
+
+	/* reset the current planner restrictions context */
+	ResetPlannerRestrictionContext(currentPlannerRestrictionContext);
+
+	/*
+	 * We force standard_planner to treat partitioned tables as regular tables
+	 * by clearing the inh flag on RTEs. We already did this at the start of
+	 * distributed_planner, but on a copy of the original query, so we need
+	 * to do it again here.
+	 */
+	AdjustPartitioningForDistributedPlanning(ExtractRangeTableEntryList(newQuery),
+											 setPartitionedTablesInherited);
+
+	/*
+	 * Some relations may have been removed from the query, but we can skip
+	 * AssignRTEIdentities since we currently do not rely on RTE identities
+	 * being contiguous.
+	 */
+
+	standard_planner(newQuery, NULL, 0, boundParams);
+
+	return newQuery;
+}
+
+
+/*
  * CreateDistributedPlan generates a distributed plan for a query.
  * It goes through 3 steps:
  *
@@ -1119,30 +1167,7 @@ CreateDistributedPlan(uint64 planId, bool allowRecursivePlanning, Query *origina
 								   "joined on their distribution columns")));
 		}
 
-		Query *newQuery = copyObject(originalQuery);
-		bool setPartitionedTablesInherited = false;
-		PlannerRestrictionContext *currentPlannerRestrictionContext =
-			CurrentPlannerRestrictionContext();
-
-		/* reset the current planner restrictions context */
-		ResetPlannerRestrictionContext(currentPlannerRestrictionContext);
-
-		/*
-		 * We force standard_planner to treat partitioned tables as regular tables
-		 * by clearing the inh flag on RTEs. We already did this at the start of
-		 * distributed_planner, but on a copy of the original query, so we need
-		 * to do it again here.
-		 */
-		AdjustPartitioningForDistributedPlanning(ExtractRangeTableEntryList(newQuery),
-												 setPartitionedTablesInherited);
-
-		/*
-		 * Some relations may have been removed from the query, but we can skip
-		 * AssignRTEIdentities since we currently do not rely on RTE identities
-		 * being contiguous.
-		 */
-
-		standard_planner(newQuery, NULL, 0, boundParams);
+		Query *newQuery = ReplanAfterQueryModification(originalQuery, boundParams);
 
 		/* overwrite the old transformed query with the new transformed query */
 		*query = *newQuery;
@@ -1873,6 +1898,27 @@ multi_join_restriction_hook(PlannerInfo *root,
 	joinRestriction->joinRestrictInfoList = copyObject(extra->restrictlist);
 	joinRestriction->innerrelRelids = bms_copy(innerrel->relids);
 	joinRestriction->outerrelRelids = bms_copy(outerrel->relids);
+
+	Relids joinrelids = bms_union(innerrel->relids, outerrel->relids);
+	List *prevVals = NIL;
+	EquivalenceClass *eqclass = NULL;
+	foreach_ptr(eqclass, root->eq_classes)
+	{
+		prevVals = lappend_int(prevVals, eqclass->ec_has_const);
+		eqclass->ec_has_const = false;
+	}
+	joinRestrictionContext->generatedEcJoinRestrictInfoList =
+		generate_join_implied_equalities(
+			root,
+			joinrelids,
+			outerrel->relids,
+			innerrel);
+	int i;
+	for (i = 0; i < list_length(prevVals); i++)
+	{
+		EquivalenceClass *eqClass = list_nth(root->eq_classes, i);
+		eqClass->ec_has_const = list_nth_int(prevVals, i);
+	}
 
 	joinRestrictionContext->joinRestrictionList =
 		lappend(joinRestrictionContext->joinRestrictionList, joinRestriction);

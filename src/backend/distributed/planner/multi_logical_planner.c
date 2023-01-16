@@ -33,7 +33,6 @@
 #include "distributed/relation_restriction_equivalence.h"
 #include "distributed/query_pushdown_planning.h"
 #include "distributed/query_utils.h"
-#include "distributed/multi_router_planner.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/version_compat.h"
 #include "nodes/makefuncs.h"
@@ -41,6 +40,7 @@
 #include "nodes/pathnodes.h"
 #include "optimizer/optimizer.h"
 #include "optimizer/clauses.h"
+#include "optimizer/paths.h"
 #include "optimizer/prep.h"
 #include "optimizer/tlist.h"
 #include "parser/parsetree.h"
@@ -85,20 +85,20 @@ static bool ExtractFromExpressionWalker(Node *node,
 										QualifierWalkerContext *walkerContext);
 static List * MultiTableNodeList(List *tableEntryList, List *rangeTableList);
 static List * AddMultiCollectNodes(List *tableNodeList);
-static MultiNode * MultiJoinTree(List *joinOrderList, List *collectTableList,
-								 bool passJoinClauseDirectly);
+static MultiNode * MultiJoinTree(List *joinOrderList, List *collectTableList);
 static MultiCollect * CollectNodeForTable(List *collectTableList, uint32 rangeTableId);
-static MultiSelect * MultiSelectNode(List *whereClauseList, bool passWhereClauseDirectly);
+static MultiSelect * MultiSelectNode(List *pushdownableClauseList,
+									 List *nonPushdownableClauseList);
 static bool IsSelectClause(Node *clause);
 
 static JoinInfoContext * FetchJoinOrderContext(FromExpr *fromExpr);
 static bool JoinInfoWalker(Node *node, JoinInfoContext *joinInfoContext);
+static List * ExtractNonPushdownableJoinClauses(List *joinOrderList);
 
 /* Local functions forward declarations for applying joins */
 static MultiNode * ApplyJoinRule(MultiNode *leftNode, MultiNode *rightNode,
 								 JoinRuleType ruleType, List *partitionColumnList,
-								 JoinType joinType, List *joinClauseList,
-								 bool passJoinClauseDirectly);
+								 JoinType joinType, List *joinClauseList);
 static RuleApplyFunction JoinRuleApplyFunction(JoinRuleType ruleType);
 static MultiNode * ApplyReferenceJoin(MultiNode *leftNode, MultiNode *rightNode,
 									  List *partitionColumnList, JoinType joinType,
@@ -157,7 +157,7 @@ MultiLogicalPlanCreate(Query *originalQuery, Query *queryTree,
 	}
 	else
 	{
-		multiQueryNode = MultiNodeTree(queryTree);
+		multiQueryNode = MultiNodeTree(queryTree, plannerRestrictionContext);
 	}
 
 	/* add a root node to serve as the permanent handle to the tree */
@@ -566,18 +566,16 @@ SubqueryEntryList(Query *queryTree)
  * group, and limit nodes if they appear in the original query tree.
  */
 MultiNode *
-MultiNodeTree(Query *queryTree)
+MultiNodeTree(Query *queryTree, PlannerRestrictionContext *plannerRestrictionContext)
 {
 	List *rangeTableList = queryTree->rtable;
 	List *targetEntryList = queryTree->targetList;
-	List *joinClauseList = NIL;
 	List *joinOrderList = NIL;
 	List *tableEntryList = NIL;
 	List *tableNodeList = NIL;
 	List *collectTableList = NIL;
 	MultiNode *joinTreeNode = NULL;
 	MultiNode *currentTopNode = NULL;
-	bool passQualClauseDirectly = false;
 
 	/* verify we can perform distributed planning on this query */
 	DeferredErrorMessage *unsupportedQueryError = DeferErrorIfQueryNotSupported(
@@ -587,16 +585,34 @@ MultiNodeTree(Query *queryTree)
 		RaiseDeferredError(unsupportedQueryError, ERROR);
 	}
 
-	/* extract where and join clause qualifiers(including outer join quals) and verify we can plan for them. */
-	List *qualClauseList = QualifierList(queryTree->jointree);
+	/* extract join and nonjoin clauses from plannerRestrictionContext */
+	RestrictInfoContext *restrictInfoContext = ExtractRestrictionInfosFromPlannerContext(
+		plannerRestrictionContext);
+	List *joinRestrictInfoList = restrictInfoContext->joinRestrictInfoList;
+	List *nonJoinRestrictionInfoList = restrictInfoContext->baseRestrictInfoList;
+	List *joinRestrictInfoListList = restrictInfoContext->joinRestrictInfoListList;
+	List *pseudoRestrictInfoList = restrictInfoContext->pseudoRestrictInfoList;
+	List *generatedEcJoinRestrictInfoList =
+		plannerRestrictionContext->joinRestrictionContext->generatedEcJoinRestrictInfoList;
+
+	/* verify we can plan for restriction clauses */
+	List *baseClauseList = ExtractRestrictClausesFromRestrictionInfoList(
+		nonJoinRestrictionInfoList);
+	List *allJoinClauseList = ExtractRestrictClausesFromRestrictionInfoList(
+		joinRestrictInfoList);
+	List *pseudoClauseList = ExtractRestrictClausesFromRestrictionInfoList(
+		pseudoRestrictInfoList);
+	List *generatedEcJoinClauseList = ExtractRestrictClausesFromRestrictionInfoList(
+		generatedEcJoinRestrictInfoList);
+	allJoinClauseList = list_concat_unique(allJoinClauseList, generatedEcJoinClauseList);
+
+	List *qualClauseList = list_concat_copy(baseClauseList, allJoinClauseList);
+
 	unsupportedQueryError = DeferErrorIfUnsupportedClause(qualClauseList);
 	if (unsupportedQueryError)
 	{
 		RaiseDeferredErrorInternal(unsupportedQueryError, ERROR);
 	}
-
-	/* WhereClauseList() merges join qualifiers and base qualifiers into result list */
-	List *whereClauseList = WhereClauseList(queryTree->jointree);
 
 	/*
 	 * If we have a subquery, build a multi table node for the subquery and
@@ -634,7 +650,7 @@ MultiNodeTree(Query *queryTree)
 		 */
 		Assert(list_length(subqueryEntryList) == 1);
 
-		List *whereClauseColumnList = pull_var_clause_default((Node *) whereClauseList);
+		List *whereClauseColumnList = pull_var_clause_default((Node *) baseClauseList);
 		List *targetListColumnList = pull_var_clause_default((Node *) targetEntryList);
 
 		List *columnList = list_concat(whereClauseColumnList, targetListColumnList);
@@ -645,7 +661,8 @@ MultiNodeTree(Query *queryTree)
 		}
 
 		/* recursively create child nested multitree */
-		MultiNode *subqueryExtendedNode = MultiNodeTree(subqueryTree);
+		MultiNode *subqueryExtendedNode = MultiNodeTree(subqueryTree,
+														plannerRestrictionContext);
 
 		SetChild((MultiUnaryNode *) subqueryCollectNode, (MultiNode *) subqueryNode);
 		SetChild((MultiUnaryNode *) subqueryNode, subqueryExtendedNode);
@@ -686,35 +703,41 @@ MultiNodeTree(Query *queryTree)
 			/* extract join infos for left recursive join tree */
 			JoinInfoContext *joinInfoContext = FetchJoinOrderContext(queryTree->jointree);
 
-			/* where clause should only contain base qualifiers */
-			whereClauseList = joinInfoContext->baseQualifierList;
-
 			/* we simply donot commute joins as we have at least 1 outer join */
-			joinOrderList = FixedJoinOrderList(tableEntryList, joinInfoContext);
-
-			/* pass join clauses directly as they are while creating tasks */
-			passQualClauseDirectly = true;
+			joinOrderList = FixedJoinOrderList(tableEntryList, joinInfoContext,
+											   joinRestrictInfoListList,
+											   generatedEcJoinClauseList,
+											   pseudoClauseList);
 		}
 		else
 		{
-			/* consider also base qualifications */
-			joinClauseList = JoinClauseList(whereClauseList);
-
 			/* find best join order for commutative inner joins */
-			joinOrderList = JoinOrderList(tableEntryList, joinClauseList);
+			joinOrderList = JoinOrderList(tableEntryList, joinRestrictInfoListList,
+										  generatedEcJoinClauseList, pseudoClauseList);
 		}
 
 		/* build join tree using the join order and collected tables */
-		joinTreeNode = MultiJoinTree(joinOrderList, collectTableList,
-									 passQualClauseDirectly);
+		joinTreeNode = MultiJoinTree(joinOrderList, collectTableList);
 
 		currentTopNode = joinTreeNode;
 	}
 
 	Assert(currentTopNode != NULL);
 
-	/* build select node if the query has selection criteria */
-	MultiSelect *selectNode = MultiSelectNode(whereClauseList, passQualClauseDirectly);
+
+	/*
+	 * build select node if the query has selection criteria
+	 * select node will have pushdownable and non-pushdownable parts.
+	 *  - all base clauses can be pushdownable
+	 *  - some of join clauses cannot be pushed down e.g. they can be only applied after join
+	 */
+	List *pushdownableSelectClauseList = baseClauseList;
+	List *nonpushdownableJoinClauseList = ExtractNonPushdownableJoinClauses(
+		joinOrderList);
+	List *nonPushdownableSelectClauseList = list_difference(allJoinClauseList,
+															nonpushdownableJoinClauseList);
+	MultiSelect *selectNode = MultiSelectNode(pushdownableSelectClauseList,
+											  nonPushdownableSelectClauseList);
 	if (selectNode != NULL)
 	{
 		SetChild((MultiUnaryNode *) selectNode, currentTopNode);
@@ -737,6 +760,128 @@ MultiNodeTree(Query *queryTree)
 	currentTopNode = (MultiNode *) extendedOpNode;
 
 	return currentTopNode;
+}
+
+
+/*
+ * ExtractNonPushdownableJoinClauses returns pushdownable clauses from given join
+ * restrict infos.
+ */
+static List *
+ExtractNonPushdownableJoinClauses(List *joinOrderList)
+{
+	List *nonPushdownJoinClauseList = NIL;
+
+	JoinOrderNode *joinOrderNode = NULL;
+	foreach_ptr(joinOrderNode, joinOrderList)
+	{
+		List *joinClauselist = joinOrderNode->joinClauseList;
+		nonPushdownJoinClauseList = list_concat(nonPushdownJoinClauseList,
+												joinClauselist);
+	}
+
+	return nonPushdownJoinClauseList;
+}
+
+
+/*
+ * RestrictInfoContext extracts all RestrictionInfo from PlannerRestrictionContext.
+ */
+RestrictInfoContext *
+ExtractRestrictionInfosFromPlannerContext(
+	PlannerRestrictionContext *plannerRestrictionContext)
+{
+	RelationRestrictionContext *relationRestrictionContext =
+		plannerRestrictionContext->relationRestrictionContext;
+	JoinRestrictionContext *joinRestrictionContext =
+		plannerRestrictionContext->joinRestrictionContext;
+	List *baseRestrictInfoList = NIL;
+	List *joinRestrictInfoList = NIL;
+	List *joinRestrictInfoListList = NIL;
+	List *pseudoRestrictInfoList = NIL;
+
+	/* collect all restrictInfos from relationRestrictionContext */
+	RelationRestriction *relationRestriction = NULL;
+	foreach_ptr(relationRestriction, relationRestrictionContext->relationRestrictionList)
+	{
+		RelOptInfo *relOptInfo = relationRestriction->relOptInfo;
+		RestrictInfo *baseRestrictInfo = NULL;
+		foreach_ptr(baseRestrictInfo, relOptInfo->baserestrictinfo)
+		{
+			if (baseRestrictInfo->pseudoconstant)
+			{
+				pseudoRestrictInfoList = list_append_unique(pseudoRestrictInfoList,
+															baseRestrictInfo);
+				continue;
+			}
+
+			baseRestrictInfoList = list_append_unique(baseRestrictInfoList,
+													  baseRestrictInfo);
+		}
+
+		RestrictInfo *joinRestrictInfo = NULL;
+		foreach_ptr(joinRestrictInfo, relOptInfo->joininfo)
+		{
+			if (joinRestrictInfo->pseudoconstant)
+			{
+				pseudoRestrictInfoList = list_append_unique(pseudoRestrictInfoList,
+															joinRestrictInfo);
+			}
+		}
+	}
+
+	/* collect all restrictInfos from joinRestrictionContext */
+	JoinRestriction *joinRestriction = NULL;
+	foreach_ptr(joinRestriction, joinRestrictionContext->joinRestrictionList)
+	{
+		List *currentJoinRestrictInfoList = NIL;
+		RestrictInfo *joinRestrictInfo = NULL;
+		foreach_ptr(joinRestrictInfo, joinRestriction->joinRestrictInfoList)
+		{
+			if (joinRestrictInfo->pseudoconstant)
+			{
+				pseudoRestrictInfoList = list_append_unique(pseudoRestrictInfoList,
+															joinRestrictInfo);
+				continue;
+			}
+
+			currentJoinRestrictInfoList = list_append_unique(currentJoinRestrictInfoList,
+															 joinRestrictInfo);
+
+			joinRestrictInfoList = list_append_unique(joinRestrictInfoList,
+													  joinRestrictInfo);
+		}
+
+		joinRestrictInfoListList = lappend(joinRestrictInfoListList,
+										   currentJoinRestrictInfoList);
+	}
+
+	RestrictInfoContext *restrictInfoContext = palloc0(sizeof(RestrictInfoContext));
+	restrictInfoContext->baseRestrictInfoList = baseRestrictInfoList;
+	restrictInfoContext->joinRestrictInfoList = joinRestrictInfoList;
+	restrictInfoContext->joinRestrictInfoListList = joinRestrictInfoListList;
+	restrictInfoContext->pseudoRestrictInfoList = pseudoRestrictInfoList;
+
+	return restrictInfoContext;
+}
+
+
+/*
+ * ExtractRestrictClausesFromRestrictionInfoList extracts RestrictInfo clauses from
+ * given restrictInfoList.
+ */
+List *
+ExtractRestrictClausesFromRestrictionInfoList(List *restrictInfoList)
+{
+	List *restrictClauseList = NIL;
+
+	RestrictInfo *restrictInfo = NULL;
+	foreach_ptr(restrictInfo, restrictInfoList)
+	{
+		restrictClauseList = lappend(restrictClauseList, restrictInfo->clause);
+	}
+
+	return restrictClauseList;
 }
 
 
@@ -1358,28 +1503,6 @@ WhereClauseList(FromExpr *fromExpr)
 
 
 /*
- * QualifierList walks over the FROM expression in the query tree, and builds
- * a list of all qualifiers from the expression tree. The function checks for
- * both implicitly and explicitly defined qualifiers. Note that this function
- * is very similar to WhereClauseList(), but QualifierList() also includes
- * outer-join clauses.
- */
-List *
-QualifierList(FromExpr *fromExpr)
-{
-	FromExpr *fromExprCopy = copyObject(fromExpr);
-	QualifierWalkerContext *walkerContext = palloc0(sizeof(QualifierWalkerContext));
-	List *qualifierList = NIL;
-
-	ExtractFromExpressionWalker((Node *) fromExprCopy, walkerContext);
-	qualifierList = list_concat(qualifierList, walkerContext->baseQualifierList);
-	qualifierList = list_concat(qualifierList, walkerContext->outerJoinQualifierList);
-
-	return qualifierList;
-}
-
-
-/*
  * DeferErrorIfUnsupportedClause walks over the given list of clauses, and
  * checks that we can recognize all the clauses. This function ensures that
  * we do not drop an unsupported clause type on the floor, and thus prevents
@@ -1402,31 +1525,6 @@ DeferErrorIfUnsupportedClause(List *clauseList)
 		}
 	}
 	return NULL;
-}
-
-
-/*
- * JoinClauseList finds the join clauses from the given where clause expression
- * list, and returns them. The function does not iterate into nested OR clauses
- * and relies on find_duplicate_ors() in the optimizer to pull up factorizable
- * OR clauses.
- */
-List *
-JoinClauseList(List *whereClauseList)
-{
-	List *joinClauseList = NIL;
-	ListCell *whereClauseCell = NULL;
-
-	foreach(whereClauseCell, whereClauseList)
-	{
-		Node *whereClause = (Node *) lfirst(whereClauseCell);
-		if (IsJoinClause(whereClause))
-		{
-			joinClauseList = lappend(joinClauseList, whereClause);
-		}
-	}
-
-	return joinClauseList;
 }
 
 
@@ -1712,7 +1810,7 @@ AddMultiCollectNodes(List *tableNodeList)
  * this tree after every table in the list has been joined.
  */
 static MultiNode *
-MultiJoinTree(List *joinOrderList, List *collectTableList, bool passJoinClauseDirectly)
+MultiJoinTree(List *joinOrderList, List *collectTableList)
 {
 	MultiNode *currentTopNode = NULL;
 	ListCell *joinOrderCell = NULL;
@@ -1744,8 +1842,7 @@ MultiJoinTree(List *joinOrderList, List *collectTableList, bool passJoinClauseDi
 												   (MultiNode *) collectNode,
 												   joinRuleType, partitionColumnList,
 												   joinType,
-												   joinClauseList,
-												   passJoinClauseDirectly);
+												   joinClauseList);
 
 			/* the new join node becomes the top of our join tree */
 			currentTopNode = newJoinNode;
@@ -1792,33 +1889,20 @@ CollectNodeForTable(List *collectTableList, uint32 rangeTableId)
  * MultiSelectNode extracts the select clauses from the given where clause list,
  * and builds a MultiSelect node from these clauses. If the expression tree does
  * not have any select clauses, the function return null.
- *
- * When we have at least 1 outer join in a query tree, we cannot commute joins(that is
- * why we have `FixedJoinOrderList`) or move join and where clauses as we wish because
- * we would have incorrect results. We should pass join and where clauses separately as
- * they are while creating tasks. `whereClauseList` should be passed as it is when
- * `passWhereClauseDirectly` is set true.
  */
 static MultiSelect *
-MultiSelectNode(List *whereClauseList, bool passWhereClauseDirectly)
+MultiSelectNode(List *pushdownableClauseList, List *nonPushdownableClauseList)
 {
-	List *selectClauseList = NIL;
 	MultiSelect *selectNode = NULL;
 
-	ListCell *whereClauseCell = NULL;
-	foreach(whereClauseCell, whereClauseList)
-	{
-		Node *whereClause = (Node *) lfirst(whereClauseCell);
-		if (passWhereClauseDirectly || IsSelectClause(whereClause))
-		{
-			selectClauseList = lappend(selectClauseList, whereClause);
-		}
-	}
-
-	if (list_length(selectClauseList) > 0)
+	if (list_length(pushdownableClauseList) > 0 ||
+		list_length(nonPushdownableClauseList) > 0)
 	{
 		selectNode = CitusMakeNode(MultiSelect);
-		selectNode->selectClauseList = selectClauseList;
+		selectNode->selectClauseList = list_concat_copy(pushdownableClauseList,
+														nonPushdownableClauseList);
+		selectNode->pushdownableSelectClauseList = pushdownableClauseList;
+		selectNode->nonPushdownableSelectClauseList = nonPushdownableClauseList;
 	}
 
 	return selectNode;
@@ -2100,37 +2184,12 @@ pull_var_clause_default(Node *node)
  */
 static MultiNode *
 ApplyJoinRule(MultiNode *leftNode, MultiNode *rightNode, JoinRuleType ruleType,
-			  List *partitionColumnList, JoinType joinType, List *joinClauseList,
-			  bool passJoinClauseDirectly)
+			  List *partitionColumnList, JoinType joinType, List *joinClauseList)
 {
-	List *leftTableIdList = OutputTableIdList(leftNode);
-	List *rightTableIdList = OutputTableIdList(rightNode);
-	int rightTableIdCount PG_USED_FOR_ASSERTS_ONLY = 0;
-
-	rightTableIdCount = list_length(rightTableIdList);
-	Assert(rightTableIdCount == 1);
-
-	List *joinClauses = joinClauseList;
-	if (!passJoinClauseDirectly)
-	{
-		/* find applicable join clauses between the left and right data sources */
-		uint32 rightTableId = (uint32) linitial_int(rightTableIdList);
-		joinClauses = ApplicableJoinClauses(leftTableIdList, rightTableId,
-											joinClauseList);
-	}
-
 	/* call the join rule application function to create the new join node */
 	RuleApplyFunction ruleApplyFunction = JoinRuleApplyFunction(ruleType);
 	MultiNode *multiNode = (*ruleApplyFunction)(leftNode, rightNode, partitionColumnList,
-												joinType, joinClauses);
-
-	if (joinType != JOIN_INNER && CitusIsA(multiNode, MultiJoin))
-	{
-		MultiJoin *joinNode = (MultiJoin *) multiNode;
-
-		/* preserve non-join clauses for OUTER joins */
-		joinNode->joinClauseList = list_copy(joinClauseList);
-	}
+												joinType, joinClauseList);
 
 	return multiNode;
 }

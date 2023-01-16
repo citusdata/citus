@@ -345,7 +345,7 @@ GROUP BY
 ORDER BY
     revenue DESC,
     o_entry_d;
-LOG:  join order: [ "customer" ][ local partition join(INNER) "oorder" ][ local partition join(INNER) "new_order" ][ local partition join(INNER) "order_line" ]
+LOG:  join order: [ "customer" ][ local partition join(INNER) "new_order" ][ local partition join(INNER) "oorder" ][ local partition join(INNER) "order_line" ]
  ol_o_id | ol_w_id | ol_d_id | revenue |        o_entry_d
 ---------------------------------------------------------------------
       10 |      10 |      10 |   10.00 | Fri Oct 17 00:00:00 2008
@@ -472,7 +472,7 @@ ORDER BY
     su_nationkey,
     cust_nation,
     l_year;
-LOG:  join order: [ "order_line" ][ local partition join(INNER) "oorder" ][ local partition join(INNER) "customer" ][ reference join(INNER) "nation" ][ reference join(INNER) "nation" ][ reference join(INNER) "supplier" ][ dual partition join(INNER) "stock" ]
+LOG:  join order: [ "order_line" ][ local partition join(INNER) "oorder" ][ local partition join(INNER) "customer" ][ reference join(INNER) "nation" ][ dual partition join(INNER) "stock" ][ reference join(INNER) "supplier" ][ reference join(INNER) "nation" ]
  supp_nation | cust_nation | l_year | revenue
 ---------------------------------------------------------------------
            9 | C           |   2008 |    3.00
@@ -963,7 +963,7 @@ ORDER BY
     su_nationkey,
     cust_nation,
     l_year;
-LOG:  join order: [ "order_line" ][ local partition join(INNER) "oorder" ][ local partition join(INNER) "customer" ][ reference join(INNER) "nation" ][ reference join(INNER) "nation" ][ reference join(INNER) "supplier" ][ single hash partition join(INNER) "stock" ]
+LOG:  join order: [ "order_line" ][ local partition join(INNER) "oorder" ][ local partition join(INNER) "customer" ][ reference join(INNER) "nation" ][ single hash partition join(INNER) "stock" ][ reference join(INNER) "supplier" ][ reference join(INNER) "nation" ]
  supp_nation | cust_nation | l_year | revenue
 ---------------------------------------------------------------------
            9 | C           |   2008 |    3.00
@@ -1003,7 +1003,7 @@ WHERE i_id = s_i_id
   AND i_id = ol_i_id
 GROUP BY extract(YEAR FROM o_entry_d)
 ORDER BY l_year;
-LOG:  join order: [ "order_line" ][ reference join(INNER) "item" ][ local partition join(INNER) "oorder" ][ local partition join(INNER) "customer" ][ reference join(INNER) "nation" ][ reference join(INNER) "region" ][ single hash partition join(INNER) "stock" ][ reference join(INNER) "supplier" ][ reference join(INNER) "nation" ]
+LOG:  join order: [ "order_line" ][ reference join(INNER) "item" ][ local partition join(INNER) "oorder" ][ local partition join(INNER) "customer" ][ reference join(INNER) "nation" ][ reference join(INNER) "region" ][ dual partition join(INNER) "stock" ][ reference join(INNER) "supplier" ][ reference join(INNER) "nation" ]
  l_year |       mkt_share
 ---------------------------------------------------------------------
    2008 | 0.50000000000000000000
@@ -1036,7 +1036,7 @@ GROUP BY
 ORDER BY
     n_name,
     l_year DESC;
-LOG:  join order: [ "order_line" ][ reference join(INNER) "item" ][ local partition join(INNER) "oorder" ][ single hash partition join(INNER) "stock" ][ reference join(INNER) "supplier" ][ reference join(INNER) "nation" ]
+LOG:  join order: [ "order_line" ][ reference join(INNER) "item" ][ local partition join(INNER) "oorder" ][ dual partition join(INNER) "stock" ][ reference join(INNER) "supplier" ][ reference join(INNER) "nation" ]
           n_name           | l_year | sum_profit
 ---------------------------------------------------------------------
  Germany                   |   2008 |       3.00

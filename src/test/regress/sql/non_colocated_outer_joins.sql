@@ -205,6 +205,43 @@ SELECT tt1.*, t3.* FROM (SELECT t1.* FROM test_hash1 t1, test_hash2 t2) tt1 LEFT
 
 SELECT t1.*, t2.* FROM test_hash1 t1 LEFT JOIN ( test_hash2 t2 JOIN test_hash3 t3 ON t2.col2 = t3.col1) ON (t1.col1 = t2.col1) ORDER BY 1,2,3,4;
 
+
+-- sometimes join filters are pushed down and applied before join by PG
+CREATE TABLE dist1 (x INT, y INT);
+CREATE TABLE dist2 (x INT, y INT);
+SELECT create_distributed_table('dist1','x');
+SELECT create_distributed_table('dist2','x');
+INSERT INTO dist1 VALUES (1,2);
+INSERT INTO dist1 VALUES (3,4);
+INSERT INTO dist2 VALUES (1,2);
+INSERT INTO dist2 VALUES (5,6);
+
+-- single join condition
+SELECT * FROM dist1 LEFT JOIN dist2 ON (dist1.x = dist2.x) ORDER BY 1,2,3,4;
+-- single join condition and dist2.x >2 will be pushed down as it is on inner part of the join. e.g. filter out dist2.x <= 2 beforehand
+SELECT * FROM dist1 LEFT JOIN dist2 ON (dist1.x = dist2.x AND dist2.x >2) ORDER BY 1,2,3,4;
+-- single join condition and dist2.x >2 is regular filter and applied after join
+SELECT * FROM dist1 LEFT JOIN dist2 ON (dist1.x = dist2.x) WHERE dist2.x >2 ORDER BY 1,2,3,4;
+-- single join condition and dist1.x >2 will not be pushed down as it is on outer part of the join
+SELECT * FROM dist1 LEFT JOIN dist2 ON (dist1.x = dist2.x AND dist1.x >2) ORDER BY 1,2,3,4;
+-- single join condition and dist1.x >2 is regular filter and applied after join
+SELECT * FROM dist1 LEFT JOIN dist2 ON (dist1.x = dist2.x) WHERE dist1.x >2 ORDER BY 1,2,3,4;
+
+
+-- constant false filter as join filter for left join. 
+-- Inner table will be converted to empty result. Constant filter will be applied before join but will not be pushdowned.
+SELECT * FROM dist1 LEFT JOIN dist2 ON (dist1.y = dist2.y AND false) ORDER BY 1,2,3,4;
+-- constant false filter as base filter for left join. 
+-- Both tables will be converted to empty result .e.g RTE_RESULT
+SELECT * FROM dist1 LEFT JOIN dist2 ON (dist1.y = dist2.y) WHERE false ORDER BY 1,2,3,4;
+-- constant false filter as join filter for inner join. 
+-- Both tables will be converted to empty result .e.g RTE_RESULT
+SELECT * FROM dist1 INNER JOIN dist2 ON (dist1.y = dist2.y AND false) ORDER BY 1,2,3,4;
+-- constant false filter as base filter for inner join. 
+-- Both tables will be converted to empty result .e.g RTE_RESULT
+SELECT * FROM dist1 INNER JOIN dist2 ON (dist1.y = dist2.y) WHERE false ORDER BY 1,2,3,4;
+
+
 DROP SCHEMA non_colocated_outer_joins CASCADE;
 RESET client_min_messages;
 RESET citus.log_multi_join_order;

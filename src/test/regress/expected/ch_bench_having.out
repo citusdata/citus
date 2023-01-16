@@ -47,6 +47,7 @@ order by s_i_id;
                                        Node: host=localhost port=xxxxx dbname=regression
                                        ->  Aggregate
                                              ->  Seq Scan on stock_1640000 stock
+                                                   Filter: (s_order_cnt IS NOT NULL)
                Task Count: 4
                Tasks Shown: One of 4
                ->  Task
@@ -57,7 +58,7 @@ order by s_i_id;
                              ->  Function Scan on read_intermediate_result intermediate_result
                            ->  Seq Scan on stock_1640000 stock
                                  Filter: ((s_order_cnt)::numeric > $0)
-(36 rows)
+(37 rows)
 
 explain (costs false, summary false, timing false)
 select     s_i_id, sum(s_order_cnt) as ordercount
@@ -84,6 +85,7 @@ order by s_i_id;
                                        Node: host=localhost port=xxxxx dbname=regression
                                        ->  Aggregate
                                              ->  Seq Scan on stock_1640000 stock
+                                                   Filter: (s_order_cnt IS NOT NULL)
                Task Count: 4
                Tasks Shown: One of 4
                ->  Task
@@ -91,7 +93,7 @@ order by s_i_id;
                      ->  HashAggregate
                            Group Key: stock.s_i_id
                            ->  Seq Scan on stock_1640000 stock
-(24 rows)
+(25 rows)
 
 explain (costs false, summary false, timing false)
 select     s_i_id, sum(s_order_cnt) as ordercount
@@ -115,6 +117,7 @@ having   sum(s_order_cnt) > (select max(s_order_cnt) - 3 as having_query from st
                                  Node: host=localhost port=xxxxx dbname=regression
                                  ->  Aggregate
                                        ->  Seq Scan on stock_1640000 stock
+                                             Filter: (s_order_cnt IS NOT NULL)
          Task Count: 4
          Tasks Shown: One of 4
          ->  Task
@@ -122,7 +125,7 @@ having   sum(s_order_cnt) > (select max(s_order_cnt) - 3 as having_query from st
                ->  HashAggregate
                      Group Key: stock.s_i_id
                      ->  Seq Scan on stock_1640000 stock
-(22 rows)
+(23 rows)
 
 explain (costs false)
 select     s_i_id, sum(s_order_cnt) as ordercount

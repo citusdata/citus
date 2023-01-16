@@ -102,7 +102,9 @@ LOG:  join order: [ "lineitem" ][ local partition join(INNER) "orders" ]
 EXPLAIN (COSTS OFF)
 SELECT l_quantity FROM lineitem, orders
 	WHERE (l_orderkey = o_orderkey OR l_quantity > 5);
-ERROR:  complex joins are only supported when all distributed tables are joined on their distribution columns with equal operator
+LOG:  join order: [ "lineitem" ][ cartesian product(INNER) "orders" ]
+ERROR:  cannot perform distributed planning on this query
+DETAIL:  Cartesian products are currently unsupported
 EXPLAIN (COSTS OFF)
 SELECT count(*) FROM orders, lineitem_hash
 	WHERE o_orderkey = l_orderkey;

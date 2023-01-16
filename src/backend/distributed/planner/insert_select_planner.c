@@ -83,7 +83,9 @@ static DeferredErrorMessage * InsertPartitionColumnMatchesSelect(Query *query,
 																 Oid *
 																 selectPartitionColumnTableId);
 static DistributedPlan * CreateNonPushableInsertSelectPlan(uint64 planId, Query *parse,
-														   ParamListInfo boundParams);
+														   ParamListInfo boundParams,
+														   PlannerRestrictionContext *
+														   plannerRestrictionContext);
 static DeferredErrorMessage * NonPushableInsertSelectSupported(Query *insertSelectQuery);
 static Query * WrapSubquery(Query *subquery);
 static void RelabelTargetEntryList(List *selectTargetList, List *insertTargetList);
@@ -253,7 +255,8 @@ CreateInsertSelectPlanInternal(uint64 planId, Query *originalQuery,
 		 * repartitioning.
 		 */
 		distributedPlan = CreateNonPushableInsertSelectPlan(planId, originalQuery,
-															boundParams);
+															boundParams,
+															plannerRestrictionContext);
 	}
 
 	return distributedPlan;
@@ -361,6 +364,62 @@ CreateDistributedInsertSelectPlan(Query *originalQuery,
 
 
 /*
+ * RelabelPlannerRestrictionContext relabels var nos inside restriction infos to 1.
+ */
+void
+RelabelPlannerRestrictionContext(PlannerRestrictionContext *plannerRestrictionContext)
+{
+	List *relationRestrictionList =
+		plannerRestrictionContext->relationRestrictionContext->relationRestrictionList;
+
+	if (plannerRestrictionContext->fastPathRestrictionContext &&
+		plannerRestrictionContext->fastPathRestrictionContext->distributionKeyValue)
+	{
+		Const *distKeyVal =
+			plannerRestrictionContext->fastPathRestrictionContext->distributionKeyValue;
+		Var *partitionColumn = PartitionColumn(
+			plannerRestrictionContext->fastPathRestrictionContext->distRelId, 1);
+		OpExpr *partitionExpression = MakeOpExpression(partitionColumn,
+													   BTEqualStrategyNumber);
+		Node *rightOp = get_rightop((Expr *) partitionExpression);
+		Const *rightConst = (Const *) rightOp;
+		*rightConst = *distKeyVal;
+
+		RestrictInfo *fastpathRestrictInfo = makeNode(RestrictInfo);
+		fastpathRestrictInfo->can_join = false;
+		fastpathRestrictInfo->is_pushed_down = true;
+		fastpathRestrictInfo->clause = (Expr *) partitionExpression;
+
+		RelationRestriction *relationRestriction = palloc0(sizeof(RelationRestriction));
+		relationRestriction->relOptInfo = palloc0(sizeof(RelOptInfo));
+		relationRestriction->relOptInfo->baserestrictinfo = list_make1(
+			fastpathRestrictInfo);
+		plannerRestrictionContext->relationRestrictionContext->relationRestrictionList =
+			list_make1(relationRestriction);
+		return;
+	}
+
+	RelationRestriction *relationRestriction = NULL;
+	foreach_ptr(relationRestriction, relationRestrictionList)
+	{
+		RelOptInfo *relOptInfo = relationRestriction->relOptInfo;
+		List *baseRestrictInfoList = relOptInfo->baserestrictinfo;
+		RestrictInfo *baseRestrictInfo = NULL;
+		foreach_ptr(baseRestrictInfo, baseRestrictInfoList)
+		{
+			List *varList = pull_var_clause_default((Node *) baseRestrictInfo->clause);
+			Var *var = NULL;
+			foreach_ptr(var, varList)
+			{
+				var->varno = 1;
+				var->varnosyn = 1;
+			}
+		}
+	}
+}
+
+
+/*
  * CreateInsertSelectIntoLocalTablePlan creates the plan for INSERT .. SELECT queries
  * where the selected table is distributed and the inserted table is not.
  *
@@ -383,6 +442,8 @@ CreateInsertSelectIntoLocalTablePlan(uint64 planId, Query *insertSelectQuery,
 
 	/* get the SELECT query (may have changed after PrepareInsertSelectForCitusPlanner) */
 	Query *selectQuery = selectRte->subquery;
+
+	RelabelPlannerRestrictionContext(plannerRestrictionContext);
 
 	bool allowRecursivePlanning = true;
 	DistributedPlan *distPlan = CreateDistributedPlan(planId, allowRecursivePlanning,
@@ -1476,7 +1537,8 @@ InsertPartitionColumnMatchesSelect(Query *query, RangeTblEntry *insertRte,
  * distributed table. The query plan can also be executed on a worker in MX.
  */
 static DistributedPlan *
-CreateNonPushableInsertSelectPlan(uint64 planId, Query *parse, ParamListInfo boundParams)
+CreateNonPushableInsertSelectPlan(uint64 planId, Query *parse, ParamListInfo boundParams,
+								  PlannerRestrictionContext *plannerRestrictionContext)
 {
 	Query *insertSelectQuery = copyObject(parse);
 

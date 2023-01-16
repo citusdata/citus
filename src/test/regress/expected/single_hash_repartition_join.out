@@ -98,7 +98,7 @@ FROM
 WHERE
 	r1.id = t1.id AND t2.sum = t1.id;
 DEBUG:  Router planner cannot handle multi-shard select queries
-LOG:  join order: [ "single_hash_repartition_second" ][ reference join(INNER) "ref_table" ][ single hash partition join(INNER) "single_hash_repartition_first" ]
+LOG:  join order: [ "single_hash_repartition_first" ][ reference join(INNER) "ref_table" ][ single hash partition join(INNER) "single_hash_repartition_second" ]
 DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [-1073741824,-1]
 DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [0,1073741823]
 DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [1073741824,2147483647]
@@ -326,7 +326,19 @@ FROM
 WHERE
 	t1.id = t2.sum AND t2.sum = t3.id;
 DEBUG:  Router planner cannot handle multi-shard select queries
-LOG:  join order: [ "single_hash_repartition_first" ][ single hash partition join(INNER) "single_hash_repartition_second" ][ single hash partition join(INNER) "single_hash_repartition_second" ]
+LOG:  join order: [ "single_hash_repartition_first" ][ local partition join(INNER) "single_hash_repartition_second" ][ single hash partition join(INNER) "single_hash_repartition_second" ]
+DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [-1073741824,-1]
+DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [0,1073741823]
+DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [1073741824,2147483647]
+DEBUG:  join prunable for intervals [-1073741824,-1] and [-2147483648,-1073741825]
+DEBUG:  join prunable for intervals [-1073741824,-1] and [0,1073741823]
+DEBUG:  join prunable for intervals [-1073741824,-1] and [1073741824,2147483647]
+DEBUG:  join prunable for intervals [0,1073741823] and [-2147483648,-1073741825]
+DEBUG:  join prunable for intervals [0,1073741823] and [-1073741824,-1]
+DEBUG:  join prunable for intervals [0,1073741823] and [1073741824,2147483647]
+DEBUG:  join prunable for intervals [1073741824,2147483647] and [-2147483648,-1073741825]
+DEBUG:  join prunable for intervals [1073741824,2147483647] and [-1073741824,-1]
+DEBUG:  join prunable for intervals [1073741824,2147483647] and [0,1073741823]
 DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [-1073741824,-1]
 DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [0,1073741823]
 DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [1073741824,2147483647]
@@ -347,26 +359,6 @@ DEBUG:  pruning merge fetch taskId 5
 DETAIL:  Creating dependency on merge taskId 15
 DEBUG:  pruning merge fetch taskId 7
 DETAIL:  Creating dependency on merge taskId 20
-DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [-1073741824,-1]
-DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [0,1073741823]
-DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [1073741824,2147483647]
-DEBUG:  join prunable for intervals [-1073741824,-1] and [-2147483648,-1073741825]
-DEBUG:  join prunable for intervals [-1073741824,-1] and [0,1073741823]
-DEBUG:  join prunable for intervals [-1073741824,-1] and [1073741824,2147483647]
-DEBUG:  join prunable for intervals [0,1073741823] and [-2147483648,-1073741825]
-DEBUG:  join prunable for intervals [0,1073741823] and [-1073741824,-1]
-DEBUG:  join prunable for intervals [0,1073741823] and [1073741824,2147483647]
-DEBUG:  join prunable for intervals [1073741824,2147483647] and [-2147483648,-1073741825]
-DEBUG:  join prunable for intervals [1073741824,2147483647] and [-1073741824,-1]
-DEBUG:  join prunable for intervals [1073741824,2147483647] and [0,1073741823]
-DEBUG:  pruning merge fetch taskId 1
-DETAIL:  Creating dependency on merge taskId 9
-DEBUG:  pruning merge fetch taskId 3
-DETAIL:  Creating dependency on merge taskId 14
-DEBUG:  pruning merge fetch taskId 5
-DETAIL:  Creating dependency on merge taskId 19
-DEBUG:  pruning merge fetch taskId 7
-DETAIL:  Creating dependency on merge taskId 24
 ERROR:  the query contains a join that requires repartitioning
 HINT:  Set citus.enable_repartition_joins to on to enable repartitioning
 -- two single repartitions again, but this

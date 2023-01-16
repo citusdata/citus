@@ -189,12 +189,14 @@ SELECT count(*) FROM users_table u1 CROSS JOIN users_ref_test_table ref2 JOIN us
 reset citus.enable_repartition_joins;
 -- although the following has the "ref LEFT JOIN dist" type of query, the LEFT JOIN is eliminated by Postgres
 -- because the INNER JOIN eliminates the LEFT JOIN
+SET citus.enable_repartition_joins TO on;
 SELECT count(*) FROM users_ref_test_table ref1 CROSS JOIN users_ref_test_table ref2 LEFT JOIN users_table ON (ref1.id = users_table.user_id) JOIN users_table u2 ON (u2.user_id = users_table.user_id);
  count
 ---------------------------------------------------------------------
  11802
 (1 row)
 
+reset citus.enable_repartition_joins;
 -- this is the same query as the above, but this time the outer query is also LEFT JOIN, meaning that Postgres
 -- cannot eliminate the outer join
 SELECT count(*) FROM users_ref_test_table ref1 CROSS JOIN users_ref_test_table ref2 LEFT JOIN users_table ON (ref1.id = users_table.user_id) LEFT JOIN users_table u2 ON (u2.user_id = users_table.user_id);
