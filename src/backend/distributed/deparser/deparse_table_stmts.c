@@ -115,6 +115,33 @@ AppendAlterTableStmt(StringInfo buf, AlterTableStmt *stmt)
 
 
 /*
+ * AppendColumnNameList converts a list of columns into comma separated string format
+ * (colname_1, colname_2, .., colname_n).
+ */
+static void
+AppendColumnNameList(StringInfo buf, List *columns)
+{
+	appendStringInfoString(buf, " (");
+
+	ListCell *lc;
+	bool firstkey = true;
+
+	foreach(lc, columns)
+	{
+		if (firstkey == false)
+		{
+			appendStringInfoString(buf, ", ");
+		}
+
+		appendStringInfo(buf, "%s", quote_identifier(strVal(lfirst(lc))));
+		firstkey = false;
+	}
+
+	appendStringInfoString(buf, " )");
+}
+
+
+/*
  * AppendAlterTableCmdAddConstraint builds the add constraint command for index constraints
  * in the ADD CONSTRAINT <conname> {PRIMARY KEY, UNIQUE, EXCLUSION} form and appends it to the buf.
  */
@@ -279,28 +306,79 @@ AppendAlterTableCmdAddConstraint(StringInfo buf, Constraint *constraint,
 	{
 		appendStringInfoString(buf, " FOREIGN KEY");
 
-		appendStringInfoString(buf, " (");
-	
-		ListCell *lc;
-		bool firstkey = true;
-
-		foreach(lc, constraint->fk_attrs)
-		{
-			if (firstkey == false)
-			{
-				appendStringInfoString(buf, ", ");
-			}
-
-			appendStringInfo(buf, "%s", quote_identifier(strVal(lfirst(lc))));
-			firstkey = false;
-		}
-
-		appendStringInfoString(buf, " )");
+		AppendColumnNameList(buf, constraint->fk_attrs);
 
 		appendStringInfoString(buf, " REFERENCES");
 
 		appendStringInfo(buf, " %s", constraint->pktable->relname);
 
+		if (list_length(constraint->pk_attrs) > 0)
+		{
+			AppendColumnNameList(buf, constraint->pk_attrs);
+		}
+
+		/*
+		 * Append supported options if provided.
+		 * Note: When a constraint name is provided by the client therefore we do not deparse the statement in preprocessing,
+		 * the unsupported statements are caught in postprocessing in ErrorIfUnsupportedForeignConstraintExists function.
+		 * Hence the error messages for the unsupported alter table statements are unexpectedly different for the
+		 * ALTER TABLE ... ADD FOREIGN KEY and ALTER TABLE ...  ADD CONSTRAINT <conname> FOREIGN KEY
+		 */
+		switch (constraint->fk_del_action)
+		{
+			case FKCONSTR_ACTION_NOACTION:
+			{
+				appendStringInfoString(buf, " ON DELETE NO ACTION");
+				break;
+			}
+
+			case FKCONSTR_ACTION_RESTRICT:
+			{
+				appendStringInfoString(buf, " ON DELETE RESTRICT");
+				break;
+			}
+
+			case FKCONSTR_ACTION_CASCADE:
+			{
+				appendStringInfoString(buf, " ON DELETE CASCADE");
+				break;
+			}
+
+			default:
+			{
+				elog(ERROR, "unsupported FK delete action type: %d",
+					 (int) constraint->fk_del_action);
+				break;
+			}
+		}
+
+		switch (constraint->fk_upd_action)
+		{
+			case FKCONSTR_ACTION_NOACTION:
+			{
+				appendStringInfoString(buf, " ON UPDATE NO ACTION");
+				break;
+			}
+
+			case FKCONSTR_ACTION_RESTRICT:
+			{
+				appendStringInfoString(buf, " ON UPDATE RESTRICT");
+				break;
+			}
+
+			default:
+			{
+				elog(ERROR, "unsupported FK update action type: %d",
+					 (int) constraint->fk_upd_action);
+				break;
+			}
+		}
+
+		/* FKCONSTR_MATCH_SIMPLE is default. Append matchtype if not default */
+		if (constraint->fk_matchtype == FKCONSTR_MATCH_FULL)
+		{
+			appendStringInfoString(buf, " MATCH FULL");
+		}
 	}
 
 	if (constraint->deferrable)

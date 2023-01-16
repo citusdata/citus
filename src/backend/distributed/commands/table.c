@@ -801,13 +801,6 @@ GenerateConstraintName(const char *tabname, Oid namespaceId, Constraint *constra
 			break;
 		}
 
-		case CONSTR_CHECK:
-		{
-			conname = ChooseConstraintName(tabname, NULL, "check", namespaceId, NULL);
-
-			break;
-		}
-
 		case CONSTR_FOREIGN:
 		{
 			conname = ChooseConstraintName(tabname,
@@ -909,16 +902,16 @@ SwitchToSequentialAndLocalExecutionIfConstraintNameTooLong(Oid relationId,
 
 
 /*
- * PreprocessAlterTableAddIndexConstraint creates a new constraint name for the index constraints {PRIMARY KEY, UNIQUE, EXCLUDE}
+ * PreprocessAlterTableAddConstraint creates a new constraint name for the index constraints {PRIMARY KEY, UNIQUE, EXCLUDE}
  * and changes the original alterTableCommand run by the utility hook to use the new constraint name.
  * Then converts the ALTER TABLE ... ADD {PRIMARY KEY, UNIQUE, EXCLUDE} ... command
  * into ALTER TABLE ... ADD CONSTRAINT <constraint name> {PRIMARY KEY, UNIQUE, EXCLUDE} format and returns the DDLJob
  * to run this command in the workers.
  */
 static List *
-PreprocessAlterTableAddIndexConstraint(AlterTableStmt *alterTableStatement, Oid
-									   relationId,
-									   Constraint *constraint)
+PreprocessAlterTableAddConstraint(AlterTableStmt *alterTableStatement, Oid
+								  relationId,
+								  Constraint *constraint)
 {
 	/* We should only preprocess an ADD CONSTRAINT command if we are changing the it.
 	 * This only happens when we have to create a constraint name in citus since the client does
@@ -948,7 +941,32 @@ PreprocessAlterTableAddIndexConstraint(AlterTableStmt *alterTableStatement, Oid
 	ObjectAddressSet(ddlJob->targetObjectAddress, RelationRelationId, relationId);
 	ddlJob->startNewTransaction = false;
 	ddlJob->metadataSyncCommand = ddlCommand;
-	ddlJob->taskList = DDLTaskList(relationId, ddlCommand);
+
+
+	if (constraint->contype == CONSTR_FOREIGN)
+	{
+		Oid rightRelationId = RangeVarGetRelid(constraint->pktable, NoLock,
+											   false);
+
+		if (IsCitusTableType(rightRelationId, REFERENCE_TABLE))
+		{
+			SetLocalMultiShardModifyModeToSequential();
+		}
+		
+		bool referencedIsLocalTable = !IsCitusTable(rightRelationId);
+		if (referencedIsLocalTable)
+		{
+			ddlJob->taskList = NIL;
+		}
+		else
+		{
+			ddlJob->taskList = InterShardDDLTaskList(relationId, rightRelationId, ddlCommand);
+		}
+	}
+	else
+	{
+		ddlJob->taskList = DDLTaskList(relationId, ddlCommand);
+	}
 
 	return list_make1(ddlJob);
 }
@@ -1195,9 +1213,9 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 
 				if (constraint->conname == NULL)
 				{
-					return PreprocessAlterTableAddIndexConstraint(alterTableStatement,
-																  leftRelationId,
-																  constraint);
+					return PreprocessAlterTableAddConstraint(alterTableStatement,
+															 leftRelationId,
+															 constraint);
 				}
 			}
 			else if (constraint->conname == NULL)
@@ -1209,9 +1227,9 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 					 * ALTER TABLE ... ADD CONSTRAINT <conname> PRIMARY KEY ... form and create the ddl jobs
 					 * for running this form of the command on the workers.
 					 */
-					return PreprocessAlterTableAddIndexConstraint(alterTableStatement,
-																  leftRelationId,
-																  constraint);
+					return PreprocessAlterTableAddConstraint(alterTableStatement,
+															 leftRelationId,
+															 constraint);
 				}
 			}
 		}
@@ -1958,9 +1976,7 @@ ConstrTypeUsesIndex(ConstrType constrType)
 {
 	return constrType == CONSTR_PRIMARY ||
 		   constrType == CONSTR_UNIQUE ||
-		   constrType == CONSTR_EXCLUSION ||
-		   constrType == CONSTR_CHECK ||
-		   constrType == CONSTR_FOREIGN;
+		   constrType == CONSTR_EXCLUSION;
 }
 
 
@@ -1973,7 +1989,8 @@ ConstrTypeCitusCanDefaultName(ConstrType constrType)
 	return constrType == CONSTR_PRIMARY ||
 		   constrType == CONSTR_UNIQUE ||
 		   constrType == CONSTR_EXCLUSION ||
-		   constrType == CONSTR_CHECK;
+		   constrType == CONSTR_CHECK ||
+		   constrType == CONSTR_FOREIGN;
 }
 
 
