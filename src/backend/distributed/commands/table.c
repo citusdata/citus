@@ -701,6 +701,10 @@ PostprocessAlterTableSchemaStmt(Node *node, const char *queryString)
 }
 
 
+/*
+ * ChooseForeignKeyConstraintNameAddition returns the string of column names to be used when generating a foreign
+ * key constraint name. This function is copied from postgres codebase.
+ */
 static char *
 ChooseForeignKeyConstraintNameAddition(List *colnames)
 {
@@ -719,9 +723,9 @@ ChooseForeignKeyConstraintNameAddition(List *colnames)
 		}
 
 		/*
-		 *                  * At this point we have buflen <= NAMEDATALEN.  name should be less
-		 *                                   * than NAMEDATALEN already, but use strlcpy for paranoia.
-		 *                                                    */
+		 *  At this point we have buflen <= NAMEDATALEN.  name should be less
+		 *  than NAMEDATALEN already, but use strlcpy for paranoia.
+		 */
 		strlcpy(buf + buflen, name, NAMEDATALEN);
 		buflen += strlen(buf + buflen);
 		if (buflen >= NAMEDATALEN)
@@ -952,7 +956,7 @@ PreprocessAlterTableAddConstraint(AlterTableStmt *alterTableStatement, Oid
 		{
 			SetLocalMultiShardModifyModeToSequential();
 		}
-		
+
 		bool referencedIsLocalTable = !IsCitusTable(rightRelationId);
 		if (referencedIsLocalTable)
 		{
@@ -960,7 +964,8 @@ PreprocessAlterTableAddConstraint(AlterTableStmt *alterTableStatement, Oid
 		}
 		else
 		{
-			ddlJob->taskList = InterShardDDLTaskList(relationId, rightRelationId, ddlCommand);
+			ddlJob->taskList = InterShardDDLTaskList(relationId, rightRelationId,
+													 ddlCommand);
 		}
 	}
 	else
