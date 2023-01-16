@@ -1375,9 +1375,9 @@ ROLLBACK;
 \c - postgres - :worker_1_port
 SET search_path TO metadata_sync_helpers;
 -- remove the manually generated metadata
-DELETE FROM pg_dist_placement WHERE shardid IN (SELECT shardid FROM pg_dist_shard WHERE logicalrelid IN ('test_ref'::regclass, 'test_2'::regclass));
-DELETE FROM pg_dist_shard WHERE logicalrelid IN ('test_ref'::regclass, 'test_2'::regclass);
-DELETE FROM pg_dist_partition WHERE logicalrelid IN ('test_ref'::regclass, 'test_2'::regclass);
+DELETE FROM pg_dist_placement WHERE shardid IN (SELECT shardid FROM pg_dist_shard WHERE logicalrelid IN ('test_ref'::regclass, 'test_2'::regclass, 'test_3'::regclass, 'super_user_table'::regclass));
+DELETE FROM pg_dist_shard WHERE logicalrelid IN ('test_ref'::regclass, 'test_2'::regclass, 'test_3'::regclass, 'super_user_table'::regclass);
+DELETE FROM pg_dist_partition WHERE logicalrelid IN ('test_ref'::regclass, 'test_2'::regclass, 'test_3'::regclass, 'super_user_table'::regclass);
 \c - - - :master_port
 -- cleanup
 SET client_min_messages TO ERROR;
