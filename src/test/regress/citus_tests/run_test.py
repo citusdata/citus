@@ -15,6 +15,16 @@ import common
 
 import config
 
+
+# Returns true if given test_schedule_line is of the form:
+#   "test: upgrade_ ... _after .."
+def schedule_line_is_upgrade_after(test_schedule_line: str) -> bool:
+    return (
+        test_schedule_line.startswith("test: upgrade_")
+        and "_after" in test_schedule_line
+    )
+
+
 if __name__ == "__main__":
     args = argparse.ArgumentParser()
     args.add_argument(
@@ -172,6 +182,11 @@ if __name__ == "__main__":
 
     if test_file_name in deps:
         dependencies = deps[test_file_name]
+    elif schedule_line_is_upgrade_after(test_schedule_line):
+        dependencies = TestDeps(
+            default_base_schedule(test_schedule),
+            [test_file_name.replace("_after", "_before")],
+        )
     else:
         dependencies = TestDeps(default_base_schedule(test_schedule))
 
