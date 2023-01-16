@@ -101,10 +101,12 @@ BEGIN;
 	INSERT INTO text_data (value) SELECT generate_random_string(1024 * 10) FROM generate_series(0,10);
 	SELECT count(DISTINCT value) FROM text_data;
 
-	-- make sure that serial is preserved
-	-- since we run "after schedule" twice and "rollback" wouldn't undo
-	-- sequence changes, it can be 22 or 33, not a different value
-	SELECT max(id) in (22, 33) FROM text_data;
+	-- Make sure that serial is preserved.
+    --
+	-- Since we might run "after schedule" several times for flaky test
+    -- detection and "rollback" wouldn't undo sequence changes, "id" should
+    -- look like below:
+	SELECT max(id) >= 11 AND max(id) % 11 = 0 FROM text_data;
 
 	-- since we run "after schedule" twice, rollback the transaction
 	-- to avoid getting "table already exists" errors
@@ -160,7 +162,7 @@ DROP TABLE columnar_schema_members, columnar_schema_members_pg_depend;
 
 -- Check the same for workers too.
 
-SELECT run_command_on_workers(
+SELECT success, result FROM run_command_on_workers(
 $$
 SELECT pg_class.oid INTO columnar_schema_members
 FROM pg_class, pg_namespace
@@ -177,7 +179,7 @@ WHERE classid = 'pg_am'::regclass::oid AND
 $$
 );
 
-SELECT run_command_on_workers(
+SELECT success, result FROM run_command_on_workers(
 $$
 (TABLE columnar_schema_members EXCEPT TABLE columnar_schema_members_pg_depend)
 UNION
@@ -185,13 +187,13 @@ UNION
 $$
 );
 
-SELECT run_command_on_workers(
+SELECT success, result FROM run_command_on_workers(
 $$
 SELECT COUNT(*)=10 FROM columnar_schema_members_pg_depend;
 $$
 );
 
-SELECT run_command_on_workers(
+SELECT success, result FROM run_command_on_workers(
 $$
 DROP TABLE columnar_schema_members, columnar_schema_members_pg_depend;
 $$

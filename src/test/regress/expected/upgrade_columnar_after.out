@@ -228,10 +228,12 @@ BEGIN;
     22
 (1 row)
 
-	-- make sure that serial is preserved
-	-- since we run "after schedule" twice and "rollback" wouldn't undo
-	-- sequence changes, it can be 22 or 33, not a different value
-	SELECT max(id) in (22, 33) FROM text_data;
+	-- Make sure that serial is preserved.
+    --
+	-- Since we might run "after schedule" several times for flaky test
+    -- detection and "rollback" wouldn't undo sequence changes, "id" should
+    -- look like below:
+	SELECT max(id) >= 11 AND max(id) % 11 = 0 FROM text_data;
  ?column?
 ---------------------------------------------------------------------
  t
@@ -292,7 +294,7 @@ SELECT COUNT(*)=10 FROM columnar_schema_members_pg_depend;
 
 DROP TABLE columnar_schema_members, columnar_schema_members_pg_depend;
 -- Check the same for workers too.
-SELECT run_command_on_workers(
+SELECT success, result FROM run_command_on_workers(
 $$
 SELECT pg_class.oid INTO columnar_schema_members
 FROM pg_class, pg_namespace
@@ -308,44 +310,44 @@ WHERE classid = 'pg_am'::regclass::oid AND
 	  deptype = 'n';
 $$
 );
-     run_command_on_workers
+ success |  result
 ---------------------------------------------------------------------
- (localhost,10201,t,"SELECT 10")
- (localhost,10202,t,"SELECT 10")
+ t       | SELECT 10
+ t       | SELECT 10
 (2 rows)
 
-SELECT run_command_on_workers(
+SELECT success, result FROM run_command_on_workers(
 $$
 (TABLE columnar_schema_members EXCEPT TABLE columnar_schema_members_pg_depend)
 UNION
 (TABLE columnar_schema_members_pg_depend EXCEPT TABLE columnar_schema_members);
 $$
 );
- run_command_on_workers
+ success | result
 ---------------------------------------------------------------------
- (localhost,10201,t,"")
- (localhost,10202,t,"")
+ t       |
+ t       |
 (2 rows)
 
-SELECT run_command_on_workers(
+SELECT success, result FROM run_command_on_workers(
 $$
 SELECT COUNT(*)=10 FROM columnar_schema_members_pg_depend;
 $$
 );
- run_command_on_workers
+ success | result
 ---------------------------------------------------------------------
- (localhost,10201,t,t)
- (localhost,10202,t,t)
+ t       | t
+ t       | t
 (2 rows)
 
-SELECT run_command_on_workers(
+SELECT success, result FROM run_command_on_workers(
 $$
 DROP TABLE columnar_schema_members, columnar_schema_members_pg_depend;
 $$
 );
-      run_command_on_workers
+ success |   result
 ---------------------------------------------------------------------
- (localhost,10201,t,"DROP TABLE")
- (localhost,10202,t,"DROP TABLE")
+ t       | DROP TABLE
+ t       | DROP TABLE
 (2 rows)
 
