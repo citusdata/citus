@@ -248,6 +248,7 @@ jobs:
       - store_artifacts:
           name: 'Save pg_upgrade logs for newData dir'
           path: /tmp/pg_upgrade_newData_logs
+      - save_logs_and_results
       - save_regressions
       - stack_trace
       - coverage:
