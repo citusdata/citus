@@ -1558,8 +1558,6 @@ MarkIdentitiesAsDistributed(Oid targetRelationId)
 static void
 PrepareRenameIdentitiesCommands(Oid sourceRelationId, Oid targetRelationId, List **outCoordinatorCommands, List **outWorkerCommands)
 {
-	char *sourceName = get_rel_name(sourceRelationId);
-
 	Relation targetRelation = relation_open(targetRelationId, AccessShareLock);
 	TupleDesc targetTupleDescriptor = RelationGetDescr(targetRelation);
 	relation_close(targetRelation, NoLock);
