@@ -252,6 +252,9 @@ s/NOTICE:  issuing WITH placement_data\(shardid, shardlength, groupid, placement
 s/pg_cancel_backend\('[0-9]+'::bigint\)/pg_cancel_backend('xxxxx'::bigint)/g
 s/issuing SELECT pg_cancel_backend\([0-9]+::integer\)/issuing SELECT pg_cancel_backend(xxxxx::integer)/g
 
+# shard_rebalancer output for flaky nodeIds
+s/issuing SELECT citus_copy_shard_placement\(43[0-9]+,[0-9]+,[0-9]+,'block_writes'\)/issuing SELECT citus_copy_shard_placement(43xxxx,xx,xx,'block_writes')/g
+
 # node id in run_command_on_all_nodes warning
 s/Error on node with node id [0-9]+/Error on node with node id xxxxx/g
 
