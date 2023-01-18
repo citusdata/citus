@@ -198,7 +198,7 @@ static TableConversionState * CreateTableConversion(TableConversionParameters *p
 static void CreateDistributedTableLike(TableConversionState *con);
 static void CreateCitusTableLike(TableConversionState *con);
 static void ReplaceTable(Oid sourceId, Oid targetId, List *justBeforeDropCommands,
-						 bool suppressNoticeMessages, char conversionType);
+						 bool suppressNoticeMessages);
 static bool HasAnyGeneratedStoredColumns(Oid relationId);
 static List * GetNonGeneratedStoredColumnNameList(Oid relationId);
 static void CheckAlterDistributedTableConversionParameters(TableConversionState *con);
@@ -790,7 +790,7 @@ ConvertTable(TableConversionState *con)
 	}
 
 	ReplaceTable(con->relationId, con->newRelationId, justBeforeDropCommands,
-				 con->suppressNoticeMessages, con->conversionType);
+				 con->suppressNoticeMessages);
 
 	TableDDLCommand *tableConstructionCommand = NULL;
 	foreach_ptr(tableConstructionCommand, postLoadCommands)
@@ -1623,7 +1623,7 @@ PrepareRenameIdentitiesCommands(Oid sourceRelationId, Oid targetRelationId,
  */
 void
 ReplaceTable(Oid sourceId, Oid targetId, List *justBeforeDropCommands,
-			 bool suppressNoticeMessages, char conversionType)
+			 bool suppressNoticeMessages)
 {
 	char *sourceName = get_rel_name(sourceId);
 	char *targetName = get_rel_name(targetId);
