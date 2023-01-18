@@ -2631,7 +2631,8 @@ get_attrdef_oid(Oid relationId, AttrNumber attnum)
  * If sequence type is not bigint, we use worker_nextval() instead of nextval().
  */
 char *
-GetAlterColumnWithNextvalDefaultCmd(Oid sequenceOid, Oid relationId, char *colname, bool missingTableOk)
+GetAlterColumnWithNextvalDefaultCmd(Oid sequenceOid, Oid relationId, char *colname, bool
+									missingTableOk)
 {
 	char *qualifiedSequenceName = generate_qualified_relation_name(sequenceOid);
 	char *qualifiedRelationName = generate_qualified_relation_name(relationId);

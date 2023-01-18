@@ -563,8 +563,8 @@ extern List * MakeNameListFromRangeVar(const RangeVar *rel);
 extern Oid GetSequenceOid(Oid relationId, AttrNumber attnum);
 extern bool ConstrTypeUsesIndex(ConstrType constrType);
 extern bool ConstrTypeCitusCanDefaultName(ConstrType constrType);
-extern char *
-GetAlterColumnWithNextvalDefaultCmd(Oid sequenceOid, Oid relationId, char *colname, bool missingTableOk);
+extern char * GetAlterColumnWithNextvalDefaultCmd(Oid sequenceOid, Oid relationId,
+												  char *colname, bool missingTableOk);
 
 /* text_search.c - forward declarations */
 extern List * GetCreateTextSearchConfigStatements(const ObjectAddress *address);
