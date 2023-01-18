@@ -48,6 +48,58 @@ ROLLBACK;
 -- since we rollback'ed above xact, should return true
 SELECT columnar_test_helpers.columnar_metadata_has_storage_id(:columnar_table_1_storage_id);
 
+BEGIN;
+  INSERT INTO columnar_table_1 VALUES (2);
+ROLLBACK;
+
+INSERT INTO columnar_table_1 VALUES (3),(4);
+INSERT INTO columnar_table_1 VALUES (5),(6);
+INSERT INTO columnar_table_1 VALUES (7),(8);
+
+-- Test whether columnar metadata accessors are still fine even
+-- when the metadata indexes are not available to them.
+BEGIN;
+  ALTER INDEX columnar_internal.stripe_first_row_number_idx RENAME TO new_index_name;
+  ALTER INDEX columnar_internal.chunk_pkey RENAME TO new_index_name_1;
+  ALTER INDEX columnar_internal.stripe_pkey RENAME TO new_index_name_2;
+  ALTER INDEX columnar_internal.chunk_group_pkey RENAME TO new_index_name_3;
+
+  CREATE INDEX columnar_table_1_idx ON columnar_table_1(a);
+
+  -- make sure that we test index scan
+  SET LOCAL columnar.enable_custom_scan TO 'off';
+  SET LOCAL enable_seqscan TO off;
+  SET LOCAL seq_page_cost TO 10000000;
+
+  SELECT * FROM columnar_table_1 WHERE a = 6;
+  SELECT * FROM columnar_table_1 WHERE a = 5;
+  SELECT * FROM columnar_table_1 WHERE a = 7;
+  SELECT * FROM columnar_table_1 WHERE a = 3;
+
+  DROP INDEX columnar_table_1_idx;
+
+  -- Re-shuffle some metadata records to test whether we can
+  -- rely on sequential metadata scan when the metadata records
+  -- are not ordered by their "first_row_number"s.
+  WITH cte AS (
+      DELETE FROM columnar_internal.stripe
+      WHERE storage_id = columnar.get_storage_id('columnar_table_1')
+      RETURNING *
+  )
+  INSERT INTO columnar_internal.stripe SELECT * FROM cte ORDER BY first_row_number DESC;
+
+  SELECT SUM(a) FROM columnar_table_1;
+
+  SELECT * FROM columnar_table_1 WHERE a = 6;
+
+  -- Run a SELECT query after the INSERT command to force flushing the
+  -- data within the xact block.
+  INSERT INTO columnar_table_1 VALUES (20);
+  SELECT COUNT(*) FROM columnar_table_1;
+
+  DROP TABLE columnar_table_1 CASCADE;
+ROLLBACK;
+
 -- test dropping columnar table
 DROP TABLE columnar_table_1 CASCADE;
 SELECT columnar_test_helpers.columnar_metadata_has_storage_id(:columnar_table_1_storage_id);
