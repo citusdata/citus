@@ -324,7 +324,7 @@ AppendAlterTableCmdAddConstraint(StringInfo buf, Constraint *constraint,
 		 * Hence the error messages for the unsupported alter table statements are unexpectedly different for the
 		 * ALTER TABLE ... ADD FOREIGN KEY and ALTER TABLE ...  ADD CONSTRAINT <conname> FOREIGN KEY
 		 */
-		
+
 		/* FKCONSTR_MATCH_SIMPLE is default. Append matchtype if not default */
 		if (constraint->fk_matchtype == FKCONSTR_MATCH_FULL)
 		{
@@ -380,7 +380,6 @@ AppendAlterTableCmdAddConstraint(StringInfo buf, Constraint *constraint,
 				break;
 			}
 		}
-
 	}
 
 	if (constraint->deferrable)
