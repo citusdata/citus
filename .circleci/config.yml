@@ -311,6 +311,7 @@ jobs:
       - store_artifacts:
           name: 'Save logfiles'
           path: src/test/regress/tmp_citus_test/logfiles
+      - save_logs_and_results
       - stack_trace
       - coverage:
           flags: 'test_<< parameters.pg_major >>,upgrade'
@@ -364,6 +365,7 @@ jobs:
                   citus-post-tar=/home/circleci/project/install-$PG_MAJOR.tar; \
             done;
           no_output_timeout: 2m
+      - save_logs_and_results
       - save_regressions
       - stack_trace
       - coverage:
@@ -446,6 +448,7 @@ jobs:
       - store_artifacts:
           name: 'Save tap logs'
           path: /home/circleci/project/src/test/<< parameters.suite >>/tmp_check/log
+      - save_logs_and_results
       - stack_trace
       - coverage:
           flags: 'test_<< parameters.pg_major >>,tap_<< parameters.suite >>_<< parameters.make >>'
