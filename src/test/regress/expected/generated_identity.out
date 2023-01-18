@@ -1,7 +1,7 @@
 CREATE SCHEMA generated_identities;
 SET search_path TO generated_identities;
 SET client_min_messages to ERROR;
-select 1 from citus_add_node('localhost', :master_port, groupId=>0);
+SELECT 1 from citus_add_node('localhost', :master_port, groupId=>0);
  ?column?
 ---------------------------------------------------------------------
         1
@@ -60,7 +60,7 @@ Number of partitions: 2 (Use \d+ to list them.)
 \c - - - :master_port
 SET search_path TO generated_identities;
 SET client_min_messages to ERROR;
-select undistribute_table('generated_identities_test');
+SELECT undistribute_table('generated_identities_test');
  undistribute_table
 ---------------------------------------------------------------------
 
@@ -72,7 +72,7 @@ SELECT citus_remove_node('localhost', :master_port);
 
 (1 row)
 
-select create_distributed_table('generated_identities_test', 'a');
+SELECT create_distributed_table('generated_identities_test', 'a');
  create_distributed_table
 ---------------------------------------------------------------------
 
@@ -111,7 +111,7 @@ Number of partitions: 2 (Use \d+ to list them.)
 SET search_path TO generated_identities;
 SET client_min_messages to ERROR;
 insert into generated_identities_test (g) values (1);
-insert into generated_identities_test (g) select 2;
+insert into generated_identities_test (g) SELECT 2;
 INSERT INTO generated_identities_test (g)
 SELECT s FROM generate_series(3,7) s;
 SELECT * FROM generated_identities_test ORDER BY 1;
@@ -126,7 +126,7 @@ SELECT * FROM generated_identities_test ORDER BY 1;
  7 | 70 | 7 | 7 | 7 | 7 | 7
 (7 rows)
 
-select undistribute_table('generated_identities_test');
+SELECT undistribute_table('generated_identities_test');
  undistribute_table
 ---------------------------------------------------------------------
 
@@ -181,7 +181,7 @@ SELECT * FROM generated_identities_test ORDER BY 1;
 (10 rows)
 
 -- distributed table
-select create_distributed_table('generated_identities_test', 'a');
+SELECT create_distributed_table('generated_identities_test', 'a');
  create_distributed_table
 ---------------------------------------------------------------------
 
@@ -194,25 +194,25 @@ DETAIL:  Only ADD|DROP COLUMN, SET|DROP NOT NULL, SET|DROP DEFAULT, ADD|DROP|VAL
 -- alter table .. alter column is unsupported
 ALTER TABLE generated_identities_test ALTER COLUMN b TYPE int;
 ERROR:  cannot execute ALTER TABLE command involving identity column
-select alter_distributed_table('generated_identities_test', 'g');
+SELECT alter_distributed_table('generated_identities_test', 'g');
  alter_distributed_table
 ---------------------------------------------------------------------
 
 (1 row)
 
-select alter_distributed_table('generated_identities_test', 'b');
+SELECT alter_distributed_table('generated_identities_test', 'b');
  alter_distributed_table
 ---------------------------------------------------------------------
 
 (1 row)
 
-select alter_distributed_table('generated_identities_test', 'c');
+SELECT alter_distributed_table('generated_identities_test', 'c');
  alter_distributed_table
 ---------------------------------------------------------------------
 
 (1 row)
 
-select undistribute_table('generated_identities_test');
+SELECT undistribute_table('generated_identities_test');
  undistribute_table
 ---------------------------------------------------------------------
 
@@ -295,7 +295,7 @@ SELECT * FROM generated_identities_test ORDER BY g;
  10 | 100 | 10 | 10 | 10 | 10 | 20
 (10 rows)
 
-select undistribute_table('generated_identities_test');
+SELECT undistribute_table('generated_identities_test');
  undistribute_table
 ---------------------------------------------------------------------
 
@@ -344,7 +344,7 @@ CREATE TABLE color (
     color_id BIGINT GENERATED ALWAYS AS IDENTITY UNIQUE,
     color_name VARCHAR NOT NULL
 );
-select create_distributed_table('color', 'color_id');
+SELECT create_distributed_table('color', 'color_id');
  create_distributed_table
 ---------------------------------------------------------------------
 
@@ -357,13 +357,13 @@ INSERT INTO color(color_name) VALUES ('Red');
 \c - - - :master_port
 SET search_path TO generated_identities;
 SET client_min_messages to ERROR;
-select undistribute_table('color');
+SELECT undistribute_table('color');
  undistribute_table
 ---------------------------------------------------------------------
 
 (1 row)
 
-select create_distributed_table('color', 'color_id');
+SELECT create_distributed_table('color', 'color_id');
  create_distributed_table
 ---------------------------------------------------------------------
 
@@ -376,10 +376,155 @@ INSERT INTO color(color_name) VALUES ('Red');
 \c - - - :master_port
 SET search_path TO generated_identities;
 SET client_min_messages to ERROR;
-select count(*) from color;
+INSERT INTO color(color_name) VALUES ('Red');
+SELECT count(*) from color;
  count
 ---------------------------------------------------------------------
-     2
+     3
 (1 row)
 
+-- modify sequence & alter table
+DROP TABLE color;
+CREATE TABLE color (
+    color_id BIGINT GENERATED ALWAYS AS IDENTITY UNIQUE,
+    color_name VARCHAR NOT NULL
+);
+SELECT create_distributed_table('color', 'color_id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+\c - - - :worker_1_port
+SET search_path TO generated_identities;
+SET client_min_messages to ERROR;
+INSERT INTO color(color_name) VALUES ('Red');
+\c - - - :master_port
+SET search_path TO generated_identities;
+SET client_min_messages to ERROR;
+SELECT undistribute_table('color');
+ undistribute_table
+---------------------------------------------------------------------
+
+(1 row)
+
+ALTER SEQUENCE color_color_id_seq RENAME TO myseq;
+SELECT create_distributed_table('color', 'color_id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+\ds+ myseq
+                                      List of relations
+        Schema        | Name  |   Type   |  Owner   | Persistence |    Size    | Description
+---------------------------------------------------------------------
+ generated_identities | myseq | sequence | postgres | permanent   | 8192 bytes |
+(1 row)
+
+\ds+ color_color_id_seq
+                        List of relations
+ Schema | Name | Type | Owner | Persistence | Size | Description
+---------------------------------------------------------------------
+(0 rows)
+
+\d color
+                          Table "generated_identities.color"
+   Column   |       Type        | Collation | Nullable |           Default
+---------------------------------------------------------------------
+ color_id   | bigint            |           | not null | generated always as identity
+ color_name | character varying |           | not null |
+Indexes:
+    "color_color_id_key" UNIQUE CONSTRAINT, btree (color_id)
+
+\c - - - :worker_1_port
+SET search_path TO generated_identities;
+SET client_min_messages to ERROR;
+\ds+ myseq
+                                      List of relations
+        Schema        | Name  |   Type   |  Owner   | Persistence |    Size    | Description
+---------------------------------------------------------------------
+ generated_identities | myseq | sequence | postgres | permanent   | 8192 bytes |
+(1 row)
+
+\ds+ color_color_id_seq
+                        List of relations
+ Schema | Name | Type | Owner | Persistence | Size | Description
+---------------------------------------------------------------------
+(0 rows)
+
+\d color
+                         Table "generated_identities.color"
+   Column   |       Type        | Collation | Nullable |          Default
+---------------------------------------------------------------------
+ color_id   | bigint            |           | not null | nextval('myseq'::regclass)
+ color_name | character varying |           | not null |
+Indexes:
+    "color_color_id_key" UNIQUE CONSTRAINT, btree (color_id)
+
+INSERT INTO color(color_name) VALUES ('Red');
+\c - - - :master_port
+SET search_path TO generated_identities;
+SET client_min_messages to ERROR;
+ALTER SEQUENCE myseq RENAME TO color_color_id_seq;
+\ds+ myseq
+                        List of relations
+ Schema | Name | Type | Owner | Persistence | Size | Description
+---------------------------------------------------------------------
+(0 rows)
+
+\ds+ color_color_id_seq
+                                            List of relations
+        Schema        |        Name        |   Type   |  Owner   | Persistence |    Size    | Description
+---------------------------------------------------------------------
+ generated_identities | color_color_id_seq | sequence | postgres | permanent   | 8192 bytes |
+(1 row)
+
+INSERT INTO color(color_name) VALUES ('Red');
+\c - - - :worker_1_port
+SET search_path TO generated_identities;
+SET client_min_messages to ERROR;
+\ds+ myseq
+                        List of relations
+ Schema | Name | Type | Owner | Persistence | Size | Description
+---------------------------------------------------------------------
+(0 rows)
+
+\ds+ color_color_id_seq
+                                            List of relations
+        Schema        |        Name        |   Type   |  Owner   | Persistence |    Size    | Description
+---------------------------------------------------------------------
+ generated_identities | color_color_id_seq | sequence | postgres | permanent   | 8192 bytes |
+(1 row)
+
+\d color
+                               Table "generated_identities.color"
+   Column   |       Type        | Collation | Nullable |                 Default
+---------------------------------------------------------------------
+ color_id   | bigint            |           | not null | nextval('color_color_id_seq'::regclass)
+ color_name | character varying |           | not null |
+Indexes:
+    "color_color_id_key" UNIQUE CONSTRAINT, btree (color_id)
+
+INSERT INTO color(color_name) VALUES ('Red');
+\c - - - :master_port
+SET search_path TO generated_identities;
+SET client_min_messages to ERROR;
+SELECT alter_distributed_table('co23423lor', shard_count := 6);
+ERROR:  relation "co23423lor" does not exist
+INSERT INTO color(color_name) VALUES ('Red');
+\c - - - :worker_1_port
+SET search_path TO generated_identities;
+SET client_min_messages to ERROR;
+\ds+ color_color_id_seq
+                                            List of relations
+        Schema        |        Name        |   Type   |  Owner   | Persistence |    Size    | Description
+---------------------------------------------------------------------
+ generated_identities | color_color_id_seq | sequence | postgres | permanent   | 8192 bytes |
+(1 row)
+
+INSERT INTO color(color_name) VALUES ('Red');
+\c - - - :master_port
+SET search_path TO generated_identities;
+SET client_min_messages to ERROR;
 DROP SCHEMA generated_identities CASCADE;

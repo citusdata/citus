@@ -2,7 +2,7 @@ CREATE SCHEMA generated_identities;
 SET search_path TO generated_identities;
 SET client_min_messages to ERROR;
 
-select 1 from citus_add_node('localhost', :master_port, groupId=>0);
+SELECT 1 from citus_add_node('localhost', :master_port, groupId=>0);
 
 DROP TABLE IF EXISTS generated_identities_test;
 
@@ -33,11 +33,11 @@ SELECT citus_add_local_table_to_metadata('generated_identities_test');
 SET search_path TO generated_identities;
 SET client_min_messages to ERROR;
 
-select undistribute_table('generated_identities_test');
+SELECT undistribute_table('generated_identities_test');
 
 SELECT citus_remove_node('localhost', :master_port);
 
-select create_distributed_table('generated_identities_test', 'a');
+SELECT create_distributed_table('generated_identities_test', 'a');
 
 \d generated_identities_test
 
@@ -51,14 +51,14 @@ SET client_min_messages to ERROR;
 
 insert into generated_identities_test (g) values (1);
 
-insert into generated_identities_test (g) select 2;
+insert into generated_identities_test (g) SELECT 2;
 
 INSERT INTO generated_identities_test (g)
 SELECT s FROM generate_series(3,7) s;
 
 SELECT * FROM generated_identities_test ORDER BY 1;
 
-select undistribute_table('generated_identities_test');
+SELECT undistribute_table('generated_identities_test');
 
 SELECT * FROM generated_identities_test ORDER BY 1;
 
@@ -78,7 +78,7 @@ SELECT s FROM generate_series(8,10) s;
 SELECT * FROM generated_identities_test ORDER BY 1;
 
 -- distributed table
-select create_distributed_table('generated_identities_test', 'a');
+SELECT create_distributed_table('generated_identities_test', 'a');
 
 -- alter table .. alter column .. add is unsupported
 ALTER TABLE generated_identities_test ALTER COLUMN g ADD GENERATED ALWAYS AS IDENTITY;
@@ -86,13 +86,13 @@ ALTER TABLE generated_identities_test ALTER COLUMN g ADD GENERATED ALWAYS AS IDE
 -- alter table .. alter column is unsupported
 ALTER TABLE generated_identities_test ALTER COLUMN b TYPE int;
 
-select alter_distributed_table('generated_identities_test', 'g');
+SELECT alter_distributed_table('generated_identities_test', 'g');
 
-select alter_distributed_table('generated_identities_test', 'b');
+SELECT alter_distributed_table('generated_identities_test', 'b');
 
-select alter_distributed_table('generated_identities_test', 'c');
+SELECT alter_distributed_table('generated_identities_test', 'c');
 
-select undistribute_table('generated_identities_test');
+SELECT undistribute_table('generated_identities_test');
 
 SELECT * FROM generated_identities_test ORDER BY g;
 
@@ -127,7 +127,7 @@ SELECT s FROM generate_series(11,20) s;
 
 SELECT * FROM generated_identities_test ORDER BY g;
 
-select undistribute_table('generated_identities_test');
+SELECT undistribute_table('generated_identities_test');
 
 \d generated_identities_test
 
@@ -156,7 +156,7 @@ CREATE TABLE color (
     color_id BIGINT GENERATED ALWAYS AS IDENTITY UNIQUE,
     color_name VARCHAR NOT NULL
 );
-select create_distributed_table('color', 'color_id');
+SELECT create_distributed_table('color', 'color_id');
 
 \c - - - :worker_1_port
 SET search_path TO generated_identities;
@@ -168,8 +168,8 @@ INSERT INTO color(color_name) VALUES ('Red');
 SET search_path TO generated_identities;
 SET client_min_messages to ERROR;
 
-select undistribute_table('color');
-select create_distributed_table('color', 'color_id');
+SELECT undistribute_table('color');
+SELECT create_distributed_table('color', 'color_id');
 
 \c - - - :worker_1_port
 SET search_path TO generated_identities;
@@ -181,6 +181,87 @@ INSERT INTO color(color_name) VALUES ('Red');
 SET search_path TO generated_identities;
 SET client_min_messages to ERROR;
 
-select count(*) from color;
+INSERT INTO color(color_name) VALUES ('Red');
+
+SELECT count(*) from color;
+
+-- modify sequence & alter table
+DROP TABLE color;
+
+CREATE TABLE color (
+    color_id BIGINT GENERATED ALWAYS AS IDENTITY UNIQUE,
+    color_name VARCHAR NOT NULL
+);
+SELECT create_distributed_table('color', 'color_id');
+
+\c - - - :worker_1_port
+SET search_path TO generated_identities;
+SET client_min_messages to ERROR;
+
+INSERT INTO color(color_name) VALUES ('Red');
+
+\c - - - :master_port
+SET search_path TO generated_identities;
+SET client_min_messages to ERROR;
+
+SELECT undistribute_table('color');
+
+ALTER SEQUENCE color_color_id_seq RENAME TO myseq;
+
+SELECT create_distributed_table('color', 'color_id');
+\ds+ myseq
+\ds+ color_color_id_seq
+\d color
+
+\c - - - :worker_1_port
+SET search_path TO generated_identities;
+SET client_min_messages to ERROR;
+
+\ds+ myseq
+\ds+ color_color_id_seq
+\d color
+
+INSERT INTO color(color_name) VALUES ('Red');
+
+\c - - - :master_port
+SET search_path TO generated_identities;
+SET client_min_messages to ERROR;
+
+ALTER SEQUENCE myseq RENAME TO color_color_id_seq;
+
+\ds+ myseq
+\ds+ color_color_id_seq
+
+INSERT INTO color(color_name) VALUES ('Red');
+
+\c - - - :worker_1_port
+SET search_path TO generated_identities;
+SET client_min_messages to ERROR;
+
+\ds+ myseq
+\ds+ color_color_id_seq
+\d color
+
+INSERT INTO color(color_name) VALUES ('Red');
+
+\c - - - :master_port
+SET search_path TO generated_identities;
+SET client_min_messages to ERROR;
+
+SELECT alter_distributed_table('co23423lor', shard_count := 6);
+
+INSERT INTO color(color_name) VALUES ('Red');
+
+\c - - - :worker_1_port
+SET search_path TO generated_identities;
+SET client_min_messages to ERROR;
+
+\ds+ color_color_id_seq
+
+INSERT INTO color(color_name) VALUES ('Red');
+
+\c - - - :master_port
+SET search_path TO generated_identities;
+SET client_min_messages to ERROR;
 
 DROP SCHEMA generated_identities CASCADE;
