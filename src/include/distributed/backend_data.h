@@ -56,12 +56,10 @@ extern void UnSetDistributedTransactionId(void);
 extern void UnSetGlobalPID(void);
 extern void SetActiveMyBackend(bool value);
 extern void AssignDistributedTransactionId(void);
-extern void AssignGlobalPID(void);
-extern void SetBackendDataGlobalPID(uint64 globalPID);
+extern void AssignGlobalPID(const char *applicationName);
 extern uint64 GetGlobalPID(void);
 extern void SetBackendDataDatabaseId(void);
-extern void SetBackendDataDistributedCommandOriginator(bool
-													   distributedCommandOriginator);
+extern void SetBackendDataGlobalPID(uint64 gpid);
 extern uint64 ExtractGlobalPID(const char *applicationName);
 extern int ExtractNodeIdFromGlobalPID(uint64 globalPID, bool missingOk);
 extern int ExtractProcessIdFromGlobalPID(uint64 globalPID);
@@ -79,7 +77,6 @@ extern bool IsCitusInternalBackend(void);
 extern bool IsRebalancerInternalBackend(void);
 extern bool IsCitusRunCommandBackend(void);
 extern bool IsExternalClientBackend(void);
-extern void ResetCitusBackendType(void);
 
 #define INVALID_CITUS_INTERNAL_BACKEND_GPID 0
 #define GLOBAL_PID_NODE_ID_FOR_NODES_NOT_IN_METADATA 99999999

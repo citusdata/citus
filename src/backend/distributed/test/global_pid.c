@@ -27,7 +27,7 @@ test_assign_global_pid(PG_FUNCTION_ARGS)
 {
 	CheckCitusVersion(ERROR);
 
-	AssignGlobalPID();
+	AssignGlobalPID(application_name);
 
 	PG_RETURN_VOID();
 }

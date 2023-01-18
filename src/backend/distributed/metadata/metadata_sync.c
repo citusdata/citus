@@ -3277,9 +3277,7 @@ citus_internal_add_shard_metadata(PG_FUNCTION_ARGS)
 								  shardMaxValue);
 	}
 
-	bool invalidateRelCache = false;
-	InsertShardRowInternal(relationId, shardId, storageType, shardMinValue, shardMaxValue,
-						   invalidateRelCache);
+	InsertShardRow(relationId, shardId, storageType, shardMinValue, shardMaxValue);
 
 	PG_RETURN_VOID();
 }
@@ -3484,9 +3482,7 @@ citus_internal_add_placement_metadata(PG_FUNCTION_ARGS)
 										   shardLength, groupId);
 	}
 
-	bool invalidateRelCache = false;
-	InsertShardPlacementRowInternal(shardId, placementId, shardState, shardLength,
-									groupId, invalidateRelCache);
+	InsertShardPlacementRow(shardId, placementId, shardState, shardLength, groupId);
 
 	PG_RETURN_VOID();
 }

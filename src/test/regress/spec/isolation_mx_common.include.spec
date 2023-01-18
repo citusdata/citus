@@ -8,12 +8,12 @@ setup
         LANGUAGE C STRICT VOLATILE
         AS 'citus', $$start_session_level_connection_to_node$$;
 
-    CREATE OR REPLACE FUNCTION override_backend_data_command_originator(bool)
+    CREATE OR REPLACE FUNCTION override_backend_data_gpid(bigint)
         RETURNS void
         LANGUAGE C STRICT IMMUTABLE
-        AS 'citus', $$override_backend_data_command_originator$$;
+        AS 'citus', $$override_backend_data_gpid$$;
 
-    SELECT run_command_on_workers($$SET citus.enable_metadata_sync TO off;CREATE OR REPLACE FUNCTION override_backend_data_command_originator(bool)
+    SELECT run_command_on_workers($$SET citus.enable_metadata_sync TO off;CREATE OR REPLACE FUNCTION override_backend_data_gpid(bigint)
         RETURNS void
         LANGUAGE C STRICT IMMUTABLE
         AS 'citus'$$);

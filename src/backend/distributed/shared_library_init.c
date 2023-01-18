@@ -159,6 +159,12 @@ static int ReplicationModel = REPLICATION_MODEL_STREAMING;
 /* we override the application_name assign_hook and keep a pointer to the old one */
 static GucStringAssignHook OldApplicationNameAssignHook = NULL;
 
+/*
+ * Flag to indicate when ApplicationNameAssignHook becomes responsible for
+ * updating the global pid.
+ */
+static bool FinishedStartupCitusBackend = false;
+
 static object_access_hook_type PrevObjectAccessHook = NULL;
 
 #if PG_VERSION_NUM >= PG_VERSION_15
@@ -677,10 +683,11 @@ StartupCitusBackend(void)
 	 * this is a no-op, since InitializeBackendData will already have extracted
 	 * the gpid from the application_name.
 	 */
-	AssignGlobalPID();
+	AssignGlobalPID(application_name);
 
 	SetBackendDataDatabaseId();
 	RegisterConnectionCleanup();
+	FinishedStartupCitusBackend = true;
 }
 
 
@@ -2597,7 +2604,30 @@ static void
 ApplicationNameAssignHook(const char *newval, void *extra)
 {
 	ResetHideShardsDecision();
-	ResetCitusBackendType();
+	DetermineCitusBackendType(newval);
+
+	/*
+	 * AssignGlobalPID might read from catalog tables to get the the local
+	 * nodeid. But ApplicationNameAssignHook might be called before catalog
+	 * access is available to the backend (such as in early stages of
+	 * authentication). We use StartupCitusBackend to initialize the global pid
+	 * after catalogs are available. After that happens this hook becomes
+	 * responsible to update the global pid on later application_name changes.
+	 * So we set the FinishedStartupCitusBackend flag in StartupCitusBackend to
+	 * indicate when this responsibility handoff has happened.
+	 *
+	 * Another solution to the catalog table acccess problem would be to update
+	 * global pid lazily, like we do for HideShards. But that's not possible
+	 * for the global pid, since it is stored in shared memory instead of in a
+	 * process-local global variable. So other processes might want to read it
+	 * before this process has updated it. So instead we try to set it as early
+	 * as reasonably possible, which is also why we extract global pids in the
+	 * AuthHook already (extracting doesn't require catalog access).
+	 */
+	if (FinishedStartupCitusBackend)
+	{
+		AssignGlobalPID(newval);
+	}
 	OldApplicationNameAssignHook(newval, extra);
 }
 
