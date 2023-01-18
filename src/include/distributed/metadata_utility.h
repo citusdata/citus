@@ -77,7 +77,6 @@ typedef struct GroupShardPlacement
 	uint64 placementId;     /* sequence that implies this placement creation order */
 	uint64 shardId;
 	uint64 shardLength;
-	ShardState shardState;
 	int32 groupId;
 } GroupShardPlacement;
 
@@ -92,7 +91,6 @@ typedef struct ShardPlacement
 	uint64 placementId;
 	uint64 shardId;
 	uint64 shardLength;
-	ShardState shardState;
 	int32 groupId;
 
 	/* the rest of the fields aren't from pg_dist_placement */
@@ -286,8 +284,7 @@ extern int ShardIntervalCount(Oid relationId);
 extern List * LoadShardList(Oid relationId);
 extern ShardInterval * CopyShardInterval(ShardInterval *srcInterval);
 extern uint64 ShardLength(uint64 shardId);
-extern bool NodeGroupHasShardPlacements(int32 groupId,
-										bool onlyConsiderActivePlacements);
+extern bool NodeGroupHasShardPlacements(int32 groupId);
 extern bool IsActiveShardPlacement(ShardPlacement *ShardPlacement);
 extern bool IsPlacementOnWorkerNode(ShardPlacement *placement, WorkerNode *workerNode);
 extern List * FilterShardPlacementList(List *shardPlacementList, bool (*filter)(
