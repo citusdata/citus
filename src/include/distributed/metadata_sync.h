@@ -48,6 +48,10 @@ typedef struct SequenceInfo
 
 
 /* Functions declarations for metadata syncing */
+extern void citus_internal_add_placement_metadata_internal(int64 shardId,
+														   int64 shardLength,
+														   int32 groupId,
+														   int64 placementId);
 extern void SyncNodeMetadataToNode(const char *nodeNameString, int32 nodePort);
 extern void SyncCitusTableMetadata(Oid relationId);
 extern void EnsureSequentialModeMetadataOperations(void);
@@ -85,7 +89,7 @@ extern List * GrantOnForeignServerDDLCommands(Oid serverId);
 extern List * GenerateGrantOnForeignServerQueriesFromAclItem(Oid serverId,
 															 AclItem *aclItem);
 extern List * GenerateGrantOnFDWQueriesFromAclItem(Oid serverId, AclItem *aclItem);
-extern char * PlacementUpsertCommand(uint64 shardId, uint64 placementId, int shardState,
+extern char * PlacementUpsertCommand(uint64 shardId, uint64 placementId,
 									 uint64 shardLength, int32 groupId);
 extern TableDDLCommand * TruncateTriggerCreateCommand(Oid relationId);
 extern void CreateInterTableRelationshipOfRelationOnWorkers(Oid relationId);
@@ -133,7 +137,7 @@ extern void SyncDeleteColocationGroupToNodes(uint32 colocationId);
 	"INSERT INTO pg_dist_placement " \
 	"(shardid, shardstate, shardlength, " \
 	"groupid, placementid) " \
-	"VALUES (" UINT64_FORMAT ", %d, " UINT64_FORMAT \
+	"VALUES (" UINT64_FORMAT ", 1, " UINT64_FORMAT \
 	", %d, " UINT64_FORMAT \
 	") " \
 	"ON CONFLICT (shardid, groupid) DO UPDATE SET " \

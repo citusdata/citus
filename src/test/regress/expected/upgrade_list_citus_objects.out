@@ -66,6 +66,7 @@ ORDER BY 1;
  function citus_internal_add_colocation_metadata(integer,integer,integer,regtype,oid)
  function citus_internal_add_object_metadata(text,text[],text[],integer,integer,boolean)
  function citus_internal_add_partition_metadata(regclass,"char",text,integer,"char")
+ function citus_internal_add_placement_metadata(bigint,bigint,integer,bigint)
  function citus_internal_add_placement_metadata(bigint,integer,bigint,integer,bigint)
  function citus_internal_add_shard_metadata(regclass,bigint,"char",text,text)
  function citus_internal_adjust_local_clock_to_remote(cluster_clock)
@@ -317,5 +318,5 @@ ORDER BY 1;
  view citus_stat_statements
  view pg_dist_shard_placement
  view time_partitions
-(309 rows)
+(310 rows)
 

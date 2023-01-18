@@ -1739,8 +1739,7 @@ InsertShardRow(Oid relationId, uint64 shardId, char storageType,
  */
 uint64
 InsertShardPlacementRow(uint64 shardId, uint64 placementId,
-						char shardState, uint64 shardLength,
-						int32 groupId)
+						uint64 shardLength, int32 groupId)
 {
 	Datum values[Natts_pg_dist_placement];
 	bool isNulls[Natts_pg_dist_placement];
@@ -1755,7 +1754,7 @@ InsertShardPlacementRow(uint64 shardId, uint64 placementId,
 	}
 	values[Anum_pg_dist_placement_placementid - 1] = Int64GetDatum(placementId);
 	values[Anum_pg_dist_placement_shardid - 1] = Int64GetDatum(shardId);
-	values[Anum_pg_dist_placement_shardstate - 1] = CharGetDatum(shardState);
+	values[Anum_pg_dist_placement_shardstate - 1] = CharGetDatum(SHARD_STATE_ACTIVE);
 	values[Anum_pg_dist_placement_shardlength - 1] = Int64GetDatum(shardLength);
 	values[Anum_pg_dist_placement_groupid - 1] = Int32GetDatum(groupId);
 

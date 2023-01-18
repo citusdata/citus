@@ -31,3 +31,5 @@ DROP FUNCTION pg_catalog.citus_task_wait(bigint, pg_catalog.citus_task_status);
 
 DROP FUNCTION pg_catalog.citus_copy_shard_placement(bigint, integer, integer, citus.shard_transfer_mode);
 DROP FUNCTION pg_catalog.citus_move_shard_placement(bigint, integer, integer, citus.shard_transfer_mode);
+DROP FUNCTION pg_catalog.citus_internal_add_placement_metadata(bigint, bigint, integer, bigint);
+#include "../udfs/citus_internal_add_placement_metadata/10.2-1.sql"

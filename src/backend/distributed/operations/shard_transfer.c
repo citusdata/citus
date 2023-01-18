@@ -486,7 +486,7 @@ citus_move_shard_placement_internal(int64 shardId, char *sourceNodeName,
 		uint64 placementId = GetNextPlacementId();
 
 		InsertShardPlacementRow(colocatedShardId, placementId,
-								SHARD_STATE_ACTIVE, ShardLength(colocatedShardId),
+								ShardLength(colocatedShardId),
 								groupId);
 	}
 
@@ -1240,14 +1240,13 @@ ReplicateColocatedShardPlacement(int64 shardId, char *sourceNodeName,
 		uint64 placementId = GetNextPlacementId();
 
 		InsertShardPlacementRow(colocatedShardId, placementId,
-								SHARD_STATE_ACTIVE, ShardLength(colocatedShardId),
+								ShardLength(colocatedShardId),
 								groupId);
 
 		if (ShouldSyncTableMetadata(colocatedShard->relationId))
 		{
 			char *placementCommand = PlacementUpsertCommand(colocatedShardId, placementId,
-															SHARD_STATE_ACTIVE, 0,
-															groupId);
+															0, groupId);
 
 			SendCommandToWorkersWithMetadata(placementCommand);
 		}
