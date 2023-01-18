@@ -717,6 +717,8 @@ DELETE FROM users_test_table WHERE user_id = 3 or user_id = 5;
 SELECT COUNT(*) FROM users_test_table WHERE user_id = 3 or user_id = 5;
 
 DROP TABLE users_test_table;
+DROP TABLE events_test_table_local;
 DROP TABLE events_test_table;
+DROP TABLE events_test_table_2;
 DROP TABLE events_reference_copy_table;
 DROP TABLE users_reference_copy_table;
