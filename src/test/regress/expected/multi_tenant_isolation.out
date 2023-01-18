@@ -415,7 +415,7 @@ SELECT * FROM pg_dist_shard
  orders_streaming   | 1230047 | t            | 2147483647    | 2147483647
 (24 rows)
 
-SELECT * FROM pg_dist_shard_placement WHERE shardid >= 1230000 ORDER BY nodeport, shardid;
+SELECT * FROM pg_dist_shard_placement WHERE shardid BETWEEN 1230000 AND 1399999 ORDER BY nodeport, shardid;
  shardid | shardstate | shardlength | nodename  | nodeport | placementid
 ---------------------------------------------------------------------
  1230011 |          1 |           0 | localhost |    57637 |      100011
