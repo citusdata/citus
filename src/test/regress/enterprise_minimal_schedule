@@ -1,0 +1,5 @@
+test: single_node_enterprise
+test: multi_test_helpers multi_test_helpers_superuser
+test: multi_cluster_management
+test: multi_test_catalog_views
+test: multi_data_types
