@@ -272,11 +272,11 @@ SELECT con.conname, con.confupdtype, con.confdeltype, con.confmatchtype
       INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
       INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
               WHERE rel.relname LIKE 'referencing_table%' ORDER BY con.conname ASC;
-               conname                | confupdtype | confdeltype | confmatchtype
+                conname                | confupdtype | confdeltype | confmatchtype
 ---------------------------------------------------------------------
- referencing_table_ref_id_fkey        | a           | c           | s
- referencing_table_ref_id_fkey_360151 | a           | c           | s
- referencing_table_ref_id_fkey_360153 | a           | c           | s
+ referencing_table_ref_id_fkey         | a           | c           | s
+ referencing_table_ref_id_fkey_5410050 | a           | c           | s
+ referencing_table_ref_id_fkey_5410052 | a           | c           | s
 (3 rows)
 
 \c - - :master_host :master_port
@@ -299,11 +299,11 @@ SELECT con.conname, con.confupdtype, con.confdeltype, con.confmatchtype
       INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
       INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
               WHERE rel.relname LIKE 'referencing_table%' ORDER BY con.conname ASC;
-               conname                | confupdtype | confdeltype | confmatchtype
+                conname                | confupdtype | confdeltype | confmatchtype
 ---------------------------------------------------------------------
- referencing_table_ref_id_fkey        | a           | a           | s
- referencing_table_ref_id_fkey_360151 | a           | a           | s
- referencing_table_ref_id_fkey_360153 | a           | a           | s
+ referencing_table_ref_id_fkey         | a           | a           | s
+ referencing_table_ref_id_fkey_5410050 | a           | a           | s
+ referencing_table_ref_id_fkey_5410052 | a           | a           | s
 (3 rows)
 
 \c - - :master_host :master_port
@@ -326,11 +326,11 @@ SELECT con.conname, con.confupdtype, con.confdeltype, con.confmatchtype
       INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
       INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
               WHERE rel.relname LIKE 'referencing_table%' ORDER BY con.conname ASC;
-               conname                | confupdtype | confdeltype | confmatchtype
+                conname                | confupdtype | confdeltype | confmatchtype
 ---------------------------------------------------------------------
- referencing_table_ref_id_fkey        | a           | r           | s
- referencing_table_ref_id_fkey_360151 | a           | r           | s
- referencing_table_ref_id_fkey_360153 | a           | r           | s
+ referencing_table_ref_id_fkey         | a           | r           | s
+ referencing_table_ref_id_fkey_5410050 | a           | r           | s
+ referencing_table_ref_id_fkey_5410052 | a           | r           | s
 (3 rows)
 
 \c - - :master_host :master_port
@@ -353,11 +353,11 @@ SELECT con.conname, con.confupdtype, con.confdeltype, con.confmatchtype
       INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
       INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
               WHERE rel.relname LIKE 'referencing_table%' ORDER BY con.conname ASC;
-                 conname                 | confupdtype | confdeltype | confmatchtype
+                 conname                  | confupdtype | confdeltype | confmatchtype
 ---------------------------------------------------------------------
- referencing_table_ref_id_id_fkey        | a           | a           | s
- referencing_table_ref_id_id_fkey_360151 | a           | a           | s
- referencing_table_ref_id_id_fkey_360153 | a           | a           | s
+ referencing_table_ref_id_id_fkey         | a           | a           | s
+ referencing_table_ref_id_id_fkey_5410050 | a           | a           | s
+ referencing_table_ref_id_id_fkey_5410052 | a           | a           | s
 (3 rows)
 
 \c - - :master_host :master_port
@@ -380,11 +380,11 @@ SELECT con.conname, con.confupdtype, con.confdeltype, con.confmatchtype
       INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
       INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
               WHERE rel.relname LIKE 'referencing_table%' ORDER BY con.conname ASC;
-                 conname                 | confupdtype | confdeltype | confmatchtype
+                 conname                  | confupdtype | confdeltype | confmatchtype
 ---------------------------------------------------------------------
- referencing_table_ref_id_id_fkey        | r           | a           | s
- referencing_table_ref_id_id_fkey_360151 | r           | a           | s
- referencing_table_ref_id_id_fkey_360153 | r           | a           | s
+ referencing_table_ref_id_id_fkey         | r           | a           | s
+ referencing_table_ref_id_id_fkey_5410050 | r           | a           | s
+ referencing_table_ref_id_id_fkey_5410052 | r           | a           | s
 (3 rows)
 
 \c - - :master_host :master_port
@@ -407,11 +407,11 @@ SELECT con.conname, con.confupdtype, con.confdeltype, con.confmatchtype
       INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
       INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
               WHERE rel.relname LIKE 'referencing_table%' ORDER BY con.conname ASC;
-                 conname                 | confupdtype | confdeltype | confmatchtype
+                 conname                  | confupdtype | confdeltype | confmatchtype
 ---------------------------------------------------------------------
- referencing_table_ref_id_id_fkey        | a           | a           | s
- referencing_table_ref_id_id_fkey_360151 | a           | a           | s
- referencing_table_ref_id_id_fkey_360153 | a           | a           | s
+ referencing_table_ref_id_id_fkey         | a           | a           | s
+ referencing_table_ref_id_id_fkey_5410050 | a           | a           | s
+ referencing_table_ref_id_id_fkey_5410052 | a           | a           | s
 (3 rows)
 
 \c - - :master_host :master_port
@@ -434,11 +434,11 @@ SELECT con.conname, con.confupdtype, con.confdeltype, con.confmatchtype
       INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
       INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
               WHERE rel.relname LIKE 'referencing_table%' ORDER BY con.conname ASC;
-                 conname                 | confupdtype | confdeltype | confmatchtype
+                 conname                  | confupdtype | confdeltype | confmatchtype
 ---------------------------------------------------------------------
- referencing_table_ref_id_id_fkey        | a           | a           | f
- referencing_table_ref_id_id_fkey_360151 | a           | a           | f
- referencing_table_ref_id_id_fkey_360153 | a           | a           | f
+ referencing_table_ref_id_id_fkey         | a           | a           | f
+ referencing_table_ref_id_id_fkey_5410050 | a           | a           | f
+ referencing_table_ref_id_id_fkey_5410052 | a           | a           | f
 (3 rows)
 
 \c - - :master_host :master_port
