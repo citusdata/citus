@@ -1,8 +1,12 @@
 --
 -- MULTI_FOREIGN_KEY
 --
-SET citus.next_shard_id TO 1770000;
+ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1770000;
+ALTER SEQUENCE pg_catalog.pg_dist_placement_placementid_seq RESTART 1770000;
 SET citus.shard_count TO 4;
+CREATE SCHEMA at_add_fk;
+SET SEARCH_PATH = at_add_fk;
+SET citus.shard_replication_factor TO 1;
 -- create tables
 CREATE TABLE referenced_table(id int UNIQUE, test_column int, PRIMARY KEY(id, test_column));
 SELECT create_distributed_table('referenced_table', 'id', 'hash');
@@ -11,58 +15,8 @@ SELECT create_distributed_table('referenced_table', 'id', 'hash');
 
 (1 row)
 
--- test foreign constraint creation with not supported parameters
-CREATE TABLE referencing_table(id int, ref_id int);
-SELECT create_distributed_table('referencing_table', 'ref_id', 'hash');
- create_distributed_table
----------------------------------------------------------------------
-
-(1 row)
-
-ALTER TABLE  referencing_table 	ADD FOREIGN KEY (ref_id) REFERENCES referenced_table(id) ON DELETE SET NULL;
-ERROR:  unsupported FK delete action type: 110
-DROP TABLE referencing_table;
-CREATE TABLE referencing_table(id int, ref_id int);
-SELECT create_distributed_table('referencing_table', 'ref_id', 'hash');
- create_distributed_table
----------------------------------------------------------------------
-
-(1 row)
-
-ALTER TABLE  referencing_table  ADD FOREIGN KEY (ref_id) REFERENCES referenced_table(id) ON DELETE SET DEFAULT;
-ERROR:  unsupported FK delete action type: 100
-DROP TABLE referencing_table;
-CREATE TABLE referencing_table(id int, ref_id int);
-SELECT create_distributed_table('referencing_table', 'ref_id', 'hash');
- create_distributed_table
----------------------------------------------------------------------
-
-(1 row)
-
-ALTER TABLE  referencing_table  ADD FOREIGN KEY (ref_id) REFERENCES referenced_table(id) ON UPDATE SET NULL;
-ERROR:  unsupported FK update action type: 110
-DROP TABLE referencing_table;
-CREATE TABLE referencing_table(id int, ref_id int);
-SELECT create_distributed_table('referencing_table', 'ref_id', 'hash');
- create_distributed_table
----------------------------------------------------------------------
-
-(1 row)
-
-ALTER TABLE  referencing_table  ADD FOREIGN KEY (ref_id) REFERENCES referenced_table(id)  ON UPDATE SET DEFAULT;
-ERROR:  unsupported FK update action type: 100
-DROP TABLE referencing_table;
-CREATE TABLE referencing_table(id int, ref_id int);
-SELECT create_distributed_table('referencing_table', 'ref_id', 'hash');
- create_distributed_table
----------------------------------------------------------------------
-
-(1 row)
-
-ALTER TABLE  referencing_table  ADD FOREIGN KEY (ref_id) REFERENCES referenced_table(id)  ON UPDATE CASCADE;
-ERROR:  unsupported FK update action type: 99
-DROP TABLE referencing_table;
 -- self referencing table with replication factor > 1
+SET citus.shard_replication_factor TO 2;
 CREATE TABLE self_referencing_table(id int, ref_id int, PRIMARY KEY (id, ref_id));
 SELECT create_distributed_table('self_referencing_table', 'id', 'hash');
  create_distributed_table
@@ -76,6 +30,7 @@ DETAIL:  Citus currently supports foreign key constraints only for "citus.shard_
 HINT:  Please change "citus.shard_replication_factor to 1". To learn more about using foreign keys with other replication factors, please contact us at https://citusdata.com/about/contact_us.
 DROP TABLE self_referencing_table;
 -- test foreign constraint creation on NOT co-located tables
+SET citus.shard_replication_factor TO 1;
 CREATE TABLE referencing_table(id int, ref_id int);
 SELECT create_distributed_table('referencing_table', 'ref_id', 'hash');
  create_distributed_table
@@ -84,9 +39,6 @@ SELECT create_distributed_table('referencing_table', 'ref_id', 'hash');
 (1 row)
 
 ALTER TABLE referencing_table ADD FOREIGN KEY(ref_id) REFERENCES referenced_table(id);
-ERROR:  cannot create foreign key constraint
-DETAIL:  Citus currently supports foreign key constraints only for "citus.shard_replication_factor = 1".
-HINT:  Please change "citus.shard_replication_factor to 1". To learn more about using foreign keys with other replication factors, please contact us at https://citusdata.com/about/contact_us.
 DROP TABLE referencing_table;
 -- test foreign constraint creation on non-partition columns
 CREATE TABLE referencing_table(id int, ref_id int);
@@ -113,6 +65,7 @@ ERROR:  cannot create foreign key constraint
 DETAIL:  Foreign keys are supported in two cases, either in between two colocated tables including partition column in the same ordinal in the both tables or from distributed to reference tables
 DROP TABLE referencing_table;
 -- test foreign constraint with replication factor > 1
+SET citus.shard_replication_factor TO 2;
 CREATE TABLE referencing_table(id int, ref_id int);
 SELECT create_distributed_table('referencing_table', 'ref_id', 'hash');
  create_distributed_table
@@ -121,9 +74,8 @@ SELECT create_distributed_table('referencing_table', 'ref_id', 'hash');
 (1 row)
 
 ALTER TABLE referencing_table ADD FOREIGN KEY(ref_id) REFERENCES referenced_table(id);
-ERROR:  cannot create foreign key constraint
-DETAIL:  Citus currently supports foreign key constraints only for "citus.shard_replication_factor = 1".
-HINT:  Please change "citus.shard_replication_factor to 1". To learn more about using foreign keys with other replication factors, please contact us at https://citusdata.com/about/contact_us.
+ERROR:  cannot create foreign key constraint since relations are not colocated or not referencing a reference table
+DETAIL:  A distributed table can only have foreign keys if it is referencing another colocated hash distributed table or a reference table
 DROP TABLE referencing_table;
 DROP TABLE referenced_table;
 -- test foreign constraint creation on append and range distributed tables
@@ -203,11 +155,12 @@ SELECT con.conname
                 conname
 ---------------------------------------------------------------------
  referencing_table_ref_id_fkey
- referencing_table_ref_id_fkey_1770052
- referencing_table_ref_id_fkey_1770054
+ referencing_table_ref_id_fkey_1770032
+ referencing_table_ref_id_fkey_1770034
 (3 rows)
 
 \c - - :master_host :master_port
+SET SEARCH_PATH = at_add_fk;
 ALTER TABLE  referencing_table DROP CONSTRAINT referencing_table_ref_id_fkey;
 -- Test "ADD FOREIGN KEY (...) REFERENCING pk_table" format
 ALTER TABLE referencing_table ADD FOREIGN KEY(ref_id) REFERENCES referenced_table;
@@ -230,11 +183,12 @@ SELECT con.conname
                 conname
 ---------------------------------------------------------------------
  referencing_table_ref_id_fkey
- referencing_table_ref_id_fkey_1770052
- referencing_table_ref_id_fkey_1770054
+ referencing_table_ref_id_fkey_1770032
+ referencing_table_ref_id_fkey_1770034
 (3 rows)
 
 \c - - :master_host :master_port
+SET SEARCH_PATH = at_add_fk;
 ALTER TABLE  referencing_table DROP CONSTRAINT referencing_table_ref_id_fkey;
 DROP TABLE referencing_table;
 DROP TABLE referenced_table;
@@ -275,11 +229,12 @@ SELECT con.conname, con.confupdtype, con.confdeltype, con.confmatchtype
                 conname                | confupdtype | confdeltype | confmatchtype
 ---------------------------------------------------------------------
  referencing_table_ref_id_fkey         | a           | c           | s
- referencing_table_ref_id_fkey_5410050 | a           | c           | s
- referencing_table_ref_id_fkey_5410052 | a           | c           | s
+ referencing_table_ref_id_fkey_1770040 | a           | c           | s
+ referencing_table_ref_id_fkey_1770042 | a           | c           | s
 (3 rows)
 
 \c - - :master_host :master_port
+SET SEARCH_PATH = at_add_fk;
 ALTER TABLE  referencing_table DROP CONSTRAINT referencing_table_ref_id_fkey;
 -- test ON DELETE NO ACTION + DEFERABLE + INITIALLY DEFERRED
 ALTER TABLE referencing_table ADD FOREIGN KEY(ref_id) REFERENCES referenced_table(id) ON DELETE NO ACTION DEFERRABLE INITIALLY DEFERRED;
@@ -302,11 +257,12 @@ SELECT con.conname, con.confupdtype, con.confdeltype, con.confmatchtype
                 conname                | confupdtype | confdeltype | confmatchtype
 ---------------------------------------------------------------------
  referencing_table_ref_id_fkey         | a           | a           | s
- referencing_table_ref_id_fkey_5410050 | a           | a           | s
- referencing_table_ref_id_fkey_5410052 | a           | a           | s
+ referencing_table_ref_id_fkey_1770040 | a           | a           | s
+ referencing_table_ref_id_fkey_1770042 | a           | a           | s
 (3 rows)
 
 \c - - :master_host :master_port
+SET SEARCH_PATH = at_add_fk;
 ALTER TABLE  referencing_table DROP CONSTRAINT referencing_table_ref_id_fkey;
 -- test ON DELETE RESTRICT
 ALTER TABLE referencing_table ADD FOREIGN KEY(ref_id) REFERENCES referenced_table(id) ON DELETE RESTRICT;
@@ -329,11 +285,12 @@ SELECT con.conname, con.confupdtype, con.confdeltype, con.confmatchtype
                 conname                | confupdtype | confdeltype | confmatchtype
 ---------------------------------------------------------------------
  referencing_table_ref_id_fkey         | a           | r           | s
- referencing_table_ref_id_fkey_5410050 | a           | r           | s
- referencing_table_ref_id_fkey_5410052 | a           | r           | s
+ referencing_table_ref_id_fkey_1770040 | a           | r           | s
+ referencing_table_ref_id_fkey_1770042 | a           | r           | s
 (3 rows)
 
 \c - - :master_host :master_port
+SET SEARCH_PATH = at_add_fk;
 ALTER TABLE  referencing_table DROP CONSTRAINT referencing_table_ref_id_fkey;
 -- test ON UPDATE NO ACTION + DEFERABLE + INITIALLY DEFERRED
 ALTER TABLE  referencing_table ADD FOREIGN KEY(ref_id, id) REFERENCES referenced_table(id, test_column) ON UPDATE NO ACTION DEFERRABLE INITIALLY DEFERRED;
@@ -356,11 +313,12 @@ SELECT con.conname, con.confupdtype, con.confdeltype, con.confmatchtype
                  conname                  | confupdtype | confdeltype | confmatchtype
 ---------------------------------------------------------------------
  referencing_table_ref_id_id_fkey         | a           | a           | s
- referencing_table_ref_id_id_fkey_5410050 | a           | a           | s
- referencing_table_ref_id_id_fkey_5410052 | a           | a           | s
+ referencing_table_ref_id_id_fkey_1770040 | a           | a           | s
+ referencing_table_ref_id_id_fkey_1770042 | a           | a           | s
 (3 rows)
 
 \c - - :master_host :master_port
+SET SEARCH_PATH = at_add_fk;
 ALTER TABLE  referencing_table DROP CONSTRAINT referencing_table_ref_id_id_fkey;
 -- test ON UPDATE RESTRICT
 ALTER TABLE  referencing_table ADD FOREIGN KEY(ref_id, id) REFERENCES referenced_table(id, test_column) ON UPDATE RESTRICT;
@@ -383,11 +341,12 @@ SELECT con.conname, con.confupdtype, con.confdeltype, con.confmatchtype
                  conname                  | confupdtype | confdeltype | confmatchtype
 ---------------------------------------------------------------------
  referencing_table_ref_id_id_fkey         | r           | a           | s
- referencing_table_ref_id_id_fkey_5410050 | r           | a           | s
- referencing_table_ref_id_id_fkey_5410052 | r           | a           | s
+ referencing_table_ref_id_id_fkey_1770040 | r           | a           | s
+ referencing_table_ref_id_id_fkey_1770042 | r           | a           | s
 (3 rows)
 
 \c - - :master_host :master_port
+SET SEARCH_PATH = at_add_fk;
 ALTER TABLE  referencing_table DROP CONSTRAINT referencing_table_ref_id_id_fkey;
 -- test MATCH SIMPLE
 ALTER TABLE referencing_table ADD FOREIGN KEY(ref_id, id) REFERENCES referenced_table(id, test_column) MATCH SIMPLE;
@@ -410,11 +369,12 @@ SELECT con.conname, con.confupdtype, con.confdeltype, con.confmatchtype
                  conname                  | confupdtype | confdeltype | confmatchtype
 ---------------------------------------------------------------------
  referencing_table_ref_id_id_fkey         | a           | a           | s
- referencing_table_ref_id_id_fkey_5410050 | a           | a           | s
- referencing_table_ref_id_id_fkey_5410052 | a           | a           | s
+ referencing_table_ref_id_id_fkey_1770040 | a           | a           | s
+ referencing_table_ref_id_id_fkey_1770042 | a           | a           | s
 (3 rows)
 
 \c - - :master_host :master_port
+SET SEARCH_PATH = at_add_fk;
 ALTER TABLE  referencing_table DROP CONSTRAINT referencing_table_ref_id_id_fkey;
 -- test MATCH FULL
 ALTER TABLE referencing_table ADD FOREIGN KEY(ref_id, id) REFERENCES referenced_table(id, test_column) MATCH FULL;
@@ -437,11 +397,12 @@ SELECT con.conname, con.confupdtype, con.confdeltype, con.confmatchtype
                  conname                  | confupdtype | confdeltype | confmatchtype
 ---------------------------------------------------------------------
  referencing_table_ref_id_id_fkey         | a           | a           | f
- referencing_table_ref_id_id_fkey_5410050 | a           | a           | f
- referencing_table_ref_id_id_fkey_5410052 | a           | a           | f
+ referencing_table_ref_id_id_fkey_1770040 | a           | a           | f
+ referencing_table_ref_id_id_fkey_1770042 | a           | a           | f
 (3 rows)
 
 \c - - :master_host :master_port
+SET SEARCH_PATH = at_add_fk;
 ALTER TABLE  referencing_table DROP CONSTRAINT referencing_table_ref_id_id_fkey;
 -- verify that we skip foreign key validation when citus.skip_constraint_validation is set to ON
 -- not skipping validation would result in a distributed query, which emits debug messages
@@ -491,3 +452,8 @@ SELECT  con.conname
 ALTER TABLE dist_table DROP CONSTRAINT dist_table_referencing_column_fkey;
 DROP TABLE dist_table;
 DROP TABLE reference_table;
+DROP SCHEMA at_add_fk CASCADE;
+NOTICE:  drop cascades to 2 other objects
+DETAIL:  drop cascades to table referenced_table
+drop cascades to table referencing_table
+RESET SEARCH_PATH;

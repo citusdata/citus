@@ -2,46 +2,27 @@
 -- MULTI_FOREIGN_KEY
 --
 
-SET citus.next_shard_id TO 1770000;
+ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1770000;
+ALTER SEQUENCE pg_catalog.pg_dist_placement_placementid_seq RESTART 1770000;
 SET citus.shard_count TO 4;
+
+CREATE SCHEMA at_add_fk;
+SET SEARCH_PATH = at_add_fk;
+SET citus.shard_replication_factor TO 1;
 
 -- create tables
 CREATE TABLE referenced_table(id int UNIQUE, test_column int, PRIMARY KEY(id, test_column));
 SELECT create_distributed_table('referenced_table', 'id', 'hash');
 
--- test foreign constraint creation with not supported parameters
-CREATE TABLE referencing_table(id int, ref_id int);
-SELECT create_distributed_table('referencing_table', 'ref_id', 'hash');
-ALTER TABLE  referencing_table 	ADD FOREIGN KEY (ref_id) REFERENCES referenced_table(id) ON DELETE SET NULL;
-DROP TABLE referencing_table;
-
-CREATE TABLE referencing_table(id int, ref_id int);
-SELECT create_distributed_table('referencing_table', 'ref_id', 'hash');
-ALTER TABLE  referencing_table  ADD FOREIGN KEY (ref_id) REFERENCES referenced_table(id) ON DELETE SET DEFAULT;
-DROP TABLE referencing_table;
-
-CREATE TABLE referencing_table(id int, ref_id int);
-SELECT create_distributed_table('referencing_table', 'ref_id', 'hash');
-ALTER TABLE  referencing_table  ADD FOREIGN KEY (ref_id) REFERENCES referenced_table(id) ON UPDATE SET NULL;
-DROP TABLE referencing_table;
-
-CREATE TABLE referencing_table(id int, ref_id int);
-SELECT create_distributed_table('referencing_table', 'ref_id', 'hash');
-ALTER TABLE  referencing_table  ADD FOREIGN KEY (ref_id) REFERENCES referenced_table(id)  ON UPDATE SET DEFAULT;
-DROP TABLE referencing_table;
-
-CREATE TABLE referencing_table(id int, ref_id int);
-SELECT create_distributed_table('referencing_table', 'ref_id', 'hash');
-ALTER TABLE  referencing_table  ADD FOREIGN KEY (ref_id) REFERENCES referenced_table(id)  ON UPDATE CASCADE;
-DROP TABLE referencing_table;
-
 -- self referencing table with replication factor > 1
+SET citus.shard_replication_factor TO 2;
 CREATE TABLE self_referencing_table(id int, ref_id int, PRIMARY KEY (id, ref_id));
 SELECT create_distributed_table('self_referencing_table', 'id', 'hash');
 ALTER TABLE self_referencing_table ADD FOREIGN KEY(id,ref_id) REFERENCES self_referencing_table(id, ref_id);
 DROP TABLE self_referencing_table;
 
 -- test foreign constraint creation on NOT co-located tables
+SET citus.shard_replication_factor TO 1;
 CREATE TABLE referencing_table(id int, ref_id int);
 SELECT create_distributed_table('referencing_table', 'ref_id', 'hash');
 ALTER TABLE referencing_table ADD FOREIGN KEY(ref_id) REFERENCES referenced_table(id);
@@ -60,6 +41,7 @@ ALTER TABLE referencing_table ADD FOREIGN KEY(id, ref_id) REFERENCES referenced_
 DROP TABLE referencing_table;
 
 -- test foreign constraint with replication factor > 1
+SET citus.shard_replication_factor TO 2;
 CREATE TABLE referencing_table(id int, ref_id int);
 SELECT create_distributed_table('referencing_table', 'ref_id', 'hash');
 ALTER TABLE referencing_table ADD FOREIGN KEY(ref_id) REFERENCES referenced_table(id);
@@ -108,6 +90,7 @@ SELECT con.conname
               WHERE rel.relname LIKE 'referencing_table%';
 
 \c - - :master_host :master_port
+SET SEARCH_PATH = at_add_fk;
 ALTER TABLE  referencing_table DROP CONSTRAINT referencing_table_ref_id_fkey;
 
 -- Test "ADD FOREIGN KEY (...) REFERENCING pk_table" format
@@ -127,6 +110,7 @@ SELECT con.conname
               WHERE rel.relname LIKE 'referencing_table%';
 
 \c - - :master_host :master_port
+SET SEARCH_PATH = at_add_fk;
 ALTER TABLE  referencing_table DROP CONSTRAINT referencing_table_ref_id_fkey;
 
 DROP TABLE referencing_table;
@@ -157,6 +141,8 @@ SELECT con.conname, con.confupdtype, con.confdeltype, con.confmatchtype
               WHERE rel.relname LIKE 'referencing_table%' ORDER BY con.conname ASC;
 
 \c - - :master_host :master_port
+SET SEARCH_PATH = at_add_fk;
+
 ALTER TABLE  referencing_table DROP CONSTRAINT referencing_table_ref_id_fkey;
 
 -- test ON DELETE NO ACTION + DEFERABLE + INITIALLY DEFERRED
@@ -177,6 +163,7 @@ SELECT con.conname, con.confupdtype, con.confdeltype, con.confmatchtype
               WHERE rel.relname LIKE 'referencing_table%' ORDER BY con.conname ASC;
 
 \c - - :master_host :master_port
+SET SEARCH_PATH = at_add_fk;
 ALTER TABLE  referencing_table DROP CONSTRAINT referencing_table_ref_id_fkey;
 
 -- test ON DELETE RESTRICT
@@ -198,6 +185,8 @@ SELECT con.conname, con.confupdtype, con.confdeltype, con.confmatchtype
               WHERE rel.relname LIKE 'referencing_table%' ORDER BY con.conname ASC;
 
 \c - - :master_host :master_port
+SET SEARCH_PATH = at_add_fk;
+
 ALTER TABLE  referencing_table DROP CONSTRAINT referencing_table_ref_id_fkey;
 
 -- test ON UPDATE NO ACTION + DEFERABLE + INITIALLY DEFERRED
@@ -217,6 +206,8 @@ SELECT con.conname, con.confupdtype, con.confdeltype, con.confmatchtype
               WHERE rel.relname LIKE 'referencing_table%' ORDER BY con.conname ASC;
 
 \c - - :master_host :master_port
+SET SEARCH_PATH = at_add_fk;
+
 ALTER TABLE  referencing_table DROP CONSTRAINT referencing_table_ref_id_id_fkey;
 
 -- test ON UPDATE RESTRICT
@@ -236,6 +227,8 @@ SELECT con.conname, con.confupdtype, con.confdeltype, con.confmatchtype
               WHERE rel.relname LIKE 'referencing_table%' ORDER BY con.conname ASC;
 
 \c - - :master_host :master_port
+SET SEARCH_PATH = at_add_fk;
+
 ALTER TABLE  referencing_table DROP CONSTRAINT referencing_table_ref_id_id_fkey;
 
 -- test MATCH SIMPLE
@@ -256,6 +249,8 @@ SELECT con.conname, con.confupdtype, con.confdeltype, con.confmatchtype
               WHERE rel.relname LIKE 'referencing_table%' ORDER BY con.conname ASC;
 
 \c - - :master_host :master_port
+SET SEARCH_PATH = at_add_fk;
+
 ALTER TABLE  referencing_table DROP CONSTRAINT referencing_table_ref_id_id_fkey;
 
 -- test MATCH FULL
@@ -275,6 +270,8 @@ SELECT con.conname, con.confupdtype, con.confdeltype, con.confmatchtype
               WHERE rel.relname LIKE 'referencing_table%' ORDER BY con.conname ASC;
 
 \c - - :master_host :master_port
+SET SEARCH_PATH = at_add_fk;
+
 ALTER TABLE  referencing_table DROP CONSTRAINT referencing_table_ref_id_id_fkey;
 
 -- verify that we skip foreign key validation when citus.skip_constraint_validation is set to ON
@@ -313,3 +310,6 @@ ALTER TABLE dist_table DROP CONSTRAINT dist_table_referencing_column_fkey;
 
 DROP TABLE dist_table;
 DROP TABLE reference_table;
+
+DROP SCHEMA at_add_fk CASCADE;
+RESET SEARCH_PATH;
