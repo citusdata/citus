@@ -459,23 +459,6 @@ SELECT unnest(shard_placement_replication_array(
  {"updatetype":2,"shardid":2,"sourcename":"hostname2","sourceport":5432,"targetname":"hostname1","targetport":5432}
 (2 rows)
 
--- Check that shard_placement_replication_array returns a shard copy operation
--- for each of the inactive shards.
-SELECT unnest(shard_placement_replication_array(
-    ARRAY['{"node_name": "hostname1"}',
-          '{"node_name": "hostname2"}']::json[],
-    ARRAY['{"shardid":1, "nodename":"hostname1"}',
-          '{"shardid":2, "shardstate":3, "nodename":"hostname1"}',
-          '{"shardid":1, "shardstate":3, "nodename":"hostname2"}',
-          '{"shardid":2, "nodename":"hostname2"}']::json[],
-    2
-));
-                                                       unnest
----------------------------------------------------------------------
- {"updatetype":2,"shardid":1,"sourcename":"hostname1","sourceport":5432,"targetname":"hostname2","targetport":5432}
- {"updatetype":2,"shardid":2,"sourcename":"hostname2","sourceport":5432,"targetname":"hostname1","targetport":5432}
-(2 rows)
-
 -- Check that shard_placement_replication_array errors out if all placements of
 -- a shard are placed on inactive nodes.
 SELECT unnest(shard_placement_replication_array(

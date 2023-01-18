@@ -1560,42 +1560,6 @@ INSERT INTO raw_events_first SELECT * FROM raw_events_second WHERE user_id = 5;
 
 SET client_min_messages TO INFO;
 
--- if a single shard of the SELECT is unhealty, the query should fail
-UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE shardid = 13300004 AND nodeport = :worker_1_port;
-truncate raw_events_first;
-SET client_min_messages TO DEBUG2;
-
--- this should fail
-INSERT INTO raw_events_first SELECT * FROM raw_events_second;
-
--- this should also fail
-INSERT INTO raw_events_first SELECT * FROM raw_events_second WHERE user_id = 5;
-
--- but this should work given that it hits different shard
-INSERT INTO raw_events_first SELECT * FROM raw_events_second WHERE user_id = 6;
-
-SET client_min_messages TO INFO;
-
--- mark the unhealthy placement as healthy again for the next tests
-UPDATE pg_dist_shard_placement SET shardstate = 1 WHERE shardid = 13300004 AND nodeport = :worker_1_port;
-
--- now that we should show that it works if one of the target shard interval is not healthy
-UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE shardid = 13300000 AND nodeport = :worker_1_port;
-truncate raw_events_first;
-SET client_min_messages TO DEBUG2;
-
--- this should work
-INSERT INTO raw_events_first SELECT * FROM raw_events_second;
-
-SET client_min_messages TO INFO;
-truncate raw_events_first;
-SET client_min_messages TO DEBUG2;
-
--- this should also work
-INSERT INTO raw_events_first SELECT * FROM raw_events_second WHERE user_id = 5;
-
-SET client_min_messages TO INFO;
-
 -- now do some tests with varchars
 INSERT INTO insert_select_varchar_test VALUES ('test_1', 10);
 INSERT INTO insert_select_varchar_test VALUES ('test_2', 30);

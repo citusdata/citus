@@ -317,15 +317,6 @@ SELECT count(*) FROM lineitem_date WHERE l_shipdate = '1997-07-30';
 SELECT count(*) FROM lineitem_date WHERE l_shipdate = '1998-01-15';
 SELECT count(*) FROM lineitem_date WHERE l_shipdate = '1997-08-08';
 
--- test with invalid shard placements
-\c - postgres - :master_port
-SET search_path to "Tenant Isolation";
-
-UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE nodeport = :worker_1_port;
-SELECT isolate_tenant_to_new_shard('lineitem_date', '1997-08-08', shard_transfer_mode => 'block_writes');
-
-UPDATE pg_dist_shard_placement SET shardstate = 1 WHERE nodeport = :worker_1_port;
-
 \c - mx_isolation_role_ent - :master_port
 SET search_path to "Tenant Isolation";
 DROP TABLE lineitem_date;
