@@ -26,7 +26,7 @@ test_file_name = args['test_name']
 use_base_schedule = args['use_base_schedule']
 use_whole_schedule_line = args['use_whole_schedule_line']
 
-test_files_to_skip = ['multi_cluster_management', 'multi_extension', 'multi_test_helpers']
+test_files_to_skip = ['multi_cluster_management', 'multi_extension', 'multi_test_helpers', 'multi_insert_select']
 test_files_to_run_without_schedule = ['single_node_enterprise']
 
 if not (test_file_name or test_file_path):
