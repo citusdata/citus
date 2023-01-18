@@ -116,8 +116,7 @@ static void SetInterShardDDLTaskRelationShardList(Task *task,
 												  ShardInterval *leftShardInterval,
 												  ShardInterval *rightShardInterval);
 static Oid get_attrdef_oid(Oid relationId, AttrNumber attnum);
-static char * GetAlterColumnWithNextvalDefaultCmd(Oid sequenceOid, Oid relationId,
-												  char *colname);
+
 static char * GetAddColumnWithNextvalDefaultCmd(Oid sequenceOid, Oid relationId,
 												char *colname, TypeName *typeName);
 
@@ -2441,8 +2440,9 @@ PostprocessAlterTableStmt(AlterTableStmt *alterTableStatement)
 					if (ShouldSyncTableMetadata(relationId))
 					{
 						needMetadataSyncForNewSequences = true;
+						bool missingTableOk = false;
 						alterTableDefaultNextvalCmd = GetAlterColumnWithNextvalDefaultCmd(
-							seqOid, relationId, command->name);
+							seqOid, relationId, command->name, missingTableOk);
 					}
 				}
 			}
@@ -2630,8 +2630,8 @@ get_attrdef_oid(Oid relationId, AttrNumber attnum)
  * ALTER TABLE ALTER COLUMN .. SET DEFAULT nextval()
  * If sequence type is not bigint, we use worker_nextval() instead of nextval().
  */
-static char *
-GetAlterColumnWithNextvalDefaultCmd(Oid sequenceOid, Oid relationId, char *colname)
+char *
+GetAlterColumnWithNextvalDefaultCmd(Oid sequenceOid, Oid relationId, char *colname, bool missingTableOk)
 {
 	char *qualifiedSequenceName = generate_qualified_relation_name(sequenceOid);
 	char *qualifiedRelationName = generate_qualified_relation_name(relationId);
@@ -2650,9 +2650,18 @@ GetAlterColumnWithNextvalDefaultCmd(Oid sequenceOid, Oid relationId, char *colna
 
 	StringInfoData str = { 0 };
 	initStringInfo(&str);
-	appendStringInfo(&str, "ALTER TABLE %s ALTER COLUMN %s "
+
+	appendStringInfo(&str, "ALTER TABLE ");
+
+	if (missingTableOk)
+	{
+		appendStringInfo(&str, "IF EXISTS ");
+	}
+
+	appendStringInfo(&str, "%s ALTER COLUMN %s "
 						   "SET DEFAULT %s(%s::regclass)",
-					 qualifiedRelationName, colname,
+					 qualifiedRelationName,
+					 colname,
 					 quote_qualified_identifier("pg_catalog", nextvalFunctionName),
 					 quote_literal_cstr(qualifiedSequenceName));
 
