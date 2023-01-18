@@ -270,7 +270,6 @@ CreateColocatedShards(Oid targetRelationId, Oid sourceRelationId, bool
 		foreach_ptr(sourcePlacement, sourceShardPlacementList)
 		{
 			int32 groupId = sourcePlacement->groupId;
-			const ShardState shardState = SHARD_STATE_ACTIVE;
 			const uint64 shardSize = 0;
 
 			/*
@@ -279,7 +278,7 @@ CreateColocatedShards(Oid targetRelationId, Oid sourceRelationId, bool
 			 */
 			uint64 shardPlacementId = InsertShardPlacementRow(newShardId,
 															  INVALID_PLACEMENT_ID,
-															  shardState, shardSize,
+															  shardSize,
 															  groupId);
 
 			ShardPlacement *shardPlacement = LoadShardPlacement(newShardId,
