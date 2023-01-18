@@ -3128,6 +3128,12 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 										   "involving partition column")));
 				}
 
+				/*
+				 * We check for ALTER COLUMN TYPE ...
+				 * if the column is an identity column,
+				 * changing the type of the column
+				 * should not be allowed for now
+				 */
 				if (AlterInvolvesIdentityColumn(alterTableStatement, command))
 				{
 					ereport(ERROR, (errmsg("cannot execute ALTER TABLE command "
@@ -3137,7 +3143,7 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 				/*
 				 * We check for ALTER COLUMN TYPE ...
 				 * if the column has default coming from a user-defined sequence
-				 * or it's an identity column changing the type of the column
+				 * changing the type of the column
 				 * should not be allowed for now
 				 */
 				AttrNumber attnum = get_attnum(relationId, command->name);
