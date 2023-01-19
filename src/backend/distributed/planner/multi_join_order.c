@@ -76,8 +76,8 @@ static List * FindJoinClauseForTables(List *joinRestrictInfoListList,
 									  JoinType joinType);
 static const char * JoinTypeName(JoinType jointype);
 static List * ExtractPushdownJoinRestrictInfos(List *joinRestrictInfoList,
-											   RestrictInfo *joinRestrictInfo, JoinType
-											   joinType);
+											   RestrictInfo *joinRestrictInfo,
+											   JoinType joinType);
 
 /* Local functions forward declarations for join evaluations */
 static JoinOrderNode * EvaluateJoinRules(List *joinedTableList,
@@ -373,7 +373,8 @@ TableEntryByRangeTableId(List *tableEntryList, uint32 rangeTableIdx)
  */
 static List *
 ExtractPushdownJoinRestrictInfos(List *restrictInfoListOfJoin,
-								 RestrictInfo *joinRestrictInfo, JoinType joinType)
+								 RestrictInfo *joinRestrictInfo,
+								 JoinType joinType)
 {
 	List *joinFilterRestrictInfoList = NIL;
 
@@ -415,18 +416,19 @@ FindJoinClauseForTables(List *joinRestrictInfoListList, List *generatedEcJoinCla
 																	 rhsTableId,
 																	 restrictClause))
 			{
-				List *pushdownFakeRestrictInfoList = ExtractPushdownJoinRestrictInfos(
+				List *pushdownableJoinRestrictInfoList = ExtractPushdownJoinRestrictInfos(
 					joinRestrictInfoList, joinRestrictInfo, joinType);
-				List *nonPushdownRestrictInfoList = list_difference(joinRestrictInfoList,
-																	pushdownFakeRestrictInfoList);
-				List *nonPushdownRestrictClauseList =
-					ExtractRestrictClausesFromRestrictionInfoList(
-						nonPushdownRestrictInfoList);
-				return nonPushdownRestrictClauseList;
+				List *nonPushdownableJoinRestrictInfoList = list_difference(
+					joinRestrictInfoList,
+					pushdownableJoinRestrictInfoList);
+				List *nonPushdownableJoinRestrictClauseList =
+					get_all_actual_clauses(nonPushdownableJoinRestrictInfoList);
+				return nonPushdownableJoinRestrictClauseList;
 			}
 		}
 	}
 
+	/* we can find applicable join clause inside generated implicit join clauses */
 	if (joinType == JOIN_INNER)
 	{
 		Node *ecClause = NULL;
@@ -1292,7 +1294,7 @@ SinglePartitionJoin(JoinOrderNode *currentJoinNode, TableEntry *candidateTable,
 
 	/*
 	 * we only allow single range redistribution if both tables are range distributed.
-	 * The reason is that we cannot guarantee all values in nonrange distributed table
+	 * The reason is that we cannot guarantee all values in non-range distributed table
 	 * will be inside the shard ranges of range distributed table.
 	 */
 	if ((currentPartitionMethod == DISTRIBUTE_BY_RANGE && candidatePartitionMethod !=
@@ -1582,8 +1584,8 @@ IsApplicableJoinClause(List *leftTableIdList, uint32 rightTableId, Node *joinCla
 
 
 /*
- * IsApplicableFalseConstantJoinClause returns true if it can find a constant false filter
- * which is applied to right table and also at least one of the table in left tables.
+ * IsApplicableFalseConstantJoinClause returns true if given restrictinfo is a constant false
+ * filter which is applied to right table and also at least one of the table in left tables.
  */
 bool
 IsApplicableFalseConstantJoinClause(List *leftTableIdList, uint32 rightTableId,

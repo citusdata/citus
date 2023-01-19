@@ -127,14 +127,17 @@ static void PopPlannerRestrictionContext(void);
 static void ResetPlannerRestrictionContext(
 	PlannerRestrictionContext *plannerRestrictionContext);
 static PlannedStmt * PlanFastPathDistributedStmt(DistributedPlanningContext *planContext,
-												 Node *distributionKeyValue, int
-												 fastPathRelId);
+												 Node *distributionKeyValue,
+												 int fastPathRelId);
 static PlannedStmt * PlanDistributedStmt(DistributedPlanningContext *planContext,
 										 int rteIdCounter);
 static RTEListProperties * GetRTEListProperties(List *rangeTableList);
 static List * TranslatedVars(PlannerInfo *root, int relationIndex);
 static void WarnIfListHasForeignDistributedTable(List *rangeTableList);
 static void ErrorIfMergeHasUnsupportedTables(Query *parse, List *rangeTableList);
+static List * GenerateImplicitJoinRestrictInfoList(PlannerInfo *plannerInfo,
+												   RelOptInfo *innerrel,
+												   RelOptInfo *outerrel);
 
 /* Distributed planner hook */
 PlannedStmt *
@@ -720,6 +723,7 @@ PlanFastPathDistributedStmt(DistributedPlanningContext *planContext,
 	planContext->plan = FastPathPlanner(planContext->originalQuery, planContext->query,
 										planContext->boundParams);
 
+	/* generate simple base restrict info inside plannerRestrictionContext */
 	RelabelPlannerRestrictionContext(planContext->plannerRestrictionContext);
 
 	return CreateDistributedPlannedStmt(planContext);
@@ -968,8 +972,8 @@ TryCreateDistributedPlannedStmt(PlannedStmt *localPlan,
 
 
 /*
- * ReplanAfterQueryModification replans modified originalquery to update plannercontext
- * properly. Returns modified query.
+ * ReplanAfterQueryModification replans given query to update plannercontext
+ * accordingly. Returns modified query without chnaging given query.
  */
 Query *
 ReplanAfterQueryModification(Query *originalQuery, ParamListInfo boundParams)
@@ -1848,6 +1852,46 @@ CheckNodeCopyAndSerialization(Node *node)
 
 
 /*
+ * GenerateImplicitJoinRestrictInfoList generates implicit join restrict infos
+ * by using planner information. As we rely on join restriction infos at join
+ * planner, we generate implicit join restrict infos. When join condition contains
+ * a reducible constant, generate_join_implied_equalities does not generate implicit
+ * join clauses. Hence, we mark ec_has_const to false beforehand. At the end, we
+ * restore previous values.
+ */
+static List *
+GenerateImplicitJoinRestrictInfoList(PlannerInfo *plannerInfo,
+									 RelOptInfo *innerrel, RelOptInfo *outerrel)
+{
+	List *generatedRestrictInfoList = NIL;
+
+	Relids joinrelids = bms_union(innerrel->relids, outerrel->relids);
+	List *prevVals = NIL;
+	EquivalenceClass *eqclass = NULL;
+	foreach_ptr(eqclass, plannerInfo->eq_classes)
+	{
+		prevVals = lappend_int(prevVals, eqclass->ec_has_const);
+		eqclass->ec_has_const = false;
+	}
+
+	generatedRestrictInfoList = generate_join_implied_equalities(
+		plannerInfo,
+		joinrelids,
+		outerrel->relids,
+		innerrel);
+
+	int i;
+	for (i = 0; i < list_length(prevVals); i++)
+	{
+		EquivalenceClass *eqClass = list_nth(plannerInfo->eq_classes, i);
+		eqClass->ec_has_const = list_nth_int(prevVals, i);
+	}
+
+	return generatedRestrictInfoList;
+}
+
+
+/*
  * multi_join_restriction_hook is a hook called by postgresql standard planner
  * to notify us about various planning information regarding joins. We use
  * it to learn about the joining column.
@@ -1899,26 +1943,8 @@ multi_join_restriction_hook(PlannerInfo *root,
 	joinRestriction->innerrelRelids = bms_copy(innerrel->relids);
 	joinRestriction->outerrelRelids = bms_copy(outerrel->relids);
 
-	Relids joinrelids = bms_union(innerrel->relids, outerrel->relids);
-	List *prevVals = NIL;
-	EquivalenceClass *eqclass = NULL;
-	foreach_ptr(eqclass, root->eq_classes)
-	{
-		prevVals = lappend_int(prevVals, eqclass->ec_has_const);
-		eqclass->ec_has_const = false;
-	}
 	joinRestrictionContext->generatedEcJoinRestrictInfoList =
-		generate_join_implied_equalities(
-			root,
-			joinrelids,
-			outerrel->relids,
-			innerrel);
-	int i;
-	for (i = 0; i < list_length(prevVals); i++)
-	{
-		EquivalenceClass *eqClass = list_nth(root->eq_classes, i);
-		eqClass->ec_has_const = list_nth_int(prevVals, i);
-	}
+		GenerateImplicitJoinRestrictInfoList(root, innerrel, outerrel);
 
 	joinRestrictionContext->joinRestrictionList =
 		lappend(joinRestrictionContext->joinRestrictionList, joinRestriction);

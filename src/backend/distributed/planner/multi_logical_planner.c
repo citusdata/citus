@@ -31,6 +31,7 @@
 #include "distributed/multi_physical_planner.h"
 #include "distributed/reference_table_utils.h"
 #include "distributed/relation_restriction_equivalence.h"
+#include "distributed/shard_pruning.h"
 #include "distributed/query_pushdown_planning.h"
 #include "distributed/query_utils.h"
 #include "distributed/worker_protocol.h"
@@ -596,13 +597,10 @@ MultiNodeTree(Query *queryTree, PlannerRestrictionContext *plannerRestrictionCon
 		plannerRestrictionContext->joinRestrictionContext->generatedEcJoinRestrictInfoList;
 
 	/* verify we can plan for restriction clauses */
-	List *baseClauseList = ExtractRestrictClausesFromRestrictionInfoList(
-		nonJoinRestrictionInfoList);
-	List *allJoinClauseList = ExtractRestrictClausesFromRestrictionInfoList(
-		joinRestrictInfoList);
-	List *pseudoClauseList = ExtractRestrictClausesFromRestrictionInfoList(
-		pseudoRestrictInfoList);
-	List *generatedEcJoinClauseList = ExtractRestrictClausesFromRestrictionInfoList(
+	List *baseClauseList = get_all_actual_clauses(nonJoinRestrictionInfoList);
+	List *allJoinClauseList = get_all_actual_clauses(joinRestrictInfoList);
+	List *pseudoClauseList = get_all_actual_clauses(pseudoRestrictInfoList);
+	List *generatedEcJoinClauseList = get_all_actual_clauses(
 		generatedEcJoinRestrictInfoList);
 	allJoinClauseList = list_concat_unique(allJoinClauseList, generatedEcJoinClauseList);
 
@@ -729,13 +727,17 @@ MultiNodeTree(Query *queryTree, PlannerRestrictionContext *plannerRestrictionCon
 	 * build select node if the query has selection criteria
 	 * select node will have pushdownable and non-pushdownable parts.
 	 *  - all base clauses can be pushdownable
-	 *  - some of join clauses cannot be pushed down e.g. they can be only applied after join
+	 *  - some of join clauses cannot be pushed down and they can only be applied after join
+	 *    as join condition. Those should stay in MultiJoin.
+	 *  - some of join clauses can be pushed down. Those should be in nonpushdownable part of
+	 *    MultiSelect. ??? todo: can we also pushdown those to workers for optimization
 	 */
 	List *pushdownableSelectClauseList = baseClauseList;
 	List *nonpushdownableJoinClauseList = ExtractNonPushdownableJoinClauses(
 		joinOrderList);
-	List *nonPushdownableSelectClauseList = list_difference(allJoinClauseList,
-															nonpushdownableJoinClauseList);
+	List *pushdownableJoinClauseList = list_difference(allJoinClauseList,
+													   nonpushdownableJoinClauseList);
+	List *nonPushdownableSelectClauseList = pushdownableJoinClauseList;
 	MultiSelect *selectNode = MultiSelectNode(pushdownableSelectClauseList,
 											  nonPushdownableSelectClauseList);
 	if (selectNode != NULL)
@@ -863,25 +865,6 @@ ExtractRestrictionInfosFromPlannerContext(
 	restrictInfoContext->pseudoRestrictInfoList = pseudoRestrictInfoList;
 
 	return restrictInfoContext;
-}
-
-
-/*
- * ExtractRestrictClausesFromRestrictionInfoList extracts RestrictInfo clauses from
- * given restrictInfoList.
- */
-List *
-ExtractRestrictClausesFromRestrictionInfoList(List *restrictInfoList)
-{
-	List *restrictClauseList = NIL;
-
-	RestrictInfo *restrictInfo = NULL;
-	foreach_ptr(restrictInfo, restrictInfoList)
-	{
-		restrictClauseList = lappend(restrictClauseList, restrictInfo->clause);
-	}
-
-	return restrictClauseList;
 }
 
 

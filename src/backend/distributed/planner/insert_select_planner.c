@@ -364,7 +364,9 @@ CreateDistributedInsertSelectPlan(Query *originalQuery,
 
 
 /*
- * RelabelPlannerRestrictionContext relabels var nos inside restriction infos to 1.
+ * RelabelPlannerRestrictionContext relabels all Var varnos inside plannerRestrictionContext
+ * restriction infos to 1. If we have an unempty fastpath context, we manually create a single
+ * base RestrictInfo as we didnot call standard_planner to create it.
  */
 void
 RelabelPlannerRestrictionContext(PlannerRestrictionContext *plannerRestrictionContext)
@@ -443,6 +445,7 @@ CreateInsertSelectIntoLocalTablePlan(uint64 planId, Query *insertSelectQuery,
 	/* get the SELECT query (may have changed after PrepareInsertSelectForCitusPlanner) */
 	Query *selectQuery = selectRte->subquery;
 
+	/* relabels all Var varnos inside plannerRestrictionContext after we modify query */
 	RelabelPlannerRestrictionContext(plannerRestrictionContext);
 
 	bool allowRecursivePlanning = true;

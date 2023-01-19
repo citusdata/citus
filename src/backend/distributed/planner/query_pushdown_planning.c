@@ -36,6 +36,7 @@
 #include "distributed/query_pushdown_planning.h"
 #include "distributed/recursive_planning.h"
 #include "distributed/relation_restriction_equivalence.h"
+#include "distributed/shard_pruning.h"
 #include "distributed/version_compat.h"
 #include "nodes/nodeFuncs.h"
 #include "nodes/makefuncs.h"
@@ -214,10 +215,6 @@ ShouldUseSubqueryPushDown(Query *originalQuery, Query *rewrittenQuery,
 		{
 			return true;
 		}
-
-		/*
-		 * todo: join order planner cannot handle lateral join trees for outer joins.
-		 */
 	}
 
 	/*
@@ -230,10 +227,8 @@ ShouldUseSubqueryPushDown(Query *originalQuery, Query *rewrittenQuery,
 	List *nonJoinRestrictionInfoList = restrictInfoContext->baseRestrictInfoList;
 
 	/* verify we can plan for restriction clauses */
-	List *whereClauseList = ExtractRestrictClausesFromRestrictionInfoList(
-		nonJoinRestrictionInfoList);
-	List *joinClauseList = ExtractRestrictClausesFromRestrictionInfoList(
-		joinRestrictionInfoList);
+	List *whereClauseList = get_all_actual_clauses(nonJoinRestrictionInfoList);
+	List *joinClauseList = get_all_actual_clauses(joinRestrictionInfoList);
 	List *qualClauseList = list_concat_copy(whereClauseList, joinClauseList);
 	if (DeferErrorIfUnsupportedClause(qualClauseList) != NULL)
 	{

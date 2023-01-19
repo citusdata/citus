@@ -411,11 +411,23 @@ DistKeyInSimpleOpExpression(Expr *clause, Var *distColumn, Node **distributionKe
 	Assert(columnInExpr);
 	bool distColumnExists = equal(distColumn, columnInExpr);
 	if (distColumnExists && constantClause != NULL &&
-		distColumn->vartype == constantClause->consttype &&
 		*distributionKeyValue == NULL)
 	{
-		/* if the vartypes do not match, let shard pruning handle it later */
-		*distributionKeyValue = (Node *) copyObject(constantClause);
+		if (distColumn->vartype == constantClause->consttype)
+		{
+			*distributionKeyValue = (Node *) copyObject(constantClause);
+		}
+		else
+		{
+			/* if the vartypes do not match, let shard pruning handle it later */
+			bool missingOk = true;
+			Const *transformedConstantClause =
+				TransformPartitionRestrictionValue(distColumn, constantClause, missingOk);
+			if (transformedConstantClause)
+			{
+				*distributionKeyValue = (Node *) copyObject(transformedConstantClause);
+			}
+		}
 	}
 	else if (paramClause != NULL)
 	{
