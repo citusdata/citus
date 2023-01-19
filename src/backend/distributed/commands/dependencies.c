@@ -370,6 +370,7 @@ GetDependencyCreateDDLCommands(const ObjectAddress *dependency)
 					bool creatingShellTableOnRemoteNode = true;
 					List *tableDDLCommands = GetFullTableCreationCommands(relationId,
 																		  WORKER_NEXTVAL_SEQUENCE_DEFAULTS,
+																		  INCLUDE_IDENTITY_AS_SEQUENCE_DEFAULTS,
 																		  creatingShellTableOnRemoteNode);
 					TableDDLCommand *tableDDLCommand = NULL;
 					foreach_ptr(tableDDLCommand, tableDDLCommands)
