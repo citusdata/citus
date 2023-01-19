@@ -308,9 +308,12 @@ CreateAppendDistributedShardPlacements(Oid relationId, int64 shardId,
 	List *foreignConstraintCommandList =
 		GetReferencingForeignConstaintCommands(relationId);
 	IncludeSequenceDefaults includeSequenceDefaults = NO_SEQUENCE_DEFAULTS;
+	IncludeIdentities includeIdentityDefaults = NO_IDENTITY;
+
 	bool creatingShellTableOnRemoteNode = false;
 	List *ddlCommandList = GetFullTableCreationCommands(relationId,
 														includeSequenceDefaults,
+														includeIdentityDefaults,
 														creatingShellTableOnRemoteNode);
 	uint32 connectionFlag = FOR_DDL;
 	char *relationOwner = TableOwner(relationId);
@@ -337,7 +340,6 @@ CreateAppendDistributedShardPlacements(Oid relationId, int64 shardId,
 		char *nodeName = workerNode->workerName;
 		uint32 nodePort = workerNode->workerPort;
 		int shardIndex = -1; /* not used in this code path */
-		const ShardState shardState = SHARD_STATE_ACTIVE;
 		const uint64 shardSize = 0;
 		MultiConnection *connection =
 			GetNodeUserDatabaseConnection(connectionFlag, nodeName, nodePort,
@@ -357,7 +359,7 @@ CreateAppendDistributedShardPlacements(Oid relationId, int64 shardId,
 
 		ExecuteCriticalRemoteCommandList(connection, commandList);
 
-		InsertShardPlacementRow(shardId, INVALID_PLACEMENT_ID, shardState, shardSize,
+		InsertShardPlacementRow(shardId, INVALID_PLACEMENT_ID, shardSize,
 								nodeGroupId);
 		placementsCreated++;
 
@@ -393,12 +395,10 @@ InsertShardPlacementRows(Oid relationId, int64 shardId, List *workerNodeList,
 		int workerNodeIndex = (workerStartIndex + attemptNumber) % workerNodeCount;
 		WorkerNode *workerNode = (WorkerNode *) list_nth(workerNodeList, workerNodeIndex);
 		uint32 nodeGroupId = workerNode->groupId;
-		const ShardState shardState = SHARD_STATE_ACTIVE;
 		const uint64 shardSize = 0;
 
 		uint64 shardPlacementId = InsertShardPlacementRow(shardId, INVALID_PLACEMENT_ID,
-														  shardState, shardSize,
-														  nodeGroupId);
+														  shardSize, nodeGroupId);
 		ShardPlacement *shardPlacement = LoadShardPlacement(shardId, shardPlacementId);
 		insertedShardPlacements = lappend(insertedShardPlacements, shardPlacement);
 
@@ -423,9 +423,12 @@ CreateShardsOnWorkers(Oid distributedRelationId, List *shardPlacements,
 					  bool useExclusiveConnection, bool colocatedShard)
 {
 	IncludeSequenceDefaults includeSequenceDefaults = NO_SEQUENCE_DEFAULTS;
+	IncludeIdentities includeIdentityDefaults = NO_IDENTITY;
+
 	bool creatingShellTableOnRemoteNode = false;
 	List *ddlCommandList = GetFullTableCreationCommands(distributedRelationId,
 														includeSequenceDefaults,
+														includeIdentityDefaults,
 														creatingShellTableOnRemoteNode);
 	List *foreignConstraintCommandList =
 		GetReferencingForeignConstaintCommands(distributedRelationId);
@@ -874,8 +877,7 @@ UpdateShardSize(uint64 shardId, ShardInterval *shardInterval, Oid relationId,
 		int32 groupId = placement->groupId;
 
 		DeleteShardPlacementRow(placementId);
-		InsertShardPlacementRow(shardId, placementId, SHARD_STATE_ACTIVE,
-								shardSize, groupId);
+		InsertShardPlacementRow(shardId, placementId, shardSize, groupId);
 	}
 }
 

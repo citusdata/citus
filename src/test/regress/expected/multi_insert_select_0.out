@@ -2025,47 +2025,6 @@ DEBUG:  Skipping target shard interval 13300001 since SELECT query for it pruned
 DEBUG:  Skipping target shard interval 13300002 since SELECT query for it pruned away
 DEBUG:  Skipping target shard interval 13300003 since SELECT query for it pruned away
 SET client_min_messages TO INFO;
--- if a single shard of the SELECT is unhealty, the query should fail
-UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE shardid = 13300004 AND nodeport = :worker_1_port;
-truncate raw_events_first;
-SET client_min_messages TO DEBUG2;
--- this should fail
-INSERT INTO raw_events_first SELECT * FROM raw_events_second;
-ERROR:  cannot perform distributed planning for the given modification
-DETAIL:  Insert query cannot be executed on all placements for shard xxxxx
--- this should also fail
-INSERT INTO raw_events_first SELECT * FROM raw_events_second WHERE user_id = 5;
-ERROR:  cannot perform distributed planning for the given modification
-DETAIL:  Insert query cannot be executed on all placements for shard xxxxx
--- but this should work given that it hits different shard
-INSERT INTO raw_events_first SELECT * FROM raw_events_second WHERE user_id = 6;
-DEBUG:  Skipping target shard interval 13300000 since SELECT query for it pruned away
-DEBUG:  Skipping target shard interval 13300001 since SELECT query for it pruned away
-DEBUG:  distributed statement: INSERT INTO public.raw_events_first_13300002 AS citus_table_alias (user_id, "time", value_1, value_2, value_3, value_4) SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM public.raw_events_second_13300006 raw_events_second WHERE ((user_id OPERATOR(pg_catalog.=) 6) AND (user_id IS NOT NULL))
-DEBUG:  Skipping target shard interval 13300003 since SELECT query for it pruned away
-SET client_min_messages TO INFO;
--- mark the unhealthy placement as healthy again for the next tests
-UPDATE pg_dist_shard_placement SET shardstate = 1 WHERE shardid = 13300004 AND nodeport = :worker_1_port;
--- now that we should show that it works if one of the target shard interval is not healthy
-UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE shardid = 13300000 AND nodeport = :worker_1_port;
-truncate raw_events_first;
-SET client_min_messages TO DEBUG2;
--- this should work
-INSERT INTO raw_events_first SELECT * FROM raw_events_second;
-DEBUG:  distributed statement: INSERT INTO public.raw_events_first_13300000 AS citus_table_alias (user_id, "time", value_1, value_2, value_3, value_4) SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM public.raw_events_second_13300004 raw_events_second WHERE (user_id IS NOT NULL)
-DEBUG:  distributed statement: INSERT INTO public.raw_events_first_13300001 AS citus_table_alias (user_id, "time", value_1, value_2, value_3, value_4) SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM public.raw_events_second_13300005 raw_events_second WHERE (user_id IS NOT NULL)
-DEBUG:  distributed statement: INSERT INTO public.raw_events_first_13300002 AS citus_table_alias (user_id, "time", value_1, value_2, value_3, value_4) SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM public.raw_events_second_13300006 raw_events_second WHERE (user_id IS NOT NULL)
-DEBUG:  distributed statement: INSERT INTO public.raw_events_first_13300003 AS citus_table_alias (user_id, "time", value_1, value_2, value_3, value_4) SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM public.raw_events_second_13300007 raw_events_second WHERE (user_id IS NOT NULL)
-SET client_min_messages TO INFO;
-truncate raw_events_first;
-SET client_min_messages TO DEBUG2;
--- this should also work
-INSERT INTO raw_events_first SELECT * FROM raw_events_second WHERE user_id = 5;
-DEBUG:  distributed statement: INSERT INTO public.raw_events_first_13300000 AS citus_table_alias (user_id, "time", value_1, value_2, value_3, value_4) SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM public.raw_events_second_13300004 raw_events_second WHERE ((user_id OPERATOR(pg_catalog.=) 5) AND (user_id IS NOT NULL))
-DEBUG:  Skipping target shard interval 13300001 since SELECT query for it pruned away
-DEBUG:  Skipping target shard interval 13300002 since SELECT query for it pruned away
-DEBUG:  Skipping target shard interval 13300003 since SELECT query for it pruned away
-SET client_min_messages TO INFO;
 -- now do some tests with varchars
 INSERT INTO insert_select_varchar_test VALUES ('test_1', 10);
 INSERT INTO insert_select_varchar_test VALUES ('test_2', 30);

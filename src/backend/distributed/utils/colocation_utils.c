@@ -399,16 +399,6 @@ ErrorIfShardPlacementsNotColocated(Oid leftRelationId, Oid rightRelationId)
 										  leftShardId, leftRelationName,
 										  rightShardId, rightRelationName)));
 			}
-
-			/* we also don't allow colocated shards to be in different shard states */
-			if (leftPlacement->shardState != rightPlacement->shardState)
-			{
-				ereport(ERROR, (errmsg("cannot colocate tables %s and %s",
-									   leftRelationName, rightRelationName),
-								errdetail("%s and %s have shard placements in "
-										  "different shard states.",
-										  leftRelationName, rightRelationName)));
-			}
 		}
 	}
 }

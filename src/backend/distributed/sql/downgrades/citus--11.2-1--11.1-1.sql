@@ -5,6 +5,9 @@ DROP FUNCTION pg_catalog.citus_get_node_clock();
 DROP FUNCTION pg_catalog.citus_get_transaction_clock();
 DROP FUNCTION pg_catalog.citus_internal_adjust_local_clock_to_remote(cluster_clock);
 DROP FUNCTION pg_catalog.citus_is_clock_after(cluster_clock, cluster_clock);
+DROP FUNCTION pg_catalog.citus_job_list();
+DROP FUNCTION pg_catalog.citus_job_status(bigint,boolean);
+DROP FUNCTION pg_catalog.citus_rebalance_status(boolean);
 DROP FUNCTION pg_catalog.cluster_clock_logical(cluster_clock);
 DROP SEQUENCE pg_catalog.pg_dist_clock_logical_seq;
 DROP OPERATOR CLASS pg_catalog.cluster_clock_ops USING btree CASCADE;
@@ -28,3 +31,5 @@ DROP FUNCTION pg_catalog.citus_task_wait(bigint, pg_catalog.citus_task_status);
 
 DROP FUNCTION pg_catalog.citus_copy_shard_placement(bigint, integer, integer, citus.shard_transfer_mode);
 DROP FUNCTION pg_catalog.citus_move_shard_placement(bigint, integer, integer, citus.shard_transfer_mode);
+DROP FUNCTION pg_catalog.citus_internal_add_placement_metadata(bigint, bigint, integer, bigint);
+#include "../udfs/citus_internal_add_placement_metadata/10.2-1.sql"

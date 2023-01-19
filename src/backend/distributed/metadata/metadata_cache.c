@@ -1001,10 +1001,6 @@ ActiveShardPlacementOnGroup(int32 groupId, uint64 shardId)
 	{
 		return NULL;
 	}
-	if (placement->shardState != SHARD_STATE_ACTIVE)
-	{
-		return NULL;
-	}
 	return placement;
 }
 

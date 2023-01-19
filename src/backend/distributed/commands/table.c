@@ -103,6 +103,8 @@ static List * InterShardDDLTaskList(Oid leftRelationId, Oid rightRelationId,
 									const char *commandString);
 static bool AlterInvolvesPartitionColumn(AlterTableStmt *alterTableStatement,
 										 AlterTableCmd *command);
+static bool AlterColumnInvolvesIdentityColumn(AlterTableStmt *alterTableStatement,
+											  AlterTableCmd *command);
 static void ErrorIfUnsupportedAlterAddConstraintStmt(AlterTableStmt *alterTableStatement);
 static List * CreateRightShardListForInterShardDDLTask(Oid rightRelationId,
 													   Oid leftRelationId,
@@ -114,8 +116,7 @@ static void SetInterShardDDLTaskRelationShardList(Task *task,
 												  ShardInterval *leftShardInterval,
 												  ShardInterval *rightShardInterval);
 static Oid get_attrdef_oid(Oid relationId, AttrNumber attnum);
-static char * GetAlterColumnWithNextvalDefaultCmd(Oid sequenceOid, Oid relationId,
-												  char *colname);
+
 static char * GetAddColumnWithNextvalDefaultCmd(Oid sequenceOid, Oid relationId,
 												char *colname, TypeName *typeName);
 
@@ -1329,6 +1330,30 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 			}
 
 			/*
+			 * We check for ADD COLUMN .. GENERATED .. AS IDENTITY expr
+			 * since it uses a sequence as an internal dependency
+			 * we should deparse the statement
+			 */
+			constraint = NULL;
+			foreach_ptr(constraint, columnConstraints)
+			{
+				if (constraint->contype == CONSTR_IDENTITY)
+				{
+					deparseAT = true;
+					useInitialDDLCommandString = false;
+
+					/*
+					 * Since we don't support constraints for AT_AddColumn
+					 * we have to set is_not_null to true explicitly for identity columns
+					 */
+					ColumnDef *newColDef = copyObject(columnDefinition);
+					newColDef->constraints = NULL;
+					newColDef->is_not_null = true;
+					newCmd->def = (Node *) newColDef;
+				}
+			}
+
+			/*
 			 * We check for ADD COLUMN .. SERIAL pseudo-type
 			 * if that's the case, we should deparse the statement
 			 * The structure of this check is copied from transformColumnDefinition.
@@ -2459,6 +2484,34 @@ PostprocessAlterTableStmt(AlterTableStmt *alterTableStatement)
 					}
 				}
 			}
+
+			/*
+			 * We check for ADD COLUMN .. GENERATED AS IDENTITY expr
+			 * since it uses a seqeunce as an internal dependency
+			 */
+			constraint = NULL;
+			foreach_ptr(constraint, columnConstraints)
+			{
+				if (constraint->contype == CONSTR_IDENTITY)
+				{
+					AttrNumber attnum = get_attnum(relationId,
+												   columnDefinition->colname);
+					bool missing_ok = false;
+					Oid seqOid = getIdentitySequence(relationId, attnum, missing_ok);
+
+					if (ShouldSyncTableMetadata(relationId))
+					{
+						needMetadataSyncForNewSequences = true;
+						alterTableDefaultNextvalCmd =
+							GetAddColumnWithNextvalDefaultCmd(seqOid,
+															  relationId,
+															  columnDefinition
+															  ->colname,
+															  columnDefinition
+															  ->typeName);
+					}
+				}
+			}
 		}
 		/*
 		 * We check for ALTER COLUMN .. SET DEFAULT nextval('user_defined_seq')
@@ -2480,8 +2533,9 @@ PostprocessAlterTableStmt(AlterTableStmt *alterTableStatement)
 					if (ShouldSyncTableMetadata(relationId))
 					{
 						needMetadataSyncForNewSequences = true;
+						bool missingTableOk = false;
 						alterTableDefaultNextvalCmd = GetAlterColumnWithNextvalDefaultCmd(
-							seqOid, relationId, command->name);
+							seqOid, relationId, command->name, missingTableOk);
 					}
 				}
 			}
@@ -2669,8 +2723,9 @@ get_attrdef_oid(Oid relationId, AttrNumber attnum)
  * ALTER TABLE ALTER COLUMN .. SET DEFAULT nextval()
  * If sequence type is not bigint, we use worker_nextval() instead of nextval().
  */
-static char *
-GetAlterColumnWithNextvalDefaultCmd(Oid sequenceOid, Oid relationId, char *colname)
+char *
+GetAlterColumnWithNextvalDefaultCmd(Oid sequenceOid, Oid relationId, char *colname, bool
+									missingTableOk)
 {
 	char *qualifiedSequenceName = generate_qualified_relation_name(sequenceOid);
 	char *qualifiedRelationName = generate_qualified_relation_name(relationId);
@@ -2689,9 +2744,18 @@ GetAlterColumnWithNextvalDefaultCmd(Oid sequenceOid, Oid relationId, char *colna
 
 	StringInfoData str = { 0 };
 	initStringInfo(&str);
-	appendStringInfo(&str, "ALTER TABLE %s ALTER COLUMN %s "
+
+	appendStringInfo(&str, "ALTER TABLE ");
+
+	if (missingTableOk)
+	{
+		appendStringInfo(&str, "IF EXISTS ");
+	}
+
+	appendStringInfo(&str, "%s ALTER COLUMN %s "
 						   "SET DEFAULT %s(%s::regclass)",
-					 qualifiedRelationName, colname,
+					 qualifiedRelationName,
+					 colname,
 					 quote_qualified_identifier("pg_catalog", nextvalFunctionName),
 					 quote_literal_cstr(qualifiedSequenceName));
 
@@ -3061,6 +3125,26 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 						}
 					}
 
+
+					Constraint *columnConstraint = NULL;
+					foreach_ptr(columnConstraint, column->constraints)
+					{
+						if (columnConstraint->contype == CONSTR_IDENTITY)
+						{
+							/*
+							 * Currently we don't support backfilling the new identity column with default values
+							 * if the table is not empty
+							 */
+							if (!TableEmpty(relationId))
+							{
+								ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+												errmsg(
+													"Cannot add an identity column because the table is not empty")));
+							}
+						}
+					}
+
+
 					List *columnConstraints = column->constraints;
 
 					Constraint *constraint = NULL;
@@ -3159,8 +3243,21 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 
 				/*
 				 * We check for ALTER COLUMN TYPE ...
+				 * if the column is an identity column,
+				 * changing the type of the column
+				 * should not be allowed for now
+				 */
+				if (AlterColumnInvolvesIdentityColumn(alterTableStatement, command))
+				{
+					ereport(ERROR, (errmsg("cannot execute ALTER COLUMN command "
+										   "involving identity column")));
+				}
+
+				/*
+				 * We check for ALTER COLUMN TYPE ...
 				 * if the column has default coming from a user-defined sequence
-				 * changing the type of the column should not be allowed for now
+				 * changing the type of the column
+				 * should not be allowed for now
 				 */
 				AttrNumber attnum = get_attnum(relationId, command->name);
 				List *seqInfoList = NIL;
@@ -3665,6 +3762,41 @@ SetInterShardDDLTaskRelationShardList(Task *task, ShardInterval *leftShardInterv
 	rightRelationShard->shardId = rightShardInterval->shardId;
 
 	task->relationShardList = list_make2(leftRelationShard, rightRelationShard);
+}
+
+
+/*
+ * AlterColumnInvolvesIdentityColumn checks if the given alter column command
+ * involves relation's identity column.
+ */
+static bool
+AlterColumnInvolvesIdentityColumn(AlterTableStmt *alterTableStatement,
+								  AlterTableCmd *command)
+{
+	bool involvesIdentityColumn = false;
+	char *alterColumnName = command->name;
+
+	LOCKMODE lockmode = AlterTableGetLockLevel(alterTableStatement->cmds);
+	Oid relationId = AlterTableLookupRelation(alterTableStatement, lockmode);
+	if (!OidIsValid(relationId))
+	{
+		return false;
+	}
+
+	HeapTuple tuple = SearchSysCacheAttName(relationId, alterColumnName);
+	if (HeapTupleIsValid(tuple))
+	{
+		Form_pg_attribute targetAttr = (Form_pg_attribute) GETSTRUCT(tuple);
+
+		if (targetAttr->attidentity)
+		{
+			involvesIdentityColumn = true;
+		}
+
+		ReleaseSysCache(tuple);
+	}
+
+	return involvesIdentityColumn;
 }
 
 

@@ -25,18 +25,6 @@
 #define INVALID_SHARD_ID 0
 #define INVALID_PLACEMENT_ID 0
 
-/*
- * ShardState represents last known states of shards on a given node.
- *
- * The numbers assigned per state used for historical reason and should
- * not be changed since they correspond to shardstate in pg_dist_placement.
- */
-typedef enum
-{
-	SHARD_STATE_INVALID_FIRST = 0,
-	SHARD_STATE_ACTIVE = 1,
-} ShardState;
-
 
 /* Function declarations to extend names in DDL commands */
 extern void RelayEventExtendNames(Node *parseTree, char *schemaName, uint64 shardId);

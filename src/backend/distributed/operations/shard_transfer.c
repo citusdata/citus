@@ -486,7 +486,7 @@ citus_move_shard_placement_internal(int64 shardId, char *sourceNodeName,
 		uint64 placementId = GetNextPlacementId();
 
 		InsertShardPlacementRow(colocatedShardId, placementId,
-								SHARD_STATE_ACTIVE, ShardLength(colocatedShardId),
+								ShardLength(colocatedShardId),
 								groupId);
 	}
 
@@ -1240,14 +1240,13 @@ ReplicateColocatedShardPlacement(int64 shardId, char *sourceNodeName,
 		uint64 placementId = GetNextPlacementId();
 
 		InsertShardPlacementRow(colocatedShardId, placementId,
-								SHARD_STATE_ACTIVE, ShardLength(colocatedShardId),
+								ShardLength(colocatedShardId),
 								groupId);
 
 		if (ShouldSyncTableMetadata(colocatedShard->relationId))
 		{
 			char *placementCommand = PlacementUpsertCommand(colocatedShardId, placementId,
-															SHARD_STATE_ACTIVE, 0,
-															groupId);
+															0, groupId);
 
 			SendCommandToWorkersWithMetadata(placementCommand);
 		}
@@ -1664,15 +1663,8 @@ EnsureShardCanBeCopied(int64 shardId, const char *sourceNodeName, int32 sourceNo
 {
 	List *shardPlacementList = ShardPlacementList(shardId);
 
-	ShardPlacement *sourcePlacement = SearchShardPlacementInListOrError(
-		shardPlacementList,
-		sourceNodeName,
-		sourceNodePort);
-	if (sourcePlacement->shardState != SHARD_STATE_ACTIVE)
-	{
-		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-						errmsg("source placement must be in active state")));
-	}
+	/* error if the source shard placement does not exist */
+	SearchShardPlacementInListOrError(shardPlacementList, sourceNodeName, sourceNodePort);
 
 	ShardPlacement *targetPlacement = SearchShardPlacementInList(shardPlacementList,
 																 targetNodeName,
@@ -1953,6 +1945,7 @@ RecreateTableDDLCommandList(Oid relationId)
 	StringInfo dropCommand = makeStringInfo();
 
 	IncludeSequenceDefaults includeSequenceDefaults = NO_SEQUENCE_DEFAULTS;
+	IncludeIdentities includeIdentityDefaults = NO_IDENTITY;
 
 	/* build appropriate DROP command based on relation kind */
 	if (RegularTable(relationId))
@@ -1975,6 +1968,7 @@ RecreateTableDDLCommandList(Oid relationId)
 	List *dropCommandList = list_make1(makeTableDDLCommandString(dropCommand->data));
 	List *createCommandList = GetPreLoadTableCreationCommands(relationId,
 															  includeSequenceDefaults,
+															  includeIdentityDefaults,
 															  NULL);
 	List *recreateCommandList = list_concat(dropCommandList, createCommandList);
 

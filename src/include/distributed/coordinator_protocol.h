@@ -117,6 +117,18 @@ typedef enum IncludeSequenceDefaults
 } IncludeSequenceDefaults;
 
 
+/*
+ * IncludeIdentities decides on how we include identity information
+ * when creating the definition of a table.
+ */
+typedef enum IncludeIdentities
+{
+	NO_IDENTITY = 0, /* don't include identities */
+	INCLUDE_IDENTITY_AS_SEQUENCE_DEFAULTS = 1, /* include identities as sequences */
+	INCLUDE_IDENTITY = 2 /* include identities as-is*/
+} IncludeIdentities;
+
+
 struct TableDDLCommand;
 typedef struct TableDDLCommand TableDDLCommand;
 typedef char *(*TableDDLFunction)(void *context);
@@ -213,11 +225,14 @@ extern uint64 GetNextPlacementId(void);
 extern Oid ResolveRelationId(text *relationName, bool missingOk);
 extern List * GetFullTableCreationCommands(Oid relationId,
 										   IncludeSequenceDefaults includeSequenceDefaults,
+										   IncludeIdentities includeIdentityDefaults,
 										   bool creatingShellTableOnRemoteNode);
 extern List * GetPostLoadTableCreationCommands(Oid relationId, bool includeIndexes,
 											   bool includeReplicaIdentity);
 extern List * GetPreLoadTableCreationCommands(Oid relationId, IncludeSequenceDefaults
 											  includeSequenceDefaults,
+											  IncludeIdentities
+											  includeIdentityDefaults,
 											  char *accessMethod);
 extern List * GetTableRowLevelSecurityCommands(Oid relationId);
 extern List * GetTableIndexAndConstraintCommands(Oid relationId, int indexFlags);

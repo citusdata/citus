@@ -1627,16 +1627,9 @@ EnsureRelationCanBeDistributed(Oid relationId, Var *distributionColumn,
 
 	ErrorIfTableIsACatalogTable(relation);
 
-	/* verify target relation does not use identity columns */
-	if (RelationUsesIdentityColumns(relationDesc))
-	{
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("cannot distribute relation: %s", relationName),
-						errdetail("Distributed relations must not use GENERATED "
-								  "... AS IDENTITY.")));
-	}
 
-	/* verify target relation is not distributed by a generated columns */
+	/* verify target relation is not distributed by a generated stored column
+	 */
 	if (distributionMethod != DISTRIBUTE_BY_NONE &&
 		DistributionColumnUsesGeneratedStoredColumn(relationDesc, distributionColumn))
 	{

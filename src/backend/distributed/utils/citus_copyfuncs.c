@@ -221,7 +221,6 @@ CopyNodeShardPlacement(COPYFUNC_ARGS)
 	COPY_SCALAR_FIELD(placementId);
 	COPY_SCALAR_FIELD(shardId);
 	COPY_SCALAR_FIELD(shardLength);
-	COPY_SCALAR_FIELD(shardState);
 	COPY_SCALAR_FIELD(groupId);
 	COPY_STRING_FIELD(nodeName);
 	COPY_SCALAR_FIELD(nodePort);
@@ -240,7 +239,6 @@ CopyNodeGroupShardPlacement(COPYFUNC_ARGS)
 	COPY_SCALAR_FIELD(placementId);
 	COPY_SCALAR_FIELD(shardId);
 	COPY_SCALAR_FIELD(shardLength);
-	COPY_SCALAR_FIELD(shardState);
 	COPY_SCALAR_FIELD(groupId);
 }
 

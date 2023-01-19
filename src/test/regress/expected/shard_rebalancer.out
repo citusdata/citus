@@ -221,7 +221,7 @@ NOTICE:  issuing SET LOCAL citus.shard_count TO '4';
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing SET LOCAL citus.shard_replication_factor TO '2';
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SELECT citus_copy_shard_placement(433101,16,18,'block_writes')
+NOTICE:  issuing SELECT citus_copy_shard_placement(43xxxx,xx,xx,'block_writes')
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing COMMIT
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
@@ -244,7 +244,7 @@ NOTICE:  issuing SET LOCAL citus.shard_count TO '4';
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing SET LOCAL citus.shard_replication_factor TO '2';
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SELECT citus_copy_shard_placement(433102,18,16,'block_writes')
+NOTICE:  issuing SELECT citus_copy_shard_placement(43xxxx,xx,xx,'block_writes')
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing COMMIT
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
@@ -267,7 +267,7 @@ NOTICE:  issuing SET LOCAL citus.shard_count TO '4';
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing SET LOCAL citus.shard_replication_factor TO '2';
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SELECT citus_copy_shard_placement(433103,16,18,'block_writes')
+NOTICE:  issuing SELECT citus_copy_shard_placement(43xxxx,xx,xx,'block_writes')
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing COMMIT
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
@@ -290,7 +290,7 @@ NOTICE:  issuing SET LOCAL citus.shard_count TO '4';
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing SET LOCAL citus.shard_replication_factor TO '2';
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SELECT citus_copy_shard_placement(433104,18,16,'block_writes')
+NOTICE:  issuing SELECT citus_copy_shard_placement(43xxxx,xx,xx,'block_writes')
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing COMMIT
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
@@ -451,23 +451,6 @@ SELECT unnest(shard_placement_replication_array(
           '{"shardid":2, "nodename":"hostname2"}',
           '{"shardid":1, "nodename":"hostname3"}',
           '{"shardid":2, "nodename":"hostname3"}']::json[],
-    2
-));
-                                                       unnest
----------------------------------------------------------------------
- {"updatetype":2,"shardid":1,"sourcename":"hostname1","sourceport":5432,"targetname":"hostname2","targetport":5432}
- {"updatetype":2,"shardid":2,"sourcename":"hostname2","sourceport":5432,"targetname":"hostname1","targetport":5432}
-(2 rows)
-
--- Check that shard_placement_replication_array returns a shard copy operation
--- for each of the inactive shards.
-SELECT unnest(shard_placement_replication_array(
-    ARRAY['{"node_name": "hostname1"}',
-          '{"node_name": "hostname2"}']::json[],
-    ARRAY['{"shardid":1, "nodename":"hostname1"}',
-          '{"shardid":2, "shardstate":3, "nodename":"hostname1"}',
-          '{"shardid":1, "shardstate":3, "nodename":"hostname2"}',
-          '{"shardid":2, "nodename":"hostname2"}']::json[],
     2
 ));
                                                        unnest
