@@ -32,8 +32,6 @@ static void AppendAlterTableCmd(StringInfo buf, AlterTableCmd *alterTableCmd,
 								AlterTableStmt *stmt);
 static void AppendAlterTableCmdAddColumn(StringInfo buf, AlterTableCmd *alterTableCmd);
 
-void AddRangeTableEntryToQueryCompat(ParseState *parseState, Relation relation);
-
 char *
 DeparseAlterTableSchemaStmt(Node *node)
 {

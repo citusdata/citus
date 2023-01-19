@@ -802,7 +802,7 @@ GenerateConstraintName(const char *tableName, Oid namespaceId, Constraint *const
 
 		case CONSTR_CHECK:
 		{
-			conname = ChooseConstraintName(tableName, NULL, "check", namespaceId, NULL);
+			conname = ChooseConstraintName(tableName, NULL, "check", namespaceId, NIL);
 
 			break;
 		}
@@ -908,10 +908,10 @@ SwitchToSequentialAndLocalExecutionIfConstraintNameTooLong(Oid relationId,
 
 
 /*
- * PreprocessAlterTableAddConstraint creates a new constraint name for the index constraints {PRIMARY KEY, UNIQUE, EXCLUDE}
- * and changes the original alterTableCommand run by the utility hook to use the new constraint name.
- * Then converts the ALTER TABLE ... ADD {PRIMARY KEY, UNIQUE, EXCLUDE} ... command
- * into ALTER TABLE ... ADD CONSTRAINT <constraint name> {PRIMARY KEY, UNIQUE, EXCLUDE} format and returns the DDLJob
+ * PreprocessAlterTableAddConstraint creates a new constraint name for {PRIMARY KEY, UNIQUE, EXCLUDE, CHECK, FOREIGN KEY}
+ * and changes the original alterTableCommand run by the standard utility hook to use the new constraint name.
+ * Then it converts the ALTER TABLE ... ADD {PRIMARY KEY, UNIQUE, EXCLUDE, CHECK, FOREIGN KEY} ... command
+ * into ALTER TABLE ... ADD CONSTRAINT <constraint name> {PRIMARY KEY, UNIQUE, EXCLUDE, CHECK, FOREIGN KEY} format and returns the DDLJob
  * to run this command in the workers.
  */
 static List *
