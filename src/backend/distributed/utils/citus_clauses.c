@@ -254,6 +254,7 @@ ShouldEvaluateExpression(Expr *expression)
 		case T_RowCompareExpr:
 		case T_RelabelType:
 		case T_CoerceToDomain:
+		case T_NextValueExpr:
 		{
 			return true;
 		}

@@ -73,6 +73,7 @@
 #include "utils/relcache.h"
 #include "utils/ruleutils.h"
 #include "utils/syscache.h"
+#include "commands/sequence.h"
 
 
 static void deparse_index_columns(StringInfo buffer, List *indexParameterList,
@@ -302,10 +303,16 @@ pg_get_sequencedef(Oid sequenceRelationId)
  * DEFAULT clauses for columns getting their default values from a sequence.
  * When it's WORKER_NEXTVAL_SEQUENCE_DEFAULTS, the function creates the DEFAULT
  * clause using worker_nextval('sequence') and not nextval('sequence')
+ * When IncludeIdentities is NO_IDENTITY, the function does not include identity column
+ * specifications. When it's INCLUDE_IDENTITY_AS_SEQUENCE_DEFAULTS, the function
+ * uses sequences and set them as default values for identity columns by using exactly
+ * the same approach with worker_nextval('sequence') & nextval('sequence') logic
+ * desribed above. When it's INCLUDE_IDENTITY it creates GENERATED .. AS IDENTIY clauses.
  */
 char *
 pg_get_tableschemadef_string(Oid tableRelationId, IncludeSequenceDefaults
-							 includeSequenceDefaults, char *accessMethod)
+							 includeSequenceDefaults, IncludeIdentities
+							 includeIdentityDefaults, char *accessMethod)
 {
 	bool firstAttributePrinted = false;
 	AttrNumber defaultValueIndex = 0;
@@ -389,6 +396,50 @@ pg_get_tableschemadef_string(Oid tableRelationId, IncludeSequenceDefaults
 								 GetCompressionMethodName(attributeForm->attcompression));
 			}
 #endif
+
+			if (attributeForm->attidentity && includeIdentityDefaults)
+			{
+				bool missing_ok = false;
+				Oid seqOid = getIdentitySequence(RelationGetRelid(relation),
+												 attributeForm->attnum, missing_ok);
+
+				char *sequenceName = generate_qualified_relation_name(seqOid);
+
+				if (includeIdentityDefaults == INCLUDE_IDENTITY_AS_SEQUENCE_DEFAULTS)
+				{
+					if (pg_get_sequencedef(seqOid)->seqtypid != INT8OID)
+					{
+						appendStringInfo(&buffer,
+										 " DEFAULT worker_nextval(%s::regclass)",
+										 quote_literal_cstr(sequenceName));
+					}
+					else
+					{
+						appendStringInfo(&buffer, " DEFAULT nextval(%s::regclass)",
+										 quote_literal_cstr(sequenceName));
+					}
+				}
+				else if (includeIdentityDefaults == INCLUDE_IDENTITY)
+				{
+					Form_pg_sequence pgSequenceForm = pg_get_sequencedef(seqOid);
+					uint64 sequenceStart = nextval_internal(seqOid, false);
+					char *sequenceDef = psprintf(
+						" GENERATED %s AS IDENTITY (INCREMENT BY " INT64_FORMAT \
+						" MINVALUE " INT64_FORMAT " MAXVALUE "
+						INT64_FORMAT \
+						" START WITH " INT64_FORMAT " CACHE "
+						INT64_FORMAT " %sCYCLE)",
+						attributeForm->attidentity == ATTRIBUTE_IDENTITY_ALWAYS ?
+						"ALWAYS" : "BY DEFAULT",
+						pgSequenceForm->seqincrement,
+						pgSequenceForm->seqmin,
+						pgSequenceForm->seqmax, sequenceStart,
+						pgSequenceForm->seqcache,
+						pgSequenceForm->seqcycle ? "" : "NO ");
+
+					appendStringInfo(&buffer, "%s", sequenceDef);
+				}
+			}
 
 			/* if this column has a default value, append the default value */
 			if (attributeForm->atthasdef)

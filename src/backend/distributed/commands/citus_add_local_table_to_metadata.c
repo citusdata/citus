@@ -60,7 +60,6 @@ static void citus_add_local_table_to_metadata_internal(Oid relationId,
 static void ErrorIfAddingPartitionTableToMetadata(Oid relationId);
 static void ErrorIfUnsupportedCreateCitusLocalTable(Relation relation);
 static void ErrorIfUnsupportedCitusLocalTableKind(Oid relationId);
-static void ErrorIfUnsupportedCitusLocalColumnDefinition(Relation relation);
 static void NoticeIfAutoConvertingLocalTables(bool autoConverted, Oid relationId);
 static CascadeOperationType GetCascadeTypeForCitusLocalTables(bool autoConverted);
 static List * GetShellTableDDLEventsForCitusLocalTable(Oid relationId);
@@ -82,6 +81,7 @@ static char * GetRenameShardTriggerCommand(Oid shardRelationId, char *triggerNam
 static void DropRelationTruncateTriggers(Oid relationId);
 static char * GetDropTriggerCommand(Oid relationId, char *triggerName);
 static void DropViewsOnTable(Oid relationId);
+static void DropIdentitiesOnTable(Oid relationId);
 static List * GetRenameStatsCommandList(List *statsOidList, uint64 shardId);
 static List * ReversedOidList(List *oidList);
 static void AppendExplicitIndexIdsToList(Form_pg_index indexForm,
@@ -338,6 +338,12 @@ CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys, bool autoConve
 	char *relationName = get_rel_name(relationId);
 	Oid relationSchemaId = get_rel_namespace(relationId);
 
+	/*
+	 * Drop identities before local shard conversion since the shell table owns
+	 * identities
+	 */
+	DropIdentitiesOnTable(relationId);
+
 	/* below we convert relation with relationId to the shard relation */
 	uint64 shardId = ConvertLocalTableToShard(relationId);
 
@@ -486,7 +492,6 @@ ErrorIfUnsupportedCreateCitusLocalTable(Relation relation)
 	ErrorIfCoordinatorNotAddedAsWorkerNode();
 	ErrorIfUnsupportedCitusLocalTableKind(relationId);
 	EnsureTableNotDistributed(relationId);
-	ErrorIfUnsupportedCitusLocalColumnDefinition(relation);
 	ErrorIfRelationHasUnsupportedTrigger(relationId);
 
 	/*
@@ -545,30 +550,6 @@ ErrorIfUnsupportedCitusLocalTableKind(Oid relationId)
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 						errmsg("constraints on temporary tables may reference only "
 							   "temporary tables")));
-	}
-}
-
-
-/*
- * ErrorIfUnsupportedCitusLocalColumnDefinition errors out if given relation
- * has unsupported column definition for citus local table creation.
- */
-static void
-ErrorIfUnsupportedCitusLocalColumnDefinition(Relation relation)
-{
-	TupleDesc relationDesc = RelationGetDescr(relation);
-	if (RelationUsesIdentityColumns(relationDesc))
-	{
-		/*
-		 * pg_get_tableschemadef_string doesn't know how to deparse identity
-		 * columns so we cannot reflect those columns when creating shell
-		 * relation. For this reason, error out here.
-		 */
-		Oid relationId = relation->rd_id;
-		ereport(ERROR, (errmsg("cannot add %s to citus metadata since table "
-							   "has identity column",
-							   generate_qualified_relation_name(relationId)),
-						errhint("Drop the identity columns and re-try the command")));
 	}
 }
 
@@ -666,10 +647,12 @@ GetShellTableDDLEventsForCitusLocalTable(Oid relationId)
 	 * a sequence.
 	 */
 	IncludeSequenceDefaults includeSequenceDefaults = NEXTVAL_SEQUENCE_DEFAULTS;
+	IncludeIdentities includeIdentityDefaults = INCLUDE_IDENTITY;
 
 	bool creatingShellTableOnRemoteNode = false;
 	List *tableDDLCommands = GetFullTableCreationCommands(relationId,
 														  includeSequenceDefaults,
+														  includeIdentityDefaults,
 														  creatingShellTableOnRemoteNode);
 
 	List *shellTableDDLEvents = NIL;
@@ -1037,6 +1020,46 @@ GetDropTriggerCommand(Oid relationId, char *triggerName)
 					 quotedTriggerName, qualifiedRelationName);
 
 	return dropCommand->data;
+}
+
+
+/*
+ * DropIdentitiesOnTable drops the identities that depend on the given relation.
+ */
+static void
+DropIdentitiesOnTable(Oid relationId)
+{
+	Relation relation = relation_open(relationId, AccessShareLock);
+	TupleDesc tupleDescriptor = RelationGetDescr(relation);
+	relation_close(relation, NoLock);
+
+	for (int attributeIndex = 0; attributeIndex < tupleDescriptor->natts;
+		 attributeIndex++)
+	{
+		Form_pg_attribute attributeForm = TupleDescAttr(tupleDescriptor, attributeIndex);
+		char *columnName = NameStr(attributeForm->attname);
+
+		if (attributeForm->attidentity)
+		{
+			char *tableName = get_rel_name(relationId);
+			char *schemaName = get_namespace_name(get_rel_namespace(relationId));
+			char *qualifiedTableName = quote_qualified_identifier(schemaName, tableName);
+
+			StringInfo dropCommand = makeStringInfo();
+
+			appendStringInfo(dropCommand, "ALTER TABLE %s ALTER %s DROP IDENTITY",
+							 qualifiedTableName,
+							 columnName);
+
+			/*
+			 * We need to disable/enable ddl propagation for this command, to prevent
+			 * sending unnecessary ALTER COLUMN commands for partitions, to MX workers.
+			 */
+			ExecuteAndLogUtilityCommandList(list_make3(DISABLE_DDL_PROPAGATION,
+													   dropCommand->data,
+													   ENABLE_DDL_PROPAGATION));
+		}
+	}
 }
 
 

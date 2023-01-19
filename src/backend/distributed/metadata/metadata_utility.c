@@ -1328,25 +1328,18 @@ ShardLength(uint64 shardId)
  * NodeGroupHasShardPlacements returns whether any active shards are placed on the group
  */
 bool
-NodeGroupHasShardPlacements(int32 groupId, bool onlyConsiderActivePlacements)
+NodeGroupHasShardPlacements(int32 groupId)
 {
-	const int scanKeyCount = (onlyConsiderActivePlacements ? 2 : 1);
+	const int scanKeyCount = 1;
 	const bool indexOK = false;
 
-
-	ScanKeyData scanKey[2];
+	ScanKeyData scanKey[1];
 
 	Relation pgPlacement = table_open(DistPlacementRelationId(),
 									  AccessShareLock);
 
 	ScanKeyInit(&scanKey[0], Anum_pg_dist_placement_groupid,
 				BTEqualStrategyNumber, F_INT4EQ, Int32GetDatum(groupId));
-	if (onlyConsiderActivePlacements)
-	{
-		ScanKeyInit(&scanKey[1], Anum_pg_dist_placement_shardstate,
-					BTEqualStrategyNumber, F_INT4EQ,
-					Int32GetDatum(SHARD_STATE_ACTIVE));
-	}
 
 	SysScanDesc scanDescriptor = systable_beginscan(pgPlacement,
 													DistPlacementGroupidIndexId(),
@@ -1381,8 +1374,7 @@ IsActiveShardPlacement(ShardPlacement *shardPlacement)
 							   shardPlacement->nodePort)));
 	}
 
-	return shardPlacement->shardState == SHARD_STATE_ACTIVE &&
-		   workerNode->isActive;
+	return workerNode->isActive;
 }
 
 
@@ -1671,8 +1663,6 @@ TupleToGroupShardPlacement(TupleDesc tupleDescriptor, HeapTuple heapTuple)
 		datumArray[Anum_pg_dist_placement_shardid - 1]);
 	shardPlacement->shardLength = DatumGetInt64(
 		datumArray[Anum_pg_dist_placement_shardlength - 1]);
-	shardPlacement->shardState = DatumGetUInt32(
-		datumArray[Anum_pg_dist_placement_shardstate - 1]);
 	shardPlacement->groupId = DatumGetInt32(
 		datumArray[Anum_pg_dist_placement_groupid - 1]);
 
@@ -1739,8 +1729,7 @@ InsertShardRow(Oid relationId, uint64 shardId, char storageType,
  */
 uint64
 InsertShardPlacementRow(uint64 shardId, uint64 placementId,
-						char shardState, uint64 shardLength,
-						int32 groupId)
+						uint64 shardLength, int32 groupId)
 {
 	Datum values[Natts_pg_dist_placement];
 	bool isNulls[Natts_pg_dist_placement];
@@ -1755,7 +1744,7 @@ InsertShardPlacementRow(uint64 shardId, uint64 placementId,
 	}
 	values[Anum_pg_dist_placement_placementid - 1] = Int64GetDatum(placementId);
 	values[Anum_pg_dist_placement_shardid - 1] = Int64GetDatum(shardId);
-	values[Anum_pg_dist_placement_shardstate - 1] = CharGetDatum(shardState);
+	values[Anum_pg_dist_placement_shardstate - 1] = Int32GetDatum(1);
 	values[Anum_pg_dist_placement_shardlength - 1] = Int64GetDatum(shardLength);
 	values[Anum_pg_dist_placement_groupid - 1] = Int32GetDatum(groupId);
 
@@ -2312,7 +2301,7 @@ IsForeignTable(Oid relationId)
  * For a task to be able to run the following conditions apply:
  *  - Task is in Running state. This could happen when a Background Tasks Queue Monitor
  *    had crashed or is otherwise restarted. To recover from such a failure tasks in
- *    Running state are deeed Runnable.
+ *    Running state are deemed Runnable.
  *  - Task is in Runnable state with either _no_ value set in not_before, or a value that
  *    has currently passed. If the not_before field is set to a time in the future the
  *    task is currently not ready to be started.

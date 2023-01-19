@@ -26,7 +26,7 @@ test_file_name = args['test_name']
 use_base_schedule = args['use_base_schedule']
 use_whole_schedule_line = args['use_whole_schedule_line']
 
-test_files_to_skip = ['multi_cluster_management', 'multi_extension', 'multi_test_helpers']
+test_files_to_skip = ['multi_cluster_management', 'multi_extension', 'multi_test_helpers', 'multi_insert_select']
 test_files_to_run_without_schedule = ['single_node_enterprise']
 
 if not (test_file_name or test_file_path):
@@ -81,6 +81,8 @@ elif "isolation" in test_schedule:
     test_schedule = 'base_isolation_schedule'
 elif "failure" in test_schedule:
     test_schedule = 'failure_base_schedule'
+elif "enterprise" in test_schedule:
+    test_schedule = 'enterprise_minimal_schedule'
 elif "split" in test_schedule:
     test_schedule = 'minimal_schedule'
 elif "mx" in test_schedule:
