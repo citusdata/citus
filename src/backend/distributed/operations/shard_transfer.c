@@ -88,6 +88,12 @@ static const char *ShardTransferTypeNamesContinuous[] = {
 	[SHARD_TRANSFER_COPY] = "Copying",
 };
 
+static const char *ShardTransferTypeFunctionNames[] = {
+	[SHARD_TRANSFER_INVALID_FIRST] = "unknown",
+	[SHARD_TRANSFER_MOVE] = "citus_move_shard_placement",
+	[SHARD_TRANSFER_COPY] = "citus_copy_shard_placement",
+};
+
 /* local function forward declarations */
 static bool CanUseLogicalReplication(Oid relationId, char shardReplicationMode);
 static void ErrorIfTableCannotBeReplicated(Oid relationId);
@@ -100,7 +106,7 @@ static void ErrorIfSameNode(char *sourceNodeName, int sourceNodePort,
 static void CopyShardTables(List *shardIntervalList, char *sourceNodeName,
 							int32 sourceNodePort, char *targetNodeName,
 							int32 targetNodePort, bool useLogicalReplication,
-							char *operationName);
+							const char *operationName);
 static void CopyShardTablesViaLogicalReplication(List *shardIntervalList,
 												 char *sourceNodeName,
 												 int32 sourceNodePort,
@@ -115,7 +121,7 @@ static void EnsureShardCanBeCopied(int64 shardId, const char *sourceNodeName,
 								   int32 targetNodePort);
 static List * RecreateTableDDLCommandList(Oid relationId);
 static void EnsureTableListOwner(List *tableIdList);
-static void EnsureTableListSuitableForReplication(List *tableIdList);
+static void ErrorIfReplicatingDistributedTableWithFKeys(List *tableIdList);
 
 static void DropShardPlacementsFromMetadata(List *shardList,
 											char *nodeName,
@@ -135,14 +141,20 @@ static void SetupRebalanceMonitorForShardTransfer(uint64 shardId, Oid distribute
 												  ShardTransferType transferType);
 static void CheckSpaceConstraints(MultiConnection *connection,
 								  uint64 colocationSizeInBytes);
+static void EnsureAllShardsCanBeCopied(List *colocatedShardList,
+									   char *sourceNodeName, uint32 sourceNodePort,
+									   char *targetNodeName, uint32 targetNodePort);
 static void EnsureEnoughDiskSpaceForShardMove(List *colocatedShardList,
 											  char *sourceNodeName, uint32 sourceNodePort,
-											  char *targetNodeName, uint32
-											  targetNodePort);
+											  char *targetNodeName, uint32 targetNodePort,
+											  ShardTransferType transferType);
 static bool TransferAlreadyCompleted(List *colocatedShardList,
 									 char *sourceNodeName, uint32 sourceNodePort,
 									 char *targetNodeName, uint32 targetNodePort,
 									 ShardTransferType transferType);
+static void LockColocatedRelationsForMove(List *colocatedTableList);
+static void ErrorIfForeignTableForShardTransfer(List *colocatedTableList,
+												ShardTransferType transferType);
 static List * RecreateShardDDLCommandList(ShardInterval *shardInterval,
 										  const char *sourceNodeName,
 										  int32 sourceNodePort);
@@ -334,13 +346,21 @@ TransferShards(int64 shardId, char *sourceNodeName,
 			   int32 targetNodePort, char shardReplicationMode,
 			   ShardTransferType transferType)
 {
+	/* strings to be used in log messages */
+	const char *operationName = ShardTransferTypeNames[transferType];
+	const char *operationNameCapitalized =
+		ShardTransferTypeNamesCapitalized[transferType];
+	const char *operationFunctionName = ShardTransferTypeFunctionNames[transferType];
+
+	/* cannot transfer shard to the same node */
 	ErrorIfSameNode(sourceNodeName, sourceNodePort,
 					targetNodeName, targetNodePort,
-					ShardTransferTypeNames[transferType]);
+					operationName);
 
 	ShardInterval *shardInterval = LoadShardInterval(shardId);
 	Oid distributedTableId = shardInterval->relationId;
 
+	/* error if unsupported shard transfer */
 	if (transferType == SHARD_TRANSFER_MOVE)
 	{
 		ErrorIfMoveUnsupportedTableType(distributedTableId);
@@ -353,42 +373,29 @@ TransferShards(int64 shardId, char *sourceNodeName,
 
 	ErrorIfTargetNodeIsNotSafeForTransfer(targetNodeName, targetNodePort, transferType);
 
-	AcquirePlacementColocationLock(distributedTableId, ExclusiveLock,
-								   ShardTransferTypeNames[transferType]);
+	AcquirePlacementColocationLock(distributedTableId, ExclusiveLock, operationName);
 
 	List *colocatedTableList = ColocatedTableList(distributedTableId);
 	List *colocatedShardList = ColocatedShardIntervalList(shardInterval);
 
 	EnsureTableListOwner(colocatedTableList);
 
-	Oid colocatedTableId = InvalidOid;
-	foreach_oid(colocatedTableId, colocatedTableList)
+	if (transferType == SHARD_TRANSFER_MOVE)
 	{
-		if (transferType == SHARD_TRANSFER_MOVE)
-		{
-			/*
-			 * Block concurrent DDL / TRUNCATE commands on the relation. Similarly,
-			 * block concurrent citus_move_shard_placement() on any shard of
-			 * the same relation. This is OK for now since we're executing shard
-			 * moves sequentially anyway.
-			 */
-			LockRelationOid(colocatedTableId, ShareUpdateExclusiveLock);
-		}
-
-		if (IsForeignTable(distributedTableId))
-		{
-			char *relationName = get_rel_name(colocatedTableId);
-			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							errmsg("cannot move shard"),
-							errdetail("Table %s is a foreign table. Moving "
-									  "shards backed by foreign tables is "
-									  "not supported.", relationName)));
-		}
+		/*
+		 * Block concurrent DDL / TRUNCATE commands on the relation. Similarly,
+		 * block concurrent citus_move_shard_placement() on any shard of
+		 * the same relation. This is OK for now since we're executing shard
+		 * moves sequentially anyway.
+		 */
+		LockColocatedRelationsForMove(colocatedTableList);
 	}
+
+	ErrorIfForeignTableForShardTransfer(colocatedTableList, transferType);
 
 	if (transferType == SHARD_TRANSFER_COPY)
 	{
-		EnsureTableListSuitableForReplication(colocatedTableList);
+		ErrorIfReplicatingDistributedTableWithFKeys(colocatedTableList);
 	}
 
 	/*
@@ -406,34 +413,21 @@ TransferShards(int64 shardId, char *sourceNodeName,
 		ereport(WARNING, (errmsg("shard is already present on node %s:%d",
 								 targetNodeName, targetNodePort),
 						  errdetail("%s may have already completed.",
-									ShardTransferTypeNamesCapitalized[transferType])));
+									operationNameCapitalized)));
 		return;
 	}
 
-	ShardInterval *colocatedShard = NULL;
-	foreach_ptr(colocatedShard, colocatedShardList)
-	{
-		uint64 colocatedShardId = colocatedShard->shardId;
-
-		/*
-		 * To transfer shard, there should be healthy placement in source node and no
-		 * placement in the target node.
-		 */
-		EnsureShardCanBeCopied(colocatedShardId, sourceNodeName, sourceNodePort,
+	EnsureAllShardsCanBeCopied(colocatedShardList, sourceNodeName, sourceNodePort,
 							   targetNodeName, targetNodePort);
-	}
 
 	if (shardReplicationMode == TRANSFER_MODE_AUTOMATIC)
 	{
 		VerifyTablesHaveReplicaIdentity(colocatedTableList);
 	}
 
-	if (transferType == SHARD_TRANSFER_MOVE)
-	{
-		EnsureEnoughDiskSpaceForShardMove(colocatedShardList,
-										  sourceNodeName, sourceNodePort,
-										  targetNodeName, targetNodePort);
-	}
+	EnsureEnoughDiskSpaceForShardMove(colocatedShardList,
+									  sourceNodeName, sourceNodePort,
+									  targetNodeName, targetNodePort, transferType);
 
 	SetupRebalanceMonitorForShardTransfer(shardId, distributedTableId,
 										  sourceNodeName, sourceNodePort,
@@ -496,7 +490,7 @@ TransferShards(int64 shardId, char *sourceNodeName,
 
 	DropOrphanedResourcesInSeparateTransaction();
 
-	colocatedShard = NULL;
+	ShardInterval *colocatedShard = NULL;
 	foreach_ptr(colocatedShard, colocatedShardList)
 	{
 		/*
@@ -508,18 +502,8 @@ TransferShards(int64 shardId, char *sourceNodeName,
 		ErrorIfCleanupRecordForShardExists(qualifiedShardName);
 	}
 
-	char *operationName = NULL;
-	if (transferType == SHARD_TRANSFER_COPY)
-	{
-		operationName = "citus_copy_shard_placement";
-	}
-	else
-	{
-		operationName = "citus_move_shard_placement";
-	}
-
 	CopyShardTables(colocatedShardList, sourceNodeName, sourceNodePort, targetNodeName,
-					targetNodePort, useLogicalReplication, operationName);
+					targetNodePort, useLogicalReplication, operationFunctionName);
 
 	if (transferType == SHARD_TRANSFER_MOVE)
 	{
@@ -680,6 +664,70 @@ IsShardListOnNode(List *colocatedShardList, char *targetNodeName, uint32 targetN
 
 
 /*
+ * LockColocatedRelationsForMove takes a list of relations, locks all of them
+ * using ShareUpdateExclusiveLock
+ */
+static void
+LockColocatedRelationsForMove(List *colocatedTableList)
+{
+	Oid colocatedTableId = InvalidOid;
+	foreach_oid(colocatedTableId, colocatedTableList)
+	{
+		LockRelationOid(colocatedTableId, ShareUpdateExclusiveLock);
+	}
+}
+
+
+/*
+ * ErrorIfForeignTableForShardTransfer takes a list of relations, errors out if
+ * there's a foreign table in the list.
+ */
+static void
+ErrorIfForeignTableForShardTransfer(List *colocatedTableList,
+									ShardTransferType transferType)
+{
+	Oid colocatedTableId = InvalidOid;
+	foreach_oid(colocatedTableId, colocatedTableList)
+	{
+		if (IsForeignTable(colocatedTableId))
+		{
+			char *relationName = get_rel_name(colocatedTableId);
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("cannot %s shard",
+								   ShardTransferTypeNames[transferType]),
+							errdetail("Table %s is a foreign table. "
+									  "%s shards backed by foreign tables is "
+									  "not supported.", relationName,
+									  ShardTransferTypeNamesContinuous[transferType])));
+		}
+	}
+}
+
+
+/*
+ * EnsureAllShardsCanBeCopied is a wrapper around EnsureShardCanBeCopied.
+ */
+static void
+EnsureAllShardsCanBeCopied(List *colocatedShardList,
+						   char *sourceNodeName, uint32 sourceNodePort,
+						   char *targetNodeName, uint32 targetNodePort)
+{
+	ShardInterval *colocatedShard = NULL;
+	foreach_ptr(colocatedShard, colocatedShardList)
+	{
+		uint64 colocatedShardId = colocatedShard->shardId;
+
+		/*
+		 * To transfer shard, there should be healthy placement in source node and no
+		 * placement in the target node.
+		 */
+		EnsureShardCanBeCopied(colocatedShardId, sourceNodeName, sourceNodePort,
+							   targetNodeName, targetNodePort);
+	}
+}
+
+
+/*
  * EnsureEnoughDiskSpaceForShardMove checks that there is enough space for
  * shard moves of the given colocated shard list from source node to target node.
  * It tries to clean up old shard placements to ensure there is enough space.
@@ -687,9 +735,10 @@ IsShardListOnNode(List *colocatedShardList, char *targetNodeName, uint32 targetN
 static void
 EnsureEnoughDiskSpaceForShardMove(List *colocatedShardList,
 								  char *sourceNodeName, uint32 sourceNodePort,
-								  char *targetNodeName, uint32 targetNodePort)
+								  char *targetNodeName, uint32 targetNodePort,
+								  ShardTransferType transferType)
 {
-	if (!CheckAvailableSpaceBeforeMove)
+	if (!CheckAvailableSpaceBeforeMove || transferType != SHARD_TRANSFER_MOVE)
 	{
 		return;
 	}
@@ -1238,25 +1287,15 @@ EnsureTableListOwner(List *tableIdList)
 
 
 /*
- * EnsureTableListSuitableForReplication errors out if given tables are not
+ * ErrorIfReplicatingDistributedTableWithFKeys errors out if given tables are not
  * suitable for replication.
  */
 static void
-EnsureTableListSuitableForReplication(List *tableIdList)
+ErrorIfReplicatingDistributedTableWithFKeys(List *tableIdList)
 {
 	Oid tableId = InvalidOid;
 	foreach_oid(tableId, tableIdList)
 	{
-		if (IsForeignTable(tableId))
-		{
-			char *relationName = get_rel_name(tableId);
-			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							errmsg("cannot replicate shard"),
-							errdetail("Table %s is a foreign table. Replicating "
-									  "shards backed by foreign tables is "
-									  "not supported.", relationName)));
-		}
-
 		List *foreignConstraintCommandList =
 			GetReferencingForeignConstaintCommands(tableId);
 
@@ -1278,7 +1317,7 @@ EnsureTableListSuitableForReplication(List *tableIdList)
 static void
 CopyShardTables(List *shardIntervalList, char *sourceNodeName, int32 sourceNodePort,
 				char *targetNodeName, int32 targetNodePort, bool useLogicalReplication,
-				char *operationName)
+				const char *operationName)
 {
 	if (list_length(shardIntervalList) < 1)
 	{
