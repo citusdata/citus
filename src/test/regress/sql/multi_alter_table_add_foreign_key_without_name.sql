@@ -317,8 +317,8 @@ SELECT  con.conname
 
 ALTER TABLE dist_table DROP CONSTRAINT dist_table_referencing_column_fkey;
 
-DROP TABLE dist_table;
-DROP TABLE reference_table;
+DROP TABLE dist_table CASCADE;
+DROP TABLE reference_table CASCADE;
 
 -- test ADD FOREIGN KEY from citus local to reference table
 SELECT 1 FROM master_add_node('localhost', :master_port, groupId => 0);
