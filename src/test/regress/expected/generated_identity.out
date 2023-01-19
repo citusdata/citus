@@ -193,7 +193,7 @@ ERROR:  alter table command is currently unsupported
 DETAIL:  Only ADD|DROP COLUMN, SET|DROP NOT NULL, SET|DROP DEFAULT, ADD|DROP|VALIDATE CONSTRAINT, SET (), RESET (), ENABLE|DISABLE|NO FORCE|FORCE ROW LEVEL SECURITY, ATTACH|DETACH PARTITION and TYPE subcommands are supported.
 -- alter table .. alter column is unsupported
 ALTER TABLE generated_identities_test ALTER COLUMN b TYPE int;
-ERROR:  cannot execute ALTER TABLE command involving identity column
+ERROR:  cannot execute ALTER COLUMN command involving identity column
 SELECT alter_distributed_table('generated_identities_test', 'g');
  alter_distributed_table
 ---------------------------------------------------------------------
