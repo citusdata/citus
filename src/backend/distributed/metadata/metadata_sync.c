@@ -1635,7 +1635,8 @@ GetDependentSequencesWithRelation(Oid relationId, List **seqInfoList,
 			attrdefResult = lappend_oid(attrdefResult, deprec->objid);
 			attrdefAttnumResult = lappend_int(attrdefAttnumResult, deprec->refobjsubid);
 		}
-		else if (deprec->deptype == DEPENDENCY_AUTO &&
+		else if ((deprec->deptype == DEPENDENCY_AUTO || deprec->deptype ==
+				  DEPENDENCY_INTERNAL) &&
 				 deprec->refobjsubid != 0 &&
 				 deprec->classid == RelationRelationId &&
 				 get_rel_relkind(deprec->objid) == RELKIND_SEQUENCE)
@@ -2604,9 +2605,13 @@ CreateShellTableOnWorkers(Oid relationId)
 	List *commandList = list_make1(DISABLE_DDL_PROPAGATION);
 
 	IncludeSequenceDefaults includeSequenceDefaults = WORKER_NEXTVAL_SEQUENCE_DEFAULTS;
+	IncludeIdentities includeIdentityDefaults =
+		INCLUDE_IDENTITY_AS_SEQUENCE_DEFAULTS;
+
 	bool creatingShellTableOnRemoteNode = true;
 	List *tableDDLCommands = GetFullTableCreationCommands(relationId,
 														  includeSequenceDefaults,
+														  includeIdentityDefaults,
 														  creatingShellTableOnRemoteNode);
 
 	TableDDLCommand *tableDDLCommand = NULL;

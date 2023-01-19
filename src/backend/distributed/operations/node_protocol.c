@@ -131,6 +131,7 @@ master_get_table_ddl_events(PG_FUNCTION_ARGS)
 		text *relationName = PG_GETARG_TEXT_P(0);
 		Oid relationId = ResolveRelationId(relationName, false);
 		IncludeSequenceDefaults includeSequenceDefaults = NEXTVAL_SEQUENCE_DEFAULTS;
+		IncludeIdentities includeIdentityDefaults = INCLUDE_IDENTITY;
 
 
 		/* create a function context for cross-call persistence */
@@ -144,6 +145,7 @@ master_get_table_ddl_events(PG_FUNCTION_ARGS)
 		bool creatingShellTableOnRemoteNode = false;
 		List *tableDDLEventList = GetFullTableCreationCommands(relationId,
 															   includeSequenceDefaults,
+															   includeIdentityDefaults,
 															   creatingShellTableOnRemoteNode);
 		tableDDLEventCell = list_head(tableDDLEventList);
 		ListCellAndListWrapper *wrapper = palloc0(sizeof(ListCellAndListWrapper));
@@ -458,16 +460,23 @@ ResolveRelationId(text *relationName, bool missingOk)
  * These DDL commands are all palloced; and include the table's schema
  * definition, optional column storage and statistics definitions, and index
  * constraint and trigger definitions.
+ * When IncludeIdentities is NO_IDENTITY, the function does not include identity column
+ * specifications. When it's INCLUDE_IDENTITY_AS_SEQUENCE_DEFAULTS, the function
+ * uses sequences and set them as default values for identity columns by using exactly
+ * the same approach with worker_nextval('sequence') & nextval('sequence') logic
+ * desribed above. When it's INCLUDE_IDENTITY it creates GENERATED .. AS IDENTIY clauses.
  */
 List *
 GetFullTableCreationCommands(Oid relationId,
 							 IncludeSequenceDefaults includeSequenceDefaults,
+							 IncludeIdentities includeIdentityDefaults,
 							 bool creatingShellTableOnRemoteNode)
 {
 	List *tableDDLEventList = NIL;
 
 	List *preLoadCreationCommandList =
-		GetPreLoadTableCreationCommands(relationId, includeSequenceDefaults, NULL);
+		GetPreLoadTableCreationCommands(relationId, includeSequenceDefaults,
+										includeIdentityDefaults, NULL);
 
 	tableDDLEventList = list_concat(tableDDLEventList, preLoadCreationCommandList);
 
@@ -592,6 +601,7 @@ GetTableReplicaIdentityCommand(Oid relationId)
 List *
 GetPreLoadTableCreationCommands(Oid relationId,
 								IncludeSequenceDefaults includeSequenceDefaults,
+								IncludeIdentities includeIdentityDefaults,
 								char *accessMethod)
 {
 	List *tableDDLEventList = NIL;
@@ -601,6 +611,7 @@ GetPreLoadTableCreationCommands(Oid relationId,
 	/* fetch table schema and column option definitions */
 	char *tableSchemaDef = pg_get_tableschemadef_string(relationId,
 														includeSequenceDefaults,
+														includeIdentityDefaults,
 														accessMethod);
 	char *tableColumnOptionsDef = pg_get_tablecolumnoptionsdef_string(relationId);
 

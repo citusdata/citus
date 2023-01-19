@@ -62,7 +62,6 @@ test: multi_mx_alter_distributed_table
 test: update_colocation_mx
 test: resync_metadata_with_sequences
 test: distributed_locks
-
 # should be executed sequentially because it modifies metadata
 test: local_shard_execution_dropped_column
 test: metadata_sync_helpers
