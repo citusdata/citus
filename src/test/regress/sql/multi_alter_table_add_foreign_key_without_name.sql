@@ -321,9 +321,9 @@ DROP TABLE dist_table;
 DROP TABLE reference_table;
 
 -- test ADD FOREIGN KEY from citus local to reference table
-SELECT 1 FROM master_add_node('localhost', :master_port, groupId => 0); 
-CREATE TABLE citus_local_table(l1 int); 
-SELECT citus_add_local_table_to_metadata('citus_local_table'); 
+SELECT 1 FROM master_add_node('localhost', :master_port, groupId => 0);
+CREATE TABLE citus_local_table(l1 int);
+SELECT citus_add_local_table_to_metadata('citus_local_table');
 
 CREATE TABLE reference_table(r1 int primary key); SELECT create_reference_table('reference_table');
 ALTER TABLE citus_local_table ADD FOREIGN KEY(l1) REFERENCES reference_table(r1);
