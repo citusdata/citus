@@ -1533,7 +1533,7 @@ MarkIdentitiesAsDistributed(Oid targetRelationId)
 	TupleDesc tupleDescriptor = RelationGetDescr(relation);
 	relation_close(relation, NoLock);
 
-	bool missing_sequence_ok = false;
+	bool missingSequenceOk = false;
 
 	for (int attributeIndex = 0; attributeIndex < tupleDescriptor->natts;
 		 attributeIndex++)
@@ -1543,7 +1543,7 @@ MarkIdentitiesAsDistributed(Oid targetRelationId)
 		if (attributeForm->attidentity)
 		{
 			Oid seqOid = getIdentitySequence(targetRelationId, attributeForm->attnum,
-											 missing_sequence_ok);
+											 missingSequenceOk);
 
 			ObjectAddress seqAddress = { 0 };
 			ObjectAddressSet(seqAddress, RelationRelationId, seqOid);
@@ -1564,7 +1564,7 @@ PrepareRenameIdentitiesCommands(Oid sourceRelationId, Oid targetRelationId,
 	TupleDesc targetTupleDescriptor = RelationGetDescr(targetRelation);
 	relation_close(targetRelation, NoLock);
 
-	bool missing_sequence_ok = false;
+	bool missingSequenceOk = false;
 
 	for (int attributeIndex = 0; attributeIndex < targetTupleDescriptor->natts;
 		 attributeIndex++)
@@ -1578,12 +1578,12 @@ PrepareRenameIdentitiesCommands(Oid sourceRelationId, Oid targetRelationId,
 
 			Oid targetSequenceOid = getIdentitySequence(targetRelationId,
 														attributeForm->attnum,
-														missing_sequence_ok);
+														missingSequenceOk);
 			char *targetSequenceName = generate_relation_name(targetSequenceOid, NIL);
 
 			Oid sourceSequenceOid = getIdentitySequence(sourceRelationId,
 														attributeForm->attnum,
-														missing_sequence_ok);
+														missingSequenceOk);
 			char *sourceSequenceName = generate_relation_name(sourceSequenceOid, NIL);
 
 			/* to rename sequence on the coordinator */
