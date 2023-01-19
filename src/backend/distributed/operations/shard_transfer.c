@@ -1663,15 +1663,8 @@ EnsureShardCanBeCopied(int64 shardId, const char *sourceNodeName, int32 sourceNo
 {
 	List *shardPlacementList = ShardPlacementList(shardId);
 
-	ShardPlacement *sourcePlacement = SearchShardPlacementInListOrError(
-		shardPlacementList,
-		sourceNodeName,
-		sourceNodePort);
-	if (sourcePlacement->shardState != SHARD_STATE_ACTIVE)
-	{
-		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-						errmsg("source placement must be in active state")));
-	}
+	/* error if the source shard placement does not exist */
+	SearchShardPlacementInListOrError(shardPlacementList, sourceNodeName, sourceNodePort);
 
 	ShardPlacement *targetPlacement = SearchShardPlacementInList(shardPlacementList,
 																 targetNodeName,

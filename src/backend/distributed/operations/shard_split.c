@@ -188,7 +188,6 @@ ErrorIfCannotSplitShard(SplitOperation splitOperation, ShardInterval *sourceShar
 {
 	Oid relationId = sourceShard->relationId;
 	ListCell *colocatedTableCell = NULL;
-	ListCell *colocatedShardCell = NULL;
 
 	/* checks for table ownership and foreign tables */
 	List *colocatedTableList = ColocatedTableList(relationId);
@@ -211,32 +210,6 @@ ErrorIfCannotSplitShard(SplitOperation splitOperation, ShardInterval *sourceShar
 								   relationName),
 							errdetail("Splitting shards backed by foreign tables "
 									  "is not supported.")));
-		}
-	}
-
-	/* check shards with inactive placements */
-	List *colocatedShardList = ColocatedShardIntervalList(sourceShard);
-	foreach(colocatedShardCell, colocatedShardList)
-	{
-		ShardInterval *shardInterval = (ShardInterval *) lfirst(colocatedShardCell);
-		uint64 shardId = shardInterval->shardId;
-		ListCell *shardPlacementCell = NULL;
-
-		List *shardPlacementList = ShardPlacementListSortedByWorker(shardId);
-		foreach(shardPlacementCell, shardPlacementList)
-		{
-			ShardPlacement *placement = (ShardPlacement *) lfirst(shardPlacementCell);
-			if (placement->shardState != SHARD_STATE_ACTIVE)
-			{
-				char *relationName = get_rel_name(shardInterval->relationId);
-				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-								errmsg("cannot %s %s because relation "
-									   "\"%s\" has an inactive shard placement "
-									   "for the shard %lu",
-									   SplitOperationName[splitOperation],
-									   SplitTargetName[splitOperation],
-									   relationName, shardId)));
-			}
 		}
 	}
 }

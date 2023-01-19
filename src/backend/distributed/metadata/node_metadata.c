@@ -2066,7 +2066,7 @@ AddNodeMetadata(char *nodeName, int32 nodePort,
 	 */
 	if (nodeMetadata->groupId != COORDINATOR_GROUP_ID && CoordinatorAddedAsWorkerNode() &&
 		ActivePrimaryNonCoordinatorNodeCount() == 0 &&
-		NodeGroupHasShardPlacements(COORDINATOR_GROUP_ID, true))
+		NodeGroupHasShardPlacements(COORDINATOR_GROUP_ID))
 	{
 		WorkerNode *coordinator = CoordinatorNodeIfAddedAsWorkerOrError();
 

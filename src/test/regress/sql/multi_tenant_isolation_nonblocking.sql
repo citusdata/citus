@@ -221,7 +221,7 @@ SELECT * FROM pg_dist_shard
 	WHERE logicalrelid = 'lineitem_streaming'::regclass OR logicalrelid = 'orders_streaming'::regclass
 	ORDER BY shardminvalue::BIGINT, logicalrelid;
 
-SELECT * FROM pg_dist_shard_placement WHERE shardid >= 1230000 ORDER BY nodeport, shardid;
+SELECT * FROM pg_dist_shard_placement WHERE shardid BETWEEN 1230000 AND 1399999 ORDER BY nodeport, shardid;
 
 -- test failing foreign constraints after multiple tenant isolation
 \COPY lineitem_streaming FROM STDIN WITH DELIMITER '|'
@@ -330,15 +330,6 @@ SELECT create_distributed_table('text_column','tenant_id');
 SELECT isolate_tenant_to_new_shard('text_column', 'hello', shard_transfer_mode => 'force_logical');
 SELECT * FROM text_column;
 SELECT public.wait_for_resource_cleanup();
-
--- test with invalid shard placements
-\c - postgres - :master_port
-SET search_path to "Tenant Isolation";
-
-UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE nodeport = :worker_1_port;
-SELECT isolate_tenant_to_new_shard('lineitem_date', '1997-08-08', shard_transfer_mode => 'force_logical');
-
-UPDATE pg_dist_shard_placement SET shardstate = 1 WHERE nodeport = :worker_1_port;
 
 \c - mx_isolation_role_ent - :master_port
 SET search_path to "Tenant Isolation";
