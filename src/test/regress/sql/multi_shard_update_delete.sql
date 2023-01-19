@@ -476,24 +476,6 @@ SET value_1 = 7
 FROM events_test_table
 WHERE users_test_table.user_id = events_test_table.user_id AND TRUE;
 
--- Test with inactive shard-placement
--- manually set shardstate of one placement of users_test_table as inactive
-UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE shardid = 1440000;
-UPDATE users_test_table
-SET    value_2 = 5
-FROM   events_test_table
-WHERE  users_test_table.user_id = events_test_table.user_id;
-
--- manually set shardstate of one placement of events_test_table as inactive
-UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE shardid = 1440004;
-UPDATE users_test_table
-SET    value_2 = 5
-FROM   events_test_table
-WHERE  users_test_table.user_id = events_test_table.user_id;
-
-UPDATE pg_dist_shard_placement SET shardstate = 1 WHERE shardid = 1440000;
-UPDATE pg_dist_shard_placement SET shardstate = 1 WHERE shardid = 1440004;
-
 -- Subquery must return single value to use it with comparison operators
 UPDATE users_test_table as utt
 SET    value_1 = 3
@@ -735,6 +717,8 @@ DELETE FROM users_test_table WHERE user_id = 3 or user_id = 5;
 SELECT COUNT(*) FROM users_test_table WHERE user_id = 3 or user_id = 5;
 
 DROP TABLE users_test_table;
+DROP TABLE events_test_table_local;
 DROP TABLE events_test_table;
+DROP TABLE events_test_table_2;
 DROP TABLE events_reference_copy_table;
 DROP TABLE users_reference_copy_table;

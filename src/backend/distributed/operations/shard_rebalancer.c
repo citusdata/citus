@@ -423,7 +423,6 @@ FullShardPlacementList(Oid relationId, ArrayType *excludedShardArray)
 			ShardPlacement *placement = CitusMakeNode(ShardPlacement);
 			placement->shardId = groupPlacement->shardId;
 			placement->shardLength = groupPlacement->shardLength;
-			placement->shardState = groupPlacement->shardState;
 			placement->nodeId = worker->nodeId;
 			placement->nodeName = pstrdup(worker->workerName);
 			placement->nodePort = worker->workerPort;
