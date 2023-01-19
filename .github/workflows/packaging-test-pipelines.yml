@@ -1,8 +1,8 @@
 name: Build tests in packaging images
 
 on:
-  pull_request:
-    types: [opened, reopened,synchronize]
+  push:
+    branches: "**"
 
   workflow_dispatch:
 
