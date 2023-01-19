@@ -69,6 +69,15 @@ ALTER TABLE referencing_table ADD FOREIGN KEY (id) REFERENCES referenced_table(i
 DROP TABLE referencing_table;
 DROP TABLE referenced_table;
 
+-- test foreign constraint creation is not supported when one of the tables is not a citus table
+CREATE TABLE referenced_local_table(id int PRIMARY KEY, other_column int);
+CREATE TABLE reference_table(id int, referencing_column int);
+SELECT create_reference_table('reference_table');
+
+ALTER TABLE reference_table ADD FOREIGN KEY (referencing_column) REFERENCES referenced_local_table(id);
+DROP TABLE referenced_local_table;
+DROP TABLE reference_table;
+
 -- test foreign constraint with correct conditions
 CREATE TABLE referenced_table(id int PRIMARY KEY, test_column int);
 CREATE TABLE referencing_table(id int, ref_id int);

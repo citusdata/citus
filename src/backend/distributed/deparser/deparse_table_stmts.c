@@ -310,7 +310,7 @@ AppendAlterTableCmdAddConstraint(StringInfo buf, Constraint *constraint,
 
 		appendStringInfoString(buf, " REFERENCES");
 
-		appendStringInfo(buf, " %s", constraint->pktable->relname);
+		appendStringInfo(buf, " %s", quote_identifier(constraint->pktable->relname));
 
 		if (list_length(constraint->pk_attrs) > 0)
 		{

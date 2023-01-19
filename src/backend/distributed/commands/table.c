@@ -706,16 +706,18 @@ PostprocessAlterTableSchemaStmt(Node *node, const char *queryString)
  * key constraint name. This function is copied from postgres codebase.
  */
 static char *
-ChooseForeignKeyConstraintNameAddition(List *colnames)
+ChooseForeignKeyConstraintNameAddition(List *columnNames)
 {
 	char buf[NAMEDATALEN * 2];
 	int buflen = 0;
-	ListCell *lc;
 
 	buf[0] = '\0';
-	foreach(lc, colnames)
+
+	String *columnNameString = NULL;
+
+	foreach_ptr(columnNameString, columnNames)
 	{
-		const char *name = strVal(lfirst(lc));
+		const char *name = strVal(columnNameString);
 
 		if (buflen > 0)
 		{
@@ -742,7 +744,7 @@ ChooseForeignKeyConstraintNameAddition(List *colnames)
  * for default naming. See ConstTypeCitusCanDefaultName function for the supported constraint types.
  */
 static char *
-GenerateConstraintName(const char *tabname, Oid namespaceId, Constraint *constraint)
+GenerateConstraintName(const char *tableName, Oid namespaceId, Constraint *constraint)
 {
 	char *conname = NULL;
 
@@ -750,7 +752,7 @@ GenerateConstraintName(const char *tabname, Oid namespaceId, Constraint *constra
 	{
 		case CONSTR_PRIMARY:
 		{
-			conname = ChooseIndexName(tabname, namespaceId,
+			conname = ChooseIndexName(tableName, namespaceId,
 									  NULL, NULL, true, true);
 			break;
 		}
@@ -767,7 +769,7 @@ GenerateConstraintName(const char *tabname, Oid namespaceId, Constraint *constra
 				indexParams = lappend(indexParams, iparam);
 			}
 
-			conname = ChooseIndexName(tabname, namespaceId,
+			conname = ChooseIndexName(tableName, namespaceId,
 									  ChooseIndexColumnNames(indexParams),
 									  NULL, false, true);
 			break;
@@ -791,7 +793,7 @@ GenerateConstraintName(const char *tabname, Oid namespaceId, Constraint *constra
 				excludeOpNames = lappend(excludeOpNames, opname);
 			}
 
-			conname = ChooseIndexName(tabname, namespaceId,
+			conname = ChooseIndexName(tableName, namespaceId,
 									  ChooseIndexColumnNames(indexParams),
 									  excludeOpNames,
 									  false, true);
@@ -800,14 +802,14 @@ GenerateConstraintName(const char *tabname, Oid namespaceId, Constraint *constra
 
 		case CONSTR_CHECK:
 		{
-			conname = ChooseConstraintName(tabname, NULL, "check", namespaceId, NULL);
+			conname = ChooseConstraintName(tableName, NULL, "check", namespaceId, NULL);
 
 			break;
 		}
 
 		case CONSTR_FOREIGN:
 		{
-			conname = ChooseConstraintName(tabname,
+			conname = ChooseConstraintName(tableName,
 										   ChooseForeignKeyConstraintNameAddition(
 											   constraint->fk_attrs),
 										   "fkey",
@@ -957,6 +959,13 @@ PreprocessAlterTableAddConstraint(AlterTableStmt *alterTableStatement, Oid
 			SetLocalMultiShardModifyModeToSequential();
 		}
 
+		/*
+		 * If one of the relations involved in the FOREIGN KEY constraint is not a distributed table, citus errors out eventually.
+		 * PreprocessAlterTableStmt function returns an empty tasklist in those cases.
+		 * leftRelation is checked in PreprocessAlterTableStmt before
+		 * calling PreprocessAlterTableAddConstraint. However, we need to handle the rightRelation since PreprocessAlterTableAddConstraint
+		 * returns early.
+		 */
 		bool referencedIsLocalTable = !IsCitusTable(rightRelationId);
 		if (referencedIsLocalTable)
 		{
