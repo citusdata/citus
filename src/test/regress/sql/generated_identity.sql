@@ -23,15 +23,9 @@ CREATE TABLE generated_identities_test_5_50 PARTITION OF generated_identities_te
 -- local tables
 SELECT citus_add_local_table_to_metadata('generated_identities_test');
 
-\d generated_identities_test
+SELECT r::text FROM information_schema.columns AS r WHERE table_name = 'generated_identities_test' ;
 
-\c - - - :worker_1_port
-
-\d generated_identities.generated_identities_test
-
-\c - - - :master_port
-SET search_path TO generated_identities;
-SET client_min_messages to ERROR;
+SELECT run_command_on_workers($$select json_agg(r::text) from information_schema.columns AS r WHERE table_name = 'generated_identities_test' $$);
 
 SELECT undistribute_table('generated_identities_test');
 
@@ -39,15 +33,9 @@ SELECT citus_remove_node('localhost', :master_port);
 
 SELECT create_distributed_table('generated_identities_test', 'a');
 
-\d generated_identities_test
+SELECT r::text FROM information_schema.columns AS r WHERE table_name = 'generated_identities_test' ;
 
-\c - - - :worker_1_port
-
-\d generated_identities.generated_identities_test
-
-\c - - - :master_port
-SET search_path TO generated_identities;
-SET client_min_messages to ERROR;
+SELECT run_command_on_workers($$select json_agg(r::text) from information_schema.columns AS r WHERE table_name = 'generated_identities_test' $$);
 
 insert into generated_identities_test (g) values (1);
 
@@ -62,15 +50,9 @@ SELECT undistribute_table('generated_identities_test');
 
 SELECT * FROM generated_identities_test ORDER BY 1;
 
-\d generated_identities_test
+SELECT r::text FROM information_schema.columns AS r WHERE table_name = 'generated_identities_test' ;
 
-\c - - - :worker_1_port
-
-\d generated_identities.generated_identities_test
-
-\c - - - :master_port
-SET search_path TO generated_identities;
-SET client_min_messages to ERROR;
+SELECT run_command_on_workers($$select json_agg(r::text) from information_schema.columns AS r WHERE table_name = 'generated_identities_test' $$);
 
 INSERT INTO generated_identities_test (g)
 SELECT s FROM generate_series(8,10) s;
@@ -112,15 +94,9 @@ CREATE TABLE generated_identities_test (
 
 SELECT create_reference_table('generated_identities_test');
 
-\d generated_identities_test
+SELECT r::text FROM information_schema.columns AS r WHERE table_name = 'generated_identities_test' ;
 
-\c - - - :worker_1_port
-
-\d generated_identities.generated_identities_test
-
-\c - - - :master_port
-SET search_path TO generated_identities;
-SET client_min_messages to ERROR;
+SELECT run_command_on_workers($$select json_agg(r::text) from information_schema.columns AS r WHERE table_name = 'generated_identities_test' $$);
 
 INSERT INTO generated_identities_test (g)
 SELECT s FROM generate_series(11,20) s;
@@ -129,15 +105,9 @@ SELECT * FROM generated_identities_test ORDER BY g;
 
 SELECT undistribute_table('generated_identities_test');
 
-\d generated_identities_test
+SELECT r::text FROM information_schema.columns AS r WHERE table_name = 'generated_identities_test' ;
 
-\c - - - :worker_1_port
-
-\d generated_identities.generated_identities_test
-
-\c - - - :master_port
-SET search_path TO generated_identities;
-SET client_min_messages to ERROR;
+SELECT run_command_on_workers($$select json_agg(r::text) from information_schema.columns AS r WHERE table_name = 'generated_identities_test' $$);
 
 -- alter table .. add column .. GENERATED .. AS IDENTITY
 DROP TABLE IF EXISTS color;
@@ -157,28 +127,12 @@ CREATE TABLE color (
 );
 SELECT create_distributed_table('color', 'color_id');
 
-\c - - - :worker_1_port
-SET search_path TO generated_identities;
-SET client_min_messages to ERROR;
-
-INSERT INTO color(color_name) VALUES ('Red');
-
-\c - - - :master_port
-SET search_path TO generated_identities;
-SET client_min_messages to ERROR;
+SELECT run_command_on_workers($$INSERT INTO generated_identities.color(color_name) VALUES ('Red');$$);
 
 SELECT undistribute_table('color');
 SELECT create_distributed_table('color', 'color_id');
 
-\c - - - :worker_1_port
-SET search_path TO generated_identities;
-SET client_min_messages to ERROR;
-
-INSERT INTO color(color_name) VALUES ('Red');
-
-\c - - - :master_port
-SET search_path TO generated_identities;
-SET client_min_messages to ERROR;
+SELECT run_command_on_workers($$INSERT INTO generated_identities.color(color_name) VALUES ('Red');$$);
 
 INSERT INTO color(color_name) VALUES ('Red');
 
@@ -193,74 +147,44 @@ CREATE TABLE color (
 );
 SELECT create_distributed_table('color', 'color_id');
 
-\c - - - :worker_1_port
-SET search_path TO generated_identities;
-SET client_min_messages to ERROR;
-
-INSERT INTO color(color_name) VALUES ('Red');
-
-\c - - - :master_port
-SET search_path TO generated_identities;
-SET client_min_messages to ERROR;
+SELECT run_command_on_workers($$INSERT INTO generated_identities.color(color_name) VALUES ('Red');$$);
 
 SELECT undistribute_table('color');
 
 ALTER SEQUENCE color_color_id_seq RENAME TO myseq;
 
 SELECT create_distributed_table('color', 'color_id');
-\ds+ myseq
-\ds+ color_color_id_seq
-\d color
+SELECT run_command_on_workers($$INSERT INTO generated_identities.color(color_name) VALUES ('Red');$$);
 
-\c - - - :worker_1_port
-SET search_path TO generated_identities;
-SET client_min_messages to ERROR;
+select * from pg_catalog.pg_sequences where sequencename = 'myseq';
+select * from pg_catalog.pg_sequences where sequencename = 'color_color_id_seq';
+select * from information_schema.columns where table_name = 'color' ;
 
-\ds+ myseq
-\ds+ color_color_id_seq
-\d color
+SELECT run_command_on_workers($$select s::text from pg_catalog.pg_sequences as s where sequencename = 'myseq'$$);
+SELECT run_command_on_workers($$select s::text from pg_catalog.pg_sequences as s where sequencename = 'color_color_id_seq'$$);
+SELECT run_command_on_workers($$select json_agg(r::text) from information_schema.columns AS r WHERE table_name = 'color' $$);
 
 INSERT INTO color(color_name) VALUES ('Red');
-
-\c - - - :master_port
-SET search_path TO generated_identities;
-SET client_min_messages to ERROR;
 
 ALTER SEQUENCE myseq RENAME TO color_color_id_seq;
 
-\ds+ myseq
-\ds+ color_color_id_seq
+select * from pg_catalog.pg_sequences where sequencename = 'myseq';
+select * from pg_catalog.pg_sequences where sequencename = 'color_color_id_seq';
 
 INSERT INTO color(color_name) VALUES ('Red');
 
-\c - - - :worker_1_port
-SET search_path TO generated_identities;
-SET client_min_messages to ERROR;
-
-\ds+ myseq
-\ds+ color_color_id_seq
-\d color
+SELECT run_command_on_workers($$select s::text from pg_catalog.pg_sequences as s where sequencename = 'myseq'$$);
+SELECT run_command_on_workers($$select s::text from pg_catalog.pg_sequences as s where sequencename = 'color_color_id_seq'$$);
+SELECT run_command_on_workers($$select json_agg(r::text) from information_schema.columns AS r WHERE table_name = 'color' $$);
 
 INSERT INTO color(color_name) VALUES ('Red');
 
-\c - - - :master_port
-SET search_path TO generated_identities;
-SET client_min_messages to ERROR;
-
-SELECT alter_distributed_table('co23423lor', shard_count := 6);
+SELECT alter_distributed_table('color', shard_count := 6);
 
 INSERT INTO color(color_name) VALUES ('Red');
 
-\c - - - :worker_1_port
-SET search_path TO generated_identities;
-SET client_min_messages to ERROR;
+SELECT run_command_on_workers($$INSERT INTO generated_identities.color(color_name) VALUES ('Red');$$);
 
-\ds+ color_color_id_seq
-
-INSERT INTO color(color_name) VALUES ('Red');
-
-\c - - - :master_port
-SET search_path TO generated_identities;
-SET client_min_messages to ERROR;
+select * from pg_catalog.pg_sequences where sequencename = 'color_color_id_seq';
 
 DROP SCHEMA generated_identities CASCADE;
