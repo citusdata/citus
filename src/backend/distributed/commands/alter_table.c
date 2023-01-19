@@ -1748,11 +1748,14 @@ ReplaceTable(Oid sourceId, Oid targetId, List *justBeforeDropCommands,
 								quote_qualified_identifier(schemaName, sourceName))));
 	}
 
-	List *outCoordinatorCommandsToRenameIdentites = NIL;
-	List *outWorkerCommandsToRenameIdentites = NIL;
+	/*
+	 * we need to prepare rename identities commands before dropping the original table
+	 */
+	List *coordinatorCommandsToRenameIdentites = NIL;
+	List *workerCommandsToRenameIdentites = NIL;
 	PrepareRenameIdentitiesCommands(sourceId, targetId,
-									&outCoordinatorCommandsToRenameIdentites,
-									&outWorkerCommandsToRenameIdentites);
+									&coordinatorCommandsToRenameIdentites,
+									&workerCommandsToRenameIdentites);
 
 	resetStringInfo(query);
 	appendStringInfo(query, "DROP %sTABLE %s CASCADE",
@@ -1773,13 +1776,13 @@ ReplaceTable(Oid sourceId, Oid targetId, List *justBeforeDropCommands,
 	ExecuteQueryViaSPI(query->data, SPI_OK_UTILITY);
 
 	char *coordinatorCommand = NULL;
-	foreach_ptr(coordinatorCommand, outCoordinatorCommandsToRenameIdentites)
+	foreach_ptr(coordinatorCommand, coordinatorCommandsToRenameIdentites)
 	{
 		ExecuteQueryViaSPI(coordinatorCommand, SPI_OK_UTILITY);
 	}
 
 	char *workerCommand = NULL;
-	foreach_ptr(workerCommand, outWorkerCommandsToRenameIdentites)
+	foreach_ptr(workerCommand, workerCommandsToRenameIdentites)
 	{
 		SendCommandToWorkersWithMetadata(workerCommand);
 	}
