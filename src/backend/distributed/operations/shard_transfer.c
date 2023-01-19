@@ -76,18 +76,26 @@ static const char *ShardTransferTypeNames[] = {
 	[SHARD_TRANSFER_COPY] = "copy",
 };
 
+static const char *ShardTransferTypeNamesContinuous[] = {
+	[SHARD_TRANSFER_INVALID_FIRST] = "unknown",
+	[SHARD_TRANSFER_MOVE] = "Moving",
+	[SHARD_TRANSFER_COPY] = "Copying",
+};
+
 /* local function forward declarations */
 static bool CanUseLogicalReplication(Oid relationId, char shardReplicationMode);
 static void ErrorIfTableCannotBeReplicated(Oid relationId);
-static void ErrorIfTargetNodeIsNotSafeToCopyTo(const char *targetNodeName,
-											   int targetNodePort);
+static void ErrorIfTargetNodeIsNotSafeForTransfer(const char *targetNodeName,
+												  int targetNodePort,
+												  ShardTransferType transferType);
 static void ErrorIfSameNode(char *sourceNodeName, int sourceNodePort,
 							char *targetNodeName, int targetNodePort,
 							const char *operationName);
 static void ReplicateColocatedShardPlacement(int64 shardId, char *sourceNodeName,
 											 int32 sourceNodePort, char *targetNodeName,
 											 int32 targetNodePort,
-											 char shardReplicationMode);
+											 char shardReplicationMode,
+											 ShardTransferType transferType);
 static void CopyShardTables(List *shardIntervalList, char *sourceNodeName,
 							int32 sourceNodePort, char *targetNodeName,
 							int32 targetNodePort, bool useLogicalReplication,
@@ -171,7 +179,7 @@ citus_copy_shard_placement(PG_FUNCTION_ARGS)
 
 	ReplicateColocatedShardPlacement(shardId, sourceNodeName, sourceNodePort,
 									 targetNodeName, targetNodePort,
-									 shardReplicationMode);
+									 shardReplicationMode, SHARD_TRANSFER_COPY);
 
 	PG_RETURN_VOID();
 }
@@ -201,7 +209,7 @@ citus_copy_shard_placement_with_nodeid(PG_FUNCTION_ARGS)
 	ReplicateColocatedShardPlacement(shardId,
 									 sourceNode->workerName, sourceNode->workerPort,
 									 targetNode->workerName, targetNode->workerPort,
-									 shardReplicationMode);
+									 shardReplicationMode, SHARD_TRANSFER_COPY);
 
 	PG_RETURN_VOID();
 }
@@ -236,7 +244,7 @@ master_copy_shard_placement(PG_FUNCTION_ARGS)
 
 	ReplicateColocatedShardPlacement(shardId, sourceNodeName, sourceNodePort,
 									 targetNodeName, targetNodePort,
-									 shardReplicationMode);
+									 shardReplicationMode, SHARD_TRANSFER_COPY);
 
 
 	PG_RETURN_VOID();
@@ -325,9 +333,10 @@ citus_move_shard_placement_internal(int64 shardId, char *sourceNodeName,
 
 	Oid relationId = RelationIdForShard(shardId);
 	ErrorIfMoveUnsupportedTableType(relationId);
-	ErrorIfTargetNodeIsNotSafeToMove(targetNodeName, targetNodePort);
+	ErrorIfTargetNodeIsNotSafeForTransfer(targetNodeName, targetNodePort, transferType);
 
-	AcquirePlacementColocationLock(relationId, ExclusiveLock, ShardTransferTypeNames[transferType]);
+	AcquirePlacementColocationLock(relationId, ExclusiveLock,
+								   ShardTransferTypeNames[transferType]);
 
 	ShardInterval *shardInterval = LoadShardInterval(shardId);
 	Oid distributedTableId = shardInterval->relationId;
@@ -735,17 +744,19 @@ CheckSpaceConstraints(MultiConnection *connection, uint64 colocationSizeInBytes)
 
 
 /*
- * ErrorIfTargetNodeIsNotSafeToMove throws error if the target node is not
- * eligible for moving shards.
+ * ErrorIfTargetNodeIsNotSafeForTransfer throws error if the target node is not
+ * eligible for shard transfers.
  */
-void
-ErrorIfTargetNodeIsNotSafeToMove(const char *targetNodeName, int targetNodePort)
+static void
+ErrorIfTargetNodeIsNotSafeForTransfer(const char *targetNodeName, int targetNodePort,
+									  ShardTransferType transferType)
 {
 	WorkerNode *workerNode = FindWorkerNode(targetNodeName, targetNodePort);
 	if (workerNode == NULL)
 	{
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("Moving shards to a non-existing node is not supported"),
+						errmsg("%s shards to a non-existing node is not supported",
+							   ShardTransferTypeNamesContinuous[transferType]),
 						errhint(
 							"Add the target node via SELECT citus_add_node('%s', %d);",
 							targetNodeName, targetNodePort)));
@@ -754,13 +765,14 @@ ErrorIfTargetNodeIsNotSafeToMove(const char *targetNodeName, int targetNodePort)
 	if (!workerNode->isActive)
 	{
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("Moving shards to a non-active node is not supported"),
+						errmsg("%s shards to a non-active node is not supported",
+							   ShardTransferTypeNamesContinuous[transferType]),
 						errhint(
 							"Activate the target node via SELECT citus_activate_node('%s', %d);",
 							targetNodeName, targetNodePort)));
 	}
 
-	if (!workerNode->shouldHaveShards)
+	if (transferType == SHARD_TRANSFER_MOVE && !workerNode->shouldHaveShards)
 	{
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 						errmsg("Moving shards to a node that shouldn't have a shard is "
@@ -773,8 +785,9 @@ ErrorIfTargetNodeIsNotSafeToMove(const char *targetNodeName, int targetNodePort)
 	if (!NodeIsPrimary(workerNode))
 	{
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("Moving shards to a secondary (e.g., replica) node is "
-							   "not supported")));
+						errmsg("%s shards to a secondary (e.g., replica) node is "
+							   "not supported",
+							   ShardTransferTypeNamesContinuous[transferType])));
 	}
 }
 
@@ -1053,41 +1066,6 @@ ErrorIfTableCannotBeReplicated(Oid relationId)
 
 
 /*
- * ErrorIfTargetNodeIsNotSafeToCopyTo throws an error if the target node is not
- * eligible for copying shards.
- */
-static void
-ErrorIfTargetNodeIsNotSafeToCopyTo(const char *targetNodeName, int targetNodePort)
-{
-	WorkerNode *workerNode = FindWorkerNode(targetNodeName, targetNodePort);
-	if (workerNode == NULL)
-	{
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("Copying shards to a non-existing node is not supported"),
-						errhint(
-							"Add the target node via SELECT citus_add_node('%s', %d);",
-							targetNodeName, targetNodePort)));
-	}
-
-	if (!workerNode->isActive)
-	{
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("Copying shards to a non-active node is not supported"),
-						errhint(
-							"Activate the target node via SELECT citus_activate_node('%s', %d);",
-							targetNodeName, targetNodePort)));
-	}
-
-	if (!NodeIsPrimary(workerNode))
-	{
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("Copying shards to a secondary (e.g., replica) node is "
-							   "not supported")));
-	}
-}
-
-
-/*
  * LookupShardTransferMode maps the oids of citus.shard_transfer_mode enum
  * values to a char.
  */
@@ -1127,17 +1105,18 @@ LookupShardTransferMode(Oid shardReplicationModeOid)
 static void
 ReplicateColocatedShardPlacement(int64 shardId, char *sourceNodeName,
 								 int32 sourceNodePort, char *targetNodeName,
-								 int32 targetNodePort, char shardReplicationMode)
+								 int32 targetNodePort, char shardReplicationMode,
+								 ShardTransferType transferType)
 {
+	ErrorIfSameNode(sourceNodeName, sourceNodePort,
+					targetNodeName, targetNodePort,
+					ShardTransferTypeNames[transferType]);
+
 	ShardInterval *shardInterval = LoadShardInterval(shardId);
 	Oid distributedTableId = shardInterval->relationId;
 
-	ErrorIfSameNode(sourceNodeName, sourceNodePort,
-					targetNodeName, targetNodePort,
-					"copy");
-
 	ErrorIfTableCannotBeReplicated(shardInterval->relationId);
-	ErrorIfTargetNodeIsNotSafeToCopyTo(targetNodeName, targetNodePort);
+	ErrorIfTargetNodeIsNotSafeForTransfer(targetNodeName, targetNodePort, transferType);
 	EnsureNoModificationsHaveBeenDone();
 
 	AcquirePlacementColocationLock(shardInterval->relationId, ExclusiveLock, "copy");
