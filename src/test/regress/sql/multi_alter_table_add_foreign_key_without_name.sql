@@ -1,9 +1,9 @@
 --
 -- MULTI_ALTER_TABLE_ADD_FOREIGN_KEY_WITHOUT_NAME
 --
-
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1770000;
 ALTER SEQUENCE pg_catalog.pg_dist_placement_placementid_seq RESTART 1770000;
+
 SET citus.shard_count TO 4;
 
 CREATE SCHEMA at_add_fk;
@@ -341,5 +341,9 @@ ALTER TABLE citus_local_table ADD FOREIGN KEY(l1) REFERENCES reference_table(r1)
 ALTER TABLE citus_local_table ADD FOREIGN KEY(l1) REFERENCES reference_table(r1) ON DELETE NO ACTION;
 ALTER TABLE citus_local_table ADD FOREIGN KEY(l1) REFERENCES reference_table(r1) ON DELETE RESTRICT;
 
-DROP SCHEMA at_add_fk CASCADE;
+DROP TABLE citus_local_table CASCADE;
+SELECT 1 FROM master_remove_node('localhost', :master_port);
+
 RESET SEARCH_PATH;
+RESET client_min_messages;
+DROP SCHEMA at_add_fk CASCADE;
