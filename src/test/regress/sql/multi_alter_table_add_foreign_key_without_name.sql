@@ -317,6 +317,18 @@ SELECT  con.conname
 
 ALTER TABLE dist_table DROP CONSTRAINT dist_table_referencing_column_fkey;
 
+BEGIN;
+	SELECT count(*) FROM  dist_table;
+	ALTER TABLE  dist_table ADD FOREIGN KEY(referencing_column) REFERENCES reference_table(id);
+	ROLLBACK;
+
+-- try inside a sequential block
+BEGIN;
+	SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
+	SELECT count(*) FROM  dist_table;
+	ALTER TABLE  dist_table ADD FOREIGN KEY(referencing_column) REFERENCES reference_table(id);
+	ROLLBACK;
+
 DROP TABLE dist_table CASCADE;
 DROP TABLE reference_table CASCADE;
 

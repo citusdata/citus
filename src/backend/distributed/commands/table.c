@@ -833,6 +833,42 @@ GenerateConstraintName(const char *tableName, Oid namespaceId, Constraint *const
 
 
 /*
+ * EnsureSequentialModeForAlterTableOperation makes sure that the current transaction is already in
+ * sequential mode, or can still safely be put in sequential mode, it errors if that is
+ * not possible. The error contains information for the user to retry the transaction with
+ * sequential mode set from the beginning.
+ */
+static void
+EnsureSequentialModeForAlterTableOperation(void)
+{
+	const char *objTypeString = "ALTER TABLE ... ADD FOREIGN KEY";
+
+	if (ParallelQueryExecutedInTransaction())
+	{
+		ereport(ERROR, (errmsg("cannot run %s command because there was a "
+							   "parallel operation on a distributed table in the "
+							   "transaction", objTypeString),
+						errdetail("When running command on/for a distributed %s, Citus "
+								  "needs to perform all operations over a single "
+								  "connection per node to ensure consistency.",
+								  objTypeString),
+						errhint("Try re-running the transaction with "
+								"\"SET LOCAL citus.multi_shard_modify_mode TO "
+								"\'sequential\';\"")));
+	}
+
+	ereport(DEBUG1, (errmsg("switching to sequential query execution mode"),
+					 errdetail(
+						 "A command for a distributed %s is run. To make sure subsequent "
+						 "commands see the %s correctly we need to make sure to "
+						 "use only one connection for all future commands",
+						 objTypeString, objTypeString)));
+
+	SetLocalMultiShardModifyModeToSequential();
+}
+
+
+/*
  * SwitchToSequentialAndLocalExecutionIfConstraintNameTooLong generates the longest index constraint name
  * among the shards of the partitions, and if exceeds the limit switches to sequential and
  * local execution to prevent self-deadlocks.
@@ -957,7 +993,7 @@ PreprocessAlterTableAddConstraint(AlterTableStmt *alterTableStatement, Oid
 
 		if (IsCitusTableType(rightRelationId, REFERENCE_TABLE))
 		{
-			SetLocalMultiShardModifyModeToSequential();
+			EnsureSequentialModeForAlterTableOperation();
 		}
 
 		/*

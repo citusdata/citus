@@ -470,6 +470,29 @@ SELECT  con.conname
 (1 row)
 
 ALTER TABLE dist_table DROP CONSTRAINT dist_table_referencing_column_fkey;
+BEGIN;
+	SELECT count(*) FROM  dist_table;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+	ALTER TABLE  dist_table ADD FOREIGN KEY(referencing_column) REFERENCES reference_table(id);
+ERROR:  cannot run ALTER TABLE ... ADD FOREIGN KEY command because there was a parallel operation on a distributed table in the transaction
+DETAIL:  When running command on/for a distributed ALTER TABLE ... ADD FOREIGN KEY, Citus needs to perform all operations over a single connection per node to ensure consistency.
+HINT:  Try re-running the transaction with "SET LOCAL citus.multi_shard_modify_mode TO 'sequential';"
+	ROLLBACK;
+-- try inside a sequential block
+BEGIN;
+	SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
+	SELECT count(*) FROM  dist_table;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+	ALTER TABLE  dist_table ADD FOREIGN KEY(referencing_column) REFERENCES reference_table(id);
+	ROLLBACK;
 DROP TABLE dist_table CASCADE;
 DROP TABLE reference_table CASCADE;
 -- test ADD FOREIGN KEY from citus local to reference table
