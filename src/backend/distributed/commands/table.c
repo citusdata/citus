@@ -1253,10 +1253,13 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 					deparseAT = true;
 					useInitialDDLCommandString = false;
 
-					/* the new column definition will have no constraint */
+					/*
+					 * Since we don't support constraints for AT_AddColumn
+					 * we have to set is_not_null to true explicitly for identity columns
+					 */
 					ColumnDef *newColDef = copyObject(columnDefinition);
 					newColDef->constraints = NULL;
-
+					newColDef->is_not_null = true;
 					newCmd->def = (Node *) newColDef;
 				}
 			}
