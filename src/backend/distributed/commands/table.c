@@ -3032,6 +3032,26 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 						}
 					}
 
+
+					Constraint *columnConstraint = NULL;
+					foreach_ptr(columnConstraint, column->constraints)
+					{
+						if (columnConstraint->contype == CONSTR_IDENTITY)
+						{
+							/*
+							 * Currently we don't support backfilling the new identity column with default values
+							 * if the table is not empty
+							 */
+							if (!TableEmpty(relationId))
+							{
+								ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+												errmsg(
+													"Cannot add an identity column because the table is not empty")));
+							}
+						}
+					}
+
+
 					List *columnConstraints = column->constraints;
 
 					Constraint *constraint = NULL;

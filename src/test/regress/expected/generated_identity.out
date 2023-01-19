@@ -319,8 +319,7 @@ SELECT undistribute_table('generated_identities_test');
 SET search_path TO generated_identities;
 SET client_min_messages to ERROR;
 -- alter table .. add column .. GENERATED .. AS IDENTITY
-DROP TABLE color IF EXISTS;
-ERROR:  syntax error at or near "IF"
+DROP TABLE IF EXISTS color;
 CREATE TABLE color (
     color_name VARCHAR NOT NULL
 );
@@ -332,12 +331,8 @@ SELECT create_distributed_table('color', 'color_name');
 
 ALTER TABLE color ADD COLUMN color_id BIGINT GENERATED ALWAYS AS IDENTITY;
 INSERT INTO color(color_name) VALUES ('Red');
-SELECT * FROM color;
- color_name | color_id
----------------------------------------------------------------------
- Red        |        1
-(1 row)
-
+ALTER TABLE color ADD COLUMN color_id_1 BIGINT GENERATED ALWAYS AS IDENTITY;
+ERROR:  Cannot add an identity column because the table is not empty
 DROP TABLE color;
 -- insert data from workers
 CREATE TABLE color (
