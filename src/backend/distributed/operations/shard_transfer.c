@@ -70,6 +70,12 @@ typedef struct ShardCommandList
 	List *ddlCommandList;
 } ShardCommandList;
 
+static const char *ShardTransferTypeNames[] = {
+	[SHARD_TRANSFER_INVALID_FIRST] = "unknown",
+	[SHARD_TRANSFER_MOVE] = "move",
+	[SHARD_TRANSFER_COPY] = "copy",
+};
+
 /* local function forward declarations */
 static bool CanUseLogicalReplication(Oid relationId, char shardReplicationMode);
 static void ErrorIfTableCannotBeReplicated(Oid relationId);
@@ -264,9 +270,11 @@ citus_move_shard_placement(PG_FUNCTION_ARGS)
 	int32 targetNodePort = PG_GETARG_INT32(4);
 	Oid shardReplicationModeOid = PG_GETARG_OID(5);
 
+	char shardReplicationMode = LookupShardTransferMode(shardReplicationModeOid);
 	citus_move_shard_placement_internal(shardId, sourceNodeName, sourceNodePort,
 										targetNodeName, targetNodePort,
-										shardReplicationModeOid);
+										shardReplicationMode,
+										SHARD_TRANSFER_MOVE);
 
 	PG_RETURN_VOID();
 }
@@ -291,10 +299,12 @@ citus_move_shard_placement_with_nodeid(PG_FUNCTION_ARGS)
 	WorkerNode *sourceNode = FindNodeWithNodeId(sourceNodeId, missingOk);
 	WorkerNode *targetNode = FindNodeWithNodeId(targetNodeId, missingOk);
 
+	char shardReplicationMode = LookupShardTransferMode(shardReplicationModeOid);
 	citus_move_shard_placement_internal(shardId, sourceNode->workerName,
 										sourceNode->workerPort, targetNode->workerName,
 										targetNode->workerPort,
-										shardReplicationModeOid);
+										shardReplicationMode,
+										SHARD_TRANSFER_MOVE);
 
 	PG_RETURN_VOID();
 }
@@ -306,20 +316,18 @@ citus_move_shard_placement_with_nodeid(PG_FUNCTION_ARGS)
 void
 citus_move_shard_placement_internal(int64 shardId, char *sourceNodeName,
 									int32 sourceNodePort, char *targetNodeName,
-									int32 targetNodePort, Oid shardReplicationModeOid)
+									int32 targetNodePort, char shardReplicationMode,
+									ShardTransferType transferType)
 {
-	ListCell *colocatedTableCell = NULL;
-	ListCell *colocatedShardCell = NULL;
-
 	ErrorIfSameNode(sourceNodeName, sourceNodePort,
 					targetNodeName, targetNodePort,
-					"move");
+					ShardTransferTypeNames[transferType]);
 
 	Oid relationId = RelationIdForShard(shardId);
 	ErrorIfMoveUnsupportedTableType(relationId);
 	ErrorIfTargetNodeIsNotSafeToMove(targetNodeName, targetNodePort);
 
-	AcquirePlacementColocationLock(relationId, ExclusiveLock, "move");
+	AcquirePlacementColocationLock(relationId, ExclusiveLock, ShardTransferTypeNames[transferType]);
 
 	ShardInterval *shardInterval = LoadShardInterval(shardId);
 	Oid distributedTableId = shardInterval->relationId;
@@ -327,10 +335,9 @@ citus_move_shard_placement_internal(int64 shardId, char *sourceNodeName,
 	List *colocatedTableList = ColocatedTableList(distributedTableId);
 	List *colocatedShardList = ColocatedShardIntervalList(shardInterval);
 
-	foreach(colocatedTableCell, colocatedTableList)
+	Oid colocatedTableId = InvalidOid;
+	foreach_oid(colocatedTableId, colocatedTableList)
 	{
-		Oid colocatedTableId = lfirst_oid(colocatedTableCell);
-
 		/* check that user has owner rights in all co-located tables */
 		EnsureTableOwner(colocatedTableId);
 
@@ -369,16 +376,15 @@ citus_move_shard_placement_internal(int64 shardId, char *sourceNodeName,
 		return;
 	}
 
-	foreach(colocatedShardCell, colocatedShardList)
+	ShardInterval *colocatedShard = NULL;
+	foreach_ptr(colocatedShard, colocatedShardList)
 	{
-		ShardInterval *colocatedShard = (ShardInterval *) lfirst(colocatedShardCell);
 		uint64 colocatedShardId = colocatedShard->shardId;
 
 		EnsureShardCanBeCopied(colocatedShardId, sourceNodeName, sourceNodePort,
 							   targetNodeName, targetNodePort);
 	}
 
-	char shardReplicationMode = LookupShardTransferMode(shardReplicationModeOid);
 	if (shardReplicationMode == TRANSFER_MODE_AUTOMATIC)
 	{
 		VerifyTablesHaveReplicaIdentity(colocatedTableList);
@@ -454,7 +460,7 @@ citus_move_shard_placement_internal(int64 shardId, char *sourceNodeName,
 
 	DropOrphanedResourcesInSeparateTransaction();
 
-	ShardInterval *colocatedShard = NULL;
+	colocatedShard = NULL;
 	foreach_ptr(colocatedShard, colocatedShardList)
 	{
 		/*
