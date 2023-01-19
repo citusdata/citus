@@ -152,6 +152,7 @@ test: multi_index_statements
 test: multi_alter_table_statements
 test: multi_alter_table_add_constraints
 test: multi_alter_table_add_constraints_without_name
+test: multi_alter_table_add_foreign_key_without_name
 
 # ----------
 # Tests to check if we inform the user about potential caveats of creating new

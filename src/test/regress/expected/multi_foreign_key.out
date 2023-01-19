@@ -466,7 +466,6 @@ ERROR:  cannot execute ADD CONSTRAINT command with other subcommands
 HINT:  You can issue each subcommand separately
 -- test foreign constraint creation without giving explicit name
 ALTER TABLE referencing_table ADD FOREIGN KEY(ref_id) REFERENCES referenced_table(id);
-ERROR:  cannot create constraint without a name on a distributed table
 -- test foreign constraint creation on NOT co-located tables
 DROP TABLE referencing_table;
 DROP TABLE referenced_table;

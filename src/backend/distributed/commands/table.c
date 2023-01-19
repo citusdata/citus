@@ -703,11 +703,49 @@ PostprocessAlterTableSchemaStmt(Node *node, const char *queryString)
 
 
 /*
+ * ChooseForeignKeyConstraintNameAddition returns the string of column names to be used when generating a foreign
+ * key constraint name. This function is copied from postgres codebase.
+ */
+static char *
+ChooseForeignKeyConstraintNameAddition(List *columnNames)
+{
+	char buf[NAMEDATALEN * 2];
+	int buflen = 0;
+
+	buf[0] = '\0';
+
+	String *columnNameString = NULL;
+
+	foreach_ptr(columnNameString, columnNames)
+	{
+		const char *name = strVal(columnNameString);
+
+		if (buflen > 0)
+		{
+			buf[buflen++] = '_';                                                                        /* insert _ between names */
+		}
+
+		/*
+		 *  At this point we have buflen <= NAMEDATALEN.  name should be less
+		 *  than NAMEDATALEN already, but use strlcpy for paranoia.
+		 */
+		strlcpy(buf + buflen, name, NAMEDATALEN);
+		buflen += strlen(buf + buflen);
+		if (buflen >= NAMEDATALEN)
+		{
+			break;
+		}
+	}
+	return pstrdup(buf);
+}
+
+
+/*
  * GenerateConstraintName creates and returns a default name for the constraints Citus supports
  * for default naming. See ConstTypeCitusCanDefaultName function for the supported constraint types.
  */
 static char *
-GenerateConstraintName(const char *tabname, Oid namespaceId, Constraint *constraint)
+GenerateConstraintName(const char *tableName, Oid namespaceId, Constraint *constraint)
 {
 	char *conname = NULL;
 
@@ -715,7 +753,7 @@ GenerateConstraintName(const char *tabname, Oid namespaceId, Constraint *constra
 	{
 		case CONSTR_PRIMARY:
 		{
-			conname = ChooseIndexName(tabname, namespaceId,
+			conname = ChooseIndexName(tableName, namespaceId,
 									  NULL, NULL, true, true);
 			break;
 		}
@@ -732,7 +770,7 @@ GenerateConstraintName(const char *tabname, Oid namespaceId, Constraint *constra
 				indexParams = lappend(indexParams, iparam);
 			}
 
-			conname = ChooseIndexName(tabname, namespaceId,
+			conname = ChooseIndexName(tableName, namespaceId,
 									  ChooseIndexColumnNames(indexParams),
 									  NULL, false, true);
 			break;
@@ -756,7 +794,7 @@ GenerateConstraintName(const char *tabname, Oid namespaceId, Constraint *constra
 				excludeOpNames = lappend(excludeOpNames, opname);
 			}
 
-			conname = ChooseIndexName(tabname, namespaceId,
+			conname = ChooseIndexName(tableName, namespaceId,
 									  ChooseIndexColumnNames(indexParams),
 									  excludeOpNames,
 									  false, true);
@@ -765,8 +803,19 @@ GenerateConstraintName(const char *tabname, Oid namespaceId, Constraint *constra
 
 		case CONSTR_CHECK:
 		{
-			conname = ChooseConstraintName(tabname, NULL, "check", namespaceId, NULL);
+			conname = ChooseConstraintName(tableName, NULL, "check", namespaceId, NIL);
 
+			break;
+		}
+
+		case CONSTR_FOREIGN:
+		{
+			conname = ChooseConstraintName(tableName,
+										   ChooseForeignKeyConstraintNameAddition(
+											   constraint->fk_attrs),
+										   "fkey",
+										   namespaceId,
+										   NIL);
 			break;
 		}
 
@@ -780,6 +829,42 @@ GenerateConstraintName(const char *tabname, Oid namespaceId, Constraint *constra
 	}
 
 	return conname;
+}
+
+
+/*
+ * EnsureSequentialModeForAlterTableOperation makes sure that the current transaction is already in
+ * sequential mode, or can still safely be put in sequential mode, it errors if that is
+ * not possible. The error contains information for the user to retry the transaction with
+ * sequential mode set from the beginning.
+ */
+static void
+EnsureSequentialModeForAlterTableOperation(void)
+{
+	const char *objTypeString = "ALTER TABLE ... ADD FOREIGN KEY";
+
+	if (ParallelQueryExecutedInTransaction())
+	{
+		ereport(ERROR, (errmsg("cannot run %s command because there was a "
+							   "parallel operation on a distributed table in the "
+							   "transaction", objTypeString),
+						errdetail("When running command on/for a distributed %s, Citus "
+								  "needs to perform all operations over a single "
+								  "connection per node to ensure consistency.",
+								  objTypeString),
+						errhint("Try re-running the transaction with "
+								"\"SET LOCAL citus.multi_shard_modify_mode TO "
+								"\'sequential\';\"")));
+	}
+
+	ereport(DEBUG1, (errmsg("switching to sequential query execution mode"),
+					 errdetail(
+						 "A command for a distributed %s is run. To make sure subsequent "
+						 "commands see the %s correctly we need to make sure to "
+						 "use only one connection for all future commands",
+						 objTypeString, objTypeString)));
+
+	SetLocalMultiShardModifyModeToSequential();
 }
 
 
@@ -860,16 +945,16 @@ SwitchToSequentialAndLocalExecutionIfConstraintNameTooLong(Oid relationId,
 
 
 /*
- * PreprocessAlterTableAddIndexConstraint creates a new constraint name for the index constraints {PRIMARY KEY, UNIQUE, EXCLUDE}
- * and changes the original alterTableCommand run by the utility hook to use the new constraint name.
- * Then converts the ALTER TABLE ... ADD {PRIMARY KEY, UNIQUE, EXCLUDE} ... command
- * into ALTER TABLE ... ADD CONSTRAINT <constraint name> {PRIMARY KEY, UNIQUE, EXCLUDE} format and returns the DDLJob
+ * PreprocessAlterTableAddConstraint creates a new constraint name for {PRIMARY KEY, UNIQUE, EXCLUDE, CHECK, FOREIGN KEY}
+ * and changes the original alterTableCommand run by the standard utility hook to use the new constraint name.
+ * Then it converts the ALTER TABLE ... ADD {PRIMARY KEY, UNIQUE, EXCLUDE, CHECK, FOREIGN KEY} ... command
+ * into ALTER TABLE ... ADD CONSTRAINT <constraint name> {PRIMARY KEY, UNIQUE, EXCLUDE, CHECK, FOREIGN KEY} format and returns the DDLJob
  * to run this command in the workers.
  */
 static List *
-PreprocessAlterTableAddIndexConstraint(AlterTableStmt *alterTableStatement, Oid
-									   relationId,
-									   Constraint *constraint)
+PreprocessAlterTableAddConstraint(AlterTableStmt *alterTableStatement, Oid
+								  relationId,
+								  Constraint *constraint)
 {
 	/* We should only preprocess an ADD CONSTRAINT command if we are changing the it.
 	 * This only happens when we have to create a constraint name in citus since the client does
@@ -899,7 +984,40 @@ PreprocessAlterTableAddIndexConstraint(AlterTableStmt *alterTableStatement, Oid
 	ObjectAddressSet(ddlJob->targetObjectAddress, RelationRelationId, relationId);
 	ddlJob->startNewTransaction = false;
 	ddlJob->metadataSyncCommand = ddlCommand;
-	ddlJob->taskList = DDLTaskList(relationId, ddlCommand);
+
+
+	if (constraint->contype == CONSTR_FOREIGN)
+	{
+		Oid rightRelationId = RangeVarGetRelid(constraint->pktable, NoLock,
+											   false);
+
+		if (IsCitusTableType(rightRelationId, REFERENCE_TABLE))
+		{
+			EnsureSequentialModeForAlterTableOperation();
+		}
+
+		/*
+		 * If one of the relations involved in the FOREIGN KEY constraint is not a distributed table, citus errors out eventually.
+		 * PreprocessAlterTableStmt function returns an empty tasklist in those cases.
+		 * leftRelation is checked in PreprocessAlterTableStmt before
+		 * calling PreprocessAlterTableAddConstraint. However, we need to handle the rightRelation since PreprocessAlterTableAddConstraint
+		 * returns early.
+		 */
+		bool referencedIsLocalTable = !IsCitusTable(rightRelationId);
+		if (referencedIsLocalTable)
+		{
+			ddlJob->taskList = NIL;
+		}
+		else
+		{
+			ddlJob->taskList = InterShardDDLTaskList(relationId, rightRelationId,
+													 ddlCommand);
+		}
+	}
+	else
+	{
+		ddlJob->taskList = DDLTaskList(relationId, ddlCommand);
+	}
 
 	return list_make1(ddlJob);
 }
@@ -1143,6 +1261,13 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 				 * transaction is in process, which causes deadlock.
 				 */
 				constraint->skip_validation = true;
+
+				if (constraint->conname == NULL)
+				{
+					return PreprocessAlterTableAddConstraint(alterTableStatement,
+															 leftRelationId,
+															 constraint);
+				}
 			}
 			else if (constraint->conname == NULL)
 			{
@@ -1153,9 +1278,9 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 					 * ALTER TABLE ... ADD CONSTRAINT <conname> PRIMARY KEY ... form and create the ddl jobs
 					 * for running this form of the command on the workers.
 					 */
-					return PreprocessAlterTableAddIndexConstraint(alterTableStatement,
-																  leftRelationId,
-																  constraint);
+					return PreprocessAlterTableAddConstraint(alterTableStatement,
+															 leftRelationId,
+															 constraint);
 				}
 			}
 		}
@@ -1939,7 +2064,8 @@ ConstrTypeCitusCanDefaultName(ConstrType constrType)
 	return constrType == CONSTR_PRIMARY ||
 		   constrType == CONSTR_UNIQUE ||
 		   constrType == CONSTR_EXCLUSION ||
-		   constrType == CONSTR_CHECK;
+		   constrType == CONSTR_CHECK ||
+		   constrType == CONSTR_FOREIGN;
 }
 
 
