@@ -103,8 +103,8 @@ static List * InterShardDDLTaskList(Oid leftRelationId, Oid rightRelationId,
 									const char *commandString);
 static bool AlterInvolvesPartitionColumn(AlterTableStmt *alterTableStatement,
 										 AlterTableCmd *command);
-static bool AlterInvolvesIdentityColumn(AlterTableStmt *alterTableStatement,
-										AlterTableCmd *command);
+static bool AlterColumnInvolvesIdentityColumn(AlterTableStmt *alterTableStatement,
+											  AlterTableCmd *command);
 static void ErrorIfUnsupportedAlterAddConstraintStmt(AlterTableStmt *alterTableStatement);
 static List * CreateRightShardListForInterShardDDLTask(Oid rightRelationId,
 													   Oid leftRelationId,
@@ -3154,9 +3154,9 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 				 * changing the type of the column
 				 * should not be allowed for now
 				 */
-				if (AlterInvolvesIdentityColumn(alterTableStatement, command))
+				if (AlterColumnInvolvesIdentityColumn(alterTableStatement, command))
 				{
-					ereport(ERROR, (errmsg("cannot execute ALTER TABLE command "
+					ereport(ERROR, (errmsg("cannot execute ALTER COLUMN command "
 										   "involving identity column")));
 				}
 
@@ -3673,12 +3673,12 @@ SetInterShardDDLTaskRelationShardList(Task *task, ShardInterval *leftShardInterv
 
 
 /*
- * AlterInvolvesIdentityColumn checks if the given alter table command
+ * AlterColumnInvolvesIdentityColumn checks if the given alter column command
  * involves relation's identity column.
  */
 static bool
-AlterInvolvesIdentityColumn(AlterTableStmt *alterTableStatement,
-							AlterTableCmd *command)
+AlterColumnInvolvesIdentityColumn(AlterTableStmt *alterTableStatement,
+								  AlterTableCmd *command)
 {
 	bool involvesIdentityColumn = false;
 	char *alterColumnName = command->name;
