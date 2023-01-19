@@ -2,23 +2,47 @@
 -- Test the CREATE statements related to columnar.
 --
 
+-- We cannot create below tables within columnar_create because columnar_create
+-- is dropped at the end of this test but unfortunately some other tests depend
+-- those tables too.
+--
+-- However, this file has to be runnable multiple times for flaky test detection;
+-- so we create them below --outside columnar_create-- idempotantly.
+DO
+$$
+BEGIN
+IF NOT EXISTS (
+    SELECT 1 FROM pg_class
+    WHERE relname = 'contestant' AND
+          relnamespace = (
+            SELECT oid FROM pg_namespace WHERE nspname = 'public'
+          )
+   )
+THEN
+    -- Create uncompressed table
+    CREATE TABLE contestant (handle TEXT, birthdate DATE, rating INT,
+        percentile FLOAT, country CHAR(3), achievements TEXT[])
+        USING columnar;
+    ALTER TABLE contestant SET (columnar.compression = none);
 
--- Create uncompressed table
-CREATE TABLE contestant (handle TEXT, birthdate DATE, rating INT,
-	percentile FLOAT, country CHAR(3), achievements TEXT[])
-	USING columnar;
-ALTER TABLE contestant SET (columnar.compression = none);
+    CREATE INDEX contestant_idx on contestant(handle);
 
-CREATE INDEX contestant_idx on contestant(handle);
+    -- Create zstd compressed table
+    CREATE TABLE contestant_compressed (handle TEXT, birthdate DATE, rating INT,
+        percentile FLOAT, country CHAR(3), achievements TEXT[])
+        USING columnar;
 
--- Create zstd compressed table
-CREATE TABLE contestant_compressed (handle TEXT, birthdate DATE, rating INT,
-	percentile FLOAT, country CHAR(3), achievements TEXT[])
-	USING columnar;
+    -- Test that querying an empty table works
+    ANALYZE contestant;
+END IF;
+END
+$$
+LANGUAGE plpgsql;
 
--- Test that querying an empty table works
-ANALYZE contestant;
 SELECT count(*) FROM contestant;
+
+CREATE SCHEMA columnar_create;
+SET search_path TO columnar_create;
 
 -- Should fail: unlogged tables not supported
 CREATE UNLOGGED TABLE columnar_unlogged(i int) USING columnar;
@@ -118,6 +142,7 @@ FROM pg_class WHERE relname='columnar_temp' \gset
 SELECT pg_backend_pid() AS val INTO old_backend_pid;
 
 \c - - - :master_port
+SET search_path TO columnar_create;
 
 -- wait until old backend to expire to make sure that temp table cleanup is complete
 SELECT columnar_test_helpers.pg_waitpid(val) FROM old_backend_pid;
@@ -184,3 +209,6 @@ SELECT columnar_test_helpers.columnar_metadata_has_storage_id(:columnar_temp_sto
 
 -- make sure citus_columnar can be loaded
 LOAD 'citus_columnar';
+
+SET client_min_messages TO WARNING;
+DROP SCHEMA columnar_create CASCADE;
