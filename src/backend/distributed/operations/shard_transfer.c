@@ -76,6 +76,12 @@ static const char *ShardTransferTypeNames[] = {
 	[SHARD_TRANSFER_COPY] = "copy",
 };
 
+static const char *ShardTransferTypeNamesCapitalized[] = {
+	[SHARD_TRANSFER_INVALID_FIRST] = "unknown",
+	[SHARD_TRANSFER_MOVE] = "Move",
+	[SHARD_TRANSFER_COPY] = "Copy",
+};
+
 static const char *ShardTransferTypeNamesContinuous[] = {
 	[SHARD_TRANSFER_INVALID_FIRST] = "unknown",
 	[SHARD_TRANSFER_MOVE] = "Moving",
@@ -126,12 +132,22 @@ static void UpdateColocatedShardPlacementMetadataOnWorkers(int64 shardId,
 														   int32 targetNodePort);
 static bool IsShardListOnNode(List *colocatedShardList, char *targetNodeName,
 							  uint32 targetPort);
+static void SetupRebalanceMonitorForShardTransfer(uint64 shardId, Oid distributedTableId,
+												  char *sourceNodeName,
+												  uint32 sourceNodePort,
+												  char *targetNodeName,
+												  uint32 targetNodePort,
+												  ShardTransferType transferType);
 static void CheckSpaceConstraints(MultiConnection *connection,
 								  uint64 colocationSizeInBytes);
 static void EnsureEnoughDiskSpaceForShardMove(List *colocatedShardList,
 											  char *sourceNodeName, uint32 sourceNodePort,
 											  char *targetNodeName, uint32
 											  targetNodePort);
+static bool TransferAlreadyCompleted(List *colocatedShardList,
+									 char *sourceNodeName, uint32 sourceNodePort,
+									 char *targetNodeName, uint32 targetNodePort,
+									 ShardTransferType transferType);
 static List * RecreateShardDDLCommandList(ShardInterval *shardInterval,
 										  const char *sourceNodeName,
 										  int32 sourceNodePort);
@@ -331,34 +347,44 @@ citus_move_shard_placement_internal(int64 shardId, char *sourceNodeName,
 					targetNodeName, targetNodePort,
 					ShardTransferTypeNames[transferType]);
 
-	Oid relationId = RelationIdForShard(shardId);
-	ErrorIfMoveUnsupportedTableType(relationId);
-	ErrorIfTargetNodeIsNotSafeForTransfer(targetNodeName, targetNodePort, transferType);
-
-	AcquirePlacementColocationLock(relationId, ExclusiveLock,
-								   ShardTransferTypeNames[transferType]);
-
 	ShardInterval *shardInterval = LoadShardInterval(shardId);
 	Oid distributedTableId = shardInterval->relationId;
+
+	if (transferType == SHARD_TRANSFER_MOVE)
+	{
+		ErrorIfMoveUnsupportedTableType(distributedTableId);
+	}
+	else if (transferType == SHARD_TRANSFER_COPY)
+	{
+		ErrorIfTableCannotBeReplicated(distributedTableId);
+		EnsureNoModificationsHaveBeenDone();
+	}
+
+	ErrorIfTargetNodeIsNotSafeForTransfer(targetNodeName, targetNodePort, transferType);
+
+	AcquirePlacementColocationLock(distributedTableId, ExclusiveLock,
+								   ShardTransferTypeNames[transferType]);
 
 	List *colocatedTableList = ColocatedTableList(distributedTableId);
 	List *colocatedShardList = ColocatedShardIntervalList(shardInterval);
 
+	EnsureTableListOwner(colocatedTableList);
+
 	Oid colocatedTableId = InvalidOid;
 	foreach_oid(colocatedTableId, colocatedTableList)
 	{
-		/* check that user has owner rights in all co-located tables */
-		EnsureTableOwner(colocatedTableId);
+		if (transferType == SHARD_TRANSFER_MOVE)
+		{
+			/*
+			 * Block concurrent DDL / TRUNCATE commands on the relation. Similarly,
+			 * block concurrent citus_move_shard_placement() on any shard of
+			 * the same relation. This is OK for now since we're executing shard
+			 * moves sequentially anyway.
+			 */
+			LockRelationOid(colocatedTableId, ShareUpdateExclusiveLock);
+		}
 
-		/*
-		 * Block concurrent DDL / TRUNCATE commands on the relation. Similarly,
-		 * block concurrent citus_move_shard_placement() on any shard of
-		 * the same relation. This is OK for now since we're executing shard
-		 * moves sequentially anyway.
-		 */
-		LockRelationOid(colocatedTableId, ShareUpdateExclusiveLock);
-
-		if (IsForeignTable(relationId))
+		if (IsForeignTable(distributedTableId))
 		{
 			char *relationName = get_rel_name(colocatedTableId);
 			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
@@ -369,19 +395,27 @@ citus_move_shard_placement_internal(int64 shardId, char *sourceNodeName,
 		}
 	}
 
-	/* we sort colocatedShardList so that lock operations will not cause any deadlocks */
-	colocatedShardList = SortList(colocatedShardList, CompareShardIntervalsById);
+	if (transferType == SHARD_TRANSFER_COPY)
+	{
+		EnsureTableListSuitableForReplication(colocatedTableList);
+	}
 
 	/*
-	 * If there are no active placements on the source and only active placements on
-	 * the target node, we assume the copy to already be done.
+	 * We sort shardIntervalList so that lock operations will not cause any
+	 * deadlocks.
 	 */
-	if (IsShardListOnNode(colocatedShardList, targetNodeName, targetNodePort) &&
-		!IsShardListOnNode(colocatedShardList, sourceNodeName, sourceNodePort))
+	colocatedShardList = SortList(colocatedShardList, CompareShardIntervalsById);
+
+	if (TransferAlreadyCompleted(colocatedShardList,
+								 sourceNodeName, sourceNodePort,
+								 targetNodeName, targetNodePort,
+								 transferType))
 	{
+		/* if the transfer is already completed, we can return right away */
 		ereport(WARNING, (errmsg("shard is already present on node %s:%d",
 								 targetNodeName, targetNodePort),
-						  errdetail("Move may have already completed.")));
+						  errdetail("%s may have already completed.",
+									ShardTransferTypeNamesCapitalized[transferType])));
 		return;
 	}
 
@@ -390,6 +424,10 @@ citus_move_shard_placement_internal(int64 shardId, char *sourceNodeName,
 	{
 		uint64 colocatedShardId = colocatedShard->shardId;
 
+		/*
+		 * To transfer shard, there should be healthy placement in source node and no
+		 * placement in the target node.
+		 */
 		EnsureShardCanBeCopied(colocatedShardId, sourceNodeName, sourceNodePort,
 							   targetNodeName, targetNodePort);
 	}
@@ -399,33 +437,17 @@ citus_move_shard_placement_internal(int64 shardId, char *sourceNodeName,
 		VerifyTablesHaveReplicaIdentity(colocatedTableList);
 	}
 
-	EnsureEnoughDiskSpaceForShardMove(colocatedShardList, sourceNodeName, sourceNodePort,
-									  targetNodeName, targetNodePort);
-
-
-	/*
-	 * We want to be able to track progress of shard moves using
-	 * get_rebalancer_progress. If this move is initiated by the rebalancer,
-	 * then the rebalancer call has already set up the shared memory that is
-	 * used to do that. But if citus_move_shard_placement is called directly by
-	 * the user (or through any other mechanism), then the shared memory is not
-	 * set up yet. In that case we do it here.
-	 */
-	if (!IsRebalancerInternalBackend())
+	if (transferType == SHARD_TRANSFER_MOVE)
 	{
-		WorkerNode *sourceNode = FindWorkerNode(sourceNodeName, sourceNodePort);
-		WorkerNode *targetNode = FindWorkerNode(targetNodeName, targetNodePort);
-
-		PlacementUpdateEvent *placementUpdateEvent = palloc0(
-			sizeof(PlacementUpdateEvent));
-		placementUpdateEvent->updateType = PLACEMENT_UPDATE_MOVE;
-		placementUpdateEvent->shardId = shardId;
-		placementUpdateEvent->sourceNode = sourceNode;
-		placementUpdateEvent->targetNode = targetNode;
-		SetupRebalanceMonitor(list_make1(placementUpdateEvent), relationId,
-							  REBALANCE_PROGRESS_MOVING,
-							  PLACEMENT_UPDATE_STATUS_SETTING_UP);
+		EnsureEnoughDiskSpaceForShardMove(colocatedShardList,
+										  sourceNodeName, sourceNodePort,
+										  targetNodeName, targetNodePort);
 	}
+
+	SetupRebalanceMonitorForShardTransfer(shardId, distributedTableId,
+										  sourceNodeName, sourceNodePort,
+										  targetNodeName, targetNodePort,
+										  transferType);
 
 	UpdatePlacementUpdateStatusForShardIntervalList(
 		colocatedShardList,
@@ -443,7 +465,7 @@ citus_move_shard_placement_internal(int64 shardId, char *sourceNodeName,
 	{
 		BlockWritesToShardList(colocatedShardList);
 	}
-	else
+	else if (transferType == SHARD_TRANSFER_MOVE)
 	{
 		/*
 		 * We prevent multiple shard moves in a transaction that use logical
@@ -467,6 +489,20 @@ citus_move_shard_placement_internal(int64 shardId, char *sourceNodeName,
 		PlacementMovedUsingLogicalReplicationInTX = true;
 	}
 
+	if (transferType == SHARD_TRANSFER_COPY &&
+		!IsCitusTableType(distributedTableId, REFERENCE_TABLE))
+	{
+		/*
+		 * When copying a shard to a new node, we should first ensure that reference
+		 * tables are present such that joins work immediately after copying the shard.
+		 * When copying a reference table, we are probably trying to achieve just that.
+		 *
+		 * Since this a long-running operation we do this after the error checks, but
+		 * before taking metadata locks.
+		 */
+		EnsureReferenceTablesExistOnAllNodesExtended(shardReplicationMode);
+	}
+
 	DropOrphanedResourcesInSeparateTransaction();
 
 	colocatedShard = NULL;
@@ -481,18 +517,31 @@ citus_move_shard_placement_internal(int64 shardId, char *sourceNodeName,
 		ErrorIfCleanupRecordForShardExists(qualifiedShardName);
 	}
 
-	/*
-	 * CopyColocatedShardPlacement function copies given shard with its co-located
-	 * shards.
-	 */
+	char *operationName = NULL;
+	if (transferType == SHARD_TRANSFER_COPY)
+	{
+		operationName = "citus_copy_shard_placement";
+	}
+	else
+	{
+		operationName = "citus_move_shard_placement";
+	}
+
 	CopyShardTables(colocatedShardList, sourceNodeName, sourceNodePort, targetNodeName,
-					targetNodePort, useLogicalReplication, "citus_move_shard_placement");
+					targetNodePort, useLogicalReplication, operationName);
 
-	/* delete old shards metadata and mark the shards as to be deferred drop */
-	int32 sourceGroupId = GroupForNode(sourceNodeName, sourceNodePort);
-	InsertCleanupRecordsForShardPlacementsOnNode(colocatedShardList,
-												 sourceGroupId);
+	if (transferType == SHARD_TRANSFER_MOVE)
+	{
+		/* delete old shards metadata and mark the shards as to be deferred drop */
+		int32 sourceGroupId = GroupForNode(sourceNodeName, sourceNodePort);
+		InsertCleanupRecordsForShardPlacementsOnNode(colocatedShardList,
+													 sourceGroupId);
+	}
 
+	/*
+	 * Finally insert the placements to pg_dist_placement and sync it to the
+	 * metadata workers.
+	 */
 	colocatedShard = NULL;
 	foreach_ptr(colocatedShard, colocatedShardList)
 	{
@@ -503,17 +552,30 @@ citus_move_shard_placement_internal(int64 shardId, char *sourceNodeName,
 		InsertShardPlacementRow(colocatedShardId, placementId,
 								ShardLength(colocatedShardId),
 								groupId);
+
+		if (transferType == SHARD_TRANSFER_COPY &&
+			ShouldSyncTableMetadata(colocatedShard->relationId))
+		{
+			char *placementCommand = PlacementUpsertCommand(colocatedShardId, placementId,
+															0, groupId);
+
+			SendCommandToWorkersWithMetadata(placementCommand);
+		}
 	}
 
-	/*
-	 * Since this is move operation, we remove the placements from the metadata
-	 * for the source node after copy.
-	 */
-	DropShardPlacementsFromMetadata(colocatedShardList, sourceNodeName, sourceNodePort);
+	if (transferType == SHARD_TRANSFER_MOVE)
+	{
+		/*
+		 * Since this is move operation, we remove the placements from the metadata
+		 * for the source node after copy.
+		 */
+		DropShardPlacementsFromMetadata(colocatedShardList,
+										sourceNodeName, sourceNodePort);
 
-	UpdateColocatedShardPlacementMetadataOnWorkers(shardId, sourceNodeName,
-												   sourceNodePort, targetNodeName,
-												   targetNodePort);
+		UpdateColocatedShardPlacementMetadataOnWorkers(shardId, sourceNodeName,
+													   sourceNodePort, targetNodeName,
+													   targetNodePort);
+	}
 
 	UpdatePlacementUpdateStatusForShardIntervalList(
 		colocatedShardList,
@@ -652,6 +714,34 @@ EnsureEnoughDiskSpaceForShardMove(List *colocatedShardList,
 
 
 /*
+ * TransferAlreadyCompleted returns true if the given shard transfer is already done.
+ * Returns false otherwise.
+ */
+static bool
+TransferAlreadyCompleted(List *colocatedShardList,
+						 char *sourceNodeName, uint32 sourceNodePort,
+						 char *targetNodeName, uint32 targetNodePort,
+						 ShardTransferType transferType)
+{
+	if (transferType == SHARD_TRANSFER_MOVE &&
+		IsShardListOnNode(colocatedShardList, targetNodeName, targetNodePort) &&
+		!IsShardListOnNode(colocatedShardList, sourceNodeName, sourceNodePort))
+	{
+		return true;
+	}
+
+	if (transferType == SHARD_TRANSFER_COPY &&
+		IsShardListOnNode(colocatedShardList, targetNodeName, targetNodePort) &&
+		IsShardListOnNode(colocatedShardList, sourceNodeName, sourceNodePort))
+	{
+		return true;
+	}
+
+	return false;
+}
+
+
+/*
  * ShardListSizeInBytes returns the size in bytes of a set of shard tables.
  */
 uint64
@@ -694,6 +784,49 @@ ShardListSizeInBytes(List *shardList, char *workerNodeName, uint32
 	ForgetResults(connection);
 
 	return totalSize;
+}
+
+
+/*
+ * SetupRebalanceMonitorForShardTransfer prepares the parameters and
+ * calls SetupRebalanceMonitor, unless the current transfer is a move
+ * initiated by the rebalancer.
+ * See comments on SetupRebalanceMonitor
+ */
+static void
+SetupRebalanceMonitorForShardTransfer(uint64 shardId, Oid distributedTableId,
+									  char *sourceNodeName, uint32 sourceNodePort,
+									  char *targetNodeName, uint32 targetNodePort,
+									  ShardTransferType transferType)
+{
+	if (transferType == SHARD_TRANSFER_MOVE && IsRebalancerInternalBackend())
+	{
+		/*
+		 * We want to be able to track progress of shard moves using
+		 * get_rebalancer_progress. If this move is initiated by the rebalancer,
+		 * then the rebalancer call has already set up the shared memory that is
+		 * used to do that, so we should return here.
+		 * But if citus_move_shard_placement is called directly by the user
+		 * (or through any other mechanism), then the shared memory is not
+		 * set up yet. In that case we do it here.
+		 */
+		return;
+	}
+
+	WorkerNode *sourceNode = FindWorkerNode(sourceNodeName, sourceNodePort);
+	WorkerNode *targetNode = FindWorkerNode(targetNodeName, targetNodePort);
+
+	PlacementUpdateEvent *placementUpdateEvent = palloc0(
+		sizeof(PlacementUpdateEvent));
+	placementUpdateEvent->updateType =
+		transferType == SHARD_TRANSFER_COPY ? PLACEMENT_UPDATE_COPY :
+		PLACEMENT_UPDATE_MOVE;
+	placementUpdateEvent->shardId = shardId;
+	placementUpdateEvent->sourceNode = sourceNode;
+	placementUpdateEvent->targetNode = targetNode;
+	SetupRebalanceMonitor(list_make1(placementUpdateEvent), distributedTableId,
+						  REBALANCE_PROGRESS_MOVING,
+						  PLACEMENT_UPDATE_STATUS_SETTING_UP);
 }
 
 
@@ -1115,17 +1248,55 @@ ReplicateColocatedShardPlacement(int64 shardId, char *sourceNodeName,
 	ShardInterval *shardInterval = LoadShardInterval(shardId);
 	Oid distributedTableId = shardInterval->relationId;
 
-	ErrorIfTableCannotBeReplicated(shardInterval->relationId);
-	ErrorIfTargetNodeIsNotSafeForTransfer(targetNodeName, targetNodePort, transferType);
-	EnsureNoModificationsHaveBeenDone();
+	if (transferType == SHARD_TRANSFER_MOVE)
+	{
+		ErrorIfMoveUnsupportedTableType(distributedTableId);
+	}
+	else if (transferType == SHARD_TRANSFER_COPY)
+	{
+		ErrorIfTableCannotBeReplicated(distributedTableId);
+		EnsureNoModificationsHaveBeenDone();
+	}
 
-	AcquirePlacementColocationLock(shardInterval->relationId, ExclusiveLock, "copy");
+	ErrorIfTargetNodeIsNotSafeForTransfer(targetNodeName, targetNodePort, transferType);
+
+	AcquirePlacementColocationLock(distributedTableId, ExclusiveLock,
+								   ShardTransferTypeNames[transferType]);
 
 	List *colocatedTableList = ColocatedTableList(distributedTableId);
 	List *colocatedShardList = ColocatedShardIntervalList(shardInterval);
 
 	EnsureTableListOwner(colocatedTableList);
-	EnsureTableListSuitableForReplication(colocatedTableList);
+
+	Oid colocatedTableId = InvalidOid;
+	foreach_oid(colocatedTableId, colocatedTableList)
+	{
+		if (transferType == SHARD_TRANSFER_MOVE)
+		{
+			/*
+			 * Block concurrent DDL / TRUNCATE commands on the relation. Similarly,
+			 * block concurrent citus_move_shard_placement() on any shard of
+			 * the same relation. This is OK for now since we're executing shard
+			 * moves sequentially anyway.
+			 */
+			LockRelationOid(colocatedTableId, ShareUpdateExclusiveLock);
+		}
+
+		if (IsForeignTable(distributedTableId))
+		{
+			char *relationName = get_rel_name(colocatedTableId);
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("cannot move shard"),
+							errdetail("Table %s is a foreign table. Moving "
+									  "shards backed by foreign tables is "
+									  "not supported.", relationName)));
+		}
+	}
+
+	if (transferType == SHARD_TRANSFER_COPY)
+	{
+		EnsureTableListSuitableForReplication(colocatedTableList);
+	}
 
 	/*
 	 * We sort shardIntervalList so that lock operations will not cause any
@@ -1133,32 +1304,48 @@ ReplicateColocatedShardPlacement(int64 shardId, char *sourceNodeName,
 	 */
 	colocatedShardList = SortList(colocatedShardList, CompareShardIntervalsById);
 
-	/*
-	 * If there are active placements on both nodes, we assume the copy to already
-	 * be done.
-	 */
-	if (IsShardListOnNode(colocatedShardList, targetNodeName, targetNodePort) &&
-		IsShardListOnNode(colocatedShardList, sourceNodeName, sourceNodePort))
+	if (TransferAlreadyCompleted(colocatedShardList,
+								 sourceNodeName, sourceNodePort,
+								 targetNodeName, targetNodePort,
+								 transferType))
 	{
+		/* if the transfer is already completed, we can return right away */
 		ereport(WARNING, (errmsg("shard is already present on node %s:%d",
 								 targetNodeName, targetNodePort),
-						  errdetail("Copy may have already completed.")));
+						  errdetail("%s may have already completed.",
+									ShardTransferTypeNamesCapitalized[transferType])));
 		return;
 	}
 
-	WorkerNode *sourceNode = FindWorkerNode(sourceNodeName, sourceNodePort);
-	WorkerNode *targetNode = FindWorkerNode(targetNodeName, targetNodePort);
+	ShardInterval *colocatedShard = NULL;
+	foreach_ptr(colocatedShard, colocatedShardList)
+	{
+		uint64 colocatedShardId = colocatedShard->shardId;
 
-	Oid relationId = RelationIdForShard(shardId);
-	PlacementUpdateEvent *placementUpdateEvent = palloc0(
-		sizeof(PlacementUpdateEvent));
-	placementUpdateEvent->updateType = PLACEMENT_UPDATE_COPY;
-	placementUpdateEvent->shardId = shardId;
-	placementUpdateEvent->sourceNode = sourceNode;
-	placementUpdateEvent->targetNode = targetNode;
-	SetupRebalanceMonitor(list_make1(placementUpdateEvent), relationId,
-						  REBALANCE_PROGRESS_MOVING,
-						  PLACEMENT_UPDATE_STATUS_SETTING_UP);
+		/*
+		 * To transfer shard, there should be healthy placement in source node and no
+		 * placement in the target node.
+		 */
+		EnsureShardCanBeCopied(colocatedShardId, sourceNodeName, sourceNodePort,
+							   targetNodeName, targetNodePort);
+	}
+
+	if (shardReplicationMode == TRANSFER_MODE_AUTOMATIC)
+	{
+		VerifyTablesHaveReplicaIdentity(colocatedTableList);
+	}
+
+	if (transferType == SHARD_TRANSFER_MOVE)
+	{
+		EnsureEnoughDiskSpaceForShardMove(colocatedShardList,
+										  sourceNodeName, sourceNodePort,
+										  targetNodeName, targetNodePort);
+	}
+
+	SetupRebalanceMonitorForShardTransfer(shardId, distributedTableId,
+										  sourceNodeName, sourceNodePort,
+										  targetNodeName, targetNodePort,
+										  transferType);
 
 	UpdatePlacementUpdateStatusForShardIntervalList(
 		colocatedShardList,
@@ -1176,26 +1363,32 @@ ReplicateColocatedShardPlacement(int64 shardId, char *sourceNodeName,
 	{
 		BlockWritesToShardList(colocatedShardList);
 	}
-
-	ShardInterval *colocatedShard = NULL;
-	foreach_ptr(colocatedShard, colocatedShardList)
+	else if (transferType == SHARD_TRANSFER_MOVE)
 	{
-		uint64 colocatedShardId = colocatedShard->shardId;
-
 		/*
-		 * For shard copy, there should be healthy placement in source node and no
-		 * placement in the target node.
+		 * We prevent multiple shard moves in a transaction that use logical
+		 * replication. That's because the first call opens a transaction block
+		 * on the worker to drop the old shard placement and replication slot
+		 * creation waits for pending transactions to finish, which will not
+		 * happen ever. In other words, we prevent a self-deadlock if both
+		 * source shard placements are on the same node.
 		 */
-		EnsureShardCanBeCopied(colocatedShardId, sourceNodeName, sourceNodePort,
-							   targetNodeName, targetNodePort);
+		if (PlacementMovedUsingLogicalReplicationInTX)
+		{
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("moving multiple shard placements via logical "
+								   "replication in the same transaction is currently "
+								   "not supported"),
+							errhint("If you wish to move multiple shard placements "
+									"in a single transaction set the shard_transfer_mode "
+									"to 'block_writes'.")));
+		}
+
+		PlacementMovedUsingLogicalReplicationInTX = true;
 	}
 
-	if (shardReplicationMode == TRANSFER_MODE_AUTOMATIC)
-	{
-		VerifyTablesHaveReplicaIdentity(colocatedTableList);
-	}
-
-	if (!IsCitusTableType(distributedTableId, REFERENCE_TABLE))
+	if (transferType == SHARD_TRANSFER_COPY &&
+		!IsCitusTableType(distributedTableId, REFERENCE_TABLE))
 	{
 		/*
 		 * When copying a shard to a new node, we should first ensure that reference
@@ -1210,14 +1403,44 @@ ReplicateColocatedShardPlacement(int64 shardId, char *sourceNodeName,
 
 	DropOrphanedResourcesInSeparateTransaction();
 
-	CopyShardTables(colocatedShardList, sourceNodeName, sourceNodePort,
-					targetNodeName, targetNodePort, useLogicalReplication,
-					"citus_copy_shard_placement");
+	colocatedShard = NULL;
+	foreach_ptr(colocatedShard, colocatedShardList)
+	{
+		/*
+		 * This is to prevent any race condition possibility among the shard moves.
+		 * We don't allow the move to happen if the shard we are going to move has an
+		 * orphaned placement somewhere that is not cleanup up yet.
+		 */
+		char *qualifiedShardName = ConstructQualifiedShardName(colocatedShard);
+		ErrorIfCleanupRecordForShardExists(qualifiedShardName);
+	}
+
+	char *operationName = NULL;
+	if (transferType == SHARD_TRANSFER_COPY)
+	{
+		operationName = "citus_copy_shard_placement";
+	}
+	else
+	{
+		operationName = "citus_move_shard_placement";
+	}
+
+	CopyShardTables(colocatedShardList, sourceNodeName, sourceNodePort, targetNodeName,
+					targetNodePort, useLogicalReplication, operationName);
+
+	if (transferType == SHARD_TRANSFER_MOVE)
+	{
+		/* delete old shards metadata and mark the shards as to be deferred drop */
+		int32 sourceGroupId = GroupForNode(sourceNodeName, sourceNodePort);
+		InsertCleanupRecordsForShardPlacementsOnNode(colocatedShardList,
+													 sourceGroupId);
+	}
 
 	/*
 	 * Finally insert the placements to pg_dist_placement and sync it to the
 	 * metadata workers.
 	 */
+	colocatedShard = NULL;
 	foreach_ptr(colocatedShard, colocatedShardList)
 	{
 		uint64 colocatedShardId = colocatedShard->shardId;
@@ -1228,13 +1451,28 @@ ReplicateColocatedShardPlacement(int64 shardId, char *sourceNodeName,
 								ShardLength(colocatedShardId),
 								groupId);
 
-		if (ShouldSyncTableMetadata(colocatedShard->relationId))
+		if (transferType == SHARD_TRANSFER_COPY &&
+			ShouldSyncTableMetadata(colocatedShard->relationId))
 		{
 			char *placementCommand = PlacementUpsertCommand(colocatedShardId, placementId,
 															0, groupId);
 
 			SendCommandToWorkersWithMetadata(placementCommand);
 		}
+	}
+
+	if (transferType == SHARD_TRANSFER_MOVE)
+	{
+		/*
+		 * Since this is move operation, we remove the placements from the metadata
+		 * for the source node after copy.
+		 */
+		DropShardPlacementsFromMetadata(colocatedShardList,
+										sourceNodeName, sourceNodePort);
+
+		UpdateColocatedShardPlacementMetadataOnWorkers(shardId, sourceNodeName,
+													   sourceNodePort, targetNodeName,
+													   targetNodePort);
 	}
 
 	UpdatePlacementUpdateStatusForShardIntervalList(
