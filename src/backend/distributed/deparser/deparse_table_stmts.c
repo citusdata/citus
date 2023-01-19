@@ -315,13 +315,7 @@ AppendAlterTableCmdAddConstraint(StringInfo buf, Constraint *constraint,
 			AppendColumnNameList(buf, constraint->pk_attrs);
 		}
 
-		/*
-		 * Append supported options if provided.
-		 * Note: When a constraint name is provided by the client therefore we do not deparse the statement in preprocessing,
-		 * the unsupported statements are caught in postprocessing in ErrorIfUnsupportedForeignConstraintExists function.
-		 * Hence the error messages for the unsupported alter table statements are unexpectedly different for the
-		 * ALTER TABLE ... ADD FOREIGN KEY and ALTER TABLE ...  ADD CONSTRAINT <conname> FOREIGN KEY
-		 */
+		/* Append supported options if provided */
 
 		/* FKCONSTR_MATCH_SIMPLE is default. Append matchtype if not default */
 		if (constraint->fk_matchtype == FKCONSTR_MATCH_FULL)
@@ -331,6 +325,18 @@ AppendAlterTableCmdAddConstraint(StringInfo buf, Constraint *constraint,
 
 		switch (constraint->fk_del_action)
 		{
+			case FKCONSTR_ACTION_SETDEFAULT:
+			{
+				appendStringInfoString(buf, " ON DELETE SET DEFAULT");
+				break;
+			}
+
+			case FKCONSTR_ACTION_SETNULL:
+			{
+				appendStringInfoString(buf, " ON DELETE SET NULL");
+				break;
+			}
+
 			case FKCONSTR_ACTION_NOACTION:
 			{
 				appendStringInfoString(buf, " ON DELETE NO ACTION");
@@ -359,6 +365,18 @@ AppendAlterTableCmdAddConstraint(StringInfo buf, Constraint *constraint,
 
 		switch (constraint->fk_upd_action)
 		{
+			case FKCONSTR_ACTION_SETDEFAULT:
+			{
+				appendStringInfoString(buf, " ON UPDATE SET DEFAULT");
+				break;
+			}
+
+			case FKCONSTR_ACTION_SETNULL:
+			{
+				appendStringInfoString(buf, " ON UPDATE SET NULL");
+				break;
+			}
+
 			case FKCONSTR_ACTION_NOACTION:
 			{
 				appendStringInfoString(buf, " ON UPDATE NO ACTION");
@@ -368,6 +386,12 @@ AppendAlterTableCmdAddConstraint(StringInfo buf, Constraint *constraint,
 			case FKCONSTR_ACTION_RESTRICT:
 			{
 				appendStringInfoString(buf, " ON UPDATE RESTRICT");
+				break;
+			}
+
+			case FKCONSTR_ACTION_CASCADE:
+			{
+				appendStringInfoString(buf, " ON UPDATE CASCADE");
 				break;
 			}
 

@@ -428,15 +428,20 @@ ALTER TABLE referencing_table ADD FOREIGN KEY (ref_id) REFERENCES referenced_tab
 ABORT;
 -- test foreign constraint creation with not supported parameters
 ALTER TABLE referencing_table ADD FOREIGN KEY(ref_id) REFERENCES referenced_table(id) ON DELETE SET NULL;
-ERROR:  unsupported FK delete action type: 110
+ERROR:  cannot create foreign key constraint
+DETAIL:  SET NULL or SET DEFAULT is not supported in ON DELETE operation when distribution key is included in the foreign key constraint
 ALTER TABLE referencing_table ADD FOREIGN KEY(ref_id) REFERENCES referenced_table(id) ON DELETE SET DEFAULT;
-ERROR:  unsupported FK delete action type: 100
+ERROR:  cannot create foreign key constraint
+DETAIL:  SET NULL or SET DEFAULT is not supported in ON DELETE operation when distribution key is included in the foreign key constraint
 ALTER TABLE referencing_table ADD FOREIGN KEY(ref_id) REFERENCES referenced_table(id) ON UPDATE SET NULL;
-ERROR:  unsupported FK update action type: 110
+ERROR:  cannot create foreign key constraint
+DETAIL:  SET NULL, SET DEFAULT or CASCADE is not supported in ON UPDATE operation when distribution key included in the foreign constraint.
 ALTER TABLE referencing_table ADD FOREIGN KEY(ref_id) REFERENCES referenced_table(id) ON UPDATE SET DEFAULT;
-ERROR:  unsupported FK update action type: 100
+ERROR:  cannot create foreign key constraint
+DETAIL:  SET NULL, SET DEFAULT or CASCADE is not supported in ON UPDATE operation when distribution key included in the foreign constraint.
 ALTER TABLE referencing_table ADD FOREIGN KEY(ref_id) REFERENCES referenced_table(id) ON UPDATE CASCADE;
-ERROR:  unsupported FK update action type: 99
+ERROR:  cannot create foreign key constraint
+DETAIL:  SET NULL, SET DEFAULT or CASCADE is not supported in ON UPDATE operation when distribution key included in the foreign constraint.
 -- test ADD FOREIGN KEY from distributed to reference table.
 SET citus.shard_replication_factor = 1;
 CREATE TABLE dist_table(id int, referencing_column int);
@@ -467,8 +472,45 @@ SELECT  con.conname
 ALTER TABLE dist_table DROP CONSTRAINT dist_table_referencing_column_fkey;
 DROP TABLE dist_table;
 DROP TABLE reference_table;
+-- test ADD FOREIGN KEY from citus local to reference table
+SELECT 1 FROM master_add_node('localhost', :master_port, groupId => 0);
+NOTICE:  localhost:xxxxx is the coordinator and already contains metadata, skipping syncing the metadata
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+CREATE TABLE citus_local_table(l1 int);
+SELECT citus_add_local_table_to_metadata('citus_local_table');
+ citus_add_local_table_to_metadata
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE reference_table(r1 int primary key); SELECT create_reference_table('reference_table');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+ALTER TABLE citus_local_table ADD FOREIGN KEY(l1) REFERENCES reference_table(r1);
+-- test ADD FOREIGN KEY from citus local to reference table with supported options
+ALTER TABLE citus_local_table ADD FOREIGN KEY(l1) REFERENCES reference_table(r1) ON UPDATE CASCADE;
+ALTER TABLE citus_local_table ADD FOREIGN KEY(l1) REFERENCES reference_table(r1) ON UPDATE SET NULL;
+ALTER TABLE citus_local_table ADD FOREIGN KEY(l1) REFERENCES reference_table(r1) ON UPDATE SET DEFAULT;
+ALTER TABLE citus_local_table ADD FOREIGN KEY(l1) REFERENCES reference_table(r1) ON UPDATE NO ACTION;
+ALTER TABLE citus_local_table ADD FOREIGN KEY(l1) REFERENCES reference_table(r1) ON UPDATE RESTRICT;
+ALTER TABLE citus_local_table ADD FOREIGN KEY(l1) REFERENCES reference_table(r1) ON DELETE CASCADE;
+ALTER TABLE citus_local_table ADD FOREIGN KEY(l1) REFERENCES reference_table(r1) ON DELETE SET NULL;
+ALTER TABLE citus_local_table ADD FOREIGN KEY(l1) REFERENCES reference_table(r1) ON DELETE SET DEFAULT;
+ALTER TABLE citus_local_table ADD FOREIGN KEY(l1) REFERENCES reference_table(r1) ON DELETE NO ACTION;
+ALTER TABLE citus_local_table ADD FOREIGN KEY(l1) REFERENCES reference_table(r1) ON DELETE RESTRICT;
 DROP SCHEMA at_add_fk CASCADE;
-NOTICE:  drop cascades to 2 other objects
+NOTICE:  drop cascades to 6 other objects
 DETAIL:  drop cascades to table referenced_table
 drop cascades to table referencing_table
+drop cascades to table citus_local_table_1770050
+drop cascades to table citus_local_table
+drop cascades to table reference_table
+drop cascades to table reference_table_1770051
 RESET SEARCH_PATH;

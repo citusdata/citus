@@ -320,5 +320,26 @@ ALTER TABLE dist_table DROP CONSTRAINT dist_table_referencing_column_fkey;
 DROP TABLE dist_table;
 DROP TABLE reference_table;
 
+-- test ADD FOREIGN KEY from citus local to reference table
+SELECT 1 FROM master_add_node('localhost', :master_port, groupId => 0); 
+CREATE TABLE citus_local_table(l1 int); 
+SELECT citus_add_local_table_to_metadata('citus_local_table'); 
+
+CREATE TABLE reference_table(r1 int primary key); SELECT create_reference_table('reference_table');
+ALTER TABLE citus_local_table ADD FOREIGN KEY(l1) REFERENCES reference_table(r1);
+
+-- test ADD FOREIGN KEY from citus local to reference table with supported options
+ALTER TABLE citus_local_table ADD FOREIGN KEY(l1) REFERENCES reference_table(r1) ON UPDATE CASCADE;
+ALTER TABLE citus_local_table ADD FOREIGN KEY(l1) REFERENCES reference_table(r1) ON UPDATE SET NULL;
+ALTER TABLE citus_local_table ADD FOREIGN KEY(l1) REFERENCES reference_table(r1) ON UPDATE SET DEFAULT;
+ALTER TABLE citus_local_table ADD FOREIGN KEY(l1) REFERENCES reference_table(r1) ON UPDATE NO ACTION;
+ALTER TABLE citus_local_table ADD FOREIGN KEY(l1) REFERENCES reference_table(r1) ON UPDATE RESTRICT;
+
+ALTER TABLE citus_local_table ADD FOREIGN KEY(l1) REFERENCES reference_table(r1) ON DELETE CASCADE;
+ALTER TABLE citus_local_table ADD FOREIGN KEY(l1) REFERENCES reference_table(r1) ON DELETE SET NULL;
+ALTER TABLE citus_local_table ADD FOREIGN KEY(l1) REFERENCES reference_table(r1) ON DELETE SET DEFAULT;
+ALTER TABLE citus_local_table ADD FOREIGN KEY(l1) REFERENCES reference_table(r1) ON DELETE NO ACTION;
+ALTER TABLE citus_local_table ADD FOREIGN KEY(l1) REFERENCES reference_table(r1) ON DELETE RESTRICT;
+
 DROP SCHEMA at_add_fk CASCADE;
 RESET SEARCH_PATH;
