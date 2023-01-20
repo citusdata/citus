@@ -625,6 +625,17 @@ for my $port (@followerWorkerPorts)
 	}
 }
 
+for my $tablespace ("ts0", "ts1", "ts2")
+{
+	if (-e catfile($TMP_CHECKDIR, $tablespace))
+	{
+	    remove_tree(catfile($TMP_CHECKDIR, $tablespace)) or die "Could not remove tablespace directory";
+	}
+    system("mkdir", ("-p", catfile($TMP_CHECKDIR, $tablespace))) == 0
+            or die "Could not create vanilla testtablespace dir.";
+}
+
+
 # Prepare directory in which 'psql' has some helpful variables for locating the workers
 make_path(catfile($TMP_CHECKDIR, $TMP_BINDIR)) or die "Could not create $TMP_BINDIR directory $!\n";
 
