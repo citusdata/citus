@@ -133,6 +133,9 @@ typedef struct CitusCopyDestReceiver
 	/* if true, should copy to local placements in the current session */
 	bool shouldUseLocalCopy;
 
+	/* if true, the operations in the receiver can be published.*/
+	bool isPublishable;
+
 	/*
 	 * Copy into colocated intermediate result. When this is set, the
 	 * COPY assumes there are hypothetical colocated shards to the
@@ -161,7 +164,8 @@ extern CitusCopyDestReceiver * CreateCitusCopyDestReceiver(Oid relationId,
 														   List *columnNameList,
 														   int partitionColumnIndex,
 														   EState *executorState,
-														   char *intermediateResultPrefix);
+														   char *intermediateResultPrefix,
+														   bool isPublishable);
 extern FmgrInfo * ColumnOutputFunctions(TupleDesc rowDescriptor, bool binaryFormat);
 extern bool CanUseBinaryCopyFormat(TupleDesc tupleDescription);
 extern bool CanUseBinaryCopyFormatForTargetList(List *targetEntryList);

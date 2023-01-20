@@ -413,7 +413,8 @@ ExecutePlanIntoColocatedIntermediateResults(Oid targetRelationId,
 																  columnNameList,
 																  partitionColumnIndex,
 																  executorState,
-																  intermediateResultIdPrefix);
+																  intermediateResultIdPrefix,
+																  true);
 
 	ExecutePlanIntoDestReceiver(selectPlan, paramListInfo, (DestReceiver *) copyDest);
 
@@ -446,7 +447,8 @@ ExecutePlanIntoRelation(Oid targetRelationId, List *insertTargetList,
 	CitusCopyDestReceiver *copyDest = CreateCitusCopyDestReceiver(targetRelationId,
 																  columnNameList,
 																  partitionColumnIndex,
-																  executorState, NULL);
+																  executorState, NULL,
+																  true);
 
 	ExecutePlanIntoDestReceiver(selectPlan, paramListInfo, (DestReceiver *) copyDest);
 

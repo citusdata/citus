@@ -1481,6 +1481,7 @@ AfterXactHostConnectionHandling(ConnectionHashEntry *entry, bool isCommit)
  * - Current cached connections is already at MaxCachedConnectionsPerWorker
  * - Connection is forced to close at the end of transaction
  * - Connection is not in OK state
+ * - Connection has a replication origin setup
  * - A transaction is still in progress (usually because we are cancelling a distributed transaction)
  * - A connection reached its maximum lifetime
  */
@@ -1500,6 +1501,7 @@ ShouldShutdownConnection(MultiConnection *connection, const int cachedConnection
 		   PQstatus(connection->pgConn) != CONNECTION_OK ||
 		   !RemoteTransactionIdle(connection) ||
 		   connection->requiresReplication ||
+		   connection->isReplicationOriginSessionSetup ||
 		   (MaxCachedConnectionLifetime >= 0 &&
 			MillisecondsToTimeout(connection->connectionEstablishmentStart,
 								  MaxCachedConnectionLifetime) <= 0);

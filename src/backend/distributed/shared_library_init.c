@@ -74,6 +74,7 @@
 #include "distributed/recursive_planning.h"
 #include "distributed/reference_table_utils.h"
 #include "distributed/relation_access_tracking.h"
+#include "distributed/replication_origin_session_utils.h"
 #include "distributed/run_from_same_connection.h"
 #include "distributed/shard_cleaner.h"
 #include "distributed/shard_transfer.h"
@@ -1289,6 +1290,18 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
+		"citus.enable_replication_origin_session",
+		gettext_noop("Enable replication origin session for avoiding publication of WAL "
+					 "records for shard splits,moves and "
+					 "create_distributed_table/undistribute_table operations."),
+		NULL,
+		&isReplicationOriginSessionFeatureEnabled,
+		false,
+		PGC_USERSET,
+		GUC_STANDARD,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
 		"citus.enable_router_execution",
 		gettext_noop("Enables router execution"),
 		NULL,
@@ -2405,7 +2418,6 @@ RegisterCitusConfigVariables(void)
 		PGC_USERSET,
 		GUC_STANDARD,
 		NULL, NULL, NULL);
-
 
 	/* warn about config items in the citus namespace that are not registered above */
 	EmitWarningsOnPlaceholders("citus");

@@ -24,6 +24,7 @@
 #include "distributed/relation_utils.h"
 #include "distributed/version_compat.h"
 #include "distributed/local_executor.h"
+#include "distributed/replication_origin_session_utils.h"
 
 /*
  * LocalCopyBuffer is used in copy callback to return the copied rows.
@@ -80,6 +81,7 @@ static void LocalCopyToShard(ShardCopyDestReceiver *copyDest, CopyOutState
 							 localCopyOutState);
 static void ConnectToRemoteAndStartCopy(ShardCopyDestReceiver *copyDest);
 
+
 static bool
 CanUseLocalCopy(uint32_t destinationNodeId)
 {
@@ -102,6 +104,12 @@ ConnectToRemoteAndStartCopy(ShardCopyDestReceiver *copyDest)
 														 currentUser,
 														 NULL /* database (current) */);
 	ClaimConnectionExclusively(copyDest->connection);
+
+
+	RemoteTransactionBeginIfNecessary(copyDest->connection);
+
+	SetupReplicationOriginRemoteSession(copyDest->connection);
+
 
 	StringInfo copyStatement = ConstructShardCopyStatement(
 		copyDest->destinationShardFullyQualifiedName,
@@ -184,6 +192,8 @@ ShardCopyDestReceiverReceive(TupleTableSlot *slot, DestReceiver *dest)
 	CopyOutState copyOutState = copyDest->copyOutState;
 	if (copyDest->useLocalCopy)
 	{
+		/* Setup replication origin session for local copy*/
+
 		WriteLocalTuple(slot, copyDest);
 		if (copyOutState->fe_msgbuf->len > LocalCopyFlushThresholdByte)
 		{
@@ -259,6 +269,11 @@ ShardCopyDestReceiverStartup(DestReceiver *dest, int operation, TupleDesc
 	copyDest->columnOutputFunctions = ColumnOutputFunctions(inputTupleDescriptor,
 															copyOutState->binary);
 	copyDest->copyOutState = copyOutState;
+	if (copyDest->useLocalCopy)
+	{
+		/* Setup replication origin session for local copy*/
+		SetupReplicationOriginLocalSession();
+	}
 }
 
 
@@ -317,6 +332,9 @@ ShardCopyDestReceiverShutdown(DestReceiver *dest)
 
 		PQclear(result);
 		ForgetResults(copyDest->connection);
+
+		ResetReplicationOriginRemoteSession(copyDest->connection);
+
 		CloseConnection(copyDest->connection);
 	}
 }
@@ -329,6 +347,10 @@ static void
 ShardCopyDestReceiverDestroy(DestReceiver *dest)
 {
 	ShardCopyDestReceiver *copyDest = (ShardCopyDestReceiver *) dest;
+	if (copyDest->useLocalCopy)
+	{
+		ResetReplicationOriginLocalSession();
+	}
 
 	if (copyDest->copyOutState)
 	{

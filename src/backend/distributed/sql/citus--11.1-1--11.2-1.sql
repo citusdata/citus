@@ -28,3 +28,4 @@ INSERT INTO pg_dist_cleanup
         WHERE plc.shardstate = 4;
 
 DELETE FROM pg_dist_placement WHERE shardstate = 4;
+#include "udfs/repl_origin_helper/11.2-1.sql"

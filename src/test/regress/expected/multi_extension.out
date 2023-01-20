@@ -1231,7 +1231,10 @@ SELECT * FROM pg_dist_cleanup;
 SELECT * FROM multi_extension.print_extension_changes();
  previous_object | current_object
 ---------------------------------------------------------------------
-(0 rows)
+                 | function replication_origin_session_end_no_publish() void
+                 | function replication_origin_session_is_no_publish() void
+                 | function replication_origin_session_start_no_publish() void
+(3 rows)
 
 -- Snapshot of state at 11.2-1
 ALTER EXTENSION citus UPDATE TO '11.2-1';

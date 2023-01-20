@@ -85,6 +85,7 @@
 #include "distributed/relation_access_tracking.h"
 #include "distributed/remote_commands.h"
 #include "distributed/remote_transaction.h"
+#include "distributed/replication_origin_session_utils.h"
 #include "distributed/resource_lock.h"
 #include "distributed/shard_pruning.h"
 #include "distributed/shared_connection_stats.h"
@@ -270,7 +271,8 @@ static CopyConnectionState * GetConnectionState(HTAB *connectionStateHash,
 static CopyShardState * GetShardState(uint64 shardId, HTAB *shardStateHash,
 									  HTAB *connectionStateHash,
 									  bool *found, bool shouldUseLocalCopy, CopyOutState
-									  copyOutState, bool isColocatedIntermediateResult);
+									  copyOutState, bool isColocatedIntermediateResult,
+									  bool isPublishable);
 static MultiConnection * CopyGetPlacementConnection(HTAB *connectionStateHash,
 													ShardPlacement *placement,
 													bool colocatedIntermediateResult);
@@ -285,7 +287,8 @@ static void InitializeCopyShardState(CopyShardState *shardState,
 									 uint64 shardId,
 									 bool canUseLocalCopy,
 									 CopyOutState copyOutState,
-									 bool colocatedIntermediateResult);
+									 bool colocatedIntermediateResult, bool
+									 isPublishable);
 static void StartPlacementStateCopyCommand(CopyPlacementState *placementState,
 										   CopyStmt *copyStatement,
 										   CopyOutState copyOutState);
@@ -494,7 +497,8 @@ CopyToExistingShards(CopyStmt *copyStatement, QueryCompletion *completionTag)
 	/* set up the destination for the COPY */
 	CitusCopyDestReceiver *copyDest = CreateCitusCopyDestReceiver(tableId, columnNameList,
 																  partitionColumnIndex,
-																  executorState, NULL);
+																  executorState, NULL,
+																  true);
 
 	/* if the user specified an explicit append-to_shard option, write to it */
 	uint64 appendShardId = ProcessAppendToShardOption(tableId, copyStatement);
@@ -1934,7 +1938,7 @@ CopyFlushOutput(CopyOutState cstate, char *start, char *pointer)
 CitusCopyDestReceiver *
 CreateCitusCopyDestReceiver(Oid tableId, List *columnNameList, int partitionColumnIndex,
 							EState *executorState,
-							char *intermediateResultIdPrefix)
+							char *intermediateResultIdPrefix, bool isPublishable)
 {
 	CitusCopyDestReceiver *copyDest = (CitusCopyDestReceiver *) palloc0(
 		sizeof(CitusCopyDestReceiver));
@@ -1953,6 +1957,7 @@ CreateCitusCopyDestReceiver(Oid tableId, List *columnNameList, int partitionColu
 	copyDest->executorState = executorState;
 	copyDest->colocatedIntermediateResultIdPrefix = intermediateResultIdPrefix;
 	copyDest->memoryContext = CurrentMemoryContext;
+	copyDest->isPublishable = isPublishable;
 
 	return copyDest;
 }
@@ -2318,7 +2323,9 @@ CitusSendTupleToPlacements(TupleTableSlot *slot, CitusCopyDestReceiver *copyDest
 											   &cachedShardStateFound,
 											   copyDest->shouldUseLocalCopy,
 											   copyDest->copyOutState,
-											   isColocatedIntermediateResult);
+											   isColocatedIntermediateResult,
+											   copyDest->isPublishable);
+
 	if (!cachedShardStateFound)
 	{
 		firstTupleInShard = true;
@@ -2751,6 +2758,11 @@ ShutdownCopyConnectionState(CopyConnectionState *connectionState,
 	if (activePlacementState != NULL)
 	{
 		EndPlacementStateCopyCommand(activePlacementState, copyOutState);
+		if (!copyDest->isPublishable)
+		{
+			ResetReplicationOriginRemoteSession(
+				activePlacementState->connectionState->connection);
+		}
 	}
 
 	dlist_foreach(iter, &connectionState->bufferedPlacementList)
@@ -2764,6 +2776,10 @@ ShutdownCopyConnectionState(CopyConnectionState *connectionState,
 		SendCopyDataToPlacement(placementState->data, shardId,
 								connectionState->connection);
 		EndPlacementStateCopyCommand(placementState, copyOutState);
+		if (!copyDest->isPublishable)
+		{
+			ResetReplicationOriginRemoteSession(connectionState->connection);
+		}
 	}
 }
 
@@ -3436,7 +3452,7 @@ static CopyShardState *
 GetShardState(uint64 shardId, HTAB *shardStateHash,
 			  HTAB *connectionStateHash, bool *found, bool
 			  shouldUseLocalCopy, CopyOutState copyOutState,
-			  bool isColocatedIntermediateResult)
+			  bool isColocatedIntermediateResult, bool isPublishable)
 {
 	CopyShardState *shardState = (CopyShardState *) hash_search(shardStateHash, &shardId,
 																HASH_ENTER, found);
@@ -3444,7 +3460,8 @@ GetShardState(uint64 shardId, HTAB *shardStateHash,
 	{
 		InitializeCopyShardState(shardState, connectionStateHash,
 								 shardId, shouldUseLocalCopy,
-								 copyOutState, isColocatedIntermediateResult);
+								 copyOutState, isColocatedIntermediateResult,
+								 isPublishable);
 	}
 
 	return shardState;
@@ -3461,7 +3478,8 @@ InitializeCopyShardState(CopyShardState *shardState,
 						 HTAB *connectionStateHash, uint64 shardId,
 						 bool shouldUseLocalCopy,
 						 CopyOutState copyOutState,
-						 bool colocatedIntermediateResult)
+						 bool colocatedIntermediateResult,
+						 bool isPublishable)
 {
 	ListCell *placementCell = NULL;
 	int failedPlacementCount = 0;
@@ -3530,6 +3548,12 @@ InitializeCopyShardState(CopyShardState *shardState,
 		if (connectionState->activePlacementState == NULL)
 		{
 			RemoteTransactionBeginIfNecessary(connection);
+		}
+
+		if (!isPublishable)
+		{
+			/*elog(LOG,"InitializeCopyShardState: calling SetupReplicationOriginRemoteSession conn id: %lu", connection->connectionId); */
+			SetupReplicationOriginRemoteSession(connection);
 		}
 
 		CopyPlacementState *placementState = palloc0(sizeof(CopyPlacementState));

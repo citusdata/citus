@@ -55,6 +55,7 @@
 #include "distributed/multi_partitioning_utils.h"
 #include "distributed/reference_table_utils.h"
 #include "distributed/relation_access_tracking.h"
+#include "distributed/replication_origin_session_utils.h"
 #include "distributed/shared_library_init.h"
 #include "distributed/shard_utils.h"
 #include "distributed/worker_protocol.h"
@@ -402,7 +403,11 @@ UndistributeTable(TableConversionParameters *params)
 	params->conversionType = UNDISTRIBUTE_TABLE;
 	params->shardCountIsNull = true;
 	TableConversionState *con = CreateTableConversion(params);
-	return ConvertTable(con);
+
+	SetupReplicationOriginLocalSession();
+	TableConversionReturn *conv = ConvertTable(con);
+	ResetReplicationOriginLocalSession();
+	return conv;
 }
 
 

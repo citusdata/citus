@@ -215,6 +215,9 @@ ORDER BY 1;
  function remove_local_tables_from_metadata()
  function replicate_reference_tables(citus.shard_transfer_mode)
  function replicate_table_shards(regclass,integer,integer,bigint[],citus.shard_transfer_mode)
+ function replication_origin_session_end_no_publish()
+ function replication_origin_session_is_no_publish()
+ function replication_origin_session_start_no_publish()
  function role_exists(name)
  function run_command_on_all_nodes(text,boolean,boolean)
  function run_command_on_colocated_placements(regclass,regclass,text,boolean)
@@ -318,5 +321,5 @@ ORDER BY 1;
  view citus_stat_statements
  view pg_dist_shard_placement
  view time_partitions
-(310 rows)
+(313 rows)
 
