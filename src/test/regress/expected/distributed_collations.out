@@ -75,9 +75,9 @@ NOTICE:  renaming the new table to collation_tests.test_collate_pushed_down_aggr
 SET citus.log_remote_commands TO true;
 SELECT ALL MIN((lower(CAST(test_collate_pushed_down_aggregate.a AS VARCHAR)) COLLATE "C"))
     FROM ONLY test_collate_pushed_down_aggregate;
-NOTICE:  issuing SELECT min((lower(((a)::character varying COLLATE "default")) COLLATE "C")) AS min FROM ONLY collation_tests.test_collate_pushed_down_aggregate_20060004 test_collate_pushed_down_aggregate WHERE true
+NOTICE:  issuing SELECT min((lower(((a)::character varying COLLATE "default")) COLLATE "C")) AS min FROM ONLY collation_tests.test_collate_pushed_down_aggregate_20060004 test_collate_pushed_down_aggregate WHERE ((lower(((a)::character varying COLLATE "default")) COLLATE "C") IS NOT NULL)
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SELECT min((lower(((a)::character varying COLLATE "default")) COLLATE "C")) AS min FROM ONLY collation_tests.test_collate_pushed_down_aggregate_20060005 test_collate_pushed_down_aggregate WHERE true
+NOTICE:  issuing SELECT min((lower(((a)::character varying COLLATE "default")) COLLATE "C")) AS min FROM ONLY collation_tests.test_collate_pushed_down_aggregate_20060005 test_collate_pushed_down_aggregate WHERE ((lower(((a)::character varying COLLATE "default")) COLLATE "C") IS NOT NULL)
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
  min
 ---------------------------------------------------------------------

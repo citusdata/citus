@@ -1926,19 +1926,19 @@ DEBUG:  join prunable for task partitionId 3 and 2
 DEBUG:  pruning merge fetch taskId 1
 DETAIL:  Creating dependency on merge taskId 2
 DEBUG:  pruning merge fetch taskId 2
-DETAIL:  Creating dependency on merge taskId 5
+DETAIL:  Creating dependency on merge taskId 2
 DEBUG:  pruning merge fetch taskId 4
 DETAIL:  Creating dependency on merge taskId 4
 DEBUG:  pruning merge fetch taskId 5
-DETAIL:  Creating dependency on merge taskId 10
+DETAIL:  Creating dependency on merge taskId 4
 DEBUG:  pruning merge fetch taskId 7
 DETAIL:  Creating dependency on merge taskId 6
 DEBUG:  pruning merge fetch taskId 8
-DETAIL:  Creating dependency on merge taskId 15
+DETAIL:  Creating dependency on merge taskId 6
 DEBUG:  pruning merge fetch taskId 10
 DETAIL:  Creating dependency on merge taskId 8
 DEBUG:  pruning merge fetch taskId 11
-DETAIL:  Creating dependency on merge taskId 20
+DETAIL:  Creating dependency on merge taskId 8
  id | author_id | title | word_count | name | id
 ---------------------------------------------------------------------
 (0 rows)

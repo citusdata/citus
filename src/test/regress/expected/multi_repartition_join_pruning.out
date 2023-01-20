@@ -480,18 +480,12 @@ FROM
 WHERE
 	false;
 DEBUG:  Router planner does not support append-partitioned tables.
-                         QUERY PLAN
+          QUERY PLAN
 ---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)
    Task Count: 0
-   Tasks Shown: None, not supported for re-partition queries
-   ->  MapMergeJob
-         Map Task Count: 0
-         Merge Task Count: 0
-   ->  MapMergeJob
-         Map Task Count: 0
-         Merge Task Count: 0
-(9 rows)
+   Tasks Shown: All
+(3 rows)
 
 -- execute once, to verify that's handled
 SELECT
@@ -513,18 +507,12 @@ FROM
 WHERE
 	1=0 AND c_custkey < 0;
 DEBUG:  Router planner does not support append-partitioned tables.
-                         QUERY PLAN
+          QUERY PLAN
 ---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)
    Task Count: 0
-   Tasks Shown: None, not supported for re-partition queries
-   ->  MapMergeJob
-         Map Task Count: 0
-         Merge Task Count: 0
-   ->  MapMergeJob
-         Map Task Count: 0
-         Merge Task Count: 0
-(9 rows)
+   Tasks Shown: All
+(3 rows)
 
 EXPLAIN (COSTS OFF)
 SELECT

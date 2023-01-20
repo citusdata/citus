@@ -731,8 +731,12 @@ MultiNodeTree(Query *queryTree, PlannerRestrictionContext *plannerRestrictionCon
 	 *    as join condition. Those should stay in MultiJoin.
 	 *  - some of join clauses can be pushed down. Those should be in nonpushdownable part of
 	 *    MultiSelect. ??? todo: can we also pushdown those to workers for optimization
+	 *    (I put them on nonpushdownable part as they contain reference to both tables and fails at workers now)
+	 *  - pseudoconstant clauses like false, null can be pushdowned
 	 */
 	List *pushdownableSelectClauseList = baseClauseList;
+	pushdownableSelectClauseList = list_concat(pushdownableSelectClauseList,
+											   pseudoClauseList);
 	List *nonpushdownableJoinClauseList = ExtractNonPushdownableJoinClauses(
 		joinOrderList);
 	List *pushdownableJoinClauseList = list_difference(allJoinClauseList,

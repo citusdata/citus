@@ -134,7 +134,6 @@ static PlannedStmt * PlanDistributedStmt(DistributedPlanningContext *planContext
 static RTEListProperties * GetRTEListProperties(List *rangeTableList);
 static List * TranslatedVars(PlannerInfo *root, int relationIndex);
 static void WarnIfListHasForeignDistributedTable(List *rangeTableList);
-static void ErrorIfMergeHasUnsupportedTables(Query *parse, List *rangeTableList);
 static List * GenerateImplicitJoinRestrictInfoList(PlannerInfo *plannerInfo,
 												   RelOptInfo *innerrel,
 												   RelOptInfo *outerrel);
@@ -1863,8 +1862,6 @@ static List *
 GenerateImplicitJoinRestrictInfoList(PlannerInfo *plannerInfo,
 									 RelOptInfo *innerrel, RelOptInfo *outerrel)
 {
-	List *generatedRestrictInfoList = NIL;
-
 	Relids joinrelids = bms_union(innerrel->relids, outerrel->relids);
 	List *prevVals = NIL;
 	EquivalenceClass *eqclass = NULL;
@@ -1874,7 +1871,7 @@ GenerateImplicitJoinRestrictInfoList(PlannerInfo *plannerInfo,
 		eqclass->ec_has_const = false;
 	}
 
-	generatedRestrictInfoList = generate_join_implied_equalities(
+	List *generatedRestrictInfoList = generate_join_implied_equalities(
 		plannerInfo,
 		joinrelids,
 		outerrel->relids,
