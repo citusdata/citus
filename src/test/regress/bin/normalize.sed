@@ -28,6 +28,10 @@ s/\(ref_id\)=\([0-9]+\)/(ref_id)=(X)/g
 # shard table names for multi_subtransactions
 s/"t2_[0-9]+"/"t2_xxxxxxx"/g
 
+# shard table names for MERGE tests
+s/merge_schema\.([_a-z0-9]+)_40[0-9]+ /merge_schema.\1_xxxxxxx /g
+s/pgmerge_schema\.([_a-z0-9]+)_40[0-9]+ /pgmerge_schema.\1_xxxxxxx /g
+
 # shard table names for multi_subquery
 s/ keyval(1|2|ref)_[0-9]+ / keyval\1_xxxxxxx /g
 
