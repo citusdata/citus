@@ -386,7 +386,7 @@ ExtractPushdownJoinRestrictInfos(List *restrictInfoListOfJoin,
 	foreach_ptr(restrictInfo, restrictInfoListOfJoin)
 	{
 		if (!restrictInfo->can_join &&
-			(!IS_OUTER_JOIN(joinType) || RINFO_IS_PUSHED_DOWN(restrictInfo, joinRelids)))
+			RINFO_IS_PUSHED_DOWN(restrictInfo, joinRelids))
 		{
 			joinFilterRestrictInfoList = lappend(joinFilterRestrictInfoList,
 												 restrictInfo);
@@ -405,6 +405,8 @@ static List *
 FindJoinClauseForTables(List *joinRestrictInfoListList, List *generatedEcJoinClauseList,
 						List *lhsTableIdList, uint32 rhsTableId, JoinType joinType)
 {
+	List *applicableJoinClauseListList = NIL;
+
 	List *joinRestrictInfoList = NIL;
 	foreach_ptr(joinRestrictInfoList, joinRestrictInfoListList)
 	{
@@ -423,7 +425,8 @@ FindJoinClauseForTables(List *joinRestrictInfoListList, List *generatedEcJoinCla
 					pushdownableJoinRestrictInfoList);
 				List *nonPushdownableJoinRestrictClauseList =
 					get_all_actual_clauses(nonPushdownableJoinRestrictInfoList);
-				return nonPushdownableJoinRestrictClauseList;
+				applicableJoinClauseListList = lappend(applicableJoinClauseListList,
+													   nonPushdownableJoinRestrictClauseList);
 			}
 		}
 	}
@@ -436,12 +439,13 @@ FindJoinClauseForTables(List *joinRestrictInfoListList, List *generatedEcJoinCla
 		{
 			if (IsApplicableJoinClause(lhsTableIdList, rhsTableId, ecClause))
 			{
-				return list_make1(ecClause);
+				applicableJoinClauseListList = lappend(applicableJoinClauseListList,
+													   list_make1(ecClause));
 			}
 		}
 	}
 
-	return NIL;
+	return applicableJoinClauseListList;
 }
 
 
@@ -985,11 +989,13 @@ EvaluateJoinRules(List *joinedTableList, JoinOrderNode *currentJoinNode,
 	 */
 	List *joinedTableIdList = RangeTableIdList(joinedTableList);
 	uint32 candidateTableId = candidateTable->rangeTableId;
-	List *applicableJoinClauseList = FindJoinClauseForTables(joinRestrictInfoListList,
-															 generatedEcJoinClauseList,
-															 joinedTableIdList,
-															 candidateTableId,
-															 joinType);
+	List *applicableJoinClauseListList = FindJoinClauseForTables(joinRestrictInfoListList,
+																 generatedEcJoinClauseList,
+																 joinedTableIdList,
+																 candidateTableId,
+																 joinType);
+	List *emptyClauseList = NIL;
+	applicableJoinClauseListList = lappend(applicableJoinClauseListList, emptyClauseList);
 
 	/* we then evaluate all join rules in order */
 	for (uint32 ruleIndex = lowestValidIndex; ruleIndex <= highestValidIndex; ruleIndex++)
@@ -997,27 +1003,26 @@ EvaluateJoinRules(List *joinedTableList, JoinOrderNode *currentJoinNode,
 		JoinRuleType ruleType = (JoinRuleType) ruleIndex;
 		RuleEvalFunction ruleEvalFunction = JoinRuleEvalFunction(ruleType);
 
-		nextJoinNode = (*ruleEvalFunction)(currentJoinNode,
-										   candidateTable,
-										   applicableJoinClauseList,
-										   joinType);
-
-		/* break after finding the first join rule that applies */
-		if (nextJoinNode != NULL)
+		List *applicableJoinClauseList = NIL;
+		foreach_ptr(applicableJoinClauseList, applicableJoinClauseListList)
 		{
-			break;
+			nextJoinNode = (*ruleEvalFunction)(currentJoinNode,
+											   candidateTable,
+											   applicableJoinClauseList,
+											   joinType);
+
+			/* return after finding the first join rule that applies */
+			if (nextJoinNode != NULL)
+			{
+				nextJoinNode->joinType = joinType;
+				nextJoinNode->joinClauseList = applicableJoinClauseList;
+				return nextJoinNode;
+			}
 		}
 	}
 
-	if (nextJoinNode == NULL)
-	{
-		return NULL;
-	}
-
-	Assert(nextJoinNode != NULL);
-	nextJoinNode->joinType = joinType;
-	nextJoinNode->joinClauseList = applicableJoinClauseList;
-	return nextJoinNode;
+	Assert(nextJoinNode == NULL);
+	return NULL;
 }
 
 

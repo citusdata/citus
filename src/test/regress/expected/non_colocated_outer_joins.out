@@ -1135,9 +1135,9 @@ SELECT * FROM dist1 LEFT JOIN dist2 ON (dist1.x = dist2.x) WHERE dist1.x >2 ORDE
 -- inner table will be converted to empty result. Constant filter will be applied before join but will not be pushdowned.
 SELECT * FROM dist1 LEFT JOIN dist2 ON (dist1.y = dist2.y AND false) ORDER BY 1,2,3,4;
 LOG:  join order: [ "dist1" ][ cartesian product(LEFT) "dist2" ]
- x | y | x | y
----------------------------------------------------------------------
-(0 rows)
+ 1 | 2 |   |
+ 3 | 4 |   |
+(2 rows)
 
 --- constant false filter as base filter for left join.
 -- both tables will be converted to empty result .e.g RTE_RESULT

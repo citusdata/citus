@@ -267,7 +267,8 @@ WHERE
 	(o_orderkey < l_quantity + 3)
 ORDER BY l_orderkey DESC
 LIMIT 10;
-ERROR:  complex joins are only supported when all distributed tables are joined on their distribution columns with equal operator
+ERROR:  cannot perform distributed planning on this query
+DETAIL:  Cartesian products are currently unsupported
 -- implicit typecast supported in equi-join
 SELECT l_orderkey
 FROM
@@ -300,7 +301,8 @@ JOIN
 ON (l_orderkey::int4 = o_orderkey::int8)
 ORDER BY l_orderkey DESC
 LIMIT 10;
-ERROR:  complex joins are only supported when all distributed tables are joined on their distribution columns with equal operator
+ERROR:  cannot perform distributed planning on this query
+DETAIL:  Cartesian products are currently unsupported
 -- type casts in filters are supported as long as
 -- a valid equi-join exists
 SELECT l_orderkey
@@ -364,7 +366,8 @@ WHERE
 	(o_orderkey < l_quantity)
 ORDER BY l_orderkey DESC
 LIMIT 10;
-ERROR:  complex joins are only supported when all distributed tables are joined on their distribution columns with equal operator
+ERROR:  cannot perform distributed planning on this query
+DETAIL:  Cartesian products are currently unsupported
 -- query is not supported if there is a single
 -- join clause with arithmetic expression. It fails
 -- with a different error message
@@ -376,7 +379,8 @@ JOIN
 ON (l_orderkey = o_orderkey + 1)
 ORDER BY l_orderkey DESC
 LIMIT 10;
-ERROR:  complex joins are only supported when all distributed tables are joined on their distribution columns with equal operator
+ERROR:  cannot perform distributed planning on this query
+DETAIL:  Cartesian products are currently unsupported
 -- query is not supported if does not have equi-join clause
 SELECT l_orderkey
 FROM
@@ -388,7 +392,8 @@ WHERE
 	(o_orderkey < l_quantity)
 ORDER BY l_orderkey DESC
 LIMIT 10;
-ERROR:  complex joins are only supported when all distributed tables are joined on their distribution columns with equal operator
+ERROR:  cannot perform distributed planning on this query
+DETAIL:  Cartesian products are currently unsupported
 -- outer joins on reference tables with functions works
 SELECT DISTINCT ON (t1.user_id) t1.user_id, t2.value_1, t2.value_2, t2.value_3
 FROM events_table t1
@@ -425,7 +430,8 @@ FROM events_table t1
 LEFT JOIN users_table t2 ON t1.user_id > t2.user_id
 ORDER BY 1 DESC, 2 DESC, 3 DESC, 4 DESC
 LIMIT 5;
-ERROR:  complex joins are only supported when all distributed tables are joined on their distribution columns with equal operator
+ERROR:  cannot perform distributed planning on this query
+DETAIL:  Cartesian products are currently unsupported
 -- outer joins on reference tables with expressions should work
 SELECT DISTINCT ON (t1.user_id) t1.user_id, t2.value_1, t2.value_2, t2.value_3
 FROM events_table t1
@@ -466,7 +472,8 @@ SELECT DISTINCT ON (t1.user_id) t1.user_id, t2.value_1, t2.value_2, t2.value_3
  LEFT JOIN users_reference_table t2 ON t1.user_id = trunc(t2.user_id)
  ORDER BY 1 DESC, 2 DESC, 3 DESC, 4 DESC
  LIMIT 5;
-ERROR:  complex joins are only supported when all distributed tables are joined on their distribution columns with equal operator
+ERROR:  cannot perform distributed planning on this query
+DETAIL:  Cartesian products are currently unsupported
 -- outer joins as subqueries should work
 -- https://github.com/citusdata/citus/issues/2739
 SELECT user_id, value_1, event_type

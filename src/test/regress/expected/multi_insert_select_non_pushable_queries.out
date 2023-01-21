@@ -19,7 +19,8 @@ FROM (
   ) t
   GROUP BY user_id
 ) q;
-ERROR:  complex joins are only supported when all distributed tables are joined on their distribution columns with equal operator
+ERROR:  cannot perform distributed planning on this query
+DETAIL:  Cartesian products are currently unsupported
 ---------------------------------------------------------------------
 ---------------------------------------------------------------------
 --  Funnel grouped by whether or not a user has done an event
@@ -64,7 +65,8 @@ FROM (
   ) t2 ON (t1.user_id = t2.user_id)
   GROUP BY  t1.user_id, hasdone_event
 ) t GROUP BY user_id, hasdone_event;
-ERROR:  complex joins are only supported when all distributed tables are joined on their distribution columns with equal operator
+ERROR:  cannot perform distributed planning on this query
+DETAIL:  Cartesian products are currently unsupported
 -- not pushable since the JOIN is not an equi join right part of the UNION
 -- is not joined on the partition key
 INSERT INTO agg_results_third (user_id, value_1_agg, value_2_agg )
@@ -234,7 +236,8 @@ GROUP BY
   count_pay, user_id
 ORDER BY
   count_pay;
-ERROR:  complex joins are only supported when all distributed tables are joined on their distribution columns with equal operator
+ERROR:  cannot perform distributed planning on this query
+DETAIL:  Cartesian products are currently unsupported
 -- not pushable since the JOIN condition is not equi JOIN
 -- (subquery_1 JOIN subquery_2)
 -- but, we can plan the query thanks to recursive planning
@@ -763,7 +766,8 @@ FROM
     ) temp
   ON users_table.user_id = temp.user_id
   WHERE users_table.value_1 < 50;
-ERROR:  complex joins are only supported when all distributed tables are joined on their distribution columns with equal operator
+ERROR:  cannot perform distributed planning on this query
+DETAIL:  Cartesian products are currently unsupported
 -- not pushable since the join is not on the partition key
 INSERT INTO agg_results_third(user_id, value_1_agg, value_3_agg)
 SELECT

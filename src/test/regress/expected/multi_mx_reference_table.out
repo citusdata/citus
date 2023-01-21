@@ -899,7 +899,7 @@ FROM
 WHERE
 	colocated_table_test.value_1 = reference_table_test.value_1 AND colocated_table_test_2.value_1 = reference_table_test.value_1
 ORDER BY 1;
-LOG:  join order: [ "colocated_table_test" ][ reference join(INNER) "reference_table_test" ][ dual partition join(INNER) "colocated_table_test_2" ]
+LOG:  join order: [ "colocated_table_test" ][ reference join(INNER) "reference_table_test" ][ local partition join(INNER) "colocated_table_test_2" ]
  value_2
 ---------------------------------------------------------------------
        1
