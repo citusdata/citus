@@ -146,7 +146,7 @@ SELECT create_distributed_table('source', 'customer_id');
 
 -- Updates one of the row with customer_id  = 30002
 SELECT * from target t WHERE t.customer_id  = 30002;
--- Turn on notice to print tasks sent to nodes (it should be a single task)
+-- Turn on notice to print tasks sent to nodes
 SET citus.log_remote_commands to true;
 MERGE INTO target t
    USING source s
@@ -160,9 +160,9 @@ MERGE INTO target t
            order_count = t.order_count + 1,
            last_order_id = s.order_id
 
-   WHEN NOT MATCHED THEN       -- New entry, record it.
-       INSERT (customer_id, last_order_id, order_center, order_count, last_order)
-           VALUES (customer_id, s.order_id, s.order_center, 123, s.order_time);
+   WHEN NOT MATCHED THEN
+       DO NOTHING;
+
 SET citus.log_remote_commands to false;
 SELECT * from target t WHERE t.customer_id  = 30002;
 
@@ -284,8 +284,8 @@ MERGE INTO t1
 	WHEN NOT MATCHED THEN
 		INSERT (id, val) VALUES (s1_res.id, s1_res.val);
 SET citus.log_remote_commands to false;
--- As the id 6 is NO match, VALUES(6, 1) should appear in target
-SELECT * FROM t1 order by id;
+-- Other than id 6 everything else is a NO match, and should appear in target
+SELECT * FROM t1 order by 1, 2;
 
 --
 -- Test with multiple join conditions
@@ -366,7 +366,7 @@ ON t2.id = s2.id AND t2.src = s2.src AND t2.id = 4
 	WHEN MATCHED THEN
 		DELETE
 	WHEN NOT MATCHED THEN
-		INSERT (id, val, src) VALUES (s2.id, s2.val, s2.src);
+		DO NOTHING;
 SET citus.log_remote_commands to false;
 -- Row with id = 4 is a match for delete clause, row should be deleted
 -- Row with id = 3 is a NO match, row from source will be inserted
@@ -999,6 +999,424 @@ SET citus.log_remote_commands to false;
 SELECT * FROM target_cj ORDER BY 1;
 ROLLBACK;
 
+-- Test distributed tables, must be co-located and joined on distribution column.
+
+--
+-- We create two sets of source and target tables, one set is Postgres and the other
+-- is Citus distributed. Run the _exact_ MERGE SQL on both the sets and compare the
+-- final results of target tables of Postgres and Citus, the result should match.
+-- This is repeated for various MERGE SQL combinations
+--
+CREATE TABLE pg_target(id int, val varchar);
+CREATE TABLE pg_source(id int, val varchar);
+CREATE TABLE citus_target(id int, val varchar);
+CREATE TABLE citus_source(id int, val varchar);
+
+-- Half of the source rows do not match
+INSERT INTO pg_target SELECT i, 'target' FROM generate_series(250, 500) i;
+INSERT INTO pg_source SELECT i, 'source' FROM generate_series(1, 500) i;
+
+INSERT INTO citus_target SELECT i, 'target' FROM generate_series(250, 500) i;
+INSERT INTO citus_source SELECT i, 'source' FROM generate_series(1, 500) i;
+
+SELECT create_distributed_table('citus_target', 'id');
+SELECT create_distributed_table('citus_source', 'id');
+
+--
+-- This routine compares the target tables of Postgres and Citus and
+-- returns true if they match, false if the results do not match.
+--
+CREATE OR REPLACE FUNCTION compare_tables() RETURNS BOOLEAN AS $$
+DECLARE ret BOOL;
+BEGIN
+SELECT count(1) = 0 INTO ret
+    FROM pg_target
+    FULL OUTER JOIN citus_target
+        USING (id, val)
+    WHERE pg_target.id IS NULL
+        OR citus_target.id IS NULL;
+RETURN ret;
+END
+$$ LANGUAGE PLPGSQL;
+
+-- Make sure we start with exact data in Postgres and Citus
+SELECT compare_tables();
+
+-- Run the MERGE on both Postgres and Citus, and compare the final target tables
+
+BEGIN;
+SET citus.log_remote_commands to true;
+
+MERGE INTO pg_target t
+USING pg_source s
+ON t.id = s.id
+WHEN MATCHED AND t.id > 400 THEN
+	UPDATE SET val = t.val || 'Updated by Merge'
+WHEN MATCHED THEN
+	DELETE
+WHEN NOT MATCHED THEN
+        INSERT VALUES(s.id, s.val);
+
+MERGE INTO citus_target t
+USING citus_source s
+ON t.id = s.id
+WHEN MATCHED AND t.id > 400 THEN
+	UPDATE SET val = t.val || 'Updated by Merge'
+WHEN MATCHED THEN
+	DELETE
+WHEN NOT MATCHED THEN
+        INSERT VALUES(s.id, s.val);
+
+SET citus.log_remote_commands to false;
+SELECT compare_tables();
+ROLLBACK;
+
+--
+-- ON clause filter on source
+--
+BEGIN;
+SET citus.log_remote_commands to true;
+
+MERGE INTO pg_target t
+USING pg_source s
+ON t.id = s.id AND s.id < 100
+WHEN MATCHED AND t.id > 400 THEN
+	UPDATE SET val = t.val || 'Updated by Merge'
+WHEN MATCHED THEN
+	DELETE
+WHEN NOT MATCHED THEN
+        INSERT VALUES(s.id, s.val);
+
+MERGE INTO citus_target t
+USING citus_source s
+ON t.id = s.id AND s.id < 100
+WHEN MATCHED AND t.id > 400 THEN
+	UPDATE SET val = t.val || 'Updated by Merge'
+WHEN MATCHED THEN
+	DELETE
+WHEN NOT MATCHED THEN
+        INSERT VALUES(s.id, s.val);
+
+SET citus.log_remote_commands to false;
+SELECT compare_tables();
+ROLLBACK;
+
+--
+-- ON clause filter on target
+--
+BEGIN;
+SET citus.log_remote_commands to true;
+
+MERGE INTO pg_target t
+USING pg_source s
+ON t.id = s.id AND t.id < 100
+WHEN MATCHED AND t.id > 400 THEN
+	UPDATE SET val = t.val || 'Updated by Merge'
+WHEN MATCHED THEN
+	DELETE
+WHEN NOT MATCHED THEN
+        INSERT VALUES(s.id, s.val);
+
+MERGE INTO citus_target t
+USING citus_source s
+ON t.id = s.id AND t.id < 100
+WHEN MATCHED AND t.id > 400 THEN
+	UPDATE SET val = t.val || 'Updated by Merge'
+WHEN MATCHED THEN
+	DELETE
+WHEN NOT MATCHED THEN
+        INSERT VALUES(s.id, s.val);
+
+SET citus.log_remote_commands to false;
+SELECT compare_tables();
+ROLLBACK;
+
+--
+-- NOT MATCHED clause filter on source
+--
+BEGIN;
+SET citus.log_remote_commands to true;
+
+MERGE INTO pg_target t
+USING pg_source s
+ON t.id = s.id
+WHEN MATCHED THEN
+	DO NOTHING
+WHEN NOT MATCHED AND s.id < 100 THEN
+        INSERT VALUES(s.id, s.val);
+
+MERGE INTO citus_target t
+USING citus_source s
+ON t.id = s.id
+WHEN MATCHED THEN
+	DO NOTHING
+WHEN NOT MATCHED AND s.id < 100 THEN
+        INSERT VALUES(s.id, s.val);
+
+SET citus.log_remote_commands to false;
+SELECT compare_tables();
+ROLLBACK;
+
+--
+-- Test constant filter in ON clause to check if shards are pruned
+-- with restriction information
+--
+
+--
+-- Though constant filter is present, this won't prune shards as
+-- NOT MATCHED clause is present
+--
+BEGIN;
+SET citus.log_remote_commands to true;
+
+MERGE INTO pg_target t
+USING pg_source s
+ON t.id = s.id AND s.id = 250
+WHEN MATCHED THEN
+        UPDATE SET val = t.val || 'Updated by Merge'
+WHEN NOT MATCHED THEN
+        INSERT VALUES(s.id, s.val);
+
+MERGE INTO citus_target t
+USING citus_source s
+ON t.id = s.id AND s.id = 250
+WHEN MATCHED THEN
+        UPDATE SET val = t.val || 'Updated by Merge'
+WHEN NOT MATCHED THEN
+        INSERT VALUES(s.id, s.val);
+
+SET citus.log_remote_commands to false;
+SELECT compare_tables();
+ROLLBACK;
+
+-- This will prune shards with restriction information as NOT MATCHED is void
+BEGIN;
+SET citus.log_remote_commands to true;
+
+MERGE INTO pg_target t
+USING pg_source s
+ON t.id = s.id AND s.id = 250
+WHEN MATCHED THEN
+        UPDATE SET val = t.val || 'Updated by Merge'
+WHEN NOT MATCHED THEN
+        DO NOTHING;
+
+MERGE INTO citus_target t
+USING citus_source s
+ON t.id = s.id AND s.id = 250
+WHEN MATCHED THEN
+        UPDATE SET val = t.val || 'Updated by Merge'
+WHEN NOT MATCHED THEN
+        DO NOTHING;
+
+SET citus.log_remote_commands to false;
+SELECT compare_tables();
+ROLLBACK;
+
+-- Test CTE with distributed tables
+CREATE VIEW pg_source_view AS SELECT * FROM pg_source WHERE id < 400;
+CREATE VIEW citus_source_view AS SELECT * FROM citus_source WHERE id < 400;
+
+BEGIN;
+SEt citus.log_remote_commands to true;
+
+WITH cte AS (
+        SELECT * FROM pg_source_view
+)
+MERGE INTO pg_target t
+USING cte
+ON cte.id = t.id
+WHEN MATCHED AND t.id > 350 THEN
+    UPDATE SET val = t.val || 'Updated by CTE'
+WHEN NOT MATCHED THEN
+        INSERT VALUES (cte.id, cte.val)
+WHEN MATCHED AND t.id < 350 THEN
+        DELETE;
+
+WITH cte AS (
+        SELECT * FROM citus_source_view
+)
+MERGE INTO citus_target t
+USING cte
+ON cte.id = t.id
+WHEN MATCHED AND t.id > 350 THEN
+    UPDATE SET val = t.val || 'Updated by CTE'
+WHEN NOT MATCHED THEN
+        INSERT VALUES (cte.id, cte.val)
+WHEN MATCHED AND t.id < 350 THEN
+        DELETE;
+
+SET citus.log_remote_commands to false;
+SELECT compare_tables();
+ROLLBACK;
+
+
+-- Test sub-query with distributed tables
+BEGIN;
+SEt citus.log_remote_commands to true;
+
+MERGE INTO pg_target t
+USING (SELECT * FROM pg_source) subq
+ON subq.id = t.id
+WHEN MATCHED AND t.id > 350 THEN
+    UPDATE SET val = t.val || 'Updated by subquery'
+WHEN NOT MATCHED THEN
+        INSERT VALUES (subq.id, subq.val)
+WHEN MATCHED AND t.id < 350 THEN
+        DELETE;
+
+MERGE INTO citus_target t
+USING (SELECT * FROM citus_source) subq
+ON subq.id = t.id
+WHEN MATCHED AND t.id > 350 THEN
+    UPDATE SET val = t.val || 'Updated by subquery'
+WHEN NOT MATCHED THEN
+        INSERT VALUES (subq.id, subq.val)
+WHEN MATCHED AND t.id < 350 THEN
+        DELETE;
+
+SET citus.log_remote_commands to false;
+SELECT compare_tables();
+ROLLBACK;
+
+-- Test PREPARE
+PREPARE pg_prep(int) AS
+MERGE INTO pg_target
+USING (SELECT * FROM pg_source) sub
+ON pg_target.id = sub.id AND pg_target.id = $1
+WHEN MATCHED THEN
+        UPDATE SET val = 'Updated by prepare using ' || sub.val
+WHEN NOT MATCHED THEN
+        DO NOTHING;
+
+PREPARE citus_prep(int) AS
+MERGE INTO citus_target
+USING (SELECT * FROM citus_source) sub
+ON citus_target.id = sub.id AND citus_target.id = $1
+WHEN MATCHED THEN
+        UPDATE SET val = 'Updated by prepare using ' || sub.val
+WHEN NOT MATCHED THEN
+        DO NOTHING;
+
+BEGIN;
+SET citus.log_remote_commands to true;
+
+SELECT * FROM pg_target WHERE id = 500; -- before merge
+EXECUTE pg_prep(500);
+SELECT * FROM pg_target WHERE id = 500; -- non-cached
+EXECUTE pg_prep(500);
+EXECUTE pg_prep(500);
+EXECUTE pg_prep(500);
+EXECUTE pg_prep(500);
+EXECUTE pg_prep(500);
+SELECT * FROM pg_target WHERE id = 500; -- cached
+
+SELECT * FROM citus_target WHERE id = 500; -- before merge
+EXECUTE citus_prep(500);
+SELECT * FROM citus_target WHERE id = 500; -- non-cached
+EXECUTE citus_prep(500);
+EXECUTE citus_prep(500);
+EXECUTE citus_prep(500);
+EXECUTE citus_prep(500);
+EXECUTE citus_prep(500);
+SELECT * FROM citus_target WHERE id = 500; -- cached
+
+SET citus.log_remote_commands to false;
+SELECT compare_tables();
+ROLLBACK;
+
+-- Test partitions + distributed tables
+
+CREATE TABLE pg_pa_target (tid integer, balance float, val text)
+	PARTITION BY LIST (tid);
+CREATE TABLE citus_pa_target (tid integer, balance float, val text)
+	PARTITION BY LIST (tid);
+
+CREATE TABLE part1 PARTITION OF pg_pa_target FOR VALUES IN (1,4)
+  WITH (autovacuum_enabled=off);
+CREATE TABLE part2 PARTITION OF pg_pa_target FOR VALUES IN (2,5,6)
+  WITH (autovacuum_enabled=off);
+CREATE TABLE part3 PARTITION OF pg_pa_target FOR VALUES IN (3,8,9)
+  WITH (autovacuum_enabled=off);
+CREATE TABLE part4 PARTITION OF pg_pa_target DEFAULT
+  WITH (autovacuum_enabled=off);
+CREATE TABLE part5 PARTITION OF citus_pa_target FOR VALUES IN (1,4)
+  WITH (autovacuum_enabled=off);
+CREATE TABLE part6 PARTITION OF citus_pa_target FOR VALUES IN (2,5,6)
+  WITH (autovacuum_enabled=off);
+CREATE TABLE part7 PARTITION OF citus_pa_target FOR VALUES IN (3,8,9)
+  WITH (autovacuum_enabled=off);
+CREATE TABLE part8 PARTITION OF citus_pa_target DEFAULT
+  WITH (autovacuum_enabled=off);
+
+CREATE TABLE pg_pa_source (sid integer, delta float);
+CREATE TABLE citus_pa_source (sid integer, delta float);
+
+-- insert many rows to the source table
+INSERT INTO pg_pa_source SELECT id, id * 10  FROM generate_series(1,14) AS id;
+INSERT INTO citus_pa_source SELECT id, id * 10  FROM generate_series(1,14) AS id;
+-- insert a few rows in the target table (odd numbered tid)
+INSERT INTO pg_pa_target SELECT id, id * 100, 'initial' FROM generate_series(1,14,2) AS id;
+INSERT INTO citus_pa_target SELECT id, id * 100, 'initial' FROM generate_series(1,14,2) AS id;
+
+SELECT create_distributed_table('citus_pa_target', 'tid');
+SELECT create_distributed_table('citus_pa_source', 'sid');
+
+CREATE OR REPLACE FUNCTION pa_compare_tables() RETURNS BOOLEAN AS $$
+DECLARE ret BOOL;
+BEGIN
+SELECT count(1) = 0 INTO ret
+    FROM pg_pa_target
+    FULL OUTER JOIN citus_pa_target
+        USING (tid, balance, val)
+    WHERE pg_pa_target.tid IS NULL
+        OR citus_pa_target.tid IS NULL;
+RETURN ret;
+END
+$$ LANGUAGE PLPGSQL;
+
+-- try simple MERGE
+BEGIN;
+MERGE INTO pg_pa_target t
+  USING pg_pa_source s
+  ON t.tid = s.sid
+  WHEN MATCHED THEN
+    UPDATE SET balance = balance + delta, val = val || ' updated by merge'
+  WHEN NOT MATCHED THEN
+    INSERT VALUES (sid, delta, 'inserted by merge');
+
+MERGE INTO citus_pa_target t
+  USING citus_pa_source s
+  ON t.tid = s.sid
+  WHEN MATCHED THEN
+    UPDATE SET balance = balance + delta, val = val || ' updated by merge'
+  WHEN NOT MATCHED THEN
+    INSERT VALUES (sid, delta, 'inserted by merge');
+
+SELECT pa_compare_tables();
+ROLLBACK;
+
+-- same with a constant qual
+BEGIN;
+MERGE INTO pg_pa_target t
+  USING pg_pa_source s
+  ON t.tid = s.sid AND tid = 1
+  WHEN MATCHED THEN
+    UPDATE SET balance = balance + delta, val = val || ' updated by merge'
+  WHEN NOT MATCHED THEN
+    INSERT VALUES (sid, delta, 'inserted by merge');
+
+MERGE INTO citus_pa_target t
+  USING citus_pa_source s
+  ON t.tid = s.sid AND tid = 1
+  WHEN MATCHED THEN
+    UPDATE SET balance = balance + delta, val = val || ' updated by merge'
+  WHEN NOT MATCHED THEN
+    INSERT VALUES (sid, delta, 'inserted by merge');
+
+SELECT pa_compare_tables();
+ROLLBACK;
+
 --
 -- Error and Unsupported scenarios
 --
@@ -1241,34 +1659,6 @@ UPDATE SET val = dist_colocated.val
 WHEN NOT MATCHED THEN
 INSERT VALUES(dist_colocated.id, dist_colocated.val);
 
--- MERGE command must be joined with with a constant qual on target relation
-
--- AND clause is missing
-MERGE INTO dist_target
-USING dist_colocated
-ON dist_target.id = dist_colocated.id
-WHEN MATCHED THEN
-UPDATE SET val = dist_colocated.val
-WHEN NOT MATCHED THEN
-INSERT VALUES(dist_colocated.id, dist_colocated.val);
-
--- AND clause incorrect table (must be target)
-MERGE INTO dist_target
-USING dist_colocated
-ON dist_target.id = dist_colocated.id AND dist_colocated.id = 1
-WHEN MATCHED THEN
-UPDATE SET val = dist_colocated.val
-WHEN NOT MATCHED THEN
-INSERT VALUES(dist_colocated.id, dist_colocated.val);
-
--- AND clause incorrect column (must be distribution column)
-MERGE INTO dist_target
-USING dist_colocated
-ON dist_target.id = dist_colocated.id AND dist_target.val = 'const'
-WHEN MATCHED THEN
-UPDATE SET val = dist_colocated.val
-WHEN NOT MATCHED THEN
-INSERT VALUES(dist_colocated.id, dist_colocated.val);
 
 -- Both the source and target must be distributed
 MERGE INTO dist_target

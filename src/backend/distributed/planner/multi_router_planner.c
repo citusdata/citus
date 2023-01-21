@@ -4108,8 +4108,6 @@ IsMergeAllowedOnRelation(Query *parse, RangeTblEntry *rte)
  *   - All the distributed tables are indeed colocated.
  *   - MERGE relations are joined on the distribution column
  *          MERGE .. USING .. ON target.dist_key = source.dist_key
- *   - The query should touch only a single shard i.e. JOIN AND with a constant qual
- *          MERGE .. USING .. ON target.dist_key = source.dist_key AND target.dist_key = <>
  *
  * If any of the conditions are not met, it raises an exception.
  */
@@ -4140,29 +4138,6 @@ ErrorIfDistTablesNotColocated(Query *parse, List *distTablesList,
 							 "MERGE command is only supported when distributed "
 							 "tables are joined on their distribution column",
 							 NULL, NULL);
-	}
-
-	/* Look for a constant qual i.e. AND target.dist_key = <> */
-	Node *distributionKeyValue = NULL;
-	Oid targetRelId = ResultRelationOidForQuery(parse);
-	Var *distributionKey = PartitionColumn(targetRelId, 1);
-
-	Assert(distributionKey);
-
-	/* convert list of expressions into expression tree for further processing */
-	Node *quals = parse->jointree->quals;
-
-	if (quals && IsA(quals, List))
-	{
-		quals = (Node *) make_ands_explicit((List *) quals);
-	}
-
-	if (!ConjunctionContainsColumnFilter(quals, distributionKey, &distributionKeyValue))
-	{
-		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-							 "MERGE on a distributed table requires a constant filter "
-							 "on the distribution column of the target table", NULL,
-							 "Consider adding AND target.dist_key = <> to the ON clause");
 	}
 
 	return NULL;
