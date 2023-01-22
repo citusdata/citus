@@ -88,13 +88,14 @@ static List * MultiTableNodeList(List *tableEntryList, List *rangeTableList);
 static List * AddMultiCollectNodes(List *tableNodeList);
 static MultiNode * MultiJoinTree(List *joinOrderList, List *collectTableList);
 static MultiCollect * CollectNodeForTable(List *collectTableList, uint32 rangeTableId);
-static MultiSelect * MultiSelectNode(List *pushdownableClauseList,
-									 List *nonPushdownableClauseList);
+static MultiSelect * MultiSelectNode(List *selectClauseList);
 static bool IsSelectClause(Node *clause);
 
 static JoinInfoContext * FetchJoinOrderContext(FromExpr *fromExpr);
 static bool JoinInfoWalker(Node *node, JoinInfoContext *joinInfoContext);
-static List * ExtractNonPushdownableJoinClauses(List *joinOrderList);
+static ApplicableJoinClauseContext * ExtractApplicableJoinClauseContext(
+	List *joinOrderList);
+static List * ExtractPushdownableSelectClausesFromJoinClauses(List *joinRestricInfoList);
 
 /* Local functions forward declarations for applying joins */
 static MultiNode * ApplyJoinRule(MultiNode *leftNode, MultiNode *rightNode,
@@ -722,28 +723,31 @@ MultiNodeTree(Query *queryTree, PlannerRestrictionContext *plannerRestrictionCon
 
 	Assert(currentTopNode != NULL);
 
+	/* all base clauses are pushdownable */
+	List *selectClauseList = baseClauseList;
+
+	/* pseudoconstant clauses like false, null can be pushdowned */
+	selectClauseList = list_concat(selectClauseList, pseudoClauseList);
 
 	/*
-	 * build select node if the query has selection criteria
-	 * select node will have pushdownable and non-pushdownable parts.
-	 *  - all base clauses can be pushdownable
-	 *  - some of join clauses cannot be pushed down and they can only be applied after join
-	 *    as join condition. Those should stay in MultiJoin.
-	 *  - some of join clauses can be pushed down. Those should be in nonpushdownable part of
-	 *    MultiSelect. ??? todo: can we also pushdown those to workers for optimization
-	 *    (I put them on nonpushdownable part as they contain reference to both tables and fails at workers now)
-	 *  - pseudoconstant clauses like false, null can be pushdowned
+	 * - some of join clauses cannot be pushed down and they can only be applied
+	 *   after join as join filter. Those should stay in MultiJoin.
+	 * - some of join clauses can be pushed down. (pushdownable part inside
+	 *   ApplicableJoinClauseContext)
 	 */
-	List *pushdownableSelectClauseList = baseClauseList;
-	pushdownableSelectClauseList = list_concat(pushdownableSelectClauseList,
-											   pseudoClauseList);
-	List *nonpushdownableJoinClauseList = ExtractNonPushdownableJoinClauses(
-		joinOrderList);
-	List *pushdownableJoinClauseList = list_difference(allJoinClauseList,
-													   nonpushdownableJoinClauseList);
-	List *nonPushdownableSelectClauseList = pushdownableJoinClauseList;
-	MultiSelect *selectNode = MultiSelectNode(pushdownableSelectClauseList,
-											  nonPushdownableSelectClauseList);
+	ApplicableJoinClauseContext *applicableJoinClauseContext =
+		ExtractApplicableJoinClauseContext(
+			joinOrderList);
+	List *pushdownableJoinClauseList =
+		applicableJoinClauseContext->pushdownableJoinClauseList;
+	List *innerPushdownableJoinClauseList =
+		ExtractPushdownableSelectClausesFromJoinClauses(joinRestrictInfoList);
+	pushdownableJoinClauseList = list_concat(pushdownableJoinClauseList,
+											 innerPushdownableJoinClauseList);
+	selectClauseList = list_concat(selectClauseList,
+								   pushdownableJoinClauseList);
+
+	MultiSelect *selectNode = MultiSelectNode(selectClauseList);
 	if (selectNode != NULL)
 	{
 		SetChild((MultiUnaryNode *) selectNode, currentTopNode);
@@ -770,23 +774,67 @@ MultiNodeTree(Query *queryTree, PlannerRestrictionContext *plannerRestrictionCon
 
 
 /*
- * ExtractNonPushdownableJoinClauses returns pushdownable clauses from given join
- * restrict infos.
+ * ExtractPushdownableSelectClausesFromJoinClauses extracts pushdownable clauses from
+ * given joinRestricInfoList.
  */
 static List *
-ExtractNonPushdownableJoinClauses(List *joinOrderList)
+ExtractPushdownableSelectClausesFromJoinClauses(List *joinRestricInfoList)
 {
-	List *nonPushdownJoinClauseList = NIL;
+	List *pushdownableClauseList = NIL;
+
+	RestrictInfo *restrictInfo = NULL;
+	foreach_ptr(restrictInfo, joinRestricInfoList)
+	{
+		bool isOuterRestriction = (bms_num_members(restrictInfo->outer_relids) > 0);
+		if (!restrictInfo->can_join && !isOuterRestriction &&
+			restrictInfo->is_pushed_down)
+		{
+			Node *pushdownableClause = (Node *) restrictInfo->clause;
+			pushdownableClauseList = lappend(pushdownableClauseList, pushdownableClause);
+		}
+	}
+
+	return pushdownableClauseList;
+}
+
+
+/*
+ * ExtractApplicableJoinClauseContext returns ApplicableJoinClauseContext which contains
+ * all pushdownable and nonpushdownable clauses from given joinOrderList.
+ */
+static ApplicableJoinClauseContext *
+ExtractApplicableJoinClauseContext(List *joinOrderList)
+{
+	List *pushdownableJoinClauseList = NIL;
+	List *nonPushdownableJoinClauseList = NIL;
 
 	JoinOrderNode *joinOrderNode = NULL;
 	foreach_ptr(joinOrderNode, joinOrderList)
 	{
-		List *joinClauselist = joinOrderNode->joinClauseList;
-		nonPushdownJoinClauseList = list_concat(nonPushdownJoinClauseList,
-												joinClauselist);
+		ApplicableJoinClauseContext *nodeApplicableJoinClauseContext =
+			joinOrderNode->applicableJoinClauseContext;
+
+		/* first node does not contain ApplicableJoinClauseContext */
+		if (nodeApplicableJoinClauseContext == NULL)
+		{
+			continue;
+		}
+		pushdownableJoinClauseList = list_concat_unique(pushdownableJoinClauseList,
+														nodeApplicableJoinClauseContext->
+														pushdownableJoinClauseList);
+		nonPushdownableJoinClauseList = list_concat_unique(nonPushdownableJoinClauseList,
+														   nodeApplicableJoinClauseContext
+														   ->nonPushdownableJoinClauseList);
 	}
 
-	return nonPushdownJoinClauseList;
+	ApplicableJoinClauseContext *applicableJoinClauseContext = palloc0(
+		sizeof(ApplicableJoinClauseContext));
+	applicableJoinClauseContext->joinClauseList = list_concat_copy(
+		pushdownableJoinClauseList, nonPushdownableJoinClauseList);
+	applicableJoinClauseContext->pushdownableJoinClauseList = pushdownableJoinClauseList;
+	applicableJoinClauseContext->nonPushdownableJoinClauseList =
+		nonPushdownableJoinClauseList;
+	return applicableJoinClauseContext;
 }
 
 
@@ -820,10 +868,9 @@ ExtractRestrictionInfosFromPlannerContext(
 															baseRestrictInfo);
 				continue;
 			}
-
-			baseRestrictInfoList = list_append_unique(baseRestrictInfoList,
-													  baseRestrictInfo);
 		}
+		baseRestrictInfoList = list_concat_unique(baseRestrictInfoList,
+												  relOptInfo->baserestrictinfo);
 
 		RestrictInfo *joinRestrictInfo = NULL;
 		foreach_ptr(joinRestrictInfo, relOptInfo->joininfo)
@@ -840,7 +887,6 @@ ExtractRestrictionInfosFromPlannerContext(
 	JoinRestriction *joinRestriction = NULL;
 	foreach_ptr(joinRestriction, joinRestrictionContext->joinRestrictionList)
 	{
-		List *currentJoinRestrictInfoList = NIL;
 		RestrictInfo *joinRestrictInfo = NULL;
 		foreach_ptr(joinRestrictInfo, joinRestriction->joinRestrictInfoList)
 		{
@@ -850,16 +896,13 @@ ExtractRestrictionInfosFromPlannerContext(
 															joinRestrictInfo);
 				continue;
 			}
-
-			currentJoinRestrictInfoList = list_append_unique(currentJoinRestrictInfoList,
-															 joinRestrictInfo);
-
-			joinRestrictInfoList = list_append_unique(joinRestrictInfoList,
-													  joinRestrictInfo);
 		}
 
-		joinRestrictInfoListList = lappend(joinRestrictInfoListList,
-										   currentJoinRestrictInfoList);
+		joinRestrictInfoList = list_concat_unique(joinRestrictInfoList,
+												  joinRestriction->joinRestrictInfoList);
+		joinRestrictInfoListList = list_append_unique(joinRestrictInfoListList,
+													  joinRestriction->
+													  joinRestrictInfoList);
 	}
 
 	RestrictInfoContext *restrictInfoContext = palloc0(sizeof(RestrictInfoContext));
@@ -1878,18 +1921,14 @@ CollectNodeForTable(List *collectTableList, uint32 rangeTableId)
  * not have any select clauses, the function return null.
  */
 static MultiSelect *
-MultiSelectNode(List *pushdownableClauseList, List *nonPushdownableClauseList)
+MultiSelectNode(List *selectClauseList)
 {
 	MultiSelect *selectNode = NULL;
 
-	if (list_length(pushdownableClauseList) > 0 ||
-		list_length(nonPushdownableClauseList) > 0)
+	if (list_length(selectClauseList) > 0)
 	{
 		selectNode = CitusMakeNode(MultiSelect);
-		selectNode->selectClauseList = list_concat_copy(pushdownableClauseList,
-														nonPushdownableClauseList);
-		selectNode->pushdownableSelectClauseList = pushdownableClauseList;
-		selectNode->nonPushdownableSelectClauseList = nonPushdownableClauseList;
+		selectNode->selectClauseList = selectClauseList;
 	}
 
 	return selectNode;

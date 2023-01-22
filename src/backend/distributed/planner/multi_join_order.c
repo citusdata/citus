@@ -69,11 +69,11 @@ static uint32 LargeDataTransferLocation(List *joinOrder);
 static List * TableEntryListDifference(List *lhsTableList, List *rhsTableList);
 static bool ConvertSemiToInnerInJoinInfoContext(JoinInfoContext *joinOrderContext);
 static bool JoinInfoContextHasAntiJoin(JoinInfoContext *joinOrderContext);
-static List * FindJoinClauseForTables(List *joinRestrictInfoListList,
-									  List *generatedEcJoinClauseList,
-									  List *lhsTableIdList,
-									  uint32 rhsTableId,
-									  JoinType joinType);
+static List * FindApplicableJoinClausesForTables(List *joinRestrictInfoListList,
+												 List *generatedEcJoinClauseList,
+												 List *lhsTableIdList,
+												 uint32 rhsTableId,
+												 JoinType joinType);
 static const char * JoinTypeName(JoinType jointype);
 static List * ExtractPushdownJoinRestrictInfos(List *joinRestrictInfoList,
 											   RestrictInfo *joinRestrictInfo,
@@ -382,6 +382,8 @@ ExtractPushdownJoinRestrictInfos(List *restrictInfoListOfJoin,
 	Bitmapset *joinRelids = bms_union(joinRestrictInfo->left_relids,
 									  joinRestrictInfo->right_relids);
 
+	/* todo:aykut joinRelids should be taken from planner context */
+
 	RestrictInfo *restrictInfo = NULL;
 	foreach_ptr(restrictInfo, restrictInfoListOfJoin)
 	{
@@ -398,14 +400,17 @@ ExtractPushdownJoinRestrictInfos(List *restrictInfoListOfJoin,
 
 
 /*
- * FindJoinClauseForTables finds join clause for given left hand side tables and
- * right hand side table.
+ * FindApplicableJoinClausesForTables finds all applicable join clauses for given
+ * left hand side tables and right hand side table. It encapsulates pushdownable
+ * and nonpushdownable parts of the join clauses inside ApplicableJoinClauseContext.
  */
 static List *
-FindJoinClauseForTables(List *joinRestrictInfoListList, List *generatedEcJoinClauseList,
-						List *lhsTableIdList, uint32 rhsTableId, JoinType joinType)
+FindApplicableJoinClausesForTables(List *joinRestrictInfoListList,
+								   List *generatedEcJoinClauseList,
+								   List *lhsTableIdList, uint32 rhsTableId, JoinType
+								   joinType)
 {
-	List *applicableJoinClauseListList = NIL;
+	List *applicableJoinClauseContextList = NIL;
 
 	List *joinRestrictInfoList = NIL;
 	foreach_ptr(joinRestrictInfoList, joinRestrictInfoListList)
@@ -420,13 +425,24 @@ FindJoinClauseForTables(List *joinRestrictInfoListList, List *generatedEcJoinCla
 			{
 				List *pushdownableJoinRestrictInfoList = ExtractPushdownJoinRestrictInfos(
 					joinRestrictInfoList, joinRestrictInfo, joinType);
+				List *pushdownableJoinRestrictClauseList =
+					get_all_actual_clauses(pushdownableJoinRestrictInfoList);
 				List *nonPushdownableJoinRestrictInfoList = list_difference(
 					joinRestrictInfoList,
 					pushdownableJoinRestrictInfoList);
 				List *nonPushdownableJoinRestrictClauseList =
 					get_all_actual_clauses(nonPushdownableJoinRestrictInfoList);
-				applicableJoinClauseListList = lappend(applicableJoinClauseListList,
-													   nonPushdownableJoinRestrictClauseList);
+
+				ApplicableJoinClauseContext *applicableJoinClauseContext = palloc0(
+					sizeof(ApplicableJoinClauseContext));
+				applicableJoinClauseContext->joinClauseList = get_all_actual_clauses(
+					joinRestrictInfoList);
+				applicableJoinClauseContext->pushdownableJoinClauseList =
+					pushdownableJoinRestrictClauseList;
+				applicableJoinClauseContext->nonPushdownableJoinClauseList =
+					nonPushdownableJoinRestrictClauseList;
+				applicableJoinClauseContextList = lappend(applicableJoinClauseContextList,
+														  applicableJoinClauseContext);
 			}
 		}
 	}
@@ -439,13 +455,30 @@ FindJoinClauseForTables(List *joinRestrictInfoListList, List *generatedEcJoinCla
 		{
 			if (IsApplicableJoinClause(lhsTableIdList, rhsTableId, ecClause))
 			{
-				applicableJoinClauseListList = lappend(applicableJoinClauseListList,
-													   list_make1(ecClause));
+				List *generatedJoinClauseList = list_make1(ecClause);
+				ApplicableJoinClauseContext *applicableJoinClauseContext = palloc0(
+					sizeof(ApplicableJoinClauseContext));
+				applicableJoinClauseContext->joinClauseList = generatedJoinClauseList;
+				applicableJoinClauseContext->pushdownableJoinClauseList = NIL;
+				applicableJoinClauseContext->nonPushdownableJoinClauseList =
+					generatedJoinClauseList;
+				applicableJoinClauseContextList = lappend(applicableJoinClauseContextList,
+														  applicableJoinClauseContext);
 			}
 		}
 	}
 
-	return applicableJoinClauseListList;
+	/* add an empty join clause list to be evaluated by cartesian rules */
+	List *emptyClauseList = NIL;
+	ApplicableJoinClauseContext *emptyApplicableJoinClauseContext = palloc0(
+		sizeof(ApplicableJoinClauseContext));
+	emptyApplicableJoinClauseContext->joinClauseList = emptyClauseList;
+	emptyApplicableJoinClauseContext->pushdownableJoinClauseList = emptyClauseList;
+	emptyApplicableJoinClauseContext->nonPushdownableJoinClauseList = emptyClauseList;
+	applicableJoinClauseContextList = lappend(applicableJoinClauseContextList,
+											  emptyApplicableJoinClauseContext);
+
+	return applicableJoinClauseContextList;
 }
 
 
@@ -989,13 +1022,12 @@ EvaluateJoinRules(List *joinedTableList, JoinOrderNode *currentJoinNode,
 	 */
 	List *joinedTableIdList = RangeTableIdList(joinedTableList);
 	uint32 candidateTableId = candidateTable->rangeTableId;
-	List *applicableJoinClauseListList = FindJoinClauseForTables(joinRestrictInfoListList,
-																 generatedEcJoinClauseList,
-																 joinedTableIdList,
-																 candidateTableId,
-																 joinType);
-	List *emptyClauseList = NIL;
-	applicableJoinClauseListList = lappend(applicableJoinClauseListList, emptyClauseList);
+	List *applicableJoinClauseContextList = FindApplicableJoinClausesForTables(
+		joinRestrictInfoListList,
+		generatedEcJoinClauseList,
+		joinedTableIdList,
+		candidateTableId,
+		joinType);
 
 	/* we then evaluate all join rules in order */
 	for (uint32 ruleIndex = lowestValidIndex; ruleIndex <= highestValidIndex; ruleIndex++)
@@ -1003,9 +1035,11 @@ EvaluateJoinRules(List *joinedTableList, JoinOrderNode *currentJoinNode,
 		JoinRuleType ruleType = (JoinRuleType) ruleIndex;
 		RuleEvalFunction ruleEvalFunction = JoinRuleEvalFunction(ruleType);
 
-		List *applicableJoinClauseList = NIL;
-		foreach_ptr(applicableJoinClauseList, applicableJoinClauseListList)
+		ApplicableJoinClauseContext *applicableJoinClauseContext = NULL;
+		foreach_ptr(applicableJoinClauseContext, applicableJoinClauseContextList)
 		{
+			List *applicableJoinClauseList =
+				applicableJoinClauseContext->nonPushdownableJoinClauseList;
 			nextJoinNode = (*ruleEvalFunction)(currentJoinNode,
 											   candidateTable,
 											   applicableJoinClauseList,
@@ -1015,7 +1049,9 @@ EvaluateJoinRules(List *joinedTableList, JoinOrderNode *currentJoinNode,
 			if (nextJoinNode != NULL)
 			{
 				nextJoinNode->joinType = joinType;
-				nextJoinNode->joinClauseList = applicableJoinClauseList;
+				nextJoinNode->joinClauseList =
+					applicableJoinClauseContext->nonPushdownableJoinClauseList;
+				nextJoinNode->applicableJoinClauseContext = applicableJoinClauseContext;
 				return nextJoinNode;
 			}
 		}
@@ -1542,6 +1578,7 @@ MakeJoinOrderNode(TableEntry *tableEntry, JoinRuleType joinRuleType,
 	joinOrderNode->partitionColumnList = partitionColumnList;
 	joinOrderNode->partitionMethod = partitionMethod;
 	joinOrderNode->joinClauseList = NIL;
+	joinOrderNode->applicableJoinClauseContext = NULL;
 	joinOrderNode->anchorTable = anchorTable;
 
 	return joinOrderNode;

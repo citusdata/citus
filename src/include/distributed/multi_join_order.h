@@ -61,6 +61,18 @@ typedef struct TableEntry
 
 
 /*
+ * ApplicableJoinClauseContext stores pushdownable and nonpushdownable
+ * parts of applicable join clauses in separate lists.
+ */
+typedef struct ApplicableJoinClauseContext
+{
+	List *joinClauseList;
+	List *pushdownableJoinClauseList;
+	List *nonPushdownableJoinClauseList;
+} ApplicableJoinClauseContext;
+
+
+/*
  * JoinOrderNode represents an element in the join order list; and this list
  * keeps the total join order for a distributed query. The first node in this
  * list later becomes the leftmost table in the join tree, and the successive
@@ -80,6 +92,7 @@ typedef struct JoinOrderNode
 
 	char partitionMethod;
 	List *joinClauseList;       /* not relevant for the first table */
+	ApplicableJoinClauseContext *applicableJoinClauseContext; /* not relevant for the first table */
 	TableEntry *anchorTable;
 } JoinOrderNode;
 
