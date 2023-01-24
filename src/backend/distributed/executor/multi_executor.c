@@ -96,7 +96,6 @@ int ExecutorLevel = 0;
 /* local function forward declarations */
 static Relation StubRelation(TupleDesc tupleDescriptor);
 static char * GetObjectTypeString(ObjectType objType);
-static bool AlterTableConstraintCheck(QueryDesc *queryDesc);
 static List * FindCitusCustomScanStates(PlanState *planState);
 static bool CitusCustomScanStateWalker(PlanState *planState,
 									   List **citusCustomScanStates);
@@ -157,8 +156,6 @@ void
 CitusExecutorRun(QueryDesc *queryDesc,
 				 ScanDirection direction, uint64 count, bool execute_once)
 {
-	DestReceiver *dest = queryDesc->dest;
-
 	ParamListInfo savedBoundParams = executorBoundParams;
 
 	/*
@@ -186,57 +183,30 @@ CitusExecutorRun(QueryDesc *queryDesc,
 			InstrStartNode(totalTime);
 		}
 
+		/* switch into per-query memory context before calling PreExecScan */
+		MemoryContext oldcontext = MemoryContextSwitchTo(
+			queryDesc->estate->es_query_cxt);
+
 		/*
-		 * Disable execution of ALTER TABLE constraint validation queries. These
-		 * constraints will be validated in worker nodes, so running these queries
-		 * from the coordinator would be redundant.
-		 *
-		 * For example, ALTER TABLE ... ATTACH PARTITION checks that the new
-		 * partition doesn't violate constraints of the parent table, which
-		 * might involve running some SELECT queries.
-		 *
-		 * Ideally we'd completely skip these checks in the coordinator, but we don't
-		 * have any means to tell postgres to skip the checks. So the best we can do is
-		 * to not execute the queries and return an empty result set, as if this table has
-		 * no rows, so no constraints will be violated.
+		 * Call PreExecScan for all citus custom scan nodes prior to starting the
+		 * postgres exec scan to give some citus scan nodes some time to initialize
+		 * state that would be too late if it were to initialize when the first tuple
+		 * would need to return.
 		 */
-		if (AlterTableConstraintCheck(queryDesc))
+		List *citusCustomScanStates = FindCitusCustomScanStates(queryDesc->planstate);
+		CitusScanState *citusScanState = NULL;
+		foreach_ptr(citusScanState, citusCustomScanStates)
 		{
-			EState *estate = queryDesc->estate;
-
-			estate->es_processed = 0;
-
-			/* start and shutdown tuple receiver to simulate empty result */
-			dest->rStartup(queryDesc->dest, CMD_SELECT, queryDesc->tupDesc);
-			dest->rShutdown(dest);
-		}
-		else
-		{
-			/* switch into per-query memory context before calling PreExecScan */
-			MemoryContext oldcontext = MemoryContextSwitchTo(
-				queryDesc->estate->es_query_cxt);
-
-			/*
-			 * Call PreExecScan for all citus custom scan nodes prior to starting the
-			 * postgres exec scan to give some citus scan nodes some time to initialize
-			 * state that would be too late if it were to initialize when the first tuple
-			 * would need to return.
-			 */
-			List *citusCustomScanStates = FindCitusCustomScanStates(queryDesc->planstate);
-			CitusScanState *citusScanState = NULL;
-			foreach_ptr(citusScanState, citusCustomScanStates)
+			if (citusScanState->PreExecScan)
 			{
-				if (citusScanState->PreExecScan)
-				{
-					citusScanState->PreExecScan(citusScanState);
-				}
+				citusScanState->PreExecScan(citusScanState);
 			}
-
-			/* postgres will switch here again and will restore back on its own */
-			MemoryContextSwitchTo(oldcontext);
-
-			standard_ExecutorRun(queryDesc, direction, count, execute_once);
 		}
+
+		/* postgres will switch here again and will restore back on its own */
+		MemoryContextSwitchTo(oldcontext);
+
+		standard_ExecutorRun(queryDesc, direction, count, execute_once);
 
 		if (totalTime)
 		{
@@ -834,44 +804,6 @@ GetObjectTypeString(ObjectType objType)
 			return "object";
 		}
 	}
-}
-
-
-/*
- * AlterTableConstraintCheck returns if the given query is an ALTER TABLE
- * constraint check query.
- *
- * Postgres uses SPI to execute these queries. To see examples of how these
- * constraint check queries look like, see RI_Initial_Check() and RI_Fkey_check().
- */
-static bool
-AlterTableConstraintCheck(QueryDesc *queryDesc)
-{
-	if (!AlterTableInProgress())
-	{
-		return false;
-	}
-
-	/*
-	 * These queries are one or more SELECT queries, where postgres checks
-	 * their results either for NULL values or existence of a row at all.
-	 */
-	if (queryDesc->plannedstmt->commandType != CMD_SELECT)
-	{
-		return false;
-	}
-
-	/*
-	 * While an ALTER TABLE is in progress, we might do SELECTs on some
-	 * catalog tables too. For example, when dropping a column, citus_drop_trigger()
-	 * runs some SELECTs on catalog tables. These are not constraint check queries.
-	 */
-	if (!IsCitusPlan(queryDesc->plannedstmt->planTree))
-	{
-		return false;
-	}
-
-	return true;
 }
 
 
