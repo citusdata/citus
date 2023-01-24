@@ -40,9 +40,6 @@ clean-full:
 
 install-downgrades:
 	$(MAKE) -C src/backend/distributed/ install-downgrades
-install-all: install-headers install-pg_send_cancellation
-	$(MAKE) -C src/backend/columnar/ install-all
-	$(MAKE) -C src/backend/distributed/ install-all
 
 # build citus_send_cancellation binary
 pg_send_cancellation:
@@ -64,8 +61,7 @@ check-style:
 	cd ${citus_abs_top_srcdir} && citus_indent --quiet --check
 .PHONY: reindent check-style
 
-# depend on install-all so that downgrade scripts are installed as well
-check: all install-all
+check: all
 	$(MAKE) -C src/test/regress check-full
 
-.PHONY: all check clean install install-downgrades install-all
+.PHONY: all check clean install install-downgrades

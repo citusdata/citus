@@ -79,16 +79,14 @@ ifneq (,$(SQL_Po_files))
 include $(SQL_Po_files)
 endif
 
-.PHONY: clean-full install install-downgrades install-all
+.PHONY: clean-full install install-downgrades
 
 cleanup-before-install:
 	rm -f $(DESTDIR)$(datadir)/$(datamoduledir)/citus.control
 	rm -f $(DESTDIR)$(datadir)/$(datamoduledir)/citus--*
 
+# install downgrades after cleanup is over
 install: cleanup-before-install
-
-# install and install-downgrades should be run sequentially
-install-all: install
 	$(MAKE) install-downgrades
 
 install-downgrades: $(generated_downgrade_sql_files)
