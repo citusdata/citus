@@ -65,6 +65,20 @@ SELECT con.conname
 (1 row)
 
 ALTER TABLE AT_AddConstNoName.tbl DROP CONSTRAINT my_index;
+-- Check "ADD UNIQUE USING INDEX ..."
+CREATE UNIQUE INDEX my_index ON AT_AddConstNoName.tbl(col1);
+ALTER TABLE AT_AddConstNoName.tbl ADD UNIQUE USING INDEX my_index;
+SELECT con.conname
+    FROM pg_catalog.pg_constraint con
+      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
+              WHERE rel.relname = 'tbl';
+ conname
+---------------------------------------------------------------------
+ my_index
+(1 row)
+
+ALTER TABLE AT_AddConstNoName.tbl DROP CONSTRAINT my_index;
 -- Check "ADD PRIMARY KEY DEFERRABLE"
 ALTER TABLE AT_AddConstNoName.products ADD PRIMARY KEY(product_no) DEFERRABLE;
 \c - - :public_worker_1_host :worker_1_port

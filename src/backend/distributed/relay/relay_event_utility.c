@@ -180,7 +180,7 @@ RelayEventExtendNames(Node *parseTree, char *schemaName, uint64 shardId)
 						constraint->contype != CONSTR_CHECK)
 					{
 						/*
-						 * constraint->conname could be empty in the case of add constraint USING INDEX.
+						 * constraint->conname could be empty in the case of ADD {PRIMARY KEY, UNIQUE} USING INDEX.
 						 * In this case, already extended index name will be used by postgres.
 						 */
 						if (constraint->conname != NULL)

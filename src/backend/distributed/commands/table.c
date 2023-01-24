@@ -1270,8 +1270,8 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 				}
 			}
 			/*
-			 * When constraint->indexname is not NULL we are handling an add constraint USING INDEX command. In this case
-			 * we do not have to create a name. If both are NULL then we create a constraint name.
+			 * When constraint->indexname is not NULL we are handling an ADD {PRIMARY KEY, UNIQUE} USING INDEX command. In this case
+			 * we do not have to create a name and change the command. The index name will be used by the postgres.
 			 */
 			else if (constraint->conname == NULL && constraint->indexname == NULL)
 			{
