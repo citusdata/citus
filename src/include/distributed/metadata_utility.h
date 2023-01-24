@@ -353,7 +353,6 @@ extern void EnsureRelationExists(Oid relationId);
 extern bool RegularTable(Oid relationId);
 extern bool TableEmpty(Oid tableId);
 extern bool IsForeignTable(Oid relationId);
-extern bool RelationUsesIdentityColumns(TupleDesc relationDesc);
 extern char * ConstructQualifiedShardName(ShardInterval *shardInterval);
 extern uint64 GetFirstShardId(Oid relationId);
 extern Datum StringToDatum(char *inputString, Oid dataType);
