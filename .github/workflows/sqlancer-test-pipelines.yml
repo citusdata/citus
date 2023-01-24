@@ -1,0 +1,120 @@
+name: Run sqlancer on release branch
+
+on:
+  push:
+    branches: "**"
+  workflow_dispatch:
+    inputs:
+      citus_release:
+        default: release-11.1
+      timeout:
+        default: 1m
+
+env:
+  timeout: ${{ inputs.timeout }}
+  citus_release: ${{ inputs.citus_release }}
+
+jobs:
+
+  run-sqlancer-test-on-citus:
+    runs-on: ubuntu-latest
+    container:
+      image: 'citus/exttester:15.1-dev-895be1f'
+
+    steps:
+      - name: Checkout citus release
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ inputs.citus_release }}
+          repository: citusdata/citus
+
+      - name: Configure
+        run: |
+          echo "Current Shell:$0"
+          echo "GCC Version: $(gcc --version)"
+          ./configure 2>&1 | tee output.log
+
+      - name: Make install-all
+        run: |
+          make install-all -sj$(cat /proc/cpuinfo | grep "core id" | wc -l) 2>&1 | tee -a output.log
+
+      - name: Setup Maven
+        uses: s4u/setup-maven-action@v1.6.0
+        with:
+          java-version: 11
+
+      - name: Checkout Sqlancer
+        uses: actions/checkout@v3
+        with:
+          ref: master
+          repository: sqlancer/sqlancer
+
+      - name: Build SQLancer
+        run: mvn -B package -DskipTests=true
+
+      - name: Set up Citus cluster
+        run: |
+          mkdir -p citus/coordinator citus/worker1 citus/worker2
+          chown -R circleci:circleci citus
+          gosu circleci initdb -D citus/coordinator
+          gosu circleci initdb -D citus/worker1
+          gosu circleci initdb -D citus/worker2
+          gosu circleci echo "shared_preload_libraries = 'citus'" >> citus/coordinator/postgresql.conf
+          gosu circleci echo "shared_preload_libraries = 'citus'" >> citus/worker1/postgresql.conf
+          gosu circleci echo "shared_preload_libraries = 'citus'" >> citus/worker2/postgresql.conf
+          gosu circleci pg_ctl -D citus/coordinator -o "-p 9700" -l citus/coordinator_logfile start
+          gosu circleci pg_ctl -D citus/worker1 -o "-p 9701" -l citus/worker1_logfile start
+          gosu circleci ls citus/worker1
+          gosu circleci pg_ctl -D citus/worker2 -o "-p 9702" -l citus/worker2_logfile start
+          gosu circleci psql -c "CREATE ROLE sqlancer SUPERUSER LOGIN CREATEDB PASSWORD 'sqlancer';" -p 9700 -d postgres
+          gosu circleci createdb test -p 9700
+          gosu circleci psql -c "CREATE ROLE sqlancer SUPERUSER LOGIN CREATEDB PASSWORD 'sqlancer';" -p 9701 -d postgres
+          gosu circleci createdb test -p 9701
+          gosu circleci psql -c "CREATE ROLE sqlancer SUPERUSER LOGIN CREATEDB PASSWORD 'sqlancer';" -p 9702 -d postgres
+          gosu circleci createdb test -p 9702
+          gosu circleci psql -c "CREATE EXTENSION citus;" -p 9700 -d test
+          gosu circleci psql -c "CREATE EXTENSION citus;" -p 9701 -d test
+          gosu circleci psql -c "CREATE EXTENSION citus;" -p 9702 -d test
+          gosu circleci psql -c "SELECT * from citus_add_node('localhost', 9701);" -p 9700 -d test
+          gosu circleci psql -c "SELECT * from citus_add_node('localhost', 9702);" -p 9700 -d test
+      - name: Run Tests
+        run: CITUS_AVAILABLE=true mvn -Dtest=TestCitus test
+
+      - name: Publish Logs
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v3
+        with:
+          name: logs
+          path: |
+            logs
+            citus/coordinator_logfile
+            citus/worker1_logfile
+            citus/worker2_logfile
+
+      - name: Publish Summary
+        if: ${{ always() }}
+        run: |
+          declare -A errors_table
+
+          while read line
+          do
+              IFS=':'
+              read -a delimitedArr <<< "$line"
+
+              file=${delimitedArr[0]}
+              category=${delimitedArr[2]}
+              error=${delimitedArr[3]}
+
+              if [[ -z "${errors_table[$error]}" ]]
+              then
+                  errors_table["$error"]="$file "
+              else
+                  errors_table["$error"]="${errors_table[$error]} $file "
+              fi
+
+          done < <(grep -noR "ERROR:.*" logs/citus)
+
+          for key in "${!errors_table[@]}"; do
+              echo "### $key" >> $GITHUB_STEP_SUMMARY
+              echo "${errors_table[$key]}"  >> $GITHUB_STEP_SUMMARY
+          done
