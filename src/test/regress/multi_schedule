@@ -94,7 +94,7 @@ test: multi_dropped_column_aliases foreign_key_restriction_enforcement
 test: binary_protocol
 test: alter_table_set_access_method
 test: alter_distributed_table
-test: issue_5248 issue_5099
+test: issue_5248 issue_5099 issue_6543
 test: object_propagation_debug
 test: undistribute_table
 test: run_command_on_all_nodes

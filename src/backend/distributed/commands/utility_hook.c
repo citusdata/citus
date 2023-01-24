@@ -594,7 +594,9 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 		 * Citus intervening. The only exception is partition column drop, in
 		 * which case we error out. Advanced Citus users use this to implement their
 		 * own DDL propagation. We also use it to avoid re-propagating DDL commands
-		 * when changing MX tables on workers.
+		 * when changing MX tables on workers. Below, we also make sure that DDL
+		 * commands don't run queries that might get intercepted by Citus and error
+		 * out during planning, specifically we skip validation in foreign keys.
 		 */
 
 		if (IsA(parsetree, AlterTableStmt))
@@ -613,7 +615,7 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 				 * Note validation is done on the shard level when DDL propagation
 				 * is enabled. The following eagerly executes some tasks on workers.
 				 */
-				SkipForeignKeyValidationIfConstraintIsFkey(alterTableStmt);
+				SkipForeignKeyValidationIfConstraintIsFkey(alterTableStmt, false);
 			}
 		}
 	}
