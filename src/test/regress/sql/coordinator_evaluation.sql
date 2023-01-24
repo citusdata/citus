@@ -228,8 +228,8 @@ SELECT * FROM reference_table ORDER BY 1;
 CREATE TABLE ref (a int);
 SELECT create_reference_table('ref');
 UPDATE ref SET a = 1 RETURNING
-	(SELECT pg_catalog.max(wal_bytes) FROM pg_catalog.pg_stat_wal)
-         as c3;
+	(SELECT pg_catalog.max(latest_end_time) FROM pg_catalog.pg_stat_wal_receiver)
+        as c3;
 
 SET client_min_messages TO ERROR;
 DROP SCHEMA coordinator_evaluation CASCADE;
