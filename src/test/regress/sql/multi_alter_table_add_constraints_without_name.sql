@@ -36,6 +36,20 @@ SELECT con.conname
 
 \c - - :master_host :master_port
 ALTER TABLE AT_AddConstNoName.products DROP CONSTRAINT products_pkey;
+-- Check "ADD PRIMARY KEY USING INDEX ..."
+
+CREATE TABLE  AT_AddConstNoName.tbl(col1 int, col2 int);
+SELECT create_distributed_table('AT_AddConstNoName.tbl', 'col1');
+CREATE UNIQUE INDEX my_index ON AT_AddConstNoName.tbl(col1);
+ALTER TABLE AT_AddConstNoName.tbl ADD PRIMARY KEY USING INDEX my_index;
+
+SELECT con.conname
+    FROM pg_catalog.pg_constraint con
+      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
+              WHERE rel.relname = 'tbl';
+
+ALTER TABLE AT_AddConstNoName.tbl DROP CONSTRAINT my_index;
 
 -- Check "ADD PRIMARY KEY DEFERRABLE"
 ALTER TABLE AT_AddConstNoName.products ADD PRIMARY KEY(product_no) DEFERRABLE;

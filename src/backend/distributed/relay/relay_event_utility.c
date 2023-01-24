@@ -150,6 +150,7 @@ RelayEventExtendNames(Node *parseTree, char *schemaName, uint64 shardId)
 				if (command->subtype == AT_AddConstraint)
 				{
 					Constraint *constraint = (Constraint *) command->def;
+
 					char **constraintName = &(constraint->conname);
 					const bool missingOk = false;
 					relationId = RangeVarGetRelid(alterTableStmt->relation,
@@ -178,7 +179,14 @@ RelayEventExtendNames(Node *parseTree, char *schemaName, uint64 shardId)
 					if (!PartitionedTable(relationId) ||
 						constraint->contype != CONSTR_CHECK)
 					{
-						AppendShardIdToName(constraintName, shardId);
+						/*
+						 * constraint->conname could be empty in the case of add constraint USING INDEX.
+						 * In this case, already extended index name will be used by postgres.
+						 */
+						if (constraint->conname != NULL)
+						{
+							AppendShardIdToName(constraintName, shardId);
+						}
 					}
 				}
 				else if (command->subtype == AT_DropConstraint ||
