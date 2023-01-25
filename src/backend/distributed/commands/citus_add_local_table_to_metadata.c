@@ -46,6 +46,7 @@
 #include "utils/lsyscache.h"
 #include "utils/ruleutils.h"
 #include "utils/syscache.h"
+#include "foreign/foreign.h"
 
 
 /*
@@ -60,6 +61,8 @@ static void citus_add_local_table_to_metadata_internal(Oid relationId,
 static void ErrorIfAddingPartitionTableToMetadata(Oid relationId);
 static void ErrorIfUnsupportedCreateCitusLocalTable(Relation relation);
 static void ErrorIfUnsupportedCitusLocalTableKind(Oid relationId);
+static void EnsureIfFdwHasTableName(Oid relationId);
+static void ErrorIfOptionListHasNoTableName(List *optionList);
 static void NoticeIfAutoConvertingLocalTables(bool autoConverted, Oid relationId);
 static CascadeOperationType GetCascadeTypeForCitusLocalTables(bool autoConverted);
 static List * GetShellTableDDLEventsForCitusLocalTable(Oid relationId);
@@ -493,7 +496,7 @@ ErrorIfUnsupportedCreateCitusLocalTable(Relation relation)
 	ErrorIfUnsupportedCitusLocalTableKind(relationId);
 	EnsureTableNotDistributed(relationId);
 	ErrorIfRelationHasUnsupportedTrigger(relationId);
-
+	EnsureIfFdwHasTableName(relationId);
 	/*
 	 * When creating other citus table types, we don't need to check that case as
 	 * EnsureTableNotDistributed already errors out if the given relation implies
@@ -506,6 +509,50 @@ ErrorIfUnsupportedCreateCitusLocalTable(Relation relation)
 
 	/* we do not support policies in citus community */
 	ErrorIfUnsupportedPolicy(relation);
+}
+
+static void
+EnsureIfFdwHasTableName(Oid relationId)
+{
+	char relationKind = get_rel_relkind(relationId);
+	if (relationKind == RELKIND_FOREIGN_TABLE)
+	{
+		ForeignTable *foreignTable = GetForeignTable(relationId);
+
+		/*
+		 * Error out with a hint if the foreign table is using postgres_fdw and
+		 * the option table_name is not provided.
+		 * Citus relays all the Citus local foreign table logic to the placement of the
+		 * Citus local table. If table_name is NOT provided, Citus would try to talk to
+		 * the foreign postgres table over the shard's table name, which would not exist
+		 * on the remote server.
+		 */
+		ErrorIfOptionListHasNoTableName(foreignTable->options);
+	}
+}
+
+/*
+ * ErrorIfOptionListHasNoTableName gets an option list (DefElem) and errors out
+ * if the list does not contain a table_name element.
+ */
+static void
+ErrorIfOptionListHasNoTableName(List *optionList)
+{
+	char *table_nameString = "table_name";
+	DefElem *option = NULL;
+	foreach_ptr(option, optionList)
+	{
+		char *optionName = option->defname;
+		if (strcmp(optionName, table_nameString) == 0)
+		{
+			return;
+		}
+	}
+
+	ereport(ERROR, (errmsg(
+						"table_name option must be provided when using postgres_fdw with Citus"),
+					errhint("Provide the option \"table_name\" with value target table's"
+							" name")));
 }
 
 

@@ -116,9 +116,6 @@ static void DecrementUtilityHookCountersIfNecessary(Node *parsetree);
 static bool IsDropSchemaOrDB(Node *parsetree);
 static bool ShouldCheckUndistributeCitusLocalTables(void);
 static bool ShouldAddNewTableToMetadata(Node *parsetree);
-static bool ServerUsesPostgresFDW(char *serverName);
-static void ErrorIfOptionListHasNoTableName(List *optionList);
-
 
 /*
  * ProcessUtilityParseTree is a convenience method to create a PlannedStmt out of
@@ -800,18 +797,6 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 
 		CreateStmt *createTableStmt = (CreateStmt *) (&createForeignTableStmt->base);
 
-		/*
-		 * Error out with a hint if the foreign table is using postgres_fdw and
-		 * the option table_name is not provided.
-		 * Citus relays all the Citus local foreign table logic to the placement of the
-		 * Citus local table. If table_name is NOT provided, Citus would try to talk to
-		 * the foreign postgres table over the shard's table name, which would not exist
-		 * on the remote server.
-		 */
-		if (ServerUsesPostgresFDW(createForeignTableStmt->servername))
-		{
-			ErrorIfOptionListHasNoTableName(createForeignTableStmt->options);
-		}
 
 		PostprocessCreateTableStmt(createTableStmt, queryString);
 	}
@@ -1099,51 +1084,6 @@ ShouldAddNewTableToMetadata(Node *parsetree)
 
 	return false;
 }
-
-
-/*
- * ServerUsesPostgresFDW gets a foreign server name and returns true if the FDW that
- * the server depends on is postgres_fdw. Returns false otherwise.
- */
-static bool
-ServerUsesPostgresFDW(char *serverName)
-{
-	ForeignServer *server = GetForeignServerByName(serverName, false);
-	ForeignDataWrapper *fdw = GetForeignDataWrapper(server->fdwid);
-
-	if (strcmp(fdw->fdwname, "postgres_fdw") == 0)
-	{
-		return true;
-	}
-
-	return false;
-}
-
-
-/*
- * ErrorIfOptionListHasNoTableName gets an option list (DefElem) and errors out
- * if the list does not contain a table_name element.
- */
-static void
-ErrorIfOptionListHasNoTableName(List *optionList)
-{
-	char *table_nameString = "table_name";
-	DefElem *option = NULL;
-	foreach_ptr(option, optionList)
-	{
-		char *optionName = option->defname;
-		if (strcmp(optionName, table_nameString) == 0)
-		{
-			return;
-		}
-	}
-
-	ereport(ERROR, (errmsg(
-						"table_name option must be provided when using postgres_fdw with Citus"),
-					errhint("Provide the option \"table_name\" with value target table's"
-							" name")));
-}
-
 
 /*
  * NotifyUtilityHookConstraintDropped sets ConstraintDropped to true to tell us
