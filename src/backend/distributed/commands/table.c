@@ -3336,8 +3336,6 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 
 			case AT_AddConstraint:
 			{
-				Constraint *constraint = (Constraint *) command->def;
-
 				/* we only allow constraints if they are only subcommand */
 				if (commandList->length > 1)
 				{
