@@ -15,7 +15,7 @@ template_downgrade_sql_files = $(patsubst $(citus_abs_srcdir)/sql/downgrades/%,%
 generated_sql_files = $(patsubst %,$(citus_abs_srcdir)/build/%,$(template_sql_files))
 generated_downgrade_sql_files += $(patsubst %,$(citus_abs_srcdir)/build/sql/%,$(template_downgrade_sql_files))
 # All citus--*.sql files that are used to upgrade between versions
-DATA_built = $(generated_sql_files)
+DATA_built = $(generated_sql_files) $(generated_downgrade_sql_files)
 
 # directories with source files
 SUBDIRS = . commands connection ddl deparser executor metadata operations planner progress relay safeclib shardsplit test transaction utils worker clock
@@ -43,7 +43,7 @@ include $(citus_top_builddir)/Makefile.global
 # make sure citus_version.o is recompiled whenever any change is made to the binary or any
 # other artifact being installed to reflect the correct gitref for every build
 CITUS_VERSION_INVALIDATE := $(filter-out utils/citus_version.o,$(OBJS))
-CITUS_VERSION_INVALIDATE += $(generated_sql_files)
+CITUS_VERSION_INVALIDATE += $(generated_sql_files) $(generated_downgrade_sql_files)
 ifneq ($(wildcard $(citus_top_builddir)/.git/.*),)
         CITUS_VERSION_INVALIDATE += $(citus_top_builddir)/.git/index
 endif
@@ -85,9 +85,7 @@ cleanup-before-install:
 	rm -f $(DESTDIR)$(datadir)/$(datamoduledir)/citus.control
 	rm -f $(DESTDIR)$(datadir)/$(datamoduledir)/citus--*
 
-# install downgrades after cleanup is over
 install: cleanup-before-install
-	$(MAKE) install-downgrades
 
 install-downgrades: $(generated_downgrade_sql_files)
 	$(INSTALL_DATA) $(generated_downgrade_sql_files) '$(DESTDIR)$(datadir)/$(datamoduledir)/'
