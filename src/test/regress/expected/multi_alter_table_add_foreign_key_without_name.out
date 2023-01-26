@@ -251,6 +251,34 @@ SELECT con.conname, con.confupdtype, con.confdeltype, con.confmatchtype
 \c - - :master_host :master_port
 SET SEARCH_PATH = at_add_fk;
 ALTER TABLE  referencing_table DROP CONSTRAINT referencing_table_ref_id_fkey;
+-- test NOT VALID
+ALTER TABLE referencing_table ADD FOREIGN KEY(ref_id) REFERENCES referenced_table(id) NOT VALID;
+SELECT  con.conname, con.convalidated
+  FROM pg_catalog.pg_constraint con
+      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
+              WHERE rel.relname = 'referencing_table';
+            conname            | convalidated
+---------------------------------------------------------------------
+ referencing_table_ref_id_fkey | f
+(1 row)
+
+\c - - :public_worker_1_host :worker_1_port
+SELECT con.conname, con.convalidated
+    FROM pg_catalog.pg_constraint con
+      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
+              WHERE rel.relname LIKE 'referencing_table%' ORDER BY con.conname ASC;
+                conname                | convalidated
+---------------------------------------------------------------------
+ referencing_table_ref_id_fkey         | f
+ referencing_table_ref_id_fkey_1770041 | f
+ referencing_table_ref_id_fkey_1770043 | f
+(3 rows)
+
+\c - - :master_host :master_port
+SET SEARCH_PATH = at_add_fk;
+ALTER TABLE  referencing_table DROP CONSTRAINT referencing_table_ref_id_fkey;
 -- test ON DELETE NO ACTION + DEFERABLE + INITIALLY DEFERRED
 ALTER TABLE referencing_table ADD FOREIGN KEY(ref_id) REFERENCES referenced_table(id) ON DELETE NO ACTION DEFERRABLE INITIALLY DEFERRED;
 SELECT  con.conname, con.confupdtype, con.confdeltype, con.confmatchtype
