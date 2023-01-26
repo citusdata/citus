@@ -125,7 +125,11 @@ def copy_test_files(config):
         with open(scheduleName) as file:
             lines = file.readlines()
             for line in lines:
-                colon_index = line.index(":")
+                colon_index = line.find(":")
+                # skip empty lines
+                if colon_index == -1:
+                    continue
+
                 line = line[colon_index + 1 :].strip()
                 test_names = line.split(" ")
                 copy_test_files_with_names(test_names, sql_dir_path, expected_dir_path, config)
