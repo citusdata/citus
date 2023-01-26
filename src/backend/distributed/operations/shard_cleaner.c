@@ -728,11 +728,6 @@ TryDropSubscriptionOutsideTransaction(char *subscriptionName,
 		}
 	}
 
-	PQclear(result);
-	ForgetResults(connection);
-	RemoteTransactionCommit(connection);
-	ResetRemoteTransaction(connection);
-
 	StringInfo alterQuery = makeStringInfo();
 	appendStringInfo(alterQuery,
 					 "ALTER SUBSCRIPTION %s SET (slot_name = NONE)",
@@ -745,9 +740,31 @@ TryDropSubscriptionOutsideTransaction(char *subscriptionName,
 
 	List *dropCommandList = list_make3("SET LOCAL lock_timeout TO '1s'",
 									   alterQuery->data, dropQuery->data);
-	bool success = SendOptionalCommandListToWorkerOutsideTransactionWithConnection(
-		connection,
-		dropCommandList);
+
+	bool success = true;
+	const char *commandString = NULL;
+	foreach_ptr(commandString, dropCommandList)
+	{
+		if (ExecuteOptionalRemoteCommand(connection, commandString, NULL) != 0)
+		{
+			success = false;
+			break;
+		}
+	}
+
+	PQclear(result);
+	ForgetResults(connection);
+
+	if (success)
+	{
+		RemoteTransactionCommit(connection);
+	}
+	else
+	{
+		RemoteTransactionAbort(connection);
+	}
+
+	ResetRemoteTransaction(connection);
 
 	return success;
 }
