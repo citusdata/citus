@@ -547,7 +547,8 @@ extern List * PreprocessAlterTableMoveAllStmt(Node *node, const char *queryStrin
 											  ProcessUtilityContext processUtilityContext);
 extern List * PreprocessAlterTableSchemaStmt(Node *node, const char *queryString,
 											 ProcessUtilityContext processUtilityContext);
-extern void SkipForeignKeyValidationIfConstraintIsFkey(AlterTableStmt *alterTableStmt);
+extern void SkipForeignKeyValidationIfConstraintIsFkey(AlterTableStmt *alterTableStmt,
+													   bool processLocalRelation);
 extern bool IsAlterTableRenameStmt(RenameStmt *renameStmt);
 extern void ErrorIfAlterDropsPartitionColumn(AlterTableStmt *alterTableStatement);
 extern void PostprocessAlterTableStmt(AlterTableStmt *pStmt);

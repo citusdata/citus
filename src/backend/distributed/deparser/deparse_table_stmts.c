@@ -168,7 +168,7 @@ AppendAlterTableCmdAddConstraint(StringInfo buf, Constraint *constraint,
 		if (constraint->contype == CONSTR_PRIMARY)
 		{
 			appendStringInfoString(buf,
-								   " PRIMARY KEY (");
+								   " PRIMARY KEY ");
 		}
 		else
 		{
@@ -180,44 +180,15 @@ AppendAlterTableCmdAddConstraint(StringInfo buf, Constraint *constraint,
 				appendStringInfoString(buf, " NULLS NOT DISTINCT");
 			}
 #endif
-			appendStringInfoString(buf, " (");
 		}
 
-		ListCell *lc;
-		bool firstkey = true;
-
-		foreach(lc, constraint->keys)
-		{
-			if (firstkey == false)
-			{
-				appendStringInfoString(buf, ", ");
-			}
-
-			appendStringInfo(buf, "%s", quote_identifier(strVal(lfirst(lc))));
-			firstkey = false;
-		}
-
-		appendStringInfoString(buf, ")");
+		AppendColumnNameList(buf, constraint->keys);
 
 		if (constraint->including != NULL)
 		{
-			appendStringInfoString(buf, " INCLUDE (");
+			appendStringInfoString(buf, " INCLUDE ");
 
-			firstkey = true;
-
-			foreach(lc, constraint->including)
-			{
-				if (firstkey == false)
-				{
-					appendStringInfoString(buf, ", ");
-				}
-
-				appendStringInfo(buf, "%s", quote_identifier(strVal(lfirst(
-																		lc))));
-				firstkey = false;
-			}
-
-			appendStringInfoString(buf, " )");
+			AppendColumnNameList(buf, constraint->including);
 		}
 	}
 	else if (constraint->contype == CONSTR_EXCLUSION)
@@ -402,6 +373,12 @@ AppendAlterTableCmdAddConstraint(StringInfo buf, Constraint *constraint,
 				break;
 			}
 		}
+	}
+
+	/* FOREIGN KEY and CHECK constraints migth have NOT VALID option */
+	if (constraint->skip_validation)
+	{
+		appendStringInfoString(buf, " NOT VALID ");
 	}
 
 	if (constraint->deferrable)
