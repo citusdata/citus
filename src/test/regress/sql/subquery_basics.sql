@@ -360,3 +360,19 @@ FROM
 		ORDER BY 1
 		LIMIT 5
 	) as foo WHERE user_id IN (SELECT count(*) FROM users_table GROUP BY user_id);
+
+CREATE TABLE dist(id int);
+SELECT create_distributed_table('dist','id');
+CREATE TABLE ref(id int);
+SELECT create_reference_table('ref');
+
+-- the outer join checks converts SELECT .. FROM ref FULL JOIN intermediate_result WHERE .. (sublink)
+SELECT * FROM ref FULL JOIN dist USING (id)
+WHERE
+	dist.id IN (SELECT id FROM dist GROUP BY id);
+
+-- sublinks in the targetlist are not supported
+SELECT (SELECT id FROM dist WHERE dist.id > d1.id GROUP BY id) FROM ref FULL JOIN dist d1 USING (id);
+
+DROP TABLE dist;
+DROP TABLE ref;
