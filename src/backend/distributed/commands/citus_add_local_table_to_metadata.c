@@ -497,6 +497,7 @@ ErrorIfUnsupportedCreateCitusLocalTable(Relation relation)
 	EnsureTableNotDistributed(relationId);
 	ErrorIfRelationHasUnsupportedTrigger(relationId);
 	EnsureIfFdwHasTableName(relationId);
+
 	/*
 	 * When creating other citus table types, we don't need to check that case as
 	 * EnsureTableNotDistributed already errors out if the given relation implies
@@ -510,6 +511,7 @@ ErrorIfUnsupportedCreateCitusLocalTable(Relation relation)
 	/* we do not support policies in citus community */
 	ErrorIfUnsupportedPolicy(relation);
 }
+
 
 static void
 EnsureIfFdwHasTableName(Oid relationId)
@@ -530,6 +532,7 @@ EnsureIfFdwHasTableName(Oid relationId)
 		ErrorIfOptionListHasNoTableName(foreignTable->options);
 	}
 }
+
 
 /*
  * ErrorIfOptionListHasNoTableName gets an option list (DefElem) and errors out

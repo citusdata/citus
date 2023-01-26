@@ -1085,6 +1085,7 @@ ShouldAddNewTableToMetadata(Node *parsetree)
 	return false;
 }
 
+
 /*
  * NotifyUtilityHookConstraintDropped sets ConstraintDropped to true to tell us
  * last command dropped a table constraint.
