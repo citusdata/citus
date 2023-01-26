@@ -496,6 +496,13 @@ ErrorIfUnsupportedCreateCitusLocalTable(Relation relation)
 	ErrorIfUnsupportedCitusLocalTableKind(relationId);
 	EnsureTableNotDistributed(relationId);
 	ErrorIfRelationHasUnsupportedTrigger(relationId);
+
+	/*
+	 * Citus relays all the Citus local foreign table logic to the placement of the
+	 * Citus local table. If table_name is NOT provided, Citus would try to talk to
+	 * the foreign postgres table over the shard's table name, which would not exist
+	 * on the remote server.
+	 */
 	EnsureIfFdwHasTableName(relationId);
 
 	/*
@@ -513,6 +520,10 @@ ErrorIfUnsupportedCreateCitusLocalTable(Relation relation)
 }
 
 
+/*
+ * EnsureIfFdwHasTableName errors out with a hint if the foreign table is using postgres_fdw and
+ * the option table_name is not provided.
+ */
 static void
 EnsureIfFdwHasTableName(Oid relationId)
 {
@@ -521,14 +532,6 @@ EnsureIfFdwHasTableName(Oid relationId)
 	{
 		ForeignTable *foreignTable = GetForeignTable(relationId);
 
-		/*
-		 * Error out with a hint if the foreign table is using postgres_fdw and
-		 * the option table_name is not provided.
-		 * Citus relays all the Citus local foreign table logic to the placement of the
-		 * Citus local table. If table_name is NOT provided, Citus would try to talk to
-		 * the foreign postgres table over the shard's table name, which would not exist
-		 * on the remote server.
-		 */
 		ErrorIfOptionListHasNoTableName(foreignTable->options);
 	}
 }
