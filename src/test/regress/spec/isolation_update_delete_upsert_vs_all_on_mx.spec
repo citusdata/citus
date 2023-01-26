@@ -2,8 +2,8 @@
 
 setup
 {
-	CREATE TABLE dist_table(id integer, value integer);
-	SELECT create_distributed_table('dist_table', 'id');
+    CREATE TABLE dist_table(id integer, value integer);
+    SELECT create_distributed_table('dist_table', 'id');
 }
 
 // Create and use UDF to close the connection opened in the setup step. Also return the cluster
@@ -29,22 +29,22 @@ step "s1-begin-on-worker"
 
 step "s1-update"
 {
-	SELECT run_commands_on_session_level_connection_to_node('UPDATE dist_table SET value=15 WHERE id=5');
+    SELECT run_commands_on_session_level_connection_to_node('UPDATE dist_table SET value=15 WHERE id=5');
 }
 
 step "s1-delete"
 {
-	SELECT run_commands_on_session_level_connection_to_node('DELETE FROM dist_table WHERE id=5');
+    SELECT run_commands_on_session_level_connection_to_node('DELETE FROM dist_table WHERE id=5');
 }
 
 step "s1-commit-worker"
 {
-	SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+    SELECT run_commands_on_session_level_connection_to_node('COMMIT');
 }
 
 step "s1-stop-connection"
 {
-	SELECT stop_session_level_connection_to_node();
+    SELECT stop_session_level_connection_to_node();
 }
 
 
@@ -64,27 +64,27 @@ step "s2-begin-on-worker"
 
 step "s2-delete"
 {
-	SELECT run_commands_on_session_level_connection_to_node('DELETE FROM dist_table WHERE id=5');
+    SELECT run_commands_on_session_level_connection_to_node('DELETE FROM dist_table WHERE id=5');
 }
 
 step "s2-copy"
 {
-	SELECT run_commands_on_session_level_connection_to_node('COPY dist_table FROM PROGRAM ''echo 5, 50 && echo 9, 90 && echo 10, 100''WITH CSV');
+    SELECT run_commands_on_session_level_connection_to_node('COPY dist_table FROM PROGRAM ''echo 5, 50 && echo 9, 90 && echo 10, 100''WITH CSV');
 }
 
 step "s2-alter-table"
 {
-	ALTER TABLE dist_table DROP value;
+    ALTER TABLE dist_table DROP value;
 }
 
 step "s2-select-for-update"
 {
-	SELECT run_commands_on_session_level_connection_to_node('SELECT * FROM dist_table WHERE id=5 FOR UPDATE');
+    SELECT run_commands_on_session_level_connection_to_node('SELECT * FROM dist_table WHERE id=5 FOR UPDATE');
 }
 
 step "s2-coordinator-create-index-concurrently"
 {
-	CREATE INDEX CONCURRENTLY dist_table_index ON dist_table(id);
+    CREATE INDEX CONCURRENTLY dist_table_index ON dist_table(id);
 }
 
 step "s2-commit-worker"
@@ -106,7 +106,7 @@ session "s3"
 
 step "s3-select-count"
 {
-	SELECT COUNT(*) FROM dist_table;
+    SELECT COUNT(*) FROM dist_table;
 }
 
 

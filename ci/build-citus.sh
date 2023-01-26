@@ -25,23 +25,23 @@ basedir="$(pwd)"
 rm -rf "${basedir}/.git"
 
 build_ext() {
-  pg_major="$1"
+    pg_major="$1"
 
-  builddir="${basedir}/build-${pg_major}"
-  echo "Beginning build of ${project} for PostgreSQL ${pg_major}..." >&2
+    builddir="${basedir}/build-${pg_major}"
+    echo "Beginning build of ${project} for PostgreSQL ${pg_major}..." >&2
 
-  # do everything in a subdirectory to avoid clutter in current directory
-  mkdir -p "${builddir}" && cd "${builddir}"
+    # do everything in a subdirectory to avoid clutter in current directory
+    mkdir -p "${builddir}" && cd "${builddir}"
 
-  CFLAGS=-Werror "${basedir}/configure" PG_CONFIG="/usr/lib/postgresql/${pg_major}/bin/pg_config" --enable-coverage --with-security-flags
+    CFLAGS=-Werror "${basedir}/configure" PG_CONFIG="/usr/lib/postgresql/${pg_major}/bin/pg_config" --enable-coverage --with-security-flags
 
-  installdir="${builddir}/install"
-  make -j$(nproc) && mkdir -p "${installdir}" && { make DESTDIR="${installdir}" install-all || make DESTDIR="${installdir}" install ; }
+    installdir="${builddir}/install"
+    make -j$(nproc) && mkdir -p "${installdir}" && { make DESTDIR="${installdir}" install-all || make DESTDIR="${installdir}" install ; }
 
-  cd "${installdir}" && find . -type f -print > "${builddir}/files.lst"
-  tar cvf "${basedir}/install-${pg_major}.tar" `cat ${builddir}/files.lst`
+    cd "${installdir}" && find . -type f -print > "${builddir}/files.lst"
+    tar cvf "${basedir}/install-${pg_major}.tar" `cat ${builddir}/files.lst`
 
-  cd "${builddir}" && rm -rf install files.lst && make clean
+    cd "${builddir}" && rm -rf install files.lst && make clean
 }
 
 build_ext "${PG_MAJOR}"

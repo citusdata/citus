@@ -1,140 +1,140 @@
 setup
 {
-	select setval('pg_dist_shardid_seq', GREATEST(1400292, nextval('pg_dist_shardid_seq')-1));
-	-- make sure coordinator is in metadata
-	SELECT citus_set_coordinator_host('localhost', 57636);
-  	CREATE TABLE table_1(id int PRIMARY KEY);
-  	CREATE TABLE table_2(id smallint PRIMARY KEY);
-  	CREATE TABLE table_default_colocated(id int PRIMARY KEY);
-  	CREATE TABLE table_none_colocated(id int PRIMARY KEY);
+    select setval('pg_dist_shardid_seq', GREATEST(1400292, nextval('pg_dist_shardid_seq')-1));
+    -- make sure coordinator is in metadata
+    SELECT citus_set_coordinator_host('localhost', 57636);
+    CREATE TABLE table_1(id int PRIMARY KEY);
+    CREATE TABLE table_2(id smallint PRIMARY KEY);
+    CREATE TABLE table_default_colocated(id int PRIMARY KEY);
+    CREATE TABLE table_none_colocated(id int PRIMARY KEY);
 }
 
 teardown
 {
-	DROP TABLE table_1 CASCADE;
-	DROP TABLE table_2 CASCADE;
-	DROP TABLE table_default_colocated CASCADE;
-	DROP TABLE table_none_colocated CASCADE;
-	SELECT citus_remove_node('localhost', 57636);
+    DROP TABLE table_1 CASCADE;
+    DROP TABLE table_2 CASCADE;
+    DROP TABLE table_default_colocated CASCADE;
+    DROP TABLE table_none_colocated CASCADE;
+    SELECT citus_remove_node('localhost', 57636);
 }
 
 session "s1"
 
 step "s1-create-concurrently-table_1"
 {
-	SELECT create_distributed_table_concurrently('table_1', 'id');
+    SELECT create_distributed_table_concurrently('table_1', 'id');
 }
 
 step "s1-create-concurrently-table_2"
 {
-	SELECT create_distributed_table_concurrently('table_2', 'id');
+    SELECT create_distributed_table_concurrently('table_2', 'id');
 }
 
 step "s1-create-concurrently-table_default_colocated"
 {
-	SELECT create_distributed_table_concurrently('table_default_colocated', 'id');
+    SELECT create_distributed_table_concurrently('table_default_colocated', 'id');
 }
 
 step "s1-create-concurrently-table_none_colocated"
 {
-	SELECT create_distributed_table_concurrently('table_none_colocated', 'id', colocate_with => 'none');
+    SELECT create_distributed_table_concurrently('table_none_colocated', 'id', colocate_with => 'none');
 }
 
 step "s1-settings"
 {
-	-- session needs to have replication factor set to 1, can't do in setup
-	SET citus.shard_count TO 4;
-	SET citus.shard_replication_factor TO 1;
+    -- session needs to have replication factor set to 1, can't do in setup
+    SET citus.shard_count TO 4;
+    SET citus.shard_replication_factor TO 1;
 }
 
 step "s1-truncate"
 {
-	TRUNCATE table_1;
+    TRUNCATE table_1;
 }
 
 session "s2"
 
 step "s2-begin"
 {
-	BEGIN;
+    BEGIN;
 }
 
 step "s2-settings"
 {
-	-- session needs to have replication factor set to 1, can't do in setup
-	SET citus.shard_count TO 4;
-	SET citus.shard_replication_factor TO 1;
+    -- session needs to have replication factor set to 1, can't do in setup
+    SET citus.shard_count TO 4;
+    SET citus.shard_replication_factor TO 1;
 }
 
 step "s2-insert"
 {
-	INSERT INTO table_1 SELECT s FROM generate_series(1,20) s;
+    INSERT INTO table_1 SELECT s FROM generate_series(1,20) s;
 }
 
 step "s2-update"
 {
-	UPDATE table_1 SET id = 21 WHERE id = 20;
+    UPDATE table_1 SET id = 21 WHERE id = 20;
 }
 
 step "s2-delete"
 {
-	DELETE FROM table_1 WHERE id = 11;
+    DELETE FROM table_1 WHERE id = 11;
 }
 
 step "s2-copy"
 {
-	COPY table_1 FROM PROGRAM 'echo 30 && echo 31 && echo 32 && echo 33 && echo 34 && echo 35 && echo 36 && echo 37 && echo 38';
+    COPY table_1 FROM PROGRAM 'echo 30 && echo 31 && echo 32 && echo 33 && echo 34 && echo 35 && echo 36 && echo 37 && echo 38';
 }
 
 step "s2-reindex"
 {
-	REINDEX TABLE table_1;
+    REINDEX TABLE table_1;
 }
 
 step "s2-reindex-concurrently"
 {
-	REINDEX TABLE CONCURRENTLY table_1;
+    REINDEX TABLE CONCURRENTLY table_1;
 }
 
 step "s2-create-concurrently-table_1"
 {
-	SELECT create_distributed_table_concurrently('table_1', 'id');
+    SELECT create_distributed_table_concurrently('table_1', 'id');
 }
 
 step "s2-create-table_1"
 {
-	SELECT create_distributed_table('table_1', 'id');
+    SELECT create_distributed_table('table_1', 'id');
 }
 
 step "s2-create-concurrently-table_2"
 {
-	SELECT create_distributed_table_concurrently('table_2', 'id');
+    SELECT create_distributed_table_concurrently('table_2', 'id');
 }
 
 step "s2-create-table_2"
 {
-	SELECT create_distributed_table('table_2', 'id');
+    SELECT create_distributed_table('table_2', 'id');
 }
 
 step "s2-create-table_2-none"
 {
-	SELECT create_distributed_table('table_2', 'id', colocate_with => 'none');
+    SELECT create_distributed_table('table_2', 'id', colocate_with => 'none');
 }
 
 step "s2-print-status"
 {
-	-- sanity check on partitions
-	SELECT * FROM pg_dist_shard
-		WHERE logicalrelid = 'table_1'::regclass OR logicalrelid = 'table_2'::regclass
-		ORDER BY shardminvalue::BIGINT, logicalrelid;
+    -- sanity check on partitions
+    SELECT * FROM pg_dist_shard
+        WHERE logicalrelid = 'table_1'::regclass OR logicalrelid = 'table_2'::regclass
+        ORDER BY shardminvalue::BIGINT, logicalrelid;
 
-	-- sanity check on total elements in the table
-	SELECT COUNT(*) FROM table_1;
+    -- sanity check on total elements in the table
+    SELECT COUNT(*) FROM table_1;
 }
 
 step "s2-commit"
 {
-	COMMIT;
+    COMMIT;
 }
 
 session "s3"
@@ -156,21 +156,21 @@ session "s4"
 
 step "s4-print-waiting-locks"
 {
-	SELECT mode, relation::regclass, granted FROM pg_locks
-		WHERE relation = 'table_1'::regclass OR relation = 'table_2'::regclass
-		ORDER BY mode, relation, granted;
+    SELECT mode, relation::regclass, granted FROM pg_locks
+        WHERE relation = 'table_1'::regclass OR relation = 'table_2'::regclass
+        ORDER BY mode, relation, granted;
 }
 
 step "s4-print-waiting-advisory-locks"
 {
-	SELECT mode, classid, objid, objsubid, granted FROM pg_locks
-		WHERE locktype = 'advisory' AND classid = 0 AND objid = 3 AND objsubid = 9
-		ORDER BY granted;
+    SELECT mode, classid, objid, objsubid, granted FROM pg_locks
+        WHERE locktype = 'advisory' AND classid = 0 AND objid = 3 AND objsubid = 9
+        ORDER BY granted;
 }
 
 step "s4-print-colocations"
 {
-	SELECT shardcount, replicationfactor, distributioncolumntype, distributioncolumncollation FROM pg_dist_colocation ORDER BY colocationid;
+    SELECT shardcount, replicationfactor, distributioncolumntype, distributioncolumncollation FROM pg_dist_colocation ORDER BY colocationid;
 }
 
 // show concurrent insert is NOT blocked by create_distributed_table_concurrently

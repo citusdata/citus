@@ -24,17 +24,17 @@ INSERT INTO test_columnar_freeze VALUES (1);
 my $ten_thousand_updates = "";
 
 foreach (1..10000) {
-    $ten_thousand_updates .= "UPDATE test_row SET i = i + 1;\n";
+		$ten_thousand_updates .= "UPDATE test_row SET i = i + 1;\n";
 }
 
 # 70K updates
 foreach (1..7) {
-    $node_one->safe_psql('postgres', $ten_thousand_updates);
+		$node_one->safe_psql('postgres', $ten_thousand_updates);
 }
 
 my $result = $node_one->safe_psql('postgres', "
 select age(relfrozenxid) < 70000 as was_frozen
-  from pg_class where relname='test_columnar_freeze';
+	from pg_class where relname='test_columnar_freeze';
 ");
 print "node one count: $result\n";
 is($result, qq(f), 'columnar table was not frozen');
@@ -43,10 +43,9 @@ $node_one->safe_psql('postgres', 'VACUUM FREEZE test_columnar_freeze;');
 
 $result = $node_one->safe_psql('postgres', "
 select age(relfrozenxid) < 70000 as was_frozen
-  from pg_class where relname='test_columnar_freeze';
+	from pg_class where relname='test_columnar_freeze';
 ");
 print "node one count: $result\n";
 is($result, qq(t), 'columnar table was frozen');
 
 $node_one->stop('fast');
-

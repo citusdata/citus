@@ -67,5 +67,3 @@ fi
 
 # create cluster and run the hammerd benchmark
 ./create-run.sh
-
-

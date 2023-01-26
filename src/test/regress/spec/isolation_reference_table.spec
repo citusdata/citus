@@ -10,12 +10,12 @@
 // transaction.
 setup
 {
-	VACUUM FULL pg_dist_partition;
+    VACUUM FULL pg_dist_partition;
 }
 setup
 {
- 	CREATE TABLE first_reference_table(a int);
- 	SELECT create_reference_table('first_reference_table');
+    CREATE TABLE first_reference_table(a int);
+    SELECT create_reference_table('first_reference_table');
 }
 
 teardown
@@ -35,7 +35,7 @@ step "s1-begin"
 step "s1-create"
 {
     CREATE TABLE reference_table_s1(a int);
- 	SELECT create_reference_table('reference_table_s1');
+    SELECT create_reference_table('reference_table_s1');
 }
 
 step "s1-drop"
@@ -58,7 +58,7 @@ step "s2-begin"
 step "s2-create"
 {
     CREATE TABLE reference_table_s2(a int);
- 	SELECT create_reference_table('reference_table_s2');
+    SELECT create_reference_table('reference_table_s2');
 }
 
 step "s2-drop"

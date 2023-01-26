@@ -5,18 +5,18 @@
 // create append distributed table to test behavior of COPY in concurrent operations
 setup
 {
-	SET citus.shard_replication_factor TO 1;
-	CREATE TABLE partitioned_copy(id integer, data text, int_data int) PARTITION BY RANGE (int_data);
+    SET citus.shard_replication_factor TO 1;
+    CREATE TABLE partitioned_copy(id integer, data text, int_data int) PARTITION BY RANGE (int_data);
     CREATE TABLE partitioned_copy_0_3 PARTITION OF partitioned_copy FOR VALUES FROM (0) TO (3);
     CREATE TABLE partitioned_copy_3_6 PARTITION OF partitioned_copy FOR VALUES FROM (3) TO (6);
     CREATE TABLE partitioned_copy_6_10 PARTITION OF partitioned_copy FOR VALUES FROM (6) TO (10);
-	SELECT create_distributed_table('partitioned_copy', 'id');
+    SELECT create_distributed_table('partitioned_copy', 'id');
 }
 
 // drop distributed table
 teardown
 {
-	DROP TABLE IF EXISTS partitioned_copy CASCADE;
+    DROP TABLE IF EXISTS partitioned_copy CASCADE;
 }
 
 // session 1
@@ -29,8 +29,8 @@ step "s1-router-select" { SELECT * FROM partitioned_copy WHERE id = 1; }
 step "s1-real-time-select" { SELECT * FROM partitioned_copy ORDER BY 1, 2; }
 step "s1-adaptive-select"
 {
-		SET citus.enable_repartition_joins TO ON;
-	SELECT * FROM partitioned_copy AS t1 JOIN partitioned_copy AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
+        SET citus.enable_repartition_joins TO ON;
+    SELECT * FROM partitioned_copy AS t1 JOIN partitioned_copy AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 }
 step "s1-insert" { INSERT INTO partitioned_copy VALUES(0, 'k', 0); }
 step "s1-insert-select" { INSERT INTO partitioned_copy SELECT * FROM partitioned_copy; }
@@ -57,8 +57,8 @@ step "s2-router-select" { SELECT * FROM partitioned_copy WHERE id = 1; }
 step "s2-real-time-select" { SELECT * FROM partitioned_copy ORDER BY 1, 2; }
 step "s2-adaptive-select"
 {
-		SET citus.enable_repartition_joins TO ON;
-	SELECT * FROM partitioned_copy AS t1 JOIN partitioned_copy AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
+        SET citus.enable_repartition_joins TO ON;
+    SELECT * FROM partitioned_copy AS t1 JOIN partitioned_copy AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 }
 step "s2-insert" { INSERT INTO partitioned_copy VALUES(0, 'k', 0); }
 step "s2-insert-select" { INSERT INTO partitioned_copy SELECT * FROM partitioned_copy; }

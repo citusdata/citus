@@ -229,7 +229,7 @@ class CitusSmallSharedPoolSizeConfig(CitusDefaultClusterConfig):
     def __init__(self, arguments):
         super().__init__(arguments)
         self.new_settings = {
-             "citus.local_shared_pool_size": 5,
+            "citus.local_shared_pool_size": 5,
             "citus.max_shared_pool_size": 5,
         }
 
@@ -308,7 +308,7 @@ class CitusUnusualQuerySettingsConfig(CitusDefaultClusterConfig):
             # As of c11, there is no way to do that through remote execution so this test
             # will fail
             "arbitrary_configs_truncate_cascade_create", "arbitrary_configs_truncate_cascade",
-             # Alter Table statement cannot be run from an arbitrary node so this test will fail
+            # Alter Table statement cannot be run from an arbitrary node so this test will fail
             "arbitrary_configs_alter_table_add_constraint_without_name_create", "arbitrary_configs_alter_table_add_constraint_without_name"]
 
 class CitusSingleNodeSingleShardClusterConfig(CitusDefaultClusterConfig):
@@ -335,7 +335,7 @@ class CitusShardReplicationFactorClusterConfig(CitusDefaultClusterConfig):
             # citus does not support colocating functions with distributed tables when
             # citus.shard_replication_factor >= 2
             "function_create", "functions",
-             # Alter Table statement cannot be run from an arbitrary node so this test will fail
+            # Alter Table statement cannot be run from an arbitrary node so this test will fail
             "arbitrary_configs_alter_table_add_constraint_without_name_create", "arbitrary_configs_alter_table_add_constraint_without_name"]
 
 

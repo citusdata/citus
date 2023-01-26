@@ -39,5 +39,5 @@ setup
             false)
     FROM pg_dist_node;
 
-	SET citus.shard_replication_factor TO 1;
+    SET citus.shard_replication_factor TO 1;
 }

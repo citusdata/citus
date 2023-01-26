@@ -5,32 +5,32 @@
 
 setup
 {
-	CREATE TABLE parted (a INT) PARTITION BY LIST (a);
-	CREATE TABLE part1 PARTITION OF parted FOR VALUES IN (1);
-	ALTER TABLE part1 SET (autovacuum_enabled = false);
-	CREATE TABLE part2 PARTITION OF parted FOR VALUES IN (2);
-	ALTER TABLE part2 SET (autovacuum_enabled = false);
+    CREATE TABLE parted (a INT) PARTITION BY LIST (a);
+    CREATE TABLE part1 PARTITION OF parted FOR VALUES IN (1);
+    ALTER TABLE part1 SET (autovacuum_enabled = false);
+    CREATE TABLE part2 PARTITION OF parted FOR VALUES IN (2);
+    ALTER TABLE part2 SET (autovacuum_enabled = false);
 }
 
 teardown
 {
-	DROP TABLE IF EXISTS parted;
+    DROP TABLE IF EXISTS parted;
 }
 
 session s1
 step lock_share
 {
-	BEGIN;
-	LOCK part1 IN SHARE MODE;
+    BEGIN;
+    LOCK part1 IN SHARE MODE;
 }
 step lock_access_exclusive
 {
-	BEGIN;
-	LOCK part1 IN ACCESS EXCLUSIVE MODE;
+    BEGIN;
+    LOCK part1 IN ACCESS EXCLUSIVE MODE;
 }
 step commit
 {
-	COMMIT;
+    COMMIT;
 }
 
 session s2

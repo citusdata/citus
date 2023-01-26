@@ -25,27 +25,27 @@ setup
         LANGUAGE C STRICT VOLATILE
         AS 'citus', $$stop_session_level_connection_to_node$$;
 
-CREATE OR REPLACE PROCEDURE isolation_cleanup_orphaned_resources()
-    LANGUAGE C
-    AS 'citus', $$isolation_cleanup_orphaned_resources$$;
-COMMENT ON PROCEDURE isolation_cleanup_orphaned_resources()
-    IS 'cleanup orphaned shards';
+    CREATE OR REPLACE PROCEDURE isolation_cleanup_orphaned_resources()
+        LANGUAGE C
+        AS 'citus', $$isolation_cleanup_orphaned_resources$$;
+    COMMENT ON PROCEDURE isolation_cleanup_orphaned_resources()
+        IS 'cleanup orphaned shards';
     RESET citus.enable_metadata_sync;
 
     CALL isolation_cleanup_orphaned_resources();
     SET citus.next_shard_id to 120000;
-	SET citus.shard_count TO 8;
-	SET citus.shard_replication_factor TO 1;
-	CREATE TABLE t1 (x int PRIMARY KEY, y int);
-	SELECT create_distributed_table('t1', 'x');
+    SET citus.shard_count TO 8;
+    SET citus.shard_replication_factor TO 1;
+    CREATE TABLE t1 (x int PRIMARY KEY, y int);
+    SELECT create_distributed_table('t1', 'x');
 
-	SELECT get_shard_id_for_distribution_column('t1', 15) INTO selected_shard;
+    SELECT get_shard_id_for_distribution_column('t1', 15) INTO selected_shard;
 }
 
 teardown
 {
-  DROP TABLE selected_shard;
-  DROP TABLE t1;
+    DROP TABLE selected_shard;
+    DROP TABLE t1;
 }
 
 
@@ -82,7 +82,7 @@ step "s2-start-session-level-connection"
 
 step "s2-stop-connection"
 {
-	SELECT stop_session_level_connection_to_node();
+    SELECT stop_session_level_connection_to_node();
 }
 
 step "s2-lock-table-on-worker"

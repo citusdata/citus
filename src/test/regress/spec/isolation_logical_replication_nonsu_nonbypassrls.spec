@@ -13,8 +13,8 @@ setup
 
     SET citus.max_cached_conns_per_worker to 0;
     SET citus.next_shard_id TO 1234000;
-	SET citus.shard_count TO 4;
-	SET citus.shard_replication_factor TO 1;
+    SET citus.shard_count TO 4;
+    SET citus.shard_replication_factor TO 1;
 
     CREATE TABLE dist(column1 int PRIMARY KEY, column2 int);
     SELECT create_distributed_table('dist', 'column1');
@@ -22,7 +22,7 @@ setup
     CREATE USER new_user;
     GRANT ALL ON SCHEMA public TO new_user;
 
-	SELECT get_shard_id_for_distribution_column('dist', 23) INTO selected_shard;
+    SELECT get_shard_id_for_distribution_column('dist', 23) INTO selected_shard;
     GRANT ALL ON TABLE selected_shard TO new_user;
 }
 
@@ -44,7 +44,7 @@ session "s1"
 
 step "s1-no-connection-cache"
 {
-	SET citus.max_cached_conns_per_worker to 0;
+    SET citus.max_cached_conns_per_worker to 0;
 }
 
 step "s1-table-owner-new_user"
@@ -69,7 +69,7 @@ step "s1-user-spec"
 
 step "s1-begin"
 {
-	BEGIN;
+    BEGIN;
 }
 
 step "s1-set-role"
@@ -84,12 +84,12 @@ step "s1-move-placement"
 
 step "s1-reset-role"
 {
-	RESET ROLE;
+    RESET ROLE;
 }
 
 step "s1-end"
 {
-	COMMIT;
+    COMMIT;
 }
 
 step "s1-select"
@@ -106,7 +106,7 @@ session "s2"
 
 step "s2-no-connection-cache"
 {
-	SET citus.max_cached_conns_per_worker to 0;
+    SET citus.max_cached_conns_per_worker to 0;
 }
 
 step "s2-insert"
@@ -118,7 +118,7 @@ session "s3"
 
 step "s3-no-connection-cache"
 {
-	SET citus.max_cached_conns_per_worker to 0;
+    SET citus.max_cached_conns_per_worker to 0;
 }
 
 step "s3-acquire-advisory-lock"

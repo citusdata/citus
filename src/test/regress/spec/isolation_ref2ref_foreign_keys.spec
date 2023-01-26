@@ -1,14 +1,14 @@
 setup
 {
-	ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 8429800;
+    ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 8429800;
     CREATE TABLE ref_table_1(id int PRIMARY KEY, value int);
-	SELECT create_reference_table('ref_table_1');
+    SELECT create_reference_table('ref_table_1');
 
     CREATE TABLE ref_table_2(id int PRIMARY KEY, value int REFERENCES ref_table_1(id) ON DELETE CASCADE ON UPDATE CASCADE);
-	SELECT create_reference_table('ref_table_2');
+    SELECT create_reference_table('ref_table_2');
 
     CREATE TABLE ref_table_3(id int PRIMARY KEY, value int REFERENCES ref_table_2(id) ON DELETE CASCADE ON UPDATE CASCADE);
-	SELECT create_reference_table('ref_table_3');
+    SELECT create_reference_table('ref_table_3');
 
     INSERT INTO ref_table_1 VALUES (1, 1), (3, 3), (5, 5);
     INSERT INTO ref_table_2 SELECT * FROM ref_table_1;
@@ -17,14 +17,14 @@ setup
 
 teardown
 {
-	DROP TABLE ref_table_1, ref_table_2, ref_table_3;
+    DROP TABLE ref_table_1, ref_table_2, ref_table_3;
 }
 
 session "s1"
 
 step "s1-begin"
 {
-	BEGIN;
+    BEGIN;
 }
 
 step "s1-delete-table-2"
@@ -106,7 +106,7 @@ session "s2"
 
 step "s2-begin"
 {
-	BEGIN;
+    BEGIN;
 }
 
 step "s2-insert-table-1"

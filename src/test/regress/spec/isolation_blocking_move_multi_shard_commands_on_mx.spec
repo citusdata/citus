@@ -3,48 +3,48 @@
 
 setup
 {
-  SET citus.enable_metadata_sync TO off;
-  CREATE OR REPLACE FUNCTION start_session_level_connection_to_node(text, integer)
-      RETURNS void
-      LANGUAGE C STRICT VOLATILE
-      AS 'citus', $$start_session_level_connection_to_node$$;
+    SET citus.enable_metadata_sync TO off;
+    CREATE OR REPLACE FUNCTION start_session_level_connection_to_node(text, integer)
+        RETURNS void
+        LANGUAGE C STRICT VOLATILE
+        AS 'citus', $$start_session_level_connection_to_node$$;
 
-  CREATE OR REPLACE FUNCTION run_commands_on_session_level_connection_to_node(text)
-      RETURNS void
-      LANGUAGE C STRICT VOLATILE
-      AS 'citus', $$run_commands_on_session_level_connection_to_node$$;
+    CREATE OR REPLACE FUNCTION run_commands_on_session_level_connection_to_node(text)
+        RETURNS void
+        LANGUAGE C STRICT VOLATILE
+        AS 'citus', $$run_commands_on_session_level_connection_to_node$$;
 
-  CREATE OR REPLACE FUNCTION stop_session_level_connection_to_node()
-      RETURNS void
-      LANGUAGE C STRICT VOLATILE
-      AS 'citus', $$stop_session_level_connection_to_node$$;
-  RESET citus.enable_metadata_sync;
+    CREATE OR REPLACE FUNCTION stop_session_level_connection_to_node()
+        RETURNS void
+        LANGUAGE C STRICT VOLATILE
+        AS 'citus', $$stop_session_level_connection_to_node$$;
+    RESET citus.enable_metadata_sync;
 
-  -- start_metadata_sync_to_node can not be run inside a transaction block
-  -- following is a workaround to overcome that
-  -- port numbers are hard coded at the moment
-  SELECT master_run_on_worker(
-          ARRAY['localhost']::text[],
-          ARRAY[57636]::int[],
-          ARRAY[format('SELECT start_metadata_sync_to_node(''%s'', %s)', nodename, nodeport)]::text[],
-          false)
-  FROM pg_dist_node;
+    -- start_metadata_sync_to_node can not be run inside a transaction block
+    -- following is a workaround to overcome that
+    -- port numbers are hard coded at the moment
+    SELECT master_run_on_worker(
+        ARRAY['localhost']::text[],
+        ARRAY[57636]::int[],
+        ARRAY[format('SELECT start_metadata_sync_to_node(''%s'', %s)', nodename, nodeport)]::text[],
+        false)
+    FROM pg_dist_node;
 
-  SET citus.shard_replication_factor TO 1;
+    SET citus.shard_replication_factor TO 1;
 
 
-	SET citus.shard_count TO 8;
-	SET citus.shard_replication_factor TO 1;
-	CREATE TABLE logical_replicate_placement (x int PRIMARY KEY, y int);
-	SELECT create_distributed_table('logical_replicate_placement', 'x');
+    SET citus.shard_count TO 8;
+    SET citus.shard_replication_factor TO 1;
+    CREATE TABLE logical_replicate_placement (x int PRIMARY KEY, y int);
+    SELECT create_distributed_table('logical_replicate_placement', 'x');
 
-	SELECT get_shard_id_for_distribution_column('logical_replicate_placement', 15) INTO selected_shard;
+    SELECT get_shard_id_for_distribution_column('logical_replicate_placement', 15) INTO selected_shard;
 }
 
 teardown
 {
-	DROP TABLE selected_shard;
-	DROP TABLE logical_replicate_placement;
+    DROP TABLE selected_shard;
+    DROP TABLE logical_replicate_placement;
 }
 
 
@@ -52,22 +52,22 @@ session "s1"
 
 step "s1-begin"
 {
-	BEGIN;
+    BEGIN;
 }
 
 step "s1-move-placement"
 {
-  SELECT master_move_shard_placement(get_shard_id_for_distribution_column, 'localhost', 57637, 'localhost', 57638, shard_transfer_mode:='block_writes') FROM selected_shard;
+    SELECT master_move_shard_placement(get_shard_id_for_distribution_column, 'localhost', 57637, 'localhost', 57638, shard_transfer_mode:='block_writes') FROM selected_shard;
 }
 
 step "s1-commit"
 {
-	COMMIT;
+    COMMIT;
 }
 
 step "s1-select"
 {
-  SELECT * FROM logical_replicate_placement order by y;
+    SELECT * FROM logical_replicate_placement order by y;
 }
 
 step "s1-insert"
@@ -84,12 +84,12 @@ session "s2"
 
 step "s2-start-session-level-connection"
 {
-  SELECT start_session_level_connection_to_node('localhost', 57638);
+    SELECT start_session_level_connection_to_node('localhost', 57638);
 }
 
 step "s2-begin-on-worker"
 {
-  SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+    SELECT run_commands_on_session_level_connection_to_node('BEGIN');
 }
 
 step "s2-select"
@@ -114,16 +114,15 @@ step "s2-update"
 
 step "s2-commit-worker"
 {
-	SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+    SELECT run_commands_on_session_level_connection_to_node('COMMIT');
 }
 
 step "s2-stop-connection"
 {
-  SELECT stop_session_level_connection_to_node();
+    SELECT stop_session_level_connection_to_node();
 }
 
 permutation "s1-begin" "s2-start-session-level-connection" "s2-begin-on-worker" "s2-insert" "s1-move-placement"  "s2-commit-worker"  "s1-commit" "s1-select" "s1-get-shard-distribution" "s2-stop-connection"
 permutation "s1-insert" "s1-begin" "s2-start-session-level-connection" "s2-begin-on-worker" "s2-update" "s1-move-placement" "s2-commit-worker" "s1-commit" "s1-select" "s1-get-shard-distribution" "s2-stop-connection"
 permutation "s1-insert" "s1-begin" "s2-start-session-level-connection" "s2-begin-on-worker" "s2-delete" "s1-move-placement" "s2-commit-worker" "s1-commit" "s1-select" "s1-get-shard-distribution" "s2-stop-connection"
 permutation "s1-insert" "s1-begin" "s2-start-session-level-connection" "s2-begin-on-worker" "s2-select" "s1-move-placement" "s2-commit-worker" "s1-commit" "s1-get-shard-distribution" "s2-stop-connection"
-

@@ -1,7 +1,7 @@
 setup
 {
     CREATE TABLE test_concurrent_dml (test_id integer NOT NULL, data text);
-	SET citus.shard_replication_factor TO 2;
+    SET citus.shard_replication_factor TO 2;
     SELECT create_distributed_table('test_concurrent_dml', 'test_id', 'hash', shard_count:=4);
 }
 

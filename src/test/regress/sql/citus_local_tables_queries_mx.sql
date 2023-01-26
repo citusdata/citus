@@ -46,18 +46,18 @@ CREATE TABLE postgres_local_table(a int, b int);
 SET citus.enable_metadata_sync TO OFF;
 CREATE FUNCTION clear_and_init_test_tables() RETURNS void AS $$
     BEGIN
-		SET client_min_messages to ERROR;
+        SET client_min_messages to ERROR;
 
-		TRUNCATE postgres_local_table, citus_local_table, reference_table, distributed_table, dummy_reference_table, citus_local_table_2;
+        TRUNCATE postgres_local_table, citus_local_table, reference_table, distributed_table, dummy_reference_table, citus_local_table_2;
 
-		INSERT INTO dummy_reference_table SELECT i, i FROM generate_series(0, 5) i;
-		INSERT INTO citus_local_table SELECT i, i FROM generate_series(0, 5) i;
-		INSERT INTO citus_local_table_2 SELECT i, i FROM generate_series(0, 5) i;
-		INSERT INTO postgres_local_table SELECT i, i FROM generate_series(0, 5) i;
-		INSERT INTO distributed_table SELECT i, i FROM generate_series(0, 5) i;
-		INSERT INTO reference_table SELECT i, i FROM generate_series(0, 5) i;
+        INSERT INTO dummy_reference_table SELECT i, i FROM generate_series(0, 5) i;
+        INSERT INTO citus_local_table SELECT i, i FROM generate_series(0, 5) i;
+        INSERT INTO citus_local_table_2 SELECT i, i FROM generate_series(0, 5) i;
+        INSERT INTO postgres_local_table SELECT i, i FROM generate_series(0, 5) i;
+        INSERT INTO distributed_table SELECT i, i FROM generate_series(0, 5) i;
+        INSERT INTO reference_table SELECT i, i FROM generate_series(0, 5) i;
 
-		RESET client_min_messages;
+        RESET client_min_messages;
     END;
 $$ LANGUAGE plpgsql;
 RESET citus.enable_metadata_sync;
@@ -74,16 +74,16 @@ SELECT * FROM citus_local_table, reference_table WHERE citus_local_table.a = ref
 
 -- should work
 WITH cte_1 AS
-	(SELECT * FROM citus_local_table, reference_table WHERE citus_local_table.a = reference_table.a ORDER BY 1,2,3,4 FOR UPDATE)
+    (SELECT * FROM citus_local_table, reference_table WHERE citus_local_table.a = reference_table.a ORDER BY 1,2,3,4 FOR UPDATE)
 SELECT count(*) FROM cte_1;
 
 -- should work as joins are between ctes
 WITH cte_citus_local_table AS
-	(SELECT * FROM citus_local_table),
+    (SELECT * FROM citus_local_table),
 cte_postgres_local_table AS
-	(SELECT * FROM postgres_local_table),
+    (SELECT * FROM postgres_local_table),
 cte_distributed_table AS
-	(SELECT * FROM distributed_table)
+    (SELECT * FROM distributed_table)
 SELECT count(*) FROM cte_distributed_table, cte_citus_local_table, cte_postgres_local_table
 WHERE  cte_citus_local_table.a = 1 AND cte_distributed_table.a = 1;
 
@@ -93,7 +93,7 @@ SELECT count(*) FROM distributed_table d1, distributed_table d2, citus_local_tab
 -- local table inside subquery should just work
 SELECT count(*) FROM
 (
-	SELECT * FROM (SELECT * FROM citus_local_table) as subquery_inner
+    SELECT * FROM (SELECT * FROM citus_local_table) as subquery_inner
 ) as subquery_top;
 
 SELECT clear_and_init_test_tables();
@@ -101,30 +101,30 @@ SELECT clear_and_init_test_tables();
 -- join between citus/postgres local tables wouldn't work as citus local table is on the coordinator
 SELECT count(*) FROM
 (
-	SELECT * FROM (SELECT count(*) FROM citus_local_table, postgres_local_table) as subquery_inner
+    SELECT * FROM (SELECT count(*) FROM citus_local_table, postgres_local_table) as subquery_inner
 ) as subquery_top;
 
 -- should fail as we don't support direct joins between distributed/local tables
 SELECT count(*) FROM
 (
-	SELECT *, random() FROM (SELECT *, random() FROM citus_local_table, distributed_table) as subquery_inner
+    SELECT *, random() FROM (SELECT *, random() FROM citus_local_table, distributed_table) as subquery_inner
 ) as subquery_top;
 
 -- should fail as we don't support direct joins between distributed/local tables
 SELECT count(*) FROM
 (
-	SELECT *, random()
-		FROM (
-				WITH cte_1 AS (SELECT *, random() FROM citus_local_table, distributed_table) SELECT * FROM cte_1) as subquery_inner
+    SELECT *, random()
+        FROM (
+                WITH cte_1 AS (SELECT *, random() FROM citus_local_table, distributed_table) SELECT * FROM cte_1) as subquery_inner
 ) as subquery_top;
 
 -- should be  fine
 SELECT count(*) FROM
 (
-	SELECT *, random()
-		FROM (
-				WITH cte_1 AS (SELECT *, random() FROM citus_local_table), cte_2  AS (SELECT * FROM distributed_table) SELECT count(*) FROM cte_1, cte_2
-				) as subquery_inner
+    SELECT *, random()
+        FROM (
+                WITH cte_1 AS (SELECT *, random() FROM citus_local_table), cte_2  AS (SELECT * FROM distributed_table) SELECT count(*) FROM cte_1, cte_2
+                ) as subquery_inner
 ) as subquery_top;
 
 SELECT clear_and_init_test_tables();
@@ -155,14 +155,14 @@ EXECUTE citus_local_only_p(random());
 EXECUTE citus_local_only_p(random());
 
 PREPARE mixed_query(int,  int, int) AS
-	WITH cte_citus_local_table AS
-		(SELECT * FROM citus_local_table WHERE a = $1),
-	cte_postgres_local_table AS
-		(SELECT * FROM postgres_local_table WHERE a = $2),
-	cte_distributed_table AS
-		(SELECT * FROM distributed_table WHERE a = $3),
-	cte_mixes AS (SELECT * FROM cte_distributed_table, cte_citus_local_table, cte_postgres_local_table)
-	SELECT count(*) FROM cte_mixes;
+    WITH cte_citus_local_table AS
+        (SELECT * FROM citus_local_table WHERE a = $1),
+    cte_postgres_local_table AS
+        (SELECT * FROM postgres_local_table WHERE a = $2),
+    cte_distributed_table AS
+        (SELECT * FROM distributed_table WHERE a = $3),
+    cte_mixes AS (SELECT * FROM cte_distributed_table, cte_citus_local_table, cte_postgres_local_table)
+    SELECT count(*) FROM cte_mixes;
 
 EXECUTE mixed_query(1,2,3);
 EXECUTE mixed_query(1,2,3);
@@ -192,9 +192,9 @@ SELECT count(*) FROM citus_local_table  WHERE a IN (SELECT a FROM reference_tabl
 
 --  nested recursive queries should just work
 SELECT count(*)  FROM citus_local_table
-	WHERE a IN
-	(SELECT a FROM distributed_table WHERE a IN
-	 (SELECT b FROM citus_local_table WHERE b IN (SELECT b FROM postgres_local_table)));
+    WHERE a IN
+    (SELECT a FROM distributed_table WHERE a IN
+    (SELECT b FROM citus_local_table WHERE b IN (SELECT b FROM postgres_local_table)));
 
 -- local outer joins
 SELECT count(*) FROM citus_local_table LEFT JOIN reference_table ON (true);
@@ -208,7 +208,7 @@ SELECT count(*) FROM citus_local_table LEFT JOIN distributed_table ON (true);
 
 -- distinct in subquery on CTE
 WITH one_row AS (
-	SELECT a from citus_local_table WHERE b = 1
+    SELECT a from citus_local_table WHERE b = 1
 )
 SELECT
   *
@@ -222,7 +222,7 @@ LIMIT
   1;
 
 WITH one_row_2 AS (
-	SELECT a from distributed_table WHERE b = 1
+    SELECT a from distributed_table WHERE b = 1
 )
 SELECT
   *
@@ -479,13 +479,13 @@ SELECT clear_and_init_test_tables();
 SELECT count(*) AS a, count(*) AS b
 FROM reference_table
 JOIN (SELECT count(*) as a, count(*) as b
-      FROM citus_local_table_2
-      JOIN (SELECT count(*) as a, count(*) as b
+    FROM citus_local_table_2
+    JOIN (SELECT count(*) as a, count(*) as b
             FROM postgres_local_table
             JOIN (SELECT count(*) as a, count(*) as b
-                  FROM reference_table as table_4677) subquery5108
+                FROM reference_table as table_4677) subquery5108
             USING (a)) subquery7132
-      USING (b)) subquery7294
+    USING (b)) subquery7294
 USING (a);
 
 -- direct join inside CTE not supported
@@ -499,7 +499,7 @@ RETURNING lt.b, lt.a
 UPDATE citus_local_table
 SET a=5
 FROM (SELECT avg(distributed_table.b) as avg_b
-      FROM distributed_table) as foo
+    FROM distributed_table) as foo
 WHERE
 foo.avg_b = citus_local_table.b;
 
@@ -572,24 +572,24 @@ BEGIN;
     INSERT INTO distributed_table VALUES (1);
 
     -- should show sequential as first inserting into citus local table
-	-- would force the xact block to use sequential execution
+    -- would force the xact block to use sequential execution
     show citus.multi_shard_modify_mode;
 ROLLBACK;
 
 BEGIN;
-	TRUNCATE distributed_table;
+    TRUNCATE distributed_table;
 
-	-- should error out as we truncated distributed_table via parallel execution
-	TRUNCATE citus_local_table  CASCADE;
+    -- should error out as we truncated distributed_table via parallel execution
+    TRUNCATE citus_local_table  CASCADE;
 ROLLBACK;
 
 BEGIN;
-	SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
-	TRUNCATE distributed_table;
+    SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
+    TRUNCATE distributed_table;
 
-	-- should work fine as we already switched to sequential execution
-	-- before parallel truncate
-	TRUNCATE citus_local_table  CASCADE;
+    -- should work fine as we already switched to sequential execution
+    -- before parallel truncate
+    TRUNCATE citus_local_table  CASCADE;
 ROLLBACK;
 
 \c - - - :master_port
@@ -620,8 +620,8 @@ SET search_path TO citus_local_table_queries_mx;
 COPY  citus_local_table(a) FROM  PROGRAM 'seq 1';
 
 BEGIN;
-	COPY  citus_local_table(a) FROM  PROGRAM 'seq 1';
-	COPY  citus_local_table(a) FROM  PROGRAM 'seq 1';
+    COPY  citus_local_table(a) FROM  PROGRAM 'seq 1';
+    COPY  citus_local_table(a) FROM  PROGRAM 'seq 1';
 COMMIT;
 
 COPY citus_local_table TO STDOUT;
@@ -639,29 +639,29 @@ COMMIT;
 TRUNCATE citus_local_table, reference_table, distributed_table;
 
 BEGIN;
-	INSERT INTO citus_local_table VALUES (1), (2);
+    INSERT INTO citus_local_table VALUES (1), (2);
 
-	SAVEPOINT sp1;
-	INSERT INTO citus_local_table VALUES (3), (4);
+    SAVEPOINT sp1;
+    INSERT INTO citus_local_table VALUES (3), (4);
 
-	ROLLBACK TO SAVEPOINT sp1;
-	SELECT * FROM citus_local_table ORDER BY 1,2;
+    ROLLBACK TO SAVEPOINT sp1;
+    SELECT * FROM citus_local_table ORDER BY 1,2;
 
-	SAVEPOINT sp2;
-	INSERT INTO citus_local_table VALUES (3), (4);
-	INSERT INTO distributed_table VALUES (3), (4);
+    SAVEPOINT sp2;
+    INSERT INTO citus_local_table VALUES (3), (4);
+    INSERT INTO distributed_table VALUES (3), (4);
 
-	ROLLBACK TO SAVEPOINT sp2;
-	SELECT * FROM citus_local_table ORDER BY 1,2;
-	SELECT * FROM distributed_table ORDER BY 1,2;
+    ROLLBACK TO SAVEPOINT sp2;
+    SELECT * FROM citus_local_table ORDER BY 1,2;
+    SELECT * FROM distributed_table ORDER BY 1,2;
 
-	SAVEPOINT sp3;
-	INSERT INTO citus_local_table VALUES (3), (2);
-	INSERT INTO reference_table VALUES (3), (2);
+    SAVEPOINT sp3;
+    INSERT INTO citus_local_table VALUES (3), (2);
+    INSERT INTO reference_table VALUES (3), (2);
 
-	ROLLBACK TO SAVEPOINT sp3;
-	SELECT * FROM citus_local_table ORDER BY 1,2;
-	SELECT * FROM reference_table ORDER BY 1,2;
+    ROLLBACK TO SAVEPOINT sp3;
+    SELECT * FROM citus_local_table ORDER BY 1,2;
+    SELECT * FROM reference_table ORDER BY 1,2;
 COMMIT;
 
 \c - - - :master_port

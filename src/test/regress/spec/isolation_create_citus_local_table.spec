@@ -1,7 +1,7 @@
 setup
 {
     SELECT 1 FROM master_add_node('localhost', 57636, 0);
-  	CREATE TABLE citus_local_table_1(a int);
+    CREATE TABLE citus_local_table_1(a int);
     CREATE TABLE citus_local_table_2(a int unique);
 
     CREATE SCHEMA another_schema;
@@ -10,7 +10,7 @@ setup
 
 teardown
 {
-	  DROP TABLE IF EXISTS citus_local_table_1, citus_local_table_2 CASCADE;
+    DROP TABLE IF EXISTS citus_local_table_1, citus_local_table_2 CASCADE;
     DROP SCHEMA IF EXISTS another_schema CASCADE;
     -- remove coordinator only if it is added to pg_dist_node
     SELECT master_remove_node(nodename, nodeport) FROM pg_dist_node WHERE nodeport=57636;

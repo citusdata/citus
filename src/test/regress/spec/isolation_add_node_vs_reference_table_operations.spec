@@ -2,24 +2,24 @@
 // add single one of the nodes for the purpose of the test
 setup
 {
-	SET citus.shard_replication_factor to 1;
-	SELECT 1 FROM master_add_node('localhost', 57637);
+    SET citus.shard_replication_factor to 1;
+    SELECT 1 FROM master_add_node('localhost', 57637);
 
-	CREATE TABLE test_reference_table (test_id integer);
-	CREATE TABLE test_reference_table_2 (test_id integer);
-	INSERT INTO test_reference_table_2 VALUES (8);
-	SELECT create_reference_table('test_reference_table');
-	CREATE TABLE test_table (x int, y int);
-	SELECT create_distributed_table('test_table','x');
+    CREATE TABLE test_reference_table (test_id integer);
+    CREATE TABLE test_reference_table_2 (test_id integer);
+    INSERT INTO test_reference_table_2 VALUES (8);
+    SELECT create_reference_table('test_reference_table');
+    CREATE TABLE test_table (x int, y int);
+    SELECT create_distributed_table('test_table','x');
 }
 
 // ensure neither node's added for the remaining of the isolation tests
 teardown
 {
-	DROP TABLE IF EXISTS test_reference_table;
-	DROP TABLE IF EXISTS test_reference_table_2;
-	DROP TABLE IF EXISTS test_table;
-	SELECT master_remove_node(nodename, nodeport) FROM pg_dist_node;
+    DROP TABLE IF EXISTS test_reference_table;
+    DROP TABLE IF EXISTS test_reference_table_2;
+    DROP TABLE IF EXISTS test_table;
+    SELECT master_remove_node(nodename, nodeport) FROM pg_dist_node;
 }
 
 session "s1"
@@ -31,12 +31,12 @@ step "s1-begin"
 
 step "s1-add-second-worker"
 {
-	SELECT 1 FROM master_add_node('localhost', 57638);
+    SELECT 1 FROM master_add_node('localhost', 57638);
 }
 
 step "s1-drop-reference-table"
 {
-	DROP TABLE test_reference_table;
+    DROP TABLE test_reference_table;
 }
 
 step "s1-commit"
@@ -50,74 +50,74 @@ session "s2"
 // loading the cache
 step "s2-load-metadata-cache"
 {
-	COPY test_reference_table FROM PROGRAM 'echo 1 && echo 2 && echo 3 && echo 4 && echo 5';
+    COPY test_reference_table FROM PROGRAM 'echo 1 && echo 2 && echo 3 && echo 4 && echo 5';
 }
 
 step "s2-copy-to-reference-table"
 {
-	COPY test_reference_table FROM PROGRAM 'echo 1 && echo 2 && echo 3 && echo 4 && echo 5';
+    COPY test_reference_table FROM PROGRAM 'echo 1 && echo 2 && echo 3 && echo 4 && echo 5';
 }
 
 step "s2-replicate-reference-tables"
 {
-	SET client_min_messages TO DEBUG2;
-	SELECT replicate_reference_tables();
-	RESET client_min_messages;
+    SET client_min_messages TO DEBUG2;
+    SELECT replicate_reference_tables();
+    RESET client_min_messages;
 }
 
 step "s2-insert-to-reference-table"
 {
-	INSERT INTO test_reference_table VALUES (6);
+    INSERT INTO test_reference_table VALUES (6);
 }
 
 step "s2-ddl-on-reference-table"
 {
-	CREATE INDEX reference_index ON test_reference_table(test_id);
+    CREATE INDEX reference_index ON test_reference_table(test_id);
 }
 
 step "s2-create-reference-table-2"
 {
-	SELECT create_reference_table('test_reference_table_2');
+    SELECT create_reference_table('test_reference_table_2');
 }
 
 step "s2-begin"
 {
-	BEGIN;
+    BEGIN;
 }
 
 step "s2-commit"
 {
-	COMMIT;
+    COMMIT;
 }
 
 step "s2-print-content"
 {
-	SELECT
-		nodeport, success, result
-	FROM
-		run_command_on_placements('test_reference_table', 'select count(*) from %s')
-	ORDER BY
-		nodeport;
+    SELECT
+        nodeport, success, result
+    FROM
+        run_command_on_placements('test_reference_table', 'select count(*) from %s')
+    ORDER BY
+        nodeport;
 }
 
 step "s2-print-content-2"
 {
-	SELECT
-		nodeport, success, result
-	FROM
-		run_command_on_placements('test_reference_table_2', 'select count(*) from %s')
-	ORDER BY
-		nodeport;
+    SELECT
+        nodeport, success, result
+    FROM
+        run_command_on_placements('test_reference_table_2', 'select count(*) from %s')
+    ORDER BY
+        nodeport;
 }
 
 step "s2-print-index-count"
 {
-	SELECT
-		nodeport, success, result
-	FROM
-		run_command_on_placements('test_reference_table', 'select count(*) from pg_indexes WHERE tablename = ''%s''')
-	ORDER BY
-		nodeport;
+    SELECT
+        nodeport, success, result
+    FROM
+        run_command_on_placements('test_reference_table', 'select count(*) from pg_indexes WHERE tablename = ''%s''')
+    ORDER BY
+        nodeport;
 }
 
 // verify that copy/insert gets the invalidation and re-builts its metadata cache

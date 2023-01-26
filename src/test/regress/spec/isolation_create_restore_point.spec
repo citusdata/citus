@@ -1,142 +1,142 @@
 setup
 {
-	SET citus.shard_replication_factor TO 1;
-	CREATE TABLE restore_table (test_id integer NOT NULL, data text);
-	CREATE TABLE restore_ref_table (test_id integer NOT NULL, data text);
-	SELECT create_distributed_table('restore_table', 'test_id');
-	SELECT create_reference_table('restore_ref_table');
+    SET citus.shard_replication_factor TO 1;
+    CREATE TABLE restore_table (test_id integer NOT NULL, data text);
+    CREATE TABLE restore_ref_table (test_id integer NOT NULL, data text);
+    SELECT create_distributed_table('restore_table', 'test_id');
+    SELECT create_reference_table('restore_ref_table');
 }
 
 teardown
 {
-	DROP TABLE IF EXISTS restore_table, restore_ref_table, test_create_distributed_table, test_create_reference_table;
+    DROP TABLE IF EXISTS restore_table, restore_ref_table, test_create_distributed_table, test_create_reference_table;
 }
 
 session "s1"
 
 step "s1-begin"
 {
-	BEGIN;
+    BEGIN;
 }
 
 step "s1-create-reference"
 {
-	CREATE TABLE test_create_reference_table (test_id integer NOT NULL, data text);
-	SELECT create_reference_table('test_create_reference_table');
+    CREATE TABLE test_create_reference_table (test_id integer NOT NULL, data text);
+    SELECT create_reference_table('test_create_reference_table');
 }
 
 step "s1-create-distributed"
 {
-	CREATE TABLE test_create_distributed_table (test_id integer NOT NULL, data text);
-	SELECT create_distributed_table('test_create_distributed_table', 'test_id');
+    CREATE TABLE test_create_distributed_table (test_id integer NOT NULL, data text);
+    SELECT create_distributed_table('test_create_distributed_table', 'test_id');
 }
 
 step "s1-insert"
 {
-	INSERT INTO restore_table VALUES (1,'hello');
+    INSERT INTO restore_table VALUES (1,'hello');
 }
 
 step "s1-insert-ref"
 {
-	INSERT INTO restore_ref_table VALUES (1,'hello');
+    INSERT INTO restore_ref_table VALUES (1,'hello');
 }
 
 step "s1-modify-multiple"
 {
-	UPDATE restore_table SET data = 'world';
+    UPDATE restore_table SET data = 'world';
 }
 
 step "s1-modify-multiple-ref"
 {
-	UPDATE restore_ref_table SET data = 'world';
+    UPDATE restore_ref_table SET data = 'world';
 }
 
 step "s1-multi-statement-ref"
 {
-	BEGIN;
-	INSERT INTO restore_ref_table VALUES (1,'hello');
-	INSERT INTO restore_ref_table VALUES (2,'hello');
-	COMMIT;
+    BEGIN;
+    INSERT INTO restore_ref_table VALUES (1,'hello');
+    INSERT INTO restore_ref_table VALUES (2,'hello');
+    COMMIT;
 }
 
 step "s1-multi-statement"
 {
-	BEGIN;
-	INSERT INTO restore_table VALUES (1,'hello');
-	INSERT INTO restore_table VALUES (2,'hello');
-	COMMIT;
+    BEGIN;
+    INSERT INTO restore_table VALUES (1,'hello');
+    INSERT INTO restore_table VALUES (2,'hello');
+    COMMIT;
 }
 
 step "s1-ddl-ref"
 {
-	ALTER TABLE restore_ref_table ADD COLUMN x int;
+    ALTER TABLE restore_ref_table ADD COLUMN x int;
 }
 
 step "s1-ddl"
 {
-	ALTER TABLE restore_table ADD COLUMN x int;
+    ALTER TABLE restore_table ADD COLUMN x int;
 }
 
 step "s1-copy-ref"
 {
-	COPY restore_ref_table FROM PROGRAM 'echo 1,hello' WITH CSV;
+    COPY restore_ref_table FROM PROGRAM 'echo 1,hello' WITH CSV;
 }
 
 step "s1-copy"
 {
-	COPY restore_table FROM PROGRAM 'echo 1,hello' WITH CSV;
+    COPY restore_table FROM PROGRAM 'echo 1,hello' WITH CSV;
 }
 
 step "s1-recover"
 {
-	SELECT recover_prepared_transactions();
+    SELECT recover_prepared_transactions();
 }
 
 step "s1-create-restore"
 {
-	SELECT 1 FROM citus_create_restore_point('citus-test-2');
+    SELECT 1 FROM citus_create_restore_point('citus-test-2');
 }
 
 step "s1-drop"
 {
-	DROP TABLE restore_table;
+    DROP TABLE restore_table;
 }
 
 step "s1-drop-ref"
 {
-	DROP TABLE restore_ref_table;
+    DROP TABLE restore_ref_table;
 }
 
 step "s1-add-node"
 {
-	SELECT 1 FROM master_add_inactive_node('localhost', 9999);
+    SELECT 1 FROM master_add_inactive_node('localhost', 9999);
 }
 
 step "s1-remove-node"
 {
-	SELECT master_remove_node('localhost', 9999);
+    SELECT master_remove_node('localhost', 9999);
 }
 
 step "s1-commit"
 {
-	COMMIT;
+    COMMIT;
 }
 
 session "s2"
 
 step "s2-begin"
 {
-	BEGIN;
+    BEGIN;
 }
 
 step "s2-create-restore"
 {
-	SELECT 1 FROM citus_create_restore_point('citus-test');
+    SELECT 1 FROM citus_create_restore_point('citus-test');
 }
 
 step "s2-commit"
 {
-	COMMIT;
+    COMMIT;
 }
 
 // verify that citus_create_restore_point is blocked by concurrent create_distributed_table

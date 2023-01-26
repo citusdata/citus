@@ -1,297 +1,297 @@
 setup
 {
-  CREATE TABLE deadlock_detection_reference (user_id int UNIQUE, some_val int);
-  SELECT create_reference_table('deadlock_detection_reference');
+    CREATE TABLE deadlock_detection_reference (user_id int UNIQUE, some_val int);
+    SELECT create_reference_table('deadlock_detection_reference');
 
-  CREATE TABLE deadlock_detection_test (user_id int UNIQUE, some_val int);
-  INSERT INTO deadlock_detection_test SELECT i, i FROM generate_series(1,7) i;
-  SELECT create_distributed_table('deadlock_detection_test', 'user_id');
+    CREATE TABLE deadlock_detection_test (user_id int UNIQUE, some_val int);
+    INSERT INTO deadlock_detection_test SELECT i, i FROM generate_series(1,7) i;
+    SELECT create_distributed_table('deadlock_detection_test', 'user_id');
 
-  CREATE TABLE local_deadlock_table (user_id int UNIQUE, some_val int);
+    CREATE TABLE local_deadlock_table (user_id int UNIQUE, some_val int);
 
-  CREATE TABLE deadlock_detection_test_rep_2  (user_id int UNIQUE, some_val int);
-  SET citus.shard_replication_factor = 2;
-  SELECT create_distributed_table('deadlock_detection_test_rep_2', 'user_id');
+    CREATE TABLE deadlock_detection_test_rep_2  (user_id int UNIQUE, some_val int);
+    SET citus.shard_replication_factor = 2;
+    SELECT create_distributed_table('deadlock_detection_test_rep_2', 'user_id');
 
-  INSERT INTO deadlock_detection_test_rep_2 VALUES (1,1);
-  INSERT INTO deadlock_detection_test_rep_2 VALUES (2,2);
+    INSERT INTO deadlock_detection_test_rep_2 VALUES (1,1);
+    INSERT INTO deadlock_detection_test_rep_2 VALUES (2,2);
 }
 
 teardown
 {
-  DROP TABLE deadlock_detection_test;
-  DROP TABLE local_deadlock_table;
-  DROP TABLE deadlock_detection_test_rep_2;
-  DROP TABLE deadlock_detection_reference;
-  SET citus.shard_replication_factor = 1;
+    DROP TABLE deadlock_detection_test;
+    DROP TABLE local_deadlock_table;
+    DROP TABLE deadlock_detection_test_rep_2;
+    DROP TABLE deadlock_detection_reference;
+    SET citus.shard_replication_factor = 1;
 }
 
 session "s1"
 
 step "s1-begin"
 {
-  BEGIN;
+    BEGIN;
 }
 
 step "s1-update-1"
 {
-  UPDATE deadlock_detection_test SET some_val = 1 WHERE user_id = 1;
+    UPDATE deadlock_detection_test SET some_val = 1 WHERE user_id = 1;
 }
 
 step "s1-update-2"
 {
-  UPDATE deadlock_detection_test SET some_val = 1 WHERE user_id = 2;
+    UPDATE deadlock_detection_test SET some_val = 1 WHERE user_id = 2;
 }
 
 step "s1-update-4"
 {
-  UPDATE deadlock_detection_test SET some_val = 1 WHERE user_id = 4;
+    UPDATE deadlock_detection_test SET some_val = 1 WHERE user_id = 4;
 }
 
 step "s1-update-5"
 {
-  UPDATE deadlock_detection_test SET some_val = 1 WHERE user_id = 5;
+    UPDATE deadlock_detection_test SET some_val = 1 WHERE user_id = 5;
 }
 
 step "s1-insert-dist-10"
 {
-  INSERT INTO deadlock_detection_test VALUES (10, 10);
+    INSERT INTO deadlock_detection_test VALUES (10, 10);
 }
 
 step "s1-insert-local-10"
 {
-  INSERT INTO local_deadlock_table VALUES (10, 10);
+    INSERT INTO local_deadlock_table VALUES (10, 10);
 }
 
 step "s1-update-1-rep-2"
 {
-  UPDATE deadlock_detection_test_rep_2 SET some_val = 1 WHERE user_id = 1;
+    UPDATE deadlock_detection_test_rep_2 SET some_val = 1 WHERE user_id = 1;
 }
 
 step "s1-update-2-rep-2"
 {
-  UPDATE deadlock_detection_test_rep_2 SET some_val = 1 WHERE user_id = 2;
+    UPDATE deadlock_detection_test_rep_2 SET some_val = 1 WHERE user_id = 2;
 }
 
 step "s1-insert-ref-10"
 {
-  INSERT INTO deadlock_detection_reference VALUES (10, 10);
+    INSERT INTO deadlock_detection_reference VALUES (10, 10);
 }
 
 step "s1-insert-ref-11"
 {
-  INSERT INTO deadlock_detection_reference VALUES (11, 11);
+    INSERT INTO deadlock_detection_reference VALUES (11, 11);
 }
 
 step "s1-update-2-4"
 {
-  UPDATE deadlock_detection_test SET some_val = 1 WHERE user_id = 2 OR user_id = 4;
+    UPDATE deadlock_detection_test SET some_val = 1 WHERE user_id = 2 OR user_id = 4;
 }
 
 step "s1-commit"
 {
-  COMMIT;
+    COMMIT;
 }
 
 session "s2"
 
 step "s2-begin"
 {
-  BEGIN;
+    BEGIN;
 }
 
 step "s2-update-1"
 {
-  UPDATE deadlock_detection_test SET some_val = 2 WHERE user_id = 1;
+    UPDATE deadlock_detection_test SET some_val = 2 WHERE user_id = 1;
 }
 
 step "s2-update-2"
 {
-  UPDATE deadlock_detection_test SET some_val = 2 WHERE user_id = 2;
+    UPDATE deadlock_detection_test SET some_val = 2 WHERE user_id = 2;
 }
 
 step "s2-update-3"
 {
-  UPDATE deadlock_detection_test SET some_val = 2 WHERE user_id = 3;
+    UPDATE deadlock_detection_test SET some_val = 2 WHERE user_id = 3;
 }
 
 step "s2-update-4"
 {
-  UPDATE deadlock_detection_test SET some_val = 2 WHERE user_id = 4;
+    UPDATE deadlock_detection_test SET some_val = 2 WHERE user_id = 4;
 }
 
 step "s2-upsert-select-all"
 {
-	INSERT INTO deadlock_detection_test SELECT * FROM deadlock_detection_test ON CONFLICT(user_id) DO UPDATE SET some_val = deadlock_detection_test.some_val + 5 RETURNING *;
+    INSERT INTO deadlock_detection_test SELECT * FROM deadlock_detection_test ON CONFLICT(user_id) DO UPDATE SET some_val = deadlock_detection_test.some_val + 5 RETURNING *;
 }
 
 step "s2-ddl"
 {
-	ALTER TABLE deadlock_detection_test ADD COLUMN test_col INT;
+    ALTER TABLE deadlock_detection_test ADD COLUMN test_col INT;
 }
 
 step "s2-insert-dist-10"
 {
-  INSERT INTO deadlock_detection_test VALUES (10, 10);
+    INSERT INTO deadlock_detection_test VALUES (10, 10);
 }
 
 step "s2-insert-local-10"
 {
-  INSERT INTO local_deadlock_table VALUES (10, 10);
+    INSERT INTO local_deadlock_table VALUES (10, 10);
 }
 
 step "s2-update-1-rep-2"
 {
-  UPDATE deadlock_detection_test_rep_2 SET some_val = 1 WHERE user_id = 1;
+    UPDATE deadlock_detection_test_rep_2 SET some_val = 1 WHERE user_id = 1;
 }
 
 step "s2-update-2-rep-2"
 {
-  UPDATE deadlock_detection_test_rep_2 SET some_val = 1 WHERE user_id = 2;
+    UPDATE deadlock_detection_test_rep_2 SET some_val = 1 WHERE user_id = 2;
 }
 
 step "s2-insert-ref-10"
 {
-  INSERT INTO deadlock_detection_reference VALUES (10, 10);
+    INSERT INTO deadlock_detection_reference VALUES (10, 10);
 }
 
 step "s2-insert-ref-11"
 {
-  INSERT INTO deadlock_detection_reference VALUES (11, 11);
+    INSERT INTO deadlock_detection_reference VALUES (11, 11);
 }
 
 
 step "s2-commit"
 {
-  COMMIT;
+    COMMIT;
 }
 
 session "s3"
 
 step "s3-begin"
 {
-  BEGIN;
+    BEGIN;
 }
 
 step "s3-update-1"
 {
-  UPDATE deadlock_detection_test SET some_val = 3 WHERE user_id = 1;
+    UPDATE deadlock_detection_test SET some_val = 3 WHERE user_id = 1;
 }
 
 step "s3-update-2"
 {
-  UPDATE deadlock_detection_test SET some_val = 3 WHERE user_id = 2;
+    UPDATE deadlock_detection_test SET some_val = 3 WHERE user_id = 2;
 }
 
 step "s3-update-3"
 {
-  UPDATE deadlock_detection_test SET some_val = 3 WHERE user_id = 3;
+    UPDATE deadlock_detection_test SET some_val = 3 WHERE user_id = 3;
 }
 
 step "s3-update-4"
 {
-  UPDATE deadlock_detection_test SET some_val = 3 WHERE user_id = 4;
+    UPDATE deadlock_detection_test SET some_val = 3 WHERE user_id = 4;
 }
 
 step "s3-commit"
 {
-  COMMIT;
+    COMMIT;
 }
 
 session "s4"
 
 step "s4-begin"
 {
-  BEGIN;
+    BEGIN;
 }
 
 step "s4-update-1"
 {
-  UPDATE deadlock_detection_test SET some_val = 4 WHERE user_id = 1;
+    UPDATE deadlock_detection_test SET some_val = 4 WHERE user_id = 1;
 }
 
 step "s4-update-2"
 {
-  UPDATE deadlock_detection_test SET some_val = 4 WHERE user_id = 2;
+    UPDATE deadlock_detection_test SET some_val = 4 WHERE user_id = 2;
 }
 
 step "s4-update-4"
 {
-  UPDATE deadlock_detection_test SET some_val = 4 WHERE user_id = 4;
+    UPDATE deadlock_detection_test SET some_val = 4 WHERE user_id = 4;
 }
 
 step "s4-update-5"
 {
-  UPDATE deadlock_detection_test SET some_val = 4 WHERE user_id = 5;
+    UPDATE deadlock_detection_test SET some_val = 4 WHERE user_id = 5;
 }
 
 step "s4-update-6"
 {
-  UPDATE deadlock_detection_test SET some_val = 4 WHERE user_id = 6;
+    UPDATE deadlock_detection_test SET some_val = 4 WHERE user_id = 6;
 }
 
 step "s4-random-adv-lock"
 {
-  SELECT pg_advisory_xact_lock(8765);
+    SELECT pg_advisory_xact_lock(8765);
 }
 
 step "s4-commit"
 {
-  COMMIT;
+    COMMIT;
 }
 
 session "s5"
 
 step "s5-begin"
 {
-  BEGIN;
+    BEGIN;
 }
 
 step "s5-update-1"
 {
-  UPDATE deadlock_detection_test SET some_val = 5 WHERE user_id = 1;
+    UPDATE deadlock_detection_test SET some_val = 5 WHERE user_id = 1;
 }
 
 step "s5-update-5"
 {
-  UPDATE deadlock_detection_test SET some_val = 5 WHERE user_id = 5;
+    UPDATE deadlock_detection_test SET some_val = 5 WHERE user_id = 5;
 }
 
 step "s5-update-6"
 {
-  UPDATE deadlock_detection_test SET some_val = 5 WHERE user_id = 6;
+    UPDATE deadlock_detection_test SET some_val = 5 WHERE user_id = 6;
 }
 
 step "s5-random-adv-lock"
 {
-  SELECT pg_advisory_xact_lock(8765);
+    SELECT pg_advisory_xact_lock(8765);
 }
 
 step "s5-commit"
 {
-  COMMIT;
+    COMMIT;
 }
 
 session "s6"
 
 step "s6-begin"
 {
-  BEGIN;
+    BEGIN;
 }
 
 step "s6-update-5"
 {
-  UPDATE deadlock_detection_test SET some_val = 6 WHERE user_id = 5;
+    UPDATE deadlock_detection_test SET some_val = 6 WHERE user_id = 5;
 }
 
 step "s6-update-6"
 {
-  UPDATE deadlock_detection_test SET some_val = 6 WHERE user_id = 6;
+    UPDATE deadlock_detection_test SET some_val = 6 WHERE user_id = 6;
 }
 
 step "s6-commit"
 {
-  COMMIT;
+    COMMIT;
 }
 
 // we disable the daemon during the regression tests in order to get consistent results
@@ -302,7 +302,7 @@ session "deadlock-checker"
 // backend inappropriately
 step "deadlock-checker-call"
 {
-  SELECT check_distributed_deadlocks();
+    SELECT check_distributed_deadlocks();
 }
 
 // simplest case, loop with two nodes (Reminder: Citus uses 2PC)

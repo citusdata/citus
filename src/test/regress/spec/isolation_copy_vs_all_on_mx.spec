@@ -2,9 +2,9 @@
 
 setup
 {
-	CREATE TABLE copy_table(id integer, value integer);
-	SELECT create_distributed_table('copy_table', 'id');
-	COPY copy_table FROM PROGRAM 'echo 1, 10 && echo 2, 20 && echo 3, 30 && echo 4, 40 && echo 5, 50' WITH CSV;
+    CREATE TABLE copy_table(id integer, value integer);
+    SELECT create_distributed_table('copy_table', 'id');
+    COPY copy_table FROM PROGRAM 'echo 1, 10 && echo 2, 20 && echo 3, 30 && echo 4, 40 && echo 5, 50' WITH CSV;
 }
 
 // Create and use UDF to close the connection opened in the setup step. Also return the cluster
@@ -30,17 +30,17 @@ step "s1-begin-on-worker"
 
 step "s1-copy"
 {
-	SELECT run_commands_on_session_level_connection_to_node('COPY copy_table FROM PROGRAM ''echo 5, 50 && echo 6, 60 && echo 7, 70''WITH CSV');
+    SELECT run_commands_on_session_level_connection_to_node('COPY copy_table FROM PROGRAM ''echo 5, 50 && echo 6, 60 && echo 7, 70''WITH CSV');
 }
 
 step "s1-commit-worker"
 {
-	SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+    SELECT run_commands_on_session_level_connection_to_node('COMMIT');
 }
 
 step "s1-stop-connection"
 {
-	SELECT stop_session_level_connection_to_node();
+    SELECT stop_session_level_connection_to_node();
 }
 
 
@@ -48,7 +48,7 @@ session "s2"
 
 step "s2-begin"
 {
-	BEGIN;
+    BEGIN;
 }
 
 // We do not need to begin a transaction on coordinator, since it will be open on workers.
@@ -65,22 +65,22 @@ step "s2-begin-on-worker"
 
 step "s2-copy"
 {
-	SELECT run_commands_on_session_level_connection_to_node('COPY copy_table FROM PROGRAM ''echo 5, 50 && echo 8, 80 && echo 9, 90''WITH CSV');
+    SELECT run_commands_on_session_level_connection_to_node('COPY copy_table FROM PROGRAM ''echo 5, 50 && echo 8, 80 && echo 9, 90''WITH CSV');
 }
 
 step "s2-coordinator-drop"
 {
-	DROP TABLE copy_table;
+    DROP TABLE copy_table;
 }
 
 step "s2-select-for-update"
 {
-	SELECT run_commands_on_session_level_connection_to_node('SELECT * FROM copy_table WHERE id=5 FOR UPDATE');
+    SELECT run_commands_on_session_level_connection_to_node('SELECT * FROM copy_table WHERE id=5 FOR UPDATE');
 }
 
 step "s2-coordinator-create-index-concurrently"
 {
-	CREATE INDEX CONCURRENTLY copy_table_index ON copy_table(id);
+    CREATE INDEX CONCURRENTLY copy_table_index ON copy_table(id);
 }
 
 step "s2-commit-worker"
@@ -95,7 +95,7 @@ step "s2-stop-connection"
 
 step "s2-commit"
 {
-	COMMIT;
+    COMMIT;
 }
 // We use this as a way to wait for s2-ddl-create-index-concurrently to
 // complete. We know it can complete after s1-commit has succeeded, this way
@@ -107,7 +107,7 @@ session "s3"
 
 step "s3-select-count"
 {
-	SELECT COUNT(*) FROM copy_table;
+    SELECT COUNT(*) FROM copy_table;
 }
 
 

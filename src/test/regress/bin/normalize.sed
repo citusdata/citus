@@ -214,9 +214,9 @@ s/^(ERROR:  child table is missing constraint "\w+)_([0-9])+"/\1_xxxxxx"/g
 # session. Sometimes happens that deadlock detector cancels the session before
 # lock detection, so we normalize it by removing these two lines.
 /^ <waiting ...>$/ {
-    N; /\nstep s1-update-2: <... completed>$/ {
-        s/.*//g
-    }
+	N; /\nstep s1-update-2: <... completed>$/ {
+		s/.*//g
+	}
 }
 
 # normalize long table shard name errors for alter_table_set_access_method and alter_distributed_table

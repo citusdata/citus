@@ -1,25 +1,25 @@
 setup
 {
-	SET citus.shard_count to 2;
-	SET citus.shard_replication_factor to 1;
-	SELECT setval('pg_dist_shardid_seq',
-		CASE WHEN nextval('pg_dist_shardid_seq') > 1599999 OR nextval('pg_dist_shardid_seq') < 1500072
-			THEN 1500072
-			ELSE nextval('pg_dist_shardid_seq')-2
-		END);
+    SET citus.shard_count to 2;
+    SET citus.shard_replication_factor to 1;
+    SELECT setval('pg_dist_shardid_seq',
+        CASE WHEN nextval('pg_dist_shardid_seq') > 1599999 OR nextval('pg_dist_shardid_seq') < 1500072
+            THEN 1500072
+            ELSE nextval('pg_dist_shardid_seq')-2
+        END);
 
-	CREATE TABLE isolation_table (id int PRIMARY KEY, value int);
-	SELECT create_distributed_table('isolation_table', 'id');
+    CREATE TABLE isolation_table (id int PRIMARY KEY, value int);
+    SELECT create_distributed_table('isolation_table', 'id');
 
-	-- different colocation id
-	CREATE TABLE isolation_table2 (id smallint PRIMARY KEY, value int);
-	SELECT create_distributed_table('isolation_table2', 'id');
+    -- different colocation id
+    CREATE TABLE isolation_table2 (id smallint PRIMARY KEY, value int);
+    SELECT create_distributed_table('isolation_table2', 'id');
 }
 
 teardown
 {
-	DROP TABLE isolation_table;
-	DROP TABLE isolation_table2;
+    DROP TABLE isolation_table;
+    DROP TABLE isolation_table2;
 }
 
 session "s1"
@@ -36,97 +36,97 @@ step "s1-begin"
 // cache all placements
 step "s1-load-cache"
 {
-	TRUNCATE isolation_table;
-	TRUNCATE isolation_table2;
+    TRUNCATE isolation_table;
+    TRUNCATE isolation_table2;
 }
 
 step "s1-insert"
 {
-	INSERT INTO isolation_table VALUES (5, 10);
-	INSERT INTO isolation_table2 VALUES (5, 10);
+    INSERT INTO isolation_table VALUES (5, 10);
+    INSERT INTO isolation_table2 VALUES (5, 10);
 }
 
 step "s1-update"
 {
-	UPDATE isolation_table SET value = 5 WHERE id = 5;
+    UPDATE isolation_table SET value = 5 WHERE id = 5;
 }
 
 step "s1-update-complex"
 {
-	UPDATE isolation_table SET value = 5 WHERE id IN (
+    UPDATE isolation_table SET value = 5 WHERE id IN (
         SELECT max(id) FROM isolation_table
     );
 }
 
 step "s1-delete"
 {
-	DELETE FROM isolation_table WHERE id = 5;
+    DELETE FROM isolation_table WHERE id = 5;
 }
 
 step "s1-select"
 {
-	SELECT count(*) FROM isolation_table WHERE id = 5;
+    SELECT count(*) FROM isolation_table WHERE id = 5;
 }
 
 step "s1-copy"
 {
-	COPY isolation_table FROM PROGRAM 'echo "1,1\n2,2\n3,3\n4,4\n5,5"' WITH CSV;
+    COPY isolation_table FROM PROGRAM 'echo "1,1\n2,2\n3,3\n4,4\n5,5"' WITH CSV;
 }
 
 step "s1-isolate-tenant-same-coloc"
 {
-	SELECT isolate_tenant_to_new_shard('isolation_table', 2, shard_transfer_mode => 'force_logical');
+    SELECT isolate_tenant_to_new_shard('isolation_table', 2, shard_transfer_mode => 'force_logical');
 }
 
 step "s1-isolate-tenant-same-coloc-blocking"
 {
-	SELECT isolate_tenant_to_new_shard('isolation_table', 2, shard_transfer_mode => 'block_writes');
+    SELECT isolate_tenant_to_new_shard('isolation_table', 2, shard_transfer_mode => 'block_writes');
 }
 
 step "s1-isolate-tenant-no-same-coloc"
 {
-	SELECT isolate_tenant_to_new_shard('isolation_table2', 2, shard_transfer_mode => 'force_logical');
+    SELECT isolate_tenant_to_new_shard('isolation_table2', 2, shard_transfer_mode => 'force_logical');
 }
 
 step "s1-isolate-tenant-no-same-coloc-blocking"
 {
-	SELECT isolate_tenant_to_new_shard('isolation_table2', 2, shard_transfer_mode => 'block_writes');
+    SELECT isolate_tenant_to_new_shard('isolation_table2', 2, shard_transfer_mode => 'block_writes');
 }
 
 step "s1-commit"
 {
-	COMMIT;
+    COMMIT;
 }
 
 session "s2"
 
 step "s2-begin"
 {
-	BEGIN;
+    BEGIN;
 }
 
 step "s2-isolate-tenant"
 {
-	SELECT isolate_tenant_to_new_shard('isolation_table', 5, shard_transfer_mode => 'force_logical');
+    SELECT isolate_tenant_to_new_shard('isolation_table', 5, shard_transfer_mode => 'force_logical');
 }
 
 step "s2-commit"
 {
-	COMMIT;
+    COMMIT;
 }
 
 step "s2-print-cluster"
 {
-	-- row count per shard
-	SELECT
-		nodeport, shardid, success, result
-	FROM
-		run_command_on_placements('isolation_table', 'select count(*) from %s')
-	ORDER BY
-		nodeport, shardid;
+    -- row count per shard
+    SELECT
+        nodeport, shardid, success, result
+    FROM
+        run_command_on_placements('isolation_table', 'select count(*) from %s')
+    ORDER BY
+        nodeport, shardid;
 
-	-- rows
-	SELECT id, value FROM isolation_table ORDER BY id, value;
+    -- rows
+    SELECT id, value FROM isolation_table ORDER BY id, value;
 }
 
 session "s3"

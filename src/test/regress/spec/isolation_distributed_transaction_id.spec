@@ -2,12 +2,12 @@
 
 setup
 {
-	SET TIME ZONE 'PST8PDT';
+    SET TIME ZONE 'PST8PDT';
 }
 
 teardown
 {
-	SET TIME ZONE DEFAULT;
+    SET TIME ZONE DEFAULT;
 }
 
 session "s1"
@@ -34,40 +34,40 @@ step "s1-commit"
 
 step "s1-create-table"
 {
-	-- some tests also use distributed table
-	CREATE TABLE distributed_transaction_id_table(some_value int, other_value int);
-	SET citus.shard_count TO 4;
-	SELECT create_distributed_table('distributed_transaction_id_table', 'some_value');
+    -- some tests also use distributed table
+    CREATE TABLE distributed_transaction_id_table(some_value int, other_value int);
+    SET citus.shard_count TO 4;
+    SELECT create_distributed_table('distributed_transaction_id_table', 'some_value');
 }
 
 step "s1-insert"
 {
-	INSERT INTO distributed_transaction_id_table VALUES (1, 1);
+    INSERT INTO distributed_transaction_id_table VALUES (1, 1);
 }
 
 step "s1-verify-current-xact-is-on-worker"
 {
-	SELECT
-	    remote.nodeport,
-	    remote.result = row(xact.transaction_number)::text AS xact_exists
-	FROM
-	    get_current_transaction_id() as xact,
-	    run_command_on_workers($$
-	        SELECT row(transaction_number)
+    SELECT
+        remote.nodeport,
+        remote.result = row(xact.transaction_number)::text AS xact_exists
+    FROM
+        get_current_transaction_id() as xact,
+        run_command_on_workers($$
+            SELECT row(transaction_number)
             FROM get_all_active_transactions()
-			WHERE transaction_number != 0;
+            WHERE transaction_number != 0;
         $$) as remote
     ORDER BY remote.nodeport ASC;
 }
 
 step "s1-get-all-transactions"
 {
-	SELECT initiator_node_identifier, transaction_number, transaction_stamp FROM get_current_transaction_id() ORDER BY 1,2,3;
+    SELECT initiator_node_identifier, transaction_number, transaction_stamp FROM get_current_transaction_id() ORDER BY 1,2,3;
 }
 
 step "s1-drop-table"
 {
-	DROP TABLE distributed_transaction_id_table;
+    DROP TABLE distributed_transaction_id_table;
 }
 
 session "s2"
@@ -94,7 +94,7 @@ step "s2-commit"
 
 step "s2-get-all-transactions"
 {
-	SELECT initiator_node_identifier, transaction_number, transaction_stamp FROM get_current_transaction_id() ORDER BY 1,2,3;
+    SELECT initiator_node_identifier, transaction_number, transaction_stamp FROM get_current_transaction_id() ORDER BY 1,2,3;
 }
 
 session "s3"
@@ -116,7 +116,7 @@ step "s3-commit"
 
 step "s3-get-all-transactions"
 {
-	SELECT initiator_node_identifier, transaction_number, transaction_stamp FROM get_current_transaction_id() ORDER BY 1,2,3;
+    SELECT initiator_node_identifier, transaction_number, transaction_stamp FROM get_current_transaction_id() ORDER BY 1,2,3;
 }
 
 // show that we could get all distributed transaction ids from seperate sessions

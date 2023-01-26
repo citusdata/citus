@@ -1,13 +1,13 @@
 setup
 {
     SET citus.shard_count TO 2;
-	SET citus.shard_replication_factor TO 1;
+    SET citus.shard_replication_factor TO 1;
 
     CREATE TABLE ref_table_1(id int PRIMARY KEY, value int);
-	SELECT create_reference_table('ref_table_1');
+    SELECT create_reference_table('ref_table_1');
 
     CREATE TABLE ref_table_2(id int PRIMARY KEY REFERENCES ref_table_1(id) ON DELETE CASCADE ON UPDATE CASCADE);
-	SELECT create_reference_table('ref_table_2');
+    SELECT create_reference_table('ref_table_2');
 
     CREATE TABLE dist_table(id int PRIMARY KEY, value int REFERENCES ref_table_2(id) ON DELETE CASCADE ON UPDATE CASCADE);
     SELECT create_distributed_table('dist_table', 'id');
@@ -21,14 +21,14 @@ setup
 
 teardown
 {
-	DROP TABLE ref_table_1, ref_table_2, dist_table, selected_shard_for_dist_table;
+    DROP TABLE ref_table_1, ref_table_2, dist_table, selected_shard_for_dist_table;
 }
 
 session "s1"
 
 step "s1-begin"
 {
-	BEGIN;
+    BEGIN;
 }
 
 step "s1-delete-table-1"
@@ -66,7 +66,7 @@ session "s2"
 
 step "s2-begin"
 {
-	BEGIN;
+    BEGIN;
 }
 
 step "s2-move-shards"

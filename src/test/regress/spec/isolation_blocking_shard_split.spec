@@ -2,25 +2,25 @@
 
 setup
 {
-	SET citus.shard_count to 2;
-	SET citus.shard_replication_factor to 1;
+    SET citus.shard_count to 2;
+    SET citus.shard_replication_factor to 1;
     SELECT setval('pg_dist_shardid_seq', 1500000);
 
-	-- Cleanup any orphan shards that might be left over from a previous run.
-	CREATE OR REPLACE FUNCTION run_try_drop_marked_resources()
-	RETURNS VOID
-	AS 'citus'
-	LANGUAGE C STRICT VOLATILE;
+    -- Cleanup any orphan shards that might be left over from a previous run.
+    CREATE OR REPLACE FUNCTION run_try_drop_marked_resources()
+    RETURNS VOID
+    AS 'citus'
+    LANGUAGE C STRICT VOLATILE;
 
-	CREATE TABLE to_split_table (id int, value int);
-	SELECT create_distributed_table('to_split_table', 'id');
+    CREATE TABLE to_split_table (id int, value int);
+    SELECT create_distributed_table('to_split_table', 'id');
 }
 
 teardown
 {
-	SELECT run_try_drop_marked_resources();
+    SELECT run_try_drop_marked_resources();
 
-	DROP TABLE to_split_table;
+    DROP TABLE to_split_table;
 }
 
 session "s1"
@@ -37,51 +37,51 @@ step "s1-begin"
 // cache all placements
 step "s1-load-cache"
 {
-	-- Indirect way to load cache.
-	TRUNCATE to_split_table;
+    -- Indirect way to load cache.
+    TRUNCATE to_split_table;
 }
 
 step "s1-insert"
 {
-	-- Id '123456789' maps to shard 1500002.
-	SELECT get_shard_id_for_distribution_column('to_split_table', 123456789);
+    -- Id '123456789' maps to shard 1500002.
+    SELECT get_shard_id_for_distribution_column('to_split_table', 123456789);
 
-	INSERT INTO to_split_table VALUES (123456789, 1);
+    INSERT INTO to_split_table VALUES (123456789, 1);
 }
 
 step "s1-update"
 {
-	UPDATE to_split_table SET value = 111 WHERE id = 123456789;
+    UPDATE to_split_table SET value = 111 WHERE id = 123456789;
 }
 
 step "s1-delete"
 {
-	DELETE FROM to_split_table WHERE id = 123456789;
+    DELETE FROM to_split_table WHERE id = 123456789;
 }
 
 step "s1-select"
 {
-	SELECT count(*) FROM to_split_table WHERE id = 123456789;
+    SELECT count(*) FROM to_split_table WHERE id = 123456789;
 }
 
 step "s1-ddl"
 {
-	CREATE INDEX test_table_index ON to_split_table(id);
+    CREATE INDEX test_table_index ON to_split_table(id);
 }
 
 step "s1-copy"
 {
-	COPY to_split_table FROM PROGRAM 'echo "1,1\n2,2\n3,3\n4,4\n5,5"' WITH CSV;
+    COPY to_split_table FROM PROGRAM 'echo "1,1\n2,2\n3,3\n4,4\n5,5"' WITH CSV;
 }
 
 step "s1-lock-to-split-shard"
 {
-  SELECT run_commands_on_session_level_connection_to_node('BEGIN; LOCK TABLE to_split_table_1500002 IN ACCESS SHARE MODE;');
+    SELECT run_commands_on_session_level_connection_to_node('BEGIN; LOCK TABLE to_split_table_1500002 IN ACCESS SHARE MODE;');
 }
 
 step "s1-start-connection"
 {
-  SELECT start_session_level_connection_to_node('localhost', 57638);
+    SELECT start_session_level_connection_to_node('localhost', 57638);
 }
 
 step "s1-stop-connection"
@@ -104,88 +104,88 @@ step "s1-release-split-advisory-lock"
 
 step "s1-run-cleaner"
 {
-	SELECT run_try_drop_marked_resources();
+    SELECT run_try_drop_marked_resources();
 }
 
 step "s1-show-pg_dist_cleanup"
 {
-	SELECT object_name, object_type, policy_type FROM pg_dist_cleanup;
+    SELECT object_name, object_type, policy_type FROM pg_dist_cleanup;
 }
 
 step "s1-blocking-shard-split"
 {
-	SELECT pg_catalog.citus_split_shard_by_split_points(
-		1500001,
-		ARRAY['-1073741824'],
-		ARRAY[1, 2],
-		'block_writes');
+    SELECT pg_catalog.citus_split_shard_by_split_points(
+        1500001,
+        ARRAY['-1073741824'],
+        ARRAY[1, 2],
+        'block_writes');
 }
 
 step "s1-commit"
 {
-	COMMIT;
+    COMMIT;
 }
 
 session "s2"
 
 step "s2-begin"
 {
-	BEGIN;
+    BEGIN;
 }
 
 step "s2-print-locks"
 {
     SELECT * FROM master_run_on_worker(
-		ARRAY['localhost']::text[],
-		ARRAY[57638]::int[],
-		ARRAY[
-			'SELECT CONCAT(relation::regclass, ''-'', locktype, ''-'', mode) AS LockInfo FROM pg_locks
-				WHERE relation::regclass::text = ''to_split_table_1500002'';'
-			 ]::text[],
-		false);
+        ARRAY['localhost']::text[],
+        ARRAY[57638]::int[],
+        ARRAY[
+            'SELECT CONCAT(relation::regclass, ''-'', locktype, ''-'', mode) AS LockInfo FROM pg_locks
+                WHERE relation::regclass::text = ''to_split_table_1500002'';'
+            ]::text[],
+        false);
 }
 
 step "s2-show-pg_dist_cleanup"
 {
-	SELECT object_name, object_type, policy_type FROM pg_dist_cleanup;
+    SELECT object_name, object_type, policy_type FROM pg_dist_cleanup;
 }
 
 step "s2-blocking-shard-split"
 {
-	SELECT pg_catalog.citus_split_shard_by_split_points(
-		1500002,
-		ARRAY['1073741824'],
-		ARRAY[1, 2],
-		'block_writes');
+    SELECT pg_catalog.citus_split_shard_by_split_points(
+        1500002,
+        ARRAY['1073741824'],
+        ARRAY[1, 2],
+        'block_writes');
 }
 
 step "s2-commit"
 {
-	COMMIT;
+    COMMIT;
 }
 
 step "s2-print-cluster"
 {
-	-- row count per shard
-	SELECT
-		nodeport, shardid, success, result
-	FROM
-		run_command_on_placements('to_split_table', 'select count(*) from %s')
-	ORDER BY
-		nodeport, shardid;
+    -- row count per shard
+    SELECT
+        nodeport, shardid, success, result
+    FROM
+        run_command_on_placements('to_split_table', 'select count(*) from %s')
+    ORDER BY
+        nodeport, shardid;
 
-	-- rows
-	SELECT id, value FROM to_split_table ORDER BY id, value;
+    -- rows
+    SELECT id, value FROM to_split_table ORDER BY id, value;
 }
 
 step "s2-print-index-count"
 {
-	SELECT
-		nodeport, success, result
-	FROM
-		run_command_on_placements('to_split_table', 'select count(*) from pg_indexes WHERE tablename = ''%s''')
-	ORDER BY
-		nodeport;
+    SELECT
+        nodeport, success, result
+    FROM
+        run_command_on_placements('to_split_table', 'select count(*) from pg_indexes WHERE tablename = ''%s''')
+    ORDER BY
+        nodeport;
 }
 
 // Run shard split while concurrently performing DML and index creation

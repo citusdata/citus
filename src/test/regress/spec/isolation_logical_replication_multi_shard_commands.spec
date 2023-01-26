@@ -3,19 +3,19 @@
 
 setup
 {
-  SET citus.shard_count TO 8;
-	SET citus.shard_replication_factor TO 1;
-	CREATE TABLE logical_replicate_placement (x int PRIMARY KEY, y int);
-	SELECT create_distributed_table('logical_replicate_placement', 'x');
+    SET citus.shard_count TO 8;
+    SET citus.shard_replication_factor TO 1;
+    CREATE TABLE logical_replicate_placement (x int PRIMARY KEY, y int);
+    SELECT create_distributed_table('logical_replicate_placement', 'x');
 
-	SELECT get_shard_id_for_distribution_column('logical_replicate_placement', 15) INTO selected_shard;
+    SELECT get_shard_id_for_distribution_column('logical_replicate_placement', 15) INTO selected_shard;
 
 }
 
 teardown
 {
-  DROP TABLE selected_shard;
-	DROP TABLE logical_replicate_placement;
+    DROP TABLE selected_shard;
+    DROP TABLE logical_replicate_placement;
 }
 
 
@@ -23,22 +23,22 @@ session "s1"
 
 step "s1-begin"
 {
-	BEGIN;
+    BEGIN;
 }
 
 step "s1-move-placement"
 {
-    	SELECT master_move_shard_placement(get_shard_id_for_distribution_column, 'localhost', 57637, 'localhost', 57638) FROM selected_shard;
+        SELECT master_move_shard_placement(get_shard_id_for_distribution_column, 'localhost', 57637, 'localhost', 57638) FROM selected_shard;
 }
 
 step "s1-end"
 {
-	COMMIT;
+    COMMIT;
 }
 
 step "s1-select"
 {
-  SELECT * FROM logical_replicate_placement order by y;
+    SELECT * FROM logical_replicate_placement order by y;
 }
 
 step "s1-insert"
@@ -55,7 +55,7 @@ session "s2"
 
 step "s2-begin"
 {
-	BEGIN;
+    BEGIN;
 }
 
 step "s2-select"
@@ -87,22 +87,22 @@ step "s2-upsert"
 
 step "s2-copy"
 {
-	COPY logical_replicate_placement FROM PROGRAM 'echo "1,1\n2,2\n3,3\n4,4\n5,5\n15,30"' WITH CSV;
+    COPY logical_replicate_placement FROM PROGRAM 'echo "1,1\n2,2\n3,3\n4,4\n5,5\n15,30"' WITH CSV;
 }
 
 step "s2-truncate"
 {
-	TRUNCATE logical_replicate_placement;
+    TRUNCATE logical_replicate_placement;
 }
 
 step "s2-alter-table"
 {
-	ALTER TABLE logical_replicate_placement ADD COLUMN z INT;
+    ALTER TABLE logical_replicate_placement ADD COLUMN z INT;
 }
 
 step "s2-end"
 {
-	COMMIT;
+    COMMIT;
 }
 
 session "s3"
@@ -149,4 +149,3 @@ permutation "s1-insert" "s1-begin" "s2-begin" "s2-select" "s1-move-placement" "s
 permutation "s1-begin" "s2-begin" "s2-copy" "s1-move-placement" "s2-end" "s1-end" "s1-select" "s1-get-shard-distribution"
 permutation "s1-insert" "s1-begin" "s2-begin" "s2-truncate" "s1-move-placement" "s2-end" "s1-end" "s1-select" "s1-get-shard-distribution"
 permutation "s1-begin" "s2-begin" "s2-alter-table" "s1-move-placement" "s2-end" "s1-end" "s1-select" "s1-get-shard-distribution"
-
