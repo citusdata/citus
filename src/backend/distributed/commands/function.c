@@ -752,6 +752,8 @@ UpdateFunctionDistributionInfo(const ObjectAddress *distAddress,
 							   distAddress->objectId, distAddress->objectSubId)));
 	}
 
+	memset(values, 0, sizeof(values));
+	memset(isnull, 0, sizeof(isnull));
 	memset(replace, 0, sizeof(replace));
 
 	replace[Anum_pg_dist_object_distribution_argument_index - 1] = true;

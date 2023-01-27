@@ -503,3 +503,82 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT user_id FROM 
 ---------------------------------------------------------------------
 (0 rows)
 
+CREATE TABLE dist(id int, value int);
+SELECT create_distributed_table('dist','id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO dist SELECT i, i FROM generate_series(0,100) i;
+DEBUG:  distributed INSERT ... SELECT can only select from distributed tables
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
+CREATE TABLE ref(id int);
+SELECT create_reference_table('ref');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO ref SELECT i FROM generate_series(50,150) i;
+DEBUG:  distributed INSERT ... SELECT can only select from distributed tables
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
+CREATE TABLE local(id int);
+INSERT INTO local SELECT i FROM generate_series(50,150) i;
+-- planner recursively plans local table in local-dist join and then the whole query is routed
+SELECT COUNT(*) FROM dist JOIN local USING(id)
+WHERE
+	dist.id IN (SELECT id FROM dist WHERE id = 55) AND
+    dist.id = 55 AND
+    dist.value IN (SELECT value FROM dist WHERE id = 55);
+DEBUG:  Wrapping relation "local" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT id FROM public.local WHERE (id OPERATOR(pg_catalog.=) 55)
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (public.dist JOIN (SELECT local_1.id FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) local_1) local USING (id)) WHERE ((dist.id OPERATOR(pg_catalog.=) ANY (SELECT dist_1.id FROM public.dist dist_1 WHERE (dist_1.id OPERATOR(pg_catalog.=) 55))) AND (dist.id OPERATOR(pg_catalog.=) 55) AND (dist.value OPERATOR(pg_catalog.=) ANY (SELECT dist_1.value FROM public.dist dist_1 WHERE (dist_1.id OPERATOR(pg_catalog.=) 55))))
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+-- subquery in WHERE clause should be recursively planned after planner recursively plans recurring full join
+SELECT COUNT(*) FROM ref FULL JOIN dist USING (id)
+WHERE
+	dist.id IN (SELECT id FROM dist GROUP BY id);
+DEBUG:  recursively planning right side of the full join since the other side is a recurring rel
+DEBUG:  recursively planning distributed relation "dist" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT id FROM public.dist WHERE true
+DEBUG:  generating subplan XXX_2 for subquery SELECT id FROM public.dist GROUP BY id
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (public.ref FULL JOIN (SELECT dist_1.id, NULL::integer AS value FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) dist_1) dist USING (id)) WHERE (dist.id OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.id FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(id integer)))
+ count
+---------------------------------------------------------------------
+   101
+(1 row)
+
+-- subqueries in WHERE clause should be recursively planned after planner recursively plans full outer join
+SELECT COUNT(*) FROM dist FULL JOIN ref USING(id)
+WHERE
+	dist.id IN (SELECT id FROM dist WHERE id > 5) AND
+    dist.value IN (SELECT value FROM dist WHERE id > 15);
+DEBUG:  generating subplan XXX_1 for subquery SELECT value FROM public.dist WHERE (id OPERATOR(pg_catalog.>) 15)
+DEBUG:  recursively planning left side of the full join since the other side is a recurring rel
+DEBUG:  recursively planning distributed relation "dist" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist" to a subquery
+DEBUG:  generating subplan XXX_2 for subquery SELECT id, value FROM public.dist WHERE true
+DEBUG:  generating subplan XXX_3 for subquery SELECT id FROM public.dist WHERE (id OPERATOR(pg_catalog.>) 5)
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT dist_1.id, dist_1.value FROM (SELECT intermediate_result.id, intermediate_result.value FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(id integer, value integer)) dist_1) dist FULL JOIN public.ref USING (id)) WHERE ((dist.id OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.id FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(id integer))) AND (dist.value OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(value integer))))
+ count
+---------------------------------------------------------------------
+    85
+(1 row)
+
+-- sublinks in the targetlist are not supported
+SELECT (SELECT id FROM dist WHERE dist.id > d1.id GROUP BY id) FROM ref FULL JOIN dist d1 USING (id);
+DEBUG:  recursively planning right side of the full join since the other side is a recurring rel
+DEBUG:  recursively planning distributed relation "dist" "d1" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist" "d1" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT id FROM public.dist d1 WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT (SELECT dist.id FROM public.dist WHERE (dist.id OPERATOR(pg_catalog.>) d1.id) GROUP BY dist.id) AS id FROM (public.ref FULL JOIN (SELECT d1_1.id, NULL::integer AS value FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) d1_1) d1 USING (id))
+ERROR:  correlated subqueries are not supported when the FROM clause contains a reference table
+DROP TABLE dist;
+DROP TABLE ref;
+DROP TABLE local;
