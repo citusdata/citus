@@ -1312,19 +1312,6 @@ IsTableTypeIncluded(Oid relationId, int flags)
 
 
 /*
- * EnableSkippingConstraintValidation is simply a C interface for setting the following:
- *      SET LOCAL citus.skip_constraint_validation TO on;
- */
-void
-EnableSkippingConstraintValidation()
-{
-	set_config_option("citus.skip_constraint_validation", "true",
-					  PGC_SUSET, PGC_S_SESSION,
-					  GUC_ACTION_LOCAL, true, 0, false);
-}
-
-
-/*
  * RelationInvolvedInAnyNonInheritedForeignKeys returns true if relation involved
  * in a foreign key that is not inherited from its parent relation.
  */
