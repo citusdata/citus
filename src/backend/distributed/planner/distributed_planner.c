@@ -749,8 +749,11 @@ CreateDistributedPlannedStmt(DistributedPlanningContext *planContext)
 		hasUnresolvedParams = true;
 	}
 
+	bool allowRecursivePlanning = true;
 	DistributedPlan *distributedPlan =
-		CreateDistributedPlan(planId, planContext->originalQuery, planContext->query,
+		CreateDistributedPlan(planId, allowRecursivePlanning,
+							  planContext->originalQuery,
+							  planContext->query,
 							  planContext->boundParams,
 							  hasUnresolvedParams,
 							  planContext->plannerRestrictionContext);
@@ -921,8 +924,8 @@ TryCreateDistributedPlannedStmt(PlannedStmt *localPlan,
  * 3. Logical planner
  */
 DistributedPlan *
-CreateDistributedPlan(uint64 planId, Query *originalQuery, Query *query, ParamListInfo
-					  boundParams, bool hasUnresolvedParams,
+CreateDistributedPlan(uint64 planId, bool allowRecursivePlanning, Query *originalQuery,
+					  Query *query, ParamListInfo boundParams, bool hasUnresolvedParams,
 					  PlannerRestrictionContext *plannerRestrictionContext)
 {
 	DistributedPlan *distributedPlan = NULL;
@@ -1060,6 +1063,21 @@ CreateDistributedPlan(uint64 planId, Query *originalQuery, Query *query, ParamLi
 	 */
 	if (list_length(subPlanList) > 0 || hasCtes)
 	{
+		/*
+		 * recursive planner should handle all the tree from bottom to
+		 * top at single pass. i.e. It should have already recursively planned all
+		 * required parts in its first pass. Hence, we expect allowRecursivePlanning
+		 * to be true. Otherwise, this means we have bug at recursive planner,
+		 * which needs to be handled. We add a check here and return error.
+		 */
+		if (!allowRecursivePlanning)
+		{
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("recursive complex joins are only supported "
+								   "when all distributed tables are co-located and "
+								   "joined on their distribution columns")));
+		}
+
 		Query *newQuery = copyObject(originalQuery);
 		bool setPartitionedTablesInherited = false;
 		PlannerRestrictionContext *currentPlannerRestrictionContext =
@@ -1088,8 +1106,14 @@ CreateDistributedPlan(uint64 planId, Query *originalQuery, Query *query, ParamLi
 		/* overwrite the old transformed query with the new transformed query */
 		*query = *newQuery;
 
-		/* recurse into CreateDistributedPlan with subqueries/CTEs replaced */
-		distributedPlan = CreateDistributedPlan(planId, originalQuery, query, NULL, false,
+		/*
+		 * recurse into CreateDistributedPlan with subqueries/CTEs replaced.
+		 * We only allow recursive planning once, which should have already done all
+		 * the necessary transformations. So, we do not allow recursive planning once again.
+		 */
+		allowRecursivePlanning = false;
+		distributedPlan = CreateDistributedPlan(planId, allowRecursivePlanning,
+												originalQuery, query, NULL, false,
 												plannerRestrictionContext);
 
 		/* distributedPlan cannot be null since hasUnresolvedParams argument was false */

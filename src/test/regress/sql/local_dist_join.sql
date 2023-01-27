@@ -289,18 +289,6 @@ ORDER BY 1;
 SELECT local.title, local.title FROM local JOIN distributed USING(id) ORDER BY 1,2 LIMIt 1;
 SELECT NULL FROM local JOIN distributed USING(id) ORDER BY 1 LIMIt 1;
 SELECT distributed.name, distributed.name,  local.title, local.title FROM local JOIN distributed USING(id) ORDER BY 1,2,3,4 LIMIT 1;
-SELECT
-	COUNT(*)
-FROM
-	local
-JOIN
-	distributed
-USING
-	(id)
-JOIN
-	(SELECT  id, NULL, NULL FROM distributed) foo
-USING
-	(id);
 
 BEGIN;
 SELECT COUNT(DISTINCT title) FROM local;

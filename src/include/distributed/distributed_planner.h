@@ -246,10 +246,12 @@ extern PlannedStmt * FinalizePlan(PlannedStmt *localPlan,
 extern RTEListProperties * GetRTEListPropertiesForQuery(Query *query);
 
 
-extern struct DistributedPlan * CreateDistributedPlan(uint64 planId, Query *originalQuery,
-													  Query *query, ParamListInfo
-													  boundParams, bool
-													  hasUnresolvedParams,
+extern struct DistributedPlan * CreateDistributedPlan(uint64 planId,
+													  bool allowRecursivePlanning,
+													  Query *originalQuery,
+													  Query *query,
+													  ParamListInfo boundParams,
+													  bool hasUnresolvedParams,
 													  PlannerRestrictionContext *
 													  plannerRestrictionContext);
 
