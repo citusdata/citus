@@ -238,8 +238,11 @@ CREATE FOREIGN TABLE foreign_table_local_fails (
 SELECT citus_add_local_table_to_metadata('foreign_table_local_fails');
 
 -- should work since it has a table_name
-ALTER FOREIGN TABLE foreign_table_local_fails OPTIONS (table_name 'foreign_table_local_fails');
+ALTER FOREIGN TABLE foreign_table_local_fails OPTIONS (table_name 'foreign_table_test');
 SELECT citus_add_local_table_to_metadata('foreign_table_local_fails');
+
+INSERT INTO foreign_table_test VALUES (1, 'test');
+
 SELECT undistribute_table('foreign_table_local_fails');
 
 DROP FOREIGN TABLE foreign_table_local;
