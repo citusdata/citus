@@ -10,22 +10,6 @@ Here is a high level overview of test plan:
 */
 
 CREATE SCHEMA "citus_cdc_test_schema";
-CREATE ROLE test_cdc_role WITH LOGIN;
-GRANT USAGE, CREATE ON SCHEMA "citus_cdc_test_schema" TO test_cdc_role;
-SET ROLE test_cdc_role;
-
--- BEGIN 1:	 Connect to the co-ordinator node and create table, indexes and statistics and create CDC replication slots in worker nodes.
-\c - postgres - :worker_1_port
-CREATE SCHEMA "citus_cdc_test_schema";
-CREATE ROLE test_cdc_role WITH LOGIN;
-GRANT USAGE, CREATE ON SCHEMA "citus_cdc_test_schema" TO test_cdc_role;
-SET ROLE test_cdc_role;
-
-\c - postgres - :worker_2_port
-CREATE SCHEMA "citus_cdc_test_schema";
-CREATE ROLE test_cdc_role WITH LOGIN;
-GRANT USAGE, CREATE ON SCHEMA "citus_cdc_test_schema" TO test_cdc_role;
-SET ROLE test_cdc_role;
 
 \c - postgres - :master_port
 SET search_path TO "citus_cdc_test_schema";
@@ -37,6 +21,9 @@ SET citus.shard_replication_factor TO 1;
 SELECT 1 FROM citus_set_coordinator_host('localhost', :master_port);
 SELECT 1 FROM master_add_node('localhost', :worker_1_port);
 SELECT 1 from master_add_node('localhost', :worker_2_port);
+
+SELECT nodeid AS worker_1_node FROM pg_dist_node WHERE nodeport=:worker_1_port \gset
+SELECT nodeid AS worker_2_node FROM pg_dist_node WHERE nodeport=:worker_2_port \gset
 
 CREATE TABLE sensors(
     measureid               integer,
@@ -53,22 +40,18 @@ CREATE INDEX hash_index_on_sensors ON sensors USING HASH((measure_data->'IsFaile
 CREATE INDEX index_with_include_on_sensors ON sensors ((measure_data->'IsFailed')) INCLUDE (measure_data, eventdatetime, measure_status);
 CREATE STATISTICS stats_on_sensors (dependencies) ON measureid, eventdatetime FROM sensors;
 
--- Create publication and logical replication slot for CDC client to connect to.
-CREATE PUBLICATION cdc_publication FOR TABLE sensors;
-SELECT pg_create_logical_replication_slot('cdc_replication_slot', 'citus', false, true);
-
 -- Create the sensors distributed table.
 SELECT create_distributed_table('sensors', 'measureid', colocate_with:='none');
 
 \c - postgres - :worker_1_port
 SET search_path TO "citus_cdc_test_schema";
 CREATE PUBLICATION cdc_publication FOR TABLE sensors;
-SELECT pg_create_logical_replication_slot('cdc_replication_slot', 'citus', false, true);
+SELECT slot_name AS slot_name_1 FROM pg_create_logical_replication_slot(FORMAT('cdc_replication_slot%s', :worker_1_node), 'citus',false,true) \gset
 
 \c - postgres - :worker_2_port
 SET search_path TO "citus_cdc_test_schema";
 CREATE PUBLICATION cdc_publication FOR TABLE sensors;
-SELECT pg_create_logical_replication_slot('cdc_replication_slot', 'citus', false, true);
+SELECT slot_name AS slot_name_2 FROM pg_create_logical_replication_slot(FORMAT('cdc_replication_slot%s', :worker_2_node), 'citus',false,true) \gset
 -- END 1:
 
 
@@ -98,23 +81,25 @@ CREATE INDEX index_with_include_on_sensors ON sensors ((measure_data->'IsFailed'
 CREATE STATISTICS stats_on_sensors (dependencies) ON measureid, eventdatetime FROM sensors;
 
 -- Create subscriptions to receive events from worker nodes for the distributed table.
+\set connection_string '\'user=postgres host=localhost port=' :worker_1_port ' dbname=regression\''
 CREATE SUBSCRIPTION cdc_subscription_1
-        CONNECTION 'host=localhost port=57637 user=postgres dbname=regression'
+        CONNECTION :connection_string
         PUBLICATION cdc_publication
                WITH (
                    create_slot=false,
                    enabled=true,
-                   slot_name='cdc_replication_slot',
+                   slot_name=:slot_name_1,
                    copy_data=false);
 
 -- Create subscriptions to receive events from worker nodes for the distributed table.
+\set connection_string '\'user=postgres host=localhost port=' :worker_2_port ' dbname=regression\''
 CREATE SUBSCRIPTION cdc_subscription_2
-        CONNECTION 'host=localhost port=57638 user=postgres dbname=regression'
+        CONNECTION :connection_string
         PUBLICATION cdc_publication
                WITH (
                    create_slot=false,
                    enabled=true,
-                   slot_name='cdc_replication_slot',
+                   slot_name=:slot_name_2,
                    copy_data=false);
 -- END 2
 

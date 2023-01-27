@@ -9,20 +9,6 @@ Here is a high level overview of test plan:
  5. Clean up all the resources created.
 */
 CREATE SCHEMA "citus_cdc_test_schema";
-CREATE ROLE test_cdc_role WITH LOGIN;
-GRANT USAGE, CREATE ON SCHEMA "citus_cdc_test_schema" TO test_cdc_role;
-SET ROLE test_cdc_role;
--- BEGIN 1:	 Connect to the co-ordinator node and create table, indexes and statistics and create CDC replication slots in worker nodes.
-\c - postgres - :worker_1_port
-CREATE SCHEMA "citus_cdc_test_schema";
-CREATE ROLE test_cdc_role WITH LOGIN;
-GRANT USAGE, CREATE ON SCHEMA "citus_cdc_test_schema" TO test_cdc_role;
-SET ROLE test_cdc_role;
-\c - postgres - :worker_2_port
-CREATE SCHEMA "citus_cdc_test_schema";
-CREATE ROLE test_cdc_role WITH LOGIN;
-GRANT USAGE, CREATE ON SCHEMA "citus_cdc_test_schema" TO test_cdc_role;
-SET ROLE test_cdc_role;
 \c - postgres - :master_port
 SET search_path TO "citus_cdc_test_schema";
 SET citus.next_shard_id TO 8981000;
@@ -47,6 +33,8 @@ SELECT 1 from master_add_node('localhost', :worker_2_port);
         1
 (1 row)
 
+SELECT nodeid AS worker_1_node FROM pg_dist_node WHERE nodeport=:worker_1_port \gset
+SELECT nodeid AS worker_2_node FROM pg_dist_node WHERE nodeport=:worker_2_port \gset
 CREATE TABLE sensors(
     measureid               integer,
     eventdatetime           date,
@@ -60,14 +48,6 @@ ALTER INDEX index_on_sensors ALTER COLUMN 1 SET STATISTICS 1000;
 CREATE INDEX hash_index_on_sensors ON sensors USING HASH((measure_data->'IsFailed'));
 CREATE INDEX index_with_include_on_sensors ON sensors ((measure_data->'IsFailed')) INCLUDE (measure_data, eventdatetime, measure_status);
 CREATE STATISTICS stats_on_sensors (dependencies) ON measureid, eventdatetime FROM sensors;
--- Create publication and logical replication slot for CDC client to connect to.
-CREATE PUBLICATION cdc_publication FOR TABLE sensors;
-SELECT pg_create_logical_replication_slot('cdc_replication_slot', 'citus', false, true);
- pg_create_logical_replication_slot
----------------------------------------------------------------------
- (cdc_replication_slot,0/19F7398)
-(1 row)
-
 -- Create the sensors distributed table.
 SELECT create_distributed_table('sensors', 'measureid', colocate_with:='none');
  create_distributed_table
@@ -78,21 +58,11 @@ SELECT create_distributed_table('sensors', 'measureid', colocate_with:='none');
 \c - postgres - :worker_1_port
 SET search_path TO "citus_cdc_test_schema";
 CREATE PUBLICATION cdc_publication FOR TABLE sensors;
-SELECT pg_create_logical_replication_slot('cdc_replication_slot', 'citus', false, true);
- pg_create_logical_replication_slot
----------------------------------------------------------------------
- (cdc_replication_slot,0/1A04590)
-(1 row)
-
+SELECT slot_name AS slot_name_1 FROM pg_create_logical_replication_slot(FORMAT('cdc_replication_slot%s', :worker_1_node), 'citus',false,true) \gset
 \c - postgres - :worker_2_port
 SET search_path TO "citus_cdc_test_schema";
 CREATE PUBLICATION cdc_publication FOR TABLE sensors;
-SELECT pg_create_logical_replication_slot('cdc_replication_slot', 'citus', false, true);
- pg_create_logical_replication_slot
----------------------------------------------------------------------
- (cdc_replication_slot,0/1A03CD0)
-(1 row)
-
+SELECT slot_name AS slot_name_2 FROM pg_create_logical_replication_slot(FORMAT('cdc_replication_slot%s', :worker_2_node), 'citus',false,true) \gset
 -- END 1:
 -- BEGIN 2:	 Connect to the CDC client node and create table to receive events published from distributed table, indexes and statistics
 \c - postgres - :worker_3_port
@@ -121,22 +91,24 @@ CREATE INDEX hash_index_on_sensors ON sensors USING HASH((measure_data->'IsFaile
 CREATE INDEX index_with_include_on_sensors ON sensors ((measure_data->'IsFailed')) INCLUDE (measure_data, eventdatetime, measure_status);
 CREATE STATISTICS stats_on_sensors (dependencies) ON measureid, eventdatetime FROM sensors;
 -- Create subscriptions to receive events from worker nodes for the distributed table.
+\set connection_string '\'user=postgres host=localhost port=' :worker_1_port ' dbname=regression\''
 CREATE SUBSCRIPTION cdc_subscription_1
-        CONNECTION 'host=localhost port=xxxxx user=postgres dbname=regression'
+        CONNECTION :connection_string
         PUBLICATION cdc_publication
                WITH (
                    create_slot=false,
                    enabled=true,
-                   slot_name='cdc_replication_slot',
+                   slot_name=:slot_name_1,
                    copy_data=false);
 -- Create subscriptions to receive events from worker nodes for the distributed table.
+\set connection_string '\'user=postgres host=localhost port=' :worker_2_port ' dbname=regression\''
 CREATE SUBSCRIPTION cdc_subscription_2
-        CONNECTION 'host=localhost port=xxxxx user=postgres dbname=regression'
+        CONNECTION :connection_string
         PUBLICATION cdc_publication
                WITH (
                    create_slot=false,
                    enabled=true,
-                   slot_name='cdc_replication_slot',
+                   slot_name=:slot_name_2,
                    copy_data=false);
 -- END 2
 -- BEGIN 3: connect to co-ordinator node and populate the distributed table and store the current LSN values of worker nodes in variables.
