@@ -841,6 +841,11 @@ workflows:
           name: 'test-15_check-failure'
           image: citus/failtester
           make: check-failure
+      - test-citus:
+          <<:  *test-citus-15
+          name: 'test-15_check-cdc'
+          make: check-cdc
+
 
       - tap-test-citus: &tap-test-citus-13
           name: 'test-13_tap-recovery'
