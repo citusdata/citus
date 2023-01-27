@@ -978,6 +978,7 @@ workflows:
             - test-13-14_check-pg-upgrade
             - test-14-15_check-pg-upgrade
             - test-13_check-citus-upgrade
+            - test-15_check-cdc
 
       - ch_benchmark:
           requires: [build-13]
