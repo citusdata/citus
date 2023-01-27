@@ -61,7 +61,7 @@ static void citus_add_local_table_to_metadata_internal(Oid relationId,
 static void ErrorIfAddingPartitionTableToMetadata(Oid relationId);
 static void ErrorIfUnsupportedCreateCitusLocalTable(Relation relation);
 static void ErrorIfUnsupportedCitusLocalTableKind(Oid relationId);
-static void EnsureIfFdwHasTableName(Oid relationId);
+static void EnsureIfPostgresFdwHasTableName(Oid relationId);
 static void ErrorIfOptionListHasNoTableName(List *optionList);
 static void NoticeIfAutoConvertingLocalTables(bool autoConverted, Oid relationId);
 static CascadeOperationType GetCascadeTypeForCitusLocalTables(bool autoConverted);
@@ -498,12 +498,14 @@ ErrorIfUnsupportedCreateCitusLocalTable(Relation relation)
 	ErrorIfRelationHasUnsupportedTrigger(relationId);
 
 	/*
+	 * Error out with a hint if the foreign table is using postgres_fdw and
+	 * the option table_name is not provided.
 	 * Citus relays all the Citus local foreign table logic to the placement of the
 	 * Citus local table. If table_name is NOT provided, Citus would try to talk to
 	 * the foreign postgres table over the shard's table name, which would not exist
 	 * on the remote server.
 	 */
-	EnsureIfFdwHasTableName(relationId);
+	EnsureIfPostgresFdwHasTableName(relationId);
 
 	/*
 	 * When creating other citus table types, we don't need to check that case as
@@ -521,18 +523,38 @@ ErrorIfUnsupportedCreateCitusLocalTable(Relation relation)
 
 
 /*
- * EnsureIfFdwHasTableName errors out with a hint if the foreign table is using postgres_fdw and
+ * ServerUsesPostgresFdw gets a foreign server Oid and returns true if the FDW that
+ * the server depends on is postgres_fdw. Returns false otherwise.
+ */
+static bool
+ServerUsesPostgresFdw(Oid serverId)
+{
+	ForeignServer *server = GetForeignServer(serverId);
+	ForeignDataWrapper *fdw = GetForeignDataWrapper(server->fdwid);
+
+	if (strcmp(fdw->fdwname, "postgres_fdw") == 0)
+	{
+		return true;
+	}
+
+	return false;
+}
+
+/*
+ * EnsureIfPostgresFdwHasTableName errors out with a hint if the foreign table is using postgres_fdw and
  * the option table_name is not provided.
  */
 static void
-EnsureIfFdwHasTableName(Oid relationId)
+EnsureIfPostgresFdwHasTableName(Oid relationId)
 {
 	char relationKind = get_rel_relkind(relationId);
 	if (relationKind == RELKIND_FOREIGN_TABLE)
 	{
 		ForeignTable *foreignTable = GetForeignTable(relationId);
-
-		ErrorIfOptionListHasNoTableName(foreignTable->options);
+		if (ServerUsesPostgresFdw(foreignTable->serverid))
+		{
+			ErrorIfOptionListHasNoTableName(foreignTable->options);
+		}
 	}
 }
 
