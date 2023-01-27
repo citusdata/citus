@@ -540,6 +540,7 @@ ServerUsesPostgresFdw(Oid serverId)
 	return false;
 }
 
+
 /*
  * EnsureIfPostgresFdwHasTableName errors out with a hint if the foreign table is using postgres_fdw and
  * the option table_name is not provided.
