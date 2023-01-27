@@ -861,11 +861,6 @@ AlterTableConstraintCheck(QueryDesc *queryDesc)
 		return false;
 	}
 
-	if (SkipConstraintValidation)
-	{
-		return true;
-	}
-
 	/*
 	 * While an ALTER TABLE is in progress, we might do SELECTs on some
 	 * catalog tables too. For example, when dropping a column, citus_drop_trigger()
