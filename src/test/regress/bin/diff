@@ -49,8 +49,12 @@ then
 	"$DIFF" -w $args "$file1.modified" "$file2.modified" | LC_CTYPE=C.UTF-8 diff-filter "$BASEDIR/normalize.sed"
 	diff_status=${PIPESTATUS[0]}
 	if [ -s "$BASEDIR/../citus_valgrind_test_log.txt" ]; then
-		cat "$BASEDIR/../citus_valgrind_test_log.txt"
-		exit 1
+		if grep -q citus "$BASEDIR/../citus_valgrind_test_log.txt"; then
+			cat "$BASEDIR/../citus_valgrind_test_log.txt"
+			exit 1
+		fi
+		# if the file doesn't contain "citus", it's probably reported because of a pg issue
+		# we are currently not interested in such reports
 	fi
 	exit $diff_status
 else
