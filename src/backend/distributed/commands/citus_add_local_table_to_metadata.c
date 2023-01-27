@@ -586,6 +586,30 @@ ErrorIfOptionListHasNoTableName(List *optionList)
 
 
 /*
+ * ForeignTableDropsTableNameOption returns true if given option list contains
+ * (DROP table_name).
+ */
+bool
+ForeignTableDropsTableNameOption(List *optionList)
+{
+	char *table_nameString = "table_name";
+	DefElem *option = NULL;
+	foreach_ptr(option, optionList)
+	{
+		char *optionName = option->defname;
+		DefElemAction optionAction = option->defaction;
+		if (strcmp(optionName, table_nameString) == 0 &&
+			optionAction == DEFELEM_DROP)
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
+
+/*
  * ErrorIfUnsupportedCitusLocalTableKind errors out if the relation kind of
  * relation with relationId is not supported for citus local table creation.
  */

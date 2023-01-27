@@ -3490,6 +3490,23 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 			{
 				if (IsForeignTable(relationId))
 				{
+					List *optionList = (List *) command->def;
+
+					if (IsCitusTableType(relationId, CITUS_LOCAL_TABLE) &&
+						ForeignTableDropsTableNameOption(optionList))
+					{
+						ereport(ERROR,
+								(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+								 errmsg(
+									 "alter foreign table alter options (drop table_name) command "
+									 "is not allowed"),
+								 errdetail(
+									 "Table_name option can not be dropped from a foreign table "
+									 "which is inside metadata."),
+								 errhint(
+									 "Try to undistribute foreign table before dropping table_name option.")));
+					}
+
 					break;
 				}
 			}
