@@ -170,6 +170,10 @@ extern CitusTableCacheEntry * GetCitusTableCacheEntry(Oid distributedRelationId)
 extern CitusTableCacheEntry * LookupCitusTableCacheEntry(Oid relationId);
 extern DistObjectCacheEntry * LookupDistObjectCacheEntry(Oid classid, Oid objid, int32
 														 objsubid);
+extern ShardPlacement * ResolveGroupShardPlacementViaCatalog(
+	GroupShardPlacement *groupShardPlacement,
+	Oid relationId,
+	ShardInterval *shardInterval);
 extern int32 GetLocalGroupId(void);
 extern int32 GetLocalNodeId(void);
 extern void CitusTableCacheFlushInvalidatedEntries(void);

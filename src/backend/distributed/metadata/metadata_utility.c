@@ -1466,7 +1466,7 @@ ActiveShardPlacementListOnGroup(uint64 shardId, int32 groupId)
 
 /*
  * ActiveShardPlacementList finds shard placements for the given shardId from
- * system catalogs, chooses placements that are in active state, and returns
+ * metadata cache, chooses placements that are in active state, and returns
  * these shard placements in a new list.
  */
 List *
@@ -1545,7 +1545,7 @@ ActiveShardPlacementWorkerNode(uint64 shardId)
 
 
 /*
- * BuildShardPlacementList finds shard placements for the given shardId from
+ * BuildGroupShardPlacementList finds shard placements for the given shardId from
  * system catalogs, converts these placements to their in-memory
  * representation, and returns the converted shard placements in a new list.
  *
@@ -1553,9 +1553,9 @@ ActiveShardPlacementWorkerNode(uint64 shardId)
  * because it shares code with other routines in this file.
  */
 List *
-BuildShardPlacementList(int64 shardId)
+BuildGroupShardPlacementList(int64 shardId)
 {
-	List *shardPlacementList = NIL;
+	List *groupShardPlacementList = NIL;
 	ScanKeyData scanKey[1];
 	int scanKeyCount = 1;
 	bool indexOK = true;
@@ -1575,10 +1575,10 @@ BuildShardPlacementList(int64 shardId)
 	{
 		TupleDesc tupleDescriptor = RelationGetDescr(pgPlacement);
 
-		GroupShardPlacement *placement =
+		GroupShardPlacement *groupShardPlacement =
 			TupleToGroupShardPlacement(tupleDescriptor, heapTuple);
 
-		shardPlacementList = lappend(shardPlacementList, placement);
+		groupShardPlacementList = lappend(groupShardPlacementList, groupShardPlacement);
 
 		heapTuple = systable_getnext(scanDescriptor);
 	}
@@ -1586,12 +1586,12 @@ BuildShardPlacementList(int64 shardId)
 	systable_endscan(scanDescriptor);
 	table_close(pgPlacement, NoLock);
 
-	return shardPlacementList;
+	return groupShardPlacementList;
 }
 
 
 /*
- * BuildShardPlacementListForGroup finds shard placements for the given groupId
+ * AllShardPlacementsOnNodeGroup finds shard placements for the given groupId
  * from system catalogs, converts these placements to their in-memory
  * representation, and returns the converted shard placements in a new list.
  */

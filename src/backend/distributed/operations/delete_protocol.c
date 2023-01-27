@@ -365,6 +365,18 @@ DropTaskList(Oid relationId, char *schemaName, char *relationName,
 			CreateDropShardPlacementCommand(schemaName, shardRelationName,
 											storageType);
 
+		/* build shard placement list using catalog only */
+		List *groupShardPlacementList = BuildGroupShardPlacementList(shardId);
+		List *shardPlacementList = NIL;
+		GroupShardPlacement *groupShardPlacement = NULL;
+		foreach_ptr(groupShardPlacement, groupShardPlacementList)
+		{
+			ShardPlacement *placement =
+				ResolveGroupShardPlacementViaCatalog(groupShardPlacement, relationId,
+													 shardInterval);
+			shardPlacementList = lappend(shardPlacementList, placement);
+		}
+
 		Task *task = CitusMakeNode(Task);
 		task->jobId = INVALID_JOB_ID;
 		task->taskId = taskId++;
@@ -373,7 +385,7 @@ DropTaskList(Oid relationId, char *schemaName, char *relationName,
 		task->dependentTaskList = NULL;
 		task->replicationModel = REPLICATION_MODEL_INVALID;
 		task->anchorShardId = shardId;
-		task->taskPlacementList = ShardPlacementList(shardId);
+		task->taskPlacementList = shardPlacementList;
 
 		taskList = lappend(taskList, task);
 	}

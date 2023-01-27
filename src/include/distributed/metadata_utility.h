@@ -296,7 +296,7 @@ extern List * ActiveShardPlacementList(uint64 shardId);
 extern List * ShardPlacementListSortedByWorker(uint64 shardId);
 extern ShardPlacement * ActiveShardPlacement(uint64 shardId, bool missingOk);
 extern WorkerNode * ActiveShardPlacementWorkerNode(uint64 shardId);
-extern List * BuildShardPlacementList(int64 shardId);
+extern List * BuildGroupShardPlacementList(int64 shardId);
 extern List * AllShardPlacementsOnNodeGroup(int32 groupId);
 extern List * GroupShardPlacementsForTableOnGroup(Oid relationId, int32 groupId);
 extern StringInfo GenerateSizeQueryOnMultiplePlacements(List *shardIntervalList,

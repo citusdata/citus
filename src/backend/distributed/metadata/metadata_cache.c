@@ -1055,6 +1055,61 @@ ResolveGroupShardPlacement(GroupShardPlacement *groupShardPlacement,
 
 
 /*
+ * ResolveGroupShardPlacementViaCatalog takes a GroupShardPlacement and adds additional
+ * data to it, such as the node we should consider it to be on.
+ *
+ * Resides here because it shares code with ResolveGroupShardPlacement in this file.
+ * Unlike ResolveGroupShardPlacement, this method does not access cache entries for Citus
+ * tables.
+ */
+ShardPlacement *
+ResolveGroupShardPlacementViaCatalog(GroupShardPlacement *groupShardPlacement,
+									 Oid relationId,
+									 ShardInterval *shardInterval)
+{
+	ShardPlacement *shardPlacement = CitusMakeNode(ShardPlacement);
+	int32 groupId = groupShardPlacement->groupId;
+	WorkerNode *workerNode = LookupNodeForGroup(groupId);
+
+	/* copy everything into shardPlacement but preserve the header */
+	CitusNode header = shardPlacement->type;
+	GroupShardPlacement *shardPlacementAsGroupPlacement =
+		(GroupShardPlacement *) shardPlacement;
+	*shardPlacementAsGroupPlacement = *groupShardPlacement;
+	shardPlacement->type = header;
+
+	SetPlacementNodeMetadata(shardPlacement, workerNode);
+
+	/* fill in remaining fields */
+	char partitionMethod = PartitionMethodViaCatalog(relationId);
+	Assert(partitionMethod != 0);
+	shardPlacement->partitionMethod = partitionMethod;
+
+	uint32 colocationId = ColocationIdViaCatalog(relationId);
+	shardPlacement->colocationGroupId = colocationId;
+
+	if (partitionMethod == DISTRIBUTE_BY_HASH)
+	{
+		Assert(shardInterval->minValueExists);
+		Assert(shardInterval->valueTypeId == INT4OID);
+
+		/*
+		 * Use the lower boundary of the interval's range to identify
+		 * it for colocation purposes. That remains meaningful even if
+		 * a concurrent session splits a shard.
+		 */
+		shardPlacement->representativeValue = DatumGetInt32(shardInterval->minValue);
+	}
+	else
+	{
+		shardPlacement->representativeValue = 0;
+	}
+
+	return shardPlacement;
+}
+
+
+/*
  * HasAnyNodes returns whether there are any nodes in pg_dist_node.
  */
 bool
@@ -1892,7 +1947,7 @@ BuildCachedShardList(CitusTableCacheEntry *cacheEntry)
 		cacheEntry->shardIntervalArrayLength++;
 
 		/* build list of shard placements */
-		List *placementList = BuildShardPlacementList(shardId);
+		List *placementList = BuildGroupShardPlacementList(shardId);
 		int numberOfPlacements = list_length(placementList);
 
 		/* and copy that list into the cache entry */
