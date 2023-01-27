@@ -7,6 +7,14 @@ SET citus.enable_local_execution TO ON;
 CREATE SCHEMA foreign_tables_schema_mx;
 SET search_path TO foreign_tables_schema_mx;
 
+
+SET client_min_messages to ERROR;
+
+-- ensure that coordinator is added to pg_dist_node
+SELECT 1 FROM master_add_node('localhost', :master_port, groupId => 0);
+
+RESET client_min_messages;
+
 -- test adding foreign table to metadata with the guc
 SET citus.use_citus_managed_tables TO ON;
 CREATE TABLE foreign_table_test (id integer NOT NULL, data text, a bigserial);
@@ -219,13 +227,23 @@ SELECT * FROM ref_tbl d JOIN foreign_table_local f ON d.a=f.id ORDER BY f.id;
 
 SET search_path TO foreign_tables_schema_mx;
 
--- should error out because doesn't have a table_name field
 CREATE FOREIGN TABLE foreign_table_local_fails (
         id integer NOT NULL,
         data text
 )
         SERVER foreign_server_local
         OPTIONS (schema_name 'foreign_tables_schema_mx');
+
+-- should error out because doesn't have a table_name field
+SELECT citus_add_local_table_to_metadata('foreign_table_local_fails');
+
+-- should work since it has a table_name
+ALTER FOREIGN TABLE foreign_table_local_fails OPTIONS (table_name 'foreign_table_test');
+SELECT citus_add_local_table_to_metadata('foreign_table_local_fails');
+
+INSERT INTO foreign_table_test VALUES (1, 'test');
+
+SELECT undistribute_table('foreign_table_local_fails');
 
 DROP FOREIGN TABLE foreign_table_local;
 
