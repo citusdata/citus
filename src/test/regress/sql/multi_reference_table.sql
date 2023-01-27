@@ -643,21 +643,24 @@ SELECT
 FROM
 	reference_table_test, colocated_table_test
 WHERE
-	colocated_table_test.value_1 = reference_table_test.value_1;
+	colocated_table_test.value_1 = reference_table_test.value_1
+ORDER BY 1;
 
 SELECT
 	colocated_table_test.value_2
 FROM
 	reference_table_test, colocated_table_test
 WHERE
-	colocated_table_test.value_2 = reference_table_test.value_2;
+	colocated_table_test.value_2 = reference_table_test.value_2
+ORDER BY 1;
 
 SELECT
 	colocated_table_test.value_2
 FROM
 	colocated_table_test, reference_table_test
 WHERE
-	reference_table_test.value_1 = colocated_table_test.value_1;
+	reference_table_test.value_1 = colocated_table_test.value_1
+ORDER BY 1;
 
 SET citus.enable_repartition_joins = on;
 SELECT
@@ -730,6 +733,7 @@ FROM
 	colocated_table_test_2, reference_table_test
 WHERE
 	colocated_table_test_2.value_4 = reference_table_test.value_4
+ORDER BY 1
 RETURNING value_1, value_2;
 
 -- similar query with the above, this time partition key but without equality
