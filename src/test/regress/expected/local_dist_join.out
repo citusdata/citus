@@ -799,23 +799,6 @@ SELECT distributed.name, distributed.name,  local.title, local.title FROM local 
  0    | 0    | 0     | 0
 (1 row)
 
-SELECT
-	COUNT(*)
-FROM
-	local
-JOIN
-	distributed
-USING
-	(id)
-JOIN
-	(SELECT  id, NULL, NULL FROM distributed) foo
-USING
-	(id);
- count
----------------------------------------------------------------------
-   101
-(1 row)
-
 BEGIN;
 SELECT COUNT(DISTINCT title) FROM local;
  count

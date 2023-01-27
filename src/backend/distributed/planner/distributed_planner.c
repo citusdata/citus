@@ -1072,12 +1072,10 @@ CreateDistributedPlan(uint64 planId, bool allowRecursivePlanning, Query *origina
 		 */
 		if (!allowRecursivePlanning)
 		{
-			const char *multiPassRecursivePlanErrorMessage =
-				"recursive complex joins are only supported when all distributed tables are "
-				"co-located and joined on their distribution columns";
-			ereport(DEBUG1, (errmsg("%s", multiPassRecursivePlanErrorMessage)));
 			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							errmsg("%s", multiPassRecursivePlanErrorMessage)));
+							errmsg("recursive complex joins are only supported "
+								   "when all distributed tables are co-located and "
+								   "joined on their distribution columns")));
 		}
 
 		Query *newQuery = copyObject(originalQuery);
@@ -1108,7 +1106,11 @@ CreateDistributedPlan(uint64 planId, bool allowRecursivePlanning, Query *origina
 		/* overwrite the old transformed query with the new transformed query */
 		*query = *newQuery;
 
-		/* recurse into CreateDistributedPlan with subqueries/CTEs replaced */
+		/*
+		 * recurse into CreateDistributedPlan with subqueries/CTEs replaced.
+		 * We only allow recursive planning once, which should have already done all
+		 * the necessary transformations. So, we do not allow recursive planning once again.
+		 */
 		allowRecursivePlanning = false;
 		distributedPlan = CreateDistributedPlan(planId, allowRecursivePlanning,
 												originalQuery, query, NULL, false,
