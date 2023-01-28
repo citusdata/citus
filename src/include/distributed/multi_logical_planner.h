@@ -124,6 +124,8 @@ typedef struct MultiSelect
 {
 	MultiUnaryNode unaryNode;
 	List *selectClauseList;
+	List *pushdownableSelectClauseList;
+	List *nonPushdownableSelectClauseList;
 } MultiSelect;
 
 

@@ -407,8 +407,8 @@ ExtractPushdownJoinRestrictInfos(List *restrictInfoListOfJoin,
 static List *
 FindApplicableJoinClausesForTables(List *joinRestrictInfoListList,
 								   List *generatedEcJoinClauseList,
-								   List *lhsTableIdList, uint32 rhsTableId, JoinType
-								   joinType)
+								   List *lhsTableIdList, uint32 rhsTableId,
+								   JoinType joinType)
 {
 	List *applicableJoinClauseContextList = NIL;
 
@@ -419,9 +419,8 @@ FindApplicableJoinClausesForTables(List *joinRestrictInfoListList,
 		foreach_ptr(joinRestrictInfo, joinRestrictInfoList)
 		{
 			Node *restrictClause = (Node *) joinRestrictInfo->clause;
-			if (joinRestrictInfo->can_join && IsApplicableJoinClause(lhsTableIdList,
-																	 rhsTableId,
-																	 restrictClause))
+			if (joinRestrictInfo->can_join &&
+				IsApplicableJoinClause(lhsTableIdList, rhsTableId, restrictClause))
 			{
 				List *pushdownableJoinRestrictInfoList = ExtractPushdownJoinRestrictInfos(
 					joinRestrictInfoList, joinRestrictInfo, joinType);
