@@ -17,16 +17,12 @@ TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHAR
 
 * Identity Column Support on Citus Managed Tables
 
-* Remove shardstate from placement insert functions
-
 TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
 * Enable adding CHECK constraints on distributed tables without the client having to provide a constraint name
 
 * Introduce citus_copy_shard_placement UDF with node id
 
 * Introduce citus_move_shard_placement UDF with node id
-
-* Use new shard transfer functions with node id for rebalancing
 
 * Quote all identifiers we use for logical replication
 
@@ -73,8 +69,6 @@ TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHAR
 
 * Propagate BEGIN properties to worker nodes
 
-* Added a workaround for a bug in git ls-files command
-
 * Deprecate citus.replicate_reference_tables_on_activate, make it always off
 
 * Makes sure to disallow triggers that depend on extensions
@@ -98,10 +92,6 @@ TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHAR
 
 * Don't leak search_path to workers on DDL
 
-* Adds failure test for shard move
-
-* Remove function `WaitForAllSubscriptionsToBecomeReady` and related tests
-
 TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
 * Introduce ```citus.propagate_session_settings_for_loopback_connection``` GUC to propagate local settings to new connections
 
@@ -115,9 +105,6 @@ TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHAR
 * Fixes a bug that causes a crash with empty/null password
 
 * Raises memory limits in columnar from 256MB to 1GB for reads and writes
-
-TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
-* Fixes a bug that prevents retaining columnar table options after a table-rewrite A fix for this issue: Columnar: options ignored during ALTER TABLE rewrite #5927
 
 TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
 * Fixes a bug that prevents retaining columnar table options after a table-rewrite A fix for this issue: Columnar: options ignored during ALTER TABLE rewrite #5927
@@ -180,8 +167,6 @@ TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHAR
 * Makes sure to disallow usage of SQL functions referencing to a distributed table and prevents a segfault
 
 * Disallows distribution by a numeric with negative scale
-
-* Fixes flaky test for views, in `citus_local_tables_mx
 
 ### citus v11.1.5 (December 12, 2022) ###
 
