@@ -1,6 +1,6 @@
 ### citus v11.2.0 (January 30, 2023) ###
 
-* Adds support for outer joins having a recurring rel in the outer side of the
+* Adds support for outer joins having recurring tuples in the outer side of the
   join (e.g., \<reference table\> LEFT JOIN \<distributed table\>)
 
 * Adds support for creating `PRIMARY KEY`s and `UNIQUE`/`EXCLUSION`/`CHECK`/
@@ -18,9 +18,6 @@
   increasing logical causal clock for the current transaction
 
 * Allows `citus_update_node()` to work with nodes from different clusters
-
-* Introduces `citus.propagate_session_settings_for_loopback_connection` GUC to
-  propagate local settings to new connections
 
 * Introduces `citus_copy_shard_placement()` UDF with node id
 
@@ -49,8 +46,6 @@
 
 * Includes Citus global pid in all internal `application_name`s
 
-* Reuses connections for shard splits and logical replication
-
 * Avoids leaking `search_path` to workers when executing DDL commands
 
 * Fixes `alter_table_set_access_method error()` for views
@@ -64,9 +59,6 @@
   have renamed columns
 
 * Fixes a bug that might cause incorrectly planning the sublinks in query tree
-
-* Fixes a bug that might cause inserting incorrect `DEFAULT` values when
-  applying foreign key actions
 
 * Fixes a bug that that causes `DROP OWNED BY` to not drop schemas on workers
 
