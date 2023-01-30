@@ -1,5 +1,7 @@
 ### citus v11.2.0 (January 30, 2023) ###
 
+* Adds support for `MERGE` command on local tables
+
 * Adds support for outer joins having recurring tuples in the outer side of the
   join (e.g., \<reference table\> LEFT JOIN \<distributed table\>)
 
@@ -13,9 +15,6 @@
 
 * Adds `source_lsn`, `target_lsn` and `status` fields into
   `get_rebalance_progress()`
-
-* Adds `citus_get_transaction_clock()` UDF that returns a monotonically
-  increasing logical causal clock for the current transaction
 
 * Introduces `citus_copy_shard_placement()` UDF with node id
 
