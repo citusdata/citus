@@ -177,7 +177,7 @@ INSERT INTO limit_orders VALUES (random() * 100, 'ORCL', 152, '2011-08-25 11:50:
 INSERT INTO limit_orders VALUES (2036, 'GOOG', 5634, now(), 'buy', random());
 -- commands with mutable functions in their quals
 DELETE FROM limit_orders WHERE id = 246 AND bidder_id = (random() * 1000);
-ERROR:  functions used in the WHERE/ON/WHEN clause of modification queries on distributed tables must not be VOLATILE
+ERROR:  functions used in the WHERE clause of modification queries on distributed tables must not be VOLATILE
 -- commands with mutable but non-volatile functions(ie: stable func.) in their quals
 -- (the cast to timestamp is because the timestamp_eq_timestamptz operator is stable)
 DELETE FROM limit_orders WHERE id = 246 AND placed_at = current_timestamp::timestamp;

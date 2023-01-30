@@ -526,7 +526,7 @@ ErrorIfUnsupportedCreateCitusLocalTable(Relation relation)
  * ServerUsesPostgresFdw gets a foreign server Oid and returns true if the FDW that
  * the server depends on is postgres_fdw. Returns false otherwise.
  */
-static bool
+bool
 ServerUsesPostgresFdw(Oid serverId)
 {
 	ForeignServer *server = GetForeignServer(serverId);
@@ -582,6 +582,30 @@ ErrorIfOptionListHasNoTableName(List *optionList)
 						"table_name option must be provided when using postgres_fdw with Citus"),
 					errhint("Provide the option \"table_name\" with value target table's"
 							" name")));
+}
+
+
+/*
+ * ForeignTableDropsTableNameOption returns true if given option list contains
+ * (DROP table_name).
+ */
+bool
+ForeignTableDropsTableNameOption(List *optionList)
+{
+	char *table_nameString = "table_name";
+	DefElem *option = NULL;
+	foreach_ptr(option, optionList)
+	{
+		char *optionName = option->defname;
+		DefElemAction optionAction = option->defaction;
+		if (strcmp(optionName, table_nameString) == 0 &&
+			optionAction == DEFELEM_DROP)
+		{
+			return true;
+		}
+	}
+
+	return false;
 }
 
 
