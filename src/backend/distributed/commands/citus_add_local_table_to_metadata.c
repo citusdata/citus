@@ -526,7 +526,7 @@ ErrorIfUnsupportedCreateCitusLocalTable(Relation relation)
  * ServerUsesPostgresFdw gets a foreign server Oid and returns true if the FDW that
  * the server depends on is postgres_fdw. Returns false otherwise.
  */
-static bool
+bool
 ServerUsesPostgresFdw(Oid serverId)
 {
 	ForeignServer *server = GetForeignServer(serverId);

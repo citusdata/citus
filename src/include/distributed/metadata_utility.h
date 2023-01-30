@@ -354,6 +354,7 @@ extern bool RegularTable(Oid relationId);
 extern bool TableEmpty(Oid tableId);
 extern bool IsForeignTable(Oid relationId);
 extern bool ForeignTableDropsTableNameOption(List *optionList);
+extern bool ServerUsesPostgresFdw(Oid serverId);
 extern char * ConstructQualifiedShardName(ShardInterval *shardInterval);
 extern uint64 GetFirstShardId(Oid relationId);
 extern Datum StringToDatum(char *inputString, Oid dataType);
