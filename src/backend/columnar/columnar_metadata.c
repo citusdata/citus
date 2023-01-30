@@ -60,6 +60,10 @@
 #include "utils/relfilenodemap.h"
 
 #define COLUMNAR_RELOPTION_NAMESPACE "columnar"
+#define SLOW_METADATA_ACCESS_WARNING \
+	"Metadata index %s is not available, this might mean slower read/writes " \
+	"on columnar tables. This is expected during Postgres upgrades and not " \
+	"expected otherwise."
 
 typedef struct
 {
@@ -701,15 +705,23 @@ ReadStripeSkipList(RelFileNode relfilenode, uint64 stripe, TupleDesc tupleDescri
 
 	Oid columnarChunkOid = ColumnarChunkRelationId();
 	Relation columnarChunk = table_open(columnarChunkOid, AccessShareLock);
-	Relation index = index_open(ColumnarChunkIndexRelationId(), AccessShareLock);
 
 	ScanKeyInit(&scanKey[0], Anum_columnar_chunk_storageid,
 				BTEqualStrategyNumber, F_OIDEQ, UInt64GetDatum(storageId));
 	ScanKeyInit(&scanKey[1], Anum_columnar_chunk_stripe,
 				BTEqualStrategyNumber, F_OIDEQ, Int32GetDatum(stripe));
 
-	SysScanDesc scanDescriptor = systable_beginscan_ordered(columnarChunk, index,
-															snapshot, 2, scanKey);
+	Oid indexId = ColumnarChunkIndexRelationId();
+	bool indexOk = OidIsValid(indexId);
+	SysScanDesc scanDescriptor = systable_beginscan(columnarChunk, indexId,
+													indexOk, snapshot, 2, scanKey);
+
+	static bool loggedSlowMetadataAccessWarning = false;
+	if (!indexOk && !loggedSlowMetadataAccessWarning)
+	{
+		ereport(WARNING, (errmsg(SLOW_METADATA_ACCESS_WARNING, "chunk_pkey")));
+		loggedSlowMetadataAccessWarning = true;
+	}
 
 	StripeSkipList *chunkList = palloc0(sizeof(StripeSkipList));
 	chunkList->chunkCount = chunkCount;
@@ -721,8 +733,7 @@ ReadStripeSkipList(RelFileNode relfilenode, uint64 stripe, TupleDesc tupleDescri
 			palloc0(chunkCount * sizeof(ColumnChunkSkipNode));
 	}
 
-	while (HeapTupleIsValid(heapTuple = systable_getnext_ordered(scanDescriptor,
-																 ForwardScanDirection)))
+	while (HeapTupleIsValid(heapTuple = systable_getnext(scanDescriptor)))
 	{
 		Datum datumArray[Natts_columnar_chunk];
 		bool isNullArray[Natts_columnar_chunk];
@@ -787,8 +798,7 @@ ReadStripeSkipList(RelFileNode relfilenode, uint64 stripe, TupleDesc tupleDescri
 		}
 	}
 
-	systable_endscan_ordered(scanDescriptor);
-	index_close(index, AccessShareLock);
+	systable_endscan(scanDescriptor);
 	table_close(columnarChunk, AccessShareLock);
 
 	chunkList->chunkGroupRowCounts =
@@ -799,9 +809,9 @@ ReadStripeSkipList(RelFileNode relfilenode, uint64 stripe, TupleDesc tupleDescri
 
 
 /*
- * FindStripeByRowNumber returns StripeMetadata for the stripe whose
- * firstRowNumber is greater than given rowNumber. If no such stripe
- * exists, then returns NULL.
+ * FindStripeByRowNumber returns StripeMetadata for the stripe that has the
+ * smallest firstRowNumber among the stripes whose firstRowNumber is grater
+ * than given rowNumber. If no such stripe exists, then returns NULL.
  */
 StripeMetadata *
 FindNextStripeByRowNumber(Relation relation, uint64 rowNumber, Snapshot snapshot)
@@ -891,8 +901,7 @@ StripeGetHighestRowNumber(StripeMetadata *stripeMetadata)
 /*
  * StripeMetadataLookupRowNumber returns StripeMetadata for the stripe whose
  * firstRowNumber is less than or equal to (FIND_LESS_OR_EQUAL), or is
- * greater than (FIND_GREATER) given rowNumber by doing backward index
- * scan on stripe_first_row_number_idx.
+ * greater than (FIND_GREATER) given rowNumber.
  * If no such stripe exists, then returns NULL.
  */
 static StripeMetadata *
@@ -923,31 +932,71 @@ StripeMetadataLookupRowNumber(Relation relation, uint64 rowNumber, Snapshot snap
 	ScanKeyInit(&scanKey[1], Anum_columnar_stripe_first_row_number,
 				strategyNumber, procedure, UInt64GetDatum(rowNumber));
 
-
 	Relation columnarStripes = table_open(ColumnarStripeRelationId(), AccessShareLock);
-	Relation index = index_open(ColumnarStripeFirstRowNumberIndexRelationId(),
-								AccessShareLock);
-	SysScanDesc scanDescriptor = systable_beginscan_ordered(columnarStripes, index,
-															snapshot, 2,
-															scanKey);
 
-	ScanDirection scanDirection = NoMovementScanDirection;
-	if (lookupMode == FIND_LESS_OR_EQUAL)
+	Oid indexId = ColumnarStripeFirstRowNumberIndexRelationId();
+	bool indexOk = OidIsValid(indexId);
+	SysScanDesc scanDescriptor = systable_beginscan(columnarStripes, indexId, indexOk,
+													snapshot, 2, scanKey);
+
+	static bool loggedSlowMetadataAccessWarning = false;
+	if (!indexOk && !loggedSlowMetadataAccessWarning)
 	{
-		scanDirection = BackwardScanDirection;
-	}
-	else if (lookupMode == FIND_GREATER)
-	{
-		scanDirection = ForwardScanDirection;
-	}
-	HeapTuple heapTuple = systable_getnext_ordered(scanDescriptor, scanDirection);
-	if (HeapTupleIsValid(heapTuple))
-	{
-		foundStripeMetadata = BuildStripeMetadata(columnarStripes, heapTuple);
+		ereport(WARNING, (errmsg(SLOW_METADATA_ACCESS_WARNING,
+								 "stripe_first_row_number_idx")));
+		loggedSlowMetadataAccessWarning = true;
 	}
 
-	systable_endscan_ordered(scanDescriptor);
-	index_close(index, AccessShareLock);
+	if (indexOk)
+	{
+		ScanDirection scanDirection = NoMovementScanDirection;
+		if (lookupMode == FIND_LESS_OR_EQUAL)
+		{
+			scanDirection = BackwardScanDirection;
+		}
+		else if (lookupMode == FIND_GREATER)
+		{
+			scanDirection = ForwardScanDirection;
+		}
+		HeapTuple heapTuple = systable_getnext_ordered(scanDescriptor, scanDirection);
+		if (HeapTupleIsValid(heapTuple))
+		{
+			foundStripeMetadata = BuildStripeMetadata(columnarStripes, heapTuple);
+		}
+	}
+	else
+	{
+		HeapTuple heapTuple = NULL;
+		while (HeapTupleIsValid(heapTuple = systable_getnext(scanDescriptor)))
+		{
+			StripeMetadata *stripe = BuildStripeMetadata(columnarStripes, heapTuple);
+			if (!foundStripeMetadata)
+			{
+				/* first match */
+				foundStripeMetadata = stripe;
+			}
+			else if (lookupMode == FIND_LESS_OR_EQUAL &&
+					 stripe->firstRowNumber > foundStripeMetadata->firstRowNumber)
+			{
+				/*
+				 * Among the stripes with firstRowNumber less-than-or-equal-to given,
+				 * we're looking for the one with the greatest firstRowNumber.
+				 */
+				foundStripeMetadata = stripe;
+			}
+			else if (lookupMode == FIND_GREATER &&
+					 stripe->firstRowNumber < foundStripeMetadata->firstRowNumber)
+			{
+				/*
+				 * Among the stripes with firstRowNumber greater-than given,
+				 * we're looking for the one with the smallest firstRowNumber.
+				 */
+				foundStripeMetadata = stripe;
+			}
+		}
+	}
+
+	systable_endscan(scanDescriptor);
 	table_close(columnarStripes, AccessShareLock);
 
 	return foundStripeMetadata;
@@ -1021,8 +1070,8 @@ CheckStripeMetadataConsistency(StripeMetadata *stripeMetadata)
 
 /*
  * FindStripeWithHighestRowNumber returns StripeMetadata for the stripe that
- * has the row with highest rowNumber by doing backward index scan on
- * stripe_first_row_number_idx. If given relation is empty, then returns NULL.
+ * has the row with highest rowNumber. If given relation is empty, then returns
+ * NULL.
  */
 StripeMetadata *
 FindStripeWithHighestRowNumber(Relation relation, Snapshot snapshot)
@@ -1035,19 +1084,46 @@ FindStripeWithHighestRowNumber(Relation relation, Snapshot snapshot)
 				BTEqualStrategyNumber, F_OIDEQ, Int32GetDatum(storageId));
 
 	Relation columnarStripes = table_open(ColumnarStripeRelationId(), AccessShareLock);
-	Relation index = index_open(ColumnarStripeFirstRowNumberIndexRelationId(),
-								AccessShareLock);
-	SysScanDesc scanDescriptor = systable_beginscan_ordered(columnarStripes, index,
-															snapshot, 1, scanKey);
 
-	HeapTuple heapTuple = systable_getnext_ordered(scanDescriptor, BackwardScanDirection);
-	if (HeapTupleIsValid(heapTuple))
+	Oid indexId = ColumnarStripeFirstRowNumberIndexRelationId();
+	bool indexOk = OidIsValid(indexId);
+	SysScanDesc scanDescriptor = systable_beginscan(columnarStripes, indexId, indexOk,
+													snapshot, 1, scanKey);
+
+	static bool loggedSlowMetadataAccessWarning = false;
+	if (!indexOk && !loggedSlowMetadataAccessWarning)
 	{
-		stripeWithHighestRowNumber = BuildStripeMetadata(columnarStripes, heapTuple);
+		ereport(WARNING, (errmsg(SLOW_METADATA_ACCESS_WARNING,
+								 "stripe_first_row_number_idx")));
+		loggedSlowMetadataAccessWarning = true;
 	}
 
-	systable_endscan_ordered(scanDescriptor);
-	index_close(index, AccessShareLock);
+	if (indexOk)
+	{
+		/* do one-time fetch using the index */
+		HeapTuple heapTuple = systable_getnext_ordered(scanDescriptor,
+													   BackwardScanDirection);
+		if (HeapTupleIsValid(heapTuple))
+		{
+			stripeWithHighestRowNumber = BuildStripeMetadata(columnarStripes, heapTuple);
+		}
+	}
+	else
+	{
+		HeapTuple heapTuple = NULL;
+		while (HeapTupleIsValid(heapTuple = systable_getnext(scanDescriptor)))
+		{
+			StripeMetadata *stripe = BuildStripeMetadata(columnarStripes, heapTuple);
+			if (!stripeWithHighestRowNumber ||
+				stripe->firstRowNumber > stripeWithHighestRowNumber->firstRowNumber)
+			{
+				/* first or a greater match */
+				stripeWithHighestRowNumber = stripe;
+			}
+		}
+	}
+
+	systable_endscan(scanDescriptor);
 	table_close(columnarStripes, AccessShareLock);
 
 	return stripeWithHighestRowNumber;
@@ -1064,7 +1140,6 @@ ReadChunkGroupRowCounts(uint64 storageId, uint64 stripe, uint32 chunkGroupCount,
 {
 	Oid columnarChunkGroupOid = ColumnarChunkGroupRelationId();
 	Relation columnarChunkGroup = table_open(columnarChunkGroupOid, AccessShareLock);
-	Relation index = index_open(ColumnarChunkGroupIndexRelationId(), AccessShareLock);
 
 	ScanKeyData scanKey[2];
 	ScanKeyInit(&scanKey[0], Anum_columnar_chunkgroup_storageid,
@@ -1072,15 +1147,22 @@ ReadChunkGroupRowCounts(uint64 storageId, uint64 stripe, uint32 chunkGroupCount,
 	ScanKeyInit(&scanKey[1], Anum_columnar_chunkgroup_stripe,
 				BTEqualStrategyNumber, F_OIDEQ, Int32GetDatum(stripe));
 
+	Oid indexId = ColumnarChunkGroupIndexRelationId();
+	bool indexOk = OidIsValid(indexId);
 	SysScanDesc scanDescriptor =
-		systable_beginscan_ordered(columnarChunkGroup, index, snapshot, 2, scanKey);
+		systable_beginscan(columnarChunkGroup, indexId, indexOk, snapshot, 2, scanKey);
 
-	uint32 chunkGroupIndex = 0;
+	static bool loggedSlowMetadataAccessWarning = false;
+	if (!indexOk && !loggedSlowMetadataAccessWarning)
+	{
+		ereport(WARNING, (errmsg(SLOW_METADATA_ACCESS_WARNING, "chunk_group_pkey")));
+		loggedSlowMetadataAccessWarning = true;
+	}
+
 	HeapTuple heapTuple = NULL;
 	uint32 *chunkGroupRowCounts = palloc0(chunkGroupCount * sizeof(uint32));
 
-	while (HeapTupleIsValid(heapTuple = systable_getnext_ordered(scanDescriptor,
-																 ForwardScanDirection)))
+	while (HeapTupleIsValid(heapTuple = systable_getnext(scanDescriptor)))
 	{
 		Datum datumArray[Natts_columnar_chunkgroup];
 		bool isNullArray[Natts_columnar_chunkgroup];
@@ -1091,24 +1173,16 @@ ReadChunkGroupRowCounts(uint64 storageId, uint64 stripe, uint32 chunkGroupCount,
 
 		uint32 tupleChunkGroupIndex =
 			DatumGetUInt32(datumArray[Anum_columnar_chunkgroup_chunk - 1]);
-		if (chunkGroupIndex >= chunkGroupCount ||
-			tupleChunkGroupIndex != chunkGroupIndex)
+		if (tupleChunkGroupIndex >= chunkGroupCount)
 		{
 			elog(ERROR, "unexpected chunk group");
 		}
 
-		chunkGroupRowCounts[chunkGroupIndex] =
+		chunkGroupRowCounts[tupleChunkGroupIndex] =
 			(uint32) DatumGetUInt64(datumArray[Anum_columnar_chunkgroup_row_count - 1]);
-		chunkGroupIndex++;
 	}
 
-	if (chunkGroupIndex != chunkGroupCount)
-	{
-		elog(ERROR, "unexpected chunk group count");
-	}
-
-	systable_endscan_ordered(scanDescriptor);
-	index_close(index, AccessShareLock);
+	systable_endscan(scanDescriptor);
 	table_close(columnarChunkGroup, AccessShareLock);
 
 	return chunkGroupRowCounts;
@@ -1305,14 +1379,20 @@ UpdateStripeMetadataRow(uint64 storageId, uint64 stripeId, bool *update,
 	Oid columnarStripesOid = ColumnarStripeRelationId();
 
 	Relation columnarStripes = table_open(columnarStripesOid, AccessShareLock);
-	Relation columnarStripePkeyIndex = index_open(ColumnarStripePKeyIndexRelationId(),
-												  AccessShareLock);
 
-	SysScanDesc scanDescriptor = systable_beginscan_ordered(columnarStripes,
-															columnarStripePkeyIndex,
-															&dirtySnapshot, 2, scanKey);
+	Oid indexId = ColumnarStripePKeyIndexRelationId();
+	bool indexOk = OidIsValid(indexId);
+	SysScanDesc scanDescriptor = systable_beginscan(columnarStripes, indexId, indexOk,
+													&dirtySnapshot, 2, scanKey);
 
-	HeapTuple oldTuple = systable_getnext_ordered(scanDescriptor, ForwardScanDirection);
+	static bool loggedSlowMetadataAccessWarning = false;
+	if (!indexOk && !loggedSlowMetadataAccessWarning)
+	{
+		ereport(WARNING, (errmsg(SLOW_METADATA_ACCESS_WARNING, "stripe_pkey")));
+		loggedSlowMetadataAccessWarning = true;
+	}
+
+	HeapTuple oldTuple = systable_getnext(scanDescriptor);
 	if (!HeapTupleIsValid(oldTuple))
 	{
 		ereport(ERROR, (errmsg("attempted to modify an unexpected stripe, "
@@ -1347,8 +1427,7 @@ UpdateStripeMetadataRow(uint64 storageId, uint64 stripeId, bool *update,
 
 	CommandCounterIncrement();
 
-	systable_endscan_ordered(scanDescriptor);
-	index_close(columnarStripePkeyIndex, AccessShareLock);
+	systable_endscan(scanDescriptor);
 	table_close(columnarStripes, AccessShareLock);
 
 	/* return StripeMetadata object built from modified tuple */
@@ -1359,6 +1438,10 @@ UpdateStripeMetadataRow(uint64 storageId, uint64 stripeId, bool *update,
 /*
  * ReadDataFileStripeList reads the stripe list for a given storageId
  * in the given snapshot.
+ *
+ * Doesn't sort the stripes by their ids before returning if
+ * stripe_first_row_number_idx is not available --normally can only happen
+ * during pg upgrades.
  */
 static List *
 ReadDataFileStripeList(uint64 storageId, Snapshot snapshot)
@@ -1373,22 +1456,27 @@ ReadDataFileStripeList(uint64 storageId, Snapshot snapshot)
 	Oid columnarStripesOid = ColumnarStripeRelationId();
 
 	Relation columnarStripes = table_open(columnarStripesOid, AccessShareLock);
-	Relation index = index_open(ColumnarStripeFirstRowNumberIndexRelationId(),
-								AccessShareLock);
 
-	SysScanDesc scanDescriptor = systable_beginscan_ordered(columnarStripes, index,
-															snapshot, 1,
-															scanKey);
+	Oid indexId = ColumnarStripeFirstRowNumberIndexRelationId();
+	bool indexOk = OidIsValid(indexId);
+	SysScanDesc scanDescriptor = systable_beginscan(columnarStripes, indexId,
+													indexOk, snapshot, 1, scanKey);
 
-	while (HeapTupleIsValid(heapTuple = systable_getnext_ordered(scanDescriptor,
-																 ForwardScanDirection)))
+	static bool loggedSlowMetadataAccessWarning = false;
+	if (!indexOk && !loggedSlowMetadataAccessWarning)
+	{
+		ereport(WARNING, (errmsg(SLOW_METADATA_ACCESS_WARNING,
+								 "stripe_first_row_number_idx")));
+		loggedSlowMetadataAccessWarning = true;
+	}
+
+	while (HeapTupleIsValid(heapTuple = systable_getnext(scanDescriptor)))
 	{
 		StripeMetadata *stripeMetadata = BuildStripeMetadata(columnarStripes, heapTuple);
 		stripeMetadataList = lappend(stripeMetadataList, stripeMetadata);
 	}
 
-	systable_endscan_ordered(scanDescriptor);
-	index_close(index, AccessShareLock);
+	systable_endscan(scanDescriptor);
 	table_close(columnarStripes, AccessShareLock);
 
 	return stripeMetadataList;
@@ -1499,25 +1587,30 @@ DeleteStorageFromColumnarMetadataTable(Oid metadataTableId,
 		return;
 	}
 
-	Relation index = index_open(storageIdIndexId, AccessShareLock);
+	bool indexOk = OidIsValid(storageIdIndexId);
+	SysScanDesc scanDescriptor = systable_beginscan(metadataTable, storageIdIndexId,
+													indexOk, NULL, 1, scanKey);
 
-	SysScanDesc scanDescriptor = systable_beginscan_ordered(metadataTable, index, NULL,
-															1, scanKey);
+	static bool loggedSlowMetadataAccessWarning = false;
+	if (!indexOk && !loggedSlowMetadataAccessWarning)
+	{
+		ereport(WARNING, (errmsg(SLOW_METADATA_ACCESS_WARNING,
+								 "on a columnar metadata table")));
+		loggedSlowMetadataAccessWarning = true;
+	}
 
 	ModifyState *modifyState = StartModifyRelation(metadataTable);
 
 	HeapTuple heapTuple;
-	while (HeapTupleIsValid(heapTuple = systable_getnext_ordered(scanDescriptor,
-																 ForwardScanDirection)))
+	while (HeapTupleIsValid(heapTuple = systable_getnext(scanDescriptor)))
 	{
 		DeleteTupleAndEnforceConstraints(modifyState, heapTuple);
 	}
 
-	systable_endscan_ordered(scanDescriptor);
+	systable_endscan(scanDescriptor);
 
 	FinishModifyRelation(modifyState);
 
-	index_close(index, AccessShareLock);
 	table_close(metadataTable, AccessShareLock);
 }
 

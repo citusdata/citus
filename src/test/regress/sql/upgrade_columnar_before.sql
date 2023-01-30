@@ -276,3 +276,7 @@ $$ LANGUAGE plpgsql;
 CREATE TABLE text_data (id SERIAL, value TEXT) USING COLUMNAR;
 INSERT INTO text_data (value) SELECT generate_random_string(1024 * 10) FROM generate_series(0,10);
 select count(DISTINCT value) from text_data;
+
+-- test using a columnar partition
+CREATE TABLE foo (d DATE NOT NULL) PARTITION BY RANGE (d);
+CREATE TABLE foo3 PARTITION OF foo FOR VALUES FROM ('2009-02-01') TO ('2009-03-01') USING COLUMNAR;
