@@ -17,13 +17,13 @@
 * Adds `citus_get_transaction_clock()` UDF that returns a monotonically
   increasing logical causal clock for the current transaction
 
-* Allows `citus_update_node()` to work with nodes from different clusters
-
 * Introduces `citus_copy_shard_placement()` UDF with node id
 
 * Introduces `citus_move_shard_placement()` UDF with node id
 
 * Propagates `BEGIN` properties to worker nodes
+
+* Propagates `DROP OWNED BY` to worker nodes
 
 * Deprecates `citus.replicate_reference_tables_on_activate` and makes it
   always `off`
@@ -33,6 +33,8 @@
 * Drops GUC `citus.defer_drop_after_shard_split`
 
 * Drops `SHARD_STATE_TO_DELETE` state and uses the cleanup records instead
+
+* Allows `citus_update_node()` to work with nodes from different clusters
 
 * Adds signal handlers for queue monitor to gracefully shutdown, cancel and to
   see config changes
@@ -59,8 +61,6 @@
   have renamed columns
 
 * Fixes a bug that might cause incorrectly planning the sublinks in query tree
-
-* Fixes a bug that that causes `DROP OWNED BY` to not drop schemas on workers
 
 * Fixes a floating exception during `create_distributed_table_concurrently()`
 
