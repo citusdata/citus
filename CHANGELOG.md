@@ -1,7 +1,5 @@
 ### citus v11.2.0 (January 30, 2023) ###
 
-* Adds support for `MERGE` command on local tables
-
 * Adds support for outer joins having recurring tuples in the outer side of the
   join (e.g., \<reference table\> LEFT JOIN \<distributed table\>)
 
@@ -10,6 +8,11 @@
   constraint name
 
 * Adds support for using identity columns on Citus tables
+
+* Adds support for `MERGE` command on local tables
+
+* Adds `citus_job_list()`, `citus_job_status()` and `citus_rebalance_status()`
+  UDFs that allow monitoring rebalancer progress
 
 * Adds `citus_task_wait()` UDF to wait on desired task status
 
@@ -61,12 +64,16 @@
 
 * Fixes a bug that might cause incorrectly planning the sublinks in query tree
 
-* Fixes a floating exception during `create_distributed_table_concurrently()`
+* Fixes a floating point exception during
+  `create_distributed_table_concurrently()`
 
 * Fixes a rebalancer failure due to integer overflow in subscription and role
   creation
 
 * Fixes a regression in allowed foreign keys on distributed tables
+
+* Fixes an unexpected foreign table error by disallowing to drop the
+  table_name option
 
 * Fixes an uninitialized memory access in `create_distributed_function()`
 
@@ -85,7 +92,7 @@
 
 * Makes sure to skip foreign key validations at the end of shard moves
 
-* Prevents crashes on `UPDATE` with `RETURNING` clauses
+* Prevents crashes on `UPDATE` with certain `RETURNING` clauses
 
 * Propagates column aliases in the shard-level commands
 
