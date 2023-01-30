@@ -1,7 +1,8 @@
 ### citus v11.2.0 (January 30, 2023) ###
 
-* Adds support for outer joins having recurring tuples in the outer side of the
-  join (e.g., \<reference table\> LEFT JOIN \<distributed table\>)
+* Adds support for outer joins with reference tables / complex subquery-CTEs
+  in the outer side of the join (e.g., \<reference table\> LEFT JOIN
+  \<distributed table\>)
 
 * Adds support for creating `PRIMARY KEY`s and `UNIQUE`/`EXCLUSION`/`CHECK`/
   `FOREIGN KEY` constraints via `ALTER TABLE` command without providing a
