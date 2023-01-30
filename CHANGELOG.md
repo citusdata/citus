@@ -1,8 +1,5 @@
 ### citus v11.2.0 (January 30, 2023) ###
 
-TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
-* Fixes wrong results by throwing error in case recursive planner multipass the query
-
 * Fix foreign key validation skip at the end of shard move
 
 * Fixes early sublink check at recursive planner
@@ -45,8 +42,6 @@ TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHAR
 
 * Adds citus_task_wait udf to wait on desired task status
 
-* Fixes task executor SIGTERM handling
-
 TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
 * Adds support for outer joins having a recurring rel in the outer side of the join (e.g., \<reference table\> LEFT JOIN \<distributed table\>)
 
@@ -59,13 +54,7 @@ TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHAR
 
 * Extend cleanup process for replication artifacts
 
-* Adds nonblocking concurrent task execution via background workers
-
-* Fixes false full join pushdown error check
-
 * Include gpid in all internal application names
-
-* Fixes a potential dangling pointer issue
 
 * Propagate BEGIN properties to worker nodes
 
@@ -84,12 +73,6 @@ TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHAR
 
 * Drops GUC defer_drop_after_shard_move
 
-TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
-* Fixes an upgrade problem for worker_fetch_foreign_file when upgrade path starts from 8.3 up to 11.1
-
-TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
-* Fixes an upgrade problem for worker_repartition_cleanup when upgrade path starts from 9.1 up to 11.1
-
 * Don't leak search_path to workers on DDL
 
 TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
@@ -102,71 +85,18 @@ TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHAR
 
 * Fix bug in global PID assignment for rebalancer sub-connections
 
-* Fixes a bug that causes a crash with empty/null password
-
-* Raises memory limits in columnar from 256MB to 1GB for reads and writes
-
-TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
-* Fixes a bug that prevents retaining columnar table options after a table-rewrite A fix for this issue: Columnar: options ignored during ALTER TABLE rewrite #5927
-
 * Fixes citus_drain_node to drain the specified worker only
-
-TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
-* Fixes a bug that causes not retaining trigger enable/disable settings when re-creating them on shards
 
 * Propagates column aliases in the shard-level commands
 
-TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
-* Fixes a bug that prevents retaining columnar table options after a table-rewrite
-
 * Adds source_lsn and target_lsn fields into get_rebalance_progress
 
-* Fixes a bug in `ALTER EXTENSION citus UPDATE`
-
 * Reuse connections for shard splits and logical replication
-
-* Revert shard move change that could cause performance regressions
-
-TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
-* Disallows having ON DELETE/UPDATE SET DEFAULT actions on columns that default to sequences
 
 TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
 * Fixes a bug that might cause inserting incorrect DEFAULT values when applying foreign key action
 
-* Fixes dropping replication slots
-
-* Improve logging during shard split and resource cleanup
-
 * Fixes floating exception during create_distributed_table_concurrently
-
-TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
-* Fixes a bug in query escaping in undistribute_table and alter_distributed_table
-
-* Show citus_copy_shard_placement progress in get_rebalance_progres
-
-* Adds support for unlogged distributed sequences
-
-* Adds support for NULLS NOT DISTINCT clauses for indexes
-
-* Show Citus local tables in citus_tables
-
-* Hide tables owned by extensions from citus_tables and citus_shards
-
-* Fix bug preventing isolate_tenant_to_new_shard with text column
-
-* citus_move_shard_placement becomes a noop if shard already exists on node
-
-* Remove do_repair option from citus_copy_shard_placement
-
-* Add infrastructure to run long running management operations in background
-
-TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
-* Makes sure that `SELECT .. FOR UPDATE `opens a transaction block when used in a function call
-
-TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
-* Makes sure to disallow usage of SQL functions referencing to a distributed table and prevents a segfault
-
-* Disallows distribution by a numeric with negative scale
 
 ### citus v11.1.5 (December 12, 2022) ###
 
