@@ -4628,7 +4628,8 @@ RowModifyLevelForQuery(Query *query)
 	}
 
 	if (commandType == CMD_UPDATE ||
-		commandType == CMD_DELETE)
+		commandType == CMD_DELETE ||
+		commandType == CMD_MERGE /* PG15+ */)
 	{
 		return ROW_MODIFY_NONCOMMUTATIVE;
 	}
