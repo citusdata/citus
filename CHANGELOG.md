@@ -1,102 +1,86 @@
 ### citus v11.2.0 (January 30, 2023) ###
 
-* Fix foreign key validation skip at the end of shard move
+* Makes sure to skip foreign key validations at the end of shard moves
 
-* Fixes early sublink check at recursive planner
+* Fixes a bug that might cause incorrectly planning the sublinks in query tree
 
-* Fixes an uninitialized memory access in create_distributed_function()
+* Fixes an uninitialized memory access in `create_distributed_function()`
 
-* Prevents crashes on update with returning clauses
+* Prevents crashes on `UPDATE` with `RETURNING` clauses
 
-* Fix regression in allowed foreign keys on distributed tables
+* Fixes a regression in allowed foreign keys on distributed tables
 
-* Enable adding FOREIGN KEY constraints on Citus tables without a name
+* Adds support for using identity columns on Citus managed tables
 
-* Identity Column Support on Citus Managed Tables
+* Introduces `citus_copy_shard_placement()` UDF with node id
 
-TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
-* Enable adding CHECK constraints on distributed tables without the client having to provide a constraint name
+* Introduces `citus_move_shard_placement()` UDF with node id
 
-* Introduce citus_copy_shard_placement UDF with node id
+* Makes sure to quote all identifiers used for logical replication to prevent potential issues
 
-* Introduce citus_move_shard_placement UDF with node id
+* Fixes a rebalancer failure due to integer overflow in subscription and role creation
 
-* Quote all identifiers we use for logical replication
+* Fixes crash that happens when trying to replicate a reference table that is actually dropped
 
-* Fix the modifier for subscription and role creation
+* Adds support for creating `PRIMARY KEY`s and `UNIQUE`/`EXCLUSION`/`CHECK`/`FOREIGN KEY` constraints via `ALTER TABLE` command without providing a constraint name
 
-* Fix crash when trying to replicate a ref table that is actually dropped
-
-TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
-* Adds support for creating table constraints UNIQUE and EXCLUDE via ALTER TABLE command without client having to specify a name
-
-* Drop `SHARD_STATE_TO_DELETE` and use the cleanup records instead
+* Drops `SHARD_STATE_TO_DELETE` state and uses the cleanup records instead
 
 * Defers cleanup after a failure in shard move or split
 
-* Cleanup the shard on the target node in case of a failed/aborted shard move
+* Make sure to cleanup the shard on the target node in case of a failed/aborted shard move
 
-* Support ALTER TABLE .. ADD PRIMARY KEY ... command
+* Fixes `alter_table_set_access_method error()` for views
 
-* Fixes alter_table_set_access_method error for views
+* Adds `citus_task_wait()` UDF to wait on desired task status
 
-* Adds citus_task_wait udf to wait on desired task status
-
-TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
 * Adds support for outer joins having a recurring rel in the outer side of the join (e.g., \<reference table\> LEFT JOIN \<distributed table\>)
 
-* Create replication artifacts with unique names
+* Makes sure to create replication artifacts with unique names
 
-TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
 * Adds signal handlers for queue monitor to gracefully shutdown, cancel and to see config changes
 
-* Fixes a bug that caused DROP OWNED BY to not drop schemas on workers
+* Fixes a bug that that causes `DROP OWNED BY` to not drop schemas on workers
 
-* Extend cleanup process for replication artifacts
+* Extends cleanup process for replication artifacts
 
-* Include gpid in all internal application names
+* Includes Citus global pid in all internal `application_name`s
 
-* Propagate BEGIN properties to worker nodes
+* Propagates `BEGIN` properties to worker nodes
 
-* Deprecate citus.replicate_reference_tables_on_activate, make it always off
+* Deprecates `citus.replicate_reference_tables_on_activate` and makes it always `off`
 
 * Makes sure to disallow triggers that depend on extensions
 
-* Improve a query that terminates compeling backends from citus_update_node()
+* Improves a query that terminates compelling backends from `citus_update_node()`
 
-* Allow citus_update_node() to work with nodes from different clusters
+* Allows `citus_update_node()` to work with nodes from different clusters
 
-TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
-* This implements a new UDF `citus_get_transaction_clock`() that returns a monotonically increasing logical causal clock for the current transaction
+* Adds `citus_get_transaction_clock()` UDF that returns a monotonically increasing logical causal clock for the current transaction
 
-* Drops GUC defer_drop_after_shard_split
+* Drops GUC `citus.defer_drop_after_shard_split`
 
-* Drops GUC defer_drop_after_shard_move
+* Drops GUC `citus.defer_drop_after_shard_move`
 
-* Don't leak search_path to workers on DDL
+* Avoids leaking `search_path` to workers when executing DDL commands
 
-TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
-* Introduce ```citus.propagate_session_settings_for_loopback_connection``` GUC to propagate local settings to new connections
+* Introduces `citus.propagate_session_settings_for_loopback_connection` GUC to propagate local settings to new connections
 
-* Adds status column to get_rebalance_progress()
-
-TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
 * Fixes a bug that might cause failing to query the views based on tables that have renamed columns
 
-* Fix bug in global PID assignment for rebalancer sub-connections
+* Fixes a bug in global pid assignment for connections opened by rebalancer internally
 
-* Fixes citus_drain_node to drain the specified worker only
+* Fixes `citus_drain_node()` to allow draining the specified worker only
 
 * Propagates column aliases in the shard-level commands
 
-* Adds source_lsn and target_lsn fields into get_rebalance_progress
+* Adds `source_lsn`, `target_lsn` and `status` fields into `get_rebalance_progress()`
 
-* Reuse connections for shard splits and logical replication
+* Reuses connections for shard splits and logical replication
 
-TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
-* Fixes a bug that might cause inserting incorrect DEFAULT values when applying foreign key action
+* Fixes a bug that might cause inserting incorrect `DEFAULT` values when applying foreign key actions
 
-* Fixes floating exception during create_distributed_table_concurrently
+* Fixes a floating exception during `create_distributed_table_concurrently()`
 
 ### citus v11.1.5 (December 12, 2022) ###
 
