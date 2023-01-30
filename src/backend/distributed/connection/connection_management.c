@@ -1490,6 +1490,7 @@ static void
 ResetConnection(MultiConnection *connection)
 {
 	/* reset per-transaction state */
+	CloseRemoteTransaction(connection);
 	ResetRemoteTransaction(connection);
 	ResetShardPlacementAssociation(connection);
 
