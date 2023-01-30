@@ -1,11 +1,11 @@
 ### citus v11.2.0 (January 30, 2023) ###
 
 TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
-* Fixes wrong results by throwing error in case recursive planner multipass the query.
+* Fixes wrong results by throwing error in case recursive planner multipass the query
 
 * Fix foreign key validation skip at the end of shard move
 
-* Fixes early sublink check at recursive planner.
+* Fixes early sublink check at recursive planner
 
 * Fixes an uninitialized memory access in create_distributed_function()
 
@@ -20,7 +20,7 @@ TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHAR
 * Remove shardstate from placement insert functions
 
 TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
-* Enable adding CHECK constraints on distributed tables without the client having to provide a constraint name.
+* Enable adding CHECK constraints on distributed tables without the client having to provide a constraint name
 
 * Introduce citus_copy_shard_placement UDF with node id
 
@@ -35,7 +35,7 @@ TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHAR
 * Fix crash when trying to replicate a ref table that is actually dropped
 
 TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
-* Adds support for creating table constraints UNIQUE and EXCLUDE via ALTER TABLE command without client having to specify a name.
+* Adds support for creating table constraints UNIQUE and EXCLUDE via ALTER TABLE command without client having to specify a name
 
 * Drop `SHARD_STATE_TO_DELETE` and use the cleanup records instead
 
@@ -45,43 +45,35 @@ TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHAR
 
 * Support ALTER TABLE .. ADD PRIMARY KEY ... command
 
-* Fixes alter_table_set_access_method error for views.
+* Fixes alter_table_set_access_method error for views
 
-* Adds citus_task_wait udf to wait on desired task status.
+* Adds citus_task_wait udf to wait on desired task status
 
-* Fixes task executor SIGTERM handling.
+* Fixes task executor SIGTERM handling
 
 TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
 * Adds support for outer joins having a recurring rel in the outer side of the join (e.g., \<reference table\> LEFT JOIN \<distributed table\>)
 
 * Create replication artifacts with unique names
 
-* PR description that will go into the change log, up to 78 characters
-
-* PR description that will go into the change log, up to 78 characters
-
-* PR description that will go into the change log, up to 78 characters
-
 TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
-* Adds signal handlers for queue monitor to gracefully shutdown, cancel and to see config changes.
+* Adds signal handlers for queue monitor to gracefully shutdown, cancel and to see config changes
 
 * Fixes a bug that caused DROP OWNED BY to not drop schemas on workers
 
 * Extend cleanup process for replication artifacts
 
-* Adds nonblocking concurrent task execution via background workers.
+* Adds nonblocking concurrent task execution via background workers
 
-* Fixes false full join pushdown error check. 
+* Fixes false full join pushdown error check
 
 * Include gpid in all internal application names
-
-* PR description that will go into the change log, up to 78 characters
 
 * Fixes a potential dangling pointer issue
 
 * Propagate BEGIN properties to worker nodes
 
-* Added a workaround for a bug in git ls-files command.
+* Added a workaround for a bug in git ls-files command
 
 * Deprecate citus.replicate_reference_tables_on_activate, make it always off
 
@@ -91,10 +83,8 @@ TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHAR
 
 * Allow citus_update_node() to work with nodes from different clusters
 
-* PR description that will go into the change log, up to 78 characters
-
 TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
-* This implements a new UDF `citus_get_transaction_clock`() that returns a monotonically increasing logical causal clock for the current transaction.
+* This implements a new UDF `citus_get_transaction_clock`() that returns a monotonically increasing logical causal clock for the current transaction
 
 * Drops GUC defer_drop_after_shard_split
 
@@ -113,7 +103,7 @@ TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHAR
 * Remove function `WaitForAllSubscriptionsToBecomeReady` and related tests
 
 TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
-* Introduce ```citus.propagate_session_settings_for_loopback_connection``` GUC to propagate local settings to new connections.
+* Introduce ```citus.propagate_session_settings_for_loopback_connection``` GUC to propagate local settings to new connections
 
 * Adds status column to get_rebalance_progress()
 
@@ -126,15 +116,13 @@ TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHAR
 
 * Raises memory limits in columnar from 256MB to 1GB for reads and writes
 
-* PR description that will go into the change log, up to 78 characters
-
 TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
 * Fixes a bug that prevents retaining columnar table options after a table-rewrite A fix for this issue: Columnar: options ignored during ALTER TABLE rewrite #5927
 
 TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
 * Fixes a bug that prevents retaining columnar table options after a table-rewrite A fix for this issue: Columnar: options ignored during ALTER TABLE rewrite #5927
 
-* Fixes citus_drain_node to drain the specified worker only.
+* Fixes citus_drain_node to drain the specified worker only
 
 TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
 * Fixes a bug that causes not retaining trigger enable/disable settings when re-creating them on shards
@@ -162,12 +150,10 @@ TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHAR
 
 * Improve logging during shard split and resource cleanup
 
-* Fixes floating exception during create_distributed_table_concurrently.
+* Fixes floating exception during create_distributed_table_concurrently
 
 TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
 * Fixes a bug in query escaping in undistribute_table and alter_distributed_table
-
-* PR description that will go into the change log, up to 78 characters
 
 * Show citus_copy_shard_placement progress in get_rebalance_progres
 
@@ -175,7 +161,7 @@ TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHAR
 
 * Adds support for NULLS NOT DISTINCT clauses for indexes
 
-* Show Citus local tables in citus_tables 
+* Show Citus local tables in citus_tables
 
 * Hide tables owned by extensions from citus_tables and citus_shards
 
@@ -194,8 +180,6 @@ TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHAR
 * Makes sure to disallow usage of SQL functions referencing to a distributed table and prevents a segfault
 
 * Disallows distribution by a numeric with negative scale
-
-* PR description that will go into the change log, up to 78 characters
 
 * Fixes flaky test for views, in `citus_local_tables_mx
 
