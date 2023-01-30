@@ -40,6 +40,7 @@
 #include "distributed/resource_lock.h"
 #include "distributed/version_compat.h"
 #include "distributed/worker_shard_visibility.h"
+#include "foreign/foreign.h"
 #include "lib/stringinfo.h"
 #include "nodes/parsenodes.h"
 #include "parser/parse_expr.h"
@@ -117,6 +118,8 @@ static char * GetAlterColumnWithNextvalDefaultCmd(Oid sequenceOid, Oid relationI
 												  char *colname);
 static char * GetAddColumnWithNextvalDefaultCmd(Oid sequenceOid, Oid relationId,
 												char *colname, TypeName *typeName);
+static void ErrorIfAlterTableDropTableNameFromPostgresFdw(List *optionList, Oid
+														  relationId);
 
 
 /*
@@ -2608,6 +2611,42 @@ ErrorIfUnsupportedConstraint(Relation relation, char distributionMethod,
 
 
 /*
+ * ErrorIfAlterTableDropTableNameFromPostgresFdw errors if given alter foreign table
+ * option list drops 'table_name' from a postgresfdw foreign table which is
+ * inside metadata.
+ */
+static void
+ErrorIfAlterTableDropTableNameFromPostgresFdw(List *optionList, Oid relationId)
+{
+	char relationKind PG_USED_FOR_ASSERTS_ONLY =
+		get_rel_relkind(relationId);
+	Assert(relationKind == RELKIND_FOREIGN_TABLE);
+
+	ForeignTable *foreignTable = GetForeignTable(relationId);
+	Oid serverId = foreignTable->serverid;
+	if (!ServerUsesPostgresFdw(serverId))
+	{
+		return;
+	}
+
+	if (IsCitusTableType(relationId, CITUS_LOCAL_TABLE) &&
+		ForeignTableDropsTableNameOption(optionList))
+	{
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg(
+					 "alter foreign table alter options (drop table_name) command "
+					 "is not allowed for Citus tables"),
+				 errdetail(
+					 "Table_name option can not be dropped from a foreign table "
+					 "which is inside metadata."),
+				 errhint(
+					 "Try to undistribute foreign table before dropping table_name option.")));
+	}
+}
+
+
+/*
  * ErrorIfUnsupportedAlterTableStmt checks if the corresponding alter table
  * statement is supported for distributed tables and errors out if it is not.
  * Currently, only the following commands are supported.
@@ -2995,6 +3034,8 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 			{
 				if (IsForeignTable(relationId))
 				{
+					List *optionList = (List *) command->def;
+					ErrorIfAlterTableDropTableNameFromPostgresFdw(optionList, relationId);
 					break;
 				}
 			}
