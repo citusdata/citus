@@ -9,7 +9,7 @@
   `FOREIGN KEY` constraints via `ALTER TABLE` command without providing a
   constraint name
 
-* Adds support for using identity columns on Citus managed tables
+* Adds support for using identity columns on Citus tables
 
 * Adds `citus_task_wait()` UDF to wait on desired task status
 
