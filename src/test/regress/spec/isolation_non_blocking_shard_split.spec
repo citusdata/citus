@@ -155,6 +155,12 @@ step "s2-show-pg_dist_cleanup"
 	SELECT object_name, object_type, policy_type FROM pg_dist_cleanup;
 }
 
+step "s2-show-pg_dist_cleanup-shards"
+{
+	SELECT object_name, object_type, policy_type FROM pg_dist_cleanup
+	WHERE object_type = 1;
+}
+
 step "s2-print-cluster"
 {
 	-- row count per shard
@@ -233,9 +239,9 @@ permutation "s2-insert" "s2-print-cluster" "s3-acquire-advisory-lock" "s1-begin"
 
 
 // With Deferred drop, AccessShareLock (acquired by SELECTS) do not block split from completion.
-permutation "s1-load-cache" "s1-start-connection"  "s1-lock-to-split-shard" "s2-print-locks" "s2-non-blocking-shard-split" "s2-print-locks" "s2-show-pg_dist_cleanup" "s1-stop-connection"
+permutation "s1-load-cache" "s1-start-connection"  "s1-lock-to-split-shard" "s2-print-locks" "s2-non-blocking-shard-split" "s2-print-locks" "s2-show-pg_dist_cleanup-shards" "s1-stop-connection"
 // The same test above without loading the cache at first
-permutation "s1-start-connection"  "s1-lock-to-split-shard" "s2-print-locks" "s2-non-blocking-shard-split" "s2-print-cluster" "s2-show-pg_dist_cleanup" "s1-stop-connection"
+permutation "s1-start-connection"  "s1-lock-to-split-shard" "s2-print-locks" "s2-non-blocking-shard-split" "s2-print-cluster" "s2-show-pg_dist_cleanup-shards" "s1-stop-connection"
 
 // When a split operation is running, cleaner cannot clean its resources.
 permutation "s1-load-cache" "s1-acquire-split-advisory-lock" "s2-non-blocking-shard-split" "s1-run-cleaner" "s1-show-pg_dist_cleanup" "s1-release-split-advisory-lock" "s1-run-cleaner" "s2-show-pg_dist_cleanup"
