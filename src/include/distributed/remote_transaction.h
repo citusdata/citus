@@ -130,7 +130,7 @@ extern void MarkRemoteTransactionCritical(struct MultiConnection *connection);
  * transaction managment code.
  */
 
-extern void ResetRemoteTransaction(struct MultiConnection *connection);
+extern void ResetRemoteTransaction(struct MultiConnection *connection, bool deleteTxNode);
 
 /* perform handling for all in-progress transactions */
 extern void CoordinatedRemoteTransactionsPrepare(void);

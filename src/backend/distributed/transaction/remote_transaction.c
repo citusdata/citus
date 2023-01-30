@@ -860,12 +860,12 @@ MarkRemoteTransactionCritical(struct MultiConnection *connection)
  * the main transaction, if the connection is being reused.
  */
 void
-ResetRemoteTransaction(struct MultiConnection *connection)
+ResetRemoteTransaction(struct MultiConnection *connection, bool deleteTxNode)
 {
 	RemoteTransaction *transaction = &connection->remoteTransaction;
 
 	/* unlink from list of open transactions, if necessary */
-	if (transaction->transactionState != REMOTE_TRANS_NOT_STARTED)
+	if (deleteTxNode && transaction->transactionState != REMOTE_TRANS_NOT_STARTED)
 	{
 		/* XXX: Should we error out for a critical transaction? */
 

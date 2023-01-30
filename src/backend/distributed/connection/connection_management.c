@@ -705,7 +705,7 @@ CloseConnection(MultiConnection *connection)
 
 		/* same for transaction state and shard/placement machinery */
 		CloseShardPlacementAssociation(connection);
-		ResetRemoteTransaction(connection);
+		ResetRemoteTransaction(connection, true);
 
 		/* we leave the per-host entry alive */
 		pfree(connection);
@@ -1464,7 +1464,7 @@ AfterXactHostConnectionHandling(ConnectionHashEntry *entry, bool isCommit)
 			/*
 			 * reset healthy session lifespan connections.
 			 */
-			ResetRemoteTransaction(connection);
+			ResetRemoteTransaction(connection, false);
 
 			UnclaimConnection(connection);
 

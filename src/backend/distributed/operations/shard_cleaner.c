@@ -684,7 +684,7 @@ TryDropSubscriptionOutsideTransaction(char *subscriptionName,
 									 "SET LOCAL lock_timeout TO '1s'", NULL) != 0)
 	{
 		RemoteTransactionAbort(connection);
-		ResetRemoteTransaction(connection);
+		ResetRemoteTransaction(connection, true);
 		return false;
 	}
 
@@ -695,7 +695,7 @@ TryDropSubscriptionOutsideTransaction(char *subscriptionName,
 	{
 		ReportConnectionError(connection, WARNING);
 		RemoteTransactionAbort(connection);
-		ResetRemoteTransaction(connection);
+		ResetRemoteTransaction(connection, true);
 		return false;
 	}
 
@@ -714,7 +714,7 @@ TryDropSubscriptionOutsideTransaction(char *subscriptionName,
 			PQclear(result);
 			ForgetResults(connection);
 			RemoteTransactionAbort(connection);
-			ResetRemoteTransaction(connection);
+			ResetRemoteTransaction(connection, true);
 			return true;
 		}
 		else
@@ -723,7 +723,7 @@ TryDropSubscriptionOutsideTransaction(char *subscriptionName,
 			PQclear(result);
 			ForgetResults(connection);
 			RemoteTransactionAbort(connection);
-			ResetRemoteTransaction(connection);
+			ResetRemoteTransaction(connection, true);
 			return false;
 		}
 	}
@@ -731,7 +731,7 @@ TryDropSubscriptionOutsideTransaction(char *subscriptionName,
 	PQclear(result);
 	ForgetResults(connection);
 	RemoteTransactionCommit(connection);
-	ResetRemoteTransaction(connection);
+	ResetRemoteTransaction(connection, true);
 
 	StringInfo alterQuery = makeStringInfo();
 	appendStringInfo(alterQuery,
@@ -803,7 +803,7 @@ TryDropReplicationSlotOutsideTransaction(char *replicationSlotName,
 									 "SET LOCAL lock_timeout TO '1s'", NULL) != 0)
 	{
 		RemoteTransactionAbort(connection);
-		ResetRemoteTransaction(connection);
+		ResetRemoteTransaction(connection, true);
 		return false;
 	}
 
@@ -820,7 +820,7 @@ TryDropReplicationSlotOutsideTransaction(char *replicationSlotName,
 	{
 		ReportConnectionError(connection, WARNING);
 		RemoteTransactionAbort(connection);
-		ResetRemoteTransaction(connection);
+		ResetRemoteTransaction(connection, true);
 		return false;
 	}
 
@@ -832,7 +832,7 @@ TryDropReplicationSlotOutsideTransaction(char *replicationSlotName,
 		PQclear(result);
 		ForgetResults(connection);
 		RemoteTransactionCommit(connection);
-		ResetRemoteTransaction(connection);
+		ResetRemoteTransaction(connection, true);
 		return true;
 	}
 
@@ -846,7 +846,7 @@ TryDropReplicationSlotOutsideTransaction(char *replicationSlotName,
 	PQclear(result);
 	ForgetResults(connection);
 	RemoteTransactionAbort(connection);
-	ResetRemoteTransaction(connection);
+	ResetRemoteTransaction(connection, true);
 
 	return false;
 }
