@@ -1123,6 +1123,8 @@ FROM
 	correlated_subquery_view
 		LEFT JOIN LATERAL
 	(SELECT max(value_2) as mx FROM events_table WHERE correlated_subquery_view.user_id = events_table.user_id) as foo ON (false);
+DEBUG:  recursively planning right side of the constant false join
+DEBUG:  recursively planning the distributed subquery since it is part of a distributed join node that is outer joined with a recurring rel
  sum
 ---------------------------------------------------------------------
 

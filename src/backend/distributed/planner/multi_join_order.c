@@ -1208,6 +1208,19 @@ static JoinOrderNode *
 CartesianProductReferenceJoin(JoinOrderNode *currentJoinNode, TableEntry *candidateTable,
 							  List *applicableJoinClauses, JoinType joinType)
 {
+	/*
+	 * right distributed part is already recursively planned.
+	 * constant false join is supported as CartesianProductReferenceJoin.
+	 */
+	if (list_length(applicableJoinClauses) == 1 &&
+		ContainsFalseClause(applicableJoinClauses))
+	{
+		return MakeJoinOrderNode(candidateTable, CARTESIAN_PRODUCT_REFERENCE_JOIN,
+								 currentJoinNode->partitionColumnList,
+								 currentJoinNode->partitionMethod,
+								 currentJoinNode->anchorTable, joinType);
+	}
+
 	bool leftIsReferenceTable = IsCitusTableType(
 		currentJoinNode->tableEntry->relationId,
 		REFERENCE_TABLE);

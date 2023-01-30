@@ -520,12 +520,27 @@ SELECT
 FROM
 	orders INNER JOIN customer_append ON (o_custkey = c_custkey AND false);
 DEBUG:  Router planner does not support append-partitioned tables.
-          QUERY PLAN
+DEBUG:  recursively planning right side of the constant false join
+DEBUG:  recursively planning distributed relation "customer_append" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "customer_append" to a subquery
+DEBUG:  Router planner does not support append-partitioned tables.
+DEBUG:  generating subplan XXX_1 for subquery SELECT NULL::integer AS "dummy-1" FROM public.customer_append WHERE false
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT orders.o_orderkey FROM (public.orders JOIN (SELECT NULL::integer AS c_custkey, NULL::character varying(25) AS c_name, NULL::character varying(40) AS c_address, NULL::integer AS c_nationkey, NULL::character(15) AS c_phone, NULL::numeric(15,2) AS c_acctbal, NULL::character(10) AS c_mktsegment, NULL::character varying(117) AS c_comment FROM (SELECT intermediate_result."dummy-1" FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result("dummy-1" integer)) customer_append_1) customer_append ON (((orders.o_custkey OPERATOR(pg_catalog.=) customer_append.c_custkey) AND false)))
+DEBUG:  Creating router plan
+                        QUERY PLAN
 ---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)
-   Task Count: 0
+   ->  Distributed Subplan XXX_1
+         ->  Custom Scan (Citus Adaptive)
+               Task Count: 0
+               Tasks Shown: All
+   Task Count: 1
    Tasks Shown: All
-(3 rows)
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  Result
+               One-Time Filter: false
+(11 rows)
 
 EXPLAIN (COSTS OFF)
 SELECT
