@@ -1258,7 +1258,8 @@ ConnectionHashCompare(const void *a, const void *b, Size keysize)
 
 	if (strncmp(ca->hostname, cb->hostname, MAX_NODE_LENGTH) != 0 ||
 		ca->port != cb->port ||
-		ca->replicationConnParam != cb->replicationConnParam ||
+		(ca->replicationConnParam && !cb->replicationConnParam) ||
+		(!ca->replicationConnParam && cb->replicationConnParam) ||
 		strncmp(ca->user, cb->user, NAMEDATALEN) != 0 ||
 		strncmp(ca->database, cb->database, NAMEDATALEN) != 0)
 	{
