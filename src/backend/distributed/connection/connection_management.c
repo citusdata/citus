@@ -1237,6 +1237,14 @@ ConnectionHashHash(const void *key, Size keysize)
 	hash = hash_combine(hash, hash_uint32(entry->port));
 	hash = hash_combine(hash, string_hash(entry->user, NAMEDATALEN));
 	hash = hash_combine(hash, string_hash(entry->database, NAMEDATALEN));
+	if (entry->replicationConnParam)
+	{
+		hash = hash_combine(hash, hash_uint32(1));
+	}
+	else
+	{
+		hash = hash_combine(hash, hash_uint32(0));
+	}
 
 	return hash;
 }
