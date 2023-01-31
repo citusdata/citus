@@ -60,6 +60,9 @@
 * Fixes a bug in global pid assignment for connections opened by rebalancer
   internally
 
+* Fixes a bug that causes background rebalancer to fail when a reference table
+  doesn't have a primary key
+
 * Fixes a bug that might cause failing to query the views based on tables that
   have renamed columns
 
