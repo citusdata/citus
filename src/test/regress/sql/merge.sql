@@ -19,7 +19,6 @@ SET search_path TO merge_schema;
 SET citus.shard_count TO 4;
 SET citus.next_shard_id TO 4000000;
 SET citus.explain_all_tasks to true;
-SET citus.shard_replication_factor TO 1;
 SELECT 1 FROM master_add_node('localhost', :master_port, groupid => 0);
 
 CREATE TABLE source
@@ -144,13 +143,9 @@ SELECT undistribute_table('source');
 SELECT create_distributed_table('target', 'customer_id');
 SELECT create_distributed_table('source', 'customer_id');
 
--- Updates one of the row with customer_id  = 30002
-SELECT * from target t WHERE t.customer_id  = 30002;
--- Turn on notice to print tasks sent to nodes (it should be a single task)
-SET citus.log_remote_commands to true;
 MERGE INTO target t
    USING source s
-   ON (t.customer_id = s.customer_id) AND t.customer_id = 30002
+   ON (t.customer_id = s.customer_id)
 
    WHEN MATCHED AND t.order_center = 'XX' THEN
        DELETE
@@ -163,27 +158,6 @@ MERGE INTO target t
    WHEN NOT MATCHED THEN       -- New entry, record it.
        INSERT (customer_id, last_order_id, order_center, order_count, last_order)
            VALUES (customer_id, s.order_id, s.order_center, 123, s.order_time);
-SET citus.log_remote_commands to false;
-SELECT * from target t WHERE t.customer_id  = 30002;
-
--- Deletes one of the row with customer_id  = 30004
-SELECT * from target t WHERE t.customer_id  = 30004;
-MERGE INTO target t
-   USING source s
-   ON (t.customer_id = s.customer_id) AND t.customer_id = 30004
-
-   WHEN MATCHED AND t.order_center = 'XX' THEN
-       DELETE
-
-   WHEN MATCHED THEN
-       UPDATE SET     -- Existing customer, update the order count and last_order_id
-           order_count = t.order_count + 1,
-           last_order_id = s.order_id
-
-   WHEN NOT MATCHED THEN       -- New entry, record it.
-       INSERT (customer_id, last_order_id, order_center, order_count, last_order)
-           VALUES (customer_id, s.order_id, s.order_center, 123, s.order_time);
-SELECT * from target t WHERE t.customer_id  = 30004;
 
 --
 -- Test MERGE with CTE as source
@@ -269,13 +243,11 @@ SELECT create_distributed_table('t1', 'id');
 SELECT create_distributed_table('s1', 'id');
 
 
-SELECT * FROM t1 order by id;
-SET citus.log_remote_commands to true;
 WITH s1_res AS (
 	SELECT * FROM s1
 )
 MERGE INTO t1
-	USING s1_res ON (s1_res.id = t1.id) AND t1.id = 6
+	USING s1_res ON (s1_res.id = t1.id)
 
 	WHEN MATCHED AND s1_res.val = 0 THEN
 		DELETE
@@ -283,9 +255,6 @@ MERGE INTO t1
 		UPDATE SET val = t1.val + 1
 	WHEN NOT MATCHED THEN
 		INSERT (id, val) VALUES (s1_res.id, s1_res.val);
-SET citus.log_remote_commands to false;
--- As the id 6 is NO match, VALUES(6, 1) should appear in target
-SELECT * FROM t1 order by id;
 
 --
 -- Test with multiple join conditions
@@ -356,21 +325,15 @@ SELECT undistribute_table('s2');
 SELECT create_distributed_table('t2', 'id');
 SELECT create_distributed_table('s2', 'id');
 
-SELECT * FROM t2 ORDER BY 1;
-SET citus.log_remote_commands to true;
 MERGE INTO t2
 USING s2
-ON t2.id = s2.id AND t2.src = s2.src AND t2.id = 4
+ON t2.id = s2.id AND t2.src = s2.src
 	WHEN MATCHED AND t2.val = 1 THEN
 		UPDATE SET val = s2.val + 10
 	WHEN MATCHED THEN
 		DELETE
 	WHEN NOT MATCHED THEN
 		INSERT (id, val, src) VALUES (s2.id, s2.val, s2.src);
-SET citus.log_remote_commands to false;
--- Row with id = 4 is a match for delete clause, row should be deleted
--- Row with id = 3 is a NO match, row from source will be inserted
-SELECT * FROM t2 ORDER BY 1;
 
 --
 -- With sub-query as the MERGE source
@@ -862,157 +825,8 @@ RESET client_min_messages;
 SELECT * FROM ft_target;
 
 --
--- complex joins on the source side
---
-
--- source(join of two relations) relation is an unaliased join
-
-CREATE TABLE target_cj(tid int, src text, val int);
-CREATE TABLE source_cj1(sid1 int, src1 text, val1 int);
-CREATE TABLE source_cj2(sid2 int, src2 text, val2 int);
-
-INSERT INTO target_cj VALUES (1, 'target', 0);
-INSERT INTO target_cj VALUES (2, 'target', 0);
-INSERT INTO target_cj VALUES (2, 'target', 0);
-INSERT INTO target_cj VALUES (3, 'target', 0);
-
-INSERT INTO source_cj1 VALUES (2, 'source-1', 10);
-INSERT INTO source_cj2 VALUES (2, 'source-2', 20);
-
-BEGIN;
-MERGE INTO target_cj t
-USING source_cj1 s1 INNER JOIN source_cj2 s2 ON sid1 = sid2
-ON t.tid = sid1 AND t.tid = 2
-WHEN MATCHED THEN
-        UPDATE SET src = src2
-WHEN NOT MATCHED THEN
-        DO NOTHING;
--- Gold result to compare against
-SELECT * FROM target_cj ORDER BY 1;
-ROLLBACK;
-
-BEGIN;
--- try accessing columns from either side of the source join
-MERGE INTO target_cj t
-USING source_cj1 s2
-        INNER JOIN source_cj2 s1 ON sid1 = sid2 AND val1 = 10
-ON t.tid = sid1 AND t.tid = 2
-WHEN MATCHED THEN
-        UPDATE SET tid = sid2, src = src1, val = val2
-WHEN NOT MATCHED THEN
-        DO NOTHING;
--- Gold result to compare against
-SELECT * FROM target_cj ORDER BY 1;
-ROLLBACK;
-
--- Test the same scenarios with distributed tables
-
-SELECT create_distributed_table('target_cj', 'tid');
-SELECT create_distributed_table('source_cj1', 'sid1');
-SELECT create_distributed_table('source_cj2', 'sid2');
-
-BEGIN;
-SET citus.log_remote_commands to true;
-MERGE INTO target_cj t
-USING source_cj1 s1 INNER JOIN source_cj2 s2 ON sid1 = sid2
-ON t.tid = sid1 AND t.tid = 2
-WHEN MATCHED THEN
-        UPDATE SET src = src2
-WHEN NOT MATCHED THEN
-        DO NOTHING;
-SET citus.log_remote_commands to false;
-SELECT * FROM target_cj ORDER BY 1;
-ROLLBACK;
-
-BEGIN;
--- try accessing columns from either side of the source join
-MERGE INTO target_cj t
-USING source_cj1 s2
-        INNER JOIN source_cj2 s1 ON sid1 = sid2 AND val1 = 10
-ON t.tid = sid1 AND t.tid = 2
-WHEN MATCHED THEN
-        UPDATE SET src = src1, val = val2
-WHEN NOT MATCHED THEN
-        DO NOTHING;
-SELECT * FROM target_cj ORDER BY 1;
-ROLLBACK;
-
--- sub-query as a source
-BEGIN;
-MERGE INTO target_cj t
-USING (SELECT * FROM source_cj1 WHERE sid1 = 2) sub
-ON t.tid = sub.sid1 AND t.tid = 2
-WHEN MATCHED THEN
-	UPDATE SET src = sub.src1, val = val1
-WHEN NOT MATCHED THEN
-	DO NOTHING;
-SELECT * FROM target_cj ORDER BY 1;
-ROLLBACK;
-
--- Test self-join
-BEGIN;
-SELECT * FROM target_cj ORDER BY 1;
-set citus.log_remote_commands to true;
-MERGE INTO target_cj t1
-USING (SELECT * FROM target_cj) sub
-ON t1.tid = sub.tid AND t1.tid = 3
-WHEN MATCHED THEN
-	UPDATE SET src = sub.src, val = sub.val + 100
-WHEN NOT MATCHED THEN
-	DO NOTHING;
-set citus.log_remote_commands to false;
-SELECT * FROM target_cj ORDER BY 1;
-ROLLBACK;
-
-
--- Test PREPARE
-PREPARE foo(int) AS
-MERGE INTO target_cj target
-USING (SELECT * FROM source_cj1) sub
-ON target.tid = sub.sid1 AND target.tid = $1
-WHEN MATCHED THEN
-        UPDATE SET val = sub.val1
-WHEN NOT MATCHED THEN
-        DO NOTHING;
-
-SELECT * FROM target_cj ORDER BY 1;
-
-BEGIN;
-EXECUTE foo(2);
-EXECUTE foo(2);
-EXECUTE foo(2);
-EXECUTE foo(2);
-EXECUTE foo(2);
-SELECT * FROM target_cj ORDER BY 1;
-ROLLBACK;
-
-BEGIN;
-
-SET citus.log_remote_commands to true;
-SET client_min_messages TO DEBUG1;
-EXECUTE foo(2);
-RESET client_min_messages;
-
-EXECUTE foo(2);
-SET citus.log_remote_commands to false;
-
-SELECT * FROM target_cj ORDER BY 1;
-ROLLBACK;
-
---
 -- Error and Unsupported scenarios
 --
-
--- try updating the distribution key column
-BEGIN;
-MERGE INTO target_cj t
-  USING source_cj1 s
-  ON t.tid = s.sid1 AND t.tid = 2
-  WHEN MATCHED THEN
-    UPDATE SET tid = tid + 9, src = src || ' updated by merge'
-  WHEN NOT MATCHED THEN
-    INSERT VALUES (sid1, 'inserted by merge', val1);
-ROLLBACK;
 
 -- Foreign table as target
 MERGE INTO foreign_table
@@ -1039,38 +853,6 @@ MERGE INTO t1
 		UPDATE SET val = t1.val + 1
 	WHEN NOT MATCHED THEN
 		INSERT (id, val) VALUES (s1.id, s1.val);
-
--- Now both s1 and t1 are distributed tables
-SELECT undistribute_table('t1');
-SELECT create_distributed_table('t1', 'id');
-
--- We have a potential pitfall where a function can be invoked in
--- the MERGE conditions which can insert/update to a random shard
-CREATE OR REPLACE function merge_when_and_write() RETURNS BOOLEAN
-LANGUAGE PLPGSQL AS
-$$
-BEGIN
-        INSERT INTO t1 VALUES (100, 100);
-        RETURN TRUE;
-END;
-$$;
-
--- Test preventing "ON" join condition from writing to the database
-BEGIN;
-MERGE INTO t1
-USING s1 ON t1.id = s1.id AND t1.id = 2 AND (merge_when_and_write())
-WHEN MATCHED THEN
-        UPDATE SET val = t1.val + s1.val;
-ROLLBACK;
-
--- Test preventing WHEN clause(s) from writing to the database
-BEGIN;
-MERGE INTO t1
-USING s1 ON t1.id = s1.id AND t1.id = 2
-WHEN MATCHED AND (merge_when_and_write()) THEN
-        UPDATE SET val = t1.val + s1.val;
-ROLLBACK;
-
 
 -- Joining on partition columns with sub-query
 MERGE INTO t1
@@ -1215,132 +997,6 @@ WHEN MATCHED THEN
 WHEN NOT MATCHED THEN
     INSERT VALUES(mv_source.id, mv_source.val);
 
--- Distributed tables *must* be colocated
-CREATE TABLE dist_target(id int, val varchar);
-SELECT create_distributed_table('dist_target', 'id');
-CREATE TABLE dist_source(id int, val varchar);
-SELECT create_distributed_table('dist_source', 'id', colocate_with => 'none');
-
-MERGE INTO dist_target
-USING dist_source
-ON dist_target.id = dist_source.id
-WHEN MATCHED THEN
-UPDATE SET val = dist_source.val
-WHEN NOT MATCHED THEN
-INSERT VALUES(dist_source.id, dist_source.val);
-
--- Distributed tables *must* be joined on distribution column
-CREATE TABLE dist_colocated(id int, val int);
-SELECT create_distributed_table('dist_colocated', 'id', colocate_with => 'dist_target');
-
-MERGE INTO dist_target
-USING dist_colocated
-ON dist_target.id = dist_colocated.val -- val is not the distribution column
-WHEN MATCHED THEN
-UPDATE SET val = dist_colocated.val
-WHEN NOT MATCHED THEN
-INSERT VALUES(dist_colocated.id, dist_colocated.val);
-
--- MERGE command must be joined with with a constant qual on target relation
-
--- AND clause is missing
-MERGE INTO dist_target
-USING dist_colocated
-ON dist_target.id = dist_colocated.id
-WHEN MATCHED THEN
-UPDATE SET val = dist_colocated.val
-WHEN NOT MATCHED THEN
-INSERT VALUES(dist_colocated.id, dist_colocated.val);
-
--- AND clause incorrect table (must be target)
-MERGE INTO dist_target
-USING dist_colocated
-ON dist_target.id = dist_colocated.id AND dist_colocated.id = 1
-WHEN MATCHED THEN
-UPDATE SET val = dist_colocated.val
-WHEN NOT MATCHED THEN
-INSERT VALUES(dist_colocated.id, dist_colocated.val);
-
--- AND clause incorrect column (must be distribution column)
-MERGE INTO dist_target
-USING dist_colocated
-ON dist_target.id = dist_colocated.id AND dist_target.val = 'const'
-WHEN MATCHED THEN
-UPDATE SET val = dist_colocated.val
-WHEN NOT MATCHED THEN
-INSERT VALUES(dist_colocated.id, dist_colocated.val);
-
--- Both the source and target must be distributed
-MERGE INTO dist_target
-USING (SELECT 100 id) AS source
-ON dist_target.id = source.id AND dist_target.val = 'const'
-WHEN MATCHED THEN
-UPDATE SET val = 'source'
-WHEN NOT MATCHED THEN
-INSERT VALUES(source.id, 'source');
-
--- Non-hash distributed tables (append/range).
-CREATE VIEW show_tables AS
-SELECT logicalrelid, partmethod
-FROM pg_dist_partition
-WHERE (logicalrelid = 'dist_target'::regclass) OR (logicalrelid = 'dist_source'::regclass)
-ORDER BY 1;
-
-SELECT undistribute_table('dist_source');
-SELECT create_distributed_table('dist_source', 'id', 'append');
-SELECT * FROM show_tables;
-
-MERGE INTO dist_target
-USING dist_source
-ON dist_target.id = dist_source.id
-WHEN MATCHED THEN
-UPDATE SET val = dist_source.val
-WHEN NOT MATCHED THEN
-INSERT VALUES(dist_source.id, dist_source.val);
-
-SELECT undistribute_table('dist_source');
-SELECT create_distributed_table('dist_source', 'id', 'range');
-SELECT * FROM show_tables;
-
-MERGE INTO dist_target
-USING dist_source
-ON dist_target.id = dist_source.id
-WHEN MATCHED THEN
-UPDATE SET val = dist_source.val
-WHEN NOT MATCHED THEN
-INSERT VALUES(dist_source.id, dist_source.val);
-
--- Both are append tables
-SELECT undistribute_table('dist_target');
-SELECT undistribute_table('dist_source');
-SELECT create_distributed_table('dist_target', 'id', 'append');
-SELECT create_distributed_table('dist_source', 'id', 'append');
-SELECT * FROM show_tables;
-
-MERGE INTO dist_target
-USING dist_source
-ON dist_target.id = dist_source.id
-WHEN MATCHED THEN
-UPDATE SET val = dist_source.val
-WHEN NOT MATCHED THEN
-INSERT VALUES(dist_source.id, dist_source.val);
-
--- Both are range tables
-SELECT undistribute_table('dist_target');
-SELECT undistribute_table('dist_source');
-SELECT create_distributed_table('dist_target', 'id', 'range');
-SELECT create_distributed_table('dist_source', 'id', 'range');
-SELECT * FROM show_tables;
-
-MERGE INTO dist_target
-USING dist_source
-ON dist_target.id = dist_source.id
-WHEN MATCHED THEN
-UPDATE SET val = dist_source.val
-WHEN NOT MATCHED THEN
-INSERT VALUES(dist_source.id, dist_source.val);
-
 DROP SERVER foreign_server CASCADE;
-DROP FUNCTION merge_when_and_write();
 DROP SCHEMA merge_schema CASCADE;
 SELECT 1 FROM master_remove_node('localhost', :master_port);
