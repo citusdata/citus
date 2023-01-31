@@ -409,12 +409,13 @@ ExecutePlanIntoColocatedIntermediateResults(Oid targetRelationId,
 																  columnNameList);
 
 	/* set up a DestReceiver that copies into the intermediate table */
+	const bool publishableData = true;
 	CitusCopyDestReceiver *copyDest = CreateCitusCopyDestReceiver(targetRelationId,
 																  columnNameList,
 																  partitionColumnIndex,
 																  executorState,
 																  intermediateResultIdPrefix,
-																  true);
+																  publishableData);
 
 	ExecutePlanIntoDestReceiver(selectPlan, paramListInfo, (DestReceiver *) copyDest);
 
@@ -444,11 +445,12 @@ ExecutePlanIntoRelation(Oid targetRelationId, List *insertTargetList,
 																  columnNameList);
 
 	/* set up a DestReceiver that copies into the distributed table */
+	const bool publishableData = true;
 	CitusCopyDestReceiver *copyDest = CreateCitusCopyDestReceiver(targetRelationId,
 																  columnNameList,
 																  partitionColumnIndex,
 																  executorState, NULL,
-																  true);
+																  publishableData);
 
 	ExecutePlanIntoDestReceiver(selectPlan, paramListInfo, (DestReceiver *) copyDest);
 

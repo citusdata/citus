@@ -495,10 +495,11 @@ CopyToExistingShards(CopyStmt *copyStatement, QueryCompletion *completionTag)
 	ExprContext *executorExpressionContext = GetPerTupleExprContext(executorState);
 
 	/* set up the destination for the COPY */
+	const bool publishableData = true;
 	CitusCopyDestReceiver *copyDest = CreateCitusCopyDestReceiver(tableId, columnNameList,
 																  partitionColumnIndex,
 																  executorState, NULL,
-																  true);
+																  publishableData);
 
 	/* if the user specified an explicit append-to_shard option, write to it */
 	uint64 appendShardId = ProcessAppendToShardOption(tableId, copyStatement);

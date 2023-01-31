@@ -85,6 +85,8 @@ elif "enterprise" in test_schedule:
     test_schedule = 'enterprise_minimal_schedule'
 elif "split" in test_schedule:
     test_schedule = 'minimal_schedule'
+elif "cdc" in test_schedule:
+    test_schedule = 'cdc_schedule'
 elif "mx" in test_schedule:
     if use_base_schedule:
         test_schedule = 'mx_base_schedule'
@@ -117,6 +119,8 @@ if "isolation" in test_schedule:
     make_recipe = 'check-isolation-custom-schedule'
 elif "failure" in test_schedule:
     make_recipe = 'check-failure-custom-schedule'
+elif "cdc" in test_schedule:    
+    make_recipe = 'check-cdc'
 else:
     make_recipe = 'check-custom-schedule'
 

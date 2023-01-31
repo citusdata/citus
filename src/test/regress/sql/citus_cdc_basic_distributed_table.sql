@@ -110,7 +110,8 @@ INSERT INTO sensors
 	SELECT i, '2020-01-05', '{}', 11011.10, 'A', 'I <3 Citus'
 	FROM generate_series(0,1000)i;
 
-SELECT COUNT(*) AS distribued_sensor_count FROM sensors \gset
+-- Export the source distributed table into a CSV file for comparison later with table formed using CDC subscriprions.	
+\COPY (select * from sensors ORDER BY measureid, eventdatetime, measure_data) TO 'results/sensors1.csv' DELIMITER ',' CSV HEADER;
 
 \c - postgres - :worker_1_port
 SELECT pg_current_wal_lsn()-'0/0' AS remote_lsn_1 \gset
@@ -126,7 +127,7 @@ SELECT pg_current_wal_lsn()-'0/0' AS remote_lsn_2 \gset
 SET search_path TO "citus_cdc_test_schema";
 
 -- This function waits for the subscription to catch up with the given remote node's LSN.
-CREATE OR REPLACE FUNCTION citus_cdc_test_schema.wait_for_subscription_to_catchup(subscription_name text, remoteLsn bigint) RETURNS void AS $$
+CREATE OR REPLACE FUNCTION wait_for_subscription_to_catchup(subscription_name text, remoteLsn bigint) RETURNS void AS $$
 DECLARE
 	receivedLsn bigint;
 BEGIN
@@ -137,11 +138,15 @@ BEGIN
     END LOOP;
 END$$ LANGUAGE plpgsql;
 
+--wait for CDC subscriptions to catch up with publishers (worker nodes of distributed table)
 SELECT wait_for_subscription_to_catchup('cdc_subscription_1',:remote_lsn_1);
 SELECT wait_for_subscription_to_catchup('cdc_subscription_2',:remote_lsn_2);
 
-SELECT COUNT(*) AS cdc_client_sensor_count FROM sensors \gset
-\echo "expected_sensor_count: " :distribued_sensor_count "cdc_client_sensor_count: " :cdc_client_sensor_count
+-- Export the local table created by CDC subscriptions into a CSV file.
+\COPY (select * from sensors ORDER BY measureid, eventdatetime, measure_data) TO 'results/sensors2.csv' DELIMITER ',' CSV HEADER;
+
+-- Compare the dumps from original distributed table with the dump from the CDC subscribed table and make sure there are no differences.
+\! diff results/sensors1.csv results/sensors2.csv
 -- END 4: connect to CDC client node and wait for the subscriptions to catch up with the worker nodes.
 
 --Begin 5: Cleanup all the resources created.

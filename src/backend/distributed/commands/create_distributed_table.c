@@ -2219,12 +2219,12 @@ CopyLocalDataIntoShards(Oid distributedRelationId)
 	EState *estate = CreateExecutorState();
 	ExprContext *econtext = GetPerTupleExprContext(estate);
 	econtext->ecxt_scantuple = slot;
-
+	const bool nonPublishableData = false;
 	DestReceiver *copyDest =
 		(DestReceiver *) CreateCitusCopyDestReceiver(distributedRelationId,
 													 columnNameList,
 													 partitionColumnIndex,
-													 estate, NULL, false);
+													 estate, NULL, nonPublishableData);
 
 	/* initialise state for writing to shards, we'll open connections on demand */
 	copyDest->rStartup(copyDest, 0, tupleDescriptor);
