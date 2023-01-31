@@ -119,7 +119,7 @@ if "isolation" in test_schedule:
     make_recipe = 'check-isolation-custom-schedule'
 elif "failure" in test_schedule:
     make_recipe = 'check-failure-custom-schedule'
-elif "cdc" in test_schedule:    
+elif "cdc" in test_schedule:
     make_recipe = 'check-cdc'
 else:
     make_recipe = 'check-custom-schedule'

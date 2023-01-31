@@ -110,7 +110,7 @@ INSERT INTO sensors
 	SELECT i, '2020-01-05', '{}', 11011.10, 'A', 'I <3 Citus'
 	FROM generate_series(0,1000)i;
 
--- Export the source distributed table into a CSV file for comparison later with table formed using CDC subscriprions.	
+-- Export the source distributed table into a CSV file for comparison later with table formed using CDC subscriprions.
 \COPY (select * from sensors ORDER BY measureid, eventdatetime, measure_data) TO 'results/sensors1.csv' DELIMITER ',' CSV HEADER;
 
 \c - postgres - :worker_1_port
