@@ -1,7 +1,7 @@
 package_type=${1}
 
-# Since $HOME is set in GH_Actions as /github/home, pyenv fails to create virtualenvs
-# For this script I set $HOME to /root and then set it back to /github/home
+# Since $HOME is set in GH_Actions as /github/home, pyenv fails to create virtualenvs.
+# For this script, we set $HOME to /root and then set it back to /github/home.
 GITHUB_HOME="${HOME}"
 export HOME="/root"
 
