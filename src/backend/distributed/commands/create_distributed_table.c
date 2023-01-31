@@ -2337,27 +2337,6 @@ TupleDescColumnNameList(TupleDesc tupleDescriptor)
 }
 
 
-/*
- * RelationUsesIdentityColumns returns whether a given relation uses
- * GENERATED ... AS IDENTITY
- */
-bool
-RelationUsesIdentityColumns(TupleDesc relationDesc)
-{
-	for (int attributeIndex = 0; attributeIndex < relationDesc->natts; attributeIndex++)
-	{
-		Form_pg_attribute attributeForm = TupleDescAttr(relationDesc, attributeIndex);
-
-		if (attributeForm->attidentity != '\0')
-		{
-			return true;
-		}
-	}
-
-	return false;
-}
-
-
 #if (PG_VERSION_NUM >= PG_VERSION_15)
 
 /*

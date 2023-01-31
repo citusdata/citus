@@ -54,7 +54,7 @@ test: subqueries_deep subquery_view subquery_partitioning subqueries_not_support
 test: subquery_in_targetlist subquery_in_where subquery_complex_target_list subquery_append
 test: subquery_prepared_statements
 test: non_colocated_leaf_subquery_joins non_colocated_subquery_joins
-test: cte_inline recursive_view_local_table values sequences_with_different_types
+test: cte_inline recursive_view_local_table values sequences_with_different_types multi_level_recursive_queries
 test: pg13 pg12
 # run pg14 sequentially as it syncs metadata
 test: pg14
@@ -95,7 +95,7 @@ test: multi_dropped_column_aliases foreign_key_restriction_enforcement
 test: binary_protocol
 test: alter_table_set_access_method
 test: alter_distributed_table
-test: issue_5248 issue_5099 issue_5763
+test: issue_5248 issue_5099 issue_5763 issue_6543
 test: object_propagation_debug
 test: undistribute_table
 test: run_command_on_all_nodes

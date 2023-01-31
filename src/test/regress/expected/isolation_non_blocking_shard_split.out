@@ -774,7 +774,7 @@ id|value
 (0 rows)
 
 
-starting permutation: s1-load-cache s1-start-connection s1-lock-to-split-shard s2-print-locks s2-non-blocking-shard-split s2-print-locks s2-show-pg_dist_cleanup s1-stop-connection
+starting permutation: s1-load-cache s1-start-connection s1-lock-to-split-shard s2-print-locks s2-non-blocking-shard-split s2-print-locks s2-show-pg_dist_cleanup-shards s1-stop-connection
 create_distributed_table
 ---------------------------------------------------------------------
 
@@ -842,8 +842,9 @@ node_name|node_port|success|result
 localhost|    57637|t      |to_split_table_1500001-relation-AccessShareLock
 (1 row)
 
-step s2-show-pg_dist_cleanup:
- SELECT object_name, object_type, policy_type FROM pg_dist_cleanup;
+step s2-show-pg_dist_cleanup-shards:
+ SELECT object_name, object_type, policy_type FROM pg_dist_cleanup
+ WHERE object_type = 1;
 
 object_name                  |object_type|policy_type
 ---------------------------------------------------------------------
@@ -859,7 +860,7 @@ stop_session_level_connection_to_node
 (1 row)
 
 
-starting permutation: s1-start-connection s1-lock-to-split-shard s2-print-locks s2-non-blocking-shard-split s2-print-cluster s2-show-pg_dist_cleanup s1-stop-connection
+starting permutation: s1-start-connection s1-lock-to-split-shard s2-print-locks s2-non-blocking-shard-split s2-print-cluster s2-show-pg_dist_cleanup-shards s1-stop-connection
 create_distributed_table
 ---------------------------------------------------------------------
 
@@ -929,8 +930,9 @@ id|value
 ---------------------------------------------------------------------
 (0 rows)
 
-step s2-show-pg_dist_cleanup:
- SELECT object_name, object_type, policy_type FROM pg_dist_cleanup;
+step s2-show-pg_dist_cleanup-shards:
+ SELECT object_name, object_type, policy_type FROM pg_dist_cleanup
+ WHERE object_type = 1;
 
 object_name                  |object_type|policy_type
 ---------------------------------------------------------------------

@@ -17,6 +17,7 @@ args.add_argument("-p", "--path", required=False, help="Relative path for test f
 args.add_argument("-r", "--repeat", help="Number of test to run", type=int, default=1)
 args.add_argument("-b", "--use-base-schedule", required=False, help="Choose base-schedules rather than minimal-schedules", action='store_true')
 args.add_argument("-w", "--use-whole-schedule-line", required=False, help="Use the whole line found in related schedule", action='store_true')
+args.add_argument("--valgrind", required=False, help="Run the test with valgrind enabled", action='store_true')
 
 args = vars(args.parse_args())
 
@@ -123,6 +124,9 @@ elif "cdc" in test_schedule:
     make_recipe = 'check-cdc'
 else:
     make_recipe = 'check-custom-schedule'
+
+if args['valgrind']:
+    make_recipe += '-vg'
 
 # prepare command to run tests
 test_command = f"make -C {regress_dir} {make_recipe} SCHEDULE='{pathlib.Path(tmp_schedule_path).stem}'"

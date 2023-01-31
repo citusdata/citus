@@ -338,6 +338,10 @@ FindCitusExtradataContainerRTE(Node *node, RangeTblEntry **result)
 		{
 			RangeTblFunction *rangeTblFunction = (RangeTblFunction *) linitial(
 				rangeTblEntry->functions);
+			if (!IsA(rangeTblFunction->funcexpr, FuncExpr))
+			{
+				return false;
+			}
 			FuncExpr *funcExpr = castNode(FuncExpr, rangeTblFunction->funcexpr);
 			if (funcExpr->funcid == CitusExtraDataContainerFuncId())
 			{

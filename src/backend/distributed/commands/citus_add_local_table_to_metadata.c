@@ -46,6 +46,7 @@
 #include "utils/lsyscache.h"
 #include "utils/ruleutils.h"
 #include "utils/syscache.h"
+#include "foreign/foreign.h"
 
 
 /*
@@ -60,6 +61,8 @@ static void citus_add_local_table_to_metadata_internal(Oid relationId,
 static void ErrorIfAddingPartitionTableToMetadata(Oid relationId);
 static void ErrorIfUnsupportedCreateCitusLocalTable(Relation relation);
 static void ErrorIfUnsupportedCitusLocalTableKind(Oid relationId);
+static void EnsureIfPostgresFdwHasTableName(Oid relationId);
+static void ErrorIfOptionListHasNoTableName(List *optionList);
 static void NoticeIfAutoConvertingLocalTables(bool autoConverted, Oid relationId);
 static CascadeOperationType GetCascadeTypeForCitusLocalTables(bool autoConverted);
 static List * GetShellTableDDLEventsForCitusLocalTable(Oid relationId);
@@ -495,6 +498,16 @@ ErrorIfUnsupportedCreateCitusLocalTable(Relation relation)
 	ErrorIfRelationHasUnsupportedTrigger(relationId);
 
 	/*
+	 * Error out with a hint if the foreign table is using postgres_fdw and
+	 * the option table_name is not provided.
+	 * Citus relays all the Citus local foreign table logic to the placement of the
+	 * Citus local table. If table_name is NOT provided, Citus would try to talk to
+	 * the foreign postgres table over the shard's table name, which would not exist
+	 * on the remote server.
+	 */
+	EnsureIfPostgresFdwHasTableName(relationId);
+
+	/*
 	 * When creating other citus table types, we don't need to check that case as
 	 * EnsureTableNotDistributed already errors out if the given relation implies
 	 * a citus table. However, as we don't mark the relation as citus table, i.e we
@@ -506,6 +519,93 @@ ErrorIfUnsupportedCreateCitusLocalTable(Relation relation)
 
 	/* we do not support policies in citus community */
 	ErrorIfUnsupportedPolicy(relation);
+}
+
+
+/*
+ * ServerUsesPostgresFdw gets a foreign server Oid and returns true if the FDW that
+ * the server depends on is postgres_fdw. Returns false otherwise.
+ */
+bool
+ServerUsesPostgresFdw(Oid serverId)
+{
+	ForeignServer *server = GetForeignServer(serverId);
+	ForeignDataWrapper *fdw = GetForeignDataWrapper(server->fdwid);
+
+	if (strcmp(fdw->fdwname, "postgres_fdw") == 0)
+	{
+		return true;
+	}
+
+	return false;
+}
+
+
+/*
+ * EnsureIfPostgresFdwHasTableName errors out with a hint if the foreign table is using postgres_fdw and
+ * the option table_name is not provided.
+ */
+static void
+EnsureIfPostgresFdwHasTableName(Oid relationId)
+{
+	char relationKind = get_rel_relkind(relationId);
+	if (relationKind == RELKIND_FOREIGN_TABLE)
+	{
+		ForeignTable *foreignTable = GetForeignTable(relationId);
+		if (ServerUsesPostgresFdw(foreignTable->serverid))
+		{
+			ErrorIfOptionListHasNoTableName(foreignTable->options);
+		}
+	}
+}
+
+
+/*
+ * ErrorIfOptionListHasNoTableName gets an option list (DefElem) and errors out
+ * if the list does not contain a table_name element.
+ */
+static void
+ErrorIfOptionListHasNoTableName(List *optionList)
+{
+	char *table_nameString = "table_name";
+	DefElem *option = NULL;
+	foreach_ptr(option, optionList)
+	{
+		char *optionName = option->defname;
+		if (strcmp(optionName, table_nameString) == 0)
+		{
+			return;
+		}
+	}
+
+	ereport(ERROR, (errmsg(
+						"table_name option must be provided when using postgres_fdw with Citus"),
+					errhint("Provide the option \"table_name\" with value target table's"
+							" name")));
+}
+
+
+/*
+ * ForeignTableDropsTableNameOption returns true if given option list contains
+ * (DROP table_name).
+ */
+bool
+ForeignTableDropsTableNameOption(List *optionList)
+{
+	char *table_nameString = "table_name";
+	DefElem *option = NULL;
+	foreach_ptr(option, optionList)
+	{
+		char *optionName = option->defname;
+		DefElemAction optionAction = option->defaction;
+		if (strcmp(optionName, table_nameString) == 0 &&
+			optionAction == DEFELEM_DROP)
+		{
+			return true;
+		}
+	}
+
+	return false;
 }
 
 

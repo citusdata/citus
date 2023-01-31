@@ -164,7 +164,6 @@ static uint32 HashPartitionCount(void);
 static Job * BuildJobTreeTaskList(Job *jobTree,
 								  PlannerRestrictionContext *plannerRestrictionContext);
 static bool IsInnerTableOfOuterJoin(RelationRestriction *relationRestriction);
-static bool IsOuterTableOfOuterJoin(RelationRestriction *relationRestriction);
 static void ErrorIfUnsupportedShardDistribution(Query *query);
 static Task * QueryPushdownTaskCreate(Query *originalQuery, int shardIndex,
 									  RelationRestrictionContext *restrictionContext,
@@ -2226,32 +2225,17 @@ QueryPushdownSqlTaskList(Query *query, uint64 jobId,
 		}
 
 		/*
-		 * Skip adding shards of non-target (outer)relations.
-		 * Note: This is a stop-gap arrangement for phase-I where in sql
-		 * generates a single task on the shard identified by constant
-		 * qual(filter) on the target relation.
+		 * For left joins we don't care about the shards pruned for the right hand side.
+		 * If the right hand side would prune to a smaller set we should still send it to
+		 * all tables of the left hand side. However if the right hand side is bigger than
+		 * the left hand side we don't have to send the query to any shard that is not
+		 * matching anything on the left hand side.
+		 *
+		 * Instead we will simply skip any RelationRestriction if it is an OUTER join and
+		 * the table is part of the non-outer side of the join.
 		 */
-		if (IsMergeQuery(query) &&
-			IsOuterTableOfOuterJoin(relationRestriction))
+		if (IsInnerTableOfOuterJoin(relationRestriction))
 		{
-			continue;
-		}
-		else if (!IsMergeQuery(query) &&
-				 IsInnerTableOfOuterJoin(relationRestriction))
-		{
-			/*
-			 * For left joins we don't care about the shards pruned for
-			 * the right hand side. If the right hand side would prune
-			 * to a smaller set we should still send it to all tables
-			 * of the left hand side. However if the right hand side is
-			 * bigger than the left hand side we don't have to send the
-			 * query to any shard that is not matching anything on the
-			 * left hand side.
-			 *
-			 * Instead we will simply skip any RelationRestriction if it
-			 * is an OUTER join and the table is part of the non-outer
-			 * side of the join.
-			 */
 			continue;
 		}
 
@@ -2315,45 +2299,6 @@ QueryPushdownSqlTaskList(Query *query, uint64 jobId,
 	}
 
 	return sqlTaskList;
-}
-
-
-/*
- * IsOuterTableOfOuterJoin tests based on the join information envoded in a
- * RelationRestriction if the table accessed for this relation is
- *   a) in an outer join
- *   b) on the outer part of said join
- *
- * The function returns true only if both conditions above hold true
- */
-static bool
-IsOuterTableOfOuterJoin(RelationRestriction *relationRestriction)
-{
-	RestrictInfo *joinInfo = NULL;
-	foreach_ptr(joinInfo, relationRestriction->relOptInfo->joininfo)
-	{
-		if (joinInfo->outer_relids == NULL)
-		{
-			/* not an outer join */
-			continue;
-		}
-
-		/*
-		 * This join restriction info describes an outer join, we need to figure out if
-		 * our table is in the outer part of this join. If that is the case this is a
-		 * outer table of an outer join.
-		 */
-		bool isInOuter = bms_is_member(relationRestriction->relOptInfo->relid,
-									   joinInfo->outer_relids);
-		if (isInOuter)
-		{
-			/* this table is joined in the outer part of an outer join */
-			return true;
-		}
-	}
-
-	/* we have not found any join clause that satisfies both requirements */
-	return false;
 }
 
 

@@ -170,7 +170,7 @@ ROLLBACK;
 CREATE FOREIGN TABLE foreign_table (
   id bigint not null,
   full_name text not null default ''
-) SERVER fake_fdw_server OPTIONS (encoding 'utf-8', compression 'true');
+) SERVER fake_fdw_server OPTIONS (encoding 'utf-8', compression 'true', table_name 'foreign_table');
 
 -- observe that we do not create fdw server for shell table, both shard relation
 -- & shell relation points to the same same server object

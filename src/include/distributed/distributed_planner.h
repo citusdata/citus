@@ -246,17 +246,15 @@ extern PlannedStmt * FinalizePlan(PlannedStmt *localPlan,
 extern RTEListProperties * GetRTEListPropertiesForQuery(Query *query);
 
 
-extern struct DistributedPlan * CreateDistributedPlan(uint64 planId, Query *originalQuery,
-													  Query *query, ParamListInfo
-													  boundParams, bool
-													  hasUnresolvedParams,
+extern struct DistributedPlan * CreateDistributedPlan(uint64 planId,
+													  bool allowRecursivePlanning,
+													  Query *originalQuery,
+													  Query *query,
+													  ParamListInfo boundParams,
+													  bool hasUnresolvedParams,
 													  PlannerRestrictionContext *
 													  plannerRestrictionContext);
 
 extern bool IsMergeAllowedOnRelation(Query *parse, RangeTblEntry *rte);
-extern bool ConjunctionContainsColumnFilter(Node *node,
-											Var *column,
-											Node **distributionKeyValue);
-extern bool ContainsMergeCommandWalker(Node *node);
 
 #endif /* DISTRIBUTED_PLANNER_H */

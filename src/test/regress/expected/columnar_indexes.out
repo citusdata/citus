@@ -257,6 +257,32 @@ SELECT SUM(a)=48000 FROM columnar_table WHERE a = 16000 OR a = 32000;
  t
 (1 row)
 
+BEGIN;
+  ALTER INDEX columnar_internal.stripe_first_row_number_idx RENAME TO new_index_name;
+  ALTER INDEX columnar_internal.chunk_pkey RENAME TO new_index_name_1;
+  -- same queries but this time some metadata indexes are not available
+  SELECT SUM(a)=312487500 FROM columnar_table WHERE a < 25000;
+WARNING:  Metadata index stripe_first_row_number_idx is not available, this might mean slower read/writes on columnar tables. This is expected during Postgres upgrades and not expected otherwise.
+WARNING:  Metadata index stripe_first_row_number_idx is not available, this might mean slower read/writes on columnar tables. This is expected during Postgres upgrades and not expected otherwise.
+WARNING:  Metadata index chunk_pkey is not available, this might mean slower read/writes on columnar tables. This is expected during Postgres upgrades and not expected otherwise.
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+  SELECT SUM(a)=167000 FROM columnar_table WHERE a = 16000 OR a = 151000;
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+  SELECT SUM(a)=48000 FROM columnar_table WHERE a = 16000 OR a = 32000;
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+ROLLBACK;
 TRUNCATE columnar_table;
 ALTER TABLE columnar_table DROP CONSTRAINT columnar_table_pkey;
 -- hash --

@@ -151,6 +151,8 @@ static void ListConcatUniqueAttributeClassMemberLists(AttributeEquivalenceClass 
 													  secondClass);
 static Var * PartitionKeyForRTEIdentityInQuery(Query *query, int targetRTEIndex,
 											   Index *partitionKeyIndex);
+static bool AllRelationsInRestrictionContextColocated(RelationRestrictionContext *
+													  restrictionContext);
 static bool IsNotSafeRestrictionToRecursivelyPlan(Node *node);
 static JoinRestrictionContext * FilterJoinRestrictionContext(
 	JoinRestrictionContext *joinRestrictionContext, Relids
@@ -381,8 +383,7 @@ SafeToPushdownUnionSubquery(Query *originalQuery,
 		return false;
 	}
 
-	if (!AllRelationsInListColocated(restrictionContext->relationRestrictionList,
-									 RESTRICTION_CONTEXT))
+	if (!AllRelationsInRestrictionContextColocated(restrictionContext))
 	{
 		/* distribution columns are equal, but tables are not co-located */
 		return false;
@@ -1550,7 +1551,21 @@ AddRteRelationToAttributeEquivalenceClass(AttributeEquivalenceClass *
 
 	Assert(rangeTableEntry->rtekind == RTE_RELATION);
 
-	/* we don't need reference tables in the equality on columns */
+	/*
+	 * we only calculate the equivalence of distributed tables.
+	 * This leads to certain shortcomings in the query planning when reference
+	 * tables and/or intermediate results are involved in the query. For example,
+	 * the following query patterns could actually be pushed-down in a single iteration
+	 *    "(intermediate_res INNER JOIN dist dist1) INNER JOIN dist dist2 " or
+	 *    "(ref INNER JOIN dist dist1) JOIN dist dist2"
+	 *
+	 * However, if there are no explicit join conditions between distributed tables,
+	 * the planner cannot deduce the equivalence between the distributed tables.
+	 *
+	 * Instead, we should be able to track all the equivalences between range table
+	 * entries, and expand distributed table equivalences that happens via
+	 * reference table/intermediate results
+	 */
 	if (relationPartitionKey == NULL)
 	{
 		return;
@@ -1904,33 +1919,19 @@ FindQueryContainingRTEIdentityInternal(Node *node,
 
 
 /*
- * AllRelationsInListColocated determines whether all of the relations in the
- * given list are co-located.
- * Note: The list can be of dofferent types, which is specified by ListEntryType
+ * AllRelationsInRestrictionContextColocated determines whether all of the relations in the
+ * given relation restrictions list are co-located.
  */
-bool
-AllRelationsInListColocated(List *relationList, ListEntryType entryType)
+static bool
+AllRelationsInRestrictionContextColocated(RelationRestrictionContext *restrictionContext)
 {
-	void *varPtr = NULL;
-	RangeTblEntry *rangeTableEntry = NULL;
 	RelationRestriction *relationRestriction = NULL;
 	int initialColocationId = INVALID_COLOCATION_ID;
 
 	/* check whether all relations exists in the main restriction list */
-	foreach_ptr(varPtr, relationList)
+	foreach_ptr(relationRestriction, restrictionContext->relationRestrictionList)
 	{
-		Oid relationId = InvalidOid;
-
-		if (entryType == RANGETABLE_ENTRY)
-		{
-			rangeTableEntry = (RangeTblEntry *) varPtr;
-			relationId = rangeTableEntry->relid;
-		}
-		else if (entryType == RESTRICTION_CONTEXT)
-		{
-			relationRestriction = (RelationRestriction *) varPtr;
-			relationId = relationRestriction->relationId;
-		}
+		Oid relationId = relationRestriction->relationId;
 
 		if (IsCitusTableType(relationId, CITUS_TABLE_WITH_NO_DIST_KEY))
 		{

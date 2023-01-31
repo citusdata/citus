@@ -316,23 +316,6 @@ RecursivelyPlanSubqueriesAndCTEs(Query *query, RecursivePlanningContext *context
 		RecursivelyPlanSetOperations(query, (Node *) query->setOperations, context);
 	}
 
-	/*
-	 * If the FROM clause is recurring (does not contain a distributed table),
-	 * then we cannot have any distributed tables appearing in subqueries in
-	 * the SELECT and WHERE clauses.
-	 */
-	if (ShouldRecursivelyPlanSublinks(query))
-	{
-		/* replace all subqueries in the WHERE clause */
-		if (query->jointree && query->jointree->quals)
-		{
-			RecursivelyPlanAllSubqueries((Node *) query->jointree->quals, context);
-		}
-
-		/* replace all subqueries in the SELECT clause */
-		RecursivelyPlanAllSubqueries((Node *) query->targetList, context);
-	}
-
 	if (query->havingQual != NULL)
 	{
 		if (NodeContainsSubqueryReferencingOuterQuery(query->havingQual))
@@ -377,6 +360,27 @@ RecursivelyPlanSubqueriesAndCTEs(Query *query, RecursivePlanningContext *context
 	{
 		RecursivelyPlanRecurringTupleOuterJoinWalker((Node *) query->jointree,
 													 query, context);
+	}
+
+	/*
+	 * If the FROM clause is recurring (does not contain a distributed table),
+	 * then we cannot have any distributed tables appearing in subqueries in
+	 * the SELECT and WHERE clauses.
+	 *
+	 * We do the sublink conversations at the end of the recursive planning
+	 * because earlier steps might have transformed the query into a
+	 * shape that needs recursively planning the sublinks.
+	 */
+	if (ShouldRecursivelyPlanSublinks(query))
+	{
+		/* replace all subqueries in the WHERE clause */
+		if (query->jointree && query->jointree->quals)
+		{
+			RecursivelyPlanAllSubqueries((Node *) query->jointree->quals, context);
+		}
+
+		/* replace all subqueries in the SELECT clause */
+		RecursivelyPlanAllSubqueries((Node *) query->targetList, context);
 	}
 
 	return NULL;

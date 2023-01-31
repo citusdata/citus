@@ -44,6 +44,73 @@ SELECT con.conname
 
 \c - - :master_host :master_port
 ALTER TABLE AT_AddConstNoName.products DROP CONSTRAINT products_pkey;
+-- Check "ADD PRIMARY KEY USING INDEX ..."
+CREATE TABLE  AT_AddConstNoName.tbl(col1 int, col2 int);
+SELECT create_distributed_table('AT_AddConstNoName.tbl', 'col1');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE UNIQUE INDEX my_index ON AT_AddConstNoName.tbl(col1);
+ALTER TABLE AT_AddConstNoName.tbl ADD PRIMARY KEY USING INDEX my_index;
+SELECT con.conname
+    FROM pg_catalog.pg_constraint con
+      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
+              WHERE rel.relname = 'tbl';
+ conname
+---------------------------------------------------------------------
+ my_index
+(1 row)
+
+\c - - :public_worker_1_host :worker_1_port
+SELECT con.conname
+    FROM pg_catalog.pg_constraint con
+      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
+                WHERE rel.relname LIKE 'tbl%' ORDER BY con.conname ASC;
+     conname
+---------------------------------------------------------------------
+ my_index
+ my_index_5410004
+ my_index_5410005
+ my_index_5410006
+ my_index_5410007
+(5 rows)
+
+\c - - :master_host :master_port
+ALTER TABLE AT_AddConstNoName.tbl DROP CONSTRAINT my_index;
+-- Check "ADD UNIQUE USING INDEX ..."
+CREATE UNIQUE INDEX my_index ON AT_AddConstNoName.tbl(col1);
+ALTER TABLE AT_AddConstNoName.tbl ADD UNIQUE USING INDEX my_index;
+SELECT con.conname
+    FROM pg_catalog.pg_constraint con
+      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
+              WHERE rel.relname = 'tbl';
+ conname
+---------------------------------------------------------------------
+ my_index
+(1 row)
+
+\c - - :public_worker_1_host :worker_1_port
+SELECT con.conname
+    FROM pg_catalog.pg_constraint con
+      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
+                WHERE rel.relname LIKE 'tbl%'ORDER BY con.conname ASC;
+     conname
+---------------------------------------------------------------------
+ my_index
+ my_index_5410004
+ my_index_5410005
+ my_index_5410006
+ my_index_5410007
+(5 rows)
+
+\c - - :master_host :master_port
+ALTER TABLE AT_AddConstNoName.tbl DROP CONSTRAINT my_index;
 -- Check "ADD PRIMARY KEY DEFERRABLE"
 ALTER TABLE AT_AddConstNoName.products ADD PRIMARY KEY(product_no) DEFERRABLE;
 \c - - :public_worker_1_host :worker_1_port
@@ -268,7 +335,7 @@ SELECT con.conname, con.connoinherit
 (1 row)
 
 \c - - :public_worker_1_host :worker_1_port
-SELECT con.conname, connoinherit
+SELECT con.conname, con.connoinherit
     FROM pg_catalog.pg_constraint con
       INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
       INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
@@ -276,6 +343,31 @@ SELECT con.conname, connoinherit
         conname         | connoinherit
 ---------------------------------------------------------------------
  products_check_5410000 | t
+(1 row)
+
+\c - - :master_host :master_port
+ALTER TABLE AT_AddConstNoName.products DROP CONSTRAINT products_check;
+-- Check "ADD CHECK ... NOT VALID"
+ALTER TABLE AT_AddConstNoName.products ADD CHECK (product_no > 0 AND price > 0) NOT VALID;
+SELECT con.conname, con.convalidated
+    FROM pg_catalog.pg_constraint con
+      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
+              WHERE rel.relname = 'products';
+    conname     | convalidated
+---------------------------------------------------------------------
+ products_check | f
+(1 row)
+
+\c - - :public_worker_1_host :worker_1_port
+SELECT con.conname, con.convalidated
+    FROM pg_catalog.pg_constraint con
+      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
+              WHERE rel.relname = 'products_5410000';
+        conname         | convalidated
+---------------------------------------------------------------------
+ products_check_5410000 | f
 (1 row)
 
 \c - - :master_host :master_port
@@ -404,10 +496,10 @@ SELECT con.conname
 		WHERE rel.relname LIKE 'very%' ORDER BY con.conname ASC;
                              conname
 ---------------------------------------------------------------------
- verylonglonglonglonglonglonglonglonglonglonglo_559ab79d_5410006
- verylonglonglonglonglonglonglonglonglonglonglo_559ab79d_5410007
- verylonglonglonglonglonglonglonglonglonglonglo_559ab79d_5410008
- verylonglonglonglonglonglonglonglonglonglonglo_559ab79d_5410009
+ verylonglonglonglonglonglonglonglonglonglonglo_559ab79d_5410010
+ verylonglonglonglonglonglonglonglonglonglonglo_559ab79d_5410011
+ verylonglonglonglonglonglonglonglonglonglonglo_559ab79d_5410012
+ verylonglonglonglonglonglonglonglonglonglonglo_559ab79d_5410013
  verylonglonglonglonglonglonglonglonglonglonglonglonglonglo_pkey
 (5 rows)
 
@@ -447,10 +539,10 @@ SELECT con.conname
                 WHERE rel.relname LIKE 'very%' ORDER BY con.conname ASC;
                              conname
 ---------------------------------------------------------------------
- verylonglonglonglonglonglonglonglonglonglonglo_cd61b0cf_5410006
- verylonglonglonglonglonglonglonglonglonglonglo_cd61b0cf_5410007
- verylonglonglonglonglonglonglonglonglonglonglo_cd61b0cf_5410008
- verylonglonglonglonglonglonglonglonglonglonglo_cd61b0cf_5410009
+ verylonglonglonglonglonglonglonglonglonglonglo_cd61b0cf_5410010
+ verylonglonglonglonglonglonglonglonglonglonglo_cd61b0cf_5410011
+ verylonglonglonglonglonglonglonglonglonglonglo_cd61b0cf_5410012
+ verylonglonglonglonglonglonglonglonglonglonglo_cd61b0cf_5410013
  verylonglonglonglonglonglonglonglonglonglonglong_product_no_key
 (5 rows)
 
@@ -490,10 +582,10 @@ SELECT con.conname
                 WHERE rel.relname LIKE 'very%' ORDER BY con.conname ASC;
                              conname
 ---------------------------------------------------------------------
- verylonglonglonglonglonglonglonglonglonglonglo_057ed027_5410006
- verylonglonglonglonglonglonglonglonglonglonglo_057ed027_5410007
- verylonglonglonglonglonglonglonglonglonglonglo_057ed027_5410008
- verylonglonglonglonglonglonglonglonglonglonglo_057ed027_5410009
+ verylonglonglonglonglonglonglonglonglonglonglo_057ed027_5410010
+ verylonglonglonglonglonglonglonglonglonglonglo_057ed027_5410011
+ verylonglonglonglonglonglonglonglonglonglonglo_057ed027_5410012
+ verylonglonglonglonglonglonglonglonglonglonglo_057ed027_5410013
  verylonglonglonglonglonglonglonglonglonglonglon_product_no_excl
 (5 rows)
 
@@ -533,10 +625,10 @@ SELECT con.conname
                 WHERE rel.relname LIKE 'very%' ORDER BY con.conname ASC;
                              conname
 ---------------------------------------------------------------------
- verylonglonglonglonglonglonglonglonglonglonglo_d943e063_5410006
- verylonglonglonglonglonglonglonglonglonglonglo_d943e063_5410007
- verylonglonglonglonglonglonglonglonglonglonglo_d943e063_5410008
- verylonglonglonglonglonglonglonglonglonglonglo_d943e063_5410009
+ verylonglonglonglonglonglonglonglonglonglonglo_d943e063_5410010
+ verylonglonglonglonglonglonglonglonglonglonglo_d943e063_5410011
+ verylonglonglonglonglonglonglonglonglonglonglo_d943e063_5410012
+ verylonglonglonglonglonglonglonglonglonglonglo_d943e063_5410013
  verylonglonglonglonglonglonglonglonglonglonglonglonglongl_check
 (5 rows)
 
@@ -593,10 +685,10 @@ SELECT con.conname
           WHERE rel.relname LIKE 'longlonglonglonglonglonglonglonglong%' ORDER BY con.conname ASC;
                              conname
 ---------------------------------------------------------------------
- longlonglonglonglonglonglonglonglonglonglonglo_9e4e3069_5410014
- longlonglonglonglonglonglonglonglonglonglonglo_9e4e3069_5410015
- longlonglonglonglonglonglonglonglonglonglonglo_9e4e3069_5410016
- longlonglonglonglonglonglonglonglonglonglonglo_9e4e3069_5410017
+ longlonglonglonglonglonglonglonglonglonglonglo_9e4e3069_5410018
+ longlonglonglonglonglonglonglonglonglonglonglo_9e4e3069_5410019
+ longlonglonglonglonglonglonglonglonglonglonglo_9e4e3069_5410020
+ longlonglonglonglonglonglonglonglonglonglonglo_9e4e3069_5410021
  longlonglonglonglonglonglonglonglonglonglonglonglonglonglo_pkey
 (5 rows)
 
@@ -639,10 +731,10 @@ SELECT con.conname
           WHERE rel.relname LIKE 'longlonglonglonglonglonglonglonglong%' ORDER BY con.conname ASC;
                              conname
 ---------------------------------------------------------------------
- longlonglonglonglonglonglonglonglonglonglongl__d794d9f1_5410014
- longlonglonglonglonglonglonglonglonglonglongl__d794d9f1_5410015
- longlonglonglonglonglonglonglonglonglonglongl__d794d9f1_5410016
- longlonglonglonglonglonglonglonglonglonglongl__d794d9f1_5410017
+ longlonglonglonglonglonglonglonglonglonglongl__d794d9f1_5410018
+ longlonglonglonglonglonglonglonglonglonglongl__d794d9f1_5410019
+ longlonglonglonglonglonglonglonglonglonglongl__d794d9f1_5410020
+ longlonglonglonglonglonglonglonglonglonglongl__d794d9f1_5410021
  longlonglonglonglonglonglonglonglonglonglongl_partition_col_key
 (5 rows)
 
@@ -795,7 +887,7 @@ SELECT con.conname
             conname
 ---------------------------------------------------------------------
  citus_local_table_pkey
- citus_local_table_pkey_5410022
+ citus_local_table_pkey_5410026
 (2 rows)
 
 SELECT create_distributed_table('AT_AddConstNoName.citus_local_table','id');
@@ -823,10 +915,10 @@ SELECT con.conname
             conname
 ---------------------------------------------------------------------
  citus_local_table_pkey
- citus_local_table_pkey_5410023
- citus_local_table_pkey_5410024
- citus_local_table_pkey_5410025
- citus_local_table_pkey_5410026
+ citus_local_table_pkey_5410027
+ citus_local_table_pkey_5410028
+ citus_local_table_pkey_5410029
+ citus_local_table_pkey_5410030
 (5 rows)
 
 \c - - :master_host :master_port
@@ -854,10 +946,10 @@ SELECT con.conname
              conname
 ---------------------------------------------------------------------
  citus_local_table_id_key
- citus_local_table_id_key_5410023
- citus_local_table_id_key_5410024
- citus_local_table_id_key_5410025
- citus_local_table_id_key_5410026
+ citus_local_table_id_key_5410027
+ citus_local_table_id_key_5410028
+ citus_local_table_id_key_5410029
+ citus_local_table_id_key_5410030
 (5 rows)
 
 \c - - :master_host :master_port
@@ -895,10 +987,10 @@ SELECT con.conname
               conname
 ---------------------------------------------------------------------
  citus_local_table_id_excl
- citus_local_table_id_excl_5410023
- citus_local_table_id_excl_5410024
- citus_local_table_id_excl_5410025
- citus_local_table_id_excl_5410026
+ citus_local_table_id_excl_5410027
+ citus_local_table_id_excl_5410028
+ citus_local_table_id_excl_5410029
+ citus_local_table_id_excl_5410030
 (5 rows)
 
 \c - - :master_host :master_port
@@ -936,10 +1028,10 @@ SELECT con.conname
              conname
 ---------------------------------------------------------------------
  citus_local_table_check
- citus_local_table_check_5410023
- citus_local_table_check_5410024
- citus_local_table_check_5410025
- citus_local_table_check_5410026
+ citus_local_table_check_5410027
+ citus_local_table_check_5410028
+ citus_local_table_check_5410029
+ citus_local_table_check_5410030
 (5 rows)
 
 \c - - :master_host :master_port
@@ -989,10 +1081,10 @@ SELECT con.conname
           WHERE rel.relname LIKE 'longlonglonglonglonglonglonglonglong%' ORDER BY con.conname ASC;
                              conname
 ---------------------------------------------------------------------
- longlonglonglonglonglonglonglonglonglonglonglo_9e4e3069_5410034
- longlonglonglonglonglonglonglonglonglonglonglo_9e4e3069_5410035
- longlonglonglonglonglonglonglonglonglonglonglo_9e4e3069_5410036
- longlonglonglonglonglonglonglonglonglonglonglo_9e4e3069_5410037
+ longlonglonglonglonglonglonglonglonglonglonglo_9e4e3069_5410038
+ longlonglonglonglonglonglonglonglonglonglonglo_9e4e3069_5410039
+ longlonglonglonglonglonglonglonglonglonglonglo_9e4e3069_5410040
+ longlonglonglonglonglonglonglonglonglonglonglo_9e4e3069_5410041
  longlonglonglonglonglonglonglonglonglonglonglonglonglonglo_pkey
 (5 rows)
 
@@ -1026,10 +1118,10 @@ SELECT con.conname
           WHERE rel.relname LIKE 'longlonglonglonglonglonglonglonglong%' ORDER BY con.conname ASC;
                              conname
 ---------------------------------------------------------------------
- longlonglonglonglonglonglonglonglonglonglongl__d794d9f1_5410034
- longlonglonglonglonglonglonglonglonglonglongl__d794d9f1_5410035
- longlonglonglonglonglonglonglonglonglonglongl__d794d9f1_5410036
- longlonglonglonglonglonglonglonglonglonglongl__d794d9f1_5410037
+ longlonglonglonglonglonglonglonglonglonglongl__d794d9f1_5410038
+ longlonglonglonglonglonglonglonglonglonglongl__d794d9f1_5410039
+ longlonglonglonglonglonglonglonglonglonglongl__d794d9f1_5410040
+ longlonglonglonglonglonglonglonglonglonglongl__d794d9f1_5410041
  longlonglonglonglonglonglonglonglonglonglongl_partition_col_key
 (5 rows)
 
@@ -1119,10 +1211,10 @@ SELECT con.conname
         conname
 ---------------------------------------------------------------------
  2nd table_pkey
- 2nd table_pkey_5410042
- 2nd table_pkey_5410043
- 2nd table_pkey_5410044
- 2nd table_pkey_5410045
+ 2nd table_pkey_5410046
+ 2nd table_pkey_5410047
+ 2nd table_pkey_5410048
+ 2nd table_pkey_5410049
 (5 rows)
 
 \c - - :master_host :master_port
@@ -1149,10 +1241,10 @@ SELECT con.conname
                conname
 ---------------------------------------------------------------------
  2nd table_2nd id_3rd id_key
- 2nd table_2nd id_3rd id_key_5410042
- 2nd table_2nd id_3rd id_key_5410043
- 2nd table_2nd id_3rd id_key_5410044
- 2nd table_2nd id_3rd id_key_5410045
+ 2nd table_2nd id_3rd id_key_5410046
+ 2nd table_2nd id_3rd id_key_5410047
+ 2nd table_2nd id_3rd id_key_5410048
+ 2nd table_2nd id_3rd id_key_5410049
 (5 rows)
 
 \c - - :master_host :master_port
@@ -1179,10 +1271,10 @@ SELECT con.conname
             conname
 ---------------------------------------------------------------------
  2nd table_2nd id_excl
- 2nd table_2nd id_excl_5410042
- 2nd table_2nd id_excl_5410043
- 2nd table_2nd id_excl_5410044
- 2nd table_2nd id_excl_5410045
+ 2nd table_2nd id_excl_5410046
+ 2nd table_2nd id_excl_5410047
+ 2nd table_2nd id_excl_5410048
+ 2nd table_2nd id_excl_5410049
 (5 rows)
 
 \c - - :master_host :master_port
@@ -1209,20 +1301,21 @@ SELECT con.conname
          conname
 ---------------------------------------------------------------------
  2nd table_check
- 2nd table_check_5410042
- 2nd table_check_5410043
- 2nd table_check_5410044
- 2nd table_check_5410045
+ 2nd table_check_5410046
+ 2nd table_check_5410047
+ 2nd table_check_5410048
+ 2nd table_check_5410049
 (5 rows)
 
 \c - - :master_host :master_port
 ALTER TABLE  AT_AddConstNoName."2nd table" DROP CONSTRAINT "2nd table_check";
 DROP EXTENSION btree_gist;
 DROP SCHEMA AT_AddConstNoName CASCADE;
-NOTICE:  drop cascades to 6 other objects
-DETAIL:  drop cascades to table at_addconstnoname.products_ref_2
+NOTICE:  drop cascades to 7 other objects
+DETAIL:  drop cascades to table at_addconstnoname.tbl
+drop cascades to table at_addconstnoname.products_ref_2
 drop cascades to table at_addconstnoname.products_ref_3
 drop cascades to table at_addconstnoname.verylonglonglonglonglonglonglonglonglonglonglonglonglonglonglon
-drop cascades to table at_addconstnoname.products_ref_3_5410005
+drop cascades to table at_addconstnoname.products_ref_3_5410009
 drop cascades to table at_addconstnoname.citus_local_partitioned_table
 drop cascades to table at_addconstnoname."2nd table"

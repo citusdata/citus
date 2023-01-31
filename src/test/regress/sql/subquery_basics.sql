@@ -360,3 +360,37 @@ FROM
 		ORDER BY 1
 		LIMIT 5
 	) as foo WHERE user_id IN (SELECT count(*) FROM users_table GROUP BY user_id);
+
+CREATE TABLE dist(id int, value int);
+SELECT create_distributed_table('dist','id');
+INSERT INTO dist SELECT i, i FROM generate_series(0,100) i;
+CREATE TABLE ref(id int);
+SELECT create_reference_table('ref');
+INSERT INTO ref SELECT i FROM generate_series(50,150) i;
+CREATE TABLE local(id int);
+INSERT INTO local SELECT i FROM generate_series(50,150) i;
+
+-- planner recursively plans local table in local-dist join and then the whole query is routed
+SELECT COUNT(*) FROM dist JOIN local USING(id)
+WHERE
+	dist.id IN (SELECT id FROM dist WHERE id = 55) AND
+    dist.id = 55 AND
+    dist.value IN (SELECT value FROM dist WHERE id = 55);
+
+-- subquery in WHERE clause should be recursively planned after planner recursively plans recurring full join
+SELECT COUNT(*) FROM ref FULL JOIN dist USING (id)
+WHERE
+	dist.id IN (SELECT id FROM dist GROUP BY id);
+
+-- subqueries in WHERE clause should be recursively planned after planner recursively plans full outer join
+SELECT COUNT(*) FROM dist FULL JOIN ref USING(id)
+WHERE
+	dist.id IN (SELECT id FROM dist WHERE id > 5) AND
+    dist.value IN (SELECT value FROM dist WHERE id > 15);
+
+-- sublinks in the targetlist are not supported
+SELECT (SELECT id FROM dist WHERE dist.id > d1.id GROUP BY id) FROM ref FULL JOIN dist d1 USING (id);
+
+DROP TABLE dist;
+DROP TABLE ref;
+DROP TABLE local;
