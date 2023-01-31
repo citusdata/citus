@@ -74,7 +74,7 @@ CREATE OR REPLACE FUNCTION pg_catalog.citus_job_status (
         WHERE j.job_id = $1
             AND t.status = 'running'
     ),
-    errored_task_details AS (
+    errored_or_retried_task_details AS (
         SELECT jsonb_agg(jsonb_build_object(
                 'state', t.status,
                 'retried', coalesce(t.retry_count,0),
@@ -85,7 +85,7 @@ CREATE OR REPLACE FUNCTION pg_catalog.citus_job_status (
             pg_dist_background_task t JOIN pg_dist_background_job j ON t.job_id = j.job_id
         WHERE j.job_id = $1
             AND NOT EXISTS (SELECT 1 FROM rp WHERE rp.sessionid = t.pid)
-            AND t.status = 'error'
+            AND (t.status = 'error' OR (t.status = 'runnable' AND t.retry_count > 0))
     )
     SELECT
         job_id,
@@ -97,7 +97,7 @@ CREATE OR REPLACE FUNCTION pg_catalog.citus_job_status (
         jsonb_build_object(
             'task_state_counts', (SELECT jsonb_object_agg(status, count) FROM task_state_occurence_counts),
             'tasks', (COALESCE((SELECT tasks FROM running_task_details),'[]'::jsonb) ||
-                      COALESCE((SELECT tasks FROM errored_task_details),'[]'::jsonb))) AS details
+                      COALESCE((SELECT tasks FROM errored_or_retried_task_details),'[]'::jsonb))) AS details
     FROM pg_dist_background_job j
     WHERE j.job_id = $1
 $fn$;
