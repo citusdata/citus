@@ -272,4 +272,9 @@ clean distclean maintainer-clean:
 	rm -rf tmp_check/
 	rm -rf tmp_citus_test/
 
+check-cluster-mgmt-vg: all
+	$(pg_regress_multi_check) --load-extension=citus --valgrind \
+	--pg_ctl-timeout=360 --connection-timeout=500000 --valgrind-path=valgrind --valgrind-log-file=$(CITUS_VALGRIND_LOG_FILE) \
+	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/cluster_management_schedule $(EXTRA_TESTS)
+
 all: create-tablespaces
