@@ -210,5 +210,94 @@ SELECT citus_rebalance_stop();
 (1 row)
 
 RESET ROLE;
+SET citus.replicate_reference_tables_on_activate = false;
+CREATE TABLE ref_no_pk(a int);
+SELECT create_reference_table('ref_no_pk');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE ref_with_pk(a int primary key);
+SELECT create_reference_table('ref_with_pk');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- Add coordinator so there's a node which doesn't have the reference tables
+SELECT 1 FROM citus_add_node('localhost', :master_port, groupId=>0);
+NOTICE:  localhost:xxxxx is the coordinator and already contains metadata, skipping syncing the metadata
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+-- fails
+BEGIN;
+SELECT 1 FROM citus_rebalance_start();
+ERROR:  cannot use logical replication to transfer shards of the relation ref_no_pk since it doesn't have a REPLICA IDENTITY or PRIMARY KEY
+DETAIL:  UPDATE and DELETE commands on the shard will error out during logical replication unless there is a REPLICA IDENTITY or PRIMARY KEY.
+HINT:  If you wish to continue without a replica identity set the shard_transfer_mode to 'force_logical' or 'block_writes'.
+ROLLBACK;
+-- success
+BEGIN;
+SELECT 1 FROM citus_rebalance_start(shard_transfer_mode := 'force_logical');
+NOTICE:  Scheduled 1 moves as job xxx
+DETAIL:  Rebalance scheduled as background job
+HINT:  To monitor progress, run: SELECT * FROM pg_dist_background_task WHERE job_id = xxx ORDER BY task_id ASC; or SELECT * FROM get_rebalance_progress();
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+ROLLBACK;
+-- success
+BEGIN;
+SELECT 1 FROM citus_rebalance_start(shard_transfer_mode := 'block_writes');
+NOTICE:  Scheduled 1 moves as job xxx
+DETAIL:  Rebalance scheduled as background job
+HINT:  To monitor progress, run: SELECT * FROM pg_dist_background_task WHERE job_id = xxx ORDER BY task_id ASC; or SELECT * FROM get_rebalance_progress();
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+ROLLBACK;
+-- fails
+SELECT 1 FROM citus_rebalance_start();
+ERROR:  cannot use logical replication to transfer shards of the relation ref_no_pk since it doesn't have a REPLICA IDENTITY or PRIMARY KEY
+DETAIL:  UPDATE and DELETE commands on the shard will error out during logical replication unless there is a REPLICA IDENTITY or PRIMARY KEY.
+HINT:  If you wish to continue without a replica identity set the shard_transfer_mode to 'force_logical' or 'block_writes'.
+-- succeeds
+SELECT 1 FROM citus_rebalance_start(shard_transfer_mode := 'force_logical');
+NOTICE:  Scheduled 1 moves as job xxx
+DETAIL:  Rebalance scheduled as background job
+HINT:  To monitor progress, run: SELECT * FROM pg_dist_background_task WHERE job_id = xxx ORDER BY task_id ASC; or SELECT * FROM get_rebalance_progress();
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+-- wait for success
+SELECT citus_rebalance_wait();
+ citus_rebalance_wait
+---------------------------------------------------------------------
+
+(1 row)
+
+-- Remove coordinator again to allow rerunning of this test
+SELECT 1 FROM citus_remove_node('localhost', :master_port);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+SELECT public.wait_until_metadata_sync(30000);
+ wait_until_metadata_sync
+---------------------------------------------------------------------
+
+(1 row)
+
 SET client_min_messages TO WARNING;
 DROP SCHEMA background_rebalance CASCADE;

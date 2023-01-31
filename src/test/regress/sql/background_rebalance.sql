@@ -61,7 +61,6 @@ SELECT citus_rebalance_wait();
 
 DROP TABLE t1;
 
-
 -- make sure a non-super user can stop rebalancing
 CREATE USER non_super_user_rebalance WITH LOGIN;
 GRANT ALL ON SCHEMA background_rebalance TO non_super_user_rebalance;
@@ -76,7 +75,37 @@ SELECT 1 FROM citus_rebalance_start();
 SELECT citus_rebalance_stop();
 
 RESET ROLE;
+SET citus.replicate_reference_tables_on_activate = false;
+CREATE TABLE ref_no_pk(a int);
+SELECT create_reference_table('ref_no_pk');
+CREATE TABLE ref_with_pk(a int primary key);
+SELECT create_reference_table('ref_with_pk');
+-- Add coordinator so there's a node which doesn't have the reference tables
+SELECT 1 FROM citus_add_node('localhost', :master_port, groupId=>0);
 
+-- fails
+BEGIN;
+SELECT 1 FROM citus_rebalance_start();
+ROLLBACK;
+-- success
+BEGIN;
+SELECT 1 FROM citus_rebalance_start(shard_transfer_mode := 'force_logical');
+ROLLBACK;
+-- success
+BEGIN;
+SELECT 1 FROM citus_rebalance_start(shard_transfer_mode := 'block_writes');
+ROLLBACK;
+
+-- fails
+SELECT 1 FROM citus_rebalance_start();
+-- succeeds
+SELECT 1 FROM citus_rebalance_start(shard_transfer_mode := 'force_logical');
+-- wait for success
+SELECT citus_rebalance_wait();
+
+-- Remove coordinator again to allow rerunning of this test
+SELECT 1 FROM citus_remove_node('localhost', :master_port);
+SELECT public.wait_until_metadata_sync(30000);
 
 SET client_min_messages TO WARNING;
 DROP SCHEMA background_rebalance CASCADE;

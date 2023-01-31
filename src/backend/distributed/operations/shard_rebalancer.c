@@ -1818,7 +1818,10 @@ RebalanceTableShardsBackground(RebalanceOptions *options, Oid shardReplicationMo
 
 	if (HasNodesWithMissingReferenceTables(&referenceTableIdList))
 	{
-		VerifyTablesHaveReplicaIdentity(referenceTableIdList);
+		if (shardTransferMode == TRANSFER_MODE_AUTOMATIC)
+		{
+			VerifyTablesHaveReplicaIdentity(referenceTableIdList);
+		}
 
 		/*
 		 * Reference tables need to be copied to (newly-added) nodes, this needs to be the
