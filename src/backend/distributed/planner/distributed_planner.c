@@ -135,6 +135,8 @@ static RTEListProperties * GetRTEListProperties(List *rangeTableList);
 static List * TranslatedVars(PlannerInfo *root, int relationIndex);
 static void WarnIfListHasForeignDistributedTable(List *rangeTableList);
 static void ErrorIfMergeHasUnsupportedTables(Query *parse, List *rangeTableList);
+static void AddFastPathRestrictInfoIntoPlannerContext(
+	PlannerRestrictionContext *plannerRestrictionContext);
 static List * GenerateImplicitJoinRestrictInfoList(PlannerInfo *plannerInfo,
 												   RelOptInfo *innerrel,
 												   RelOptInfo *outerrel);
@@ -724,7 +726,7 @@ PlanFastPathDistributedStmt(DistributedPlanningContext *planContext,
 										planContext->boundParams);
 
 	/* generate simple base restrict info inside plannerRestrictionContext */
-	RelabelPlannerRestrictionContext(planContext->plannerRestrictionContext);
+	AddFastPathRestrictInfoIntoPlannerContext(planContext->plannerRestrictionContext);
 
 	return CreateDistributedPlannedStmt(planContext);
 }
@@ -973,7 +975,7 @@ TryCreateDistributedPlannedStmt(PlannedStmt *localPlan,
 
 /*
  * ReplanAfterQueryModification replans given query to update plannercontext
- * accordingly. Returns modified query without chnaging given query.
+ * accordingly. Returns modified query without changing original query.
  */
 Query *
 ReplanAfterQueryModification(Query *originalQuery, ParamListInfo boundParams)
@@ -1852,18 +1854,59 @@ CheckNodeCopyAndSerialization(Node *node)
 
 
 /*
+ * AddFastPathRestrictInfoIntoPlannerContext creates a single base restrictinfo as we do not call
+ * standard_planner and not generate restrictinfo for fastpath queries.
+ */
+static
+void
+AddFastPathRestrictInfoIntoPlannerContext(
+	PlannerRestrictionContext *plannerRestrictionContext)
+{
+	if (plannerRestrictionContext->fastPathRestrictionContext == NULL ||
+		plannerRestrictionContext->fastPathRestrictionContext->distributionKeyValue ==
+		NULL)
+	{
+		return;
+	}
+
+	Const *distKeyVal =
+		plannerRestrictionContext->fastPathRestrictionContext->distributionKeyValue;
+	Var *partitionColumn = PartitionColumn(
+		plannerRestrictionContext->fastPathRestrictionContext->distRelId, 1);
+	OpExpr *partitionExpression = MakeOpExpression(partitionColumn,
+												   BTEqualStrategyNumber);
+	Node *rightOp = get_rightop((Expr *) partitionExpression);
+	Const *rightConst = (Const *) rightOp;
+	*rightConst = *distKeyVal;
+
+	RestrictInfo *fastpathRestrictInfo = makeNode(RestrictInfo);
+	fastpathRestrictInfo->can_join = false;
+	fastpathRestrictInfo->is_pushed_down = true;
+	fastpathRestrictInfo->clause = (Expr *) partitionExpression;
+
+	RelationRestriction *relationRestriction = palloc0(sizeof(RelationRestriction));
+	relationRestriction->relOptInfo = palloc0(sizeof(RelOptInfo));
+	relationRestriction->relOptInfo->baserestrictinfo = list_make1(
+		fastpathRestrictInfo);
+	plannerRestrictionContext->relationRestrictionContext->relationRestrictionList =
+		list_make1(relationRestriction);
+}
+
+
+/*
  * GenerateImplicitJoinRestrictInfoList generates implicit join restrict infos
  * by using planner information. As we rely on join restriction infos at join
- * planner, we generate implicit join restrict infos. When join condition contains
- * a reducible constant, generate_join_implied_equalities does not generate implicit
- * join clauses. Hence, we mark ec_has_const to false beforehand. At the end, we
- * restore previous values.
+ * planner, we generate implicit join restrict infos.
  */
 static List *
 GenerateImplicitJoinRestrictInfoList(PlannerInfo *plannerInfo,
 									 RelOptInfo *innerrel, RelOptInfo *outerrel)
 {
-	Relids joinrelids = bms_union(innerrel->relids, outerrel->relids);
+	/*
+	 * when join condition contains a reducible constant, generate_join_implied_equalities
+	 * does not generate implicit join clauses. Hence, we mark ec_has_const to false
+	 * beforehand. At the end, we restore previous values.
+	 */
 	List *prevVals = NIL;
 	EquivalenceClass *eqclass = NULL;
 	foreach_ptr(eqclass, plannerInfo->eq_classes)
@@ -1872,12 +1915,15 @@ GenerateImplicitJoinRestrictInfoList(PlannerInfo *plannerInfo,
 		eqclass->ec_has_const = false;
 	}
 
+	/* generate implicit join restrictinfos */
+	Relids joinrelids = bms_union(innerrel->relids, outerrel->relids);
 	List *generatedRestrictInfoList = generate_join_implied_equalities(
 		plannerInfo,
 		joinrelids,
 		outerrel->relids,
 		innerrel);
 
+	/* restore previous values for ec_has_const */
 	int i;
 	for (i = 0; i < list_length(prevVals); i++)
 	{

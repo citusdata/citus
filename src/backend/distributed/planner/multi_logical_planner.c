@@ -91,12 +91,10 @@ static MultiCollect * CollectNodeForTable(List *collectTableList, uint32 rangeTa
 static MultiSelect * MultiSelectNode(List *pushdownableClauseList,
 									 List *nonPushdownableClauseList);
 static bool IsSelectClause(Node *clause);
-static List * SelectClauses(List *clauseList);
+static List * SelectClauseList(List *clauseList);
 
 static JoinInfoContext * FetchJoinOrderContext(FromExpr *fromExpr);
 static bool JoinInfoWalker(Node *node, JoinInfoContext *joinInfoContext);
-static ApplicableJoinClauseContext * ExtractApplicableJoinClauseContext(
-	List *joinOrderList);
 
 /* Local functions forward declarations for applying joins */
 static MultiNode * ApplyJoinRule(MultiNode *leftNode, MultiNode *rightNode,
@@ -589,7 +587,7 @@ MultiNodeTree(Query *queryTree, PlannerRestrictionContext *plannerRestrictionCon
 	}
 
 	/* extract join and nonjoin clauses from plannerRestrictionContext */
-	RestrictInfoContext *restrictInfoContext = ExtractRestrictionInfosFromPlannerContext(
+	RestrictInfoContext *restrictInfoContext = ExtractRestrictInfosFromPlannerContext(
 		plannerRestrictionContext);
 	List *joinRestrictInfoList = restrictInfoContext->joinRestrictInfoList;
 	List *nonJoinRestrictionInfoList = restrictInfoContext->baseRestrictInfoList;
@@ -706,14 +704,13 @@ MultiNodeTree(Query *queryTree, PlannerRestrictionContext *plannerRestrictionCon
 			/* we simply donot commute joins as we have at least 1 outer join */
 			joinOrderList = FixedJoinOrderList(tableEntryList, joinInfoContext,
 											   joinRestrictInfoListList,
-											   generatedEcJoinClauseList,
-											   pseudoClauseList);
+											   generatedEcJoinClauseList);
 		}
 		else
 		{
 			/* find best join order for commutative inner joins */
 			joinOrderList = JoinOrderList(tableEntryList, joinRestrictInfoListList,
-										  generatedEcJoinClauseList, pseudoClauseList);
+										  generatedEcJoinClauseList);
 		}
 
 		/* build join tree using the join order and collected tables */
@@ -737,7 +734,7 @@ MultiNodeTree(Query *queryTree, PlannerRestrictionContext *plannerRestrictionCon
 	 * - some of join clauses can be pushed down. See below for details.
 	 */
 	ApplicableJoinClauseContext *applicableJoinClauseContext =
-		ExtractApplicableJoinClauseContext(
+		ExtractApplicableJoinClauseContextFromJoinList(
 			joinOrderList);
 
 	/*
@@ -754,7 +751,7 @@ MultiNodeTree(Query *queryTree, PlannerRestrictionContext *plannerRestrictionCon
 	 * be put into pushdownable part of MultiSelect clause, so we differentiate those from
 	 * actual pushdownable parts in join clauses.
 	 */
-	List *pushdownableSelectJoinClauseList = SelectClauses(pushdownableJoinClauseList);
+	List *pushdownableSelectJoinClauseList = SelectClauseList(pushdownableJoinClauseList);
 	List *nonPushdownableSelectJoinClauseList = list_difference(
 		pushdownableJoinClauseList,
 		pushdownableSelectJoinClauseList);
@@ -790,10 +787,10 @@ MultiNodeTree(Query *queryTree, PlannerRestrictionContext *plannerRestrictionCon
 
 
 /*
- * SelectClauses returns select clauses from given clause list.
+ * SelectClauseList returns select clauses from given clause list.
  */
 static List *
-SelectClauses(List *clauseList)
+SelectClauseList(List *clauseList)
 {
 	List *selectClauseList = NIL;
 
@@ -811,50 +808,10 @@ SelectClauses(List *clauseList)
 
 
 /*
- * ExtractApplicableJoinClauseContext returns ApplicableJoinClauseContext which contains
- * all pushdownable and nonpushdownable clauses from given joinOrderList.
- */
-static ApplicableJoinClauseContext *
-ExtractApplicableJoinClauseContext(List *joinOrderList)
-{
-	List *pushdownableJoinClauseList = NIL;
-	List *nonPushdownableJoinClauseList = NIL;
-
-	JoinOrderNode *joinOrderNode = NULL;
-	foreach_ptr(joinOrderNode, joinOrderList)
-	{
-		ApplicableJoinClauseContext *nodeApplicableJoinClauseContext =
-			joinOrderNode->applicableJoinClauseContext;
-
-		/* first node does not contain ApplicableJoinClauseContext */
-		if (nodeApplicableJoinClauseContext == NULL)
-		{
-			continue;
-		}
-		pushdownableJoinClauseList = list_concat_unique(pushdownableJoinClauseList,
-														nodeApplicableJoinClauseContext->
-														pushdownableJoinClauseList);
-		nonPushdownableJoinClauseList = list_concat_unique(nonPushdownableJoinClauseList,
-														   nodeApplicableJoinClauseContext
-														   ->nonPushdownableJoinClauseList);
-	}
-
-	ApplicableJoinClauseContext *applicableJoinClauseContext = palloc0(
-		sizeof(ApplicableJoinClauseContext));
-	applicableJoinClauseContext->joinClauseList = list_concat_copy(
-		pushdownableJoinClauseList, nonPushdownableJoinClauseList);
-	applicableJoinClauseContext->pushdownableJoinClauseList = pushdownableJoinClauseList;
-	applicableJoinClauseContext->nonPushdownableJoinClauseList =
-		nonPushdownableJoinClauseList;
-	return applicableJoinClauseContext;
-}
-
-
-/*
  * RestrictInfoContext extracts all RestrictionInfo from PlannerRestrictionContext.
  */
 RestrictInfoContext *
-ExtractRestrictionInfosFromPlannerContext(
+ExtractRestrictInfosFromPlannerContext(
 	PlannerRestrictionContext *plannerRestrictionContext)
 {
 	RelationRestrictionContext *relationRestrictionContext =

@@ -419,7 +419,9 @@ DistKeyInSimpleOpExpression(Expr *clause, Var *distColumn, Node **distributionKe
 		}
 		else
 		{
-			/* if the vartypes do not match, let shard pruning handle it later */
+			/*
+			 * if the vartypes do not match, try to transform the constant
+			 */
 			bool missingOk = true;
 			Const *transformedConstantClause =
 				TransformPartitionRestrictionValue(distColumn, constantClause, missingOk);

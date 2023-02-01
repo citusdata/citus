@@ -44,8 +44,6 @@ extern DistributedPlan * CreateInsertSelectIntoLocalTablePlan(uint64 planId,
 															  plannerRestrictionContext);
 extern char * InsertSelectResultIdPrefix(uint64 planId);
 extern bool PlanningInsertSelect(void);
-extern void RelabelPlannerRestrictionContext(
-	PlannerRestrictionContext *plannerRestrictionContext);
 
 
 #endif /* INSERT_SELECT_PLANNER_H */

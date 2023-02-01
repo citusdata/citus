@@ -238,7 +238,7 @@ extern bool IsJoinClause(Node *clause);
 extern List * SubqueryEntryList(Query *queryTree);
 extern DeferredErrorMessage * DeferErrorIfQueryNotSupported(Query *queryTree);
 extern List * WhereClauseList(FromExpr *fromExpr);
-extern RestrictInfoContext * ExtractRestrictionInfosFromPlannerContext(
+extern RestrictInfoContext * ExtractRestrictInfosFromPlannerContext(
 	PlannerRestrictionContext *plannerRestrictionContext);
 extern List * TableEntryList(List *rangeTableList);
 extern List * UsedTableEntryList(Query *query);

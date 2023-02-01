@@ -66,7 +66,6 @@ typedef struct TableEntry
  */
 typedef struct ApplicableJoinClauseContext
 {
-	List *joinClauseList;
 	List *pushdownableJoinClauseList;
 	List *nonPushdownableJoinClauseList;
 } ApplicableJoinClauseContext;
@@ -129,12 +128,11 @@ extern bool EnableSingleHashRepartitioning;
 /* Function declaration for determining table join orders */
 extern List * JoinExprList(FromExpr *fromExpr);
 extern List * JoinOrderList(List *rangeTableEntryList, List *joinRestrictInfoListList,
-							List *generatedEcJoinClauseList, List *pseudoClauseList);
+							List *generatedEcJoinClauseList);
 extern List * FixedJoinOrderList(List *rangeTableEntryList,
 								 JoinInfoContext *joinInfoContext,
 								 List *joinRestrictInfoListList,
-								 List *generatedEcJoinClauseList,
-								 List *pseudoClauseList);
+								 List *generatedEcJoinClauseList);
 extern bool IsApplicableJoinClause(List *leftTableIdList, uint32 rightTableId,
 								   Node *joinClause);
 extern bool IsApplicableFalseConstantJoinClause(List *leftTableIdList,
@@ -154,6 +152,7 @@ extern Var * DistPartitionKeyOrError(Oid relationId);
 extern char PartitionMethod(Oid relationId);
 extern char TableReplicationModel(Oid relationId);
 extern bool ExtractLeftMostRangeTableIndex(Node *node, int *rangeTableIndex);
-
+extern ApplicableJoinClauseContext * ExtractApplicableJoinClauseContextFromJoinList(
+	List *joinOrderList);
 
 #endif   /* MULTI_JOIN_ORDER_H */

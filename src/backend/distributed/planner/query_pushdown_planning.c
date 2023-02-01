@@ -114,8 +114,6 @@ static bool ContainsReferencesToRelidsWalker(Node *node,
 											 RelidsReferenceWalkerContext *context);
 static bool HasRightRecursiveJoin(FromExpr *fromExpr);
 static bool RightRecursiveJoinExprWalker(Node *node, void *context);
-static bool HasCartesianJoin(FromExpr *fromExpr);
-static bool CartesianJoinExprWalker(Node *node, void *context);
 
 
 /*
@@ -206,22 +204,13 @@ ShouldUseSubqueryPushDown(Query *originalQuery, Query *rewrittenQuery,
 		{
 			return true;
 		}
-
-		/*
-		 * join order planner cannot handle cartesian joins when query tree contains outer
-		 * join.
-		 */
-		if (HasCartesianJoin(rewrittenQuery->jointree))
-		{
-			return true;
-		}
 	}
 
 	/*
 	 * Some unsupported join clauses in logical planner
 	 * may be supported by subquery pushdown planner.
 	 */
-	RestrictInfoContext *restrictInfoContext = ExtractRestrictionInfosFromPlannerContext(
+	RestrictInfoContext *restrictInfoContext = ExtractRestrictInfosFromPlannerContext(
 		plannerRestrictionContext);
 	List *joinRestrictionInfoList = restrictInfoContext->joinRestrictInfoList;
 	List *nonJoinRestrictionInfoList = restrictInfoContext->baseRestrictInfoList;
@@ -288,55 +277,6 @@ RightRecursiveJoinExprWalker(Node *node, void *context)
 	}
 
 	return expression_tree_walker(node, RightRecursiveJoinExprWalker, NULL);
-}
-
-
-/*
- * HasCartesianJoin returns true if join tree contains any cartesian join.
- */
-static bool
-HasCartesianJoin(FromExpr *fromExpr)
-{
-	if (fromExpr && list_length(fromExpr->fromlist) > 1)
-	{
-		return true;
-	}
-
-	JoinExpr *joinExpr = NULL;
-	foreach_ptr(joinExpr, fromExpr->fromlist)
-	{
-		if (CartesianJoinExprWalker((Node *) joinExpr, NULL))
-		{
-			return true;
-		}
-	}
-
-	return false;
-}
-
-
-/*
- * CartesianJoinExprWalker is helper method for HasCartesianJoin.
- */
-static bool
-CartesianJoinExprWalker(Node *node, void *context)
-{
-	if (node == NULL)
-	{
-		return false;
-	}
-
-	if (IsA(node, FromExpr))
-	{
-		FromExpr *fromExpr = (FromExpr *) node;
-
-		if (list_length(fromExpr->fromlist) > 1)
-		{
-			return true;
-		}
-	}
-
-	return expression_tree_walker(node, CartesianJoinExprWalker, NULL);
 }
 
 

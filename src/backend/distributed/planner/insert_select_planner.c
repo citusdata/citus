@@ -89,6 +89,8 @@ static DistributedPlan * CreateNonPushableInsertSelectPlan(uint64 planId, Query 
 static DeferredErrorMessage * NonPushableInsertSelectSupported(Query *insertSelectQuery);
 static Query * WrapSubquery(Query *subquery);
 static void RelabelTargetEntryList(List *selectTargetList, List *insertTargetList);
+static void RelabelPlannerRestrictionContextForInsertSelect(
+	PlannerRestrictionContext *plannerRestrictionContext);
 static List * AddInsertSelectCasts(List *insertTargetList, List *selectTargetList,
 								   Oid targetRelationId);
 static Expr * CastExpr(Expr *expr, Oid sourceType, Oid targetType, Oid targetCollation,
@@ -364,42 +366,17 @@ CreateDistributedInsertSelectPlan(Query *originalQuery,
 
 
 /*
- * RelabelPlannerRestrictionContext relabels all Var varnos inside plannerRestrictionContext
- * restriction infos to 1. If we have an unempty fastpath context, we manually create a single
- * base RestrictInfo as we didnot call standard_planner to create it.
+ * RelabelPlannerRestrictionContextForInsertSelect relabels all Var varnos of restrictioninfos
+ * inside plannerRestrictionContext to 1. We wrap SELECT part into subquery for INSERT .. SELECT
+ * queries but do not update restrictinfos inside plannerContext. It is safe to do that as we are
+ * sure that SELECT part has only single table.
  */
-void
-RelabelPlannerRestrictionContext(PlannerRestrictionContext *plannerRestrictionContext)
+static void
+RelabelPlannerRestrictionContextForInsertSelect(
+	PlannerRestrictionContext *plannerRestrictionContext)
 {
 	List *relationRestrictionList =
 		plannerRestrictionContext->relationRestrictionContext->relationRestrictionList;
-
-	if (plannerRestrictionContext->fastPathRestrictionContext &&
-		plannerRestrictionContext->fastPathRestrictionContext->distributionKeyValue)
-	{
-		Const *distKeyVal =
-			plannerRestrictionContext->fastPathRestrictionContext->distributionKeyValue;
-		Var *partitionColumn = PartitionColumn(
-			plannerRestrictionContext->fastPathRestrictionContext->distRelId, 1);
-		OpExpr *partitionExpression = MakeOpExpression(partitionColumn,
-													   BTEqualStrategyNumber);
-		Node *rightOp = get_rightop((Expr *) partitionExpression);
-		Const *rightConst = (Const *) rightOp;
-		*rightConst = *distKeyVal;
-
-		RestrictInfo *fastpathRestrictInfo = makeNode(RestrictInfo);
-		fastpathRestrictInfo->can_join = false;
-		fastpathRestrictInfo->is_pushed_down = true;
-		fastpathRestrictInfo->clause = (Expr *) partitionExpression;
-
-		RelationRestriction *relationRestriction = palloc0(sizeof(RelationRestriction));
-		relationRestriction->relOptInfo = palloc0(sizeof(RelOptInfo));
-		relationRestriction->relOptInfo->baserestrictinfo = list_make1(
-			fastpathRestrictInfo);
-		plannerRestrictionContext->relationRestrictionContext->relationRestrictionList =
-			list_make1(relationRestriction);
-		return;
-	}
 
 	RelationRestriction *relationRestriction = NULL;
 	foreach_ptr(relationRestriction, relationRestrictionList)
@@ -445,8 +422,8 @@ CreateInsertSelectIntoLocalTablePlan(uint64 planId, Query *insertSelectQuery,
 	/* get the SELECT query (may have changed after PrepareInsertSelectForCitusPlanner) */
 	Query *selectQuery = selectRte->subquery;
 
-	/* relabels all Var varnos inside plannerRestrictionContext after we modify query */
-	RelabelPlannerRestrictionContext(plannerRestrictionContext);
+	/* relabels all Var varnos inside plannerRestrictionContext after we modify SELECT query */
+	RelabelPlannerRestrictionContextForInsertSelect(plannerRestrictionContext);
 
 	bool allowRecursivePlanning = true;
 	DistributedPlan *distPlan = CreateDistributedPlan(planId, allowRecursivePlanning,
