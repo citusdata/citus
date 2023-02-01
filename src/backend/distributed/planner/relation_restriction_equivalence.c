@@ -151,6 +151,9 @@ static void ListConcatUniqueAttributeClassMemberLists(AttributeEquivalenceClass 
 													  secondClass);
 static Var * PartitionKeyForRTEIdentityInQuery(Query *query, int targetRTEIndex,
 											   Index *partitionKeyIndex);
+static bool AllRelationsInRestrictionContextColocated(RelationRestrictionContext *
+													  restrictionContext);
+static bool AllRelationsInListColocated(List *relationList);
 static bool IsNotSafeRestrictionToRecursivelyPlan(Node *node);
 static JoinRestrictionContext * FilterJoinRestrictionContext(
 	JoinRestrictionContext *joinRestrictionContext, Relids
@@ -381,8 +384,7 @@ SafeToPushdownUnionSubquery(Query *originalQuery,
 		return false;
 	}
 
-	if (!AllRelationsInListColocated(restrictionContext->relationRestrictionList,
-									 RESTRICTION_CONTEXT))
+	if (!AllRelationsInRestrictionContextColocated(restrictionContext))
 	{
 		/* distribution columns are equal, but tables are not co-located */
 		return false;
@@ -1918,34 +1920,56 @@ FindQueryContainingRTEIdentityInternal(Node *node,
 
 
 /*
- * AllRelationsInListColocated determines whether all of the relations in the
- * given list are co-located.
- * Note: The list can be of dofferent types, which is specified by ListEntryType
+ * AllRelationsInRestrictionContextColocated determines whether all of the relations in the
+ * given relation restrictions list are co-located.
  */
-bool
-AllRelationsInListColocated(List *relationList, ListEntryType entryType)
+static bool
+AllRelationsInRestrictionContextColocated(RelationRestrictionContext *restrictionContext)
 {
-	void *varPtr = NULL;
-	RangeTblEntry *rangeTableEntry = NULL;
 	RelationRestriction *relationRestriction = NULL;
-	int initialColocationId = INVALID_COLOCATION_ID;
+	List *relationIdList = NIL;
 
 	/* check whether all relations exists in the main restriction list */
-	foreach_ptr(varPtr, relationList)
+	foreach_ptr(relationRestriction, restrictionContext->relationRestrictionList)
 	{
-		Oid relationId = InvalidOid;
+		relationIdList = lappend_oid(relationIdList, relationRestriction->relationId);
+	}
 
-		if (entryType == RANGETABLE_ENTRY)
-		{
-			rangeTableEntry = (RangeTblEntry *) varPtr;
-			relationId = rangeTableEntry->relid;
-		}
-		else if (entryType == RESTRICTION_CONTEXT)
-		{
-			relationRestriction = (RelationRestriction *) varPtr;
-			relationId = relationRestriction->relationId;
-		}
+	return AllRelationsInListColocated(relationIdList);
+}
 
+
+/*
+ * AllRelationsInRTEListColocated determines whether all of the relations in the
+ * given RangeTableEntry list are co-located.
+ */
+bool
+AllRelationsInRTEListColocated(List *rangeTableEntryList)
+{
+	RangeTblEntry *rangeTableEntry = NULL;
+	List *relationIdList = NIL;
+
+	foreach_ptr(rangeTableEntry, rangeTableEntryList)
+	{
+		relationIdList = lappend_oid(relationIdList, rangeTableEntry->relid);
+	}
+
+	return AllRelationsInListColocated(relationIdList);
+}
+
+
+/*
+ * AllRelationsInListColocated determines whether all of the relations in the
+ * given list are co-located.
+ */
+static bool
+AllRelationsInListColocated(List *relationList)
+{
+	int initialColocationId = INVALID_COLOCATION_ID;
+	Oid relationId = InvalidOid;
+
+	foreach_oid(relationId, relationList)
+	{
 		if (IsCitusTable(relationId) && !HasDistributionKey(relationId))
 		{
 			continue;

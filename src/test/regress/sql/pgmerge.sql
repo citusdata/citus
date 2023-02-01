@@ -1172,12 +1172,14 @@ INSERT INTO pa_target SELECT '2017-02-28', id, id * 100, 'initial' FROM generate
 SET client_min_messages TO DEBUG1;
 BEGIN;
 MERGE INTO pa_target t
-  USING (SELECT '2017-01-15' AS slogts, * FROM pa_source WHERE sid < 10) s
+  USING (SELECT * FROM pa_source WHERE sid < 10) s
+  --USING (SELECT '2017-01-15' AS slogts, * FROM pa_source WHERE sid < 10) s
   ON t.tid = s.sid
   WHEN MATCHED THEN
     UPDATE SET balance = balance + delta, val = val || ' updated by merge'
   WHEN NOT MATCHED THEN
-    INSERT VALUES (slogts::timestamp, sid, delta, 'inserted by merge');
+    INSERT VALUES ('2017-01-15', sid, delta, 'inserted by merge');
+    --INSERT VALUES (slogts::timestamp, sid, delta, 'inserted by merge');
 SELECT * FROM pa_target ORDER BY tid;
 ROLLBACK;
 RESET client_min_messages;

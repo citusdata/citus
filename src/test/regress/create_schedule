@@ -13,3 +13,4 @@ test: arbitrary_configs_truncate_create
 test: arbitrary_configs_truncate_cascade_create
 test: arbitrary_configs_truncate_partition_create
 test: arbitrary_configs_alter_table_add_constraint_without_name_create
+test: merge_arbitrary_create

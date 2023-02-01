@@ -77,7 +77,7 @@ int PlannerLevel = 0;
 
 static bool ListContainsDistributedTableRTE(List *rangeTableList,
 											bool *maybeHasForeignDistributedTable);
-static bool IsUpdateOrDelete(Query *query);
+static bool IsUpdateOrDeleteOrMerge(Query *query);
 static PlannedStmt * CreateDistributedPlannedStmt(
 	DistributedPlanningContext *planContext);
 static PlannedStmt * InlineCtesAndCreateDistributedPlannedStmt(uint64 planId,
@@ -153,7 +153,7 @@ distributed_planner(Query *parse,
 		 * We cannot have merge command for this path as well because
 		 * there cannot be recursively planned merge command.
 		 */
-		Assert(!ContainsMergeCommandWalker((Node *) parse));
+		Assert(!IsMergeQuery(parse));
 
 		needsDistributedPlanning = true;
 	}
@@ -292,39 +292,6 @@ distributed_planner(Query *parse,
 	}
 
 	return result;
-}
-
-
-/*
- * ContainsMergeCommandWalker walks over the node and finds if there are any
- * Merge command (e.g., CMD_MERGE) in the node.
- */
-bool
-ContainsMergeCommandWalker(Node *node)
-{
-	#if PG_VERSION_NUM < PG_VERSION_15
-	return false;
-	#endif
-
-	if (node == NULL)
-	{
-		return false;
-	}
-
-	if (IsA(node, Query))
-	{
-		Query *query = (Query *) node;
-		if (IsMergeQuery(query))
-		{
-			return true;
-		}
-
-		return query_tree_walker((Query *) node, ContainsMergeCommandWalker, NULL, 0);
-	}
-
-	return expression_tree_walker(node, ContainsMergeCommandWalker, NULL);
-
-	return false;
 }
 
 
@@ -631,7 +598,7 @@ IsMultiTaskPlan(DistributedPlan *distributedPlan)
  * IsUpdateOrDelete returns true if the query performs an update or delete.
  */
 bool
-IsUpdateOrDelete(Query *query)
+IsUpdateOrDeleteOrMerge(Query *query)
 {
 	return query->commandType == CMD_UPDATE ||
 		   query->commandType == CMD_DELETE ||
@@ -809,7 +776,7 @@ CreateDistributedPlannedStmt(DistributedPlanningContext *planContext)
 	 * if it is planned as a multi shard modify query.
 	 */
 	if ((distributedPlan->planningError ||
-		 (IsUpdateOrDelete(planContext->originalQuery) && IsMultiTaskPlan(
+		 (IsUpdateOrDeleteOrMerge(planContext->originalQuery) && IsMultiTaskPlan(
 			  distributedPlan))) &&
 		hasUnresolvedParams)
 	{

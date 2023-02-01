@@ -18,8 +18,9 @@ CREATE SCHEMA merge_schema;
 SET search_path TO merge_schema;
 SET citus.shard_count TO 4;
 SET citus.next_shard_id TO 4000000;
-SET citus.explain_all_tasks to true;
+SET citus.explain_all_tasks TO true;
 SET citus.shard_replication_factor TO 1;
+SET citus.max_adaptive_executor_pool_size TO 1;
 SELECT 1 FROM master_add_node('localhost', :master_port, groupid => 0);
 
 CREATE TABLE source
@@ -185,6 +186,21 @@ MERGE INTO target t
            VALUES (customer_id, s.order_id, s.order_center, 123, s.order_time);
 SELECT * from target t WHERE t.customer_id  = 30004;
 
+-- Updating distribution column is allowed if the operation is a no-op
+SELECT * from target t WHERE t.customer_id  = 30000;
+MERGE INTO target t
+USING SOURCE s
+ON (t.customer_id = s.customer_id AND t.customer_id = 30000)
+WHEN MATCHED THEN
+	UPDATE SET customer_id = 30000;
+
+MERGE INTO target t
+USING SOURCE s
+ON (t.customer_id = s.customer_id AND t.customer_id = 30000)
+WHEN MATCHED THEN
+	UPDATE SET customer_id = t.customer_id;
+SELECT * from target t WHERE t.customer_id  = 30000;
+
 --
 -- Test MERGE with CTE as source
 --
@@ -223,7 +239,6 @@ MERGE INTO t1
 	WHEN NOT MATCHED THEN
 		INSERT (id, val) VALUES (pg_res.id, pg_res.val);
 
--- Two rows with id 2 and val incremented, id 3, and id 1 is deleted
 SELECT * FROM t1 order by id;
 SELECT * INTO merge_result FROM t1 order by id;
 
@@ -777,7 +792,8 @@ $$ language plpgsql volatile;
 CREATE TABLE fn_target(id int, data varchar);
 
 MERGE INTO fn_target
-USING (SELECT * FROM f_dist() f(id integer, source varchar)) as fn_source
+--USING (SELECT * FROM f_dist() f(id integer, source varchar)) as fn_source
+USING (SELECT id, source FROM dist_table) as fn_source
 ON fn_source.id = fn_target.id
 WHEN MATCHED THEN
 DO NOTHING
@@ -790,11 +806,12 @@ SELECT * INTO fn_result FROM fn_target ORDER BY 1 ;
 -- Clean the slate
 TRUNCATE TABLE fn_target;
 SELECT citus_add_local_table_to_metadata('fn_target');
-SELECT create_distributed_table('dist_table', 'id');
+SELECT citus_add_local_table_to_metadata('dist_table');
 
 SET client_min_messages TO DEBUG1;
 MERGE INTO fn_target
-USING (SELECT * FROM f_dist() f(id integer, source varchar)) as fn_source
+--USING (SELECT * FROM f_dist() f(id integer, source varchar)) as fn_source
+USING (SELECT id, source FROM dist_table) as fn_source
 ON fn_source.id = fn_target.id
 WHEN MATCHED THEN
 DO NOTHING
@@ -1287,7 +1304,7 @@ ON pg_target.id = sub.id AND pg_target.id = $1
 WHEN MATCHED THEN
         UPDATE SET val = 'Updated by prepare using ' || sub.val
 WHEN NOT MATCHED THEN
-        DO NOTHING;
+        INSERT VALUES (sub.id, sub.val);
 
 PREPARE citus_prep(int) AS
 MERGE INTO citus_target
@@ -1296,12 +1313,12 @@ ON citus_target.id = sub.id AND citus_target.id = $1
 WHEN MATCHED THEN
         UPDATE SET val = 'Updated by prepare using ' || sub.val
 WHEN NOT MATCHED THEN
-        DO NOTHING;
+        INSERT VALUES (sub.id, sub.val);
 
 BEGIN;
-SET citus.log_remote_commands to true;
 
 SELECT * FROM pg_target WHERE id = 500; -- before merge
+SELECT count(*) FROM pg_target; -- before merge
 EXECUTE pg_prep(500);
 SELECT * FROM pg_target WHERE id = 500; -- non-cached
 EXECUTE pg_prep(500);
@@ -1310,8 +1327,11 @@ EXECUTE pg_prep(500);
 EXECUTE pg_prep(500);
 EXECUTE pg_prep(500);
 SELECT * FROM pg_target WHERE id = 500; -- cached
+SELECT count(*) FROM pg_target; -- cached
 
 SELECT * FROM citus_target WHERE id = 500; -- before merge
+SELECT count(*) FROM citus_target; -- before merge
+SET citus.log_remote_commands to true;
 EXECUTE citus_prep(500);
 SELECT * FROM citus_target WHERE id = 500; -- non-cached
 EXECUTE citus_prep(500);
@@ -1319,9 +1339,10 @@ EXECUTE citus_prep(500);
 EXECUTE citus_prep(500);
 EXECUTE citus_prep(500);
 EXECUTE citus_prep(500);
-SELECT * FROM citus_target WHERE id = 500; -- cached
-
 SET citus.log_remote_commands to false;
+SELECT * FROM citus_target WHERE id = 500; -- cached
+SELECT count(*) FROM citus_target; -- cached
+
 SELECT compare_tables();
 ROLLBACK;
 
@@ -1417,9 +1438,184 @@ MERGE INTO citus_pa_target t
 SELECT pa_compare_tables();
 ROLLBACK;
 
+CREATE TABLE source_json( id   integer, z int, d jsonb);
+CREATE TABLE target_json( id   integer, z int, d jsonb);
+
+INSERT INTO source_json SELECT i,i FROM generate_series(0,5)i;
+
+SELECT create_distributed_table('target_json','id'), create_distributed_table('source_json', 'id');
+
+-- single shard query given source_json is filtered and Postgres is smart to pushdown
+-- filter to the target_json as well
+SELECT public.coordinator_plan($Q$
+EXPLAIN (ANALYZE ON, TIMING OFF) MERGE INTO target_json sda
+USING (SELECT * FROM source_json WHERE id = 1) sdn
+ON sda.id = sdn.id
+WHEN NOT matched THEN
+	INSERT (id, z) VALUES (sdn.id, 5);
+$Q$);
+SELECT * FROM target_json ORDER BY 1;
+
+-- zero shard query as filters do not match
+--SELECT public.coordinator_plan($Q$
+--EXPLAIN (ANALYZE ON, TIMING OFF) MERGE INTO target_json sda
+--USING (SELECT * FROM source_json WHERE id = 1) sdn
+--ON sda.id = sdn.id AND sda.id = 2
+--WHEN NOT matched THEN
+--	INSERT (id, z) VALUES (sdn.id, 5);
+--$Q$);
+--SELECT * FROM target_json ORDER BY 1;
+
+-- join for source_json is happening at a different place
+SELECT public.coordinator_plan($Q$
+EXPLAIN (ANALYZE ON, TIMING OFF) MERGE INTO target_json sda
+USING source_json s1 LEFT JOIN (SELECT * FROM source_json) s2 USING(z)
+ON sda.id = s1.id AND s1.id = s2.id
+WHEN NOT matched THEN
+	INSERT (id, z) VALUES (s2.id, 5);
+$Q$);
+SELECT * FROM target_json ORDER BY 1;
+
+-- update JSON column
+SELECT public.coordinator_plan($Q$
+EXPLAIN (ANALYZE ON, TIMING OFF) MERGE INTO target_json sda
+USING source_json sdn
+ON sda.id = sdn.id
+WHEN matched THEN
+	UPDATE SET d = '{"a" : 5}';
+$Q$);
+SELECT * FROM target_json ORDER BY 1;
+
+CREATE FUNCTION immutable_hash(int) RETURNS int
+AS 'SELECT hashtext( ($1 + $1)::text);'
+LANGUAGE SQL
+IMMUTABLE
+RETURNS NULL ON NULL INPUT;
+
+MERGE INTO target_json sda
+USING source_json sdn
+ON sda.id = sdn.id
+WHEN matched THEN
+	UPDATE SET z = immutable_hash(sdn.z);
+
+-- Test bigserial
+CREATE TABLE source_serial (id integer, z int, d bigserial);
+CREATE TABLE target_serial (id integer, z int, d bigserial);
+INSERT INTO source_serial SELECT i,i FROM generate_series(0,100)i;
+SELECT create_distributed_table('source_serial', 'id'),
+       create_distributed_table('target_serial', 'id');
+
+MERGE INTO target_serial sda
+USING source_serial sdn
+ON sda.id = sdn.id
+WHEN NOT matched THEN
+       INSERT (id, z) VALUES (id, z);
+
+SELECT count(*) from source_serial;
+SELECT count(*) from target_serial;
+
+SELECT count(distinct d) from source_serial;
+SELECT count(distinct d) from target_serial;
+
+-- Test set operations
+CREATE TABLE target_set(t1 int, t2 int);
+CREATE TABLE source_set(s1 int, s2 int);
+
+SELECT create_distributed_table('target_set', 't1'),
+       create_distributed_table('source_set', 's1');
+
+INSERT INTO target_set VALUES(1, 0);
+INSERT INTO source_set VALUES(1, 1);
+INSERT INTO source_set VALUES(2, 2);
+
+MERGE INTO target_set
+USING (SELECT * FROM source_set UNION SELECT * FROM source_set) AS foo ON target_set.t1 = foo.s1
+WHEN MATCHED THEN
+        UPDATE SET t2 = t2 + 100
+WHEN NOT MATCHED THEN
+	INSERT VALUES(foo.s1);
+SELECT * FROM target_set ORDER BY 1, 2;
+
 --
 -- Error and Unsupported scenarios
 --
+
+MERGE INTO target_set
+USING (SELECT s1,s2 FROM source_set UNION SELECT s2,s1 FROM source_set) AS foo ON target_set.t1 = foo.s1
+WHEN MATCHED THEN
+        UPDATE SET t2 = t2 + 1;
+
+MERGE INTO target_set
+USING (SELECT 2 as s3, source_set.* FROM (SELECT * FROM source_set LIMIT 1) as foo LEFT JOIN source_set USING( s1)) AS foo
+ON target_set.t1 = foo.s1
+WHEN MATCHED THEN UPDATE SET t2 = t2 + 1
+WHEN NOT MATCHED THEN INSERT VALUES(s1, s3);
+
+
+-- modifying CTE not supported
+EXPLAIN
+WITH cte_1 AS (DELETE FROM target_json)
+MERGE INTO target_json sda
+USING source_json sdn
+ON sda.id = sdn.id
+WHEN NOT matched THEN
+	INSERT (id, z) VALUES (sdn.id, 5);
+
+-- Grouping sets not supported
+MERGE INTO citus_target t
+USING (SELECT count(*), id FROM citus_source GROUP BY GROUPING SETS (id, val)) subq
+ON subq.id = t.id
+WHEN MATCHED AND t.id > 350 THEN
+    UPDATE SET val = t.val || 'Updated'
+WHEN NOT MATCHED THEN
+        INSERT VALUES (subq.id, 99)
+WHEN MATCHED AND t.id < 350 THEN
+        DELETE;
+
+WITH subq AS
+(
+SELECT count(*), id FROM citus_source GROUP BY GROUPING SETS (id, val)
+)
+MERGE INTO citus_target t
+USING subq
+ON subq.id = t.id
+WHEN MATCHED AND t.id > 350 THEN
+    UPDATE SET val = t.val || 'Updated'
+WHEN NOT MATCHED THEN
+        INSERT VALUES (subq.id, 99)
+WHEN MATCHED AND t.id < 350 THEN
+        DELETE;
+
+-- try inserting unmatched distribution column value
+MERGE INTO citus_target t
+USING citus_source s
+ON t.id = s.id
+WHEN NOT MATCHED THEN
+  INSERT DEFAULT VALUES;
+
+MERGE INTO citus_target t
+USING citus_source s
+ON t.id = s.id
+WHEN NOT MATCHED THEN
+  INSERT VALUES(10000);
+
+MERGE INTO citus_target t
+USING citus_source s
+ON t.id = s.id
+WHEN NOT MATCHED THEN
+  INSERT (id) VALUES(1000);
+
+MERGE INTO t1 t
+USING s1 s
+ON t.id = s.id
+WHEN NOT MATCHED THEN
+  INSERT (id) VALUES(s.val);
+
+MERGE INTO t1 t
+USING s1 s
+ON t.id = s.id
+WHEN NOT MATCHED THEN
+  INSERT (val) VALUES(s.val);
 
 -- try updating the distribution key column
 BEGIN;
@@ -1472,6 +1668,25 @@ BEGIN
         RETURN TRUE;
 END;
 $$;
+
+-- Test functions executing in MERGE statement. This is to prevent the functions from
+-- doing a random sql, which may be executed in a remote node or modifying the target
+-- relation which will have unexpected/suprising results.
+MERGE INTO t1 USING (SELECT * FROM s1 WHERE true) s1 ON
+  t1.id = s1.id AND s1.id = 2
+   WHEN matched THEN
+ UPDATE SET id = s1.id, val = random();
+
+-- Test STABLE function
+CREATE FUNCTION add_s(integer, integer) RETURNS integer
+AS 'select $1 + $2;'
+LANGUAGE SQL
+STABLE RETURNS NULL ON NULL INPUT;
+
+MERGE INTO t1
+USING s1 ON t1.id = s1.id
+WHEN NOT MATCHED THEN
+	INSERT VALUES(s1.id, add_s(s1.val, 2));
 
 -- Test preventing "ON" join condition from writing to the database
 BEGIN;
