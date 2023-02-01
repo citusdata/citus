@@ -67,8 +67,8 @@ static List * LatestLargeDataTransfer(List *candidateJoinOrders);
 static void PrintJoinOrderList(List *joinOrder);
 static uint32 LargeDataTransferLocation(List *joinOrder);
 static List * TableEntryListDifference(List *lhsTableList, List *rhsTableList);
-static bool ConvertSemiToInnerInJoinInfoContext(JoinInfoContext *joinOrderContext);
-static bool JoinInfoContextHasAntiJoin(JoinInfoContext *joinOrderContext);
+static bool ConvertSemiToInnerInJoinOrderInfoList(List *joinOrderInfoList);
+static bool JoinOrderInfoListContainsAntiJoin(List *joinOrderInfoList);
 static List * FindApplicableJoinClausesForTables(List *joinRestrictInfoListList,
 												 List *generatedEcJoinClauseList,
 												 List *lhsTableIdList,
@@ -532,11 +532,11 @@ ExtractApplicableJoinClauseContextFromJoinList(List *joinOrderList)
  * applicable join rules for the nodes in the list.
  */
 List *
-FixedJoinOrderList(List *tableEntryList, JoinInfoContext *joinInfoContext,
+FixedJoinOrderList(List *tableEntryList, List *joinOrderInfoList,
 				   List *joinRestrictInfoListList, List *generatedEcJoinClauseList)
 {
 	/* we donot support anti joins as ruleutils files cannot deparse JOIN_ANTI */
-	if (JoinInfoContextHasAntiJoin(joinInfoContext))
+	if (JoinOrderInfoListContainsAntiJoin(joinOrderInfoList))
 	{
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 						errmsg(
@@ -550,14 +550,14 @@ FixedJoinOrderList(List *tableEntryList, JoinInfoContext *joinInfoContext,
 	 * at query_pushdown_planning that planner did not actually plan any semi join.
 	 * ruleutils files cannot deparse JOIN_SEMI, so we convert those to JOIN_INNER.
 	 */
-	ConvertSemiToInnerInJoinInfoContext(joinInfoContext);
+	ConvertSemiToInnerInJoinOrderInfoList(joinOrderInfoList);
 
 	List *joinOrderList = NIL;
 	List *joinedTableList = NIL;
 	JoinOrderNode *nextJoinNode = NULL;
 
 	/* fetch joininfo */
-	JoinInfo *firstJoinInfo = (JoinInfo *) list_nth(joinInfoContext->joinInfoList, 0);
+	JoinOrderInfo *firstJoinInfo = (JoinOrderInfo *) list_nth(joinOrderInfoList, 0);
 
 	/* add first table into joinedtable list */
 	TableEntry *firstTable = TableEntryByRangeTableId(tableEntryList,
@@ -577,18 +577,18 @@ FixedJoinOrderList(List *tableEntryList, JoinInfoContext *joinInfoContext,
 													   firstJoinInfo->joinType);
 	joinOrderList = lappend(joinOrderList, currentJoinNode);
 
-	JoinInfo *joinInfo = NULL;
-	foreach_ptr(joinInfo, joinInfoContext->joinInfoList)
+	JoinOrderInfo *joinOrderInfo = NULL;
+	foreach_ptr(joinOrderInfo, joinOrderInfoList)
 	{
 		TableEntry *nextTable = TableEntryByRangeTableId(tableEntryList,
-														 joinInfo->rightTableIdx);
+														 joinOrderInfo->rightTableIdx);
 
 		nextJoinNode = EvaluateJoinRules(joinedTableList,
 										 currentJoinNode,
 										 nextTable,
 										 joinRestrictInfoListList,
 										 generatedEcJoinClauseList,
-										 joinInfo->joinType);
+										 joinOrderInfo->joinType);
 
 		if (nextJoinNode == NULL)
 		{
@@ -618,16 +618,16 @@ FixedJoinOrderList(List *tableEntryList, JoinInfoContext *joinInfoContext,
 
 
 /*
- * JoinInfoContextHasAntiJoin returns true if given join info context contains
+ * JoinOrderInfoListContainsAntiJoin returns true if given join order info list contains
  * an anti join.
  */
 static bool
-JoinInfoContextHasAntiJoin(JoinInfoContext *joinOrderContext)
+JoinOrderInfoListContainsAntiJoin(List *joinOrderInfoList)
 {
-	JoinInfo *joinInfo = NULL;
-	foreach_ptr(joinInfo, joinOrderContext->joinInfoList)
+	JoinOrderInfo *joinOrderInfo = NULL;
+	foreach_ptr(joinOrderInfo, joinOrderInfoList)
 	{
-		if (joinInfo->joinType == JOIN_ANTI)
+		if (joinOrderInfo->joinType == JOIN_ANTI)
 		{
 			return true;
 		}
@@ -638,20 +638,20 @@ JoinInfoContextHasAntiJoin(JoinInfoContext *joinOrderContext)
 
 
 /*
- * ConvertSemiToInnerInJoinInfoContext converts semi joins in given join info context
+ * ConvertSemiToInnerInJoinOrderInfoList converts semi joins in given join order info list
  * to inner joins as we checked at query_pushdown_planning that planner did not actually
  * plan any semi join. ruleutils files cannot deparse JOIN_SEMI, so we convert those
  * to JOIN_INNER.
  */
 static bool
-ConvertSemiToInnerInJoinInfoContext(JoinInfoContext *joinOrderContext)
+ConvertSemiToInnerInJoinOrderInfoList(List *joinOrderInfoList)
 {
-	JoinInfo *joinInfo = NULL;
-	foreach_ptr(joinInfo, joinOrderContext->joinInfoList)
+	JoinOrderInfo *joinOrderInfo = NULL;
+	foreach_ptr(joinOrderInfo, joinOrderInfoList)
 	{
-		if (joinInfo->joinType == JOIN_SEMI)
+		if (joinOrderInfo->joinType == JOIN_SEMI)
 		{
-			joinInfo->joinType = JOIN_INNER;
+			joinOrderInfo->joinType = JOIN_INNER;
 		}
 	}
 

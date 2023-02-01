@@ -96,28 +96,18 @@ typedef struct JoinOrderNode
 } JoinOrderNode;
 
 
-/* JoinInfoContext stores list of JoinInfo and base qualifications */
-typedef struct JoinInfoContext
-{
-	List *baseQualifierList;
-	List *joinInfoList;
-} JoinInfoContext;
-
-
 /*
- * JoinInfo stores information about a join between 2 tables.
+ * JoinOrderInfo stores information about a join between 2 tables.
  * joinType:          join type between left and right tables in join
  * leftTableIdx:	  rtable index for left table in join
  * rightTableIdx:	  rtable index for right table in join
- * joinQualifierList: list of join qualifications in join, i.e. ON (...)
  */
-typedef struct JoinInfo
+typedef struct JoinOrderInfo
 {
 	JoinType joinType;
 	uint32 leftTableIdx;
 	uint32 rightTableIdx;
-	List *joinQualifierList;
-} JoinInfo;
+} JoinOrderInfo;
 
 
 /* Config variables managed via guc.c */
@@ -130,7 +120,7 @@ extern List * JoinExprList(FromExpr *fromExpr);
 extern List * JoinOrderList(List *rangeTableEntryList, List *joinRestrictInfoListList,
 							List *generatedEcJoinClauseList);
 extern List * FixedJoinOrderList(List *rangeTableEntryList,
-								 JoinInfoContext *joinInfoContext,
+								 List *joinOrderInfoList,
 								 List *joinRestrictInfoListList,
 								 List *generatedEcJoinClauseList);
 extern bool IsApplicableJoinClause(List *leftTableIdList, uint32 rightTableId,

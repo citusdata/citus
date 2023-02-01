@@ -136,7 +136,7 @@ static List * TranslatedVars(PlannerInfo *root, int relationIndex);
 static void WarnIfListHasForeignDistributedTable(List *rangeTableList);
 static void ErrorIfMergeHasUnsupportedTables(Query *parse, List *rangeTableList);
 static void AddFastPathRestrictInfoIntoPlannerContext(
-	PlannerRestrictionContext *plannerRestrictionContext);
+	PlannerRestrictionContext *plannerRestrictionContext, int fastPathRelId);
 static List * GenerateImplicitJoinRestrictInfoList(PlannerInfo *plannerInfo,
 												   RelOptInfo *innerrel,
 												   RelOptInfo *outerrel);
@@ -706,9 +706,6 @@ PlanFastPathDistributedStmt(DistributedPlanningContext *planContext,
 	planContext->plannerRestrictionContext->fastPathRestrictionContext->
 	fastPathRouterQuery = true;
 
-	planContext->plannerRestrictionContext->fastPathRestrictionContext->
-	distRelId = fastPathRelId;
-
 	if (distributionKeyValue == NULL)
 	{
 		/* nothing to record */
@@ -726,7 +723,8 @@ PlanFastPathDistributedStmt(DistributedPlanningContext *planContext,
 										planContext->boundParams);
 
 	/* generate simple base restrict info inside plannerRestrictionContext */
-	AddFastPathRestrictInfoIntoPlannerContext(planContext->plannerRestrictionContext);
+	AddFastPathRestrictInfoIntoPlannerContext(planContext->plannerRestrictionContext,
+											  fastPathRelId);
 
 	return CreateDistributedPlannedStmt(planContext);
 }
@@ -1860,7 +1858,7 @@ CheckNodeCopyAndSerialization(Node *node)
 static
 void
 AddFastPathRestrictInfoIntoPlannerContext(
-	PlannerRestrictionContext *plannerRestrictionContext)
+	PlannerRestrictionContext *plannerRestrictionContext, int fastPathRelId)
 {
 	if (plannerRestrictionContext->fastPathRestrictionContext == NULL ||
 		plannerRestrictionContext->fastPathRestrictionContext->distributionKeyValue ==
@@ -1871,8 +1869,7 @@ AddFastPathRestrictInfoIntoPlannerContext(
 
 	Const *distKeyVal =
 		plannerRestrictionContext->fastPathRestrictionContext->distributionKeyValue;
-	Var *partitionColumn = PartitionColumn(
-		plannerRestrictionContext->fastPathRestrictionContext->distRelId, 1);
+	Var *partitionColumn = PartitionColumn(fastPathRelId, 1);
 	OpExpr *partitionExpression = MakeOpExpression(partitionColumn,
 												   BTEqualStrategyNumber);
 	Node *rightOp = get_rightop((Expr *) partitionExpression);

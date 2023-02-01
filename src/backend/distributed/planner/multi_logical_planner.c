@@ -93,8 +93,8 @@ static MultiSelect * MultiSelectNode(List *pushdownableClauseList,
 static bool IsSelectClause(Node *clause);
 static List * SelectClauseList(List *clauseList);
 
-static JoinInfoContext * FetchJoinOrderContext(FromExpr *fromExpr);
-static bool JoinInfoWalker(Node *node, JoinInfoContext *joinInfoContext);
+static List * FetchJoinOrderInfoList(FromExpr *fromExpr);
+static bool JoinOrderInfoWalker(Node *node, List **joinOrderInfoList);
 
 /* Local functions forward declarations for applying joins */
 static MultiNode * ApplyJoinRule(MultiNode *leftNode, MultiNode *rightNode,
@@ -698,11 +698,11 @@ MultiNodeTree(Query *queryTree, PlannerRestrictionContext *plannerRestrictionCon
 		 */
 		if (FindNodeMatchingCheckFunction((Node *) queryTree->jointree, IsOuterJoinExpr))
 		{
-			/* extract join infos for left recursive join tree */
-			JoinInfoContext *joinInfoContext = FetchJoinOrderContext(queryTree->jointree);
+			/* extract join order info list for left recursive join tree */
+			List *joinOrderInfoList = FetchJoinOrderInfoList(queryTree->jointree);
 
 			/* we simply donot commute joins as we have at least 1 outer join */
-			joinOrderList = FixedJoinOrderList(tableEntryList, joinInfoContext,
+			joinOrderList = FixedJoinOrderList(tableEntryList, joinOrderInfoList,
 											   joinRestrictInfoListList,
 											   generatedEcJoinClauseList);
 		}
@@ -890,34 +890,34 @@ ExtractRestrictInfosFromPlannerContext(
 
 
 /*
- * FetchJoinOrderContext returns all join info for given node.
+ * FetchJoinOrderInfoList returns all join order info list for given node.
  */
-static JoinInfoContext *
-FetchJoinOrderContext(FromExpr *fromExpr)
+static List *
+FetchJoinOrderInfoList(FromExpr *fromExpr)
 {
 	/* we do not allow cartesian product for outer joins */
 	Assert(fromExpr->fromlist && list_length(fromExpr->fromlist) == 1);
 
-	JoinInfoContext *joinInfoContext = palloc0(sizeof(JoinInfoContext));
-	JoinInfoWalker((Node *) fromExpr, joinInfoContext);
+	List *joinOrderInfoList = NIL;
+	JoinOrderInfoWalker((Node *) fromExpr, &joinOrderInfoList);
 
 	/* only leftmost table will have valid(ltableIdx != 0) ltableIdx */
 	int leftMostTableIdx = 0;
 	ExtractLeftMostRangeTableIndex((Node *) fromExpr, &leftMostTableIdx);
-	Assert(list_length(joinInfoContext->joinInfoList) > 0);
-	JoinInfo *leftMostJoinInfo = list_nth(joinInfoContext->joinInfoList, 0);
+	Assert(list_length(joinOrderInfoList) > 0);
+	JoinOrderInfo *leftMostJoinInfo = list_nth(joinOrderInfoList, 0);
 	leftMostJoinInfo->leftTableIdx = leftMostTableIdx;
 
-	return joinInfoContext;
+	return joinOrderInfoList;
 }
 
 
 /*
- * JoinInfoWalker descends into given node and pushes all join info into
- * joinInfoContext.
+ * JoinOrderInfoWalker descends into given node and pushes all join order infos into
+ * joinOrderInfoList.
  */
 static bool
-JoinInfoWalker(Node *node, JoinInfoContext *joinInfoContext)
+JoinOrderInfoWalker(Node *node, List **joinOrderInfoList)
 {
 	if (node == NULL)
 	{
@@ -925,8 +925,8 @@ JoinInfoWalker(Node *node, JoinInfoContext *joinInfoContext)
 	}
 
 	/* process the deepest node first */
-	bool walkerResult = expression_tree_walker(node, JoinInfoWalker,
-											   (void *) joinInfoContext);
+	bool walkerResult = expression_tree_walker(node, JoinOrderInfoWalker,
+											   joinOrderInfoList);
 
 	/*
 	 * Get qualifier lists of join and from expression nodes. Note that in the
@@ -951,56 +951,14 @@ JoinInfoWalker(Node *node, JoinInfoContext *joinInfoContext)
 								"equal operator")));
 		}
 
-		Node *joinQualifiersNode = joinExpression->quals;
 		JoinType joinType = joinExpression->jointype;
 		RangeTblRef *rightTableRef = (RangeTblRef *) joinExpression->rarg;
 
-		List *joinQualifierList = NIL;
-		if (joinQualifiersNode != NULL)
-		{
-			if (IsA(joinQualifiersNode, List))
-			{
-				joinQualifierList = (List *) joinQualifiersNode;
-			}
-			else
-			{
-				/* this part of code only run for subqueries */
-				Node *joinClause = eval_const_expressions(NULL, joinQualifiersNode);
-				joinClause = (Node *) canonicalize_qual((Expr *) joinClause, false);
-				joinQualifierList = make_ands_implicit((Expr *) joinClause);
-			}
-		}
+		JoinOrderInfo *joinOrderInfo = palloc0(sizeof(JoinOrderInfo));
+		joinOrderInfo->joinType = joinType;
+		joinOrderInfo->rightTableIdx = rightTableRef->rtindex;
 
-		JoinInfo *joinInfo = palloc0(sizeof(JoinInfo));
-		joinInfo->joinType = joinType;
-		joinInfo->rightTableIdx = rightTableRef->rtindex;
-		joinInfo->joinQualifierList = joinQualifierList;
-
-		joinInfoContext->joinInfoList = lappend(joinInfoContext->joinInfoList, joinInfo);
-	}
-	else if (IsA(node, FromExpr))
-	{
-		List *fromQualifierList = NIL;
-		FromExpr *fromExpression = (FromExpr *) node;
-		Node *fromQualifiersNode = fromExpression->quals;
-
-		if (fromQualifiersNode != NULL)
-		{
-			if (IsA(fromQualifiersNode, List))
-			{
-				fromQualifierList = (List *) fromQualifiersNode;
-			}
-			else
-			{
-				/* this part of code only run for subqueries */
-				Node *fromClause = eval_const_expressions(NULL, fromQualifiersNode);
-				fromClause = (Node *) canonicalize_qual((Expr *) fromClause, false);
-				fromQualifierList = make_ands_implicit((Expr *) fromClause);
-			}
-
-			joinInfoContext->baseQualifierList =
-				list_concat(joinInfoContext->baseQualifierList, fromQualifierList);
-		}
+		*joinOrderInfoList = lappend(*joinOrderInfoList, joinOrderInfo);
 	}
 
 	return walkerResult;
