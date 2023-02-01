@@ -254,8 +254,6 @@ extern struct DistributedPlan * CreateDistributedPlan(uint64 planId,
 													  bool hasUnresolvedParams,
 													  PlannerRestrictionContext *
 													  plannerRestrictionContext);
-
-extern bool IsMergeAllowedOnRelation(Query *parse, RangeTblEntry *rte);
 extern bool ConjunctionContainsColumnFilter(Node *node,
 											Var *column,
 											Node **distributionKeyValue);

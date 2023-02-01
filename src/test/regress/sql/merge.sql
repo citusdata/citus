@@ -18,8 +18,9 @@ CREATE SCHEMA merge_schema;
 SET search_path TO merge_schema;
 SET citus.shard_count TO 4;
 SET citus.next_shard_id TO 4000000;
-SET citus.explain_all_tasks to true;
+SET citus.explain_all_tasks TO true;
 SET citus.shard_replication_factor TO 1;
+SET citus.max_adaptive_executor_pool_size TO 1;
 SELECT 1 FROM master_add_node('localhost', :master_port, groupid => 0);
 
 CREATE TABLE source
@@ -1287,7 +1288,7 @@ ON pg_target.id = sub.id AND pg_target.id = $1
 WHEN MATCHED THEN
         UPDATE SET val = 'Updated by prepare using ' || sub.val
 WHEN NOT MATCHED THEN
-        DO NOTHING;
+        INSERT VALUES (sub.id, sub.val);
 
 PREPARE citus_prep(int) AS
 MERGE INTO citus_target
@@ -1296,12 +1297,12 @@ ON citus_target.id = sub.id AND citus_target.id = $1
 WHEN MATCHED THEN
         UPDATE SET val = 'Updated by prepare using ' || sub.val
 WHEN NOT MATCHED THEN
-        DO NOTHING;
+        INSERT VALUES (sub.id, sub.val);
 
 BEGIN;
-SET citus.log_remote_commands to true;
 
 SELECT * FROM pg_target WHERE id = 500; -- before merge
+SELECT count(*) FROM pg_target; -- before merge
 EXECUTE pg_prep(500);
 SELECT * FROM pg_target WHERE id = 500; -- non-cached
 EXECUTE pg_prep(500);
@@ -1310,8 +1311,11 @@ EXECUTE pg_prep(500);
 EXECUTE pg_prep(500);
 EXECUTE pg_prep(500);
 SELECT * FROM pg_target WHERE id = 500; -- cached
+SELECT count(*) FROM pg_target; -- cached
 
 SELECT * FROM citus_target WHERE id = 500; -- before merge
+SELECT count(*) FROM citus_target; -- before merge
+SET citus.log_remote_commands to true;
 EXECUTE citus_prep(500);
 SELECT * FROM citus_target WHERE id = 500; -- non-cached
 EXECUTE citus_prep(500);
@@ -1319,9 +1323,10 @@ EXECUTE citus_prep(500);
 EXECUTE citus_prep(500);
 EXECUTE citus_prep(500);
 EXECUTE citus_prep(500);
-SELECT * FROM citus_target WHERE id = 500; -- cached
-
 SET citus.log_remote_commands to false;
+SELECT * FROM citus_target WHERE id = 500; -- cached
+SELECT count(*) FROM citus_target; -- cached
+
 SELECT compare_tables();
 ROLLBACK;
 
@@ -1420,6 +1425,62 @@ ROLLBACK;
 --
 -- Error and Unsupported scenarios
 --
+
+-- Grouping sets not supported
+MERGE INTO citus_target t
+USING (SELECT count(*), id FROM citus_source GROUP BY GROUPING SETS (id, val)) subq
+ON subq.id = t.id
+WHEN MATCHED AND t.id > 350 THEN
+    UPDATE SET val = t.val || 'Updated'
+WHEN NOT MATCHED THEN
+        INSERT VALUES (subq.id, 99)
+WHEN MATCHED AND t.id < 350 THEN
+        DELETE;
+
+WITH subq AS
+(
+SELECT count(*), id FROM citus_source GROUP BY GROUPING SETS (id, val)
+)
+MERGE INTO citus_target t
+USING subq
+ON subq.id = t.id
+WHEN MATCHED AND t.id > 350 THEN
+    UPDATE SET val = t.val || 'Updated'
+WHEN NOT MATCHED THEN
+        INSERT VALUES (subq.id, 99)
+WHEN MATCHED AND t.id < 350 THEN
+        DELETE;
+
+-- try inserting unmatched distribution column value
+MERGE INTO citus_target t
+USING citus_source s
+ON t.id = s.id
+WHEN NOT MATCHED THEN
+  INSERT DEFAULT VALUES;
+
+MERGE INTO citus_target t
+USING citus_source s
+ON t.id = s.id
+WHEN NOT MATCHED THEN
+  INSERT VALUES(10000);
+
+MERGE INTO citus_target t
+USING citus_source s
+ON t.id = s.id
+WHEN NOT MATCHED THEN
+  INSERT (id) VALUES(1000);
+
+MERGE INTO t1 t
+USING s1 s
+ON t.id = s.id
+WHEN NOT MATCHED THEN
+  INSERT (id) VALUES(s.val);
+
+MERGE INTO t1 t
+USING s1 s
+ON t.id = s.id
+WHEN NOT MATCHED THEN
+  INSERT (val) VALUES(s.val);
 
 -- try updating the distribution key column
 BEGIN;

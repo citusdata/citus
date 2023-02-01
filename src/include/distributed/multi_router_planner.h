@@ -100,6 +100,13 @@ extern PlannedStmt * FastPathPlanner(Query *originalQuery, Query *parse, ParamLi
 extern bool FastPathRouterQuery(Query *query, Node **distributionKeyValue);
 extern bool JoinConditionIsOnFalse(List *relOptInfo);
 extern Oid ResultRelationOidForQuery(Query *query);
+extern DeferredErrorMessage * TargetlistAndFunctionsSupported(Oid resultRelationId,
+															  FromExpr *joinTree,
+															  Node *quals,
+															  List *targetList,
+															  CmdType commandType,
+															  List *returningList);
+
 
 
 #endif /* MULTI_ROUTER_PLANNER_H */
