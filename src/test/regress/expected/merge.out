@@ -17,8 +17,9 @@ CREATE SCHEMA merge_schema;
 SET search_path TO merge_schema;
 SET citus.shard_count TO 4;
 SET citus.next_shard_id TO 4000000;
-SET citus.explain_all_tasks to true;
+SET citus.explain_all_tasks TO true;
 SET citus.shard_replication_factor TO 1;
+SET citus.max_adaptive_executor_pool_size TO 1;
 SELECT 1 FROM master_add_node('localhost', :master_port, groupid => 0);
 NOTICE:  localhost:xxxxx is the coordinator and already contains metadata, skipping syncing the metadata
  ?column?
@@ -268,6 +269,29 @@ SELECT * from target t WHERE t.customer_id  = 30004;
 ---------------------------------------------------------------------
 (0 rows)
 
+-- Updating distribution column is allowed if the operation is a no-op
+SELECT * from target t WHERE t.customer_id  = 30000;
+ customer_id | last_order_id | order_center | order_count |        last_order
+---------------------------------------------------------------------
+       30000 |           101 | WX           |         123 | Sat Jan 01 00:00:00 2022
+(1 row)
+
+MERGE INTO target t
+USING SOURCE s
+ON (t.customer_id = s.customer_id AND t.customer_id = 30000)
+WHEN MATCHED THEN
+	UPDATE SET customer_id = 30000;
+MERGE INTO target t
+USING SOURCE s
+ON (t.customer_id = s.customer_id AND t.customer_id = 30000)
+WHEN MATCHED THEN
+	UPDATE SET customer_id = t.customer_id;
+SELECT * from target t WHERE t.customer_id  = 30000;
+ customer_id | last_order_id | order_center | order_count |        last_order
+---------------------------------------------------------------------
+       30000 |           101 | WX           |         123 | Sat Jan 01 00:00:00 2022
+(1 row)
+
 --
 -- Test MERGE with CTE as source
 --
@@ -310,7 +334,6 @@ MERGE INTO t1
 		UPDATE SET val = t1.val + 1
 	WHEN NOT MATCHED THEN
 		INSERT (id, val) VALUES (pg_res.id, pg_res.val);
--- Two rows with id 2 and val incremented, id 3, and id 1 is deleted
 SELECT * FROM t1 order by id;
  id | val
 ---------------------------------------------------------------------
@@ -1200,7 +1223,8 @@ END;
 $$ language plpgsql volatile;
 CREATE TABLE fn_target(id int, data varchar);
 MERGE INTO fn_target
-USING (SELECT * FROM f_dist() f(id integer, source varchar)) as fn_source
+--USING (SELECT * FROM f_dist() f(id integer, source varchar)) as fn_source
+USING (SELECT id, source FROM dist_table) as fn_source
 ON fn_source.id = fn_target.id
 WHEN MATCHED THEN
 DO NOTHING
@@ -1216,29 +1240,22 @@ SELECT citus_add_local_table_to_metadata('fn_target');
 
 (1 row)
 
-SELECT create_distributed_table('dist_table', 'id');
-NOTICE:  Copying data from local table...
-NOTICE:  copying the data has completed
-DETAIL:  The local data in the table is no longer visible, but is still on disk.
-HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$merge_schema.dist_table$$)
- create_distributed_table
+SELECT citus_add_local_table_to_metadata('dist_table');
+ citus_add_local_table_to_metadata
 ---------------------------------------------------------------------
 
 (1 row)
 
 SET client_min_messages TO DEBUG1;
 MERGE INTO fn_target
-USING (SELECT * FROM f_dist() f(id integer, source varchar)) as fn_source
+--USING (SELECT * FROM f_dist() f(id integer, source varchar)) as fn_source
+USING (SELECT id, source FROM dist_table) as fn_source
 ON fn_source.id = fn_target.id
 WHEN MATCHED THEN
 DO NOTHING
 WHEN NOT MATCHED THEN
 INSERT VALUES(fn_source.id, fn_source.source);
-DEBUG:  function does not have co-located tables
-DEBUG:  generating subplan XXX_1 for subquery SELECT id, source FROM merge_schema.f_dist() f(id integer, source character varying)
-DEBUG:  <Deparsed MERGE query: MERGE INTO merge_schema.fn_target USING (SELECT intermediate_result.id, intermediate_result.source FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id integer, source character varying)) fn_source ON (fn_source.id OPERATOR(pg_catalog.=) fn_target.id) WHEN MATCHED THEN DO NOTHING  WHEN NOT MATCHED THEN INSERT (id, data) VALUES (fn_source.id, fn_source.source)>
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: MERGE INTO merge_schema.fn_target USING (SELECT intermediate_result.id, intermediate_result.source FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id integer, source character varying)) fn_source ON (fn_source.id OPERATOR(pg_catalog.=) fn_target.id) WHEN MATCHED THEN DO NOTHING  WHEN NOT MATCHED THEN INSERT (id, data) VALUES (fn_source.id, fn_source.source)
-DEBUG:  <Deparsed MERGE query: MERGE INTO merge_schema.fn_target_xxxxxxx fn_target USING (SELECT intermediate_result.id, intermediate_result.source FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id integer, source character varying)) fn_source ON (fn_source.id OPERATOR(pg_catalog.=) fn_target.id) WHEN MATCHED THEN DO NOTHING  WHEN NOT MATCHED THEN INSERT (id, data) VALUES (fn_source.id, fn_source.source)>
+DEBUG:  <Deparsed MERGE query: MERGE INTO merge_schema.fn_target_xxxxxxx fn_target USING (SELECT dist_table.id, dist_table.source FROM merge_schema.dist_table_xxxxxxx dist_table) fn_source ON (fn_source.id OPERATOR(pg_catalog.=) fn_target.id) WHEN MATCHED THEN DO NOTHING  WHEN NOT MATCHED THEN INSERT (id, data) VALUES (fn_source.id, fn_source.source)>
 RESET client_min_messages;
 SELECT * INTO fn_local FROM fn_target ORDER BY 1 ;
 -- Should be equal
@@ -1959,7 +1976,7 @@ ON pg_target.id = sub.id AND pg_target.id = $1
 WHEN MATCHED THEN
         UPDATE SET val = 'Updated by prepare using ' || sub.val
 WHEN NOT MATCHED THEN
-        DO NOTHING;
+        INSERT VALUES (sub.id, sub.val);
 PREPARE citus_prep(int) AS
 MERGE INTO citus_target
 USING (SELECT * FROM citus_source) sub
@@ -1967,13 +1984,18 @@ ON citus_target.id = sub.id AND citus_target.id = $1
 WHEN MATCHED THEN
         UPDATE SET val = 'Updated by prepare using ' || sub.val
 WHEN NOT MATCHED THEN
-        DO NOTHING;
+        INSERT VALUES (sub.id, sub.val);
 BEGIN;
-SET citus.log_remote_commands to true;
 SELECT * FROM pg_target WHERE id = 500; -- before merge
  id  |  val
 ---------------------------------------------------------------------
  500 | target
+(1 row)
+
+SELECT count(*) FROM pg_target; -- before merge
+ count
+---------------------------------------------------------------------
+   251
 (1 row)
 
 EXECUTE pg_prep(500);
@@ -1994,18 +2016,33 @@ SELECT * FROM pg_target WHERE id = 500; -- cached
  500 | Updated by prepare using source
 (1 row)
 
+SELECT count(*) FROM pg_target; -- cached
+ count
+---------------------------------------------------------------------
+  3245
+(1 row)
+
 SELECT * FROM citus_target WHERE id = 500; -- before merge
-NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SELECT id, val FROM merge_schema.citus_target_xxxxxxx citus_target WHERE (id OPERATOR(pg_catalog.=) 500)
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
  id  |  val
 ---------------------------------------------------------------------
  500 | target
 (1 row)
 
+SELECT count(*) FROM citus_target; -- before merge
+ count
+---------------------------------------------------------------------
+   251
+(1 row)
+
+SET citus.log_remote_commands to true;
 EXECUTE citus_prep(500);
-NOTICE:  issuing MERGE INTO merge_schema.citus_target_xxxxxxx citus_target USING (SELECT citus_source.id, citus_source.val FROM merge_schema.citus_source_xxxxxxx citus_source) sub ON ((citus_target.id OPERATOR(pg_catalog.=) sub.id) AND (citus_target.id OPERATOR(pg_catalog.=) $1)) WHEN MATCHED THEN UPDATE SET val = (('Updated by prepare using '::text OPERATOR(pg_catalog.||) (sub.val COLLATE "default")) COLLATE "default") WHEN NOT MATCHED THEN DO NOTHING
+NOTICE:  issuing MERGE INTO merge_schema.citus_target_xxxxxxx citus_target USING (SELECT citus_source.id, citus_source.val FROM merge_schema.citus_source_xxxxxxx citus_source) sub ON ((citus_target.id OPERATOR(pg_catalog.=) sub.id) AND (citus_target.id OPERATOR(pg_catalog.=) $1)) WHEN MATCHED THEN UPDATE SET val = (('Updated by prepare using '::text OPERATOR(pg_catalog.||) (sub.val COLLATE "default")) COLLATE "default") WHEN NOT MATCHED THEN INSERT (id, val) VALUES (sub.id, sub.val)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing MERGE INTO merge_schema.citus_target_xxxxxxx citus_target USING (SELECT citus_source.id, citus_source.val FROM merge_schema.citus_source_xxxxxxx citus_source) sub ON ((citus_target.id OPERATOR(pg_catalog.=) sub.id) AND (citus_target.id OPERATOR(pg_catalog.=) $1)) WHEN MATCHED THEN UPDATE SET val = (('Updated by prepare using '::text OPERATOR(pg_catalog.||) (sub.val COLLATE "default")) COLLATE "default") WHEN NOT MATCHED THEN INSERT (id, val) VALUES (sub.id, sub.val)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing MERGE INTO merge_schema.citus_target_xxxxxxx citus_target USING (SELECT citus_source.id, citus_source.val FROM merge_schema.citus_source_xxxxxxx citus_source) sub ON ((citus_target.id OPERATOR(pg_catalog.=) sub.id) AND (citus_target.id OPERATOR(pg_catalog.=) $1)) WHEN MATCHED THEN UPDATE SET val = (('Updated by prepare using '::text OPERATOR(pg_catalog.||) (sub.val COLLATE "default")) COLLATE "default") WHEN NOT MATCHED THEN INSERT (id, val) VALUES (sub.id, sub.val)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing MERGE INTO merge_schema.citus_target_xxxxxxx citus_target USING (SELECT citus_source.id, citus_source.val FROM merge_schema.citus_source_xxxxxxx citus_source) sub ON ((citus_target.id OPERATOR(pg_catalog.=) sub.id) AND (citus_target.id OPERATOR(pg_catalog.=) $1)) WHEN MATCHED THEN UPDATE SET val = (('Updated by prepare using '::text OPERATOR(pg_catalog.||) (sub.val COLLATE "default")) COLLATE "default") WHEN NOT MATCHED THEN INSERT (id, val) VALUES (sub.id, sub.val)
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 SELECT * FROM citus_target WHERE id = 500; -- non-cached
 NOTICE:  issuing SELECT id, val FROM merge_schema.citus_target_xxxxxxx citus_target WHERE (id OPERATOR(pg_catalog.=) 500)
@@ -2016,29 +2053,63 @@ DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 (1 row)
 
 EXECUTE citus_prep(500);
-NOTICE:  issuing MERGE INTO merge_schema.citus_target_xxxxxxx citus_target USING (SELECT citus_source.id, citus_source.val FROM merge_schema.citus_source_xxxxxxx citus_source) sub ON ((citus_target.id OPERATOR(pg_catalog.=) sub.id) AND (citus_target.id OPERATOR(pg_catalog.=) $1)) WHEN MATCHED THEN UPDATE SET val = (('Updated by prepare using '::text OPERATOR(pg_catalog.||) (sub.val COLLATE "default")) COLLATE "default") WHEN NOT MATCHED THEN DO NOTHING
+NOTICE:  issuing MERGE INTO merge_schema.citus_target_xxxxxxx citus_target USING (SELECT citus_source.id, citus_source.val FROM merge_schema.citus_source_xxxxxxx citus_source) sub ON ((citus_target.id OPERATOR(pg_catalog.=) sub.id) AND (citus_target.id OPERATOR(pg_catalog.=) $1)) WHEN MATCHED THEN UPDATE SET val = (('Updated by prepare using '::text OPERATOR(pg_catalog.||) (sub.val COLLATE "default")) COLLATE "default") WHEN NOT MATCHED THEN INSERT (id, val) VALUES (sub.id, sub.val)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing MERGE INTO merge_schema.citus_target_xxxxxxx citus_target USING (SELECT citus_source.id, citus_source.val FROM merge_schema.citus_source_xxxxxxx citus_source) sub ON ((citus_target.id OPERATOR(pg_catalog.=) sub.id) AND (citus_target.id OPERATOR(pg_catalog.=) $1)) WHEN MATCHED THEN UPDATE SET val = (('Updated by prepare using '::text OPERATOR(pg_catalog.||) (sub.val COLLATE "default")) COLLATE "default") WHEN NOT MATCHED THEN INSERT (id, val) VALUES (sub.id, sub.val)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing MERGE INTO merge_schema.citus_target_xxxxxxx citus_target USING (SELECT citus_source.id, citus_source.val FROM merge_schema.citus_source_xxxxxxx citus_source) sub ON ((citus_target.id OPERATOR(pg_catalog.=) sub.id) AND (citus_target.id OPERATOR(pg_catalog.=) $1)) WHEN MATCHED THEN UPDATE SET val = (('Updated by prepare using '::text OPERATOR(pg_catalog.||) (sub.val COLLATE "default")) COLLATE "default") WHEN NOT MATCHED THEN INSERT (id, val) VALUES (sub.id, sub.val)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing MERGE INTO merge_schema.citus_target_xxxxxxx citus_target USING (SELECT citus_source.id, citus_source.val FROM merge_schema.citus_source_xxxxxxx citus_source) sub ON ((citus_target.id OPERATOR(pg_catalog.=) sub.id) AND (citus_target.id OPERATOR(pg_catalog.=) $1)) WHEN MATCHED THEN UPDATE SET val = (('Updated by prepare using '::text OPERATOR(pg_catalog.||) (sub.val COLLATE "default")) COLLATE "default") WHEN NOT MATCHED THEN INSERT (id, val) VALUES (sub.id, sub.val)
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 EXECUTE citus_prep(500);
-NOTICE:  issuing MERGE INTO merge_schema.citus_target_xxxxxxx citus_target USING (SELECT citus_source.id, citus_source.val FROM merge_schema.citus_source_xxxxxxx citus_source) sub ON ((citus_target.id OPERATOR(pg_catalog.=) sub.id) AND (citus_target.id OPERATOR(pg_catalog.=) $1)) WHEN MATCHED THEN UPDATE SET val = (('Updated by prepare using '::text OPERATOR(pg_catalog.||) (sub.val COLLATE "default")) COLLATE "default") WHEN NOT MATCHED THEN DO NOTHING
+NOTICE:  issuing MERGE INTO merge_schema.citus_target_xxxxxxx citus_target USING (SELECT citus_source.id, citus_source.val FROM merge_schema.citus_source_xxxxxxx citus_source) sub ON ((citus_target.id OPERATOR(pg_catalog.=) sub.id) AND (citus_target.id OPERATOR(pg_catalog.=) $1)) WHEN MATCHED THEN UPDATE SET val = (('Updated by prepare using '::text OPERATOR(pg_catalog.||) (sub.val COLLATE "default")) COLLATE "default") WHEN NOT MATCHED THEN INSERT (id, val) VALUES (sub.id, sub.val)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing MERGE INTO merge_schema.citus_target_xxxxxxx citus_target USING (SELECT citus_source.id, citus_source.val FROM merge_schema.citus_source_xxxxxxx citus_source) sub ON ((citus_target.id OPERATOR(pg_catalog.=) sub.id) AND (citus_target.id OPERATOR(pg_catalog.=) $1)) WHEN MATCHED THEN UPDATE SET val = (('Updated by prepare using '::text OPERATOR(pg_catalog.||) (sub.val COLLATE "default")) COLLATE "default") WHEN NOT MATCHED THEN INSERT (id, val) VALUES (sub.id, sub.val)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing MERGE INTO merge_schema.citus_target_xxxxxxx citus_target USING (SELECT citus_source.id, citus_source.val FROM merge_schema.citus_source_xxxxxxx citus_source) sub ON ((citus_target.id OPERATOR(pg_catalog.=) sub.id) AND (citus_target.id OPERATOR(pg_catalog.=) $1)) WHEN MATCHED THEN UPDATE SET val = (('Updated by prepare using '::text OPERATOR(pg_catalog.||) (sub.val COLLATE "default")) COLLATE "default") WHEN NOT MATCHED THEN INSERT (id, val) VALUES (sub.id, sub.val)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing MERGE INTO merge_schema.citus_target_xxxxxxx citus_target USING (SELECT citus_source.id, citus_source.val FROM merge_schema.citus_source_xxxxxxx citus_source) sub ON ((citus_target.id OPERATOR(pg_catalog.=) sub.id) AND (citus_target.id OPERATOR(pg_catalog.=) $1)) WHEN MATCHED THEN UPDATE SET val = (('Updated by prepare using '::text OPERATOR(pg_catalog.||) (sub.val COLLATE "default")) COLLATE "default") WHEN NOT MATCHED THEN INSERT (id, val) VALUES (sub.id, sub.val)
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 EXECUTE citus_prep(500);
-NOTICE:  issuing MERGE INTO merge_schema.citus_target_xxxxxxx citus_target USING (SELECT citus_source.id, citus_source.val FROM merge_schema.citus_source_xxxxxxx citus_source) sub ON ((citus_target.id OPERATOR(pg_catalog.=) sub.id) AND (citus_target.id OPERATOR(pg_catalog.=) $1)) WHEN MATCHED THEN UPDATE SET val = (('Updated by prepare using '::text OPERATOR(pg_catalog.||) (sub.val COLLATE "default")) COLLATE "default") WHEN NOT MATCHED THEN DO NOTHING
+NOTICE:  issuing MERGE INTO merge_schema.citus_target_xxxxxxx citus_target USING (SELECT citus_source.id, citus_source.val FROM merge_schema.citus_source_xxxxxxx citus_source) sub ON ((citus_target.id OPERATOR(pg_catalog.=) sub.id) AND (citus_target.id OPERATOR(pg_catalog.=) $1)) WHEN MATCHED THEN UPDATE SET val = (('Updated by prepare using '::text OPERATOR(pg_catalog.||) (sub.val COLLATE "default")) COLLATE "default") WHEN NOT MATCHED THEN INSERT (id, val) VALUES (sub.id, sub.val)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing MERGE INTO merge_schema.citus_target_xxxxxxx citus_target USING (SELECT citus_source.id, citus_source.val FROM merge_schema.citus_source_xxxxxxx citus_source) sub ON ((citus_target.id OPERATOR(pg_catalog.=) sub.id) AND (citus_target.id OPERATOR(pg_catalog.=) $1)) WHEN MATCHED THEN UPDATE SET val = (('Updated by prepare using '::text OPERATOR(pg_catalog.||) (sub.val COLLATE "default")) COLLATE "default") WHEN NOT MATCHED THEN INSERT (id, val) VALUES (sub.id, sub.val)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing MERGE INTO merge_schema.citus_target_xxxxxxx citus_target USING (SELECT citus_source.id, citus_source.val FROM merge_schema.citus_source_xxxxxxx citus_source) sub ON ((citus_target.id OPERATOR(pg_catalog.=) sub.id) AND (citus_target.id OPERATOR(pg_catalog.=) $1)) WHEN MATCHED THEN UPDATE SET val = (('Updated by prepare using '::text OPERATOR(pg_catalog.||) (sub.val COLLATE "default")) COLLATE "default") WHEN NOT MATCHED THEN INSERT (id, val) VALUES (sub.id, sub.val)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing MERGE INTO merge_schema.citus_target_xxxxxxx citus_target USING (SELECT citus_source.id, citus_source.val FROM merge_schema.citus_source_xxxxxxx citus_source) sub ON ((citus_target.id OPERATOR(pg_catalog.=) sub.id) AND (citus_target.id OPERATOR(pg_catalog.=) $1)) WHEN MATCHED THEN UPDATE SET val = (('Updated by prepare using '::text OPERATOR(pg_catalog.||) (sub.val COLLATE "default")) COLLATE "default") WHEN NOT MATCHED THEN INSERT (id, val) VALUES (sub.id, sub.val)
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 EXECUTE citus_prep(500);
-NOTICE:  issuing MERGE INTO merge_schema.citus_target_xxxxxxx citus_target USING (SELECT citus_source.id, citus_source.val FROM merge_schema.citus_source_xxxxxxx citus_source) sub ON ((citus_target.id OPERATOR(pg_catalog.=) sub.id) AND (citus_target.id OPERATOR(pg_catalog.=) $1)) WHEN MATCHED THEN UPDATE SET val = (('Updated by prepare using '::text OPERATOR(pg_catalog.||) (sub.val COLLATE "default")) COLLATE "default") WHEN NOT MATCHED THEN DO NOTHING
+NOTICE:  issuing MERGE INTO merge_schema.citus_target_xxxxxxx citus_target USING (SELECT citus_source.id, citus_source.val FROM merge_schema.citus_source_xxxxxxx citus_source) sub ON ((citus_target.id OPERATOR(pg_catalog.=) sub.id) AND (citus_target.id OPERATOR(pg_catalog.=) $1)) WHEN MATCHED THEN UPDATE SET val = (('Updated by prepare using '::text OPERATOR(pg_catalog.||) (sub.val COLLATE "default")) COLLATE "default") WHEN NOT MATCHED THEN INSERT (id, val) VALUES (sub.id, sub.val)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing MERGE INTO merge_schema.citus_target_xxxxxxx citus_target USING (SELECT citus_source.id, citus_source.val FROM merge_schema.citus_source_xxxxxxx citus_source) sub ON ((citus_target.id OPERATOR(pg_catalog.=) sub.id) AND (citus_target.id OPERATOR(pg_catalog.=) $1)) WHEN MATCHED THEN UPDATE SET val = (('Updated by prepare using '::text OPERATOR(pg_catalog.||) (sub.val COLLATE "default")) COLLATE "default") WHEN NOT MATCHED THEN INSERT (id, val) VALUES (sub.id, sub.val)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing MERGE INTO merge_schema.citus_target_xxxxxxx citus_target USING (SELECT citus_source.id, citus_source.val FROM merge_schema.citus_source_xxxxxxx citus_source) sub ON ((citus_target.id OPERATOR(pg_catalog.=) sub.id) AND (citus_target.id OPERATOR(pg_catalog.=) $1)) WHEN MATCHED THEN UPDATE SET val = (('Updated by prepare using '::text OPERATOR(pg_catalog.||) (sub.val COLLATE "default")) COLLATE "default") WHEN NOT MATCHED THEN INSERT (id, val) VALUES (sub.id, sub.val)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing MERGE INTO merge_schema.citus_target_xxxxxxx citus_target USING (SELECT citus_source.id, citus_source.val FROM merge_schema.citus_source_xxxxxxx citus_source) sub ON ((citus_target.id OPERATOR(pg_catalog.=) sub.id) AND (citus_target.id OPERATOR(pg_catalog.=) $1)) WHEN MATCHED THEN UPDATE SET val = (('Updated by prepare using '::text OPERATOR(pg_catalog.||) (sub.val COLLATE "default")) COLLATE "default") WHEN NOT MATCHED THEN INSERT (id, val) VALUES (sub.id, sub.val)
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 EXECUTE citus_prep(500);
-NOTICE:  issuing MERGE INTO merge_schema.citus_target_xxxxxxx citus_target USING (SELECT citus_source.id, citus_source.val FROM merge_schema.citus_source_xxxxxxx citus_source) sub ON ((citus_target.id OPERATOR(pg_catalog.=) sub.id) AND (citus_target.id OPERATOR(pg_catalog.=) $1)) WHEN MATCHED THEN UPDATE SET val = (('Updated by prepare using '::text OPERATOR(pg_catalog.||) (sub.val COLLATE "default")) COLLATE "default") WHEN NOT MATCHED THEN DO NOTHING
+NOTICE:  issuing MERGE INTO merge_schema.citus_target_xxxxxxx citus_target USING (SELECT citus_source.id, citus_source.val FROM merge_schema.citus_source_xxxxxxx citus_source) sub ON ((citus_target.id OPERATOR(pg_catalog.=) sub.id) AND (citus_target.id OPERATOR(pg_catalog.=) $1)) WHEN MATCHED THEN UPDATE SET val = (('Updated by prepare using '::text OPERATOR(pg_catalog.||) (sub.val COLLATE "default")) COLLATE "default") WHEN NOT MATCHED THEN INSERT (id, val) VALUES (sub.id, sub.val)
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing MERGE INTO merge_schema.citus_target_xxxxxxx citus_target USING (SELECT citus_source.id, citus_source.val FROM merge_schema.citus_source_xxxxxxx citus_source) sub ON ((citus_target.id OPERATOR(pg_catalog.=) sub.id) AND (citus_target.id OPERATOR(pg_catalog.=) $1)) WHEN MATCHED THEN UPDATE SET val = (('Updated by prepare using '::text OPERATOR(pg_catalog.||) (sub.val COLLATE "default")) COLLATE "default") WHEN NOT MATCHED THEN INSERT (id, val) VALUES (sub.id, sub.val)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing MERGE INTO merge_schema.citus_target_xxxxxxx citus_target USING (SELECT citus_source.id, citus_source.val FROM merge_schema.citus_source_xxxxxxx citus_source) sub ON ((citus_target.id OPERATOR(pg_catalog.=) sub.id) AND (citus_target.id OPERATOR(pg_catalog.=) $1)) WHEN MATCHED THEN UPDATE SET val = (('Updated by prepare using '::text OPERATOR(pg_catalog.||) (sub.val COLLATE "default")) COLLATE "default") WHEN NOT MATCHED THEN INSERT (id, val) VALUES (sub.id, sub.val)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing MERGE INTO merge_schema.citus_target_xxxxxxx citus_target USING (SELECT citus_source.id, citus_source.val FROM merge_schema.citus_source_xxxxxxx citus_source) sub ON ((citus_target.id OPERATOR(pg_catalog.=) sub.id) AND (citus_target.id OPERATOR(pg_catalog.=) $1)) WHEN MATCHED THEN UPDATE SET val = (('Updated by prepare using '::text OPERATOR(pg_catalog.||) (sub.val COLLATE "default")) COLLATE "default") WHEN NOT MATCHED THEN INSERT (id, val) VALUES (sub.id, sub.val)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+SET citus.log_remote_commands to false;
 SELECT * FROM citus_target WHERE id = 500; -- cached
-NOTICE:  issuing SELECT id, val FROM merge_schema.citus_target_xxxxxxx citus_target WHERE (id OPERATOR(pg_catalog.=) 500)
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
  id  |               val
 ---------------------------------------------------------------------
  500 | Updated by prepare using source
 (1 row)
 
-SET citus.log_remote_commands to false;
+SELECT count(*) FROM citus_target; -- cached
+ count
+---------------------------------------------------------------------
+  3245
+(1 row)
+
 SELECT compare_tables();
  compare_tables
 ---------------------------------------------------------------------
@@ -2165,9 +2236,263 @@ SELECT pa_compare_tables();
 (1 row)
 
 ROLLBACK;
+CREATE TABLE source_json( id   integer, z int, d jsonb);
+CREATE TABLE target_json( id   integer, z int, d jsonb);
+INSERT INTO source_json SELECT i,i FROM generate_series(0,5)i;
+SELECT create_distributed_table('target_json','id'), create_distributed_table('source_json', 'id');
+NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$merge_schema.source_json$$)
+ create_distributed_table | create_distributed_table
+---------------------------------------------------------------------
+                          |
+(1 row)
+
+-- single shard query given source_json is filtered and Postgres is smart to pushdown
+-- filter to the target_json as well
+SELECT public.coordinator_plan($Q$
+EXPLAIN (ANALYZE ON, TIMING OFF) MERGE INTO target_json sda
+USING (SELECT * FROM source_json WHERE id = 1) sdn
+ON sda.id = sdn.id
+WHEN NOT matched THEN
+	INSERT (id, z) VALUES (sdn.id, 5);
+$Q$);
+                                    coordinator_plan
+---------------------------------------------------------------------
+ Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0) (actual rows=0 loops=1)
+   Task Count: 1
+(2 rows)
+
+SELECT * FROM target_json ORDER BY 1;
+ id | z | d
+---------------------------------------------------------------------
+  1 | 5 |
+(1 row)
+
+-- zero shard query as filters do not match
+--SELECT public.coordinator_plan($Q$
+--EXPLAIN (ANALYZE ON, TIMING OFF) MERGE INTO target_json sda
+--USING (SELECT * FROM source_json WHERE id = 1) sdn
+--ON sda.id = sdn.id AND sda.id = 2
+--WHEN NOT matched THEN
+--	INSERT (id, z) VALUES (sdn.id, 5);
+--$Q$);
+--SELECT * FROM target_json ORDER BY 1;
+-- join for source_json is happening at a different place
+SELECT public.coordinator_plan($Q$
+EXPLAIN (ANALYZE ON, TIMING OFF) MERGE INTO target_json sda
+USING source_json s1 LEFT JOIN (SELECT * FROM source_json) s2 USING(z)
+ON sda.id = s1.id AND s1.id = s2.id
+WHEN NOT matched THEN
+	INSERT (id, z) VALUES (s2.id, 5);
+$Q$);
+                                    coordinator_plan
+---------------------------------------------------------------------
+ Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0) (actual rows=0 loops=1)
+   Task Count: 4
+(2 rows)
+
+SELECT * FROM target_json ORDER BY 1;
+ id | z | d
+---------------------------------------------------------------------
+  0 | 5 |
+  1 | 5 |
+  2 | 5 |
+  3 | 5 |
+  4 | 5 |
+  5 | 5 |
+(6 rows)
+
+-- update JSON column
+SELECT public.coordinator_plan($Q$
+EXPLAIN (ANALYZE ON, TIMING OFF) MERGE INTO target_json sda
+USING source_json sdn
+ON sda.id = sdn.id
+WHEN matched THEN
+	UPDATE SET d = '{"a" : 5}';
+$Q$);
+                                    coordinator_plan
+---------------------------------------------------------------------
+ Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0) (actual rows=0 loops=1)
+   Task Count: 4
+(2 rows)
+
+SELECT * FROM target_json ORDER BY 1;
+ id | z |    d
+---------------------------------------------------------------------
+  0 | 5 | {"a": 5}
+  1 | 5 | {"a": 5}
+  2 | 5 | {"a": 5}
+  3 | 5 | {"a": 5}
+  4 | 5 | {"a": 5}
+  5 | 5 | {"a": 5}
+(6 rows)
+
+CREATE FUNCTION immutable_hash(int) RETURNS int
+AS 'SELECT hashtext( ($1 + $1)::text);'
+LANGUAGE SQL
+IMMUTABLE
+RETURNS NULL ON NULL INPUT;
+MERGE INTO target_json sda
+USING source_json sdn
+ON sda.id = sdn.id
+WHEN matched THEN
+	UPDATE SET z = immutable_hash(sdn.z);
+-- Test bigserial
+CREATE TABLE source_serial (id integer, z int, d bigserial);
+CREATE TABLE target_serial (id integer, z int, d bigserial);
+INSERT INTO source_serial SELECT i,i FROM generate_series(0,100)i;
+SELECT create_distributed_table('source_serial', 'id'),
+       create_distributed_table('target_serial', 'id');
+NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$merge_schema.source_serial$$)
+ create_distributed_table | create_distributed_table
+---------------------------------------------------------------------
+                          |
+(1 row)
+
+MERGE INTO target_serial sda
+USING source_serial sdn
+ON sda.id = sdn.id
+WHEN NOT matched THEN
+       INSERT (id, z) VALUES (id, z);
+ERROR:  non-IMMUTABLE functions are not yet supported in MERGE sql with distributed tables
+SELECT count(*) from source_serial;
+ count
+---------------------------------------------------------------------
+   101
+(1 row)
+
+SELECT count(*) from target_serial;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+SELECT count(distinct d) from source_serial;
+ count
+---------------------------------------------------------------------
+   101
+(1 row)
+
+SELECT count(distinct d) from target_serial;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+-- Test set operations
+CREATE TABLE target_set(t1 int, t2 int);
+CREATE TABLE source_set(s1 int, s2 int);
+SELECT create_distributed_table('target_set', 't1'),
+       create_distributed_table('source_set', 's1');
+ create_distributed_table | create_distributed_table
+---------------------------------------------------------------------
+                          |
+(1 row)
+
+INSERT INTO target_set VALUES(1, 0);
+INSERT INTO source_set VALUES(1, 1);
+INSERT INTO source_set VALUES(2, 2);
+MERGE INTO target_set
+USING (SELECT * FROM source_set UNION SELECT * FROM source_set) AS foo ON target_set.t1 = foo.s1
+WHEN MATCHED THEN
+        UPDATE SET t2 = t2 + 100
+WHEN NOT MATCHED THEN
+	INSERT VALUES(foo.s1);
+SELECT * FROM target_set ORDER BY 1, 2;
+ t1 | t2
+---------------------------------------------------------------------
+  1 | 100
+  2 |
+(2 rows)
+
 --
 -- Error and Unsupported scenarios
 --
+MERGE INTO target_set
+USING (SELECT s1,s2 FROM source_set UNION SELECT s2,s1 FROM source_set) AS foo ON target_set.t1 = foo.s1
+WHEN MATCHED THEN
+        UPDATE SET t2 = t2 + 1;
+ERROR:  cannot pushdown the subquery since not all subqueries in the UNION have the partition column in the same position
+DETAIL:  Each leaf query of the UNION should return the partition column in the same position and all joins must be on the partition column
+MERGE INTO target_set
+USING (SELECT 2 as s3, source_set.* FROM (SELECT * FROM source_set LIMIT 1) as foo LEFT JOIN source_set USING( s1)) AS foo
+ON target_set.t1 = foo.s1
+WHEN MATCHED THEN UPDATE SET t2 = t2 + 1
+WHEN NOT MATCHED THEN INSERT VALUES(s1, s3);
+ERROR:  cannot push down this subquery
+DETAIL:  Limit clause is currently unsupported when a subquery references a column from another query
+-- modifying CTE not supported
+EXPLAIN
+WITH cte_1 AS (DELETE FROM target_json)
+MERGE INTO target_json sda
+USING source_json sdn
+ON sda.id = sdn.id
+WHEN NOT matched THEN
+	INSERT (id, z) VALUES (sdn.id, 5);
+ERROR:  MERGE command is only supported when all distributed tables are co-located and joined on their distribution columns
+-- Grouping sets not supported
+MERGE INTO citus_target t
+USING (SELECT count(*), id FROM citus_source GROUP BY GROUPING SETS (id, val)) subq
+ON subq.id = t.id
+WHEN MATCHED AND t.id > 350 THEN
+    UPDATE SET val = t.val || 'Updated'
+WHEN NOT MATCHED THEN
+        INSERT VALUES (subq.id, 99)
+WHEN MATCHED AND t.id < 350 THEN
+        DELETE;
+ERROR:  cannot push down this subquery
+DETAIL:  could not run distributed query with GROUPING SETS, CUBE, or ROLLUP
+WITH subq AS
+(
+SELECT count(*), id FROM citus_source GROUP BY GROUPING SETS (id, val)
+)
+MERGE INTO citus_target t
+USING subq
+ON subq.id = t.id
+WHEN MATCHED AND t.id > 350 THEN
+    UPDATE SET val = t.val || 'Updated'
+WHEN NOT MATCHED THEN
+        INSERT VALUES (subq.id, 99)
+WHEN MATCHED AND t.id < 350 THEN
+        DELETE;
+ERROR:  cannot push down this subquery
+DETAIL:  could not run distributed query with GROUPING SETS, CUBE, or ROLLUP
+-- try inserting unmatched distribution column value
+MERGE INTO citus_target t
+USING citus_source s
+ON t.id = s.id
+WHEN NOT MATCHED THEN
+  INSERT DEFAULT VALUES;
+ERROR:  cannot perform MERGE INSERT with DEFAULTS
+MERGE INTO citus_target t
+USING citus_source s
+ON t.id = s.id
+WHEN NOT MATCHED THEN
+  INSERT VALUES(10000);
+ERROR:  MERGE INSERT must refer a source column for distribution column
+MERGE INTO citus_target t
+USING citus_source s
+ON t.id = s.id
+WHEN NOT MATCHED THEN
+  INSERT (id) VALUES(1000);
+ERROR:  MERGE INSERT must refer a source column for distribution column
+MERGE INTO t1 t
+USING s1 s
+ON t.id = s.id
+WHEN NOT MATCHED THEN
+  INSERT (id) VALUES(s.val);
+ERROR:  MERGE INSERT must use the source table distribution column value
+MERGE INTO t1 t
+USING s1 s
+ON t.id = s.id
+WHEN NOT MATCHED THEN
+  INSERT (val) VALUES(s.val);
+ERROR:  MERGE INSERT must have distribution column as value
 -- try updating the distribution key column
 BEGIN;
 MERGE INTO target_cj t
@@ -2177,7 +2502,7 @@ MERGE INTO target_cj t
     UPDATE SET tid = tid + 9, src = src || ' updated by merge'
   WHEN NOT MATCHED THEN
     INSERT VALUES (sid1, 'inserted by merge', val1);
-ERROR:  modifying the partition value of rows is not allowed
+ERROR:  updating the distribution column is not allowed in MERGE actions
 ROLLBACK;
 -- Foreign table as target
 MERGE INTO foreign_table
@@ -2269,13 +2594,31 @@ BEGIN
         RETURN TRUE;
 END;
 $$;
+-- Test functions executing in MERGE statement. This is to prevent the functions from
+-- doing a random sql, which may be executed in a remote node or modifying the target
+-- relation which will have unexpected/suprising results.
+MERGE INTO t1 USING (SELECT * FROM s1 WHERE true) s1 ON
+  t1.id = s1.id AND s1.id = 2
+   WHEN matched THEN
+ UPDATE SET id = s1.id, val = random();
+ERROR:  non-IMMUTABLE functions are not yet supported in MERGE sql with distributed tables
+-- Test STABLE function
+CREATE FUNCTION add_s(integer, integer) RETURNS integer
+AS 'select $1 + $2;'
+LANGUAGE SQL
+STABLE RETURNS NULL ON NULL INPUT;
+MERGE INTO t1
+USING s1 ON t1.id = s1.id
+WHEN NOT MATCHED THEN
+	INSERT VALUES(s1.id, add_s(s1.val, 2));
+ERROR:  non-IMMUTABLE functions are not yet supported in MERGE sql with distributed tables
 -- Test preventing "ON" join condition from writing to the database
 BEGIN;
 MERGE INTO t1
 USING s1 ON t1.id = s1.id AND t1.id = 2 AND (merge_when_and_write())
 WHEN MATCHED THEN
         UPDATE SET val = t1.val + s1.val;
-ERROR:  functions used in the WHERE/ON/WHEN clause of modification queries on distributed tables must not be VOLATILE
+ERROR:  non-IMMUTABLE functions are not yet supported in MERGE sql with distributed tables
 ROLLBACK;
 -- Test preventing WHEN clause(s) from writing to the database
 BEGIN;
@@ -2283,7 +2626,7 @@ MERGE INTO t1
 USING s1 ON t1.id = s1.id AND t1.id = 2
 WHEN MATCHED AND (merge_when_and_write()) THEN
         UPDATE SET val = t1.val + s1.val;
-ERROR:  functions used in the WHERE/ON/WHEN clause of modification queries on distributed tables must not be VOLATILE
+ERROR:  non-IMMUTABLE functions are not yet supported in MERGE sql with distributed tables
 ROLLBACK;
 -- Joining on partition columns with sub-query
 MERGE INTO t1
@@ -2294,7 +2637,7 @@ MERGE INTO t1
 		UPDATE SET val = t1.val + 1
 	WHEN NOT MATCHED THEN
 		INSERT (id, val) VALUES (sub.id, sub.val);
-ERROR:  MERGE command is only supported when distributed tables are joined on their distribution column
+ERROR:  MERGE command is only supported when all distributed tables are co-located and joined on their distribution columns
 -- Joining on partition columns with CTE
 WITH s1_res AS (
 	SELECT * FROM s1
@@ -2307,7 +2650,7 @@ MERGE INTO t1
 		UPDATE SET val = t1.val + 1
 	WHEN NOT MATCHED THEN
 		INSERT (id, val) VALUES (s1_res.id, s1_res.val);
-ERROR:  MERGE command is only supported when distributed tables are joined on their distribution column
+ERROR:  MERGE command is only supported when all distributed tables are co-located and joined on their distribution columns
 -- Constant Join condition
 WITH s1_res AS (
 	SELECT * FROM s1
@@ -2320,7 +2663,7 @@ MERGE INTO t1
 		UPDATE SET val = t1.val + 1
 	WHEN NOT MATCHED THEN
 		INSERT (id, val) VALUES (s1_res.id, s1_res.val);
-ERROR:  MERGE command is only supported when distributed tables are joined on their distribution column
+ERROR:  MERGE command is only supported when all distributed tables are co-located and joined on their distribution columns
 -- With a single WHEN clause, which causes a non-left join
 WITH s1_res AS (
      SELECT * FROM s1
@@ -2329,7 +2672,7 @@ WITH s1_res AS (
  WHEN MATCHED THEN DELETE
 	WHEN NOT MATCHED THEN
 		INSERT (id, val) VALUES (s1_res.id, s1_res.val);
-ERROR:  MERGE command is only supported when distributed tables are joined on their distribution column
+ERROR:  MERGE command is only supported when all distributed tables are co-located and joined on their distribution columns
 --
 -- Reference tables
 --
@@ -2559,7 +2902,7 @@ WHEN MATCHED THEN
 UPDATE SET val = dist_colocated.val
 WHEN NOT MATCHED THEN
 INSERT VALUES(dist_colocated.id, dist_colocated.val);
-ERROR:  MERGE command is only supported when distributed tables are joined on their distribution column
+ERROR:  MERGE command is only supported when all distributed tables are co-located and joined on their distribution columns
 -- Both the source and target must be distributed
 MERGE INTO dist_target
 USING (SELECT 100 id) AS source
@@ -2752,14 +3095,14 @@ HINT:  Consider using hash distribution instead
 DROP SERVER foreign_server CASCADE;
 NOTICE:  drop cascades to 3 other objects
 DETAIL:  drop cascades to user mapping for postgres on server foreign_server
-drop cascades to foreign table foreign_table_4000046
+drop cascades to foreign table foreign_table_4000043
 drop cascades to foreign table foreign_table
-NOTICE:  foreign table "foreign_table_4000046" does not exist, skipping
+NOTICE:  foreign table "foreign_table_4000043" does not exist, skipping
 CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
 PL/pgSQL function citus_drop_trigger() line XX at PERFORM
 DROP FUNCTION merge_when_and_write();
 DROP SCHEMA merge_schema CASCADE;
-NOTICE:  drop cascades to 75 other objects
+NOTICE:  drop cascades to 84 other objects
 DETAIL:  drop cascades to function insert_data()
 drop cascades to table pg_result
 drop cascades to table local_local
@@ -2801,14 +3144,15 @@ drop cascades to table mv_target
 drop cascades to table mv_source_table
 drop cascades to materialized view mv_source
 drop cascades to table mv_local
-drop cascades to table dist_table
+drop cascades to table dist_table_4000041
 drop cascades to function f_dist()
 drop cascades to table fn_target_4000040
 drop cascades to table fn_result
 drop cascades to table fn_target
+drop cascades to table dist_table
 drop cascades to table fn_local
 drop cascades to table ft_target
-drop cascades to table ft_source_4000045
+drop cascades to table ft_source_4000042
 drop cascades to table ft_source
 drop cascades to extension postgres_fdw
 drop cascades to table target_cj
@@ -2826,9 +3170,17 @@ drop cascades to table citus_pa_target
 drop cascades to table pg_pa_source
 drop cascades to table citus_pa_source
 drop cascades to function pa_compare_tables()
+drop cascades to table source_json
+drop cascades to table target_json
+drop cascades to function immutable_hash(integer)
+drop cascades to table source_serial
+drop cascades to table target_serial
+drop cascades to table target_set
+drop cascades to table source_set
+drop cascades to function add_s(integer,integer)
 drop cascades to table pg
-drop cascades to table t1_4000110
-drop cascades to table s1_4000111
+drop cascades to table t1_4000131
+drop cascades to table s1_4000132
 drop cascades to table t1
 drop cascades to table s1
 drop cascades to table dist_colocated
