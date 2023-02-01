@@ -134,6 +134,7 @@ static PlannedStmt * PlanDistributedStmt(DistributedPlanningContext *planContext
 static RTEListProperties * GetRTEListProperties(List *rangeTableList);
 static List * TranslatedVars(PlannerInfo *root, int relationIndex);
 static void WarnIfListHasForeignDistributedTable(List *rangeTableList);
+static void ErrorIfMergeHasUnsupportedTables(Query *parse, List *rangeTableList);
 static List * GenerateImplicitJoinRestrictInfoList(PlannerInfo *plannerInfo,
 												   RelOptInfo *innerrel,
 												   RelOptInfo *outerrel);

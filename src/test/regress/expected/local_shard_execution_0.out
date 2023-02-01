@@ -473,8 +473,8 @@ NOTICE:  executing the command locally: SELECT first.b, first.c, first.d, second
 END;
 BEGIN;
 SELECT * FROM abcd first join abcd second USING(b) join abcd third on first.b=third.b ORDER BY 1,2,3,4;
-NOTICE:  executing the command locally: SELECT first.b, first.c, first.d, second.c, second.d, third.b, third.c, third.d FROM ((local_shard_execution.abcd_1470025 first JOIN local_shard_execution.abcd_1470025 second ON ((first.b OPERATOR(pg_catalog.=) second.b))) JOIN local_shard_execution.abcd_1470025 third ON ((first.b OPERATOR(pg_catalog.=) third.b))) WHERE true
-NOTICE:  executing the command locally: SELECT first.b, first.c, first.d, second.c, second.d, third.b, third.c, third.d FROM ((local_shard_execution.abcd_1470027 first JOIN local_shard_execution.abcd_1470027 second ON ((first.b OPERATOR(pg_catalog.=) second.b))) JOIN local_shard_execution.abcd_1470027 third ON ((first.b OPERATOR(pg_catalog.=) third.b))) WHERE true
+NOTICE:  executing the command locally: SELECT first.b, first.c, first.d, second.c, second.d, third.b, third.c, third.d FROM ((local_shard_execution.abcd_1470025 first JOIN local_shard_execution.abcd_1470025 second ON ((first.b OPERATOR(pg_catalog.=) second.b))) JOIN local_shard_execution.abcd_1470025 third ON ((first.b OPERATOR(pg_catalog.=) third.b))) WHERE ((second.b OPERATOR(pg_catalog.=) third.b) AND (second.b OPERATOR(pg_catalog.=) first.b))
+NOTICE:  executing the command locally: SELECT first.b, first.c, first.d, second.c, second.d, third.b, third.c, third.d FROM ((local_shard_execution.abcd_1470027 first JOIN local_shard_execution.abcd_1470027 second ON ((first.b OPERATOR(pg_catalog.=) second.b))) JOIN local_shard_execution.abcd_1470027 third ON ((first.b OPERATOR(pg_catalog.=) third.b))) WHERE ((second.b OPERATOR(pg_catalog.=) third.b) AND (second.b OPERATOR(pg_catalog.=) first.b))
  b | c | d | c | d | b | c | d
 ---------------------------------------------------------------------
  2 | 3 | 4 | 3 | 4 | 2 | 3 | 4
