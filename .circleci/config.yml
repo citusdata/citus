@@ -472,7 +472,12 @@ jobs:
       - store_artifacts:
           name: 'Save logfiles'
           path: src/test/regress/tmp_citus_test/logfiles
-      - save_logs_and_results
+      - store_artifacts:
+          name: 'Save ddls'
+          path: src/test/regress/citus_tests/join_gen/out/ddls.sql
+      - store_artifacts:
+          name: 'Save dmls'
+          path: src/test/regress/citus_tests/join_gen/out/queries.sql
       - stack_trace
       - coverage:
           flags: 'test_<< parameters.pg_major >>,joingen'

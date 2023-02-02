@@ -5,50 +5,38 @@ set -euo pipefail
 
 psql_port=$1
 
-prepareLocalDdlFiles()
+runDDLs()
 {
-    # remove create_distributed_table and create_reference_table lines from ddls.sql
-    sed -i '/create_distributed_table/d' "${out_folder}"/ddls.sql
-    sed -i '/create_reference_table/d' "${out_folder}"/ddls.sql
-
-    # remove INSERT INTO lines from ddls.sql
-    sed -i '/INSERT INTO/d' "${out_folder}"/ddls.sql
-
-    # replace CREATE TABLE tbl(...) with CREATE TABLE tbl AS
-    sed -i 's/CREATE TABLE \(.\+\)(.\+);/CREATE TABLE \1 AS SELECT * FROM \1;/g' "${out_folder}"/ddls.sql
-
-    # convert dist and ref table names in DROP IF EXISTS with loc in ddls.sql
-    sed -i 's/DROP TABLE IF EXISTS dist\([0-9]\+\)/DROP TABLE IF EXISTS locd\1/g' "${out_folder}"/ddls.sql
-    sed -i 's/DROP TABLE IF EXISTS ref\([0-9]\+\)/DROP TABLE IF EXISTS locr\1/g' "${out_folder}"/ddls.sql
-
-    # convert dist and ref table names in CREATE part(not select part) with loc in ddls.sql
-    sed -i 's/CREATE TABLE dist/CREATE TABLE locd/g' "${out_folder}"/ddls.sql
-    sed -i 's/CREATE TABLE ref/CREATE TABLE locr/g' "${out_folder}"/ddls.sql
+    # run ddls
+    psql -U postgres -d postgres -p "${psql_port}" -f "${out_folder}"/ddls.sql > /dev/null
 }
 
-prepareLocalQueryFiles()
+runUndistributeTables()
 {
-    # convert dist and ref table names with loc in queries.sql
-    sed -i 's/dist\([0-9]\+\)/locd\1/g' "${out_folder}"/queries.sql
-    sed -i 's/ref\([0-9]\+\)/locr\1/g' "${out_folder}"/queries.sql
-
-    # rename replaced outputs for local table psql run
-    mv "${out_folder}"/ddls.sql "${out_folder}"/local_ddls.sql
-    mv "${out_folder}"/queries.sql "${out_folder}"/local_queries.sql
+    undistribute_all_tables_command='SELECT undistribute_table(logicalrelid) FROM pg_dist_partition;'
+    # run undistribute all tables
+    psql -U postgres -d postgres -p "${psql_port}" -c "${undistribute_all_tables_command}" > /dev/null
 }
 
 runQueries()
 {
-    # remove out files if exists
-    rm -rf "${out_folder}"/dist_queries.out "${out_folder}"/local_queries.out
+    out_filename=$1
 
-    # run ddls for local and distributed tables sequentially
-    psql -U postgres -d postgres -p "${psql_port}" -f "${out_folder}"/dist_ddls.sql > /dev/null
-    psql -U postgres -d postgres -p "${psql_port}" -f "${out_folder}"/local_ddls.sql > /dev/null
+    # run dmls
+    # echo queries for query tracing
+    psql -U postgres -d postgres -p "${psql_port}" \
+        --echo-queries \
+        -f "${out_folder}"/queries.sql > "${out_filename}" 2>&1
+}
 
-    # run dmls for local and distributed tables sequentially
-    psql -U postgres -d postgres -p "${psql_port}" -f "${out_folder}"/dist_queries.sql > "${out_folder}"/dist_queries.out 2>&1
-    psql -U postgres -d postgres -p "${psql_port}" -f "${out_folder}"/local_queries.sql > "${out_folder}"/local_queries.out 2>&1
+showDiffs()
+{
+    # - show results in unified format
+    # - do not consider queries as diff since we change table names for local and
+    #   dist queries even if both queries are same
+    diff -u "${out_folder}"/local_queries.out \
+            "${out_folder}"/dist_queries.out \
+            > "${out_folder}"/local_dist.diffs
 }
 
 # run query generator and let it create output ddls and queries
@@ -57,16 +45,20 @@ query_gen_folder="${script_folder}"/..
 out_folder="${query_gen_folder}"/out
 cd "${query_gen_folder}" && python3 main.py
 
-# copy outputs for distributed table psql run
-cp "${out_folder}"/ddls.sql "${out_folder}"/dist_ddls.sql
-cp "${out_folder}"/queries.sql "${out_folder}"/dist_queries.sql
+# remove result files if exists
+rm -rf "${out_folder}"/dist_queries.out "${out_folder}"/local_queries.out
 
-# creates ddl and query files for local tables
-prepareLocalDdlFiles
-prepareLocalQueryFiles
+# run ddls
+runDDLs
 
-# runs ddls sequentially and then queries from parallel sessions
-runQueries
+# runs dmls for distributed tables
+runQueries "${out_folder}"/dist_queries.out
 
-# see diffs in results (returns with exit code 1 if there is any diff)
-diff "${out_folder}"/local_queries.out "${out_folder}"/dist_queries.out > "${out_folder}"/local_dist.diffs
+# undistribute all dist tables
+runUndistributeTables
+
+# runs the same dmls for pg local tables
+runQueries "${out_folder}"/local_queries.out
+
+# see diffs in results
+showDiffs
