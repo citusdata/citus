@@ -263,7 +263,7 @@ check-arbitrary-base: all
 check-pytest:
 	pytest -n auto
 
-check-join-gen: all
+check-join-generator: all
 	${join_generator_check} --bindir=$(bindir) --pgxsdir=$(pgxsdir)
 
 check-citus-upgrade: all

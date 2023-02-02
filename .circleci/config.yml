@@ -421,6 +421,58 @@ jobs:
       - coverage:
           flags: 'test_<< parameters.pg_major >>,upgrade'
 
+  test-join-generator:
+    description: Runs tests on generated join queries
+    parameters:
+      pg_major:
+        description: 'postgres major version'
+        type: integer
+      image:
+        description: 'docker image to use as for the tests'
+        type: string
+        default: citus/exttester
+      image_tag:
+        description: 'docker image tag to use'
+        type: string
+    docker:
+      - image: '<< parameters.image >>:<< parameters.image_tag >><< pipeline.parameters.image_suffix >>'
+    working_directory: /home/circleci/project
+    steps:
+      - checkout
+      - attach_workspace:
+          at: .
+      - install_extension:
+          pg_major: << parameters.pg_major >>
+      - configure
+      - enable_core
+      - run:
+          name: 'Run Test'
+          command: |
+            gosu circleci make -C src/test/regress check-join-generator
+          no_output_timeout: 2m
+      - run:
+          name: 'Show regressions'
+          command: |
+            find src/test/regress/citus_tests/join_gen/out/ -name "local_dist.diffs" -exec cat {} +
+            lines=$(find src/test/regress/citus_tests/join_gen/out/ -name "local_dist.diffs" | wc -l)
+            if [ $lines -ne 0 ]; then
+               exit 1
+            fi
+          when: on_fail
+      - run:
+          name: 'Copy logfiles'
+          command: |
+            mkdir src/test/regress/tmp_citus_test/logfiles
+            find src/test/regress/tmp_citus_test/ -name "logfile_*" -exec cp -t src/test/regress/tmp_citus_test/logfiles/ {} +
+          when: on_fail
+      - store_artifacts:
+          name: 'Save logfiles'
+          path: src/test/regress/tmp_citus_test/logfiles
+      - save_logs_and_results
+      - stack_trace
+      - coverage:
+          flags: 'test_<< parameters.pg_major >>,joingen'
+
   test-citus:
     description: Runs the common tests of citus
     parameters:
@@ -935,6 +987,24 @@ workflows:
           image_tag: '<< pipeline.parameters.pg15_version >>'
           requires: [build-15]
 
+      - test-join-generator:
+          name: 'test-13_check-join-generator'
+          pg_major: 13
+          image_tag: '<< pipeline.parameters.pg13_version >>'
+          requires: [build-13]
+
+      - test-join-generator:
+          name: 'test-14_check-join-generator'
+          pg_major: 14
+          image_tag: '<< pipeline.parameters.pg14_version >>'
+          requires: [build-14]
+
+      - test-join-generator:
+          name: 'test-15_check-join-generator'
+          pg_major: 15
+          image_tag: '<< pipeline.parameters.pg15_version >>'
+          requires: [build-15]
+
       - test-pg-upgrade:
           name: 'test-13-14_check-pg-upgrade'
           old_pg_major: 13
@@ -975,6 +1045,7 @@ workflows:
             - test-13_check-enterprise-failure
             - test-13_check-split
             - test-13_check-arbitrary-configs
+            - test-13_check-join-generator
             - test-14_check-multi
             - test-14_check-multi-1
             - test-14_check-mx
@@ -993,6 +1064,7 @@ workflows:
             - test-14_check-enterprise-failure
             - test-14_check-split
             - test-14_check-arbitrary-configs
+            - test-14_check-join-generator
             - test-15_check-multi
             - test-15_check-multi-1
             - test-15_check-mx
@@ -1011,6 +1083,7 @@ workflows:
             - test-15_check-enterprise-failure
             - test-15_check-split
             - test-15_check-arbitrary-configs
+            - test-15_check-join-generator
             - test-13-14_check-pg-upgrade
             - test-14-15_check-pg-upgrade
             - test-13_check-citus-upgrade
