@@ -43,12 +43,12 @@ runQueries()
     rm -rf "${out_folder}"/dist_queries.out "${out_folder}"/local_queries.out
 
     # run ddls for local and distributed tables sequentially
-    psql -p "${psql_port}" -f "${out_folder}"/dist_ddls.sql > /dev/null
-    psql -p "${psql_port}" -f "${out_folder}"/local_ddls.sql > /dev/null
+    psql -U postgres -d postgres -p "${psql_port}" -f "${out_folder}"/dist_ddls.sql > /dev/null
+    psql -U postgres -d postgres -p "${psql_port}" -f "${out_folder}"/local_ddls.sql > /dev/null
 
     # run dmls for local and distributed tables sequentially
-    psql -p "${psql_port}" -f "${out_folder}"/dist_queries.sql > "${out_folder}"/dist_queries.out 2>&1
-    psql -p "${psql_port}" -f "${out_folder}"/local_queries.sql > "${out_folder}"/local_queries.out 2>&1
+    psql -U postgres -d postgres -p "${psql_port}" -f "${out_folder}"/dist_queries.sql > "${out_folder}"/dist_queries.out 2>&1
+    psql -U postgres -d postgres -p "${psql_port}" -f "${out_folder}"/local_queries.sql > "${out_folder}"/local_queries.out 2>&1
 }
 
 # run query generator and let it create output ddls and queries
@@ -68,5 +68,5 @@ prepareLocalQueryFiles
 # runs ddls sequentially and then queries from parallel sessions
 runQueries
 
-# see diffs in results
+# see diffs in results (returns with exit code 1 if there is any diff)
 diff "${out_folder}"/local_queries.out "${out_folder}"/dist_queries.out > "${out_folder}"/local_dist.diffs
