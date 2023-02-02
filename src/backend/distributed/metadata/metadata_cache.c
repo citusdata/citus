@@ -1168,6 +1168,39 @@ LookupNodeForGroup(int32 groupId)
 
 
 /*
+ * ShardPlacementListViaCatalog returns the list of placements for the given shard from
+ * the cache.
+ *
+ * This function is intended for DROP operations can potentially drop placements, and
+ * therefore invalidate caches for placements. We continue accessing caches for worker
+ * nodes, and expect that they will not get invalidated by a concurrent process.
+ */
+List *
+ShardPlacementListViaCatalog(uint64 shardId)
+{
+	List *groupShardPlacementList = BuildShardPlacementList(shardId);
+	List *shardPlacementList = NIL;
+
+	GroupShardPlacement *groupShardPlacement = NULL;
+	foreach_ptr(groupShardPlacement, groupShardPlacementList)
+	{
+		WorkerNode *worker = LookupNodeForGroup(groupShardPlacement->groupId);
+		ShardPlacement *placement = CitusMakeNode(ShardPlacement);
+		placement->shardId = groupShardPlacement->shardId;
+		placement->shardLength = groupShardPlacement->shardLength;
+		placement->nodeId = worker->nodeId;
+		placement->nodeName = pstrdup(worker->workerName);
+		placement->nodePort = worker->workerPort;
+		placement->placementId = groupShardPlacement->placementId;
+
+		shardPlacementList = lappend(shardPlacementList, placement);
+	}
+
+	return SortList(shardPlacementList, CompareShardPlacements);
+}
+
+
+/*
  * ShardPlacementList returns the list of placements for the given shard from
  * the cache.
  *
