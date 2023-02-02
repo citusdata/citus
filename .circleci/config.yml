@@ -453,7 +453,7 @@ jobs:
           name: 'Run Test'
           command: |
             gosu circleci make -C src/test/regress check-join-generator
-          no_output_timeout: 2m
+          no_output_timeout: 5m
       - run:
           name: 'Show regressions'
           command: |
