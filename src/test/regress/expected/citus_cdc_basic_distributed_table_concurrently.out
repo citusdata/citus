@@ -40,7 +40,7 @@ SELECT nodeid AS worker_2_node FROM pg_dist_node WHERE nodeport=:worker_2_port \
 \set cdc_client_port :worker_3_port
 CREATE TABLE sensors(
     measureid               integer,
-    eventdatetime           date,
+    eventdatetime           timestamptz,
     measure_data            jsonb,
 	meaure_quantity         decimal(15, 2),
     measure_status          char(1),
@@ -52,8 +52,8 @@ CREATE INDEX hash_index_on_sensors ON sensors USING HASH((measure_data->'IsFaile
 CREATE INDEX index_with_include_on_sensors ON sensors ((measure_data->'IsFailed')) INCLUDE (measure_data, eventdatetime, measure_status);
 CREATE STATISTICS stats_on_sensors (dependencies) ON measureid, eventdatetime FROM sensors;
 -- Create the sensors distributed table and create he publications and replication slots in all worker nodes.
-SELECT create_distributed_table('sensors', 'measureid', colocate_with:='none');
- create_distributed_table
+SELECT create_distributed_table_concurrently('sensors', 'measureid', colocate_with:='none');
+ create_distributed_table_concurrently
 ---------------------------------------------------------------------
 
 (1 row)
@@ -74,7 +74,7 @@ SET search_path TO "citus_cdc_test_schema";
 -- Disable Deferred drop auto cleanup to avoid flaky tests.
 CREATE TABLE sensors(
     measureid               integer,
-    eventdatetime           date,
+    eventdatetime           timestamptz,
     measure_data            jsonb,
 	meaure_quantity         decimal(15, 2),
     measure_status          char(1),
@@ -163,7 +163,7 @@ UPDATE sensors
 			ELSE 'n'
 		END,
 	measure_comment= 'Comment:' || measureid::text;
--- Export the source distributed table into a CSV file for comparison later with table forme	d using CDC subscriprions in CDC client node.
+-- Export the source distributed table into a CSV file for comparison later with table formed using CDC subscriprions in CDC client node.
 \COPY (select * from sensors ORDER BY measureid, eventdatetime, measure_data) TO 'results/sensors1.csv' DELIMITER ',' CSV HEADER;
 \c - postgres - :worker_1_port
 SELECT pg_current_wal_lsn()-'0/0' AS remote_lsn_1 \gset
@@ -222,10 +222,6 @@ SELECT wait_for_subscription_to_catchup('cdc_subscription_2',:remote_lsn_2);
 \COPY (select * from sensors ORDER BY measureid, eventdatetime, measure_data) TO 'results/sensors2.csv' DELIMITER ',' CSV HEADER;
 -- Compare the dumps from original distributed table with the dump from the CDC subscribed table and make sure there are no differences.
 \! diff results/sensors1.csv results/sensors2.csv
-DROP SUBSCRIPTION cdc_subscription_1;
-NOTICE:  dropped replication slot "cdc_replication_slot2" on publisher
-DROP SUBSCRIPTION cdc_subscription_2;
-NOTICE:  dropped replication slot "cdc_replication_slot3" on publisher
 -- END 5:
 --Begin 6: Cleanup all the resources created.
 DROP SCHEMA "citus_cdc_test_schema" CASCADE;
@@ -234,9 +230,7 @@ DETAIL:  drop cascades to table sensors
 drop cascades to function wait_for_subscription_to_catchup(text,bigint)
 \c - postgres - :master_port
 DROP SCHEMA "citus_cdc_test_schema" CASCADE;
-NOTICE:  drop cascades to table citus_cdc_test_schema.sensors
-\c - postgres - :worker_1_port
-DROP PUBLICATION cdc_publication;
-\c - postgres - :worker_2_port
-DROP PUBLICATION cdc_publication;
+NOTICE:  drop cascades to 2 other objects
+DETAIL:  drop cascades to table citus_cdc_test_schema.sensors_102008
+drop cascades to table citus_cdc_test_schema.sensors
 --END 5 :

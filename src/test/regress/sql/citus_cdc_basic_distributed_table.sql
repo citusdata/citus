@@ -155,8 +155,9 @@ SELECT wait_for_subscription_to_catchup('cdc_subscription_2',:remote_lsn_2);
 
 SET search_path TO "citus_cdc_test_schema";
 UPDATE sensors
-	SET eventdatetime=NOW(),measure_data = jsonb_set(measure_data, '{val}', to_jsonb(measureid * 10)),
-	meaure_quantity = (measureid  * 10) + 5,
+	SET
+	eventdatetime=NOW(),
+	measure_data = jsonb_set(measure_data, '{val}', measureid::text::jsonb , TRUE),
 	measure_status = CASE
 		WHEN measureid % 2 = 0
 			THEN 'y'
@@ -196,7 +197,7 @@ SELECT wait_for_subscription_to_catchup('cdc_subscription_2',:remote_lsn_2);
 
 SET search_path TO "citus_cdc_test_schema";
 
-DELETE FROM sensors	WHERE (measureid %2) == 0;
+DELETE FROM sensors	WHERE (measureid %2) = 0;
 
 -- Export the source distributed table into a CSV file for comparison later with table forme	d using CDC subscriprions in CDC client node.
 \COPY (select * from sensors ORDER BY measureid, eventdatetime, measure_data) TO 'results/sensors1.csv' DELIMITER ',' CSV HEADER;
@@ -222,11 +223,19 @@ SELECT wait_for_subscription_to_catchup('cdc_subscription_2',:remote_lsn_2);
 
 -- Compare the dumps from original distributed table with the dump from the CDC subscribed table and make sure there are no differences.
 \! diff results/sensors1.csv results/sensors2.csv
+DROP SUBSCRIPTION cdc_subscription_1;
+DROP SUBSCRIPTION cdc_subscription_2;
 
 -- END 5:
 
 --Begin 6: Cleanup all the resources created.
+
 DROP SCHEMA "citus_cdc_test_schema" CASCADE;
 \c - postgres - :master_port
 DROP SCHEMA "citus_cdc_test_schema" CASCADE;
+\c - postgres - :worker_1_port
+DROP PUBLICATION cdc_publication;
+\c - postgres - :worker_2_port
+DROP PUBLICATION cdc_publication;
+
 --END 5 :
