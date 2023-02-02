@@ -430,7 +430,7 @@ jobs:
       image:
         description: 'docker image to use as for the tests'
         type: string
-        default: citus/exttester
+        default: citus/failtester
       image_tag:
         description: 'docker image tag to use'
         type: string

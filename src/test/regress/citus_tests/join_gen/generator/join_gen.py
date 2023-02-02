@@ -5,7 +5,7 @@ from generator.random_selections import *
 import random
 
 # grammar syntax
-# 
+#
 # ======Assumptions======
 # 1. Tables has common dist col
 # 2. All operations execute on common column for all tables.
@@ -138,7 +138,7 @@ class GeneratorContext:
             # not yet added to rte count map, so we can allow the name
             if rteName not in self.perTableRtes:
                 self.perTableRtes[rteName] = 0
-                break 
+                break
             # limit is not exceeded, so we can allow the name
             if self.perTableRtes[rteName] < getMaxCountForTable(rteName):
                 break
@@ -323,7 +323,7 @@ def _genRte(genCtx):
     else:
         genCtx.currentRteCount += 1
     genCtx.totalRteCount += 1
-    
+
     # donot dive into recursive subquery further if we hit into rte limit, replace it with relation rte
     rteType = randomRteType()
     if not genCtx.canGenerateNewRte():
@@ -355,7 +355,7 @@ def _genRte(genCtx):
     query += ' AS '
     query += (alias if not modifiedAlias else modifiedAlias)
     genCtx.addAlias(alias)
-        
+
     return query
 
 def _genSubqueryRte(genCtx):

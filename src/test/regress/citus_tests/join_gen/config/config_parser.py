@@ -44,7 +44,7 @@ def parseTable(targetTableDict):
             columns.append(col)
         dupCount = targetTableDict['dupCount']
         return Table(name, citusType, maxCount, rowCount,
-                     nullRate, duplicateRate, useRandom, 
+                     nullRate, duplicateRate, useRandom,
                      columns, dupCount)
 
 def parseTableArray(targetTableDicts):

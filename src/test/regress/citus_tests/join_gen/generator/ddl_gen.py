@@ -20,7 +20,7 @@ def _genTableDDL(table):
     if len(table.columns) > 0:
         ddl += _genColumnDDL(table.columns[-1])
     ddl += ');\n'
-    
+
     if isTableDistributed(table):
         ddl += 'SELECT create_distributed_table(' + '\'' + table.name + '\',\'' + getConfig().commonColName + '\'' + ');'
         ddl += '\n'
@@ -28,7 +28,7 @@ def _genTableDDL(table):
         ddl += 'SELECT create_reference_table(' + '\'' + table.name + '\'' + ');'
         ddl += '\n'
     return ddl
-        
+
 def _genColumnDDL(column):
     ddl = ''
     ddl += column.name

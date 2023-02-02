@@ -24,7 +24,7 @@ def run_test(config):
     # start cluster
     common.initialize_temp_dir(cfg.CITUS_ARBITRARY_TEST_DIR)
     common.initialize_citus_cluster(
-        config.bindir, config.datadir, 
+        config.bindir, config.datadir,
         config.settings, config
     )
 

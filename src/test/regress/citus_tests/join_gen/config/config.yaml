@@ -33,7 +33,7 @@ targetTables:
       duplicateRate: 0.1
       useRandom: false
       columns:
-        - Column: 
+        - Column:
           name: id
           type: int
       dupCount: 2
@@ -46,7 +46,7 @@ targetTables:
       duplicateRate: 0.1
       useRandom: false
       columns:
-        - Column: 
+        - Column:
           name: id
           type: int
       dupCount: 2
@@ -64,7 +64,7 @@ targetRteTypes:
   #- TABLEFUNC
   - VALUES
 
-targetRestrictOps: 
+targetRestrictOps:
   - LT
   - GT
   - EQ

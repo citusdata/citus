@@ -1,5 +1,5 @@
 ## Query Generator for Postgres
-Tool generates SELECT queries, whose depth can be configured, with different join orders. It also generates DDLs required for query execution. 
+Tool generates SELECT queries, whose depth can be configured, with different join orders. It also generates DDLs required for query execution.
 You can also tweak configuration parameters for data inserting command generation.
 
 ### Configuration
@@ -10,7 +10,7 @@ You can configure 3 different parts:
 - [Query Configuration](#query-configuration)
 
 ## DDL Configuration
-Tool generates related ddl commands before generating queries. 
+Tool generates related ddl commands before generating queries.
 
 Schema for DDL configuration:
 ```yaml
@@ -26,7 +26,7 @@ targetTables: <Table[]>
       duplicateRate: <float>
       useRandom: <bool>
       columns: <Column[]>
-        - Column: 
+        - Column:
           name: <string>
           type: <string>
       dupCount: <int>
@@ -46,7 +46,7 @@ targetTables: "array of tables that will be used in generated queries"
       duplicateRate: "percentage of duplicates in rowCount that will be inserted into table"
       useRandom: "should we generate random rows"
       columns: "array of columns in table"
-        - Column: 
+        - Column:
           name: "name of column"
           type: "name of data type of column(only support 'int' now)"
       dupCount: "how many tables with the same configuration we should create(only by changing full name, still using the same name prefix)"
@@ -54,7 +54,7 @@ targetTables: "array of tables that will be used in generated queries"
 
 
 ## Data Insertion Configuration
-Tool generates data insertion commands if you want tables with filled data. You can configure total number of rows, what percentage of them should 
+Tool generates data insertion commands if you want tables with filled data. You can configure total number of rows, what percentage of them should
 be null and what percentage of them should be duplicated. For related configuration see Table schema at [DDL Configuration](#ddl-configuration). You
 can also configure range of the randomly generated data. See `dataRange` at [Query Configuration](#query-configuration).
 
@@ -211,7 +211,7 @@ python main.py
 ## How to Run Citus Join Verification?
 You can verify if Citus breaks any default PG join behaviour via `tests/citus_compare_dist_local_joins.sh`. It creates
 tables specified in config. Then, it runs generated queries on those tables and saves the results into `out/dist_queries.out`.
-After running those queries for Citus tables, it creates PG tables with the same names as previous run, executes the same 
+After running those queries for Citus tables, it creates PG tables with the same names as previous run, executes the same
 queries, and saves the results into `out/local_queries.out`. In final step, it generates diff between local and distributed results.
 You can see the contents of `out/local_dist_diffs` to see if there is any Citus unsupported query.
 

@@ -24,8 +24,8 @@ class CitusType(Enum):
     POSTGRES = 3
 
 class Table:
-    def __init__(self, name, citusType, maxCount, 
-                 rowCount, nullRate, duplicateRate, 
+    def __init__(self, name, citusType, maxCount,
+                 rowCount, nullRate, duplicateRate,
                  useRandom, columns, dupCount):
         self.name = name
         self.citusType = citusType
