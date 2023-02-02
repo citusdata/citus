@@ -1449,6 +1449,9 @@ AfterXactHostConnectionHandling(ConnectionHashEntry *entry, bool isCommit)
 		{
 			ShutdownConnection(connection);
 
+			/* remove from transactionlist before free-ing */
+			ResetRemoteTransaction(connection);
+
 			/* unlink from list */
 			dlist_delete(iter.cur);
 

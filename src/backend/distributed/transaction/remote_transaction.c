@@ -66,6 +66,7 @@ StartRemoteTransactionBegin(struct MultiConnection *connection)
 
 	/* remember transaction as being in-progress */
 	dlist_push_tail(&InProgressTransactions, &connection->transactionNode);
+	connection->transactionInProgress = true;
 
 	transaction->transactionState = REMOTE_TRANS_STARTING;
 
@@ -760,11 +761,13 @@ ResetRemoteTransaction(struct MultiConnection *connection)
 	RemoteTransaction *transaction = &connection->remoteTransaction;
 
 	/* unlink from list of open transactions, if necessary */
-	if (transaction->transactionState != REMOTE_TRANS_NOT_STARTED)
+	if (connection->transactionInProgress)
 	{
 		/* XXX: Should we error out for a critical transaction? */
 
 		dlist_delete(&connection->transactionNode);
+		connection->transactionInProgress = false;
+		memset(&connection->transactionNode, 0, sizeof(connection->transactionNode));
 	}
 
 	/* just reset the entire state, relying on 0 being invalid/false */
