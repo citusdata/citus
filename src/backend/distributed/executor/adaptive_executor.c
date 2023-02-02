@@ -4222,7 +4222,7 @@ TransactionStateMachine(WorkerSession *session)
 				}
 				else
 				{
-					transaction->transactionState = REMOTE_TRANS_NOT_STARTED;
+					ResetRemoteTransaction(connection);
 				}
 				break;
 			}
