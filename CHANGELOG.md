@@ -76,6 +76,8 @@
 
 * Fixes a regression in allowed foreign keys on distributed tables
 
+* Fixes a use-after-free bug in connection management 
+
 * Fixes an unexpected foreign table error by disallowing to drop the
   table_name option
 
