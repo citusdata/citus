@@ -870,6 +870,8 @@ ResetRemoteTransaction(struct MultiConnection *connection)
 		/* XXX: Should we error out for a critical transaction? */
 
 		dlist_delete(&connection->transactionNode);
+		connection->transactionNode.next = NULL;
+		connection->transactionNode.prev = NULL;
 	}
 
 	/* just reset the entire state, relying on 0 being invalid/false */
