@@ -1,3 +1,107 @@
+### citus v11.2.0 (January 30, 2023) ###
+
+* Adds support for outer joins with reference tables / complex subquery-CTEs
+  in the outer side of the join (e.g., \<reference table\> LEFT JOIN
+  \<distributed table\>)
+
+* Adds support for creating `PRIMARY KEY`s and `UNIQUE`/`EXCLUSION`/`CHECK`/
+  `FOREIGN KEY` constraints via `ALTER TABLE` command without providing a
+  constraint name
+
+* Adds support for using identity columns on Citus tables
+
+* Adds support for `MERGE` command on local tables
+
+* Adds `citus_job_list()`, `citus_job_status()` and `citus_rebalance_status()`
+  UDFs that allow monitoring rebalancer progress
+
+* Adds `citus_task_wait()` UDF to wait on desired task status
+
+* Adds `source_lsn`, `target_lsn` and `status` fields into
+  `get_rebalance_progress()`
+
+* Introduces `citus_copy_shard_placement()` UDF with node id
+
+* Introduces `citus_move_shard_placement()` UDF with node id
+
+* Propagates `BEGIN` properties to worker nodes
+
+* Propagates `DROP OWNED BY` to worker nodes
+
+* Deprecates `citus.replicate_reference_tables_on_activate` and makes it
+  always `off`
+
+* Drops GUC `citus.defer_drop_after_shard_move`
+
+* Drops GUC `citus.defer_drop_after_shard_split`
+
+* Drops `SHARD_STATE_TO_DELETE` state and uses the cleanup records instead
+
+* Allows `citus_update_node()` to work with nodes from different clusters
+
+* Adds signal handlers for queue monitor to gracefully shutdown, cancel and to
+  see config changes
+
+* Defers cleanup after a failure in shard move or split
+
+* Extends cleanup process for replication artifacts
+
+* Improves a query that terminates compelling backends from
+  `citus_update_node()`
+
+* Includes Citus global pid in all internal `application_name`s
+
+* Avoids leaking `search_path` to workers when executing DDL commands
+
+* Fixes `alter_table_set_access_method error()` for views
+
+* Fixes `citus_drain_node()` to allow draining the specified worker only
+
+* Fixes a bug in global pid assignment for connections opened by rebalancer
+  internally
+
+* Fixes a bug that causes background rebalancer to fail when a reference table
+  doesn't have a primary key
+
+* Fixes a bug that might cause failing to query the views based on tables that
+  have renamed columns
+
+* Fixes a bug that might cause incorrectly planning the sublinks in query tree
+
+* Fixes a floating point exception during
+  `create_distributed_table_concurrently()`
+
+* Fixes a rebalancer failure due to integer overflow in subscription and role
+  creation
+
+* Fixes a regression in allowed foreign keys on distributed tables
+
+* Fixes a use-after-free bug in connection management
+
+* Fixes an unexpected foreign table error by disallowing to drop the
+  table_name option
+
+* Fixes an uninitialized memory access in `create_distributed_function()`
+
+* Fixes crash that happens when trying to replicate a reference table that is
+  actually dropped
+
+* Make sure to cleanup the shard on the target node in case of a
+  failed/aborted shard move
+
+* Makes sure to create replication artifacts with unique names
+
+* Makes sure to disallow triggers that depend on extensions
+
+* Makes sure to quote all identifiers used for logical replication to prevent
+  potential issues
+
+* Makes sure to skip foreign key validations at the end of shard moves
+
+* Prevents crashes on `UPDATE` with certain `RETURNING` clauses
+
+* Propagates column aliases in the shard-level commands
+
 ### citus v11.1.5 (December 12, 2022) ###
 
 * Fixes two potential dangling pointer issues
