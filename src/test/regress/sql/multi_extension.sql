@@ -333,6 +333,8 @@ CREATE TABLE new_columnar_table (a int) USING columnar;
 
 -- do cleanup for the rest of the tests
 SET citus.enable_version_checks TO OFF;
+ALTER SYSTEM SET citus.enable_version_checks TO OFF;
+SELECT pg_reload_conf();
 SET columnar.enable_version_checks TO OFF;
 DROP TABLE columnar_table;
 RESET columnar.enable_custom_scan;
@@ -580,7 +582,11 @@ WHERE pgd.refclassid = 'pg_extension'::regclass AND
 ORDER BY 1, 2;
 
 -- see incompatible version errors out
+
 RESET citus.enable_version_checks;
+ALTER SYSTEM RESET citus.enable_version_checks;
+SELECT pg_reload_conf();
+
 RESET columnar.enable_version_checks;
 DROP EXTENSION citus;
 DROP EXTENSION citus_columnar;
