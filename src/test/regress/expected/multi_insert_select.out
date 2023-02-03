@@ -845,7 +845,6 @@ SET client_min_messages TO WARNING;
    raw_events_first.user_id
  FROM
    raw_events_first LEFT JOIN raw_events_second ON raw_events_first.user_id = raw_events_second.value_1;
-ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
  -- same as the above with INNER JOIN
  INSERT INTO agg_events (user_id)
  SELECT
@@ -867,7 +866,6 @@ DETAIL:  Cartesian products are currently unsupported
    raw_events_first.user_id
  FROM
    raw_events_first LEFT JOIN raw_events_second ON raw_events_first.value_1 = raw_events_second.value_1;
-ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
  -- same as the above with INNER JOIN
  -- we support this with route to coordinator
  SELECT coordinator_plan($Q$
@@ -903,7 +901,6 @@ FROM
   raw_events_first LEFT JOIN raw_events_second ON raw_events_first.user_id = raw_events_second.value_1
 WHERE
   raw_events_first.user_id = 10;
-ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
  -- same as the above with INNER JOIN
  -- we support this with route to coordinator
  SELECT coordinator_plan($Q$
