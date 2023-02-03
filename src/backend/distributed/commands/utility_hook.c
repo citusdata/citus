@@ -219,6 +219,23 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		PreprocessCreateExtensionStmtForCitusColumnar(parsetree);
 	}
 
+	/*
+	 * Make sure that on DROP DATABASE we terminate the background daemon
+	 * associated with it.
+	 */
+	if (IsA(parsetree, DropdbStmt))
+	{
+		const bool missingOK = true;
+		DropdbStmt *dropDbStatement = (DropdbStmt *) parsetree;
+		char *dbname = dropDbStatement->dbname;
+		Oid databaseOid = get_database_oid(dbname, missingOK);
+
+		if (OidIsValid(databaseOid))
+		{
+			StopMaintenanceDaemon(databaseOid);
+		}
+	}
+
 	if (!CitusHasBeenLoaded())
 	{
 		/*
@@ -678,22 +695,9 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 	}
 
 	/*
-	 * Make sure that on DROP DATABASE we terminate the background daemon
+	 * Make sure that on DROP EXTENSION we terminate the background daemon
 	 * associated with it.
 	 */
-	if (IsA(parsetree, DropdbStmt))
-	{
-		const bool missingOK = true;
-		DropdbStmt *dropDbStatement = (DropdbStmt *) parsetree;
-		char *dbname = dropDbStatement->dbname;
-		Oid databaseOid = get_database_oid(dbname, missingOK);
-
-		if (OidIsValid(databaseOid))
-		{
-			StopMaintenanceDaemon(databaseOid);
-		}
-	}
-
 	if (IsDropCitusExtensionStmt(parsetree))
 	{
 		StopMaintenanceDaemon(MyDatabaseId);
