@@ -170,6 +170,7 @@ FROM
 	multi_outer_join_left_hash a LEFT JOIN multi_outer_join_right_reference b ON (l_custkey = r_custkey)
 WHERE
 	r_custkey = 5 or r_custkey > 15;
+LOG:  join order: [ "multi_outer_join_left_hash" ][ reference join "multi_outer_join_right_reference" ]
  min | max
 ---------------------------------------------------------------------
    5 |   5
@@ -312,6 +313,7 @@ FROM
 	multi_outer_join_left_hash a LEFT JOIN multi_outer_join_right_reference b ON (l_custkey = r_custkey)
 WHERE
 	r_custkey = 21 or r_custkey < 10;
+LOG:  join order: [ "multi_outer_join_left_hash" ][ reference join "multi_outer_join_right_reference" ]
  min | max
 ---------------------------------------------------------------------
   21 |  21

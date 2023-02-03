@@ -266,7 +266,11 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT t1.col1, t1.c
 
 -- join order planner can handle queries with multi joins consisting of outer joins with simple join clause
 SELECT t1.*, t2.*, t3.* FROM test_hash1 t1 RIGHT JOIN test_hash2 t2 ON (t1.col1 = t2.col1) INNER JOIN test_hash3 t3 ON (t3.col1 = t1.col1) ORDER BY 1,2,3,4,5,6;
-ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
+LOG:  join order: [ "test_hash1" ][ local partition join "test_hash3" ][ dual partition join "test_hash2" ]
+ col1 | col2 | col1 | col2 | col1 | col2
+---------------------------------------------------------------------
+(0 rows)
+
 SELECT t1.*, t2.*, t3.* FROM test_hash1 t1 RIGHT JOIN test_hash2 t2 ON (t1.col1 = t2.col1) INNER JOIN test_hash3 t3 ON (t3.col1 = t2.col1) ORDER BY 1,2,3,4,5,6;
 DEBUG:  recursively planning noncolocated relation
 DEBUG:  Wrapping relation "test_hash2" "t2" to a subquery
@@ -292,7 +296,11 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT t1.col1, t1.c
 (5 rows)
 
 SELECT t1.*, t2.*, t3.* FROM test_hash1 t1 RIGHT JOIN test_hash2 t2 ON (t1.col2 = t2.col2) INNER JOIN test_hash3 t3 ON (t3.col2 = t1.col2) ORDER BY 1,2,3,4,5,6;
-ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
+LOG:  join order: [ "test_hash1" ][ dual partition join "test_hash2" ][ dual partition join "test_hash3" ]
+ col1 | col2 | col1 | col2 | col1 | col2
+---------------------------------------------------------------------
+(0 rows)
+
 SELECT t1.*, t2.*, t3.* FROM test_hash1 t1 RIGHT JOIN test_hash2 t2 ON (t1.col2 = t2.col2) INNER JOIN test_hash3 t3 ON (t3.col2 = t2.col2) ORDER BY 1,2,3,4,5,6;
 DEBUG:  recursively planning noncolocated relation
 DEBUG:  Wrapping relation "test_hash2" "t2" to a subquery
@@ -318,7 +326,11 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT t1.col1, t1.c
 (5 rows)
 
 SELECT t1.*, t2.*, t3.* FROM test_hash1 t1 RIGHT JOIN test_hash2 t2 ON (t1.col2 = t2.col1) INNER JOIN test_hash3 t3 ON (t3.col2 = t1.col1) ORDER BY 1,2,3,4,5,6;
-ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
+LOG:  join order: [ "test_hash1" ][ dual partition join "test_hash2" ][ dual partition join "test_hash3" ]
+ col1 | col2 | col1 | col2 | col1 | col2
+---------------------------------------------------------------------
+(0 rows)
+
 SELECT t1.*, t2.*, t3.* FROM test_hash1 t1 RIGHT JOIN test_hash2 t2 ON (t1.col2 = t2.col1) INNER JOIN test_hash3 t3 ON (t3.col2 = t2.col1) ORDER BY 1,2,3,4,5,6;
 DEBUG:  recursively planning noncolocated relation
 DEBUG:  Wrapping relation "test_hash2" "t2" to a subquery
@@ -344,7 +356,11 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT t1.col1, t1.c
 (5 rows)
 
 SELECT t1.*, t2.*, t3.* FROM test_hash2 t2 LEFT JOIN test_hash1 t1 ON (t1.col1 = t2.col1) INNER JOIN test_hash3 t3 ON (t3.col1 = t1.col1) ORDER BY 1,2,3,4,5,6;
-ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
+LOG:  join order: [ "test_hash1" ][ local partition join "test_hash3" ][ dual partition join "test_hash2" ]
+ col1 | col2 | col1 | col2 | col1 | col2
+---------------------------------------------------------------------
+(0 rows)
+
 SELECT t1.*, t2.*, t3.* FROM test_hash2 t2 LEFT JOIN test_hash1 t1 ON (t1.col1 = t2.col1) INNER JOIN test_hash3 t3 ON (t3.col1 = t2.col1) ORDER BY 1,2,3,4,5,6;
 DEBUG:  recursively planning noncolocated relation
 DEBUG:  Wrapping relation "test_hash1" "t1" to a subquery
@@ -365,7 +381,11 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT t1.col1, t1.c
 (5 rows)
 
 SELECT t1.*, t2.*, t3.* FROM test_hash2 t2 LEFT JOIN test_hash1 t1 ON (t1.col2 = t2.col2) INNER JOIN test_hash3 t3 ON (t3.col2 = t1.col2) ORDER BY 1,2,3,4,5,6;
-ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
+LOG:  join order: [ "test_hash2" ][ dual partition join "test_hash1" ][ dual partition join "test_hash3" ]
+ col1 | col2 | col1 | col2 | col1 | col2
+---------------------------------------------------------------------
+(0 rows)
+
 SELECT t1.*, t2.*, t3.* FROM test_hash2 t2 LEFT JOIN test_hash1 t1 ON (t1.col2 = t2.col2) INNER JOIN test_hash3 t3 ON (t3.col2 = t2.col2) ORDER BY 1,2,3,4,5,6;
 DEBUG:  recursively planning noncolocated relation
 DEBUG:  Wrapping relation "test_hash1" "t1" to a subquery
@@ -386,7 +406,11 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT t1.col1, t1.c
 (5 rows)
 
 SELECT t1.*, t2.*, t3.* FROM test_hash2 t2 LEFT JOIN test_hash1 t1 ON (t1.col2 = t2.col1) INNER JOIN test_hash3 t3 ON (t3.col2 = t1.col1) ORDER BY 1,2,3,4,5,6;
-ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
+LOG:  join order: [ "test_hash2" ][ dual partition join "test_hash1" ][ dual partition join "test_hash3" ]
+ col1 | col2 | col1 | col2 | col1 | col2
+---------------------------------------------------------------------
+(0 rows)
+
 SELECT t1.*, t2.*, t3.* FROM test_hash2 t2 LEFT JOIN test_hash1 t1 ON (t1.col2 = t2.col1) INNER JOIN test_hash3 t3 ON (t3.col2 = t2.col1) ORDER BY 1,2,3,4,5,6;
 DEBUG:  recursively planning noncolocated relation
 DEBUG:  Wrapping relation "test_hash1" "t1" to a subquery
@@ -1778,6 +1802,7 @@ SELECT * FROM dist1 LEFT JOIN dist2 ON (dist1.x = dist2.x AND dist2.x >2) ORDER 
 
 -- single join condition and dist2.x >2 is regular filter and applied after join
 SELECT * FROM dist1 LEFT JOIN dist2 ON (dist1.x = dist2.x) WHERE dist2.x >2 ORDER BY 1,2,3,4;
+LOG:  join order: [ "dist1" ][ local partition join "dist2" ]
  x | y | x | y
 ---------------------------------------------------------------------
 (0 rows)

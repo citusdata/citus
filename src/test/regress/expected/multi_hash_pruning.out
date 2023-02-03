@@ -1242,19 +1242,19 @@ WHERE o_orderkey IN (1, 2)
 ---------------------------------------------------------------------
  Aggregate
    ->  Custom Scan (Citus Adaptive)
-         Task Count: 3
-         Tasks Shown: One of 3
+         Task Count: 1
+         Tasks Shown: All
          ->  Task
                Node: host=localhost port=xxxxx dbname=regression
                ->  Aggregate
                      ->  Nested Loop
                            Join Filter: (orders_hash_partitioned.o_orderkey = lineitem_hash_partitioned.l_orderkey)
-                           ->  Seq Scan on orders_hash_partitioned_630000 orders_hash_partitioned
+                           ->  Seq Scan on orders_hash_partitioned_630003 orders_hash_partitioned
                                  Filter: (o_orderkey = ANY ('{1,2}'::integer[]))
                            ->  Materialize
-                                 ->  Bitmap Heap Scan on lineitem_hash_partitioned_630004 lineitem_hash_partitioned
+                                 ->  Bitmap Heap Scan on lineitem_hash_partitioned_630007 lineitem_hash_partitioned
                                        Recheck Cond: (l_orderkey = ANY ('{2,3}'::integer[]))
-                                       ->  Bitmap Index Scan on lineitem_hash_partitioned_pkey_630004
+                                       ->  Bitmap Index Scan on lineitem_hash_partitioned_pkey_630007
                                              Index Cond: (l_orderkey = ANY ('{2,3}'::integer[]))
 (16 rows)
 
