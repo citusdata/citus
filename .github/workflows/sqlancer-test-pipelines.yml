@@ -118,3 +118,4 @@ jobs:
               echo "### $key" >> $GITHUB_STEP_SUMMARY
               echo "${errors_table[$key]}"  >> $GITHUB_STEP_SUMMARY
           done
+        shell: bash
