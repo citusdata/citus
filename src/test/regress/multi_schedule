@@ -121,3 +121,4 @@ test: ensure_no_shared_connection_leak
 test: check_mx
 
 test: generated_identity
+test: drop_database

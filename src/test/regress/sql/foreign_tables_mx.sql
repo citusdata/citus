@@ -247,6 +247,62 @@ SELECT undistribute_table('foreign_table_local_fails');
 
 DROP FOREIGN TABLE foreign_table_local;
 
+-- disallow dropping table_name when foreign table is in metadata
+CREATE TABLE table_name_drop(id int);
+CREATE FOREIGN TABLE foreign_table_name_drop_fails (
+        id INT
+)
+        SERVER foreign_server_local
+        OPTIONS (schema_name 'foreign_tables_schema_mx', table_name 'table_name_drop');
+
+SELECT citus_add_local_table_to_metadata('foreign_table_name_drop_fails');
+
+-- table_name option is already added
+ALTER FOREIGN TABLE foreign_table_name_drop_fails OPTIONS (ADD table_name 'table_name_drop');
+
+-- throw error if user tries to drop table_name option from a foreign table inside metadata
+ALTER FOREIGN TABLE foreign_table_name_drop_fails OPTIONS (DROP table_name);
+
+-- case sensitive option name
+ALTER FOREIGN TABLE foreign_table_name_drop_fails OPTIONS (DROP Table_Name);
+
+-- other options are allowed to drop
+ALTER FOREIGN TABLE foreign_table_name_drop_fails OPTIONS (DROP schema_name);
+
+CREATE FOREIGN TABLE foreign_table_name_drop (
+        id INT
+)
+        SERVER foreign_server_local
+        OPTIONS (schema_name 'foreign_tables_schema_mx', table_name 'table_name_drop');
+
+-- user can drop table_option if foreign table is not in metadata
+ALTER FOREIGN TABLE foreign_table_name_drop OPTIONS (DROP table_name);
+
+-- we should not intercept data wrappers other than postgres_fdw
+CREATE EXTENSION file_fdw;
+
+-- remove validator method to add table_name option; otherwise, table_name option is not allowed
+SELECT result FROM run_command_on_all_nodes('ALTER FOREIGN DATA WRAPPER file_fdw NO VALIDATOR');
+
+CREATE SERVER citustest FOREIGN DATA WRAPPER file_fdw;
+
+\copy (select i from generate_series(0,100)i) to '/tmp/test_file_fdw.data';
+CREATE FOREIGN TABLE citustest_filefdw (
+        data text
+)
+        SERVER citustest
+        OPTIONS ( filename '/tmp/test_file_fdw.data');
+
+
+-- add non-postgres_fdw table into metadata even if it does not have table_name option
+SELECT citus_add_local_table_to_metadata('citustest_filefdw');
+
+ALTER FOREIGN TABLE citustest_filefdw OPTIONS (ADD table_name 'unused_table_name_option');
+
+-- drop table_name option of non-postgres_fdw table even if it is inside metadata
+ALTER FOREIGN TABLE citustest_filefdw OPTIONS (DROP table_name);
+
+
 -- cleanup at exit
 set client_min_messages to error;
 DROP SCHEMA foreign_tables_schema_mx CASCADE;
