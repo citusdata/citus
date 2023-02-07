@@ -4,6 +4,7 @@ on:
   schedule:
     - cron: '59 23 * * 6'
   workflow_dispatch:
+  push:
 
 jobs:
   analyze:
