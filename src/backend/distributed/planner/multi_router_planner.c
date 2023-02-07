@@ -896,7 +896,6 @@ ModifyQuerySupported(Query *queryTree, Query *originalQuery, bool multiShardQuer
 	}
 
 	List *rangeTableList = NIL;
-	uint32 queryTableCount = 0;
 	CmdType commandType = queryTree->commandType;
 	bool fastPathRouterQuery =
 		plannerRestrictionContext->fastPathRestrictionContext->fastPathRouterQuery;
@@ -967,7 +966,7 @@ ModifyQuerySupported(Query *queryTree, Query *originalQuery, bool multiShardQuer
 										 NULL, NULL);
 				}
 			}
-			/* for other kinds of relations, check if its distributed */
+			/* for other kinds of relations, check if it's distributed */
 			else
 			{
 				if (IsRelationLocalTableOrMatView(rangeTableEntry->relid) &&
@@ -990,8 +989,6 @@ ModifyQuerySupported(Query *queryTree, Query *originalQuery, bool multiShardQuer
 										 errorMessage->data, NULL, NULL);
 				}
 			}
-
-			queryTableCount++;
 		}
 		else if (rangeTableEntry->rtekind == RTE_VALUES ||
 				 rangeTableEntry->rtekind == RTE_RESULT
@@ -2633,7 +2630,7 @@ GetAnchorShardId(List *prunedShardIntervalListList)
 /*
  * TargetShardIntervalForFastPathQuery gets a query which is in
  * the form defined by FastPathRouterQuery() and returns exactly
- * one list of a a one shard interval (see FastPathRouterQuery()
+ * one list of one shard interval (see FastPathRouterQuery()
  * for the detail).
  *
  * If the caller requested the distributionKey value that this function
@@ -2659,7 +2656,7 @@ TargetShardIntervalForFastPathQuery(Query *query, bool *isMultiShardQuery,
 
 		/*
 		 * We currently don't allow implicitly coerced values to be handled by fast-
-		 * path planner. Still, let's be defensive for any  future changes..
+		 * path planner. Still, let's be defensive for any  future changes.
 		 */
 		if (inputDistributionKeyValue->consttype != distributionKey->vartype)
 		{
