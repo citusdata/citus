@@ -104,7 +104,7 @@ jobs:
               then
                   errors_table["$error"]="$file "
               else
-                  errors_table["$error"]=", ${errors_table[$error]} $file "
+                  errors_table["$error"]=" ${errors_table[$error]}, $file "
               fi
 
           done < <(grep -noR "ERROR:.*" logs/citus)
