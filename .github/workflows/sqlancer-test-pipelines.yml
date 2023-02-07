@@ -1,18 +1,12 @@
-name: Run sqlancer on release branch
+name: Run sqlancer tests
 
 on:
-  push:
-    branches: "**"
   workflow_dispatch:
     inputs:
       citus_release:
         default: release-11.1
-      timeout:
-        default: 1m
-
-env:
-  timeout: ${{ inputs.timeout }}
-  citus_release: ${{ inputs.citus_release }}
+        description: 'Branch, tag or SHA to run tests against'
+        required: true
 
 jobs:
 
@@ -38,16 +32,16 @@ jobs:
         run: |
           make install-all -sj$(cat /proc/cpuinfo | grep "core id" | wc -l) 2>&1 | tee -a output.log
 
-      - name: Setup Maven
-        uses: s4u/setup-maven-action@v1.6.0
-        with:
-          java-version: 11
-
       - name: Checkout Sqlancer
         uses: actions/checkout@v3
         with:
           ref: master
           repository: sqlancer/sqlancer
+
+      - name: Setup Maven
+        uses: s4u/setup-maven-action@v1.6.0
+        with:
+          java-version: 11
 
       - name: Build SQLancer
         run: mvn -B package -DskipTests=true
@@ -109,13 +103,13 @@ jobs:
               then
                   errors_table["$error"]="$file "
               else
-                  errors_table["$error"]="${errors_table[$error]} $file "
+                  errors_table["$error"]=", ${errors_table[$error]} $file "
               fi
 
           done < <(grep -noR "ERROR:.*" logs/citus)
 
           for key in "${!errors_table[@]}"; do
               echo "### $key" >> $GITHUB_STEP_SUMMARY
-              echo "${errors_table[$key]}"  >> $GITHUB_STEP_SUMMARY
+              echo "in ${errors_table[$key]}"  >> $GITHUB_STEP_SUMMARY
           done
         shell: bash
