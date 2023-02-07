@@ -384,7 +384,9 @@ CreateInsertSelectIntoLocalTablePlan(uint64 planId, Query *insertSelectQuery,
 	/* get the SELECT query (may have changed after PrepareInsertSelectForCitusPlanner) */
 	Query *selectQuery = selectRte->subquery;
 
-	DistributedPlan *distPlan = CreateDistributedPlan(planId, selectQuery,
+	bool allowRecursivePlanning = true;
+	DistributedPlan *distPlan = CreateDistributedPlan(planId, allowRecursivePlanning,
+													  selectQuery,
 													  copyObject(selectQuery),
 													  boundParams, hasUnresolvedParams,
 													  plannerRestrictionContext);

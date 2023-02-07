@@ -52,8 +52,7 @@ Benefits of Citus Columnar over cstore_fdw:
   ... FOR UPDATE``)
 * No support for serializable isolation level
 * Support for PostgreSQL server versions 12+ only
-* No support for foreign keys, unique constraints, or exclusion
-  constraints
+* No support for foreign keys
 * No support for logical decoding
 * No support for intra-node parallel scans
 * No support for ``AFTER ... FOR EACH ROW`` triggers

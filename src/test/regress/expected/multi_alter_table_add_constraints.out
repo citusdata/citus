@@ -711,21 +711,6 @@ SET LOCAL application_name to 'citus_internal gpid=10000000001';
 SET citus.enable_ddl_propagation TO OFF;
 -- alter table triggers SELECT, and auto_explain catches that
 ALTER TABLE target_table ADD CONSTRAINT fkey_167 FOREIGN KEY (col_1) REFERENCES test_ref_table(key) ON DELETE CASCADE;
-LOG:  duration: xxxx ms  plan:
-{
-  "Query Text": "SELECT fk.\"col_1\" FROM ONLY \"test_auto_explain\".\"target_table\" fk LEFT OUTER JOIN ONLY \"test_auto_explain\".\"test_ref_table\" pk ON ( pk.\"key\" OPERATOR(pg_catalog.=) fk.\"col_1\") WHERE pk.\"key\" IS NULL AND (fk.\"col_1\" IS NOT NULL)",
-  "Plan": {
-    "Node Type": "Custom Scan",
-    "Custom Plan Provider": "Citus Adaptive",
-    "Parallel Aware": false,
-    "Startup Cost": 0.00,
-    "Total Cost": xxxx,
-    "Plan Rows": 100000,
-    "Plan Width": 4,
-    "Citus Explain Scan": "Explain for triggered constraint validation queries during ALTER TABLE commands are not supported by Citus"
-  }
-}
-CONTEXT:  SQL statement "SELECT fk."col_1" FROM ONLY "test_auto_explain"."target_table" fk LEFT OUTER JOIN ONLY "test_auto_explain"."test_ref_table" pk ON ( pk."key" OPERATOR(pg_catalog.=) fk."col_1") WHERE pk."key" IS NULL AND (fk."col_1" IS NOT NULL)"
 END;
 RESET citus.enable_ddl_propagation;
 SET client_min_messages to ERROR;

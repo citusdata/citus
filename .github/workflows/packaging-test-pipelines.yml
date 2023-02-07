@@ -49,14 +49,17 @@ jobs:
 
     container:
       image: citus/packaging:${{ matrix.packaging_docker_image }}-pg${{ matrix.POSTGRES_VERSION }}
+      options: --user root
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Add Postgres installation directory into PATH for rpm based distros
+      - name: Set Postgres and python parameters for rpm based distros
         run: |
           echo "/usr/pgsql-${{ matrix.POSTGRES_VERSION }}/bin" >> $GITHUB_PATH
+          echo "/root/.pyenv/bin:$PATH" >> $GITHUB_PATH
+          echo "PACKAGING_PYTHON_VERSION=3.8.16" >> $GITHUB_ENV
 
       - name: Configure
         run: |
@@ -115,14 +118,17 @@ jobs:
 
     container:
       image: citus/packaging:${{ matrix.packaging_docker_image }}
+      options: --user root
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Set pg_config path to related Postgres version
+      - name: Set pg_config path and python parameters for deb based distros
         run: |
           echo "PG_CONFIG=/usr/lib/postgresql/${{ matrix.POSTGRES_VERSION }}/bin/pg_config" >> $GITHUB_ENV
+          echo "/root/.pyenv/bin:$PATH" >> $GITHUB_PATH
+          echo "PACKAGING_PYTHON_VERSION=3.8.16" >> $GITHUB_ENV
 
       - name: Configure
         run: |
@@ -154,5 +160,4 @@ jobs:
           apt install python3-dev python3-pip -y
           sudo apt-get purge -y python3-yaml
           python3 -m pip install --upgrade pip  setuptools==57.5.0
-
           ./.github/packaging/validate_build_output.sh "deb"

@@ -609,5 +609,18 @@ SELECT * FROM reference_table ORDER BY 1;
  (5)
 (5 rows)
 
+-- failing UPDATE on a reference table with a subquery in RETURNING clause that needs to be pushed-down.
+-- the error message is not great, but at least we no longer see crashes.
+CREATE TABLE ref (a int);
+SELECT create_reference_table('ref');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+UPDATE ref SET a = 1 RETURNING
+	(SELECT pg_catalog.max(latest_end_time) FROM pg_catalog.pg_stat_wal_receiver)
+        as c3;
+ERROR:  a column definition list is required for functions returning "record"
 SET client_min_messages TO ERROR;
 DROP SCHEMA coordinator_evaluation CASCADE;

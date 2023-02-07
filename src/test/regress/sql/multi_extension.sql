@@ -331,6 +331,10 @@ SELECT 1 FROM columnar_table; -- seq scan
 
 CREATE TABLE new_columnar_table (a int) USING columnar;
 
+-- disable version checks for other sessions too
+ALTER SYSTEM SET citus.enable_version_checks TO OFF;
+SELECT pg_reload_conf();
+
 -- do cleanup for the rest of the tests
 SET citus.enable_version_checks TO OFF;
 SET columnar.enable_version_checks TO OFF;
@@ -563,6 +567,16 @@ RESET client_min_messages;
 
 SELECT * FROM multi_extension.print_extension_changes();
 
+-- Test downgrade to 11.2-1 from 11.3-1
+ALTER EXTENSION citus UPDATE TO '11.3-1';
+ALTER EXTENSION citus UPDATE TO '11.2-1';
+-- Should be empty result since upgrade+downgrade should be a no-op
+SELECT * FROM multi_extension.print_extension_changes();
+
+-- Snapshot of state at 11.3-1
+ALTER EXTENSION citus UPDATE TO '11.3-1';
+SELECT * FROM multi_extension.print_extension_changes();
+
 DROP TABLE multi_extension.prev_objects, multi_extension.extension_diff;
 
 -- show running version
@@ -582,6 +596,11 @@ ORDER BY 1, 2;
 -- see incompatible version errors out
 RESET citus.enable_version_checks;
 RESET columnar.enable_version_checks;
+
+-- reset version check config for other sessions too
+ALTER SYSTEM RESET citus.enable_version_checks;
+SELECT pg_reload_conf();
+
 DROP EXTENSION citus;
 DROP EXTENSION citus_columnar;
 CREATE EXTENSION citus VERSION '8.0-1';

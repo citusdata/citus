@@ -497,6 +497,30 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS c
    100
 (1 row)
 
+-- prefer-distributed option causes recursive planner passes the query 2 times and errors out
+-- planner recursively plans one of the distributed_table in its first pass. Then, at its second
+-- pass, it also recursively plans other distributed_table as modification at first step caused it.
+SET citus.local_table_join_policy TO 'prefer-distributed';
+SELECT
+	COUNT(*)
+FROM
+	postgres_table
+JOIN
+	distributed_table
+USING
+	(key)
+JOIN
+	(SELECT  key, NULL, NULL FROM distributed_table) foo
+USING
+	(key);
+DEBUG:  Wrapping relation "distributed_table" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT key FROM citus_local_dist_joins.distributed_table WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((citus_local_dist_joins.postgres_table JOIN (SELECT distributed_table_1.key, NULL::text AS value, NULL::jsonb AS value_2 FROM (SELECT intermediate_result.key FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) distributed_table_1) distributed_table USING (key)) JOIN (SELECT distributed_table_1.key, NULL::text, NULL::text FROM citus_local_dist_joins.distributed_table distributed_table_1) foo(key, "?column?", "?column?_1") USING (key))
+DEBUG:  Wrapping relation "postgres_table" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT key FROM citus_local_dist_joins.postgres_table WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (((SELECT postgres_table_1.key, NULL::text AS value, NULL::jsonb AS value_2 FROM (SELECT intermediate_result.key FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) postgres_table_1) postgres_table JOIN (SELECT distributed_table_1.key, NULL::text AS value, NULL::jsonb AS value_2 FROM (SELECT intermediate_result.key FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) distributed_table_1) distributed_table USING (key)) JOIN (SELECT distributed_table_1.key, NULL::text, NULL::text FROM citus_local_dist_joins.distributed_table distributed_table_1) foo(key, "?column?", "?column?_1") USING (key))
+ERROR:  recursive complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
+RESET citus.local_table_join_policy;
 SET client_min_messages to ERROR;
 DROP TABLE citus_local;
 SELECT master_remove_node('localhost', :master_port);

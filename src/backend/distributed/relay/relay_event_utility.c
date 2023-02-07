@@ -178,7 +178,15 @@ RelayEventExtendNames(Node *parseTree, char *schemaName, uint64 shardId)
 					if (!PartitionedTable(relationId) ||
 						constraint->contype != CONSTR_CHECK)
 					{
-						AppendShardIdToName(constraintName, shardId);
+						/*
+						 * constraint->conname could be empty in the case of
+						 * ADD {PRIMARY KEY, UNIQUE} USING INDEX.
+						 * In this case, already extended index name will be used by postgres.
+						 */
+						if (constraint->conname != NULL)
+						{
+							AppendShardIdToName(constraintName, shardId);
+						}
 					}
 				}
 				else if (command->subtype == AT_DropConstraint ||

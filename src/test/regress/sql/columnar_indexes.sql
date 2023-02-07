@@ -167,6 +167,16 @@ SELECT SUM(a)=312487500 FROM columnar_table WHERE a < 25000;
 SELECT SUM(a)=167000 FROM columnar_table WHERE a = 16000 OR a = 151000;
 SELECT SUM(a)=48000 FROM columnar_table WHERE a = 16000 OR a = 32000;
 
+BEGIN;
+  ALTER INDEX columnar_internal.stripe_first_row_number_idx RENAME TO new_index_name;
+  ALTER INDEX columnar_internal.chunk_pkey RENAME TO new_index_name_1;
+
+  -- same queries but this time some metadata indexes are not available
+  SELECT SUM(a)=312487500 FROM columnar_table WHERE a < 25000;
+  SELECT SUM(a)=167000 FROM columnar_table WHERE a = 16000 OR a = 151000;
+  SELECT SUM(a)=48000 FROM columnar_table WHERE a = 16000 OR a = 32000;
+ROLLBACK;
+
 TRUNCATE columnar_table;
 ALTER TABLE columnar_table DROP CONSTRAINT columnar_table_pkey;
 

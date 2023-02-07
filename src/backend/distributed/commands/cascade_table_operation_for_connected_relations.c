@@ -623,18 +623,13 @@ ExecuteForeignKeyCreateCommand(const char *commandString, bool skip_validation)
 	 */
 	Assert(IsA(parseTree, AlterTableStmt));
 
-	bool oldSkipConstraintsValidationValue = SkipConstraintValidation;
-
 	if (skip_validation && IsA(parseTree, AlterTableStmt))
 	{
-		EnableSkippingConstraintValidation();
-
+		SkipForeignKeyValidationIfConstraintIsFkey((AlterTableStmt *) parseTree, true);
 		ereport(DEBUG4, (errmsg("skipping validation for foreign key create "
 								"command \"%s\"", commandString)));
 	}
 
 	ProcessUtilityParseTree(parseTree, commandString, PROCESS_UTILITY_QUERY,
 							NULL, None_Receiver, NULL);
-
-	SkipConstraintValidation = oldSkipConstraintsValidationValue;
 }
