@@ -32,16 +32,17 @@ jobs:
         run: |
           make install-all -sj$(cat /proc/cpuinfo | grep "core id" | wc -l) 2>&1 | tee -a output.log
 
-      - name: Checkout Sqlancer
-        uses: actions/checkout@v3
-        with:
-          ref: master
-          repository: sqlancer/sqlancer
 
       - name: Setup Maven
         uses: s4u/setup-maven-action@v1.6.0
         with:
           java-version: 11
+
+      - name: Checkout Sqlancer
+        uses: actions/checkout@v3
+        with:
+          ref: master
+          repository: sqlancer/sqlancer
 
       - name: Build SQLancer
         run: mvn -B package -DskipTests=true
