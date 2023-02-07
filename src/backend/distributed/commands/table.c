@@ -41,6 +41,7 @@
 #include "distributed/resource_lock.h"
 #include "distributed/version_compat.h"
 #include "distributed/worker_shard_visibility.h"
+#include "foreign/foreign.h"
 #include "lib/stringinfo.h"
 #include "nodes/parsenodes.h"
 #include "parser/parse_expr.h"
@@ -119,6 +120,8 @@ static Oid get_attrdef_oid(Oid relationId, AttrNumber attnum);
 
 static char * GetAddColumnWithNextvalDefaultCmd(Oid sequenceOid, Oid relationId,
 												char *colname, TypeName *typeName);
+static void ErrorIfAlterTableDropTableNameFromPostgresFdw(List *optionList, Oid
+														  relationId);
 
 
 /*
@@ -956,11 +959,15 @@ PreprocessAlterTableAddConstraint(AlterTableStmt *alterTableStatement, Oid
 								  relationId,
 								  Constraint *constraint)
 {
-	/* We should only preprocess an ADD CONSTRAINT command if we are changing the it.
+	/*
+	 * We should only preprocess an ADD CONSTRAINT command if we have empty conname
 	 * This only happens when we have to create a constraint name in citus since the client does
 	 * not specify a name.
+	 * indexname should also be NULL to make sure this is not an
+	 * ADD {PRIMARY KEY, UNIQUE} USING INDEX command
+	 * which doesn't need a conname since the indexname will be used
 	 */
-	Assert(constraint->conname == NULL);
+	Assert(constraint->conname == NULL && constraint->indexname == NULL);
 
 	Relation rel = RelationIdGetRelation(relationId);
 
@@ -1269,7 +1276,13 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 															 constraint);
 				}
 			}
-			else if (constraint->conname == NULL)
+			/*
+			 * When constraint->indexname is not NULL we are handling an
+			 * ADD {PRIMARY KEY, UNIQUE} USING INDEX command. In this case
+			 * we do not have to create a name and change the command.
+			 * The existing index name will be used by the postgres.
+			 */
+			else if (constraint->conname == NULL && constraint->indexname == NULL)
 			{
 				if (ConstrTypeCitusCanDefaultName(constraint->contype))
 				{
@@ -2255,7 +2268,8 @@ PreprocessAlterTableSchemaStmt(Node *node, const char *queryString,
  * ALTER TABLE ... ADD FOREIGN KEY command to skip the validation step.
  */
 void
-SkipForeignKeyValidationIfConstraintIsFkey(AlterTableStmt *alterTableStatement)
+SkipForeignKeyValidationIfConstraintIsFkey(AlterTableStmt *alterTableStatement,
+										   bool processLocalRelation)
 {
 	/* first check whether a distributed relation is affected */
 	if (alterTableStatement->relation == NULL)
@@ -2270,11 +2284,17 @@ SkipForeignKeyValidationIfConstraintIsFkey(AlterTableStmt *alterTableStatement)
 		return;
 	}
 
-	if (!IsCitusTable(leftRelationId))
+	if (!IsCitusTable(leftRelationId) && !processLocalRelation)
 	{
 		return;
 	}
 
+	/*
+	 * We check if there is a ADD FOREIGN CONSTRAINT command in sub commands
+	 * list. We set skip_validation to true to prevent PostgreSQL to verify
+	 * validity of the foreign constraint. Validity will be checked on the
+	 * shards anyway.
+	 */
 	AlterTableCmd *command = NULL;
 	foreach_ptr(command, alterTableStatement->cmds)
 	{
@@ -2286,9 +2306,8 @@ SkipForeignKeyValidationIfConstraintIsFkey(AlterTableStmt *alterTableStatement)
 			Constraint *constraint = (Constraint *) command->def;
 			if (constraint->contype == CONSTR_FOREIGN)
 			{
-				/* set the GUC skip_constraint_validation to on */
-				EnableSkippingConstraintValidation();
-				return;
+				/* foreign constraint validations will be done in shards. */
+				constraint->skip_validation = true;
 			}
 		}
 	}
@@ -3063,6 +3082,42 @@ ErrorIfUnsupportedConstraint(Relation relation, char distributionMethod,
 
 
 /*
+ * ErrorIfAlterTableDropTableNameFromPostgresFdw errors if given alter foreign table
+ * option list drops 'table_name' from a postgresfdw foreign table which is
+ * inside metadata.
+ */
+static void
+ErrorIfAlterTableDropTableNameFromPostgresFdw(List *optionList, Oid relationId)
+{
+	char relationKind PG_USED_FOR_ASSERTS_ONLY =
+		get_rel_relkind(relationId);
+	Assert(relationKind == RELKIND_FOREIGN_TABLE);
+
+	ForeignTable *foreignTable = GetForeignTable(relationId);
+	Oid serverId = foreignTable->serverid;
+	if (!ServerUsesPostgresFdw(serverId))
+	{
+		return;
+	}
+
+	if (IsCitusTableType(relationId, CITUS_LOCAL_TABLE) &&
+		ForeignTableDropsTableNameOption(optionList))
+	{
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg(
+					 "alter foreign table alter options (drop table_name) command "
+					 "is not allowed for Citus tables"),
+				 errdetail(
+					 "Table_name option can not be dropped from a foreign table "
+					 "which is inside metadata."),
+				 errhint(
+					 "Try to undistribute foreign table before dropping table_name option.")));
+	}
+}
+
+
+/*
  * ErrorIfUnsupportedAlterTableStmt checks if the corresponding alter table
  * statement is supported for distributed tables and errors out if it is not.
  * Currently, only the following commands are supported.
@@ -3320,8 +3375,6 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 
 			case AT_AddConstraint:
 			{
-				Constraint *constraint = (Constraint *) command->def;
-
 				/* we only allow constraints if they are only subcommand */
 				if (commandList->length > 1)
 				{
@@ -3329,26 +3382,6 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 									errmsg("cannot execute ADD CONSTRAINT command with "
 										   "other subcommands"),
 									errhint("You can issue each subcommand separately")));
-				}
-
-				/*
-				 * We will use constraint name in each placement by extending it at
-				 * workers. Therefore we require it to be exist.
-				 */
-				if (constraint->conname == NULL)
-				{
-					/*
-					 * We support ALTER TABLE ... ADD PRIMARY ... commands by creating a constraint name
-					 * and changing the command into the following form.
-					 * ALTER TABLE ... ADD CONSTRAINT <constaint_name> PRIMARY KEY ...
-					 */
-					if (ConstrTypeCitusCanDefaultName(constraint->contype) == false)
-					{
-						ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-										errmsg(
-											"cannot create constraint without a name on a "
-											"distributed table")));
-					}
 				}
 
 				break;
@@ -3496,6 +3529,8 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 			{
 				if (IsForeignTable(relationId))
 				{
+					List *optionList = (List *) command->def;
+					ErrorIfAlterTableDropTableNameFromPostgresFdw(optionList, relationId);
 					break;
 				}
 			}

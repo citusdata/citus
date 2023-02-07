@@ -250,6 +250,26 @@ JOIN
 	citus_local c2
 USING (key);
 
+-- prefer-distributed option causes recursive planner passes the query 2 times and errors out
+-- planner recursively plans one of the distributed_table in its first pass. Then, at its second
+-- pass, it also recursively plans other distributed_table as modification at first step caused it.
+SET citus.local_table_join_policy TO 'prefer-distributed';
+
+SELECT
+	COUNT(*)
+FROM
+	postgres_table
+JOIN
+	distributed_table
+USING
+	(key)
+JOIN
+	(SELECT  key, NULL, NULL FROM distributed_table) foo
+USING
+	(key);
+
+RESET citus.local_table_join_policy;
+
 
 SET client_min_messages to ERROR;
 DROP TABLE citus_local;

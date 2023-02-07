@@ -910,15 +910,7 @@ MERGE INTO wq_target t
 USING wq_source s ON t.tid = s.sid
 WHEN MATCHED AND (merge_when_and_write()) THEN
 	UPDATE SET balance = t.balance + s.balance;
-ERROR:  functions used in the WHERE/ON/WHEN clause of modification queries on distributed tables must not be VOLATILE
-ROLLBACK;
--- Test preventing ON condition from writing to the database
-BEGIN;
-MERGE INTO wq_target t
-USING wq_source s ON t.tid = s.sid AND (merge_when_and_write())
-WHEN MATCHED THEN
-	UPDATE SET balance = t.balance + s.balance;
-ERROR:  functions used in the WHERE/ON/WHEN clause of modification queries on distributed tables must not be VOLATILE
+ERROR:  functions used in UPDATE queries on distributed tables must not be VOLATILE
 ROLLBACK;
 drop function merge_when_and_write();
 DROP TABLE wq_target, wq_source;

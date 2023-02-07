@@ -116,9 +116,6 @@ static void DecrementUtilityHookCountersIfNecessary(Node *parsetree);
 static bool IsDropSchemaOrDB(Node *parsetree);
 static bool ShouldCheckUndistributeCitusLocalTables(void);
 static bool ShouldAddNewTableToMetadata(Node *parsetree);
-static bool ServerUsesPostgresFDW(char *serverName);
-static void ErrorIfOptionListHasNoTableName(List *optionList);
-
 
 /*
  * ProcessUtilityParseTree is a convenience method to create a PlannedStmt out of
@@ -220,6 +217,23 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		 * This preprocess check whether citus_columnar should be installed first before citus
 		 */
 		PreprocessCreateExtensionStmtForCitusColumnar(parsetree);
+	}
+
+	/*
+	 * Make sure that on DROP DATABASE we terminate the background daemon
+	 * associated with it.
+	 */
+	if (IsA(parsetree, DropdbStmt))
+	{
+		const bool missingOK = true;
+		DropdbStmt *dropDbStatement = (DropdbStmt *) parsetree;
+		char *dbname = dropDbStatement->dbname;
+		Oid databaseOid = get_database_oid(dbname, missingOK);
+
+		if (OidIsValid(databaseOid))
+		{
+			StopMaintenanceDaemon(databaseOid);
+		}
 	}
 
 	if (!CitusHasBeenLoaded())
@@ -389,7 +403,6 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 	Node *parsetree = pstmt->utilityStmt;
 	List *ddlJobs = NIL;
 	DistOpsValidationState distOpsValidationState = HasNoneValidObject;
-	bool oldSkipConstraintsValidationValue = SkipConstraintValidation;
 
 	if (IsA(parsetree, ExplainStmt) &&
 		IsA(((ExplainStmt *) parsetree)->query, Query))
@@ -608,7 +621,9 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 		 * Citus intervening. The only exception is partition column drop, in
 		 * which case we error out. Advanced Citus users use this to implement their
 		 * own DDL propagation. We also use it to avoid re-propagating DDL commands
-		 * when changing MX tables on workers.
+		 * when changing MX tables on workers. Below, we also make sure that DDL
+		 * commands don't run queries that might get intercepted by Citus and error
+		 * out during planning, specifically we skip validation in foreign keys.
 		 */
 
 		if (IsA(parsetree, AlterTableStmt))
@@ -627,7 +642,33 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 				 * Note validation is done on the shard level when DDL propagation
 				 * is enabled. The following eagerly executes some tasks on workers.
 				 */
-				SkipForeignKeyValidationIfConstraintIsFkey(alterTableStmt);
+				SkipForeignKeyValidationIfConstraintIsFkey(alterTableStmt, false);
+			}
+		}
+	}
+
+	/*
+	 * If we've explicitly set the citus.skip_constraint_validation GUC, then
+	 * we skip validation of any added constraints.
+	 */
+	if (IsA(parsetree, AlterTableStmt) && SkipConstraintValidation)
+	{
+		AlterTableStmt *alterTableStmt = (AlterTableStmt *) parsetree;
+		AlterTableCmd *command = NULL;
+		foreach_ptr(command, alterTableStmt->cmds)
+		{
+			AlterTableType alterTableType = command->subtype;
+
+			/*
+			 * XXX: In theory we could probably use this GUC to skip validation
+			 * of VALIDATE CONSTRAINT and ALTER CONSTRAINT too. But currently
+			 * this is not needed, so we make its behaviour only apply to ADD
+			 * CONSTRAINT.
+			 */
+			if (alterTableType == AT_AddConstraint)
+			{
+				Constraint *constraint = (Constraint *) command->def;
+				constraint->skip_validation = true;
 			}
 		}
 	}
@@ -654,22 +695,9 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 	}
 
 	/*
-	 * Make sure that on DROP DATABASE we terminate the background daemon
+	 * Make sure that on DROP EXTENSION we terminate the background daemon
 	 * associated with it.
 	 */
-	if (IsA(parsetree, DropdbStmt))
-	{
-		const bool missingOK = true;
-		DropdbStmt *dropDbStatement = (DropdbStmt *) parsetree;
-		char *dbname = dropDbStatement->dbname;
-		Oid databaseOid = get_database_oid(dbname, missingOK);
-
-		if (OidIsValid(databaseOid))
-		{
-			StopMaintenanceDaemon(databaseOid);
-		}
-	}
-
 	if (IsDropCitusExtensionStmt(parsetree))
 	{
 		StopMaintenanceDaemon(MyDatabaseId);
@@ -798,18 +826,6 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 
 		CreateStmt *createTableStmt = (CreateStmt *) (&createForeignTableStmt->base);
 
-		/*
-		 * Error out with a hint if the foreign table is using postgres_fdw and
-		 * the option table_name is not provided.
-		 * Citus relays all the Citus local foreign table logic to the placement of the
-		 * Citus local table. If table_name is NOT provided, Citus would try to talk to
-		 * the foreign postgres table over the shard's table name, which would not exist
-		 * on the remote server.
-		 */
-		if (ServerUsesPostgresFDW(createForeignTableStmt->servername))
-		{
-			ErrorIfOptionListHasNoTableName(createForeignTableStmt->options);
-		}
 
 		PostprocessCreateTableStmt(createTableStmt, queryString);
 	}
@@ -913,8 +929,6 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 		 */
 		CitusHasBeenLoaded(); /* lgtm[cpp/return-value-ignored] */
 	}
-
-	SkipConstraintValidation = oldSkipConstraintsValidationValue;
 }
 
 
@@ -1096,50 +1110,6 @@ ShouldAddNewTableToMetadata(Node *parsetree)
 	}
 
 	return false;
-}
-
-
-/*
- * ServerUsesPostgresFDW gets a foreign server name and returns true if the FDW that
- * the server depends on is postgres_fdw. Returns false otherwise.
- */
-static bool
-ServerUsesPostgresFDW(char *serverName)
-{
-	ForeignServer *server = GetForeignServerByName(serverName, false);
-	ForeignDataWrapper *fdw = GetForeignDataWrapper(server->fdwid);
-
-	if (strcmp(fdw->fdwname, "postgres_fdw") == 0)
-	{
-		return true;
-	}
-
-	return false;
-}
-
-
-/*
- * ErrorIfOptionListHasNoTableName gets an option list (DefElem) and errors out
- * if the list does not contain a table_name element.
- */
-static void
-ErrorIfOptionListHasNoTableName(List *optionList)
-{
-	char *table_nameString = "table_name";
-	DefElem *option = NULL;
-	foreach_ptr(option, optionList)
-	{
-		char *optionName = option->defname;
-		if (strcmp(optionName, table_nameString) == 0)
-		{
-			return;
-		}
-	}
-
-	ereport(ERROR, (errmsg(
-						"table_name option must be provided when using postgres_fdw with Citus"),
-					errhint("Provide the option \"table_name\" with value target table's"
-							" name")));
 }
 
 

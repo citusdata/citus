@@ -1,0 +1,307 @@
+-- multi recursive queries with joins, subqueries, and ctes
+CREATE SCHEMA multi_recursive;
+SET search_path TO multi_recursive;
+DROP TABLE IF EXISTS tbl_dist1;
+NOTICE:  table "tbl_dist1" does not exist, skipping
+CREATE TABLE tbl_dist1(id int);
+SELECT create_distributed_table('tbl_dist1','id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+DROP TABLE IF EXISTS tbl_ref1;
+NOTICE:  table "tbl_ref1" does not exist, skipping
+CREATE TABLE tbl_ref1(id int);
+SELECT create_reference_table('tbl_ref1');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO tbl_dist1 SELECT i FROM generate_series(0,10) i;
+INSERT INTO tbl_ref1 SELECT i FROM generate_series(0,10) i;
+-- https://github.com/citusdata/citus/issues/6653
+-- The reason why inlined queries failed are all the same. After we modified the query at first pass, second pass finds out
+-- noncolocated queries as we donot create equivalances between nondistributed-distributed tables.
+-- QUERY1
+-- recursive planner multipass the query and fails.
+-- Why inlined query failed?
+--  limit clause is recursively planned in inlined cte. First pass finishes here. At second pass, noncolocated queries and
+--  recurring full join are recursively planned. We detect that and throw error.
+SELECT t1.id
+FROM (
+    SELECT t2.id
+    FROM (
+        SELECT t0.id
+        FROM tbl_dist1 t0
+        LIMIT 5
+    ) AS t2
+    INNER JOIN tbl_dist1 AS t3 USING (id)
+) AS t1
+FULL JOIN tbl_dist1 t4 USING (id);
+ERROR:  recursive complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
+-- QUERY2
+-- recursive planner multipass the query with inlined cte and fails. Then, cte is planned without inlining and it succeeds.
+-- Why inlined query failed?
+--  recurring left join is recursively planned in inlined cte. Then, limit clause causes another recursive planning. First pass
+--  finishes here. At second pass, noncolocated queries and recurring right join are recursively planned. We detect that and
+--  throw error.
+SET client_min_messages TO DEBUG1;
+WITH cte_0 AS (
+    SELECT id FROM tbl_dist1 WHERE id IN (
+        SELECT id FROM tbl_ref1
+        LEFT JOIN tbl_dist1 USING (id)
+    )
+)
+SELECT count(id) FROM tbl_dist1
+RIGHT JOIN (
+    SELECT table_5.id FROM (
+        SELECT id FROM cte_0 LIMIT 0
+    ) AS table_5
+    RIGHT JOIN tbl_dist1 USING (id)
+) AS table_4 USING (id);
+DEBUG:  CTE cte_0 is going to be inlined via distributed planning
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning distributed relation "tbl_dist1" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "tbl_dist1" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT id FROM multi_recursive.tbl_dist1 WHERE true
+DEBUG:  push down of limit count: 0
+DEBUG:  generating subplan XXX_2 for subquery SELECT id FROM (SELECT tbl_dist1.id FROM multi_recursive.tbl_dist1 WHERE (tbl_dist1.id OPERATOR(pg_catalog.=) ANY (SELECT tbl_ref1.id FROM (multi_recursive.tbl_ref1 LEFT JOIN (SELECT tbl_dist1_2.id FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) tbl_dist1_2) tbl_dist1_1 USING (id))))) cte_0 LIMIT 0
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(table_4.id) AS count FROM (multi_recursive.tbl_dist1 RIGHT JOIN (SELECT table_5.id FROM ((SELECT intermediate_result.id FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) table_5 RIGHT JOIN multi_recursive.tbl_dist1 tbl_dist1_1 USING (id))) table_4 USING (id))
+DEBUG:  generating subplan XXX_1 for subquery SELECT table_5.id FROM ((SELECT intermediate_result.id FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) table_5 RIGHT JOIN multi_recursive.tbl_dist1 USING (id))
+DEBUG:  recursively planning left side of the right join since the outer side is a recurring rel
+DEBUG:  recursively planning distributed relation "tbl_dist1" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "tbl_dist1" to a subquery
+DEBUG:  generating subplan XXX_2 for subquery SELECT id FROM multi_recursive.tbl_dist1 WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(table_4.id) AS count FROM ((SELECT tbl_dist1_1.id FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) tbl_dist1_1) tbl_dist1 RIGHT JOIN (SELECT intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) table_4 USING (id))
+DEBUG:  generating subplan XXX_1 for CTE cte_0: SELECT id FROM multi_recursive.tbl_dist1 WHERE (id OPERATOR(pg_catalog.=) ANY (SELECT tbl_ref1.id FROM (multi_recursive.tbl_ref1 LEFT JOIN multi_recursive.tbl_dist1 tbl_dist1_1 USING (id))))
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning distributed relation "tbl_dist1" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "tbl_dist1" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT id FROM multi_recursive.tbl_dist1 WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT id FROM multi_recursive.tbl_dist1 WHERE (id OPERATOR(pg_catalog.=) ANY (SELECT tbl_ref1.id FROM (multi_recursive.tbl_ref1 LEFT JOIN (SELECT tbl_dist1_2.id FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) tbl_dist1_2) tbl_dist1_1 USING (id))))
+DEBUG:  generating subplan XXX_2 for subquery SELECT id FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) cte_0 LIMIT 0
+DEBUG:  generating subplan XXX_3 for subquery SELECT table_5.id FROM ((SELECT intermediate_result.id FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) table_5 RIGHT JOIN multi_recursive.tbl_dist1 USING (id))
+DEBUG:  recursively planning left side of the right join since the outer side is a recurring rel
+DEBUG:  recursively planning distributed relation "tbl_dist1" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "tbl_dist1" to a subquery
+DEBUG:  generating subplan XXX_4 for subquery SELECT id FROM multi_recursive.tbl_dist1 WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(table_4.id) AS count FROM ((SELECT tbl_dist1_1.id FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_4'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) tbl_dist1_1) tbl_dist1 RIGHT JOIN (SELECT intermediate_result.id FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) table_4 USING (id))
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+RESET client_min_messages;
+DROP TABLE IF EXISTS dist0;
+NOTICE:  table "dist0" does not exist, skipping
+CREATE TABLE dist0(id int);
+SELECT create_distributed_table('dist0','id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+DROP TABLE IF EXISTS dist1;
+NOTICE:  table "dist1" does not exist, skipping
+CREATE TABLE dist1(id int);
+SELECT create_distributed_table('dist1','id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO dist0 SELECT i FROM generate_series(1005,1025) i;
+INSERT INTO dist1 SELECT i FROM generate_series(1015,1035) i;
+-- QUERY3
+-- recursive planner multipass the query with inlined cte and fails. Then, cte is planned without inlining and it succeeds.
+-- Why inlined query failed?
+--  noncolocated queries are recursively planned. First pass finishes here. Second pass also recursively plans noncolocated
+--  queries and recurring full join. We detect the error and throw it.
+SET client_min_messages TO DEBUG1;
+WITH cte_0 AS (
+    SELECT id FROM dist0
+    RIGHT JOIN dist0 AS table_1 USING (id)
+    ORDER BY id
+)
+SELECT avg(avgsub.id) FROM (
+    SELECT table_2.id FROM (
+        SELECT table_3.id FROM (
+            SELECT table_5.id FROM cte_0 AS table_5, dist1
+        ) AS table_3 INNER JOIN dist1 USING (id)
+    ) AS table_2 FULL JOIN dist0 USING (id)
+) AS avgsub;
+DEBUG:  CTE cte_0 is going to be inlined via distributed planning
+DEBUG:  generating subplan XXX_1 for subquery SELECT table_1.id FROM (multi_recursive.dist0 RIGHT JOIN multi_recursive.dist0 table_1 USING (id)) ORDER BY table_1.id
+DEBUG:  generating subplan XXX_2 for subquery SELECT table_5.id FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) table_5, multi_recursive.dist1
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT avg(id) AS avg FROM (SELECT table_2.id FROM ((SELECT table_3.id FROM ((SELECT intermediate_result.id FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) table_3 JOIN multi_recursive.dist1 USING (id))) table_2 FULL JOIN multi_recursive.dist0 USING (id))) avgsub
+DEBUG:  generating subplan XXX_1 for subquery SELECT table_3.id FROM ((SELECT intermediate_result.id FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) table_3 JOIN multi_recursive.dist1 USING (id))
+DEBUG:  recursively planning right side of the full join since the other side is a recurring rel
+DEBUG:  recursively planning distributed relation "dist0" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist0" to a subquery
+DEBUG:  generating subplan XXX_2 for subquery SELECT id FROM multi_recursive.dist0 WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT avg(id) AS avg FROM (SELECT table_2.id FROM ((SELECT intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) table_2 FULL JOIN (SELECT dist0_1.id FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) dist0_1) dist0 USING (id))) avgsub
+DEBUG:  generating subplan XXX_1 for CTE cte_0: SELECT table_1.id FROM (multi_recursive.dist0 RIGHT JOIN multi_recursive.dist0 table_1 USING (id)) ORDER BY table_1.id
+DEBUG:  generating subplan XXX_1 for subquery SELECT table_5.id FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) table_5, multi_recursive.dist1
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT table_3.id FROM ((SELECT intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) table_3 JOIN multi_recursive.dist1 USING (id))
+DEBUG:  generating subplan XXX_2 for subquery SELECT table_3.id FROM ((SELECT table_5.id FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) table_5, multi_recursive.dist1 dist1_1) table_3 JOIN multi_recursive.dist1 USING (id))
+DEBUG:  recursively planning right side of the full join since the other side is a recurring rel
+DEBUG:  recursively planning distributed relation "dist0" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist0" to a subquery
+DEBUG:  generating subplan XXX_3 for subquery SELECT id FROM multi_recursive.dist0 WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT avg(id) AS avg FROM (SELECT table_2.id FROM ((SELECT intermediate_result.id FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) table_2 FULL JOIN (SELECT dist0_1.id FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) dist0_1) dist0 USING (id))) avgsub
+          avg
+---------------------------------------------------------------------
+ 1020.0000000000000000
+(1 row)
+
+RESET client_min_messages;
+DROP TABLE IF EXISTS dist0;
+CREATE TABLE dist0(id int);
+SELECT create_distributed_table('dist0','id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+DROP TABLE IF EXISTS dist1;
+CREATE TABLE dist1(id int);
+SELECT create_distributed_table('dist1','id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO dist0 SELECT i FROM generate_series(0,10) i;
+INSERT INTO dist0 SELECT * FROM dist0 ORDER BY id LIMIT 1;
+INSERT INTO dist1 SELECT i FROM generate_series(0,10) i;
+INSERT INTO dist1 SELECT * FROM dist1 ORDER BY id LIMIT 1;
+-- QUERY4
+-- recursive planner multipass the query fails.
+-- Why inlined query failed?
+--  limit clause is recursively planned at the first pass. At second pass noncolocated queries are recursively planned.
+--  We detect that and throw error.
+SET client_min_messages TO DEBUG1;
+SELECT avg(avgsub.id) FROM (
+    SELECT table_0.id FROM (
+        SELECT table_1.id FROM (
+            SELECT table_2.id FROM (
+                SELECT table_3.id FROM (
+                    SELECT table_4.id FROM dist0 AS table_4
+                    LEFT JOIN dist1 AS table_5 USING (id)
+                ) AS table_3 INNER JOIN dist0 AS table_6 USING (id)
+            ) AS table_2 WHERE table_2.id < 10 ORDER BY id LIMIT 47
+        ) AS table_1 RIGHT JOIN dist0 AS table_7 USING (id)
+    ) AS table_0 RIGHT JOIN dist1 AS table_8 USING (id)
+) AS avgsub;
+DEBUG:  push down of limit count: 47
+DEBUG:  generating subplan XXX_1 for subquery SELECT id FROM (SELECT table_3.id FROM ((SELECT table_4.id FROM (multi_recursive.dist0 table_4 LEFT JOIN multi_recursive.dist1 table_5 USING (id))) table_3 JOIN multi_recursive.dist0 table_6 USING (id))) table_2 WHERE (id OPERATOR(pg_catalog.<) 10) ORDER BY id LIMIT 47
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT avg(id) AS avg FROM (SELECT table_0.id FROM ((SELECT table_1.id FROM ((SELECT intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) table_1 RIGHT JOIN multi_recursive.dist0 table_7 USING (id))) table_0 RIGHT JOIN multi_recursive.dist1 table_8 USING (id))) avgsub
+DEBUG:  generating subplan XXX_1 for subquery SELECT table_1.id FROM ((SELECT intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) table_1 RIGHT JOIN multi_recursive.dist0 table_7 USING (id))
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT avg(id) AS avg FROM (SELECT table_0.id FROM ((SELECT intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) table_0 RIGHT JOIN multi_recursive.dist1 table_8 USING (id))) avgsub
+ERROR:  recursive complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
+-- QUERY5
+-- recursive planner multipass the query with inlined cte and fails. Then, cte is planned without inlining and it succeeds.
+-- Why inlined query failed?
+--  limit clause is recursively planned. First pass finishes here. At second pass, noncolocated tables and recurring full join
+--  are recursively planned. We detect that and throw error.
+WITH cte_0 AS (
+    SELECT table_0.id FROM dist1 AS table_0 LEFT JOIN dist1 AS table_1 USING (id) ORDER BY id LIMIT 41
+)
+SELECT avg(avgsub.id) FROM (
+    SELECT table_4.id FROM (
+        SELECT table_5.id FROM (
+            SELECT table_6.id FROM cte_0 AS table_6
+        ) AS table_5
+        INNER JOIN dist0 USING (id) INNER JOIN dist1 AS table_9 USING (id)
+    ) AS table_4 FULL JOIN dist0 USING (id)
+) AS avgsub;
+DEBUG:  CTE cte_0 is going to be inlined via distributed planning
+DEBUG:  push down of limit count: 41
+DEBUG:  generating subplan XXX_1 for subquery SELECT table_0.id FROM (multi_recursive.dist1 table_0 LEFT JOIN multi_recursive.dist1 table_1 USING (id)) ORDER BY table_0.id LIMIT 41
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT avg(id) AS avg FROM (SELECT table_4.id FROM ((SELECT table_5.id FROM (((SELECT table_6.id FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) table_6) table_5 JOIN multi_recursive.dist0 dist0_1 USING (id)) JOIN multi_recursive.dist1 table_9 USING (id))) table_4 FULL JOIN multi_recursive.dist0 USING (id))) avgsub
+DEBUG:  generating subplan XXX_1 for subquery SELECT table_5.id FROM (((SELECT table_6.id FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) table_6) table_5 JOIN multi_recursive.dist0 USING (id)) JOIN multi_recursive.dist1 table_9 USING (id))
+DEBUG:  recursively planning right side of the full join since the other side is a recurring rel
+DEBUG:  recursively planning distributed relation "dist0" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist0" to a subquery
+DEBUG:  generating subplan XXX_2 for subquery SELECT id FROM multi_recursive.dist0 WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT avg(id) AS avg FROM (SELECT table_4.id FROM ((SELECT intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) table_4 FULL JOIN (SELECT dist0_1.id FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) dist0_1) dist0 USING (id))) avgsub
+DEBUG:  generating subplan XXX_1 for CTE cte_0: SELECT table_0.id FROM (multi_recursive.dist1 table_0 LEFT JOIN multi_recursive.dist1 table_1 USING (id)) ORDER BY table_0.id LIMIT 41
+DEBUG:  push down of limit count: 41
+DEBUG:  generating subplan XXX_2 for subquery SELECT table_5.id FROM (((SELECT table_6.id FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) table_6) table_5 JOIN multi_recursive.dist0 USING (id)) JOIN multi_recursive.dist1 table_9 USING (id))
+DEBUG:  recursively planning right side of the full join since the other side is a recurring rel
+DEBUG:  recursively planning distributed relation "dist0" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist0" to a subquery
+DEBUG:  generating subplan XXX_3 for subquery SELECT id FROM multi_recursive.dist0 WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT avg(id) AS avg FROM (SELECT table_4.id FROM ((SELECT intermediate_result.id FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) table_4 FULL JOIN (SELECT dist0_1.id FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) dist0_1) dist0 USING (id))) avgsub
+        avg
+---------------------------------------------------------------------
+ 1.3095238095238095
+(1 row)
+
+-- QUERY6
+-- recursive planner multipass the query with inlined cte and fails. Then, cte is planned without inlining and it succeeds.
+-- Why inlined query failed?
+--  Same query and flow as above with explicit (NOT MATERIALIZED) option, which makes it directly inlinable. Even if
+--  planner fails with inlined query, it succeeds without inlining.
+WITH cte_0 AS (
+    SELECT table_0.id FROM dist1 AS table_0 LEFT JOIN dist1 AS table_1 USING (id) ORDER BY id LIMIT 41
+)
+SELECT avg(avgsub.id) FROM (
+    SELECT table_4.id FROM (
+        SELECT table_5.id FROM (
+            SELECT table_6.id FROM cte_0 AS table_6
+        ) AS table_5
+        INNER JOIN dist0 USING (id) INNER JOIN dist1 AS table_9 USING (id)
+    ) AS table_4 FULL JOIN dist0 USING (id)
+) AS avgsub;
+DEBUG:  CTE cte_0 is going to be inlined via distributed planning
+DEBUG:  push down of limit count: 41
+DEBUG:  generating subplan XXX_1 for subquery SELECT table_0.id FROM (multi_recursive.dist1 table_0 LEFT JOIN multi_recursive.dist1 table_1 USING (id)) ORDER BY table_0.id LIMIT 41
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT avg(id) AS avg FROM (SELECT table_4.id FROM ((SELECT table_5.id FROM (((SELECT table_6.id FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) table_6) table_5 JOIN multi_recursive.dist0 dist0_1 USING (id)) JOIN multi_recursive.dist1 table_9 USING (id))) table_4 FULL JOIN multi_recursive.dist0 USING (id))) avgsub
+DEBUG:  generating subplan XXX_1 for subquery SELECT table_5.id FROM (((SELECT table_6.id FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) table_6) table_5 JOIN multi_recursive.dist0 USING (id)) JOIN multi_recursive.dist1 table_9 USING (id))
+DEBUG:  recursively planning right side of the full join since the other side is a recurring rel
+DEBUG:  recursively planning distributed relation "dist0" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist0" to a subquery
+DEBUG:  generating subplan XXX_2 for subquery SELECT id FROM multi_recursive.dist0 WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT avg(id) AS avg FROM (SELECT table_4.id FROM ((SELECT intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) table_4 FULL JOIN (SELECT dist0_1.id FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) dist0_1) dist0 USING (id))) avgsub
+DEBUG:  generating subplan XXX_1 for CTE cte_0: SELECT table_0.id FROM (multi_recursive.dist1 table_0 LEFT JOIN multi_recursive.dist1 table_1 USING (id)) ORDER BY table_0.id LIMIT 41
+DEBUG:  push down of limit count: 41
+DEBUG:  generating subplan XXX_2 for subquery SELECT table_5.id FROM (((SELECT table_6.id FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) table_6) table_5 JOIN multi_recursive.dist0 USING (id)) JOIN multi_recursive.dist1 table_9 USING (id))
+DEBUG:  recursively planning right side of the full join since the other side is a recurring rel
+DEBUG:  recursively planning distributed relation "dist0" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist0" to a subquery
+DEBUG:  generating subplan XXX_3 for subquery SELECT id FROM multi_recursive.dist0 WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT avg(id) AS avg FROM (SELECT table_4.id FROM ((SELECT intermediate_result.id FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) table_4 FULL JOIN (SELECT dist0_1.id FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) dist0_1) dist0 USING (id))) avgsub
+        avg
+---------------------------------------------------------------------
+ 1.3095238095238095
+(1 row)
+
+-- QUERY7
+-- recursive planner multipass the query and fails. Note that cte is not used in the query.
+-- Why inlined query failed?
+--  limit clause is recursively planned. First pass finishes here. At second pass noncolocated queries are recursively planned.
+--  We detect multipass and throw error.
+WITH cte_0 AS (
+    SELECT table_0.id FROM dist1 AS table_0 FULL JOIN dist1 AS table_1 USING (id)
+)
+SELECT avg(table_5.id) FROM (
+    SELECT table_6.id FROM (
+        SELECT table_7.id FROM dist0 AS table_7 ORDER BY id LIMIT 87
+    ) AS table_6 INNER JOIN dist0 AS table_8 USING (id) WHERE table_8.id < 0 ORDER BY id
+) AS table_5 INNER JOIN dist0 AS table_9 USING (id);
+DEBUG:  push down of limit count: 87
+DEBUG:  generating subplan XXX_1 for subquery SELECT id FROM multi_recursive.dist0 table_7 ORDER BY id LIMIT 87
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT avg(table_5.id) AS avg FROM ((SELECT table_6.id FROM ((SELECT intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) table_6 JOIN multi_recursive.dist0 table_8 USING (id)) WHERE (table_8.id OPERATOR(pg_catalog.<) 0) ORDER BY table_6.id) table_5 JOIN multi_recursive.dist0 table_9 USING (id))
+DEBUG:  generating subplan XXX_1 for subquery SELECT table_6.id FROM ((SELECT intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) table_6 JOIN multi_recursive.dist0 table_8 USING (id)) WHERE (table_8.id OPERATOR(pg_catalog.<) 0) ORDER BY table_6.id
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT avg(table_5.id) AS avg FROM ((SELECT intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) table_5 JOIN multi_recursive.dist0 table_9 USING (id))
+ERROR:  recursive complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
+RESET client_min_messages;
+DROP SCHEMA multi_recursive CASCADE;
+NOTICE:  drop cascades to 4 other objects
+DETAIL:  drop cascades to table tbl_dist1
+drop cascades to table tbl_ref1
+drop cascades to table dist0
+drop cascades to table dist1
