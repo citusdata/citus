@@ -112,7 +112,11 @@ def main(config):
         config.node_name_to_ports.keys(),
     )
     common.start_databases(
-        config.new_bindir, config.new_datadir, config.node_name_to_ports, config.name, {}
+        config.new_bindir,
+        config.new_datadir,
+        config.node_name_to_ports,
+        config.name,
+        {},
     )
     citus_finish_pg_upgrade(config.new_bindir, config.node_name_to_ports.values())
 

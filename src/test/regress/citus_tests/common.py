@@ -27,12 +27,10 @@ def initialize_temp_dir_if_not_exists(temp_dir):
 
 def parallel_run(function, items, *args, **kwargs):
     with concurrent.futures.ThreadPoolExecutor() as executor:
-        futures = [
-            executor.submit(function, item, *args, **kwargs)
-            for item in items
-        ]
+        futures = [executor.submit(function, item, *args, **kwargs) for item in items]
         for future in futures:
             future.result()
+
 
 def initialize_db_for_cluster(pg_path, rel_data_path, settings, node_names):
     subprocess.run(["mkdir", rel_data_path], check=True)
@@ -52,7 +50,7 @@ def initialize_db_for_cluster(pg_path, rel_data_path, settings, node_names):
             "--encoding",
             "UTF8",
             "--locale",
-            "POSIX"
+            "POSIX",
         ]
         subprocess.run(command, check=True)
         add_settings(abs_data_path, settings)
@@ -76,7 +74,9 @@ def create_role(pg_path, node_ports, user_name):
             user_name, user_name
         )
         utils.psql(pg_path, port, command)
-        command = "SET citus.enable_ddl_propagation TO OFF; GRANT CREATE ON DATABASE postgres to {}".format(user_name)
+        command = "SET citus.enable_ddl_propagation TO OFF; GRANT CREATE ON DATABASE postgres to {}".format(
+            user_name
+        )
         utils.psql(pg_path, port, command)
 
     parallel_run(create, node_ports)
@@ -89,7 +89,9 @@ def coordinator_should_haveshards(pg_path, port):
     utils.psql(pg_path, port, command)
 
 
-def start_databases(pg_path, rel_data_path, node_name_to_ports, logfile_prefix, env_variables):
+def start_databases(
+    pg_path, rel_data_path, node_name_to_ports, logfile_prefix, env_variables
+):
     def start(node_name):
         abs_data_path = os.path.abspath(os.path.join(rel_data_path, node_name))
         node_port = node_name_to_ports[node_name]
@@ -248,7 +250,12 @@ def logfile_name(logfile_prefix, node_name):
 
 
 def stop_databases(
-    pg_path, rel_data_path, node_name_to_ports, logfile_prefix, no_output=False, parallel=True
+    pg_path,
+    rel_data_path,
+    node_name_to_ports,
+    logfile_prefix,
+    no_output=False,
+    parallel=True,
 ):
     def stop(node_name):
         abs_data_path = os.path.abspath(os.path.join(rel_data_path, node_name))
@@ -287,7 +294,9 @@ def initialize_citus_cluster(bindir, datadir, settings, config):
     initialize_db_for_cluster(
         bindir, datadir, settings, config.node_name_to_ports.keys()
     )
-    start_databases(bindir, datadir, config.node_name_to_ports, config.name, config.env_variables)
+    start_databases(
+        bindir, datadir, config.node_name_to_ports, config.name, config.env_variables
+    )
     create_citus_extension(bindir, config.node_name_to_ports.values())
     add_workers(bindir, config.worker_ports, config.coordinator_port())
     if not config.is_mx:
@@ -295,6 +304,7 @@ def initialize_citus_cluster(bindir, datadir, settings, config):
     if config.add_coordinator_to_metadata:
         add_coordinator_to_metadata(bindir, config.coordinator_port())
     config.setup_steps()
+
 
 def eprint(*args, **kwargs):
     """eprint prints to stderr"""
