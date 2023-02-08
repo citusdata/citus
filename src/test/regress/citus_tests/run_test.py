@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
 
-import sys
+import argparse
 import os
 import pathlib
-from glob import glob
-import argparse
-import shutil
 import random
 import re
+import shutil
+import sys
+from glob import glob
+
 import common
+
 import config
 
 args = argparse.ArgumentParser()

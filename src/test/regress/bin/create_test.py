@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 
-import sys
-import random
 import os
+import random
+import sys
 
 if len(sys.argv) != 2:
     print(

@@ -1,11 +1,12 @@
-from os.path import expanduser
+import inspect
+import os
 import random
 import socket
-from contextlib import closing
-import os
 import threading
+from contextlib import closing
+from os.path import expanduser
+
 import common
-import inspect
 
 COORDINATOR_NAME = "coordinator"
 WORKER1 = "worker1"

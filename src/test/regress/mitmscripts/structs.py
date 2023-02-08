@@ -1,29 +1,29 @@
-from construct import (
-    Struct,
-    Int8ub,
-    Int16ub,
-    Int32ub,
-    Int16sb,
-    Int32sb,
-    Bytes,
-    CString,
-    Computed,
-    Switch,
-    Seek,
-    this,
-    Pointer,
-    GreedyRange,
-    Enum,
-    Byte,
-    Probe,
-    FixedSized,
-    RestreamData,
-    GreedyBytes,
-    Array,
-)
-import construct.lib as cl
-
 import re
+
+import construct.lib as cl
+from construct import (
+    Array,
+    Byte,
+    Bytes,
+    Computed,
+    CString,
+    Enum,
+    FixedSized,
+    GreedyBytes,
+    GreedyRange,
+    Int8ub,
+    Int16sb,
+    Int16ub,
+    Int32sb,
+    Int32ub,
+    Pointer,
+    Probe,
+    RestreamData,
+    Seek,
+    Struct,
+    Switch,
+    this,
+)
 
 # For all possible message formats see:
 # https://www.postgresql.org/docs/current/protocol-message-formats.html

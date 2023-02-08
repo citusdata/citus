@@ -1,20 +1,19 @@
-from collections import defaultdict
-from itertools import count
 import logging
-import re
 import os
+import queue
+import re
 import signal
 import socket
 import struct
 import threading
 import time
 import traceback
-import queue
-
-from construct.lib import ListContainer
-from mitmproxy import ctx, tcp
+from collections import defaultdict
+from itertools import count
 
 import structs
+from construct.lib import ListContainer
+from mitmproxy import ctx, tcp
 
 logging.basicConfig(format="%(asctime)s %(levelname)s %(message)s", level=logging.DEBUG)
 

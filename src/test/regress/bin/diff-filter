@@ -5,8 +5,8 @@ diff-filter denormalizes diff output by having lines beginning with ' ' or '+'
 come from file2's unmodified version.
 """
 
-from sys import argv, stdin, stdout
 import re
+from sys import argv, stdin, stdout
 
 
 class FileScanner:

@@ -12,21 +12,23 @@ Options:
     --seed=<seed>                   random number seed
     --base                          whether to use the base sql schedule or not
 """
+import os
+import shutil
 import sys
-import os, shutil
 
 # https://stackoverflow.com/questions/14132789/relative-imports-for-the-billionth-time/14132912#14132912
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
-import common
-import config as cfg
 import concurrent.futures
 import multiprocessing
-from docopt import docopt
-import time
 import random
+import time
 
+import common
+from docopt import docopt
+
+import config as cfg
 
 testResults = {}
 parallel_thread_amount = 1
