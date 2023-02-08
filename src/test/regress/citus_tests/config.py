@@ -75,7 +75,7 @@ def find_free_port():
                     port = next_port
                     next_port += 1
                     return port
-                except:
+                except Exception:
                     next_port += 1
     # we couldn't find a port
     raise Exception("Couldn't find a port to use")

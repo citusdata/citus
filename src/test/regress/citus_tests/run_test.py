@@ -63,7 +63,7 @@ test_files_to_skip = [
 test_files_to_run_without_schedule = ["single_node_enterprise"]
 
 if not (test_file_name or test_file_path):
-    print(f"FATAL: No test given.")
+    print("FATAL: No test given.")
     sys.exit(2)
 
 
@@ -77,7 +77,7 @@ if test_file_path:
     test_file_extension = pathlib.Path(test_file_path).suffix
     test_file_name = pathlib.Path(test_file_path).stem
 
-    if not test_file_extension in ".spec.sql":
+    if test_file_extension not in ".spec.sql":
         print(
             "ERROR: Unrecognized test extension. Valid extensions are: .sql and .spec"
         )
@@ -142,7 +142,7 @@ tmp_schedule_path = os.path.join(
 if test_file_name not in test_files_to_run_without_schedule:
     shutil.copy2(os.path.join(regress_dir, test_schedule), tmp_schedule_path)
 with open(tmp_schedule_path, "a") as myfile:
-    for i in range(args["repeat"]):
+    for _ in range(args["repeat"]):
         myfile.write(test_schedule_line)
 
 # find suitable make recipe

@@ -8,7 +8,6 @@ import struct
 import threading
 import time
 import traceback
-from collections import defaultdict
 from itertools import count
 
 import structs

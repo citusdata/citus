@@ -8,7 +8,6 @@ from construct import (
     Computed,
     CString,
     Enum,
-    FixedSized,
     GreedyBytes,
     GreedyRange,
     Int8ub,
@@ -16,10 +15,7 @@ from construct import (
     Int16ub,
     Int32sb,
     Int32ub,
-    Pointer,
-    Probe,
     RestreamData,
-    Seek,
     Struct,
     Switch,
     this,
@@ -179,7 +175,7 @@ class Query(FrontendMessage):
         'COPY public.copy_test_XXXXXX (key, value) FROM STDIN WITH (FORMAT BINARY))'
         """
         result = content
-        pattern = re.compile("public\.[a-z_]+(?P<shardid>[0-9]+)")
+        pattern = re.compile(r"public\.[a-z_]+(?P<shardid>[0-9]+)")
         for match in pattern.finditer(content):
             span = match.span("shardid")
             replacement = "X" * (span[1] - span[0])
@@ -211,9 +207,9 @@ class Query(FrontendMessage):
         """
 
         pattern = re.compile(
-            "assign_distributed_transaction_id\s*\("  # a method call
-            "\s*[0-9]+\s*,"  # an integer first parameter
-            "\s*(?P<transaction_id>[0-9]+)"  # an integer second parameter
+            r"assign_distributed_transaction_id\s*\("  # a method call
+            r"\s*[0-9]+\s*,"  # an integer first parameter
+            r"\s*(?P<transaction_id>[0-9]+)"  # an integer second parameter
         )
         result = content
         for match in pattern.finditer(content):

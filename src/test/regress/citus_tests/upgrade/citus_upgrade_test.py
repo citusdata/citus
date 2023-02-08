@@ -94,7 +94,7 @@ def remove_citus(tar_path):
 
 def remove_tar_files(tar_path):
     ps = subprocess.Popen(("tar", "tf", tar_path), stdout=subprocess.PIPE)
-    output = subprocess.check_output(("xargs", "rm", "-v"), stdin=ps.stdout)
+    subprocess.check_output(("xargs", "rm", "-v"), stdin=ps.stdout)
     ps.wait()
 
 

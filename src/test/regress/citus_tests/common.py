@@ -6,7 +6,7 @@ import subprocess
 import sys
 
 import utils
-from utils import USER, cd
+from utils import USER
 
 
 def initialize_temp_dir(temp_dir):
@@ -70,8 +70,11 @@ def add_settings(abs_data_path, settings):
 
 def create_role(pg_path, node_ports, user_name):
     def create(port):
-        command = "SET citus.enable_ddl_propagation TO OFF; SELECT worker_create_or_alter_role('{}', 'CREATE ROLE {} WITH LOGIN CREATEROLE CREATEDB;', NULL)".format(
-            user_name, user_name
+        command = (
+            "SET citus.enable_ddl_propagation TO OFF;"
+            + "SELECT worker_create_or_alter_role('{}', 'CREATE ROLE {} WITH LOGIN CREATEROLE CREATEDB;', NULL)".format(
+                user_name, user_name
+            )
         )
         utils.psql(pg_path, port, command)
         command = "SET citus.enable_ddl_propagation TO OFF; GRANT CREATE ON DATABASE postgres to {}".format(
