@@ -1,6 +1,6 @@
 [flake8]
-# Whitespace before ':' (E203) is ignored for black
-# Module level import not at top of file (E402) is ignored because of the way we do relative imports
+# E203 is ignored for black
+# E402 is ignored because of te way we do relative imports
 extend-ignore = E203, E402
 # black will truncate to 88 characters usually, but long string literals it
 # might keep. That's fine in most cases unless it gets really excessive.
