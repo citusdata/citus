@@ -114,6 +114,9 @@ commands:
           lcov --remove lcov.info -o lcov.info '/usr/*'
           sed "s=^SF:$PWD/=SF:=g" -i lcov.info # relative pats are required by codeclimate
           mkdir -p /tmp/codeclimate
+          # We started getting permissions error. This fixes them and since
+          # weqre not on a multi-user system so this is safe to do.
+          git config --global --add safe.directory /home/circleci/project
           cc-test-reporter format-coverage -t lcov -o /tmp/codeclimate/$CIRCLE_JOB.json lcov.info
     - persist_to_workspace:
         root: /tmp
