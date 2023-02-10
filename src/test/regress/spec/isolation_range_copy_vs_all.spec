@@ -5,20 +5,20 @@
 // create range distributed table to test behavior of COPY in concurrent operations
 setup
 {
-	SET citus.shard_replication_factor TO 1;
-	SET citus.next_shard_id TO 3004005;
-	CREATE TABLE range_copy(id integer, data text, int_data int);
-	SELECT create_distributed_table('range_copy', 'id', 'range');
-	SELECT master_create_empty_shard('range_copy');
-	SELECT master_create_empty_shard('range_copy');
-	UPDATE pg_dist_shard SET shardminvalue = '0', shardmaxvalue = '4' WHERE shardid = 3004005;
-	UPDATE pg_dist_shard SET shardminvalue = '5', shardmaxvalue = '9' WHERE shardid = 3004006;
+    SET citus.shard_replication_factor TO 1;
+    SET citus.next_shard_id TO 3004005;
+    CREATE TABLE range_copy(id integer, data text, int_data int);
+    SELECT create_distributed_table('range_copy', 'id', 'range');
+    SELECT master_create_empty_shard('range_copy');
+    SELECT master_create_empty_shard('range_copy');
+    UPDATE pg_dist_shard SET shardminvalue = '0', shardmaxvalue = '4' WHERE shardid = 3004005;
+    UPDATE pg_dist_shard SET shardminvalue = '5', shardmaxvalue = '9' WHERE shardid = 3004006;
 }
 
 // drop distributed table
 teardown
 {
-	DROP TABLE IF EXISTS range_copy CASCADE;
+    DROP TABLE IF EXISTS range_copy CASCADE;
 }
 
 // session 1
@@ -31,8 +31,8 @@ step "s1-router-select" { SELECT * FROM range_copy WHERE id = 1; }
 step "s1-real-time-select" { SELECT * FROM range_copy ORDER BY 1, 2; }
 step "s1-adaptive-select"
 {
-		SET citus.enable_repartition_joins TO ON;
-	SELECT * FROM range_copy AS t1 JOIN range_copy AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
+    SET citus.enable_repartition_joins TO ON;
+    SELECT * FROM range_copy AS t1 JOIN range_copy AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 }
 step "s1-insert" { INSERT INTO range_copy VALUES(0, 'k', 0); }
 step "s1-insert-select" { INSERT INTO range_copy SELECT * FROM range_copy; }
@@ -63,8 +63,8 @@ step "s2-router-select" { SELECT * FROM range_copy WHERE id = 1; }
 step "s2-real-time-select" { SELECT * FROM range_copy ORDER BY 1, 2; }
 step "s2-adaptive-select"
 {
-		SET citus.enable_repartition_joins TO ON;
-	SELECT * FROM range_copy AS t1 JOIN range_copy AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
+        SET citus.enable_repartition_joins TO ON;
+    SELECT * FROM range_copy AS t1 JOIN range_copy AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 }
 step "s2-insert" { INSERT INTO range_copy VALUES(0, 'k', 0); }
 step "s2-insert-select" { INSERT INTO range_copy SELECT * FROM range_copy; }
@@ -81,13 +81,14 @@ step "s2-ddl-rename-column" { ALTER TABLE range_copy RENAME data TO new_column; 
 step "s2-table-size" { SELECT citus_total_relation_size('range_copy'); }
 step "s2-master-modify-multiple-shards" { DELETE FROM range_copy; }
 step "s2-master-drop-all-shards" { SELECT citus_drop_all_shards('range_copy'::regclass, 'public', 'range_copy'); }
-step "s2-distribute-table" {
-  SET citus.shard_replication_factor TO 1;
-  SET citus.next_shard_id TO 3004005;
-  SELECT create_distributed_table('range_copy', 'id', 'range');
-  UPDATE pg_dist_shard SET shardminvalue = '0', shardmaxvalue = '4' WHERE shardid = 3004005;
-  UPDATE pg_dist_shard SET shardminvalue = '5', shardmaxvalue = '9' WHERE shardid = 3004006;
- }
+step "s2-distribute-table"
+{
+    SET citus.shard_replication_factor TO 1;
+    SET citus.next_shard_id TO 3004005;
+    SELECT create_distributed_table('range_copy', 'id', 'range');
+    UPDATE pg_dist_shard SET shardminvalue = '0', shardmaxvalue = '4' WHERE shardid = 3004005;
+    UPDATE pg_dist_shard SET shardminvalue = '5', shardmaxvalue = '9' WHERE shardid = 3004006;
+}
 // We use this as a way to wait for s2-ddl-create-index-concurrently to
 // complete. We know it can complete after s1-commit has succeeded, this way we
 // make sure no other query is run over session s1 before that happens.

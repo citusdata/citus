@@ -2,60 +2,60 @@
 
 setup
 {
-	CREATE TABLE ref_table(user_id int, value_1 int);
-	SELECT create_reference_table('ref_table');
-	INSERT INTO ref_table VALUES (1, 11), (2, 21), (3, 31), (4, 41), (5, 51), (6, 61), (7, 71);
+    CREATE TABLE ref_table(user_id int, value_1 int);
+    SELECT create_reference_table('ref_table');
+    INSERT INTO ref_table VALUES (1, 11), (2, 21), (3, 31), (4, 41), (5, 51), (6, 61), (7, 71);
 }
 
 // Create and use UDF to close the connection opened in the setup step. Also return the cluster
 // back to the initial state.
 teardown
 {
-	DROP TABLE ref_table;
+    DROP TABLE ref_table;
 }
 
 session "s1"
 
 step "s1-begin"
 {
-	BEGIN;
+    BEGIN;
 }
 
 // We do not need to begin a transaction on coordinator, since it will be open on workers.
 
 step "s1-start-session-level-connection"
 {
-	SELECT start_session_level_connection_to_node('localhost', 57637);
+    SELECT start_session_level_connection_to_node('localhost', 57637);
 }
 
 step "s1-begin-on-worker"
 {
-	SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+    SELECT run_commands_on_session_level_connection_to_node('BEGIN');
 }
 
 step "s1-update-ref-table"
 {
-	SELECT run_commands_on_session_level_connection_to_node('UPDATE ref_table SET value_1 = 12 WHERE user_id = 1');
+    SELECT run_commands_on_session_level_connection_to_node('UPDATE ref_table SET value_1 = 12 WHERE user_id = 1');
 }
 
 step "s1-delete-from-ref-table"
 {
-	SELECT run_commands_on_session_level_connection_to_node('DELETE FROM ref_table WHERE user_id = 1');
+    SELECT run_commands_on_session_level_connection_to_node('DELETE FROM ref_table WHERE user_id = 1');
 }
 
 step "s1-insert-into-ref-table"
 {
-	SELECT run_commands_on_session_level_connection_to_node('INSERT INTO ref_table VALUES(8,81),(9,91)');
+    SELECT run_commands_on_session_level_connection_to_node('INSERT INTO ref_table VALUES(8,81),(9,91)');
 }
 
 step "s1-copy-to-ref-table"
 {
-	SELECT run_commands_on_session_level_connection_to_node('COPY ref_table FROM PROGRAM ''echo 10, 101 && echo 11, 111'' WITH CSV');
+    SELECT run_commands_on_session_level_connection_to_node('COPY ref_table FROM PROGRAM ''echo 10, 101 && echo 11, 111'' WITH CSV');
 }
 
 step "s1-select-for-update"
 {
-	SELECT run_commands_on_session_level_connection_to_node('SELECT * FROM ref_table FOR UPDATE');
+    SELECT run_commands_on_session_level_connection_to_node('SELECT * FROM ref_table FOR UPDATE');
 }
 
 step "s1-commit-worker"
@@ -65,54 +65,54 @@ step "s1-commit-worker"
 
 step "s1-alter-table"
 {
-	ALTER TABLE ref_table ADD CONSTRAINT rf_p_key PRIMARY KEY(user_id);
+    ALTER TABLE ref_table ADD CONSTRAINT rf_p_key PRIMARY KEY(user_id);
 }
 
 step "s1-stop-connection"
 {
-	SELECT stop_session_level_connection_to_node();
+    SELECT stop_session_level_connection_to_node();
 }
 
 step "s1-commit"
 {
-	COMMIT;
+    COMMIT;
 }
 
 session "s2"
 
 step "s2-start-session-level-connection"
 {
-	SELECT start_session_level_connection_to_node('localhost', 57638);
+    SELECT start_session_level_connection_to_node('localhost', 57638);
 }
 
 step "s2-begin-on-worker"
 {
-	SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+    SELECT run_commands_on_session_level_connection_to_node('BEGIN');
 }
 
 step "s2-update-ref-table"
 {
-	SELECT run_commands_on_session_level_connection_to_node('UPDATE ref_table SET value_1 = 12 WHERE user_id = 1');
+    SELECT run_commands_on_session_level_connection_to_node('UPDATE ref_table SET value_1 = 12 WHERE user_id = 1');
 }
 
 step "s2-select-from-ref-table"
 {
-	SELECT run_commands_on_session_level_connection_to_node('SELECT count(*) FROM ref_table');
+    SELECT run_commands_on_session_level_connection_to_node('SELECT count(*) FROM ref_table');
 }
 
 step "s2-insert-into-ref-table"
 {
-	SELECT run_commands_on_session_level_connection_to_node('INSERT INTO ref_table VALUES(8,81),(9,91)');
+    SELECT run_commands_on_session_level_connection_to_node('INSERT INTO ref_table VALUES(8,81),(9,91)');
 }
 
 step "s2-copy-to-ref-table"
 {
-	SELECT run_commands_on_session_level_connection_to_node('COPY ref_table FROM PROGRAM ''echo 10, 101 && echo 11, 111'' WITH CSV');
+    SELECT run_commands_on_session_level_connection_to_node('COPY ref_table FROM PROGRAM ''echo 10, 101 && echo 11, 111'' WITH CSV');
 }
 
 step "s2-stop-connection"
 {
-	SELECT stop_session_level_connection_to_node();
+    SELECT stop_session_level_connection_to_node();
 }
 
 step "s2-commit-worker"

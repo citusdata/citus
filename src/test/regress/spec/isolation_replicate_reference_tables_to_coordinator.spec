@@ -1,18 +1,18 @@
 setup
 {
-  SET citus.next_shard_id TO 1500877;
-  CREATE TABLE ref_table(a int primary key);
-  SELECT create_reference_table('ref_table');
-  INSERT INTO ref_table VALUES (1), (3), (5), (7);
+    SET citus.next_shard_id TO 1500877;
+    CREATE TABLE ref_table(a int primary key);
+    SELECT create_reference_table('ref_table');
+    INSERT INTO ref_table VALUES (1), (3), (5), (7);
 
-  CREATE TABLE dist_table(a int, b int);
-  SELECT create_distributed_table('dist_table', 'a');
+    CREATE TABLE dist_table(a int, b int);
+    SELECT create_distributed_table('dist_table', 'a');
 }
 
 teardown
 {
-  DROP TABLE ref_table, dist_table;
-  SELECT master_remove_node('localhost', 57636);
+    DROP TABLE ref_table, dist_table;
+    SELECT master_remove_node('localhost', 57636);
 }
 
 session "s1"
@@ -40,11 +40,11 @@ step "s1-update-ref-table"
 step "s1-lock-ref-table-placement-on-coordinator"
 {
     DO $$
-      DECLARE refshardid int;
-      BEGIN
+    DECLARE refshardid int;
+    BEGIN
         SELECT shardid INTO refshardid FROM pg_dist_shard WHERE logicalrelid='ref_table'::regclass;
         EXECUTE format('SELECT * from ref_table_%s FOR UPDATE', refshardid::text);
-      END
+    END
     $$;
 }
 
@@ -68,32 +68,32 @@ step "s2-update-dist-table"
 step "s2-lock-ref-table-placement-on-coordinator"
 {
     DO $$
-      DECLARE refshardid int;
-      BEGIN
+    DECLARE refshardid int;
+    BEGIN
         SELECT shardid INTO refshardid FROM pg_dist_shard WHERE logicalrelid='ref_table'::regclass;
         EXECUTE format('SELECT * from ref_table_%s FOR UPDATE', refshardid::text);
-      END
+    END
     $$;
 }
 
 step "s2-view-dist"
 {
-        SELECT query, state, wait_event_type, wait_event, usename, datname FROM citus_dist_stat_activity WHERE backend_type = 'client backend' AND query NOT ILIKE ALL(VALUES('%pg_prepared_xacts%'), ('%COMMIT%'), ('%pg_isolation_test_session_is_blocked%'), ('%BEGIN%'), ('%add_node%')) ORDER BY query DESC;
+    SELECT query, state, wait_event_type, wait_event, usename, datname FROM citus_dist_stat_activity WHERE backend_type = 'client backend' AND query NOT ILIKE ALL(VALUES('%pg_prepared_xacts%'), ('%COMMIT%'), ('%pg_isolation_test_session_is_blocked%'), ('%BEGIN%'), ('%add_node%')) ORDER BY query DESC;
 }
 
 step "s2-view-worker"
 {
-	SELECT query, state, wait_event_type, wait_event, usename, datname
+    SELECT query, state, wait_event_type, wait_event, usename, datname
     FROM citus_stat_activity
     WHERE query NOT ILIKE ALL(VALUES
-      ('%application_name%'),
-      ('%pg_prepared_xacts%'),
-      ('%COMMIT%'),
-      ('%dump_local_%'),
-      ('%citus_internal_local_blocked_processes%'),
-      ('%add_node%'),
-      ('%csa_from_one_node%'),
-      ('%pg_locks%'))
+    ('%application_name%'),
+    ('%pg_prepared_xacts%'),
+    ('%COMMIT%'),
+    ('%dump_local_%'),
+    ('%citus_internal_local_blocked_processes%'),
+    ('%add_node%'),
+    ('%csa_from_one_node%'),
+    ('%pg_locks%'))
     AND is_worker_query = true
     AND backend_type = 'client backend'
     AND query != ''
@@ -103,14 +103,14 @@ step "s2-view-worker"
 
 step "s2-sleep"
 {
-	SELECT pg_sleep(0.5);
+    SELECT pg_sleep(0.5);
 }
 
 step "s2-active-transactions"
 {
-	-- Admin should be able to see all transactions
-	SELECT count(*) FROM get_all_active_transactions() WHERE transaction_number != 0;
-	SELECT count(*) FROM get_global_active_transactions() WHERE transaction_number != 0;
+    -- Admin should be able to see all transactions
+    SELECT count(*) FROM get_all_active_transactions() WHERE transaction_number != 0;
+    SELECT count(*) FROM get_global_active_transactions() WHERE transaction_number != 0;
 }
 
 // we disable the daemon during the regression tests in order to get consistent results
@@ -122,7 +122,7 @@ session "deadlock-checker"
 // backend inappropriately
 step "deadlock-checker-call"
 {
-  SELECT check_distributed_deadlocks();
+    SELECT check_distributed_deadlocks();
 }
 
 
@@ -133,12 +133,12 @@ session "add-node"
 // backend inappropriately
 step "add-node"
 {
-  SELECT 1 FROM master_add_node('localhost', 57636, groupid => 0);
+    SELECT 1 FROM master_add_node('localhost', 57636, groupid => 0);
 }
 
 step "replicate-reference-tables"
 {
-  SELECT replicate_reference_tables(shard_transfer_mode := 'block_writes');
+    SELECT replicate_reference_tables(shard_transfer_mode := 'block_writes');
 }
 
 // verify that locks on the placement of the reference table on the coordinator is

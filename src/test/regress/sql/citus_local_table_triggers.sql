@@ -340,7 +340,7 @@ ROLLBACK;
 
 -- can perform local execution from a trigger on a Citus local table
 BEGIN;
-	SELECT citus_add_local_table_to_metadata('local_table');
+    SELECT citus_add_local_table_to_metadata('local_table');
 
     -- update should actually update something to test ON UPDATE CASCADE logic
     INSERT INTO another_citus_local_table VALUES (600);

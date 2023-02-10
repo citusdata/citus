@@ -2,68 +2,68 @@
 
 setup
 {
-	CREATE TABLE ref_table(id int PRIMARY KEY, value int);
-	SELECT create_reference_table('ref_table');
+    CREATE TABLE ref_table(id int PRIMARY KEY, value int);
+    SELECT create_reference_table('ref_table');
 
-	CREATE TABLE dist_table(id int, value int REFERENCES ref_table(id) ON DELETE CASCADE ON UPDATE CASCADE);
-	SELECT create_distributed_table('dist_table', 'id');
+    CREATE TABLE dist_table(id int, value int REFERENCES ref_table(id) ON DELETE CASCADE ON UPDATE CASCADE);
+    SELECT create_distributed_table('dist_table', 'id');
 
-	INSERT INTO ref_table VALUES (1, 10), (2, 20);
-	INSERT INTO dist_table VALUES (1, 1), (2, 2);
+    INSERT INTO ref_table VALUES (1, 10), (2, 20);
+    INSERT INTO dist_table VALUES (1, 1), (2, 2);
 }
 
 teardown
 {
-	DROP TABLE ref_table, dist_table;
+    DROP TABLE ref_table, dist_table;
 }
 
 session "s1"
 
 step "s1-start-session-level-connection"
 {
-	SELECT start_session_level_connection_to_node('localhost', 57637);
+    SELECT start_session_level_connection_to_node('localhost', 57637);
 }
 
 step "s1-begin-on-worker"
 {
-	SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+    SELECT run_commands_on_session_level_connection_to_node('BEGIN');
 }
 
 step "s1-delete"
 {
-	SELECT run_commands_on_session_level_connection_to_node('DELETE FROM ref_table WHERE id=1');
+    SELECT run_commands_on_session_level_connection_to_node('DELETE FROM ref_table WHERE id=1');
 }
 
 step "s1-update"
 {
-	SELECT run_commands_on_session_level_connection_to_node('UPDATE ref_table SET id=id+2 WHERE id=1');
+    SELECT run_commands_on_session_level_connection_to_node('UPDATE ref_table SET id=id+2 WHERE id=1');
 }
 
 step "s1-commit-worker"
 {
-	SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+    SELECT run_commands_on_session_level_connection_to_node('COMMIT');
 }
 
 step "s1-rollback-worker"
 {
-	SELECT run_commands_on_session_level_connection_to_node('ROLLBACK');
+    SELECT run_commands_on_session_level_connection_to_node('ROLLBACK');
 }
 
 step "s1-stop-connection"
 {
-	SELECT stop_session_level_connection_to_node();
+    SELECT stop_session_level_connection_to_node();
 }
 
 session "s2"
 
 step "s2-start-session-level-connection"
 {
-	SELECT start_session_level_connection_to_node('localhost', 57638);
+    SELECT start_session_level_connection_to_node('localhost', 57638);
 }
 
 step "s2-begin-on-worker"
 {
-	SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+    SELECT run_commands_on_session_level_connection_to_node('BEGIN');
 }
 
 step "s2-insert"
@@ -103,17 +103,17 @@ step "s2-select-for-udpate"
 
 step "s2-coordinator-create-index-concurrently"
 {
-	CREATE INDEX CONCURRENTLY dist_table_index ON dist_table(id);
+    CREATE INDEX CONCURRENTLY dist_table_index ON dist_table(id);
 }
 
 step "s2-commit-worker"
 {
-	SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+    SELECT run_commands_on_session_level_connection_to_node('COMMIT');
 }
 
 step "s2-stop-connection"
 {
-	SELECT stop_session_level_connection_to_node();
+    SELECT stop_session_level_connection_to_node();
 }
 
 // We use this as a way to wait for s2-ddl-create-index-concurrently to
@@ -126,8 +126,8 @@ session "s3"
 
 step "s3-display"
 {
-	SELECT * FROM ref_table ORDER BY id, value;
-	SELECT * FROM dist_table ORDER BY id, value;
+    SELECT * FROM ref_table ORDER BY id, value;
+    SELECT * FROM dist_table ORDER BY id, value;
 }
 
 

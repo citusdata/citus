@@ -5,15 +5,15 @@
 // create distributed table to test behavior of VALIDATE in concurrent operations
 setup
 {
-	SET citus.shard_replication_factor TO 1;
-	CREATE TABLE constrained_table(id integer, int_data int);
-	SELECT create_distributed_table('constrained_table', 'id');
+    SET citus.shard_replication_factor TO 1;
+    CREATE TABLE constrained_table(id integer, int_data int);
+    SELECT create_distributed_table('constrained_table', 'id');
 }
 
 // drop distributed table
 teardown
 {
-	DROP TABLE IF EXISTS constrained_table CASCADE;
+    DROP TABLE IF EXISTS constrained_table CASCADE;
 }
 
 // session 1

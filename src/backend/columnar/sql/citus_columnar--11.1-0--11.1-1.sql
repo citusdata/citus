@@ -28,5 +28,3 @@ ALTER EXTENSION citus_columnar ADD VIEW columnar.chunk;
 ALTER FUNCTION citus_internal.upgrade_columnar_storage(regclass) SET SCHEMA columnar_internal;
 ALTER FUNCTION citus_internal.downgrade_columnar_storage(regclass) SET SCHEMA columnar_internal;
 ALTER FUNCTION citus_internal.columnar_ensure_am_depends_catalog() SET SCHEMA columnar_internal;
-
-

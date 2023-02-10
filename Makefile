@@ -6,7 +6,7 @@ extension_dir = $(shell $(PG_CONFIG) --sharedir)/extension
 
 # Hint that configure should be run first
 ifeq (,$(wildcard Makefile.global))
-  $(error ./configure needs to be run before compiling Citus)
+	$(error ./configure needs to be run before compiling Citus)
 endif
 
 include Makefile.global

@@ -26,7 +26,7 @@ ifeq ($(pg_major_version),13)
 else ifeq ($(pg_major_version),14)
 	test_path = t_pg13_pg14/*.pl
 else
-    test_path = t/*.pl
+	test_path = t/*.pl
 endif
 
 # copied from pgxs/Makefile.global to use postgres' abs build dir for pg_regress

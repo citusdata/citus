@@ -51,4 +51,3 @@ then
 else
 	exec "$DIFF" -w $args "$file1" "$file2"
 fi
-

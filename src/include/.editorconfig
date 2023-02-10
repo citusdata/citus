@@ -1,0 +1,6 @@
+# Don't change generated input file
+[citus_config.h.in]
+insert_final_newline = unset
+trim_trailing_whitespace = unset
+indent_style = unset
+indent_size = unset

@@ -2,42 +2,42 @@
 
 setup
 {
-  CREATE OR REPLACE FUNCTION trigger_metadata_sync()
-    RETURNS void
-    LANGUAGE C STRICT
-    AS 'citus';
+    CREATE OR REPLACE FUNCTION trigger_metadata_sync()
+        RETURNS void
+        LANGUAGE C STRICT
+        AS 'citus';
 
-  CREATE OR REPLACE FUNCTION wait_until_metadata_sync(timeout INTEGER DEFAULT 15000)
-    RETURNS void
-    LANGUAGE C STRICT
-    AS 'citus';
+    CREATE OR REPLACE FUNCTION wait_until_metadata_sync(timeout INTEGER DEFAULT 15000)
+        RETURNS void
+        LANGUAGE C STRICT
+        AS 'citus';
 
-  CREATE TABLE deadlock_detection_test (user_id int UNIQUE, some_val int);
-  INSERT INTO deadlock_detection_test SELECT i, i FROM generate_series(1,7) i;
-  SELECT create_distributed_table('deadlock_detection_test', 'user_id');
+    CREATE TABLE deadlock_detection_test (user_id int UNIQUE, some_val int);
+    INSERT INTO deadlock_detection_test SELECT i, i FROM generate_series(1,7) i;
+    SELECT create_distributed_table('deadlock_detection_test', 'user_id');
 
-  CREATE TABLE t2(a int);
-  SELECT create_distributed_table('t2', 'a');
+    CREATE TABLE t2(a int);
+    SELECT create_distributed_table('t2', 'a');
 }
 
 teardown
 {
-  DROP FUNCTION trigger_metadata_sync();
-  DROP TABLE deadlock_detection_test;
-  DROP TABLE t2;
-  SET citus.shard_replication_factor = 1;
+    DROP FUNCTION trigger_metadata_sync();
+    DROP TABLE deadlock_detection_test;
+    DROP TABLE t2;
+    SET citus.shard_replication_factor = 1;
 }
 
 session "s1"
 
 step "enable-deadlock-detection"
 {
-  ALTER SYSTEM SET citus.distributed_deadlock_detection_factor TO 3;
+    ALTER SYSTEM SET citus.distributed_deadlock_detection_factor TO 3;
 }
 
 step "disable-deadlock-detection"
 {
-  ALTER SYSTEM SET citus.distributed_deadlock_detection_factor TO -1;
+    ALTER SYSTEM SET citus.distributed_deadlock_detection_factor TO -1;
 }
 
 step "reload-conf"
@@ -47,49 +47,49 @@ step "reload-conf"
 
 step "s1-begin"
 {
-  BEGIN;
+    BEGIN;
 }
 
 step "s1-update-1"
 {
-  UPDATE deadlock_detection_test SET some_val = 1 WHERE user_id = 1;
+    UPDATE deadlock_detection_test SET some_val = 1 WHERE user_id = 1;
 }
 
 step "s1-update-2"
 {
-  UPDATE deadlock_detection_test SET some_val = 1 WHERE user_id = 2;
+    UPDATE deadlock_detection_test SET some_val = 1 WHERE user_id = 2;
 }
 
 step "s1-commit"
 {
-  COMMIT;
+    COMMIT;
 }
 
 session "s2"
 
 step "s2-start-session-level-connection"
 {
-	SELECT start_session_level_connection_to_node('localhost', 57638);
+    SELECT start_session_level_connection_to_node('localhost', 57638);
 }
 
 step "s2-stop-connection"
 {
-	SELECT stop_session_level_connection_to_node();
+    SELECT stop_session_level_connection_to_node();
 }
 
 step "s2-begin-on-worker"
 {
-	SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+    SELECT run_commands_on_session_level_connection_to_node('BEGIN');
 }
 
 step "s2-update-1-on-worker"
 {
-  SELECT run_commands_on_session_level_connection_to_node('UPDATE deadlock_detection_test SET some_val = 2 WHERE user_id = 1');
+    SELECT run_commands_on_session_level_connection_to_node('UPDATE deadlock_detection_test SET some_val = 2 WHERE user_id = 1');
 }
 
 step "s2-update-2-on-worker"
 {
-  SELECT run_commands_on_session_level_connection_to_node('UPDATE deadlock_detection_test SET some_val = 2 WHERE user_id = 2');
+    SELECT run_commands_on_session_level_connection_to_node('UPDATE deadlock_detection_test SET some_val = 2 WHERE user_id = 2');
 }
 
 step "s2-truncate-on-worker"
@@ -99,7 +99,7 @@ step "s2-truncate-on-worker"
 
 step "s2-commit-on-worker"
 {
-  SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+    SELECT run_commands_on_session_level_connection_to_node('COMMIT');
 }
 
 session "s3"
@@ -111,12 +111,12 @@ step "s3-invalidate-metadata"
 
 step "s3-resync"
 {
-  SELECT trigger_metadata_sync();
+    SELECT trigger_metadata_sync();
 }
 
 step "s3-wait"
 {
-  SELECT pg_sleep(2);
+    SELECT pg_sleep(2);
 }
 
 // Backends can block metadata sync. The following test verifies that if this happens,

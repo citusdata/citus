@@ -2,18 +2,18 @@
 // so setting the corresponding shard here is useful
 setup
 {
-	SET citus.shard_count TO 2;
-	SET citus.shard_replication_factor TO 2;
-	CREATE TABLE test_repair_placement_vs_modification (x int, y int);
-	SELECT create_distributed_table('test_repair_placement_vs_modification', 'x');
+    SET citus.shard_count TO 2;
+    SET citus.shard_replication_factor TO 2;
+    CREATE TABLE test_repair_placement_vs_modification (x int, y int);
+    SELECT create_distributed_table('test_repair_placement_vs_modification', 'x');
 
-	SELECT get_shard_id_for_distribution_column('test_repair_placement_vs_modification', 5) INTO selected_shard;
+    SELECT get_shard_id_for_distribution_column('test_repair_placement_vs_modification', 5) INTO selected_shard;
 }
 
 teardown
 {
-	DROP TABLE test_repair_placement_vs_modification;
-	DROP TABLE selected_shard;
+    DROP TABLE test_repair_placement_vs_modification;
+    DROP TABLE selected_shard;
 }
 
 session "s1"
@@ -21,93 +21,93 @@ session "s1"
 step "s1-begin"
 {
     BEGIN;
-	SET LOCAL citus.select_opens_transaction_block TO off;
+    SET LOCAL citus.select_opens_transaction_block TO off;
 }
 
 // since test_repair_placement_vs_modification has rep > 1 simple select query doesn't hit all placements
 // hence not all placements are cached
 step "s1-load-cache"
 {
-	TRUNCATE test_repair_placement_vs_modification;
+    TRUNCATE test_repair_placement_vs_modification;
 }
 
 step "s1-insert"
 {
-	INSERT INTO test_repair_placement_vs_modification VALUES (5, 10);
+    INSERT INTO test_repair_placement_vs_modification VALUES (5, 10);
 }
 
 step "s1-update"
 {
-	UPDATE test_repair_placement_vs_modification SET y = 5 WHERE x = 5;
+    UPDATE test_repair_placement_vs_modification SET y = 5 WHERE x = 5;
 }
 
 step "s1-delete"
 {
-	DELETE FROM test_repair_placement_vs_modification WHERE x = 5;
+    DELETE FROM test_repair_placement_vs_modification WHERE x = 5;
 }
 
 step "s1-select"
 {
-	SELECT count(*) FROM test_repair_placement_vs_modification WHERE x = 5;
+    SELECT count(*) FROM test_repair_placement_vs_modification WHERE x = 5;
 }
 
 step "s1-ddl"
 {
-	CREATE INDEX test_repair_placement_vs_modification_index ON test_repair_placement_vs_modification(x);
+    CREATE INDEX test_repair_placement_vs_modification_index ON test_repair_placement_vs_modification(x);
 }
 
 step "s1-copy"
 {
-	COPY test_repair_placement_vs_modification FROM PROGRAM 'echo 1,1 && echo 2,2 && echo 3,3 && echo 4,4 && echo 5,5' WITH CSV;
+    COPY test_repair_placement_vs_modification FROM PROGRAM 'echo 1,1 && echo 2,2 && echo 3,3 && echo 4,4 && echo 5,5' WITH CSV;
 }
 
 step "s1-commit"
 {
-	COMMIT;
+    COMMIT;
 }
 
 session "s2"
 
 step "s2-begin"
 {
-	BEGIN;
+    BEGIN;
 }
 
 step "s2-delete-inactive"
 {
-	DELETE FROM pg_dist_shard_placement WHERE shardid IN (SELECT * FROM selected_shard) AND nodeport = 57638;
+    DELETE FROM pg_dist_shard_placement WHERE shardid IN (SELECT * FROM selected_shard) AND nodeport = 57638;
 }
 
 step "s2-repair-placement"
 {
-	SELECT citus_copy_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638, transfer_mode := 'block_writes');
+    SELECT citus_copy_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638, transfer_mode := 'block_writes');
 }
 
 step "s2-commit"
 {
-	COMMIT;
+    COMMIT;
 }
 
 step "s2-print-content"
 {
-	SELECT
-		nodeport, success, result
-	FROM
-		run_command_on_placements('test_repair_placement_vs_modification', 'select y from %s WHERE x = 5')
-	WHERE
-		shardid IN (SELECT * FROM selected_shard)
-	ORDER BY
-		nodeport;
+    SELECT
+        nodeport, success, result
+    FROM
+        run_command_on_placements('test_repair_placement_vs_modification', 'select y from %s WHERE x = 5')
+    WHERE
+        shardid IN (SELECT * FROM selected_shard)
+    ORDER BY
+        nodeport;
 }
 
 step "s2-print-index-count"
 {
-	SELECT
-		nodeport, success, result
-	FROM
-		run_command_on_placements('test_repair_placement_vs_modification', 'select count(*) from pg_indexes WHERE tablename = ''%s''')
-	ORDER BY
-		nodeport;
+    SELECT
+        nodeport, success, result
+    FROM
+        run_command_on_placements('test_repair_placement_vs_modification', 'select count(*) from pg_indexes WHERE tablename = ''%s''')
+    ORDER BY
+        nodeport;
 }
 
 // repair a placement while concurrently performing an update/delete/insert/copy

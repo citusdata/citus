@@ -23,7 +23,7 @@ session "s1"
 
 step "s1-begin"
 {
-	BEGIN;
+    BEGIN;
 }
 
 step "s1-prepare-transaction" {
@@ -58,21 +58,21 @@ step "s1-update-node-existent" {
 
 step "s1-commit"
 {
-	COMMIT;
+    COMMIT;
 }
 
 step "s1-show-nodes"
 {
     SELECT nodeid, nodename, nodeport, isactive
-      FROM pg_dist_node
-  ORDER BY nodename, nodeport;
+    FROM pg_dist_node
+    ORDER BY nodename, nodeport;
 }
 
 session "s2"
 
 step "s2-begin"
 {
-	BEGIN;
+    BEGIN;
 }
 
 step "s2-update-node-1"
@@ -112,7 +112,7 @@ step "s2-execute-prepared" {
 
 step "s2-abort"
 {
-	ABORT;
+    ABORT;
 }
 
 session "s3"

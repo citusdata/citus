@@ -24,7 +24,7 @@ session "s1"
 
 step "s1-begin"
 {
-	BEGIN;
+    BEGIN;
 }
 
 step "s1-update-node-1"
@@ -37,34 +37,33 @@ step "s1-update-node-1"
 
 step "s1-commit"
 {
-	COMMIT;
+    COMMIT;
 }
 
 session "s2"
 
 step "s2-begin"
 {
-	BEGIN;
+    BEGIN;
 }
 
 step "s2-insert"
 {
     INSERT INTO update_node(id, f1)
-         SELECT id, md5(id::text)
-           FROM generate_series(1, 10) as t(id);
+        SELECT id, md5(id::text)
+            FROM generate_series(1, 10) as t(id);
 }
 
 step "s2-abort"
 {
-	ABORT;
+    ABORT;
 }
 
 step "s2-commit"
 {
-	COMMIT;
+    COMMIT;
 }
 
 // session 1 updates node 1, session 2 writes should be blocked
 permutation "s1-begin" "s1-update-node-1" "s2-begin" "s2-insert" "s1-commit" "s2-abort"
 permutation "s2-begin" "s2-insert" "s1-update-node-1" "s2-commit"
-

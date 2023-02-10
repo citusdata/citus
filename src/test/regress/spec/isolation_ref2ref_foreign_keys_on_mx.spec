@@ -3,13 +3,13 @@
 setup
 {
     CREATE TABLE ref_table_1(id int PRIMARY KEY, value int);
-	SELECT create_reference_table('ref_table_1');
+    SELECT create_reference_table('ref_table_1');
 
     CREATE TABLE ref_table_2(id int PRIMARY KEY, value int REFERENCES ref_table_1(id) ON DELETE CASCADE ON UPDATE CASCADE);
-	SELECT create_reference_table('ref_table_2');
+    SELECT create_reference_table('ref_table_2');
 
     CREATE TABLE ref_table_3(id int PRIMARY KEY, value int REFERENCES ref_table_2(id) ON DELETE CASCADE ON UPDATE CASCADE);
-	SELECT create_reference_table('ref_table_3');
+    SELECT create_reference_table('ref_table_3');
 
     INSERT INTO ref_table_1 VALUES (1, 1), (3, 3), (5, 5);
     INSERT INTO ref_table_2 SELECT * FROM ref_table_1;
@@ -18,43 +18,43 @@ setup
 
 teardown
 {
-	DROP TABLE ref_table_1, ref_table_2, ref_table_3;
+    DROP TABLE ref_table_1, ref_table_2, ref_table_3;
 }
 
 session "s1"
 
 step "s1-start-session-level-connection"
 {
-	SELECT start_session_level_connection_to_node('localhost', 57637);
+    SELECT start_session_level_connection_to_node('localhost', 57637);
 }
 
 step "s1-view-locks"
 {
     SELECT * FROM master_run_on_worker(
-		ARRAY['localhost']::text[],
-		ARRAY[57637]::int[],
-		ARRAY[$$
-          SELECT array_agg(ROW(t.mode, t.count) ORDER BY t.mode) FROM
-          (SELECT mode, count(*) count FROM pg_locks
-           WHERE locktype='advisory' GROUP BY mode ORDER BY 1, 2) t$$]::text[],
-		false);
+        ARRAY['localhost']::text[],
+        ARRAY[57637]::int[],
+        ARRAY[$$
+        SELECT array_agg(ROW(t.mode, t.count) ORDER BY t.mode) FROM
+        (SELECT mode, count(*) count FROM pg_locks
+            WHERE locktype='advisory' GROUP BY mode ORDER BY 1, 2) t$$]::text[],
+        false);
 }
 
 step "s1-stop-connection"
 {
-	SELECT stop_session_level_connection_to_node();
+    SELECT stop_session_level_connection_to_node();
 }
 
 session "s2"
 
 step "s2-start-session-level-connection"
 {
-	SELECT start_session_level_connection_to_node('localhost', 57637);
+    SELECT start_session_level_connection_to_node('localhost', 57637);
 }
 
 step "s2-begin-on-worker"
 {
-	SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+    SELECT run_commands_on_session_level_connection_to_node('BEGIN');
 }
 
 step "s2-insert-table-1"
@@ -109,7 +109,7 @@ step "s2-rollback-worker"
 
 step "s2-stop-connection"
 {
-	SELECT stop_session_level_connection_to_node();
+    SELECT stop_session_level_connection_to_node();
 }
 
 // Case 1. UPDATE/DELETE ref_table_1 should only lock its own shard in Exclusive mode.

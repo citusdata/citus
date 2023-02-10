@@ -292,4 +292,3 @@ clean distclean maintainer-clean:
 	rm -rf input/ output/
 	rm -rf tmp_check/
 	rm -rf tmp_citus_test/
-

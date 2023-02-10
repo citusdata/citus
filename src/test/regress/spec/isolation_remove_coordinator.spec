@@ -1,11 +1,11 @@
 setup
 {
-	SELECT 1;
+    SELECT 1;
 }
 
 teardown
 {
-	SELECT 1 FROM citus_remove_node('localhost', 57636);
+    SELECT 1 FROM citus_remove_node('localhost', 57636);
 }
 
 session "s1"

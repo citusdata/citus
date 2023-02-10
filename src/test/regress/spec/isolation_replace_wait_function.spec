@@ -5,41 +5,41 @@
 
 setup
 {
-  select setval('pg_dist_shardid_seq', GREATEST(1400000, nextval('pg_dist_shardid_seq')));
+    select setval('pg_dist_shardid_seq', GREATEST(1400000, nextval('pg_dist_shardid_seq')));
 
-  CREATE TABLE test_locking (a int unique);
-  SELECT create_distributed_table('test_locking', 'a');
+    CREATE TABLE test_locking (a int unique);
+    SELECT create_distributed_table('test_locking', 'a');
 }
 
 teardown
 {
-  DROP TABLE test_locking;
+    DROP TABLE test_locking;
 }
 
 session "s1"
 
 step "s1-insert-1"
 {
-  BEGIN;
-  INSERT INTO test_locking (a) VALUES (1);
+    BEGIN;
+    INSERT INTO test_locking (a) VALUES (1);
 }
 
 step "s1-commit"
 {
-  COMMIT;
+    COMMIT;
 }
 
 session "s2"
 
 step "s2-insert"
 {
-  BEGIN;
-  INSERT INTO test_locking (a) VALUES (1);
+    BEGIN;
+    INSERT INTO test_locking (a) VALUES (1);
 }
 
 step "s2-commit"
 {
-  COMMIT;
+    COMMIT;
 }
 
 permutation "s1-insert-1" "s2-insert" "s1-commit" "s2-commit"

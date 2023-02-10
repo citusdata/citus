@@ -1,61 +1,61 @@
 setup
 {
-	CREATE TABLE migration_table (test_id integer NOT NULL, data text);
+    CREATE TABLE migration_table (test_id integer NOT NULL, data text);
 }
 
 teardown
 {
-	DROP TABLE migration_table;
+    DROP TABLE migration_table;
 }
 
 session "s1"
 
 step "s1-begin"
 {
-	BEGIN;
+    BEGIN;
 }
 
 step "s1-begin-serializable"
 {
-	BEGIN TRANSACTION ISOLATION LEVEL SERIALIZABLE;
-	SELECT 1;
+    BEGIN TRANSACTION ISOLATION LEVEL SERIALIZABLE;
+    SELECT 1;
 }
 
 step "s1-create_distributed_table"
 {
-	SELECT create_distributed_table('migration_table', 'test_id');
+    SELECT create_distributed_table('migration_table', 'test_id');
 }
 
 step "s1-commit"
 {
-	COMMIT;
+    COMMIT;
 }
 
 session "s2"
 
 step "s2-begin"
 {
-	BEGIN;
+    BEGIN;
 }
 
 step "s2-copy"
 {
-	COPY migration_table FROM PROGRAM 'echo 1,hello' WITH CSV;
+    COPY migration_table FROM PROGRAM 'echo 1,hello' WITH CSV;
 }
 
 step "s2-insert"
 {
-	INSERT INTO migration_table VALUES (1, 'hello');
+    INSERT INTO migration_table VALUES (1, 'hello');
 }
 
 step "s2-commit"
 {
-	COMMIT;
+    COMMIT;
 }
 
 step "s2-select"
 {
-	SELECT * FROM migration_table ORDER BY test_id;
+    SELECT * FROM migration_table ORDER BY test_id;
 }
 
 // verify that local COPY is picked up by create_distributed_table once it commits

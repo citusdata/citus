@@ -2,18 +2,18 @@
 // so setting the corresponding shard here is useful
 setup
 {
-	SET citus.shard_count TO 8;
-	SET citus.shard_replication_factor TO 1;
-	CREATE TABLE logical_replicate_placement (x int PRIMARY KEY, y int);
-	SELECT create_distributed_table('logical_replicate_placement', 'x');
+    SET citus.shard_count TO 8;
+    SET citus.shard_replication_factor TO 1;
+    CREATE TABLE logical_replicate_placement (x int PRIMARY KEY, y int);
+    SELECT create_distributed_table('logical_replicate_placement', 'x');
 
-	SELECT get_shard_id_for_distribution_column('logical_replicate_placement', 15) INTO selected_shard;
+    SELECT get_shard_id_for_distribution_column('logical_replicate_placement', 15) INTO selected_shard;
 }
 
 teardown
 {
-  DROP TABLE selected_shard;
-	DROP TABLE logical_replicate_placement;
+    DROP TABLE selected_shard;
+    DROP TABLE logical_replicate_placement;
 }
 
 
@@ -21,22 +21,22 @@ session "s1"
 
 step "s1-begin"
 {
-	BEGIN;
+    BEGIN;
 }
 
 step "s1-move-placement"
 {
-    	SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638);
+        SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638);
 }
 
 step "s1-end"
 {
-	COMMIT;
+    COMMIT;
 }
 
 step "s1-select"
 {
-  SELECT * FROM logical_replicate_placement order by y;
+    SELECT * FROM logical_replicate_placement order by y;
 }
 
 step "s1-insert"
@@ -46,7 +46,7 @@ step "s1-insert"
 
 step "s1-get-shard-distribution"
 {
-  select nodeport from pg_dist_placement inner join pg_dist_node on(pg_dist_placement.groupid = pg_dist_node.groupid) where shardstate != 4 AND shardid in (SELECT * FROM selected_shard) order by nodeport;
+    select nodeport from pg_dist_placement inner join pg_dist_node on(pg_dist_placement.groupid = pg_dist_node.groupid) where shardstate != 4 AND shardid in (SELECT * FROM selected_shard) order by nodeport;
 }
 
 session "s2"
@@ -58,9 +58,9 @@ step "s2-begin"
 
 step "s2-move-placement"
 {
-	SELECT master_move_shard_placement(
-		get_shard_id_for_distribution_column('logical_replicate_placement', 4),
-		'localhost', 57637, 'localhost', 57638);
+    SELECT master_move_shard_placement(
+        get_shard_id_for_distribution_column('logical_replicate_placement', 4),
+        'localhost', 57637, 'localhost', 57638);
 }
 
 step "s2-select"
@@ -97,7 +97,7 @@ step "s2-upsert"
 
 step "s2-end"
 {
-	  COMMIT;
+    COMMIT;
 }
 
 session "s3"

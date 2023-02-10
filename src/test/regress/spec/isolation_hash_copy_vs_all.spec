@@ -5,15 +5,15 @@
 // create append distributed table to test behavior of COPY in concurrent operations
 setup
 {
-	SET citus.shard_replication_factor TO 1;
-	CREATE TABLE hash_copy(id integer, data text, int_data int);
-	SELECT create_distributed_table('hash_copy', 'id');
+    SET citus.shard_replication_factor TO 1;
+    CREATE TABLE hash_copy(id integer, data text, int_data int);
+    SELECT create_distributed_table('hash_copy', 'id');
 }
 
 // drop distributed table
 teardown
 {
-	DROP TABLE IF EXISTS hash_copy CASCADE;
+    DROP TABLE IF EXISTS hash_copy CASCADE;
 }
 
 // session 1
@@ -26,8 +26,8 @@ step "s1-router-select" { SELECT * FROM hash_copy WHERE id = 1; }
 step "s1-real-time-select" { SELECT * FROM hash_copy ORDER BY 1, 2; }
 step "s1-adaptive-select"
 {
-		SET citus.enable_repartition_joins TO ON;
-	SELECT * FROM hash_copy AS t1 JOIN hash_copy AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
+        SET citus.enable_repartition_joins TO ON;
+    SELECT * FROM hash_copy AS t1 JOIN hash_copy AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 }
 step "s1-insert" { INSERT INTO hash_copy VALUES(0, 'k', 0); }
 step "s1-insert-select" { INSERT INTO hash_copy SELECT * FROM hash_copy; }
@@ -51,10 +51,10 @@ step "s1-show-columns" { SELECT run_command_on_workers('SELECT column_name FROM 
 step "s1-commit" { COMMIT; }
 step "s1-recreate-with-replication-2"
 {
-	DROP TABLE hash_copy;
-	SET citus.shard_replication_factor TO 2;
-	CREATE TABLE hash_copy(id integer, data text, int_data int);
-	SELECT create_distributed_table('hash_copy', 'id');
+    DROP TABLE hash_copy;
+    SET citus.shard_replication_factor TO 2;
+    CREATE TABLE hash_copy(id integer, data text, int_data int);
+    SELECT create_distributed_table('hash_copy', 'id');
 }
 
 // session 2
@@ -64,8 +64,8 @@ step "s2-router-select" { SELECT * FROM hash_copy WHERE id = 1; }
 step "s2-real-time-select" { SELECT * FROM hash_copy ORDER BY 1, 2; }
 step "s2-adaptive-select"
 {
-		SET citus.enable_repartition_joins TO ON;
-	SELECT * FROM hash_copy AS t1 JOIN hash_copy AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
+        SET citus.enable_repartition_joins TO ON;
+    SELECT * FROM hash_copy AS t1 JOIN hash_copy AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 }
 step "s2-insert" { INSERT INTO hash_copy VALUES(0, 'k', 0); }
 step "s2-insert-select" { INSERT INTO hash_copy SELECT * FROM hash_copy; }

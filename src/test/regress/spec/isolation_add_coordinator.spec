@@ -6,7 +6,7 @@ setup
 
 teardown
 {
-	SELECT 1;
+    SELECT 1;
 }
 
 session "s1"
