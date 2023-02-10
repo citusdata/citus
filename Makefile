@@ -61,6 +61,9 @@ clean: clean-extension clean-pg_send_cancellation
 reindent:
 	${citus_abs_top_srcdir}/ci/fix_style.sh
 check-style:
+	black . --check --quiet
+	isort . --check --quiet
+	flake8
 	cd ${citus_abs_top_srcdir} && citus_indent --quiet --check
 .PHONY: reindent check-style
 

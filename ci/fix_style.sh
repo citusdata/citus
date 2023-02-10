@@ -9,6 +9,8 @@ cidir="${0%/*}"
 cd ${cidir}/..
 
 citus_indent . --quiet
+black . --quiet
+isort . --quiet
 ci/editorconfig.sh
 ci/remove_useless_declarations.sh
 ci/disallow_c_comments_in_migrations.sh

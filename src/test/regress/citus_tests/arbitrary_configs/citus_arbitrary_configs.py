@@ -12,21 +12,23 @@ Options:
     --seed=<seed>                   random number seed
     --base                          whether to use the base sql schedule or not
 """
+import os
+import shutil
 import sys
-import os, shutil
 
 # https://stackoverflow.com/questions/14132789/relative-imports-for-the-billionth-time/14132912#14132912
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
-import common
-import config as cfg
 import concurrent.futures
 import multiprocessing
-from docopt import docopt
-import time
 import random
+import time
 
+import common
+from docopt import docopt
+
+import config as cfg
 
 testResults = {}
 parallel_thread_amount = 1
@@ -115,7 +117,6 @@ def copy_copy_modified_binary(datadir):
 
 
 def copy_test_files(config):
-
     sql_dir_path = os.path.join(config.datadir, "sql")
     expected_dir_path = os.path.join(config.datadir, "expected")
 
@@ -132,7 +133,9 @@ def copy_test_files(config):
 
                 line = line[colon_index + 1 :].strip()
                 test_names = line.split(" ")
-                copy_test_files_with_names(test_names, sql_dir_path, expected_dir_path, config)
+                copy_test_files_with_names(
+                    test_names, sql_dir_path, expected_dir_path, config
+                )
 
 
 def copy_test_files_with_names(test_names, sql_dir_path, expected_dir_path, config):
@@ -140,10 +143,10 @@ def copy_test_files_with_names(test_names, sql_dir_path, expected_dir_path, conf
         # make empty files for the skipped tests
         if test_name in config.skip_tests:
             expected_sql_file = os.path.join(sql_dir_path, test_name + ".sql")
-            open(expected_sql_file, 'x').close()
+            open(expected_sql_file, "x").close()
 
             expected_out_file = os.path.join(expected_dir_path, test_name + ".out")
-            open(expected_out_file, 'x').close()
+            open(expected_out_file, "x").close()
 
             continue
 

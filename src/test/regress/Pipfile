@@ -10,6 +10,10 @@ docopt = "==0.6.2"
 cryptography = "==3.4.8"
 
 [dev-packages]
+black = "*"
+isort = "*"
+flake8 = "*"
+flake8-bugbear = "*"
 
 [requires]
 python_version = "3.9"

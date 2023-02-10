@@ -6,7 +6,7 @@ orbs:
 parameters:
   image_suffix:
     type: string
-    default: '-v7e4468f'
+    default: '-v9a494cd'
   pg13_version:
     type: string
     default: '13.9'
@@ -157,8 +157,17 @@ jobs:
     steps:
       - checkout
       - run:
-          name: 'Check Style'
+          name: 'Check C Style'
           command: citus_indent --check
+      - run:
+          name: 'Check Python style'
+          command: black --check .
+      - run:
+          name: 'Check Python import order'
+          command: isort --check .
+      - run:
+          name: 'Check Python lints'
+          command: flake8 .
       - run:
           name: 'Fix whitespace'
           command: ci/editorconfig.sh && git diff --exit-code
