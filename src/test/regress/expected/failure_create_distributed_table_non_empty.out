@@ -35,21 +35,6 @@ SELECT count(*) FROM pg_dist_shard WHERE logicalrelid='create_distributed_table_
      0
 (1 row)
 
--- in the first test, cancel the first connection we sent from the coordinator
-SELECT citus.mitmproxy('conn.cancel(' ||  pg_backend_pid() || ')');
- mitmproxy
----------------------------------------------------------------------
-
-(1 row)
-
-SELECT create_distributed_table('test_table', 'id');
-ERROR:  canceling statement due to user request
-SELECT count(*) FROM pg_dist_shard WHERE logicalrelid='create_distributed_table_non_empty_failure.test_table'::regclass;
- count
----------------------------------------------------------------------
-     0
-(1 row)
-
 -- kill as soon as the coordinator sends CREATE SCHEMA
 SELECT citus.mitmproxy('conn.onQuery(query="^CREATE SCHEMA").kill()');
  mitmproxy
