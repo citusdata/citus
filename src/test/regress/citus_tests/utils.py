@@ -1,6 +1,5 @@
-import subprocess
 import os
-
+import subprocess
 
 USER = "postgres"
 

@@ -5,6 +5,8 @@
 -- display of SQL-standard function's arguments in INSERT/SELECT in PG15.
 -- The alternative output can be deleted when we drop support for PG14
 --
+CREATE SCHEMA multi_insert_select;
+SET search_path = multi_insert_select,public;
 SHOW server_version \gset
 SELECT substring(:'server_version', '\d+')::int >= 15 AS server_version_ge_15;
 
@@ -2339,24 +2341,5 @@ join dist_table_2 t2 using (dist_col)
 limit 1
 returning text_col_1;
 
-DROP TABLE dist_table_1, dist_table_2;
-
--- wrap in a transaction to improve performance
-BEGIN;
-DROP TABLE coerce_events;
-DROP TABLE coerce_agg;
-DROP TABLE drop_col_table;
-DROP TABLE raw_table;
-DROP TABLE summary_table;
-DROP TABLE raw_events_first CASCADE;
-DROP TABLE raw_events_second;
-DROP TABLE reference_table;
-DROP TABLE agg_events;
-DROP TABLE table_with_defaults;
-DROP TABLE table_with_serial;
-DROP TABLE table_with_user_sequence;
-DROP SEQUENCE user_defined_sequence;
-DROP TABLE text_table;
-DROP TABLE char_table;
-DROP TABLE table_with_starts_with_defaults;
-COMMIT;
+SET client_min_messages TO ERROR;
+DROP SCHEMA multi_insert_select CASCADE;

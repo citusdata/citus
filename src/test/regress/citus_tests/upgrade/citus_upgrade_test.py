@@ -13,31 +13,29 @@ Options:
     --mixed                                 Run the verification phase with one node not upgraded.
 """
 
-import subprocess
 import atexit
 import os
 import re
+import subprocess
 import sys
 
 # https://stackoverflow.com/questions/14132789/relative-imports-for-the-billionth-time/14132912#14132912
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+import common
 import utils
+from docopt import docopt
 from utils import USER
 
-from docopt import docopt
-
 from config import (
-    CitusUpgradeConfig,
-    CITUS_VERSION_SQL,
-    MASTER_VERSION,
     AFTER_CITUS_UPGRADE_COORD_SCHEDULE,
     BEFORE_CITUS_UPGRADE_COORD_SCHEDULE,
+    CITUS_VERSION_SQL,
+    MASTER_VERSION,
     MIXED_AFTER_CITUS_UPGRADE_SCHEDULE,
     MIXED_BEFORE_CITUS_UPGRADE_SCHEDULE,
+    CitusUpgradeConfig,
 )
-
-import common
 
 
 def main(config):
@@ -96,7 +94,7 @@ def remove_citus(tar_path):
 
 def remove_tar_files(tar_path):
     ps = subprocess.Popen(("tar", "tf", tar_path), stdout=subprocess.PIPE)
-    output = subprocess.check_output(("xargs", "rm", "-v"), stdin=ps.stdout)
+    subprocess.check_output(("xargs", "rm", "-v"), stdin=ps.stdout)
     ps.wait()
 
 

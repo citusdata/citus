@@ -3207,7 +3207,7 @@ BinaryOpExpression(Expr *clause, Node **leftOperand, Node **rightOperand)
 		}
 		if (rightOperand != NULL)
 		{
-			*leftOperand = NULL;
+			*rightOperand = NULL;
 		}
 		return false;
 	}
