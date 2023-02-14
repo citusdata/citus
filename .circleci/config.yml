@@ -860,10 +860,6 @@ workflows:
           pg_major: 13
           image_tag: '<< pipeline.parameters.pg13_version >>'
           requires: [build-13]
-      - tap-test-citus:
-          <<:  *tap-test-citus-13
-          name: 'test-13_tap-columnar-freezing'
-          suite: columnar_freezing
 
       - tap-test-citus: &tap-test-citus-14
           name: 'test-14_tap-recovery'
@@ -871,10 +867,6 @@ workflows:
           pg_major: 14
           image_tag: '<< pipeline.parameters.pg14_version >>'
           requires: [build-14]
-      - tap-test-citus:
-          <<:  *tap-test-citus-14
-          name: 'test-14_tap-columnar-freezing'
-          suite: columnar_freezing
 
       - tap-test-citus: &tap-test-citus-15
           name: 'test-15_tap-recovery'
@@ -882,10 +874,6 @@ workflows:
           pg_major: 15
           image_tag: '<< pipeline.parameters.pg15_version >>'
           requires: [build-15]
-      - tap-test-citus:
-          <<:  *tap-test-citus-15
-          name: 'test-15_tap-columnar-freezing'
-          suite: columnar_freezing
 
       - test-arbitrary-configs:
           name: 'test-13_check-arbitrary-configs'
@@ -937,7 +925,6 @@ workflows:
             - test-13_check-columnar
             - test-13_check-columnar-isolation
             - test-13_tap-recovery
-            - test-13_tap-columnar-freezing
             - test-13_check-failure
             - test-13_check-enterprise
             - test-13_check-enterprise-isolation
@@ -957,7 +944,6 @@ workflows:
             - test-14_check-columnar
             - test-14_check-columnar-isolation
             - test-14_tap-recovery
-            - test-14_tap-columnar-freezing
             - test-14_check-failure
             - test-14_check-enterprise
             - test-14_check-enterprise-isolation
@@ -977,7 +963,6 @@ workflows:
             - test-15_check-columnar
             - test-15_check-columnar-isolation
             - test-15_tap-recovery
-            - test-15_tap-columnar-freezing
             - test-15_check-failure
             - test-15_check-enterprise
             - test-15_check-enterprise-isolation

@@ -8,6 +8,12 @@ mitmproxy = {editable = true, ref = "fix/tcp-flow-kill", git = "https://github.c
 construct = "==2.9.45"
 docopt = "==0.6.2"
 cryptography = "==3.4.8"
+pytest = "*"
+psycopg = "*"
+filelock = "*"
+pytest-asyncio = "*"
+pytest-timeout = "*"
+pytest-xdist = "*"
 
 [dev-packages]
 black = "*"
