@@ -343,6 +343,44 @@ ShardCopyDestReceiverDestroy(DestReceiver *dest)
 	pfree(copyDest);
 }
 
+StringInfo 
+ConstructNonGeneratedColumnsList(const  char *shardRelationName, const  char *schemaName)
+{
+
+	Oid namespaceOid = get_namespace_oid(schemaName, true);
+
+	Oid relationId = get_relname_relid(shardRelationName, namespaceOid);
+
+       Relation relation = relation_open(relationId, AccessShareLock);
+       int numberOfAttributes = RelationGetNumberOfAttributes(relation);
+
+       StringInfo columnList = makeStringInfo();
+
+       appendStringInfo(columnList, "( ");
+
+       bool first = true;
+
+       for (int attrNum = 1; attrNum <= numberOfAttributes; attrNum++)
+       {
+		Form_pg_attribute attributeTuple =
+			                        TupleDescAttr(relation->rd_att, attrNum - 1);
+
+		if (attributeTuple->attgenerated)
+			continue;
+
+		if (!first)
+			 appendStringInfo(columnList,", ");
+
+		 appendStringInfo(columnList, "%s ", NameStr(attributeTuple->attname));
+
+		 first = false;
+       }
+
+       appendStringInfo(columnList, ")");
+
+       relation_close(relation, NoLock);
+       return columnList;
+}
 
 /*
  * ConstructShardCopyStatement constructs the text of a COPY statement
@@ -355,10 +393,14 @@ ConstructShardCopyStatement(List *destinationShardFullyQualifiedName, bool
 	char *destinationShardSchemaName = linitial(destinationShardFullyQualifiedName);
 	char *destinationShardRelationName = lsecond(destinationShardFullyQualifiedName);
 
+	
 	StringInfo command = makeStringInfo();
-	appendStringInfo(command, "COPY %s.%s FROM STDIN",
+
+	StringInfo colNameList = ConstructNonGeneratedColumnsList(destinationShardRelationName, destinationShardSchemaName);
+
+	appendStringInfo(command, "COPY %s.%s %s FROM STDIN",
 					 quote_identifier(destinationShardSchemaName), quote_identifier(
-						 destinationShardRelationName));
+						 destinationShardRelationName), colNameList->data);
 
 	if (useBinaryFormat)
 	{
