@@ -177,7 +177,7 @@ with open(tmp_schedule_path, "a") as myfile:
         myfile.write(f"test: {dependency}\n")
 
     repetition_cnt = args["repeat"]
-    if  repetition_cnt > 1 not dependencies.repeatable:
+    if repetition_cnt > 1 and not dependencies.repeatable:
         repetition_cnt = 1
         print(f"WARNING: Cannot repeatably run this test: '{test_file_name}'")
     for _ in range(repetition_cnt):
