@@ -201,6 +201,9 @@ jobs:
       - run:
           name: 'Check if all GUCs are sorted alphabetically'
           command: ci/check_gucs_are_alphabetically_sorted.sh
+      - run:
+          name: 'Check for missing downgrade scripts'
+          command: ci/check_migration_files.sh
 
   check-sql-snapshots:
     docker:
