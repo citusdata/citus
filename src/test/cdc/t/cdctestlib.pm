@@ -113,7 +113,7 @@ sub create_node {
         $PostgresNode::use_tcp = 1;
         $PostgresNode::test_pghost = '127.0.0.1';
         my %params = ( "port" => $port, "host" => "localhost");
-        $node = get_new_node($name, %params);        
+        $node = get_new_node($name, %params);
     }
     print("node's port:" . $node->port . "\n");
 
@@ -130,7 +130,7 @@ citus.override_table_visibility = off
     $node->init(allows_streaming => 'logical');
     if ($node_type == $NODE_TYPE_COORDINATOR || $node_type == $NODE_TYPE_WORKER) {
         $node->append_conf("postgresql.conf",$citus_config_options);
-    } 
+    }
 
     $node->start();
 
@@ -139,7 +139,7 @@ citus.override_table_visibility = off
         my $value = $node->safe_psql('postgres', "SHOW citus.enable_replication_origin_session;");
         print("citus.enable_replication_origin_session value is $value\n")
     }
-    
+
     return $node;
 }
 
@@ -208,7 +208,7 @@ sub connect_cdc_client_to_citus_cluster_publications {
                 create_slot=false,
                 enabled=true,
                 slot_name=cdc_replication_slot,". $copy_data .");";
-        
+
         $node->safe_psql('postgres',$subscription_stmt);
         $i++;
     }
@@ -241,7 +241,7 @@ sub wait_for_cdc_client_to_catch_up_with_workers {
             print "node$i: waiting for cdc client subscription $subscription to catch up\n";
             $_->wait_for_catchup($subscription);
             $i++;
-        }        
+        }
 }
 
 sub wait_for_cdc_client_to_catch_up_with_coordinator {
