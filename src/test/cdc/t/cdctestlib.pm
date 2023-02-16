@@ -119,12 +119,17 @@ sub create_node {
 
     $port += 1;
 
+    my $citus_config_options = "
+max_connections = 100
+max_wal_senders = 100
+max_replication_slots = 100
+citus.enable_replication_origin_session = on
+citus.override_table_visibility = off
+";
+
     $node->init(allows_streaming => 'logical');
     if ($node_type == $NODE_TYPE_COORDINATOR || $node_type == $NODE_TYPE_WORKER) {
-        $node->append_conf("postgresql.conf","
-            citus.enable_replication_origin_session = on
-            citus.override_table_visibility = off
-        ");
+        $node->append_conf("postgresql.conf",$citus_config_options);
     } 
 
     $node->start();

@@ -134,7 +134,6 @@ PublishChangesIfCdcSlot(LogicalDecodingContext *ctx, ReorderBufferTXN *txn,
 				/*For reference tables, publish the changes only from the coordinator node. */
 				if (!IsCoordinator())
 				{
-					int nodeID = GetLocalNodeId();
 					return true;
 				}
 			}
