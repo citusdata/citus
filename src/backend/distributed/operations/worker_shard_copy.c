@@ -356,8 +356,6 @@ ConstructNonGeneratedColumnsList(const  char *shardRelationName, const  char *sc
 
        StringInfo columnList = makeStringInfo();
 
-       appendStringInfo(columnList, "( ");
-
        bool first = true;
 
        for (int attrNum = 1; attrNum <= numberOfAttributes; attrNum++)
@@ -375,8 +373,6 @@ ConstructNonGeneratedColumnsList(const  char *shardRelationName, const  char *sc
 
 		 first = false;
        }
-
-       appendStringInfo(columnList, ")");
 
        relation_close(relation, NoLock);
        return columnList;
@@ -398,7 +394,7 @@ ConstructShardCopyStatement(List *destinationShardFullyQualifiedName, bool
 
 	StringInfo colNameList = ConstructNonGeneratedColumnsList(destinationShardRelationName, destinationShardSchemaName);
 
-	appendStringInfo(command, "COPY %s.%s %s FROM STDIN",
+	appendStringInfo(command, "COPY %s.%s (%s) FROM STDIN",
 					 quote_identifier(destinationShardSchemaName), quote_identifier(
 						 destinationShardRelationName), colNameList->data);
 
@@ -410,6 +406,8 @@ ConstructShardCopyStatement(List *destinationShardFullyQualifiedName, bool
 	{
 		appendStringInfo(command, ";");
 	}
+
+	elog(WARNING, "ConstructShardCopyStatement : COMMAND = %s", command->data);
 
 	return command;
 }

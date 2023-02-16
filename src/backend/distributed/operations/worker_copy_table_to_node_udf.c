@@ -57,6 +57,8 @@ worker_copy_table_to_node(PG_FUNCTION_ARGS)
 	appendStringInfo(selectShardQueryForCopy,
 					 "SELECT %s FROM %s;", colNameList->data, relationQualifiedName);
 
+	elog(WARNING, "selectShardQueryForCopy = %s", selectShardQueryForCopy->data);
+
 	ParamListInfo params = NULL;
 	ExecuteQueryStringIntoDestReceiver(selectShardQueryForCopy->data, params,
 									   destReceiver);
