@@ -25,7 +25,7 @@ extern void ResetReplicationOriginLocalSession(void);
 extern void ResetReplicationOriginLocalSessionCallbackHandler(void *arg);
 
 
-extern bool isReplicationOriginSessionFeatureEnabled;
+extern bool UseReplicationOriginsForInternalTransfers;
 
 
 #endif /* REPLICATION_ORIGIN_SESSION_UTILS_H */

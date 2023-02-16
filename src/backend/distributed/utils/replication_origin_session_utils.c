@@ -34,7 +34,7 @@ static RepOriginId originalOriginId = InvalidRepOriginId;
 /*
  * Setting that controls whether replication origin sessions are enabled.
  */
-bool isReplicationOriginSessionFeatureEnabled = false;
+bool UseReplicationOriginsForInternalTransfers = false;
 
 
 /* replication_origin_session_start_no_publish starts a new replication origin session
@@ -46,7 +46,7 @@ bool isReplicationOriginSessionFeatureEnabled = false;
 Datum
 replication_origin_session_start_no_publish(PG_FUNCTION_ARGS)
 {
-	if (!isReplicationOriginSessionFeatureEnabled)
+	if (!UseReplicationOriginsForInternalTransfers)
 	{
 		PG_RETURN_VOID();
 	}
@@ -62,10 +62,6 @@ replication_origin_session_start_no_publish(PG_FUNCTION_ARGS)
 Datum
 replication_origin_session_end_no_publish(PG_FUNCTION_ARGS)
 {
-	if (!isReplicationOriginSessionFeatureEnabled)
-	{
-		PG_RETURN_VOID();
-	}
 	ResetReplicationOriginLocalSession();
 	PG_RETURN_VOID();
 }
@@ -77,10 +73,6 @@ replication_origin_session_end_no_publish(PG_FUNCTION_ARGS)
 Datum
 replication_origin_session_is_no_publish(PG_FUNCTION_ARGS)
 {
-	if (!isReplicationOriginSessionFeatureEnabled)
-	{
-		PG_RETURN_BOOL(false);
-	}
 	bool result = IsLocalReplicationOriginSessionActive();
 	PG_RETURN_BOOL(result);
 }
@@ -103,7 +95,7 @@ IsLocalReplicationOriginSessionActive(void)
 void
 SetupReplicationOriginLocalSession(void)
 {
-	if (!isReplicationOriginSessionFeatureEnabled)
+	if (!UseReplicationOriginsForInternalTransfers)
 	{
 		return;
 	}
@@ -134,7 +126,7 @@ void
 ResetReplicationOriginLocalSession(void)
 {
 	/*elog(LOG, "Resetting local replication origin session"); */
-	if (!isReplicationOriginSessionFeatureEnabled)
+	if (replorigin_session_origin != DoNotReplicateId)
 	{
 		return;
 	}
@@ -167,7 +159,7 @@ ResetReplicationOriginLocalSessionCallbackHandler(void *arg)
 void
 SetupReplicationOriginRemoteSession(MultiConnection *connection)
 {
-	if (!isReplicationOriginSessionFeatureEnabled)
+	if (!UseReplicationOriginsForInternalTransfers)
 	{
 		return;
 	}
@@ -191,10 +183,6 @@ SetupReplicationOriginRemoteSession(MultiConnection *connection)
 void
 ResetReplicationOriginRemoteSession(MultiConnection *connection)
 {
-	if (!isReplicationOriginSessionFeatureEnabled)
-	{
-		return;
-	}
 	if (connection != NULL && connection->isReplicationOriginSessionSetup)
 	{
 		/*elog(LOG, "Resetting remote replication origin session %s,%d", connection->hostname, connection->port); */

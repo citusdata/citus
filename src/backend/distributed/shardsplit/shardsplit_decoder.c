@@ -47,6 +47,9 @@ static bool replication_origin_filter_cb(LogicalDecodingContext *ctx, RepOriginI
 static bool PublishChangesIfCdcSlot(LogicalDecodingContext *ctx, ReorderBufferTXN *txn,
 									Relation relation, ReorderBufferChange *change);
 
+static void handleSchemaChangesInRelation(Relation relation, Relation targetRelation,
+										  ReorderBufferChange *change);
+
 /* used in the replication_origin_filter_cb function. */
 #define InvalidRepOriginId 0
 
@@ -108,6 +111,8 @@ PublishChangesIfCdcSlot(LogicalDecodingContext *ctx, ReorderBufferTXN *txn,
 						Relation relation, ReorderBufferChange *change)
 {
 	char *replicationSlotName = ctx->slot->data.name.data;
+	bool isCDCTranslated = false;
+	Relation targetRelation;
 
 	/* Check if the replication slot is CITUS_CDC_SLOT*/
 	if (replicationSlotName != NULL &&
@@ -130,9 +135,6 @@ PublishChangesIfCdcSlot(LogicalDecodingContext *ctx, ReorderBufferTXN *txn,
 				if (!IsCoordinator())
 				{
 					int nodeID = GetLocalNodeId();
-					elog(LOG,
-						 "PublishChangesIfCdcSlot: Skipping changes for reference table %s in node %d",
-						 shardRelationName, nodeID);
 					return true;
 				}
 			}
@@ -140,17 +142,131 @@ PublishChangesIfCdcSlot(LogicalDecodingContext *ctx, ReorderBufferTXN *txn,
 			{
 				/* try to get the distributed relation id for the shard */
 				Oid distributedRelationId = RelationIdForShard(shardId);
+
 				if (OidIsValid(distributedRelationId))
 				{
-					relation = RelationIdGetRelation(distributedRelationId);
+					targetRelation = RelationIdGetRelation(distributedRelationId);
+					handleSchemaChangesInRelation(relation, targetRelation, change);
+					isCDCTranslated = true;
 				}
 			}
 		}
 
-		pgoutputChangeCB(ctx, txn, relation, change);
+		if (isCDCTranslated)
+		{
+			pgoutputChangeCB(ctx, txn, targetRelation, change);
+			RelationClose(targetRelation);
+		}
+		else
+		{
+			pgoutputChangeCB(ctx, txn, relation, change);
+		}
 		return true;
 	}
 	return false;
+}
+
+
+static HeapTuple
+GetTupleForTargetSchemaForCdc(HeapTuple sourceRelationTuple,
+							  TupleDesc sourceRelDesc,
+							  TupleDesc targetRelDesc)
+{
+	/* Deform the tuple */
+	Datum *oldValues = (Datum *) palloc0(sourceRelDesc->natts * sizeof(Datum));
+	bool *oldNulls = (bool *) palloc0(sourceRelDesc->natts * sizeof(bool));
+	heap_deform_tuple(sourceRelationTuple, sourceRelDesc, oldValues,
+					  oldNulls);
+
+
+	/* Create new tuple by skipping dropped columns */
+	int nextAttributeIndex = 0;
+	Datum *newValues = (Datum *) palloc0(targetRelDesc->natts * sizeof(Datum));
+	bool *newNulls = (bool *) palloc0(targetRelDesc->natts * sizeof(bool));
+	for (int i = 0; i < targetRelDesc->natts; i++)
+	{
+		if (TupleDescAttr(targetRelDesc, i)->attisdropped)
+		{
+			Datum nullDatum = (Datum) 0;
+			newValues[i] = nullDatum;
+			newNulls[i] = true;
+		}
+		else
+		{
+			newValues[i] = oldValues[nextAttributeIndex];
+			newNulls[i] = oldNulls[nextAttributeIndex];
+			nextAttributeIndex++;
+		}
+	}
+
+	HeapTuple targetRelationTuple = heap_form_tuple(targetRelDesc, newValues, newNulls);
+	return targetRelationTuple;
+}
+
+
+static void
+handleSchemaChangesInRelation(Relation relation, Relation targetRelation,
+							  ReorderBufferChange *change)
+{
+	TupleDesc sourceRelationDesc = RelationGetDescr(relation);
+	TupleDesc targetRelationDesc = RelationGetDescr(targetRelation);
+	if (targetRelationDesc->natts > sourceRelationDesc->natts)
+	{
+		switch (change->action)
+		{
+			case REORDER_BUFFER_CHANGE_INSERT:
+			{
+				HeapTuple sourceRelationNewTuple = &(change->data.tp.newtuple->tuple);
+				HeapTuple targetRelationNewTuple = GetTupleForTargetSchemaForCdc(
+					sourceRelationNewTuple, sourceRelationDesc, targetRelationDesc);
+
+				change->data.tp.newtuple->tuple = *targetRelationNewTuple;
+				break;
+			}
+
+			case REORDER_BUFFER_CHANGE_UPDATE:
+			{
+				HeapTuple sourceRelationNewTuple = &(change->data.tp.newtuple->tuple);
+				HeapTuple targetRelationNewTuple = GetTupleForTargetSchemaForCdc(
+					sourceRelationNewTuple, sourceRelationDesc, targetRelationDesc);
+
+				change->data.tp.newtuple->tuple = *targetRelationNewTuple;
+
+				/*
+				 * Format oldtuple according to the target relation. If the column values of replica
+				 * identiy change, then the old tuple is non-null and needs to be formatted according
+				 * to the target relation schema.
+				 */
+				if (change->data.tp.oldtuple != NULL)
+				{
+					HeapTuple sourceRelationOldTuple = &(change->data.tp.oldtuple->tuple);
+					HeapTuple targetRelationOldTuple = GetTupleForTargetSchemaForCdc(
+						sourceRelationOldTuple,
+						sourceRelationDesc,
+						targetRelationDesc);
+
+					change->data.tp.oldtuple->tuple = *targetRelationOldTuple;
+				}
+				break;
+			}
+
+			case REORDER_BUFFER_CHANGE_DELETE:
+			{
+				HeapTuple sourceRelationOldTuple = &(change->data.tp.oldtuple->tuple);
+				HeapTuple targetRelationOldTuple = GetTupleForTargetSchemaForCdc(
+					sourceRelationOldTuple, sourceRelationDesc, targetRelationDesc);
+
+				change->data.tp.oldtuple->tuple = *targetRelationOldTuple;
+				break;
+			}
+
+			/* Only INSERT/DELETE/UPDATE actions are visible in the replication path of split shard */
+			default:
+				ereport(ERROR, errmsg(
+							"Unexpected Action :%d. Expected action is INSERT/DELETE/UPDATE",
+							change->action));
+		}
+	}
 }
 
 

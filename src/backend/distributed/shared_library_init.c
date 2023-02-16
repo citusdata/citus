@@ -1295,7 +1295,7 @@ RegisterCitusConfigVariables(void)
 					 "records for shard splits,moves and "
 					 "create_distributed_table/undistribute_table operations."),
 		NULL,
-		&isReplicationOriginSessionFeatureEnabled,
+		&UseReplicationOriginsForInternalTransfers,
 		false,
 		PGC_USERSET,
 		GUC_STANDARD,
