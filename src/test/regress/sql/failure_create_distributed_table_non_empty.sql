@@ -27,11 +27,6 @@ SELECT citus.mitmproxy('conn.kill()');
 SELECT create_distributed_table('test_table', 'id');
 SELECT count(*) FROM pg_dist_shard WHERE logicalrelid='create_distributed_table_non_empty_failure.test_table'::regclass;
 
--- in the first test, cancel the first connection we sent from the coordinator
-SELECT citus.mitmproxy('conn.cancel(' ||  pg_backend_pid() || ')');
-SELECT create_distributed_table('test_table', 'id');
-SELECT count(*) FROM pg_dist_shard WHERE logicalrelid='create_distributed_table_non_empty_failure.test_table'::regclass;
-
 -- kill as soon as the coordinator sends CREATE SCHEMA
 SELECT citus.mitmproxy('conn.onQuery(query="^CREATE SCHEMA").kill()');
 SELECT create_distributed_table('test_table', 'id');

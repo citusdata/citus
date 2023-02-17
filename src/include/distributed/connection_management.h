@@ -192,8 +192,12 @@ typedef struct MultiConnection
 	/* information about the associated remote transaction */
 	RemoteTransaction remoteTransaction;
 
-	/* membership in list of in-progress transactions */
+	/*
+	 * membership in list of in-progress transactions and a flag to indicate
+	 * that the connection was added to this list
+	 */
 	dlist_node transactionNode;
+	bool transactionInProgress;
 
 	/* list of all placements referenced by this connection */
 	dlist_head referencedPlacements;

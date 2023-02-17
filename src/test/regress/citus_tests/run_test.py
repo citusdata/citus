@@ -150,7 +150,6 @@ def default_base_schedule(test_schedule):
         return "minimal_schedule"
     
     if "cdc" in test_schedule:
-        print("cdc returning NONE")
         return None
 
     if test_schedule in config.ARBITRARY_SCHEDULE_NAMES:
@@ -193,8 +192,10 @@ if dependencies.schedule == "base_isolation_schedule":
     make_recipe = "check-isolation-custom-schedule"
 elif dependencies.schedule == "failure_base_schedule":
     make_recipe = "check-failure-custom-schedule"
+
 elif "cdc" in test_file_name:
     make_recipe = "check-cdc"
+
 else:
     make_recipe = "check-custom-schedule"
 

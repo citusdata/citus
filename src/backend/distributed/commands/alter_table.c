@@ -805,15 +805,30 @@ ConvertTable(TableConversionState *con)
 		ExecuteQueryViaSPI(tableConstructionSQL, SPI_OK_UTILITY);
 	}
 
+	/*
+	 * when there are many partitions, each call to ProcessUtilityParseTree
+	 * accumulates used memory. Free context after each call.
+	 */
+	MemoryContext citusPerPartitionContext =
+		AllocSetContextCreate(CurrentMemoryContext,
+							  "citus_per_partition_context",
+							  ALLOCSET_DEFAULT_SIZES);
+	MemoryContext oldContext = MemoryContextSwitchTo(citusPerPartitionContext);
+
 	char *attachPartitionCommand = NULL;
 	foreach_ptr(attachPartitionCommand, attachPartitionCommands)
 	{
+		MemoryContextReset(citusPerPartitionContext);
+
 		Node *parseTree = ParseTreeNode(attachPartitionCommand);
 
 		ProcessUtilityParseTree(parseTree, attachPartitionCommand,
 								PROCESS_UTILITY_QUERY,
 								NULL, None_Receiver, NULL);
 	}
+
+	MemoryContextSwitchTo(oldContext);
+	MemoryContextDelete(citusPerPartitionContext);
 
 	if (isPartitionTable)
 	{

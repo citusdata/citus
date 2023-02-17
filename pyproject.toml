@@ -1,0 +1,5 @@
+[tool.isort]
+profile = 'black'
+
+[tool.black]
+include = '(src/test/regress/bin/diff-filter|\.pyi?|\.ipynb)$'
