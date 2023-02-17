@@ -273,7 +273,7 @@ ROLLBACK;
 -- make sure that everything is rollbacked
 SELECT * FROM distributed_table WHERE key = 1 ORDER BY 1,2,3;
 SELECT count(*) FROM second_distributed_table;
-SELECT * FROM second_distributed_table;
+SELECT * FROM second_distributed_table ORDER BY 1;
 
 -- very simple examples, an SELECTs should see the modifications
 -- that has done before

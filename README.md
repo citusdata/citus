@@ -1,4 +1,4 @@
-| **<br/>The Citus database is 100% open source.<br/><img width=1000/><br/>Learn what's new in the [Citus 11.1 release blog](https://www.citusdata.com/blog/2022/09/19/citus-11-1-shards-postgres-tables-without-interruption/) and the [Citus Updates page](https://www.citusdata.com/updates/).<br/><br/>**|
+| **<br/>The Citus database is 100% open source.<br/><img width=1000/><br/>Learn what's new in the [Citus 11.2 release blog](https://www.citusdata.com/blog/2023/02/08/whats-new-in-citus-11-2-patroni-ha-support/) and the [Citus Updates page](https://www.citusdata.com/updates/).<br/><br/>**|
 |---|
 <br/>
 
@@ -38,6 +38,7 @@ Since Citus is an extension to Postgres, you can use Citus with the latest Postg
 - [Why Citus?](#why-citus)
 - [Getting Started](#getting-started)
 - [Using Citus](#using-citus)
+- [Setting up with High Availability](#setting-up-with-high-availability)
 - [Documentation](#documentation)
 - [Architecture](#architecture)
 - [When to Use Citus](#when-to-use-citus)
@@ -93,14 +94,14 @@ Install packages on Ubuntu / Debian:
 ```bash
 curl https://install.citusdata.com/community/deb.sh > add-citus-repo.sh
 sudo bash add-citus-repo.sh
-sudo apt-get -y install postgresql-15-citus-11.1
+sudo apt-get -y install postgresql-15-citus-11.2
 ```
 
-Install packages on CentOS / Fedora / Red Hat:
+Install packages on CentOS / Red Hat:
 ```bash
 curl https://install.citusdata.com/community/rpm.sh > add-citus-repo.sh
 sudo bash add-citus-repo.sh
-sudo yum install -y citus111_15
+sudo yum install -y citus112_15
 ```
 
 To add Citus to your local PostgreSQL database, add the following to `postgresql.conf`:
@@ -345,6 +346,30 @@ You can use columnar storage by itself, or in a distributed table to combine the
 When using columnar storage, you should only load data in batch using `COPY` or `INSERT..SELECT` to achieve good  compression. Update, delete, and foreign keys are currently unsupported on columnar tables. However, you can use partitioned tables in which newer partitions use row-based storage, and older partitions are compressed using columnar storage.
 
 To learn more about columnar storage, check out the [columnar storage README](https://github.com/citusdata/citus/blob/master/src/backend/columnar/README.md).
+
+## Setting up with High Availability
+
+One of the most popular high availability solutions for PostgreSQL, [Patroni 3.0](https://github.com/zalando/patroni), has [first class support for Citus 10.0 and above](https://patroni.readthedocs.io/en/latest/citus.html#citus), additionally Citus 11.2 ships with improvements for smoother node switchover in Patroni.
+
+An example of patronictl list output for the Citus cluster:
+
+```bash
+postgres@coord1:~$ patronictl list demo
+```
+
+```text
++ Citus cluster: demo ----------+--------------+---------+----+-----------+
+| Group | Member  | Host        | Role         | State   | TL | Lag in MB |
++-------+---------+-------------+--------------+---------+----+-----------+
+|     0 | coord1  | 172.27.0.10 | Replica      | running |  1 |         0 |
+|     0 | coord2  | 172.27.0.6  | Sync Standby | running |  1 |         0 |
+|     0 | coord3  | 172.27.0.4  | Leader       | running |  1 |           |
+|     1 | work1-1 | 172.27.0.8  | Sync Standby | running |  1 |         0 |
+|     1 | work1-2 | 172.27.0.2  | Leader       | running |  1 |           |
+|     2 | work2-1 | 172.27.0.5  | Sync Standby | running |  1 |         0 |
+|     2 | work2-2 | 172.27.0.7  | Leader       | running |  1 |           |
++-------+---------+-------------+--------------+---------+----+-----------+
+```
 
 ## Documentation
 

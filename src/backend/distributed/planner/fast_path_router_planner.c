@@ -137,7 +137,7 @@ GeneratePlaceHolderPlannedStmt(Query *parse)
 
 
 /*
- * FastPathRouterQuery gets a query and returns true if the query is eligable for
+ * FastPathRouterQuery gets a query and returns true if the query is eligible for
  * being a fast path router query.
  * The requirements for the fast path query can be listed below:
  *
@@ -240,7 +240,7 @@ FastPathRouterQuery(Query *query, Node **distributionKeyValue)
 	 *
 	 *	We're also not allowing any other appearances of the distribution key in the quals.
 	 *
-	 *	Overall the logic is might sound fuzzy since it involves two individual checks:
+	 *	Overall the logic might sound fuzzy since it involves two individual checks:
 	 *	    (a) Check for top level AND operator with one side being "dist_key = const"
 	 *	    (b) Only allow single appearance of "dist_key" in the quals
 	 *

@@ -4,12 +4,16 @@ url = "https://pypi.python.org/simple"
 verify_ssl = true
 
 [packages]
-mitmproxy = {editable = true, ref = "fix/tcp-flow-kill", git = "https://github.com/thanodnl/mitmproxy.git"}
+mitmproxy = {editable = true, ref = "main", git = "https://github.com/citusdata/mitmproxy.git"}
 construct = "==2.9.45"
 docopt = "==0.6.2"
-cryptography = "==3.4.8"
+cryptography = ">=39.0.1"
 
 [dev-packages]
+black = "*"
+isort = "*"
+flake8 = "*"
+flake8-bugbear = "*"
 
 [requires]
 python_version = "3.9"
