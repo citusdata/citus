@@ -124,6 +124,10 @@ check-custom-schedule: all
 	$(pg_regress_multi_check) --load-extension=citus \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/$(SCHEDULE) $(EXTRA_TESTS)
 
+check-cdc-custom-schedule: all
+	$(pg_regress_multi_check) --load-extension=citus --worker-count=3 \
+	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/$(SCHEDULE) $(EXTRA_TESTS)
+
 check-failure-custom-schedule: all
 	$(pg_regress_multi_check) --load-extension=citus --mitmproxy \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/$(SCHEDULE) $(EXTRA_TESTS)
