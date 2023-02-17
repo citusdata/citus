@@ -4563,6 +4563,7 @@ ReceiveResults(WorkerSession *session, bool storeRows)
 		TupleDesc tupleDescriptor = tupleDest->tupleDescForQuery(tupleDest, queryIndex);
 		if (tupleDescriptor == NULL)
 		{
+			PQclear(result);
 			continue;
 		}
 
