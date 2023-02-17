@@ -199,20 +199,6 @@ CitusExplainScan(CustomScanState *node, List *ancestors, struct ExplainState *es
 		return;
 	}
 
-	/*
-	 * ALTER TABLE statements are not explained by postgres. However ALTER TABLE statements
-	 * may trigger SELECT statements causing explain hook to run. This situation causes a crash in a worker.
-	 * Therefore we will detect if we are explaining a triggered query when we are processing
-	 * an ALTER TABLE statement and stop explain in this situation.
-	 */
-	if (AlterTableInProgress())
-	{
-		ExplainPropertyText("Citus Explain Scan",
-							"Explain for triggered constraint validation queries during ALTER TABLE commands are not supported by Citus",
-							es);
-		return;
-	}
-
 	ExplainOpenGroup("Distributed Query", "Distributed Query", true, es);
 
 	/*
