@@ -1116,12 +1116,27 @@ CreateDistributedTable(Oid relationId, char *distributionColumnName,
 		char *relationName = get_rel_name(relationId);
 		char *parentRelationName = quote_qualified_identifier(schemaName, relationName);
 
+		/*
+		 * when there are many partitions, each call to CreateDistributedTable
+		 * accumulates used memory. Create and free context for each call.
+		 */
+		MemoryContext citusPartitionContext =
+			AllocSetContextCreate(CurrentMemoryContext,
+								  "citus_per_partition_context",
+								  ALLOCSET_DEFAULT_SIZES);
+		MemoryContext oldContext = MemoryContextSwitchTo(citusPartitionContext);
+
 		foreach_oid(partitionRelationId, partitionList)
 		{
+			MemoryContextReset(citusPartitionContext);
+
 			CreateDistributedTable(partitionRelationId, distributionColumnName,
 								   distributionMethod, shardCount, false,
 								   parentRelationName);
 		}
+
+		MemoryContextSwitchTo(oldContext);
+		MemoryContextDelete(citusPartitionContext);
 	}
 
 	/* copy over data for hash distributed and reference tables */
