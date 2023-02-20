@@ -645,14 +645,36 @@ ConvertTable(TableConversionState *con)
 
 		List *partitionList = PartitionList(con->relationId);
 
+		/*
+		 * when there are many partitions, memory usage is
+		 * accumulated. Free context after each partition.
+		 */
+		MemoryContext citusPerPartitionContext =
+			AllocSetContextCreate(CurrentMemoryContext,
+								  "citus_per_partition_context",
+								  ALLOCSET_DEFAULT_SIZES);
+		MemoryContext oldContext = MemoryContextSwitchTo(citusPerPartitionContext);
+
 		Oid partitionRelationId = InvalidOid;
 		foreach_oid(partitionRelationId, partitionList)
 		{
+			MemoryContextReset(citusPerPartitionContext);
+
+			MemoryContextSwitchTo(oldContext);
+
+			/* persist new colocateWith as we need it later */
 			char *tableQualifiedName = generate_qualified_relation_name(
 				partitionRelationId);
-			char *detachPartitionCommand = GenerateDetachPartitionCommand(
-				partitionRelationId);
+
+			/* persist attachPartitionCommands as we need them later */
 			char *attachPartitionCommand = GenerateAlterTableAttachPartitionCommand(
+				partitionRelationId);
+			attachPartitionCommands = lappend(attachPartitionCommands,
+											  attachPartitionCommand);
+
+			MemoryContextSwitchTo(citusPerPartitionContext);
+
+			char *detachPartitionCommand = GenerateDetachPartitionCommand(
 				partitionRelationId);
 
 			/*
@@ -661,8 +683,6 @@ ConvertTable(TableConversionState *con)
 			 * the checks.
 			 */
 			ExecuteQueryViaSPI(detachPartitionCommand, SPI_OK_UTILITY);
-			attachPartitionCommands = lappend(attachPartitionCommands,
-											  attachPartitionCommand);
 
 			CascadeToColocatedOption cascadeOption = CASCADE_TO_COLOCATED_NO;
 			if (con->cascadeToColocated == CASCADE_TO_COLOCATED_YES ||
@@ -690,12 +710,30 @@ ConvertTable(TableConversionState *con)
 			};
 
 			TableConversionReturn *partitionReturn = con->function(&partitionParam);
-			if (cascadeOption == CASCADE_TO_COLOCATED_NO_ALREADY_CASCADED)
-			{
-				foreignKeyCommands = list_concat(foreignKeyCommands,
-												 partitionReturn->foreignKeyCommands);
-			}
 
+			/* persist foreign key commands as we need them later */
+			if (partitionReturn && partitionReturn->foreignKeyCommands)
+			{
+				if (cascadeOption == CASCADE_TO_COLOCATED_NO_ALREADY_CASCADED)
+				{
+					MemoryContextSwitchTo(oldContext);
+
+					List *copyForeignKeyCommands = NIL;
+					char *foreignKeyCommand = NULL;
+					foreach_ptr(foreignKeyCommand, partitionReturn->foreignKeyCommands)
+					{
+						char *copyForeignKeyCommand = MemoryContextStrdup(oldContext,
+																		  foreignKeyCommand);
+						copyForeignKeyCommands = lappend(copyForeignKeyCommands,
+														 copyForeignKeyCommand);
+					}
+
+					foreignKeyCommands = list_concat(foreignKeyCommands,
+													 copyForeignKeyCommands);
+
+					MemoryContextSwitchTo(citusPerPartitionContext);
+				}
+			}
 
 			/*
 			 * If we are altering a partitioned distributed table by
@@ -706,9 +744,14 @@ ConvertTable(TableConversionState *con)
 			 */
 			if (con->colocateWith != NULL && IsColocateWithNone(con->colocateWith))
 			{
+				/* free old colocateWith */
+				pfree(con->colocateWith);
 				con->colocateWith = tableQualifiedName;
 			}
 		}
+
+		MemoryContextSwitchTo(oldContext);
+		MemoryContextDelete(citusPerPartitionContext);
 	}
 
 	if (!con->suppressNoticeMessages)
@@ -836,8 +879,21 @@ ConvertTable(TableConversionState *con)
 
 		/* For now we only support cascade to colocation for alter_distributed_table UDF */
 		Assert(con->conversionType == ALTER_DISTRIBUTED_TABLE);
+
+		/*
+		 * when there are many colocated table, memory usage is
+		 * accumulated. Free context after each colocated table.
+		 */
+		MemoryContext citusPerColocatedTableContext =
+			AllocSetContextCreate(CurrentMemoryContext,
+								  "citus_per_coloc_table_context",
+								  ALLOCSET_DEFAULT_SIZES);
+		oldContext = MemoryContextSwitchTo(citusPerColocatedTableContext);
+
 		foreach_oid(colocatedTableId, con->colocatedTableList)
 		{
+			MemoryContextReset(citusPerColocatedTableContext);
+
 			if (colocatedTableId == con->relationId)
 			{
 				continue;
@@ -854,9 +910,31 @@ ConvertTable(TableConversionState *con)
 				.suppressNoticeMessages = con->suppressNoticeMessages
 			};
 			TableConversionReturn *colocatedReturn = con->function(&cascadeParam);
-			foreignKeyCommands = list_concat(foreignKeyCommands,
-											 colocatedReturn->foreignKeyCommands);
+
+			if (colocatedReturn && colocatedReturn->foreignKeyCommands)
+			{
+				/* persist foreign key commands as we need them later */
+				MemoryContextSwitchTo(oldContext);
+
+				List *copyForeignKeyCommands = NIL;
+				char *foreignKeyCommand = NULL;
+				foreach_ptr(foreignKeyCommand, colocatedReturn->foreignKeyCommands)
+				{
+					char *copyForeignKeyCommand = MemoryContextStrdup(oldContext,
+																	  foreignKeyCommand);
+					copyForeignKeyCommands = lappend(copyForeignKeyCommands,
+													 copyForeignKeyCommand);
+				}
+
+				foreignKeyCommands = list_concat(foreignKeyCommands,
+												 copyForeignKeyCommands);
+
+				MemoryContextSwitchTo(citusPerColocatedTableContext);
+			}
 		}
+
+		MemoryContextSwitchTo(oldContext);
+		MemoryContextDelete(citusPerColocatedTableContext);
 	}
 
 	/* recreate foreign keys */
