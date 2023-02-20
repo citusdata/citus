@@ -363,7 +363,7 @@ ConstructNonGeneratedColumnsList(const char *shardRelationName, const char *sche
 		Form_pg_attribute attributeTuple =
 			TupleDescAttr(relation->rd_att, attrNum - 1);
 
-		if (attributeTuple->attgenerated)
+		if (attributeTuple->attgenerated || attributeTuple->attisdropped)
 		{
 			continue;
 		}
