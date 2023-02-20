@@ -19,6 +19,7 @@ extern DestReceiver * CreateShardCopyDestReceiver(EState *executorState,
 												  List *destinationShardFullyQualifiedName,
 												  uint32_t destinationNodeId);
 
-extern StringInfo ConstructNonGeneratedColumnsList(const  char *shardRelationName, const  char *schemaName);
+extern StringInfo ConstructNonGeneratedColumnsList(const char *shardRelationName, const
+												   char *schemaName);
 
 #endif /* WORKER_SHARD_COPY_H_ */

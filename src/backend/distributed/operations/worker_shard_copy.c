@@ -343,40 +343,45 @@ ShardCopyDestReceiverDestroy(DestReceiver *dest)
 	pfree(copyDest);
 }
 
-StringInfo 
-ConstructNonGeneratedColumnsList(const  char *shardRelationName, const  char *schemaName)
-{
 
+StringInfo
+ConstructNonGeneratedColumnsList(const char *shardRelationName, const char *schemaName)
+{
 	Oid namespaceOid = get_namespace_oid(schemaName, true);
 
 	Oid relationId = get_relname_relid(shardRelationName, namespaceOid);
 
-       Relation relation = relation_open(relationId, AccessShareLock);
-       int numberOfAttributes = RelationGetNumberOfAttributes(relation);
+	Relation relation = relation_open(relationId, AccessShareLock);
+	int numberOfAttributes = RelationGetNumberOfAttributes(relation);
 
-       StringInfo columnList = makeStringInfo();
+	StringInfo columnList = makeStringInfo();
 
-       bool first = true;
+	bool first = true;
 
-       for (int attrNum = 1; attrNum <= numberOfAttributes; attrNum++)
-       {
+	for (int attrNum = 1; attrNum <= numberOfAttributes; attrNum++)
+	{
 		Form_pg_attribute attributeTuple =
-			                        TupleDescAttr(relation->rd_att, attrNum - 1);
+			TupleDescAttr(relation->rd_att, attrNum - 1);
 
 		if (attributeTuple->attgenerated)
+		{
 			continue;
+		}
 
 		if (!first)
-			 appendStringInfo(columnList,", ");
+		{
+			appendStringInfo(columnList, ", ");
+		}
 
-		 appendStringInfo(columnList, "%s ", NameStr(attributeTuple->attname));
+		appendStringInfo(columnList, "%s ", NameStr(attributeTuple->attname));
 
-		 first = false;
-       }
+		first = false;
+	}
 
-       relation_close(relation, NoLock);
-       return columnList;
+	relation_close(relation, NoLock);
+	return columnList;
 }
+
 
 /*
  * ConstructShardCopyStatement constructs the text of a COPY statement
@@ -389,10 +394,11 @@ ConstructShardCopyStatement(List *destinationShardFullyQualifiedName, bool
 	char *destinationShardSchemaName = linitial(destinationShardFullyQualifiedName);
 	char *destinationShardRelationName = lsecond(destinationShardFullyQualifiedName);
 
-	
+
 	StringInfo command = makeStringInfo();
 
-	StringInfo colNameList = ConstructNonGeneratedColumnsList(destinationShardRelationName, destinationShardSchemaName);
+	StringInfo colNameList = ConstructNonGeneratedColumnsList(
+		destinationShardRelationName, destinationShardSchemaName);
 
 	appendStringInfo(command, "COPY %s.%s (%s) FROM STDIN",
 					 quote_identifier(destinationShardSchemaName), quote_identifier(
