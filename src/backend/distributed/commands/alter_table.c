@@ -183,6 +183,7 @@ static TableConversionReturn * AlterDistributedTable(TableConversionParameters *
 static TableConversionReturn * AlterTableSetAccessMethod(
 	TableConversionParameters *params);
 static TableConversionReturn * ConvertTable(TableConversionState *con);
+static TableConversionReturn * ConvertTableInternal(TableConversionState *con);
 static bool SwitchToSequentialAndLocalExecutionIfShardNameTooLong(char *relationName,
 																  char *longestShardName);
 static void DropIndexesNotSupportedByColumnar(Oid relationId,
@@ -216,6 +217,8 @@ static bool WillRecreateForeignKeyToReferenceTable(Oid relationId,
 static void WarningsForDroppingForeignKeysWithDistributedTables(Oid relationId);
 static void ErrorIfUnsupportedCascadeObjects(Oid relationId);
 static bool DoesCascadeDropUnsupportedObject(Oid classId, Oid id, HTAB *nodeMap);
+static TableConversionReturn * CopyTableConversionReturnIntoCurrentContext(
+	TableConversionReturn *tableConversionReturn);
 
 PG_FUNCTION_INFO_V1(undistribute_table);
 PG_FUNCTION_INFO_V1(alter_distributed_table);
@@ -402,6 +405,7 @@ UndistributeTable(TableConversionParameters *params)
 	params->conversionType = UNDISTRIBUTE_TABLE;
 	params->shardCountIsNull = true;
 	TableConversionState *con = CreateTableConversion(params);
+
 	return ConvertTable(con);
 }
 
@@ -441,6 +445,7 @@ AlterDistributedTable(TableConversionParameters *params)
 		ereport(DEBUG1, (errmsg("setting multi shard modify mode to sequential")));
 		SetLocalMultiShardModifyModeToSequential();
 	}
+
 	return ConvertTable(con);
 }
 
@@ -511,9 +516,9 @@ AlterTableSetAccessMethod(TableConversionParameters *params)
 
 
 /*
- * ConvertTable is used for converting a table into a new table with different properties.
- * The conversion is done by creating a new table, moving everything to the new table and
- * dropping the old one. So the oid of the table is not preserved.
+ * ConvertTableInternal is used for converting a table into a new table with different
+ * properties. The conversion is done by creating a new table, moving everything to the
+ * new table and dropping the old one. So the oid of the table is not preserved.
  *
  * The new table will have the same name, columns and rows. It will also have partitions,
  * views, sequences of the old table. Finally it will have everything created by
@@ -532,7 +537,7 @@ AlterTableSetAccessMethod(TableConversionParameters *params)
  * in case you add a new way to return from this function.
  */
 TableConversionReturn *
-ConvertTable(TableConversionState *con)
+ConvertTableInternal(TableConversionState *con)
 {
 	InTableTypeConversionFunctionCall = true;
 
@@ -645,36 +650,14 @@ ConvertTable(TableConversionState *con)
 
 		List *partitionList = PartitionList(con->relationId);
 
-		/*
-		 * when there are many partitions, memory usage is
-		 * accumulated. Free context after each partition.
-		 */
-		MemoryContext citusPerPartitionContext =
-			AllocSetContextCreate(CurrentMemoryContext,
-								  "citus_per_partition_context",
-								  ALLOCSET_DEFAULT_SIZES);
-		MemoryContext oldContext = MemoryContextSwitchTo(citusPerPartitionContext);
-
 		Oid partitionRelationId = InvalidOid;
 		foreach_oid(partitionRelationId, partitionList)
 		{
-			MemoryContextReset(citusPerPartitionContext);
-
-			MemoryContextSwitchTo(oldContext);
-
-			/* persist new colocateWith as we need it later */
 			char *tableQualifiedName = generate_qualified_relation_name(
 				partitionRelationId);
-
-			/* persist attachPartitionCommands as we need them later */
-			char *attachPartitionCommand = GenerateAlterTableAttachPartitionCommand(
-				partitionRelationId);
-			attachPartitionCommands = lappend(attachPartitionCommands,
-											  attachPartitionCommand);
-
-			MemoryContextSwitchTo(citusPerPartitionContext);
-
 			char *detachPartitionCommand = GenerateDetachPartitionCommand(
+				partitionRelationId);
+			char *attachPartitionCommand = GenerateAlterTableAttachPartitionCommand(
 				partitionRelationId);
 
 			/*
@@ -683,6 +666,8 @@ ConvertTable(TableConversionState *con)
 			 * the checks.
 			 */
 			ExecuteQueryViaSPI(detachPartitionCommand, SPI_OK_UTILITY);
+			attachPartitionCommands = lappend(attachPartitionCommands,
+											  attachPartitionCommand);
 
 			CascadeToColocatedOption cascadeOption = CASCADE_TO_COLOCATED_NO;
 			if (con->cascadeToColocated == CASCADE_TO_COLOCATED_YES ||
@@ -710,30 +695,12 @@ ConvertTable(TableConversionState *con)
 			};
 
 			TableConversionReturn *partitionReturn = con->function(&partitionParam);
-
-			/* persist foreign key commands as we need them later */
-			if (partitionReturn && partitionReturn->foreignKeyCommands)
+			if (cascadeOption == CASCADE_TO_COLOCATED_NO_ALREADY_CASCADED)
 			{
-				if (cascadeOption == CASCADE_TO_COLOCATED_NO_ALREADY_CASCADED)
-				{
-					MemoryContextSwitchTo(oldContext);
-
-					List *copyForeignKeyCommands = NIL;
-					char *foreignKeyCommand = NULL;
-					foreach_ptr(foreignKeyCommand, partitionReturn->foreignKeyCommands)
-					{
-						char *copyForeignKeyCommand = MemoryContextStrdup(oldContext,
-																		  foreignKeyCommand);
-						copyForeignKeyCommands = lappend(copyForeignKeyCommands,
-														 copyForeignKeyCommand);
-					}
-
-					foreignKeyCommands = list_concat(foreignKeyCommands,
-													 copyForeignKeyCommands);
-
-					MemoryContextSwitchTo(citusPerPartitionContext);
-				}
+				foreignKeyCommands = list_concat(foreignKeyCommands,
+												 partitionReturn->foreignKeyCommands);
 			}
+
 
 			/*
 			 * If we are altering a partitioned distributed table by
@@ -744,14 +711,9 @@ ConvertTable(TableConversionState *con)
 			 */
 			if (con->colocateWith != NULL && IsColocateWithNone(con->colocateWith))
 			{
-				/* free old colocateWith */
-				pfree(con->colocateWith);
 				con->colocateWith = tableQualifiedName;
 			}
 		}
-
-		MemoryContextSwitchTo(oldContext);
-		MemoryContextDelete(citusPerPartitionContext);
 	}
 
 	if (!con->suppressNoticeMessages)
@@ -879,21 +841,8 @@ ConvertTable(TableConversionState *con)
 
 		/* For now we only support cascade to colocation for alter_distributed_table UDF */
 		Assert(con->conversionType == ALTER_DISTRIBUTED_TABLE);
-
-		/*
-		 * when there are many colocated table, memory usage is
-		 * accumulated. Free context after each colocated table.
-		 */
-		MemoryContext citusPerColocatedTableContext =
-			AllocSetContextCreate(CurrentMemoryContext,
-								  "citus_per_coloc_table_context",
-								  ALLOCSET_DEFAULT_SIZES);
-		oldContext = MemoryContextSwitchTo(citusPerColocatedTableContext);
-
 		foreach_oid(colocatedTableId, con->colocatedTableList)
 		{
-			MemoryContextReset(citusPerColocatedTableContext);
-
 			if (colocatedTableId == con->relationId)
 			{
 				continue;
@@ -910,31 +859,9 @@ ConvertTable(TableConversionState *con)
 				.suppressNoticeMessages = con->suppressNoticeMessages
 			};
 			TableConversionReturn *colocatedReturn = con->function(&cascadeParam);
-
-			if (colocatedReturn && colocatedReturn->foreignKeyCommands)
-			{
-				/* persist foreign key commands as we need them later */
-				MemoryContextSwitchTo(oldContext);
-
-				List *copyForeignKeyCommands = NIL;
-				char *foreignKeyCommand = NULL;
-				foreach_ptr(foreignKeyCommand, colocatedReturn->foreignKeyCommands)
-				{
-					char *copyForeignKeyCommand = MemoryContextStrdup(oldContext,
-																	  foreignKeyCommand);
-					copyForeignKeyCommands = lappend(copyForeignKeyCommands,
-													 copyForeignKeyCommand);
-				}
-
-				foreignKeyCommands = list_concat(foreignKeyCommands,
-												 copyForeignKeyCommands);
-
-				MemoryContextSwitchTo(citusPerColocatedTableContext);
-			}
+			foreignKeyCommands = list_concat(foreignKeyCommands,
+											 colocatedReturn->foreignKeyCommands);
 		}
-
-		MemoryContextSwitchTo(oldContext);
-		MemoryContextDelete(citusPerColocatedTableContext);
 	}
 
 	/* recreate foreign keys */
@@ -962,7 +889,67 @@ ConvertTable(TableConversionState *con)
 	SetLocalEnableLocalReferenceForeignKeys(oldEnableLocalReferenceForeignKeys);
 
 	InTableTypeConversionFunctionCall = false;
+
 	return ret;
+}
+
+
+/*
+ * CopyTableConversionReturnIntoCurrentContext copies given tableConversionReturn
+ * into CurrentMemoryContext.
+ */
+static TableConversionReturn *
+CopyTableConversionReturnIntoCurrentContext(TableConversionReturn *tableConversionReturn)
+{
+	TableConversionReturn *tableConversionReturnCopy = NULL;
+	if (tableConversionReturn)
+	{
+		tableConversionReturnCopy = palloc0(sizeof(TableConversionReturn));
+		List *copyForeignKeyCommands = NIL;
+		char *foreignKeyCommand = NULL;
+		foreach_ptr(foreignKeyCommand, tableConversionReturn->foreignKeyCommands)
+		{
+			char *copyForeignKeyCommand = MemoryContextStrdup(CurrentMemoryContext,
+															  foreignKeyCommand);
+			copyForeignKeyCommands = lappend(copyForeignKeyCommands,
+											 copyForeignKeyCommand);
+		}
+		tableConversionReturnCopy->foreignKeyCommands = copyForeignKeyCommands;
+	}
+
+	return tableConversionReturnCopy;
+}
+
+
+/*
+ * ConvertTable is a wrapper for ConvertTableInternal to persist only
+ * TableConversionReturn and delete all other allocations.
+ */
+static TableConversionReturn *
+ConvertTable(TableConversionState *con)
+{
+	/*
+	 * when there are many partitions or colocated tables, memory usage is
+	 * accumulated. Free context for each call to ConvertTable.
+	 */
+	MemoryContext convertTableContext =
+		AllocSetContextCreate(CurrentMemoryContext,
+							  "citus_convert_table_context",
+							  ALLOCSET_DEFAULT_SIZES);
+	MemoryContext oldContext = MemoryContextSwitchTo(convertTableContext);
+
+	TableConversionReturn *tableConversionReturn = ConvertTableInternal(con);
+
+	MemoryContextSwitchTo(oldContext);
+
+	/* persist TableConversionReturn in oldContext */
+	TableConversionReturn *tableConversionReturnCopy =
+		CopyTableConversionReturnIntoCurrentContext(tableConversionReturn);
+
+	/* delete convertTableContext */
+	MemoryContextDelete(convertTableContext);
+
+	return tableConversionReturnCopy;
 }
 
 
