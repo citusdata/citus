@@ -503,7 +503,7 @@ SELECT count(*) FROM second_distributed_table;
      2
 (1 row)
 
-SELECT * FROM second_distributed_table;
+SELECT * FROM second_distributed_table ORDER BY 1;
  key | value
 ---------------------------------------------------------------------
    1 | 1

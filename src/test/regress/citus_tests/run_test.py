@@ -7,6 +7,7 @@ import random
 import re
 import shutil
 import sys
+from collections import OrderedDict
 from glob import glob
 
 import common
@@ -54,13 +55,37 @@ test_file_name = args["test_name"]
 use_base_schedule = args["use_base_schedule"]
 use_whole_schedule_line = args["use_whole_schedule_line"]
 
-test_files_to_skip = [
-    "multi_cluster_management",
-    "multi_extension",
-    "multi_test_helpers",
-    "multi_insert_select",
-]
-test_files_to_run_without_schedule = ["single_node_enterprise"]
+
+class TestDeps:
+    schedule: str | None
+    direct_extra_tests: list[str]
+
+    def __init__(self, schedule, extra_tests=None, repeatable=True):
+        self.schedule = schedule
+        self.direct_extra_tests = extra_tests or []
+        self.repeatable = repeatable
+
+    def extra_tests(self):
+        all_deps = OrderedDict()
+        for direct_dep in self.direct_extra_tests:
+            if direct_dep in deps:
+                for indirect_dep in deps[direct_dep].extra_tests():
+                    all_deps[indirect_dep] = True
+            all_deps[direct_dep] = True
+
+        return list(all_deps.keys())
+
+
+deps = {
+    "multi_cluster_management": TestDeps(
+        None, ["multi_test_helpers_superuser"], repeatable=False
+    ),
+    "create_role_propagation": TestDeps(None, ["multi_cluster_management"]),
+    "single_node_enterprise": TestDeps(None),
+    "multi_extension": TestDeps(None, repeatable=False),
+    "multi_test_helpers": TestDeps(None),
+    "multi_insert_select": TestDeps("base_schedule"),
+}
 
 if not (test_file_name or test_file_path):
     print("FATAL: No test given.")
@@ -83,12 +108,8 @@ if test_file_path:
         )
         sys.exit(1)
 
-# early exit if it's a test that needs to be skipped
-if test_file_name in test_files_to_skip:
-    print(f"WARNING: Skipping exceptional test: '{test_file_name}'")
-    sys.exit(0)
-
 test_schedule = ""
+dependencies = []
 
 # find related schedule
 for schedule_file_path in sorted(glob(os.path.join(regress_dir, "*_schedule"))):
@@ -103,34 +124,44 @@ for schedule_file_path in sorted(glob(os.path.join(regress_dir, "*_schedule"))):
     else:
         continue
     break
-
-# map suitable schedule
-if not test_schedule:
-    print(f"WARNING: Could not find any schedule for '{test_file_name}'")
-    sys.exit(0)
-elif "isolation" in test_schedule:
-    test_schedule = "base_isolation_schedule"
-elif "failure" in test_schedule:
-    test_schedule = "failure_base_schedule"
-elif "enterprise" in test_schedule:
-    test_schedule = "enterprise_minimal_schedule"
-elif "split" in test_schedule:
-    test_schedule = "minimal_schedule"
-elif "mx" in test_schedule:
-    if use_base_schedule:
-        test_schedule = "mx_base_schedule"
-    else:
-        test_schedule = "mx_minimal_schedule"
-elif "operations" in test_schedule:
-    test_schedule = "minimal_schedule"
-elif test_schedule in config.ARBITRARY_SCHEDULE_NAMES:
-    print(f"WARNING: Arbitrary config schedule ({test_schedule}) is not supported.")
-    sys.exit(0)
 else:
+    raise Exception("Test could not be found in any schedule")
+
+
+def default_base_schedule(test_schedule):
+    if "isolation" in test_schedule:
+        return "base_isolation_schedule"
+
+    if "failure" in test_schedule:
+        return "failure_base_schedule"
+
+    if "enterprise" in test_schedule:
+        return "enterprise_minimal_schedule"
+
+    if "split" in test_schedule:
+        return "minimal_schedule"
+
+    if "mx" in test_schedule:
+        if use_base_schedule:
+            return "mx_base_schedule"
+        return "mx_minimal_schedule"
+
+    if "operations" in test_schedule:
+        return "minimal_schedule"
+
+    if test_schedule in config.ARBITRARY_SCHEDULE_NAMES:
+        print(f"WARNING: Arbitrary config schedule ({test_schedule}) is not supported.")
+        sys.exit(0)
+
     if use_base_schedule:
-        test_schedule = "base_schedule"
-    else:
-        test_schedule = "minimal_schedule"
+        return "base_schedule"
+    return "minimal_schedule"
+
+
+if test_file_name in deps:
+    dependencies = deps[test_file_name]
+else:
+    dependencies = TestDeps(default_base_schedule(test_schedule))
 
 # copy base schedule to a temp file and append test_schedule_line
 # to be able to run tests in parallel (if test_schedule_line is a parallel group.)
@@ -139,16 +170,24 @@ tmp_schedule_path = os.path.join(
 )
 # some tests don't need a schedule to run
 # e.g tests that are in the first place in their own schedule
-if test_file_name not in test_files_to_run_without_schedule:
-    shutil.copy2(os.path.join(regress_dir, test_schedule), tmp_schedule_path)
+if dependencies.schedule:
+    shutil.copy2(os.path.join(regress_dir, dependencies.schedule), tmp_schedule_path)
 with open(tmp_schedule_path, "a") as myfile:
-    for _ in range(args["repeat"]):
+    for dependency in dependencies.extra_tests():
+        myfile.write(f"test: {dependency}\n")
+
+    repetition_cnt = args["repeat"]
+    if repetition_cnt > 1 and not dependencies.repeatable:
+        repetition_cnt = 1
+        print(f"WARNING: Cannot repeatably run this test: '{test_file_name}'")
+    for _ in range(repetition_cnt):
         myfile.write(test_schedule_line)
 
+
 # find suitable make recipe
-if "isolation" in test_schedule:
+if dependencies.schedule == "base_isolation_schedule":
     make_recipe = "check-isolation-custom-schedule"
-elif "failure" in test_schedule:
+elif dependencies.schedule == "failure_base_schedule":
     make_recipe = "check-failure-custom-schedule"
 else:
     make_recipe = "check-custom-schedule"
