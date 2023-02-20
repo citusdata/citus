@@ -53,7 +53,8 @@ worker_copy_table_to_node(PG_FUNCTION_ARGS)
 		targetNodeId);
 
 	StringInfo selectShardQueryForCopy = makeStringInfo();
-	StringInfo colNameList = ConstructNonGeneratedColumnsList(relationName, relationSchemaName);
+	StringInfo colNameList = ConstructNonGeneratedColumnsList(relationName,
+															  relationSchemaName);
 	appendStringInfo(selectShardQueryForCopy,
 					 "SELECT %s FROM %s;", colNameList->data, relationQualifiedName);
 
