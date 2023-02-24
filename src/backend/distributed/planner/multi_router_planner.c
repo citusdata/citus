@@ -121,7 +121,6 @@ static void CreateSingleTaskRouterSelectPlan(DistributedPlan *distributedPlan,
 											 Query *query,
 											 PlannerRestrictionContext *
 											 plannerRestrictionContext);
-static Oid ResultRelationOidForQuery(Query *query);
 static bool IsTidColumn(Node *node);
 static DeferredErrorMessage * ModifyPartialQuerySupported(Query *queryTree, bool
 														  multiShardQuery,
@@ -180,7 +179,12 @@ static void ReorderTaskPlacementsByTaskAssignmentPolicy(Job *job,
 static bool ModifiesLocalTableWithRemoteCitusLocalTable(List *rangeTableList);
 static DeferredErrorMessage * DeferErrorIfUnsupportedLocalTableJoin(List *rangeTableList);
 static bool IsLocallyAccessibleCitusLocalTable(Oid relationId);
-
+static DeferredErrorMessage * TargetlistAndFunctionsSupported(Oid resultRelationId,
+															  FromExpr *joinTree,
+															  Node *quals,
+															  List *targetList,
+															  CmdType commandType,
+															  List *returningList);
 
 /*
  * CreateRouterPlan attempts to create a router executor plan for the given
@@ -445,7 +449,7 @@ ModifyQueryResultRelationId(Query *query)
  * ResultRelationOidForQuery returns the OID of the relation this is modified
  * by a given query.
  */
-static Oid
+Oid
 ResultRelationOidForQuery(Query *query)
 {
 	RangeTblEntry *resultRTE = rt_fetch(query->resultRelation, query->rtable);
@@ -509,6 +513,161 @@ IsTidColumn(Node *node)
 	}
 
 	return false;
+}
+
+
+/*
+ * TargetlistAndFunctionsSupported implements a subset of what ModifyPartialQuerySupported
+ * checks, that subset being checking what functions are allowed, if we are
+ * updating distribution column, etc.
+ * Note: This subset of checks are repeated for each MERGE modify action.
+ */
+static DeferredErrorMessage *
+TargetlistAndFunctionsSupported(Oid resultRelationId, FromExpr *joinTree, Node *quals,
+								List *targetList,
+								CmdType commandType, List *returningList)
+{
+	uint32 rangeTableId = 1;
+	Var *partitionColumn = NULL;
+
+	if (IsCitusTable(resultRelationId))
+	{
+		partitionColumn = PartitionColumn(resultRelationId, rangeTableId);
+	}
+
+	bool hasVarArgument = false; /* A STABLE function is passed a Var argument */
+	bool hasBadCoalesce = false; /* CASE/COALESCE passed a mutable function */
+	ListCell *targetEntryCell = NULL;
+
+	foreach(targetEntryCell, targetList)
+	{
+		TargetEntry *targetEntry = (TargetEntry *) lfirst(targetEntryCell);
+
+		/* skip resjunk entries: UPDATE adds some for ctid, etc. */
+		if (targetEntry->resjunk)
+		{
+			continue;
+		}
+
+		bool targetEntryPartitionColumn = false;
+		AttrNumber targetColumnAttrNumber = InvalidAttrNumber;
+
+		/* reference tables do not have partition column */
+		if (partitionColumn == NULL)
+		{
+			targetEntryPartitionColumn = false;
+		}
+		else
+		{
+			if (commandType == CMD_UPDATE)
+			{
+				/*
+				 * Note that it is not possible to give an alias to
+				 * UPDATE table SET ...
+				 */
+				if (targetEntry->resname)
+				{
+					targetColumnAttrNumber = get_attnum(resultRelationId,
+														targetEntry->resname);
+					if (targetColumnAttrNumber == partitionColumn->varattno)
+					{
+						targetEntryPartitionColumn = true;
+					}
+				}
+			}
+		}
+
+
+		if (commandType == CMD_UPDATE &&
+			FindNodeMatchingCheckFunction((Node *) targetEntry->expr,
+										  CitusIsVolatileFunction))
+		{
+			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+								 "functions used in UPDATE queries on distributed "
+								 "tables must not be VOLATILE",
+								 NULL, NULL);
+		}
+
+		if (commandType == CMD_UPDATE && targetEntryPartitionColumn &&
+			TargetEntryChangesValue(targetEntry, partitionColumn,
+									joinTree))
+		{
+			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+								 "modifying the partition value of rows is not "
+								 "allowed",
+								 NULL, NULL);
+		}
+
+		if (commandType == CMD_UPDATE &&
+			MasterIrreducibleExpression((Node *) targetEntry->expr,
+										&hasVarArgument, &hasBadCoalesce))
+		{
+			Assert(hasVarArgument || hasBadCoalesce);
+		}
+
+		if (FindNodeMatchingCheckFunction((Node *) targetEntry->expr,
+										  NodeIsFieldStore))
+		{
+			/* DELETE cannot do field indirection already */
+			Assert(commandType == CMD_UPDATE || commandType == CMD_INSERT);
+			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+								 "inserting or modifying composite type fields is not "
+								 "supported", NULL,
+								 "Use the column name to insert or update the composite "
+								 "type as a single value");
+		}
+	}
+
+	if (joinTree != NULL)
+	{
+		if (FindNodeMatchingCheckFunction((Node *) quals,
+										  CitusIsVolatileFunction))
+		{
+			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+								 "functions used in the WHERE/ON/WHEN clause of modification "
+								 "queries on distributed tables must not be VOLATILE",
+								 NULL, NULL);
+		}
+		else if (MasterIrreducibleExpression(quals, &hasVarArgument,
+											 &hasBadCoalesce))
+		{
+			Assert(hasVarArgument || hasBadCoalesce);
+		}
+	}
+
+	if (hasVarArgument)
+	{
+		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+							 "STABLE functions used in UPDATE queries "
+							 "cannot be called with column references",
+							 NULL, NULL);
+	}
+
+	if (hasBadCoalesce)
+	{
+		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+							 "non-IMMUTABLE functions are not allowed in CASE or "
+							 "COALESCE statements",
+							 NULL, NULL);
+	}
+
+	if (contain_mutable_functions((Node *) returningList))
+	{
+		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+							 "non-IMMUTABLE functions are not allowed in the "
+							 "RETURNING clause",
+							 NULL, NULL);
+	}
+
+	if (quals != NULL &&
+		nodeTag(quals) == T_CurrentOfExpr)
+	{
+		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+							 "cannot run DML queries with cursors", NULL,
+							 NULL);
+	}
+
+	return NULL;
 }
 
 
@@ -620,148 +779,21 @@ ModifyPartialQuerySupported(Query *queryTree, bool multiShardQuery,
 
 	Oid resultRelationId = ModifyQueryResultRelationId(queryTree);
 	*distributedTableIdOutput = resultRelationId;
-	uint32 rangeTableId = 1;
 
-	Var *partitionColumn = NULL;
-	if (IsCitusTable(resultRelationId))
-	{
-		partitionColumn = PartitionColumn(resultRelationId, rangeTableId);
-	}
 	commandType = queryTree->commandType;
 	if (commandType == CMD_INSERT || commandType == CMD_UPDATE ||
 		commandType == CMD_DELETE)
 	{
-		bool hasVarArgument = false; /* A STABLE function is passed a Var argument */
-		bool hasBadCoalesce = false; /* CASE/COALESCE passed a mutable function */
-		FromExpr *joinTree = queryTree->jointree;
-		ListCell *targetEntryCell = NULL;
-
-		foreach(targetEntryCell, queryTree->targetList)
+		deferredError =
+			TargetlistAndFunctionsSupported(resultRelationId,
+											queryTree->jointree,
+											queryTree->jointree->quals,
+											queryTree->targetList,
+											commandType,
+											queryTree->returningList);
+		if (deferredError)
 		{
-			TargetEntry *targetEntry = (TargetEntry *) lfirst(targetEntryCell);
-
-			/* skip resjunk entries: UPDATE adds some for ctid, etc. */
-			if (targetEntry->resjunk)
-			{
-				continue;
-			}
-
-			bool targetEntryPartitionColumn = false;
-			AttrNumber targetColumnAttrNumber = InvalidAttrNumber;
-
-			/* reference tables do not have partition column */
-			if (partitionColumn == NULL)
-			{
-				targetEntryPartitionColumn = false;
-			}
-			else
-			{
-				if (commandType == CMD_UPDATE)
-				{
-					/*
-					 * Note that it is not possible to give an alias to
-					 * UPDATE table SET ...
-					 */
-					if (targetEntry->resname)
-					{
-						targetColumnAttrNumber = get_attnum(resultRelationId,
-															targetEntry->resname);
-						if (targetColumnAttrNumber == partitionColumn->varattno)
-						{
-							targetEntryPartitionColumn = true;
-						}
-					}
-				}
-			}
-
-
-			if (commandType == CMD_UPDATE &&
-				FindNodeMatchingCheckFunction((Node *) targetEntry->expr,
-											  CitusIsVolatileFunction))
-			{
-				return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-									 "functions used in UPDATE queries on distributed "
-									 "tables must not be VOLATILE",
-									 NULL, NULL);
-			}
-
-			if (commandType == CMD_UPDATE && targetEntryPartitionColumn &&
-				TargetEntryChangesValue(targetEntry, partitionColumn,
-										queryTree->jointree))
-			{
-				return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-									 "modifying the partition value of rows is not "
-									 "allowed",
-									 NULL, NULL);
-			}
-
-			if (commandType == CMD_UPDATE &&
-				MasterIrreducibleExpression((Node *) targetEntry->expr,
-											&hasVarArgument, &hasBadCoalesce))
-			{
-				Assert(hasVarArgument || hasBadCoalesce);
-			}
-
-			if (FindNodeMatchingCheckFunction((Node *) targetEntry->expr,
-											  NodeIsFieldStore))
-			{
-				/* DELETE cannot do field indirection already */
-				Assert(commandType == CMD_UPDATE || commandType == CMD_INSERT);
-				return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-									 "inserting or modifying composite type fields is not "
-									 "supported", NULL,
-									 "Use the column name to insert or update the composite "
-									 "type as a single value");
-			}
-		}
-
-		if (joinTree != NULL)
-		{
-			if (FindNodeMatchingCheckFunction((Node *) joinTree->quals,
-											  CitusIsVolatileFunction))
-			{
-				return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-									 "functions used in the WHERE clause of modification "
-									 "queries on distributed tables must not be VOLATILE",
-									 NULL, NULL);
-			}
-			else if (MasterIrreducibleExpression(joinTree->quals, &hasVarArgument,
-												 &hasBadCoalesce))
-			{
-				Assert(hasVarArgument || hasBadCoalesce);
-			}
-		}
-
-		if (hasVarArgument)
-		{
-			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-								 "STABLE functions used in UPDATE queries "
-								 "cannot be called with column references",
-								 NULL, NULL);
-		}
-
-		if (hasBadCoalesce)
-		{
-			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-								 "non-IMMUTABLE functions are not allowed in CASE or "
-								 "COALESCE statements",
-								 NULL, NULL);
-		}
-
-		if (contain_mutable_functions((Node *) queryTree->returningList))
-		{
-			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-								 "non-IMMUTABLE functions are not allowed in the "
-								 "RETURNING clause",
-								 NULL, NULL);
-		}
-
-		if (queryTree->jointree->quals != NULL &&
-			nodeTag(queryTree->jointree->quals) == T_CurrentOfExpr)
-		{
-			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-								 "cannot run DML queries with cursors", NULL,
-								 NULL);
+			return deferredError;
 		}
 	}
 
