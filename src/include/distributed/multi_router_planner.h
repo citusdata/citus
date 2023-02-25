@@ -106,7 +106,11 @@ extern DeferredErrorMessage * TargetlistAndFunctionsSupported(Oid resultRelation
 															  List *targetList,
 															  CmdType commandType,
 															  List *returningList);
-
-
+extern bool NodeIsFieldStore(Node *node);
+extern bool TargetEntryChangesValue(TargetEntry *targetEntry, Var *column,
+									FromExpr *joinTree);
+extern bool MasterIrreducibleExpression(Node *expression, bool *varArgument,
+										bool *badCoalesce);
+extern bool HasDangerousJoinUsing(List *rtableList, Node *jtnode);
 
 #endif /* MULTI_ROUTER_PLANNER_H */

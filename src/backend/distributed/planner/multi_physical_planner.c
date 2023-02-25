@@ -2225,17 +2225,14 @@ QueryPushdownSqlTaskList(Query *query, uint64 jobId,
 		}
 
 		/*
-		 * For left joins we don't care about the shards pruned for
-		 * the right hand side. If the right hand side would prune
-		 * to a smaller set we should still send it to all tables
-		 * of the left hand side. However if the right hand side is
-		 * bigger than the left hand side we don't have to send the
-		 * query to any shard that is not matching anything on the
-		 * left hand side.
+		 * For left joins we don't care about the shards pruned for the right hand side.
+		 * If the right hand side would prune to a smaller set we should still send it to
+		 * all tables of the left hand side. However if the right hand side is bigger than
+		 * the left hand side we don't have to send the query to any shard that is not
+		 * matching anything on the left hand side.
 		 *
-		 * Instead we will simply skip any RelationRestriction if it
-		 * is an OUTER join and the table is part of the non-outer
-		 * side of the join.
+		 * Instead we will simply skip any RelationRestriction if it is an OUTER join and
+		 * the table is part of the non-outer side of the join.
 		 */
 		if (IsInnerTableOfOuterJoin(relationRestriction))
 		{

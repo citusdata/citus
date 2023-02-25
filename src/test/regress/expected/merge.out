@@ -2220,9 +2220,231 @@ SELECT pa_compare_tables();
 (1 row)
 
 ROLLBACK;
+CREATE TABLE source_json( id   integer, z int, d jsonb);
+CREATE TABLE target_json( id   integer, z int, d jsonb);
+INSERT INTO source_json SELECT i,i FROM generate_series(0,100)i;
+SELECT create_distributed_table('target_json','id'), create_distributed_table('source_json', 'id');
+NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$merge_schema.source_json$$)
+ create_distributed_table | create_distributed_table
+---------------------------------------------------------------------
+                          |
+(1 row)
+
+-- single shard query given source_json is filtered and Postgres is smart to pushdown
+-- filter to the target_json as well
+EXPLAIN MERGE INTO target_json sda
+USING (SELECT * FROM source_json WHERE id = 1) sdn
+ON sda.id = sdn.id
+WHEN NOT matched THEN
+	INSERT (id, z) VALUES (sdn.id, 5);
+                                               QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0)
+   Task Count: 1
+   Tasks Shown: All
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  Merge on target_json_4000091 sda  (cost=0.00..50.56 rows=0 width=0)
+               ->  Nested Loop Left Join  (cost=0.00..50.56 rows=36 width=10)
+                     Join Filter: (sda.id = source_json.id)
+                     ->  Seq Scan on source_json_4000095 source_json  (cost=0.00..25.00 rows=6 width=4)
+                           Filter: (id = 1)
+                     ->  Materialize  (cost=0.00..25.03 rows=6 width=10)
+                           ->  Seq Scan on target_json_4000091 sda  (cost=0.00..25.00 rows=6 width=10)
+                                 Filter: (id = 1)
+(13 rows)
+
+-- zero shard query as filters do not match
+EXPLAIN MERGE INTO target_json sda
+USING (SELECT * FROM source_json WHERE id = 1) sdn
+ON sda.id = sdn.id AND sda.id = 2
+WHEN NOT matched THEN
+	INSERT (id, z) VALUES (sdn.id, 5);
+                           QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0)
+   Task Count: 0
+   Tasks Shown: All
+(3 rows)
+
+-- join for source_json is happening at at different place
+EXPLAIN MERGE INTO target_json sda
+USING source_json s1 LEFT JOIN (SELECT * FROM source_json) s2 USING(z)
+ON sda.id = s1.id AND s1.id = s2.id
+WHEN NOT matched THEN
+	INSERT (id, z) VALUES (s2.id, 5);
+                                                         QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0)
+   Task Count: 4
+   Tasks Shown: All
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  Merge on target_json_4000091 sda  (cost=825.41..1617.41 rows=0 width=0)
+               ->  Merge Left Join  (cost=825.41..1617.41 rows=7200 width=10)
+                     Merge Cond: (s1.id = sda.id)
+                     Join Filter: (s1.id = source_json.id)
+                     ->  Sort  (cost=742.04..760.04 rows=7200 width=8)
+                           Sort Key: s1.id
+                           ->  Merge Left Join  (cost=166.75..280.75 rows=7200 width=8)
+                                 Merge Cond: (s1.z = source_json.z)
+                                 ->  Sort  (cost=83.37..86.37 rows=1200 width=8)
+                                       Sort Key: s1.z
+                                       ->  Seq Scan on source_json_4000095 s1  (cost=0.00..22.00 rows=1200 width=8)
+                                 ->  Sort  (cost=83.37..86.37 rows=1200 width=8)
+                                       Sort Key: source_json.z
+                                       ->  Seq Scan on source_json_4000095 source_json  (cost=0.00..22.00 rows=1200 width=8)
+                     ->  Sort  (cost=83.37..86.37 rows=1200 width=10)
+                           Sort Key: sda.id
+                           ->  Seq Scan on target_json_4000091 sda  (cost=0.00..22.00 rows=1200 width=10)
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  Merge on target_json_4000092 sda  (cost=825.41..1617.41 rows=0 width=0)
+               ->  Merge Left Join  (cost=825.41..1617.41 rows=7200 width=10)
+                     Merge Cond: (s1.id = sda.id)
+                     Join Filter: (s1.id = source_json.id)
+                     ->  Sort  (cost=742.04..760.04 rows=7200 width=8)
+                           Sort Key: s1.id
+                           ->  Merge Left Join  (cost=166.75..280.75 rows=7200 width=8)
+                                 Merge Cond: (s1.z = source_json.z)
+                                 ->  Sort  (cost=83.37..86.37 rows=1200 width=8)
+                                       Sort Key: s1.z
+                                       ->  Seq Scan on source_json_4000096 s1  (cost=0.00..22.00 rows=1200 width=8)
+                                 ->  Sort  (cost=83.37..86.37 rows=1200 width=8)
+                                       Sort Key: source_json.z
+                                       ->  Seq Scan on source_json_4000096 source_json  (cost=0.00..22.00 rows=1200 width=8)
+                     ->  Sort  (cost=83.37..86.37 rows=1200 width=10)
+                           Sort Key: sda.id
+                           ->  Seq Scan on target_json_4000092 sda  (cost=0.00..22.00 rows=1200 width=10)
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  Merge on target_json_4000093 sda  (cost=825.41..1617.41 rows=0 width=0)
+               ->  Merge Left Join  (cost=825.41..1617.41 rows=7200 width=10)
+                     Merge Cond: (s1.id = sda.id)
+                     Join Filter: (s1.id = source_json.id)
+                     ->  Sort  (cost=742.04..760.04 rows=7200 width=8)
+                           Sort Key: s1.id
+                           ->  Merge Left Join  (cost=166.75..280.75 rows=7200 width=8)
+                                 Merge Cond: (s1.z = source_json.z)
+                                 ->  Sort  (cost=83.37..86.37 rows=1200 width=8)
+                                       Sort Key: s1.z
+                                       ->  Seq Scan on source_json_4000097 s1  (cost=0.00..22.00 rows=1200 width=8)
+                                 ->  Sort  (cost=83.37..86.37 rows=1200 width=8)
+                                       Sort Key: source_json.z
+                                       ->  Seq Scan on source_json_4000097 source_json  (cost=0.00..22.00 rows=1200 width=8)
+                     ->  Sort  (cost=83.37..86.37 rows=1200 width=10)
+                           Sort Key: sda.id
+                           ->  Seq Scan on target_json_4000093 sda  (cost=0.00..22.00 rows=1200 width=10)
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  Merge on target_json_4000094 sda  (cost=825.41..1617.41 rows=0 width=0)
+               ->  Merge Left Join  (cost=825.41..1617.41 rows=7200 width=10)
+                     Merge Cond: (s1.id = sda.id)
+                     Join Filter: (s1.id = source_json.id)
+                     ->  Sort  (cost=742.04..760.04 rows=7200 width=8)
+                           Sort Key: s1.id
+                           ->  Merge Left Join  (cost=166.75..280.75 rows=7200 width=8)
+                                 Merge Cond: (s1.z = source_json.z)
+                                 ->  Sort  (cost=83.37..86.37 rows=1200 width=8)
+                                       Sort Key: s1.z
+                                       ->  Seq Scan on source_json_4000098 s1  (cost=0.00..22.00 rows=1200 width=8)
+                                 ->  Sort  (cost=83.37..86.37 rows=1200 width=8)
+                                       Sort Key: source_json.z
+                                       ->  Seq Scan on source_json_4000098 source_json  (cost=0.00..22.00 rows=1200 width=8)
+                     ->  Sort  (cost=83.37..86.37 rows=1200 width=10)
+                           Sort Key: sda.id
+                           ->  Seq Scan on target_json_4000094 sda  (cost=0.00..22.00 rows=1200 width=10)
+(79 rows)
+
+-- update JSON column
+EXPLAIN MERGE INTO target_json sda
+USING source_json sdn
+ON sda.id = sdn.id
+WHEN matched THEN
+	UPDATE SET d = '{"a" : 5}';
+                                                QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0)
+   Task Count: 4
+   Tasks Shown: All
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  Merge on target_json_4000091 sda  (cost=166.75..280.75 rows=0 width=0)
+               ->  Merge Join  (cost=166.75..280.75 rows=7200 width=6)
+                     Merge Cond: (sda.id = sdn.id)
+                     ->  Sort  (cost=83.37..86.37 rows=1200 width=10)
+                           Sort Key: sda.id
+                           ->  Seq Scan on target_json_4000091 sda  (cost=0.00..22.00 rows=1200 width=10)
+                     ->  Sort  (cost=83.37..86.37 rows=1200 width=4)
+                           Sort Key: sdn.id
+                           ->  Seq Scan on source_json_4000095 sdn  (cost=0.00..22.00 rows=1200 width=4)
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  Merge on target_json_4000092 sda  (cost=166.75..280.75 rows=0 width=0)
+               ->  Merge Join  (cost=166.75..280.75 rows=7200 width=6)
+                     Merge Cond: (sda.id = sdn.id)
+                     ->  Sort  (cost=83.37..86.37 rows=1200 width=10)
+                           Sort Key: sda.id
+                           ->  Seq Scan on target_json_4000092 sda  (cost=0.00..22.00 rows=1200 width=10)
+                     ->  Sort  (cost=83.37..86.37 rows=1200 width=4)
+                           Sort Key: sdn.id
+                           ->  Seq Scan on source_json_4000096 sdn  (cost=0.00..22.00 rows=1200 width=4)
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  Merge on target_json_4000093 sda  (cost=166.75..280.75 rows=0 width=0)
+               ->  Merge Join  (cost=166.75..280.75 rows=7200 width=6)
+                     Merge Cond: (sda.id = sdn.id)
+                     ->  Sort  (cost=83.37..86.37 rows=1200 width=10)
+                           Sort Key: sda.id
+                           ->  Seq Scan on target_json_4000093 sda  (cost=0.00..22.00 rows=1200 width=10)
+                     ->  Sort  (cost=83.37..86.37 rows=1200 width=4)
+                           Sort Key: sdn.id
+                           ->  Seq Scan on source_json_4000097 sdn  (cost=0.00..22.00 rows=1200 width=4)
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  Merge on target_json_4000094 sda  (cost=166.75..280.75 rows=0 width=0)
+               ->  Merge Join  (cost=166.75..280.75 rows=7200 width=6)
+                     Merge Cond: (sda.id = sdn.id)
+                     ->  Sort  (cost=83.37..86.37 rows=1200 width=10)
+                           Sort Key: sda.id
+                           ->  Seq Scan on target_json_4000094 sda  (cost=0.00..22.00 rows=1200 width=10)
+                     ->  Sort  (cost=83.37..86.37 rows=1200 width=4)
+                           Sort Key: sdn.id
+                           ->  Seq Scan on source_json_4000098 sdn  (cost=0.00..22.00 rows=1200 width=4)
+(47 rows)
+
+CREATE FUNCTION immutable_hash(int) RETURNS int
+AS 'SELECT hashtext( ($1 + $1)::text);'
+LANGUAGE SQL
+IMMUTABLE
+RETURNS NULL ON NULL INPUT;
+MERGE INTO target_json sda
+USING source_json sdn
+ON sda.id = sdn.id
+WHEN matched THEN
+	UPDATE SET z = immutable_hash(sdn.z);
 --
 -- Error and Unsupported scenarios
 --
+-- zero shard query as source_json is zero shard
+EXPLAIN MERGE INTO target_json sda
+USING (SELECT * FROM source_json WHERE false) sdn
+ON sda.id = sdn.id AND sda.id = 2
+WHEN NOT matched THEN
+	INSERT (id, z) VALUES (sdn.id, 5);
+ERROR:  MERGE command is only supported when distributed tables are joined on their distribution column
+-- modifying CTE not supported
+EXPLAIN
+WITH cte_1 AS (DELETE FROM target_json)
+MERGE INTO target_json sda
+USING source_json sdn
+ON sda.id = sdn.id
+WHEN NOT matched THEN
+	INSERT (id, z) VALUES (sdn.id, 5);
+ERROR:  MERGE command is only supported when distributed tables are joined on their distribution column
 -- Grouping sets not supported
 MERGE INTO citus_target t
 USING (SELECT count(*), id FROM citus_source GROUP BY GROUPING SETS (id, val)) subq
@@ -2290,7 +2512,7 @@ MERGE INTO target_cj t
     UPDATE SET tid = tid + 9, src = src || ' updated by merge'
   WHEN NOT MATCHED THEN
     INSERT VALUES (sid1, 'inserted by merge', val1);
-ERROR:  modifying the partition value of rows is not allowed
+ERROR:  updating the distribution column is not allowed in MERGE actions
 ROLLBACK;
 -- Foreign table as target
 MERGE INTO foreign_table
@@ -2382,13 +2604,22 @@ BEGIN
         RETURN TRUE;
 END;
 $$;
+-- Test functions executing in MERGE statement. This is to prevent the functions from
+-- doing a random sql, which may be executed in a remote node or modifying the target
+-- relation which will have unexpected/suprising results.
+MERGE INTO t1 USING (SELECT * FROM s1 WHERE true) s1 ON
+  t1.id = s1.id AND s1.id = 2
+   WHEN NOT matched THEN
+ INSERT (id, val)
+   VALUES (s1.id , random());
+ERROR:  functions used in MERGE actions on distributed tables must not be VOLATILE
 -- Test preventing "ON" join condition from writing to the database
 BEGIN;
 MERGE INTO t1
 USING s1 ON t1.id = s1.id AND t1.id = 2 AND (merge_when_and_write())
 WHEN MATCHED THEN
         UPDATE SET val = t1.val + s1.val;
-ERROR:  functions used in the WHERE/ON/WHEN clause of modification queries on distributed tables must not be VOLATILE
+ERROR:  functions used in the ON clause of MERGE queries on distributed tables must not be VOLATILE
 ROLLBACK;
 -- Test preventing WHEN clause(s) from writing to the database
 BEGIN;
@@ -2396,7 +2627,7 @@ MERGE INTO t1
 USING s1 ON t1.id = s1.id AND t1.id = 2
 WHEN MATCHED AND (merge_when_and_write()) THEN
         UPDATE SET val = t1.val + s1.val;
-ERROR:  functions used in the WHERE/ON/WHEN clause of modification queries on distributed tables must not be VOLATILE
+ERROR:  functions used in the WHEN clause of MERGE queries on distributed tables must not be VOLATILE
 ROLLBACK;
 -- Joining on partition columns with sub-query
 MERGE INTO t1
@@ -2872,7 +3103,7 @@ CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_
 PL/pgSQL function citus_drop_trigger() line XX at PERFORM
 DROP FUNCTION merge_when_and_write();
 DROP SCHEMA merge_schema CASCADE;
-NOTICE:  drop cascades to 75 other objects
+NOTICE:  drop cascades to 78 other objects
 DETAIL:  drop cascades to function insert_data()
 drop cascades to table pg_result
 drop cascades to table local_local
@@ -2939,9 +3170,12 @@ drop cascades to table citus_pa_target
 drop cascades to table pg_pa_source
 drop cascades to table citus_pa_source
 drop cascades to function pa_compare_tables()
+drop cascades to table source_json
+drop cascades to table target_json
+drop cascades to function immutable_hash(integer)
 drop cascades to table pg
-drop cascades to table t1_4000110
-drop cascades to table s1_4000111
+drop cascades to table t1_4000118
+drop cascades to table s1_4000119
 drop cascades to table t1
 drop cascades to table s1
 drop cascades to table dist_colocated

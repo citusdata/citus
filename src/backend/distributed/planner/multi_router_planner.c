@@ -126,21 +126,15 @@ static bool IsTidColumn(Node *node);
 static DeferredErrorMessage * ModifyPartialQuerySupported(Query *queryTree, bool
 														  multiShardQuery,
 														  Oid *distributedTableId);
-static bool NodeIsFieldStore(Node *node);
-static DeferredErrorMessage * MultiShardUpdateDeleteMergeSupported(Query *originalQuery,
+static DeferredErrorMessage * MultiShardUpdateDeleteSupported(Query *originalQuery,
 																   PlannerRestrictionContext
 																   *
 																   plannerRestrictionContext);
 static DeferredErrorMessage * SingleShardUpdateDeleteSupported(Query *originalQuery,
 															   PlannerRestrictionContext *
 															   plannerRestrictionContext);
-static bool HasDangerousJoinUsing(List *rtableList, Node *jtnode);
-static bool MasterIrreducibleExpression(Node *expression, bool *varArgument,
-										bool *badCoalesce);
 static bool MasterIrreducibleExpressionWalker(Node *expression, WalkerState *state);
 static bool MasterIrreducibleExpressionFunctionChecker(Oid func_id, void *context);
-static bool TargetEntryChangesValue(TargetEntry *targetEntry, Var *column,
-									FromExpr *joinTree);
 static Job * RouterInsertJob(Query *originalQuery);
 static void ErrorIfNoShardsExist(CitusTableCacheEntry *cacheEntry);
 static DeferredErrorMessage * DeferErrorIfModifyView(Query *queryTree);
@@ -894,7 +888,7 @@ IsLocallyAccessibleCitusLocalTable(Oid relationId)
 /*
  * NodeIsFieldStore returns true if given Node is a FieldStore object.
  */
-static bool
+bool
 NodeIsFieldStore(Node *node)
 {
 	return node && IsA(node, FieldStore);
@@ -916,14 +910,11 @@ ModifyQuerySupported(Query *queryTree, Query *originalQuery, bool multiShardQuer
 					 PlannerRestrictionContext *plannerRestrictionContext)
 {
 	Oid distributedTableId = InvalidOid;
-	DeferredErrorMessage *error = MergeQuerySupported(originalQuery,
+	DeferredErrorMessage *error = MergeQuerySupported(originalQuery, multiShardQuery,
 													  plannerRestrictionContext);
 	if (error)
 	{
-		/*
-		 * For MERGE, we do not do recursive plannning, simply bail out.
-		 */
-		RaiseDeferredError(error, ERROR);
+		return error;
 	}
 
 	error = ModifyPartialQuerySupported(queryTree, multiShardQuery, &distributedTableId);
@@ -1096,13 +1087,13 @@ ModifyQuerySupported(Query *queryTree, Query *originalQuery, bool multiShardQuer
 		}
 	}
 
-	if (commandType != CMD_INSERT)
+	if (commandType != CMD_INSERT && commandType != CMD_MERGE)
 	{
 		DeferredErrorMessage *errorMessage = NULL;
 
 		if (multiShardQuery)
 		{
-			errorMessage = MultiShardUpdateDeleteMergeSupported(
+			errorMessage = MultiShardUpdateDeleteSupported(
 				originalQuery,
 				plannerRestrictionContext);
 		}
@@ -1283,11 +1274,11 @@ ErrorIfOnConflictNotSupported(Query *queryTree)
 
 
 /*
- * MultiShardUpdateDeleteMergeSupported returns the error message if the update/delete is
+ * MultiShardUpdateDeleteSupported returns the error message if the update/delete is
  * not pushdownable, otherwise it returns NULL.
  */
 static DeferredErrorMessage *
-MultiShardUpdateDeleteMergeSupported(Query *originalQuery,
+MultiShardUpdateDeleteSupported(Query *originalQuery,
 									 PlannerRestrictionContext *plannerRestrictionContext)
 {
 	DeferredErrorMessage *errorMessage = NULL;
@@ -1360,7 +1351,7 @@ SingleShardUpdateDeleteSupported(Query *originalQuery,
  * HasDangerousJoinUsing search jointree for unnamed JOIN USING. Check the
  * implementation of has_dangerous_join_using in ruleutils.
  */
-static bool
+bool
 HasDangerousJoinUsing(List *rtableList, Node *joinTreeNode)
 {
 	if (IsA(joinTreeNode, RangeTblRef))
@@ -1464,7 +1455,7 @@ IsMergeQuery(Query *query)
  * which do, but for now we just error out. That makes both the code and user-education
  * easier.
  */
-static bool
+bool
 MasterIrreducibleExpression(Node *expression, bool *varArgument, bool *badCoalesce)
 {
 	WalkerState data;
@@ -1612,7 +1603,7 @@ MasterIrreducibleExpressionFunctionChecker(Oid func_id, void *context)
  * expression is a value that is implied by the qualifiers of the join
  * tree, or the target entry sets a different column.
  */
-static bool
+bool
 TargetEntryChangesValue(TargetEntry *targetEntry, Var *column, FromExpr *joinTree)
 {
 	bool isColumnValueChanged = true;

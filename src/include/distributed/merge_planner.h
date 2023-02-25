@@ -19,7 +19,7 @@
 #include "distributed/errormessage.h"
 
 extern bool IsMergeAllowedOnRelation(Query *parse, RangeTblEntry *rte);
-extern DeferredErrorMessage * MergeQuerySupported(Query *originalQuery,
+extern DeferredErrorMessage * MergeQuerySupported(Query *originalQuery, bool multiShardQuery,
 												  PlannerRestrictionContext *
 												  plannerRestrictionContext);
 #endif /* MERGE_PLANNER_H */

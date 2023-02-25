@@ -1422,9 +1422,85 @@ MERGE INTO citus_pa_target t
 SELECT pa_compare_tables();
 ROLLBACK;
 
+CREATE TABLE source_json( id   integer, z int, d jsonb);
+CREATE TABLE target_json( id   integer, z int, d jsonb);
+
+INSERT INTO source_json SELECT i,i FROM generate_series(0,100)i;
+
+SELECT create_distributed_table('target_json','id'), create_distributed_table('source_json', 'id');
+
+-- single shard query given source_json is filtered and Postgres is smart to pushdown
+-- filter to the target_json as well
+EXPLAIN MERGE INTO target_json sda
+USING (SELECT * FROM source_json WHERE id = 1) sdn
+ON sda.id = sdn.id
+WHEN NOT matched THEN
+	INSERT (id, z) VALUES (sdn.id, 5);
+
+-- zero shard query as filters do not match
+EXPLAIN MERGE INTO target_json sda
+USING (SELECT * FROM source_json WHERE id = 1) sdn
+ON sda.id = sdn.id AND sda.id = 2
+WHEN NOT matched THEN
+	INSERT (id, z) VALUES (sdn.id, 5);
+
+-- join for source_json is happening at at different place
+EXPLAIN MERGE INTO target_json sda
+USING source_json s1 LEFT JOIN (SELECT * FROM source_json) s2 USING(z)
+ON sda.id = s1.id AND s1.id = s2.id
+WHEN NOT matched THEN
+	INSERT (id, z) VALUES (s2.id, 5);
+
+-- update JSON column
+EXPLAIN MERGE INTO target_json sda
+USING source_json sdn
+ON sda.id = sdn.id
+WHEN matched THEN
+	UPDATE SET d = '{"a" : 5}';
+
+CREATE FUNCTION immutable_hash(int) RETURNS int
+AS 'SELECT hashtext( ($1 + $1)::text);'
+LANGUAGE SQL
+IMMUTABLE
+RETURNS NULL ON NULL INPUT;
+
+MERGE INTO target_json sda
+USING source_json sdn
+ON sda.id = sdn.id
+WHEN matched THEN
+	UPDATE SET z = immutable_hash(sdn.z);
+
+-- Test bigserial
+CREATE TABLE source_serial (id integer, z int, d bigserial);
+CREATE TABLE target_serial (id integer, z int, d bigserial);
+INSERT INTO source_serial SELECT i,i FROM generate_series(0,100)i;
+SELECT create_distributed_table('source_serial', 'id'), create_distributed_table('target_serial', 'id');
+
+MERGE INTO target_serial sda
+USING source_serial sdn
+ON sda.id = sdn.id
+WHEN NOT matched THEN
+       INSERT (id, z) VALUES (id, z);
+
 --
 -- Error and Unsupported scenarios
 --
+
+-- zero shard query as source_json is zero shard
+EXPLAIN MERGE INTO target_json sda
+USING (SELECT * FROM source_json WHERE false) sdn
+ON sda.id = sdn.id AND sda.id = 2
+WHEN NOT matched THEN
+	INSERT (id, z) VALUES (sdn.id, 5);
+
+-- modifying CTE not supported
+EXPLAIN
+WITH cte_1 AS (DELETE FROM target_json)
+MERGE INTO target_json sda
+USING source_json sdn
+ON sda.id = sdn.id
+WHEN NOT matched THEN
+	INSERT (id, z) VALUES (sdn.id, 5);
 
 -- Grouping sets not supported
 MERGE INTO citus_target t
@@ -1533,6 +1609,15 @@ BEGIN
         RETURN TRUE;
 END;
 $$;
+
+-- Test functions executing in MERGE statement. This is to prevent the functions from
+-- doing a random sql, which may be executed in a remote node or modifying the target
+-- relation which will have unexpected/suprising results.
+MERGE INTO t1 USING (SELECT * FROM s1 WHERE true) s1 ON
+  t1.id = s1.id AND s1.id = 2
+   WHEN NOT matched THEN
+ INSERT (id, val)
+   VALUES (s1.id , random());
 
 -- Test preventing "ON" join condition from writing to the database
 BEGIN;
