@@ -73,7 +73,7 @@ static void ShardCopyDestReceiverDestroy(DestReceiver *destReceiver);
 static bool CanUseLocalCopy(uint32_t destinationNodeId);
 static StringInfo ConstructShardCopyStatement(List *destinationShardFullyQualifiedName,
 											  bool
-											  useBinaryFormat);
+											  useBinaryFormat, TupleDesc tupleDesc);
 static void WriteLocalTuple(TupleTableSlot *slot, ShardCopyDestReceiver *copyDest);
 static int ReadFromLocalBufferCallback(void *outBuf, int minRead, int maxRead);
 static void LocalCopyToShard(ShardCopyDestReceiver *copyDest, CopyOutState
@@ -105,7 +105,8 @@ ConnectToRemoteAndStartCopy(ShardCopyDestReceiver *copyDest)
 
 	StringInfo copyStatement = ConstructShardCopyStatement(
 		copyDest->destinationShardFullyQualifiedName,
-		copyDest->copyOutState->binary);
+		copyDest->copyOutState->binary,
+		copyDest->tupleDescriptor);
 
 	if (!SendRemoteCommand(copyDest->connection, copyStatement->data))
 	{
@@ -344,9 +345,39 @@ ShardCopyDestReceiverDestroy(DestReceiver *dest)
 }
 
 
+static StringInfo
+ConstructTargetColumnsList(TupleDesc tupdesc)
+{
+	StringInfo columnList = makeStringInfo();
+	int i;
+
+	for (i = 0; i < tupdesc->natts; i++)
+	{
+		Form_pg_attribute att = TupleDescAttr(tupdesc, i);
+		if (att->attgenerated || att->attisdropped)
+		{
+			continue;
+		}
+		if (i > 0)
+		{
+			appendStringInfo(columnList, ", ");
+		}
+
+		appendStringInfo(columnList, "%s ", NameStr(att->attname));
+	}
+
+	elog(WARNING, "ConstructTargetColumnsList : %s", columnList->data);
+
+	return columnList;
+}
+
+
 StringInfo
 ConstructNonGeneratedColumnsList(const char *shardRelationName, const char *schemaName)
 {
+	elog(WARNING, "ConstructNonGeneratedColumnsList : %s, %s", shardRelationName,
+		 schemaName);
+
 	Oid namespaceOid = get_namespace_oid(schemaName, true);
 
 	Oid relationId = get_relname_relid(shardRelationName, namespaceOid);
@@ -389,7 +420,8 @@ ConstructNonGeneratedColumnsList(const char *shardRelationName, const char *sche
  */
 static StringInfo
 ConstructShardCopyStatement(List *destinationShardFullyQualifiedName, bool
-							useBinaryFormat)
+							useBinaryFormat,
+							TupleDesc tupleDesc)
 {
 	char *destinationShardSchemaName = linitial(destinationShardFullyQualifiedName);
 	char *destinationShardRelationName = lsecond(destinationShardFullyQualifiedName);
@@ -397,8 +429,11 @@ ConstructShardCopyStatement(List *destinationShardFullyQualifiedName, bool
 
 	StringInfo command = makeStringInfo();
 
-	StringInfo colNameList = ConstructNonGeneratedColumnsList(
-		destinationShardRelationName, destinationShardSchemaName);
+	/*StringInfo colNameList = ConstructNonGeneratedColumnsList( */
+	/*	destinationShardRelationName, destinationShardSchemaName); */
+
+	StringInfo colNameList = ConstructTargetColumnsList(tupleDesc);
+
 
 	appendStringInfo(command, "COPY %s.%s (%s) FROM STDIN",
 					 quote_identifier(destinationShardSchemaName), quote_identifier(
