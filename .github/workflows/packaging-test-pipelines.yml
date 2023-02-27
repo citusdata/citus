@@ -160,5 +160,4 @@ jobs:
           ## Install required packages to execute packaging tools for deb based distros
           sudo apt-get install python3-dev python3-pip -y
           sudo apt-get purge -y python3-yaml
-          python3 -m pip install --upgrade pip  setuptools==57.5.0
           ./.github/packaging/validate_build_output.sh "deb"
