@@ -350,7 +350,7 @@ GenerateColumnListFromTupleDesc(TupleDesc tupdesc)
 {
 	StringInfo columnList = makeStringInfo();
 	int i;
-        bool firstInList = true;
+	bool firstInList = true;
 
 	for (i = 0; i < tupdesc->natts; i++)
 	{
