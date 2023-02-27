@@ -345,8 +345,8 @@ ShardCopyDestReceiverDestroy(DestReceiver *dest)
 }
 
 
-static StringInfo
-ConstructTargetColumnsList(TupleDesc tupdesc)
+StringInfo
+GenerateColumnListFromTupleDesc(TupleDesc tupdesc)
 {
 	StringInfo columnList = makeStringInfo();
 	int i;
@@ -366,50 +366,25 @@ ConstructTargetColumnsList(TupleDesc tupdesc)
 		appendStringInfo(columnList, "%s ", NameStr(att->attname));
 	}
 
-	elog(WARNING, "ConstructTargetColumnsList : %s", columnList->data);
-
 	return columnList;
 }
 
 
 StringInfo
-ConstructNonGeneratedColumnsList(const char *shardRelationName, const char *schemaName)
+GenerateColumnListFromRelationName(const char *relationName, const char *schemaName)
 {
-	elog(WARNING, "ConstructNonGeneratedColumnsList : %s, %s", shardRelationName,
-		 schemaName);
-
 	Oid namespaceOid = get_namespace_oid(schemaName, true);
 
-	Oid relationId = get_relname_relid(shardRelationName, namespaceOid);
+	Oid relationId = get_relname_relid(relationName, namespaceOid);
 
 	Relation relation = relation_open(relationId, AccessShareLock);
-	int numberOfAttributes = RelationGetNumberOfAttributes(relation);
 
-	StringInfo columnList = makeStringInfo();
+	TupleDesc tupleDesc = RelationGetDescr(relation);
 
-	bool first = true;
-
-	for (int attrNum = 1; attrNum <= numberOfAttributes; attrNum++)
-	{
-		Form_pg_attribute attributeTuple =
-			TupleDescAttr(relation->rd_att, attrNum - 1);
-
-		if (attributeTuple->attgenerated || attributeTuple->attisdropped)
-		{
-			continue;
-		}
-
-		if (!first)
-		{
-			appendStringInfo(columnList, ", ");
-		}
-
-		appendStringInfo(columnList, "%s ", NameStr(attributeTuple->attname));
-
-		first = false;
-	}
+	StringInfo columnList = GenerateColumnListFromTupleDesc(tupleDesc);
 
 	relation_close(relation, NoLock);
+
 	return columnList;
 }
 
@@ -429,15 +404,11 @@ ConstructShardCopyStatement(List *destinationShardFullyQualifiedName, bool
 
 	StringInfo command = makeStringInfo();
 
-	/*StringInfo colNameList = ConstructNonGeneratedColumnsList( */
-	/*	destinationShardRelationName, destinationShardSchemaName); */
-
-	StringInfo colNameList = ConstructTargetColumnsList(tupleDesc);
-
+	StringInfo columnList = GenerateColumnListFromTupleDesc(tupleDesc);
 
 	appendStringInfo(command, "COPY %s.%s (%s) FROM STDIN",
 					 quote_identifier(destinationShardSchemaName), quote_identifier(
-						 destinationShardRelationName), colNameList->data);
+						 destinationShardRelationName), columnList->data);
 
 	if (useBinaryFormat)
 	{
@@ -447,8 +418,6 @@ ConstructShardCopyStatement(List *destinationShardFullyQualifiedName, bool
 	{
 		appendStringInfo(command, ";");
 	}
-
-	elog(WARNING, "ConstructShardCopyStatement : COMMAND = %s", command->data);
 
 	return command;
 }
