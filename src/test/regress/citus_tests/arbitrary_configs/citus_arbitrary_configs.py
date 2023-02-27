@@ -12,23 +12,23 @@ Options:
     --seed=<seed>                   random number seed
     --base                          whether to use the base sql schedule or not
 """
+import concurrent.futures
+import multiprocessing
 import os
+import random
 import shutil
 import sys
+import time
+
+from docopt import docopt
 
 # https://stackoverflow.com/questions/14132789/relative-imports-for-the-billionth-time/14132912#14132912
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+# ignore E402 because these imports require addition to path
+import common  # noqa: E402
 
-import concurrent.futures
-import multiprocessing
-import random
-import time
-
-import common
-from docopt import docopt
-
-import config as cfg
+import config as cfg  # noqa: E402
 
 testResults = {}
 parallel_thread_amount = 1
