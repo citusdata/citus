@@ -153,6 +153,7 @@ jobs:
           POSTGRES_VERSION: ${{ matrix.POSTGRES_VERSION }}
           PACKAGING_DOCKER_IMAGE: ${{ matrix.packaging_docker_image }}
         run: |
+          set -x
           echo "Postgres version: ${POSTGRES_VERSION}"
 
           sudo apt-get update -y
