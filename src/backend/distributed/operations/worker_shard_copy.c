@@ -345,6 +345,11 @@ ShardCopyDestReceiverDestroy(DestReceiver *dest)
 }
 
 
+/*
+ *  GenerateColumnListFromTupleDesc function creates and returns a comma seperated column names string  to be used in COPY
+ *  and SELECT statements when copying a table. The COPY and SELECT statements should filter out the GENERATED columns since COPY
+ *  statement fails to handle them. Iterating over the attributes of the table we also need to skip the dropped columns.
+ */
 StringInfo
 GenerateColumnListFromTupleDesc(TupleDesc tupdesc)
 {
@@ -373,6 +378,9 @@ GenerateColumnListFromTupleDesc(TupleDesc tupdesc)
 }
 
 
+/*
+ *  GenerateColumnListFromRelationName function is a wrapper for GenerateColumnListFromTupleDesc.
+ */
 StringInfo
 GenerateColumnListFromRelationName(const char *relationName, const char *schemaName)
 {
