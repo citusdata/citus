@@ -350,6 +350,7 @@ GenerateColumnListFromTupleDesc(TupleDesc tupdesc)
 {
 	StringInfo columnList = makeStringInfo();
 	int i;
+        bool firstInList = true;
 
 	for (i = 0; i < tupdesc->natts; i++)
 	{
@@ -358,10 +359,12 @@ GenerateColumnListFromTupleDesc(TupleDesc tupdesc)
 		{
 			continue;
 		}
-		if (i > 0)
+		if (!firstInList)
 		{
 			appendStringInfo(columnList, ", ");
 		}
+
+		firstInList = false;
 
 		appendStringInfo(columnList, "%s ", NameStr(att->attname));
 	}
