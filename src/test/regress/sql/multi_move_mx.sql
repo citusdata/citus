@@ -151,8 +151,32 @@ ORDER BY
 	shardid
 LIMIT 1 OFFSET 1;
 
+-- Check that shards of a table with GENERATED columns can be moved.
+\c - - - :master_port
+SET citus.shard_count TO 4;
+SET citus.shard_replication_factor TO 1;
+
+CREATE TABLE mx_table_with_generated_column (a int, b int GENERATED ALWAYS AS ( a + 3 ) STORED, c int);
+SELECT create_distributed_table('mx_table_with_generated_column', 'a');
+
+-- Check that dropped columns are handled properly in a move.
+ALTER TABLE mx_table_with_generated_column DROP COLUMN c;
+
+-- Move a shard from worker 1 to worker 2
+SELECT
+        citus_move_shard_placement(shardid, 'localhost', :worker_1_port, 'localhost', :worker_2_port, 'force_logical')
+FROM
+        pg_dist_shard NATURAL JOIN pg_dist_shard_placement
+WHERE
+        logicalrelid = 'mx_table_with_generated_column'::regclass
+	AND nodeport = :worker_1_port
+ORDER BY
+        shardid
+LIMIT 1;
+
 -- Cleanup
 \c - - - :master_port
+DROP TABLE mx_table_with_generated_column;
 DROP TABLE mx_table_1;
 DROP TABLE mx_table_2;
 DROP TABLE mx_table_3;
