@@ -110,11 +110,11 @@ worker_split_copy(PG_FUNCTION_ARGS)
 													   splitCopyInfoList))));
 
 	StringInfo selectShardQueryForCopy = makeStringInfo();
-	StringInfo colNameList = ConstructNonGeneratedColumnsList(
+	StringInfo columnList = GenerateColumnListFromRelationName(
 		sourceShardToCopyName, sourceShardToCopySchemaName);
 
 	appendStringInfo(selectShardQueryForCopy,
-					 "SELECT %s FROM %s;", colNameList->data,
+					 "SELECT %s FROM %s;", columnList->data,
 					 sourceShardToCopyQualifiedName);
 
 	ParamListInfo params = NULL;

@@ -53,12 +53,14 @@ worker_copy_table_to_node(PG_FUNCTION_ARGS)
 		targetNodeId);
 
 	StringInfo selectShardQueryForCopy = makeStringInfo();
-	StringInfo colNameList = ConstructNonGeneratedColumnsList(relationName,
-															  relationSchemaName);
-	appendStringInfo(selectShardQueryForCopy,
-					 "SELECT %s FROM %s;", colNameList->data, relationQualifiedName);
 
-	elog(WARNING, "selectShardQueryForCopy = %s", selectShardQueryForCopy->data);
+	/*
+	 * Even though we do COPY(SELECT ...) all the columns, we can't just do SELECT * because we need to not COPY generated colums.
+	 */
+	StringInfo columnList = GenerateColumnListFromRelationName(relationName,
+															   relationSchemaName);
+	appendStringInfo(selectShardQueryForCopy,
+					 "SELECT %s FROM %s;", columnList->data, relationQualifiedName);
 
 	ParamListInfo params = NULL;
 	ExecuteQueryStringIntoDestReceiver(selectShardQueryForCopy->data, params,
