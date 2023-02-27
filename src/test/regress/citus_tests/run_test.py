@@ -9,6 +9,7 @@ import shutil
 import sys
 from collections import OrderedDict
 from glob import glob
+from typing import Optional
 
 import common
 
@@ -57,7 +58,7 @@ use_whole_schedule_line = args["use_whole_schedule_line"]
 
 
 class TestDeps:
-    schedule: str | None
+    schedule: Optional[str]
     direct_extra_tests: list[str]
 
     def __init__(self, schedule, extra_tests=None, repeatable=True):
