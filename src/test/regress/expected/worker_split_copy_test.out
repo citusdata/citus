@@ -142,8 +142,89 @@ SELECT COUNT(*) FROM worker_split_copy_test."test !/ \n _""dist_123_table_810700
 (1 row)
 
 -- END: List updated row count for local targets shard.
+-- Check that GENERATED columns are  handled properly in a shard split operation.
+\c - - - :master_port
+SET search_path TO worker_split_copy_test;
+SET citus.shard_count TO 2;
+SET citus.shard_replication_factor TO 1;
+SET citus.next_shard_id TO 81080000;
+-- BEGIN: Create distributed table and insert data.
+CREATE TABLE worker_split_copy_test.dist_table_with_generated_col(id int primary key, new_id int GENERATED ALWAYS AS ( id + 3 ) stored, value char);
+SELECT create_distributed_table('dist_table_with_generated_col', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO dist_table_with_generated_col (id, value) (SELECT g.id, 'N' FROM generate_series(1, 1000) AS g(id));
+-- END: Create distributed table and insert data.
+-- BEGIN: Create target shards in Worker1 and Worker2 for a 2-way split copy.
+\c - - - :worker_1_port
+CREATE TABLE worker_split_copy_test.dist_table_with_generated_col_81080015(id int primary key, new_id int GENERATED ALWAYS AS ( id + 3 ) stored, value char);
+\c - - - :worker_2_port
+CREATE TABLE worker_split_copy_test.dist_table_with_generated_col_81080016(id int primary key, new_id int GENERATED ALWAYS AS ( id + 3 ) stored, value char);
+-- BEGIN: List row count for source shard and targets shard in Worker1.
+\c - - - :worker_1_port
+SELECT COUNT(*) FROM worker_split_copy_test.dist_table_with_generated_col_81080000;
+ count
+---------------------------------------------------------------------
+   510
+(1 row)
+
+SELECT COUNT(*) FROM worker_split_copy_test.dist_table_with_generated_col_81080015;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+-- BEGIN: List row count for target shard in Worker2.
+\c - - - :worker_2_port
+SELECT COUNT(*) FROM worker_split_copy_test.dist_table_with_generated_col_81080016;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+\c - - - :worker_1_port
+SELECT * from worker_split_copy(
+	    81080000, -- source shard id to copy
+	    'id',
+	    ARRAY[
+	         -- split copy info for split children 1
+        ROW(81080015, -- destination shard id
+	    -2147483648, -- split range begin
+	    -1073741824, --split range end
+	    :worker_1_node)::pg_catalog.split_copy_info,
+	        -- split copy info for split children 2
+        ROW(81080016,  --destination shard id
+	    -1073741823, --split range begin
+	    -1, --split range end
+	    :worker_2_node)::pg_catalog.split_copy_info
+        ]
+ );
+ worker_split_copy
+---------------------------------------------------------------------
+
+(1 row)
+
+\c - - - :worker_1_port
+SELECT COUNT(*) FROM worker_split_copy_test.dist_table_with_generated_col_81080015;
+ count
+---------------------------------------------------------------------
+   247
+(1 row)
+
+\c - - - :worker_2_port
+SELECT COUNT(*) FROM worker_split_copy_test.dist_table_with_generated_col_81080016;
+ count
+---------------------------------------------------------------------
+   263
+(1 row)
+
 -- BEGIN: CLEANUP.
 \c - - - :master_port
+CALL citus_cleanup_orphaned_resources();
+NOTICE:  cleaned up 1 orphaned resources
 SET client_min_messages TO WARNING;
 DROP SCHEMA worker_split_copy_test CASCADE;
 -- END: CLEANUP.
