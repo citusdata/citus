@@ -161,7 +161,7 @@ static void EnsureColocateWithTableIsValid(Oid relationId, char distributionMeth
 										   char *distributionColumnName,
 										   char *colocateWithTableName);
 static void WarnIfTableHaveNoReplicaIdentity(Oid relationId);
-static void MarkIdentitiesAsDistributed(Oid targetRelationId);
+static void DistributeIdentityColumns(Oid targetRelationId);
 
 /* exports for SQL callable functions */
 PG_FUNCTION_INFO_V1(master_create_distributed_table);
@@ -1165,7 +1165,7 @@ CreateDistributedTable(Oid relationId, char *distributionColumnName,
 	ExecuteForeignKeyCreateCommandList(originalForeignKeyRecreationCommands,
 									   skip_validation);
 
-	MarkIdentitiesAsDistributed(relationId);
+	DistributeIdentityColumns(relationId);
 }
 
 
@@ -1806,10 +1806,13 @@ ErrorIfTableIsACatalogTable(Relation relation)
 
 
 /*
- * This function marks all the identity sequences as distributed on the given table.
+ * DistributeIdentityColumns is responsible for marking sequences depend on
+ * identity columns of a given table. If the table has any identity columns,
+ * this function executes a command on workers to modify the identity columns
+ * min/max values to produce unique values on workers.
  */
 static void
-MarkIdentitiesAsDistributed(Oid targetRelationId)
+DistributeIdentityColumns(Oid targetRelationId)
 {
 	Relation relation = relation_open(targetRelationId, AccessShareLock);
 	TupleDesc tupleDescriptor = RelationGetDescr(relation);
