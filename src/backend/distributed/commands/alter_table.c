@@ -183,6 +183,7 @@ static TableConversionReturn * AlterDistributedTable(TableConversionParameters *
 static TableConversionReturn * AlterTableSetAccessMethod(
 	TableConversionParameters *params);
 static TableConversionReturn * ConvertTable(TableConversionState *con);
+static TableConversionReturn * ConvertTableInternal(TableConversionState *con);
 static bool SwitchToSequentialAndLocalExecutionIfShardNameTooLong(char *relationName,
 																  char *longestShardName);
 static void DropIndexesNotSupportedByColumnar(Oid relationId,
@@ -216,6 +217,8 @@ static bool WillRecreateForeignKeyToReferenceTable(Oid relationId,
 static void WarningsForDroppingForeignKeysWithDistributedTables(Oid relationId);
 static void ErrorIfUnsupportedCascadeObjects(Oid relationId);
 static bool DoesCascadeDropUnsupportedObject(Oid classId, Oid id, HTAB *nodeMap);
+static TableConversionReturn * CopyTableConversionReturnIntoCurrentContext(
+	TableConversionReturn *tableConversionReturn);
 
 PG_FUNCTION_INFO_V1(undistribute_table);
 PG_FUNCTION_INFO_V1(alter_distributed_table);
@@ -402,6 +405,7 @@ UndistributeTable(TableConversionParameters *params)
 	params->conversionType = UNDISTRIBUTE_TABLE;
 	params->shardCountIsNull = true;
 	TableConversionState *con = CreateTableConversion(params);
+
 	return ConvertTable(con);
 }
 
@@ -441,6 +445,7 @@ AlterDistributedTable(TableConversionParameters *params)
 		ereport(DEBUG1, (errmsg("setting multi shard modify mode to sequential")));
 		SetLocalMultiShardModifyModeToSequential();
 	}
+
 	return ConvertTable(con);
 }
 
@@ -511,9 +516,9 @@ AlterTableSetAccessMethod(TableConversionParameters *params)
 
 
 /*
- * ConvertTable is used for converting a table into a new table with different properties.
- * The conversion is done by creating a new table, moving everything to the new table and
- * dropping the old one. So the oid of the table is not preserved.
+ * ConvertTableInternal is used for converting a table into a new table with different
+ * properties. The conversion is done by creating a new table, moving everything to the
+ * new table and dropping the old one. So the oid of the table is not preserved.
  *
  * The new table will have the same name, columns and rows. It will also have partitions,
  * views, sequences of the old table. Finally it will have everything created by
@@ -532,7 +537,7 @@ AlterTableSetAccessMethod(TableConversionParameters *params)
  * in case you add a new way to return from this function.
  */
 TableConversionReturn *
-ConvertTable(TableConversionState *con)
+ConvertTableInternal(TableConversionState *con)
 {
 	InTableTypeConversionFunctionCall = true;
 
@@ -884,7 +889,67 @@ ConvertTable(TableConversionState *con)
 	SetLocalEnableLocalReferenceForeignKeys(oldEnableLocalReferenceForeignKeys);
 
 	InTableTypeConversionFunctionCall = false;
+
 	return ret;
+}
+
+
+/*
+ * CopyTableConversionReturnIntoCurrentContext copies given tableConversionReturn
+ * into CurrentMemoryContext.
+ */
+static TableConversionReturn *
+CopyTableConversionReturnIntoCurrentContext(TableConversionReturn *tableConversionReturn)
+{
+	TableConversionReturn *tableConversionReturnCopy = NULL;
+	if (tableConversionReturn)
+	{
+		tableConversionReturnCopy = palloc0(sizeof(TableConversionReturn));
+		List *copyForeignKeyCommands = NIL;
+		char *foreignKeyCommand = NULL;
+		foreach_ptr(foreignKeyCommand, tableConversionReturn->foreignKeyCommands)
+		{
+			char *copyForeignKeyCommand = MemoryContextStrdup(CurrentMemoryContext,
+															  foreignKeyCommand);
+			copyForeignKeyCommands = lappend(copyForeignKeyCommands,
+											 copyForeignKeyCommand);
+		}
+		tableConversionReturnCopy->foreignKeyCommands = copyForeignKeyCommands;
+	}
+
+	return tableConversionReturnCopy;
+}
+
+
+/*
+ * ConvertTable is a wrapper for ConvertTableInternal to persist only
+ * TableConversionReturn and delete all other allocations.
+ */
+static TableConversionReturn *
+ConvertTable(TableConversionState *con)
+{
+	/*
+	 * when there are many partitions or colocated tables, memory usage is
+	 * accumulated. Free context for each call to ConvertTable.
+	 */
+	MemoryContext convertTableContext =
+		AllocSetContextCreate(CurrentMemoryContext,
+							  "citus_convert_table_context",
+							  ALLOCSET_DEFAULT_SIZES);
+	MemoryContext oldContext = MemoryContextSwitchTo(convertTableContext);
+
+	TableConversionReturn *tableConversionReturn = ConvertTableInternal(con);
+
+	MemoryContextSwitchTo(oldContext);
+
+	/* persist TableConversionReturn in oldContext */
+	TableConversionReturn *tableConversionReturnCopy =
+		CopyTableConversionReturnIntoCurrentContext(tableConversionReturn);
+
+	/* delete convertTableContext */
+	MemoryContextDelete(convertTableContext);
+
+	return tableConversionReturnCopy;
 }
 
 
