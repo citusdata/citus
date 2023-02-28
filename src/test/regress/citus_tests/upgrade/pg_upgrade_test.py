@@ -10,21 +10,22 @@ Options:
     --pgxsdir=<pgxsdir>           	       Path to the PGXS directory(ex: ~/.pgenv/src/postgresql-11.3)
 """
 
+import atexit
 import os
+import subprocess
 import sys
+
+from docopt import docopt
 
 # https://stackoverflow.com/questions/14132789/relative-imports-for-the-billionth-time/14132912#14132912
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import atexit
-import subprocess
+# ignore E402 because these imports require addition to path
+import common  # noqa: E402
+import utils  # noqa: E402
+from utils import USER  # noqa: E402
 
-import common
-import utils
-from docopt import docopt
-from utils import USER
-
-from config import (
+from config import (  # noqa: E402
     AFTER_PG_UPGRADE_SCHEDULE,
     BEFORE_PG_UPGRADE_SCHEDULE,
     PGUpgradeConfig,
