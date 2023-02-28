@@ -134,7 +134,7 @@ typedef enum
 	CITUS_LOCAL_TABLE,
 
 	/* table without a dist key such as reference table */
-	CITUS_TABLE_WITH_NO_DIST_KEY,
+	CITUS_LOCAL_OR_REFERENCE_TABLE,
 
 	ANY_CITUS_TABLE_TYPE
 } CitusTableType;
@@ -154,7 +154,9 @@ extern List * LookupDistShardTuples(Oid relationId);
 extern char PartitionMethodViaCatalog(Oid relationId);
 extern Var * PartitionColumnViaCatalog(Oid relationId);
 extern uint32 ColocationIdViaCatalog(Oid relationId);
-extern bool IsCitusLocalTableByDistParams(char partitionMethod, char replicationModel);
+bool IsReferenceTableByDistParams(char partitionMethod, char replicationModel);
+extern bool IsCitusLocalTableByDistParams(char partitionMethod, char replicationModel,
+										  uint32 colocationId);
 extern List * CitusTableList(void);
 extern ShardInterval * LoadShardInterval(uint64 shardId);
 extern bool ShardExists(uint64 shardId);

@@ -2199,7 +2199,7 @@ QueryPushdownSqlTaskList(Query *query, uint64 jobId,
 		Oid relationId = relationRestriction->relationId;
 
 		CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
-		if (IsCitusTableTypeCacheEntry(cacheEntry, CITUS_TABLE_WITH_NO_DIST_KEY))
+		if (IsCitusTableTypeCacheEntry(cacheEntry, CITUS_LOCAL_OR_REFERENCE_TABLE))
 		{
 			continue;
 		}
@@ -2377,7 +2377,7 @@ ErrorIfUnsupportedShardDistribution(Query *query)
 			nonReferenceRelations = lappend_oid(nonReferenceRelations,
 												relationId);
 		}
-		else if (IsCitusTableType(relationId, CITUS_TABLE_WITH_NO_DIST_KEY))
+		else if (IsCitusTableType(relationId, CITUS_LOCAL_OR_REFERENCE_TABLE))
 		{
 			/* do not need to handle non-distributed tables */
 			continue;
@@ -2482,7 +2482,7 @@ QueryPushdownTaskCreate(Query *originalQuery, int shardIndex,
 		ShardInterval *shardInterval = NULL;
 
 		CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
-		if (IsCitusTableTypeCacheEntry(cacheEntry, CITUS_TABLE_WITH_NO_DIST_KEY))
+		if (IsCitusTableTypeCacheEntry(cacheEntry, CITUS_LOCAL_OR_REFERENCE_TABLE))
 		{
 			/* non-distributed tables have only one shard */
 			shardInterval = cacheEntry->sortedShardIntervalArray[0];
@@ -3697,7 +3697,7 @@ PartitionedOnColumn(Var *column, List *rangeTableList, List *dependentJobList)
 		Var *partitionColumn = PartitionColumn(relationId, rangeTableId);
 
 		/* non-distributed tables do not have partition columns */
-		if (IsCitusTableType(relationId, CITUS_TABLE_WITH_NO_DIST_KEY))
+		if (IsCitusTableType(relationId, CITUS_LOCAL_OR_REFERENCE_TABLE))
 		{
 			return false;
 		}

@@ -221,7 +221,8 @@ ErrorIfUnsupportedForeignConstraintExists(Relation relation, char referencingDis
 		if (!referencedIsCitus && !selfReferencingTable)
 		{
 			if (IsCitusLocalTableByDistParams(referencingDistMethod,
-											  referencingReplicationModel))
+											  referencingReplicationModel,
+											  referencingColocationId))
 			{
 				ErrorOutForFKeyBetweenPostgresAndCitusLocalTable(referencedTableId);
 			}
@@ -246,7 +247,7 @@ ErrorIfUnsupportedForeignConstraintExists(Relation relation, char referencingDis
 		{
 			referencedDistMethod = PartitionMethod(referencedTableId);
 			referencedDistKey = IsCitusTableType(referencedTableId,
-												 CITUS_TABLE_WITH_NO_DIST_KEY) ?
+												 CITUS_LOCAL_OR_REFERENCE_TABLE) ?
 								NULL :
 								DistPartitionKey(referencedTableId);
 			referencedColocationId = TableColocationId(referencedTableId);
@@ -278,9 +279,17 @@ ErrorIfUnsupportedForeignConstraintExists(Relation relation, char referencingDis
 		}
 
 		bool referencingIsCitusLocalOrRefTable =
-			(referencingDistMethod == DISTRIBUTE_BY_NONE);
+			IsCitusLocalTableByDistParams(referencingDistMethod,
+										  referencingReplicationModel,
+										  referencingColocationId) ||
+			IsReferenceTableByDistParams(referencingDistMethod,
+										 referencingReplicationModel);
 		bool referencedIsCitusLocalOrRefTable =
-			(referencedDistMethod == DISTRIBUTE_BY_NONE);
+			IsCitusLocalTableByDistParams(referencedDistMethod,
+										  referencedReplicationModel,
+										  referencedColocationId) ||
+			IsReferenceTableByDistParams(referencedDistMethod,
+										 referencedReplicationModel);
 		if (referencingIsCitusLocalOrRefTable && referencedIsCitusLocalOrRefTable)
 		{
 			EnsureSupportedFKeyBetweenCitusLocalAndRefTable(constraintForm,
@@ -313,7 +322,8 @@ ErrorIfUnsupportedForeignConstraintExists(Relation relation, char referencingDis
 		 * reference table is referenced.
 		 */
 		bool referencedIsReferenceTable =
-			(referencedReplicationModel == REPLICATION_MODEL_2PC);
+			IsReferenceTableByDistParams(referencedDistMethod,
+										 referencedReplicationModel);
 		if (!referencedIsReferenceTable && (
 				referencingColocationId == INVALID_COLOCATION_ID ||
 				referencingColocationId != referencedColocationId))

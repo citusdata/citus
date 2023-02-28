@@ -324,7 +324,7 @@ ExecuteTruncateStmtSequentialIfNecessary(TruncateStmt *command)
 	{
 		Oid relationId = RangeVarGetRelid(rangeVar, NoLock, failOK);
 
-		if (IsCitusTableType(relationId, CITUS_TABLE_WITH_NO_DIST_KEY) &&
+		if (IsCitusTableType(relationId, CITUS_LOCAL_OR_REFERENCE_TABLE) &&
 			TableReferenced(relationId))
 		{
 			char *relationName = get_rel_name(relationId);

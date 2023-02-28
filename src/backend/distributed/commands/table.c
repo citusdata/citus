@@ -1607,9 +1607,9 @@ AlterTableDefinesFKeyBetweenPostgresAndNonDistTable(AlterTableStmt *alterTableSt
 	if (!IsCitusTable(leftRelationId))
 	{
 		return RelationIdListContainsCitusTableType(rightRelationIdList,
-													CITUS_TABLE_WITH_NO_DIST_KEY);
+													CITUS_LOCAL_OR_REFERENCE_TABLE);
 	}
-	else if (IsCitusTableType(leftRelationId, CITUS_TABLE_WITH_NO_DIST_KEY))
+	else if (IsCitusTableType(leftRelationId, CITUS_LOCAL_OR_REFERENCE_TABLE))
 	{
 		return RelationIdListContainsPostgresTable(rightRelationIdList);
 	}
@@ -3666,7 +3666,7 @@ SetupExecutionModeForAlterTable(Oid relationId, AlterTableCmd *command)
 	 * sequential mode.
 	 */
 	if (executeSequentially &&
-		!IsCitusTableType(relationId, CITUS_TABLE_WITH_NO_DIST_KEY) &&
+		!IsCitusTableType(relationId, CITUS_LOCAL_OR_REFERENCE_TABLE) &&
 		ParallelQueryExecutedInTransaction())
 	{
 		char *relationName = get_rel_name(relationId);

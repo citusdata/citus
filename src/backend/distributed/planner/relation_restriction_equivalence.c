@@ -704,7 +704,7 @@ EquivalenceListContainsRelationsEquality(List *attributeEquivalenceList,
 
 		/* we shouldn't check for the equality of non-distributed tables */
 		if (IsCitusTableType(relationRestriction->relationId,
-							 CITUS_TABLE_WITH_NO_DIST_KEY))
+							 CITUS_LOCAL_OR_REFERENCE_TABLE))
 		{
 			continue;
 		}
@@ -1933,7 +1933,7 @@ AllRelationsInRestrictionContextColocated(RelationRestrictionContext *restrictio
 	{
 		Oid relationId = relationRestriction->relationId;
 
-		if (IsCitusTableType(relationId, CITUS_TABLE_WITH_NO_DIST_KEY))
+		if (IsCitusTableType(relationId, CITUS_LOCAL_OR_REFERENCE_TABLE))
 		{
 			continue;
 		}
