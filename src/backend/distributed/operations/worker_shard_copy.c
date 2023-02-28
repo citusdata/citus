@@ -354,10 +354,9 @@ const char *
 GenerateColumnListFromTupleDesc(TupleDesc tupdesc)
 {
 	StringInfo columnList = makeStringInfo();
-	int i;
 	bool firstInList = true;
 
-	for (i = 0; i < tupdesc->natts; i++)
+	for (int i = 0; i < tupdesc->natts; i++)
 	{
 		Form_pg_attribute att = TupleDescAttr(tupdesc, i);
 		if (att->attgenerated || att->attisdropped)
