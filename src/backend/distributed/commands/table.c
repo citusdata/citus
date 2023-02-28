@@ -3991,10 +3991,12 @@ ErrorIfTableHasUnsupportedIdentityColumn(Oid relationId)
 		if (attributeForm->attidentity && attributeForm->atttypid != INT8OID)
 		{
 			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-					errmsg("cannot complete operation on a table with smallint/int identity column")));
+							errmsg(
+								"cannot complete operation on a table with smallint/int identity column")));
 		}
 	}
 }
+
 
 /*
  * ErrorIfTableHasIdentityColumn errors out if the given table has identity column
@@ -4014,7 +4016,8 @@ ErrorIfTableHasIdentityColumn(Oid relationId)
 		if (attributeForm->attidentity)
 		{
 			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-					errmsg("cannot complete operation on a table with identity column")));
+							errmsg(
+								"cannot complete operation on a table with identity column")));
 		}
 	}
 }

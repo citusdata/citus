@@ -1541,6 +1541,7 @@ CreateMaterializedViewDDLCommand(Oid matViewOid)
 	return query->data;
 }
 
+
 /*
  * ReplaceTable replaces the source table with the target table.
  * It moves all the rows of the source table to target table with INSERT SELECT.

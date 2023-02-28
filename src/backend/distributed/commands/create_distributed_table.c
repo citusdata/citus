@@ -1805,8 +1805,6 @@ ErrorIfTableIsACatalogTable(Relation relation)
 }
 
 
-
-
 /*
  * This function marks all the identity sequences as distributed on the given table.
  */
@@ -1842,13 +1840,11 @@ MarkIdentitiesAsDistributed(Oid targetRelationId)
 		char *tableName = generate_qualified_relation_name(targetRelationId);
 
 		appendStringInfo(stringInfo,
-						WORKER_MODIFY_IDENTITY_COMMAND,
-						quote_literal_cstr(tableName));
+						 WORKER_MODIFY_IDENTITY_COMMAND,
+						 quote_literal_cstr(tableName));
 		SendCommandToWorkersWithMetadata(stringInfo->data);
 	}
-
 }
-
 
 
 /*

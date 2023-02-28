@@ -133,6 +133,7 @@ worker_apply_inter_shard_ddl_command(PG_FUNCTION_ARGS)
 	PG_RETURN_VOID();
 }
 
+
 /*
  * worker_modify_identity_columns takes a table oid, runs an ALTER SEQUENCE statement
  * for each identity column to adjust the minvalue and maxvalue of the sequence owned by
@@ -160,20 +161,22 @@ worker_modify_identity_columns(PG_FUNCTION_ARGS)
 		if (attributeForm->attidentity)
 		{
 			Oid sequenceOid = getIdentitySequence(tableRelationId,
-														attributeForm->attnum,
-														missingSequenceOk);
+												  attributeForm->attnum,
+												  missingSequenceOk);
 
 			Oid sequenceSchemaOid = get_rel_namespace(sequenceOid);
 			char *sequenceSchemaName = get_namespace_name(sequenceSchemaOid);
 			char *sequenceName = get_rel_name(sequenceOid);
 			Oid sequenceTypeId = pg_get_sequencedef(sequenceOid)->seqtypid;
 
-			AlterSequenceMinMax(sequenceOid, sequenceSchemaName, sequenceName, sequenceTypeId);
+			AlterSequenceMinMax(sequenceOid, sequenceSchemaName, sequenceName,
+								sequenceTypeId);
 		}
 	}
 
 	PG_RETURN_VOID();
 }
+
 
 /*
  * worker_apply_sequence_command takes a CREATE SEQUENCE command string, runs the
