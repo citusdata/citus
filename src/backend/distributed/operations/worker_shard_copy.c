@@ -350,7 +350,7 @@ ShardCopyDestReceiverDestroy(DestReceiver *dest)
  *  and SELECT statements when copying a table. The COPY and SELECT statements should filter out the GENERATED columns since COPY
  *  statement fails to handle them. Iterating over the attributes of the table we also need to skip the dropped columns.
  */
-StringInfo
+const char *
 GenerateColumnListFromTupleDesc(TupleDesc tupdesc)
 {
 	StringInfo columnList = makeStringInfo();
@@ -366,22 +366,22 @@ GenerateColumnListFromTupleDesc(TupleDesc tupdesc)
 		}
 		if (!firstInList)
 		{
-			appendStringInfo(columnList, ", ");
+			appendStringInfo(columnList, ",");
 		}
 
 		firstInList = false;
 
-		appendStringInfo(columnList, "%s ", NameStr(att->attname));
+		appendStringInfo(columnList, "%s", NameStr(att->attname));
 	}
 
-	return columnList;
+	return columnList->data;
 }
 
 
 /*
  *  GenerateColumnListFromRelationName function is a wrapper for GenerateColumnListFromTupleDesc.
  */
-StringInfo
+const char *
 GenerateColumnListFromRelationName(const char *relationName, const char *schemaName)
 {
 	Oid namespaceOid = get_namespace_oid(schemaName, true);
@@ -392,7 +392,7 @@ GenerateColumnListFromRelationName(const char *relationName, const char *schemaN
 
 	TupleDesc tupleDesc = RelationGetDescr(relation);
 
-	StringInfo columnList = GenerateColumnListFromTupleDesc(tupleDesc);
+	const char *columnList = GenerateColumnListFromTupleDesc(tupleDesc);
 
 	relation_close(relation, NoLock);
 
@@ -415,11 +415,11 @@ ConstructShardCopyStatement(List *destinationShardFullyQualifiedName, bool
 
 	StringInfo command = makeStringInfo();
 
-	StringInfo columnList = GenerateColumnListFromTupleDesc(tupleDesc);
+	const char *columnList = GenerateColumnListFromTupleDesc(tupleDesc);
 
 	appendStringInfo(command, "COPY %s.%s (%s) FROM STDIN",
 					 quote_identifier(destinationShardSchemaName), quote_identifier(
-						 destinationShardRelationName), columnList->data);
+						 destinationShardRelationName), columnList);
 
 	if (useBinaryFormat)
 	{
