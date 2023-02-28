@@ -176,6 +176,7 @@ LIMIT 1;
 
 -- Cleanup
 \c - - - :master_port
+CALL citus_cleanup_orphaned_resources();
 DROP TABLE mx_table_with_generated_column;
 DROP TABLE mx_table_1;
 DROP TABLE mx_table_2;
