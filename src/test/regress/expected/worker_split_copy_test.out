@@ -223,8 +223,7 @@ SELECT COUNT(*) FROM worker_split_copy_test.dist_table_with_generated_col_810800
 
 -- BEGIN: CLEANUP.
 \c - - - :master_port
-CALL citus_cleanup_orphaned_resources();
-NOTICE:  cleaned up 1 orphaned resources
 SET client_min_messages TO WARNING;
+CALL citus_cleanup_orphaned_resources();
 DROP SCHEMA worker_split_copy_test CASCADE;
 -- END: CLEANUP.
