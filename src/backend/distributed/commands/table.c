@@ -1378,29 +1378,6 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 				}
 			}
 
-			/*
-			 * We check for ADD COLUMN .. GENERATED .. AS IDENTITY expr
-			 * since it uses a sequence as an internal dependency
-			 * we should deparse the statement
-			 */
-			constraint = NULL;
-			foreach_ptr(constraint, columnConstraints)
-			{
-				if (constraint->contype == CONSTR_IDENTITY)
-				{
-					deparseAT = true;
-					useInitialDDLCommandString = false;
-
-					/*
-					 * Since we don't support constraints for AT_AddColumn
-					 * we have to set is_not_null to true explicitly for identity columns
-					 */
-					ColumnDef *newColDef = copyObject(columnDefinition);
-					newColDef->constraints = NULL;
-					newColDef->is_not_null = true;
-					newCmd->def = (Node *) newColDef;
-				}
-			}
 
 			/*
 			 * We check for ADD COLUMN .. SERIAL pseudo-type
@@ -2539,34 +2516,6 @@ PostprocessAlterTableStmt(AlterTableStmt *alterTableStatement)
 					}
 				}
 			}
-
-			/*
-			 * We check for ADD COLUMN .. GENERATED AS IDENTITY expr
-			 * since it uses a seqeunce as an internal dependency
-			 */
-			constraint = NULL;
-			foreach_ptr(constraint, columnConstraints)
-			{
-				if (constraint->contype == CONSTR_IDENTITY)
-				{
-					AttrNumber attnum = get_attnum(relationId,
-												   columnDefinition->colname);
-					bool missing_ok = false;
-					Oid seqOid = getIdentitySequence(relationId, attnum, missing_ok);
-
-					if (ShouldSyncTableMetadata(relationId))
-					{
-						needMetadataSyncForNewSequences = true;
-						alterTableDefaultNextvalCmd =
-							GetAddColumnWithNextvalDefaultCmd(seqOid,
-															  relationId,
-															  columnDefinition
-															  ->colname,
-															  columnDefinition
-															  ->typeName);
-					}
-				}
-			}
 		}
 		/*
 		 * We check for ALTER COLUMN .. SET DEFAULT nextval('user_defined_seq')
@@ -3222,6 +3171,17 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 					{
 						if (columnConstraint->contype == CONSTR_IDENTITY)
 						{
+							/*
+							 * We currently don't support adding an identity column for an MX table
+							 */
+							if (ShouldSyncTableMetadata(relationId))
+							{
+								ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+												errmsg(
+													"cannot execute ADD COLUMN commands involving identity"
+													" columns when metadata is synchronized to workers")));
+							}
+
 							/*
 							 * Currently we don't support backfilling the new identity column with default values
 							 * if the table is not empty
@@ -4009,5 +3969,52 @@ MakeNameListFromRangeVar(const RangeVar *rel)
 	{
 		Assert(rel->relname != NULL);
 		return list_make1(makeString(rel->relname));
+	}
+}
+
+
+/*
+ * ErrorIfTableHasUnsupportedIdentityColumn errors out if the given table has any identity column other than bigint identity column
+ */
+void
+ErrorIfTableHasUnsupportedIdentityColumn(Oid relationId)
+{
+	Relation relation = relation_open(relationId, AccessShareLock);
+	TupleDesc tupleDescriptor = RelationGetDescr(relation);
+	relation_close(relation, NoLock);
+
+	for (int attributeIndex = 0; attributeIndex < tupleDescriptor->natts;
+		 attributeIndex++)
+	{
+		Form_pg_attribute attributeForm = TupleDescAttr(tupleDescriptor, attributeIndex);
+
+		if (attributeForm->attidentity && attributeForm->atttypid != INT8OID)
+		{
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					errmsg("cannot complete operation on a table with smallint/int identity column")));
+		}
+	}
+}
+
+/*
+ * ErrorIfTableHasIdentityColumn errors out if the given table has identity column
+ */
+void
+ErrorIfTableHasIdentityColumn(Oid relationId)
+{
+	Relation relation = relation_open(relationId, AccessShareLock);
+	TupleDesc tupleDescriptor = RelationGetDescr(relation);
+	relation_close(relation, NoLock);
+
+	for (int attributeIndex = 0; attributeIndex < tupleDescriptor->natts;
+		 attributeIndex++)
+	{
+		Form_pg_attribute attributeForm = TupleDescAttr(tupleDescriptor, attributeIndex);
+
+		if (attributeForm->attidentity)
+		{
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					errmsg("cannot complete operation on a table with identity column")));
+		}
 	}
 }

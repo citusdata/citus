@@ -422,7 +422,6 @@ pg_get_tableschemadef_string(Oid tableRelationId, IncludeSequenceDefaults
 				else if (includeIdentityDefaults == INCLUDE_IDENTITY)
 				{
 					Form_pg_sequence pgSequenceForm = pg_get_sequencedef(seqOid);
-					uint64 sequenceStart = nextval_internal(seqOid, false);
 					char *sequenceDef = psprintf(
 						" GENERATED %s AS IDENTITY (INCREMENT BY " INT64_FORMAT \
 						" MINVALUE " INT64_FORMAT " MAXVALUE "
@@ -433,7 +432,8 @@ pg_get_tableschemadef_string(Oid tableRelationId, IncludeSequenceDefaults
 						"ALWAYS" : "BY DEFAULT",
 						pgSequenceForm->seqincrement,
 						pgSequenceForm->seqmin,
-						pgSequenceForm->seqmax, sequenceStart,
+						pgSequenceForm->seqmax,
+						pgSequenceForm->seqstart,
 						pgSequenceForm->seqcache,
 						pgSequenceForm->seqcycle ? "" : "NO ");
 

@@ -98,6 +98,7 @@
  * once every LOG_PER_TUPLE_AMOUNT, the copy will be logged.
  */
 #define LOG_PER_TUPLE_AMOUNT 1000000
+#define WORKER_MODIFY_IDENTITY_COMMAND "SELECT worker_modify_identity_columns(%s)"
 
 /* local function forward declarations */
 static void CreateDistributedTableConcurrently(Oid relationId,
@@ -160,6 +161,7 @@ static void EnsureColocateWithTableIsValid(Oid relationId, char distributionMeth
 										   char *distributionColumnName,
 										   char *colocateWithTableName);
 static void WarnIfTableHaveNoReplicaIdentity(Oid relationId);
+static void MarkIdentitiesAsDistributed(Oid targetRelationId);
 
 /* exports for SQL callable functions */
 PG_FUNCTION_INFO_V1(master_create_distributed_table);
@@ -221,6 +223,7 @@ create_distributed_table(PG_FUNCTION_ARGS)
 	}
 
 	EnsureCitusTableCanBeCreated(relationId);
+
 
 	/* enable create_distributed_table on an empty node */
 	InsertCoordinatorIfClusterEmpty();
@@ -300,6 +303,8 @@ create_distributed_table_concurrently(PG_FUNCTION_ARGS)
 		 */
 		shardCountIsStrict = true;
 	}
+
+	ErrorIfTableHasUnsupportedIdentityColumn(relationId);
 
 	CreateDistributedTableConcurrently(relationId, distributionColumnName,
 									   distributionMethod,
@@ -963,6 +968,8 @@ CreateDistributedTable(Oid relationId, char *distributionColumnName,
 					   char distributionMethod, int shardCount,
 					   bool shardCountIsStrict, char *colocateWithTableName)
 {
+	ErrorIfTableHasUnsupportedIdentityColumn(relationId);
+
 	/*
 	 * EnsureTableNotDistributed errors out when relation is a citus table but
 	 * we don't want to ask user to first undistribute their citus local tables
@@ -1157,6 +1164,8 @@ CreateDistributedTable(Oid relationId, char *distributionColumnName,
 	bool skip_validation = true;
 	ExecuteForeignKeyCreateCommandList(originalForeignKeyRecreationCommands,
 									   skip_validation);
+
+	MarkIdentitiesAsDistributed(relationId);
 }
 
 
@@ -1794,6 +1803,52 @@ ErrorIfTableIsACatalogTable(Relation relation)
 	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 					errmsg("cannot create a citus table from a catalog table")));
 }
+
+
+
+
+/*
+ * This function marks all the identity sequences as distributed on the given table.
+ */
+static void
+MarkIdentitiesAsDistributed(Oid targetRelationId)
+{
+	Relation relation = relation_open(targetRelationId, AccessShareLock);
+	TupleDesc tupleDescriptor = RelationGetDescr(relation);
+	relation_close(relation, NoLock);
+
+	bool missingSequenceOk = false;
+	bool tableHasIdentityColumn = false;
+	for (int attributeIndex = 0; attributeIndex < tupleDescriptor->natts;
+		 attributeIndex++)
+	{
+		Form_pg_attribute attributeForm = TupleDescAttr(tupleDescriptor, attributeIndex);
+
+		if (attributeForm->attidentity)
+		{
+			tableHasIdentityColumn = true;
+			Oid seqOid = getIdentitySequence(targetRelationId, attributeForm->attnum,
+											 missingSequenceOk);
+
+			ObjectAddress seqAddress = { 0 };
+			ObjectAddressSet(seqAddress, RelationRelationId, seqOid);
+			MarkObjectDistributed(&seqAddress);
+		}
+	}
+
+	if (tableHasIdentityColumn)
+	{
+		StringInfo stringInfo = makeStringInfo();
+		char *tableName = generate_qualified_relation_name(targetRelationId);
+
+		appendStringInfo(stringInfo,
+						WORKER_MODIFY_IDENTITY_COMMAND,
+						quote_literal_cstr(tableName));
+		SendCommandToWorkersWithMetadata(stringInfo->data);
+	}
+
+}
+
 
 
 /*

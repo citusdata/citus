@@ -566,6 +566,9 @@ extern bool ConstrTypeCitusCanDefaultName(ConstrType constrType);
 extern char * GetAlterColumnWithNextvalDefaultCmd(Oid sequenceOid, Oid relationId,
 												  char *colname, bool missingTableOk);
 
+extern void ErrorIfTableHasUnsupportedIdentityColumn(Oid relationId);
+extern void ErrorIfTableHasIdentityColumn(Oid relationId);
+
 /* text_search.c - forward declarations */
 extern List * GetCreateTextSearchConfigStatements(const ObjectAddress *address);
 extern List * GetCreateTextSearchDictionaryStatements(const ObjectAddress *address);
