@@ -161,11 +161,11 @@ SET search_path TO generated_identities;
 SET client_min_messages to ERROR;
 INSERT INTO partitioned_table (c)
 SELECT s FROM generate_series(10,20) s;
-INSERT INTO partitioned_table (a,b,c) VALUES (999,999,999);
+INSERT INTO partitioned_table (a,b,c) VALUES (997,997,997);
 ERROR:  cannot insert a non-DEFAULT value into column "b"
 DETAIL:  Column "b" is an identity column defined as GENERATED ALWAYS.
 HINT:  Use OVERRIDING SYSTEM VALUE to override.
-INSERT INTO partitioned_table (a,c) VALUES (999,999);
+INSERT INTO partitioned_table (a,c) VALUES (998,998);
 INSERT INTO partitioned_table (a,b,c) OVERRIDING SYSTEM VALUE VALUES (999,999,999);
 SELECT * FROM partitioned_table ORDER BY c ASC;
         a         |        b         |  c
@@ -188,7 +188,7 @@ SELECT * FROM partitioned_table ORDER BY c ASC;
                90 |               90 |  18
               100 |              100 |  19
               110 |              110 |  20
-              999 |              120 | 999
+              998 |              120 | 998
               999 |              999 | 999
 (20 rows)
 
@@ -294,10 +294,10 @@ SELECT create_distributed_table('color', 'color_id');
 
 (1 row)
 
-CREATE USER test;
-GRANT INSERT ON color TO test;
-GRANT USAGE ON SCHEMA generated_identities TO test;
-\c - test - :worker_1_port
+CREATE USER identity_test_user;
+GRANT INSERT ON color TO identity_test_user;
+GRANT USAGE ON SCHEMA generated_identities TO identity_test_user;
+\c - identity_test_user - :worker_1_port
 SET search_path TO generated_identities;
 SET client_min_messages to ERROR;
 INSERT INTO color(color_name) VALUES ('Blue');
@@ -305,3 +305,4 @@ INSERT INTO color(color_name) VALUES ('Blue');
 SET search_path TO generated_identities;
 SET client_min_messages to ERROR;
 DROP SCHEMA generated_identities CASCADE;
+DROP USER identity_test_user;

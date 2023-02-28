@@ -98,9 +98,9 @@ SET client_min_messages to ERROR;
 INSERT INTO partitioned_table (c)
 SELECT s FROM generate_series(10,20) s;
 
-INSERT INTO partitioned_table (a,b,c) VALUES (999,999,999);
+INSERT INTO partitioned_table (a,b,c) VALUES (997,997,997);
 
-INSERT INTO partitioned_table (a,c) VALUES (999,999);
+INSERT INTO partitioned_table (a,c) VALUES (998,998);
 
 INSERT INTO partitioned_table (a,b,c) OVERRIDING SYSTEM VALUE VALUES (999,999,999);
 
@@ -154,11 +154,11 @@ CREATE TABLE color (
 );
 SELECT create_distributed_table('color', 'color_id');
 
-CREATE USER test;
-GRANT INSERT ON color TO test;
-GRANT USAGE ON SCHEMA generated_identities TO test;
+CREATE USER identity_test_user;
+GRANT INSERT ON color TO identity_test_user;
+GRANT USAGE ON SCHEMA generated_identities TO identity_test_user;
 
-\c - test - :worker_1_port
+\c - identity_test_user - :worker_1_port
 SET search_path TO generated_identities;
 SET client_min_messages to ERROR;
 
@@ -169,3 +169,4 @@ SET search_path TO generated_identities;
 SET client_min_messages to ERROR;
 
 DROP SCHEMA generated_identities CASCADE;
+DROP USER identity_test_user;
