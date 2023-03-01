@@ -3981,7 +3981,7 @@ ErrorIfTableHasUnsupportedIdentityColumn(Oid relationId)
 {
 	Relation relation = relation_open(relationId, AccessShareLock);
 	TupleDesc tupleDescriptor = RelationGetDescr(relation);
-	relation_close(relation, NoLock);
+	relation_close(relation, AccessShareLock);
 
 	for (int attributeIndex = 0; attributeIndex < tupleDescriptor->natts;
 		 attributeIndex++)

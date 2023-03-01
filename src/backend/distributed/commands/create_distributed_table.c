@@ -304,8 +304,6 @@ create_distributed_table_concurrently(PG_FUNCTION_ARGS)
 		shardCountIsStrict = true;
 	}
 
-	ErrorIfTableHasUnsupportedIdentityColumn(relationId);
-
 	CreateDistributedTableConcurrently(relationId, distributionColumnName,
 									   distributionMethod,
 									   colocateWithTableName,
@@ -433,6 +431,8 @@ CreateDistributedTableConcurrently(Oid relationId, char *distributionColumnName,
 	}
 
 	WarnIfTableHaveNoReplicaIdentity(relationId);
+
+	ErrorIfTableHasUnsupportedIdentityColumn(relationId);
 
 	List *shardList = LoadShardIntervalList(relationId);
 

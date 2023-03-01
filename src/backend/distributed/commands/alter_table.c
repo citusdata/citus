@@ -399,11 +399,12 @@ UndistributeTable(TableConversionParameters *params)
 
 	ErrorIfUnsupportedCascadeObjects(params->relationId);
 
-	ErrorIfTableHasIdentityColumn(params->relationId);
-
 	params->conversionType = UNDISTRIBUTE_TABLE;
 	params->shardCountIsNull = true;
 	TableConversionState *con = CreateTableConversion(params);
+
+	ErrorIfTableHasIdentityColumn(params->relationId);
+
 	return ConvertTable(con);
 }
 
