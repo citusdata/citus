@@ -1465,24 +1465,23 @@ DELETE FROM pg_catalog.pg_dist_rebalance_strategy WHERE name='only_worker_1';
 -- add colocation groups with shard group count < worker count
 -- the rebalancer should balance those "unbalanced shards" evenly as much as possible
 SELECT 1 FROM citus_remove_node('localhost', :worker_2_port);
-create table table_with_one_shard_1 (a int primary key);
-create table table_with_one_shard_2 (a int primary key);
-create table table_with_one_shard_3 (a int primary key);
+create table single_shard_colocation_1a (a int primary key);
+create table single_shard_colocation_1b (a int primary key);
+create table single_shard_colocation_1c (a int primary key);
 SET citus.shard_replication_factor = 1;
-SET citus.shard_count = 1;
-select create_distributed_table('table_with_one_shard_1','a');
-select create_distributed_table('table_with_one_shard_2','a',colocate_with=>'table_with_one_shard_1');
-select create_distributed_table('table_with_one_shard_3','a',colocate_with=>'table_with_one_shard_2');
+select create_distributed_table('single_shard_colocation_1a','a', colocate_with => 'none', shard_count => 1);
+select create_distributed_table('single_shard_colocation_1b','a',colocate_with=>'single_shard_colocation_1a');
+select create_distributed_table('single_shard_colocation_1c','a',colocate_with=>'single_shard_colocation_1b');
 
-create table table_with_one_shard_4 (a bigint);
-create table table_with_one_shard_5 (a bigint);
-select create_distributed_table('table_with_one_shard_4','a');
-select create_distributed_table('table_with_one_shard_5','a',colocate_with=>'table_with_one_shard_4');
+create table single_shard_colocation_2a (a bigint);
+create table single_shard_colocation_2b (a bigint);
+select create_distributed_table('single_shard_colocation_2a','a', colocate_with => 'none', shard_count => 1);
+select create_distributed_table('single_shard_colocation_2b','a',colocate_with=>'single_shard_colocation_2a');
 
 -- all shards are placed on the first worker node
 SELECT sh.logicalrelid, pl.nodeport
     FROM pg_dist_shard sh JOIN pg_dist_shard_placement pl ON sh.shardid = pl.shardid
-    WHERE sh.logicalrelid::text IN ('table_with_one_shard_1', 'table_with_one_shard_2', 'table_with_one_shard_3', 'table_with_one_shard_4', 'table_with_one_shard_5')
+    WHERE sh.logicalrelid::text IN ('single_shard_colocation_1a', 'single_shard_colocation_1b', 'single_shard_colocation_1c', 'single_shard_colocation_2a', 'single_shard_colocation_2b')
     ORDER BY sh.logicalrelid;
 
 -- add the second node back, then rebalance
@@ -1493,10 +1492,10 @@ select rebalance_table_shards();
 -- verify some shards are moved to the new node
 SELECT sh.logicalrelid, pl.nodeport
     FROM pg_dist_shard sh JOIN pg_dist_shard_placement pl ON sh.shardid = pl.shardid
-    WHERE sh.logicalrelid::text IN ('table_with_one_shard_1', 'table_with_one_shard_2', 'table_with_one_shard_3', 'table_with_one_shard_4', 'table_with_one_shard_5')
+    WHERE sh.logicalrelid::text IN ('single_shard_colocation_1a', 'single_shard_colocation_1b', 'single_shard_colocation_1c', 'single_shard_colocation_2a', 'single_shard_colocation_2b')
     ORDER BY sh.logicalrelid;
 
-DROP TABLE table_with_one_shard_1, table_with_one_shard_2, table_with_one_shard_3, table_with_one_shard_4, table_with_one_shard_5 CASCADE;
+DROP TABLE single_shard_colocation_1a, single_shard_colocation_1b, single_shard_colocation_1c, single_shard_colocation_2a, single_shard_colocation_2b CASCADE;
 
 \c - - - :worker_1_port
 SET citus.enable_ddl_propagation TO OFF;

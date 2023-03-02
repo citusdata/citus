@@ -2634,38 +2634,37 @@ SELECT 1 FROM citus_remove_node('localhost', :worker_2_port);
         1
 (1 row)
 
-create table table_with_one_shard_1 (a int primary key);
-create table table_with_one_shard_2 (a int primary key);
-create table table_with_one_shard_3 (a int primary key);
+create table single_shard_colocation_1a (a int primary key);
+create table single_shard_colocation_1b (a int primary key);
+create table single_shard_colocation_1c (a int primary key);
 SET citus.shard_replication_factor = 1;
-SET citus.shard_count = 1;
-select create_distributed_table('table_with_one_shard_1','a');
+select create_distributed_table('single_shard_colocation_1a','a', colocate_with => 'none', shard_count => 1);
  create_distributed_table
 ---------------------------------------------------------------------
 
 (1 row)
 
-select create_distributed_table('table_with_one_shard_2','a',colocate_with=>'table_with_one_shard_1');
+select create_distributed_table('single_shard_colocation_1b','a',colocate_with=>'single_shard_colocation_1a');
  create_distributed_table
 ---------------------------------------------------------------------
 
 (1 row)
 
-select create_distributed_table('table_with_one_shard_3','a',colocate_with=>'table_with_one_shard_2');
+select create_distributed_table('single_shard_colocation_1c','a',colocate_with=>'single_shard_colocation_1b');
  create_distributed_table
 ---------------------------------------------------------------------
 
 (1 row)
 
-create table table_with_one_shard_4 (a bigint);
-create table table_with_one_shard_5 (a bigint);
-select create_distributed_table('table_with_one_shard_4','a');
+create table single_shard_colocation_2a (a bigint);
+create table single_shard_colocation_2b (a bigint);
+select create_distributed_table('single_shard_colocation_2a','a', colocate_with => 'none', shard_count => 1);
  create_distributed_table
 ---------------------------------------------------------------------
 
 (1 row)
 
-select create_distributed_table('table_with_one_shard_5','a',colocate_with=>'table_with_one_shard_4');
+select create_distributed_table('single_shard_colocation_2b','a',colocate_with=>'single_shard_colocation_2a');
  create_distributed_table
 ---------------------------------------------------------------------
 
@@ -2674,15 +2673,15 @@ select create_distributed_table('table_with_one_shard_5','a',colocate_with=>'tab
 -- all shards are placed on the first worker node
 SELECT sh.logicalrelid, pl.nodeport
     FROM pg_dist_shard sh JOIN pg_dist_shard_placement pl ON sh.shardid = pl.shardid
-    WHERE sh.logicalrelid::text IN ('table_with_one_shard_1', 'table_with_one_shard_2', 'table_with_one_shard_3', 'table_with_one_shard_4', 'table_with_one_shard_5')
+    WHERE sh.logicalrelid::text IN ('single_shard_colocation_1a', 'single_shard_colocation_1b', 'single_shard_colocation_1c', 'single_shard_colocation_2a', 'single_shard_colocation_2b')
     ORDER BY sh.logicalrelid;
-      logicalrelid      | nodeport
+        logicalrelid        | nodeport
 ---------------------------------------------------------------------
- table_with_one_shard_1 |    57637
- table_with_one_shard_2 |    57637
- table_with_one_shard_3 |    57637
- table_with_one_shard_4 |    57637
- table_with_one_shard_5 |    57637
+ single_shard_colocation_1a |    57637
+ single_shard_colocation_1b |    57637
+ single_shard_colocation_1c |    57637
+ single_shard_colocation_2a |    57637
+ single_shard_colocation_2b |    57637
 (5 rows)
 
 -- add the second node back, then rebalance
@@ -2703,18 +2702,18 @@ NOTICE:  Moving shard xxxxx from localhost:xxxxx to localhost:xxxxx ...
 -- verify some shards are moved to the new node
 SELECT sh.logicalrelid, pl.nodeport
     FROM pg_dist_shard sh JOIN pg_dist_shard_placement pl ON sh.shardid = pl.shardid
-    WHERE sh.logicalrelid::text IN ('table_with_one_shard_1', 'table_with_one_shard_2', 'table_with_one_shard_3', 'table_with_one_shard_4', 'table_with_one_shard_5')
+    WHERE sh.logicalrelid::text IN ('single_shard_colocation_1a', 'single_shard_colocation_1b', 'single_shard_colocation_1c', 'single_shard_colocation_2a', 'single_shard_colocation_2b')
     ORDER BY sh.logicalrelid;
-      logicalrelid      | nodeport
+        logicalrelid        | nodeport
 ---------------------------------------------------------------------
- table_with_one_shard_1 |    57638
- table_with_one_shard_2 |    57638
- table_with_one_shard_3 |    57638
- table_with_one_shard_4 |    57637
- table_with_one_shard_5 |    57637
+ single_shard_colocation_1a |    57638
+ single_shard_colocation_1b |    57638
+ single_shard_colocation_1c |    57638
+ single_shard_colocation_2a |    57637
+ single_shard_colocation_2b |    57637
 (5 rows)
 
-DROP TABLE table_with_one_shard_1, table_with_one_shard_2, table_with_one_shard_3, table_with_one_shard_4, table_with_one_shard_5 CASCADE;
+DROP TABLE single_shard_colocation_1a, single_shard_colocation_1b, single_shard_colocation_1c, single_shard_colocation_2a, single_shard_colocation_2b CASCADE;
 \c - - - :worker_1_port
 SET citus.enable_ddl_propagation TO OFF;
 REVOKE ALL ON SCHEMA public FROM testrole;
