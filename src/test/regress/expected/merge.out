@@ -311,7 +311,6 @@ MERGE INTO t1
 		UPDATE SET val = t1.val + 1
 	WHEN NOT MATCHED THEN
 		INSERT (id, val) VALUES (pg_res.id, pg_res.val);
--- Two rows with id 2 and val incremented, id 3, and id 1 is deleted
 SELECT * FROM t1 order by id;
  id | val
 ---------------------------------------------------------------------
@@ -1235,11 +1234,7 @@ WHEN MATCHED THEN
 DO NOTHING
 WHEN NOT MATCHED THEN
 INSERT VALUES(fn_source.id, fn_source.source);
-DEBUG:  function does not have co-located tables
-DEBUG:  generating subplan XXX_1 for subquery SELECT id, source FROM merge_schema.f_dist() f(id integer, source character varying)
-DEBUG:  <Deparsed MERGE query: MERGE INTO merge_schema.fn_target USING (SELECT intermediate_result.id, intermediate_result.source FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id integer, source character varying)) fn_source ON (fn_source.id OPERATOR(pg_catalog.=) fn_target.id) WHEN MATCHED THEN DO NOTHING  WHEN NOT MATCHED THEN INSERT (id, data) VALUES (fn_source.id, fn_source.source)>
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: MERGE INTO merge_schema.fn_target USING (SELECT intermediate_result.id, intermediate_result.source FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id integer, source character varying)) fn_source ON (fn_source.id OPERATOR(pg_catalog.=) fn_target.id) WHEN MATCHED THEN DO NOTHING  WHEN NOT MATCHED THEN INSERT (id, data) VALUES (fn_source.id, fn_source.source)
-DEBUG:  <Deparsed MERGE query: MERGE INTO merge_schema.fn_target_xxxxxxx fn_target USING (SELECT intermediate_result.id, intermediate_result.source FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id integer, source character varying)) fn_source ON (fn_source.id OPERATOR(pg_catalog.=) fn_target.id) WHEN MATCHED THEN DO NOTHING  WHEN NOT MATCHED THEN INSERT (id, data) VALUES (fn_source.id, fn_source.source)>
+DEBUG:  <Deparsed MERGE query: MERGE INTO merge_schema.fn_target_xxxxxxx fn_target USING (SELECT f.id, f.source FROM merge_schema.f_dist() f(id integer, source character varying)) fn_source ON (fn_source.id OPERATOR(pg_catalog.=) fn_target.id) WHEN MATCHED THEN DO NOTHING  WHEN NOT MATCHED THEN INSERT (id, data) VALUES (fn_source.id, fn_source.source)>
 RESET client_min_messages;
 SELECT * INTO fn_local FROM fn_target ORDER BY 1 ;
 -- Should be equal
@@ -2426,6 +2421,37 @@ USING source_json sdn
 ON sda.id = sdn.id
 WHEN matched THEN
 	UPDATE SET z = immutable_hash(sdn.z);
+-- Test bigserial
+CREATE TABLE source_serial (id integer, z int, d bigserial);
+CREATE TABLE target_serial (id integer, z int, d bigserial);
+INSERT INTO source_serial SELECT i,i FROM generate_series(0,100)i;
+SELECT create_distributed_table('source_serial', 'id'), create_distributed_table('target_serial', 'id');
+NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$merge_schema.source_serial$$)
+ create_distributed_table | create_distributed_table
+---------------------------------------------------------------------
+                          |
+(1 row)
+
+MERGE INTO target_serial sda
+USING source_serial sdn
+ON sda.id = sdn.id
+WHEN NOT matched THEN
+       INSERT (id, z) VALUES (id, z);
+SELECT count(*) from source_serial;
+ count
+---------------------------------------------------------------------
+   101
+(1 row)
+
+SELECT count(*) from target_serial;
+ count
+---------------------------------------------------------------------
+   101
+(1 row)
+
 --
 -- Error and Unsupported scenarios
 --
@@ -2609,9 +2635,8 @@ $$;
 -- relation which will have unexpected/suprising results.
 MERGE INTO t1 USING (SELECT * FROM s1 WHERE true) s1 ON
   t1.id = s1.id AND s1.id = 2
-   WHEN NOT matched THEN
- INSERT (id, val)
-   VALUES (s1.id , random());
+   WHEN matched THEN
+ UPDATE SET id = s1.id, val = random();
 ERROR:  functions used in MERGE actions on distributed tables must not be VOLATILE
 -- Test preventing "ON" join condition from writing to the database
 BEGIN;
@@ -3103,7 +3128,7 @@ CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_
 PL/pgSQL function citus_drop_trigger() line XX at PERFORM
 DROP FUNCTION merge_when_and_write();
 DROP SCHEMA merge_schema CASCADE;
-NOTICE:  drop cascades to 78 other objects
+NOTICE:  drop cascades to 80 other objects
 DETAIL:  drop cascades to function insert_data()
 drop cascades to table pg_result
 drop cascades to table local_local
@@ -3173,9 +3198,11 @@ drop cascades to function pa_compare_tables()
 drop cascades to table source_json
 drop cascades to table target_json
 drop cascades to function immutable_hash(integer)
+drop cascades to table source_serial
+drop cascades to table target_serial
 drop cascades to table pg
-drop cascades to table t1_4000118
-drop cascades to table s1_4000119
+drop cascades to table t1_4000126
+drop cascades to table s1_4000127
 drop cascades to table t1
 drop cascades to table s1
 drop cascades to table dist_colocated

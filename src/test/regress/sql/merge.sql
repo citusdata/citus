@@ -224,7 +224,6 @@ MERGE INTO t1
 	WHEN NOT MATCHED THEN
 		INSERT (id, val) VALUES (pg_res.id, pg_res.val);
 
--- Two rows with id 2 and val incremented, id 3, and id 1 is deleted
 SELECT * FROM t1 order by id;
 SELECT * INTO merge_result FROM t1 order by id;
 
@@ -1482,6 +1481,9 @@ ON sda.id = sdn.id
 WHEN NOT matched THEN
        INSERT (id, z) VALUES (id, z);
 
+SELECT count(*) from source_serial;
+SELECT count(*) from target_serial;
+
 --
 -- Error and Unsupported scenarios
 --
@@ -1615,9 +1617,8 @@ $$;
 -- relation which will have unexpected/suprising results.
 MERGE INTO t1 USING (SELECT * FROM s1 WHERE true) s1 ON
   t1.id = s1.id AND s1.id = 2
-   WHEN NOT matched THEN
- INSERT (id, val)
-   VALUES (s1.id , random());
+   WHEN matched THEN
+ UPDATE SET id = s1.id, val = random();
 
 -- Test preventing "ON" join condition from writing to the database
 BEGIN;

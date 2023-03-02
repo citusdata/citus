@@ -51,27 +51,25 @@ SELECT * FROM target_cj ORDER BY 1;
 
 ROLLBACK;
 -- Test PREPARE
-CREATE TABLE prept(t1 int, t2 int);
-CREATE TABLE preps(s1 int, s2 int);
-INSERT INTO prept VALUES(100, 0);
-INSERT INTO preps VALUES(100, 0);
-INSERT INTO preps VALUES(200, 0);
 PREPARE insert(int) AS
 MERGE INTO prept
 USING preps
 ON prept.t1 = preps.s1
 WHEN MATCHED THEN
-	UPDATE SET t2 = t2 + $1
+        UPDATE SET t2 = t2 + $1
 WHEN NOT MATCHED THEN
-	INSERT VALUES(s1, s2);
+        INSERT VALUES(s1, s2);
 PREPARE delete(int) AS
 MERGE INTO prept
 USING preps
 ON prept.t1 = preps.s1
 WHEN MATCHED AND prept.t2 = $1 THEN
-	DELETE
+        DELETE
 WHEN MATCHED THEN
-	UPDATE SET t2 = t2 + 1;
+        UPDATE SET t2 = t2 + 1;
+INSERT INTO prept VALUES(100, 0);
+INSERT INTO preps VALUES(100, 0);
+INSERT INTO preps VALUES(200, 0);
 EXECUTE insert(1); EXECUTE delete(0);
 EXECUTE insert(1); EXECUTE delete(0);
 EXECUTE insert(1); EXECUTE delete(0);
@@ -85,4 +83,34 @@ SELECT * FROM prept;
 ---------------------------------------------------------------------
  100 | 12
 (1 row)
+
+-- Test local tables
+INSERT INTO s1 VALUES(1, 0); -- Matches DELETE clause
+INSERT INTO s1 VALUES(2, 1); -- Matches UPDATE clause
+INSERT INTO s1 VALUES(3, 1); -- No Match INSERT clause
+INSERT INTO s1 VALUES(4, 1); -- No Match INSERT clause
+INSERT INTO s1 VALUES(6, 1); -- No Match INSERT clause
+INSERT INTO t1 VALUES(1, 0); -- Will be deleted
+INSERT INTO t1 VALUES(2, 0); -- Will be updated
+INSERT INTO t1 VALUES(5, 0); -- Will be intact
+WITH s1_res AS (
+        SELECT * FROM s1
+)
+MERGE INTO t1
+        USING s1_res ON (s1_res.id = t1.id)
+        WHEN MATCHED AND s1_res.val = 0 THEN
+                DELETE
+        WHEN MATCHED THEN
+                UPDATE SET val = t1.val + 1
+        WHEN NOT MATCHED THEN
+                INSERT (id, val) VALUES (s1_res.id, s1_res.val);
+SELECT * FROM t1 order by id;
+ id | val
+---------------------------------------------------------------------
+  2 |   1
+  3 |   1
+  4 |   1
+  5 |   0
+  6 |   1
+(5 rows)
 

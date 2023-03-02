@@ -127,9 +127,9 @@ static DeferredErrorMessage * ModifyPartialQuerySupported(Query *queryTree, bool
 														  multiShardQuery,
 														  Oid *distributedTableId);
 static DeferredErrorMessage * MultiShardUpdateDeleteSupported(Query *originalQuery,
-																   PlannerRestrictionContext
-																   *
-																   plannerRestrictionContext);
+															  PlannerRestrictionContext
+															  *
+															  plannerRestrictionContext);
 static DeferredErrorMessage * SingleShardUpdateDeleteSupported(Query *originalQuery,
 															   PlannerRestrictionContext *
 															   plannerRestrictionContext);
@@ -1279,7 +1279,7 @@ ErrorIfOnConflictNotSupported(Query *queryTree)
  */
 static DeferredErrorMessage *
 MultiShardUpdateDeleteSupported(Query *originalQuery,
-									 PlannerRestrictionContext *plannerRestrictionContext)
+								PlannerRestrictionContext *plannerRestrictionContext)
 {
 	DeferredErrorMessage *errorMessage = NULL;
 	RangeTblEntry *resultRangeTable = ExtractResultRelationRTE(originalQuery);
@@ -1874,8 +1874,8 @@ RouterJob(Query *originalQuery, PlannerRestrictionContext *plannerRestrictionCon
 	if (*planningError)
 	{
 		/*
-		 * For MERGE, we do _not_ plan anything other than Router job, let's
-		 * not continue further down the lane in distributed planning, simply
+		 * For MERGE, we do _not_ plan any other router job than the MERGE job itself,
+		 * let's not continue further down the lane in distributed planning, simply
 		 * bail out.
 		 */
 		if (IsMergeQuery(originalQuery))

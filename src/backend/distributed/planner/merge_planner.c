@@ -138,8 +138,9 @@ MergeQuerySupported(Query *originalQuery, bool multiShardQuery,
 
 	if (multiShardQuery)
 	{
-		deferredError = DeferErrorIfUnsupportedSubqueryPushdown(originalQuery,
-									plannerRestrictionContext);
+		deferredError =
+			DeferErrorIfUnsupportedSubqueryPushdown(originalQuery,
+													plannerRestrictionContext);
 		if (deferredError)
 		{
 			return deferredError;
@@ -149,8 +150,8 @@ MergeQuerySupported(Query *originalQuery, bool multiShardQuery,
 	if (HasDangerousJoinUsing(originalQuery->rtable, (Node *) originalQuery->jointree))
 	{
 		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-					"a join with USING causes an internal naming "
-					"conflict, use ON instead", NULL, NULL);
+							 "a join with USING causes an internal naming "
+							 "conflict, use ON instead", NULL, NULL);
 	}
 
 	return NULL;
@@ -627,7 +628,7 @@ MergeActionListSupported(Oid resultRelationId, FromExpr *joinTree, Node *quals,
 
 		if (commandType != CMD_INSERT &&
 			MasterIrreducibleExpression((Node *) targetEntry->expr,
-											 &hasVarArgument, &hasBadCoalesce))
+										&hasVarArgument, &hasBadCoalesce))
 		{
 			Assert(hasVarArgument || hasBadCoalesce);
 		}
