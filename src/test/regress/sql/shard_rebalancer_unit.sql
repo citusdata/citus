@@ -530,3 +530,34 @@ SELECT unnest(shard_placement_rebalance_array(
         ]::json[],
     improvement_threshold := 0.6
 ));
+
+
+-- Test single shard colocation groups
+SELECT unnest(shard_placement_rebalance_array(
+    ARRAY['{"node_name": "a"}',
+          '{"node_name": "b"}']::json[],
+    ARRAY['{"shardid":1, "cost":20,  "nodename":"a"}',
+          '{"shardid":2, "cost":10,  "nodename":"a", "next_colocation": true}',
+          '{"shardid":3, "cost":10,  "nodename":"a", "next_colocation": true}',
+          '{"shardid":4, "cost":100, "nodename":"a", "next_colocation": true}',
+          '{"shardid":5, "cost":50,  "nodename":"a", "next_colocation": true}',
+          '{"shardid":6, "cost":50,  "nodename":"a", "next_colocation": true}'
+        ]::json[],
+    improvement_threshold := 0.1
+));
+
+
+-- Test colocation groups with shard count < worker count
+SELECT unnest(shard_placement_rebalance_array(
+    ARRAY['{"node_name": "a"}',
+          '{"node_name": "b"}',
+          '{"node_name": "c"}']::json[],
+    ARRAY['{"shardid":1, "cost":20,  "nodename":"a"}',
+          '{"shardid":2, "cost":10,  "nodename":"a"}',
+          '{"shardid":3, "cost":10,  "nodename":"a", "next_colocation": true}',
+          '{"shardid":4, "cost":100, "nodename":"a"}',
+          '{"shardid":5, "cost":50,  "nodename":"a", "next_colocation": true}',
+          '{"shardid":6, "cost":50,  "nodename":"a"}'
+        ]::json[],
+    improvement_threshold := 0.1
+));
