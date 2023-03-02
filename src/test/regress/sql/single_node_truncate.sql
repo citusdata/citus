@@ -1,6 +1,7 @@
 CREATE SCHEMA single_node_truncate;
 SET search_path TO single_node_truncate;
 SET citus.shard_replication_factor TO 1;
+SET citus.next_shard_id TO 91630500;
 
 -- helper view that prints out local table names and sizes in the schema
 CREATE VIEW table_sizes AS

@@ -85,6 +85,7 @@ if __name__ == "__main__":
         "create_role_propagation": TestDeps(None, ["multi_cluster_management"]),
         "single_node_enterprise": TestDeps(None),
         "single_node": TestDeps(None),
+        "single_node_truncate": TestDeps(None),
         "multi_extension": TestDeps(None, repeatable=False),
         "multi_test_helpers": TestDeps(None),
         "multi_insert_select": TestDeps("base_schedule"),
