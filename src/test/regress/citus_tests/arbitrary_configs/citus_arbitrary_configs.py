@@ -56,9 +56,7 @@ def run_for_config(config, lock, sql_schedule_name):
     )
     if config.user == cfg.REGULAR_USER_NAME:
         common.create_role(
-            config.bindir,
-            config.node_name_to_ports.values(),
-            config.user,
+            config.bindir, config.node_name_to_ports.values(), config.user
         )
 
     copy_copy_modified_binary(config.datadir)
@@ -160,7 +158,9 @@ def copy_test_files_with_names(test_names, sql_dir_path, expected_dir_path, conf
             # might not be there yet, in that case, we don't want to error out
             # while copying the file.
             shutil.copy(output_name, expected_dir_path)
-            output_name = os.path.join("./expected", f"{test_name}_{alt_output_version_no}.out")
+            output_name = os.path.join(
+                "./expected", f"{test_name}_{alt_output_version_no}.out"
+            )
             alt_output_version_no += 1
 
 
