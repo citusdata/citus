@@ -56,7 +56,9 @@ def run_for_config(config, lock, sql_schedule_name):
     )
     if config.user == cfg.REGULAR_USER_NAME:
         common.create_role(
-            config.bindir, config.node_name_to_ports.values(), config.user
+            config.bindir,
+            config.node_name_to_ports.values(),
+            config.user,
         )
 
     copy_copy_modified_binary(config.datadir)
@@ -151,6 +153,11 @@ def copy_test_files_with_names(test_names, sql_dir_path, expected_dir_path, conf
         sql_name = os.path.join("./sql", test_name + ".sql")
         shutil.copy(sql_name, sql_dir_path)
 
+        # for a test named <t>, all files:
+        # <t>.out, <t>_0.out, <t>_1.out ...
+        # are considered as valid outputs for the test
+        # by the testing tool (pg_regress)
+        # so copy such files to the testing directory
         output_name = os.path.join("./expected", test_name + ".out")
         alt_output_version_no = 0
         while os.path.isfile(output_name):
