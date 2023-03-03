@@ -151,14 +151,24 @@ def copy_test_files_with_names(test_names, sql_dir_path, expected_dir_path, conf
             continue
 
         sql_name = os.path.join("./sql", test_name + ".sql")
-        output_name = os.path.join("./expected", test_name + ".out")
-
         shutil.copy(sql_name, sql_dir_path)
-        if os.path.isfile(output_name):
+
+        # for a test named <t>, all files:
+        # <t>.out, <t>_0.out, <t>_1.out ...
+        # are considered as valid outputs for the test
+        # by the testing tool (pg_regress)
+        # so copy such files to the testing directory
+        output_name = os.path.join("./expected", test_name + ".out")
+        alt_output_version_no = 0
+        while os.path.isfile(output_name):
             # it might be the first time we run this test and the expected file
             # might not be there yet, in that case, we don't want to error out
             # while copying the file.
             shutil.copy(output_name, expected_dir_path)
+            output_name = os.path.join(
+                "./expected", f"{test_name}_{alt_output_version_no}.out"
+            )
+            alt_output_version_no += 1
 
 
 def run_tests(configs, sql_schedule_name):
