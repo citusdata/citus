@@ -975,6 +975,7 @@ SELECT pg_sleep(0.1);
 -- backend(s) that execute on the shards will be terminated
 -- so show that there no internal backends
 SET search_path TO single_node;
+SET citus.next_shard_id TO 90730500;
 SELECT count(*) from should_commit;
 SELECT count(*) FROM pg_stat_activity WHERE application_name LIKE 'citus_internal%';
 SELECT get_all_active_client_backend_count();
@@ -998,6 +999,7 @@ ROLLBACK;
 
 \c - - - :master_port
 SET search_path TO single_node;
+SET citus.next_shard_id TO 90830500;
 
 -- simulate that even if there is no connection slots
 -- to connect, Citus can switch to local execution
@@ -1069,14 +1071,14 @@ SELECT create_distributed_table('test_disabling_drop_and_truncate', 'a');
 SET citus.enable_manual_changes_to_shards TO off;
 
 -- these should error out
-DROP TABLE test_disabling_drop_and_truncate_102040;
-TRUNCATE TABLE test_disabling_drop_and_truncate_102040;
+DROP TABLE test_disabling_drop_and_truncate_90830500;
+TRUNCATE TABLE test_disabling_drop_and_truncate_90830500;
 
 RESET citus.enable_manual_changes_to_shards ;
 
 -- these should work as expected
-TRUNCATE TABLE test_disabling_drop_and_truncate_102040;
-DROP TABLE test_disabling_drop_and_truncate_102040;
+TRUNCATE TABLE test_disabling_drop_and_truncate_90830500;
+DROP TABLE test_disabling_drop_and_truncate_90830500;
 
 DROP TABLE test_disabling_drop_and_truncate;
 
@@ -1086,10 +1088,10 @@ SELECT create_distributed_table('test_creating_distributed_relation_table_from_s
 
 -- these should error because shards cannot be used to:
 -- create distributed table
-SELECT create_distributed_table('test_creating_distributed_relation_table_from_shard_102044', 'a');
+SELECT create_distributed_table('test_creating_distributed_relation_table_from_shard_90830504', 'a');
 
 -- create reference table
-SELECT create_reference_table('test_creating_distributed_relation_table_from_shard_102044');
+SELECT create_reference_table('test_creating_distributed_relation_table_from_shard_90830504');
 
 RESET citus.shard_replication_factor;
 DROP TABLE test_creating_distributed_relation_table_from_shard;
