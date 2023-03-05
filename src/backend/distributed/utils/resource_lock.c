@@ -502,46 +502,6 @@ SetLocktagForShardDistributionMetadata(int64 shardId, LOCKTAG *tag)
 	}
 }
 
-
-/*
- * LockPlacementCleanup takes an exclusive lock to ensure that only one process
- * can cleanup placements at the same time.
- */
-void
-LockPlacementCleanup(void)
-{
-	LOCKTAG tag;
-	const bool sessionLock = false;
-	const bool dontWait = false;
-
-	/* Moves acquire lock with a constant operation id CITUS_SHARD_MOVE.
-	 * This will change as we add support for parallel moves.
-	 */
-	SET_LOCKTAG_CITUS_OPERATION(tag, CITUS_SHARD_MOVE);
-	(void) LockAcquire(&tag, ExclusiveLock, sessionLock, dontWait);
-}
-
-
-/*
- * TryLockPlacementCleanup takes an exclusive lock to ensure that only one
- * process can cleanup placements at the same time.
- */
-bool
-TryLockPlacementCleanup(void)
-{
-	LOCKTAG tag;
-	const bool sessionLock = false;
-	const bool dontWait = true;
-
-	/* Moves acquire lock with a constant operation id CITUS_SHARD_MOVE.
-	 * This will change as we add support for parallel moves.
-	 */
-	SET_LOCKTAG_CITUS_OPERATION(tag, CITUS_SHARD_MOVE);
-	bool lockAcquired = LockAcquire(&tag, ExclusiveLock, sessionLock, dontWait);
-	return lockAcquired;
-}
-
-
 /*
  * LockReferencedReferenceShardDistributionMetadata acquires shard distribution
  * metadata locks with the given lock mode on the reference tables which has a
