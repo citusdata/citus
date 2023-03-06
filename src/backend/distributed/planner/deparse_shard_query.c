@@ -149,7 +149,8 @@ RebuildQueryStrings(Job *workerJob)
 		{
 			partitionColumnValue = workerJob->partitionKeyValue->constvalue;
 			partitionColumnType = workerJob->partitionKeyValue->consttype;
-			partitionColumnString = DatumToString(partitionColumnValue, partitionColumnType);
+			partitionColumnString = DatumToString(partitionColumnValue,
+												  partitionColumnType);
 		}
 
 		task->partitionColumn = partitionColumnString;
@@ -402,7 +403,8 @@ SetTaskQueryIfShouldLazyDeparse(Task *task, Query *query)
 		return;
 	}
 
-	SetTaskQueryString(task, AnnotateQuery(DeparseTaskQuery(task, query), task->partitionColumn, task->colocationId));
+	SetTaskQueryString(task, AnnotateQuery(DeparseTaskQuery(task, query),
+										   task->partitionColumn, task->colocationId));
 }
 
 

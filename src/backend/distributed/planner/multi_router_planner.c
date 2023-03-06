@@ -170,7 +170,8 @@ static int CompareInsertValuesByShardId(const void *leftElement,
 static List * SingleShardTaskList(Query *query, uint64 jobId,
 								  List *relationShardList, List *placementList,
 								  uint64 shardId, bool parametersInQueryResolved,
-								  bool isLocalTableModification, char * partitionColumn, int colocationId);
+								  bool isLocalTableModification, char *partitionColumn,
+								  int colocationId);
 static bool RowLocksOnRelations(Node *node, List **rtiLockList);
 static void ReorderTaskPlacementsByTaskAssignmentPolicy(Job *job,
 														TaskAssignmentPolicyType
@@ -1961,7 +1962,8 @@ GenerateSingleShardRouterTaskList(Job *job, List *relationShardList,
 		{
 			partitionColumnValue = job->partitionKeyValue->constvalue;
 			partitionColumnType = job->partitionKeyValue->consttype;
-			partitionColumnString = DatumToString(partitionColumnValue, partitionColumnType);
+			partitionColumnString = DatumToString(partitionColumnValue,
+												  partitionColumnType);
 		}
 
 		SetJobColocationId(job);
@@ -1970,7 +1972,8 @@ GenerateSingleShardRouterTaskList(Job *job, List *relationShardList,
 											relationShardList, placementList,
 											shardId,
 											job->parametersInJobQueryResolved,
-											isLocalTableModification, partitionColumnString, job->colocationId);
+											isLocalTableModification,
+											partitionColumnString, job->colocationId);
 
 		/*
 		 * Queries to reference tables, or distributed tables with multiple replica's have
@@ -2092,7 +2095,8 @@ static List *
 SingleShardTaskList(Query *query, uint64 jobId, List *relationShardList,
 					List *placementList, uint64 shardId,
 					bool parametersInQueryResolved,
-					bool isLocalTableModification, char * partitionColumn, int colocationId)
+					bool isLocalTableModification, char *partitionColumn,
+					int colocationId)
 {
 	TaskType taskType = READ_TASK;
 	char replicationModel = 0;

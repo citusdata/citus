@@ -1903,7 +1903,7 @@ RegisterCitusConfigVariables(void)
 		PGC_USERSET,
 		GUC_STANDARD,
 		NULL, NULL, NULL);
-	
+
 	DefineCustomEnumVariable(
 		"citus.multi_tenant_monitoring_log_level",
 		gettext_noop("Sets the level of multi tenant monitoring log messages"),

@@ -55,7 +55,7 @@ typedef struct MultiTenantMonitor
 
 extern void CitusAttributeToEnd(QueryDesc *queryDesc);
 extern void AttributeQueryIfAnnotated(const char *queryString, CmdType commandType);
-extern char * AnnotateQuery(char *queryString, char * partitionColumn, int colocationId);
+extern char * AnnotateQuery(char *queryString, char *partitionColumn, int colocationId);
 extern void InitializeMultiTenantMonitorSMHandleManagement(void);
 
 extern ExecutorEnd_hook_type prev_ExecutorEnd;
@@ -64,4 +64,4 @@ extern int MultiTenantMonitoringLogLevel;
 extern int CitusStatsTenantsPeriod;
 extern int CitusStatsTenantsLimit;
 
-#endif //CITUS_ATTRIBUTE_H
+#endif /*CITUS_ATTRIBUTE_H */
