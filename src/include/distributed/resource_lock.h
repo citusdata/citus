@@ -53,8 +53,7 @@ typedef enum CitusOperations
 	CITUS_NONBLOCKING_SPLIT = 1,
 	CITUS_CREATE_DISTRIBUTED_TABLE_CONCURRENTLY = 2,
 	CITUS_CREATE_COLOCATION_DEFAULT = 3,
-	CITUS_SHARD_MOVE = 4,
-	CITUS_BACKGROUND_TASK_MONITOR = 5
+	CITUS_BACKGROUND_TASK_MONITOR = 4
 } CitusOperations;
 
 /* reuse advisory lock, but with different, unused field 4 (4)*/
@@ -165,8 +164,6 @@ enum DistLockConfigs
 
 /* Lock shard/relation metadata for safe modifications */
 extern void LockShardDistributionMetadata(int64 shardId, LOCKMODE lockMode);
-extern void LockPlacementCleanup(void);
-extern bool TryLockPlacementCleanup(void);
 extern void EnsureShardOwner(uint64 shardId, bool missingOk);
 extern void LockShardListMetadataOnWorkers(LOCKMODE lockmode, List *shardIntervalList);
 extern void BlockWritesToShardList(List *shardList);
