@@ -23,7 +23,7 @@ do
     downgrade_migration_file="src/backend/distributed/sql/downgrades/citus--$to_version--$from_version.sql"
 
     # check for the existence of migration scripts
-    if [[ $(grep --line-regexp --count downgrade_migration_file <<< "$downgrade_files") == 0 ]]
+    if [[ $(grep --line-regexp --count "$downgrade_migration_file" <<< "$downgrade_files") == 0 ]]
     then
         echo "$file is updated, but $downgrade_migration_file is not updated in branch"
         ret_value=1
