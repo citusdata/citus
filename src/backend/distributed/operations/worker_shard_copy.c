@@ -351,14 +351,14 @@ ShardCopyDestReceiverDestroy(DestReceiver *dest)
  *  statement fails to handle them. Iterating over the attributes of the table we also need to skip the dropped columns.
  */
 const char *
-GenerateColumnListFromTupleDesc(TupleDesc tupdesc)
+GenerateColumnListFromTupleDesc(TupleDesc tupDesc)
 {
 	StringInfo columnList = makeStringInfo();
 	bool firstInList = true;
 
-	for (int i = 0; i < tupdesc->natts; i++)
+	for (int i = 0; i < tupDesc->natts; i++)
 	{
-		Form_pg_attribute att = TupleDescAttr(tupdesc, i);
+		Form_pg_attribute att = TupleDescAttr(tupDesc, i);
 		if (att->attgenerated || att->attisdropped)
 		{
 			continue;
@@ -370,7 +370,7 @@ GenerateColumnListFromTupleDesc(TupleDesc tupdesc)
 
 		firstInList = false;
 
-		appendStringInfo(columnList, "%s", NameStr(att->attname));
+		appendStringInfo(columnList, "%s", quote_identifier(NameStr(att->attname)));
 	}
 
 	return columnList->data;
