@@ -502,6 +502,7 @@ SetLocktagForShardDistributionMetadata(int64 shardId, LOCKTAG *tag)
 	}
 }
 
+
 /*
  * LockReferencedReferenceShardDistributionMetadata acquires shard distribution
  * metadata locks with the given lock mode on the reference tables which has a
