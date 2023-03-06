@@ -155,13 +155,18 @@ CREATE TABLE color (
     color_name VARCHAR NOT NULL
 );
 
-SET citus.shard_replication_factor TO 1;
-SELECT create_distributed_table_concurrently('color', 'color_id');
-RESET citus.shard_replication_factor;
 -- https://github.com/citusdata/citus/issues/6694
 CREATE USER identity_test_user;
 GRANT INSERT ON color TO identity_test_user;
 GRANT USAGE ON SCHEMA generated_identities TO identity_test_user;
+
+SET ROLE identity_test_user;
+SELECT create_distributed_table('color', 'color_id');
+
+SET ROLE postgres;
+SET citus.shard_replication_factor TO 1;
+SELECT create_distributed_table_concurrently('color', 'color_id');
+RESET citus.shard_replication_factor;
 
 \c - identity_test_user - :worker_1_port
 SET search_path TO generated_identities;

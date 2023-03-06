@@ -289,6 +289,14 @@ CREATE TABLE color (
     color_id BIGINT GENERATED ALWAYS AS IDENTITY UNIQUE,
     color_name VARCHAR NOT NULL
 );
+-- https://github.com/citusdata/citus/issues/6694
+CREATE USER identity_test_user;
+GRANT INSERT ON color TO identity_test_user;
+GRANT USAGE ON SCHEMA generated_identities TO identity_test_user;
+SET ROLE identity_test_user;
+SELECT create_distributed_table('color', 'color_id');
+ERROR:  must be owner of table color
+SET ROLE postgres;
 SET citus.shard_replication_factor TO 1;
 SELECT create_distributed_table_concurrently('color', 'color_id');
  create_distributed_table_concurrently
@@ -297,10 +305,6 @@ SELECT create_distributed_table_concurrently('color', 'color_id');
 (1 row)
 
 RESET citus.shard_replication_factor;
--- https://github.com/citusdata/citus/issues/6694
-CREATE USER identity_test_user;
-GRANT INSERT ON color TO identity_test_user;
-GRANT USAGE ON SCHEMA generated_identities TO identity_test_user;
 \c - identity_test_user - :worker_1_port
 SET search_path TO generated_identities;
 SET client_min_messages to ERROR;

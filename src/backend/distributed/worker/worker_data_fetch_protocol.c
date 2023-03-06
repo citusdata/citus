@@ -146,6 +146,8 @@ worker_modify_identity_columns(PG_FUNCTION_ARGS)
 
 	Oid tableRelationId = PG_GETARG_OID(0);
 
+	EnsureTableOwner(tableRelationId);
+
 	Relation tableRelation = relation_open(tableRelationId, AccessShareLock);
 	TupleDesc tableTupleDesc = RelationGetDescr(tableRelation);
 	relation_close(tableRelation, NoLock);
