@@ -302,7 +302,7 @@ AttributeMetricsIfApplicable()
 		{
 			LWLockAcquire(&monitor->tenants[tenantIndex - 1].lock, LW_EXCLUSIVE);
 
-			ReduceScoreIfNecessary(monitor, monitor->tenants[tenantIndex - 1], queryTime);
+			ReduceScoreIfNecessary(monitor, &monitor->tenants[tenantIndex - 1], queryTime);
 
 			TenantStats tempTenant = monitor->tenants[tenantIndex];
 			monitor->tenants[tenantIndex] = monitor->tenants[tenantIndex - 1];
