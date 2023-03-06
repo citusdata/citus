@@ -1010,7 +1010,7 @@ AppendShardSizeQuery(StringInfo selectQuery, ShardInterval *shardInterval,
 					 char *quotedShardName)
 {
 	appendStringInfo(selectQuery, "SELECT %s AS shard_name, ", quotedShardName);
-	appendStringInfo(selectQuery, PG_RELATION_SIZE_FUNCTION, quotedShardName);
+	appendStringInfo(selectQuery, PG_TOTAL_RELATION_SIZE_FUNCTION, quotedShardName);
 }
 
 

@@ -22,10 +22,10 @@ SELECT create_distributed_table('test_table_statistics_hash', 'id');
 INSERT INTO test_table_statistics_hash SELECT i FROM generate_series(0, 10000)i;
 -- originally shardlength (size of the shard) is zero
 SELECT
-    ds.logicalrelid::regclass::text AS tablename,
-    ds.shardid AS shardid,
+	ds.logicalrelid::regclass::text AS tablename,
+	ds.shardid AS shardid,
     dsp.placementid AS placementid,
-    shard_name(ds.logicalrelid, ds.shardid) AS shardname,
+	shard_name(ds.logicalrelid, ds.shardid) AS shardname,
     ds.shardminvalue AS shardminvalue,
     ds.shardmaxvalue AS shardmaxvalue
 FROM pg_dist_shard ds JOIN pg_dist_shard_placement dsp USING (shardid)
@@ -82,10 +82,10 @@ DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 RESET citus.log_remote_commands;
 RESET citus.multi_shard_modify_mode;
 SELECT
-    ds.logicalrelid::regclass::text AS tablename,
-    ds.shardid AS shardid,
+	ds.logicalrelid::regclass::text AS tablename,
+	ds.shardid AS shardid,
     dsp.placementid AS placementid,
-    shard_name(ds.logicalrelid, ds.shardid) AS shardname,
+	shard_name(ds.logicalrelid, ds.shardid) AS shardname,
     ds.shardminvalue as shardminvalue,
     ds.shardmaxvalue as shardmaxvalue
 FROM pg_dist_shard ds JOIN pg_dist_shard_placement dsp USING (shardid)
@@ -124,10 +124,10 @@ COPY test_table_statistics_append FROM PROGRAM 'echo 0 && echo 1 && echo 2 && ec
 COPY test_table_statistics_append FROM PROGRAM 'echo 4 && echo 5 && echo 6 && echo 7' WITH CSV;
 -- originally shardminvalue and shardmaxvalue will be 0,3 and 4, 7
 SELECT
-    ds.logicalrelid::regclass::text AS tablename,
-    ds.shardid AS shardid,
+	ds.logicalrelid::regclass::text AS tablename,
+	ds.shardid AS shardid,
     dsp.placementid AS placementid,
-    shard_name(ds.logicalrelid, ds.shardid) AS shardname,
+	shard_name(ds.logicalrelid, ds.shardid) AS shardname,
     ds.shardminvalue as shardminvalue,
     ds.shardmaxvalue as shardmaxvalue
 FROM pg_dist_shard ds JOIN pg_dist_shard_placement dsp USING (shardid)
@@ -168,10 +168,10 @@ DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 RESET citus.log_remote_commands;
 RESET citus.multi_shard_modify_mode;
 SELECT
-    ds.logicalrelid::regclass::text AS tablename,
-    ds.shardid AS shardid,
+	ds.logicalrelid::regclass::text AS tablename,
+	ds.shardid AS shardid,
     dsp.placementid AS placementid,
-    shard_name(ds.logicalrelid, ds.shardid) AS shardname,
+	shard_name(ds.logicalrelid, ds.shardid) AS shardname,
     ds.shardminvalue as shardminvalue,
     ds.shardmaxvalue as shardmaxvalue
 FROM pg_dist_shard ds JOIN pg_dist_shard_placement dsp USING (shardid)
