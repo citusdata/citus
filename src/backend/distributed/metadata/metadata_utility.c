@@ -916,7 +916,7 @@ AppendShardSizeQuery(StringInfo selectQuery, ShardInterval *shardInterval)
 
 	appendStringInfo(selectQuery, "SELECT " UINT64_FORMAT " AS shard_id, ", shardId);
 	appendStringInfo(selectQuery, "%s AS shard_name, ", quotedShardName);
-	appendStringInfo(selectQuery, PG_RELATION_SIZE_FUNCTION, quotedShardName);
+	appendStringInfo(selectQuery, PG_TOTAL_RELATION_SIZE_FUNCTION, quotedShardName);
 }
 
 
