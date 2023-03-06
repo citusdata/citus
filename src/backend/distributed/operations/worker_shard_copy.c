@@ -381,7 +381,7 @@ GenerateColumnListFromTupleDesc(TupleDesc tupDesc)
  *  GenerateColumnListFromRelationName function is a wrapper for GenerateColumnListFromTupleDesc.
  */
 const char *
-GenerateColumnListFromRelationName(const char *relationName, const char *schemaName)
+CopyableColumnNamesFromRelationName(const char *schemaName, const char *relationName)
 {
 	Oid namespaceOid = get_namespace_oid(schemaName, true);
 
