@@ -7,15 +7,7 @@
 
 #include "executor/execdesc.h"
 #include "executor/executor.h"
-
-typedef struct MultiTenantMonitor
-{
-	int tenantCount;
-	dsm_handle tenants[300];
-	long long scores[300];
-
-	time_t periodStart;
-} MultiTenantMonitor;
+#include "storage/lwlock.h"
 
 typedef struct TenantStats
 {
@@ -35,14 +27,25 @@ typedef struct TenantStats
 
 	time_t lastQueryTime;
 
+	long long score;
 	time_t lastScoreReduction;
 	int rank;
+
+	NamedLWLockTranche namedLockTranche;
+	LWLock lock;
 } TenantStats;
 
-typedef struct MultiTenantMonitorSMData
+typedef struct MultiTenantMonitor
 {
-	dsm_handle dsmHandle;
-} MultiTenantMonitorSMData;
+	time_t periodStart;
+
+	NamedLWLockTranche namedLockTranche;
+	LWLock lock;
+
+	int tenantCount;
+	TenantStats tenants[FLEXIBLE_ARRAY_MEMBER];
+} MultiTenantMonitor;
+
 
 extern void CitusAttributeToEnd(QueryDesc *queryDesc);
 extern void AttributeQueryIfAnnotated(const char *queryString, CmdType commandType);
