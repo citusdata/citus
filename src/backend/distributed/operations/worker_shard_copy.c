@@ -346,7 +346,7 @@ ShardCopyDestReceiverDestroy(DestReceiver *dest)
 
 
 /*
- *  GenerateColumnListFromTupleDesc function creates and returns a comma seperated column names string  to be used in COPY
+ *  CopyableColumnNamesFromTupleDesc function creates and returns a comma seperated column names string  to be used in COPY
  *  and SELECT statements when copying a table. The COPY and SELECT statements should filter out the GENERATED columns since COPY
  *  statement fails to handle them. Iterating over the attributes of the table we also need to skip the dropped columns.
  */
@@ -378,7 +378,7 @@ CopyableColumnNamesFromTupleDesc(TupleDesc tupDesc)
 
 
 /*
- *  GenerateColumnListFromRelationName function is a wrapper for GenerateColumnListFromTupleDesc.
+ *  CopyableColumnNamesFromRelationName function is a wrapper for CopyableColumnNamesFromTupleDesc.
  */
 const char *
 CopyableColumnNamesFromRelationName(const char *schemaName, const char *relationName)
@@ -391,7 +391,7 @@ CopyableColumnNamesFromRelationName(const char *schemaName, const char *relation
 
 	TupleDesc tupleDesc = RelationGetDescr(relation);
 
-	const char *columnList = GenerateColumnListFromTupleDesc(tupleDesc);
+	const char *columnList = CopyableColumnNamesFromTupleDesc(tupleDesc);
 
 	relation_close(relation, NoLock);
 
@@ -414,7 +414,7 @@ ConstructShardCopyStatement(List *destinationShardFullyQualifiedName, bool
 
 	StringInfo command = makeStringInfo();
 
-	const char *columnList = GenerateColumnListFromTupleDesc(tupleDesc);
+	const char *columnList = CopyableColumnNamesFromTupleDesc(tupleDesc);
 
 	appendStringInfo(command, "COPY %s.%s (%s) FROM STDIN",
 					 quote_identifier(destinationShardSchemaName), quote_identifier(

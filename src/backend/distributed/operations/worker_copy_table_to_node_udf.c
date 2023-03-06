@@ -57,8 +57,8 @@ worker_copy_table_to_node(PG_FUNCTION_ARGS)
 	/*
 	 * Even though we do COPY(SELECT ...) all the columns, we can't just do SELECT * because we need to not COPY generated colums.
 	 */
-	const char *columnList = GenerateColumnListFromRelationName(relationName,
-																relationSchemaName);
+	const char *columnList = CopyableColumnNamesFromRelationName(relationSchemaName,
+																 relationName);
 	appendStringInfo(selectShardQueryForCopy,
 					 "SELECT %s FROM %s;", columnList, relationQualifiedName);
 

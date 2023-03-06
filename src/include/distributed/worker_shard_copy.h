@@ -19,9 +19,9 @@ extern DestReceiver * CreateShardCopyDestReceiver(EState *executorState,
 												  List *destinationShardFullyQualifiedName,
 												  uint32_t destinationNodeId);
 
-extern const char * GenerateColumnListFromRelationName(const char *relationName, const
-													   char *schemaName);
+extern const char * CopyableColumnNamesFromRelationName(const char *schemaName, const
+														char *relationName);
 
-extern const char * GenerateColumnListFromTupleDesc(TupleDesc tupdesc);
+extern const char * CopyableColumnNamesFromTupleDesc(TupleDesc tupdesc);
 
 #endif /* WORKER_SHARD_COPY_H_ */

@@ -110,8 +110,9 @@ worker_split_copy(PG_FUNCTION_ARGS)
 													   splitCopyInfoList))));
 
 	StringInfo selectShardQueryForCopy = makeStringInfo();
-	const char *columnList = GenerateColumnListFromRelationName(
-		sourceShardToCopyName, sourceShardToCopySchemaName);
+	const char *columnList = CopyableColumnNamesFromRelationName(
+		sourceShardToCopySchemaName,
+		sourceShardToCopyName);
 
 	appendStringInfo(selectShardQueryForCopy,
 					 "SELECT %s FROM %s;", columnList,
