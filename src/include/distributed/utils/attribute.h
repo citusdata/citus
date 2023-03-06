@@ -1,6 +1,12 @@
-//
-// Created by Nils Dijk on 02/12/2022.
-//
+/*-------------------------------------------------------------------------
+ *
+ * attribute.h
+ *	  Routines related to the multi tenant monitor.
+ *
+ * Copyright (c) Citus Data, Inc.
+ *
+ *-------------------------------------------------------------------------
+ */
 
 #ifndef CITUS_ATTRIBUTE_H
 #define CITUS_ATTRIBUTE_H

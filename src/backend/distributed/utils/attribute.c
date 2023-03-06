@@ -291,8 +291,8 @@ AttributeMetricsIfApplicable()
 		while(tenantIndex != 0 && monitor->tenants[tenantIndex-1].score < tenantStats->score)
 		{
 			LWLockAcquire(&monitor->tenants[tenantIndex-1].lock, LW_EXCLUSIVE);
-			// we need to reduce previous tenants score too !!!!!!!!
-			elog(WARNING, "swap = %d, %d", tenantIndex, tenantIndex-1);
+
+			ReduceScoreIfNecessary(monitor, monitor->tenants[tenantIndex-1], queryTime);
 			
 			TenantStats tempTenant = monitor->tenants[tenantIndex];
 			monitor->tenants[tenantIndex] = monitor->tenants[tenantIndex - 1];
@@ -548,6 +548,10 @@ FindTenantStats(MultiTenantMonitor *monitor)
 }
 
 
+/*
+ * MultiTenantMonitorshmemSize calculates the size of the multi tenant monitor using
+ * CitusStatsTenantsLimit parameter.
+ */
 static size_t
 MultiTenantMonitorshmemSize(void)
 {
