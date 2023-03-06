@@ -351,7 +351,7 @@ ShardCopyDestReceiverDestroy(DestReceiver *dest)
  *  statement fails to handle them. Iterating over the attributes of the table we also need to skip the dropped columns.
  */
 const char *
-GenerateColumnListFromTupleDesc(TupleDesc tupDesc)
+CopyableColumnNamesFromTupleDesc(TupleDesc tupDesc)
 {
 	StringInfo columnList = makeStringInfo();
 	bool firstInList = true;
