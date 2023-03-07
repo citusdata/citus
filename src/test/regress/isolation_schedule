@@ -108,3 +108,6 @@ test: isolation_acquire_distributed_locks
 test: isolation_concurrent_move_create_table
 
 test: isolation_check_mx
+
+# MERGE
+test: isolation_merge

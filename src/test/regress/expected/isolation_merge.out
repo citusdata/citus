@@ -1,0 +1,44 @@
+Parsed test spec with 2 sessions
+
+starting permutation: s1-begin s2-begin s1-insert s2-delete s1-commit s2-commit s2-result
+step s1-begin: BEGIN;
+step s2-begin: BEGIN;
+step s1-insert: MERGE INTO prept USING preps ON prept.t1 = preps.s1
+   WHEN MATCHED THEN UPDATE SET t2 = t2 + 1
+   WHEN NOT MATCHED THEN INSERT VALUES(s1, s2);
+
+step s2-delete: MERGE INTO prept USING preps ON prept.t1 = preps.s1
+   WHEN MATCHED AND prept.t2 = 0 THEN DELETE
+   WHEN MATCHED THEN UPDATE SET t2 = t2 + 1;
+ <waiting ...>
+step s1-commit: COMMIT;
+step s2-delete: <... completed>
+step s2-commit: COMMIT;
+step s2-result: SELECT * FROM prept;
+ t1|t2
+---------------------------------------------------------------------
+100| 2
+(1 row)
+
+
+starting permutation: s2-begin s2-delete s1-begin s1-insert s2-commit s1-commit s2-result
+step s2-begin: BEGIN;
+step s2-delete: MERGE INTO prept USING preps ON prept.t1 = preps.s1
+   WHEN MATCHED AND prept.t2 = 0 THEN DELETE
+   WHEN MATCHED THEN UPDATE SET t2 = t2 + 1;
+
+step s1-begin: BEGIN;
+step s1-insert: MERGE INTO prept USING preps ON prept.t1 = preps.s1
+   WHEN MATCHED THEN UPDATE SET t2 = t2 + 1
+   WHEN NOT MATCHED THEN INSERT VALUES(s1, s2);
+ <waiting ...>
+step s2-commit: COMMIT;
+step s1-insert: <... completed>
+step s1-commit: COMMIT;
+step s2-result: SELECT * FROM prept;
+ t1|t2
+---------------------------------------------------------------------
+200| 0
+100| 0
+(2 rows)
+
