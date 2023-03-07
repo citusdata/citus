@@ -1464,7 +1464,7 @@ DropFKeysRelationInvolvedWithTableType(Oid relationId, int tableTypeFlag)
 
 /*
  * DecideDistTableReplicationModel function decides which replication model should be
- * used for given distributed table depending on given distribution configuration.
+ * used for a distributed table depending on given distribution configuration.
  */
 static char
 DecideDistTableReplicationModel(char distributionMethod, char *colocateWithTableName)
