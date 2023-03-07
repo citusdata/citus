@@ -49,7 +49,7 @@ SELECT create_distributed_table('sensors', 'measureid', colocate_with:='none');
 CREATE TABLE reference_table (measureid integer PRIMARY KEY);
 SELECT create_reference_table('reference_table');
 
-CREATE TABLE colocated_dist_table (measureid integer PRIMARY KEY);
+CREATE TABLE colocated_dist_table (measureid integer PRIMARY KEY, genid integer GENERATED ALWAYS AS ( measureid + 3 ) stored, value varchar(44), col_todrop integer);
 CLUSTER colocated_dist_table USING colocated_dist_table_pkey;
 SELECT create_distributed_table('colocated_dist_table', 'measureid', colocate_with:='sensors');
 
@@ -66,8 +66,10 @@ ALTER TABLE sensors ADD CONSTRAINT fkey_table_to_dist FOREIGN KEY (measureid) RE
 
 -- BEGIN : Load data into tables.
 INSERT INTO reference_table SELECT i FROM generate_series(0,1000)i;
-INSERT INTO colocated_dist_table SELECT i FROM generate_series(0,1000)i;
+INSERT INTO colocated_dist_table(measureid, value, col_todrop) SELECT i,'Value',i FROM generate_series(0,1000)i;
 INSERT INTO sensors SELECT i, '2020-01-05', '{}', 11011.10, 'A', 'I <3 Citus' FROM generate_series(0,1000)i;
+
+ALTER TABLE colocated_dist_table DROP COLUMN col_todrop;
 
 SELECT COUNT(*) FROM sensors;
 SELECT COUNT(*) FROM reference_table;
