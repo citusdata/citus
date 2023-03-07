@@ -121,7 +121,7 @@ SET citus.next_shard_id TO 81080000;
 CREATE TABLE worker_split_copy_test.dist_table_with_generated_col(id int primary key, new_id int GENERATED ALWAYS AS ( id + 3 ) stored, value char, col_todrop int);
 SELECT create_distributed_table('dist_table_with_generated_col', 'id');
 
--- Check that dropped columns are filtered out in COPY command. 
+-- Check that dropped columns are filtered out in COPY command.
 ALTER TABLE  dist_table_with_generated_col DROP COLUMN col_todrop;
 
 INSERT INTO dist_table_with_generated_col (id, value) (SELECT g.id, 'N' FROM generate_series(1, 1000) AS g(id));
