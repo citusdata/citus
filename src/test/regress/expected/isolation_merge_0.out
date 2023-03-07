@@ -1,0 +1,5 @@
+Parsed test spec with 2 sessions
+
+starting permutation: s1-begin s2-begin s1-insert s2-delete s1-commit s2-commit s2-result
+setup failed: ERROR:  MERGE is not supported on PG version: 14
+CONTEXT:  PL/pgSQL function inline_code_block line XX at RAISE

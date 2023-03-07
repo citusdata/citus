@@ -27,6 +27,9 @@
 
 #if PG_VERSION_NUM >= PG_VERSION_15
 
+static bool CheckIfRTETypeIsUnsupported(Query *parse,
+						RangeTblEntry *rangeTableEntry,
+						DeferredErrorMessage **returnMessage);
 static DeferredErrorMessage * ErrorIfTablesNotColocatedAndJoinedOnDistColumn(Query *parse,
 																			 List *
 																			 distTablesList,
@@ -232,6 +235,78 @@ ErrorIfTablesNotColocatedAndJoinedOnDistColumn(Query *parse, List *distTablesLis
 
 
 /*
+ * ErrorIfRTETypeIsUnsupported Checks for types of tables that are not supported, such
+ * as, reference tables, append-distributed tables and materialized view as target relation.
+ * Routine returns true for the supported types, and false for everything else, only for
+ * unsupported types it fills the appropriate error message in the parameter passed.
+ */
+static bool
+CheckIfRTETypeIsUnsupported(Query *parse,
+				RangeTblEntry *rangeTableEntry,
+				DeferredErrorMessage **returnMessage)
+{
+	/* skip the regular views as they are replaced with subqueries */
+	if (rangeTableEntry->relkind == RELKIND_VIEW)
+	{
+		return true;
+	}
+
+	if (rangeTableEntry->relkind == RELKIND_MATVIEW ||
+		rangeTableEntry->relkind == RELKIND_FOREIGN_TABLE)
+	{
+		/* Materialized view or Foreign table as target is not allowed */
+		if (IsMergeAllowedOnRelation(parse, rangeTableEntry))
+		{
+			/* Non target relation is ok */
+			return true;
+		}
+		else
+		{
+			/* Usually we don't reach this exception as the Postgres parser catches it */
+			StringInfo errorMessage = makeStringInfo();
+			appendStringInfo(errorMessage, "MERGE command is not allowed on "
+						"relation type(relkind:%c)", rangeTableEntry->relkind);
+			*returnMessage = DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+								errorMessage->data, NULL, NULL);
+		}
+	}
+
+	if (rangeTableEntry->relkind != RELKIND_RELATION &&
+		rangeTableEntry->relkind != RELKIND_PARTITIONED_TABLE)
+	{
+		StringInfo errorMessage = makeStringInfo();
+		appendStringInfo(errorMessage, "Unexpected table type(relkind:%c) "
+									   "in MERGE command", rangeTableEntry->relkind);
+		*returnMessage = DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+							errorMessage->data, NULL, NULL);
+	}
+
+	Assert(rangeTableEntry->relid != 0);
+
+	/* Reference tables are not supported yet */
+	if (IsCitusTableType(rangeTableEntry->relid, REFERENCE_TABLE))
+	{
+		*returnMessage = DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+							 "MERGE command is not supported on reference "
+							 "tables yet", NULL, NULL);
+	}
+
+	/* Append/Range tables are not supported */
+	if (IsCitusTableType(rangeTableEntry->relid, APPEND_DISTRIBUTED) ||
+		IsCitusTableType(rangeTableEntry->relid, RANGE_DISTRIBUTED))
+	{
+		*returnMessage = DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+							 "For MERGE command, all the distributed tables "
+							 "must be colocated, for append/range distribution, "
+							 "colocation is not supported", NULL,
+							 "Consider using hash distribution instead");
+	}
+
+	return false;
+}
+
+
+/*
  * ErrorIfMergeHasUnsupportedTables checks if all the tables(target, source or any CTE
  * present) in the MERGE command are local i.e. a combination of Citus local and Non-Citus
  * tables (regular Postgres tables), or distributed tables with some restrictions, please
@@ -294,63 +369,17 @@ ErrorIfMergeHasUnsupportedTables(Query *parse, List *rangeTableList,
 		}
 
 		/* RTE Relation can be of various types, check them now */
-
-		/* skip the regular views as they are replaced with subqueries */
-		if (rangeTableEntry->relkind == RELKIND_VIEW)
+		DeferredErrorMessage *errorMessage = NULL;
+		if (CheckIfRTETypeIsUnsupported(parse, rangeTableEntry, &errorMessage))
 		{
 			continue;
 		}
-
-		if (rangeTableEntry->relkind == RELKIND_MATVIEW ||
-			rangeTableEntry->relkind == RELKIND_FOREIGN_TABLE)
+		else
 		{
-			/* Materialized view or Foreign table as target is not allowed */
-			if (IsMergeAllowedOnRelation(parse, rangeTableEntry))
+			if (errorMessage)
 			{
-				/* Non target relation is ok */
-				continue;
+				return errorMessage;
 			}
-			else
-			{
-				/* Usually we don't reach this exception as the Postgres parser catches it */
-				StringInfo errorMessage = makeStringInfo();
-				appendStringInfo(errorMessage,
-								 "MERGE command is not allowed on "
-								 "relation type(relkind:%c)", rangeTableEntry->relkind);
-				return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED, errorMessage->data,
-									 NULL, NULL);
-			}
-		}
-
-		if (rangeTableEntry->relkind != RELKIND_RELATION &&
-			rangeTableEntry->relkind != RELKIND_PARTITIONED_TABLE)
-		{
-			StringInfo errorMessage = makeStringInfo();
-			appendStringInfo(errorMessage, "Unexpected table type(relkind:%c) "
-										   "in MERGE command", rangeTableEntry->relkind);
-			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED, errorMessage->data,
-								 NULL, NULL);
-		}
-
-		Assert(rangeTableEntry->relid != 0);
-
-		/* Reference tables are not supported yet */
-		if (IsCitusTableType(relationId, REFERENCE_TABLE))
-		{
-			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-								 "MERGE command is not supported on reference "
-								 "tables yet", NULL, NULL);
-		}
-
-		/* Append/Range tables are not supported */
-		if (IsCitusTableType(relationId, APPEND_DISTRIBUTED) ||
-			IsCitusTableType(relationId, RANGE_DISTRIBUTED))
-		{
-			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-								 "For MERGE command, all the distributed tables "
-								 "must be colocated, for append/range distribution, "
-								 "colocation is not supported", NULL,
-								 "Consider using hash distribution instead");
 		}
 
 		/*
@@ -389,8 +418,8 @@ ErrorIfMergeHasUnsupportedTables(Query *parse, List *rangeTableList,
 	}
 
 	/* Ensure all distributed tables are indeed co-located and joined on distribution column */
-	return ErrorIfTablesNotColocatedAndJoinedOnDistColumn(parse, distTablesList,
-														  restrictionContext);
+	return ErrorIfTablesNotColocatedAndJoinedOnDistColumn(parse,
+								distTablesList, restrictionContext);
 }
 
 
@@ -461,7 +490,8 @@ IsPartitionColumnInMergeSource(Expr *columnExpression, Query *query, bool skipOu
  * value into the target which is not from the source table, if so, it
  * raises an exception.
  * Note: Inserting random values other than the joined column values will
- * result in unexpected behaviour of rows ending up in incorrect shards.
+ * result in unexpected behaviour of rows ending up in incorrect shards, to
+ * prevent such mishaps, we disallow such inserts here.
  */
 static DeferredErrorMessage *
 InsertPartitionColumnMatchesSource(Query *query, RangeTblEntry *resultRte)
@@ -475,7 +505,7 @@ InsertPartitionColumnMatchesSource(Query *query, RangeTblEntry *resultRte)
 	MergeAction *action = NULL;
 	foreach_ptr(action, query->mergeActionList)
 	{
-		/* Skip MATCHED clauses */
+		/* Skip MATCHED clause as INSERTS are not allowed in it*/
 		if (action->matched)
 		{
 			continue;
@@ -501,11 +531,6 @@ InsertPartitionColumnMatchesSource(Query *query, RangeTblEntry *resultRte)
 		TargetEntry *targetEntry = NULL;
 		foreach_ptr(targetEntry, action->targetList)
 		{
-			if (targetEntry->resjunk)
-			{
-				continue;
-			}
-
 			AttrNumber originalAttrNo = targetEntry->resno;
 
 			/* skip processing of target table non-partition columns */
@@ -516,7 +541,7 @@ InsertPartitionColumnMatchesSource(Query *query, RangeTblEntry *resultRte)
 
 			foundDistributionColumn = true;
 
-			if (targetEntry->expr->type == T_Var)
+			if (IsA(targetEntry->expr, Var))
 			{
 				if (IsPartitionColumnInMergeSource(targetEntry->expr, query, true))
 				{
