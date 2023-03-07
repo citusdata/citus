@@ -1471,7 +1471,7 @@ DecideDistTableReplicationModel(char distributionMethod, char *colocateWithTable
 {
 	Assert(distributionMethod != DISTRIBUTE_BY_NONE);
 
-	if (pg_strncasecmp(colocateWithTableName, "default", NAMEDATALEN) != 0 &&
+	if (!IsColocateWithDefault(colocateWithTableName) &&
 		!IsColocateWithNone(colocateWithTableName))
 	{
 		text *colocateWithTableNameText = cstring_to_text(colocateWithTableName);
