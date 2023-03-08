@@ -34,7 +34,7 @@ ExecutorEnd_hook_type prev_ExecutorEnd = NULL;
 #define ONE_QUERY_SCORE 1000000000
 
 /* TODO maybe needs to be a stack */
-char *attributeToTenant = NULL;
+char attributeToTenant[100] = "";
 CmdType attributeCommandType = CMD_UNKNOWN;
 int colocationGroupId = -1;
 clock_t attributeToTenantStart = { 0 };
@@ -144,7 +144,7 @@ citus_stats_tenants(PG_FUNCTION_ARGS)
 void
 AttributeQueryIfAnnotated(const char *query_string, CmdType commandType)
 {
-	attributeToTenant = NULL;
+//	attributeToTenant = NULL;
 
 	attributeCommandType = commandType;
 
@@ -349,7 +349,7 @@ AttributeMetricsIfApplicable()
 								 	tenantStats->tenantAttribute)));
 		}
 	}
-	attributeToTenant = NULL;
+	//attributeToTenant = NULL;
 }
 
 
