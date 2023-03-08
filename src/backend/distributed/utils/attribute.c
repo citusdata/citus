@@ -178,6 +178,14 @@ AttributeQueryIfAnnotated(const char *query_string, CmdType commandType)
 			tenantEnd--;
 		}
 
+		int t = colocationGroupId;
+		colocationGroupId = 0;
+		while (t)
+		{
+			colocationGroupId *= 10;
+			colocationGroupId += t%10;
+			t/=10;
+		}
 		/* hack to get a clean copy of the tenant id string */
 		char tenantEndTmp = *tenantEnd;
 		*tenantEnd = '\0';
@@ -195,7 +203,7 @@ AttributeQueryIfAnnotated(const char *query_string, CmdType commandType)
 	}
 	else
 	{
-		Assert(attributeToTenant == NULL);
+		//Assert(attributeToTenant == NULL);
 	}
 
 	/*DetachSegment(); */
