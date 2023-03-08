@@ -1348,8 +1348,7 @@ CreateCitusTableLike(TableConversionState *con)
 	}
 	else if (IsCitusTableType(con->relationId, REFERENCE_TABLE))
 	{
-		CreateDistributedTable(con->newRelationId, NULL, DISTRIBUTE_BY_NONE, 0, false,
-							   NULL);
+		CreateReferenceTable(con->newRelationId);
 	}
 	else if (IsCitusTableType(con->relationId, CITUS_LOCAL_TABLE))
 	{
