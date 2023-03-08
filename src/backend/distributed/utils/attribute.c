@@ -190,7 +190,7 @@ AttributeQueryIfAnnotated(const char *query_string, CmdType commandType)
 									quote_literal_cstr(tenantId))));
 		}
 
-		attributeToTenant = (char *) malloc(strlen(tenantId));
+	//	attributeToTenant = (char *) malloc(strlen(tenantId));
 		strcpy(attributeToTenant, tenantId);
 	}
 	else
@@ -250,7 +250,7 @@ CitusAttributeToEnd(QueryDesc *queryDesc)
 static void
 AttributeMetricsIfApplicable()
 {
-	if (attributeToTenant)
+	if (strcmp(attributeToTenant, "") != 0)
 	{
 		clock_t end = { 0 };
 		double cpu_time_used = 0;
