@@ -1896,7 +1896,18 @@ ErrorOnConcurrentRebalance(RebalanceOptions *options)
 							"citus_rebalance_status();")));
 	}
 }
+/* 
+ * Returns 0 if INVALID_COLOCATION_ID.
+ */
+static int64
+GetCollocationId(PlacementUpdateEvent *move)
+{
+	ShardInterval *shardInterval = LoadShardInterval(move->shardId);
 
+	CitusTableCacheEntry *citusTableCacheEntry = GetCitusTableCacheEntry(shardInterval->relationId);
+
+	return citusTableCacheEntry->colocationId;
+}
 
 /*
  * RebalanceTableShardsBackground rebalances the shards for the relations
@@ -1982,10 +1993,9 @@ RebalanceTableShardsBackground(RebalanceOptions *options, Oid shardReplicationMo
 	 * prevJobIdx tells what slot to write the id of the task into. We only use both slots
 	 * if we are actually replicating reference tables.
 	 */
-	int64 prevJobId[2] = { 0 };
-	int prevJobIdx = 0;
-
 	List *referenceTableIdList = NIL;
+	int64 replicateRefTablesTaskId = 0;
+	int64 dependingTasksList[1] = {0};
 
 	if (HasNodesWithMissingReferenceTables(&referenceTableIdList))
 	{
@@ -2002,14 +2012,13 @@ RebalanceTableShardsBackground(RebalanceOptions *options, Oid shardReplicationMo
 						 "SELECT pg_catalog.replicate_reference_tables(%s)",
 						 quote_literal_cstr(shardTranferModeLabel));
 		BackgroundTask *task = ScheduleBackgroundTask(jobId, GetUserId(), buf.data,
-													  prevJobIdx, prevJobId);
-		prevJobId[prevJobIdx] = task->taskid;
-		prevJobIdx++;
+													 0 , dependingTasksList);
+		replicateRefTablesTaskId = task->taskid;
 	}
 
 	PlacementUpdateEvent *move = NULL;
-	bool first = true;
-	int prevMoveIndex = prevJobIdx;
+	int64 dependencyMap[1000] = {0};
+
 	foreach_ptr(move, placementUpdateList)
 	{
 		resetStringInfo(&buf);
@@ -2021,14 +2030,25 @@ RebalanceTableShardsBackground(RebalanceOptions *options, Oid shardReplicationMo
 						 move->targetNode->nodeId,
 						 quote_literal_cstr(shardTranferModeLabel));
 
-		BackgroundTask *task = ScheduleBackgroundTask(jobId, GetUserId(), buf.data,
-													  prevJobIdx, prevJobId);
-		prevJobId[prevMoveIndex] = task->taskid;
-		if (first)
+		int64 cid = GetCollocationId(move);
+		
+		int nDep = 0;
+
+		if (dependencyMap[cid] > 0)
 		{
-			first = false;
-			prevJobIdx++;
+			dependingTasksList[0] = dependencyMap[cid];
+			nDep = 1;
 		}
+		else if (replicateRefTablesTaskId > 0) {
+			dependingTasksList[0] = replicateRefTablesTaskId;
+			nDep = 1;
+		}
+
+		BackgroundTask *task = ScheduleBackgroundTask(jobId, GetUserId(), buf.data,
+													  nDep,  dependingTasksList);
+
+		dependencyMap[cid] = task->taskid;
+
 	}
 
 	ereport(NOTICE,
