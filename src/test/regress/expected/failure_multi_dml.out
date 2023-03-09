@@ -83,7 +83,7 @@ SELECT * FROM dml_test ORDER BY id ASC;
 (4 rows)
 
 -- fail at INSERT
-SELECT citus.mitmproxy('conn.onQuery(query="^INSERT").kill()');
+SELECT citus.mitmproxy('conn.onQuery(query="INSERT").kill()');
  mitmproxy
 ---------------------------------------------------------------------
 
@@ -110,7 +110,7 @@ SELECT * FROM dml_test ORDER BY id ASC;
 (4 rows)
 
 -- cancel at INSERT
-SELECT citus.mitmproxy('conn.onQuery(query="^INSERT").cancel(' ||  pg_backend_pid() || ')');
+SELECT citus.mitmproxy('conn.onQuery(query="INSERT").cancel(' ||  pg_backend_pid() || ')');
  mitmproxy
 ---------------------------------------------------------------------
 
@@ -137,7 +137,7 @@ SELECT * FROM dml_test ORDER BY id ASC;
 (4 rows)
 
 -- fail at UPDATE
-SELECT citus.mitmproxy('conn.onQuery(query="^UPDATE").kill()');
+SELECT citus.mitmproxy('conn.onQuery(query="UPDATE").kill()');
  mitmproxy
 ---------------------------------------------------------------------
 
@@ -163,7 +163,7 @@ SELECT * FROM dml_test ORDER BY id ASC;
 (4 rows)
 
 -- cancel at UPDATE
-SELECT citus.mitmproxy('conn.onQuery(query="^UPDATE").cancel(' ||  pg_backend_pid() || ')');
+SELECT citus.mitmproxy('conn.onQuery(query="UPDATE").cancel(' ||  pg_backend_pid() || ')');
  mitmproxy
 ---------------------------------------------------------------------
 

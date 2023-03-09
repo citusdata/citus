@@ -49,7 +49,7 @@ COMMIT;
 SELECT * FROM dml_test ORDER BY id ASC;
 
 -- fail at INSERT
-SELECT citus.mitmproxy('conn.onQuery(query="^INSERT").kill()');
+SELECT citus.mitmproxy('conn.onQuery(query="INSERT").kill()');
 
 BEGIN;
 DELETE FROM dml_test WHERE id = 1;
@@ -63,7 +63,7 @@ COMMIT;
 SELECT * FROM dml_test ORDER BY id ASC;
 
 -- cancel at INSERT
-SELECT citus.mitmproxy('conn.onQuery(query="^INSERT").cancel(' ||  pg_backend_pid() || ')');
+SELECT citus.mitmproxy('conn.onQuery(query="INSERT").cancel(' ||  pg_backend_pid() || ')');
 
 BEGIN;
 DELETE FROM dml_test WHERE id = 1;
@@ -77,7 +77,7 @@ COMMIT;
 SELECT * FROM dml_test ORDER BY id ASC;
 
 -- fail at UPDATE
-SELECT citus.mitmproxy('conn.onQuery(query="^UPDATE").kill()');
+SELECT citus.mitmproxy('conn.onQuery(query="UPDATE").kill()');
 
 BEGIN;
 DELETE FROM dml_test WHERE id = 1;
@@ -91,7 +91,7 @@ COMMIT;
 SELECT * FROM dml_test ORDER BY id ASC;
 
 -- cancel at UPDATE
-SELECT citus.mitmproxy('conn.onQuery(query="^UPDATE").cancel(' ||  pg_backend_pid() || ')');
+SELECT citus.mitmproxy('conn.onQuery(query="UPDATE").cancel(' ||  pg_backend_pid() || ')');
 
 BEGIN;
 DELETE FROM dml_test WHERE id = 1;
