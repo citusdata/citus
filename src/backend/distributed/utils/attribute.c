@@ -93,10 +93,11 @@ citus_stats_tenants(PG_FUNCTION_ARGS)
 		PG_RETURN_VOID();
 	}
 
-	//!!!!!!!LWLockAcquire(&monitor->lock, LW_EXCLUSIVE);
+	LWLockAcquire(&monitor->lock, LW_EXCLUSIVE);
 
 	monitor->periodStart = monitor->periodStart +
-						   ((monitoringTime - monitor->periodStart) / CitusStatsTenantsPeriod) *
+						   ((monitoringTime - monitor->periodStart) /
+							CitusStatsTenantsPeriod) *
 						   CitusStatsTenantsPeriod;
 
 	int numberOfRowsToReturn = 0;
@@ -132,7 +133,7 @@ citus_stats_tenants(PG_FUNCTION_ARGS)
 		tuplestore_putvalues(tupleStore, tupleDescriptor, values, isNulls);
 	}
 
-	//!!!!!!!LWLockRelease(&monitor->lock);
+	LWLockRelease(&monitor->lock);
 
 	PG_RETURN_VOID();
 }
@@ -144,7 +145,7 @@ citus_stats_tenants(PG_FUNCTION_ARGS)
 void
 AttributeQueryIfAnnotated(const char *query_string, CmdType commandType)
 {
-//	attributeToTenant = NULL;
+/*	attributeToTenant = NULL; */
 
 	attributeCommandType = commandType;
 
@@ -183,9 +184,10 @@ AttributeQueryIfAnnotated(const char *query_string, CmdType commandType)
 		while (t)
 		{
 			colocationGroupId *= 10;
-			colocationGroupId += t%10;
-			t/=10;
+			colocationGroupId += t % 10;
+			t /= 10;
 		}
+
 		/* hack to get a clean copy of the tenant id string */
 		char tenantEndTmp = *tenantEnd;
 		*tenantEnd = '\0';
@@ -198,12 +200,12 @@ AttributeQueryIfAnnotated(const char *query_string, CmdType commandType)
 									quote_literal_cstr(tenantId))));
 		}
 
-	//	attributeToTenant = (char *) malloc(strlen(tenantId));
+		/*	attributeToTenant = (char *) malloc(strlen(tenantId)); */
 		strcpy(attributeToTenant, tenantId);
 	}
 	else
 	{
-		//Assert(attributeToTenant == NULL);
+		/*Assert(attributeToTenant == NULL); */
 	}
 
 	/*DetachSegment(); */
@@ -275,10 +277,11 @@ AttributeMetricsIfApplicable()
 
 		MultiTenantMonitor *monitor = GetMultiTenantMonitor();
 
-		//!!!!!!!LWLockAcquire(&monitor->lock, LW_SHARED);
+		LWLockAcquire(&monitor->lock, LW_SHARED);
 
 		monitor->periodStart = monitor->periodStart +
-							   ((queryTime - monitor->periodStart) / CitusStatsTenantsPeriod) *
+							   ((queryTime - monitor->periodStart) /
+								CitusStatsTenantsPeriod) *
 							   CitusStatsTenantsPeriod;
 
 		int tenantIndex = FindTenantStats(monitor);
@@ -289,7 +292,7 @@ AttributeMetricsIfApplicable()
 		}
 		TenantStats *tenantStats = &monitor->tenants[tenantIndex];
 
-		//!!!!!!!LWLockAcquire(&tenantStats->lock, LW_EXCLUSIVE);
+		LWLockAcquire(&tenantStats->lock, LW_EXCLUSIVE);
 
 		UpdatePeriodsIfNecessary(monitor, tenantStats);
 		tenantStats->lastQueryTime = queryTime;
@@ -308,15 +311,16 @@ AttributeMetricsIfApplicable()
 		while (tenantIndex != 0 &&
 			   monitor->tenants[tenantIndex - 1].score < tenantStats->score)
 		{
-			//!!!!!!!LWLockAcquire(&monitor->tenants[tenantIndex - 1].lock, LW_EXCLUSIVE);
+			LWLockAcquire(&monitor->tenants[tenantIndex - 1].lock, LW_EXCLUSIVE);
 
-			ReduceScoreIfNecessary(monitor, &monitor->tenants[tenantIndex - 1], queryTime);
+			ReduceScoreIfNecessary(monitor, &monitor->tenants[tenantIndex - 1],
+								   queryTime);
 
 			TenantStats tempTenant = monitor->tenants[tenantIndex];
 			monitor->tenants[tenantIndex] = monitor->tenants[tenantIndex - 1];
 			monitor->tenants[tenantIndex - 1] = tempTenant;
 
-			//!!!!!!!LWLockRelease(&monitor->tenants[tenantIndex - 1].lock);
+			LWLockRelease(&monitor->tenants[tenantIndex - 1].lock);
 
 			tenantIndex--;
 		}
@@ -334,8 +338,8 @@ AttributeMetricsIfApplicable()
 			tenantStats->totalInsertTime += cpu_time_used;
 		}
 
-		//!!!!!!!LWLockRelease(&tenantStats->lock);
-		//!!!!!!!LWLockRelease(&monitor->lock);
+		LWLockRelease(&tenantStats->lock);
+		LWLockRelease(&monitor->lock);
 
 		/*
 		 * We keep up to CitusStatsTenantsLimit * 3 tenants instead of CitusStatsTenantsLimit,
@@ -345,19 +349,20 @@ AttributeMetricsIfApplicable()
 		 */
 		if (monitor->tenantCount >= CitusStatsTenantsLimit * 3)
 		{
-			//!!!!!!!LWLockAcquire(&monitor->lock, LW_EXCLUSIVE);
+			LWLockAcquire(&monitor->lock, LW_EXCLUSIVE);
 			monitor->tenantCount = CitusStatsTenantsLimit * 2;
-			//!!!!!!!LWLockRelease(&monitor->lock);
+			LWLockRelease(&monitor->lock);
 		}
 
 		if (MultiTenantMonitoringLogLevel != CITUS_LOG_LEVEL_OFF)
 		{
-			ereport(NOTICE, (errmsg("total select count = %d, total CPU time = %f to tenant: %s",
+			ereport(NOTICE, (errmsg("total select count = %d, total CPU time = %f "
+									"to tenant: %s",
 									tenantStats->selectCount, tenantStats->totalSelectTime,
 								 	tenantStats->tenantAttribute)));
 		}
 	}
-	//attributeToTenant = NULL;
+	/*attributeToTenant = NULL; */
 }
 
 
