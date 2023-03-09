@@ -147,6 +147,26 @@ shard_placement_rebalance_array(PG_FUNCTION_ARGS)
 	shardPlacementList = SortList(shardPlacementList, CompareShardPlacements);
 	shardPlacementListList = lappend(shardPlacementListList, shardPlacementList);
 
+	List *unbalancedShards = NIL;
+	ListCell *shardPlacementListCell = NULL;
+	foreach(shardPlacementListCell, shardPlacementListList)
+	{
+		List *placementList = (List *) lfirst(shardPlacementListCell);
+
+		if (list_length(placementList) < list_length(workerNodeList))
+		{
+			unbalancedShards = list_concat(unbalancedShards,
+										   placementList);
+			shardPlacementListList = foreach_delete_current(shardPlacementListList,
+															shardPlacementListCell);
+		}
+	}
+
+	if (list_length(unbalancedShards) > 0)
+	{
+		shardPlacementListList = lappend(shardPlacementListList, unbalancedShards);
+	}
+
 	rebalancePlanFunctions.context = &context;
 
 	/* sort the lists to make the function more deterministic */

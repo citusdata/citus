@@ -107,11 +107,17 @@ static void CreateDistributedTableConcurrently(Oid relationId,
 											   char *colocateWithTableName,
 											   int shardCount,
 											   bool shardCountIsStrict);
-static char DecideReplicationModel(char distributionMethod, char *colocateWithTableName);
+static char DecideDistTableReplicationModel(char distributionMethod,
+											char *colocateWithTableName);
 static List * HashSplitPointsForShardList(List *shardList);
 static List * HashSplitPointsForShardCount(int shardCount);
 static List * WorkerNodesForShardList(List *shardList);
 static List * RoundRobinWorkerNodeList(List *workerNodeList, int listLength);
+static void CreateCitusTable(Oid relationId, char *distributionColumnName,
+							 char distributionMethod,
+							 int shardCount, bool shardCountIsStrict,
+							 char *colocateWithTableName,
+							 char replicationModel);
 static void CreateHashDistributedTableShards(Oid relationId, int shardCount,
 											 Oid colocatedTableId, bool localTableEmpty);
 static uint32 ColocationIdForNewTable(Oid relationId, Var *distributionColumn,
@@ -380,8 +386,8 @@ CreateDistributedTableConcurrently(Oid relationId, char *distributionColumnName,
 
 	EnsureForeignKeysForDistributedTableConcurrently(relationId);
 
-	char replicationModel = DecideReplicationModel(distributionMethod,
-												   colocateWithTableName);
+	char replicationModel = DecideDistTableReplicationModel(distributionMethod,
+															colocateWithTableName);
 
 	/*
 	 * we fail transaction before local table conversion if the table could not be colocated with
@@ -627,8 +633,8 @@ static void
 EnsureColocateWithTableIsValid(Oid relationId, char distributionMethod,
 							   char *distributionColumnName, char *colocateWithTableName)
 {
-	char replicationModel = DecideReplicationModel(distributionMethod,
-												   colocateWithTableName);
+	char replicationModel = DecideDistTableReplicationModel(distributionMethod,
+															colocateWithTableName);
 
 	/*
 	 * we fail transaction before local table conversion if the table could not be colocated with
@@ -865,9 +871,6 @@ create_reference_table(PG_FUNCTION_ARGS)
 	CheckCitusVersion(ERROR);
 	Oid relationId = PG_GETARG_OID(0);
 
-	char *colocateWithTableName = NULL;
-	char *distributionColumnName = NULL;
-
 	EnsureCitusTableCanBeCreated(relationId);
 
 	/* enable create_reference_table on an empty node */
@@ -900,8 +903,7 @@ create_reference_table(PG_FUNCTION_ARGS)
 						errdetail("There are no active worker nodes.")));
 	}
 
-	CreateDistributedTable(relationId, distributionColumnName, DISTRIBUTE_BY_NONE,
-						   ShardCount, false, colocateWithTableName);
+	CreateReferenceTable(relationId);
 	PG_RETURN_VOID();
 }
 
@@ -956,17 +958,61 @@ EnsureRelationExists(Oid relationId)
 
 
 /*
- * CreateDistributedTable creates distributed table in the given configuration.
+ * CreateReferenceTable is a wrapper around CreateCitusTable that creates a
+ * distributed table.
+ */
+void
+CreateDistributedTable(Oid relationId, char *distributionColumnName,
+					   char distributionMethod,
+					   int shardCount, bool shardCountIsStrict,
+					   char *colocateWithTableName)
+{
+	Assert(distributionMethod != DISTRIBUTE_BY_NONE);
+
+	char replicationModel = DecideDistTableReplicationModel(distributionMethod,
+															colocateWithTableName);
+	CreateCitusTable(relationId, distributionColumnName,
+					 distributionMethod, shardCount,
+					 shardCountIsStrict, colocateWithTableName,
+					 replicationModel);
+}
+
+
+/*
+ * CreateReferenceTable is a wrapper around CreateCitusTable that creates a
+ * reference table.
+ */
+void
+CreateReferenceTable(Oid relationId)
+{
+	char *distributionColumnName = NULL;
+	char distributionMethod = DISTRIBUTE_BY_NONE;
+	int shardCount = 1;
+	bool shardCountIsStrict = true;
+	char *colocateWithTableName = NULL;
+	char replicationModel = REPLICATION_MODEL_2PC;
+	CreateCitusTable(relationId, distributionColumnName,
+					 distributionMethod, shardCount,
+					 shardCountIsStrict, colocateWithTableName,
+					 replicationModel);
+}
+
+
+/*
+ * CreateCitusTable is the internal method that creates a Citus table in
+ * given configuration.
+ *
  * This functions contains all necessary logic to create distributed tables. It
  * performs necessary checks to ensure distributing the table is safe. If it is
  * safe to distribute the table, this function creates distributed table metadata,
  * creates shards and copies local data to shards. This function also handles
  * partitioned tables by distributing its partitions as well.
  */
-void
-CreateDistributedTable(Oid relationId, char *distributionColumnName,
-					   char distributionMethod, int shardCount,
-					   bool shardCountIsStrict, char *colocateWithTableName)
+static void
+CreateCitusTable(Oid relationId, char *distributionColumnName,
+				 char distributionMethod, int shardCount,
+				 bool shardCountIsStrict, char *colocateWithTableName,
+				 char replicationModel)
 {
 	ErrorIfTableHasUnsupportedIdentityColumn(relationId);
 
@@ -1028,9 +1074,6 @@ CreateDistributedTable(Oid relationId, char *distributionColumnName,
 	EnsureTableNotDistributed(relationId);
 
 	PropagatePrerequisiteObjectsForDistributedTable(relationId);
-
-	char replicationModel = DecideReplicationModel(distributionMethod,
-												   colocateWithTableName);
 
 	Var *distributionColumn = BuildDistributionKeyFromColumnName(relationId,
 																 distributionColumnName,
@@ -1429,18 +1472,16 @@ DropFKeysRelationInvolvedWithTableType(Oid relationId, int tableTypeFlag)
 
 
 /*
- * DecideReplicationModel function decides which replication model should be
- * used depending on given distribution configuration.
+ * DecideDistTableReplicationModel function decides which replication model should be
+ * used for a distributed table depending on given distribution configuration.
  */
 static char
-DecideReplicationModel(char distributionMethod, char *colocateWithTableName)
+DecideDistTableReplicationModel(char distributionMethod, char *colocateWithTableName)
 {
-	if (distributionMethod == DISTRIBUTE_BY_NONE)
-	{
-		return REPLICATION_MODEL_2PC;
-	}
-	else if (pg_strncasecmp(colocateWithTableName, "default", NAMEDATALEN) != 0 &&
-			 !IsColocateWithNone(colocateWithTableName))
+	Assert(distributionMethod != DISTRIBUTE_BY_NONE);
+
+	if (!IsColocateWithDefault(colocateWithTableName) &&
+		!IsColocateWithNone(colocateWithTableName))
 	{
 		text *colocateWithTableNameText = cstring_to_text(colocateWithTableName);
 		Oid colocatedRelationId = ResolveRelationId(colocateWithTableNameText, false);

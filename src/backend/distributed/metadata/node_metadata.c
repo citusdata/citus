@@ -1918,6 +1918,10 @@ ErrorIfNodeContainsNonRemovablePlacements(WorkerNode *workerNode)
 {
 	int32 groupId = workerNode->groupId;
 	List *shardPlacements = AllShardPlacementsOnNodeGroup(groupId);
+
+	/* sort the list to prevent regression tests getting flaky */
+	shardPlacements = SortList(shardPlacements, CompareGroupShardPlacements);
+
 	GroupShardPlacement *placement = NULL;
 	foreach_ptr(placement, shardPlacements)
 	{
