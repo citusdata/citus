@@ -1821,6 +1821,7 @@ RebalanceTableShards(RebalanceOptions *options, Oid shardReplicationModeOid)
 
 	if (list_length(options->relationIdList) == 0)
 	{
+		EnsureReferenceTablesExistOnAllNodesExtended(transferMode);
 		return;
 	}
 
