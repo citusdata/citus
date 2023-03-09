@@ -168,7 +168,7 @@ AnchorRte(Query *subquery)
 		{
 			Oid relationId = currentRte->relid;
 
-			if (IsCitusTableType(relationId, CITUS_LOCAL_OR_REFERENCE_TABLE))
+			if (HasNoneDistribution(relationId))
 			{
 				/*
 				 * Non-distributed tables should not be the anchor rte since they

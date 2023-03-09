@@ -133,9 +133,6 @@ typedef enum
 	REFERENCE_TABLE,
 	CITUS_LOCAL_TABLE,
 
-	/* table without a dist key such as reference table */
-	CITUS_LOCAL_OR_REFERENCE_TABLE,
-
 	ANY_CITUS_TABLE_TYPE
 } CitusTableType;
 
@@ -143,6 +140,8 @@ extern List * AllCitusTableIds(void);
 extern bool IsCitusTableType(Oid relationId, CitusTableType tableType);
 extern bool IsCitusTableTypeCacheEntry(CitusTableCacheEntry *tableEtnry,
 									   CitusTableType tableType);
+bool HasNoneDistribution(Oid relationId);
+bool HasNoneDistributionCacheEntry(CitusTableCacheEntry *tableEntry);
 extern char * GetTableTypeName(Oid tableId);
 
 extern void SetCreateCitusTransactionLevel(int val);

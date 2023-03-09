@@ -535,7 +535,7 @@ ShouldSyncTableMetadata(Oid relationId)
 
 	bool hashDistributed = IsCitusTableTypeCacheEntry(tableEntry, HASH_DISTRIBUTED);
 	bool citusTableWithNoDistKey =
-		IsCitusTableTypeCacheEntry(tableEntry, CITUS_LOCAL_OR_REFERENCE_TABLE);
+		HasNoneDistributionCacheEntry(tableEntry);
 
 	return ShouldSyncTableMetadataInternal(hashDistributed, citusTableWithNoDistKey);
 }
@@ -1158,7 +1158,7 @@ DistributionCreateCommand(CitusTableCacheEntry *cacheEntry)
 	char replicationModel = cacheEntry->replicationModel;
 	StringInfo tablePartitionKeyNameString = makeStringInfo();
 
-	if (IsCitusTableTypeCacheEntry(cacheEntry, CITUS_LOCAL_OR_REFERENCE_TABLE))
+	if (HasNoneDistributionCacheEntry(cacheEntry))
 	{
 		appendStringInfo(tablePartitionKeyNameString, "NULL");
 	}

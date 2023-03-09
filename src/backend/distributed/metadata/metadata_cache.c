@@ -456,6 +456,35 @@ IsCitusTableTypeCacheEntry(CitusTableCacheEntry *tableEntry, CitusTableType tabl
 
 
 /*
+ * HasNoneDistribution returs true if table doesn't have a distribution key.
+ */
+bool
+HasNoneDistribution(Oid relationId)
+{
+	CitusTableCacheEntry *tableEntry = LookupCitusTableCacheEntry(relationId);
+
+	/* we are not interested in postgres tables */
+	if (tableEntry == NULL)
+	{
+		return false;
+	}
+
+	return HasNoneDistributionCacheEntry(tableEntry);
+}
+
+
+/*
+ * !HasNoneDistribution returs true if given cache entry identifies a Citus
+ * table that doesn't have a distribution key.
+ */
+bool
+HasNoneDistributionCacheEntry(CitusTableCacheEntry *tableEntry)
+{
+	return tableEntry->partitionMethod == DISTRIBUTE_BY_NONE;
+}
+
+
+/*
  * IsCitusTableTypeInternal returns true if the given table entry belongs to
  * the given table type group. For definition of table types, see CitusTableType.
  */
@@ -504,14 +533,6 @@ IsCitusTableTypeInternal(char partitionMethod, char replicationModel,
 			return partitionMethod == DISTRIBUTE_BY_NONE &&
 				   replicationModel != REPLICATION_MODEL_2PC &&
 				   colocationId == INVALID_COLOCATION_ID;
-		}
-
-		case CITUS_LOCAL_OR_REFERENCE_TABLE:
-		{
-			return partitionMethod == DISTRIBUTE_BY_NONE &&
-				   (replicationModel == REPLICATION_MODEL_2PC ||
-					(replicationModel != REPLICATION_MODEL_2PC &&
-					 colocationId == INVALID_COLOCATION_ID));
 		}
 
 		case ANY_CITUS_TABLE_TYPE:

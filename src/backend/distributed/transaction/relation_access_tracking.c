@@ -195,7 +195,7 @@ RecordRelationAccessIfNonDistTable(Oid relationId, ShardPlacementAccessType acce
 	 * recursively calling RecordRelationAccessBase(), so becareful about
 	 * removing this check.
 	 */
-	if (!IsCitusTableType(relationId, CITUS_LOCAL_OR_REFERENCE_TABLE))
+	if (!HasNoneDistribution(relationId))
 	{
 		return;
 	}
@@ -732,7 +732,7 @@ CheckConflictingRelationAccesses(Oid relationId, ShardPlacementAccessType access
 
 	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
 
-	if (!(IsCitusTableTypeCacheEntry(cacheEntry, CITUS_LOCAL_OR_REFERENCE_TABLE) &&
+	if (!(HasNoneDistributionCacheEntry(cacheEntry) &&
 		  cacheEntry->referencingRelationsViaForeignKey != NIL))
 	{
 		return;
@@ -931,7 +931,7 @@ HoldsConflictingLockWithReferencedRelations(Oid relationId, ShardPlacementAccess
 		 * We're only interested in foreign keys to reference tables and citus
 		 * local tables.
 		 */
-		if (!IsCitusTableType(referencedRelation, CITUS_LOCAL_OR_REFERENCE_TABLE))
+		if (!HasNoneDistribution(referencedRelation))
 		{
 			continue;
 		}
@@ -993,7 +993,7 @@ HoldsConflictingLockWithReferencingRelations(Oid relationId, ShardPlacementAcces
 	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
 	bool holdsConflictingLocks = false;
 
-	Assert(IsCitusTableTypeCacheEntry(cacheEntry, CITUS_LOCAL_OR_REFERENCE_TABLE));
+	Assert(HasNoneDistributionCacheEntry(cacheEntry));
 
 	Oid referencingRelation = InvalidOid;
 	foreach_oid(referencingRelation, cacheEntry->referencingRelationsViaForeignKey)

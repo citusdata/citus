@@ -228,7 +228,7 @@ TargetListOnPartitionColumn(Query *query, List *targetEntryList)
 		 * If the expression belongs to a non-distributed table continue searching for
 		 * other partition keys.
 		 */
-		if (IsCitusTableType(relationId, CITUS_LOCAL_OR_REFERENCE_TABLE))
+		if (HasNoneDistribution(relationId))
 		{
 			continue;
 		}

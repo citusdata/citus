@@ -2675,7 +2675,7 @@ TargetShardIntervalForFastPathQuery(Query *query, bool *isMultiShardQuery,
 {
 	Oid relationId = ExtractFirstCitusTableId(query);
 
-	if (IsCitusTableType(relationId, CITUS_LOCAL_OR_REFERENCE_TABLE))
+	if (HasNoneDistribution(relationId))
 	{
 		/* we don't need to do shard pruning for non-distributed tables */
 		return list_make1(LoadShardIntervalList(relationId));
@@ -2968,7 +2968,7 @@ BuildRoutesForInsert(Query *query, DeferredErrorMessage **planningError)
 	Assert(query->commandType == CMD_INSERT);
 
 	/* reference tables and citus local tables can only have one shard */
-	if (IsCitusTableTypeCacheEntry(cacheEntry, CITUS_LOCAL_OR_REFERENCE_TABLE))
+	if (HasNoneDistributionCacheEntry(cacheEntry))
 	{
 		List *shardIntervalList = LoadShardIntervalList(distributedTableId);
 
@@ -3509,7 +3509,7 @@ ExtractInsertPartitionKeyValue(Query *query)
 	uint32 rangeTableId = 1;
 	Const *singlePartitionValueConst = NULL;
 
-	if (IsCitusTableType(distributedTableId, CITUS_LOCAL_OR_REFERENCE_TABLE))
+	if (HasNoneDistribution(distributedTableId))
 	{
 		return NULL;
 	}
@@ -3829,8 +3829,7 @@ ErrorIfQueryHasUnroutableModifyingCTE(Query *queryTree)
 			CitusTableCacheEntry *modificationTableCacheEntry =
 				GetCitusTableCacheEntry(distributedTableId);
 
-			if (IsCitusTableTypeCacheEntry(modificationTableCacheEntry,
-										   CITUS_LOCAL_OR_REFERENCE_TABLE))
+			if (HasNoneDistributionCacheEntry(modificationTableCacheEntry))
 			{
 				return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
 									 "cannot router plan modification of a non-distributed table",

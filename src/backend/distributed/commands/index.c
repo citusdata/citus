@@ -1190,7 +1190,7 @@ ErrorIfUnsupportedIndexStmt(IndexStmt *createIndexStatement)
 		 * Non-distributed tables do not have partition key, and unique constraints
 		 * are allowed for them. Thus, we added a short-circuit for non-distributed tables.
 		 */
-		if (IsCitusTableType(relationId, CITUS_LOCAL_OR_REFERENCE_TABLE))
+		if (HasNoneDistribution(relationId))
 		{
 			return;
 		}

@@ -1536,7 +1536,7 @@ get_shard_id_for_distribution_column(PG_FUNCTION_ARGS)
 						errmsg("relation is not distributed")));
 	}
 
-	if (IsCitusTableType(relationId, CITUS_LOCAL_OR_REFERENCE_TABLE))
+	if (HasNoneDistribution(relationId))
 	{
 		List *shardIntervalList = LoadShardIntervalList(relationId);
 		if (shardIntervalList == NIL)
