@@ -358,10 +358,12 @@ AttributeMetricsIfApplicable()
 		{
 			ereport(NOTICE, (errmsg("total select count = %d, total CPU time = %f "
 									"to tenant: %s",
-									tenantStats->selectCount, tenantStats->totalSelectTime,
-								 	tenantStats->tenantAttribute)));
+									tenantStats->selectCount,
+									tenantStats->totalSelectTime,
+									tenantStats->tenantAttribute)));
 		}
 	}
+
 	/*attributeToTenant = NULL; */
 }
 
