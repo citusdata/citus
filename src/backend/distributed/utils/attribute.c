@@ -263,11 +263,10 @@ AttributeMetricsIfApplicable()
 	if (strcmp(attributeToTenant, "") != 0)
 	{
 		clock_t end = { 0 };
-		double cpu_time_used = 0;
 
 		end = clock();
 		time_t queryTime = time(0);
-		cpu_time_used = ((double) (end - attributeToTenantStart)) / CLOCKS_PER_SEC;
+		double cpu_time_used = ((double) (end - attributeToTenantStart)) / CLOCKS_PER_SEC;
 
 		if (MultiTenantMonitoringLogLevel != CITUS_LOG_LEVEL_OFF)
 		{
