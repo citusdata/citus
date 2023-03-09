@@ -333,7 +333,7 @@ PruneShards(Oid relationId, Index rangeTableId, List *whereClauseList,
 	}
 
 	/* short circuit for non-distributed tables such as reference table */
-	if (HasNoneDistributionCacheEntry(cacheEntry))
+	if (!HasDistributionKeyCacheEntry(cacheEntry))
 	{
 		prunedList = ShardArrayToList(cacheEntry->sortedShardIntervalArray,
 									  cacheEntry->shardIntervalArrayLength);

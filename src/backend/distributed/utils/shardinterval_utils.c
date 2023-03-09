@@ -223,7 +223,7 @@ ShardIndex(ShardInterval *shardInterval)
 	 * currently it is not required.
 	 */
 	if (!IsCitusTableTypeCacheEntry(cacheEntry, HASH_DISTRIBUTED) &&
-		!HasNoneDistributionCacheEntry(cacheEntry))
+		HasDistributionKeyCacheEntry(cacheEntry))
 	{
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 						errmsg("finding index of a given shard is only supported for "
@@ -232,7 +232,7 @@ ShardIndex(ShardInterval *shardInterval)
 	}
 
 	/* short-circuit for reference tables */
-	if (HasNoneDistributionCacheEntry(cacheEntry))
+	if (!HasDistributionKeyCacheEntry(cacheEntry))
 	{
 		/*
 		 * Reference tables and citus local tables have only a single shard,
@@ -332,7 +332,7 @@ FindShardIntervalIndex(Datum searchedValue, CitusTableCacheEntry *cacheEntry)
 			shardIndex = CalculateUniformHashRangeIndex(hashedValue, shardCount);
 		}
 	}
-	else if (HasNoneDistributionCacheEntry(cacheEntry))
+	else if (!HasDistributionKeyCacheEntry(cacheEntry))
 	{
 		/* non-distributed tables have a single shard, all values mapped to that shard */
 		Assert(shardCount == 1);

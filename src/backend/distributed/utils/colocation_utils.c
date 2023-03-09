@@ -442,7 +442,7 @@ ShardsIntervalsEqual(ShardInterval *leftShardInterval, ShardInterval *rightShard
 	{
 		return HashPartitionedShardIntervalsEqual(leftShardInterval, rightShardInterval);
 	}
-	else if (HasNoneDistribution(leftShardInterval->relationId))
+	else if (!HasDistributionKey(leftShardInterval->relationId))
 	{
 		/*
 		 * Reference tables has only a single shard and all reference tables

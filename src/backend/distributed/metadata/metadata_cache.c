@@ -456,31 +456,30 @@ IsCitusTableTypeCacheEntry(CitusTableCacheEntry *tableEntry, CitusTableType tabl
 
 
 /*
- * HasNoneDistribution returs true if table doesn't have a distribution key.
+ * HasDistributionKey returs true if given Citus table doesn't have a
+ * distribution key.
  */
 bool
-HasNoneDistribution(Oid relationId)
+HasDistributionKey(Oid relationId)
 {
 	CitusTableCacheEntry *tableEntry = LookupCitusTableCacheEntry(relationId);
-
-	/* we are not interested in postgres tables */
 	if (tableEntry == NULL)
 	{
-		return false;
+		ereport(ERROR, (errmsg("relation with oid %u is not a Citus table", relationId)));
 	}
 
-	return HasNoneDistributionCacheEntry(tableEntry);
+	return HasDistributionKeyCacheEntry(tableEntry);
 }
 
 
 /*
- * !HasNoneDistribution returs true if given cache entry identifies a Citus
+ * HasDistributionKey returs true if given cache entry identifies a Citus
  * table that doesn't have a distribution key.
  */
 bool
-HasNoneDistributionCacheEntry(CitusTableCacheEntry *tableEntry)
+HasDistributionKeyCacheEntry(CitusTableCacheEntry *tableEntry)
 {
-	return tableEntry->partitionMethod == DISTRIBUTE_BY_NONE;
+	return tableEntry->partitionMethod != DISTRIBUTE_BY_NONE;
 }
 
 

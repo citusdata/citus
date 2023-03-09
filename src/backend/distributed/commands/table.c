@@ -3669,7 +3669,7 @@ SetupExecutionModeForAlterTable(Oid relationId, AlterTableCmd *command)
 	 * sequential mode.
 	 */
 	if (executeSequentially &&
-		!HasNoneDistribution(relationId) &&
+		HasDistributionKey(relationId) &&
 		ParallelQueryExecutedInTransaction())
 	{
 		char *relationName = get_rel_name(relationId);

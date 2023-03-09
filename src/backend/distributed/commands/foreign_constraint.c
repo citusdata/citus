@@ -246,7 +246,7 @@ ErrorIfUnsupportedForeignConstraintExists(Relation relation, char referencingDis
 		if (!selfReferencingTable)
 		{
 			referencedDistMethod = PartitionMethod(referencedTableId);
-			referencedDistKey = HasNoneDistribution(referencedTableId) ?
+			referencedDistKey = !HasDistributionKey(referencedTableId) ?
 								NULL :
 								DistPartitionKey(referencedTableId);
 			referencedColocationId = TableColocationId(referencedTableId);

@@ -1383,7 +1383,7 @@ DistPartitionKey(Oid relationId)
 	CitusTableCacheEntry *partitionEntry = GetCitusTableCacheEntry(relationId);
 
 	/* non-distributed tables do not have partition column */
-	if (HasNoneDistributionCacheEntry(partitionEntry))
+	if (!HasDistributionKeyCacheEntry(partitionEntry))
 	{
 		return NULL;
 	}

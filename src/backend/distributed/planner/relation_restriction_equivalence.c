@@ -703,7 +703,8 @@ EquivalenceListContainsRelationsEquality(List *attributeEquivalenceList,
 		int rteIdentity = GetRTEIdentity(relationRestriction->rte);
 
 		/* we shouldn't check for the equality of non-distributed tables */
-		if (HasNoneDistribution(relationRestriction->relationId))
+		if (IsCitusTable(relationRestriction->relationId) &&
+			!HasDistributionKey(relationRestriction->relationId))
 		{
 			continue;
 		}
@@ -1932,7 +1933,7 @@ AllRelationsInRestrictionContextColocated(RelationRestrictionContext *restrictio
 	{
 		Oid relationId = relationRestriction->relationId;
 
-		if (HasNoneDistribution(relationId))
+		if (IsCitusTable(relationId) && !HasDistributionKey(relationId))
 		{
 			continue;
 		}

@@ -140,8 +140,8 @@ extern List * AllCitusTableIds(void);
 extern bool IsCitusTableType(Oid relationId, CitusTableType tableType);
 extern bool IsCitusTableTypeCacheEntry(CitusTableCacheEntry *tableEtnry,
 									   CitusTableType tableType);
-bool HasNoneDistribution(Oid relationId);
-bool HasNoneDistributionCacheEntry(CitusTableCacheEntry *tableEntry);
+bool HasDistributionKey(Oid relationId);
+bool HasDistributionKeyCacheEntry(CitusTableCacheEntry *tableEntry);
 extern char * GetTableTypeName(Oid tableId);
 
 extern void SetCreateCitusTransactionLevel(int val);
