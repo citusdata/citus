@@ -25,7 +25,7 @@ SELECT citus.clear_network_traffic();
 ---- test multiple statements spanning multiple shards,
 ---- at each significant point. These transactions are 2pc
 -- fail at DELETE
-SELECT citus.mitmproxy('conn.onQuery(query="^DELETE").kill()');
+SELECT citus.mitmproxy('conn.onQuery(query="DELETE").kill()');
  mitmproxy
 ---------------------------------------------------------------------
 
@@ -54,7 +54,7 @@ SELECT * FROM dml_test ORDER BY id ASC;
 (4 rows)
 
 -- cancel at DELETE
-SELECT citus.mitmproxy('conn.onQuery(query="^DELETE").cancel(' ||  pg_backend_pid() || ')');
+SELECT citus.mitmproxy('conn.onQuery(query="DELETE").cancel(' ||  pg_backend_pid() || ')');
  mitmproxy
 ---------------------------------------------------------------------
 
