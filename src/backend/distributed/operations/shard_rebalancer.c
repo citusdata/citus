@@ -1841,6 +1841,23 @@ RebalanceTableShards(RebalanceOptions *options, Oid shardReplicationModeOid)
 		return;
 	}
 
+	if (transferMode == TRANSFER_MODE_AUTOMATIC)
+	{
+		/*
+		 * If the shard transfer mode is set to auto, we should check beforehand
+		 * if we are able to use logical replication to transfer shards or not.
+		 * We throw an error if any of the tables do not have a replica identity, which
+		 * is required for logical replication to replicate UPDATE and DELETE commands.
+		 */
+		PlacementUpdateEvent *placementUpdate = NULL;
+		foreach_ptr(placementUpdate, placementUpdateList)
+		{
+			Oid relationId = RelationIdForShard(placementUpdate->shardId);
+			List *colocatedTableList = ColocatedTableList(relationId);
+			VerifyTablesHaveReplicaIdentity(colocatedTableList);
+		}
+	}
+
 	/*
 	 * This uses the first relationId from the list, it's only used for display
 	 * purposes so it does not really matter which to show
