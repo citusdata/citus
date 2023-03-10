@@ -3981,7 +3981,6 @@ ErrorIfTableHasUnsupportedIdentityColumn(Oid relationId)
 {
 	Relation relation = relation_open(relationId, AccessShareLock);
 	TupleDesc tupleDescriptor = RelationGetDescr(relation);
-	relation_close(relation, AccessShareLock);
 
 	for (int attributeIndex = 0; attributeIndex < tupleDescriptor->natts;
 		 attributeIndex++)
@@ -3990,11 +3989,14 @@ ErrorIfTableHasUnsupportedIdentityColumn(Oid relationId)
 
 		if (attributeForm->attidentity && attributeForm->atttypid != INT8OID)
 		{
+			relation_close(relation, AccessShareLock);
 			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 							errmsg(
 								"cannot complete operation on a table with smallint/int identity column")));
 		}
 	}
+
+	relation_close(relation, AccessShareLock);
 }
 
 
@@ -4006,7 +4008,6 @@ ErrorIfTableHasIdentityColumn(Oid relationId)
 {
 	Relation relation = relation_open(relationId, AccessShareLock);
 	TupleDesc tupleDescriptor = RelationGetDescr(relation);
-	relation_close(relation, NoLock);
 
 	for (int attributeIndex = 0; attributeIndex < tupleDescriptor->natts;
 		 attributeIndex++)
@@ -4015,9 +4016,12 @@ ErrorIfTableHasIdentityColumn(Oid relationId)
 
 		if (attributeForm->attidentity)
 		{
+			relation_close(relation, AccessShareLock);
 			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 							errmsg(
 								"cannot complete operation on a table with identity column")));
 		}
 	}
+
+	relation_close(relation, NoLock);
 }
