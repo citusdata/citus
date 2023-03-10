@@ -178,5 +178,23 @@ INSERT INTO color(color_name) VALUES ('Blue');
 SET search_path TO generated_identities;
 SET client_min_messages to ERROR;
 
+DROP TABLE Color;
+CREATE TABLE color (
+    color_id BIGINT GENERATED ALWAYS AS IDENTITY UNIQUE,
+    color_name VARCHAR NOT NULL
+) USING columnar;
+SELECT create_distributed_table('color', 'color_id');
+INSERT INTO color(color_name) VALUES ('Blue');
+\d+ color
+
+\c - - - :worker_1_port
+SET search_path TO generated_identities;
+\d+ color
+INSERT INTO color(color_name) VALUES ('Red');
+
+\c - postgres - :master_port
+SET search_path TO generated_identities;
+SET client_min_messages to ERROR;
+
 DROP SCHEMA generated_identities CASCADE;
 DROP USER identity_test_user;

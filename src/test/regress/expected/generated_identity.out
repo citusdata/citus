@@ -17,7 +17,7 @@ ERROR:  cannot complete operation on a table with smallint/int identity column
 SELECT create_distributed_table_concurrently('smallint_identity_column', 'a');
 ERROR:  cannot complete operation on a table with smallint/int identity column
 SELECT create_reference_table('smallint_identity_column');
-ERROR:  cannot complete operation on a table with smallint/int identity column
+ERROR:  cannot complete operation on a table with identity column
 SELECT citus_add_local_table_to_metadata('smallint_identity_column');
  citus_add_local_table_to_metadata
 ---------------------------------------------------------------------
@@ -34,7 +34,7 @@ ERROR:  cannot complete operation on a table with smallint/int identity column
 SELECT create_distributed_table_concurrently('int_identity_column', 'a');
 ERROR:  cannot complete operation on a table with smallint/int identity column
 SELECT create_reference_table('int_identity_column');
-ERROR:  cannot complete operation on a table with smallint/int identity column
+ERROR:  cannot complete operation on a table with identity column
 SELECT citus_add_local_table_to_metadata('int_identity_column');
  citus_add_local_table_to_metadata
 ---------------------------------------------------------------------
@@ -309,6 +309,42 @@ RESET citus.shard_replication_factor;
 SET search_path TO generated_identities;
 SET client_min_messages to ERROR;
 INSERT INTO color(color_name) VALUES ('Blue');
+\c - postgres - :master_port
+SET search_path TO generated_identities;
+SET client_min_messages to ERROR;
+DROP TABLE Color;
+CREATE TABLE color (
+    color_id BIGINT GENERATED ALWAYS AS IDENTITY UNIQUE,
+    color_name VARCHAR NOT NULL
+) USING columnar;
+SELECT create_distributed_table('color', 'color_id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO color(color_name) VALUES ('Blue');
+\d+ color
+                                              Table "generated_identities.color"
+   Column   |       Type        | Collation | Nullable |           Default            | Storage  | Stats target | Description
+---------------------------------------------------------------------
+ color_id   | bigint            |           | not null | generated always as identity | plain    |              |
+ color_name | character varying |           | not null |                              | extended |              |
+Indexes:
+    "color_color_id_key" UNIQUE CONSTRAINT, btree (color_id)
+
+\c - - - :worker_1_port
+SET search_path TO generated_identities;
+\d+ color
+                                              Table "generated_identities.color"
+   Column   |       Type        | Collation | Nullable |           Default            | Storage  | Stats target | Description
+---------------------------------------------------------------------
+ color_id   | bigint            |           | not null | generated always as identity | plain    |              |
+ color_name | character varying |           | not null |                              | extended |              |
+Indexes:
+    "color_color_id_key" UNIQUE CONSTRAINT, btree (color_id)
+
+INSERT INTO color(color_name) VALUES ('Red');
 \c - postgres - :master_port
 SET search_path TO generated_identities;
 SET client_min_messages to ERROR;
