@@ -312,7 +312,7 @@ AttributeMetricsIfApplicable()
 		 */
 		while (tenantIndex != 0 &&
 			   monitor->tenants[tenantIndex - 1].score <
-			   monitor->tenants[tenantIndex]->score)
+			   monitor->tenants[tenantIndex].score)
 		{
 			LWLockAcquire(&monitor->tenants[tenantIndex - 1].lock, LW_EXCLUSIVE);
 
