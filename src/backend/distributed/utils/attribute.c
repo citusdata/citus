@@ -311,7 +311,7 @@ AttributeMetricsIfApplicable()
 		 * After updating the score we might need to change the rank of the tenant in the monitor
 		 */
 		while (tenantIndex != 0 &&
-			   monitor->tenants[tenantIndex - 1].score < tenantStats->score)
+			   monitor->tenants[tenantIndex - 1].score < monitor->tenants[tenantIndex]->score)
 		{
 			LWLockAcquire(&monitor->tenants[tenantIndex - 1].lock, LW_EXCLUSIVE);
 
@@ -325,9 +325,8 @@ AttributeMetricsIfApplicable()
 			LWLockRelease(&monitor->tenants[tenantIndex].lock);
 
 			tenantIndex--;
-
-			tenantStats = &monitor->tenants[tenantIndex];
 		}
+		tenantStats = &monitor->tenants[tenantIndex];
 
 		if (attributeCommandType == CMD_SELECT)
 		{
