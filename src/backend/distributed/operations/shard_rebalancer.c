@@ -191,11 +191,13 @@ typedef struct WorkerShardStatistics
 	HTAB *statistics;
 } WorkerShardStatistics;
 
+/* ShardMoveDependencyHashKey contains colocationId to be used as a key in a hash */
 typedef struct ShardMoveDependencyHashKey
 {
-	int64 collocationId;
+	int64 colocationId;
 } ShardMoveDependencyHashKey;
 
+/* ShardMoveDependencyHashEntry contains the taskId which any new shard move task within the corresponding colocation group must take a dependency on */
 typedef struct ShardMoveDependencyHashEntry
 {
 	ShardMoveDependencyHashKey key;          /* Hash key (must be first!) */
@@ -1911,10 +1913,10 @@ ErrorOnConcurrentRebalance(RebalanceOptions *options)
 
 
 /*
- * Returns 0 if INVALID_COLOCATION_ID.
+ * GetColocationId function returns the colocationId of the shard in a PlacementUpdateEvent.
  */
 static int64
-GetCollocationId(PlacementUpdateEvent *move)
+GetColocationId(PlacementUpdateEvent *move)
 {
 	ShardInterval *shardInterval = LoadShardInterval(move->shardId);
 
@@ -1925,6 +1927,11 @@ GetCollocationId(PlacementUpdateEvent *move)
 }
 
 
+/*
+ * InitShardMoveDependencyMap function creates a dependency map where
+ * 	key = colocationId
+ * 	value = taskId of the latest scheduled task in the colocation group
+ */
 static HTAB *
 InitShardMoveDependencyMap()
 {
@@ -1933,7 +1940,7 @@ InitShardMoveDependencyMap()
 	hash_ctl.keysize = sizeof(ShardMoveDependencyHashKey);
 	hash_ctl.entrysize = sizeof(ShardMoveDependencyHashEntry);
 	hash_ctl.hcxt = CurrentMemoryContext;
-	return hash_create("Shard Move Dependency Map", 1,
+	return hash_create("ShardMoveDependencyMap", 1,
 					   &hash_ctl,
 					   HASH_ELEM | HASH_BLOBS);
 }
@@ -2061,7 +2068,7 @@ RebalanceTableShardsBackground(RebalanceOptions *options, Oid shardReplicationMo
 						 move->targetNode->nodeId,
 						 quote_literal_cstr(shardTranferModeLabel));
 
-		int64 cid = GetCollocationId(move);
+		int64 cid = GetColocationId(move);
 
 		int nDep = 0;
 		bool found;
@@ -2071,13 +2078,11 @@ RebalanceTableShardsBackground(RebalanceOptions *options, Oid shardReplicationMo
 
 		if (found)
 		{
-			/*elog(WARNING, "Emel : Found entry for key = %ld value= %ld ", cid, *elem); */
 			dependingTasksList[0] = shardMoveDependencyHashEntry->taskId;
 			nDep = 1;
 		}
 		else if (replicateRefTablesTaskId > 0)
 		{
-			/*elog(WARNING, "Emel : Found = false RefTaskID = %ld ", replicateRefTablesTaskId); */
 			dependingTasksList[0] = replicateRefTablesTaskId;
 			nDep = 1;
 		}
@@ -2085,6 +2090,7 @@ RebalanceTableShardsBackground(RebalanceOptions *options, Oid shardReplicationMo
 		BackgroundTask *task = ScheduleBackgroundTask(jobId, GetUserId(), buf.data,
 													  nDep, dependingTasksList);
 
+		/* Update the taskId for the colocation group so that it points to the latest task scheduled.*/
 		shardMoveDependencyHashEntry->taskId = task->taskid;
 	}
 
