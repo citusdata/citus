@@ -42,6 +42,9 @@ clock_t attributeToTenantStart = { 0 };
 const char *SharedMemoryNameForMultiTenantMonitor =
 	"Shared memory for multi tenant monitor";
 
+char *tenantTrancheName = "Tenant Tranche";
+char *monitorTrancheName = "Multi Tenant Monitor Tranche";
+
 static shmem_startup_hook_type prev_shmem_startup_hook = NULL;
 
 static void UpdatePeriodsIfNecessary(MultiTenantMonitor *monitor,
@@ -319,9 +322,11 @@ AttributeMetricsIfApplicable()
 			monitor->tenants[tenantIndex] = monitor->tenants[tenantIndex - 1];
 			monitor->tenants[tenantIndex - 1] = tempTenant;
 
-			LWLockRelease(&monitor->tenants[tenantIndex - 1].lock);
+			LWLockRelease(&monitor->tenants[tenantIndex].lock);
 
 			tenantIndex--;
+
+			tenantStats = &monitor->tenants[tenantIndex];
 		}
 
 		if (attributeCommandType == CMD_SELECT)
@@ -337,8 +342,8 @@ AttributeMetricsIfApplicable()
 			tenantStats->totalInsertTime += cpu_time_used;
 		}
 
-		LWLockRelease(&tenantStats->lock);
 		LWLockRelease(&monitor->lock);
+		LWLockRelease(&tenantStats->lock);
 
 		/*
 		 * We keep up to CitusStatsTenantsLimit * 3 tenants instead of CitusStatsTenantsLimit,
@@ -474,11 +479,10 @@ CreateSharedMemoryForMultiTenantMonitor()
 		return monitor;
 	}
 
-	char *trancheName = "Multi Tenant Monitor Tranche";
-
 	monitor->namedLockTranche.trancheId = LWLockNewTrancheId();
+	monitor->namedLockTranche.trancheName = monitorTrancheName;
 
-	LWLockRegisterTranche(monitor->namedLockTranche.trancheId, trancheName);
+	LWLockRegisterTranche(monitor->namedLockTranche.trancheId, monitor->namedLockTranche.trancheName);
 	LWLockInitialize(&monitor->lock, monitor->namedLockTranche.trancheId);
 
 	return monitor;
@@ -547,12 +551,11 @@ CreateTenantStats(MultiTenantMonitor *monitor)
 	strcpy(monitor->tenants[tenantIndex].tenantAttribute, attributeToTenant);
 	monitor->tenants[tenantIndex].colocationGroupId = colocationGroupId;
 
-	char *trancheName = "Tenant Tranche";
-
 	monitor->tenants[tenantIndex].namedLockTranche.trancheId = LWLockNewTrancheId();
+	monitor->tenants[tenantIndex].namedLockTranche.trancheName = tenantTrancheName;
 
 	LWLockRegisterTranche(monitor->tenants[tenantIndex].namedLockTranche.trancheId,
-						  trancheName);
+						  monitor->tenants[tenantIndex].namedLockTranche.trancheName);
 	LWLockInitialize(&monitor->tenants[tenantIndex].lock,
 					 monitor->tenants[tenantIndex].namedLockTranche.trancheId);
 
