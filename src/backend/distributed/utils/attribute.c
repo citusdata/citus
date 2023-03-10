@@ -311,7 +311,8 @@ AttributeMetricsIfApplicable()
 		 * After updating the score we might need to change the rank of the tenant in the monitor
 		 */
 		while (tenantIndex != 0 &&
-			   monitor->tenants[tenantIndex - 1].score < monitor->tenants[tenantIndex]->score)
+			   monitor->tenants[tenantIndex - 1].score <
+			   monitor->tenants[tenantIndex]->score)
 		{
 			LWLockAcquire(&monitor->tenants[tenantIndex - 1].lock, LW_EXCLUSIVE);
 
@@ -481,7 +482,8 @@ CreateSharedMemoryForMultiTenantMonitor()
 	monitor->namedLockTranche.trancheId = LWLockNewTrancheId();
 	monitor->namedLockTranche.trancheName = monitorTrancheName;
 
-	LWLockRegisterTranche(monitor->namedLockTranche.trancheId, monitor->namedLockTranche.trancheName);
+	LWLockRegisterTranche(monitor->namedLockTranche.trancheId,
+						  monitor->namedLockTranche.trancheName);
 	LWLockInitialize(&monitor->lock, monitor->namedLockTranche.trancheId);
 
 	return monitor;
