@@ -167,7 +167,7 @@ AttributeQueryIfAnnotated(const char *query_string, CmdType commandType)
 		if (tenantIdTextP != NULL)
 		{
 			char *tenantId = text_to_cstring(tenantIdTextP);
-			strcpy(attributeToTenant, tenantId);
+			strcpy_s(attributeToTenant, sizeof(attributeToTenant), tenantId);
 		}
 
 		colocationGroupId = ExtractFieldInt32(jsonbDatum, "cId", 0);
