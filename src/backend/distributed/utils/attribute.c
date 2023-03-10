@@ -550,7 +550,8 @@ CreateTenantStats(MultiTenantMonitor *monitor)
 {
 	int tenantIndex = monitor->tenantCount;
 
-	strcpy_s(monitor->tenants[tenantIndex].tenantAttribute, sizeof(monitor->tenants[tenantIndex].tenantAttribute), attributeToTenant);
+	strcpy_s(monitor->tenants[tenantIndex].tenantAttribute,
+			 sizeof(monitor->tenants[tenantIndex].tenantAttribute), attributeToTenant);
 	monitor->tenants[tenantIndex].colocationGroupId = colocationGroupId;
 
 	monitor->tenants[tenantIndex].namedLockTranche.trancheId = LWLockNewTrancheId();
