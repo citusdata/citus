@@ -406,8 +406,6 @@ UndistributeTable(TableConversionParameters *params)
 	params->shardCountIsNull = true;
 	TableConversionState *con = CreateTableConversion(params);
 
-	ErrorIfTableHasIdentityColumn(params->relationId);
-
 	return ConvertTable(con);
 }
 
@@ -437,7 +435,6 @@ AlterDistributedTable(TableConversionParameters *params)
 	EnsureHashDistributedTable(params->relationId);
 
 	ErrorIfUnsupportedCascadeObjects(params->relationId);
-	ErrorIfTableHasIdentityColumn(params->relationId);
 
 	params->conversionType = ALTER_DISTRIBUTED_TABLE;
 	TableConversionState *con = CreateTableConversion(params);
@@ -502,7 +499,6 @@ AlterTableSetAccessMethod(TableConversionParameters *params)
 	}
 
 	ErrorIfUnsupportedCascadeObjects(params->relationId);
-	ErrorIfTableHasIdentityColumn(params->relationId);
 
 	params->conversionType = ALTER_TABLE_SET_ACCESS_METHOD;
 	params->shardCountIsNull = true;
@@ -932,6 +928,7 @@ CopyTableConversionReturnIntoCurrentContext(TableConversionReturn *tableConversi
 static TableConversionReturn *
 ConvertTable(TableConversionState *con)
 {
+	ErrorIfTableHasIdentityColumn(con->relationId);
 	/*
 	 * when there are many partitions or colocated tables, memory usage is
 	 * accumulated. Free context for each call to ConvertTable.
