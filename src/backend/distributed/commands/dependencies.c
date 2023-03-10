@@ -525,68 +525,6 @@ GetAllDependencyCreateDDLCommands(const List *dependencies)
 
 
 /*
- * ReplicateAllObjectsToNodeCommandList returns commands to replicate all
- * previously marked objects to a worker node. The function also sets
- * clusterHasDistributedFunction if there are any distributed functions.
- */
-List *
-ReplicateAllObjectsToNodeCommandList(const char *nodeName, int nodePort)
-{
-	/* since we are executing ddl commands disable propagation first, primarily for mx */
-	List *ddlCommands = list_make1(DISABLE_DDL_PROPAGATION);
-
-	/*
-	 * collect all dependencies in creation order and get their ddl commands
-	 */
-	List *dependencies = GetDistributedObjectAddressList();
-
-	/*
-	 * Depending on changes in the environment, such as the enable_metadata_sync guc
-	 * there might be objects in the distributed object address list that should currently
-	 * not be propagated by citus as they are 'not supported'.
-	 */
-	dependencies = FilterObjectAddressListByPredicate(dependencies,
-													  &SupportedDependencyByCitus);
-
-	/*
-	 * When dependency lists are getting longer we see a delay in the creation time on the
-	 * workers. We would like to inform the user. Currently we warn for lists greater than
-	 * 100 items, where 100 is an arbitrarily chosen number. If we find it too high or too
-	 * low we can adjust this based on experience.
-	 */
-	if (list_length(dependencies) > 100)
-	{
-		ereport(NOTICE, (errmsg("Replicating postgres objects to node %s:%d", nodeName,
-								nodePort),
-						 errdetail("There are %d objects to replicate, depending on your "
-								   "environment this might take a while",
-								   list_length(dependencies))));
-	}
-
-	dependencies = OrderObjectAddressListInDependencyOrder(dependencies);
-	ObjectAddress *dependency = NULL;
-	foreach_ptr(dependency, dependencies)
-	{
-		if (IsAnyObjectAddressOwnedByExtension(list_make1(dependency), NULL))
-		{
-			/*
-			 * we expect extension-owned objects to be created as a result
-			 * of the extension being created.
-			 */
-			continue;
-		}
-
-		ddlCommands = list_concat(ddlCommands,
-								  GetDependencyCreateDDLCommands(dependency));
-	}
-
-	ddlCommands = lappend(ddlCommands, ENABLE_DDL_PROPAGATION);
-
-	return ddlCommands;
-}
-
-
-/*
  * ShouldPropagate determines if we should be propagating anything
  */
 bool
