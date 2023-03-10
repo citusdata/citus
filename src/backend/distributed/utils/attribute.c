@@ -11,6 +11,7 @@
 #include "postgres.h"
 #include "unistd.h"
 
+#include "distributed/citus_safe_lib.h"
 #include "distributed/log_utils.h"
 #include "distributed/listutils.h"
 #include "distributed/tuplestore.h"
@@ -204,7 +205,7 @@ AttributeQueryIfAnnotated(const char *query_string, CmdType commandType)
 		}
 
 		/*	attributeToTenant = (char *) malloc(strlen(tenantId)); */
-		strcpy(attributeToTenant, tenantId);
+		strcpy_s(attributeToTenant, tenantId);
 	}
 	else
 	{
@@ -549,7 +550,7 @@ CreateTenantStats(MultiTenantMonitor *monitor)
 {
 	int tenantIndex = monitor->tenantCount;
 
-	strcpy(monitor->tenants[tenantIndex].tenantAttribute, attributeToTenant);
+	strcpy_s(monitor->tenants[tenantIndex].tenantAttribute, attributeToTenant);
 	monitor->tenants[tenantIndex].colocationGroupId = colocationGroupId;
 
 	monitor->tenants[tenantIndex].namedLockTranche.trancheId = LWLockNewTrancheId();
