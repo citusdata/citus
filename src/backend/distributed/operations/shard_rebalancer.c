@@ -59,6 +59,7 @@
 #include "utils/fmgroids.h"
 #include "utils/json.h"
 #include "utils/lsyscache.h"
+#include "utils/hsearch.h"
 #include "utils/memutils.h"
 #include "utils/pg_lsn.h"
 #include "utils/syscache.h"
@@ -189,6 +190,17 @@ typedef struct WorkerShardStatistics
 	 */
 	HTAB *statistics;
 } WorkerShardStatistics;
+
+typedef struct ShardMoveDependencyHashKey
+{
+	int64 collocationId;
+} ShardMoveDependencyHashKey;
+
+typedef struct ShardMoveDependencyHashEntry
+{
+	ShardMoveDependencyHashKey key;          /* Hash key (must be first!) */
+	int64 taskId;
+} ShardMoveDependencyHashEntry;
 
 char *VariablesToBePassedToNewConnections = NULL;
 
@@ -1896,7 +1908,9 @@ ErrorOnConcurrentRebalance(RebalanceOptions *options)
 							"citus_rebalance_status();")));
 	}
 }
-/* 
+
+
+/*
  * Returns 0 if INVALID_COLOCATION_ID.
  */
 static int64
@@ -1904,10 +1918,26 @@ GetCollocationId(PlacementUpdateEvent *move)
 {
 	ShardInterval *shardInterval = LoadShardInterval(move->shardId);
 
-	CitusTableCacheEntry *citusTableCacheEntry = GetCitusTableCacheEntry(shardInterval->relationId);
+	CitusTableCacheEntry *citusTableCacheEntry = GetCitusTableCacheEntry(
+		shardInterval->relationId);
 
 	return citusTableCacheEntry->colocationId;
 }
+
+
+static HTAB *
+InitShardMoveDependencyMap()
+{
+	HASHCTL hash_ctl;
+	memset(&hash_ctl, 0, sizeof(hash_ctl));
+	hash_ctl.keysize = sizeof(ShardMoveDependencyHashKey);
+	hash_ctl.entrysize = sizeof(ShardMoveDependencyHashEntry);
+	hash_ctl.hcxt = CurrentMemoryContext;
+	return hash_create("Shard Move Dependency Map", 1,
+					   &hash_ctl,
+					   HASH_ELEM | HASH_BLOBS);
+}
+
 
 /*
  * RebalanceTableShardsBackground rebalances the shards for the relations
@@ -1995,7 +2025,7 @@ RebalanceTableShardsBackground(RebalanceOptions *options, Oid shardReplicationMo
 	 */
 	List *referenceTableIdList = NIL;
 	int64 replicateRefTablesTaskId = 0;
-	int64 dependingTasksList[1] = {0};
+	int64 dependingTasksList[1] = { 0 };
 
 	if (HasNodesWithMissingReferenceTables(&referenceTableIdList))
 	{
@@ -2012,12 +2042,13 @@ RebalanceTableShardsBackground(RebalanceOptions *options, Oid shardReplicationMo
 						 "SELECT pg_catalog.replicate_reference_tables(%s)",
 						 quote_literal_cstr(shardTranferModeLabel));
 		BackgroundTask *task = ScheduleBackgroundTask(jobId, GetUserId(), buf.data,
-													 0 , dependingTasksList);
+													  0, dependingTasksList);
 		replicateRefTablesTaskId = task->taskid;
 	}
 
 	PlacementUpdateEvent *move = NULL;
-	int64 dependencyMap[1000] = {0};
+
+	HTAB *hashtable = InitShardMoveDependencyMap();
 
 	foreach_ptr(move, placementUpdateList)
 	{
@@ -2031,24 +2062,30 @@ RebalanceTableShardsBackground(RebalanceOptions *options, Oid shardReplicationMo
 						 quote_literal_cstr(shardTranferModeLabel));
 
 		int64 cid = GetCollocationId(move);
-		
-		int nDep = 0;
 
-		if (dependencyMap[cid] > 0)
+		int nDep = 0;
+		bool found;
+
+		ShardMoveDependencyHashEntry *shardMoveDependencyHashEntry = hash_search(
+			hashtable, &cid, HASH_ENTER, &found);
+
+		if (found)
 		{
-			dependingTasksList[0] = dependencyMap[cid];
+			/*elog(WARNING, "Emel : Found entry for key = %ld value= %ld ", cid, *elem); */
+			dependingTasksList[0] = shardMoveDependencyHashEntry->taskId;
 			nDep = 1;
 		}
-		else if (replicateRefTablesTaskId > 0) {
+		else if (replicateRefTablesTaskId > 0)
+		{
+			/*elog(WARNING, "Emel : Found = false RefTaskID = %ld ", replicateRefTablesTaskId); */
 			dependingTasksList[0] = replicateRefTablesTaskId;
 			nDep = 1;
 		}
 
 		BackgroundTask *task = ScheduleBackgroundTask(jobId, GetUserId(), buf.data,
-													  nDep,  dependingTasksList);
+													  nDep, dependingTasksList);
 
-		dependencyMap[cid] = task->taskid;
-
+		shardMoveDependencyHashEntry->taskId = task->taskid;
 	}
 
 	ereport(NOTICE,
