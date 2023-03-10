@@ -205,7 +205,7 @@ AttributeQueryIfAnnotated(const char *query_string, CmdType commandType)
 		}
 
 		/*	attributeToTenant = (char *) malloc(strlen(tenantId)); */
-		strcpy_s(attributeToTenant, tenantId);
+		strcpy_s(attributeToTenant, sizeof(attributeToTenant), tenantId);
 	}
 	else
 	{
@@ -550,7 +550,7 @@ CreateTenantStats(MultiTenantMonitor *monitor)
 {
 	int tenantIndex = monitor->tenantCount;
 
-	strcpy_s(monitor->tenants[tenantIndex].tenantAttribute, attributeToTenant);
+	strcpy_s(monitor->tenants[tenantIndex].tenantAttribute, sizeof(monitor->tenants[tenantIndex].tenantAttribute), attributeToTenant);
 	monitor->tenants[tenantIndex].colocationGroupId = colocationGroupId;
 
 	monitor->tenants[tenantIndex].namedLockTranche.trancheId = LWLockNewTrancheId();
