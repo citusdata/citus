@@ -554,33 +554,21 @@ IsCitusTableTypeInternal(char partitionMethod, char replicationModel,
 char *
 GetTableTypeName(Oid tableId)
 {
-	bool regularTable = false;
-	char partitionMethod = ' ';
-	char replicationModel = ' ';
-	if (IsCitusTable(tableId))
-	{
-		CitusTableCacheEntry *referencingCacheEntry = GetCitusTableCacheEntry(tableId);
-		partitionMethod = referencingCacheEntry->partitionMethod;
-		replicationModel = referencingCacheEntry->replicationModel;
-	}
-	else
-	{
-		regularTable = true;
-	}
-
-	if (regularTable)
+	if (!IsCitusTable(tableId))
 	{
 		return "regular table";
 	}
-	else if (partitionMethod == 'h')
+
+	CitusTableCacheEntry *tableCacheEntry = GetCitusTableCacheEntry(tableId);
+	if (IsCitusTableTypeCacheEntry(tableCacheEntry, HASH_DISTRIBUTED))
 	{
 		return "distributed table";
 	}
-	else if (partitionMethod == 'n' && replicationModel == 't')
+	else if (IsCitusTableTypeCacheEntry(tableCacheEntry, REFERENCE_TABLE))
 	{
 		return "reference table";
 	}
-	else if (partitionMethod == 'n' && replicationModel != 't')
+	else if (IsCitusTableTypeCacheEntry(tableCacheEntry, CITUS_LOCAL_TABLE))
 	{
 		return "citus local table";
 	}
