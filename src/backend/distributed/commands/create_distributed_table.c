@@ -438,8 +438,6 @@ CreateDistributedTableConcurrently(Oid relationId, char *distributionColumnName,
 
 	WarnIfTableHaveNoReplicaIdentity(relationId);
 
-	ErrorIfTableHasUnsupportedIdentityColumn(relationId);
-
 	List *shardList = LoadShardIntervalList(relationId);
 
 	/*
@@ -1014,8 +1012,6 @@ CreateCitusTable(Oid relationId, char *distributionColumnName,
 				 bool shardCountIsStrict, char *colocateWithTableName,
 				 char replicationModel)
 {
-	ErrorIfTableHasUnsupportedIdentityColumn(relationId);
-
 	/*
 	 * EnsureTableNotDistributed errors out when relation is a citus table but
 	 * we don't want to ask user to first undistribute their citus local tables
@@ -1672,6 +1668,8 @@ EnsureRelationCanBeDistributed(Oid relationId, Var *distributionColumn,
 							   char replicationModel)
 {
 	Oid parentRelationId = InvalidOid;
+
+	ErrorIfTableHasUnsupportedIdentityColumn(relationId);
 
 	EnsureLocalTableEmptyIfNecessary(relationId, distributionMethod);
 
