@@ -929,6 +929,7 @@ static TableConversionReturn *
 ConvertTable(TableConversionState *con)
 {
 	ErrorIfTableHasIdentityColumn(con->relationId);
+
 	/*
 	 * when there are many partitions or colocated tables, memory usage is
 	 * accumulated. Free context for each call to ConvertTable.
