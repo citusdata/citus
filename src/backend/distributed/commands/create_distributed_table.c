@@ -98,7 +98,7 @@
  * once every LOG_PER_TUPLE_AMOUNT, the copy will be logged.
  */
 #define LOG_PER_TUPLE_AMOUNT 1000000
-#define WORKER_MODIFY_IDENTITY_COMMAND "SELECT worker_modify_identity_columns(%s)"
+#define WORKER_MODIFY_IDENTITY_COMMAND "SELECT pg_catalog.worker_modify_identity_columns(%s)"
 
 /* local function forward declarations */
 static void CreateDistributedTableConcurrently(Oid relationId,
