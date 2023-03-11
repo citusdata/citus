@@ -200,7 +200,7 @@ typedef struct ShardMoveDependencyHashKey
 /* ShardMoveDependencyHashEntry contains the taskId which any new shard move task within the corresponding colocation group must take a dependency on */
 typedef struct ShardMoveDependencyHashEntry
 {
-	ShardMoveDependencyHashKey key;          /* Hash key (must be first!) */
+	ShardMoveDependencyHashKey key;
 	int64 taskId;
 } ShardMoveDependencyHashEntry;
 
