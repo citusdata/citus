@@ -66,6 +66,7 @@ int CitusStatsTenantsLimit = 10;
 
 
 PG_FUNCTION_INFO_V1(citus_stats_tenants);
+PG_FUNCTION_INFO_V1(clean_citus_stats_tenants);
 
 
 /*
@@ -144,12 +145,26 @@ citus_stats_tenants(PG_FUNCTION_ARGS)
 
 
 /*
+ * clean_citus_stats_tenants cleans the citus_stats_tenants monitor.
+ */
+Datum
+clean_citus_stats_tenants(PG_FUNCTION_ARGS)
+{
+	MultiTenantMonitor *monitor = GetMultiTenantMonitor();
+	monitor->tenantCount = 0;
+	monitor->periodStart = time(0);
+
+	PG_RETURN_VOID();
+}
+
+
+/*
  * AttributeQueryIfAnnotated assigns the attributes of tenant if the query is annotated.
  */
 void
 AttributeQueryIfAnnotated(const char *query_string, CmdType commandType)
 {
-/*	attributeToTenant = NULL; */
+	strcpy_s(attributeToTenant, sizeof(attributeToTenant), "");
 
 	attributeCommandType = commandType;
 
@@ -369,7 +384,7 @@ AttributeMetricsIfApplicable()
 		}
 	}
 
-	/*attributeToTenant = NULL; */
+	strcpy_s(attributeToTenant, sizeof(attributeToTenant), "");
 }
 
 
@@ -549,6 +564,8 @@ static int
 CreateTenantStats(MultiTenantMonitor *monitor)
 {
 	int tenantIndex = monitor->tenantCount;
+
+	memset(&monitor->tenants[tenantIndex], 0 ,sizeof(monitor->tenants[tenantIndex]));
 
 	strcpy_s(monitor->tenants[tenantIndex].tenantAttribute,
 			 sizeof(monitor->tenants[tenantIndex].tenantAttribute), attributeToTenant);

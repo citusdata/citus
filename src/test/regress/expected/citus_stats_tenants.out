@@ -1,0 +1,298 @@
+CREATE SCHEMA citus_stats_tenants;
+SET search_path TO citus_stats_tenants;
+SET citus.next_shard_id TO 5797500;
+SET citus.shard_replication_factor TO 1;
+CREATE OR REPLACE FUNCTION pg_catalog.clean_citus_stats_tenants()
+RETURNS VOID
+LANGUAGE C
+AS 'citus', $$clean_citus_stats_tenants$$;
+SELECT result FROM run_command_on_all_nodes('SELECT clean_citus_stats_tenants()');
+ result
+---------------------------------------------------------------------
+
+
+
+(3 rows)
+
+CREATE TABLE dist_tbl (a INT, b TEXT);
+SELECT create_distributed_table('dist_tbl', 'a', shard_count:=4, colocate_with:='none');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE dist_tbl_2 (a INT, b INT);
+SELECT create_distributed_table('dist_tbl_2', 'a', colocate_with:='dist_tbl');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE dist_tbl_text (a TEXT, b INT);
+SELECT create_distributed_table('dist_tbl_text', 'a', shard_count:=4, colocate_with:='none');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE ref_tbl (a INT, b INT);
+SELECT create_reference_table('ref_tbl');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO dist_tbl VALUES (1, 'abcd');
+INSERT INTO dist_tbl VALUES (2, 'abcd');
+INSERT INTO dist_tbl VALUES (3, 'abcd');
+INSERT INTO dist_tbl VALUES (4, 'abcd');
+INSERT INTO dist_tbl VALUES (5, 'abcd');
+\c - - - :worker_1_port
+SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, query_count_in_this_period, query_count_in_last_period FROM citus_stats_tenants ORDER BY tenant_attribute;
+ tenant_attribute | read_count_in_this_period | read_count_in_last_period | query_count_in_this_period | query_count_in_last_period
+---------------------------------------------------------------------
+ 1                |                         0 |                         0 |                          1 |                          0
+ 5                |                         0 |                         0 |                          1 |                          0
+(2 rows)
+
+\c - - - :worker_2_port
+SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, query_count_in_this_period, query_count_in_last_period FROM citus_stats_tenants ORDER BY tenant_attribute;
+ tenant_attribute | read_count_in_this_period | read_count_in_last_period | query_count_in_this_period | query_count_in_last_period
+---------------------------------------------------------------------
+ 2                |                         0 |                         0 |                          1 |                          0
+ 3                |                         0 |                         0 |                          1 |                          0
+(2 rows)
+
+\c - - - :master_port
+SET search_path TO citus_stats_tenants;
+SELECT result FROM run_command_on_all_nodes('ALTER SYSTEM SET citus.stats_tenants_period TO 3');
+    result
+---------------------------------------------------------------------
+ ALTER SYSTEM
+ ALTER SYSTEM
+ ALTER SYSTEM
+(3 rows)
+
+SELECT result FROM run_command_on_all_nodes('SELECT pg_reload_conf()');
+ result
+---------------------------------------------------------------------
+ t
+ t
+ t
+(3 rows)
+
+SELECT count(*)>=0 FROM dist_tbl WHERE a = 1;
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT count(*)>=0 FROM dist_tbl WHERE a = 2;
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+\c - - - :worker_1_port
+SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, query_count_in_this_period, query_count_in_last_period FROM citus_stats_tenants ORDER BY tenant_attribute;
+ tenant_attribute | read_count_in_this_period | read_count_in_last_period | query_count_in_this_period | query_count_in_last_period
+---------------------------------------------------------------------
+ 1                |                         1 |                         0 |                          2 |                          0
+ 5                |                         0 |                         0 |                          1 |                          0
+(2 rows)
+
+\c - - - :worker_2_port
+SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, query_count_in_this_period, query_count_in_last_period FROM citus_stats_tenants ORDER BY tenant_attribute;
+ tenant_attribute | read_count_in_this_period | read_count_in_last_period | query_count_in_this_period | query_count_in_last_period
+---------------------------------------------------------------------
+ 2                |                         1 |                         0 |                          2 |                          0
+ 3                |                         0 |                         0 |                          1 |                          0
+(2 rows)
+
+\c - - - :master_port
+SELECT pg_sleep (3);
+ pg_sleep
+---------------------------------------------------------------------
+
+(1 row)
+
+\c - - - :worker_1_port
+SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, query_count_in_this_period, query_count_in_last_period FROM citus_stats_tenants ORDER BY tenant_attribute;
+ tenant_attribute | read_count_in_this_period | read_count_in_last_period | query_count_in_this_period | query_count_in_last_period
+---------------------------------------------------------------------
+ 1                |                         0 |                         1 |                          0 |                          2
+ 5                |                         0 |                         0 |                          0 |                          1
+(2 rows)
+
+\c - - - :worker_2_port
+SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, query_count_in_this_period, query_count_in_last_period FROM citus_stats_tenants ORDER BY tenant_attribute;
+ tenant_attribute | read_count_in_this_period | read_count_in_last_period | query_count_in_this_period | query_count_in_last_period
+---------------------------------------------------------------------
+ 2                |                         0 |                         1 |                          0 |                          2
+ 3                |                         0 |                         0 |                          0 |                          1
+(2 rows)
+
+\c - - - :master_port
+SET search_path TO citus_stats_tenants;
+SELECT result FROM run_command_on_all_nodes('ALTER SYSTEM SET citus.stats_tenants_period TO 60');
+    result
+---------------------------------------------------------------------
+ ALTER SYSTEM
+ ALTER SYSTEM
+ ALTER SYSTEM
+(3 rows)
+
+SELECT result FROM run_command_on_all_nodes('SELECT pg_reload_conf()');
+ result
+---------------------------------------------------------------------
+ t
+ t
+ t
+(3 rows)
+
+-- queries with multiple tenants should not be counted
+SELECT count(*)>=0 FROM dist_tbl WHERE a IN (1, 5);
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+-- queries with reference tables should not be counted
+SELECT count(*)>=0 FROM ref_tbl WHERE a = 1;
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+\c - - - :worker_1_port
+SELECT tenant_attribute, query_count_in_this_period FROM citus_stats_tenants ORDER BY tenant_attribute;
+ tenant_attribute | query_count_in_this_period
+---------------------------------------------------------------------
+ 1                |                          0
+ 5                |                          0
+(2 rows)
+
+\c - - - :master_port
+SET search_path TO citus_stats_tenants;
+-- queries with multiple tables but one tenant should be counted
+SELECT count(*)>=0 FROM dist_tbl, dist_tbl_2 WHERE dist_tbl.a = 1 AND dist_tbl_2.a = 1;
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT count(*)>=0 FROM dist_tbl JOIN dist_tbl_2 ON dist_tbl.a = dist_tbl_2.a WHERE dist_tbl.a = 1;
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+\c - - - :worker_1_port
+SELECT tenant_attribute, query_count_in_this_period FROM citus_stats_tenants WHERE tenant_attribute = '1';
+ tenant_attribute | query_count_in_this_period
+---------------------------------------------------------------------
+ 1                |                          2
+(1 row)
+
+\c - - - :master_port
+SET search_path TO citus_stats_tenants;
+-- test scoring
+-- all of these distribution column values are from second worker
+SELECT count(*)>=0 FROM dist_tbl WHERE a = 2;
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT count(*)>=0 FROM dist_tbl WHERE a = 3;
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT count(*)>=0 FROM dist_tbl WHERE a = 4;
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT count(*)>=0 FROM dist_tbl_text WHERE a = 'abcd';
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+\c - - - :worker_2_port
+SELECT tenant_attribute, query_count_in_this_period, score FROM citus_stats_tenants(true) ORDER BY score DESC;
+ tenant_attribute | query_count_in_this_period |   score
+---------------------------------------------------------------------
+ 2                |                          1 | 2000000000
+ 3                |                          1 | 1500000000
+ 4                |                          1 | 1500000000
+ abcd             |                          1 | 1000000000
+(4 rows)
+
+\c - - - :master_port
+SET search_path TO citus_stats_tenants;
+SELECT count(*)>=0 FROM dist_tbl_text WHERE a = 'abcd';
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT count(*)>=0 FROM dist_tbl_text WHERE a = 'abcd';
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT count(*)>=0 FROM dist_tbl_text WHERE a = 'bcde';
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+\c - - - :worker_2_port
+SELECT tenant_attribute, query_count_in_this_period, score FROM citus_stats_tenants(true) ORDER BY score DESC;
+ tenant_attribute | query_count_in_this_period |   score
+---------------------------------------------------------------------
+ abcd             |                          3 | 3000000000
+ 2                |                          1 | 2000000000
+ 3                |                          1 | 1500000000
+ 4                |                          1 | 1500000000
+ bcde             |                          1 | 1000000000
+(5 rows)
+
+\c - - - :master_port
+SET search_path TO citus_stats_tenants;
+SELECT count(*)>=0 FROM dist_tbl_text WHERE a = 'bcde';
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT count(*)>=0 FROM dist_tbl_text WHERE a = 'bcde';
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT count(*)>=0 FROM dist_tbl_text WHERE a = 'cdef';
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+\c - - - :worker_2_port
+SELECT tenant_attribute, query_count_in_this_period, score FROM citus_stats_tenants(true) ORDER BY score DESC;
+ tenant_attribute | query_count_in_this_period |   score
+---------------------------------------------------------------------
+ abcd             |                          3 | 3000000000
+ bcde             |                          3 | 3000000000
+ 2                |                          1 | 2000000000
+ 3                |                          1 | 1500000000
+(4 rows)
+
+\c - - - :master_port
+SET client_min_messages TO ERROR;
+DROP SCHEMA citus_stats_tenants CASCADE;

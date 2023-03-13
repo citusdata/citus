@@ -35,7 +35,6 @@ typedef struct TenantStats
 
 	long long score;
 	time_t lastScoreReduction;
-	int rank;
 
 	NamedLWLockTranche namedLockTranche;
 	LWLock lock;
