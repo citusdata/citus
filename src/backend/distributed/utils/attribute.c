@@ -676,8 +676,13 @@ MultiTenantMonitorshmemSize(void)
 static char *
 extractTopComment(const char *inputString)
 {
-	int i = 0;
+	int commentStartCharsLength = 2;
+	if (strlen(inputString) < commentStartCharsLength )
+	{
+		return NULL;
+	}
 
+	int i = 0;
 	/* If query starts with a comment */
 	if (inputString[i] == '/' && inputString[i + 1] == '*')
 	{
@@ -689,9 +694,9 @@ extractTopComment(const char *inputString)
 		}
 	}
 
-	if (i > 2)
+	if (i > commentStartCharsLength)
 	{
-		return get_substring(inputString, 2, i);
+		return get_substring(inputString, commentStartCharsLength, i);
 	}
 	else
 	{
