@@ -403,8 +403,7 @@ SetTaskQueryIfShouldLazyDeparse(Task *task, Query *query)
 		return;
 	}
 
-	SetTaskQueryString(task, AnnotateQuery(DeparseTaskQuery(task, query),
-										   task->partitionColumn, task->colocationId));
+	SetTaskQueryString(task, DeparseTaskQuery(task, query));
 }
 
 
@@ -424,7 +423,7 @@ SetTaskQueryString(Task *task, char *queryString)
 	else
 	{
 		task->taskQuery.queryType = TASK_QUERY_TEXT;
-		task->taskQuery.data.queryStringLazy = queryString;
+		task->taskQuery.data.queryStringLazy = AnnotateQuery(queryString, task->partitionColumn, task->colocationId);
 		task->queryCount = 1;
 	}
 }
@@ -438,6 +437,15 @@ SetTaskQueryStringList(Task *task, List *queryStringList)
 {
 	Assert(queryStringList != NIL);
 	task->taskQuery.queryType = TASK_QUERY_TEXT_LIST;
+
+
+	char *queryString = NULL;
+	foreach_ptr(queryString, queryStringList)
+	{
+		queryString = AnnotateQuery(queryString, task->partitionColumn, task->colocationId);
+	}
+
+
 	task->taskQuery.data.queryStringList = queryStringList;
 	task->queryCount = list_length(queryStringList);
 }
@@ -552,5 +560,6 @@ TaskQueryString(Task *task)
 	char *queryString = DeparseTaskQuery(task, jobQueryReferenceForLazyDeparsing);
 	MemoryContextSwitchTo(previousContext);
 	SetTaskQueryString(task, queryString);
+
 	return task->taskQuery.data.queryStringLazy;
 }
