@@ -66,6 +66,7 @@ Schema for Query configuration:
 queryCount: <int>
 queryOutFile: <string>
 semiAntiJoin: <bool>
+cartesianProduct: <bool>
 limit: <bool>
 orderby: <bool>
 forceOrderbyWithLimit: <bool>
@@ -92,8 +93,9 @@ targetAggregateFunctions: <string[]>
 Explanation:
 ```yaml
 queryCount: "number of queries to generate"
-queryOutFile: "fileto write generated queries"
-semiAntiJoin: "should we support semin joins (WHERE col IN (Subquery))"
+queryOutFile: "file to write generated queries"
+semiAntiJoin: "should we support semi joins (WHERE col IN (Subquery))"
+cartesianProduct: "should we support cartesian joins"
 limit: "should we support limit clause"
 orderby: "should we support order by clause"
 forceOrderbyWithLimit: "should we force order by when we use limit"

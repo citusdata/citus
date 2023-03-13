@@ -279,7 +279,7 @@ def _genCte(genCtx):
 def _genRteList(genCtx):
     # RteList -> Rte [, RteList] || Rte
     query = ''
-    if shouldSelectThatBranch():
+    if getConfig().cartesianProduct and shouldSelectThatBranch():
         query += _genRte(genCtx)
         if not genCtx.canGenerateNewRte():
             return query

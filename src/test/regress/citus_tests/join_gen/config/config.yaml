@@ -3,6 +3,7 @@ queryCount: 1000
 queryOutFile: queries.sql
 ddlOutFile: ddls.sql
 semiAntiJoin: true
+cartesianProduct: false
 limit: true
 orderby: true
 forceOrderbyWithLimit: true

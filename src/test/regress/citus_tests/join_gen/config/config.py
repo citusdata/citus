@@ -19,6 +19,7 @@ class Config:
         self.targetAggregateFunctions = configObj['targetAggregateFunctions']
         self.targetRteTableFunctions = configObj['targetRteTableFunctions']
         self.semiAntiJoin = configObj['semiAntiJoin']
+        self.cartesianProduct = configObj['cartesianProduct']
         self.limit = configObj['limit']
         self.orderby = configObj['orderby']
         self.forceOrderbyWithLimit = configObj['forceOrderbyWithLimit']
