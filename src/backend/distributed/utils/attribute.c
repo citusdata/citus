@@ -65,6 +65,7 @@ static int CreateTenantStats(MultiTenantMonitor *monitor, time_t queryTime);
 static int FindTenantStats(MultiTenantMonitor *monitor);
 static size_t MultiTenantMonitorshmemSize(void);
 static char * extractTopComment(const char *inputString);
+static char* get_substring(const char* str, int start, int end);
 
 int MultiTenantMonitoringLogLevel = CITUS_LOG_LEVEL_OFF;
 int CitusStatsTenantsPeriod = (time_t) 60;
@@ -690,12 +691,32 @@ extractTopComment(const char *inputString)
 
 	if (i > 2)
 	{
-		char *result = (char *) palloc(sizeof(char) * (i - 1));
-		strncpy(result, inputString + 2, i - 2);
-		return result;
+		return get_substring(inputString, 2, i);
 	}
 	else
 	{
 		return NULL;
 	}
+}
+
+static char*
+get_substring(const char* str, int start, int end) {
+    int len = strlen(str);
+    char* substr = NULL;
+
+    // Ensure start and end are within the bounds of the string
+    if (start < 0 || end > len || start > end) {
+        return NULL;
+    }
+
+    // Allocate memory for the substring
+    substr = (char*) palloc((end - start + 1) * sizeof(char));
+
+    // Copy the substring to the new memory location
+    strncpy_s(substr, end - start + 1, str + start, end - start);
+
+    // Add null terminator to end the substring
+    substr[end - start] = '\0';
+
+    return substr;
 }
