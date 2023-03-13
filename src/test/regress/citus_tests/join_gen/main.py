@@ -32,11 +32,16 @@ def _fileMode(ddls, data):
     queryCount = getConfig().queryCount
     fileName = 'out/' + getConfig().queryOutFile
     with open(fileName, 'w') as f:
+        queryId = 1
         queryLines = []
         for _ in range(queryCount):
             query = newQuery()
-            queryLine = query + '\n\n'
+
+            queryLine = '-- queryId: ' + str(queryId) + '\n'
+            queryLine += query + '\n\n'
+
             queryLines.append(queryLine)
+            queryId += 1
         f.writelines(queryLines)
 
 if __name__ == '__main__':

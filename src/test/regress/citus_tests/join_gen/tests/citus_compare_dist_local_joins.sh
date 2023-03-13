@@ -23,20 +23,15 @@ runQueries()
     out_filename=$1
 
     # run dmls
-    # echo queries for query tracing
+    # echo queries and comments for query tracing
     psql -U postgres -d postgres -p "${psql_port}" \
-        --echo-queries \
+        --echo-all \
         -f "${out_folder}"/queries.sql > "${out_filename}" 2>&1
 }
 
 showDiffs()
 {
-    # - show results in unified format
-    # - do not consider queries as diff since we change table names for local and
-    #   dist queries even if both queries are same
-    diff -u "${out_folder}"/local_queries.out \
-            "${out_folder}"/dist_queries.out \
-            > "${out_folder}"/local_dist.diffs
+    cd "${script_folder}" && python3 diff-checker.py
 }
 
 # run query generator and let it create output ddls and queries

@@ -1,5 +1,5 @@
 interactiveMode: false
-queryCount: 1000
+queryCount: 10000
 queryOutFile: queries.sql
 ddlOutFile: ddls.sql
 semiAntiJoin: true
