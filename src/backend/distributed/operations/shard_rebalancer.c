@@ -198,11 +198,11 @@ typedef struct ShardMoveDependencyHashKey
 } ShardMoveDependencyHashKey;
 
 /* ShardMoveDependencyHashEntry contains the taskId which any new shard move task within the corresponding colocation group must take a dependency on */
-typedef struct ShardMoveDependencyHashEntry
+typedef struct ShardMoveDependencyInfo
 {
 	ShardMoveDependencyHashKey key;
 	int64 taskId;
-} ShardMoveDependencyHashEntry;
+} ShardMoveDependencyInfo;
 
 char *VariablesToBePassedToNewConnections = NULL;
 
@@ -1938,7 +1938,7 @@ InitShardMoveDependencyMap()
 	HASHCTL hash_ctl;
 	memset(&hash_ctl, 0, sizeof(hash_ctl));
 	hash_ctl.keysize = sizeof(ShardMoveDependencyHashKey);
-	hash_ctl.entrysize = sizeof(ShardMoveDependencyHashEntry);
+	hash_ctl.entrysize = sizeof(ShardMoveDependencyInfo);
 	hash_ctl.hcxt = CurrentMemoryContext;
 	return hash_create("ShardMoveDependencyMap", 1,
 					   &hash_ctl,
@@ -2022,17 +2022,9 @@ RebalanceTableShardsBackground(RebalanceOptions *options, Oid shardReplicationMo
 	StringInfoData buf = { 0 };
 	initStringInfo(&buf);
 
-	/*
-	 * Currently we only have two tasks that any move can depend on:
-	 *  - replicating reference tables
-	 *  - the previous move
-	 *
-	 * prevJobIdx tells what slot to write the id of the task into. We only use both slots
-	 * if we are actually replicating reference tables.
-	 */
 	List *referenceTableIdList = NIL;
 	int64 replicateRefTablesTaskId = 0;
-	int64 dependingTasksList[1] = { 0 };
+	int64 dependTasksList[1] = { 0 };
 
 	if (HasNodesWithMissingReferenceTables(&referenceTableIdList))
 	{
@@ -2049,13 +2041,19 @@ RebalanceTableShardsBackground(RebalanceOptions *options, Oid shardReplicationMo
 						 "SELECT pg_catalog.replicate_reference_tables(%s)",
 						 quote_literal_cstr(shardTranferModeLabel));
 		BackgroundTask *task = ScheduleBackgroundTask(jobId, GetUserId(), buf.data,
-													  0, dependingTasksList);
+													  0, dependTasksList);
 		replicateRefTablesTaskId = task->taskid;
 	}
 
 	PlacementUpdateEvent *move = NULL;
 
-	HTAB *hashtable = InitShardMoveDependencyMap();
+	/*
+	 * A shard move must take a dependency on a previous shecheduled move in the same colocation group.
+	 * Two shards moves with the same colocation id cannot run concurrently.
+	 * If there is no previous move scheduled in the same colocation group the move must
+	 * take a dependency on the reference table replication task if exists otherwise no task dependency is required.
+	 * dependHashMap tracks the last move scheduled for the given colocation id.*/
+	HTAB *dependencyHashMap = InitShardMoveDependencyMap();
 
 	foreach_ptr(move, placementUpdateList)
 	{
@@ -2070,28 +2068,27 @@ RebalanceTableShardsBackground(RebalanceOptions *options, Oid shardReplicationMo
 
 		int64 cid = GetColocationId(move);
 
-		int nDep = 0;
 		bool found;
 
-		ShardMoveDependencyHashEntry *shardMoveDependencyHashEntry = hash_search(
-			hashtable, &cid, HASH_ENTER, &found);
+		ShardMoveDependencyInfo *shardMoveDependencyInfo = hash_search(
+			dependencyHashMap, &cid, HASH_ENTER, &found);
+
+		int nDepend = 0;
 
 		if (found)
 		{
-			dependingTasksList[0] = shardMoveDependencyHashEntry->taskId;
-			nDep = 1;
+			dependTasksList[nDepend++] = shardMoveDependencyInfo->taskId;
 		}
 		else if (replicateRefTablesTaskId > 0)
 		{
-			dependingTasksList[0] = replicateRefTablesTaskId;
-			nDep = 1;
+			dependTasksList[nDepend++] = replicateRefTablesTaskId;
 		}
 
 		BackgroundTask *task = ScheduleBackgroundTask(jobId, GetUserId(), buf.data,
-													  nDep, dependingTasksList);
+													  nDepend, dependTasksList);
 
 		/* Update the taskId for the colocation group so that it points to the latest task scheduled.*/
-		shardMoveDependencyHashEntry->taskId = task->taskid;
+		shardMoveDependencyInfo->taskId = task->taskid;
 	}
 
 	ereport(NOTICE,
