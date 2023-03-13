@@ -2487,7 +2487,7 @@ QueryPushdownTaskCreate(Query *originalQuery, int shardIndex,
 			/* non-distributed tables have only one shard */
 			shardInterval = cacheEntry->sortedShardIntervalArray[0];
 
-			/* only use reference table as anchor shard if none exists yet */
+			/* use as anchor shard only if we couldn't find any yet */
 			if (anchorShardId == INVALID_SHARD_ID)
 			{
 				anchorShardId = shardInterval->shardId;

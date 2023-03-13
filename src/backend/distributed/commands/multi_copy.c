@@ -2140,6 +2140,7 @@ CitusCopyDestReceiverStartup(DestReceiver *dest, int operation,
 	}
 
 	if (IsCitusTableTypeCacheEntry(cacheEntry, DISTRIBUTED_TABLE) &&
+		!IsCitusTableTypeCacheEntry(cacheEntry, NULL_KEY_DISTRIBUTED_TABLE) &&
 		copyDest->partitionColumnIndex == INVALID_PARTITION_COLUMN_INDEX)
 	{
 		ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),

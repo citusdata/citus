@@ -99,6 +99,7 @@ if __name__ == "__main__":
         "multi_extension": TestDeps(None, repeatable=False),
         "multi_test_helpers": TestDeps(None),
         "multi_insert_select": TestDeps("base_schedule"),
+        "create_null_dist_key": TestDeps("minimal_schedule"),
         "multi_mx_create_table": TestDeps(
             None,
             [
