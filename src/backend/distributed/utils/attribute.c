@@ -690,7 +690,7 @@ extractTopComment(const char *inputString)
 
 	if (i > 2)
 	{
-		char *result = (char *) malloc(sizeof(char) * (i - 1));
+		char *result = (char *) palloc(sizeof(char) * (i - 1));
 		strncpy(result, inputString + 2, i - 2);
 		return result;
 	}
