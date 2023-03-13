@@ -33,7 +33,7 @@ static void AttributeMetricsIfApplicable(void);
 
 ExecutorEnd_hook_type prev_ExecutorEnd = NULL;
 
-#define ATTRIBUTE_PREFIX "/*{"
+#define ATTRIBUTE_PREFIX "{\"tId\":"
 #define ATTRIBUTE_STRING_FORMAT "/*{\"tId\":%s,\"cId\":%d}*/"
 #define CITUS_STATS_TENANTS_COLUMNS 7
 #define ONE_QUERY_SCORE 1000000000
@@ -202,34 +202,32 @@ AttributeQueryIfAnnotated(const char *query_string, CmdType commandType)
 		return;
 	}
 
-	char *annotation = extractTopComment(query_string);
-	if (annotation != NULL)
+	if (strncmp(ATTRIBUTE_PREFIX, query_string, strlen(ATTRIBUTE_PREFIX)) == 0)
 	{
-		Datum jsonbDatum = DirectFunctionCall1(jsonb_in, PointerGetDatum(annotation));
-
-		text *tenantIdTextP = ExtractFieldTextP(jsonbDatum, "tId");
-		if (tenantIdTextP != NULL)
+		char *annotation = extractTopComment(query_string);
+		if (annotation != NULL)
 		{
-			char *tenantId = text_to_cstring(tenantIdTextP);
-			strcpy_s(attributeToTenant, sizeof(attributeToTenant), tenantId);
-		}
+			Datum jsonbDatum = DirectFunctionCall1(jsonb_in, PointerGetDatum(annotation));
+
+			text *tenantIdTextP = ExtractFieldTextP(jsonbDatum, "tId");
+			if (tenantIdTextP != NULL)
+			{
+				char *tenantId = text_to_cstring(tenantIdTextP);
+				strcpy_s(attributeToTenant, sizeof(attributeToTenant), tenantId);
+			}
 
 		colocationGroupId = ExtractFieldInt32(jsonbDatum, "cId", INVALID_COLOCATION_ID);
 
-		if (MultiTenantMonitoringLogLevel != CITUS_LOG_LEVEL_OFF)
-		{
-			ereport(NOTICE, (errmsg(
-								 "attributing query to tenant: %s, colocationGroupId: %d",
-								 quote_literal_cstr(attributeToTenant),
-								 colocationGroupId)));
+			if (MultiTenantMonitoringLogLevel != CITUS_LOG_LEVEL_OFF)
+			{
+				ereport(NOTICE, (errmsg(
+									"attributing query to tenant: %s, colocationGroupId: %d",
+									quote_literal_cstr(attributeToTenant),
+									colocationGroupId)));
+			}
 		}
 	}
-	else
-	{
-		strcpy_s(attributeToTenant, sizeof(attributeToTenant), "");
-	}
 
-	/*DetachSegment(); */
 	attributeToTenantStart = clock();
 }
 
