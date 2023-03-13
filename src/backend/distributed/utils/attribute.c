@@ -65,7 +65,7 @@ static int CreateTenantStats(MultiTenantMonitor *monitor, time_t queryTime);
 static int FindTenantStats(MultiTenantMonitor *monitor);
 static size_t MultiTenantMonitorshmemSize(void);
 static char * extractTopComment(const char *inputString);
-static char* get_substring(const char* str, int start, int end);
+static char * get_substring(const char *str, int start, int end);
 
 int MultiTenantMonitoringLogLevel = CITUS_LOG_LEVEL_OFF;
 int CitusStatsTenantsPeriod = (time_t) 60;
@@ -221,9 +221,9 @@ AttributeQueryIfAnnotated(const char *query_string, CmdType commandType)
 			if (MultiTenantMonitoringLogLevel != CITUS_LOG_LEVEL_OFF)
 			{
 				ereport(NOTICE, (errmsg(
-									"attributing query to tenant: %s, colocationGroupId: %d",
-									quote_literal_cstr(attributeToTenant),
-									colocationGroupId)));
+									 "attributing query to tenant: %s, colocationGroupId: %d",
+									 quote_literal_cstr(attributeToTenant),
+									 colocationGroupId)));
 			}
 		}
 	}
@@ -675,12 +675,13 @@ static char *
 extractTopComment(const char *inputString)
 {
 	int commentStartCharsLength = 2;
-	if (strlen(inputString) < commentStartCharsLength )
+	if (strlen(inputString) < commentStartCharsLength)
 	{
 		return NULL;
 	}
 
 	int i = 0;
+
 	/* If query starts with a comment */
 	if (inputString[i] == '/' && inputString[i + 1] == '*')
 	{
@@ -702,24 +703,26 @@ extractTopComment(const char *inputString)
 	}
 }
 
-static char*
-get_substring(const char* str, int start, int end) {
-    int len = strlen(str);
-    char* substr = NULL;
 
-    // Ensure start and end are within the bounds of the string
-    if (start < 0 || end > len || start > end) {
-        return NULL;
-    }
+static char *
+get_substring(const char *str, int start, int end)
+{
+	int len = strlen(str);
 
-    // Allocate memory for the substring
-    substr = (char*) palloc((end - start + 1) * sizeof(char));
+	/* Ensure start and end are within the bounds of the string */
+	if (start < 0 || end > len || start > end)
+	{
+		return NULL;
+	}
 
-    // Copy the substring to the new memory location
-    strncpy_s(substr, end - start + 1, str + start, end - start);
+	/* Allocate memory for the substring */
+	char *substr = (char *) palloc((end - start + 1) * sizeof(char));
 
-    // Add null terminator to end the substring
-    substr[end - start] = '\0';
+	/* Copy the substring to the new memory location */
+	strncpy_s(substr, end - start + 1, str + start, end - start);
 
-    return substr;
+	/* Add null terminator to end the substring */
+	substr[end - start] = '\0';
+
+	return substr;
 }
