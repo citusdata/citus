@@ -1,8 +1,9 @@
-from config.config import *
-from node_defs import *
-from generator.random_selections import *
-
 import random
+
+from generator.random_selections import *
+from node_defs import *
+
+from config.config import *
 
 # grammar syntax
 #
@@ -62,8 +63,9 @@ import random
 # OrderBy -> 'ORDER BY' DistColName
 # DistColName -> 'hardwired(get from config)'
 
+
 class GeneratorContext:
-    '''context to store some variables which should be available during generation'''
+    """context to store some variables which should be available during generation"""
 
     def __init__(self):
         # each level's last table is used in WHERE clause for the level
@@ -86,48 +88,48 @@ class GeneratorContext:
         self.usedAvg = False
 
     def randomCteName(self):
-        '''returns a randomly selected cte name'''
-        randCteRef = random.randint(0, self.currentCteCount-1)
-        return ' cte_' + str(randCteRef)
+        """returns a randomly selected cte name"""
+        randCteRef = random.randint(0, self.currentCteCount - 1)
+        return " cte_" + str(randCteRef)
 
     def curAlias(self):
-        '''returns current alias name to be used for the current table'''
-        return ' table_' + str(self.totalRteCount)
+        """returns current alias name to be used for the current table"""
+        return " table_" + str(self.totalRteCount)
 
     def curCteAlias(self):
-        '''returns current alias name to be used for the current cte'''
-        return ' cte_' + str(self.currentCteCount)
+        """returns current alias name to be used for the current cte"""
+        return " cte_" + str(self.currentCteCount)
 
     def hasAnyCte(self):
-        '''returns if context has any cte'''
+        """returns if context has any cte"""
         return self.currentCteCount > 0
 
     def canGenerateNewRte(self):
-        '''checks if context exceeds allowed rte count'''
+        """checks if context exceeds allowed rte count"""
         return self.currentRteCount < getConfig().targetRteCount
 
     def canGenerateNewCte(self):
-        '''checks if context exceeds allowed cte count'''
+        """checks if context exceeds allowed cte count"""
         return self.currentCteCount < getConfig().targetCteCount
 
     def canGenerateNewRteInsideCte(self):
-        '''checks if context exceeds allowed rte count inside a cte'''
+        """checks if context exceeds allowed rte count inside a cte"""
         return self.currentCteRteCount < getConfig().targetCteRteCount
 
     def addAlias(self, alias):
-        '''adds given alias to the stack'''
+        """adds given alias to the stack"""
         self.aliasStack.append(alias)
 
     def removeLastAlias(self):
-        '''removes the latest added alias from the stack'''
+        """removes the latest added alias from the stack"""
         return self.aliasStack.pop()
 
     def getRteNameEnforcingRteLimits(self):
-        '''returns rteName by enforcing rte count limits for tables'''
+        """returns rteName by enforcing rte count limits for tables"""
         # do not enforce per table rte limit if we are inside cte
         if self.insideCte:
             rteName = random.choice(getAllTableNames())
-            return ' ' +  rteName + ' '
+            return " " + rteName + " "
 
         while True:
             # keep trying to find random name by eliminating blacklist of names
@@ -147,36 +149,43 @@ class GeneratorContext:
 
         # increment rte count for the table name
         self.perTableRtes[rteName] += 1
-        return ' ' +  rteName + ' '
+        return " " + rteName + " "
+
 
 def newQuery():
-    '''returns generated query'''
+    """returns generated query"""
     genCtx = GeneratorContext()
     return _start(genCtx)
 
+
 def _start(genCtx):
     # Query ';' || 'WITH' CteList Query ';'
-    query = ''
+    query = ""
     if not genCtx.canGenerateNewCte() or shouldSelectThatBranch():
         query += _genQuery(genCtx)
     else:
         genCtx.insideCte = True
-        query += ' WITH '
+        query += " WITH "
         query += _genCteList(genCtx)
         genCtx.insideCte = False
         query += _genQuery(genCtx)
-    query += ';'
+    query += ";"
     return query
+
 
 def _genQuery(genCtx):
     # SelectExpr FromExpr [OrderBy] [Limit] || 'SELECT' 'avg(avgsub.DistColName)' 'FROM' SubqueryRte 'AS avgsub'
-    query = ''
-    if getConfig().useAvgAtTopLevelTarget and not genCtx.insideCte and not genCtx.usedAvg:
+    query = ""
+    if (
+        getConfig().useAvgAtTopLevelTarget
+        and not genCtx.insideCte
+        and not genCtx.usedAvg
+    ):
         genCtx.usedAvg = True
-        query += 'SELECT '
-        query += 'avg(avgsub.' + getConfig().commonColName + ') FROM '
+        query += "SELECT "
+        query += "avg(avgsub." + getConfig().commonColName + ") FROM "
         query += _genSubqueryRte(genCtx)
-        query += ' AS avgsub'
+        query += " AS avgsub"
     else:
         query += _genSelectExpr(genCtx)
         query += _genFromExpr(genCtx)
@@ -190,36 +199,49 @@ def _genQuery(genCtx):
             query += _genLimit(genCtx)
     return query
 
+
 def _genOrderBy(genCtx):
     # 'ORDER BY' DistColName
-    query = ''
-    query += ' ORDER BY '
-    query += getConfig().commonColName + ' '
+    query = ""
+    query += " ORDER BY "
+    query += getConfig().commonColName + " "
     return query
+
 
 def _genLimit(genCtx):
     # 'LIMIT' 'random()'
-    query = ''
-    query += ' LIMIT '
+    query = ""
+    query += " LIMIT "
     (fromVal, toVal) = getConfig().limitRange
     query += str(random.randint(fromVal, toVal))
     return query
 
+
 def _genSelectExpr(genCtx):
     # 'SELECT' 'curAlias()' '.' DistColName || 'randomAggregateFunc()' '(' curAlias() '.' DistColName ') AS ' DistColName
-    query = ''
-    query += ' SELECT '
+    query = ""
+    query += " SELECT "
     commonColName = getConfig().commonColName
     if not getConfig().aggregate or shouldSelectThatBranch():
-        query +=  genCtx.curAlias() + '.' + commonColName + ' '
+        query += genCtx.curAlias() + "." + commonColName + " "
     else:
-        query += randomAggregateFunc() + '(' + genCtx.curAlias() + '.' + commonColName + ') AS ' + commonColName + ' '
+        query += (
+            randomAggregateFunc()
+            + "("
+            + genCtx.curAlias()
+            + "."
+            + commonColName
+            + ") AS "
+            + commonColName
+            + " "
+        )
     return query
+
 
 def _genFromExpr(genCtx):
     # 'FROM' (Rte JoinList JoinOp Rte Using || RteList) ['WHERE' 'nextRandomAlias()' '.' DistColName RestrictExpr]
-    query = ''
-    query += ' FROM '
+    query = ""
+    query += " FROM "
 
     if shouldSelectThatBranch():
         query += _genRte(genCtx)
@@ -232,68 +254,77 @@ def _genFromExpr(genCtx):
 
     alias = genCtx.removeLastAlias()
     if shouldSelectThatBranch():
-        query += ' WHERE '
-        query += alias + '.' + getConfig().commonColName
+        query += " WHERE "
+        query += alias + "." + getConfig().commonColName
         query += _genRestrictExpr(genCtx)
     return query
 
+
 def _genRestrictExpr(genCtx):
     # ('<' || '>' || '=') Int || ['NOT'] 'IN' '(' SubqueryRte ')'
-    query = ''
-    if not getConfig().semiAntiJoin or not genCtx.canGenerateNewRte() or shouldSelectThatBranch():
+    query = ""
+    if (
+        not getConfig().semiAntiJoin
+        or not genCtx.canGenerateNewRte()
+        or shouldSelectThatBranch()
+    ):
         query += randomRestrictOp()
         (fromVal, toVal) = getConfig().filterRange
         query += str(random.randint(fromVal, toVal))
     else:
         if shouldSelectThatBranch():
-            query += ' NOT'
-        query += ' IN '
+            query += " NOT"
+        query += " IN "
         query += _genSubqueryRte(genCtx)
     return query
 
+
 def _genCteList(genCtx):
     # Cte [',' CteList] || Cte
-    query = ''
+    query = ""
 
     if shouldSelectThatBranch():
         query += _genCte(genCtx)
         if not genCtx.canGenerateNewCte():
             return query
-        query += ','
+        query += ","
         query += _genCteList(genCtx)
     else:
         query += _genCte(genCtx)
     return query
 
+
 def _genCte(genCtx):
     # 'nextRandomAlias()' 'AS' '(' Query ')'
-    query = ''
+    query = ""
     query += genCtx.curCteAlias()
     genCtx.currentCteCount += 1
-    query += ' AS '
-    query += ' ( '
+    query += " AS "
+    query += " ( "
     query += _genQuery(genCtx)
-    query += ' ) '
+    query += " ) "
     return query
+
 
 def _genRteList(genCtx):
     # RteList -> Rte [, RteList] || Rte
-    query = ''
+    query = ""
     if getConfig().cartesianProduct and shouldSelectThatBranch():
         query += _genRte(genCtx)
         if not genCtx.canGenerateNewRte():
             return query
         if genCtx.insideCte and not genCtx.canGenerateNewRteInsideCte():
             return query
-        query += ','
+        query += ","
         query += _genRteList(genCtx)
     else:
         query += _genRte(genCtx)
     return query
 
+
 def _genJoinList(genCtx):
     # JoinOp Rte Using JoinList || e
-    query = ''
+    query = ""
 
     if shouldSelectThatBranch():
         if not genCtx.canGenerateNewRte():
@@ -306,11 +337,13 @@ def _genJoinList(genCtx):
         query += _genJoinList(genCtx)
     return query
 
+
 def _genUsing(genCtx):
     # 'USING' '(' DistColName ')'
-    query = ''
-    query += ' USING (' + getConfig().commonColName + ' ) '
+    query = ""
+    query += " USING (" + getConfig().commonColName + " ) "
     return query
+
 
 def _genRte(genCtx):
     # SubqueryRte as 'nextRandomAlias()' || RelationRte as 'curAlias()' ||
@@ -337,7 +370,7 @@ def _genRte(genCtx):
     if (genCtx.insideCte or not genCtx.hasAnyCte()) and rteType == RTEType.CTE:
         rteType = RTEType.RELATION
 
-    query = ''
+    query = ""
     if rteType == RTEType.SUBQUERY:
         query += _genSubqueryRte(genCtx)
     elif rteType == RTEType.RELATION:
@@ -348,45 +381,50 @@ def _genRte(genCtx):
         query += _genTableFuncRte(genCtx)
     elif rteType == RTEType.VALUES:
         query += _genValuesRte(genCtx)
-        modifiedAlias = alias + '(' + getConfig().commonColName + ') '
+        modifiedAlias = alias + "(" + getConfig().commonColName + ") "
     else:
         raise BaseException("unknown RTE type")
 
-    query += ' AS '
-    query += (alias if not modifiedAlias else modifiedAlias)
+    query += " AS "
+    query += alias if not modifiedAlias else modifiedAlias
     genCtx.addAlias(alias)
 
     return query
 
+
 def _genSubqueryRte(genCtx):
     # '(' Query ')'
-    query = ''
-    query += ' ( '
+    query = ""
+    query += " ( "
     query += _genQuery(genCtx)
-    query += ' ) '
+    query += " ) "
     return query
+
 
 def _genRelationRte(genCtx):
     # 'randomAllowedTableName()'
-    query = ''
+    query = ""
     query += genCtx.getRteNameEnforcingRteLimits()
     return query
 
+
 def _genCteRte(genCtx):
     # 'randomCteName()'
-    query = ''
+    query = ""
     query += genCtx.randomCteName()
     return query
 
+
 def _genTableFuncRte(genCtx):
     # 'randomTableFuncName()'
-    query = ''
+    query = ""
     query += randomTableFunc()
     return query
 
+
 def _genValuesRte(genCtx):
     # '( VALUES(random()) )'
-    query = ''
+    query = ""
     (fromVal, toVal) = getConfig().dataRange
-    query += ' ( VALUES(' + str(random.randint(fromVal,toVal)) + ' ) ) '
+    query += " ( VALUES(" + str(random.randint(fromVal, toVal)) + " ) ) "
     return query

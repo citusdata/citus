@@ -1,38 +1,39 @@
-from node_defs import *
-from config.config_parser import *
+import copy
 
 import yaml
-import copy
+from config.config_parser import *
+from node_defs import *
+
 
 class Config:
     def __init__(self):
-        configObj = Config.parseConfigFile('config/config.yaml')
+        configObj = Config.parseConfigFile("config/config.yaml")
 
-        self.targetTables = _dupTables(parseTableArray(configObj['targetTables']))
-        self.targetJoinTypes = parseJoinTypeArray(configObj['targetJoinTypes'])
-        self.targetRteTypes = parseRteTypeArray(configObj['targetRteTypes'])
-        self.targetRestrictOps = parseRestrictOpArray(configObj['targetRestrictOps'])
-        self.commonColName = configObj['commonColName']
-        self.targetRteCount = configObj['targetRteCount']
-        self.targetCteCount = configObj['targetCteCount']
-        self.targetCteRteCount = configObj['targetCteRteCount']
-        self.targetAggregateFunctions = configObj['targetAggregateFunctions']
-        self.targetRteTableFunctions = configObj['targetRteTableFunctions']
-        self.semiAntiJoin = configObj['semiAntiJoin']
-        self.cartesianProduct = configObj['cartesianProduct']
-        self.limit = configObj['limit']
-        self.orderby = configObj['orderby']
-        self.forceOrderbyWithLimit = configObj['forceOrderbyWithLimit']
-        self.aggregate = configObj['aggregate']
-        self.useAvgAtTopLevelTarget = configObj['useAvgAtTopLevelTarget']
-        self.interactiveMode = configObj['interactiveMode']
-        self.queryOutFile = configObj['queryOutFile']
-        self.ddlOutFile = configObj['ddlOutFile']
-        self.queryCount = configObj['queryCount']
-        self.dataRange = parseRange(configObj['dataRange'])
-        self.filterRange = parseRange(configObj['filterRange'])
-        self.limitRange = parseRange(configObj['limitRange'])
-        #print(self)
+        self.targetTables = _dupTables(parseTableArray(configObj["targetTables"]))
+        self.targetJoinTypes = parseJoinTypeArray(configObj["targetJoinTypes"])
+        self.targetRteTypes = parseRteTypeArray(configObj["targetRteTypes"])
+        self.targetRestrictOps = parseRestrictOpArray(configObj["targetRestrictOps"])
+        self.commonColName = configObj["commonColName"]
+        self.targetRteCount = configObj["targetRteCount"]
+        self.targetCteCount = configObj["targetCteCount"]
+        self.targetCteRteCount = configObj["targetCteRteCount"]
+        self.targetAggregateFunctions = configObj["targetAggregateFunctions"]
+        self.targetRteTableFunctions = configObj["targetRteTableFunctions"]
+        self.semiAntiJoin = configObj["semiAntiJoin"]
+        self.cartesianProduct = configObj["cartesianProduct"]
+        self.limit = configObj["limit"]
+        self.orderby = configObj["orderby"]
+        self.forceOrderbyWithLimit = configObj["forceOrderbyWithLimit"]
+        self.aggregate = configObj["aggregate"]
+        self.useAvgAtTopLevelTarget = configObj["useAvgAtTopLevelTarget"]
+        self.interactiveMode = configObj["interactiveMode"]
+        self.queryOutFile = configObj["queryOutFile"]
+        self.ddlOutFile = configObj["ddlOutFile"]
+        self.queryCount = configObj["queryCount"]
+        self.dataRange = parseRange(configObj["dataRange"])
+        self.filterRange = parseRange(configObj["filterRange"])
+        self.limitRange = parseRange(configObj["limitRange"])
+        # print(self)
 
     def __repr__(self):
         rep = "targetRteCount: {}\n".format(self.targetRteCount)
@@ -56,24 +57,30 @@ class Config:
     @staticmethod
     def parseConfigFile(path):
         try:
-            with open(path, 'r') as configFile:
+            with open(path, "r") as configFile:
                 return yaml.load(configFile, yaml.Loader)
         except:
-            raise BaseException('cannot parse config.yaml')
+            raise BaseException("cannot parse config.yaml")
+
 
 _config = None
+
+
 def resetConfig():
     global _config
     _config = Config()
 
+
 def getConfig():
     return _config
 
+
 def getAllTableNames():
-    '''returns table names from target tables given at config'''
+    """returns table names from target tables given at config"""
     tables = getConfig().targetTables
     tableNames = [table.name for table in tables]
     return tableNames
+
 
 def getMaxCountForTable(tableName):
     tables = getConfig().targetTables
@@ -82,11 +89,14 @@ def getMaxCountForTable(tableName):
     assert len(filtered) == 1
     return filtered[0].maxCount
 
+
 def isTableDistributed(table):
     return table.citusType == CitusType.DISTRIBUTED
 
+
 def isTableReference(table):
     return table.citusType == CitusType.REFERENCE
+
 
 def _dupTables(tables):
     dupTables = []
@@ -96,6 +106,6 @@ def _dupTables(tables):
             dupTable = copy.deepcopy(table)
             dupTable.name += str(dupIdx)
             dupTables.append(dupTable)
-        table.name += '0'
+        table.name += "0"
     tables.extend(dupTables)
     return tables
