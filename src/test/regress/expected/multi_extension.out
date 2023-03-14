@@ -1326,10 +1326,8 @@ SELECT * FROM multi_extension.print_extension_changes();
  previous_object |                   current_object
 ---------------------------------------------------------------------
                  | function citus_stats_tenants(boolean) SETOF record
-                 | function citus_stats_tenants_storage() SETOF record
                  | view citus_stats_tenants
-                 | view citus_stats_tenants_storage
-(4 rows)
+(2 rows)
 
 DROP TABLE multi_extension.prev_objects, multi_extension.extension_diff;
 -- show running version
