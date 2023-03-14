@@ -43,8 +43,6 @@ that are missing in earlier minor versions.
   ./configure
   make
   make install
-  # Optionally, you might instead want to use `make install-all`
-  # since `multi_extension` regression test would fail due to missing downgrade scripts.
   cd src/test/regress
 
   pip install pipenv
@@ -81,8 +79,6 @@ that are missing in earlier minor versions.
   ./configure
   make
   sudo make install
-  # Optionally, you might instead want to use `sudo make install-all`
-  # since `multi_extension` regression test would fail due to missing downgrade scripts.
   cd src/test/regress
 
   pip install pipenv
@@ -131,8 +127,6 @@ that are missing in earlier minor versions.
   PG_CONFIG=/usr/pgsql-14/bin/pg_config ./configure
   make
   sudo make install
-  # Optionally, you might instead want to use `sudo make install-all`
-  # since `multi_extension` regression test would fail due to missing downgrade scripts.
   cd src/test/regress
 
   pip install pipenv

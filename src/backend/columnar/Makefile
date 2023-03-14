@@ -18,6 +18,3 @@ DATA = $(columnar_sql_files) \
 PG_CPPFLAGS += -I$(libpq_srcdir) -I$(safestringlib_srcdir)/include
 
 include $(citus_top_builddir)/Makefile.global
-
-.PHONY: install-all
-install-all: install
