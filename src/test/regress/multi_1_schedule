@@ -19,7 +19,7 @@ test: multi_extension
 test: single_node
 test: relation_access_tracking_single_node
 test: single_node_truncate
-test: multi_test_helpers multi_test_helpers_superuser
+test: multi_test_helpers multi_test_helpers_superuser multi_create_fdw
 test: multi_cluster_management
 
 # below tests are placed right after multi_cluster_management as we do
@@ -90,13 +90,6 @@ test: partitioning_issue_3970
 test: drop_partitioned_table
 test: multi_fix_partition_shard_index_names
 test: partition_wise_join
-
-# ----------
-# Tests for foreign data wrapper support
-# ----------
-test: multi_create_fdw
-
-
 
 # ----------
 # Tests for statistics propagation
