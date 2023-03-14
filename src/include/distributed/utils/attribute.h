@@ -21,15 +21,15 @@ typedef struct TenantStats
 
 	int colocationGroupId;
 
-	int selectCount;
-	double totalSelectTime;
-	int selectsInLastPeriod;
-	int selectsInThisPeriod;
+	int readCount;
+	double totalReadTime;
+	int readsInLastPeriod;
+	int readsInThisPeriod;
 
-	int insertCount;
-	double totalInsertTime;
-	int insertsInLastPeriod;
-	int insertsInThisPeriod;
+	int writeCount;
+	double totalWriteTime;
+	int writesInLastPeriod;
+	int writesInThisPeriod;
 
 	time_t lastQueryTime;
 

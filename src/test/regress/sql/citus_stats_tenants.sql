@@ -24,9 +24,9 @@ SELECT create_reference_table('ref_tbl');
 
 INSERT INTO dist_tbl VALUES (1, 'abcd');
 INSERT INTO dist_tbl VALUES (2, 'abcd');
-INSERT INTO dist_tbl VALUES (3, 'abcd');
-INSERT INTO dist_tbl VALUES (4, 'abcd');
-INSERT INTO dist_tbl VALUES (5, 'abcd');
+UPDATE dist_tbl SET b = a + 1 WHERE a = 3;
+UPDATE dist_tbl SET b = a + 1 WHERE a = 4;
+DELETE FROM dist_tbl WHERE a = 5;
 
 \c - - - :worker_1_port
 SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, query_count_in_this_period, query_count_in_last_period FROM citus_stats_tenants ORDER BY tenant_attribute;
