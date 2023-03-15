@@ -64,6 +64,8 @@ static void MultiTenantMonitorSMInit(void);
 static int CreateTenantStats(MultiTenantMonitor *monitor, time_t queryTime);
 static int FindTenantStats(MultiTenantMonitor *monitor);
 static size_t MultiTenantMonitorshmemSize(void);
+static char * ExtractTopComment(const char *inputString);
+static char * Substring(const char *str, int start, int end);
 static char * EscapeCommentChars(const char *str);
 static char * UnescapeCommentChars(const char *str);
 
@@ -204,7 +206,7 @@ AttributeQueryIfAnnotated(const char *query_string, CmdType commandType)
 
 	if (strncmp(ATTRIBUTE_PREFIX, query_string, strlen(ATTRIBUTE_PREFIX)) == 0)
 	{
-		char *annotation = extractTopComment(query_string);
+		char *annotation = ExtractTopComment(query_string);
 		if (annotation != NULL)
 		{
 			Datum jsonbDatum = DirectFunctionCall1(jsonb_in, PointerGetDatum(annotation));
@@ -669,33 +671,37 @@ MultiTenantMonitorshmemSize(void)
 
 
 /*
- * extractTopComment extracts the top-level multi-line comment from a given input string.
+ * ExtractTopComment extracts the top-level multi-line comment from a given input string.
  */
 static char *
-extractTopComment(const char *inputString)
+ExtractTopComment(const char *inputString)
 {
 	int commentStartCharsLength = 2;
-	if (strlen(inputString) < commentStartCharsLength)
+	int inputStringLen = strlen(inputString);
+	if (inputStringLen < commentStartCharsLength)
 	{
 		return NULL;
 	}
 
-	int i = 0;
+	int commentEndCharsIndex = 0;
 
 	/* If query starts with a comment */
-	if (inputString[i] == '/' && inputString[i + 1] == '*')
+	if (inputString[commentEndCharsIndex] == '/' && inputString[commentEndCharsIndex +
+																1] == '*')
 	{
 		/* Skip the comment start characters */
-		i += 2;
-		while (inputString[i] && (inputString[i] != '*' && inputString[i + 1] != '/'))
+		commentEndCharsIndex += commentStartCharsLength;
+		while (inputString[commentEndCharsIndex] && commentEndCharsIndex <
+			   inputStringLen && !(inputString[commentEndCharsIndex] == '*' &&
+								   inputString[commentEndCharsIndex + 1] == '/'))
 		{
-			i++;
+			commentEndCharsIndex++;
 		}
 	}
 
-	if (i > commentStartCharsLength)
+	if (commentEndCharsIndex > commentStartCharsLength)
 	{
-		return get_substring(inputString, commentStartCharsLength, i);
+		return Substring(inputString, commentStartCharsLength, commentEndCharsIndex);
 	}
 	else
 	{
@@ -704,8 +710,9 @@ extractTopComment(const char *inputString)
 }
 
 
+/* Extracts a substring from the input string between the specified start and end indices.*/
 static char *
-get_substring(const char *str, int start, int end)
+Substring(const char *str, int start, int end)
 {
 	int len = strlen(str);
 
