@@ -23,6 +23,7 @@
 #include "utils/builtins.h"
 #include "utils/json.h"
 #include "distributed/utils/attribute.h"
+#include "common/base64.h"
 
 #include <time.h>
 
@@ -30,7 +31,7 @@ static void AttributeMetricsIfApplicable(void);
 
 ExecutorEnd_hook_type prev_ExecutorEnd = NULL;
 
-#define ATTRIBUTE_PREFIX "/*{"
+#define ATTRIBUTE_PREFIX "/*{\"tId\":"
 #define ATTRIBUTE_STRING_FORMAT "/*{\"tId\":%s,\"cId\":%d}*/"
 #define CITUS_STATS_TENANTS_COLUMNS 7
 #define ONE_QUERY_SCORE 1000000000
@@ -60,7 +61,10 @@ static void MultiTenantMonitorSMInit(void);
 static int CreateTenantStats(MultiTenantMonitor *monitor);
 static int FindTenantStats(MultiTenantMonitor *monitor);
 static size_t MultiTenantMonitorshmemSize(void);
-static char * extractTopComment(const char *inputString);
+static char * ExtractTopComment(const char *inputString);
+static char * Substring(const char *str, int start, int end);
+static char * EscapeCommentChars(const char *str);
+static char * UnescapeCommentChars(const char *str);
 
 int MultiTenantMonitoringLogLevel = CITUS_LOG_LEVEL_OFF;
 int CitusStatsTenantsPeriod = (time_t) 60;
@@ -68,6 +72,7 @@ int CitusStatsTenantsLimit = 10;
 
 
 PG_FUNCTION_INFO_V1(citus_stats_tenants);
+PG_FUNCTION_INFO_V1(clean_citus_stats_tenants);
 
 
 /*
@@ -128,12 +133,12 @@ citus_stats_tenants(PG_FUNCTION_ARGS)
 
 		values[0] = Int32GetDatum(tenantStats->colocationGroupId);
 		values[1] = PointerGetDatum(cstring_to_text(tenantStats->tenantAttribute));
-		values[2] = Int32GetDatum(tenantStats->selectsInThisPeriod);
-		values[3] = Int32GetDatum(tenantStats->selectsInLastPeriod);
-		values[4] = Int32GetDatum(tenantStats->selectsInThisPeriod +
-								  tenantStats->insertsInThisPeriod);
-		values[5] = Int32GetDatum(tenantStats->selectsInLastPeriod +
-								  tenantStats->insertsInLastPeriod);
+		values[2] = Int32GetDatum(tenantStats->readsInThisPeriod);
+		values[3] = Int32GetDatum(tenantStats->readsInLastPeriod);
+		values[4] = Int32GetDatum(tenantStats->readsInThisPeriod +
+								  tenantStats->writesInThisPeriod);
+		values[5] = Int32GetDatum(tenantStats->readsInLastPeriod +
+								  tenantStats->writesInLastPeriod);
 		values[6] = Int64GetDatum(tenantStats->score);
 
 		tuplestore_putvalues(tupleStore, tupleDescriptor, values, isNulls);
@@ -146,11 +151,27 @@ citus_stats_tenants(PG_FUNCTION_ARGS)
 
 
 /*
+ * clean_citus_stats_tenants cleans the citus_stats_tenants monitor.
+ */
+Datum
+clean_citus_stats_tenants(PG_FUNCTION_ARGS)
+{
+	MultiTenantMonitor *monitor = GetMultiTenantMonitor();
+	monitor->tenantCount = 0;
+	monitor->periodStart = time(0);
+
+	PG_RETURN_VOID();
+}
+
+
+/*
  * AttributeQueryIfAnnotated assigns the attributes of tenant if the query is annotated.
  */
 void
 AttributeQueryIfAnnotated(const char *query_string, CmdType commandType)
 {
+	strcpy_s(attributeToTenant, sizeof(attributeToTenant), "");
+
 	attributeCommandType = commandType;
 
 	if (query_string == NULL)
@@ -158,34 +179,32 @@ AttributeQueryIfAnnotated(const char *query_string, CmdType commandType)
 		return;
 	}
 
-	char *annotation = extractTopComment(query_string);
-	if (annotation != NULL)
+	if (strncmp(ATTRIBUTE_PREFIX, query_string, strlen(ATTRIBUTE_PREFIX)) == 0)
 	{
-		Datum jsonbDatum = DirectFunctionCall1(jsonb_in, PointerGetDatum(annotation));
-
-		text *tenantIdTextP = ExtractFieldTextP(jsonbDatum, "tId");
-		if (tenantIdTextP != NULL)
+		char *annotation = ExtractTopComment(query_string);
+		if (annotation != NULL)
 		{
-			char *tenantId = text_to_cstring(tenantIdTextP);
-			strcpy_s(attributeToTenant, sizeof(attributeToTenant), tenantId);
-		}
+			Datum jsonbDatum = DirectFunctionCall1(jsonb_in, PointerGetDatum(annotation));
 
-		colocationGroupId = ExtractFieldInt32(jsonbDatum, "cId", 0);
+			text *tenantIdTextP = ExtractFieldTextP(jsonbDatum, "tId");
+			if (tenantIdTextP != NULL)
+			{
+				char *tenantId = UnescapeCommentChars(text_to_cstring(tenantIdTextP));
+				strcpy_s(attributeToTenant, sizeof(attributeToTenant), tenantId);
+			}
 
-		if (MultiTenantMonitoringLogLevel != CITUS_LOG_LEVEL_OFF)
-		{
-			ereport(NOTICE, (errmsg(
-								 "attributing query to tenant: %s, colocationGroupId: %d",
-								 quote_literal_cstr(attributeToTenant),
-								 colocationGroupId)));
+			colocationGroupId = ExtractFieldInt32(jsonbDatum, "cId", 0);
+
+			if (MultiTenantMonitoringLogLevel != CITUS_LOG_LEVEL_OFF)
+			{
+				ereport(NOTICE, (errmsg(
+									 "attributing query to tenant: %s, colocationGroupId: %d",
+									 quote_literal_cstr(attributeToTenant),
+									 colocationGroupId)));
+			}
 		}
 	}
-	else
-	{
-		/*Assert(attributeToTenant == NULL); */
-	}
 
-	/*DetachSegment(); */
 	attributeToTenantStart = clock();
 }
 
@@ -201,12 +220,15 @@ AnnotateQuery(char *queryString, char *partitionColumn, int colocationId)
 		return queryString;
 	}
 
+	char *commentCharsEscaped = EscapeCommentChars(partitionColumn);
 	StringInfo escapedSourceName = makeStringInfo();
-	escape_json(escapedSourceName, partitionColumn);
+
+	escape_json(escapedSourceName, commentCharsEscaped);
 
 	StringInfo newQuery = makeStringInfo();
 	appendStringInfo(newQuery, ATTRIBUTE_STRING_FORMAT, escapedSourceName->data,
 					 colocationId);
+
 	appendStringInfoString(newQuery, queryString);
 
 	return newQuery->data;
@@ -308,15 +330,17 @@ AttributeMetricsIfApplicable()
 
 		if (attributeCommandType == CMD_SELECT)
 		{
-			tenantStats->selectCount++;
-			tenantStats->selectsInThisPeriod++;
-			tenantStats->totalSelectTime += cpu_time_used;
+			tenantStats->readCount++;
+			tenantStats->readsInThisPeriod++;
+			tenantStats->totalReadTime += cpu_time_used;
 		}
-		else if (attributeCommandType == CMD_INSERT)
+		else if (attributeCommandType == CMD_UPDATE ||
+				 attributeCommandType == CMD_INSERT ||
+				 attributeCommandType == CMD_DELETE)
 		{
-			tenantStats->insertCount++;
-			tenantStats->insertsInThisPeriod++;
-			tenantStats->totalInsertTime += cpu_time_used;
+			tenantStats->writeCount++;
+			tenantStats->writesInThisPeriod++;
+			tenantStats->totalWriteTime += cpu_time_used;
 		}
 
 		LWLockRelease(&monitor->lock);
@@ -337,15 +361,15 @@ AttributeMetricsIfApplicable()
 
 		if (MultiTenantMonitoringLogLevel != CITUS_LOG_LEVEL_OFF)
 		{
-			ereport(NOTICE, (errmsg("total select count = %d, total CPU time = %f "
+			ereport(NOTICE, (errmsg("total read count = %d, total read CPU time = %f "
 									"to tenant: %s",
-									tenantStats->selectCount,
-									tenantStats->totalSelectTime,
+									tenantStats->readCount,
+									tenantStats->totalReadTime,
 									tenantStats->tenantAttribute)));
 		}
 	}
 
-	/*attributeToTenant = NULL; */
+	strcpy_s(attributeToTenant, sizeof(attributeToTenant), "");
 }
 
 
@@ -366,13 +390,13 @@ UpdatePeriodsIfNecessary(MultiTenantMonitor *monitor, TenantStats *tenantStats)
 	 * but there are some query count for this period we move them to the last period.
 	 */
 	if (tenantStats->lastQueryTime < monitor->periodStart &&
-		(tenantStats->insertsInThisPeriod || tenantStats->selectsInThisPeriod))
+		(tenantStats->writesInThisPeriod || tenantStats->readsInThisPeriod))
 	{
-		tenantStats->insertsInLastPeriod = tenantStats->insertsInThisPeriod;
-		tenantStats->insertsInThisPeriod = 0;
+		tenantStats->writesInLastPeriod = tenantStats->writesInThisPeriod;
+		tenantStats->writesInThisPeriod = 0;
 
-		tenantStats->selectsInLastPeriod = tenantStats->selectsInThisPeriod;
-		tenantStats->selectsInThisPeriod = 0;
+		tenantStats->readsInLastPeriod = tenantStats->readsInThisPeriod;
+		tenantStats->readsInThisPeriod = 0;
 	}
 
 	/*
@@ -380,9 +404,9 @@ UpdatePeriodsIfNecessary(MultiTenantMonitor *monitor, TenantStats *tenantStats)
 	 */
 	if (tenantStats->lastQueryTime < monitor->periodStart - CitusStatsTenantsPeriod)
 	{
-		tenantStats->insertsInLastPeriod = 0;
+		tenantStats->writesInLastPeriod = 0;
 
-		tenantStats->selectsInLastPeriod = 0;
+		tenantStats->readsInLastPeriod = 0;
 	}
 }
 
@@ -526,6 +550,8 @@ CreateTenantStats(MultiTenantMonitor *monitor)
 {
 	int tenantIndex = monitor->tenantCount;
 
+	memset(&monitor->tenants[tenantIndex], 0, sizeof(monitor->tenants[tenantIndex]));
+
 	strcpy_s(monitor->tenants[tenantIndex].tenantAttribute,
 			 sizeof(monitor->tenants[tenantIndex].tenantAttribute), attributeToTenant);
 	monitor->tenants[tenantIndex].colocationGroupId = colocationGroupId;
@@ -579,32 +605,113 @@ MultiTenantMonitorshmemSize(void)
 
 
 /*
- * extractTopComment extracts the top-level multi-line comment from a given input string.
+ * ExtractTopComment extracts the top-level multi-line comment from a given input string.
  */
 static char *
-extractTopComment(const char *inputString)
+ExtractTopComment(const char *inputString)
 {
-	int i = 0;
+	int commentStartCharsLength = 2;
+	int inputStringLen = strlen(inputString);
+	if (inputStringLen < commentStartCharsLength)
+	{
+		return NULL;
+	}
+
+	int commentEndCharsIndex = 0;
 
 	/* If query starts with a comment */
-	if (inputString[i] == '/' && inputString[i + 1] == '*')
+	if (inputString[commentEndCharsIndex] == '/' &&
+		inputString[commentEndCharsIndex + 1] == '*')
 	{
 		/* Skip the comment start characters */
-		i += 2;
-		while (inputString[i] && (inputString[i] != '*' && inputString[i + 1] != '/'))
+		commentEndCharsIndex += commentStartCharsLength;
+		while (inputString[commentEndCharsIndex] &&
+			   commentEndCharsIndex < inputStringLen &&
+			   !(inputString[commentEndCharsIndex] == '*' &&
+				 inputString [commentEndCharsIndex + 1] == '/'))
 		{
-			i++;
+			commentEndCharsIndex++;
 		}
 	}
 
-	if (i > 2)
+	if (commentEndCharsIndex > commentStartCharsLength)
 	{
-		char *result = (char *) palloc(sizeof(char) * (i - 1));
-		strncpy(result, inputString + 2, i - 2);
-		return result;
+		return Substring(inputString, commentStartCharsLength, commentEndCharsIndex);
 	}
 	else
 	{
 		return NULL;
 	}
+}
+
+
+/* Extracts a substring from the input string between the specified start and end indices.*/
+static char *
+Substring(const char *str, int start, int end)
+{
+	int len = strlen(str);
+
+	/* Ensure start and end are within the bounds of the string */
+	if (start < 0 || end > len || start > end)
+	{
+		return NULL;
+	}
+
+	/* Allocate memory for the substring */
+	char *substr = (char *) palloc((end - start + 1) * sizeof(char));
+
+	/* Copy the substring to the new memory location */
+	strncpy_s(substr, end - start + 1, str + start, end - start);
+
+	/* Add null terminator to end the substring */
+	substr[end - start] = '\0';
+
+	return substr;
+}
+
+
+/*  EscapeCommentChars adds a backslash before each occurrence of '*' or '/' in the input string */
+static char *
+EscapeCommentChars(const char *str)
+{
+	int len = strlen(str);
+	char *new_str = (char *) malloc(len * 2 + 1);
+	int j = 0;
+
+	for (int i = 0; i < len; i++)
+	{
+		if (str[i] == '*' || str[i] == '/')
+		{
+			new_str[j++] = '\\';
+		}
+		new_str[j++] = str[i];
+	}
+	new_str[j] = '\0';
+
+	return new_str;
+}
+
+
+/*  UnescapeCommentChars removes the backslash that precedes '*' or '/' in the input string. */
+static char *
+UnescapeCommentChars(const char *str)
+{
+	int len = strlen(str);
+	char *new_str = (char *) malloc(len + 1);
+	int j = 0;
+
+	for (int i = 0; i < len; i++)
+	{
+		if (str[i] == '\\' && i < len - 1)
+		{
+			if (str[i + 1] == '*' || str[i + 1] == '/')
+			{
+				i++;
+			}
+		}
+		new_str[j++] = str[i];
+	}
+	new_str[j] = '\0';
+
+	return new_str;
 }
