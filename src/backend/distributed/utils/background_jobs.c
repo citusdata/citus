@@ -121,10 +121,11 @@ static volatile sig_atomic_t GotSigterm = false;
 static volatile sig_atomic_t GotSigint = false;
 static volatile sig_atomic_t GotSighup = false;
 
+static int parallel_moves_per_node[100] = { 0 };
+
 PG_FUNCTION_INFO_V1(citus_job_cancel);
 PG_FUNCTION_INFO_V1(citus_job_wait);
 PG_FUNCTION_INFO_V1(citus_task_wait);
-
 
 /*
  * pg_catalog.citus_job_cancel(jobid bigint) void
@@ -568,6 +569,17 @@ AssignRunnableTaskToNewExecutor(BackgroundTask *runnableTask,
 		return NEW_EXECUTOR_EXCEEDS_LIMIT;
 	}
 
+	if (parallel_moves_per_node[runnableTask->source_id] == 3 ||
+		parallel_moves_per_node[runnableTask->target_id] == 3)
+	{
+		return TASK_BLOCKED_ON_TOKEN;
+	}
+	else
+	{
+		parallel_moves_per_node[runnableTask->source_id] += 1;
+		parallel_moves_per_node[runnableTask->target_id] += 1;
+	}
+
 	/* assign the allocated executor to the runnable task and increment total executor count */
 	bool handleEntryFound = false;
 	BackgroundExecutorHashEntry *handleEntry = hash_search(
@@ -853,6 +865,12 @@ TaskEnded(TaskExecutionContext *taskExecutionContext)
 	 */
 	UNSET_NULLABLE_FIELD(task, pid);
 	task->message = handleEntry->message->data;
+
+	if (task->source_id && task->target_id)
+	{
+		parallel_moves_per_node[task->source_id] -= 1;
+		parallel_moves_per_node[task->target_id] -= 1;
+	}
 
 	UpdateBackgroundTask(task);
 	UpdateDependingTasks(task);
