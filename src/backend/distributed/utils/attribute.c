@@ -23,6 +23,7 @@
 #include "utils/builtins.h"
 #include "utils/json.h"
 #include "distributed/utils/attribute.h"
+#include "common/base64.h"
 
 #include <time.h>
 
@@ -171,7 +172,7 @@ AttributeQueryIfAnnotated(const char *query_string, CmdType commandType)
 			text *tenantIdTextP = ExtractFieldTextP(jsonbDatum, "tId");
 			if (tenantIdTextP != NULL)
 			{
-				char *tenantId = text_to_cstring(tenantIdTextP);
+				char *tenantId = UnescapeCommentChars(text_to_cstring(tenantIdTextP));
 				strcpy_s(attributeToTenant, sizeof(attributeToTenant), tenantId);
 			}
 
@@ -202,12 +203,15 @@ AnnotateQuery(char *queryString, char *partitionColumn, int colocationId)
 		return queryString;
 	}
 
+	char *commentCharsEscaped = EscapeCommentChars(partitionColumn);
 	StringInfo escapedSourceName = makeStringInfo();
-	escape_json(escapedSourceName, partitionColumn);
+
+	escape_json(escapedSourceName, commentCharsEscaped);
 
 	StringInfo newQuery = makeStringInfo();
 	appendStringInfo(newQuery, ATTRIBUTE_STRING_FORMAT, escapedSourceName->data,
 					 colocationId);
+
 	appendStringInfoString(newQuery, queryString);
 
 	return newQuery->data;
