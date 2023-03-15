@@ -215,9 +215,9 @@ ORDER BY 1;
  function remove_local_tables_from_metadata()
  function replicate_reference_tables(citus.shard_transfer_mode)
  function replicate_table_shards(regclass,integer,integer,bigint[],citus.shard_transfer_mode)
- function replication_origin_session_end_no_publish()
- function replication_origin_session_is_no_publish()
- function replication_origin_session_start_no_publish()
+ function citus_internal_is_replication_origin_tracking_active() boolean
+ function citus_internal_start_replication_origin_tracking() void
+ function citus_internal_stop_replication_origin_tracking() void
  function role_exists(name)
  function run_command_on_all_nodes(text,boolean,boolean)
  function run_command_on_colocated_placements(regclass,regclass,text,boolean)
