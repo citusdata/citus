@@ -627,7 +627,8 @@ ExtractTopComment(const char *inputString)
 		commentEndCharsIndex += commentStartCharsLength;
 		while (inputString[commentEndCharsIndex] && commentEndCharsIndex <
 			   inputStringLen && !(inputString[commentEndCharsIndex] == '*' &&
-								   inputString[commentEndCharsIndex + 1] == '/'))
+								   inputString
+								   [commentEndCharsIndex + 1] == '/'))
 		{
 			commentEndCharsIndex++;
 		}
