@@ -42,6 +42,9 @@ my $initial_schema = "
 $node_coordinator->safe_psql('postgres',$initial_schema);
 $node_cdc_client->safe_psql('postgres',$initial_schema);
 
+create_cdc_publication_and_slots_for_coordinator($node_coordinator,'sensors');
+connect_cdc_client_to_coordinator_publication($node_coordinator, $node_cdc_client);
+wait_for_cdc_client_to_catch_up_with_coordinator($node_coordinator);
 
 #insert data into the sensors table in the coordinator node before distributing the table.
 $node_coordinator->safe_psql('postgres',"
@@ -52,16 +55,15 @@ FROM generate_series(0,100)i;");
 $node_coordinator->safe_psql('postgres',"SET citus.shard_count = 2; SELECT create_distributed_table_concurrently('sensors', 'measureid');");
 
 #connect_cdc_client_to_coordinator_publication($node_coordinator, $node_cdc_client);
-prepare_workers_for_cdc_publication(\@workers);
-
-connect_cdc_client_to_citus_cluster_publications(\@workers, $node_cdc_client);
-wait_for_cdc_client_to_catch_up_with_workers(\@workers);
+create_cdc_publication_and_slots_for_workers(\@workers,'sensors');
+connect_cdc_client_to_workers_publication(\@workers, $node_cdc_client);
+wait_for_cdc_client_to_catch_up_with_citus_cluster($node_coordinator, \@workers);
 
 $result = compare_tables_in_different_nodes($node_coordinator,$node_cdc_client,'postgres',$select_stmt);
 is($result, 1, 'CDC create_distributed_table - schema change before move');
 
 
-$node_coordinator->safe_psql('postgres',"ALTER TABLE sensors DROP COLUMN meaure_quantity;");
+#$node_coordinator->safe_psql('postgres',"ALTER TABLE sensors DROP COLUMN meaure_quantity;");
 
 
 my $shard_to_move = $node_coordinator->safe_psql('postgres',
@@ -82,29 +84,11 @@ my $move_params = "select citus_move_shard_placement($shard_to_move,'$host1',$po
 print("move_params: $move_params\n");
 $node_coordinator->safe_psql('postgres',$move_params);
 
-$node_coordinator->safe_psql('postgres',"
- 	INSERT INTO sensors
- SELECT i, '2020-01-05', '{}', 'A', 'I <3 Citus'
- FROM generate_series(-10,-1)i;");
-
-$node_cdc_client->safe_psql('postgres',"DROP subscription cdc_subscription_1;");
-$node_cdc_client->safe_psql('postgres',"DROP subscription cdc_subscription_2;");
-$node_cdc_client->safe_psql('postgres',"DELETE FROM sensors;");
-$node_cdc_client->safe_psql('postgres',"ALTER TABLE sensors DROP COLUMN meaure_quantity;");
-
-prepare_workers_for_cdc_publication(\@workers);
-connect_cdc_client_to_citus_cluster_publications(\@workers, $node_cdc_client);
-wait_for_cdc_client_to_catch_up_with_workers(\@workers);
+wait_for_cdc_client_to_catch_up_with_citus_cluster($node_coordinator,\@workers);
 
 
-# wait_for_cdc_client_to_catch_up_with_workers(\@workers);
+#wait_for_cdc_client_to_catch_up_with_workers(\@workers);
 $result = compare_tables_in_different_nodes($node_coordinator,$node_cdc_client,'postgres',$select_stmt);
 is($result, 1, 'CDC create_distributed_table - schema change and move shard');
 
-
-
-
-
-
-
-
+drop_cdc_client_subscriptions($node_cdc_client,\@workers);

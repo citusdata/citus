@@ -3553,7 +3553,6 @@ InitializeCopyShardState(CopyShardState *shardState,
 
 		if (!isPublishable)
 		{
-			/*elog(LOG,"InitializeCopyShardState: calling SetupReplicationOriginRemoteSession conn id: %lu", connection->connectionId); */
 			SetupReplicationOriginRemoteSession(connection);
 		}
 

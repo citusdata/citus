@@ -1290,12 +1290,10 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
-		"citus.enable_replication_origin_session",
-		gettext_noop("Enable replication origin session for avoiding publication of WAL "
-					 "records for shard splits,moves and "
-					 "create_distributed_table/undistribute_table operations."),
+		"citus.enable_change_data_capture",
+		gettext_noop("Enables using replication origin tracking for change data capture"),
 		NULL,
-		&UseReplicationOriginsForInternalTransfers,
+		&enable_change_data_capture,
 		false,
 		PGC_USERSET,
 		GUC_STANDARD,

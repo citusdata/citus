@@ -133,7 +133,10 @@ typedef struct CitusCopyDestReceiver
 	/* if true, should copy to local placements in the current session */
 	bool shouldUseLocalCopy;
 
-	/* if true, the operations in the receiver can be published.*/
+	/*
+	 * if true, the data from this dest receiver should be published for CDC clients.
+	 * This is set tot false for internal transfers like shard split/move/rebalance etc.
+	 */
 	bool isPublishable;
 
 	/*

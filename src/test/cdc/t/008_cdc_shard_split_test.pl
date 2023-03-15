@@ -10,9 +10,15 @@ use cdctestlib;
 # Initialize co-ordinator node
 my $select_stmt = qq(SELECT * FROM sensors ORDER BY measureid, eventdatetime, measure_data;);
 my $result = 0;
-
+my $citus_config = "
+citus.shard_count = 2
+citus.shard_replication_factor = 1
+";
 ### Create the citus cluster with coordinator and two worker nodes
-our ($node_coordinator, @workers) = create_citus_cluster(2,"localhost",57636);
+our ($node_coordinator, @workers) = create_citus_cluster(1,"localhost",57636, $citus_config);
+
+my $command = "SELECT citus_set_node_property('localhost', 57636, 'shouldhaveshards', true);";
+$node_coordinator->safe_psql('postgres',$command);
 
 our $node_cdc_client = create_node('cdc_client', 0, "localhost", 57639);
 
@@ -41,55 +47,36 @@ connect_cdc_client_to_coordinator_publication($node_coordinator, $node_cdc_clien
 wait_for_cdc_client_to_catch_up_with_coordinator($node_coordinator);
 
 # Distribut the sensors table to worker nodes.
+
 $node_coordinator->safe_psql('postgres',"SELECT create_distributed_table('sensors', 'measureid');");
+$node_coordinator->safe_psql('postgres','\d');
 
 create_cdc_publication_and_slots_for_workers(\@workers,'sensors');
 connect_cdc_client_to_workers_publication(\@workers, $node_cdc_client);
 wait_for_cdc_client_to_catch_up_with_citus_cluster($node_coordinator, \@workers);
 
+# Compare the data in the coordinator and cdc client nodes.
+$result = compare_tables_in_different_nodes($node_coordinator,$node_cdc_client,'postgres',$select_stmt);
+is($result, 1, 'CDC split test - distributed table create data');
+
 # Insert some data to the sensors table in the coordinator node.
 $node_coordinator->safe_psql('postgres',"
  INSERT INTO sensors
 	SELECT i, '2020-01-05', '{}', 11011.10, 'A', 'I <3 Citus'
-	FROM generate_series(0,10)i;");
-
-# Wait for the data changes to be replicated to the cdc client node.
-wait_for_cdc_client_to_catch_up_with_citus_cluster($node_coordinator, \@workers);
-
-$result = compare_tables_in_different_nodes($node_coordinator,$node_cdc_client,'postgres',$select_stmt);
-is($result, 1, 'CDC basic test - distributed table insert data');
-
-
-# Update some data in the sensors table in the coordinator node.
-$node_coordinator->safe_psql('postgres',"
-UPDATE sensors
-	SET
-	eventdatetime=NOW(),
-	measure_data = jsonb_set(measure_data, '{val}', measureid::text::jsonb , TRUE),
-	measure_status = CASE
-		WHEN measureid % 2 = 0
-			THEN 'y'
-			ELSE 'n'
-		END,
-	measure_comment= 'Comment:' || measureid::text;");
-
-# Wait for the data changes to be replicated to the cdc client node.
-wait_for_cdc_client_to_catch_up_with_citus_cluster($node_coordinator, \@workers);
+	FROM generate_series(-100,100)i;");
 
 # Compare the data in the coordinator and cdc client nodes.
 $result = compare_tables_in_different_nodes($node_coordinator,$node_cdc_client,'postgres',$select_stmt);
-is($result, 1, 'CDC basic test - distributed table update data');
-
-# Delete some data from the sensors table in the coordinator node.
-$node_coordinator->safe_psql('postgres',"
-DELETE FROM sensors
-    WHERE (measureid % 2) = 0;");
+is($result, 1, 'CDC split test - distributed table insert data');
 
 # Wait for the data changes to be replicated to the cdc client node.
 wait_for_cdc_client_to_catch_up_with_citus_cluster($node_coordinator, \@workers);
 
+$node_coordinator->safe_psql('postgres',"
+ SELECT citus_split_shard_by_split_points(102008,ARRAY['-50'],ARRAY[1,2], 'block_writes');");
+
 # Compare the data in the coordinator and cdc client nodes.
 $result = compare_tables_in_different_nodes($node_coordinator,$node_cdc_client,'postgres',$select_stmt);
-is($result, 1, 'CDC basic test - distributed table delete data');
+is($result, 1, 'CDC split test - distributed table split data');
 
 drop_cdc_client_subscriptions($node_cdc_client,\@workers);

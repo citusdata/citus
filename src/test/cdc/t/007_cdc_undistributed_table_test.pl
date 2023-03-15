@@ -2,7 +2,7 @@
 use strict;
 use warnings;
 
-use Test::More tests => 3;
+use Test::More tests => 4;
 
 use lib './t';
 use cdctestlib;
@@ -13,6 +13,9 @@ my $result = 0;
 
 ### Create the citus cluster with coordinator and two worker nodes
 our ($node_coordinator, @workers) = create_citus_cluster(2,"localhost",57636);
+
+my $command = "SELECT citus_set_node_property('localhost', 57636, 'shouldhaveshards', true);";
+$node_coordinator->safe_psql('postgres',$command);
 
 our $node_cdc_client = create_node('cdc_client', 0, "localhost", 57639);
 
@@ -42,6 +45,7 @@ wait_for_cdc_client_to_catch_up_with_coordinator($node_coordinator);
 
 # Distribut the sensors table to worker nodes.
 $node_coordinator->safe_psql('postgres',"SELECT create_distributed_table('sensors', 'measureid');");
+$node_coordinator->safe_psql('postgres','\d');
 
 create_cdc_publication_and_slots_for_workers(\@workers,'sensors');
 connect_cdc_client_to_workers_publication(\@workers, $node_cdc_client);
@@ -84,6 +88,16 @@ is($result, 1, 'CDC basic test - distributed table update data');
 $node_coordinator->safe_psql('postgres',"
 DELETE FROM sensors
     WHERE (measureid % 2) = 0;");
+
+# Wait for the data changes to be replicated to the cdc client node.
+wait_for_cdc_client_to_catch_up_with_citus_cluster($node_coordinator, \@workers);
+
+# Compare the data in the coordinator and cdc client nodes.
+$result = compare_tables_in_different_nodes($node_coordinator,$node_cdc_client,'postgres',$select_stmt);
+is($result, 1, 'CDC basic test - distributed table delete data');
+
+$node_coordinator->safe_psql('postgres',"
+SELECT undistribute_table('sensors',cascade_via_foreign_keys=>true);");
 
 # Wait for the data changes to be replicated to the cdc client node.
 wait_for_cdc_client_to_catch_up_with_citus_cluster($node_coordinator, \@workers);

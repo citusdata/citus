@@ -42,10 +42,9 @@ $node_cdc_client->safe_psql('postgres',$initial_schema);
 # Distribut the sensors table to worker nodes.
 $node_coordinator->safe_psql('postgres',"SELECT create_distributed_table_concurrently('sensors', 'measureid');");
 
-prepare_workers_for_cdc_publication(\@workers);
-connect_cdc_client_to_citus_cluster_publications(\@workers, $node_cdc_client);
-
-wait_for_cdc_client_to_catch_up_with_workers(\@workers);
+create_cdc_publication_and_replication_slots_for_citus_cluster($node_coordinator, \@workers,'sensors');
+connect_cdc_client_to_citus_cluster_publications($node_coordinator, \@workers, $node_cdc_client);
+wait_for_cdc_client_to_catch_up_with_citus_cluster($node_coordinator, \@workers);
 
 # Insert some data to the sensors table in the coordinator node.
 $node_coordinator->safe_psql('postgres',"
@@ -54,7 +53,7 @@ $node_coordinator->safe_psql('postgres',"
 	FROM generate_series(0,10)i;");
 
 # Wait for the data changes to be replicated to the cdc client node.
-wait_for_cdc_client_to_catch_up_with_workers(\@workers);
+wait_for_cdc_client_to_catch_up_with_citus_cluster($node_coordinator, \@workers);
 
 
 $result = compare_tables_in_different_nodes($node_coordinator,$node_cdc_client,'postgres',$select_stmt);
@@ -75,7 +74,7 @@ UPDATE sensors
 	measure_comment= 'Comment:' || measureid::text;");
 
 # Wait for the data changes to be replicated to the cdc client node.
-wait_for_cdc_client_to_catch_up_with_workers(\@workers);
+wait_for_cdc_client_to_catch_up_with_citus_cluster($node_coordinator, \@workers);
 
 # Compare the data in the coordinator and cdc client nodes.
 $result = compare_tables_in_different_nodes($node_coordinator,$node_cdc_client,'postgres',$select_stmt);
@@ -87,16 +86,10 @@ DELETE FROM sensors
     WHERE (measureid % 2) = 0;");
 
 # Wait for the data changes to be replicated to the cdc client node.
-wait_for_cdc_client_to_catch_up_with_workers(\@workers);
+wait_for_cdc_client_to_catch_up_with_citus_cluster($node_coordinator, \@workers);
 
 # Compare the data in the coordinator and cdc client nodes.
 $result = compare_tables_in_different_nodes($node_coordinator,$node_cdc_client,'postgres',$select_stmt);
 is($result, 1, 'CDC test - create_distributed_table_concurrently delete data');
 
-
-
-
-
-
-
-
+drop_cdc_client_subscriptions($node_cdc_client,\@workers);

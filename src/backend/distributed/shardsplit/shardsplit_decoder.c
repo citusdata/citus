@@ -8,6 +8,7 @@
  *-------------------------------------------------------------------------
  */
 #include "postgres.h"
+#include "distributed/cdc_decoder.h"
 #include "distributed/shardinterval_utils.h"
 #include "distributed/shardsplit_shared_memory.h"
 #include "distributed/worker_shard_visibility.h"
@@ -20,13 +21,14 @@
 #include "catalog/pg_namespace.h"
 
 extern void _PG_output_plugin_init(OutputPluginCallbacks *cb);
-static LogicalDecodeChangeCB pgoutputChangeCB;
+static LogicalDecodeChangeCB ouputPluginChangeCB;
 
 static HTAB *SourceToDestinationShardMap = NULL;
 
 /* Plugin callback */
-static void split_change_cb(LogicalDecodingContext *ctx, ReorderBufferTXN *txn,
-							Relation relation, ReorderBufferChange *change);
+static void shard_split_and_cdc_change_cb(LogicalDecodingContext *ctx,
+										  ReorderBufferTXN *txn,
+										  Relation relation, ReorderBufferChange *change);
 
 /* Helper methods */
 static int32_t GetHashValueForIncomingTuple(Relation sourceShardRelation,
@@ -41,19 +43,13 @@ static Oid FindTargetRelationOid(Relation sourceShardRelation,
 static HeapTuple GetTupleForTargetSchema(HeapTuple sourceRelationTuple,
 										 TupleDesc sourceTupleDesc,
 										 TupleDesc targetTupleDesc);
-static bool replication_origin_filter_cb(LogicalDecodingContext *ctx, RepOriginId
-										 origin_id);
 
-static bool PublishChangesIfCdcSlot(LogicalDecodingContext *ctx, ReorderBufferTXN *txn,
-									Relation relation, ReorderBufferChange *change);
+inline static bool IsShardSplitSlot(char *replicationSlotName);
 
-static void handleSchemaChangesInRelation(Relation relation, Relation targetRelation,
-										  ReorderBufferChange *change);
 
-/* used in the replication_origin_filter_cb function. */
-#define InvalidRepOriginId 0
+#define CITUS_SHARD_SLOT_PREXIX "citus_shard_"
+#define CITUS_SHARD_SLOT_PREFIX_SIZE (sizeof(CITUS_SHARD_SLOT_PREXIX) - 1)
 
-#define CITUS_SHARD_PREFIX_SLOT "citus_shard_"
 
 /*
  * Postgres uses 'pgoutput' as default plugin for logical replication.
@@ -78,221 +74,58 @@ _PG_output_plugin_init(OutputPluginCallbacks *cb)
 	plugin_init(cb);
 
 	/* actual pgoutput callback will be called with the appropriate destination shard */
-	pgoutputChangeCB = cb->change_cb;
-	cb->change_cb = split_change_cb;
-	cb->filter_by_origin_cb = replication_origin_filter_cb;
+	ouputPluginChangeCB = cb->change_cb;
+	cb->change_cb = shard_split_and_cdc_change_cb;
+	InitCDCDecoder(cb, ouputPluginChangeCB);
 }
 
 
 /*
- * replication_origin_filter_cb call back function filters out publication of changes
- * originated from any other node other than the current node. This is
- * identified by the "origin_id" of the changes. The origin_id is set to
- * a non-zero value in the origin node as part of WAL replication.
+ *  Check if the replication slot is for Shard split by checking for prefix.
  */
-static bool
-replication_origin_filter_cb(LogicalDecodingContext *ctx, RepOriginId origin_id)
+inline static
+bool
+IsShardSplitSlot(char *replicationSlotName)
 {
-	if (origin_id != InvalidRepOriginId)
-	{
-		return true;
-	}
-	return false;
+	return strncmp(replicationSlotName, CITUS_SHARD_SLOT_PREXIX,
+				   CITUS_SHARD_SLOT_PREFIX_SIZE) == 0;
 }
 
 
 /*
- * PublishChangesIfCdcSlot checks if the current slot is a CDC slot. If so, it publishes
- * the changes as the change for the distributed table instead of shard.
- * If not, it returns false. It also skips the Citus metadata tables.
- */
-static bool
-PublishChangesIfCdcSlot(LogicalDecodingContext *ctx, ReorderBufferTXN *txn,
-						Relation relation, ReorderBufferChange *change)
-{
-	char *replicationSlotName = ctx->slot->data.name.data;
-	bool isCDCTranslated = false;
-	Relation targetRelation;
-
-	/* Check if the replication slot is CITUS_CDC_SLOT*/
-	if (replicationSlotName != NULL &&
-		strncmp(replicationSlotName, CITUS_SHARD_PREFIX_SLOT, strlen(
-					CITUS_SHARD_PREFIX_SLOT)) != 0)
-	{
-		/* Skip publishing changes for system relations in pg_catalog*/
-		if (relation->rd_rel->relnamespace == PG_CATALOG_NAMESPACE)
-		{
-			return true;
-		}
-
-		char *shardRelationName = RelationGetRelationName(relation);
-		uint64 shardId = ExtractShardIdFromTableName(shardRelationName, true);
-		if (shardId != INVALID_SHARD_ID && ShardExists(shardId))
-		{
-			if (ReferenceTableShardId(shardId))
-			{
-				/*For reference tables, publish the changes only from the coordinator node. */
-				if (!IsCoordinator())
-				{
-					return true;
-				}
-			}
-			else
-			{
-				/* try to get the distributed relation id for the shard */
-				Oid distributedRelationId = RelationIdForShard(shardId);
-
-				if (OidIsValid(distributedRelationId))
-				{
-					targetRelation = RelationIdGetRelation(distributedRelationId);
-					handleSchemaChangesInRelation(relation, targetRelation, change);
-					isCDCTranslated = true;
-				}
-			}
-		}
-
-		if (isCDCTranslated)
-		{
-			pgoutputChangeCB(ctx, txn, targetRelation, change);
-			RelationClose(targetRelation);
-		}
-		else
-		{
-			pgoutputChangeCB(ctx, txn, relation, change);
-		}
-		return true;
-	}
-	return false;
-}
-
-
-static HeapTuple
-GetTupleForTargetSchemaForCdc(HeapTuple sourceRelationTuple,
-							  TupleDesc sourceRelDesc,
-							  TupleDesc targetRelDesc)
-{
-	/* Deform the tuple */
-	Datum *oldValues = (Datum *) palloc0(sourceRelDesc->natts * sizeof(Datum));
-	bool *oldNulls = (bool *) palloc0(sourceRelDesc->natts * sizeof(bool));
-	heap_deform_tuple(sourceRelationTuple, sourceRelDesc, oldValues,
-					  oldNulls);
-
-
-	/* Create new tuple by skipping dropped columns */
-	int nextAttributeIndex = 0;
-	Datum *newValues = (Datum *) palloc0(targetRelDesc->natts * sizeof(Datum));
-	bool *newNulls = (bool *) palloc0(targetRelDesc->natts * sizeof(bool));
-	for (int i = 0; i < targetRelDesc->natts; i++)
-	{
-		if (TupleDescAttr(targetRelDesc, i)->attisdropped)
-		{
-			Datum nullDatum = (Datum) 0;
-			newValues[i] = nullDatum;
-			newNulls[i] = true;
-		}
-		else
-		{
-			newValues[i] = oldValues[nextAttributeIndex];
-			newNulls[i] = oldNulls[nextAttributeIndex];
-			nextAttributeIndex++;
-		}
-	}
-
-	HeapTuple targetRelationTuple = heap_form_tuple(targetRelDesc, newValues, newNulls);
-	return targetRelationTuple;
-}
-
-
-static void
-handleSchemaChangesInRelation(Relation relation, Relation targetRelation,
-							  ReorderBufferChange *change)
-{
-	TupleDesc sourceRelationDesc = RelationGetDescr(relation);
-	TupleDesc targetRelationDesc = RelationGetDescr(targetRelation);
-	if (targetRelationDesc->natts > sourceRelationDesc->natts)
-	{
-		switch (change->action)
-		{
-			case REORDER_BUFFER_CHANGE_INSERT:
-			{
-				HeapTuple sourceRelationNewTuple = &(change->data.tp.newtuple->tuple);
-				HeapTuple targetRelationNewTuple = GetTupleForTargetSchemaForCdc(
-					sourceRelationNewTuple, sourceRelationDesc, targetRelationDesc);
-
-				change->data.tp.newtuple->tuple = *targetRelationNewTuple;
-				break;
-			}
-
-			case REORDER_BUFFER_CHANGE_UPDATE:
-			{
-				HeapTuple sourceRelationNewTuple = &(change->data.tp.newtuple->tuple);
-				HeapTuple targetRelationNewTuple = GetTupleForTargetSchemaForCdc(
-					sourceRelationNewTuple, sourceRelationDesc, targetRelationDesc);
-
-				change->data.tp.newtuple->tuple = *targetRelationNewTuple;
-
-				/*
-				 * Format oldtuple according to the target relation. If the column values of replica
-				 * identiy change, then the old tuple is non-null and needs to be formatted according
-				 * to the target relation schema.
-				 */
-				if (change->data.tp.oldtuple != NULL)
-				{
-					HeapTuple sourceRelationOldTuple = &(change->data.tp.oldtuple->tuple);
-					HeapTuple targetRelationOldTuple = GetTupleForTargetSchemaForCdc(
-						sourceRelationOldTuple,
-						sourceRelationDesc,
-						targetRelationDesc);
-
-					change->data.tp.oldtuple->tuple = *targetRelationOldTuple;
-				}
-				break;
-			}
-
-			case REORDER_BUFFER_CHANGE_DELETE:
-			{
-				HeapTuple sourceRelationOldTuple = &(change->data.tp.oldtuple->tuple);
-				HeapTuple targetRelationOldTuple = GetTupleForTargetSchemaForCdc(
-					sourceRelationOldTuple, sourceRelationDesc, targetRelationDesc);
-
-				change->data.tp.oldtuple->tuple = *targetRelationOldTuple;
-				break;
-			}
-
-			/* Only INSERT/DELETE/UPDATE actions are visible in the replication path of split shard */
-			default:
-				ereport(ERROR, errmsg(
-							"Unexpected Action :%d. Expected action is INSERT/DELETE/UPDATE",
-							change->action));
-		}
-	}
-}
-
-
-/*
- * split_change function emits the incoming tuple change
+ * shard_split_and_cdc_change_cb function emits the incoming tuple change
  * to the appropriate destination shard.
  */
 static void
-split_change_cb(LogicalDecodingContext *ctx, ReorderBufferTXN *txn,
-				Relation relation, ReorderBufferChange *change)
+shard_split_and_cdc_change_cb(LogicalDecodingContext *ctx, ReorderBufferTXN *txn,
+							  Relation relation, ReorderBufferChange *change)
 {
-	/*check if Citus extension is loaded. */
+	/*check if Citus extension is loaded. If not, just call the pgoutput's decoder function.*/
 	if (!CitusHasBeenLoaded())
 	{
+		ouputPluginChangeCB(ctx, txn, relation, change);
 		return;
 	}
 
+	/* check if the relation is publishable.*/
 	if (!is_publishable_relation(relation))
 	{
 		return;
 	}
-	if (PublishChangesIfCdcSlot(ctx, txn, relation, change))
+
+	char *replicationSlotName = ctx->slot->data.name.data;
+	if (replicationSlotName == NULL)
 	{
+		elog(ERROR, "Replication slot name is NULL!");
 		return;
 	}
 
-	char *replicationSlotName = ctx->slot->data.name.data;
+	/* check for the internal shard split names, if not, assume the slot is for CDC. */
+	if (!IsShardSplitSlot(replicationSlotName))
+	{
+		PublishDistributedTableChanges(ctx, txn, relation, change);
+		return;
+	}
 
 	/*
 	 * Initialize SourceToDestinationShardMap if not already initialized.
@@ -412,7 +245,7 @@ split_change_cb(LogicalDecodingContext *ctx, ReorderBufferTXN *txn,
 		}
 	}
 
-	pgoutputChangeCB(ctx, txn, targetRelation, change);
+	ouputPluginChangeCB(ctx, txn, targetRelation, change);
 	RelationClose(targetRelation);
 }
 

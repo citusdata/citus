@@ -55,6 +55,8 @@ sub compare_tables_in_different_nodes
 
         # Use a cursor to iterate over the second database node's data
         if (@row1 and @row2) {
+            #print("row1: @row1\n");
+            #print("row2: @row2\n");
             my $field_count_row1 = scalar @row1;
             my $field_count_row2 = scalar @row2;
             if ($field_count_row1 != $field_count_row2) {
@@ -99,7 +101,7 @@ sub compare_tables_in_different_nodes
 }
 
 sub create_node {
-    my ($name,$node_type,$host, $port) = @_;
+    my ($name,$node_type,$host, $port, $config) = @_;
 
     our $node;
 
@@ -123,12 +125,22 @@ sub create_node {
 max_connections = 100
 max_wal_senders = 100
 max_replication_slots = 100
-citus.enable_replication_origin_session = on
+citus.enable_change_data_capture = on
 citus.override_table_visibility = off
 ";
+    if ($config ne "") {
+        $citus_config_options = $citus_config_options . $config
+    }
 
+    my $client_config_options = "
+max_connections = 100
+max_wal_senders = 100
+max_replication_slots = 100
+";
     $node->init(allows_streaming => 'logical');
     if ($node_type == $NODE_TYPE_COORDINATOR || $node_type == $NODE_TYPE_WORKER) {
+        $node->append_conf("postgresql.conf",$citus_config_options);
+    } else {
         $node->append_conf("postgresql.conf",$citus_config_options);
     }
 
@@ -136,8 +148,8 @@ citus.override_table_visibility = off
 
     if ($node_type == $NODE_TYPE_COORDINATOR || $node_type == $NODE_TYPE_WORKER) {
         $node->safe_psql('postgres', "CREATE EXTENSION citus;");
-        my $value = $node->safe_psql('postgres', "SHOW citus.enable_replication_origin_session;");
-        print("citus.enable_replication_origin_session value is $value\n")
+        my $value = $node->safe_psql('postgres', "SHOW citus.enable_change_data_capture;");
+        print("citus.enable_change_data_capture value is $value\n")
     }
 
     return $node;
@@ -145,17 +157,26 @@ citus.override_table_visibility = off
 
 # Create a Citus cluster with the given number of workers
 sub create_citus_cluster {
-    my ($no_workers,$host,$port) = @_;
+    my ($no_workers,$host,$port,$citus_config) = @_;
     my @workers = ();
-    #my $localhost = "127.0.0.1";
-    #my $port = 56365;
-    my $node_coordinator = create_node('coordinator', $NODE_TYPE_COORDINATOR,$host, $port);
+    my $node_coordinator;
+    print("citus_config :", $citus_config);
+    if ($citus_config ne "") {
+        $node_coordinator = create_node('coordinator', $NODE_TYPE_COORDINATOR,$host, $port, $citus_config);
+    } else {
+        $node_coordinator = create_node('coordinator', $NODE_TYPE_COORDINATOR,$host, $port);
+    }
     my $coord_host = $node_coordinator->host();
     my $coord_port = $node_coordinator->port();
     $node_coordinator->safe_psql('postgres',"SELECT pg_catalog.citus_set_coordinator_host('$coord_host', $coord_port);");
     for (my $i = 0; $i < $no_workers; $i++) {
         $port = $port + 1;
-        my $node_worker = create_node("worker$i", $NODE_TYPE_WORKER,"localhost", $port);
+        my $node_worker;
+        if ($citus_config ne "") {
+            $node_worker = create_node("worker$i", $NODE_TYPE_WORKER,"localhost", $port, $citus_config);
+        } else {
+            $node_worker = create_node("worker$i", $NODE_TYPE_WORKER,"localhost", $port);
+        }
         my $node_worker_host = $node_worker->host();
         my $node_worker_port = $node_worker->port();
         $node_coordinator->safe_psql('postgres',"SELECT pg_catalog.citus_add_node('$node_worker_host', $node_worker_port);");
@@ -164,14 +185,32 @@ sub create_citus_cluster {
     return $node_coordinator, @workers;
 }
 
-sub prepare_workers_for_cdc_publication {
-    my ($workersref) = $_[0];
+sub create_cdc_publication_and_replication_slots_for_citus_cluster {
+    my $node_coordinator = $_[0];
+    my $workersref = $_[1];
+    my $table_names = $_[2];
+
+    create_cdc_publication_and_slots_for_coordinator($node_coordinator, $table_names);
+    create_cdc_publication_and_slots_for_workers($workersref, $table_names);
+}
+
+sub create_cdc_publication_and_slots_for_coordinator {
+    my $node_coordinator = $_[0];
+    my $table_names = $_[1];
+    print("node node_coordinator connstr: \n" . $node_coordinator->connstr());
+    $node_coordinator->safe_psql('postgres',"CREATE PUBLICATION cdc_publication FOR TABLE $table_names;");
+    $node_coordinator->safe_psql('postgres',"SELECT pg_catalog.pg_create_logical_replication_slot('cdc_replication_slot','citus',false,true)");
+}
+
+sub create_cdc_publication_and_slots_for_workers {
+    my $workersref = $_[0];
+    my $table_names = $_[1];
     for (@$workersref) {
         my $pub = $_->safe_psql('postgres',"SELECT * FROM pg_publication WHERE pubname = 'cdc_publication';");
         if ($pub ne "") {
             $_->safe_psql('postgres',"DROP PUBLICATION IF EXISTS cdc_publication;");
         }
-        $_->safe_psql('postgres',"CREATE PUBLICATION cdc_publication FOR TABLE sensors;");
+        $_->safe_psql('postgres',"CREATE PUBLICATION cdc_publication FOR TABLE $table_names;");
 
         my $slot = $_->safe_psql('postgres',"select * from pg_replication_slots where  slot_name = 'cdc_replication_slot';");
         if ($slot ne "") {
@@ -181,42 +220,34 @@ sub prepare_workers_for_cdc_publication {
     }
 }
 
-sub prepare_coordinator_for_cdc_publication {
-    my $node_coordinator = $_[0];
-    print("node node_coordinator connstr: \n" . $node_coordinator->connstr());
-    $node_coordinator->safe_psql('postgres',"CREATE PUBLICATION cdc_publication FOR TABLE sensors;");
-    $node_coordinator->safe_psql('postgres',"SELECT pg_catalog.pg_create_logical_replication_slot('cdc_replication_slot','citus',false,true)");
-}
 
 sub connect_cdc_client_to_citus_cluster_publications {
-    my ($workersref) = $_[0];
-    my ($node) = $_[1];
+    my $node_coordinator = $_[0];
+    my $workersref = $_[1];
+    my $node_cdc_client = $_[2];
+    my $num_args = scalar(@_);
 
-    my $i = 1;
-    for (@$workersref) {
-        my $conn_str = $_->connstr() . " dbname=postgres";
-        my $subscription = 'cdc_subscription_' . $i;
-        print "creating subscription $subscription for node$i: $conn_str\n";
-        my $copy_data= 'copy_data=false';
-        if ($i == 1) {
-            $copy_data='copy_data=true';
-        }
-        my $subscription_stmt = "CREATE SUBSCRIPTION $subscription
-            CONNECTION '$conn_str'
-            PUBLICATION cdc_publication
-            WITH (
-                create_slot=false,
-                enabled=true,
-                slot_name=cdc_replication_slot,". $copy_data .");";
 
-        $node->safe_psql('postgres',$subscription_stmt);
-        $i++;
+    if ($num_args > 3) {
+         my $copy_arg = $_[3];
+        connect_cdc_client_to_coordinator_publication($node_coordinator,$node_cdc_client, $copy_arg);
+    } else {
+        connect_cdc_client_to_coordinator_publication($node_coordinator,$node_cdc_client);
     }
+    connect_cdc_client_to_workers_publication($workersref, $node_cdc_client);
 }
 
 sub connect_cdc_client_to_coordinator_publication {
     my $node_coordinator = $_[0];
     my $node_cdc_client = $_[1];
+    my $num_args = scalar(@_);
+    my $copy_data = "";
+    if ($num_args > 2) {
+        my $copy_arg = $_[2];
+        $copy_data = 'copy_data='. $copy_arg;
+    } else {
+        $copy_data = 'copy_data=false';
+    }
 
     my $conn_str = $node_coordinator->connstr() . " dbname=postgres";
     my $subscription = 'cdc_subscription';
@@ -228,9 +259,49 @@ sub connect_cdc_client_to_coordinator_publication {
             WITH (
                 create_slot=false,
                 enabled=true,
-                slot_name=cdc_replication_slot,
-                copy_data=true);"
+                slot_name=cdc_replication_slot,"
+                . $copy_data. ");"
     );
+}
+
+sub connect_cdc_client_to_workers_publication {
+    my $workersref = $_[0];
+    my $node_cdc_client = $_[1];
+    my $i = 1;
+    for (@$workersref) {
+        my $conn_str = $_->connstr() . " dbname=postgres";
+        my $subscription = 'cdc_subscription_' . $i;
+        print "creating subscription $subscription for node$i: $conn_str\n";
+        my $subscription_stmt = "CREATE SUBSCRIPTION $subscription
+            CONNECTION '$conn_str'
+            PUBLICATION cdc_publication
+            WITH (
+                create_slot=false,
+                enabled=true,
+                slot_name=cdc_replication_slot,
+                copy_data=false);
+            ";
+
+        $node_cdc_client->safe_psql('postgres',$subscription_stmt);
+        $i++;
+    }
+}
+
+sub wait_for_cdc_client_to_catch_up_with_citus_cluster {
+        my $node_coordinator = $_[0];
+        my ($workersref) = $_[1];
+
+        my $subscription = 'cdc_subscription';
+        print "coordinator: waiting for cdc client subscription $subscription to catch up\n";
+        $node_coordinator->wait_for_catchup($subscription);
+        wait_for_cdc_client_to_catch_up_with_workers($workersref);
+}
+
+sub wait_for_cdc_client_to_catch_up_with_coordinator {
+        my $node_coordinator = $_[0];
+        my $subscription = 'cdc_subscription';
+        print "coordinator: waiting for cdc client subscription $subscription to catch up\n";
+        $node_coordinator->wait_for_catchup($subscription);
 }
 
 sub wait_for_cdc_client_to_catch_up_with_workers {
@@ -244,10 +315,15 @@ sub wait_for_cdc_client_to_catch_up_with_workers {
         }
 }
 
-sub wait_for_cdc_client_to_catch_up_with_coordinator {
-        my $node_coordinator = $_[0];
-        my $subscription = 'cdc_subscription';
-        print "coordinator: waiting for cdc client subscription $subscription to catch up\n";
-        $node_coordinator->wait_for_catchup($subscription);
-}
+sub drop_cdc_client_subscriptions {
+    my $node = $_[0];
+    my ($workersref) = $_[1];
 
+    $node->safe_psql('postgres',"drop subscription cdc_subscription");
+    my $i = 1;
+    for (@$workersref) {
+        my $subscription = 'cdc_subscription_' . $i;
+        $node->safe_psql('postgres',"drop subscription " . $subscription);
+        $i++;
+    }
+}

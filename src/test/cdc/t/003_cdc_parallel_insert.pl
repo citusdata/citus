@@ -39,13 +39,11 @@ my $initial_schema = "
 $node_coordinator->safe_psql('postgres',$initial_schema);
 $node_cdc_client->safe_psql('postgres',$initial_schema);
 
-
 #insert data into the sensors table in the coordinator node before distributing the table.
 $node_coordinator->safe_psql('postgres',"
 	INSERT INTO sensors
 SELECT i, '2020-01-05', '{}', 11011.10, 'A', 'I <3 Citus'
 FROM generate_series(0,100)i;");
-
 
 sub create_distributed_table_thread() {
 	$node_coordinator->safe_psql('postgres',"SELECT create_distributed_table_concurrently('sensors', 'measureid');");
@@ -71,19 +69,12 @@ my $thr_insert = threads->create(\&insert_data_into_distributed_table_thread);
 $thr_create->join();
 $thr_insert->join();
 
+create_cdc_publication_and_replication_slots_for_citus_cluster($node_coordinator,\@workers,'sensors');
+connect_cdc_client_to_citus_cluster_publications($node_coordinator,\@workers, $node_cdc_client,'true');
+wait_for_cdc_client_to_catch_up_with_citus_cluster($node_coordinator, \@workers);
 
-prepare_workers_for_cdc_publication(\@workers);
-connect_cdc_client_to_citus_cluster_publications(\@workers, $node_cdc_client);
-
-
-wait_for_cdc_client_to_catch_up_with_workers(\@workers);
 
 $result = compare_tables_in_different_nodes($node_coordinator,$node_cdc_client,'postgres',$select_stmt);
 is($result, 1, 'CDC create_distributed_table - parallel insert data');
 
-
-
-
-
-
-
+drop_cdc_client_subscriptions($node_cdc_client,\@workers);

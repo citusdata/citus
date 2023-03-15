@@ -19,59 +19,63 @@ static bool IsRemoteReplicationOriginSessionSetup(MultiConnection *connection);
 static bool ExecuteRemoteCommandAndCheckResult(MultiConnection *connection, char *command,
 											   char *expected);
 
+static void SetupMemoryContextResetReplicationOriginHandler(void);
+
+static void SetupReplicationOriginSessionHelper(bool isContexResetSetupNeeded);
+
 static inline bool IsLocalReplicationOriginSessionActive(void);
 
-PG_FUNCTION_INFO_V1(replication_origin_session_start_no_publish);
-PG_FUNCTION_INFO_V1(replication_origin_session_end_no_publish);
-PG_FUNCTION_INFO_V1(replication_origin_session_is_no_publish);
+PG_FUNCTION_INFO_V1(citus_internal_start_replication_origin_tracking);
+PG_FUNCTION_INFO_V1(citus_internal_stop_replication_origin_tracking);
+PG_FUNCTION_INFO_V1(citus_internal_is_replication_origin_tracking_active);
 
 /*
  * This variable is used to remember the replication origin id of the current session
  * before resetting it to DoNotReplicateId in SetupReplicationOriginLocalSession.
  */
-static RepOriginId originalOriginId = InvalidRepOriginId;
+static RepOriginId OriginalOriginId = InvalidRepOriginId;
 
 /*
- * Setting that controls whether replication origin sessions are enabled.
+ * Setting that controls whether replication origin tracking is enabled
  */
-bool UseReplicationOriginsForInternalTransfers = false;
+bool enable_change_data_capture = false;
 
 
-/* replication_origin_session_start_no_publish starts a new replication origin session
+/* citus_internal_start_replication_origin_tracking starts a new replication origin session
  * in the local node. This function is used to avoid publishing the WAL records to the
  * replication slot by setting replication origin to DoNotReplicateId in WAL records.
  * It remembers the previous replication origin for the current session which will be
  * used to reset the replication origin to the previous value when the session ends.
  */
 Datum
-replication_origin_session_start_no_publish(PG_FUNCTION_ARGS)
+citus_internal_start_replication_origin_tracking(PG_FUNCTION_ARGS)
 {
-	if (!UseReplicationOriginsForInternalTransfers)
+	if (!enable_change_data_capture)
 	{
 		PG_RETURN_VOID();
 	}
-	SetupReplicationOriginLocalSession();
+	SetupReplicationOriginSessionHelper(false);
 	PG_RETURN_VOID();
 }
 
 
-/* replication_origin_session_end_no_publish ends the current replication origin session
+/* citus_internal_stop_replication_origin_tracking ends the current replication origin session
  * in the local node. This function is used to reset the replication origin to the
  * earlier value of replication origin.
  */
 Datum
-replication_origin_session_end_no_publish(PG_FUNCTION_ARGS)
+citus_internal_stop_replication_origin_tracking(PG_FUNCTION_ARGS)
 {
 	ResetReplicationOriginLocalSession();
 	PG_RETURN_VOID();
 }
 
 
-/* replication_origin_session_is_no_publish checks if the current replication origin
+/* citus_internal_is_replication_origin_tracking_active checks if the current replication origin
  * session is active in the local node.
  */
 Datum
-replication_origin_session_is_no_publish(PG_FUNCTION_ARGS)
+citus_internal_is_replication_origin_tracking_active(PG_FUNCTION_ARGS)
 {
 	bool result = IsLocalReplicationOriginSessionActive();
 	PG_RETURN_BOOL(result);
@@ -89,32 +93,54 @@ IsLocalReplicationOriginSessionActive(void)
 
 
 /*
+ * SetupMemoryContextResetReplicationOriginHandler registers a callback function
+ * that resets the replication origin session in case of any error for the current
+ * memory context.
+ */
+static void
+SetupMemoryContextResetReplicationOriginHandler()
+{
+	MemoryContextCallback *replicationOriginResetCallback = palloc0(
+		sizeof(MemoryContextCallback));
+	replicationOriginResetCallback->func =
+		ResetReplicationOriginLocalSessionCallbackHandler;
+	replicationOriginResetCallback->arg = NULL;
+	MemoryContextRegisterResetCallback(CurrentMemoryContext,
+									   replicationOriginResetCallback);
+}
+
+
+/*
+ * SetupReplicationOriginSessionHelper sets up a new replication origin session in a
+ * local session. It takes an argument isContexResetSetupNeeded to decide whether
+ * to register a callback function that resets the replication origin session in case
+ * of any error for the current memory context.
+ */
+static void
+SetupReplicationOriginSessionHelper(bool isContexResetSetupNeeded)
+{
+	if (!enable_change_data_capture)
+	{
+		elog(NOTICE, "change data capture is not enabled");
+		return;
+	}
+	OriginalOriginId = replorigin_session_origin;
+	replorigin_session_origin = DoNotReplicateId;
+	if (isContexResetSetupNeeded)
+	{
+		SetupMemoryContextResetReplicationOriginHandler();
+	}
+}
+
+
+/*
  * SetupReplicationOriginLocalSession sets up a new replication origin session in a
  * local session.
  */
 void
-SetupReplicationOriginLocalSession(void)
+SetupReplicationOriginLocalSession()
 {
-	if (!UseReplicationOriginsForInternalTransfers)
-	{
-		return;
-	}
-
-	/*elog(LOG, "Setting up local replication origin session"); */
-	if (!IsLocalReplicationOriginSessionActive())
-	{
-		originalOriginId = replorigin_session_origin;
-		replorigin_session_origin = DoNotReplicateId;
-
-		/* Register a call back for ResetReplicationOriginLocalSession function for error cases */
-		MemoryContextCallback *replicationOriginResetCallback = palloc0(
-			sizeof(MemoryContextCallback));
-		replicationOriginResetCallback->func =
-			ResetReplicationOriginLocalSessionCallbackHandler;
-		replicationOriginResetCallback->arg = NULL;
-		MemoryContextRegisterResetCallback(CurrentMemoryContext,
-										   replicationOriginResetCallback);
-	}
+	SetupReplicationOriginSessionHelper(true);
 }
 
 
@@ -125,16 +151,12 @@ SetupReplicationOriginLocalSession(void)
 void
 ResetReplicationOriginLocalSession(void)
 {
-	/*elog(LOG, "Resetting local replication origin session"); */
 	if (replorigin_session_origin != DoNotReplicateId)
 	{
 		return;
 	}
 
-	if (IsLocalReplicationOriginSessionActive())
-	{
-		replorigin_session_origin = originalOriginId;
-	}
+	replorigin_session_origin = OriginalOriginId;
 }
 
 
@@ -159,16 +181,15 @@ ResetReplicationOriginLocalSessionCallbackHandler(void *arg)
 void
 SetupReplicationOriginRemoteSession(MultiConnection *connection)
 {
-	if (!UseReplicationOriginsForInternalTransfers)
+	if (!enable_change_data_capture)
 	{
 		return;
 	}
 	if (connection != NULL && !IsRemoteReplicationOriginSessionSetup(connection))
 	{
-		/*elog(LOG, "After IsReplicationOriginSessionSetup session %s,%d", connection->hostname, connection->port); */
 		StringInfo replicationOriginSessionSetupQuery = makeStringInfo();
 		appendStringInfo(replicationOriginSessionSetupQuery,
-						 "select pg_catalog.replication_origin_session_start_no_publish();");
+						 "select pg_catalog.citus_internal_start_replication_origin_tracking();");
 		ExecuteCriticalRemoteCommand(connection,
 									 replicationOriginSessionSetupQuery->data);
 		connection->isReplicationOriginSessionSetup = true;
@@ -188,7 +209,7 @@ ResetReplicationOriginRemoteSession(MultiConnection *connection)
 		/*elog(LOG, "Resetting remote replication origin session %s,%d", connection->hostname, connection->port); */
 		StringInfo replicationOriginSessionResetQuery = makeStringInfo();
 		appendStringInfo(replicationOriginSessionResetQuery,
-						 "select pg_catalog.replication_origin_session_end_no_publish();");
+						 "select pg_catalog.citus_internal_stop_replication_origin_tracking();");
 		ExecuteCriticalRemoteCommand(connection,
 									 replicationOriginSessionResetQuery->data);
 		connection->isReplicationOriginSessionSetup = false;
@@ -211,7 +232,7 @@ IsRemoteReplicationOriginSessionSetup(MultiConnection *connection)
 
 	StringInfo isReplicationOriginSessionSetupQuery = makeStringInfo();
 	appendStringInfo(isReplicationOriginSessionSetupQuery,
-					 "SELECT pg_catalog.replication_origin_session_is_no_publish()");
+					 "SELECT pg_catalog.citus_internal_is_replication_origin_tracking_active()");
 	bool result =
 		ExecuteRemoteCommandAndCheckResult(connection,
 										   isReplicationOriginSessionSetupQuery->data,
