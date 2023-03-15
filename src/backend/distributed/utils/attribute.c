@@ -72,6 +72,7 @@ int CitusStatsTenantsLimit = 10;
 
 
 PG_FUNCTION_INFO_V1(citus_stats_tenants);
+PG_FUNCTION_INFO_V1(clean_citus_stats_tenants);
 
 
 /*
@@ -132,12 +133,12 @@ citus_stats_tenants(PG_FUNCTION_ARGS)
 
 		values[0] = Int32GetDatum(tenantStats->colocationGroupId);
 		values[1] = PointerGetDatum(cstring_to_text(tenantStats->tenantAttribute));
-		values[2] = Int32GetDatum(tenantStats->selectsInThisPeriod);
-		values[3] = Int32GetDatum(tenantStats->selectsInLastPeriod);
-		values[4] = Int32GetDatum(tenantStats->selectsInThisPeriod +
-								  tenantStats->insertsInThisPeriod);
-		values[5] = Int32GetDatum(tenantStats->selectsInLastPeriod +
-								  tenantStats->insertsInLastPeriod);
+		values[2] = Int32GetDatum(tenantStats->readsInThisPeriod);
+		values[3] = Int32GetDatum(tenantStats->readsInLastPeriod);
+		values[4] = Int32GetDatum(tenantStats->readsInThisPeriod +
+								  tenantStats->writesInThisPeriod);
+		values[5] = Int32GetDatum(tenantStats->readsInLastPeriod +
+								  tenantStats->writesInLastPeriod);
 		values[6] = Int64GetDatum(tenantStats->score);
 
 		tuplestore_putvalues(tupleStore, tupleDescriptor, values, isNulls);
@@ -150,11 +151,27 @@ citus_stats_tenants(PG_FUNCTION_ARGS)
 
 
 /*
+ * clean_citus_stats_tenants cleans the citus_stats_tenants monitor.
+ */
+Datum
+clean_citus_stats_tenants(PG_FUNCTION_ARGS)
+{
+	MultiTenantMonitor *monitor = GetMultiTenantMonitor();
+	monitor->tenantCount = 0;
+	monitor->periodStart = time(0);
+
+	PG_RETURN_VOID();
+}
+
+
+/*
  * AttributeQueryIfAnnotated assigns the attributes of tenant if the query is annotated.
  */
 void
 AttributeQueryIfAnnotated(const char *query_string, CmdType commandType)
 {
+	strcpy_s(attributeToTenant, sizeof(attributeToTenant), "");
+
 	attributeCommandType = commandType;
 
 	if (query_string == NULL)
@@ -313,15 +330,17 @@ AttributeMetricsIfApplicable()
 
 		if (attributeCommandType == CMD_SELECT)
 		{
-			tenantStats->selectCount++;
-			tenantStats->selectsInThisPeriod++;
-			tenantStats->totalSelectTime += cpu_time_used;
+			tenantStats->readCount++;
+			tenantStats->readsInThisPeriod++;
+			tenantStats->totalReadTime += cpu_time_used;
 		}
-		else if (attributeCommandType == CMD_INSERT)
+		else if (attributeCommandType == CMD_UPDATE ||
+				 attributeCommandType == CMD_INSERT ||
+				 attributeCommandType == CMD_DELETE)
 		{
-			tenantStats->insertCount++;
-			tenantStats->insertsInThisPeriod++;
-			tenantStats->totalInsertTime += cpu_time_used;
+			tenantStats->writeCount++;
+			tenantStats->writesInThisPeriod++;
+			tenantStats->totalWriteTime += cpu_time_used;
 		}
 
 		LWLockRelease(&monitor->lock);
@@ -342,15 +361,15 @@ AttributeMetricsIfApplicable()
 
 		if (MultiTenantMonitoringLogLevel != CITUS_LOG_LEVEL_OFF)
 		{
-			ereport(NOTICE, (errmsg("total select count = %d, total CPU time = %f "
+			ereport(NOTICE, (errmsg("total read count = %d, total read CPU time = %f "
 									"to tenant: %s",
-									tenantStats->selectCount,
-									tenantStats->totalSelectTime,
+									tenantStats->readCount,
+									tenantStats->totalReadTime,
 									tenantStats->tenantAttribute)));
 		}
 	}
 
-	/*attributeToTenant = NULL; */
+	strcpy_s(attributeToTenant, sizeof(attributeToTenant), "");
 }
 
 
@@ -371,13 +390,13 @@ UpdatePeriodsIfNecessary(MultiTenantMonitor *monitor, TenantStats *tenantStats)
 	 * but there are some query count for this period we move them to the last period.
 	 */
 	if (tenantStats->lastQueryTime < monitor->periodStart &&
-		(tenantStats->insertsInThisPeriod || tenantStats->selectsInThisPeriod))
+		(tenantStats->writesInThisPeriod || tenantStats->readsInThisPeriod))
 	{
-		tenantStats->insertsInLastPeriod = tenantStats->insertsInThisPeriod;
-		tenantStats->insertsInThisPeriod = 0;
+		tenantStats->writesInLastPeriod = tenantStats->writesInThisPeriod;
+		tenantStats->writesInThisPeriod = 0;
 
-		tenantStats->selectsInLastPeriod = tenantStats->selectsInThisPeriod;
-		tenantStats->selectsInThisPeriod = 0;
+		tenantStats->readsInLastPeriod = tenantStats->readsInThisPeriod;
+		tenantStats->readsInThisPeriod = 0;
 	}
 
 	/*
@@ -385,9 +404,9 @@ UpdatePeriodsIfNecessary(MultiTenantMonitor *monitor, TenantStats *tenantStats)
 	 */
 	if (tenantStats->lastQueryTime < monitor->periodStart - CitusStatsTenantsPeriod)
 	{
-		tenantStats->insertsInLastPeriod = 0;
+		tenantStats->writesInLastPeriod = 0;
 
-		tenantStats->selectsInLastPeriod = 0;
+		tenantStats->readsInLastPeriod = 0;
 	}
 }
 
@@ -530,6 +549,8 @@ static int
 CreateTenantStats(MultiTenantMonitor *monitor)
 {
 	int tenantIndex = monitor->tenantCount;
+
+	memset(&monitor->tenants[tenantIndex], 0, sizeof(monitor->tenants[tenantIndex]));
 
 	strcpy_s(monitor->tenants[tenantIndex].tenantAttribute,
 			 sizeof(monitor->tenants[tenantIndex].tenantAttribute), attributeToTenant);

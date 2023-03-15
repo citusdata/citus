@@ -1997,11 +1997,25 @@ GenerateSingleShardRouterTaskList(Job *job, List *relationShardList,
 	}
 	else
 	{
+		Datum partitionColumnValue;
+		Oid partitionColumnType = 0;
+		char *partitionColumnString = NULL;
+		if (job->partitionKeyValue != NULL)
+		{
+			partitionColumnValue = job->partitionKeyValue->constvalue;
+			partitionColumnType = job->partitionKeyValue->consttype;
+			partitionColumnString = DatumToString(partitionColumnValue,
+												  partitionColumnType);
+		}
+
+		SetJobColocationId(job);
+
 		job->taskList = SingleShardTaskList(originalQuery, job->jobId,
 											relationShardList, placementList,
 											shardId,
 											job->parametersInJobQueryResolved,
-											isLocalTableModification, "", -1);
+											isLocalTableModification,
+											partitionColumnString, job->colocationId);
 	}
 }
 
