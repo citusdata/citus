@@ -252,6 +252,8 @@ typedef struct BackgroundTask
 	int32 *retry_count;
 	TimestampTz *not_before;
 	char *message;
+	int32 source_id;
+	int32 target_id;
 
 	/* extra space to store values for nullable value types above */
 	struct
@@ -388,7 +390,8 @@ extern bool HasNonTerminalJobOfType(const char *jobType, int64 *jobIdOut);
 extern int64 CreateBackgroundJob(const char *jobType, const char *description);
 extern BackgroundTask * ScheduleBackgroundTask(int64 jobId, Oid owner, char *command,
 											   int dependingTaskCount,
-											   int64 dependingTaskIds[]);
+											   int64 dependingTaskIds[],
+											   int32 source_and_target[]);
 extern BackgroundTask * GetRunnableBackgroundTask(void);
 extern void ResetRunningBackgroundTasks(void);
 extern BackgroundJob * GetBackgroundJobByJobId(int64 jobId);

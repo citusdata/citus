@@ -14,3 +14,6 @@ ALTER TABLE pg_catalog.pg_dist_transaction REPLICA IDENTITY USING INDEX pg_dist_
 
 #include "udfs/citus_stat_tenants_local_reset/11.3-1.sql"
 #include "udfs/citus_stat_tenants_reset/11.3-1.sql"
+
+ALTER TABLE pg_catalog.pg_dist_background_task ADD COLUMN source_id int DEFAULT 0;
+ALTER TABLE pg_catalog.pg_dist_background_task ADD COLUMN target_id int DEFAULT 0;

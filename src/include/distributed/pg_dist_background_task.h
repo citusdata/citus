@@ -15,7 +15,7 @@
  *      compiler constants for pg_dist_background_task
  * ----------------
  */
-#define Natts_pg_dist_background_task 9
+#define Natts_pg_dist_background_task 11
 #define Anum_pg_dist_background_task_job_id 1
 #define Anum_pg_dist_background_task_task_id 2
 #define Anum_pg_dist_background_task_owner 3
@@ -25,5 +25,7 @@
 #define Anum_pg_dist_background_task_retry_count 7
 #define Anum_pg_dist_background_task_not_before 8
 #define Anum_pg_dist_background_task_message 9
+#define Anum_pg_dist_background_task_source_id 10
+#define Anum_pg_dist_background_task_target_id 11
 
 #endif /* CITUS_PG_DIST_BACKGROUND_TASK_H */

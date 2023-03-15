@@ -2816,7 +2816,7 @@ CreateBackgroundJob(const char *jobType, const char *description)
  */
 BackgroundTask *
 ScheduleBackgroundTask(int64 jobId, Oid owner, char *command, int dependingTaskCount,
-					   int64 dependingTaskIds[])
+					   int64 dependingTaskIds[], int32 source_and_target[])
 {
 	BackgroundTask *task = NULL;
 
@@ -2889,6 +2889,14 @@ ScheduleBackgroundTask(int64 jobId, Oid owner, char *command, int dependingTaskC
 
 		values[Anum_pg_dist_background_task_message - 1] = CStringGetTextDatum("");
 		nulls[Anum_pg_dist_background_task_message - 1] = false;
+
+		values[Anum_pg_dist_background_task_source_id - 1] = Int32GetDatum(
+			source_and_target[0]);
+		nulls[Anum_pg_dist_background_task_source_id - 1] = false;
+
+		values[Anum_pg_dist_background_task_target_id - 1] = Int32GetDatum(
+			source_and_target[1]);
+		nulls[Anum_pg_dist_background_task_target_id - 1] = false;
 
 		HeapTuple newTuple = heap_form_tuple(RelationGetDescr(pgDistBackgroundTask),
 											 values, nulls);
@@ -3200,6 +3208,9 @@ DeformBackgroundTaskHeapTuple(TupleDesc tupleDescriptor, HeapTuple taskTuple)
 		task->message =
 			TextDatumGetCString(values[Anum_pg_dist_background_task_message - 1]);
 	}
+
+	task->source_id = DatumGetInt32(values[Anum_pg_dist_background_task_source_id - 1]);
+	task->target_id = DatumGetInt32(values[Anum_pg_dist_background_task_target_id - 1]);
 
 	return task;
 }

@@ -91,9 +91,9 @@ static bool NewExecutorExceedsCitusLimit(
 static bool NewExecutorExceedsPgMaxWorkers(BackgroundWorkerHandle *handle,
 										   QueueMonitorExecutionContext *
 										   queueMonitorExecutionContext);
-static bool AssignRunnableTaskToNewExecutor(BackgroundTask *runnableTask,
-											QueueMonitorExecutionContext *
-											queueMonitorExecutionContext);
+static TaskAssignmentStatus AssignRunnableTaskToNewExecutor(BackgroundTask *runnableTask,
+															QueueMonitorExecutionContext *
+															queueMonitorExecutionContext);
 static void AssignRunnableTasks(
 	QueueMonitorExecutionContext *queueMonitorExecutionContext);
 static List * GetRunningTaskEntries(HTAB *currentExecutors);
@@ -539,7 +539,7 @@ NewExecutorExceedsPgMaxWorkers(BackgroundWorkerHandle *handle,
  * AssignRunnableTaskToNewExecutor tries to assign given runnable task to a new task executor.
  * It reports the assignment status as return value.
  */
-static bool
+static TaskAssignmentStatus
 AssignRunnableTaskToNewExecutor(BackgroundTask *runnableTask,
 								QueueMonitorExecutionContext *queueMonitorExecutionContext)
 {
@@ -548,7 +548,7 @@ AssignRunnableTaskToNewExecutor(BackgroundTask *runnableTask,
 	if (NewExecutorExceedsCitusLimit(queueMonitorExecutionContext))
 	{
 		/* escape if we hit citus executor limit */
-		return false;
+		return NEW_EXECUTOR_EXCEEDS_LIMIT;
 	}
 
 	char *databaseName = get_database_name(MyDatabaseId);
@@ -565,7 +565,7 @@ AssignRunnableTaskToNewExecutor(BackgroundTask *runnableTask,
 	if (NewExecutorExceedsPgMaxWorkers(handle, queueMonitorExecutionContext))
 	{
 		/* escape if we hit pg worker limit */
-		return false;
+		return NEW_EXECUTOR_EXCEEDS_LIMIT;
 	}
 
 	/* assign the allocated executor to the runnable task and increment total executor count */
@@ -611,20 +611,20 @@ static void
 AssignRunnableTasks(QueueMonitorExecutionContext *queueMonitorExecutionContext)
 {
 	BackgroundTask *runnableTask = NULL;
-	bool taskAssigned = false;
+	bool taskAssignedOrBlockedOnToken = false;
 	do {
 		/* fetch a runnable task from catalog */
 		runnableTask = GetRunnableBackgroundTask();
 		if (runnableTask)
 		{
-			taskAssigned = AssignRunnableTaskToNewExecutor(runnableTask,
-														   queueMonitorExecutionContext);
+			taskAssignedOrBlockedOnToken = AssignRunnableTaskToNewExecutor(runnableTask,
+																		   queueMonitorExecutionContext);
 		}
 		else
 		{
-			taskAssigned = false;
+			taskAssignedOrBlockedOnToken = false;
 		}
-	} while (taskAssigned);
+	} while (taskAssignedOrBlockedOnToken);
 }
 
 
