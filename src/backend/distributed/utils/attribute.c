@@ -64,8 +64,8 @@ static void MultiTenantMonitorSMInit(void);
 static int CreateTenantStats(MultiTenantMonitor *monitor, time_t queryTime);
 static int FindTenantStats(MultiTenantMonitor *monitor);
 static size_t MultiTenantMonitorshmemSize(void);
-static char * extractTopComment(const char *inputString);
-static char * get_substring(const char *str, int start, int end);
+static char * EscapeCommentChars(const char *str);
+static char * UnescapeCommentChars(const char *str);
 
 int MultiTenantMonitoringLogLevel = CITUS_LOG_LEVEL_OFF;
 int CitusStatsTenantsPeriod = (time_t) 60;
@@ -725,4 +725,51 @@ get_substring(const char *str, int start, int end)
 	substr[end - start] = '\0';
 
 	return substr;
+}
+
+
+/*  EscapeCommentChars adds a backslash before each occurrence of '*' or '/' in the input string */
+static char *
+EscapeCommentChars(const char *str)
+{
+	int len = strlen(str);
+	char *new_str = (char *) malloc(len * 2 + 1);
+	int j = 0;
+
+	for (int i = 0; i < len; i++)
+	{
+		if (str[i] == '*' || str[i] == '/')
+		{
+			new_str[j++] = '\\';
+		}
+		new_str[j++] = str[i];
+	}
+	new_str[j] = '\0';
+
+	return new_str;
+}
+
+
+/*  UnescapeCommentChars removes the backslash that precedes '*' or '/' in the input string. */
+static char *
+UnescapeCommentChars(const char *str)
+{
+	int len = strlen(str);
+	char *new_str = (char *) malloc(len + 1);
+	int j = 0;
+
+	for (int i = 0; i < len; i++)
+	{
+		if (str[i] == '\\' && i < len - 1)
+		{
+			if (str[i + 1] == '*' || str[i + 1] == '/')
+			{
+				i++;
+			}
+		}
+		new_str[j++] = str[i];
+	}
+	new_str[j] = '\0';
+
+	return new_str;
 }
