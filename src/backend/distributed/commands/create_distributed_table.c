@@ -231,7 +231,6 @@ create_distributed_table(PG_FUNCTION_ARGS)
 
 	EnsureCitusTableCanBeCreated(relationId);
 
-
 	/* enable create_distributed_table on an empty node */
 	InsertCoordinatorIfClusterEmpty();
 
