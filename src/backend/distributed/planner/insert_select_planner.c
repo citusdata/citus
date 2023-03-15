@@ -83,10 +83,14 @@ static DeferredErrorMessage * InsertPartitionColumnMatchesSelect(Query *query,
 																 Oid *
 																 selectPartitionColumnTableId);
 static DistributedPlan * CreateNonPushableInsertSelectPlan(uint64 planId, Query *parse,
-														   ParamListInfo boundParams);
+														   ParamListInfo boundParams,
+														   PlannerRestrictionContext *
+														   plannerRestrictionContext);
 static DeferredErrorMessage * NonPushableInsertSelectSupported(Query *insertSelectQuery);
 static Query * WrapSubquery(Query *subquery);
 static void RelabelTargetEntryList(List *selectTargetList, List *insertTargetList);
+static void RelabelPlannerRestrictionContextForInsertSelect(
+	PlannerRestrictionContext *plannerRestrictionContext);
 static List * AddInsertSelectCasts(List *insertTargetList, List *selectTargetList,
 								   Oid targetRelationId);
 static Expr * CastExpr(Expr *expr, Oid sourceType, Oid targetType, Oid targetCollation,
@@ -253,7 +257,8 @@ CreateInsertSelectPlanInternal(uint64 planId, Query *originalQuery,
 		 * repartitioning.
 		 */
 		distributedPlan = CreateNonPushableInsertSelectPlan(planId, originalQuery,
-															boundParams);
+															boundParams,
+															plannerRestrictionContext);
 	}
 
 	return distributedPlan;
@@ -361,6 +366,39 @@ CreateDistributedInsertSelectPlan(Query *originalQuery,
 
 
 /*
+ * RelabelPlannerRestrictionContextForInsertSelect relabels all Var varnos of restrictioninfos
+ * inside plannerRestrictionContext to 1. We wrap SELECT part into subquery for INSERT .. SELECT
+ * queries but do not update restrictinfos inside plannerContext. It is safe to do that as we are
+ * sure that SELECT part has only single table.
+ */
+static void
+RelabelPlannerRestrictionContextForInsertSelect(
+	PlannerRestrictionContext *plannerRestrictionContext)
+{
+	List *relationRestrictionList =
+		plannerRestrictionContext->relationRestrictionContext->relationRestrictionList;
+
+	RelationRestriction *relationRestriction = NULL;
+	foreach_ptr(relationRestriction, relationRestrictionList)
+	{
+		RelOptInfo *relOptInfo = relationRestriction->relOptInfo;
+		List *baseRestrictInfoList = relOptInfo->baserestrictinfo;
+		RestrictInfo *baseRestrictInfo = NULL;
+		foreach_ptr(baseRestrictInfo, baseRestrictInfoList)
+		{
+			List *varList = pull_var_clause_default((Node *) baseRestrictInfo->clause);
+			Var *var = NULL;
+			foreach_ptr(var, varList)
+			{
+				var->varno = 1;
+				var->varnosyn = 1;
+			}
+		}
+	}
+}
+
+
+/*
  * CreateInsertSelectIntoLocalTablePlan creates the plan for INSERT .. SELECT queries
  * where the selected table is distributed and the inserted table is not.
  *
@@ -383,6 +421,9 @@ CreateInsertSelectIntoLocalTablePlan(uint64 planId, Query *insertSelectQuery,
 
 	/* get the SELECT query (may have changed after PrepareInsertSelectForCitusPlanner) */
 	Query *selectQuery = selectRte->subquery;
+
+	/* relabels all Var varnos inside plannerRestrictionContext after we modify SELECT query */
+	RelabelPlannerRestrictionContextForInsertSelect(plannerRestrictionContext);
 
 	bool allowRecursivePlanning = true;
 	DistributedPlan *distPlan = CreateDistributedPlan(planId, allowRecursivePlanning,
@@ -1476,7 +1517,8 @@ InsertPartitionColumnMatchesSelect(Query *query, RangeTblEntry *insertRte,
  * distributed table. The query plan can also be executed on a worker in MX.
  */
 static DistributedPlan *
-CreateNonPushableInsertSelectPlan(uint64 planId, Query *parse, ParamListInfo boundParams)
+CreateNonPushableInsertSelectPlan(uint64 planId, Query *parse, ParamListInfo boundParams,
+								  PlannerRestrictionContext *plannerRestrictionContext)
 {
 	Query *insertSelectQuery = copyObject(parse);
 

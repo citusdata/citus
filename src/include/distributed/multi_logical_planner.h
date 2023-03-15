@@ -124,6 +124,8 @@ typedef struct MultiSelect
 {
 	MultiUnaryNode unaryNode;
 	List *selectClauseList;
+	List *pushdownableSelectClauseList;
+	List *nonPushdownableSelectClauseList;
 } MultiSelect;
 
 
@@ -188,6 +190,24 @@ typedef struct MultiExtendedOp
 } MultiExtendedOp;
 
 
+/*
+ * RestrictInfoContext stores join and base restriction infos extracted from planner context
+ *	baseRestrictInfoList: WHERE <>
+ *	joinRestrictInfoList JOIN ON <>
+ *	joinRestrictInfoListList: stores colocated join restrictions in 2 dimensional list
+ *	generatedEcJoinClauseList: stores generated implicit join clauses
+ *  pseudoRestrictInfoList: stores all pseudoconstant restrict infos
+ */
+typedef struct RestrictInfoContext
+{
+	List *baseRestrictInfoList;
+	List *joinRestrictInfoList;
+	List *joinRestrictInfoListList;
+	List *generatedEcJoinClauseList;
+	List *pseudoRestrictInfoList;
+} RestrictInfoContext;
+
+
 /* Function declarations for building logical plans */
 extern MultiTreeRoot * MultiLogicalPlanCreate(Query *originalQuery, Query *queryTree,
 											  PlannerRestrictionContext *
@@ -214,12 +234,12 @@ extern bool UnaryOperator(MultiNode *node);
 extern bool BinaryOperator(MultiNode *node);
 extern List * OutputTableIdList(MultiNode *multiNode);
 extern List * FindNodesOfType(MultiNode *node, int type);
-extern List * JoinClauseList(List *whereClauseList);
 extern bool IsJoinClause(Node *clause);
 extern List * SubqueryEntryList(Query *queryTree);
 extern DeferredErrorMessage * DeferErrorIfQueryNotSupported(Query *queryTree);
 extern List * WhereClauseList(FromExpr *fromExpr);
-extern List * QualifierList(FromExpr *fromExpr);
+extern RestrictInfoContext * ExtractRestrictInfosFromPlannerContext(
+	PlannerRestrictionContext *plannerRestrictionContext);
 extern List * TableEntryList(List *rangeTableList);
 extern List * UsedTableEntryList(Query *query);
 extern List * pull_var_clause_default(Node *node);
@@ -229,7 +249,8 @@ extern MultiProject * MultiProjectNode(List *targetEntryList);
 extern MultiExtendedOp * MultiExtendedOpNode(Query *queryTree, Query *originalQuery);
 extern DeferredErrorMessage * DeferErrorIfUnsupportedSubqueryRepartition(Query *
 																		 subqueryTree);
-extern MultiNode * MultiNodeTree(Query *queryTree);
+extern MultiNode * MultiNodeTree(Query *queryTree,
+								 PlannerRestrictionContext *plannerRestrictionContext);
 
 
 #endif   /* MULTI_LOGICAL_PLANNER_H */

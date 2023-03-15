@@ -53,7 +53,7 @@ GROUP BY
 ORDER BY
 	revenue DESC,
 	o_orderdate;
-LOG:  join order: [ "orders" ][ local partition join "lineitem" ][ dual partition join "customer_append" ]
+LOG:  join order: [ "orders" ][ local partition join(INNER) "lineitem" ][ dual partition join(INNER) "customer_append" ]
                                            QUERY PLAN
 ---------------------------------------------------------------------
  Sort
@@ -97,7 +97,7 @@ GROUP BY
 	c_comment
 ORDER BY
 	revenue DESC;
-LOG:  join order: [ "orders" ][ local partition join "lineitem" ][ dual partition join "customer_append" ][ reference join "nation" ]
+LOG:  join order: [ "orders" ][ local partition join(INNER) "lineitem" ][ dual partition join(INNER) "customer_append" ][ reference join(INNER) "nation" ]
                              QUERY PLAN
 ---------------------------------------------------------------------
  Sort
@@ -137,7 +137,7 @@ WHERE
 		AND l_shipmode in ('AIR', 'AIR REG', 'TRUCK')
 		AND l_shipinstruct = 'DELIVER IN PERSON'
 	);
-LOG:  join order: [ "lineitem" ][ dual partition join "part_append" ]
+LOG:  join order: [ "lineitem" ][ dual partition join(INNER) "part_append" ]
                              QUERY PLAN
 ---------------------------------------------------------------------
  Aggregate
@@ -157,7 +157,7 @@ WHERE
 	c_custkey = o_custkey
 GROUP BY
       l_partkey;
-LOG:  join order: [ "lineitem" ][ local partition join "orders" ][ dual partition join "part_append" ][ dual partition join "customer_append" ]
+LOG:  join order: [ "lineitem" ][ local partition join(INNER) "orders" ][ dual partition join(INNER) "part_append" ][ dual partition join(INNER) "customer_append" ]
                              QUERY PLAN
 ---------------------------------------------------------------------
  HashAggregate

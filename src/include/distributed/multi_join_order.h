@@ -17,6 +17,7 @@
 
 #include "postgres.h"
 
+#include "nodes/pathnodes.h"
 #include "nodes/pg_list.h"
 #include "nodes/primnodes.h"
 
@@ -60,6 +61,17 @@ typedef struct TableEntry
 
 
 /*
+ * ApplicableJoinClauseContext stores pushdownable and nonpushdownable
+ * parts of applicable join clauses in separate lists.
+ */
+typedef struct ApplicableJoinClauseContext
+{
+	List *pushdownableJoinClauseList;
+	List *nonPushdownableJoinClauseList;
+} ApplicableJoinClauseContext;
+
+
+/*
  * JoinOrderNode represents an element in the join order list; and this list
  * keeps the total join order for a distributed query. The first node in this
  * list later becomes the leftmost table in the join tree, and the successive
@@ -79,8 +91,23 @@ typedef struct JoinOrderNode
 
 	char partitionMethod;
 	List *joinClauseList;       /* not relevant for the first table */
+	ApplicableJoinClauseContext *applicableJoinClauseContext; /* not relevant for the first table */
 	TableEntry *anchorTable;
 } JoinOrderNode;
+
+
+/*
+ * JoinOrderInfo stores information about a join between 2 tables.
+ * joinType:          join type between left and right tables in join
+ * leftTableIdx:	  rtable index for left table in join
+ * rightTableIdx:	  rtable index for right table in join
+ */
+typedef struct JoinOrderInfo
+{
+	JoinType joinType;
+	uint32 leftTableIdx;
+	uint32 rightTableIdx;
+} JoinOrderInfo;
 
 
 /* Config variables managed via guc.c */
@@ -90,11 +117,17 @@ extern bool EnableSingleHashRepartitioning;
 
 /* Function declaration for determining table join orders */
 extern List * JoinExprList(FromExpr *fromExpr);
-extern List * JoinOrderList(List *rangeTableEntryList, List *joinClauseList);
+extern List * JoinOrderList(List *rangeTableEntryList, List *joinRestrictInfoListList,
+							List *generatedEcJoinClauseList);
+extern List * FixedJoinOrderList(List *rangeTableEntryList,
+								 List *joinOrderInfoList,
+								 List *joinRestrictInfoListList,
+								 List *generatedEcJoinClauseList);
 extern bool IsApplicableJoinClause(List *leftTableIdList, uint32 rightTableId,
 								   Node *joinClause);
-extern List * ApplicableJoinClauses(List *leftTableIdList, uint32 rightTableId,
-									List *joinClauseList);
+extern bool IsApplicableFalseConstantJoinClause(List *leftTableIdList,
+												uint32 rightTableId,
+												RestrictInfo *restrictInfo);
 extern bool NodeIsEqualsOpExpr(Node *node);
 extern bool IsSupportedReferenceJoin(JoinType joinType, bool leftIsReferenceTable,
 									 bool rightIsReferenceTable);
@@ -108,6 +141,8 @@ extern Var * DistPartitionKey(Oid relationId);
 extern Var * DistPartitionKeyOrError(Oid relationId);
 extern char PartitionMethod(Oid relationId);
 extern char TableReplicationModel(Oid relationId);
-
+extern bool ExtractLeftMostRangeTableIndex(Node *node, int *rangeTableIndex);
+extern ApplicableJoinClauseContext * ExtractApplicableJoinClauseContextFromJoinList(
+	List *joinOrderList);
 
 #endif   /* MULTI_JOIN_ORDER_H */

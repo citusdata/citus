@@ -78,6 +78,7 @@ typedef struct JoinRestrictionContext
 	List *joinRestrictionList;
 	bool hasSemiJoin;
 	bool hasOuterJoin;
+	List *generatedEcJoinRestrictInfoList;
 } JoinRestrictionContext;
 
 typedef struct JoinRestriction
@@ -241,6 +242,8 @@ extern bool GetOriginalInh(RangeTblEntry *rte);
 extern LOCKMODE GetQueryLockMode(Query *query);
 extern int32 BlessRecordExpression(Expr *expr);
 extern void DissuadePlannerFromUsingPlan(PlannedStmt *plan);
+extern Query * ReplanAfterQueryModification(Query *originalQuery, ParamListInfo
+											boundParams);
 extern PlannedStmt * FinalizePlan(PlannedStmt *localPlan,
 								  struct DistributedPlan *distributedPlan);
 extern RTEListProperties * GetRTEListPropertiesForQuery(Query *query);

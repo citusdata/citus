@@ -857,7 +857,8 @@ FROM (
     SELECT events_table.user_id, sum(events_table.value_2) AS counter FROM events_table, users_table WHERE users_table.user_id > events_table.user_id GROUP BY 1
 ) user_id
 GROUP BY user_id;
-ERROR:  complex joins are only supported when all distributed tables are joined on their distribution columns with equal operator
+ERROR:  cannot perform distributed planning on this query
+DETAIL:  Cartesian products are currently unsupported
 -- non-equi join also not supported for UNION ALL
 SELECT user_id, sum(counter)
 FROM (
@@ -866,7 +867,8 @@ FROM (
     SELECT events_table.user_id, sum(events_table.value_2) AS counter FROM events_table, users_table WHERE users_table.user_id > events_table.user_id GROUP BY 1
 ) user_id
 GROUP BY user_id;
-ERROR:  complex joins are only supported when all distributed tables are joined on their distribution columns with equal operator
+ERROR:  cannot perform distributed planning on this query
+DETAIL:  Cartesian products are currently unsupported
 -- joins inside unions are supported -- slightly more comlex than the above
 SELECT * FROM
 (

@@ -72,6 +72,7 @@ FROM
     test b
 WHERE t2.y - a.x - b.x = 0
 ORDER BY 1,2,3;
-ERROR:  complex joins are only supported when all distributed tables are joined on their distribution columns with equal operator
+ERROR:  cannot perform distributed planning on this query
+DETAIL:  Cartesian products are currently unsupported
 SET client_min_messages TO WARNING;
 DROP SCHEMA expression_reference_join CASCADE;

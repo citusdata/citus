@@ -36,6 +36,7 @@
 #include "distributed/query_pushdown_planning.h"
 #include "distributed/recursive_planning.h"
 #include "distributed/relation_restriction_equivalence.h"
+#include "distributed/shard_pruning.h"
 #include "distributed/version_compat.h"
 #include "nodes/nodeFuncs.h"
 #include "nodes/makefuncs.h"
@@ -82,7 +83,6 @@ int ValuesMaterializationThreshold = 100;
 /* Local functions forward declarations */
 static bool JoinTreeContainsSubqueryWalker(Node *joinTreeNode, void *context);
 static bool IsFunctionOrValuesRTE(Node *node);
-static bool IsOuterJoinExpr(Node *node);
 static bool WindowPartitionOnDistributionColumn(Query *query);
 static DeferredErrorMessage * DeferErrorIfFromClauseRecurs(Query *queryTree);
 static RecurringTuplesType FromClauseRecurringTupleType(Query *queryTree);
@@ -112,6 +112,8 @@ static Var * PartitionColumnForPushedDownSubquery(Query *query);
 static bool ContainsReferencesToRelids(Query *query, Relids relids, int *foundRelid);
 static bool ContainsReferencesToRelidsWalker(Node *node,
 											 RelidsReferenceWalkerContext *context);
+static bool HasRightRecursiveJoin(FromExpr *fromExpr);
+static bool RightRecursiveJoinExprWalker(Node *node, void *context);
 
 
 /*
@@ -153,7 +155,6 @@ ShouldUseSubqueryPushDown(Query *originalQuery, Query *rewrittenQuery,
 		return true;
 	}
 
-
 	/*
 	 * We check if postgres planned any semi joins, MultiNodeTree doesn't
 	 * support these so we fail. Postgres is able to replace some IN/ANY
@@ -174,7 +175,6 @@ ShouldUseSubqueryPushDown(Query *originalQuery, Query *rewrittenQuery,
 		return true;
 	}
 
-
 	/*
 	 * We process function and VALUES RTEs as subqueries, since the join order planner
 	 * does not know how to handle them.
@@ -185,31 +185,41 @@ ShouldUseSubqueryPushDown(Query *originalQuery, Query *rewrittenQuery,
 	}
 
 	/*
-	 * We handle outer joins as subqueries, since the join order planner
-	 * does not know how to handle them.
-	 */
-	if (FindNodeMatchingCheckFunction((Node *) originalQuery->jointree, IsOuterJoinExpr))
-	{
-		return true;
-	}
-
-	/*
-	 * Original query may not have an outer join while rewritten query does.
-	 * We should push down in this case.
-	 * An example of this is https://github.com/citusdata/citus/issues/2739
-	 * where postgres pulls-up the outer-join in the subquery.
+	 * some unsupported outer joins in logical planner
+	 * may be supported by pushdown planner.
 	 */
 	if (FindNodeMatchingCheckFunction((Node *) rewrittenQuery->jointree, IsOuterJoinExpr))
 	{
-		return true;
+		/* we can try to pushdown outer joins if all restrictions are on partition columns */
+		if (RestrictionEquivalenceForPartitionKeys(plannerRestrictionContext))
+		{
+			return true;
+		}
+
+		/*
+		 * join order planner only handles left recursive join trees (except inner joins,
+		 * which are commutative).
+		 */
+		if (HasRightRecursiveJoin(rewrittenQuery->jointree))
+		{
+			return true;
+		}
 	}
 
 	/*
 	 * Some unsupported join clauses in logical planner
 	 * may be supported by subquery pushdown planner.
 	 */
-	List *qualifierList = QualifierList(rewrittenQuery->jointree);
-	if (DeferErrorIfUnsupportedClause(qualifierList) != NULL)
+	RestrictInfoContext *restrictInfoContext = ExtractRestrictInfosFromPlannerContext(
+		plannerRestrictionContext);
+	List *joinRestrictionInfoList = restrictInfoContext->joinRestrictInfoList;
+	List *nonJoinRestrictionInfoList = restrictInfoContext->baseRestrictInfoList;
+
+	/* verify we can plan for restriction clauses */
+	List *whereClauseList = get_all_actual_clauses(nonJoinRestrictionInfoList);
+	List *joinClauseList = get_all_actual_clauses(joinRestrictionInfoList);
+	List *qualClauseList = list_concat_copy(whereClauseList, joinClauseList);
+	if (DeferErrorIfUnsupportedClause(qualClauseList) != NULL)
 	{
 		return true;
 	}
@@ -222,6 +232,51 @@ ShouldUseSubqueryPushDown(Query *originalQuery, Query *rewrittenQuery,
 	}
 
 	return false;
+}
+
+
+/*
+ * HasRightRecursiveJoin returns true if it finds right recursive part
+ * in given join tree.
+ */
+static bool
+HasRightRecursiveJoin(FromExpr *fromExpr)
+{
+	JoinExpr *joinExpr = NULL;
+	foreach_ptr(joinExpr, fromExpr->fromlist)
+	{
+		if (RightRecursiveJoinExprWalker((Node *) joinExpr, NULL))
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
+
+/*
+ * RightRecursiveJoinExprWalker is helper method for HasRightRecursiveJoin.
+ */
+static bool
+RightRecursiveJoinExprWalker(Node *node, void *context)
+{
+	if (node == NULL)
+	{
+		return false;
+	}
+
+	if (IsA(node, JoinExpr))
+	{
+		JoinExpr *joinExpr = (JoinExpr *) node;
+
+		if (IsA(joinExpr->rarg, JoinExpr))
+		{
+			return true;
+		}
+	}
+
+	return expression_tree_walker(node, RightRecursiveJoinExprWalker, NULL);
 }
 
 
@@ -391,7 +446,7 @@ IsNodeSubquery(Node *node)
 /*
  * IsOuterJoinExpr returns whether the given node is an outer join expression.
  */
-static bool
+bool
 IsOuterJoinExpr(Node *node)
 {
 	bool isOuterJoin = false;

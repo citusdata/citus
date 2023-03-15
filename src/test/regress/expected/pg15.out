@@ -566,7 +566,8 @@ SELECT count(*)
 FROM numeric_repartition_first f,
      numeric_repartition_second s
 WHERE f.id = s.numeric_column;
-ERROR:  complex joins are only supported when all distributed tables are joined on their distribution columns with equal operator
+ERROR:  cannot perform distributed planning on this query
+DETAIL:  Cartesian products are currently unsupported
 -- show that the same query works if we use an int column instead of a numeric on the filter clause
 SELECT count(*)
 FROM numeric_repartition_first f,

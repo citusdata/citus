@@ -989,7 +989,31 @@ DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  skipping recursive planning for the subquery since it contains references to outer queries
 DEBUG:  skipping recursive planning for the subquery since it contains references to outer queries
 DEBUG:  skipping recursive planning for the subquery since it contains references to outer queries
-ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
+DEBUG:  join prunable for task partitionId 0 and 1
+DEBUG:  join prunable for task partitionId 0 and 2
+DEBUG:  join prunable for task partitionId 0 and 3
+DEBUG:  join prunable for task partitionId 1 and 0
+DEBUG:  join prunable for task partitionId 1 and 2
+DEBUG:  join prunable for task partitionId 1 and 3
+DEBUG:  join prunable for task partitionId 2 and 0
+DEBUG:  join prunable for task partitionId 2 and 1
+DEBUG:  join prunable for task partitionId 2 and 3
+DEBUG:  join prunable for task partitionId 3 and 0
+DEBUG:  join prunable for task partitionId 3 and 1
+DEBUG:  join prunable for task partitionId 3 and 2
+DEBUG:  pruning merge fetch taskId 1
+DEBUG:  pruning merge fetch taskId 2
+DEBUG:  pruning merge fetch taskId 4
+DEBUG:  pruning merge fetch taskId 5
+DEBUG:  pruning merge fetch taskId 7
+DEBUG:  pruning merge fetch taskId 8
+DEBUG:  pruning merge fetch taskId 10
+DEBUG:  pruning merge fetch taskId 11
+ valid
+---------------------------------------------------------------------
+ t
+(1 row)
+
 -- similar to the above, make sure that we skip recursive planning when
 -- the subquery contains only intermediate results
 SELECT COUNT(*) = 176

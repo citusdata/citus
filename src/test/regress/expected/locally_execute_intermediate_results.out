@@ -604,8 +604,8 @@ HAVING max(value) > (SELECT max FROM cte_1);
 DEBUG:  generating subplan XXX_1 for CTE cte_1: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM locally_execute_intermediate_results.table_2 GROUP BY value HAVING (max(value) OPERATOR(pg_catalog.>) (SELECT cte_1.max FROM (SELECT intermediate_result.max FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_1))
 DEBUG:  Subplan XXX_1 will be written to local file
-NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580000 table_1 WHERE true
-NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580002 table_1 WHERE true
+NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580000 table_1 WHERE (value IS NOT NULL)
+NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580002 table_1 WHERE (value IS NOT NULL)
 NOTICE:  executing the command locally: SELECT count(*) AS count, worker_column_1 AS worker_column_2, max(worker_column_1) AS worker_column_3 FROM (SELECT table_2.value AS worker_column_1 FROM locally_execute_intermediate_results.table_2_1580004 table_2) worker_subquery GROUP BY worker_column_1
 NOTICE:  executing the command locally: SELECT count(*) AS count, worker_column_1 AS worker_column_2, max(worker_column_1) AS worker_column_3 FROM (SELECT table_2.value AS worker_column_1 FROM locally_execute_intermediate_results.table_2_1580006 table_2) worker_subquery GROUP BY worker_column_1
  count
@@ -631,8 +631,8 @@ DEBUG:  generating subplan XXX_2 for CTE cte_2: SELECT key, value FROM locally_e
 DEBUG:  generating subplan XXX_3 for subquery SELECT key FROM (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) cte_2 ORDER BY key LIMIT 1
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM locally_execute_intermediate_results.table_2 WHERE (key OPERATOR(pg_catalog.>) (SELECT intermediate_result.key FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(key integer))) GROUP BY value HAVING (max(value) OPERATOR(pg_catalog.>) (SELECT cte_1.max FROM (SELECT intermediate_result.max FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_1))
 DEBUG:  Subplan XXX_1 will be written to local file
-NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580000 table_1 WHERE true
-NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580002 table_1 WHERE true
+NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580000 table_1 WHERE (value IS NOT NULL)
+NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580002 table_1 WHERE (value IS NOT NULL)
 DEBUG:  Subplan XXX_2 will be written to local file
 NOTICE:  executing the command locally: SELECT key, value FROM locally_execute_intermediate_results.table_2_1580004 table_2 WHERE true
 NOTICE:  executing the command locally: SELECT key, value FROM locally_execute_intermediate_results.table_2_1580006 table_2 WHERE true
@@ -664,12 +664,12 @@ DEBUG:  generating subplan XXX_2 for CTE cte_2: SELECT max(key) AS max FROM loca
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM locally_execute_intermediate_results.table_2 WHERE (key OPERATOR(pg_catalog.>) (SELECT cte_2.max FROM (SELECT intermediate_result.max FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(max integer)) cte_2)) GROUP BY key HAVING (max(value) OPERATOR(pg_catalog.>) (SELECT cte_1.max FROM (SELECT intermediate_result.max FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_1))
 DEBUG:  Subplan XXX_1 will be sent to localhost:xxxxx
 DEBUG:  Subplan XXX_1 will be sent to localhost:xxxxx
-NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580000 table_1 WHERE true
-NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580002 table_1 WHERE true
+NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580000 table_1 WHERE (value IS NOT NULL)
+NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580002 table_1 WHERE (value IS NOT NULL)
 DEBUG:  Subplan XXX_2 will be sent to localhost:xxxxx
 DEBUG:  Subplan XXX_2 will be sent to localhost:xxxxx
-NOTICE:  executing the command locally: SELECT max(key) AS max FROM locally_execute_intermediate_results.table_2_1580004 table_2 WHERE true
-NOTICE:  executing the command locally: SELECT max(key) AS max FROM locally_execute_intermediate_results.table_2_1580006 table_2 WHERE true
+NOTICE:  executing the command locally: SELECT max(key) AS max FROM locally_execute_intermediate_results.table_2_1580004 table_2 WHERE (key IS NOT NULL)
+NOTICE:  executing the command locally: SELECT max(key) AS max FROM locally_execute_intermediate_results.table_2_1580006 table_2 WHERE (key IS NOT NULL)
 NOTICE:  executing the command locally: SELECT count(*) AS count, worker_column_1 AS worker_column_2 FROM (SELECT table_2.key AS worker_column_1, table_2.value AS worker_column_2 FROM locally_execute_intermediate_results.table_2_1580004 table_2 WHERE (table_2.key OPERATOR(pg_catalog.>) (SELECT cte_2.max FROM (SELECT intermediate_result.max FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(max integer)) cte_2))) worker_subquery GROUP BY worker_column_1 HAVING (max(worker_column_2) OPERATOR(pg_catalog.>) (SELECT cte_1.max FROM (SELECT intermediate_result.max FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_1))
 NOTICE:  executing the command locally: SELECT count(*) AS count, worker_column_1 AS worker_column_2 FROM (SELECT table_2.key AS worker_column_1, table_2.value AS worker_column_2 FROM locally_execute_intermediate_results.table_2_1580006 table_2 WHERE (table_2.key OPERATOR(pg_catalog.>) (SELECT cte_2.max FROM (SELECT intermediate_result.max FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(max integer)) cte_2))) worker_subquery GROUP BY worker_column_1 HAVING (max(worker_column_2) OPERATOR(pg_catalog.>) (SELECT cte_1.max FROM (SELECT intermediate_result.max FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_1))
  count
@@ -694,11 +694,11 @@ DEBUG:  generating subplan XXX_2 for CTE cte_2: SELECT max(key) AS max FROM loca
 DEBUG:  generating subplan XXX_3 for CTE cte_3: SELECT key, value FROM locally_execute_intermediate_results.table_2
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) cte_3 WHERE (key OPERATOR(pg_catalog.>) (SELECT cte_2.max FROM (SELECT intermediate_result.max FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(max integer)) cte_2)) GROUP BY key HAVING (max(value) OPERATOR(pg_catalog.>) (SELECT cte_1.max FROM (SELECT intermediate_result.max FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_1))
 DEBUG:  Subplan XXX_1 will be written to local file
-NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580000 table_1 WHERE true
-NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580002 table_1 WHERE true
+NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580000 table_1 WHERE (value IS NOT NULL)
+NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580002 table_1 WHERE (value IS NOT NULL)
 DEBUG:  Subplan XXX_2 will be written to local file
-NOTICE:  executing the command locally: SELECT max(key) AS max FROM locally_execute_intermediate_results.table_2_1580004 table_2 WHERE true
-NOTICE:  executing the command locally: SELECT max(key) AS max FROM locally_execute_intermediate_results.table_2_1580006 table_2 WHERE true
+NOTICE:  executing the command locally: SELECT max(key) AS max FROM locally_execute_intermediate_results.table_2_1580004 table_2 WHERE (key IS NOT NULL)
+NOTICE:  executing the command locally: SELECT max(key) AS max FROM locally_execute_intermediate_results.table_2_1580006 table_2 WHERE (key IS NOT NULL)
 DEBUG:  Subplan XXX_3 will be written to local file
 NOTICE:  executing the command locally: SELECT key, value FROM locally_execute_intermediate_results.table_2_1580004 table_2 WHERE true
 NOTICE:  executing the command locally: SELECT key, value FROM locally_execute_intermediate_results.table_2_1580006 table_2 WHERE true
@@ -721,11 +721,11 @@ DEBUG:  generating subplan XXX_1 for CTE cte_1: SELECT max(value) AS max FROM lo
 DEBUG:  generating subplan XXX_2 for CTE cte_2: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM locally_execute_intermediate_results.table_2 GROUP BY value HAVING (max(value) OPERATOR(pg_catalog.>) (SELECT cte_1.max FROM ((SELECT intermediate_result.max FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_1 JOIN (SELECT intermediate_result.max FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_2 USING (max))))
 DEBUG:  Subplan XXX_1 will be written to local file
-NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580000 table_1 WHERE true
-NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580002 table_1 WHERE true
+NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580000 table_1 WHERE (value IS NOT NULL)
+NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580002 table_1 WHERE (value IS NOT NULL)
 DEBUG:  Subplan XXX_2 will be written to local file
-NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580000 table_1 WHERE true
-NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580002 table_1 WHERE true
+NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580000 table_1 WHERE (value IS NOT NULL)
+NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580002 table_1 WHERE (value IS NOT NULL)
 NOTICE:  executing the command locally: SELECT count(*) AS count, worker_column_1 AS worker_column_2, max(worker_column_1) AS worker_column_3 FROM (SELECT table_2.value AS worker_column_1 FROM locally_execute_intermediate_results.table_2_1580004 table_2) worker_subquery GROUP BY worker_column_1
 NOTICE:  executing the command locally: SELECT count(*) AS count, worker_column_1 AS worker_column_2, max(worker_column_1) AS worker_column_3 FROM (SELECT table_2.value AS worker_column_1 FROM locally_execute_intermediate_results.table_2_1580006 table_2) worker_subquery GROUP BY worker_column_1
  count
@@ -751,11 +751,11 @@ DEBUG:  generating subplan XXX_2 for CTE cte_2: SELECT max(value) AS max FROM lo
 DEBUG:  generating subplan XXX_3 for CTE cte_3: SELECT key, value FROM locally_execute_intermediate_results.table_2
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) cte_3 GROUP BY key HAVING (max(value) OPERATOR(pg_catalog.>) (SELECT cte_1.max FROM ((SELECT intermediate_result.max FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_1 JOIN (SELECT intermediate_result.max FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_2 USING (max))))
 DEBUG:  Subplan XXX_1 will be written to local file
-NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580000 table_1 WHERE true
-NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580002 table_1 WHERE true
+NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580000 table_1 WHERE (value IS NOT NULL)
+NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580002 table_1 WHERE (value IS NOT NULL)
 DEBUG:  Subplan XXX_2 will be written to local file
-NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580000 table_1 WHERE true
-NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580002 table_1 WHERE true
+NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580000 table_1 WHERE (value IS NOT NULL)
+NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580002 table_1 WHERE (value IS NOT NULL)
 DEBUG:  Subplan XXX_3 will be written to local file
 NOTICE:  executing the command locally: SELECT key, value FROM locally_execute_intermediate_results.table_2_1580004 table_2 WHERE true
 NOTICE:  executing the command locally: SELECT key, value FROM locally_execute_intermediate_results.table_2_1580006 table_2 WHERE true
@@ -781,8 +781,8 @@ DEBUG:  generating subplan XXX_1 for CTE cte_1: SELECT max(value) AS max FROM lo
 DEBUG:  generating subplan XXX_2 for subquery SELECT max(max) AS max FROM (SELECT intermediate_result.max FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_1
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM locally_execute_intermediate_results.table_2 GROUP BY value HAVING (max(value) OPERATOR(pg_catalog.>) (SELECT intermediate_result.max FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(max text)))
 DEBUG:  Subplan XXX_1 will be written to local file
-NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580000 table_1 WHERE true
-NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580002 table_1 WHERE true
+NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580000 table_1 WHERE (value IS NOT NULL)
+NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580002 table_1 WHERE (value IS NOT NULL)
 DEBUG:  Subplan XXX_2 will be written to local file
 NOTICE:  executing the command locally: SELECT max(max) AS max FROM (SELECT intermediate_result.max FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_1
 NOTICE:  executing the command locally: SELECT count(*) AS count, worker_column_1 AS worker_column_2, max(worker_column_1) AS worker_column_3 FROM (SELECT table_2.value AS worker_column_1 FROM locally_execute_intermediate_results.table_2_1580004 table_2) worker_subquery GROUP BY worker_column_1
@@ -808,8 +808,8 @@ DEBUG:  generating subplan XXX_2 for CTE cte_2: SELECT key, value FROM locally_e
 DEBUG:  generating subplan XXX_3 for subquery SELECT max(max) AS max FROM (SELECT intermediate_result.max FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_1
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) cte_2 GROUP BY key HAVING (max(value) OPERATOR(pg_catalog.<) (SELECT intermediate_result.max FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(max text)))
 DEBUG:  Subplan XXX_1 will be written to local file
-NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580000 table_1 WHERE true
-NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580002 table_1 WHERE true
+NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580000 table_1 WHERE (value IS NOT NULL)
+NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580002 table_1 WHERE (value IS NOT NULL)
 DEBUG:  Subplan XXX_2 will be written to local file
 NOTICE:  executing the command locally: SELECT key, value FROM locally_execute_intermediate_results.table_1_1580000 table_1 WHERE true
 NOTICE:  executing the command locally: SELECT key, value FROM locally_execute_intermediate_results.table_1_1580002 table_1 WHERE true
@@ -990,11 +990,11 @@ DEBUG:  generating subplan XXX_1 for CTE cte_1: SELECT max(value) AS max FROM lo
 DEBUG:  generating subplan XXX_2 for CTE cte_2: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM locally_execute_intermediate_results.table_2 WHERE (key OPERATOR(pg_catalog.=) 3) GROUP BY key HAVING (max(value) OPERATOR(pg_catalog.>) (SELECT cte_1.max FROM ((SELECT intermediate_result.max FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_1 JOIN (SELECT intermediate_result.max FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_2 USING (max))))
 DEBUG:  Subplan XXX_1 will be sent to localhost:xxxxx
-NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580000 table_1 WHERE true
-NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580002 table_1 WHERE true
+NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580000 table_1 WHERE (value IS NOT NULL)
+NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580002 table_1 WHERE (value IS NOT NULL)
 DEBUG:  Subplan XXX_2 will be sent to localhost:xxxxx
-NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580000 table_1 WHERE true
-NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580002 table_1 WHERE true
+NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580000 table_1 WHERE (value IS NOT NULL)
+NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580002 table_1 WHERE (value IS NOT NULL)
  count
 ---------------------------------------------------------------------
 (0 rows)
@@ -1015,11 +1015,11 @@ DEBUG:  generating subplan XXX_2 for CTE cte_2: SELECT max(value) AS max FROM lo
 DEBUG:  generating subplan XXX_3 for CTE cte_3: SELECT key, value FROM locally_execute_intermediate_results.table_2
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (locally_execute_intermediate_results.table_2 JOIN (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) cte_3 USING (key)) WHERE (table_2.key OPERATOR(pg_catalog.=) 3) GROUP BY table_2.key HAVING (max(table_2.value) OPERATOR(pg_catalog.>) (SELECT cte_1.max FROM ((SELECT intermediate_result.max FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_1 JOIN (SELECT intermediate_result.max FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_2 USING (max))))
 DEBUG:  Subplan XXX_1 will be sent to localhost:xxxxx
-NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580000 table_1 WHERE true
-NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580002 table_1 WHERE true
+NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580000 table_1 WHERE (value IS NOT NULL)
+NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580002 table_1 WHERE (value IS NOT NULL)
 DEBUG:  Subplan XXX_2 will be sent to localhost:xxxxx
-NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580000 table_1 WHERE true
-NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580002 table_1 WHERE true
+NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580000 table_1 WHERE (value IS NOT NULL)
+NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580002 table_1 WHERE (value IS NOT NULL)
 DEBUG:  Subplan XXX_3 will be sent to localhost:xxxxx
 NOTICE:  executing the command locally: SELECT key, value FROM locally_execute_intermediate_results.table_2_1580004 table_2 WHERE true
 NOTICE:  executing the command locally: SELECT key, value FROM locally_execute_intermediate_results.table_2_1580006 table_2 WHERE true
@@ -1042,11 +1042,11 @@ DEBUG:  generating subplan XXX_2 for CTE cte_2: SELECT max(value) AS max FROM lo
 DEBUG:  generating subplan XXX_3 for CTE cte_3: SELECT key, value FROM locally_execute_intermediate_results.table_2
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (((locally_execute_intermediate_results.table_2 JOIN (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) cte_3 USING (key)) JOIN (SELECT intermediate_result.max FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_2 ON ((table_2.key OPERATOR(pg_catalog.=) (cte_2.max)::integer))) JOIN (SELECT intermediate_result.max FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_1 USING (max)) WHERE (table_2.key OPERATOR(pg_catalog.=) 3) GROUP BY table_2.key HAVING (max(table_2.value) OPERATOR(pg_catalog.>) (SELECT cte_1_1.max FROM ((SELECT intermediate_result.max FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_1_1 JOIN (SELECT intermediate_result.max FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_2_1 USING (max))))
 DEBUG:  Subplan XXX_1 will be sent to localhost:xxxxx
-NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580000 table_1 WHERE true
-NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580002 table_1 WHERE true
+NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580000 table_1 WHERE (value IS NOT NULL)
+NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580002 table_1 WHERE (value IS NOT NULL)
 DEBUG:  Subplan XXX_2 will be sent to localhost:xxxxx
-NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580000 table_1 WHERE true
-NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580002 table_1 WHERE true
+NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580000 table_1 WHERE (value IS NOT NULL)
+NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580002 table_1 WHERE (value IS NOT NULL)
 DEBUG:  Subplan XXX_3 will be sent to localhost:xxxxx
 NOTICE:  executing the command locally: SELECT key, value FROM locally_execute_intermediate_results.table_2_1580004 table_2 WHERE true
 NOTICE:  executing the command locally: SELECT key, value FROM locally_execute_intermediate_results.table_2_1580006 table_2 WHERE true
@@ -1066,12 +1066,12 @@ DEBUG:  generating subplan XXX_2 for CTE cte_2: SELECT max(value) AS max FROM lo
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT foo.key, bar.key FROM (SELECT table_1.key FROM locally_execute_intermediate_results.table_1 GROUP BY table_1.key HAVING (max(table_1.value) OPERATOR(pg_catalog.>) (SELECT cte_1.max FROM (SELECT intermediate_result.max FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_1))) foo, (SELECT table_2.key FROM locally_execute_intermediate_results.table_2 GROUP BY table_2.key HAVING (max(table_2.value) OPERATOR(pg_catalog.>) (SELECT cte_2.max FROM (SELECT intermediate_result.max FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_2))) bar WHERE (foo.key OPERATOR(pg_catalog.=) bar.key)
 DEBUG:  Subplan XXX_1 will be sent to localhost:xxxxx
 DEBUG:  Subplan XXX_1 will be sent to localhost:xxxxx
-NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580000 table_1 WHERE true
-NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580002 table_1 WHERE true
+NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580000 table_1 WHERE (value IS NOT NULL)
+NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580002 table_1 WHERE (value IS NOT NULL)
 DEBUG:  Subplan XXX_2 will be sent to localhost:xxxxx
 DEBUG:  Subplan XXX_2 will be sent to localhost:xxxxx
-NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_2_1580004 table_2 WHERE true
-NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_2_1580006 table_2 WHERE true
+NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_2_1580004 table_2 WHERE (value IS NOT NULL)
+NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_2_1580006 table_2 WHERE (value IS NOT NULL)
 NOTICE:  executing the command locally: SELECT worker_column_1 AS key, worker_column_2 AS key FROM (SELECT foo.key AS worker_column_1, bar.key AS worker_column_2 FROM (SELECT table_1.key FROM locally_execute_intermediate_results.table_1_1580000 table_1 GROUP BY table_1.key HAVING (max(table_1.value) OPERATOR(pg_catalog.>) (SELECT cte_1.max FROM (SELECT intermediate_result.max FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_1))) foo, (SELECT table_2.key FROM locally_execute_intermediate_results.table_2_1580004 table_2 GROUP BY table_2.key HAVING (max(table_2.value) OPERATOR(pg_catalog.>) (SELECT cte_2.max FROM (SELECT intermediate_result.max FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_2))) bar WHERE (foo.key OPERATOR(pg_catalog.=) bar.key)) worker_subquery
 NOTICE:  executing the command locally: SELECT worker_column_1 AS key, worker_column_2 AS key FROM (SELECT foo.key AS worker_column_1, bar.key AS worker_column_2 FROM (SELECT table_1.key FROM locally_execute_intermediate_results.table_1_1580002 table_1 GROUP BY table_1.key HAVING (max(table_1.value) OPERATOR(pg_catalog.>) (SELECT cte_1.max FROM (SELECT intermediate_result.max FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_1))) foo, (SELECT table_2.key FROM locally_execute_intermediate_results.table_2_1580006 table_2 GROUP BY table_2.key HAVING (max(table_2.value) OPERATOR(pg_catalog.>) (SELECT cte_2.max FROM (SELECT intermediate_result.max FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_2))) bar WHERE (foo.key OPERATOR(pg_catalog.=) bar.key)) worker_subquery
  key | key
@@ -1092,11 +1092,11 @@ DEBUG:  generating subplan XXX_3 for subquery SELECT value AS key FROM locally_e
 DEBUG:  generating subplan XXX_4 for subquery SELECT value AS key FROM locally_execute_intermediate_results.table_2 GROUP BY value HAVING (max(value) OPERATOR(pg_catalog.>) (SELECT cte_2.max FROM (SELECT intermediate_result.max FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_2))
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT foo.key, bar.key FROM (SELECT intermediate_result.key FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(key text)) foo, (SELECT intermediate_result.key FROM read_intermediate_result('XXX_4'::text, 'binary'::citus_copy_format) intermediate_result(key text)) bar WHERE (foo.key OPERATOR(pg_catalog.<>) bar.key)
 DEBUG:  Subplan XXX_1 will be written to local file
-NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580000 table_1 WHERE true
-NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580002 table_1 WHERE true
+NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580000 table_1 WHERE (value IS NOT NULL)
+NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580002 table_1 WHERE (value IS NOT NULL)
 DEBUG:  Subplan XXX_2 will be written to local file
-NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_2_1580004 table_2 WHERE true
-NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_2_1580006 table_2 WHERE true
+NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_2_1580004 table_2 WHERE (value IS NOT NULL)
+NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_2_1580006 table_2 WHERE (value IS NOT NULL)
 DEBUG:  Subplan XXX_3 will be written to local file
 NOTICE:  executing the command locally: SELECT worker_column_1 AS key, max(worker_column_1) AS worker_column_2 FROM (SELECT table_1.value AS worker_column_1 FROM locally_execute_intermediate_results.table_1_1580000 table_1) worker_subquery GROUP BY worker_column_1
 NOTICE:  executing the command locally: SELECT worker_column_1 AS key, max(worker_column_1) AS worker_column_2 FROM (SELECT table_1.value AS worker_column_1 FROM locally_execute_intermediate_results.table_1_1580002 table_1) worker_subquery GROUP BY worker_column_1
@@ -1121,11 +1121,11 @@ DEBUG:  generating subplan XXX_3 for subquery SELECT value AS key FROM locally_e
 DEBUG:  generating subplan XXX_4 for subquery SELECT value AS key FROM locally_execute_intermediate_results.table_2 GROUP BY value HAVING (max(value) OPERATOR(pg_catalog.>) (SELECT cte_2.max FROM (SELECT intermediate_result.max FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_2)) LIMIT 1
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT foo.key, bar.key FROM (SELECT intermediate_result.key FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(key text)) foo, (SELECT intermediate_result.key FROM read_intermediate_result('XXX_4'::text, 'binary'::citus_copy_format) intermediate_result(key text)) bar WHERE (foo.key OPERATOR(pg_catalog.<>) bar.key)
 DEBUG:  Subplan XXX_1 will be written to local file
-NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580000 table_1 WHERE true
-NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580002 table_1 WHERE true
+NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580000 table_1 WHERE (value IS NOT NULL)
+NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580002 table_1 WHERE (value IS NOT NULL)
 DEBUG:  Subplan XXX_2 will be written to local file
-NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_2_1580004 table_2 WHERE true
-NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_2_1580006 table_2 WHERE true
+NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_2_1580004 table_2 WHERE (value IS NOT NULL)
+NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_2_1580006 table_2 WHERE (value IS NOT NULL)
 DEBUG:  Subplan XXX_3 will be written to local file
 NOTICE:  executing the command locally: SELECT worker_column_1 AS key, max(worker_column_1) AS worker_column_2 FROM (SELECT table_1.value AS worker_column_1 FROM locally_execute_intermediate_results.table_1_1580000 table_1) worker_subquery GROUP BY worker_column_1
 NOTICE:  executing the command locally: SELECT worker_column_1 AS key, max(worker_column_1) AS worker_column_2 FROM (SELECT table_1.value AS worker_column_1 FROM locally_execute_intermediate_results.table_1_1580002 table_1) worker_subquery GROUP BY worker_column_1
@@ -1151,8 +1151,8 @@ HAVING max(value) > (SELECT max FROM cte_1);
 DEBUG:  generating subplan XXX_1 for CTE cte_1: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM locally_execute_intermediate_results.table_2 GROUP BY value HAVING (max(value) OPERATOR(pg_catalog.>) (SELECT cte_1.max FROM (SELECT intermediate_result.max FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_1))
 DEBUG:  Subplan XXX_1 will be written to local file
-NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580000 table_1 WHERE true
-NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580002 table_1 WHERE true
+NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580000 table_1 WHERE (value IS NOT NULL)
+NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580002 table_1 WHERE (value IS NOT NULL)
 NOTICE:  executing the command locally: SELECT count(*) AS count, worker_column_1 AS worker_column_2, max(worker_column_1) AS worker_column_3 FROM (SELECT table_2.value AS worker_column_1 FROM locally_execute_intermediate_results.table_2_1580004 table_2) worker_subquery GROUP BY worker_column_1
 NOTICE:  executing the command locally: SELECT count(*) AS count, worker_column_1 AS worker_column_2, max(worker_column_1) AS worker_column_3 FROM (SELECT table_2.value AS worker_column_1 FROM locally_execute_intermediate_results.table_2_1580006 table_2) worker_subquery GROUP BY worker_column_1
  count
@@ -1179,8 +1179,8 @@ DEBUG:  generating subplan XXX_3 for subquery SELECT key FROM (SELECT intermedia
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM locally_execute_intermediate_results.table_2 WHERE (key OPERATOR(pg_catalog.>) (SELECT intermediate_result.key FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(key integer))) GROUP BY key HAVING (max(value) OPERATOR(pg_catalog.>) (SELECT cte_1.max FROM (SELECT intermediate_result.max FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_1))
 DEBUG:  Subplan XXX_1 will be sent to localhost:xxxxx
 DEBUG:  Subplan XXX_1 will be sent to localhost:xxxxx
-NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580000 table_1 WHERE true
-NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580002 table_1 WHERE true
+NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580000 table_1 WHERE (value IS NOT NULL)
+NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580002 table_1 WHERE (value IS NOT NULL)
 DEBUG:  Subplan XXX_2 will be sent to localhost:xxxxx
 NOTICE:  executing the command locally: SELECT key, value FROM locally_execute_intermediate_results.table_2_1580004 table_2 WHERE true
 NOTICE:  executing the command locally: SELECT key, value FROM locally_execute_intermediate_results.table_2_1580006 table_2 WHERE true
@@ -1211,12 +1211,12 @@ DEBUG:  generating subplan XXX_2 for CTE cte_2: SELECT max(key) AS max FROM loca
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM locally_execute_intermediate_results.table_2 WHERE (key OPERATOR(pg_catalog.>) (SELECT cte_2.max FROM (SELECT intermediate_result.max FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(max integer)) cte_2)) GROUP BY key HAVING (max(value) OPERATOR(pg_catalog.>) (SELECT cte_1.max FROM (SELECT intermediate_result.max FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_1))
 DEBUG:  Subplan XXX_1 will be sent to localhost:xxxxx
 DEBUG:  Subplan XXX_1 will be sent to localhost:xxxxx
-NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580000 table_1 WHERE true
-NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580002 table_1 WHERE true
+NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580000 table_1 WHERE (value IS NOT NULL)
+NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580002 table_1 WHERE (value IS NOT NULL)
 DEBUG:  Subplan XXX_2 will be sent to localhost:xxxxx
 DEBUG:  Subplan XXX_2 will be sent to localhost:xxxxx
-NOTICE:  executing the command locally: SELECT max(key) AS max FROM locally_execute_intermediate_results.table_2_1580004 table_2 WHERE true
-NOTICE:  executing the command locally: SELECT max(key) AS max FROM locally_execute_intermediate_results.table_2_1580006 table_2 WHERE true
+NOTICE:  executing the command locally: SELECT max(key) AS max FROM locally_execute_intermediate_results.table_2_1580004 table_2 WHERE (key IS NOT NULL)
+NOTICE:  executing the command locally: SELECT max(key) AS max FROM locally_execute_intermediate_results.table_2_1580006 table_2 WHERE (key IS NOT NULL)
 NOTICE:  executing the command locally: SELECT count(*) AS count, worker_column_1 AS worker_column_2 FROM (SELECT table_2.key AS worker_column_1, table_2.value AS worker_column_2 FROM locally_execute_intermediate_results.table_2_1580004 table_2 WHERE (table_2.key OPERATOR(pg_catalog.>) (SELECT cte_2.max FROM (SELECT intermediate_result.max FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(max integer)) cte_2))) worker_subquery GROUP BY worker_column_1 HAVING (max(worker_column_2) OPERATOR(pg_catalog.>) (SELECT cte_1.max FROM (SELECT intermediate_result.max FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_1))
 NOTICE:  executing the command locally: SELECT count(*) AS count, worker_column_1 AS worker_column_2 FROM (SELECT table_2.key AS worker_column_1, table_2.value AS worker_column_2 FROM locally_execute_intermediate_results.table_2_1580006 table_2 WHERE (table_2.key OPERATOR(pg_catalog.>) (SELECT cte_2.max FROM (SELECT intermediate_result.max FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(max integer)) cte_2))) worker_subquery GROUP BY worker_column_1 HAVING (max(worker_column_2) OPERATOR(pg_catalog.>) (SELECT cte_1.max FROM (SELECT intermediate_result.max FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_1))
  count
@@ -1241,11 +1241,11 @@ DEBUG:  generating subplan XXX_2 for CTE cte_2: SELECT max(key) AS max FROM loca
 DEBUG:  generating subplan XXX_3 for CTE cte_3: SELECT key, value FROM locally_execute_intermediate_results.table_2
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) cte_3 WHERE (key OPERATOR(pg_catalog.>) (SELECT cte_2.max FROM (SELECT intermediate_result.max FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(max integer)) cte_2)) GROUP BY key HAVING (max(value) OPERATOR(pg_catalog.>) (SELECT cte_1.max FROM (SELECT intermediate_result.max FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_1))
 DEBUG:  Subplan XXX_1 will be sent to localhost:xxxxx
-NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580000 table_1 WHERE true
-NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580002 table_1 WHERE true
+NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580000 table_1 WHERE (value IS NOT NULL)
+NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580002 table_1 WHERE (value IS NOT NULL)
 DEBUG:  Subplan XXX_2 will be sent to localhost:xxxxx
-NOTICE:  executing the command locally: SELECT max(key) AS max FROM locally_execute_intermediate_results.table_2_1580004 table_2 WHERE true
-NOTICE:  executing the command locally: SELECT max(key) AS max FROM locally_execute_intermediate_results.table_2_1580006 table_2 WHERE true
+NOTICE:  executing the command locally: SELECT max(key) AS max FROM locally_execute_intermediate_results.table_2_1580004 table_2 WHERE (key IS NOT NULL)
+NOTICE:  executing the command locally: SELECT max(key) AS max FROM locally_execute_intermediate_results.table_2_1580006 table_2 WHERE (key IS NOT NULL)
 DEBUG:  Subplan XXX_3 will be sent to localhost:xxxxx
 NOTICE:  executing the command locally: SELECT key, value FROM locally_execute_intermediate_results.table_2_1580004 table_2 WHERE true
 NOTICE:  executing the command locally: SELECT key, value FROM locally_execute_intermediate_results.table_2_1580006 table_2 WHERE true
@@ -1269,12 +1269,12 @@ DEBUG:  generating subplan XXX_2 for CTE cte_2: SELECT max(value) AS max FROM lo
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM locally_execute_intermediate_results.table_2 GROUP BY key HAVING (max(value) OPERATOR(pg_catalog.>) (SELECT cte_1.max FROM ((SELECT intermediate_result.max FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_1 JOIN (SELECT intermediate_result.max FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_2 USING (max))))
 DEBUG:  Subplan XXX_1 will be sent to localhost:xxxxx
 DEBUG:  Subplan XXX_1 will be sent to localhost:xxxxx
-NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580000 table_1 WHERE true
-NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580002 table_1 WHERE true
+NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580000 table_1 WHERE (value IS NOT NULL)
+NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580002 table_1 WHERE (value IS NOT NULL)
 DEBUG:  Subplan XXX_2 will be sent to localhost:xxxxx
 DEBUG:  Subplan XXX_2 will be sent to localhost:xxxxx
-NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580000 table_1 WHERE true
-NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580002 table_1 WHERE true
+NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580000 table_1 WHERE (value IS NOT NULL)
+NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580002 table_1 WHERE (value IS NOT NULL)
 NOTICE:  executing the command locally: SELECT count(*) AS count, worker_column_1 AS worker_column_2 FROM (SELECT table_2.key AS worker_column_1, table_2.value AS worker_column_2 FROM locally_execute_intermediate_results.table_2_1580004 table_2) worker_subquery GROUP BY worker_column_1 HAVING (max(worker_column_2) OPERATOR(pg_catalog.>) (SELECT cte_1.max FROM ((SELECT intermediate_result.max FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_1 JOIN (SELECT intermediate_result.max FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_2 USING (max))))
 NOTICE:  executing the command locally: SELECT count(*) AS count, worker_column_1 AS worker_column_2 FROM (SELECT table_2.key AS worker_column_1, table_2.value AS worker_column_2 FROM locally_execute_intermediate_results.table_2_1580006 table_2) worker_subquery GROUP BY worker_column_1 HAVING (max(worker_column_2) OPERATOR(pg_catalog.>) (SELECT cte_1.max FROM ((SELECT intermediate_result.max FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_1 JOIN (SELECT intermediate_result.max FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_2 USING (max))))
  count
@@ -1300,11 +1300,11 @@ DEBUG:  generating subplan XXX_2 for CTE cte_2: SELECT max(value) AS max FROM lo
 DEBUG:  generating subplan XXX_3 for CTE cte_3: SELECT key, value FROM locally_execute_intermediate_results.table_2
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) cte_3 GROUP BY value HAVING (max(value) OPERATOR(pg_catalog.>) (SELECT cte_1.max FROM ((SELECT intermediate_result.max FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_1 JOIN (SELECT intermediate_result.max FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_2 USING (max))))
 DEBUG:  Subplan XXX_1 will be sent to localhost:xxxxx
-NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580000 table_1 WHERE true
-NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580002 table_1 WHERE true
+NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580000 table_1 WHERE (value IS NOT NULL)
+NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580002 table_1 WHERE (value IS NOT NULL)
 DEBUG:  Subplan XXX_2 will be sent to localhost:xxxxx
-NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580000 table_1 WHERE true
-NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580002 table_1 WHERE true
+NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580000 table_1 WHERE (value IS NOT NULL)
+NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580002 table_1 WHERE (value IS NOT NULL)
 DEBUG:  Subplan XXX_3 will be sent to localhost:xxxxx
 NOTICE:  executing the command locally: SELECT key, value FROM locally_execute_intermediate_results.table_2_1580004 table_2 WHERE true
 NOTICE:  executing the command locally: SELECT key, value FROM locally_execute_intermediate_results.table_2_1580006 table_2 WHERE true
@@ -1329,8 +1329,8 @@ DEBUG:  generating subplan XXX_1 for CTE cte_1: SELECT max(value) AS max FROM lo
 DEBUG:  generating subplan XXX_2 for subquery SELECT max(max) AS max FROM (SELECT intermediate_result.max FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_1
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM locally_execute_intermediate_results.table_2 GROUP BY value HAVING (max(value) OPERATOR(pg_catalog.>) (SELECT intermediate_result.max FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(max text)))
 DEBUG:  Subplan XXX_1 will be sent to localhost:xxxxx
-NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580000 table_1 WHERE true
-NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580002 table_1 WHERE true
+NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580000 table_1 WHERE (value IS NOT NULL)
+NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580002 table_1 WHERE (value IS NOT NULL)
 DEBUG:  Subplan XXX_2 will be written to local file
 NOTICE:  executing the command locally: SELECT max(max) AS max FROM (SELECT intermediate_result.max FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_1
 NOTICE:  executing the command locally: SELECT count(*) AS count, worker_column_1 AS worker_column_2, max(worker_column_1) AS worker_column_3 FROM (SELECT table_2.value AS worker_column_1 FROM locally_execute_intermediate_results.table_2_1580004 table_2) worker_subquery GROUP BY worker_column_1
@@ -1356,8 +1356,8 @@ DEBUG:  generating subplan XXX_2 for CTE cte_2: SELECT key, value FROM locally_e
 DEBUG:  generating subplan XXX_3 for subquery SELECT max(max) AS max FROM (SELECT intermediate_result.max FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_1
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) cte_2 GROUP BY key HAVING (max(value) OPERATOR(pg_catalog.<) (SELECT intermediate_result.max FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(max text)))
 DEBUG:  Subplan XXX_1 will be sent to localhost:xxxxx
-NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580000 table_1 WHERE true
-NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580002 table_1 WHERE true
+NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580000 table_1 WHERE (value IS NOT NULL)
+NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580002 table_1 WHERE (value IS NOT NULL)
 DEBUG:  Subplan XXX_2 will be sent to localhost:xxxxx
 NOTICE:  executing the command locally: SELECT key, value FROM locally_execute_intermediate_results.table_1_1580000 table_1 WHERE true
 NOTICE:  executing the command locally: SELECT key, value FROM locally_execute_intermediate_results.table_1_1580002 table_1 WHERE true
@@ -1525,11 +1525,11 @@ DEBUG:  generating subplan XXX_1 for CTE cte_1: SELECT max(value) AS max FROM lo
 DEBUG:  generating subplan XXX_2 for CTE cte_2: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM locally_execute_intermediate_results.table_2 WHERE (key OPERATOR(pg_catalog.=) 3) GROUP BY key HAVING (max(value) OPERATOR(pg_catalog.>) (SELECT cte_1.max FROM ((SELECT intermediate_result.max FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_1 JOIN (SELECT intermediate_result.max FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_2 USING (max))))
 DEBUG:  Subplan XXX_1 will be sent to localhost:xxxxx
-NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580000 table_1 WHERE true
-NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580002 table_1 WHERE true
+NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580000 table_1 WHERE (value IS NOT NULL)
+NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580002 table_1 WHERE (value IS NOT NULL)
 DEBUG:  Subplan XXX_2 will be sent to localhost:xxxxx
-NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580000 table_1 WHERE true
-NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580002 table_1 WHERE true
+NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580000 table_1 WHERE (value IS NOT NULL)
+NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580002 table_1 WHERE (value IS NOT NULL)
  count
 ---------------------------------------------------------------------
 (0 rows)
@@ -1550,11 +1550,11 @@ DEBUG:  generating subplan XXX_2 for CTE cte_2: SELECT max(value) AS max FROM lo
 DEBUG:  generating subplan XXX_3 for CTE cte_3: SELECT key, value FROM locally_execute_intermediate_results.table_2
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (locally_execute_intermediate_results.table_2 JOIN (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) cte_3 USING (key)) WHERE (table_2.key OPERATOR(pg_catalog.=) 3) GROUP BY table_2.key HAVING (max(table_2.value) OPERATOR(pg_catalog.>) (SELECT cte_1.max FROM ((SELECT intermediate_result.max FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_1 JOIN (SELECT intermediate_result.max FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_2 USING (max))))
 DEBUG:  Subplan XXX_1 will be sent to localhost:xxxxx
-NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580000 table_1 WHERE true
-NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580002 table_1 WHERE true
+NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580000 table_1 WHERE (value IS NOT NULL)
+NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580002 table_1 WHERE (value IS NOT NULL)
 DEBUG:  Subplan XXX_2 will be sent to localhost:xxxxx
-NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580000 table_1 WHERE true
-NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580002 table_1 WHERE true
+NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580000 table_1 WHERE (value IS NOT NULL)
+NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580002 table_1 WHERE (value IS NOT NULL)
 DEBUG:  Subplan XXX_3 will be sent to localhost:xxxxx
 NOTICE:  executing the command locally: SELECT key, value FROM locally_execute_intermediate_results.table_2_1580004 table_2 WHERE true
 NOTICE:  executing the command locally: SELECT key, value FROM locally_execute_intermediate_results.table_2_1580006 table_2 WHERE true
@@ -1577,11 +1577,11 @@ DEBUG:  generating subplan XXX_2 for CTE cte_2: SELECT max(value) AS max FROM lo
 DEBUG:  generating subplan XXX_3 for CTE cte_3: SELECT key, value FROM locally_execute_intermediate_results.table_2
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (locally_execute_intermediate_results.table_2 JOIN (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) cte_3 USING (key)) WHERE (table_2.key OPERATOR(pg_catalog.=) 3) GROUP BY table_2.key HAVING (max(table_2.value) OPERATOR(pg_catalog.>) (SELECT cte_1.max FROM ((SELECT intermediate_result.max FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_1 JOIN (SELECT intermediate_result.max FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_2 USING (max))))
 DEBUG:  Subplan XXX_1 will be sent to localhost:xxxxx
-NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580000 table_1 WHERE true
-NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580002 table_1 WHERE true
+NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580000 table_1 WHERE (value IS NOT NULL)
+NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580002 table_1 WHERE (value IS NOT NULL)
 DEBUG:  Subplan XXX_2 will be sent to localhost:xxxxx
-NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580000 table_1 WHERE true
-NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580002 table_1 WHERE true
+NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580000 table_1 WHERE (value IS NOT NULL)
+NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580002 table_1 WHERE (value IS NOT NULL)
 DEBUG:  Subplan XXX_3 will be sent to localhost:xxxxx
 NOTICE:  executing the command locally: SELECT key, value FROM locally_execute_intermediate_results.table_2_1580004 table_2 WHERE true
 NOTICE:  executing the command locally: SELECT key, value FROM locally_execute_intermediate_results.table_2_1580006 table_2 WHERE true
@@ -1605,11 +1605,11 @@ DEBUG:  generating subplan XXX_2 for CTE cte_2: SELECT max(value) AS max FROM lo
 DEBUG:  generating subplan XXX_3 for CTE cte_3: SELECT key, value FROM locally_execute_intermediate_results.table_2
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (((locally_execute_intermediate_results.table_2 JOIN (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) cte_3 USING (key)) JOIN (SELECT intermediate_result.max FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_2 ON ((table_2.key OPERATOR(pg_catalog.=) (cte_2.max)::integer))) JOIN (SELECT intermediate_result.max FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_1 USING (max)) WHERE (table_2.key OPERATOR(pg_catalog.=) 3) GROUP BY table_2.key HAVING (max(table_2.value) OPERATOR(pg_catalog.>) (SELECT cte_1_1.max FROM ((SELECT intermediate_result.max FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_1_1 JOIN (SELECT intermediate_result.max FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_2_1 USING (max))))
 DEBUG:  Subplan XXX_1 will be sent to localhost:xxxxx
-NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580000 table_1 WHERE true
-NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580002 table_1 WHERE true
+NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580000 table_1 WHERE (value IS NOT NULL)
+NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580002 table_1 WHERE (value IS NOT NULL)
 DEBUG:  Subplan XXX_2 will be sent to localhost:xxxxx
-NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580000 table_1 WHERE true
-NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580002 table_1 WHERE true
+NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580000 table_1 WHERE (value IS NOT NULL)
+NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580002 table_1 WHERE (value IS NOT NULL)
 DEBUG:  Subplan XXX_3 will be sent to localhost:xxxxx
 NOTICE:  executing the command locally: SELECT key, value FROM locally_execute_intermediate_results.table_2_1580004 table_2 WHERE true
 NOTICE:  executing the command locally: SELECT key, value FROM locally_execute_intermediate_results.table_2_1580006 table_2 WHERE true
@@ -1639,11 +1639,11 @@ DEBUG:  generating subplan XXX_3 for subquery SELECT value AS key FROM locally_e
 DEBUG:  generating subplan XXX_4 for subquery SELECT value AS key FROM locally_execute_intermediate_results.table_2 GROUP BY value HAVING (max(value) OPERATOR(pg_catalog.>) (SELECT cte_2.max FROM (SELECT intermediate_result.max FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_2))
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT foo.key, bar.key FROM (SELECT intermediate_result.key FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(key text)) foo, (SELECT intermediate_result.key FROM read_intermediate_result('XXX_4'::text, 'binary'::citus_copy_format) intermediate_result(key text)) bar WHERE (foo.key OPERATOR(pg_catalog.<>) bar.key)
 DEBUG:  Subplan XXX_1 will be written to local file
-NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580000 table_1 WHERE true
-NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580002 table_1 WHERE true
+NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580000 table_1 WHERE (value IS NOT NULL)
+NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580002 table_1 WHERE (value IS NOT NULL)
 DEBUG:  Subplan XXX_2 will be written to local file
-NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_2_1580004 table_2 WHERE true
-NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_2_1580006 table_2 WHERE true
+NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_2_1580004 table_2 WHERE (value IS NOT NULL)
+NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_2_1580006 table_2 WHERE (value IS NOT NULL)
 DEBUG:  Subplan XXX_3 will be sent to localhost:xxxxx
 NOTICE:  executing the command locally: SELECT worker_column_1 AS key, max(worker_column_1) AS worker_column_2 FROM (SELECT table_1.value AS worker_column_1 FROM locally_execute_intermediate_results.table_1_1580000 table_1) worker_subquery GROUP BY worker_column_1
 NOTICE:  executing the command locally: SELECT worker_column_1 AS key, max(worker_column_1) AS worker_column_2 FROM (SELECT table_1.value AS worker_column_1 FROM locally_execute_intermediate_results.table_1_1580002 table_1) worker_subquery GROUP BY worker_column_1
@@ -1667,11 +1667,11 @@ DEBUG:  generating subplan XXX_3 for subquery SELECT value AS key FROM locally_e
 DEBUG:  generating subplan XXX_4 for subquery SELECT value AS key FROM locally_execute_intermediate_results.table_2 GROUP BY value HAVING (max(value) OPERATOR(pg_catalog.>) (SELECT cte_2.max FROM (SELECT intermediate_result.max FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_2)) LIMIT 1
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT foo.key, bar.key FROM (SELECT intermediate_result.key FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(key text)) foo, (SELECT intermediate_result.key FROM read_intermediate_result('XXX_4'::text, 'binary'::citus_copy_format) intermediate_result(key text)) bar WHERE (foo.key OPERATOR(pg_catalog.<>) bar.key)
 DEBUG:  Subplan XXX_1 will be written to local file
-NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580000 table_1 WHERE true
-NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580002 table_1 WHERE true
+NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580000 table_1 WHERE (value IS NOT NULL)
+NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1_1580002 table_1 WHERE (value IS NOT NULL)
 DEBUG:  Subplan XXX_2 will be written to local file
-NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_2_1580004 table_2 WHERE true
-NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_2_1580006 table_2 WHERE true
+NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_2_1580004 table_2 WHERE (value IS NOT NULL)
+NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_2_1580006 table_2 WHERE (value IS NOT NULL)
 DEBUG:  Subplan XXX_3 will be sent to localhost:xxxxx
 NOTICE:  executing the command locally: SELECT worker_column_1 AS key, max(worker_column_1) AS worker_column_2 FROM (SELECT table_1.value AS worker_column_1 FROM locally_execute_intermediate_results.table_1_1580000 table_1) worker_subquery GROUP BY worker_column_1
 NOTICE:  executing the command locally: SELECT worker_column_1 AS key, max(worker_column_1) AS worker_column_2 FROM (SELECT table_1.value AS worker_column_1 FROM locally_execute_intermediate_results.table_1_1580002 table_1) worker_subquery GROUP BY worker_column_1

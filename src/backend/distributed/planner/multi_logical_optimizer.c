@@ -169,9 +169,8 @@ typedef struct OrderByLimitReference
 
 
 /* Local functions forward declarations */
-static MultiSelect * AndSelectNode(MultiSelect *selectNode);
-static MultiSelect * OrSelectNode(MultiSelect *selectNode);
-static List * OrSelectClauseList(List *selectClauseList);
+static MultiSelect * PushdownableSelectNode(MultiSelect *selectNode);
+static MultiSelect * NonPushdownableSelectNode(MultiSelect *selectNode);
 static void PushDownNodeLoop(MultiUnaryNode *currentNode);
 static void PullUpCollectLoop(MultiCollect *collectNode);
 static void AddressProjectSpecialConditions(MultiProject *projectNode);
@@ -381,27 +380,29 @@ MultiLogicalPlanOptimize(MultiTreeRoot *multiLogicalPlan)
 	if (selectNodeList != NIL)
 	{
 		MultiSelect *selectNode = (MultiSelect *) linitial(selectNodeList);
-		MultiSelect *andSelectNode = AndSelectNode(selectNode);
-		MultiSelect *orSelectNode = OrSelectNode(selectNode);
+		MultiSelect *pushdownableSelectNode = PushdownableSelectNode(selectNode);
+		MultiSelect *nonPushdownableSelectNode = NonPushdownableSelectNode(selectNode);
 
-		if (andSelectNode != NULL && orSelectNode != NULL)
+		if (pushdownableSelectNode != NULL && nonPushdownableSelectNode != NULL)
 		{
 			MultiNode *parentNode = ParentNode((MultiNode *) selectNode);
 			MultiNode *childNode = ChildNode((MultiUnaryNode *) selectNode);
 			Assert(UnaryOperator(parentNode));
 
-			SetChild((MultiUnaryNode *) parentNode, (MultiNode *) orSelectNode);
-			SetChild((MultiUnaryNode *) orSelectNode, (MultiNode *) andSelectNode);
-			SetChild((MultiUnaryNode *) andSelectNode, (MultiNode *) childNode);
+			SetChild((MultiUnaryNode *) parentNode,
+					 (MultiNode *) nonPushdownableSelectNode);
+			SetChild((MultiUnaryNode *) nonPushdownableSelectNode,
+					 (MultiNode *) pushdownableSelectNode);
+			SetChild((MultiUnaryNode *) pushdownableSelectNode, (MultiNode *) childNode);
 		}
-		else if (andSelectNode != NULL && orSelectNode == NULL)
+		else if (pushdownableSelectNode != NULL && nonPushdownableSelectNode == NULL)
 		{
-			andSelectNode = selectNode; /* no need to modify the tree */
+			pushdownableSelectNode = selectNode; /* no need to modify the tree */
 		}
 
-		if (andSelectNode != NULL)
+		if (pushdownableSelectNode != NULL)
 		{
-			PushDownNodeLoop((MultiUnaryNode *) andSelectNode);
+			PushDownNodeLoop((MultiUnaryNode *) pushdownableSelectNode);
 		}
 	}
 
@@ -486,71 +487,44 @@ MultiLogicalPlanOptimize(MultiTreeRoot *multiLogicalPlan)
 
 
 /*
- * AndSelectNode looks for AND clauses in the given select node. If they exist,
- * the function returns these clauses in a new node. Otherwise, the function
+ * PushdownableSelectNode looks for pushdownable clauses in the given select node.
+ * If they exist, the function returns these clauses in a new node. Otherwise, the function
  * returns null.
  */
 static MultiSelect *
-AndSelectNode(MultiSelect *selectNode)
+PushdownableSelectNode(MultiSelect *selectNode)
 {
-	MultiSelect *andSelectNode = NULL;
-	List *selectClauseList = selectNode->selectClauseList;
-	List *orSelectClauseList = OrSelectClauseList(selectClauseList);
+	MultiSelect *pushdownableSelectNode = NULL;
 
-	/* AND clauses are select clauses that are not OR clauses */
-	List *andSelectClauseList = list_difference(selectClauseList, orSelectClauseList);
-	if (andSelectClauseList != NIL)
+	if (selectNode->pushdownableSelectClauseList != NIL)
 	{
-		andSelectNode = CitusMakeNode(MultiSelect);
-		andSelectNode->selectClauseList = andSelectClauseList;
+		pushdownableSelectNode = CitusMakeNode(MultiSelect);
+		pushdownableSelectNode->selectClauseList =
+			selectNode->pushdownableSelectClauseList;
 	}
 
-	return andSelectNode;
+	return pushdownableSelectNode;
 }
 
 
 /*
- * OrSelectNode looks for OR clauses in the given select node. If they exist,
- * the function returns these clauses in a new node. Otherwise, the function
+ * PushdownableSelectNode looks for nonpushdownable clauses in the given select node.
+ * If they exist, the function returns these clauses in a new node. Otherwise, the function
  * returns null.
  */
 static MultiSelect *
-OrSelectNode(MultiSelect *selectNode)
+NonPushdownableSelectNode(MultiSelect *selectNode)
 {
-	MultiSelect *orSelectNode = NULL;
-	List *selectClauseList = selectNode->selectClauseList;
-	List *orSelectClauseList = OrSelectClauseList(selectClauseList);
+	MultiSelect *nonPushdownableSelectNode = NULL;
 
-	if (orSelectClauseList != NIL)
+	if (selectNode->nonPushdownableSelectClauseList != NIL)
 	{
-		orSelectNode = CitusMakeNode(MultiSelect);
-		orSelectNode->selectClauseList = orSelectClauseList;
+		nonPushdownableSelectNode = CitusMakeNode(MultiSelect);
+		nonPushdownableSelectNode->selectClauseList =
+			selectNode->nonPushdownableSelectClauseList;
 	}
 
-	return orSelectNode;
-}
-
-
-/*
- * OrSelectClauseList walks over the select clause list, and returns all clauses
- * that have OR expressions in them.
- */
-static List *
-OrSelectClauseList(List *selectClauseList)
-{
-	List *orSelectClauseList = NIL;
-
-	Node *selectClause = NULL;
-	foreach_ptr(selectClause, selectClauseList)
-	{
-		bool orClause = is_orclause(selectClause);
-		if (orClause)
-		{
-			orSelectClauseList = lappend(orSelectClauseList, selectClause);
-		}
-	}
-
-	return orSelectClauseList;
+	return nonPushdownableSelectNode;
 }
 
 

@@ -25,18 +25,21 @@
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_join_order.h"
 #include "distributed/multi_physical_planner.h"
+#include "distributed/multi_router_planner.h"
 #include "distributed/pg_dist_partition.h"
+#include "distributed/shard_pruning.h"
 #include "distributed/worker_protocol.h"
 #include "lib/stringinfo.h"
 #include "optimizer/optimizer.h"
 #include "utils/builtins.h"
 #include "nodes/nodeFuncs.h"
+#include "nodes/nodes.h"
+#include "nodes/pathnodes.h"
 #include "utils/builtins.h"
 #include "utils/datum.h"
 #include "utils/lsyscache.h"
 #include "utils/rel.h"
 #include "utils/syscache.h"
-
 
 /* Config variables managed via guc.c */
 bool LogMultiJoinOrder = false; /* print join order as a debugging aid */
@@ -54,9 +57,9 @@ static RuleEvalFunction RuleEvalFunctionArray[JOIN_RULE_LAST] = { 0 }; /* join r
 
 /* Local functions forward declarations */
 static bool JoinExprListWalker(Node *node, List **joinList);
-static bool ExtractLeftMostRangeTableIndex(Node *node, int *rangeTableIndex);
 static List * JoinOrderForTable(TableEntry *firstTable, List *tableEntryList,
-								List *joinClauseList);
+								List *joinRestrictInfoListList,
+								List *generatedEcJoinClauseList);
 static List * BestJoinOrder(List *candidateJoinOrders);
 static List * FewestOfJoinRuleType(List *candidateJoinOrders, JoinRuleType ruleType);
 static uint32 JoinRuleTypeCount(List *joinOrder, JoinRuleType ruleTypeToCount);
@@ -64,23 +67,44 @@ static List * LatestLargeDataTransfer(List *candidateJoinOrders);
 static void PrintJoinOrderList(List *joinOrder);
 static uint32 LargeDataTransferLocation(List *joinOrder);
 static List * TableEntryListDifference(List *lhsTableList, List *rhsTableList);
+static bool ConvertSemiToInnerInJoinOrderInfoList(List *joinOrderInfoList);
+static bool JoinOrderInfoListContainsAntiJoin(List *joinOrderInfoList);
+static List * FindApplicableJoinClausesForTables(List *joinRestrictInfoListList,
+												 List *generatedEcJoinClauseList,
+												 List *lhsTableIdList,
+												 uint32 rhsTableId,
+												 JoinType joinType);
+static const char * JoinTypeName(JoinType jointype);
+static List * ExtractPushdownableJoinRestrictInfos(List *joinRestrictInfoList,
+												   RestrictInfo *joinRestrictInfo);
+static ApplicableJoinClauseContext * CreateApplicableJoinClauseContext(
+	List *pushdownableJoinRestrictClauseList,
+	List *
+	nonPushdownableJoinRestrictClauseList);
 
 /* Local functions forward declarations for join evaluations */
 static JoinOrderNode * EvaluateJoinRules(List *joinedTableList,
 										 JoinOrderNode *currentJoinNode,
 										 TableEntry *candidateTable,
-										 List *joinClauseList, JoinType joinType);
+										 List *joinRestrictInfoListList,
+										 List *generatedEcJoinClauseList,
+										 JoinType joinType);
 static List * RangeTableIdList(List *tableList);
+static TableEntry * TableEntryByRangeTableId(List *tableEntryList, uint32 rangeTableIdx);
 static RuleEvalFunction JoinRuleEvalFunction(JoinRuleType ruleType);
 static char * JoinRuleName(JoinRuleType ruleType);
-static JoinOrderNode * ReferenceJoin(JoinOrderNode *joinNode, TableEntry *candidateTable,
-									 List *applicableJoinClauses, JoinType joinType);
+static JoinOrderNode * ReferenceJoin(JoinOrderNode *joinNode,
+									 TableEntry *candidateTable,
+									 List *applicableJoinClauses,
+									 JoinType joinType);
 static JoinOrderNode * CartesianProductReferenceJoin(JoinOrderNode *joinNode,
 													 TableEntry *candidateTable,
 													 List *applicableJoinClauses,
 													 JoinType joinType);
-static JoinOrderNode * LocalJoin(JoinOrderNode *joinNode, TableEntry *candidateTable,
-								 List *applicableJoinClauses, JoinType joinType);
+static JoinOrderNode * LocalJoin(JoinOrderNode *joinNode,
+								 TableEntry *candidateTable,
+								 List *applicableJoinClauses,
+								 JoinType joinType);
 static bool JoinOnColumns(List *currentPartitionColumnList, Var *candidatePartitionColumn,
 						  List *joinClauseList);
 static JoinOrderNode * SinglePartitionJoin(JoinOrderNode *joinNode,
@@ -98,7 +122,7 @@ static JoinOrderNode * CartesianProduct(JoinOrderNode *joinNode,
 static JoinOrderNode * MakeJoinOrderNode(TableEntry *tableEntry,
 										 JoinRuleType joinRuleType,
 										 List *partitionColumnList, char partitionMethod,
-										 TableEntry *anchorTable);
+										 TableEntry *anchorTable, JoinType joinType);
 
 
 /*
@@ -179,7 +203,7 @@ JoinExprListWalker(Node *node, List **joinList)
  * ExtractLeftMostRangeTableIndex extracts the range table index of the left-most
  * leaf in a join tree.
  */
-static bool
+bool
 ExtractLeftMostRangeTableIndex(Node *node, int *rangeTableIndex)
 {
 	bool walkerResult = false;
@@ -285,7 +309,8 @@ NodeIsEqualsOpExpr(Node *node)
  * least amount of data across the network, and returns this join order.
  */
 List *
-JoinOrderList(List *tableEntryList, List *joinClauseList)
+JoinOrderList(List *tableEntryList, List *joinRestrictInfoListList,
+			  List *generatedEcJoinClauseList)
 {
 	List *candidateJoinOrderList = NIL;
 	ListCell *tableEntryCell = NULL;
@@ -296,7 +321,8 @@ JoinOrderList(List *tableEntryList, List *joinClauseList)
 
 		/* each candidate join order starts with a different table */
 		List *candidateJoinOrder = JoinOrderForTable(startingTable, tableEntryList,
-													 joinClauseList);
+													 joinRestrictInfoListList,
+													 generatedEcJoinClauseList);
 
 		if (candidateJoinOrder != NULL)
 		{
@@ -326,6 +352,314 @@ JoinOrderList(List *tableEntryList, List *joinClauseList)
 
 
 /*
+ * TableEntryByRangeTableId returns TableEntry from given list with specified range table id.
+ */
+static TableEntry *
+TableEntryByRangeTableId(List *tableEntryList, uint32 rangeTableIdx)
+{
+	TableEntry *tableEntry = NULL;
+	foreach_ptr(tableEntry, tableEntryList)
+	{
+		if (tableEntry->rangeTableId == rangeTableIdx)
+		{
+			return tableEntry;
+		}
+	}
+
+	ereport(ERROR, errmsg("Unexpected table entry!"));
+}
+
+
+/*
+ * ExtractPushdownableJoinRestrictInfos extracts clauses, which are pushed down and treated like a normal filter,
+ * inside given join restriction infos.
+ */
+static List *
+ExtractPushdownableJoinRestrictInfos(List *restrictInfoListOfJoin,
+									 RestrictInfo *joinRestrictInfo)
+{
+	List *joinFilterRestrictInfoList = NIL;
+
+	/* left and right relids of the join restriction */
+	Bitmapset *joinRelids = bms_union(joinRestrictInfo->left_relids,
+									  joinRestrictInfo->right_relids);
+
+	/* todo:aykut joinRelids should be taken from planner context */
+
+	RestrictInfo *restrictInfo = NULL;
+	foreach_ptr(restrictInfo, restrictInfoListOfJoin)
+	{
+		if (!restrictInfo->can_join &&
+			RINFO_IS_PUSHED_DOWN(restrictInfo, joinRelids))
+		{
+			joinFilterRestrictInfoList = lappend(joinFilterRestrictInfoList,
+												 restrictInfo);
+		}
+	}
+
+	return joinFilterRestrictInfoList;
+}
+
+
+/*
+ * FindApplicableJoinClausesForTables finds all applicable join clauses for given
+ * left hand side tables and right hand side table. It encapsulates pushdownable
+ * and nonpushdownable parts of the join clauses inside ApplicableJoinClauseContext.
+ */
+static List *
+FindApplicableJoinClausesForTables(List *joinRestrictInfoListList,
+								   List *generatedEcJoinClauseList,
+								   List *lhsTableIdList, uint32 rhsTableId,
+								   JoinType joinType)
+{
+	List *applicableJoinClauseContextList = NIL;
+
+	List *joinRestrictInfoList = NIL;
+	foreach_ptr(joinRestrictInfoList, joinRestrictInfoListList)
+	{
+		RestrictInfo *joinRestrictInfo = NULL;
+		foreach_ptr(joinRestrictInfo, joinRestrictInfoList)
+		{
+			Node *restrictClause = (Node *) joinRestrictInfo->clause;
+			if (joinRestrictInfo->can_join &&
+				IsApplicableJoinClause(lhsTableIdList, rhsTableId, restrictClause))
+			{
+				List *pushdownableJoinRestrictInfoList =
+					ExtractPushdownableJoinRestrictInfos(joinRestrictInfoList,
+														 joinRestrictInfo);
+
+				List *nonPushdownableJoinRestrictInfoList =
+					list_difference(joinRestrictInfoList,
+									pushdownableJoinRestrictInfoList);
+
+				List *pushdownableJoinRestrictClauseList =
+					get_all_actual_clauses(pushdownableJoinRestrictInfoList);
+
+				List *nonPushdownableJoinRestrictClauseList =
+					get_all_actual_clauses(nonPushdownableJoinRestrictInfoList);
+
+				ApplicableJoinClauseContext *applicableJoinClauseContext =
+					CreateApplicableJoinClauseContext(pushdownableJoinRestrictClauseList,
+													  nonPushdownableJoinRestrictClauseList);
+
+				applicableJoinClauseContextList = lappend(applicableJoinClauseContextList,
+														  applicableJoinClauseContext);
+			}
+		}
+	}
+
+	/* we can find applicable join clause inside generated implicit join clauses */
+	Node *ecClause = NULL;
+	foreach_ptr(ecClause, generatedEcJoinClauseList)
+	{
+		if (IsApplicableJoinClause(lhsTableIdList, rhsTableId, ecClause))
+		{
+			List *generatedJoinClauseList = list_make1(ecClause);
+			ApplicableJoinClauseContext *applicableJoinClauseContext =
+				CreateApplicableJoinClauseContext(NIL, generatedJoinClauseList);
+
+			applicableJoinClauseContextList = lappend(applicableJoinClauseContextList,
+													  applicableJoinClauseContext);
+		}
+	}
+
+	/* add an empty join clause list to be evaluated by cartesian rules */
+	List *emptyClauseList = NIL;
+	ApplicableJoinClauseContext *emptyApplicableJoinClauseContext =
+		CreateApplicableJoinClauseContext(emptyClauseList, emptyClauseList);
+
+	applicableJoinClauseContextList = lappend(applicableJoinClauseContextList,
+											  emptyApplicableJoinClauseContext);
+
+	return applicableJoinClauseContextList;
+}
+
+
+static ApplicableJoinClauseContext *
+CreateApplicableJoinClauseContext(List *pushdownableJoinRestrictClauseList,
+								  List *nonPushdownableJoinRestrictClauseList)
+{
+	ApplicableJoinClauseContext *applicableJoinClauseContext = palloc0(
+		sizeof(ApplicableJoinClauseContext));
+
+	applicableJoinClauseContext->
+	pushdownableJoinClauseList = pushdownableJoinRestrictClauseList;
+	applicableJoinClauseContext->
+	nonPushdownableJoinClauseList = nonPushdownableJoinRestrictClauseList;
+
+	return applicableJoinClauseContext;
+}
+
+
+/*
+ * ExtractApplicableJoinClauseContextFromJoinList returns ApplicableJoinClauseContext which contains
+ * all pushdownable and nonpushdownable clauses from given joinOrderList.
+ */
+ApplicableJoinClauseContext *
+ExtractApplicableJoinClauseContextFromJoinList(List *joinOrderList)
+{
+	List *pushdownableJoinClauseList = NIL;
+	List *nonPushdownableJoinClauseList = NIL;
+
+	JoinOrderNode *joinOrderNode = NULL;
+	foreach_ptr(joinOrderNode, joinOrderList)
+	{
+		ApplicableJoinClauseContext *nodeApplicableJoinClauseContext =
+			joinOrderNode->applicableJoinClauseContext;
+
+		/* first node does not contain ApplicableJoinClauseContext */
+		if (nodeApplicableJoinClauseContext == NULL)
+		{
+			continue;
+		}
+		pushdownableJoinClauseList = list_concat_unique(pushdownableJoinClauseList,
+														nodeApplicableJoinClauseContext->
+														pushdownableJoinClauseList);
+		nonPushdownableJoinClauseList = list_concat_unique(nonPushdownableJoinClauseList,
+														   nodeApplicableJoinClauseContext
+														   ->nonPushdownableJoinClauseList);
+	}
+
+	ApplicableJoinClauseContext *applicableJoinClauseContext =
+		CreateApplicableJoinClauseContext(pushdownableJoinClauseList,
+										  nonPushdownableJoinClauseList);
+	return applicableJoinClauseContext;
+}
+
+
+/*
+ * FixedJoinOrderList returns the best fixed join order according to
+ * applicable join rules for the nodes in the list.
+ */
+List *
+FixedJoinOrderList(List *tableEntryList, List *joinOrderInfoList,
+				   List *joinRestrictInfoListList, List *generatedEcJoinClauseList)
+{
+	/* we donot support anti joins as ruleutils files cannot deparse JOIN_ANTI */
+	if (JoinOrderInfoListContainsAntiJoin(joinOrderInfoList))
+	{
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg(
+							"complex joins are only supported when all distributed "
+							"tables are joined on their distribution columns with "
+							"equal operator")));
+	}
+
+	/*
+	 * converts semi joins in given join info context to inner joins as we checked
+	 * at query_pushdown_planning that planner did not actually plan any semi join.
+	 * ruleutils files cannot deparse JOIN_SEMI, so we convert those to JOIN_INNER.
+	 */
+	ConvertSemiToInnerInJoinOrderInfoList(joinOrderInfoList);
+
+	List *joinOrderList = NIL;
+	List *joinedTableList = NIL;
+	JoinOrderNode *nextJoinNode = NULL;
+
+	/* fetch joininfo */
+	JoinOrderInfo *firstJoinInfo = (JoinOrderInfo *) list_nth(joinOrderInfoList, 0);
+
+	/* add first table into joinedtable list */
+	TableEntry *firstTable = TableEntryByRangeTableId(tableEntryList,
+													  firstJoinInfo->leftTableIdx);
+	joinedTableList = lappend(joinedTableList, firstTable);
+
+	/* create join node for the first table */
+	JoinRuleType joinRule = JOIN_RULE_INVALID_FIRST;
+	Oid relationId = firstTable->relationId;
+	uint32 tableId = firstTable->rangeTableId;
+	Var *partitionColumn = PartitionColumn(relationId, tableId);
+	char partitionMethod = PartitionMethod(relationId);
+	JoinOrderNode *currentJoinNode = MakeJoinOrderNode(firstTable, joinRule,
+													   list_make1(partitionColumn),
+													   partitionMethod,
+													   firstTable,
+													   firstJoinInfo->joinType);
+	joinOrderList = lappend(joinOrderList, currentJoinNode);
+
+	JoinOrderInfo *joinOrderInfo = NULL;
+	foreach_ptr(joinOrderInfo, joinOrderInfoList)
+	{
+		TableEntry *nextTable = TableEntryByRangeTableId(tableEntryList,
+														 joinOrderInfo->rightTableIdx);
+
+		nextJoinNode = EvaluateJoinRules(joinedTableList,
+										 currentJoinNode,
+										 nextTable,
+										 joinRestrictInfoListList,
+										 generatedEcJoinClauseList,
+										 joinOrderInfo->joinType);
+
+		if (nextJoinNode == NULL)
+		{
+			/* there are no plans that we can create, time to error */
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg(
+								"complex joins are only supported when all distributed "
+								"tables are joined on their distribution columns with "
+								"equal operator")));
+		}
+
+		Assert(nextJoinNode != NULL);
+		joinOrderList = lappend(joinOrderList, nextJoinNode);
+		joinedTableList = lappend(joinedTableList, nextTable);
+
+		currentJoinNode = nextJoinNode;
+	}
+
+	/* if logging is enabled, print join order */
+	if (LogMultiJoinOrder)
+	{
+		PrintJoinOrderList(joinOrderList);
+	}
+
+	return joinOrderList;
+}
+
+
+/*
+ * JoinOrderInfoListContainsAntiJoin returns true if given join order info list contains
+ * an anti join.
+ */
+static bool
+JoinOrderInfoListContainsAntiJoin(List *joinOrderInfoList)
+{
+	JoinOrderInfo *joinOrderInfo = NULL;
+	foreach_ptr(joinOrderInfo, joinOrderInfoList)
+	{
+		if (joinOrderInfo->joinType == JOIN_ANTI)
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
+
+/*
+ * ConvertSemiToInnerInJoinOrderInfoList converts semi joins in given join order info list
+ * to inner joins as we checked at query_pushdown_planning that planner did not actually
+ * plan any semi join. ruleutils files cannot deparse JOIN_SEMI, so we convert those
+ * to JOIN_INNER.
+ */
+static bool
+ConvertSemiToInnerInJoinOrderInfoList(List *joinOrderInfoList)
+{
+	JoinOrderInfo *joinOrderInfo = NULL;
+	foreach_ptr(joinOrderInfo, joinOrderInfoList)
+	{
+		if (joinOrderInfo->joinType == JOIN_SEMI)
+		{
+			joinOrderInfo->joinType = JOIN_INNER;
+		}
+	}
+
+	return false;
+}
+
+
+/*
  * JoinOrderForTable creates a join order whose first element is the given first
  * table. To determine each subsequent element in the join order, the function
  * then chooses the table that has the lowest ranking join rule, and with which
@@ -334,7 +668,8 @@ JoinOrderList(List *tableEntryList, List *joinClauseList)
  * returns this list.
  */
 static List *
-JoinOrderForTable(TableEntry *firstTable, List *tableEntryList, List *joinClauseList)
+JoinOrderForTable(TableEntry *firstTable, List *tableEntryList,
+				  List *joinRestrictInfoListList, List *generatedEcJoinClauseList)
 {
 	JoinRuleType firstJoinRule = JOIN_RULE_INVALID_FIRST;
 	int joinedTableCount = 1;
@@ -349,7 +684,7 @@ JoinOrderForTable(TableEntry *firstTable, List *tableEntryList, List *joinClause
 	JoinOrderNode *firstJoinNode = MakeJoinOrderNode(firstTable, firstJoinRule,
 													 list_make1(firstPartitionColumn),
 													 firstPartitionMethod,
-													 firstTable);
+													 firstTable, JOIN_INNER);
 
 	/* add first node to the join order */
 	List *joinOrderList = list_make1(firstJoinNode);
@@ -380,7 +715,9 @@ JoinOrderForTable(TableEntry *firstTable, List *tableEntryList, List *joinClause
 			JoinOrderNode *pendingJoinNode = EvaluateJoinRules(joinedTableList,
 															   currentJoinNode,
 															   pendingTable,
-															   joinClauseList, joinType);
+															   joinRestrictInfoListList,
+															   generatedEcJoinClauseList,
+															   joinType);
 
 			if (pendingJoinNode == NULL)
 			{
@@ -597,6 +934,43 @@ LargeDataTransferLocation(List *joinOrder)
 }
 
 
+/* Output join name for given join type */
+const char *
+JoinTypeName(JoinType jointype)
+{
+	switch (jointype)
+	{
+		case JOIN_INNER:
+		{
+			return "INNER";
+		}
+
+		case JOIN_LEFT:
+		{
+			return "LEFT";
+		}
+
+		case JOIN_RIGHT:
+		{
+			return "RIGHT";
+		}
+
+		case JOIN_FULL:
+		{
+			return "FULL";
+		}
+
+		default:
+
+			/* Shouldn't come here, but protect from buggy code. */
+			elog(ERROR, "unsupported join type %d", jointype);
+	}
+
+	/* Keep compiler happy */
+	return NULL;
+}
+
+
 /* Prints the join order list and join rules for debugging purposes. */
 static void
 PrintJoinOrderList(List *joinOrder)
@@ -621,7 +995,10 @@ PrintJoinOrderList(List *joinOrder)
 			JoinRuleType ruleType = (JoinRuleType) joinOrderNode->joinRuleType;
 			char *ruleName = JoinRuleName(ruleType);
 
-			appendStringInfo(printBuffer, "[ %s ", ruleName);
+			JoinType joinType = joinOrderNode->joinType;
+			const char *joinTypeName = JoinTypeName(joinType);
+
+			appendStringInfo(printBuffer, "[ %s(%s) ", ruleName, joinTypeName);
 			appendStringInfo(printBuffer, "\"%s\" ]", relationName);
 		}
 	}
@@ -676,8 +1053,8 @@ TableEntryListDifference(List *lhsTableList, List *rhsTableList)
  */
 static JoinOrderNode *
 EvaluateJoinRules(List *joinedTableList, JoinOrderNode *currentJoinNode,
-				  TableEntry *candidateTable, List *joinClauseList,
-				  JoinType joinType)
+				  TableEntry *candidateTable, List *joinRestrictInfoListList,
+				  List *generatedEcJoinClauseList, JoinType joinType)
 {
 	JoinOrderNode *nextJoinNode = NULL;
 	uint32 lowestValidIndex = JOIN_RULE_INVALID_FIRST + 1;
@@ -689,9 +1066,12 @@ EvaluateJoinRules(List *joinedTableList, JoinOrderNode *currentJoinNode,
 	 */
 	List *joinedTableIdList = RangeTableIdList(joinedTableList);
 	uint32 candidateTableId = candidateTable->rangeTableId;
-	List *applicableJoinClauses = ApplicableJoinClauses(joinedTableIdList,
-														candidateTableId,
-														joinClauseList);
+	List *applicableJoinClauseContextList = FindApplicableJoinClausesForTables(
+		joinRestrictInfoListList,
+		generatedEcJoinClauseList,
+		joinedTableIdList,
+		candidateTableId,
+		joinType);
 
 	/* we then evaluate all join rules in order */
 	for (uint32 ruleIndex = lowestValidIndex; ruleIndex <= highestValidIndex; ruleIndex++)
@@ -699,27 +1079,30 @@ EvaluateJoinRules(List *joinedTableList, JoinOrderNode *currentJoinNode,
 		JoinRuleType ruleType = (JoinRuleType) ruleIndex;
 		RuleEvalFunction ruleEvalFunction = JoinRuleEvalFunction(ruleType);
 
-		nextJoinNode = (*ruleEvalFunction)(currentJoinNode,
-										   candidateTable,
-										   applicableJoinClauses,
-										   joinType);
-
-		/* break after finding the first join rule that applies */
-		if (nextJoinNode != NULL)
+		ApplicableJoinClauseContext *applicableJoinClauseContext = NULL;
+		foreach_ptr(applicableJoinClauseContext, applicableJoinClauseContextList)
 		{
-			break;
+			List *applicableJoinClauseList =
+				applicableJoinClauseContext->nonPushdownableJoinClauseList;
+			nextJoinNode = (*ruleEvalFunction)(currentJoinNode,
+											   candidateTable,
+											   applicableJoinClauseList,
+											   joinType);
+
+			/* return after finding the first join rule that applies */
+			if (nextJoinNode != NULL)
+			{
+				nextJoinNode->joinType = joinType;
+				nextJoinNode->joinClauseList =
+					applicableJoinClauseContext->nonPushdownableJoinClauseList;
+				nextJoinNode->applicableJoinClauseContext = applicableJoinClauseContext;
+				return nextJoinNode;
+			}
 		}
 	}
 
-	if (nextJoinNode == NULL)
-	{
-		return NULL;
-	}
-
-	Assert(nextJoinNode != NULL);
-	nextJoinNode->joinType = joinType;
-	nextJoinNode->joinClauseList = applicableJoinClauses;
-	return nextJoinNode;
+	Assert(nextJoinNode == NULL);
+	return NULL;
 }
 
 
@@ -831,7 +1214,7 @@ ReferenceJoin(JoinOrderNode *currentJoinNode, TableEntry *candidateTable,
 	return MakeJoinOrderNode(candidateTable, REFERENCE_JOIN,
 							 currentJoinNode->partitionColumnList,
 							 currentJoinNode->partitionMethod,
-							 currentJoinNode->anchorTable);
+							 currentJoinNode->anchorTable, joinType);
 }
 
 
@@ -870,6 +1253,19 @@ static JoinOrderNode *
 CartesianProductReferenceJoin(JoinOrderNode *currentJoinNode, TableEntry *candidateTable,
 							  List *applicableJoinClauses, JoinType joinType)
 {
+	/*
+	 * right distributed part is already recursively planned.
+	 * constant false join is supported as CartesianProductReferenceJoin.
+	 */
+	if (list_length(applicableJoinClauses) == 1 &&
+		ContainsFalseClause(applicableJoinClauses))
+	{
+		return MakeJoinOrderNode(candidateTable, CARTESIAN_PRODUCT_REFERENCE_JOIN,
+								 currentJoinNode->partitionColumnList,
+								 currentJoinNode->partitionMethod,
+								 currentJoinNode->anchorTable, joinType);
+	}
+
 	bool leftIsReferenceTable = IsCitusTableType(
 		currentJoinNode->tableEntry->relationId,
 		REFERENCE_TABLE);
@@ -883,7 +1279,7 @@ CartesianProductReferenceJoin(JoinOrderNode *currentJoinNode, TableEntry *candid
 	return MakeJoinOrderNode(candidateTable, CARTESIAN_PRODUCT_REFERENCE_JOIN,
 							 currentJoinNode->partitionColumnList,
 							 currentJoinNode->partitionMethod,
-							 currentJoinNode->anchorTable);
+							 currentJoinNode->anchorTable, joinType);
 }
 
 
@@ -955,7 +1351,7 @@ LocalJoin(JoinOrderNode *currentJoinNode, TableEntry *candidateTable,
 	JoinOrderNode *nextJoinNode = MakeJoinOrderNode(candidateTable, LOCAL_PARTITION_JOIN,
 													currentPartitionColumnList,
 													currentPartitionMethod,
-													currentAnchorTable);
+													currentAnchorTable, joinType);
 
 
 	return nextJoinNode;
@@ -984,12 +1380,6 @@ SinglePartitionJoin(JoinOrderNode *currentJoinNode, TableEntry *candidateTable,
 	Var *candidatePartitionColumn = PartitionColumn(relationId, tableId);
 	char candidatePartitionMethod = PartitionMethod(relationId);
 
-	/* outer joins are not supported yet */
-	if (IS_OUTER_JOIN(joinType))
-	{
-		return NULL;
-	}
-
 	/*
 	 * If we previously dual-hash re-partitioned the tables for a join or made
 	 * cartesian product, we currently don't allow a single-repartition join.
@@ -1000,11 +1390,24 @@ SinglePartitionJoin(JoinOrderNode *currentJoinNode, TableEntry *candidateTable,
 		return NULL;
 	}
 
+	/*
+	 * we only allow single range redistribution if both tables are range distributed.
+	 * The reason is that we cannot guarantee all values in non-range distributed table
+	 * will be inside the shard ranges of range distributed table.
+	 */
+	if ((currentPartitionMethod == DISTRIBUTE_BY_RANGE && candidatePartitionMethod !=
+		 DISTRIBUTE_BY_RANGE) ||
+		(candidatePartitionMethod == DISTRIBUTE_BY_RANGE && currentPartitionMethod !=
+		 DISTRIBUTE_BY_RANGE))
+	{
+		return NULL;
+	}
+
 	OpExpr *joinClause =
 		SinglePartitionJoinClause(currentPartitionColumnList, applicableJoinClauses);
 	if (joinClause != NULL)
 	{
-		if (currentPartitionMethod == DISTRIBUTE_BY_HASH)
+		if (currentPartitionMethod != DISTRIBUTE_BY_RANGE)
 		{
 			/*
 			 * Single hash repartitioning may perform worse than dual hash
@@ -1018,14 +1421,14 @@ SinglePartitionJoin(JoinOrderNode *currentJoinNode, TableEntry *candidateTable,
 			return MakeJoinOrderNode(candidateTable, SINGLE_HASH_PARTITION_JOIN,
 									 currentPartitionColumnList,
 									 currentPartitionMethod,
-									 currentAnchorTable);
+									 currentAnchorTable, joinType);
 		}
 		else if (candidatePartitionMethod == DISTRIBUTE_BY_RANGE)
 		{
 			return MakeJoinOrderNode(candidateTable, SINGLE_RANGE_PARTITION_JOIN,
 									 currentPartitionColumnList,
 									 currentPartitionMethod,
-									 currentAnchorTable);
+									 currentAnchorTable, joinType);
 		}
 	}
 
@@ -1042,7 +1445,7 @@ SinglePartitionJoin(JoinOrderNode *currentJoinNode, TableEntry *candidateTable,
 											   applicableJoinClauses);
 		if (joinClause != NULL)
 		{
-			if (candidatePartitionMethod == DISTRIBUTE_BY_HASH)
+			if (candidatePartitionMethod != DISTRIBUTE_BY_RANGE)
 			{
 				/*
 				 * Single hash repartitioning may perform worse than dual hash
@@ -1057,7 +1460,7 @@ SinglePartitionJoin(JoinOrderNode *currentJoinNode, TableEntry *candidateTable,
 										 SINGLE_HASH_PARTITION_JOIN,
 										 candidatePartitionColumnList,
 										 candidatePartitionMethod,
-										 candidateTable);
+										 candidateTable, joinType);
 			}
 			else if (currentPartitionMethod == DISTRIBUTE_BY_RANGE)
 			{
@@ -1065,7 +1468,7 @@ SinglePartitionJoin(JoinOrderNode *currentJoinNode, TableEntry *candidateTable,
 										 SINGLE_RANGE_PARTITION_JOIN,
 										 candidatePartitionColumnList,
 										 candidatePartitionMethod,
-										 candidateTable);
+										 candidateTable, joinType);
 			}
 		}
 	}
@@ -1151,7 +1554,7 @@ DualPartitionJoin(JoinOrderNode *currentJoinNode, TableEntry *candidateTable,
 								 DUAL_PARTITION_JOIN,
 								 NIL,
 								 REDISTRIBUTE_BY_HASH,
-								 NULL);
+								 NULL, joinType);
 	}
 
 	return NULL;
@@ -1212,7 +1615,7 @@ CartesianProduct(JoinOrderNode *currentJoinNode, TableEntry *candidateTable,
 		return MakeJoinOrderNode(candidateTable, CARTESIAN_PRODUCT,
 								 currentJoinNode->partitionColumnList,
 								 currentJoinNode->partitionMethod,
-								 NULL);
+								 NULL, joinType);
 	}
 
 	return NULL;
@@ -1223,15 +1626,16 @@ CartesianProduct(JoinOrderNode *currentJoinNode, TableEntry *candidateTable,
 JoinOrderNode *
 MakeJoinOrderNode(TableEntry *tableEntry, JoinRuleType joinRuleType,
 				  List *partitionColumnList, char partitionMethod,
-				  TableEntry *anchorTable)
+				  TableEntry *anchorTable, JoinType joinType)
 {
 	JoinOrderNode *joinOrderNode = palloc0(sizeof(JoinOrderNode));
 	joinOrderNode->tableEntry = tableEntry;
 	joinOrderNode->joinRuleType = joinRuleType;
-	joinOrderNode->joinType = JOIN_INNER;
+	joinOrderNode->joinType = joinType;
 	joinOrderNode->partitionColumnList = partitionColumnList;
 	joinOrderNode->partitionMethod = partitionMethod;
 	joinOrderNode->joinClauseList = NIL;
+	joinOrderNode->applicableJoinClauseContext = NULL;
 	joinOrderNode->anchorTable = anchorTable;
 
 	return joinOrderNode;
@@ -1279,27 +1683,30 @@ IsApplicableJoinClause(List *leftTableIdList, uint32 rightTableId, Node *joinCla
 
 
 /*
- * ApplicableJoinClauses finds all join clauses that apply between the given
- * left table list and the right table, and returns these found join clauses.
+ * IsApplicableFalseConstantJoinClause returns true if given restrictinfo is a constant false
+ * filter which is applied to right table and also at least one of the table in left tables.
  */
-List *
-ApplicableJoinClauses(List *leftTableIdList, uint32 rightTableId, List *joinClauseList)
+bool
+IsApplicableFalseConstantJoinClause(List *leftTableIdList, uint32 rightTableId,
+									RestrictInfo *restrictInfo)
 {
-	List *applicableJoinClauses = NIL;
+	/* find whether restrictinfo relids contain right table relid */
+	Relids restrictionRelIds = restrictInfo->required_relids;
+	bool hasRightTable = bms_is_member(rightTableId, restrictionRelIds);
 
-	/* make sure joinClauseList contains only join clauses */
-	joinClauseList = JoinClauseList(joinClauseList);
-
-	Node *joinClause = NULL;
-	foreach_ptr(joinClause, joinClauseList)
+	/* convert left table id list to bitmapset */
+	Relids leftTableRelIds = NULL;
+	int leftTableId = -1;
+	foreach_int(leftTableId, leftTableIdList)
 	{
-		if (IsApplicableJoinClause(leftTableIdList, rightTableId, joinClause))
-		{
-			applicableJoinClauses = lappend(applicableJoinClauses, joinClause);
-		}
+		leftTableRelIds = bms_add_member(leftTableRelIds, leftTableId);
 	}
 
-	return applicableJoinClauses;
+	/* find whether restrictinfo relids contain any of the left table relids */
+	Relids intersectLeftRelids = bms_intersect(restrictionRelIds, leftTableRelIds);
+	bool hasOneOfLeftTables = bms_num_members(intersectLeftRelids) > 0;
+
+	return hasRightTable && hasOneOfLeftTables;
 }
 
 

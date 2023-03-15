@@ -59,6 +59,7 @@
 #include "optimizer/optimizer.h"
 #include "optimizer/plancat.h"
 #include "optimizer/pathnode.h"
+#include "optimizer/paths.h"
 #include "optimizer/planner.h"
 #include "optimizer/planmain.h"
 #include "utils/builtins.h"
@@ -126,13 +127,19 @@ static void PopPlannerRestrictionContext(void);
 static void ResetPlannerRestrictionContext(
 	PlannerRestrictionContext *plannerRestrictionContext);
 static PlannedStmt * PlanFastPathDistributedStmt(DistributedPlanningContext *planContext,
-												 Node *distributionKeyValue);
+												 Node *distributionKeyValue,
+												 int fastPathRelId);
 static PlannedStmt * PlanDistributedStmt(DistributedPlanningContext *planContext,
 										 int rteIdCounter);
 static RTEListProperties * GetRTEListProperties(List *rangeTableList);
 static List * TranslatedVars(PlannerInfo *root, int relationIndex);
 static void WarnIfListHasForeignDistributedTable(List *rangeTableList);
 static void ErrorIfMergeHasUnsupportedTables(Query *parse, List *rangeTableList);
+static void AddFastPathRestrictInfoIntoPlannerContext(
+	PlannerRestrictionContext *plannerRestrictionContext, int fastPathRelId);
+static List * GenerateImplicitJoinRestrictInfoList(PlannerInfo *plannerInfo,
+												   RelOptInfo *innerrel,
+												   RelOptInfo *outerrel);
 
 /* Distributed planner hook */
 PlannedStmt *
@@ -144,6 +151,7 @@ distributed_planner(Query *parse,
 	bool needsDistributedPlanning = false;
 	bool fastPathRouterQuery = false;
 	Node *distributionKeyValue = NULL;
+	int fastPathRelId = InvalidOid;
 
 	List *rangeTableList = ExtractRangeTableEntryList(parse);
 
@@ -247,7 +255,11 @@ distributed_planner(Query *parse,
 	{
 		if (fastPathRouterQuery)
 		{
-			result = PlanFastPathDistributedStmt(&planContext, distributionKeyValue);
+			RangeTblEntry *rangeTableEntry = (RangeTblEntry *) linitial(parse->rtable);
+			fastPathRelId = rangeTableEntry->relid;
+
+			result = PlanFastPathDistributedStmt(&planContext, distributionKeyValue,
+												 fastPathRelId);
 		}
 		else
 		{
@@ -686,7 +698,7 @@ IsUpdateOrDelete(Query *query)
  */
 static PlannedStmt *
 PlanFastPathDistributedStmt(DistributedPlanningContext *planContext,
-							Node *distributionKeyValue)
+							Node *distributionKeyValue, int fastPathRelId)
 {
 	FastPathRestrictionContext *fastPathContext =
 		planContext->plannerRestrictionContext->fastPathRestrictionContext;
@@ -709,6 +721,10 @@ PlanFastPathDistributedStmt(DistributedPlanningContext *planContext,
 
 	planContext->plan = FastPathPlanner(planContext->originalQuery, planContext->query,
 										planContext->boundParams);
+
+	/* generate simple base restrict info inside plannerRestrictionContext */
+	AddFastPathRestrictInfoIntoPlannerContext(planContext->plannerRestrictionContext,
+											  fastPathRelId);
 
 	return CreateDistributedPlannedStmt(planContext);
 }
@@ -956,6 +972,42 @@ TryCreateDistributedPlannedStmt(PlannedStmt *localPlan,
 
 
 /*
+ * ReplanAfterQueryModification replans given query to update plannercontext
+ * accordingly. Returns modified query without changing original query.
+ */
+Query *
+ReplanAfterQueryModification(Query *originalQuery, ParamListInfo boundParams)
+{
+	Query *newQuery = copyObject(originalQuery);
+	bool setPartitionedTablesInherited = false;
+	PlannerRestrictionContext *currentPlannerRestrictionContext =
+		CurrentPlannerRestrictionContext();
+
+	/* reset the current planner restrictions context */
+	ResetPlannerRestrictionContext(currentPlannerRestrictionContext);
+
+	/*
+	 * We force standard_planner to treat partitioned tables as regular tables
+	 * by clearing the inh flag on RTEs. We already did this at the start of
+	 * distributed_planner, but on a copy of the original query, so we need
+	 * to do it again here.
+	 */
+	AdjustPartitioningForDistributedPlanning(ExtractRangeTableEntryList(newQuery),
+											 setPartitionedTablesInherited);
+
+	/*
+	 * Some relations may have been removed from the query, but we can skip
+	 * AssignRTEIdentities since we currently do not rely on RTE identities
+	 * being contiguous.
+	 */
+
+	standard_planner(newQuery, NULL, 0, boundParams);
+
+	return newQuery;
+}
+
+
+/*
  * CreateDistributedPlan generates a distributed plan for a query.
  * It goes through 3 steps:
  *
@@ -1119,30 +1171,7 @@ CreateDistributedPlan(uint64 planId, bool allowRecursivePlanning, Query *origina
 								   "joined on their distribution columns")));
 		}
 
-		Query *newQuery = copyObject(originalQuery);
-		bool setPartitionedTablesInherited = false;
-		PlannerRestrictionContext *currentPlannerRestrictionContext =
-			CurrentPlannerRestrictionContext();
-
-		/* reset the current planner restrictions context */
-		ResetPlannerRestrictionContext(currentPlannerRestrictionContext);
-
-		/*
-		 * We force standard_planner to treat partitioned tables as regular tables
-		 * by clearing the inh flag on RTEs. We already did this at the start of
-		 * distributed_planner, but on a copy of the original query, so we need
-		 * to do it again here.
-		 */
-		AdjustPartitioningForDistributedPlanning(ExtractRangeTableEntryList(newQuery),
-												 setPartitionedTablesInherited);
-
-		/*
-		 * Some relations may have been removed from the query, but we can skip
-		 * AssignRTEIdentities since we currently do not rely on RTE identities
-		 * being contiguous.
-		 */
-
-		standard_planner(newQuery, NULL, 0, boundParams);
+		Query *newQuery = ReplanAfterQueryModification(originalQuery, boundParams);
 
 		/* overwrite the old transformed query with the new transformed query */
 		*query = *newQuery;
@@ -1823,6 +1852,87 @@ CheckNodeCopyAndSerialization(Node *node)
 
 
 /*
+ * AddFastPathRestrictInfoIntoPlannerContext creates a single base restrictinfo as we do not call
+ * standard_planner and not generate restrictinfo for fastpath queries.
+ */
+static
+void
+AddFastPathRestrictInfoIntoPlannerContext(
+	PlannerRestrictionContext *plannerRestrictionContext, int fastPathRelId)
+{
+	if (plannerRestrictionContext->fastPathRestrictionContext == NULL ||
+		plannerRestrictionContext->fastPathRestrictionContext->distributionKeyValue ==
+		NULL)
+	{
+		return;
+	}
+
+	Const *distKeyVal =
+		plannerRestrictionContext->fastPathRestrictionContext->distributionKeyValue;
+	Var *partitionColumn = PartitionColumn(fastPathRelId, 1);
+	OpExpr *partitionExpression = MakeOpExpression(partitionColumn,
+												   BTEqualStrategyNumber);
+	Node *rightOp = get_rightop((Expr *) partitionExpression);
+	Const *rightConst = (Const *) rightOp;
+	*rightConst = *distKeyVal;
+
+	RestrictInfo *fastpathRestrictInfo = makeNode(RestrictInfo);
+	fastpathRestrictInfo->can_join = false;
+	fastpathRestrictInfo->is_pushed_down = true;
+	fastpathRestrictInfo->clause = (Expr *) partitionExpression;
+
+	RelationRestriction *relationRestriction = palloc0(sizeof(RelationRestriction));
+	relationRestriction->relOptInfo = palloc0(sizeof(RelOptInfo));
+	relationRestriction->relOptInfo->baserestrictinfo = list_make1(
+		fastpathRestrictInfo);
+	plannerRestrictionContext->relationRestrictionContext->relationRestrictionList =
+		list_make1(relationRestriction);
+}
+
+
+/*
+ * GenerateImplicitJoinRestrictInfoList generates implicit join restrict infos
+ * by using planner information. As we rely on join restriction infos at join
+ * planner, we generate implicit join restrict infos.
+ */
+static List *
+GenerateImplicitJoinRestrictInfoList(PlannerInfo *plannerInfo,
+									 RelOptInfo *innerrel, RelOptInfo *outerrel)
+{
+	/*
+	 * when join condition contains a reducible constant, generate_join_implied_equalities
+	 * does not generate implicit join clauses. Hence, we mark ec_has_const to false
+	 * beforehand. At the end, we restore previous values.
+	 */
+	List *prevVals = NIL;
+	EquivalenceClass *eqclass = NULL;
+	foreach_ptr(eqclass, plannerInfo->eq_classes)
+	{
+		prevVals = lappend_int(prevVals, eqclass->ec_has_const);
+		eqclass->ec_has_const = false;
+	}
+
+	/* generate implicit join restrictinfos */
+	Relids joinrelids = bms_union(innerrel->relids, outerrel->relids);
+	List *generatedRestrictInfoList = generate_join_implied_equalities(
+		plannerInfo,
+		joinrelids,
+		outerrel->relids,
+		innerrel);
+
+	/* restore previous values for ec_has_const */
+	int i;
+	for (i = 0; i < list_length(prevVals); i++)
+	{
+		EquivalenceClass *eqClass = list_nth(plannerInfo->eq_classes, i);
+		eqClass->ec_has_const = list_nth_int(prevVals, i);
+	}
+
+	return generatedRestrictInfoList;
+}
+
+
+/*
  * multi_join_restriction_hook is a hook called by postgresql standard planner
  * to notify us about various planning information regarding joins. We use
  * it to learn about the joining column.
@@ -1873,6 +1983,9 @@ multi_join_restriction_hook(PlannerInfo *root,
 	joinRestriction->joinRestrictInfoList = copyObject(extra->restrictlist);
 	joinRestriction->innerrelRelids = bms_copy(innerrel->relids);
 	joinRestriction->outerrelRelids = bms_copy(outerrel->relids);
+
+	joinRestrictionContext->generatedEcJoinRestrictInfoList =
+		GenerateImplicitJoinRestrictInfoList(root, innerrel, outerrel);
 
 	joinRestrictionContext->joinRestrictionList =
 		lappend(joinRestrictionContext->joinRestrictionList, joinRestriction);

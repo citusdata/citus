@@ -51,9 +51,11 @@ SELECT count(*) FROM users_table u1 CROSS JOIN users_ref_test_table ref2 RIGHT J
 
 -- a reference tables CROSS JOINed with a distribted table, and later JOINED with distributed tables on reference table column
 -- so not safe to pushdown
+SET citus.enable_repartition_joins TO on;
 SELECT count(*) FROM users_table u1 CROSS JOIN users_ref_test_table ref2 LEFT JOIN users_table u2 ON (ref2.id = u2.user_id);
 SELECT count(*) FROM users_table u1 CROSS JOIN users_ref_test_table ref2 FULL JOIN users_table u2 ON (ref2.id = u2.user_id);
 SELECT count(*) FROM users_table u1 CROSS JOIN users_ref_test_table ref2 RIGHT JOIN users_table u2 ON (ref2.id = u2.user_id);
+RESET citus.enable_repartition_joins;
 
 -- via repartitioning, Citus can handle this query as the result of "u1 CROSS JOIN ref2"
 -- can be repartitioned on ref2.id
@@ -63,7 +65,9 @@ reset citus.enable_repartition_joins;
 
 -- although the following has the "ref LEFT JOIN dist" type of query, the LEFT JOIN is eliminated by Postgres
 -- because the INNER JOIN eliminates the LEFT JOIN
+SET citus.enable_repartition_joins TO on;
 SELECT count(*) FROM users_ref_test_table ref1 CROSS JOIN users_ref_test_table ref2 LEFT JOIN users_table ON (ref1.id = users_table.user_id) JOIN users_table u2 ON (u2.user_id = users_table.user_id);
+reset citus.enable_repartition_joins;
 
 -- this is the same query as the above, but this time the outer query is also LEFT JOIN, meaning that Postgres
 -- cannot eliminate the outer join

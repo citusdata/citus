@@ -1099,6 +1099,7 @@ SELECT *
 	WHERE author_id = 1 and false;
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
+DEBUG:  query has a single distribution column value: 1
  id | author_id | title | word_count
 ---------------------------------------------------------------------
 (0 rows)
@@ -1119,6 +1120,7 @@ SELECT *
 	WHERE null and author_id = 1;
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
+DEBUG:  query has a single distribution column value: 1
  id | author_id | title | word_count
 ---------------------------------------------------------------------
 (0 rows)

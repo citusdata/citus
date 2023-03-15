@@ -217,11 +217,12 @@ FROM
 
 
 -- Citus can use broadcast join here
+SET citus.enable_repartition_joins TO on;
 SELECT
 	count(*)
 FROM
 	multi_outer_join_left_hash a LEFT JOIN multi_outer_join_right_hash b ON (l_nationkey = r_nationkey);
-
+RESET citus.enable_repartition_joins;
 
 -- Anti-join should return customers for which there is no row in the right table
 SELECT

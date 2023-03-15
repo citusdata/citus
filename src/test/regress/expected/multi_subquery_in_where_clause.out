@@ -682,5 +682,5 @@ SELECT user_id, value_2 FROM users_table WHERE
   AND NOT EXISTS (SELECT user_id FROM events_table WHERE event_type=1 AND value_3 > 1 AND test_join_function(events_table.user_id, users_table.user_id))
 ORDER BY 1 DESC, 2 DESC
 LIMIT 3;
-ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
+ERROR:  complex joins are only supported when all distributed tables are joined on their distribution columns with equal operator
 DROP FUNCTION test_join_function(int,int);

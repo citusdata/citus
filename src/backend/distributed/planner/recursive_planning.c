@@ -152,6 +152,8 @@ static void RecursivelyPlanNonColocatedSubqueriesInWhere(Query *query,
 														 recursivePlanningContext);
 static bool RecursivelyPlanRecurringTupleOuterJoinWalker(Node *node, Query *query,
 														 RecursivePlanningContext *context);
+static bool RecursivelyPlanConstantFalseJoinsWalker(Node *node, Query *query,
+													RecursivePlanningContext *context);
 static void RecursivelyPlanDistributedJoinNode(Node *node, Query *query,
 											   RecursivePlanningContext *context);
 static bool IsRTERefRecurring(RangeTblRef *rangeTableRef, Query *query);
@@ -383,7 +385,104 @@ RecursivelyPlanSubqueriesAndCTEs(Query *query, RecursivePlanningContext *context
 		RecursivelyPlanAllSubqueries((Node *) query->targetList, context);
 	}
 
+	/*
+	 * make right side recurring when query has constant false join
+	 * with both side distributed
+	 */
+	RecursivelyPlanConstantFalseJoinsWalker((Node *) query->jointree,
+											query, context);
+
 	return NULL;
+}
+
+
+/*
+ * RecursivelyPlanConstantFalseJoinsWalker replaces right side of the joins with constant
+ * false clause.
+ *
+ * Example:
+ *   SELECT dist [FULL/LEFT/RIGHT/INNER] JOIN dist ON (false)
+ * is converted to
+ *   SELECT dist [FULL/LEFT/RIGHT/INNER] JOIN intermediate_result ON (false)
+ */
+static bool
+RecursivelyPlanConstantFalseJoinsWalker(Node *node, Query *query,
+										RecursivePlanningContext *context)
+{
+	if (node == NULL)
+	{
+		return false;
+	}
+	else if (IsA(node, FromExpr))
+	{
+		FromExpr *fromExpr = (FromExpr *) node;
+		ListCell *fromExprCell;
+
+		/* search for join trees in each FROM element */
+		foreach(fromExprCell, fromExpr->fromlist)
+		{
+			Node *fromElement = (Node *) lfirst(fromExprCell);
+
+			RecursivelyPlanConstantFalseJoinsWalker(fromElement, query,
+													context);
+		}
+
+		return false;
+	}
+	else if (IsA(node, JoinExpr))
+	{
+		JoinExpr *joinExpr = (JoinExpr *) node;
+
+		Node *leftNode = joinExpr->larg;
+		Node *rightNode = joinExpr->rarg;
+		Node *joinQualsNode = joinExpr->quals;
+		List *joinQualList = NIL;
+
+		if (joinQualsNode == NULL)
+		{
+			joinQualList = NIL;
+		}
+		else if (IsA(joinQualsNode, List))
+		{
+			joinQualList = (List *) joinQualsNode;
+		}
+		else
+		{
+			/* this part of code only run for subqueries */
+			Node *joinClause = eval_const_expressions(NULL, joinQualsNode);
+			joinClause = (Node *) canonicalize_qual((Expr *) joinClause, false);
+			joinQualList = make_ands_implicit((Expr *) joinClause);
+		}
+
+		bool hasConstantFalseJoin = ContainsFalseClause(joinQualList);
+
+		bool isLeftRefRecurring = RecursivelyPlanConstantFalseJoinsWalker(leftNode, query,
+																		  context);
+		bool isRightRefRecurring = RecursivelyPlanConstantFalseJoinsWalker(rightNode,
+																		   query,
+																		   context);
+
+		if (!isLeftRefRecurring && !isRightRefRecurring && hasConstantFalseJoin)
+		{
+			ereport(DEBUG1, (errmsg("recursively planning right side of "
+									"the constant false join")));
+			RecursivelyPlanDistributedJoinNode(rightNode, query,
+											   context);
+		}
+
+		return isLeftRefRecurring || isRightRefRecurring;
+	}
+	else if (IsA(node, RangeTblRef))
+	{
+		RangeTblRef *rangeTableRef = castNode(RangeTblRef, node);
+		return IsRTERefRecurring(rangeTableRef, query);
+	}
+	else
+	{
+		ereport(ERROR, errmsg("got unexpected node type (%d) when recursively "
+							  "planning a constant false join",
+							  nodeTag(node)));
+	}
 }
 
 
