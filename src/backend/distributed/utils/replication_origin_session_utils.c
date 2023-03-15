@@ -121,7 +121,6 @@ SetupReplicationOriginSessionHelper(bool isContexResetSetupNeeded)
 {
 	if (!enable_change_data_capture)
 	{
-		elog(NOTICE, "change data capture is not enabled");
 		return;
 	}
 	OriginalOriginId = replorigin_session_origin;
