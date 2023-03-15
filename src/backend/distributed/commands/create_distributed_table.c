@@ -98,7 +98,7 @@
  * once every LOG_PER_TUPLE_AMOUNT, the copy will be logged.
  */
 #define LOG_PER_TUPLE_AMOUNT 1000000
-#define WORKER_MODIFY_IDENTITY_COMMAND \
+#define WORKER_MODIFY_IDENTITY_COLUMNS \
 	"SELECT pg_catalog.worker_modify_identity_columns(%s)"
 
 /* local function forward declarations */
@@ -1883,7 +1883,7 @@ DistributeIdentityColumns(Oid targetRelationId)
 		char *tableName = generate_qualified_relation_name(targetRelationId);
 
 		appendStringInfo(stringInfo,
-						 WORKER_MODIFY_IDENTITY_COMMAND,
+						 WORKER_MODIFY_IDENTITY_COLUMNS,
 						 quote_literal_cstr(tableName));
 		SendCommandToWorkersWithMetadata(stringInfo->data);
 	}
