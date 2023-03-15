@@ -1134,6 +1134,16 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
+		"citus.enable_change_data_capture",
+		gettext_noop("Enables using replication origin tracking for change data capture"),
+		NULL,
+		&enable_change_data_capture,
+		false,
+		PGC_USERSET,
+		GUC_STANDARD,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
 		"citus.enable_cluster_clock",
 		gettext_noop("When users explicitly call UDF citus_get_transaction_clock() "
 					 "and the flag is true, it returns the maximum "
@@ -1287,16 +1297,6 @@ RegisterCitusConfigVariables(void)
 		true,
 		PGC_USERSET,
 		GUC_NO_SHOW_ALL,
-		NULL, NULL, NULL);
-
-	DefineCustomBoolVariable(
-		"citus.enable_change_data_capture",
-		gettext_noop("Enables using replication origin tracking for change data capture"),
-		NULL,
-		&enable_change_data_capture,
-		false,
-		PGC_USERSET,
-		GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
