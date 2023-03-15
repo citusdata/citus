@@ -170,10 +170,10 @@ if __name__ == "__main__":
 
         if "operations" in test_schedule:
             return "minimal_schedule"
-          
+
         if "cdc" in test_schedule:
             return None
-          
+
         if test_schedule in config.ARBITRARY_SCHEDULE_NAMES:
             print(
                 f"WARNING: Arbitrary config schedule ({test_schedule}) is not supported."
