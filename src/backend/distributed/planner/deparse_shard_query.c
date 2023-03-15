@@ -423,7 +423,9 @@ SetTaskQueryString(Task *task, char *queryString)
 	else
 	{
 		task->taskQuery.queryType = TASK_QUERY_TEXT;
-		task->taskQuery.data.queryStringLazy = AnnotateQuery(queryString, task->partitionColumn, task->colocationId);
+		task->taskQuery.data.queryStringLazy = AnnotateQuery(queryString,
+															 task->partitionColumn,
+															 task->colocationId);
 		task->queryCount = 1;
 	}
 }
@@ -442,7 +444,8 @@ SetTaskQueryStringList(Task *task, List *queryStringList)
 	char *queryString = NULL;
 	foreach_ptr(queryString, queryStringList)
 	{
-		queryString = AnnotateQuery(queryString, task->partitionColumn, task->colocationId);
+		queryString = AnnotateQuery(queryString, task->partitionColumn,
+									task->colocationId);
 	}
 
 
