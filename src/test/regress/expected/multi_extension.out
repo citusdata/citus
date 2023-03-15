@@ -1239,10 +1239,7 @@ SELECT * FROM pg_dist_cleanup;
 SELECT * FROM multi_extension.print_extension_changes();
  previous_object | current_object
 ---------------------------------------------------------------------
-                 | function replication_origin_session_end_no_publish() void
-                 | function replication_origin_session_is_no_publish() void
-                 | function replication_origin_session_start_no_publish() void
-(3 rows)
+(0 rows)
 
 -- Snapshot of state at 11.2-1
 ALTER EXTENSION citus UPDATE TO '11.2-1';
@@ -1356,9 +1353,12 @@ ALTER EXTENSION citus UPDATE TO '11.3-1';
 ALTER EXTENSION citus UPDATE TO '11.2-1';
 -- Should be empty result since upgrade+downgrade should be a no-op
 SELECT * FROM multi_extension.print_extension_changes();
- previous_object | current_object
+ previous_object |                             current_object
 ---------------------------------------------------------------------
-(0 rows)
+                 | function citus_internal_is_replication_origin_tracking_active() boolean
+                 | function citus_internal_start_replication_origin_tracking() void
+                 | function citus_internal_stop_replication_origin_tracking() void
+(3 rows)
 
 -- Snapshot of state at 11.3-1
 ALTER EXTENSION citus UPDATE TO '11.3-1';
