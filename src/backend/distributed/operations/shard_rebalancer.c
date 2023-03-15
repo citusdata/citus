@@ -475,6 +475,7 @@ GetRebalanceSteps(RebalanceOptions *options)
 	/* sort the lists to make the function more deterministic */
 	List *activeWorkerList = SortedActiveWorkers();
 	List *activeShardPlacementListList = NIL;
+	List *unbalancedShards = NIL;
 
 	Oid relationId = InvalidOid;
 	foreach_oid(relationId, options->relationIdList)
@@ -490,8 +491,29 @@ GetRebalanceSteps(RebalanceOptions *options)
 				shardPlacementList, options->workerNode);
 		}
 
-		activeShardPlacementListList =
-			lappend(activeShardPlacementListList, activeShardPlacementListForRelation);
+		if (list_length(activeShardPlacementListForRelation) >= list_length(
+				activeWorkerList))
+		{
+			activeShardPlacementListList = lappend(activeShardPlacementListList,
+												   activeShardPlacementListForRelation);
+		}
+		else
+		{
+			/*
+			 * If the number of shard groups are less than the number of worker nodes,
+			 * at least one of the worker nodes will remain empty. For such cases,
+			 * we consider those shard groups as a colocation group and try to
+			 * distribute them across the cluster.
+			 */
+			unbalancedShards = list_concat(unbalancedShards,
+										   activeShardPlacementListForRelation);
+		}
+	}
+
+	if (list_length(unbalancedShards) > 0)
+	{
+		activeShardPlacementListList = lappend(activeShardPlacementListList,
+											   unbalancedShards);
 	}
 
 	if (options->threshold < options->rebalanceStrategy->minimumThreshold)
