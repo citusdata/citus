@@ -82,8 +82,10 @@ LookupDistributedTableIdForShardId(Oid shardId, bool *isReferenceTable)
 {
 	bool found;
 	Oid distributedTableId = InvalidOid;
-	ShardIdHashEntry *entry = (ShardIdHashEntry *) hash_search(shardToDistributedTableMap, &shardId,
-											 HASH_FIND | HASH_ENTER, &found);
+	ShardIdHashEntry *entry = (ShardIdHashEntry *) hash_search(shardToDistributedTableMap,
+															   &shardId,
+															   HASH_FIND | HASH_ENTER,
+															   &found);
 	if (found)
 	{
 		distributedTableId = entry->distributedTableId;
