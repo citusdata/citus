@@ -33,7 +33,7 @@ static void AttributeMetricsIfApplicable(void);
 
 ExecutorEnd_hook_type prev_ExecutorEnd = NULL;
 
-#define ATTRIBUTE_PREFIX "{\"tId\":"
+#define ATTRIBUTE_PREFIX "/*{\"tId\":"
 #define ATTRIBUTE_STRING_FORMAT "/*{\"tId\":%s,\"cId\":%d}*/"
 #define CITUS_STATS_TENANTS_COLUMNS 7
 #define ONE_QUERY_SCORE 1000000000
