@@ -3977,7 +3977,7 @@ MakeNameListFromRangeVar(const RangeVar *rel)
 
 
 /*
- * ErrorIfTableHasUnsupportedIdentityColumn errors out if the given table has any identity column other than bigint identity column
+ * ErrorIfTableHasUnsupportedIdentityColumn errors out if the given table has any identity column other than bigint identity column.
  */
 void
 ErrorIfTableHasUnsupportedIdentityColumn(Oid relationId)
