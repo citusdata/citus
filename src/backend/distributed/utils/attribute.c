@@ -220,7 +220,8 @@ AttributeQueryIfAnnotated(const char *query_string, CmdType commandType)
 				strcpy_s(attributeToTenant, sizeof(attributeToTenant), tenantId);
 			}
 
-			colocationGroupId = ExtractFieldInt32(jsonbDatum, "cId", INVALID_COLOCATION_ID);
+			colocationGroupId = ExtractFieldInt32(jsonbDatum, "cId",
+												  INVALID_COLOCATION_ID);
 
 			if (MultiTenantMonitoringLogLevel != CITUS_LOG_LEVEL_OFF)
 			{
@@ -745,21 +746,22 @@ Substring(const char *str, int start, int end)
 static char *
 EscapeCommentChars(const char *str)
 {
-	int len = strlen(str);
-	char *new_str = (char *) malloc(len * 2 + 1);
-	int j = 0;
+	int originalStringLength = strlen(str);
+	char *escapedString = (char *) malloc(originalStringLength * 2 + 1);
+	int escapedStringIndex = 0;
 
-	for (int i = 0; i < len; i++)
+	for (int originalStringIndex = 0; originalStringIndex < originalStringLength;
+		 originalStringIndex++)
 	{
-		if (str[i] == '*' || str[i] == '/')
+		if (str[originalStringIndex] == '*' || str[originalStringIndex] == '/')
 		{
-			new_str[j++] = '\\';
+			escapedString[escapedStringIndex++] = '\\';
 		}
-		new_str[j++] = str[i];
+		escapedString[escapedStringIndex++] = str[originalStringIndex];
 	}
-	new_str[j] = '\0';
+	escapedString[escapedStringIndex] = '\0';
 
-	return new_str;
+	return escapedString;
 }
 
 
@@ -767,22 +769,22 @@ EscapeCommentChars(const char *str)
 static char *
 UnescapeCommentChars(const char *str)
 {
-	int len = strlen(str);
-	char *new_str = (char *) malloc(len + 1);
-	int j = 0;
+	int originalStringLength = strlen(str);
+	char *unescapedString = (char *) malloc(originalStringLength + 1);
+	int unescapedStringIndex = 0;
 
-	for (int i = 0; i < len; i++)
+	for (int originalStringindex = 0; originalStringindex < originalStringLength;
+		 originalStringindex++)
 	{
-		if (str[i] == '\\' && i < len - 1)
+		if (str[originalStringindex] == '\\' && originalStringindex <
+			originalStringLength - 1 && (str[originalStringindex + 1] == '*' ||
+										 str[originalStringindex + 1] == '/'))
 		{
-			if (str[i + 1] == '*' || str[i + 1] == '/')
-			{
-				i++;
-			}
+			originalStringindex++;
 		}
-		new_str[j++] = str[i];
+		unescapedString[unescapedStringIndex++] = str[originalStringindex];
 	}
-	new_str[j] = '\0';
+	unescapedString[unescapedStringIndex] = '\0';
 
-	return new_str;
+	return unescapedString;
 }
