@@ -458,7 +458,7 @@ jobs:
       - run:
           name: 'Install DBI.pm'
           command: |
-            gosu apt install libdbi-perl
+            gosu circleci apt-get install libdbi-perl
       - run:
           name: 'Run Test'
           command: |
