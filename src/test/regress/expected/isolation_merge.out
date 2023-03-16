@@ -1,0 +1,147 @@
+Parsed test spec with 2 sessions
+
+starting permutation: s1-begin s1-upd-ins s2-result s1-commit s2-result
+step s1-begin: BEGIN;
+step s1-upd-ins: MERGE INTO prept USING preps ON prept.t1 = preps.s1
+   WHEN MATCHED THEN UPDATE SET t2 = t2 + 1
+   WHEN NOT MATCHED THEN INSERT VALUES(s1, s2);
+
+step s2-result: SELECT * FROM prept ORDER BY 1;
+ t1|t2
+---------------------------------------------------------------------
+100| 0
+(1 row)
+
+step s1-commit: COMMIT;
+step s2-result: SELECT * FROM prept ORDER BY 1;
+ t1|t2
+---------------------------------------------------------------------
+100| 1
+200| 0
+(2 rows)
+
+
+starting permutation: s1-begin s1-upd-ins s2-begin s2-upd-del s1-commit s2-commit s2-result
+step s1-begin: BEGIN;
+step s1-upd-ins: MERGE INTO prept USING preps ON prept.t1 = preps.s1
+   WHEN MATCHED THEN UPDATE SET t2 = t2 + 1
+   WHEN NOT MATCHED THEN INSERT VALUES(s1, s2);
+
+step s2-begin: BEGIN;
+step s2-upd-del: MERGE INTO prept USING preps ON prept.t1 = preps.s1
+   WHEN MATCHED AND prept.t2 = 0 THEN DELETE
+   WHEN MATCHED THEN UPDATE SET t2 = t2 + 1;
+ <waiting ...>
+step s1-commit: COMMIT;
+step s2-upd-del: <... completed>
+step s2-commit: COMMIT;
+step s2-result: SELECT * FROM prept ORDER BY 1;
+ t1|t2
+---------------------------------------------------------------------
+100| 2
+(1 row)
+
+
+starting permutation: s2-begin s2-upd-del s1-begin s1-upd-ins s2-commit s1-commit s2-result
+step s2-begin: BEGIN;
+step s2-upd-del: MERGE INTO prept USING preps ON prept.t1 = preps.s1
+   WHEN MATCHED AND prept.t2 = 0 THEN DELETE
+   WHEN MATCHED THEN UPDATE SET t2 = t2 + 1;
+
+step s1-begin: BEGIN;
+step s1-upd-ins: MERGE INTO prept USING preps ON prept.t1 = preps.s1
+   WHEN MATCHED THEN UPDATE SET t2 = t2 + 1
+   WHEN NOT MATCHED THEN INSERT VALUES(s1, s2);
+ <waiting ...>
+step s2-commit: COMMIT;
+step s1-upd-ins: <... completed>
+step s1-commit: COMMIT;
+step s2-result: SELECT * FROM prept ORDER BY 1;
+ t1|t2
+---------------------------------------------------------------------
+100| 0
+200| 0
+(2 rows)
+
+
+starting permutation: s1-begin s1-upd-ins s2-begin s2-upd s1-commit s2-commit s2-result
+step s1-begin: BEGIN;
+step s1-upd-ins: MERGE INTO prept USING preps ON prept.t1 = preps.s1
+   WHEN MATCHED THEN UPDATE SET t2 = t2 + 1
+   WHEN NOT MATCHED THEN INSERT VALUES(s1, s2);
+
+step s2-begin: BEGIN;
+step s2-upd: MERGE INTO prept USING preps ON prept.t1 = preps.s1
+   WHEN MATCHED THEN UPDATE SET t2 = t2 + 1;
+ <waiting ...>
+step s1-commit: COMMIT;
+step s2-upd: <... completed>
+step s2-commit: COMMIT;
+step s2-result: SELECT * FROM prept ORDER BY 1;
+ t1|t2
+---------------------------------------------------------------------
+100| 2
+200| 1
+(2 rows)
+
+
+starting permutation: s2-begin s2-ins s1-begin s1-del s2-upd s2-result s2-commit s1-commit s2-result
+step s2-begin: BEGIN;
+step s2-ins: MERGE INTO prept USING preps ON prept.t1 = preps.s1
+   WHEN NOT MATCHED THEN INSERT VALUES(s1, s2);
+
+step s1-begin: BEGIN;
+step s1-del: MERGE INTO prept USING preps ON prept.t1 = preps.s1
+   WHEN MATCHED THEN DELETE;
+ <waiting ...>
+step s2-upd: MERGE INTO prept USING preps ON prept.t1 = preps.s1
+   WHEN MATCHED THEN UPDATE SET t2 = t2 + 1;
+
+step s2-result: SELECT * FROM prept ORDER BY 1;
+ t1|t2
+---------------------------------------------------------------------
+100| 1
+200| 1
+(2 rows)
+
+step s2-commit: COMMIT;
+step s1-del: <... completed>
+step s1-commit: COMMIT;
+step s2-result: SELECT * FROM prept ORDER BY 1;
+t1|t2
+---------------------------------------------------------------------
+(0 rows)
+
+
+starting permutation: s1-begin s1-del-ins s2-begin s2-upd s1-result s1-ins s1-commit s2-upd s2-commit s2-result
+step s1-begin: BEGIN;
+step s1-del-ins: MERGE INTO prept USING preps ON prept.t1 = preps.s1
+   WHEN MATCHED THEN DELETE
+   WHEN NOT MATCHED THEN INSERT VALUES(s1, s2);
+
+step s2-begin: BEGIN;
+step s2-upd: MERGE INTO prept USING preps ON prept.t1 = preps.s1
+   WHEN MATCHED THEN UPDATE SET t2 = t2 + 1;
+ <waiting ...>
+step s1-result: SELECT * FROM prept ORDER BY 1;
+ t1|t2
+---------------------------------------------------------------------
+200| 0
+(1 row)
+
+step s1-ins: MERGE INTO prept USING preps ON prept.t1 = preps.s1
+   WHEN NOT MATCHED THEN INSERT VALUES(s1, s2);
+
+step s1-commit: COMMIT;
+step s2-upd: <... completed>
+step s2-upd: MERGE INTO prept USING preps ON prept.t1 = preps.s1
+   WHEN MATCHED THEN UPDATE SET t2 = t2 + 1;
+
+step s2-commit: COMMIT;
+step s2-result: SELECT * FROM prept ORDER BY 1;
+ t1|t2
+---------------------------------------------------------------------
+100| 2
+200| 2
+(2 rows)
+
