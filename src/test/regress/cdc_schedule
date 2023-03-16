@@ -1,3 +1,0 @@
-# Split tests go here.
-test: citus_cdc_basic_distributed_table
-test: citus_cdc_basic_distributed_table_concurrently
