@@ -627,8 +627,7 @@ ExtractTopComment(const char *inputString)
 	{
 		/* Skip the comment start characters */
 		commentEndCharsIndex += commentStartCharsLength;
-		while (inputString[commentEndCharsIndex] &&
-			   commentEndCharsIndex < inputStringLen &&
+		while (commentEndCharsIndex < inputStringLen &&
 			   !(inputString[commentEndCharsIndex] == '*' &&
 				 inputString [commentEndCharsIndex + 1] == '/'))
 		{
@@ -708,7 +707,8 @@ UnescapeCommentChars(const char *str)
 	{
 		if (str[originalStringindex] == '\\' && originalStringindex <
 			originalStringLength - 1 && (str[originalStringindex + 1] == '*' ||
-										 str[originalStringindex + 1] == '/'))
+										 str
+										 [originalStringindex + 1] == '/'))
 		{
 			originalStringindex++;
 		}
