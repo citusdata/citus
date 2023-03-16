@@ -456,6 +456,10 @@ jobs:
       - configure
       - enable_core
       - run:
+          name: 'Install DBI.pm'
+          command: |
+            gosu apt install libdbi-perl
+      - run:
           name: 'Run Test'
           command: |
             gosu circleci make -C src/test/<< parameters.suite >> << parameters.make >>
@@ -893,10 +897,6 @@ workflows:
           <<:  *tap-test-citus-15
           name: 'test-15_tap-cdc'
           suite: cdc
-        - run:
-            name: 'Install DBI.pm'
-            command: |
-              sudo apt-get install libdbi-perl
 
       - test-arbitrary-configs:
           name: 'test-13_check-arbitrary-configs'
