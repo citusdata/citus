@@ -894,6 +894,10 @@ workflows:
           <<:  *tap-test-citus-15
           name: 'test-15_tap-columnar-freezing'
           suite: columnar_freezing
+      - tap-test-citus:
+          <<:  *tap-test-citus-15
+          name: 'test-15_tap-cdc'
+          suite: cdc
 
       - test-arbitrary-configs:
           name: 'test-13_check-arbitrary-configs'
