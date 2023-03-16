@@ -1871,6 +1871,18 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
+		"citus.max_parallel_moves_per_node",
+		gettext_noop(
+			"Sets the maximum number of parallel task executor workers for scheduled "
+			"background tasks that involve a particular node in a rebalancing job"),
+		NULL,
+		&MaxParallelMovesPerNode,
+		3, 1, MAX_PARALLEL_MOVES_PER_NODE,
+		PGC_SIGHUP,
+		GUC_STANDARD,
+		NULL, NULL, NULL);
+
+	DefineCustomIntVariable(
 		"citus.max_rebalancer_logged_ignored_moves",
 		gettext_noop("Sets the maximum number of ignored moves the rebalance logs"),
 		NULL,

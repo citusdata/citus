@@ -63,6 +63,7 @@
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata_utility.h"
 #include "distributed/shard_cleaner.h"
+#include "distributed/shard_rebalancer.h"
 #include "distributed/resource_lock.h"
 
 /* Table-of-contents constants for our dynamic shared memory segment. */
@@ -569,8 +570,8 @@ AssignRunnableTaskToNewExecutor(BackgroundTask *runnableTask,
 		return NEW_EXECUTOR_EXCEEDS_LIMIT;
 	}
 
-	if (parallel_moves_per_node[runnableTask->source_id] == 3 ||
-		parallel_moves_per_node[runnableTask->target_id] == 3)
+	if (parallel_moves_per_node[runnableTask->source_id] == MaxParallelMovesPerNode ||
+		parallel_moves_per_node[runnableTask->target_id] == MaxParallelMovesPerNode)
 	{
 		/* set runnable task's status as blocked on token */
 		runnableTask->status = BACKGROUND_TASK_STATUS_BLOCKED_ON_TOKEN;
