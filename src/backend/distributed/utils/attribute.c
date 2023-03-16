@@ -707,11 +707,10 @@ UnescapeCommentChars(const char *str)
 	for (int originalStringindex = 0; originalStringindex < originalStringLength;
 		 originalStringindex++)
 	{
-		if (str[originalStringindex] == '\\' && originalStringindex <
-			originalStringLength - 1 && (str[originalStringindex + 1] == '*' ||
-										 str
-										 [
-											 originalStringindex + 1] == '/'))
+		if (str[originalStringindex] == '\\' &&
+			originalStringindex < originalStringLength - 1 &&
+			(str[originalStringindex + 1] == '*' ||
+			 str[originalStringindex + 1] == '/'))
 		{
 			originalStringindex++;
 		}
