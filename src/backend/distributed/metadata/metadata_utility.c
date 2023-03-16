@@ -2481,6 +2481,10 @@ BackgroundTaskStatusByOid(Oid enumOid)
 	{
 		return BACKGROUND_TASK_STATUS_CANCELLING;
 	}
+	else if (enumOid == CitusTaskStatusBlockedOnTokenId())
+	{
+		return BACKGROUND_TASK_STATUS_BLOCKED_ON_TOKEN;
+	}
 	ereport(ERROR, (errmsg("unknown enum value for citus_task_status")));
 }
 
@@ -2536,6 +2540,7 @@ IsBackgroundTaskStatusTerminal(BackgroundTaskStatus status)
 		}
 
 		case BACKGROUND_TASK_STATUS_BLOCKED:
+		case BACKGROUND_TASK_STATUS_BLOCKED_ON_TOKEN:
 		case BACKGROUND_TASK_STATUS_CANCELLING:
 		case BACKGROUND_TASK_STATUS_RUNNABLE:
 		case BACKGROUND_TASK_STATUS_RUNNING:
@@ -2645,6 +2650,11 @@ BackgroundTaskStatusOid(BackgroundTaskStatus status)
 		case BACKGROUND_TASK_STATUS_CANCELLING:
 		{
 			return CitusTaskStatusCancellingId();
+		}
+
+		case BACKGROUND_TASK_STATUS_BLOCKED_ON_TOKEN:
+		{
+			return CitusTaskStatusBlockedOnTokenId();
 		}
 	}
 
@@ -3104,6 +3114,59 @@ ResetRunningBackgroundTasks(void)
 			const bool dontWait = false;
 			(void) LockAcquire(&locktag, AccessExclusiveLock, sessionLock, dontWait);
 		}
+	}
+
+	CommandCounterIncrement();
+
+	systable_endscan(scanDescriptor);
+
+	table_close(pgDistBackgroundTasks, NoLock);
+}
+
+
+/*
+ * UnblockTasksBlockedOnToken
+ */
+void
+UnblockTasksBlockedOnToken(void)
+{
+	const int scanKeyCount = 1;
+	ScanKeyData scanKey[1];
+	const bool indexOK = true;
+
+	Relation pgDistBackgroundTasks =
+		table_open(DistBackgroundTaskRelationId(), ExclusiveLock);
+
+	/* pg_dist_background_task.status == 'blocked_on_token' */
+	ScanKeyInit(&scanKey[0], Anum_pg_dist_background_task_status,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(CitusTaskStatusBlockedOnTokenId()));
+
+	SysScanDesc scanDescriptor =
+		systable_beginscan(pgDistBackgroundTasks,
+						   DistBackgroundTaskStatusTaskIdIndexId(),
+						   indexOK, NULL, scanKeyCount,
+						   scanKey);
+
+	HeapTuple taskTuple = NULL;
+	while (HeapTupleIsValid(taskTuple = systable_getnext(scanDescriptor)))
+	{
+		Datum values[Natts_pg_dist_background_task] = { 0 };
+		bool isnull[Natts_pg_dist_background_task] = { 0 };
+		bool replace[Natts_pg_dist_background_task] = { 0 };
+
+		TupleDesc tupleDescriptor = RelationGetDescr(pgDistBackgroundTasks);
+		heap_deform_tuple(taskTuple, tupleDescriptor, values, isnull);
+
+		values[Anum_pg_dist_background_task_status - 1] =
+			ObjectIdGetDatum(CitusTaskStatusRunnableId());
+		isnull[Anum_pg_dist_background_task_status - 1] = false;
+		replace[Anum_pg_dist_background_task_status - 1] = true;
+
+		taskTuple = heap_modify_tuple(taskTuple, tupleDescriptor, values, isnull,
+									  replace);
+
+		CatalogTupleUpdate(pgDistBackgroundTasks, &taskTuple->t_self, taskTuple);
 	}
 
 	CommandCounterIncrement();

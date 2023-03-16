@@ -572,6 +572,9 @@ AssignRunnableTaskToNewExecutor(BackgroundTask *runnableTask,
 	if (parallel_moves_per_node[runnableTask->source_id] == 3 ||
 		parallel_moves_per_node[runnableTask->target_id] == 3)
 	{
+		/* set runnable task's status as blocked on token */
+		runnableTask->status = BACKGROUND_TASK_STATUS_BLOCKED_ON_TOKEN;
+		UpdateBackgroundTask(runnableTask);
 		return TASK_BLOCKED_ON_TOKEN;
 	}
 	else
@@ -637,6 +640,9 @@ AssignRunnableTasks(QueueMonitorExecutionContext *queueMonitorExecutionContext)
 			taskAssignedOrBlockedOnToken = false;
 		}
 	} while (taskAssignedOrBlockedOnToken);
+
+	/* change status of all tasks that are blocked on token to runnable */
+	UnblockTasksBlockedOnToken();
 }
 
 

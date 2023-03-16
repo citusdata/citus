@@ -17,3 +17,5 @@ ALTER TABLE pg_catalog.pg_dist_transaction REPLICA IDENTITY USING INDEX pg_dist_
 
 ALTER TABLE pg_catalog.pg_dist_background_task ADD COLUMN source_id int DEFAULT 0;
 ALTER TABLE pg_catalog.pg_dist_background_task ADD COLUMN target_id int DEFAULT 0;
+
+ALTER TYPE pg_catalog.citus_task_status ADD VALUE IF NOT EXISTS 'blocked_on_token';

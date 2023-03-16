@@ -160,6 +160,7 @@ typedef struct MetadataCacheData
 	Oid citusJobStatusFailedId;
 	Oid citusJobStatusFailingId;
 	Oid citusTaskStatusBlockedId;
+	Oid citusTaskStatusBlockedOnTokenId;
 	Oid citusTaskStatusRunnableId;
 	Oid citusTaskStatusRunningId;
 	Oid citusTaskStatusDoneId;
@@ -3518,6 +3519,19 @@ CitusTaskStatusBlockedId(void)
 	}
 
 	return MetadataCache.citusTaskStatusBlockedId;
+}
+
+
+Oid
+CitusTaskStatusBlockedOnTokenId(void)
+{
+	if (!MetadataCache.citusTaskStatusBlockedOnTokenId)
+	{
+		MetadataCache.citusTaskStatusBlockedOnTokenId =
+			LookupStringEnumValueId("citus_task_status", "blocked_on_token");
+	}
+
+	return MetadataCache.citusTaskStatusBlockedOnTokenId;
 }
 
 
