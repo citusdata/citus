@@ -691,18 +691,20 @@ ExtractTopComment(const char *inputString)
 
 	int commentEndCharsIndex = 0;
 
-	/* If query starts with a comment */
-	if (inputString[commentEndCharsIndex] == '/' &&
-		inputString[commentEndCharsIndex + 1] == '*')
+	/* If query doesn't start with a comment, return NULL */
+	if (inputString[commentEndCharsIndex] != '/' ||
+		inputString[commentEndCharsIndex + 1] != '*')
 	{
-		/* Skip the comment start characters */
-		commentEndCharsIndex += commentStartCharsLength;
-		while (commentEndCharsIndex < inputStringLen &&
-			   !(inputString[commentEndCharsIndex] == '*' &&
-				 inputString [commentEndCharsIndex + 1] == '/'))
-		{
-			commentEndCharsIndex++;
-		}
+		return NULL;
+	}
+
+	/* Skip the comment start characters */
+	commentEndCharsIndex += commentStartCharsLength;
+	while (commentEndCharsIndex < inputStringLen &&
+			!(inputString[commentEndCharsIndex] == '*' &&
+				inputString [commentEndCharsIndex + 1] == '/'))
+	{
+		commentEndCharsIndex++;
 	}
 
 	if (commentEndCharsIndex > commentStartCharsLength)
