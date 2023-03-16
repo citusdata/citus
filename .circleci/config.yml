@@ -856,11 +856,6 @@ workflows:
           name: 'test-15_check-failure'
           image: citus/failtester
           make: check-failure
-      - test-citus:
-          <<:  *test-citus-15
-          name: 'test-15_check-cdc'
-          make: check-cdc
-
 
       - tap-test-citus: &tap-test-citus-13
           name: 'test-13_tap-recovery'
@@ -898,7 +893,10 @@ workflows:
           <<:  *tap-test-citus-15
           name: 'test-15_tap-cdc'
           suite: cdc
-
+          - run:
+            name: 'Install DBI.pm'
+            command: |
+              sudo apt-get install libdbi-perl
       - test-arbitrary-configs:
           name: 'test-13_check-arbitrary-configs'
           pg_major: 13
@@ -1002,7 +1000,6 @@ workflows:
             - test-13-14_check-pg-upgrade
             - test-14-15_check-pg-upgrade
             - test-13_check-citus-upgrade
-            - test-15_check-cdc
 
       - ch_benchmark:
           requires: [build-13]
