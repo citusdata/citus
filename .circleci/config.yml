@@ -458,7 +458,7 @@ jobs:
       - run:
           name: 'Install DBI.pm'
           command: |
-            sudo apt-get install libdbi-perl
+            apt-get install libdbi-perl
       - run:
           name: 'Run Test'
           command: |
