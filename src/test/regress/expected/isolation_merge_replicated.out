@@ -1,0 +1,26 @@
+Parsed test spec with 2 sessions
+
+starting permutation: s1-begin s1-upd-ins s2-begin s2-update s1-commit s2-commit s1-result s2-result
+step s1-begin: BEGIN;
+step s1-upd-ins: MERGE INTO prept USING preps ON prept.t1 = preps.s1
+   WHEN MATCHED THEN UPDATE SET t2 = t2 + 1
+   WHEN NOT MATCHED THEN INSERT VALUES(s1, s2);
+step s2-begin: BEGIN;
+step s2-update: UPDATE preps SET s2 = s2 + 1; <waiting ...>
+step s1-commit: COMMIT;
+step s2-update: <... completed>
+step s2-commit: COMMIT;
+step s1-result: SELECT * FROM preps ORDER BY 1;
+ s1|s2
+---------------------------------------------------------------------
+100| 1
+200| 1
+(2 rows)
+
+step s2-result: SELECT * FROM prept ORDER BY 1;
+ t1|t2
+---------------------------------------------------------------------
+100| 1
+200| 0
+(2 rows)
+
