@@ -885,10 +885,6 @@ workflows:
           pg_major: 15
           image_tag: '<< pipeline.parameters.pg15_version >>'
           requires: [build-15]
-      - run:
-          name: 'Install DBI.pm'
-          command: |
-            sudo apt-get install libdbi-perl
       - tap-test-citus:
           <<:  *tap-test-citus-15
           name: 'test-15_tap-columnar-freezing'
@@ -897,6 +893,10 @@ workflows:
           <<:  *tap-test-citus-15
           name: 'test-15_tap-cdc'
           suite: cdc
+        - run:
+            name: 'Install DBI.pm'
+            command: |
+              sudo apt-get install libdbi-perl
 
       - test-arbitrary-configs:
           name: 'test-13_check-arbitrary-configs'
