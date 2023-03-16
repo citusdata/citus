@@ -171,9 +171,6 @@ if __name__ == "__main__":
         if "operations" in test_schedule:
             return "minimal_schedule"
 
-        if "cdc" in test_schedule:
-            return None
-
         if test_schedule in config.ARBITRARY_SCHEDULE_NAMES:
             print(
                 f"WARNING: Arbitrary config schedule ({test_schedule}) is not supported."
@@ -221,8 +218,6 @@ if __name__ == "__main__":
         make_recipe = "check-isolation-custom-schedule"
     elif dependencies.schedule == "failure_base_schedule":
         make_recipe = "check-failure-custom-schedule"
-    elif "cdc" in test_file_name:
-        make_recipe = "check-cdc-custom-schedule"
     else:
         make_recipe = "check-custom-schedule"
 
