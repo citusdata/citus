@@ -366,8 +366,10 @@ AddPartitionKeyNotNullFilterToSelect(Query *subqery)
 		}
 	}
 
-	/* we should have found target partition column */
-	Assert(targetPartitionColumnVar != NULL);
+	if (targetPartitionColumnVar == NULL)
+	{
+		return;
+	}
 
 	/* create expression for partition_column IS NOT NULL */
 	NullTest *nullTest = makeNode(NullTest);

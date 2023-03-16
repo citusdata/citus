@@ -223,6 +223,72 @@ CreateInsertSelectPlan(uint64 planId, Query *originalQuery,
 }
 
 
+static DeferredErrorMessage *
+CheckRouterInsertSelect(Query *originalQuery,
+						PlannerRestrictionContext *
+						plannerRestrictionContext)
+{
+	if (originalQuery->cteList)
+	{
+		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+							 "ctes in INSERT are not allowed in router insert .. select",
+							 NULL, NULL);
+	}
+
+
+	RangeTblEntry *selectRte = ExtractSelectRangeTableEntry(originalQuery);
+	Query *selectQuery = selectRte->subquery;
+	DistributedPlan *selectPlan = CreateRouterPlan(copyObject(selectQuery),
+												   copyObject(selectQuery),
+												   plannerRestrictionContext);
+	if (selectPlan->planningError)
+	{
+		return selectPlan->planningError;
+	}
+
+	uint64 anchorShardId = ((Task *) linitial(
+								selectPlan->workerJob->taskList))->anchorShardId;
+	if (anchorShardId == INVALID_SHARD_ID)
+	{
+		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+							 "only distributed tables may be referenced "
+							 "in router insert .. select",
+							 NULL, NULL);
+	}
+
+	Oid anchorSelectRelationId = LoadShardInterval(anchorShardId)->relationId;
+	CitusTableCacheEntry *anchorSelectRelCacheEnt =
+		GetCitusTableCacheEntry(anchorSelectRelationId);
+
+	RangeTblEntry *insertRte = ExtractResultRelationRTEOrError(originalQuery);
+	Oid targetRelationId = insertRte->relid;
+	CitusTableCacheEntry *targetRelCacheEnt = GetCitusTableCacheEntry(targetRelationId);
+
+	if (anchorSelectRelCacheEnt->colocationId == targetRelCacheEnt->colocationId)
+	{
+	}
+	/*
+	else if (IsCitusTableTypeCacheEntry(anchorSelectRelCacheEnt, REFERENCE_TABLE) &&
+	         IsCitusTableTypeCacheEntry(targetRelCacheEnt, DISTRIBUTED_TABLE))
+	{
+		// be smarter ?
+	}
+	*/
+	else if (IsCitusTableTypeCacheEntry(anchorSelectRelCacheEnt, REFERENCE_TABLE) &&
+			 IsCitusTableTypeCacheEntry(targetRelCacheEnt, CITUS_LOCAL_TABLE))
+	{
+	}
+	else
+	{
+		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+							 "tables must be colocated for distributed insert select",
+							 NULL, NULL);
+	}
+
+	return NULL;
+}
+
+
 /*
  * CreateInsertSelectPlan tries to create a distributed plan for an
  * INSERT INTO distributed_table SELECT ... query by push down the
@@ -285,14 +351,16 @@ CreateDistributedInsertSelectPlan(Query *originalQuery,
 
 	distributedPlan->modLevel = RowModifyLevelForQuery(originalQuery);
 
-	/*
-	 * Error semantics for INSERT ... SELECT queries are different than regular
-	 * modify queries. Thus, handle separately.
-	 */
-	distributedPlan->planningError = DistributedInsertSelectSupported(originalQuery,
-																	  insertRte,
-																	  subqueryRte,
-																	  allReferenceTables);
+	distributedPlan->planningError = CheckRouterInsertSelect(originalQuery,
+															 plannerRestrictionContext);
+	if (distributedPlan->planningError)
+	{
+		distributedPlan->planningError = DistributedInsertSelectSupported(originalQuery,
+																		  insertRte,
+																		  subqueryRte,
+																		  allReferenceTables);
+	}
+
 	if (distributedPlan->planningError)
 	{
 		return distributedPlan;
