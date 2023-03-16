@@ -16,6 +16,7 @@
 #include "distributed/listutils.h"
 #include "distributed/jsonbutils.h"
 #include "distributed/tuplestore.h"
+#include "distributed/colocation_utils.h"
 #include "executor/execdesc.h"
 #include "storage/ipc.h"
 #include "storage/lwlock.h"
@@ -193,7 +194,7 @@ AttributeQueryIfAnnotated(const char *query_string, CmdType commandType)
 				strcpy_s(attributeToTenant, sizeof(attributeToTenant), tenantId);
 			}
 
-			colocationGroupId = ExtractFieldInt32(jsonbDatum, "cId", 0);
+			colocationGroupId = ExtractFieldInt32(jsonbDatum, "cId", INVALID_COLOCATION_ID);
 
 			if (MultiTenantMonitoringLogLevel != CITUS_LOG_LEVEL_OFF)
 			{
