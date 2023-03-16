@@ -122,7 +122,16 @@ static volatile sig_atomic_t GotSigterm = false;
 static volatile sig_atomic_t GotSigint = false;
 static volatile sig_atomic_t GotSighup = false;
 
-static int parallel_moves_per_node[100] = { 0 };
+/* Counter for parallel moves per node */
+static HTAB *ParallelMovesPerNode = NULL;
+
+typedef struct ParallelMovesPerNodeEntry
+{
+	/* Used as hash key. */
+	uint32 node_id;
+
+	uint32 counter;
+} ParallelMovesPerNodeEntry;
 
 PG_FUNCTION_INFO_V1(citus_job_cancel);
 PG_FUNCTION_INFO_V1(citus_job_wait);
@@ -570,18 +579,48 @@ AssignRunnableTaskToNewExecutor(BackgroundTask *runnableTask,
 		return NEW_EXECUTOR_EXCEEDS_LIMIT;
 	}
 
-	if (parallel_moves_per_node[runnableTask->source_id] == MaxParallelMovesPerNode ||
-		parallel_moves_per_node[runnableTask->target_id] == MaxParallelMovesPerNode)
+	if (runnableTask->source_id && runnableTask->target_id)
 	{
-		/* set runnable task's status as blocked on token */
-		runnableTask->status = BACKGROUND_TASK_STATUS_BLOCKED_ON_TOKEN;
-		UpdateBackgroundTask(runnableTask);
-		return TASK_BLOCKED_ON_TOKEN;
-	}
-	else
-	{
-		parallel_moves_per_node[runnableTask->source_id] += 1;
-		parallel_moves_per_node[runnableTask->target_id] += 1;
+		bool found;
+		ParallelMovesPerNodeEntry *source_hashEntry = hash_search(ParallelMovesPerNode,
+																  &(runnableTask->
+																	source_id),
+																  HASH_ENTER, &found);
+		if (!found)
+		{
+			source_hashEntry->counter = 1;
+		}
+		else if (source_hashEntry->counter > MaxParallelMovesPerNode)
+		{
+			source_hashEntry->counter += 1;
+		}
+		else
+		{
+			runnableTask->status = BACKGROUND_TASK_STATUS_BLOCKED_ON_TOKEN;
+			UpdateBackgroundTask(runnableTask);
+			return TASK_BLOCKED_ON_TOKEN;
+		}
+
+		found = false;
+
+		ParallelMovesPerNodeEntry *target_hashEntry = hash_search(ParallelMovesPerNode,
+																  &(runnableTask->
+																	target_id),
+																  HASH_ENTER, &found);
+		if (!found)
+		{
+			target_hashEntry->counter = 1;
+		}
+		else if (target_hashEntry->counter > MaxParallelMovesPerNode)
+		{
+			target_hashEntry->counter += 1;
+		}
+		else
+		{
+			runnableTask->status = BACKGROUND_TASK_STATUS_BLOCKED_ON_TOKEN;
+			UpdateBackgroundTask(runnableTask);
+			return TASK_BLOCKED_ON_TOKEN;
+		}
 	}
 
 	/* assign the allocated executor to the runnable task and increment total executor count */
@@ -875,8 +914,18 @@ TaskEnded(TaskExecutionContext *taskExecutionContext)
 
 	if (task->source_id && task->target_id)
 	{
-		parallel_moves_per_node[task->source_id] -= 1;
-		parallel_moves_per_node[task->target_id] -= 1;
+		ParallelMovesPerNodeEntry *source_hashEntry = hash_search(ParallelMovesPerNode,
+																  &(task->source_id),
+																  HASH_FIND, NULL);
+
+		source_hashEntry->counter -= 1;
+
+
+		ParallelMovesPerNodeEntry *target_hashEntry = hash_search(ParallelMovesPerNode,
+																  &(task->target_id),
+																  HASH_FIND, NULL);
+
+		target_hashEntry->counter -= 1;
 	}
 
 	UpdateBackgroundTask(task);
@@ -1194,6 +1243,20 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 
 			/* update max_background_task_executors if changed */
 			ProcessConfigFile(PGC_SIGHUP);
+		}
+
+		if (ParallelMovesPerNode == NULL)
+		{
+			HASHCTL info;
+			uint32 hashFlags = (HASH_ELEM | HASH_FUNCTION);
+			memset(&info, 0, sizeof(info));
+			info.keysize = sizeof(uint32);
+			info.hash = oid_hash;
+			info.entrysize = sizeof(ParallelMovesPerNodeEntry);
+
+			ParallelMovesPerNode = hash_create(
+				"Parallel moves per node in a rebalancing job map",
+				32, &info, hashFlags);
 		}
 
 		/* assign runnable tasks, if any, to new task executors in a transaction if we do not have SIGTERM or SIGINT */
