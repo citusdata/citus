@@ -1,0 +1,172 @@
+CREATE SCHEMA background_rebalance_parallel;
+SET search_path TO background_rebalance_parallel;
+SET citus.next_shard_id TO 85674000;
+SET citus.shard_replication_factor TO 1;
+ALTER SEQUENCE pg_dist_background_job_job_id_seq RESTART 17777;
+ALTER SYSTEM SET citus.background_task_queue_interval TO '1s';
+SELECT pg_reload_conf();
+ pg_reload_conf
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT citus_disable_node('localhost', :worker_2_port, synchronous:=true);
+ citus_disable_node
+---------------------------------------------------------------------
+
+(1 row)
+
+/* Create two tables table1_coloc1, table2_coloc1 and in a colocation group  */
+CREATE TABLE table1_colg1 (a int PRIMARY KEY);
+SELECT create_distributed_table('table1_colg1', 'a', shard_count => 8, colocate_with => 'none');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+/*INSERT INTO  table1_colg1 SELECT generate_series(1,1000) AS a; */
+CREATE TABLE table2_colg1 (b int PRIMARY KEY);
+SELECT create_distributed_table('table2_colg1', 'b' , colocate_with => 'table1_colg1');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+/*INSERT INTO table2_colg1 SELECT generate_series(1,1000); */
+CREATE TABLE table1_colg2 (a int PRIMARY KEY);
+SELECT create_distributed_table('table1_colg2 ', 'a', shard_count => 8, colocate_with => 'none');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+/*INSERT INTO  table1_colg2  SELECT generate_series(1,1000) AS a; */
+CREATE TABLE  table2_colg2 (b int primary key);
+SELECT create_distributed_table('table2_colg2', 'b' , colocate_with => 'table1_colg2');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+/*INSERT INTO table2_colg2 SELECT generate_series(1,1000); */
+/* Activate a node so that we can rebalance */
+SELECT * FROM citus_activate_node('localhost', :worker_2_port);
+ citus_activate_node
+---------------------------------------------------------------------
+                  36
+(1 row)
+
+SELECT * FROM citus_set_node_property('localhost', :worker_2_port, 'shouldhaveshards', true);
+ citus_set_node_property
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT * FROM citus_rebalance_start();
+NOTICE:  Scheduled 8 moves as job xxx
+DETAIL:  Rebalance scheduled as background job
+HINT:  To monitor progress, run: SELECT * FROM citus_rebalance_status();
+ citus_rebalance_start
+---------------------------------------------------------------------
+                 17777
+(1 row)
+
+SELECT citus_rebalance_wait();
+ citus_rebalance_wait
+---------------------------------------------------------------------
+
+(1 row)
+
+/* Check that all the move tasks for shards of table1_colg1 and table2_colg1 sequentially take a dependency on each other.
+ * The all the move tasks of table1_colg2 and table2_colg2 sequentially take a dependency on each other *
+   The first move task scheduled in each group has no dependency.
+ */
+SELECT * FROM pg_dist_background_task_depend WHERE job_id = 17777 ORDER BY task_id ASC;
+ job_id | task_id | depends_on
+---------------------------------------------------------------------
+  17777 |      14 |         13
+  17777 |      15 |         14
+  17777 |      16 |         15
+  17777 |      18 |         17
+  17777 |      19 |         18
+  17777 |      20 |         19
+(6 rows)
+
+/* Check that if there is a reference table that needs to be synched to a node, the first move scheduled in a colocation group takes a dependency on the
+   replicate_reference_tables task */
+SELECT citus_drain_node('localhost',:worker_2_port);
+NOTICE:  Moving shard xxxxx from localhost:xxxxx to localhost:xxxxx ...
+NOTICE:  Moving shard xxxxx from localhost:xxxxx to localhost:xxxxx ...
+NOTICE:  Moving shard xxxxx from localhost:xxxxx to localhost:xxxxx ...
+NOTICE:  Moving shard xxxxx from localhost:xxxxx to localhost:xxxxx ...
+NOTICE:  Moving shard xxxxx from localhost:xxxxx to localhost:xxxxx ...
+NOTICE:  Moving shard xxxxx from localhost:xxxxx to localhost:xxxxx ...
+NOTICE:  Moving shard xxxxx from localhost:xxxxx to localhost:xxxxx ...
+NOTICE:  Moving shard xxxxx from localhost:xxxxx to localhost:xxxxx ...
+ citus_drain_node
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT citus_disable_node('localhost', :worker_2_port, synchronous:=true);
+ citus_disable_node
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE ref_table(a int PRIMARY KEY);
+SELECT create_reference_table('ref_table');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+/* Activate a node so that we can rebalance */
+SELECT * FROM citus_activate_node('localhost', :worker_2_port);
+ citus_activate_node
+---------------------------------------------------------------------
+                  36
+(1 row)
+
+SELECT * FROM citus_set_node_property('localhost', :worker_2_port, 'shouldhaveshards', true);
+ citus_set_node_property
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT * FROM citus_rebalance_start();
+NOTICE:  Scheduled 8 moves as job xxx
+DETAIL:  Rebalance scheduled as background job
+HINT:  To monitor progress, run: SELECT * FROM citus_rebalance_status();
+ citus_rebalance_start
+---------------------------------------------------------------------
+                 17778
+(1 row)
+
+SELECT citus_rebalance_wait();
+ citus_rebalance_wait
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT * FROM pg_dist_background_task_depend WHERE job_id = 17778 ORDER BY task_id ASC;
+ job_id | task_id | depends_on
+---------------------------------------------------------------------
+  17778 |      22 |         21
+  17778 |      23 |         22
+  17778 |      24 |         23
+  17778 |      25 |         24
+  17778 |      26 |         21
+  17778 |      27 |         26
+  17778 |      28 |         27
+  17778 |      29 |         28
+(8 rows)
+
+DROP SCHEMA background_rebalance_parallel CASCADE;
+NOTICE:  drop cascades to 6 other objects
+DETAIL:  drop cascades to table table1_colg1
+drop cascades to table table2_colg1
+drop cascades to table table1_colg2
+drop cascades to table table2_colg2
+drop cascades to table ref_table
+drop cascades to table ref_table_85674032
