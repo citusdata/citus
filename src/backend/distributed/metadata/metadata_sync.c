@@ -515,7 +515,7 @@ ShouldSyncUserCommandForObject(ObjectAddress objectAddress)
 /*
  * ShouldSyncTableMetadata checks if the metadata of a distributed table should be
  * propagated to metadata workers, i.e. the table is a hash distributed table or
- * reference/citus local table.
+ * a Citus table that doesn't have shard key.
  */
 bool
 ShouldSyncTableMetadata(Oid relationId)
@@ -537,10 +537,11 @@ ShouldSyncTableMetadata(Oid relationId)
 
 
 /*
- * ShouldSyncTableMetadataViaCatalog checks if the metadata of a distributed table should
- * be propagated to metadata workers, i.e. the table is an MX table or reference table.
+ * ShouldSyncTableMetadataViaCatalog checks if the metadata of a Citus table should
+ * be propagated to metadata workers, i.e. the table is an MX table or Citus table
+ * that doesn't have shard key.
  * Tables with streaming replication model (which means RF=1) and hash distribution are
- * considered as MX tables while tables with none distribution are reference tables.
+ * considered as MX tables.
  *
  * ShouldSyncTableMetadataViaCatalog does not use the CitusTableCache and instead reads
  * from catalog tables directly.
@@ -1080,7 +1081,7 @@ EnsureObjectMetadataIsSane(int distributionArgumentIndex, int colocationId)
 
 /*
  * DistributionCreateCommands generates a commands that can be
- * executed to replicate the metadata for a distributed table.
+ * executed to replicate the metadata for a Citus table.
  */
 char *
 DistributionCreateCommand(CitusTableCacheEntry *cacheEntry)

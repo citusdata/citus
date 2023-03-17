@@ -715,6 +715,13 @@ DistributedInsertSelectSupported(Query *queryTree, RangeTblEntry *insertRte,
 								 NULL, NULL);
 		}
 	}
+	else if (IsCitusTableType(targetRelationId, NULL_KEY_DISTRIBUTED_TABLE))
+	{
+		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+							 "distributed INSERT ... SELECT cannot target a distributed "
+							 "table with a null shard key",
+							 NULL, NULL);
+	}
 	else
 	{
 		/*
