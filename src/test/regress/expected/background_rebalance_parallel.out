@@ -24,7 +24,6 @@ SELECT create_distributed_table('table1_colg1', 'a', shard_count => 8, colocate_
 
 (1 row)
 
-/*INSERT INTO  table1_colg1 SELECT generate_series(1,1000) AS a; */
 CREATE TABLE table2_colg1 (b int PRIMARY KEY);
 SELECT create_distributed_table('table2_colg1', 'b' , colocate_with => 'table1_colg1');
  create_distributed_table
@@ -32,7 +31,6 @@ SELECT create_distributed_table('table2_colg1', 'b' , colocate_with => 'table1_c
 
 (1 row)
 
-/*INSERT INTO table2_colg1 SELECT generate_series(1,1000); */
 CREATE TABLE table1_colg2 (a int PRIMARY KEY);
 SELECT create_distributed_table('table1_colg2 ', 'a', shard_count => 8, colocate_with => 'none');
  create_distributed_table
@@ -40,7 +38,6 @@ SELECT create_distributed_table('table1_colg2 ', 'a', shard_count => 8, colocate
 
 (1 row)
 
-/*INSERT INTO  table1_colg2  SELECT generate_series(1,1000) AS a; */
 CREATE TABLE  table2_colg2 (b int primary key);
 SELECT create_distributed_table('table2_colg2', 'b' , colocate_with => 'table1_colg2');
  create_distributed_table
@@ -48,7 +45,6 @@ SELECT create_distributed_table('table2_colg2', 'b' , colocate_with => 'table1_c
 
 (1 row)
 
-/*INSERT INTO table2_colg2 SELECT generate_series(1,1000); */
 /* Activate a node so that we can rebalance */
 SELECT * FROM citus_activate_node('localhost', :worker_2_port);
  citus_activate_node
@@ -163,10 +159,9 @@ SELECT * FROM pg_dist_background_task_depend WHERE job_id = 17778 ORDER BY task_
 (8 rows)
 
 DROP SCHEMA background_rebalance_parallel CASCADE;
-NOTICE:  drop cascades to 6 other objects
+NOTICE:  drop cascades to 5 other objects
 DETAIL:  drop cascades to table table1_colg1
 drop cascades to table table2_colg1
 drop cascades to table table1_colg2
 drop cascades to table table2_colg2
 drop cascades to table ref_table
-drop cascades to table ref_table_85674032

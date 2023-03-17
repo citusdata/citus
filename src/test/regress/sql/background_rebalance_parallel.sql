@@ -8,30 +8,30 @@ ALTER SEQUENCE pg_dist_background_job_job_id_seq RESTART 17777;
 ALTER SYSTEM SET citus.background_task_queue_interval TO '1s';
 SELECT pg_reload_conf();
 
-SELECT citus_disable_node('localhost', :worker_2_port, synchronous:=true); 
+SELECT citus_disable_node('localhost', :worker_2_port, synchronous:=true);
 
 /* Create two tables table1_coloc1, table2_coloc1 and in a colocation group  */
 
 CREATE TABLE table1_colg1 (a int PRIMARY KEY);
 SELECT create_distributed_table('table1_colg1', 'a', shard_count => 8, colocate_with => 'none');
 
-CREATE TABLE table2_colg1 (b int PRIMARY KEY); 
+CREATE TABLE table2_colg1 (b int PRIMARY KEY);
 
-SELECT create_distributed_table('table2_colg1', 'b' , colocate_with => 'table1_colg1'); 
+SELECT create_distributed_table('table2_colg1', 'b' , colocate_with => 'table1_colg1');
 
-CREATE TABLE table1_colg2 (a int PRIMARY KEY); 
+CREATE TABLE table1_colg2 (a int PRIMARY KEY);
 
-SELECT create_distributed_table('table1_colg2 ', 'a', shard_count => 8, colocate_with => 'none'); 
+SELECT create_distributed_table('table1_colg2 ', 'a', shard_count => 8, colocate_with => 'none');
 
-CREATE TABLE  table2_colg2 (b int primary key); 
+CREATE TABLE  table2_colg2 (b int primary key);
 
-SELECT create_distributed_table('table2_colg2', 'b' , colocate_with => 'table1_colg2'); 
+SELECT create_distributed_table('table2_colg2', 'b' , colocate_with => 'table1_colg2');
 
 
 /* Activate a node so that we can rebalance */
-SELECT * FROM citus_activate_node('localhost', :worker_2_port); 
+SELECT * FROM citus_activate_node('localhost', :worker_2_port);
 
-SELECT * FROM citus_set_node_property('localhost', :worker_2_port, 'shouldhaveshards', true); 
+SELECT * FROM citus_set_node_property('localhost', :worker_2_port, 'shouldhaveshards', true);
 
 SELECT * FROM citus_rebalance_start();
 
@@ -43,15 +43,15 @@ SELECT citus_rebalance_wait();
  */
 SELECT * FROM pg_dist_background_task_depend WHERE job_id = 17777 ORDER BY task_id ASC;
 
-/* Check that if there is a reference table that needs to be synched to a node, the first move scheduled in a colocation group takes a dependency on the 
+/* Check that if there is a reference table that needs to be synched to a node, the first move scheduled in a colocation group takes a dependency on the
    replicate_reference_tables task */
 
 SELECT citus_drain_node('localhost',:worker_2_port);
 SELECT citus_disable_node('localhost', :worker_2_port, synchronous:=true);
 
-CREATE TABLE ref_table(a int PRIMARY KEY); 
+CREATE TABLE ref_table(a int PRIMARY KEY);
 
-SELECT create_reference_table('ref_table'); 
+SELECT create_reference_table('ref_table');
 
 /* Activate a node so that we can rebalance */
 SELECT * FROM citus_activate_node('localhost', :worker_2_port);
