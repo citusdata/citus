@@ -303,6 +303,11 @@ ErrorIfUnsupportedForeignConstraintExists(Relation relation, char referencingDis
 		/*
 		 * Foreign keys from citus local tables or reference tables to distributed
 		 * tables are not supported.
+		 *
+		 * We could support foreign keys from references tables to null-shard-key
+		 * tables but this doesn't seem useful a lot. However, if we decide supporting
+		 * this, then we need to expand relation access tracking check for the null-shard-key
+		 * tables too.
 		 */
 		if (referencingIsCitusLocalOrRefTable && !referencedIsCitusLocalOrRefTable)
 		{
@@ -361,7 +366,12 @@ ErrorIfUnsupportedForeignConstraintExists(Relation relation, char referencingDis
 		 * if tables are hash-distributed and colocated, we need to make sure that
 		 * the distribution key is included in foreign constraint.
 		 */
-		if (!referencedIsCitusLocalOrRefTable && !foreignConstraintOnDistKey)
+		bool referencedIsNullShardKeyTable =
+			IsNullShardKeyTableByDistParams(referencedDistMethod,
+											referencedReplicationModel,
+											referencedColocationId);
+		if (!referencedIsCitusLocalOrRefTable && !referencedIsNullShardKeyTable &&
+			!foreignConstraintOnDistKey)
 		{
 			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 							errmsg("cannot create foreign key constraint"),

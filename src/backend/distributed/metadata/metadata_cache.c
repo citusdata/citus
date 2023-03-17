@@ -508,11 +508,21 @@ IsCitusTableTypeInternal(char partitionMethod, char replicationModel,
 			return partitionMethod == DISTRIBUTE_BY_RANGE;
 		}
 
+		case NULL_KEY_DISTRIBUTED_TABLE:
+		{
+			return partitionMethod == DISTRIBUTE_BY_NONE &&
+				   replicationModel != REPLICATION_MODEL_2PC &&
+				   colocationId != INVALID_COLOCATION_ID;
+		}
+
 		case DISTRIBUTED_TABLE:
 		{
 			return partitionMethod == DISTRIBUTE_BY_HASH ||
 				   partitionMethod == DISTRIBUTE_BY_RANGE ||
-				   partitionMethod == DISTRIBUTE_BY_APPEND;
+				   partitionMethod == DISTRIBUTE_BY_APPEND ||
+				   (partitionMethod == DISTRIBUTE_BY_NONE &&
+					replicationModel != REPLICATION_MODEL_2PC &&
+					colocationId != INVALID_COLOCATION_ID);
 		}
 
 		case STRICTLY_PARTITIONED_DISTRIBUTED_TABLE:
@@ -800,6 +810,21 @@ IsCitusLocalTableByDistParams(char partitionMethod, char replicationModel,
 	return partitionMethod == DISTRIBUTE_BY_NONE &&
 		   replicationModel != REPLICATION_MODEL_2PC &&
 		   colocationId == INVALID_COLOCATION_ID;
+}
+
+
+/*
+ * IsNullShardKeyTableByDistParams returns true if given partitionMethod,
+ * replicationModel and colocationId would identify a distributed table that
+ * has a null shard key.
+ */
+bool
+IsNullShardKeyTableByDistParams(char partitionMethod, char replicationModel,
+								uint32 colocationId)
+{
+	return partitionMethod == DISTRIBUTE_BY_NONE &&
+		   replicationModel != REPLICATION_MODEL_2PC &&
+		   colocationId != INVALID_COLOCATION_ID;
 }
 
 
