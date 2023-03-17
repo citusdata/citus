@@ -1927,25 +1927,6 @@ GetColocationId(PlacementUpdateEvent *move)
 
 
 /*
- * InitShardMoveDependencyMap function creates a dependency map where
- * key = colocationId
- * value = taskId of the latest scheduled task in the colocation group
- */
-static HTAB *
-InitShardMoveDependencyMap()
-{
-	HASHCTL hash_ctl;
-	memset(&hash_ctl, 0, sizeof(hash_ctl));
-	hash_ctl.keysize = sizeof(ShardMoveDependencyHashKey);
-	hash_ctl.entrysize = sizeof(ShardMoveDependencyInfo);
-	hash_ctl.hcxt = CurrentMemoryContext;
-	return hash_create("ShardMoveDependencyMap", 1,
-					   &hash_ctl,
-					   HASH_ELEM | HASH_BLOBS);
-}
-
-
-/*
  * RebalanceTableShardsBackground rebalances the shards for the relations
  * inside the relationIdList across the different workers. It does so using our
  * background job+task infrastructure.
@@ -2051,8 +2032,11 @@ RebalanceTableShardsBackground(RebalanceOptions *options, Oid shardReplicationMo
 	 * Two shards moves with the same colocation id cannot run concurrently.
 	 * If there is no previous move scheduled in the same colocation group the move must
 	 * take a dependency on the reference table replication task if exists otherwise no task dependency is required.
-	 * dependHashMap tracks the last move scheduled for the given colocation id.*/
-	HTAB *dependencyHashMap = InitShardMoveDependencyMap();
+	 * dependencyHashMap tracks the last move scheduled for the given colocation id.*/
+	HTAB *dependencyHashMap = CreateSimpleHashWithNameAndSize(int64,
+															  ShardMoveDependencyInfo,
+															  "ShardMoveDependencyMap",
+															  6);
 
 	foreach_ptr(move, placementUpdateList)
 	{
@@ -2065,7 +2049,7 @@ RebalanceTableShardsBackground(RebalanceOptions *options, Oid shardReplicationMo
 						 move->targetNode->nodeId,
 						 quote_literal_cstr(shardTranferModeLabel));
 
-		int64 cid = GetColocationId(move);
+		int64 colocationId = GetColocationId(move);
 
 		bool found;
 
