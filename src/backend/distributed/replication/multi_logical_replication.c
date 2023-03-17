@@ -1338,7 +1338,9 @@ CreatePublications(MultiConnection *connection,
 											worker->groupId,
 											CLEANUP_ALWAYS);
 
+		ExecuteCriticalRemoteCommand(connection, DISABLE_DDL_PROPAGATION);
 		ExecuteCriticalRemoteCommand(connection, createPublicationCommand->data);
+		ExecuteCriticalRemoteCommand(connection, ENABLE_DDL_PROPAGATION);
 		pfree(createPublicationCommand->data);
 		pfree(createPublicationCommand);
 	}

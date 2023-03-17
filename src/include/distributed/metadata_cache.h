@@ -147,6 +147,7 @@ extern char * GetTableTypeName(Oid tableId);
 extern void SetCreateCitusTransactionLevel(int val);
 extern int GetCitusCreationLevel(void);
 extern bool IsCitusTable(Oid relationId);
+extern bool IsCitusTableRangeVar(RangeVar *rangeVar, LOCKMODE lockMode, bool missingOk);
 extern bool IsCitusTableViaCatalog(Oid relationId);
 extern char PgDistPartitionViaCatalog(Oid relationId);
 extern List * LookupDistShardTuples(Oid relationId);

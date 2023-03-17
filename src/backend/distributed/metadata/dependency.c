@@ -132,6 +132,7 @@ typedef struct ViewDependencyNode
 static List * GetRelationSequenceDependencyList(Oid relationId);
 static List * GetRelationFunctionDependencyList(Oid relationId);
 static List * GetRelationTriggerFunctionDependencyList(Oid relationId);
+static List * GetPublicationRelationsDependencyList(Oid relationId);
 static List * GetRelationStatsSchemaDependencyList(Oid relationId);
 static List * GetRelationIndicesDependencyList(Oid relationId);
 static DependencyDefinition * CreateObjectAddressDependencyDef(Oid classId, Oid objectId);
@@ -718,6 +719,11 @@ SupportedDependencyByCitus(const ObjectAddress *address)
 		}
 
 		case OCLASS_EXTENSION:
+		{
+			return true;
+		}
+
+		case OCLASS_PUBLICATION:
 		{
 			return true;
 		}
@@ -1656,6 +1662,36 @@ ExpandCitusSupportedTypes(ObjectAddressCollector *collector, ObjectAddress targe
 				List *ruleRefDepList = GetViewRuleReferenceDependencyList(relationId);
 				result = list_concat(result, ruleRefDepList);
 			}
+
+			break;
+		}
+
+		case PublicationRelationId:
+		{
+			Oid publicationId = target.objectId;
+
+			/*
+			 * Publications do not depend directly on relations, because dropping
+			 * the relation will only remove it from the publications. However,
+			 * we add a dependency to ensure the relation is created first when
+			 * adding a node.
+			 */
+			List *relationDependencyList =
+				GetPublicationRelationsDependencyList(publicationId);
+			result = list_concat(result, relationDependencyList);
+
+			/*
+			 * As of PostgreSQL 15, the same applies to schemas.
+			 */
+#if PG_VERSION_NUM >= PG_VERSION_15
+			List *schemaIdList =
+				GetPublicationSchemas(publicationId);
+			List *schemaDependencyList =
+				CreateObjectAddressDependencyDefList(NamespaceRelationId, schemaIdList);
+			result = list_concat(result, schemaDependencyList);
+#endif
+
+			break;
 		}
 
 		default:
@@ -1920,6 +1956,33 @@ GetRelationTriggerFunctionDependencyList(Oid relationId)
 	}
 
 	return dependencyList;
+}
+
+
+/*
+ * GetPublicationRelationsDependencyList creates a list of ObjectAddressDependencies for
+ * a publication on the Citus relations it contains. This helps make sure we distribute
+ * Citus tables before local tables.
+ */
+static List *
+GetPublicationRelationsDependencyList(Oid publicationId)
+{
+	List *allRelationIds = GetPublicationRelations(publicationId, PUBLICATION_PART_ROOT);
+	List *citusRelationIds = NIL;
+
+	Oid relationId = InvalidOid;
+
+	foreach_oid(relationId, allRelationIds)
+	{
+		if (!IsCitusTable(relationId))
+		{
+			continue;
+		}
+
+		citusRelationIds = lappend_oid(citusRelationIds, relationId);
+	}
+
+	return CreateObjectAddressDependencyDefList(RelationRelationId, citusRelationIds);
 }
 
 

@@ -21,7 +21,9 @@ SELECT 1 from citus_add_node('localhost', :master_port, groupId := 0);
 -- This allows us to test the cleanup logic at the start of the shard move.
 \c - - - :worker_1_port
 SET search_path TO logical_replication;
+SET citus.enable_ddl_propagation TO off;
 CREATE PUBLICATION citus_shard_move_publication_:postgres_oid FOR TABLE dist_6830000;
+RESET citus.enable_ddl_propagation;
 
 \c - - - :master_port
 SET search_path TO logical_replication;
@@ -72,6 +74,9 @@ SELECT count(*) from pg_publication;
 SELECT count(*) from pg_replication_slots;
 SELECT count(*) from dist;
 
+DROP PUBLICATION citus_shard_move_publication_:postgres_oid;
+SELECT pg_drop_replication_slot('citus_shard_move_slot_' || :postgres_oid);
+
 \c - - - :worker_2_port
 SET search_path TO logical_replication;
 
@@ -88,3 +93,4 @@ ALTER SUBSCRIPTION citus_shard_move_subscription_:postgres_oid DISABLE;
 ALTER SUBSCRIPTION citus_shard_move_subscription_:postgres_oid SET (slot_name = NONE);
 DROP SUBSCRIPTION citus_shard_move_subscription_:postgres_oid;
 DROP SCHEMA logical_replication CASCADE;
+SELECT public.wait_for_resource_cleanup();

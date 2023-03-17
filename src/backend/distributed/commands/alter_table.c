@@ -217,6 +217,7 @@ static bool WillRecreateForeignKeyToReferenceTable(Oid relationId,
 												   CascadeToColocatedOption cascadeOption);
 static void WarningsForDroppingForeignKeysWithDistributedTables(Oid relationId);
 static void ErrorIfUnsupportedCascadeObjects(Oid relationId);
+static List * WrapTableDDLCommands(List *commandStrings);
 static bool DoesCascadeDropUnsupportedObject(Oid classId, Oid id, HTAB *nodeMap);
 static TableConversionReturn * CopyTableConversionReturnIntoCurrentContext(
 	TableConversionReturn *tableConversionReturn);
@@ -604,9 +605,18 @@ ConvertTableInternal(TableConversionState *con)
 	List *justBeforeDropCommands = NIL;
 	List *attachPartitionCommands = NIL;
 
-	postLoadCommands =
-		list_concat(postLoadCommands,
-					GetViewCreationTableDDLCommandsOfTable(con->relationId));
+	List *createViewCommands = GetViewCreationCommandsOfTable(con->relationId);
+
+	postLoadCommands = list_concat(postLoadCommands,
+								   WrapTableDDLCommands(createViewCommands));
+
+	/* need to add back to publications after dropping the original table */
+	bool isAdd = true;
+	List *alterPublicationCommands =
+		GetAlterPublicationDDLCommandsForTable(con->relationId, isAdd);
+
+	postLoadCommands = list_concat(postLoadCommands,
+								   WrapTableDDLCommands(alterPublicationCommands));
 
 	List *foreignKeyCommands = NIL;
 	if (con->conversionType == ALTER_DISTRIBUTED_TABLE)
@@ -1493,17 +1503,16 @@ GetViewCreationCommandsOfTable(Oid relationId)
 
 
 /*
- * GetViewCreationTableDDLCommandsOfTable is the same as GetViewCreationCommandsOfTable,
- * but the returned list includes objects of TableDDLCommand's, not strings.
+ * WrapTableDDLCommands takes a list of command strings and wraps them
+ * in TableDDLCommand structs.
  */
-List *
-GetViewCreationTableDDLCommandsOfTable(Oid relationId)
+static List *
+WrapTableDDLCommands(List *commandStrings)
 {
-	List *commands = GetViewCreationCommandsOfTable(relationId);
 	List *tableDDLCommands = NIL;
 
 	char *command = NULL;
-	foreach_ptr(command, commands)
+	foreach_ptr(command, commandStrings)
 	{
 		tableDDLCommands = lappend(tableDDLCommands, makeTableDDLCommandString(command));
 	}

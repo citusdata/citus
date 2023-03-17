@@ -22,7 +22,7 @@ SELECT nodeid AS worker_1_id FROM pg_dist_node WHERE nodename = 'localhost' AND 
 SELECT nodeid AS worker_2_id FROM pg_dist_node WHERE nodename = 'localhost' AND nodeport = :worker_2_port;
  worker_2_id
 ---------------------------------------------------------------------
-          18
+          35
 (1 row)
 
 \gset

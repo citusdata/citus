@@ -438,6 +438,11 @@ GetDependencyCreateDDLCommands(const ObjectAddress *dependency)
 			return DDLCommands;
 		}
 
+		case OCLASS_PUBLICATION:
+		{
+			return CreatePublicationDDLCommandsIdempotent(dependency);
+		}
+
 		case OCLASS_ROLE:
 		{
 			return GenerateCreateOrAlterRoleCommand(dependency->objectId);

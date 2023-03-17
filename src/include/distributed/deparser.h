@@ -210,6 +210,23 @@ extern char * DeparseAlterExtensionStmt(Node *stmt);
 /* forward declarations for deparse_database_stmts.c */
 extern char * DeparseAlterDatabaseOwnerStmt(Node *node);
 
+/* forward declaration for deparse_publication_stmts.c */
+extern char * DeparseCreatePublicationStmt(Node *stmt);
+extern char * DeparseCreatePublicationStmtExtended(Node *node,
+												   bool whereClauseNeedsTransform,
+												   bool includeLocalTables);
+extern char * DeparseAlterPublicationStmt(Node *stmt);
+extern char * DeparseAlterPublicationStmtExtended(Node *stmt,
+												  bool whereClauseNeedsTransform,
+												  bool includeLocalTables);
+extern char * DeparseAlterPublicationOwnerStmt(Node *stmt);
+extern char * DeparseAlterPublicationSchemaStmt(Node *node);
+extern char * DeparseDropPublicationStmt(Node *stmt);
+extern char * DeparseRenamePublicationStmt(Node *node);
+
+extern void QualifyCreatePublicationStmt(Node *node);
+extern void QualifyAlterPublicationStmt(Node *node);
+
 /* forward declatations for deparse_text_search_stmts.c */
 extern void QualifyAlterTextSearchConfigurationOwnerStmt(Node *node);
 extern void QualifyAlterTextSearchConfigurationSchemaStmt(Node *node);

@@ -409,6 +409,24 @@ extern void DropPolicyEventExtendNames(DropStmt *stmt, const char *schemaName, u
 
 extern void AddRangeTableEntryToQueryCompat(ParseState *parseState, Relation relation);
 
+/* publication.c - forward declarations */
+extern List * PostProcessCreatePublicationStmt(Node *node, const char *queryString);
+extern List * CreatePublicationDDLCommandsIdempotent(const ObjectAddress *address);
+extern char * CreatePublicationDDLCommand(Oid publicationId);
+extern List * PreprocessAlterPublicationStmt(Node *stmt, const char *queryString,
+											 ProcessUtilityContext processUtilityCtx);
+extern List * GetAlterPublicationDDLCommandsForTable(Oid relationId, bool isAdd);
+extern char * GetAlterPublicationTableDDLCommand(Oid publicationId, Oid relationId,
+												 bool isAdd);
+extern List * AlterPublicationOwnerStmtObjectAddress(Node *node, bool missingOk,
+													 bool isPostProcess);
+extern List * AlterPublicationStmtObjectAddress(Node *node, bool missingOk,
+												bool isPostProcess);
+extern List * CreatePublicationStmtObjectAddress(Node *node, bool missingOk,
+												 bool isPostProcess);
+extern List * RenamePublicationStmtObjectAddress(Node *node, bool missingOk,
+												 bool isPostProcess);
+
 /* rename.c - forward declarations*/
 extern List * PreprocessRenameStmt(Node *renameStmt, const char *renameCommand,
 								   ProcessUtilityContext processUtilityContext);
@@ -657,7 +675,6 @@ extern List * PreprocessDropViewStmt(Node *node, const char *queryString,
 extern List * DropViewStmtObjectAddress(Node *node, bool missing_ok, bool isPostprocess);
 extern char * CreateViewDDLCommand(Oid viewOid);
 extern List * GetViewCreationCommandsOfTable(Oid relationId);
-extern List * GetViewCreationTableDDLCommandsOfTable(Oid relationId);
 extern char * AlterViewOwnerCommand(Oid viewOid);
 extern char * DeparseViewStmt(Node *node);
 extern char * DeparseDropViewStmt(Node *node);
