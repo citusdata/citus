@@ -59,7 +59,6 @@
 #include "utils/fmgroids.h"
 #include "utils/json.h"
 #include "utils/lsyscache.h"
-#include "utils/hsearch.h"
 #include "utils/memutils.h"
 #include "utils/pg_lsn.h"
 #include "utils/syscache.h"
@@ -1929,8 +1928,8 @@ GetColocationId(PlacementUpdateEvent *move)
 
 /*
  * InitShardMoveDependencyMap function creates a dependency map where
- * 	key = colocationId
- * 	value = taskId of the latest scheduled task in the colocation group
+ * key = colocationId
+ * value = taskId of the latest scheduled task in the colocation group
  */
 static HTAB *
 InitShardMoveDependencyMap()
