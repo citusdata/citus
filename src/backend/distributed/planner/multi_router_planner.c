@@ -2683,7 +2683,7 @@ TargetShardIntervalForFastPathQuery(Query *query, bool *isMultiShardQuery,
 
 	if (!HasDistributionKey(relationId))
 	{
-		/* we don't need to do shard pruning for non-distributed tables */
+		/* we don't need to do shard pruning for single shard tables */
 		return list_make1(LoadShardIntervalList(relationId));
 	}
 
@@ -2973,7 +2973,7 @@ BuildRoutesForInsert(Query *query, DeferredErrorMessage **planningError)
 
 	Assert(query->commandType == CMD_INSERT);
 
-	/* reference tables and citus local tables can only have one shard */
+	/* tables that don't have distribution column can only have one shard */
 	if (!HasDistributionKeyCacheEntry(cacheEntry))
 	{
 		List *shardIntervalList = LoadShardIntervalList(distributedTableId);
@@ -2989,6 +2989,12 @@ BuildRoutesForInsert(Query *query, DeferredErrorMessage **planningError)
 			else if (IsCitusTableTypeCacheEntry(cacheEntry, CITUS_LOCAL_TABLE))
 			{
 				ereport(ERROR, (errmsg("local table cannot have %d shards",
+									   shardCount)));
+			}
+			else if (IsCitusTableTypeCacheEntry(cacheEntry, NULL_KEY_DISTRIBUTED_TABLE))
+			{
+				ereport(ERROR, (errmsg("distributed tables having a null shard key "
+									   "cannot have %d shards",
 									   shardCount)));
 			}
 		}
