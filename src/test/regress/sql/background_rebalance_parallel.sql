@@ -1,3 +1,7 @@
+/*
+  Test to check if the background tasks scheduled by the background rebalancer
+  has the correct dependencies.
+*/
 CREATE SCHEMA background_rebalance_parallel;
 SET search_path TO background_rebalance_parallel;
 SET citus.next_shard_id TO 85674000;
@@ -66,3 +70,4 @@ SELECT citus_rebalance_wait();
 SELECT * FROM pg_dist_background_task_depend WHERE job_id = 17778 ORDER BY task_id ASC;
 
 DROP SCHEMA background_rebalance_parallel CASCADE;
+TRUNCATE pg_dist_background_job CASCADE;
