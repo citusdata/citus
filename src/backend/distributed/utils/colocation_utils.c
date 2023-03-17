@@ -1384,17 +1384,19 @@ EnsureTableCanBeColocatedWith(Oid relationId, char replicationModel,
 							  Oid distributionColumnType, Oid sourceRelationId)
 {
 	CitusTableCacheEntry *sourceTableEntry = GetCitusTableCacheEntry(sourceRelationId);
-	char sourceReplicationModel = sourceTableEntry->replicationModel;
-	Var *sourceDistributionColumn = DistPartitionKeyOrError(sourceRelationId);
 
-	if (!IsCitusTableTypeCacheEntry(sourceTableEntry, HASH_DISTRIBUTED))
+	if (IsCitusTableTypeCacheEntry(sourceTableEntry, APPEND_DISTRIBUTED) ||
+		IsCitusTableTypeCacheEntry(sourceTableEntry, RANGE_DISTRIBUTED) ||
+		IsCitusTableTypeCacheEntry(sourceTableEntry, CITUS_LOCAL_TABLE))
 	{
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 						errmsg("cannot distribute relation"),
-						errdetail("Currently, colocate_with option is only supported "
-								  "for hash distributed tables.")));
+						errdetail("Currently, colocate_with option is not supported "
+								  "with append / range distributed tables and local "
+								  "tables added to metadata.")));
 	}
 
+	char sourceReplicationModel = sourceTableEntry->replicationModel;
 	if (sourceReplicationModel != replicationModel)
 	{
 		char *relationName = get_rel_name(relationId);
@@ -1406,7 +1408,9 @@ EnsureTableCanBeColocatedWith(Oid relationId, char replicationModel,
 								  sourceRelationName, relationName)));
 	}
 
-	Oid sourceDistributionColumnType = sourceDistributionColumn->vartype;
+	Var *sourceDistributionColumn = DistPartitionKey(sourceRelationId);
+	Oid sourceDistributionColumnType = !sourceDistributionColumn ? InvalidOid :
+									   sourceDistributionColumn->vartype;
 	if (sourceDistributionColumnType != distributionColumnType)
 	{
 		char *relationName = get_rel_name(relationId);
