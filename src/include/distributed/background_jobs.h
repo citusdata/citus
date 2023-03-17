@@ -84,13 +84,14 @@ typedef struct TaskExecutionContext
 	QueueMonitorExecutionContext *queueMonitorExecutionContext;
 } TaskExecutionContext;
 
-/* TaskAssignmentStatus to be used in AssignRunnableTaskToNewExecutor */
-typedef enum TaskAssignmentStatus
+
+typedef struct ParallelMovesPerNodeEntry
 {
-	NEW_EXECUTOR_EXCEEDS_LIMIT = 0,
-	TASK_BLOCKED_ON_TOKEN,
-	TASK_ASSIGNED
-} TaskAssignmentStatus;
+	/* Used as hash key. */
+	uint32 node_id;
+
+	uint32 counter;
+} ParallelMovesPerNodeEntry;
 
 
 extern BackgroundWorkerHandle * StartCitusBackgroundTaskQueueMonitor(Oid database,

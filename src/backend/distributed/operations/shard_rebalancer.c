@@ -2139,8 +2139,7 @@ RebalanceTableShardsBackground(RebalanceOptions *options, Oid shardReplicationMo
 
 		int32 source_and_target[2] = { 0 };
 		BackgroundTask *task = ScheduleBackgroundTask(jobId, GetUserId(), buf.data, 0,
-													  NULL,
-													  source_and_target);
+													  NULL, 2, source_and_target);
 		replicateRefTablesTaskId = task->taskid;
 	}
 
@@ -2180,7 +2179,7 @@ RebalanceTableShardsBackground(RebalanceOptions *options, Oid shardReplicationMo
 
 		BackgroundTask *task = ScheduleBackgroundTask(jobId, GetUserId(), buf.data,
 													  nDepends,
-													  dependsArray,
+													  dependsArray, 2,
 													  source_and_target);
 
 		UpdateShardMoveDependencies(move, colocationId, task->taskid,

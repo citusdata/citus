@@ -303,7 +303,6 @@ extern Oid CitusTaskStatusErrorId(void);
 extern Oid CitusTaskStatusUnscheduledId(void);
 extern Oid CitusTaskStatusCancelledId(void);
 extern Oid CitusTaskStatusCancellingId(void);
-extern Oid CitusTaskStatusBlockedOnTokenId(void);
 
 /* user related functions */
 extern Oid CitusExtensionOwner(void);

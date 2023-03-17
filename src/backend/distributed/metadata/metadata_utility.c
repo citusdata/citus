@@ -32,6 +32,7 @@
 #include "catalog/pg_type.h"
 #include "commands/extension.h"
 #include "commands/sequence.h"
+#include "distributed/background_jobs.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/connection_management.h"
 #include "distributed/citus_nodes.h"
@@ -57,6 +58,7 @@
 #include "distributed/relay_utility.h"
 #include "distributed/resource_lock.h"
 #include "distributed/remote_commands.h"
+#include "distributed/shard_rebalancer.h"
 #include "distributed/tuplestore.h"
 #include "distributed/worker_manager.h"
 #include "distributed/worker_protocol.h"
@@ -114,6 +116,8 @@ static bool SetFieldValue(int attno, Datum values[], bool isnull[], bool replace
 static bool SetFieldText(int attno, Datum values[], bool isnull[], bool replace[],
 						 const char *newValue);
 static bool SetFieldNull(int attno, Datum values[], bool isnull[], bool replace[]);
+static Datum intArrayToDatum(int int_array_size, int int_array[]);
+static List * datumIntArrayToList(Datum datum);
 
 #define InitFieldValue(attno, values, isnull, initValue) \
 	(void) SetFieldValue((attno), (values), (isnull), NULL, (initValue))
@@ -2481,10 +2485,6 @@ BackgroundTaskStatusByOid(Oid enumOid)
 	{
 		return BACKGROUND_TASK_STATUS_CANCELLING;
 	}
-	else if (enumOid == CitusTaskStatusBlockedOnTokenId())
-	{
-		return BACKGROUND_TASK_STATUS_BLOCKED_ON_TOKEN;
-	}
 	ereport(ERROR, (errmsg("unknown enum value for citus_task_status")));
 }
 
@@ -2540,7 +2540,6 @@ IsBackgroundTaskStatusTerminal(BackgroundTaskStatus status)
 		}
 
 		case BACKGROUND_TASK_STATUS_BLOCKED:
-		case BACKGROUND_TASK_STATUS_BLOCKED_ON_TOKEN:
 		case BACKGROUND_TASK_STATUS_CANCELLING:
 		case BACKGROUND_TASK_STATUS_RUNNABLE:
 		case BACKGROUND_TASK_STATUS_RUNNING:
@@ -2650,11 +2649,6 @@ BackgroundTaskStatusOid(BackgroundTaskStatus status)
 		case BACKGROUND_TASK_STATUS_CANCELLING:
 		{
 			return CitusTaskStatusCancellingId();
-		}
-
-		case BACKGROUND_TASK_STATUS_BLOCKED_ON_TOKEN:
-		{
-			return CitusTaskStatusBlockedOnTokenId();
 		}
 	}
 
@@ -2826,7 +2820,7 @@ CreateBackgroundJob(const char *jobType, const char *description)
  */
 BackgroundTask *
 ScheduleBackgroundTask(int64 jobId, Oid owner, char *command, int dependingTaskCount,
-					   int64 dependingTaskIds[], int32 source_and_target[])
+					   int64 dependingTaskIds[], int nodeTokensCount, int32 nodeTokens[])
 {
 	BackgroundTask *task = NULL;
 
@@ -2900,13 +2894,9 @@ ScheduleBackgroundTask(int64 jobId, Oid owner, char *command, int dependingTaskC
 		values[Anum_pg_dist_background_task_message - 1] = CStringGetTextDatum("");
 		nulls[Anum_pg_dist_background_task_message - 1] = false;
 
-		values[Anum_pg_dist_background_task_source_id - 1] = Int32GetDatum(
-			source_and_target[0]);
-		nulls[Anum_pg_dist_background_task_source_id - 1] = false;
-
-		values[Anum_pg_dist_background_task_target_id - 1] = Int32GetDatum(
-			source_and_target[1]);
-		nulls[Anum_pg_dist_background_task_target_id - 1] = false;
+		values[Anum_pg_dist_background_task_node_tokens - 1] = intArrayToDatum(
+			nodeTokensCount, nodeTokens);
+		nulls[Anum_pg_dist_background_task_node_tokens - 1] = (nodeTokensCount == 0);
 
 		HeapTuple newTuple = heap_form_tuple(RelationGetDescr(pgDistBackgroundTask),
 											 values, nulls);
@@ -2985,6 +2975,36 @@ ScheduleBackgroundTask(int64 jobId, Oid owner, char *command, int dependingTaskC
 	CommandCounterIncrement();
 
 	return task;
+}
+
+
+/*
+ * intArrayToDatum
+ *
+ * Convert an integer array to the datum int array format that is used in
+ * pg_dist_background_task for node_tokens
+ *
+ * Returns the array in the form of a Datum, or PointerGetDatum(NULL)
+ * if the int_array is empty.
+ */
+static Datum
+intArrayToDatum(int int_array_size, int int_array[])
+{
+	ArrayBuildState *astate = NULL;
+
+	for (int i = 0; i < int_array_size; i++)
+	{
+		astate = accumArrayResult(astate, Int32GetDatum(int_array[i]),
+								  false, INT4OID,
+								  CurrentMemoryContext);
+	}
+
+	if (astate)
+	{
+		return makeArrayResult(astate, CurrentMemoryContext);
+	}
+
+	return PointerGetDatum(NULL);
 }
 
 
@@ -3125,59 +3145,6 @@ ResetRunningBackgroundTasks(void)
 
 
 /*
- * UnblockTasksBlockedOnToken
- */
-void
-UnblockTasksBlockedOnToken(void)
-{
-	const int scanKeyCount = 1;
-	ScanKeyData scanKey[1];
-	const bool indexOK = true;
-
-	Relation pgDistBackgroundTasks =
-		table_open(DistBackgroundTaskRelationId(), ExclusiveLock);
-
-	/* pg_dist_background_task.status == 'blocked_on_token' */
-	ScanKeyInit(&scanKey[0], Anum_pg_dist_background_task_status,
-				BTEqualStrategyNumber, F_OIDEQ,
-				ObjectIdGetDatum(CitusTaskStatusBlockedOnTokenId()));
-
-	SysScanDesc scanDescriptor =
-		systable_beginscan(pgDistBackgroundTasks,
-						   DistBackgroundTaskStatusTaskIdIndexId(),
-						   indexOK, NULL, scanKeyCount,
-						   scanKey);
-
-	HeapTuple taskTuple = NULL;
-	while (HeapTupleIsValid(taskTuple = systable_getnext(scanDescriptor)))
-	{
-		Datum values[Natts_pg_dist_background_task] = { 0 };
-		bool isnull[Natts_pg_dist_background_task] = { 0 };
-		bool replace[Natts_pg_dist_background_task] = { 0 };
-
-		TupleDesc tupleDescriptor = RelationGetDescr(pgDistBackgroundTasks);
-		heap_deform_tuple(taskTuple, tupleDescriptor, values, isnull);
-
-		values[Anum_pg_dist_background_task_status - 1] =
-			ObjectIdGetDatum(CitusTaskStatusRunnableId());
-		isnull[Anum_pg_dist_background_task_status - 1] = false;
-		replace[Anum_pg_dist_background_task_status - 1] = true;
-
-		taskTuple = heap_modify_tuple(taskTuple, tupleDescriptor, values, isnull,
-									  replace);
-
-		CatalogTupleUpdate(pgDistBackgroundTasks, &taskTuple->t_self, taskTuple);
-	}
-
-	CommandCounterIncrement();
-
-	systable_endscan(scanDescriptor);
-
-	table_close(pgDistBackgroundTasks, NoLock);
-}
-
-
-/*
  * DeformBackgroundJobHeapTuple pareses a HeapTuple from pg_dist_background_job into its
  * inmemory representation. This can be used while scanning a heap to quickly get access
  * to all fields of a Job.
@@ -3272,10 +3239,42 @@ DeformBackgroundTaskHeapTuple(TupleDesc tupleDescriptor, HeapTuple taskTuple)
 			TextDatumGetCString(values[Anum_pg_dist_background_task_message - 1]);
 	}
 
-	task->source_id = DatumGetInt32(values[Anum_pg_dist_background_task_source_id - 1]);
-	task->target_id = DatumGetInt32(values[Anum_pg_dist_background_task_target_id - 1]);
+	if (!nulls[Anum_pg_dist_background_task_node_tokens - 1])
+	{
+		task->nodeTokens =
+			datumIntArrayToList(values[Anum_pg_dist_background_task_node_tokens - 1]);
+	}
 
 	return task;
+}
+
+
+/*
+ * datumIntArrayToList
+ * See PG's oid_array_to_list implementation for reference
+ */
+static List *
+datumIntArrayToList(Datum datum)
+{
+	ArrayType *array = DatumGetArrayTypeP(datum);
+	Oid elmtype = INT4OID;
+	int elmlen = sizeof(int32);
+	bool elmbyval = true;
+	char elmalign = TYPALIGN_INT;
+	Datum *values;
+	bool **nullsp = NULL;
+	int nelems;
+	deconstruct_array(array, elmtype, elmlen, elmbyval, elmalign,
+					  &values, nullsp, &nelems);
+
+	List *result = NIL;
+	int i;
+	for (i = 0; i < nelems; i++)
+	{
+		result = lappend_int(result, values[i]);
+	}
+
+	return result;
 }
 
 
@@ -3367,7 +3366,7 @@ BackgroundTaskReadyToRun(BackgroundTask *task)
 
 
 /*
- * GetRunnableBackgroundTask returns the first candidate for a task to be run. When a task
+ * GetRunnableBackgroundTaskWithTokens returns the first candidate for a task to be run. When a task
  * is returned it has been checked for all the preconditions to hold.
  *
  * That means, if there is no task returned the background worker should close and let the
@@ -3375,7 +3374,7 @@ BackgroundTaskReadyToRun(BackgroundTask *task)
  * available.
  */
 BackgroundTask *
-GetRunnableBackgroundTask(void)
+GetRunnableBackgroundTaskWithTokens(HTAB *ParallelMovesPerNode)
 {
 	Relation pgDistBackgroundTasks =
 		table_open(DistBackgroundTaskRelationId(), ExclusiveLock);
@@ -3409,6 +3408,36 @@ GetRunnableBackgroundTask(void)
 			task = DeformBackgroundTaskHeapTuple(tupleDescriptor, taskTuple);
 			if (BackgroundTaskReadyToRun(task))
 			{
+				/*
+				 * Check if we can take node tokens from buckets.
+				 * If yes, take them. If not, continue to next runnable task.
+				 */
+				if (task->nodeTokens)
+				{
+					int node_token;
+					foreach_int(node_token, task->nodeTokens)
+					{
+						bool found;
+						ParallelMovesPerNodeEntry *hashEntry = hash_search(
+							ParallelMovesPerNode,
+							&(node_token),
+							HASH_ENTER,
+							&found);
+						if (!found)
+						{
+							hashEntry->counter = 1;
+						}
+						else if (hashEntry->counter < MaxParallelMovesPerNode)
+						{
+							hashEntry->counter += 1;
+						}
+						else
+						{
+							continue;
+						}
+					}
+				}
+
 				/* found task, close table and return */
 				break;
 			}

@@ -92,9 +92,9 @@ static bool NewExecutorExceedsCitusLimit(
 static bool NewExecutorExceedsPgMaxWorkers(BackgroundWorkerHandle *handle,
 										   QueueMonitorExecutionContext *
 										   queueMonitorExecutionContext);
-static TaskAssignmentStatus AssignRunnableTaskToNewExecutor(BackgroundTask *runnableTask,
-															QueueMonitorExecutionContext *
-															queueMonitorExecutionContext);
+static bool AssignRunnableTaskToNewExecutor(BackgroundTask *runnableTask,
+											QueueMonitorExecutionContext *
+											queueMonitorExecutionContext);
 static void AssignRunnableTasks(
 	QueueMonitorExecutionContext *queueMonitorExecutionContext);
 static List * GetRunningTaskEntries(HTAB *currentExecutors);
@@ -125,17 +125,10 @@ static volatile sig_atomic_t GotSighup = false;
 /* Counter for parallel moves per node */
 static HTAB *ParallelMovesPerNode = NULL;
 
-typedef struct ParallelMovesPerNodeEntry
-{
-	/* Used as hash key. */
-	uint32 node_id;
-
-	uint32 counter;
-} ParallelMovesPerNodeEntry;
-
 PG_FUNCTION_INFO_V1(citus_job_cancel);
 PG_FUNCTION_INFO_V1(citus_job_wait);
 PG_FUNCTION_INFO_V1(citus_task_wait);
+
 
 /*
  * pg_catalog.citus_job_cancel(jobid bigint) void
@@ -550,7 +543,7 @@ NewExecutorExceedsPgMaxWorkers(BackgroundWorkerHandle *handle,
  * AssignRunnableTaskToNewExecutor tries to assign given runnable task to a new task executor.
  * It reports the assignment status as return value.
  */
-static TaskAssignmentStatus
+static bool
 AssignRunnableTaskToNewExecutor(BackgroundTask *runnableTask,
 								QueueMonitorExecutionContext *queueMonitorExecutionContext)
 {
@@ -559,7 +552,7 @@ AssignRunnableTaskToNewExecutor(BackgroundTask *runnableTask,
 	if (NewExecutorExceedsCitusLimit(queueMonitorExecutionContext))
 	{
 		/* escape if we hit citus executor limit */
-		return NEW_EXECUTOR_EXCEEDS_LIMIT;
+		return false;
 	}
 
 	char *databaseName = get_database_name(MyDatabaseId);
@@ -576,51 +569,7 @@ AssignRunnableTaskToNewExecutor(BackgroundTask *runnableTask,
 	if (NewExecutorExceedsPgMaxWorkers(handle, queueMonitorExecutionContext))
 	{
 		/* escape if we hit pg worker limit */
-		return NEW_EXECUTOR_EXCEEDS_LIMIT;
-	}
-
-	if (runnableTask->source_id && runnableTask->target_id)
-	{
-		bool found;
-		ParallelMovesPerNodeEntry *source_hashEntry = hash_search(ParallelMovesPerNode,
-																  &(runnableTask->
-																	source_id),
-																  HASH_ENTER, &found);
-		if (!found)
-		{
-			source_hashEntry->counter = 1;
-		}
-		else if (source_hashEntry->counter > MaxParallelMovesPerNode)
-		{
-			source_hashEntry->counter += 1;
-		}
-		else
-		{
-			runnableTask->status = BACKGROUND_TASK_STATUS_BLOCKED_ON_TOKEN;
-			UpdateBackgroundTask(runnableTask);
-			return TASK_BLOCKED_ON_TOKEN;
-		}
-
-		found = false;
-
-		ParallelMovesPerNodeEntry *target_hashEntry = hash_search(ParallelMovesPerNode,
-																  &(runnableTask->
-																	target_id),
-																  HASH_ENTER, &found);
-		if (!found)
-		{
-			target_hashEntry->counter = 1;
-		}
-		else if (target_hashEntry->counter > MaxParallelMovesPerNode)
-		{
-			target_hashEntry->counter += 1;
-		}
-		else
-		{
-			runnableTask->status = BACKGROUND_TASK_STATUS_BLOCKED_ON_TOKEN;
-			UpdateBackgroundTask(runnableTask);
-			return TASK_BLOCKED_ON_TOKEN;
-		}
+		return false;
 	}
 
 	/* assign the allocated executor to the runnable task and increment total executor count */
@@ -666,23 +615,20 @@ static void
 AssignRunnableTasks(QueueMonitorExecutionContext *queueMonitorExecutionContext)
 {
 	BackgroundTask *runnableTask = NULL;
-	bool taskAssignedOrBlockedOnToken = false;
+	bool taskAssigned = false;
 	do {
 		/* fetch a runnable task from catalog */
-		runnableTask = GetRunnableBackgroundTask();
+		runnableTask = GetRunnableBackgroundTaskWithTokens(ParallelMovesPerNode);
 		if (runnableTask)
 		{
-			taskAssignedOrBlockedOnToken = AssignRunnableTaskToNewExecutor(runnableTask,
-																		   queueMonitorExecutionContext);
+			taskAssigned = AssignRunnableTaskToNewExecutor(runnableTask,
+														   queueMonitorExecutionContext);
 		}
 		else
 		{
-			taskAssignedOrBlockedOnToken = false;
+			taskAssigned = false;
 		}
-	} while (taskAssignedOrBlockedOnToken);
-
-	/* change status of all tasks that are blocked on token to runnable */
-	UnblockTasksBlockedOnToken();
+	} while (taskAssigned);
 }
 
 
@@ -912,20 +858,17 @@ TaskEnded(TaskExecutionContext *taskExecutionContext)
 	UNSET_NULLABLE_FIELD(task, pid);
 	task->message = handleEntry->message->data;
 
-	if (task->source_id && task->target_id)
+	if (task->nodeTokens)
 	{
-		ParallelMovesPerNodeEntry *source_hashEntry = hash_search(ParallelMovesPerNode,
-																  &(task->source_id),
-																  HASH_FIND, NULL);
+		int node_token;
+		foreach_int(node_token, task->nodeTokens)
+		{
+			ParallelMovesPerNodeEntry *hashEntry = hash_search(ParallelMovesPerNode,
+															   &(node_token),
+															   HASH_FIND, NULL);
 
-		source_hashEntry->counter -= 1;
-
-
-		ParallelMovesPerNodeEntry *target_hashEntry = hash_search(ParallelMovesPerNode,
-																  &(task->target_id),
-																  HASH_FIND, NULL);
-
-		target_hashEntry->counter -= 1;
+			hashEntry->counter -= 1;
+		}
 	}
 
 	UpdateBackgroundTask(task);

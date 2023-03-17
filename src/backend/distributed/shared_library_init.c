@@ -1874,10 +1874,10 @@ RegisterCitusConfigVariables(void)
 		"citus.max_parallel_moves_per_node",
 		gettext_noop(
 			"Sets the maximum number of parallel task executor workers for scheduled "
-			"background tasks that involve a particular node in a rebalancing job"),
+			"background tasks that involve a particular node"),
 		NULL,
 		&MaxParallelMovesPerNode,
-		3, 1, MAX_PARALLEL_MOVES_PER_NODE,
+		1, 1, MAX_PARALLEL_MOVES_PER_NODE,
 		PGC_SIGHUP,
 		GUC_STANDARD,
 		NULL, NULL, NULL);

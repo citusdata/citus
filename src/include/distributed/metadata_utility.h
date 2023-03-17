@@ -238,8 +238,7 @@ typedef enum BackgroundTaskStatus
 	BACKGROUND_TASK_STATUS_DONE,
 	BACKGROUND_TASK_STATUS_ERROR,
 	BACKGROUND_TASK_STATUS_UNSCHEDULED,
-	BACKGROUND_TASK_STATUS_CANCELLED,
-	BACKGROUND_TASK_STATUS_BLOCKED_ON_TOKEN
+	BACKGROUND_TASK_STATUS_CANCELLED
 } BackgroundTaskStatus;
 
 typedef struct BackgroundTask
@@ -253,8 +252,7 @@ typedef struct BackgroundTask
 	int32 *retry_count;
 	TimestampTz *not_before;
 	char *message;
-	int32 source_id;
-	int32 target_id;
+	List *nodeTokens;
 
 	/* extra space to store values for nullable value types above */
 	struct
@@ -392,10 +390,10 @@ extern int64 CreateBackgroundJob(const char *jobType, const char *description);
 extern BackgroundTask * ScheduleBackgroundTask(int64 jobId, Oid owner, char *command,
 											   int dependingTaskCount,
 											   int64 dependingTaskIds[],
-											   int32 source_and_target[]);
-extern BackgroundTask * GetRunnableBackgroundTask(void);
+											   int nodeTokensCount,
+											   int32 nodeTokens[]);
+extern BackgroundTask * GetRunnableBackgroundTaskWithTokens(HTAB *ParallelMovesPerNode);
 extern void ResetRunningBackgroundTasks(void);
-extern void UnblockTasksBlockedOnToken(void);
 extern BackgroundJob * GetBackgroundJobByJobId(int64 jobId);
 extern BackgroundTask * GetBackgroundTaskByTaskId(int64 taskId);
 extern void UpdateBackgroundJob(int64 jobId);
