@@ -206,7 +206,7 @@ CompareRelationShards(const void *leftElement, const void *rightElement)
  *
  * For hash partitioned tables, it calculates hash value of a number in its
  * range (e.g. min value) and finds which shard should contain the hashed
- * value. For reference tables and citus local tables, it simply returns 0.
+ * value. For the tables that don't have a shard key, it simply returns 0.
  * For the other table types, the function errors out.
  */
 int
@@ -231,12 +231,11 @@ ShardIndex(ShardInterval *shardInterval)
 							   "tables that are added to citus metadata")));
 	}
 
-	/* short-circuit for reference tables */
+	/* short-circuit for the tables that don't have a distribution key */
 	if (!HasDistributionKeyCacheEntry(cacheEntry))
 	{
 		/*
-		 * Reference tables and citus local tables have only a single shard,
-		 * so the index is fixed to 0.
+		 * Such tables have only a single shard, so the index is fixed to 0.
 		 */
 		shardIndex = 0;
 
