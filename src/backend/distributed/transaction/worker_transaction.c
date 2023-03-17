@@ -375,6 +375,54 @@ SendCommandListToWorkerOutsideTransactionWithConnection(MultiConnection *workerC
 
 
 /*
+ * SendCommandListToWorkerListWithBareConnections sends the command list
+ * over the specified bare connections. This function is mainly useful to
+ * avoid opening an closing connections excessively by allowing reusing
+ * connections to send multiple separate bare commands. The function
+ * raises an error if any of the queries fail.
+ */
+void
+SendCommandListToWorkerListWithBareConnections(List *workerConnectionList,
+											   List *commandList)
+{
+	Assert(!InCoordinatedTransaction());
+	Assert(!GetCoordinatedTransactionShouldUse2PC());
+
+	if (list_length(commandList) == 0 || list_length(workerConnectionList) == 0)
+	{
+		/* nothing to do */
+		return;
+	}
+
+	/*
+	 * In order to avoid round-trips per query in queryStringList,
+	 * we join the string and send as a single command. Also,
+	 * if there is only a single command, avoid additional call to
+	 * StringJoin given that some strings can be quite large.
+	 */
+	char *stringToSend = (list_length(commandList) == 1) ?
+						 linitial(commandList) : StringJoin(commandList, ';');
+
+	/* send commands in parallel */
+	MultiConnection *connection = NULL;
+	foreach_ptr(connection, workerConnectionList)
+	{
+		int querySent = SendRemoteCommand(connection, stringToSend);
+		if (querySent == 0)
+		{
+			ReportConnectionError(connection, ERROR);
+		}
+	}
+
+	bool failOnError = true;
+	foreach_ptr(connection, workerConnectionList)
+	{
+		ClearResults(connection, failOnError);
+	}
+}
+
+
+/*
  * SendCommandListToWorkerInCoordinatedTransaction opens connection to the node
  * with the given nodeName and nodePort. The commands are sent as part of the
  * coordinated transaction. Any failures aborts the coordinated transaction.
