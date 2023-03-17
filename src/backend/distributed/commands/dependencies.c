@@ -36,6 +36,7 @@ static int ObjectAddressComparator(const void *a, const void *b);
 static void EnsureDependenciesExistOnAllNodes(const ObjectAddress *target);
 static List * GetDependencyCreateDDLCommands(const ObjectAddress *dependency);
 static bool ShouldPropagateObject(const ObjectAddress *address);
+static char * DropTableIfExistsCommand(Oid relationId);
 
 /*
  * EnsureDependenciesExistOnAllNodes finds all the dependencies that we support and makes
@@ -323,6 +324,21 @@ GetDistributableDependenciesForObject(const ObjectAddress *target)
 
 
 /*
+ * DropTableIfExistsCommand returns command to drop given table if exists.
+ */
+static char *
+DropTableIfExistsCommand(Oid relationId)
+{
+	char *qualifiedRelationName = generate_qualified_relation_name(relationId);
+	StringInfo dropTableCommand = makeStringInfo();
+	appendStringInfo(dropTableCommand, "DROP TABLE IF EXISTS %s CASCADE",
+					 qualifiedRelationName);
+
+	return dropTableCommand->data;
+}
+
+
+/*
  * GetDependencyCreateDDLCommands returns a list (potentially empty or NIL) of ddl
  * commands to execute on a worker to create the object.
  */
@@ -376,6 +392,10 @@ GetDependencyCreateDDLCommands(const ObjectAddress *dependency)
 						commandList = lappend(commandList, GetTableDDLCommand(
 												  tableDDLCommand));
 					}
+
+					/* we need to drop table, if exists, first to make table creation idempotent */
+					commandList = lcons(DropTableIfExistsCommand(relationId),
+										commandList);
 				}
 
 				return commandList;
