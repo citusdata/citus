@@ -4,11 +4,12 @@ SET citus.next_shard_id TO 85674000;
 SET citus.shard_replication_factor TO 1;
 
 ALTER SEQUENCE pg_dist_background_job_job_id_seq RESTART 17777;
+ALTER SEQUENCE pg_dist_background_task_task_id_seq RESTART 1460000;
 
 ALTER SYSTEM SET citus.background_task_queue_interval TO '1s';
 SELECT pg_reload_conf();
 
-SELECT citus_disable_node('localhost', :worker_2_port, synchronous:=true);
+SELECT 1 FROM citus_disable_node('localhost', :worker_2_port, synchronous:=true);
 
 /* Create two tables table1_coloc1, table2_coloc1 and in a colocation group  */
 
@@ -29,9 +30,9 @@ SELECT create_distributed_table('table2_colg2', 'b' , colocate_with => 'table1_c
 
 
 /* Activate a node so that we can rebalance */
-SELECT * FROM citus_activate_node('localhost', :worker_2_port);
+SELECT 1 FROM citus_activate_node('localhost', :worker_2_port);
 
-SELECT * FROM citus_set_node_property('localhost', :worker_2_port, 'shouldhaveshards', true);
+SELECT citus_set_node_property('localhost', :worker_2_port, 'shouldhaveshards', true);
 
 SELECT * FROM citus_rebalance_start();
 
@@ -46,17 +47,17 @@ SELECT * FROM pg_dist_background_task_depend WHERE job_id = 17777 ORDER BY task_
 /* Check that if there is a reference table that needs to be synched to a node, the first move scheduled in a colocation group takes a dependency on the
    replicate_reference_tables task */
 
-SELECT citus_drain_node('localhost',:worker_2_port);
-SELECT citus_disable_node('localhost', :worker_2_port, synchronous:=true);
+SELECT 1 FROM citus_drain_node('localhost',:worker_2_port);
+SELECT 1 FROM citus_disable_node('localhost', :worker_2_port, synchronous:=true);
 
 CREATE TABLE ref_table(a int PRIMARY KEY);
 
 SELECT create_reference_table('ref_table');
 
 /* Activate a node so that we can rebalance */
-SELECT * FROM citus_activate_node('localhost', :worker_2_port);
+SELECT 1 FROM citus_activate_node('localhost', :worker_2_port);
 
-SELECT * FROM citus_set_node_property('localhost', :worker_2_port, 'shouldhaveshards', true);
+SELECT citus_set_node_property('localhost', :worker_2_port, 'shouldhaveshards', true);
 
 SELECT * FROM citus_rebalance_start();
 

@@ -3,6 +3,7 @@ SET search_path TO background_rebalance_parallel;
 SET citus.next_shard_id TO 85674000;
 SET citus.shard_replication_factor TO 1;
 ALTER SEQUENCE pg_dist_background_job_job_id_seq RESTART 17777;
+ALTER SEQUENCE pg_dist_background_task_task_id_seq RESTART 1460000;
 ALTER SYSTEM SET citus.background_task_queue_interval TO '1s';
 SELECT pg_reload_conf();
  pg_reload_conf
@@ -10,10 +11,10 @@ SELECT pg_reload_conf();
  t
 (1 row)
 
-SELECT citus_disable_node('localhost', :worker_2_port, synchronous:=true);
- citus_disable_node
+SELECT 1 FROM citus_disable_node('localhost', :worker_2_port, synchronous:=true);
+ ?column?
 ---------------------------------------------------------------------
-
+        1
 (1 row)
 
 /* Create two tables table1_coloc1, table2_coloc1 and in a colocation group  */
@@ -46,13 +47,13 @@ SELECT create_distributed_table('table2_colg2', 'b' , colocate_with => 'table1_c
 (1 row)
 
 /* Activate a node so that we can rebalance */
-SELECT * FROM citus_activate_node('localhost', :worker_2_port);
- citus_activate_node
+SELECT 1 FROM citus_activate_node('localhost', :worker_2_port);
+ ?column?
 ---------------------------------------------------------------------
-                  36
+        1
 (1 row)
 
-SELECT * FROM citus_set_node_property('localhost', :worker_2_port, 'shouldhaveshards', true);
+SELECT citus_set_node_property('localhost', :worker_2_port, 'shouldhaveshards', true);
  citus_set_node_property
 ---------------------------------------------------------------------
 
@@ -80,17 +81,17 @@ SELECT citus_rebalance_wait();
 SELECT * FROM pg_dist_background_task_depend WHERE job_id = 17777 ORDER BY task_id ASC;
  job_id | task_id | depends_on
 ---------------------------------------------------------------------
-  17777 |      14 |         13
-  17777 |      15 |         14
-  17777 |      16 |         15
-  17777 |      18 |         17
-  17777 |      19 |         18
-  17777 |      20 |         19
+  17777 | 1460001 |    1460000
+  17777 | 1460002 |    1460001
+  17777 | 1460003 |    1460002
+  17777 | 1460005 |    1460004
+  17777 | 1460006 |    1460005
+  17777 | 1460007 |    1460006
 (6 rows)
 
 /* Check that if there is a reference table that needs to be synched to a node, the first move scheduled in a colocation group takes a dependency on the
    replicate_reference_tables task */
-SELECT citus_drain_node('localhost',:worker_2_port);
+SELECT 1 FROM citus_drain_node('localhost',:worker_2_port);
 NOTICE:  Moving shard xxxxx from localhost:xxxxx to localhost:xxxxx ...
 NOTICE:  Moving shard xxxxx from localhost:xxxxx to localhost:xxxxx ...
 NOTICE:  Moving shard xxxxx from localhost:xxxxx to localhost:xxxxx ...
@@ -99,15 +100,15 @@ NOTICE:  Moving shard xxxxx from localhost:xxxxx to localhost:xxxxx ...
 NOTICE:  Moving shard xxxxx from localhost:xxxxx to localhost:xxxxx ...
 NOTICE:  Moving shard xxxxx from localhost:xxxxx to localhost:xxxxx ...
 NOTICE:  Moving shard xxxxx from localhost:xxxxx to localhost:xxxxx ...
- citus_drain_node
+ ?column?
 ---------------------------------------------------------------------
-
+        1
 (1 row)
 
-SELECT citus_disable_node('localhost', :worker_2_port, synchronous:=true);
- citus_disable_node
+SELECT 1 FROM citus_disable_node('localhost', :worker_2_port, synchronous:=true);
+ ?column?
 ---------------------------------------------------------------------
-
+        1
 (1 row)
 
 CREATE TABLE ref_table(a int PRIMARY KEY);
@@ -118,13 +119,13 @@ SELECT create_reference_table('ref_table');
 (1 row)
 
 /* Activate a node so that we can rebalance */
-SELECT * FROM citus_activate_node('localhost', :worker_2_port);
- citus_activate_node
+SELECT 1 FROM citus_activate_node('localhost', :worker_2_port);
+ ?column?
 ---------------------------------------------------------------------
-                  36
+        1
 (1 row)
 
-SELECT * FROM citus_set_node_property('localhost', :worker_2_port, 'shouldhaveshards', true);
+SELECT citus_set_node_property('localhost', :worker_2_port, 'shouldhaveshards', true);
  citus_set_node_property
 ---------------------------------------------------------------------
 
@@ -148,14 +149,14 @@ SELECT citus_rebalance_wait();
 SELECT * FROM pg_dist_background_task_depend WHERE job_id = 17778 ORDER BY task_id ASC;
  job_id | task_id | depends_on
 ---------------------------------------------------------------------
-  17778 |      22 |         21
-  17778 |      23 |         22
-  17778 |      24 |         23
-  17778 |      25 |         24
-  17778 |      26 |         21
-  17778 |      27 |         26
-  17778 |      28 |         27
-  17778 |      29 |         28
+  17778 | 1460009 |    1460008
+  17778 | 1460010 |    1460009
+  17778 | 1460011 |    1460010
+  17778 | 1460012 |    1460011
+  17778 | 1460013 |    1460008
+  17778 | 1460014 |    1460013
+  17778 | 1460015 |    1460014
+  17778 | 1460016 |    1460015
 (8 rows)
 
 DROP SCHEMA background_rebalance_parallel CASCADE;
