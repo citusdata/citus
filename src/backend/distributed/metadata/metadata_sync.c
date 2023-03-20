@@ -216,7 +216,20 @@ start_metadata_sync_to_all_nodes(PG_FUNCTION_ARGS)
 
 	List *workerNodes = ActivePrimaryNonCoordinatorNodeList(RowShareLock);
 
-	ActivateNodeList(workerNodes);
+	/*
+	 * create MetadataSyncContext which will be used throughout nodes' activation.
+	 * It contains metadata sync nodes, their connections and also a MemoryContext
+	 * for allocations.
+	 */
+	bool collectCommands = false;
+	MetadataSyncContext *context = CreateMetadataSyncContext(workerNodes,
+															 collectCommands);
+
+	ActivateNodeList(context);
+
+	/* cleanup metadata memory context and connections */
+	DestroyMetadataSyncContext(context);
+
 	TransactionModifiedNodeMetadata = true;
 
 	PG_RETURN_BOOL(true);

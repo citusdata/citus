@@ -503,12 +503,11 @@ GetReferenceTableColocationId()
 
 
 /*
- * DeleteAllReplicatedTablePlacementsFromNodeGroup function iterates over
- * list of reference and replicated hash distributed tables and deletes
- * all placements from pg_dist_placement table for given group.
+ * GetAllReplicatedTableList returns all tables which has replicated placements.
+ * i.e. (all reference tables) + (distributed tables with more than 1 placements)
  */
-void
-DeleteAllReplicatedTablePlacementsFromNodeGroup(int32 groupId, bool localOnly)
+List *
+GetAllReplicatedTableList(void)
 {
 	List *referenceTableList = CitusTableTypeIdList(REFERENCE_TABLE);
 	List *replicatedMetadataSyncedDistributedTableList =
@@ -517,13 +516,25 @@ DeleteAllReplicatedTablePlacementsFromNodeGroup(int32 groupId, bool localOnly)
 	List *replicatedTableList =
 		list_concat(referenceTableList, replicatedMetadataSyncedDistributedTableList);
 
-	/* if there are no reference tables, we do not need to do anything */
+	return replicatedTableList;
+}
+
+
+/*
+ * ReplicatedPlacementsForNodeGroup filters all replicated placements for given
+ * node group id.
+ */
+List *
+ReplicatedPlacementsForNodeGroup(int32 groupId)
+{
+	List *replicatedTableList = GetAllReplicatedTableList();
+
 	if (list_length(replicatedTableList) == 0)
 	{
-		return;
+		return NIL;
 	}
 
-	StringInfo deletePlacementCommand = makeStringInfo();
+	List *replicatedPlacementsForNodeGroup = NIL;
 	Oid replicatedTableId = InvalidOid;
 	foreach_oid(replicatedTableId, replicatedTableList)
 	{
@@ -538,24 +549,104 @@ DeleteAllReplicatedTablePlacementsFromNodeGroup(int32 groupId, bool localOnly)
 			continue;
 		}
 
-		GroupShardPlacement *placement = NULL;
-		foreach_ptr(placement, placements)
+		replicatedPlacementsForNodeGroup = list_concat(replicatedPlacementsForNodeGroup,
+													   placements);
+	}
+
+	return replicatedPlacementsForNodeGroup;
+}
+
+
+/*
+ * DeleteShardPlacementCommand returns a command for deleting given placement from
+ * metadata.
+ */
+char *
+DeleteShardPlacementCommand(uint64 placementId)
+{
+	StringInfo deletePlacementCommand = makeStringInfo();
+	appendStringInfo(deletePlacementCommand,
+					 "DELETE FROM pg_catalog.pg_dist_placement "
+					 "WHERE placementid = " UINT64_FORMAT, placementId);
+	return deletePlacementCommand->data;
+}
+
+
+/*
+ * DeleteAllReplicatedTablePlacementsFromNodeGroup function iterates over
+ * list of reference and replicated hash distributed tables and deletes
+ * all placements from pg_dist_placement table for given group.
+ */
+void
+DeleteAllReplicatedTablePlacementsFromNodeGroup(int32 groupId, bool localOnly)
+{
+	List *replicatedPlacementListForGroup = ReplicatedPlacementsForNodeGroup(groupId);
+
+	/* if there are no replicated tables for the group, we do not need to do anything */
+	if (list_length(replicatedPlacementListForGroup) == 0)
+	{
+		return;
+	}
+
+	GroupShardPlacement *placement = NULL;
+	foreach_ptr(placement, replicatedPlacementListForGroup)
+	{
+		LockShardDistributionMetadata(placement->shardId, ExclusiveLock);
+
+		if (!localOnly)
 		{
-			LockShardDistributionMetadata(placement->shardId, ExclusiveLock);
+			char *deletePlacementCommand =
+				DeleteShardPlacementCommand(placement->placementId);
 
-			DeleteShardPlacementRow(placement->placementId);
-
-			if (!localOnly)
-			{
-				resetStringInfo(deletePlacementCommand);
-				appendStringInfo(deletePlacementCommand,
-								 "DELETE FROM pg_catalog.pg_dist_placement "
-								 "WHERE placementid = " UINT64_FORMAT,
-								 placement->placementId);
-
-				SendCommandToWorkersWithMetadata(deletePlacementCommand->data);
-			}
+			SendCommandToWorkersWithMetadata(deletePlacementCommand);
 		}
+
+		DeleteShardPlacementRow(placement->placementId);
+	}
+}
+
+
+/*
+ * DeleteAllReplicatedTablePlacementsFromNodeGroupViaMetadataContext does the same as
+ * DeleteAllReplicatedTablePlacementsFromNodeGroup except it uses metadataSyncContext for
+ * connections.
+ */
+void
+DeleteAllReplicatedTablePlacementsFromNodeGroupViaMetadataContext(
+	MetadataSyncContext *context, int32 groupId, bool localOnly)
+{
+	List *replicatedPlacementListForGroup = ReplicatedPlacementsForNodeGroup(groupId);
+
+	/* if there are no replicated tables for the group, we do not need to do anything */
+	if (list_length(replicatedPlacementListForGroup) == 0)
+	{
+		return;
+	}
+
+	MemoryContext oldContext = MemoryContextSwitchTo(context->context);
+
+	GroupShardPlacement *placement = NULL;
+	foreach_ptr(placement, replicatedPlacementListForGroup)
+	{
+		LockShardDistributionMetadata(placement->shardId, ExclusiveLock);
+
+		if (!localOnly)
+		{
+			char *deletePlacementCommand =
+				DeleteShardPlacementCommand(placement->placementId);
+
+			SendOrCollectCommandListToMetadataNodes(context,
+													list_make1(deletePlacementCommand));
+		}
+
+		/* do not execute local transaction if we collect commands */
+		if (!MetadataSyncCollectsCommands(context))
+		{
+			DeleteShardPlacementRow(placement->placementId);
+		}
+
+		MemoryContextSwitchTo(oldContext);
+		ResetMetadataSyncMemoryContext(context);
 	}
 }
 
