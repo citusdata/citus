@@ -506,5 +506,14 @@ BEGIN;
 COMMIT;
 SELECT start_metadata_sync_to_all_nodes();
 
+-- nontransactional sync mode tests
+SET citus.metadata_sync_mode TO 'nontransactional';
+-- do not allow nontransactional sync inside transaction block
+BEGIN;
+	SELECT start_metadata_sync_to_all_nodes();
+COMMIT;
+SELECT start_metadata_sync_to_all_nodes();
+RESET citus.metadata_sync_mode;
+
 -- verify that at the end of this file, all primary nodes have metadata synced
 SELECT bool_and(hasmetadata) AND bool_and(metadatasynced) FROM pg_dist_node WHERE isactive = 't' and noderole = 'primary';

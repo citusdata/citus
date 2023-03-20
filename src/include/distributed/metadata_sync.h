@@ -153,6 +153,9 @@ extern void SendOrCollectCommandListToMetadataNodes(MetadataSyncContext *context
 extern void SendOrCollectCommandListToSingleNode(MetadataSyncContext *context,
 												 List *commands, int nodeIdx);
 
+extern void ActivateNodeList(MetadataSyncContext *context);
+extern int ActivateNode(char *nodeName, int nodePort);
+
 extern char * WorkerDropAllShellTablesCommand(bool singleTransaction);
 
 extern void SyncDistributedObjects(MetadataSyncContext *context);

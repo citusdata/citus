@@ -62,9 +62,6 @@ extern int MaxWorkerNodesTracked;
 extern char *WorkerListFileName;
 extern char *CurrentCluster;
 
-extern void ActivateNodeList(List *nodeList);
-extern int ActivateNode(char *nodeName, int nodePort);
-
 /* Function declarations for finding worker nodes to place shards on */
 extern WorkerNode * WorkerGetRandomCandidateNode(List *currentNodeList);
 extern WorkerNode * WorkerGetRoundRobinCandidateNode(List *workerNodeList,
