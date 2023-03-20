@@ -152,14 +152,17 @@ extern void SendOrCollectCommandListToMetadataNodes(MetadataSyncContext *context
 extern void SendOrCollectCommandListToSingleNode(MetadataSyncContext *context,
 												 List *commands, int nodeIdx);
 
+extern char * WorkerDropAllShellTablesCommand(bool singleTransaction);
+
 #define DELETE_ALL_NODES "DELETE FROM pg_dist_node"
 #define DELETE_ALL_PLACEMENTS "DELETE FROM pg_dist_placement"
 #define DELETE_ALL_SHARDS "DELETE FROM pg_dist_shard"
 #define DELETE_ALL_DISTRIBUTED_OBJECTS "DELETE FROM pg_catalog.pg_dist_object"
 #define DELETE_ALL_PARTITIONS "DELETE FROM pg_dist_partition"
 #define DELETE_ALL_COLOCATION "DELETE FROM pg_catalog.pg_dist_colocation"
-#define REMOVE_ALL_SHELL_TABLES_COMMAND \
-	"SELECT worker_drop_shell_table(logicalrelid::regclass::text) FROM pg_dist_partition"
+#define WORKER_DROP_ALL_SHELL_TABLES \
+	"CALL pg_catalog.worker_drop_all_shell_tables(%s)"
+
 #define REMOVE_ALL_CITUS_TABLES_COMMAND \
 	"SELECT worker_drop_distributed_table(logicalrelid::regclass::text) FROM pg_dist_partition"
 #define BREAK_CITUS_TABLE_SEQUENCE_DEPENDENCY_COMMAND \
