@@ -645,9 +645,13 @@ ExtractTopComment(const char *inputString)
 
 	if (commentEndCharsIndex > commentStartCharsLength)
 	{
-		Datum substringTextDatum = DirectFunctionCall3(text_substr, PointerGetDatum(inputString),
-			Int32GetDatum(commentStartCharsLength),
-			Int32GetDatum(commentEndCharsIndex - commentStartCharsLength));
+		Datum substringTextDatum = DirectFunctionCall3(text_substr, PointerGetDatum(
+														   inputString),
+													   Int32GetDatum(
+														   commentStartCharsLength),
+													   Int32GetDatum(
+														   commentEndCharsIndex -
+														   commentStartCharsLength));
 		return TextDatumGetCString(substringTextDatum);
 	}
 	else
@@ -655,6 +659,7 @@ ExtractTopComment(const char *inputString)
 		return NULL;
 	}
 }
+
 
 /*  EscapeCommentChars adds a backslash before each occurrence of '*' or '/' in the input string */
 static char *
