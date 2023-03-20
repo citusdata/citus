@@ -63,7 +63,6 @@ static int CreateTenantStats(MultiTenantMonitor *monitor);
 static int FindTenantStats(MultiTenantMonitor *monitor);
 static size_t MultiTenantMonitorshmemSize(void);
 static char * ExtractTopComment(const char *inputString);
-static char * Substring(const char *str, int start, int end);
 static char * EscapeCommentChars(const char *str);
 static char * UnescapeCommentChars(const char *str);
 
@@ -639,39 +638,16 @@ ExtractTopComment(const char *inputString)
 
 	if (commentEndCharsIndex > commentStartCharsLength)
 	{
-		return Substring(inputString, commentStartCharsLength, commentEndCharsIndex);
+		Datum substringTextDatum = DirectFunctionCall3(text_substr, PointerGetDatum(inputString),
+			Int32GetDatum(commentStartCharsLength),
+			Int32GetDatum(commentEndCharsIndex - commentStartCharsLength));
+		return TextDatumGetCString(substringTextDatum);
 	}
 	else
 	{
 		return NULL;
 	}
 }
-
-
-/* Extracts a substring from the input string between the specified start and end indices.*/
-static char *
-Substring(const char *str, int start, int end)
-{
-	int len = strlen(str);
-
-	/* Ensure start and end are within the bounds of the string */
-	if (start < 0 || end > len || start > end)
-	{
-		return NULL;
-	}
-
-	/* Allocate memory for the substring */
-	char *substr = (char *) palloc((end - start + 1) * sizeof(char));
-
-	/* Copy the substring to the new memory location */
-	strncpy_s(substr, end - start + 1, str + start, end - start);
-
-	/* Add null terminator to end the substring */
-	substr[end - start] = '\0';
-
-	return substr;
-}
-
 
 /*  EscapeCommentChars adds a backslash before each occurrence of '*' or '/' in the input string */
 static char *
