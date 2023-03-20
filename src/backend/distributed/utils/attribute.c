@@ -636,6 +636,13 @@ ExtractTopComment(const char *inputString)
 		commentEndCharsIndex++;
 	}
 
+	/* If there is no end of comment chars , return NULL */
+	if (inputString[commentEndCharsIndex] != '*' &&
+		inputString[commentEndCharsIndex + 1] != '/')
+	{
+		return NULL;
+	}
+
 	if (commentEndCharsIndex > commentStartCharsLength)
 	{
 		Datum substringTextDatum = DirectFunctionCall3(text_substr, PointerGetDatum(inputString),
