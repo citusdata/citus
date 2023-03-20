@@ -716,9 +716,9 @@ ExtractTopComment(const char *inputString)
 	if (commentEndCharsIndex > commentStartCharsLength)
 	{
 		Datum substringTextDatum = DirectFunctionCall3(text_substr, PointerGetDatum(
-														   inputString),
+														   cstring_to_text(inputString)),
 													   Int32GetDatum(
-														   commentStartCharsLength),
+														   commentStartCharsLength + 1),
 													   Int32GetDatum(
 														   commentEndCharsIndex -
 														   commentStartCharsLength));
@@ -736,7 +736,7 @@ static char *
 EscapeCommentChars(const char *str)
 {
 	int originalStringLength = strlen(str);
-	char *escapedString = (char *) palloc(originalStringLength * 2 + 1);
+	char *escapedString = (char *) palloc0((originalStringLength * 2 + 1) * sizeof(char));
 	int escapedStringIndex = 0;
 
 	for (int originalStringIndex = 0; originalStringIndex < originalStringLength;
@@ -759,7 +759,7 @@ static char *
 UnescapeCommentChars(const char *str)
 {
 	int originalStringLength = strlen(str);
-	char *unescapedString = (char *) palloc(originalStringLength + 1);
+	char *unescapedString = (char *) palloc0((originalStringLength + 1) * sizeof(char));
 	int unescapedStringIndex = 0;
 
 	for (int originalStringindex = 0; originalStringindex < originalStringLength;
