@@ -134,7 +134,6 @@ static List * HashSplitPointsForShardList(List *shardList);
 static List * HashSplitPointsForShardCount(int shardCount);
 static List * WorkerNodesForShardList(List *shardList);
 static List * RoundRobinWorkerNodeList(List *workerNodeList, int listLength);
-static void CreateNullShardKeyDistTable(Oid relationId, char *colocateWithTableName);
 static CitusTableParams DecideCitusTableParams(CitusTableType tableType,
 											   DistributedTableParams *
 											   distributedTableParams);
@@ -1082,7 +1081,7 @@ CreateReferenceTable(Oid relationId)
  * CreateNullShardKeyDistTable is a wrapper around CreateCitusTable that creates a
  * single shard distributed table that doesn't have a shard key.
  */
-static void
+void
 CreateNullShardKeyDistTable(Oid relationId, char *colocateWithTableName)
 {
 	DistributedTableParams distributedTableParams = {

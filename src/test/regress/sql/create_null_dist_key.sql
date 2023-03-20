@@ -438,6 +438,51 @@ SELECT create_distributed_table('sensors_2000', NULL, distribution_type=>null);
 
 SELECT create_distributed_table('sensors', NULL, distribution_type=>null);
 
+-- verify we can create new partitions after distributing the parent table
+CREATE TABLE sensors_2001 PARTITION OF sensors FOR VALUES FROM ('2001-01-01') TO ('2002-01-01');
+
+-- verify we can attach to a null dist key table
+CREATE TABLE sensors_2002 (measureid integer, eventdatetime date, measure_data jsonb, PRIMARY KEY (measureid, eventdatetime, measure_data));
+ALTER TABLE sensors ATTACH PARTITION sensors_2002 FOR VALUES FROM ('2002-01-01') TO ('2003-01-01');
+
+-- verify we can detach from a null dist key table
+ALTER TABLE sensors DETACH PARTITION sensors_2001;
+
+-- error out when attaching a noncolocated partition
+CREATE TABLE sensors_2003 (measureid integer, eventdatetime date, measure_data jsonb, PRIMARY KEY (measureid, eventdatetime, measure_data));
+SELECT create_distributed_table('sensors_2003', NULL, distribution_type=>null, colocate_with=>'none');
+ALTER TABLE sensors ATTACH PARTITION sensors_2003 FOR VALUES FROM ('2003-01-01') TO ('2004-01-01');
+DROP TABLE sensors_2003;
+
+-- verify we can attach after distributing, if the parent and partition are colocated
+CREATE TABLE sensors_2004 (measureid integer, eventdatetime date, measure_data jsonb, PRIMARY KEY (measureid, eventdatetime, measure_data));
+SELECT create_distributed_table('sensors_2004', NULL, distribution_type=>null, colocate_with=>'sensors');
+ALTER TABLE sensors ATTACH PARTITION sensors_2004 FOR VALUES FROM ('2004-01-01') TO ('2005-01-01');
+
+-- check metadata
+-- check all partitions and the parent on pg_dist_partition
+SELECT logicalrelid::text FROM pg_dist_partition WHERE logicalrelid::text IN ('sensors', 'sensors_2000', 'sensors_2001', 'sensors_2002', 'sensors_2004') ORDER BY logicalrelid::text;
+-- verify they are all colocated
+SELECT COUNT(DISTINCT(colocationid)) FROM pg_dist_partition WHERE logicalrelid::text IN ('sensors', 'sensors_2000', 'sensors_2001', 'sensors_2002', 'sensors_2004');
+-- verify all partitions are placed on the same node
+SELECT COUNT(DISTINCT(groupid)) FROM pg_dist_placement WHERE shardid IN
+    (SELECT shardid FROM pg_dist_shard WHERE logicalrelid::text IN ('sensors', 'sensors_2000', 'sensors_2001', 'sensors_2002', 'sensors_2004'));
+
+-- verify the shard of sensors_2000 is attached to the parent shard, on the worker node
+SELECT COUNT(*) FROM run_command_on_workers($$
+    SELECT relpartbound FROM pg_class WHERE relname LIKE 'sensors_2000_1______';$$)
+    WHERE length(result) > 0;
+
+-- verify the shard of sensors_2001 is detached from the parent shard, on the worker node
+SELECT COUNT(*) FROM run_command_on_workers($$
+    SELECT relpartbound FROM pg_class WHERE relname LIKE 'sensors_2001_1______';$$)
+    WHERE length(result) > 0;
+
+-- verify the shard of sensors_2002 is attached to the parent shard, on the worker node
+SELECT COUNT(*) FROM run_command_on_workers($$
+    SELECT relpartbound FROM pg_class WHERE relname LIKE 'sensors_2002_1______';$$)
+    WHERE length(result) > 0;
+
 CREATE TABLE multi_level_partitioning_parent(
     measureid integer,
     eventdatetime date,
