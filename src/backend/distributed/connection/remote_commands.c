@@ -574,6 +574,47 @@ SendRemoteCommand(MultiConnection *connection, const char *command)
 
 
 /*
+ * ExecuteRemoteCommandAndCheckResult executes the given command in the remote node and
+ * checks if the result is equal to the expected result. If the result is equal to the
+ * expected result, the function returns true, otherwise it returns false.
+ */
+bool
+ExecuteRemoteCommandAndCheckResult(MultiConnection *connection, char *command,
+								   char *expected)
+{
+	if (!SendRemoteCommand(connection, command))
+	{
+		/* if we cannot connect, we warn and report false */
+		ReportConnectionError(connection, WARNING);
+		return false;
+	}
+	bool raiseInterrupts = true;
+	PGresult *queryResult = GetRemoteCommandResult(connection, raiseInterrupts);
+
+	/* if remote node throws an error, we also throw an error */
+	if (!IsResponseOK(queryResult))
+	{
+		ReportResultError(connection, queryResult, ERROR);
+	}
+
+	StringInfo queryResultString = makeStringInfo();
+
+	/* Evaluate the queryResult and store it into the queryResultString */
+	bool success = EvaluateSingleQueryResult(connection, queryResult, queryResultString);
+	bool result = false;
+	if (success && strcmp(queryResultString->data, expected) == 0)
+	{
+		result = true;
+	}
+
+	PQclear(queryResult);
+	ForgetResults(connection);
+
+	return result;
+}
+
+
+/*
  * ReadFirstColumnAsText reads the first column of result tuples from the given
  * PGresult struct and returns them in a StringInfo list.
  */

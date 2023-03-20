@@ -102,6 +102,9 @@ sub compare_tables_in_different_nodes
 
 sub create_node {
     my ($name,$node_type,$host, $port, $config) = @_;
+    if (!defined($config)) {
+        $config = ""
+    }
 
     our $node;
 
@@ -126,8 +129,9 @@ max_connections = 100
 max_wal_senders = 100
 max_replication_slots = 100
 citus.enable_change_data_capture = on
-citus.override_table_visibility = off
-";
+log_statement = 'all'
+citus.override_table_visibility = off";
+
     if ($config ne "") {
         $citus_config_options = $citus_config_options . $config
     }
@@ -205,13 +209,30 @@ sub create_cdc_publication_and_slots_for_coordinator {
 sub create_cdc_publication_and_slots_for_workers {
     my $workersref = $_[0];
     my $table_names = $_[1];
+    create_cdc_publication_for_workers($workersref, $table_names);
+    create_cdc_replication_slots_for_workers($workersref);
+}
+
+sub create_cdc_publication_for_workers {
+    my $workersref = $_[0];
+    my $table_names = $_[1];
     for (@$workersref) {
         my $pub = $_->safe_psql('postgres',"SELECT * FROM pg_publication WHERE pubname = 'cdc_publication';");
         if ($pub ne "") {
             $_->safe_psql('postgres',"DROP PUBLICATION IF EXISTS cdc_publication;");
         }
-        $_->safe_psql('postgres',"CREATE PUBLICATION cdc_publication FOR TABLE $table_names;");
+        if ($table_names eq "all") {
+            $_->safe_psql('postgres',"CREATE PUBLICATION cdc_publication FOR ALL TABLES;");
+        } else {
+            $_->safe_psql('postgres',"CREATE PUBLICATION cdc_publication FOR TABLE $table_names;");
+        }
+    }
+}
 
+
+sub create_cdc_replication_slots_for_workers {
+    my $workersref = $_[0];
+    for (@$workersref) {
         my $slot = $_->safe_psql('postgres',"select * from pg_replication_slots where  slot_name = 'cdc_replication_slot';");
         if ($slot ne "") {
             $_->safe_psql('postgres',"SELECT pg_catalog.pg_drop_replication_slot('cdc_replication_slot');");
@@ -327,3 +348,4 @@ sub drop_cdc_client_subscriptions {
         $i++;
     }
 }
+

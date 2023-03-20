@@ -100,7 +100,10 @@ static void
 shard_split_and_cdc_change_cb(LogicalDecodingContext *ctx, ReorderBufferTXN *txn,
 							  Relation relation, ReorderBufferChange *change)
 {
-	/*check if Citus extension is loaded. If not, just call the pgoutput's decoder function.*/
+	/*
+	 * If Citus has not been loaded yet, pass the changes
+	 * through to the undrelying decoder plugin.
+	 */
 	if (!CitusHasBeenLoaded())
 	{
 		ouputPluginChangeCB(ctx, txn, relation, change);

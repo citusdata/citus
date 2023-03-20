@@ -37,13 +37,17 @@ my $initial_schema = "
 $node_coordinator->safe_psql('postgres',$initial_schema);
 $node_cdc_client->safe_psql('postgres',$initial_schema);
 
+create_cdc_publication_and_slots_for_coordinator($node_coordinator,'sensors');
+connect_cdc_client_to_coordinator_publication($node_coordinator, $node_cdc_client);
+wait_for_cdc_client_to_catch_up_with_coordinator($node_coordinator);
 
+create_cdc_replication_slots_for_workers(\@workers);
 
 # Distribut the sensors table to worker nodes.
 $node_coordinator->safe_psql('postgres',"SELECT create_distributed_table_concurrently('sensors', 'measureid');");
 
-create_cdc_publication_and_replication_slots_for_citus_cluster($node_coordinator, \@workers,'sensors');
-connect_cdc_client_to_citus_cluster_publications($node_coordinator, \@workers, $node_cdc_client);
+create_cdc_publication_for_workers(\@workers,'sensors');
+connect_cdc_client_to_workers_publication(\@workers, $node_cdc_client);
 wait_for_cdc_client_to_catch_up_with_citus_cluster($node_coordinator, \@workers);
 
 # Insert some data to the sensors table in the coordinator node.

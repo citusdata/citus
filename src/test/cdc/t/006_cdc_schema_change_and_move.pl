@@ -10,6 +10,7 @@ use cdctestlib;
 
 # Initialize co-ordinator node
 my $select_stmt = qq(SELECT * FROM sensors ORDER BY measureid, eventdatetime, measure_data;);
+my $select_stmt_after_drop = qq(SELECT measureid, eventdatetime, measure_data, measure_status, measure_comment FROM sensors ORDER BY measureid, eventdatetime, measure_data;);
 my $result = 0;
 
 ### Create the citus cluster with coordinator and two worker nodes
@@ -85,26 +86,16 @@ print("move_params: $move_params\n");
 $node_coordinator->safe_psql('postgres',$move_params);
 
 
- $node_cdc_client->safe_psql('postgres',"DROP subscription cdc_subscription;");
- $node_cdc_client->safe_psql('postgres',"DROP subscription cdc_subscription_1;");
- $node_cdc_client->safe_psql('postgres',"DROP subscription cdc_subscription_2;");
- #$node_cdc_client->safe_psql('postgres',"DELETE FROM sensors;");
- $node_cdc_client->safe_psql('postgres',"ALTER TABLE sensors DROP COLUMN meaure_quantity;");
- $node_coordinator->safe_psql('postgres',"DROP publication cdc_publication;");
-
-
-create_cdc_publication_and_replication_slots_for_citus_cluster($node_coordinator, \@workers,'sensors');
 
 $node_coordinator->safe_psql('postgres',"
   	INSERT INTO sensors
   SELECT i, '2020-01-05', '{}', 'A', 'I <3 Citus'
   FROM generate_series(-10,-1)i;");
 
-connect_cdc_client_to_citus_cluster_publications($node_coordinator, \@workers, $node_cdc_client);
-wait_for_cdc_client_to_catch_up_with_citus_cluster($node_coordinator, \@workers);
 
+$node_cdc_client->safe_psql('postgres',"ALTER TABLE sensors DROP COLUMN meaure_quantity;");
 
-#wait_for_cdc_client_to_catch_up_with_workers(\@workers);
+wait_for_cdc_client_to_catch_up_with_workers(\@workers);
 $result = compare_tables_in_different_nodes($node_coordinator,$node_cdc_client,'postgres',$select_stmt);
 is($result, 1, 'CDC create_distributed_table - schema change and move shard');
 

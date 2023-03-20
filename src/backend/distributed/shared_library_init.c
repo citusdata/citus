@@ -1137,7 +1137,7 @@ RegisterCitusConfigVariables(void)
 		"citus.enable_change_data_capture",
 		gettext_noop("Enables using replication origin tracking for change data capture"),
 		NULL,
-		&enable_change_data_capture,
+		&EnableChangeDataCapture,
 		false,
 		PGC_USERSET,
 		GUC_STANDARD,

@@ -16,9 +16,6 @@
 
 static bool IsRemoteReplicationOriginSessionSetup(MultiConnection *connection);
 
-static bool ExecuteRemoteCommandAndCheckResult(MultiConnection *connection, char *command,
-											   char *expected);
-
 static void SetupMemoryContextResetReplicationOriginHandler(void);
 
 static void SetupReplicationOriginSessionHelper(bool isContexResetSetupNeeded);
@@ -38,7 +35,7 @@ static RepOriginId OriginalOriginId = InvalidRepOriginId;
 /*
  * Setting that controls whether replication origin tracking is enabled
  */
-bool enable_change_data_capture = false;
+bool EnableChangeDataCapture = false;
 
 
 /* citus_internal_start_replication_origin_tracking starts a new replication origin session
@@ -50,7 +47,7 @@ bool enable_change_data_capture = false;
 Datum
 citus_internal_start_replication_origin_tracking(PG_FUNCTION_ARGS)
 {
-	if (!enable_change_data_capture)
+	if (!EnableChangeDataCapture)
 	{
 		PG_RETURN_VOID();
 	}
@@ -88,7 +85,7 @@ citus_internal_is_replication_origin_tracking_active(PG_FUNCTION_ARGS)
 inline bool
 IsLocalReplicationOriginSessionActive(void)
 {
-	return (replorigin_session_origin != InvalidRepOriginId);
+	return (replorigin_session_origin == DoNotReplicateId);
 }
 
 
@@ -119,7 +116,7 @@ SetupMemoryContextResetReplicationOriginHandler()
 static void
 SetupReplicationOriginSessionHelper(bool isContexResetSetupNeeded)
 {
-	if (!enable_change_data_capture)
+	if (!EnableChangeDataCapture)
 	{
 		return;
 	}
@@ -180,7 +177,7 @@ ResetReplicationOriginLocalSessionCallbackHandler(void *arg)
 void
 SetupReplicationOriginRemoteSession(MultiConnection *connection)
 {
-	if (!enable_change_data_capture)
+	if (!EnableChangeDataCapture)
 	{
 		return;
 	}
@@ -205,7 +202,6 @@ ResetReplicationOriginRemoteSession(MultiConnection *connection)
 {
 	if (connection != NULL && connection->isReplicationOriginSessionSetup)
 	{
-		/*elog(LOG, "Resetting remote replication origin session %s,%d", connection->hostname, connection->port); */
 		StringInfo replicationOriginSessionResetQuery = makeStringInfo();
 		appendStringInfo(replicationOriginSessionResetQuery,
 						 "select pg_catalog.citus_internal_stop_replication_origin_tracking();");
@@ -217,13 +213,14 @@ ResetReplicationOriginRemoteSession(MultiConnection *connection)
 
 
 /*
- * IsRemoteReplicationOriginSessionSetup(MultiConnection *connection) checks if the replication origin is setup
- * already in the local or remote session.
+ * IsRemoteReplicationOriginSessionSetup checks if the replication origin is setup
+ * already in the remote session by calliing the UDF
+ * citus_internal_is_replication_origin_tracking_active(). This is also remembered
+ * in the connection object to avoid calling the UDF again next time.
  */
 static bool
 IsRemoteReplicationOriginSessionSetup(MultiConnection *connection)
 {
-	/*elog(LOG, "IsReplicationOriginSessionSetup: %s,%d", connection->hostname, connection->port); */
 	if (connection->isReplicationOriginSessionSetup)
 	{
 		return true;
@@ -238,46 +235,5 @@ IsRemoteReplicationOriginSessionSetup(MultiConnection *connection)
 										   "t");
 
 	connection->isReplicationOriginSessionSetup = result;
-	return result;
-}
-
-
-/*
- * ExecuteRemoteCommandAndCheckResult executes the given command in the remote node and
- * checks if the result is equal to the expected result. If the result is equal to the
- * expected result, the function returns true, otherwise it returns false.
- */
-static bool
-ExecuteRemoteCommandAndCheckResult(MultiConnection *connection, char *command,
-								   char *expected)
-{
-	if (!SendRemoteCommand(connection, command))
-	{
-		/* if we cannot connect, we warn and report false */
-		ReportConnectionError(connection, WARNING);
-		return false;
-	}
-	bool raiseInterrupts = true;
-	PGresult *queryResult = GetRemoteCommandResult(connection, raiseInterrupts);
-
-	/* if remote node throws an error, we also throw an error */
-	if (!IsResponseOK(queryResult))
-	{
-		ReportResultError(connection, queryResult, ERROR);
-	}
-
-	StringInfo queryResultString = makeStringInfo();
-
-	/* Evaluate the queryResult and store it into the queryResultString */
-	bool success = EvaluateSingleQueryResult(connection, queryResult, queryResultString);
-	bool result = false;
-	if (success && strcmp(queryResultString->data, expected) == 0)
-	{
-		result = true;
-	}
-
-	PQclear(queryResult);
-	ForgetResults(connection);
-
 	return result;
 }
