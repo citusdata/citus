@@ -678,7 +678,7 @@ static char *
 EscapeCommentChars(const char *str)
 {
 	int originalStringLength = strlen(str);
-	char *escapedString = (char *) malloc(originalStringLength * 2 + 1);
+	char *escapedString = (char *) palloc(originalStringLength * 2 + 1);
 	int escapedStringIndex = 0;
 
 	for (int originalStringIndex = 0; originalStringIndex < originalStringLength;
@@ -701,7 +701,7 @@ static char *
 UnescapeCommentChars(const char *str)
 {
 	int originalStringLength = strlen(str);
-	char *unescapedString = (char *) malloc(originalStringLength + 1);
+	char *unescapedString = (char *) palloc(originalStringLength + 1);
 	int unescapedStringIndex = 0;
 
 	for (int originalStringindex = 0; originalStringindex < originalStringLength;
