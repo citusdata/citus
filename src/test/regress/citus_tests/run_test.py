@@ -201,30 +201,9 @@ if __name__ == "__main__":
         shutil.copy2(
             os.path.join(regress_dir, dependencies.schedule), tmp_schedule_path
         )
-
-    def test_file_path(test_name):
-        test_suffix = "sql"
-        if dependencies.schedule == "base_isolation_schedule":
-            test_suffix = "spec"
-        test_file_dir = os.path.join(regress_dir, test_suffix)
-        test_file_name = f"{test_name}.{test_suffix}"
-        return os.path.join(test_file_dir, test_file_name)
-
-    # default worker count is 2, but we set it to higher value if we
-    # detect that any test requires more workers
-    worker_count = 2
-
-    def worker_count_for(test_name):
-        with open(test_file_path(test_name), "r") as testfile:
-            content = testfile.read()
-            worker_ports = re.findall(":worker_([0-9]+)_port", content)
-            ports = [int(worker_port) for worker_port in worker_ports]
-            return max(ports, default=2)
-
     with open(tmp_schedule_path, "a") as myfile:
         for dependency in dependencies.extra_tests():
             myfile.write(f"test: {dependency}\n")
-            worker_count = max(worker_count, worker_count_for(dependency))
 
         repetition_cnt = args["repeat"]
         if repetition_cnt > 1 and not dependencies.repeatable:
@@ -232,8 +211,6 @@ if __name__ == "__main__":
             print(f"WARNING: Cannot repeatably run this test: '{test_file_name}'")
         for _ in range(repetition_cnt):
             myfile.write(test_schedule_line)
-        for test_name in test_schedule_line.split()[1:]:
-            worker_count = max(worker_count, worker_count_for(test_name))
 
     # find suitable make recipe
     if dependencies.schedule == "base_isolation_schedule":
@@ -247,7 +224,7 @@ if __name__ == "__main__":
         make_recipe += "-vg"
 
     # prepare command to run tests
-    test_command = f"make -C {regress_dir} {make_recipe} WORKERCOUNT={worker_count} SCHEDULE='{pathlib.Path(tmp_schedule_path).stem}'"
+    test_command = f"make -C {regress_dir} {make_recipe} SCHEDULE='{pathlib.Path(tmp_schedule_path).stem}'"
 
     # run test command n times
     try:
