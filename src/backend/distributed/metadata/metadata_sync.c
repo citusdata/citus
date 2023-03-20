@@ -716,11 +716,12 @@ DropMetadataSnapshotOnNode(WorkerNode *workerNode)
 	 * Detach partitions, break dependencies between sequences and table then
 	 * remove shell tables first.
 	 */
+	bool singleTransaction = true;
 	List *dropMetadataCommandList = DetachPartitionCommandList();
 	dropMetadataCommandList = lappend(dropMetadataCommandList,
 									  BREAK_CITUS_TABLE_SEQUENCE_DEPENDENCY_COMMAND);
 	dropMetadataCommandList = lappend(dropMetadataCommandList,
-									  REMOVE_ALL_SHELL_TABLES_COMMAND);
+									  WorkerDropAllShellTablesCommand(singleTransaction));
 	dropMetadataCommandList = list_concat(dropMetadataCommandList,
 										  NodeMetadataDropCommands());
 	dropMetadataCommandList = lappend(dropMetadataCommandList,
@@ -4484,4 +4485,20 @@ SendOrCollectCommandListToSingleNode(MetadataSyncContext *context, List *command
 	{
 		pg_unreachable();
 	}
+}
+
+
+/*
+ * WorkerDropAllShellTablesCommand returns command required to drop shell tables
+ * from workers. When singleTransaction is false, we create transaction per shell
+ * table. Otherwise, we drop all shell tables within single transaction.
+ */
+char *
+WorkerDropAllShellTablesCommand(bool singleTransaction)
+{
+	char *singleTransactionString = (singleTransaction) ? "true" : "false";
+	StringInfo removeAllShellTablesCommand = makeStringInfo();
+	appendStringInfo(removeAllShellTablesCommand, WORKER_DROP_ALL_SHELL_TABLES,
+					 singleTransactionString);
+	return removeAllShellTablesCommand->data;
 }

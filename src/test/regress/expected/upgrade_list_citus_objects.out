@@ -245,6 +245,7 @@ ORDER BY 1;
  function worker_create_or_replace_object(text)
  function worker_create_or_replace_object(text[])
  function worker_create_truncate_trigger(regclass)
+ function worker_drop_all_shell_tables(boolean)
  function worker_drop_distributed_table(text)
  function worker_drop_sequence_dependency(text)
  function worker_drop_shell_table(text)
