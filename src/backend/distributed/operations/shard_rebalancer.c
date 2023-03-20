@@ -2054,7 +2054,7 @@ RebalanceTableShardsBackground(RebalanceOptions *options, Oid shardReplicationMo
 		bool found;
 
 		ShardMoveDependencyInfo *shardMoveDependencyInfo = hash_search(
-			dependencyHashMap, &cid, HASH_ENTER, &found);
+			dependencyHashMap, &colocationId, HASH_ENTER, &found);
 
 		int nDepend = 0;
 
