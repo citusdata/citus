@@ -2,7 +2,7 @@
 use strict;
 use warnings;
 
-use Test::More tests => 2;
+use Test::More tests => 4;
 
 use lib './t';
 use cdctestlib;
@@ -98,5 +98,29 @@ $node_cdc_client->safe_psql('postgres',"ALTER TABLE sensors DROP COLUMN meaure_q
 wait_for_cdc_client_to_catch_up_with_workers(\@workers);
 $result = compare_tables_in_different_nodes($node_coordinator,$node_cdc_client,'postgres',$select_stmt);
 is($result, 1, 'CDC create_distributed_table - schema change and move shard');
+
+# Update some data in the sensors table to check the schema change handling logic in CDC decoder.
+$node_coordinator->safe_psql('postgres',"
+UPDATE sensors
+	SET
+	measure_status = CASE
+		WHEN measureid % 2 = 0
+			THEN 'y'
+			ELSE 'n'
+		END;");
+
+wait_for_cdc_client_to_catch_up_with_citus_cluster($node_coordinator,\@workers);
+$result = compare_tables_in_different_nodes($node_coordinator,$node_cdc_client,'postgres',$select_stmt);
+is($result, 1, 'CDC create_distributed_table - update data after schema change');
+
+# Update some data in the sensors table to check the schema change handling logic in CDC decoder.
+$node_coordinator->safe_psql('postgres',"
+DELETE FROM sensors
+	WHERE
+	measure_status = 'n';");
+
+wait_for_cdc_client_to_catch_up_with_citus_cluster($node_coordinator,\@workers);
+$result = compare_tables_in_different_nodes($node_coordinator,$node_cdc_client,'postgres',$select_stmt);
+is($result, 1, 'CDC create_distributed_table - delete data after schem change');
 
 drop_cdc_client_subscriptions($node_cdc_client,\@workers);
