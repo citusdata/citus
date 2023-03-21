@@ -601,9 +601,9 @@ PreprocessAttachCitusPartitionToCitusTable(Oid parentCitusRelationId, Oid
 
 /*
  * DistributePartitionUsingParent takes a parent and a partition relation and
- * distributes the partition, using the same distribution column as the parent.
- * It creates a *hash* distributed table by default, as partitioned tables can only be
- * distributed by hash.
+ * distributes the partition, using the same distribution column as the parent, if the
+ * parent has a distribution column. It creates a *hash* distributed table by default, as
+ * partitioned tables can only be distributed by hash, unless it's null key distributed.
  *
  * If the parent has no distribution key, we distribute the partition with null key too.
  */
@@ -615,9 +615,9 @@ DistributePartitionUsingParent(Oid parentCitusRelationId, Oid partitionRelationI
 	if (!HasDistributionKey(parentCitusRelationId))
 	{
 		/*
-		* If the parent is null key distributed, we should distribute the partition
-		* with null distribution key as well.
-		*/
+		 * If the parent is null key distributed, we should distribute the partition
+		 * with null distribution key as well.
+		 */
 		CreateNullShardKeyDistTable(partitionRelationId, parentRelationName);
 		return;
 	}
