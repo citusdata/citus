@@ -55,6 +55,23 @@ static DeferredErrorMessage * MergeQualAndTargetListFunctionsSupported(Oid
 
 
 /*
+ * CreateMergePlan attempts to create a plan for the given MERGE SQL
+ * statement. If planning fails ->planningError is set to a description
+ * of the failure.
+ */
+DistributedPlan *
+CreateMergePlan(Query *originalQuery, Query *query,
+				PlannerRestrictionContext *plannerRestrictionContext)
+{
+	/*
+	 * For now, this is a place holder until we isolate the merge
+	 * planning into it's own code-path.
+	 */
+	return CreateModifyPlan(originalQuery, query, plannerRestrictionContext);
+}
+
+
+/*
  * MergeQuerySupported does check for a MERGE command in the query, if it finds
  * one, it will verify the below criteria
  * - Supported tables and combinations in ErrorIfMergeHasUnsupportedTables
