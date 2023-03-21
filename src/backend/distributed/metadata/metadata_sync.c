@@ -3241,7 +3241,6 @@ EnsureCoordinatorInitiatedOperation(void)
 	 * by the coordinator.
 	 */
 	if (!(IsCitusInternalBackend() || IsRebalancerInternalBackend()) ||
-		!MyBackendIsInDisributedTransaction() ||
 		GetLocalGroupId() == COORDINATOR_GROUP_ID)
 	{
 		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
