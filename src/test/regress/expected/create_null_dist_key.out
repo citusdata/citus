@@ -643,6 +643,119 @@ SELECT create_distributed_table('sensors', NULL, distribution_type=>null);
 
 (1 row)
 
+-- verify we can create new partitions after distributing the parent table
+CREATE TABLE sensors_2001 PARTITION OF sensors FOR VALUES FROM ('2001-01-01') TO ('2002-01-01');
+-- verify we can attach to a null dist key table
+CREATE TABLE sensors_2002 (measureid integer, eventdatetime date, measure_data jsonb, PRIMARY KEY (measureid, eventdatetime, measure_data));
+ALTER TABLE sensors ATTACH PARTITION sensors_2002 FOR VALUES FROM ('2002-01-01') TO ('2003-01-01');
+-- verify we can detach from a null dist key table
+ALTER TABLE sensors DETACH PARTITION sensors_2001;
+-- error out when attaching a noncolocated partition
+CREATE TABLE sensors_2003 (measureid integer, eventdatetime date, measure_data jsonb, PRIMARY KEY (measureid, eventdatetime, measure_data));
+SELECT create_distributed_table('sensors_2003', NULL, distribution_type=>null, colocate_with=>'none');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+ALTER TABLE sensors ATTACH PARTITION sensors_2003 FOR VALUES FROM ('2003-01-01') TO ('2004-01-01');
+ERROR:  distributed tables cannot have non-colocated distributed tables as a partition
+DROP TABLE sensors_2003;
+-- verify we can attach after distributing, if the parent and partition are colocated
+CREATE TABLE sensors_2004 (measureid integer, eventdatetime date, measure_data jsonb, PRIMARY KEY (measureid, eventdatetime, measure_data));
+SELECT create_distributed_table('sensors_2004', NULL, distribution_type=>null, colocate_with=>'sensors');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+ALTER TABLE sensors ATTACH PARTITION sensors_2004 FOR VALUES FROM ('2004-01-01') TO ('2005-01-01');
+-- verify we can attach a citus local table
+CREATE TABLE sensors_2005 (measureid integer, eventdatetime date, measure_data jsonb, PRIMARY KEY (measureid, eventdatetime, measure_data));
+SELECT citus_add_local_table_to_metadata('sensors_2005');
+ citus_add_local_table_to_metadata
+---------------------------------------------------------------------
+
+(1 row)
+
+ALTER TABLE sensors ATTACH PARTITION sensors_2005 FOR VALUES FROM ('2005-01-01') TO ('2006-01-01');
+-- check metadata
+-- check all partitions and the parent on pg_dist_partition
+SELECT logicalrelid::text FROM pg_dist_partition WHERE logicalrelid::text IN ('sensors', 'sensors_2000', 'sensors_2001', 'sensors_2002', 'sensors_2004', 'sensors_2005') ORDER BY logicalrelid::text;
+ logicalrelid
+---------------------------------------------------------------------
+ sensors
+ sensors_2000
+ sensors_2001
+ sensors_2002
+ sensors_2004
+ sensors_2005
+(6 rows)
+
+-- verify they are all colocated
+SELECT COUNT(DISTINCT(colocationid)) FROM pg_dist_partition WHERE logicalrelid::text IN ('sensors', 'sensors_2000', 'sensors_2001', 'sensors_2002', 'sensors_2004', 'sensors_2005');
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+-- verify all partitions are placed on the same node
+SELECT COUNT(DISTINCT(groupid)) FROM pg_dist_placement WHERE shardid IN
+    (SELECT shardid FROM pg_dist_shard WHERE logicalrelid::text IN ('sensors', 'sensors_2000', 'sensors_2001', 'sensors_2002', 'sensors_2004', 'sensors_2005'));
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+-- verify the shard of sensors_2000 is attached to the parent shard, on the worker node
+SELECT COUNT(*) FROM run_command_on_workers($$
+    SELECT relpartbound FROM pg_class WHERE relname LIKE 'sensors_2000_1______';$$)
+    WHERE length(result) > 0;
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+-- verify the shard of sensors_2001 is detached from the parent shard, on the worker node
+SELECT COUNT(*) FROM run_command_on_workers($$
+    SELECT relpartbound FROM pg_class WHERE relname LIKE 'sensors_2001_1______';$$)
+    WHERE length(result) > 0;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+-- verify the shard of sensors_2002 is attached to the parent shard, on the worker node
+SELECT COUNT(*) FROM run_command_on_workers($$
+    SELECT relpartbound FROM pg_class WHERE relname LIKE 'sensors_2002_1______';$$)
+    WHERE length(result) > 0;
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+-- create a partitioned citus local table and verify we error out when attaching a partition with null dist key
+CREATE TABLE partitioned_citus_local_tbl(
+    measureid integer,
+    eventdatetime date,
+    measure_data jsonb,
+PRIMARY KEY (measureid, eventdatetime, measure_data))
+PARTITION BY RANGE(eventdatetime);
+SELECT citus_add_local_table_to_metadata('partitioned_citus_local_tbl');
+ citus_add_local_table_to_metadata
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE partition_with_null_key (measureid integer, eventdatetime date, measure_data jsonb, PRIMARY KEY (measureid, eventdatetime, measure_data));
+SELECT create_distributed_table('partition_with_null_key', NULL, distribution_type=>null);
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+ALTER TABLE partitioned_citus_local_tbl ATTACH PARTITION partition_with_null_key FOR VALUES FROM ('2004-01-01') TO ('2005-01-01');
+ERROR:  non-distributed partitioned tables cannot have distributed partitions
 CREATE TABLE multi_level_partitioning_parent(
     measureid integer,
     eventdatetime date,
@@ -761,7 +874,7 @@ BEGIN;
   INSERT INTO referencing_table VALUES (1, 2);
   -- fails
   INSERT INTO referencing_table VALUES (2, 2);
-ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_fkey_1730049"
+ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_fkey_1730057"
 DETAIL:  Key (a)=(2) is not present in table "referenced_table_xxxxxxx".
 CONTEXT:  while executing command on localhost:xxxxx
 ROLLBACK;
@@ -807,7 +920,7 @@ BEGIN;
   INSERT INTO referencing_table VALUES (1, 2);
   -- fails
   INSERT INTO referencing_table VALUES (2, 2);
-ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_fkey_1730085"
+ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_fkey_1730093"
 DETAIL:  Key (a)=(2) is not present in table "referenced_table_xxxxxxx".
 CONTEXT:  while executing command on localhost:xxxxx
 ROLLBACK;
@@ -925,8 +1038,8 @@ SELECT result, success FROM run_command_on_workers($$
 $$);
                                                               result                                                              | success
 ---------------------------------------------------------------------
- ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_fkey_1730102" | f
- ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_fkey_1730102" | f
+ ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_fkey_1730110" | f
+ ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_fkey_1730110" | f
 (2 rows)
 
 DROP TABLE referencing_table, referenced_table;
@@ -941,8 +1054,8 @@ SELECT create_distributed_table('self_fkey_test', NULL, distribution_type=>null)
 
 INSERT INTO self_fkey_test VALUES (1, 1); -- ok
 INSERT INTO self_fkey_test VALUES (2, 3); -- fails
-ERROR:  insert or update on table "self_fkey_test_1730103" violates foreign key constraint "self_fkey_test_b_fkey_1730103"
-DETAIL:  Key (b)=(3) is not present in table "self_fkey_test_1730103".
+ERROR:  insert or update on table "self_fkey_test_1730111" violates foreign key constraint "self_fkey_test_b_fkey_1730111"
+DETAIL:  Key (b)=(3) is not present in table "self_fkey_test_1730111".
 CONTEXT:  while executing command on localhost:xxxxx
 -- similar foreign key tests but this time create the referencing table later on
 -- referencing table is a null shard key table
@@ -966,7 +1079,7 @@ BEGIN;
   INSERT INTO referencing_table VALUES (1, 2);
   -- fails
   INSERT INTO referencing_table VALUES (2, 2);
-ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_fkey_1730105"
+ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_fkey_1730113"
 DETAIL:  Key (a)=(2) is not present in table "referenced_table_xxxxxxx".
 CONTEXT:  while executing command on localhost:xxxxx
 ROLLBACK;
@@ -989,7 +1102,7 @@ BEGIN;
   INSERT INTO referencing_table VALUES (2, 1);
   -- fails
   INSERT INTO referencing_table VALUES (1, 2);
-ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_b_fkey_1730107"
+ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_b_fkey_1730115"
 DETAIL:  Key (a, b)=(1, 2) is not present in table "referenced_table_xxxxxxx".
 CONTEXT:  while executing command on localhost:xxxxx
 ROLLBACK;
@@ -1078,7 +1191,7 @@ BEGIN;
   INSERT INTO referencing_table VALUES (1, 2);
   -- fails
   INSERT INTO referencing_table VALUES (2, 2);
-ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_fkey_1730146"
+ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_fkey_1730154"
 DETAIL:  Key (a)=(2) is not present in table "referenced_table_xxxxxxx".
 CONTEXT:  while executing command on localhost:xxxxx
 ROLLBACK;
