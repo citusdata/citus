@@ -745,7 +745,7 @@ Substring(const char *str, int start, int end)
 	/* Copy the substring to the new memory location */
 	strncpy_s(substr, end - start + 1, str + start, end - start);
 
-	/* Add null terminator to end the substring */
+	/* Add null terminator to end of the substring */
 	substr[end - start] = '\0';
 
 	return substr;
