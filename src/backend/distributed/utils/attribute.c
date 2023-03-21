@@ -25,6 +25,7 @@
 #include "utils/json.h"
 #include "distributed/utils/attribute.h"
 #include "common/base64.h"
+#include "miscadmin.h"
 
 #include <time.h>
 
@@ -687,31 +688,28 @@ static char *
 EscapeCommentChars(const char *str)
 {
 	int originalStringLength = strlen(str);
-	char *escapedString = (char *) palloc0((originalStringLength * 2 + 1) * sizeof(char));
-	int escapedStringIndex = 0;
+	StringInfo escapedString = makeStringInfo();
 
 	for (int originalStringIndex = 0; originalStringIndex < originalStringLength;
 		 originalStringIndex++)
 	{
 		if (str[originalStringIndex] == '*' || str[originalStringIndex] == '/')
 		{
-			escapedString[escapedStringIndex++] = '\\';
+			appendStringInfoChar(escapedString, '\\');
 		}
-		escapedString[escapedStringIndex++] = str[originalStringIndex];
-	}
-	escapedString[escapedStringIndex] = '\0';
 
-	return escapedString;
+		appendStringInfoChar(escapedString, str[originalStringIndex]);
+ 	}
+
+	return escapedString->data;
 }
-
 
 /*  UnescapeCommentChars removes the backslash that precedes '*' or '/' in the input string. */
 static char *
 UnescapeCommentChars(const char *str)
 {
 	int originalStringLength = strlen(str);
-	char *unescapedString = (char *) palloc0((originalStringLength + 1) * sizeof(char));
-	int unescapedStringIndex = 0;
+	StringInfo unescapedString = makeStringInfo();
 
 	for (int originalStringindex = 0; originalStringindex < originalStringLength;
 		 originalStringindex++)
@@ -723,9 +721,8 @@ UnescapeCommentChars(const char *str)
 		{
 			originalStringindex++;
 		}
-		unescapedString[unescapedStringIndex++] = str[originalStringindex];
+		appendStringInfoChar(unescapedString, str[originalStringindex]);
 	}
-	unescapedString[unescapedStringIndex] = '\0';
 
-	return unescapedString;
+	return unescapedString->data;
 }
