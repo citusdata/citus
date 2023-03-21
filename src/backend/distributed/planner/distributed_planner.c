@@ -34,6 +34,7 @@
 #include "distributed/intermediate_results.h"
 #include "distributed/listutils.h"
 #include "distributed/coordinator_protocol.h"
+#include "distributed/merge_planner.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_executor.h"
 #include "distributed/distributed_planner.h"
@@ -67,6 +68,17 @@
 #include "utils/memutils.h"
 #include "utils/syscache.h"
 
+
+/* RouterPlanType is used to determine the router plan to invoke */
+typedef enum RouterPlanType
+{
+	INSERT_SELECT_INTO_CITUS_TABLE,
+	INSERT_SELECT_INTO_LOCAL_TABLE,
+	DML_QUERY,
+	SELECT_QUERY,
+	MERGE_QUERY,
+	REPLAN_WITH_BOUND_PARAMETERS
+} RouterPlanType;
 
 static List *plannerRestrictionContextList = NIL;
 int MultiTaskQueryLogLevel = CITUS_LOG_LEVEL_OFF; /* multi-task query log level */
@@ -129,6 +141,9 @@ static PlannedStmt * PlanDistributedStmt(DistributedPlanningContext *planContext
 static RTEListProperties * GetRTEListProperties(List *rangeTableList);
 static List * TranslatedVars(PlannerInfo *root, int relationIndex);
 static void WarnIfListHasForeignDistributedTable(List *rangeTableList);
+static RouterPlanType GetRouterPlanType(Query *query,
+										Query *originalQuery,
+										bool hasUnresolvedParams);
 
 
 /* Distributed planner hook */
@@ -882,6 +897,51 @@ TryCreateDistributedPlannedStmt(PlannedStmt *localPlan,
 
 
 /*
+ * GetRouterPlanType checks the parse tree to return appropriate plan type.
+ */
+static RouterPlanType
+GetRouterPlanType(Query *query, Query *originalQuery, bool hasUnresolvedParams)
+{
+	if (!IsModifyCommand(originalQuery))
+	{
+		return SELECT_QUERY;
+	}
+
+	Oid targetRelationId = ModifyQueryResultRelationId(query);
+
+	EnsureModificationsCanRunOnRelation(targetRelationId);
+	EnsurePartitionTableNotReplicated(targetRelationId);
+
+	/* Check the type of modification being done */
+
+	if (InsertSelectIntoCitusTable(originalQuery))
+	{
+		if (hasUnresolvedParams)
+		{
+			return REPLAN_WITH_BOUND_PARAMETERS;
+		}
+		return INSERT_SELECT_INTO_CITUS_TABLE;
+	}
+	else if (InsertSelectIntoLocalTable(originalQuery))
+	{
+		if (hasUnresolvedParams)
+		{
+			return REPLAN_WITH_BOUND_PARAMETERS;
+		}
+		return INSERT_SELECT_INTO_LOCAL_TABLE;
+	}
+	else if (IsMergeQuery(originalQuery))
+	{
+		return MERGE_QUERY;
+	}
+	else
+	{
+		return DML_QUERY;
+	}
+}
+
+
+/*
  * CreateDistributedPlan generates a distributed plan for a query.
  * It goes through 3 steps:
  *
@@ -898,64 +958,71 @@ CreateDistributedPlan(uint64 planId, bool allowRecursivePlanning, Query *origina
 	DistributedPlan *distributedPlan = NULL;
 	bool hasCtes = originalQuery->cteList != NIL;
 
-	if (IsModifyCommand(originalQuery))
+	/* Step 1: Try router planner */
+
+	RouterPlanType routerPlan = GetRouterPlanType(query, originalQuery,
+												  hasUnresolvedParams);
+
+	switch (routerPlan)
 	{
-		Oid targetRelationId = ModifyQueryResultRelationId(query);
-
-		EnsureModificationsCanRunOnRelation(targetRelationId);
-
-		EnsurePartitionTableNotReplicated(targetRelationId);
-
-		if (InsertSelectIntoCitusTable(originalQuery))
+		case INSERT_SELECT_INTO_CITUS_TABLE:
 		{
-			if (hasUnresolvedParams)
-			{
-				/*
-				 * Unresolved parameters can cause performance regressions in
-				 * INSERT...SELECT when the partition column is a parameter
-				 * because we don't perform any additional pruning in the executor.
-				 */
-				return NULL;
-			}
-
 			distributedPlan =
-				CreateInsertSelectPlan(planId, originalQuery, plannerRestrictionContext,
+				CreateInsertSelectPlan(planId,
+									   originalQuery,
+									   plannerRestrictionContext,
 									   boundParams);
+			break;
 		}
-		else if (InsertSelectIntoLocalTable(originalQuery))
+
+		case INSERT_SELECT_INTO_LOCAL_TABLE:
 		{
-			if (hasUnresolvedParams)
-			{
-				/*
-				 * Unresolved parameters can cause performance regressions in
-				 * INSERT...SELECT when the partition column is a parameter
-				 * because we don't perform any additional pruning in the executor.
-				 */
-				return NULL;
-			}
 			distributedPlan =
-				CreateInsertSelectIntoLocalTablePlan(planId, originalQuery, boundParams,
+				CreateInsertSelectIntoLocalTablePlan(planId,
+													 originalQuery,
+													 boundParams,
 													 hasUnresolvedParams,
 													 plannerRestrictionContext);
+			break;
 		}
-		else
+
+		case DML_QUERY:
 		{
 			/* modifications are always routed through the same planner/executor */
 			distributedPlan =
 				CreateModifyPlan(originalQuery, query, plannerRestrictionContext);
+			break;
 		}
-	}
-	else
-	{
-		/*
-		 * For select queries we, if router executor is enabled, first try to
-		 * plan the query as a router query. If not supported, otherwise try
-		 * the full blown plan/optimize/physical planning process needed to
-		 * produce distributed query plans.
-		 */
 
-		distributedPlan = CreateRouterPlan(originalQuery, query,
-										   plannerRestrictionContext);
+		case MERGE_QUERY:
+		{
+			distributedPlan =
+				CreateMergePlan(originalQuery, query, plannerRestrictionContext);
+			break;
+		}
+
+		case REPLAN_WITH_BOUND_PARAMETERS:
+		{
+			/*
+			 * Unresolved parameters can cause performance regressions in
+			 * INSERT...SELECT when the partition column is a parameter
+			 * because we don't perform any additional pruning in the executor.
+			 */
+			return NULL;
+		}
+
+		case SELECT_QUERY:
+		{
+			/*
+			 * For select queries we, if router executor is enabled, first try to
+			 * plan the query as a router query. If not supported, otherwise try
+			 * the full blown plan/optimize/physical planning process needed to
+			 * produce distributed query plans.
+			 */
+			distributedPlan =
+				CreateRouterPlan(originalQuery, query, plannerRestrictionContext);
+			break;
+		}
 	}
 
 	/* the functions above always return a plan, possibly with an error */
@@ -995,6 +1062,8 @@ CreateDistributedPlan(uint64 planId, bool allowRecursivePlanning, Query *origina
 	originalQuery = (Query *) ResolveExternalParams((Node *) originalQuery,
 													boundParams);
 	Assert(originalQuery != NULL);
+
+	/* Step 2: Generate subplans for CTEs and complex subqueries */
 
 	/*
 	 * Plan subqueries and CTEs that cannot be pushed down by recursively
@@ -1095,6 +1164,8 @@ CreateDistributedPlan(uint64 planId, bool allowRecursivePlanning, Query *origina
 	 */
 	query->cteList = NIL;
 	Assert(originalQuery->cteList == NIL);
+
+	/* Step 3: Try Logical planner */
 
 	MultiTreeRoot *logicalPlan = MultiLogicalPlanCreate(originalQuery, query,
 														plannerRestrictionContext);
