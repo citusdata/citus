@@ -944,18 +944,6 @@ CreateDistributedPlan(uint64 planId, bool allowRecursivePlanning, Query *origina
 			distributedPlan =
 				CreateModifyPlan(originalQuery, query, plannerRestrictionContext);
 		}
-
-		/* the functions above always return a plan, possibly with an error */
-		Assert(distributedPlan);
-
-		if (distributedPlan->planningError == NULL)
-		{
-			return distributedPlan;
-		}
-		else
-		{
-			RaiseDeferredError(distributedPlan->planningError, DEBUG2);
-		}
 	}
 	else
 	{
@@ -968,18 +956,18 @@ CreateDistributedPlan(uint64 planId, bool allowRecursivePlanning, Query *origina
 
 		distributedPlan = CreateRouterPlan(originalQuery, query,
 										   plannerRestrictionContext);
-		if (distributedPlan->planningError == NULL)
-		{
-			return distributedPlan;
-		}
-		else
-		{
-			/*
-			 * For debugging it's useful to display why query was not
-			 * router plannable.
-			 */
-			RaiseDeferredError(distributedPlan->planningError, DEBUG2);
-		}
+	}
+
+	/* the functions above always return a plan, possibly with an error */
+	Assert(distributedPlan);
+
+	if (distributedPlan->planningError == NULL)
+	{
+		return distributedPlan;
+	}
+	else
+	{
+		RaiseDeferredError(distributedPlan->planningError, DEBUG2);
 	}
 
 	if (hasUnresolvedParams)
