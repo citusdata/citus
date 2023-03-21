@@ -1271,23 +1271,6 @@ MyBackendGotCancelledDueToDeadlock(bool clearState)
 
 
 /*
- * MyBackendIsInDisributedTransaction returns true if MyBackendData
- * is in a distributed transaction.
- */
-bool
-MyBackendIsInDisributedTransaction(void)
-{
-	/* backend might not have used citus yet and thus not initialized backend data */
-	if (!MyBackendData)
-	{
-		return false;
-	}
-
-	return IsInDistributedTransaction(MyBackendData);
-}
-
-
-/*
  * ActiveDistributedTransactionNumbers returns a list of pointers to
  * transaction numbers of distributed transactions that are in progress
  * and were started by the node on which it is called.
