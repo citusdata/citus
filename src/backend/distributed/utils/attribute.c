@@ -27,8 +27,7 @@
 #include "utils/builtins.h"
 #include "utils/json.h"
 #include "distributed/utils/attribute.h"
-#include "common/base64.h"
-#include "miscadmin.h"
+
 
 #include <time.h>
 
@@ -68,7 +67,6 @@ static int CreateTenantStats(MultiTenantMonitor *monitor, time_t queryTime);
 static int FindTenantStats(MultiTenantMonitor *monitor);
 static size_t MultiTenantMonitorshmemSize(void);
 static char * ExtractTopComment(const char *inputString);
-static char * Substring(const char *str, int start, int end);
 static char * EscapeCommentChars(const char *str);
 static char * UnescapeCommentChars(const char *str);
 
@@ -683,75 +681,41 @@ MultiTenantMonitorshmemSize(void)
 static char *
 ExtractTopComment(const char *inputString)
 {
-	int commentStartCharsLength = 2;
-	int inputStringLen = strlen(inputString);
-	if (inputStringLen < commentStartCharsLength)
-	{
-		return NULL;
-	}
+    int commentCharsLength = 2;
+    int inputStringLen = strlen(inputString);
+    if (inputStringLen < commentCharsLength)
+    {
+        return NULL;
+    }
 
-	int commentEndCharsIndex = 0;
+    const char *commentStartChars = "/*";
+    const char *commentEndChars = "*/";
 
-	/* If query doesn't start with a comment, return NULL */
-	if (inputString[commentEndCharsIndex] != '/' ||
-		inputString[commentEndCharsIndex + 1] != '*')
-	{
-		return NULL;
-	}
+    /* If query doesn't start with a comment, return NULL */
+    if (strstr(inputString, commentStartChars) != inputString)
+    {
+        return NULL;
+    }
 
-	/* Skip the comment start characters */
-	commentEndCharsIndex += commentStartCharsLength;
-	
-	/* Find the first comment end character */
-	while (commentEndCharsIndex < inputStringLen &&
-		   !(inputString[commentEndCharsIndex] == '*' &&
-			 inputString [commentEndCharsIndex + 1] == '/'))
-	{
-		commentEndCharsIndex++;
-	}
+    StringInfo commentData = makeStringInfo();
 
-	/* If there is no end of comment chars , return NULL */
-	if (inputString[commentEndCharsIndex] != '*' &&
-		inputString[commentEndCharsIndex + 1] != '/')
-	{
-		return NULL;
-	}
+    /* Skip the comment start characters */
+    const char *commentStart = inputString + commentCharsLength;
 
-	if (commentEndCharsIndex > commentStartCharsLength)
-	{
-		return Substring(inputString, commentStartCharsLength, commentEndCharsIndex);
-	}
-	else
-	{
-		return NULL;
-	}
+    /* Find the first comment end character */
+    const char *commentEnd = strstr(commentStart, commentEndChars);
+    if (commentEnd == NULL)
+    {
+        return NULL;
+    }
+
+    /* Append the comment to the StringInfo buffer */
+    int commentLength = commentEnd - commentStart;
+    appendStringInfo(commentData, "%.*s", commentLength, commentStart);
+
+    /* Return the extracted comment */
+    return commentData->data;
 }
-
-
-/* Extracts a substring from the input string between the specified start and end indices.*/
-static char *
-Substring(const char *str, int start, int end)
-{
-	int len = strlen(str);
-
-	/* Ensure start and end are within the bounds of the string */
-	if (start < 0 || end > len || start > end)
-	{
-		return NULL;
-	}
-
-	/* Allocate memory for the substring */
-	char *substr = (char *) palloc((end - start + 1) * sizeof(char));
-
-	/* Copy the substring to the new memory location */
-	strncpy_s(substr, end - start + 1, str + start, end - start);
-
-	/* Add null terminator to end of the substring */
-	substr[end - start] = '\0';
-
-	return substr;
-}
-
 
 /*  EscapeCommentChars adds a backslash before each occurrence of '*' or '/' in the input string */
 static char *
