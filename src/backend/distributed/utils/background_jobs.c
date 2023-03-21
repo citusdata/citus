@@ -116,6 +116,7 @@ static bool MonitorGotTerminationOrCancellationRequest();
 static void QueueMonitorSigTermHandler(SIGNAL_ARGS);
 static void QueueMonitorSigIntHandler(SIGNAL_ARGS);
 static void QueueMonitorSigHupHandler(SIGNAL_ARGS);
+static void PutTokensBack(BackgroundTask *task);
 
 /* flags set by signal handlers */
 static volatile sig_atomic_t GotSigterm = false;
@@ -858,19 +859,7 @@ TaskEnded(TaskExecutionContext *taskExecutionContext)
 	UNSET_NULLABLE_FIELD(task, pid);
 	task->message = handleEntry->message->data;
 
-	if (task->nodeTokens)
-	{
-		int node_token;
-		foreach_int(node_token, task->nodeTokens)
-		{
-			ParallelMovesPerNodeEntry *hashEntry = hash_search(ParallelMovesPerNode,
-															   &(node_token),
-															   HASH_FIND, NULL);
-
-			hashEntry->counter -= 1;
-		}
-	}
-
+	PutTokensBack(task);
 	UpdateBackgroundTask(task);
 	UpdateDependingTasks(task);
 	UpdateBackgroundJob(task->jobid);
@@ -882,6 +871,32 @@ TaskEnded(TaskExecutionContext *taskExecutionContext)
 				HASH_REMOVE, NULL);
 	WaitForBackgroundWorkerShutdown(handleEntry->handle);
 	queueMonitorExecutionContext->currentExecutorCount--;
+}
+
+
+/*
+ * PutTokensBack
+ * Goes through the global ParallelMovesPerNode hash table
+ * and puts the tokens of the input task back to their place
+ */
+static void
+PutTokensBack(BackgroundTask *task)
+{
+	if (task->nodeTokens)
+	{
+		int node_token;
+		foreach_int(node_token, task->nodeTokens)
+		{
+			ParallelMovesPerNodeEntry *hashEntry = hash_search(ParallelMovesPerNode,
+															   &(node_token),
+															   HASH_FIND, NULL);
+
+			hashEntry->counter -= 1;
+
+			/* sanity check */
+			Assert(hashEntry->counter < MaxParallelMovesPerNode);
+		}
+	}
 }
 
 
@@ -1190,16 +1205,7 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 
 		if (ParallelMovesPerNode == NULL)
 		{
-			HASHCTL info;
-			uint32 hashFlags = (HASH_ELEM | HASH_FUNCTION);
-			memset(&info, 0, sizeof(info));
-			info.keysize = sizeof(uint32);
-			info.hash = oid_hash;
-			info.entrysize = sizeof(ParallelMovesPerNodeEntry);
-
-			ParallelMovesPerNode = hash_create(
-				"Parallel moves per node in a rebalancing job map",
-				32, &info, hashFlags);
+			ParallelMovesPerNode = CreateSimpleHash(int32, ParallelMovesPerNodeEntry);
 		}
 
 		/* assign runnable tasks, if any, to new task executors in a transaction if we do not have SIGTERM or SIGINT */

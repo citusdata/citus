@@ -118,6 +118,7 @@ static bool SetFieldText(int attno, Datum values[], bool isnull[], bool replace[
 static bool SetFieldNull(int attno, Datum values[], bool isnull[], bool replace[]);
 static Datum intArrayToDatum(int int_array_size, int int_array[]);
 static List * datumIntArrayToList(Datum datum);
+static bool GetTaskTokens(HTAB *ParallelMovesPerNode, BackgroundTask *task);
 
 #define InitFieldValue(attno, values, isnull, initValue) \
 	(void) SetFieldValue((attno), (values), (isnull), NULL, (initValue))
@@ -2994,8 +2995,10 @@ intArrayToDatum(int int_array_size, int int_array[])
 
 	for (int i = 0; i < int_array_size; i++)
 	{
-		astate = accumArrayResult(astate, Int32GetDatum(int_array[i]),
-								  false, INT4OID,
+		Datum dvalue = Int32GetDatum(int_array[i]);
+		bool disnull = false;
+		Oid element_type = INT4OID;
+		astate = accumArrayResult(astate, dvalue, disnull, element_type,
 								  CurrentMemoryContext);
 	}
 
@@ -3406,38 +3409,9 @@ GetRunnableBackgroundTaskWithTokens(HTAB *ParallelMovesPerNode)
 		while (HeapTupleIsValid(taskTuple = systable_getnext(scanDescriptor)))
 		{
 			task = DeformBackgroundTaskHeapTuple(tupleDescriptor, taskTuple);
-			if (BackgroundTaskReadyToRun(task))
+			if (BackgroundTaskReadyToRun(task) &&
+				GetTaskTokens(ParallelMovesPerNode, task))
 			{
-				/*
-				 * Check if we can take node tokens from buckets.
-				 * If yes, take them. If not, continue to next runnable task.
-				 */
-				if (task->nodeTokens)
-				{
-					int node_token;
-					foreach_int(node_token, task->nodeTokens)
-					{
-						bool found;
-						ParallelMovesPerNodeEntry *hashEntry = hash_search(
-							ParallelMovesPerNode,
-							&(node_token),
-							HASH_ENTER,
-							&found);
-						if (!found)
-						{
-							hashEntry->counter = 1;
-						}
-						else if (hashEntry->counter < MaxParallelMovesPerNode)
-						{
-							hashEntry->counter += 1;
-						}
-						else
-						{
-							continue;
-						}
-					}
-				}
-
 				/* found task, close table and return */
 				break;
 			}
@@ -3450,6 +3424,45 @@ GetRunnableBackgroundTaskWithTokens(HTAB *ParallelMovesPerNode)
 	table_close(pgDistBackgroundTasks, NoLock);
 
 	return task;
+}
+
+
+/*
+ * GetTaskTokens
+ * Checks whether the node ids in the task tokens are available
+ * If at least one of them is not available, it returns false.
+ * If yes, it takes all the needed tokens and returns true.
+ */
+static bool
+GetTaskTokens(HTAB *ParallelMovesPerNode, BackgroundTask *task)
+{
+	if (task->nodeTokens)
+	{
+		int node_token;
+
+		/* first check if all tokens are available*/
+		foreach_int(node_token, task->nodeTokens)
+		{
+			ParallelMovesPerNodeEntry *hashEntry = hash_search(
+				ParallelMovesPerNode, &(node_token), HASH_ENTER, NULL);
+			if (hashEntry->counter == MaxParallelMovesPerNode)
+			{
+				/* at least one token (this one) is not available */
+				return false;
+			}
+		}
+
+		/* then, take all needed tokens */
+		foreach_int(node_token, task->nodeTokens)
+		{
+			ParallelMovesPerNodeEntry *hashEntry = hash_search(
+				ParallelMovesPerNode, &(node_token), HASH_FIND, NULL);
+			Assert(hashEntry);
+			hashEntry->counter += 1;
+		}
+	}
+
+	return true;
 }
 
 

@@ -85,11 +85,17 @@ typedef struct TaskExecutionContext
 } TaskExecutionContext;
 
 
+/*
+ * ParallelMovesPerNodeEntry is the struct used
+ * to track the number of concurrent background tasks that have taken
+ * a token on the particular node
+ */
 typedef struct ParallelMovesPerNodeEntry
 {
 	/* Used as hash key. */
-	uint32 node_id;
+	int32 node_id;
 
+	/* number of concurrent background tasks that involve node node_id */
 	uint32 counter;
 } ParallelMovesPerNodeEntry;
 
