@@ -944,9 +944,6 @@ CreateDistributedPlan(uint64 planId, bool allowRecursivePlanning, Query *origina
 			distributedPlan =
 				CreateModifyPlan(originalQuery, query, plannerRestrictionContext);
 		}
-
-		/* the functions above always return a plan, possibly with an error */
-		Assert(distributedPlan);
 	}
 	else
 	{
@@ -960,6 +957,9 @@ CreateDistributedPlan(uint64 planId, bool allowRecursivePlanning, Query *origina
 		distributedPlan = CreateRouterPlan(originalQuery, query,
 										   plannerRestrictionContext);
 	}
+
+	/* the functions above always return a plan, possibly with an error */
+	Assert(distributedPlan);
 
 	if (distributedPlan->planningError == NULL)
 	{
