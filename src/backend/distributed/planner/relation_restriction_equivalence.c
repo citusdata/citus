@@ -153,6 +153,7 @@ static Var * PartitionKeyForRTEIdentityInQuery(Query *query, int targetRTEIndex,
 											   Index *partitionKeyIndex);
 static bool AllRelationsInRestrictionContextColocated(RelationRestrictionContext *
 													  restrictionContext);
+static bool AllRelationsInListColocated(List *relationList);
 static bool IsNotSafeRestrictionToRecursivelyPlan(Node *node);
 static JoinRestrictionContext * FilterJoinRestrictionContext(
 	JoinRestrictionContext *joinRestrictionContext, Relids
@@ -703,8 +704,8 @@ EquivalenceListContainsRelationsEquality(List *attributeEquivalenceList,
 		int rteIdentity = GetRTEIdentity(relationRestriction->rte);
 
 		/* we shouldn't check for the equality of non-distributed tables */
-		if (IsCitusTableType(relationRestriction->relationId,
-							 CITUS_TABLE_WITH_NO_DIST_KEY))
+		if (IsCitusTable(relationRestriction->relationId) &&
+			!HasDistributionKey(relationRestriction->relationId))
 		{
 			continue;
 		}
@@ -1926,14 +1927,50 @@ static bool
 AllRelationsInRestrictionContextColocated(RelationRestrictionContext *restrictionContext)
 {
 	RelationRestriction *relationRestriction = NULL;
-	int initialColocationId = INVALID_COLOCATION_ID;
+	List *relationIdList = NIL;
 
 	/* check whether all relations exists in the main restriction list */
 	foreach_ptr(relationRestriction, restrictionContext->relationRestrictionList)
 	{
-		Oid relationId = relationRestriction->relationId;
+		relationIdList = lappend_oid(relationIdList, relationRestriction->relationId);
+	}
 
-		if (IsCitusTableType(relationId, CITUS_TABLE_WITH_NO_DIST_KEY))
+	return AllRelationsInListColocated(relationIdList);
+}
+
+
+/*
+ * AllRelationsInRTEListColocated determines whether all of the relations in the
+ * given RangeTableEntry list are co-located.
+ */
+bool
+AllRelationsInRTEListColocated(List *rangeTableEntryList)
+{
+	RangeTblEntry *rangeTableEntry = NULL;
+	List *relationIdList = NIL;
+
+	foreach_ptr(rangeTableEntry, rangeTableEntryList)
+	{
+		relationIdList = lappend_oid(relationIdList, rangeTableEntry->relid);
+	}
+
+	return AllRelationsInListColocated(relationIdList);
+}
+
+
+/*
+ * AllRelationsInListColocated determines whether all of the relations in the
+ * given list are co-located.
+ */
+static bool
+AllRelationsInListColocated(List *relationList)
+{
+	int initialColocationId = INVALID_COLOCATION_ID;
+	Oid relationId = InvalidOid;
+
+	foreach_oid(relationId, relationList)
+	{
+		if (IsCitusTable(relationId) && !HasDistributionKey(relationId))
 		{
 			continue;
 		}

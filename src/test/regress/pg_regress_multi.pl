@@ -49,6 +49,7 @@ sub Usage()
     print "  --pg_ctl-timeout    	Timeout for pg_ctl\n";
     print "  --connection-timeout	Timeout for connecting to worker nodes\n";
     print "  --mitmproxy        	Start a mitmproxy for one of the workers\n";
+    print "  --worker-count         Number of workers in Citus cluster (default: 2)\n";
     exit 1;
 }
 
@@ -84,6 +85,7 @@ my $mitmFifoPath = catfile($TMP_CHECKDIR, "mitmproxy.fifo");
 my $conninfo = "";
 my $publicWorker1Host = "localhost";
 my $publicWorker2Host = "localhost";
+my $workerCount = 2;
 
 my $serversAreShutdown = "TRUE";
 my $usingWindows = 0;
@@ -116,6 +118,7 @@ GetOptions(
     'conninfo=s' => \$conninfo,
     'worker-1-public-hostname=s' => \$publicWorker1Host,
     'worker-2-public-hostname=s' => \$publicWorker2Host,
+    'worker-count=i' => \$workerCount,
     'help' => sub { Usage() });
 
 my $fixopen = "$bindir/postgres.fixopen";
@@ -318,7 +321,6 @@ my $mitmPort = 9060;
 # Set some default configuration options
 my $masterPort = 57636;
 
-my $workerCount = 2;
 my @workerHosts = ();
 my @workerPorts = ();
 

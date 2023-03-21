@@ -15,6 +15,16 @@ import common
 
 import config
 
+
+# Returns true if given test_schedule_line is of the form:
+#   "test: upgrade_ ... _after .."
+def schedule_line_is_upgrade_after(test_schedule_line: str) -> bool:
+    return (
+        test_schedule_line.startswith("test: upgrade_")
+        and "_after" in test_schedule_line
+    )
+
+
 if __name__ == "__main__":
     args = argparse.ArgumentParser()
     args.add_argument(
@@ -63,10 +73,11 @@ if __name__ == "__main__":
         schedule: Optional[str]
         direct_extra_tests: list[str]
 
-        def __init__(self, schedule, extra_tests=None, repeatable=True):
+        def __init__(self, schedule, extra_tests=None, repeatable=True, worker_count=2):
             self.schedule = schedule
             self.direct_extra_tests = extra_tests or []
             self.repeatable = repeatable
+            self.worker_count = worker_count
 
         def extra_tests(self):
             all_deps = OrderedDict()
@@ -170,8 +181,22 @@ if __name__ == "__main__":
             return "base_schedule"
         return "minimal_schedule"
 
+    # we run the tests with 2 workers by default.
+    # If we find any dependency which requires more workers, we update the worker count.
+    def worker_count_for(test_name):
+        if test_name in deps:
+            return deps[test_name].worker_count
+        return 2
+
+    test_worker_count = max(worker_count_for(test_file_name), 2)
+
     if test_file_name in deps:
         dependencies = deps[test_file_name]
+    elif schedule_line_is_upgrade_after(test_schedule_line):
+        dependencies = TestDeps(
+            default_base_schedule(test_schedule),
+            [test_file_name.replace("_after", "_before")],
+        )
     else:
         dependencies = TestDeps(default_base_schedule(test_schedule))
 
@@ -189,6 +214,7 @@ if __name__ == "__main__":
     with open(tmp_schedule_path, "a") as myfile:
         for dependency in dependencies.extra_tests():
             myfile.write(f"test: {dependency}\n")
+            test_worker_count = max(worker_count_for(dependency), test_worker_count)
 
         repetition_cnt = args["repeat"]
         if repetition_cnt > 1 and not dependencies.repeatable:
@@ -209,7 +235,11 @@ if __name__ == "__main__":
         make_recipe += "-vg"
 
     # prepare command to run tests
-    test_command = f"make -C {regress_dir} {make_recipe} SCHEDULE='{pathlib.Path(tmp_schedule_path).stem}'"
+    test_command = (
+        f"make -C {regress_dir} {make_recipe} "
+        f"WORKERCOUNT={test_worker_count} "
+        f"SCHEDULE='{pathlib.Path(tmp_schedule_path).stem}'"
+    )
 
     # run test command n times
     try:

@@ -1,5 +1,29 @@
 -- Test if relying on topological sort of the objects, not their names, works
 -- fine when re-creating objects during pg_upgrade.
+
+DO
+$$
+BEGIN
+IF EXISTS (SELECT * FROM pg_namespace WHERE nspname = 'upgrade_columnar')
+THEN
+    -- Drop the the table leftover from the earlier run of
+    -- upgrade_columnar_before.sql. Similarly, drop the fake public schema
+    -- created before and rename the original one (renamed to citus_schema)
+    -- back to public.
+    --
+    -- This can only happen if upgrade_columnar_before.sql is run multiple
+    -- times for flaky test detection.
+    DROP TABLE citus_schema.new_columnar_table;
+    DROP SCHEMA public CASCADE;
+    ALTER SCHEMA citus_schema RENAME TO public;
+
+    SET LOCAL client_min_messages TO WARNING;
+    DROP SCHEMA upgrade_columnar CASCADE;
+END IF;
+END
+$$
+LANGUAGE plpgsql;
+
 ALTER SCHEMA public RENAME TO citus_schema;
 SET search_path TO citus_schema;
 

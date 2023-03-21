@@ -311,7 +311,7 @@ static void InvalidateDistTableCache(void);
 static void InvalidateDistObjectCache(void);
 static bool InitializeTableCacheEntry(int64 shardId, bool missingOk);
 static bool IsCitusTableTypeInternal(char partitionMethod, char replicationModel,
-									 CitusTableType tableType);
+									 uint32 colocationId, CitusTableType tableType);
 static bool RefreshTableCacheEntryIfInvalid(ShardIdCacheEntry *shardEntry, bool
 											missingOk);
 
@@ -450,7 +450,36 @@ bool
 IsCitusTableTypeCacheEntry(CitusTableCacheEntry *tableEntry, CitusTableType tableType)
 {
 	return IsCitusTableTypeInternal(tableEntry->partitionMethod,
-									tableEntry->replicationModel, tableType);
+									tableEntry->replicationModel,
+									tableEntry->colocationId, tableType);
+}
+
+
+/*
+ * HasDistributionKey returs true if given Citus table doesn't have a
+ * distribution key.
+ */
+bool
+HasDistributionKey(Oid relationId)
+{
+	CitusTableCacheEntry *tableEntry = LookupCitusTableCacheEntry(relationId);
+	if (tableEntry == NULL)
+	{
+		ereport(ERROR, (errmsg("relation with oid %u is not a Citus table", relationId)));
+	}
+
+	return HasDistributionKeyCacheEntry(tableEntry);
+}
+
+
+/*
+ * HasDistributionKey returs true if given cache entry identifies a Citus
+ * table that doesn't have a distribution key.
+ */
+bool
+HasDistributionKeyCacheEntry(CitusTableCacheEntry *tableEntry)
+{
+	return tableEntry->partitionMethod != DISTRIBUTE_BY_NONE;
 }
 
 
@@ -460,7 +489,7 @@ IsCitusTableTypeCacheEntry(CitusTableCacheEntry *tableEntry, CitusTableType tabl
  */
 static bool
 IsCitusTableTypeInternal(char partitionMethod, char replicationModel,
-						 CitusTableType tableType)
+						 uint32 colocationId, CitusTableType tableType)
 {
 	switch (tableType)
 	{
@@ -501,12 +530,8 @@ IsCitusTableTypeInternal(char partitionMethod, char replicationModel,
 		case CITUS_LOCAL_TABLE:
 		{
 			return partitionMethod == DISTRIBUTE_BY_NONE &&
-				   replicationModel != REPLICATION_MODEL_2PC;
-		}
-
-		case CITUS_TABLE_WITH_NO_DIST_KEY:
-		{
-			return partitionMethod == DISTRIBUTE_BY_NONE;
+				   replicationModel != REPLICATION_MODEL_2PC &&
+				   colocationId == INVALID_COLOCATION_ID;
 		}
 
 		case ANY_CITUS_TABLE_TYPE:
@@ -529,33 +554,21 @@ IsCitusTableTypeInternal(char partitionMethod, char replicationModel,
 char *
 GetTableTypeName(Oid tableId)
 {
-	bool regularTable = false;
-	char partitionMethod = ' ';
-	char replicationModel = ' ';
-	if (IsCitusTable(tableId))
-	{
-		CitusTableCacheEntry *referencingCacheEntry = GetCitusTableCacheEntry(tableId);
-		partitionMethod = referencingCacheEntry->partitionMethod;
-		replicationModel = referencingCacheEntry->replicationModel;
-	}
-	else
-	{
-		regularTable = true;
-	}
-
-	if (regularTable)
+	if (!IsCitusTable(tableId))
 	{
 		return "regular table";
 	}
-	else if (partitionMethod == 'h')
+
+	CitusTableCacheEntry *tableCacheEntry = GetCitusTableCacheEntry(tableId);
+	if (IsCitusTableTypeCacheEntry(tableCacheEntry, HASH_DISTRIBUTED))
 	{
 		return "distributed table";
 	}
-	else if (partitionMethod == 'n' && replicationModel == 't')
+	else if (IsCitusTableTypeCacheEntry(tableCacheEntry, REFERENCE_TABLE))
 	{
 		return "reference table";
 	}
-	else if (partitionMethod == 'n' && replicationModel != 't')
+	else if (IsCitusTableTypeCacheEntry(tableCacheEntry, CITUS_LOCAL_TABLE))
 	{
 		return "citus local table";
 	}
@@ -765,14 +778,28 @@ PgDistPartitionTupleViaCatalog(Oid relationId)
 
 
 /*
- * IsCitusLocalTableByDistParams returns true if given partitionMethod and
- * replicationModel would identify a citus local table.
+ * IsReferenceTableByDistParams returns true if given partitionMethod and
+ * replicationModel would identify a reference table.
  */
 bool
-IsCitusLocalTableByDistParams(char partitionMethod, char replicationModel)
+IsReferenceTableByDistParams(char partitionMethod, char replicationModel)
 {
 	return partitionMethod == DISTRIBUTE_BY_NONE &&
-		   replicationModel != REPLICATION_MODEL_2PC;
+		   replicationModel == REPLICATION_MODEL_2PC;
+}
+
+
+/*
+ * IsCitusLocalTableByDistParams returns true if given partitionMethod,
+ * replicationModel and colocationId would identify a citus local table.
+ */
+bool
+IsCitusLocalTableByDistParams(char partitionMethod, char replicationModel,
+							  uint32 colocationId)
+{
+	return partitionMethod == DISTRIBUTE_BY_NONE &&
+		   replicationModel != REPLICATION_MODEL_2PC &&
+		   colocationId == INVALID_COLOCATION_ID;
 }
 
 
@@ -4837,11 +4864,14 @@ CitusTableTypeIdList(CitusTableType citusTableType)
 
 		Datum partMethodDatum = datumArray[Anum_pg_dist_partition_partmethod - 1];
 		Datum replicationModelDatum = datumArray[Anum_pg_dist_partition_repmodel - 1];
+		Datum colocationIdDatum = datumArray[Anum_pg_dist_partition_colocationid - 1];
 
 		Oid partitionMethod = DatumGetChar(partMethodDatum);
 		Oid replicationModel = DatumGetChar(replicationModelDatum);
+		uint32 colocationId = DatumGetUInt32(colocationIdDatum);
 
-		if (IsCitusTableTypeInternal(partitionMethod, replicationModel, citusTableType))
+		if (IsCitusTableTypeInternal(partitionMethod, replicationModel, colocationId,
+									 citusTableType))
 		{
 			Datum relationIdDatum = datumArray[Anum_pg_dist_partition_logicalrelid - 1];
 
