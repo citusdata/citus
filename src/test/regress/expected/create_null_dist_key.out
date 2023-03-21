@@ -670,9 +670,18 @@ SELECT create_distributed_table('sensors_2004', NULL, distribution_type=>null, c
 (1 row)
 
 ALTER TABLE sensors ATTACH PARTITION sensors_2004 FOR VALUES FROM ('2004-01-01') TO ('2005-01-01');
+-- verify we can attach a citus local table
+CREATE TABLE sensors_2005 (measureid integer, eventdatetime date, measure_data jsonb, PRIMARY KEY (measureid, eventdatetime, measure_data));
+SELECT citus_add_local_table_to_metadata('sensors_2005');
+ citus_add_local_table_to_metadata
+---------------------------------------------------------------------
+
+(1 row)
+
+ALTER TABLE sensors ATTACH PARTITION sensors_2005 FOR VALUES FROM ('2005-01-01') TO ('2006-01-01');
 -- check metadata
 -- check all partitions and the parent on pg_dist_partition
-SELECT logicalrelid::text FROM pg_dist_partition WHERE logicalrelid::text IN ('sensors', 'sensors_2000', 'sensors_2001', 'sensors_2002', 'sensors_2004') ORDER BY logicalrelid::text;
+SELECT logicalrelid::text FROM pg_dist_partition WHERE logicalrelid::text IN ('sensors', 'sensors_2000', 'sensors_2001', 'sensors_2002', 'sensors_2004', 'sensors_2005') ORDER BY logicalrelid::text;
  logicalrelid
 ---------------------------------------------------------------------
  sensors
@@ -680,10 +689,11 @@ SELECT logicalrelid::text FROM pg_dist_partition WHERE logicalrelid::text IN ('s
  sensors_2001
  sensors_2002
  sensors_2004
-(5 rows)
+ sensors_2005
+(6 rows)
 
 -- verify they are all colocated
-SELECT COUNT(DISTINCT(colocationid)) FROM pg_dist_partition WHERE logicalrelid::text IN ('sensors', 'sensors_2000', 'sensors_2001', 'sensors_2002', 'sensors_2004');
+SELECT COUNT(DISTINCT(colocationid)) FROM pg_dist_partition WHERE logicalrelid::text IN ('sensors', 'sensors_2000', 'sensors_2001', 'sensors_2002', 'sensors_2004', 'sensors_2005');
  count
 ---------------------------------------------------------------------
      1
@@ -691,7 +701,7 @@ SELECT COUNT(DISTINCT(colocationid)) FROM pg_dist_partition WHERE logicalrelid::
 
 -- verify all partitions are placed on the same node
 SELECT COUNT(DISTINCT(groupid)) FROM pg_dist_placement WHERE shardid IN
-    (SELECT shardid FROM pg_dist_shard WHERE logicalrelid::text IN ('sensors', 'sensors_2000', 'sensors_2001', 'sensors_2002', 'sensors_2004'));
+    (SELECT shardid FROM pg_dist_shard WHERE logicalrelid::text IN ('sensors', 'sensors_2000', 'sensors_2001', 'sensors_2002', 'sensors_2004', 'sensors_2005'));
  count
 ---------------------------------------------------------------------
      1
@@ -842,7 +852,7 @@ BEGIN;
   INSERT INTO referencing_table VALUES (1, 2);
   -- fails
   INSERT INTO referencing_table VALUES (2, 2);
-ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_fkey_1730053"
+ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_fkey_1730055"
 DETAIL:  Key (a)=(2) is not present in table "referenced_table_xxxxxxx".
 CONTEXT:  while executing command on localhost:xxxxx
 ROLLBACK;
@@ -888,7 +898,7 @@ BEGIN;
   INSERT INTO referencing_table VALUES (1, 2);
   -- fails
   INSERT INTO referencing_table VALUES (2, 2);
-ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_fkey_1730089"
+ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_fkey_1730091"
 DETAIL:  Key (a)=(2) is not present in table "referenced_table_xxxxxxx".
 CONTEXT:  while executing command on localhost:xxxxx
 ROLLBACK;
@@ -1006,8 +1016,8 @@ SELECT result, success FROM run_command_on_workers($$
 $$);
                                                               result                                                              | success
 ---------------------------------------------------------------------
- ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_fkey_1730106" | f
- ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_fkey_1730106" | f
+ ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_fkey_1730108" | f
+ ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_fkey_1730108" | f
 (2 rows)
 
 DROP TABLE referencing_table, referenced_table;
@@ -1022,8 +1032,8 @@ SELECT create_distributed_table('self_fkey_test', NULL, distribution_type=>null)
 
 INSERT INTO self_fkey_test VALUES (1, 1); -- ok
 INSERT INTO self_fkey_test VALUES (2, 3); -- fails
-ERROR:  insert or update on table "self_fkey_test_1730107" violates foreign key constraint "self_fkey_test_b_fkey_1730107"
-DETAIL:  Key (b)=(3) is not present in table "self_fkey_test_1730107".
+ERROR:  insert or update on table "self_fkey_test_1730109" violates foreign key constraint "self_fkey_test_b_fkey_1730109"
+DETAIL:  Key (b)=(3) is not present in table "self_fkey_test_1730109".
 CONTEXT:  while executing command on localhost:xxxxx
 -- similar foreign key tests but this time create the referencing table later on
 -- referencing table is a null shard key table
@@ -1047,7 +1057,7 @@ BEGIN;
   INSERT INTO referencing_table VALUES (1, 2);
   -- fails
   INSERT INTO referencing_table VALUES (2, 2);
-ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_fkey_1730109"
+ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_fkey_1730111"
 DETAIL:  Key (a)=(2) is not present in table "referenced_table_xxxxxxx".
 CONTEXT:  while executing command on localhost:xxxxx
 ROLLBACK;
@@ -1070,7 +1080,7 @@ BEGIN;
   INSERT INTO referencing_table VALUES (2, 1);
   -- fails
   INSERT INTO referencing_table VALUES (1, 2);
-ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_b_fkey_1730111"
+ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_b_fkey_1730113"
 DETAIL:  Key (a, b)=(1, 2) is not present in table "referenced_table_xxxxxxx".
 CONTEXT:  while executing command on localhost:xxxxx
 ROLLBACK;
@@ -1159,7 +1169,7 @@ BEGIN;
   INSERT INTO referencing_table VALUES (1, 2);
   -- fails
   INSERT INTO referencing_table VALUES (2, 2);
-ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_fkey_1730150"
+ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_fkey_1730152"
 DETAIL:  Key (a)=(2) is not present in table "referenced_table_xxxxxxx".
 CONTEXT:  while executing command on localhost:xxxxx
 ROLLBACK;

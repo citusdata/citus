@@ -537,11 +537,6 @@ PreprocessAttachPartitionToCitusTable(Oid parentRelationId, Oid partitionRelatio
 			CreateCitusLocalTable(partitionRelationId, cascadeViaForeignKeys,
 								  autoConverted);
 		}
-		else if (IsCitusTableType(parentRelationId, NULL_KEY_DISTRIBUTED_TABLE))
-		{
-			char *parentName = generate_qualified_relation_name(parentRelationId);
-			CreateNullShardKeyDistTable(partitionRelationId, parentName);
-		}
 		else if (IsCitusTableType(parentRelationId, DISTRIBUTED_TABLE))
 		{
 			DistributePartitionUsingParent(parentRelationId, partitionRelationId);
@@ -609,16 +604,29 @@ PreprocessAttachCitusPartitionToCitusTable(Oid parentCitusRelationId, Oid
  * distributes the partition, using the same distribution column as the parent.
  * It creates a *hash* distributed table by default, as partitioned tables can only be
  * distributed by hash.
+ *
+ * If the parent has no distribution key, we distribute the partition with null key too.
  */
 static void
 DistributePartitionUsingParent(Oid parentCitusRelationId, Oid partitionRelationId)
 {
+	char *parentRelationName = generate_qualified_relation_name(parentCitusRelationId);
+
+	if (!HasDistributionKey(parentCitusRelationId))
+	{
+		/*
+		* If the parent is null key distributed, we should distribute the partition
+		* with null distribution key as well.
+		*/
+		CreateNullShardKeyDistTable(partitionRelationId, parentRelationName);
+		return;
+	}
+
 	Var *distributionColumn = DistPartitionKeyOrError(parentCitusRelationId);
 	char *distributionColumnName = ColumnToColumnName(parentCitusRelationId,
 													  (Node *) distributionColumn);
 
 	char distributionMethod = DISTRIBUTE_BY_HASH;
-	char *parentRelationName = generate_qualified_relation_name(parentCitusRelationId);
 
 	SwitchToSequentialAndLocalExecutionIfPartitionNameTooLong(
 		parentCitusRelationId, partitionRelationId);
