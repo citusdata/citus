@@ -700,6 +700,8 @@ ExtractTopComment(const char *inputString)
 
 	/* Skip the comment start characters */
 	commentEndCharsIndex += commentStartCharsLength;
+	
+	/* Find the first comment end character */
 	while (commentEndCharsIndex < inputStringLen &&
 		   !(inputString[commentEndCharsIndex] == '*' &&
 			 inputString [commentEndCharsIndex + 1] == '/'))
