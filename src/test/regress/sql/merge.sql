@@ -1945,6 +1945,7 @@ UPDATE SET val = dist_source.val
 WHEN NOT MATCHED THEN
 INSERT VALUES(dist_source.id, dist_source.val);
 
+SET client_min_messages TO WARNING;
 DROP SERVER foreign_server CASCADE;
 DROP FUNCTION merge_when_and_write();
 DROP SCHEMA merge_schema CASCADE;
