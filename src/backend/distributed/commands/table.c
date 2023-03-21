@@ -384,6 +384,11 @@ PostprocessCreateTableStmtPartitionOf(CreateStmt *createStatement, const
 	 */
 	if (IsCitusTable(parentRelationId))
 	{
+		/*
+		 * We can create Citus local tables and distributed tables with null shard keys
+		 * right away, without switching to sequential mode, because they are going to
+		 * have only one shard.
+		 */
 		if (IsCitusTableType(parentRelationId, CITUS_LOCAL_TABLE))
 		{
 			CreateCitusLocalTablePartitionOf(createStatement, relationId,
@@ -391,11 +396,18 @@ PostprocessCreateTableStmtPartitionOf(CreateStmt *createStatement, const
 			return;
 		}
 
+		char *parentRelationName = generate_qualified_relation_name(parentRelationId);
+
+		if (IsCitusTableType(parentRelationId, NULL_KEY_DISTRIBUTED_TABLE))
+		{
+			CreateNullShardKeyDistTable(relationId, parentRelationName);
+			return;
+		}
+
 		Var *parentDistributionColumn = DistPartitionKeyOrError(parentRelationId);
 		char *distributionColumnName =
 			ColumnToColumnName(parentRelationId, (Node *) parentDistributionColumn);
 		char parentDistributionMethod = DISTRIBUTE_BY_HASH;
-		char *parentRelationName = generate_qualified_relation_name(parentRelationId);
 
 		SwitchToSequentialAndLocalExecutionIfPartitionNameTooLong(parentRelationId,
 																  relationId);
@@ -524,6 +536,11 @@ PreprocessAttachPartitionToCitusTable(Oid parentRelationId, Oid partitionRelatio
 			bool autoConverted = entry->autoConverted;
 			CreateCitusLocalTable(partitionRelationId, cascadeViaForeignKeys,
 								  autoConverted);
+		}
+		else if (IsCitusTableType(parentRelationId, NULL_KEY_DISTRIBUTED_TABLE))
+		{
+			char *parentName = generate_qualified_relation_name(parentRelationId);
+			CreateNullShardKeyDistTable(partitionRelationId, parentName);
 		}
 		else if (IsCitusTableType(parentRelationId, DISTRIBUTED_TABLE))
 		{
