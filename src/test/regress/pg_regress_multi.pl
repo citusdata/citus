@@ -49,7 +49,7 @@ sub Usage()
     print "  --pg_ctl-timeout    	Timeout for pg_ctl\n";
     print "  --connection-timeout	Timeout for connecting to worker nodes\n";
     print "  --mitmproxy        	Start a mitmproxy for one of the workers\n";
-    print "  --workercount         number of Worker nodes to be created (dafault:2)\n";
+    print "  --worker-count         Number of workers in Citus cluster (default: 2)\n";
     exit 1;
 }
 
@@ -85,6 +85,7 @@ my $mitmFifoPath = catfile($TMP_CHECKDIR, "mitmproxy.fifo");
 my $conninfo = "";
 my $publicWorker1Host = "localhost";
 my $publicWorker2Host = "localhost";
+my $workerCount = 2;
 
 my $serversAreShutdown = "TRUE";
 my $usingWindows = 0;

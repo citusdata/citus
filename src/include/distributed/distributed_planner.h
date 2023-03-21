@@ -255,6 +255,4 @@ extern struct DistributedPlan * CreateDistributedPlan(uint64 planId,
 													  PlannerRestrictionContext *
 													  plannerRestrictionContext);
 
-extern bool IsMergeAllowedOnRelation(Query *parse, RangeTblEntry *rte);
-
 #endif /* DISTRIBUTED_PLANNER_H */
