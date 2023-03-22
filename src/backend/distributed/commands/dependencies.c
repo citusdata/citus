@@ -29,13 +29,10 @@
 #include "storage/lmgr.h"
 #include "utils/lsyscache.h"
 
-typedef bool (*AddressPredicate)(const ObjectAddress *);
 
 static void EnsureDependenciesCanBeDistributed(const ObjectAddress *relationAddress);
 static void ErrorIfCircularDependencyExists(const ObjectAddress *objectAddress);
 static int ObjectAddressComparator(const void *a, const void *b);
-static List * FilterObjectAddressListByPredicate(List *objectAddressList,
-												 AddressPredicate predicate);
 static void EnsureDependenciesExistOnAllNodes(const ObjectAddress *target);
 static List * GetDependencyCreateDDLCommands(const ObjectAddress *dependency);
 static bool ShouldPropagateObject(const ObjectAddress *address);
@@ -749,7 +746,7 @@ ShouldPropagateAnyObject(List *addresses)
  * FilterObjectAddressListByPredicate takes a list of ObjectAddress *'s and returns a list
  * only containing the ObjectAddress *'s for which the predicate returned true.
  */
-static List *
+List *
 FilterObjectAddressListByPredicate(List *objectAddressList, AddressPredicate predicate)
 {
 	List *result = NIL;

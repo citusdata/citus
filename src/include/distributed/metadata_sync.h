@@ -36,7 +36,7 @@ extern int MetadataSyncTransMode;
 typedef struct MetadataSyncContext
 {
 	List *activatedWorkerNodeList; /* activated worker nodes */
-	List *activatedWorkerConnections; /* connections to activated worker nodes */
+	List *activatedWorkerBareConnections; /* bare connections to activated worker nodes */
 	MemoryContext context; /* memory context for all allocations */
 	MetadataSyncTransactionMode transactionMode; /* transaction mode for the sync */
 	bool collectCommands; /* flag to collect commands instead of sending and resetting */
@@ -81,6 +81,8 @@ extern char * LocalGroupIdUpdateCommand(int32 groupId);
 extern bool ShouldSyncUserCommandForObject(ObjectAddress objectAddress);
 extern bool ShouldSyncTableMetadata(Oid relationId);
 extern bool ShouldSyncTableMetadataViaCatalog(Oid relationId);
+extern Oid FetchRelationIdFromPgPartitionHeapTuple(HeapTuple heapTuple,
+												   TupleDesc tupleDesc);
 extern bool ShouldSyncSequenceMetadata(Oid relationId);
 extern List * NodeMetadataCreateCommands(void);
 extern List * DistributedObjectMetadataSyncCommandList(void);
@@ -140,8 +142,6 @@ extern void SyncDeleteColocationGroupToNodes(uint32 colocationId);
 extern MetadataSyncContext * CreateMetadataSyncContext(List *nodeList, bool testMode);
 extern void DestroyMetadataSyncContext(MetadataSyncContext *context);
 extern void EstablishAndSetMetadataSyncBareConnections(MetadataSyncContext *context);
-extern void EstablishAndSetMetadataSyncCoordinatedConnections(
-	MetadataSyncContext *context);
 extern void SetMetadataSyncNodesFromNodeList(MetadataSyncContext *context,
 											 List *nodeList);
 extern void ResetMetadataSyncMemoryContext(MetadataSyncContext *context);
@@ -154,6 +154,16 @@ extern void SendOrCollectCommandListToSingleNode(MetadataSyncContext *context,
 												 List *commands, int nodeIdx);
 
 extern char * WorkerDropAllShellTablesCommand(bool singleTransaction);
+
+extern void SyncDistributedObjects(MetadataSyncContext *context);
+extern void SendNodeWideObjectsSyncCommands(MetadataSyncContext *context);
+extern void SendShellTableDeletionCommands(MetadataSyncContext *context);
+extern void SendMetadataDeletionCommands(MetadataSyncContext *context);
+extern void SendColocationMetadataCommands(MetadataSyncContext *context);
+extern void SendDependencyCreationCommands(MetadataSyncContext *context);
+extern void SendDistTableMetadataCommands(MetadataSyncContext *context);
+extern void SendDistObjectCommands(MetadataSyncContext *context);
+extern void SendInterTableRelationshipCommands(MetadataSyncContext *context);
 
 #define DELETE_ALL_NODES "DELETE FROM pg_dist_node"
 #define DELETE_ALL_PLACEMENTS "DELETE FROM pg_dist_placement"
