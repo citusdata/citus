@@ -1,0 +1,13 @@
+ALTER FUNCTION create_distributed_table RENAME TO create_distributed_table_internal;
+CREATE OR REPLACE FUNCTION pg_catalog.create_distributed_table(table_name regclass,
+                                                               distribution_column text,
+                                                               distribution_type citus.distribution_type DEFAULT 'hash',
+                                                               colocate_with text DEFAULT 'default',
+                                                               shard_count int DEFAULT NULL)
+RETURNS void
+LANGUAGE plpgsql
+AS $function$
+BEGIN
+    PERFORM create_distributed_table_internal(table_name, NULL, NULL, colocate_with, NULL);
+END;
+$function$;
