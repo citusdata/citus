@@ -42,6 +42,14 @@
 /* application name used for connections made by run_command_on_* */
 #define CITUS_RUN_COMMAND_APPLICATION_NAME_PREFIX "citus_run_command gpid="
 
+/*
+ * application name prefix for move/split replication connections.
+ *
+ * This application_name is set to the subscription name by logical replication
+ * workers, so there is no GPID.
+ */
+#define CITUS_SHARD_TRANSFER_APPLICATION_NAME_PREFIX "citus_shard_"
+
 /* deal with waiteventset errors */
 #define WAIT_EVENT_SET_INDEX_NOT_INITIALIZED -1
 #define WAIT_EVENT_SET_INDEX_FAILED -2
