@@ -76,6 +76,17 @@ def run_for_config(config, lock, sql_schedule_name):
             cfg.SUPER_USER_NAME,
         )
         common.save_regression_diff("postgres", config.output_dir)
+    elif config.all_null_dist_key:
+        exitCode |= common.run_pg_regress_without_exit(
+            config.bindir,
+            config.pg_srcdir,
+            config.coordinator_port(),
+            cfg.NULL_DIST_KEY_PREP_SCHEDULE,
+            config.output_dir,
+            config.input_dir,
+            cfg.SUPER_USER_NAME,
+        )
+        common.save_regression_diff("null_dist_key_prep_regression", config.output_dir)
 
     exitCode |= _run_pg_regress_on_port(
         config, config.coordinator_port(), cfg.CREATE_SCHEDULE
