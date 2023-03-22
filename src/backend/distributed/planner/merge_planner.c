@@ -229,7 +229,7 @@ ErrorIfDistTablesNotColocated(Query *parse, List *distTablesList,
 	}
 
 	/* All distributed tables must be colocated */
-	if (!AllRelationsInRTEListColocated(distTablesList))
+	if (!AllDistributedRelationsInRTEListColocated(distTablesList))
 	{
 		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
 							 "For MERGE command, all the distributed tables "

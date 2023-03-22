@@ -151,9 +151,10 @@ static void ListConcatUniqueAttributeClassMemberLists(AttributeEquivalenceClass 
 													  secondClass);
 static Var * PartitionKeyForRTEIdentityInQuery(Query *query, int targetRTEIndex,
 											   Index *partitionKeyIndex);
-static bool AllRelationsInRestrictionContextColocated(RelationRestrictionContext *
-													  restrictionContext);
-static bool AllRelationsInListColocated(List *relationList);
+static bool AllDistributedRelationsInRestrictionContextColocated(
+	RelationRestrictionContext *
+	restrictionContext);
+static bool AllDistributedRelationsInListColocated(List *relationList);
 static bool IsNotSafeRestrictionToRecursivelyPlan(Node *node);
 static JoinRestrictionContext * FilterJoinRestrictionContext(
 	JoinRestrictionContext *joinRestrictionContext, Relids
@@ -384,7 +385,7 @@ SafeToPushdownUnionSubquery(Query *originalQuery,
 		return false;
 	}
 
-	if (!AllRelationsInRestrictionContextColocated(restrictionContext))
+	if (!AllDistributedRelationsInRestrictionContextColocated(restrictionContext))
 	{
 		/* distribution columns are equal, but tables are not co-located */
 		return false;
@@ -1920,11 +1921,12 @@ FindQueryContainingRTEIdentityInternal(Node *node,
 
 
 /*
- * AllRelationsInRestrictionContextColocated determines whether all of the relations in the
- * given relation restrictions list are co-located.
+ * AllDistributedRelationsInRestrictionContextColocated determines whether all of the
+ * distributed  relations in the given relation restrictions list are co-located.
  */
 static bool
-AllRelationsInRestrictionContextColocated(RelationRestrictionContext *restrictionContext)
+AllDistributedRelationsInRestrictionContextColocated(
+	RelationRestrictionContext *restrictionContext)
 {
 	RelationRestriction *relationRestriction = NULL;
 	List *relationIdList = NIL;
@@ -1935,16 +1937,16 @@ AllRelationsInRestrictionContextColocated(RelationRestrictionContext *restrictio
 		relationIdList = lappend_oid(relationIdList, relationRestriction->relationId);
 	}
 
-	return AllRelationsInListColocated(relationIdList);
+	return AllDistributedRelationsInListColocated(relationIdList);
 }
 
 
 /*
- * AllRelationsInRTEListColocated determines whether all of the relations in the
- * given RangeTableEntry list are co-located.
+ * AllDistributedRelationsInRTEListColocated determines whether all of the
+ * distributed relations in the given RangeTableEntry list are co-located.
  */
 bool
-AllRelationsInRTEListColocated(List *rangeTableEntryList)
+AllDistributedRelationsInRTEListColocated(List *rangeTableEntryList)
 {
 	RangeTblEntry *rangeTableEntry = NULL;
 	List *relationIdList = NIL;
@@ -1954,24 +1956,31 @@ AllRelationsInRTEListColocated(List *rangeTableEntryList)
 		relationIdList = lappend_oid(relationIdList, rangeTableEntry->relid);
 	}
 
-	return AllRelationsInListColocated(relationIdList);
+	return AllDistributedRelationsInListColocated(relationIdList);
 }
 
 
 /*
- * AllRelationsInListColocated determines whether all of the relations in the
- * given list are co-located.
+ * AllDistributedRelationsInListColocated determines whether all of the
+ * distributed relations in the given list are co-located.
  */
 static bool
-AllRelationsInListColocated(List *relationList)
+AllDistributedRelationsInListColocated(List *relationList)
 {
 	int initialColocationId = INVALID_COLOCATION_ID;
 	Oid relationId = InvalidOid;
 
 	foreach_oid(relationId, relationList)
 	{
-		if (IsCitusTable(relationId) && !HasDistributionKey(relationId))
+		if (!IsCitusTable(relationId))
 		{
+			/* not interested in Postgres tables */
+			continue;
+		}
+
+		if (!IsCitusTableType(relationId, DISTRIBUTED_TABLE))
+		{
+			/* not interested in non-distributed tables */
 			continue;
 		}
 
