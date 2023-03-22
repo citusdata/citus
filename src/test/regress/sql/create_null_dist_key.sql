@@ -459,14 +459,19 @@ CREATE TABLE sensors_2004 (measureid integer, eventdatetime date, measure_data j
 SELECT create_distributed_table('sensors_2004', NULL, distribution_type=>null, colocate_with=>'sensors');
 ALTER TABLE sensors ATTACH PARTITION sensors_2004 FOR VALUES FROM ('2004-01-01') TO ('2005-01-01');
 
+-- verify we can attach a citus local table
+CREATE TABLE sensors_2005 (measureid integer, eventdatetime date, measure_data jsonb, PRIMARY KEY (measureid, eventdatetime, measure_data));
+SELECT citus_add_local_table_to_metadata('sensors_2005');
+ALTER TABLE sensors ATTACH PARTITION sensors_2005 FOR VALUES FROM ('2005-01-01') TO ('2006-01-01');
+
 -- check metadata
 -- check all partitions and the parent on pg_dist_partition
-SELECT logicalrelid::text FROM pg_dist_partition WHERE logicalrelid::text IN ('sensors', 'sensors_2000', 'sensors_2001', 'sensors_2002', 'sensors_2004') ORDER BY logicalrelid::text;
+SELECT logicalrelid::text FROM pg_dist_partition WHERE logicalrelid::text IN ('sensors', 'sensors_2000', 'sensors_2001', 'sensors_2002', 'sensors_2004', 'sensors_2005') ORDER BY logicalrelid::text;
 -- verify they are all colocated
-SELECT COUNT(DISTINCT(colocationid)) FROM pg_dist_partition WHERE logicalrelid::text IN ('sensors', 'sensors_2000', 'sensors_2001', 'sensors_2002', 'sensors_2004');
+SELECT COUNT(DISTINCT(colocationid)) FROM pg_dist_partition WHERE logicalrelid::text IN ('sensors', 'sensors_2000', 'sensors_2001', 'sensors_2002', 'sensors_2004', 'sensors_2005');
 -- verify all partitions are placed on the same node
 SELECT COUNT(DISTINCT(groupid)) FROM pg_dist_placement WHERE shardid IN
-    (SELECT shardid FROM pg_dist_shard WHERE logicalrelid::text IN ('sensors', 'sensors_2000', 'sensors_2001', 'sensors_2002', 'sensors_2004'));
+    (SELECT shardid FROM pg_dist_shard WHERE logicalrelid::text IN ('sensors', 'sensors_2000', 'sensors_2001', 'sensors_2002', 'sensors_2004', 'sensors_2005'));
 
 -- verify the shard of sensors_2000 is attached to the parent shard, on the worker node
 SELECT COUNT(*) FROM run_command_on_workers($$
@@ -482,6 +487,18 @@ SELECT COUNT(*) FROM run_command_on_workers($$
 SELECT COUNT(*) FROM run_command_on_workers($$
     SELECT relpartbound FROM pg_class WHERE relname LIKE 'sensors_2002_1______';$$)
     WHERE length(result) > 0;
+
+-- create a partitioned citus local table and verify we error out when attaching a partition with null dist key
+CREATE TABLE partitioned_citus_local_tbl(
+    measureid integer,
+    eventdatetime date,
+    measure_data jsonb,
+PRIMARY KEY (measureid, eventdatetime, measure_data))
+PARTITION BY RANGE(eventdatetime);
+SELECT citus_add_local_table_to_metadata('partitioned_citus_local_tbl');
+CREATE TABLE partition_with_null_key (measureid integer, eventdatetime date, measure_data jsonb, PRIMARY KEY (measureid, eventdatetime, measure_data));
+SELECT create_distributed_table('partition_with_null_key', NULL, distribution_type=>null);
+ALTER TABLE partitioned_citus_local_tbl ATTACH PARTITION partition_with_null_key FOR VALUES FROM ('2004-01-01') TO ('2005-01-01');
 
 CREATE TABLE multi_level_partitioning_parent(
     measureid integer,
