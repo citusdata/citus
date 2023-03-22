@@ -88,10 +88,11 @@ SELECT * FROM pg_dist_background_task_depend WHERE job_id = 17777 ORDER BY task_
   17777 | 1460001 |    1460000
   17777 | 1460002 |    1460001
   17777 | 1460003 |    1460002
+  17777 | 1460004 |    1460003
   17777 | 1460005 |    1460004
   17777 | 1460006 |    1460005
   17777 | 1460007 |    1460006
-(6 rows)
+(7 rows)
 
 /* Check that if there is a reference table that needs to be synched to a node, the first move scheduled in a colocation group takes a dependency on the
    replicate_reference_tables task */
@@ -157,7 +158,7 @@ SELECT * FROM pg_dist_background_task_depend WHERE job_id = 17778 ORDER BY task_
   17778 | 1460010 |    1460009
   17778 | 1460011 |    1460010
   17778 | 1460012 |    1460011
-  17778 | 1460013 |    1460008
+  17778 | 1460013 |    1460012
   17778 | 1460014 |    1460013
   17778 | 1460015 |    1460014
   17778 | 1460016 |    1460015
