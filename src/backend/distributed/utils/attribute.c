@@ -16,6 +16,7 @@
 #include "distributed/listutils.h"
 #include "distributed/jsonbutils.h"
 #include "distributed/tuplestore.h"
+#include "distributed/colocation_utils.h"
 #include "executor/execdesc.h"
 #include "storage/ipc.h"
 #include "storage/lwlock.h"
@@ -63,7 +64,6 @@ static int CreateTenantStats(MultiTenantMonitor *monitor);
 static int FindTenantStats(MultiTenantMonitor *monitor);
 static size_t MultiTenantMonitorshmemSize(void);
 static char * ExtractTopComment(const char *inputString);
-static char * Substring(const char *str, int start, int end);
 static char * EscapeCommentChars(const char *str);
 static char * UnescapeCommentChars(const char *str);
 
@@ -624,108 +624,82 @@ MultiTenantMonitorshmemSize(void)
 static char *
 ExtractTopComment(const char *inputString)
 {
-	int commentStartCharsLength = 2;
-	int inputStringLen = strlen(inputString);
-	if (inputStringLen < commentStartCharsLength)
-	{
-		return NULL;
-	}
+    int commentCharsLength = 2;
+    int inputStringLen = strlen(inputString);
+    if (inputStringLen < commentCharsLength)
+    {
+        return NULL;
+    }
 
-	int commentEndCharsIndex = 0;
+    const char *commentStartChars = "/*";
+    const char *commentEndChars = "*/";
 
-	/* If query starts with a comment */
-	if (inputString[commentEndCharsIndex] == '/' &&
-		inputString[commentEndCharsIndex + 1] == '*')
-	{
-		/* Skip the comment start characters */
-		commentEndCharsIndex += commentStartCharsLength;
-		while (inputString[commentEndCharsIndex] &&
-			   commentEndCharsIndex < inputStringLen &&
-			   !(inputString[commentEndCharsIndex] == '*' &&
-				 inputString [commentEndCharsIndex + 1] == '/'))
-		{
-			commentEndCharsIndex++;
-		}
-	}
+    /* If query doesn't start with a comment, return NULL */
+    if (strstr(inputString, commentStartChars) != inputString)
+    {
+        return NULL;
+    }
 
-	if (commentEndCharsIndex > commentStartCharsLength)
-	{
-		return Substring(inputString, commentStartCharsLength, commentEndCharsIndex);
-	}
-	else
-	{
-		return NULL;
-	}
+    StringInfo commentData = makeStringInfo();
+
+    /* Skip the comment start characters */
+    const char *commentStart = inputString + commentCharsLength;
+
+    /* Find the first comment end character */
+    const char *commentEnd = strstr(commentStart, commentEndChars);
+    if (commentEnd == NULL)
+    {
+        return NULL;
+    }
+
+    /* Append the comment to the StringInfo buffer */
+    int commentLength = commentEnd - commentStart;
+    appendStringInfo(commentData, "%.*s", commentLength, commentStart);
+
+    /* Return the extracted comment */
+    return commentData->data;
 }
-
-
-/* Extracts a substring from the input string between the specified start and end indices.*/
-static char *
-Substring(const char *str, int start, int end)
-{
-	int len = strlen(str);
-
-	/* Ensure start and end are within the bounds of the string */
-	if (start < 0 || end > len || start > end)
-	{
-		return NULL;
-	}
-
-	/* Allocate memory for the substring */
-	char *substr = (char *) palloc((end - start + 1) * sizeof(char));
-
-	/* Copy the substring to the new memory location */
-	strncpy_s(substr, end - start + 1, str + start, end - start);
-
-	/* Add null terminator to end the substring */
-	substr[end - start] = '\0';
-
-	return substr;
-}
-
 
 /*  EscapeCommentChars adds a backslash before each occurrence of '*' or '/' in the input string */
 static char *
 EscapeCommentChars(const char *str)
 {
-	int len = strlen(str);
-	char *new_str = (char *) malloc(len * 2 + 1);
-	int j = 0;
+	int originalStringLength = strlen(str);
+	StringInfo escapedString = makeStringInfo();
 
-	for (int i = 0; i < len; i++)
+	for (int originalStringIndex = 0; originalStringIndex < originalStringLength;
+		 originalStringIndex++)
 	{
-		if (str[i] == '*' || str[i] == '/')
+		if (str[originalStringIndex] == '*' || str[originalStringIndex] == '/')
 		{
-			new_str[j++] = '\\';
+			appendStringInfoChar(escapedString, '\\');
 		}
-		new_str[j++] = str[i];
-	}
-	new_str[j] = '\0';
 
-	return new_str;
+		appendStringInfoChar(escapedString, str[originalStringIndex]);
+ 	}
+
+	return escapedString->data;
 }
-
 
 /*  UnescapeCommentChars removes the backslash that precedes '*' or '/' in the input string. */
 static char *
 UnescapeCommentChars(const char *str)
 {
-	int len = strlen(str);
-	char *new_str = (char *) malloc(len + 1);
-	int j = 0;
+	int originalStringLength = strlen(str);
+	StringInfo unescapedString = makeStringInfo();
 
-	for (int i = 0; i < len; i++)
+	for (int originalStringindex = 0; originalStringindex < originalStringLength;
+		 originalStringindex++)
 	{
-		if (str[i] == '\\' && i < len - 1)
+		if (str[originalStringindex] == '\\' &&
+			originalStringindex < originalStringLength - 1 &&
+			(str[originalStringindex + 1] == '*' ||
+			 str[originalStringindex + 1] == '/'))
 		{
-			if (str[i + 1] == '*' || str[i + 1] == '/')
-			{
-				i++;
-			}
+			originalStringindex++;
 		}
-		new_str[j++] = str[i];
+		appendStringInfoChar(unescapedString, str[originalStringindex]);
 	}
-	new_str[j] = '\0';
 
-	return new_str;
+	return unescapedString->data;
 }
