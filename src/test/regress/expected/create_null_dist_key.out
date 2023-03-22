@@ -812,6 +812,51 @@ SELECT result FROM run_command_on_workers($$
  4
 (2 rows)
 
+-- foreign key to a ref table
+CREATE TABLE dummy_reference_table (a INT PRIMARY KEY);
+SELECT create_reference_table('dummy_reference_table');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+TRUNCATE "NULL_!_dist_key"."nullKeyTable.1!?!9012345678901234567890123456789012345678901234567890123456789";
+NOTICE:  identifier "nullKeyTable.1!?!9012345678901234567890123456789012345678901234567890123456789" will be truncated to "nullKeyTable.1!?!9012345678901234567890123456789012345678901234"
+ALTER TABLE "NULL_!_dist_key"."nullKeyTable.1!?!9012345678901234567890123456789012345678901234567890123456789"
+    ADD CONSTRAINT fkey_to_dummy_ref FOREIGN KEY (id) REFERENCES dummy_reference_table(a);
+NOTICE:  identifier "nullKeyTable.1!?!9012345678901234567890123456789012345678901234567890123456789" will be truncated to "nullKeyTable.1!?!9012345678901234567890123456789012345678901234"
+-- foreign key to a local table, errors out
+CREATE TABLE local_table_for_fkey (a INT PRIMARY KEY);
+ALTER TABLE "NULL_!_dist_key"."nullKeyTable.1!?!9012345678901234567890123456789012345678901234567890123456789"
+    ADD CONSTRAINT fkey_to_dummy_local FOREIGN KEY (id) REFERENCES local_table_for_fkey(a);
+NOTICE:  identifier "nullKeyTable.1!?!9012345678901234567890123456789012345678901234567890123456789" will be truncated to "nullKeyTable.1!?!9012345678901234567890123456789012345678901234"
+ERROR:  referenced table "local_table_for_fkey" must be a distributed table or a reference table
+DETAIL:  To enforce foreign keys, the referencing and referenced rows need to be stored on the same node.
+HINT:  You could use SELECT create_reference_table('local_table_for_fkey') to replicate the referenced table to all nodes or consider dropping the foreign key
+-- foreign key to a distributed table, errors out because not colocated
+CREATE TABLE dist_table_for_fkey (a INT PRIMARY KEY);
+SELECT create_distributed_table('dist_table_for_fkey', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+ALTER TABLE "NULL_!_dist_key"."nullKeyTable.1!?!9012345678901234567890123456789012345678901234567890123456789"
+    ADD CONSTRAINT fkey_to_dummy_dist FOREIGN KEY (id) REFERENCES dist_table_for_fkey(a);
+NOTICE:  identifier "nullKeyTable.1!?!9012345678901234567890123456789012345678901234567890123456789" will be truncated to "nullKeyTable.1!?!9012345678901234567890123456789012345678901234"
+ERROR:  cannot create foreign key constraint since relations are not colocated or not referencing a reference table
+DETAIL:  A distributed table can only have foreign keys if it is referencing another colocated hash distributed table or a reference table
+-- create a null key distributed table, colocated with the partitioned table, and then create a fkey
+CREATE TABLE null_key_dist (a INT PRIMARY KEY);
+SELECT create_distributed_table('null_key_dist', null, colocate_with=>'"NULL_!_dist_key"."nullKeyTable.1!?!9012345678901234567890123456789012345678901234567890123456789"');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+ALTER TABLE "NULL_!_dist_key"."nullKeyTable.1!?!9012345678901234567890123456789012345678901234567890123456789"
+    ADD CONSTRAINT fkey_to_dummy_dist FOREIGN KEY (id) REFERENCES null_key_dist(a);
+NOTICE:  identifier "nullKeyTable.1!?!9012345678901234567890123456789012345678901234567890123456789" will be truncated to "nullKeyTable.1!?!9012345678901234567890123456789012345678901234"
 CREATE TABLE multi_level_partitioning_parent(
     measureid integer,
     eventdatetime date,
@@ -940,7 +985,7 @@ BEGIN;
   INSERT INTO referencing_table VALUES (1, 2);
   -- fails
   INSERT INTO referencing_table VALUES (2, 2);
-ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_fkey_1730060"
+ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_fkey_1730094"
 DETAIL:  Key (a)=(2) is not present in table "referenced_table_xxxxxxx".
 CONTEXT:  while executing command on localhost:xxxxx
 ROLLBACK;
@@ -986,7 +1031,7 @@ BEGIN;
   INSERT INTO referencing_table VALUES (1, 2);
   -- fails
   INSERT INTO referencing_table VALUES (2, 2);
-ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_fkey_1730096"
+ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_fkey_1730130"
 DETAIL:  Key (a)=(2) is not present in table "referenced_table_xxxxxxx".
 CONTEXT:  while executing command on localhost:xxxxx
 ROLLBACK;
@@ -1104,8 +1149,8 @@ SELECT result, success FROM run_command_on_workers($$
 $$);
                                                               result                                                              | success
 ---------------------------------------------------------------------
- ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_fkey_1730113" | f
- ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_fkey_1730113" | f
+ ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_fkey_1730147" | f
+ ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_fkey_1730147" | f
 (2 rows)
 
 DROP TABLE referencing_table, referenced_table;
@@ -1120,8 +1165,8 @@ SELECT create_distributed_table('self_fkey_test', NULL, distribution_type=>null)
 
 INSERT INTO self_fkey_test VALUES (1, 1); -- ok
 INSERT INTO self_fkey_test VALUES (2, 3); -- fails
-ERROR:  insert or update on table "self_fkey_test_1730114" violates foreign key constraint "self_fkey_test_b_fkey_1730114"
-DETAIL:  Key (b)=(3) is not present in table "self_fkey_test_1730114".
+ERROR:  insert or update on table "self_fkey_test_1730148" violates foreign key constraint "self_fkey_test_b_fkey_1730148"
+DETAIL:  Key (b)=(3) is not present in table "self_fkey_test_1730148".
 CONTEXT:  while executing command on localhost:xxxxx
 -- similar foreign key tests but this time create the referencing table later on
 -- referencing table is a null shard key table
@@ -1145,7 +1190,7 @@ BEGIN;
   INSERT INTO referencing_table VALUES (1, 2);
   -- fails
   INSERT INTO referencing_table VALUES (2, 2);
-ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_fkey_1730116"
+ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_fkey_1730150"
 DETAIL:  Key (a)=(2) is not present in table "referenced_table_xxxxxxx".
 CONTEXT:  while executing command on localhost:xxxxx
 ROLLBACK;
@@ -1168,7 +1213,7 @@ BEGIN;
   INSERT INTO referencing_table VALUES (2, 1);
   -- fails
   INSERT INTO referencing_table VALUES (1, 2);
-ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_b_fkey_1730118"
+ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_b_fkey_1730152"
 DETAIL:  Key (a, b)=(1, 2) is not present in table "referenced_table_xxxxxxx".
 CONTEXT:  while executing command on localhost:xxxxx
 ROLLBACK;
@@ -1257,7 +1302,7 @@ BEGIN;
   INSERT INTO referencing_table VALUES (1, 2);
   -- fails
   INSERT INTO referencing_table VALUES (2, 2);
-ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_fkey_1730157"
+ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_fkey_1730191"
 DETAIL:  Key (a)=(2) is not present in table "referenced_table_xxxxxxx".
 CONTEXT:  while executing command on localhost:xxxxx
 ROLLBACK;

@@ -541,6 +541,30 @@ SELECT result FROM run_command_on_workers($$
     SELECT COUNT(*) FROM pg_indexes WHERE indexname LIKE '%my!Index_New_1%' OR indexname LIKE '%uniqueindex%new_1%';$$)
     ORDER BY result;
 
+-- foreign key to a ref table
+CREATE TABLE dummy_reference_table (a INT PRIMARY KEY);
+SELECT create_reference_table('dummy_reference_table');
+TRUNCATE "NULL_!_dist_key"."nullKeyTable.1!?!9012345678901234567890123456789012345678901234567890123456789";
+ALTER TABLE "NULL_!_dist_key"."nullKeyTable.1!?!9012345678901234567890123456789012345678901234567890123456789"
+    ADD CONSTRAINT fkey_to_dummy_ref FOREIGN KEY (id) REFERENCES dummy_reference_table(a);
+
+-- foreign key to a local table, errors out
+CREATE TABLE local_table_for_fkey (a INT PRIMARY KEY);
+ALTER TABLE "NULL_!_dist_key"."nullKeyTable.1!?!9012345678901234567890123456789012345678901234567890123456789"
+    ADD CONSTRAINT fkey_to_dummy_local FOREIGN KEY (id) REFERENCES local_table_for_fkey(a);
+
+-- foreign key to a distributed table, errors out because not colocated
+CREATE TABLE dist_table_for_fkey (a INT PRIMARY KEY);
+SELECT create_distributed_table('dist_table_for_fkey', 'a');
+ALTER TABLE "NULL_!_dist_key"."nullKeyTable.1!?!9012345678901234567890123456789012345678901234567890123456789"
+    ADD CONSTRAINT fkey_to_dummy_dist FOREIGN KEY (id) REFERENCES dist_table_for_fkey(a);
+
+-- create a null key distributed table, colocated with the partitioned table, and then create a fkey
+CREATE TABLE null_key_dist (a INT PRIMARY KEY);
+SELECT create_distributed_table('null_key_dist', null, colocate_with=>'"NULL_!_dist_key"."nullKeyTable.1!?!9012345678901234567890123456789012345678901234567890123456789"');
+ALTER TABLE "NULL_!_dist_key"."nullKeyTable.1!?!9012345678901234567890123456789012345678901234567890123456789"
+    ADD CONSTRAINT fkey_to_dummy_dist FOREIGN KEY (id) REFERENCES null_key_dist(a);
+
 CREATE TABLE multi_level_partitioning_parent(
     measureid integer,
     eventdatetime date,
