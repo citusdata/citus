@@ -1818,10 +1818,10 @@ static void
 RebalanceTableShards(RebalanceOptions *options, Oid shardReplicationModeOid)
 {
 	char transferMode = LookupShardTransferMode(shardReplicationModeOid);
-	EnsureReferenceTablesExistOnAllNodesExtended(transferMode);
 
 	if (list_length(options->relationIdList) == 0)
 	{
+		EnsureReferenceTablesExistOnAllNodesExtended(transferMode);
 		return;
 	}
 
@@ -1835,6 +1835,25 @@ RebalanceTableShards(RebalanceOptions *options, Oid shardReplicationModeOid)
 	ErrorOnConcurrentRebalance(options);
 
 	List *placementUpdateList = GetRebalanceSteps(options);
+
+	if (transferMode == TRANSFER_MODE_AUTOMATIC)
+	{
+		/*
+		 * If the shard transfer mode is set to auto, we should check beforehand
+		 * if we are able to use logical replication to transfer shards or not.
+		 * We throw an error if any of the tables do not have a replica identity, which
+		 * is required for logical replication to replicate UPDATE and DELETE commands.
+		 */
+		PlacementUpdateEvent *placementUpdate = NULL;
+		foreach_ptr(placementUpdate, placementUpdateList)
+		{
+			Oid relationId = RelationIdForShard(placementUpdate->shardId);
+			List *colocatedTableList = ColocatedTableList(relationId);
+			VerifyTablesHaveReplicaIdentity(colocatedTableList);
+		}
+	}
+
+	EnsureReferenceTablesExistOnAllNodesExtended(transferMode);
 
 	if (list_length(placementUpdateList) == 0)
 	{
@@ -1916,18 +1935,29 @@ RebalanceTableShardsBackground(RebalanceOptions *options, Oid shardReplicationMo
 		EnsureTableOwner(colocatedTableId);
 	}
 
-	if (shardTransferMode == TRANSFER_MODE_AUTOMATIC)
-	{
-		/* make sure that all tables included in the rebalance have a replica identity*/
-		VerifyTablesHaveReplicaIdentity(colocatedTableList);
-	}
-
 	List *placementUpdateList = GetRebalanceSteps(options);
 
 	if (list_length(placementUpdateList) == 0)
 	{
 		ereport(NOTICE, (errmsg("No moves available for rebalancing")));
 		return 0;
+	}
+
+	if (shardTransferMode == TRANSFER_MODE_AUTOMATIC)
+	{
+		/*
+		 * If the shard transfer mode is set to auto, we should check beforehand
+		 * if we are able to use logical replication to transfer shards or not.
+		 * We throw an error if any of the tables do not have a replica identity, which
+		 * is required for logical replication to replicate UPDATE and DELETE commands.
+		 */
+		PlacementUpdateEvent *placementUpdate = NULL;
+		foreach_ptr(placementUpdate, placementUpdateList)
+		{
+			relationId = RelationIdForShard(placementUpdate->shardId);
+			List *colocatedTables = ColocatedTableList(relationId);
+			VerifyTablesHaveReplicaIdentity(colocatedTables);
+		}
 	}
 
 	DropOrphanedResourcesInSeparateTransaction();
