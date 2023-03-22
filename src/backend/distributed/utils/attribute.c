@@ -205,9 +205,6 @@ AttributeQueryIfAnnotated(const char *query_string, CmdType commandType)
  */
 void AttributeTask(char *tenantId, int colocationId, CmdType commandType)
 {
-	ereport(NOTICE, (errmsg("MyProcPid: %d", MyProcPid)));
-	sleep(10);
-
 	colocationGroupId = colocationId;
 	strcpy_s(attributeToTenant, sizeof(attributeToTenant), tenantId);
 	attributeCommandType = commandType;
