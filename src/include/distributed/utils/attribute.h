@@ -56,6 +56,7 @@ extern void CitusAttributeToEnd(QueryDesc *queryDesc);
 extern void AttributeQueryIfAnnotated(const char *queryString, CmdType commandType);
 extern char * AnnotateQuery(char *queryString, char *partitionColumn, int colocationId);
 extern void InitializeMultiTenantMonitorSMHandleManagement(void);
+extern void AttributeTask(char *tenantId, int colocationGroupId, CmdType commandType);
 
 extern ExecutorEnd_hook_type prev_ExecutorEnd;
 

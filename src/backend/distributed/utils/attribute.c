@@ -23,7 +23,8 @@
 #include "utils/builtins.h"
 #include "utils/json.h"
 #include "distributed/utils/attribute.h"
-#include "common/base64.h"
+#include "miscadmin.h"
+
 
 #include <time.h>
 
@@ -172,8 +173,6 @@ AttributeQueryIfAnnotated(const char *query_string, CmdType commandType)
 {
 	strcpy_s(attributeToTenant, sizeof(attributeToTenant), "");
 
-	attributeCommandType = commandType;
-
 	if (query_string == NULL)
 	{
 		return;
@@ -187,27 +186,42 @@ AttributeQueryIfAnnotated(const char *query_string, CmdType commandType)
 			Datum jsonbDatum = DirectFunctionCall1(jsonb_in, PointerGetDatum(annotation));
 
 			text *tenantIdTextP = ExtractFieldTextP(jsonbDatum, "tId");
+			char *tenantId = NULL;
 			if (tenantIdTextP != NULL)
 			{
-				char *tenantId = UnescapeCommentChars(text_to_cstring(tenantIdTextP));
-				strcpy_s(attributeToTenant, sizeof(attributeToTenant), tenantId);
+				tenantId = UnescapeCommentChars(text_to_cstring(tenantIdTextP));
 			}
 
-			colocationGroupId = ExtractFieldInt32(jsonbDatum, "cId", 0);
+			int colocationId = ExtractFieldInt32(jsonbDatum, "cId",
+												  0);
 
-			if (MultiTenantMonitoringLogLevel != CITUS_LOG_LEVEL_OFF)
-			{
-				ereport(NOTICE, (errmsg(
-									 "attributing query to tenant: %s, colocationGroupId: %d",
-									 quote_literal_cstr(attributeToTenant),
-									 colocationGroupId)));
-			}
+			AttributeTask(tenantId, colocationId, commandType);
 		}
+	}
+}
+
+/*
+ * AttributeTask assigns the given attributes of a tenant and starts a timer
+ */
+void AttributeTask(char *tenantId, int colocationId, CmdType commandType)
+{
+	ereport(NOTICE, (errmsg("MyProcPid: %d", MyProcPid)));
+	sleep(10);
+
+	colocationGroupId = colocationId;
+	strcpy_s(attributeToTenant, sizeof(attributeToTenant), tenantId);
+	attributeCommandType = commandType;
+
+	if (MultiTenantMonitoringLogLevel != CITUS_LOG_LEVEL_OFF)
+	{
+		ereport(NOTICE, (errmsg(
+								"attributing query to tenant: %s, colocationGroupId: %d",
+								quote_literal_cstr(attributeToTenant),
+								colocationGroupId)));
 	}
 
 	attributeToTenantStart = clock();
 }
-
 
 /*
  * AnnotateQuery annotates the query with tenant attributes.
