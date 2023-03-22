@@ -241,7 +241,7 @@ class AllNullDistKeyDefaultConfig(CitusDefaultClusterConfig):
             "merge_arbitrary",
             # group 10
             "arbitrary_configs_router_create",
-            "arbitrary_configs_router"
+            "arbitrary_configs_router",
             #
             # ii) Skip the following test as it requires support for create_distributed_function.
             "nested_execution",
