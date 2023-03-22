@@ -1878,8 +1878,8 @@ RegisterCitusConfigVariables(void)
 		NULL,
 		&MaxParallelMovesPerNode,
 		1, 1, MAX_PARALLEL_MOVES_PER_NODE,
-		PGC_SIGHUP,
-		GUC_STANDARD,
+		PGC_USERSET,
+		GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(

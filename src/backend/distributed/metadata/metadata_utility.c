@@ -3274,7 +3274,7 @@ datumIntArrayToList(Datum datum)
 	int i;
 	for (i = 0; i < nelems; i++)
 	{
-		result = lappend_int(result, values[i]);
+		result = lappend_int(result, DatumGetInt32(values[i]));
 	}
 
 	return result;
@@ -3443,9 +3443,14 @@ GetTaskTokens(HTAB *ParallelMovesPerNode, BackgroundTask *task)
 		/* first check if all tokens are available*/
 		foreach_int(node_token, task->nodeTokens)
 		{
+			bool found;
 			ParallelMovesPerNodeEntry *hashEntry = hash_search(
-				ParallelMovesPerNode, &(node_token), HASH_ENTER, NULL);
-			if (hashEntry->counter == MaxParallelMovesPerNode)
+				ParallelMovesPerNode, &(node_token), HASH_ENTER, &found);
+			if (!found)
+			{
+				hashEntry->counter = 0;
+			}
+			else if (hashEntry->counter == MaxParallelMovesPerNode)
 			{
 				/* at least one token (this one) is not available */
 				return false;
