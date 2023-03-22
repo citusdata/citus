@@ -734,6 +734,28 @@ SELECT COUNT(*) FROM run_command_on_workers($$
      1
 (1 row)
 
+-- create a partitioned citus local table and verify we error out when attaching a partition with null dist key
+CREATE TABLE partitioned_citus_local_tbl(
+    measureid integer,
+    eventdatetime date,
+    measure_data jsonb,
+PRIMARY KEY (measureid, eventdatetime, measure_data))
+PARTITION BY RANGE(eventdatetime);
+SELECT citus_add_local_table_to_metadata('partitioned_citus_local_tbl');
+ citus_add_local_table_to_metadata
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE partition_with_null_key (measureid integer, eventdatetime date, measure_data jsonb, PRIMARY KEY (measureid, eventdatetime, measure_data));
+SELECT create_distributed_table('partition_with_null_key', NULL, distribution_type=>null);
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+ALTER TABLE partitioned_citus_local_tbl ATTACH PARTITION partition_with_null_key FOR VALUES FROM ('2004-01-01') TO ('2005-01-01');
+ERROR:  non-distributed partitioned tables cannot have distributed partitions
 CREATE TABLE multi_level_partitioning_parent(
     measureid integer,
     eventdatetime date,
@@ -852,7 +874,7 @@ BEGIN;
   INSERT INTO referencing_table VALUES (1, 2);
   -- fails
   INSERT INTO referencing_table VALUES (2, 2);
-ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_fkey_1730055"
+ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_fkey_1730057"
 DETAIL:  Key (a)=(2) is not present in table "referenced_table_xxxxxxx".
 CONTEXT:  while executing command on localhost:xxxxx
 ROLLBACK;
@@ -898,7 +920,7 @@ BEGIN;
   INSERT INTO referencing_table VALUES (1, 2);
   -- fails
   INSERT INTO referencing_table VALUES (2, 2);
-ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_fkey_1730091"
+ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_fkey_1730093"
 DETAIL:  Key (a)=(2) is not present in table "referenced_table_xxxxxxx".
 CONTEXT:  while executing command on localhost:xxxxx
 ROLLBACK;
@@ -1016,8 +1038,8 @@ SELECT result, success FROM run_command_on_workers($$
 $$);
                                                               result                                                              | success
 ---------------------------------------------------------------------
- ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_fkey_1730108" | f
- ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_fkey_1730108" | f
+ ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_fkey_1730110" | f
+ ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_fkey_1730110" | f
 (2 rows)
 
 DROP TABLE referencing_table, referenced_table;
@@ -1032,8 +1054,8 @@ SELECT create_distributed_table('self_fkey_test', NULL, distribution_type=>null)
 
 INSERT INTO self_fkey_test VALUES (1, 1); -- ok
 INSERT INTO self_fkey_test VALUES (2, 3); -- fails
-ERROR:  insert or update on table "self_fkey_test_1730109" violates foreign key constraint "self_fkey_test_b_fkey_1730109"
-DETAIL:  Key (b)=(3) is not present in table "self_fkey_test_1730109".
+ERROR:  insert or update on table "self_fkey_test_1730111" violates foreign key constraint "self_fkey_test_b_fkey_1730111"
+DETAIL:  Key (b)=(3) is not present in table "self_fkey_test_1730111".
 CONTEXT:  while executing command on localhost:xxxxx
 -- similar foreign key tests but this time create the referencing table later on
 -- referencing table is a null shard key table
@@ -1057,7 +1079,7 @@ BEGIN;
   INSERT INTO referencing_table VALUES (1, 2);
   -- fails
   INSERT INTO referencing_table VALUES (2, 2);
-ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_fkey_1730111"
+ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_fkey_1730113"
 DETAIL:  Key (a)=(2) is not present in table "referenced_table_xxxxxxx".
 CONTEXT:  while executing command on localhost:xxxxx
 ROLLBACK;
@@ -1080,7 +1102,7 @@ BEGIN;
   INSERT INTO referencing_table VALUES (2, 1);
   -- fails
   INSERT INTO referencing_table VALUES (1, 2);
-ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_b_fkey_1730113"
+ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_b_fkey_1730115"
 DETAIL:  Key (a, b)=(1, 2) is not present in table "referenced_table_xxxxxxx".
 CONTEXT:  while executing command on localhost:xxxxx
 ROLLBACK;
@@ -1169,7 +1191,7 @@ BEGIN;
   INSERT INTO referencing_table VALUES (1, 2);
   -- fails
   INSERT INTO referencing_table VALUES (2, 2);
-ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_fkey_1730152"
+ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_fkey_1730154"
 DETAIL:  Key (a)=(2) is not present in table "referenced_table_xxxxxxx".
 CONTEXT:  while executing command on localhost:xxxxx
 ROLLBACK;

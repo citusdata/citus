@@ -488,6 +488,18 @@ SELECT COUNT(*) FROM run_command_on_workers($$
     SELECT relpartbound FROM pg_class WHERE relname LIKE 'sensors_2002_1______';$$)
     WHERE length(result) > 0;
 
+-- create a partitioned citus local table and verify we error out when attaching a partition with null dist key
+CREATE TABLE partitioned_citus_local_tbl(
+    measureid integer,
+    eventdatetime date,
+    measure_data jsonb,
+PRIMARY KEY (measureid, eventdatetime, measure_data))
+PARTITION BY RANGE(eventdatetime);
+SELECT citus_add_local_table_to_metadata('partitioned_citus_local_tbl');
+CREATE TABLE partition_with_null_key (measureid integer, eventdatetime date, measure_data jsonb, PRIMARY KEY (measureid, eventdatetime, measure_data));
+SELECT create_distributed_table('partition_with_null_key', NULL, distribution_type=>null);
+ALTER TABLE partitioned_citus_local_tbl ATTACH PARTITION partition_with_null_key FOR VALUES FROM ('2004-01-01') TO ('2005-01-01');
+
 CREATE TABLE multi_level_partitioning_parent(
     measureid integer,
     eventdatetime date,
