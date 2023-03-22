@@ -203,6 +203,9 @@ typedef struct ShardMoveDependencyInfo
 	int64 taskId;
 } ShardMoveDependencyInfo;
 
+HTAB *colocationDependencyHashMap = NULL;
+HTAB *nodeDependencyHashMap = NULL;
+
 char *VariablesToBePassedToNewConnections = NULL;
 
 /* static declarations for main logic */
@@ -1927,6 +1930,92 @@ GetColocationId(PlacementUpdateEvent *move)
 
 
 /*
+ * InitializeMoveDependencyHashMaps function creates the hash maps that we use to track the latest moves so that subsequent moves with the same properties
+ * must take a dependency on them. There are two hash maps. One is for tracking the latest move scheduled in a given colocation group and the other one is for
+ * tracking the latest move which involves a given node either as its source node or its target node.
+ */
+static void
+InitializeMoveDependencyHashMaps()
+{
+	colocationDependencyHashMap = CreateSimpleHashWithNameAndSize(int64,
+																  ShardMoveDependencyInfo,
+																  "colocationDependencyHashMap",
+																  6);
+	nodeDependencyHashMap = CreateSimpleHashWithNameAndSize(int64,
+															ShardMoveDependencyInfo,
+															"nodeDependencyHashMap",
+															6);
+}
+
+
+/*
+ * GenerateTaskMoveDependencyList creates and returns a List of taskIds that the move must take a dependency on.
+ */
+static List *
+GenerateTaskMoveDependencyList(PlacementUpdateEvent *move, int64 colocationId)
+{
+	List *dependsList = NIL;
+
+	bool found;
+
+	/* Check if there exists a move in the same colocation group scheduled earlier. */
+	ShardMoveDependencyInfo *shardMoveDependencyInfo = hash_search(
+		colocationDependencyHashMap, &colocationId, HASH_ENTER, &found);
+
+	if (found)
+	{
+		dependsList = list_append_unique_ptr(dependsList,
+											 (void *) shardMoveDependencyInfo->taskId);
+	}
+
+	/* Check if there exists a move scheduled earlier whose source or target node overlaps with the current move's source node. */
+	shardMoveDependencyInfo = hash_search(
+		nodeDependencyHashMap, &move->sourceNode->nodeId, HASH_ENTER, &found);
+
+	if (found)
+	{
+		dependsList = list_append_unique_ptr(dependsList,
+											 (void *) shardMoveDependencyInfo->taskId);
+	}
+
+	/* Check if there exists a move scheduled earlier whose source or target node overlaps with the current move's target node. */
+	shardMoveDependencyInfo = hash_search(
+		nodeDependencyHashMap, &move->targetNode->nodeId, HASH_ENTER, &found);
+
+
+	if (found)
+	{
+		dependsList = list_append_unique_ptr(dependsList,
+											 (void *) shardMoveDependencyInfo->taskId);
+	}
+
+	return dependsList;
+}
+
+
+/*
+ * UpdateDependencyHashMaps updates the tracking dependency maps with the latest move taskId..
+ */
+static void
+UpdateDependencyHashMaps(PlacementUpdateEvent *move, uint64 colocationId, int64 taskId)
+{
+	ShardMoveDependencyInfo *shardMoveDependencyInfo = hash_search(
+		colocationDependencyHashMap, &colocationId, HASH_ENTER, NULL);
+	shardMoveDependencyInfo->taskId = taskId;
+
+	shardMoveDependencyInfo = hash_search(nodeDependencyHashMap,
+										  &move->sourceNode->nodeId, HASH_ENTER, NULL);
+
+	shardMoveDependencyInfo->taskId = taskId;
+
+	shardMoveDependencyInfo = hash_search(nodeDependencyHashMap,
+										  &move->targetNode->nodeId, HASH_ENTER, NULL);
+
+	shardMoveDependencyInfo->taskId = taskId;
+}
+
+
+/*
  * RebalanceTableShardsBackground rebalances the shards for the relations
  * inside the relationIdList across the different workers. It does so using our
  * background job+task infrastructure.
@@ -2004,7 +2093,6 @@ RebalanceTableShardsBackground(RebalanceOptions *options, Oid shardReplicationMo
 
 	List *referenceTableIdList = NIL;
 	int64 replicateRefTablesTaskId = 0;
-	int64 dependTasksList[1] = { 0 };
 
 	if (HasNodesWithMissingReferenceTables(&referenceTableIdList))
 	{
@@ -2020,23 +2108,13 @@ RebalanceTableShardsBackground(RebalanceOptions *options, Oid shardReplicationMo
 		appendStringInfo(&buf,
 						 "SELECT pg_catalog.replicate_reference_tables(%s)",
 						 quote_literal_cstr(shardTranferModeLabel));
-		BackgroundTask *task = ScheduleBackgroundTask(jobId, GetUserId(), buf.data,
-													  0, dependTasksList);
+		BackgroundTask *task = ScheduleBackgroundTask(jobId, GetUserId(), buf.data, NIL);
 		replicateRefTablesTaskId = task->taskid;
 	}
 
 	PlacementUpdateEvent *move = NULL;
 
-	/*
-	 * A shard move must take a dependency on a previous shecheduled move in the same colocation group.
-	 * Two shards moves with the same colocation id cannot run concurrently.
-	 * If there is no previous move scheduled in the same colocation group the move must
-	 * take a dependency on the reference table replication task if exists otherwise no task dependency is required.
-	 * dependencyHashMap tracks the last move scheduled for the given colocation id.*/
-	HTAB *dependencyHashMap = CreateSimpleHashWithNameAndSize(int64,
-															  ShardMoveDependencyInfo,
-															  "ShardMoveDependencyMap",
-															  6);
+	InitializeMoveDependencyHashMaps();
 
 	foreach_ptr(move, placementUpdateList)
 	{
@@ -2051,27 +2129,17 @@ RebalanceTableShardsBackground(RebalanceOptions *options, Oid shardReplicationMo
 
 		int64 colocationId = GetColocationId(move);
 
-		bool found;
+		List *dependsList = GenerateTaskMoveDependencyList(move, colocationId);
 
-		ShardMoveDependencyInfo *shardMoveDependencyInfo = hash_search(
-			dependencyHashMap, &colocationId, HASH_ENTER, &found);
-
-		int nDepend = 0;
-
-		if (found)
+		if (dependsList == NIL && replicateRefTablesTaskId > 0)
 		{
-			dependTasksList[nDepend++] = shardMoveDependencyInfo->taskId;
-		}
-		else if (replicateRefTablesTaskId > 0)
-		{
-			dependTasksList[nDepend++] = replicateRefTablesTaskId;
+			dependsList = lappend(dependsList, (void *) replicateRefTablesTaskId);
 		}
 
 		BackgroundTask *task = ScheduleBackgroundTask(jobId, GetUserId(), buf.data,
-													  nDepend, dependTasksList);
+													  dependsList);
 
-		/* Update the taskId for the colocation group so that it points to the latest task scheduled.*/
-		shardMoveDependencyInfo->taskId = task->taskid;
+		UpdateDependencyHashMaps(move, colocationId, task->taskid);
 	}
 
 	ereport(NOTICE,

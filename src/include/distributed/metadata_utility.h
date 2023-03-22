@@ -385,8 +385,7 @@ extern bool HasRunnableBackgroundTask(void);
 extern bool HasNonTerminalJobOfType(const char *jobType, int64 *jobIdOut);
 extern int64 CreateBackgroundJob(const char *jobType, const char *description);
 extern BackgroundTask * ScheduleBackgroundTask(int64 jobId, Oid owner, char *command,
-											   int dependingTaskCount,
-											   int64 dependingTaskIds[]);
+											   List *dependingTaskIds);
 extern BackgroundTask * GetRunnableBackgroundTask(void);
 extern void ResetRunningBackgroundTasks(void);
 extern BackgroundJob * GetBackgroundJobByJobId(int64 jobId);
