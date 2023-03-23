@@ -61,7 +61,8 @@ SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, q
 ---------------------------------------------------------------------
  2                |                         0 |                         0 |                          1 |                          0
  3                |                         0 |                         0 |                          1 |                          0
-(2 rows)
+ 4                |                         0 |                         0 |                          1 |                          0
+(3 rows)
 
 \c - - - :master_port
 SET search_path TO citus_stats_tenants;
@@ -107,7 +108,8 @@ SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, q
 ---------------------------------------------------------------------
  2                |                         1 |                         0 |                          2 |                          0
  3                |                         0 |                         0 |                          1 |                          0
-(2 rows)
+ 4                |                         0 |                         0 |                          1 |                          0
+(3 rows)
 
 \c - - - :master_port
 SELECT pg_sleep (3);
@@ -130,7 +132,8 @@ SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, q
 ---------------------------------------------------------------------
  2                |                         0 |                         1 |                          0 |                          2
  3                |                         0 |                         0 |                          0 |                          1
-(2 rows)
+ 4                |                         0 |                         0 |                          0 |                          1
+(3 rows)
 
 \c - - - :master_port
 SET search_path TO citus_stats_tenants;
@@ -291,6 +294,102 @@ SELECT tenant_attribute, query_count_in_this_period, score FROM citus_stats_tena
  bcde             |                          3 | 3000000000
  2                |                          1 | 2000000000
  3                |                          1 | 1500000000
+ 4                |                          1 | 1500000000
+ cdef             |                          1 | 1000000000
+(6 rows)
+
+\c - - - :master_port
+SET search_path TO citus_stats_tenants;
+-- test special and multibyte characters in tenant attribute
+SELECT result FROM run_command_on_all_nodes('SELECT clean_citus_stats_tenants()');
+ result
+---------------------------------------------------------------------
+
+
+
+(3 rows)
+
+TRUNCATE TABLE dist_tbl_text;
+SELECT count(*)>=0 FROM dist_tbl_text WHERE a = '/bcde';
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT count(*)>=0 FROM dist_tbl_text WHERE a = '/*bcde';
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT count(*)>=0 FROM dist_tbl_text WHERE a = '/b*cde';
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT count(*)>=0 FROM dist_tbl_text WHERE a = '/b*c/de';
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT count(*)>=0 FROM dist_tbl_text WHERE a = 'b/*//cde';
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT count(*)>=0 FROM dist_tbl_text WHERE a = '/b/*/cde';
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT count(*)>=0 FROM dist_tbl_text WHERE a = '/b/**/cde';
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT count(*)>=0 FROM dist_tbl_text WHERE a = 'bcde*';
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT count(*)>=0 FROM dist_tbl_text WHERE a = 'bcde*/';
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT count(*)>=0 FROM dist_tbl_text WHERE a = U&'\0061\0308bc';
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+\c - - - :worker_1_port
+SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, query_count_in_this_period, query_count_in_last_period FROM citus_stats_tenants ORDER BY tenant_attribute;
+ tenant_attribute | read_count_in_this_period | read_count_in_last_period | query_count_in_this_period | query_count_in_last_period
+---------------------------------------------------------------------
+ /*bcde           |                         1 |                         0 |                          1 |                          0
+ /b*cde           |                         1 |                         0 |                          1 |                          0
+ /b/**/cde        |                         1 |                         0 |                          1 |                          0
+ /b/*/cde         |                         1 |                         0 |                          1 |                          0
+ b/*//cde         |                         1 |                         0 |                          1 |                          0
+ bcde*/           |                         1 |                         0 |                          1 |                          0
+(6 rows)
+
+\c - - - :worker_2_port
+SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, query_count_in_this_period, query_count_in_last_period FROM citus_stats_tenants ORDER BY tenant_attribute;
+ tenant_attribute | read_count_in_this_period | read_count_in_last_period | query_count_in_this_period | query_count_in_last_period
+---------------------------------------------------------------------
+ /b*c/de          |                         1 |                         0 |                          1 |                          0
+ /bcde            |                         1 |                         0 |                          1 |                          0
+ äbc              |                         1 |                         0 |                          1 |                          0
+ bcde*            |                         1 |                         0 |                          1 |                          0
 (4 rows)
 
 \c - - - :master_port
