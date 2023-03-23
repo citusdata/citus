@@ -681,41 +681,42 @@ MultiTenantMonitorshmemSize(void)
 static char *
 ExtractTopComment(const char *inputString)
 {
-    int commentCharsLength = 2;
-    int inputStringLen = strlen(inputString);
-    if (inputStringLen < commentCharsLength)
-    {
-        return NULL;
-    }
+	int commentCharsLength = 2;
+	int inputStringLen = strlen(inputString);
+	if (inputStringLen < commentCharsLength)
+	{
+		return NULL;
+	}
 
-    const char *commentStartChars = "/*";
-    const char *commentEndChars = "*/";
+	const char *commentStartChars = "/*";
+	const char *commentEndChars = "*/";
 
-    /* If query doesn't start with a comment, return NULL */
-    if (strstr(inputString, commentStartChars) != inputString)
-    {
-        return NULL;
-    }
+	/* If query doesn't start with a comment, return NULL */
+	if (strstr(inputString, commentStartChars) != inputString)
+	{
+		return NULL;
+	}
 
-    StringInfo commentData = makeStringInfo();
+	StringInfo commentData = makeStringInfo();
 
-    /* Skip the comment start characters */
-    const char *commentStart = inputString + commentCharsLength;
+	/* Skip the comment start characters */
+	const char *commentStart = inputString + commentCharsLength;
 
-    /* Find the first comment end character */
-    const char *commentEnd = strstr(commentStart, commentEndChars);
-    if (commentEnd == NULL)
-    {
-        return NULL;
-    }
+	/* Find the first comment end character */
+	const char *commentEnd = strstr(commentStart, commentEndChars);
+	if (commentEnd == NULL)
+	{
+		return NULL;
+	}
 
-    /* Append the comment to the StringInfo buffer */
-    int commentLength = commentEnd - commentStart;
-    appendStringInfo(commentData, "%.*s", commentLength, commentStart);
+	/* Append the comment to the StringInfo buffer */
+	int commentLength = commentEnd - commentStart;
+	appendStringInfo(commentData, "%.*s", commentLength, commentStart);
 
-    /* Return the extracted comment */
-    return commentData->data;
+	/* Return the extracted comment */
+	return commentData->data;
 }
+
 
 /*  EscapeCommentChars adds a backslash before each occurrence of '*' or '/' in the input string */
 static char *
@@ -733,10 +734,11 @@ EscapeCommentChars(const char *str)
 		}
 
 		appendStringInfoChar(escapedString, str[originalStringIndex]);
- 	}
+	}
 
 	return escapedString->data;
 }
+
 
 /*  UnescapeCommentChars removes the backslash that precedes '*' or '/' in the input string. */
 static char *
