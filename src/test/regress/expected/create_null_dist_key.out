@@ -771,6 +771,9 @@ CREATE TABLE "NULL_!_dist_key"."partition1_nullKeyTable.1!?!90123456789012345678
 CREATE TABLE "NULL_!_dist_key"."partition2_nullKeyTable.1!?!9012345678901234567890123456789012345678901234567890123456789"
     PARTITION OF "NULL_!_dist_key"."nullKeyTable.1!?!9012345678901234567890123456789012345678901234567890123456789"
     FOR VALUES IN (2);
+CREATE TABLE "NULL_!_dist_key"."partition100_nullKeyTable.1!?!9012345678901234567890123456789012345678901234567890123456789"
+    PARTITION OF "NULL_!_dist_key"."nullKeyTable.1!?!9012345678901234567890123456789012345678901234567890123456789"
+    FOR VALUES IN (100);
 -- create some objects before create_distributed_table
 CREATE INDEX "my!Index1New" ON "NULL_!_dist_key"."nullKeyTable.1!?!9012345678901234567890123456789012345678901234567890123456789"(id) WITH ( fillfactor = 80 ) WHERE  id > 10;
 CREATE UNIQUE INDEX uniqueIndexNew ON "NULL_!_dist_key"."nullKeyTable.1!?!9012345678901234567890123456789012345678901234567890123456789" (id);
@@ -797,6 +800,27 @@ HINT:  To remove the local data, run: SELECT truncate_local_data_after_distribut
 
 (1 row)
 
+-- test triggers
+SET citus.enable_unsafe_triggers TO ON;
+SET client_min_messages TO ERROR;
+CREATE FUNCTION insert_id_100() RETURNS trigger AS $insert_100$
+BEGIN
+    INSERT INTO "NULL_!_dist_key"."nullKeyTable.1!?!9012345678901234567890123456789012345678901234567890123456789" VALUES (100, 1, row_to_json(row(1,1), true));
+    RETURN NEW;
+END;
+$insert_100$ LANGUAGE plpgsql;
+CREATE TRIGGER insert_100_trigger
+    AFTER UPDATE ON "NULL_!_dist_key"."nullKeyTable.1!?!9012345678901234567890123456789012345678901234567890123456789"
+    FOR EACH STATEMENT EXECUTE FUNCTION insert_id_100();
+UPDATE "NULL_!_dist_key"."nullKeyTable.1!?!9012345678901234567890123456789012345678901234567890123456789" SET "TeNANt_Id"="TeNANt_Id"+1;
+-- we should see one row with id = 100
+SELECT COUNT(*) FROM "NULL_!_dist_key"."nullKeyTable.1!?!9012345678901234567890123456789012345678901234567890123456789" WHERE id = 100;
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+RESET client_min_messages;
 -- create some objects after create_distributed_table
 CREATE INDEX "my!Index2New" ON "NULL_!_dist_key"."nullKeyTable.1!?!9012345678901234567890123456789012345678901234567890123456789"(id) WITH ( fillfactor = 90 ) WHERE id < 20;
 NOTICE:  identifier "nullKeyTable.1!?!9012345678901234567890123456789012345678901234567890123456789" will be truncated to "nullKeyTable.1!?!9012345678901234567890123456789012345678901234"
@@ -985,7 +1009,7 @@ BEGIN;
   INSERT INTO referencing_table VALUES (1, 2);
   -- fails
   INSERT INTO referencing_table VALUES (2, 2);
-ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_fkey_1730094"
+ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_fkey_1730095"
 DETAIL:  Key (a)=(2) is not present in table "referenced_table_xxxxxxx".
 CONTEXT:  while executing command on localhost:xxxxx
 ROLLBACK;
@@ -1031,7 +1055,7 @@ BEGIN;
   INSERT INTO referencing_table VALUES (1, 2);
   -- fails
   INSERT INTO referencing_table VALUES (2, 2);
-ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_fkey_1730130"
+ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_fkey_1730131"
 DETAIL:  Key (a)=(2) is not present in table "referenced_table_xxxxxxx".
 CONTEXT:  while executing command on localhost:xxxxx
 ROLLBACK;
@@ -1149,8 +1173,8 @@ SELECT result, success FROM run_command_on_workers($$
 $$);
                                                               result                                                              | success
 ---------------------------------------------------------------------
- ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_fkey_1730147" | f
- ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_fkey_1730147" | f
+ ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_fkey_1730148" | f
+ ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_fkey_1730148" | f
 (2 rows)
 
 DROP TABLE referencing_table, referenced_table;
@@ -1165,8 +1189,8 @@ SELECT create_distributed_table('self_fkey_test', NULL, distribution_type=>null)
 
 INSERT INTO self_fkey_test VALUES (1, 1); -- ok
 INSERT INTO self_fkey_test VALUES (2, 3); -- fails
-ERROR:  insert or update on table "self_fkey_test_1730148" violates foreign key constraint "self_fkey_test_b_fkey_1730148"
-DETAIL:  Key (b)=(3) is not present in table "self_fkey_test_1730148".
+ERROR:  insert or update on table "self_fkey_test_1730149" violates foreign key constraint "self_fkey_test_b_fkey_1730149"
+DETAIL:  Key (b)=(3) is not present in table "self_fkey_test_1730149".
 CONTEXT:  while executing command on localhost:xxxxx
 -- similar foreign key tests but this time create the referencing table later on
 -- referencing table is a null shard key table
@@ -1190,7 +1214,7 @@ BEGIN;
   INSERT INTO referencing_table VALUES (1, 2);
   -- fails
   INSERT INTO referencing_table VALUES (2, 2);
-ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_fkey_1730150"
+ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_fkey_1730151"
 DETAIL:  Key (a)=(2) is not present in table "referenced_table_xxxxxxx".
 CONTEXT:  while executing command on localhost:xxxxx
 ROLLBACK;
@@ -1213,7 +1237,7 @@ BEGIN;
   INSERT INTO referencing_table VALUES (2, 1);
   -- fails
   INSERT INTO referencing_table VALUES (1, 2);
-ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_b_fkey_1730152"
+ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_b_fkey_1730153"
 DETAIL:  Key (a, b)=(1, 2) is not present in table "referenced_table_xxxxxxx".
 CONTEXT:  while executing command on localhost:xxxxx
 ROLLBACK;
@@ -1302,7 +1326,7 @@ BEGIN;
   INSERT INTO referencing_table VALUES (1, 2);
   -- fails
   INSERT INTO referencing_table VALUES (2, 2);
-ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_fkey_1730191"
+ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_fkey_1730192"
 DETAIL:  Key (a)=(2) is not present in table "referenced_table_xxxxxxx".
 CONTEXT:  while executing command on localhost:xxxxx
 ROLLBACK;
@@ -1554,15 +1578,14 @@ CREATE TRIGGER trigger_1
 BEFORE INSERT ON trigger_table_1
 FOR EACH ROW EXECUTE FUNCTION increment_value();
 SELECT create_distributed_table('trigger_table_1', NULL, distribution_type=>null);
-ERROR:  cannot distribute relation "trigger_table_1" because it has triggers
-HINT:  Consider dropping all the triggers on "trigger_table_1" and retry.
-SET citus.enable_unsafe_triggers TO ON;
-SELECT create_distributed_table('trigger_table_1', NULL, distribution_type=>null);
  create_distributed_table
 ---------------------------------------------------------------------
 
 (1 row)
 
+SET citus.enable_unsafe_triggers TO ON;
+SELECT create_distributed_table('trigger_table_1', NULL, distribution_type=>null);
+ERROR:  table "trigger_table_1" is already distributed
 INSERT INTO trigger_table_1 VALUES(1), (2);
 SELECT * FROM trigger_table_1 ORDER BY value;
  value
