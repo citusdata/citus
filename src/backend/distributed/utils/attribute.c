@@ -207,6 +207,11 @@ AttributeQueryIfAnnotated(const char *query_string, CmdType commandType)
 void
 AttributeTask(char *tenantId, int colocationId, CmdType commandType)
 {
+	if (tenantId == NULL || colocationId == INVALID_COLOCATION_ID)
+	{
+		return;
+	}
+
 	colocationGroupId = colocationId;
 	strcpy_s(attributeToTenant, sizeof(attributeToTenant), tenantId);
 	attributeCommandType = commandType;
