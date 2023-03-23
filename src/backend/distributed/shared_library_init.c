@@ -1871,14 +1871,14 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
-		"citus.max_parallel_moves_per_node",
+		"citus.max_parallel_tasks_per_node",
 		gettext_noop(
-			"Sets the maximum number of parallel task executor workers for scheduled "
-			"background tasks that involve a particular node"),
+			"Sets the maximum number of parallel background task executor workers "
+			"for scheduled background tasks that involve a particular node"),
 		NULL,
-		&MaxParallelMovesPerNode,
-		1, 1, MAX_PARALLEL_MOVES_PER_NODE,
-		PGC_USERSET,
+		&MaxParallelTasksPerNode,
+		1, 1, MAX_PARALLEL_TASKS_PER_NODE,
+		PGC_SIGHUP,
 		GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
 

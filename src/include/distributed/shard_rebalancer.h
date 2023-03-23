@@ -77,7 +77,7 @@
 #define REBALANCE_PROGRESS_MOVING 1
 #define REBALANCE_PROGRESS_MOVED 2
 
-#define MAX_PARALLEL_MOVES_PER_NODE 100
+#define MAX_PARALLEL_TASKS_PER_NODE 128
 
 /* Enumeration that defines different placement update types */
 typedef enum
@@ -192,7 +192,7 @@ extern char *VariablesToBePassedToNewConnections;
 extern int MaxRebalancerLoggedIgnoredMoves;
 extern bool RunningUnderIsolationTest;
 extern bool PropagateSessionSettingsForLoopbackConnection;
-extern int MaxParallelMovesPerNode;
+extern int MaxParallelTasksPerNode;
 
 /* External function declarations */
 extern Datum shard_placement_rebalance_array(PG_FUNCTION_ARGS);

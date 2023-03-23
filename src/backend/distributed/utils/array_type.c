@@ -140,3 +140,34 @@ TextArrayTypeToIntegerList(ArrayType *arrayObject)
 
 	return list;
 }
+
+
+/*
+ * intArrayToDatum
+ *
+ * Convert an integer array to the datum int array format
+ * (currently used for nodes_involved in pg_dist_background_task)
+ *
+ * Returns the array in the form of a Datum, or empty array datum
+ * if the int_array is empty.
+ */
+Datum
+intArrayToDatum(uint32 int_array_size, int int_array[])
+{
+	if (int_array_size == 0)
+	{
+		return PointerGetDatum(construct_empty_array(INT4OID));
+	}
+
+	ArrayBuildState *astate = NULL;
+	for (int i = 0; i < int_array_size; i++)
+	{
+		Datum dvalue = Int32GetDatum(int_array[i]);
+		bool disnull = false;
+		Oid element_type = INT4OID;
+		astate = accumArrayResult(astate, dvalue, disnull, element_type,
+								  CurrentMemoryContext);
+	}
+
+	return makeArrayResult(astate, CurrentMemoryContext);
+}

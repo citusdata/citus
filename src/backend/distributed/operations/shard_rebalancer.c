@@ -292,7 +292,7 @@ PG_FUNCTION_INFO_V1(citus_rebalance_wait);
 bool RunningUnderIsolationTest = false;
 int MaxRebalancerLoggedIgnoredMoves = 5;
 bool PropagateSessionSettingsForLoopbackConnection = false;
-int MaxParallelMovesPerNode = 1;
+int MaxParallelTasksPerNode = 1;
 
 static const char *PlacementUpdateTypeNames[] = {
 	[PLACEMENT_UPDATE_INVALID_FIRST] = "unknown",

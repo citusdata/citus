@@ -116,15 +116,15 @@ static bool MonitorGotTerminationOrCancellationRequest();
 static void QueueMonitorSigTermHandler(SIGNAL_ARGS);
 static void QueueMonitorSigIntHandler(SIGNAL_ARGS);
 static void QueueMonitorSigHupHandler(SIGNAL_ARGS);
-static void PutTokensBack(BackgroundTask *task);
+static void DecrementParallelTaskCountForNodesInvolved(BackgroundTask *task);
 
 /* flags set by signal handlers */
 static volatile sig_atomic_t GotSigterm = false;
 static volatile sig_atomic_t GotSigint = false;
 static volatile sig_atomic_t GotSighup = false;
 
-/* Counter for parallel moves per node */
-static HTAB *ParallelMovesPerNode = NULL;
+/* HTAB of counters for parallel tasks per node */
+static HTAB *ParallelTasksPerNode = NULL;
 
 PG_FUNCTION_INFO_V1(citus_job_cancel);
 PG_FUNCTION_INFO_V1(citus_job_wait);
@@ -619,7 +619,7 @@ AssignRunnableTasks(QueueMonitorExecutionContext *queueMonitorExecutionContext)
 	bool taskAssigned = false;
 	do {
 		/* fetch a runnable task from catalog */
-		runnableTask = GetRunnableBackgroundTaskWithTokens(ParallelMovesPerNode);
+		runnableTask = GetRunnableBackgroundTask(ParallelTasksPerNode);
 		if (runnableTask)
 		{
 			taskAssigned = AssignRunnableTaskToNewExecutor(runnableTask,
@@ -859,7 +859,7 @@ TaskEnded(TaskExecutionContext *taskExecutionContext)
 	UNSET_NULLABLE_FIELD(task, pid);
 	task->message = handleEntry->message->data;
 
-	PutTokensBack(task);
+	DecrementParallelTaskCountForNodesInvolved(task);
 	UpdateBackgroundTask(task);
 	UpdateDependingTasks(task);
 	UpdateBackgroundJob(task->jobid);
@@ -875,26 +875,25 @@ TaskEnded(TaskExecutionContext *taskExecutionContext)
 
 
 /*
- * PutTokensBack
- * Goes through the global ParallelMovesPerNode hash table
- * and puts the tokens of the input task back to their place
+ * DecrementParallelTaskCountForNodesInvolved
+ * Decrements the parallel task count for each of the nodes involved
+ * with the task.
+ * We call this function after the task has gone through Running state
+ * and then has ended.
  */
 static void
-PutTokensBack(BackgroundTask *task)
+DecrementParallelTaskCountForNodesInvolved(BackgroundTask *task)
 {
-	if (task->nodeTokens)
+	if (task->nodesInvolved)
 	{
-		int node_token;
-		foreach_int(node_token, task->nodeTokens)
+		int node;
+		foreach_int(node, task->nodesInvolved)
 		{
-			ParallelMovesPerNodeEntry *hashEntry = hash_search(ParallelMovesPerNode,
-															   &(node_token),
+			ParallelTasksPerNodeEntry *hashEntry = hash_search(ParallelTasksPerNode,
+															   &(node),
 															   HASH_FIND, NULL);
 
 			hashEntry->counter -= 1;
-
-			/* sanity check */
-			Assert(hashEntry->counter < MaxParallelMovesPerNode);
 		}
 	}
 }
@@ -1203,9 +1202,9 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 			ProcessConfigFile(PGC_SIGHUP);
 		}
 
-		if (ParallelMovesPerNode == NULL)
+		if (ParallelTasksPerNode == NULL)
 		{
-			ParallelMovesPerNode = CreateSimpleHash(int32, ParallelMovesPerNodeEntry);
+			ParallelTasksPerNode = CreateSimpleHash(int32, ParallelTasksPerNodeEntry);
 		}
 
 		/* assign runnable tasks, if any, to new task executors in a transaction if we do not have SIGTERM or SIGINT */

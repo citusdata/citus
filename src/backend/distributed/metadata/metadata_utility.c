@@ -60,6 +60,7 @@
 #include "distributed/remote_commands.h"
 #include "distributed/shard_rebalancer.h"
 #include "distributed/tuplestore.h"
+#include "distributed/utils/array_type.h"
 #include "distributed/worker_manager.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/version_compat.h"
@@ -116,9 +117,8 @@ static bool SetFieldValue(int attno, Datum values[], bool isnull[], bool replace
 static bool SetFieldText(int attno, Datum values[], bool isnull[], bool replace[],
 						 const char *newValue);
 static bool SetFieldNull(int attno, Datum values[], bool isnull[], bool replace[]);
-static Datum intArrayToDatum(int int_array_size, int int_array[]);
-static List * datumIntArrayToList(Datum datum);
-static bool GetTaskTokens(HTAB *ParallelMovesPerNode, BackgroundTask *task);
+static bool IncrementParallelTaskCountForNodesInvolved(HTAB *ParallelTasksPerNode,
+													   BackgroundTask *task);
 
 #define InitFieldValue(attno, values, isnull, initValue) \
 	(void) SetFieldValue((attno), (values), (isnull), NULL, (initValue))
@@ -2821,7 +2821,8 @@ CreateBackgroundJob(const char *jobType, const char *description)
  */
 BackgroundTask *
 ScheduleBackgroundTask(int64 jobId, Oid owner, char *command, int dependingTaskCount,
-					   int64 dependingTaskIds[], int nodeTokensCount, int32 nodeTokens[])
+					   int64 dependingTaskIds[], int nodesInvolvedCount, int32
+					   nodesInvolved[])
 {
 	BackgroundTask *task = NULL;
 
@@ -2895,9 +2896,11 @@ ScheduleBackgroundTask(int64 jobId, Oid owner, char *command, int dependingTaskC
 		values[Anum_pg_dist_background_task_message - 1] = CStringGetTextDatum("");
 		nulls[Anum_pg_dist_background_task_message - 1] = false;
 
-		values[Anum_pg_dist_background_task_node_tokens - 1] = intArrayToDatum(
-			nodeTokensCount, nodeTokens);
-		nulls[Anum_pg_dist_background_task_node_tokens - 1] = (nodeTokensCount == 0);
+		values[Anum_pg_dist_background_task_nodes_involved - 1] =
+			intArrayToDatum(nodesInvolvedCount, nodesInvolved);
+
+		/* default is an empty array, not null, so it's not a nullable entry */
+		nulls[Anum_pg_dist_background_task_nodes_involved - 1] = false;
 
 		HeapTuple newTuple = heap_form_tuple(RelationGetDescr(pgDistBackgroundTask),
 											 values, nulls);
@@ -2976,38 +2979,6 @@ ScheduleBackgroundTask(int64 jobId, Oid owner, char *command, int dependingTaskC
 	CommandCounterIncrement();
 
 	return task;
-}
-
-
-/*
- * intArrayToDatum
- *
- * Convert an integer array to the datum int array format that is used in
- * pg_dist_background_task for node_tokens
- *
- * Returns the array in the form of a Datum, or PointerGetDatum(NULL)
- * if the int_array is empty.
- */
-static Datum
-intArrayToDatum(int int_array_size, int int_array[])
-{
-	ArrayBuildState *astate = NULL;
-
-	for (int i = 0; i < int_array_size; i++)
-	{
-		Datum dvalue = Int32GetDatum(int_array[i]);
-		bool disnull = false;
-		Oid element_type = INT4OID;
-		astate = accumArrayResult(astate, dvalue, disnull, element_type,
-								  CurrentMemoryContext);
-	}
-
-	if (astate)
-	{
-		return makeArrayResult(astate, CurrentMemoryContext);
-	}
-
-	return PointerGetDatum(NULL);
 }
 
 
@@ -3242,42 +3213,11 @@ DeformBackgroundTaskHeapTuple(TupleDesc tupleDescriptor, HeapTuple taskTuple)
 			TextDatumGetCString(values[Anum_pg_dist_background_task_message - 1]);
 	}
 
-	if (!nulls[Anum_pg_dist_background_task_node_tokens - 1])
-	{
-		task->nodeTokens =
-			datumIntArrayToList(values[Anum_pg_dist_background_task_node_tokens - 1]);
-	}
+	ArrayType *nodesInvolvedArrayObject =
+		DatumGetArrayTypeP(values[Anum_pg_dist_background_task_nodes_involved - 1]);
+	task->nodesInvolved = IntegerArrayTypeToList(nodesInvolvedArrayObject);
 
 	return task;
-}
-
-
-/*
- * datumIntArrayToList
- * See PG's oid_array_to_list implementation for reference
- */
-static List *
-datumIntArrayToList(Datum datum)
-{
-	ArrayType *array = DatumGetArrayTypeP(datum);
-	Oid elmtype = INT4OID;
-	int elmlen = sizeof(int32);
-	bool elmbyval = true;
-	char elmalign = TYPALIGN_INT;
-	Datum *values;
-	bool **nullsp = NULL;
-	int nelems;
-	deconstruct_array(array, elmtype, elmlen, elmbyval, elmalign,
-					  &values, nullsp, &nelems);
-
-	List *result = NIL;
-	int i;
-	for (i = 0; i < nelems; i++)
-	{
-		result = lappend_int(result, DatumGetInt32(values[i]));
-	}
-
-	return result;
 }
 
 
@@ -3369,7 +3309,7 @@ BackgroundTaskReadyToRun(BackgroundTask *task)
 
 
 /*
- * GetRunnableBackgroundTaskWithTokens returns the first candidate for a task to be run. When a task
+ * GetRunnableBackgroundTask returns the first candidate for a task to be run. When a task
  * is returned it has been checked for all the preconditions to hold.
  *
  * That means, if there is no task returned the background worker should close and let the
@@ -3377,7 +3317,7 @@ BackgroundTaskReadyToRun(BackgroundTask *task)
  * available.
  */
 BackgroundTask *
-GetRunnableBackgroundTaskWithTokens(HTAB *ParallelMovesPerNode)
+GetRunnableBackgroundTask(HTAB *ParallelTasksPerNode)
 {
 	Relation pgDistBackgroundTasks =
 		table_open(DistBackgroundTaskRelationId(), ExclusiveLock);
@@ -3410,7 +3350,7 @@ GetRunnableBackgroundTaskWithTokens(HTAB *ParallelMovesPerNode)
 		{
 			task = DeformBackgroundTaskHeapTuple(tupleDescriptor, taskTuple);
 			if (BackgroundTaskReadyToRun(task) &&
-				GetTaskTokens(ParallelMovesPerNode, task))
+				IncrementParallelTaskCountForNodesInvolved(ParallelTasksPerNode, task))
 			{
 				/* found task, close table and return */
 				break;
@@ -3428,40 +3368,43 @@ GetRunnableBackgroundTaskWithTokens(HTAB *ParallelMovesPerNode)
 
 
 /*
- * GetTaskTokens
- * Checks whether the node ids in the task tokens are available
- * If at least one of them is not available, it returns false.
- * If yes, it takes all the needed tokens and returns true.
+ * IncrementParallelTaskCountForNodesInvolved
+ * Checks whether we have reached the limit of parallel tasks per node
+ * per each of the nodes involved with the task
+ * If at least one limit is reached, it returns false.
+ * If limits aren't reached, it increments the parallel task count
+ * for each of the nodes involved with the task, and returns true.
  */
 static bool
-GetTaskTokens(HTAB *ParallelMovesPerNode, BackgroundTask *task)
+IncrementParallelTaskCountForNodesInvolved(HTAB *ParallelTasksPerNode,
+										   BackgroundTask *task)
 {
-	if (task->nodeTokens)
+	if (task->nodesInvolved)
 	{
-		int node_token;
+		int node;
 
-		/* first check if all tokens are available*/
-		foreach_int(node_token, task->nodeTokens)
+		/* first check whether we have reached the limit for any of the nodes */
+		foreach_int(node, task->nodesInvolved)
 		{
 			bool found;
-			ParallelMovesPerNodeEntry *hashEntry = hash_search(
-				ParallelMovesPerNode, &(node_token), HASH_ENTER, &found);
+			ParallelTasksPerNodeEntry *hashEntry = hash_search(
+				ParallelTasksPerNode, &(node), HASH_ENTER, &found);
 			if (!found)
 			{
 				hashEntry->counter = 0;
 			}
-			else if (hashEntry->counter == MaxParallelMovesPerNode)
+			else if (hashEntry->counter >= MaxParallelTasksPerNode)
 			{
-				/* at least one token (this one) is not available */
+				/* at least one node's limit is reached */
 				return false;
 			}
 		}
 
-		/* then, take all needed tokens */
-		foreach_int(node_token, task->nodeTokens)
+		/* then, increment the parallel task count per each node */
+		foreach_int(node, task->nodesInvolved)
 		{
-			ParallelMovesPerNodeEntry *hashEntry = hash_search(
-				ParallelMovesPerNode, &(node_token), HASH_FIND, NULL);
+			ParallelTasksPerNodeEntry *hashEntry = hash_search(
+				ParallelTasksPerNode, &(node), HASH_FIND, NULL);
 			Assert(hashEntry);
 			hashEntry->counter += 1;
 		}

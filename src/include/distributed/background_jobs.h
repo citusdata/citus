@@ -86,18 +86,18 @@ typedef struct TaskExecutionContext
 
 
 /*
- * ParallelMovesPerNodeEntry is the struct used
- * to track the number of concurrent background tasks that have taken
- * a token on the particular node
+ * ParallelTasksPerNodeEntry is the struct used
+ * to track the number of concurrent background tasks that
+ * involve a particular node (the key to the entry)
  */
-typedef struct ParallelMovesPerNodeEntry
+typedef struct ParallelTasksPerNodeEntry
 {
 	/* Used as hash key. */
 	int32 node_id;
 
 	/* number of concurrent background tasks that involve node node_id */
 	uint32 counter;
-} ParallelMovesPerNodeEntry;
+} ParallelTasksPerNodeEntry;
 
 
 extern BackgroundWorkerHandle * StartCitusBackgroundTaskQueueMonitor(Oid database,

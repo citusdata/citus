@@ -25,6 +25,6 @@
 #define Anum_pg_dist_background_task_retry_count 7
 #define Anum_pg_dist_background_task_not_before 8
 #define Anum_pg_dist_background_task_message 9
-#define Anum_pg_dist_background_task_node_tokens 10
+#define Anum_pg_dist_background_task_nodes_involved 10
 
 #endif /* CITUS_PG_DIST_BACKGROUND_TASK_H */

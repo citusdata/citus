@@ -15,6 +15,6 @@ ALTER TABLE pg_catalog.pg_dist_transaction REPLICA IDENTITY USING INDEX pg_dist_
 #include "udfs/citus_stat_tenants_local_reset/11.3-1.sql"
 #include "udfs/citus_stat_tenants_reset/11.3-1.sql"
 
--- we introduce node_tokens, which will be used internally to
+-- we introduce nodes_involved, which will be used internally to
 -- limit the number of parallel tasks running per node
-ALTER TABLE pg_catalog.pg_dist_background_task ADD COLUMN node_tokens int[] DEFAULT NULL;
+ALTER TABLE pg_catalog.pg_dist_background_task ADD COLUMN nodes_involved int[] NOT NULL DEFAULT '{}';
