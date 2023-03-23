@@ -93,6 +93,31 @@ SET citus.stats_tenants_period TO 2;
 SELECT sleep_until_next_period();
 
 SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, query_count_in_this_period, query_count_in_last_period FROM citus_stats_tenants_local ORDER BY tenant_attribute;
+\c - - - :worker_2_port
+SELECT tenant_attribute, query_count_in_this_period, score FROM citus_stats_tenants(true) ORDER BY score DESC;
+
+\c - - - :master_port
+SET search_path TO citus_stats_tenants;
+
+-- test special and multibyte characters in tenant attribute
+SELECT result FROM run_command_on_all_nodes('SELECT clean_citus_stats_tenants()');
+TRUNCATE TABLE dist_tbl_text;
+
+SELECT count(*)>=0 FROM dist_tbl_text WHERE a = '/bcde';
+SELECT count(*)>=0 FROM dist_tbl_text WHERE a = '/*bcde';
+SELECT count(*)>=0 FROM dist_tbl_text WHERE a = '/b*cde';
+SELECT count(*)>=0 FROM dist_tbl_text WHERE a = '/b*c/de';
+SELECT count(*)>=0 FROM dist_tbl_text WHERE a = 'b/*//cde';
+SELECT count(*)>=0 FROM dist_tbl_text WHERE a = '/b/*/cde';
+SELECT count(*)>=0 FROM dist_tbl_text WHERE a = '/b/**/cde';
+SELECT count(*)>=0 FROM dist_tbl_text WHERE a = 'bcde*';
+SELECT count(*)>=0 FROM dist_tbl_text WHERE a = 'bcde*/';
+SELECT count(*)>=0 FROM dist_tbl_text WHERE a = U&'\0061\0308bc';
+
+\c - - - :worker_1_port
+SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, query_count_in_this_period, query_count_in_last_period FROM citus_stats_tenants ORDER BY tenant_attribute;
+\c - - - :worker_2_port
+SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, query_count_in_this_period, query_count_in_last_period FROM citus_stats_tenants ORDER BY tenant_attribute;
 \c - - - :master_port
 SET search_path TO citus_stats_tenants;
 
