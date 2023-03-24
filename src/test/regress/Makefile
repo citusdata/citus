@@ -226,6 +226,10 @@ check-operations: all
 	$(pg_regress_multi_check) --load-extension=citus \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/operations_schedule $(EXTRA_TESTS)
 
+check-operations-multi-node: all
+	        $(pg_regress_multi_check) --load-extension=citus --worker-count=4 \
+			        -- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/operations_multi_node_schedule $(EXTRA_TESTS)
+
 check-columnar: all
 	$(pg_regress_multi_check) --load-extension=citus_columnar --load-extension=citus \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/columnar_schedule $(EXTRA_TESTS)

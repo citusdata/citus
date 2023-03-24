@@ -190,16 +190,10 @@ typedef struct WorkerShardStatistics
 	HTAB *statistics;
 } WorkerShardStatistics;
 
-/* ShardMoveDependencyHashKey contains colocationId to be used as a key in a hash */
-typedef struct ShardMoveDependencyHashKey
-{
-	int64 colocationId;
-} ShardMoveDependencyHashKey;
-
 /* ShardMoveDependencyHashEntry contains the taskId which any new shard move task within the corresponding colocation group must take a dependency on */
 typedef struct ShardMoveDependencyInfo
 {
-	ShardMoveDependencyHashKey key;
+	int64 key; 
 	int64 taskId;
 } ShardMoveDependencyInfo;
 
