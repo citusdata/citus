@@ -63,11 +63,43 @@ DistributedPlan *
 CreateMergePlan(Query *originalQuery, Query *query,
 				PlannerRestrictionContext *plannerRestrictionContext)
 {
-	/*
-	 * For now, this is a place holder until we isolate the merge
-	 * planning into it's own code-path.
-	 */
-	return CreateModifyPlan(originalQuery, query, plannerRestrictionContext);
+	DistributedPlan *distributedPlan = CitusMakeNode(DistributedPlan);
+	bool multiShardQuery = false;
+
+	Assert(originalQuery->commandType == CMD_MERGE);
+
+	distributedPlan->modLevel = RowModifyLevelForQuery(query);
+
+	distributedPlan->planningError = MergeQuerySupported(originalQuery,
+														 multiShardQuery,
+														 plannerRestrictionContext);
+
+	if (distributedPlan->planningError != NULL)
+	{
+		return distributedPlan;
+	}
+
+	Job *job = RouterJob(originalQuery, plannerRestrictionContext,
+						 &distributedPlan->planningError);
+
+	if (distributedPlan->planningError != NULL)
+	{
+		return distributedPlan;
+	}
+
+	ereport(DEBUG1, (errmsg("Creating MERGE router plan")));
+
+	distributedPlan->workerJob = job;
+	distributedPlan->combineQuery = NULL;
+
+	/* MERGE doesn't support RETURNING clause */
+	distributedPlan->expectResults = false;
+	distributedPlan->targetRelationId = ResultRelationOidForQuery(query);
+
+	distributedPlan->fastPathRouterPlan =
+		plannerRestrictionContext->fastPathRestrictionContext->fastPathRouterQuery;
+
+	return distributedPlan;
 }
 
 
@@ -88,12 +120,6 @@ MergeQuerySupported(Query *originalQuery, bool multiShardQuery,
 	return NULL;
 
 	#else
-
-	/* For non-MERGE commands it's a no-op */
-	if (!IsMergeQuery(originalQuery))
-	{
-		return NULL;
-	}
 
 	/*
 	 * TODO: For now, we are adding an exception where any volatile or stable
@@ -595,12 +621,6 @@ MergeQualAndTargetListFunctionsSupported(Oid resultRelationId, FromExpr *joinTre
 	foreach(targetEntryCell, targetList)
 	{
 		TargetEntry *targetEntry = (TargetEntry *) lfirst(targetEntryCell);
-
-		/* skip resjunk entries: UPDATE adds some for ctid, etc. */
-		if (targetEntry->resjunk)
-		{
-			continue;
-		}
 
 		bool targetEntryDistributionColumn = false;
 		AttrNumber targetColumnAttrNumber = InvalidAttrNumber;
