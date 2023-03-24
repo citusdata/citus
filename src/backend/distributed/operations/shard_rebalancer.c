@@ -197,8 +197,11 @@ typedef struct ShardMoveDependencyInfo
 	int64 taskId;
 } ShardMoveDependencyInfo;
 
-HTAB *colocationDependencyHashMap = NULL;
-HTAB *nodeDependencyHashMap = NULL;
+typedef struct ShardMoveDependencies
+{
+	HTAB *colocationDependencies;
+	HTAB *nodeDependencies;
+} ShardMoveDependencies;
 
 char *VariablesToBePassedToNewConnections = NULL;
 
@@ -1924,29 +1927,36 @@ GetColocationId(PlacementUpdateEvent *move)
 
 
 /*
- * InitializeMoveDependencyHashMaps function creates the hash maps that we use to track the latest moves so that subsequent moves with the same properties
- * must take a dependency on them. There are two hash maps. One is for tracking the latest move scheduled in a given colocation group and the other one is for
- * tracking the latest move which involves a given node either as its source node or its target node.
+ * InitializeShardMoveDependencies function creates the hash maps that we use to track
+ * the latest moves so that subsequent moves with the same properties must take a dependency
+ * on them. There are two hash maps. One is for tracking the latest move scheduled in a
+ * given colocation group and the other one is for tracking the latest move which involves
+ * a given node either as its source node or its target node.
  */
-static void
-InitializeMoveDependencyHashMaps()
+static ShardMoveDependencies
+InitializeShardMoveDependencies()
 {
-	colocationDependencyHashMap = CreateSimpleHashWithNameAndSize(int64,
-																  ShardMoveDependencyInfo,
-																  "colocationDependencyHashMap",
-																  6);
-	nodeDependencyHashMap = CreateSimpleHashWithNameAndSize(int64,
-															ShardMoveDependencyInfo,
-															"nodeDependencyHashMap",
-															6);
+	ShardMoveDependencies shardMoveDependencies;
+	shardMoveDependencies.colocationDependencies = CreateSimpleHashWithNameAndSize(int64,
+																				   ShardMoveDependencyInfo,
+																				   "colocationDependencyHashMap",
+																				   6);
+	shardMoveDependencies.nodeDependencies = CreateSimpleHashWithNameAndSize(int64,
+																			 ShardMoveDependencyInfo,
+																			 "nodeDependencyHashMap",
+																			 6);
+
+	return shardMoveDependencies;
 }
 
 
 /*
- * GenerateTaskMoveDependencyList creates and returns a List of taskIds that the move must take a dependency on.
+ * GenerateTaskMoveDependencyList creates and returns a List of taskIds that
+ * the move must take a dependency on.
  */
 static List *
-GenerateTaskMoveDependencyList(PlacementUpdateEvent *move, int64 colocationId)
+GenerateTaskMoveDependencyList(PlacementUpdateEvent *move, int64 colocationId,
+							   ShardMoveDependencies shardMoveDependencies)
 {
 	List *dependsList = NIL;
 
@@ -1954,7 +1964,7 @@ GenerateTaskMoveDependencyList(PlacementUpdateEvent *move, int64 colocationId)
 
 	/* Check if there exists a move in the same colocation group scheduled earlier. */
 	ShardMoveDependencyInfo *shardMoveDependencyInfo = hash_search(
-		colocationDependencyHashMap, &colocationId, HASH_ENTER, &found);
+		shardMoveDependencies.colocationDependencies, &colocationId, HASH_ENTER, &found);
 
 	if (found)
 	{
@@ -1962,9 +1972,11 @@ GenerateTaskMoveDependencyList(PlacementUpdateEvent *move, int64 colocationId)
 											 (void *) shardMoveDependencyInfo->taskId);
 	}
 
-	/* Check if there exists a move scheduled earlier whose source or target node overlaps with the current move's source node. */
+	/* Check if there exists a move scheduled earlier whose source or target node
+	 * overlaps with the current move's source node. */
 	shardMoveDependencyInfo = hash_search(
-		nodeDependencyHashMap, &move->sourceNode->nodeId, HASH_ENTER, &found);
+		shardMoveDependencies.nodeDependencies, &move->sourceNode->nodeId, HASH_ENTER,
+		&found);
 
 	if (found)
 	{
@@ -1972,9 +1984,11 @@ GenerateTaskMoveDependencyList(PlacementUpdateEvent *move, int64 colocationId)
 											 (void *) shardMoveDependencyInfo->taskId);
 	}
 
-	/* Check if there exists a move scheduled earlier whose source or target node overlaps with the current move's target node. */
+	/* Check if there exists a move scheduled earlier whose source or target node
+	 * overlaps with the current move's target node. */
 	shardMoveDependencyInfo = hash_search(
-		nodeDependencyHashMap, &move->targetNode->nodeId, HASH_ENTER, &found);
+		shardMoveDependencies.nodeDependencies, &move->targetNode->nodeId, HASH_ENTER,
+		&found);
 
 
 	if (found)
@@ -1988,21 +2002,22 @@ GenerateTaskMoveDependencyList(PlacementUpdateEvent *move, int64 colocationId)
 
 
 /*
- * UpdateDependencyHashMaps updates the tracking dependency maps with the latest move taskId..
+ * UpdateShardMoveDependencies function updates the dependency maps with the latest move's taskId.
  */
 static void
-UpdateDependencyHashMaps(PlacementUpdateEvent *move, uint64 colocationId, int64 taskId)
+UpdateShardMoveDependencies(PlacementUpdateEvent *move, uint64 colocationId, int64 taskId,
+							ShardMoveDependencies shardMoveDependencies)
 {
 	ShardMoveDependencyInfo *shardMoveDependencyInfo = hash_search(
-		colocationDependencyHashMap, &colocationId, HASH_ENTER, NULL);
+		shardMoveDependencies.colocationDependencies, &colocationId, HASH_ENTER, NULL);
 	shardMoveDependencyInfo->taskId = taskId;
 
-	shardMoveDependencyInfo = hash_search(nodeDependencyHashMap,
+	shardMoveDependencyInfo = hash_search(shardMoveDependencies.nodeDependencies,
 										  &move->sourceNode->nodeId, HASH_ENTER, NULL);
 
 	shardMoveDependencyInfo->taskId = taskId;
 
-	shardMoveDependencyInfo = hash_search(nodeDependencyHashMap,
+	shardMoveDependencyInfo = hash_search(shardMoveDependencies.nodeDependencies,
 										  &move->targetNode->nodeId, HASH_ENTER, NULL);
 
 	shardMoveDependencyInfo->taskId = taskId;
@@ -2108,7 +2123,7 @@ RebalanceTableShardsBackground(RebalanceOptions *options, Oid shardReplicationMo
 
 	PlacementUpdateEvent *move = NULL;
 
-	InitializeMoveDependencyHashMaps();
+	ShardMoveDependencies shardMoveDependencies = InitializeShardMoveDependencies();
 
 	foreach_ptr(move, placementUpdateList)
 	{
@@ -2123,7 +2138,8 @@ RebalanceTableShardsBackground(RebalanceOptions *options, Oid shardReplicationMo
 
 		int64 colocationId = GetColocationId(move);
 
-		List *dependsList = GenerateTaskMoveDependencyList(move, colocationId);
+		List *dependsList = GenerateTaskMoveDependencyList(move, colocationId,
+														   shardMoveDependencies);
 
 		if (dependsList == NIL && replicateRefTablesTaskId > 0)
 		{
@@ -2133,7 +2149,8 @@ RebalanceTableShardsBackground(RebalanceOptions *options, Oid shardReplicationMo
 		BackgroundTask *task = ScheduleBackgroundTask(jobId, GetUserId(), buf.data,
 													  dependsList);
 
-		UpdateDependencyHashMaps(move, colocationId, task->taskid);
+		UpdateShardMoveDependencies(move, colocationId, task->taskid,
+									shardMoveDependencies);
 	}
 
 	ereport(NOTICE,
