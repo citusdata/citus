@@ -193,7 +193,7 @@ typedef struct WorkerShardStatistics
 /* ShardMoveDependencyHashEntry contains the taskId which any new shard move task within the corresponding colocation group must take a dependency on */
 typedef struct ShardMoveDependencyInfo
 {
-	int64 key; 
+	int64 key;
 	int64 taskId;
 } ShardMoveDependencyInfo;
 
