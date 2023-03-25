@@ -2417,8 +2417,133 @@ SELECT * FROM target_set ORDER BY 1, 2;
 (2 rows)
 
 --
+-- Reference as a source
+--
+CREATE TABLE reftarget_local(t1 int, t2 int);
+CREATE TABLE refsource_ref(s1 int, s2 int);
+INSERT INTO reftarget_local VALUES(1, 0);
+INSERT INTO reftarget_local VALUES(3, 100);
+INSERT INTO refsource_ref VALUES(1, 1);
+INSERT INTO refsource_ref VALUES(2, 2);
+INSERT INTO refsource_ref VALUES(3, 3);
+MERGE INTO reftarget_local
+USING (SELECT * FROM refsource_ref UNION SELECT * FROM refsource_ref) AS foo ON reftarget_local.t1 = foo.s1
+WHEN MATCHED AND reftarget_local.t2 = 100 THEN
+	DELETE
+WHEN MATCHED THEN
+        UPDATE SET t2 = t2 + 100
+WHEN NOT MATCHED THEN
+	INSERT VALUES(foo.s1);
+DROP TABLE IF EXISTS pg_result;
+SELECT * INTO pg_result FROM reftarget_local ORDER BY 1, 2;
+-- Make source table as reference (target is Postgres)
+TRUNCATE reftarget_local;
+TRUNCATE refsource_ref;
+INSERT INTO reftarget_local VALUES(1, 0);
+INSERT INTO reftarget_local VALUES(3, 100);
+INSERT INTO refsource_ref VALUES(1, 1);
+INSERT INTO refsource_ref VALUES(2, 2);
+INSERT INTO refsource_ref VALUES(3, 3);
+SELECT create_reference_table('refsource_ref');
+NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$merge_schema.refsource_ref$$)
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+MERGE INTO reftarget_local
+USING (SELECT * FROM refsource_ref UNION SELECT * FROM refsource_ref) AS foo ON reftarget_local.t1 = foo.s1
+WHEN MATCHED AND reftarget_local.t2 = 100 THEN
+	DELETE
+WHEN MATCHED THEN
+        UPDATE SET t2 = t2 + 100
+WHEN NOT MATCHED THEN
+	INSERT VALUES(foo.s1);
+SELECT * INTO pg_ref FROM reftarget_local ORDER BY 1, 2;
+-- Should be equal
+SELECT c.*, p.*
+FROM pg_ref c, pg_result p
+WHERE c.t1 = p.t1
+ORDER BY 1,2;
+ t1 | t2  | t1 | t2
+---------------------------------------------------------------------
+  1 | 100 |  1 | 100
+  2 |     |  2 |
+(2 rows)
+
+-- Must return zero rows
+SELECT count(*)
+FROM pg_result FULL OUTER JOIN pg_ref ON pg_result.t1 = pg_ref.t1
+WHERE pg_result.t1 IS NULL OR pg_ref.t1 IS NULL;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+-- Now make both Citus tables, reference as source, local as target
+TRUNCATE reftarget_local;
+TRUNCATE refsource_ref;
+INSERT INTO reftarget_local VALUES(1, 0);
+INSERT INTO reftarget_local VALUES(3, 100);
+INSERT INTO refsource_ref VALUES(1, 1);
+INSERT INTO refsource_ref VALUES(2, 2);
+INSERT INTO refsource_ref VALUES(3, 3);
+SELECT citus_add_local_table_to_metadata('reftarget_local');
+ citus_add_local_table_to_metadata
+---------------------------------------------------------------------
+
+(1 row)
+
+MERGE INTO reftarget_local
+USING (SELECT * FROM refsource_ref UNION SELECT * FROM refsource_ref) AS foo ON reftarget_local.t1 = foo.s1
+WHEN MATCHED AND reftarget_local.t2 = 100 THEN
+	DELETE
+WHEN MATCHED THEN
+        UPDATE SET t2 = t2 + 100
+WHEN NOT MATCHED THEN
+	INSERT VALUES(foo.s1);
+SELECT * INTO local_ref FROM reftarget_local ORDER BY 1, 2;
+-- Should be equal
+SELECT c.*, p.*
+FROM local_ref c, pg_result p
+WHERE c.t1 = p.t1
+ORDER BY 1,2;
+ t1 | t2  | t1 | t2
+---------------------------------------------------------------------
+  1 | 100 |  1 | 100
+  2 |     |  2 |
+(2 rows)
+
+-- Must return zero rows
+SELECT count(*)
+FROM pg_result FULL OUTER JOIN local_ref ON pg_result.t1 = local_ref.t1
+WHERE pg_result.t1 IS NULL OR local_ref.t1 IS NULL;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+--
 -- Error and Unsupported scenarios
 --
+-- Reference as a target and local as source
+MERGE INTO refsource_ref
+USING (SELECT * FROM reftarget_local UNION SELECT * FROM reftarget_local) AS foo ON refsource_ref.s1 = foo.t1
+WHEN MATCHED THEN
+        UPDATE SET s2 = s2 + 100
+WHEN NOT MATCHED THEN
+	INSERT VALUES(foo.t1);
+ERROR:  Reference table as target is not allowed in MERGE command
+-- Reference as a source and distributed as target
+MERGE INTO target_set t
+USING refsource_ref AS s ON t.t1 = s.s1
+WHEN MATCHED THEN
+        DO NOTHING;
+ERROR:  MERGE command is not supported with combination of distributed/reference yet
+HINT:  If target is distributed, source must be distributed and co-located
 MERGE INTO target_set
 USING source_set AS foo ON target_set.t1 = foo.s1
 WHEN MATCHED THEN
@@ -2735,7 +2860,7 @@ MERGE INTO t1
 		UPDATE SET val = t1.val + 1
 	WHEN NOT MATCHED THEN
 		INSERT (id, val) VALUES (s1.id, s1.val);
-ERROR:  MERGE command is not supported on reference tables yet
+ERROR:  Reference table as target is not allowed in MERGE command
 --
 -- Postgres + Citus-Distributed table
 --
@@ -3113,9 +3238,8 @@ CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_
 PL/pgSQL function citus_drop_trigger() line XX at PERFORM
 DROP FUNCTION merge_when_and_write();
 DROP SCHEMA merge_schema CASCADE;
-NOTICE:  drop cascades to 84 other objects
+NOTICE:  drop cascades to 90 other objects
 DETAIL:  drop cascades to function insert_data()
-drop cascades to table pg_result
 drop cascades to table local_local
 drop cascades to table target
 drop cascades to table source
@@ -3188,10 +3312,17 @@ drop cascades to table source_serial
 drop cascades to table target_serial
 drop cascades to table target_set
 drop cascades to table source_set
+drop cascades to table reftarget_local_4000113
+drop cascades to table refsource_ref
+drop cascades to table pg_result
+drop cascades to table refsource_ref_4000112
+drop cascades to table pg_ref
+drop cascades to table reftarget_local
+drop cascades to table local_ref
 drop cascades to function add_s(integer,integer)
 drop cascades to table pg
-drop cascades to table t1_4000131
-drop cascades to table s1_4000132
+drop cascades to table t1_4000133
+drop cascades to table s1_4000134
 drop cascades to table t1
 drop cascades to table s1
 drop cascades to table dist_colocated

@@ -19,13 +19,16 @@
 #include "distributed/errormessage.h"
 #include "distributed/multi_physical_planner.h"
 
-extern bool IsMergeAllowedOnRelation(Query *parse, RangeTblEntry *rte);
-extern DeferredErrorMessage * MergeQuerySupported(Query *originalQuery,
+extern DeferredErrorMessage * MergeQuerySupported(Oid resultRelationId,
+												  Query *originalQuery,
 												  bool multiShardQuery,
 												  PlannerRestrictionContext *
 												  plannerRestrictionContext);
 extern DistributedPlan * CreateMergePlan(Query *originalQuery, Query *query,
 										 PlannerRestrictionContext *
 										 plannerRestrictionContext);
+extern bool IsLocalTableModification(Oid targetRelationId, Query *query,
+									 uint64 shardId,
+									 RTEListProperties *rteProperties);
 
 #endif /* MERGE_PLANNER_H */

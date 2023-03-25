@@ -36,6 +36,7 @@
 #include "distributed/multi_join_order.h"
 #include "distributed/multi_router_planner.h"
 #include "distributed/pg_dist_node.h"
+#include "distributed/pg_dist_node_metadata.h"
 #include "distributed/reference_table_utils.h"
 #include "distributed/remote_commands.h"
 #include "distributed/resource_lock.h"
@@ -119,7 +120,6 @@ static char * NodeMetadataSyncedUpdateCommand(uint32 nodeId, bool metadataSynced
 static void ErrorIfCoordinatorMetadataSetFalse(WorkerNode *workerNode, Datum value,
 											   char *field);
 static WorkerNode * SetShouldHaveShards(WorkerNode *workerNode, bool shouldHaveShards);
-static int FindCoordinatorNodeId(void);
 static WorkerNode * FindNodeAnyClusterByNodeId(uint32 nodeId);
 static void ErrorIfAnyNodeNotExist(List *nodeList);
 static void UpdateLocalGroupIdsViaMetadataContext(MetadataSyncContext *context);
@@ -1800,7 +1800,7 @@ FindNodeWithNodeId(int nodeId, bool missingOk)
 /*
  * FindCoordinatorNodeId returns the node id of the coordinator node
  */
-static int
+int
 FindCoordinatorNodeId()
 {
 	bool includeNodesFromOtherClusters = false;

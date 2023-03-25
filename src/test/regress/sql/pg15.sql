@@ -198,13 +198,13 @@ SELECT citus_add_local_table_to_metadata('tbl2');
 MERGE INTO tbl1 USING tbl2 ON (true)
 WHEN MATCHED THEN DELETE;
 
--- one table is reference, the other local, not supported
+-- source table is reference, the target is local, supported
 SELECT create_reference_table('tbl2');
 
 MERGE INTO tbl1 USING tbl2 ON (true)
 WHEN MATCHED THEN DELETE;
 
--- now, both are reference, still not supported
+-- now, both are reference, not supported
 SELECT create_reference_table('tbl1');
 
 MERGE INTO tbl1 USING tbl2 ON (true)
