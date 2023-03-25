@@ -1537,8 +1537,109 @@ WHEN NOT MATCHED THEN
 SELECT * FROM target_set ORDER BY 1, 2;
 
 --
+-- Reference as a source
+--
+CREATE TABLE reftarget_local(t1 int, t2 int);
+CREATE TABLE refsource_ref(s1 int, s2 int);
+
+INSERT INTO reftarget_local VALUES(1, 0);
+INSERT INTO reftarget_local VALUES(3, 100);
+INSERT INTO refsource_ref VALUES(1, 1);
+INSERT INTO refsource_ref VALUES(2, 2);
+INSERT INTO refsource_ref VALUES(3, 3);
+
+MERGE INTO reftarget_local
+USING (SELECT * FROM refsource_ref UNION SELECT * FROM refsource_ref) AS foo ON reftarget_local.t1 = foo.s1
+WHEN MATCHED AND reftarget_local.t2 = 100 THEN
+	DELETE
+WHEN MATCHED THEN
+        UPDATE SET t2 = t2 + 100
+WHEN NOT MATCHED THEN
+	INSERT VALUES(foo.s1);
+
+DROP TABLE IF EXISTS pg_result;
+SELECT * INTO pg_result FROM reftarget_local ORDER BY 1, 2;
+
+-- Make source table as reference (target is Postgres)
+TRUNCATE reftarget_local;
+TRUNCATE refsource_ref;
+INSERT INTO reftarget_local VALUES(1, 0);
+INSERT INTO reftarget_local VALUES(3, 100);
+INSERT INTO refsource_ref VALUES(1, 1);
+INSERT INTO refsource_ref VALUES(2, 2);
+INSERT INTO refsource_ref VALUES(3, 3);
+SELECT create_reference_table('refsource_ref');
+
+MERGE INTO reftarget_local
+USING (SELECT * FROM refsource_ref UNION SELECT * FROM refsource_ref) AS foo ON reftarget_local.t1 = foo.s1
+WHEN MATCHED AND reftarget_local.t2 = 100 THEN
+	DELETE
+WHEN MATCHED THEN
+        UPDATE SET t2 = t2 + 100
+WHEN NOT MATCHED THEN
+	INSERT VALUES(foo.s1);
+SELECT * INTO pg_ref FROM reftarget_local ORDER BY 1, 2;
+
+-- Should be equal
+SELECT c.*, p.*
+FROM pg_ref c, pg_result p
+WHERE c.t1 = p.t1
+ORDER BY 1,2;
+
+-- Must return zero rows
+SELECT count(*)
+FROM pg_result FULL OUTER JOIN pg_ref ON pg_result.t1 = pg_ref.t1
+WHERE pg_result.t1 IS NULL OR pg_ref.t1 IS NULL;
+
+-- Now make both Citus tables, reference as source, local as target
+TRUNCATE reftarget_local;
+TRUNCATE refsource_ref;
+INSERT INTO reftarget_local VALUES(1, 0);
+INSERT INTO reftarget_local VALUES(3, 100);
+INSERT INTO refsource_ref VALUES(1, 1);
+INSERT INTO refsource_ref VALUES(2, 2);
+INSERT INTO refsource_ref VALUES(3, 3);
+
+SELECT citus_add_local_table_to_metadata('reftarget_local');
+
+MERGE INTO reftarget_local
+USING (SELECT * FROM refsource_ref UNION SELECT * FROM refsource_ref) AS foo ON reftarget_local.t1 = foo.s1
+WHEN MATCHED AND reftarget_local.t2 = 100 THEN
+	DELETE
+WHEN MATCHED THEN
+        UPDATE SET t2 = t2 + 100
+WHEN NOT MATCHED THEN
+	INSERT VALUES(foo.s1);
+SELECT * INTO local_ref FROM reftarget_local ORDER BY 1, 2;
+
+-- Should be equal
+SELECT c.*, p.*
+FROM local_ref c, pg_result p
+WHERE c.t1 = p.t1
+ORDER BY 1,2;
+
+-- Must return zero rows
+SELECT count(*)
+FROM pg_result FULL OUTER JOIN local_ref ON pg_result.t1 = local_ref.t1
+WHERE pg_result.t1 IS NULL OR local_ref.t1 IS NULL;
+
+--
 -- Error and Unsupported scenarios
 --
+
+-- Reference as a target and local as source
+MERGE INTO refsource_ref
+USING (SELECT * FROM reftarget_local UNION SELECT * FROM reftarget_local) AS foo ON refsource_ref.s1 = foo.t1
+WHEN MATCHED THEN
+        UPDATE SET s2 = s2 + 100
+WHEN NOT MATCHED THEN
+	INSERT VALUES(foo.t1);
+
+-- Reference as a source and distributed as target
+MERGE INTO target_set t
+USING refsource_ref AS s ON t.t1 = s.s1
+WHEN MATCHED THEN
+        DO NOTHING;
 
 MERGE INTO target_set
 USING source_set AS foo ON target_set.t1 = foo.s1

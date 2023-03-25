@@ -117,5 +117,6 @@ extern bool HasDangerousJoinUsing(List *rtableList, Node *jtnode);
 extern Job * RouterJob(Query *originalQuery,
 					   PlannerRestrictionContext *plannerRestrictionContext,
 					   DeferredErrorMessage **planningError);
+extern bool ContainsOnlyLocalTables(RTEListProperties *rteProperties);
 
 #endif /* MULTI_ROUTER_PLANNER_H */
