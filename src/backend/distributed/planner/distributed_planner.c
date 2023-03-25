@@ -990,7 +990,8 @@ CreateDistributedPlan(uint64 planId, bool allowRecursivePlanning, Query *origina
 		case MERGE_QUERY:
 		{
 			distributedPlan =
-				CreateMergePlan(originalQuery, query, plannerRestrictionContext);
+				CreateMergePlan(planId, originalQuery, query, plannerRestrictionContext,
+								boundParams);
 			break;
 		}
 
@@ -1385,6 +1386,12 @@ FinalizePlan(PlannedStmt *localPlan, DistributedPlan *distributedPlan)
 		case MULTI_EXECUTOR_NON_PUSHABLE_INSERT_SELECT:
 		{
 			customScan->methods = &NonPushableInsertSelectCustomScanMethods;
+			break;
+		}
+
+		case MULTI_EXECUTOR_NON_PUSHABLE_MERGE_QUERY:
+		{
+			customScan->methods = &NonPushableMergeCommandCustomScanMethods;
 			break;
 		}
 

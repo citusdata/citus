@@ -1879,24 +1879,7 @@ RouterJob(Query *originalQuery, PlannerRestrictionContext *plannerRestrictionCon
 
 	if (*planningError)
 	{
-		/*
-		 * For MERGE, we do _not_ plan any other router job than the MERGE job itself,
-		 * let's not continue further down the lane in distributed planning, simply
-		 * bail out.
-		 */
-		if (IsMergeQuery(originalQuery))
-		{
-			if (ContainsSingleShardTable(originalQuery))
-			{
-				WrapRouterErrorForSingleShardTable(*planningError);
-			}
-
-			RaiseDeferredError(*planningError, ERROR);
-		}
-		else
-		{
-			return NULL;
-		}
+		return NULL;
 	}
 
 	Job *job = CreateJob(originalQuery);
@@ -2368,14 +2351,7 @@ PlanRouterQuery(Query *originalQuery,
 
 		Assert(UpdateOrDeleteOrMergeQuery(originalQuery));
 
-		if (IsMergeQuery(originalQuery))
-		{
-			targetRelationId = ModifyQueryResultRelationId(originalQuery);
-			planningError = MergeQuerySupported(targetRelationId, originalQuery,
-												isMultiShardQuery,
-												plannerRestrictionContext);
-		}
-		else
+		if (!IsMergeQuery(originalQuery))
 		{
 			planningError = ModifyQuerySupported(originalQuery, originalQuery,
 												 isMultiShardQuery,

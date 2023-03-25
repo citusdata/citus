@@ -27,6 +27,8 @@
 #include "distributed/listutils.h"
 #include "distributed/local_executor.h"
 #include "distributed/local_plan_cache.h"
+#include "distributed/merge_executor.h"
+#include "distributed/merge_planner.h"
 #include "distributed/multi_executor.h"
 #include "distributed/multi_server_executor.h"
 #include "distributed/multi_router_planner.h"
@@ -53,6 +55,7 @@ extern AllowedDistributionColumn AllowedDistributionColumnValue;
 static Node * AdaptiveExecutorCreateScan(CustomScan *scan);
 static Node * NonPushableInsertSelectCreateScan(CustomScan *scan);
 static Node * DelayedErrorCreateScan(CustomScan *scan);
+static Node * NonPushableMergeCommandCreateScan(CustomScan *scan);
 
 /* functions that are common to different scans */
 static void CitusBeginScan(CustomScanState *node, EState *estate, int eflags);
@@ -88,6 +91,11 @@ CustomScanMethods DelayedErrorCustomScanMethods = {
 	DelayedErrorCreateScan
 };
 
+CustomScanMethods NonPushableMergeCommandCustomScanMethods = {
+	"Citus MERGE INTO ...",
+	NonPushableMergeCommandCreateScan
+};
+
 
 /*
  * Define executor methods for the different executor types.
@@ -111,6 +119,16 @@ static CustomExecMethods NonPushableInsertSelectCustomExecMethods = {
 };
 
 
+static CustomExecMethods NonPushableMergeCommandCustomExecMethods = {
+	.CustomName = "NonPushableMergeCommandScan",
+	.BeginCustomScan = CitusBeginScan,
+	.ExecCustomScan = NonPushableMergeCommandExecScan,
+	.EndCustomScan = CitusEndScan,
+	.ReScanCustomScan = CitusReScan,
+	.ExplainCustomScan = NonPushableMergeCommandExplainScan
+};
+
+
 /*
  * IsCitusCustomState returns if a given PlanState node is a CitusCustomState node.
  */
@@ -124,7 +142,8 @@ IsCitusCustomState(PlanState *planState)
 
 	CustomScanState *css = castNode(CustomScanState, planState);
 	if (css->methods == &AdaptiveExecutorCustomExecMethods ||
-		css->methods == &NonPushableInsertSelectCustomExecMethods)
+		css->methods == &NonPushableInsertSelectCustomExecMethods ||
+		css->methods == &NonPushableMergeCommandCustomExecMethods)
 	{
 		return true;
 	}
@@ -142,6 +161,7 @@ RegisterCitusCustomScanMethods(void)
 	RegisterCustomScanMethods(&AdaptiveExecutorCustomScanMethods);
 	RegisterCustomScanMethods(&NonPushableInsertSelectCustomScanMethods);
 	RegisterCustomScanMethods(&DelayedErrorCustomScanMethods);
+	RegisterCustomScanMethods(&NonPushableMergeCommandCustomScanMethods);
 }
 
 
@@ -720,6 +740,26 @@ DelayedErrorCreateScan(CustomScan *scan)
 	RaiseDeferredError(distributedPlan->planningError, ERROR);
 
 	return NULL;
+}
+
+
+/*
+ * NonPushableMergeCommandCreateScan creates the scan state for executing
+ * MERGE INTO ... into a distributed table with repartition of source rows.
+ */
+static Node *
+NonPushableMergeCommandCreateScan(CustomScan *scan)
+{
+	CitusScanState *scanState = palloc0(sizeof(CitusScanState));
+
+	scanState->executorType = MULTI_EXECUTOR_NON_PUSHABLE_MERGE_QUERY;
+	scanState->customScanState.ss.ps.type = T_CustomScanState;
+	scanState->distributedPlan = GetDistributedPlan(scan);
+	scanState->customScanState.methods = &NonPushableMergeCommandCustomExecMethods;
+	scanState->finishedPreScan = false;
+	scanState->finishedRemoteScan = false;
+
+	return (Node *) scanState;
 }
 
 

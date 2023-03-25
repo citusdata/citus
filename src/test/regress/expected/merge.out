@@ -20,13 +20,14 @@ SET citus.next_shard_id TO 4000000;
 SET citus.explain_all_tasks TO true;
 SET citus.shard_replication_factor TO 1;
 SET citus.max_adaptive_executor_pool_size TO 1;
+SET client_min_messages = warning;
 SELECT 1 FROM master_add_node('localhost', :master_port, groupid => 0);
-NOTICE:  localhost:xxxxx is the coordinator and already contains metadata, skipping syncing the metadata
  ?column?
 ---------------------------------------------------------------------
         1
 (1 row)
 
+RESET client_min_messages;
 CREATE TABLE source
 (
    order_id        INT,
@@ -1425,19 +1426,13 @@ HINT:  To remove the local data, run: SELECT truncate_local_data_after_distribut
 (1 row)
 
 BEGIN;
-SET citus.log_remote_commands to true;
 MERGE INTO target_cj t
-USING source_cj1 s1 INNER JOIN source_cj2 s2 ON sid1 = sid2
+USING (SELECT * FROM source_cj1 s1 INNER JOIN source_cj2 s2 ON sid1 = sid2) s
 ON t.tid = sid1 AND t.tid = 2
 WHEN MATCHED THEN
         UPDATE SET src = src2
 WHEN NOT MATCHED THEN
         DO NOTHING;
-NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing MERGE INTO merge_schema.target_cj_xxxxxxx t USING (merge_schema.source_cj1_xxxxxxx s1 JOIN merge_schema.source_cj2_xxxxxxx s2 ON ((s1.sid1 OPERATOR(pg_catalog.=) s2.sid2))) ON ((t.tid OPERATOR(pg_catalog.=) s1.sid1) AND (t.tid OPERATOR(pg_catalog.=) 2)) WHEN MATCHED THEN UPDATE SET src = s2.src2 WHEN NOT MATCHED THEN DO NOTHING
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-SET citus.log_remote_commands to false;
 SELECT * FROM target_cj ORDER BY 1;
  tid |   src    | val
 ---------------------------------------------------------------------
@@ -1451,8 +1446,8 @@ ROLLBACK;
 BEGIN;
 -- try accessing columns from either side of the source join
 MERGE INTO target_cj t
-USING source_cj1 s2
-        INNER JOIN source_cj2 s1 ON sid1 = sid2 AND val1 = 10
+USING (SELECT * FROM source_cj1 s2
+        INNER JOIN source_cj2 s1 ON sid1 = sid2 AND val1 = 10) s
 ON t.tid = sid1 AND t.tid = 2
 WHEN MATCHED THEN
         UPDATE SET src = src1, val = val2
@@ -1520,7 +1515,7 @@ SELECT * FROM target_cj ORDER BY 1;
 
 ROLLBACK;
 -- Test PREPARE
-PREPARE foo(int) AS
+PREPARE merge_prepare(int) AS
 MERGE INTO target_cj target
 USING (SELECT * FROM source_cj1) sub
 ON target.tid = sub.sid1 AND target.tid = $1
@@ -1538,11 +1533,11 @@ SELECT * FROM target_cj ORDER BY 1;
 (4 rows)
 
 BEGIN;
-EXECUTE foo(2);
-EXECUTE foo(2);
-EXECUTE foo(2);
-EXECUTE foo(2);
-EXECUTE foo(2);
+EXECUTE merge_prepare(2);
+EXECUTE merge_prepare(2);
+EXECUTE merge_prepare(2);
+EXECUTE merge_prepare(2);
+EXECUTE merge_prepare(2);
 SELECT * FROM target_cj ORDER BY 1;
  tid |  src   | val
 ---------------------------------------------------------------------
@@ -1556,7 +1551,7 @@ ROLLBACK;
 BEGIN;
 SET citus.log_remote_commands to true;
 SET client_min_messages TO DEBUG1;
-EXECUTE foo(2);
+EXECUTE merge_prepare(2);
 DEBUG:  <Deparsed MERGE query: MERGE INTO merge_schema.target_cj_xxxxxxx target USING (SELECT source_cj1.sid1, source_cj1.src1, source_cj1.val1 FROM merge_schema.source_cj1_xxxxxxx source_cj1) sub ON ((target.tid OPERATOR(pg_catalog.=) sub.sid1) AND (target.tid OPERATOR(pg_catalog.=) $1)) WHEN MATCHED THEN UPDATE SET val = sub.val1 WHEN NOT MATCHED THEN DO NOTHING >
 DEBUG:  <Deparsed MERGE query: MERGE INTO merge_schema.target_cj_xxxxxxx target USING (SELECT source_cj1.sid1, source_cj1.src1, source_cj1.val1 FROM merge_schema.source_cj1_xxxxxxx source_cj1) sub ON ((target.tid OPERATOR(pg_catalog.=) sub.sid1) AND (target.tid OPERATOR(pg_catalog.=) $1)) WHEN MATCHED THEN UPDATE SET val = sub.val1 WHEN NOT MATCHED THEN DO NOTHING >
 DEBUG:  <Deparsed MERGE query: MERGE INTO merge_schema.target_cj_xxxxxxx target USING (SELECT source_cj1.sid1, source_cj1.src1, source_cj1.val1 FROM merge_schema.source_cj1_xxxxxxx source_cj1) sub ON ((target.tid OPERATOR(pg_catalog.=) sub.sid1) AND (target.tid OPERATOR(pg_catalog.=) $1)) WHEN MATCHED THEN UPDATE SET val = sub.val1 WHEN NOT MATCHED THEN DO NOTHING >
@@ -1569,7 +1564,7 @@ DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing MERGE INTO merge_schema.target_cj_xxxxxxx target USING (SELECT source_cj1.sid1, source_cj1.src1, source_cj1.val1 FROM merge_schema.source_cj1_xxxxxxx source_cj1) sub ON ((target.tid OPERATOR(pg_catalog.=) sub.sid1) AND (target.tid OPERATOR(pg_catalog.=) $1)) WHEN MATCHED THEN UPDATE SET val = sub.val1 WHEN NOT MATCHED THEN DO NOTHING
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 RESET client_min_messages;
-EXECUTE foo(2);
+EXECUTE merge_prepare(2);
 NOTICE:  issuing MERGE INTO merge_schema.target_cj_xxxxxxx target USING (SELECT source_cj1.sid1, source_cj1.src1, source_cj1.val1 FROM merge_schema.source_cj1_xxxxxxx source_cj1) sub ON ((target.tid OPERATOR(pg_catalog.=) sub.sid1) AND (target.tid OPERATOR(pg_catalog.=) $1)) WHEN MATCHED THEN UPDATE SET val = sub.val1 WHEN NOT MATCHED THEN DO NOTHING
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 SET citus.log_remote_commands to false;
@@ -2526,9 +2521,442 @@ WHERE pg_result.t1 IS NULL OR local_ref.t1 IS NULL;
      0
 (1 row)
 
+-- Now make target as distributed, keep reference as source
+TRUNCATE reftarget_local;
+TRUNCATE refsource_ref;
+INSERT INTO reftarget_local VALUES(1, 0);
+INSERT INTO reftarget_local VALUES(3, 100);
+INSERT INTO refsource_ref VALUES(1, 1);
+INSERT INTO refsource_ref VALUES(2, 2);
+INSERT INTO refsource_ref VALUES(3, 3);
+SELECT create_distributed_table('reftarget_local', 't1');
+NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$merge_schema.reftarget_local$$)
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+MERGE INTO reftarget_local
+USING (SELECT * FROM refsource_ref UNION SELECT * FROM refsource_ref) AS foo ON reftarget_local.t1 = foo.s1
+WHEN MATCHED AND reftarget_local.t2 = 100 THEN
+	DELETE
+WHEN MATCHED THEN
+        UPDATE SET t2 = t2 + 100
+WHEN NOT MATCHED THEN
+	INSERT VALUES(foo.s1);
+SELECT * INTO dist_reftarget FROM reftarget_local ORDER BY 1, 2;
+-- Should be equal
+SELECT c.*, p.*
+FROM dist_reftarget c, pg_result p
+WHERE c.t1 = p.t1
+ORDER BY 1,2;
+ t1 | t2  | t1 | t2
+---------------------------------------------------------------------
+  1 | 100 |  1 | 100
+  2 |     |  2 |
+(2 rows)
+
+-- Must return zero rows
+SELECT count(*)
+FROM pg_result FULL OUTER JOIN dist_reftarget ON pg_result.t1 = dist_reftarget.t1
+WHERE pg_result.t1 IS NULL OR dist_reftarget.t1 IS NULL;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+--
+-- Distributed (target), Reference(source)
+--
+CREATE TABLE demo_distributed(id1 int, val1 int);
+CREATE TABLE demo_source_table(id2 int, val2 int);
+CREATE FUNCTION setup_demo_data() RETURNS VOID AS $$
+INSERT INTO demo_distributed VALUES(1, 100);
+INSERT INTO demo_distributed VALUES(7, 100);
+INSERT INTO demo_distributed VALUES(15, 100);
+INSERT INTO demo_distributed VALUES(100, 0);
+INSERT INTO demo_distributed VALUES(300, 100);
+INSERT INTO demo_distributed VALUES(400, 0);
+
+INSERT INTO demo_source_table VALUES(1, 77);
+INSERT INTO demo_source_table VALUES(15, 77);
+INSERT INTO demo_source_table VALUES(75, 77);
+INSERT INTO demo_source_table VALUES(100, 77);
+INSERT INTO demo_source_table VALUES(300, 77);
+INSERT INTO demo_source_table VALUES(400, 77);
+INSERT INTO demo_source_table VALUES(500, 77);
+$$
+LANGUAGE SQL;
+CREATE FUNCTION merge_demo_data() RETURNS VOID AS $$
+MERGE INTO demo_distributed t
+USING demo_source_table s ON s.id2 = t.id1
+WHEN MATCHED AND t.val1= 0 THEN
+	DELETE
+WHEN MATCHED THEN
+	UPDATE SET val1 = val1 + s.val2
+WHEN NOT MATCHED THEN
+	INSERT VALUES(s.id2, s.val2);
+$$
+LANGUAGE SQL;
+SELECT setup_demo_data();
+ setup_demo_data
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT merge_demo_data();
+ merge_demo_data
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT * INTO pg_demo_result FROM demo_distributed ORDER BY 1, 2;
+TRUNCATE demo_distributed;
+TRUNCATE demo_source_table;
+SELECT create_distributed_table('demo_distributed', 'id1');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_reference_table('demo_source_table');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT setup_demo_data();
+ setup_demo_data
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT merge_demo_data();
+ merge_demo_data
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT * INTO dist_demo_result FROM demo_distributed ORDER BY 1, 2;
+-- Should be equal
+SELECT c.*, p.*
+FROM dist_demo_result c, pg_demo_result p
+WHERE c.id1 = p.id1
+ORDER BY 1,2;
+ id1 | val1 | id1 | val1
+---------------------------------------------------------------------
+   1 |  177 |   1 |  177
+   7 |  100 |   7 |  100
+  15 |  177 |  15 |  177
+  75 |   77 |  75 |   77
+ 300 |  177 | 300 |  177
+ 500 |   77 | 500 |   77
+(6 rows)
+
+-- Must return zero rows
+SELECT count(*)
+FROM pg_demo_result p FULL OUTER JOIN dist_demo_result d ON p.id1 = d.id1
+WHERE p.id1 IS NULL OR d.id1 IS NULL;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+-- Now convert source as distributed, but non-colocated with target
+DROP TABLE pg_demo_result, dist_demo_result;
+SELECT undistribute_table('demo_distributed');
+NOTICE:  creating a new table for merge_schema.demo_distributed
+NOTICE:  moving the data of merge_schema.demo_distributed
+NOTICE:  dropping the old merge_schema.demo_distributed
+NOTICE:  renaming the new table to merge_schema.demo_distributed
+ undistribute_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT undistribute_table('demo_source_table');
+NOTICE:  creating a new table for merge_schema.demo_source_table
+NOTICE:  moving the data of merge_schema.demo_source_table
+NOTICE:  dropping the old merge_schema.demo_source_table
+NOTICE:  renaming the new table to merge_schema.demo_source_table
+ undistribute_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE OR REPLACE FUNCTION merge_demo_data() RETURNS VOID AS $$
+MERGE INTO demo_distributed t
+USING (SELECT id2,val2 FROM demo_source_table UNION SELECT val2,id2 FROM demo_source_table) AS s
+ON t.id1 = s.id2
+WHEN MATCHED THEN
+        UPDATE SET val1 = val1 + 1;
+$$
+LANGUAGE SQL;
+TRUNCATE demo_distributed;
+TRUNCATE demo_source_table;
+SELECT setup_demo_data();
+ setup_demo_data
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT merge_demo_data();
+ merge_demo_data
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT * INTO pg_demo_result FROM demo_distributed ORDER BY 1, 2;
+SELECT create_distributed_table('demo_distributed', 'id1');
+NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$merge_schema.demo_distributed$$)
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_distributed_table('demo_source_table', 'id2', colocate_with=>'none');
+NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$merge_schema.demo_source_table$$)
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+TRUNCATE demo_distributed;
+TRUNCATE demo_source_table;
+SELECT setup_demo_data();
+ setup_demo_data
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT merge_demo_data();
+ merge_demo_data
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT * INTO dist_demo_result FROM demo_distributed ORDER BY 1, 2;
+-- Should be equal
+SELECT c.*, p.*
+FROM dist_demo_result c, pg_demo_result p
+WHERE c.id1 = p.id1
+ORDER BY 1,2;
+ id1 | val1 | id1 | val1
+---------------------------------------------------------------------
+   1 |  101 |   1 |  101
+   7 |  100 |   7 |  100
+  15 |  101 |  15 |  101
+ 100 |    1 | 100 |    1
+ 300 |  101 | 300 |  101
+ 400 |    1 | 400 |    1
+(6 rows)
+
+-- Must return zero rows
+SELECT count(*)
+FROM pg_demo_result p FULL OUTER JOIN dist_demo_result d ON p.id1 = d.id1
+WHERE p.id1 IS NULL OR d.id1 IS NULL;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+-- Test with LIMIT
+CREATE OR REPLACE FUNCTION merge_demo_data() RETURNS VOID AS $$
+MERGE INTO demo_distributed t
+USING (SELECT 999 as s3, demo_source_table.* FROM (SELECT * FROM demo_source_table ORDER BY 1 LIMIT 3) as foo LEFT JOIN demo_source_table USING(id2)) AS s
+ON t.id1 = s.id2
+WHEN MATCHED THEN
+	UPDATE SET val1 = s3
+WHEN NOT MATCHED THEN
+	INSERT VALUES(id2, s3);
+$$
+LANGUAGE SQL;
+DROP TABLE pg_demo_result, dist_demo_result;
+SELECT undistribute_table('demo_distributed');
+NOTICE:  creating a new table for merge_schema.demo_distributed
+NOTICE:  moving the data of merge_schema.demo_distributed
+NOTICE:  dropping the old merge_schema.demo_distributed
+NOTICE:  renaming the new table to merge_schema.demo_distributed
+ undistribute_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT undistribute_table('demo_source_table');
+NOTICE:  creating a new table for merge_schema.demo_source_table
+NOTICE:  moving the data of merge_schema.demo_source_table
+NOTICE:  dropping the old merge_schema.demo_source_table
+NOTICE:  renaming the new table to merge_schema.demo_source_table
+ undistribute_table
+---------------------------------------------------------------------
+
+(1 row)
+
+TRUNCATE demo_distributed;
+TRUNCATE demo_source_table;
+SELECT setup_demo_data();
+ setup_demo_data
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT merge_demo_data();
+ merge_demo_data
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT * INTO pg_demo_result FROM demo_distributed ORDER BY 1, 2;
+SELECT create_distributed_table('demo_distributed', 'id1');
+NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$merge_schema.demo_distributed$$)
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_distributed_table('demo_source_table', 'id2', colocate_with=>'none');
+NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$merge_schema.demo_source_table$$)
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+TRUNCATE demo_distributed;
+TRUNCATE demo_source_table;
+SELECT setup_demo_data();
+ setup_demo_data
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT merge_demo_data();
+ merge_demo_data
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT * INTO dist_demo_result FROM demo_distributed ORDER BY 1, 2;
+-- Should be equal
+SELECT c.*, p.*
+FROM dist_demo_result c, pg_demo_result p
+WHERE c.id1 = p.id1
+ORDER BY 1,2;
+ id1 | val1 | id1 | val1
+---------------------------------------------------------------------
+   1 |  999 |   1 |  999
+   7 |  100 |   7 |  100
+  15 |  999 |  15 |  999
+  75 |  999 |  75 |  999
+ 100 |    0 | 100 |    0
+ 300 |  100 | 300 |  100
+ 400 |    0 | 400 |    0
+(7 rows)
+
+-- Must return zero rows
+SELECT count(*)
+FROM pg_demo_result p FULL OUTER JOIN dist_demo_result d ON p.id1 = d.id1
+WHERE p.id1 IS NULL OR d.id1 IS NULL;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+-- Test explain with repartition
+SET citus.explain_all_tasks TO false;
+EXPLAIN (COSTS OFF)
+MERGE INTO demo_distributed t
+USING (SELECT 999 as s3, demo_source_table.* FROM (SELECT * FROM demo_source_table ORDER BY 1 LIMIT 3) as foo LEFT JOIN demo_source_table USING(id2)) AS s
+ON t.id1 = s.id2
+WHEN MATCHED THEN
+	UPDATE SET val1 = s3
+WHEN NOT MATCHED THEN
+	INSERT VALUES(id2, s3);
+                                                  QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (Citus MERGE INTO ...)
+   MERGE INTO demo_distributed method: source repartition
+   ->  Custom Scan (Citus Adaptive)
+         ->  Distributed Subplan XXX_1
+               ->  Limit
+                     ->  Sort
+                           Sort Key: remote_scan.id2
+                           ->  Custom Scan (Citus Adaptive)
+                                 Task Count: 4
+                                 Tasks Shown: One of 4
+                                 ->  Task
+                                       Node: host=localhost port=xxxxx dbname=regression
+                                       ->  Limit
+                                             ->  Sort
+                                                   Sort Key: id2
+                                                   ->  Seq Scan on demo_source_table_4000135 demo_source_table
+         ->  Distributed Subplan XXX_2
+               ->  Custom Scan (Citus Adaptive)
+                     Task Count: 4
+                     Tasks Shown: One of 4
+                     ->  Task
+                           Node: host=localhost port=xxxxx dbname=regression
+                           ->  Seq Scan on demo_source_table_4000135 demo_source_table
+         Task Count: 1
+         Tasks Shown: All
+         ->  Task
+               Node: host=localhost port=xxxxx dbname=regression
+               ->  Merge Left Join
+                     Merge Cond: (intermediate_result.id2 = intermediate_result_1.id2)
+                     ->  Sort
+                           Sort Key: intermediate_result.id2
+                           ->  Function Scan on read_intermediate_result intermediate_result
+                     ->  Sort
+                           Sort Key: intermediate_result_1.id2
+                           ->  Function Scan on read_intermediate_result intermediate_result_1
+(35 rows)
+
 --
 -- Error and Unsupported scenarios
 --
+-- Test explain analyze with repartition
+EXPLAIN ANALYZE
+MERGE INTO demo_distributed t
+USING (SELECT 999 as s3, demo_source_table.* FROM (SELECT * FROM demo_source_table ORDER BY 1 LIMIT 3) as foo LEFT JOIN demo_source_table USING(id2)) AS s
+ON t.id1 = s.id2
+WHEN MATCHED THEN
+	UPDATE SET val1 = s3
+WHEN NOT MATCHED THEN
+	INSERT VALUES(id2, s3);
+ERROR:  EXPLAIN ANALYZE is currently not supported for MERGE INTO ... commands with repartitioning
+-- Source without a table
+MERGE INTO target_cj t
+USING (VALUES (1, 1), (2, 1), (3, 3)) as s (sid, val)
+ON t.tid = s.sid AND t.tid = 2
+WHEN MATCHED THEN
+        UPDATE SET val = s.val
+WHEN NOT MATCHED THEN
+        DO NOTHING;
+ERROR:  To MERGE into a distributed table, source must be Citus table(s)
+-- Incomplete source
+MERGE INTO target_cj t
+USING (source_cj1 s1 INNER JOIN source_cj2 s2 ON sid1 = val2) s
+ON t.tid = s.sid1 AND t.tid = 2
+WHEN MATCHED THEN
+        UPDATE SET src = src2
+WHEN NOT MATCHED THEN
+        DO NOTHING;
+ERROR:  Source is not an explicit query
+HINT:  Source query is a Join expression, try converting into a query as SELECT * FROM (..Join..)
 -- Reference as a target and local as source
 MERGE INTO refsource_ref
 USING (SELECT * FROM reftarget_local UNION SELECT * FROM reftarget_local) AS foo ON refsource_ref.s1 = foo.t1
@@ -2537,40 +2965,20 @@ WHEN MATCHED THEN
 WHEN NOT MATCHED THEN
 	INSERT VALUES(foo.t1);
 ERROR:  Reference table as target is not allowed in MERGE command
--- Reference as a source and distributed as target
-MERGE INTO target_set t
-USING refsource_ref AS s ON t.t1 = s.s1
-WHEN MATCHED THEN
-        DO NOTHING;
-ERROR:  MERGE command is not supported with combination of distributed/reference yet
-HINT:  If target is distributed, source must be distributed and co-located
 MERGE INTO target_set
 USING source_set AS foo ON target_set.t1 = foo.s1
 WHEN MATCHED THEN
         UPDATE SET ctid = '(0,100)';
 ERROR:  cannot assign to system column "ctid"
-MERGE INTO target_set
-USING (SELECT s1,s2 FROM source_set UNION SELECT s2,s1 FROM source_set) AS foo ON target_set.t1 = foo.s1
-WHEN MATCHED THEN
-        UPDATE SET t2 = t2 + 1;
-ERROR:  cannot pushdown the subquery since not all subqueries in the UNION have the partition column in the same position
-DETAIL:  Each leaf query of the UNION should return the partition column in the same position and all joins must be on the partition column
-MERGE INTO target_set
-USING (SELECT 2 as s3, source_set.* FROM (SELECT * FROM source_set LIMIT 1) as foo LEFT JOIN source_set USING( s1)) AS foo
-ON target_set.t1 = foo.s1
-WHEN MATCHED THEN UPDATE SET t2 = t2 + 1
-WHEN NOT MATCHED THEN INSERT VALUES(s1, s3);
-ERROR:  cannot push down this subquery
-DETAIL:  Limit clause is currently unsupported when a subquery references a column from another query
 -- modifying CTE not supported
 EXPLAIN
-WITH cte_1 AS (DELETE FROM target_json)
+WITH cte_1 AS (DELETE FROM target_json RETURNING *)
 MERGE INTO target_json sda
-USING source_json sdn
+USING cte_1 sdn
 ON sda.id = sdn.id
 WHEN NOT matched THEN
 	INSERT (id, z) VALUES (sdn.id, 5);
-ERROR:  MERGE command is only supported when all distributed tables are co-located and joined on their distribution columns
+ERROR:  CTEs with modifying actions are not yet supported in MERGE
 -- Grouping sets not supported
 MERGE INTO citus_target t
 USING (SELECT count(*), id FROM citus_source GROUP BY GROUPING SETS (id, val)) subq
@@ -2581,8 +2989,8 @@ WHEN NOT MATCHED THEN
         INSERT VALUES (subq.id, 99)
 WHEN MATCHED AND t.id < 350 THEN
         DELETE;
-ERROR:  cannot push down this subquery
-DETAIL:  could not run distributed query with GROUPING SETS, CUBE, or ROLLUP
+ERROR:  could not run distributed query with GROUPING SETS, CUBE, or ROLLUP
+HINT:  Consider using an equality filter on the distributed table's partition column.
 WITH subq AS
 (
 SELECT count(*), id FROM citus_source GROUP BY GROUPING SETS (id, val)
@@ -2596,8 +3004,8 @@ WHEN NOT MATCHED THEN
         INSERT VALUES (subq.id, 99)
 WHEN MATCHED AND t.id < 350 THEN
         DELETE;
-ERROR:  cannot push down this subquery
-DETAIL:  could not run distributed query with GROUPING SETS, CUBE, or ROLLUP
+ERROR:  could not run distributed query with GROUPING SETS, CUBE, or ROLLUP
+HINT:  Consider using an equality filter on the distributed table's partition column.
 -- try inserting unmatched distribution column value
 MERGE INTO citus_target t
 USING citus_source s
@@ -2617,6 +3025,7 @@ ON t.id = s.id
 WHEN NOT MATCHED THEN
   INSERT (id) VALUES(1000);
 ERROR:  MERGE INSERT must refer a source column for distribution column
+-- Colocated merge
 MERGE INTO t1 t
 USING s1 s
 ON t.id = s.id
@@ -2629,6 +3038,13 @@ ON t.id = s.id
 WHEN NOT MATCHED THEN
   INSERT (val) VALUES(s.val);
 ERROR:  MERGE INSERT must have distribution column as value
+-- Non-colocated merge
+MERGE INTO t1 t
+USING s1 s
+ON t.id = s.val
+WHEN NOT MATCHED THEN
+  INSERT (id) VALUES(s.id);
+ERROR:  MERGE INSERT must use the source's joining column for target's distribution column
 -- try updating the distribution key column
 BEGIN;
 MERGE INTO target_cj t
@@ -2698,7 +3114,7 @@ MERGE INTO t1
 		UPDATE SET val = t1.val + 1
 	WHEN NOT MATCHED THEN
 		INSERT (id, val) VALUES (s1.id, s1.val);
-ERROR:  MERGE command is not supported with combination of distributed/local tables yet
+ERROR:  MERGE involving repartition of rows is supported only if the target is distributed
 -- Now both s1 and t1 are distributed tables
 SELECT undistribute_table('t1');
 NOTICE:  creating a new table for merge_schema.t1
@@ -2764,17 +3180,7 @@ WHEN MATCHED AND (merge_when_and_write()) THEN
         UPDATE SET val = t1.val + s1.val;
 ERROR:  non-IMMUTABLE functions are not yet supported in MERGE sql with distributed tables
 ROLLBACK;
--- Joining on partition columns with sub-query
-MERGE INTO t1
-	USING (SELECT * FROM s1) sub ON (sub.val = t1.id) -- sub.val is not a distribution column
-	WHEN MATCHED AND sub.val = 0 THEN
-		DELETE
-	WHEN MATCHED THEN
-		UPDATE SET val = t1.val + 1
-	WHEN NOT MATCHED THEN
-		INSERT (id, val) VALUES (sub.id, sub.val);
-ERROR:  MERGE command is only supported when all distributed tables are co-located and joined on their distribution columns
--- Joining on partition columns with CTE
+-- Joining on non-partition columns with CTE source, but INSERT incorrect column
 WITH s1_res AS (
 	SELECT * FROM s1
 )
@@ -2786,7 +3192,7 @@ MERGE INTO t1
 		UPDATE SET val = t1.val + 1
 	WHEN NOT MATCHED THEN
 		INSERT (id, val) VALUES (s1_res.id, s1_res.val);
-ERROR:  MERGE command is only supported when all distributed tables are co-located and joined on their distribution columns
+ERROR:  MERGE INSERT must use the source's joining column for target's distribution column
 -- Constant Join condition
 WITH s1_res AS (
 	SELECT * FROM s1
@@ -2799,8 +3205,9 @@ MERGE INTO t1
 		UPDATE SET val = t1.val + 1
 	WHEN NOT MATCHED THEN
 		INSERT (id, val) VALUES (s1_res.id, s1_res.val);
-ERROR:  MERGE command is only supported when all distributed tables are co-located and joined on their distribution columns
--- With a single WHEN clause, which causes a non-left join
+ERROR:  Missing required join condition between source and target's distribution column
+HINT:  Without a join condition on the target's distribution column, the source rows cannot be efficiently redistributed, and the NOT-MATCHED condition cannot be evaluated unambiguously. This can result in incorrect or unexpected results when attempting to merge tables in a distributed setting
+-- Join condition without target distribution column
 WITH s1_res AS (
      SELECT * FROM s1
  )
@@ -2808,7 +3215,8 @@ WITH s1_res AS (
  WHEN MATCHED THEN DELETE
 	WHEN NOT MATCHED THEN
 		INSERT (id, val) VALUES (s1_res.id, s1_res.val);
-ERROR:  MERGE command is only supported when all distributed tables are co-located and joined on their distribution columns
+ERROR:  Missing required join condition between source and target's distribution column
+HINT:  Without a join condition on the target's distribution column, the source rows cannot be efficiently redistributed, and the NOT-MATCHED condition cannot be evaluated unambiguously. This can result in incorrect or unexpected results when attempting to merge tables in a distributed setting
 --
 -- Reference tables
 --
@@ -2902,7 +3310,7 @@ MERGE INTO t1
 		UPDATE SET val = t1.val + 1
 	WHEN NOT MATCHED THEN
 		INSERT (id, val) VALUES (s1.id, s1.val);
-ERROR:  MERGE command is not supported with combination of distributed/local tables yet
+ERROR:  MERGE INTO an distributed table from Postgres table is not yet supported
 MERGE INTO t1
 	USING (SELECT * FROM s1) sub ON (sub.id = t1.id)
 	WHEN MATCHED AND sub.val = 0 THEN
@@ -2911,7 +3319,7 @@ MERGE INTO t1
 		UPDATE SET val = t1.val + 1
 	WHEN NOT MATCHED THEN
 		INSERT (id, val) VALUES (sub.id, sub.val);
-ERROR:  MERGE command is not supported with combination of distributed/local tables yet
+ERROR:  MERGE INTO an distributed table from Postgres table is not yet supported
 CREATE TABLE pg(val int);
 SELECT create_distributed_table('s1', 'id');
 NOTICE:  Copying data from local table...
@@ -2932,7 +3340,7 @@ MERGE INTO t1
 		UPDATE SET val = t1.val + 1
 	WHEN NOT MATCHED THEN
 		INSERT (id, val) VALUES (sub.id, sub.val);
-ERROR:  MERGE command is not supported with combination of distributed/local tables yet
+ERROR:  MERGE INTO an distributed table from Postgres table is not yet supported
 -- Mix Postgres table in CTE
 WITH pg_res AS (
 	SELECT * FROM pg
@@ -2945,7 +3353,7 @@ MERGE INTO t1
 		UPDATE SET val = t1.val + 1
 	WHEN NOT MATCHED THEN
 		INSERT (id, val) VALUES (sub.id, sub.val);
-ERROR:  MERGE command is not supported with combination of distributed/local tables yet
+ERROR:  MERGE INTO an distributed table from Postgres table is not yet supported
 -- Match more than one source row should fail same as Postgres behavior
 SELECT undistribute_table('t1');
 NOTICE:  creating a new table for merge_schema.t1
@@ -3000,7 +3408,7 @@ WHEN NOT MATCHED THEN
     INSERT VALUES(mv_source.id, mv_source.val);
 ERROR:  cannot execute MERGE on relation "mv_source"
 DETAIL:  This operation is not supported for materialized views.
--- Distributed tables *must* be colocated
+-- Do not allow constant values into the distribution column
 CREATE TABLE dist_target(id int, val varchar);
 SELECT create_distributed_table('dist_target', 'id');
  create_distributed_table
@@ -3016,38 +3424,13 @@ SELECT create_distributed_table('dist_source', 'id', colocate_with => 'none');
 (1 row)
 
 MERGE INTO dist_target
-USING dist_source
-ON dist_target.id = dist_source.id
-WHEN MATCHED THEN
-UPDATE SET val = dist_source.val
-WHEN NOT MATCHED THEN
-INSERT VALUES(dist_source.id, dist_source.val);
-ERROR:  For MERGE command, all the distributed tables must be colocated
--- Distributed tables *must* be joined on distribution column
-CREATE TABLE dist_colocated(id int, val int);
-SELECT create_distributed_table('dist_colocated', 'id', colocate_with => 'dist_target');
- create_distributed_table
----------------------------------------------------------------------
-
-(1 row)
-
-MERGE INTO dist_target
-USING dist_colocated
-ON dist_target.id = dist_colocated.val -- val is not the distribution column
-WHEN MATCHED THEN
-UPDATE SET val = dist_colocated.val
-WHEN NOT MATCHED THEN
-INSERT VALUES(dist_colocated.id, dist_colocated.val);
-ERROR:  MERGE command is only supported when all distributed tables are co-located and joined on their distribution columns
--- Both the source and target must be distributed
-MERGE INTO dist_target
 USING (SELECT 100 id) AS source
 ON dist_target.id = source.id AND dist_target.val = 'const'
 WHEN MATCHED THEN
 UPDATE SET val = 'source'
 WHEN NOT MATCHED THEN
 INSERT VALUES(source.id, 'source');
-ERROR:  For MERGE command, both the source and target must be distributed
+ERROR:  To MERGE into a distributed table, source must be Citus table(s)
 -- Non-hash distributed tables (append/range).
 CREATE VIEW show_tables AS
 SELECT logicalrelid, partmethod
@@ -3086,8 +3469,7 @@ WHEN MATCHED THEN
 UPDATE SET val = dist_source.val
 WHEN NOT MATCHED THEN
 INSERT VALUES(dist_source.id, dist_source.val);
-ERROR:  For MERGE command, all the distributed tables must be colocated, for append/range distribution, colocation is not supported
-HINT:  Consider using hash distribution instead
+ERROR:  For MERGE command, append/range distribution table is not supported yet
 SELECT undistribute_table('dist_source');
 NOTICE:  creating a new table for merge_schema.dist_source
 NOTICE:  moving the data of merge_schema.dist_source
@@ -3120,8 +3502,7 @@ WHEN MATCHED THEN
 UPDATE SET val = dist_source.val
 WHEN NOT MATCHED THEN
 INSERT VALUES(dist_source.id, dist_source.val);
-ERROR:  For MERGE command, all the distributed tables must be colocated, for append/range distribution, colocation is not supported
-HINT:  Consider using hash distribution instead
+ERROR:  For MERGE command, append/range distribution table is not supported yet
 -- Both are append tables
 SELECT undistribute_table('dist_target');
 NOTICE:  creating a new table for merge_schema.dist_target
@@ -3173,8 +3554,7 @@ WHEN MATCHED THEN
 UPDATE SET val = dist_source.val
 WHEN NOT MATCHED THEN
 INSERT VALUES(dist_source.id, dist_source.val);
-ERROR:  For MERGE command, all the distributed tables must be colocated, for append/range distribution, colocation is not supported
-HINT:  Consider using hash distribution instead
+ERROR:  For MERGE command, append/range distribution table is not supported yet
 -- Both are range tables
 SELECT undistribute_table('dist_target');
 NOTICE:  creating a new table for merge_schema.dist_target
@@ -3226,8 +3606,7 @@ WHEN MATCHED THEN
 UPDATE SET val = dist_source.val
 WHEN NOT MATCHED THEN
 INSERT VALUES(dist_source.id, dist_source.val);
-ERROR:  For MERGE command, all the distributed tables must be colocated, for append/range distribution, colocation is not supported
-HINT:  Consider using hash distribution instead
+ERROR:  For MERGE command, append/range distribution table is not supported yet
 -- test merge with single-shard tables
 CREATE SCHEMA query_single_shard_table;
 SET search_path TO query_single_shard_table;
@@ -3295,44 +3674,82 @@ INSERT INTO postgres_local_table SELECT i, i FROM generate_series(5, 10) i;
 -- with a colocated table
 MERGE INTO nullkey_c1_t1 USING nullkey_c1_t2 ON (nullkey_c1_t1.a = nullkey_c1_t2.a)
 WHEN MATCHED THEN UPDATE SET b = nullkey_c1_t2.b;
-DEBUG:  <Deparsed MERGE query: MERGE INTO query_single_shard_table.nullkey_c1_t1_4000147 nullkey_c1_t1 USING query_single_shard_table.nullkey_c1_t2_4000148 nullkey_c1_t2 ON (nullkey_c1_t1.a OPERATOR(pg_catalog.=) nullkey_c1_t2.a) WHEN MATCHED THEN UPDATE SET b = nullkey_c1_t2.b>
+DEBUG:  <Deparsed MERGE query: MERGE INTO query_single_shard_table.nullkey_c1_t1_4000168 nullkey_c1_t1 USING query_single_shard_table.nullkey_c1_t2_4000169 nullkey_c1_t2 ON (nullkey_c1_t1.a OPERATOR(pg_catalog.=) nullkey_c1_t2.a) WHEN MATCHED THEN UPDATE SET b = nullkey_c1_t2.b>
 DEBUG:  Creating MERGE router plan
 MERGE INTO nullkey_c1_t1 USING nullkey_c1_t2 ON (nullkey_c1_t1.a = nullkey_c1_t2.a)
 WHEN MATCHED THEN DELETE;
-DEBUG:  <Deparsed MERGE query: MERGE INTO query_single_shard_table.nullkey_c1_t1_4000147 nullkey_c1_t1 USING query_single_shard_table.nullkey_c1_t2_4000148 nullkey_c1_t2 ON (nullkey_c1_t1.a OPERATOR(pg_catalog.=) nullkey_c1_t2.a) WHEN MATCHED THEN DELETE>
+DEBUG:  <Deparsed MERGE query: MERGE INTO query_single_shard_table.nullkey_c1_t1_4000168 nullkey_c1_t1 USING query_single_shard_table.nullkey_c1_t2_4000169 nullkey_c1_t2 ON (nullkey_c1_t1.a OPERATOR(pg_catalog.=) nullkey_c1_t2.a) WHEN MATCHED THEN DELETE>
 DEBUG:  Creating MERGE router plan
 MERGE INTO nullkey_c1_t1 USING nullkey_c1_t2 ON (nullkey_c1_t1.a = nullkey_c1_t2.a)
 WHEN MATCHED THEN UPDATE SET b = nullkey_c1_t2.b
 WHEN NOT MATCHED THEN INSERT VALUES (nullkey_c1_t2.a, nullkey_c1_t2.b);
-DEBUG:  <Deparsed MERGE query: MERGE INTO query_single_shard_table.nullkey_c1_t1_4000147 nullkey_c1_t1 USING query_single_shard_table.nullkey_c1_t2_4000148 nullkey_c1_t2 ON (nullkey_c1_t1.a OPERATOR(pg_catalog.=) nullkey_c1_t2.a) WHEN MATCHED THEN UPDATE SET b = nullkey_c1_t2.b WHEN NOT MATCHED THEN INSERT (a, b) VALUES (nullkey_c1_t2.a, nullkey_c1_t2.b)>
+DEBUG:  <Deparsed MERGE query: MERGE INTO query_single_shard_table.nullkey_c1_t1_4000168 nullkey_c1_t1 USING query_single_shard_table.nullkey_c1_t2_4000169 nullkey_c1_t2 ON (nullkey_c1_t1.a OPERATOR(pg_catalog.=) nullkey_c1_t2.a) WHEN MATCHED THEN UPDATE SET b = nullkey_c1_t2.b WHEN NOT MATCHED THEN INSERT (a, b) VALUES (nullkey_c1_t2.a, nullkey_c1_t2.b)>
 DEBUG:  Creating MERGE router plan
 MERGE INTO nullkey_c1_t1 USING nullkey_c1_t2 ON (nullkey_c1_t1.a = nullkey_c1_t2.a)
 WHEN MATCHED THEN DELETE
 WHEN NOT MATCHED THEN INSERT VALUES (nullkey_c1_t2.a, nullkey_c1_t2.b);
-DEBUG:  <Deparsed MERGE query: MERGE INTO query_single_shard_table.nullkey_c1_t1_4000147 nullkey_c1_t1 USING query_single_shard_table.nullkey_c1_t2_4000148 nullkey_c1_t2 ON (nullkey_c1_t1.a OPERATOR(pg_catalog.=) nullkey_c1_t2.a) WHEN MATCHED THEN DELETE WHEN NOT MATCHED THEN INSERT (a, b) VALUES (nullkey_c1_t2.a, nullkey_c1_t2.b)>
+DEBUG:  <Deparsed MERGE query: MERGE INTO query_single_shard_table.nullkey_c1_t1_4000168 nullkey_c1_t1 USING query_single_shard_table.nullkey_c1_t2_4000169 nullkey_c1_t2 ON (nullkey_c1_t1.a OPERATOR(pg_catalog.=) nullkey_c1_t2.a) WHEN MATCHED THEN DELETE WHEN NOT MATCHED THEN INSERT (a, b) VALUES (nullkey_c1_t2.a, nullkey_c1_t2.b)>
 DEBUG:  Creating MERGE router plan
 -- with non-colocated single-shard table
 MERGE INTO nullkey_c1_t1 USING nullkey_c2_t1 ON (nullkey_c1_t1.a = nullkey_c2_t1.a)
 WHEN MATCHED THEN UPDATE SET b = nullkey_c2_t1.b;
-ERROR:  For MERGE command, all the distributed tables must be colocated
+DEBUG:  Distributed tables are not co-located, try repartitioning
+DEBUG:  For MERGE command, all the distributed tables must be colocated
+DEBUG:  Creating MERGE repartition plan
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Executing subplans of the source
+DEBUG:  Executing task list and redistributing the source rows
+ERROR:  Missing required join condition between source and target's distribution column
+HINT:  Without a join condition on the target's distribution column, the source rows cannot be efficiently redistributed, and the NOT-MATCHED condition cannot be evaluated unambiguously. This can result in incorrect or unexpected results when attempting to merge tables in a distributed setting
 MERGE INTO nullkey_c1_t1 USING nullkey_c2_t1 ON (nullkey_c1_t1.a = nullkey_c2_t1.a)
 WHEN MATCHED THEN UPDATE SET b = nullkey_c2_t1.b
 WHEN NOT MATCHED THEN INSERT VALUES (nullkey_c2_t1.a, nullkey_c2_t1.b);
-ERROR:  For MERGE command, all the distributed tables must be colocated
+DEBUG:  Distributed tables are not co-located, try repartitioning
+DEBUG:  For MERGE command, all the distributed tables must be colocated
+DEBUG:  Creating MERGE repartition plan
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Executing subplans of the source
+DEBUG:  Executing task list and redistributing the source rows
+ERROR:  Missing required join condition between source and target's distribution column
+HINT:  Without a join condition on the target's distribution column, the source rows cannot be efficiently redistributed, and the NOT-MATCHED condition cannot be evaluated unambiguously. This can result in incorrect or unexpected results when attempting to merge tables in a distributed setting
 -- with a distributed table
 MERGE INTO nullkey_c1_t1 USING distributed_table ON (nullkey_c1_t1.a = distributed_table.a)
 WHEN MATCHED THEN UPDATE SET b = distributed_table.b
 WHEN NOT MATCHED THEN INSERT VALUES (distributed_table.a, distributed_table.b);
-ERROR:  For MERGE command, all the distributed tables must be colocated
+DEBUG:  Distributed tables are not co-located, try repartitioning
+DEBUG:  For MERGE command, all the distributed tables must be colocated
+DEBUG:  Creating MERGE repartition plan
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  Executing subplans of the source
+DEBUG:  Executing task list and redistributing the source rows
+ERROR:  Missing required join condition between source and target's distribution column
+HINT:  Without a join condition on the target's distribution column, the source rows cannot be efficiently redistributed, and the NOT-MATCHED condition cannot be evaluated unambiguously. This can result in incorrect or unexpected results when attempting to merge tables in a distributed setting
 MERGE INTO distributed_table USING nullkey_c1_t1 ON (nullkey_c1_t1.a = distributed_table.a)
 WHEN MATCHED THEN DELETE
 WHEN NOT MATCHED THEN INSERT VALUES (nullkey_c1_t1.a, nullkey_c1_t1.b);
-ERROR:  For MERGE command, all the distributed tables must be colocated
+DEBUG:  Distributed tables are not co-located, try repartitioning
+DEBUG:  For MERGE command, all the distributed tables must be colocated
+DEBUG:  Creating MERGE repartition plan
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Executing subplans of the source
+DEBUG:  Executing task list and redistributing the source rows
+DEBUG:  Using column - index:0 from the source list to redistribute
+DEBUG:  Executing final MERGE on workers
 -- with a reference table
 MERGE INTO nullkey_c1_t1 USING reference_table ON (nullkey_c1_t1.a = reference_table.a)
 WHEN MATCHED THEN UPDATE SET b = reference_table.b;
-ERROR:  MERGE command is not supported with combination of distributed/reference yet
-HINT:  If target is distributed, source must be distributed and co-located
+DEBUG:  A mix of distributed and reference table, try repartitioning
+DEBUG:  A mix of distributed and reference table, routable query is not possible
+DEBUG:  Creating MERGE repartition plan
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Executing subplans of the source
+DEBUG:  Executing task list and redistributing the source rows
+ERROR:  Missing required join condition between source and target's distribution column
+HINT:  Without a join condition on the target's distribution column, the source rows cannot be efficiently redistributed, and the NOT-MATCHED condition cannot be evaluated unambiguously. This can result in incorrect or unexpected results when attempting to merge tables in a distributed setting
 MERGE INTO reference_table USING nullkey_c1_t1 ON (nullkey_c1_t1.a = reference_table.a)
 WHEN MATCHED THEN UPDATE SET b = nullkey_c1_t1.b
 WHEN NOT MATCHED THEN INSERT VALUES (nullkey_c1_t1.a, nullkey_c1_t1.b);
@@ -3340,38 +3757,67 @@ ERROR:  Reference table as target is not allowed in MERGE command
 -- with a citus local table
 MERGE INTO nullkey_c1_t1 USING citus_local_table ON (nullkey_c1_t1.a = citus_local_table.a)
 WHEN MATCHED THEN UPDATE SET b = citus_local_table.b;
-ERROR:  MERGE command is not supported with combination of distributed/local tables yet
+DEBUG:  A mix of distributed and local table, try repartitioning
+DEBUG:  A mix of distributed and citus-local table, routable query is not possible
+DEBUG:  Creating MERGE repartition plan
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Executing subplans of the source
+DEBUG:  Executing task list and redistributing the source rows
+ERROR:  Missing required join condition between source and target's distribution column
+HINT:  Without a join condition on the target's distribution column, the source rows cannot be efficiently redistributed, and the NOT-MATCHED condition cannot be evaluated unambiguously. This can result in incorrect or unexpected results when attempting to merge tables in a distributed setting
 MERGE INTO citus_local_table USING nullkey_c1_t1 ON (nullkey_c1_t1.a = citus_local_table.a)
 WHEN MATCHED THEN DELETE;
-ERROR:  MERGE command is not supported with combination of distributed/local tables yet
+DEBUG:  A mix of distributed and local table, try repartitioning
+DEBUG:  A mix of distributed and citus-local table, routable query is not possible
+DEBUG:  Creating MERGE repartition plan
+ERROR:  MERGE involving repartition of rows is supported only if the target is distributed
 -- with a postgres table
 MERGE INTO nullkey_c1_t1 USING postgres_local_table ON (nullkey_c1_t1.a = postgres_local_table.a)
 WHEN MATCHED THEN UPDATE SET b = postgres_local_table.b;
-ERROR:  MERGE command is not supported with combination of distributed/local tables yet
+DEBUG:  There is only one distributed table, merge is not pushable, try repartitioning
+DEBUG:  Creating MERGE repartition plan
+ERROR:  MERGE INTO an distributed table from Postgres table is not yet supported
 MERGE INTO postgres_local_table USING nullkey_c1_t1 ON (nullkey_c1_t1.a = postgres_local_table.a)
 WHEN MATCHED THEN UPDATE SET b = nullkey_c1_t1.b
 WHEN NOT MATCHED THEN INSERT VALUES (nullkey_c1_t1.a, nullkey_c1_t1.b);
-ERROR:  MERGE command is not supported with combination of distributed/local tables yet
+DEBUG:  There is only one distributed table, merge is not pushable, try repartitioning
+DEBUG:  Creating MERGE repartition plan
+ERROR:  MERGE involving repartition of rows is supported only if the target is distributed
 -- using ctes
 WITH cte AS (
     SELECT * FROM nullkey_c1_t1
 )
 MERGE INTO nullkey_c1_t1 USING cte ON (nullkey_c1_t1.a = cte.a)
 WHEN MATCHED THEN UPDATE SET b = cte.b;
-DEBUG:  <Deparsed MERGE query: WITH cte AS (SELECT nullkey_c1_t1_1.a, nullkey_c1_t1_1.b FROM query_single_shard_table.nullkey_c1_t1_4000147 nullkey_c1_t1_1) MERGE INTO query_single_shard_table.nullkey_c1_t1_4000147 nullkey_c1_t1 USING cte ON (nullkey_c1_t1.a OPERATOR(pg_catalog.=) cte.a) WHEN MATCHED THEN UPDATE SET b = cte.b>
+DEBUG:  <Deparsed MERGE query: WITH cte AS (SELECT nullkey_c1_t1_1.a, nullkey_c1_t1_1.b FROM query_single_shard_table.nullkey_c1_t1_4000168 nullkey_c1_t1_1) MERGE INTO query_single_shard_table.nullkey_c1_t1_4000168 nullkey_c1_t1 USING cte ON (nullkey_c1_t1.a OPERATOR(pg_catalog.=) cte.a) WHEN MATCHED THEN UPDATE SET b = cte.b>
 DEBUG:  Creating MERGE router plan
 WITH cte AS (
     SELECT * FROM distributed_table
 )
 MERGE INTO nullkey_c1_t1 USING cte ON (nullkey_c1_t1.a = cte.a)
 WHEN MATCHED THEN UPDATE SET b = cte.b;
-ERROR:  For MERGE command, all the distributed tables must be colocated
+DEBUG:  Distributed tables are not co-located, try repartitioning
+DEBUG:  For MERGE command, all the distributed tables must be colocated
+DEBUG:  Creating MERGE repartition plan
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  Executing subplans of the source
+DEBUG:  Executing task list and redistributing the source rows
+ERROR:  Missing required join condition between source and target's distribution column
+HINT:  Without a join condition on the target's distribution column, the source rows cannot be efficiently redistributed, and the NOT-MATCHED condition cannot be evaluated unambiguously. This can result in incorrect or unexpected results when attempting to merge tables in a distributed setting
 WITH cte AS materialized (
     SELECT * FROM distributed_table
 )
 MERGE INTO nullkey_c1_t1 USING cte ON (nullkey_c1_t1.a = cte.a)
 WHEN MATCHED THEN UPDATE SET b = cte.b;
-ERROR:  For MERGE command, all the distributed tables must be colocated
+DEBUG:  Distributed tables are not co-located, try repartitioning
+DEBUG:  For MERGE command, all the distributed tables must be colocated
+DEBUG:  Creating MERGE repartition plan
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  Executing subplans of the source
+DEBUG:  Executing task list and redistributing the source rows
+ERROR:  Missing required join condition between source and target's distribution column
+HINT:  Without a join condition on the target's distribution column, the source rows cannot be efficiently redistributed, and the NOT-MATCHED condition cannot be evaluated unambiguously. This can result in incorrect or unexpected results when attempting to merge tables in a distributed setting
 SET client_min_messages TO WARNING;
 DROP SCHEMA query_single_shard_table CASCADE;
 RESET client_min_messages;
@@ -3386,7 +3832,7 @@ CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_
 PL/pgSQL function citus_drop_trigger() line XX at PERFORM
 DROP FUNCTION merge_when_and_write();
 DROP SCHEMA merge_schema CASCADE;
-NOTICE:  drop cascades to 90 other objects
+NOTICE:  drop cascades to 95 other objects
 DETAIL:  drop cascades to function insert_data()
 drop cascades to table local_local
 drop cascades to table target
@@ -3460,26 +3906,25 @@ drop cascades to table source_serial
 drop cascades to table target_serial
 drop cascades to table target_set
 drop cascades to table source_set
-drop cascades to table reftarget_local_4000113
 drop cascades to table refsource_ref
 drop cascades to table pg_result
 drop cascades to table refsource_ref_4000112
 drop cascades to table pg_ref
-drop cascades to table reftarget_local
 drop cascades to table local_ref
+drop cascades to table reftarget_local
+drop cascades to table dist_reftarget
+drop cascades to function setup_demo_data()
+drop cascades to function merge_demo_data()
+drop cascades to table demo_distributed
+drop cascades to table demo_source_table
+drop cascades to table pg_demo_result
+drop cascades to table dist_demo_result
 drop cascades to function add_s(integer,integer)
 drop cascades to table pg
-drop cascades to table t1_4000133
-drop cascades to table s1_4000134
+drop cascades to table t1_4000158
+drop cascades to table s1_4000159
 drop cascades to table t1
 drop cascades to table s1
-drop cascades to table dist_colocated
 drop cascades to table dist_target
 drop cascades to table dist_source
 drop cascades to view show_tables
-SELECT 1 FROM master_remove_node('localhost', :master_port);
- ?column?
----------------------------------------------------------------------
-        1
-(1 row)
-

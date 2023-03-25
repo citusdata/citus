@@ -67,11 +67,6 @@ static HTAB * ExecutePlanIntoColocatedIntermediateResults(Oid targetRelationId,
 static List * BuildColumnNameListFromTargetList(Oid targetRelationId,
 												List *insertTargetList);
 static int PartitionColumnIndexFromColumnList(Oid relationId, List *columnNameList);
-static List * RedistributedInsertSelectTaskList(Query *insertSelectQuery,
-												CitusTableCacheEntry *targetRelation,
-												List **redistributedResults,
-												bool useBinaryFormat);
-static int PartitionColumnIndex(List *insertTargetList, Var *partitionColumn);
 static void WrapTaskListForProjection(List *taskList, List *projectedTargetEntries);
 
 
@@ -535,7 +530,7 @@ IsSupportedRedistributionTarget(Oid targetRelationId)
  * a result name which should be inserted into
  * targetRelation->sortedShardIntervalArray[shardIndex].
  */
-static List *
+List *
 RedistributedInsertSelectTaskList(Query *insertSelectQuery,
 								  CitusTableCacheEntry *targetRelation,
 								  List **redistributedResults,
@@ -632,7 +627,7 @@ RedistributedInsertSelectTaskList(Query *insertSelectQuery,
  * PartitionColumnIndex finds the index of given partition column in the
  * given target list.
  */
-static int
+int
 PartitionColumnIndex(List *insertTargetList, Var *partitionColumn)
 {
 	TargetEntry *insertTargetEntry = NULL;

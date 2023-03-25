@@ -85,7 +85,6 @@ static DeferredErrorMessage * InsertPartitionColumnMatchesSelect(Query *query,
 static DistributedPlan * CreateNonPushableInsertSelectPlan(uint64 planId, Query *parse,
 														   ParamListInfo boundParams);
 static DeferredErrorMessage * NonPushableInsertSelectSupported(Query *insertSelectQuery);
-static Query * WrapSubquery(Query *subquery);
 static void RelabelTargetEntryList(List *selectTargetList, List *insertTargetList);
 static List * AddInsertSelectCasts(List *insertTargetList, List *selectTargetList,
 								   Oid targetRelationId);
@@ -1635,7 +1634,7 @@ InsertSelectResultIdPrefix(uint64 planId)
  * WrapSubquery wraps the given query as a subquery in a newly constructed
  * "SELECT * FROM (...subquery...) citus_insert_select_subquery" query.
  */
-static Query *
+Query *
 WrapSubquery(Query *subquery)
 {
 	ParseState *pstate = make_parsestate(NULL);

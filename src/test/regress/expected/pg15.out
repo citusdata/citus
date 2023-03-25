@@ -418,14 +418,16 @@ SELECT create_distributed_table('tbl2', 'x');
 
 MERGE INTO tbl1 USING tbl2 ON (true)
 WHEN MATCHED THEN DELETE;
-ERROR:  MERGE command is only supported when all distributed tables are co-located and joined on their distribution columns
--- also, not inside subqueries & ctes
+ERROR:  Missing required join condition between source and target's distribution column
+HINT:  Without a join condition on the target's distribution column, the source rows cannot be efficiently redistributed, and the NOT-MATCHED condition cannot be evaluated unambiguously. This can result in incorrect or unexpected results when attempting to merge tables in a distributed setting
+-- also, inside subqueries & ctes
 WITH targq AS (
     SELECT * FROM tbl2
 )
 MERGE INTO tbl1 USING targq ON (true)
 WHEN MATCHED THEN DELETE;
-ERROR:  MERGE command is only supported when all distributed tables are co-located and joined on their distribution columns
+ERROR:  Missing required join condition between source and target's distribution column
+HINT:  Without a join condition on the target's distribution column, the source rows cannot be efficiently redistributed, and the NOT-MATCHED condition cannot be evaluated unambiguously. This can result in incorrect or unexpected results when attempting to merge tables in a distributed setting
 WITH foo AS (
   MERGE INTO tbl1 USING tbl2 ON (true)
   WHEN MATCHED THEN DELETE
@@ -441,7 +443,8 @@ USING tbl2
 ON (true)
 WHEN MATCHED THEN
     DO NOTHING;
-ERROR:  MERGE command is only supported when all distributed tables are co-located and joined on their distribution columns
+ERROR:  Missing required join condition between source and target's distribution column
+HINT:  Without a join condition on the target's distribution column, the source rows cannot be efficiently redistributed, and the NOT-MATCHED condition cannot be evaluated unambiguously. This can result in incorrect or unexpected results when attempting to merge tables in a distributed setting
 MERGE INTO tbl1 t
 USING tbl2
 ON (true)

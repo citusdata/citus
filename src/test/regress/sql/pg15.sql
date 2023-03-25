@@ -262,7 +262,7 @@ SELECT create_distributed_table('tbl2', 'x');
 MERGE INTO tbl1 USING tbl2 ON (true)
 WHEN MATCHED THEN DELETE;
 
--- also, not inside subqueries & ctes
+-- also, inside subqueries & ctes
 WITH targq AS (
     SELECT * FROM tbl2
 )
