@@ -35,7 +35,7 @@ static void TranslateAndPublishRelationForCDC(LogicalDecodingContext *ctx,
 
 typedef struct
 {
-	Oid shardId;
+	uint64 shardId;
 	Oid distributedTableId;
 	bool isReferenceTable;
 	bool isNull;
@@ -53,9 +53,9 @@ InitShardToDistributedTableMap()
 {
 	HASHCTL info;
 	memset(&info, 0, sizeof(info));
-	info.keysize = sizeof(Oid);
+	info.keysize = sizeof(uint64);
 	info.entrysize = sizeof(ShardIdHashEntry);
-	info.hash = oid_hash;
+	info.hash = tag_hash;
 	info.hcxt = CurrentMemoryContext;
 
 	int hashFlags = (HASH_ELEM | HASH_CONTEXT | HASH_FUNCTION);

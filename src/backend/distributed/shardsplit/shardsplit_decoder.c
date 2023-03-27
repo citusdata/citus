@@ -47,8 +47,8 @@ static HeapTuple GetTupleForTargetSchema(HeapTuple sourceRelationTuple,
 inline static bool IsShardSplitSlot(char *replicationSlotName);
 
 
-#define CITUS_SHARD_SLOT_PREXIX "citus_shard_"
-#define CITUS_SHARD_SLOT_PREFIX_SIZE (sizeof(CITUS_SHARD_SLOT_PREXIX) - 1)
+#define CITUS_SHARD_SLOT_PREFIX "citus_shard_"
+#define CITUS_SHARD_SLOT_PREFIX_SIZE (sizeof(CITUS_SHARD_SLOT_PREFIX) - 1)
 
 
 /*
@@ -87,7 +87,7 @@ inline static
 bool
 IsShardSplitSlot(char *replicationSlotName)
 {
-	return strncmp(replicationSlotName, CITUS_SHARD_SLOT_PREXIX,
+	return strncmp(replicationSlotName, CITUS_SHARD_SLOT_PREFIX,
 				   CITUS_SHARD_SLOT_PREFIX_SIZE) == 0;
 }
 

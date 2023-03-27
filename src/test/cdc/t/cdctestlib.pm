@@ -202,6 +202,10 @@ sub create_cdc_publication_and_slots_for_coordinator {
     my $node_coordinator = $_[0];
     my $table_names = $_[1];
     print("node node_coordinator connstr: \n" . $node_coordinator->connstr());
+    my $pub = $node_coordinator->safe_psql('postgres',"SELECT * FROM pg_publication WHERE pubname = 'cdc_publication';");
+    if ($pub ne "") {
+        $node_coordinator->safe_psql('postgres',"DROP PUBLICATION IF EXISTS cdc_publication;");
+    }
     $node_coordinator->safe_psql('postgres',"CREATE PUBLICATION cdc_publication FOR TABLE $table_names;");
     $node_coordinator->safe_psql('postgres',"SELECT pg_catalog.pg_create_logical_replication_slot('cdc_replication_slot','citus',false,true)");
 }
