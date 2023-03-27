@@ -20,3 +20,6 @@ ALTER TABLE pg_catalog.pg_dist_transaction REPLICA IDENTITY NOTHING;
 
 DROP PROCEDURE pg_catalog.worker_drop_all_shell_tables(bool);
 DROP FUNCTION pg_catalog.citus_internal_mark_node_not_synced(int, int);
+
+DROP VIEW pg_catalog.citus_stats_tenants;
+DROP FUNCTION pg_catalog.citus_stats_tenants(boolean);

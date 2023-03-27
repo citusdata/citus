@@ -36,7 +36,7 @@ SELECT create_reference_table('reference_table');
 -- (d) multi-row INSERT that hits multiple shards in multiple workers
 -- (e) multi-row INSERT to a reference table
 --  Failure and cancellation on multi-row INSERT that hits the same shard with the same value
-SELECT citus.mitmproxy('conn.onQuery(query="^INSERT").kill()');
+SELECT citus.mitmproxy('conn.onQuery(query="INSERT").kill()');
  mitmproxy
 ---------------------------------------------------------------------
 

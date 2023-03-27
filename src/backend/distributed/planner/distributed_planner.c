@@ -49,6 +49,7 @@
 #include "distributed/recursive_planning.h"
 #include "distributed/shardinterval_utils.h"
 #include "distributed/shard_utils.h"
+#include "distributed/utils/attribute.h"
 #include "distributed/version_compat.h"
 #include "distributed/worker_shard_visibility.h"
 #include "executor/executor.h"
@@ -155,6 +156,8 @@ distributed_planner(Query *parse,
 	bool needsDistributedPlanning = false;
 	bool fastPathRouterQuery = false;
 	Node *distributionKeyValue = NULL;
+
+	AttributeQueryIfAnnotated(query_string, parse->commandType);
 
 	List *rangeTableList = ExtractRangeTableEntryList(parse);
 
