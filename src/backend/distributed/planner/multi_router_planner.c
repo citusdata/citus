@@ -165,7 +165,8 @@ static int CompareInsertValuesByShardId(const void *leftElement,
 static List * SingleShardTaskList(Query *query, uint64 jobId,
 								  List *relationShardList, List *placementList,
 								  uint64 shardId, bool parametersInQueryResolved,
-								  bool isLocalTableModification);
+								  bool isLocalTableModification, char *partitionColumn,
+								  int colocationId);
 static bool RowLocksOnRelations(Node *node, List **rtiLockList);
 static void ReorderTaskPlacementsByTaskAssignmentPolicy(Job *job,
 														TaskAssignmentPolicyType
@@ -1951,11 +1952,25 @@ GenerateSingleShardRouterTaskList(Job *job, List *relationShardList,
 
 	if (originalQuery->commandType == CMD_SELECT)
 	{
+		Datum partitionColumnValue;
+		Oid partitionColumnType = 0;
+		char *partitionColumnString = NULL;
+		if (job->partitionKeyValue != NULL)
+		{
+			partitionColumnValue = job->partitionKeyValue->constvalue;
+			partitionColumnType = job->partitionKeyValue->consttype;
+			partitionColumnString = DatumToString(partitionColumnValue,
+												  partitionColumnType);
+		}
+
+		SetJobColocationId(job);
+
 		job->taskList = SingleShardTaskList(originalQuery, job->jobId,
 											relationShardList, placementList,
 											shardId,
 											job->parametersInJobQueryResolved,
-											isLocalTableModification);
+											isLocalTableModification,
+											partitionColumnString, job->colocationId);
 
 		/*
 		 * Queries to reference tables, or distributed tables with multiple replica's have
@@ -1979,11 +1994,25 @@ GenerateSingleShardRouterTaskList(Job *job, List *relationShardList,
 	}
 	else
 	{
+		Datum partitionColumnValue;
+		Oid partitionColumnType = 0;
+		char *partitionColumnString = NULL;
+		if (job->partitionKeyValue != NULL)
+		{
+			partitionColumnValue = job->partitionKeyValue->constvalue;
+			partitionColumnType = job->partitionKeyValue->consttype;
+			partitionColumnString = DatumToString(partitionColumnValue,
+												  partitionColumnType);
+		}
+
+		SetJobColocationId(job);
+
 		job->taskList = SingleShardTaskList(originalQuery, job->jobId,
 											relationShardList, placementList,
 											shardId,
 											job->parametersInJobQueryResolved,
-											isLocalTableModification);
+											isLocalTableModification,
+											partitionColumnString, job->colocationId);
 	}
 }
 
@@ -2077,7 +2106,8 @@ static List *
 SingleShardTaskList(Query *query, uint64 jobId, List *relationShardList,
 					List *placementList, uint64 shardId,
 					bool parametersInQueryResolved,
-					bool isLocalTableModification)
+					bool isLocalTableModification, char *partitionColumn,
+					int colocationId)
 {
 	TaskType taskType = READ_TASK;
 	char replicationModel = 0;
@@ -2147,6 +2177,8 @@ SingleShardTaskList(Query *query, uint64 jobId, List *relationShardList,
 	 * that the query cannot be executed locally.
 	 */
 	task->taskPlacementList = placementList;
+	task->partitionColumn = partitionColumn;
+	task->colocationId = colocationId;
 	SetTaskQueryIfShouldLazyDeparse(task, query);
 	task->anchorShardId = shardId;
 	task->jobId = jobId;

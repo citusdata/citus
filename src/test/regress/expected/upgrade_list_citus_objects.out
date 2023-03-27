@@ -121,6 +121,7 @@ ORDER BY 1;
  function citus_stat_activity()
  function citus_stat_statements()
  function citus_stat_statements_reset()
+ function citus_stats_tenants(boolean)
  function citus_table_is_visible(oid)
  function citus_table_size(regclass)
  function citus_task_wait(bigint,citus_task_status)
@@ -316,7 +317,8 @@ ORDER BY 1;
  view citus_shards_on_worker
  view citus_stat_activity
  view citus_stat_statements
+ view citus_stats_tenants
  view pg_dist_shard_placement
  view time_partitions
-(310 rows)
+(312 rows)
 

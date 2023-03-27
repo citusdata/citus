@@ -90,6 +90,7 @@
 #include "distributed/resource_lock.h"
 #include "distributed/transaction_management.h"
 #include "distributed/transaction_recovery.h"
+#include "distributed/utils/attribute.h"
 #include "distributed/utils/directory.h"
 #include "distributed/worker_log_messages.h"
 #include "distributed/worker_manager.h"
@@ -439,6 +440,8 @@ _PG_init(void)
 	ExecutorStart_hook = CitusExecutorStart;
 	ExecutorRun_hook = CitusExecutorRun;
 	ExplainOneQuery_hook = CitusExplainOneQuery;
+	prev_ExecutorEnd = ExecutorEnd_hook;
+	ExecutorEnd_hook = CitusAttributeToEnd;
 
 	/* register hook for error messages */
 	emit_log_hook = multi_log_hook;
@@ -471,6 +474,8 @@ _PG_init(void)
 
 	/* initialize shard split shared memory handle management */
 	InitializeShardSplitSMHandleManagement();
+
+	InitializeMultiTenantMonitorSMHandleManagement();
 
 	/* enable modification of pg_catalog tables during pg_upgrade */
 	if (IsBinaryUpgrade)
@@ -1899,6 +1904,16 @@ RegisterCitusConfigVariables(void)
 		GUC_STANDARD,
 		NULL, NULL, NULL);
 
+	DefineCustomEnumVariable(
+		"citus.multi_tenant_monitoring_log_level",
+		gettext_noop("Sets the level of multi tenant monitoring log messages"),
+		NULL,
+		&MultiTenantMonitoringLogLevel,
+		CITUS_LOG_LEVEL_OFF, log_level_options,
+		PGC_USERSET,
+		GUC_STANDARD,
+		NULL, NULL, NULL);
+
 	DefineCustomIntVariable(
 		"citus.next_cleanup_record_id",
 		gettext_noop("Set the next cleanup record ID to use in operation creation."),
@@ -2280,6 +2295,26 @@ RegisterCitusConfigVariables(void)
 		STAT_STATEMENTS_TRACK_NONE,
 		stat_statements_track_options,
 		PGC_SUSET,
+		GUC_STANDARD,
+		NULL, NULL, NULL);
+
+	DefineCustomIntVariable(
+		"citus.stats_tenants_limit",
+		gettext_noop("monitor limit"),
+		NULL,
+		&CitusStatsTenantsLimit,
+		10, 1, 100,
+		PGC_POSTMASTER,
+		GUC_STANDARD,
+		NULL, NULL, NULL);
+
+	DefineCustomIntVariable(
+		"citus.stats_tenants_period",
+		gettext_noop("monitor period"),
+		NULL,
+		&CitusStatsTenantsPeriod,
+		60, 1, 1000000000,
+		PGC_USERSET,
 		GUC_STANDARD,
 		NULL, NULL, NULL);
 
