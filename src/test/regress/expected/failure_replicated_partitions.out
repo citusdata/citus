@@ -21,7 +21,7 @@ CREATE TABLE partitioned_table_0
 	PARTITION OF partitioned_table (dist_key, partition_id)
 	FOR VALUES IN ( 0 );
 INSERT INTO partitioned_table VALUES (0, 0);
-SELECT citus.mitmproxy('conn.onQuery(query="^INSERT").kill()');
+SELECT citus.mitmproxy('conn.onQuery(query="INSERT").kill()');
  mitmproxy
 ---------------------------------------------------------------------
 

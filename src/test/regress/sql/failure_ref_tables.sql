@@ -17,19 +17,19 @@ SELECT citus.clear_network_traffic();
 SELECT COUNT(*) FROM ref_table;
 
 -- verify behavior of single INSERT; should fail to execute
-SELECT citus.mitmproxy('conn.onQuery(query="^INSERT").kill()');
+SELECT citus.mitmproxy('conn.onQuery(query="INSERT").kill()');
 INSERT INTO ref_table VALUES (5, 6);
 
 SELECT COUNT(*) FROM ref_table WHERE key=5;
 
 -- verify behavior of UPDATE ... RETURNING; should not execute
-SELECT citus.mitmproxy('conn.onQuery(query="^UPDATE").kill()');
+SELECT citus.mitmproxy('conn.onQuery(query="UPDATE").kill()');
 UPDATE ref_table SET key=7 RETURNING value;
 
 SELECT COUNT(*) FROM ref_table WHERE key=7;
 
 -- verify fix to #2214; should raise error and fail to execute
-SELECT citus.mitmproxy('conn.onQuery(query="^UPDATE").kill()');
+SELECT citus.mitmproxy('conn.onQuery(query="UPDATE").kill()');
 
 BEGIN;
 DELETE FROM ref_table WHERE key=5;
