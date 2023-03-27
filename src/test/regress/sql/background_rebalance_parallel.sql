@@ -14,6 +14,8 @@ ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 50050;
 
 SELECT nextval('pg_catalog.pg_dist_groupid_seq') AS last_group_id_cls \gset
 SELECT nextval('pg_catalog.pg_dist_node_nodeid_seq') AS last_node_id_cls \gset
+ALTER SEQUENCE pg_catalog.pg_dist_groupid_seq RESTART 50;
+ALTER SEQUENCE pg_catalog.pg_dist_node_nodeid_seq RESTART 50;
 
 ALTER SYSTEM SET citus.background_task_queue_interval TO '1s';
 SELECT pg_reload_conf();
