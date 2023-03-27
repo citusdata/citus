@@ -68,16 +68,16 @@ int CitusStatsTenantsPeriod = (time_t) 60;
 int CitusStatsTenantsLimit = 10;
 
 
-PG_FUNCTION_INFO_V1(citus_stats_tenants);
+PG_FUNCTION_INFO_V1(citus_stats_tenants_local);
 PG_FUNCTION_INFO_V1(clean_citus_stats_tenants);
 PG_FUNCTION_INFO_V1(sleep_until_next_period);
 
 
 /*
- * citus_stats_tenants finds, updates and returns the statistics for tenants.
+ * citus_stats_tenants_local finds, updates and returns the statistics for tenants.
  */
 Datum
-citus_stats_tenants(PG_FUNCTION_ARGS)
+citus_stats_tenants_local(PG_FUNCTION_ARGS)
 {
 	CheckCitusVersion(ERROR);
 

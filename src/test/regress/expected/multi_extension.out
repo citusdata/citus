@@ -1367,10 +1367,12 @@ SELECT * FROM multi_extension.print_extension_changes();
                  | function citus_internal_start_replication_origin_tracking() void
                  | function citus_internal_stop_replication_origin_tracking() void
                  | function citus_stats_tenants(boolean) SETOF record
+                 | function citus_stats_tenants_local(boolean) SETOF record
                  | function worker_adjust_identity_column_seq_ranges(regclass) void
                  | function worker_drop_all_shell_tables(boolean)
                  | view citus_stats_tenants
-(8 rows)
+                 | view citus_stats_tenants_local
+(10 rows)
 
 DROP TABLE multi_extension.prev_objects, multi_extension.extension_diff;
 -- show running version
