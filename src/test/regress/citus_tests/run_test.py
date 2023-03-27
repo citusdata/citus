@@ -110,16 +110,11 @@ if __name__ == "__main__":
                 "multi_mx_function_table_reference",
             ],
         ),
-<<<<<<< HEAD
         "multi_mx_modifying_xacts": TestDeps(None, ["multi_mx_create_table"]),
         "multi_mx_router_planner": TestDeps(None, ["multi_mx_create_table"]),
         "multi_mx_copy_data": TestDeps(None, ["multi_mx_create_table"]),
         "multi_simple_queries": TestDeps("base_schedule"),
-        "my_new_test": TestDeps(None, worker_count=6)
-=======
         "background_rebalance_parallel": TestDeps(None, worker_count=6)
->>>>>>> 3bc8a8942 (Fix flaky)
-
     }
 
     if not (test_file_name or test_file_path):
