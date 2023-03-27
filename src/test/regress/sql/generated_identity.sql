@@ -191,11 +191,13 @@ INSERT INTO color(color_name) VALUES ('Blue');
 SET search_path TO generated_identities;
 \d+ color
 INSERT INTO color(color_name) VALUES ('Red');
-
+-- alter sequence .. restart
 ALTER SEQUENCE color_color_id_seq RESTART WITH 1000;
+-- override system value
 INSERT INTO color(color_id, color_name) VALUES (1, 'Red');
 INSERT INTO color(color_id, color_name) VALUES (NULL, 'Red');
 INSERT INTO color(color_id, color_name) OVERRIDING SYSTEM VALUE VALUES (1, 'Red');
+-- update null or custom value
 UPDATE color SET color_id = NULL;
 UPDATE color SET color_id = 1;
 
@@ -203,10 +205,17 @@ UPDATE color SET color_id = 1;
 SET search_path TO generated_identities;
 SET client_min_messages to ERROR;
 
+
+-- alter table .. add column .. GENERATED .. AS IDENTITY
+ALTER TABLE color ADD COLUMN color_id BIGINT GENERATED ALWAYS AS IDENTITY;
+
+-- alter sequence .. restart
 ALTER SEQUENCE color_color_id_seq RESTART WITH 1000;
+-- override system value
 INSERT INTO color(color_id, color_name) VALUES (1, 'Red');
 INSERT INTO color(color_id, color_name) VALUES (NULL, 'Red');
 INSERT INTO color(color_id, color_name) OVERRIDING SYSTEM VALUE VALUES (1, 'Red');
+-- update null or custom value
 UPDATE color SET color_id = NULL;
 UPDATE color SET color_id = 1;
 

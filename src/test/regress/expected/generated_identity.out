@@ -345,8 +345,10 @@ Indexes:
     "color_color_id_key" UNIQUE CONSTRAINT, btree (color_id)
 
 INSERT INTO color(color_name) VALUES ('Red');
+-- alter sequence .. restart
 ALTER SEQUENCE color_color_id_seq RESTART WITH 1000;
 ERROR:  Altering a distributed sequence is currently not supported.
+-- override system value
 INSERT INTO color(color_id, color_name) VALUES (1, 'Red');
 ERROR:  cannot insert a non-DEFAULT value into column "color_id"
 DETAIL:  Column "color_id" is an identity column defined as GENERATED ALWAYS.
@@ -359,6 +361,7 @@ INSERT INTO color(color_id, color_name) OVERRIDING SYSTEM VALUE VALUES (1, 'Red'
 ERROR:  duplicate key value violates unique constraint "color_color_id_key_102033"
 DETAIL:  Key (color_id)=(1) already exists.
 CONTEXT:  while executing command on localhost:xxxxx
+-- update null or custom value
 UPDATE color SET color_id = NULL;
 ERROR:  column "color_id" can only be updated to DEFAULT
 DETAIL:  Column "color_id" is an identity column defined as GENERATED ALWAYS.
@@ -368,8 +371,13 @@ DETAIL:  Column "color_id" is an identity column defined as GENERATED ALWAYS.
 \c - postgres - :master_port
 SET search_path TO generated_identities;
 SET client_min_messages to ERROR;
+-- alter table .. add column .. GENERATED .. AS IDENTITY
+ALTER TABLE color ADD COLUMN color_id BIGINT GENERATED ALWAYS AS IDENTITY;
+ERROR:  cannot execute ADD COLUMN commands involving identity columns when metadata is synchronized to workers
+-- alter sequence .. restart
 ALTER SEQUENCE color_color_id_seq RESTART WITH 1000;
 ERROR:  Altering a distributed sequence is currently not supported.
+-- override system value
 INSERT INTO color(color_id, color_name) VALUES (1, 'Red');
 ERROR:  cannot insert a non-DEFAULT value into column "color_id"
 DETAIL:  Column "color_id" is an identity column defined as GENERATED ALWAYS.
@@ -382,6 +390,7 @@ INSERT INTO color(color_id, color_name) OVERRIDING SYSTEM VALUE VALUES (1, 'Red'
 ERROR:  duplicate key value violates unique constraint "color_color_id_key_102033"
 DETAIL:  Key (color_id)=(1) already exists.
 CONTEXT:  while executing command on localhost:xxxxx
+-- update null or custom value
 UPDATE color SET color_id = NULL;
 ERROR:  column "color_id" can only be updated to DEFAULT
 DETAIL:  Column "color_id" is an identity column defined as GENERATED ALWAYS.
