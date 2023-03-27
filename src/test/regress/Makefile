@@ -223,12 +223,8 @@ check-follower-cluster: all
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/multi_follower_schedule $(EXTRA_TESTS)
 
 check-operations: all
-	$(pg_regress_multi_check) --load-extension=citus \
+	$(pg_regress_multi_check) --load-extension=citus  --worker-count=6 \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/operations_schedule $(EXTRA_TESTS)
-
-check-operations-multi-node: all
-	        $(pg_regress_multi_check) --load-extension=citus --worker-count=6 \
-			        -- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/operations_multi_node_schedule $(EXTRA_TESTS)
 
 check-columnar: all
 	$(pg_regress_multi_check) --load-extension=citus_columnar --load-extension=citus \

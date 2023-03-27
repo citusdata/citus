@@ -10,6 +10,7 @@ SET client_min_messages TO WARNING;
 
 ALTER SEQUENCE pg_dist_background_job_job_id_seq RESTART 17777;
 ALTER SEQUENCE pg_dist_background_task_task_id_seq RESTART 1000;
+ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 50050;
 
 ALTER SYSTEM SET citus.background_task_queue_interval TO '1s';
 SELECT pg_reload_conf();
@@ -61,7 +62,7 @@ SELECT D.task_id,
        (SELECT T.command FROM pg_dist_background_task T WHERE T.task_id = D.task_id),
        D.depends_on,
        (SELECT T.command FROM pg_dist_background_task T WHERE T.task_id = D.depends_on)
-FROM pg_dist_background_task_depend D  WHERE job_id = 17777 ORDER BY D.task_id ASC;
+FROM pg_dist_background_task_depend D  WHERE job_id = 17777 ORDER BY D.task_id, D.depends_on ASC;
 
 
 /* Check that if there is a reference table that needs to be synched to a node,
@@ -111,7 +112,11 @@ SELECT D.task_id,
        (SELECT T.command FROM pg_dist_background_task T WHERE T.task_id = D.task_id),
        D.depends_on,
        (SELECT T.command FROM pg_dist_background_task T WHERE T.task_id = D.depends_on)
-FROM pg_dist_background_task_depend D  WHERE job_id = 17778 ORDER BY D.task_id ASC;
+FROM pg_dist_background_task_depend D  WHERE job_id = 17778 ORDER BY D.task_id, D.depends_on ASC;
 
 DROP SCHEMA background_rebalance_parallel CASCADE;
 TRUNCATE pg_dist_background_job CASCADE;
+select citus_remove_node('localhost', :worker_3_port);
+select citus_remove_node('localhost', :worker_4_port);
+select citus_remove_node('localhost', :worker_5_port);
+select citus_remove_node('localhost', :worker_6_port);

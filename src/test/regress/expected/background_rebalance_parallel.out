@@ -9,6 +9,7 @@ SET citus.shard_replication_factor TO 1;
 SET client_min_messages TO WARNING;
 ALTER SEQUENCE pg_dist_background_job_job_id_seq RESTART 17777;
 ALTER SEQUENCE pg_dist_background_task_task_id_seq RESTART 1000;
+ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 50050;
 ALTER SYSTEM SET citus.background_task_queue_interval TO '1s';
 SELECT pg_reload_conf();
  pg_reload_conf
@@ -95,46 +96,46 @@ FROM pg_dist_shard S, pg_dist_partition P
 WHERE S.logicalrelid = P.logicalrelid ORDER BY S.shardid ASC;
  shardid  | colocationid
 ---------------------------------------------------------------------
- 85674000 |      1390010
- 85674001 |      1390010
- 85674002 |      1390010
- 85674003 |      1390010
- 85674004 |      1390010
- 85674005 |      1390010
- 85674006 |      1390010
- 85674007 |      1390010
- 85674008 |      1390011
- 85674009 |      1390011
- 85674010 |      1390011
- 85674011 |      1390011
- 85674012 |      1390011
- 85674013 |      1390011
- 85674014 |      1390011
- 85674015 |      1390011
- 85674016 |      1390012
- 85674017 |      1390012
- 85674018 |      1390012
- 85674019 |      1390012
- 85674020 |      1390012
- 85674021 |      1390012
- 85674022 |      1390012
- 85674023 |      1390012
+ 85674000 |        50050
+ 85674001 |        50050
+ 85674002 |        50050
+ 85674003 |        50050
+ 85674004 |        50050
+ 85674005 |        50050
+ 85674006 |        50050
+ 85674007 |        50050
+ 85674008 |        50051
+ 85674009 |        50051
+ 85674010 |        50051
+ 85674011 |        50051
+ 85674012 |        50051
+ 85674013 |        50051
+ 85674014 |        50051
+ 85674015 |        50051
+ 85674016 |        50052
+ 85674017 |        50052
+ 85674018 |        50052
+ 85674019 |        50052
+ 85674020 |        50052
+ 85674021 |        50052
+ 85674022 |        50052
+ 85674023 |        50052
 (24 rows)
 
 SELECT D.task_id,
        (SELECT T.command FROM pg_dist_background_task T WHERE T.task_id = D.task_id),
        D.depends_on,
        (SELECT T.command FROM pg_dist_background_task T WHERE T.task_id = D.depends_on)
-FROM pg_dist_background_task_depend D  WHERE job_id = 17777 ORDER BY D.task_id ASC;
+FROM pg_dist_background_task_depend D  WHERE job_id = 17777 ORDER BY D.task_id, D.depends_on ASC;
  task_id |                               command                               | depends_on |                               command
 ---------------------------------------------------------------------
-    1001 | SELECT pg_catalog.citus_move_shard_placement(85674000,16,31,'auto') |       1000 | SELECT pg_catalog.citus_move_shard_placement(85674001,18,30,'auto')
-    1002 | SELECT pg_catalog.citus_move_shard_placement(85674009,18,30,'auto') |       1000 | SELECT pg_catalog.citus_move_shard_placement(85674001,18,30,'auto')
-    1003 | SELECT pg_catalog.citus_move_shard_placement(85674008,16,31,'auto') |       1002 | SELECT pg_catalog.citus_move_shard_placement(85674009,18,30,'auto')
-    1003 | SELECT pg_catalog.citus_move_shard_placement(85674008,16,31,'auto') |       1001 | SELECT pg_catalog.citus_move_shard_placement(85674000,16,31,'auto')
-    1004 | SELECT pg_catalog.citus_move_shard_placement(85674017,18,30,'auto') |       1002 | SELECT pg_catalog.citus_move_shard_placement(85674009,18,30,'auto')
-    1005 | SELECT pg_catalog.citus_move_shard_placement(85674016,16,31,'auto') |       1004 | SELECT pg_catalog.citus_move_shard_placement(85674017,18,30,'auto')
-    1005 | SELECT pg_catalog.citus_move_shard_placement(85674016,16,31,'auto') |       1003 | SELECT pg_catalog.citus_move_shard_placement(85674008,16,31,'auto')
+    1001 | SELECT pg_catalog.citus_move_shard_placement(85674000,16,40,'auto') |       1000 | SELECT pg_catalog.citus_move_shard_placement(85674001,37,39,'auto')
+    1002 | SELECT pg_catalog.citus_move_shard_placement(85674009,37,39,'auto') |       1000 | SELECT pg_catalog.citus_move_shard_placement(85674001,37,39,'auto')
+    1003 | SELECT pg_catalog.citus_move_shard_placement(85674008,16,40,'auto') |       1001 | SELECT pg_catalog.citus_move_shard_placement(85674000,16,40,'auto')
+    1003 | SELECT pg_catalog.citus_move_shard_placement(85674008,16,40,'auto') |       1002 | SELECT pg_catalog.citus_move_shard_placement(85674009,37,39,'auto')
+    1004 | SELECT pg_catalog.citus_move_shard_placement(85674017,37,39,'auto') |       1002 | SELECT pg_catalog.citus_move_shard_placement(85674009,37,39,'auto')
+    1005 | SELECT pg_catalog.citus_move_shard_placement(85674016,16,40,'auto') |       1003 | SELECT pg_catalog.citus_move_shard_placement(85674008,16,40,'auto')
+    1005 | SELECT pg_catalog.citus_move_shard_placement(85674016,16,40,'auto') |       1004 | SELECT pg_catalog.citus_move_shard_placement(85674017,37,39,'auto')
 (7 rows)
 
 /* Check that if there is a reference table that needs to be synched to a node,
@@ -173,7 +174,7 @@ SELECT create_reference_table('ref_table');
 
 (1 row)
 
-/* Move all the shards of Colocation group 3 to worker_3.*/			
+/* Move all the shards of Colocation group 3 to worker_3.*/
 SELECT
 master_move_shard_placement(shardid, 'localhost', nodeport, 'localhost', :worker_3_port, 'block_writes')
 FROM
@@ -233,47 +234,71 @@ FROM pg_dist_shard S, pg_dist_partition P
 WHERE S.logicalrelid = P.logicalrelid ORDER BY S.shardid ASC;
  shardid  | colocationid
 ---------------------------------------------------------------------
- 85674000 |      1390010
- 85674001 |      1390010
- 85674002 |      1390010
- 85674003 |      1390010
- 85674004 |      1390010
- 85674005 |      1390010
- 85674006 |      1390010
- 85674007 |      1390010
- 85674008 |      1390011
- 85674009 |      1390011
- 85674010 |      1390011
- 85674011 |      1390011
- 85674012 |      1390011
- 85674013 |      1390011
- 85674014 |      1390011
- 85674015 |      1390011
- 85674016 |      1390012
- 85674017 |      1390012
- 85674018 |      1390012
- 85674019 |      1390012
- 85674020 |      1390012
- 85674021 |      1390012
- 85674022 |      1390012
- 85674023 |      1390012
- 85674024 |      1390013
+ 85674000 |        50050
+ 85674001 |        50050
+ 85674002 |        50050
+ 85674003 |        50050
+ 85674004 |        50050
+ 85674005 |        50050
+ 85674006 |        50050
+ 85674007 |        50050
+ 85674008 |        50051
+ 85674009 |        50051
+ 85674010 |        50051
+ 85674011 |        50051
+ 85674012 |        50051
+ 85674013 |        50051
+ 85674014 |        50051
+ 85674015 |        50051
+ 85674016 |        50052
+ 85674017 |        50052
+ 85674018 |        50052
+ 85674019 |        50052
+ 85674020 |        50052
+ 85674021 |        50052
+ 85674022 |        50052
+ 85674023 |        50052
+ 85674024 |        50053
 (25 rows)
 
 SELECT D.task_id,
        (SELECT T.command FROM pg_dist_background_task T WHERE T.task_id = D.task_id),
        D.depends_on,
        (SELECT T.command FROM pg_dist_background_task T WHERE T.task_id = D.depends_on)
-FROM pg_dist_background_task_depend D  WHERE job_id = 17778 ORDER BY D.task_id ASC;
+FROM pg_dist_background_task_depend D  WHERE job_id = 17778 ORDER BY D.task_id, D.depends_on ASC;
  task_id |                               command                               | depends_on |                               command
 ---------------------------------------------------------------------
-    1007 | SELECT pg_catalog.citus_move_shard_placement(85674016,30,31,'auto') |       1006 | SELECT pg_catalog.replicate_reference_tables('auto')
-    1008 | SELECT pg_catalog.citus_move_shard_placement(85674003,18,32,'auto') |       1006 | SELECT pg_catalog.replicate_reference_tables('auto')
-    1009 | SELECT pg_catalog.citus_move_shard_placement(85674000,16,33,'auto') |       1008 | SELECT pg_catalog.citus_move_shard_placement(85674003,18,32,'auto')
-    1010 | SELECT pg_catalog.citus_move_shard_placement(85674017,30,31,'auto') |       1007 | SELECT pg_catalog.citus_move_shard_placement(85674016,30,31,'auto')
-    1011 | SELECT pg_catalog.citus_move_shard_placement(85674008,18,32,'auto') |       1008 | SELECT pg_catalog.citus_move_shard_placement(85674003,18,32,'auto')
-    1012 | SELECT pg_catalog.citus_move_shard_placement(85674001,16,33,'auto') |       1009 | SELECT pg_catalog.citus_move_shard_placement(85674000,16,33,'auto')
+    1007 | SELECT pg_catalog.citus_move_shard_placement(85674016,39,40,'auto') |       1006 | SELECT pg_catalog.replicate_reference_tables('auto')
+    1008 | SELECT pg_catalog.citus_move_shard_placement(85674003,37,41,'auto') |       1006 | SELECT pg_catalog.replicate_reference_tables('auto')
+    1009 | SELECT pg_catalog.citus_move_shard_placement(85674000,16,42,'auto') |       1008 | SELECT pg_catalog.citus_move_shard_placement(85674003,37,41,'auto')
+    1010 | SELECT pg_catalog.citus_move_shard_placement(85674017,39,40,'auto') |       1007 | SELECT pg_catalog.citus_move_shard_placement(85674016,39,40,'auto')
+    1011 | SELECT pg_catalog.citus_move_shard_placement(85674008,37,41,'auto') |       1008 | SELECT pg_catalog.citus_move_shard_placement(85674003,37,41,'auto')
+    1012 | SELECT pg_catalog.citus_move_shard_placement(85674001,16,42,'auto') |       1009 | SELECT pg_catalog.citus_move_shard_placement(85674000,16,42,'auto')
 (6 rows)
 
 DROP SCHEMA background_rebalance_parallel CASCADE;
 TRUNCATE pg_dist_background_job CASCADE;
+select citus_remove_node('localhost', :worker_3_port);
+ citus_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
+select citus_remove_node('localhost', :worker_4_port);
+ citus_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
+select citus_remove_node('localhost', :worker_5_port);
+ citus_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
+select citus_remove_node('localhost', :worker_6_port);
+ citus_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+

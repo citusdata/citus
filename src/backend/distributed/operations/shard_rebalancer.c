@@ -1954,11 +1954,12 @@ InitializeShardMoveDependencies()
  * GenerateTaskMoveDependencyList creates and returns a List of taskIds that
  * the move must take a dependency on.
  */
-static HTAB *
+static int64 *
 GenerateTaskMoveDependencyList(PlacementUpdateEvent *move, int64 colocationId,
-							   ShardMoveDependencies shardMoveDependencies)
+							   ShardMoveDependencies shardMoveDependencies, int *nDepends)
 {
-	HTAB *dependsList = CreateSimpleHashSetWithNameAndSize(int64, "shardMoveDependencyList", 0);
+	HTAB *dependsList = CreateSimpleHashSetWithNameAndSize(int64,
+														   "shardMoveDependencyList", 0);
 
 	bool found;
 
@@ -1994,8 +1995,29 @@ GenerateTaskMoveDependencyList(PlacementUpdateEvent *move, int64 colocationId,
 		hash_search(dependsList, &shardMoveDependencyInfo->taskId, HASH_ENTER, NULL);
 	}
 
-	return dependsList;
+	*nDepends = hash_get_num_entries(dependsList);
+
+	int64 *dependsArray = NULL;
+
+	if (*nDepends > 0)
+	{
+		HASH_SEQ_STATUS seq;
+
+		dependsArray = palloc((*nDepends) * sizeof(int64));
+
+		hash_seq_init(&seq, dependsList);
+		int i = 0;
+		int64 *dependsTaskId;
+
+		while ((dependsTaskId = (int64 *) hash_seq_search(&seq)) != NULL)
+		{
+			dependsArray[i++] = *dependsTaskId;
+		}
+	}
+
+	return dependsArray;
 }
+
 
 /*
  * UpdateShardMoveDependencies function updates the dependency maps with the latest move's taskId.
@@ -2018,6 +2040,7 @@ UpdateShardMoveDependencies(PlacementUpdateEvent *move, uint64 colocationId, int
 
 	shardMoveDependencyInfo->taskId = taskId;
 }
+
 
 /*
  * RebalanceTableShardsBackground rebalances the shards for the relations
@@ -2112,7 +2135,8 @@ RebalanceTableShardsBackground(RebalanceOptions *options, Oid shardReplicationMo
 		appendStringInfo(&buf,
 						 "SELECT pg_catalog.replicate_reference_tables(%s)",
 						 quote_literal_cstr(shardTranferModeLabel));
-		BackgroundTask *task = ScheduleBackgroundTask(jobId, GetUserId(), buf.data, 0, NULL);
+		BackgroundTask *task = ScheduleBackgroundTask(jobId, GetUserId(), buf.data, 0,
+													  NULL);
 		replicateRefTablesTaskId = task->taskid;
 	}
 
@@ -2133,35 +2157,21 @@ RebalanceTableShardsBackground(RebalanceOptions *options, Oid shardReplicationMo
 
 		int64 colocationId = GetColocationId(move);
 
-		HTAB *dependsList = GenerateTaskMoveDependencyList(move, colocationId,
-														   shardMoveDependencies);
+		int nDepends = 0;
 
-		int nDepends = hash_get_num_entries(dependsList);
+		int64 *dependsArray = GenerateTaskMoveDependencyList(move, colocationId,
+															 shardMoveDependencies,
+															 &nDepends);
 
-		int64 *dependsArray = NULL;
-
-		if (nDepends > 0)
-		{
-			HASH_SEQ_STATUS seq;
-
-			dependsArray = palloc(nDepends * sizeof(int64));
-
-			hash_seq_init(&seq, dependsList);
-			int i=0;
-			int64 *dependsTaskId;
-
-			while ((dependsTaskId = (int64 *)hash_seq_search(&seq)) != NULL)
-				dependsArray[i++] = *dependsTaskId;
-
-		}
-		else if (replicateRefTablesTaskId > 0)
+		if (nDepends == 0 && replicateRefTablesTaskId > 0)
 		{
 			nDepends = 1;
 			dependsArray = palloc(nDepends * sizeof(int64));
-			dependsArray[0] =  replicateRefTablesTaskId;
+			dependsArray[0] = replicateRefTablesTaskId;
 		}
 
-		BackgroundTask *task = ScheduleBackgroundTask(jobId, GetUserId(), buf.data, nDepends,
+		BackgroundTask *task = ScheduleBackgroundTask(jobId, GetUserId(), buf.data,
+													  nDepends,
 													  dependsArray);
 
 		UpdateShardMoveDependencies(move, colocationId, task->taskid,

@@ -114,6 +114,8 @@ if __name__ == "__main__":
         "multi_mx_router_planner": TestDeps(None, ["multi_mx_create_table"]),
         "multi_mx_copy_data": TestDeps(None, ["multi_mx_create_table"]),
         "multi_simple_queries": TestDeps("base_schedule"),
+        "my_new_test": TestDeps(None, worker_count=6)
+
     }
 
     if not (test_file_name or test_file_path):
