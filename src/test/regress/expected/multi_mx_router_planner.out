@@ -586,11 +586,13 @@ DEBUG:  query has a single distribution column value: 10
 (3 rows)
 
 -- following join is router plannable since the same worker
--- has both shards
+-- has both shards when citus.enable_non_colocated_router_query_pushdown
+-- is enabled
+SET citus.enable_non_colocated_router_query_pushdown TO ON;
 SELECT a.author_id as first_author, b.word_count as second_word_count
 	FROM articles_hash_mx a, articles_single_shard_hash_mx b
 	WHERE a.author_id = 10 and a.author_id = b.author_id
-	LIMIT 3;
+	ORDER by 1,2 LIMIT 3;
 DEBUG:  Creating router plan
 DEBUG:  query has a single distribution column value: 10
  first_author | second_word_count
@@ -600,6 +602,45 @@ DEBUG:  query has a single distribution column value: 10
            10 |             19519
 (3 rows)
 
+SET citus.enable_non_colocated_router_query_pushdown TO OFF;
+-- but this is not the case otherwise
+SELECT a.author_id as first_author, b.word_count as second_word_count
+	FROM articles_hash_mx a, articles_single_shard_hash_mx b
+	WHERE a.author_id = 10 and a.author_id = b.author_id
+	ORDER by 1,2 LIMIT 3;
+DEBUG:  router planner does not support queries that reference non-colocated distributed tables
+DEBUG:  push down of limit count: 3
+DEBUG:  join prunable for task partitionId 0 and 1
+DEBUG:  join prunable for task partitionId 0 and 2
+DEBUG:  join prunable for task partitionId 0 and 3
+DEBUG:  join prunable for task partitionId 1 and 0
+DEBUG:  join prunable for task partitionId 1 and 2
+DEBUG:  join prunable for task partitionId 1 and 3
+DEBUG:  join prunable for task partitionId 2 and 0
+DEBUG:  join prunable for task partitionId 2 and 1
+DEBUG:  join prunable for task partitionId 2 and 3
+DEBUG:  join prunable for task partitionId 3 and 0
+DEBUG:  join prunable for task partitionId 3 and 1
+DEBUG:  join prunable for task partitionId 3 and 2
+DEBUG:  pruning merge fetch taskId 1
+DETAIL:  Creating dependency on merge taskId 2
+DEBUG:  pruning merge fetch taskId 2
+DETAIL:  Creating dependency on merge taskId 2
+DEBUG:  pruning merge fetch taskId 4
+DETAIL:  Creating dependency on merge taskId 4
+DEBUG:  pruning merge fetch taskId 5
+DETAIL:  Creating dependency on merge taskId 4
+DEBUG:  pruning merge fetch taskId 7
+DETAIL:  Creating dependency on merge taskId 6
+DEBUG:  pruning merge fetch taskId 8
+DETAIL:  Creating dependency on merge taskId 6
+DEBUG:  pruning merge fetch taskId 10
+DETAIL:  Creating dependency on merge taskId 8
+DEBUG:  pruning merge fetch taskId 11
+DETAIL:  Creating dependency on merge taskId 8
+ERROR:  the query contains a join that requires repartitioning
+HINT:  Set citus.enable_repartition_joins to on to enable repartitioning
+RESET citus.enable_non_colocated_router_query_pushdown;
 -- following join is not router plannable since there are no
 -- workers containing both shards, but will work through recursive
 -- planning
