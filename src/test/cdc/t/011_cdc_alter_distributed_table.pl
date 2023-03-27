@@ -60,7 +60,7 @@ is($result, 1, 'CDC split test - distributed table create data');
 $node_coordinator->safe_psql('postgres',"
  SELECT alter_distributed_table('sensors', shard_count:=6, cascade_to_colocated:=true);");
 
-wait_for_cdc_client_to_catch_up_with_citus_cluster($node_coordinator, \@workers); 
+wait_for_cdc_client_to_catch_up_with_citus_cluster($node_coordinator, \@workers);
 
 # Compare the data in the coordinator and cdc client nodes.
 $result = compare_tables_in_different_nodes($node_coordinator,$node_cdc_client,'postgres',$select_stmt);
@@ -69,8 +69,8 @@ is($result, 1, 'CDC split test - alter distributed table ');
 #$node_cdc_client->safe_psql("postgres","alter subscription cdc_subscription refresh publication;");
 $node_cdc_client->safe_psql("postgres","alter subscription cdc_subscription_1 refresh publication;");
 
- 
-#Drop the CDC client subscription and recreate them , since the 
+
+#Drop the CDC client subscription and recreate them , since the
 #alter_distributed_table has changed the Oid of the distributed table.
 #So the  CDC client has to create Oid to table mappings again for
 #CDC to work again.
