@@ -1,0 +1,118 @@
+CREATE SCHEMA arbitrary_configs_router;
+SET search_path TO arbitrary_configs_router;
+
+CREATE TABLE articles_hash (
+	id bigint NOT NULL,
+	author_id bigint NOT NULL,
+	title varchar(20) NOT NULL,
+	word_count integer
+);
+
+SELECT create_distributed_table('articles_hash', 'author_id');
+
+CREATE TABLE authors_reference (id int, name text);
+SELECT create_reference_table('authors_reference');
+
+-- create a bunch of test data
+INSERT INTO articles_hash VALUES (1,  1, 'arsenous', 9572), (2,  2, 'abducing', 13642),( 3,  3, 'asternal', 10480),( 4,  4, 'altdorfer', 14551),( 5,  5, 'aruru', 11389),
+								 (6,  6, 'atlases', 15459),(7,  7, 'aseptic', 12298),( 8,  8, 'agatized', 16368),(9,  9, 'alligate', 438),
+								 (10, 10, 'aggrandize', 17277),(11,  1, 'alamo', 1347),(12,  2, 'archiblast', 18185),
+								 (13,  3, 'aseyev', 2255),(14,  4, 'andesite', 19094),(15,  5, 'adversa', 3164),
+								 (16,  6, 'allonym', 2),(17,  7, 'auriga', 4073),(18,  8, 'assembly', 911),(19,  9, 'aubergiste', 4981),
+								 (20, 10, 'absentness', 1820),(21,  1, 'arcading', 5890),(22,  2, 'antipope', 2728),(23,  3, 'abhorring', 6799),
+								 (24,  4, 'audacious', 3637),(25,  5, 'antehall', 7707),(26,  6, 'abington', 4545),(27,  7, 'arsenous', 8616),
+								 (28,  8, 'aerophyte', 5454),(29,  9, 'amateur', 9524),(30, 10, 'andelee', 6363),(31,  1, 'athwartships', 7271),
+								 (32,  2, 'amazon', 11342),(33,  3, 'autochrome', 8180),(34,  4, 'amnestied', 12250),(35,  5, 'aminate', 9089),
+								 (36,  6, 'ablation', 13159),(37,  7, 'archduchies', 9997),(38,  8, 'anatine', 14067),(39,  9, 'anchises', 10906),
+								 (40, 10, 'attemper', 14976),(41,  1, 'aznavour', 11814),(42,  2, 'ausable', 15885),(43,  3, 'affixal', 12723),
+								 (44,  4, 'anteport', 16793),(45,  5, 'afrasia', 864),(46,  6, 'atlanta', 17702),(47,  7, 'abeyance', 1772),
+								 (48,  8, 'alkylic', 18610),(49,  9, 'anyone', 2681),(50, 10, 'anjanette', 19519);
+
+CREATE TABLE company_employees (company_id int, employee_id int, manager_id int);
+
+SELECT create_distributed_table('company_employees', 'company_id', 'hash');
+
+INSERT INTO company_employees values(1, 1, 0);
+INSERT INTO company_employees values(1, 2, 1);
+INSERT INTO company_employees values(1, 3, 1);
+INSERT INTO company_employees values(1, 4, 2);
+INSERT INTO company_employees values(1, 5, 4);
+
+INSERT INTO company_employees values(3, 1, 0);
+INSERT INTO company_employees values(3, 15, 1);
+INSERT INTO company_employees values(3, 3, 1);
+
+-- finally, some tests with partitioned tables
+CREATE TABLE collections_list (
+	key bigint,
+	ts timestamptz,
+	collection_id integer,
+	value numeric
+) PARTITION BY LIST (collection_id );
+
+CREATE TABLE collections_list_1
+	PARTITION OF collections_list (key, ts, collection_id, value)
+	FOR VALUES IN ( 1 );
+
+CREATE TABLE collections_list_2
+	PARTITION OF collections_list (key, ts, collection_id, value)
+	FOR VALUES IN ( 2 );
+
+SELECT create_distributed_table('collections_list', 'key');
+INSERT INTO collections_list SELECT i % 10, now(), (i % 2) + 1, i*i FROM generate_series(0, 50)i;
+
+-- queries inside plpgsql functions could be router plannable
+CREATE OR REPLACE FUNCTION author_articles_max_id() RETURNS int AS $$
+DECLARE
+  max_id integer;
+BEGIN
+	SELECT MAX(id) FROM articles_hash ah
+		WHERE author_id = 1
+		into max_id;
+	return max_id;
+END;
+$$ LANGUAGE plpgsql;
+
+-- queries inside plpgsql functions could be router plannable
+CREATE OR REPLACE FUNCTION author_articles_max_id(int) RETURNS int AS $$
+DECLARE
+  max_id integer;
+BEGIN
+	SELECT MAX(id) FROM articles_hash ah
+		WHERE author_id = $1
+		into max_id;
+	return max_id;
+END;
+$$ LANGUAGE plpgsql;
+
+-- check that function returning setof query are router plannable
+CREATE OR REPLACE FUNCTION author_articles_id_word_count() RETURNS TABLE(id bigint, word_count int) AS $$
+DECLARE
+BEGIN
+	RETURN QUERY
+		SELECT ah.id, ah.word_count
+		FROM articles_hash ah
+		WHERE author_id = 1;
+
+END;
+$$ LANGUAGE plpgsql;
+
+-- check that function returning setof query are router plannable
+CREATE OR REPLACE FUNCTION author_articles_id_word_count(int) RETURNS TABLE(id bigint, word_count int) AS $$
+DECLARE
+BEGIN
+	RETURN QUERY
+		SELECT ah.id, ah.word_count
+		FROM articles_hash ah
+		WHERE author_id = $1;
+
+END;
+$$ LANGUAGE plpgsql;
+
+-- Suppress the warning that tells that the view won't be distributed
+-- because it depends on a local table.
+--
+-- This only happens when running PostgresConfig.
+SET client_min_messages TO ERROR;
+CREATE VIEW test_view AS
+	SELECT * FROM articles_hash WHERE author_id = 1;

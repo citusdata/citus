@@ -1,0 +1,1561 @@
+SET search_path TO arbitrary_configs_router;
+SET client_min_messages TO WARNING;
+-- test simple select for a single row
+SELECT * FROM articles_hash WHERE author_id = 10 AND id = 50;
+ id | author_id |   title   | word_count
+---------------------------------------------------------------------
+ 50 |        10 | anjanette |      19519
+(1 row)
+
+-- get all titles by a single author
+SELECT title FROM articles_hash WHERE author_id = 10;
+   title
+---------------------------------------------------------------------
+ aggrandize
+ absentness
+ andelee
+ attemper
+ anjanette
+(5 rows)
+
+-- try ordering them by word count
+SELECT title, word_count FROM articles_hash
+	WHERE author_id = 10
+	ORDER BY word_count DESC NULLS LAST;
+   title    | word_count
+---------------------------------------------------------------------
+ anjanette  |      19519
+ aggrandize |      17277
+ attemper   |      14976
+ andelee    |       6363
+ absentness |       1820
+(5 rows)
+
+-- look at last two articles by an author
+SELECT title, id FROM articles_hash
+	WHERE author_id = 5
+	ORDER BY id
+	LIMIT 2;
+  title  | id
+---------------------------------------------------------------------
+ aruru   |  5
+ adversa | 15
+(2 rows)
+
+-- find all articles by two authors in same shard
+-- but plan is not fast path router plannable due to
+-- two distribution columns in the query
+SELECT title, author_id FROM articles_hash
+	WHERE author_id = 7 OR author_id = 8
+	ORDER BY author_id ASC, id;
+    title    | author_id
+---------------------------------------------------------------------
+ aseptic     |         7
+ auriga      |         7
+ arsenous    |         7
+ archduchies |         7
+ abeyance    |         7
+ agatized    |         8
+ assembly    |         8
+ aerophyte   |         8
+ anatine     |         8
+ alkylic     |         8
+(10 rows)
+
+-- having clause is supported if it goes to a single shard
+-- and single dist. key on the query
+SELECT author_id, sum(word_count) AS corpus_size FROM articles_hash
+	WHERE author_id = 1
+	GROUP BY author_id
+	HAVING sum(word_count) > 1000
+	ORDER BY sum(word_count) DESC;
+ author_id | corpus_size
+---------------------------------------------------------------------
+         1 |       35894
+(1 row)
+
+-- fast path planner only support = operator
+SELECT * FROM articles_hash WHERE author_id <= 1;
+ id | author_id |    title     | word_count
+---------------------------------------------------------------------
+  1 |         1 | arsenous     |       9572
+ 11 |         1 | alamo        |       1347
+ 21 |         1 | arcading     |       5890
+ 31 |         1 | athwartships |       7271
+ 41 |         1 | aznavour     |      11814
+(5 rows)
+
+SELECT * FROM articles_hash WHERE author_id IN (1, 3) ORDER BY 1,2,3,4;
+ id | author_id |    title     | word_count
+---------------------------------------------------------------------
+  1 |         1 | arsenous     |       9572
+  3 |         3 | asternal     |      10480
+ 11 |         1 | alamo        |       1347
+ 13 |         3 | aseyev       |       2255
+ 21 |         1 | arcading     |       5890
+ 23 |         3 | abhorring    |       6799
+ 31 |         1 | athwartships |       7271
+ 33 |         3 | autochrome   |       8180
+ 41 |         1 | aznavour     |      11814
+ 43 |         3 | affixal      |      12723
+(10 rows)
+
+-- queries with CTEs cannot go through fast-path planning
+WITH first_author AS ( SELECT id FROM articles_hash WHERE author_id = 1)
+SELECT * FROM first_author;
+ id
+---------------------------------------------------------------------
+  1
+ 11
+ 21
+ 31
+ 41
+(5 rows)
+
+-- two CTE joins also cannot go through fast-path planning
+WITH id_author AS ( SELECT id, author_id FROM articles_hash WHERE author_id = 1),
+id_title AS (SELECT id, title from articles_hash WHERE author_id = 1)
+SELECT * FROM id_author, id_title WHERE id_author.id = id_title.id;
+ id | author_id | id |    title
+---------------------------------------------------------------------
+  1 |         1 |  1 | arsenous
+ 11 |         1 | 11 | alamo
+ 21 |         1 | 21 | arcading
+ 31 |         1 | 31 | athwartships
+ 41 |         1 | 41 | aznavour
+(5 rows)
+
+-- this is a different case where each CTE is recursively planned and those goes
+-- through the fast-path router planner, but the top level join is not
+WITH id_author AS ( SELECT id, author_id FROM articles_hash WHERE author_id = 1),
+id_title AS (SELECT id, title from articles_hash WHERE author_id = 2)
+SELECT * FROM id_author, id_title WHERE id_author.id = id_title.id;
+ id | author_id | id | title
+---------------------------------------------------------------------
+(0 rows)
+
+-- recursive CTEs are also cannot go through fast
+-- path planning
+WITH RECURSIVE hierarchy as (
+	SELECT *, 1 AS level
+		FROM company_employees
+		WHERE company_id = 1 and manager_id = 0
+	UNION
+	SELECT ce.*, (h.level+1)
+		FROM hierarchy h JOIN company_employees ce
+			ON (h.employee_id = ce.manager_id AND
+				h.company_id = ce.company_id AND
+				ce.company_id = 1))
+SELECT * FROM hierarchy WHERE LEVEL <= 2;
+ company_id | employee_id | manager_id | level
+---------------------------------------------------------------------
+          1 |           1 |          0 |     1
+          1 |           2 |          1 |     2
+          1 |           3 |          1 |     2
+(3 rows)
+
+WITH update_article AS (
+    UPDATE articles_hash SET word_count = 10 WHERE id = 1 AND word_count = 9 RETURNING *
+)
+SELECT * FROM update_article;
+ id | author_id | title | word_count
+---------------------------------------------------------------------
+(0 rows)
+
+WITH delete_article AS (
+    DELETE FROM articles_hash WHERE id = 1 AND word_count = 10 RETURNING *
+)
+SELECT * FROM delete_article;
+ id | author_id | title | word_count
+---------------------------------------------------------------------
+(0 rows)
+
+-- grouping sets are supported via fast-path
+SELECT
+	id, substring(title, 2, 1) AS subtitle, count(*)
+	FROM articles_hash
+	WHERE author_id = 1
+	GROUP BY GROUPING SETS ((id),(subtitle))
+	ORDER BY id, subtitle;
+ id | subtitle | count
+---------------------------------------------------------------------
+  1 |          |     1
+ 11 |          |     1
+ 21 |          |     1
+ 31 |          |     1
+ 41 |          |     1
+    | l        |     1
+    | r        |     2
+    | t        |     1
+    | z        |     1
+(9 rows)
+
+-- queries which involve functions in FROM clause are not supported via fast path planning
+SELECT * FROM articles_hash, position('om' in 'Thomas') WHERE author_id = 1;
+ id | author_id |    title     | word_count | position
+---------------------------------------------------------------------
+  1 |         1 | arsenous     |       9572 |        3
+ 11 |         1 | alamo        |       1347 |        3
+ 21 |         1 | arcading     |       5890 |        3
+ 31 |         1 | athwartships |       7271 |        3
+ 41 |         1 | aznavour     |      11814 |        3
+(5 rows)
+
+-- sublinks are not supported via fast path planning
+SELECT * FROM articles_hash
+WHERE author_id IN (SELECT author_id FROM articles_hash WHERE author_id = 2)
+ORDER BY articles_hash.id;
+ id | author_id |   title    | word_count
+---------------------------------------------------------------------
+  2 |         2 | abducing   |      13642
+ 12 |         2 | archiblast |      18185
+ 22 |         2 | antipope   |       2728
+ 32 |         2 | amazon     |      11342
+ 42 |         2 | ausable    |      15885
+(5 rows)
+
+-- subqueries are not supported via fast path planning
+SELECT articles_hash.id,test.word_count
+FROM articles_hash, (SELECT id, word_count FROM articles_hash) AS test WHERE test.id = articles_hash.id
+ORDER BY test.word_count DESC, articles_hash.id LIMIT 5;
+ id | word_count
+---------------------------------------------------------------------
+ 50 |      19519
+ 14 |      19094
+ 48 |      18610
+ 12 |      18185
+ 46 |      17702
+(5 rows)
+
+SELECT articles_hash.id,test.word_count
+FROM articles_hash, (SELECT id, word_count FROM articles_hash) AS test
+WHERE test.id = articles_hash.id and articles_hash.author_id = 1
+ORDER BY articles_hash.id;
+ id | word_count
+---------------------------------------------------------------------
+  1 |       9572
+ 11 |       1347
+ 21 |       5890
+ 31 |       7271
+ 41 |      11814
+(5 rows)
+
+-- simple lookup query just works
+SELECT *
+	FROM articles_hash
+	WHERE author_id = 1;
+ id | author_id |    title     | word_count
+---------------------------------------------------------------------
+  1 |         1 | arsenous     |       9572
+ 11 |         1 | alamo        |       1347
+ 21 |         1 | arcading     |       5890
+ 31 |         1 | athwartships |       7271
+ 41 |         1 | aznavour     |      11814
+(5 rows)
+
+-- below query hits a single shard but with multiple filters
+-- so cannot go via fast-path
+SELECT *
+	FROM articles_hash
+	WHERE author_id = 1 OR author_id = 17;
+ id | author_id |    title     | word_count
+---------------------------------------------------------------------
+  1 |         1 | arsenous     |       9572
+ 11 |         1 | alamo        |       1347
+ 21 |         1 | arcading     |       5890
+ 31 |         1 | athwartships |       7271
+ 41 |         1 | aznavour     |      11814
+(5 rows)
+
+-- rename the output columns
+SELECT id as article_id, word_count * id as random_value
+	FROM articles_hash
+	WHERE author_id = 1;
+ article_id | random_value
+---------------------------------------------------------------------
+          1 |         9572
+         11 |        14817
+         21 |       123690
+         31 |       225401
+         41 |       484374
+(5 rows)
+
+-- joins do not go through fast-path planning
+SELECT a.author_id as first_author, b.word_count as second_word_count
+	FROM articles_hash a, articles_hash b
+	WHERE a.author_id = 10 and a.author_id = b.author_id
+	LIMIT 3;
+ first_author | second_word_count
+---------------------------------------------------------------------
+           10 |             17277
+           10 |              1820
+           10 |              6363
+(3 rows)
+
+-- single shard select with limit goes through fast-path planning
+SELECT *
+	FROM articles_hash
+	WHERE author_id = 1
+	LIMIT 3;
+ id | author_id |  title   | word_count
+---------------------------------------------------------------------
+  1 |         1 | arsenous |       9572
+ 11 |         1 | alamo    |       1347
+ 21 |         1 | arcading |       5890
+(3 rows)
+
+-- single shard select with limit + offset goes through fast-path planning
+SELECT *
+	FROM articles_hash
+	WHERE author_id = 1
+	LIMIT 2
+	OFFSET 1;
+ id | author_id |  title   | word_count
+---------------------------------------------------------------------
+ 11 |         1 | alamo    |       1347
+ 21 |         1 | arcading |       5890
+(2 rows)
+
+-- single shard select with limit + offset + order by goes through fast-path planning
+SELECT *
+	FROM articles_hash
+	WHERE author_id = 1
+	ORDER BY id desc
+	LIMIT 2
+	OFFSET 1;
+ id | author_id |    title     | word_count
+---------------------------------------------------------------------
+ 31 |         1 | athwartships |       7271
+ 21 |         1 | arcading     |       5890
+(2 rows)
+
+-- single shard select with group by on non-partition column goes through fast-path planning
+SELECT id
+	FROM articles_hash
+	WHERE author_id = 1
+	GROUP BY id
+	ORDER BY id;
+ id
+---------------------------------------------------------------------
+  1
+ 11
+ 21
+ 31
+ 41
+(5 rows)
+
+-- single shard select with distinct goes through fast-path planning
+SELECT DISTINCT id
+	FROM articles_hash
+	WHERE author_id = 1
+	ORDER BY id;
+ id
+---------------------------------------------------------------------
+  1
+ 11
+ 21
+ 31
+ 41
+(5 rows)
+
+-- single shard aggregate goes through fast-path planning
+SELECT avg(word_count)
+	FROM articles_hash
+	WHERE author_id = 2;
+        avg
+---------------------------------------------------------------------
+ 12356.400000000000
+(1 row)
+
+-- max, min, sum, count goes through fast-path planning
+SELECT max(word_count) as max, min(word_count) as min,
+	   sum(word_count) as sum, count(word_count) as cnt
+	FROM articles_hash
+	WHERE author_id = 2;
+  max  | min  |  sum  | cnt
+---------------------------------------------------------------------
+ 18185 | 2728 | 61782 |   5
+(1 row)
+
+-- queries with aggregates and group by goes through fast-path planning
+SELECT max(word_count)
+	FROM articles_hash
+	WHERE author_id = 1
+	GROUP BY author_id;
+  max
+---------------------------------------------------------------------
+ 11814
+(1 row)
+
+-- set operations are not supported via fast-path planning
+SELECT * FROM (
+	SELECT * FROM articles_hash WHERE author_id = 1
+	UNION
+	SELECT * FROM articles_hash WHERE author_id = 3
+) AS combination
+ORDER BY id;
+ id | author_id |    title     | word_count
+---------------------------------------------------------------------
+  1 |         1 | arsenous     |       9572
+  3 |         3 | asternal     |      10480
+ 11 |         1 | alamo        |       1347
+ 13 |         3 | aseyev       |       2255
+ 21 |         1 | arcading     |       5890
+ 23 |         3 | abhorring    |       6799
+ 31 |         1 | athwartships |       7271
+ 33 |         3 | autochrome   |       8180
+ 41 |         1 | aznavour     |      11814
+ 43 |         3 | affixal      |      12723
+(10 rows)
+
+-- function calls in the target list is supported via fast path
+SELECT LEFT(title, 1) FROM articles_hash WHERE author_id = 1;
+ left
+---------------------------------------------------------------------
+ a
+ a
+ a
+ a
+ a
+(5 rows)
+
+-- top-level union queries are supported through recursive planning
+-- unions in subqueries are not supported via fast-path planning
+SELECT * FROM (
+	(SELECT * FROM articles_hash WHERE author_id = 1)
+	UNION
+	(SELECT * FROM articles_hash WHERE author_id = 1)) uu
+ORDER BY 1, 2
+LIMIT 5;
+ id | author_id |    title     | word_count
+---------------------------------------------------------------------
+  1 |         1 | arsenous     |       9572
+ 11 |         1 | alamo        |       1347
+ 21 |         1 | arcading     |       5890
+ 31 |         1 | athwartships |       7271
+ 41 |         1 | aznavour     |      11814
+(5 rows)
+
+-- Test various filtering options for router plannable check
+-- cannot go through fast-path if there is
+-- explicit coercion
+SELECT *
+	FROM articles_hash
+	WHERE author_id = 1::bigint;
+ id | author_id |    title     | word_count
+---------------------------------------------------------------------
+  1 |         1 | arsenous     |       9572
+ 11 |         1 | alamo        |       1347
+ 21 |         1 | arcading     |       5890
+ 31 |         1 | athwartships |       7271
+ 41 |         1 | aznavour     |      11814
+(5 rows)
+
+-- can go through fast-path if there is
+-- implicit coercion
+-- This doesn't work see the related issue
+-- reported https://github.com/citusdata/citus/issues/2605
+-- SELECT *
+--	FROM articles_hash
+--	WHERE author_id = 1.0;
+SELECT *
+	FROM articles_hash
+	WHERE author_id = 68719476736; -- this is bigint
+ id | author_id | title | word_count
+---------------------------------------------------------------------
+(0 rows)
+
+-- cannot go through fast-path due to
+-- multiple filters on the dist. key
+SELECT *
+	FROM articles_hash
+	WHERE author_id = 1 and author_id >= 1;
+ id | author_id |    title     | word_count
+---------------------------------------------------------------------
+  1 |         1 | arsenous     |       9572
+ 11 |         1 | alamo        |       1347
+ 21 |         1 | arcading     |       5890
+ 31 |         1 | athwartships |       7271
+ 41 |         1 | aznavour     |      11814
+(5 rows)
+
+-- cannot go through fast-path due to
+-- multiple filters on the dist. key
+SELECT *
+	FROM articles_hash
+	WHERE author_id = 1 or id = 1;
+ id | author_id |    title     | word_count
+---------------------------------------------------------------------
+  1 |         1 | arsenous     |       9572
+ 11 |         1 | alamo        |       1347
+ 21 |         1 | arcading     |       5890
+ 31 |         1 | athwartships |       7271
+ 41 |         1 | aznavour     |      11814
+(5 rows)
+
+-- goes through fast-path planning because
+-- the dist. key is ANDed with the rest of the
+-- filters
+SELECT *
+	FROM articles_hash
+	WHERE author_id = 1 and (id = 1 or id = 41);
+ id | author_id |  title   | word_count
+---------------------------------------------------------------------
+  1 |         1 | arsenous |       9572
+ 41 |         1 | aznavour |      11814
+(2 rows)
+
+-- this time there is an OR clause which prevents
+-- router planning at all
+SELECT *
+	FROM articles_hash
+	WHERE author_id = 1 and id = 1 or id = 41;
+ id | author_id |  title   | word_count
+---------------------------------------------------------------------
+  1 |         1 | arsenous |       9572
+ 41 |         1 | aznavour |      11814
+(2 rows)
+
+-- goes through fast-path planning because
+-- the dist. key is ANDed with the rest of the
+-- filters
+SELECT *
+	FROM articles_hash
+	WHERE author_id = 1 and (id = random()::int  * 0);
+ id | author_id | title | word_count
+---------------------------------------------------------------------
+(0 rows)
+
+-- not router plannable due to function call on the right side
+SELECT *
+	FROM articles_hash
+	WHERE author_id = (random()::int  * 0 + 1);
+ id | author_id |    title     | word_count
+---------------------------------------------------------------------
+  1 |         1 | arsenous     |       9572
+ 11 |         1 | alamo        |       1347
+ 21 |         1 | arcading     |       5890
+ 31 |         1 | athwartships |       7271
+ 41 |         1 | aznavour     |      11814
+(5 rows)
+
+-- Citus does not qualify this as a fast-path because
+-- dist_key = func()
+SELECT *
+	FROM articles_hash
+	WHERE author_id = abs(-1);
+ id | author_id |    title     | word_count
+---------------------------------------------------------------------
+  1 |         1 | arsenous     |       9572
+ 11 |         1 | alamo        |       1347
+ 21 |         1 | arcading     |       5890
+ 31 |         1 | athwartships |       7271
+ 41 |         1 | aznavour     |      11814
+(5 rows)
+
+-- Citus does not qualify this as a fast-path because
+-- dist_key = func()
+SELECT *
+	FROM articles_hash
+	WHERE 1 = abs(author_id);
+ id | author_id |    title     | word_count
+---------------------------------------------------------------------
+  1 |         1 | arsenous     |       9572
+ 11 |         1 | alamo        |       1347
+ 21 |         1 | arcading     |       5890
+ 31 |         1 | athwartships |       7271
+ 41 |         1 | aznavour     |      11814
+(5 rows)
+
+-- Citus does not qualify this as a fast-path because
+-- dist_key = func()
+SELECT *
+	FROM articles_hash
+	WHERE author_id = abs(author_id - 2);
+ id | author_id |    title     | word_count
+---------------------------------------------------------------------
+  1 |         1 | arsenous     |       9572
+ 11 |         1 | alamo        |       1347
+ 21 |         1 | arcading     |       5890
+ 31 |         1 | athwartships |       7271
+ 41 |         1 | aznavour     |      11814
+(5 rows)
+
+-- the function is not on the dist. key, so qualify as
+-- fast-path
+SELECT *
+	FROM articles_hash
+	WHERE author_id = 1 and (id = abs(id - 2));
+ id | author_id |  title   | word_count
+---------------------------------------------------------------------
+  1 |         1 | arsenous |       9572
+(1 row)
+
+-- not router plannable due to is true
+SELECT *
+	FROM articles_hash
+	WHERE (author_id = 1) is true;
+ id | author_id |    title     | word_count
+---------------------------------------------------------------------
+  1 |         1 | arsenous     |       9572
+ 11 |         1 | alamo        |       1347
+ 21 |         1 | arcading     |       5890
+ 31 |         1 | athwartships |       7271
+ 41 |         1 | aznavour     |      11814
+(5 rows)
+
+-- router plannable, (boolean expression) = true is collapsed to (boolean expression)
+SELECT *
+	FROM articles_hash
+	WHERE (author_id = 1) = true;
+ id | author_id |    title     | word_count
+---------------------------------------------------------------------
+  1 |         1 | arsenous     |       9572
+ 11 |         1 | alamo        |       1347
+ 21 |         1 | arcading     |       5890
+ 31 |         1 | athwartships |       7271
+ 41 |         1 | aznavour     |      11814
+(5 rows)
+
+-- some more complex quals
+SELECT count(*) FROM articles_hash WHERE (author_id = 15) AND (id = 1 OR word_count > 5);
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+SELECT count(*) FROM articles_hash WHERE (author_id = 15) OR (id = 1 AND word_count > 5);
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+SELECT count(*) FROM articles_hash WHERE (id = 15) OR (author_id = 1 AND word_count > 5);
+ count
+---------------------------------------------------------------------
+     6
+(1 row)
+
+SELECT count(*) FROM articles_hash WHERE (id = 15) AND (author_id = 1 OR word_count > 5);
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+SELECT count(*) FROM articles_hash WHERE (id = 15) AND (author_id = 1 AND (word_count > 5 OR id  = 2));
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+SELECT count(*) FROM articles_hash WHERE (id = 15) AND (title ilike 'a%' AND (word_count > 5 OR author_id  = 2));
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+SELECT count(*) FROM articles_hash WHERE (id = 15) AND (title ilike 'a%' AND (word_count > 5 AND author_id  = 2));
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+SELECT count(*) FROM articles_hash WHERE (id = 15) AND (title ilike 'a%' AND ((word_count > 5 OR title ilike 'b%' ) AND (author_id  = 2 AND word_count > 50)));
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+-- fast-path router plannable, between operator is on another column
+SELECT *
+	FROM articles_hash
+	WHERE (author_id = 1) and id between 0 and 20;
+ id | author_id |  title   | word_count
+---------------------------------------------------------------------
+  1 |         1 | arsenous |       9572
+ 11 |         1 | alamo    |       1347
+(2 rows)
+
+-- fast-path router plannable, partition column expression is and'ed to rest
+SELECT *
+	FROM articles_hash
+	WHERE (author_id = 1) and (id = 1 or id = 31) and title like '%s';
+ id | author_id |    title     | word_count
+---------------------------------------------------------------------
+  1 |         1 | arsenous     |       9572
+ 31 |         1 | athwartships |       7271
+(2 rows)
+
+-- fast-path router plannable, order is changed
+SELECT *
+	FROM articles_hash
+	WHERE (id = 1 or id = 31) and title like '%s' and (author_id = 1);
+ id | author_id |    title     | word_count
+---------------------------------------------------------------------
+  1 |         1 | arsenous     |       9572
+ 31 |         1 | athwartships |       7271
+(2 rows)
+
+-- fast-path router plannable
+SELECT *
+	FROM articles_hash
+	WHERE (title like '%s' or title like 'a%') and (author_id = 1);
+ id | author_id |    title     | word_count
+---------------------------------------------------------------------
+  1 |         1 | arsenous     |       9572
+ 11 |         1 | alamo        |       1347
+ 21 |         1 | arcading     |       5890
+ 31 |         1 | athwartships |       7271
+ 41 |         1 | aznavour     |      11814
+(5 rows)
+
+-- fast-path router plannable
+SELECT *
+	FROM articles_hash
+	WHERE (title like '%s' or title like 'a%') and (author_id = 1) and (word_count < 3000 or word_count > 8000);
+ id | author_id |  title   | word_count
+---------------------------------------------------------------------
+  1 |         1 | arsenous |       9572
+ 11 |         1 | alamo    |       1347
+ 41 |         1 | aznavour |      11814
+(3 rows)
+
+-- window functions are supported with fast-path router plannable
+SELECT LAG(title, 1) over (ORDER BY word_count) prev, title, word_count
+	FROM articles_hash
+	WHERE author_id = 5;
+   prev   |  title   | word_count
+---------------------------------------------------------------------
+          | afrasia  |        864
+ afrasia  | adversa  |       3164
+ adversa  | antehall |       7707
+ antehall | aminate  |       9089
+ aminate  | aruru    |      11389
+(5 rows)
+
+SELECT LAG(title, 1) over (ORDER BY word_count) prev, title, word_count
+	FROM articles_hash
+	WHERE author_id = 5
+	ORDER BY word_count DESC;
+   prev   |  title   | word_count
+---------------------------------------------------------------------
+ aminate  | aruru    |      11389
+ antehall | aminate  |       9089
+ adversa  | antehall |       7707
+ afrasia  | adversa  |       3164
+          | afrasia  |        864
+(5 rows)
+
+SELECT id, MIN(id) over (order by word_count)
+	FROM articles_hash
+	WHERE author_id = 1;
+ id | min
+---------------------------------------------------------------------
+ 11 |  11
+ 21 |  11
+ 31 |  11
+  1 |   1
+ 41 |   1
+(5 rows)
+
+SELECT id, word_count, AVG(word_count) over (order by word_count)
+	FROM articles_hash
+	WHERE author_id = 1;
+ id | word_count |          avg
+---------------------------------------------------------------------
+ 11 |       1347 | 1347.0000000000000000
+ 21 |       5890 | 3618.5000000000000000
+ 31 |       7271 | 4836.0000000000000000
+  1 |       9572 | 6020.0000000000000000
+ 41 |      11814 | 7178.8000000000000000
+(5 rows)
+
+SELECT word_count, rank() OVER (PARTITION BY author_id ORDER BY word_count)
+	FROM articles_hash
+	WHERE author_id = 1;
+ word_count | rank
+---------------------------------------------------------------------
+       1347 |    1
+       5890 |    2
+       7271 |    3
+       9572 |    4
+      11814 |    5
+(5 rows)
+
+-- some more tests on complex target lists
+SELECT DISTINCT ON (author_id, id) author_id, id,
+	MIN(id) over (order by avg(word_count)) * AVG(id * 5.2 + (1.0/max(word_count))) over (order by max(word_count)) as t1,
+	count(*) FILTER (WHERE title LIKE 'al%') as cnt_with_filter,
+	count(*) FILTER (WHERE '0300030' LIKE '%3%') as cnt_with_filter_2,
+	avg(case when id > 2 then char_length(word_count::text) * (id * strpos(word_count::text, '1')) end) as case_cnt,
+	COALESCE(strpos(avg(word_count)::text, '1'), 20)
+	FROM articles_hash as aliased_table
+	WHERE author_id = 1
+	GROUP BY author_id, id
+	HAVING count(DISTINCT title) > 0
+	ORDER BY author_id, id, sum(word_count) - avg(char_length(title)) DESC, COALESCE(array_upper(ARRAY[max(id)],1) * 5,0) DESC;
+ author_id | id |              t1              | cnt_with_filter | cnt_with_filter_2 |        case_cnt        | coalesce
+---------------------------------------------------------------------
+         1 |  1 |      83.20028854345579490574 |               0 |                 1 |                        |        0
+         1 | 11 |     629.20816629547141796586 |               1 |                 1 |    44.0000000000000000 |        1
+         1 | 21 |     915.20501693381380745499 |               0 |                 1 | 0.00000000000000000000 |        0
+         1 | 31 |    1201.20384890897723321000 |               0 |                 1 |   496.0000000000000000 |        4
+         1 | 41 | 109.200247763831844321405335 |               0 |                 1 |   205.0000000000000000 |        1
+(5 rows)
+
+-- where false queries are router plannable but not fast-path
+SELECT *
+	FROM articles_hash
+	WHERE false;
+ id | author_id | title | word_count
+---------------------------------------------------------------------
+(0 rows)
+
+-- fast-path with false
+SELECT *
+	FROM articles_hash
+	WHERE author_id = 1 and false;
+ id | author_id | title | word_count
+---------------------------------------------------------------------
+(0 rows)
+
+-- fast-path with false
+SELECT *
+	FROM articles_hash
+	WHERE author_id = 1 and 1=0;
+ id | author_id | title | word_count
+---------------------------------------------------------------------
+(0 rows)
+
+SELECT *
+	FROM articles_hash
+	WHERE null and author_id = 1;
+ id | author_id | title | word_count
+---------------------------------------------------------------------
+(0 rows)
+
+-- we cannot qualify dist_key = X operator Y via
+-- fast-path planning
+SELECT *
+	FROM articles_hash
+	WHERE author_id = 1 + 1;
+ id | author_id |   title    | word_count
+---------------------------------------------------------------------
+  2 |         2 | abducing   |      13642
+ 12 |         2 | archiblast |      18185
+ 22 |         2 | antipope   |       2728
+ 32 |         2 | amazon     |      11342
+ 42 |         2 | ausable    |      15885
+(5 rows)
+
+-- where false with immutable function returning false
+-- goes through fast-path
+SELECT *
+	FROM articles_hash a
+	WHERE a.author_id = 10 and int4eq(1, 2);
+ id | author_id | title | word_count
+---------------------------------------------------------------------
+(0 rows)
+
+-- partition_column is null clause does not prune out any shards,
+-- all shards remain after shard pruning, not router plannable
+-- not fast-path router either
+SELECT *
+	FROM articles_hash a
+	WHERE a.author_id is null;
+ id | author_id | title | word_count
+---------------------------------------------------------------------
+(0 rows)
+
+-- partition_column equals to null clause prunes out all shards
+-- no shards after shard pruning, router plannable
+-- not fast-path router either
+SELECT *
+	FROM articles_hash a
+	WHERE a.author_id = null;
+ id | author_id | title | word_count
+---------------------------------------------------------------------
+(0 rows)
+
+-- union/difference /intersection with where false
+-- this query was not originally router plannable, addition of 1=0
+-- makes it router plannable but not fast-path
+SELECT * FROM (
+	SELECT * FROM articles_hash WHERE author_id = 1
+	UNION
+	SELECT * FROM articles_hash WHERE author_id = 2 and 1=0
+) AS combination
+ORDER BY id;
+ id | author_id |    title     | word_count
+---------------------------------------------------------------------
+  1 |         1 | arsenous     |       9572
+ 11 |         1 | alamo        |       1347
+ 21 |         1 | arcading     |       5890
+ 31 |         1 | athwartships |       7271
+ 41 |         1 | aznavour     |      11814
+(5 rows)
+
+-- same with the above, but with WHERE false
+SELECT * FROM (
+	SELECT * FROM articles_hash WHERE author_id = 1
+	UNION
+	SELECT * FROM articles_hash WHERE author_id = 2 and 1=0
+) AS combination WHERE false
+ORDER BY id;
+ id | author_id | title | word_count
+---------------------------------------------------------------------
+(0 rows)
+
+-- window functions with where false
+SELECT word_count, rank() OVER (PARTITION BY author_id ORDER BY word_count)
+	FROM articles_hash
+	WHERE author_id = 1 and 1=0;
+ word_count | rank
+---------------------------------------------------------------------
+(0 rows)
+
+-- complex query hitting a single shard and a fast-path
+SELECT
+	count(DISTINCT CASE
+			WHEN
+				word_count > 100
+			THEN
+				id
+			ELSE
+				NULL
+			END) as c
+	FROM
+		articles_hash
+	WHERE
+		author_id = 5;
+ c
+---------------------------------------------------------------------
+ 5
+(1 row)
+
+-- queries inside transactions can be fast-path router plannable
+BEGIN;
+SELECT *
+	FROM articles_hash
+	WHERE author_id = 1
+	ORDER BY id;
+ id | author_id |    title     | word_count
+---------------------------------------------------------------------
+  1 |         1 | arsenous     |       9572
+ 11 |         1 | alamo        |       1347
+ 21 |         1 | arcading     |       5890
+ 31 |         1 | athwartships |       7271
+ 41 |         1 | aznavour     |      11814
+(5 rows)
+
+END;
+-- queries inside read-only transactions can be fast-path router plannable
+SET TRANSACTION READ ONLY;
+WARNING:  SET TRANSACTION can only be used in transaction blocks
+SELECT *
+	FROM articles_hash
+	WHERE author_id = 1
+	ORDER BY id;
+ id | author_id |    title     | word_count
+---------------------------------------------------------------------
+  1 |         1 | arsenous     |       9572
+ 11 |         1 | alamo        |       1347
+ 21 |         1 | arcading     |       5890
+ 31 |         1 | athwartships |       7271
+ 41 |         1 | aznavour     |      11814
+(5 rows)
+
+END;
+WARNING:  there is no transaction in progress
+-- cursor queries are fast-path router plannable
+BEGIN;
+DECLARE test_cursor CURSOR FOR
+	SELECT *
+		FROM articles_hash
+		WHERE author_id = 1
+		ORDER BY id;
+FETCH test_cursor;
+ id | author_id |  title   | word_count
+---------------------------------------------------------------------
+  1 |         1 | arsenous |       9572
+(1 row)
+
+FETCH ALL test_cursor;
+ id | author_id |    title     | word_count
+---------------------------------------------------------------------
+ 11 |         1 | alamo        |       1347
+ 21 |         1 | arcading     |       5890
+ 31 |         1 | athwartships |       7271
+ 41 |         1 | aznavour     |      11814
+(4 rows)
+
+FETCH test_cursor; -- fetch one row after the last
+ id | author_id | title | word_count
+---------------------------------------------------------------------
+(0 rows)
+
+FETCH BACKWARD test_cursor;
+ id | author_id |  title   | word_count
+---------------------------------------------------------------------
+ 41 |         1 | aznavour |      11814
+(1 row)
+
+END;
+-- queries inside copy can be router plannable
+COPY (
+	SELECT *
+	FROM articles_hash
+	WHERE author_id = 1
+	ORDER BY id) TO STDOUT;
+1	1	arsenous	9572
+11	1	alamo	1347
+21	1	arcading	5890
+31	1	athwartships	7271
+41	1	aznavour	11814
+-- table creation queries inside can be fast-path router plannable
+CREATE TEMP TABLE temp_articles_hash as
+	SELECT *
+	FROM articles_hash
+	WHERE author_id = 1
+	ORDER BY id;
+-- fast-path router plannable queries may include filter for aggregates
+SELECT count(*), count(*) FILTER (WHERE id < 3)
+	FROM articles_hash
+	WHERE author_id = 1;
+ count | count
+---------------------------------------------------------------------
+     5 |     1
+(1 row)
+
+-- prepare queries can be router plannable
+PREPARE author_1_articles as
+	SELECT *
+	FROM articles_hash
+	WHERE author_id = 1;
+EXECUTE author_1_articles;
+ id | author_id |    title     | word_count
+---------------------------------------------------------------------
+  1 |         1 | arsenous     |       9572
+ 11 |         1 | alamo        |       1347
+ 21 |         1 | arcading     |       5890
+ 31 |         1 | athwartships |       7271
+ 41 |         1 | aznavour     |      11814
+(5 rows)
+
+EXECUTE author_1_articles;
+ id | author_id |    title     | word_count
+---------------------------------------------------------------------
+  1 |         1 | arsenous     |       9572
+ 11 |         1 | alamo        |       1347
+ 21 |         1 | arcading     |       5890
+ 31 |         1 | athwartships |       7271
+ 41 |         1 | aznavour     |      11814
+(5 rows)
+
+EXECUTE author_1_articles;
+ id | author_id |    title     | word_count
+---------------------------------------------------------------------
+  1 |         1 | arsenous     |       9572
+ 11 |         1 | alamo        |       1347
+ 21 |         1 | arcading     |       5890
+ 31 |         1 | athwartships |       7271
+ 41 |         1 | aznavour     |      11814
+(5 rows)
+
+EXECUTE author_1_articles;
+ id | author_id |    title     | word_count
+---------------------------------------------------------------------
+  1 |         1 | arsenous     |       9572
+ 11 |         1 | alamo        |       1347
+ 21 |         1 | arcading     |       5890
+ 31 |         1 | athwartships |       7271
+ 41 |         1 | aznavour     |      11814
+(5 rows)
+
+EXECUTE author_1_articles;
+ id | author_id |    title     | word_count
+---------------------------------------------------------------------
+  1 |         1 | arsenous     |       9572
+ 11 |         1 | alamo        |       1347
+ 21 |         1 | arcading     |       5890
+ 31 |         1 | athwartships |       7271
+ 41 |         1 | aznavour     |      11814
+(5 rows)
+
+EXECUTE author_1_articles;
+ id | author_id |    title     | word_count
+---------------------------------------------------------------------
+  1 |         1 | arsenous     |       9572
+ 11 |         1 | alamo        |       1347
+ 21 |         1 | arcading     |       5890
+ 31 |         1 | athwartships |       7271
+ 41 |         1 | aznavour     |      11814
+(5 rows)
+
+-- parametric prepare queries can be router plannable
+PREPARE author_articles(int) as
+	SELECT *
+	FROM articles_hash
+	WHERE author_id = $1;
+EXECUTE author_articles(1);
+ id | author_id |    title     | word_count
+---------------------------------------------------------------------
+  1 |         1 | arsenous     |       9572
+ 11 |         1 | alamo        |       1347
+ 21 |         1 | arcading     |       5890
+ 31 |         1 | athwartships |       7271
+ 41 |         1 | aznavour     |      11814
+(5 rows)
+
+EXECUTE author_articles(1);
+ id | author_id |    title     | word_count
+---------------------------------------------------------------------
+  1 |         1 | arsenous     |       9572
+ 11 |         1 | alamo        |       1347
+ 21 |         1 | arcading     |       5890
+ 31 |         1 | athwartships |       7271
+ 41 |         1 | aznavour     |      11814
+(5 rows)
+
+EXECUTE author_articles(1);
+ id | author_id |    title     | word_count
+---------------------------------------------------------------------
+  1 |         1 | arsenous     |       9572
+ 11 |         1 | alamo        |       1347
+ 21 |         1 | arcading     |       5890
+ 31 |         1 | athwartships |       7271
+ 41 |         1 | aznavour     |      11814
+(5 rows)
+
+EXECUTE author_articles(1);
+ id | author_id |    title     | word_count
+---------------------------------------------------------------------
+  1 |         1 | arsenous     |       9572
+ 11 |         1 | alamo        |       1347
+ 21 |         1 | arcading     |       5890
+ 31 |         1 | athwartships |       7271
+ 41 |         1 | aznavour     |      11814
+(5 rows)
+
+EXECUTE author_articles(1);
+ id | author_id |    title     | word_count
+---------------------------------------------------------------------
+  1 |         1 | arsenous     |       9572
+ 11 |         1 | alamo        |       1347
+ 21 |         1 | arcading     |       5890
+ 31 |         1 | athwartships |       7271
+ 41 |         1 | aznavour     |      11814
+(5 rows)
+
+EXECUTE author_articles(1);
+ id | author_id |    title     | word_count
+---------------------------------------------------------------------
+  1 |         1 | arsenous     |       9572
+ 11 |         1 | alamo        |       1347
+ 21 |         1 | arcading     |       5890
+ 31 |         1 | athwartships |       7271
+ 41 |         1 | aznavour     |      11814
+(5 rows)
+
+EXECUTE author_articles(NULL);
+ id | author_id | title | word_count
+---------------------------------------------------------------------
+(0 rows)
+
+EXECUTE author_articles(NULL);
+ id | author_id | title | word_count
+---------------------------------------------------------------------
+(0 rows)
+
+EXECUTE author_articles(NULL);
+ id | author_id | title | word_count
+---------------------------------------------------------------------
+(0 rows)
+
+EXECUTE author_articles(NULL);
+ id | author_id | title | word_count
+---------------------------------------------------------------------
+(0 rows)
+
+EXECUTE author_articles(NULL);
+ id | author_id | title | word_count
+---------------------------------------------------------------------
+(0 rows)
+
+EXECUTE author_articles(NULL);
+ id | author_id | title | word_count
+---------------------------------------------------------------------
+(0 rows)
+
+EXECUTE author_articles(NULL);
+ id | author_id | title | word_count
+---------------------------------------------------------------------
+(0 rows)
+
+PREPARE author_articles_update(int) AS
+	UPDATE articles_hash SET title = 'test' WHERE author_id = $1;
+EXECUTE author_articles_update(NULL);
+EXECUTE author_articles_update(NULL);
+EXECUTE author_articles_update(NULL);
+EXECUTE author_articles_update(NULL);
+EXECUTE author_articles_update(NULL);
+EXECUTE author_articles_update(NULL);
+EXECUTE author_articles_update(NULL);
+-- we don't want too many details. though we're omitting
+-- "DETAIL:  distribution column value:", we see it acceptable
+-- since the query results verifies the correctness
+\set VERBOSITY terse
+SELECT author_articles_max_id();
+ author_articles_max_id
+---------------------------------------------------------------------
+                     41
+(1 row)
+
+SELECT author_articles_max_id();
+ author_articles_max_id
+---------------------------------------------------------------------
+                     41
+(1 row)
+
+SELECT author_articles_max_id();
+ author_articles_max_id
+---------------------------------------------------------------------
+                     41
+(1 row)
+
+SELECT author_articles_max_id();
+ author_articles_max_id
+---------------------------------------------------------------------
+                     41
+(1 row)
+
+SELECT author_articles_max_id();
+ author_articles_max_id
+---------------------------------------------------------------------
+                     41
+(1 row)
+
+SELECT author_articles_max_id();
+ author_articles_max_id
+---------------------------------------------------------------------
+                     41
+(1 row)
+
+SELECT author_articles_max_id(1);
+ author_articles_max_id
+---------------------------------------------------------------------
+                     41
+(1 row)
+
+SELECT author_articles_max_id(1);
+ author_articles_max_id
+---------------------------------------------------------------------
+                     41
+(1 row)
+
+SELECT author_articles_max_id(1);
+ author_articles_max_id
+---------------------------------------------------------------------
+                     41
+(1 row)
+
+SELECT author_articles_max_id(1);
+ author_articles_max_id
+---------------------------------------------------------------------
+                     41
+(1 row)
+
+SELECT author_articles_max_id(1);
+ author_articles_max_id
+---------------------------------------------------------------------
+                     41
+(1 row)
+
+SELECT author_articles_max_id(1);
+ author_articles_max_id
+---------------------------------------------------------------------
+                     41
+(1 row)
+
+SELECT * FROM author_articles_id_word_count();
+ id | word_count
+---------------------------------------------------------------------
+  1 |       9572
+ 11 |       1347
+ 21 |       5890
+ 31 |       7271
+ 41 |      11814
+(5 rows)
+
+SELECT * FROM author_articles_id_word_count();
+ id | word_count
+---------------------------------------------------------------------
+  1 |       9572
+ 11 |       1347
+ 21 |       5890
+ 31 |       7271
+ 41 |      11814
+(5 rows)
+
+SELECT * FROM author_articles_id_word_count();
+ id | word_count
+---------------------------------------------------------------------
+  1 |       9572
+ 11 |       1347
+ 21 |       5890
+ 31 |       7271
+ 41 |      11814
+(5 rows)
+
+SELECT * FROM author_articles_id_word_count();
+ id | word_count
+---------------------------------------------------------------------
+  1 |       9572
+ 11 |       1347
+ 21 |       5890
+ 31 |       7271
+ 41 |      11814
+(5 rows)
+
+SELECT * FROM author_articles_id_word_count();
+ id | word_count
+---------------------------------------------------------------------
+  1 |       9572
+ 11 |       1347
+ 21 |       5890
+ 31 |       7271
+ 41 |      11814
+(5 rows)
+
+SELECT * FROM author_articles_id_word_count();
+ id | word_count
+---------------------------------------------------------------------
+  1 |       9572
+ 11 |       1347
+ 21 |       5890
+ 31 |       7271
+ 41 |      11814
+(5 rows)
+
+SELECT * FROM author_articles_id_word_count(1);
+ id | word_count
+---------------------------------------------------------------------
+  1 |       9572
+ 11 |       1347
+ 21 |       5890
+ 31 |       7271
+ 41 |      11814
+(5 rows)
+
+SELECT * FROM author_articles_id_word_count(1);
+ id | word_count
+---------------------------------------------------------------------
+  1 |       9572
+ 11 |       1347
+ 21 |       5890
+ 31 |       7271
+ 41 |      11814
+(5 rows)
+
+SELECT * FROM author_articles_id_word_count(1);
+ id | word_count
+---------------------------------------------------------------------
+  1 |       9572
+ 11 |       1347
+ 21 |       5890
+ 31 |       7271
+ 41 |      11814
+(5 rows)
+
+SELECT * FROM author_articles_id_word_count(1);
+ id | word_count
+---------------------------------------------------------------------
+  1 |       9572
+ 11 |       1347
+ 21 |       5890
+ 31 |       7271
+ 41 |      11814
+(5 rows)
+
+SELECT * FROM author_articles_id_word_count(1);
+ id | word_count
+---------------------------------------------------------------------
+  1 |       9572
+ 11 |       1347
+ 21 |       5890
+ 31 |       7271
+ 41 |      11814
+(5 rows)
+
+SELECT * FROM author_articles_id_word_count(1);
+ id | word_count
+---------------------------------------------------------------------
+  1 |       9572
+ 11 |       1347
+ 21 |       5890
+ 31 |       7271
+ 41 |      11814
+(5 rows)
+
+\set VERBOSITY default
+-- insert .. select via coordinator could also
+-- use fast-path queries
+PREPARE insert_sel(int, int) AS
+INSERT INTO articles_hash
+	SELECT * FROM articles_hash WHERE author_id = $2 AND word_count = $1 OFFSET 0;
+EXECUTE insert_sel(1,1);
+EXECUTE insert_sel(1,1);
+EXECUTE insert_sel(1,1);
+EXECUTE insert_sel(1,1);
+EXECUTE insert_sel(1,1);
+EXECUTE insert_sel(1,1);
+-- one final interesting preperad statement
+-- where one of the filters is on the target list
+PREPARE fast_path_agg_filter(int, int) AS
+	SELECT
+		count(*) FILTER (WHERE word_count=$1)
+	FROM
+		articles_hash
+	WHERE author_id = $2;
+EXECUTE fast_path_agg_filter(1,1);
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+EXECUTE fast_path_agg_filter(2,2);
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+EXECUTE fast_path_agg_filter(3,3);
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+EXECUTE fast_path_agg_filter(4,4);
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+EXECUTE fast_path_agg_filter(5,5);
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+EXECUTE fast_path_agg_filter(6,6);
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+-- views internally become subqueries, so not fast-path router query
+SELECT * FROM test_view;
+ id | author_id |    title     | word_count
+---------------------------------------------------------------------
+  1 |         1 | arsenous     |       9572
+ 11 |         1 | alamo        |       1347
+ 21 |         1 | arcading     |       5890
+ 31 |         1 | athwartships |       7271
+ 41 |         1 | aznavour     |      11814
+(5 rows)
+
+-- materialized views can be created for fast-path router plannable queries
+CREATE MATERIALIZED VIEW mv_articles_hash_empty AS
+	SELECT * FROM articles_hash WHERE author_id = 1;
+SELECT * FROM mv_articles_hash_empty;
+ id | author_id |    title     | word_count
+---------------------------------------------------------------------
+  1 |         1 | arsenous     |       9572
+ 11 |         1 | alamo        |       1347
+ 21 |         1 | arcading     |       5890
+ 31 |         1 | athwartships |       7271
+ 41 |         1 | aznavour     |      11814
+(5 rows)
+
+SELECT id
+	FROM articles_hash
+	WHERE author_id = 1;
+ id
+---------------------------------------------------------------------
+  1
+ 11
+ 21
+ 31
+ 41
+(5 rows)
+
+INSERT INTO articles_hash VALUES (51, 1, 'amateus', 1814), (52, 1, 'second amateus', 2824);
+-- verify insert is successfull (not router plannable and executable)
+SELECT id
+	FROM articles_hash
+	WHERE author_id = 1;
+ id
+---------------------------------------------------------------------
+  1
+ 11
+ 21
+ 31
+ 41
+ 51
+ 52
+(7 rows)
+
+SELECT count(*) FROM collections_list WHERE key = 4;
+ count
+---------------------------------------------------------------------
+     5
+(1 row)
+
+SELECT count(*) FROM collections_list_1 WHERE key = 4;
+ count
+---------------------------------------------------------------------
+     5
+(1 row)
+
+SELECT count(*) FROM collections_list_2 WHERE key = 4;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+UPDATE collections_list SET value = 15 WHERE key = 4;
+SELECT count(*) FILTER (where value = 15) FROM collections_list WHERE key = 4;
+ count
+---------------------------------------------------------------------
+     5
+(1 row)
+
+SELECT count(*) FILTER (where value = 15) FROM collections_list_1 WHERE key = 4;
+ count
+---------------------------------------------------------------------
+     5
+(1 row)
+
+SELECT count(*) FILTER (where value = 15) FROM collections_list_2 WHERE key = 4;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+-- test INSERT using values from generate_series() and repeat() functions
+INSERT INTO authors_reference (id, name) VALUES (generate_series(1, 10), repeat('Migjeni', 3));
+SELECT * FROM authors_reference ORDER BY 1, 2;
+ id |         name
+---------------------------------------------------------------------
+  1 | MigjeniMigjeniMigjeni
+  2 | MigjeniMigjeniMigjeni
+  3 | MigjeniMigjeniMigjeni
+  4 | MigjeniMigjeniMigjeni
+  5 | MigjeniMigjeniMigjeni
+  6 | MigjeniMigjeniMigjeni
+  7 | MigjeniMigjeniMigjeni
+  8 | MigjeniMigjeniMigjeni
+  9 | MigjeniMigjeniMigjeni
+ 10 | MigjeniMigjeniMigjeni
+(10 rows)
+

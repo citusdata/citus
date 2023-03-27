@@ -1497,6 +1497,21 @@ SELECT sh.logicalrelid, pl.nodeport
 
 DROP TABLE single_shard_colocation_1a, single_shard_colocation_1b, single_shard_colocation_1c, single_shard_colocation_2a, single_shard_colocation_2b CASCADE;
 
+-- verify we detect if one of the tables do not have a replica identity or primary key
+-- and error out in case of shard transfer mode = auto
+SELECT 1 FROM citus_remove_node('localhost', :worker_2_port);
+
+create table table_with_primary_key (a int primary key);
+select create_distributed_table('table_with_primary_key','a');
+create table table_without_primary_key (a bigint);
+select create_distributed_table('table_without_primary_key','a');
+
+-- add the second node back, then rebalance
+ALTER SEQUENCE pg_dist_groupid_seq RESTART WITH 16;
+select 1 from citus_add_node('localhost', :worker_2_port);
+select rebalance_table_shards();
+
+DROP TABLE table_with_primary_key, table_without_primary_key;
 \c - - - :worker_1_port
 SET citus.enable_ddl_propagation TO OFF;
 REVOKE ALL ON SCHEMA public FROM testrole;

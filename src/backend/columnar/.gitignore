@@ -1,0 +1,3 @@
+# The directory used to store columnar sql files after pre-processing them
+# with 'cpp' in build-time, see src/backend/columnar/Makefile.
+/build/

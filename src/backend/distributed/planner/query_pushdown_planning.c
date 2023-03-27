@@ -591,10 +591,16 @@ DeferErrorIfUnsupportedSubqueryPushdown(Query *originalQuery,
 	}
 	else if (!RestrictionEquivalenceForPartitionKeys(plannerRestrictionContext))
 	{
+		StringInfo errorMessage = makeStringInfo();
+		bool isMergeCmd = IsMergeQuery(originalQuery);
+		appendStringInfo(errorMessage,
+						 "%s"
+						 "only supported when all distributed tables are "
+						 "co-located and joined on their distribution columns",
+						 isMergeCmd ? "MERGE command is " : "complex joins are ");
+
 		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-							 "complex joins are only supported when all distributed tables are "
-							 "co-located and joined on their distribution columns",
-							 NULL, NULL);
+							 errorMessage->data, NULL, NULL);
 	}
 
 	/* we shouldn't allow reference tables in the FROM clause when the query has sublinks */
