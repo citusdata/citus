@@ -110,11 +110,13 @@ if __name__ == "__main__":
                 "multi_mx_function_table_reference",
             ],
         ),
+        "background_rebalance_parallel": TestDeps(
+            None, ["multi_cluster_management"], worker_count=6
+        ),
         "multi_mx_modifying_xacts": TestDeps(None, ["multi_mx_create_table"]),
         "multi_mx_router_planner": TestDeps(None, ["multi_mx_create_table"]),
         "multi_mx_copy_data": TestDeps(None, ["multi_mx_create_table"]),
         "multi_simple_queries": TestDeps("base_schedule"),
-        "background_rebalance_parallel": TestDeps(None, worker_count=6)
     }
 
     if not (test_file_name or test_file_path):

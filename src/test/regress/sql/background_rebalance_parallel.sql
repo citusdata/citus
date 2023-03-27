@@ -12,6 +12,9 @@ ALTER SEQUENCE pg_dist_background_job_job_id_seq RESTART 17777;
 ALTER SEQUENCE pg_dist_background_task_task_id_seq RESTART 1000;
 ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 50050;
 
+SELECT nextval('pg_catalog.pg_dist_groupid_seq') AS last_group_id_cls \gset
+SELECT nextval('pg_catalog.pg_dist_node_nodeid_seq') AS last_node_id_cls \gset
+
 ALTER SYSTEM SET citus.background_task_queue_interval TO '1s';
 SELECT pg_reload_conf();
 
@@ -120,3 +123,7 @@ select citus_remove_node('localhost', :worker_3_port);
 select citus_remove_node('localhost', :worker_4_port);
 select citus_remove_node('localhost', :worker_5_port);
 select citus_remove_node('localhost', :worker_6_port);
+-- keep the rest of the tests inact that depends node/group ids
+ALTER SEQUENCE pg_catalog.pg_dist_groupid_seq RESTART :last_group_id_cls;
+ALTER SEQUENCE pg_catalog.pg_dist_node_nodeid_seq RESTART :last_node_id_cls;
+
