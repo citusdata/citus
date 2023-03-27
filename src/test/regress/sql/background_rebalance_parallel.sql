@@ -17,6 +17,12 @@ SELECT nextval('pg_catalog.pg_dist_node_nodeid_seq') AS last_node_id_cls \gset
 ALTER SEQUENCE pg_catalog.pg_dist_groupid_seq RESTART 50;
 ALTER SEQUENCE pg_catalog.pg_dist_node_nodeid_seq RESTART 50;
 
+SELECT 1 FROM master_remove_node('localhost', :worker_1_port);
+SELECT 1 FROM master_remove_node('localhost', :worker_2_port);
+
+SELECT 1 FROM master_add_node('localhost', :worker_1_port);
+SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+
 ALTER SYSTEM SET citus.background_task_queue_interval TO '1s';
 SELECT pg_reload_conf();
 
