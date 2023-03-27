@@ -930,8 +930,8 @@ ConvertTable(TableConversionState *con)
 {
 	/*
 	 * We do not allow alter_distributed_table and undistribute_table operations
-	  for tables with identity columns. This is because we do not have a proper way
-	  of keeping sequence states consistent across the cluster.
+	 * for tables with identity columns. This is because we do not have a proper way
+	 * of keeping sequence states consistent across the cluster.
 	 */
 	ErrorIfTableHasIdentityColumn(con->relationId);
 
