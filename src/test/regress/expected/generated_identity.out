@@ -1,4 +1,11 @@
 -- This test file has an alternative output because of error messages vary for PG13
+SHOW server_version \gset
+SELECT substring(:'server_version', '\d+')::int <= 13 AS server_version_le_13;
+ server_version_le_13
+---------------------------------------------------------------------
+ f
+(1 row)
+
 CREATE SCHEMA generated_identities;
 SET search_path TO generated_identities;
 SET client_min_messages to ERROR;
@@ -313,10 +320,10 @@ INSERT INTO color(color_name) VALUES ('Blue');
 \c - postgres - :master_port
 SET search_path TO generated_identities;
 SET client_min_messages to ERROR;
-SET citus.next_shard_id TO 1270000;
+SET citus.next_shard_id TO 12400000;
 DROP TABLE Color;
 CREATE TABLE color (
-    color_id BIGINT GENERATED ALWAYS AS IDENTITY,
+    color_id BIGINT GENERATED ALWAYS AS IDENTITY UNIQUE,
     color_name VARCHAR NOT NULL
 ) USING columnar;
 SELECT create_distributed_table('color', 'color_id');
@@ -360,7 +367,7 @@ ERROR:  cannot insert a non-DEFAULT value into column "color_id"
 DETAIL:  Column "color_id" is an identity column defined as GENERATED ALWAYS.
 HINT:  Use OVERRIDING SYSTEM VALUE to override.
 INSERT INTO color(color_id, color_name) OVERRIDING SYSTEM VALUE VALUES (1, 'Red');
-ERROR:  duplicate key value violates unique constraint "color_color_id_key_102033"
+ERROR:  duplicate key value violates unique constraint "color_color_id_key_12400000"
 DETAIL:  Key (color_id)=(1) already exists.
 CONTEXT:  while executing command on localhost:xxxxx
 -- update null or custom value
@@ -389,7 +396,7 @@ ERROR:  cannot insert a non-DEFAULT value into column "color_id"
 DETAIL:  Column "color_id" is an identity column defined as GENERATED ALWAYS.
 HINT:  Use OVERRIDING SYSTEM VALUE to override.
 INSERT INTO color(color_id, color_name) OVERRIDING SYSTEM VALUE VALUES (1, 'Red');
-ERROR:  duplicate key value violates unique constraint "color_color_id_key_102033"
+ERROR:  duplicate key value violates unique constraint "color_color_id_key_12400000"
 DETAIL:  Key (color_id)=(1) already exists.
 CONTEXT:  while executing command on localhost:xxxxx
 -- update null or custom value
