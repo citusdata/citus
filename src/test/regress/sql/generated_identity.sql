@@ -1,3 +1,5 @@
+-- This test file has an alternative output because of error messages vary for PG13
+
 CREATE SCHEMA generated_identities;
 SET search_path TO generated_identities;
 SET client_min_messages to ERROR;
