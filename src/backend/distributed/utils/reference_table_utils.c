@@ -634,20 +634,20 @@ DeleteAllReplicatedTablePlacementsFromNodeGroupViaMetadataContext(
 		{
 			char *deletePlacementCommand =
 				DeleteShardPlacementCommand(placement->placementId);
-
-			SendOrCollectCommandListToMetadataNodes(context,
-													list_make1(deletePlacementCommand));
+			CollectCommandIntoMetadataSyncContext(context, list_make1(
+													  deletePlacementCommand));
 		}
 
 		/* do not execute local transaction if we collect commands */
-		if (!MetadataSyncCollectsCommands(context))
+		if (!MetadataSyncInNoConnectionMode(context))
 		{
 			DeleteShardPlacementRow(placement->placementId);
 		}
-
-		MemoryContextSwitchTo(oldContext);
-		ResetMetadataSyncMemoryContext(context);
 	}
+
+	bool forceSend = true;
+	ProcessBatchCommandsToMetadataNodes(context, forceSend);
+	MemoryContextSwitchTo(oldContext);
 }
 
 
