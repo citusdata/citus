@@ -359,7 +359,7 @@ ERROR:  cannot insert a non-DEFAULT value into column "color_id"
 DETAIL:  Column "color_id" is an identity column defined as GENERATED ALWAYS.
 HINT:  Use OVERRIDING SYSTEM VALUE to override.
 INSERT INTO color(color_id, color_name) OVERRIDING SYSTEM VALUE VALUES (1, 'Red');
-ERROR:  duplicate key value violates unique constraint "color_color_id_key_xxxxxx"
+ERROR:  duplicate key value violates unique constraint "color_color_id_key_102033"
 DETAIL:  Key (color_id)=(1) already exists.
 CONTEXT:  while executing command on localhost:xxxxx
 -- update null or custom value
@@ -388,7 +388,7 @@ ERROR:  cannot insert a non-DEFAULT value into column "color_id"
 DETAIL:  Column "color_id" is an identity column defined as GENERATED ALWAYS.
 HINT:  Use OVERRIDING SYSTEM VALUE to override.
 INSERT INTO color(color_id, color_name) OVERRIDING SYSTEM VALUE VALUES (1, 'Red');
-ERROR:  duplicate key value violates unique constraint "color_color_id_key_xxxxxx"
+ERROR:  duplicate key value violates unique constraint "color_color_id_key_102033"
 DETAIL:  Key (color_id)=(1) already exists.
 CONTEXT:  while executing command on localhost:xxxxx
 -- update null or custom value

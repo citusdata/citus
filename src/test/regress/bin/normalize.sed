@@ -307,6 +307,3 @@ s/(NOTICE:  issuing SET LOCAL application_name TO 'citus_rebalancer gpid=)[0-9]+
 
 # shard_rebalancer output, flaky improvement number
 s/improvement of 0.1[0-9]* is lower/improvement of 0.1xxxxx is lower/g
-
-# normalize unique key constraint errors for identity columns
-s/^(ERROR:  duplicate key value violates unique constraint "\w+)_([0-9])+"/\1_xxxxxx"/g
