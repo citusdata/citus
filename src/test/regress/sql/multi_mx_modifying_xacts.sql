@@ -331,3 +331,7 @@ COMMIT;
 -- no data should persists
 SELECT * FROM objects_mx WHERE id = 1;
 SELECT * FROM labs_mx WHERE id = 8;
+
+TRUNCATE objects_mx, labs_mx, researchers_mx;
+DROP TRIGGER reject_bad_mx ON labs_mx_1220102;
+DROP FUNCTION reject_bad_mx;
