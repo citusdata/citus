@@ -179,6 +179,7 @@ INSERT INTO color(color_name) VALUES ('Blue');
 \c - postgres - :master_port
 SET search_path TO generated_identities;
 SET client_min_messages to ERROR;
+SET citus.next_shard_id TO 12400000;
 
 DROP TABLE Color;
 CREATE TABLE color (
