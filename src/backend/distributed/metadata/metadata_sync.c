@@ -1586,10 +1586,13 @@ GetAttributeTypeOid(Oid relationId, AttrNumber attnum)
  * For both cases, we use the intermediate AttrDefault object from pg_depend.
  * If attnum is specified, we only return the sequences related to that
  * attribute of the relationId.
+ * See DependencyType for the possible values of depType.
+ * We use DEPENDENCY_INTERNAL for sequences created by identity column.
+ * DEPENDENCY_AUTO for regular sequences.
  */
 void
 GetDependentSequencesWithRelation(Oid relationId, List **seqInfoList,
-								  AttrNumber attnum)
+								  AttrNumber attnum, char depType)
 {
 	Assert(*seqInfoList == NIL);
 
@@ -1626,7 +1629,7 @@ GetDependentSequencesWithRelation(Oid relationId, List **seqInfoList,
 		if (deprec->classid == AttrDefaultRelationId &&
 			deprec->objsubid == 0 &&
 			deprec->refobjsubid != 0 &&
-			deprec->deptype == DEPENDENCY_AUTO)
+			deprec->deptype == depType)
 		{
 			/*
 			 * We are going to generate corresponding SequenceInfo
@@ -1635,7 +1638,7 @@ GetDependentSequencesWithRelation(Oid relationId, List **seqInfoList,
 			attrdefResult = lappend_oid(attrdefResult, deprec->objid);
 			attrdefAttnumResult = lappend_int(attrdefAttnumResult, deprec->refobjsubid);
 		}
-		else if (deprec->deptype == DEPENDENCY_AUTO &&
+		else if (deprec->deptype == depType &&
 				 deprec->refobjsubid != 0 &&
 				 deprec->classid == RelationRelationId &&
 				 get_rel_relkind(deprec->objid) == RELKIND_SEQUENCE)
@@ -1879,6 +1882,51 @@ SequenceDependencyCommandList(Oid relationId)
 	}
 
 	return sequenceCommandList;
+}
+
+
+/*
+ * IdentitySequenceDependencyCommandList generate a command to execute a UDF (WORKER_MODIFY_IDENTITY_COLUMNS) on workers
+ * to modify the identity columns min/max values to produce unique values on workers.
+ */
+List *
+IdentitySequenceDependencyCommandList(Oid targetRelationId)
+{
+	List *commandList = NIL;
+
+	Relation relation = relation_open(targetRelationId, AccessShareLock);
+	TupleDesc tupleDescriptor = RelationGetDescr(relation);
+	relation_close(relation, NoLock);
+
+	bool tableHasIdentityColumn = false;
+	for (int attributeIndex = 0; attributeIndex < tupleDescriptor->natts;
+		 attributeIndex++)
+	{
+		Form_pg_attribute attributeForm = TupleDescAttr(tupleDescriptor, attributeIndex);
+
+		if (attributeForm->attidentity)
+		{
+			tableHasIdentityColumn = true;
+			break;
+		}
+	}
+
+	if (tableHasIdentityColumn)
+	{
+		StringInfo stringInfo = makeStringInfo();
+		char *tableName = generate_qualified_relation_name(targetRelationId);
+
+		appendStringInfo(stringInfo,
+						 WORKER_MODIFY_IDENTITY_COLUMNS,
+						 quote_literal_cstr(tableName));
+
+
+		commandList = lappend(commandList,
+							  makeTableDDLCommandString(
+								  stringInfo->data));
+	}
+
+	return commandList;
 }
 
 

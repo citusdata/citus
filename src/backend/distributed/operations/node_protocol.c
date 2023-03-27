@@ -497,6 +497,15 @@ GetFullTableCreationCommands(Oid relationId,
 			tableDDLEventList = lappend(tableDDLEventList,
 										truncateTriggerCommand);
 		}
+
+		/*
+		 * For identity column sequences, we only need to modify
+		 * their min/max values to produce unique values on the worker nodes.
+		 */
+		List *identitySequenceDependencyCommandList =
+			IdentitySequenceDependencyCommandList(relationId);
+		tableDDLEventList = list_concat(tableDDLEventList,
+										identitySequenceDependencyCommandList);
 	}
 
 	tableDDLEventList = list_concat(tableDDLEventList, postLoadCreationCommandList);

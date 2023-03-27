@@ -138,6 +138,7 @@ worker_apply_inter_shard_ddl_command(PG_FUNCTION_ARGS)
  * worker_modify_identity_columns takes a table oid, runs an ALTER SEQUENCE statement
  * for each identity column to adjust the minvalue and maxvalue of the sequence owned by
  * identity column such that the sequence creates globally unique values.
+ * We use table oid instead of sequence name to avoid any potential conflicts between sequences of different tables. This way, we can safely iterate through identity columns on a specific table without any issues. While this may introduce a small amount of business logic to workers, it's a much safer approach overall.
  */
 Datum
 worker_modify_identity_columns(PG_FUNCTION_ARGS)

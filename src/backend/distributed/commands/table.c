@@ -3315,7 +3315,8 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 				 */
 				AttrNumber attnum = get_attnum(relationId, command->name);
 				List *seqInfoList = NIL;
-				GetDependentSequencesWithRelation(relationId, &seqInfoList, attnum);
+				GetDependentSequencesWithRelation(relationId, &seqInfoList, attnum,
+												  DEPENDENCY_AUTO);
 				if (seqInfoList != NIL)
 				{
 					ereport(ERROR, (errmsg("cannot execute ALTER COLUMN TYPE .. command "

@@ -98,8 +98,6 @@
  * once every LOG_PER_TUPLE_AMOUNT, the copy will be logged.
  */
 #define LOG_PER_TUPLE_AMOUNT 1000000
-#define WORKER_MODIFY_IDENTITY_COLUMNS \
-	"SELECT pg_catalog.worker_modify_identity_columns(%s)"
 
 /* local function forward declarations */
 static void CreateDistributedTableConcurrently(Oid relationId,
@@ -168,7 +166,6 @@ static void EnsureColocateWithTableIsValid(Oid relationId, char distributionMeth
 										   char *distributionColumnName,
 										   char *colocateWithTableName);
 static void WarnIfTableHaveNoReplicaIdentity(Oid relationId);
-static void DistributeIdentityColumns(Oid targetRelationId);
 
 /* exports for SQL callable functions */
 PG_FUNCTION_INFO_V1(master_create_distributed_table);
@@ -1203,8 +1200,6 @@ CreateCitusTable(Oid relationId, char *distributionColumnName,
 	bool skip_validation = true;
 	ExecuteForeignKeyCreateCommandList(originalForeignKeyRecreationCommands,
 									   skip_validation);
-
-	DistributeIdentityColumns(relationId);
 }
 
 
@@ -1253,7 +1248,7 @@ EnsureSequenceTypeSupported(Oid seqOid, Oid attributeTypeId, Oid ownerRelationId
 	foreach_oid(citusTableId, citusTableIdList)
 	{
 		List *seqInfoList = NIL;
-		GetDependentSequencesWithRelation(citusTableId, &seqInfoList, 0);
+		GetDependentSequencesWithRelation(citusTableId, &seqInfoList, 0, DEPENDENCY_AUTO);
 
 		SequenceInfo *seqInfo = NULL;
 		foreach_ptr(seqInfo, seqInfoList)
@@ -1330,7 +1325,7 @@ EnsureRelationHasCompatibleSequenceTypes(Oid relationId)
 {
 	List *seqInfoList = NIL;
 
-	GetDependentSequencesWithRelation(relationId, &seqInfoList, 0);
+	GetDependentSequencesWithRelation(relationId, &seqInfoList, 0, DEPENDENCY_AUTO);
 	EnsureDistributedSequencesHaveOneType(relationId, seqInfoList);
 }
 
@@ -1841,51 +1836,6 @@ ErrorIfTableIsACatalogTable(Relation relation)
 
 	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 					errmsg("cannot create a citus table from a catalog table")));
-}
-
-
-/*
- * DistributeIdentityColumns is responsible for marking sequences depend on
- * identity columns of a given table. If the table has any identity columns,
- * this function executes a command on workers to modify the identity columns
- * min/max values to produce unique values on workers.
- */
-static void
-DistributeIdentityColumns(Oid targetRelationId)
-{
-	Relation relation = relation_open(targetRelationId, AccessShareLock);
-	TupleDesc tupleDescriptor = RelationGetDescr(relation);
-	relation_close(relation, NoLock);
-
-	bool missingSequenceOk = false;
-	bool tableHasIdentityColumn = false;
-	for (int attributeIndex = 0; attributeIndex < tupleDescriptor->natts;
-		 attributeIndex++)
-	{
-		Form_pg_attribute attributeForm = TupleDescAttr(tupleDescriptor, attributeIndex);
-
-		if (attributeForm->attidentity)
-		{
-			tableHasIdentityColumn = true;
-			Oid seqOid = getIdentitySequence(targetRelationId, attributeForm->attnum,
-											 missingSequenceOk);
-
-			ObjectAddress seqAddress = { 0 };
-			ObjectAddressSet(seqAddress, RelationRelationId, seqOid);
-			MarkObjectDistributed(&seqAddress);
-		}
-	}
-
-	if (tableHasIdentityColumn)
-	{
-		StringInfo stringInfo = makeStringInfo();
-		char *tableName = generate_qualified_relation_name(targetRelationId);
-
-		appendStringInfo(stringInfo,
-						 WORKER_MODIFY_IDENTITY_COLUMNS,
-						 quote_literal_cstr(tableName));
-		SendCommandToWorkersWithMetadata(stringInfo->data);
-	}
 }
 
 
