@@ -66,7 +66,6 @@ static DistributedPlan * CopyDistributedPlanWithoutCache(
 	DistributedPlan *originalDistributedPlan);
 static void CitusEndScan(CustomScanState *node);
 static void CitusReScan(CustomScanState *node);
-static void SetJobColocationId(Job *job);
 static void EnsureForceDelegationDistributionKey(Job *job);
 static void EnsureAnchorShardsInJobExist(Job *job);
 static bool AnchorShardsInTaskListExist(List *taskList);
@@ -892,7 +891,7 @@ IsCitusCustomScan(Plan *plan)
  * colocation group, the Job's colocation ID is set to the group ID, else,
  * it will be set to INVALID_COLOCATION_ID.
  */
-static void
+void
 SetJobColocationId(Job *job)
 {
 	uint32 jobColocationId = INVALID_COLOCATION_ID;

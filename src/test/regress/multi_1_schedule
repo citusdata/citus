@@ -103,6 +103,11 @@ test: pg13_propagate_statistics
 test: citus_update_table_statistics
 
 # ----------
+# Test for tenant statistics
+# ----------
+test: citus_stats_tenants
+
+# ----------
 # Parallel TPC-H tests to check our distributed execution behavior
 # ----------
 test: multi_tpch_query1 multi_tpch_query3 multi_tpch_query6 multi_tpch_query10

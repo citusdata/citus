@@ -19,7 +19,7 @@ CREATE TABLE partitioned_table_0
 
 INSERT INTO partitioned_table VALUES (0, 0);
 
-SELECT citus.mitmproxy('conn.onQuery(query="^INSERT").kill()');
+SELECT citus.mitmproxy('conn.onQuery(query="INSERT").kill()');
 
 INSERT INTO partitioned_table VALUES (0, 0);
 
