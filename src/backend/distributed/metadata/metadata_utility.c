@@ -2773,7 +2773,8 @@ CreateBackgroundJob(const char *jobType, const char *description)
  * blocked on its depending tasks.
  */
 BackgroundTask *
-ScheduleBackgroundTask(int64 jobId, Oid owner, char *command, List *dependingTaskIds)
+ScheduleBackgroundTask(int64 jobId, Oid owner, char *command, int dependingTaskCount,
+					   int64 dependingTaskIds[])
 {
 	BackgroundTask *task = NULL;
 
@@ -2782,7 +2783,7 @@ ScheduleBackgroundTask(int64 jobId, Oid owner, char *command, List *dependingTas
 	Relation pgDistBackgroundTask =
 		table_open(DistBackgroundTaskRelationId(), ExclusiveLock);
 	Relation pgDistbackgroundTasksDepend = NULL;
-	if (dependingTaskIds != NIL)
+	if (dependingTaskCount > 0)
 	{
 		pgDistbackgroundTasksDepend =
 			table_open(DistBackgroundTaskDependRelationId(), ExclusiveLock);
@@ -2830,7 +2831,7 @@ ScheduleBackgroundTask(int64 jobId, Oid owner, char *command, List *dependingTas
 		nulls[Anum_pg_dist_background_task_owner - 1] = false;
 
 		Oid statusOid = InvalidOid;
-		if (dependingTaskIds == NIL)
+		if (dependingTaskCount == 0)
 		{
 			statusOid = CitusTaskStatusRunnableId();
 		}
@@ -2859,12 +2860,8 @@ ScheduleBackgroundTask(int64 jobId, Oid owner, char *command, List *dependingTas
 
 	/* 3. insert dependencies into catalog */
 	{
-		ListCell *lc;
-
-		foreach(lc, dependingTaskIds)
+		for (int i = 0; i < dependingTaskCount; i++)
 		{
-			int64 dependingTaskId = (int64) lfirst(lc);
-
 			/* 3.1 after verifying the task exists for this job */
 			{
 				ScanKeyData scanKey[2] = { 0 };
@@ -2877,7 +2874,7 @@ ScheduleBackgroundTask(int64 jobId, Oid owner, char *command, List *dependingTas
 				/* pg_dist_background_task.task_id == $taskId */
 				ScanKeyInit(&scanKey[1], Anum_pg_dist_background_task_task_id,
 							BTEqualStrategyNumber, F_INT8EQ,
-							Int64GetDatum(dependingTaskId));
+							Int64GetDatum(dependingTaskIds[i]));
 
 				SysScanDesc scanDescriptor =
 					systable_beginscan(pgDistBackgroundTask,
@@ -2909,7 +2906,7 @@ ScheduleBackgroundTask(int64 jobId, Oid owner, char *command, List *dependingTas
 			nulls[Anum_pg_dist_background_task_depend_task_id - 1] = false;
 
 			values[Anum_pg_dist_background_task_depend_depends_on - 1] =
-				Int64GetDatum(dependingTaskId);
+				Int64GetDatum(dependingTaskIds[i]);
 			nulls[Anum_pg_dist_background_task_depend_depends_on - 1] = false;
 
 			HeapTuple newTuple = heap_form_tuple(
