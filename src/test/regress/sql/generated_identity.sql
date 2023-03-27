@@ -191,10 +191,13 @@ INSERT INTO color(color_name) VALUES ('Blue');
 SET search_path TO generated_identities;
 \d+ color
 INSERT INTO color(color_name) VALUES ('Red');
+ALTER SEQUENCE color_color_id_seq RESTART WITH 1000;
 
 \c - postgres - :master_port
 SET search_path TO generated_identities;
 SET client_min_messages to ERROR;
+ALTER SEQUENCE color_color_id_seq RESTART WITH 1000;
+
 
 DROP SCHEMA generated_identities CASCADE;
 DROP USER identity_test_user;
