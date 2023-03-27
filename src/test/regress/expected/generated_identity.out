@@ -347,10 +347,46 @@ Indexes:
 INSERT INTO color(color_name) VALUES ('Red');
 ALTER SEQUENCE color_color_id_seq RESTART WITH 1000;
 ERROR:  Altering a distributed sequence is currently not supported.
+INSERT INTO color(color_id, color_name) VALUES (1, 'Red');
+ERROR:  cannot insert a non-DEFAULT value into column "color_id"
+DETAIL:  Column "color_id" is an identity column defined as GENERATED ALWAYS.
+HINT:  Use OVERRIDING SYSTEM VALUE to override.
+INSERT INTO color(color_id, color_name) VALUES (NULL, 'Red');
+ERROR:  cannot insert a non-DEFAULT value into column "color_id"
+DETAIL:  Column "color_id" is an identity column defined as GENERATED ALWAYS.
+HINT:  Use OVERRIDING SYSTEM VALUE to override.
+INSERT INTO color(color_id, color_name) OVERRIDING SYSTEM VALUE VALUES (1, 'Red');
+ERROR:  duplicate key value violates unique constraint "color_color_id_key_102033"
+DETAIL:  Key (color_id)=(1) already exists.
+CONTEXT:  while executing command on localhost:xxxxx
+UPDATE color SET color_id = NULL;
+ERROR:  column "color_id" can only be updated to DEFAULT
+DETAIL:  Column "color_id" is an identity column defined as GENERATED ALWAYS.
+UPDATE color SET color_id = 1;
+ERROR:  column "color_id" can only be updated to DEFAULT
+DETAIL:  Column "color_id" is an identity column defined as GENERATED ALWAYS.
 \c - postgres - :master_port
 SET search_path TO generated_identities;
 SET client_min_messages to ERROR;
 ALTER SEQUENCE color_color_id_seq RESTART WITH 1000;
 ERROR:  Altering a distributed sequence is currently not supported.
+INSERT INTO color(color_id, color_name) VALUES (1, 'Red');
+ERROR:  cannot insert a non-DEFAULT value into column "color_id"
+DETAIL:  Column "color_id" is an identity column defined as GENERATED ALWAYS.
+HINT:  Use OVERRIDING SYSTEM VALUE to override.
+INSERT INTO color(color_id, color_name) VALUES (NULL, 'Red');
+ERROR:  cannot insert a non-DEFAULT value into column "color_id"
+DETAIL:  Column "color_id" is an identity column defined as GENERATED ALWAYS.
+HINT:  Use OVERRIDING SYSTEM VALUE to override.
+INSERT INTO color(color_id, color_name) OVERRIDING SYSTEM VALUE VALUES (1, 'Red');
+ERROR:  duplicate key value violates unique constraint "color_color_id_key_102033"
+DETAIL:  Key (color_id)=(1) already exists.
+CONTEXT:  while executing command on localhost:xxxxx
+UPDATE color SET color_id = NULL;
+ERROR:  column "color_id" can only be updated to DEFAULT
+DETAIL:  Column "color_id" is an identity column defined as GENERATED ALWAYS.
+UPDATE color SET color_id = 1;
+ERROR:  column "color_id" can only be updated to DEFAULT
+DETAIL:  Column "color_id" is an identity column defined as GENERATED ALWAYS.
 DROP SCHEMA generated_identities CASCADE;
 DROP USER identity_test_user;

@@ -191,13 +191,24 @@ INSERT INTO color(color_name) VALUES ('Blue');
 SET search_path TO generated_identities;
 \d+ color
 INSERT INTO color(color_name) VALUES ('Red');
+
 ALTER SEQUENCE color_color_id_seq RESTART WITH 1000;
+INSERT INTO color(color_id, color_name) VALUES (1, 'Red');
+INSERT INTO color(color_id, color_name) VALUES (NULL, 'Red');
+INSERT INTO color(color_id, color_name) OVERRIDING SYSTEM VALUE VALUES (1, 'Red');
+UPDATE color SET color_id = NULL;
+UPDATE color SET color_id = 1;
 
 \c - postgres - :master_port
 SET search_path TO generated_identities;
 SET client_min_messages to ERROR;
-ALTER SEQUENCE color_color_id_seq RESTART WITH 1000;
 
+ALTER SEQUENCE color_color_id_seq RESTART WITH 1000;
+INSERT INTO color(color_id, color_name) VALUES (1, 'Red');
+INSERT INTO color(color_id, color_name) VALUES (NULL, 'Red');
+INSERT INTO color(color_id, color_name) OVERRIDING SYSTEM VALUE VALUES (1, 'Red');
+UPDATE color SET color_id = NULL;
+UPDATE color SET color_id = 1;
 
 DROP SCHEMA generated_identities CASCADE;
 DROP USER identity_test_user;
