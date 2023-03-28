@@ -28,6 +28,8 @@
 extern bool EnableRouterExecution;
 extern bool EnableFastPathRouterPlanner;
 
+extern bool EnableNonColocatedRouterQueryPushdown;
+
 extern DistributedPlan * CreateRouterPlan(Query *originalQuery, Query *query,
 										  PlannerRestrictionContext *
 										  plannerRestrictionContext);

@@ -248,12 +248,34 @@ SELECT a.author_id as first_author, b.word_count as second_word_count
 	WHERE a.author_id = 10 and a.author_id = b.author_id
 	LIMIT 3;
 
--- now show that JOINs with multiple tables are not router executable
--- they are executed by real-time executor
+-- Not router plannable when citus.enable_non_colocated_router_query_pushdown
+-- is disabled.
+
+SET citus.enable_non_colocated_router_query_pushdown TO ON;
+
 SELECT a.author_id as first_author, b.word_count as second_word_count
 	FROM articles a, articles_single_shard b
 	WHERE a.author_id = 10 and a.author_id = b.author_id
-	LIMIT 3;
+	ORDER BY 1,2 LIMIT 3;
+
+SET citus.enable_non_colocated_router_query_pushdown TO OFF;
+
+SELECT a.author_id as first_author, b.word_count as second_word_count
+	FROM articles a, articles_single_shard b
+	WHERE a.author_id = 10 and a.author_id = b.author_id
+	ORDER BY 1,2 LIMIT 3;
+
+-- but they can be executed via repartition join planner
+SET citus.enable_repartition_joins TO ON;
+
+SELECT a.author_id as first_author, b.word_count as second_word_count
+	FROM articles a, articles_single_shard b
+	WHERE a.author_id = 10 and a.author_id = b.author_id
+	ORDER BY 1,2 LIMIT 3;
+
+RESET citus.enable_repartition_joins;
+
+RESET citus.enable_non_colocated_router_query_pushdown;
 
 -- do not create the master query for LIMIT on a single shard SELECT
 SELECT *

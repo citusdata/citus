@@ -1269,6 +1269,26 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
+		"citus.enable_non_colocated_router_query_pushdown",
+		gettext_noop("Enables router planner for the queries that reference "
+					 "non-colocated distributed tables."),
+		gettext_noop("Normally, router planner planner is only enabled for "
+					 "the queries that reference colocated distributed tables "
+					 "because it is not guaranteed to have the target shards "
+					 "always on the same node, e.g., after rebalancing the "
+					 "shards. For this reason, while enabling this flag allows "
+					 "some degree of optimization for the queries that reference "
+					 "non-colocated distributed tables, it is not guaranteed "
+					 "that the same query will work after rebalancing the shards "
+					 "or altering the shard count of one of those distributed "
+					 "tables."),
+		&EnableNonColocatedRouterQueryPushdown,
+		true,
+		PGC_USERSET,
+		GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
 		"citus.enable_repartition_joins",
 		gettext_noop("Allows Citus to repartition data between nodes."),
 		NULL,
