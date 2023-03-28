@@ -359,6 +359,11 @@ static const struct config_enum_entry cpu_priority_options[] = {
 	{ NULL, 0, false}
 };
 
+static const struct config_enum_entry metadata_sync_mode_options[] = {
+	{ "transactional", METADATA_SYNC_TRANSACTIONAL, false },
+	{ "nontransactional", METADATA_SYNC_NON_TRANSACTIONAL, false },
+	{ NULL, 0, false }
+};
 
 /* *INDENT-ON* */
 
@@ -1847,6 +1852,21 @@ RegisterCitusConfigVariables(void)
 		60 * MS_PER_SECOND, 1, 7 * MS_PER_DAY,
 		PGC_SIGHUP,
 		GUC_UNIT_MS | GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
+
+	DefineCustomEnumVariable(
+		"citus.metadata_sync_mode",
+		gettext_noop("Sets transaction mode for metadata syncs."),
+		gettext_noop("metadata sync can be run inside a single coordinated "
+					 "transaction or with multiple small transactions in "
+					 "idempotent way. By default we sync metadata in single "
+					 "coordinated transaction. When we hit memory problems "
+					 "at workers, we have alternative nontransactional mode "
+					 "where we send each command with separate transaction."),
+		&MetadataSyncTransMode,
+		METADATA_SYNC_TRANSACTIONAL, metadata_sync_mode_options,
+		PGC_SUSET,
+		GUC_SUPERUSER_ONLY | GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
