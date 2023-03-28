@@ -782,7 +782,6 @@ GenerateSizeQueryOnMultiplePlacements(List *shardIntervalList,
 		{
 			partitionedShardNames = lappend(partitionedShardNames, quotedShardName);
 		}
-
 		/* for non-partitioned tables, we will use Postgres' size functions */
 		else
 		{
@@ -2898,9 +2897,8 @@ ScheduleBackgroundTask(int64 jobId, Oid owner, char *command, int dependingTaskC
 
 		values[Anum_pg_dist_background_task_nodes_involved - 1] =
 			intArrayToDatum(nodesInvolvedCount, nodesInvolved);
-
-		/* default is an empty array, not null, so it's not a nullable entry */
-		nulls[Anum_pg_dist_background_task_nodes_involved - 1] = false;
+		nulls[Anum_pg_dist_background_task_nodes_involved - 1] = (nodesInvolvedCount ==
+																  0);
 
 		HeapTuple newTuple = heap_form_tuple(RelationGetDescr(pgDistBackgroundTask),
 											 values, nulls);
@@ -3213,9 +3211,12 @@ DeformBackgroundTaskHeapTuple(TupleDesc tupleDescriptor, HeapTuple taskTuple)
 			TextDatumGetCString(values[Anum_pg_dist_background_task_message - 1]);
 	}
 
-	ArrayType *nodesInvolvedArrayObject =
-		DatumGetArrayTypeP(values[Anum_pg_dist_background_task_nodes_involved - 1]);
-	task->nodesInvolved = IntegerArrayTypeToList(nodesInvolvedArrayObject);
+	if (!nulls[Anum_pg_dist_background_task_nodes_involved - 1])
+	{
+		ArrayType *nodesInvolvedArrayObject =
+			DatumGetArrayTypeP(values[Anum_pg_dist_background_task_nodes_involved - 1]);
+		task->nodesInvolved = IntegerArrayTypeToList(nodesInvolvedArrayObject);
+	}
 
 	return task;
 }

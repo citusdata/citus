@@ -2137,9 +2137,9 @@ RebalanceTableShardsBackground(RebalanceOptions *options, Oid shardReplicationMo
 						 "SELECT pg_catalog.replicate_reference_tables(%s)",
 						 quote_literal_cstr(shardTranferModeLabel));
 
-		int32 source_and_target[2] = { 0 };
+		int32 nodesInvolved[] = { 0 };
 		BackgroundTask *task = ScheduleBackgroundTask(jobId, GetUserId(), buf.data, 0,
-													  NULL, 2, source_and_target);
+													  NULL, 0, nodesInvolved);
 		replicateRefTablesTaskId = task->taskid;
 	}
 
@@ -2173,14 +2173,14 @@ RebalanceTableShardsBackground(RebalanceOptions *options, Oid shardReplicationMo
 			dependsArray[0] = replicateRefTablesTaskId;
 		}
 
-		int32 source_and_target[2] = { 0 };
-		source_and_target[0] = move->sourceNode->nodeId;
-		source_and_target[1] = move->targetNode->nodeId;
+		int32 nodesInvolved[2] = { 0 };
+		nodesInvolved[0] = move->sourceNode->nodeId;
+		nodesInvolved[1] = move->targetNode->nodeId;
 
 		BackgroundTask *task = ScheduleBackgroundTask(jobId, GetUserId(), buf.data,
 													  nDepends,
 													  dependsArray, 2,
-													  source_and_target);
+													  nodesInvolved);
 
 		UpdateShardMoveDependencies(move, colocationId, task->taskid,
 									shardMoveDependencies);
