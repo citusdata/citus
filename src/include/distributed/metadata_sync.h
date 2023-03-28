@@ -141,7 +141,6 @@ extern void SyncDeleteColocationGroupToNodes(uint32 colocationId);
 extern MetadataSyncContext * CreateMetadataSyncContext(List *nodeList,
 													   bool collectCommands,
 													   bool nodesAddedInSameTransaction);
-extern void DestroyMetadataSyncContext(MetadataSyncContext *context);
 extern void EstablishAndSetMetadataSyncBareConnections(MetadataSyncContext *context);
 extern void SetMetadataSyncNodesFromNodeList(MetadataSyncContext *context,
 											 List *nodeList);

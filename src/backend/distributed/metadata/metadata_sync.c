@@ -210,9 +210,6 @@ start_metadata_sync_to_node(PG_FUNCTION_ARGS)
 	ActivateNodeList(context);
 	TransactionModifiedNodeMetadata = true;
 
-	/* cleanup metadata memory context and connections */
-	DestroyMetadataSyncContext(context);
-
 	PG_RETURN_VOID();
 }
 
@@ -245,9 +242,6 @@ start_metadata_sync_to_all_nodes(PG_FUNCTION_ARGS)
 
 	ActivateNodeList(context);
 	TransactionModifiedNodeMetadata = true;
-
-	/* cleanup metadata memory context and connections */
-	DestroyMetadataSyncContext(context);
 
 	PG_RETURN_BOOL(true);
 }
@@ -4002,6 +3996,7 @@ EstablishAndSetMetadataSyncBareConnections(MetadataSyncContext *context)
 																	NULL);
 
 		Assert(connection != NULL);
+		ForceConnectionCloseAtTransactionEnd(connection);
 		bareConnectionList = lappend(bareConnectionList, connection);
 	}
 
@@ -4056,26 +4051,6 @@ CreateMetadataSyncContext(List *nodeList, bool collectCommands,
 	}
 
 	return metadataSyncContext;
-}
-
-
-/*
- * DestroyMetadataSyncContext destroys the memory context inside metadataSyncContext
- * and also closes open connections if any.
- */
-void
-DestroyMetadataSyncContext(MetadataSyncContext *context)
-{
-	/* todo: make sure context is always cleanup by using resource release callback?? */
-	/* close connections */
-	MultiConnection *connection = NULL;
-	foreach_ptr(connection, context->activatedWorkerBareConnections)
-	{
-		CloseConnection(connection);
-	}
-
-	/* delete memory context */
-	MemoryContextDelete(context->context);
 }
 
 

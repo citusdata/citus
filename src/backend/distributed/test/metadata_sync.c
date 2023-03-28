@@ -86,9 +86,6 @@ activate_node_snapshot(PG_FUNCTION_ARGS)
 		activateNodeCommandCount,
 		ddlCommandTypeId);
 
-	/* cleanup metadata memory context and connections */
-	DestroyMetadataSyncContext(context);
-
 	PG_RETURN_ARRAYTYPE_P(activateNodeCommandArrayType);
 }
 

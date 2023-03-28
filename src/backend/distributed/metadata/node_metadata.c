@@ -771,9 +771,6 @@ citus_activate_node(PG_FUNCTION_ARGS)
 	ActivateNodeList(context);
 	TransactionModifiedNodeMetadata = true;
 
-	/* cleanup metadata memory context and connections */
-	DestroyMetadataSyncContext(context);
-
 	PG_RETURN_INT32(workerNode->nodeId);
 }
 
@@ -2239,9 +2236,6 @@ AddNodeMetadataViaMetadataContext(char *nodeName, int32 nodePort,
 	}
 
 	ActivateNodeList(context);
-
-	/* cleanup metadata memory context and connections */
-	DestroyMetadataSyncContext(context);
 
 	return nodeId;
 }
