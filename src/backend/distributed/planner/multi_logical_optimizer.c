@@ -3385,6 +3385,13 @@ GetAggregateType(Aggref *aggregateExpression)
 {
 	Oid aggFunctionId = aggregateExpression->aggfnoid;
 
+	/* custom aggregates with combine func take precedence over name-based logic */
+	if (aggFunctionId >= FirstNormalObjectId &&
+		AggregateEnabledCustom(aggregateExpression))
+	{
+		return AGGREGATE_CUSTOM_COMBINE;
+	}
+
 	/* look up the function name */
 	char *aggregateProcName = get_func_name(aggFunctionId);
 	if (aggregateProcName == NULL)
@@ -3394,8 +3401,6 @@ GetAggregateType(Aggref *aggregateExpression)
 	}
 
 	uint32 aggregateCount = lengthof(AggregateNames);
-
-	Assert(AGGREGATE_INVALID_FIRST == 0);
 
 	for (uint32 aggregateIndex = 1; aggregateIndex < aggregateCount; aggregateIndex++)
 	{
@@ -3465,7 +3470,7 @@ GetAggregateType(Aggref *aggregateExpression)
 		}
 	}
 
-
+	/* handle any remaining built-in aggregates with a suitable combinefn */
 	if (AggregateEnabledCustom(aggregateExpression))
 	{
 		return AGGREGATE_CUSTOM_COMBINE;
