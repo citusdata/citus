@@ -234,12 +234,6 @@ class AllNullDistKeyDefaultConfig(CitusDefaultClusterConfig):
             # group 8
             "function_create",
             "functions",
-            # group 9
-            "merge_arbitrary_create",
-            "merge_arbitrary",
-            # group 10
-            "arbitrary_configs_router_create",
-            "arbitrary_configs_router",
             #
             # ii) Skip the following test as it requires support for create_distributed_function.
             "nested_execution",

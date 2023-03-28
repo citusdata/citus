@@ -524,6 +524,11 @@ InsertDistributionColumnMatchesSource(Query *query, RangeTblEntry *resultRte)
 		return NULL;
 	}
 
+	if (!HasDistributionKey(resultRte->relid))
+	{
+		return NULL;
+	}
+
 	bool foundDistributionColumn = false;
 	MergeAction *action = NULL;
 	foreach_ptr(action, query->mergeActionList)
