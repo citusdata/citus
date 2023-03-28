@@ -438,6 +438,8 @@ SendMetadataCommandListToWorkerListInCoordinatedTransaction(List *workerNodeList
 		return;
 	}
 
+	ErrorIfAnyMetadataNodeOutOfSync(workerNodeList);
+
 	UseCoordinatedTransaction();
 
 	List *connectionList = NIL;

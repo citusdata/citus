@@ -50,13 +50,15 @@ activate_node_snapshot(PG_FUNCTION_ARGS)
 	WorkerNode *dummyWorkerNode = GetFirstPrimaryWorkerNode();
 
 	/*
-	 * Create MetadataSyncContext which will be used throughout nodes' activation.
-	 * As we set collectCommands to true, it will not create connections to workers.
-	 * Instead it will collect and return sync commands to be sent to workers.
+	 * Create MetadataSyncContext which is used throughout nodes' activation.
+	 * As we set collectCommands to true, it would not create connections to workers.
+	 * Instead it would collect and return sync commands to be sent to workers.
 	 */
 	bool collectCommands = true;
+	bool nodesAddedInSameTransaction = false;
 	MetadataSyncContext *context = CreateMetadataSyncContext(list_make1(dummyWorkerNode),
-															 collectCommands);
+															 collectCommands,
+															 nodesAddedInSameTransaction);
 
 	ActivateNodeList(context);
 

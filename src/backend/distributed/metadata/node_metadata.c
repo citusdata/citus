@@ -91,9 +91,11 @@ static void RemoveNodeFromCluster(char *nodeName, int32 nodePort);
 static void ErrorIfNodeContainsNonRemovablePlacements(WorkerNode *workerNode);
 static bool PlacementHasActivePlacementOnAnotherGroup(GroupShardPlacement
 													  *sourcePlacement);
-static int AddNodeMetadata(char *nodeName, int32 nodePort, NodeMetadata
-						   *nodeMetadata, bool *nodeAlreadyExists);
-static WorkerNode * SetNodeState(char *nodeName, int32 nodePort, bool isActive);
+static int AddNodeMetadata(char *nodeName, int32 nodePort, NodeMetadata *nodeMetadata,
+						   bool *nodeAlreadyExists, bool localOnly);
+static int AddNodeMetadataViaMetadataContext(char *nodeName, int32 nodePort,
+											 NodeMetadata *nodeMetadata,
+											 bool *nodeAlreadyExists);
 static HeapTuple GetNodeTuple(const char *nodeName, int32 nodePort);
 static HeapTuple GetNodeByNodeId(int32 nodeId);
 static int32 GetNextGroupId(void);
@@ -104,7 +106,6 @@ static void InsertNodeRow(int nodeid, char *nodename, int32 nodeport, NodeMetada
 static void DeleteNodeRow(char *nodename, int32 nodeport);
 static void BlockDistributedQueriesOnMetadataNodes(void);
 static WorkerNode * TupleToWorkerNode(TupleDesc tupleDescriptor, HeapTuple heapTuple);
-static WorkerNode * ModifiableWorkerNode(const char *nodeName, int32 nodePort);
 static bool NodeIsLocal(WorkerNode *worker);
 static void SetLockTimeoutLocally(int32 lock_cooldown);
 static void UpdateNodeLocation(int32 nodeId, char *newNodeName, int32 newNodePort);
@@ -124,11 +125,11 @@ static void UpdateLocalGroupIdsViaMetadataContext(MetadataSyncContext *context);
 static void SendDeletionCommandsForReplicatedTablePlacements(
 	MetadataSyncContext *context);
 static void SyncNodeMetadata(MetadataSyncContext *context);
-static void SetWorkerColumnViaMetadataContext(MetadataSyncContext *context,
-											  WorkerNode *workerNode,
-											  int columnIndex, Datum value);
-static void MarkNodesNotSyncedInLoopBackConnection(MetadataSyncContext *context, pid_t
-												   parentSessionPid);
+static void SetNodeStateViaMetadataContext(MetadataSyncContext *context,
+										   WorkerNode *workerNode,
+										   Datum value);
+static void MarkNodesNotSyncedInLoopBackConnection(MetadataSyncContext *context,
+												   pid_t parentSessionPid);
 static void EnsureParentSessionHasExclusiveLockOnPgDistNode(pid_t parentSessionPid);
 static void SetNodeMetadata(MetadataSyncContext *context, bool localOnly);
 static void EnsureTransactionalMetadataSyncMode(void);
@@ -199,16 +200,26 @@ citus_set_coordinator_host(PG_FUNCTION_ARGS)
 	Name nodeClusterName = PG_GETARG_NAME(3);
 	nodeMetadata.nodeCluster = NameStr(*nodeClusterName);
 
+	/*
+	 * We do not allow metadata operations on secondary nodes in nontransactional
+	 * sync mode.
+	 */
+	if (nodeMetadata.nodeRole == SecondaryNodeRoleId())
+	{
+		EnsureTransactionalMetadataSyncMode();
+	}
+
 	bool isCoordinatorInMetadata = false;
 	WorkerNode *coordinatorNode = PrimaryNodeForGroup(COORDINATOR_GROUP_ID,
 													  &isCoordinatorInMetadata);
 	if (!isCoordinatorInMetadata)
 	{
 		bool nodeAlreadyExists = false;
+		bool localOnly = false;
 
 		/* add the coordinator to pg_dist_node if it was not already added */
 		AddNodeMetadata(nodeNameString, nodePort, &nodeMetadata,
-						&nodeAlreadyExists);
+						&nodeAlreadyExists, localOnly);
 
 		/* we just checked */
 		Assert(!nodeAlreadyExists);
@@ -257,6 +268,9 @@ citus_add_node(PG_FUNCTION_ARGS)
 {
 	CheckCitusVersion(ERROR);
 
+	EnsureSuperUser();
+	EnsureCoordinator();
+
 	text *nodeName = PG_GETARG_TEXT_P(0);
 	int32 nodePort = PG_GETARG_INT32(1);
 	char *nodeNameString = text_to_cstring(nodeName);
@@ -289,12 +303,25 @@ citus_add_node(PG_FUNCTION_ARGS)
 	}
 
 	/*
-	 * We do not allow addition of secondary nodes in nontransactional sync mode
-	 * via citus_add_node.
+	 * We do not allow metadata operations on secondary nodes in nontransactional
+	 * sync mode.
 	 */
 	if (nodeMetadata.nodeRole == SecondaryNodeRoleId())
 	{
 		EnsureTransactionalMetadataSyncMode();
+	}
+
+	if (MetadataSyncTransMode == METADATA_SYNC_NON_TRANSACTIONAL &&
+		IsMultiStatementTransaction())
+	{
+		/*
+		 * prevent inside transaction block as we use bare connections which can
+		 * lead deadlock
+		 */
+		ereport(ERROR, (errmsg("do not add node in transaction block "
+							   "when the sync mode is nontransactional"),
+						errhint("add the node after SET citus.metadata_sync_mode "
+								"TO 'transactional'")));
 	}
 
 	int nodeId = AddNodeMetadataViaMetadataContext(nodeNameString, nodePort,
@@ -342,8 +369,18 @@ citus_add_inactive_node(PG_FUNCTION_ARGS)
 		ereport(ERROR, (errmsg("coordinator node cannot be added as inactive node")));
 	}
 
+	/*
+	 * We do not allow metadata operations on secondary nodes in nontransactional
+	 * sync mode.
+	 */
+	if (nodeMetadata.nodeRole == SecondaryNodeRoleId())
+	{
+		EnsureTransactionalMetadataSyncMode();
+	}
+
+	bool localOnly = false;
 	int nodeId = AddNodeMetadata(nodeNameString, nodePort, &nodeMetadata,
-								 &nodeAlreadyExists);
+								 &nodeAlreadyExists, localOnly);
 	TransactionModifiedNodeMetadata = true;
 
 	PG_RETURN_INT32(nodeId);
@@ -386,8 +423,15 @@ citus_add_secondary_node(PG_FUNCTION_ARGS)
 	nodeMetadata.nodeRole = SecondaryNodeRoleId();
 	nodeMetadata.isActive = true;
 
+	/*
+	 * We do not allow metadata operations on secondary nodes in nontransactional
+	 * sync mode.
+	 */
+	EnsureTransactionalMetadataSyncMode();
+
+	bool localOnly = false;
 	int nodeId = AddNodeMetadata(nodeNameString, nodePort, &nodeMetadata,
-								 &nodeAlreadyExists);
+								 &nodeAlreadyExists, localOnly);
 	TransactionModifiedNodeMetadata = true;
 
 	PG_RETURN_INT32(nodeId);
@@ -464,6 +508,15 @@ citus_disable_node(PG_FUNCTION_ARGS)
 	bool isActive = false;
 	ErrorIfCoordinatorMetadataSetFalse(workerNode, BoolGetDatum(isActive),
 									   "isactive");
+
+	/*
+	 * We do not allow metadata operations on secondary nodes in nontransactional
+	 * sync mode.
+	 */
+	if (NodeIsSecondary(workerNode))
+	{
+		EnsureTransactionalMetadataSyncMode();
+	}
 
 	WorkerNode *firstWorkerNode = GetFirstPrimaryWorkerNode();
 	bool disablingFirstNode =
@@ -623,6 +676,15 @@ citus_set_node_property(PG_FUNCTION_ARGS)
 	WorkerNode *workerNode = ModifiableWorkerNode(text_to_cstring(nodeNameText),
 												  nodePort);
 
+	/*
+	 * We do not allow metadata operations on secondary nodes in nontransactional
+	 * sync mode.
+	 */
+	if (NodeIsSecondary(workerNode))
+	{
+		EnsureTransactionalMetadataSyncMode();
+	}
+
 	if (strcmp(text_to_cstring(propertyText), "shouldhaveshards") == 0)
 	{
 		SetShouldHaveShards(workerNode, value);
@@ -654,7 +716,7 @@ master_set_node_property(PG_FUNCTION_ARGS)
  * ModifiableWorkerNode gets the requested WorkerNode and also gets locks
  * required for modifying it. This fails if the node does not exist.
  */
-static WorkerNode *
+WorkerNode *
 ModifiableWorkerNode(const char *nodeName, int32 nodePort)
 {
 	CheckCitusVersion(ERROR);
@@ -683,11 +745,36 @@ citus_activate_node(PG_FUNCTION_ARGS)
 	text *nodeNameText = PG_GETARG_TEXT_P(0);
 	int32 nodePort = PG_GETARG_INT32(1);
 
-	int32 nodeId = ActivateNode(text_to_cstring(nodeNameText), nodePort);
+	char *nodeNameString = text_to_cstring(nodeNameText);
+	WorkerNode *workerNode = ModifiableWorkerNode(nodeNameString, nodePort);
 
+	/*
+	 * We do not allow metadata operations on secondary nodes in nontransactional
+	 * sync mode.
+	 */
+	if (NodeIsSecondary(workerNode))
+	{
+		EnsureTransactionalMetadataSyncMode();
+	}
+
+	/*
+	 * Create MetadataSyncContext which is used throughout nodes' activation.
+	 * It contains activated nodes, bare connections if the mode is nontransactional,
+	 * and a memory context for allocation.
+	 */
+	bool collectCommands = false;
+	bool nodesAddedInSameTransaction = false;
+	MetadataSyncContext *context = CreateMetadataSyncContext(list_make1(workerNode),
+															 collectCommands,
+															 nodesAddedInSameTransaction);
+
+	ActivateNodeList(context);
 	TransactionModifiedNodeMetadata = true;
 
-	PG_RETURN_INT32(nodeId);
+	/* cleanup metadata memory context and connections */
+	DestroyMetadataSyncContext(context);
+
+	PG_RETURN_INT32(workerNode->nodeId);
 }
 
 
@@ -844,8 +931,8 @@ PrimaryNodeForGroup(int32 groupId, bool *groupContainsNodes)
  * connection to localhost by calling the udf `citus_internal_mark_node_not_synced`.
  */
 static void
-MarkNodesNotSyncedInLoopBackConnection(MetadataSyncContext *context, pid_t
-									   parentSessionPid)
+MarkNodesNotSyncedInLoopBackConnection(MetadataSyncContext *context,
+									   pid_t parentSessionPid)
 {
 	Assert(context->transactionMode == METADATA_SYNC_NON_TRANSACTIONAL);
 	Assert(!MetadataSyncCollectsCommands(context));
@@ -867,6 +954,22 @@ MarkNodesNotSyncedInLoopBackConnection(MetadataSyncContext *context, pid_t
 	 * In those cases, proper metadata sync for the workers should be done.)
 	 */
 
+	/*
+	 * Because we try to unset metadatasynced flag with a separate transaction,
+	 * we could not find the new node if the node is added in the current local
+	 * transaction. But, hopefully, we do not need to unset metadatasynced for
+	 * the new node as local transaction would rollback in case of a failure.
+	 */
+	if (context->nodesAddedInSameTransaction)
+	{
+		return;
+	}
+
+	if (context->activatedWorkerNodeList == NIL)
+	{
+		return;
+	}
+
 	int connectionFlag = FORCE_NEW_CONNECTION;
 	MultiConnection *connection = GetNodeConnection(connectionFlag, LocalHostName,
 													PostPortNumber);
@@ -880,7 +983,7 @@ MarkNodesNotSyncedInLoopBackConnection(MetadataSyncContext *context, pid_t
 		 * connection to localhost. To achieve this, we check if the caller session's
 		 * pid holds the Exclusive lock on pg_dist_node. After ensuring that (we are
 		 * called from parent session which holds the Exclusive lock), we can safely
-		 * update node metadata by acquiring lower level of lock.
+		 * update node metadata by acquiring the relaxed lock.
 		 */
 		StringInfo metadatasyncCommand = makeStringInfo();
 		appendStringInfo(metadatasyncCommand, CITUS_INTERNAL_MARK_NODE_NOT_SYNCED,
@@ -903,6 +1006,8 @@ SetNodeMetadata(MetadataSyncContext *context, bool localOnly)
 	/* do not execute local transaction if we collect commands */
 	if (!MetadataSyncCollectsCommands(context))
 	{
+		List *updatedActivatedNodeList = NIL;
+
 		WorkerNode *node = NULL;
 		foreach_ptr(node, context->activatedWorkerNodeList)
 		{
@@ -912,22 +1017,20 @@ SetNodeMetadata(MetadataSyncContext *context, bool localOnly)
 											BoolGetDatum(true));
 			node = SetWorkerColumnLocalOnly(node, Anum_pg_dist_node_hasmetadata,
 											BoolGetDatum(true));
+
+			updatedActivatedNodeList = lappend(updatedActivatedNodeList, node);
 		}
+
+		/* reset activated nodes inside metadataSyncContext afer local update */
+		SetMetadataSyncNodesFromNodeList(context, updatedActivatedNodeList);
 	}
 
-	if (!localOnly)
+	if (!localOnly && EnableMetadataSync)
 	{
 		WorkerNode *node = NULL;
 		foreach_ptr(node, context->activatedWorkerNodeList)
 		{
-			SetWorkerColumnViaMetadataContext(context, node, Anum_pg_dist_node_isactive,
-											  BoolGetDatum(true));
-			SetWorkerColumnViaMetadataContext(context, node,
-											  Anum_pg_dist_node_metadatasynced,
-											  BoolGetDatum(true));
-			SetWorkerColumnViaMetadataContext(context, node,
-											  Anum_pg_dist_node_hasmetadata,
-											  BoolGetDatum(true));
+			SetNodeStateViaMetadataContext(context, node, BoolGetDatum(true));
 		}
 	}
 }
@@ -935,7 +1038,7 @@ SetNodeMetadata(MetadataSyncContext *context, bool localOnly)
 
 /*
  * ActivateNodeList does some sanity checks and acquire Exclusive lock on pg_dist_node,
- * and then iterates over the nodeList and activates the nodes.
+ * and then activates the nodes inside given metadataSyncContext.
  *
  * The function operates in 3 different modes according to transactionMode inside
  * metadataSyncContext.
@@ -950,16 +1053,6 @@ SetNodeMetadata(MetadataSyncContext *context, bool localOnly)
 void
 ActivateNodeList(MetadataSyncContext *context)
 {
-	if (context->activatedWorkerNodeList == NIL)
-	{
-		/*
-		 * In case user calls with only coordinator in nodelist, we can hit here. Just bail
-		 * out as we already warned the user, at `SetMetadataSyncNodesFromNodeList`, that
-		 * coordinator already has metadata.
-		 */
-		return;
-	}
-
 	if (context->transactionMode == METADATA_SYNC_NON_TRANSACTIONAL &&
 		IsMultiStatementTransaction())
 	{
@@ -1017,7 +1110,6 @@ ActivateNodeList(MetadataSyncContext *context)
 	 * Delete existing reference and replicated table placements on the
 	 * given groupId if the group has been disabled earlier (e.g., isActive
 	 * set to false).
-	 * todo: use metada context connections
 	 */
 	SendDeletionCommandsForReplicatedTablePlacements(context);
 
@@ -1067,44 +1159,6 @@ ActivateNodeList(MetadataSyncContext *context)
 	 */
 	localOnly = false;
 	SetNodeMetadata(context, localOnly);
-}
-
-
-/*
- * ActivateNode activates the node with nodeName and nodePort. Currently, activation
- * includes only replicating the reference tables and setting isactive column of the
- * given node.
- */
-int
-ActivateNode(char *nodeName, int nodePort)
-{
-	bool isActive = true;
-
-	/*
-	 * We take exclusive lock on pg_dist_node inside ActivateNodeList. We
-	 * also check the node still exists after acquiring the lock.
-	 */
-	WorkerNode *workerNode = FindWorkerNodeAnyCluster(nodeName, nodePort);
-
-	/*
-	 * Create MetadataSyncContext which will be used throughout nodes' activation.
-	 * It contains metadata sync nodes, their connections and also a MemoryContext
-	 * for allocations.
-	 */
-	bool collectCommands = false;
-	MetadataSyncContext *context = CreateMetadataSyncContext(list_make1(workerNode),
-															 collectCommands);
-
-	ActivateNodeList(context);
-
-	/* cleanup metadata memory context and connections */
-	DestroyMetadataSyncContext(context);
-
-	/* finally, let all other active metadata nodes to learn about this change */
-	WorkerNode *newWorkerNode = SetNodeState(nodeName, nodePort, isActive);
-	Assert(newWorkerNode->nodeId == workerNode->nodeId);
-
-	return newWorkerNode->nodeId;
 }
 
 
@@ -1165,6 +1219,14 @@ citus_update_node(PG_FUNCTION_ARGS)
 						errmsg("node %u not found", nodeId)));
 	}
 
+	/*
+	 * We do not allow metadata operations on secondary nodes in nontransactional
+	 * sync mode.
+	 */
+	if (NodeIsSecondary(workerNode))
+	{
+		EnsureTransactionalMetadataSyncMode();
+	}
 
 	/*
 	 * If the node is a primary node we block reads and writes.
@@ -1525,10 +1587,10 @@ EnsureParentSessionHasExclusiveLockOnPgDistNode(pid_t parentSessionPid)
 	}
 
 	char *checkIfParentLockCommand = "SELECT pid FROM pg_locks WHERE "
-									 "database = %d AND relation = %d AND "
+									 "pid = %d AND database = %d AND relation = %d AND "
 									 "mode = 'ExclusiveLock' AND granted = TRUE";
 	appendStringInfo(checkIfParentLockCommandStr, checkIfParentLockCommand,
-					 MyDatabaseId, DistNodeRelationId());
+					 parentSessionPid, MyDatabaseId, DistNodeRelationId());
 
 	bool readOnly = true;
 	int spiQueryResult = SPI_execute(checkIfParentLockCommandStr->data, readOnly, 0);
@@ -1551,9 +1613,9 @@ EnsureParentSessionHasExclusiveLockOnPgDistNode(pid_t parentSessionPid)
 
 
 /*
- * citus_internal_mark_node_not_synced unsets metadatasynced flag in separate
- * connection to localhost. Should only be called by
- * `MarkNodesNotSyncedInLoopBackConnection`. See it for details.
+ * citus_internal_mark_node_not_synced unsets metadatasynced flag in separate connection
+ * to localhost. Should only be called by `MarkNodesNotSyncedInLoopBackConnection`.
+ * See it for details.
  */
 Datum
 citus_internal_mark_node_not_synced(PG_FUNCTION_ARGS)
@@ -1565,20 +1627,17 @@ citus_internal_mark_node_not_synced(PG_FUNCTION_ARGS)
 
 	pid_t parentSessionPid = PG_GETARG_INT32(0);
 
+	/* fetch node by id */
+	int nodeId = PG_GETARG_INT32(1);
+	HeapTuple heapTuple = GetNodeByNodeId(nodeId);
+
 	/* ensure that parent session holds Exclusive lock to pg_dist_node */
 	EnsureParentSessionHasExclusiveLockOnPgDistNode(parentSessionPid);
 
 	/*
-	 * We made sure parent session holds the ExclusiveLock, so we can update
-	 * pg_dist_node safely with low level lock here.
+	 * We made sure parent session holds the ExclusiveLock, so we can unset
+	 * metadatasynced for the node safely with the relaxed lock here.
 	 */
-	int nodeId = PG_GETARG_INT32(1);
-	HeapTuple heapTuple = GetNodeByNodeId(nodeId);
-	if (heapTuple == NULL)
-	{
-		ereport(ERROR, (errmsg("could not find valid entry for node id %d", nodeId)));
-	}
-
 	Relation pgDistNode = table_open(DistNodeRelationId(), AccessShareLock);
 	TupleDesc tupleDescriptor = RelationGetDescr(pgDistNode);
 
@@ -1806,6 +1865,16 @@ static void
 RemoveNodeFromCluster(char *nodeName, int32 nodePort)
 {
 	WorkerNode *workerNode = ModifiableWorkerNode(nodeName, nodePort);
+
+	/*
+	 * We do not allow metadata operations on secondary nodes in nontransactional
+	 * sync mode.
+	 */
+	if (NodeIsSecondary(workerNode))
+	{
+		EnsureTransactionalMetadataSyncMode();
+	}
+
 	if (NodeIsPrimary(workerNode))
 	{
 		ErrorIfNodeContainsNonRemovablePlacements(workerNode);
@@ -1934,12 +2003,11 @@ CountPrimariesWithMetadata(void)
  * If not, the following procedure is followed while adding a node: If the groupId is not
  * explicitly given by the user, the function picks the group that the new node should
  * be in with respect to GroupSize. Then, the new node is inserted into the local
- * pg_dist_node as well as the nodes with hasmetadata=true.
+ * pg_dist_node as well as the nodes with hasmetadata=true if localOnly is false.
  */
 static int
-AddNodeMetadata(char *nodeName, int32 nodePort,
-				NodeMetadata *nodeMetadata,
-				bool *nodeAlreadyExists)
+AddNodeMetadata(char *nodeName, int32 nodePort, NodeMetadata *nodeMetadata,
+				bool *nodeAlreadyExists, bool localOnly)
 {
 	EnsureCoordinator();
 
@@ -2068,7 +2136,7 @@ AddNodeMetadata(char *nodeName, int32 nodePort,
 
 	workerNode = FindWorkerNodeAnyCluster(nodeName, nodePort);
 
-	if (EnableMetadataSync)
+	if (EnableMetadataSync && !localOnly)
 	{
 		/* send the delete command to all primary nodes with metadata */
 		char *nodeDeleteCommand = NodeDeleteCommand(workerNode->nodeId);
@@ -2086,6 +2154,96 @@ AddNodeMetadata(char *nodeName, int32 nodePort,
 	}
 
 	return workerNode->nodeId;
+}
+
+
+/*
+ * AddNodeMetadataViaMetadataContext does the same thing as AddNodeMetadata but
+ * make use of metadata sync context to send commands to workers to support both
+ * transactional and nontransactional sync modes.
+ */
+static int
+AddNodeMetadataViaMetadataContext(char *nodeName, int32 nodePort,
+								  NodeMetadata *nodeMetadata, bool *nodeAlreadyExists)
+{
+	bool localOnly = true;
+	int nodeId = AddNodeMetadata(nodeName, nodePort, nodeMetadata, nodeAlreadyExists,
+								 localOnly);
+
+	/* do nothing as the node already exists */
+	if (*nodeAlreadyExists)
+	{
+		return nodeId;
+	}
+
+	/*
+	 * Create metadata sync context that is used throughout node addition
+	 * and activation if necessary.
+	 */
+	WorkerNode *node = ModifiableWorkerNode(nodeName, nodePort);
+
+	/* we should always set active flag to true if we call citus_add_node */
+	node = SetWorkerColumnLocalOnly(node, Anum_pg_dist_node_isactive, DatumGetBool(true));
+
+	/*
+	 * After adding new node, if the node did not already exist, we will activate
+	 * the node.
+	 * If the worker is not marked as a coordinator, check that
+	 * the node is not trying to add itself
+	 */
+	if (node != NULL &&
+		node->groupId != COORDINATOR_GROUP_ID &&
+		node->nodeRole != SecondaryNodeRoleId() &&
+		IsWorkerTheCurrentNode(node))
+	{
+		ereport(ERROR, (errmsg("Node cannot add itself as a worker."),
+						errhint(
+							"Add the node as a coordinator by using: "
+							"SELECT citus_set_coordinator_host('%s', %d);",
+							node->workerName, node->workerPort)));
+	}
+
+	List *nodeList = list_make1(node);
+	bool collectCommands = false;
+	bool nodesAddedInSameTransaction = true;
+	MetadataSyncContext *context = CreateMetadataSyncContext(nodeList, collectCommands,
+															 nodesAddedInSameTransaction);
+
+	if (EnableMetadataSync)
+	{
+		/* send the delete command to all primary nodes with metadata */
+		char *nodeDeleteCommand = NodeDeleteCommand(node->nodeId);
+		SendOrCollectCommandListToMetadataNodes(context, list_make1(nodeDeleteCommand));
+
+		/* finally prepare the insert command and send it to all primary nodes */
+		uint32 primariesWithMetadata = CountPrimariesWithMetadata();
+		if (primariesWithMetadata != 0)
+		{
+			char *nodeInsertCommand = NULL;
+			if (context->transactionMode == METADATA_SYNC_TRANSACTIONAL)
+			{
+				nodeInsertCommand = NodeListInsertCommand(nodeList);
+			}
+			else if (context->transactionMode == METADATA_SYNC_NON_TRANSACTIONAL)
+			{
+				/*
+				 * We need to ensure node insertion is idempotent in nontransactional
+				 * sync mode.
+				 */
+				nodeInsertCommand = NodeListIdempotentInsertCommand(nodeList);
+			}
+			Assert(nodeInsertCommand != NULL);
+			SendOrCollectCommandListToMetadataNodes(context,
+													list_make1(nodeInsertCommand));
+		}
+	}
+
+	ActivateNodeList(context);
+
+	/* cleanup metadata memory context and connections */
+	DestroyMetadataSyncContext(context);
+
+	return nodeId;
 }
 
 
@@ -2114,17 +2272,26 @@ SetWorkerColumn(WorkerNode *workerNode, int columnIndex, Datum value)
 
 
 /*
- * SetWorkerColumnViaMetadataContext does the same as SetWorkerColumn but using metadata
- * sync context.
+ * SetNodeStateViaMetadataContext sets or unsets isactive, metadatasynced, and hasmetadata
+ * flags via metadataSyncContext.
  */
 static void
-SetWorkerColumnViaMetadataContext(MetadataSyncContext *context, WorkerNode *workerNode,
-								  int columnIndex, Datum value)
+SetNodeStateViaMetadataContext(MetadataSyncContext *context, WorkerNode *workerNode,
+							   Datum value)
 {
-	char *metadataSyncCommand =
-		GetMetadataSyncCommandToSetNodeColumn(workerNode, columnIndex, value);
+	char *isActiveCommand =
+		GetMetadataSyncCommandToSetNodeColumn(workerNode, Anum_pg_dist_node_isactive,
+											  value);
+	char *metadatasyncedCommand =
+		GetMetadataSyncCommandToSetNodeColumn(workerNode,
+											  Anum_pg_dist_node_metadatasynced, value);
+	char *hasmetadataCommand =
+		GetMetadataSyncCommandToSetNodeColumn(workerNode, Anum_pg_dist_node_hasmetadata,
+											  value);
+	List *commandList = list_make3(isActiveCommand, metadatasyncedCommand,
+								   hasmetadataCommand);
 
-	SendOrCollectCommandListToMetadataNodes(context, list_make1(metadataSyncCommand));
+	SendOrCollectCommandListToMetadataNodes(context, commandList);
 }
 
 
@@ -2341,20 +2508,6 @@ SetShouldHaveShards(WorkerNode *workerNode, bool shouldHaveShards)
 
 
 /*
- * SetNodeState function sets the isactive column of the specified worker in
- * pg_dist_node to isActive. Also propagates this to other metadata nodes.
- * It returns the new worker node after the modification.
- */
-static WorkerNode *
-SetNodeState(char *nodeName, int nodePort, bool isActive)
-{
-	WorkerNode *workerNode = FindWorkerNodeAnyCluster(nodeName, nodePort);
-	return SetWorkerColumn(workerNode, Anum_pg_dist_node_isactive, BoolGetDatum(
-							   isActive));
-}
-
-
-/*
  * GetNodeTuple function returns the heap tuple of given nodeName and nodePort. If the
  * node is not found this function returns NULL.
  *
@@ -2412,6 +2565,10 @@ GetNodeByNodeId(int32 nodeId)
 	if (HeapTupleIsValid(heapTuple))
 	{
 		nodeTuple = heap_copytuple(heapTuple);
+	}
+	else
+	{
+		ereport(ERROR, (errmsg("could not find valid entry for node id %d", nodeId)));
 	}
 
 	systable_endscan(scanDescriptor);
@@ -2561,9 +2718,11 @@ InsertPlaceholderCoordinatorRecord(void)
 	nodeMetadata.nodeCluster = "default";
 
 	bool nodeAlreadyExists = false;
+	bool localOnly = false;
 
 	/* as long as there is a single node, localhost should be ok */
-	AddNodeMetadata(LocalHostName, PostPortNumber, &nodeMetadata, &nodeAlreadyExists);
+	AddNodeMetadata(LocalHostName, PostPortNumber, &nodeMetadata, &nodeAlreadyExists,
+					localOnly);
 }
 
 
@@ -2880,8 +3039,9 @@ ErrorIfAnyNodeNotExist(List *nodeList)
 static void
 UpdateLocalGroupIdsViaMetadataContext(MetadataSyncContext *context)
 {
+	int activatedPrimaryCount = list_length(context->activatedWorkerNodeList);
 	int nodeIdx = 0;
-	for (nodeIdx = 0; nodeIdx < list_length(context->activatedWorkerNodeList); nodeIdx++)
+	for (nodeIdx = 0; nodeIdx < activatedPrimaryCount; nodeIdx++)
 	{
 		WorkerNode *node = list_nth(context->activatedWorkerNodeList, nodeIdx);
 		List *commandList = list_make1(LocalGroupIdUpdateCommand(node->groupId));
@@ -2926,6 +3086,11 @@ SyncNodeMetadata(MetadataSyncContext *context)
 {
 	CheckCitusVersion(ERROR);
 
+	if (!EnableMetadataSync)
+	{
+		return;
+	}
+
 	/*
 	 * Do not fail when we call this method from activate_node_snapshot
 	 * from workers.
@@ -2950,5 +3115,9 @@ SyncNodeMetadata(MetadataSyncContext *context)
 	recreateNodeSnapshotCommandList = list_concat(recreateNodeSnapshotCommandList,
 												  createMetadataCommandList);
 
-	SendOrCollectCommandListToMetadataNodes(context, recreateNodeSnapshotCommandList);
+	/*
+	 * We should have already added node metadata to metadata workers. Sync node
+	 * metadata just for activated workers.
+	 */
+	SendOrCollectCommandListToActivatedNodes(context, recreateNodeSnapshotCommandList);
 }

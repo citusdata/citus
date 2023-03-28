@@ -194,9 +194,24 @@ start_metadata_sync_to_node(PG_FUNCTION_ARGS)
 	EnsureCoordinator();
 
 	char *nodeNameString = text_to_cstring(nodeName);
+	WorkerNode *workerNode = ModifiableWorkerNode(nodeNameString, nodePort);
 
-	ActivateNode(nodeNameString, nodePort);
+	/*
+	 * Create MetadataSyncContext which is used throughout nodes' activation.
+	 * It contains activated nodes, bare connections if the mode is nontransactional,
+	 * and a memory context for allocation.
+	 */
+	bool collectCommands = false;
+	bool nodesAddedInSameTransaction = false;
+	MetadataSyncContext *context = CreateMetadataSyncContext(list_make1(workerNode),
+															 collectCommands,
+															 nodesAddedInSameTransaction);
+
+	ActivateNodeList(context);
 	TransactionModifiedNodeMetadata = true;
+
+	/* cleanup metadata memory context and connections */
+	DestroyMetadataSyncContext(context);
 
 	PG_RETURN_VOID();
 }
@@ -215,23 +230,24 @@ start_metadata_sync_to_all_nodes(PG_FUNCTION_ARGS)
 	EnsureSuperUser();
 	EnsureCoordinator();
 
-	List *workerNodes = ActivePrimaryNonCoordinatorNodeList(RowShareLock);
+	List *nodeList = ActivePrimaryNonCoordinatorNodeList(RowShareLock);
 
 	/*
-	 * create MetadataSyncContext which will be used throughout nodes' activation.
-	 * It contains metadata sync nodes, their connections and also a MemoryContext
-	 * for allocations.
+	 * Create MetadataSyncContext which is used throughout nodes' activation.
+	 * It contains activated nodes, bare connections if the mode is nontransactional,
+	 * and a memory context for allocation.
 	 */
 	bool collectCommands = false;
-	MetadataSyncContext *context = CreateMetadataSyncContext(workerNodes,
-															 collectCommands);
+	bool nodesAddedInSameTransaction = false;
+	MetadataSyncContext *context = CreateMetadataSyncContext(nodeList,
+															 collectCommands,
+															 nodesAddedInSameTransaction);
 
 	ActivateNodeList(context);
+	TransactionModifiedNodeMetadata = true;
 
 	/* cleanup metadata memory context and connections */
 	DestroyMetadataSyncContext(context);
-
-	TransactionModifiedNodeMetadata = true;
 
 	PG_RETURN_BOOL(true);
 }
@@ -837,6 +853,35 @@ NodeListInsertCommand(List *workerNodeList)
 	}
 
 	return nodeListInsertCommand->data;
+}
+
+
+/*
+ * NodeListIdempotentInsertCommand generates an idempotent multi-row INSERT command that
+ * can be executed to insert the nodes that are in workerNodeList to pg_dist_node table.
+ * It would insert new nodes or replace current nodes with new nodes if nodename-nodeport
+ * pairs already exist.
+ */
+char *
+NodeListIdempotentInsertCommand(List *workerNodeList)
+{
+	StringInfo nodeInsertIdempotentCommand = makeStringInfo();
+	char *nodeInsertStr = NodeListInsertCommand(workerNodeList);
+	appendStringInfoString(nodeInsertIdempotentCommand, nodeInsertStr);
+	char *onConflictStr = " ON CONFLICT ON CONSTRAINT pg_dist_node_nodename_nodeport_key "
+						  "DO UPDATE SET nodeid = EXCLUDED.nodeid, "
+						  "groupid = EXCLUDED.groupid, "
+						  "nodename = EXCLUDED.nodename, "
+						  "nodeport = EXCLUDED.nodeport, "
+						  "noderack = EXCLUDED.noderack, "
+						  "hasmetadata = EXCLUDED.hasmetadata, "
+						  "isactive = EXCLUDED.isactive, "
+						  "noderole = EXCLUDED.noderole, "
+						  "nodecluster = EXCLUDED.nodecluster ,"
+						  "metadatasynced = EXCLUDED.metadatasynced, "
+						  "shouldhaveshards = EXCLUDED.shouldhaveshards";
+	appendStringInfoString(nodeInsertIdempotentCommand, onConflictStr);
+	return nodeInsertIdempotentCommand->data;
 }
 
 
@@ -3904,12 +3949,18 @@ ColocationGroupDeleteCommand(uint32 colocationId)
 void
 SetMetadataSyncNodesFromNodeList(MetadataSyncContext *context, List *nodeList)
 {
+	/* sync is disabled, then no nodes to sync */
+	if (!EnableMetadataSync)
+	{
+		return;
+	}
+
 	List *activatedWorkerNodeList = NIL;
 
 	WorkerNode *node = NULL;
 	foreach_ptr(node, nodeList)
 	{
-		if (EnableMetadataSync && NodeIsPrimary(node))
+		if (NodeIsPrimary(node))
 		{
 			/* warn if we have coordinator in nodelist */
 			if (NodeIsCoordinator(node))
@@ -3963,10 +4014,14 @@ EstablishAndSetMetadataSyncBareConnections(MetadataSyncContext *context)
  * and a MemoryContext to be used throughout the metadata sync.
  *
  * If we collect commands, connections will not be established as caller's intent
- * is to collcet sync commands.
+ * is to collect sync commands.
+ *
+ * If the nodes are newly added before activation, we would not try to unset
+ * metadatasynced in separate transaction during nontransactional metadatasync.
  */
 MetadataSyncContext *
-CreateMetadataSyncContext(List *nodeList, bool collectCommands)
+CreateMetadataSyncContext(List *nodeList, bool collectCommands,
+						  bool nodesAddedInSameTransaction)
 {
 	/* should be alive during local transaction during the sync */
 	MemoryContext context = AllocSetContextCreate(TopTransactionContext,
@@ -3980,6 +4035,7 @@ CreateMetadataSyncContext(List *nodeList, bool collectCommands)
 	metadataSyncContext->transactionMode = MetadataSyncTransMode;
 	metadataSyncContext->collectCommands = collectCommands;
 	metadataSyncContext->collectedCommands = NIL;
+	metadataSyncContext->nodesAddedInSameTransaction = nodesAddedInSameTransaction;
 
 	/* filter the nodes that needs to be activated from given node list */
 	SetMetadataSyncNodesFromNodeList(metadataSyncContext, nodeList);
@@ -4010,6 +4066,7 @@ CreateMetadataSyncContext(List *nodeList, bool collectCommands)
 void
 DestroyMetadataSyncContext(MetadataSyncContext *context)
 {
+	/* todo: make sure context is always cleanup by using resource release callback?? */
 	/* close connections */
 	MultiConnection *connection = NULL;
 	foreach_ptr(connection, context->activatedWorkerBareConnections)

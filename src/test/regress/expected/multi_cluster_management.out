@@ -2,19 +2,22 @@ SET citus.next_shard_id TO 1220000;
 ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 1390000;
 ALTER SEQUENCE pg_catalog.pg_dist_groupid_seq RESTART 1;
 -- Tests functions related to cluster membership
--- add the nodes to the cluster
+-- add the first node to the cluster in transactional mode
 SELECT 1 FROM master_add_node('localhost', :worker_1_port);
  ?column?
 ---------------------------------------------------------------------
         1
 (1 row)
 
+-- add the second node in nontransactional mode
+SET citus.metadata_sync_mode TO 'nontransactional';
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
  ?column?
 ---------------------------------------------------------------------
         1
 (1 row)
 
+RESET citus.metadata_sync_mode;
 -- I am coordinator
 SELECT citus_is_coordinator();
  citus_is_coordinator
@@ -374,7 +377,7 @@ SELECT master_get_active_worker_nodes();
 SELECT * FROM master_add_node('localhost', :worker_2_port);
  master_add_node
 ---------------------------------------------------------------------
-               7
+               6
 (1 row)
 
 ALTER SEQUENCE pg_dist_node_nodeid_seq RESTART WITH 7;
@@ -445,7 +448,7 @@ SELECT run_command_on_workers('UPDATE pg_dist_placement SET shardstate=1 WHERE g
 -- when there is no primary we should get a pretty error
 UPDATE pg_dist_node SET noderole = 'secondary' WHERE nodeport=:worker_2_port;
 SELECT * FROM cluster_management_test;
-ERROR:  node group 6 does not have a primary node
+ERROR:  node group 5 does not have a primary node
 -- when there is no node at all in the group we should get a different error
 DELETE FROM pg_dist_node WHERE nodeport=:worker_2_port;
 SELECT run_command_on_workers('DELETE FROM pg_dist_node WHERE nodeport=' || :'worker_2_port');
@@ -455,12 +458,11 @@ SELECT run_command_on_workers('DELETE FROM pg_dist_node WHERE nodeport=' || :'wo
 (1 row)
 
 SELECT * FROM cluster_management_test;
-ERROR:  there is a shard placement in node group 6 but there are no nodes in that group
+ERROR:  there is a shard placement in node group 5 but there are no nodes in that group
 -- clean-up
 SELECT * INTO old_placements FROM pg_dist_placement WHERE groupid = :worker_2_group;
 DELETE FROM pg_dist_placement WHERE groupid = :worker_2_group;
 SELECT master_add_node('localhost', :worker_2_port) AS new_node \gset
-WARNING:  could not find any shard placements for shardId 1220001
 WARNING:  could not find any shard placements for shardId 1220001
 WARNING:  could not find any shard placements for shardId 1220003
 WARNING:  could not find any shard placements for shardId 1220005
@@ -1216,6 +1218,18 @@ SELECT start_metadata_sync_to_all_nodes();
  t
 (1 row)
 
+-- do not allow nontransactional node addition inside transaction block
+BEGIN;
+	SELECT citus_remove_node('localhost', :worker_1_port);
+ citus_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
+	SELECT citus_add_node('localhost', :worker_1_port);
+ERROR:  do not add node in transaction block when the sync mode is nontransactional
+HINT:  add the node after SET citus.metadata_sync_mode TO 'transactional'
+COMMIT;
 RESET citus.metadata_sync_mode;
 -- verify that at the end of this file, all primary nodes have metadata synced
 SELECT bool_and(hasmetadata) AND bool_and(metadatasynced) FROM pg_dist_node WHERE isactive = 't' and noderole = 'primary';

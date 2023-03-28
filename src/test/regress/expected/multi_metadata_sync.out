@@ -1802,6 +1802,7 @@ ALTER TABLE dist_table_1 ADD COLUMN b int;
 ERROR:  localhost:xxxxx is a metadata node, but is out of sync
 HINT:  If the node is up, wait until metadata gets synced to it and try again.
 SELECT master_add_node('localhost', :master_port, groupid => 0);
+NOTICE:  localhost:xxxxx is the coordinator and already contains metadata, skipping syncing the metadata
 ERROR:  localhost:xxxxx is a metadata node, but is out of sync
 HINT:  If the node is up, wait until metadata gets synced to it and try again.
 SELECT citus_disable_node_and_wait('localhost', :worker_1_port);
