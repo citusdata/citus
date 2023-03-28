@@ -28,6 +28,8 @@
 extern bool EnableRouterExecution;
 extern bool EnableFastPathRouterPlanner;
 
+extern bool EnableNonColocatedRouterQueryPushdown;
+
 extern DistributedPlan * CreateRouterPlan(Query *originalQuery, Query *query,
 										  PlannerRestrictionContext *
 										  plannerRestrictionContext);
@@ -112,5 +114,8 @@ extern bool TargetEntryChangesValue(TargetEntry *targetEntry, Var *column,
 extern bool MasterIrreducibleExpression(Node *expression, bool *varArgument,
 										bool *badCoalesce);
 extern bool HasDangerousJoinUsing(List *rtableList, Node *jtnode);
+extern Job * RouterJob(Query *originalQuery,
+					   PlannerRestrictionContext *plannerRestrictionContext,
+					   DeferredErrorMessage **planningError);
 
 #endif /* MULTI_ROUTER_PLANNER_H */

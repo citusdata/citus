@@ -89,7 +89,6 @@ int PlannerLevel = 0;
 
 static bool ListContainsDistributedTableRTE(List *rangeTableList,
 											bool *maybeHasForeignDistributedTable);
-static bool IsUpdateOrDeleteOrMerge(Query *query);
 static PlannedStmt * CreateDistributedPlannedStmt(
 	DistributedPlanningContext *planContext);
 static PlannedStmt * InlineCtesAndCreateDistributedPlannedStmt(uint64 planId,
@@ -610,18 +609,6 @@ IsMultiTaskPlan(DistributedPlan *distributedPlan)
 
 
 /*
- * IsUpdateOrDelete returns true if the query performs an update or delete.
- */
-bool
-IsUpdateOrDeleteOrMerge(Query *query)
-{
-	return query->commandType == CMD_UPDATE ||
-		   query->commandType == CMD_DELETE ||
-		   query->commandType == CMD_MERGE;
-}
-
-
-/*
  * PlanFastPathDistributedStmt creates a distributed planned statement using
  * the FastPathPlanner.
  */
@@ -791,7 +778,7 @@ CreateDistributedPlannedStmt(DistributedPlanningContext *planContext)
 	 * if it is planned as a multi shard modify query.
 	 */
 	if ((distributedPlan->planningError ||
-		 (IsUpdateOrDeleteOrMerge(planContext->originalQuery) && IsMultiTaskPlan(
+		 (UpdateOrDeleteOrMergeQuery(planContext->originalQuery) && IsMultiTaskPlan(
 			  distributedPlan))) &&
 		hasUnresolvedParams)
 	{
