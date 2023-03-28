@@ -26,8 +26,8 @@ CREATE TABLE t_62629600(a int);
 SET search_path TO worker_copy_table_to_node;
 
 -- Make sure that the UDF doesn't work on Citus tables
-SELECT worker_copy_table_to_node('t', :worker_1_node);
-SELECT worker_copy_table_to_node('ref', :worker_1_node);
+SELECT worker_copy_table_to_node('t', :worker_2_node);
+SELECT worker_copy_table_to_node('ref', :worker_2_node);
 
 -- It should work on shards
 SELECT worker_copy_table_to_node('t_62629600', :worker_1_node);
