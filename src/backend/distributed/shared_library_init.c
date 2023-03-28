@@ -74,6 +74,7 @@
 #include "distributed/recursive_planning.h"
 #include "distributed/reference_table_utils.h"
 #include "distributed/relation_access_tracking.h"
+#include "distributed/replication_origin_session_utils.h"
 #include "distributed/run_from_same_connection.h"
 #include "distributed/shard_cleaner.h"
 #include "distributed/shard_transfer.h"
@@ -1128,6 +1129,16 @@ RegisterCitusConfigVariables(void)
 #else
 		false,
 #endif
+		PGC_USERSET,
+		GUC_STANDARD,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		"citus.enable_change_data_capture",
+		gettext_noop("Enables using replication origin tracking for change data capture"),
+		NULL,
+		&EnableChangeDataCapture,
+		false,
 		PGC_USERSET,
 		GUC_STANDARD,
 		NULL, NULL, NULL);
@@ -2425,7 +2436,6 @@ RegisterCitusConfigVariables(void)
 		PGC_USERSET,
 		GUC_STANDARD,
 		NULL, NULL, NULL);
-
 
 	/* warn about config items in the citus namespace that are not registered above */
 	EmitWarningsOnPlaceholders("citus");

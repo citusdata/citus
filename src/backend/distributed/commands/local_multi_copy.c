@@ -36,6 +36,7 @@
 #include "distributed/local_multi_copy.h"
 #include "distributed/shard_utils.h"
 #include "distributed/version_compat.h"
+#include "distributed/replication_origin_session_utils.h"
 
 /* managed via GUC, default is 512 kB */
 int LocalCopyFlushThresholdByte = 512 * 1024;
@@ -46,7 +47,7 @@ static void AddSlotToBuffer(TupleTableSlot *slot, CitusCopyDestReceiver *copyDes
 static bool ShouldAddBinaryHeaders(StringInfo buffer, bool isBinary);
 static bool ShouldSendCopyNow(StringInfo buffer);
 static void DoLocalCopy(StringInfo buffer, Oid relationId, int64 shardId,
-						CopyStmt *copyStatement, bool isEndOfCopy);
+						CopyStmt *copyStatement, bool isEndOfCopy, bool isPublishable);
 static int ReadFromLocalBufferCallback(void *outBuf, int minRead, int maxRead);
 
 
@@ -94,7 +95,7 @@ WriteTupleToLocalShard(TupleTableSlot *slot, CitusCopyDestReceiver *copyDest, in
 		bool isEndOfCopy = false;
 		DoLocalCopy(localCopyOutState->fe_msgbuf, copyDest->distributedRelationId,
 					shardId,
-					copyDest->copyStatement, isEndOfCopy);
+					copyDest->copyStatement, isEndOfCopy, copyDest->isPublishable);
 		resetStringInfo(localCopyOutState->fe_msgbuf);
 	}
 }
@@ -133,7 +134,7 @@ FinishLocalCopyToShard(CitusCopyDestReceiver *copyDest, int64 shardId,
 	}
 	bool isEndOfCopy = true;
 	DoLocalCopy(localCopyOutState->fe_msgbuf, copyDest->distributedRelationId, shardId,
-				copyDest->copyStatement, isEndOfCopy);
+				copyDest->copyStatement, isEndOfCopy, copyDest->isPublishable);
 }
 
 
@@ -197,7 +198,7 @@ ShouldSendCopyNow(StringInfo buffer)
  */
 static void
 DoLocalCopy(StringInfo buffer, Oid relationId, int64 shardId, CopyStmt *copyStatement,
-			bool isEndOfCopy)
+			bool isEndOfCopy, bool isPublishable)
 {
 	/*
 	 * Set the buffer as a global variable to allow ReadFromLocalBufferCallback
@@ -205,6 +206,10 @@ DoLocalCopy(StringInfo buffer, Oid relationId, int64 shardId, CopyStmt *copyStat
 	 * ReadFromLocalBufferCallback.
 	 */
 	LocalCopyBuffer = buffer;
+	if (!isPublishable)
+	{
+		SetupReplicationOriginLocalSession();
+	}
 
 	Oid shardOid = GetTableLocalShardOid(relationId, shardId);
 	Relation shard = table_open(shardOid, RowExclusiveLock);
@@ -219,6 +224,10 @@ DoLocalCopy(StringInfo buffer, Oid relationId, int64 shardId, CopyStmt *copyStat
 	EndCopyFrom(cstate);
 
 	table_close(shard, NoLock);
+	if (!isPublishable)
+	{
+		ResetReplicationOriginLocalSession();
+	}
 	free_parsestate(pState);
 }
 
