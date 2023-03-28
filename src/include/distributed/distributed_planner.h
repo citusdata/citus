@@ -147,8 +147,18 @@ typedef struct RTEListProperties
 	bool hasReferenceTable;
 	bool hasCitusLocalTable;
 
-	/* includes hash, append and range partitioned tables */
+	/* includes hash, null dist key, append and range partitioned tables */
 	bool hasDistributedTable;
+
+	/*
+	 * Effectively, hasDistributedTable is equal to
+	 *  "hasDistTableWithShardKey || hasDistTableWithoutShardKey".
+	 *
+	 * We provide below two for the callers that want to know what kind of
+	 * distributed tables that given query has references to.
+	 */
+	bool hasDistTableWithShardKey;
+	bool hasDistTableWithoutShardKey;
 
 	/* union of hasReferenceTable, hasCitusLocalTable and hasDistributedTable */
 	bool hasCitusTable;
@@ -243,6 +253,7 @@ extern int32 BlessRecordExpression(Expr *expr);
 extern void DissuadePlannerFromUsingPlan(PlannedStmt *plan);
 extern PlannedStmt * FinalizePlan(PlannedStmt *localPlan,
 								  struct DistributedPlan *distributedPlan);
+extern bool ContainsNullDistKeyTable(Query *query);
 extern RTEListProperties * GetRTEListPropertiesForQuery(Query *query);
 
 
