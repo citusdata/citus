@@ -1019,6 +1019,17 @@ CreateDistributedPlan(uint64 planId, bool allowRecursivePlanning, Query *origina
 	{
 		return distributedPlan;
 	}
+	else if (ContainsNullDistKeyTable(originalQuery))
+	{
+		/*
+		 * We only support router queries if the query contains reference to
+		 * a null-dist-key table. This temporary restriction will be removed
+		 * once we support recursive planning for the queries that reference
+		 * null-dist-key tables.
+		 */
+		WrapRouterErrorForNullDistKeyTable(distributedPlan->planningError);
+		RaiseDeferredError(distributedPlan->planningError, ERROR);
+	}
 	else
 	{
 		RaiseDeferredError(distributedPlan->planningError, DEBUG2);
@@ -2457,6 +2468,18 @@ HasUnresolvedExternParamsWalker(Node *expression, ParamListInfo boundParams)
 
 
 /*
+ * ContainsNullDistKeyTable returns true if given query contains reference
+ * to a null-dist-key table.
+ */
+bool
+ContainsNullDistKeyTable(Query *query)
+{
+	RTEListProperties *rteListProperties = GetRTEListPropertiesForQuery(query);
+	return rteListProperties->hasDistTableWithoutShardKey;
+}
+
+
+/*
  * GetRTEListPropertiesForQuery is a wrapper around GetRTEListProperties that
  * returns RTEListProperties for the rte list retrieved from query.
  */
@@ -2532,6 +2555,15 @@ GetRTEListProperties(List *rangeTableList)
 		else if (IsCitusTableTypeCacheEntry(cacheEntry, DISTRIBUTED_TABLE))
 		{
 			rteListProperties->hasDistributedTable = true;
+
+			if (!HasDistributionKeyCacheEntry(cacheEntry))
+			{
+				rteListProperties->hasDistTableWithoutShardKey = true;
+			}
+			else
+			{
+				rteListProperties->hasDistTableWithShardKey = true;
+			}
 		}
 		else
 		{
