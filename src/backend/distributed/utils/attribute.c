@@ -218,7 +218,7 @@ AttributeQueryIfAnnotated(const char *query_string, CmdType commandType)
 			}
 
 			int colocationId = ExtractFieldInt32(jsonbDatum, "cId",
-												  0);
+												  INVALID_COLOCATION_ID);
 
 			AttributeTask(tenantId, colocationId, commandType);
 		}
