@@ -3,6 +3,8 @@
 
 SET citus.next_shard_id TO 980000;
 
+CREATE SCHEMA upsert_test;
+SET search_path TO upsert_test;
 
 CREATE TABLE upsert_test
 (
@@ -207,3 +209,6 @@ INSERT INTO upsert_test (part_key, other_col) VALUES (1, 1) ON CONFLICT (part_ke
 -- error out on attempt to update the partition key
 INSERT INTO upsert_test (part_key, other_col) VALUES (1, 1) ON CONFLICT (part_key) DO
 	UPDATE SET part_key = 15;
+
+SET client_min_messages TO WARNING;
+DROP SCHEMA upsert_test CASCADE;

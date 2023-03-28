@@ -140,9 +140,6 @@ static void ErrorIfNoShardsExist(CitusTableCacheEntry *cacheEntry);
 static DeferredErrorMessage * DeferErrorIfModifyView(Query *queryTree);
 static Job * CreateJob(Query *query);
 static Task * CreateTask(TaskType taskType);
-static Job * RouterJob(Query *originalQuery,
-					   PlannerRestrictionContext *plannerRestrictionContext,
-					   DeferredErrorMessage **planningError);
 static bool RelationPrunesToMultipleShards(List *relationShardList);
 static void NormalizeMultiRowInsertTargetList(Query *query);
 static void AppendNextDummyColReference(Alias *expendedReferenceNames);
@@ -910,14 +907,10 @@ ModifyQuerySupported(Query *queryTree, Query *originalQuery, bool multiShardQuer
 					 PlannerRestrictionContext *plannerRestrictionContext)
 {
 	Oid distributedTableId = InvalidOid;
-	DeferredErrorMessage *error = MergeQuerySupported(originalQuery, multiShardQuery,
-													  plannerRestrictionContext);
-	if (error)
-	{
-		return error;
-	}
 
-	error = ModifyPartialQuerySupported(queryTree, multiShardQuery, &distributedTableId);
+	DeferredErrorMessage *error =
+		ModifyPartialQuerySupported(queryTree, multiShardQuery,
+									&distributedTableId);
 	if (error)
 	{
 		return error;
@@ -982,17 +975,10 @@ ModifyQuerySupported(Query *queryTree, Query *originalQuery, bool multiShardQuer
 			}
 			else if (rangeTableEntry->relkind == RELKIND_MATVIEW)
 			{
-				if (IsMergeAllowedOnRelation(originalQuery, rangeTableEntry))
-				{
-					continue;
-				}
-				else
-				{
-					return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-										 "materialized views in "
-										 "modify queries are not supported",
-										 NULL, NULL);
-				}
+				return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+									 "materialized views in "
+									 "modify queries are not supported",
+									 NULL, NULL);
 			}
 			/* for other kinds of relations, check if it's distributed */
 			else
@@ -1087,7 +1073,7 @@ ModifyQuerySupported(Query *queryTree, Query *originalQuery, bool multiShardQuer
 		}
 	}
 
-	if (commandType != CMD_INSERT && commandType != CMD_MERGE)
+	if (commandType != CMD_INSERT)
 	{
 		DeferredErrorMessage *errorMessage = NULL;
 
@@ -1825,7 +1811,7 @@ ExtractFirstCitusTableId(Query *query)
  * RouterJob builds a Job to represent a single shard select/update/delete and
  * multiple shard update/delete queries.
  */
-static Job *
+Job *
 RouterJob(Query *originalQuery, PlannerRestrictionContext *plannerRestrictionContext,
 		  DeferredErrorMessage **planningError)
 {
@@ -2349,9 +2335,20 @@ PlanRouterQuery(Query *originalQuery,
 		}
 
 		Assert(UpdateOrDeleteOrMergeQuery(originalQuery));
-		planningError = ModifyQuerySupported(originalQuery, originalQuery,
-											 isMultiShardQuery,
-											 plannerRestrictionContext);
+
+		if (IsMergeQuery(originalQuery))
+		{
+			planningError = MergeQuerySupported(originalQuery,
+												isMultiShardQuery,
+												plannerRestrictionContext);
+		}
+		else
+		{
+			planningError = ModifyQuerySupported(originalQuery, originalQuery,
+												 isMultiShardQuery,
+												 plannerRestrictionContext);
+		}
+
 		if (planningError != NULL)
 		{
 			return planningError;

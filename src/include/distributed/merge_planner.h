@@ -17,10 +17,15 @@
 #include "nodes/parsenodes.h"
 #include "distributed/distributed_planner.h"
 #include "distributed/errormessage.h"
+#include "distributed/multi_physical_planner.h"
 
 extern bool IsMergeAllowedOnRelation(Query *parse, RangeTblEntry *rte);
 extern DeferredErrorMessage * MergeQuerySupported(Query *originalQuery,
 												  bool multiShardQuery,
 												  PlannerRestrictionContext *
 												  plannerRestrictionContext);
+extern DistributedPlan * CreateMergePlan(Query *originalQuery, Query *query,
+										 PlannerRestrictionContext *
+										 plannerRestrictionContext);
+
 #endif /* MERGE_PLANNER_H */

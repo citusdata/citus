@@ -2,6 +2,11 @@
 -- MULTI_MX_COPY_DATA
 --
 
+-- We truncate them to make this test runnable multiple times.
+-- Note that we cannot do that at the end of the test because
+-- we need to keep the data for the other tests.
+TRUNCATE lineitem_mx, orders_mx;
+
 \set nation_data_file :abs_srcdir '/data/nation.data'
 \set client_side_copy_command '\\copy nation_hash FROM ' :'nation_data_file' ' with delimiter '''|''';'
 :client_side_copy_command
@@ -96,3 +101,5 @@ SET search_path TO public;
 :client_side_copy_command
 \set client_side_copy_command '\\copy supplier_mx FROM ' :'supplier_data_file' ' with delimiter '''|''';'
 :client_side_copy_command
+
+DROP TABLE citus_mx_test_schema.nation_hash_replicated;

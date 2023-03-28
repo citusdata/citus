@@ -3,6 +3,14 @@
 -- create, distribute, INSERT, SELECT and UPDATE
 -- ===================================================================
 SET citus.next_shard_id TO 530000;
+-- Given that other test files depend on the existence of types created in this file,
+-- we cannot drop them at the end. Instead, we drop them at the beginning of the test
+-- to make this file runnable multiple times via run_test.py.
+BEGIN;
+  SET LOCAL client_min_messages TO WARNING;
+  DROP TYPE IF EXISTS test_composite_type, other_composite_type, bug_status CASCADE;
+  DROP OPERATOR FAMILY IF EXISTS cats_op_fam USING hash;
+COMMIT;
 -- create a custom type...
 CREATE TYPE test_composite_type AS (
     i integer,

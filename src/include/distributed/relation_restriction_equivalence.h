@@ -54,5 +54,5 @@ extern RelationRestrictionContext * FilterRelationRestrictionContext(
 	RelationRestrictionContext *relationRestrictionContext,
 	Relids
 	queryRteIdentities);
-extern bool AllRelationsInRTEListColocated(List *rangeTableEntryList);
+extern bool AllDistributedRelationsInRTEListColocated(List *rangeTableEntryList);
 #endif /* RELATION_RESTRICTION_EQUIVALENCE_H */

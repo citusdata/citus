@@ -10,6 +10,9 @@ SET citus.next_shard_id TO 840000;
 -- other tests that triggers fast-path-router planner
 SET citus.enable_fast_path_router_planner TO false;
 
+CREATE SCHEMA multi_router_planner;
+SET search_path TO multi_router_planner;
+
 CREATE TABLE articles_hash (
 	id bigint NOT NULL,
 	author_id bigint NOT NULL,
@@ -1182,12 +1185,15 @@ SELECT create_distributed_table('failure_test', 'a', 'hash');
 
 SET citus.enable_ddl_propagation TO off;
 CREATE USER router_user;
-GRANT INSERT ON ALL TABLES IN SCHEMA public TO router_user;
+GRANT USAGE ON SCHEMA multi_router_planner TO router_user;
+GRANT INSERT ON ALL TABLES IN SCHEMA multi_router_planner TO router_user;
 \c - - - :worker_1_port
 SET citus.enable_ddl_propagation TO off;
 CREATE USER router_user;
-GRANT INSERT ON ALL TABLES IN SCHEMA public TO router_user;
+GRANT USAGE ON SCHEMA multi_router_planner TO router_user;
+GRANT INSERT ON ALL TABLES IN SCHEMA multi_router_planner TO router_user;
 \c - router_user - :master_port
+SET search_path TO multi_router_planner;
 -- we will fail to connect to worker 2, since the user does not exist
 -- still, we never mark placements inactive. Instead, fail the transaction
 BEGIN;
@@ -1199,29 +1205,13 @@ SELECT shardid, shardstate, nodename, nodeport FROM pg_dist_shard_placement
 		SELECT shardid FROM pg_dist_shard
 		WHERE logicalrelid = 'failure_test'::regclass
 	)
-	ORDER BY placementid;
+	ORDER BY shardid, nodeport;
 \c - postgres - :worker_1_port
 DROP OWNED BY router_user;
 DROP USER router_user;
 \c - - - :master_port
 DROP OWNED BY router_user;
 DROP USER router_user;
-DROP TABLE failure_test;
 
-DROP FUNCTION author_articles_max_id();
-DROP FUNCTION author_articles_id_word_count();
-
-DROP MATERIALIZED VIEW mv_articles_hash_empty;
-DROP MATERIALIZED VIEW mv_articles_hash_data;
-
-DROP VIEW num_db;
-DROP FUNCTION number1();
-
-DROP TABLE articles_hash;
-DROP TABLE articles_single_shard_hash;
-DROP TABLE authors_hash;
-DROP TABLE authors_range;
-DROP TABLE authors_reference;
-DROP TABLE company_employees;
-DROP TABLE articles_range;
-DROP TABLE articles_append;
+SET client_min_messages TO WARNING;
+DROP SCHEMA multi_router_planner CASCADE;

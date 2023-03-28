@@ -112,5 +112,8 @@ extern bool TargetEntryChangesValue(TargetEntry *targetEntry, Var *column,
 extern bool MasterIrreducibleExpression(Node *expression, bool *varArgument,
 										bool *badCoalesce);
 extern bool HasDangerousJoinUsing(List *rtableList, Node *jtnode);
+extern Job * RouterJob(Query *originalQuery,
+					   PlannerRestrictionContext *plannerRestrictionContext,
+					   DeferredErrorMessage **planningError);
 
 #endif /* MULTI_ROUTER_PLANNER_H */

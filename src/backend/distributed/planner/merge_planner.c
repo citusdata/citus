@@ -55,6 +55,55 @@ static DeferredErrorMessage * MergeQualAndTargetListFunctionsSupported(Oid
 
 
 /*
+ * CreateMergePlan attempts to create a plan for the given MERGE SQL
+ * statement. If planning fails ->planningError is set to a description
+ * of the failure.
+ */
+DistributedPlan *
+CreateMergePlan(Query *originalQuery, Query *query,
+				PlannerRestrictionContext *plannerRestrictionContext)
+{
+	DistributedPlan *distributedPlan = CitusMakeNode(DistributedPlan);
+	bool multiShardQuery = false;
+
+	Assert(originalQuery->commandType == CMD_MERGE);
+
+	distributedPlan->modLevel = RowModifyLevelForQuery(query);
+
+	distributedPlan->planningError = MergeQuerySupported(originalQuery,
+														 multiShardQuery,
+														 plannerRestrictionContext);
+
+	if (distributedPlan->planningError != NULL)
+	{
+		return distributedPlan;
+	}
+
+	Job *job = RouterJob(originalQuery, plannerRestrictionContext,
+						 &distributedPlan->planningError);
+
+	if (distributedPlan->planningError != NULL)
+	{
+		return distributedPlan;
+	}
+
+	ereport(DEBUG1, (errmsg("Creating MERGE router plan")));
+
+	distributedPlan->workerJob = job;
+	distributedPlan->combineQuery = NULL;
+
+	/* MERGE doesn't support RETURNING clause */
+	distributedPlan->expectResults = false;
+	distributedPlan->targetRelationId = ResultRelationOidForQuery(query);
+
+	distributedPlan->fastPathRouterPlan =
+		plannerRestrictionContext->fastPathRestrictionContext->fastPathRouterQuery;
+
+	return distributedPlan;
+}
+
+
+/*
  * MergeQuerySupported does check for a MERGE command in the query, if it finds
  * one, it will verify the below criteria
  * - Supported tables and combinations in ErrorIfMergeHasUnsupportedTables
@@ -71,12 +120,6 @@ MergeQuerySupported(Query *originalQuery, bool multiShardQuery,
 	return NULL;
 
 	#else
-
-	/* For non-MERGE commands it's a no-op */
-	if (!IsMergeQuery(originalQuery))
-	{
-		return NULL;
-	}
 
 	/*
 	 * TODO: For now, we are adding an exception where any volatile or stable
@@ -229,7 +272,7 @@ ErrorIfDistTablesNotColocated(Query *parse, List *distTablesList,
 	}
 
 	/* All distributed tables must be colocated */
-	if (!AllRelationsInRTEListColocated(distTablesList))
+	if (!AllDistributedRelationsInRTEListColocated(distTablesList))
 	{
 		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
 							 "For MERGE command, all the distributed tables "
@@ -578,12 +621,6 @@ MergeQualAndTargetListFunctionsSupported(Oid resultRelationId, FromExpr *joinTre
 	foreach(targetEntryCell, targetList)
 	{
 		TargetEntry *targetEntry = (TargetEntry *) lfirst(targetEntryCell);
-
-		/* skip resjunk entries: UPDATE adds some for ctid, etc. */
-		if (targetEntry->resjunk)
-		{
-			continue;
-		}
 
 		bool targetEntryDistributionColumn = false;
 		AttrNumber targetColumnAttrNumber = InvalidAttrNumber;
