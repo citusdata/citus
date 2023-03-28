@@ -162,7 +162,7 @@ distributed_planner(Query *parse,
 	{
 		AttributeQueryIfAnnotated(query_string, parse->commandType);
 	}
-	
+
 	List *rangeTableList = ExtractRangeTableEntryList(parse);
 
 	if (cursorOptions & CURSOR_OPT_FORCE_DISTRIBUTED)

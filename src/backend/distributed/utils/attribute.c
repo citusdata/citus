@@ -218,17 +218,19 @@ AttributeQueryIfAnnotated(const char *query_string, CmdType commandType)
 			}
 
 			int colocationId = ExtractFieldInt32(jsonbDatum, "cId",
-												  INVALID_COLOCATION_ID);
+												 INVALID_COLOCATION_ID);
 
 			AttributeTask(tenantId, colocationId, commandType);
 		}
 	}
 }
 
+
 /*
  * AttributeTask assigns the given attributes of a tenant and starts a timer
  */
-void AttributeTask(char *tenantId, int colocationId, CmdType commandType)
+void
+AttributeTask(char *tenantId, int colocationId, CmdType commandType)
 {
 	if (tenantId == NULL || colocationId == INVALID_COLOCATION_ID)
 	{
@@ -242,13 +244,14 @@ void AttributeTask(char *tenantId, int colocationId, CmdType commandType)
 	if (MultiTenantMonitoringLogLevel != CITUS_LOG_LEVEL_OFF)
 	{
 		ereport(NOTICE, (errmsg(
-								"attributing query to tenant: %s, colocationGroupId: %d",
-								quote_literal_cstr(attributeToTenant),
-								colocationGroupId)));
+							 "attributing query to tenant: %s, colocationGroupId: %d",
+							 quote_literal_cstr(attributeToTenant),
+							 colocationGroupId)));
 	}
 
 	attributeToTenantStart = clock();
 }
+
 
 /*
  * AnnotateQuery annotates the query with tenant attributes.
