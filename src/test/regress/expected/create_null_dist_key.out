@@ -1796,6 +1796,7 @@ ALTER TABLE trigger_table_3 ENABLE TRIGGER ALL;
 -- try a few simple queries at least to make sure that we don't crash
 BEGIN;
   INSERT INTO nullkey_c1_t1 SELECT * FROM nullkey_c2_t1;
+ERROR:  cannot select from a non-colocated distributed table when inserting into a distributed table that does not have a shard key
 ROLLBACK;
 DROP TRIGGER IF EXISTS trigger_1 ON trigger_table_1;
 DROP TRIGGER trigger_2 ON trigger_table_2 CASCADE;
