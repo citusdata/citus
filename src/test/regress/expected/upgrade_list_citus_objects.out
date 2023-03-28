@@ -75,6 +75,7 @@ ORDER BY 1;
  function citus_internal_delete_shard_metadata(bigint)
  function citus_internal_global_blocked_processes()
  function citus_internal_local_blocked_processes()
+ function citus_internal_mark_node_not_synced(integer,integer)
  function citus_internal_update_placement_metadata(bigint,integer,integer)
  function citus_internal_update_relation_colocation(oid,integer)
  function citus_is_clock_after(cluster_clock,cluster_clock)
@@ -319,5 +320,5 @@ ORDER BY 1;
  view citus_stat_statements
  view pg_dist_shard_placement
  view time_partitions
-(311 rows)
+(312 rows)
 
