@@ -1460,3 +1460,7 @@ DEBUG:  query has a single distribution column value: 1
  51
 (6 rows)
 
+SET client_min_messages to WARNING;
+TRUNCATE articles_hash_mx, company_employees_mx, articles_single_shard_hash_mx;
+DROP MATERIALIZED VIEW mv_articles_hash_mx_error;
+DROP TABLE authors_hash_mx;

@@ -2304,7 +2304,7 @@ RegisterCitusConfigVariables(void)
 		NULL,
 		&CitusStatsTenantsLimit,
 		10, 1, 100,
-		PGC_USERSET,
+		PGC_POSTMASTER,
 		GUC_STANDARD,
 		NULL, NULL, NULL);
 
@@ -2313,7 +2313,7 @@ RegisterCitusConfigVariables(void)
 		gettext_noop("monitor period"),
 		NULL,
 		&CitusStatsTenantsPeriod,
-		60, 1, 60 * 60,
+		60, 1, 1000000000,
 		PGC_USERSET,
 		GUC_STANDARD,
 		NULL, NULL, NULL);

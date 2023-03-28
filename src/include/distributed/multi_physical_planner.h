@@ -556,6 +556,7 @@ extern bool BinaryOpExpression(Expr *clause, Node **leftOperand, Node **rightOpe
 /* helper functions */
 extern Var * MakeInt4Column(void);
 extern int CompareShardPlacements(const void *leftElement, const void *rightElement);
+extern int CompareGroupShardPlacements(const void *leftElement, const void *rightElement);
 extern bool ShardIntervalsOverlap(ShardInterval *firstInterval,
 								  ShardInterval *secondInterval);
 extern bool ShardIntervalsOverlapWithParams(Datum firstMin, Datum firstMax,

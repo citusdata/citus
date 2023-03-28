@@ -1536,7 +1536,7 @@ get_shard_id_for_distribution_column(PG_FUNCTION_ARGS)
 						errmsg("relation is not distributed")));
 	}
 
-	if (IsCitusTableType(relationId, CITUS_TABLE_WITH_NO_DIST_KEY))
+	if (!HasDistributionKey(relationId))
 	{
 		List *shardIntervalList = LoadShardIntervalList(relationId);
 		if (shardIntervalList == NIL)
@@ -1918,6 +1918,10 @@ ErrorIfNodeContainsNonRemovablePlacements(WorkerNode *workerNode)
 {
 	int32 groupId = workerNode->groupId;
 	List *shardPlacements = AllShardPlacementsOnNodeGroup(groupId);
+
+	/* sort the list to prevent regression tests getting flaky */
+	shardPlacements = SortList(shardPlacements, CompareGroupShardPlacements);
+
 	GroupShardPlacement *placement = NULL;
 	foreach_ptr(placement, shardPlacements)
 	{

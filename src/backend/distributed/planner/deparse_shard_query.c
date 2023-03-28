@@ -404,7 +404,8 @@ SetTaskQueryIfShouldLazyDeparse(Task *task, Query *query)
 		return;
 	}
 
-	SetTaskQueryString(task, DeparseTaskQuery(task, query));
+	SetTaskQueryString(task, AnnotateQuery(DeparseTaskQuery(task, query),
+										   task->partitionColumn, task->colocationId));
 }
 
 

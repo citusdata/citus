@@ -406,3 +406,6 @@ SELECT * FROM labs_mx WHERE id = 8;
 ---------------------------------------------------------------------
 (0 rows)
 
+TRUNCATE objects_mx, labs_mx, researchers_mx;
+DROP TRIGGER reject_bad_mx ON labs_mx_1220102;
+DROP FUNCTION reject_bad_mx;

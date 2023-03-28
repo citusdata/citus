@@ -54,10 +54,11 @@
 bool EnableFastPathRouterPlanner = true;
 
 static bool ColumnAppearsMultipleTimes(Node *quals, Var *distributionKey);
-static bool ConjunctionContainsColumnFilter(Node *node, Var *column,
-											Node **distributionKeyValue);
 static bool DistKeyInSimpleOpExpression(Expr *clause, Var *distColumn,
 										Node **distributionKeyValue);
+static bool ConjunctionContainsColumnFilter(Node *node,
+											Var *column,
+											Node **distributionKeyValue);
 
 
 /*

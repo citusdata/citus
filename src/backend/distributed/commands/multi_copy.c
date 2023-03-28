@@ -393,7 +393,7 @@ CitusCopyFrom(CopyStmt *copyStatement, QueryCompletion *completionTag)
 	if (IsCitusTableTypeCacheEntry(cacheEntry, HASH_DISTRIBUTED) ||
 		IsCitusTableTypeCacheEntry(cacheEntry, RANGE_DISTRIBUTED) ||
 		IsCitusTableTypeCacheEntry(cacheEntry, APPEND_DISTRIBUTED) ||
-		IsCitusTableTypeCacheEntry(cacheEntry, CITUS_TABLE_WITH_NO_DIST_KEY))
+		!HasDistributionKeyCacheEntry(cacheEntry))
 	{
 		CopyToExistingShards(copyStatement, completionTag);
 	}

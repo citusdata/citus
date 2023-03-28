@@ -657,3 +657,8 @@ INSERT INTO articles_hash_mx VALUES (51,  1, 'amateus', 1814);
 SELECT id
 	FROM articles_hash_mx
 	WHERE author_id = 1;
+
+SET client_min_messages to WARNING;
+TRUNCATE articles_hash_mx, company_employees_mx, articles_single_shard_hash_mx;
+DROP MATERIALIZED VIEW mv_articles_hash_mx_error;
+DROP TABLE authors_hash_mx;
