@@ -2051,6 +2051,118 @@ UPDATE SET val = dist_source.val
 WHEN NOT MATCHED THEN
 INSERT VALUES(dist_source.id, dist_source.val);
 
+-- test merge with null shard key tables
+
+CREATE SCHEMA query_null_dist_key;
+
+SET search_path TO query_null_dist_key;
+SET client_min_messages TO DEBUG2;
+
+CREATE TABLE nullkey_c1_t1(a int, b int);
+CREATE TABLE nullkey_c1_t2(a int, b int);
+SELECT create_distributed_table('nullkey_c1_t1', null, colocate_with=>'none');
+SELECT create_distributed_table('nullkey_c1_t2', null, colocate_with=>'nullkey_c1_t1');
+
+CREATE TABLE nullkey_c2_t1(a int, b int);
+CREATE TABLE nullkey_c2_t2(a int, b int);
+SELECT create_distributed_table('nullkey_c2_t1', null, colocate_with=>'none');
+SELECT create_distributed_table('nullkey_c2_t2', null, colocate_with=>'nullkey_c2_t1', distribution_type=>null);
+
+CREATE TABLE reference_table(a int, b int);
+SELECT create_reference_table('reference_table');
+INSERT INTO reference_table SELECT i, i FROM generate_series(0, 5) i;
+
+CREATE TABLE distributed_table(a int, b int);
+SELECT create_distributed_table('distributed_table', 'a');
+INSERT INTO distributed_table SELECT i, i FROM generate_series(3, 8) i;
+
+CREATE TABLE citus_local_table(a int, b int);
+SELECT citus_add_local_table_to_metadata('citus_local_table');
+INSERT INTO citus_local_table SELECT i, i FROM generate_series(0, 10) i;
+
+CREATE TABLE postgres_local_table(a int, b int);
+INSERT INTO postgres_local_table SELECT i, i FROM generate_series(5, 10) i;
+
+-- with a colocated table
+MERGE INTO nullkey_c1_t1 USING nullkey_c1_t2 ON (nullkey_c1_t1.a = nullkey_c1_t2.a)
+WHEN MATCHED THEN UPDATE SET b = nullkey_c1_t2.b;
+
+MERGE INTO nullkey_c1_t1 USING nullkey_c1_t2 ON (nullkey_c1_t1.a = nullkey_c1_t2.a)
+WHEN MATCHED THEN DELETE;
+
+MERGE INTO nullkey_c1_t1 USING nullkey_c1_t2 ON (nullkey_c1_t1.a = nullkey_c1_t2.a)
+WHEN MATCHED THEN UPDATE SET b = nullkey_c1_t2.b
+WHEN NOT MATCHED THEN INSERT VALUES (nullkey_c1_t2.a, nullkey_c1_t2.b);
+
+MERGE INTO nullkey_c1_t1 USING nullkey_c1_t2 ON (nullkey_c1_t1.a = nullkey_c1_t2.a)
+WHEN MATCHED THEN DELETE
+WHEN NOT MATCHED THEN INSERT VALUES (nullkey_c1_t2.a, nullkey_c1_t2.b);
+
+-- with non-colocated null-dist-key table
+MERGE INTO nullkey_c1_t1 USING nullkey_c2_t1 ON (nullkey_c1_t1.a = nullkey_c2_t1.a)
+WHEN MATCHED THEN UPDATE SET b = nullkey_c2_t1.b;
+
+MERGE INTO nullkey_c1_t1 USING nullkey_c2_t1 ON (nullkey_c1_t1.a = nullkey_c2_t1.a)
+WHEN MATCHED THEN UPDATE SET b = nullkey_c2_t1.b
+WHEN NOT MATCHED THEN INSERT VALUES (nullkey_c2_t1.a, nullkey_c2_t1.b);
+
+-- with a distributed table
+MERGE INTO nullkey_c1_t1 USING distributed_table ON (nullkey_c1_t1.a = distributed_table.a)
+WHEN MATCHED THEN UPDATE SET b = distributed_table.b
+WHEN NOT MATCHED THEN INSERT VALUES (distributed_table.a, distributed_table.b);
+
+MERGE INTO distributed_table USING nullkey_c1_t1 ON (nullkey_c1_t1.a = distributed_table.a)
+WHEN MATCHED THEN DELETE
+WHEN NOT MATCHED THEN INSERT VALUES (nullkey_c1_t1.a, nullkey_c1_t1.b);
+
+-- with a reference table
+MERGE INTO nullkey_c1_t1 USING reference_table ON (nullkey_c1_t1.a = reference_table.a)
+WHEN MATCHED THEN UPDATE SET b = reference_table.b;
+
+MERGE INTO reference_table USING nullkey_c1_t1 ON (nullkey_c1_t1.a = reference_table.a)
+WHEN MATCHED THEN UPDATE SET b = nullkey_c1_t1.b
+WHEN NOT MATCHED THEN INSERT VALUES (nullkey_c1_t1.a, nullkey_c1_t1.b);
+
+-- with a citus local table
+MERGE INTO nullkey_c1_t1 USING citus_local_table ON (nullkey_c1_t1.a = citus_local_table.a)
+WHEN MATCHED THEN UPDATE SET b = citus_local_table.b;
+
+MERGE INTO citus_local_table USING nullkey_c1_t1 ON (nullkey_c1_t1.a = citus_local_table.a)
+WHEN MATCHED THEN DELETE;
+
+-- with a postgres table
+MERGE INTO nullkey_c1_t1 USING postgres_local_table ON (nullkey_c1_t1.a = postgres_local_table.a)
+WHEN MATCHED THEN UPDATE SET b = postgres_local_table.b;
+
+MERGE INTO postgres_local_table USING nullkey_c1_t1 ON (nullkey_c1_t1.a = postgres_local_table.a)
+WHEN MATCHED THEN UPDATE SET b = nullkey_c1_t1.b
+WHEN NOT MATCHED THEN INSERT VALUES (nullkey_c1_t1.a, nullkey_c1_t1.b);
+
+-- using ctes
+WITH cte AS (
+    SELECT * FROM nullkey_c1_t1
+)
+MERGE INTO nullkey_c1_t1 USING cte ON (nullkey_c1_t1.a = cte.a)
+WHEN MATCHED THEN UPDATE SET b = cte.b;
+
+WITH cte AS (
+    SELECT * FROM distributed_table
+)
+MERGE INTO nullkey_c1_t1 USING cte ON (nullkey_c1_t1.a = cte.a)
+WHEN MATCHED THEN UPDATE SET b = cte.b;
+
+WITH cte AS materialized (
+    SELECT * FROM distributed_table
+)
+MERGE INTO nullkey_c1_t1 USING cte ON (nullkey_c1_t1.a = cte.a)
+WHEN MATCHED THEN UPDATE SET b = cte.b;
+
+SET client_min_messages TO WARNING;
+DROP SCHEMA query_null_dist_key CASCADE;
+
+RESET client_min_messages;
+SET search_path TO merge_schema;
+
 DROP SERVER foreign_server CASCADE;
 DROP FUNCTION merge_when_and_write();
 DROP SCHEMA merge_schema CASCADE;

@@ -259,6 +259,22 @@ CreateModifyPlan(Query *originalQuery, Query *query,
 
 
 /*
+ * WrapRouterErrorForNullDistKeyTable wraps given planning error with a
+ * generic error message if given query references a distributed table
+ * that doesn't have a distribution key.
+ */
+void
+WrapRouterErrorForNullDistKeyTable(DeferredErrorMessage *planningError)
+{
+	planningError->detail = planningError->message;
+	planningError->message = pstrdup("queries that reference a distributed "
+									 "table without a shard key can only "
+									 "reference colocated distributed "
+									 "tables or reference tables");
+}
+
+
+/*
  * CreateSingleTaskRouterSelectPlan creates a physical plan for given SELECT query.
  * The returned plan is a router task that returns query results from a single worker.
  * If not router plannable, the returned plan's planningError describes the problem.
@@ -1870,6 +1886,11 @@ RouterJob(Query *originalQuery, PlannerRestrictionContext *plannerRestrictionCon
 		 */
 		if (IsMergeQuery(originalQuery))
 		{
+			if (ContainsNullDistKeyTable(originalQuery))
+			{
+				WrapRouterErrorForNullDistKeyTable(*planningError);
+			}
+
 			RaiseDeferredError(*planningError, ERROR);
 		}
 		else
@@ -3855,7 +3876,8 @@ ErrorIfQueryHasUnroutableModifyingCTE(Query *queryTree)
 			CitusTableCacheEntry *modificationTableCacheEntry =
 				GetCitusTableCacheEntry(distributedTableId);
 
-			if (!HasDistributionKeyCacheEntry(modificationTableCacheEntry))
+			if (!IsCitusTableTypeCacheEntry(modificationTableCacheEntry,
+											DISTRIBUTED_TABLE))
 			{
 				return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
 									 "cannot router plan modification of a non-distributed table",

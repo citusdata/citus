@@ -57,6 +57,7 @@ static DistributedPlan * CreateInsertSelectPlanInternal(uint64 planId,
 														PlannerRestrictionContext *
 														plannerRestrictionContext,
 														ParamListInfo boundParams);
+static void ErrorIfInsertSelectWithNullDistKeyNotSupported(Query *originalQuery);
 static DistributedPlan * CreateDistributedInsertSelectPlan(Query *originalQuery,
 														   PlannerRestrictionContext *
 														   plannerRestrictionContext);
@@ -241,6 +242,12 @@ CreateInsertSelectPlanInternal(uint64 planId, Query *originalQuery,
 		RaiseDeferredError(deferredError, ERROR);
 	}
 
+	/*
+	 * We support a limited set of INSERT .. SELECT queries if the query
+	 * references a null-dist-key table.
+	 */
+	ErrorIfInsertSelectWithNullDistKeyNotSupported(originalQuery);
+
 	DistributedPlan *distributedPlan = CreateDistributedInsertSelectPlan(originalQuery,
 																		 plannerRestrictionContext);
 
@@ -257,6 +264,74 @@ CreateInsertSelectPlanInternal(uint64 planId, Query *originalQuery,
 	}
 
 	return distributedPlan;
+}
+
+
+/*
+ * ErrorIfInsertSelectWithNullDistKeyNotSupported throws an error if given INSERT
+ * .. SELECT query references a null-dist-key table (as the target table or in
+ * the SELECT clause) and is unsupported.
+ *
+ * Such an INSERT .. SELECT query is supported as long as the it only references
+ * a "colocated" set of null-dist-key tables, no other relation rte types.
+ */
+static void
+ErrorIfInsertSelectWithNullDistKeyNotSupported(Query *originalQuery)
+{
+	RangeTblEntry *subqueryRte = ExtractSelectRangeTableEntry(originalQuery);
+	Query *subquery = subqueryRte->subquery;
+	RTEListProperties *subqueryRteListProperties = GetRTEListPropertiesForQuery(subquery);
+
+	RangeTblEntry *insertRte = ExtractResultRelationRTEOrError(originalQuery);
+	Oid targetRelationId = insertRte->relid;
+	if (!IsCitusTableType(targetRelationId, NULL_KEY_DISTRIBUTED_TABLE) &&
+		subqueryRteListProperties->hasDistTableWithoutShardKey)
+	{
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("cannot select from a distributed table that "
+							   "does not have a shard key when inserting into "
+							   "a different table type")));
+	}
+	else if (IsCitusTableType(targetRelationId, NULL_KEY_DISTRIBUTED_TABLE))
+	{
+		if (subqueryRteListProperties->hasPostgresLocalTable ||
+			subqueryRteListProperties->hasReferenceTable ||
+			subqueryRteListProperties->hasCitusLocalTable ||
+			subqueryRteListProperties->hasDistTableWithShardKey ||
+			subqueryRteListProperties->hasMaterializedView)
+		{
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("cannot select from different table types "
+								   "when inserting into a distributed table "
+								   "that does not have a shard key")));
+		}
+
+		if (!subqueryRteListProperties->hasDistTableWithoutShardKey)
+		{
+			/*
+			 * This means that the SELECT doesn't reference any Citus tables,
+			 * Postgres tables or materialized views but references a function
+			 * call, a values claue etc., or a cte from INSERT.
+			 *
+			 * In that case, we rely on the common restrictions enforced by the
+			 * INSERT .. SELECT planners.
+			 */
+			Assert(!NeedsDistributedPlanning(subquery));
+			return;
+		}
+
+		List *distributedRelationIdList = DistributedRelationIdList(subquery);
+		distributedRelationIdList = lappend_oid(distributedRelationIdList,
+												targetRelationId);
+
+		if (!AllDistributedRelationsInListColocated(distributedRelationIdList))
+		{
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("cannot select from a non-colocated distributed "
+								   "table when inserting into a distributed table "
+								   "that does not have a shard key")));
+		}
+	}
 }
 
 
@@ -378,6 +453,16 @@ CreateInsertSelectIntoLocalTablePlan(uint64 planId, Query *insertSelectQuery,
 									 PlannerRestrictionContext *plannerRestrictionContext)
 {
 	RangeTblEntry *selectRte = ExtractSelectRangeTableEntry(insertSelectQuery);
+
+	RTEListProperties *selectRteListProperties =
+		GetRTEListPropertiesForQuery(selectRte->subquery);
+	if (selectRteListProperties->hasDistTableWithoutShardKey)
+	{
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("cannot select from a distributed table that "
+							   "does not have a shard key when inserting into "
+							   "a local table")));
+	}
 
 	PrepareInsertSelectForCitusPlanner(insertSelectQuery);
 
@@ -717,10 +802,7 @@ DistributedInsertSelectSupported(Query *queryTree, RangeTblEntry *insertRte,
 	}
 	else if (IsCitusTableType(targetRelationId, NULL_KEY_DISTRIBUTED_TABLE))
 	{
-		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-							 "distributed INSERT ... SELECT cannot target a distributed "
-							 "table with a null shard key",
-							 NULL, NULL);
+		/* we've already checked the subquery via ErrorIfInsertSelectWithNullDistKeyNotSupported */
 	}
 	else
 	{
@@ -874,7 +956,7 @@ RouterModifyTaskForShardInterval(Query *originalQuery,
 	 */
 	RTEListProperties *subqueryRteListProperties = GetRTEListPropertiesForQuery(
 		copiedSubquery);
-	if (subqueryRteListProperties->hasDistributedTable)
+	if (subqueryRteListProperties->hasDistTableWithShardKey)
 	{
 		AddPartitionKeyNotNullFilterToSelect(copiedSubquery);
 	}
