@@ -114,6 +114,7 @@ typedef struct WalkerState
 } WalkerState;
 
 bool EnableRouterExecution = true;
+bool EnableNonColocatedRouterQueryPushdown = false;
 
 
 /* planner functions forward declarations */
@@ -3615,6 +3616,8 @@ DeferErrorIfUnsupportedRouterPlannableSelectQuery(Query *query)
 	bool hasDistributedTable = false;
 	bool hasReferenceTable = false;
 
+	List *distributedRelationList = NIL;
+
 	ExtractRangeTableRelationWalker((Node *) query, &rangeTableRelationList);
 	foreach(rangeTableRelationCell, rangeTableRelationList)
 	{
@@ -3652,6 +3655,8 @@ DeferErrorIfUnsupportedRouterPlannableSelectQuery(Query *query)
 			if (IsCitusTableType(distributedTableId, DISTRIBUTED_TABLE))
 			{
 				hasDistributedTable = true;
+				distributedRelationList = lappend_oid(distributedRelationList,
+													  distributedTableId);
 			}
 
 			/*
@@ -3703,6 +3708,15 @@ DeferErrorIfUnsupportedRouterPlannableSelectQuery(Query *query)
 	{
 		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
 							 "Local tables cannot be used in distributed queries.",
+							 NULL, NULL);
+	}
+
+	if (!EnableNonColocatedRouterQueryPushdown &&
+		!AllDistributedRelationsInListColocated(distributedRelationList))
+	{
+		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+							 "router planner does not support queries that "
+							 "reference non-colocated distributed tables",
 							 NULL, NULL);
 	}
 
