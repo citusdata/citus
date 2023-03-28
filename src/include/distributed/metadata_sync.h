@@ -18,9 +18,30 @@
 #include "distributed/metadata_cache.h"
 #include "nodes/pg_list.h"
 
+/* managed via guc.c */
+typedef enum
+{
+	METADATA_SYNC_TRANSACTIONAL = 0,
+	METADATA_SYNC_NON_TRANSACTIONAL = 1
+} MetadataSyncTransactionMode;
+
 /* config variables */
 extern int MetadataSyncInterval;
 extern int MetadataSyncRetryInterval;
+extern int MetadataSyncTransMode;
+
+/*
+ * MetadataSyncContext is used throughout metadata sync.
+ */
+typedef struct MetadataSyncContext
+{
+	List *activatedWorkerNodeList; /* activated worker nodes */
+	List *activatedWorkerConnections; /* connections to activated worker nodes */
+	MemoryContext context; /* memory context for all allocations */
+	MetadataSyncTransactionMode transactionMode; /* transaction mode for the sync */
+	bool collectCommands; /* flag to collect commands instead of sending and resetting */
+	List *collectedCommands; /* collected commands. (NIL if collectCommands == false) */
+} MetadataSyncContext;
 
 typedef enum
 {
@@ -115,6 +136,22 @@ extern void SyncNewColocationGroupToNodes(uint32 colocationId, int shardCount,
 										  Oid distributionColumType,
 										  Oid distributionColumnCollation);
 extern void SyncDeleteColocationGroupToNodes(uint32 colocationId);
+
+extern MetadataSyncContext * CreateMetadataSyncContext(List *nodeList, bool testMode);
+extern void DestroyMetadataSyncContext(MetadataSyncContext *context);
+extern void EstablishAndSetMetadataSyncBareConnections(MetadataSyncContext *context);
+extern void EstablishAndSetMetadataSyncCoordinatedConnections(
+	MetadataSyncContext *context);
+extern void SetMetadataSyncNodesFromNodeList(MetadataSyncContext *context,
+											 List *nodeList);
+extern void ResetMetadataSyncMemoryContext(MetadataSyncContext *context);
+extern bool MetadataSyncCollectsCommands(MetadataSyncContext *context);
+extern void SendOrCollectCommandListToActivatedNodes(MetadataSyncContext *context,
+													 List *commands);
+extern void SendOrCollectCommandListToMetadataNodes(MetadataSyncContext *context,
+													List *commands);
+extern void SendOrCollectCommandListToSingleNode(MetadataSyncContext *context,
+												 List *commands, int nodeIdx);
 
 #define DELETE_ALL_NODES "DELETE FROM pg_dist_node"
 #define DELETE_ALL_PLACEMENTS "DELETE FROM pg_dist_placement"

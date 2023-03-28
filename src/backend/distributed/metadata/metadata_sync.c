@@ -90,6 +90,7 @@
 
 /* managed via a GUC */
 char *EnableManualMetadataChangesForUser = "";
+int MetadataSyncTransMode = METADATA_SYNC_TRANSACTIONAL;
 
 
 static void EnsureObjectMetadataIsSane(int distributionArgumentIndex,
@@ -4156,4 +4157,331 @@ ColocationGroupCreateCommandList(void)
 					 " = c.collnamespace)");
 
 	return list_make1(colocationGroupCreateCommand->data);
+}
+
+
+/*
+ * SetMetadataSyncNodesFromNodeList sets list of nodes that needs to be metadata
+ * synced among given node list into metadataSyncContext.
+ */
+void
+SetMetadataSyncNodesFromNodeList(MetadataSyncContext *context, List *nodeList)
+{
+	List *activatedWorkerNodeList = NIL;
+
+	WorkerNode *node = NULL;
+	foreach_ptr(node, nodeList)
+	{
+		if (EnableMetadataSync && NodeIsPrimary(node))
+		{
+			/* warn if we have coordinator in nodelist */
+			if (NodeIsCoordinator(node))
+			{
+				ereport(NOTICE, (errmsg("%s:%d is the coordinator and already contains "
+										"metadata, skipping syncing the metadata",
+										node->workerName, node->workerPort)));
+				continue;
+			}
+
+			activatedWorkerNodeList = lappend(activatedWorkerNodeList, node);
+		}
+	}
+
+	context->activatedWorkerNodeList = activatedWorkerNodeList;
+}
+
+
+/*
+ * EstablishAndSetMetadataSyncBareConnections establishes and sets
+ * connections used throughout nontransactional metadata sync.
+ */
+void
+EstablishAndSetMetadataSyncBareConnections(MetadataSyncContext *context)
+{
+	Assert(MetadataSyncTransMode == METADATA_SYNC_NON_TRANSACTIONAL);
+
+	int connectionFlags = REQUIRE_METADATA_CONNECTION;
+
+	/* establish bare connections to activated worker nodes */
+	List *bareConnectionList = NIL;
+	WorkerNode *node = NULL;
+	foreach_ptr(node, context->activatedWorkerNodeList)
+	{
+		MultiConnection *connection = GetNodeUserDatabaseConnection(connectionFlags,
+																	node->workerName,
+																	node->workerPort,
+																	CurrentUserName(),
+																	NULL);
+
+		Assert(connection != NULL);
+		bareConnectionList = lappend(bareConnectionList, connection);
+	}
+
+	context->activatedWorkerConnections = bareConnectionList;
+}
+
+
+/*
+ * EstablishAndSetMetadataSyncCoordinatedConnections establishes and sets
+ * connections used throughout transactional metadata sync.
+ */
+void
+EstablishAndSetMetadataSyncCoordinatedConnections(MetadataSyncContext *context)
+{
+	Assert(MetadataSyncTransMode == METADATA_SYNC_TRANSACTIONAL);
+
+	int connectionFlags = REQUIRE_METADATA_CONNECTION;
+
+	/* establish coordinated connections to activated worker nodes */
+	List *coordinatedConnectionList = NIL;
+	WorkerNode *node = NULL;
+	foreach_ptr(node, context->activatedWorkerNodeList)
+	{
+		MultiConnection *connection =
+			StartNodeConnection(connectionFlags, node->workerName, node->workerPort);
+
+		MarkRemoteTransactionCritical(connection);
+
+		Assert(connection != NULL);
+		coordinatedConnectionList = lappend(coordinatedConnectionList, connection);
+	}
+
+	context->activatedWorkerConnections = coordinatedConnectionList;
+}
+
+
+/*
+ * CreateMetadataSyncContext creates a context which contains worker connections
+ * and a MemoryContext to be used throughout the metadata sync.
+ *
+ * If we collect commands, connections will not be established as caller's intent
+ * is to collcet sync commands.
+ */
+MetadataSyncContext *
+CreateMetadataSyncContext(List *nodeList, bool collectCommands)
+{
+	/* should be alive during local transaction during the sync */
+	MemoryContext context = AllocSetContextCreate(TopTransactionContext,
+												  "metadata_sync_context",
+												  ALLOCSET_DEFAULT_SIZES);
+
+	MetadataSyncContext *metadataSyncContext = (MetadataSyncContext *) palloc0(
+		sizeof(MetadataSyncContext));
+
+	metadataSyncContext->context = context;
+	metadataSyncContext->transactionMode = MetadataSyncTransMode;
+	metadataSyncContext->collectCommands = collectCommands;
+	metadataSyncContext->collectedCommands = NIL;
+
+	/* filter the nodes that needs to be activated from given node list */
+	SetMetadataSyncNodesFromNodeList(metadataSyncContext, nodeList);
+
+	/* establish connections */
+	if (!collectCommands && MetadataSyncTransMode == METADATA_SYNC_TRANSACTIONAL)
+	{
+		EstablishAndSetMetadataSyncCoordinatedConnections(metadataSyncContext);
+	}
+	else if (!collectCommands && MetadataSyncTransMode == METADATA_SYNC_NON_TRANSACTIONAL)
+	{
+		EstablishAndSetMetadataSyncBareConnections(metadataSyncContext);
+	}
+
+	/* use 2PC coordinated transactions if we operate in transactional mode */
+	if (MetadataSyncTransMode == METADATA_SYNC_TRANSACTIONAL)
+	{
+		Use2PCForCoordinatedTransaction();
+	}
+
+	return metadataSyncContext;
+}
+
+
+/*
+ * DestroyMetadataSyncContext destroys the memory context inside metadataSyncContext
+ * and also closes open connections if any.
+ */
+void
+DestroyMetadataSyncContext(MetadataSyncContext *context)
+{
+	/* close connections */
+	MultiConnection *connection = NULL;
+	foreach_ptr(connection, context->activatedWorkerBareConnections)
+	{
+		CloseConnection(connection);
+	}
+
+	/* delete memory context */
+	MemoryContextDelete(context->context);
+}
+
+
+/*
+ * ResetMetadataSyncMemoryContext resets memory context inside metadataSyncContext, if
+ * we are not collecting commands.
+ */
+void
+ResetMetadataSyncMemoryContext(MetadataSyncContext *context)
+{
+	if (!MetadataSyncCollectsCommands(context))
+	{
+		MemoryContextReset(context->context);
+	}
+}
+
+
+/*
+ * MetadataSyncCollectsCommands returns whether context is used for collecting
+ * commands instead of sending them to workers.
+ */
+bool
+MetadataSyncCollectsCommands(MetadataSyncContext *context)
+{
+	return context->collectCommands;
+}
+
+
+/*
+ * SendOrCollectCommandListToActivatedNodes sends the commands to the activated nodes with
+ * bare connections inside metadatacontext or via coordinated connections.
+ * Note that when context only collects commands, we add commands into the context
+ * without sending the commands.
+ */
+void
+SendOrCollectCommandListToActivatedNodes(MetadataSyncContext *context, List *commands)
+{
+	/* do nothing if no commands */
+	if (commands == NIL)
+	{
+		return;
+	}
+
+	/*
+	 * do not send any command to workers if we collect commands.
+	 * Collect commands into metadataSyncContext's collected command
+	 * list.
+	 */
+	if (MetadataSyncCollectsCommands(context))
+	{
+		context->collectedCommands = list_concat(context->collectedCommands,
+												 commands);
+		return;
+	}
+
+	/* send commands to new workers, the current user should be a superuser */
+	Assert(superuser());
+
+	if (context->transactionMode == METADATA_SYNC_TRANSACTIONAL)
+	{
+		List *workerNodes = context->activatedWorkerNodeList;
+		SendMetadataCommandListToWorkerListInCoordinatedTransaction(workerNodes,
+																	CurrentUserName(),
+																	commands);
+	}
+	else if (context->transactionMode == METADATA_SYNC_NON_TRANSACTIONAL)
+	{
+		List *workerConnections = context->activatedWorkerBareConnections;
+		SendCommandListToWorkerListWithBareConnections(workerConnections, commands);
+	}
+	else
+	{
+		pg_unreachable();
+	}
+}
+
+
+/*
+ * SendOrCollectCommandListToMetadataNodes sends the commands to the metadata nodes with
+ * bare connections inside metadatacontext or via coordinated connections.
+ * Note that when context only collects commands, we add commands into the context
+ * without sending the commands.
+ */
+void
+SendOrCollectCommandListToMetadataNodes(MetadataSyncContext *context, List *commands)
+{
+	/*
+	 * do not send any command to workers if we collcet commands.
+	 * Collect commands into metadataSyncContext's collected command
+	 * list.
+	 */
+	if (MetadataSyncCollectsCommands(context))
+	{
+		context->collectedCommands = list_concat(context->collectedCommands,
+												 commands);
+		return;
+	}
+
+	/* send commands to new workers, the current user should be a superuser */
+	Assert(superuser());
+
+	if (context->transactionMode == METADATA_SYNC_TRANSACTIONAL)
+	{
+		List *metadataNodes = TargetWorkerSetNodeList(NON_COORDINATOR_METADATA_NODES,
+													  RowShareLock);
+		SendMetadataCommandListToWorkerListInCoordinatedTransaction(metadataNodes,
+																	CurrentUserName(),
+																	commands);
+	}
+	else if (context->transactionMode == METADATA_SYNC_NON_TRANSACTIONAL)
+	{
+		SendBareCommandListToMetadataWorkers(commands);
+	}
+	else
+	{
+		pg_unreachable();
+	}
+}
+
+
+/*
+ * SendOrCollectCommandListToSingleNode sends the commands to the specific worker
+ * indexed by nodeIdx with bare connection inside metadatacontext or via coordinated
+ * connection. Note that when context only collects commands, we add commands into
+ * the context without sending the commands.
+ */
+void
+SendOrCollectCommandListToSingleNode(MetadataSyncContext *context, List *commands,
+									 int nodeIdx)
+{
+	/*
+	 * Do not send any command to workers if we collect commands.
+	 * Collect commands into metadataSyncContext's collected command
+	 * list.
+	 */
+	if (MetadataSyncCollectsCommands(context))
+	{
+		context->collectedCommands = list_concat(context->collectedCommands,
+												 commands);
+		return;
+	}
+
+	/* send commands to new workers, the current user should be a superuser */
+	Assert(superuser());
+
+	List *workerConnections = context->activatedWorkerConnections;
+	Assert(nodeIdx < list_length(workerConnections));
+	MultiConnection *workerConnection = list_nth(workerConnections, nodeIdx);
+
+	if (context->transactionMode == METADATA_SYNC_TRANSACTIONAL)
+	{
+		List *workerNodes = context->activatedWorkerNodeList;
+		Assert(nodeIdx < list_length(workerNodes));
+
+		WorkerNode *node = list_nth(workerNodes, nodeIdx);
+		SendMetadataCommandListToWorkerListInCoordinatedTransaction(list_make1(node),
+																	CurrentUserName(),
+																	commands);
+	}
+	else if (context->transactionMode == METADATA_SYNC_NON_TRANSACTIONAL)
+	{
+		List *workerConnections = context->activatedWorkerBareConnections;
+		Assert(nodeIdx < list_length(workerConnections));
+
+		MultiConnection *workerConnection = list_nth(workerConnections, nodeIdx);
+		List *connectionList = list_make1(workerConnection);
+		SendCommandListToWorkerListWithBareConnections(connectionList, commands);
+	}
+	else
+	{
+		pg_unreachable();
+	}
 }
