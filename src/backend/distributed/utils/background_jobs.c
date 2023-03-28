@@ -123,9 +123,6 @@ static volatile sig_atomic_t GotSigterm = false;
 static volatile sig_atomic_t GotSigint = false;
 static volatile sig_atomic_t GotSighup = false;
 
-/* HTAB of counters for parallel tasks per node */
-static HTAB *ParallelTasksPerNode = NULL;
-
 PG_FUNCTION_INFO_V1(citus_job_cancel);
 PG_FUNCTION_INFO_V1(citus_job_wait);
 PG_FUNCTION_INFO_V1(citus_task_wait);
@@ -859,7 +856,6 @@ TaskEnded(TaskExecutionContext *taskExecutionContext)
 	UNSET_NULLABLE_FIELD(task, pid);
 	task->message = handleEntry->message->data;
 
-	DecrementParallelTaskCountForNodesInvolved(task);
 	UpdateBackgroundTask(task);
 	UpdateDependingTasks(task);
 	UpdateBackgroundJob(task->jobid);
@@ -871,6 +867,7 @@ TaskEnded(TaskExecutionContext *taskExecutionContext)
 				HASH_REMOVE, NULL);
 	WaitForBackgroundWorkerShutdown(handleEntry->handle);
 	queueMonitorExecutionContext->currentExecutorCount--;
+	DecrementParallelTaskCountForNodesInvolved(task);
 }
 
 
@@ -1054,7 +1051,7 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 	/* handle SIGINT to properly cancel active task executors */
 	pqsignal(SIGINT, QueueMonitorSigIntHandler);
 
-	/* handle SIGHUP to update MaxBackgroundTaskExecutors */
+	/* handle SIGHUP to update MaxBackgroundTaskExecutors and MaxParallelTasksPerNode */
 	pqsignal(SIGHUP, QueueMonitorSigHupHandler);
 
 	/* ready to handle signals */
@@ -1198,7 +1195,7 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 		{
 			GotSighup = false;
 
-			/* update max_background_task_executors if changed */
+			/* update max_background_task_executors and max_parallel_tasks_per_node if changed */
 			ProcessConfigFile(PGC_SIGHUP);
 		}
 

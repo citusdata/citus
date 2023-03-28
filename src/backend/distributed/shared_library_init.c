@@ -1879,7 +1879,7 @@ RegisterCitusConfigVariables(void)
 		&MaxParallelTasksPerNode,
 		1, 1, MAX_PARALLEL_TASKS_PER_NODE,
 		PGC_SIGHUP,
-		GUC_NO_SHOW_ALL,
+		GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
