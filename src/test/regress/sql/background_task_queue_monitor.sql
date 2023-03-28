@@ -287,9 +287,9 @@ SELECT pg_reload_conf();
 BEGIN;
 SELECT nodeid AS worker_1_node FROM pg_dist_node WHERE nodeport=:worker_1_port \gset
 INSERT INTO pg_dist_background_job (job_type, description) VALUES ('test_job', 'simple test to verify max parallel moves per node') RETURNING job_id AS job_id1 \gset
-INSERT INTO pg_dist_background_task (job_id, command, nodes_involved) VALUES (:job_id1, $job$ SELECT pg_sleep(5); $job$, ARRAY [:worker_1_node]) RETURNING task_id AS task_id1 \gset
-INSERT INTO pg_dist_background_task (job_id, command, nodes_involved) VALUES (:job_id1, $job$ SELECT pg_sleep(5); $job$, ARRAY [:worker_1_node]) RETURNING task_id AS task_id2 \gset
-INSERT INTO pg_dist_background_task (job_id, command, nodes_involved) VALUES (:job_id1, $job$ SELECT pg_sleep(5); $job$, ARRAY [:worker_1_node]) RETURNING task_id AS task_id3 \gset
+INSERT INTO pg_dist_background_task (job_id, command, nodes_involved) VALUES (:job_id1, $job$ SELECT pg_sleep(3); $job$, ARRAY [:worker_1_node]) RETURNING task_id AS task_id1 \gset
+INSERT INTO pg_dist_background_task (job_id, command, nodes_involved) VALUES (:job_id1, $job$ SELECT pg_sleep(3); $job$, ARRAY [:worker_1_node]) RETURNING task_id AS task_id2 \gset
+INSERT INTO pg_dist_background_task (job_id, command, nodes_involved) VALUES (:job_id1, $job$ SELECT pg_sleep(3); $job$, ARRAY [:worker_1_node]) RETURNING task_id AS task_id3 \gset
 COMMIT;
 
 SELECT citus_task_wait(:task_id1, desired_status => 'running');
@@ -299,6 +299,55 @@ SELECT citus_task_wait(:task_id3, desired_status => 'runnable');
 SELECT job_id, task_id, status FROM pg_dist_background_task
     WHERE task_id IN (:task_id1, :task_id2, :task_id3)
     ORDER BY job_id, task_id; -- show that last task is not running but ready to run(runnable)
+
+SELECT citus_job_wait(:job_id1);
+
+-- TEST12
+-- verify that we can change citus.max_parallel_tasks_per_node on the fly
+
+-- set to 1 - default
+ALTER SYSTEM RESET citus.max_parallel_tasks_per_node;
+SELECT pg_reload_conf();
+
+BEGIN;
+SELECT nodeid AS worker_1_node FROM pg_dist_node WHERE nodeport=:worker_1_port \gset
+INSERT INTO pg_dist_background_job (job_type, description) VALUES ('test_job', 'simple test to verify changing max parallel moves per node on the fly') RETURNING job_id AS job_id1 \gset
+INSERT INTO pg_dist_background_task (job_id, command, nodes_involved) VALUES (:job_id1, $job$ SELECT pg_sleep(5); $job$, ARRAY [:worker_1_node]) RETURNING task_id AS task_id1 \gset
+INSERT INTO pg_dist_background_task (job_id, command, nodes_involved) VALUES (:job_id1, $job$ SELECT pg_sleep(5); $job$, ARRAY [:worker_1_node]) RETURNING task_id AS task_id2 \gset
+INSERT INTO pg_dist_background_task (job_id, command, nodes_involved) VALUES (:job_id1, $job$ SELECT pg_sleep(5); $job$, ARRAY [:worker_1_node]) RETURNING task_id AS task_id3 \gset
+INSERT INTO pg_dist_background_task (job_id, command, nodes_involved) VALUES (:job_id1, $job$ SELECT pg_sleep(5); $job$, ARRAY [:worker_1_node]) RETURNING task_id AS task_id4 \gset
+INSERT INTO pg_dist_background_task (job_id, command, nodes_involved) VALUES (:job_id1, $job$ SELECT pg_sleep(5); $job$, ARRAY [:worker_1_node]) RETURNING task_id AS task_id5 \gset
+COMMIT;
+
+SELECT citus_task_wait(:task_id1, desired_status => 'running');
+SELECT citus_task_wait(:task_id2, desired_status => 'runnable');
+
+SELECT job_id, task_id, status FROM pg_dist_background_task
+    WHERE task_id IN (:task_id1, :task_id2, :task_id3, :task_id4, :task_id5)
+    ORDER BY job_id, task_id; -- show that exactly 1 is running
+
+-- increase max_parallel_tasks_per_node on the fly
+ALTER SYSTEM SET citus.max_parallel_tasks_per_node = 2;
+SELECT pg_reload_conf();
+
+SELECT citus_task_wait(:task_id2, desired_status => 'running');
+SELECT citus_task_wait(:task_id3, desired_status => 'running');
+SELECT citus_task_wait(:task_id4, desired_status => 'runnable');
+
+SELECT job_id, task_id, status FROM pg_dist_background_task
+    WHERE task_id IN (:task_id1, :task_id2, :task_id3, :task_id4, :task_id5)
+    ORDER BY job_id, task_id; -- show that exactly two are running
+
+-- decrease (from 2 to default 1) max_parallel_tasks_per_node on the fly
+ALTER SYSTEM RESET citus.max_parallel_tasks_per_node;
+SELECT pg_reload_conf();
+
+SELECT citus_task_wait(:task_id4, desired_status => 'running');
+SELECT citus_task_wait(:task_id5, desired_status => 'runnable');
+
+SELECT job_id, task_id, status FROM pg_dist_background_task
+    WHERE task_id IN (:task_id1, :task_id2, :task_id3, :task_id4, :task_id5)
+    ORDER BY job_id, task_id; -- show that exactly one is running
 
 SELECT citus_job_wait(:job_id1);
 
