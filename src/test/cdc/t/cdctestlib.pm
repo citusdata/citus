@@ -207,7 +207,7 @@ sub create_cdc_publication_and_slots_for_coordinator {
         $node_coordinator->safe_psql('postgres',"DROP PUBLICATION IF EXISTS cdc_publication;");
     }
     $node_coordinator->safe_psql('postgres',"CREATE PUBLICATION cdc_publication FOR TABLE $table_names;");
-    $node_coordinator->safe_psql('postgres',"SELECT pg_catalog.pg_create_logical_replication_slot('cdc_replication_slot','citus',false,true)");
+    $node_coordinator->safe_psql('postgres',"SELECT pg_catalog.pg_create_logical_replication_slot('cdc_replication_slot','citus',false,false)");
 }
 
 sub create_cdc_publication_and_slots_for_workers {

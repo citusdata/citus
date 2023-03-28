@@ -2,7 +2,7 @@
 use strict;
 use warnings;
 
-use Test::More tests => 4;
+use Test::More;
 
 use lib './t';
 use cdctestlib;
@@ -124,3 +124,4 @@ $result = compare_tables_in_different_nodes($node_coordinator,$node_cdc_client,'
 is($result, 1, 'CDC create_distributed_table - delete data after schem change');
 
 drop_cdc_client_subscriptions($node_cdc_client,\@workers);
+done_testing();

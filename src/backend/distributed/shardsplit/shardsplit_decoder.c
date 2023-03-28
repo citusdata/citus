@@ -50,6 +50,15 @@ inline static bool IsShardSplitSlot(char *replicationSlotName);
 #define CITUS_SHARD_SLOT_PREFIX "citus_shard_"
 #define CITUS_SHARD_SLOT_PREFIX_SIZE (sizeof(CITUS_SHARD_SLOT_PREFIX) - 1)
 
+/* build time macro for base decoder plugin name for CDC and Shard Split. */
+#ifndef CDC_SHARD_SPLIT_BASE_DECODER_PLUGIN_NAME
+#define CDC_SHARD_SPLIT_BASE_DECODER_PLUGIN_NAME "pgoutput"
+#endif
+
+/* build time macro for base decoder plugin's  initialization function name for CDC and Shard Split. */
+#ifndef CDC_SHARD_SPLIT_BASE_DECODER_PLUGIN_INIT_FUNCTION_NAME
+#define CDC_SHARD_SPLIT_BASE_DECODER_PLUGIN_INIT_FUNCTION_NAME "_PG_output_plugin_init"
+#endif
 
 /*
  * Postgres uses 'pgoutput' as default plugin for logical replication.
@@ -61,8 +70,8 @@ _PG_output_plugin_init(OutputPluginCallbacks *cb)
 {
 	LogicalOutputPluginInit plugin_init =
 		(LogicalOutputPluginInit) (void *)
-		load_external_function("pgoutput",
-							   "_PG_output_plugin_init",
+		load_external_function(CDC_SHARD_SPLIT_BASE_DECODER_PLUGIN_NAME,
+							   CDC_SHARD_SPLIT_BASE_DECODER_PLUGIN_INIT_FUNCTION_NAME,
 							   false, NULL);
 
 	if (plugin_init == NULL)

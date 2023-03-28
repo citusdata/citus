@@ -2,7 +2,7 @@
 use strict;
 use warnings;
 
-use Test::More tests => 3;
+use Test::More;
 
 use lib './t';
 use cdctestlib;
@@ -92,3 +92,4 @@ is($result, 1, 'CDC basic test - distributed table insert data');
 
 drop_cdc_client_subscriptions($node_cdc_client,\@workers);
 
+done_testing();

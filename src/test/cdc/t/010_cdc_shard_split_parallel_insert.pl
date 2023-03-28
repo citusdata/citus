@@ -2,7 +2,7 @@
 use strict;
 use warnings;
 
-use Test::More tests => 3;
+use Test::More;
 
 use lib './t';
 use cdctestlib;
@@ -104,3 +104,4 @@ $result = compare_tables_in_different_nodes($node_coordinator,$node_cdc_client,'
 is($result, 1, 'CDC split test - distributed table split data');
 
 drop_cdc_client_subscriptions($node_cdc_client,\@workers);
+done_testing();
