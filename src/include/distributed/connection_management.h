@@ -312,6 +312,7 @@ extern void ShutdownConnection(MultiConnection *connection);
 /* dealing with a connection */
 extern void FinishConnectionListEstablishment(List *multiConnectionList);
 extern void FinishConnectionEstablishment(MultiConnection *connection);
+extern void ForceConnectionCloseAtTransactionEnd(MultiConnection *connection);
 extern void ClaimConnectionExclusively(MultiConnection *connection);
 extern void UnclaimConnection(MultiConnection *connection);
 extern void MarkConnectionConnected(MultiConnection *connection);

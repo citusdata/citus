@@ -1203,6 +1203,17 @@ FinishConnectionEstablishment(MultiConnection *connection)
 
 
 /*
+ * ForceConnectionCloseAtTransactionEnd marks connection to be closed at the end of the
+ * transaction.
+ */
+void
+ForceConnectionCloseAtTransactionEnd(MultiConnection *connection)
+{
+	connection->forceCloseAtTransactionEnd = true;
+}
+
+
+/*
  * ClaimConnectionExclusively signals that this connection is actively being
  * used. That means it'll not be, again, returned by
  * StartNodeUserDatabaseConnection() et al until releases with
