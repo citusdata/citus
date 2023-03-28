@@ -285,15 +285,14 @@ SELECT job_id, task_id, status FROM pg_dist_background_task
 ALTER SYSTEM SET citus.max_parallel_tasks_per_node = 2;
 SELECT pg_reload_conf();
 BEGIN;
-SELECT nodeid AS worker_1_node FROM pg_dist_node WHERE nodeport=:worker_1_port \gset
-SELECT nodeid AS worker_2_node FROM pg_dist_node WHERE nodeport=:worker_2_port \gset
+-- we use dummy node ids to avoid print differences
 INSERT INTO pg_dist_background_job (job_type, description) VALUES ('test_job', 'simple test to verify max parallel moves per node') RETURNING job_id AS job_id1 \gset
-INSERT INTO pg_dist_background_task (job_id, command, nodes_involved) VALUES (:job_id1, $job$ SELECT pg_sleep(2); $job$, ARRAY [:worker_1_node]) RETURNING task_id AS task_id1 \gset
-INSERT INTO pg_dist_background_task (job_id, command, nodes_involved) VALUES (:job_id1, $job$ SELECT pg_sleep(3); $job$, ARRAY [:worker_1_node, :worker_2_node]) RETURNING task_id AS task_id2 \gset
-INSERT INTO pg_dist_background_task (job_id, command, nodes_involved) VALUES (:job_id1, $job$ SELECT pg_sleep(4); $job$, ARRAY [:worker_2_node]) RETURNING task_id AS task_id3 \gset
-INSERT INTO pg_dist_background_task (job_id, command, nodes_involved) VALUES (:job_id1, $job$ SELECT pg_sleep(5); $job$, ARRAY [:worker_1_node]) RETURNING task_id AS task_id4 \gset
-INSERT INTO pg_dist_background_task (job_id, command, nodes_involved) VALUES (:job_id1, $job$ SELECT pg_sleep(5); $job$, ARRAY [:worker_2_node, :worker_1_node]) RETURNING task_id AS task_id5 \gset
-INSERT INTO pg_dist_background_task (job_id, command, nodes_involved) VALUES (:job_id1, $job$ SELECT pg_sleep(5); $job$, ARRAY [:worker_2_node]) RETURNING task_id AS task_id6 \gset
+INSERT INTO pg_dist_background_task (job_id, command, nodes_involved) VALUES (:job_id1, $job$ SELECT pg_sleep(2); $job$, ARRAY [1]) RETURNING task_id AS task_id1 \gset
+INSERT INTO pg_dist_background_task (job_id, command, nodes_involved) VALUES (:job_id1, $job$ SELECT pg_sleep(3); $job$, ARRAY [1, 2]) RETURNING task_id AS task_id2 \gset
+INSERT INTO pg_dist_background_task (job_id, command, nodes_involved) VALUES (:job_id1, $job$ SELECT pg_sleep(4); $job$, ARRAY [2]) RETURNING task_id AS task_id3 \gset
+INSERT INTO pg_dist_background_task (job_id, command, nodes_involved) VALUES (:job_id1, $job$ SELECT pg_sleep(5); $job$, ARRAY [1]) RETURNING task_id AS task_id4 \gset
+INSERT INTO pg_dist_background_task (job_id, command, nodes_involved) VALUES (:job_id1, $job$ SELECT pg_sleep(5); $job$, ARRAY [2, 1]) RETURNING task_id AS task_id5 \gset
+INSERT INTO pg_dist_background_task (job_id, command, nodes_involved) VALUES (:job_id1, $job$ SELECT pg_sleep(5); $job$, ARRAY [2]) RETURNING task_id AS task_id6 \gset
 COMMIT;
 
 SELECT citus_task_wait(:task_id1, desired_status => 'running');
