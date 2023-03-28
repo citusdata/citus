@@ -36,11 +36,12 @@ extern int MetadataSyncTransMode;
 typedef struct MetadataSyncContext
 {
 	List *activatedWorkerNodeList; /* activated worker nodes */
-	List *activatedWorkerBareConnections; /* bare connections to activated worker nodes */
+	List *activatedWorkerBareConnections; /* bare connections to activated nodes */
 	MemoryContext context; /* memory context for all allocations */
 	MetadataSyncTransactionMode transactionMode; /* transaction mode for the sync */
-	bool collectCommands; /* flag to collect commands instead of sending and resetting */
+	bool collectCommands; /* if we collect commands instead of sending and resetting */
 	List *collectedCommands; /* collected commands. (NIL if collectCommands == false) */
+	bool nodesAddedInSameTransaction; /* if the nodes are added just before activation */
 } MetadataSyncContext;
 
 typedef enum
@@ -135,7 +136,9 @@ extern void SyncNewColocationGroupToNodes(uint32 colocationId, int shardCount,
 										  Oid distributionColumnCollation);
 extern void SyncDeleteColocationGroupToNodes(uint32 colocationId);
 
-extern MetadataSyncContext * CreateMetadataSyncContext(List *nodeList, bool testMode);
+extern MetadataSyncContext * CreateMetadataSyncContext(List *nodeList,
+													   bool collectCommands,
+													   bool nodesAddedInSameTransaction);
 extern void DestroyMetadataSyncContext(MetadataSyncContext *context);
 extern void EstablishAndSetMetadataSyncBareConnections(MetadataSyncContext *context);
 extern void SetMetadataSyncNodesFromNodeList(MetadataSyncContext *context,
@@ -150,7 +153,6 @@ extern void SendOrCollectCommandListToSingleNode(MetadataSyncContext *context,
 												 List *commands, int nodeIdx);
 
 extern void ActivateNodeList(MetadataSyncContext *context);
-extern int ActivateNode(char *nodeName, int nodePort);
 
 extern char * WorkerDropAllShellTablesCommand(bool singleTransaction);
 
