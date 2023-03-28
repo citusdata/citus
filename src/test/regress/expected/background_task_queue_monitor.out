@@ -666,10 +666,14 @@ SELECT pg_reload_conf();
 
 BEGIN;
 SELECT nodeid AS worker_1_node FROM pg_dist_node WHERE nodeport=:worker_1_port \gset
+SELECT nodeid AS worker_2_node FROM pg_dist_node WHERE nodeport=:worker_2_port \gset
 INSERT INTO pg_dist_background_job (job_type, description) VALUES ('test_job', 'simple test to verify max parallel moves per node') RETURNING job_id AS job_id1 \gset
-INSERT INTO pg_dist_background_task (job_id, command, nodes_involved) VALUES (:job_id1, $job$ SELECT pg_sleep(3); $job$, ARRAY [:worker_1_node]) RETURNING task_id AS task_id1 \gset
-INSERT INTO pg_dist_background_task (job_id, command, nodes_involved) VALUES (:job_id1, $job$ SELECT pg_sleep(3); $job$, ARRAY [:worker_1_node]) RETURNING task_id AS task_id2 \gset
-INSERT INTO pg_dist_background_task (job_id, command, nodes_involved) VALUES (:job_id1, $job$ SELECT pg_sleep(3); $job$, ARRAY [:worker_1_node]) RETURNING task_id AS task_id3 \gset
+INSERT INTO pg_dist_background_task (job_id, command, nodes_involved) VALUES (:job_id1, $job$ SELECT pg_sleep(2); $job$, ARRAY [:worker_1_node]) RETURNING task_id AS task_id1 \gset
+INSERT INTO pg_dist_background_task (job_id, command, nodes_involved) VALUES (:job_id1, $job$ SELECT pg_sleep(3); $job$, ARRAY [:worker_1_node, :worker_2_node]) RETURNING task_id AS task_id2 \gset
+INSERT INTO pg_dist_background_task (job_id, command, nodes_involved) VALUES (:job_id1, $job$ SELECT pg_sleep(4); $job$, ARRAY [:worker_2_node]) RETURNING task_id AS task_id3 \gset
+INSERT INTO pg_dist_background_task (job_id, command, nodes_involved) VALUES (:job_id1, $job$ SELECT pg_sleep(5); $job$, ARRAY [:worker_1_node]) RETURNING task_id AS task_id4 \gset
+INSERT INTO pg_dist_background_task (job_id, command, nodes_involved) VALUES (:job_id1, $job$ SELECT pg_sleep(5); $job$, ARRAY [:worker_2_node, :worker_1_node]) RETURNING task_id AS task_id5 \gset
+INSERT INTO pg_dist_background_task (job_id, command, nodes_involved) VALUES (:job_id1, $job$ SELECT pg_sleep(5); $job$, ARRAY [:worker_2_node]) RETURNING task_id AS task_id6 \gset
 COMMIT;
 SELECT citus_task_wait(:task_id1, desired_status => 'running');
  citus_task_wait
@@ -683,21 +687,81 @@ SELECT citus_task_wait(:task_id2, desired_status => 'running');
 
 (1 row)
 
-SELECT citus_task_wait(:task_id3, desired_status => 'runnable');
+SELECT citus_task_wait(:task_id3, desired_status => 'running');
  citus_task_wait
 ---------------------------------------------------------------------
 
 (1 row)
 
-SELECT job_id, task_id, status FROM pg_dist_background_task
-    WHERE task_id IN (:task_id1, :task_id2, :task_id3)
-    ORDER BY job_id, task_id; -- show that last task is not running but ready to run(runnable)
- job_id  | task_id |  status
+SELECT task_id, status, nodes_involved FROM pg_dist_background_task
+    WHERE task_id IN (:task_id1, :task_id2, :task_id3, :task_id4, :task_id5, :task_id6)
+    ORDER BY task_id; -- show that there are at most 2 tasks running per node
+ task_id |  status  | nodes_involved
 ---------------------------------------------------------------------
- 1450017 | 1450025 | running
- 1450017 | 1450026 | running
- 1450017 | 1450027 | runnable
-(3 rows)
+ 1450025 | running  | {16}
+ 1450026 | running  | {16,18}
+ 1450027 | running  | {18}
+ 1450028 | runnable | {16}
+ 1450029 | runnable | {18,16}
+ 1450030 | runnable | {18}
+(6 rows)
+
+SELECT citus_task_wait(:task_id1, desired_status => 'done');
+ citus_task_wait
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT task_id, status, nodes_involved FROM pg_dist_background_task
+    WHERE task_id IN (:task_id1, :task_id2, :task_id3, :task_id4, :task_id5, :task_id6)
+    ORDER BY task_id; -- show that there are at most 2 tasks running per node
+ task_id |  status  | nodes_involved
+---------------------------------------------------------------------
+ 1450025 | done     | {16}
+ 1450026 | running  | {16,18}
+ 1450027 | running  | {18}
+ 1450028 | running  | {16}
+ 1450029 | runnable | {18,16}
+ 1450030 | runnable | {18}
+(6 rows)
+
+SELECT citus_task_wait(:task_id2, desired_status => 'done');
+ citus_task_wait
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT task_id, status, nodes_involved FROM pg_dist_background_task
+    WHERE task_id IN (:task_id1, :task_id2, :task_id3, :task_id4, :task_id5, :task_id6)
+    ORDER BY task_id; -- show that there are at most 2 tasks running per node
+ task_id |  status  | nodes_involved
+---------------------------------------------------------------------
+ 1450025 | done     | {16}
+ 1450026 | done     | {16,18}
+ 1450027 | running  | {18}
+ 1450028 | running  | {16}
+ 1450029 | running  | {18,16}
+ 1450030 | runnable | {18}
+(6 rows)
+
+SELECT citus_task_wait(:task_id3, desired_status => 'done');
+ citus_task_wait
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT task_id, status, nodes_involved FROM pg_dist_background_task
+    WHERE task_id IN (:task_id1, :task_id2, :task_id3, :task_id4, :task_id5, :task_id6)
+    ORDER BY task_id; -- show that there are at most 2 tasks running per node
+ task_id | status  | nodes_involved
+---------------------------------------------------------------------
+ 1450025 | done    | {16}
+ 1450026 | done    | {16,18}
+ 1450027 | done    | {18}
+ 1450028 | running | {16}
+ 1450029 | running | {18,16}
+ 1450030 | running | {18}
+(6 rows)
 
 SELECT citus_job_wait(:job_id1);
  citus_job_wait
@@ -718,11 +782,11 @@ SELECT pg_reload_conf();
 BEGIN;
 SELECT nodeid AS worker_1_node FROM pg_dist_node WHERE nodeport=:worker_1_port \gset
 INSERT INTO pg_dist_background_job (job_type, description) VALUES ('test_job', 'simple test to verify changing max parallel tasks per node on the fly') RETURNING job_id AS job_id1 \gset
-INSERT INTO pg_dist_background_task (job_id, command, nodes_involved) VALUES (:job_id1, $job$ SELECT pg_sleep(3); $job$, ARRAY [:worker_1_node]) RETURNING task_id AS task_id1 \gset
-INSERT INTO pg_dist_background_task (job_id, command, nodes_involved) VALUES (:job_id1, $job$ SELECT pg_sleep(3); $job$, ARRAY [:worker_1_node]) RETURNING task_id AS task_id2 \gset
-INSERT INTO pg_dist_background_task (job_id, command, nodes_involved) VALUES (:job_id1, $job$ SELECT pg_sleep(3); $job$, ARRAY [:worker_1_node]) RETURNING task_id AS task_id3 \gset
-INSERT INTO pg_dist_background_task (job_id, command, nodes_involved) VALUES (:job_id1, $job$ SELECT pg_sleep(3); $job$, ARRAY [:worker_1_node]) RETURNING task_id AS task_id4 \gset
-INSERT INTO pg_dist_background_task (job_id, command, nodes_involved) VALUES (:job_id1, $job$ SELECT pg_sleep(3); $job$, ARRAY [:worker_1_node]) RETURNING task_id AS task_id5 \gset
+INSERT INTO pg_dist_background_task (job_id, command, nodes_involved) VALUES (:job_id1, $job$ SELECT pg_sleep(5); $job$, ARRAY [:worker_1_node]) RETURNING task_id AS task_id1 \gset
+INSERT INTO pg_dist_background_task (job_id, command, nodes_involved) VALUES (:job_id1, $job$ SELECT pg_sleep(5); $job$, ARRAY [:worker_1_node]) RETURNING task_id AS task_id2 \gset
+INSERT INTO pg_dist_background_task (job_id, command, nodes_involved) VALUES (:job_id1, $job$ SELECT pg_sleep(5); $job$, ARRAY [:worker_1_node]) RETURNING task_id AS task_id3 \gset
+INSERT INTO pg_dist_background_task (job_id, command, nodes_involved) VALUES (:job_id1, $job$ SELECT pg_sleep(5); $job$, ARRAY [:worker_1_node]) RETURNING task_id AS task_id4 \gset
+INSERT INTO pg_dist_background_task (job_id, command, nodes_involved) VALUES (:job_id1, $job$ SELECT pg_sleep(5); $job$, ARRAY [:worker_1_node]) RETURNING task_id AS task_id5 \gset
 COMMIT;
 SELECT citus_task_wait(:task_id1, desired_status => 'running');
  citus_task_wait
@@ -741,11 +805,11 @@ SELECT job_id, task_id, status FROM pg_dist_background_task
     ORDER BY job_id, task_id; -- show that exactly 1 is running
  job_id  | task_id |  status
 ---------------------------------------------------------------------
- 1450018 | 1450028 | running
- 1450018 | 1450029 | runnable
- 1450018 | 1450030 | runnable
- 1450018 | 1450031 | runnable
+ 1450018 | 1450031 | running
  1450018 | 1450032 | runnable
+ 1450018 | 1450033 | runnable
+ 1450018 | 1450034 | runnable
+ 1450018 | 1450035 | runnable
 (5 rows)
 
 -- increase max_parallel_tasks_per_node on the fly
@@ -779,11 +843,11 @@ SELECT job_id, task_id, status FROM pg_dist_background_task
     ORDER BY job_id, task_id; -- show that exactly two are running
  job_id  | task_id |  status
 ---------------------------------------------------------------------
- 1450018 | 1450028 | done
- 1450018 | 1450029 | running
- 1450018 | 1450030 | running
- 1450018 | 1450031 | runnable
- 1450018 | 1450032 | runnable
+ 1450018 | 1450031 | done
+ 1450018 | 1450032 | running
+ 1450018 | 1450033 | running
+ 1450018 | 1450034 | runnable
+ 1450018 | 1450035 | runnable
 (5 rows)
 
 -- decrease (from 2 to default 1) max_parallel_tasks_per_node on the fly
@@ -811,11 +875,11 @@ SELECT job_id, task_id, status FROM pg_dist_background_task
     ORDER BY job_id, task_id; -- show that exactly one is running
  job_id  | task_id |  status
 ---------------------------------------------------------------------
- 1450018 | 1450028 | done
- 1450018 | 1450029 | done
- 1450018 | 1450030 | done
- 1450018 | 1450031 | running
- 1450018 | 1450032 | runnable
+ 1450018 | 1450031 | done
+ 1450018 | 1450032 | done
+ 1450018 | 1450033 | done
+ 1450018 | 1450034 | running
+ 1450018 | 1450035 | runnable
 (5 rows)
 
 SELECT citus_job_wait(:job_id1);
