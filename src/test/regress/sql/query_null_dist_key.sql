@@ -547,7 +547,7 @@ WITH level_0 AS (
     WITH RECURSIVE level_2_recursive(x) AS (
         VALUES (1)
       UNION ALL
-        SELECT a + 1 FROM nullkey_c1_t1 JOIN level_2_recursive ON (a = x) WHERE a < 100
+        SELECT a + 1 FROM nullkey_c1_t1 JOIN level_2_recursive ON (a = x) WHERE a < 2
     )
     SELECT * FROM level_2_recursive RIGHT JOIN reference_table ON (level_2_recursive.x = reference_table.a)
   )
@@ -800,19 +800,19 @@ INSERT INTO agg_events
 
 -- we still support complex joins via INSERT's cte list ..
 WITH cte AS (
-    SELECT reference_table.a AS a, 1 AS b
+    SELECT DISTINCT(reference_table.a) AS a, 1 AS b
     FROM distributed_table RIGHT JOIN reference_table USING (a)
 )
 INSERT INTO raw_events_second (user_id, value_1)
   SELECT (a+5)*-1, b FROM cte;
 
--- .. but can't do so via via SELECT's cte list
+-- .. and via SELECT's cte list too
 INSERT INTO raw_events_second (user_id, value_1)
 WITH cte AS (
-    SELECT reference_table.a AS a, 1 AS b
+    SELECT DISTINCT(reference_table.a) AS a, 1 AS b
     FROM distributed_table RIGHT JOIN reference_table USING (a)
 )
-  SELECT (a+5)*-1, b FROM cte;
+  SELECT (a+5)*2, b FROM cte;
 
 -- using set operations
 INSERT INTO

@@ -827,7 +827,10 @@ INSERT INTO nullkey_c1_t1 SELECT * FROM nullkey_c1_t2;
 SET client_min_messages TO DEBUG2;
 --    between two non-colocated null dist key tables
 INSERT INTO nullkey_c1_t1 SELECT * FROM nullkey_c2_t1;
-ERROR:  cannot select from a non-colocated distributed table when inserting into a distributed table that does not have a shard key
+DEBUG:  distributed INSERT ... SELECT cannot reference a distributed table without a shard key together with non-colocated distributed tables
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
 --    between a null dist key table and a table of different type
 SET client_min_messages TO WARNING;
 EXPLAIN (ANALYZE TRUE, TIMING FALSE, COSTS FALSE, SUMMARY FALSE, VERBOSE FALSE)
@@ -845,17 +848,32 @@ INSERT INTO nullkey_c1_t1 SELECT * FROM reference_table;
 
 SET client_min_messages TO DEBUG2;
 INSERT INTO nullkey_c1_t1 SELECT * FROM distributed_table;
-ERROR:  cannot select from a non-colocated distributed table or a local table when inserting into a distributed table that does not have a shard key
+DEBUG:  distributed INSERT ... SELECT cannot reference a distributed table without a shard key together with non-colocated distributed tables
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
 INSERT INTO nullkey_c1_t1 SELECT * FROM citus_local_table;
-ERROR:  cannot select from a non-colocated distributed table or a local table when inserting into a distributed table that does not have a shard key
+DEBUG:  distributed INSERT ... SELECT cannot select from a local relation when inserting into a distributed table
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
 INSERT INTO nullkey_c1_t1 SELECT * FROM postgres_local_table;
-ERROR:  cannot select from a non-colocated distributed table or a local table when inserting into a distributed table that does not have a shard key
+DEBUG:  distributed INSERT ... SELECT can only select from distributed tables
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
 INSERT INTO reference_table SELECT * FROM nullkey_c1_t1;
-ERROR:  cannot select from a distributed table that does not have a shard key when inserting into a different table type
+DEBUG:  only reference tables may be queried when targeting a reference table with distributed INSERT ... SELECT
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
 INSERT INTO distributed_table SELECT * FROM nullkey_c1_t1;
-ERROR:  cannot select from a distributed table that does not have a shard key when inserting into a different table type
+DEBUG:  distributed INSERT ... SELECT cannot reference a distributed table without a shard key together with non-colocated distributed tables
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
 INSERT INTO citus_local_table SELECT * FROM nullkey_c1_t1;
-ERROR:  cannot select from a distributed table that does not have a shard key when inserting into a different table type
+DEBUG:  distributed INSERT ... SELECT cannot insert into a local table that is added to metadata
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
 INSERT INTO postgres_local_table SELECT * FROM nullkey_c1_t1;
 ERROR:  cannot select from a distributed table that does not have a shard key when inserting into a local table
 -- test subquery
@@ -886,7 +904,7 @@ WITH level_0 AS (
     WITH RECURSIVE level_2_recursive(x) AS (
         VALUES (1)
       UNION ALL
-        SELECT a + 1 FROM nullkey_c1_t1 JOIN level_2_recursive ON (a = x) WHERE a < 100
+        SELECT a + 1 FROM nullkey_c1_t1 JOIN level_2_recursive ON (a = x) WHERE a < 2
     )
     SELECT * FROM level_2_recursive RIGHT JOIN reference_table ON (level_2_recursive.x = reference_table.a)
   )
@@ -898,7 +916,7 @@ DEBUG:  CTE level_1 is going to be inlined via distributed planning
 DEBUG:  Creating router plan
  count
 ---------------------------------------------------------------------
-   342
+   106
 (1 row)
 
 WITH level_0 AS (
@@ -1272,7 +1290,7 @@ DEBUG:  Subqueries without relations are not allowed in distributed INSERT ... S
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 -- we still support complex joins via INSERT's cte list ..
 WITH cte AS (
-    SELECT reference_table.a AS a, 1 AS b
+    SELECT DISTINCT(reference_table.a) AS a, 1 AS b
     FROM distributed_table RIGHT JOIN reference_table USING (a)
 )
 INSERT INTO raw_events_second (user_id, value_1)
@@ -1283,17 +1301,23 @@ DEBUG:  recursively planning left side of the right join since the outer side is
 DEBUG:  recursively planning distributed relation "distributed_table" since it is part of a distributed join node that is outer joined with a recurring rel
 DEBUG:  Wrapping relation "distributed_table" to a subquery
 DEBUG:  generating subplan XXX_1 for subquery SELECT a FROM query_null_dist_key.distributed_table WHERE true
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT "?column?" AS user_id, b AS value_1 FROM (SELECT ((cte.a OPERATOR(pg_catalog.+) 5) OPERATOR(pg_catalog.*) '-1'::integer), cte.b FROM (SELECT reference_table.a, 1 AS b FROM ((SELECT distributed_table_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) distributed_table_1) distributed_table RIGHT JOIN query_null_dist_key.reference_table USING (a))) cte) citus_insert_select_subquery("?column?", b)
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT "?column?" AS user_id, b AS value_1 FROM (SELECT ((cte.a OPERATOR(pg_catalog.+) 5) OPERATOR(pg_catalog.*) '-1'::integer), cte.b FROM (SELECT DISTINCT reference_table.a, 1 AS b FROM ((SELECT distributed_table_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) distributed_table_1) distributed_table RIGHT JOIN query_null_dist_key.reference_table USING (a))) cte) citus_insert_select_subquery("?column?", b)
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
--- .. but can't do so via via SELECT's cte list
+-- .. and via SELECT's cte list too
 INSERT INTO raw_events_second (user_id, value_1)
 WITH cte AS (
-    SELECT reference_table.a AS a, 1 AS b
+    SELECT DISTINCT(reference_table.a) AS a, 1 AS b
     FROM distributed_table RIGHT JOIN reference_table USING (a)
 )
-  SELECT (a+5)*-1, b FROM cte;
+  SELECT (a+5)*2, b FROM cte;
 DEBUG:  CTE cte is going to be inlined via distributed planning
-ERROR:  cannot select from a non-colocated distributed table or a local table when inserting into a distributed table that does not have a shard key
+DEBUG:  distributed INSERT ... SELECT cannot reference a distributed table without a shard key together with non-colocated distributed tables
+DEBUG:  recursively planning left side of the right join since the outer side is a recurring rel
+DEBUG:  recursively planning distributed relation "distributed_table" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "distributed_table" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT a FROM query_null_dist_key.distributed_table WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT ((a OPERATOR(pg_catalog.+) 5) OPERATOR(pg_catalog.*) 2) AS user_id, b AS value_1 FROM (SELECT DISTINCT reference_table.a, 1 AS b FROM ((SELECT distributed_table_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) distributed_table_1) distributed_table RIGHT JOIN query_null_dist_key.reference_table USING (a))) cte
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
 -- using set operations
 INSERT INTO
   raw_events_first(user_id)
@@ -1846,3 +1870,4 @@ SELECT citus_remove_node('localhost', :master_port);
 ---------------------------------------------------------------------
 
 (1 row)
+
