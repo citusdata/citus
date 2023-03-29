@@ -81,6 +81,7 @@ FROM pg_dist_background_task_depend D  WHERE job_id = 17777 ORDER BY D.task_id, 
 /* Check that if there is a reference table that needs to be synched to a node,
    any move without a dependency must depend on the move task for reference table. */
 SELECT 1 FROM citus_drain_node('localhost',:worker_4_port);
+SELECT public.wait_for_resource_cleanup();
 SELECT 1 FROM citus_disable_node('localhost', :worker_4_port, synchronous:=true);
 
 /* Drain worker_3 so that we can move only one colocation group to worker_3
