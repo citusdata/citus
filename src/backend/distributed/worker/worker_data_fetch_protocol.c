@@ -160,6 +160,12 @@ worker_modify_identity_columns(PG_FUNCTION_ARGS)
 		Form_pg_attribute attributeForm = TupleDescAttr(tableTupleDesc,
 														attributeIndex);
 
+		/* skip dropped columns */
+		if (attributeForm->attisdropped)
+		{
+			continue;
+		}
+
 		if (attributeForm->attidentity)
 		{
 			Oid sequenceOid = getIdentitySequence(tableRelationId,
