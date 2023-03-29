@@ -14,6 +14,14 @@ CREATE OR REPLACE FUNCTION pg_catalog.citus_stats_tenants (
     LANGUAGE plpgsql
     AS $function$
 BEGIN
+    IF
+        array_position(enumvals, 'log') >= array_position(enumvals, setting)
+        AND setting != 'off'
+        FROM pg_settings
+        WHERE name = 'citus.multi_tenant_monitoring_log_level'
+    THEN
+        RAISE LOG 'Generating citus_stats_tenants';
+    END IF;
     RETURN QUERY
     SELECT *
     FROM jsonb_to_recordset((
