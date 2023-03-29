@@ -158,10 +158,7 @@ distributed_planner(Query *parse,
 	bool fastPathRouterQuery = false;
 	Node *distributionKeyValue = NULL;
 
-	if (query_string != NULL)
-	{
-		AttributeQueryIfAnnotated(query_string, parse->commandType);
-	}
+	AttributeQueryIfAnnotated(query_string, parse->commandType);
 
 	List *rangeTableList = ExtractRangeTableEntryList(parse);
 
