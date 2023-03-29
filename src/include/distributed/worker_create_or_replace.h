@@ -21,6 +21,7 @@
 extern char * WrapCreateOrReplace(const char *sql);
 extern char * WrapCreateOrReplaceList(List *sqls);
 extern char * GenerateBackupNameForCollision(const ObjectAddress *address);
+extern DropStmt * CreateDropStmt(const ObjectAddress *address);
 extern RenameStmt * CreateRenameStatement(const ObjectAddress *address, char *newName);
 
 #endif /* WORKER_CREATE_OR_REPLACE_H */

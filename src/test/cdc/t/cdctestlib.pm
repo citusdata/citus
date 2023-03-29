@@ -195,7 +195,7 @@ sub create_cdc_publication_and_replication_slots_for_citus_cluster {
     my $table_names = $_[2];
 
     create_cdc_publication_and_slots_for_coordinator($node_coordinator, $table_names);
-    create_cdc_publication_and_slots_for_workers($workersref, $table_names);
+    create_cdc_slots_for_workers($workersref);
 }
 
 sub create_cdc_publication_and_slots_for_coordinator {
@@ -210,31 +210,7 @@ sub create_cdc_publication_and_slots_for_coordinator {
     $node_coordinator->safe_psql('postgres',"SELECT pg_catalog.pg_create_logical_replication_slot('cdc_replication_slot','citus',false,false)");
 }
 
-sub create_cdc_publication_and_slots_for_workers {
-    my $workersref = $_[0];
-    my $table_names = $_[1];
-    create_cdc_publication_for_workers($workersref, $table_names);
-    create_cdc_replication_slots_for_workers($workersref);
-}
-
-sub create_cdc_publication_for_workers {
-    my $workersref = $_[0];
-    my $table_names = $_[1];
-    for (@$workersref) {
-        my $pub = $_->safe_psql('postgres',"SELECT * FROM pg_publication WHERE pubname = 'cdc_publication';");
-        if ($pub ne "") {
-            $_->safe_psql('postgres',"DROP PUBLICATION IF EXISTS cdc_publication;");
-        }
-        if ($table_names eq "all") {
-            $_->safe_psql('postgres',"CREATE PUBLICATION cdc_publication FOR ALL TABLES;");
-        } else {
-            $_->safe_psql('postgres',"CREATE PUBLICATION cdc_publication FOR TABLE $table_names;");
-        }
-    }
-}
-
-
-sub create_cdc_replication_slots_for_workers {
+sub create_cdc_slots_for_workers {
     my $workersref = $_[0];
     for (@$workersref) {
         my $slot = $_->safe_psql('postgres',"select * from pg_replication_slots where  slot_name = 'cdc_replication_slot';");

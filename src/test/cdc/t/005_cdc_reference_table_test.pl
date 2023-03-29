@@ -26,7 +26,7 @@ wait_for_cdc_client_to_catch_up_with_coordinator($node_coordinator);
 # Create the reference table in the coordinator and cdc client nodes.
 $node_coordinator->safe_psql('postgres',"SELECT create_reference_table('reference_table');");
 
-create_cdc_replication_slots_for_workers(\@workers);
+create_cdc_slots_for_workers(\@workers);
 connect_cdc_client_to_workers_publication(\@workers, $node_cdc_client);
 
 wait_for_cdc_client_to_catch_up_with_citus_cluster($node_coordinator, \@workers);

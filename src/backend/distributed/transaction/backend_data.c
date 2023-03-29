@@ -1453,6 +1453,21 @@ IsExternalClientBackend(void)
 
 
 /*
+ * IsRebalancerInitiatedBackend returns true if we are in a backend that citus
+ * rebalancer initiated.
+ */
+bool
+IsCitusShardTransferBackend(void)
+{
+	int prefixLength = strlen(CITUS_SHARD_TRANSFER_APPLICATION_NAME_PREFIX);
+
+	return strncmp(application_name,
+				   CITUS_SHARD_TRANSFER_APPLICATION_NAME_PREFIX,
+				   prefixLength) == 0;
+}
+
+
+/*
  * DetermineCitusBackendType determines the type of backend based on the application_name.
  */
 void

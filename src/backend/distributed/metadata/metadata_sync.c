@@ -100,6 +100,7 @@ static bool HasMetadataWorkers(void);
 static void CreateShellTableOnWorkers(Oid relationId);
 static void CreateTableMetadataOnWorkers(Oid relationId);
 static void CreateDependingViewsOnWorkers(Oid relationId);
+static void AddTableToPublications(Oid relationId);
 static NodeMetadataSyncResult SyncNodeMetadataToNodesOptional(void);
 static bool ShouldSyncTableMetadataInternal(bool hashDistributed,
 											bool citusTableWithNoDistKey);
@@ -302,7 +303,8 @@ SyncNodeMetadataToNode(const char *nodeNameString, int32 nodePort)
  * Our definition of metadata includes the shell table and its inter relations with
  * other shell tables, corresponding pg_dist_object, pg_dist_partiton, pg_dist_shard
  * and pg_dist_shard placement entries. This function also propagates the views that
- * depend on the given relation, to the metadata workers.
+ * depend on the given relation, to the metadata workers, and adds the relation to
+ * the appropriate publications.
  */
 void
 SyncCitusTableMetadata(Oid relationId)
@@ -319,6 +321,7 @@ SyncCitusTableMetadata(Oid relationId)
 	}
 
 	CreateDependingViewsOnWorkers(relationId);
+	AddTableToPublications(relationId);
 }
 
 
@@ -358,6 +361,49 @@ CreateDependingViewsOnWorkers(Oid relationId)
 		SendCommandToWorkersWithMetadata(alterViewOwnerCommand);
 
 		MarkObjectDistributed(viewAddress);
+	}
+
+	SendCommandToWorkersWithMetadata(ENABLE_DDL_PROPAGATION);
+}
+
+
+/*
+ * AddTableToPublications adds the table to a publication on workers with metadata.
+ */
+static void
+AddTableToPublications(Oid relationId)
+{
+	List *publicationIds = GetRelationPublications(relationId);
+	if (publicationIds == NIL)
+	{
+		return;
+	}
+
+	Oid publicationId = InvalidOid;
+
+	SendCommandToWorkersWithMetadata(DISABLE_DDL_PROPAGATION);
+
+	foreach_oid(publicationId, publicationIds)
+	{
+		ObjectAddress *publicationAddress = palloc0(sizeof(ObjectAddress));
+		ObjectAddressSet(*publicationAddress, PublicationRelationId, publicationId);
+		List *addresses = list_make1(publicationAddress);
+
+		if (!ShouldPropagateAnyObject(addresses))
+		{
+			/* skip non-distributed publications */
+			continue;
+		}
+
+		/* ensure schemas exist */
+		EnsureAllObjectDependenciesExistOnAllNodes(addresses);
+
+		bool isAdd = true;
+		char *alterPublicationCommand =
+			GetAlterPublicationTableDDLCommand(publicationId, relationId, isAdd);
+
+		/* send ALTER PUBLICATION .. ADD to workers with metadata */
+		SendCommandToWorkersWithMetadata(alterPublicationCommand);
 	}
 
 	SendCommandToWorkersWithMetadata(ENABLE_DDL_PROPAGATION);
