@@ -1131,7 +1131,7 @@ DropIdentitiesOnTable(Oid relationId)
 {
 	Relation relation = relation_open(relationId, AccessShareLock);
 	TupleDesc tupleDescriptor = RelationGetDescr(relation);
-	relation_close(relation, NoLock);
+	List *dropCommandList = NIL;
 
 	for (int attributeIndex = 0; attributeIndex < tupleDescriptor->natts;
 		 attributeIndex++)
@@ -1151,14 +1151,23 @@ DropIdentitiesOnTable(Oid relationId)
 							 qualifiedTableName,
 							 columnName);
 
-			/*
-			 * We need to disable/enable ddl propagation for this command, to prevent
-			 * sending unnecessary ALTER COLUMN commands for partitions, to MX workers.
-			 */
-			ExecuteAndLogUtilityCommandList(list_make3(DISABLE_DDL_PROPAGATION,
-													   dropCommand->data,
-													   ENABLE_DDL_PROPAGATION));
+			dropCommandList = lappend(dropCommandList, dropCommand->data);
 		}
+
+	}
+
+	relation_close(relation, NoLock);
+
+	char *dropCommand = NULL;
+	foreach_ptr(dropCommand, dropCommandList)
+	{
+		/*
+			* We need to disable/enable ddl propagation for this command, to prevent
+			* sending unnecessary ALTER COLUMN commands for partitions, to MX workers.
+			*/
+		ExecuteAndLogUtilityCommandList(list_make3(DISABLE_DDL_PROPAGATION,
+													dropCommand,
+													ENABLE_DDL_PROPAGATION));
 	}
 }
 

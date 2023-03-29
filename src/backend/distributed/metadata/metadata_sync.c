@@ -1896,7 +1896,6 @@ IdentitySequenceDependencyCommandList(Oid targetRelationId)
 
 	Relation relation = relation_open(targetRelationId, AccessShareLock);
 	TupleDesc tupleDescriptor = RelationGetDescr(relation);
-	relation_close(relation, NoLock);
 
 	bool tableHasIdentityColumn = false;
 	for (int attributeIndex = 0; attributeIndex < tupleDescriptor->natts;
@@ -1910,6 +1909,8 @@ IdentitySequenceDependencyCommandList(Oid targetRelationId)
 			break;
 		}
 	}
+
+	relation_close(relation, NoLock);
 
 	if (tableHasIdentityColumn)
 	{

@@ -151,7 +151,6 @@ worker_modify_identity_columns(PG_FUNCTION_ARGS)
 
 	Relation tableRelation = relation_open(tableRelationId, AccessShareLock);
 	TupleDesc tableTupleDesc = RelationGetDescr(tableRelation);
-	relation_close(tableRelation, NoLock);
 
 	bool missingSequenceOk = false;
 
@@ -176,6 +175,8 @@ worker_modify_identity_columns(PG_FUNCTION_ARGS)
 								sequenceTypeId);
 		}
 	}
+
+	relation_close(tableRelation, NoLock);
 
 	PG_RETURN_VOID();
 }
