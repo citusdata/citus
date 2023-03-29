@@ -57,6 +57,8 @@ SELECT create_distributed_table('table2_colg3', 'b' , colocate_with => 'table1_c
 SELECT 1 FROM citus_add_node('localhost', :worker_3_port);
 SELECT 1 FROM citus_add_node('localhost', :worker_4_port);
 
+SELECT * FROM get_rebalance_table_shards_plan() ORDER BY shardid;
+
 SELECT * FROM citus_rebalance_start();
 
 SELECT citus_rebalance_wait();
