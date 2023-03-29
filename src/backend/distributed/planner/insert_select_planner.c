@@ -295,18 +295,19 @@ ErrorIfInsertSelectWithNullDistKeyNotSupported(Query *originalQuery)
 	else if (IsCitusTableType(targetRelationId, NULL_KEY_DISTRIBUTED_TABLE))
 	{
 		if (subqueryRteListProperties->hasPostgresLocalTable ||
-			subqueryRteListProperties->hasReferenceTable ||
 			subqueryRteListProperties->hasCitusLocalTable ||
 			subqueryRteListProperties->hasDistTableWithShardKey ||
 			subqueryRteListProperties->hasMaterializedView)
 		{
 			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							errmsg("cannot select from different table types "
-								   "when inserting into a distributed table "
-								   "that does not have a shard key")));
+							errmsg("cannot select from a non-colocated distributed "
+								   "table or a local table when inserting into a "
+								   "distributed table that does not have a shard "
+								   "key")));
 		}
 
-		if (!subqueryRteListProperties->hasDistTableWithoutShardKey)
+		if (!subqueryRteListProperties->hasDistTableWithoutShardKey &&
+			!subqueryRteListProperties->hasReferenceTable)
 		{
 			/*
 			 * This means that the SELECT doesn't reference any Citus tables,
