@@ -215,7 +215,8 @@ AttributeQueryIfAnnotated(const char *query_string, CmdType commandType)
 			if (tenantIdTextP != NULL)
 			{
 				char *tenantId = UnescapeCommentChars(text_to_cstring(tenantIdTextP));
-				strncpy_s(attributeToTenant, MAX_TENANT_ATTRIBUTE_LENGTH , tenantId,  MAX_TENANT_ATTRIBUTE_LENGTH - 1);
+				strncpy_s(attributeToTenant, MAX_TENANT_ATTRIBUTE_LENGTH, tenantId,
+						  MAX_TENANT_ATTRIBUTE_LENGTH - 1);
 			}
 
 			colocationGroupId = ExtractFieldInt32(jsonbDatum, "cId",
@@ -226,8 +227,6 @@ AttributeQueryIfAnnotated(const char *query_string, CmdType commandType)
 	{
 		strcpy_s(attributeToTenant, sizeof(attributeToTenant), "");
 	}
-
-
 }
 
 
