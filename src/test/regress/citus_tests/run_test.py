@@ -113,6 +113,7 @@ if __name__ == "__main__":
         "background_rebalance_parallel": TestDeps(
             None,
             [
+                "multi_test_helpers",
                 "multi_cluster_management",
             ],
             worker_count=6,
