@@ -400,7 +400,6 @@ SetTaskQueryIfShouldLazyDeparse(Task *task, Query *query)
 		task->taskQuery.queryType = TASK_QUERY_OBJECT;
 		task->taskQuery.data.jobQueryReferenceForLazyDeparsing = query;
 		task->queryCount = 1;
-
 		return;
 	}
 
