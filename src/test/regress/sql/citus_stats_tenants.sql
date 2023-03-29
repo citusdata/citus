@@ -96,5 +96,17 @@ SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, q
 \c - - - :master_port
 SET search_path TO citus_stats_tenants;
 
+-- test logs
+SET client_min_messages TO LOG;
+SELECT count(*)>=0 FROM citus_stats_tenants;
+SET citus.multi_tenant_monitoring_log_level TO ERROR;
+SELECT count(*)>=0 FROM citus_stats_tenants;
+SET citus.multi_tenant_monitoring_log_level TO OFF;
+SELECT count(*)>=0 FROM citus_stats_tenants;
+SET citus.multi_tenant_monitoring_log_level TO LOG;
+SELECT count(*)>=0 FROM citus_stats_tenants;
+SET citus.multi_tenant_monitoring_log_level TO DEBUG;
+SELECT count(*)>=0 FROM citus_stats_tenants;
+
 SET client_min_messages TO ERROR;
 DROP SCHEMA citus_stats_tenants CASCADE;
