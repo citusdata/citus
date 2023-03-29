@@ -220,8 +220,10 @@ SELECT tenant_attribute, query_count_in_this_period, score FROM citus_stats_tena
  bcde             |                          3 | 3000000000
  2                |                          1 | 1000000000
  3                |                          1 | 1000000000
+ 4                |                          1 | 1000000000
+ cdef             |                          1 | 1000000000
  defg             |                          1 | 1000000000
-(5 rows)
+(7 rows)
 
 -- test period passing
 SELECT result FROM run_command_on_all_nodes('SELECT clean_citus_stats_tenants()');
@@ -260,6 +262,14 @@ SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, q
 ---------------------------------------------------------------------
  1                |                         0 |                         1 |                          0 |                          1
  5                |                         0 |                         0 |                          0 |                          1
+(2 rows)
+
+\c - - - :worker_2_port
+SELECT tenant_attribute, query_count_in_this_period, score FROM citus_stats_tenants(true) ORDER BY score DESC;
+ tenant_attribute | query_count_in_this_period |   score
+---------------------------------------------------------------------
+ 1                |                          0 | 500000000
+ 5                |                          0 | 500000000
 (2 rows)
 
 \c - - - :master_port
@@ -302,6 +312,130 @@ CONTEXT:  PL/pgSQL function citus_stats_tenants(boolean) line XX at RAISE
  ?column?
 ---------------------------------------------------------------------
  t
+(1 row)
+
+-- test special and multibyte characters in tenant attribute
+SELECT result FROM run_command_on_all_nodes('SELECT clean_citus_stats_tenants()');
+ result
+---------------------------------------------------------------------
+
+
+
+(3 rows)
+
+TRUNCATE TABLE dist_tbl_text;
+SELECT count(*)>=0 FROM dist_tbl_text WHERE a = '/bcde';
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT count(*)>=0 FROM dist_tbl_text WHERE a = '/*bcde';
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT count(*)>=0 FROM dist_tbl_text WHERE a = '/b*cde';
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT count(*)>=0 FROM dist_tbl_text WHERE a = '/b*c/de';
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT count(*)>=0 FROM dist_tbl_text WHERE a = 'b/*//cde';
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT count(*)>=0 FROM dist_tbl_text WHERE a = '/b/*/cde';
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT count(*)>=0 FROM dist_tbl_text WHERE a = '/b/**/cde';
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT count(*)>=0 FROM dist_tbl_text WHERE a = 'bcde*';
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT count(*)>=0 FROM dist_tbl_text WHERE a = 'bcde*/';
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT count(*)>=0 FROM dist_tbl_text WHERE a = U&'\0061\0308bc';
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+\c - - - :worker_1_port
+SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, query_count_in_this_period, query_count_in_last_period FROM citus_stats_tenants ORDER BY tenant_attribute;
+ tenant_attribute | read_count_in_this_period | read_count_in_last_period | query_count_in_this_period | query_count_in_last_period
+---------------------------------------------------------------------
+ /*bcde           |                         1 |                         0 |                          1 |                          0
+ /b*c/de          |                         1 |                         0 |                          1 |                          0
+ /b*cde           |                         1 |                         0 |                          1 |                          0
+ /b/**/cde        |                         1 |                         0 |                          1 |                          0
+ /b/*/cde         |                         1 |                         0 |                          1 |                          0
+ /bcde            |                         1 |                         0 |                          1 |                          0
+ äbc              |                         1 |                         0 |                          1 |                          0
+ b/*//cde         |                         1 |                         0 |                          1 |                          0
+ bcde*            |                         1 |                         0 |                          1 |                          0
+ bcde*/           |                         1 |                         0 |                          1 |                          0
+(10 rows)
+
+\c - - - :worker_2_port
+SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, query_count_in_this_period, query_count_in_last_period FROM citus_stats_tenants ORDER BY tenant_attribute;
+ tenant_attribute | read_count_in_this_period | read_count_in_last_period | query_count_in_this_period | query_count_in_last_period
+---------------------------------------------------------------------
+ /*bcde           |                         1 |                         0 |                          1 |                          0
+ /b*c/de          |                         1 |                         0 |                          1 |                          0
+ /b*cde           |                         1 |                         0 |                          1 |                          0
+ /b/**/cde        |                         1 |                         0 |                          1 |                          0
+ /b/*/cde         |                         1 |                         0 |                          1 |                          0
+ /bcde            |                         1 |                         0 |                          1 |                          0
+ äbc              |                         1 |                         0 |                          1 |                          0
+ b/*//cde         |                         1 |                         0 |                          1 |                          0
+ bcde*            |                         1 |                         0 |                          1 |                          0
+ bcde*/           |                         1 |                         0 |                          1 |                          0
+(10 rows)
+
+\c - - - :master_port
+SET search_path TO citus_stats_tenants;
+SELECT result FROM run_command_on_all_nodes('SELECT clean_citus_stats_tenants()');
+ result
+---------------------------------------------------------------------
+
+
+
+(3 rows)
+
+SELECT count(*)>=0 FROM dist_tbl_text WHERE a = 'thisisaveryloooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooongname';
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, query_count_in_this_period, query_count_in_last_period FROM citus_stats_tenants ORDER BY tenant_attribute;
+                                          tenant_attribute                                           | read_count_in_this_period | read_count_in_last_period | query_count_in_this_period | query_count_in_last_period
+---------------------------------------------------------------------
+ thisisaverylooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo |                         1 |                         0 |                          1 |                          0
 (1 row)
 
 SET client_min_messages TO ERROR;
