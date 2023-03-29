@@ -84,6 +84,25 @@ ExtractFieldBoolean(Datum jsonbDoc, const char *fieldName, bool defaultValue)
 
 
 /*
+ * ExtractFieldInt32 gets value of fieldName from jsonbDoc, or returns
+ * defaultValue if it doesn't exist.
+ */
+int32
+ExtractFieldInt32(Datum jsonbDoc, const char *fieldName, int32 defaultValue)
+{
+	Datum jsonbDatum = 0;
+	bool found = ExtractFieldJsonb(jsonbDoc, fieldName, &jsonbDatum, false);
+	if (!found)
+	{
+		return defaultValue;
+	}
+
+	Datum int32Datum = DirectFunctionCall1(jsonb_int4, jsonbDatum);
+	return DatumGetInt32(int32Datum);
+}
+
+
+/*
  * ExtractFieldTextP gets value of fieldName as text* from jsonbDoc, or
  * returns NULL if it doesn't exist.
  */
