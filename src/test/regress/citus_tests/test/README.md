@@ -51,9 +51,10 @@ those are written in Perl.
 ## Adding a new test
 
 Tests are automatically discovered by `pytest` using a simple but effective
-heuristic. Files with a name of the format `test_{some name}.py` are searched
-for function names starting with the `test_` prefix. All those functions are
-considered tests by `pytest`.
+heuristic. In this directory (`src/test/regress/citus_tests/test`) it finds
+all of the files that are named `test_{some name}.py`. Those files
+are then searched for function names starting with the `test_` prefix. All those
+functions are considered tests by `pytest`.
 
 
 ### Fixtures aka Dependency Injection aka Teardown/Cleanup

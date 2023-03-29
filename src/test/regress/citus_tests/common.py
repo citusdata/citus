@@ -431,6 +431,7 @@ class PortLock:
                     self.port = next_port
                     break
                 except Exception:
+                    self.lock.release()
                     continue
 
     def release(self):
