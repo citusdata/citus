@@ -117,7 +117,19 @@ INSERT INTO researchers VALUES (8, 5, 'Douglas Engelbart');
 INSERT INTO labs VALUES (5, 'Los Alamos');
 COMMIT;
 
+SET citus.enable_non_colocated_router_query_pushdown TO ON;
+
 SELECT * FROM researchers, labs WHERE labs.id = researchers.lab_id AND researchers.lab_id = 5;
+
+SET citus.enable_non_colocated_router_query_pushdown TO OFF;
+
+-- fails because researchers and labs are not colocated
+SELECT * FROM researchers, labs WHERE labs.id = researchers.lab_id AND researchers.lab_id = 5;
+
+-- works thanks to "OFFSET 0" trick
+SELECT * FROM (SELECT * FROM researchers OFFSET 0) researchers, labs WHERE labs.id = researchers.lab_id AND researchers.lab_id = 5;
+
+RESET citus.enable_non_colocated_router_query_pushdown;
 
 -- and the other way around is also allowed
 BEGIN;

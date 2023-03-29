@@ -134,6 +134,12 @@ typedef struct CitusCopyDestReceiver
 	bool shouldUseLocalCopy;
 
 	/*
+	 * if true, the data from this dest receiver should be published for CDC clients.
+	 * This is set tot false for internal transfers like shard split/move/rebalance etc.
+	 */
+	bool isPublishable;
+
+	/*
 	 * Copy into colocated intermediate result. When this is set, the
 	 * COPY assumes there are hypothetical colocated shards to the
 	 * relation that are files. And, COPY writes the data to the
@@ -161,7 +167,8 @@ extern CitusCopyDestReceiver * CreateCitusCopyDestReceiver(Oid relationId,
 														   List *columnNameList,
 														   int partitionColumnIndex,
 														   EState *executorState,
-														   char *intermediateResultPrefix);
+														   char *intermediateResultPrefix,
+														   bool isPublishable);
 extern FmgrInfo * ColumnOutputFunctions(TupleDesc rowDescriptor, bool binaryFormat);
 extern bool CanUseBinaryCopyFormat(TupleDesc tupleDescription);
 extern bool CanUseBinaryCopyFormatForTargetList(List *targetEntryList);

@@ -74,6 +74,7 @@
 #include "distributed/recursive_planning.h"
 #include "distributed/reference_table_utils.h"
 #include "distributed/relation_access_tracking.h"
+#include "distributed/replication_origin_session_utils.h"
 #include "distributed/run_from_same_connection.h"
 #include "distributed/shard_cleaner.h"
 #include "distributed/shard_transfer.h"
@@ -1133,6 +1134,16 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
+		"citus.enable_change_data_capture",
+		gettext_noop("Enables using replication origin tracking for change data capture"),
+		NULL,
+		&EnableChangeDataCapture,
+		false,
+		PGC_USERSET,
+		GUC_STANDARD,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
 		"citus.enable_cluster_clock",
 		gettext_noop("When users explicitly call UDF citus_get_transaction_clock() "
 					 "and the flag is true, it returns the maximum "
@@ -1263,6 +1274,26 @@ RegisterCitusConfigVariables(void)
 		gettext_noop("Enables object and metadata syncing."),
 		NULL,
 		&EnableMetadataSync,
+		true,
+		PGC_USERSET,
+		GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		"citus.enable_non_colocated_router_query_pushdown",
+		gettext_noop("Enables router planner for the queries that reference "
+					 "non-colocated distributed tables."),
+		gettext_noop("Normally, router planner planner is only enabled for "
+					 "the queries that reference colocated distributed tables "
+					 "because it is not guaranteed to have the target shards "
+					 "always on the same node, e.g., after rebalancing the "
+					 "shards. For this reason, while enabling this flag allows "
+					 "some degree of optimization for the queries that reference "
+					 "non-colocated distributed tables, it is not guaranteed "
+					 "that the same query will work after rebalancing the shards "
+					 "or altering the shard count of one of those distributed "
+					 "tables."),
+		&EnableNonColocatedRouterQueryPushdown,
 		true,
 		PGC_USERSET,
 		GUC_NO_SHOW_ALL,
@@ -2405,7 +2436,6 @@ RegisterCitusConfigVariables(void)
 		PGC_USERSET,
 		GUC_STANDARD,
 		NULL, NULL, NULL);
-
 
 	/* warn about config items in the citus namespace that are not registered above */
 	EmitWarningsOnPlaceholders("citus");

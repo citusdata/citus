@@ -1541,6 +1541,11 @@ SELECT * FROM target_set ORDER BY 1, 2;
 --
 
 MERGE INTO target_set
+USING source_set AS foo ON target_set.t1 = foo.s1
+WHEN MATCHED THEN
+        UPDATE SET ctid = '(0,100)';
+
+MERGE INTO target_set
 USING (SELECT s1,s2 FROM source_set UNION SELECT s2,s1 FROM source_set) AS foo ON target_set.t1 = foo.s1
 WHEN MATCHED THEN
         UPDATE SET t2 = t2 + 1;

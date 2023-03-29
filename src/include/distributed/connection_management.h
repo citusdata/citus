@@ -173,6 +173,9 @@ typedef struct MultiConnection
 	/* is the connection currently in use, and shouldn't be used by anything else */
 	bool claimedExclusively;
 
+	/* is the replication origin session has already been setup for this connection. */
+	bool isReplicationOriginSessionSetup;
+
 	/*
 	 * Should be used to access/modify metadata. See REQUIRE_METADATA_CONNECTION for
 	 * the details.

@@ -1900,6 +1900,7 @@ MERGE INTO pa_target t
     UPDATE SET balance = balance + delta, val = val || ' updated by merge'
   WHEN NOT MATCHED THEN
     INSERT VALUES ('2017-01-15', sid, delta, 'inserted by merge');
+DEBUG:  Creating MERGE router plan
 DEBUG:  <Deparsed MERGE query: MERGE INTO pgmerge_schema.pa_target t USING (SELECT pa_source.sid, pa_source.delta FROM pgmerge_schema.pa_source_xxxxxxx pa_source WHERE (pa_source.sid OPERATOR(pg_catalog.<) 10)) s ON (t.tid OPERATOR(pg_catalog.=) s.sid) WHEN MATCHED THEN UPDATE SET balance = (t.balance OPERATOR(pg_catalog.+) s.delta), val = (t.val OPERATOR(pg_catalog.||) ' updated by merge'::text) WHEN NOT MATCHED THEN INSERT (logts, tid, balance, val) VALUES ('Sun Jan 15 00:00:00 2017'::timestamp without time zone, s.sid, s.delta, 'inserted by merge'::text)>
     --INSERT VALUES (slogts::timestamp, sid, delta, 'inserted by merge');
 SELECT * FROM pa_target ORDER BY tid;
@@ -2093,6 +2094,7 @@ WHEN MATCHED THEN UPDATE
 WHEN NOT MATCHED THEN INSERT
      (city_id, logdate, peaktemp, unitsales)
    VALUES (city_id, logdate, peaktemp, unitsales);
+DEBUG:  Creating MERGE router plan
 DEBUG:  <Deparsed MERGE query: MERGE INTO pgmerge_schema.measurement m USING pgmerge_schema.new_measurement_xxxxxxx nm ON ((m.city_id OPERATOR(pg_catalog.=) nm.city_id) AND (m.logdate OPERATOR(pg_catalog.=) nm.logdate)) WHEN MATCHED AND (nm.peaktemp IS NULL) THEN DELETE WHEN MATCHED THEN UPDATE SET peaktemp = GREATEST(m.peaktemp, nm.peaktemp), unitsales = (m.unitsales OPERATOR(pg_catalog.+) COALESCE(nm.unitsales, 0)) WHEN NOT MATCHED THEN INSERT (city_id, logdate, peaktemp, unitsales) VALUES (nm.city_id, nm.logdate, nm.peaktemp, nm.unitsales)>
 RESET client_min_messages;
 SELECT tableoid::regclass, * FROM measurement ORDER BY city_id, logdate;

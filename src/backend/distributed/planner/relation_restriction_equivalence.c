@@ -154,7 +154,6 @@ static Var * PartitionKeyForRTEIdentityInQuery(Query *query, int targetRTEIndex,
 static bool AllDistributedRelationsInRestrictionContextColocated(
 	RelationRestrictionContext *
 	restrictionContext);
-static bool AllDistributedRelationsInListColocated(List *relationList);
 static bool IsNotSafeRestrictionToRecursivelyPlan(Node *node);
 static JoinRestrictionContext * FilterJoinRestrictionContext(
 	JoinRestrictionContext *joinRestrictionContext, Relids
@@ -1964,7 +1963,7 @@ AllDistributedRelationsInRTEListColocated(List *rangeTableEntryList)
  * AllDistributedRelationsInListColocated determines whether all of the
  * distributed relations in the given list are co-located.
  */
-static bool
+bool
 AllDistributedRelationsInListColocated(List *relationList)
 {
 	int initialColocationId = INVALID_COLOCATION_ID;
