@@ -121,5 +121,9 @@ SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, q
 \c - - - :master_port
 SET search_path TO citus_stats_tenants;
 
+SELECT result FROM run_command_on_all_nodes('SELECT clean_citus_stats_tenants()');
+SELECT count(*)>=0 FROM dist_tbl_text WHERE a = 'thisisaveryloooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooongname';
+SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, query_count_in_this_period, query_count_in_last_period FROM citus_stats_tenants ORDER BY tenant_attribute;
+
 SET client_min_messages TO ERROR;
 DROP SCHEMA citus_stats_tenants CASCADE;
