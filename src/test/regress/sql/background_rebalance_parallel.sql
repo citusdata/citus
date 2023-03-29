@@ -130,6 +130,7 @@ FROM pg_dist_background_task_depend D  WHERE job_id = 17778 ORDER BY D.task_id, 
 
 DROP SCHEMA background_rebalance_parallel CASCADE;
 TRUNCATE pg_dist_background_job CASCADE;
+SELECT public.wait_for_resource_cleanup();
 select citus_remove_node('localhost', :worker_3_port);
 select citus_remove_node('localhost', :worker_4_port);
 select citus_remove_node('localhost', :worker_5_port);
