@@ -907,8 +907,10 @@ class Postgres(QueryRunner):
                 match_count = len(re.findall(re_string, content))
                 assert match_count == times
 
-    def create_user(self, name, args: psycopg.sql.Composable = sql.SQL("")):
+    def create_user(self, name, args: typing.Optional[psycopg.sql.Composable] = None):
         self.users.add(name)
+        if args is None:
+            args = sql.SQL("")
         self.sql(sql.SQL("CREATE USER {} {}").format(sql.Identifier(name), args))
 
     def create_schema(self, name):
