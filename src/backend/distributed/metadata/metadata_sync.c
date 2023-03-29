@@ -1886,8 +1886,9 @@ SequenceDependencyCommandList(Oid relationId)
 
 
 /*
- * IdentitySequenceDependencyCommandList generate a command to execute a UDF (WORKER_MODIFY_IDENTITY_COLUMNS) on workers
- * to modify the identity columns min/max values to produce unique values on workers.
+ * IdentitySequenceDependencyCommandList generate a command to execute
+ * a UDF (WORKER_MODIFY_IDENTITY_COLUMNS) on workers to modify the identity
+ * columns min/max values to produce unique values on workers.
  */
 List *
 IdentitySequenceDependencyCommandList(Oid targetRelationId)
