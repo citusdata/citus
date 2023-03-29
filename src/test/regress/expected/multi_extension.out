@@ -1365,7 +1365,7 @@ SELECT * FROM multi_extension.print_extension_changes();
                  | function citus_internal_is_replication_origin_tracking_active() boolean
                  | function citus_internal_start_replication_origin_tracking() void
                  | function citus_internal_stop_replication_origin_tracking() void
-                 | function worker_modify_identity_columns(regclass) void
+                 | function worker_adjust_identity_column_seq_ranges(regclass) void
 (4 rows)
 
 DROP TABLE multi_extension.prev_objects, multi_extension.extension_diff;

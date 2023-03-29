@@ -147,8 +147,8 @@ extern void SyncDeleteColocationGroupToNodes(uint32 colocationId);
 	"placementid = EXCLUDED.placementid"
 #define METADATA_SYNC_CHANNEL "metadata_sync"
 
-#define WORKER_MODIFY_IDENTITY_COLUMNS \
-	"SELECT pg_catalog.worker_modify_identity_columns(%s)"
+#define WORKER_ADJUST_IDENTITY_COLUMN_SEQ_RANGES \
+	"SELECT pg_catalog.worker_adjust_identity_column_seq_ranges(%s)"
 
 /* controlled via GUC */
 extern char *EnableManualMetadataChangesForUser;

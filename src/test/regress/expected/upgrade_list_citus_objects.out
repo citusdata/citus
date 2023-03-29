@@ -251,7 +251,7 @@ ORDER BY 1;
  function worker_fix_pre_citus10_partitioned_table_constraint_names(regclass,bigint,text)
  function worker_hash("any")
  function worker_last_saved_explain_analyze()
- function worker_modify_identity_columns(regclass)
+ function worker_adjust_identity_column_seq_ranges(regclass)
  function worker_nextval(regclass)
  function worker_partial_agg(oid,anyelement)
  function worker_partial_agg_ffunc(internal)

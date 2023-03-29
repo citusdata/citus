@@ -1887,7 +1887,7 @@ SequenceDependencyCommandList(Oid relationId)
 
 /*
  * IdentitySequenceDependencyCommandList generate a command to execute
- * a UDF (WORKER_MODIFY_IDENTITY_COLUMNS) on workers to modify the identity
+ * a UDF (WORKER_ADJUST_IDENTITY_COLUMN_SEQ_RANGES) on workers to modify the identity
  * columns min/max values to produce unique values on workers.
  */
 List *
@@ -1919,7 +1919,7 @@ IdentitySequenceDependencyCommandList(Oid targetRelationId)
 		char *tableName = generate_qualified_relation_name(targetRelationId);
 
 		appendStringInfo(stringInfo,
-						 WORKER_MODIFY_IDENTITY_COLUMNS,
+						 WORKER_ADJUST_IDENTITY_COLUMN_SEQ_RANGES,
 						 quote_literal_cstr(tableName));
 
 

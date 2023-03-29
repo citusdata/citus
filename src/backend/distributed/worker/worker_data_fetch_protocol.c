@@ -70,7 +70,7 @@ static void AlterSequenceMinMax(Oid sequenceId, char *schemaName, char *sequence
 PG_FUNCTION_INFO_V1(worker_apply_shard_ddl_command);
 PG_FUNCTION_INFO_V1(worker_apply_inter_shard_ddl_command);
 PG_FUNCTION_INFO_V1(worker_apply_sequence_command);
-PG_FUNCTION_INFO_V1(worker_modify_identity_columns);
+PG_FUNCTION_INFO_V1(worker_adjust_identity_column_seq_ranges);
 PG_FUNCTION_INFO_V1(worker_append_table_to_shard);
 PG_FUNCTION_INFO_V1(worker_nextval);
 
@@ -135,13 +135,13 @@ worker_apply_inter_shard_ddl_command(PG_FUNCTION_ARGS)
 
 
 /*
- * worker_modify_identity_columns takes a table oid, runs an ALTER SEQUENCE statement
+ * worker_adjust_identity_column_seq_ranges takes a table oid, runs an ALTER SEQUENCE statement
  * for each identity column to adjust the minvalue and maxvalue of the sequence owned by
  * identity column such that the sequence creates globally unique values.
  * We use table oid instead of sequence name to avoid any potential conflicts between sequences of different tables. This way, we can safely iterate through identity columns on a specific table without any issues. While this may introduce a small amount of business logic to workers, it's a much safer approach overall.
  */
 Datum
-worker_modify_identity_columns(PG_FUNCTION_ARGS)
+worker_adjust_identity_column_seq_ranges(PG_FUNCTION_ARGS)
 {
 	CheckCitusVersion(ERROR);
 
