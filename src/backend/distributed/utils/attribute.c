@@ -44,7 +44,6 @@ ExecutorEnd_hook_type prev_ExecutorEnd = NULL;
 char attributeToTenant[MAX_TENANT_ATTRIBUTE_LENGTH] = "";
 CmdType attributeCommandType = CMD_UNKNOWN;
 int colocationGroupId = -1;
-clock_t attributeToTenantStart = { 0 };
 
 const char *SharedMemoryNameForMultiTenantMonitor =
 	"Shared memory for multi tenant monitor";
@@ -221,18 +220,14 @@ AttributeQueryIfAnnotated(const char *query_string, CmdType commandType)
 
 			colocationGroupId = ExtractFieldInt32(jsonbDatum, "cId",
 												  INVALID_COLOCATION_ID);
-
-			if (MultiTenantMonitoringLogLevel != CITUS_LOG_LEVEL_OFF)
-			{
-				ereport(NOTICE, (errmsg(
-									 "attributing query to tenant: %s, colocationGroupId: %d",
-									 quote_literal_cstr(attributeToTenant),
-									 colocationGroupId)));
-			}
 		}
 	}
+	else
+	{
+		strcpy_s(attributeToTenant, sizeof(attributeToTenant), "");
+	}
 
-	attributeToTenantStart = clock();
+
 }
 
 
@@ -317,17 +312,7 @@ AttributeMetricsIfApplicable()
 {
 	if (strcmp(attributeToTenant, "") != 0)
 	{
-		clock_t end = { 0 };
-
-		end = clock();
 		time_t queryTime = time(0);
-		double cpu_time_used = ((double) (end - attributeToTenantStart)) / CLOCKS_PER_SEC;
-
-		if (MultiTenantMonitoringLogLevel != CITUS_LOG_LEVEL_OFF)
-		{
-			ereport(NOTICE, (errmsg("attribute cpu counter (%f) to tenant: %s",
-									cpu_time_used, attributeToTenant)));
-		}
 
 		MultiTenantMonitor *monitor = GetMultiTenantMonitor();
 
