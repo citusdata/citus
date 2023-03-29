@@ -4003,7 +4003,7 @@ ErrorIfTableHasUnsupportedIdentityColumn(Oid relationId)
 		}
 	}
 
-	relation_close(relation, AccessShareLock);
+	relation_close(relation, NoLock);
 }
 
 
@@ -4023,7 +4023,6 @@ ErrorIfTableHasIdentityColumn(Oid relationId)
 
 		if (attributeForm->attidentity)
 		{
-			relation_close(relation, AccessShareLock);
 			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 							errmsg(
 								"cannot complete operation on a table with identity column")));
