@@ -191,6 +191,12 @@ SELECT 1 FROM citus_drain_node('localhost',:worker_4_port);
         1
 (1 row)
 
+SELECT public.wait_for_resource_cleanup();
+ wait_for_resource_cleanup
+---------------------------------------------------------------------
+
+(1 row)
+
 SELECT 1 FROM citus_disable_node('localhost', :worker_4_port, synchronous:=true);
  ?column?
 ---------------------------------------------------------------------
@@ -323,6 +329,12 @@ FROM pg_dist_background_task_depend D  WHERE job_id = 17778 ORDER BY D.task_id, 
 
 DROP SCHEMA background_rebalance_parallel CASCADE;
 TRUNCATE pg_dist_background_job CASCADE;
+SELECT public.wait_for_resource_cleanup();
+ wait_for_resource_cleanup
+---------------------------------------------------------------------
+
+(1 row)
+
 select citus_remove_node('localhost', :worker_3_port);
  citus_remove_node
 ---------------------------------------------------------------------
