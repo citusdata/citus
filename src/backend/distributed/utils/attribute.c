@@ -240,14 +240,6 @@ AttributeTask(char *tenantId, int colocationId, CmdType commandType)
 	strncpy_s(attributeToTenant, MAX_TENANT_ATTRIBUTE_LENGTH, tenantId,
 			  MAX_TENANT_ATTRIBUTE_LENGTH - 1);
 	attributeCommandType = commandType;
-
-	if (MultiTenantMonitoringLogLevel != CITUS_LOG_LEVEL_OFF)
-	{
-		ereport(NOTICE, (errmsg(
-							 "attributing query to tenant: %s, colocationGroupId: %d",
-							 quote_literal_cstr(attributeToTenant),
-							 colocationGroupId)));
-	}
 }
 
 
