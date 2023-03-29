@@ -3996,7 +3996,8 @@ ErrorIfTableHasUnsupportedIdentityColumn(Oid relationId)
 			char *qualifiedRelationName = generate_qualified_relation_name(relationId);
 			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 							errmsg(
-								"cannot complete operation on %s with smallint/int identity column", qualifiedRelationName),
+								"cannot complete operation on %s with smallint/int identity column",
+								qualifiedRelationName),
 							errhint(
 								"Use bigint identity column instead.")));
 		}

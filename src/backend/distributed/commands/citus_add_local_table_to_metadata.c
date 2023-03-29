@@ -1153,7 +1153,6 @@ DropIdentitiesOnTable(Oid relationId)
 
 			dropCommandList = lappend(dropCommandList, dropCommand->data);
 		}
-
 	}
 
 	relation_close(relation, NoLock);
@@ -1162,12 +1161,12 @@ DropIdentitiesOnTable(Oid relationId)
 	foreach_ptr(dropCommand, dropCommandList)
 	{
 		/*
-			* We need to disable/enable ddl propagation for this command, to prevent
-			* sending unnecessary ALTER COLUMN commands for partitions, to MX workers.
-			*/
+		 * We need to disable/enable ddl propagation for this command, to prevent
+		 * sending unnecessary ALTER COLUMN commands for partitions, to MX workers.
+		 */
 		ExecuteAndLogUtilityCommandList(list_make3(DISABLE_DDL_PROPAGATION,
-													dropCommand,
-													ENABLE_DDL_PROPAGATION));
+												   dropCommand,
+												   ENABLE_DDL_PROPAGATION));
 	}
 }
 
