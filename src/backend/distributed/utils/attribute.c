@@ -238,7 +238,7 @@ AttributeTask(char *tenantId, int colocationId, CmdType commandType)
 
 	colocationGroupId = colocationId;
 	strncpy_s(attributeToTenant, MAX_TENANT_ATTRIBUTE_LENGTH, tenantId,
-						  MAX_TENANT_ATTRIBUTE_LENGTH - 1);
+			  MAX_TENANT_ATTRIBUTE_LENGTH - 1);
 	attributeCommandType = commandType;
 
 	if (MultiTenantMonitoringLogLevel != CITUS_LOG_LEVEL_OFF)
