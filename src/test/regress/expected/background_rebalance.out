@@ -291,6 +291,12 @@ SELECT state, details from citus_rebalance_status();
  finished | {"tasks": [], "task_state_counts": {"done": 2}}
 (1 row)
 
+SELECT public.wait_for_resource_cleanup();
+ wait_for_resource_cleanup
+---------------------------------------------------------------------
+
+(1 row)
+
 -- Remove coordinator again to allow rerunning of this test
 SELECT 1 FROM citus_remove_node('localhost', :master_port);
  ?column?

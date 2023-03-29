@@ -104,6 +104,8 @@ SELECT 1 FROM citus_rebalance_start(shard_transfer_mode := 'force_logical');
 SELECT citus_rebalance_wait();
 SELECT state, details from citus_rebalance_status();
 
+SELECT public.wait_for_resource_cleanup();
+
 -- Remove coordinator again to allow rerunning of this test
 SELECT 1 FROM citus_remove_node('localhost', :master_port);
 SELECT public.wait_until_metadata_sync(30000);
