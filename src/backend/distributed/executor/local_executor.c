@@ -104,6 +104,7 @@
 #include "optimizer/optimizer.h"
 #include "nodes/params.h"
 #include "utils/snapmgr.h"
+#include "distributed/utils/attribute.h"
 
 /* controlled via a GUC */
 bool EnableLocalExecution = true;
@@ -646,6 +647,8 @@ LocallyExecuteTaskPlan(PlannedStmt *taskPlan, char *queryString,
 	{
 		LocalExecutorShardId = task->anchorShardId;
 	}
+
+	AttributeTask(task->partitionColumn, task->colocationId, taskPlan->commandType);
 
 	PG_TRY();
 	{
