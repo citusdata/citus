@@ -136,13 +136,14 @@ SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, q
 SELECT result FROM run_command_on_all_nodes('SELECT clean_citus_stats_tenants()');
 
 -- test local queries
+-- all of these distribution column values are from second worker
 
 SELECT count(*)>=0 FROM dist_tbl_text WHERE a = '/b*c/de';
 SELECT count(*)>=0 FROM dist_tbl_text WHERE a = '/bcde';
 SELECT count(*)>=0 FROM dist_tbl_text WHERE a = U&'\0061\0308bc';
 SELECT count(*)>=0 FROM dist_tbl_text WHERE a = 'bcde*';
 
-SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, query_count_in_this_period, query_count_in_last_period FROM citus_stats_tenants ORDER BY tenant_attribute;
+SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, query_count_in_this_period, query_count_in_last_period FROM citus_stats_tenants_local ORDER BY tenant_attribute;
 
 -- test local cached queries & prepared statements
 
@@ -161,7 +162,7 @@ EXECUTE dist_tbl_text_select_plan('/bcde');
 EXECUTE dist_tbl_text_select_plan(U&'\0061\0308bc');
 EXECUTE dist_tbl_text_select_plan('bcde*');
 
-SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, query_count_in_this_period, query_count_in_last_period FROM citus_stats_tenants ORDER BY tenant_attribute;
+SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, query_count_in_this_period, query_count_in_last_period FROM citus_stats_tenants_local ORDER BY tenant_attribute;
 
 \c - - - :master_port
 SET search_path TO citus_stats_tenants;
