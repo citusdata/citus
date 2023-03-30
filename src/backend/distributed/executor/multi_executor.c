@@ -802,6 +802,11 @@ GetObjectTypeString(ObjectType objType)
 			return "function";
 		}
 
+		case OBJECT_PUBLICATION:
+		{
+			return "publication";
+		}
+
 		case OBJECT_SCHEMA:
 		{
 			return "schema";

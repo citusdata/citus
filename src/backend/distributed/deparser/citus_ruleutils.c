@@ -1372,7 +1372,7 @@ convert_aclright_to_string(int aclright)
 
 /*
  * contain_nextval_expression_walker walks over expression tree and returns
- * true if it contains call to 'nextval' function.
+ * true if it contains call to 'nextval' function or it has an identity column.
  */
 bool
 contain_nextval_expression_walker(Node *node, void *context)
@@ -1382,6 +1382,13 @@ contain_nextval_expression_walker(Node *node, void *context)
 		return false;
 	}
 
+	/* check if the node contains an identity column */
+	if (IsA(node, NextValueExpr))
+	{
+		return true;
+	}
+
+	/* check if the node contains call to 'nextval' */
 	if (IsA(node, FuncExpr))
 	{
 		FuncExpr *funcExpr = (FuncExpr *) node;

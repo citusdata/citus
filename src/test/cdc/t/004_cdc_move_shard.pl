@@ -46,7 +46,7 @@ create_cdc_publication_and_slots_for_coordinator($node_coordinator,'sensors');
 connect_cdc_client_to_coordinator_publication($node_coordinator, $node_cdc_client);
 wait_for_cdc_client_to_catch_up_with_coordinator($node_coordinator);
 
-create_cdc_replication_slots_for_workers(\@workers);
+create_cdc_slots_for_workers(\@workers);
 
 #insert data into the sensors table in the coordinator node before distributing the table.
 $node_coordinator->safe_psql('postgres',"
@@ -56,7 +56,6 @@ FROM generate_series(0,100)i;");
 
 $node_coordinator->safe_psql('postgres',"SET citus.shard_count = 2; SELECT create_distributed_table_concurrently('sensors', 'measureid');");
 
-create_cdc_publication_for_workers(\@workers,'sensors');
 connect_cdc_client_to_workers_publication(\@workers, $node_cdc_client);
 wait_for_cdc_client_to_catch_up_with_citus_cluster($node_coordinator, \@workers);
 

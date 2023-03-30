@@ -425,6 +425,7 @@ ErrorIfCurrentUserCanNotDistributeObject(char *textType, ObjectType type,
 		case OBJECT_COLLATION:
 		case OBJECT_VIEW:
 		case OBJECT_ROLE:
+		case OBJECT_PUBLICATION:
 		{
 			check_object_ownership(userId, type, *addr, node, *relation);
 			break;

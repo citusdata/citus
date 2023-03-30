@@ -429,12 +429,15 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 	SET application_name to 'citus_internal gpid=10000000001';
 	\set VERBOSITY terse
 
-	CREATE TABLE publication_test_table(id int);
-	CREATE PUBLICATION publication_test FOR TABLE publication_test_table;
+    CREATE OPERATOR === (
+    LEFTARG = int,
+    RIGHTARG = int,
+    FUNCTION = int4eq
+    );
 
 	SET ROLE metadata_sync_helper_role;
 	WITH distributed_object_data(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation)
-		AS (VALUES ('publication', ARRAY['publication_test']::text[], ARRAY[]::text[], -1, 0, false))
+		AS (VALUES ('operator', ARRAY['===']::text[], ARRAY['int','int']::text[], -1, 0, false))
 	SELECT citus_internal_add_object_metadata(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation) FROM distributed_object_data;
 ROLLBACK;
 

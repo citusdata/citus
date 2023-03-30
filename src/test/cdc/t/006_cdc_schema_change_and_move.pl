@@ -56,7 +56,7 @@ FROM generate_series(0,100)i;");
 $node_coordinator->safe_psql('postgres',"SET citus.shard_count = 2; SELECT create_distributed_table_concurrently('sensors', 'measureid');");
 
 #connect_cdc_client_to_coordinator_publication($node_coordinator, $node_cdc_client);
-create_cdc_publication_and_slots_for_workers(\@workers,'sensors');
+create_cdc_slots_for_workers(\@workers);
 connect_cdc_client_to_workers_publication(\@workers, $node_cdc_client);
 wait_for_cdc_client_to_catch_up_with_citus_cluster($node_coordinator, \@workers);
 

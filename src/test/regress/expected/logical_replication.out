@@ -25,7 +25,9 @@ NOTICE:  localhost:xxxxx is the coordinator and already contains metadata, skipp
 -- This allows us to test the cleanup logic at the start of the shard move.
 \c - - - :worker_1_port
 SET search_path TO logical_replication;
+SET citus.enable_ddl_propagation TO off;
 CREATE PUBLICATION citus_shard_move_publication_:postgres_oid FOR TABLE dist_6830000;
+RESET citus.enable_ddl_propagation;
 \c - - - :master_port
 SET search_path TO logical_replication;
 CREATE TABLE dist_6830000(
@@ -155,6 +157,13 @@ SELECT count(*) from dist;
    100
 (1 row)
 
+DROP PUBLICATION citus_shard_move_publication_:postgres_oid;
+SELECT pg_drop_replication_slot('citus_shard_move_slot_' || :postgres_oid);
+ pg_drop_replication_slot
+---------------------------------------------------------------------
+
+(1 row)
+
 \c - - - :worker_2_port
 SET search_path TO logical_replication;
 SELECT count(*) from pg_subscription;
@@ -188,3 +197,9 @@ ALTER SUBSCRIPTION citus_shard_move_subscription_:postgres_oid DISABLE;
 ALTER SUBSCRIPTION citus_shard_move_subscription_:postgres_oid SET (slot_name = NONE);
 DROP SUBSCRIPTION citus_shard_move_subscription_:postgres_oid;
 DROP SCHEMA logical_replication CASCADE;
+SELECT public.wait_for_resource_cleanup();
+ wait_for_resource_cleanup
+---------------------------------------------------------------------
+
+(1 row)
+

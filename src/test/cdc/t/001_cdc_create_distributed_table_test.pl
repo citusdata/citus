@@ -40,12 +40,11 @@ create_cdc_publication_and_slots_for_coordinator($node_coordinator,'sensors');
 connect_cdc_client_to_coordinator_publication($node_coordinator, $node_cdc_client);
 wait_for_cdc_client_to_catch_up_with_coordinator($node_coordinator);
 
-create_cdc_replication_slots_for_workers(\@workers);
+create_cdc_slots_for_workers(\@workers);
 
 # Distribut the sensors table to worker nodes.
 $node_coordinator->safe_psql('postgres',"SELECT create_distributed_table('sensors', 'measureid');");
 
-create_cdc_publication_for_workers(\@workers,'sensors');
 connect_cdc_client_to_workers_publication(\@workers, $node_cdc_client);
 wait_for_cdc_client_to_catch_up_with_citus_cluster($node_coordinator, \@workers);
 
