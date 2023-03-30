@@ -43,7 +43,7 @@ ExecutorEnd_hook_type prev_ExecutorEnd = NULL;
 /* TODO maybe needs to be a stack */
 char attributeToTenant[MAX_TENANT_ATTRIBUTE_LENGTH] = "";
 CmdType attributeCommandType = CMD_UNKNOWN;
-int colocationGroupId = -1;
+int attributeToColocationGroupId = INVALID_COLOCATION_ID;
 
 const char *SharedMemoryNameForMultiTenantMonitor =
 	"Shared memory for multi tenant monitor";
@@ -236,7 +236,7 @@ AttributeTask(char *tenantId, int colocationId, CmdType commandType)
 		return;
 	}
 
-	colocationGroupId = colocationId;
+	attributeToColocationGroupId = colocationId;
 	strncpy_s(attributeToTenant, MAX_TENANT_ATTRIBUTE_LENGTH, tenantId,
 			  MAX_TENANT_ATTRIBUTE_LENGTH - 1);
 	attributeCommandType = commandType;
@@ -622,7 +622,7 @@ CreateTenantStats(MultiTenantMonitor *monitor, time_t queryTime)
 
 	strcpy_s(monitor->tenants[tenantIndex].tenantAttribute,
 			 sizeof(monitor->tenants[tenantIndex].tenantAttribute), attributeToTenant);
-	monitor->tenants[tenantIndex].colocationGroupId = colocationGroupId;
+	monitor->tenants[tenantIndex].colocationGroupId = attributeToColocationGroupId;
 
 	monitor->tenants[tenantIndex].namedLockTranche.trancheId = LWLockNewTrancheId();
 	monitor->tenants[tenantIndex].namedLockTranche.trancheName = tenantTrancheName;
@@ -648,7 +648,7 @@ FindTenantStats(MultiTenantMonitor *monitor)
 	{
 		TenantStats *tenantStats = &monitor->tenants[i];
 		if (strcmp(tenantStats->tenantAttribute, attributeToTenant) == 0 &&
-			tenantStats->colocationGroupId == colocationGroupId)
+			tenantStats->colocationGroupId == attributeToColocationGroupId)
 		{
 			return i;
 		}
