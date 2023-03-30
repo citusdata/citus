@@ -624,6 +624,7 @@ DeleteAllReplicatedTablePlacementsFromNodeGroupViaMetadataContext(
 	}
 
 	MemoryContext oldContext = MemoryContextSwitchTo(context->context);
+	bool forceSend = false;
 	GroupShardPlacement *placement = NULL;
 	foreach_ptr(placement, replicatedPlacementListForGroup)
 	{
@@ -633,18 +634,16 @@ DeleteAllReplicatedTablePlacementsFromNodeGroupViaMetadataContext(
 		{
 			char *deletePlacementCommand =
 				DeleteShardPlacementCommand(placement->placementId);
-
-			SendOrCollectCommandListToMetadataNodes(context,
-													list_make1(deletePlacementCommand));
+			List *commandList = list_make1(deletePlacementCommand);
+			CollectCommandIntoMetadataSyncContext(context, commandList);
+			ProcessBatchCommandsToMetadataNodes(context, forceSend);
 		}
 
 		/* do not execute local transaction if we collect commands */
-		if (!MetadataSyncCollectsCommands(context))
+		if (!MetadataSyncInNoConnectionMode(context))
 		{
 			DeleteShardPlacementRow(placement->placementId);
 		}
-
-		ResetMetadataSyncMemoryContext(context);
 	}
 	MemoryContextSwitchTo(oldContext);
 }
