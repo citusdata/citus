@@ -8,17 +8,26 @@
  *-------------------------------------------------------------------------
  */
 
+#include "cdc_decoder_utils.h"
 #include "postgres.h"
+#include "access/genam.h"
+#include "catalog/pg_namespace.h"
+#include "commands/extension.h"
 #include "common/hashfn.h"
 #include "utils/typcache.h"
 #include "utils/lsyscache.h"
-#include "catalog/pg_namespace.h"
-#include "distributed/cdc_decoder.h"
-#include "distributed/relay_utility.h"
-#include "distributed/worker_protocol.h"
-#include "distributed/metadata_cache.h"
 
+PG_MODULE_MAGIC;
+
+extern void _PG_output_plugin_init(OutputPluginCallbacks *cb);
 static LogicalDecodeChangeCB ouputPluginChangeCB;
+
+static void
+InitShardToDistributedTableMap(void);
+
+static void
+PublishDistributedTableChanges(LogicalDecodingContext *ctx, ReorderBufferTXN *txn,
+							   Relation relation, ReorderBufferChange *change);
 
 
 static bool replication_origin_filter_cb(LogicalDecodingContext *ctx, RepOriginId
@@ -42,6 +51,81 @@ typedef struct
 } ShardIdHashEntry;
 
 static HTAB *shardToDistributedTableMap = NULL;
+
+static void
+cdc_change_cb(LogicalDecodingContext *ctx, ReorderBufferTXN *txn,
+							  Relation relation, ReorderBufferChange *change);
+
+
+/* build time macro for base decoder plugin name for CDC and Shard Split. */
+#ifndef CDC_BASE_DECODER_PLUGIN_NAME
+#define CDC_BASE_DECODER_PLUGIN_NAME "pgoutput"
+#endif
+
+/* build time macro for base decoder plugin's  initialization function name for CDC and Shard Split. */
+#ifndef CDC_BASE_DECODER_PLUGIN_INIT_FUNCTION_NAME
+#define CDC_BASE_DECODER_PLUGIN_INIT_FUNCTION_NAME "_PG_output_plugin_init"
+#endif
+
+/*
+ * Postgres uses 'pgoutput' as default plugin for logical replication.
+ * We want to reuse Postgres pgoutput's functionality as much as possible.
+ * Hence we load all the functions of this plugin and override as required.
+ */
+void
+_PG_output_plugin_init(OutputPluginCallbacks *cb)
+{
+	elog(LOG, "Initializing CDC decoder");
+	LogicalOutputPluginInit plugin_init =
+		(LogicalOutputPluginInit) (void *)
+		load_external_function(CDC_BASE_DECODER_PLUGIN_NAME,
+							   CDC_BASE_DECODER_PLUGIN_INIT_FUNCTION_NAME,
+							   false, NULL);
+
+	if (plugin_init == NULL)
+	{
+		elog(ERROR, "output plugins have to declare the _PG_output_plugin_init symbol");
+	}
+
+	/* ask the output plugin to fill the callback struct */
+	plugin_init(cb);
+
+	/* Initialize the Shard Id to Distributed Table id mapping hash table.*/
+	InitShardToDistributedTableMap();
+
+	/* actual pgoutput callback function will be called  */
+	ouputPluginChangeCB = cb->change_cb;
+	cb->change_cb = cdc_change_cb;
+	cb->filter_by_origin_cb = replication_origin_filter_cb;
+}
+
+
+/*
+ * shard_split_and_cdc_change_cb function emits the incoming tuple change
+ * to the appropriate destination shard.
+ */
+static void
+cdc_change_cb(LogicalDecodingContext *ctx, ReorderBufferTXN *txn,
+							  Relation relation, ReorderBufferChange *change)
+{
+	/*
+	 * If Citus has not been loaded yet, pass the changes
+	 * through to the undrelying decoder plugin.
+	 */
+	if (!CitusHasBeenLoaded())
+	{
+		ouputPluginChangeCB(ctx, txn, relation, change);
+		return;
+	}
+
+	/* check if the relation is publishable.*/
+	if (!is_publishable_relation(relation))
+	{
+		return;
+	}
+
+	PublishDistributedTableChanges(ctx, txn, relation, change);
+}
 
 
 /*
@@ -100,24 +184,6 @@ LookupDistributedTableIdForShardId(Oid shardId, bool *isReferenceTable)
 
 
 /*
- * InitCDCDecoder is called by from the shard split decoder plugin's init function.
- * It sets the call back function for filtering out changes originated from other nodes.
- * It also sets the call back function for processing the changes in ouputPluginChangeCB.
- * This function is common for both CDC and shard split decoder plugins.
- */
-void
-InitCDCDecoder(OutputPluginCallbacks *cb, LogicalDecodeChangeCB changeCB)
-{
-	elog(LOG, "Initializing CDC decoder");
-	cb->filter_by_origin_cb = replication_origin_filter_cb;
-	ouputPluginChangeCB = changeCB;
-
-	/* Initialize the hash table used for mapping shard to shell tables. */
-	InitShardToDistributedTableMap();
-}
-
-
-/*
  * replication_origin_filter_cb call back function filters out publication of changes
  * originated from any other node other than the current node. This is
  * identified by the "origin_id" of the changes. The origin_id is set to
@@ -166,7 +232,7 @@ TranslateAndPublishRelationForCDC(LogicalDecodingContext *ctx, ReorderBufferTXN 
  * the changes as the change for the distributed table instead of shard.
  * If not, it returns false. It also skips the Citus metadata tables.
  */
-void
+static void
 PublishDistributedTableChanges(LogicalDecodingContext *ctx, ReorderBufferTXN *txn,
 							   Relation relation, ReorderBufferChange *change)
 {

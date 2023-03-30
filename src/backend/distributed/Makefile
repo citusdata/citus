@@ -18,7 +18,7 @@ generated_downgrade_sql_files += $(patsubst %,$(citus_abs_srcdir)/build/sql/%,$(
 DATA_built = $(generated_sql_files)
 
 # directories with source files
-SUBDIRS = . commands cdc connection ddl deparser executor metadata operations planner progress relay safeclib shardsplit test transaction utils worker clock
+SUBDIRS = . commands connection ddl deparser executor metadata operations planner progress relay safeclib shardsplit test transaction utils worker clock
 # enterprise modules
 SUBDIRS += replication
 
@@ -32,7 +32,10 @@ OBJS += \
 	$(patsubst $(citus_abs_srcdir)/%.c,%.o,$(foreach dir,$(SUBDIRS), $(sort $(wildcard $(citus_abs_srcdir)/$(dir)/*.c))))
 
 # be explicit about the default target
-all:
+all: cdc
+
+cdc: 
+	$(MAKE) -C cdc all
 
 NO_PGXS = 1
 

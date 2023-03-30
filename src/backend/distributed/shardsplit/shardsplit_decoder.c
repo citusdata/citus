@@ -8,7 +8,6 @@
  *-------------------------------------------------------------------------
  */
 #include "postgres.h"
-#include "distributed/cdc_decoder.h"
 #include "distributed/shardinterval_utils.h"
 #include "distributed/shardsplit_shared_memory.h"
 #include "distributed/worker_shard_visibility.h"
@@ -21,12 +20,12 @@
 #include "catalog/pg_namespace.h"
 
 extern void _PG_output_plugin_init(OutputPluginCallbacks *cb);
-static LogicalDecodeChangeCB ouputPluginChangeCB;
+static LogicalDecodeChangeCB pgOutputPluginChangeCB;
 
 static HTAB *SourceToDestinationShardMap = NULL;
 
 /* Plugin callback */
-static void shard_split_and_cdc_change_cb(LogicalDecodingContext *ctx,
+static void shard_split_change_cb(LogicalDecodingContext *ctx,
 										  ReorderBufferTXN *txn,
 										  Relation relation, ReorderBufferChange *change);
 
@@ -44,22 +43,6 @@ static HeapTuple GetTupleForTargetSchema(HeapTuple sourceRelationTuple,
 										 TupleDesc sourceTupleDesc,
 										 TupleDesc targetTupleDesc);
 
-inline static bool IsShardSplitSlot(char *replicationSlotName);
-
-
-#define CITUS_SHARD_SLOT_PREFIX "citus_shard_"
-#define CITUS_SHARD_SLOT_PREFIX_SIZE (sizeof(CITUS_SHARD_SLOT_PREFIX) - 1)
-
-/* build time macro for base decoder plugin name for CDC and Shard Split. */
-#ifndef CDC_SHARD_SPLIT_BASE_DECODER_PLUGIN_NAME
-#define CDC_SHARD_SPLIT_BASE_DECODER_PLUGIN_NAME "pgoutput"
-#endif
-
-/* build time macro for base decoder plugin's  initialization function name for CDC and Shard Split. */
-#ifndef CDC_SHARD_SPLIT_BASE_DECODER_PLUGIN_INIT_FUNCTION_NAME
-#define CDC_SHARD_SPLIT_BASE_DECODER_PLUGIN_INIT_FUNCTION_NAME "_PG_output_plugin_init"
-#endif
-
 /*
  * Postgres uses 'pgoutput' as default plugin for logical replication.
  * We want to reuse Postgres pgoutput's functionality as much as possible.
@@ -70,8 +53,8 @@ _PG_output_plugin_init(OutputPluginCallbacks *cb)
 {
 	LogicalOutputPluginInit plugin_init =
 		(LogicalOutputPluginInit) (void *)
-		load_external_function(CDC_SHARD_SPLIT_BASE_DECODER_PLUGIN_NAME,
-							   CDC_SHARD_SPLIT_BASE_DECODER_PLUGIN_INIT_FUNCTION_NAME,
+		load_external_function("pgoutput",
+							   "_PG_output_plugin_init",
 							   false, NULL);
 
 	if (plugin_init == NULL)
@@ -83,30 +66,17 @@ _PG_output_plugin_init(OutputPluginCallbacks *cb)
 	plugin_init(cb);
 
 	/* actual pgoutput callback will be called with the appropriate destination shard */
-	ouputPluginChangeCB = cb->change_cb;
-	cb->change_cb = shard_split_and_cdc_change_cb;
-	InitCDCDecoder(cb, ouputPluginChangeCB);
+	pgOutputPluginChangeCB = cb->change_cb;
+	cb->change_cb = shard_split_change_cb;
 }
 
 
 /*
- *  Check if the replication slot is for Shard split by checking for prefix.
- */
-inline static
-bool
-IsShardSplitSlot(char *replicationSlotName)
-{
-	return strncmp(replicationSlotName, CITUS_SHARD_SLOT_PREFIX,
-				   CITUS_SHARD_SLOT_PREFIX_SIZE) == 0;
-}
-
-
-/*
- * shard_split_and_cdc_change_cb function emits the incoming tuple change
+ * shard_split_change_cb function emits the incoming tuple change
  * to the appropriate destination shard.
  */
 static void
-shard_split_and_cdc_change_cb(LogicalDecodingContext *ctx, ReorderBufferTXN *txn,
+shard_split_change_cb(LogicalDecodingContext *ctx, ReorderBufferTXN *txn,
 							  Relation relation, ReorderBufferChange *change)
 {
 	/*
@@ -115,7 +85,7 @@ shard_split_and_cdc_change_cb(LogicalDecodingContext *ctx, ReorderBufferTXN *txn
 	 */
 	if (!CitusHasBeenLoaded())
 	{
-		ouputPluginChangeCB(ctx, txn, relation, change);
+		pgOutputPluginChangeCB(ctx, txn, relation, change);
 		return;
 	}
 
@@ -129,13 +99,6 @@ shard_split_and_cdc_change_cb(LogicalDecodingContext *ctx, ReorderBufferTXN *txn
 	if (replicationSlotName == NULL)
 	{
 		elog(ERROR, "Replication slot name is NULL!");
-		return;
-	}
-
-	/* check for the internal shard split names, if not, assume the slot is for CDC. */
-	if (!IsShardSplitSlot(replicationSlotName))
-	{
-		PublishDistributedTableChanges(ctx, txn, relation, change);
 		return;
 	}
 
@@ -257,7 +220,7 @@ shard_split_and_cdc_change_cb(LogicalDecodingContext *ctx, ReorderBufferTXN *txn
 		}
 	}
 
-	ouputPluginChangeCB(ctx, txn, targetRelation, change);
+	pgOutputPluginChangeCB(ctx, txn, targetRelation, change);
 	RelationClose(targetRelation);
 }
 
