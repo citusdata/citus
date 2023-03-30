@@ -101,11 +101,12 @@ extern void SyncNodeMetadataToNodesMain(Datum main_arg);
 extern void SignalMetadataSyncDaemon(Oid database, int sig);
 extern bool ShouldInitiateMetadataSync(bool *lockFailure);
 extern List * SequenceDependencyCommandList(Oid relationId);
+extern List * IdentitySequenceDependencyCommandList(Oid targetRelationId);
 
 extern List * DDLCommandsForSequence(Oid sequenceOid, char *ownerName);
 extern List * GetSequencesFromAttrDef(Oid attrdefOid);
 extern void GetDependentSequencesWithRelation(Oid relationId, List **seqInfoList,
-											  AttrNumber attnum);
+											  AttrNumber attnum, char depType);
 extern List * GetDependentFunctionsWithRelation(Oid relationId);
 extern Oid GetAttributeTypeOid(Oid relationId, AttrNumber attnum);
 extern void SetLocalEnableMetadataSync(bool state);
@@ -146,6 +147,8 @@ extern void SyncDeleteColocationGroupToNodes(uint32 colocationId);
 	"placementid = EXCLUDED.placementid"
 #define METADATA_SYNC_CHANNEL "metadata_sync"
 
+#define WORKER_ADJUST_IDENTITY_COLUMN_SEQ_RANGES \
+	"SELECT pg_catalog.worker_adjust_identity_column_seq_ranges(%s)"
 
 /* controlled via GUC */
 extern char *EnableManualMetadataChangesForUser;
