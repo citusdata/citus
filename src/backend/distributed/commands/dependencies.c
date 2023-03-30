@@ -29,16 +29,14 @@
 #include "storage/lmgr.h"
 #include "utils/lsyscache.h"
 
-typedef bool (*AddressPredicate)(const ObjectAddress *);
 
 static void EnsureDependenciesCanBeDistributed(const ObjectAddress *relationAddress);
 static void ErrorIfCircularDependencyExists(const ObjectAddress *objectAddress);
 static int ObjectAddressComparator(const void *a, const void *b);
-static List * FilterObjectAddressListByPredicate(List *objectAddressList,
-												 AddressPredicate predicate);
 static void EnsureDependenciesExistOnAllNodes(const ObjectAddress *target);
 static List * GetDependencyCreateDDLCommands(const ObjectAddress *dependency);
 static bool ShouldPropagateObject(const ObjectAddress *address);
+static char * DropTableIfExistsCommand(Oid relationId);
 
 /*
  * EnsureDependenciesExistOnAllNodes finds all the dependencies that we support and makes
@@ -326,6 +324,21 @@ GetDistributableDependenciesForObject(const ObjectAddress *target)
 
 
 /*
+ * DropTableIfExistsCommand returns command to drop given table if exists.
+ */
+static char *
+DropTableIfExistsCommand(Oid relationId)
+{
+	char *qualifiedRelationName = generate_qualified_relation_name(relationId);
+	StringInfo dropTableCommand = makeStringInfo();
+	appendStringInfo(dropTableCommand, "DROP TABLE IF EXISTS %s CASCADE",
+					 qualifiedRelationName);
+
+	return dropTableCommand->data;
+}
+
+
+/*
  * GetDependencyCreateDDLCommands returns a list (potentially empty or NIL) of ddl
  * commands to execute on a worker to create the object.
  */
@@ -379,6 +392,10 @@ GetDependencyCreateDDLCommands(const ObjectAddress *dependency)
 						commandList = lappend(commandList, GetTableDDLCommand(
 												  tableDDLCommand));
 					}
+
+					/* we need to drop table, if exists, first to make table creation idempotent */
+					commandList = lcons(DropTableIfExistsCommand(relationId),
+										commandList);
 				}
 
 				return commandList;
@@ -529,68 +546,6 @@ GetAllDependencyCreateDDLCommands(const List *dependencies)
 	}
 
 	return commands;
-}
-
-
-/*
- * ReplicateAllObjectsToNodeCommandList returns commands to replicate all
- * previously marked objects to a worker node. The function also sets
- * clusterHasDistributedFunction if there are any distributed functions.
- */
-List *
-ReplicateAllObjectsToNodeCommandList(const char *nodeName, int nodePort)
-{
-	/* since we are executing ddl commands disable propagation first, primarily for mx */
-	List *ddlCommands = list_make1(DISABLE_DDL_PROPAGATION);
-
-	/*
-	 * collect all dependencies in creation order and get their ddl commands
-	 */
-	List *dependencies = GetDistributedObjectAddressList();
-
-	/*
-	 * Depending on changes in the environment, such as the enable_metadata_sync guc
-	 * there might be objects in the distributed object address list that should currently
-	 * not be propagated by citus as they are 'not supported'.
-	 */
-	dependencies = FilterObjectAddressListByPredicate(dependencies,
-													  &SupportedDependencyByCitus);
-
-	/*
-	 * When dependency lists are getting longer we see a delay in the creation time on the
-	 * workers. We would like to inform the user. Currently we warn for lists greater than
-	 * 100 items, where 100 is an arbitrarily chosen number. If we find it too high or too
-	 * low we can adjust this based on experience.
-	 */
-	if (list_length(dependencies) > 100)
-	{
-		ereport(NOTICE, (errmsg("Replicating postgres objects to node %s:%d", nodeName,
-								nodePort),
-						 errdetail("There are %d objects to replicate, depending on your "
-								   "environment this might take a while",
-								   list_length(dependencies))));
-	}
-
-	dependencies = OrderObjectAddressListInDependencyOrder(dependencies);
-	ObjectAddress *dependency = NULL;
-	foreach_ptr(dependency, dependencies)
-	{
-		if (IsAnyObjectAddressOwnedByExtension(list_make1(dependency), NULL))
-		{
-			/*
-			 * we expect extension-owned objects to be created as a result
-			 * of the extension being created.
-			 */
-			continue;
-		}
-
-		ddlCommands = list_concat(ddlCommands,
-								  GetDependencyCreateDDLCommands(dependency));
-	}
-
-	ddlCommands = lappend(ddlCommands, ENABLE_DDL_PROPAGATION);
-
-	return ddlCommands;
 }
 
 
@@ -749,7 +704,7 @@ ShouldPropagateAnyObject(List *addresses)
  * FilterObjectAddressListByPredicate takes a list of ObjectAddress *'s and returns a list
  * only containing the ObjectAddress *'s for which the predicate returned true.
  */
-static List *
+List *
 FilterObjectAddressListByPredicate(List *objectAddressList, AddressPredicate predicate)
 {
 	List *result = NIL;

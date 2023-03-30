@@ -90,6 +90,7 @@
 
 /* managed via a GUC */
 char *EnableManualMetadataChangesForUser = "";
+int MetadataSyncTransMode = METADATA_SYNC_TRANSACTIONAL;
 
 
 static void EnsureObjectMetadataIsSane(int distributionArgumentIndex,
@@ -193,8 +194,20 @@ start_metadata_sync_to_node(PG_FUNCTION_ARGS)
 	EnsureCoordinator();
 
 	char *nodeNameString = text_to_cstring(nodeName);
+	WorkerNode *workerNode = ModifiableWorkerNode(nodeNameString, nodePort);
 
-	ActivateNode(nodeNameString, nodePort);
+	/*
+	 * Create MetadataSyncContext which is used throughout nodes' activation.
+	 * It contains activated nodes, bare connections if the mode is nontransactional,
+	 * and a memory context for allocation.
+	 */
+	bool collectCommands = false;
+	bool nodesAddedInSameTransaction = false;
+	MetadataSyncContext *context = CreateMetadataSyncContext(list_make1(workerNode),
+															 collectCommands,
+															 nodesAddedInSameTransaction);
+
+	ActivateNodeList(context);
 	TransactionModifiedNodeMetadata = true;
 
 	PG_RETURN_VOID();
@@ -214,87 +227,23 @@ start_metadata_sync_to_all_nodes(PG_FUNCTION_ARGS)
 	EnsureSuperUser();
 	EnsureCoordinator();
 
-	List *workerNodes = ActivePrimaryNonCoordinatorNodeList(RowShareLock);
+	List *nodeList = ActivePrimaryNonCoordinatorNodeList(RowShareLock);
 
-	ActivateNodeList(workerNodes);
+	/*
+	 * Create MetadataSyncContext which is used throughout nodes' activation.
+	 * It contains activated nodes, bare connections if the mode is nontransactional,
+	 * and a memory context for allocation.
+	 */
+	bool collectCommands = false;
+	bool nodesAddedInSameTransaction = false;
+	MetadataSyncContext *context = CreateMetadataSyncContext(nodeList,
+															 collectCommands,
+															 nodesAddedInSameTransaction);
+
+	ActivateNodeList(context);
 	TransactionModifiedNodeMetadata = true;
 
 	PG_RETURN_BOOL(true);
-}
-
-
-/*
- * SyncNodeMetadataToNode is the internal API for
- * start_metadata_sync_to_node().
- */
-void
-SyncNodeMetadataToNode(const char *nodeNameString, int32 nodePort)
-{
-	char *escapedNodeName = quote_literal_cstr(nodeNameString);
-
-	CheckCitusVersion(ERROR);
-	EnsureCoordinator();
-	EnsureModificationsCanRun();
-
-	EnsureSequentialModeMetadataOperations();
-
-	LockRelationOid(DistNodeRelationId(), ExclusiveLock);
-
-	WorkerNode *workerNode = FindWorkerNode(nodeNameString, nodePort);
-	if (workerNode == NULL)
-	{
-		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
-						errmsg("you cannot sync metadata to a non-existent node"),
-						errhint("First, add the node with SELECT citus_add_node"
-								"(%s,%d)", escapedNodeName, nodePort)));
-	}
-
-	if (!workerNode->isActive)
-	{
-		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
-						errmsg("you cannot sync metadata to an inactive node"),
-						errhint("First, activate the node with "
-								"SELECT citus_activate_node(%s,%d)",
-								escapedNodeName, nodePort)));
-	}
-
-	if (NodeIsCoordinator(workerNode))
-	{
-		ereport(NOTICE, (errmsg("%s:%d is the coordinator and already contains "
-								"metadata, skipping syncing the metadata",
-								nodeNameString, nodePort)));
-		return;
-	}
-
-	UseCoordinatedTransaction();
-
-	/*
-	 * One would normally expect to set hasmetadata first, and then metadata sync.
-	 * However, at this point we do the order reverse.
-	 * We first set metadatasynced, and then hasmetadata; since setting columns for
-	 * nodes with metadatasynced==false could cause errors.
-	 * (See ErrorIfAnyMetadataNodeOutOfSync)
-	 * We can safely do that because we are in a coordinated transaction and the changes
-	 * are only visible to our own transaction.
-	 * If anything goes wrong, we are going to rollback all the changes.
-	 */
-	workerNode = SetWorkerColumn(workerNode, Anum_pg_dist_node_metadatasynced,
-								 BoolGetDatum(true));
-	workerNode = SetWorkerColumn(workerNode, Anum_pg_dist_node_hasmetadata, BoolGetDatum(
-									 true));
-
-	if (!NodeIsPrimary(workerNode))
-	{
-		/*
-		 * If this is a secondary node we can't actually sync metadata to it; we assume
-		 * the primary node is receiving metadata.
-		 */
-		return;
-	}
-
-	/* fail if metadata synchronization doesn't succeed */
-	bool raiseInterrupts = true;
-	SyncNodeMetadataSnapshotToNode(workerNode, raiseInterrupts);
 }
 
 
@@ -613,6 +562,25 @@ ShouldSyncTableMetadataViaCatalog(Oid relationId)
 
 
 /*
+ * FetchRelationIdFromPgPartitionHeapTuple returns relation id from given heap tuple.
+ */
+Oid
+FetchRelationIdFromPgPartitionHeapTuple(HeapTuple heapTuple, TupleDesc tupleDesc)
+{
+	Assert(heapTuple->t_tableOid == DistPartitionRelationId());
+
+	bool isNullArray[Natts_pg_dist_partition];
+	Datum datumArray[Natts_pg_dist_partition];
+	heap_deform_tuple(heapTuple, tupleDesc, datumArray, isNullArray);
+
+	Datum relationIdDatum = datumArray[Anum_pg_dist_partition_logicalrelid - 1];
+	Oid relationId = DatumGetObjectId(relationIdDatum);
+
+	return relationId;
+}
+
+
+/*
  * ShouldSyncTableMetadataInternal decides whether we should sync the metadata for a table
  * based on whether it is a hash distributed table, or a citus table with no distribution
  * key.
@@ -715,11 +683,12 @@ DropMetadataSnapshotOnNode(WorkerNode *workerNode)
 	 * Detach partitions, break dependencies between sequences and table then
 	 * remove shell tables first.
 	 */
+	bool singleTransaction = true;
 	List *dropMetadataCommandList = DetachPartitionCommandList();
 	dropMetadataCommandList = lappend(dropMetadataCommandList,
 									  BREAK_CITUS_TABLE_SEQUENCE_DEPENDENCY_COMMAND);
 	dropMetadataCommandList = lappend(dropMetadataCommandList,
-									  REMOVE_ALL_SHELL_TABLES_COMMAND);
+									  WorkerDropAllShellTablesCommand(singleTransaction));
 	dropMetadataCommandList = list_concat(dropMetadataCommandList,
 										  NodeMetadataDropCommands());
 	dropMetadataCommandList = lappend(dropMetadataCommandList,
@@ -766,114 +735,6 @@ NodeMetadataCreateCommands(void)
 										  nodeListInsertCommand);
 
 	return metadataSnapshotCommandList;
-}
-
-
-/*
- * DistributedObjectMetadataSyncCommandList returns the necessary commands to create
- * pg_dist_object entries on the new node.
- */
-List *
-DistributedObjectMetadataSyncCommandList(void)
-{
-	HeapTuple pgDistObjectTup = NULL;
-	Relation pgDistObjectRel = table_open(DistObjectRelationId(), AccessShareLock);
-	Relation pgDistObjectIndexRel = index_open(DistObjectPrimaryKeyIndexId(),
-											   AccessShareLock);
-	TupleDesc pgDistObjectDesc = RelationGetDescr(pgDistObjectRel);
-
-	List *objectAddressList = NIL;
-	List *distArgumentIndexList = NIL;
-	List *colocationIdList = NIL;
-	List *forceDelegationList = NIL;
-
-	/* It is not strictly necessary to read the tuples in order.
-	 * However, it is useful to get consistent behavior, both for regression
-	 * tests and also in production systems.
-	 */
-	SysScanDesc pgDistObjectScan = systable_beginscan_ordered(pgDistObjectRel,
-															  pgDistObjectIndexRel, NULL,
-															  0, NULL);
-	while (HeapTupleIsValid(pgDistObjectTup = systable_getnext_ordered(pgDistObjectScan,
-																	   ForwardScanDirection)))
-	{
-		Form_pg_dist_object pg_dist_object = (Form_pg_dist_object) GETSTRUCT(
-			pgDistObjectTup);
-
-		ObjectAddress *address = palloc(sizeof(ObjectAddress));
-
-		ObjectAddressSubSet(*address, pg_dist_object->classid, pg_dist_object->objid,
-							pg_dist_object->objsubid);
-
-		bool distributionArgumentIndexIsNull = false;
-		Datum distributionArgumentIndexDatum =
-			heap_getattr(pgDistObjectTup,
-						 Anum_pg_dist_object_distribution_argument_index,
-						 pgDistObjectDesc,
-						 &distributionArgumentIndexIsNull);
-		int32 distributionArgumentIndex = DatumGetInt32(distributionArgumentIndexDatum);
-
-		bool colocationIdIsNull = false;
-		Datum colocationIdDatum =
-			heap_getattr(pgDistObjectTup,
-						 Anum_pg_dist_object_colocationid,
-						 pgDistObjectDesc,
-						 &colocationIdIsNull);
-		int32 colocationId = DatumGetInt32(colocationIdDatum);
-
-		bool forceDelegationIsNull = false;
-		Datum forceDelegationDatum =
-			heap_getattr(pgDistObjectTup,
-						 Anum_pg_dist_object_force_delegation,
-						 pgDistObjectDesc,
-						 &forceDelegationIsNull);
-		bool forceDelegation = DatumGetBool(forceDelegationDatum);
-
-		objectAddressList = lappend(objectAddressList, address);
-
-		if (distributionArgumentIndexIsNull)
-		{
-			distArgumentIndexList = lappend_int(distArgumentIndexList,
-												INVALID_DISTRIBUTION_ARGUMENT_INDEX);
-		}
-		else
-		{
-			distArgumentIndexList = lappend_int(distArgumentIndexList,
-												distributionArgumentIndex);
-		}
-
-		if (colocationIdIsNull)
-		{
-			colocationIdList = lappend_int(colocationIdList,
-										   INVALID_COLOCATION_ID);
-		}
-		else
-		{
-			colocationIdList = lappend_int(colocationIdList, colocationId);
-		}
-
-		if (forceDelegationIsNull)
-		{
-			forceDelegationList = lappend_int(forceDelegationList, NO_FORCE_PUSHDOWN);
-		}
-		else
-		{
-			forceDelegationList = lappend_int(forceDelegationList, forceDelegation);
-		}
-	}
-
-	systable_endscan_ordered(pgDistObjectScan);
-	index_close(pgDistObjectIndexRel, AccessShareLock);
-	relation_close(pgDistObjectRel, NoLock);
-
-	char *workerMetadataUpdateCommand =
-		MarkObjectsDistributedCreateCommand(objectAddressList,
-											distArgumentIndexList,
-											colocationIdList,
-											forceDelegationList);
-	List *commandList = list_make1(workerMetadataUpdateCommand);
-
-	return commandList;
 }
 
 
@@ -986,6 +847,35 @@ NodeListInsertCommand(List *workerNodeList)
 	}
 
 	return nodeListInsertCommand->data;
+}
+
+
+/*
+ * NodeListIdempotentInsertCommand generates an idempotent multi-row INSERT command that
+ * can be executed to insert the nodes that are in workerNodeList to pg_dist_node table.
+ * It would insert new nodes or replace current nodes with new nodes if nodename-nodeport
+ * pairs already exist.
+ */
+char *
+NodeListIdempotentInsertCommand(List *workerNodeList)
+{
+	StringInfo nodeInsertIdempotentCommand = makeStringInfo();
+	char *nodeInsertStr = NodeListInsertCommand(workerNodeList);
+	appendStringInfoString(nodeInsertIdempotentCommand, nodeInsertStr);
+	char *onConflictStr = " ON CONFLICT ON CONSTRAINT pg_dist_node_nodename_nodeport_key "
+						  "DO UPDATE SET nodeid = EXCLUDED.nodeid, "
+						  "groupid = EXCLUDED.groupid, "
+						  "nodename = EXCLUDED.nodename, "
+						  "nodeport = EXCLUDED.nodeport, "
+						  "noderack = EXCLUDED.noderack, "
+						  "hasmetadata = EXCLUDED.hasmetadata, "
+						  "isactive = EXCLUDED.isactive, "
+						  "noderole = EXCLUDED.noderole, "
+						  "nodecluster = EXCLUDED.nodecluster ,"
+						  "metadatasynced = EXCLUDED.metadatasynced, "
+						  "shouldhaveshards = EXCLUDED.shouldhaveshards";
+	appendStringInfoString(nodeInsertIdempotentCommand, onConflictStr);
+	return nodeInsertIdempotentCommand->data;
 }
 
 
@@ -3390,7 +3280,6 @@ EnsureCoordinatorInitiatedOperation(void)
 	 * by the coordinator.
 	 */
 	if (!(IsCitusInternalBackend() || IsRebalancerInternalBackend()) ||
-		!MyBackendIsInDisributedTransaction() ||
 		GetLocalGroupId() == COORDINATOR_GROUP_ID)
 	{
 		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
@@ -4048,47 +3937,493 @@ ColocationGroupDeleteCommand(uint32 colocationId)
 
 
 /*
- * ColocationGroupCreateCommandList returns the full list of commands for syncing
- * pg_dist_colocation.
+ * SetMetadataSyncNodesFromNodeList sets list of nodes that needs to be metadata
+ * synced among given node list into metadataSyncContext.
  */
-List *
-ColocationGroupCreateCommandList(void)
+void
+SetMetadataSyncNodesFromNodeList(MetadataSyncContext *context, List *nodeList)
 {
-	bool hasColocations = false;
+	/* sync is disabled, then no nodes to sync */
+	if (!EnableMetadataSync)
+	{
+		return;
+	}
 
-	StringInfo colocationGroupCreateCommand = makeStringInfo();
-	appendStringInfo(colocationGroupCreateCommand,
-					 "WITH colocation_group_data (colocationid, shardcount, "
-					 "replicationfactor, distributioncolumntype, "
-					 "distributioncolumncollationname, "
-					 "distributioncolumncollationschema)  AS (VALUES ");
+	List *activatedWorkerNodeList = NIL;
 
-	Relation pgDistColocation = table_open(DistColocationRelationId(), AccessShareLock);
-	Relation colocationIdIndexRel = index_open(DistColocationIndexId(), AccessShareLock);
+	WorkerNode *node = NULL;
+	foreach_ptr(node, nodeList)
+	{
+		if (NodeIsPrimary(node))
+		{
+			/* warn if we have coordinator in nodelist */
+			if (NodeIsCoordinator(node))
+			{
+				ereport(NOTICE, (errmsg("%s:%d is the coordinator and already contains "
+										"metadata, skipping syncing the metadata",
+										node->workerName, node->workerPort)));
+				continue;
+			}
+
+			activatedWorkerNodeList = lappend(activatedWorkerNodeList, node);
+		}
+	}
+
+	context->activatedWorkerNodeList = activatedWorkerNodeList;
+}
+
+
+/*
+ * EstablishAndSetMetadataSyncBareConnections establishes and sets
+ * connections used throughout nontransactional metadata sync.
+ */
+void
+EstablishAndSetMetadataSyncBareConnections(MetadataSyncContext *context)
+{
+	Assert(MetadataSyncTransMode == METADATA_SYNC_NON_TRANSACTIONAL);
+
+	int connectionFlags = REQUIRE_METADATA_CONNECTION;
+
+	/* establish bare connections to activated worker nodes */
+	List *bareConnectionList = NIL;
+	WorkerNode *node = NULL;
+	foreach_ptr(node, context->activatedWorkerNodeList)
+	{
+		MultiConnection *connection = GetNodeUserDatabaseConnection(connectionFlags,
+																	node->workerName,
+																	node->workerPort,
+																	CurrentUserName(),
+																	NULL);
+
+		Assert(connection != NULL);
+		ForceConnectionCloseAtTransactionEnd(connection);
+		bareConnectionList = lappend(bareConnectionList, connection);
+	}
+
+	context->activatedWorkerBareConnections = bareConnectionList;
+}
+
+
+/*
+ * CreateMetadataSyncContext creates a context which contains worker connections
+ * and a MemoryContext to be used throughout the metadata sync.
+ *
+ * If we collect commands, connections will not be established as caller's intent
+ * is to collect sync commands.
+ *
+ * If the nodes are newly added before activation, we would not try to unset
+ * metadatasynced in separate transaction during nontransactional metadatasync.
+ */
+MetadataSyncContext *
+CreateMetadataSyncContext(List *nodeList, bool collectCommands,
+						  bool nodesAddedInSameTransaction)
+{
+	/* should be alive during local transaction during the sync */
+	MemoryContext context = AllocSetContextCreate(TopTransactionContext,
+												  "metadata_sync_context",
+												  ALLOCSET_DEFAULT_SIZES);
+
+	MetadataSyncContext *metadataSyncContext = (MetadataSyncContext *) palloc0(
+		sizeof(MetadataSyncContext));
+
+	metadataSyncContext->context = context;
+	metadataSyncContext->transactionMode = MetadataSyncTransMode;
+	metadataSyncContext->collectCommands = collectCommands;
+	metadataSyncContext->collectedCommands = NIL;
+	metadataSyncContext->nodesAddedInSameTransaction = nodesAddedInSameTransaction;
+
+	/* filter the nodes that needs to be activated from given node list */
+	SetMetadataSyncNodesFromNodeList(metadataSyncContext, nodeList);
 
 	/*
-	 * It is not strictly necessary to read the tuples in order.
-	 * However, it is useful to get consistent behavior, both for regression
-	 * tests and also in production systems.
+	 * establish connections only for nontransactional mode to prevent connection
+	 * open-close for each command
 	 */
-	SysScanDesc scanDescriptor =
-		systable_beginscan_ordered(pgDistColocation, colocationIdIndexRel,
-								   NULL, 0, NULL);
-
-	HeapTuple colocationTuple = systable_getnext_ordered(scanDescriptor,
-														 ForwardScanDirection);
-
-	while (HeapTupleIsValid(colocationTuple))
+	if (!collectCommands && MetadataSyncTransMode == METADATA_SYNC_NON_TRANSACTIONAL)
 	{
-		if (hasColocations)
+		EstablishAndSetMetadataSyncBareConnections(metadataSyncContext);
+	}
+
+	/* use 2PC coordinated transactions if we operate in transactional mode */
+	if (MetadataSyncTransMode == METADATA_SYNC_TRANSACTIONAL)
+	{
+		Use2PCForCoordinatedTransaction();
+	}
+
+	return metadataSyncContext;
+}
+
+
+/*
+ * ResetMetadataSyncMemoryContext resets memory context inside metadataSyncContext, if
+ * we are not collecting commands.
+ */
+void
+ResetMetadataSyncMemoryContext(MetadataSyncContext *context)
+{
+	if (!MetadataSyncCollectsCommands(context))
+	{
+		MemoryContextReset(context->context);
+	}
+}
+
+
+/*
+ * MetadataSyncCollectsCommands returns whether context is used for collecting
+ * commands instead of sending them to workers.
+ */
+bool
+MetadataSyncCollectsCommands(MetadataSyncContext *context)
+{
+	return context->collectCommands;
+}
+
+
+/*
+ * SendOrCollectCommandListToActivatedNodes sends the commands to the activated nodes with
+ * bare connections inside metadatacontext or via coordinated connections.
+ * Note that when context only collects commands, we add commands into the context
+ * without sending the commands.
+ */
+void
+SendOrCollectCommandListToActivatedNodes(MetadataSyncContext *context, List *commands)
+{
+	/* do nothing if no commands */
+	if (commands == NIL)
+	{
+		return;
+	}
+
+	/*
+	 * do not send any command to workers if we collect commands.
+	 * Collect commands into metadataSyncContext's collected command
+	 * list.
+	 */
+	if (MetadataSyncCollectsCommands(context))
+	{
+		context->collectedCommands = list_concat(context->collectedCommands, commands);
+		return;
+	}
+
+	/* send commands to new workers, the current user should be a superuser */
+	Assert(superuser());
+
+	if (context->transactionMode == METADATA_SYNC_TRANSACTIONAL)
+	{
+		List *workerNodes = context->activatedWorkerNodeList;
+		SendMetadataCommandListToWorkerListInCoordinatedTransaction(workerNodes,
+																	CurrentUserName(),
+																	commands);
+	}
+	else if (context->transactionMode == METADATA_SYNC_NON_TRANSACTIONAL)
+	{
+		List *workerConnections = context->activatedWorkerBareConnections;
+		SendCommandListToWorkerListWithBareConnections(workerConnections, commands);
+	}
+	else
+	{
+		pg_unreachable();
+	}
+}
+
+
+/*
+ * SendOrCollectCommandListToMetadataNodes sends the commands to the metadata nodes with
+ * bare connections inside metadatacontext or via coordinated connections.
+ * Note that when context only collects commands, we add commands into the context
+ * without sending the commands.
+ */
+void
+SendOrCollectCommandListToMetadataNodes(MetadataSyncContext *context, List *commands)
+{
+	/*
+	 * do not send any command to workers if we collcet commands.
+	 * Collect commands into metadataSyncContext's collected command
+	 * list.
+	 */
+	if (MetadataSyncCollectsCommands(context))
+	{
+		context->collectedCommands = list_concat(context->collectedCommands, commands);
+		return;
+	}
+
+	/* send commands to new workers, the current user should be a superuser */
+	Assert(superuser());
+
+	if (context->transactionMode == METADATA_SYNC_TRANSACTIONAL)
+	{
+		List *metadataNodes = TargetWorkerSetNodeList(NON_COORDINATOR_METADATA_NODES,
+													  RowShareLock);
+		SendMetadataCommandListToWorkerListInCoordinatedTransaction(metadataNodes,
+																	CurrentUserName(),
+																	commands);
+	}
+	else if (context->transactionMode == METADATA_SYNC_NON_TRANSACTIONAL)
+	{
+		SendBareCommandListToMetadataWorkers(commands);
+	}
+	else
+	{
+		pg_unreachable();
+	}
+}
+
+
+/*
+ * SendOrCollectCommandListToSingleNode sends the commands to the specific worker
+ * indexed by nodeIdx with bare connection inside metadatacontext or via coordinated
+ * connection. Note that when context only collects commands, we add commands into
+ * the context without sending the commands.
+ */
+void
+SendOrCollectCommandListToSingleNode(MetadataSyncContext *context, List *commands,
+									 int nodeIdx)
+{
+	/*
+	 * Do not send any command to workers if we collect commands.
+	 * Collect commands into metadataSyncContext's collected command
+	 * list.
+	 */
+	if (MetadataSyncCollectsCommands(context))
+	{
+		context->collectedCommands = list_concat(context->collectedCommands, commands);
+		return;
+	}
+
+	/* send commands to new workers, the current user should be a superuser */
+	Assert(superuser());
+
+	if (context->transactionMode == METADATA_SYNC_TRANSACTIONAL)
+	{
+		List *workerNodes = context->activatedWorkerNodeList;
+		Assert(nodeIdx < list_length(workerNodes));
+
+		WorkerNode *node = list_nth(workerNodes, nodeIdx);
+		SendMetadataCommandListToWorkerListInCoordinatedTransaction(list_make1(node),
+																	CurrentUserName(),
+																	commands);
+	}
+	else if (context->transactionMode == METADATA_SYNC_NON_TRANSACTIONAL)
+	{
+		List *workerConnections = context->activatedWorkerBareConnections;
+		Assert(nodeIdx < list_length(workerConnections));
+
+		MultiConnection *workerConnection = list_nth(workerConnections, nodeIdx);
+		List *connectionList = list_make1(workerConnection);
+		SendCommandListToWorkerListWithBareConnections(connectionList, commands);
+	}
+	else
+	{
+		pg_unreachable();
+	}
+}
+
+
+/*
+ * WorkerDropAllShellTablesCommand returns command required to drop shell tables
+ * from workers. When singleTransaction is false, we create transaction per shell
+ * table. Otherwise, we drop all shell tables within single transaction.
+ */
+char *
+WorkerDropAllShellTablesCommand(bool singleTransaction)
+{
+	char *singleTransactionString = (singleTransaction) ? "true" : "false";
+	StringInfo removeAllShellTablesCommand = makeStringInfo();
+	appendStringInfo(removeAllShellTablesCommand, WORKER_DROP_ALL_SHELL_TABLES,
+					 singleTransactionString);
+	return removeAllShellTablesCommand->data;
+}
+
+
+/*
+ * PropagateNodeWideObjectsCommandList is called during node activation to
+ * propagate any object that should be propagated for every node. These are
+ * generally not linked to any distributed object but change system wide behaviour.
+ */
+static List *
+PropagateNodeWideObjectsCommandList(void)
+{
+	/* collect all commands */
+	List *ddlCommands = NIL;
+
+	if (EnableAlterRoleSetPropagation)
+	{
+		/*
+		 * Get commands for database and postgres wide settings. Since these settings are not
+		 * linked to any role that can be distributed we need to distribute them seperately
+		 */
+		List *alterRoleSetCommands = GenerateAlterRoleSetCommandForRole(InvalidOid);
+		ddlCommands = list_concat(ddlCommands, alterRoleSetCommands);
+	}
+
+	return ddlCommands;
+}
+
+
+/*
+ * SyncDistributedObjects sync the distributed objects to the nodes in metadataSyncContext
+ * with transactional or nontransactional mode according to transactionMode inside
+ * metadataSyncContext.
+ *
+ * Transactions should be ordered like below:
+ * - Nodewide objects (only roles for now),
+ * - Deletion of sequence and shell tables and metadata entries
+ * - All dependencies (e.g., types, schemas, sequences) and all shell distributed
+ *   table and their pg_dist_xx metadata entries
+ * - Inter relation between those shell tables
+ *
+ * Note that we do not create the distributed dependencies on the coordinator
+ * since all the dependencies should be present in the coordinator already.
+ */
+void
+SyncDistributedObjects(MetadataSyncContext *context)
+{
+	if (context->activatedWorkerNodeList == NIL)
+	{
+		return;
+	}
+
+	EnsureSequentialModeMetadataOperations();
+
+	Assert(ShouldPropagate());
+
+	/* Send systemwide objects, only roles for now */
+	SendNodeWideObjectsSyncCommands(context);
+
+	/*
+	 * Break dependencies between sequences-shell tables, then remove shell tables,
+	 * and metadata tables respectively.
+	 * We should delete shell tables before metadata entries as we look inside
+	 * pg_dist_partition to figure out shell tables.
+	 */
+	SendShellTableDeletionCommands(context);
+	SendMetadataDeletionCommands(context);
+
+	/*
+	 * Commands to insert pg_dist_colocation entries.
+	 * Replicating dist objects and their metadata depends on this step.
+	 */
+	SendColocationMetadataCommands(context);
+
+	/*
+	 * Replicate all objects of the pg_dist_object to the remote node and
+	 * create metadata entries for Citus tables (pg_dist_shard, pg_dist_shard_placement,
+	 * pg_dist_partition, pg_dist_object).
+	 */
+	SendDependencyCreationCommands(context);
+	SendDistTableMetadataCommands(context);
+	SendDistObjectCommands(context);
+
+	/*
+	 * After creating each table, handle the inter table relationship between
+	 * those tables.
+	 */
+	SendInterTableRelationshipCommands(context);
+}
+
+
+/*
+ * SendNodeWideObjectsSyncCommands sends systemwide objects to workers with
+ * transactional or nontransactional mode according to transactionMode inside
+ * metadataSyncContext.
+ */
+void
+SendNodeWideObjectsSyncCommands(MetadataSyncContext *context)
+{
+	/* propagate node wide objects. It includes only roles for now. */
+	List *commandList = PropagateNodeWideObjectsCommandList();
+
+	if (commandList == NIL)
+	{
+		return;
+	}
+
+	commandList = lcons(DISABLE_DDL_PROPAGATION, commandList);
+	commandList = lappend(commandList, ENABLE_DDL_PROPAGATION);
+	SendOrCollectCommandListToActivatedNodes(context, commandList);
+}
+
+
+/*
+ * SendShellTableDeletionCommands sends sequence, and shell table deletion
+ * commands to workers with transactional or nontransactional mode according to
+ * transactionMode inside metadataSyncContext.
+ */
+void
+SendShellTableDeletionCommands(MetadataSyncContext *context)
+{
+	/* break all sequence deps for citus tables and remove all shell tables */
+	char *breakSeqDepsCommand = BREAK_CITUS_TABLE_SEQUENCE_DEPENDENCY_COMMAND;
+	SendOrCollectCommandListToActivatedNodes(context, list_make1(breakSeqDepsCommand));
+
+	/* remove shell tables */
+	bool singleTransaction = (context->transactionMode == METADATA_SYNC_TRANSACTIONAL);
+	char *dropShellTablesCommand = WorkerDropAllShellTablesCommand(singleTransaction);
+	SendOrCollectCommandListToActivatedNodes(context, list_make1(dropShellTablesCommand));
+}
+
+
+/*
+ * SendMetadataDeletionCommands sends metadata entry deletion commands to workers
+ * with transactional or nontransactional mode according to transactionMode inside
+ * metadataSyncContext.
+ */
+void
+SendMetadataDeletionCommands(MetadataSyncContext *context)
+{
+	/* remove pg_dist_partition entries */
+	SendOrCollectCommandListToActivatedNodes(context, list_make1(DELETE_ALL_PARTITIONS));
+
+	/* remove pg_dist_shard entries */
+	SendOrCollectCommandListToActivatedNodes(context, list_make1(DELETE_ALL_SHARDS));
+
+	/* remove pg_dist_placement entries */
+	SendOrCollectCommandListToActivatedNodes(context, list_make1(DELETE_ALL_PLACEMENTS));
+
+	/* remove pg_dist_object entries */
+	SendOrCollectCommandListToActivatedNodes(context,
+											 list_make1(DELETE_ALL_DISTRIBUTED_OBJECTS));
+
+	/* remove pg_dist_colocation entries */
+	SendOrCollectCommandListToActivatedNodes(context, list_make1(DELETE_ALL_COLOCATION));
+}
+
+
+/*
+ * SendColocationMetadataCommands sends colocation metadata with transactional or
+ * nontransactional mode according to transactionMode inside metadataSyncContext.
+ */
+void
+SendColocationMetadataCommands(MetadataSyncContext *context)
+{
+	ScanKeyData scanKey[1];
+	int scanKeyCount = 0;
+
+	Relation relation = table_open(DistColocationRelationId(), AccessShareLock);
+	SysScanDesc scanDesc = systable_beginscan(relation, InvalidOid, false, NULL,
+											  scanKeyCount, scanKey);
+
+	MemoryContext oldContext = MemoryContextSwitchTo(context->context);
+	HeapTuple nextTuple = NULL;
+	while (true)
+	{
+		ResetMetadataSyncMemoryContext(context);
+
+		nextTuple = systable_getnext(scanDesc);
+		if (!HeapTupleIsValid(nextTuple))
 		{
-			appendStringInfo(colocationGroupCreateCommand, ", ");
+			break;
 		}
 
-		hasColocations = true;
+		StringInfo colocationGroupCreateCommand = makeStringInfo();
+		appendStringInfo(colocationGroupCreateCommand,
+						 "WITH colocation_group_data (colocationid, shardcount, "
+						 "replicationfactor, distributioncolumntype, "
+						 "distributioncolumncollationname, "
+						 "distributioncolumncollationschema)  AS (VALUES ");
 
 		Form_pg_dist_colocation colocationForm =
-			(Form_pg_dist_colocation) GETSTRUCT(colocationTuple);
+			(Form_pg_dist_colocation) GETSTRUCT(nextTuple);
 
 		appendStringInfo(colocationGroupCreateCommand,
 						 "(%d, %d, %d, %s, ",
@@ -4106,20 +4441,17 @@ ColocationGroupCreateCommandList(void)
 		{
 			Datum collationIdDatum = ObjectIdGetDatum(distributionColumCollation);
 			HeapTuple collationTuple = SearchSysCache1(COLLOID, collationIdDatum);
-
 			if (HeapTupleIsValid(collationTuple))
 			{
 				Form_pg_collation collationform =
 					(Form_pg_collation) GETSTRUCT(collationTuple);
 				char *collationName = NameStr(collationform->collname);
-				char *collationSchemaName = get_namespace_name(
-					collationform->collnamespace);
-
+				char *collationSchemaName =
+					get_namespace_name(collationform->collnamespace);
 				appendStringInfo(colocationGroupCreateCommand,
 								 "%s, %s)",
 								 quote_literal_cstr(collationName),
 								 quote_literal_cstr(collationSchemaName));
-
 				ReleaseSysCache(collationTuple);
 			}
 			else
@@ -4134,26 +4466,290 @@ ColocationGroupCreateCommandList(void)
 							 "NULL, NULL)");
 		}
 
-		colocationTuple = systable_getnext_ordered(scanDescriptor, ForwardScanDirection);
+		appendStringInfo(colocationGroupCreateCommand,
+						 ") SELECT pg_catalog.citus_internal_add_colocation_metadata("
+						 "colocationid, shardcount, replicationfactor, "
+						 "distributioncolumntype, coalesce(c.oid, 0)) "
+						 "FROM colocation_group_data d LEFT JOIN pg_collation c "
+						 "ON (d.distributioncolumncollationname = c.collname "
+						 "AND d.distributioncolumncollationschema::regnamespace"
+						 " = c.collnamespace)");
+
+		List *commandList = list_make1(colocationGroupCreateCommand->data);
+		SendOrCollectCommandListToActivatedNodes(context, commandList);
 	}
+	MemoryContextSwitchTo(oldContext);
 
-	systable_endscan_ordered(scanDescriptor);
-	index_close(colocationIdIndexRel, AccessShareLock);
-	table_close(pgDistColocation, AccessShareLock);
+	systable_endscan(scanDesc);
+	table_close(relation, AccessShareLock);
+}
 
-	if (!hasColocations)
+
+/*
+ * SendDependencyCreationCommands sends dependency creation commands to workers
+ * with transactional or nontransactional mode according to transactionMode
+ * inside metadataSyncContext.
+ */
+void
+SendDependencyCreationCommands(MetadataSyncContext *context)
+{
+	/* disable ddl propagation */
+	SendOrCollectCommandListToActivatedNodes(context,
+											 list_make1(DISABLE_DDL_PROPAGATION));
+
+	MemoryContext oldContext = MemoryContextSwitchTo(context->context);
+
+	/* collect all dependencies in creation order and get their ddl commands */
+	List *dependencies = GetDistributedObjectAddressList();
+
+	/*
+	 * Depending on changes in the environment, such as the enable_metadata_sync guc
+	 * there might be objects in the distributed object address list that should currently
+	 * not be propagated by citus as they are 'not supported'.
+	 */
+	dependencies = FilterObjectAddressListByPredicate(dependencies,
+													  &SupportedDependencyByCitus);
+
+	dependencies = OrderObjectAddressListInDependencyOrder(dependencies);
+
+	/*
+	 * We need to create a subcontext as we reset the context after each dependency
+	 * creation but we want to preserve all dependency objects at metadataSyncContext.
+	 */
+	MemoryContext commandsContext = AllocSetContextCreate(context->context,
+														  "dependency commands context",
+														  ALLOCSET_DEFAULT_SIZES);
+	MemoryContextSwitchTo(commandsContext);
+	ObjectAddress *dependency = NULL;
+	foreach_ptr(dependency, dependencies)
 	{
-		return NIL;
+		if (!MetadataSyncCollectsCommands(context))
+		{
+			MemoryContextReset(commandsContext);
+		}
+
+		if (IsAnyObjectAddressOwnedByExtension(list_make1(dependency), NULL))
+		{
+			/*
+			 * We expect extension-owned objects to be created as a result
+			 * of the extension being created.
+			 */
+			continue;
+		}
+
+		/* dependency creation commands */
+		List *ddlCommands = GetAllDependencyCreateDDLCommands(list_make1(dependency));
+		SendOrCollectCommandListToActivatedNodes(context, ddlCommands);
 	}
+	MemoryContextSwitchTo(oldContext);
 
-	appendStringInfo(colocationGroupCreateCommand,
-					 ") SELECT pg_catalog.citus_internal_add_colocation_metadata("
-					 "colocationid, shardcount, replicationfactor, "
-					 "distributioncolumntype, coalesce(c.oid, 0)) "
-					 "FROM colocation_group_data d LEFT JOIN pg_collation c "
-					 "ON (d.distributioncolumncollationname = c.collname "
-					 "AND d.distributioncolumncollationschema::regnamespace"
-					 " = c.collnamespace)");
+	if (!MetadataSyncCollectsCommands(context))
+	{
+		MemoryContextDelete(commandsContext);
+	}
+	ResetMetadataSyncMemoryContext(context);
 
-	return list_make1(colocationGroupCreateCommand->data);
+	/* enable ddl propagation */
+	SendOrCollectCommandListToActivatedNodes(context, list_make1(ENABLE_DDL_PROPAGATION));
+}
+
+
+/*
+ * SendDistTableMetadataCommands sends commands related to pg_dist_shard and,
+ * pg_dist_shard_placement entries to workers with transactional or nontransactional
+ * mode according to transactionMode inside metadataSyncContext.
+ */
+void
+SendDistTableMetadataCommands(MetadataSyncContext *context)
+{
+	ScanKeyData scanKey[1];
+	int scanKeyCount = 0;
+
+	Relation relation = table_open(DistPartitionRelationId(), AccessShareLock);
+	TupleDesc tupleDesc = RelationGetDescr(relation);
+
+	SysScanDesc scanDesc = systable_beginscan(relation, InvalidOid, false, NULL,
+											  scanKeyCount, scanKey);
+
+	MemoryContext oldContext = MemoryContextSwitchTo(context->context);
+	HeapTuple nextTuple = NULL;
+	while (true)
+	{
+		ResetMetadataSyncMemoryContext(context);
+
+		nextTuple = systable_getnext(scanDesc);
+		if (!HeapTupleIsValid(nextTuple))
+		{
+			break;
+		}
+
+		/*
+		 * Create Citus table metadata commands (pg_dist_shard, pg_dist_shard_placement,
+		 * pg_dist_partition). Only Citus tables have shard metadata.
+		 */
+		Oid relationId = FetchRelationIdFromPgPartitionHeapTuple(nextTuple, tupleDesc);
+		if (!ShouldSyncTableMetadata(relationId))
+		{
+			continue;
+		}
+
+		List *commandList = CitusTableMetadataCreateCommandList(relationId);
+		SendOrCollectCommandListToActivatedNodes(context, commandList);
+	}
+	MemoryContextSwitchTo(oldContext);
+
+	systable_endscan(scanDesc);
+	table_close(relation, AccessShareLock);
+}
+
+
+/*
+ * SendDistObjectCommands sends commands related to pg_dist_object entries to
+ * workers with transactional or nontransactional mode according to transactionMode
+ * inside metadataSyncContext.
+ */
+void
+SendDistObjectCommands(MetadataSyncContext *context)
+{
+	ScanKeyData scanKey[1];
+	int scanKeyCount = 0;
+
+	Relation relation = table_open(DistObjectRelationId(), AccessShareLock);
+	TupleDesc tupleDesc = RelationGetDescr(relation);
+
+	SysScanDesc scanDesc = systable_beginscan(relation, InvalidOid, false, NULL,
+											  scanKeyCount, scanKey);
+
+	MemoryContext oldContext = MemoryContextSwitchTo(context->context);
+	HeapTuple nextTuple = NULL;
+	while (true)
+	{
+		ResetMetadataSyncMemoryContext(context);
+
+		nextTuple = systable_getnext(scanDesc);
+		if (!HeapTupleIsValid(nextTuple))
+		{
+			break;
+		}
+
+		Form_pg_dist_object pg_dist_object = (Form_pg_dist_object) GETSTRUCT(nextTuple);
+
+		ObjectAddress *address = palloc(sizeof(ObjectAddress));
+
+		ObjectAddressSubSet(*address, pg_dist_object->classid, pg_dist_object->objid,
+							pg_dist_object->objsubid);
+
+		bool distributionArgumentIndexIsNull = false;
+		Datum distributionArgumentIndexDatum =
+			heap_getattr(nextTuple,
+						 Anum_pg_dist_object_distribution_argument_index,
+						 tupleDesc,
+						 &distributionArgumentIndexIsNull);
+		int32 distributionArgumentIndex = DatumGetInt32(distributionArgumentIndexDatum);
+
+		bool colocationIdIsNull = false;
+		Datum colocationIdDatum =
+			heap_getattr(nextTuple,
+						 Anum_pg_dist_object_colocationid,
+						 tupleDesc,
+						 &colocationIdIsNull);
+		int32 colocationId = DatumGetInt32(colocationIdDatum);
+
+		bool forceDelegationIsNull = false;
+		Datum forceDelegationDatum =
+			heap_getattr(nextTuple,
+						 Anum_pg_dist_object_force_delegation,
+						 tupleDesc,
+						 &forceDelegationIsNull);
+		bool forceDelegation = DatumGetBool(forceDelegationDatum);
+
+		if (distributionArgumentIndexIsNull)
+		{
+			distributionArgumentIndex = INVALID_DISTRIBUTION_ARGUMENT_INDEX;
+		}
+
+		if (colocationIdIsNull)
+		{
+			colocationId = INVALID_COLOCATION_ID;
+		}
+
+		if (forceDelegationIsNull)
+		{
+			forceDelegation = NO_FORCE_PUSHDOWN;
+		}
+
+		char *workerMetadataUpdateCommand =
+			MarkObjectsDistributedCreateCommand(list_make1(address),
+												list_make1_int(distributionArgumentIndex),
+												list_make1_int(colocationId),
+												list_make1_int(forceDelegation));
+		SendOrCollectCommandListToActivatedNodes(context,
+												 list_make1(workerMetadataUpdateCommand));
+	}
+	MemoryContextSwitchTo(oldContext);
+
+	systable_endscan(scanDesc);
+	relation_close(relation, NoLock);
+}
+
+
+/*
+ * SendInterTableRelationshipCommands sends inter-table relationship commands
+ * (e.g. constraints, attach partitions) to workers with transactional or
+ * nontransactional mode per inter table relationship according to transactionMode
+ * inside metadataSyncContext.
+ */
+void
+SendInterTableRelationshipCommands(MetadataSyncContext *context)
+{
+	/* disable ddl propagation */
+	SendOrCollectCommandListToActivatedNodes(context,
+											 list_make1(DISABLE_DDL_PROPAGATION));
+
+	ScanKeyData scanKey[1];
+	int scanKeyCount = 0;
+
+	Relation relation = table_open(DistPartitionRelationId(), AccessShareLock);
+	TupleDesc tupleDesc = RelationGetDescr(relation);
+
+	SysScanDesc scanDesc = systable_beginscan(relation, InvalidOid, false, NULL,
+											  scanKeyCount, scanKey);
+
+	MemoryContext oldContext = MemoryContextSwitchTo(context->context);
+	HeapTuple nextTuple = NULL;
+	while (true)
+	{
+		ResetMetadataSyncMemoryContext(context);
+
+		nextTuple = systable_getnext(scanDesc);
+		if (!HeapTupleIsValid(nextTuple))
+		{
+			break;
+		}
+
+		Oid relationId = FetchRelationIdFromPgPartitionHeapTuple(nextTuple, tupleDesc);
+		if (!ShouldSyncTableMetadata(relationId))
+		{
+			continue;
+		}
+
+		/*
+		 * Skip foreign key and partition creation when the Citus table is
+		 * owned by an extension.
+		 */
+		if (IsTableOwnedByExtension(relationId))
+		{
+			continue;
+		}
+
+		List *commandList = InterTableRelationshipOfRelationCommandList(relationId);
+		SendOrCollectCommandListToActivatedNodes(context, commandList);
+	}
+	MemoryContextSwitchTo(oldContext);
+
+	systable_endscan(scanDesc);
+	table_close(relation, AccessShareLock);
+
+	/* enable ddl propagation */
+	SendOrCollectCommandListToActivatedNodes(context, list_make1(ENABLE_DDL_PROPAGATION));
 }

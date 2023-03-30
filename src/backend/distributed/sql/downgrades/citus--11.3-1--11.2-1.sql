@@ -17,3 +17,6 @@ ALTER TABLE pg_catalog.pg_dist_placement REPLICA IDENTITY NOTHING;
 ALTER TABLE pg_catalog.pg_dist_rebalance_strategy REPLICA IDENTITY NOTHING;
 ALTER TABLE pg_catalog.pg_dist_shard REPLICA IDENTITY NOTHING;
 ALTER TABLE pg_catalog.pg_dist_transaction REPLICA IDENTITY NOTHING;
+
+DROP PROCEDURE pg_catalog.worker_drop_all_shell_tables(bool);
+DROP FUNCTION pg_catalog.citus_internal_mark_node_not_synced(int, int);
