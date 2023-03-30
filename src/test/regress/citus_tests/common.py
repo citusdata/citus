@@ -793,7 +793,9 @@ class Postgres(QueryRunner):
 
     def reload(self):
         self.pgctl("reload")
-        time.sleep(1)
+        # Sadly UNIX signals are asynchronous, so we sleep a bit and hope that
+        # Postgres actually processed the SIGHUP signal after the sleep.
+        time.sleep(0.1)
 
     async def arestart(self):
         process = await self.apgctl("-m fast restart")
