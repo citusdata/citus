@@ -410,10 +410,15 @@ class PortLock:
 
     def __init__(self):
         global next_port
+        first_port = next_port
         while True:
             next_port += 1
             if next_port >= PORT_UPPER_BOUND:
                 next_port = PORT_LOWER_BOUND
+
+            # avoid infinite loop
+            if first_port == next_port:
+                raise Exception("Could not find port")
 
             self.lock = filelock.FileLock(Path(gettempdir()) / f"port-{next_port}.lock")
             try:
