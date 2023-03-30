@@ -42,8 +42,8 @@ ExecutorEnd_hook_type prev_ExecutorEnd = NULL;
 
 /* TODO maybe needs to be a stack */
 char attributeToTenant[MAX_TENANT_ATTRIBUTE_LENGTH] = "";
-CmdType attributeCommandType = CMD_UNKNOWN;
-int colocationGroupId = -1;
+CmdType attributeToCommandType = CMD_UNKNOWN;
+int attributeToColocationGroupId = INVALID_COLOCATION_ID;
 
 const char *SharedMemoryNameForMultiTenantMonitor =
 	"Shared memory for multi tenant monitor";
@@ -197,8 +197,6 @@ AttributeQueryIfAnnotated(const char *query_string, CmdType commandType)
 {
 	strcpy_s(attributeToTenant, sizeof(attributeToTenant), "");
 
-	attributeCommandType = commandType;
-
 	if (query_string == NULL)
 	{
 		return;
@@ -212,21 +210,36 @@ AttributeQueryIfAnnotated(const char *query_string, CmdType commandType)
 			Datum jsonbDatum = DirectFunctionCall1(jsonb_in, PointerGetDatum(annotation));
 
 			text *tenantIdTextP = ExtractFieldTextP(jsonbDatum, "tId");
+			char *tenantId = NULL;
 			if (tenantIdTextP != NULL)
 			{
-				char *tenantId = UnescapeCommentChars(text_to_cstring(tenantIdTextP));
-				strncpy_s(attributeToTenant, MAX_TENANT_ATTRIBUTE_LENGTH, tenantId,
-						  MAX_TENANT_ATTRIBUTE_LENGTH - 1);
+				tenantId = UnescapeCommentChars(text_to_cstring(tenantIdTextP));
 			}
 
-			colocationGroupId = ExtractFieldInt32(jsonbDatum, "cId",
-												  INVALID_COLOCATION_ID);
+			int colocationId = ExtractFieldInt32(jsonbDatum, "cId",
+												 INVALID_COLOCATION_ID);
+
+			AttributeTask(tenantId, colocationId, commandType);
 		}
 	}
-	else
+}
+
+
+/*
+ * AttributeTask assigns the given attributes of a tenant and starts a timer
+ */
+void
+AttributeTask(char *tenantId, int colocationId, CmdType commandType)
+{
+	if (tenantId == NULL || colocationId == INVALID_COLOCATION_ID)
 	{
-		strcpy_s(attributeToTenant, sizeof(attributeToTenant), "");
+		return;
 	}
+
+	attributeToColocationGroupId = colocationId;
+	strncpy_s(attributeToTenant, MAX_TENANT_ATTRIBUTE_LENGTH, tenantId,
+			  MAX_TENANT_ATTRIBUTE_LENGTH - 1);
+	attributeToCommandType = commandType;
 }
 
 
@@ -493,13 +506,13 @@ RecordTenantStats(TenantStats *tenantStats)
 		tenantStats->score = LLONG_MAX;
 	}
 
-	if (attributeCommandType == CMD_SELECT)
+	if (attributeToCommandType == CMD_SELECT)
 	{
 		tenantStats->readsInThisPeriod++;
 	}
-	else if (attributeCommandType == CMD_UPDATE ||
-			 attributeCommandType == CMD_INSERT ||
-			 attributeCommandType == CMD_DELETE)
+	else if (attributeToCommandType == CMD_UPDATE ||
+			 attributeToCommandType == CMD_INSERT ||
+			 attributeToCommandType == CMD_DELETE)
 	{
 		tenantStats->writesInThisPeriod++;
 	}
@@ -609,7 +622,7 @@ CreateTenantStats(MultiTenantMonitor *monitor, time_t queryTime)
 
 	strcpy_s(monitor->tenants[tenantIndex].tenantAttribute,
 			 sizeof(monitor->tenants[tenantIndex].tenantAttribute), attributeToTenant);
-	monitor->tenants[tenantIndex].colocationGroupId = colocationGroupId;
+	monitor->tenants[tenantIndex].colocationGroupId = attributeToColocationGroupId;
 
 	monitor->tenants[tenantIndex].namedLockTranche.trancheId = LWLockNewTrancheId();
 	monitor->tenants[tenantIndex].namedLockTranche.trancheName = tenantTrancheName;
@@ -635,7 +648,7 @@ FindTenantStats(MultiTenantMonitor *monitor)
 	{
 		TenantStats *tenantStats = &monitor->tenants[i];
 		if (strcmp(tenantStats->tenantAttribute, attributeToTenant) == 0 &&
-			tenantStats->colocationGroupId == colocationGroupId)
+			tenantStats->colocationGroupId == attributeToColocationGroupId)
 		{
 			return i;
 		}
