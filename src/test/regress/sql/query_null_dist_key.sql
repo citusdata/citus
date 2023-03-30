@@ -13,14 +13,19 @@ CREATE TABLE nullkey_c1_t1(a int, b int);
 CREATE TABLE nullkey_c1_t2(a int, b int);
 SELECT create_distributed_table('nullkey_c1_t1', null, colocate_with=>'none');
 SELECT create_distributed_table('nullkey_c1_t2', null, colocate_with=>'nullkey_c1_t1');
+INSERT INTO nullkey_c1_t1 SELECT i, i FROM generate_series(1, 8) i;
+INSERT INTO nullkey_c1_t2 SELECT i, i FROM generate_series(2, 7) i;
 
 CREATE TABLE nullkey_c2_t1(a int, b int);
 CREATE TABLE nullkey_c2_t2(a int, b int);
 SELECT create_distributed_table('nullkey_c2_t1', null, colocate_with=>'none');
 SELECT create_distributed_table('nullkey_c2_t2', null, colocate_with=>'nullkey_c2_t1', distribution_type=>null);
+INSERT INTO nullkey_c2_t1 SELECT i, i FROM generate_series(2, 7) i;
+INSERT INTO nullkey_c2_t2 SELECT i, i FROM generate_series(1, 8) i;
 
 CREATE TABLE nullkey_c3_t1(a int, b int);
 SELECT create_distributed_table('nullkey_c3_t1', null, colocate_with=>'none');
+INSERT INTO nullkey_c3_t1 SELECT i, i FROM generate_series(1, 8) i;
 
 CREATE TABLE reference_table(a int, b int);
 SELECT create_reference_table('reference_table');
@@ -77,6 +82,35 @@ SELECT create_reference_table('modify_fast_path_reference');
 
 CREATE TABLE bigserial_test (x int, y int, z bigserial);
 SELECT create_distributed_table('bigserial_test', null);
+
+CREATE TABLE append_table (text_col text, a int);
+SELECT create_distributed_table('append_table', 'a', 'append');
+SELECT master_create_empty_shard('append_table') AS shardid1 \gset
+SELECT master_create_empty_shard('append_table') AS shardid2 \gset
+SELECT master_create_empty_shard('append_table') AS shardid3 \gset
+
+COPY append_table (text_col, a) FROM STDIN WITH (format 'csv', append_to_shard :shardid1);
+abc,234
+bcd,123
+bcd,234
+cde,345
+def,456
+efg,234
+\.
+
+COPY append_table (text_col, a) FROM STDIN WITH (format 'csv', append_to_shard :shardid2);
+abc,123
+efg,123
+hij,123
+hij,234
+ijk,1
+jkl,0
+\.
+
+CREATE TABLE range_table(a int, b int);
+SELECT create_distributed_table('range_table', 'a', 'range');
+CALL public.create_range_partitioned_shards('range_table', '{"0","25"}','{"24","49"}');
+INSERT INTO range_table VALUES (0, 1), (1, 2), (2, 3), (3, 4), (4, 5), (5, 6), (6, 50);
 
 SET client_min_messages to DEBUG2;
 
@@ -232,6 +266,19 @@ SELECT COUNT(*) FROM postgres_local_table LEFT JOIN nullkey_c1_t1 USING(a);
 SELECT COUNT(*) FROM nullkey_c1_t1 FULL JOIN citus_local_table USING(a);
 SELECT COUNT(*) FROM nullkey_c1_t1 FULL JOIN postgres_local_table USING(a);
 SELECT COUNT(*) FROM nullkey_c1_t1 FULL JOIN reference_table USING(a);
+
+SELECT COUNT(*) FROM nullkey_c1_t1 JOIN append_table USING(a);
+SELECT COUNT(*) FROM nullkey_c1_t1 JOIN range_table USING(a);
+
+SET citus.enable_non_colocated_router_query_pushdown TO ON;
+
+SELECT COUNT(*) FROM nullkey_c1_t1 JOIN range_table USING(a) WHERE range_table.a = 20;
+
+SET citus.enable_non_colocated_router_query_pushdown TO OFF;
+
+SELECT COUNT(*) FROM nullkey_c1_t1 JOIN range_table USING(a) WHERE range_table.a = 20;
+
+RESET citus.enable_non_colocated_router_query_pushdown;
 
 -- lateral / semi / anti joins with different table types
 
@@ -1038,6 +1085,46 @@ WITH cte AS (
     DELETE FROM modify_fast_path WHERE key = 1 RETURNING *
 )
 DELETE FROM modify_fast_path WHERE key = 1;
+
+-- test window functions
+
+SELECT
+	user_id, avg(avg(value_3)) OVER (PARTITION BY user_id, MIN(value_2))
+FROM
+	raw_events_first
+GROUP BY
+	1
+ORDER BY
+	2 DESC NULLS LAST, 1 DESC;
+
+SELECT
+	user_id, max(value_1) OVER (PARTITION BY user_id, MIN(value_2))
+FROM (
+	SELECT
+		DISTINCT us.user_id, us.value_2, us.value_1, random() as r1
+	FROM
+		raw_events_first as us, raw_events_second
+	WHERE
+		us.user_id = raw_events_second.user_id
+	ORDER BY
+		user_id, value_2
+	) s
+GROUP BY
+	1, value_1
+ORDER BY
+	2 DESC, 1;
+
+SELECT
+	DISTINCT ON (raw_events_second.user_id, rnk) raw_events_second.user_id, rank() OVER my_win AS rnk
+FROM
+	raw_events_second, raw_events_first
+WHERE
+	raw_events_first.user_id = raw_events_second.user_id
+WINDOW
+	my_win AS (PARTITION BY raw_events_second.user_id, raw_events_first.value_1 ORDER BY raw_events_second.time DESC)
+ORDER BY
+	rnk DESC, 1 DESC
+LIMIT 10;
 
 SET client_min_messages TO ERROR;
 DROP SCHEMA query_null_dist_key CASCADE;
