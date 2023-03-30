@@ -42,7 +42,7 @@ ExecutorEnd_hook_type prev_ExecutorEnd = NULL;
 
 /* TODO maybe needs to be a stack */
 char attributeToTenant[MAX_TENANT_ATTRIBUTE_LENGTH] = "";
-CmdType attributeCommandType = CMD_UNKNOWN;
+CmdType attributeToCommandType = CMD_UNKNOWN;
 int attributeToColocationGroupId = INVALID_COLOCATION_ID;
 
 const char *SharedMemoryNameForMultiTenantMonitor =
@@ -239,7 +239,7 @@ AttributeTask(char *tenantId, int colocationId, CmdType commandType)
 	attributeToColocationGroupId = colocationId;
 	strncpy_s(attributeToTenant, MAX_TENANT_ATTRIBUTE_LENGTH, tenantId,
 			  MAX_TENANT_ATTRIBUTE_LENGTH - 1);
-	attributeCommandType = commandType;
+	attributeToCommandType = commandType;
 }
 
 
@@ -506,13 +506,13 @@ RecordTenantStats(TenantStats *tenantStats)
 		tenantStats->score = LLONG_MAX;
 	}
 
-	if (attributeCommandType == CMD_SELECT)
+	if (attributeToCommandType == CMD_SELECT)
 	{
 		tenantStats->readsInThisPeriod++;
 	}
-	else if (attributeCommandType == CMD_UPDATE ||
-			 attributeCommandType == CMD_INSERT ||
-			 attributeCommandType == CMD_DELETE)
+	else if (attributeToCommandType == CMD_UPDATE ||
+			 attributeToCommandType == CMD_INSERT ||
+			 attributeToCommandType == CMD_DELETE)
 	{
 		tenantStats->writesInThisPeriod++;
 	}
