@@ -1870,7 +1870,7 @@ static List *
 GetRelationSequenceDependencyList(Oid relationId)
 {
 	List *seqInfoList = NIL;
-	GetDependentSequencesWithRelation(relationId, &seqInfoList, 0);
+	GetDependentSequencesWithRelation(relationId, &seqInfoList, 0, DEPENDENCY_AUTO);
 
 	List *seqIdList = NIL;
 	SequenceInfo *seqInfo = NULL;

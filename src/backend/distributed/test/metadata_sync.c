@@ -49,25 +49,22 @@ activate_node_snapshot(PG_FUNCTION_ARGS)
 	 */
 	WorkerNode *dummyWorkerNode = GetFirstPrimaryWorkerNode();
 
-	List *updateLocalGroupCommand =
-		list_make1(LocalGroupIdUpdateCommand(dummyWorkerNode->groupId));
-	List *syncDistObjCommands = SyncDistributedObjectsCommandList(dummyWorkerNode);
-	List *dropSnapshotCommands = NodeMetadataDropCommands();
-	List *createSnapshotCommands = NodeMetadataCreateCommands();
-	List *pgDistTableMetadataSyncCommands = PgDistTableMetadataSyncCommandList();
+	/*
+	 * Create MetadataSyncContext which is used throughout nodes' activation.
+	 * As we set collectCommands to true, it would not create connections to workers.
+	 * Instead it would collect and return sync commands to be sent to workers.
+	 */
+	bool collectCommands = true;
+	bool nodesAddedInSameTransaction = false;
+	MetadataSyncContext *context = CreateMetadataSyncContext(list_make1(dummyWorkerNode),
+															 collectCommands,
+															 nodesAddedInSameTransaction);
 
-	List *activateNodeCommandList = NIL;
+	ActivateNodeList(context);
+
+	List *activateNodeCommandList = context->collectedCommands;
 	int activateNodeCommandIndex = 0;
 	Oid ddlCommandTypeId = TEXTOID;
-
-	activateNodeCommandList = list_concat(activateNodeCommandList,
-										  updateLocalGroupCommand);
-	activateNodeCommandList = list_concat(activateNodeCommandList, syncDistObjCommands);
-	activateNodeCommandList = list_concat(activateNodeCommandList, dropSnapshotCommands);
-	activateNodeCommandList = list_concat(activateNodeCommandList,
-										  createSnapshotCommands);
-	activateNodeCommandList = list_concat(activateNodeCommandList,
-										  pgDistTableMetadataSyncCommands);
 
 	int activateNodeCommandCount = list_length(activateNodeCommandList);
 	Datum *activateNodeCommandDatumArray = palloc0(activateNodeCommandCount *

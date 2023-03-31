@@ -19,6 +19,8 @@
 #include "distributed/errormessage.h"
 #include "nodes/pg_list.h"
 
+typedef bool (*AddressPredicate)(const ObjectAddress *);
+
 extern List * GetUniqueDependenciesList(List *objectAddressesList);
 extern List * GetDependenciesForObject(const ObjectAddress *target);
 extern List * GetAllSupportedDependenciesForObject(const ObjectAddress *target);
@@ -33,5 +35,7 @@ extern List * GetPgDependTuplesForDependingObjects(Oid targetObjectClassId,
 												   Oid targetObjectId);
 extern List * GetDependingViews(Oid relationId);
 extern Oid GetDependingView(Form_pg_depend pg_depend);
+extern List * FilterObjectAddressListByPredicate(List *objectAddressList,
+												 AddressPredicate predicate);
 
 #endif /* CITUS_DEPENDENCY_H */

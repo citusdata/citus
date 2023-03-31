@@ -749,15 +749,6 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 	SELECT citus_internal_delete_shard_metadata(shardid) FROM shard_data;
 ROLLBACK;
 
--- the user only allowed to delete shards in a distributed transaction
-BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
-	SET application_name to 'citus_internal gpid=10000000001';
-	\set VERBOSITY terse
-	WITH shard_data(shardid)
-		AS (VALUES (1420007))
-	SELECT citus_internal_delete_shard_metadata(shardid) FROM shard_data;
-ROLLBACK;
-
 -- the user cannot delete non-existing shards
 BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 	SELECT assign_distributed_transaction_id(0, 8, '2021-07-09 15:41:55.542377+02');

@@ -1369,7 +1369,7 @@ EnsureSequenceTypeSupported(Oid seqOid, Oid attributeTypeId, Oid ownerRelationId
 	foreach_oid(citusTableId, citusTableIdList)
 	{
 		List *seqInfoList = NIL;
-		GetDependentSequencesWithRelation(citusTableId, &seqInfoList, 0);
+		GetDependentSequencesWithRelation(citusTableId, &seqInfoList, 0, DEPENDENCY_AUTO);
 
 		SequenceInfo *seqInfo = NULL;
 		foreach_ptr(seqInfo, seqInfoList)
@@ -1446,7 +1446,7 @@ EnsureRelationHasCompatibleSequenceTypes(Oid relationId)
 {
 	List *seqInfoList = NIL;
 
-	GetDependentSequencesWithRelation(relationId, &seqInfoList, 0);
+	GetDependentSequencesWithRelation(relationId, &seqInfoList, 0, DEPENDENCY_AUTO);
 	EnsureDistributedSequencesHaveOneType(relationId, seqInfoList);
 }
 
@@ -1794,6 +1794,8 @@ EnsureRelationCanBeDistributed(Oid relationId, Var *distributionColumn,
 							   char replicationModel)
 {
 	Oid parentRelationId = InvalidOid;
+
+	ErrorIfTableHasUnsupportedIdentityColumn(relationId);
 
 	EnsureLocalTableEmptyIfNecessary(relationId, distributionMethod);
 

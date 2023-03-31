@@ -82,6 +82,8 @@ extern void SendCommandListToWorkerOutsideTransaction(const char *nodeName,
 extern void SendCommandListToWorkerOutsideTransactionWithConnection(
 	MultiConnection *workerConnection,
 	List *commandList);
+extern void SendCommandListToWorkerListWithBareConnections(List *workerConnections,
+														   List *commandList);
 extern void SendMetadataCommandListToWorkerListInCoordinatedTransaction(
 	List *workerNodeList,
 	const char *
