@@ -229,6 +229,12 @@ static const struct config_enum_entry stat_statements_track_options[] = {
 	{ NULL, 0, false }
 };
 
+static const struct config_enum_entry stat_tenants_track_options[] = {
+	{ "none", STAT_TENANTS_TRACK_NONE, false },
+	{ "all", STAT_TENANTS_TRACK_ALL, false },
+	{ NULL, 0, false }
+};
+
 static const struct config_enum_entry task_assignment_policy_options[] = {
 	{ "greedy", TASK_ASSIGNMENT_GREEDY, false },
 	{ "first-replica", TASK_ASSIGNMENT_FIRST_REPLICA, false },
@@ -2374,6 +2380,17 @@ RegisterCitusConfigVariables(void)
 		&StatStatementsTrack,
 		STAT_STATEMENTS_TRACK_NONE,
 		stat_statements_track_options,
+		PGC_SUSET,
+		GUC_STANDARD,
+		NULL, NULL, NULL);
+
+	DefineCustomEnumVariable(
+		"citus.stat_tenants_track",
+		gettext_noop("enable disable"),
+		NULL,
+		&StatTenantsTrack,
+		STAT_TENANTS_TRACK_ALL,
+		stat_tenants_track_options,
 		PGC_SUSET,
 		GUC_STANDARD,
 		NULL, NULL, NULL);
