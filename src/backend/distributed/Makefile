@@ -32,10 +32,14 @@ OBJS += \
 	$(patsubst $(citus_abs_srcdir)/%.c,%.o,$(foreach dir,$(SUBDIRS), $(sort $(wildcard $(citus_abs_srcdir)/$(dir)/*.c))))
 
 # be explicit about the default target
-all: cdc
+.PHONY: cdc
 
-cdc: 
-	$(MAKE) -C cdc all
+all:
+
+cdc:
+	echo "running cdc make"
+	$(MAKE) DECODER=pgoutput -C cdc all
+	$(MAKE) DECODER=wal2json -C cdc all
 
 NO_PGXS = 1
 
@@ -93,10 +97,12 @@ install: cleanup-before-install
 # install and install-downgrades should be run sequentially
 install-all: install
 	$(MAKE) install-downgrades
+	$(MAKE) -C cdc install-all
 
 install-downgrades: $(generated_downgrade_sql_files)
 	$(INSTALL_DATA) $(generated_downgrade_sql_files) '$(DESTDIR)$(datadir)/$(datamoduledir)/'
 
 clean-full:
 	$(MAKE) clean
+	$(MAKE) -C cdc clean-full
 	rm -rf $(safestringlib_builddir)

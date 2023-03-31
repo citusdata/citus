@@ -22,12 +22,12 @@ PG_MODULE_MAGIC;
 extern void _PG_output_plugin_init(OutputPluginCallbacks *cb);
 static LogicalDecodeChangeCB ouputPluginChangeCB;
 
-static void
-InitShardToDistributedTableMap(void);
+static void InitShardToDistributedTableMap(void);
 
-static void
-PublishDistributedTableChanges(LogicalDecodingContext *ctx, ReorderBufferTXN *txn,
-							   Relation relation, ReorderBufferChange *change);
+static void PublishDistributedTableChanges(LogicalDecodingContext *ctx,
+										   ReorderBufferTXN *txn,
+										   Relation relation,
+										   ReorderBufferChange *change);
 
 
 static bool replication_origin_filter_cb(LogicalDecodingContext *ctx, RepOriginId
@@ -52,20 +52,16 @@ typedef struct
 
 static HTAB *shardToDistributedTableMap = NULL;
 
-static void
-cdc_change_cb(LogicalDecodingContext *ctx, ReorderBufferTXN *txn,
-							  Relation relation, ReorderBufferChange *change);
+static void cdc_change_cb(LogicalDecodingContext *ctx, ReorderBufferTXN *txn,
+						  Relation relation, ReorderBufferChange *change);
 
 
 /* build time macro for base decoder plugin name for CDC and Shard Split. */
-#ifndef CDC_BASE_DECODER_PLUGIN_NAME
-#define CDC_BASE_DECODER_PLUGIN_NAME "pgoutput"
+#ifndef DECODER_NAME
+#define DECODER_NAME "pgoutput"
 #endif
 
-/* build time macro for base decoder plugin's  initialization function name for CDC and Shard Split. */
-#ifndef CDC_BASE_DECODER_PLUGIN_INIT_FUNCTION_NAME
-#define CDC_BASE_DECODER_PLUGIN_INIT_FUNCTION_NAME "_PG_output_plugin_init"
-#endif
+#define DECODER_INIT_FUNCTION_NAME "_PG_output_plugin_init"
 
 /*
  * Postgres uses 'pgoutput' as default plugin for logical replication.
@@ -78,8 +74,8 @@ _PG_output_plugin_init(OutputPluginCallbacks *cb)
 	elog(LOG, "Initializing CDC decoder");
 	LogicalOutputPluginInit plugin_init =
 		(LogicalOutputPluginInit) (void *)
-		load_external_function(CDC_BASE_DECODER_PLUGIN_NAME,
-							   CDC_BASE_DECODER_PLUGIN_INIT_FUNCTION_NAME,
+		load_external_function(DECODER_NAME,
+							   DECODER_INIT_FUNCTION_NAME,
 							   false, NULL);
 
 	if (plugin_init == NULL)
@@ -106,13 +102,13 @@ _PG_output_plugin_init(OutputPluginCallbacks *cb)
  */
 static void
 cdc_change_cb(LogicalDecodingContext *ctx, ReorderBufferTXN *txn,
-							  Relation relation, ReorderBufferChange *change)
+			  Relation relation, ReorderBufferChange *change)
 {
 	/*
 	 * If Citus has not been loaded yet, pass the changes
 	 * through to the undrelying decoder plugin.
 	 */
-	if (!CitusHasBeenLoaded())
+	if (!CdcCitusHasBeenLoaded())
 	{
 		ouputPluginChangeCB(ctx, txn, relation, change);
 		return;
@@ -155,8 +151,8 @@ static Oid
 AddShardIdToHashTable(Oid shardId, ShardIdHashEntry *entry)
 {
 	entry->shardId = shardId;
-	entry->distributedTableId = LookupShardRelationFromCatalog(shardId, true);
-	entry->isReferenceTable = PartitionMethodViaCatalog(entry->distributedTableId) == 'n';
+	entry->distributedTableId = CdcLookupShardRelationFromCatalog(shardId, true);
+	entry->isReferenceTable = CdcPartitionMethodViaCatalog(entry->distributedTableId) == 'n';
 	return entry->distributedTableId;
 }
 
@@ -245,7 +241,7 @@ PublishDistributedTableChanges(LogicalDecodingContext *ctx, ReorderBufferTXN *tx
 	}
 
 	/* Check if the relation is a distributed table by checking for shard name.	*/
-	uint64 shardId = ExtractShardIdFromTableName(shardRelationName, true);
+	uint64 shardId = CdcExtractShardIdFromTableName(shardRelationName, true);
 
 	/* If this relation is not distributed, call the pgoutput's callback and return. */
 	if (shardId == INVALID_SHARD_ID)
@@ -263,7 +259,7 @@ PublishDistributedTableChanges(LogicalDecodingContext *ctx, ReorderBufferTXN *tx
 	}
 
 	/* Publish changes for reference table only from the coordinator node. */
-	if (isReferenceTable && !IsCoordinator())
+	if (isReferenceTable && !CdcIsCoordinator())
 	{
 		return;
 	}

@@ -29,6 +29,7 @@ static Oid PgDistShardRelationId = InvalidOid;
 static Oid PgDistShardShardidIndexId = InvalidOid;
 static Oid PgDistPartitionRelationId = InvalidOid;
 static Oid PgDistPartitionLogicalrelidIndexId = InvalidOid;
+static bool IsCitusExtensionLoaded = false;
 
 #define COORDINATOR_GROUP_ID 0
 #define InvalidRepOriginId 0
@@ -37,89 +38,105 @@ static Oid PgDistPartitionLogicalrelidIndexId = InvalidOid;
 
 
 static Oid DistLocalGroupIdRelationId(void);
-static int32 GetLocalGroupId(void);
-static HeapTuple PgDistPartitionTupleViaCatalog(Oid relationId);
+static int32 CdcGetLocalGroupId(void);
+static HeapTuple CdcPgDistPartitionTupleViaCatalog(Oid relationId);
 
 /*
- * DistLocalGroupIdRelationId returns the relation id of the pg_dist_local_group 
+ * DistLocalGroupIdRelationId returns the relation id of the pg_dist_local_group
  */
 static Oid
-DistLocalGroupIdRelationId(void) 
+DistLocalGroupIdRelationId(void)
 {
-	if (PgDistLocalGroupRelationId == InvalidOid) 
+	if (PgDistLocalGroupRelationId == InvalidOid)
 	{
-		PgDistLocalGroupRelationId = get_relname_relid("pg_dist_local_group", PG_CATALOG_NAMESPACE);
+		PgDistLocalGroupRelationId = get_relname_relid("pg_dist_local_group",
+													   PG_CATALOG_NAMESPACE);
 	}
 	return PgDistLocalGroupRelationId;
 }
 
-/* 
+
+/*
  * DistShardRelationId returns the relation id of the pg_dist_shard
  */
 static Oid
 DistShardRelationId(void)
 {
-	if (PgDistShardRelationId == InvalidOid) 
+	if (PgDistShardRelationId == InvalidOid)
 	{
 		PgDistShardRelationId = get_relname_relid("pg_dist_shard", PG_CATALOG_NAMESPACE);
 	}
 	return PgDistShardRelationId;
 }
 
-/* 
+
+/*
  * DistShardRelationId returns the relation id of the pg_dist_shard
  */
 static Oid
 DistShardShardidIndexId(void)
 {
-	if (PgDistShardShardidIndexId == InvalidOid) 
+	if (PgDistShardShardidIndexId == InvalidOid)
 	{
-		PgDistShardShardidIndexId = get_relname_relid("pg_dist_shard_shardid_index", PG_CATALOG_NAMESPACE);
+		PgDistShardShardidIndexId = get_relname_relid("pg_dist_shard_shardid_index",
+													  PG_CATALOG_NAMESPACE);
 	}
 	return PgDistShardShardidIndexId;
 }
 
-/* 
+
+/*
  * DistShardRelationId returns the relation id of the pg_dist_shard
  */
 static Oid
 DistPartitionRelationId(void)
 {
-	if (PgDistPartitionRelationId == InvalidOid) 
+	if (PgDistPartitionRelationId == InvalidOid)
 	{
-		PgDistPartitionRelationId = get_relname_relid("pg_dist_partition", PG_CATALOG_NAMESPACE);
+		PgDistPartitionRelationId = get_relname_relid("pg_dist_partition",
+													  PG_CATALOG_NAMESPACE);
 	}
 	return PgDistPartitionRelationId;
 }
 
+
 static Oid
 DistPartitionLogicalRelidIndexId(void)
 {
-	if (PgDistPartitionLogicalrelidIndexId == InvalidOid) 
+	if (PgDistPartitionLogicalrelidIndexId == InvalidOid)
 	{
-		PgDistPartitionLogicalrelidIndexId = get_relname_relid("pg_dist_partition_logicalrelid_index", PG_CATALOG_NAMESPACE);
+		PgDistPartitionLogicalrelidIndexId = get_relname_relid(
+			"pg_dist_partition_logicalrelid_index", PG_CATALOG_NAMESPACE);
 	}
 	return PgDistPartitionLogicalrelidIndexId;
 }
 
-/* 
- * IsCoordinator function returns true if this node is identified as the
+
+/*
+ * CdcIsCoordinator function returns true if this node is identified as the
  * schema/coordinator/master node of the cluster.
  */
 bool
-IsCoordinator(void)
+CdcIsCoordinator(void)
 {
-	return (GetLocalGroupId() == COORDINATOR_GROUP_ID);
+	return (CdcGetLocalGroupId() == COORDINATOR_GROUP_ID);
 }
 
-/* 
- * CitusHasBeenLoaded function returns true if the citus extension has been loaded.
+
+/*
+ * CdcCitusHasBeenLoaded function returns true if the citus extension has been loaded.
  */
-bool CitusHasBeenLoaded()
+bool
+CdcCitusHasBeenLoaded()
 {
-	Oid citusExtensionOid = get_extension_oid("citus", true);
-	return citusExtensionOid != InvalidOid;
+	if (!IsCitusExtensionLoaded)
+	{
+		IsCitusExtensionLoaded = (get_extension_oid("citus", true) != InvalidOid);
+	}
+
+	return IsCitusExtensionLoaded;
 }
+
 
 /*
  * ExtractShardIdFromTableName tries to extract shard id from the given table name,
@@ -127,7 +144,7 @@ bool CitusHasBeenLoaded()
  * Else, the function returns INVALID_SHARD_ID.
  */
 uint64
-ExtractShardIdFromTableName(const char *tableName, bool missingOk)
+CdcExtractShardIdFromTableName(const char *tableName, bool missingOk)
 {
 	char *shardIdStringEnd = NULL;
 
@@ -166,12 +183,12 @@ ExtractShardIdFromTableName(const char *tableName, bool missingOk)
 
 
 /*
- * GetLocalGroupId returns the group identifier of the local node. The function assumes
+ * CdcGetLocalGroupId returns the group identifier of the local node. The function assumes
  * that pg_dist_local_node_group has exactly one row and has at least one column.
  * Otherwise, the function errors out.
  */
 static int32
-GetLocalGroupId(void)
+CdcGetLocalGroupId(void)
 {
 	ScanKeyData scanKey[1];
 	int scanKeyCount = 0;
@@ -228,14 +245,15 @@ GetLocalGroupId(void)
 	return groupId;
 }
 
+
 /*
- * LookupShardRelationFromCatalog returns the logical relation oid a shard belongs to.
+ * CdcLookupShardRelationFromCatalog returns the logical relation oid a shard belongs to.
  *
  * Errors out if the shardId does not exist and missingOk is false.
  * Returns InvalidOid if the shardId does not exist and missingOk is true.
  */
 Oid
-LookupShardRelationFromCatalog(int64 shardId, bool missingOk)
+CdcLookupShardRelationFromCatalog(int64 shardId, bool missingOk)
 {
 	ScanKeyData scanKey[1];
 	int scanKeyCount = 1;
@@ -273,14 +291,15 @@ LookupShardRelationFromCatalog(int64 shardId, bool missingOk)
 	return relationId;
 }
 
+
 /*
- * PgDistPartitionTupleViaCatalog is a helper function that searches
+ * CdcPgDistPartitionTupleViaCatalog is a helper function that searches
  * pg_dist_partition for the given relationId. The caller is responsible
  * for ensuring that the returned heap tuple is valid before accessing
  * its fields.
  */
 static HeapTuple
-PgDistPartitionTupleViaCatalog(Oid relationId)
+CdcPgDistPartitionTupleViaCatalog(Oid relationId)
 {
 	const int scanKeyCount = 1;
 	ScanKeyData scanKey[1];
@@ -309,14 +328,15 @@ PgDistPartitionTupleViaCatalog(Oid relationId)
 	return partitionTuple;
 }
 
+
 /*
- * PartitionMethodViaCatalog gets a relationId and returns the partition
+ * CdcPartitionMethodViaCatalog gets a relationId and returns the partition
  * method column from pg_dist_partition via reading from catalog.
  */
 char
-PartitionMethodViaCatalog(Oid relationId)
+CdcPartitionMethodViaCatalog(Oid relationId)
 {
-	HeapTuple partitionTuple = PgDistPartitionTupleViaCatalog(relationId);
+	HeapTuple partitionTuple = CdcPgDistPartitionTupleViaCatalog(relationId);
 	if (!HeapTupleIsValid(partitionTuple))
 	{
 		return DISTRIBUTE_BY_INVALID;

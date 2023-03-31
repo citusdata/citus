@@ -26,8 +26,8 @@ static HTAB *SourceToDestinationShardMap = NULL;
 
 /* Plugin callback */
 static void shard_split_change_cb(LogicalDecodingContext *ctx,
-										  ReorderBufferTXN *txn,
-										  Relation relation, ReorderBufferChange *change);
+								  ReorderBufferTXN *txn,
+								  Relation relation, ReorderBufferChange *change);
 
 /* Helper methods */
 static int32_t GetHashValueForIncomingTuple(Relation sourceShardRelation,
@@ -77,7 +77,7 @@ _PG_output_plugin_init(OutputPluginCallbacks *cb)
  */
 static void
 shard_split_change_cb(LogicalDecodingContext *ctx, ReorderBufferTXN *txn,
-							  Relation relation, ReorderBufferChange *change)
+					  Relation relation, ReorderBufferChange *change)
 {
 	/*
 	 * If Citus has not been loaded yet, pass the changes
