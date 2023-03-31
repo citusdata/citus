@@ -4,6 +4,7 @@ endif
 
 MODULE_big = citus_$(DECODER)
 citus_top_builddir = ../../../..
+citus_subdir = src/backend/distributed/cdc
 
 .PHONY: clean-full install install-all
 
