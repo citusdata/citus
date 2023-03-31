@@ -1,7 +1,14 @@
-/*
-  Test to check if the background tasks scheduled by the background rebalancer
-  has the correct dependencies.
-*/
+--
+-- BACKGROUND_REBALANCE_PARALLEL
+--
+-- Test to check if the background tasks scheduled by the background rebalancer
+-- have the correct dependencies
+--
+-- Test to verify that we do not allow parallel rebalancer moves involving a
+-- particular node (either as source or target) more than
+-- citus.max_parallel_tasks_per_node, and that we can change the GUC on
+-- the fly, and that will affect the ongoing balance as it should
+--
 CREATE SCHEMA background_rebalance_parallel;
 SET search_path TO background_rebalance_parallel;
 SET citus.next_shard_id TO 85674000;
@@ -45,52 +52,52 @@ SELECT pg_reload_conf();
  t
 (1 row)
 
-/* Colocation group 1: create two tables table1_colg1, table2_colg1 and in a colocation group  */
+-- Colocation group 1: create two tables table1_colg1, table2_colg1 and in a colocation group
 CREATE TABLE table1_colg1 (a int PRIMARY KEY);
-SELECT create_distributed_table('table1_colg1', 'a', shard_count => 4 , colocate_with => 'none');
+SELECT create_distributed_table('table1_colg1', 'a', shard_count => 4, colocate_with => 'none');
  create_distributed_table
 ---------------------------------------------------------------------
 
 (1 row)
 
 CREATE TABLE table2_colg1 (b int PRIMARY KEY);
-SELECT create_distributed_table('table2_colg1', 'b' , colocate_with => 'table1_colg1');
+SELECT create_distributed_table('table2_colg1', 'b', colocate_with => 'table1_colg1');
  create_distributed_table
 ---------------------------------------------------------------------
 
 (1 row)
 
-/* Colocation group 2: create two tables table1_colg2, table2_colg2 and in a colocation group  */
+-- Colocation group 2: create two tables table1_colg2, table2_colg2 and in a colocation group
 CREATE TABLE table1_colg2 (a int PRIMARY KEY);
-SELECT create_distributed_table('table1_colg2 ', 'a', shard_count => 4, colocate_with => 'none');
+SELECT create_distributed_table('table1_colg2', 'a', shard_count => 4, colocate_with => 'none');
  create_distributed_table
 ---------------------------------------------------------------------
 
 (1 row)
 
 CREATE TABLE  table2_colg2 (b int primary key);
-SELECT create_distributed_table('table2_colg2', 'b' , colocate_with => 'table1_colg2');
+SELECT create_distributed_table('table2_colg2', 'b', colocate_with => 'table1_colg2');
  create_distributed_table
 ---------------------------------------------------------------------
 
 (1 row)
 
-/* Colocation group 3: create two tables table1_colg3, table2_colg3 and in a colocation group  */
+-- Colocation group 3: create two tables table1_colg3, table2_colg3 and in a colocation group
 CREATE TABLE table1_colg3 (a int PRIMARY KEY);
-SELECT create_distributed_table('table1_colg3 ', 'a', shard_count => 4, colocate_with => 'none');
+SELECT create_distributed_table('table1_colg3', 'a', shard_count => 4, colocate_with => 'none');
  create_distributed_table
 ---------------------------------------------------------------------
 
 (1 row)
 
 CREATE TABLE  table2_colg3 (b int primary key);
-SELECT create_distributed_table('table2_colg3', 'b' , colocate_with => 'table1_colg3');
+SELECT create_distributed_table('table2_colg3', 'b', colocate_with => 'table1_colg3');
  create_distributed_table
 ---------------------------------------------------------------------
 
 (1 row)
 
-/* Add two new node so that we can rebalance */
+-- Add two new nodes so that we can rebalance
 SELECT 1 FROM citus_add_node('localhost', :worker_3_port);
  ?column?
 ---------------------------------------------------------------------
@@ -132,10 +139,11 @@ SELECT citus_rebalance_wait();
 
 (1 row)
 
-/*Check that a move is dependent on
-	1. any other move scheduled earlier in its colocation group.
-	2. any other move scheduled earlier whose source node or target
-	   node overlaps with the current moves nodes. */
+-- PART 1
+-- Test to check if the background tasks scheduled by the background rebalancer
+-- have the correct dependencies
+-- Check that a move is dependent on
+-- any other move scheduled earlier in its colocation group.
 SELECT S.shardid, P.colocationid
 FROM pg_dist_shard S, pg_dist_partition P
 WHERE S.logicalrelid = P.logicalrelid ORDER BY S.shardid ASC;
@@ -175,16 +183,12 @@ FROM pg_dist_background_task_depend D  WHERE job_id = 17777 ORDER BY D.task_id, 
  task_id |                               command                               | depends_on |                               command
 ---------------------------------------------------------------------
     1001 | SELECT pg_catalog.citus_move_shard_placement(85674000,50,53,'auto') |       1000 | SELECT pg_catalog.citus_move_shard_placement(85674001,51,52,'auto')
-    1002 | SELECT pg_catalog.citus_move_shard_placement(85674009,51,52,'auto') |       1000 | SELECT pg_catalog.citus_move_shard_placement(85674001,51,52,'auto')
-    1003 | SELECT pg_catalog.citus_move_shard_placement(85674008,50,53,'auto') |       1001 | SELECT pg_catalog.citus_move_shard_placement(85674000,50,53,'auto')
     1003 | SELECT pg_catalog.citus_move_shard_placement(85674008,50,53,'auto') |       1002 | SELECT pg_catalog.citus_move_shard_placement(85674009,51,52,'auto')
-    1004 | SELECT pg_catalog.citus_move_shard_placement(85674017,51,52,'auto') |       1002 | SELECT pg_catalog.citus_move_shard_placement(85674009,51,52,'auto')
-    1005 | SELECT pg_catalog.citus_move_shard_placement(85674016,50,53,'auto') |       1003 | SELECT pg_catalog.citus_move_shard_placement(85674008,50,53,'auto')
     1005 | SELECT pg_catalog.citus_move_shard_placement(85674016,50,53,'auto') |       1004 | SELECT pg_catalog.citus_move_shard_placement(85674017,51,52,'auto')
-(7 rows)
+(3 rows)
 
-/* Check that if there is a reference table that needs to be synched to a node,
-   any move without a dependency must depend on the move task for reference table. */
+-- Check that if there is a reference table that needs to be synched to a node,
+-- any move without a dependency must depend on the move task for reference table.
 SELECT 1 FROM citus_drain_node('localhost',:worker_4_port);
  ?column?
 ---------------------------------------------------------------------
@@ -203,8 +207,8 @@ SELECT 1 FROM citus_disable_node('localhost', :worker_4_port, synchronous:=true)
         1
 (1 row)
 
-/* Drain worker_3 so that we can move only one colocation group to worker_3
-   to create an unbalance that would cause parallel rebalancing. */
+-- Drain worker_3 so that we can move only one colocation group to worker_3
+-- to create an unbalance that would cause parallel rebalancing.
 SELECT 1 FROM citus_drain_node('localhost',:worker_3_port);
  ?column?
 ---------------------------------------------------------------------
@@ -225,7 +229,7 @@ SELECT create_reference_table('ref_table');
 
 (1 row)
 
-/* Move all the shards of Colocation group 3 to worker_3.*/
+-- Move all the shards of Colocation group 3 to worker_3.
 SELECT
 master_move_shard_placement(shardid, 'localhost', nodeport, 'localhost', :worker_3_port, 'block_writes')
 FROM
@@ -243,7 +247,7 @@ ORDER BY
 (4 rows)
 
 CALL citus_cleanup_orphaned_resources();
-/* Activate and new  nodes so that we can rebalance. */
+-- Activate and new  nodes so that we can rebalance.
 SELECT 1 FROM citus_activate_node('localhost', :worker_4_port);
  ?column?
 ---------------------------------------------------------------------
@@ -323,14 +327,26 @@ FROM pg_dist_background_task_depend D  WHERE job_id = 17778 ORDER BY D.task_id, 
     1008 | SELECT pg_catalog.citus_move_shard_placement(85674003,51,54,'auto') |       1006 | SELECT pg_catalog.replicate_reference_tables('auto')
     1009 | SELECT pg_catalog.citus_move_shard_placement(85674000,50,55,'auto') |       1008 | SELECT pg_catalog.citus_move_shard_placement(85674003,51,54,'auto')
     1010 | SELECT pg_catalog.citus_move_shard_placement(85674017,52,53,'auto') |       1007 | SELECT pg_catalog.citus_move_shard_placement(85674016,52,53,'auto')
-    1011 | SELECT pg_catalog.citus_move_shard_placement(85674008,51,54,'auto') |       1008 | SELECT pg_catalog.citus_move_shard_placement(85674003,51,54,'auto')
+    1011 | SELECT pg_catalog.citus_move_shard_placement(85674008,51,54,'auto') |       1006 | SELECT pg_catalog.replicate_reference_tables('auto')
     1012 | SELECT pg_catalog.citus_move_shard_placement(85674001,50,55,'auto') |       1009 | SELECT pg_catalog.citus_move_shard_placement(85674000,50,55,'auto')
 (6 rows)
 
+-- PART 2
+-- Test to verify that we do not allow parallel rebalancer moves involving a
+-- particular node (either as source or target)
+-- more than citus.max_parallel_tasks_per_node
+-- and that we can change the GUC on the fly
+-- First let's restart the scenario
 DROP SCHEMA background_rebalance_parallel CASCADE;
 TRUNCATE pg_dist_background_job CASCADE;
 SELECT public.wait_for_resource_cleanup();
  wait_for_resource_cleanup
+---------------------------------------------------------------------
+
+(1 row)
+
+select citus_remove_node('localhost', :worker_2_port);
+ citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
@@ -354,6 +370,224 @@ select citus_remove_node('localhost', :worker_5_port);
 (1 row)
 
 select citus_remove_node('localhost', :worker_6_port);
+ citus_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE SCHEMA background_rebalance_parallel;
+SET search_path TO background_rebalance_parallel;
+-- Create 10 tables in 5 colocation groups, and populate them
+CREATE TABLE table1_colg1 (a int PRIMARY KEY);
+SELECT create_distributed_table('table1_colg1', 'a', shard_count => 3, colocate_with => 'none');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO table1_colg1 SELECT i FROM generate_series(0, 100)i;
+CREATE TABLE table2_colg1 (b int PRIMARY KEY);
+SELECT create_distributed_table('table2_colg1', 'b', colocate_with => 'table1_colg1');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO table2_colg1 SELECT i FROM generate_series(0, 100)i;
+CREATE TABLE table1_colg2 (a int PRIMARY KEY);
+SELECT create_distributed_table('table1_colg2', 'a', shard_count => 3, colocate_with => 'none');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO table1_colg2 SELECT i FROM generate_series(0, 100)i;
+CREATE TABLE table2_colg2 (b int PRIMARY KEY);
+SELECT create_distributed_table('table2_colg2', 'b', colocate_with => 'table1_colg2');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO table2_colg2 SELECT i FROM generate_series(0, 100)i;
+CREATE TABLE table1_colg3 (a int PRIMARY KEY);
+SELECT create_distributed_table('table1_colg3', 'a', shard_count => 3, colocate_with => 'none');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO table1_colg3 SELECT i FROM generate_series(0, 100)i;
+CREATE TABLE  table2_colg3 (b int primary key);
+SELECT create_distributed_table('table2_colg3', 'b', colocate_with => 'table1_colg3');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO table2_colg3 SELECT i FROM generate_series(0, 100)i;
+CREATE TABLE table1_colg4 (a int PRIMARY KEY);
+SELECT create_distributed_table('table1_colg4', 'a', shard_count => 3, colocate_with => 'none');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO table1_colg4 SELECT i FROM generate_series(0, 100)i;
+CREATE TABLE table2_colg4 (b int PRIMARY KEY);
+SELECT create_distributed_table('table2_colg4', 'b', colocate_with => 'table1_colg4');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO table2_colg4 SELECT i FROM generate_series(0, 100)i;
+-- Add nodes so that we can rebalance
+SELECT citus_add_node('localhost', :worker_2_port);
+ citus_add_node
+---------------------------------------------------------------------
+             56
+(1 row)
+
+SELECT citus_add_node('localhost', :worker_3_port);
+ citus_add_node
+---------------------------------------------------------------------
+             57
+(1 row)
+
+SELECT citus_rebalance_start AS job_id from citus_rebalance_start() \gset
+-- see dependent tasks to understand which tasks remain runnable because of
+-- citus.max_parallel_tasks_per_node
+-- and which tasks are actually blocked from colocation group dependencies
+SELECT D.task_id,
+       (SELECT T.command FROM pg_dist_background_task T WHERE T.task_id = D.task_id),
+       D.depends_on,
+       (SELECT T.command FROM pg_dist_background_task T WHERE T.task_id = D.depends_on)
+FROM pg_dist_background_task_depend D  WHERE job_id in (:job_id) ORDER BY D.task_id, D.depends_on ASC;
+ task_id |                               command                               | depends_on |                               command
+---------------------------------------------------------------------
+    1014 | SELECT pg_catalog.citus_move_shard_placement(85674026,50,57,'auto') |       1013 | SELECT pg_catalog.citus_move_shard_placement(85674025,50,56,'auto')
+    1016 | SELECT pg_catalog.citus_move_shard_placement(85674032,50,57,'auto') |       1015 | SELECT pg_catalog.citus_move_shard_placement(85674031,50,56,'auto')
+    1018 | SELECT pg_catalog.citus_move_shard_placement(85674038,50,57,'auto') |       1017 | SELECT pg_catalog.citus_move_shard_placement(85674037,50,56,'auto')
+    1020 | SELECT pg_catalog.citus_move_shard_placement(85674044,50,57,'auto') |       1019 | SELECT pg_catalog.citus_move_shard_placement(85674043,50,56,'auto')
+(4 rows)
+
+-- default citus.max_parallel_tasks_per_node is 1
+SHOW citus.max_parallel_tasks_per_node;
+ citus.max_parallel_tasks_per_node
+---------------------------------------------------------------------
+ 1
+(1 row)
+
+-- show that first exactly one task per node is running
+-- among the tasks that are not blocked
+SELECT citus_task_wait(1013, desired_status => 'running');
+ citus_task_wait
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT job_id, task_id, status, nodes_involved
+FROM pg_dist_background_task WHERE job_id in (:job_id) ORDER BY task_id;
+ job_id | task_id |  status  | nodes_involved
+---------------------------------------------------------------------
+  17779 |    1013 | running  | {50,56}
+  17779 |    1014 | blocked  | {50,57}
+  17779 |    1015 | runnable | {50,56}
+  17779 |    1016 | blocked  | {50,57}
+  17779 |    1017 | runnable | {50,56}
+  17779 |    1018 | blocked  | {50,57}
+  17779 |    1019 | runnable | {50,56}
+  17779 |    1020 | blocked  | {50,57}
+(8 rows)
+
+-- increase citus.max_parallel_tasks_per_node
+ALTER SYSTEM SET citus.max_parallel_tasks_per_node = 2;
+SELECT pg_reload_conf();
+ pg_reload_conf
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT citus_task_wait(1015, desired_status => 'running');
+ citus_task_wait
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT citus_task_wait(1013, desired_status => 'done');
+ citus_task_wait
+---------------------------------------------------------------------
+
+(1 row)
+
+-- show that at most 2 tasks per node are running
+-- among the tasks that are not blocked
+SELECT job_id, task_id, status, nodes_involved
+FROM pg_dist_background_task WHERE job_id in (:job_id) ORDER BY task_id;
+ job_id | task_id |  status  | nodes_involved
+---------------------------------------------------------------------
+  17779 |    1013 | done     | {50,56}
+  17779 |    1014 | running  | {50,57}
+  17779 |    1015 | running  | {50,56}
+  17779 |    1016 | blocked  | {50,57}
+  17779 |    1017 | runnable | {50,56}
+  17779 |    1018 | blocked  | {50,57}
+  17779 |    1019 | runnable | {50,56}
+  17779 |    1020 | blocked  | {50,57}
+(8 rows)
+
+-- decrease to default (1)
+ALTER SYSTEM RESET citus.max_parallel_tasks_per_node;
+SELECT pg_reload_conf();
+ pg_reload_conf
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT citus_task_wait(1015, desired_status => 'done');
+ citus_task_wait
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT citus_task_wait(1014, desired_status => 'done');
+ citus_task_wait
+---------------------------------------------------------------------
+
+(1 row)
+
+-- show that exactly one task per node is running
+-- among the tasks that are not blocked
+SELECT job_id, task_id, status, nodes_involved
+FROM pg_dist_background_task WHERE job_id in (:job_id) ORDER BY task_id;
+ job_id | task_id |  status  | nodes_involved
+---------------------------------------------------------------------
+  17779 |    1013 | done     | {50,56}
+  17779 |    1014 | done     | {50,57}
+  17779 |    1015 | done     | {50,56}
+  17779 |    1016 | running  | {50,57}
+  17779 |    1017 | runnable | {50,56}
+  17779 |    1018 | blocked  | {50,57}
+  17779 |    1019 | runnable | {50,56}
+  17779 |    1020 | blocked  | {50,57}
+(8 rows)
+
+SELECT citus_rebalance_stop();
+ citus_rebalance_stop
+---------------------------------------------------------------------
+
+(1 row)
+
+DROP SCHEMA background_rebalance_parallel CASCADE;
+TRUNCATE pg_dist_background_job CASCADE;
+SELECT public.wait_for_resource_cleanup();
+ wait_for_resource_cleanup
+---------------------------------------------------------------------
+
+(1 row)
+
+select citus_remove_node('localhost', :worker_3_port);
  citus_remove_node
 ---------------------------------------------------------------------
 

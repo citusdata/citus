@@ -213,7 +213,7 @@ citus_job_wait(PG_FUNCTION_ARGS)
  *   assume any terminal state as its desired status. The function returns if the
  *   desired_state was reached.
  *
- * The current implementation is a polling implementation with an interval of 1 second.
+ * The current implementation is a polling implementation with an interval of 0.1 seconds.
  * Ideally we would have some synchronization between the background tasks queue monitor
  * and any backend calling this function to receive a signal when the task changes state.
  */
@@ -859,6 +859,7 @@ TaskEnded(TaskExecutionContext *taskExecutionContext)
 	UpdateBackgroundTask(task);
 	UpdateDependingTasks(task);
 	UpdateBackgroundJob(task->jobid);
+	DecrementParallelTaskCountForNodesInvolved(task);
 
 	/* we are sure that at least one task did not block on current iteration */
 	queueMonitorExecutionContext->allTasksWouldBlock = false;
@@ -867,7 +868,6 @@ TaskEnded(TaskExecutionContext *taskExecutionContext)
 				HASH_REMOVE, NULL);
 	WaitForBackgroundWorkerShutdown(handleEntry->handle);
 	queueMonitorExecutionContext->currentExecutorCount--;
-	DecrementParallelTaskCountForNodesInvolved(task);
 }
 
 
