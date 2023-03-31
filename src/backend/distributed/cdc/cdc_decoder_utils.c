@@ -14,6 +14,7 @@
 #include "access/genam.h"
 #include "access/heapam.h"
 #include "common/hashfn.h"
+#include "common/string.h"
 #include "utils/fmgroids.h"
 #include "utils/typcache.h"
 #include "utils/lsyscache.h"
@@ -365,4 +366,67 @@ CdcPartitionMethodViaCatalog(Oid relationId)
 	table_close(pgDistPartition, NoLock);
 
 	return partitionMethodChar;
+}
+
+
+/*
+ * RemoveCitusDecodersFromPaths removes a path ending in citus_decoders
+ * from the given input paths.
+ */
+char *
+RemoveCitusDecodersFromPaths(char *paths)
+{
+	if (strlen(paths) == 0)
+	{
+		/* dynamic_library_path is empty */
+		return paths;
+	}
+
+	StringInfo newPaths = makeStringInfo();
+
+	char *remainingPaths = paths;
+
+	for (;;)
+	{
+		int pathLength = 0;
+
+		char *pathStart = first_path_var_separator(remainingPaths);
+		if (pathStart == remainingPaths)
+		{
+			/*
+			 * This will error out in find_in_dynamic_libpath, return
+			 * original value here.
+			 */
+			return paths;
+		}
+		else if (pathStart == NULL)
+		{
+			/* final path */
+			pathLength = strlen(remainingPaths);
+		}
+		else
+		{
+			/* more paths remaining */
+			pathLength = pathStart - remainingPaths;
+		}
+
+		char *currentPath = palloc(pathLength + 1);
+		strlcpy(currentPath, remainingPaths, pathLength + 1);
+		canonicalize_path(currentPath);
+
+		if (!pg_str_endswith(currentPath, "/citus_decoders"))
+		{
+			appendStringInfo(newPaths, "%s%s", newPaths->len > 0 ? ":" : "", currentPath);
+		}
+
+		if (remainingPaths[pathLength] == '\0')
+		{
+			/* end of string */
+			break;
+		}
+
+		remainingPaths += pathLength + 1;
+	}
+
+	return newPaths->data;
 }

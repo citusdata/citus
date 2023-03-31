@@ -29,4 +29,6 @@ char CdcPartitionMethodViaCatalog(Oid relationId);
 
 bool CdcCitusHasBeenLoaded(void);
 
+char * RemoveCitusDecodersFromPaths(char *paths);
+
 #endif   /* CITUS_CDC_DECODER_UTILS_H */

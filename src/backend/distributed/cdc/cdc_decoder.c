@@ -10,12 +10,16 @@
 
 #include "cdc_decoder_utils.h"
 #include "postgres.h"
+#include "fmgr.h"
+
 #include "access/genam.h"
 #include "catalog/pg_namespace.h"
+#include "catalog/pg_publication.h"
 #include "commands/extension.h"
 #include "common/hashfn.h"
-#include "utils/typcache.h"
 #include "utils/lsyscache.h"
+#include "utils/rel.h"
+#include "utils/typcache.h"
 
 PG_MODULE_MAGIC;
 
@@ -72,6 +76,19 @@ void
 _PG_output_plugin_init(OutputPluginCallbacks *cb)
 {
 	elog(LOG, "Initializing CDC decoder");
+
+	/*
+	 * We build custom .so files whose name matches common decoders (pgoutput, wal2json)
+	 * and place them in $libdir/citus_decoders/ such that administrators can configure
+	 * dynamic_library_path to include this directory, and users can then use the
+	 * regular decoder names when creating replications slots.
+	 *
+	 * To load the original decoder, we need to remove citus_decoders/ from the
+	 * dynamic_library_path.
+	 */
+	char *originalDLP = Dynamic_library_path;
+	Dynamic_library_path = RemoveCitusDecodersFromPaths(Dynamic_library_path);
+
 	LogicalOutputPluginInit plugin_init =
 		(LogicalOutputPluginInit) (void *)
 		load_external_function(DECODER,
@@ -82,6 +99,9 @@ _PG_output_plugin_init(OutputPluginCallbacks *cb)
 	{
 		elog(ERROR, "output plugins have to declare the _PG_output_plugin_init symbol");
 	}
+
+	/* in case this session is used for different replication slots */
+	Dynamic_library_path = originalDLP;
 
 	/* ask the output plugin to fill the callback struct */
 	plugin_init(cb);
