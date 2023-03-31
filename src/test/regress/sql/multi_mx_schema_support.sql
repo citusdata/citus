@@ -38,6 +38,7 @@ END;
 -- test inserting to table in different schema
 SET search_path TO public;
 
+DELETE from citus_mx_test_schema.nation_hash where n_nationkey = 100; -- allow rerunning this file
 INSERT INTO citus_mx_test_schema.nation_hash(n_nationkey, n_name, n_regionkey) VALUES (100, 'TURKEY', 3);
 
 -- verify insertion
@@ -46,6 +47,7 @@ SELECT * FROM citus_mx_test_schema.nation_hash WHERE n_nationkey = 100;
 -- test with search_path is set
 SET search_path TO citus_mx_test_schema;
 
+DELETE from nation_hash where n_nationkey = 101; -- allow rerunning this file
 INSERT INTO nation_hash(n_nationkey, n_name, n_regionkey) VALUES (101, 'GERMANY', 3);
 
 -- verify insertion
@@ -307,7 +309,7 @@ CREATE TABLE mx_old_schema.table_set_schema (id int);
 SELECT create_distributed_table('mx_old_schema.table_set_schema', 'id');
 CREATE SCHEMA mx_new_schema;
 
-SELECT objid::oid::regnamespace as "Distributed Schemas"
+SELECT objid::oid::regnamespace::text as "Distributed Schemas"
     FROM pg_catalog.pg_dist_object
     WHERE objid::oid::regnamespace IN ('mx_old_schema', 'mx_new_schema')
     ORDER BY "Distributed Schemas";
@@ -324,9 +326,10 @@ ALTER SCHEMA mx_old_schema RENAME TO temp_mx_old_schema;
 
 ALTER TABLE mx_old_schema.table_set_schema SET SCHEMA mx_new_schema;
 
-SELECT objid::oid::regnamespace as "Distributed Schemas"
+SELECT objid::oid::regnamespace::text as "Distributed Schemas"
     FROM pg_catalog.pg_dist_object
-    WHERE objid::oid::regnamespace IN ('mx_old_schema', 'mx_new_schema');
+    WHERE objid::oid::regnamespace IN ('mx_old_schema', 'mx_new_schema')
+    ORDER BY "Distributed Schemas";
 \c - - - :worker_1_port
 SELECT table_schema AS "Table's Schema" FROM information_schema.tables WHERE table_name='table_set_schema';
 SELECT table_schema AS "Shards' Schema"
@@ -392,3 +395,6 @@ SELECT COUNT(*)=0 FROM pg_dist_partition WHERE logicalrelid='new_schema.t1'::reg
 DROP SCHEMA old_schema, new_schema CASCADE;
 DROP SCHEMA mx_old_schema CASCADE;
 DROP SCHEMA mx_new_schema CASCADE;
+DROP SCHEMA localschema;
+DROP ROLE schema_owner;
+DROP ROLE role_to_be_granted;
