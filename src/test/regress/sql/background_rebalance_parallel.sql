@@ -142,6 +142,8 @@ FROM pg_dist_background_task_depend D  WHERE job_id = 17778 ORDER BY D.task_id, 
 -- particular node (either as source or target)
 -- more than citus.max_parallel_tasks_per_node
 -- and that we can change the GUC on the fly
+-- citus_task_wait calls are used to ensure consistent pg_dist_background_task query
+-- output i.e. to avoid flakiness
 
 -- First let's restart the scenario
 DROP SCHEMA background_rebalance_parallel CASCADE;
@@ -230,6 +232,7 @@ ALTER SYSTEM RESET citus.max_parallel_tasks_per_node;
 SELECT pg_reload_conf();
 SELECT citus_task_wait(1015, desired_status => 'done');
 SELECT citus_task_wait(1014, desired_status => 'done');
+SELECT citus_task_wait(1016, desired_status => 'running');
 
 -- show that exactly one task per node is running
 -- among the tasks that are not blocked

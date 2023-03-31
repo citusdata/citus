@@ -872,6 +872,52 @@ TaskEnded(TaskExecutionContext *taskExecutionContext)
 
 
 /*
+ * IncrementParallelTaskCountForNodesInvolved
+ * Checks whether we have reached the limit of parallel tasks per node
+ * per each of the nodes involved with the task
+ * If at least one limit is reached, it returns false.
+ * If limits aren't reached, it increments the parallel task count
+ * for each of the nodes involved with the task, and returns true.
+ */
+bool
+IncrementParallelTaskCountForNodesInvolved(BackgroundTask *task)
+{
+	if (task->nodesInvolved)
+	{
+		int node;
+
+		/* first check whether we have reached the limit for any of the nodes */
+		foreach_int(node, task->nodesInvolved)
+		{
+			bool found;
+			ParallelTasksPerNodeEntry *hashEntry = hash_search(
+				ParallelTasksPerNode, &(node), HASH_ENTER, &found);
+			if (!found)
+			{
+				hashEntry->counter = 0;
+			}
+			else if (hashEntry->counter >= MaxParallelTasksPerNode)
+			{
+				/* at least one node's limit is reached */
+				return false;
+			}
+		}
+
+		/* then, increment the parallel task count per each node */
+		foreach_int(node, task->nodesInvolved)
+		{
+			ParallelTasksPerNodeEntry *hashEntry = hash_search(
+				ParallelTasksPerNode, &(node), HASH_FIND, NULL);
+			Assert(hashEntry);
+			hashEntry->counter += 1;
+		}
+	}
+
+	return true;
+}
+
+
+/*
  * DecrementParallelTaskCountForNodesInvolved
  * Decrements the parallel task count for each of the nodes involved
  * with the task.

@@ -110,5 +110,6 @@ extern Datum citus_job_wait(PG_FUNCTION_ARGS);
 extern Datum citus_task_wait(PG_FUNCTION_ARGS);
 extern void citus_job_wait_internal(int64 jobid, BackgroundJobStatus *desiredStatus);
 extern void citus_task_wait_internal(int64 taskid, BackgroundTaskStatus *desiredStatus);
+extern bool IncrementParallelTaskCountForNodesInvolved(BackgroundTask *task);
 
 #endif /*CITUS_BACKGROUND_JOBS_H */

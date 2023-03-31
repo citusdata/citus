@@ -283,6 +283,9 @@ SELECT job_id, task_id, status FROM pg_dist_background_task
 -- verify that we do not allow parallel task executors involving a particular node
 -- more than citus.max_parallel_tasks_per_node
 -- verify that we can change citus.max_parallel_tasks_per_node on the fly
+-- tests are done with dummy node ids
+-- citus_task_wait calls are used to ensure consistent pg_dist_background_task query
+-- output i.e. to avoid flakiness
 
 BEGIN;
 SELECT nodeid AS worker_1_node FROM pg_dist_node WHERE nodeport=:worker_1_port \gset

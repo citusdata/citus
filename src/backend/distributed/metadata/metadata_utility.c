@@ -117,8 +117,6 @@ static bool SetFieldValue(int attno, Datum values[], bool isnull[], bool replace
 static bool SetFieldText(int attno, Datum values[], bool isnull[], bool replace[],
 						 const char *newValue);
 static bool SetFieldNull(int attno, Datum values[], bool isnull[], bool replace[]);
-static bool IncrementParallelTaskCountForNodesInvolved(HTAB *ParallelTasksPerNode,
-													   BackgroundTask *task);
 
 #define InitFieldValue(attno, values, isnull, initValue) \
 	(void) SetFieldValue((attno), (values), (isnull), NULL, (initValue))
@@ -782,6 +780,7 @@ GenerateSizeQueryOnMultiplePlacements(List *shardIntervalList,
 		{
 			partitionedShardNames = lappend(partitionedShardNames, quotedShardName);
 		}
+
 		/* for non-partitioned tables, we will use Postgres' size functions */
 		else
 		{
@@ -3351,7 +3350,7 @@ GetRunnableBackgroundTask(HTAB *ParallelTasksPerNode)
 		{
 			task = DeformBackgroundTaskHeapTuple(tupleDescriptor, taskTuple);
 			if (BackgroundTaskReadyToRun(task) &&
-				IncrementParallelTaskCountForNodesInvolved(ParallelTasksPerNode, task))
+				IncrementParallelTaskCountForNodesInvolved(task))
 			{
 				/* found task, close table and return */
 				break;
@@ -3365,53 +3364,6 @@ GetRunnableBackgroundTask(HTAB *ParallelTasksPerNode)
 	table_close(pgDistBackgroundTasks, NoLock);
 
 	return task;
-}
-
-
-/*
- * IncrementParallelTaskCountForNodesInvolved
- * Checks whether we have reached the limit of parallel tasks per node
- * per each of the nodes involved with the task
- * If at least one limit is reached, it returns false.
- * If limits aren't reached, it increments the parallel task count
- * for each of the nodes involved with the task, and returns true.
- */
-static bool
-IncrementParallelTaskCountForNodesInvolved(HTAB *ParallelTasksPerNode,
-										   BackgroundTask *task)
-{
-	if (task->nodesInvolved)
-	{
-		int node;
-
-		/* first check whether we have reached the limit for any of the nodes */
-		foreach_int(node, task->nodesInvolved)
-		{
-			bool found;
-			ParallelTasksPerNodeEntry *hashEntry = hash_search(
-				ParallelTasksPerNode, &(node), HASH_ENTER, &found);
-			if (!found)
-			{
-				hashEntry->counter = 0;
-			}
-			else if (hashEntry->counter >= MaxParallelTasksPerNode)
-			{
-				/* at least one node's limit is reached */
-				return false;
-			}
-		}
-
-		/* then, increment the parallel task count per each node */
-		foreach_int(node, task->nodesInvolved)
-		{
-			ParallelTasksPerNodeEntry *hashEntry = hash_search(
-				ParallelTasksPerNode, &(node), HASH_FIND, NULL);
-			Assert(hashEntry);
-			hashEntry->counter += 1;
-		}
-	}
-
-	return true;
 }
 
 
