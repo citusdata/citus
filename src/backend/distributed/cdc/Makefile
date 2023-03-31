@@ -2,31 +2,25 @@ ifndef DECODER
 	DECODER = pgoutput
 endif
 
-citus_subdir = src/backend/distributed/cdc
-citus_top_builddir = ../../../..
-
-MODULE_big = citus_$(DECODER)
+MODULE = citus_$(DECODER)
 
 .PHONY: clean-full install install-all
 
 OBJS = cdc_decoder.o cdc_decoder_utils.o
-SHLIB_LINK = $(libpq)
 
 PG_CONFIG = pg_config
 PGXS := $(shell $(PG_CONFIG) --pgxs)
-INCDIR := $(shell $(PG_CONFIG) --includedir)
 include $(PGXS)
 
 override CFLAGS += -std=gnu99 -Wno-declaration-after-statement
 
-clean:
-	rm -f *.o *.so
+install: install-cdc
 
-cleanup-before-install:
-	rm -f $(DESTDIR)$(datadir)/$(datamoduledir)/citus-$(DECODER).so
-	rm -f $(DESTDIR)$(datadir)/$(datamoduledir)/citus_decoders/$(DECODER).so
+clean: clean-cdc
 
-install: cleanup-before-install
+install-cdc:
 	mkdir -p '$(DESTDIR)$(datadir)/$(datamoduledir)/citus_decoders'
 	$(INSTALL_SHLIB) citus_$(DECODER).so '$(DESTDIR)$(datadir)/$(datamoduledir)/citus_decoders/$(DECODER).so'
 
+clean-cdc:
+	rm -f '$(DESTDIR)$(datadir)/$(datamoduledir)/citus_decoders/$(DECODER).so'

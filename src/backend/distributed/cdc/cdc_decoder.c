@@ -152,7 +152,8 @@ AddShardIdToHashTable(Oid shardId, ShardIdHashEntry *entry)
 {
 	entry->shardId = shardId;
 	entry->distributedTableId = CdcLookupShardRelationFromCatalog(shardId, true);
-	entry->isReferenceTable = CdcPartitionMethodViaCatalog(entry->distributedTableId) == 'n';
+	entry->isReferenceTable = CdcPartitionMethodViaCatalog(entry->distributedTableId) ==
+							  'n';
 	return entry->distributedTableId;
 }
 
@@ -309,14 +310,12 @@ GetTupleForTargetSchemaForCdc(HeapTuple sourceRelationTuple,
 			targetNulls[targetIndex] = true;
 			targetIndex++;
 		}
-
 		/* If this source attribute has been dropped, just skip this source attribute.*/
 		else if (TupleDescAttr(sourceRelDesc, sourceIndex)->attisdropped)
 		{
 			sourceIndex++;
 			continue;
 		}
-
 		/* If both source and target attributes are not dropped, add the attribute field to targetValues. */
 		else if (sourceIndex < sourceRelDesc->natts)
 		{

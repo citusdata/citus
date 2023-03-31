@@ -88,7 +88,9 @@ endif
 
 .PHONY: clean-full install install-downgrades install-all
 
-clean:
+clean: clean-cdc
+
+clean-cdc:
 	$(MAKE) DECODER=pgoutput -C cdc clean
 	$(MAKE) DECODER=wal2json -C cdc clean
 
@@ -96,14 +98,15 @@ cleanup-before-install:
 	rm -f $(DESTDIR)$(datadir)/$(datamoduledir)/citus.control
 	rm -f $(DESTDIR)$(datadir)/$(datamoduledir)/citus--*
 
-install: cleanup-before-install
+install: cleanup-before-install install-cdc
+
+install-cdc:
 	$(MAKE) DECODER=pgoutput -C cdc install
 	$(MAKE) DECODER=wal2json -C cdc install
 
 # install and install-downgrades should be run sequentially
 install-all: install
 	$(MAKE) install-downgrades
-	$(MAKE) -C cdc install-all
 
 install-downgrades: $(generated_downgrade_sql_files)
 	$(INSTALL_DATA) $(generated_downgrade_sql_files) '$(DESTDIR)$(datadir)/$(datamoduledir)/'
