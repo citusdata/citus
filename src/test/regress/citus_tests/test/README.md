@@ -42,11 +42,19 @@ expected and actual output, then the tests fails. This works fine for many
 cases, but certain types of tests are hard to write and a lot of care usually
 has to be taken to make sure output is completely identical in every run.
 
-The tests in this directory use a different approach and use `pytest` to run
-tests that are written in the Python programming language. This idea is similar
-to TAP tests that are part of Postgres, with the important difference that
-those are written in Perl.
+The tests in this directory use a different approach and use
+[`pytest`][pytest-docs] to run tests that are written in the Python programming
+language. This idea is similar to TAP tests that are part of Postgres, with the
+important difference that those are written in Perl.
 
+In the sections below you can find most stuff you'll need to know about
+`pytest` to run and write such tests, but if you want more detailed info some
+useful references are:
+- [A blog with pytest tips and tricks][pytest-tips]
+- [The official pytest docs][pytest-docs]
+
+[pytest-docs]: https://docs.pytest.org/en/stable/
+[pytest-tips]: https://pythontest.com/pytest-tips-tricks/
 
 ## Adding a new test
 
