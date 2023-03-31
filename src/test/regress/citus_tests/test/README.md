@@ -66,7 +66,6 @@ functions that `yield` a value. Anything before the `yield` is done during setup
 and anything after the yield is done during teardown of the test (or whole
 session). All our fixtures are defined in `conftest.py`.
 
-[fixtures]: https://docs.pytest.org/en/stable/explanation/fixtures.html
 
 Using a fixture in a test is very easy, but looks like a lot of magic. All you
 have to do is make sure your test function has an argument with the same name as
@@ -84,6 +83,15 @@ def test_with_100_workers(cluster_factory):
     cluster = cluster_factory(100)
 ```
 
+If you want more details on how fixtures work a few useful pages of the pytest
+docs are:
+- [About fixtures][fixtures]
+- [How to use fixtures][fixtures-how-to]
+- [Fixtures reference][fixtures-reference]
+
+[fixtures]: https://docs.pytest.org/en/stable/explanation/fixtures.html
+[fixtures-how-to]: https://docs.pytest.org/en/stable/how-to/fixtures.html
+[fixtures-reference]: https://docs.pytest.org/en/stable/reference/fixtures.html
 ## Connecting to a test postgres
 
 Sometimes your test is failing in an unexpected way and the easiest way to find
