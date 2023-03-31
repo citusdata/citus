@@ -146,6 +146,8 @@ FROM pg_dist_background_task_depend D  WHERE job_id = 17778 ORDER BY D.task_id, 
 -- First let's restart the scenario
 DROP SCHEMA background_rebalance_parallel CASCADE;
 TRUNCATE pg_dist_background_job CASCADE;
+TRUNCATE pg_dist_background_task CASCADE;
+TRUNCATE pg_dist_background_task_depend;
 SELECT public.wait_for_resource_cleanup();
 select citus_remove_node('localhost', :worker_2_port);
 select citus_remove_node('localhost', :worker_3_port);
@@ -235,9 +237,14 @@ SELECT job_id, task_id, status, nodes_involved
 FROM pg_dist_background_task WHERE job_id in (:job_id) ORDER BY task_id;
 
 SELECT citus_rebalance_stop();
+-- waiting on this rebalance is racy, as it sometimes sees no rebalance is ongoing while other times it actually sees it ongoing
+-- we simply sleep a bit here
+SELECT pg_sleep(1);
 
 DROP SCHEMA background_rebalance_parallel CASCADE;
 TRUNCATE pg_dist_background_job CASCADE;
+TRUNCATE pg_dist_background_task CASCADE;
+TRUNCATE pg_dist_background_task_depend;
 SELECT public.wait_for_resource_cleanup();
 select citus_remove_node('localhost', :worker_3_port);
 -- keep the rest of the tests inact that depends node/group ids

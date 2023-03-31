@@ -339,6 +339,8 @@ FROM pg_dist_background_task_depend D  WHERE job_id = 17778 ORDER BY D.task_id, 
 -- First let's restart the scenario
 DROP SCHEMA background_rebalance_parallel CASCADE;
 TRUNCATE pg_dist_background_job CASCADE;
+TRUNCATE pg_dist_background_task CASCADE;
+TRUNCATE pg_dist_background_task_depend;
 SELECT public.wait_for_resource_cleanup();
  wait_for_resource_cleanup
 ---------------------------------------------------------------------
@@ -579,8 +581,18 @@ SELECT citus_rebalance_stop();
 
 (1 row)
 
+-- waiting on this rebalance is racy, as it sometimes sees no rebalance is ongoing while other times it actually sees it ongoing
+-- we simply sleep a bit here
+SELECT pg_sleep(1);
+ pg_sleep
+---------------------------------------------------------------------
+
+(1 row)
+
 DROP SCHEMA background_rebalance_parallel CASCADE;
 TRUNCATE pg_dist_background_job CASCADE;
+TRUNCATE pg_dist_background_task CASCADE;
+TRUNCATE pg_dist_background_task_depend;
 SELECT public.wait_for_resource_cleanup();
  wait_for_resource_cleanup
 ---------------------------------------------------------------------
