@@ -377,7 +377,7 @@ select citus_remove_node('localhost', :worker_6_port);
 
 CREATE SCHEMA background_rebalance_parallel;
 SET search_path TO background_rebalance_parallel;
--- Create 10 tables in 5 colocation groups, and populate them
+-- Create 8 tables in 4 colocation groups, and populate them
 CREATE TABLE table1_colg1 (a int PRIMARY KEY);
 SELECT create_distributed_table('table1_colg1', 'a', shard_count => 3, colocate_with => 'none');
  create_distributed_table
