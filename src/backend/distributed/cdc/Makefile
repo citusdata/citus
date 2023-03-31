@@ -3,16 +3,13 @@ ifndef DECODER
 endif
 
 MODULE_big = citus_$(DECODER)
+citus_top_builddir = ../../../..
 
 .PHONY: clean-full install install-all
 
 OBJS += cdc_decoder.o cdc_decoder_utils.o
 
-PG_CONFIG = pg_config
-PGXS := $(shell $(PG_CONFIG) --pgxs)
-include $(PGXS)
-
-override CFLAGS += -std=gnu99 -Wno-declaration-after-statement
+include $(citus_top_builddir)/Makefile.global
 
 install: install-cdc
 
