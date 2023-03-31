@@ -21,7 +21,9 @@ ORDER BY 1;
 ---------------------------------------------------------------------
  pg_dist_authinfo
  pg_dist_clock_logical_seq
-(2 rows)
+ citus_stats_tenants_local
+ citus_stats_tenants
+(4 rows)
 
 RESET role;
 DROP USER no_access;

@@ -71,4 +71,8 @@ FROM pg_catalog.citus_stats_tenants(FALSE);
 
 ALTER VIEW citus.citus_stats_tenants SET SCHEMA pg_catalog;
 
-GRANT SELECT ON pg_catalog.citus_stats_tenants TO PUBLIC;
+REVOKE ALL ON FUNCTION pg_catalog.citus_stats_tenants(BOOLEAN) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION pg_catalog.citus_stats_tenants(BOOLEAN) TO pg_monitor;
+
+REVOKE ALL ON pg_catalog.citus_stats_tenants FROM PUBLIC;
+GRANT SELECT ON pg_catalog.citus_stats_tenants TO pg_monitor;
