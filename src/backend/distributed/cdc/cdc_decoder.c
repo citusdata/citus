@@ -57,8 +57,8 @@ static void cdc_change_cb(LogicalDecodingContext *ctx, ReorderBufferTXN *txn,
 
 
 /* build time macro for base decoder plugin name for CDC and Shard Split. */
-#ifndef DECODER_NAME
-#define DECODER_NAME "pgoutput"
+#ifndef DECODER
+#define DECODER "pgoutput"
 #endif
 
 #define DECODER_INIT_FUNCTION_NAME "_PG_output_plugin_init"
@@ -74,7 +74,7 @@ _PG_output_plugin_init(OutputPluginCallbacks *cb)
 	elog(LOG, "Initializing CDC decoder");
 	LogicalOutputPluginInit plugin_init =
 		(LogicalOutputPluginInit) (void *)
-		load_external_function(DECODER_NAME,
+		load_external_function(DECODER,
 							   DECODER_INIT_FUNCTION_NAME,
 							   false, NULL);
 

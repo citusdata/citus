@@ -1,6 +1,0 @@
-# PostgreSQL extension control file
-
-comment = 'Citus CDC decoder extension with pgoutput as the base decoder'
-default_version = '11.2-1'
-module_pathname = '$libdir/citus_pgoutput'
-relocatable = false

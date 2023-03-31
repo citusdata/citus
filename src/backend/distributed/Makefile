@@ -34,7 +34,7 @@ OBJS += \
 # be explicit about the default target
 .PHONY: cdc
 
-all:
+all: cdc
 
 cdc:
 	echo "running cdc make"
@@ -88,11 +88,17 @@ endif
 
 .PHONY: clean-full install install-downgrades install-all
 
+clean:
+	$(MAKE) DECODER=pgoutput -C cdc clean
+	$(MAKE) DECODER=wal2json -C cdc clean
+
 cleanup-before-install:
 	rm -f $(DESTDIR)$(datadir)/$(datamoduledir)/citus.control
 	rm -f $(DESTDIR)$(datadir)/$(datamoduledir)/citus--*
 
 install: cleanup-before-install
+	$(MAKE) DECODER=pgoutput -C cdc install
+	$(MAKE) DECODER=wal2json -C cdc install
 
 # install and install-downgrades should be run sequentially
 install-all: install

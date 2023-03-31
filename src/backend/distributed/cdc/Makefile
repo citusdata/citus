@@ -1,15 +1,11 @@
-ifneq ($(DECODER),)
-    DECODER_NAME=$(DECODER)
-else
-	DECODER_NAME = pgoutput
+ifndef DECODER
 	DECODER = pgoutput
 endif
 
 citus_subdir = src/backend/distributed/cdc
 citus_top_builddir = ../../../..
 
-MODULE_big = citus_${DECODER_NAME}
-EXTENSION = citus_${DECODER_NAME}
+MODULE_big = citus_$(DECODER)
 
 .PHONY: clean-full install install-all
 
@@ -27,12 +23,10 @@ clean:
 	rm -f *.o *.so
 
 cleanup-before-install:
-	rm -f $(DESTDIR)$(datadir)/$(datamoduledir)/citus_$(DECODER).control
 	rm -f $(DESTDIR)$(datadir)/$(datamoduledir)/citus-$(DECODER).so
 	rm -f $(DESTDIR)$(datadir)/$(datamoduledir)/citus_decoders/$(DECODER).so
 
 install: cleanup-before-install
 	mkdir -p '$(DESTDIR)$(datadir)/$(datamoduledir)/citus_decoders'
 	$(INSTALL_SHLIB) citus_$(DECODER).so '$(DESTDIR)$(datadir)/$(datamoduledir)/citus_decoders/$(DECODER).so'
-	$(INSTALL_DATA) citus_$(DECODER).control '$(DESTDIR)$(datadir)/$(datamoduledir)/citus_decoders/$(DECODER).control'
 
