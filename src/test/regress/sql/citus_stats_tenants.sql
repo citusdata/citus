@@ -110,6 +110,25 @@ SET citus.multi_tenant_monitoring_log_level TO LOG;
 SELECT count(*)>=0 FROM citus_stats_tenants;
 SET citus.multi_tenant_monitoring_log_level TO DEBUG;
 SELECT count(*)>=0 FROM citus_stats_tenants;
+RESET client_min_messages;
+
+SELECT result FROM run_command_on_all_nodes('SELECT clean_citus_stats_tenants()');
+
+-- test turning monitoring on/off
+SET citus.stat_tenants_track TO "NONE";
+SELECT count(*)>=0 FROM dist_tbl WHERE a = 1;
+INSERT INTO dist_tbl VALUES (1, 1);
+
+SELECT tenant_attribute, query_count_in_this_period FROM citus_stats_tenants;
+
+SET citus.stat_tenants_track TO "ALL";
+
+SELECT tenant_attribute, query_count_in_this_period FROM citus_stats_tenants;
+
+SELECT count(*)>=0 FROM dist_tbl WHERE a = 1;
+INSERT INTO dist_tbl VALUES (1, 1);
+
+SELECT tenant_attribute, query_count_in_this_period FROM citus_stats_tenants;
 
 -- test special and multibyte characters in tenant attribute
 SELECT result FROM run_command_on_all_nodes('SELECT clean_citus_stats_tenants()');
