@@ -21,3 +21,12 @@ FROM pg_dist_node_metadata, pg_extension WHERE extname = 'citus';
 -- still, do not NOTICE the version as it changes per release
 SET client_min_messages TO WARNING;
 CALL citus_finish_citus_upgrade();
+-- we should be able to sync metadata in nontransactional way as well
+SET citus.metadata_sync_mode TO 'nontransactional';
+SELECT start_metadata_sync_to_all_nodes();
+ start_metadata_sync_to_all_nodes
+---------------------------------------------------------------------
+ t
+(1 row)
+
+RESET citus.metadata_sync_mode;

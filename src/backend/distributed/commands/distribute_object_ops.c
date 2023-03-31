@@ -245,6 +245,15 @@ static DistributeObjectOps Any_CreatePolicy = {
 	.address = NULL,
 	.markDistributed = false,
 };
+static DistributeObjectOps Any_CreatePublication = {
+	.deparse = DeparseCreatePublicationStmt,
+	.qualify = QualifyCreatePublicationStmt,
+	.preprocess = NULL,
+	.postprocess = PostProcessCreatePublicationStmt,
+	.operationType = DIST_OPS_CREATE,
+	.address = CreatePublicationStmtObjectAddress,
+	.markDistributed = true,
+};
 static DistributeObjectOps Any_CreateRole = {
 	.deparse = DeparseCreateRoleStmt,
 	.qualify = NULL,
@@ -705,6 +714,45 @@ static DistributeObjectOps Procedure_Rename = {
 	.objectType = OBJECT_FUNCTION,
 	.operationType = DIST_OPS_ALTER,
 	.address = RenameFunctionStmtObjectAddress,
+	.markDistributed = false,
+};
+static DistributeObjectOps Publication_Alter = {
+	.deparse = DeparseAlterPublicationStmt,
+	.qualify = QualifyAlterPublicationStmt,
+	.preprocess = PreprocessAlterPublicationStmt,
+	.postprocess = PostprocessAlterDistributedObjectStmt,
+	.objectType = OBJECT_PUBLICATION,
+	.operationType = DIST_OPS_ALTER,
+	.address = AlterPublicationStmtObjectAddress,
+	.markDistributed = false,
+};
+static DistributeObjectOps Publication_AlterOwner = {
+	.deparse = DeparseAlterPublicationOwnerStmt,
+	.qualify = NULL,
+	.preprocess = PreprocessAlterDistributedObjectStmt,
+	.postprocess = PostprocessAlterDistributedObjectStmt,
+	.objectType = OBJECT_PUBLICATION,
+	.operationType = DIST_OPS_ALTER,
+	.address = AlterPublicationOwnerStmtObjectAddress,
+	.markDistributed = false,
+};
+static DistributeObjectOps Publication_Drop = {
+	.deparse = DeparseDropPublicationStmt,
+	.qualify = NULL,
+	.preprocess = PreprocessDropDistributedObjectStmt,
+	.postprocess = NULL,
+	.operationType = DIST_OPS_DROP,
+	.address = NULL,
+	.markDistributed = false,
+};
+static DistributeObjectOps Publication_Rename = {
+	.deparse = DeparseRenamePublicationStmt,
+	.qualify = NULL,
+	.preprocess = PreprocessAlterDistributedObjectStmt,
+	.postprocess = NULL,
+	.objectType = OBJECT_PUBLICATION,
+	.operationType = DIST_OPS_ALTER,
+	.address = RenamePublicationStmtObjectAddress,
 	.markDistributed = false,
 };
 static DistributeObjectOps Routine_AlterObjectDepends = {
@@ -1399,6 +1447,11 @@ GetDistributeObjectOps(Node *node)
 					return &Procedure_AlterOwner;
 				}
 
+				case OBJECT_PUBLICATION:
+				{
+					return &Publication_AlterOwner;
+				}
+
 				case OBJECT_ROUTINE:
 				{
 					return &Routine_AlterOwner;
@@ -1434,6 +1487,11 @@ GetDistributeObjectOps(Node *node)
 		case T_AlterPolicyStmt:
 		{
 			return &Any_AlterPolicy;
+		}
+
+		case T_AlterPublicationStmt:
+		{
+			return &Publication_Alter;
 		}
 
 		case T_AlterRoleStmt:
@@ -1610,6 +1668,11 @@ GetDistributeObjectOps(Node *node)
 			return &Any_CreatePolicy;
 		}
 
+		case T_CreatePublicationStmt:
+		{
+			return &Any_CreatePublication;
+		}
+
 		case T_CreateRoleStmt:
 		{
 			return &Any_CreateRole;
@@ -1720,6 +1783,11 @@ GetDistributeObjectOps(Node *node)
 				case OBJECT_PROCEDURE:
 				{
 					return &Procedure_Drop;
+				}
+
+				case OBJECT_PUBLICATION:
+				{
+					return &Publication_Drop;
 				}
 
 				case OBJECT_ROUTINE:
@@ -1899,6 +1967,11 @@ GetDistributeObjectOps(Node *node)
 				case OBJECT_PROCEDURE:
 				{
 					return &Procedure_Rename;
+				}
+
+				case OBJECT_PUBLICATION:
+				{
+					return &Publication_Rename;
 				}
 
 				case OBJECT_ROUTINE:

@@ -232,9 +232,14 @@ SELECT set_backend_type(4);
 SELECT relname FROM pg_catalog.pg_class WHERE relnamespace = 'mx_hide_shard_names'::regnamespace ORDER BY relname;
 
 -- or, we set it to walsender
--- the shards and indexes do show up
+-- the shards and indexes do not show up
 SELECT set_backend_type(9);
 SELECT relname FROM pg_catalog.pg_class WHERE relnamespace = 'mx_hide_shard_names'::regnamespace ORDER BY relname;
+
+-- unless the application name starts with citus_shard
+SET application_name = 'citus_shard_move';
+SELECT relname FROM pg_catalog.pg_class WHERE relnamespace = 'mx_hide_shard_names'::regnamespace ORDER BY relname;
+RESET application_name;
 
 -- but, client backends to see the shards
 SELECT set_backend_type(3);

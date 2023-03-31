@@ -124,8 +124,7 @@ typedef enum IncludeSequenceDefaults
 typedef enum IncludeIdentities
 {
 	NO_IDENTITY = 0, /* don't include identities */
-	INCLUDE_IDENTITY_AS_SEQUENCE_DEFAULTS = 1, /* include identities as sequences */
-	INCLUDE_IDENTITY = 2 /* include identities as-is*/
+	INCLUDE_IDENTITY = 1 /* include identities as-is*/
 } IncludeIdentities;
 
 

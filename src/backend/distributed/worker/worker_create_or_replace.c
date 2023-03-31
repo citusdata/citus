@@ -35,8 +35,22 @@
 #include "distributed/worker_create_or_replace.h"
 #include "distributed/worker_protocol.h"
 
+
+/*
+ * OnCollisionAction describes what to do when the created object
+ * and existing object do not match.
+ */
+typedef enum OnCollisionAction
+{
+	ON_COLLISION_RENAME,
+	ON_COLLISION_DROP
+} OnCollisionAction;
+
+
 static List * CreateStmtListByObjectAddress(const ObjectAddress *address);
 static bool CompareStringList(List *list1, List *list2);
+static OnCollisionAction GetOnCollisionAction(const ObjectAddress *address);
+
 
 PG_FUNCTION_INFO_V1(worker_create_or_replace_object);
 PG_FUNCTION_INFO_V1(worker_create_or_replace_object_array);
@@ -192,7 +206,8 @@ WorkerCreateOrReplaceObject(List *sqlStatements)
 		/*
 		 * Object with name from statement is already found locally, check if states are
 		 * identical. If objects differ we will rename the old object (non- destructively)
-		 * as to make room to create the new object according to the spec sent.
+		 * or drop it (if safe) as to make room to create the new object according to the
+		 * spec sent.
 		 */
 
 		/*
@@ -213,11 +228,22 @@ WorkerCreateOrReplaceObject(List *sqlStatements)
 			return false;
 		}
 
-		char *newName = GenerateBackupNameForCollision(address);
+		Node *utilityStmt = NULL;
 
-		RenameStmt *renameStmt = CreateRenameStatement(address, newName);
-		const char *sqlRenameStmt = DeparseTreeNode((Node *) renameStmt);
-		ProcessUtilityParseTree((Node *) renameStmt, sqlRenameStmt,
+		if (GetOnCollisionAction(address) == ON_COLLISION_DROP)
+		{
+			/* drop the existing object */
+			utilityStmt = (Node *) CreateDropStmt(address);
+		}
+		else
+		{
+			/* rename the existing object */
+			char *newName = GenerateBackupNameForCollision(address);
+			utilityStmt = (Node *) CreateRenameStatement(address, newName);
+		}
+
+		const char *commandString = DeparseTreeNode(utilityStmt);
+		ProcessUtilityParseTree(utilityStmt, commandString,
 								PROCESS_UTILITY_QUERY,
 								NULL, None_Receiver, NULL);
 	}
@@ -286,6 +312,11 @@ CreateStmtListByObjectAddress(const ObjectAddress *address)
 			return list_make1(GetFunctionDDLCommand(address->objectId, false));
 		}
 
+		case OCLASS_PUBLICATION:
+		{
+			return list_make1(CreatePublicationDDLCommand(address->objectId));
+		}
+
 		case OCLASS_TSCONFIG:
 		{
 			List *stmts = GetCreateTextSearchConfigStatements(address);
@@ -307,6 +338,37 @@ CreateStmtListByObjectAddress(const ObjectAddress *address)
 		{
 			ereport(ERROR, (errmsg(
 								"unsupported object to construct a create statement")));
+		}
+	}
+}
+
+
+/*
+ * GetOnCollisionAction decides what to do when the object already exists.
+ */
+static OnCollisionAction
+GetOnCollisionAction(const ObjectAddress *address)
+{
+	switch (getObjectClass(address))
+	{
+		case OCLASS_PUBLICATION:
+		{
+			/*
+			 * We prefer to drop publications because they can be
+			 * harmful (cause update/delete failures) and are relatively
+			 * safe to drop.
+			 */
+			return ON_COLLISION_DROP;
+		}
+
+		case OCLASS_COLLATION:
+		case OCLASS_PROC:
+		case OCLASS_TSCONFIG:
+		case OCLASS_TSDICT:
+		case OCLASS_TYPE:
+		default:
+		{
+			return ON_COLLISION_RENAME;
 		}
 	}
 }
@@ -359,6 +421,64 @@ GenerateBackupNameForCollision(const ObjectAddress *address)
 
 	ereport(ERROR, (errmsg("unsupported object to construct a rename statement"),
 					errdetail("unable to generate a backup name for the old type")));
+}
+
+
+/*
+ * CreateDropPublicationStmt creates a DROP PUBLICATION statement for the
+ * publication at the given address.
+ */
+static DropStmt *
+CreateDropPublicationStmt(const ObjectAddress *address)
+{
+	Assert(address->classId == PublicationRelationId);
+
+	DropStmt *dropStmt = makeNode(DropStmt);
+	dropStmt->removeType = OBJECT_PUBLICATION;
+	dropStmt->behavior = DROP_RESTRICT;
+
+	HeapTuple publicationTuple =
+		SearchSysCache1(PUBLICATIONOID, ObjectIdGetDatum(address->objectId));
+
+	if (!HeapTupleIsValid(publicationTuple))
+	{
+		ereport(ERROR, (errmsg("cannot find publication with oid: %d",
+							   address->objectId)));
+	}
+
+	Form_pg_publication publicationForm =
+		(Form_pg_publication) GETSTRUCT(publicationTuple);
+
+	char *publicationName = NameStr(publicationForm->pubname);
+	dropStmt->objects = list_make1(makeString(publicationName));
+
+	ReleaseSysCache(publicationTuple);
+
+	return dropStmt;
+}
+
+
+/*
+ * CreateDropStmt returns a DROP statement for the given object.
+ */
+DropStmt *
+CreateDropStmt(const ObjectAddress *address)
+{
+	switch (getObjectClass(address))
+	{
+		case OCLASS_PUBLICATION:
+		{
+			return CreateDropPublicationStmt(address);
+		}
+
+		default:
+		{
+			break;
+		}
+	}
+
+	ereport(ERROR, (errmsg("unsupported object to construct a drop statement"),
+					errdetail("unable to generate a parsetree for the drop")));
 }
 
 

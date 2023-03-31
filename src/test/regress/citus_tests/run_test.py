@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+from __future__ import annotations
 
 import argparse
 import os
@@ -109,6 +110,14 @@ if __name__ == "__main__":
                 "multi_cluster_management",
                 "multi_mx_function_table_reference",
             ],
+        ),
+        "background_rebalance_parallel": TestDeps(
+            None,
+            [
+                "multi_test_helpers",
+                "multi_cluster_management",
+            ],
+            worker_count=6,
         ),
         "multi_mx_modifying_xacts": TestDeps(None, ["multi_mx_create_table"]),
         "multi_mx_router_planner": TestDeps(None, ["multi_mx_create_table"]),

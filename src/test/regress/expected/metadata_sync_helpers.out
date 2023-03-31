@@ -713,13 +713,16 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 
 	SET application_name to 'citus_internal gpid=10000000001';
 	\set VERBOSITY terse
-	CREATE TABLE publication_test_table(id int);
-	CREATE PUBLICATION publication_test FOR TABLE publication_test_table;
+    CREATE OPERATOR === (
+    LEFTARG = int,
+    RIGHTARG = int,
+    FUNCTION = int4eq
+    );
 	SET ROLE metadata_sync_helper_role;
 	WITH distributed_object_data(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation)
-		AS (VALUES ('publication', ARRAY['publication_test']::text[], ARRAY[]::text[], -1, 0, false))
+		AS (VALUES ('operator', ARRAY['===']::text[], ARRAY['int','int']::text[], -1, 0, false))
 	SELECT citus_internal_add_object_metadata(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation) FROM distributed_object_data;
-ERROR:  publication object can not be distributed by Citus
+ERROR:  operator object can not be distributed by Citus
 ROLLBACK;
 -- Show that citus_internal_add_object_metadata checks the priviliges
 BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
@@ -1193,15 +1196,6 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 		AS (VALUES (1420007))
 	SELECT citus_internal_delete_shard_metadata(shardid) FROM shard_data;
 ERROR:  must be owner of table super_user_table
-ROLLBACK;
--- the user only allowed to delete shards in a distributed transaction
-BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
-	SET application_name to 'citus_internal gpid=10000000001';
-	\set VERBOSITY terse
-	WITH shard_data(shardid)
-		AS (VALUES (1420007))
-	SELECT citus_internal_delete_shard_metadata(shardid) FROM shard_data;
-ERROR:  This is an internal Citus function can only be used in a distributed transaction
 ROLLBACK;
 -- the user cannot delete non-existing shards
 BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;

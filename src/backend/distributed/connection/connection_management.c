@@ -1203,6 +1203,17 @@ FinishConnectionEstablishment(MultiConnection *connection)
 
 
 /*
+ * ForceConnectionCloseAtTransactionEnd marks connection to be closed at the end of the
+ * transaction.
+ */
+void
+ForceConnectionCloseAtTransactionEnd(MultiConnection *connection)
+{
+	connection->forceCloseAtTransactionEnd = true;
+}
+
+
+/*
  * ClaimConnectionExclusively signals that this connection is actively being
  * used. That means it'll not be, again, returned by
  * StartNodeUserDatabaseConnection() et al until releases with
@@ -1484,6 +1495,7 @@ AfterXactHostConnectionHandling(ConnectionHashEntry *entry, bool isCommit)
  * - Current cached connections is already at MaxCachedConnectionsPerWorker
  * - Connection is forced to close at the end of transaction
  * - Connection is not in OK state
+ * - Connection has a replication origin setup
  * - A transaction is still in progress (usually because we are cancelling a distributed transaction)
  * - A connection reached its maximum lifetime
  */
@@ -1503,6 +1515,7 @@ ShouldShutdownConnection(MultiConnection *connection, const int cachedConnection
 		   PQstatus(connection->pgConn) != CONNECTION_OK ||
 		   !RemoteTransactionIdle(connection) ||
 		   connection->requiresReplication ||
+		   connection->isReplicationOriginSessionSetup ||
 		   (MaxCachedConnectionLifetime >= 0 &&
 			MillisecondsToTimeout(connection->connectionEstablishmentStart,
 								  MaxCachedConnectionLifetime) <= 0);

@@ -85,6 +85,7 @@ static void DropRelationTruncateTriggers(Oid relationId);
 static char * GetDropTriggerCommand(Oid relationId, char *triggerName);
 static void DropViewsOnTable(Oid relationId);
 static void DropIdentitiesOnTable(Oid relationId);
+static void DropTableFromPublications(Oid relationId);
 static List * GetRenameStatsCommandList(List *statsOidList, uint64 shardId);
 static List * ReversedOidList(List *oidList);
 static void AppendExplicitIndexIdsToList(Form_pg_index indexForm,
@@ -338,6 +339,10 @@ CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys, bool autoConve
 	List *shellTableDDLEvents = GetShellTableDDLEventsForCitusLocalTable(relationId);
 	List *tableViewCreationCommands = GetViewCreationCommandsOfTable(relationId);
 
+	bool isAdd = true;
+	List *alterPublicationCommands =
+		GetAlterPublicationDDLCommandsForTable(relationId, isAdd);
+
 	char *relationName = get_rel_name(relationId);
 	Oid relationSchemaId = get_rel_namespace(relationId);
 
@@ -346,6 +351,12 @@ CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys, bool autoConve
 	 * identities
 	 */
 	DropIdentitiesOnTable(relationId);
+
+	/*
+	 * We do not want the shard to be in the publication (subscribers are
+	 * unlikely to recognize it).
+	 */
+	DropTableFromPublications(relationId);
 
 	/* below we convert relation with relationId to the shard relation */
 	uint64 shardId = ConvertLocalTableToShard(relationId);
@@ -362,6 +373,11 @@ CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys, bool autoConve
 	 * Views will be distributed via FinalizeCitusLocalTableCreation below.
 	 */
 	ExecuteAndLogUtilityCommandListInTableTypeConversionViaSPI(tableViewCreationCommands);
+
+	/*
+	 * Execute the publication creation commands with the shell table.
+	 */
+	ExecuteAndLogUtilityCommandListInTableTypeConversionViaSPI(alterPublicationCommands);
 
 	/*
 	 * Set shellRelationId as the relation with relationId now points
@@ -1131,7 +1147,7 @@ DropIdentitiesOnTable(Oid relationId)
 {
 	Relation relation = relation_open(relationId, AccessShareLock);
 	TupleDesc tupleDescriptor = RelationGetDescr(relation);
-	relation_close(relation, NoLock);
+	List *dropCommandList = NIL;
 
 	for (int attributeIndex = 0; attributeIndex < tupleDescriptor->natts;
 		 attributeIndex++)
@@ -1151,15 +1167,38 @@ DropIdentitiesOnTable(Oid relationId)
 							 qualifiedTableName,
 							 columnName);
 
-			/*
-			 * We need to disable/enable ddl propagation for this command, to prevent
-			 * sending unnecessary ALTER COLUMN commands for partitions, to MX workers.
-			 */
-			ExecuteAndLogUtilityCommandList(list_make3(DISABLE_DDL_PROPAGATION,
-													   dropCommand->data,
-													   ENABLE_DDL_PROPAGATION));
+			dropCommandList = lappend(dropCommandList, dropCommand->data);
 		}
 	}
+
+	relation_close(relation, NoLock);
+
+	char *dropCommand = NULL;
+	foreach_ptr(dropCommand, dropCommandList)
+	{
+		/*
+		 * We need to disable/enable ddl propagation for this command, to prevent
+		 * sending unnecessary ALTER COLUMN commands for partitions, to MX workers.
+		 */
+		ExecuteAndLogUtilityCommandList(list_make3(DISABLE_DDL_PROPAGATION,
+												   dropCommand,
+												   ENABLE_DDL_PROPAGATION));
+	}
+}
+
+
+/*
+ * DropTableFromPublications drops the table from all of its publications.
+ */
+static void
+DropTableFromPublications(Oid relationId)
+{
+	bool isAdd = false;
+
+	List *alterPublicationCommands =
+		GetAlterPublicationDDLCommandsForTable(relationId, isAdd);
+
+	ExecuteAndLogUtilityCommandList(alterPublicationCommands);
 }
 
 

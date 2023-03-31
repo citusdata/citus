@@ -429,12 +429,15 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 	SET application_name to 'citus_internal gpid=10000000001';
 	\set VERBOSITY terse
 
-	CREATE TABLE publication_test_table(id int);
-	CREATE PUBLICATION publication_test FOR TABLE publication_test_table;
+    CREATE OPERATOR === (
+    LEFTARG = int,
+    RIGHTARG = int,
+    FUNCTION = int4eq
+    );
 
 	SET ROLE metadata_sync_helper_role;
 	WITH distributed_object_data(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation)
-		AS (VALUES ('publication', ARRAY['publication_test']::text[], ARRAY[]::text[], -1, 0, false))
+		AS (VALUES ('operator', ARRAY['===']::text[], ARRAY['int','int']::text[], -1, 0, false))
 	SELECT citus_internal_add_object_metadata(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation) FROM distributed_object_data;
 ROLLBACK;
 
@@ -739,15 +742,6 @@ COMMIT;
 -- the user only allowed to delete their own shards
 BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 	SELECT assign_distributed_transaction_id(0, 8, '2021-07-09 15:41:55.542377+02');
-	SET application_name to 'citus_internal gpid=10000000001';
-	\set VERBOSITY terse
-	WITH shard_data(shardid)
-		AS (VALUES (1420007))
-	SELECT citus_internal_delete_shard_metadata(shardid) FROM shard_data;
-ROLLBACK;
-
--- the user only allowed to delete shards in a distributed transaction
-BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 	SET application_name to 'citus_internal gpid=10000000001';
 	\set VERBOSITY terse
 	WITH shard_data(shardid)

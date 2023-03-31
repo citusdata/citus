@@ -964,7 +964,7 @@ RouterModifyTaskForShardInterval(Query *originalQuery,
 														  &prunedShardIntervalListList,
 														  replacePrunedQueryWithDummy,
 														  &multiShardModifyQuery, NULL,
-														  false);
+														  NULL);
 
 	Assert(!multiShardModifyQuery);
 
@@ -1027,6 +1027,7 @@ RouterModifyTaskForShardInterval(Query *originalQuery,
 	modifyTask->taskPlacementList = insertShardPlacementList;
 	modifyTask->relationShardList = relationShardList;
 	modifyTask->replicationModel = targetTableCacheEntry->replicationModel;
+	modifyTask->isLocalTableModification = false;
 
 	return modifyTask;
 }

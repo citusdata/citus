@@ -74,6 +74,7 @@
 #include "distributed/recursive_planning.h"
 #include "distributed/reference_table_utils.h"
 #include "distributed/relation_access_tracking.h"
+#include "distributed/replication_origin_session_utils.h"
 #include "distributed/run_from_same_connection.h"
 #include "distributed/shard_cleaner.h"
 #include "distributed/shard_transfer.h"
@@ -359,6 +360,11 @@ static const struct config_enum_entry cpu_priority_options[] = {
 	{ NULL, 0, false}
 };
 
+static const struct config_enum_entry metadata_sync_mode_options[] = {
+	{ "transactional", METADATA_SYNC_TRANSACTIONAL, false },
+	{ "nontransactional", METADATA_SYNC_NON_TRANSACTIONAL, false },
+	{ NULL, 0, false }
+};
 
 /* *INDENT-ON* */
 
@@ -1133,6 +1139,16 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
+		"citus.enable_change_data_capture",
+		gettext_noop("Enables using replication origin tracking for change data capture"),
+		NULL,
+		&EnableChangeDataCapture,
+		false,
+		PGC_USERSET,
+		GUC_STANDARD,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
 		"citus.enable_cluster_clock",
 		gettext_noop("When users explicitly call UDF citus_get_transaction_clock() "
 					 "and the flag is true, it returns the maximum "
@@ -1869,6 +1885,21 @@ RegisterCitusConfigVariables(void)
 		GUC_UNIT_MS | GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
 
+	DefineCustomEnumVariable(
+		"citus.metadata_sync_mode",
+		gettext_noop("Sets transaction mode for metadata syncs."),
+		gettext_noop("metadata sync can be run inside a single coordinated "
+					 "transaction or with multiple small transactions in "
+					 "idempotent way. By default we sync metadata in single "
+					 "coordinated transaction. When we hit memory problems "
+					 "at workers, we have alternative nontransactional mode "
+					 "where we send each command with separate transaction."),
+		&MetadataSyncTransMode,
+		METADATA_SYNC_TRANSACTIONAL, metadata_sync_mode_options,
+		PGC_SUSET,
+		GUC_SUPERUSER_ONLY | GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
+
 	DefineCustomIntVariable(
 		"citus.metadata_sync_retry_interval",
 		gettext_noop("Sets the interval to retry failed metadata syncs."),
@@ -2425,7 +2456,6 @@ RegisterCitusConfigVariables(void)
 		PGC_USERSET,
 		GUC_STANDARD,
 		NULL, NULL, NULL);
-
 
 	/* warn about config items in the citus namespace that are not registered above */
 	EmitWarningsOnPlaceholders("citus");

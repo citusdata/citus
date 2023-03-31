@@ -33,7 +33,8 @@
 
 /* Local functions forward declarations for helper functions */
 static bool OptionsSpecifyOwnedBy(List *optionList, Oid *ownedByTableId);
-static Oid SequenceUsedInDistributedTable(const ObjectAddress *sequenceAddress);
+static Oid SequenceUsedInDistributedTable(const ObjectAddress *sequenceAddress, char
+										  depType);
 static List * FilterDistributedSequences(GrantStmt *stmt);
 
 
@@ -183,7 +184,7 @@ ExtractDefaultColumnsAndOwnedSequences(Oid relationId, List **columnNameList,
 
 		char *columnName = NameStr(attributeForm->attname);
 		List *columnOwnedSequences =
-			getOwnedSequences_internal(relationId, attributeIndex + 1, 0);
+			getOwnedSequences_internal(relationId, attributeIndex + 1, DEPENDENCY_AUTO);
 
 		if (attributeForm->atthasdef && list_length(columnOwnedSequences) == 0)
 		{
@@ -453,21 +454,22 @@ PreprocessAlterSequenceStmt(Node *node, const char *queryString,
 	/*  the code-path only supports a single object */
 	Assert(list_length(addresses) == 1);
 
+	/* We have already asserted that we have exactly 1 address in the addresses. */
+	ObjectAddress *address = linitial(addresses);
+
 	/* error out if the sequence is distributed */
-	if (IsAnyObjectDistributed(addresses))
+	if (IsAnyObjectDistributed(addresses) || SequenceUsedInDistributedTable(address,
+																			DEPENDENCY_INTERNAL))
 	{
 		ereport(ERROR, (errmsg(
 							"Altering a distributed sequence is currently not supported.")));
 	}
 
-	/* We have already asserted that we have exactly 1 address in the addresses. */
-	ObjectAddress *address = linitial(addresses);
-
 	/*
 	 * error out if the sequence is used in a distributed table
 	 * and this is an ALTER SEQUENCE .. AS .. statement
 	 */
-	Oid citusTableId = SequenceUsedInDistributedTable(address);
+	Oid citusTableId = SequenceUsedInDistributedTable(address, DEPENDENCY_AUTO);
 	if (citusTableId != InvalidOid)
 	{
 		List *options = stmt->options;
@@ -497,16 +499,19 @@ PreprocessAlterSequenceStmt(Node *node, const char *queryString,
  * SequenceUsedInDistributedTable returns true if the argument sequence
  * is used as the default value of a column in a distributed table.
  * Returns false otherwise
+ * See DependencyType for the possible values of depType.
+ * We use DEPENDENCY_INTERNAL for sequences created by identity column.
+ * DEPENDENCY_AUTO for regular sequences.
  */
 static Oid
-SequenceUsedInDistributedTable(const ObjectAddress *sequenceAddress)
+SequenceUsedInDistributedTable(const ObjectAddress *sequenceAddress, char depType)
 {
 	List *citusTableIdList = CitusTableTypeIdList(ANY_CITUS_TABLE_TYPE);
 	Oid citusTableId = InvalidOid;
 	foreach_oid(citusTableId, citusTableIdList)
 	{
 		List *seqInfoList = NIL;
-		GetDependentSequencesWithRelation(citusTableId, &seqInfoList, 0);
+		GetDependentSequencesWithRelation(citusTableId, &seqInfoList, 0, depType);
 		SequenceInfo *seqInfo = NULL;
 		foreach_ptr(seqInfo, seqInfoList)
 		{

@@ -88,6 +88,8 @@ static const char *replicationSlotPrefix[] = {
  * IMPORTANT: All the subscription names should start with "citus_". Otherwise
  * our utility hook does not defend against non-superusers altering or dropping
  * them, which is important for security purposes.
+ *
+ * We should also keep these in sync with IsCitusShardTransferBackend().
  */
 static const char *subscriptionPrefix[] = {
 	[SHARD_MOVE] = "citus_shard_move_subscription_",
@@ -1338,7 +1340,9 @@ CreatePublications(MultiConnection *connection,
 											worker->groupId,
 											CLEANUP_ALWAYS);
 
+		ExecuteCriticalRemoteCommand(connection, DISABLE_DDL_PROPAGATION);
 		ExecuteCriticalRemoteCommand(connection, createPublicationCommand->data);
+		ExecuteCriticalRemoteCommand(connection, ENABLE_DDL_PROPAGATION);
 		pfree(createPublicationCommand->data);
 		pfree(createPublicationCommand);
 	}

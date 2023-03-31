@@ -601,6 +601,18 @@ IsCitusTable(Oid relationId)
 
 
 /*
+ * IsCitusTableRangeVar returns whether the table named in the given
+ * rangeVar is a Citus table.
+ */
+bool
+IsCitusTableRangeVar(RangeVar *rangeVar, LOCKMODE lockMode, bool missingOK)
+{
+	Oid relationId = RangeVarGetRelid(rangeVar, lockMode, missingOK);
+	return IsCitusTable(relationId);
+}
+
+
+/*
  * IsCitusTableViaCatalog returns whether the given relation is a
  * distributed table or not.
  *

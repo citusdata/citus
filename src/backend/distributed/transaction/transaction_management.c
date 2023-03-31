@@ -34,6 +34,7 @@
 #include "distributed/multi_logical_replication.h"
 #include "distributed/multi_explain.h"
 #include "distributed/repartition_join_execution.h"
+#include "distributed/replication_origin_session_utils.h"
 #include "distributed/transaction_management.h"
 #include "distributed/placement_connection.h"
 #include "distributed/relation_access_tracking.h"
@@ -391,6 +392,9 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			ResetGlobalVariables();
 			ResetRelationAccessHash();
 
+			/* Reset any local replication origin session since transaction has been aborted.*/
+			ResetReplicationOriginLocalSession();
+
 			/* empty the CitusXactCallbackContext to ensure we're not leaking memory */
 			MemoryContextReset(CitusXactCallbackContext);
 
@@ -715,6 +719,8 @@ CoordinatedSubTransactionCallback(SubXactEvent event, SubTransactionId subId,
 				SetCreateCitusTransactionLevel(0);
 			}
 
+			/* Reset any local replication origin session since subtransaction has been aborted.*/
+			ResetReplicationOriginLocalSession();
 			MemoryContextSwitchTo(previousContext);
 
 			break;
