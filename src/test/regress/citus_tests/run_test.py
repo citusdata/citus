@@ -13,7 +13,7 @@ from typing import Optional
 
 import common
 
-import config
+from config import ARBITRARY_SCHEDULE_NAMES, MASTER_VERSION, CitusDefaultClusterConfig
 
 
 # Returns true if given test_schedule_line is of the form:
@@ -43,6 +43,30 @@ def run_python_test(test_file_name, repeat):
         "--count",
         str(repeat),
         str(test_path),
+    )
+
+
+def run_schedule_with_python(schedule):
+    bindir = common.capture("pg_config --bindir").rstrip()
+    pgxs_path = pathlib.Path(common.capture("pg_config --pgxs").rstrip())
+
+    os.chdir(regress_dir)
+    os.environ["PATH"] = str(regress_dir / "bin") + os.pathsep + os.environ["PATH"]
+    os.environ["PG_REGRESS_DIFF_OPTS"] = "-dU10 -w"
+    os.environ["CITUS_OLD_VERSION"] = f"v{MASTER_VERSION}.0"
+
+    args = {
+        "--pgxsdir": str(pgxs_path.parent.parent.parent),
+        "--bindir": bindir,
+    }
+
+    config = CitusDefaultClusterConfig(args)
+    common.initialize_temp_dir(config.temp_dir)
+    common.initialize_citus_cluster(
+        config.bindir, config.datadir, config.settings, config
+    )
+    common.run_pg_regress(
+        config.bindir, config.pg_srcdir, config.coordinator_port(), schedule
     )
 
 
@@ -210,7 +234,19 @@ if __name__ == "__main__":
         if "operations" in test_schedule:
             return "minimal_schedule"
 
-        if test_schedule in config.ARBITRARY_SCHEDULE_NAMES:
+        if "after_citus_upgrade" in test_schedule:
+            print(
+                f"WARNING: After citus upgrade schedule ({test_schedule}) is not supported."
+            )
+            sys.exit(0)
+
+        if "citus_upgrade" in test_schedule:
+            return None
+
+        if "pg_upgrade" in test_schedule:
+            return "minimal_schedule"
+
+        if test_schedule in ARBITRARY_SCHEDULE_NAMES:
             print(
                 f"WARNING: Arbitrary config schedule ({test_schedule}) is not supported."
             )
@@ -239,6 +275,9 @@ if __name__ == "__main__":
     else:
         dependencies = TestDeps(default_base_schedule(test_schedule))
 
+    if "before_" in test_schedule:
+        dependencies.repeatable = False
+
     # copy base schedule to a temp file and append test_schedule_line
     # to be able to run tests in parallel (if test_schedule_line is a parallel group.)
     tmp_schedule_path = os.path.join(
@@ -261,6 +300,14 @@ if __name__ == "__main__":
             print(f"WARNING: Cannot repeatably run this test: '{test_file_name}'")
         for _ in range(repetition_cnt):
             myfile.write(test_schedule_line)
+
+    if "upgrade" in test_schedule_line:
+        try:
+            run_schedule_with_python(pathlib.Path(tmp_schedule_path).stem)
+        finally:
+            # remove temp schedule file
+            os.remove(tmp_schedule_path)
+        sys.exit(0)
 
     # find suitable make recipe
     if dependencies.schedule == "base_isolation_schedule":
