@@ -2,6 +2,7 @@ import asyncio
 import atexit
 import concurrent.futures
 import os
+import pathlib
 import platform
 import random
 import re
@@ -42,6 +43,8 @@ BSD = MACOS or FREEBSD or OPENBSD
 
 TIMEOUT_DEFAULT = timedelta(seconds=int(os.getenv("PG_TEST_TIMEOUT_DEFAULT", "10")))
 FORCE_PORTS = os.getenv("PG_FORCE_PORTS", "NO").lower() not in ("no", "0", "n", "")
+
+REGRESS_DIR = pathlib.Path(os.path.realpath(__file__)).parent.parent
 
 
 def initialize_temp_dir(temp_dir):
