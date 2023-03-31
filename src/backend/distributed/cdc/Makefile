@@ -6,7 +6,7 @@ MODULE = citus_$(DECODER)
 
 .PHONY: clean-full install install-all
 
-OBJS = cdc_decoder.o cdc_decoder_utils.o
+OBJS += cdc_decoder.o cdc_decoder_utils.o
 
 PG_CONFIG = pg_config
 PGXS := $(shell $(PG_CONFIG) --pgxs)
