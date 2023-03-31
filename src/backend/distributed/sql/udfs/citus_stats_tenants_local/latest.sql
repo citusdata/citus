@@ -24,4 +24,9 @@ FROM pg_catalog.citus_stats_tenants_local()
 ORDER BY score DESC;
 
 ALTER VIEW citus.citus_stats_tenants_local SET SCHEMA pg_catalog;
-GRANT SELECT ON pg_catalog.citus_stats_tenants_local TO PUBLIC;
+
+REVOKE ALL ON FUNCTION pg_catalog.citus_stats_tenants_local(BOOLEAN) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION pg_catalog.citus_stats_tenants_local(BOOLEAN) TO pg_monitor;
+
+REVOKE ALL ON pg_catalog.citus_stats_tenants_local FROM PUBLIC;
+GRANT SELECT ON pg_catalog.citus_stats_tenants_local TO pg_monitor;
