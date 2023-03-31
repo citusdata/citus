@@ -2,7 +2,7 @@ ifndef DECODER
 	DECODER = pgoutput
 endif
 
-MODULE = citus_$(DECODER)
+MODULE_big = citus_$(DECODER)
 
 .PHONY: clean-full install install-all
 
