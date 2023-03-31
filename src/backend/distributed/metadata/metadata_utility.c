@@ -1671,6 +1671,48 @@ TupleToGroupShardPlacement(TupleDesc tupleDescriptor, HeapTuple heapTuple)
 
 
 /*
+ * LookupTaskPlacementHostAndPort sets the nodename and nodeport for the given task placement
+ * with a lookup.
+ */
+void
+LookupTaskPlacementHostAndPort(ShardPlacement *taskPlacement, char **nodeName,
+							   int *nodePort)
+{
+	if (IsDummyPlacement(taskPlacement))
+	{
+		/*
+		 * If we create a dummy placement for the local node, it is possible
+		 * that the entry doesn't exist in pg_dist_node, hence a lookup will fail.
+		 * In that case we want to use the dummy placements values.
+		 */
+		*nodeName = taskPlacement->nodeName;
+		*nodePort = taskPlacement->nodePort;
+	}
+	else
+	{
+		/*
+		 * We want to lookup the node information again since it is possible that
+		 * there were changes in pg_dist_node and we will get those invalidations
+		 * in LookupNodeForGroup.
+		 */
+		WorkerNode *workerNode = LookupNodeForGroup(taskPlacement->groupId);
+		*nodeName = workerNode->workerName;
+		*nodePort = workerNode->workerPort;
+	}
+}
+
+
+/*
+ * IsDummyPlacement returns true if the given placement is a dummy placement.
+ */
+bool
+IsDummyPlacement(ShardPlacement *taskPlacement)
+{
+	return taskPlacement->nodeId == LOCAL_NODE_ID;
+}
+
+
+/*
  * InsertShardRow opens the shard system catalog, and inserts a new row with the
  * given values into that system catalog. Note that we allow the user to pass in
  * null min/max values in case they are creating an empty shard.

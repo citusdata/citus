@@ -54,6 +54,19 @@
 #define WAIT_EVENT_SET_INDEX_NOT_INITIALIZED -1
 #define WAIT_EVENT_SET_INDEX_FAILED -2
 
+/*
+ * UINT32_MAX is reserved in pg_dist_node, so we can use it safely.
+ */
+#define LOCAL_NODE_ID UINT32_MAX
+
+/*
+ * If you want to connect to the current node use `LocalHostName`, which is a GUC, instead
+ * of the hardcoded loopback hostname. Only if you really need the loopback hostname use
+ * this define.
+ */
+#define LOCAL_HOST_NAME "localhost"
+
+
 /* forward declare, to avoid forcing large headers on everyone */
 struct pg_conn; /* target of the PGconn typedef */
 struct MemoryContextData;
