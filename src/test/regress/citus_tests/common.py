@@ -385,6 +385,13 @@ next_port = PORT_LOWER_BOUND
 
 
 def cleanup_test_leftovers(nodes):
+    """
+    Cleaning up test leftovers needs to be done in a specific order, because
+    some of these leftovers depend on others having been removed. They might
+    even depend on leftovers on other nodes being removed. So this takes a list
+    of nodes, so that we can clean up all test leftovers globally in the
+    correct order.
+    """
     for node in nodes:
         node.cleanup_subscriptions()
 
