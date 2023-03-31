@@ -87,6 +87,11 @@ typedef struct MultiTenantMonitor
 	TenantStats tenants[FLEXIBLE_ARRAY_MEMBER];
 } MultiTenantMonitor;
 
+typedef enum
+{
+	STAT_TENANTS_TRACK_NONE = 0,
+	STAT_TENANTS_TRACK_ALL = 1
+} StatTenantsTrackType;
 
 extern void CitusAttributeToEnd(QueryDesc *queryDesc);
 extern void AttributeQueryIfAnnotated(const char *queryString, CmdType commandType);
@@ -99,5 +104,6 @@ extern ExecutorEnd_hook_type prev_ExecutorEnd;
 extern int MultiTenantMonitoringLogLevel;
 extern int CitusStatsTenantsPeriod;
 extern int CitusStatsTenantsLimit;
+extern int StatTenantsTrack;
 
 #endif /*CITUS_ATTRIBUTE_H */

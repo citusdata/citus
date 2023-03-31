@@ -72,6 +72,7 @@ static char * UnescapeCommentChars(const char *str);
 int MultiTenantMonitoringLogLevel = CITUS_LOG_LEVEL_OFF;
 int CitusStatsTenantsPeriod = (time_t) 60;
 int CitusStatsTenantsLimit = 10;
+int StatTenantsTrack = STAT_TENANTS_TRACK_ALL;
 
 
 PG_FUNCTION_INFO_V1(citus_stats_tenants_local);
@@ -195,6 +196,11 @@ sleep_until_next_period(PG_FUNCTION_ARGS)
 void
 AttributeQueryIfAnnotated(const char *query_string, CmdType commandType)
 {
+	if (StatTenantsTrack == STAT_TENANTS_TRACK_NONE)
+	{
+		return;
+	}
+
 	strcpy_s(attributeToTenant, sizeof(attributeToTenant), "");
 
 	if (query_string == NULL)
@@ -231,7 +237,8 @@ AttributeQueryIfAnnotated(const char *query_string, CmdType commandType)
 void
 AttributeTask(char *tenantId, int colocationId, CmdType commandType)
 {
-	if (tenantId == NULL || colocationId == INVALID_COLOCATION_ID)
+	if (StatTenantsTrack == STAT_TENANTS_TRACK_NONE ||
+		tenantId == NULL || colocationId == INVALID_COLOCATION_ID)
 	{
 		return;
 	}
@@ -249,7 +256,7 @@ AttributeTask(char *tenantId, int colocationId, CmdType commandType)
 char *
 AnnotateQuery(char *queryString, char *partitionColumn, int colocationId)
 {
-	if (partitionColumn == NULL)
+	if (StatTenantsTrack == STAT_TENANTS_TRACK_NONE || partitionColumn == NULL)
 	{
 		return queryString;
 	}
@@ -322,6 +329,11 @@ CompareTenantScore(const void *leftElement, const void *rightElement)
 static void
 AttributeMetricsIfApplicable()
 {
+	if (StatTenantsTrack == STAT_TENANTS_TRACK_NONE)
+	{
+		return;
+	}
+
 	if (strcmp(attributeToTenant, "") != 0)
 	{
 		time_t queryTime = time(0);
