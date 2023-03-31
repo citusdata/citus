@@ -360,6 +360,11 @@ def run(command, *args, check=True, shell=True, silent=False, **kwargs):
     return subprocess.run(command, *args, check=check, shell=shell, **kwargs)
 
 
+def capture(command, *args, **kwargs):
+    """runs the given command and returns its output as a string"""
+    return run(command, *args, stdout=subprocess.PIPE, text=True, **kwargs).stdout
+
+
 def sudo(command, *args, shell=True, **kwargs):
     """
     A version of run that prefixes the command with sudo when the process is
