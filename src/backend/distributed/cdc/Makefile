@@ -10,7 +10,10 @@ citus_subdir = src/backend/distributed/cdc
 
 OBJS += cdc_decoder.o cdc_decoder_utils.o
 
+
 include $(citus_top_builddir)/Makefile.global
+
+CLAGS += -I$(citus_top_builddir)/src/include/distributed
 
 install: install-cdc
 
