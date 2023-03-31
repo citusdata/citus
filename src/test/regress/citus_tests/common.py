@@ -1162,7 +1162,7 @@ class CitusCluster(QueryRunner):
 
     @schema.setter
     def schema(self, value):
-        self._schema
+        self._schema = value
         for node in self.nodes:
             node.schema = value
 
