@@ -9,7 +9,6 @@ import re
 import shutil
 import sys
 from collections import OrderedDict
-from glob import glob
 from typing import Optional
 
 import common
@@ -23,6 +22,27 @@ def schedule_line_is_upgrade_after(test_schedule_line: str) -> bool:
     return (
         test_schedule_line.startswith("test: upgrade_")
         and "_after" in test_schedule_line
+    )
+
+
+def run_python_test(test_file_name, repeat):
+    """Runs the test using pytest
+
+    This function never returns as it usese os.execlp to replace the current
+    process with a new pytest process.
+    """
+    test_path = regress_dir / "citus_tests" / "test" / f"{test_file_name}.py"
+    if not test_path.exists():
+        raise Exception("Test could not be found in any schedule")
+
+    os.execlp(
+        "pytest",
+        "pytest",
+        "--numprocesses",
+        "auto",
+        "--count",
+        str(repeat),
+        str(test_path),
     )
 
 
@@ -64,7 +84,9 @@ if __name__ == "__main__":
 
     args = vars(args.parse_args())
 
-    regress_dir = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+    regress_dir = pathlib.Path(
+        os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+    )
     test_file_path = args["path"]
     test_file_name = args["test_name"]
     use_base_schedule = args["use_base_schedule"]
@@ -138,17 +160,20 @@ if __name__ == "__main__":
         test_file_extension = pathlib.Path(test_file_path).suffix
         test_file_name = pathlib.Path(test_file_path).stem
 
-        if test_file_extension not in ".spec.sql":
+        if test_file_extension not in (".spec", ".sql", ".py"):
             print(
-                "ERROR: Unrecognized test extension. Valid extensions are: .sql and .spec"
+                "ERROR: Unrecognized test extension. Valid extensions are: .sql, .spec, and .py"
             )
             sys.exit(1)
 
     test_schedule = ""
     dependencies = []
 
+    if test_file_name.startswith("test_"):
+        run_python_test(test_file_name, args["repeat"])
+
     # find related schedule
-    for schedule_file_path in sorted(glob(os.path.join(regress_dir, "*_schedule"))):
+    for schedule_file_path in sorted(regress_dir.glob("*_schedule")):
         for schedule_line in open(schedule_file_path, "r"):
             if re.search(r"\b" + test_file_name + r"\b", schedule_line):
                 test_schedule = pathlib.Path(schedule_file_path).stem
