@@ -74,6 +74,7 @@ FETCH BACKWARD test_cursor;
 END;
 -- test inserting to table in different schema
 SET search_path TO public;
+DELETE from citus_mx_test_schema.nation_hash where n_nationkey = 100; -- allow rerunning this file
 INSERT INTO citus_mx_test_schema.nation_hash(n_nationkey, n_name, n_regionkey) VALUES (100, 'TURKEY', 3);
 -- verify insertion
 SELECT * FROM citus_mx_test_schema.nation_hash WHERE n_nationkey = 100;
@@ -84,6 +85,7 @@ SELECT * FROM citus_mx_test_schema.nation_hash WHERE n_nationkey = 100;
 
 -- test with search_path is set
 SET search_path TO citus_mx_test_schema;
+DELETE from nation_hash where n_nationkey = 101; -- allow rerunning this file
 INSERT INTO nation_hash(n_nationkey, n_name, n_regionkey) VALUES (101, 'GERMANY', 3);
 -- verify insertion
 SELECT * FROM nation_hash WHERE n_nationkey = 101;
@@ -458,14 +460,14 @@ SELECT create_distributed_table('mx_old_schema.table_set_schema', 'id');
 (1 row)
 
 CREATE SCHEMA mx_new_schema;
-SELECT objid::oid::regnamespace as "Distributed Schemas"
+SELECT objid::oid::regnamespace::text as "Distributed Schemas"
     FROM pg_catalog.pg_dist_object
     WHERE objid::oid::regnamespace IN ('mx_old_schema', 'mx_new_schema')
     ORDER BY "Distributed Schemas";
  Distributed Schemas
 ---------------------------------------------------------------------
- mx_old_schema
  mx_new_schema
+ mx_old_schema
 (2 rows)
 
 \c - - - :worker_1_port
@@ -490,13 +492,14 @@ ERROR:  operation is not allowed on this node
 HINT:  Connect to the coordinator and run it again.
 \c - - - :master_port
 ALTER TABLE mx_old_schema.table_set_schema SET SCHEMA mx_new_schema;
-SELECT objid::oid::regnamespace as "Distributed Schemas"
+SELECT objid::oid::regnamespace::text as "Distributed Schemas"
     FROM pg_catalog.pg_dist_object
-    WHERE objid::oid::regnamespace IN ('mx_old_schema', 'mx_new_schema');
+    WHERE objid::oid::regnamespace IN ('mx_old_schema', 'mx_new_schema')
+    ORDER BY "Distributed Schemas";
  Distributed Schemas
 ---------------------------------------------------------------------
- mx_old_schema
  mx_new_schema
+ mx_old_schema
 (2 rows)
 
 \c - - - :worker_1_port
@@ -542,7 +545,7 @@ SET client_min_messages TO ERROR;
 CREATE ROLE schema_owner WITH LOGIN;
 RESET client_min_messages;
 SELECT run_command_on_workers($$SET citus.enable_ddl_propagation TO OFF;CREATE ROLE schema_owner WITH LOGIN;RESET citus.enable_ddl_propagation;$$);
-      run_command_on_workers
+ run_command_on_workers
 ---------------------------------------------------------------------
  (localhost,57637,t,SET)
  (localhost,57638,t,SET)
@@ -567,7 +570,7 @@ SET client_min_messages TO ERROR;
 CREATE ROLE role_to_be_granted WITH LOGIN;
 RESET client_min_messages;
 SELECT run_command_on_workers($$SET citus.enable_ddl_propagation TO OFF;CREATE ROLE role_to_be_granted WITH LOGIN;RESET citus.enable_ddl_propagation;$$);
-      run_command_on_workers
+ run_command_on_workers
 ---------------------------------------------------------------------
  (localhost,57637,t,SET)
  (localhost,57638,t,SET)
@@ -616,3 +619,6 @@ NOTICE:  drop cascades to table new_schema.t1
 DROP SCHEMA mx_old_schema CASCADE;
 DROP SCHEMA mx_new_schema CASCADE;
 NOTICE:  drop cascades to table mx_new_schema.table_set_schema
+DROP SCHEMA localschema;
+DROP ROLE schema_owner;
+DROP ROLE role_to_be_granted;
