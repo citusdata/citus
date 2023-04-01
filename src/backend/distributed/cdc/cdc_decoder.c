@@ -195,7 +195,7 @@ InitShardToDistributedTableMap()
  * AddShardIdToHashTable adds the shardId to the hash table.
  */
 static Oid
-AddShardIdToHashTable(Oid shardId, ShardIdHashEntry *entry)
+AddShardIdToHashTable(uint64 shardId, ShardIdHashEntry *entry)
 {
 	entry->shardId = shardId;
 	entry->distributedTableId = CdcLookupShardRelationFromCatalog(shardId, true);
@@ -206,13 +206,13 @@ AddShardIdToHashTable(Oid shardId, ShardIdHashEntry *entry)
 
 
 static Oid
-LookupDistributedTableIdForShardId(Oid shardId, bool *isReferenceTable)
+LookupDistributedTableIdForShardId(uint64 shardId, bool *isReferenceTable)
 {
 	bool found;
 	Oid distributedTableId = InvalidOid;
 	ShardIdHashEntry *entry = (ShardIdHashEntry *) hash_search(shardToDistributedTableMap,
 															   &shardId,
-															   HASH_FIND | HASH_ENTER,
+															   HASH_ENTER,
 															   &found);
 	if (found)
 	{
