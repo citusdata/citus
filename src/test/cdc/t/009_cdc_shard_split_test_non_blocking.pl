@@ -17,7 +17,7 @@ citus.shard_replication_factor = 1
 ### Create the citus cluster with coordinator and two worker nodes
 our ($node_coordinator, @workers) = create_citus_cluster(1,"localhost",57636, $citus_config);
 
-my $command = "SELECT citus_set_node_property('localhost', 57636, 'shouldhaveshards', true);";
+my $command = "UPDATE pg_dist_node SET shouldhaveshards = true;";
 $node_coordinator->safe_psql('postgres',$command);
 
 our $node_cdc_client = create_node('cdc_client', 0, "localhost", 57639);

@@ -118,6 +118,7 @@ _PG_output_plugin_init(OutputPluginCallbacks *cb)
 	cb->filter_by_origin_cb = replication_origin_filter_cb;
 }
 
+
 /*
  *  Check if the replication slot is for Shard split by checking for prefix.
  */
@@ -138,7 +139,6 @@ static void
 cdc_change_cb(LogicalDecodingContext *ctx, ReorderBufferTXN *txn,
 			  Relation relation, ReorderBufferChange *change)
 {
-	elog(LOG, "cdc_change_cb called for relation %s", RelationGetRelationName(relation));
 	/*
 	 * If Citus has not been loaded yet, pass the changes
 	 * through to the undrelying decoder plugin.

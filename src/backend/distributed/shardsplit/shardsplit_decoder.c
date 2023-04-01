@@ -22,7 +22,11 @@
 extern void _PG_output_plugin_init(OutputPluginCallbacks *cb);
 static LogicalDecodeChangeCB pgOutputPluginChangeCB;
 
+#define InvalidRepOriginId 0
+
 static HTAB *SourceToDestinationShardMap = NULL;
+static bool replication_origin_filter_cb(LogicalDecodingContext *ctx, RepOriginId
+										 origin_id);
 
 /* Plugin callback */
 static void shard_split_change_cb(LogicalDecodingContext *ctx,
@@ -68,6 +72,21 @@ _PG_output_plugin_init(OutputPluginCallbacks *cb)
 	/* actual pgoutput callback will be called with the appropriate destination shard */
 	pgOutputPluginChangeCB = cb->change_cb;
 	cb->change_cb = shard_split_change_cb;
+	cb->filter_by_origin_cb = replication_origin_filter_cb;
+}
+
+
+/*
+ * replication_origin_filter_cb call back function filters out publication of changes
+ * originated from any other node other than the current node. This is
+ * identified by the "origin_id" of the changes. The origin_id is set to
+ * a non-zero value in the origin node as part of WAL replication for internal
+ * operations like shard split/moves/create_distributed_table etc.
+ */
+static bool
+replication_origin_filter_cb(LogicalDecodingContext *ctx, RepOriginId origin_id)
+{
+	return  (origin_id != InvalidRepOriginId);
 }
 
 
@@ -79,7 +98,6 @@ static void
 shard_split_change_cb(LogicalDecodingContext *ctx, ReorderBufferTXN *txn,
 					  Relation relation, ReorderBufferChange *change)
 {
-	elog(LOG, "shard_split_change_cb called for relation %s", RelationGetRelationName(relation));
 	/*
 	 * If Citus has not been loaded yet, pass the changes
 	 * through to the undrelying decoder plugin.
