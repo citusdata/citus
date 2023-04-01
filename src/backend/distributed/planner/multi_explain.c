@@ -29,6 +29,7 @@
 #include "distributed/citus_nodefuncs.h"
 #include "distributed/connection_management.h"
 #include "distributed/deparse_shard_query.h"
+#include "distributed/executor_util.h"
 #include "distributed/insert_select_planner.h"
 #include "distributed/insert_select_executor.h"
 #include "distributed/listutils.h"

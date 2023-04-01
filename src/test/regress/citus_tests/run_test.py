@@ -9,12 +9,11 @@ import re
 import shutil
 import sys
 from collections import OrderedDict
-from glob import glob
 from typing import Optional
 
 import common
 
-import config
+from config import ARBITRARY_SCHEDULE_NAMES, MASTER_VERSION, CitusDefaultClusterConfig
 
 
 # Returns true if given test_schedule_line is of the form:
@@ -23,6 +22,51 @@ def schedule_line_is_upgrade_after(test_schedule_line: str) -> bool:
     return (
         test_schedule_line.startswith("test: upgrade_")
         and "_after" in test_schedule_line
+    )
+
+
+def run_python_test(test_file_name, repeat):
+    """Runs the test using pytest
+
+    This function never returns as it usese os.execlp to replace the current
+    process with a new pytest process.
+    """
+    test_path = regress_dir / "citus_tests" / "test" / f"{test_file_name}.py"
+    if not test_path.exists():
+        raise Exception("Test could not be found in any schedule")
+
+    os.execlp(
+        "pytest",
+        "pytest",
+        "--numprocesses",
+        "auto",
+        "--count",
+        str(repeat),
+        str(test_path),
+    )
+
+
+def run_schedule_with_python(schedule):
+    bindir = common.capture("pg_config --bindir").rstrip()
+    pgxs_path = pathlib.Path(common.capture("pg_config --pgxs").rstrip())
+
+    os.chdir(regress_dir)
+    os.environ["PATH"] = str(regress_dir / "bin") + os.pathsep + os.environ["PATH"]
+    os.environ["PG_REGRESS_DIFF_OPTS"] = "-dU10 -w"
+    os.environ["CITUS_OLD_VERSION"] = f"v{MASTER_VERSION}.0"
+
+    args = {
+        "--pgxsdir": str(pgxs_path.parent.parent.parent),
+        "--bindir": bindir,
+    }
+
+    config = CitusDefaultClusterConfig(args)
+    common.initialize_temp_dir(config.temp_dir)
+    common.initialize_citus_cluster(
+        config.bindir, config.datadir, config.settings, config
+    )
+    common.run_pg_regress(
+        config.bindir, config.pg_srcdir, config.coordinator_port(), schedule
     )
 
 
@@ -64,7 +108,9 @@ if __name__ == "__main__":
 
     args = vars(args.parse_args())
 
-    regress_dir = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+    regress_dir = pathlib.Path(
+        os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+    )
     test_file_path = args["path"]
     test_file_name = args["test_name"]
     use_base_schedule = args["use_base_schedule"]
@@ -121,6 +167,7 @@ if __name__ == "__main__":
         "multi_mx_modifying_xacts": TestDeps(None, ["multi_mx_create_table"]),
         "multi_mx_router_planner": TestDeps(None, ["multi_mx_create_table"]),
         "multi_mx_copy_data": TestDeps(None, ["multi_mx_create_table"]),
+        "multi_mx_schema_support": TestDeps(None, ["multi_mx_copy_data"]),
         "multi_simple_queries": TestDeps("base_schedule"),
     }
 
@@ -138,17 +185,20 @@ if __name__ == "__main__":
         test_file_extension = pathlib.Path(test_file_path).suffix
         test_file_name = pathlib.Path(test_file_path).stem
 
-        if test_file_extension not in ".spec.sql":
+        if test_file_extension not in (".spec", ".sql", ".py"):
             print(
-                "ERROR: Unrecognized test extension. Valid extensions are: .sql and .spec"
+                "ERROR: Unrecognized test extension. Valid extensions are: .sql, .spec, and .py"
             )
             sys.exit(1)
 
     test_schedule = ""
     dependencies = []
 
+    if test_file_name.startswith("test_"):
+        run_python_test(test_file_name, args["repeat"])
+
     # find related schedule
-    for schedule_file_path in sorted(glob(os.path.join(regress_dir, "*_schedule"))):
+    for schedule_file_path in sorted(regress_dir.glob("*_schedule")):
         for schedule_line in open(schedule_file_path, "r"):
             if re.search(r"\b" + test_file_name + r"\b", schedule_line):
                 test_schedule = pathlib.Path(schedule_file_path).stem
@@ -184,7 +234,19 @@ if __name__ == "__main__":
         if "operations" in test_schedule:
             return "minimal_schedule"
 
-        if test_schedule in config.ARBITRARY_SCHEDULE_NAMES:
+        if "after_citus_upgrade" in test_schedule:
+            print(
+                f"WARNING: After citus upgrade schedule ({test_schedule}) is not supported."
+            )
+            sys.exit(0)
+
+        if "citus_upgrade" in test_schedule:
+            return None
+
+        if "pg_upgrade" in test_schedule:
+            return "minimal_schedule"
+
+        if test_schedule in ARBITRARY_SCHEDULE_NAMES:
             print(
                 f"WARNING: Arbitrary config schedule ({test_schedule}) is not supported."
             )
@@ -213,6 +275,9 @@ if __name__ == "__main__":
     else:
         dependencies = TestDeps(default_base_schedule(test_schedule))
 
+    if "before_" in test_schedule:
+        dependencies.repeatable = False
+
     # copy base schedule to a temp file and append test_schedule_line
     # to be able to run tests in parallel (if test_schedule_line is a parallel group.)
     tmp_schedule_path = os.path.join(
@@ -235,6 +300,14 @@ if __name__ == "__main__":
             print(f"WARNING: Cannot repeatably run this test: '{test_file_name}'")
         for _ in range(repetition_cnt):
             myfile.write(test_schedule_line)
+
+    if "upgrade" in test_schedule_line:
+        try:
+            run_schedule_with_python(pathlib.Path(tmp_schedule_path).stem)
+        finally:
+            # remove temp schedule file
+            os.remove(tmp_schedule_path)
+        sys.exit(0)
 
     # find suitable make recipe
     if dependencies.schedule == "base_isolation_schedule":

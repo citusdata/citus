@@ -90,6 +90,7 @@
 #include "distributed/local_executor.h"
 #include "distributed/local_plan_cache.h"
 #include "distributed/coordinator_protocol.h"
+#include "distributed/executor_util.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_executor.h"
 #include "distributed/multi_server_executor.h"

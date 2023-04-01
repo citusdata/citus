@@ -14,7 +14,6 @@ extern int ExecutorSlowStartInterval;
 extern bool EnableCostBasedConnectionEstablishment;
 extern bool PreventIncompleteConnectionEstablishment;
 
-extern bool ShouldRunTasksSequentially(List *taskList);
 extern uint64 ExecuteTaskList(RowModifyLevel modLevel, List *taskList);
 extern uint64 ExecuteUtilityTaskList(List *utilityTaskList, bool localExecutionSupported);
 extern uint64 ExecuteUtilityTaskListExtended(List *utilityTaskList, int poolSize,

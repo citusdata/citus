@@ -106,9 +106,17 @@ Adding a new test file is quite simple:
 
 See [`src/test/regress/spec/README.md`](https://github.com/citusdata/citus/blob/master/src/test/regress/spec/README.md)
 
+## Pytest testing
+
+See [`src/test/regress/citus_tests/test/README.md`](https://github.com/citusdata/citus/blob/master/src/test/regress/citus_tests/test/README.md)
+
 ## Upgrade testing
 
 See [`src/test/regress/citus_tests/upgrade/README.md`](https://github.com/citusdata/citus/blob/master/src/test/regress/citus_tests/upgrade/README.md)
+
+## Arbitrary configs testing
+
+See [`src/test/regress/citus_tests/arbitrary_configs/README.md`](https://github.com/citusdata/citus/blob/master/src/test/regress/citus_tests/arbitrary_configsupgrade/README.md)
 
 ## Failure testing
 
