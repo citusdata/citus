@@ -10,9 +10,14 @@
 #include "postgres.h"
 #include "distributed/shardinterval_utils.h"
 #include "distributed/shardsplit_shared_memory.h"
+#include "distributed/worker_shard_visibility.h"
+#include "distributed/worker_protocol.h"
 #include "distributed/listutils.h"
+#include "distributed/metadata/distobject.h"
 #include "replication/logical.h"
 #include "utils/typcache.h"
+#include "utils/lsyscache.h"
+#include "catalog/pg_namespace.h"
 
 extern void _PG_output_plugin_init(OutputPluginCallbacks *cb);
 static LogicalDecodeChangeCB pgOutputPluginChangeCB;
@@ -74,12 +79,28 @@ static void
 shard_split_change_cb(LogicalDecodingContext *ctx, ReorderBufferTXN *txn,
 					  Relation relation, ReorderBufferChange *change)
 {
+	/*
+	 * If Citus has not been loaded yet, pass the changes
+	 * through to the undrelying decoder plugin.
+	 */
+	if (!CitusHasBeenLoaded())
+	{
+		pgOutputPluginChangeCB(ctx, txn, relation, change);
+		return;
+	}
+
+	/* check if the relation is publishable.*/
 	if (!is_publishable_relation(relation))
 	{
 		return;
 	}
 
 	char *replicationSlotName = ctx->slot->data.name.data;
+	if (replicationSlotName == NULL)
+	{
+		elog(ERROR, "Replication slot name is NULL!");
+		return;
+	}
 
 	/*
 	 * Initialize SourceToDestinationShardMap if not already initialized.

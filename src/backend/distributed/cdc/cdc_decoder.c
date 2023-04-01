@@ -67,6 +67,9 @@ static void cdc_change_cb(LogicalDecodingContext *ctx, ReorderBufferTXN *txn,
 
 #define DECODER_INIT_FUNCTION_NAME "_PG_output_plugin_init"
 
+#define CITUS_SHARD_SLOT_PREFIX "citus_shard_"
+#define CITUS_SHARD_SLOT_PREFIX_SIZE (sizeof(CITUS_SHARD_SLOT_PREFIX) - 1)
+
 /*
  * Postgres uses 'pgoutput' as default plugin for logical replication.
  * We want to reuse Postgres pgoutput's functionality as much as possible.
@@ -115,6 +118,17 @@ _PG_output_plugin_init(OutputPluginCallbacks *cb)
 	cb->filter_by_origin_cb = replication_origin_filter_cb;
 }
 
+/*
+ *  Check if the replication slot is for Shard split by checking for prefix.
+ */
+inline static
+bool
+IsShardSplitSlot(char *replicationSlotName)
+{
+	return strncmp(replicationSlotName, CITUS_SHARD_SLOT_PREFIX,
+				   CITUS_SHARD_SLOT_PREFIX_SIZE) == 0;
+}
+
 
 /*
  * shard_split_and_cdc_change_cb function emits the incoming tuple change
@@ -140,7 +154,19 @@ cdc_change_cb(LogicalDecodingContext *ctx, ReorderBufferTXN *txn,
 		return;
 	}
 
-	PublishDistributedTableChanges(ctx, txn, relation, change);
+	char *replicationSlotName = ctx->slot->data.name.data;
+	if (replicationSlotName == NULL)
+	{
+		elog(ERROR, "Replication slot name is NULL!");
+		return;
+	}
+
+	/* check for the internal shard split names, if not, assume the slot is for CDC. */
+	if (!IsShardSplitSlot(replicationSlotName))
+	{
+		PublishDistributedTableChanges(ctx, txn, relation, change);
+		return;
+	}
 }
 
 
