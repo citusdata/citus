@@ -79,6 +79,7 @@ static void
 shard_split_change_cb(LogicalDecodingContext *ctx, ReorderBufferTXN *txn,
 					  Relation relation, ReorderBufferChange *change)
 {
+	elog(LOG, "shard_split_change_cb called for relation %s", RelationGetRelationName(relation));
 	/*
 	 * If Citus has not been loaded yet, pass the changes
 	 * through to the undrelying decoder plugin.
