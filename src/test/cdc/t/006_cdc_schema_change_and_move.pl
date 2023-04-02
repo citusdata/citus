@@ -41,6 +41,7 @@ my $initial_schema = "
         CREATE STATISTICS stats_on_sensors (dependencies) ON measureid, eventdatetime FROM sensors;";
 
 $node_coordinator->safe_psql('postgres',$initial_schema);
+$node_coordinator->safe_psql('postgres','ALTER TABLE sensors REPLICA IDENTITY FULL;');
 $node_cdc_client->safe_psql('postgres',$initial_schema);
 
 create_cdc_publication_and_slots_for_coordinator($node_coordinator,'sensors');
