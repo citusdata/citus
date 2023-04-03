@@ -103,7 +103,7 @@ extern void AttributeTask(char *tenantId, int colocationGroupId, CmdType command
 
 extern ExecutorEnd_hook_type prev_ExecutorEnd;
 
-extern int MultiTenantMonitoringLogLevel;
+extern int CitusStatTenantsLogLevel;
 extern int CitusStatsTenantsPeriod;
 extern int CitusStatsTenantsLimit;
 extern int StatTenantsTrack;

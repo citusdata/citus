@@ -1961,16 +1961,6 @@ RegisterCitusConfigVariables(void)
 		GUC_STANDARD,
 		NULL, NULL, NULL);
 
-	DefineCustomEnumVariable(
-		"citus.multi_tenant_monitoring_log_level",
-		gettext_noop("Sets the level of multi tenant monitoring log messages"),
-		NULL,
-		&MultiTenantMonitoringLogLevel,
-		CITUS_LOG_LEVEL_OFF, log_level_options,
-		PGC_USERSET,
-		GUC_STANDARD,
-		NULL, NULL, NULL);
-
 	DefineCustomIntVariable(
 		"citus.next_cleanup_record_id",
 		gettext_noop("Set the next cleanup record ID to use in operation creation."),
@@ -2375,6 +2365,16 @@ RegisterCitusConfigVariables(void)
 		&CitusStatsTenantsLimit,
 		10, 1, 100,
 		PGC_POSTMASTER,
+		GUC_STANDARD,
+		NULL, NULL, NULL);
+
+	DefineCustomEnumVariable(
+		"citus.stat_tenant_log_level",
+		gettext_noop("Sets the level of citus_stat_tenants log messages"),
+		NULL,
+		&CitusStatTenantsLogLevel,
+		CITUS_LOG_LEVEL_OFF, log_level_options,
+		PGC_USERSET,
 		GUC_STANDARD,
 		NULL, NULL, NULL);
 
