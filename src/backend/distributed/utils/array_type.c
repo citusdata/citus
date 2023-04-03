@@ -143,7 +143,7 @@ TextArrayTypeToIntegerList(ArrayType *arrayObject)
 
 
 /*
- * intArrayToDatum
+ * IntArrayToDatum
  *
  * Convert an integer array to the datum int array format
  * (currently used for nodes_involved in pg_dist_background_task)
@@ -152,7 +152,7 @@ TextArrayTypeToIntegerList(ArrayType *arrayObject)
  * if the int_array is empty.
  */
 Datum
-intArrayToDatum(uint32 int_array_size, int int_array[])
+IntArrayToDatum(uint32 int_array_size, int int_array[])
 {
 	if (int_array_size == 0)
 	{

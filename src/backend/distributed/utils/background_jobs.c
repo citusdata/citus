@@ -123,6 +123,10 @@ static volatile sig_atomic_t GotSigterm = false;
 static volatile sig_atomic_t GotSigint = false;
 static volatile sig_atomic_t GotSighup = false;
 
+/* keeping track of parallel background tasks per node */
+HTAB *ParallelTasksPerNode = NULL;
+int MaxBackgroundTaskExecutorsPerNode = 1;
+
 PG_FUNCTION_INFO_V1(citus_job_cancel);
 PG_FUNCTION_INFO_V1(citus_job_wait);
 PG_FUNCTION_INFO_V1(citus_task_wait);
@@ -616,7 +620,7 @@ AssignRunnableTasks(QueueMonitorExecutionContext *queueMonitorExecutionContext)
 	bool taskAssigned = false;
 	do {
 		/* fetch a runnable task from catalog */
-		runnableTask = GetRunnableBackgroundTask(ParallelTasksPerNode);
+		runnableTask = GetRunnableBackgroundTask();
 		if (runnableTask)
 		{
 			taskAssigned = AssignRunnableTaskToNewExecutor(runnableTask,
@@ -896,7 +900,7 @@ IncrementParallelTaskCountForNodesInvolved(BackgroundTask *task)
 			{
 				hashEntry->counter = 0;
 			}
-			else if (hashEntry->counter >= MaxParallelTasksPerNode)
+			else if (hashEntry->counter >= MaxBackgroundTaskExecutorsPerNode)
 			{
 				/* at least one node's limit is reached */
 				return false;
@@ -1097,7 +1101,7 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 	/* handle SIGINT to properly cancel active task executors */
 	pqsignal(SIGINT, QueueMonitorSigIntHandler);
 
-	/* handle SIGHUP to update MaxBackgroundTaskExecutors and MaxParallelTasksPerNode */
+	/* handle SIGHUP to update MaxBackgroundTaskExecutors and MaxBackgroundTaskExecutorsPerNode */
 	pqsignal(SIGHUP, QueueMonitorSigHupHandler);
 
 	/* ready to handle signals */
@@ -1241,7 +1245,7 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 		{
 			GotSighup = false;
 
-			/* update max_background_task_executors and max_parallel_tasks_per_node if changed */
+			/* update max_background_task_executors and max_background_task_executors_per_node if changed */
 			ProcessConfigFile(PGC_SIGHUP);
 		}
 

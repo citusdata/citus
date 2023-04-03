@@ -21,9 +21,6 @@
 /* config variable for */
 extern double DistributedDeadlockDetectionTimeoutFactor;
 
-/* hash table to keep track of parallel background tasks per node */
-extern HTAB *ParallelTasksPerNode;
-
 extern void StopMaintenanceDaemon(Oid databaseId);
 extern void TriggerNodeMetadataSync(Oid databaseId);
 extern void InitializeMaintenanceDaemon(void);

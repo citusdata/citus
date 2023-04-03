@@ -119,10 +119,6 @@ static volatile sig_atomic_t got_SIGTERM = false;
 /* set to true when becoming a maintenance daemon */
 static bool IsMaintenanceDaemon = false;
 
-/* keeping track of parallel background tasks per node */
-HTAB *ParallelTasksPerNode = NULL;
-int MaxParallelTasksPerNode = 1;
-
 static void MaintenanceDaemonSigTermHandler(SIGNAL_ARGS);
 static void MaintenanceDaemonSigHupHandler(SIGNAL_ARGS);
 static void MaintenanceDaemonShmemExit(int code, Datum arg);

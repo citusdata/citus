@@ -281,8 +281,8 @@ SELECT job_id, task_id, status FROM pg_dist_background_task
 
 -- TEST11
 -- verify that we do not allow parallel task executors involving a particular node
--- more than citus.max_parallel_tasks_per_node
--- verify that we can change citus.max_parallel_tasks_per_node on the fly
+-- more than citus.max_background_task_executors_per_node
+-- verify that we can change citus.max_background_task_executors_per_node on the fly
 -- tests are done with dummy node ids
 -- citus_task_wait calls are used to ensure consistent pg_dist_background_task query
 -- output i.e. to avoid flakiness
@@ -313,8 +313,8 @@ SELECT job_id, task_id, status, nodes_involved FROM pg_dist_background_task
 
 SELECT citus_task_wait(:task_id1, desired_status => 'done');
 SELECT citus_task_wait(:task_id2, desired_status => 'done');
--- increase max_parallel_tasks_per_node on the fly
-ALTER SYSTEM SET citus.max_parallel_tasks_per_node = 2;
+-- increase max_background_task_executors_per_node on the fly
+ALTER SYSTEM SET citus.max_background_task_executors_per_node = 2;
 SELECT pg_reload_conf();
 
 SELECT citus_task_wait(:task_id3, desired_status => 'running');
@@ -326,11 +326,11 @@ SELECT job_id, task_id, status, nodes_involved FROM pg_dist_background_task
                       :task_id6, :task_id7, :task_id8, :task_id9, :task_id10, :task_id11)
     ORDER BY job_id, task_id; -- show that at most 2 tasks per node are running
 
--- increase to 3 max_parallel_tasks_per_node on the fly
+-- increase to 3 max_background_task_executors_per_node on the fly
 SELECT citus_task_wait(:task_id3, desired_status => 'done');
 SELECT citus_task_wait(:task_id4, desired_status => 'done');
 SELECT citus_task_wait(:task_id5, desired_status => 'done');
-ALTER SYSTEM SET citus.max_parallel_tasks_per_node = 3;
+ALTER SYSTEM SET citus.max_background_task_executors_per_node = 3;
 SELECT pg_reload_conf();
 
 SELECT citus_task_wait(:task_id6, desired_status => 'running');
@@ -342,7 +342,7 @@ SELECT job_id, task_id, status, nodes_involved FROM pg_dist_background_task
                       :task_id6, :task_id7, :task_id8, :task_id9, :task_id10, :task_id11)
     ORDER BY job_id, task_id; -- show that at most 3 tasks per node are running
 
-ALTER SYSTEM RESET citus.max_parallel_tasks_per_node;
+ALTER SYSTEM RESET citus.max_background_task_executors_per_node;
 SELECT pg_reload_conf();
 SELECT citus_task_wait(:task_id6, desired_status => 'done');
 SELECT citus_task_wait(:task_id7, desired_status => 'done');
@@ -357,7 +357,7 @@ SELECT job_id, task_id, status, nodes_involved FROM pg_dist_background_task
 SELECT citus_job_cancel(:job_id1);
 SELECT citus_job_wait(:job_id1);
 
-ALTER SYSTEM RESET citus.max_parallel_tasks_per_node;
+ALTER SYSTEM RESET citus.max_background_task_executors_per_node;
 SELECT pg_reload_conf();
 
 SET client_min_messages TO WARNING;

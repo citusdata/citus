@@ -780,7 +780,6 @@ GenerateSizeQueryOnMultiplePlacements(List *shardIntervalList,
 		{
 			partitionedShardNames = lappend(partitionedShardNames, quotedShardName);
 		}
-
 		/* for non-partitioned tables, we will use Postgres' size functions */
 		else
 		{
@@ -2895,7 +2894,7 @@ ScheduleBackgroundTask(int64 jobId, Oid owner, char *command, int dependingTaskC
 		nulls[Anum_pg_dist_background_task_message - 1] = false;
 
 		values[Anum_pg_dist_background_task_nodes_involved - 1] =
-			intArrayToDatum(nodesInvolvedCount, nodesInvolved);
+			IntArrayToDatum(nodesInvolvedCount, nodesInvolved);
 		nulls[Anum_pg_dist_background_task_nodes_involved - 1] = (nodesInvolvedCount ==
 																  0);
 
@@ -3317,7 +3316,7 @@ BackgroundTaskReadyToRun(BackgroundTask *task)
  * available.
  */
 BackgroundTask *
-GetRunnableBackgroundTask(HTAB *ParallelTasksPerNode)
+GetRunnableBackgroundTask(void)
 {
 	Relation pgDistBackgroundTasks =
 		table_open(DistBackgroundTaskRelationId(), ExclusiveLock);

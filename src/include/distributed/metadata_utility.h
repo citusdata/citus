@@ -392,7 +392,7 @@ extern BackgroundTask * ScheduleBackgroundTask(int64 jobId, Oid owner, char *com
 											   int64 dependingTaskIds[],
 											   int nodesInvolvedCount,
 											   int32 nodesInvolved[]);
-extern BackgroundTask * GetRunnableBackgroundTask(HTAB *ParallelTasksPerNode);
+extern BackgroundTask * GetRunnableBackgroundTask(void);
 extern void ResetRunningBackgroundTasks(void);
 extern BackgroundJob * GetBackgroundJobByJobId(int64 jobId);
 extern BackgroundTask * GetBackgroundTaskByTaskId(int64 taskId);
