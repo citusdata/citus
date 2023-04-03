@@ -67,7 +67,7 @@ SELECT pg_catalog.citus_split_shard_by_split_points(
 SELECT * from pg_dist_cleanup;
  record_id | operation_id | object_type |                               object_name                                | node_group_id | policy_type
 ---------------------------------------------------------------------
-       512 |          778 |           1 | citus_split_shard_by_split_points_deferred_schema.table_to_split_8981001 |            16 |           2
+       526 |          778 |           1 | citus_split_shard_by_split_points_deferred_schema.table_to_split_8981001 |            16 |           2
 (1 row)
 
 -- One of the physical shards should not be deleted, the other one should.
