@@ -566,6 +566,14 @@ SELECT * FROM multi_extension.print_extension_changes();
 -- show running version
 SHOW citus.version;
 
+-- Snapshot of state at 11.2-2
+ALTER EXTENSION citus UPDATE TO '11.2-2';
+
+SELECT * FROM multi_extension.print_extension_changes();
+
+-- Test downgrade to 11.2-1 from 11.2-2
+ALTER EXTENSION citus UPDATE TO '11.2-1';
+
 -- ensure no unexpected objects were created outside pg_catalog
 SELECT pgio.type, pgio.identity
 FROM pg_depend AS pgd,
@@ -576,14 +584,6 @@ WHERE pgd.refclassid = 'pg_extension'::regclass AND
 	  pge.extname    = 'citus' AND
 	  pgio.schema    NOT IN ('pg_catalog', 'citus', 'citus_internal', 'test', 'columnar', 'columnar_internal')
 ORDER BY 1, 2;
-
--- Snapshot of state at 11.2-2
-ALTER EXTENSION citus UPDATE TO '11.2-2';
-
-SELECT * FROM multi_extension.print_extension_changes();
-
--- Test downgrade to 11.2-1 from 11.2-2
-ALTER EXTENSION citus UPDATE TO '11.2-1';
 
 DROP TABLE multi_extension.prev_objects, multi_extension.extension_diff;
 
