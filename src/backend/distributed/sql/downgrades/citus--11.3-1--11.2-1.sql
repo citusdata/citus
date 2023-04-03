@@ -26,3 +26,6 @@ DROP FUNCTION pg_catalog.citus_stats_tenants_local(boolean);
 
 DROP VIEW pg_catalog.citus_stats_tenants;
 DROP FUNCTION pg_catalog.citus_stats_tenants(boolean);
+
+DROP FUNCTION pg_catalog.citus_stats_tenants_local_reset();
+DROP FUNCTION pg_catalog.citus_stats_tenants_reset();

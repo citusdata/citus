@@ -648,7 +648,15 @@ LocallyExecuteTaskPlan(PlannedStmt *taskPlan, char *queryString,
 		LocalExecutorShardId = task->anchorShardId;
 	}
 
-	AttributeTask(task->partitionColumn, task->colocationId, taskPlan->commandType);
+
+	char *partitionKeyValueString = NULL;
+	if (task->partitionKeyValue != NULL)
+	{
+		partitionKeyValueString = DatumToString(task->partitionKeyValue->constvalue,
+												task->partitionKeyValue->consttype);
+	}
+
+	AttributeTask(partitionKeyValueString, task->colocationId, taskPlan->commandType);
 
 	PG_TRY();
 	{
