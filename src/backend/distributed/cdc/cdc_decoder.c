@@ -67,8 +67,8 @@ static void cdc_change_cb(LogicalDecodingContext *ctx, ReorderBufferTXN *txn,
 
 #define DECODER_INIT_FUNCTION_NAME "_PG_output_plugin_init"
 
-#define CITUS_SHARD_SLOT_PREFIX "citus_shard_"
-#define CITUS_SHARD_SLOT_PREFIX_SIZE (sizeof(CITUS_SHARD_SLOT_PREFIX) - 1)
+#define CITUS_SHARD_TRANSFER_SLOT_PREFIX "citus_shard_"
+#define CITUS_SHARD_TRANSFER_SLOT_PREFIX_SIZE (sizeof(CITUS_SHARD_TRANSFER_SLOT_PREFIX) - 1)
 
 /*
  * Postgres uses 'pgoutput' as default plugin for logical replication.
@@ -120,14 +120,14 @@ _PG_output_plugin_init(OutputPluginCallbacks *cb)
 
 
 /*
- *  Check if the replication slot is for Shard split by checking for prefix.
+ *  Check if the replication slot is for Shard transfer by checking for prefix.
  */
 inline static
 bool
-IsShardSplitSlot(char *replicationSlotName)
+IsShardTransferSlot(char *replicationSlotName)
 {
-	return strncmp(replicationSlotName, CITUS_SHARD_SLOT_PREFIX,
-				   CITUS_SHARD_SLOT_PREFIX_SIZE) == 0;
+	return strncmp(replicationSlotName, CITUS_SHARD_TRANSFER_SLOT_PREFIX,
+				   CITUS_SHARD_TRANSFER_SLOT_PREFIX_SIZE) == 0;
 }
 
 
@@ -162,8 +162,8 @@ cdc_change_cb(LogicalDecodingContext *ctx, ReorderBufferTXN *txn,
 		return;
 	}
 
-	/* check for the internal shard split names, if not, assume the slot is for CDC. */
-	if (!IsShardSplitSlot(replicationSlotName))
+	/* check for the internal shard transfer slot names, if not, assume the slot is for CDC. */
+	if (!IsShardTransferSlot(replicationSlotName))
 	{
 		PublishDistributedTableChanges(ctx, txn, relation, change);
 		return;
