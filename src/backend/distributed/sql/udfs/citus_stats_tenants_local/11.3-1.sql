@@ -1,4 +1,4 @@
-CREATE OR REPLACE FUNCTION pg_catalog.citus_stats_tenants_local(
+CREATE OR REPLACE FUNCTION pg_catalog.citus_stat_tenants_local(
     return_all_tenants BOOLEAN DEFAULT FALSE,
     OUT colocation_id INT,
     OUT tenant_attribute TEXT,
@@ -9,10 +9,10 @@ CREATE OR REPLACE FUNCTION pg_catalog.citus_stats_tenants_local(
     OUT score BIGINT)
 RETURNS SETOF RECORD
 LANGUAGE C
-AS 'citus', $$citus_stats_tenants_local$$;
+AS 'citus', $$citus_stat_tenants_local$$;
 
 
-CREATE OR REPLACE VIEW citus.citus_stats_tenants_local AS
+CREATE OR REPLACE VIEW citus.citus_stat_tenants_local AS
 SELECT
     colocation_id,
     tenant_attribute,
@@ -20,13 +20,13 @@ SELECT
     read_count_in_last_period,
     query_count_in_this_period,
     query_count_in_last_period
-FROM pg_catalog.citus_stats_tenants_local()
+FROM pg_catalog.citus_stat_tenants_local()
 ORDER BY score DESC;
 
-ALTER VIEW citus.citus_stats_tenants_local SET SCHEMA pg_catalog;
+ALTER VIEW citus.citus_stat_tenants_local SET SCHEMA pg_catalog;
 
-REVOKE ALL ON FUNCTION pg_catalog.citus_stats_tenants_local(BOOLEAN) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION pg_catalog.citus_stats_tenants_local(BOOLEAN) TO pg_monitor;
+REVOKE ALL ON FUNCTION pg_catalog.citus_stat_tenants_local(BOOLEAN) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION pg_catalog.citus_stat_tenants_local(BOOLEAN) TO pg_monitor;
 
-REVOKE ALL ON pg_catalog.citus_stats_tenants_local FROM PUBLIC;
-GRANT SELECT ON pg_catalog.citus_stats_tenants_local TO pg_monitor;
+REVOKE ALL ON pg_catalog.citus_stat_tenants_local FROM PUBLIC;
+GRANT SELECT ON pg_catalog.citus_stat_tenants_local TO pg_monitor;

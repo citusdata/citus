@@ -76,15 +76,15 @@ int CitusStatsTenantsLimit = 10;
 int StatTenantsTrack = STAT_TENANTS_TRACK_ALL;
 
 
-PG_FUNCTION_INFO_V1(citus_stats_tenants_local);
-PG_FUNCTION_INFO_V1(citus_stats_tenants_local_reset);
+PG_FUNCTION_INFO_V1(citus_stat_tenants_local);
+PG_FUNCTION_INFO_V1(citus_stat_tenants_local_reset);
 
 
 /*
- * citus_stats_tenants_local finds, updates and returns the statistics for tenants.
+ * citus_stat_tenants_local finds, updates and returns the statistics for tenants.
  */
 Datum
-citus_stats_tenants_local(PG_FUNCTION_ARGS)
+citus_stat_tenants_local(PG_FUNCTION_ARGS)
 {
 	CheckCitusVersion(ERROR);
 
@@ -156,11 +156,11 @@ citus_stats_tenants_local(PG_FUNCTION_ARGS)
 
 
 /*
- * citus_stats_tenants_local_reset resets monitor for tenant statistics
+ * citus_stat_tenants_local_reset resets monitor for tenant statistics
  * on the local node.
  */
 Datum
-citus_stats_tenants_local_reset(PG_FUNCTION_ARGS)
+citus_stat_tenants_local_reset(PG_FUNCTION_ARGS)
 {
 	MultiTenantMonitor *monitor = GetMultiTenantMonitor();
 	monitor->tenantCount = 0;

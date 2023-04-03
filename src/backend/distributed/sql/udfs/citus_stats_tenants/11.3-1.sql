@@ -1,5 +1,5 @@
--- cts in the query is an abbreviation for citus_stats_tenants
-CREATE OR REPLACE FUNCTION pg_catalog.citus_stats_tenants (
+-- cts in the query is an abbreviation for citus_stat_tenants
+CREATE OR REPLACE FUNCTION pg_catalog.citus_stat_tenants (
     return_all_tenants BOOLEAN DEFAULT FALSE,
     OUT nodeid INT,
     OUT colocation_id INT,
@@ -20,7 +20,7 @@ BEGIN
         FROM pg_settings
         WHERE name = 'citus.multi_tenant_monitoring_log_level'
     THEN
-        RAISE LOG 'Generating citus_stats_tenants';
+        RAISE LOG 'Generating citus_stat_tenants';
     END IF;
     RETURN QUERY
     SELECT *
@@ -36,7 +36,7 @@ BEGIN
                     $$
                         SELECT
                             coalesce(to_jsonb (array_agg(cstl.*)), '[]'::jsonb)
-                        FROM citus_stats_tenants_local($$||return_all_tenants||$$) cstl;
+                        FROM citus_stat_tenants_local($$||return_all_tenants||$$) cstl;
                     $$,
                     parallel:= TRUE,
                     give_warning_for_connection_errors:= TRUE)
@@ -58,7 +58,7 @@ AS (
 END;
 $function$;
 
-CREATE OR REPLACE VIEW citus.citus_stats_tenants AS
+CREATE OR REPLACE VIEW citus.citus_stat_tenants AS
 SELECT
     nodeid,
     colocation_id,
@@ -67,12 +67,12 @@ SELECT
     read_count_in_last_period,
     query_count_in_this_period,
     query_count_in_last_period
-FROM pg_catalog.citus_stats_tenants(FALSE);
+FROM pg_catalog.citus_stat_tenants(FALSE);
 
-ALTER VIEW citus.citus_stats_tenants SET SCHEMA pg_catalog;
+ALTER VIEW citus.citus_stat_tenants SET SCHEMA pg_catalog;
 
-REVOKE ALL ON FUNCTION pg_catalog.citus_stats_tenants(BOOLEAN) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION pg_catalog.citus_stats_tenants(BOOLEAN) TO pg_monitor;
+REVOKE ALL ON FUNCTION pg_catalog.citus_stat_tenants(BOOLEAN) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION pg_catalog.citus_stat_tenants(BOOLEAN) TO pg_monitor;
 
-REVOKE ALL ON pg_catalog.citus_stats_tenants FROM PUBLIC;
-GRANT SELECT ON pg_catalog.citus_stats_tenants TO pg_monitor;
+REVOKE ALL ON pg_catalog.citus_stat_tenants FROM PUBLIC;
+GRANT SELECT ON pg_catalog.citus_stat_tenants TO pg_monitor;

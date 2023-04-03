@@ -2,7 +2,7 @@
  *
  * citus_stat_tenants.c
  *
- * This file contains functions to test citus_stats_tenants.
+ * This file contains functions to test citus_stat_tenants.
  *
  * Copyright (c) Citus Data, Inc.
  *
