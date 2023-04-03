@@ -136,6 +136,8 @@ ReadColumnarOptions_type extern_ReadColumnarOptions = NULL;
 	CppConcat(extern_, funcname) = \
 		(typename) (void *) lookup_external_function(handle, # funcname)
 
+#define CDC_DECODER_DYNAMIC_LIB_PATH "$libdir/citus_decoders:$libdir"
+
 DEFINE_COLUMNAR_PASSTHROUGH_FUNC(columnar_handler)
 DEFINE_COLUMNAR_PASSTHROUGH_FUNC(alter_columnar_table_set)
 DEFINE_COLUMNAR_PASSTHROUGH_FUNC(alter_columnar_table_reset)
@@ -210,8 +212,6 @@ static bool IsSuperuser(char *userName);
 static void AdjustDynamicLibraryPathForCdcDecoders(void);
 
 static ClientAuthentication_hook_type original_client_auth_hook = NULL;
-
-static const char *cdc_decoders_dymaic_library_path = "$libdir/citus_decoders:$libdir";
 
 /* *INDENT-OFF* */
 /* GUC enum definitions */
@@ -565,7 +565,7 @@ AdjustDynamicLibraryPathForCdcDecoders(void)
 {
 	if (strcmp(Dynamic_library_path, "$libdir") == 0)
 	{
-		SetConfigOption("dynamic_library_path", cdc_decoders_dymaic_library_path,
+		SetConfigOption("dynamic_library_path", CDC_DECODER_DYNAMIC_LIB_PATH,
 						PGC_POSTMASTER, PGC_S_OVERRIDE);
 	}
 }
