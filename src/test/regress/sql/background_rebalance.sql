@@ -1,4 +1,5 @@
 CREATE SCHEMA background_rebalance;
+
 SET search_path TO background_rebalance;
 SET citus.next_shard_id TO 85674000;
 SET citus.shard_replication_factor TO 1;

@@ -25,6 +25,7 @@ SELECT pg_reload_conf();
 
 -- Connections on the proxy port(worker_2) are monitored
 SELECT nodeid AS worker_1_node FROM pg_dist_node WHERE nodeport=:worker_1_port \gset
+
 SELECT nodeid AS worker_2_node FROM pg_dist_node WHERE nodeport=:worker_2_proxy_port \gset
 
 CREATE TABLE table_to_split(id int PRIMARY KEY, int_data int, data text);

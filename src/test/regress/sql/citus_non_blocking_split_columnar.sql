@@ -17,6 +17,7 @@ SELECT pg_reload_conf();
         PRIMARY KEY (measureid, eventdatetime, measure_data))
     PARTITION BY RANGE(eventdatetime);
 
+
     -- Table access method is specified on child tables
     CREATE TABLE sensorscolumnar(
         measureid         integer,

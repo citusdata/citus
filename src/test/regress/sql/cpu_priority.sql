@@ -22,6 +22,7 @@ GRANT ALL ON SCHEMA cpu_priority to cpu_priority_user2;
 GRANT ALL ON SCHEMA cpu_priority to cpu_priority_user3;
 GRANT ALL ON SCHEMA cpu_priority to cpu_priority_user_background;
 
+
 CREATE TABLE t1(a int);
 CREATE TABLE t2(a int);
 CREATE TABLE t3(a int);

@@ -18,6 +18,7 @@ CREATE USER full_access_single_node;
 CREATE USER read_access_single_node;
 CREATE USER no_access_single_node;
 
+
 CREATE TYPE new_type AS (n int, m text);
 CREATE TABLE test(x int, y int, z new_type);
 SELECT create_distributed_table('test','x');

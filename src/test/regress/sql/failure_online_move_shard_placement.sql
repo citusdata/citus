@@ -15,6 +15,7 @@ SELECT pg_backend_pid() as pid \gset
 SELECT citus.mitmproxy('conn.allow()');
 
 CREATE TABLE t(id int PRIMARY KEY, int_data int, data text);
+
 CREATE INDEX index_failure ON t(id);
 SELECT create_distributed_table('t', 'id');
 

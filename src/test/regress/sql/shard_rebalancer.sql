@@ -1345,6 +1345,7 @@ FROM pg_dist_shard
 JOIN pg_dist_shard_placement USING (shardid)
 WHERE logicalrelid = 'r1'::regclass;
 
+
 -- cleanup tables
 DROP TABLE r1;
 

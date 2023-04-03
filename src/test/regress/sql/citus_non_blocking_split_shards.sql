@@ -24,6 +24,7 @@ SELECT pg_reload_conf();
 CREATE ROLE test_shard_split_role WITH LOGIN;
 GRANT USAGE, CREATE ON SCHEMA "citus_split_test_schema" TO test_shard_split_role;
 SET ROLE test_shard_split_role;
+
 SET search_path TO "citus_split_test_schema";
 SET citus.next_shard_id TO 8981000;
 SET citus.next_placement_id TO 8610000;
