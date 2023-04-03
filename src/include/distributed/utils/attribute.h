@@ -14,6 +14,7 @@
 #include "executor/execdesc.h"
 #include "executor/executor.h"
 #include "storage/lwlock.h"
+#include "utils/datetime.h"
 
 #define MAX_TENANT_ATTRIBUTE_LENGTH 100
 
@@ -44,7 +45,7 @@ typedef struct TenantStats
 	/*
 	 * The latest time this tenant ran a query. This value is used to update the score later.
 	 */
-	time_t lastQueryTime;
+	TimestampTz lastQueryTime;
 
 	/*
 	 * The tenant monitoring score of this tenant. This value is increased by ONE_QUERY_SCORE at every query
@@ -55,7 +56,7 @@ typedef struct TenantStats
 	/*
 	 * The latest time the score of this tenant is halved. This value is used to correctly calculate the reduction later.
 	 */
-	time_t lastScoreReduction;
+	TimestampTz lastScoreReduction;
 
 	/*
 	 * Locks needed to update this tenant's statistics.
@@ -95,7 +96,8 @@ typedef enum
 
 extern void CitusAttributeToEnd(QueryDesc *queryDesc);
 extern void AttributeQueryIfAnnotated(const char *queryString, CmdType commandType);
-extern char * AnnotateQuery(char *queryString, char *partitionColumn, int colocationId);
+extern char * AnnotateQuery(char *queryString, Const *partitionKeyValue,
+							int colocationId);
 extern void InitializeMultiTenantMonitorSMHandleManagement(void);
 extern void AttributeTask(char *tenantId, int colocationGroupId, CmdType commandType);
 

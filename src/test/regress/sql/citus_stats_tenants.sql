@@ -3,17 +3,12 @@ SET search_path TO citus_stats_tenants;
 SET citus.next_shard_id TO 5797500;
 SET citus.shard_replication_factor TO 1;
 
-CREATE OR REPLACE FUNCTION pg_catalog.clean_citus_stats_tenants()
-RETURNS VOID
-LANGUAGE C
-AS 'citus', $$clean_citus_stats_tenants$$;
-
 CREATE OR REPLACE FUNCTION pg_catalog.sleep_until_next_period()
 RETURNS VOID
 LANGUAGE C
 AS 'citus', $$sleep_until_next_period$$;
 
-SELECT result FROM run_command_on_all_nodes('SELECT clean_citus_stats_tenants()');
+SELECT citus_stats_tenants_reset();
 
 -- set period to a high number to prevent stats from being reset
 SELECT result FROM run_command_on_all_nodes('ALTER SYSTEM SET citus.stats_tenants_period TO 1000000000');
@@ -39,7 +34,7 @@ DELETE FROM dist_tbl WHERE a = 5;
 
 SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, query_count_in_this_period, query_count_in_last_period FROM citus_stats_tenants(true) ORDER BY tenant_attribute;
 
-SELECT result FROM run_command_on_all_nodes('SELECT clean_citus_stats_tenants()');
+SELECT citus_stats_tenants_reset();
 
 -- queries with multiple tenants should not be counted
 SELECT count(*)>=0 FROM dist_tbl WHERE a IN (1, 5);
@@ -80,7 +75,7 @@ SELECT count(*)>=0 FROM dist_tbl_text WHERE a = 'defg';
 SELECT tenant_attribute, query_count_in_this_period, score FROM citus_stats_tenants(true) WHERE nodeid = :worker_2_nodeid ORDER BY score DESC, tenant_attribute;
 
 -- test period passing
-SELECT result FROM run_command_on_all_nodes('SELECT clean_citus_stats_tenants()');
+SELECT citus_stats_tenants_reset();
 
 SELECT count(*)>=0 FROM dist_tbl WHERE a = 1;
 INSERT INTO dist_tbl VALUES (5, 'abcd');
@@ -93,8 +88,6 @@ SET citus.stats_tenants_period TO 2;
 SELECT sleep_until_next_period();
 
 SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, query_count_in_this_period, query_count_in_last_period FROM citus_stats_tenants_local ORDER BY tenant_attribute;
-\c - - - :worker_2_port
-SELECT tenant_attribute, query_count_in_this_period, score FROM citus_stats_tenants(true) ORDER BY score DESC;
 
 \c - - - :master_port
 SET search_path TO citus_stats_tenants;
@@ -112,7 +105,7 @@ SET citus.multi_tenant_monitoring_log_level TO DEBUG;
 SELECT count(*)>=0 FROM citus_stats_tenants;
 RESET client_min_messages;
 
-SELECT result FROM run_command_on_all_nodes('SELECT clean_citus_stats_tenants()');
+SELECT citus_stats_tenants_reset();
 
 -- test turning monitoring on/off
 SET citus.stat_tenants_track TO "NONE";
@@ -131,7 +124,7 @@ INSERT INTO dist_tbl VALUES (1, 1);
 SELECT tenant_attribute, query_count_in_this_period FROM citus_stats_tenants;
 
 -- test special and multibyte characters in tenant attribute
-SELECT result FROM run_command_on_all_nodes('SELECT clean_citus_stats_tenants()');
+SELECT citus_stats_tenants_reset();
 TRUNCATE TABLE dist_tbl_text;
 
 SELECT count(*)>=0 FROM dist_tbl_text WHERE a = '/bcde';
@@ -152,7 +145,7 @@ SET search_path TO citus_stats_tenants;
 
 SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, query_count_in_this_period, query_count_in_last_period FROM citus_stats_tenants ORDER BY tenant_attribute;
 
-SELECT result FROM run_command_on_all_nodes('SELECT clean_citus_stats_tenants()');
+SELECT citus_stats_tenants_reset();
 
 -- test local queries
 -- all of these distribution column values are from second worker
@@ -209,7 +202,7 @@ SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, q
 \c - - - :master_port
 SET search_path TO citus_stats_tenants;
 
-SELECT result FROM run_command_on_all_nodes('SELECT clean_citus_stats_tenants()');
+SELECT citus_stats_tenants_reset();
 SELECT count(*)>=0 FROM dist_tbl_text WHERE a = 'thisisaveryloooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooongname';
 SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, query_count_in_this_period, query_count_in_last_period FROM citus_stats_tenants ORDER BY tenant_attribute;
 

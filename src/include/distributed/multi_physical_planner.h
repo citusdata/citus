@@ -331,7 +331,7 @@ typedef struct Task
 	 */
 	bool cannotBeExecutedInTransction;
 
-	char *partitionColumn;
+	Const *partitionKeyValue;
 	int colocationId;
 } Task;
 
