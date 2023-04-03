@@ -207,9 +207,11 @@ static bool StatisticsCollectionGucCheckHook(bool *newval, void **extra, GucSour
 											 source);
 static void CitusAuthHook(Port *port, int status);
 static bool IsSuperuser(char *userName);
-
+static void AdjustDynamicLibraryPathForCdcDecoders(void);
 
 static ClientAuthentication_hook_type original_client_auth_hook = NULL;
+
+static const char *cdc_decoders_dymaic_library_path = "$libdir/citus_decoders:$libdir";
 
 /* *INDENT-OFF* */
 /* GUC enum definitions */
@@ -475,6 +477,17 @@ _PG_init(void)
 	InitializeLocallyReservedSharedConnections();
 	InitializeClusterClockMem();
 
+	/*
+	 * Adjust the Dynamic Library Path to prepend citus_decodes to the dynamic
+	 * library path. This is needed to make sure that the citus decoders are
+	 * loaded before the default decoders for CDC.
+	 */
+	if (EnableChangeDataCapture)
+	{
+		AdjustDynamicLibraryPathForCdcDecoders();
+	}
+
+
 	/* initialize shard split shared memory handle management */
 	InitializeShardSplitSMHandleManagement();
 
@@ -539,6 +552,22 @@ _PG_init(void)
 	INIT_COLUMNAR_SYMBOL(PGFunction, columnar_storage_info);
 	INIT_COLUMNAR_SYMBOL(PGFunction, columnar_store_memory_stats);
 	INIT_COLUMNAR_SYMBOL(PGFunction, test_columnar_storage_write_new_page);
+}
+
+
+/*
+ * PrependCitusDecodersToDynamicLibrayPath prepends the $libdir/citus_decoders
+ * to the dynamic library path. This is needed to make sure that the citus
+ * decoders are loaded before the default decoders for CDC.
+ */
+static void
+AdjustDynamicLibraryPathForCdcDecoders(void)
+{
+	if (strcmp(Dynamic_library_path, "$libdir") == 0)
+	{
+		SetConfigOption("dynamic_library_path", cdc_decoders_dymaic_library_path,
+						PGC_POSTMASTER, PGC_S_OVERRIDE);
+	}
 }
 
 

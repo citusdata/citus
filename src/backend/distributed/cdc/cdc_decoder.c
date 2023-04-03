@@ -68,7 +68,8 @@ static void cdc_change_cb(LogicalDecodingContext *ctx, ReorderBufferTXN *txn,
 #define DECODER_INIT_FUNCTION_NAME "_PG_output_plugin_init"
 
 #define CITUS_SHARD_TRANSFER_SLOT_PREFIX "citus_shard_"
-#define CITUS_SHARD_TRANSFER_SLOT_PREFIX_SIZE (sizeof(CITUS_SHARD_TRANSFER_SLOT_PREFIX) - 1)
+#define CITUS_SHARD_TRANSFER_SLOT_PREFIX_SIZE (sizeof(CITUS_SHARD_TRANSFER_SLOT_PREFIX) - \
+											   1)
 
 /*
  * Postgres uses 'pgoutput' as default plugin for logical replication.
