@@ -39,7 +39,6 @@ all: cdc
 cdc:
 	echo "running cdc make"
 	$(MAKE) DECODER=pgoutput -C cdc all
-	$(MAKE) DECODER=wal2json -C cdc all
 
 NO_PGXS = 1
 
@@ -92,7 +91,6 @@ clean: clean-cdc
 
 clean-cdc:
 	$(MAKE) DECODER=pgoutput -C cdc clean
-	$(MAKE) DECODER=wal2json -C cdc clean
 
 cleanup-before-install:
 	rm -f $(DESTDIR)$(datadir)/$(datamoduledir)/citus.control
@@ -102,7 +100,6 @@ install: cleanup-before-install install-cdc
 
 install-cdc:
 	$(MAKE) DECODER=pgoutput -C cdc install
-	$(MAKE) DECODER=wal2json -C cdc install
 
 # install and install-downgrades should be run sequentially
 install-all: install

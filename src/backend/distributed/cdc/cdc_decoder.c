@@ -162,12 +162,15 @@ cdc_change_cb(LogicalDecodingContext *ctx, ReorderBufferTXN *txn,
 		return;
 	}
 
-	/* check for the internal shard transfer slot names, if not, assume the slot is for CDC. */
-	if (!IsShardTransferSlot(replicationSlotName))
+	/* If the slot is for internal shard operations, call the base plugin's call back. */
+	if (IsShardTransferSlot(replicationSlotName))
 	{
-		PublishDistributedTableChanges(ctx, txn, relation, change);
+		ouputPluginChangeCB(ctx, txn, relation, change);
 		return;
 	}
+
+	/* Transalate the changes from shard to distributes table and publish. */
+	PublishDistributedTableChanges(ctx, txn, relation, change);
 }
 
 
