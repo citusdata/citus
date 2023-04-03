@@ -150,7 +150,6 @@ static char * ColocationGroupDeleteCommand(uint32 colocationId);
 static char * RemoteTypeIdExpression(Oid typeId);
 static char * RemoteCollationIdExpression(Oid colocationId);
 static bool ExceedsSyncBatchCount(MetadataSyncContext *context);
-static void ExecuteCommandListOnWorkerList(List *commandList, List *workerList);
 
 
 PG_FUNCTION_INFO_V1(start_metadata_sync_to_all_nodes);
@@ -4072,35 +4071,6 @@ ExceedsSyncBatchCount(MetadataSyncContext *context)
 
 
 /*
- * ExecuteCommandListOnWorkerList executes a command list on all nodes
- * in the given list.
- */
-static void
-ExecuteCommandListOnWorkerList(List *commandList, List *workerList)
-{
-	List *taskList = NIL;
-
-	WorkerNode *workerNode = NULL;
-	foreach_ptr(workerNode, workerList)
-	{
-		ShardPlacement *placement = CitusMakeNode(ShardPlacement);
-		SetPlacementNodeMetadata(placement, workerNode);
-
-		Task *task = CitusMakeNode(Task);
-		task->taskType = DDL_TASK;
-		SetTaskQueryStringList(task, commandList);
-		task->taskPlacementList = list_make1(placement);
-
-		taskList = lappend(taskList, task);
-	}
-
-	bool localExecutionSupported = false;
-
-	ExecuteUtilityTaskList(taskList, localExecutionSupported);
-}
-
-
-/*
  * ProcessBatchCommandsToActivatedNodes processes collected commands inside
  * metadataSyncContext. Sends commands to activated workers if batch limit
  * is exceeded or user forces. If noConnectionMode is set, it would not process
@@ -4124,7 +4094,7 @@ ProcessBatchCommandsToActivatedNodes(MetadataSyncContext *context, bool forceSen
 
 
 /*
- * ProcessBatchCommandsToSingleNode does the same operation as
+ * ProcessBatchCommandsToMetadataNodes does the same operation as
  * ProcessBatchCommandsToActivatedNodes but for metadata nodes.
  */
 void
@@ -4223,16 +4193,18 @@ SendCollectedCommandsToActivatedNodes(MetadataSyncContext *context)
 	if (context->transactionMode == METADATA_SYNC_TRANSACTIONAL)
 	{
 		List *workerNodes = context->activatedWorkerNodeList;
-		ExecuteCommandListOnWorkerList(commands, workerNodes);
-
-		/* SendMetadataCommandListToWorkerListInCoordinatedTransaction(workerNodes, */
-		/*                                                          CurrentUserName(), */
-		/*                                                          commands); */
+		SendMetadataCommandListToWorkerListInCoordinatedTransaction(workerNodes,
+																	CurrentUserName(),
+																	commands);
 	}
 	else if (context->transactionMode == METADATA_SYNC_NON_TRANSACTIONAL)
 	{
-		List *workerConnections = context->activatedWorkerBareConnections;
-		SendCommandListToWorkerListWithBareConnections(workerConnections, commands);
+		List *connections = context->activatedWorkerBareConnections;
+		#if PG_VERSION_NUM >= PG_VERSION_14
+		ExecuteRemoteCommandsInConnectionsInPipelineMode(connections, commands);
+		#else
+		SendCommandListToWorkerListWithBareConnections(connections, commands);
+		#endif
 	}
 	else
 	{
@@ -4266,11 +4238,9 @@ SendCollectedCommandsToMetadataNodes(MetadataSyncContext *context)
 	{
 		List *metadataNodes = TargetWorkerSetNodeList(NON_COORDINATOR_METADATA_NODES,
 													  RowShareLock);
-		ExecuteCommandListOnWorkerList(commands, metadataNodes);
-
-		/* SendMetadataCommandListToWorkerListInCoordinatedTransaction(metadataNodes, */
-		/*                                                          CurrentUserName(), */
-		/*                                                          commands); */
+		SendMetadataCommandListToWorkerListInCoordinatedTransaction(metadataNodes,
+																	CurrentUserName(),
+																	commands);
 	}
 	else if (context->transactionMode == METADATA_SYNC_NON_TRANSACTIONAL)
 	{
@@ -4310,11 +4280,9 @@ SendCollectedCommandsToSingleNode(MetadataSyncContext *context, int nodeIdx)
 		Assert(nodeIdx < list_length(workerNodes));
 
 		WorkerNode *node = list_nth(workerNodes, nodeIdx);
-		ExecuteCommandListOnWorkerList(commands, list_make1(node));
-
-		/* SendMetadataCommandListToWorkerListInCoordinatedTransaction(list_make1(node), */
-		/*                                                          CurrentUserName(), */
-		/*                                                          commands); */
+		SendMetadataCommandListToWorkerListInCoordinatedTransaction(list_make1(node),
+																	CurrentUserName(),
+																	commands);
 	}
 	else if (context->transactionMode == METADATA_SYNC_NON_TRANSACTIONAL)
 	{
