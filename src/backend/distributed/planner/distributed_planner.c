@@ -157,8 +157,6 @@ distributed_planner(Query *parse,
 	bool fastPathRouterQuery = false;
 	Node *distributionKeyValue = NULL;
 
-	AttributeQueryIfAnnotated(query_string, parse->commandType);
-
 	List *rangeTableList = ExtractRangeTableEntryList(parse);
 
 	if (cursorOptions & CURSOR_OPT_FORCE_DISTRIBUTED)
@@ -307,6 +305,11 @@ distributed_planner(Query *parse,
 							   "not supported"),
 						errhint("Consider using PL/pgSQL functions instead.")));
 	}
+
+	/*
+	 * We annotate the query for tenant statisisics.
+	 */
+	AttributeQueryIfAnnotated(query_string, parse->commandType);
 
 	return result;
 }

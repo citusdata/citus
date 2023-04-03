@@ -142,18 +142,7 @@ RebuildQueryStrings(Job *workerJob)
 								? "(null)"
 								: TaskQueryString(task))));
 
-		Datum partitionColumnValue;
-		Oid partitionColumnType = 0;
-		char *partitionColumnString = NULL;
-		if (workerJob->partitionKeyValue != NULL)
-		{
-			partitionColumnValue = workerJob->partitionKeyValue->constvalue;
-			partitionColumnType = workerJob->partitionKeyValue->consttype;
-			partitionColumnString = DatumToString(partitionColumnValue,
-												  partitionColumnType);
-		}
-
-		task->partitionColumn = partitionColumnString;
+		task->partitionKeyValue = workerJob->partitionKeyValue;
 		SetJobColocationId(workerJob);
 		task->colocationId = workerJob->colocationId;
 
@@ -404,7 +393,7 @@ SetTaskQueryIfShouldLazyDeparse(Task *task, Query *query)
 	}
 
 	SetTaskQueryString(task, AnnotateQuery(DeparseTaskQuery(task, query),
-										   task->partitionColumn, task->colocationId));
+										   task->partitionKeyValue, task->colocationId));
 }
 
 

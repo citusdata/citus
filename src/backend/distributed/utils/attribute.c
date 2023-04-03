@@ -23,8 +23,9 @@
 #include "storage/ipc.h"
 #include "storage/lwlock.h"
 #include "storage/shmem.h"
-#include <sys/time.h>
+#include "sys/time.h"
 #include "utils/builtins.h"
+#include "utils/datetime.h"
 #include "utils/json.h"
 #include "distributed/utils/attribute.h"
 
@@ -54,15 +55,15 @@ char *monitorTrancheName = "Multi Tenant Monitor Tranche";
 static shmem_startup_hook_type prev_shmem_startup_hook = NULL;
 
 static int CompareTenantScore(const void *leftElement, const void *rightElement);
-static void UpdatePeriodsIfNecessary(TenantStats *tenantStats, time_t queryTime);
-static void ReduceScoreIfNecessary(TenantStats *tenantStats, time_t queryTime);
-static void EvictTenantsIfNecessary(time_t queryTime);
+static void UpdatePeriodsIfNecessary(TenantStats *tenantStats, TimestampTz queryTime);
+static void ReduceScoreIfNecessary(TenantStats *tenantStats, TimestampTz queryTime);
+static void EvictTenantsIfNecessary(TimestampTz queryTime);
 static void RecordTenantStats(TenantStats *tenantStats);
 static void CreateMultiTenantMonitor(void);
 static MultiTenantMonitor * CreateSharedMemoryForMultiTenantMonitor(void);
 static MultiTenantMonitor * GetMultiTenantMonitor(void);
 static void MultiTenantMonitorSMInit(void);
-static int CreateTenantStats(MultiTenantMonitor *monitor, time_t queryTime);
+static int CreateTenantStats(MultiTenantMonitor *monitor, TimestampTz queryTime);
 static int FindTenantStats(MultiTenantMonitor *monitor);
 static size_t MultiTenantMonitorshmemSize(void);
 static char * ExtractTopComment(const char *inputString);
@@ -76,8 +77,7 @@ int StatTenantsTrack = STAT_TENANTS_TRACK_ALL;
 
 
 PG_FUNCTION_INFO_V1(citus_stats_tenants_local);
-PG_FUNCTION_INFO_V1(clean_citus_stats_tenants);
-PG_FUNCTION_INFO_V1(sleep_until_next_period);
+PG_FUNCTION_INFO_V1(citus_stats_tenants_local_reset);
 
 
 /*
@@ -97,7 +97,7 @@ citus_stats_tenants_local(PG_FUNCTION_ARGS)
 
 	TupleDesc tupleDescriptor = NULL;
 	Tuplestorestate *tupleStore = SetupTuplestore(fcinfo, &tupleDescriptor);
-	time_t monitoringTime = time(0);
+	TimestampTz monitoringTime = GetCurrentTimestamp();
 
 	Datum values[CITUS_STATS_TENANTS_COLUMNS];
 	bool isNulls[CITUS_STATS_TENANTS_COLUMNS];
@@ -156,34 +156,14 @@ citus_stats_tenants_local(PG_FUNCTION_ARGS)
 
 
 /*
- * clean_citus_stats_tenants cleans the citus_stats_tenants monitor.
+ * citus_stats_tenants_local_reset resets monitor for tenant statistics
+ * on the local node.
  */
 Datum
-clean_citus_stats_tenants(PG_FUNCTION_ARGS)
+citus_stats_tenants_local_reset(PG_FUNCTION_ARGS)
 {
 	MultiTenantMonitor *monitor = GetMultiTenantMonitor();
 	monitor->tenantCount = 0;
-
-	PG_RETURN_VOID();
-}
-
-
-/*
- * sleep_until_next_period sleeps until the next monitoring period starts.
- */
-Datum
-sleep_until_next_period(PG_FUNCTION_ARGS)
-{
-	struct timeval currentTime;
-	gettimeofday(&currentTime, NULL);
-
-	long int nextPeriodStart = currentTime.tv_sec -
-							   (currentTime.tv_sec % CitusStatsTenantsPeriod) +
-							   CitusStatsTenantsPeriod;
-
-	long int sleepTime = (nextPeriodStart - currentTime.tv_sec) * 1000000 -
-						 currentTime.tv_usec + 100000;
-	pg_usleep(sleepTime);
 
 	PG_RETURN_VOID();
 }
@@ -254,14 +234,17 @@ AttributeTask(char *tenantId, int colocationId, CmdType commandType)
  * AnnotateQuery annotates the query with tenant attributes.
  */
 char *
-AnnotateQuery(char *queryString, char *partitionColumn, int colocationId)
+AnnotateQuery(char *queryString, Const *partitionKeyValue, int colocationId)
 {
-	if (StatTenantsTrack == STAT_TENANTS_TRACK_NONE || partitionColumn == NULL)
+	if (StatTenantsTrack == STAT_TENANTS_TRACK_NONE || partitionKeyValue == NULL)
 	{
 		return queryString;
 	}
 
-	char *commentCharsEscaped = EscapeCommentChars(partitionColumn);
+	char *partitionKeyValueString = DatumToString(partitionKeyValue->constvalue,
+												  partitionKeyValue->consttype);
+
+	char *commentCharsEscaped = EscapeCommentChars(partitionKeyValueString);
 	StringInfo escapedSourceName = makeStringInfo();
 
 	escape_json(escapedSourceName, commentCharsEscaped);
@@ -329,21 +312,61 @@ CompareTenantScore(const void *leftElement, const void *rightElement)
 static void
 AttributeMetricsIfApplicable()
 {
-	if (StatTenantsTrack == STAT_TENANTS_TRACK_NONE)
+	if (StatTenantsTrack == STAT_TENANTS_TRACK_NONE ||
+		attributeToTenant[0] == '\0')
 	{
 		return;
 	}
 
-	if (strcmp(attributeToTenant, "") != 0)
-	{
-		time_t queryTime = time(0);
+	TimestampTz queryTime = GetCurrentTimestamp();
 
-		MultiTenantMonitor *monitor = GetMultiTenantMonitor();
+	MultiTenantMonitor *monitor = GetMultiTenantMonitor();
+
+	/*
+	 * We need to acquire the monitor lock in shared mode to check if the tenant is
+	 * already in the monitor. If it is not, we need to acquire the lock in
+	 * exclusive mode to add the tenant to the monitor.
+	 *
+	 * We need to check again if the tenant is in the monitor after acquiring the
+	 * exclusive lock to avoid adding the tenant twice. Some other backend might
+	 * have added the tenant while we were waiting for the lock.
+	 *
+	 * After releasing the exclusive lock, we need to acquire the lock in shared
+	 * mode to update the tenant's statistics. We need to check again if the tenant
+	 * is in the monitor after acquiring the shared lock because some other backend
+	 * might have removed the tenant while we were waiting for the lock.
+	 */
+	LWLockAcquire(&monitor->lock, LW_SHARED);
+
+	int currentTenantIndex = FindTenantStats(monitor);
+
+	if (currentTenantIndex != -1)
+	{
+		TenantStats *tenantStats = &monitor->tenants[currentTenantIndex];
+		LWLockAcquire(&tenantStats->lock, LW_EXCLUSIVE);
+
+		UpdatePeriodsIfNecessary(tenantStats, queryTime);
+		ReduceScoreIfNecessary(tenantStats, queryTime);
+		RecordTenantStats(tenantStats);
+
+		LWLockRelease(&tenantStats->lock);
+	}
+	else
+	{
+		LWLockRelease(&monitor->lock);
+
+		LWLockAcquire(&monitor->lock, LW_EXCLUSIVE);
+		currentTenantIndex = FindTenantStats(monitor);
+
+		if (currentTenantIndex == -1)
+		{
+			currentTenantIndex = CreateTenantStats(monitor, queryTime);
+		}
+
+		LWLockRelease(&monitor->lock);
 
 		LWLockAcquire(&monitor->lock, LW_SHARED);
-
-		int currentTenantIndex = FindTenantStats(monitor);
-
+		currentTenantIndex = FindTenantStats(monitor);
 		if (currentTenantIndex != -1)
 		{
 			TenantStats *tenantStats = &monitor->tenants[currentTenantIndex];
@@ -355,36 +378,8 @@ AttributeMetricsIfApplicable()
 
 			LWLockRelease(&tenantStats->lock);
 		}
-		else
-		{
-			LWLockRelease(&monitor->lock);
-
-			LWLockAcquire(&monitor->lock, LW_EXCLUSIVE);
-			currentTenantIndex = FindTenantStats(monitor);
-
-			if (currentTenantIndex == -1)
-			{
-				currentTenantIndex = CreateTenantStats(monitor, queryTime);
-			}
-
-			LWLockRelease(&monitor->lock);
-
-			LWLockAcquire(&monitor->lock, LW_SHARED);
-			currentTenantIndex = FindTenantStats(monitor);
-			if (currentTenantIndex != -1)
-			{
-				TenantStats *tenantStats = &monitor->tenants[currentTenantIndex];
-				LWLockAcquire(&tenantStats->lock, LW_EXCLUSIVE);
-
-				UpdatePeriodsIfNecessary(tenantStats, queryTime);
-				ReduceScoreIfNecessary(tenantStats, queryTime);
-				RecordTenantStats(tenantStats);
-
-				LWLockRelease(&tenantStats->lock);
-			}
-		}
-		LWLockRelease(&monitor->lock);
 	}
+	LWLockRelease(&monitor->lock);
 
 	strcpy_s(attributeToTenant, sizeof(attributeToTenant), "");
 }
@@ -400,9 +395,10 @@ AttributeMetricsIfApplicable()
  * statistics.
  */
 static void
-UpdatePeriodsIfNecessary(TenantStats *tenantStats, time_t queryTime)
+UpdatePeriodsIfNecessary(TenantStats *tenantStats, TimestampTz queryTime)
 {
-	time_t periodStart = queryTime - (queryTime % CitusStatsTenantsPeriod);
+	long long int periodInMicroSeconds = CitusStatsTenantsPeriod * USECS_PER_SEC;
+	TimestampTz periodStart = queryTime - (queryTime % periodInMicroSeconds);
 
 	/*
 	 * If the last query in this tenant was before the start of current period
@@ -421,7 +417,8 @@ UpdatePeriodsIfNecessary(TenantStats *tenantStats, time_t queryTime)
 	/*
 	 * If the last query is more than two periods ago, we clean the last period counts too.
 	 */
-	if (tenantStats->lastQueryTime < periodStart - CitusStatsTenantsPeriod)
+	if (TimestampDifferenceExceeds(tenantStats->lastQueryTime, periodStart,
+								   periodInMicroSeconds))
 	{
 		tenantStats->writesInLastPeriod = 0;
 
@@ -439,9 +436,10 @@ UpdatePeriodsIfNecessary(TenantStats *tenantStats, time_t queryTime)
  * periods that passed after the lsat score reduction and reduces the score accordingly.
  */
 static void
-ReduceScoreIfNecessary(TenantStats *tenantStats, time_t queryTime)
+ReduceScoreIfNecessary(TenantStats *tenantStats, TimestampTz queryTime)
 {
-	time_t periodStart = queryTime - (queryTime % CitusStatsTenantsPeriod);
+	long long int periodInMicroSeconds = CitusStatsTenantsPeriod * USECS_PER_SEC;
+	TimestampTz periodStart = queryTime - (queryTime % periodInMicroSeconds);
 
 	/*
 	 * With each query we increase the score of tenant by ONE_QUERY_SCORE.
@@ -453,8 +451,8 @@ ReduceScoreIfNecessary(TenantStats *tenantStats, time_t queryTime)
 	 */
 	int periodCountAfterLastScoreReduction = (periodStart -
 											  tenantStats->lastScoreReduction +
-											  CitusStatsTenantsPeriod - 1) /
-											 CitusStatsTenantsPeriod;
+											  periodInMicroSeconds - 1) /
+											 periodInMicroSeconds;
 
 	/*
 	 * This should not happen but let's make sure
@@ -480,7 +478,7 @@ ReduceScoreIfNecessary(TenantStats *tenantStats, time_t queryTime)
  * equal to 3 * CitusStatsTenantsLimit.
  */
 static void
-EvictTenantsIfNecessary(time_t queryTime)
+EvictTenantsIfNecessary(TimestampTz queryTime)
 {
 	MultiTenantMonitor *monitor = GetMultiTenantMonitor();
 
@@ -618,9 +616,11 @@ MultiTenantMonitorSMInit()
 
 /*
  * CreateTenantStats creates the data structure for a tenant's statistics.
+ *
+ * Calling this function should be protected by the monitor->lock in LW_EXCLUSIVE mode.
  */
 static int
-CreateTenantStats(MultiTenantMonitor *monitor, time_t queryTime)
+CreateTenantStats(MultiTenantMonitor *monitor, TimestampTz queryTime)
 {
 	/*
 	 * If the tenant count reached 3 * CitusStatsTenantsLimit, we evict the tenants
