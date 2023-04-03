@@ -514,19 +514,16 @@ InsertCleanupRecordInSubtransaction(CleanupObject objectType,
 	 */
 	Assert(CurrentOperationId != INVALID_OPERATION_ID);
 
-	StringInfo sequenceName = makeStringInfo();
-	appendStringInfo(sequenceName, "%s.%s",
-					 PG_CATALOG,
-					 CLEANUPRECORDID_SEQUENCE_NAME);
+	uint64 recordId = GetNextCleanupRecordId();
 
 	StringInfo command = makeStringInfo();
 	appendStringInfo(command,
 					 "INSERT INTO %s.%s "
 					 " (record_id, operation_id, object_type, object_name, node_group_id, policy_type) "
-					 " VALUES ( nextval('%s'), " UINT64_FORMAT ", %d, %s, %d, %d)",
+					 " VALUES ( %lu, " UINT64_FORMAT ", %d, %s, %d, %d)",
 					 PG_CATALOG,
 					 PG_DIST_CLEANUP,
-					 sequenceName->data,
+					 recordId,
 					 CurrentOperationId,
 					 objectType,
 					 quote_literal_cstr(objectName),
