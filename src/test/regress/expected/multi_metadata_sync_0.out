@@ -921,7 +921,9 @@ FROM
 	pg_dist_partition
 WHERE
 	logicalrelid = 'mx_test_schema_1.mx_table_1'::regclass
-	OR logicalrelid = 'mx_test_schema_2.mx_table_2'::regclass;
+	OR logicalrelid = 'mx_test_schema_2.mx_table_2'::regclass
+ORDER BY
+	logicalrelid;
         logicalrelid         | repmodel
 ---------------------------------------------------------------------
  mx_test_schema_1.mx_table_1 | s
@@ -1101,11 +1103,13 @@ FROM
 	pg_dist_partition
 WHERE
 	logicalrelid = 'mx_colocation_test_1'::regclass
-	OR logicalrelid = 'mx_colocation_test_2'::regclass;
+	OR logicalrelid = 'mx_colocation_test_2'::regclass
+ORDER BY
+	logicalrelid;
      logicalrelid     | colocationid
 ---------------------------------------------------------------------
- mx_colocation_test_2 |        10001
  mx_colocation_test_1 |        10001
+ mx_colocation_test_2 |        10001
 (2 rows)
 
 \c - - - :worker_1_port
@@ -1115,11 +1119,13 @@ FROM
 	pg_dist_partition
 WHERE
 	logicalrelid = 'mx_colocation_test_1'::regclass
-	OR logicalrelid = 'mx_colocation_test_2'::regclass;
+	OR logicalrelid = 'mx_colocation_test_2'::regclass
+ORDER BY
+	logicalrelid;
      logicalrelid     | colocationid
 ---------------------------------------------------------------------
- mx_colocation_test_2 |        10001
  mx_colocation_test_1 |        10001
+ mx_colocation_test_2 |        10001
 (2 rows)
 
 \c - - - :master_port

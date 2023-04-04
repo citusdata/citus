@@ -278,7 +278,9 @@ FROM
 	pg_dist_partition
 WHERE
 	logicalrelid = 'mx_test_schema_1.mx_table_1'::regclass
-	OR logicalrelid = 'mx_test_schema_2.mx_table_2'::regclass;
+	OR logicalrelid = 'mx_test_schema_2.mx_table_2'::regclass
+ORDER BY
+	logicalrelid;
 
 -- Check that shard and placement data are created
 SELECT
@@ -391,7 +393,9 @@ FROM
 	pg_dist_partition
 WHERE
 	logicalrelid = 'mx_colocation_test_1'::regclass
-	OR logicalrelid = 'mx_colocation_test_2'::regclass;
+	OR logicalrelid = 'mx_colocation_test_2'::regclass
+ORDER BY
+	logicalrelid;
 \c - - - :worker_1_port
 SELECT
 	logicalrelid, colocationid
@@ -399,7 +403,9 @@ FROM
 	pg_dist_partition
 WHERE
 	logicalrelid = 'mx_colocation_test_1'::regclass
-	OR logicalrelid = 'mx_colocation_test_2'::regclass;
+	OR logicalrelid = 'mx_colocation_test_2'::regclass
+ORDER BY
+	logicalrelid;
 
 \c - - - :master_port
 
