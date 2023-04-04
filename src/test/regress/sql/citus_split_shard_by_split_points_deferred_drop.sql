@@ -24,7 +24,7 @@ SET citus.next_placement_id TO 8610000;
 SET citus.shard_count TO 2;
 SET citus.shard_replication_factor TO 1;
 SET citus.next_operation_id TO 777;
-SET citus.next_cleanup_record_id TO 511;
+ALTER SEQUENCE pg_catalog.pg_dist_cleanup_recordid_seq RESTART 511;
 SET ROLE test_split_role;
 SET search_path TO "citus_split_shard_by_split_points_deferred_schema";
 
@@ -51,7 +51,7 @@ SELECT pg_catalog.citus_split_shard_by_split_points(
 
 -- The original shard is marked for deferred drop with policy_type = 2.
 -- The previous shard should be dropped at the beginning of the second split call
-SELECT * from pg_dist_cleanup;
+SELECT * FROM pg_dist_cleanup WHERE policy_type = 2;
 
 -- One of the physical shards should not be deleted, the other one should.
 \c - - - :worker_1_port
@@ -62,7 +62,7 @@ SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind 
 
 -- Perform deferred drop cleanup.
 \c - postgres - :master_port
-CALL citus_cleanup_orphaned_resources();
+SELECT public.wait_for_resource_cleanup();
 
 -- Clenaup has been done.
 SELECT * from pg_dist_cleanup;

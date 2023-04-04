@@ -806,6 +806,19 @@ DistributedInsertSelectSupported(Query *queryTree, RangeTblEntry *insertRte,
 	}
 	else
 	{
+		/*
+		 * Note that we've already checked the non-existence of Postgres
+		 * tables in the subquery.
+		 */
+		if (subqueryRteListProperties->hasCitusLocalTable ||
+			subqueryRteListProperties->hasMaterializedView)
+		{
+			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+								 "distributed INSERT ... SELECT cannot select from "
+								 "a local relation when inserting into a distributed "
+								 "table", NULL, NULL);
+		}
+
 		/* ensure that INSERT's partition column comes from SELECT's partition column */
 		error = InsertPartitionColumnMatchesSelect(queryTree, insertRte, subqueryRte,
 												   &selectPartitionColumnTableId);
