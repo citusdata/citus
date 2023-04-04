@@ -1,18 +1,21 @@
 \set upgrade_test_old_citus_version `echo "$CITUS_OLD_VERSION"`
-SELECT substring(:'upgrade_test_old_citus_version', 'v(\d+)\.\d+\.\d+')::int < 10
-AS upgrade_test_old_citus_version_lt_10_0;
- upgrade_test_old_citus_version_lt_10_0
+SELECT substring(:'upgrade_test_old_citus_version', 'v(\d+)\.\d+\.\d+')::int < 11 OR
+       (substring(:'upgrade_test_old_citus_version', 'v(\d+)\.\d+\.\d+')::int = 11 AND
+        substring(:'upgrade_test_old_citus_version', 'v\d+\.(\d+)\.\d+')::int < 2)
+AS upgrade_test_old_citus_version_lt_11_2;
+ upgrade_test_old_citus_version_lt_11_2
 ---------------------------------------------------------------------
  t
 (1 row)
 
 \gset
-\if :upgrade_test_old_citus_version_lt_10_0
+\if :upgrade_test_old_citus_version_lt_11_2
 \else
 \q
 \endif
 -- create a table with orphaned shards to see if orphaned shards will be dropped
 -- and cleanup records will be created for them
+SET citus.next_shard_id TO 980000;
 CREATE TABLE table_with_orphaned_shards (a int);
 SELECT create_distributed_table('table_with_orphaned_shards', 'a');
  create_distributed_table

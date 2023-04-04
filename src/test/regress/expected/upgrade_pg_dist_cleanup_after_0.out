@@ -1,13 +1,15 @@
 \set upgrade_test_old_citus_version `echo "$CITUS_OLD_VERSION"`
-SELECT substring(:'upgrade_test_old_citus_version', 'v(\d+)\.\d+\.\d+')::int < 10
-AS upgrade_test_old_citus_version_lt_10_0;
- upgrade_test_old_citus_version_lt_10_0
+SELECT substring(:'upgrade_test_old_citus_version', 'v(\d+)\.\d+\.\d+')::int < 11 OR
+       (substring(:'upgrade_test_old_citus_version', 'v(\d+)\.\d+\.\d+')::int = 11 AND
+        substring(:'upgrade_test_old_citus_version', 'v\d+\.(\d+)\.\d+')::int < 2)
+AS upgrade_test_old_citus_version_lt_11_2;
+ upgrade_test_old_citus_version_lt_11_2
 ---------------------------------------------------------------------
  t
 (1 row)
 
 \gset
-\if :upgrade_test_old_citus_version_lt_10_0
+\if :upgrade_test_old_citus_version_lt_11_2
 \else
 \q
 \endif
@@ -21,7 +23,7 @@ SELECT COUNT(*) FROM pg_dist_placement WHERE shardid IN (SELECT shardid FROM pg_
 SELECT * FROM pg_dist_cleanup;
  record_id | operation_id | object_type |            object_name            | node_group_id | policy_type
 ---------------------------------------------------------------------
-         1 |            0 |           1 | table_with_orphaned_shards_102241 |             1 |           0
+         1 |            0 |           1 | table_with_orphaned_shards_980001 |             1 |           0
 (1 row)
 
 CALL citus_cleanup_orphaned_resources();
