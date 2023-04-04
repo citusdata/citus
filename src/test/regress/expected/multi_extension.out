@@ -1366,14 +1366,14 @@ SELECT * FROM multi_extension.print_extension_changes();
                  | function citus_internal_mark_node_not_synced(integer,integer) void
                  | function citus_internal_start_replication_origin_tracking() void
                  | function citus_internal_stop_replication_origin_tracking() void
-                 | function citus_stats_tenants(boolean) SETOF record
-                 | function citus_stats_tenants_local(boolean) SETOF record
-                 | function citus_stats_tenants_local_reset() void
-                 | function citus_stats_tenants_reset() void
+                 | function citus_stat_tenants(boolean) SETOF record
+                 | function citus_stat_tenants_local(boolean) SETOF record
+                 | function citus_stat_tenants_local_reset() void
+                 | function citus_stat_tenants_reset() void
                  | function worker_adjust_identity_column_seq_ranges(regclass) void
                  | function worker_drop_all_shell_tables(boolean)
-                 | view citus_stats_tenants
-                 | view citus_stats_tenants_local
+                 | view citus_stat_tenants
+                 | view citus_stat_tenants_local
 (12 rows)
 
 DROP TABLE multi_extension.prev_objects, multi_extension.extension_diff;

@@ -97,6 +97,7 @@
 #include "distributed/relation_access_tracking.h"
 #include "distributed/remote_commands.h" /* to access LogRemoteCommands */
 #include "distributed/transaction_management.h"
+#include "distributed/utils/citus_stat_tenants.h"
 #include "distributed/version_compat.h"
 #include "distributed/worker_protocol.h"
 #include "executor/tstoreReceiver.h"
@@ -104,7 +105,6 @@
 #include "optimizer/optimizer.h"
 #include "nodes/params.h"
 #include "utils/snapmgr.h"
-#include "distributed/utils/attribute.h"
 
 /* controlled via a GUC */
 bool EnableLocalExecution = true;

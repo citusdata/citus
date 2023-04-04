@@ -1,19 +1,19 @@
-CREATE SCHEMA citus_stats_tenants;
-SET search_path TO citus_stats_tenants;
+CREATE SCHEMA citus_stat_tenants;
+SET search_path TO citus_stat_tenants;
 SET citus.next_shard_id TO 5797500;
 SET citus.shard_replication_factor TO 1;
 CREATE OR REPLACE FUNCTION pg_catalog.sleep_until_next_period()
 RETURNS VOID
 LANGUAGE C
 AS 'citus', $$sleep_until_next_period$$;
-SELECT citus_stats_tenants_reset();
- citus_stats_tenants_reset
+SELECT citus_stat_tenants_reset();
+ citus_stat_tenants_reset
 ---------------------------------------------------------------------
 
 (1 row)
 
 -- set period to a high number to prevent stats from being reset
-SELECT result FROM run_command_on_all_nodes('ALTER SYSTEM SET citus.stats_tenants_period TO 1000000000');
+SELECT result FROM run_command_on_all_nodes('ALTER SYSTEM SET citus.stat_tenants_period TO 1000000000');
     result
 ---------------------------------------------------------------------
  ALTER SYSTEM
@@ -62,7 +62,7 @@ INSERT INTO dist_tbl VALUES (2, 'abcd');
 UPDATE dist_tbl SET b = a + 1 WHERE a = 3;
 UPDATE dist_tbl SET b = a + 1 WHERE a = 4;
 DELETE FROM dist_tbl WHERE a = 5;
-SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, query_count_in_this_period, query_count_in_last_period FROM citus_stats_tenants(true) ORDER BY tenant_attribute;
+SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, query_count_in_this_period, query_count_in_last_period FROM citus_stat_tenants(true) ORDER BY tenant_attribute;
  tenant_attribute | read_count_in_this_period | read_count_in_last_period | query_count_in_this_period | query_count_in_last_period
 ---------------------------------------------------------------------
  1                |                         0 |                         0 |                          1 |                          0
@@ -72,8 +72,8 @@ SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, q
  5                |                         0 |                         0 |                          1 |                          0
 (5 rows)
 
-SELECT citus_stats_tenants_reset();
- citus_stats_tenants_reset
+SELECT citus_stat_tenants_reset();
+ citus_stat_tenants_reset
 ---------------------------------------------------------------------
 
 (1 row)
@@ -92,7 +92,7 @@ SELECT count(*)>=0 FROM ref_tbl WHERE a = 1;
  t
 (1 row)
 
-SELECT tenant_attribute, query_count_in_this_period FROM citus_stats_tenants(true) ORDER BY tenant_attribute;
+SELECT tenant_attribute, query_count_in_this_period FROM citus_stat_tenants(true) ORDER BY tenant_attribute;
  tenant_attribute | query_count_in_this_period
 ---------------------------------------------------------------------
 (0 rows)
@@ -110,7 +110,7 @@ SELECT count(*)>=0 FROM dist_tbl JOIN dist_tbl_2 ON dist_tbl.a = dist_tbl_2.a WH
  t
 (1 row)
 
-SELECT tenant_attribute, query_count_in_this_period FROM citus_stats_tenants(true) WHERE tenant_attribute = '1';
+SELECT tenant_attribute, query_count_in_this_period FROM citus_stat_tenants(true) WHERE tenant_attribute = '1';
  tenant_attribute | query_count_in_this_period
 ---------------------------------------------------------------------
  1                |                          2
@@ -143,7 +143,7 @@ SELECT count(*)>=0 FROM dist_tbl_text WHERE a = 'abcd';
  t
 (1 row)
 
-SELECT tenant_attribute, query_count_in_this_period, score FROM citus_stats_tenants(true) WHERE nodeid = :worker_2_nodeid ORDER BY score DESC, tenant_attribute;
+SELECT tenant_attribute, query_count_in_this_period, score FROM citus_stat_tenants(true) WHERE nodeid = :worker_2_nodeid ORDER BY score DESC, tenant_attribute;
  tenant_attribute | query_count_in_this_period |   score
 ---------------------------------------------------------------------
  2                |                          1 | 1000000000
@@ -176,7 +176,7 @@ SELECT count(*)>=0 FROM dist_tbl_text WHERE a = 'cdef';
  t
 (1 row)
 
-SELECT tenant_attribute, query_count_in_this_period, score FROM citus_stats_tenants(true) WHERE nodeid = :worker_2_nodeid ORDER BY score DESC, tenant_attribute;
+SELECT tenant_attribute, query_count_in_this_period, score FROM citus_stat_tenants(true) WHERE nodeid = :worker_2_nodeid ORDER BY score DESC, tenant_attribute;
  tenant_attribute | query_count_in_this_period |   score
 ---------------------------------------------------------------------
  abcd             |                          3 | 3000000000
@@ -205,7 +205,7 @@ SELECT count(*)>=0 FROM dist_tbl_text WHERE a = 'defg';
  t
 (1 row)
 
-SELECT tenant_attribute, query_count_in_this_period, score FROM citus_stats_tenants(true) WHERE nodeid = :worker_2_nodeid ORDER BY score DESC, tenant_attribute;
+SELECT tenant_attribute, query_count_in_this_period, score FROM citus_stat_tenants(true) WHERE nodeid = :worker_2_nodeid ORDER BY score DESC, tenant_attribute;
  tenant_attribute | query_count_in_this_period |   score
 ---------------------------------------------------------------------
  abcd             |                          3 | 3000000000
@@ -218,8 +218,8 @@ SELECT tenant_attribute, query_count_in_this_period, score FROM citus_stats_tena
 (7 rows)
 
 -- test period passing
-SELECT citus_stats_tenants_reset();
- citus_stats_tenants_reset
+SELECT citus_stat_tenants_reset();
+ citus_stat_tenants_reset
 ---------------------------------------------------------------------
 
 (1 row)
@@ -232,7 +232,7 @@ SELECT count(*)>=0 FROM dist_tbl WHERE a = 1;
 
 INSERT INTO dist_tbl VALUES (5, 'abcd');
 \c - - - :worker_1_port
-SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, query_count_in_this_period, query_count_in_last_period FROM citus_stats_tenants_local ORDER BY tenant_attribute;
+SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, query_count_in_this_period, query_count_in_last_period FROM citus_stat_tenants_local ORDER BY tenant_attribute;
  tenant_attribute | read_count_in_this_period | read_count_in_last_period | query_count_in_this_period | query_count_in_last_period
 ---------------------------------------------------------------------
  1                |                         1 |                         0 |                          1 |                          0
@@ -240,14 +240,14 @@ SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, q
 (2 rows)
 
 -- simulate passing the period
-SET citus.stats_tenants_period TO 2;
+SET citus.stat_tenants_period TO 2;
 SELECT sleep_until_next_period();
  sleep_until_next_period
 ---------------------------------------------------------------------
 
 (1 row)
 
-SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, query_count_in_this_period, query_count_in_last_period FROM citus_stats_tenants_local ORDER BY tenant_attribute;
+SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, query_count_in_this_period, query_count_in_last_period FROM citus_stat_tenants_local ORDER BY tenant_attribute;
  tenant_attribute | read_count_in_this_period | read_count_in_last_period | query_count_in_this_period | query_count_in_last_period
 ---------------------------------------------------------------------
  1                |                         0 |                         1 |                          0 |                          1
@@ -255,50 +255,50 @@ SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, q
 (2 rows)
 
 \c - - - :master_port
-SET search_path TO citus_stats_tenants;
+SET search_path TO citus_stat_tenants;
 -- test logs
 SET client_min_messages TO LOG;
-SELECT count(*)>=0 FROM citus_stats_tenants;
+SELECT count(*)>=0 FROM citus_stat_tenants;
  ?column?
 ---------------------------------------------------------------------
  t
 (1 row)
 
-SET citus.multi_tenant_monitoring_log_level TO ERROR;
-SELECT count(*)>=0 FROM citus_stats_tenants;
+SET citus.stat_tenants_log_level TO ERROR;
+SELECT count(*)>=0 FROM citus_stat_tenants;
  ?column?
 ---------------------------------------------------------------------
  t
 (1 row)
 
-SET citus.multi_tenant_monitoring_log_level TO OFF;
-SELECT count(*)>=0 FROM citus_stats_tenants;
+SET citus.stat_tenants_log_level TO OFF;
+SELECT count(*)>=0 FROM citus_stat_tenants;
  ?column?
 ---------------------------------------------------------------------
  t
 (1 row)
 
-SET citus.multi_tenant_monitoring_log_level TO LOG;
-SELECT count(*)>=0 FROM citus_stats_tenants;
-LOG:  Generating citus_stats_tenants
-CONTEXT:  PL/pgSQL function citus_stats_tenants(boolean) line XX at RAISE
+SET citus.stat_tenants_log_level TO LOG;
+SELECT count(*)>=0 FROM citus_stat_tenants;
+LOG:  Generating citus_stat_tenants
+CONTEXT:  PL/pgSQL function citus_stat_tenants(boolean) line XX at RAISE
  ?column?
 ---------------------------------------------------------------------
  t
 (1 row)
 
-SET citus.multi_tenant_monitoring_log_level TO DEBUG;
-SELECT count(*)>=0 FROM citus_stats_tenants;
-LOG:  Generating citus_stats_tenants
-CONTEXT:  PL/pgSQL function citus_stats_tenants(boolean) line XX at RAISE
+SET citus.stat_tenants_log_level TO DEBUG;
+SELECT count(*)>=0 FROM citus_stat_tenants;
+LOG:  Generating citus_stat_tenants
+CONTEXT:  PL/pgSQL function citus_stat_tenants(boolean) line XX at RAISE
  ?column?
 ---------------------------------------------------------------------
  t
 (1 row)
 
 RESET client_min_messages;
-SELECT citus_stats_tenants_reset();
- citus_stats_tenants_reset
+SELECT citus_stat_tenants_reset();
+ citus_stat_tenants_reset
 ---------------------------------------------------------------------
 
 (1 row)
@@ -312,13 +312,13 @@ SELECT count(*)>=0 FROM dist_tbl WHERE a = 1;
 (1 row)
 
 INSERT INTO dist_tbl VALUES (1, 1);
-SELECT tenant_attribute, query_count_in_this_period FROM citus_stats_tenants;
+SELECT tenant_attribute, query_count_in_this_period FROM citus_stat_tenants;
  tenant_attribute | query_count_in_this_period
 ---------------------------------------------------------------------
 (0 rows)
 
 SET citus.stat_tenants_track TO "ALL";
-SELECT tenant_attribute, query_count_in_this_period FROM citus_stats_tenants;
+SELECT tenant_attribute, query_count_in_this_period FROM citus_stat_tenants;
  tenant_attribute | query_count_in_this_period
 ---------------------------------------------------------------------
 (0 rows)
@@ -330,15 +330,15 @@ SELECT count(*)>=0 FROM dist_tbl WHERE a = 1;
 (1 row)
 
 INSERT INTO dist_tbl VALUES (1, 1);
-SELECT tenant_attribute, query_count_in_this_period FROM citus_stats_tenants;
+SELECT tenant_attribute, query_count_in_this_period FROM citus_stat_tenants;
  tenant_attribute | query_count_in_this_period
 ---------------------------------------------------------------------
  1                |                          2
 (1 row)
 
 -- test special and multibyte characters in tenant attribute
-SELECT citus_stats_tenants_reset();
- citus_stats_tenants_reset
+SELECT citus_stat_tenants_reset();
+ citus_stat_tenants_reset
 ---------------------------------------------------------------------
 
 (1 row)
@@ -405,7 +405,7 @@ SELECT count(*)>=0 FROM dist_tbl_text WHERE a = U&'\0061\0308bc';
 (1 row)
 
 \c - - - :worker_1_port
-SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, query_count_in_this_period, query_count_in_last_period FROM citus_stats_tenants ORDER BY tenant_attribute;
+SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, query_count_in_this_period, query_count_in_last_period FROM citus_stat_tenants ORDER BY tenant_attribute;
  tenant_attribute | read_count_in_this_period | read_count_in_last_period | query_count_in_this_period | query_count_in_last_period
 ---------------------------------------------------------------------
  /*bcde           |                         1 |                         0 |                          1 |                          0
@@ -421,8 +421,8 @@ SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, q
 (10 rows)
 
 \c - - - :worker_2_port
-SET search_path TO citus_stats_tenants;
-SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, query_count_in_this_period, query_count_in_last_period FROM citus_stats_tenants ORDER BY tenant_attribute;
+SET search_path TO citus_stat_tenants;
+SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, query_count_in_this_period, query_count_in_last_period FROM citus_stat_tenants ORDER BY tenant_attribute;
  tenant_attribute | read_count_in_this_period | read_count_in_last_period | query_count_in_this_period | query_count_in_last_period
 ---------------------------------------------------------------------
  /*bcde           |                         1 |                         0 |                          1 |                          0
@@ -437,8 +437,8 @@ SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, q
  bcde*/           |                         1 |                         0 |                          1 |                          0
 (10 rows)
 
-SELECT citus_stats_tenants_reset();
- citus_stats_tenants_reset
+SELECT citus_stat_tenants_reset();
+ citus_stat_tenants_reset
 ---------------------------------------------------------------------
 
 (1 row)
@@ -469,7 +469,7 @@ SELECT count(*)>=0 FROM dist_tbl_text WHERE a = 'bcde*';
  t
 (1 row)
 
-SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, query_count_in_this_period, query_count_in_last_period FROM citus_stats_tenants_local ORDER BY tenant_attribute;
+SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, query_count_in_this_period, query_count_in_last_period FROM citus_stat_tenants_local ORDER BY tenant_attribute;
  tenant_attribute | read_count_in_this_period | read_count_in_last_period | query_count_in_this_period | query_count_in_last_period
 ---------------------------------------------------------------------
  /b*c/de          |                         1 |                         0 |                          1 |                          0
@@ -552,7 +552,7 @@ EXECUTE dist_tbl_text_select_plan('bcde*');
  t
 (1 row)
 
-SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, query_count_in_this_period, query_count_in_last_period FROM citus_stats_tenants_local ORDER BY tenant_attribute;
+SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, query_count_in_this_period, query_count_in_last_period FROM citus_stat_tenants_local ORDER BY tenant_attribute;
  tenant_attribute | read_count_in_this_period | read_count_in_last_period | query_count_in_this_period | query_count_in_last_period
 ---------------------------------------------------------------------
  /b*c/de          |                         4 |                         0 |                          4 |                          0
@@ -562,7 +562,7 @@ SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, q
 (4 rows)
 
 \c - - - :master_port
-SET search_path TO citus_stats_tenants;
+SET search_path TO citus_stat_tenants;
 PREPARE dist_tbl_text_select_plan (text) AS SELECT count(*)>=0 FROM dist_tbl_text WHERE a = $1;
 EXECUTE dist_tbl_text_select_plan('/b*c/de');
  ?column?
@@ -637,8 +637,8 @@ EXECUTE dist_tbl_text_select_plan('bcde*');
 (1 row)
 
 \c - - - :worker_2_port
-SET search_path TO citus_stats_tenants;
-SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, query_count_in_this_period, query_count_in_last_period FROM citus_stats_tenants ORDER BY tenant_attribute;
+SET search_path TO citus_stat_tenants;
+SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, query_count_in_this_period, query_count_in_last_period FROM citus_stat_tenants ORDER BY tenant_attribute;
  tenant_attribute | read_count_in_this_period | read_count_in_last_period | query_count_in_this_period | query_count_in_last_period
 ---------------------------------------------------------------------
  /b*c/de          |                         7 |                         0 |                          7 |                          0
@@ -648,9 +648,9 @@ SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, q
 (4 rows)
 
 \c - - - :master_port
-SET search_path TO citus_stats_tenants;
-SELECT citus_stats_tenants_reset();
- citus_stats_tenants_reset
+SET search_path TO citus_stat_tenants;
+SELECT citus_stat_tenants_reset();
+ citus_stat_tenants_reset
 ---------------------------------------------------------------------
 
 (1 row)
@@ -661,7 +661,7 @@ SELECT count(*)>=0 FROM dist_tbl_text WHERE a = 'thisisaverylooooooooooooooooooo
  t
 (1 row)
 
-SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, query_count_in_this_period, query_count_in_last_period FROM citus_stats_tenants ORDER BY tenant_attribute;
+SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, query_count_in_this_period, query_count_in_last_period FROM citus_stat_tenants ORDER BY tenant_attribute;
                                           tenant_attribute                                           | read_count_in_this_period | read_count_in_last_period | query_count_in_this_period | query_count_in_last_period
 ---------------------------------------------------------------------
  thisisaverylooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo |                         1 |                         0 |                          1 |                          0
@@ -670,36 +670,36 @@ SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, q
 -- test role permissions
 CREATE ROLE stats_non_superuser WITH LOGIN;
 SET ROLE stats_non_superuser;
-SELECT count(*)>=0 FROM citus_stats_tenants;
-ERROR:  permission denied for view citus_stats_tenants
-SELECT count(*)>=0 FROM citus_stats_tenants_local;
-ERROR:  permission denied for view citus_stats_tenants_local
-SELECT count(*)>=0 FROM citus_stats_tenants();
-ERROR:  permission denied for function citus_stats_tenants
-SELECT count(*)>=0 FROM citus_stats_tenants_local();
-ERROR:  permission denied for function citus_stats_tenants_local
+SELECT count(*)>=0 FROM citus_stat_tenants;
+ERROR:  permission denied for view citus_stat_tenants
+SELECT count(*)>=0 FROM citus_stat_tenants_local;
+ERROR:  permission denied for view citus_stat_tenants_local
+SELECT count(*)>=0 FROM citus_stat_tenants();
+ERROR:  permission denied for function citus_stat_tenants
+SELECT count(*)>=0 FROM citus_stat_tenants_local();
+ERROR:  permission denied for function citus_stat_tenants_local
 RESET ROLE;
 GRANT pg_monitor TO stats_non_superuser;
 SET ROLE stats_non_superuser;
-SELECT count(*)>=0 FROM citus_stats_tenants;
+SELECT count(*)>=0 FROM citus_stat_tenants;
  ?column?
 ---------------------------------------------------------------------
  t
 (1 row)
 
-SELECT count(*)>=0 FROM citus_stats_tenants_local;
+SELECT count(*)>=0 FROM citus_stat_tenants_local;
  ?column?
 ---------------------------------------------------------------------
  t
 (1 row)
 
-SELECT count(*)>=0 FROM citus_stats_tenants();
+SELECT count(*)>=0 FROM citus_stat_tenants();
  ?column?
 ---------------------------------------------------------------------
  t
 (1 row)
 
-SELECT count(*)>=0 FROM citus_stats_tenants_local();
+SELECT count(*)>=0 FROM citus_stat_tenants_local();
  ?column?
 ---------------------------------------------------------------------
  t
@@ -708,4 +708,4 @@ SELECT count(*)>=0 FROM citus_stats_tenants_local();
 RESET ROLE;
 DROP ROLE stats_non_superuser;
 SET client_min_messages TO ERROR;
-DROP SCHEMA citus_stats_tenants CASCADE;
+DROP SCHEMA citus_stat_tenants CASCADE;

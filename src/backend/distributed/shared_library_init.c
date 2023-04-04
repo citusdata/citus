@@ -91,7 +91,7 @@
 #include "distributed/resource_lock.h"
 #include "distributed/transaction_management.h"
 #include "distributed/transaction_recovery.h"
-#include "distributed/utils/attribute.h"
+#include "distributed/utils/citus_stat_tenants.h"
 #include "distributed/utils/directory.h"
 #include "distributed/worker_log_messages.h"
 #include "distributed/worker_manager.h"
@@ -1990,16 +1990,6 @@ RegisterCitusConfigVariables(void)
 		GUC_STANDARD,
 		NULL, NULL, NULL);
 
-	DefineCustomEnumVariable(
-		"citus.multi_tenant_monitoring_log_level",
-		gettext_noop("Sets the level of multi tenant monitoring log messages"),
-		NULL,
-		&MultiTenantMonitoringLogLevel,
-		CITUS_LOG_LEVEL_OFF, log_level_options,
-		PGC_USERSET,
-		GUC_STANDARD,
-		NULL, NULL, NULL);
-
 	DefineCustomIntVariable(
 		"citus.next_cleanup_record_id",
 		gettext_noop("Set the next cleanup record ID to use in operation creation."),
@@ -2384,6 +2374,37 @@ RegisterCitusConfigVariables(void)
 		GUC_STANDARD,
 		NULL, NULL, NULL);
 
+	DefineCustomIntVariable(
+		"citus.stat_tenants_limit",
+		gettext_noop("Number of tenants to be shown in citus_stat_tenants."),
+		NULL,
+		&StatTenantsLimit,
+		10, 1, 100,
+		PGC_POSTMASTER,
+		GUC_STANDARD,
+		NULL, NULL, NULL);
+
+	DefineCustomEnumVariable(
+		"citus.stat_tenants_log_level",
+		gettext_noop("Sets the level of citus_stat_tenants log messages"),
+		NULL,
+		&StatTenantsLogLevel,
+		CITUS_LOG_LEVEL_OFF, log_level_options,
+		PGC_USERSET,
+		GUC_STANDARD,
+		NULL, NULL, NULL);
+
+	DefineCustomIntVariable(
+		"citus.stat_tenants_period",
+		gettext_noop("Period in seconds to be used for calculating the tenant "
+					 "statistics in citus_stat_tenants."),
+		NULL,
+		&StatTenantsPeriod,
+		60, 1, 1000000000,
+		PGC_USERSET,
+		GUC_STANDARD,
+		NULL, NULL, NULL);
+
 	DefineCustomEnumVariable(
 		"citus.stat_tenants_track",
 		gettext_noop("Enables/Disables the stats collection for citus_stat_tenants."),
@@ -2394,27 +2415,6 @@ RegisterCitusConfigVariables(void)
 		STAT_TENANTS_TRACK_ALL,
 		stat_tenants_track_options,
 		PGC_SUSET,
-		GUC_STANDARD,
-		NULL, NULL, NULL);
-
-	DefineCustomIntVariable(
-		"citus.stats_tenants_limit",
-		gettext_noop("Number of tenants to be shown in citus_stat_tenants."),
-		NULL,
-		&CitusStatsTenantsLimit,
-		10, 1, 100,
-		PGC_POSTMASTER,
-		GUC_STANDARD,
-		NULL, NULL, NULL);
-
-	DefineCustomIntVariable(
-		"citus.stats_tenants_period",
-		gettext_noop("Period in seconds to be used for calculating the tenant "
-					 "statistics in citus_stat_tenants."),
-		NULL,
-		&CitusStatsTenantsPeriod,
-		60, 1, 1000000000,
-		PGC_USERSET,
 		GUC_STANDARD,
 		NULL, NULL, NULL);
 

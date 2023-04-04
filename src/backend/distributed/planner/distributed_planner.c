@@ -49,7 +49,7 @@
 #include "distributed/recursive_planning.h"
 #include "distributed/shardinterval_utils.h"
 #include "distributed/shard_utils.h"
-#include "distributed/utils/attribute.h"
+#include "distributed/utils/citus_stat_tenants.h"
 #include "distributed/version_compat.h"
 #include "distributed/worker_shard_visibility.h"
 #include "executor/executor.h"
