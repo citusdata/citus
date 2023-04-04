@@ -18,7 +18,7 @@ BEGIN
         array_position(enumvals, 'log') >= array_position(enumvals, setting)
         AND setting != 'off'
         FROM pg_settings
-        WHERE name = 'citus.multi_tenant_monitoring_log_level'
+        WHERE name = 'citus.stat_tenants_log_level'
     THEN
         RAISE LOG 'Generating citus_stat_tenants';
     END IF;

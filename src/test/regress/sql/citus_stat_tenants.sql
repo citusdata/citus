@@ -95,13 +95,13 @@ SET search_path TO citus_stat_tenants;
 -- test logs
 SET client_min_messages TO LOG;
 SELECT count(*)>=0 FROM citus_stat_tenants;
-SET citus.multi_tenant_monitoring_log_level TO ERROR;
+SET citus.stat_tenants_log_level TO ERROR;
 SELECT count(*)>=0 FROM citus_stat_tenants;
-SET citus.multi_tenant_monitoring_log_level TO OFF;
+SET citus.stat_tenants_log_level TO OFF;
 SELECT count(*)>=0 FROM citus_stat_tenants;
-SET citus.multi_tenant_monitoring_log_level TO LOG;
+SET citus.stat_tenants_log_level TO LOG;
 SELECT count(*)>=0 FROM citus_stat_tenants;
-SET citus.multi_tenant_monitoring_log_level TO DEBUG;
+SET citus.stat_tenants_log_level TO DEBUG;
 SELECT count(*)>=0 FROM citus_stat_tenants;
 RESET client_min_messages;
 
