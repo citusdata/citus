@@ -2369,7 +2369,7 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomEnumVariable(
-		"citus.stat_tenant_log_level",
+		"citus.stat_tenants_log_level",
 		gettext_noop("Sets the level of citus_stat_tenants log messages"),
 		NULL,
 		&StatTenantsLogLevel,
