@@ -24,6 +24,8 @@ SELECT create_distributed_table('nullkey_c1_t2', null, colocate_with=>'nullkey_c
 
 (1 row)
 
+INSERT INTO nullkey_c1_t1 SELECT i, i FROM generate_series(1, 8) i;
+INSERT INTO nullkey_c1_t2 SELECT i, i FROM generate_series(2, 7) i;
 CREATE TABLE nullkey_c2_t1(a int, b int);
 CREATE TABLE nullkey_c2_t2(a int, b int);
 SELECT create_distributed_table('nullkey_c2_t1', null, colocate_with=>'none');
@@ -38,6 +40,8 @@ SELECT create_distributed_table('nullkey_c2_t2', null, colocate_with=>'nullkey_c
 
 (1 row)
 
+INSERT INTO nullkey_c2_t1 SELECT i, i FROM generate_series(2, 7) i;
+INSERT INTO nullkey_c2_t2 SELECT i, i FROM generate_series(1, 8) i;
 CREATE TABLE nullkey_c3_t1(a int, b int);
 SELECT create_distributed_table('nullkey_c3_t1', null, colocate_with=>'none');
  create_distributed_table
@@ -45,6 +49,7 @@ SELECT create_distributed_table('nullkey_c3_t1', null, colocate_with=>'none');
 
 (1 row)
 
+INSERT INTO nullkey_c3_t1 SELECT i, i FROM generate_series(1, 8) i;
 CREATE TABLE reference_table(a int, b int);
 SELECT create_reference_table('reference_table');
  create_reference_table
@@ -145,6 +150,27 @@ SELECT create_distributed_table('bigserial_test', null);
 
 (1 row)
 
+CREATE TABLE append_table (text_col text, a int);
+SELECT create_distributed_table('append_table', 'a', 'append');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT master_create_empty_shard('append_table') AS shardid1 \gset
+SELECT master_create_empty_shard('append_table') AS shardid2 \gset
+SELECT master_create_empty_shard('append_table') AS shardid3 \gset
+COPY append_table (text_col, a) FROM STDIN WITH (format 'csv', append_to_shard :shardid1);
+COPY append_table (text_col, a) FROM STDIN WITH (format 'csv', append_to_shard :shardid2);
+CREATE TABLE range_table(a int, b int);
+SELECT create_distributed_table('range_table', 'a', 'range');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CALL public.create_range_partitioned_shards('range_table', '{"0","25"}','{"24","49"}');
+INSERT INTO range_table VALUES (0, 1), (1, 2), (2, 3), (3, 4), (4, 5), (5, 6), (6, 50);
 SET client_min_messages to DEBUG2;
 -- simple insert
 INSERT INTO nullkey_c1_t1 VALUES (1,2), (2,2), (3,4);
@@ -161,10 +187,18 @@ DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
  a | b
 ---------------------------------------------------------------------
+ 1 | 1
  1 | 2
  2 | 2
+ 2 | 2
+ 3 | 3
  3 | 4
-(3 rows)
+ 4 | 4
+ 5 | 5
+ 6 | 6
+ 7 | 7
+ 8 | 8
+(11 rows)
 
 -- for update / share
 SELECT * FROM modify_fast_path WHERE key = 1 FOR UPDATE;
@@ -204,7 +238,7 @@ SELECT COUNT(*) FROM reference_table d1, nullkey_c1_t1;
 DEBUG:  Creating router plan
  count
 ---------------------------------------------------------------------
-    18
+    66
 (1 row)
 
 SELECT COUNT(*) FROM citus_local_table d1, nullkey_c1_t1;
@@ -218,7 +252,7 @@ SELECT COUNT(*) FROM nullkey_c1_t1 d1, nullkey_c1_t2;
 DEBUG:  Creating router plan
  count
 ---------------------------------------------------------------------
-    12
+   110
 (1 row)
 
 --    with a non-colocated null dist key table
@@ -242,7 +276,7 @@ SELECT COUNT(*) FROM nullkey_c1_t1 JOIN nullkey_c3_t1 USING(a);
 DEBUG:  Creating router plan
  count
 ---------------------------------------------------------------------
-     0
+    11
 (1 row)
 
 SET citus.enable_non_colocated_router_query_pushdown TO OFF;
@@ -255,21 +289,21 @@ SELECT COUNT(*) FROM nullkey_c1_t1 JOIN nullkey_c1_t2 USING(a);
 DEBUG:  Creating router plan
  count
 ---------------------------------------------------------------------
-     2
+    14
 (1 row)
 
 SELECT COUNT(*) FROM nullkey_c1_t1 LEFT JOIN nullkey_c1_t2 USING(a);
 DEBUG:  Creating router plan
  count
 ---------------------------------------------------------------------
-     3
+    15
 (1 row)
 
 SELECT COUNT(*) FROM nullkey_c1_t1 FULL JOIN nullkey_c1_t2 USING(a);
 DEBUG:  Creating router plan
  count
 ---------------------------------------------------------------------
-     5
+    15
 (1 row)
 
 SELECT COUNT(*) FROM nullkey_c1_t1 t1
@@ -279,7 +313,7 @@ LEFT JOIN LATERAL (
 DEBUG:  Creating router plan
  count
 ---------------------------------------------------------------------
-     3
+    11
 (1 row)
 
 SELECT COUNT(*) FROM nullkey_c1_t1 t1
@@ -289,7 +323,7 @@ JOIN LATERAL (
 DEBUG:  Creating router plan
  count
 ---------------------------------------------------------------------
-     2
+     4
 (1 row)
 
 SELECT COUNT(*) FROM nullkey_c1_t1 t1
@@ -299,7 +333,7 @@ WHERE EXISTS (
 DEBUG:  Creating router plan
  count
 ---------------------------------------------------------------------
-     3
+     9
 (1 row)
 
 SELECT COUNT(*) FROM nullkey_c1_t1 t1
@@ -319,7 +353,7 @@ WHERE t1.b NOT IN (
 DEBUG:  Creating router plan
  count
 ---------------------------------------------------------------------
-     3
+     7
 (1 row)
 
 -- non-colocated inner joins between null dist key tables
@@ -374,7 +408,7 @@ SELECT COUNT(*) FROM nullkey_c1_t1, reference_table WHERE nullkey_c1_t1.a = refe
 DEBUG:  Creating router plan
  count
 ---------------------------------------------------------------------
-     3
+     8
 (1 row)
 
 WITH cte_1 AS
@@ -383,7 +417,7 @@ SELECT COUNT(*) FROM cte_1;
 DEBUG:  Creating router plan
  count
 ---------------------------------------------------------------------
-     3
+     8
 (1 row)
 
 -- join with postgres / citus local tables
@@ -414,14 +448,14 @@ SELECT COUNT(*) FROM nullkey_c1_t1 LEFT JOIN reference_table USING(a);
 DEBUG:  Creating router plan
  count
 ---------------------------------------------------------------------
-     3
+    11
 (1 row)
 
 SELECT COUNT(*) FROM reference_table LEFT JOIN nullkey_c1_t1 USING(a);
 DEBUG:  Creating router plan
  count
 ---------------------------------------------------------------------
-     6
+     9
 (1 row)
 
 SELECT COUNT(*) FROM nullkey_c1_t1 LEFT JOIN citus_local_table USING(a);
@@ -446,9 +480,28 @@ SELECT COUNT(*) FROM nullkey_c1_t1 FULL JOIN reference_table USING(a);
 DEBUG:  Creating router plan
  count
 ---------------------------------------------------------------------
-     6
+    12
 (1 row)
 
+SELECT COUNT(*) FROM nullkey_c1_t1 JOIN append_table USING(a);
+ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
+DETAIL:  Router planner does not support append-partitioned tables.
+SELECT COUNT(*) FROM nullkey_c1_t1 JOIN range_table USING(a);
+ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
+DETAIL:  Router planner cannot handle multi-shard select queries
+SET citus.enable_non_colocated_router_query_pushdown TO ON;
+SELECT COUNT(*) FROM nullkey_c1_t1 JOIN range_table USING(a) WHERE range_table.a = 20;
+DEBUG:  Creating router plan
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+SET citus.enable_non_colocated_router_query_pushdown TO OFF;
+SELECT COUNT(*) FROM nullkey_c1_t1 JOIN range_table USING(a) WHERE range_table.a = 20;
+ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
+DETAIL:  router planner does not support queries that reference non-colocated distributed tables
+RESET citus.enable_non_colocated_router_query_pushdown;
 -- lateral / semi / anti joins with different table types
 --    with a reference table
 SELECT COUNT(*) FROM nullkey_c1_t1 t1
@@ -458,7 +511,7 @@ LEFT JOIN LATERAL (
 DEBUG:  Creating router plan
  count
 ---------------------------------------------------------------------
-     3
+    11
 (1 row)
 
 SELECT COUNT(*) FROM nullkey_c1_t1 t1
@@ -468,7 +521,7 @@ WHERE EXISTS (
 DEBUG:  Creating router plan
  count
 ---------------------------------------------------------------------
-     3
+     7
 (1 row)
 
 SELECT COUNT(*) FROM nullkey_c1_t1 t1
@@ -478,7 +531,7 @@ WHERE NOT EXISTS (
 DEBUG:  Creating router plan
  count
 ---------------------------------------------------------------------
-     0
+     4
 (1 row)
 
 SELECT COUNT(*) FROM nullkey_c1_t1 t1
@@ -498,7 +551,7 @@ WHERE t1.b NOT IN (
 DEBUG:  Creating router plan
  count
 ---------------------------------------------------------------------
-     1
+     9
 (1 row)
 
 SELECT COUNT(*) FROM nullkey_c1_t1 t1
@@ -528,7 +581,7 @@ WHERE EXISTS (
 DEBUG:  Creating router plan
  count
 ---------------------------------------------------------------------
-     4
+     6
 (1 row)
 
 SELECT COUNT(*) FROM reference_table t1
@@ -760,7 +813,7 @@ DETAIL:  Local tables cannot be used in distributed queries.
 SET client_min_messages TO WARNING;
 EXPLAIN (ANALYZE TRUE, TIMING FALSE, COSTS FALSE, SUMMARY FALSE, VERBOSE FALSE)
 INSERT INTO nullkey_c1_t1 SELECT * FROM nullkey_c1_t2;
-                                        QUERY PLAN
+                                         QUERY PLAN
 ---------------------------------------------------------------------
  Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
    Task Count: 1
@@ -768,7 +821,7 @@ INSERT INTO nullkey_c1_t1 SELECT * FROM nullkey_c1_t2;
    ->  Task
          Node: host=localhost port=xxxxx dbname=regression
          ->  Insert on nullkey_c1_t1_1620000 citus_table_alias (actual rows=0 loops=1)
-               ->  Seq Scan on nullkey_c1_t2_1620001 nullkey_c1_t2 (actual rows=4 loops=1)
+               ->  Seq Scan on nullkey_c1_t2_1620001 nullkey_c1_t2 (actual rows=10 loops=1)
 (7 rows)
 
 SET client_min_messages TO DEBUG2;
@@ -800,7 +853,7 @@ SELECT count(*) FROM
 DEBUG:  Creating router plan
  count
 ---------------------------------------------------------------------
-     4
+    10
 (1 row)
 
 -- test cte inlining
@@ -832,7 +885,7 @@ DEBUG:  CTE level_1 is going to be inlined via distributed planning
 DEBUG:  Creating router plan
  count
 ---------------------------------------------------------------------
-    11
+   122
 (1 row)
 
 WITH level_0 AS (
@@ -1642,6 +1695,97 @@ WITH cte AS (
 )
 DELETE FROM modify_fast_path WHERE key = 1;
 DEBUG:  Creating router plan
+-- test window functions
+SELECT
+	user_id, avg(avg(value_3)) OVER (PARTITION BY user_id, MIN(value_2))
+FROM
+	raw_events_first
+GROUP BY
+	1
+ORDER BY
+	2 DESC NULLS LAST, 1 DESC;
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+ user_id |  avg
+---------------------------------------------------------------------
+       6 | 6000.1
+       5 | 5000.1
+       4 | 4000.1
+       3 | 3000.1
+       2 | 2000.1
+       1 | 1000.1
+     105 |
+     104 |
+     103 |
+     102 |
+     101 |
+     100 |
+(12 rows)
+
+SELECT
+	user_id, max(value_1) OVER (PARTITION BY user_id, MIN(value_2))
+FROM (
+	SELECT
+		DISTINCT us.user_id, us.value_2, us.value_1, random() as r1
+	FROM
+		raw_events_first as us, raw_events_second
+	WHERE
+		us.user_id = raw_events_second.user_id
+	ORDER BY
+		user_id, value_2
+	) s
+GROUP BY
+	1, value_1
+ORDER BY
+	2 DESC, 1;
+DEBUG:  Creating router plan
+ user_id | max
+---------------------------------------------------------------------
+       1 |
+       2 |
+       3 |
+       4 |
+       5 |
+       6 |
+       6 |  60
+       5 |  50
+       4 |  40
+       3 |  30
+       2 |  20
+       1 |  10
+       5 |   5
+       4 |   4
+       3 |   3
+       2 |   2
+       1 |   1
+(17 rows)
+
+SELECT
+	DISTINCT ON (raw_events_second.user_id, rnk) raw_events_second.user_id, rank() OVER my_win AS rnk
+FROM
+	raw_events_second, raw_events_first
+WHERE
+	raw_events_first.user_id = raw_events_second.user_id
+WINDOW
+	my_win AS (PARTITION BY raw_events_second.user_id, raw_events_first.value_1 ORDER BY raw_events_second.time DESC)
+ORDER BY
+	rnk DESC, 1 DESC
+LIMIT 10;
+DEBUG:  Creating router plan
+ user_id | rnk
+---------------------------------------------------------------------
+       6 |   2
+       5 |   2
+       4 |   2
+       3 |   2
+       2 |   2
+       1 |   2
+       6 |   1
+       5 |   1
+       4 |   1
+       3 |   1
+(10 rows)
+
 SET client_min_messages TO ERROR;
 DROP SCHEMA query_null_dist_key CASCADE;
 SELECT citus_remove_node('localhost', :master_port);
