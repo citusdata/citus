@@ -3,13 +3,20 @@ ifndef DECODER
 endif
 
 MODULE_big = citus_$(DECODER)
-citus_subdir = src/backend/distributed/cdc
-citus_top_builddir = ../../../..
+
 citus_decoders_dir = $(DESTDIR)$(pkglibdir)/citus_decoders
+
+# Set the default value to citus_top_builddir as relative path to the
+# citus top directory from current directory.
+ifeq ($(strip $(citus_top_builddir)),)
+citus_top_builddir = ../../../..
+citus_subdir = $(shell pwd)
+endif
 
 OBJS += cdc_decoder.o cdc_decoder_utils.o
 
 include $(citus_top_builddir)/Makefile.global
+
 
 override CFLAGS += -DDECODER=\"$(DECODER)\" -I$(citus_abs_top_srcdir)/include
 override CPPFLAGS += -DDECODER=\"$(DECODER)\" -I$(citus_abs_top_srcdir)/include

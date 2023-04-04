@@ -52,21 +52,16 @@ cdc_build_dir:
 	$(eval DECODER_BUILD_DIR = $(citus_abs_srcdir)/build/cdc-$(DECODER))
 	$(MAKE) DECODER_BUILD_DIR=$(DECODER_BUILD_DIR) setup_cdc_build_dir_copy_files
 	$(MAKE) DECODER=$(DECODER) citus_top_builddir="../../../../.." \
-		citus_subdir=$(DECODER_BUILD_DIR) \
 		-C $(DECODER_BUILD_DIR)
 
 cdc_clean_dir:
 	$(eval DECODER_BUILD_DIR = $(citus_abs_srcdir)/build/cdc-$(DECODER))
-	$(MAKE) DECODER_BUILD_DIR=$(DECODER_BUILD_DIR) setup_cdc_build_dir_copy_files
 	$(MAKE) DECODER=$(DECODER) citus_top_builddir="../../../../.." \
-		citus_subdir=$(DECODER_BUILD_DIR) \
 		-C $(DECODER_BUILD_DIR) clean
 
 cdc_install_dir:
 	$(eval DECODER_BUILD_DIR = $(citus_abs_srcdir)/build/cdc-$(DECODER))
-	$(MAKE) DECODER_BUILD_DIR=$(DECODER_BUILD_DIR) setup_cdc_build_dir_copy_files
 	$(MAKE) DECODER=$(DECODER) citus_top_builddir="../../../../.." \
-		citus_subdir=$(DECODER_BUILD_DIR) \
 		-C $(DECODER_BUILD_DIR) install
 
 cdc:
