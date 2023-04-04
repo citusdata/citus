@@ -13,7 +13,7 @@ CREATE SCHEMA background_rebalance_parallel;
 SET search_path TO background_rebalance_parallel;
 SET citus.next_shard_id TO 85674000;
 SET citus.shard_replication_factor TO 1;
-SET client_min_messages TO WARNING;
+SET client_min_messages TO ERROR;
 
 ALTER SEQUENCE pg_dist_background_job_job_id_seq RESTART 17777;
 ALTER SEQUENCE pg_dist_background_task_task_id_seq RESTART 1000;
@@ -238,9 +238,6 @@ SELECT job_id, task_id, status, nodes_involved
 FROM pg_dist_background_task WHERE job_id in (:job_id) ORDER BY task_id;
 
 SELECT citus_rebalance_stop();
--- waiting on this rebalance is racy, as it sometimes sees no rebalance is ongoing while other times it actually sees it ongoing
--- we simply sleep a bit here
-SELECT pg_sleep(1);
 
 DROP SCHEMA background_rebalance_parallel CASCADE;
 TRUNCATE pg_dist_background_job CASCADE;
