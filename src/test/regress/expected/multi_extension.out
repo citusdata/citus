@@ -1348,16 +1348,50 @@ SELECT * FROM multi_extension.print_extension_changes();
                                                                                                                                                                                                                                                                                         | type cluster_clock
 (38 rows)
 
--- Test downgrade to 11.2-1 from 11.3-1
-ALTER EXTENSION citus UPDATE TO '11.3-1';
+-- Snapshot of state at 11.2-1
 ALTER EXTENSION citus UPDATE TO '11.2-1';
--- Should be empty result since upgrade+downgrade should be a no-op
+NOTICE:  version "11.2-1" of extension "citus" is already installed
+-- Test upgrade to 11.2-2 from 11.2-1
+ALTER EXTENSION citus UPDATE TO '11.2-2';
 SELECT * FROM multi_extension.print_extension_changes();
- previous_object | current_object
+ previous_object |                          current_object
 ---------------------------------------------------------------------
-(0 rows)
+                 | function worker_adjust_identity_column_seq_ranges(regclass) void
+(1 row)
 
--- Snapshot of state at 11.3-1
+-- Test upgrade to 11.3-1 from 11.2-2
+ALTER EXTENSION citus UPDATE TO '11.3-1';
+SELECT * FROM multi_extension.print_extension_changes();
+ previous_object |                             current_object
+---------------------------------------------------------------------
+                 | function citus_internal_is_replication_origin_tracking_active() boolean
+                 | function citus_internal_mark_node_not_synced(integer,integer) void
+                 | function citus_internal_start_replication_origin_tracking() void
+                 | function citus_internal_stop_replication_origin_tracking() void
+                 | function worker_drop_all_shell_tables(boolean)
+(5 rows)
+
+-- Test downgrade to 11.2-2 from 11.3-1
+ALTER EXTENSION citus UPDATE TO '11.2-2';
+SELECT * FROM multi_extension.print_extension_changes();
+                             previous_object                             | current_object
+---------------------------------------------------------------------
+ function citus_internal_is_replication_origin_tracking_active() boolean |
+ function citus_internal_mark_node_not_synced(integer,integer) void      |
+ function citus_internal_start_replication_origin_tracking() void        |
+ function citus_internal_stop_replication_origin_tracking() void         |
+ function worker_drop_all_shell_tables(boolean)                          |
+(5 rows)
+
+-- Test downgrade to 11.2-1 from 11.2-2
+ALTER EXTENSION citus UPDATE TO '11.2-1';
+SELECT * FROM multi_extension.print_extension_changes();
+                         previous_object                          | current_object
+---------------------------------------------------------------------
+ function worker_adjust_identity_column_seq_ranges(regclass) void |
+(1 row)
+
+-- Test upgrade to 11.3-1 from 11.2-1
 ALTER EXTENSION citus UPDATE TO '11.3-1';
 SELECT * FROM multi_extension.print_extension_changes();
  previous_object |                             current_object
