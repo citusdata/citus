@@ -3,6 +3,9 @@ SET search_path TO citus_stat_tenants;
 SET citus.next_shard_id TO 5797500;
 SET citus.shard_replication_factor TO 1;
 
+-- make sure that we are tracking the tenant stats
+SELECT result FROM run_command_on_all_nodes('SHOW citus.stat_tenants_track');
+
 CREATE OR REPLACE FUNCTION pg_catalog.sleep_until_next_period()
 RETURNS VOID
 LANGUAGE C
