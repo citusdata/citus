@@ -25,6 +25,13 @@ SELECT citus_is_coordinator();
  t
 (1 row)
 
+-- make sure coordinator is always in metadata.
+SELECT citus_set_coordinator_host('localhost');
+ citus_set_coordinator_host
+---------------------------------------------------------------------
+
+(1 row)
+
 -- workers are not coordinator
 SELECT result FROM run_command_on_workers('SELECT citus_is_coordinator()');
  result
@@ -144,9 +151,9 @@ SELECT citus_disable_node('localhost', :worker_1_port, synchronous:=true);
 (1 row)
 
 SELECT run_command_on_workers($$SELECT array_agg(isactive ORDER BY nodeport) FROM pg_dist_node WHERE hasmetadata and noderole='primary'::noderole AND nodecluster='default'$$);
-   run_command_on_workers
+    run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57638,t,"{f,t}")
+ (localhost,57638,t,"{t,f,t}")
 (1 row)
 
 SELECT 1 FROM citus_activate_node('localhost', :worker_1_port);
@@ -163,9 +170,9 @@ SELECT citus_disable_node('localhost', :worker_2_port, synchronous:=true);
 (1 row)
 
 SELECT run_command_on_workers($$SELECT array_agg(isactive ORDER BY nodeport) FROM pg_dist_node WHERE hasmetadata and noderole='primary'::noderole AND nodecluster='default'$$);
-   run_command_on_workers
+    run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"{t,f}")
+ (localhost,57637,t,"{t,t,f}")
 (1 row)
 
 SELECT 1 FROM citus_activate_node('localhost', :worker_2_port);
@@ -248,7 +255,7 @@ ERROR:  node at "localhost.noexist:2345" does not exist
 SELECT master_activate_node('localhost', :worker_2_port);
  master_activate_node
 ---------------------------------------------------------------------
-                    3
+                    4
 (1 row)
 
 DROP TABLE test_reference_table, cluster_management_test;
@@ -358,9 +365,10 @@ SELECT master_update_node(nodeid, 'localhost', :worker_2_port + 3) FROM pg_dist_
 SELECT nodename, nodeport, noderole FROM pg_dist_node ORDER BY nodeport;
  nodename  | nodeport | noderole
 ---------------------------------------------------------------------
+ localhost |    57636 | primary
  localhost |    57637 | primary
  localhost |    57640 | secondary
-(2 rows)
+(3 rows)
 
 ABORT;
 \c - postgres - :master_port
@@ -377,7 +385,7 @@ SELECT master_get_active_worker_nodes();
 SELECT * FROM master_add_node('localhost', :worker_2_port);
  master_add_node
 ---------------------------------------------------------------------
-               6
+               7
 (1 row)
 
 ALTER SEQUENCE pg_dist_node_nodeid_seq RESTART WITH 7;
@@ -579,7 +587,7 @@ SELECT
 SELECT count(1) FROM pg_dist_node;
  count
 ---------------------------------------------------------------------
-     0
+     1
 (1 row)
 
 -- check that adding two nodes in the same transaction works
@@ -594,9 +602,10 @@ SELECT
 SELECT * FROM pg_dist_node ORDER BY nodeid;
  nodeid | groupid | nodename  | nodeport | noderack | hasmetadata | isactive | noderole | nodecluster | metadatasynced | shouldhaveshards
 ---------------------------------------------------------------------
+      3 |       0 | localhost |    57636 | default  | t           | t        | primary  | default     | t              | f
      11 |       9 | localhost |    57637 | default  | t           | t        | primary  | default     | t              | t
      12 |      10 | localhost |    57638 | default  | t           | t        | primary  | default     | t              | t
-(2 rows)
+(3 rows)
 
 -- check that mixed add/remove node commands work fine inside transaction
 BEGIN;
@@ -669,7 +678,8 @@ SELECT master_remove_node(nodename, nodeport) FROM pg_dist_node;
 ---------------------------------------------------------------------
 
 
-(2 rows)
+
+(3 rows)
 
 SELECT 1 FROM master_add_node('localhost', :worker_1_port);
  ?column?

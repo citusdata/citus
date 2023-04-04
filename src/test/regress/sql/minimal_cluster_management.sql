@@ -13,6 +13,9 @@ ALTER SEQUENCE pg_catalog.pg_dist_node_nodeid_seq RESTART 16;
 ALTER SEQUENCE pg_catalog.pg_dist_groupid_seq RESTART 14;
 SELECT 1 FROM master_add_node('localhost', :worker_1_port);
 
+-- make sure coordinator is always in metadata.
+SELECT citus_set_coordinator_host('localhost');
+
 -- Create the same colocation groups as multi_cluster_management.sql
 SET citus.shard_count TO 16;
 SET citus.shard_replication_factor TO 1;
