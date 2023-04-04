@@ -2412,7 +2412,7 @@ RegisterCitusConfigVariables(void)
 					 "Disables when set to 'none'. Disabling can be useful for "
 					 "avoiding extra CPU cycles needed for the calculations."),
 		&StatTenantsTrack,
-		STAT_TENANTS_TRACK_ALL,
+		STAT_TENANTS_TRACK_NONE,
 		stat_tenants_track_options,
 		PGC_SUSET,
 		GUC_STANDARD,
