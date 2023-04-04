@@ -82,7 +82,7 @@ typedef struct MultiTenantMonitor
 	/*
 	 * tenantCount is the number of items in the tenants array.
 	 * The total length of tenants array is set up at CreateSharedMemoryForMultiTenantMonitor
-	 * and is 3 * citus.stats_tenants_limit
+	 * and is 3 * citus.stat_tenants_limit
 	 */
 	int tenantCount;
 	TenantStats tenants[FLEXIBLE_ARRAY_MEMBER];

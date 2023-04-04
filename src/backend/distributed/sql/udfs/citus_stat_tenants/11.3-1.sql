@@ -54,7 +54,7 @@ AS (
     score BIGINT
 )
     ORDER BY score DESC
-    LIMIT CASE WHEN NOT return_all_tenants THEN current_setting('citus.stats_tenants_limit')::BIGINT END;
+    LIMIT CASE WHEN NOT return_all_tenants THEN current_setting('citus.stat_tenants_limit')::BIGINT END;
 END;
 $function$;
 

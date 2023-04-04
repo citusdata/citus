@@ -2359,7 +2359,7 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
-		"citus.stats_tenants_limit",
+		"citus.stat_tenants_limit",
 		gettext_noop("Number of tenants to be shown in citus_stat_tenants."),
 		NULL,
 		&StatTenantsLimit,
@@ -2379,7 +2379,7 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
-		"citus.stats_tenants_period",
+		"citus.stat_tenants_period",
 		gettext_noop("Period in seconds to be used for calculating the tenant "
 					 "statistics in citus_stat_tenants."),
 		NULL,

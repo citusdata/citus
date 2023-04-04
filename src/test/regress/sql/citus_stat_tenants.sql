@@ -11,7 +11,7 @@ AS 'citus', $$sleep_until_next_period$$;
 SELECT citus_stat_tenants_reset();
 
 -- set period to a high number to prevent stats from being reset
-SELECT result FROM run_command_on_all_nodes('ALTER SYSTEM SET citus.stats_tenants_period TO 1000000000');
+SELECT result FROM run_command_on_all_nodes('ALTER SYSTEM SET citus.stat_tenants_period TO 1000000000');
 SELECT result FROM run_command_on_all_nodes('SELECT pg_reload_conf()');
 
 CREATE TABLE dist_tbl (a INT, b TEXT);
@@ -84,7 +84,7 @@ INSERT INTO dist_tbl VALUES (5, 'abcd');
 SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, query_count_in_this_period, query_count_in_last_period FROM citus_stat_tenants_local ORDER BY tenant_attribute;
 
 -- simulate passing the period
-SET citus.stats_tenants_period TO 2;
+SET citus.stat_tenants_period TO 2;
 SELECT sleep_until_next_period();
 
 SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, query_count_in_this_period, query_count_in_last_period FROM citus_stat_tenants_local ORDER BY tenant_attribute;
