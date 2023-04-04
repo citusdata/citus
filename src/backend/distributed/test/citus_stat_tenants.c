@@ -27,8 +27,8 @@ sleep_until_next_period(PG_FUNCTION_ARGS)
 	gettimeofday(&currentTime, NULL);
 
 	long int nextPeriodStart = currentTime.tv_sec -
-							   (currentTime.tv_sec % CitusStatsTenantsPeriod) +
-							   CitusStatsTenantsPeriod;
+							   (currentTime.tv_sec % StatTenantsPeriod) +
+							   StatTenantsPeriod;
 
 	long int sleepTime = (nextPeriodStart - currentTime.tv_sec) * 1000000 -
 						 currentTime.tv_usec + 100000;
