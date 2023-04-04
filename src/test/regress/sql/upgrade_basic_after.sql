@@ -8,6 +8,9 @@ SELECT nextval('pg_dist_placement_placementid_seq') = MAX(placementid)+1 FROM pg
 SELECT nextval('pg_dist_groupid_seq') = MAX(groupid)+1 FROM pg_dist_node;
 SELECT nextval('pg_dist_node_nodeid_seq') = MAX(nodeid)+1 FROM pg_dist_node;
 SELECT nextval('pg_dist_colocationid_seq') = MAX(colocationid)+1 FROM pg_dist_colocation;
+-- while testing sequences on pg_dist_cleanup, they return null in pg upgrade schedule
+-- but return a valid value in citus upgrade schedule
+-- that's why we accept both NULL and MAX()+1 here
 SELECT
     CASE WHEN MAX(operation_id) IS NULL
     THEN true
