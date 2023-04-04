@@ -9,6 +9,9 @@
 -- citus.max_background_task_executors_per_node, and that we can change the GUC on
 -- the fly, and that will affect the ongoing balance as it should
 --
+-- Test to verify that there's a hard dependency when a specific node is first being
+-- used as a source for a move, and then later as a target.
+--
 CREATE SCHEMA background_rebalance_parallel;
 SET search_path TO background_rebalance_parallel;
 SET citus.next_shard_id TO 85674000;
@@ -236,6 +239,157 @@ SELECT citus_task_wait(1016, desired_status => 'running');
 -- among the tasks that are not blocked
 SELECT job_id, task_id, status, nodes_involved
 FROM pg_dist_background_task WHERE job_id in (:job_id) ORDER BY task_id;
+
+SELECT citus_rebalance_stop();
+
+-- PART 3
+-- Test to verify that there's a hard dependency when A specific node is first being used as a
+-- source for a move, and then later as a target.
+
+-- First let's restart the scenario
+DROP SCHEMA background_rebalance_parallel CASCADE;
+TRUNCATE pg_dist_background_job CASCADE;
+TRUNCATE pg_dist_background_task CASCADE;
+TRUNCATE pg_dist_background_task_depend;
+SELECT public.wait_for_resource_cleanup();
+select citus_remove_node('localhost', :worker_1_port);
+select citus_remove_node('localhost', :worker_2_port);
+select citus_remove_node('localhost', :worker_3_port);
+select citus_remove_node('localhost', :worker_4_port);
+select citus_remove_node('localhost', :worker_5_port);
+select citus_remove_node('localhost', :worker_6_port);
+CREATE SCHEMA background_rebalance_parallel;
+SET search_path TO background_rebalance_parallel;
+
+-- add the first node
+-- nodeid here is 58
+select citus_add_node('localhost', :worker_1_port);
+
+-- create, populate and distribute 6 tables, each with 1 shard, none colocated with each other
+CREATE TABLE table1_colg1 (a int PRIMARY KEY);
+SELECT create_distributed_table('table1_colg1', 'a', shard_count => 1, colocate_with => 'none');
+INSERT INTO table1_colg1 SELECT i FROM generate_series(0, 100)i;
+
+CREATE TABLE table1_colg2 (a int PRIMARY KEY);
+SELECT create_distributed_table('table1_colg2', 'a', shard_count => 1, colocate_with => 'none');
+INSERT INTO table1_colg2 SELECT i FROM generate_series(0, 100)i;
+
+CREATE TABLE table1_colg3 (a int PRIMARY KEY);
+SELECT create_distributed_table('table1_colg3', 'a', shard_count => 1, colocate_with => 'none');
+INSERT INTO table1_colg3 SELECT i FROM generate_series(0, 100)i;
+
+CREATE TABLE table1_colg4 (a int PRIMARY KEY);
+SELECT create_distributed_table('table1_colg4', 'a', shard_count => 1, colocate_with => 'none');
+INSERT INTO table1_colg4 SELECT i FROM generate_series(0, 100)i;
+
+CREATE TABLE table1_colg5 (a int PRIMARY KEY);
+SELECT create_distributed_table('table1_colg5', 'a', shard_count => 1, colocate_with => 'none');
+INSERT INTO table1_colg5 SELECT i FROM generate_series(0, 100)i;
+
+CREATE TABLE table1_colg6 (a int PRIMARY KEY);
+SELECT create_distributed_table('table1_colg6', 'a', shard_count => 1, colocate_with => 'none');
+INSERT INTO table1_colg6 SELECT i FROM generate_series(0, 100)i;
+
+-- add two other nodes
+-- nodeid here is 59
+select citus_add_node('localhost', :worker_2_port);
+-- nodeid here is 60
+select citus_add_node('localhost', :worker_3_port);
+
+CREATE OR REPLACE FUNCTION shard_placement_rebalance_array(
+    worker_node_list json[],
+    shard_placement_list json[],
+    threshold float4 DEFAULT 0,
+    max_shard_moves int DEFAULT 1000000,
+    drain_only bool DEFAULT false,
+    improvement_threshold float4 DEFAULT 0.5
+)
+RETURNS json[]
+AS 'citus'
+LANGUAGE C STRICT VOLATILE;
+
+-- we are simulating the following from shard_rebalancer_unit.sql
+-- the following steps are all according to this scenario
+-- where the third move should be dependent of the first two
+-- because the third move's target is the source of the first two
+SELECT unnest(shard_placement_rebalance_array(
+    ARRAY['{"node_name": "hostname1", "disallowed_shards": "1,2,3,5,6"}',
+          '{"node_name": "hostname2", "disallowed_shards": "4"}',
+          '{"node_name": "hostname3", "disallowed_shards": "4"}'
+        ]::json[],
+    ARRAY['{"shardid":1, "nodename":"hostname1"}',
+          '{"shardid":2, "nodename":"hostname1"}',
+          '{"shardid":3, "nodename":"hostname2"}',
+          '{"shardid":4, "nodename":"hostname2"}',
+          '{"shardid":5, "nodename":"hostname3"}',
+          '{"shardid":6, "nodename":"hostname3"}'
+        ]::json[]
+));
+
+-- manually balance the cluster such that we have
+-- a balanced cluster like above with 1,2,3,4,5,6 and hostname1/2/3
+-- shardid 85674049 (1) nodeid 58 (hostname1)
+-- shardid 85674050 (2) nodeid 58 (hostname1)
+-- shardid 85674051 (3) nodeid 59 (hostname2)
+-- shardid 85674052 (4) nodeid 59 (hostname2)
+-- shardid 85674053 (5) nodeid 60 (hostname3)
+-- shardid 85674054 (6) nodeid 60 (hostname3)
+SELECT pg_catalog.citus_move_shard_placement(85674051,58,59,'auto');
+SELECT pg_catalog.citus_move_shard_placement(85674052,58,59,'auto');
+SELECT pg_catalog.citus_move_shard_placement(85674053,58,60,'auto');
+SELECT pg_catalog.citus_move_shard_placement(85674054,58,60,'auto');
+
+-- now create another rebalance strategy in order to simulate moves
+-- which use as target a node that has been previously used as source
+CREATE OR REPLACE FUNCTION test_shard_allowed_on_node(shardid bigint, nodeid int)
+    RETURNS boolean AS
+$$
+    -- analogous to '{"node_name": "hostname1", "disallowed_shards": "1,2,3,5,6"}'
+    select case when (shardid != 85674051 and nodeid = 58)
+        then false
+    -- analogous to '{"node_name": "hostname2", "disallowed_shards": "4"}'
+    --          AND '{"node_name": "hostname2", "disallowed_shards": "4"}'
+    when (shardid = 85674051 and nodeid != 58)
+        then false
+    else true
+    end;
+$$ LANGUAGE sql;
+
+-- insert the new test rebalance strategy
+INSERT INTO
+    pg_catalog.pg_dist_rebalance_strategy(
+        name,
+        default_strategy,
+        shard_cost_function,
+        node_capacity_function,
+        shard_allowed_on_node_function,
+        default_threshold,
+        minimum_threshold,
+        improvement_threshold
+    ) VALUES (
+        'test_source_then_target',
+        false,
+        'citus_shard_cost_1',
+        'citus_node_capacity_1',
+        'background_rebalance_parallel.test_shard_allowed_on_node',
+        0,
+        0,
+        0
+    );
+
+SELECT * FROM get_rebalance_table_shards_plan(rebalance_strategy := 'test_source_then_target');
+
+SELECT citus_rebalance_start AS job_id from citus_rebalance_start(rebalance_strategy := 'test_source_then_target') \gset
+
+-- check that the third move is blocked and depends on the first two
+SELECT job_id, task_id, status, nodes_involved
+FROM pg_dist_background_task WHERE job_id in (:job_id) ORDER BY task_id;
+
+SELECT D.task_id,
+       (SELECT T.command FROM pg_dist_background_task T WHERE T.task_id = D.task_id),
+       D.depends_on,
+       (SELECT T.command FROM pg_dist_background_task T WHERE T.task_id = D.depends_on)
+FROM pg_dist_background_task_depend D  WHERE job_id in (:job_id) ORDER BY D.task_id, D.depends_on ASC;
 
 SELECT citus_rebalance_stop();
 
