@@ -532,11 +532,7 @@ reset client_min_messages;
 -- create a replica identity before create_distributed_table
 ALTER TABLE "NULL_!_dist_key"."nullKeyTable.1!?!9012345678901234567890123456789012345678901234567890123456789" REPLICA IDENTITY USING INDEX uniqueIndexNew;
 
--- this shouldn't give any syntax errors
-SELECT create_distributed_table('"NULL_!_dist_key"."nullKeyTable.1!?!9012345678901234567890123456789012345678901234567890123456789"', null);
-
 -- test triggers
-SET citus.enable_unsafe_triggers TO ON;
 SET client_min_messages TO ERROR;
 CREATE FUNCTION insert_id_100() RETURNS trigger AS $insert_100$
 BEGIN
@@ -549,19 +545,31 @@ CREATE TRIGGER insert_100_trigger
     AFTER UPDATE ON "NULL_!_dist_key"."nullKeyTable.1!?!9012345678901234567890123456789012345678901234567890123456789"
     FOR EACH STATEMENT EXECUTE FUNCTION insert_id_100();
 
+-- error out because of the trigger
+SELECT create_distributed_table('"NULL_!_dist_key"."nullKeyTable.1!?!9012345678901234567890123456789012345678901234567890123456789"', null);
+
+SET citus.enable_unsafe_triggers TO ON;
+RESET client_min_messages;
+
+-- this shouldn't give any syntax errors
+SELECT create_distributed_table('"NULL_!_dist_key"."nullKeyTable.1!?!9012345678901234567890123456789012345678901234567890123456789"', null);
+
+SET client_min_messages TO ERROR;
 UPDATE "NULL_!_dist_key"."nullKeyTable.1!?!9012345678901234567890123456789012345678901234567890123456789" SET "TeNANt_Id"="TeNANt_Id"+1;
 -- we should see one row with id = 100
 SELECT COUNT(*) FROM "NULL_!_dist_key"."nullKeyTable.1!?!9012345678901234567890123456789012345678901234567890123456789" WHERE id = 100;
-RESET client_min_messages;
 
 -- create some objects after create_distributed_table
 CREATE INDEX "my!Index2New" ON "NULL_!_dist_key"."nullKeyTable.1!?!9012345678901234567890123456789012345678901234567890123456789"(id) WITH ( fillfactor = 90 ) WHERE id < 20;
 CREATE UNIQUE INDEX uniqueIndex2New ON "NULL_!_dist_key"."nullKeyTable.1!?!9012345678901234567890123456789012345678901234567890123456789"(id);
 
+-- error out for already existing, because of the unique index
+INSERT INTO "NULL_!_dist_key"."nullKeyTable.1!?!9012345678901234567890123456789012345678901234567890123456789" VALUES (1, 1, row_to_json(row(1,1), true));
+
 -- verify all 4 shard indexes are created on the same node
 SELECT result FROM run_command_on_workers($$
     SELECT COUNT(*) FROM pg_indexes WHERE indexname LIKE '%my!Index_New_1%' OR indexname LIKE '%uniqueindex%new_1%';$$)
-    ORDER BY result;
+    ORDER BY nodeport;
 
 -- foreign key to a ref table
 CREATE TABLE dummy_reference_table (a INT PRIMARY KEY);
@@ -569,23 +577,49 @@ SELECT create_reference_table('dummy_reference_table');
 TRUNCATE "NULL_!_dist_key"."nullKeyTable.1!?!9012345678901234567890123456789012345678901234567890123456789";
 ALTER TABLE "NULL_!_dist_key"."nullKeyTable.1!?!9012345678901234567890123456789012345678901234567890123456789"
     ADD CONSTRAINT fkey_to_dummy_ref FOREIGN KEY (id) REFERENCES dummy_reference_table(a);
+BEGIN; -- try to add the same fkey, reversed
+    ALTER TABLE dummy_reference_table
+        ADD CONSTRAINT fkey_to_dummy_ref FOREIGN KEY (a) REFERENCES "NULL_!_dist_key"."nullKeyTable.1!?!9012345678901234567890123456789012345678901234567890123456789"(id);
+ROLLBACK;
+
+-- errors out because of foreign key violation
+INSERT INTO "NULL_!_dist_key"."nullKeyTable.1!?!9012345678901234567890123456789012345678901234567890123456789" VALUES (100, 1, row_to_json(row(1,1), true));
+
+-- now inserts successfully
+INSERT INTO dummy_reference_table VALUES (100);
+INSERT INTO "NULL_!_dist_key"."nullKeyTable.1!?!9012345678901234567890123456789012345678901234567890123456789" VALUES (100, 1, row_to_json(row(1,1), true));
+DELETE FROM "NULL_!_dist_key"."nullKeyTable.1!?!9012345678901234567890123456789012345678901234567890123456789" WHERE id = 100;
 
 -- foreign key to a local table, errors out
 CREATE TABLE local_table_for_fkey (a INT PRIMARY KEY);
 ALTER TABLE "NULL_!_dist_key"."nullKeyTable.1!?!9012345678901234567890123456789012345678901234567890123456789"
     ADD CONSTRAINT fkey_to_dummy_local FOREIGN KEY (id) REFERENCES local_table_for_fkey(a);
+-- reversed, still fails
+ALTER TABLE local_table_for_fkey
+    ADD CONSTRAINT fkey_from_dummy_local FOREIGN KEY (a) REFERENCES "NULL_!_dist_key"."nullKeyTable.1!?!9012345678901234567890123456789012345678901234567890123456789"(id);
 
 -- foreign key to a distributed table, errors out because not colocated
 CREATE TABLE dist_table_for_fkey (a INT PRIMARY KEY);
 SELECT create_distributed_table('dist_table_for_fkey', 'a');
 ALTER TABLE "NULL_!_dist_key"."nullKeyTable.1!?!9012345678901234567890123456789012345678901234567890123456789"
     ADD CONSTRAINT fkey_to_dummy_dist FOREIGN KEY (id) REFERENCES dist_table_for_fkey(a);
+-- reversed, still fails
+ALTER TABLE dist_table_for_fkey
+    ADD CONSTRAINT fkey_to_dummy_dist FOREIGN KEY (a) REFERENCES "NULL_!_dist_key"."nullKeyTable.1!?!9012345678901234567890123456789012345678901234567890123456789"(id);
+
+-- create a null key distributed table, not colocated with the partitioned table, and then try to create a fkey
+CREATE TABLE null_key_dist_not_colocated (a INT PRIMARY KEY);
+SELECT create_distributed_table('null_key_dist_not_colocated', null, colocate_with=>'none');
+ALTER TABLE "NULL_!_dist_key"."nullKeyTable.1!?!9012345678901234567890123456789012345678901234567890123456789"
+    ADD CONSTRAINT fkey_to_dummy_dist FOREIGN KEY (id) REFERENCES null_key_dist_not_colocated(a);
 
 -- create a null key distributed table, colocated with the partitioned table, and then create a fkey
 CREATE TABLE null_key_dist (a INT PRIMARY KEY);
 SELECT create_distributed_table('null_key_dist', null, colocate_with=>'"NULL_!_dist_key"."nullKeyTable.1!?!9012345678901234567890123456789012345678901234567890123456789"');
 ALTER TABLE "NULL_!_dist_key"."nullKeyTable.1!?!9012345678901234567890123456789012345678901234567890123456789"
     ADD CONSTRAINT fkey_to_dummy_dist FOREIGN KEY (id) REFERENCES null_key_dist(a);
+
+RESET client_min_messages;
 
 CREATE TABLE multi_level_partitioning_parent(
     measureid integer,
