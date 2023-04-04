@@ -2345,19 +2345,6 @@ RegisterCitusConfigVariables(void)
 		GUC_STANDARD,
 		NULL, NULL, NULL);
 
-	DefineCustomEnumVariable(
-		"citus.stat_tenants_track",
-		gettext_noop("Enables/Disables the stats collection for citus_stat_tenants."),
-		gettext_noop("Enables the stats collection when set to 'all'. "
-					 "Disables when set to 'none'. Disabling can be useful for "
-					 "avoiding extra CPU cycles needed for the calculations."),
-		&StatTenantsTrack,
-		STAT_TENANTS_TRACK_ALL,
-		stat_tenants_track_options,
-		PGC_SUSET,
-		GUC_STANDARD,
-		NULL, NULL, NULL);
-
 	DefineCustomIntVariable(
 		"citus.stat_tenants_limit",
 		gettext_noop("Number of tenants to be shown in citus_stat_tenants."),
@@ -2386,6 +2373,19 @@ RegisterCitusConfigVariables(void)
 		&StatTenantsPeriod,
 		60, 1, 1000000000,
 		PGC_USERSET,
+		GUC_STANDARD,
+		NULL, NULL, NULL);
+
+	DefineCustomEnumVariable(
+		"citus.stat_tenants_track",
+		gettext_noop("Enables/Disables the stats collection for citus_stat_tenants."),
+		gettext_noop("Enables the stats collection when set to 'all'. "
+					 "Disables when set to 'none'. Disabling can be useful for "
+					 "avoiding extra CPU cycles needed for the calculations."),
+		&StatTenantsTrack,
+		STAT_TENANTS_TRACK_ALL,
+		stat_tenants_track_options,
+		PGC_SUSET,
 		GUC_STANDARD,
 		NULL, NULL, NULL);
 
