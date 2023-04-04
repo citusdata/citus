@@ -1,6 +1,6 @@
 /*-------------------------------------------------------------------------
  *
- * attribute.h
+ * citus_stat_tenants.h
  *	  Routines related to the multi tenant monitor.
  *
  * Copyright (c) Citus Data, Inc.

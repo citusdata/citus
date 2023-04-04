@@ -1,6 +1,6 @@
 /*-------------------------------------------------------------------------
  *
- * attribute.c
+ * citus_stat_tenants.c
  *	  Routines related to the multi tenant monitor.
  *
  * Copyright (c) Citus Data, Inc.
@@ -19,6 +19,7 @@
 #include "distributed/colocation_utils.h"
 #include "distributed/tuplestore.h"
 #include "distributed/colocation_utils.h"
+#include "distributed/utils/citus_stat_tenants.h"
 #include "executor/execdesc.h"
 #include "storage/ipc.h"
 #include "storage/lwlock.h"
@@ -27,7 +28,6 @@
 #include "utils/builtins.h"
 #include "utils/datetime.h"
 #include "utils/json.h"
-#include "distributed/utils/attribute.h"
 
 
 #include <time.h>

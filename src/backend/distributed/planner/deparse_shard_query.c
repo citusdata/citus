@@ -26,7 +26,7 @@
 #include "distributed/multi_physical_planner.h"
 #include "distributed/multi_router_planner.h"
 #include "distributed/shard_utils.h"
-#include "distributed/utils/attribute.h"
+#include "distributed/utils/citus_stat_tenants.h"
 #include "distributed/version_compat.h"
 #include "lib/stringinfo.h"
 #include "nodes/makefuncs.h"

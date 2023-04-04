@@ -91,7 +91,7 @@
 #include "distributed/resource_lock.h"
 #include "distributed/transaction_management.h"
 #include "distributed/transaction_recovery.h"
-#include "distributed/utils/attribute.h"
+#include "distributed/utils/citus_stat_tenants.h"
 #include "distributed/utils/directory.h"
 #include "distributed/worker_log_messages.h"
 #include "distributed/worker_manager.h"
