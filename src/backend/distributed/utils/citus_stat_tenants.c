@@ -38,7 +38,7 @@ ExecutorEnd_hook_type prev_ExecutorEnd = NULL;
 
 #define ATTRIBUTE_PREFIX "/*{\"tId\":"
 #define ATTRIBUTE_STRING_FORMAT "/*{\"tId\":%s,\"cId\":%d}*/"
-#define CITUS_STATS_TENANTS_COLUMNS 7
+#define STAT_TENANTS_COLUMNS 7
 #define ONE_QUERY_SCORE 1000000000
 
 /* TODO maybe needs to be a stack */
@@ -99,8 +99,8 @@ citus_stat_tenants_local(PG_FUNCTION_ARGS)
 	Tuplestorestate *tupleStore = SetupTuplestore(fcinfo, &tupleDescriptor);
 	TimestampTz monitoringTime = GetCurrentTimestamp();
 
-	Datum values[CITUS_STATS_TENANTS_COLUMNS];
-	bool isNulls[CITUS_STATS_TENANTS_COLUMNS];
+	Datum values[STAT_TENANTS_COLUMNS];
+	bool isNulls[STAT_TENANTS_COLUMNS];
 
 	MultiTenantMonitor *monitor = GetMultiTenantMonitor();
 
