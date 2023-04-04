@@ -34,6 +34,8 @@ my $initial_schema = "
         CREATE STATISTICS stats_on_sensors (dependencies) ON measureid, eventdatetime FROM sensors;";
 
 $node_coordinator->safe_psql('postgres',$initial_schema);
+$node_coordinator->safe_psql('postgres','ALTER TABLE sensors REPLICA IDENTITY FULL;');
+
 $node_cdc_client->safe_psql('postgres',$initial_schema);
 
 create_cdc_publication_and_slots_for_coordinator($node_coordinator,'sensors');
@@ -92,6 +94,16 @@ wait_for_cdc_client_to_catch_up_with_citus_cluster($node_coordinator, \@workers)
 # Compare the data in the coordinator and cdc client nodes.
 $result = compare_tables_in_different_nodes($node_coordinator,$node_cdc_client,'postgres',$select_stmt);
 is($result, 1, 'CDC basic test - distributed table delete data');
+
+$node_coordinator->safe_psql('postgres',"TRUNCATE sensors;");
+
+# Wait for the data changes to be replicated to the cdc client node.
+wait_for_cdc_client_to_catch_up_with_citus_cluster($node_coordinator, \@workers);
+
+# Compare the data in the coordinator and cdc client nodes.
+$result = compare_tables_in_different_nodes($node_coordinator,$node_cdc_client,'postgres',$select_stmt);
+is($result, 1, 'CDC basic test - distributed table delete data');
+
 
 drop_cdc_client_subscriptions($node_cdc_client,\@workers);
 done_testing();

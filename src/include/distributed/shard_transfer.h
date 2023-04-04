@@ -12,11 +12,17 @@
 #include "distributed/shard_rebalancer.h"
 #include "nodes/pg_list.h"
 
-extern void citus_move_shard_placement_internal(int64 shardId, char *sourceNodeName,
-												int32 sourceNodePort,
-												char *targetNodeName,
-												int32 targetNodePort,
-												Oid shardReplicationModeOid);
+typedef enum
+{
+	SHARD_TRANSFER_INVALID_FIRST = 0,
+	SHARD_TRANSFER_MOVE = 1,
+	SHARD_TRANSFER_COPY = 2
+} ShardTransferType;
+
+extern void TransferShards(int64 shardId,
+						   char *sourceNodeName, int32 sourceNodePort,
+						   char *targetNodeName, int32 targetNodePort,
+						   char shardReplicationMode, ShardTransferType transferType);
 extern uint64 ShardListSizeInBytes(List *colocatedShardList,
 								   char *workerNodeName, uint32 workerNodePort);
 extern void ErrorIfMoveUnsupportedTableType(Oid relationId);
