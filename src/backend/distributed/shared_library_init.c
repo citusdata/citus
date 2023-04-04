@@ -1794,6 +1794,18 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
+		"citus.max_background_task_executors_per_node",
+		gettext_noop(
+			"Sets the maximum number of parallel background task executor workers "
+			"for scheduled background tasks that involve a particular node"),
+		NULL,
+		&MaxBackgroundTaskExecutorsPerNode,
+		1, 1, 128,
+		PGC_SIGHUP,
+		GUC_STANDARD,
+		NULL, NULL, NULL);
+
+	DefineCustomIntVariable(
 		"citus.max_cached_connection_lifetime",
 		gettext_noop("Sets the maximum lifetime of cached connections to other nodes."),
 		NULL,
@@ -1868,18 +1880,6 @@ RegisterCitusConfigVariables(void)
 		1024, -1, INT_MAX,
 		PGC_USERSET,
 		GUC_UNIT_MB | GUC_STANDARD,
-		NULL, NULL, NULL);
-
-	DefineCustomIntVariable(
-		"citus.max_background_task_executors_per_node",
-		gettext_noop(
-			"Sets the maximum number of parallel background task executor workers "
-			"for scheduled background tasks that involve a particular node"),
-		NULL,
-		&MaxBackgroundTaskExecutorsPerNode,
-		1, 1, MAX_BACKGROUND_TASK_EXECUTORS_PER_NODE,
-		PGC_SIGHUP,
-		GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(

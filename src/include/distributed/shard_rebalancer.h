@@ -77,8 +77,6 @@
 #define REBALANCE_PROGRESS_MOVING 1
 #define REBALANCE_PROGRESS_MOVED 2
 
-#define MAX_BACKGROUND_TASK_EXECUTORS_PER_NODE 128
-
 /* Enumeration that defines different placement update types */
 typedef enum
 {
