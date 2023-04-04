@@ -8,17 +8,30 @@
  *-------------------------------------------------------------------------
  */
 
+#include "cdc_decoder_utils.h"
 #include "postgres.h"
-#include "common/hashfn.h"
-#include "utils/typcache.h"
-#include "utils/lsyscache.h"
-#include "catalog/pg_namespace.h"
-#include "distributed/cdc_decoder.h"
-#include "distributed/relay_utility.h"
-#include "distributed/worker_protocol.h"
-#include "distributed/metadata_cache.h"
+#include "fmgr.h"
 
+#include "access/genam.h"
+#include "catalog/pg_namespace.h"
+#include "catalog/pg_publication.h"
+#include "commands/extension.h"
+#include "common/hashfn.h"
+#include "utils/lsyscache.h"
+#include "utils/rel.h"
+#include "utils/typcache.h"
+
+PG_MODULE_MAGIC;
+
+extern void _PG_output_plugin_init(OutputPluginCallbacks *cb);
 static LogicalDecodeChangeCB ouputPluginChangeCB;
+
+static void InitShardToDistributedTableMap(void);
+
+static void PublishDistributedTableChanges(LogicalDecodingContext *ctx,
+										   ReorderBufferTXN *txn,
+										   Relation relation,
+										   ReorderBufferChange *change);
 
 
 static bool replication_origin_filter_cb(LogicalDecodingContext *ctx, RepOriginId
@@ -42,6 +55,124 @@ typedef struct
 } ShardIdHashEntry;
 
 static HTAB *shardToDistributedTableMap = NULL;
+
+static void cdc_change_cb(LogicalDecodingContext *ctx, ReorderBufferTXN *txn,
+						  Relation relation, ReorderBufferChange *change);
+
+
+/* build time macro for base decoder plugin name for CDC and Shard Split. */
+#ifndef DECODER
+#define DECODER "pgoutput"
+#endif
+
+#define DECODER_INIT_FUNCTION_NAME "_PG_output_plugin_init"
+
+#define CITUS_SHARD_TRANSFER_SLOT_PREFIX "citus_shard_"
+#define CITUS_SHARD_TRANSFER_SLOT_PREFIX_SIZE (sizeof(CITUS_SHARD_TRANSFER_SLOT_PREFIX) - \
+											   1)
+
+/*
+ * Postgres uses 'pgoutput' as default plugin for logical replication.
+ * We want to reuse Postgres pgoutput's functionality as much as possible.
+ * Hence we load all the functions of this plugin and override as required.
+ */
+void
+_PG_output_plugin_init(OutputPluginCallbacks *cb)
+{
+	elog(LOG, "Initializing CDC decoder");
+
+	/*
+	 * We build custom .so files whose name matches common decoders (pgoutput, wal2json)
+	 * and place them in $libdir/citus_decoders/ such that administrators can configure
+	 * dynamic_library_path to include this directory, and users can then use the
+	 * regular decoder names when creating replications slots.
+	 *
+	 * To load the original decoder, we need to remove citus_decoders/ from the
+	 * dynamic_library_path.
+	 */
+	char *originalDLP = Dynamic_library_path;
+	Dynamic_library_path = RemoveCitusDecodersFromPaths(Dynamic_library_path);
+
+	LogicalOutputPluginInit plugin_init =
+		(LogicalOutputPluginInit) (void *)
+		load_external_function(DECODER,
+							   DECODER_INIT_FUNCTION_NAME,
+							   false, NULL);
+
+	if (plugin_init == NULL)
+	{
+		elog(ERROR, "output plugins have to declare the _PG_output_plugin_init symbol");
+	}
+
+	/* in case this session is used for different replication slots */
+	Dynamic_library_path = originalDLP;
+
+	/* ask the output plugin to fill the callback struct */
+	plugin_init(cb);
+
+	/* Initialize the Shard Id to Distributed Table id mapping hash table.*/
+	InitShardToDistributedTableMap();
+
+	/* actual pgoutput callback function will be called  */
+	ouputPluginChangeCB = cb->change_cb;
+	cb->change_cb = cdc_change_cb;
+	cb->filter_by_origin_cb = replication_origin_filter_cb;
+}
+
+
+/*
+ *  Check if the replication slot is for Shard transfer by checking for prefix.
+ */
+inline static
+bool
+IsShardTransferSlot(char *replicationSlotName)
+{
+	return strncmp(replicationSlotName, CITUS_SHARD_TRANSFER_SLOT_PREFIX,
+				   CITUS_SHARD_TRANSFER_SLOT_PREFIX_SIZE) == 0;
+}
+
+
+/*
+ * shard_split_and_cdc_change_cb function emits the incoming tuple change
+ * to the appropriate destination shard.
+ */
+static void
+cdc_change_cb(LogicalDecodingContext *ctx, ReorderBufferTXN *txn,
+			  Relation relation, ReorderBufferChange *change)
+{
+	/*
+	 * If Citus has not been loaded yet, pass the changes
+	 * through to the undrelying decoder plugin.
+	 */
+	if (!CdcCitusHasBeenLoaded())
+	{
+		ouputPluginChangeCB(ctx, txn, relation, change);
+		return;
+	}
+
+	/* check if the relation is publishable.*/
+	if (!is_publishable_relation(relation))
+	{
+		return;
+	}
+
+	char *replicationSlotName = ctx->slot->data.name.data;
+	if (replicationSlotName == NULL)
+	{
+		elog(ERROR, "Replication slot name is NULL!");
+		return;
+	}
+
+	/* If the slot is for internal shard operations, call the base plugin's call back. */
+	if (IsShardTransferSlot(replicationSlotName))
+	{
+		ouputPluginChangeCB(ctx, txn, relation, change);
+		return;
+	}
+
+	/* Transalate the changes from shard to distributes table and publish. */
+	PublishDistributedTableChanges(ctx, txn, relation, change);
+}
 
 
 /*
@@ -68,23 +199,24 @@ InitShardToDistributedTableMap()
  * AddShardIdToHashTable adds the shardId to the hash table.
  */
 static Oid
-AddShardIdToHashTable(Oid shardId, ShardIdHashEntry *entry)
+AddShardIdToHashTable(uint64 shardId, ShardIdHashEntry *entry)
 {
 	entry->shardId = shardId;
-	entry->distributedTableId = LookupShardRelationFromCatalog(shardId, true);
-	entry->isReferenceTable = PartitionMethodViaCatalog(entry->distributedTableId) == 'n';
+	entry->distributedTableId = CdcLookupShardRelationFromCatalog(shardId, true);
+	entry->isReferenceTable = CdcPartitionMethodViaCatalog(entry->distributedTableId) ==
+							  'n';
 	return entry->distributedTableId;
 }
 
 
 static Oid
-LookupDistributedTableIdForShardId(Oid shardId, bool *isReferenceTable)
+LookupDistributedTableIdForShardId(uint64 shardId, bool *isReferenceTable)
 {
 	bool found;
 	Oid distributedTableId = InvalidOid;
 	ShardIdHashEntry *entry = (ShardIdHashEntry *) hash_search(shardToDistributedTableMap,
 															   &shardId,
-															   HASH_FIND | HASH_ENTER,
+															   HASH_ENTER,
 															   &found);
 	if (found)
 	{
@@ -96,24 +228,6 @@ LookupDistributedTableIdForShardId(Oid shardId, bool *isReferenceTable)
 	}
 	*isReferenceTable = entry->isReferenceTable;
 	return distributedTableId;
-}
-
-
-/*
- * InitCDCDecoder is called by from the shard split decoder plugin's init function.
- * It sets the call back function for filtering out changes originated from other nodes.
- * It also sets the call back function for processing the changes in ouputPluginChangeCB.
- * This function is common for both CDC and shard split decoder plugins.
- */
-void
-InitCDCDecoder(OutputPluginCallbacks *cb, LogicalDecodeChangeCB changeCB)
-{
-	elog(LOG, "Initializing CDC decoder");
-	cb->filter_by_origin_cb = replication_origin_filter_cb;
-	ouputPluginChangeCB = changeCB;
-
-	/* Initialize the hash table used for mapping shard to shell tables. */
-	InitShardToDistributedTableMap();
 }
 
 
@@ -166,7 +280,7 @@ TranslateAndPublishRelationForCDC(LogicalDecodingContext *ctx, ReorderBufferTXN 
  * the changes as the change for the distributed table instead of shard.
  * If not, it returns false. It also skips the Citus metadata tables.
  */
-void
+static void
 PublishDistributedTableChanges(LogicalDecodingContext *ctx, ReorderBufferTXN *txn,
 							   Relation relation, ReorderBufferChange *change)
 {
@@ -179,7 +293,7 @@ PublishDistributedTableChanges(LogicalDecodingContext *ctx, ReorderBufferTXN *tx
 	}
 
 	/* Check if the relation is a distributed table by checking for shard name.	*/
-	uint64 shardId = ExtractShardIdFromTableName(shardRelationName, true);
+	uint64 shardId = CdcExtractShardIdFromTableName(shardRelationName, true);
 
 	/* If this relation is not distributed, call the pgoutput's callback and return. */
 	if (shardId == INVALID_SHARD_ID)
@@ -197,7 +311,7 @@ PublishDistributedTableChanges(LogicalDecodingContext *ctx, ReorderBufferTXN *tx
 	}
 
 	/* Publish changes for reference table only from the coordinator node. */
-	if (isReferenceTable && !IsCoordinator())
+	if (isReferenceTable && !CdcIsCoordinator())
 	{
 		return;
 	}
@@ -247,14 +361,12 @@ GetTupleForTargetSchemaForCdc(HeapTuple sourceRelationTuple,
 			targetNulls[targetIndex] = true;
 			targetIndex++;
 		}
-
 		/* If this source attribute has been dropped, just skip this source attribute.*/
 		else if (TupleDescAttr(sourceRelDesc, sourceIndex)->attisdropped)
 		{
 			sourceIndex++;
 			continue;
 		}
-
 		/* If both source and target attributes are not dropped, add the attribute field to targetValues. */
 		else if (sourceIndex < sourceRelDesc->natts)
 		{

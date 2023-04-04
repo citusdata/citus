@@ -3,3 +3,35 @@ profile = 'black'
 
 [tool.black]
 include = '(src/test/regress/bin/diff-filter|\.pyi?|\.ipynb)$'
+
+[tool.pytest.ini_options]
+addopts = [
+    "--import-mode=importlib",
+    "--showlocals",
+    "--tb=short",
+]
+pythonpath = 'src/test/regress/citus_tests'
+asyncio_mode = 'auto'
+
+# Make test discovery quicker from the root dir of the repo
+testpaths = ['src/test/regress/citus_tests/test']
+
+# Make test discovery quicker from other directories than root directory
+norecursedirs = [
+    '*.egg',
+    '.*',
+    'build',
+    'venv',
+    'ci',
+    'vendor',
+    'backend',
+    'bin',
+    'include',
+    'tmp_*',
+    'results',
+    'expected',
+    'sql',
+    'spec',
+    'data',
+    '__pycache__',
+]
