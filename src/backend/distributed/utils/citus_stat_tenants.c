@@ -70,7 +70,7 @@ static char * UnescapeCommentChars(const char *str);
 
 int StatTenantsLogLevel = CITUS_LOG_LEVEL_OFF;
 int StatTenantsPeriod = (time_t) 60;
-int StatTenantsLimit = 10;
+int StatTenantsLimit = 100;
 int StatTenantsTrack = STAT_TENANTS_TRACK_NONE;
 
 

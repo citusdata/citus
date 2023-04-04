@@ -2379,7 +2379,7 @@ RegisterCitusConfigVariables(void)
 		gettext_noop("Number of tenants to be shown in citus_stat_tenants."),
 		NULL,
 		&StatTenantsLimit,
-		10, 1, 100,
+		100, 1, 10000,
 		PGC_POSTMASTER,
 		GUC_STANDARD,
 		NULL, NULL, NULL);
