@@ -600,26 +600,23 @@ RESET client_min_messages;
 
 SELECT * FROM multi_extension.print_extension_changes();
 
--- Snapshot of state at 11.2-1
-ALTER EXTENSION citus UPDATE TO '11.2-1';
-
--- Test upgrade to 11.2-2 from 11.2-1
+-- Test downgrade to 11.2-1 from 11.2-2
 ALTER EXTENSION citus UPDATE TO '11.2-2';
+ALTER EXTENSION citus UPDATE TO '11.2-1';
+-- Should be empty result since upgrade+downgrade should be a no-op
 SELECT * FROM multi_extension.print_extension_changes();
 
--- Test upgrade to 11.3-1 from 11.2-2
-ALTER EXTENSION citus UPDATE TO '11.3-1';
+-- Snapshot of state at 11.2-2
+ALTER EXTENSION citus UPDATE TO '11.2-2';
 SELECT * FROM multi_extension.print_extension_changes();
 
 -- Test downgrade to 11.2-2 from 11.3-1
+ALTER EXTENSION citus UPDATE TO '11.3-1';
 ALTER EXTENSION citus UPDATE TO '11.2-2';
+-- Should be empty result since upgrade+downgrade should be a no-op
 SELECT * FROM multi_extension.print_extension_changes();
 
--- Test downgrade to 11.2-1 from 11.2-2
-ALTER EXTENSION citus UPDATE TO '11.2-1';
-SELECT * FROM multi_extension.print_extension_changes();
-
--- Test upgrade to 11.3-1 from 11.2-1
+-- Snapshot of state at 11.3-1
 ALTER EXTENSION citus UPDATE TO '11.3-1';
 SELECT * FROM multi_extension.print_extension_changes();
 
