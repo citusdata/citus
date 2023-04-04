@@ -2368,7 +2368,7 @@ RegisterCitusConfigVariables(void)
 					 "Disables when set to 'none'. Disabling can be useful for "
 					 "avoiding extra CPU cycles needed for the calculations."),
 		&StatStatementsTrack,
-		STAT_STATEMENTS_TRACK_NONE,
+		STAT_STATEMENTS_TRACK_ALL,
 		stat_statements_track_options,
 		PGC_SUSET,
 		GUC_STANDARD,

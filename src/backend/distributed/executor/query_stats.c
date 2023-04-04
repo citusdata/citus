@@ -62,7 +62,7 @@ int StatStatementsPurgeInterval = 10;
 int StatStatementsMax = 50000;
 
 /* tracking all or none, for citus_stat_statements, controlled by GUC citus.stat_statements_track */
-int StatStatementsTrack = STAT_STATEMENTS_TRACK_NONE;
+int StatStatementsTrack = STAT_STATEMENTS_TRACK_ALL;
 
 /*
  * Hashtable key that defines the identity of a hashtable entry.  We use the
