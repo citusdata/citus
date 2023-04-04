@@ -61,7 +61,9 @@ SET search_path TO split_shard_replication_setup_schema;
 CREATE TABLE table_to_split_2(id bigserial PRIMARY KEY, value char);
 CREATE TABLE table_to_split_3(id bigserial PRIMARY KEY, value char);
 -- Create publication at worker1
+SET citus.enable_ddl_propagation TO off;
 CREATE PUBLICATION pub1 FOR TABLE table_to_split_1, table_to_split_2, table_to_split_3;
+RESET citus.enable_ddl_propagation;
 SELECT count(*) FROM pg_catalog.worker_split_shard_replication_setup(ARRAY[
     ROW(1, 'id', 2, '-2147483648', '-1', :worker_2_node)::pg_catalog.split_shard_info,
     ROW(1, 'id', 3, '0', '2147483647', :worker_2_node)::pg_catalog.split_shard_info
@@ -261,7 +263,9 @@ SELECT nodeid AS worker_2_node FROM pg_dist_node WHERE nodeport=:worker_2_port \
 \c - - - :worker_1_port
 SET search_path TO split_shard_replication_setup_schema;
 -- Create publication at worker1
+SET citus.enable_ddl_propagation TO off;
 CREATE PUBLICATION pub1 FOR TABLE table_to_split_1, table_to_split_2, table_to_split_3;
+RESET citus.enable_ddl_propagation;
 SELECT count(*) FROM pg_catalog.worker_split_shard_replication_setup(ARRAY[
     ROW(1, 'id', 2, '-2147483648', '-1', :worker_1_node)::pg_catalog.split_shard_info,
     ROW(1, 'id', 3, '0', '2147483647', :worker_2_node)::pg_catalog.split_shard_info
@@ -428,7 +432,9 @@ SELECT nodeid AS worker_2_node FROM pg_dist_node WHERE nodeport=:worker_2_port \
 SET search_path TO split_shard_replication_setup_schema;
 SET client_min_messages TO ERROR;
 -- Create publication at worker1
+SET citus.enable_ddl_propagation TO off;
 CREATE PUBLICATION pub1 for table table_to_split_1, table_to_split_2, table_to_split_3;
+RESET citus.enable_ddl_propagation;
 -- Worker1 is target for table_to_split_2 and table_to_split_3
 SELECT count(*) FROM pg_catalog.worker_split_shard_replication_setup(ARRAY[
     ROW(1, 'id', 2, '-2147483648', '-1', :worker_1_node)::pg_catalog.split_shard_info,
@@ -597,8 +603,10 @@ CREATE TABLE table_second_9(id bigserial PRIMARY KEY, value char);
 -- Create publication at worker1
 \c - postgres - :worker_1_port
 SET search_path TO split_shard_replication_setup_schema;
+SET citus.enable_ddl_propagation TO off;
 CREATE PUBLICATION pub1 FOR TABLE table_first_4, table_first_5, table_first_6;
 CREATE PUBLICATION pub2 FOR TABLE table_second_7, table_second_8, table_second_9;
+RESET citus.enable_ddl_propagation;
 SELECT count(*) FROM pg_catalog.worker_split_shard_replication_setup(ARRAY[
     ROW(4, 'id', 5, '-2147483648', '-1', :worker_2_node)::pg_catalog.split_shard_info,
     ROW(4, 'id', 6, '0', '2147483647', :worker_2_node)::pg_catalog.split_shard_info,

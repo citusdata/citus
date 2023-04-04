@@ -299,6 +299,9 @@ extern WorkerNode * ActiveShardPlacementWorkerNode(uint64 shardId);
 extern List * BuildShardPlacementList(int64 shardId);
 extern List * AllShardPlacementsOnNodeGroup(int32 groupId);
 extern List * GroupShardPlacementsForTableOnGroup(Oid relationId, int32 groupId);
+extern void LookupTaskPlacementHostAndPort(ShardPlacement *taskPlacement, char **nodeName,
+										   int *nodePort);
+extern bool IsDummyPlacement(ShardPlacement *taskPlacement);
 extern StringInfo GenerateSizeQueryOnMultiplePlacements(List *shardIntervalList,
 														SizeQueryType sizeQueryType,
 														bool optimizePartitionCalculations);
@@ -325,6 +328,7 @@ extern void DeleteShardPlacementRow(uint64 placementId);
 extern void CreateDistributedTable(Oid relationId, char *distributionColumnName,
 								   char distributionMethod, int shardCount,
 								   bool shardCountIsStrict, char *colocateWithTableName);
+extern void CreateReferenceTable(Oid relationId);
 extern void CreateTruncateTrigger(Oid relationId);
 extern TableConversionReturn * UndistributeTable(TableConversionParameters *params);
 
@@ -337,7 +341,6 @@ extern List * GetAllDependencyCreateDDLCommands(const List *dependencies);
 extern bool ShouldPropagate(void);
 extern bool ShouldPropagateCreateInCoordinatedTransction(void);
 extern bool ShouldPropagateAnyObject(List *addresses);
-extern List * ReplicateAllObjectsToNodeCommandList(const char *nodeName, int nodePort);
 
 /* Remaining metadata utility functions  */
 extern Oid TableOwnerOid(Oid relationId);

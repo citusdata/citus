@@ -275,11 +275,25 @@ SELECT a.author_id as first_author, b.word_count as second_word_count
 	LIMIT 3;
 
 -- following join is router plannable since the same worker
--- has both shards
+-- has both shards when citus.enable_non_colocated_router_query_pushdown
+-- is enabled
+
+SET citus.enable_non_colocated_router_query_pushdown TO ON;
+
 SELECT a.author_id as first_author, b.word_count as second_word_count
 	FROM articles_hash_mx a, articles_single_shard_hash_mx b
 	WHERE a.author_id = 10 and a.author_id = b.author_id
-	LIMIT 3;
+	ORDER by 1,2 LIMIT 3;
+
+SET citus.enable_non_colocated_router_query_pushdown TO OFF;
+
+-- but this is not the case otherwise
+SELECT a.author_id as first_author, b.word_count as second_word_count
+	FROM articles_hash_mx a, articles_single_shard_hash_mx b
+	WHERE a.author_id = 10 and a.author_id = b.author_id
+	ORDER by 1,2 LIMIT 3;
+
+RESET citus.enable_non_colocated_router_query_pushdown;
 
 -- following join is not router plannable since there are no
 -- workers containing both shards, but will work through recursive
@@ -657,3 +671,8 @@ INSERT INTO articles_hash_mx VALUES (51,  1, 'amateus', 1814);
 SELECT id
 	FROM articles_hash_mx
 	WHERE author_id = 1;
+
+SET client_min_messages to WARNING;
+TRUNCATE articles_hash_mx, company_employees_mx, articles_single_shard_hash_mx;
+DROP MATERIALIZED VIEW mv_articles_hash_mx_error;
+DROP TABLE authors_hash_mx;

@@ -66,7 +66,6 @@ extern int ExtractProcessIdFromGlobalPID(uint64 globalPID);
 extern void GetBackendDataForProc(PGPROC *proc, BackendData *result);
 extern void CancelTransactionDueToDeadlock(PGPROC *proc);
 extern bool MyBackendGotCancelledDueToDeadlock(bool clearState);
-extern bool MyBackendIsInDisributedTransaction(void);
 extern List * ActiveDistributedTransactionNumbers(void);
 extern LocalTransactionId GetMyProcLocalTransactionId(void);
 extern int GetExternalClientBackendCount(void);
@@ -77,6 +76,7 @@ extern bool IsCitusInternalBackend(void);
 extern bool IsRebalancerInternalBackend(void);
 extern bool IsCitusRunCommandBackend(void);
 extern bool IsExternalClientBackend(void);
+extern bool IsCitusShardTransferBackend(void);
 
 #define INVALID_CITUS_INTERNAL_BACKEND_GPID 0
 #define GLOBAL_PID_NODE_ID_FOR_NODES_NOT_IN_METADATA 99999999

@@ -10,6 +10,9 @@ SET citus.next_shard_id TO 840000;
 -- other tests that triggers fast-path-router planner
 SET citus.enable_fast_path_router_planner TO false;
 
+CREATE SCHEMA multi_router_planner;
+SET search_path TO multi_router_planner;
+
 CREATE TABLE articles_hash (
 	id bigint NOT NULL,
 	author_id bigint NOT NULL,
@@ -381,11 +384,26 @@ SELECT a.author_id as first_author, b.word_count as second_word_count
 	LIMIT 3;
 
 -- following join is router plannable since the same worker
--- has both shards
+-- has both shards when citus.enable_non_colocated_router_query_pushdown
+-- is enabled
+
+SET citus.enable_non_colocated_router_query_pushdown TO ON;
+
 SELECT a.author_id as first_author, b.word_count as second_word_count
 	FROM articles_hash a, articles_single_shard_hash b
 	WHERE a.author_id = 10 and a.author_id = b.author_id
-	LIMIT 3;
+	ORDER BY 1,2 LIMIT 3;
+
+SET citus.enable_non_colocated_router_query_pushdown TO OFF;
+
+-- but this is not the case otherwise
+
+SELECT a.author_id as first_author, b.word_count as second_word_count
+	FROM articles_hash a, articles_single_shard_hash b
+	WHERE a.author_id = 10 and a.author_id = b.author_id
+	ORDER BY 1,2 LIMIT 3;
+
+RESET citus.enable_non_colocated_router_query_pushdown;
 
 -- following join is not router plannable since there are no
 -- workers containing both shards, but will work through recursive
@@ -646,9 +664,25 @@ SELECT *
 	FROM articles_hash
 	WHERE author_id = 1 and 1=0;
 
+-- Even if the where clause contains "false", the query is not router
+-- plannable when citus.enable_non_colocated_router_query_pushdown
+-- is disabled. This is because, the tables are not colocated.
+
+SET citus.enable_non_colocated_router_query_pushdown TO ON;
+
+-- the same query, router plannable
 SELECT a.author_id as first_author, b.word_count as second_word_count
 	FROM articles_hash a, articles_single_shard_hash b
 	WHERE a.author_id = 10 and a.author_id = b.author_id and false;
+
+SET citus.enable_non_colocated_router_query_pushdown TO OFF;
+
+-- the same query, _not_ router plannable
+SELECT a.author_id as first_author, b.word_count as second_word_count
+	FROM articles_hash a, articles_single_shard_hash b
+	WHERE a.author_id = 10 and a.author_id = b.author_id and false;
+
+RESET citus.enable_non_colocated_router_query_pushdown;
 
 SELECT *
 	FROM articles_hash
@@ -900,9 +934,20 @@ SELECT * FROM articles_range ar join authors_range au on (ar.id = au.id)
 -- join between hash and range partition tables are router plannable
 -- only if both tables pruned down to single shard and co-located on the same
 -- node.
--- router plannable
+
+SET citus.enable_non_colocated_router_query_pushdown TO ON;
+
+-- router plannable when citus.enable_non_colocated_router_query_pushdown is on
 SELECT * FROM articles_hash ar join authors_range au on (ar.author_id = au.id)
-	WHERE ar.author_id = 2;
+	WHERE ar.author_id = 2 ORDER BY 1,2,3,4,5,6;
+
+SET citus.enable_non_colocated_router_query_pushdown TO OFF;
+
+-- not router plannable otherwise
+SELECT * FROM articles_hash ar join authors_range au on (ar.author_id = au.id)
+	WHERE ar.author_id = 2 ORDER BY 1,2,3,4,5,6;
+
+RESET citus.enable_non_colocated_router_query_pushdown;
 
 -- not router plannable
 SELECT * FROM articles_hash ar join authors_range au on (ar.author_id = au.id)
@@ -1182,12 +1227,15 @@ SELECT create_distributed_table('failure_test', 'a', 'hash');
 
 SET citus.enable_ddl_propagation TO off;
 CREATE USER router_user;
-GRANT INSERT ON ALL TABLES IN SCHEMA public TO router_user;
+GRANT USAGE ON SCHEMA multi_router_planner TO router_user;
+GRANT INSERT ON ALL TABLES IN SCHEMA multi_router_planner TO router_user;
 \c - - - :worker_1_port
 SET citus.enable_ddl_propagation TO off;
 CREATE USER router_user;
-GRANT INSERT ON ALL TABLES IN SCHEMA public TO router_user;
+GRANT USAGE ON SCHEMA multi_router_planner TO router_user;
+GRANT INSERT ON ALL TABLES IN SCHEMA multi_router_planner TO router_user;
 \c - router_user - :master_port
+SET search_path TO multi_router_planner;
 -- we will fail to connect to worker 2, since the user does not exist
 -- still, we never mark placements inactive. Instead, fail the transaction
 BEGIN;
@@ -1199,29 +1247,48 @@ SELECT shardid, shardstate, nodename, nodeport FROM pg_dist_shard_placement
 		SELECT shardid FROM pg_dist_shard
 		WHERE logicalrelid = 'failure_test'::regclass
 	)
-	ORDER BY placementid;
+	ORDER BY shardid, nodeport;
 \c - postgres - :worker_1_port
 DROP OWNED BY router_user;
 DROP USER router_user;
 \c - - - :master_port
 DROP OWNED BY router_user;
 DROP USER router_user;
-DROP TABLE failure_test;
 
-DROP FUNCTION author_articles_max_id();
-DROP FUNCTION author_articles_id_word_count();
+SET search_path TO multi_router_planner;
+SET citus.next_shard_id TO 850000;
 
-DROP MATERIALIZED VIEW mv_articles_hash_empty;
-DROP MATERIALIZED VIEW mv_articles_hash_data;
+SET citus.shard_replication_factor TO 1;
+CREATE TABLE single_shard_dist(a int, b int);
+SELECT create_distributed_table('single_shard_dist', 'a', shard_count=>1);
 
-DROP VIEW num_db;
-DROP FUNCTION number1();
+SET citus.shard_replication_factor TO 2;
+CREATE TABLE table_with_four_shards(a int, b int);
+SELECT create_distributed_table('table_with_four_shards', 'a', shard_count=>4);
 
-DROP TABLE articles_hash;
-DROP TABLE articles_single_shard_hash;
-DROP TABLE authors_hash;
-DROP TABLE authors_range;
-DROP TABLE authors_reference;
-DROP TABLE company_employees;
-DROP TABLE articles_range;
-DROP TABLE articles_append;
+SET client_min_messages TO DEBUG2;
+
+-- Make sure that router rejects planning this query because
+-- the target shards are not placed on the same node when
+-- citus.enable_non_colocated_router_query_pushdown is disabled.
+-- Otherwise, it throws a somewhat meaningless error but we assume
+-- that the user is aware of the setting.
+
+SET citus.enable_non_colocated_router_query_pushdown TO ON;
+
+WITH cte AS (
+    DELETE FROM table_with_four_shards WHERE a = 1 RETURNING *
+)
+SELECT * FROM single_shard_dist WHERE b IN (SELECT b FROM cte);
+
+SET citus.enable_non_colocated_router_query_pushdown TO OFF;
+
+WITH cte AS (
+    DELETE FROM table_with_four_shards WHERE a = 1 RETURNING *
+)
+SELECT * FROM single_shard_dist WHERE b IN (SELECT b FROM cte);
+
+RESET citus.enable_non_colocated_router_query_pushdown;
+
+SET client_min_messages TO WARNING;
+DROP SCHEMA multi_router_planner CASCADE;

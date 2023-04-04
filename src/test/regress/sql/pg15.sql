@@ -269,16 +269,21 @@ WITH targq AS (
 MERGE INTO tbl1 USING targq ON (true)
 WHEN MATCHED THEN DELETE;
 
--- crashes on beta3, fixed on 15 stable
---WITH foo AS (
---  MERGE INTO tbl1 USING tbl2 ON (true)
---  WHEN MATCHED THEN DELETE
---) SELECT * FROM foo;
+WITH foo AS (
+  MERGE INTO tbl1 USING tbl2 ON (true)
+  WHEN MATCHED THEN DELETE
+) SELECT * FROM foo;
 
---COPY (
---  MERGE INTO tbl1 USING tbl2 ON (true)
---  WHEN MATCHED THEN DELETE
---) TO stdout;
+COPY (
+  MERGE INTO tbl1 USING tbl2 ON (true)
+  WHEN MATCHED THEN DELETE
+) TO stdout;
+
+MERGE INTO tbl1 t
+USING tbl2
+ON (true)
+WHEN MATCHED THEN
+    DO NOTHING;
 
 MERGE INTO tbl1 t
 USING tbl2

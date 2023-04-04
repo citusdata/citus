@@ -985,7 +985,7 @@ AppendShardSizeQuery(StringInfo selectQuery, ShardInterval *shardInterval)
 
 	appendStringInfo(selectQuery, "SELECT " UINT64_FORMAT " AS shard_id, ", shardId);
 	appendStringInfo(selectQuery, "%s AS shard_name, ", quotedShardName);
-	appendStringInfo(selectQuery, PG_RELATION_SIZE_FUNCTION, quotedShardName);
+	appendStringInfo(selectQuery, PG_TOTAL_RELATION_SIZE_FUNCTION, quotedShardName);
 }
 
 
@@ -1667,6 +1667,48 @@ TupleToGroupShardPlacement(TupleDesc tupleDescriptor, HeapTuple heapTuple)
 		datumArray[Anum_pg_dist_placement_groupid - 1]);
 
 	return shardPlacement;
+}
+
+
+/*
+ * LookupTaskPlacementHostAndPort sets the nodename and nodeport for the given task placement
+ * with a lookup.
+ */
+void
+LookupTaskPlacementHostAndPort(ShardPlacement *taskPlacement, char **nodeName,
+							   int *nodePort)
+{
+	if (IsDummyPlacement(taskPlacement))
+	{
+		/*
+		 * If we create a dummy placement for the local node, it is possible
+		 * that the entry doesn't exist in pg_dist_node, hence a lookup will fail.
+		 * In that case we want to use the dummy placements values.
+		 */
+		*nodeName = taskPlacement->nodeName;
+		*nodePort = taskPlacement->nodePort;
+	}
+	else
+	{
+		/*
+		 * We want to lookup the node information again since it is possible that
+		 * there were changes in pg_dist_node and we will get those invalidations
+		 * in LookupNodeForGroup.
+		 */
+		WorkerNode *workerNode = LookupNodeForGroup(taskPlacement->groupId);
+		*nodeName = workerNode->workerName;
+		*nodePort = workerNode->workerPort;
+	}
+}
+
+
+/*
+ * IsDummyPlacement returns true if the given placement is a dummy placement.
+ */
+bool
+IsDummyPlacement(ShardPlacement *taskPlacement)
+{
+	return taskPlacement->nodeId == LOCAL_NODE_ID;
 }
 
 

@@ -42,9 +42,30 @@
 /* application name used for connections made by run_command_on_* */
 #define CITUS_RUN_COMMAND_APPLICATION_NAME_PREFIX "citus_run_command gpid="
 
+/*
+ * application name prefix for move/split replication connections.
+ *
+ * This application_name is set to the subscription name by logical replication
+ * workers, so there is no GPID.
+ */
+#define CITUS_SHARD_TRANSFER_APPLICATION_NAME_PREFIX "citus_shard_"
+
 /* deal with waiteventset errors */
 #define WAIT_EVENT_SET_INDEX_NOT_INITIALIZED -1
 #define WAIT_EVENT_SET_INDEX_FAILED -2
+
+/*
+ * UINT32_MAX is reserved in pg_dist_node, so we can use it safely.
+ */
+#define LOCAL_NODE_ID UINT32_MAX
+
+/*
+ * If you want to connect to the current node use `LocalHostName`, which is a GUC, instead
+ * of the hardcoded loopback hostname. Only if you really need the loopback hostname use
+ * this define.
+ */
+#define LOCAL_HOST_NAME "localhost"
+
 
 /* forward declare, to avoid forcing large headers on everyone */
 struct pg_conn; /* target of the PGconn typedef */
@@ -172,6 +193,9 @@ typedef struct MultiConnection
 
 	/* is the connection currently in use, and shouldn't be used by anything else */
 	bool claimedExclusively;
+
+	/* is the replication origin session has already been setup for this connection. */
+	bool isReplicationOriginSessionSetup;
 
 	/*
 	 * Should be used to access/modify metadata. See REQUIRE_METADATA_CONNECTION for
@@ -312,6 +336,7 @@ extern void ShutdownConnection(MultiConnection *connection);
 /* dealing with a connection */
 extern void FinishConnectionListEstablishment(List *multiConnectionList);
 extern void FinishConnectionEstablishment(MultiConnection *connection);
+extern void ForceConnectionCloseAtTransactionEnd(MultiConnection *connection);
 extern void ClaimConnectionExclusively(MultiConnection *connection);
 extern void UnclaimConnection(MultiConnection *connection);
 extern void MarkConnectionConnected(MultiConnection *connection);

@@ -34,6 +34,7 @@
 #include "distributed/intermediate_results.h"
 #include "distributed/listutils.h"
 #include "distributed/coordinator_protocol.h"
+#include "distributed/merge_planner.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_executor.h"
 #include "distributed/distributed_planner.h"
@@ -68,6 +69,17 @@
 #include "utils/syscache.h"
 
 
+/* RouterPlanType is used to determine the router plan to invoke */
+typedef enum RouterPlanType
+{
+	INSERT_SELECT_INTO_CITUS_TABLE,
+	INSERT_SELECT_INTO_LOCAL_TABLE,
+	DML_QUERY,
+	SELECT_QUERY,
+	MERGE_QUERY,
+	REPLAN_WITH_BOUND_PARAMETERS
+} RouterPlanType;
+
 static List *plannerRestrictionContextList = NIL;
 int MultiTaskQueryLogLevel = CITUS_LOG_LEVEL_OFF; /* multi-task query log level */
 static uint64 NextPlanId = 1;
@@ -75,12 +87,8 @@ static uint64 NextPlanId = 1;
 /* keep track of planner call stack levels */
 int PlannerLevel = 0;
 
-static void ErrorIfQueryHasUnsupportedMergeCommand(Query *queryTree,
-												   List *rangeTableList);
-static bool ContainsMergeCommandWalker(Node *node);
 static bool ListContainsDistributedTableRTE(List *rangeTableList,
 											bool *maybeHasForeignDistributedTable);
-static bool IsUpdateOrDelete(Query *query);
 static PlannedStmt * CreateDistributedPlannedStmt(
 	DistributedPlanningContext *planContext);
 static PlannedStmt * InlineCtesAndCreateDistributedPlannedStmt(uint64 planId,
@@ -132,7 +140,10 @@ static PlannedStmt * PlanDistributedStmt(DistributedPlanningContext *planContext
 static RTEListProperties * GetRTEListProperties(List *rangeTableList);
 static List * TranslatedVars(PlannerInfo *root, int relationIndex);
 static void WarnIfListHasForeignDistributedTable(List *rangeTableList);
-static void ErrorIfMergeHasUnsupportedTables(Query *parse, List *rangeTableList);
+static RouterPlanType GetRouterPlanType(Query *query,
+										Query *originalQuery,
+										bool hasUnresolvedParams);
+
 
 /* Distributed planner hook */
 PlannedStmt *
@@ -156,7 +167,7 @@ distributed_planner(Query *parse,
 		 * We cannot have merge command for this path as well because
 		 * there cannot be recursively planned merge command.
 		 */
-		Assert(!ContainsMergeCommandWalker((Node *) parse));
+		Assert(!IsMergeQuery(parse));
 
 		needsDistributedPlanning = true;
 	}
@@ -200,12 +211,6 @@ distributed_planner(Query *parse,
 
 		if (!fastPathRouterQuery)
 		{
-			/*
-			 * Fast path queries cannot have merge command, and we
-			 * prevent the remaining here.
-			 */
-			ErrorIfQueryHasUnsupportedMergeCommand(parse, rangeTableList);
-
 			/*
 			 * When there are partitioned tables (not applicable to fast path),
 			 * pretend that they are regular tables to avoid unnecessary work
@@ -301,72 +306,6 @@ distributed_planner(Query *parse,
 	}
 
 	return result;
-}
-
-
-/*
- * ErrorIfQueryHasUnsupportedMergeCommand walks over the query tree and bails out
- * if there is no Merge command (e.g., CMD_MERGE) in the query tree. For merge,
- * looks for all supported combinations, throws an exception if any violations
- * are seen.
- */
-static void
-ErrorIfQueryHasUnsupportedMergeCommand(Query *queryTree, List *rangeTableList)
-{
-	/*
-	 * Postgres currently doesn't support Merge queries inside subqueries and
-	 * ctes, but lets be defensive and do query tree walk anyway.
-	 *
-	 * We do not call this path for fast-path queries to avoid this additional
-	 * overhead.
-	 */
-	if (!ContainsMergeCommandWalker((Node *) queryTree))
-	{
-		/* No MERGE found */
-		return;
-	}
-
-
-	/*
-	 * In Citus we have limited support for MERGE, it's allowed
-	 * only if all the tables(target, source or any CTE) tables
-	 * are are local i.e. a combination of Citus local and Non-Citus
-	 * tables (regular Postgres tables).
-	 */
-	ErrorIfMergeHasUnsupportedTables(queryTree, rangeTableList);
-}
-
-
-/*
- * ContainsMergeCommandWalker walks over the node and finds if there are any
- * Merge command (e.g., CMD_MERGE) in the node.
- */
-static bool
-ContainsMergeCommandWalker(Node *node)
-{
-	#if PG_VERSION_NUM < PG_VERSION_15
-	return false;
-	#endif
-
-	if (node == NULL)
-	{
-		return false;
-	}
-
-	if (IsA(node, Query))
-	{
-		Query *query = (Query *) node;
-		if (IsMergeQuery(query))
-		{
-			return true;
-		}
-
-		return query_tree_walker((Query *) node, ContainsMergeCommandWalker, NULL, 0);
-	}
-
-	return expression_tree_walker(node, ContainsMergeCommandWalker, NULL);
-
-	return false;
 }
 
 
@@ -670,17 +609,6 @@ IsMultiTaskPlan(DistributedPlan *distributedPlan)
 
 
 /*
- * IsUpdateOrDelete returns true if the query performs an update or delete.
- */
-bool
-IsUpdateOrDelete(Query *query)
-{
-	return query->commandType == CMD_UPDATE ||
-		   query->commandType == CMD_DELETE;
-}
-
-
-/*
  * PlanFastPathDistributedStmt creates a distributed planned statement using
  * the FastPathPlanner.
  */
@@ -850,7 +778,7 @@ CreateDistributedPlannedStmt(DistributedPlanningContext *planContext)
 	 * if it is planned as a multi shard modify query.
 	 */
 	if ((distributedPlan->planningError ||
-		 (IsUpdateOrDelete(planContext->originalQuery) && IsMultiTaskPlan(
+		 (UpdateOrDeleteOrMergeQuery(planContext->originalQuery) && IsMultiTaskPlan(
 			  distributedPlan))) &&
 		hasUnresolvedParams)
 	{
@@ -956,6 +884,51 @@ TryCreateDistributedPlannedStmt(PlannedStmt *localPlan,
 
 
 /*
+ * GetRouterPlanType checks the parse tree to return appropriate plan type.
+ */
+static RouterPlanType
+GetRouterPlanType(Query *query, Query *originalQuery, bool hasUnresolvedParams)
+{
+	if (!IsModifyCommand(originalQuery))
+	{
+		return SELECT_QUERY;
+	}
+
+	Oid targetRelationId = ModifyQueryResultRelationId(query);
+
+	EnsureModificationsCanRunOnRelation(targetRelationId);
+	EnsurePartitionTableNotReplicated(targetRelationId);
+
+	/* Check the type of modification being done */
+
+	if (InsertSelectIntoCitusTable(originalQuery))
+	{
+		if (hasUnresolvedParams)
+		{
+			return REPLAN_WITH_BOUND_PARAMETERS;
+		}
+		return INSERT_SELECT_INTO_CITUS_TABLE;
+	}
+	else if (InsertSelectIntoLocalTable(originalQuery))
+	{
+		if (hasUnresolvedParams)
+		{
+			return REPLAN_WITH_BOUND_PARAMETERS;
+		}
+		return INSERT_SELECT_INTO_LOCAL_TABLE;
+	}
+	else if (IsMergeQuery(originalQuery))
+	{
+		return MERGE_QUERY;
+	}
+	else
+	{
+		return DML_QUERY;
+	}
+}
+
+
+/*
  * CreateDistributedPlan generates a distributed plan for a query.
  * It goes through 3 steps:
  *
@@ -972,88 +945,83 @@ CreateDistributedPlan(uint64 planId, bool allowRecursivePlanning, Query *origina
 	DistributedPlan *distributedPlan = NULL;
 	bool hasCtes = originalQuery->cteList != NIL;
 
-	if (IsModifyCommand(originalQuery))
+	/* Step 1: Try router planner */
+
+	RouterPlanType routerPlan = GetRouterPlanType(query, originalQuery,
+												  hasUnresolvedParams);
+
+	switch (routerPlan)
 	{
-		Oid targetRelationId = ModifyQueryResultRelationId(query);
-
-		EnsureModificationsCanRunOnRelation(targetRelationId);
-
-		EnsurePartitionTableNotReplicated(targetRelationId);
-
-		if (InsertSelectIntoCitusTable(originalQuery))
+		case INSERT_SELECT_INTO_CITUS_TABLE:
 		{
-			if (hasUnresolvedParams)
-			{
-				/*
-				 * Unresolved parameters can cause performance regressions in
-				 * INSERT...SELECT when the partition column is a parameter
-				 * because we don't perform any additional pruning in the executor.
-				 */
-				return NULL;
-			}
-
 			distributedPlan =
-				CreateInsertSelectPlan(planId, originalQuery, plannerRestrictionContext,
+				CreateInsertSelectPlan(planId,
+									   originalQuery,
+									   plannerRestrictionContext,
 									   boundParams);
+			break;
 		}
-		else if (InsertSelectIntoLocalTable(originalQuery))
+
+		case INSERT_SELECT_INTO_LOCAL_TABLE:
 		{
-			if (hasUnresolvedParams)
-			{
-				/*
-				 * Unresolved parameters can cause performance regressions in
-				 * INSERT...SELECT when the partition column is a parameter
-				 * because we don't perform any additional pruning in the executor.
-				 */
-				return NULL;
-			}
 			distributedPlan =
-				CreateInsertSelectIntoLocalTablePlan(planId, originalQuery, boundParams,
+				CreateInsertSelectIntoLocalTablePlan(planId,
+													 originalQuery,
+													 boundParams,
 													 hasUnresolvedParams,
 													 plannerRestrictionContext);
+			break;
 		}
-		else
+
+		case DML_QUERY:
 		{
 			/* modifications are always routed through the same planner/executor */
 			distributedPlan =
 				CreateModifyPlan(originalQuery, query, plannerRestrictionContext);
+			break;
 		}
 
-		/* the functions above always return a plan, possibly with an error */
-		Assert(distributedPlan);
+		case MERGE_QUERY:
+		{
+			distributedPlan =
+				CreateMergePlan(originalQuery, query, plannerRestrictionContext);
+			break;
+		}
 
-		if (distributedPlan->planningError == NULL)
+		case REPLAN_WITH_BOUND_PARAMETERS:
 		{
-			return distributedPlan;
+			/*
+			 * Unresolved parameters can cause performance regressions in
+			 * INSERT...SELECT when the partition column is a parameter
+			 * because we don't perform any additional pruning in the executor.
+			 */
+			return NULL;
 		}
-		else
+
+		case SELECT_QUERY:
 		{
-			RaiseDeferredError(distributedPlan->planningError, DEBUG2);
+			/*
+			 * For select queries we, if router executor is enabled, first try to
+			 * plan the query as a router query. If not supported, otherwise try
+			 * the full blown plan/optimize/physical planning process needed to
+			 * produce distributed query plans.
+			 */
+			distributedPlan =
+				CreateRouterPlan(originalQuery, query, plannerRestrictionContext);
+			break;
 		}
+	}
+
+	/* the functions above always return a plan, possibly with an error */
+	Assert(distributedPlan);
+
+	if (distributedPlan->planningError == NULL)
+	{
+		return distributedPlan;
 	}
 	else
 	{
-		/*
-		 * For select queries we, if router executor is enabled, first try to
-		 * plan the query as a router query. If not supported, otherwise try
-		 * the full blown plan/optimize/physical planning process needed to
-		 * produce distributed query plans.
-		 */
-
-		distributedPlan = CreateRouterPlan(originalQuery, query,
-										   plannerRestrictionContext);
-		if (distributedPlan->planningError == NULL)
-		{
-			return distributedPlan;
-		}
-		else
-		{
-			/*
-			 * For debugging it's useful to display why query was not
-			 * router plannable.
-			 */
-			RaiseDeferredError(distributedPlan->planningError, DEBUG2);
-		}
+		RaiseDeferredError(distributedPlan->planningError, DEBUG2);
 	}
 
 	if (hasUnresolvedParams)
@@ -1081,6 +1049,8 @@ CreateDistributedPlan(uint64 planId, bool allowRecursivePlanning, Query *origina
 	originalQuery = (Query *) ResolveExternalParams((Node *) originalQuery,
 													boundParams);
 	Assert(originalQuery != NULL);
+
+	/* Step 2: Generate subplans for CTEs and complex subqueries */
 
 	/*
 	 * Plan subqueries and CTEs that cannot be pushed down by recursively
@@ -1181,6 +1151,8 @@ CreateDistributedPlan(uint64 planId, bool allowRecursivePlanning, Query *origina
 	 */
 	query->cteList = NIL;
 	Assert(originalQuery->cteList == NIL);
+
+	/* Step 3: Try Logical planner */
 
 	MultiTreeRoot *logicalPlan = MultiLogicalPlanCreate(originalQuery, query,
 														plannerRestrictionContext);
@@ -2610,149 +2582,4 @@ WarnIfListHasForeignDistributedTable(List *rangeTableList)
 								   "citus_add_local_table_to_metadata()"))));
 		}
 	}
-}
-
-
-/*
- * IsMergeAllowedOnRelation takes a relation entry and checks if MERGE command is
- * permitted on special relations, such as materialized view, returns true only if
- * it's a "source" relation.
- */
-bool
-IsMergeAllowedOnRelation(Query *parse, RangeTblEntry *rte)
-{
-	if (!IsMergeQuery(parse))
-	{
-		return false;
-	}
-
-	RangeTblEntry *targetRte = rt_fetch(parse->resultRelation, parse->rtable);
-
-	/* Is it a target relation? */
-	if (targetRte->relid == rte->relid)
-	{
-		return false;
-	}
-
-	return true;
-}
-
-
-/*
- * ErrorIfMergeHasUnsupportedTables checks if all the tables(target, source or any CTE
- * present) in the MERGE command are local i.e. a combination of Citus local and Non-Citus
- * tables (regular Postgres tables), raises an exception for all other combinations.
- */
-static void
-ErrorIfMergeHasUnsupportedTables(Query *parse, List *rangeTableList)
-{
-	ListCell *tableCell = NULL;
-
-	foreach(tableCell, rangeTableList)
-	{
-		RangeTblEntry *rangeTableEntry = (RangeTblEntry *) lfirst(tableCell);
-		Oid relationId = rangeTableEntry->relid;
-
-		switch (rangeTableEntry->rtekind)
-		{
-			case RTE_RELATION:
-			{
-				/* Check the relation type */
-				break;
-			}
-
-			case RTE_SUBQUERY:
-			case RTE_FUNCTION:
-			case RTE_TABLEFUNC:
-			case RTE_VALUES:
-			case RTE_JOIN:
-			case RTE_CTE:
-			{
-				/* Skip them as base table(s) will be checked */
-				continue;
-			}
-
-			/*
-			 * RTE_NAMEDTUPLESTORE is typically used in ephmeral named relations,
-			 * such as, trigger data; until we find a genuine use case, raise an
-			 * exception.
-			 * RTE_RESULT is a node added by the planner and we shouldn't
-			 * encounter it in the parse tree.
-			 */
-			case RTE_NAMEDTUPLESTORE:
-			case RTE_RESULT:
-			{
-				ereport(ERROR,
-						(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						 errmsg("MERGE command is not supported with "
-								"Tuplestores and results")));
-				break;
-			}
-
-			default:
-			{
-				ereport(ERROR,
-						(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						 errmsg("MERGE command: Unrecognized range table entry.")));
-			}
-		}
-
-		/* RTE Relation can be of various types, check them now */
-
-		/* skip the regular views as they are replaced with subqueries */
-		if (rangeTableEntry->relkind == RELKIND_VIEW)
-		{
-			continue;
-		}
-
-		if (rangeTableEntry->relkind == RELKIND_MATVIEW ||
-			rangeTableEntry->relkind == RELKIND_FOREIGN_TABLE)
-		{
-			/* Materialized view or Foreign table as target is not allowed */
-			if (IsMergeAllowedOnRelation(parse, rangeTableEntry))
-			{
-				/* Non target relation is ok */
-				continue;
-			}
-			else
-			{
-				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-								errmsg("MERGE command is not allowed "
-									   "on materialized view")));
-			}
-		}
-
-		if (rangeTableEntry->relkind != RELKIND_RELATION &&
-			rangeTableEntry->relkind != RELKIND_PARTITIONED_TABLE)
-		{
-			ereport(ERROR,
-					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-					 errmsg("Unexpected relation type(relkind:%c) in MERGE command",
-							rangeTableEntry->relkind)));
-		}
-
-		Assert(rangeTableEntry->relid != 0);
-
-		/* Distributed tables and Reference tables are not supported yet */
-		if (IsCitusTableType(relationId, REFERENCE_TABLE) ||
-			IsCitusTableType(relationId, DISTRIBUTED_TABLE))
-		{
-			ereport(ERROR,
-					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-					 errmsg("MERGE command is not supported on "
-							"distributed/reference tables yet")));
-		}
-
-		/* Regular Postgres tables and Citus local tables are allowed */
-		if (!IsCitusTable(relationId) ||
-			IsCitusTableType(relationId, CITUS_LOCAL_TABLE))
-		{
-			continue;
-		}
-
-
-		/* Any other Citus table type missing ? */
-	}
-
-	/* All the tables are local, supported */
 }

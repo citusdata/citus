@@ -44,7 +44,7 @@ vanilla_diffs_file = $(citus_abs_srcdir)/pg_vanilla_outputs/$(MAJORVERSION)/regr
 # intermediate, for muscle memory backward compatibility.
 check: check-full check-enterprise-full
 # check-full triggers all tests that ought to be run routinely
-check-full: check-multi check-multi-mx check-multi-1 check-operations check-follower-cluster check-isolation check-failure check-split check-vanilla check-columnar check-columnar-isolation check-pg-upgrade check-arbitrary-configs check-citus-upgrade check-citus-upgrade-mixed check-citus-upgrade-local check-citus-upgrade-mixed-local
+check-full: check-multi check-multi-mx check-multi-1 check-operations check-follower-cluster check-isolation check-failure check-split check-vanilla check-columnar check-columnar-isolation check-pg-upgrade check-arbitrary-configs check-citus-upgrade check-citus-upgrade-mixed check-citus-upgrade-local check-citus-upgrade-mixed-local check-pytest
 # check-enterprise-full triggers all enterprise specific tests
 check-enterprise-full: check-enterprise check-enterprise-isolation check-enterprise-failure check-enterprise-isolation-logicalrep-1 check-enterprise-isolation-logicalrep-2 check-enterprise-isolation-logicalrep-3
 
@@ -117,29 +117,31 @@ check-minimal-mx: all
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/mx_minimal_schedule $(EXTRA_TESTS)
 
 check-custom-schedule: all
-	$(pg_regress_multi_check) --load-extension=citus \
+	$(pg_regress_multi_check) --load-extension=citus --worker-count=$(WORKERCOUNT) \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/$(SCHEDULE) $(EXTRA_TESTS)
 
 check-failure-custom-schedule: all
-	$(pg_regress_multi_check) --load-extension=citus --mitmproxy \
+	$(pg_regress_multi_check) --load-extension=citus --mitmproxy --worker-count=$(WORKERCOUNT) \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/$(SCHEDULE) $(EXTRA_TESTS)
 
 check-isolation-custom-schedule: all  $(isolation_test_files)
-	$(pg_regress_multi_check) --load-extension=citus --isolationtester \
+	$(pg_regress_multi_check) --load-extension=citus --isolationtester --worker-count=$(WORKERCOUNT) \
 	-- $(MULTI_REGRESS_OPTS) --inputdir=$(citus_abs_srcdir)/build --schedule=$(citus_abs_srcdir)/$(SCHEDULE) $(EXTRA_TESTS)
 
 check-custom-schedule-vg: all
 	$(pg_regress_multi_check) --load-extension=citus \
-	--valgrind --pg_ctl-timeout=360 --connection-timeout=500000 --valgrind-path=valgrind --valgrind-log-file=$(CITUS_VALGRIND_LOG_FILE) \
+	--valgrind --pg_ctl-timeout=360 --connection-timeout=500000 --worker-count=$(WORKERCOUNT) \
+	--valgrind-path=valgrind --valgrind-log-file=$(CITUS_VALGRIND_LOG_FILE) \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/$(SCHEDULE) $(EXTRA_TESTS)
 
 check-failure-custom-schedule-vg: all
 	$(pg_regress_multi_check) --load-extension=citus --mitmproxy \
-	--valgrind --pg_ctl-timeout=360 --connection-timeout=500000 --valgrind-path=valgrind --valgrind-log-file=$(CITUS_VALGRIND_LOG_FILE) \
+	--valgrind --pg_ctl-timeout=360 --connection-timeout=500000 --worker-count=$(WORKERCOUNT) \
+	--valgrind-path=valgrind --valgrind-log-file=$(CITUS_VALGRIND_LOG_FILE) \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/$(SCHEDULE) $(EXTRA_TESTS)
 
 check-isolation-custom-schedule-vg: all  $(isolation_test_files)
-	$(pg_regress_multi_check) --load-extension=citus --isolationtester \
+	$(pg_regress_multi_check) --load-extension=citus --isolationtester --worker-count=$(WORKERCOUNT) \
 	--valgrind --pg_ctl-timeout=360 --connection-timeout=500000 --valgrind-path=valgrind --valgrind-log-file=$(CITUS_VALGRIND_LOG_FILE) \
 	-- $(MULTI_REGRESS_OPTS) --inputdir=$(citus_abs_srcdir)/build --schedule=$(citus_abs_srcdir)/$(SCHEDULE) $(EXTRA_TESTS)
 
@@ -221,7 +223,7 @@ check-follower-cluster: all
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/multi_follower_schedule $(EXTRA_TESTS)
 
 check-operations: all
-	$(pg_regress_multi_check) --load-extension=citus \
+	$(pg_regress_multi_check) --load-extension=citus  --worker-count=6 \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/operations_schedule $(EXTRA_TESTS)
 
 check-columnar: all
@@ -256,6 +258,9 @@ check-arbitrary-configs: all
 
 check-arbitrary-base: all
 	${arbitrary_config_check} --bindir=$(bindir) --pgxsdir=$(pgxsdir) --parallel=$(parallel) --configs=$(CONFIGS) --seed=$(seed) --base
+
+check-pytest:
+	pytest -n auto
 
 check-citus-upgrade: all
 	$(citus_upgrade_check) \

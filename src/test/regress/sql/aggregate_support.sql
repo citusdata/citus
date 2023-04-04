@@ -364,6 +364,8 @@ $$);
 set role notsuper;
 select array_collect_sort(val) from aggdata;
 reset role;
+drop owned by notsuper;
+drop user notsuper;
 
 -- Test aggregation on coordinator
 set citus.coordinator_aggregation_strategy to 'row-gather';
@@ -644,6 +646,35 @@ CREATE AGGREGATE newavg (
 );
 
 SELECT run_command_on_workers($$select aggfnoid from pg_aggregate where aggfnoid::text like '%newavg%';$$);
+
+CREATE TYPE coord AS (x int, y int);
+
+CREATE FUNCTION coord_minx_sfunc(state coord, new coord)
+returns coord immutable language plpgsql as $$
+BEGIN
+   IF (state IS NULL OR new.x < state.x) THEN
+     RETURN new;
+   ELSE
+     RETURN state;
+   END IF;
+END
+$$;
+
+create function coord_minx_finalfunc(state coord)
+returns coord immutable language plpgsql as $$
+begin return state;
+end;
+$$;
+
+-- custom aggregate that has the same name as a built-in function, but with a combinefunc
+create aggregate min (coord) (
+    sfunc = coord_minx_sfunc,
+    stype = coord,
+    finalfunc = coord_minx_finalfunc,
+    combinefunc = coord_minx_sfunc
+);
+
+select min((id,val)::coord) from aggdata;
 
 set client_min_messages to error;
 drop schema aggregate_support cascade;

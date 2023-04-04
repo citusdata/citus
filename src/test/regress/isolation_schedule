@@ -107,4 +107,10 @@ test: isolation_multiuser_locking
 test: isolation_acquire_distributed_locks
 test: isolation_concurrent_move_create_table
 
+# MERGE
+test: isolation_merge
+test: isolation_merge_replicated
+
+
+# Note: Always keep this test at the end
 test: isolation_check_mx

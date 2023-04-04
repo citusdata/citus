@@ -1,6 +1,9 @@
 SET citus.next_shard_id TO 1200000;
 SET citus.next_placement_id TO 1200000;
 
+CREATE SCHEMA multi_modifying_xacts;
+SET search_path TO multi_modifying_xacts;
+
 -- ===================================================================
 -- test end-to-end modification functionality
 -- ===================================================================
@@ -114,7 +117,19 @@ INSERT INTO researchers VALUES (8, 5, 'Douglas Engelbart');
 INSERT INTO labs VALUES (5, 'Los Alamos');
 COMMIT;
 
+SET citus.enable_non_colocated_router_query_pushdown TO ON;
+
 SELECT * FROM researchers, labs WHERE labs.id = researchers.lab_id AND researchers.lab_id = 5;
+
+SET citus.enable_non_colocated_router_query_pushdown TO OFF;
+
+-- fails because researchers and labs are not colocated
+SELECT * FROM researchers, labs WHERE labs.id = researchers.lab_id AND researchers.lab_id = 5;
+
+-- works thanks to "OFFSET 0" trick
+SELECT * FROM (SELECT * FROM researchers OFFSET 0) researchers, labs WHERE labs.id = researchers.lab_id AND researchers.lab_id = 5;
+
+RESET citus.enable_non_colocated_router_query_pushdown;
 
 -- and the other way around is also allowed
 BEGIN;
@@ -169,7 +184,7 @@ INSERT INTO labs VALUES (6, 'Bell Labs');
 ABORT;
 
 -- but the DDL should correctly roll back
-SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.labs'::regclass;
+SELECT "Column", "Type", "Modifiers" FROM public.table_desc WHERE relid='multi_modifying_xacts.labs'::regclass;
 SELECT * FROM labs WHERE id = 6;
 
 -- COPY can happen after single row INSERT
@@ -294,7 +309,7 @@ CREATE FUNCTION reject_large_id() RETURNS trigger AS $rli$
 $rli$ LANGUAGE plpgsql;
 
 -- register after insert trigger
-SELECT * FROM run_command_on_placements('researchers', 'CREATE CONSTRAINT TRIGGER reject_large_researcher_id AFTER INSERT ON %s DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE PROCEDURE  reject_large_id()')
+SELECT * FROM run_command_on_placements('multi_modifying_xacts.researchers', 'CREATE CONSTRAINT TRIGGER reject_large_researcher_id AFTER INSERT ON %s DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE PROCEDURE  multi_modifying_xacts.reject_large_id()')
 ORDER BY nodeport, shardid;
 
 -- hide postgresql version dependend messages for next test only
@@ -418,6 +433,7 @@ AND    s.logicalrelid = 'objects'::regclass;
 
 -- create trigger on one worker to reject certain values
 \c - - - :worker_2_port
+SET search_path TO multi_modifying_xacts;
 
 SET citus.enable_metadata_sync TO OFF;
 CREATE FUNCTION reject_bad() RETURNS trigger AS $rb$
@@ -437,6 +453,7 @@ DEFERRABLE INITIALLY IMMEDIATE
 FOR EACH ROW EXECUTE PROCEDURE reject_bad();
 
 \c - - - :master_port
+SET search_path TO multi_modifying_xacts;
 
 -- test partial failure; worker_1 succeeds, 2 fails
 -- in this case, we expect the transaction to abort
@@ -465,6 +482,7 @@ DELETE FROM objects;
 -- there cannot be errors on different shards at different times
 -- because the first failure will fail the whole transaction
 \c - - - :worker_1_port
+SET search_path TO multi_modifying_xacts;
 SET citus.enable_metadata_sync TO OFF;
 CREATE FUNCTION reject_bad() RETURNS trigger AS $rb$
     BEGIN
@@ -483,6 +501,7 @@ DEFERRABLE INITIALLY IMMEDIATE
 FOR EACH ROW EXECUTE PROCEDURE reject_bad();
 
 \c - - - :master_port
+SET search_path TO multi_modifying_xacts;
 
 BEGIN;
 INSERT INTO objects VALUES (1, 'apple');
@@ -506,6 +525,7 @@ AND    (s.logicalrelid = 'objects'::regclass OR
 
 -- what if the failures happen at COMMIT time?
 \c - - - :worker_2_port
+SET search_path TO multi_modifying_xacts;
 
 DROP TRIGGER reject_bad ON objects_1200003;
 
@@ -515,6 +535,7 @@ DEFERRABLE INITIALLY DEFERRED
 FOR EACH ROW EXECUTE PROCEDURE reject_bad();
 
 \c - - - :master_port
+SET search_path TO multi_modifying_xacts;
 
 -- should be the same story as before, just at COMMIT time
 -- as we use 2PC, the transaction is rollbacked
@@ -547,6 +568,7 @@ AND    s.logicalrelid = 'objects'::regclass;
 
 -- what if all nodes have failures at COMMIT time?
 \c - - - :worker_1_port
+SET search_path TO multi_modifying_xacts;
 
 DROP TRIGGER reject_bad ON labs_1200002;
 
@@ -556,6 +578,7 @@ DEFERRABLE INITIALLY DEFERRED
 FOR EACH ROW EXECUTE PROCEDURE reject_bad();
 
 \c - - - :master_port
+SET search_path TO multi_modifying_xacts;
 
 -- reduce the log level for differences between PG14 and PG15
 -- in PGconn->errorMessage
@@ -586,10 +609,12 @@ AND    (s.logicalrelid = 'objects'::regclass OR
 
 -- what if one shard (objects) succeeds but another (labs) completely fails?
 \c - - - :worker_2_port
+SET search_path TO multi_modifying_xacts;
 
 DROP TRIGGER reject_bad ON objects_1200003;
 
 \c - - - :master_port
+SET search_path TO multi_modifying_xacts;
 SET citus.next_shard_id TO 1200004;
 BEGIN;
 INSERT INTO objects VALUES (1, 'apple');
@@ -682,6 +707,7 @@ SELECT * FROM reference_modifying_xacts;
 
 -- lets fail on of the workers at before the commit time
 \c - - - :worker_1_port
+SET search_path TO multi_modifying_xacts;
 SET citus.enable_metadata_sync TO OFF;
 CREATE FUNCTION reject_bad_reference() RETURNS trigger AS $rb$
     BEGIN
@@ -700,6 +726,7 @@ DEFERRABLE INITIALLY IMMEDIATE
 FOR EACH ROW EXECUTE PROCEDURE reject_bad_reference();
 
 \c - - - :master_port
+SET search_path TO multi_modifying_xacts;
 \set VERBOSITY terse
 -- try without wrapping inside a transaction
 INSERT INTO reference_modifying_xacts VALUES (999, 3);
@@ -711,6 +738,7 @@ COMMIT;
 
 -- lets fail one of the workers at COMMIT time
 \c - - - :worker_1_port
+SET search_path TO multi_modifying_xacts;
 DROP TRIGGER reject_bad_reference ON reference_modifying_xacts_1200006;
 
 CREATE CONSTRAINT TRIGGER reject_bad_reference
@@ -719,6 +747,7 @@ DEFERRABLE INITIALLY  DEFERRED
 FOR EACH ROW EXECUTE PROCEDURE reject_bad_reference();
 
 \c - - - :master_port
+SET search_path TO multi_modifying_xacts;
 \set VERBOSITY terse
 
 -- try without wrapping inside a transaction
@@ -740,10 +769,12 @@ ORDER BY s.logicalrelid, sp.shardstate;
 
 -- for the time-being drop the constraint
 \c - - - :worker_1_port
+SET search_path TO multi_modifying_xacts;
 DROP TRIGGER reject_bad_reference ON reference_modifying_xacts_1200006;
 
 
 \c - - - :master_port
+SET search_path TO multi_modifying_xacts;
 
 -- now create a hash distributed table and run tests
 -- including both the reference table and the hash
@@ -777,6 +808,7 @@ ABORT;
 
 -- lets fail one of the workers before COMMIT time for the hash table
 \c - - - :worker_1_port
+SET search_path TO multi_modifying_xacts;
 SET citus.enable_metadata_sync TO OFF;
 CREATE FUNCTION reject_bad_hash() RETURNS trigger AS $rb$
     BEGIN
@@ -795,6 +827,7 @@ DEFERRABLE INITIALLY IMMEDIATE
 FOR EACH ROW EXECUTE PROCEDURE reject_bad_hash();
 
 \c - - - :master_port
+SET search_path TO multi_modifying_xacts;
 \set VERBOSITY terse
 
 -- the transaction as a whole should fail
@@ -809,6 +842,7 @@ SELECT * FROM reference_modifying_xacts WHERE key = 55;
 -- now lets fail on of the workers for the hash distributed table table
 -- when there is a reference table involved
 \c - - - :worker_1_port
+SET search_path TO multi_modifying_xacts;
 DROP TRIGGER reject_bad_hash ON hash_modifying_xacts_1200007;
 
 -- the trigger is on execution time
@@ -818,6 +852,7 @@ DEFERRABLE INITIALLY DEFERRED
 FOR EACH ROW EXECUTE PROCEDURE reject_bad_hash();
 
 \c - - - :master_port
+SET search_path TO multi_modifying_xacts;
 \set VERBOSITY terse
 
 -- the transaction as a whole should fail
@@ -844,6 +879,7 @@ ORDER BY s.logicalrelid, sp.shardstate;
 -- change is rollbacked as well
 
 \c - - - :worker_1_port
+SET search_path TO multi_modifying_xacts;
 
 CREATE CONSTRAINT TRIGGER reject_bad_reference
 AFTER INSERT ON reference_modifying_xacts_1200006
@@ -851,6 +887,7 @@ DEFERRABLE INITIALLY IMMEDIATE
 FOR EACH ROW EXECUTE PROCEDURE reject_bad_reference();
 
 \c - - - :master_port
+SET search_path TO multi_modifying_xacts;
 \set VERBOSITY terse
 
 BEGIN;
@@ -920,9 +957,11 @@ SELECT count(*) FROM pg_dist_transaction;
 
 -- first create the new user on all nodes
 CREATE USER test_user;
+GRANT ALL ON SCHEMA multi_modifying_xacts TO test_user;
 
 -- now connect back to the master with the new user
 \c - test_user - :master_port
+SET search_path TO multi_modifying_xacts;
 SET citus.next_shard_id TO 1200015;
 CREATE TABLE reference_failure_test (key int, value int);
 SELECT create_reference_table('reference_failure_test');
@@ -934,16 +973,19 @@ SELECT create_distributed_table('numbers_hash_failure_test', 'key');
 
 -- ensure that the shard is created for this user
 \c - test_user - :worker_1_port
+SET search_path TO multi_modifying_xacts;
 SET citus.override_table_visibility TO false;
 \dt reference_failure_test_1200015
 
 -- now connect with the default user,
 -- and rename the existing user
 \c - :default_user - :worker_1_port
+SET search_path TO multi_modifying_xacts;
 ALTER USER test_user RENAME TO test_user_new;
 
 -- connect back to master and query the reference table
  \c - test_user - :master_port
+SET search_path TO multi_modifying_xacts;
 -- should fail since the worker doesn't have test_user anymore
 INSERT INTO reference_failure_test VALUES (1, '1');
 
@@ -1007,15 +1049,18 @@ SELECT count(*) FROM numbers_hash_failure_test;
 
 -- break the other node as well
 \c - :default_user - :worker_2_port
+SET search_path TO multi_modifying_xacts;
 ALTER USER test_user RENAME TO test_user_new;
 
 \c - test_user - :master_port
+SET search_path TO multi_modifying_xacts;
 
 -- fails on all shard placements
 INSERT INTO numbers_hash_failure_test VALUES (2,2);
 
 -- connect back to the master with the proper user to continue the tests
 \c - :default_user - :master_port
+SET search_path TO multi_modifying_xacts;
 SET citus.next_shard_id TO 1200020;
 SET citus.next_placement_id TO 1200033;
 -- unbreak both nodes by renaming the user back to the original name
@@ -1024,6 +1069,7 @@ SELECT * FROM run_command_on_workers('ALTER USER test_user_new RENAME TO test_us
 DROP TABLE reference_modifying_xacts, hash_modifying_xacts, hash_modifying_xacts_second,
 	reference_failure_test, numbers_hash_failure_test;
 
+REVOKE ALL ON SCHEMA multi_modifying_xacts FROM test_user;
 DROP USER test_user;
 
 -- set up foreign keys to test transactions with co-located and reference tables
@@ -1043,7 +1089,10 @@ CREATE TABLE itemgroups (
 );
 SELECT create_reference_table('itemgroups');
 
+SET client_min_messages TO WARNING;
 DROP TABLE IF EXISTS users ;
+RESET client_min_messages;
+
 CREATE TABLE users (
     id int PRIMARY KEY,
     name text,
@@ -1199,5 +1248,5 @@ SELECT insert_abort();
 SELECT name FROM labs WHERE id = 1001;
 RESET citus.function_opens_transaction_block;
 
-DROP FUNCTION insert_abort();
-DROP TABLE items, users, itemgroups, usergroups, researchers, labs;
+SET client_min_messages TO WARNING;
+DROP SCHEMA multi_modifying_xacts CASCADE;

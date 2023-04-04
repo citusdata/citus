@@ -10,19 +10,28 @@
 #include "postgres.h"
 #include "distributed/shardinterval_utils.h"
 #include "distributed/shardsplit_shared_memory.h"
+#include "distributed/worker_shard_visibility.h"
+#include "distributed/worker_protocol.h"
 #include "distributed/listutils.h"
+#include "distributed/metadata/distobject.h"
 #include "replication/logical.h"
 #include "utils/typcache.h"
-
+#include "utils/lsyscache.h"
+#include "catalog/pg_namespace.h"
 
 extern void _PG_output_plugin_init(OutputPluginCallbacks *cb);
-static LogicalDecodeChangeCB pgoutputChangeCB;
+static LogicalDecodeChangeCB pgOutputPluginChangeCB;
+
+#define InvalidRepOriginId 0
 
 static HTAB *SourceToDestinationShardMap = NULL;
+static bool replication_origin_filter_cb(LogicalDecodingContext *ctx, RepOriginId
+										 origin_id);
 
 /* Plugin callback */
-static void split_change_cb(LogicalDecodingContext *ctx, ReorderBufferTXN *txn,
-							Relation relation, ReorderBufferChange *change);
+static void shard_split_change_cb(LogicalDecodingContext *ctx,
+								  ReorderBufferTXN *txn,
+								  Relation relation, ReorderBufferChange *change);
 
 /* Helper methods */
 static int32_t GetHashValueForIncomingTuple(Relation sourceShardRelation,
@@ -47,9 +56,10 @@ void
 _PG_output_plugin_init(OutputPluginCallbacks *cb)
 {
 	LogicalOutputPluginInit plugin_init =
-		(LogicalOutputPluginInit) (void *) load_external_function("pgoutput",
-																  "_PG_output_plugin_init",
-																  false, NULL);
+		(LogicalOutputPluginInit) (void *)
+		load_external_function("pgoutput",
+							   "_PG_output_plugin_init",
+							   false, NULL);
 
 	if (plugin_init == NULL)
 	{
@@ -60,25 +70,56 @@ _PG_output_plugin_init(OutputPluginCallbacks *cb)
 	plugin_init(cb);
 
 	/* actual pgoutput callback will be called with the appropriate destination shard */
-	pgoutputChangeCB = cb->change_cb;
-	cb->change_cb = split_change_cb;
+	pgOutputPluginChangeCB = cb->change_cb;
+	cb->change_cb = shard_split_change_cb;
+	cb->filter_by_origin_cb = replication_origin_filter_cb;
 }
 
 
 /*
- * split_change function emits the incoming tuple change
+ * replication_origin_filter_cb call back function filters out publication of changes
+ * originated from any other node other than the current node. This is
+ * identified by the "origin_id" of the changes. The origin_id is set to
+ * a non-zero value in the origin node as part of WAL replication for internal
+ * operations like shard split/moves/create_distributed_table etc.
+ */
+static bool
+replication_origin_filter_cb(LogicalDecodingContext *ctx, RepOriginId origin_id)
+{
+	return  (origin_id != InvalidRepOriginId);
+}
+
+
+/*
+ * shard_split_change_cb function emits the incoming tuple change
  * to the appropriate destination shard.
  */
 static void
-split_change_cb(LogicalDecodingContext *ctx, ReorderBufferTXN *txn,
-				Relation relation, ReorderBufferChange *change)
+shard_split_change_cb(LogicalDecodingContext *ctx, ReorderBufferTXN *txn,
+					  Relation relation, ReorderBufferChange *change)
 {
+	/*
+	 * If Citus has not been loaded yet, pass the changes
+	 * through to the undrelying decoder plugin.
+	 */
+	if (!CitusHasBeenLoaded())
+	{
+		pgOutputPluginChangeCB(ctx, txn, relation, change);
+		return;
+	}
+
+	/* check if the relation is publishable.*/
 	if (!is_publishable_relation(relation))
 	{
 		return;
 	}
 
 	char *replicationSlotName = ctx->slot->data.name.data;
+	if (replicationSlotName == NULL)
+	{
+		elog(ERROR, "Replication slot name is NULL!");
+		return;
+	}
 
 	/*
 	 * Initialize SourceToDestinationShardMap if not already initialized.
@@ -198,7 +239,7 @@ split_change_cb(LogicalDecodingContext *ctx, ReorderBufferTXN *txn,
 		}
 	}
 
-	pgoutputChangeCB(ctx, txn, targetRelation, change);
+	pgOutputPluginChangeCB(ctx, txn, targetRelation, change);
 	RelationClose(targetRelation);
 }
 

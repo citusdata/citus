@@ -215,6 +215,7 @@ CreateColocatedShards(Oid targetRelationId, Oid sourceRelationId, bool
 {
 	bool colocatedShard = true;
 	List *insertedShardPlacements = NIL;
+	List *insertedShardIds = NIL;
 
 	/* make sure that tables are hash partitioned */
 	CheckHashPartitionedTable(targetRelationId);
@@ -254,7 +255,9 @@ CreateColocatedShards(Oid targetRelationId, Oid sourceRelationId, bool
 	foreach_ptr(sourceShardInterval, sourceShardIntervalList)
 	{
 		uint64 sourceShardId = sourceShardInterval->shardId;
-		uint64 newShardId = GetNextShardId();
+		uint64 *newShardIdPtr = (uint64 *) palloc0(sizeof(uint64));
+		*newShardIdPtr = GetNextShardId();
+		insertedShardIds = lappend(insertedShardIds, newShardIdPtr);
 
 		int32 shardMinValue = DatumGetInt32(sourceShardInterval->minValue);
 		int32 shardMaxValue = DatumGetInt32(sourceShardInterval->maxValue);
@@ -263,7 +266,7 @@ CreateColocatedShards(Oid targetRelationId, Oid sourceRelationId, bool
 		List *sourceShardPlacementList = ShardPlacementListSortedByWorker(
 			sourceShardId);
 
-		InsertShardRow(targetRelationId, newShardId, targetShardStorageType,
+		InsertShardRow(targetRelationId, *newShardIdPtr, targetShardStorageType,
 					   shardMinValueText, shardMaxValueText);
 
 		ShardPlacement *sourcePlacement = NULL;
@@ -272,19 +275,24 @@ CreateColocatedShards(Oid targetRelationId, Oid sourceRelationId, bool
 			int32 groupId = sourcePlacement->groupId;
 			const uint64 shardSize = 0;
 
-			/*
-			 * Optimistically add shard placement row the pg_dist_shard_placement, in case
-			 * of any error it will be roll-backed.
-			 */
-			uint64 shardPlacementId = InsertShardPlacementRow(newShardId,
-															  INVALID_PLACEMENT_ID,
-															  shardSize,
-															  groupId);
-
-			ShardPlacement *shardPlacement = LoadShardPlacement(newShardId,
-																shardPlacementId);
-			insertedShardPlacements = lappend(insertedShardPlacements, shardPlacement);
+			InsertShardPlacementRow(*newShardIdPtr,
+									INVALID_PLACEMENT_ID,
+									shardSize,
+									groupId);
 		}
+	}
+
+	/*
+	 * load shard placements for the shard at once after all placement insertions
+	 * finished. That prevents MetadataCache from rebuilding unnecessarily after
+	 * each placement insertion.
+	 */
+	uint64 *shardIdPtr;
+	foreach_ptr(shardIdPtr, insertedShardIds)
+	{
+		List *placementsForShard = ShardPlacementList(*shardIdPtr);
+		insertedShardPlacements = list_concat(insertedShardPlacements,
+											  placementsForShard);
 	}
 
 	CreateShardsOnWorkers(targetRelationId, insertedShardPlacements,

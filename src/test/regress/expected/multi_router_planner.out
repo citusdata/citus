@@ -6,6 +6,8 @@ SET citus.next_shard_id TO 840000;
 -- router planner, so we're disabling it in this file. We've bunch of
 -- other tests that triggers fast-path-router planner
 SET citus.enable_fast_path_router_planner TO false;
+CREATE SCHEMA multi_router_planner;
+SET search_path TO multi_router_planner;
 CREATE TABLE articles_hash (
 	id bigint NOT NULL,
 	author_id bigint NOT NULL,
@@ -290,10 +292,10 @@ WITH first_author AS MATERIALIZED (
 UPDATE articles_hash SET title = first_author.name
 FROM first_author WHERE articles_hash.author_id = 2 AND articles_hash.id = first_author.id;
 DEBUG:  Router planner doesn't support SELECT FOR UPDATE in common table expressions involving reference tables.
-DEBUG:  generating subplan XXX_1 for CTE first_author: SELECT articles_hash.id, auref.name FROM public.articles_hash, public.authors_reference auref WHERE ((articles_hash.author_id OPERATOR(pg_catalog.=) 2) AND (auref.id OPERATOR(pg_catalog.=) articles_hash.author_id)) FOR UPDATE OF articles_hash FOR UPDATE OF auref
+DEBUG:  generating subplan XXX_1 for CTE first_author: SELECT articles_hash.id, auref.name FROM multi_router_planner.articles_hash, multi_router_planner.authors_reference auref WHERE ((articles_hash.author_id OPERATOR(pg_catalog.=) 2) AND (auref.id OPERATOR(pg_catalog.=) articles_hash.author_id)) FOR UPDATE OF articles_hash FOR UPDATE OF auref
 DEBUG:  Creating router plan
 DEBUG:  query has a single distribution column value: 2
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: UPDATE public.articles_hash SET title = first_author.name FROM (SELECT intermediate_result.id, intermediate_result.name FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, name character varying(20))) first_author WHERE ((articles_hash.author_id OPERATOR(pg_catalog.=) 2) AND (articles_hash.id OPERATOR(pg_catalog.=) first_author.id))
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: UPDATE multi_router_planner.articles_hash SET title = first_author.name FROM (SELECT intermediate_result.id, intermediate_result.name FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, name character varying(20))) first_author WHERE ((articles_hash.author_id OPERATOR(pg_catalog.=) 2) AND (articles_hash.id OPERATOR(pg_catalog.=) first_author.id))
 DEBUG:  Creating router plan
 DEBUG:  query has a single distribution column value: 2
 WITH first_author AS MATERIALIZED (
@@ -356,10 +358,10 @@ WITH id_author AS MATERIALIZED ( SELECT id, author_id FROM articles_hash WHERE a
 id_title AS MATERIALIZED (SELECT id, title from articles_hash WHERE author_id = 2)
 SELECT * FROM id_author, id_title WHERE id_author.id = id_title.id;
 DEBUG:  cannot run command which targets multiple shards
-DEBUG:  generating subplan XXX_1 for CTE id_author: SELECT id, author_id FROM public.articles_hash WHERE (author_id OPERATOR(pg_catalog.=) 1)
+DEBUG:  generating subplan XXX_1 for CTE id_author: SELECT id, author_id FROM multi_router_planner.articles_hash WHERE (author_id OPERATOR(pg_catalog.=) 1)
 DEBUG:  Creating router plan
 DEBUG:  query has a single distribution column value: 1
-DEBUG:  generating subplan XXX_2 for CTE id_title: SELECT id, title FROM public.articles_hash WHERE (author_id OPERATOR(pg_catalog.=) 2)
+DEBUG:  generating subplan XXX_2 for CTE id_title: SELECT id, title FROM multi_router_planner.articles_hash WHERE (author_id OPERATOR(pg_catalog.=) 2)
 DEBUG:  Creating router plan
 DEBUG:  query has a single distribution column value: 2
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT id_author.id, id_author.author_id, id_title.id, id_title.title FROM (SELECT intermediate_result.id, intermediate_result.author_id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, author_id bigint)) id_author, (SELECT intermediate_result.id, intermediate_result.title FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, title character varying(20))) id_title WHERE (id_author.id OPERATOR(pg_catalog.=) id_title.id)
@@ -456,7 +458,7 @@ WITH new_article AS MATERIALIZED(
 )
 SELECT * FROM new_article;
 DEBUG:  only SELECT, UPDATE, or DELETE common table expressions may be router planned
-DEBUG:  generating subplan XXX_1 for CTE new_article: INSERT INTO public.articles_hash (id, author_id, title, word_count) VALUES (1, 1, 'arsenous'::character varying, 9) RETURNING id, author_id, title, word_count
+DEBUG:  generating subplan XXX_1 for CTE new_article: INSERT INTO multi_router_planner.articles_hash (id, author_id, title, word_count) VALUES (1, 1, 'arsenous'::character varying, 9) RETURNING id, author_id, title, word_count
 DEBUG:  Creating router plan
 DEBUG:  query has a single distribution column value: 1
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT id, author_id, title, word_count FROM (SELECT intermediate_result.id, intermediate_result.author_id, intermediate_result.title, intermediate_result.word_count FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, author_id bigint, title character varying(20), word_count integer)) new_article
@@ -471,7 +473,7 @@ WITH update_article AS MATERIALIZED(
 )
 SELECT * FROM update_article;
 DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  generating subplan XXX_1 for CTE update_article: UPDATE public.articles_hash SET word_count = 10 WHERE ((id OPERATOR(pg_catalog.=) 1) AND (word_count OPERATOR(pg_catalog.=) 9)) RETURNING id, author_id, title, word_count
+DEBUG:  generating subplan XXX_1 for CTE update_article: UPDATE multi_router_planner.articles_hash SET word_count = 10 WHERE ((id OPERATOR(pg_catalog.=) 1) AND (word_count OPERATOR(pg_catalog.=) 9)) RETURNING id, author_id, title, word_count
 DEBUG:  Creating router plan
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT id, author_id, title, word_count FROM (SELECT intermediate_result.id, intermediate_result.author_id, intermediate_result.title, intermediate_result.word_count FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, author_id bigint, title character varying(20), word_count integer)) update_article
 DEBUG:  Creating router plan
@@ -485,7 +487,7 @@ WITH update_article AS MATERIALIZED (
 )
 SELECT coalesce(1,random());
 DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  generating subplan XXX_1 for CTE update_article: UPDATE public.articles_hash SET word_count = 11 WHERE ((id OPERATOR(pg_catalog.=) 1) AND (word_count OPERATOR(pg_catalog.=) 10)) RETURNING id, author_id, title, word_count
+DEBUG:  generating subplan XXX_1 for CTE update_article: UPDATE multi_router_planner.articles_hash SET word_count = 11 WHERE ((id OPERATOR(pg_catalog.=) 1) AND (word_count OPERATOR(pg_catalog.=) 10)) RETURNING id, author_id, title, word_count
 DEBUG:  Creating router plan
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT COALESCE((1)::double precision, random()) AS "coalesce"
 DEBUG:  Creating router plan
@@ -510,7 +512,7 @@ WITH update_article AS MATERIALIZED (
 )
 SELECT coalesce(1,random());
 DEBUG:  cannot router plan modification of a non-distributed table
-DEBUG:  generating subplan XXX_1 for CTE update_article: UPDATE public.authors_reference SET name = ''::character varying WHERE (id OPERATOR(pg_catalog.=) 0) RETURNING name, id
+DEBUG:  generating subplan XXX_1 for CTE update_article: UPDATE multi_router_planner.authors_reference SET name = ''::character varying WHERE (id OPERATOR(pg_catalog.=) 0) RETURNING name, id
 DEBUG:  Creating router plan
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT COALESCE((1)::double precision, random()) AS "coalesce"
 DEBUG:  Creating router plan
@@ -524,7 +526,7 @@ WITH delete_article AS MATERIALIZED (
 )
 SELECT * FROM delete_article;
 DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  generating subplan XXX_1 for CTE delete_article: DELETE FROM public.articles_hash WHERE ((id OPERATOR(pg_catalog.=) 1) AND (word_count OPERATOR(pg_catalog.=) 10)) RETURNING id, author_id, title, word_count
+DEBUG:  generating subplan XXX_1 for CTE delete_article: DELETE FROM multi_router_planner.articles_hash WHERE ((id OPERATOR(pg_catalog.=) 1) AND (word_count OPERATOR(pg_catalog.=) 10)) RETURNING id, author_id, title, word_count
 DEBUG:  Creating router plan
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT id, author_id, title, word_count FROM (SELECT intermediate_result.id, intermediate_result.author_id, intermediate_result.title, intermediate_result.word_count FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, author_id bigint, title character varying(20), word_count integer)) delete_article
 DEBUG:  Creating router plan
@@ -653,8 +655,8 @@ FROM articles_hash, (SELECT id, word_count FROM articles_hash) AS test WHERE tes
 ORDER BY test.word_count DESC, articles_hash.id LIMIT 5;
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  generating subplan XXX_1 for subquery SELECT id, word_count FROM public.articles_hash
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT articles_hash.id, test.word_count FROM public.articles_hash, (SELECT intermediate_result.id, intermediate_result.word_count FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, word_count integer)) test WHERE (test.id OPERATOR(pg_catalog.=) articles_hash.id) ORDER BY test.word_count DESC, articles_hash.id LIMIT 5
+DEBUG:  generating subplan XXX_1 for subquery SELECT id, word_count FROM multi_router_planner.articles_hash
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT articles_hash.id, test.word_count FROM multi_router_planner.articles_hash, (SELECT intermediate_result.id, intermediate_result.word_count FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, word_count integer)) test WHERE (test.id OPERATOR(pg_catalog.=) articles_hash.id) ORDER BY test.word_count DESC, articles_hash.id LIMIT 5
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  push down of limit count: 5
  id | word_count
@@ -672,8 +674,8 @@ WHERE test.id = articles_hash.id and articles_hash.author_id = 1
 ORDER BY articles_hash.id;
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  generating subplan XXX_1 for subquery SELECT id, word_count FROM public.articles_hash
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT articles_hash.id, test.word_count FROM public.articles_hash, (SELECT intermediate_result.id, intermediate_result.word_count FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, word_count integer)) test WHERE ((test.id OPERATOR(pg_catalog.=) articles_hash.id) AND (articles_hash.author_id OPERATOR(pg_catalog.=) 1)) ORDER BY articles_hash.id
+DEBUG:  generating subplan XXX_1 for subquery SELECT id, word_count FROM multi_router_planner.articles_hash
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT articles_hash.id, test.word_count FROM multi_router_planner.articles_hash, (SELECT intermediate_result.id, intermediate_result.word_count FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, word_count integer)) test WHERE ((test.id OPERATOR(pg_catalog.=) articles_hash.id) AND (articles_hash.author_id OPERATOR(pg_catalog.=) 1)) ORDER BY articles_hash.id
 DEBUG:  Creating router plan
 DEBUG:  query has a single distribution column value: 1
  id | word_count
@@ -765,11 +767,13 @@ DEBUG:  query has a single distribution column value: 10
 (3 rows)
 
 -- following join is router plannable since the same worker
--- has both shards
+-- has both shards when citus.enable_non_colocated_router_query_pushdown
+-- is enabled
+SET citus.enable_non_colocated_router_query_pushdown TO ON;
 SELECT a.author_id as first_author, b.word_count as second_word_count
 	FROM articles_hash a, articles_single_shard_hash b
 	WHERE a.author_id = 10 and a.author_id = b.author_id
-	LIMIT 3;
+	ORDER BY 1,2 LIMIT 3;
 DEBUG:  Creating router plan
 DEBUG:  query has a single distribution column value: 10
  first_author | second_word_count
@@ -779,6 +783,45 @@ DEBUG:  query has a single distribution column value: 10
            10 |             19519
 (3 rows)
 
+SET citus.enable_non_colocated_router_query_pushdown TO OFF;
+-- but this is not the case otherwise
+SELECT a.author_id as first_author, b.word_count as second_word_count
+	FROM articles_hash a, articles_single_shard_hash b
+	WHERE a.author_id = 10 and a.author_id = b.author_id
+	ORDER BY 1,2 LIMIT 3;
+DEBUG:  router planner does not support queries that reference non-colocated distributed tables
+DEBUG:  push down of limit count: 3
+DEBUG:  join prunable for task partitionId 0 and 1
+DEBUG:  join prunable for task partitionId 0 and 2
+DEBUG:  join prunable for task partitionId 0 and 3
+DEBUG:  join prunable for task partitionId 1 and 0
+DEBUG:  join prunable for task partitionId 1 and 2
+DEBUG:  join prunable for task partitionId 1 and 3
+DEBUG:  join prunable for task partitionId 2 and 0
+DEBUG:  join prunable for task partitionId 2 and 1
+DEBUG:  join prunable for task partitionId 2 and 3
+DEBUG:  join prunable for task partitionId 3 and 0
+DEBUG:  join prunable for task partitionId 3 and 1
+DEBUG:  join prunable for task partitionId 3 and 2
+DEBUG:  pruning merge fetch taskId 1
+DETAIL:  Creating dependency on merge taskId 2
+DEBUG:  pruning merge fetch taskId 2
+DETAIL:  Creating dependency on merge taskId 2
+DEBUG:  pruning merge fetch taskId 4
+DETAIL:  Creating dependency on merge taskId 4
+DEBUG:  pruning merge fetch taskId 5
+DETAIL:  Creating dependency on merge taskId 4
+DEBUG:  pruning merge fetch taskId 7
+DETAIL:  Creating dependency on merge taskId 6
+DEBUG:  pruning merge fetch taskId 8
+DETAIL:  Creating dependency on merge taskId 6
+DEBUG:  pruning merge fetch taskId 10
+DETAIL:  Creating dependency on merge taskId 8
+DEBUG:  pruning merge fetch taskId 11
+DETAIL:  Creating dependency on merge taskId 8
+ERROR:  the query contains a join that requires repartitioning
+HINT:  Set citus.enable_repartition_joins to on to enable repartitioning
+RESET citus.enable_non_colocated_router_query_pushdown;
 -- following join is not router plannable since there are no
 -- workers containing both shards, but will work through recursive
 -- planning
@@ -788,9 +831,9 @@ SELECT a.author_id as first_author, b.word_count as second_word_count
 	WHERE a.author_id = 2 and a.author_id = b.author_id
 	LIMIT 3;
 DEBUG:  found no worker with all shard placements
-DEBUG:  generating subplan XXX_1 for CTE single_shard: SELECT id, author_id, title, word_count FROM public.articles_single_shard_hash
+DEBUG:  generating subplan XXX_1 for CTE single_shard: SELECT id, author_id, title, word_count FROM multi_router_planner.articles_single_shard_hash
 DEBUG:  Creating router plan
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT a.author_id AS first_author, b.word_count AS second_word_count FROM public.articles_hash a, (SELECT intermediate_result.id, intermediate_result.author_id, intermediate_result.title, intermediate_result.word_count FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, author_id bigint, title character varying(20), word_count integer)) b WHERE ((a.author_id OPERATOR(pg_catalog.=) 2) AND (a.author_id OPERATOR(pg_catalog.=) b.author_id)) LIMIT 3
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT a.author_id AS first_author, b.word_count AS second_word_count FROM multi_router_planner.articles_hash a, (SELECT intermediate_result.id, intermediate_result.author_id, intermediate_result.title, intermediate_result.word_count FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, author_id bigint, title character varying(20), word_count integer)) b WHERE ((a.author_id OPERATOR(pg_catalog.=) 2) AND (a.author_id OPERATOR(pg_catalog.=) b.author_id)) LIMIT 3
 DEBUG:  Creating router plan
 DEBUG:  query has a single distribution column value: 2
  first_author | second_word_count
@@ -1418,6 +1461,11 @@ DEBUG:  Creating router plan
 ---------------------------------------------------------------------
 (0 rows)
 
+-- Even if the where clause contains "false", the query is not router
+-- plannable when citus.enable_non_colocated_router_query_pushdown
+-- is disabled. This is because, the tables are not colocated.
+SET citus.enable_non_colocated_router_query_pushdown TO ON;
+-- the same query, router plannable
 SELECT a.author_id as first_author, b.word_count as second_word_count
 	FROM articles_hash a, articles_single_shard_hash b
 	WHERE a.author_id = 10 and a.author_id = b.author_id and false;
@@ -1426,6 +1474,17 @@ DEBUG:  Creating router plan
 ---------------------------------------------------------------------
 (0 rows)
 
+SET citus.enable_non_colocated_router_query_pushdown TO OFF;
+-- the same query, _not_ router plannable
+SELECT a.author_id as first_author, b.word_count as second_word_count
+	FROM articles_hash a, articles_single_shard_hash b
+	WHERE a.author_id = 10 and a.author_id = b.author_id and false;
+DEBUG:  router planner does not support queries that reference non-colocated distributed tables
+ first_author | second_word_count
+---------------------------------------------------------------------
+(0 rows)
+
+RESET citus.enable_non_colocated_router_query_pushdown;
 SELECT *
 	FROM articles_hash
 	WHERE null;
@@ -1575,10 +1634,10 @@ SELECT 1 FROM authors_reference  r JOIN (
 ) num_db ON (r.id = num_db.datid) LIMIT 1;
 DEBUG:  found no worker with all shard placements
 DEBUG:  function does not have co-located tables
-DEBUG:  generating subplan XXX_1 for subquery SELECT datid FROM public.number1() s(datid)
+DEBUG:  generating subplan XXX_1 for subquery SELECT datid FROM multi_router_planner.number1() s(datid)
 DEBUG:  Creating router plan
 DEBUG:  generating subplan XXX_2 for subquery SELECT s.datid FROM ((SELECT intermediate_result.datid FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(datid integer)) s LEFT JOIN pg_database d ON (((s.datid)::oid OPERATOR(pg_catalog.=) d.oid)))
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT 1 FROM (public.authors_reference r JOIN (SELECT intermediate_result.datid FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(datid integer)) num_db ON ((r.id OPERATOR(pg_catalog.=) num_db.datid))) LIMIT 1
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT 1 FROM (multi_router_planner.authors_reference r JOIN (SELECT intermediate_result.datid FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(datid integer)) num_db ON ((r.id OPERATOR(pg_catalog.=) num_db.datid))) LIMIT 1
 DEBUG:  Creating router plan
  ?column?
 ---------------------------------------------------------------------
@@ -1590,10 +1649,10 @@ SELECT s.datid FROM number1() s LEFT JOIN pg_database d ON s.datid = d.oid;
 SELECT 1 FROM authors_reference r JOIN num_db ON (r.id = num_db.datid) LIMIT 1;
 DEBUG:  found no worker with all shard placements
 DEBUG:  function does not have co-located tables
-DEBUG:  generating subplan XXX_1 for subquery SELECT datid FROM public.number1() s(datid)
+DEBUG:  generating subplan XXX_1 for subquery SELECT datid FROM multi_router_planner.number1() s(datid)
 DEBUG:  Creating router plan
 DEBUG:  generating subplan XXX_2 for subquery SELECT s.datid FROM ((SELECT intermediate_result.datid FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(datid integer)) s LEFT JOIN pg_database d ON (((s.datid)::oid OPERATOR(pg_catalog.=) d.oid)))
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT 1 FROM (public.authors_reference r JOIN (SELECT intermediate_result.datid FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(datid integer)) num_db ON ((r.id OPERATOR(pg_catalog.=) num_db.datid))) LIMIT 1
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT 1 FROM (multi_router_planner.authors_reference r JOIN (SELECT intermediate_result.datid FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(datid integer)) num_db ON ((r.id OPERATOR(pg_catalog.=) num_db.datid))) LIMIT 1
 DEBUG:  Creating router plan
  ?column?
 ---------------------------------------------------------------------
@@ -1603,8 +1662,8 @@ DEBUG:  Creating router plan
 WITH cte AS MATERIALIZED (SELECT * FROM num_db)
 SELECT 1 FROM authors_reference r JOIN cte ON (r.id = cte.datid) LIMIT 1;
 DEBUG:  found no worker with all shard placements
-DEBUG:  generating subplan XXX_1 for CTE cte: SELECT datid FROM (SELECT s.datid FROM (public.number1() s(datid) LEFT JOIN pg_database d ON (((s.datid)::oid OPERATOR(pg_catalog.=) d.oid)))) num_db
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT 1 FROM (public.authors_reference r JOIN (SELECT intermediate_result.datid FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(datid integer)) cte ON ((r.id OPERATOR(pg_catalog.=) cte.datid))) LIMIT 1
+DEBUG:  generating subplan XXX_1 for CTE cte: SELECT datid FROM (SELECT s.datid FROM (multi_router_planner.number1() s(datid) LEFT JOIN pg_database d ON (((s.datid)::oid OPERATOR(pg_catalog.=) d.oid)))) num_db
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT 1 FROM (multi_router_planner.authors_reference r JOIN (SELECT intermediate_result.datid FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(datid integer)) cte ON ((r.id OPERATOR(pg_catalog.=) cte.datid))) LIMIT 1
 DEBUG:  Creating router plan
  ?column?
 ---------------------------------------------------------------------
@@ -1769,7 +1828,7 @@ SET citus.log_remote_commands TO on;
 -- single shard select queries are router plannable
 SELECT * FROM articles_range where author_id = 1;
 DEBUG:  Creating router plan
-NOTICE:  issuing SELECT id, author_id, title, word_count FROM public.articles_range_840012 articles_range WHERE (author_id OPERATOR(pg_catalog.=) 1)
+NOTICE:  issuing SELECT id, author_id, title, word_count FROM multi_router_planner.articles_range_840012 articles_range WHERE (author_id OPERATOR(pg_catalog.=) 1)
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
  id | author_id | title | word_count
 ---------------------------------------------------------------------
@@ -1777,7 +1836,7 @@ DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 
 SELECT * FROM articles_range where author_id = 1 or author_id = 5;
 DEBUG:  Creating router plan
-NOTICE:  issuing SELECT id, author_id, title, word_count FROM public.articles_range_840012 articles_range WHERE ((author_id OPERATOR(pg_catalog.=) 1) OR (author_id OPERATOR(pg_catalog.=) 5))
+NOTICE:  issuing SELECT id, author_id, title, word_count FROM multi_router_planner.articles_range_840012 articles_range WHERE ((author_id OPERATOR(pg_catalog.=) 1) OR (author_id OPERATOR(pg_catalog.=) 5))
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
  id | author_id | title | word_count
 ---------------------------------------------------------------------
@@ -1795,7 +1854,7 @@ NOTICE:  executing the command locally: SELECT id, author_id, title, word_count 
 SELECT * FROM articles_range ar join authors_range au on (ar.author_id = au.id)
 	WHERE ar.author_id = 1;
 DEBUG:  Creating router plan
-NOTICE:  issuing SELECT ar.id, ar.author_id, ar.title, ar.word_count, au.name, au.id FROM (public.articles_range_840012 ar JOIN public.authors_range_840008 au ON ((ar.author_id OPERATOR(pg_catalog.=) au.id))) WHERE (ar.author_id OPERATOR(pg_catalog.=) 1)
+NOTICE:  issuing SELECT ar.id, ar.author_id, ar.title, ar.word_count, au.name, au.id FROM (multi_router_planner.articles_range_840012 ar JOIN multi_router_planner.authors_range_840008 au ON ((ar.author_id OPERATOR(pg_catalog.=) au.id))) WHERE (ar.author_id OPERATOR(pg_catalog.=) 1)
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
  id | author_id | title | word_count | name | id
 ---------------------------------------------------------------------
@@ -1898,15 +1957,54 @@ DEBUG:  Creating router plan
 -- join between hash and range partition tables are router plannable
 -- only if both tables pruned down to single shard and co-located on the same
 -- node.
--- router plannable
+SET citus.enable_non_colocated_router_query_pushdown TO ON;
+-- router plannable when citus.enable_non_colocated_router_query_pushdown is on
 SELECT * FROM articles_hash ar join authors_range au on (ar.author_id = au.id)
-	WHERE ar.author_id = 2;
+	WHERE ar.author_id = 2 ORDER BY 1,2,3,4,5,6;
 DEBUG:  Creating router plan
 DEBUG:  query has a single distribution column value: 2
  id | author_id | title | word_count | name | id
 ---------------------------------------------------------------------
 (0 rows)
 
+SET citus.enable_non_colocated_router_query_pushdown TO OFF;
+-- not router plannable otherwise
+SELECT * FROM articles_hash ar join authors_range au on (ar.author_id = au.id)
+	WHERE ar.author_id = 2 ORDER BY 1,2,3,4,5,6;
+DEBUG:  router planner does not support queries that reference non-colocated distributed tables
+DEBUG:  join prunable for task partitionId 0 and 1
+DEBUG:  join prunable for task partitionId 0 and 2
+DEBUG:  join prunable for task partitionId 0 and 3
+DEBUG:  join prunable for task partitionId 1 and 0
+DEBUG:  join prunable for task partitionId 1 and 2
+DEBUG:  join prunable for task partitionId 1 and 3
+DEBUG:  join prunable for task partitionId 2 and 0
+DEBUG:  join prunable for task partitionId 2 and 1
+DEBUG:  join prunable for task partitionId 2 and 3
+DEBUG:  join prunable for task partitionId 3 and 0
+DEBUG:  join prunable for task partitionId 3 and 1
+DEBUG:  join prunable for task partitionId 3 and 2
+DEBUG:  pruning merge fetch taskId 1
+DETAIL:  Creating dependency on merge taskId 2
+DEBUG:  pruning merge fetch taskId 2
+DETAIL:  Creating dependency on merge taskId 5
+DEBUG:  pruning merge fetch taskId 4
+DETAIL:  Creating dependency on merge taskId 4
+DEBUG:  pruning merge fetch taskId 5
+DETAIL:  Creating dependency on merge taskId 10
+DEBUG:  pruning merge fetch taskId 7
+DETAIL:  Creating dependency on merge taskId 6
+DEBUG:  pruning merge fetch taskId 8
+DETAIL:  Creating dependency on merge taskId 15
+DEBUG:  pruning merge fetch taskId 10
+DETAIL:  Creating dependency on merge taskId 8
+DEBUG:  pruning merge fetch taskId 11
+DETAIL:  Creating dependency on merge taskId 20
+ id | author_id | title | word_count | name | id
+---------------------------------------------------------------------
+(0 rows)
+
+RESET citus.enable_non_colocated_router_query_pushdown;
 -- not router plannable
 SELECT * FROM articles_hash ar join authors_range au on (ar.author_id = au.id)
 	WHERE ar.author_id = 3;
@@ -2433,12 +2531,15 @@ SELECT create_distributed_table('failure_test', 'a', 'hash');
 
 SET citus.enable_ddl_propagation TO off;
 CREATE USER router_user;
-GRANT INSERT ON ALL TABLES IN SCHEMA public TO router_user;
+GRANT USAGE ON SCHEMA multi_router_planner TO router_user;
+GRANT INSERT ON ALL TABLES IN SCHEMA multi_router_planner TO router_user;
 \c - - - :worker_1_port
 SET citus.enable_ddl_propagation TO off;
 CREATE USER router_user;
-GRANT INSERT ON ALL TABLES IN SCHEMA public TO router_user;
+GRANT USAGE ON SCHEMA multi_router_planner TO router_user;
+GRANT INSERT ON ALL TABLES IN SCHEMA multi_router_planner TO router_user;
 \c - router_user - :master_port
+SET search_path TO multi_router_planner;
 -- we will fail to connect to worker 2, since the user does not exist
 -- still, we never mark placements inactive. Instead, fail the transaction
 BEGIN;
@@ -2452,7 +2553,7 @@ SELECT shardid, shardstate, nodename, nodeport FROM pg_dist_shard_placement
 		SELECT shardid FROM pg_dist_shard
 		WHERE logicalrelid = 'failure_test'::regclass
 	)
-	ORDER BY placementid;
+	ORDER BY shardid, nodeport;
  shardid | shardstate | nodename  | nodeport
 ---------------------------------------------------------------------
   840017 |          1 | localhost |    57637
@@ -2471,18 +2572,55 @@ DROP USER router_user;
 \c - - - :master_port
 DROP OWNED BY router_user;
 DROP USER router_user;
-DROP TABLE failure_test;
-DROP FUNCTION author_articles_max_id();
-DROP FUNCTION author_articles_id_word_count();
-DROP MATERIALIZED VIEW mv_articles_hash_empty;
-DROP MATERIALIZED VIEW mv_articles_hash_data;
-DROP VIEW num_db;
-DROP FUNCTION number1();
-DROP TABLE articles_hash;
-DROP TABLE articles_single_shard_hash;
-DROP TABLE authors_hash;
-DROP TABLE authors_range;
-DROP TABLE authors_reference;
-DROP TABLE company_employees;
-DROP TABLE articles_range;
-DROP TABLE articles_append;
+SET search_path TO multi_router_planner;
+SET citus.next_shard_id TO 850000;
+SET citus.shard_replication_factor TO 1;
+CREATE TABLE single_shard_dist(a int, b int);
+SELECT create_distributed_table('single_shard_dist', 'a', shard_count=>1);
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SET citus.shard_replication_factor TO 2;
+CREATE TABLE table_with_four_shards(a int, b int);
+SELECT create_distributed_table('table_with_four_shards', 'a', shard_count=>4);
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SET client_min_messages TO DEBUG2;
+-- Make sure that router rejects planning this query because
+-- the target shards are not placed on the same node when
+-- citus.enable_non_colocated_router_query_pushdown is disabled.
+-- Otherwise, it throws a somewhat meaningless error but we assume
+-- that the user is aware of the setting.
+SET citus.enable_non_colocated_router_query_pushdown TO ON;
+WITH cte AS (
+    DELETE FROM table_with_four_shards WHERE a = 1 RETURNING *
+)
+SELECT * FROM single_shard_dist WHERE b IN (SELECT b FROM cte);
+DEBUG:  Creating router plan
+DEBUG:  query has a single distribution column value: 1
+ERROR:  relation "multi_router_planner.single_shard_dist_850000" does not exist
+CONTEXT:  while executing command on localhost:xxxxx
+SET citus.enable_non_colocated_router_query_pushdown TO OFF;
+WITH cte AS (
+    DELETE FROM table_with_four_shards WHERE a = 1 RETURNING *
+)
+SELECT * FROM single_shard_dist WHERE b IN (SELECT b FROM cte);
+DEBUG:  router planner does not support queries that reference non-colocated distributed tables
+DEBUG:  generating subplan XXX_1 for CTE cte: DELETE FROM multi_router_planner.table_with_four_shards WHERE (a OPERATOR(pg_catalog.=) 1) RETURNING a, b
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  query has a single distribution column value: 1
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT a, b FROM multi_router_planner.single_shard_dist WHERE (b OPERATOR(pg_catalog.=) ANY (SELECT cte.b FROM (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) cte))
+DEBUG:  Creating router plan
+ a | b
+---------------------------------------------------------------------
+(0 rows)
+
+RESET citus.enable_non_colocated_router_query_pushdown;
+SET client_min_messages TO WARNING;
+DROP SCHEMA multi_router_planner CASCADE;

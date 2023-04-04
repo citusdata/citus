@@ -554,7 +554,7 @@ SELECT count(*) FROM second_distributed_table;
      2
 (1 row)
 
-SELECT * FROM second_distributed_table;
+SELECT * FROM second_distributed_table ORDER BY 1;
  key | value
 ---------------------------------------------------------------------
    1 | 1
@@ -2031,6 +2031,7 @@ NOTICE:  executing the command locally: SELECT count(*) AS count FROM ((SELECT f
 RESET client_min_messages;
 RESET citus.log_local_commands;
 \c - - - :master_port
+SET search_path TO local_shard_execution;
 SET citus.next_shard_id TO 1480000;
 -- test both local and remote execution with custom type
 SET citus.shard_replication_factor TO 1;
@@ -2353,7 +2354,9 @@ EXECUTE router_select_with_no_dist_key_filter('yes');
 -- rest of the tests assume the table is empty
 TRUNCATE event_responses;
 CREATE OR REPLACE PROCEDURE register_for_event(p_event_id int, p_user_id int, p_choice invite_resp)
-LANGUAGE plpgsql AS $fn$
+LANGUAGE plpgsql
+SET search_path TO local_shard_execution
+AS $fn$
 BEGIN
    INSERT INTO event_responses VALUES (p_event_id, p_user_id, p_choice)
    ON CONFLICT (event_id, user_id)
@@ -2386,6 +2389,7 @@ CALL register_for_event(16, 1, 'yes');
 CALL register_for_event(16, 1, 'yes');
 CALL register_for_event(16, 1, 'yes');
 \c - - - :worker_2_port
+SET search_path TO local_shard_execution;
 CALL register_for_event(16, 1, 'yes');
 CALL register_for_event(16, 1, 'yes');
 CALL register_for_event(16, 1, 'yes');
@@ -2409,16 +2413,16 @@ SET citus.log_local_commands TO ON;
 SET client_min_messages TO DEBUG2;
 CALL register_for_event(19, 1, 'yes');
 DEBUG:  not pushing down procedure to the same node
-NOTICE:  executing the command locally: INSERT INTO public.event_responses_1480001 AS citus_table_alias (event_id, user_id, response) VALUES (19, 1, 'yes'::public.invite_resp) ON CONFLICT(event_id, user_id) DO UPDATE SET response = excluded.response
-NOTICE:  executing the command locally: SELECT count(*) AS count FROM public.event_responses_1480001 event_responses WHERE (event_id OPERATOR(pg_catalog.=) 19)
-NOTICE:  executing the command locally: SELECT count(*) AS count FROM (SELECT NULL::integer AS event_id, NULL::integer AS user_id, NULL::public.invite_resp AS response WHERE false) event_responses(event_id, user_id, response) WHERE ((event_id OPERATOR(pg_catalog.=) 19) AND false)
-NOTICE:  executing the command locally: UPDATE public.event_responses_1480001 event_responses SET response = 'yes'::public.invite_resp WHERE (event_id OPERATOR(pg_catalog.=) 19)
+NOTICE:  executing the command locally: INSERT INTO local_shard_execution.event_responses_1480001 AS citus_table_alias (event_id, user_id, response) VALUES (19, 1, 'yes'::local_shard_execution.invite_resp) ON CONFLICT(event_id, user_id) DO UPDATE SET response = excluded.response
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shard_execution.event_responses_1480001 event_responses WHERE (event_id OPERATOR(pg_catalog.=) 19)
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM (SELECT NULL::integer AS event_id, NULL::integer AS user_id, NULL::local_shard_execution.invite_resp AS response WHERE false) event_responses(event_id, user_id, response) WHERE ((event_id OPERATOR(pg_catalog.=) 19) AND false)
+NOTICE:  executing the command locally: UPDATE local_shard_execution.event_responses_1480001 event_responses SET response = 'yes'::local_shard_execution.invite_resp WHERE (event_id OPERATOR(pg_catalog.=) 19)
 -- should be fine even if no parameters exists in the query
 SELECT count(*) FROM event_responses WHERE event_id = 16;
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  query has a single distribution column value: 16
-NOTICE:  executing the command locally: SELECT count(*) AS count FROM public.event_responses_1480001 event_responses WHERE (event_id OPERATOR(pg_catalog.=) 16)
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shard_execution.event_responses_1480001 event_responses WHERE (event_id OPERATOR(pg_catalog.=) 16)
  count
 ---------------------------------------------------------------------
      1
@@ -2428,7 +2432,7 @@ SELECT count(*) FROM event_responses WHERE event_id = 16;
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  query has a single distribution column value: 16
-NOTICE:  executing the command locally: SELECT count(*) AS count FROM public.event_responses_1480001 event_responses WHERE (event_id OPERATOR(pg_catalog.=) 16)
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shard_execution.event_responses_1480001 event_responses WHERE (event_id OPERATOR(pg_catalog.=) 16)
  count
 ---------------------------------------------------------------------
      1
@@ -2438,13 +2442,13 @@ UPDATE event_responses SET response = 'no' WHERE event_id = 16;
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  query has a single distribution column value: 16
-NOTICE:  executing the command locally: UPDATE public.event_responses_1480001 event_responses SET response = 'no'::public.invite_resp WHERE (event_id OPERATOR(pg_catalog.=) 16)
+NOTICE:  executing the command locally: UPDATE local_shard_execution.event_responses_1480001 event_responses SET response = 'no'::local_shard_execution.invite_resp WHERE (event_id OPERATOR(pg_catalog.=) 16)
 INSERT INTO event_responses VALUES (16, 666, 'maybe')
 ON CONFLICT (event_id, user_id)
 DO UPDATE SET response = EXCLUDED.response RETURNING *;
 DEBUG:  Creating router plan
 DEBUG:  query has a single distribution column value: 16
-NOTICE:  executing the command locally: INSERT INTO public.event_responses_1480001 AS citus_table_alias (event_id, user_id, response) VALUES (16, 666, 'maybe'::public.invite_resp) ON CONFLICT(event_id, user_id) DO UPDATE SET response = excluded.response RETURNING citus_table_alias.event_id, citus_table_alias.user_id, citus_table_alias.response
+NOTICE:  executing the command locally: INSERT INTO local_shard_execution.event_responses_1480001 AS citus_table_alias (event_id, user_id, response) VALUES (16, 666, 'maybe'::local_shard_execution.invite_resp) ON CONFLICT(event_id, user_id) DO UPDATE SET response = excluded.response RETURNING citus_table_alias.event_id, citus_table_alias.user_id, citus_table_alias.response
  event_id | user_id | response
 ---------------------------------------------------------------------
        16 |     666 | maybe
@@ -2455,7 +2459,7 @@ INSERT INTO event_responses VALUES (16, 666, 'maybe'), (17, 777, 'no')
 ON CONFLICT (event_id, user_id)
 DO UPDATE SET response = EXCLUDED.response RETURNING *;
 DEBUG:  Creating router plan
-NOTICE:  executing the command locally: INSERT INTO public.event_responses_1480001 AS citus_table_alias (event_id, user_id, response) VALUES (16,666,'maybe'::public.invite_resp), (17,777,'no'::public.invite_resp) ON CONFLICT(event_id, user_id) DO UPDATE SET response = excluded.response RETURNING citus_table_alias.event_id, citus_table_alias.user_id, citus_table_alias.response
+NOTICE:  executing the command locally: INSERT INTO local_shard_execution.event_responses_1480001 AS citus_table_alias (event_id, user_id, response) VALUES (16,666,'maybe'::local_shard_execution.invite_resp), (17,777,'no'::local_shard_execution.invite_resp) ON CONFLICT(event_id, user_id) DO UPDATE SET response = excluded.response RETURNING citus_table_alias.event_id, citus_table_alias.user_id, citus_table_alias.response
  event_id | user_id | response
 ---------------------------------------------------------------------
        16 |     666 | maybe
@@ -2537,7 +2541,7 @@ SELECT * FROM event_responses_no_pkey WHERE event_id = 2;
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  query has a single distribution column value: 2
-NOTICE:  executing the command locally: SELECT event_id, user_id, response FROM public.event_responses_no_pkey_1480007 event_responses_no_pkey WHERE (event_id OPERATOR(pg_catalog.=) 2)
+NOTICE:  executing the command locally: SELECT event_id, user_id, response FROM local_shard_execution.event_responses_no_pkey_1480007 event_responses_no_pkey WHERE (event_id OPERATOR(pg_catalog.=) 2)
  event_id | user_id | response
 ---------------------------------------------------------------------
 (0 rows)
@@ -2546,7 +2550,7 @@ SELECT * FROM event_responses_no_pkey WHERE event_id = 1;
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  query has a single distribution column value: 1
-NOTICE:  issuing SELECT event_id, user_id, response FROM public.event_responses_no_pkey_1480004 event_responses_no_pkey WHERE (event_id OPERATOR(pg_catalog.=) 1)
+NOTICE:  issuing SELECT event_id, user_id, response FROM local_shard_execution.event_responses_no_pkey_1480004 event_responses_no_pkey WHERE (event_id OPERATOR(pg_catalog.=) 1)
  event_id | user_id | response
 ---------------------------------------------------------------------
 (0 rows)
@@ -3258,6 +3262,7 @@ SELECT recover_prepared_transactions();
 (1 row)
 
 \c - - - :master_port
+SET search_path TO local_shard_execution;
 -- verify the local_hostname guc is used for local executions that should connect to the
 -- local host
 ALTER SYSTEM SET citus.local_hostname TO 'foobar';

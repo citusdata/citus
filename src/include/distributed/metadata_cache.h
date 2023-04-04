@@ -133,9 +133,6 @@ typedef enum
 	REFERENCE_TABLE,
 	CITUS_LOCAL_TABLE,
 
-	/* table without a dist key such as reference table */
-	CITUS_TABLE_WITH_NO_DIST_KEY,
-
 	ANY_CITUS_TABLE_TYPE
 } CitusTableType;
 
@@ -143,18 +140,23 @@ extern List * AllCitusTableIds(void);
 extern bool IsCitusTableType(Oid relationId, CitusTableType tableType);
 extern bool IsCitusTableTypeCacheEntry(CitusTableCacheEntry *tableEtnry,
 									   CitusTableType tableType);
+bool HasDistributionKey(Oid relationId);
+bool HasDistributionKeyCacheEntry(CitusTableCacheEntry *tableEntry);
 extern char * GetTableTypeName(Oid tableId);
 
 extern void SetCreateCitusTransactionLevel(int val);
 extern int GetCitusCreationLevel(void);
 extern bool IsCitusTable(Oid relationId);
+extern bool IsCitusTableRangeVar(RangeVar *rangeVar, LOCKMODE lockMode, bool missingOk);
 extern bool IsCitusTableViaCatalog(Oid relationId);
 extern char PgDistPartitionViaCatalog(Oid relationId);
 extern List * LookupDistShardTuples(Oid relationId);
 extern char PartitionMethodViaCatalog(Oid relationId);
 extern Var * PartitionColumnViaCatalog(Oid relationId);
 extern uint32 ColocationIdViaCatalog(Oid relationId);
-extern bool IsCitusLocalTableByDistParams(char partitionMethod, char replicationModel);
+bool IsReferenceTableByDistParams(char partitionMethod, char replicationModel);
+extern bool IsCitusLocalTableByDistParams(char partitionMethod, char replicationModel,
+										  uint32 colocationId);
 extern List * CitusTableList(void);
 extern ShardInterval * LoadShardInterval(uint64 shardId);
 extern bool ShardExists(uint64 shardId);

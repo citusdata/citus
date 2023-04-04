@@ -6,7 +6,7 @@ orbs:
 parameters:
   image_suffix:
     type: string
-    default: '-vc4b1573'
+    default: '-v087ecd7'
   pg13_version:
     type: string
     default: '13.10'
@@ -201,6 +201,9 @@ jobs:
       - run:
           name: 'Check if all GUCs are sorted alphabetically'
           command: ci/check_gucs_are_alphabetically_sorted.sh
+      - run:
+          name: 'Check for missing downgrade scripts'
+          command: ci/check_migration_files.sh
 
   check-sql-snapshots:
     docker:
@@ -265,6 +268,41 @@ jobs:
       - stack_trace
       - coverage:
           flags: 'test_<< parameters.old_pg_major >>_<< parameters.new_pg_major >>,upgrade'
+
+  test-pytest:
+    description: Runs pytest based tests
+    parameters:
+      pg_major:
+        description: 'postgres major version'
+        type: integer
+      image:
+        description: 'docker image to use as for the tests'
+        type: string
+        default: citus/failtester
+      image_tag:
+        description: 'docker image tag to use'
+        type: string
+    docker:
+      - image: '<< parameters.image >>:<< parameters.image_tag >><< pipeline.parameters.image_suffix >>'
+    working_directory: /home/circleci/project
+    steps:
+      - checkout
+      - attach_workspace:
+          at: .
+      - install_extension:
+          pg_major: << parameters.pg_major >>
+      - configure
+      - enable_core
+      - run:
+          name: 'Run pytest'
+          command: |
+            gosu circleci \
+              make -C src/test/regress check-pytest
+          no_output_timeout: 2m
+      - stack_trace
+      - coverage:
+          flags: 'test_<< parameters.pg_major >>,pytest'
+
 
   test-arbitrary-configs:
     description: Runs tests on arbitrary configs
@@ -453,6 +491,10 @@ jobs:
       - configure
       - enable_core
       - run:
+          name: 'Install DBI.pm'
+          command: |
+            apt-get update && apt-get install libdbi-perl && apt-get install libdbd-pg-perl
+      - run:
           name: 'Run Test'
           command: |
             gosu circleci make -C src/test/<< parameters.suite >> << parameters.make >>
@@ -551,7 +593,7 @@ jobs:
             testForDebugging="<< parameters.test >>"
 
             if [ -z "$testForDebugging" ]; then
-              detected_changes=$(git diff origin/main... --name-only --diff-filter=AM | (grep 'src/test/regress/sql/.*.sql\|src/test/regress/spec/.*.spec' || true))
+              detected_changes=$(git diff origin/main... --name-only --diff-filter=AM | (grep 'src/test/regress/sql/.*\.sql\|src/test/regress/spec/.*\.spec\|src/test/regress/citus_tests/test/test_.*\.py' || true))
               tests=${detected_changes}
             else
               tests=$testForDebugging;
@@ -854,38 +896,30 @@ workflows:
           image: citus/failtester
           make: check-failure
 
-      - tap-test-citus: &tap-test-citus-13
-          name: 'test-13_tap-recovery'
-          suite: recovery
+      - test-pytest:
+          name: 'test-13_pytest'
           pg_major: 13
           image_tag: '<< pipeline.parameters.pg13_version >>'
           requires: [build-13]
-      - tap-test-citus:
-          <<:  *tap-test-citus-13
-          name: 'test-13_tap-columnar-freezing'
-          suite: columnar_freezing
 
-      - tap-test-citus: &tap-test-citus-14
-          name: 'test-14_tap-recovery'
-          suite: recovery
+      - test-pytest:
+          name: 'test-14_pytest'
           pg_major: 14
           image_tag: '<< pipeline.parameters.pg14_version >>'
           requires: [build-14]
-      - tap-test-citus:
-          <<:  *tap-test-citus-14
-          name: 'test-14_tap-columnar-freezing'
-          suite: columnar_freezing
 
-      - tap-test-citus: &tap-test-citus-15
-          name: 'test-15_tap-recovery'
-          suite: recovery
+      - test-pytest:
+          name: 'test-15_pytest'
           pg_major: 15
           image_tag: '<< pipeline.parameters.pg15_version >>'
           requires: [build-15]
+
       - tap-test-citus:
-          <<:  *tap-test-citus-15
-          name: 'test-15_tap-columnar-freezing'
-          suite: columnar_freezing
+          name: 'test-15_tap-cdc'
+          suite: cdc
+          pg_major: 15
+          image_tag: '<< pipeline.parameters.pg15_version >>'
+          requires: [build-15]
 
       - test-arbitrary-configs:
           name: 'test-13_check-arbitrary-configs'
@@ -936,8 +970,6 @@ workflows:
             - test-13_check-follower-cluster
             - test-13_check-columnar
             - test-13_check-columnar-isolation
-            - test-13_tap-recovery
-            - test-13_tap-columnar-freezing
             - test-13_check-failure
             - test-13_check-enterprise
             - test-13_check-enterprise-isolation
@@ -956,8 +988,6 @@ workflows:
             - test-14_check-follower-cluster
             - test-14_check-columnar
             - test-14_check-columnar-isolation
-            - test-14_tap-recovery
-            - test-14_tap-columnar-freezing
             - test-14_check-failure
             - test-14_check-enterprise
             - test-14_check-enterprise-isolation
@@ -976,8 +1006,6 @@ workflows:
             - test-15_check-follower-cluster
             - test-15_check-columnar
             - test-15_check-columnar-isolation
-            - test-15_tap-recovery
-            - test-15_tap-columnar-freezing
             - test-15_check-failure
             - test-15_check-enterprise
             - test-15_check-enterprise-isolation

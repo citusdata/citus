@@ -116,7 +116,19 @@ INSERT INTO researchers_mx VALUES (8, 5, 'Douglas Engelbart');
 INSERT INTO labs_mx VALUES (5, 'Los Alamos');
 COMMIT;
 
-SELECT * FROM researchers_mx, labs_mx WHERE labs_mx.id = researchers_mx.lab_id and researchers_mx.lab_id = 5;;
+SET citus.enable_non_colocated_router_query_pushdown TO ON;
+
+SELECT * FROM researchers_mx, labs_mx WHERE labs_mx.id = researchers_mx.lab_id and researchers_mx.lab_id = 5 ORDER BY 1,2,3,4,5;
+
+SET citus.enable_non_colocated_router_query_pushdown TO OFF;
+
+-- fails because researchers and labs are not colocated
+SELECT * FROM researchers_mx, labs_mx WHERE labs_mx.id = researchers_mx.lab_id and researchers_mx.lab_id = 5;
+
+-- works thanks to "OFFSET 0" trick
+SELECT * FROM (SELECT * FROM researchers_mx OFFSET 0) researchers_mx, labs_mx WHERE labs_mx.id = researchers_mx.lab_id and researchers_mx.lab_id = 5 ORDER BY 1,2,3,4,5;
+
+RESET citus.enable_non_colocated_router_query_pushdown;
 
 -- and the other way around is also allowed
 BEGIN;
@@ -133,7 +145,19 @@ INSERT INTO researchers_mx VALUES (8, 5, 'Douglas Engelbart');
 INSERT INTO labs_mx VALUES (5, 'Los Alamos');
 COMMIT;
 
+SET citus.enable_non_colocated_router_query_pushdown TO ON;
+
+SELECT * FROM researchers_mx, labs_mx WHERE labs_mx.id = researchers_mx.lab_id and researchers_mx.lab_id = 5 ORDER BY 1,2,3,4,5;
+
+SET citus.enable_non_colocated_router_query_pushdown TO OFF;
+
+-- fails because researchers and labs are not colocated
 SELECT * FROM researchers_mx, labs_mx WHERE labs_mx.id = researchers_mx.lab_id and researchers_mx.lab_id = 5;
+
+-- works thanks to "OFFSET 0" trick
+SELECT * FROM (SELECT * FROM researchers_mx OFFSET 0) researchers_mx, labs_mx WHERE labs_mx.id = researchers_mx.lab_id and researchers_mx.lab_id = 5 ORDER BY 1,2,3,4,5;
+
+RESET citus.enable_non_colocated_router_query_pushdown;
 
 -- and the other way around is also allowed
 BEGIN;
@@ -331,3 +355,7 @@ COMMIT;
 -- no data should persists
 SELECT * FROM objects_mx WHERE id = 1;
 SELECT * FROM labs_mx WHERE id = 8;
+
+TRUNCATE objects_mx, labs_mx, researchers_mx;
+DROP TRIGGER reject_bad_mx ON labs_mx_1220102;
+DROP FUNCTION reject_bad_mx;

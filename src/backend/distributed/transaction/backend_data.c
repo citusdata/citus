@@ -1271,23 +1271,6 @@ MyBackendGotCancelledDueToDeadlock(bool clearState)
 
 
 /*
- * MyBackendIsInDisributedTransaction returns true if MyBackendData
- * is in a distributed transaction.
- */
-bool
-MyBackendIsInDisributedTransaction(void)
-{
-	/* backend might not have used citus yet and thus not initialized backend data */
-	if (!MyBackendData)
-	{
-		return false;
-	}
-
-	return IsInDistributedTransaction(MyBackendData);
-}
-
-
-/*
  * ActiveDistributedTransactionNumbers returns a list of pointers to
  * transaction numbers of distributed transactions that are in progress
  * and were started by the node on which it is called.
@@ -1449,6 +1432,21 @@ IsExternalClientBackend(void)
 	}
 
 	return CurrentBackendType == EXTERNAL_CLIENT_BACKEND;
+}
+
+
+/*
+ * IsRebalancerInitiatedBackend returns true if we are in a backend that citus
+ * rebalancer initiated.
+ */
+bool
+IsCitusShardTransferBackend(void)
+{
+	int prefixLength = strlen(CITUS_SHARD_TRANSFER_APPLICATION_NAME_PREFIX);
+
+	return strncmp(application_name,
+				   CITUS_SHARD_TRANSFER_APPLICATION_NAME_PREFIX,
+				   prefixLength) == 0;
 }
 
 

@@ -351,18 +351,17 @@ ShouldHideShardsInternal(void)
 			return false;
 		}
 	}
-	else if (MyBackendType != B_BACKEND)
+	else if (MyBackendType != B_BACKEND && MyBackendType != B_WAL_SENDER)
 	{
 		/*
 		 * We are aiming only to hide shards from client
 		 * backends or certain background workers(see above),
-		 * not backends like walsender or checkpointer.
 		 */
 		return false;
 	}
 
 	if (IsCitusInternalBackend() || IsRebalancerInternalBackend() ||
-		IsCitusRunCommandBackend())
+		IsCitusRunCommandBackend() || IsCitusShardTransferBackend())
 	{
 		/* we never hide shards from Citus */
 		return false;

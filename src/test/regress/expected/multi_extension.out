@@ -1258,6 +1258,43 @@ SELECT * FROM pg_dist_cleanup;
          2 |            0 |           1 | table_with_orphaned_shards_102011 |             0 |           0
 (2 rows)
 
+ALTER EXTENSION citus_columnar UPDATE TO '11.2-1';
+-- Make sure that we defined dependencies from all rel objects (tables,
+-- indexes, sequences ..) to columnar table access method ...
+SELECT pg_class.oid INTO columnar_schema_members
+FROM pg_class, pg_namespace
+WHERE pg_namespace.oid=pg_class.relnamespace AND
+      pg_namespace.nspname='columnar_internal' AND
+      pg_class.relname NOT IN ('chunk_group_pkey',
+                               'chunk_pkey',
+                               'options_pkey',
+                               'stripe_first_row_number_idx',
+                               'stripe_pkey');
+SELECT refobjid INTO columnar_schema_members_pg_depend
+FROM pg_depend
+WHERE classid = 'pg_am'::regclass::oid AND
+      objid = (select oid from pg_am where amname = 'columnar') AND
+      objsubid = 0 AND
+      refclassid = 'pg_class'::regclass::oid AND
+      refobjsubid = 0 AND
+      deptype = 'n';
+-- ... , so this should be empty,
+(TABLE columnar_schema_members EXCEPT TABLE columnar_schema_members_pg_depend)
+UNION
+(TABLE columnar_schema_members_pg_depend EXCEPT TABLE columnar_schema_members);
+ oid
+---------------------------------------------------------------------
+(0 rows)
+
+-- ... , and both columnar_schema_members_pg_depend & columnar_schema_members
+-- should have 5 entries.
+SELECT COUNT(*)=5 FROM columnar_schema_members_pg_depend;
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+DROP TABLE columnar_schema_members, columnar_schema_members_pg_depend;
 -- error out as cleanup records remain
 ALTER EXTENSION citus UPDATE TO '11.0-4';
 ERROR:  pg_dist_cleanup is introduced in Citus 11.1
@@ -1323,9 +1360,15 @@ SELECT * FROM multi_extension.print_extension_changes();
 -- Snapshot of state at 11.3-1
 ALTER EXTENSION citus UPDATE TO '11.3-1';
 SELECT * FROM multi_extension.print_extension_changes();
- previous_object | current_object
+ previous_object |                             current_object
 ---------------------------------------------------------------------
-(0 rows)
+                 | function citus_internal_is_replication_origin_tracking_active() boolean
+                 | function citus_internal_mark_node_not_synced(integer,integer) void
+                 | function citus_internal_start_replication_origin_tracking() void
+                 | function citus_internal_stop_replication_origin_tracking() void
+                 | function worker_adjust_identity_column_seq_ranges(regclass) void
+                 | function worker_drop_all_shell_tables(boolean)
+(6 rows)
 
 DROP TABLE multi_extension.prev_objects, multi_extension.extension_diff;
 -- show running version

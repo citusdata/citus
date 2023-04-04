@@ -11,6 +11,9 @@ SET citus.coordinator_aggregation_strategy TO 'disabled';
 -- test end-to-end query functionality
 -- ===================================================================
 
+CREATE SCHEMA simple_queries_test;
+SET search_path TO simple_queries_test;
+
 CREATE TABLE articles (
 	id bigint NOT NULL,
 	author_id bigint NOT NULL,
@@ -203,12 +206,12 @@ SELECT author_id FROM articles
 	HAVING author_id <= 2 OR author_id = 8
 	ORDER BY author_id;
 
-SELECT o_orderstatus, count(*), avg(o_totalprice) FROM orders
+SELECT o_orderstatus, count(*), avg(o_totalprice) FROM public.orders
 	GROUP BY o_orderstatus
 	HAVING count(*) > 1450 OR avg(o_totalprice) > 150000
 	ORDER BY o_orderstatus;
 
-SELECT o_orderstatus, sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
+SELECT o_orderstatus, sum(l_linenumber), avg(l_linenumber) FROM public.lineitem, public.orders
 	WHERE l_orderkey = o_orderkey AND l_orderkey > 9030
 	GROUP BY o_orderstatus
 	HAVING sum(l_linenumber) > 1000
@@ -245,12 +248,34 @@ SELECT a.author_id as first_author, b.word_count as second_word_count
 	WHERE a.author_id = 10 and a.author_id = b.author_id
 	LIMIT 3;
 
--- now show that JOINs with multiple tables are not router executable
--- they are executed by real-time executor
+-- Not router plannable when citus.enable_non_colocated_router_query_pushdown
+-- is disabled.
+
+SET citus.enable_non_colocated_router_query_pushdown TO ON;
+
 SELECT a.author_id as first_author, b.word_count as second_word_count
 	FROM articles a, articles_single_shard b
 	WHERE a.author_id = 10 and a.author_id = b.author_id
-	LIMIT 3;
+	ORDER BY 1,2 LIMIT 3;
+
+SET citus.enable_non_colocated_router_query_pushdown TO OFF;
+
+SELECT a.author_id as first_author, b.word_count as second_word_count
+	FROM articles a, articles_single_shard b
+	WHERE a.author_id = 10 and a.author_id = b.author_id
+	ORDER BY 1,2 LIMIT 3;
+
+-- but they can be executed via repartition join planner
+SET citus.enable_repartition_joins TO ON;
+
+SELECT a.author_id as first_author, b.word_count as second_word_count
+	FROM articles a, articles_single_shard b
+	WHERE a.author_id = 10 and a.author_id = b.author_id
+	ORDER BY 1,2 LIMIT 3;
+
+RESET citus.enable_repartition_joins;
+
+RESET citus.enable_non_colocated_router_query_pushdown;
 
 -- do not create the master query for LIMIT on a single shard SELECT
 SELECT *
@@ -277,7 +302,7 @@ SELECT avg(word_count)
 -- error out on unsupported aggregate
 SET client_min_messages to 'NOTICE';
 
-CREATE AGGREGATE public.invalid(int) (
+CREATE AGGREGATE invalid(int) (
     sfunc = int4pl,
     stype = int
 );
@@ -355,7 +380,8 @@ SELECT nextval('query_seq')*2 FROM articles LIMIT 3;
 SELECT * FROM (SELECT nextval('query_seq') FROM articles LIMIT 3) vals;
 
 -- but not elsewhere
-SELECT sum(nextval('query_seq')) FROM articles;
-SELECT n FROM (SELECT nextval('query_seq') n, random() FROM articles) vals;
+SELECT sum(nextval('simple_queries_test.query_seq')) FROM articles;
+SELECT n FROM (SELECT nextval('simple_queries_test.query_seq') n, random() FROM articles) vals;
 
-DROP SEQUENCE query_seq;
+SET client_min_messages TO WARNING;
+DROP SCHEMA simple_queries_test CASCADE;

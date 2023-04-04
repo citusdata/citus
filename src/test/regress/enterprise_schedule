@@ -19,6 +19,7 @@ test: citus_local_tables_ent
 test: remove_coordinator
 # --------
 
+test: publication
 test: logical_replication
 test: multi_create_table
 test: multi_create_table_superuser

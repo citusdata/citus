@@ -74,6 +74,7 @@
 #include "distributed/recursive_planning.h"
 #include "distributed/reference_table_utils.h"
 #include "distributed/relation_access_tracking.h"
+#include "distributed/replication_origin_session_utils.h"
 #include "distributed/run_from_same_connection.h"
 #include "distributed/shard_cleaner.h"
 #include "distributed/shard_transfer.h"
@@ -134,6 +135,8 @@ ReadColumnarOptions_type extern_ReadColumnarOptions = NULL;
 #define INIT_COLUMNAR_SYMBOL(typename, funcname) \
 	CppConcat(extern_, funcname) = \
 		(typename) (void *) lookup_external_function(handle, # funcname)
+
+#define CDC_DECODER_DYNAMIC_LIB_PATH "$libdir/citus_decoders:$libdir"
 
 DEFINE_COLUMNAR_PASSTHROUGH_FUNC(columnar_handler)
 DEFINE_COLUMNAR_PASSTHROUGH_FUNC(alter_columnar_table_set)
@@ -206,7 +209,7 @@ static bool StatisticsCollectionGucCheckHook(bool *newval, void **extra, GucSour
 											 source);
 static void CitusAuthHook(Port *port, int status);
 static bool IsSuperuser(char *userName);
-
+static void AdjustDynamicLibraryPathForCdcDecoders(void);
 
 static ClientAuthentication_hook_type original_client_auth_hook = NULL;
 
@@ -359,6 +362,11 @@ static const struct config_enum_entry cpu_priority_options[] = {
 	{ NULL, 0, false}
 };
 
+static const struct config_enum_entry metadata_sync_mode_options[] = {
+	{ "transactional", METADATA_SYNC_TRANSACTIONAL, false },
+	{ "nontransactional", METADATA_SYNC_NON_TRANSACTIONAL, false },
+	{ NULL, 0, false }
+};
 
 /* *INDENT-ON* */
 
@@ -469,6 +477,17 @@ _PG_init(void)
 	InitializeLocallyReservedSharedConnections();
 	InitializeClusterClockMem();
 
+	/*
+	 * Adjust the Dynamic Library Path to prepend citus_decodes to the dynamic
+	 * library path. This is needed to make sure that the citus decoders are
+	 * loaded before the default decoders for CDC.
+	 */
+	if (EnableChangeDataCapture)
+	{
+		AdjustDynamicLibraryPathForCdcDecoders();
+	}
+
+
 	/* initialize shard split shared memory handle management */
 	InitializeShardSplitSMHandleManagement();
 
@@ -533,6 +552,22 @@ _PG_init(void)
 	INIT_COLUMNAR_SYMBOL(PGFunction, columnar_storage_info);
 	INIT_COLUMNAR_SYMBOL(PGFunction, columnar_store_memory_stats);
 	INIT_COLUMNAR_SYMBOL(PGFunction, test_columnar_storage_write_new_page);
+}
+
+
+/*
+ * PrependCitusDecodersToDynamicLibrayPath prepends the $libdir/citus_decoders
+ * to the dynamic library path. This is needed to make sure that the citus
+ * decoders are loaded before the default decoders for CDC.
+ */
+static void
+AdjustDynamicLibraryPathForCdcDecoders(void)
+{
+	if (strcmp(Dynamic_library_path, "$libdir") == 0)
+	{
+		SetConfigOption("dynamic_library_path", CDC_DECODER_DYNAMIC_LIB_PATH,
+						PGC_POSTMASTER, PGC_S_OVERRIDE);
+	}
 }
 
 
@@ -1133,6 +1168,16 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
+		"citus.enable_change_data_capture",
+		gettext_noop("Enables using replication origin tracking for change data capture"),
+		NULL,
+		&EnableChangeDataCapture,
+		false,
+		PGC_USERSET,
+		GUC_STANDARD,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
 		"citus.enable_cluster_clock",
 		gettext_noop("When users explicitly call UDF citus_get_transaction_clock() "
 					 "and the flag is true, it returns the maximum "
@@ -1263,6 +1308,26 @@ RegisterCitusConfigVariables(void)
 		gettext_noop("Enables object and metadata syncing."),
 		NULL,
 		&EnableMetadataSync,
+		true,
+		PGC_USERSET,
+		GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		"citus.enable_non_colocated_router_query_pushdown",
+		gettext_noop("Enables router planner for the queries that reference "
+					 "non-colocated distributed tables."),
+		gettext_noop("Normally, router planner planner is only enabled for "
+					 "the queries that reference colocated distributed tables "
+					 "because it is not guaranteed to have the target shards "
+					 "always on the same node, e.g., after rebalancing the "
+					 "shards. For this reason, while enabling this flag allows "
+					 "some degree of optimization for the queries that reference "
+					 "non-colocated distributed tables, it is not guaranteed "
+					 "that the same query will work after rebalancing the shards "
+					 "or altering the shard count of one of those distributed "
+					 "tables."),
+		&EnableNonColocatedRouterQueryPushdown,
 		true,
 		PGC_USERSET,
 		GUC_NO_SHOW_ALL,
@@ -1849,6 +1914,21 @@ RegisterCitusConfigVariables(void)
 		GUC_UNIT_MS | GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
 
+	DefineCustomEnumVariable(
+		"citus.metadata_sync_mode",
+		gettext_noop("Sets transaction mode for metadata syncs."),
+		gettext_noop("metadata sync can be run inside a single coordinated "
+					 "transaction or with multiple small transactions in "
+					 "idempotent way. By default we sync metadata in single "
+					 "coordinated transaction. When we hit memory problems "
+					 "at workers, we have alternative nontransactional mode "
+					 "where we send each command with separate transaction."),
+		&MetadataSyncTransMode,
+		METADATA_SYNC_TRANSACTIONAL, metadata_sync_mode_options,
+		PGC_SUSET,
+		GUC_SUPERUSER_ONLY | GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
+
 	DefineCustomIntVariable(
 		"citus.metadata_sync_retry_interval",
 		gettext_noop("Sets the interval to retry failed metadata syncs."),
@@ -2405,7 +2485,6 @@ RegisterCitusConfigVariables(void)
 		PGC_USERSET,
 		GUC_STANDARD,
 		NULL, NULL, NULL);
-
 
 	/* warn about config items in the citus namespace that are not registered above */
 	EmitWarningsOnPlaceholders("citus");

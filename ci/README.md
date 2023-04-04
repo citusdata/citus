@@ -283,6 +283,14 @@ actually run in CI. This is most commonly forgotten for newly added CI tests
 that the developer only ran locally. It also checks that all CI scripts have a
 section in this `README.md` file and that they include `ci/ci_helpers.sh`.
 
+## `check_migration_files.sh`
+
+A branch that touches a set of upgrade scripts is also expected to touch
+corresponding downgrade scripts as well. If this script fails, read the output
+and make sure you update the downgrade scripts in the printed list. If you
+really don't need a downgrade to run any SQL. You can write a comment in the
+file explaining why a downgrade step is not necessary.
+
 ## `disallow_c_comments_in_migrations.sh`
 
 We do not use C-style comments in migration files as the stripped

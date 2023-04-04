@@ -310,7 +310,7 @@ ROLLBACK;
 -- make sure that everything is rollbacked
 SELECT * FROM distributed_table WHERE key = 1 ORDER BY 1,2,3;
 SELECT count(*) FROM second_distributed_table;
-SELECT * FROM second_distributed_table;
+SELECT * FROM second_distributed_table ORDER BY 1;
 
 -- very simple examples, an SELECTs should see the modifications
 -- that has done before
@@ -931,6 +931,7 @@ RESET client_min_messages;
 RESET citus.log_local_commands;
 
 \c - - - :master_port
+SET search_path TO local_shard_execution;
 SET citus.next_shard_id TO 1480000;
 -- test both local and remote execution with custom type
 SET citus.shard_replication_factor TO 1;
@@ -1063,7 +1064,9 @@ EXECUTE router_select_with_no_dist_key_filter('yes');
 TRUNCATE event_responses;
 
 CREATE OR REPLACE PROCEDURE register_for_event(p_event_id int, p_user_id int, p_choice invite_resp)
-LANGUAGE plpgsql AS $fn$
+LANGUAGE plpgsql
+SET search_path TO local_shard_execution
+AS $fn$
 BEGIN
    INSERT INTO event_responses VALUES (p_event_id, p_user_id, p_choice)
    ON CONFLICT (event_id, user_id)
@@ -1094,6 +1097,7 @@ CALL register_for_event(16, 1, 'yes');
 CALL register_for_event(16, 1, 'yes');
 
 \c - - - :worker_2_port
+SET search_path TO local_shard_execution;
 CALL register_for_event(16, 1, 'yes');
 CALL register_for_event(16, 1, 'yes');
 CALL register_for_event(16, 1, 'yes');
@@ -1426,6 +1430,7 @@ SELECT count(*) FROM pg_dist_transaction;
 SELECT recover_prepared_transactions();
 
 \c - - - :master_port
+SET search_path TO local_shard_execution;
 
 -- verify the local_hostname guc is used for local executions that should connect to the
 -- local host

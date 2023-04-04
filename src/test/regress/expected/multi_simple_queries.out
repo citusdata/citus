@@ -7,6 +7,8 @@ SET citus.coordinator_aggregation_strategy TO 'disabled';
 -- ===================================================================
 -- test end-to-end query functionality
 -- ===================================================================
+CREATE SCHEMA simple_queries_test;
+SET search_path TO simple_queries_test;
 CREATE TABLE articles (
 	id bigint NOT NULL,
 	author_id bigint NOT NULL,
@@ -382,7 +384,7 @@ SELECT author_id FROM articles
          8
 (3 rows)
 
-SELECT o_orderstatus, count(*), avg(o_totalprice) FROM orders
+SELECT o_orderstatus, count(*), avg(o_totalprice) FROM public.orders
 	GROUP BY o_orderstatus
 	HAVING count(*) > 1450 OR avg(o_totalprice) > 150000
 	ORDER BY o_orderstatus;
@@ -392,7 +394,7 @@ SELECT o_orderstatus, count(*), avg(o_totalprice) FROM orders
  P             |    75 | 164847.914533333333
 (2 rows)
 
-SELECT o_orderstatus, sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
+SELECT o_orderstatus, sum(l_linenumber), avg(l_linenumber) FROM public.lineitem, public.orders
 	WHERE l_orderkey = o_orderkey AND l_orderkey > 9030
 	GROUP BY o_orderstatus
 	HAVING sum(l_linenumber) > 1000
@@ -479,12 +481,13 @@ DEBUG:  query has a single distribution column value: 10
            10 |              6363
 (3 rows)
 
--- now show that JOINs with multiple tables are not router executable
--- they are executed by real-time executor
+-- Not router plannable when citus.enable_non_colocated_router_query_pushdown
+-- is disabled.
+SET citus.enable_non_colocated_router_query_pushdown TO ON;
 SELECT a.author_id as first_author, b.word_count as second_word_count
 	FROM articles a, articles_single_shard b
 	WHERE a.author_id = 10 and a.author_id = b.author_id
-	LIMIT 3;
+	ORDER BY 1,2 LIMIT 3;
 DEBUG:  Creating router plan
 DEBUG:  query has a single distribution column value: 10
  first_author | second_word_count
@@ -494,6 +497,88 @@ DEBUG:  query has a single distribution column value: 10
            10 |             19519
 (3 rows)
 
+SET citus.enable_non_colocated_router_query_pushdown TO OFF;
+SELECT a.author_id as first_author, b.word_count as second_word_count
+	FROM articles a, articles_single_shard b
+	WHERE a.author_id = 10 and a.author_id = b.author_id
+	ORDER BY 1,2 LIMIT 3;
+DEBUG:  router planner does not support queries that reference non-colocated distributed tables
+DEBUG:  push down of limit count: 3
+DEBUG:  join prunable for task partitionId 0 and 1
+DEBUG:  join prunable for task partitionId 0 and 2
+DEBUG:  join prunable for task partitionId 0 and 3
+DEBUG:  join prunable for task partitionId 1 and 0
+DEBUG:  join prunable for task partitionId 1 and 2
+DEBUG:  join prunable for task partitionId 1 and 3
+DEBUG:  join prunable for task partitionId 2 and 0
+DEBUG:  join prunable for task partitionId 2 and 1
+DEBUG:  join prunable for task partitionId 2 and 3
+DEBUG:  join prunable for task partitionId 3 and 0
+DEBUG:  join prunable for task partitionId 3 and 1
+DEBUG:  join prunable for task partitionId 3 and 2
+DEBUG:  pruning merge fetch taskId 1
+DETAIL:  Creating dependency on merge taskId 2
+DEBUG:  pruning merge fetch taskId 2
+DETAIL:  Creating dependency on merge taskId 2
+DEBUG:  pruning merge fetch taskId 4
+DETAIL:  Creating dependency on merge taskId 4
+DEBUG:  pruning merge fetch taskId 5
+DETAIL:  Creating dependency on merge taskId 4
+DEBUG:  pruning merge fetch taskId 7
+DETAIL:  Creating dependency on merge taskId 6
+DEBUG:  pruning merge fetch taskId 8
+DETAIL:  Creating dependency on merge taskId 6
+DEBUG:  pruning merge fetch taskId 10
+DETAIL:  Creating dependency on merge taskId 8
+DEBUG:  pruning merge fetch taskId 11
+DETAIL:  Creating dependency on merge taskId 8
+ERROR:  the query contains a join that requires repartitioning
+HINT:  Set citus.enable_repartition_joins to on to enable repartitioning
+-- but they can be executed via repartition join planner
+SET citus.enable_repartition_joins TO ON;
+SELECT a.author_id as first_author, b.word_count as second_word_count
+	FROM articles a, articles_single_shard b
+	WHERE a.author_id = 10 and a.author_id = b.author_id
+	ORDER BY 1,2 LIMIT 3;
+DEBUG:  router planner does not support queries that reference non-colocated distributed tables
+DEBUG:  push down of limit count: 3
+DEBUG:  join prunable for task partitionId 0 and 1
+DEBUG:  join prunable for task partitionId 0 and 2
+DEBUG:  join prunable for task partitionId 0 and 3
+DEBUG:  join prunable for task partitionId 1 and 0
+DEBUG:  join prunable for task partitionId 1 and 2
+DEBUG:  join prunable for task partitionId 1 and 3
+DEBUG:  join prunable for task partitionId 2 and 0
+DEBUG:  join prunable for task partitionId 2 and 1
+DEBUG:  join prunable for task partitionId 2 and 3
+DEBUG:  join prunable for task partitionId 3 and 0
+DEBUG:  join prunable for task partitionId 3 and 1
+DEBUG:  join prunable for task partitionId 3 and 2
+DEBUG:  pruning merge fetch taskId 1
+DETAIL:  Creating dependency on merge taskId 2
+DEBUG:  pruning merge fetch taskId 2
+DETAIL:  Creating dependency on merge taskId 2
+DEBUG:  pruning merge fetch taskId 4
+DETAIL:  Creating dependency on merge taskId 4
+DEBUG:  pruning merge fetch taskId 5
+DETAIL:  Creating dependency on merge taskId 4
+DEBUG:  pruning merge fetch taskId 7
+DETAIL:  Creating dependency on merge taskId 6
+DEBUG:  pruning merge fetch taskId 8
+DETAIL:  Creating dependency on merge taskId 6
+DEBUG:  pruning merge fetch taskId 10
+DETAIL:  Creating dependency on merge taskId 8
+DEBUG:  pruning merge fetch taskId 11
+DETAIL:  Creating dependency on merge taskId 8
+ first_author | second_word_count
+---------------------------------------------------------------------
+           10 |             19519
+           10 |             19519
+           10 |             19519
+(3 rows)
+
+RESET citus.enable_repartition_joins;
+RESET citus.enable_non_colocated_router_query_pushdown;
 -- do not create the master query for LIMIT on a single shard SELECT
 SELECT *
 	FROM articles
@@ -541,7 +626,7 @@ DEBUG:  query has a single distribution column value: 2
 
 -- error out on unsupported aggregate
 SET client_min_messages to 'NOTICE';
-CREATE AGGREGATE public.invalid(int) (
+CREATE AGGREGATE invalid(int) (
     sfunc = int4pl,
     stype = int
 );
@@ -812,10 +897,11 @@ SELECT * FROM (SELECT nextval('query_seq') FROM articles LIMIT 3) vals;
 (3 rows)
 
 -- but not elsewhere
-SELECT sum(nextval('query_seq')) FROM articles;
-ERROR:  relation "public.query_seq" does not exist
+SELECT sum(nextval('simple_queries_test.query_seq')) FROM articles;
+ERROR:  relation "simple_queries_test.query_seq" does not exist
 CONTEXT:  while executing command on localhost:xxxxx
-SELECT n FROM (SELECT nextval('query_seq') n, random() FROM articles) vals;
-ERROR:  relation "public.query_seq" does not exist
+SELECT n FROM (SELECT nextval('simple_queries_test.query_seq') n, random() FROM articles) vals;
+ERROR:  relation "simple_queries_test.query_seq" does not exist
 CONTEXT:  while executing command on localhost:xxxxx
-DROP SEQUENCE query_seq;
+SET client_min_messages TO WARNING;
+DROP SCHEMA simple_queries_test CASCADE;

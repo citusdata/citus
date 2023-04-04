@@ -49,6 +49,7 @@ sub Usage()
     print "  --pg_ctl-timeout    	Timeout for pg_ctl\n";
     print "  --connection-timeout	Timeout for connecting to worker nodes\n";
     print "  --mitmproxy        	Start a mitmproxy for one of the workers\n";
+    print "  --worker-count         Number of workers in Citus cluster (default: 2)\n";
     exit 1;
 }
 
@@ -84,10 +85,12 @@ my $mitmFifoPath = catfile($TMP_CHECKDIR, "mitmproxy.fifo");
 my $conninfo = "";
 my $publicWorker1Host = "localhost";
 my $publicWorker2Host = "localhost";
+my $workerCount = 2;
 
 my $serversAreShutdown = "TRUE";
 my $usingWindows = 0;
 my $mitmPid = 0;
+my $workerCount = 2;
 
 if ($Config{osname} eq "MSWin32")
 {
@@ -116,6 +119,7 @@ GetOptions(
     'conninfo=s' => \$conninfo,
     'worker-1-public-hostname=s' => \$publicWorker1Host,
     'worker-2-public-hostname=s' => \$publicWorker2Host,
+    'worker-count=i' => \$workerCount,
     'help' => sub { Usage() });
 
 my $fixopen = "$bindir/postgres.fixopen";
@@ -318,7 +322,6 @@ my $mitmPort = 9060;
 # Set some default configuration options
 my $masterPort = 57636;
 
-my $workerCount = 2;
 my @workerHosts = ();
 my @workerPorts = ();
 
@@ -485,6 +488,7 @@ push(@pgOptions, "citus.explain_analyze_sort_method='taskId'");
 push(@pgOptions, "citus.enable_manual_changes_to_shards=on");
 push(@pgOptions, "citus.allow_unsafe_locks_from_workers=on");
 push(@pgOptions, "citus.stat_statements_track = 'all'");
+push(@pgOptions, "citus.enable_change_data_capture=on");
 
 # Some tests look at shards in pg_class, make sure we can usually see them:
 push(@pgOptions, "citus.show_shards_for_app_name_prefixes='pg_regress'");

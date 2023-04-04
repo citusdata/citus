@@ -124,8 +124,7 @@ typedef enum IncludeSequenceDefaults
 typedef enum IncludeIdentities
 {
 	NO_IDENTITY = 0, /* don't include identities */
-	INCLUDE_IDENTITY_AS_SEQUENCE_DEFAULTS = 1, /* include identities as sequences */
-	INCLUDE_IDENTITY = 2 /* include identities as-is*/
+	INCLUDE_IDENTITY = 1 /* include identities as-is*/
 } IncludeIdentities;
 
 
@@ -311,8 +310,6 @@ extern ShardPlacement * SearchShardPlacementInList(List *shardPlacementList,
 extern ShardPlacement * SearchShardPlacementInListOrError(List *shardPlacementList,
 														  const char *nodeName,
 														  uint32 nodePort);
-extern void ErrorIfTargetNodeIsNotSafeToMove(const char *targetNodeName, int
-											 targetNodePort);
 extern char LookupShardTransferMode(Oid shardReplicationModeOid);
 extern void BlockWritesToShardList(List *shardList);
 extern List * WorkerApplyShardDDLCommandList(List *ddlCommandList, int64 shardId);

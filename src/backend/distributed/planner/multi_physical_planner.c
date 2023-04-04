@@ -2199,7 +2199,7 @@ QueryPushdownSqlTaskList(Query *query, uint64 jobId,
 		Oid relationId = relationRestriction->relationId;
 
 		CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
-		if (IsCitusTableTypeCacheEntry(cacheEntry, CITUS_TABLE_WITH_NO_DIST_KEY))
+		if (!HasDistributionKeyCacheEntry(cacheEntry))
 		{
 			continue;
 		}
@@ -2377,7 +2377,7 @@ ErrorIfUnsupportedShardDistribution(Query *query)
 			nonReferenceRelations = lappend_oid(nonReferenceRelations,
 												relationId);
 		}
-		else if (IsCitusTableType(relationId, CITUS_TABLE_WITH_NO_DIST_KEY))
+		else if (IsCitusTable(relationId) && !HasDistributionKey(relationId))
 		{
 			/* do not need to handle non-distributed tables */
 			continue;
@@ -2482,7 +2482,7 @@ QueryPushdownTaskCreate(Query *originalQuery, int shardIndex,
 		ShardInterval *shardInterval = NULL;
 
 		CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
-		if (IsCitusTableTypeCacheEntry(cacheEntry, CITUS_TABLE_WITH_NO_DIST_KEY))
+		if (!HasDistributionKeyCacheEntry(cacheEntry))
 		{
 			/* non-distributed tables have only one shard */
 			shardInterval = cacheEntry->sortedShardIntervalArray[0];
@@ -3697,7 +3697,7 @@ PartitionedOnColumn(Var *column, List *rangeTableList, List *dependentJobList)
 		Var *partitionColumn = PartitionColumn(relationId, rangeTableId);
 
 		/* non-distributed tables do not have partition columns */
-		if (IsCitusTableType(relationId, CITUS_TABLE_WITH_NO_DIST_KEY))
+		if (IsCitusTable(relationId) && !HasDistributionKey(relationId))
 		{
 			return false;
 		}
@@ -4573,7 +4573,8 @@ RowModifyLevelForQuery(Query *query)
 	}
 
 	if (commandType == CMD_UPDATE ||
-		commandType == CMD_DELETE)
+		commandType == CMD_DELETE ||
+		commandType == CMD_MERGE)
 	{
 		return ROW_MODIFY_NONCOMMUTATIVE;
 	}
@@ -5343,14 +5344,42 @@ ActiveShardPlacementLists(List *taskList)
 
 
 /*
- * CompareShardPlacements compares two shard placements by their tuple oid; this
- * oid reflects the tuple's insertion order into pg_dist_placement.
+ * CompareShardPlacements compares two shard placements by placement id.
  */
 int
 CompareShardPlacements(const void *leftElement, const void *rightElement)
 {
 	const ShardPlacement *leftPlacement = *((const ShardPlacement **) leftElement);
 	const ShardPlacement *rightPlacement = *((const ShardPlacement **) rightElement);
+
+	uint64 leftPlacementId = leftPlacement->placementId;
+	uint64 rightPlacementId = rightPlacement->placementId;
+
+	if (leftPlacementId < rightPlacementId)
+	{
+		return -1;
+	}
+	else if (leftPlacementId > rightPlacementId)
+	{
+		return 1;
+	}
+	else
+	{
+		return 0;
+	}
+}
+
+
+/*
+ * CompareGroupShardPlacements compares two group shard placements by placement id.
+ */
+int
+CompareGroupShardPlacements(const void *leftElement, const void *rightElement)
+{
+	const GroupShardPlacement *leftPlacement =
+		*((const GroupShardPlacement **) leftElement);
+	const GroupShardPlacement *rightPlacement =
+		*((const GroupShardPlacement **) rightElement);
 
 	uint64 leftPlacementId = leftPlacement->placementId;
 	uint64 rightPlacementId = rightPlacement->placementId;

@@ -24,6 +24,7 @@
 #include "distributed/relation_utils.h"
 #include "distributed/version_compat.h"
 #include "distributed/local_executor.h"
+#include "distributed/replication_origin_session_utils.h"
 
 /*
  * LocalCopyBuffer is used in copy callback to return the copied rows.
@@ -73,12 +74,13 @@ static void ShardCopyDestReceiverDestroy(DestReceiver *destReceiver);
 static bool CanUseLocalCopy(uint32_t destinationNodeId);
 static StringInfo ConstructShardCopyStatement(List *destinationShardFullyQualifiedName,
 											  bool
-											  useBinaryFormat);
+											  useBinaryFormat, TupleDesc tupleDesc);
 static void WriteLocalTuple(TupleTableSlot *slot, ShardCopyDestReceiver *copyDest);
 static int ReadFromLocalBufferCallback(void *outBuf, int minRead, int maxRead);
 static void LocalCopyToShard(ShardCopyDestReceiver *copyDest, CopyOutState
 							 localCopyOutState);
 static void ConnectToRemoteAndStartCopy(ShardCopyDestReceiver *copyDest);
+
 
 static bool
 CanUseLocalCopy(uint32_t destinationNodeId)
@@ -103,9 +105,16 @@ ConnectToRemoteAndStartCopy(ShardCopyDestReceiver *copyDest)
 														 NULL /* database (current) */);
 	ClaimConnectionExclusively(copyDest->connection);
 
+
+	RemoteTransactionBeginIfNecessary(copyDest->connection);
+
+	SetupReplicationOriginRemoteSession(copyDest->connection);
+
+
 	StringInfo copyStatement = ConstructShardCopyStatement(
 		copyDest->destinationShardFullyQualifiedName,
-		copyDest->copyOutState->binary);
+		copyDest->copyOutState->binary,
+		copyDest->tupleDescriptor);
 
 	if (!SendRemoteCommand(copyDest->connection, copyStatement->data))
 	{
@@ -184,6 +193,8 @@ ShardCopyDestReceiverReceive(TupleTableSlot *slot, DestReceiver *dest)
 	CopyOutState copyOutState = copyDest->copyOutState;
 	if (copyDest->useLocalCopy)
 	{
+		/* Setup replication origin session for local copy*/
+
 		WriteLocalTuple(slot, copyDest);
 		if (copyOutState->fe_msgbuf->len > LocalCopyFlushThresholdByte)
 		{
@@ -259,6 +270,11 @@ ShardCopyDestReceiverStartup(DestReceiver *dest, int operation, TupleDesc
 	copyDest->columnOutputFunctions = ColumnOutputFunctions(inputTupleDescriptor,
 															copyOutState->binary);
 	copyDest->copyOutState = copyOutState;
+	if (copyDest->useLocalCopy)
+	{
+		/* Setup replication origin session for local copy*/
+		SetupReplicationOriginLocalSession();
+	}
 }
 
 
@@ -317,6 +333,9 @@ ShardCopyDestReceiverShutdown(DestReceiver *dest)
 
 		PQclear(result);
 		ForgetResults(copyDest->connection);
+
+		ResetReplicationOriginRemoteSession(copyDest->connection);
+
 		CloseConnection(copyDest->connection);
 	}
 }
@@ -329,6 +348,10 @@ static void
 ShardCopyDestReceiverDestroy(DestReceiver *dest)
 {
 	ShardCopyDestReceiver *copyDest = (ShardCopyDestReceiver *) dest;
+	if (copyDest->useLocalCopy)
+	{
+		ResetReplicationOriginLocalSession();
+	}
 
 	if (copyDest->copyOutState)
 	{
@@ -345,20 +368,79 @@ ShardCopyDestReceiverDestroy(DestReceiver *dest)
 
 
 /*
+ *  CopyableColumnNamesFromTupleDesc function creates and returns a comma seperated column names string  to be used in COPY
+ *  and SELECT statements when copying a table. The COPY and SELECT statements should filter out the GENERATED columns since COPY
+ *  statement fails to handle them. Iterating over the attributes of the table we also need to skip the dropped columns.
+ */
+const char *
+CopyableColumnNamesFromTupleDesc(TupleDesc tupDesc)
+{
+	StringInfo columnList = makeStringInfo();
+	bool firstInList = true;
+
+	for (int i = 0; i < tupDesc->natts; i++)
+	{
+		Form_pg_attribute att = TupleDescAttr(tupDesc, i);
+		if (att->attgenerated || att->attisdropped)
+		{
+			continue;
+		}
+		if (!firstInList)
+		{
+			appendStringInfo(columnList, ",");
+		}
+
+		firstInList = false;
+
+		appendStringInfo(columnList, "%s", quote_identifier(NameStr(att->attname)));
+	}
+
+	return columnList->data;
+}
+
+
+/*
+ *  CopyableColumnNamesFromRelationName function is a wrapper for CopyableColumnNamesFromTupleDesc.
+ */
+const char *
+CopyableColumnNamesFromRelationName(const char *schemaName, const char *relationName)
+{
+	Oid namespaceOid = get_namespace_oid(schemaName, true);
+
+	Oid relationId = get_relname_relid(relationName, namespaceOid);
+
+	Relation relation = relation_open(relationId, AccessShareLock);
+
+	TupleDesc tupleDesc = RelationGetDescr(relation);
+
+	const char *columnList = CopyableColumnNamesFromTupleDesc(tupleDesc);
+
+	relation_close(relation, NoLock);
+
+	return columnList;
+}
+
+
+/*
  * ConstructShardCopyStatement constructs the text of a COPY statement
  * for copying into a result table
  */
 static StringInfo
 ConstructShardCopyStatement(List *destinationShardFullyQualifiedName, bool
-							useBinaryFormat)
+							useBinaryFormat,
+							TupleDesc tupleDesc)
 {
 	char *destinationShardSchemaName = linitial(destinationShardFullyQualifiedName);
 	char *destinationShardRelationName = lsecond(destinationShardFullyQualifiedName);
 
+
 	StringInfo command = makeStringInfo();
-	appendStringInfo(command, "COPY %s.%s FROM STDIN",
+
+	const char *columnList = CopyableColumnNamesFromTupleDesc(tupleDesc);
+
+	appendStringInfo(command, "COPY %s.%s (%s) FROM STDIN",
 					 quote_identifier(destinationShardSchemaName), quote_identifier(
-						 destinationShardRelationName));
+						 destinationShardRelationName), columnList);
 
 	if (useBinaryFormat)
 	{

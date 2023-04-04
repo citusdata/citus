@@ -43,7 +43,8 @@ test: coordinator_evaluation_modify
 test: coordinator_evaluation_select
 test: multi_mx_call
 test: multi_mx_function_call_delegation
-test: multi_mx_modifications local_shard_execution_replicated
+test: multi_mx_modifications
+test: local_shard_execution_replicated
 # the following test has to be run sequentially
 test: local_shard_execution
 test: multi_mx_repartition_udt_w1 multi_mx_repartition_udt_w2

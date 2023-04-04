@@ -1829,6 +1829,7 @@ SELECT pg_sleep(0.1);
 -- backend(s) that execute on the shards will be terminated
 -- so show that there no internal backends
 SET search_path TO single_node;
+SET citus.next_shard_id TO 90730500;
 SELECT count(*) from should_commit;
  count
 ---------------------------------------------------------------------
@@ -1882,6 +1883,7 @@ BEGIN;
 ROLLBACK;
 \c - - - :master_port
 SET search_path TO single_node;
+SET citus.next_shard_id TO 90830500;
 -- simulate that even if there is no connection slots
 -- to connect, Citus can switch to local execution
 SET citus.force_max_query_parallelization TO false;
@@ -2106,10 +2108,10 @@ NOTICE:  executing the command locally: SELECT count(DISTINCT (key)::text) AS co
 SET citus.shard_replication_factor TO 1;
 CREATE TABLE test_disabling_drop_and_truncate (a int);
 SELECT create_distributed_table('test_disabling_drop_and_truncate', 'a');
-NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (102040, 'single_node', 'CREATE TABLE single_node.test_disabling_drop_and_truncate (a integer) USING heap');SELECT worker_apply_shard_ddl_command (102040, 'single_node', 'ALTER TABLE single_node.test_disabling_drop_and_truncate OWNER TO postgres')
-NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (102041, 'single_node', 'CREATE TABLE single_node.test_disabling_drop_and_truncate (a integer) USING heap');SELECT worker_apply_shard_ddl_command (102041, 'single_node', 'ALTER TABLE single_node.test_disabling_drop_and_truncate OWNER TO postgres')
-NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (102042, 'single_node', 'CREATE TABLE single_node.test_disabling_drop_and_truncate (a integer) USING heap');SELECT worker_apply_shard_ddl_command (102042, 'single_node', 'ALTER TABLE single_node.test_disabling_drop_and_truncate OWNER TO postgres')
-NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (102043, 'single_node', 'CREATE TABLE single_node.test_disabling_drop_and_truncate (a integer) USING heap');SELECT worker_apply_shard_ddl_command (102043, 'single_node', 'ALTER TABLE single_node.test_disabling_drop_and_truncate OWNER TO postgres')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (90830500, 'single_node', 'CREATE TABLE single_node.test_disabling_drop_and_truncate (a integer) USING heap');SELECT worker_apply_shard_ddl_command (90830500, 'single_node', 'ALTER TABLE single_node.test_disabling_drop_and_truncate OWNER TO postgres')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (90830501, 'single_node', 'CREATE TABLE single_node.test_disabling_drop_and_truncate (a integer) USING heap');SELECT worker_apply_shard_ddl_command (90830501, 'single_node', 'ALTER TABLE single_node.test_disabling_drop_and_truncate OWNER TO postgres')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (90830502, 'single_node', 'CREATE TABLE single_node.test_disabling_drop_and_truncate (a integer) USING heap');SELECT worker_apply_shard_ddl_command (90830502, 'single_node', 'ALTER TABLE single_node.test_disabling_drop_and_truncate OWNER TO postgres')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (90830503, 'single_node', 'CREATE TABLE single_node.test_disabling_drop_and_truncate (a integer) USING heap');SELECT worker_apply_shard_ddl_command (90830503, 'single_node', 'ALTER TABLE single_node.test_disabling_drop_and_truncate OWNER TO postgres')
  create_distributed_table
 ---------------------------------------------------------------------
 
@@ -2117,24 +2119,24 @@ NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1
 
 SET citus.enable_manual_changes_to_shards TO off;
 -- these should error out
-DROP TABLE test_disabling_drop_and_truncate_102040;
-ERROR:  cannot modify "test_disabling_drop_and_truncate_102040" because it is a shard of a distributed table
+DROP TABLE test_disabling_drop_and_truncate_90830500;
+ERROR:  cannot modify "test_disabling_drop_and_truncate_90830500" because it is a shard of a distributed table
 HINT:  Use the distributed table or set citus.enable_manual_changes_to_shards to on to modify shards directly
-TRUNCATE TABLE test_disabling_drop_and_truncate_102040;
-ERROR:  cannot modify "test_disabling_drop_and_truncate_102040" because it is a shard of a distributed table
+TRUNCATE TABLE test_disabling_drop_and_truncate_90830500;
+ERROR:  cannot modify "test_disabling_drop_and_truncate_90830500" because it is a shard of a distributed table
 HINT:  Use the distributed table or set citus.enable_manual_changes_to_shards to on to modify shards directly
 RESET citus.enable_manual_changes_to_shards ;
 -- these should work as expected
-TRUNCATE TABLE test_disabling_drop_and_truncate_102040;
-DROP TABLE test_disabling_drop_and_truncate_102040;
+TRUNCATE TABLE test_disabling_drop_and_truncate_90830500;
+DROP TABLE test_disabling_drop_and_truncate_90830500;
 DROP TABLE test_disabling_drop_and_truncate;
 -- test creating distributed or reference tables from shards
 CREATE TABLE test_creating_distributed_relation_table_from_shard (a int);
 SELECT create_distributed_table('test_creating_distributed_relation_table_from_shard', 'a');
-NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (102044, 'single_node', 'CREATE TABLE single_node.test_creating_distributed_relation_table_from_shard (a integer) USING heap');SELECT worker_apply_shard_ddl_command (102044, 'single_node', 'ALTER TABLE single_node.test_creating_distributed_relation_table_from_shard OWNER TO postgres')
-NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (102045, 'single_node', 'CREATE TABLE single_node.test_creating_distributed_relation_table_from_shard (a integer) USING heap');SELECT worker_apply_shard_ddl_command (102045, 'single_node', 'ALTER TABLE single_node.test_creating_distributed_relation_table_from_shard OWNER TO postgres')
-NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (102046, 'single_node', 'CREATE TABLE single_node.test_creating_distributed_relation_table_from_shard (a integer) USING heap');SELECT worker_apply_shard_ddl_command (102046, 'single_node', 'ALTER TABLE single_node.test_creating_distributed_relation_table_from_shard OWNER TO postgres')
-NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (102047, 'single_node', 'CREATE TABLE single_node.test_creating_distributed_relation_table_from_shard (a integer) USING heap');SELECT worker_apply_shard_ddl_command (102047, 'single_node', 'ALTER TABLE single_node.test_creating_distributed_relation_table_from_shard OWNER TO postgres')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (90830504, 'single_node', 'CREATE TABLE single_node.test_creating_distributed_relation_table_from_shard (a integer) USING heap');SELECT worker_apply_shard_ddl_command (90830504, 'single_node', 'ALTER TABLE single_node.test_creating_distributed_relation_table_from_shard OWNER TO postgres')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (90830505, 'single_node', 'CREATE TABLE single_node.test_creating_distributed_relation_table_from_shard (a integer) USING heap');SELECT worker_apply_shard_ddl_command (90830505, 'single_node', 'ALTER TABLE single_node.test_creating_distributed_relation_table_from_shard OWNER TO postgres')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (90830506, 'single_node', 'CREATE TABLE single_node.test_creating_distributed_relation_table_from_shard (a integer) USING heap');SELECT worker_apply_shard_ddl_command (90830506, 'single_node', 'ALTER TABLE single_node.test_creating_distributed_relation_table_from_shard OWNER TO postgres')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (90830507, 'single_node', 'CREATE TABLE single_node.test_creating_distributed_relation_table_from_shard (a integer) USING heap');SELECT worker_apply_shard_ddl_command (90830507, 'single_node', 'ALTER TABLE single_node.test_creating_distributed_relation_table_from_shard OWNER TO postgres')
  create_distributed_table
 ---------------------------------------------------------------------
 
@@ -2142,11 +2144,11 @@ NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1
 
 -- these should error because shards cannot be used to:
 -- create distributed table
-SELECT create_distributed_table('test_creating_distributed_relation_table_from_shard_102044', 'a');
-ERROR:  relation "test_creating_distributed_relation_table_from_shard_102044" is a shard relation
+SELECT create_distributed_table('test_creating_distributed_relation_table_from_shard_90830504', 'a');
+ERROR:  relation "test_creating_distributed_relation_table_from_shard_90830504" is a shard relation
 -- create reference table
-SELECT create_reference_table('test_creating_distributed_relation_table_from_shard_102044');
-ERROR:  relation "test_creating_distributed_relation_table_from_shard_102044" is a shard relation
+SELECT create_reference_table('test_creating_distributed_relation_table_from_shard_90830504');
+ERROR:  relation "test_creating_distributed_relation_table_from_shard_90830504" is a shard relation
 RESET citus.shard_replication_factor;
 DROP TABLE test_creating_distributed_relation_table_from_shard;
 -- lets flush the copy often to make sure everyhing is fine

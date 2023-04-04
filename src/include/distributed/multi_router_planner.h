@@ -28,6 +28,8 @@
 extern bool EnableRouterExecution;
 extern bool EnableFastPathRouterPlanner;
 
+extern bool EnableNonColocatedRouterQueryPushdown;
+
 extern DistributedPlan * CreateRouterPlan(Query *originalQuery, Query *query,
 										  PlannerRestrictionContext *
 										  plannerRestrictionContext);
@@ -99,6 +101,21 @@ extern PlannedStmt * FastPathPlanner(Query *originalQuery, Query *parse, ParamLi
 									 boundParams);
 extern bool FastPathRouterQuery(Query *query, Node **distributionKeyValue);
 extern bool JoinConditionIsOnFalse(List *relOptInfo);
-
+extern Oid ResultRelationOidForQuery(Query *query);
+extern DeferredErrorMessage * TargetlistAndFunctionsSupported(Oid resultRelationId,
+															  FromExpr *joinTree,
+															  Node *quals,
+															  List *targetList,
+															  CmdType commandType,
+															  List *returningList);
+extern bool NodeIsFieldStore(Node *node);
+extern bool TargetEntryChangesValue(TargetEntry *targetEntry, Var *column,
+									FromExpr *joinTree);
+extern bool MasterIrreducibleExpression(Node *expression, bool *varArgument,
+										bool *badCoalesce);
+extern bool HasDangerousJoinUsing(List *rtableList, Node *jtnode);
+extern Job * RouterJob(Query *originalQuery,
+					   PlannerRestrictionContext *plannerRestrictionContext,
+					   DeferredErrorMessage **planningError);
 
 #endif /* MULTI_ROUTER_PLANNER_H */
