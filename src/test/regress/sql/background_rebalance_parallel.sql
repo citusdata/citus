@@ -208,8 +208,6 @@ SELECT D.task_id,
 FROM pg_dist_background_task_depend D  WHERE job_id in (:job_id) ORDER BY D.task_id, D.depends_on ASC;
 
 -- default citus.max_background_task_executors_per_node is 1
-SHOW citus.max_background_task_executors_per_node;
-
 -- show that first exactly one task per node is running
 -- among the tasks that are not blocked
 SELECT citus_task_wait(1013, desired_status => 'running');
