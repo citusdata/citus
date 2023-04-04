@@ -21,8 +21,8 @@ ORDER BY 1;
 ---------------------------------------------------------------------
  pg_dist_authinfo
  pg_dist_clock_logical_seq
- citus_stats_tenants_local
- citus_stats_tenants
+ citus_stat_tenants_local
+ citus_stat_tenants
 (4 rows)
 
 RESET role;

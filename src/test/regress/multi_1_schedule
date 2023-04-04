@@ -105,7 +105,7 @@ test: citus_update_table_statistics
 # ----------
 # Test for tenant statistics
 # ----------
-test: citus_stats_tenants
+test: citus_stat_tenants
 
 # ----------
 # Parallel TPC-H tests to check our distributed execution behavior

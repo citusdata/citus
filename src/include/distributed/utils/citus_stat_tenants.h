@@ -1,6 +1,6 @@
 /*-------------------------------------------------------------------------
  *
- * attribute.h
+ * citus_stat_tenants.h
  *	  Routines related to the multi tenant monitor.
  *
  * Copyright (c) Citus Data, Inc.
@@ -82,7 +82,7 @@ typedef struct MultiTenantMonitor
 	/*
 	 * tenantCount is the number of items in the tenants array.
 	 * The total length of tenants array is set up at CreateSharedMemoryForMultiTenantMonitor
-	 * and is 3 * citus.stats_tenants_limit
+	 * and is 3 * citus.stat_tenants_limit
 	 */
 	int tenantCount;
 	TenantStats tenants[FLEXIBLE_ARRAY_MEMBER];
@@ -103,9 +103,9 @@ extern void AttributeTask(char *tenantId, int colocationGroupId, CmdType command
 
 extern ExecutorEnd_hook_type prev_ExecutorEnd;
 
-extern int MultiTenantMonitoringLogLevel;
-extern int CitusStatsTenantsPeriod;
-extern int CitusStatsTenantsLimit;
+extern int StatTenantsLogLevel;
+extern int StatTenantsPeriod;
+extern int StatTenantsLimit;
 extern int StatTenantsTrack;
 
 #endif /*CITUS_ATTRIBUTE_H */
