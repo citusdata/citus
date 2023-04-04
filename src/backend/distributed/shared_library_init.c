@@ -2400,7 +2400,7 @@ RegisterCitusConfigVariables(void)
 					 "statistics in citus_stat_tenants."),
 		NULL,
 		&StatTenantsPeriod,
-		60, 1, 1000000000,
+		60, 1, 60 * 60 * 24,
 		PGC_USERSET,
 		GUC_STANDARD,
 		NULL, NULL, NULL);
