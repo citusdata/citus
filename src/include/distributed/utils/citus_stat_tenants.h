@@ -103,9 +103,9 @@ extern void AttributeTask(char *tenantId, int colocationGroupId, CmdType command
 
 extern ExecutorEnd_hook_type prev_ExecutorEnd;
 
-extern int CitusStatTenantsLogLevel;
-extern int CitusStatsTenantsPeriod;
-extern int CitusStatsTenantsLimit;
+extern int StatTenantsLogLevel;
+extern int StatTenantsPeriod;
+extern int StatTenantsLimit;
 extern int StatTenantsTrack;
 
 #endif /*CITUS_ATTRIBUTE_H */

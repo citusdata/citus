@@ -70,9 +70,9 @@ static char * ExtractTopComment(const char *inputString);
 static char * EscapeCommentChars(const char *str);
 static char * UnescapeCommentChars(const char *str);
 
-int CitusStatTenantsLogLevel = CITUS_LOG_LEVEL_OFF;
-int CitusStatsTenantsPeriod = (time_t) 60;
-int CitusStatsTenantsLimit = 10;
+int StatTenantsLogLevel = CITUS_LOG_LEVEL_OFF;
+int StatTenantsPeriod = (time_t) 60;
+int StatTenantsLimit = 10;
 int StatTenantsTrack = STAT_TENANTS_TRACK_ALL;
 
 
@@ -89,9 +89,9 @@ citus_stat_tenants_local(PG_FUNCTION_ARGS)
 	CheckCitusVersion(ERROR);
 
 	/*
-	 * We keep more than CitusStatsTenantsLimit tenants in our monitor.
-	 * We do this to not lose data if a tenant falls out of top CitusStatsTenantsLimit in case they need to return soon.
-	 * Normally we return CitusStatsTenantsLimit tenants but if returnAllTenants is true we return all of them.
+	 * We keep more than StatTenantsLimit tenants in our monitor.
+	 * We do this to not lose data if a tenant falls out of top StatTenantsLimit in case they need to return soon.
+	 * Normally we return StatTenantsLimit tenants but if returnAllTenants is true we return all of them.
 	 */
 	bool returnAllTenants = PG_GETARG_BOOL(0);
 
@@ -118,7 +118,7 @@ citus_stat_tenants_local(PG_FUNCTION_ARGS)
 	}
 	else
 	{
-		numberOfRowsToReturn = Min(monitor->tenantCount, CitusStatsTenantsLimit);
+		numberOfRowsToReturn = Min(monitor->tenantCount, StatTenantsLimit);
 	}
 
 	for (int tenantIndex = 0; tenantIndex < monitor->tenantCount; tenantIndex++)
@@ -397,7 +397,7 @@ AttributeMetricsIfApplicable()
 static void
 UpdatePeriodsIfNecessary(TenantStats *tenantStats, TimestampTz queryTime)
 {
-	long long int periodInMicroSeconds = CitusStatsTenantsPeriod * USECS_PER_SEC;
+	long long int periodInMicroSeconds = StatTenantsPeriod * USECS_PER_SEC;
 	TimestampTz periodStart = queryTime - (queryTime % periodInMicroSeconds);
 
 	/*
@@ -438,7 +438,7 @@ UpdatePeriodsIfNecessary(TenantStats *tenantStats, TimestampTz queryTime)
 static void
 ReduceScoreIfNecessary(TenantStats *tenantStats, TimestampTz queryTime)
 {
-	long long int periodInMicroSeconds = CitusStatsTenantsPeriod * USECS_PER_SEC;
+	long long int periodInMicroSeconds = StatTenantsPeriod * USECS_PER_SEC;
 	TimestampTz periodStart = queryTime - (queryTime % periodInMicroSeconds);
 
 	/*
@@ -475,7 +475,7 @@ ReduceScoreIfNecessary(TenantStats *tenantStats, TimestampTz queryTime)
 
 /*
  * EvictTenantsIfNecessary sorts and evicts the tenants if the tenant count is more than or
- * equal to 3 * CitusStatsTenantsLimit.
+ * equal to 3 * StatTenantsLimit.
  */
 static void
 EvictTenantsIfNecessary(TimestampTz queryTime)
@@ -483,12 +483,12 @@ EvictTenantsIfNecessary(TimestampTz queryTime)
 	MultiTenantMonitor *monitor = GetMultiTenantMonitor();
 
 	/*
-	 * We keep up to CitusStatsTenantsLimit * 3 tenants instead of CitusStatsTenantsLimit,
-	 * so we don't lose data immediately after a tenant is out of top CitusStatsTenantsLimit
+	 * We keep up to StatTenantsLimit * 3 tenants instead of StatTenantsLimit,
+	 * so we don't lose data immediately after a tenant is out of top StatTenantsLimit
 	 *
-	 * Every time tenant count hits CitusStatsTenantsLimit * 3, we reduce it back to CitusStatsTenantsLimit * 2.
+	 * Every time tenant count hits StatTenantsLimit * 3, we reduce it back to StatTenantsLimit * 2.
 	 */
-	if (monitor->tenantCount >= CitusStatsTenantsLimit * 3)
+	if (monitor->tenantCount >= StatTenantsLimit * 3)
 	{
 		for (int tenantIndex = 0; tenantIndex < monitor->tenantCount; tenantIndex++)
 		{
@@ -496,7 +496,7 @@ EvictTenantsIfNecessary(TimestampTz queryTime)
 		}
 		SafeQsort(monitor->tenants, monitor->tenantCount, sizeof(TenantStats),
 				  CompareTenantScore);
-		monitor->tenantCount = CitusStatsTenantsLimit * 2;
+		monitor->tenantCount = StatTenantsLimit * 2;
 	}
 }
 
@@ -623,7 +623,7 @@ static int
 CreateTenantStats(MultiTenantMonitor *monitor, TimestampTz queryTime)
 {
 	/*
-	 * If the tenant count reached 3 * CitusStatsTenantsLimit, we evict the tenants
+	 * If the tenant count reached 3 * StatTenantsLimit, we evict the tenants
 	 * with the lowest score.
 	 */
 	EvictTenantsIfNecessary(queryTime);
@@ -672,13 +672,13 @@ FindTenantStats(MultiTenantMonitor *monitor)
 
 /*
  * MultiTenantMonitorshmemSize calculates the size of the multi tenant monitor using
- * CitusStatsTenantsLimit parameter.
+ * StatTenantsLimit parameter.
  */
 static size_t
 MultiTenantMonitorshmemSize(void)
 {
 	Size size = sizeof(MultiTenantMonitor);
-	size = add_size(size, mul_size(sizeof(TenantStats), CitusStatsTenantsLimit * 3));
+	size = add_size(size, mul_size(sizeof(TenantStats), StatTenantsLimit * 3));
 
 	return size;
 }
