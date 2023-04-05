@@ -6,7 +6,7 @@ orbs:
 parameters:
   image_suffix:
     type: string
-    default: '-v087ecd7'
+    default: '-f104adb'
   pg13_version:
     type: string
     default: '13.10'
@@ -490,10 +490,6 @@ jobs:
           pg_major: << parameters.pg_major >>
       - configure
       - enable_core
-      - run:
-          name: 'Install DBI.pm'
-          command: |
-            apt-get update && apt-get install libdbi-perl && apt-get install libdbd-pg-perl postgresql-<< parameters.pg_major >>-wal2json
       - run:
           name: 'Run Test'
           command: |
