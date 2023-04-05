@@ -354,6 +354,7 @@ def needed_worker_count(test_name, dependencies):
     worker_count = worker_count_for(test_name)
     for dependency in dependencies.extra_tests():
         worker_count = max(worker_count_for(dependency), worker_count)
+    return worker_count
 
 
 if __name__ == "__main__":
