@@ -19,19 +19,20 @@ include $(citus_top_builddir)/Makefile.global
 
 override CFLAGS += -DDECODER=\"$(DECODER)\" -I$(citus_abs_top_srcdir)/include
 override CPPFLAGS += -DDECODER=\"$(DECODER)\" -I$(citus_abs_top_srcdir)/include
+SRC_DIR = $(citus_abs_top_srcdir)/$(citus_subdir)
 
 all: cdc_pgouput cdc_wal2json
 
 copy_decoder_files_to_build_dir:
 	mkdir -p $(DECODER_BUILD_DIR)
-	@for file in *.c *.h; do \
+	@for file in $(SRC_DIR)/*.c $(SRC_DIR)/*.h; do \
 		if [ -f $$file ]; then \
 			if ! diff -q $$file $(DECODER_BUILD_DIR)/$$(basename $$file); then \
 				cp $$file $(DECODER_BUILD_DIR)/$$(basename $$file); \
 			fi \
 		fi \
 	done
-	cp Makefile.decoder $(DECODER_BUILD_DIR)/Makefile
+	cp $(SRC_DIR)/Makefile.decoder $(DECODER_BUILD_DIR)/Makefile
 
 cdc_pgouput:
 	$(MAKE) DECODER_BUILD_DIR=build_pgoutput copy_decoder_files_to_build_dir
