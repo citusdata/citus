@@ -497,7 +497,7 @@ SELECT * FROM pg_dist_node ORDER BY nodeid;
       5 |       1 | localhost |     8889 | default  | f           | t        | secondary | second-cluster | f              | t
 (4 rows)
 
-SELECT * FROM pg_dist_partition WHERE logicalrelid::text LIKE 'mx_testing_schema%' ORDER BY logicalrelid;
+SELECT * FROM pg_dist_partition WHERE logicalrelid::text LIKE 'mx_testing_schema%' ORDER BY logicalrelid::text;
           logicalrelid           | partmethod |                                                         partkey                                                          | colocationid | repmodel | autoconverted
 ---------------------------------------------------------------------
  mx_testing_schema.mx_test_table | h          | {VAR :varno 1 :varattno 1 :vartype 23 :vartypmod -1 :varcollid 0 :varlevelsup 0 :varnosyn 1 :varattnosyn 1 :location -1} |            2 | s        | f
@@ -635,7 +635,7 @@ SELECT * FROM pg_dist_node ORDER BY nodeid;
       5 |       1 | localhost |     8889 | default  | f           | t        | secondary | second-cluster | f              | t
 (4 rows)
 
-SELECT * FROM pg_dist_partition WHERE logicalrelid::text LIKE 'mx_testing_schema%' ORDER BY logicalrelid;
+SELECT * FROM pg_dist_partition WHERE logicalrelid::text LIKE 'mx_testing_schema%' ORDER BY logicalrelid::text;
           logicalrelid           | partmethod |                                                         partkey                                                          | colocationid | repmodel | autoconverted
 ---------------------------------------------------------------------
  mx_testing_schema.mx_test_table | h          | {VAR :varno 1 :varattno 1 :vartype 23 :vartypmod -1 :varcollid 0 :varlevelsup 0 :varnosyn 1 :varattnosyn 1 :location -1} |            2 | s        | f
@@ -872,7 +872,7 @@ WHERE
 	logicalrelid = 'mx_test_schema_1.mx_table_1'::regclass
 	OR logicalrelid = 'mx_test_schema_2.mx_table_2'::regclass
 ORDER BY
-	logicalrelid;
+	logicalrelid::text;
         logicalrelid         | repmodel
 ---------------------------------------------------------------------
  mx_test_schema_1.mx_table_1 | s
@@ -888,7 +888,7 @@ WHERE
 	logicalrelid = 'mx_test_schema_1.mx_table_1'::regclass
 	OR logicalrelid = 'mx_test_schema_2.mx_table_2'::regclass
 ORDER BY
-	logicalrelid, shardid;
+	logicalrelid::text, shardid;
         logicalrelid         | shardid | nodename  | nodeport
 ---------------------------------------------------------------------
  mx_test_schema_1.mx_table_1 | 1310020 | localhost |    57637
@@ -923,7 +923,7 @@ WHERE
 	logicalrelid = 'mx_test_schema_1.mx_table_1'::regclass
 	OR logicalrelid = 'mx_test_schema_2.mx_table_2'::regclass
 ORDER BY
-	logicalrelid;
+	logicalrelid::text;
         logicalrelid         | repmodel
 ---------------------------------------------------------------------
  mx_test_schema_1.mx_table_1 | s
@@ -939,7 +939,7 @@ WHERE
 	logicalrelid = 'mx_test_schema_1.mx_table_1'::regclass
 	OR logicalrelid = 'mx_test_schema_2.mx_table_2'::regclass
 ORDER BY
-	logicalrelid, shardid;
+	logicalrelid::text, shardid;
         logicalrelid         | shardid | nodename  | nodeport
 ---------------------------------------------------------------------
  mx_test_schema_1.mx_table_1 | 1310020 | localhost |    57637
@@ -1083,7 +1083,7 @@ FROM
 WHERE
 	logicalrelid = 'mx_colocation_test_1'::regclass
 	OR logicalrelid = 'mx_colocation_test_2'::regclass
-ORDER BY logicalrelid;
+ORDER BY logicalrelid::text;
      logicalrelid     | colocationid
 ---------------------------------------------------------------------
  mx_colocation_test_1 |        10000
@@ -1105,7 +1105,7 @@ WHERE
 	logicalrelid = 'mx_colocation_test_1'::regclass
 	OR logicalrelid = 'mx_colocation_test_2'::regclass
 ORDER BY
-	logicalrelid;
+	logicalrelid::text;
      logicalrelid     | colocationid
 ---------------------------------------------------------------------
  mx_colocation_test_1 |        10001
@@ -1121,7 +1121,7 @@ WHERE
 	logicalrelid = 'mx_colocation_test_1'::regclass
 	OR logicalrelid = 'mx_colocation_test_2'::regclass
 ORDER BY
-	logicalrelid;
+	logicalrelid::text;
      logicalrelid     | colocationid
 ---------------------------------------------------------------------
  mx_colocation_test_1 |        10001
