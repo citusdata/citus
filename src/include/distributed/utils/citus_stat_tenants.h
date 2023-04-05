@@ -49,7 +49,9 @@ typedef struct TenantStats
 
 	/*
 	 * The tenant monitoring score of this tenant. This value is increased by ONE_QUERY_SCORE at every query
-	 * and halved after every period.
+	 * and halved after every period. This custom scoring mechanism is used to rank the tenants based on
+	 * the recency and frequency of their activity. The score is used to rank the tenants and decide which
+	 * tenants should be removed from the monitor.
 	 */
 	long long score;
 
