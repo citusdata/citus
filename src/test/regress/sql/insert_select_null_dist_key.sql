@@ -222,6 +222,23 @@ TRUNCATE nullkey_c1_t1, nullkey_c2_t1;
 INSERT INTO nullkey_c1_t1 SELECT i, i FROM generate_series(1, 8) i;
 INSERT INTO nullkey_c2_t1 SELECT i, i FROM generate_series(2, 7) i;
 
+-- Test inserting into a local table by selecting from a combination of
+-- different table types, together with or without null-shard-key tables.
+
+INSERT INTO postgres_local_table SELECT nullkey_c1_t1.a, nullkey_c1_t1.b FROM nullkey_c1_t1 JOIN reference_table USING (a);
+
+INSERT INTO postgres_local_table SELECT * FROM nullkey_c1_t1 ORDER BY 1,2 OFFSET 3 LIMIT 2;
+
+WITH cte_1 AS (
+  DELETE FROM nullkey_c1_t1 WHERE a >= 1 and a <= 4 RETURNING *
+)
+INSERT INTO postgres_local_table SELECT cte_1.* FROM cte_1 LEFT JOIN nullkey_c1_t2 USING (a) WHERE nullkey_c1_t2.a IS NULL;
+
+INSERT INTO postgres_local_table SELECT * FROM nullkey_c1_t1 EXCEPT SELECT * FROM postgres_local_table;
+
+TRUNCATE postgres_local_table;
+INSERT INTO postgres_local_table SELECT i, i FROM generate_series(5, 10) i;
+
 -- Try slightly more complex queries.
 
 WITH cte_1 AS (

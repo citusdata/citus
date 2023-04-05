@@ -875,7 +875,7 @@ DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 INSERT INTO postgres_local_table SELECT * FROM nullkey_c1_t1;
-ERROR:  cannot select from a distributed table that does not have a shard key when inserting into a local table
+DEBUG:  Creating router plan
 -- test subquery
 SELECT count(*) FROM
 (

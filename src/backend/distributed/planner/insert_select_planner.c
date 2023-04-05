@@ -379,16 +379,6 @@ CreateInsertSelectIntoLocalTablePlan(uint64 planId, Query *insertSelectQuery,
 {
 	RangeTblEntry *selectRte = ExtractSelectRangeTableEntry(insertSelectQuery);
 
-	RTEListProperties *selectRteListProperties =
-		GetRTEListPropertiesForQuery(selectRte->subquery);
-	if (selectRteListProperties->hasDistTableWithoutShardKey)
-	{
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("cannot select from a distributed table that "
-							   "does not have a shard key when inserting into "
-							   "a local table")));
-	}
-
 	PrepareInsertSelectForCitusPlanner(insertSelectQuery);
 
 	/* get the SELECT query (may have changed after PrepareInsertSelectForCitusPlanner) */
