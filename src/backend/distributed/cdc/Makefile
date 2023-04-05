@@ -32,7 +32,6 @@ install-cdc-decoders:
 	$(foreach base_decoder,$(cdc_base_decoders),$(MAKE) DECODER=$(base_decoder) -C build-cdc-$(base_decoder) install;)
 
 clean-cdc-decoders:
-	$(foreach base_decoder,$(cdc_base_decoders),$(MAKE) DECODER=$(base_decoder) -C build-cdc-$(base_decoder) clean;)
 	$(foreach base_decoder,$(cdc_base_decoders),rm -rf build-cdc-$(base_decoder);)
 
 

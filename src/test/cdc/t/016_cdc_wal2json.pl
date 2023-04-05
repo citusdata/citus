@@ -46,6 +46,6 @@ if ($output =~ /$change_string_expected/) {
 }
 
 is($result, 1, 'CDC create_distributed_table - wal2json test');
-my $output = $node_coordinator->safe_psql('postgres',"SELECT pg_drop_replication_slot('cdc_replication_slot');");
+$node_coordinator->safe_psql('postgres',"SELECT pg_drop_replication_slot('cdc_replication_slot');");
 
 done_testing();
