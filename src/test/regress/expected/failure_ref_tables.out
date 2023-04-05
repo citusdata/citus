@@ -26,7 +26,7 @@ SELECT COUNT(*) FROM ref_table;
 (1 row)
 
 -- verify behavior of single INSERT; should fail to execute
-SELECT citus.mitmproxy('conn.onQuery(query="^INSERT").kill()');
+SELECT citus.mitmproxy('conn.onQuery(query="INSERT").kill()');
  mitmproxy
 ---------------------------------------------------------------------
 
@@ -41,7 +41,7 @@ SELECT COUNT(*) FROM ref_table WHERE key=5;
 (1 row)
 
 -- verify behavior of UPDATE ... RETURNING; should not execute
-SELECT citus.mitmproxy('conn.onQuery(query="^UPDATE").kill()');
+SELECT citus.mitmproxy('conn.onQuery(query="UPDATE").kill()');
  mitmproxy
 ---------------------------------------------------------------------
 
@@ -56,7 +56,7 @@ SELECT COUNT(*) FROM ref_table WHERE key=7;
 (1 row)
 
 -- verify fix to #2214; should raise error and fail to execute
-SELECT citus.mitmproxy('conn.onQuery(query="^UPDATE").kill()');
+SELECT citus.mitmproxy('conn.onQuery(query="UPDATE").kill()');
  mitmproxy
 ---------------------------------------------------------------------
 

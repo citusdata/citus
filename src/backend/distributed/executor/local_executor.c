@@ -97,6 +97,7 @@
 #include "distributed/relation_access_tracking.h"
 #include "distributed/remote_commands.h" /* to access LogRemoteCommands */
 #include "distributed/transaction_management.h"
+#include "distributed/utils/citus_stat_tenants.h"
 #include "distributed/version_compat.h"
 #include "distributed/worker_protocol.h"
 #include "executor/tstoreReceiver.h"
@@ -646,6 +647,16 @@ LocallyExecuteTaskPlan(PlannedStmt *taskPlan, char *queryString,
 	{
 		LocalExecutorShardId = task->anchorShardId;
 	}
+
+
+	char *partitionKeyValueString = NULL;
+	if (task->partitionKeyValue != NULL)
+	{
+		partitionKeyValueString = DatumToString(task->partitionKeyValue->constvalue,
+												task->partitionKeyValue->consttype);
+	}
+
+	AttributeTask(partitionKeyValueString, task->colocationId, taskPlan->commandType);
 
 	PG_TRY();
 	{
