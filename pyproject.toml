@@ -35,3 +35,6 @@ norecursedirs = [
     'data',
     '__pycache__',
 ]
+
+# Don't find files with test at the end such as run_test.py
+python_files = ['test_*.py']
