@@ -2001,6 +2001,9 @@ GenerateTaskMoveDependencyList(PlacementUpdateEvent *move, int64 colocationId,
 	/*
 	 * Check if there exists moves scheduled earlier whose source node
 	 * overlaps with the current move's target node.
+	 * The earlier/first move might make space for the later/second move.
+	 * So we could run out of disk space (or at least overload the node)
+	 * if we move the second shard to it before the first one is moved away. 
 	 */
 	ShardMoveSourceNodeHashEntry *shardMoveSourceNodeHashEntry = hash_search(
 		shardMoveDependencies.nodeDependencies, &move->targetNode->nodeId, HASH_FIND,
@@ -2008,10 +2011,10 @@ GenerateTaskMoveDependencyList(PlacementUpdateEvent *move, int64 colocationId,
 
 	if (found)
 	{
-		int64 taskId = InvalidOid;
-		foreach_int(taskId, shardMoveSourceNodeHashEntry->taskIds)
+		int64 *taskId = NULL;
+		foreach_ptr(taskId, shardMoveSourceNodeHashEntry->taskIds)
 		{
-			hash_search(dependsList, &taskId, HASH_ENTER, NULL);
+			hash_search(dependsList, taskId, HASH_ENTER, NULL);
 		}
 	}
 
@@ -2054,15 +2057,16 @@ UpdateShardMoveDependencies(PlacementUpdateEvent *move, uint64 colocationId, int
 	ShardMoveSourceNodeHashEntry *shardMoveSourceNodeHashEntry = hash_search(
 		shardMoveDependencies.nodeDependencies, &move->sourceNode->nodeId, HASH_ENTER,
 		&found);
-	if (found)
+
+	if (!found)
 	{
-		shardMoveSourceNodeHashEntry->taskIds = lappend_int(
-			shardMoveSourceNodeHashEntry->taskIds, taskId);
+		shardMoveSourceNodeHashEntry->taskIds = NIL;
 	}
-	else
-	{
-		shardMoveSourceNodeHashEntry->taskIds = list_make1_int(taskId);
-	}
+
+	int64 *newTaskId = palloc0(sizeof(int64));
+	*newTaskId = taskId;
+	shardMoveSourceNodeHashEntry->taskIds = lappend(
+		shardMoveSourceNodeHashEntry->taskIds, newTaskId);
 }
 
 

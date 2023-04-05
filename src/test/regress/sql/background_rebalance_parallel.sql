@@ -255,14 +255,13 @@ SELECT public.wait_for_resource_cleanup();
 select citus_remove_node('localhost', :worker_1_port);
 select citus_remove_node('localhost', :worker_2_port);
 select citus_remove_node('localhost', :worker_3_port);
-select citus_remove_node('localhost', :worker_4_port);
-select citus_remove_node('localhost', :worker_5_port);
-select citus_remove_node('localhost', :worker_6_port);
 CREATE SCHEMA background_rebalance_parallel;
 SET search_path TO background_rebalance_parallel;
+SET citus.next_shard_id TO 85674051;
+ALTER SEQUENCE pg_catalog.pg_dist_node_nodeid_seq RESTART 61;
 
 -- add the first node
--- nodeid here is 58
+-- nodeid here is 61
 select citus_add_node('localhost', :worker_1_port);
 
 -- create, populate and distribute 6 tables, each with 1 shard, none colocated with each other
@@ -291,9 +290,9 @@ SELECT create_distributed_table('table1_colg6', 'a', shard_count => 1, colocate_
 INSERT INTO table1_colg6 SELECT i FROM generate_series(0, 100)i;
 
 -- add two other nodes
--- nodeid here is 59
+-- nodeid here is 62
 select citus_add_node('localhost', :worker_2_port);
--- nodeid here is 60
+-- nodeid here is 63
 select citus_add_node('localhost', :worker_3_port);
 
 CREATE OR REPLACE FUNCTION shard_placement_rebalance_array(
@@ -328,16 +327,16 @@ SELECT unnest(shard_placement_rebalance_array(
 
 -- manually balance the cluster such that we have
 -- a balanced cluster like above with 1,2,3,4,5,6 and hostname1/2/3
--- shardid 85674049 (1) nodeid 58 (hostname1)
--- shardid 85674050 (2) nodeid 58 (hostname1)
--- shardid 85674051 (3) nodeid 59 (hostname2)
--- shardid 85674052 (4) nodeid 59 (hostname2)
--- shardid 85674053 (5) nodeid 60 (hostname3)
--- shardid 85674054 (6) nodeid 60 (hostname3)
-SELECT pg_catalog.citus_move_shard_placement(85674051,58,59,'auto');
-SELECT pg_catalog.citus_move_shard_placement(85674052,58,59,'auto');
-SELECT pg_catalog.citus_move_shard_placement(85674053,58,60,'auto');
-SELECT pg_catalog.citus_move_shard_placement(85674054,58,60,'auto');
+-- shardid 85674051 (1) nodeid 61 (hostname1)
+-- shardid 85674052 (2) nodeid 61 (hostname1)
+-- shardid 85674053 (3) nodeid 62 (hostname2)
+-- shardid 85674054 (4) nodeid 62 (hostname2)
+-- shardid 85674055 (5) nodeid 63 (hostname3)
+-- shardid 85674056 (6) nodeid 63 (hostname3)
+SELECT pg_catalog.citus_move_shard_placement(85674053,61,62,'auto');
+SELECT pg_catalog.citus_move_shard_placement(85674054,61,62,'auto');
+SELECT pg_catalog.citus_move_shard_placement(85674055,61,63,'auto');
+SELECT pg_catalog.citus_move_shard_placement(85674056,61,63,'auto');
 
 -- now create another rebalance strategy in order to simulate moves
 -- which use as target a node that has been previously used as source
@@ -345,11 +344,11 @@ CREATE OR REPLACE FUNCTION test_shard_allowed_on_node(shardid bigint, nodeid int
     RETURNS boolean AS
 $$
     -- analogous to '{"node_name": "hostname1", "disallowed_shards": "1,2,3,5,6"}'
-    select case when (shardid != 85674051 and nodeid = 58)
+    select case when (shardid != 85674054 and nodeid = 61)
         then false
     -- analogous to '{"node_name": "hostname2", "disallowed_shards": "4"}'
     --          AND '{"node_name": "hostname2", "disallowed_shards": "4"}'
-    when (shardid = 85674051 and nodeid != 58)
+    when (shardid = 85674054 and nodeid != 61)
         then false
     else true
     end;
@@ -392,6 +391,7 @@ SELECT D.task_id,
 FROM pg_dist_background_task_depend D  WHERE job_id in (:job_id) ORDER BY D.task_id, D.depends_on ASC;
 
 SELECT citus_rebalance_stop();
+DELETE FROM pg_catalog.pg_dist_rebalance_strategy WHERE name='test_source_then_target';
 
 DROP SCHEMA background_rebalance_parallel CASCADE;
 TRUNCATE pg_dist_background_job CASCADE;
