@@ -13,8 +13,8 @@ AS 'citus', $$sleep_until_next_period$$;
 
 SELECT citus_stat_tenants_reset();
 
--- set period to a high number to prevent stats from being reset
-SELECT result FROM run_command_on_all_nodes('ALTER SYSTEM SET citus.stat_tenants_period TO 1000000000');
+-- set period to upper limit to prevent stats from being reset
+SELECT result FROM run_command_on_all_nodes('ALTER SYSTEM SET citus.stat_tenants_period TO 86400');
 SELECT result FROM run_command_on_all_nodes('SELECT pg_reload_conf()');
 
 CREATE TABLE dist_tbl (a INT, b TEXT);

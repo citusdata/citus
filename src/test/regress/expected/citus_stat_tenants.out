@@ -21,8 +21,8 @@ SELECT citus_stat_tenants_reset();
 
 (1 row)
 
--- set period to a high number to prevent stats from being reset
-SELECT result FROM run_command_on_all_nodes('ALTER SYSTEM SET citus.stat_tenants_period TO 1000000000');
+-- set period to upper limit to prevent stats from being reset
+SELECT result FROM run_command_on_all_nodes('ALTER SYSTEM SET citus.stat_tenants_period TO 86400');
     result
 ---------------------------------------------------------------------
  ALTER SYSTEM
