@@ -36,37 +36,8 @@ OBJS += \
 
 all: cdc
 
-setup_cdc_build_dir_copy_files:
-	mkdir -p $(DECODER_BUILD_DIR)
-	$(eval SRC_DIR = $(citus_abs_srcdir)/cdc)
-	$(eval DEST_DIR = $(DECODER_BUILD_DIR))
-	@for file in $(SRC_DIR)/*.c $(SRC_DIR)/*.h $(SRC_DIR)/Makefile; do \
-		if [ -f $$file ]; then \
-            if ! diff -q $$file $(DEST_DIR)/$$(basename $$file); then \
-                cp $$file $(DEST_DIR)/$$(basename $$file); \
-            fi \
-        fi \
-    done
-
-cdc_build_dir:
-	$(eval DECODER_BUILD_DIR = $(citus_abs_srcdir)/build/cdc-$(DECODER))
-	$(MAKE) DECODER_BUILD_DIR=$(DECODER_BUILD_DIR) setup_cdc_build_dir_copy_files
-	$(MAKE) DECODER=$(DECODER) citus_top_builddir="../../../../.." \
-		-C $(DECODER_BUILD_DIR)
-
-cdc_clean_dir:
-	$(eval DECODER_BUILD_DIR = $(citus_abs_srcdir)/build/cdc-$(DECODER))
-	$(MAKE) DECODER=$(DECODER) citus_top_builddir="../../../../.." \
-		-C $(DECODER_BUILD_DIR) clean
-
-cdc_install_dir:
-	$(eval DECODER_BUILD_DIR = $(citus_abs_srcdir)/build/cdc-$(DECODER))
-	$(MAKE) DECODER=$(DECODER) citus_top_builddir="../../../../.." \
-		-C $(DECODER_BUILD_DIR) install
-
 cdc:
-	$(MAKE) DECODER=pgoutput cdc_build_dir
-	$(MAKE) DECODER=wal2json cdc_build_dir
+	$(MAKE) -C cdc all
 
 NO_PGXS = 1
 
@@ -119,20 +90,16 @@ endif
 clean: clean-cdc
 
 clean-cdc:
-	$(MAKE) DECODER=pgoutput cdc_clean_dir
-	$(MAKE) DECODER=wal2json cdc_clean_dir
+	$(MAKE) -C cdc clean
 
 cleanup-before-install:
 	rm -f $(DESTDIR)$(datadir)/$(datamoduledir)/citus.control
 	rm -f $(DESTDIR)$(datadir)/$(datamoduledir)/citus--*
-	echo cleanup-before-install $(DESTDIR)$(datadir)/$(datamoduledir)/lib/citus_decoders/*.so
-	rm -f $(DESTDIR)$(datadir)/$(datamoduledir)/lib/citus_decoders/*.so
 
 install: cleanup-before-install install-cdc
 
 install-cdc:
-	$(MAKE) DECODER=pgoutput cdc_install_dir
-	$(MAKE) DECODER=wal2json cdc_install_dir
+	$(MAKE) -C cdc install
 
 # install and install-downgrades should be run sequentially
 install-all: install
