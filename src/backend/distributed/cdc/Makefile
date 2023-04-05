@@ -1,55 +1,46 @@
-ifndef DECODER
-	DECODER = pgoutput
-endif
-
-MODULE_big = citus_$(DECODER)
-
-citus_decoders_dir = $(DESTDIR)$(pkglibdir)/citus_decoders
-
-# Set the default value to citus_top_builddir as relative path to the
-# citus top directory from current directory.
-ifeq ($(strip $(citus_top_builddir)),)
 citus_top_builddir = ../../../..
-citus_subdir = src/backend/distributed/cdc
-endif
-
-OBJS += cdc_decoder.o cdc_decoder_utils.o
-
 include $(citus_top_builddir)/Makefile.global
 
-override CFLAGS += -DDECODER=\"$(DECODER)\" -I$(citus_abs_top_srcdir)/include
-override CPPFLAGS += -DDECODER=\"$(DECODER)\" -I$(citus_abs_top_srcdir)/include
+citus_subdir = src/backend/distributed/cdc
 SRC_DIR = $(citus_abs_top_srcdir)/$(citus_subdir)
 
-all: cdc_pgouput cdc_wal2json
+#List of supported based decoders. Add new decoders here.
+cdc_base_decoders :=pgoutput wal2json
 
-copy_decoder_files_to_build_dir:
+all: build-cdc-decoders
+
+copy-decoder-files-to-build-dir:
+	$(eval DECODER_BUILD_DIR=build-cdc-$(DECODER))
 	mkdir -p $(DECODER_BUILD_DIR)
 	@for file in $(SRC_DIR)/*.c $(SRC_DIR)/*.h; do \
 		if [ -f $$file ]; then \
-			if ! diff -q $$file $(DECODER_BUILD_DIR)/$$(basename $$file); then \
+			if [ -f $(DECODER_BUILD_DIR)/$$(basename $$file) ]; then \
+				if ! diff -q $$file $(DECODER_BUILD_DIR)/$$(basename $$file); then \
+					cp $$file $(DECODER_BUILD_DIR)/$$(basename $$file); \
+				fi \
+			else \
 				cp $$file $(DECODER_BUILD_DIR)/$$(basename $$file); \
 			fi \
 		fi \
 	done
 	cp $(SRC_DIR)/Makefile.decoder $(DECODER_BUILD_DIR)/Makefile
 
-cdc_pgouput:
-	$(MAKE) DECODER_BUILD_DIR=build_pgoutput copy_decoder_files_to_build_dir
-	$(MAKE) DECODER=pgoutput -C build_pgoutput
+build-cdc-decoders:
+	$(foreach base_decoder,$(cdc_base_decoders),$(MAKE) DECODER=$(base_decoder) build-cdc-decoder;)
 
-cdc_wal2json:
-	$(MAKE) DECODER_BUILD_DIR=build_wal2json copy_decoder_files_to_build_dir
-	$(MAKE) DECODER=wal2json -C build_wal2json
+install-cdc-decoders:
+	$(foreach base_decoder,$(cdc_base_decoders),$(MAKE) DECODER=$(base_decoder) -C build-cdc-$(base_decoder) install;)
 
-install: install-cdc
+clean-cdc-decoders:
+	$(foreach base_decoder,$(cdc_base_decoders),$(MAKE) DECODER=$(base_decoder) -C build-cdc-$(base_decoder) clean;)
+	$(foreach base_decoder,$(cdc_base_decoders),rm -rf build-cdc-$(base_decoder);)
 
-clean: clean-cdc
 
-install-cdc:
-	$(MAKE) DECODER=pgoutput -C build_pgoutput install
-	$(MAKE) DECODER=wal2json -C build_wal2json install
+build-cdc-decoder:
+	$(MAKE) DECODER=$(DECODER) copy-decoder-files-to-build-dir
+	$(MAKE) DECODER=$(DECODER) -C build-cdc-$(DECODER)
 
-clean-cdc:
-	rm -rf build_pgoutput build_wal2json
-	rm -f '$(DESTDIR)$(datadir)/$(datamoduledir)/citus_decoders/$(DECODER).so'
+install: install-cdc-decoders
+
+clean: clean-cdc-decoders
+

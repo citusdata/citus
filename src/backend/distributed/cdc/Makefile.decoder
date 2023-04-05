@@ -1,7 +1,3 @@
-ifndef DECODER
-	DECODER = pgoutput
-endif
-
 MODULE_big = citus_$(DECODER)
 
 citus_decoders_dir = $(DESTDIR)$(pkglibdir)/citus_decoders
