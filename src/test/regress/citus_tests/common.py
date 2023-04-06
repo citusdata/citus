@@ -325,6 +325,15 @@ def stop_databases(
             stop(node_name)
 
 
+def get_version_number(version):
+    return re.findall(r"\d+.\d+", version)[0]
+
+
+def get_actual_citus_version(pg_path, port):
+    citus_version = utils.psql_capture(pg_path, port, CITUS_VERSION_SQL)
+    citus_version = citus_version.decode("utf-8")
+    return get_version_number(citus_version)
+
 def initialize_citus_cluster(bindir, datadir, settings, config):
     # In case there was a leftover from previous runs, stop the databases
     stop_databases(
@@ -338,7 +347,10 @@ def initialize_citus_cluster(bindir, datadir, settings, config):
     )
     create_citus_extension(bindir, config.node_name_to_ports.values())
 
-    add_coordinator_to_metadata(bindir, config.coordinator_port())
+    actual_citus_version = get_actual_citus_version(config.bindir, config.coordinator_port())
+
+    if actual_citus_version == '11.3':
+        add_coordinator_to_metadata(bindir, config.coordinator_port())
 
     add_workers(bindir, config.worker_ports, config.coordinator_port())
     if not config.is_mx:
