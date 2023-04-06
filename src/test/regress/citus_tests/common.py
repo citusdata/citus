@@ -350,9 +350,7 @@ def initialize_citus_cluster(bindir, datadir, settings, config):
     )
     create_citus_extension(bindir, config.node_name_to_ports.values())
 
-    actual_citus_version = get_actual_citus_version(
-        config.bindir, config.coordinator_port()
-    )
+    actual_citus_version = get_actual_citus_version(bindir, config.coordinator_port())
 
     if actual_citus_version == "11.3":
         add_coordinator_to_metadata(bindir, config.coordinator_port())
