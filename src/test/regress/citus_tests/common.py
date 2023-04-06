@@ -337,6 +337,10 @@ def get_actual_citus_version(pg_path, port):
     return get_version_number(citus_version)
 
 
+def versiontuple(v):
+    return tuple(map(int, (v.split("."))))
+
+
 def initialize_citus_cluster(bindir, datadir, settings, config):
     # In case there was a leftover from previous runs, stop the databases
     stop_databases(
@@ -352,7 +356,7 @@ def initialize_citus_cluster(bindir, datadir, settings, config):
 
     actual_citus_version = get_actual_citus_version(bindir, config.coordinator_port())
 
-    if actual_citus_version == "11.3":
+    if versiontuple(actual_citus_version) >= versiontuple("11"):
         add_coordinator_to_metadata(bindir, config.coordinator_port())
 
     add_workers(bindir, config.worker_ports, config.coordinator_port())
