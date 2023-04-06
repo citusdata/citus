@@ -25,6 +25,16 @@ import utils
 from psycopg import sql
 from utils import USER
 
+from config import (  # noqa: E402
+    AFTER_CITUS_UPGRADE_COORD_SCHEDULE,
+    BEFORE_CITUS_UPGRADE_COORD_SCHEDULE,
+    CITUS_VERSION_SQL,
+    MASTER_VERSION,
+    MIXED_AFTER_CITUS_UPGRADE_SCHEDULE,
+    MIXED_BEFORE_CITUS_UPGRADE_SCHEDULE,
+    CitusUpgradeConfig,
+)
+
 LINUX = False
 MACOS = False
 FREEBSD = False
