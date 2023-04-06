@@ -87,7 +87,7 @@ INSERT INTO dist_tbl VALUES (5, 'abcd');
 SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, query_count_in_this_period, query_count_in_last_period FROM citus_stat_tenants_local ORDER BY tenant_attribute;
 
 -- simulate passing the period
-SET citus.stat_tenants_period TO 1;
+SET citus.stat_tenants_period TO 2;
 SELECT sleep_until_next_period();
 
 SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, query_count_in_this_period, query_count_in_last_period FROM citus_stat_tenants_local ORDER BY tenant_attribute;
