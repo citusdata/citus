@@ -190,6 +190,7 @@ extern char *VariablesToBePassedToNewConnections;
 extern int MaxRebalancerLoggedIgnoredMoves;
 extern bool RunningUnderIsolationTest;
 extern bool PropagateSessionSettingsForLoopbackConnection;
+extern int MaxBackgroundTaskExecutorsPerNode;
 
 /* External function declarations */
 extern Datum shard_placement_rebalance_array(PG_FUNCTION_ARGS);

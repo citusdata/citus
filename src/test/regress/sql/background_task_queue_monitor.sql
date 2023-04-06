@@ -3,6 +3,7 @@ SET search_path TO background_task_queue_monitor;
 SET citus.shard_count TO 4;
 SET citus.shard_replication_factor TO 1;
 SET citus.next_shard_id TO 3536400;
+SET client_min_messages TO ERROR;
 
 -- reset sequence values
 ALTER SEQUENCE pg_dist_background_job_job_id_seq RESTART 1450000;
@@ -279,11 +280,106 @@ SELECT job_id, task_id, status FROM pg_dist_background_task
     WHERE task_id IN (:task_id1, :task_id2)
     ORDER BY job_id, task_id;  -- show that task is cancelled
 
+-- TEST11
+-- verify that we do not allow parallel task executors involving a particular node
+-- more than citus.max_background_task_executors_per_node
+-- verify that we can change citus.max_background_task_executors_per_node on the fly
+-- tests are done with dummy node ids
+-- citus_task_wait calls are used to ensure consistent pg_dist_background_task query
+-- output i.e. to avoid flakiness
+
+BEGIN;
+INSERT INTO pg_dist_background_job (job_type, description) VALUES ('test_job', 'simple test to verify changing max background task executors per node on the fly') RETURNING job_id AS job_id1 \gset
+INSERT INTO pg_dist_background_task (job_id, command, nodes_involved) VALUES (:job_id1, $job$ SELECT pg_sleep(2); $job$, ARRAY [1, 2]) RETURNING task_id AS task_id1 \gset
+INSERT INTO pg_dist_background_task (job_id, command, nodes_involved) VALUES (:job_id1, $job$ SELECT pg_sleep(2); $job$, ARRAY [3, 4]) RETURNING task_id AS task_id2 \gset
+INSERT INTO pg_dist_background_task (job_id, command, nodes_involved) VALUES (:job_id1, $job$ SELECT pg_sleep(4); $job$, ARRAY [1, 2]) RETURNING task_id AS task_id3 \gset
+INSERT INTO pg_dist_background_task (job_id, command, nodes_involved) VALUES (:job_id1, $job$ SELECT pg_sleep(4); $job$, ARRAY [1, 3]) RETURNING task_id AS task_id4 \gset
+INSERT INTO pg_dist_background_task (job_id, command, nodes_involved) VALUES (:job_id1, $job$ SELECT pg_sleep(4); $job$, ARRAY [2, 4]) RETURNING task_id AS task_id5 \gset
+INSERT INTO pg_dist_background_task (job_id, command, nodes_involved) VALUES (:job_id1, $job$ SELECT pg_sleep(7); $job$, ARRAY [1, 2]) RETURNING task_id AS task_id6 \gset
+INSERT INTO pg_dist_background_task (job_id, command, nodes_involved) VALUES (:job_id1, $job$ SELECT pg_sleep(6); $job$, ARRAY [1, 3]) RETURNING task_id AS task_id7 \gset
+INSERT INTO pg_dist_background_task (job_id, command, nodes_involved) VALUES (:job_id1, $job$ SELECT pg_sleep(6); $job$, ARRAY [1, 4]) RETURNING task_id AS task_id8 \gset
+COMMIT;
+
+SELECT citus_task_wait(:task_id1, desired_status => 'running');
+SELECT citus_task_wait(:task_id2, desired_status => 'running');
+
+SELECT job_id, task_id, status, nodes_involved FROM pg_dist_background_task
+    WHERE task_id IN (:task_id1, :task_id2, :task_id3, :task_id4,
+                      :task_id5, :task_id6, :task_id7, :task_id8)
+    ORDER BY job_id, task_id; -- show that at most 1 task per node is running
+
+SELECT citus_task_wait(:task_id1, desired_status => 'done');
+SELECT citus_task_wait(:task_id2, desired_status => 'done');
+-- increase max_background_task_executors_per_node on the fly
+ALTER SYSTEM SET citus.max_background_task_executors_per_node = 2;
+SELECT pg_reload_conf();
+
+SELECT citus_task_wait(:task_id3, desired_status => 'running');
+SELECT citus_task_wait(:task_id4, desired_status => 'running');
+SELECT citus_task_wait(:task_id5, desired_status => 'running');
+
+SELECT job_id, task_id, status, nodes_involved FROM pg_dist_background_task
+    WHERE task_id IN (:task_id1, :task_id2, :task_id3, :task_id4,
+                      :task_id5, :task_id6, :task_id7, :task_id8)
+    ORDER BY job_id, task_id; -- show that at most 2 tasks per node are running
+
+-- increase to 3 max_background_task_executors_per_node on the fly
+SELECT citus_task_wait(:task_id3, desired_status => 'done');
+SELECT citus_task_wait(:task_id4, desired_status => 'done');
+SELECT citus_task_wait(:task_id5, desired_status => 'done');
+ALTER SYSTEM SET citus.max_background_task_executors_per_node = 3;
+SELECT pg_reload_conf();
+
+SELECT citus_task_wait(:task_id6, desired_status => 'running');
+SELECT citus_task_wait(:task_id7, desired_status => 'running');
+SELECT citus_task_wait(:task_id8, desired_status => 'running');
+
+SELECT job_id, task_id, status, nodes_involved FROM pg_dist_background_task
+    WHERE task_id IN (:task_id1, :task_id2, :task_id3, :task_id4,
+                      :task_id5, :task_id6, :task_id7, :task_id8)
+    ORDER BY job_id, task_id; -- show that at most 3 tasks per node are running
+
+ALTER SYSTEM RESET citus.max_background_task_executors_per_node;
+SELECT pg_reload_conf();
+
+-- if pg_cancel_backend is called on one of the running task PIDs
+-- task doesn't restart because it's not allowed anymore by the limit.
+-- node with id 1 can be used only once, unless there are previously running tasks
+SELECT pid AS task_id6_pid FROM pg_dist_background_task WHERE task_id IN (:task_id6) \gset
+SELECT pg_cancel_backend(:task_id6_pid); -- cancel task_id6 process
+
+-- task goes to only runnable state, not running anymore.
+SELECT citus_task_wait(:task_id6, desired_status => 'runnable');
+
+-- show that cancelled task hasn't restarted because limit doesn't allow it
+SELECT job_id, task_id, status, nodes_involved FROM pg_dist_background_task
+    WHERE task_id IN (:task_id1, :task_id2, :task_id3, :task_id4,
+                      :task_id5, :task_id6, :task_id7, :task_id8)
+    ORDER BY job_id, task_id;
+
+SELECT citus_task_wait(:task_id7, desired_status => 'done');
+SELECT citus_task_wait(:task_id8, desired_status => 'done');
+SELECT citus_task_wait(:task_id6, desired_status => 'running');
+
+-- show that the 6th task has restarted only after both 6 and 7 are done
+-- since we have a limit of 1 background task executor per node with id 1
+SELECT job_id, task_id, status, nodes_involved FROM pg_dist_background_task
+    WHERE task_id IN (:task_id1, :task_id2, :task_id3, :task_id4,
+                      :task_id5, :task_id6, :task_id7, :task_id8)
+    ORDER BY job_id, task_id;
+
+SELECT citus_job_cancel(:job_id1);
+SELECT citus_job_wait(:job_id1);
+
+ALTER SYSTEM RESET citus.max_background_task_executors_per_node;
+SELECT pg_reload_conf();
+
 SET client_min_messages TO WARNING;
 TRUNCATE pg_dist_background_job CASCADE;
 TRUNCATE pg_dist_background_task CASCADE;
 TRUNCATE pg_dist_background_task_depend;
 DROP SCHEMA background_task_queue_monitor CASCADE;
+RESET client_min_messages;
 
 ALTER SYSTEM RESET citus.background_task_queue_interval;
 ALTER SYSTEM RESET citus.max_background_task_executors;
