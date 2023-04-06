@@ -327,6 +327,11 @@ INSERT INTO null_dist_key_table_2 VALUES(1);
 CREATE INDEX null_dist_key_table_2_idx ON null_dist_key_table_2(a);
 SELECT create_distributed_table('null_dist_key_table_2', null, colocate_with=>'none');
 
+-- test create index concurrently, then reindex
+CREATE INDEX CONCURRENTLY ind_conc ON null_dist_key_table_2(a);
+REINDEX INDEX ind_conc;
+REINDEX INDEX CONCURRENTLY ind_conc;
+
 SELECT * FROM null_dist_key_table_2 ORDER BY a;
 
 -- show that we do not support inheritance relationships
