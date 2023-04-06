@@ -249,7 +249,7 @@ SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, q
 (2 rows)
 
 -- simulate passing the period
-SET citus.stat_tenants_period TO 2;
+SET citus.stat_tenants_period TO 1;
 SELECT sleep_until_next_period();
  sleep_until_next_period
 ---------------------------------------------------------------------
@@ -261,6 +261,19 @@ SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, q
 ---------------------------------------------------------------------
  1                |                         0 |                         1 |                          0 |                          1
  5                |                         0 |                         0 |                          0 |                          1
+(2 rows)
+
+SELECT sleep_until_next_period();
+ sleep_until_next_period
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, query_count_in_this_period, query_count_in_last_period FROM citus_stat_tenants_local ORDER BY tenant_attribute;
+ tenant_attribute | read_count_in_this_period | read_count_in_last_period | query_count_in_this_period | query_count_in_last_period
+---------------------------------------------------------------------
+ 1                |                         0 |                         0 |                          0 |                          0
+ 5                |                         0 |                         0 |                          0 |                          0
 (2 rows)
 
 \c - - - :master_port
