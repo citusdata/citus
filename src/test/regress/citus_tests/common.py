@@ -25,15 +25,7 @@ import utils
 from psycopg import sql
 from utils import USER
 
-from config import (  # noqa: E402
-    AFTER_CITUS_UPGRADE_COORD_SCHEDULE,
-    BEFORE_CITUS_UPGRADE_COORD_SCHEDULE,
-    CITUS_VERSION_SQL,
-    MASTER_VERSION,
-    MIXED_AFTER_CITUS_UPGRADE_SCHEDULE,
-    MIXED_BEFORE_CITUS_UPGRADE_SCHEDULE,
-    CitusUpgradeConfig,
-)
+CITUS_VERSION_SQL = "SELECT extversion FROM pg_extension WHERE extname = 'citus';"
 
 LINUX = False
 MACOS = False
@@ -344,6 +336,7 @@ def get_actual_citus_version(pg_path, port):
     citus_version = citus_version.decode("utf-8")
     return get_version_number(citus_version)
 
+
 def initialize_citus_cluster(bindir, datadir, settings, config):
     # In case there was a leftover from previous runs, stop the databases
     stop_databases(
@@ -357,9 +350,11 @@ def initialize_citus_cluster(bindir, datadir, settings, config):
     )
     create_citus_extension(bindir, config.node_name_to_ports.values())
 
-    actual_citus_version = get_actual_citus_version(config.bindir, config.coordinator_port())
+    actual_citus_version = get_actual_citus_version(
+        config.bindir, config.coordinator_port()
+    )
 
-    if actual_citus_version == '11.3':
+    if actual_citus_version == "11.3":
         add_coordinator_to_metadata(bindir, config.coordinator_port())
 
     add_workers(bindir, config.worker_ports, config.coordinator_port())
