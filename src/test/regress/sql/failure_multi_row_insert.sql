@@ -30,7 +30,7 @@ SELECT create_reference_table('reference_table');
 
 
 --  Failure and cancellation on multi-row INSERT that hits the same shard with the same value
-SELECT citus.mitmproxy('conn.onQuery(query="^INSERT").kill()');
+SELECT citus.mitmproxy('conn.onQuery(query="INSERT").kill()');
 INSERT INTO distributed_table VALUES (1,1), (1,2), (1,3);
 
 -- this test is broken, see https://github.com/citusdata/citus/issues/2460
