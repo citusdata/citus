@@ -1303,14 +1303,23 @@ SELECT * FROM multi_extension.print_extension_changes();
                                                                                                                                                                                                                                                                                         | type cluster_clock
 (38 rows)
 
-DROP TABLE multi_extension.prev_objects, multi_extension.extension_diff;
 -- show running version
 SHOW citus.version;
  citus.version
 ---------------------------------------------------------------------
- 11.2.0
+ 11.2.1
 (1 row)
 
+-- Snapshot of state at 11.2-2
+ALTER EXTENSION citus UPDATE TO '11.2-2';
+SELECT * FROM multi_extension.print_extension_changes();
+ previous_object |                          current_object
+---------------------------------------------------------------------
+                 | function worker_adjust_identity_column_seq_ranges(regclass) void
+(1 row)
+
+-- Test downgrade to 11.2-1 from 11.2-2
+ALTER EXTENSION citus UPDATE TO '11.2-1';
 -- ensure no unexpected objects were created outside pg_catalog
 SELECT pgio.type, pgio.identity
 FROM pg_depend AS pgd,
@@ -1326,6 +1335,7 @@ ORDER BY 1, 2;
  view | public.citus_tables
 (1 row)
 
+DROP TABLE multi_extension.prev_objects, multi_extension.extension_diff;
 -- see incompatible version errors out
 RESET citus.enable_version_checks;
 RESET columnar.enable_version_checks;

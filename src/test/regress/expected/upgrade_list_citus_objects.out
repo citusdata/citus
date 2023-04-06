@@ -230,6 +230,7 @@ ORDER BY 1;
  function truncate_local_data_after_distributing_table(regclass)
  function undistribute_table(regclass,boolean)
  function update_distributed_table_colocation(regclass,text)
+ function worker_adjust_identity_column_seq_ranges(regclass)
  function worker_apply_inter_shard_ddl_command(bigint,text,bigint,text,text)
  function worker_apply_sequence_command(text)
  function worker_apply_sequence_command(text,regtype)
@@ -318,5 +319,5 @@ ORDER BY 1;
  view citus_stat_statements
  view pg_dist_shard_placement
  view time_partitions
-(310 rows)
+(311 rows)
 

@@ -304,10 +304,7 @@ pg_get_sequencedef(Oid sequenceRelationId)
  * When it's WORKER_NEXTVAL_SEQUENCE_DEFAULTS, the function creates the DEFAULT
  * clause using worker_nextval('sequence') and not nextval('sequence')
  * When IncludeIdentities is NO_IDENTITY, the function does not include identity column
- * specifications. When it's INCLUDE_IDENTITY_AS_SEQUENCE_DEFAULTS, the function
- * uses sequences and set them as default values for identity columns by using exactly
- * the same approach with worker_nextval('sequence') & nextval('sequence') logic
- * desribed above. When it's INCLUDE_IDENTITY it creates GENERATED .. AS IDENTIY clauses.
+ * specifications. When it's INCLUDE_IDENTITY it creates GENERATED .. AS IDENTIY clauses.
  */
 char *
 pg_get_tableschemadef_string(Oid tableRelationId, IncludeSequenceDefaults
@@ -403,26 +400,9 @@ pg_get_tableschemadef_string(Oid tableRelationId, IncludeSequenceDefaults
 				Oid seqOid = getIdentitySequence(RelationGetRelid(relation),
 												 attributeForm->attnum, missing_ok);
 
-				char *sequenceName = generate_qualified_relation_name(seqOid);
-
-				if (includeIdentityDefaults == INCLUDE_IDENTITY_AS_SEQUENCE_DEFAULTS)
-				{
-					if (pg_get_sequencedef(seqOid)->seqtypid != INT8OID)
-					{
-						appendStringInfo(&buffer,
-										 " DEFAULT worker_nextval(%s::regclass)",
-										 quote_literal_cstr(sequenceName));
-					}
-					else
-					{
-						appendStringInfo(&buffer, " DEFAULT nextval(%s::regclass)",
-										 quote_literal_cstr(sequenceName));
-					}
-				}
-				else if (includeIdentityDefaults == INCLUDE_IDENTITY)
+				if (includeIdentityDefaults == INCLUDE_IDENTITY)
 				{
 					Form_pg_sequence pgSequenceForm = pg_get_sequencedef(seqOid);
-					uint64 sequenceStart = nextval_internal(seqOid, false);
 					char *sequenceDef = psprintf(
 						" GENERATED %s AS IDENTITY (INCREMENT BY " INT64_FORMAT \
 						" MINVALUE " INT64_FORMAT " MAXVALUE "
@@ -433,7 +413,8 @@ pg_get_tableschemadef_string(Oid tableRelationId, IncludeSequenceDefaults
 						"ALWAYS" : "BY DEFAULT",
 						pgSequenceForm->seqincrement,
 						pgSequenceForm->seqmin,
-						pgSequenceForm->seqmax, sequenceStart,
+						pgSequenceForm->seqmax,
+						pgSequenceForm->seqstart,
 						pgSequenceForm->seqcache,
 						pgSequenceForm->seqcycle ? "" : "NO ");
 
@@ -1391,7 +1372,7 @@ convert_aclright_to_string(int aclright)
 
 /*
  * contain_nextval_expression_walker walks over expression tree and returns
- * true if it contains call to 'nextval' function.
+ * true if it contains call to 'nextval' function or it has an identity column.
  */
 bool
 contain_nextval_expression_walker(Node *node, void *context)
@@ -1401,6 +1382,13 @@ contain_nextval_expression_walker(Node *node, void *context)
 		return false;
 	}
 
+	/* check if the node contains an identity column */
+	if (IsA(node, NextValueExpr))
+	{
+		return true;
+	}
+
+	/* check if the node contains call to 'nextval' */
 	if (IsA(node, FuncExpr))
 	{
 		FuncExpr *funcExpr = (FuncExpr *) node;
