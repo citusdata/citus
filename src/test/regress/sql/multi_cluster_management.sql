@@ -35,7 +35,7 @@ SELECT master_get_active_worker_nodes();
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 
 SELECT citus_disable_node('localhost', :worker_2_port);
-SELECT public.wait_until_metadata_sync();
+SELECT public.wait_until_metadata_sync(60000);
 SELECT master_get_active_worker_nodes();
 
 -- add some shard placements to the cluster
@@ -323,7 +323,7 @@ SELECT 1 FROM master_add_inactive_node('localhost', 9996, groupid => :worker_2_g
 SELECT master_add_inactive_node('localhost', 9999, groupid => :worker_2_group, nodecluster => 'olap', noderole => 'secondary');
 SELECT master_activate_node('localhost', 9999);
 SELECT citus_disable_node('localhost', 9999);
-SELECT public.wait_until_metadata_sync();
+SELECT public.wait_until_metadata_sync(60000);
 SELECT master_remove_node('localhost', 9999);
 
 -- check that you can't manually add two primaries to a group

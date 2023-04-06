@@ -91,6 +91,7 @@
 #include "distributed/resource_lock.h"
 #include "distributed/transaction_management.h"
 #include "distributed/transaction_recovery.h"
+#include "distributed/utils/citus_stat_tenants.h"
 #include "distributed/utils/directory.h"
 #include "distributed/worker_log_messages.h"
 #include "distributed/worker_manager.h"
@@ -225,6 +226,12 @@ static const struct config_enum_entry propagate_set_commands_options[] = {
 static const struct config_enum_entry stat_statements_track_options[] = {
 	{ "none", STAT_STATEMENTS_TRACK_NONE, false },
 	{ "all", STAT_STATEMENTS_TRACK_ALL, false },
+	{ NULL, 0, false }
+};
+
+static const struct config_enum_entry stat_tenants_track_options[] = {
+	{ "none", STAT_TENANTS_TRACK_NONE, false },
+	{ "all", STAT_TENANTS_TRACK_ALL, false },
 	{ NULL, 0, false }
 };
 
@@ -447,6 +454,8 @@ _PG_init(void)
 	ExecutorStart_hook = CitusExecutorStart;
 	ExecutorRun_hook = CitusExecutorRun;
 	ExplainOneQuery_hook = CitusExplainOneQuery;
+	prev_ExecutorEnd = ExecutorEnd_hook;
+	ExecutorEnd_hook = CitusAttributeToEnd;
 
 	/* register hook for error messages */
 	emit_log_hook = multi_log_hook;
@@ -490,6 +499,8 @@ _PG_init(void)
 
 	/* initialize shard split shared memory handle management */
 	InitializeShardSplitSMHandleManagement();
+
+	InitializeMultiTenantMonitorSMHandleManagement();
 
 	/* enable modification of pg_catalog tables during pg_upgrade */
 	if (IsBinaryUpgrade)
@@ -2359,6 +2370,50 @@ RegisterCitusConfigVariables(void)
 		&StatStatementsTrack,
 		STAT_STATEMENTS_TRACK_NONE,
 		stat_statements_track_options,
+		PGC_SUSET,
+		GUC_STANDARD,
+		NULL, NULL, NULL);
+
+	DefineCustomIntVariable(
+		"citus.stat_tenants_limit",
+		gettext_noop("Number of tenants to be shown in citus_stat_tenants."),
+		NULL,
+		&StatTenantsLimit,
+		100, 1, 10000,
+		PGC_POSTMASTER,
+		GUC_STANDARD,
+		NULL, NULL, NULL);
+
+	DefineCustomEnumVariable(
+		"citus.stat_tenants_log_level",
+		gettext_noop("Sets the level of citus_stat_tenants log messages"),
+		NULL,
+		&StatTenantsLogLevel,
+		CITUS_LOG_LEVEL_OFF, log_level_options,
+		PGC_USERSET,
+		GUC_STANDARD,
+		NULL, NULL, NULL);
+
+	DefineCustomIntVariable(
+		"citus.stat_tenants_period",
+		gettext_noop("Period in seconds to be used for calculating the tenant "
+					 "statistics in citus_stat_tenants."),
+		NULL,
+		&StatTenantsPeriod,
+		60, 1, 60 * 60 * 24,
+		PGC_USERSET,
+		GUC_STANDARD,
+		NULL, NULL, NULL);
+
+	DefineCustomEnumVariable(
+		"citus.stat_tenants_track",
+		gettext_noop("Enables/Disables the stats collection for citus_stat_tenants."),
+		gettext_noop("Enables the stats collection when set to 'all'. "
+					 "Disables when set to 'none'. Disabling can be useful for "
+					 "avoiding extra CPU cycles needed for the calculations."),
+		&StatTenantsTrack,
+		STAT_TENANTS_TRACK_NONE,
+		stat_tenants_track_options,
 		PGC_SUSET,
 		GUC_STANDARD,
 		NULL, NULL, NULL);

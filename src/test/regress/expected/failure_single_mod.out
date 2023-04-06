@@ -20,7 +20,7 @@ SELECT create_distributed_table('mod_test', 'key');
 (1 row)
 
 -- verify behavior of single INSERT; should mark shard as failed
-SELECT citus.mitmproxy('conn.onQuery(query="^INSERT").kill()');
+SELECT citus.mitmproxy('conn.onQuery(query="INSERT").kill()');
  mitmproxy
 ---------------------------------------------------------------------
 
@@ -52,7 +52,7 @@ SELECT citus.mitmproxy('conn.allow()');
 (1 row)
 
 INSERT INTO mod_test VALUES (2, 6);
-SELECT citus.mitmproxy('conn.onQuery(query="^UPDATE").kill()');
+SELECT citus.mitmproxy('conn.onQuery(query="UPDATE").kill()');
  mitmproxy
 ---------------------------------------------------------------------
 
@@ -78,7 +78,7 @@ WHERE shardid IN (
 TRUNCATE mod_test;
 -- verify behavior of multi-statement modifications to a single shard
 -- should fail the transaction and never mark placements inactive
-SELECT citus.mitmproxy('conn.onQuery(query="^UPDATE").kill()');
+SELECT citus.mitmproxy('conn.onQuery(query="UPDATE").kill()');
  mitmproxy
 ---------------------------------------------------------------------
 
