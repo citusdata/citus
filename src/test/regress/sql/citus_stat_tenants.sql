@@ -231,5 +231,26 @@ SELECT count(*)>=0 FROM citus_stat_tenants_local();
 RESET ROLE;
 DROP ROLE stats_non_superuser;
 
+-- test function push down
+CREATE OR REPLACE FUNCTION
+  select_from_dist_tbl_text(p_keyword text)
+RETURNS boolean LANGUAGE plpgsql AS $fn$
+BEGIN
+  RETURN(SELECT count(*)>=0 FROM citus_stat_tenants.dist_tbl_text WHERE a = $1);
+END;
+$fn$;
+
+SELECT create_distributed_function(
+  'select_from_dist_tbl_text(text)', 'p_keyword', colocate_with => 'dist_tbl_text'
+);
+
+SELECT citus_stat_tenants_reset();
+
+SELECT select_from_dist_tbl_text('/b*c/de');
+SELECT select_from_dist_tbl_text('/b*c/de');
+SELECT select_from_dist_tbl_text(U&'\0061\0308bc');
+
+SELECT tenant_attribute, query_count_in_this_period FROM citus_stat_tenants;
+
 SET client_min_messages TO ERROR;
 DROP SCHEMA citus_stat_tenants CASCADE;
