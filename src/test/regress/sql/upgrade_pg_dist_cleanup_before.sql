@@ -15,8 +15,8 @@ CREATE TABLE table_with_orphaned_shards (a int);
 SELECT create_distributed_table('table_with_orphaned_shards', 'a');
 -- show all 32 placements are active
 SELECT COUNT(*) FROM pg_dist_placement WHERE shardstate = 1 AND shardid IN (SELECT shardid FROM pg_dist_shard WHERE logicalrelid='table_with_orphaned_shards'::regclass);
--- mark one shard as orphaned
+-- create an orphaned placement based on an existing one
 INSERT INTO pg_dist_placement(placementid, shardid, shardstate, shardlength, groupid)
     SELECT nextval('pg_dist_placement_placementid_seq'::regclass), shardid, 4, shardlength, 3-groupid
     FROM pg_dist_placement
-    WHERE shardid % 32 = 1 AND shardid IN (SELECT shardid FROM pg_dist_shard WHERE logicalrelid='table_with_orphaned_shards'::regclass)
+    WHERE shardid = 980001;
