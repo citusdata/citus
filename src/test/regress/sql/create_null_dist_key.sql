@@ -353,6 +353,9 @@ BEGIN;
   CREATE POLICY table_policy ON null_dist_key_table_3 TO table_users
       USING (table_user = current_user);
 
+  GRANT ALL ON TABLE null_dist_key_table_3 TO table_users;
+  ALTER TABLE null_dist_key_table_3 OWNER TO table_users;
+
   SELECT create_distributed_table('null_dist_key_table_3', null, colocate_with=>'none');
 ROLLBACK;
 
@@ -634,6 +637,17 @@ ALTER TABLE null_key_dist ADD CONSTRAINT fkey_add_test_3 FOREIGN KEY(a)
     REFERENCES dummy_reference_table(a) ON DELETE SET DEFAULT;
 ALTER TABLE null_key_dist ADD CONSTRAINT fkey_add_test_4 FOREIGN KEY(a)
     REFERENCES dummy_reference_table(a) ON UPDATE CASCADE;
+
+ALTER TABLE null_key_dist DROP CONSTRAINT fkey_add_test_1;
+ALTER TABLE null_key_dist DROP CONSTRAINT fkey_add_test_2;
+ALTER TABLE null_key_dist DROP CONSTRAINT fkey_add_test_3;
+ALTER TABLE null_key_dist DROP CONSTRAINT fkey_add_test_4;
+ALTER TABLE "NULL_!_dist_key"."nullKeyTable.1!?!9012345678901234567890123456789012345678901234567890123456789" DROP CONSTRAINT fkey_to_dummy_dist;
+
+DELETE FROM null_key_dist;
+VACUUM null_key_dist;
+TRUNCATE null_key_dist;
+DROP TABLE null_key_dist;
 
 RESET client_min_messages;
 
@@ -1155,6 +1169,10 @@ SET client_min_messages TO WARNING;
 BEGIN;
   INSERT INTO nullkey_c1_t1 SELECT * FROM nullkey_c2_t1;
 ROLLBACK;
+
+DROP TRIGGER IF EXISTS trigger_1 ON trigger_table_1;
+DROP TRIGGER trigger_2 ON trigger_table_2 CASCADE;
+DROP TRIGGER trigger_3 ON trigger_table_3 RESTRICT;
 
 -- cleanup at exit
 SET client_min_messages TO ERROR;
