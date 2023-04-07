@@ -519,6 +519,7 @@ SELECT create_distributed_table('null_dist_key_table_2', null, colocate_with=>'n
 CREATE INDEX CONCURRENTLY ind_conc ON null_dist_key_table_2(a);
 REINDEX INDEX ind_conc;
 REINDEX INDEX CONCURRENTLY ind_conc;
+DROP INDEX ind_conc;
 SELECT * FROM null_dist_key_table_2 ORDER BY a;
  a
 ---------------------------------------------------------------------
