@@ -37,8 +37,7 @@ OBJS += \
 all: cdc
 
 cdc:
-	echo "running cdc make"
-	$(MAKE) DECODER=pgoutput -C cdc all
+	$(MAKE) -C cdc all
 
 NO_PGXS = 1
 
@@ -85,12 +84,13 @@ ifneq (,$(SQL_Po_files))
 include $(SQL_Po_files)
 endif
 
-.PHONY: clean-full install install-downgrades install-all
+
+.PHONY: clean-full install install-downgrades install-all install-cdc clean-cdc
 
 clean: clean-cdc
 
 clean-cdc:
-	$(MAKE) DECODER=pgoutput -C cdc clean
+	$(MAKE) -C cdc clean
 
 cleanup-before-install:
 	rm -f $(DESTDIR)$(datadir)/$(datamoduledir)/citus.control
@@ -99,7 +99,7 @@ cleanup-before-install:
 install: cleanup-before-install install-cdc
 
 install-cdc:
-	$(MAKE) DECODER=pgoutput -C cdc install
+	$(MAKE) -C cdc install
 
 # install and install-downgrades should be run sequentially
 install-all: install

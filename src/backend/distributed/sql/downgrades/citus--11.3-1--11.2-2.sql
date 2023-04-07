@@ -28,3 +28,5 @@ DROP FUNCTION pg_catalog.citus_stat_tenants(boolean);
 
 DROP FUNCTION pg_catalog.citus_stat_tenants_local_reset();
 DROP FUNCTION pg_catalog.citus_stat_tenants_reset();
+
+ALTER TABLE pg_catalog.pg_dist_background_task DROP COLUMN nodes_involved;
