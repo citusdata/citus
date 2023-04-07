@@ -926,6 +926,15 @@ SELECT create_distributed_table('null_key_dist', null, colocate_with=>'"NULL_!_d
 
 ALTER TABLE "NULL_!_dist_key"."nullKeyTable.1!?!9012345678901234567890123456789012345678901234567890123456789"
     ADD CONSTRAINT fkey_to_dummy_dist FOREIGN KEY (id) REFERENCES null_key_dist(a);
+-- check supported ON DELETE and ON UPDATE commands
+ALTER TABLE null_key_dist ADD CONSTRAINT fkey_add_test_1 FOREIGN KEY(a)
+    REFERENCES "NULL_!_dist_key"."nullKeyTable.1!?!9012345678901234567890123456789012345678901234567890123456789"(id) ON DELETE SET DEFAULT;
+ALTER TABLE null_key_dist ADD CONSTRAINT fkey_add_test_2 FOREIGN KEY(a)
+    REFERENCES "NULL_!_dist_key"."nullKeyTable.1!?!9012345678901234567890123456789012345678901234567890123456789"(id) ON UPDATE CASCADE;
+ALTER TABLE null_key_dist ADD CONSTRAINT fkey_add_test_3 FOREIGN KEY(a)
+    REFERENCES dummy_reference_table(a) ON DELETE SET DEFAULT;
+ALTER TABLE null_key_dist ADD CONSTRAINT fkey_add_test_4 FOREIGN KEY(a)
+    REFERENCES dummy_reference_table(a) ON UPDATE CASCADE;
 RESET client_min_messages;
 CREATE TABLE multi_level_partitioning_parent(
     measureid integer,
