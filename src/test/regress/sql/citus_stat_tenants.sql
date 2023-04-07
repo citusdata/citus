@@ -249,6 +249,30 @@ SELECT citus_stat_tenants_reset();
 SELECT select_from_dist_tbl_text('/b*c/de');
 SELECT select_from_dist_tbl_text('/b*c/de');
 SELECT select_from_dist_tbl_text(U&'\0061\0308bc');
+SELECT select_from_dist_tbl_text(U&'\0061\0308bc');
+
+SELECT tenant_attribute, query_count_in_this_period FROM citus_stat_tenants;
+
+CREATE OR REPLACE PROCEDURE select_from_dist_tbl_text_proc(
+   p_keyword text
+)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    PERFORM select_from_dist_tbl_text(p_keyword);
+    PERFORM count(*)>=0 FROM citus_stat_tenants.dist_tbl_text WHERE b < 0;
+    PERFORM count(*)>=0 FROM citus_stat_tenants.dist_tbl_text;
+    PERFORM count(*)>=0 FROM citus_stat_tenants.dist_tbl_text WHERE a = p_keyword;
+    COMMIT;
+END;$$;
+
+CALL citus_stat_tenants.select_from_dist_tbl_text_proc('/b*c/de');
+CALL citus_stat_tenants.select_from_dist_tbl_text_proc('/b*c/de');
+CALL citus_stat_tenants.select_from_dist_tbl_text_proc('/b*c/de');
+CALL citus_stat_tenants.select_from_dist_tbl_text_proc(U&'\0061\0308bc');
+CALL citus_stat_tenants.select_from_dist_tbl_text_proc(U&'\0061\0308bc');
+CALL citus_stat_tenants.select_from_dist_tbl_text_proc(U&'\0061\0308bc');
+CALL citus_stat_tenants.select_from_dist_tbl_text_proc(NULL);
 
 SELECT tenant_attribute, query_count_in_this_period FROM citus_stat_tenants;
 

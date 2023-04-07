@@ -656,9 +656,6 @@ SplitLocalAndRemotePlacements(List *taskPlacementList, List **localTaskPlacement
 	}
 }
 
-
-#include "miscadmin.h"
-
 /*
  * ExecuteLocalTaskPlan gets a planned statement which can be executed locally.
  * The function simply follows the steps to have a local execution, sets the
