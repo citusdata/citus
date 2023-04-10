@@ -110,7 +110,7 @@ class CitusBaseClusterConfig(object, metaclass=NewInitCaller):
             "max_connections": 1200,
         }
         self.new_settings = {}
-        self.add_coordinator_to_metadata = False
+        self.add_coordinator_to_metadata = True
         self.env_variables = {}
         self.skip_tests = []
 
@@ -166,7 +166,6 @@ class CitusDefaultClusterConfig(CitusBaseClusterConfig):
             "citus.use_citus_managed_tables": True,
         }
         self.settings.update(new_settings)
-        self.add_coordinator_to_metadata = True
         self.skip_tests = [
             # Alter Table statement cannot be run from an arbitrary node so this test will fail
             "arbitrary_configs_alter_table_add_constraint_without_name_create",
@@ -380,4 +379,3 @@ class PGUpgradeConfig(CitusBaseClusterConfig):
         self.old_datadir = self.temp_dir + "/oldData"
         self.new_datadir = self.temp_dir + "/newData"
         self.user = SUPER_USER_NAME
-        self.add_coordinator_to_metadata = True
