@@ -42,6 +42,13 @@ typedef struct TenantStats
 	int writesInLastPeriod;
 	int writesInThisPeriod;
 
+
+	/*
+	 * CPU time usage of this tenant in this and last periods.
+	 */
+	double cpuUsageInLastPeriod;
+	double cpuUsageInThisPeriod;
+
 	/*
 	 * The latest time this tenant ran a query. This value is used to update the score later.
 	 */

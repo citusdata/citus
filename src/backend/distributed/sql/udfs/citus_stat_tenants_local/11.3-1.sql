@@ -6,6 +6,8 @@ CREATE OR REPLACE FUNCTION pg_catalog.citus_stat_tenants_local(
     OUT read_count_in_last_period INT,
     OUT query_count_in_this_period INT,
     OUT query_count_in_last_period INT,
+    OUT cpu_usage_in_this_period DOUBLE PRECISION,
+    OUT cpu_usage_in_last_period DOUBLE PRECISION,
     OUT score BIGINT)
 RETURNS SETOF RECORD
 LANGUAGE C
@@ -19,7 +21,9 @@ SELECT
     read_count_in_this_period,
     read_count_in_last_period,
     query_count_in_this_period,
-    query_count_in_last_period
+    query_count_in_last_period,
+    cpu_usage_in_this_period,
+    cpu_usage_in_last_period
 FROM pg_catalog.citus_stat_tenants_local()
 ORDER BY score DESC;
 
