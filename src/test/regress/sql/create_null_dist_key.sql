@@ -363,6 +363,7 @@ ROLLBACK;
 
 ALTER STATISTICS s2 SET STATISTICS 46;
 ALTER TABLE null_dist_key_table_1 SET SCHEMA public;
+DROP STATISTICS s1, s2;
 
 -- drop them for next tests
 DROP TABLE public.null_dist_key_table_1, null_dist_key_table_2, distributed_table;
