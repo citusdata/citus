@@ -1654,9 +1654,6 @@ SELECT create_distributed_table('trigger_table_1', NULL, distribution_type=>null
 
 (1 row)
 
-SET citus.enable_unsafe_triggers TO ON;
-SELECT create_distributed_table('trigger_table_1', NULL, distribution_type=>null);
-ERROR:  table "trigger_table_1" is already distributed
 INSERT INTO trigger_table_1 VALUES(1), (2);
 SELECT * FROM trigger_table_1 ORDER BY value;
  value

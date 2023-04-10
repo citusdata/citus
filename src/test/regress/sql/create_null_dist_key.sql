@@ -1106,9 +1106,6 @@ FOR EACH ROW EXECUTE FUNCTION increment_value();
 
 SELECT create_distributed_table('trigger_table_1', NULL, distribution_type=>null);
 
-SET citus.enable_unsafe_triggers TO ON;
-SELECT create_distributed_table('trigger_table_1', NULL, distribution_type=>null);
-
 INSERT INTO trigger_table_1 VALUES(1), (2);
 SELECT * FROM trigger_table_1 ORDER BY value;
 
