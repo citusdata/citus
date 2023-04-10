@@ -4212,9 +4212,9 @@ InitializeWorkerNodeCache(void)
 	List *workerNodeList = ReadDistNode(includeNodesFromOtherClusters);
 
 	int newWorkerNodeCount = list_length(workerNodeList);
-	WorkerNode **newWorkerNodeArray = MemoryContextAlloc(MetadataCacheMemoryContext,
-														 sizeof(WorkerNode *) *
-														 newWorkerNodeCount);
+	WorkerNode **newWorkerNodeArray = MemoryContextAllocZero(MetadataCacheMemoryContext,
+															 sizeof(WorkerNode *) *
+															 newWorkerNodeCount);
 
 	/* iterate over the worker node list */
 	WorkerNode *currentNode = NULL;
