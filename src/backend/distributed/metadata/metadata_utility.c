@@ -32,7 +32,6 @@
 #include "catalog/pg_type.h"
 #include "commands/extension.h"
 #include "commands/sequence.h"
-#include "distributed/background_jobs.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/connection_management.h"
 #include "distributed/citus_nodes.h"
@@ -58,9 +57,7 @@
 #include "distributed/relay_utility.h"
 #include "distributed/resource_lock.h"
 #include "distributed/remote_commands.h"
-#include "distributed/shard_rebalancer.h"
 #include "distributed/tuplestore.h"
-#include "distributed/utils/array_type.h"
 #include "distributed/worker_manager.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/version_compat.h"
@@ -780,6 +777,7 @@ GenerateSizeQueryOnMultiplePlacements(List *shardIntervalList,
 		{
 			partitionedShardNames = lappend(partitionedShardNames, quotedShardName);
 		}
+
 		/* for non-partitioned tables, we will use Postgres' size functions */
 		else
 		{
@@ -2818,8 +2816,7 @@ CreateBackgroundJob(const char *jobType, const char *description)
  */
 BackgroundTask *
 ScheduleBackgroundTask(int64 jobId, Oid owner, char *command, int dependingTaskCount,
-					   int64 dependingTaskIds[], int nodesInvolvedCount, int32
-					   nodesInvolved[])
+					   int64 dependingTaskIds[])
 {
 	BackgroundTask *task = NULL;
 
@@ -2892,11 +2889,6 @@ ScheduleBackgroundTask(int64 jobId, Oid owner, char *command, int dependingTaskC
 
 		values[Anum_pg_dist_background_task_message - 1] = CStringGetTextDatum("");
 		nulls[Anum_pg_dist_background_task_message - 1] = false;
-
-		values[Anum_pg_dist_background_task_nodes_involved - 1] =
-			IntArrayToDatum(nodesInvolvedCount, nodesInvolved);
-		nulls[Anum_pg_dist_background_task_nodes_involved - 1] = (nodesInvolvedCount ==
-																  0);
 
 		HeapTuple newTuple = heap_form_tuple(RelationGetDescr(pgDistBackgroundTask),
 											 values, nulls);
@@ -3209,13 +3201,6 @@ DeformBackgroundTaskHeapTuple(TupleDesc tupleDescriptor, HeapTuple taskTuple)
 			TextDatumGetCString(values[Anum_pg_dist_background_task_message - 1]);
 	}
 
-	if (!nulls[Anum_pg_dist_background_task_nodes_involved - 1])
-	{
-		ArrayType *nodesInvolvedArrayObject =
-			DatumGetArrayTypeP(values[Anum_pg_dist_background_task_nodes_involved - 1]);
-		task->nodesInvolved = IntegerArrayTypeToList(nodesInvolvedArrayObject);
-	}
-
 	return task;
 }
 
@@ -3348,8 +3333,7 @@ GetRunnableBackgroundTask(void)
 		while (HeapTupleIsValid(taskTuple = systable_getnext(scanDescriptor)))
 		{
 			task = DeformBackgroundTaskHeapTuple(tupleDescriptor, taskTuple);
-			if (BackgroundTaskReadyToRun(task) &&
-				IncrementParallelTaskCountForNodesInvolved(task))
+			if (BackgroundTaskReadyToRun(task))
 			{
 				/* found task, close table and return */
 				break;

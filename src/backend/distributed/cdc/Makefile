@@ -1,45 +1,26 @@
+ifndef DECODER
+	DECODER = pgoutput
+endif
+
+MODULE_big = citus_$(DECODER)
+citus_subdir = src/backend/distributed/cdc
 citus_top_builddir = ../../../..
+citus_decoders_dir = $(DESTDIR)$(pkglibdir)/citus_decoders
+
+OBJS += cdc_decoder.o cdc_decoder_utils.o
+
 include $(citus_top_builddir)/Makefile.global
 
-citus_subdir = src/backend/distributed/cdc
-SRC_DIR = $(citus_abs_top_srcdir)/$(citus_subdir)
+override CFLAGS += -DDECODER=\"$(DECODER)\" -I$(citus_abs_top_srcdir)/include
+override CPPFLAGS += -DDECODER=\"$(DECODER)\" -I$(citus_abs_top_srcdir)/include
 
-#List of supported based decoders. Add new decoders here.
-cdc_base_decoders :=pgoutput wal2json
+install: install-cdc
 
-all: build-cdc-decoders
+clean: clean-cdc
 
-copy-decoder-files-to-build-dir:
-	$(eval DECODER_BUILD_DIR=build-cdc-$(DECODER))
-	mkdir -p $(DECODER_BUILD_DIR)
-	@for file in $(SRC_DIR)/*.c $(SRC_DIR)/*.h; do \
-		if [ -f $$file ]; then \
-			if [ -f $(DECODER_BUILD_DIR)/$$(basename $$file) ]; then \
-				if ! diff -q $$file $(DECODER_BUILD_DIR)/$$(basename $$file); then \
-					cp $$file $(DECODER_BUILD_DIR)/$$(basename $$file); \
-				fi \
-			else \
-				cp $$file $(DECODER_BUILD_DIR)/$$(basename $$file); \
-			fi \
-		fi \
-	done
-	cp $(SRC_DIR)/Makefile.decoder $(DECODER_BUILD_DIR)/Makefile
+install-cdc:
+	mkdir -p '$(citus_decoders_dir)'
+	$(INSTALL_SHLIB) citus_$(DECODER).so '$(citus_decoders_dir)/$(DECODER).so'
 
-build-cdc-decoders:
-	$(foreach base_decoder,$(cdc_base_decoders),$(MAKE) DECODER=$(base_decoder) build-cdc-decoder;)
-
-install-cdc-decoders:
-	$(foreach base_decoder,$(cdc_base_decoders),$(MAKE) DECODER=$(base_decoder) -C build-cdc-$(base_decoder) install;)
-
-clean-cdc-decoders:
-	$(foreach base_decoder,$(cdc_base_decoders),rm -rf build-cdc-$(base_decoder);)
-
-
-build-cdc-decoder:
-	$(MAKE) DECODER=$(DECODER) copy-decoder-files-to-build-dir
-	$(MAKE) DECODER=$(DECODER) -C build-cdc-$(DECODER)
-
-install: install-cdc-decoders
-
-clean: clean-cdc-decoders
-
+clean-cdc:
+	rm -f '$(DESTDIR)$(datadir)/$(datamoduledir)/citus_decoders/$(DECODER).so'

@@ -1,5 +1,6 @@
 -- citus--11.2-1--11.3-1
 #include "udfs/repl_origin_helper/11.3-1.sql"
+#include "udfs/worker_adjust_identity_column_seq_ranges/11.3-1.sql"
 ALTER TABLE pg_catalog.pg_dist_authinfo REPLICA IDENTITY USING INDEX pg_dist_authinfo_identification_index;
 ALTER TABLE pg_catalog.pg_dist_partition REPLICA IDENTITY USING INDEX pg_dist_partition_logical_relid_index;
 ALTER TABLE pg_catalog.pg_dist_placement REPLICA IDENTITY USING INDEX pg_dist_placement_placementid_index;
@@ -14,7 +15,3 @@ ALTER TABLE pg_catalog.pg_dist_transaction REPLICA IDENTITY USING INDEX pg_dist_
 
 #include "udfs/citus_stat_tenants_local_reset/11.3-1.sql"
 #include "udfs/citus_stat_tenants_reset/11.3-1.sql"
-
--- we introduce nodes_involved, which will be used internally to
--- limit the number of parallel tasks running per node
-ALTER TABLE pg_catalog.pg_dist_background_task ADD COLUMN nodes_involved int[] DEFAULT NULL;

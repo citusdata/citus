@@ -10,6 +10,5 @@ FROM pg_attribute
 WHERE atthasmissing AND attrelid NOT IN ('pg_dist_node'::regclass,
                                          'pg_dist_rebalance_strategy'::regclass,
                                          'pg_dist_partition'::regclass,
-                                         'pg_dist_object'::regclass,
-                                         'pg_dist_background_task'::regclass)
+                                         'pg_dist_object'::regclass)
 ORDER BY attrelid, attname;

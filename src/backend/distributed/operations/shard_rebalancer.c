@@ -190,32 +190,13 @@ typedef struct WorkerShardStatistics
 	HTAB *statistics;
 } WorkerShardStatistics;
 
-/*
- * ShardMoveDependencyHashEntry contains the taskId which any new shard
- * move task within the corresponding colocation group
- * must take a dependency on
- */
+/* ShardMoveDependencyHashEntry contains the taskId which any new shard move task within the corresponding colocation group must take a dependency on */
 typedef struct ShardMoveDependencyInfo
 {
 	int64 key;
 	int64 taskId;
 } ShardMoveDependencyInfo;
 
-/*
- * ShardMoveSourceNodeHashEntry keeps track of the source nodes
- * of the moves.
- */
-typedef struct ShardMoveSourceNodeHashEntry
-{
-	/* this is the key */
-	int32 node_id;
-	List *taskIds;
-} ShardMoveSourceNodeHashEntry;
-
-/*
- * ShardMoveDependencies keeps track of all needed dependencies
- * between shard moves.
- */
 typedef struct ShardMoveDependencies
 {
 	HTAB *colocationDependencies;
@@ -293,15 +274,6 @@ static void AddToWorkerShardIdSet(HTAB *shardsByWorker, char *workerName, int wo
 static HTAB * BuildShardSizesHash(ProgressMonitorData *monitor, HTAB *shardStatistics);
 static void ErrorOnConcurrentRebalance(RebalanceOptions *);
 static List * GetSetCommandListForNewConnections(void);
-static int64 GetColocationId(PlacementUpdateEvent *move);
-static ShardMoveDependencies InitializeShardMoveDependencies();
-static int64 * GenerateTaskMoveDependencyList(PlacementUpdateEvent *move, int64
-											  colocationId,
-											  ShardMoveDependencies shardMoveDependencies,
-											  int *nDepends);
-static void UpdateShardMoveDependencies(PlacementUpdateEvent *move, uint64 colocationId,
-										int64 taskId,
-										ShardMoveDependencies shardMoveDependencies);
 
 /* declarations for dynamic loading */
 PG_FUNCTION_INFO_V1(rebalance_table_shards);
@@ -1958,7 +1930,8 @@ GetColocationId(PlacementUpdateEvent *move)
  * InitializeShardMoveDependencies function creates the hash maps that we use to track
  * the latest moves so that subsequent moves with the same properties must take a dependency
  * on them. There are two hash maps. One is for tracking the latest move scheduled in a
- * given colocation group and the other one is for tracking source nodes of all moves.
+ * given colocation group and the other one is for tracking the latest move which involves
+ * a given node either as its source node or its target node.
  */
 static ShardMoveDependencies
 InitializeShardMoveDependencies()
@@ -1968,17 +1941,18 @@ InitializeShardMoveDependencies()
 																				   ShardMoveDependencyInfo,
 																				   "colocationDependencyHashMap",
 																				   6);
-	shardMoveDependencies.nodeDependencies = CreateSimpleHashWithNameAndSize(int32,
-																			 ShardMoveSourceNodeHashEntry,
+	shardMoveDependencies.nodeDependencies = CreateSimpleHashWithNameAndSize(int64,
+																			 ShardMoveDependencyInfo,
 																			 "nodeDependencyHashMap",
 																			 6);
+
 	return shardMoveDependencies;
 }
 
 
 /*
  * GenerateTaskMoveDependencyList creates and returns a List of taskIds that
- * the move must take a dependency on, given the shard move dependencies as input.
+ * the move must take a dependency on.
  */
 static int64 *
 GenerateTaskMoveDependencyList(PlacementUpdateEvent *move, int64 colocationId,
@@ -1998,24 +1972,27 @@ GenerateTaskMoveDependencyList(PlacementUpdateEvent *move, int64 colocationId,
 		hash_search(dependsList, &shardMoveDependencyInfo->taskId, HASH_ENTER, NULL);
 	}
 
-	/*
-	 * Check if there exists moves scheduled earlier whose source node
-	 * overlaps with the current move's target node.
-	 * The earlier/first move might make space for the later/second move.
-	 * So we could run out of disk space (or at least overload the node)
-	 * if we move the second shard to it before the first one is moved away. 
-	 */
-	ShardMoveSourceNodeHashEntry *shardMoveSourceNodeHashEntry = hash_search(
-		shardMoveDependencies.nodeDependencies, &move->targetNode->nodeId, HASH_FIND,
+	/* Check if there exists a move scheduled earlier whose source or target node
+	 * overlaps with the current move's source node. */
+	shardMoveDependencyInfo = hash_search(
+		shardMoveDependencies.nodeDependencies, &move->sourceNode->nodeId, HASH_ENTER,
 		&found);
 
 	if (found)
 	{
-		int64 *taskId = NULL;
-		foreach_ptr(taskId, shardMoveSourceNodeHashEntry->taskIds)
-		{
-			hash_search(dependsList, taskId, HASH_ENTER, NULL);
-		}
+		hash_search(dependsList, &shardMoveDependencyInfo->taskId, HASH_ENTER, NULL);
+	}
+
+	/* Check if there exists a move scheduled earlier whose source or target node
+	 * overlaps with the current move's target node. */
+	shardMoveDependencyInfo = hash_search(
+		shardMoveDependencies.nodeDependencies, &move->targetNode->nodeId, HASH_ENTER,
+		&found);
+
+
+	if (found)
+	{
+		hash_search(dependsList, &shardMoveDependencyInfo->taskId, HASH_ENTER, NULL);
 	}
 
 	*nDepends = hash_get_num_entries(dependsList);
@@ -2053,20 +2030,15 @@ UpdateShardMoveDependencies(PlacementUpdateEvent *move, uint64 colocationId, int
 		shardMoveDependencies.colocationDependencies, &colocationId, HASH_ENTER, NULL);
 	shardMoveDependencyInfo->taskId = taskId;
 
-	bool found;
-	ShardMoveSourceNodeHashEntry *shardMoveSourceNodeHashEntry = hash_search(
-		shardMoveDependencies.nodeDependencies, &move->sourceNode->nodeId, HASH_ENTER,
-		&found);
+	shardMoveDependencyInfo = hash_search(shardMoveDependencies.nodeDependencies,
+										  &move->sourceNode->nodeId, HASH_ENTER, NULL);
 
-	if (!found)
-	{
-		shardMoveSourceNodeHashEntry->taskIds = NIL;
-	}
+	shardMoveDependencyInfo->taskId = taskId;
 
-	int64 *newTaskId = palloc0(sizeof(int64));
-	*newTaskId = taskId;
-	shardMoveSourceNodeHashEntry->taskIds = lappend(
-		shardMoveSourceNodeHashEntry->taskIds, newTaskId);
+	shardMoveDependencyInfo = hash_search(shardMoveDependencies.nodeDependencies,
+										  &move->targetNode->nodeId, HASH_ENTER, NULL);
+
+	shardMoveDependencyInfo->taskId = taskId;
 }
 
 
@@ -2163,10 +2135,8 @@ RebalanceTableShardsBackground(RebalanceOptions *options, Oid shardReplicationMo
 		appendStringInfo(&buf,
 						 "SELECT pg_catalog.replicate_reference_tables(%s)",
 						 quote_literal_cstr(shardTranferModeLabel));
-
-		int32 nodesInvolved[] = { 0 };
 		BackgroundTask *task = ScheduleBackgroundTask(jobId, GetUserId(), buf.data, 0,
-													  NULL, 0, nodesInvolved);
+													  NULL);
 		replicateRefTablesTaskId = task->taskid;
 	}
 
@@ -2200,14 +2170,9 @@ RebalanceTableShardsBackground(RebalanceOptions *options, Oid shardReplicationMo
 			dependsArray[0] = replicateRefTablesTaskId;
 		}
 
-		int32 nodesInvolved[2] = { 0 };
-		nodesInvolved[0] = move->sourceNode->nodeId;
-		nodesInvolved[1] = move->targetNode->nodeId;
-
 		BackgroundTask *task = ScheduleBackgroundTask(jobId, GetUserId(), buf.data,
 													  nDepends,
-													  dependsArray, 2,
-													  nodesInvolved);
+													  dependsArray);
 
 		UpdateShardMoveDependencies(move, colocationId, task->taskid,
 									shardMoveDependencies);

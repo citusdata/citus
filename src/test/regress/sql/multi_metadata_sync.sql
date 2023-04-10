@@ -111,7 +111,7 @@ SELECT nodeid, hasmetadata FROM pg_dist_node WHERE nodename='localhost' AND node
 \c - - - :worker_1_port
 SELECT * FROM pg_dist_local_group;
 SELECT * FROM pg_dist_node ORDER BY nodeid;
-SELECT * FROM pg_dist_partition WHERE logicalrelid::text LIKE 'mx_testing_schema%' ORDER BY logicalrelid::text;
+SELECT * FROM pg_dist_partition WHERE logicalrelid::text LIKE 'mx_testing_schema%' ORDER BY logicalrelid;
 SELECT * FROM pg_dist_shard  WHERE logicalrelid::text LIKE 'mx_testing_schema%' ORDER BY shardid;
 SELECT * FROM pg_dist_shard_placement WHERE shardid IN (SELECT shardid FROM pg_dist_shard WHERE logicalrelid::text LIKE 'mx_testing_schema%') ORDER BY shardid, nodename, nodeport;
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_testing_schema.mx_test_table'::regclass;
@@ -161,7 +161,7 @@ SELECT 1 FROM citus_activate_node('localhost', :worker_1_port);
 \c - - - :worker_1_port
 SELECT * FROM pg_dist_local_group;
 SELECT * FROM pg_dist_node ORDER BY nodeid;
-SELECT * FROM pg_dist_partition WHERE logicalrelid::text LIKE 'mx_testing_schema%' ORDER BY logicalrelid::text;
+SELECT * FROM pg_dist_partition WHERE logicalrelid::text LIKE 'mx_testing_schema%' ORDER BY logicalrelid;
 SELECT * FROM pg_dist_shard WHERE logicalrelid::text LIKE 'mx_testing_schema%' ORDER BY shardid;
 SELECT * FROM pg_dist_shard_placement WHERE shardid IN (SELECT shardid FROM pg_dist_shard WHERE logicalrelid::text LIKE 'mx_testing_schema%') ORDER BY shardid, nodename, nodeport;
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_testing_schema.mx_test_table'::regclass;
@@ -252,7 +252,7 @@ WHERE
 	logicalrelid = 'mx_test_schema_1.mx_table_1'::regclass
 	OR logicalrelid = 'mx_test_schema_2.mx_table_2'::regclass
 ORDER BY
-	logicalrelid::text;
+	logicalrelid;
 
 -- See the shards and placements of the mx tables
 SELECT
@@ -263,7 +263,7 @@ WHERE
 	logicalrelid = 'mx_test_schema_1.mx_table_1'::regclass
 	OR logicalrelid = 'mx_test_schema_2.mx_table_2'::regclass
 ORDER BY
-	logicalrelid::text, shardid;
+	logicalrelid, shardid;
 
 -- Check that metadata of MX tables exist on the metadata worker
 \c - - - :worker_1_port
@@ -278,9 +278,7 @@ FROM
 	pg_dist_partition
 WHERE
 	logicalrelid = 'mx_test_schema_1.mx_table_1'::regclass
-	OR logicalrelid = 'mx_test_schema_2.mx_table_2'::regclass
-ORDER BY
-	logicalrelid::text;
+	OR logicalrelid = 'mx_test_schema_2.mx_table_2'::regclass;
 
 -- Check that shard and placement data are created
 SELECT
@@ -291,7 +289,7 @@ WHERE
 	logicalrelid = 'mx_test_schema_1.mx_table_1'::regclass
 	OR logicalrelid = 'mx_test_schema_2.mx_table_2'::regclass
 ORDER BY
-	logicalrelid::text, shardid;
+	logicalrelid, shardid;
 
 -- Check that metadata of MX tables don't exist on the non-metadata worker
 \c - - - :worker_2_port
@@ -383,7 +381,7 @@ FROM
 WHERE
 	logicalrelid = 'mx_colocation_test_1'::regclass
 	OR logicalrelid = 'mx_colocation_test_2'::regclass
-ORDER BY logicalrelid::text;
+ORDER BY logicalrelid;
 
 -- Update colocation and see the changes on the master and the worker
 SELECT update_distributed_table_colocation('mx_colocation_test_1', colocate_with => 'mx_colocation_test_2');
@@ -393,9 +391,7 @@ FROM
 	pg_dist_partition
 WHERE
 	logicalrelid = 'mx_colocation_test_1'::regclass
-	OR logicalrelid = 'mx_colocation_test_2'::regclass
-ORDER BY
-	logicalrelid::text;
+	OR logicalrelid = 'mx_colocation_test_2'::regclass;
 \c - - - :worker_1_port
 SELECT
 	logicalrelid, colocationid
@@ -403,9 +399,7 @@ FROM
 	pg_dist_partition
 WHERE
 	logicalrelid = 'mx_colocation_test_1'::regclass
-	OR logicalrelid = 'mx_colocation_test_2'::regclass
-ORDER BY
-	logicalrelid::text;
+	OR logicalrelid = 'mx_colocation_test_2'::regclass;
 
 \c - - - :master_port
 

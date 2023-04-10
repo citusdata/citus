@@ -85,21 +85,6 @@ typedef struct TaskExecutionContext
 } TaskExecutionContext;
 
 
-/*
- * ParallelTasksPerNodeEntry is the struct used
- * to track the number of concurrent background tasks that
- * involve a particular node (the key to the entry)
- */
-typedef struct ParallelTasksPerNodeEntry
-{
-	/* Used as hash key. */
-	int32 node_id;
-
-	/* number of concurrent background tasks that involve node node_id */
-	uint32 counter;
-} ParallelTasksPerNodeEntry;
-
-
 extern BackgroundWorkerHandle * StartCitusBackgroundTaskQueueMonitor(Oid database,
 																	 Oid extensionOwner);
 extern void CitusBackgroundTaskQueueMonitorMain(Datum arg);
@@ -110,6 +95,5 @@ extern Datum citus_job_wait(PG_FUNCTION_ARGS);
 extern Datum citus_task_wait(PG_FUNCTION_ARGS);
 extern void citus_job_wait_internal(int64 jobid, BackgroundJobStatus *desiredStatus);
 extern void citus_task_wait_internal(int64 taskid, BackgroundTaskStatus *desiredStatus);
-extern bool IncrementParallelTaskCountForNodesInvolved(BackgroundTask *task);
 
 #endif /*CITUS_BACKGROUND_JOBS_H */
