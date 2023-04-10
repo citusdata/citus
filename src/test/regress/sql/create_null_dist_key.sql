@@ -556,6 +556,14 @@ BEGIN
 END;
 $insert_100$ LANGUAGE plpgsql;
 
+CREATE TABLE null_key_table_with_trigger(a INT);
+SELECT create_distributed_table('null_key_table_with_trigger', null);
+-- try to add a trigger after distributing the table, fails
+CREATE TRIGGER insert_100_trigger
+    AFTER UPDATE ON null_key_table_with_trigger
+    FOR EACH STATEMENT EXECUTE FUNCTION insert_id_100();
+
+-- now try to distribute a table that already has a trigger on it
 CREATE TRIGGER insert_100_trigger
     AFTER UPDATE ON "NULL_!_dist_key"."nullKeyTable.1!?!9012345678901234567890123456789012345678901234567890123456789"
     FOR EACH STATEMENT EXECUTE FUNCTION insert_id_100();
@@ -568,6 +576,11 @@ RESET client_min_messages;
 
 -- this shouldn't give any syntax errors
 SELECT create_distributed_table('"NULL_!_dist_key"."nullKeyTable.1!?!9012345678901234567890123456789012345678901234567890123456789"', null);
+
+-- now we can add triggers on distributed tables, because we set the GUC to on
+CREATE TRIGGER insert_100_trigger_2
+    AFTER UPDATE ON null_key_table_with_trigger
+    FOR EACH STATEMENT EXECUTE FUNCTION insert_id_100();
 
 SET client_min_messages TO ERROR;
 UPDATE "NULL_!_dist_key"."nullKeyTable.1!?!9012345678901234567890123456789012345678901234567890123456789" SET "TeNANt_Id"="TeNANt_Id"+1;
