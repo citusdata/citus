@@ -317,9 +317,11 @@ DROP TABLE null_dist_key_table_1, null_dist_key_table_2;
 -- create indexes before creating the null dist key tables
 
 -- .. for an initially empty table
-CREATE TABLE null_dist_key_table_1(a int);
+CREATE TABLE null_dist_key_table_1(a int, b int);
+CREATE STATISTICS s1 (dependencies) ON a, b FROM null_dist_key_table_1;
 CREATE INDEX null_dist_key_table_1_idx ON null_dist_key_table_1(a);
 SELECT create_distributed_table('null_dist_key_table_1', null, colocate_with=>'none');
+CREATE STATISTICS s2 (dependencies) ON a, b FROM null_dist_key_table_1;
 
 -- .. and for another table having data in it before creating null dist key table
 CREATE TABLE null_dist_key_table_2(a int);
@@ -358,6 +360,8 @@ BEGIN;
 
   SELECT create_distributed_table('null_dist_key_table_3', null, colocate_with=>'none');
 ROLLBACK;
+
+ALTER STATISTICS s2 SET STATISTICS 46;
 
 -- drop them for next tests
 DROP TABLE null_dist_key_table_1, null_dist_key_table_2, distributed_table;
