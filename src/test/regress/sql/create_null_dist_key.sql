@@ -362,9 +362,10 @@ BEGIN;
 ROLLBACK;
 
 ALTER STATISTICS s2 SET STATISTICS 46;
+ALTER TABLE null_dist_key_table_1 SET SCHEMA public;
 
 -- drop them for next tests
-DROP TABLE null_dist_key_table_1, null_dist_key_table_2, distributed_table;
+DROP TABLE public.null_dist_key_table_1, null_dist_key_table_2, distributed_table;
 
 -- tests for object names that should be escaped properly
 
