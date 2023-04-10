@@ -38,9 +38,6 @@ lib*.pc
 /Makefile.global
 /src/Makefile.custom
 /compile_commands.json
-/src/backend/distributed/cdc/build-cdc-*/*
-/src/test/cdc/tmp_check/*
-
 
 # temporary files vim creates
 *.swp
