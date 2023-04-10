@@ -613,6 +613,15 @@ ALTER TABLE "NULL_!_dist_key"."nullKeyTable.1!?!90123456789012345678901234567890
 ALTER TABLE local_table_for_fkey
     ADD CONSTRAINT fkey_from_dummy_local FOREIGN KEY (a) REFERENCES "NULL_!_dist_key"."nullKeyTable.1!?!9012345678901234567890123456789012345678901234567890123456789"(id);
 
+-- foreign key to a citus local table, errors out
+CREATE TABLE citus_local_table_for_fkey (a INT PRIMARY KEY);
+SELECT citus_add_local_table_to_metadata('citus_local_table_for_fkey');
+ALTER TABLE "NULL_!_dist_key"."nullKeyTable.1!?!9012345678901234567890123456789012345678901234567890123456789"
+    ADD CONSTRAINT fkey_to_dummy_citus_local FOREIGN KEY (id) REFERENCES citus_local_table_for_fkey(a);
+-- reversed, still fails
+ALTER TABLE citus_local_table_for_fkey
+    ADD CONSTRAINT fkey_from_dummy_citus_local FOREIGN KEY (a) REFERENCES "NULL_!_dist_key"."nullKeyTable.1!?!9012345678901234567890123456789012345678901234567890123456789"(id);
+
 -- foreign key to a distributed table, errors out because not colocated
 CREATE TABLE dist_table_for_fkey (a INT PRIMARY KEY);
 SELECT create_distributed_table('dist_table_for_fkey', 'a');
