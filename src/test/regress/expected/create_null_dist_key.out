@@ -551,6 +551,9 @@ BEGIN;
 
 (1 row)
 
+  REVOKE ALL ON TABLE null_dist_key_table_3 FROM table_users;
+  ALTER TABLE null_dist_key_table_3 OWNER TO postgres;
+  GRANT ALL ON TABLE null_dist_key_table_3 TO table_users;
 ROLLBACK;
 ALTER STATISTICS s2 SET STATISTICS 46;
 ALTER TABLE null_dist_key_table_1 SET SCHEMA public;

@@ -359,6 +359,10 @@ BEGIN;
   ALTER TABLE null_dist_key_table_3 OWNER TO table_users;
 
   SELECT create_distributed_table('null_dist_key_table_3', null, colocate_with=>'none');
+
+  REVOKE ALL ON TABLE null_dist_key_table_3 FROM table_users;
+  ALTER TABLE null_dist_key_table_3 OWNER TO postgres;
+  GRANT ALL ON TABLE null_dist_key_table_3 TO table_users;
 ROLLBACK;
 
 ALTER STATISTICS s2 SET STATISTICS 46;
