@@ -53,11 +53,10 @@ static char *MonitorTrancheName = "Multi Tenant Monitor Tranche";
 static shmem_startup_hook_type prev_shmem_startup_hook = NULL;
 
 static int CompareTenantScore(const void *leftElement, const void *rightElement);
-static void UpdatePeriodsIfNecessary(TenantStats *tenantStats, TimestampTz queryTime,
-									 bool isTenantQuery);
+static void UpdatePeriodsIfNecessary(TenantStats *tenantStats, TimestampTz queryTime);
 static void ReduceScoreIfNecessary(TenantStats *tenantStats, TimestampTz queryTime);
 static void EvictTenantsIfNecessary(TimestampTz queryTime);
-static void RecordTenantStats(TenantStats *tenantStats);
+static void RecordTenantStats(TenantStats *tenantStats, TimestampTz queryTime);
 static void CreateMultiTenantMonitor(void);
 static MultiTenantMonitor * CreateSharedMemoryForMultiTenantMonitor(void);
 static MultiTenantMonitor * GetMultiTenantMonitor(void);
@@ -122,10 +121,7 @@ citus_stat_tenants_local(PG_FUNCTION_ARGS)
 
 	for (int tenantIndex = 0; tenantIndex < monitor->tenantCount; tenantIndex++)
 	{
-		/* this is not a tenant query, it's a query to get stats */
-		bool isTenantQuery = false;
-		UpdatePeriodsIfNecessary(&monitor->tenants[tenantIndex], monitoringTime,
-								 isTenantQuery);
+		UpdatePeriodsIfNecessary(&monitor->tenants[tenantIndex], monitoringTime);
 		ReduceScoreIfNecessary(&monitor->tenants[tenantIndex], monitoringTime);
 	}
 	SafeQsort(monitor->tenants, monitor->tenantCount, sizeof(TenantStats),
@@ -347,10 +343,9 @@ AttributeMetricsIfApplicable()
 		TenantStats *tenantStats = &monitor->tenants[currentTenantIndex];
 		LWLockAcquire(&tenantStats->lock, LW_EXCLUSIVE);
 
-		bool isTenantQuery = true;
-		UpdatePeriodsIfNecessary(tenantStats, queryTime, isTenantQuery);
+		UpdatePeriodsIfNecessary(tenantStats, queryTime);
 		ReduceScoreIfNecessary(tenantStats, queryTime);
-		RecordTenantStats(tenantStats);
+		RecordTenantStats(tenantStats, queryTime);
 
 		LWLockRelease(&tenantStats->lock);
 	}
@@ -375,10 +370,9 @@ AttributeMetricsIfApplicable()
 			TenantStats *tenantStats = &monitor->tenants[currentTenantIndex];
 			LWLockAcquire(&tenantStats->lock, LW_EXCLUSIVE);
 
-			bool isTenantQuery = true;
-			UpdatePeriodsIfNecessary(tenantStats, queryTime, isTenantQuery);
+			UpdatePeriodsIfNecessary(tenantStats, queryTime);
 			ReduceScoreIfNecessary(tenantStats, queryTime);
-			RecordTenantStats(tenantStats);
+			RecordTenantStats(tenantStats, queryTime);
 
 			LWLockRelease(&tenantStats->lock);
 		}
@@ -399,8 +393,7 @@ AttributeMetricsIfApplicable()
  * statistics.
  */
 static void
-UpdatePeriodsIfNecessary(TenantStats *tenantStats, TimestampTz queryTime,
-						 bool isTenantQuery)
+UpdatePeriodsIfNecessary(TenantStats *tenantStats, TimestampTz queryTime)
 {
 	long long int periodInMicroSeconds = StatTenantsPeriod * USECS_PER_SEC;
 	long long int periodInMilliSeconds = StatTenantsPeriod * 1000;
@@ -429,11 +422,6 @@ UpdatePeriodsIfNecessary(TenantStats *tenantStats, TimestampTz queryTime,
 		tenantStats->writesInLastPeriod = 0;
 
 		tenantStats->readsInLastPeriod = 0;
-	}
-
-	if (isTenantQuery)
-	{
-		tenantStats->lastQueryTime = queryTime;
 	}
 }
 
@@ -514,7 +502,7 @@ EvictTenantsIfNecessary(TimestampTz queryTime)
  * RecordTenantStats records the query statistics for the tenant.
  */
 static void
-RecordTenantStats(TenantStats *tenantStats)
+RecordTenantStats(TenantStats *tenantStats, TimestampTz queryTime)
 {
 	if (tenantStats->score < LLONG_MAX - ONE_QUERY_SCORE)
 	{
@@ -535,6 +523,8 @@ RecordTenantStats(TenantStats *tenantStats)
 	{
 		tenantStats->writesInThisPeriod++;
 	}
+
+	tenantStats->lastQueryTime = queryTime;
 }
 
 
