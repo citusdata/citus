@@ -13,6 +13,10 @@ RESET citus.metadata_sync_mode;
 
 -- I am coordinator
 SELECT citus_is_coordinator();
+
+-- make sure coordinator is always in metadata.
+SELECT citus_set_coordinator_host('localhost');
+
 -- workers are not coordinator
 SELECT result FROM run_command_on_workers('SELECT citus_is_coordinator()');
 

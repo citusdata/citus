@@ -25,6 +25,8 @@ import utils
 from psycopg import sql
 from utils import USER
 
+CITUS_VERSION_SQL = "SELECT extversion FROM pg_extension WHERE extname = 'citus';"
+
 LINUX = False
 MACOS = False
 FREEBSD = False
@@ -272,9 +274,7 @@ def stop_metadata_to_workers(pg_path, worker_ports, coordinator_port):
 
 
 def add_coordinator_to_metadata(pg_path, coordinator_port):
-    command = "SELECT citus_add_node('localhost', {}, groupId := 0)".format(
-        coordinator_port
-    )
+    command = "SELECT citus_set_coordinator_host('localhost');"
     utils.psql(pg_path, coordinator_port, command)
 
 
@@ -327,6 +327,20 @@ def stop_databases(
             stop(node_name)
 
 
+def get_version_number(version):
+    return re.findall(r"\d+.\d+", version)[0]
+
+
+def get_actual_citus_version(pg_path, port):
+    citus_version = utils.psql_capture(pg_path, port, CITUS_VERSION_SQL)
+    citus_version = citus_version.decode("utf-8")
+    return get_version_number(citus_version)
+
+
+def versiontuple(v):
+    return tuple(map(int, (v.split("."))))
+
+
 def initialize_citus_cluster(bindir, datadir, settings, config):
     # In case there was a leftover from previous runs, stop the databases
     stop_databases(
@@ -339,11 +353,16 @@ def initialize_citus_cluster(bindir, datadir, settings, config):
         bindir, datadir, config.node_name_to_ports, config.name, config.env_variables
     )
     create_citus_extension(bindir, config.node_name_to_ports.values())
+
+    actual_citus_version = get_actual_citus_version(bindir, config.coordinator_port())
+
+    if versiontuple(actual_citus_version) >= versiontuple("11"):
+        add_coordinator_to_metadata(bindir, config.coordinator_port())
+
     add_workers(bindir, config.worker_ports, config.coordinator_port())
     if not config.is_mx:
         stop_metadata_to_workers(bindir, config.worker_ports, config.coordinator_port())
-    if config.add_coordinator_to_metadata:
-        add_coordinator_to_metadata(bindir, config.coordinator_port())
+
     config.setup_steps()
 
 
