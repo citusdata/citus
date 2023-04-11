@@ -1384,6 +1384,24 @@ BEGIN;
   SELECT create_distributed_table('referencing_table', NULL, distribution_type=>null, colocate_with=>'referenced_table');
 ERROR:  cannot create foreign key constraint since Citus does not support ON DELETE / UPDATE SET DEFAULT actions on the columns that default to sequences
 ROLLBACK;
+BEGIN;
+  CREATE TABLE referenced_table(a int UNIQUE, b int);
+  SELECT create_distributed_table('referenced_table', NULL, distribution_type=>null);
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+  CREATE TABLE referencing_table(a serial, b int);
+  SELECT create_distributed_table('referencing_table', NULL, distribution_type=>null, colocate_with=>'referenced_table');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+  ALTER TABLE referencing_table ADD CONSTRAINT fkey_to_dummy_ref_on_update FOREIGN KEY (a) REFERENCES referenced_table(a) ON UPDATE SET DEFAULT;
+ERROR:  cannot create foreign key constraint since Citus does not support ON DELETE / UPDATE SET DEFAULT actions on the columns that default to sequences
+ROLLBACK;
 -- to a non-colocated null dist key table
 BEGIN;
   CREATE TABLE referenced_table(a int UNIQUE, b int);
@@ -1432,7 +1450,7 @@ BEGIN;
   INSERT INTO referencing_table VALUES (1, 2);
   -- fails
   INSERT INTO referencing_table VALUES (2, 2);
-ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_fkey_1730195"
+ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_fkey_1730197"
 DETAIL:  Key (a)=(2) is not present in table "referenced_table_xxxxxxx".
 CONTEXT:  while executing command on localhost:xxxxx
 ROLLBACK;

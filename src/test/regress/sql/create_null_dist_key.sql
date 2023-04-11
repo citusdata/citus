@@ -926,6 +926,15 @@ BEGIN;
   SELECT create_distributed_table('referencing_table', NULL, distribution_type=>null, colocate_with=>'referenced_table');
 ROLLBACK;
 
+BEGIN;
+  CREATE TABLE referenced_table(a int UNIQUE, b int);
+  SELECT create_distributed_table('referenced_table', NULL, distribution_type=>null);
+
+  CREATE TABLE referencing_table(a serial, b int);
+  SELECT create_distributed_table('referencing_table', NULL, distribution_type=>null, colocate_with=>'referenced_table');
+  ALTER TABLE referencing_table ADD CONSTRAINT fkey_to_dummy_ref_on_update FOREIGN KEY (a) REFERENCES referenced_table(a) ON UPDATE SET DEFAULT;
+ROLLBACK;
+
 -- to a non-colocated null dist key table
 BEGIN;
   CREATE TABLE referenced_table(a int UNIQUE, b int);
