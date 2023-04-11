@@ -328,7 +328,8 @@ def stop_databases(
 
 
 def is_add_coordinator_to_metadata_udf_exist(pg_path, port):
-    return utils.psql_capture(pg_path, port, IS_CITUS_VERSION_11_SQL) == b' t\n\n'
+    return utils.psql_capture(pg_path, port, IS_CITUS_VERSION_11_SQL) == b" t\n\n"
+
 
 def initialize_citus_cluster(bindir, datadir, settings, config):
     # In case there was a leftover from previous runs, stop the databases
