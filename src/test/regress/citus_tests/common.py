@@ -25,7 +25,7 @@ import utils
 from psycopg import sql
 from utils import USER
 
-CITUS_VERSION_SQL = "SELECT extversion FROM pg_extension WHERE extname = 'citus';"
+IS_CITUS_VERSION_11_SQL = "SELECT (split_part(extversion, '.', 1)::int >= 11) as has_mx FROM pg_extension WHERE extname = 'citus';"
 
 LINUX = False
 MACOS = False
@@ -327,19 +327,8 @@ def stop_databases(
             stop(node_name)
 
 
-def get_version_number(version):
-    return re.findall(r"\d+.\d+", version)[0]
-
-
-def get_actual_citus_version(pg_path, port):
-    citus_version = utils.psql_capture(pg_path, port, CITUS_VERSION_SQL)
-    citus_version = citus_version.decode("utf-8")
-    return get_version_number(citus_version)
-
-
-def versiontuple(v):
-    return tuple(map(int, (v.split("."))))
-
+def is_add_coordinator_to_metadata_udf_exist(pg_path, port):
+    return utils.psql_capture(pg_path, port, IS_CITUS_VERSION_11_SQL) == b' t\n\n'
 
 def initialize_citus_cluster(bindir, datadir, settings, config):
     # In case there was a leftover from previous runs, stop the databases
@@ -356,7 +345,7 @@ def initialize_citus_cluster(bindir, datadir, settings, config):
 
     actual_citus_version = get_actual_citus_version(bindir, config.coordinator_port())
 
-    if versiontuple(actual_citus_version) >= versiontuple("11"):
+    if is_add_coordinator_to_metadata_udf_exist(bindir, config.coordinator_port()):
         add_coordinator_to_metadata(bindir, config.coordinator_port())
 
     add_workers(bindir, config.worker_ports, config.coordinator_port())
