@@ -42,7 +42,12 @@ INSERT INTO loc1 SELECT i FROM generate_series(1,100) i;
 CREATE TABLE loc2 (id int REFERENCES loc1(id));
 INSERT INTO loc2 SELECT i FROM generate_series(1,100) i;
 
+-- citus_set_coordinator_host with wrong port
+SELECT citus_set_coordinator_host('localhost', 9999);
+-- citus_set_coordinator_host with correct port
 SELECT citus_set_coordinator_host('localhost', :master_port);
+-- show coordinator port is correct on all workers
+SELECT * FROM run_command_on_workers($$SELECT row(nodename,nodeport) FROM pg_dist_node WHERE groupid = 0$$);
 SELECT citus_add_local_table_to_metadata('loc1', cascade_via_foreign_keys => true);
 
 -- Create partitioned distributed table

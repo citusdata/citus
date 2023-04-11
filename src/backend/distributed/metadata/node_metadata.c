@@ -108,7 +108,8 @@ static void BlockDistributedQueriesOnMetadataNodes(void);
 static WorkerNode * TupleToWorkerNode(TupleDesc tupleDescriptor, HeapTuple heapTuple);
 static bool NodeIsLocal(WorkerNode *worker);
 static void SetLockTimeoutLocally(int32 lock_cooldown);
-static void UpdateNodeLocation(int32 nodeId, char *newNodeName, int32 newNodePort);
+static void UpdateNodeLocation(int32 nodeId, char *newNodeName, int32 newNodePort,
+							   bool localOnly);
 static bool UnsetMetadataSyncedForAllWorkers(void);
 static char * GetMetadataSyncCommandToSetNodeColumn(WorkerNode *workerNode,
 													int columnIndex,
@@ -231,8 +232,8 @@ citus_set_coordinator_host(PG_FUNCTION_ARGS)
 		 * do not need to worry about concurrent changes (e.g. deletion) and
 		 * can proceed to update immediately.
 		 */
-
-		UpdateNodeLocation(coordinatorNode->nodeId, nodeNameString, nodePort);
+		bool localOnly = false;
+		UpdateNodeLocation(coordinatorNode->nodeId, nodeNameString, nodePort, localOnly);
 
 		/* clear cached plans that have the old host/port */
 		ResetPlanCache();
@@ -1290,7 +1291,8 @@ citus_update_node(PG_FUNCTION_ARGS)
 	 */
 	ResetPlanCache();
 
-	UpdateNodeLocation(nodeId, newNodeNameString, newNodePort);
+	bool localOnly = true;
+	UpdateNodeLocation(nodeId, newNodeNameString, newNodePort, localOnly);
 
 	/* we should be able to find the new node from the metadata */
 	workerNode = FindWorkerNodeAnyCluster(newNodeNameString, newNodePort);
@@ -1352,7 +1354,7 @@ SetLockTimeoutLocally(int32 lockCooldown)
 
 
 static void
-UpdateNodeLocation(int32 nodeId, char *newNodeName, int32 newNodePort)
+UpdateNodeLocation(int32 nodeId, char *newNodeName, int32 newNodePort, bool localOnly)
 {
 	const bool indexOK = true;
 
@@ -1395,6 +1397,20 @@ UpdateNodeLocation(int32 nodeId, char *newNodeName, int32 newNodePort)
 	CitusInvalidateRelcacheByRelid(DistNodeRelationId());
 
 	CommandCounterIncrement();
+
+	if (!localOnly && EnableMetadataSync)
+	{
+		WorkerNode *updatedNode = FindWorkerNodeAnyCluster(newNodeName, newNodePort);
+		Assert(updatedNode->nodeId == nodeId);
+
+		/* send the delete command to all primary nodes with metadata */
+		char *nodeDeleteCommand = NodeDeleteCommand(updatedNode->nodeId);
+		SendCommandToWorkersWithMetadata(nodeDeleteCommand);
+
+		/* send the insert command to all primary nodes with metadata */
+		char *nodeInsertCommand = NodeListInsertCommand(list_make1(updatedNode));
+		SendCommandToWorkersWithMetadata(nodeInsertCommand);
+	}
 
 	systable_endscan(scanDescriptor);
 	table_close(pgDistNode, NoLock);
