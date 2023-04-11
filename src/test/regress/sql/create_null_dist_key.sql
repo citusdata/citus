@@ -622,7 +622,11 @@ DELETE FROM "NULL_!_dist_key"."nullKeyTable.1!?!90123456789012345678901234567890
 CREATE TABLE local_table_for_fkey (a INT PRIMARY KEY);
 ALTER TABLE "NULL_!_dist_key"."nullKeyTable.1!?!9012345678901234567890123456789012345678901234567890123456789"
     ADD CONSTRAINT fkey_to_dummy_local FOREIGN KEY (id) REFERENCES local_table_for_fkey(a);
--- reversed, still fails
+
+-- Normally, we support foreign keys from Postgres tables to distributed
+-- tables assuming that the user will soon distribute the local table too
+-- anyway. However, this is not the case for null-shard-key tables before
+-- we improve SQL support.
 ALTER TABLE local_table_for_fkey
     ADD CONSTRAINT fkey_from_dummy_local FOREIGN KEY (a) REFERENCES "NULL_!_dist_key"."nullKeyTable.1!?!9012345678901234567890123456789012345678901234567890123456789"(id);
 
