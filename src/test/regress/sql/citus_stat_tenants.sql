@@ -276,5 +276,19 @@ CALL citus_stat_tenants.select_from_dist_tbl_text_proc(NULL);
 
 SELECT tenant_attribute, query_count_in_this_period FROM citus_stat_tenants;
 
+CREATE OR REPLACE VIEW
+  select_from_dist_tbl_text_view
+AS
+  SELECT * FROM citus_stat_tenants.dist_tbl_text;
+
+SELECT count(*)>=0 FROM select_from_dist_tbl_text_view WHERE a = '/b*c/de';
+SELECT count(*)>=0 FROM select_from_dist_tbl_text_view WHERE a = '/b*c/de';
+SELECT count(*)>=0 FROM select_from_dist_tbl_text_view WHERE a = '/b*c/de';
+SELECT count(*)>=0 FROM select_from_dist_tbl_text_view WHERE a = U&'\0061\0308bc';
+SELECT count(*)>=0 FROM select_from_dist_tbl_text_view WHERE a = U&'\0061\0308bc';
+SELECT count(*)>=0 FROM select_from_dist_tbl_text_view WHERE a = U&'\0061\0308bc';
+
+SELECT tenant_attribute, query_count_in_this_period FROM citus_stat_tenants;
+
 SET client_min_messages TO ERROR;
 DROP SCHEMA citus_stat_tenants CASCADE;
