@@ -343,8 +343,6 @@ def initialize_citus_cluster(bindir, datadir, settings, config):
     )
     create_citus_extension(bindir, config.node_name_to_ports.values())
 
-    actual_citus_version = get_actual_citus_version(bindir, config.coordinator_port())
-
     if is_add_coordinator_to_metadata_udf_exist(bindir, config.coordinator_port()):
         add_coordinator_to_metadata(bindir, config.coordinator_port())
 
