@@ -263,6 +263,19 @@ SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, q
  5                |                         0 |                         0 |                          0 |                          1
 (2 rows)
 
+SELECT sleep_until_next_period();
+ sleep_until_next_period
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, query_count_in_this_period, query_count_in_last_period FROM citus_stat_tenants_local ORDER BY tenant_attribute;
+ tenant_attribute | read_count_in_this_period | read_count_in_last_period | query_count_in_this_period | query_count_in_last_period
+---------------------------------------------------------------------
+ 1                |                         0 |                         0 |                          0 |                          0
+ 5                |                         0 |                         0 |                          0 |                          0
+(2 rows)
+
 \c - - - :master_port
 SET search_path TO citus_stat_tenants;
 -- test logs
