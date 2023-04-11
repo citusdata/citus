@@ -25,7 +25,7 @@ import utils
 from psycopg import sql
 from utils import USER
 
-IS_CITUS_VERSION_11_SQL = "SELECT (split_part(extversion, '.', 1)::int >= 11) as has_mx FROM pg_extension WHERE extname = 'citus';"
+IS_CITUS_VERSION_11_SQL = "SELECT (split_part(extversion, '.', 1)::int >= 11) as is_11 FROM pg_extension WHERE extname = 'citus';"
 
 LINUX = False
 MACOS = False
