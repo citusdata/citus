@@ -597,8 +597,8 @@ ERROR:  connection not open
 SELECT * FROM pg_dist_node ORDER BY nodeport;
  nodeid | groupid | nodename  | nodeport | noderack | hasmetadata | isactive | noderole | nodecluster | metadatasynced | shouldhaveshards
 ---------------------------------------------------------------------
-      4 |       4 | localhost |     9060 | default  | f           | t        | primary  | default     | f              | t
-      6 |       0 | localhost |    57636 | default  | t           | t        | primary  | default     | t              | f
+      2 |       2 | localhost |     9060 | default  | f           | t        | primary  | default     | f              | t
+      3 |       0 | localhost |    57636 | default  | t           | t        | primary  | default     | t              | f
       1 |       1 | localhost |    57637 | default  | t           | t        | primary  | default     | t              | t
 (3 rows)
 
@@ -626,24 +626,14 @@ UPDATE dist1 SET id = :failed_node_val WHERE id = :failed_node_val;
 -- Show that we can still delete from a shard at the node from coordinator
 DELETE FROM dist1 WHERE id = :failed_node_val;
 -- Show that DDL would still propagate to the node
-SET client_min_messages TO NOTICE;
-SET citus.log_remote_commands TO 1;
 CREATE SCHEMA dummy;
-NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
-NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
-NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off'
-NOTICE:  issuing CREATE SCHEMA dummy
-NOTICE:  issuing SET citus.enable_ddl_propagation TO 'on'
-NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off'
-NOTICE:  issuing CREATE SCHEMA dummy
-NOTICE:  issuing SET citus.enable_ddl_propagation TO 'on'
-NOTICE:  issuing WITH distributed_object_data(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation)  AS (VALUES ('schema', ARRAY['dummy']::text[], ARRAY[]::text[], -1, 0, false)) SELECT citus_internal_add_object_metadata(typetext, objnames, objargs, distargumentindex::int, colocationid::int, force_delegation::bool) FROM distributed_object_data;
-NOTICE:  issuing PREPARE TRANSACTION 'citus_xx_xx_xx_xx'
-NOTICE:  issuing PREPARE TRANSACTION 'citus_xx_xx_xx_xx'
-NOTICE:  issuing COMMIT PREPARED 'citus_xx_xx_xx_xx'
-NOTICE:  issuing COMMIT PREPARED 'citus_xx_xx_xx_xx'
-SET citus.log_remote_commands TO 0;
-SET client_min_messages TO ERROR;
+SELECT * FROM run_command_on_workers($$SELECT nspname FROM pg_namespace WHERE nspname = 'dummy'$$);
+ nodename  | nodeport | success | result
+---------------------------------------------------------------------
+ localhost |     9060 | t       | dummy
+ localhost |    57637 | t       | dummy
+(2 rows)
+
 -- Successfully activate the node after many failures
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
@@ -654,14 +644,14 @@ SELECT citus.mitmproxy('conn.allow()');
 SELECT citus_activate_node('localhost', :worker_2_proxy_port);
  citus_activate_node
 ---------------------------------------------------------------------
-                   4
+                   2
 (1 row)
 
 -- Activate the node once more to verify it works again with already synced metadata
 SELECT citus_activate_node('localhost', :worker_2_proxy_port);
  citus_activate_node
 ---------------------------------------------------------------------
-                   4
+                   2
 (1 row)
 
 -- Show node metadata info on worker2 and coordinator after success
@@ -669,8 +659,8 @@ SELECT citus_activate_node('localhost', :worker_2_proxy_port);
 SELECT * FROM pg_dist_node ORDER BY nodeport;
  nodeid | groupid | nodename  | nodeport | noderack | hasmetadata | isactive | noderole | nodecluster | metadatasynced | shouldhaveshards
 ---------------------------------------------------------------------
-      4 |       4 | localhost |     9060 | default  | t           | t        | primary  | default     | t              | t
-      6 |       0 | localhost |    57636 | default  | t           | t        | primary  | default     | t              | f
+      2 |       2 | localhost |     9060 | default  | t           | t        | primary  | default     | t              | t
+      3 |       0 | localhost |    57636 | default  | t           | t        | primary  | default     | t              | f
       1 |       1 | localhost |    57637 | default  | t           | t        | primary  | default     | t              | t
 (3 rows)
 
@@ -678,8 +668,8 @@ SELECT * FROM pg_dist_node ORDER BY nodeport;
 SELECT * FROM pg_dist_node ORDER BY nodeport;
  nodeid | groupid | nodename  | nodeport | noderack | hasmetadata | isactive | noderole | nodecluster | metadatasynced | shouldhaveshards
 ---------------------------------------------------------------------
-      4 |       4 | localhost |     9060 | default  | t           | t        | primary  | default     | t              | t
-      6 |       0 | localhost |    57636 | default  | t           | t        | primary  | default     | t              | f
+      2 |       2 | localhost |     9060 | default  | t           | t        | primary  | default     | t              | t
+      3 |       0 | localhost |    57636 | default  | t           | t        | primary  | default     | t              | f
       1 |       1 | localhost |    57637 | default  | t           | t        | primary  | default     | t              | t
 (3 rows)
 
@@ -701,3 +691,5 @@ SELECT citus_remove_node('localhost', :master_port);
 
 (1 row)
 
+ALTER SEQUENCE pg_dist_node_nodeid_seq RESTART 3;
+ALTER SEQUENCE pg_dist_groupid_seq RESTART 3;
