@@ -92,6 +92,10 @@ SELECT sleep_until_next_period();
 
 SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, query_count_in_this_period, query_count_in_last_period FROM citus_stat_tenants_local ORDER BY tenant_attribute;
 
+SELECT sleep_until_next_period();
+
+SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, query_count_in_this_period, query_count_in_last_period FROM citus_stat_tenants_local ORDER BY tenant_attribute;
+
 \c - - - :master_port
 SET search_path TO citus_stat_tenants;
 

@@ -56,7 +56,7 @@ static int CompareTenantScore(const void *leftElement, const void *rightElement)
 static void UpdatePeriodsIfNecessary(TenantStats *tenantStats, TimestampTz queryTime);
 static void ReduceScoreIfNecessary(TenantStats *tenantStats, TimestampTz queryTime);
 static void EvictTenantsIfNecessary(TimestampTz queryTime);
-static void RecordTenantStats(TenantStats *tenantStats);
+static void RecordTenantStats(TenantStats *tenantStats, TimestampTz queryTime);
 static void CreateMultiTenantMonitor(void);
 static MultiTenantMonitor * CreateSharedMemoryForMultiTenantMonitor(void);
 static MultiTenantMonitor * GetMultiTenantMonitor(void);
@@ -345,7 +345,7 @@ AttributeMetricsIfApplicable()
 
 		UpdatePeriodsIfNecessary(tenantStats, queryTime);
 		ReduceScoreIfNecessary(tenantStats, queryTime);
-		RecordTenantStats(tenantStats);
+		RecordTenantStats(tenantStats, queryTime);
 
 		LWLockRelease(&tenantStats->lock);
 	}
@@ -372,7 +372,7 @@ AttributeMetricsIfApplicable()
 
 			UpdatePeriodsIfNecessary(tenantStats, queryTime);
 			ReduceScoreIfNecessary(tenantStats, queryTime);
-			RecordTenantStats(tenantStats);
+			RecordTenantStats(tenantStats, queryTime);
 
 			LWLockRelease(&tenantStats->lock);
 		}
@@ -396,6 +396,7 @@ static void
 UpdatePeriodsIfNecessary(TenantStats *tenantStats, TimestampTz queryTime)
 {
 	long long int periodInMicroSeconds = StatTenantsPeriod * USECS_PER_SEC;
+	long long int periodInMilliSeconds = StatTenantsPeriod * 1000;
 	TimestampTz periodStart = queryTime - (queryTime % periodInMicroSeconds);
 
 	/*
@@ -416,14 +417,12 @@ UpdatePeriodsIfNecessary(TenantStats *tenantStats, TimestampTz queryTime)
 	 * If the last query is more than two periods ago, we clean the last period counts too.
 	 */
 	if (TimestampDifferenceExceeds(tenantStats->lastQueryTime, periodStart,
-								   periodInMicroSeconds))
+								   periodInMilliSeconds))
 	{
 		tenantStats->writesInLastPeriod = 0;
 
 		tenantStats->readsInLastPeriod = 0;
 	}
-
-	tenantStats->lastQueryTime = queryTime;
 }
 
 
@@ -503,7 +502,7 @@ EvictTenantsIfNecessary(TimestampTz queryTime)
  * RecordTenantStats records the query statistics for the tenant.
  */
 static void
-RecordTenantStats(TenantStats *tenantStats)
+RecordTenantStats(TenantStats *tenantStats, TimestampTz queryTime)
 {
 	if (tenantStats->score < LLONG_MAX - ONE_QUERY_SCORE)
 	{
@@ -524,6 +523,8 @@ RecordTenantStats(TenantStats *tenantStats)
 	{
 		tenantStats->writesInThisPeriod++;
 	}
+
+	tenantStats->lastQueryTime = queryTime;
 }
 
 

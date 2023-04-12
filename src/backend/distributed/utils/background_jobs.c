@@ -63,6 +63,7 @@
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata_utility.h"
 #include "distributed/shard_cleaner.h"
+#include "distributed/shard_rebalancer.h"
 #include "distributed/resource_lock.h"
 
 /* Table-of-contents constants for our dynamic shared memory segment. */
@@ -115,11 +116,16 @@ static bool MonitorGotTerminationOrCancellationRequest();
 static void QueueMonitorSigTermHandler(SIGNAL_ARGS);
 static void QueueMonitorSigIntHandler(SIGNAL_ARGS);
 static void QueueMonitorSigHupHandler(SIGNAL_ARGS);
+static void DecrementParallelTaskCountForNodesInvolved(BackgroundTask *task);
 
 /* flags set by signal handlers */
 static volatile sig_atomic_t GotSigterm = false;
 static volatile sig_atomic_t GotSigint = false;
 static volatile sig_atomic_t GotSighup = false;
+
+/* keeping track of parallel background tasks per node */
+HTAB *ParallelTasksPerNode = NULL;
+int MaxBackgroundTaskExecutorsPerNode = 1;
 
 PG_FUNCTION_INFO_V1(citus_job_cancel);
 PG_FUNCTION_INFO_V1(citus_job_wait);
@@ -211,7 +217,7 @@ citus_job_wait(PG_FUNCTION_ARGS)
  *   assume any terminal state as its desired status. The function returns if the
  *   desired_state was reached.
  *
- * The current implementation is a polling implementation with an interval of 1 second.
+ * The current implementation is a polling implementation with an interval of 0.1 seconds.
  * Ideally we would have some synchronization between the background tasks queue monitor
  * and any backend calling this function to receive a signal when the task changes state.
  */
@@ -857,6 +863,7 @@ TaskEnded(TaskExecutionContext *taskExecutionContext)
 	UpdateBackgroundTask(task);
 	UpdateDependingTasks(task);
 	UpdateBackgroundJob(task->jobid);
+	DecrementParallelTaskCountForNodesInvolved(task);
 
 	/* we are sure that at least one task did not block on current iteration */
 	queueMonitorExecutionContext->allTasksWouldBlock = false;
@@ -865,6 +872,77 @@ TaskEnded(TaskExecutionContext *taskExecutionContext)
 				HASH_REMOVE, NULL);
 	WaitForBackgroundWorkerShutdown(handleEntry->handle);
 	queueMonitorExecutionContext->currentExecutorCount--;
+}
+
+
+/*
+ * IncrementParallelTaskCountForNodesInvolved
+ * Checks whether we have reached the limit of parallel tasks per node
+ * per each of the nodes involved with the task
+ * If at least one limit is reached, it returns false.
+ * If limits aren't reached, it increments the parallel task count
+ * for each of the nodes involved with the task, and returns true.
+ */
+bool
+IncrementParallelTaskCountForNodesInvolved(BackgroundTask *task)
+{
+	if (task->nodesInvolved)
+	{
+		int node;
+
+		/* first check whether we have reached the limit for any of the nodes */
+		foreach_int(node, task->nodesInvolved)
+		{
+			bool found;
+			ParallelTasksPerNodeEntry *hashEntry = hash_search(
+				ParallelTasksPerNode, &(node), HASH_ENTER, &found);
+			if (!found)
+			{
+				hashEntry->counter = 0;
+			}
+			else if (hashEntry->counter >= MaxBackgroundTaskExecutorsPerNode)
+			{
+				/* at least one node's limit is reached */
+				return false;
+			}
+		}
+
+		/* then, increment the parallel task count per each node */
+		foreach_int(node, task->nodesInvolved)
+		{
+			ParallelTasksPerNodeEntry *hashEntry = hash_search(
+				ParallelTasksPerNode, &(node), HASH_FIND, NULL);
+			Assert(hashEntry);
+			hashEntry->counter += 1;
+		}
+	}
+
+	return true;
+}
+
+
+/*
+ * DecrementParallelTaskCountForNodesInvolved
+ * Decrements the parallel task count for each of the nodes involved
+ * with the task.
+ * We call this function after the task has gone through Running state
+ * and then has ended.
+ */
+static void
+DecrementParallelTaskCountForNodesInvolved(BackgroundTask *task)
+{
+	if (task->nodesInvolved)
+	{
+		int node;
+		foreach_int(node, task->nodesInvolved)
+		{
+			ParallelTasksPerNodeEntry *hashEntry = hash_search(ParallelTasksPerNode,
+															   &(node),
+															   HASH_FIND, NULL);
+
+			hashEntry->counter -= 1;
+		}
+	}
 }
 
 
@@ -1023,7 +1101,7 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 	/* handle SIGINT to properly cancel active task executors */
 	pqsignal(SIGINT, QueueMonitorSigIntHandler);
 
-	/* handle SIGHUP to update MaxBackgroundTaskExecutors */
+	/* handle SIGHUP to update MaxBackgroundTaskExecutors and MaxBackgroundTaskExecutorsPerNode */
 	pqsignal(SIGHUP, QueueMonitorSigHupHandler);
 
 	/* ready to handle signals */
@@ -1167,8 +1245,13 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 		{
 			GotSighup = false;
 
-			/* update max_background_task_executors if changed */
+			/* update max_background_task_executors and max_background_task_executors_per_node if changed */
 			ProcessConfigFile(PGC_SIGHUP);
+		}
+
+		if (ParallelTasksPerNode == NULL)
+		{
+			ParallelTasksPerNode = CreateSimpleHash(int32, ParallelTasksPerNodeEntry);
 		}
 
 		/* assign runnable tasks, if any, to new task executors in a transaction if we do not have SIGTERM or SIGINT */
