@@ -12,13 +12,14 @@
 #include "unistd.h"
 
 #include "distributed/citus_safe_lib.h"
+#include "distributed/colocation_utils.h"
+#include "distributed/distributed_planner.h"
+#include "distributed/jsonbutils.h"
 #include "distributed/log_utils.h"
 #include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
-#include "distributed/jsonbutils.h"
-#include "distributed/colocation_utils.h"
+#include "distributed/multi_executor.h"
 #include "distributed/tuplestore.h"
-#include "distributed/colocation_utils.h"
 #include "distributed/utils/citus_stat_tenants.h"
 #include "executor/execdesc.h"
 #include "storage/ipc.h"
@@ -38,12 +39,14 @@ ExecutorEnd_hook_type prev_ExecutorEnd = NULL;
 
 #define ATTRIBUTE_PREFIX "/*{\"tId\":"
 #define ATTRIBUTE_STRING_FORMAT "/*{\"tId\":%s,\"cId\":%d}*/"
-#define STAT_TENANTS_COLUMNS 7
+#define STAT_TENANTS_COLUMNS 9
 #define ONE_QUERY_SCORE 1000000000
 
 static char AttributeToTenant[MAX_TENANT_ATTRIBUTE_LENGTH] = "";
 static CmdType AttributeToCommandType = CMD_UNKNOWN;
 static int AttributeToColocationGroupId = INVALID_COLOCATION_ID;
+static clock_t QueryStartClock = { 0 };
+static clock_t QueryEndClock = { 0 };
 
 static const char *SharedMemoryNameForMultiTenantMonitor =
 	"Shared memory for multi tenant monitor";
@@ -142,7 +145,9 @@ citus_stat_tenants_local(PG_FUNCTION_ARGS)
 								  tenantStats->writesInThisPeriod);
 		values[5] = Int32GetDatum(tenantStats->readsInLastPeriod +
 								  tenantStats->writesInLastPeriod);
-		values[6] = Int64GetDatum(tenantStats->score);
+		values[6] = Float8GetDatum(tenantStats->cpuUsageInThisPeriod);
+		values[7] = Float8GetDatum(tenantStats->cpuUsageInLastPeriod);
+		values[8] = Int64GetDatum(tenantStats->score);
 
 		tuplestore_putvalues(tupleStore, tupleDescriptor, values, isNulls);
 	}
@@ -225,6 +230,7 @@ AttributeTask(char *tenantId, int colocationId, CmdType commandType)
 	strncpy_s(AttributeToTenant, MAX_TENANT_ATTRIBUTE_LENGTH, tenantId,
 			  MAX_TENANT_ATTRIBUTE_LENGTH - 1);
 	AttributeToCommandType = commandType;
+	QueryStartClock = clock();
 }
 
 
@@ -315,6 +321,17 @@ AttributeMetricsIfApplicable()
 	{
 		return;
 	}
+
+	/*
+	 * return if we are not in the top level to make sure we are not
+	 * stopping counting time for a sub-level execution
+	 */
+	if (ExecutorLevel != 0 || PlannerLevel != 0)
+	{
+		return;
+	}
+
+	QueryEndClock = clock();
 
 	TimestampTz queryTime = GetCurrentTimestamp();
 
@@ -411,6 +428,9 @@ UpdatePeriodsIfNecessary(TenantStats *tenantStats, TimestampTz queryTime)
 
 		tenantStats->readsInLastPeriod = tenantStats->readsInThisPeriod;
 		tenantStats->readsInThisPeriod = 0;
+
+		tenantStats->cpuUsageInLastPeriod = tenantStats->cpuUsageInThisPeriod;
+		tenantStats->cpuUsageInThisPeriod = 0;
 	}
 
 	/*
@@ -422,6 +442,8 @@ UpdatePeriodsIfNecessary(TenantStats *tenantStats, TimestampTz queryTime)
 		tenantStats->writesInLastPeriod = 0;
 
 		tenantStats->readsInLastPeriod = 0;
+
+		tenantStats->cpuUsageInLastPeriod = 0;
 	}
 }
 
@@ -523,6 +545,9 @@ RecordTenantStats(TenantStats *tenantStats, TimestampTz queryTime)
 	{
 		tenantStats->writesInThisPeriod++;
 	}
+
+	double queryCpuTime = ((double) (QueryEndClock - QueryStartClock)) / CLOCKS_PER_SEC;
+	tenantStats->cpuUsageInThisPeriod += queryCpuTime;
 
 	tenantStats->lastQueryTime = queryTime;
 }
