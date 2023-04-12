@@ -209,5 +209,7 @@ if __name__ == "__main__":
         config.datadir,
         config.node_name_to_ports,
         config.name,
+        no_output=True,
+        parallel=False,
     )
     main(config)
