@@ -12,13 +12,14 @@
 #include "unistd.h"
 
 #include "distributed/citus_safe_lib.h"
+#include "distributed/colocation_utils.h"
+#include "distributed/distributed_planner.h"
+#include "distributed/jsonbutils.h"
 #include "distributed/log_utils.h"
 #include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
-#include "distributed/jsonbutils.h"
-#include "distributed/colocation_utils.h"
+#include "distributed/multi_executor.h"
 #include "distributed/tuplestore.h"
-#include "distributed/colocation_utils.h"
 #include "distributed/utils/citus_stat_tenants.h"
 #include "executor/execdesc.h"
 #include "storage/ipc.h"
@@ -317,6 +318,15 @@ AttributeMetricsIfApplicable()
 {
 	if (StatTenantsTrack == STAT_TENANTS_TRACK_NONE ||
 		AttributeToTenant[0] == '\0')
+	{
+		return;
+	}
+
+	/*
+	 * return if we are not in the top level to make sure we are not
+	 * stopping counting time for a sub-level execution
+	 */
+	if (ExecutorLevel != 0 || PlannerLevel != 0)
 	{
 		return;
 	}
