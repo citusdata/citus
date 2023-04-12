@@ -1,3 +1,1054 @@
+### citus v11.3.0 (April 12, 2023) ###
+
+* Fixes an uninitialized memory access in shard split API
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Fixes update propagation bug when `citus_set_coordinator_host` is called more than once.
+
+* 
+
+* Adds control for background task executors involving a node
+
+* PR description that will go into the change log, up to 78 characters
+
+* Move cleanup record test to upgrade schedule
+
+* Adds views that monitor statistics on tenant usages
+
+* Fix an issue that caused some queries with custom aggregates to fail
+
+* 
+
+* Refactor and unify shard move and copy functions
+
+* Fixes memory leak and max allocation block errors during metadata syncing.
+
+* Introduces nontransactional mode for metadata sync.
+
+* Introduces the GUC `citus.metadata_sync_mode` to switch sync modes
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Prevents using identity columns on data types other than `bigint` on distributed tables
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Prevents using `alter_distributed_table` and `undistribute_table` UDFs when a table has identity columns
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Fixes a bug that prevents enforcing identity column restrictions on worker nodes
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* This PR removes the task dependencies between shard moves for which the shards belong to different colocation groups. This change results in scheduling multiple tasks in the RUNNABLE state. Therefore it is possible that the background task monitor can run them concurrently. 
+
+* Propagate CREATE/ALTER/DROP PUBLICATION statements for distributed tables
+
+* Fixes a bug with insert..select queries with identity columns
+
+* PR description that will go into the change log, up to 78 characters
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Implementing CDC changes  using Logical Replication to avoid re-publishing events multiple times by setting up replication origin session, which will add "DoNotReplicateId" to every WAL entry.
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Adds `citus.enable_non_colocated_router_query_pushdown` GUC to ensure generating a consistent distributed plan for the queries that reference non-colocated distributed tables (when set to "false", the default is "true").
+
+* Check before logicalrep for rebalancer, error if needed
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Fixes (pg_dump/pg_upgrade) dependency loop warnings caused by pg_depend entries inserted by citus_columnar
+
+* Fixes a bug in shard copy operations.
+
+* Adds logic to distribute unbalanced shards
+
+* Correctly report shard size in citus_shards vie
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Fixes a memory leak issue during altering distributed table with a lot of partition and shards.
+
+* PR description that will go into the change log, up to 78 characters
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Fixes memory leak during distribution of a table with a lot of partitions and shards.
+
+* Fixes memory leak issue with query results that returns single row.
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Fixes memory leak during undistribution and alteration of a table with a lot of partitions.
+
+* Stop maintenance daemon when dropping a database even without Citus extension
+
+* Fix use-after-free bug introduced in 11.1.1
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Fixes a bug that causes background rebalancer to fail when a reference table doesn't have a primary key
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Fixes an unexpected foreign table error by disallowing to drop the table_name option.
+
+* Revert "Support MERGE on distributed tables with restrictions"
+
+* Fixes a bug that breaks pg upgrades if the user has a columnar table
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Fixes wrong results by throwing error in case recursive planner multipass the query.
+
+* Fix foreign key validation skip at the end of shard move
+
+* Fixes early sublink check at recursive planner.
+
+* Fixes an uninitialized memory access in create_distributed_function()
+
+* Prevents crashes on update with returning clauses
+
+* Fix regression in allowed foreign keys on distributed tables
+
+* Enable adding FOREIGN KEY constraints on Citus tables without a name
+
+* Identity Column Support on Citus Tables
+
+* Remove shardstate from placement insert functions
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Enable adding CHECK constraints on distributed tables without the client having to provide a constraint name.
+
+* Introduce citus_copy_shard_placement UDF with node id
+
+* Introduce citus_move_shard_placement UDF with node id
+
+* Use new shard transfer functions with node id for rebalancing
+
+* Quote all identifiers we use for logical replication
+
+* Fix the modifier for subscription and role creation
+
+* Fix crash when trying to replicate a ref table that is actually dropped
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Adds support for creating table constraints UNIQUE and EXCLUDE via ALTER TABLE command without client having to specify a name.
+
+* Drop `SHARD_STATE_TO_DELETE` and use the cleanup records instead
+
+* Defers cleanup after a failure in shard move or split
+
+* Cleanup the shard on the target node in case of a failed/aborted shard move
+
+* Support ALTER TABLE .. ADD PRIMARY KEY ... command
+
+* Fixes alter_table_set_access_method error for views.
+
+* Adds citus_task_wait udf to wait on desired task status.
+
+* Fixes task executor SIGTERM handling.
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Adds support for outer joins having a recurring rel in the outer side of the join (e.g., \<reference table\> LEFT JOIN \<distributed table\>)
+
+* Create replication artifacts with unique names
+
+* PR description that will go into the change log, up to 78 characters
+
+* PR description that will go into the change log, up to 78 characters
+
+* PR description that will go into the change log, up to 78 characters
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Adds signal handlers for queue monitor to gracefully shutdown, cancel and to see config changes.
+
+* Fixes a bug that caused DROP OWNED BY to not drop schemas on workers
+
+* Extend cleanup process for replication artifacts
+
+* Adds nonblocking concurrent task execution via background workers.
+
+* Fixes false full join pushdown error check. 
+
+* Include gpid in all internal application names
+
+* PR description that will go into the change log, up to 78 characters
+
+* Fixes a potential dangling pointer issue
+
+* Propagate BEGIN properties to worker nodes
+
+* Added a workaround for a bug in git ls-files command.
+
+* Deprecate citus.replicate_reference_tables_on_activate, make it always off
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Fixes a bug that might cause segfaults when handling deeply nested subtransaction
+
+* Makes sure to disallow triggers that depend on extensions
+
+* Improve a query that terminates compeling backends from citus_update_node()
+
+* Allow citus_update_node() to work with nodes from different clusters
+
+* PR description that will go into the change log, up to 78 characters
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* This implements a new UDF `citus_get_transaction_clock`() that returns a monotonically increasing logical causal clock for the current transaction.
+
+* Drops GUC defer_drop_after_shard_split
+
+* Drops GUC defer_drop_after_shard_move
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Fixes an upgrade problem for worker_fetch_foreign_file when upgrade path starts from 8.3 up to 11.1
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Fixes an upgrade problem for worker_repartition_cleanup when upgrade path starts from 9.1 up to 11.1
+
+* Don't leak search_path to workers on DDL
+
+* Adds failure test for shard move
+
+* Remove function `WaitForAllSubscriptionsToBecomeReady` and related tests
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Introduce ```citus.propagate_session_settings_for_loopback_connection``` GUC to propagate local settings to new connections.
+
+* Adds status column to get_rebalance_progress()
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Fixes a bug that might cause failing to query the views based on tables that have renamed columns
+
+* Fix bug in global PID assignment for rebalancer sub-connections
+
+* Fixes a bug that causes a crash with empty/null password
+
+* Raises memory limits in columnar from 256MB to 1GB for reads and writes
+
+* PR description that will go into the change log, up to 78 characters
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Fixes a bug that prevents retaining columnar table options after a table-rewrite A fix for this issue: Columnar: options ignored during ALTER TABLE rewrite #5927
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Fixes a bug that prevents retaining columnar table options after a table-rewrite A fix for this issue: Columnar: options ignored during ALTER TABLE rewrite #5927
+
+* Fixes citus_drain_node to drain the specified worker only.
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Fixes a bug that causes not retaining trigger enable/disable settings when re-creating them on shards
+
+* Propagates column aliases in the shard-level commands
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Fixes a bug that prevents retaining columnar table options after a table-rewrite
+
+* Adds source_lsn and target_lsn fields into get_rebalance_progress
+
+* Fixes a bug in `ALTER EXTENSION citus UPDATE`
+
+* Reuse connections for shard splits and logical replication
+
+* Revert shard move change that could cause performance regressions
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Disallows having ON DELETE/UPDATE SET DEFAULT actions on columns that default to sequences
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Fixes a bug that might cause inserting incorrect DEFAULT values when applying foreign key action
+
+* Fixes dropping replication slots
+
+* Improve logging during shard split and resource cleanup
+
+* Fixes floating exception during create_distributed_table_concurrently.
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Fixes a bug in query escaping in undistribute_table and alter_distributed_table
+
+* PR description that will go into the change log, up to 78 characters
+
+* Show citus_copy_shard_placement progress in get_rebalance_progres
+
+* Adds support for unlogged distributed sequences
+
+* Adds support for NULLS NOT DISTINCT clauses for indexes
+
+* Add a rebalancer that uses background tasks for its execution
+
+* Show Citus local tables in citus_tables 
+
+* Hide tables owned by extensions from citus_tables and citus_shards
+
+* Fix bug preventing isolate_tenant_to_new_shard with text column
+
+* citus_move_shard_placement becomes a noop if shard already exists on node
+
+* Remove do_repair option from citus_copy_shard_placement
+
+* Add infrastructure to run long running management operations in background
+
+* Create all foreign keys quickly at the end of a shard mov
+
+* Introduce GUC `citus.skip_constraint_validation`
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Makes sure that `SELECT .. FOR UPDATE `opens a transaction block when used in a function call
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Makes sure to disallow usage of SQL functions referencing to a distributed table and prevents a segfault
+
+* Checks existence of the shards before insert, delete, and update.
+
+* Disallows distribution by a numeric with negative scale
+
+* PR description that will go into the change log, up to 78 characters
+
+* Fixes flaky test for views, in `citus_local_tables_mx
+
+* Allow citus_internal application_name with additional suffix
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Add create_distributed_table_concurrently which distributes tables without blocking
+
+* Adds SUM for calculating non-partitioned table sizes
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Add an allow_unsafe_constraints flag for constraints without distribution column
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Fixes a bug that prevents setting colocation group of a partitioned distributed table to 'none'
+
+* Adds support for PostgreSQL 15beta3
+
+* Creates new colocation entries when colocate_with => 'none'.
+
+* Fixes an issue can cause logical reference table replication to fail
+
+* Stops creating colocation entry at EnsureReferenceTablesExistOnAllNodes.
+
+* Fix compilation warning on PG13 + OpenSSL 3.0
+
+* Fixes a bug that caused GRANT to propagate within CREATE EXTENSIO
+
+* Only show shards in moving state in get_rebalance_progres
+
+* Fixes a bug that prevents distributing tables that depend on sequences
+
+* Fixes a bug that could cause failures in create_distributed_tabl
+
+* Fix reference table lock contention
+
+* Fixes upgrade paths for earlier versions
+
+* Default mode for shard splitting is changed to 'auto' from 'block_writes'.
+
+* Supports non blocking tenant isolation.
+
+* Support changing CPU priorities for backends and shard moves
+
+* Fix description of citus.distributed_deadlock_detection_factor
+
+* Fix several small memory leaks
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Remove the GUC, citus.enable_unsafe_triggers,  mention in the error message as this config is meant for advanced users.
+
+* Fixes a bug that can cause failure in CREATE ROLE statement.
+
+* Support logical replication in replicate_reference_tables(
+
+* Fixes a segfault in citus_copy_shard_placement
+
+* Use faster custom copy logic for non-blocking shard moves
+
+* isolate_tenant_to_new_shard drops support for replicated tables
+
+* isolate_tenant_to_new_shard now fails when run concurrently with itself
+
+* isolate_tenant_to_new_shard adds support for partitioned tables
+
+* isolate_tenant_to_new_shard adds support for columnar tables
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Fixes the transaction timestamp column of the get_current_transaction_id() on coordinator.
+
+* Adds support for GRANT/REVOKE ON aggregates.
+
+* Fixes unexpected error for foreign tables when upgrading pg
+
+* Improve performance of blocking shard moves
+
+* Fixes a crash that can happen due to catalog read in shmem_exit
+
+* Fixes a bug that could cause failures in insert into select
+
+* Avoid possible information leakage about existing user
+
+* Adds error check for views with circular dependencies
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Fixes a concurrency bug between creating colocated distributed table and shard move
+
+* Reduces memory consumption of index name fix for partitioned tables
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Adds the GUC enable_unsupported_feature_messages to control some of the citus related messages.
+
+* Allow WITH HOLD cursors with parameters
+
+* Introduces `citus_locks` view
+
+* Adds a `citus_split_shard_by_split_points` function
+
+* Separate columnar storage AM into a separate logical extension
+
+* Fixes a bug that prevents promoting read-replicas as primaries
+
+* 
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Fixes a bug that prevents using `auto` option for `VACUUM (INDEX_CLEANUP)` operation
+
+* Fix upgrades to Citus 11 when there are no nodes in the metadata
+
+* Fixes a bug that prevents using COMPRESSION and CONSTRAINT on a column
+
+* VACUUM and ANALYZE commands are propagated to worker nodes.
+
+* Fixes qualify CREATE STATISTICS statements
+
+* Fixes a bug that could cause unqualified DROP DOMAIN IF EXISTS to fail
+
+* Fixes a bug that could cause leaking files when mat. view refreshed
+
+* Introduce a citus_finish_citus_upgrade() procedure
+
+* PR description that will go into the change log, up to 78 characters
+
+* Prevents alter table functions from dropping extensions
+
+* honor enable_metadata_sync in node operations
+
+* Fix `invalid read of size 1` memory error with citus_add_node
+
+* PR description that will go into the change log, up to 78 characters
+
+* PR description that will go into the change log, up to 78 characters
+
+* PR description that will go into the change log, up to 78 characters
+
+* Propagate views when syncing Citus table metadata
+
+* Fix columnar freezing/wraparound bug.
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Fixes a bug that could cause wrong schema and ownership after alter_distributed_table
+
+* Parallelize metadata syncing on node activat
+
+* Columnar: tighten security and improve visibility
+
+* Improve nested execution checks and add GUC to disable
+
+* Columnar: support relation options with ALTER TABLE.
+
+* Enable distributed execution from run_command_on_* functions 
+
+* LOCK commands on distributed tables are supported from worker nodes
+
+* Add a run_command_on_coordinator function
+
+* Fix schema name qualification for rename sequence statement
+
+* Adds "synchronous" option to citus_disable_node() UDF
+
+* Fixes a bug that prevents dropping/altering indexes
+
+* Fixes schema name qualification for ALTER and DROP SEQUENCE
+
+* In prepared statements, map any unused parameters to a generic type.
+
+* Adds support for propagating ALTER VIEW commands
+
+* Add a citus_is_coordinator function to check whether a node is the coordinator
+
+* Fixes schema name qualification for ALTER and DROP STATISTICS
+
+* `lock_table_if_exits` no longer raises an error when called outside of a xact
+
+* Adds support for distributing CREATE/DROP VIEW commands
+
+* Refrain reading the metadata cache for all tables during upgrade
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Convert citus.hide_shards_from_app_name_prefixes to citus.show_shards_for_app_name_prefixes
+
+* Fixes a bug that marks metadatasynced of coordinator
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Fixes a bug that cause false positive distributed deadlocks due to local execution
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Fixes a bug that may cause Citus not to create function in transaction block properly
+
+* Add support for DOMAIN objects in Citus
+
+* Allow adding a unique constraint with an index
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Fixes a bug that could cause invalid JSON when running EXPLAIN ANALYZE with subplans
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Fixes a bug that could cause EXPLAIN ANALYZE to fail for prepared statements with custom type
+
+* Removes deprecated re-partitioning functions like worker_hash_partition_table
+
+* Add TABLESAMPLE support
+
+* Fixes a bug that prevents non-client backends to access shards
+
+* Drops postgres 12 suppor
+
+* Add support for deparsing ALTER FUNCTION ... SUPPORT ... commands
+
+* Drop GUC citus.enable_cte_inlining 
+
+* Introduces citus_coordinator_nodeid UDF
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Qualify CREATE AGGREGATE stmts in Preprocess, adds PreprocessDefineAggregateStm
+
+* Create type locally if it has undistributable dependenc
+
+* Fixes a bug that limits usage of sequences in non-int columns
+
+* Propagates CREATE SCHEMA .. GRANT ON SCHEMA .. commands
+
+* Start erroring out for unsupported lateral subqueries
+
+* Implement TEXT SEARCH DICTIONARY propagation
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Fixes a bug that could cause worker_save_query_explain_analyze to fail on custom types
+
+* Supports CREATE SCHEMA AUTHORIZATION statements without schema name
+
+* Set create_object_propagation default to immediate
+
+* Error out if object has dependency to an object with unsupported type
+
+* Error out if object has circular dependency
+
+* Introduces helper functions for global pid
+
+* Move pg_dist_object to pg_catalog
+
+* Drops citus_worker_stat_activit
+
+* Provide notice message for idempotent create_distributed_function calls
+
+* Introduces citus_backend_gpid(
+
+* Introduces citus_stat_activity view
+
+* Synchronize pg_dist_colocation to worker nodes
+
+* Add a citus.max_client_connections setting to limit non-Citus connections
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Adds citus_finalize_upgrade_to_citus11() which is necessary to upgrade Citus 11+ from earlier versions
+
+* Adds propagation of CREATE AGGREGATE commands
+
+* Add GUC to control ddl creation behaviour in transactions
+
+* Improves concurrent metadata syncing and metadata changing DDL operations
+
+* Enable re-partition joins on followers
+
+* Enable re-partition joins in transaction blocks
+
+* Fixes a bug that could cause failed re-partition joins to leak result tables
+
+* Fixes a bug that could cause re-partition joins involving local shards to fail
+
+* Automatically use binary encoding in re-partition joins when possible
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Add citus.enable_unsafe_triggers flag to propagate triggers on distributed tables
+
+* Overrides pg_cancel_backend and pg_terminate_backend to run with global pid
+
+* Refactor CreateDistributedTable to take column name
+
+* Distribute functions with CREATE FUNCTION command
+
+* Implement TEXT SEARCH CONFIGURATION propagation
+
+* PR description that will go into the change log, up to 78 characters
+
+* Supports TRUNCATE for foreign tables
+
+* Prevent Citus table functions from being called on shards
+
+* Propagates schema operations
+
+* Delegate function calls of the form SELECT .. FROM func()
+
+* Prevent citus.node_conninfo to use "application_name
+
+* Allow create_distributed_function() on a function owned by an extension.
+
+* Introduces global pid
+
+* Removes citus.shard_placement_policy
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Fixes a crash that occurs when the aggregate that cannot be pushed-down returns empty result from a worker
+
+* Replaces citus.enable_object_propagation with citus.enable_metadata_sync
+
+* Rebalancer backends are identified by application_name = citus_rebalancer
+
+* Regular internal backends are identified by application_name = citus_internal
+
+* Propagate tables and sequences like other objects to remote nodes
+
+* Use smgrextend() when extending relation, and WAL-log first.
+
+* Use a fixed application_name while connecting to remote nodes
+
+* Allow creating distributed tables in sequential mode
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Prevents failing over to local execution for DDL's that cannot be executed locally
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Fixes a possible segfault that could happen when reporting distributed deadlock
+
+* Refactor `GenerateGrantOnSchemaStmtForRights` to a more generic for
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Introduce a new flag "force_delegation" in create_distributed_function(), which will allow a function to be delegated in an explicit transaction block. Such delegated functions are restricted to use only the distributed argument value.
+
+* Hide shards based on application_name prefix
+
+* citus_shards_on_worker shows all local shards regardles of search_path
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* citus_shard_indexes_on_worker shows all local shard indexes regardles of search_path
+
+* Require superuser for citus_add_node()/citus_activate_node()
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Improves self-deadlock prevention for `CREATE INDEX / REINDEX CONCURRENTLY` commands for builds using PG14 or higher
+
+* Disallow remote execution from queries on shards
+
+* Disables distributed&reference foreign tables
+
+* Adds support for foreign tables in MX
+
+* Prevent creating distributed functions when there are out of sync nodes
+
+* Adds twitter,packagecloud and CircleCI badges
+
+* Adds stackoverflow badge into README.md
+
+* Adds propagation for foreign server command
+
+* Fixes function signature generation bug
+
+* Propagate SET TRANSACTION commands when propagate_set_commands = 'local'
+
+* Fixes a build error that happens when lz4 is not installe
+
+* PR description that will go into the change log, up to 78 characters
+
+* Introduces `citus_check_cluster_node_health` UDF to check cluster connectivity
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Removes support for dropping distributed and local indexes in the same statement
+
+* Propagate pg_dist_object to worker nodes
+
+* Introduces `citus_check_connection_to_node` UDF to check node connectivity
+
+* Allow disabling node(s) when multiple failures happen
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Fixes an unexpected error that occurs when writing to a columnar table created in older version
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Fixes a bug that could break pg upgrades due to missing pg_depend records for columnar table access method
+
+* Fixes a bug preventing issues while create dependencies from multiple sessions
+
+* Adds NOTICE file for the use of packaging
+
+* Adds NOTICE file for the use of packaging
+
+* Adds NOTICE file for the use of packaging
+
+* Adds NOTICE file for the use of packaging
+
+* Stop updating shard range in citus_update_shard_statistics for append tables
+
+* Fixes a bug that prevents DROP SCHEMA CASCADE
+
+* Removes support for distributed cstore_fdw tables in favour of Citus columnar
+
+* Enables shard replication > 1 hash distributed tables on Citus MX
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Fixes a bug that could break `DROP SCHEMA/EXTENSON` commands when there is a columnar tabl
+
+* Introduce GUC `use_citus_managed_tables`
+
+* Relaxes table ownership check to privileges check while acquiring lock
+
+* Fixes naming issues of newly created partitioned indexes
+
+* Removes master_append_table_to_shard
+
+* Removes copy into new shard logic for append-distributed tables
+
+* Reinstate optimisation for uniform shard interval ranges
+
+* Fixes a missing `FROM` clause entry error
+
+* Fixes ALTER STATISTICS IF EXISTS bug
+
+* Removes superuser requirement for metadata sync
+
+* Disables auto-undistributing for local tables added by the user
+
+* Fix issue when compiling Citus from source with some compilers
+
+* Deprecates Inactive shard state, never marks any placement inactiv
+
+* Drop support for citus.multi_shard_commit_protocol, always use 2PC
+
+* Deprecates master_get_table_metadata UDF
+
+* Support operator class parameters in indexes
+
+* Drops GUC citus.single_shard_commit_protocol, defaults to 2PC
+
+* Removes master_apply_delete_command
+
+* Fixes the extra comma bug in ShardListInsertCommand
+
+* Refactors/Fixes issues on attach partition logic
+
+* Pushes down procedures with OUT arguments to the worker nodes.
+
+* Adds support for adding partitioned local table to Citus metadat
+
+* Turns MX on by default
+
+* Add fix_partition_shard_index_names udf to fix currently broken names
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Fixes a bug that could cause CREATE INDEX to fail for expressions when using custom search_path
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Fixes a bug that causes reading columnar metapage as all-zeros under high write concurrency 
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Fixes an unexpected error that occurs due to aborted writes to a columnar table with an inde
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Fixes a bug that could cause prerequisite columnarAM objects being not created during pg upgrade
+
+* Fixes a clog lookup failure that could occur when writing to a columnar tabl
+
+* Partition shards to be co-located with the parent shards.
+
+* Revokes read access to `columnar.chunk` from unprivileged user
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Fixes a bug that prevents pushing down boolean expressions when using columnar custom scan
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Fixes an issue that could cause unexpected errors when there is an in-progress write to a columnar table
+
+* Adds missing version checks for columnar tables
+
+* Adds missing version checks for internal function
+
+* PR description that will go into the change log, up to 78 characters
+
+* Improves error message while distributing a temporary table
+
+* Fixes a bug that may cause crash while aborting transaction
+
+* Fixes bug about int and smallint sequences on MX
+
+* Fixes a bug that caused worker_append_table_to_shard to write as superuser
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Fixes a use after free issue that could happen when altering a distributed table
+
+* Enable transferring of data using binary encoding by default on PG14
+
+* Add helper UDFs for easy time partition management
+
+* Adds pg14 support
+
+* Columnar: enable chunk group filtering to work with Params.
+
+* Shows projected columns for columnar tables in EXPLAIN output
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Fixes a bug that prevents attaching partitions when colocated foreign key exists
+
+* Speeds up dropping partitioned tables
+
+* Fix crash in shard rebalancer when no distributed tables exist
+
+* Fix a segfault caused by use after free in ConnectionsPlacementHash
+
+* Adds support for CREATE INDEX ON ONLY
+
+* Adds support for ALTER INDEX ATTACH PARTITION
+
+* Synchronizes hasmetadata flag on mx workers
+
+* Prevents errors with concurrent `citus_update_table_statistics` and DROP table
+
+* Allows more graceful failovers when replication factor > 1
+
+* Make start/stop_metadata_sync_to_node() transactiona
+
+* Fixes a bug that cause partitions to have wrong dist. key after DROP COLUMN
+
+* Columnar: fix misleading comments and useless types.
+
+* Fix master_update_table_statistics scripts for 9.4, 9.5, 10.0, 10.1
+
+* Fix master_update_table_statistics scripts for 9.4, 9.5, 10.0, 10.1
+
+* Fix master_update_table_statistics scripts for 9.4, 9.5, 10.0
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Improves `master_update_table_statistics` and provides distributed deadlock detection
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Improves `master_update_table_statistics` and provides distributed deadlock detection
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Reduces memory usage of columnar table scans by freeing the memory used for last stripe rea
+
+* Fixes a UNION pushdown issue 
+
+* Fix showing target shard size in the rebalance progress monitor
+
+* Include data_type and cache in sequence definition on worker
+
+* Use current user while syncing metadata
+
+* PR description that will go into the change log, up to 78 characters
+
+* Remove dependencies on the existence of public schema
+
+* Adds failure test for stop_metadata_sync_to_nod
+
+* Fixes an issue that could cause citus_finish_pg_upgrade to fail
+
+* Fixes an issue that could cause citus_finish_pg_upgrade to fail
+
+* Fixes an issue that could cause citus_finish_pg_upgrade to fail
+
+* Fixes an issue that could cause citus_finish_pg_upgrade to fail
+
+* Fixes a bug that causes pruning incorrect shard of a range distributed table
+
+* Adds a parameter to cleanup metadata
+
+* Excludes orphaned shards while finding shard placements
+
+* Adds propagation of ALTER SEQUENCE and other improvements
+
+* Fix bug where foreign key to reference table was disallowe
+
+* Fix bug that allowed moving of shards belonging to a reference table
+
+* Fix two race conditions in the get_rebalance_progress
+
+* Fixes a bug with local cached plans on tables with dropped columns
+
+* Adds hash & btree index support for columnar tables
+
+* Adds basic index support for columnar tables
+
+* Fixes the relation size bug during rebalancing
+
+* Fixes a bug that caused worker_create_or_alter_role to crash with NULL input
+
+* Fix nextval('seq_name'::text) bug, and schema for seq tests
+
+* Improve performance of citus_shards
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* `alter_columnar_table_set` enforces table option constraints for columnar tables
+
+* Prevents users from dropping&truncating known shards
+
+* Do smarter cleanup of orphaned shards
+
+* Fixes column default coming from a sequence
+
+* Fix possible segfaults when using Citus in the middle of an upgrad
+
+* Fix relname null bug when parallel execution
+
+* Fixes a bug that can cause a crash when DEBUG4 logging is enabled
+
+* Fix data race in get_rebalance_progress
+
+* Ignores old placements when disabling or removing a node
+
+* Deprecates the `citus.replication_model` GUC
+
+* Fixes using 2PC when it might be necessary
+
+* Enables citus.defer_drop_after_shard_move by default
+
+* fix shared dependencies that are not resident in a database
+
+* Fetch shard size on the fly for the rebalance monitor
+
+* Add support for ALTER DATABASE OWNER
+
+* Make sure that target node in shard moves is eligible for shard move
+
+* Prevent connection errors by properly terminating connections
+
+* Executor refrains from opening extra connections
+
+* Reduces memory usage for multi-row inserts
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Fixes a bug causing stale hostnames in prep. statements after master_update_node
+
+* introduce `citus.local_hostname` GUC for connections to the current node
+
+* Implement an improvement threshold for shard rebalancer moves
+
+* Closes connection after each shard move
+
+* Fixes matview access method change issue
+
+* Checks free disk space before moving a shard
+
+* Fixes nested select query with union bug
+
+* Continues to remove shards after failure in DropMarkedShards
+
+* Reduces memory usage while rebalancing
+
+* Fixes FROM ONLY queries on partitioned tables
+
+* Pushes down VALUES clause as long as not in outer part of a JOIN
+
+* Fixes problems with concurrent calls of DropMarkedShards
+
+* Optimizes partitioned disk size calculation for shard rebalancer
+
+* When DEBUG4 enabled, Citus now prints per connection establishment times
+
+* When DEBUG4 enabled, Citus prints per task execution times
+
+* Removes limits around long partition names
+
+* Introduces three new UDFs for partitioned size calculation
+
+* Refactors size queries with new enum SizeQueryTyp
+
+* PR description that will go into the change log, up to 78 characters
+
+* Updates the function comment for PostprocessCreateTableStmt
+
+* Errors out if inheriting a distributed table
+
+* Fixes error message for local table joins
+
+* Fixes issues caused by public schema being omitted in queries
+
+* Adds a parameter for shard count to create_distributed_table function
+
+* Drops postgres 11 support
+
+* Fix a bug where one could create a foreign key between non-colocated tables
+
+* Makes sure that local execution starts coordinated transactio
+
+* Introduces new UDF citus_get_active_worker_nodes
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Introduce citus.remote_copy_flush_threshold GUC that controls per-shard memory usages by COPY
+
+* Add GUC to set maximum connection lifetime
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Remove open temporary file warning when cancelling a query with an open tuple store
+
+* Adds support for temporary columnar tables
+
+* Fixes a bug that causes SELECT queries to use 2PC unnecessarily
+
+* Fixes upgrade and downgrade paths for citus_update_table_statistics
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* corrects the README.md syntax highlighting of Docker commands to run Citus on Docke
+
+* Fixes a crash in queries with a modifying CTE and a SELECT without FROM
+
+* Relaxes the locks when adding an existing node
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Fixes a bug that might cause self-deadlocks with `CREATE INDEX` / `REINDEX CONCURRENTLY` command
+
+* Prevent infinite recursion for queries that involve UNION ALL below JOIN
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Improves citus_update_table_statistics and provides distributed deadlock detection
+
+* Enforces compiler and linker flags by default
+
+* Fixes a bug with UNION ALL on PG 13
+
+* Grants SELECT permission on citus_tables view to public.
+
+* Fixes a bug due to cross join without target list
+
+* Grants read access for columnar metadata tables to unprivileged user
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Prevents using `alter_columnar_table_set` and `alter_columnar_table_reset` on a columnar table not owned by the user
+
+* Preserve colocation with procedures in alter_distributed_table
+
+* Removes limits around long table names
+
+* Fix insert query with CTEs/sublinks/subqueries etc
+
+* Uses PROCESS_UTILITY_QUERY in utility calls 
+
+* Fixes compatibility with pg_audit
+
+* Fixes an issue in creation of time_partitions vie
+
+* Support dropping local table indexes along with a distributed index
+
+* Do not re-use connections for intermediate results
+
+* Fix dropping foreign key bug when distributing table
+
+* Fixes EXPLAIN ANALYZE error when query returns no columns
+
+* Rename 'master' to 'distributed' for columns of citus_dist_stat_activity
+
+* Rename 'master' to 'distributed' for columns of citus_worker_stat_activity
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Fixes undistribute_table when table has column with GENERATED ALWAYS AS STORED expr
+
 ### citus v11.2.0 (January 30, 2023) ###
 
 * Adds support for outer joins with reference tables / complex subquery-CTEs
