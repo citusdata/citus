@@ -1,3 +1,25 @@
+### citus v11.3.0 (April 13, 2023) ###
+
+PR #6846 : fix 3 flaky tests in failure schedule
+PR #6844 : Add CPU usage to citus_stat_tenants
+PR #6845 : When creating a HTAB we need to use HASH_COMPARE  flag in order to set a user defined comparison function.
+* Fixes an uninitialized memory access in shard split API
+
+PR #6833 : Fix citus_stat_tenants period updating bug
+PR #6837 : fixes update propagation bug when `citus_set_coordinator_host` is called more than once
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Fixes update propagation bug when `citus_set_coordinator_host` is called more than once.
+
+PR #6842 : Add build-cdc-* temporary directories to .gitignore
+PR #6841 : Add build-cdc-* temporary directories to .gitignore
+PR #6840 : Bump Citus to 12.0devel
+PR #6827 : Makefile changes to build CDC in builddir for pgoutput and wal2json.
+* 
+
+PR #6824 : Fixes flakiness in multi_metadata_sync test
+PR #6830 : In run_test.py actually return worker_count
+PR #6825 : Fixes flakiness in multi_cluster_management test
+PR #6822 : Add some more tests for initial sql support
 ### citus v11.2.0 (January 30, 2023) ###
 
 * Adds support for outer joins with reference tables / complex subquery-CTEs
