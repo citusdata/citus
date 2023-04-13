@@ -38,7 +38,7 @@ NOTICE:  creating a new table for undistribute_table.dist_table
 NOTICE:  moving the data of undistribute_table.dist_table
 NOTICE:  dropping the old undistribute_table.dist_table
 NOTICE:  renaming the new table to undistribute_table.dist_table
-ERROR:  relation with OID XXXX does not exist
+ERROR:  could not create distributed table: relation does not exist
 SELECT undistribute_table('dist_table');
 NOTICE:  creating a new table for undistribute_table.dist_table
 NOTICE:  moving the data of undistribute_table.dist_table
