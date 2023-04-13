@@ -33,6 +33,7 @@ test: ref_citus_local_fkeys
 test: alter_database_owner
 test: distributed_triggers
 test: create_null_dist_key
+test: alter_table_null_dist_key
 
 test: multi_test_catalog_views
 test: multi_table_ddl
