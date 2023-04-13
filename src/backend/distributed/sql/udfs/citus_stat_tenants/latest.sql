@@ -8,6 +8,8 @@ CREATE OR REPLACE FUNCTION pg_catalog.citus_stat_tenants (
     OUT read_count_in_last_period INT,
     OUT query_count_in_this_period INT,
     OUT query_count_in_last_period INT,
+    OUT cpu_usage_in_this_period DOUBLE PRECISION,
+    OUT cpu_usage_in_last_period DOUBLE PRECISION,
     OUT score BIGINT
 )
     RETURNS SETOF record
@@ -51,6 +53,8 @@ AS (
     read_count_in_last_period INT,
     query_count_in_this_period INT,
     query_count_in_last_period INT,
+    cpu_usage_in_this_period DOUBLE PRECISION,
+    cpu_usage_in_last_period DOUBLE PRECISION,
     score BIGINT
 )
     ORDER BY score DESC
@@ -66,7 +70,9 @@ SELECT
     read_count_in_this_period,
     read_count_in_last_period,
     query_count_in_this_period,
-    query_count_in_last_period
+    query_count_in_last_period,
+    cpu_usage_in_this_period,
+    cpu_usage_in_last_period
 FROM pg_catalog.citus_stat_tenants(FALSE);
 
 ALTER VIEW citus.citus_stat_tenants SET SCHEMA pg_catalog;
