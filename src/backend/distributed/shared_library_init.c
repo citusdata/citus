@@ -2391,7 +2391,7 @@ RegisterCitusConfigVariables(void)
 		gettext_noop("Number of tenants to be shown in citus_stat_tenants."),
 		NULL,
 		&StatTenantsLimit,
-		100, 1, 10000,
+		1, 1, 10000,
 		PGC_POSTMASTER,
 		GUC_STANDARD,
 		NULL, NULL, NULL);
@@ -2412,7 +2412,7 @@ RegisterCitusConfigVariables(void)
 					 "statistics in citus_stat_tenants."),
 		NULL,
 		&StatTenantsPeriod,
-		60, 1, 60 * 60 * 24,
+		1, 1, 60 * 60 * 24,
 		PGC_USERSET,
 		GUC_STANDARD,
 		NULL, NULL, NULL);
@@ -2424,7 +2424,7 @@ RegisterCitusConfigVariables(void)
 					 "Disables when set to 'none'. Disabling can be useful for "
 					 "avoiding extra CPU cycles needed for the calculations."),
 		&StatTenantsTrack,
-		STAT_TENANTS_TRACK_NONE,
+		STAT_TENANTS_TRACK_ALL,
 		stat_tenants_track_options,
 		PGC_SUSET,
 		GUC_STANDARD,
