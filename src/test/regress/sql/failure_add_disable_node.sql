@@ -97,6 +97,8 @@ WHERE s.logicalrelid = 'user_table'::regclass AND n.isactive
 ORDER BY placementid;
 
 -- reset cluster to original state
+ALTER SEQUENCE pg_dist_node_nodeid_seq RESTART 2;
+ALTER SEQUENCE pg_dist_groupid_seq RESTART 2;
 SELECT citus.mitmproxy('conn.allow()');
 SELECT master_add_node('localhost', :worker_2_proxy_port);
 

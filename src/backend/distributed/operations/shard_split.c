@@ -1810,7 +1810,7 @@ CreateWorkerForPlacementSet(List *workersForPlacementList)
 	/* we don't have value field as it's a set */
 	info.entrysize = info.keysize;
 
-	uint32 hashFlags = (HASH_ELEM | HASH_FUNCTION | HASH_CONTEXT);
+	uint32 hashFlags = (HASH_ELEM | HASH_FUNCTION | HASH_CONTEXT | HASH_COMPARE);
 
 	HTAB *workerForPlacementSet = hash_create("worker placement set", 32, &info,
 											  hashFlags);
