@@ -247,22 +247,6 @@ create_distributed_table(PG_FUNCTION_ARGS)
 		shardCountIsStrict = true;
 	}
 
-	/*
-	 * We don't lock the relation here because we don't want to block concurrent
-	 * operations to the table unless the command is issued by owner of the table.
-	 *
-	 * CreateDistributedTable() would perform necessary checks and lock the relation
-	 * then.
-	 */
-	Relation relation = try_relation_open(relationId, NoLock);
-	if (relation == NULL)
-	{
-		ereport(ERROR, (errmsg("could not create distributed table: "
-							   "relation does not exist")));
-	}
-
-	relation_close(relation, NoLock);
-
 	char *distributionColumnName = text_to_cstring(distributionColumnText);
 	Assert(distributionColumnName != NULL);
 
@@ -883,22 +867,6 @@ create_reference_table(PG_FUNCTION_ARGS)
 {
 	CheckCitusVersion(ERROR);
 	Oid relationId = PG_GETARG_OID(0);
-
-	/*
-	 * We don't lock the relation here because we don't want to block concurrent
-	 * operations to the table unless the command is issued by owner of the table.
-	 *
-	 * CreateReferenceTable() would perform necessary checks and lock the relation
-	 * then.
-	 */
-	Relation relation = try_relation_open(relationId, NoLock);
-	if (relation == NULL)
-	{
-		ereport(ERROR, (errmsg("could not create reference table: "
-							   "relation does not exist")));
-	}
-
-	relation_close(relation, NoLock);
 
 	CreateReferenceTable(relationId);
 	PG_RETURN_VOID();
