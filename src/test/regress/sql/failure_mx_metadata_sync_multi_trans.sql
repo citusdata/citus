@@ -260,11 +260,8 @@ UPDATE dist1 SET id = :failed_node_val WHERE id = :failed_node_val;
 DELETE FROM dist1 WHERE id = :failed_node_val;
 
 -- Show that DDL would still propagate to the node
-SET client_min_messages TO NOTICE;
-SET citus.log_remote_commands TO 1;
 CREATE SCHEMA dummy;
-SET citus.log_remote_commands TO 0;
-SET client_min_messages TO ERROR;
+SELECT * FROM run_command_on_workers($$SELECT nspname FROM pg_namespace WHERE nspname = 'dummy'$$);
 
 -- Successfully activate the node after many failures
 SELECT citus.mitmproxy('conn.allow()');
@@ -285,3 +282,5 @@ DROP SCHEMA mx_metadata_sync_multi_trans CASCADE;
 DROP ROLE foo1;
 DROP ROLE foo2;
 SELECT citus_remove_node('localhost', :master_port);
+ALTER SEQUENCE pg_dist_node_nodeid_seq RESTART 3;
+ALTER SEQUENCE pg_dist_groupid_seq RESTART 3;

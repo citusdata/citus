@@ -15,6 +15,9 @@ SET citus.shard_replication_factor TO 1;
 SET citus.max_adaptive_executor_pool_size TO 1;
 SELECT pg_backend_pid() as pid \gset
 
+ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 222222;
+ALTER SEQUENCE pg_catalog.pg_dist_placement_placementid_seq RESTART 333333;
+
 -- make sure coordinator is in the metadata
 SELECT citus_set_coordinator_host('localhost', 57636);
 
@@ -108,3 +111,5 @@ SELECT * FROM pg_dist_shard WHERE logicalrelid = 'table_1'::regclass;
 DROP SCHEMA create_dist_tbl_con CASCADE;
 SET search_path TO default;
 SELECT citus_remove_node('localhost', 57636);
+ALTER SEQUENCE pg_dist_node_nodeid_seq RESTART 3;
+ALTER SEQUENCE pg_dist_groupid_seq RESTART 3;
