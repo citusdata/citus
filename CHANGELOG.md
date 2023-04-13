@@ -1,19 +1,12 @@
 ### citus v11.3.0 (April 13, 2023) ###
 
-PR #6846 : fix 3 flaky tests in failure schedule
-PR #6844 : Add CPU usage to citus_stat_tenants
 PR #6845 : When creating a HTAB we need to use HASH_COMPARE  flag in order to set a user defined comparison function.
 * Fixes an uninitialized memory access in shard split API
 
-PR #6833 : Fix citus_stat_tenants period updating bug
-PR #6787 : Add more tests for ddl coverage
 PR #6837 : fixes update propagation bug when `citus_set_coordinator_host` is called more than once
 TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
 * Fixes update propagation bug when `citus_set_coordinator_host` is called more than once.
 
-PR #6842 : Add build-cdc-* temporary directories to .gitignore
-PR #6841 : Add build-cdc-* temporary directories to .gitignore
-PR #6840 : Bump Citus to 12.0devel
 PR #6827 : Makefile changes to build CDC in builddir for pgoutput and wal2json.
 *
 
@@ -26,31 +19,15 @@ PR #6820 : Add upgrade/downgrade paths between v11.2.2 and v11.3.1
 PR #6794 : Move cleanup record test to upgrade schedule
 * Move cleanup record test to upgrade schedule
 
-PR #6824 : Fixes flakiness in multi_metadata_sync test
-PR #6811 : Backport identity column improvements to v11.2
 PR #6725 : Multi tenant monitoring
 * Adds views that monitor statistics on tenant usages
 
-PR #6830 : In run_test.py actually return worker_count
-PR #6825 : Fixes flakiness in multi_cluster_management test
-PR #6816 : Refactor run_test.py
-PR #6817 : Explicitly disallow local rels when inserting into dist table
-PR #6821 : Rename citus stats tenants
-PR #6822 : Add some more tests for initial sql support
-PR #6819 : Fix flakyness in citus_split_shard_by_split_points_deferred_drop
 PR #6805 : Do not override combinefunc of custom aggregates with common names
 * Fix an issue that caused some queries with custom aggregates to fail
 
 PR #6810 : Make CDC decoder an independent extension
 *
 
-PR #6814 : Make python-regress based tests runnable with run_test.py
-PR #6813 : Fix flaky multi_mx_schema_support test
-PR #6720 : Convert columnar tap tests to pytest
-PR #6812 : Revoke statistics permissions from public and grant them to pg_monitor
-PR #6769 : Citus stats tenants guc
-PR #6807 : Fix the incorrect (constant) value passed to pointer-to-bool parameter, pass a NULL  as the value is not used
-PR #6797 : Attribute local queries and cached plans on local execution
 PR #6728 : stabilize metadata syncing
 * Fixes memory leak and max allocation block errors during metadata syncing.
 
@@ -75,65 +52,32 @@ TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHAR
 PR #6776 : Propagate CREATE/ALTER/DROP PUBLICATION statements
 * Propagate CREATE/ALTER/DROP PUBLICATION statements for distributed tables
 
-PR #6796 : Parse the annotation string correctly
 PR #6802 : Handle identity columns properly in the router planner
 * Fixes a bug with insert..select queries with identity columns
 
-PR #6762 : Add logs to citus_stats_tenants
 PR #6775 : Add appropriate locks for MERGE to run in in parallel
 * PR description that will go into the change log, up to 78 characters
 
-PR #6773 : Add initial sql support for distributed tables that don't have a shard key
 PR #6793 : Add a GUC to disallow planning the queries that reference non-colocated tables via router planner
 TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
 * Adds `citus.enable_non_colocated_router_query_pushdown` GUC to ensure generating a consistent distributed plan for the queries that reference non-colocated distributed tables (when set to "false", the default is "true").
 
-PR #6792 : Disentangle MERGE planning code from the modify-planning code path
-PR #6761 : Citus stats tenants collector view
-PR #6791 : Make 8 more tests runnable multiple times via run_test.py
-PR #6786 : Refactor some of the planning code to accommodate a new planning path for MERGE SQL
-PR #6789 : Rename AllRelations.. functions to AllDistributedRelations..
-PR #6788 : Actually skip arbitrary_configs_router & nested_execution for AllNullDistKeyDefaultConfig
-PR #6783 : Add a config for arbitrary config tests where all the tables are null-shard-key tables
-PR #6784 : Fix attach partition: citus local to null distributed
-PR #6782 :  Add an arbitrary config test heavily based on multi_router_planner_fast_path.sql
 PR #6754 : Check before logicalrep for rebalancer, error if needed
 * Check before logicalrep for rebalancer, error if needed
 
-PR #6781 : Decide what to do with router planner error at one place
-PR #6778 : Support partitioning for dist tables with null dist keys
-PR #6766 : fix pip lock file
-PR #6764 : Make workerCount configurable for regression tests
-PR #6745 : Add support for creating distributed tables with a null shard key
-PR #6696 : This implements MERGE phase-III
-PR #6767 : Add pytest depedencies to Pipfile
-PR #6760 : Decide core distribution params in CreateCitusTable
-PR #6759 : Add multi_create_fdw into minimal_schedule
-PR #6743 : Replace CITUS_TABLE_WITH_NO_DIST_KEY checks with HasDistributionKey()
-PR #6751 : Stabilize single_node.sql and others that report illegal node removal
-PR #6742 : Refactor CreateDistributedTable()
 PR #6721 : Exclude-Generated-Columns-In-Copy
 * Fixes a bug in shard copy operations.
 
 PR #6739 : Rebalance shard groups with placement count less than worker count
 * Adds logic to distribute unbalanced shards
 
-PR #6747 : Remove unused lock functions
 PR #6748 : Use pg_total_relation_size in citus_shards
 * Correctly report shard size in citus_shards vie
 
-PR #6744 : Fix multiple output version arbitrary config tests
-PR #6741 : Stabilize single node tests
-PR #6740 : Fix string eval bug in migration files check
 PR #6726 : fix memory leak during altering distributed table with a lot of partition and shards
 TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
 * Fixes a memory leak issue during altering distributed table with a lot of partition and shards.
 
-PR #6736 : Make run_test.py and create_test.py importable without errors
-PR #6734 : Don't blanket ignore flake8 E402 error
-PR #6737 : Fixes bookworm packaging pipeline problem
-PR #6735 : Fix run_test.py on python 3.9
-PR #6733 : MERGE: In deparser, add missing check for RETURNING clause.
 PR #6732 : Move common code to a new routine.
 * PR description that will go into the change log, up to 78 characters
 
@@ -141,25 +85,13 @@ PR #6722 : fix memory leak during distribution of a table with a lot of partitio
 TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
 * Fixes memory leak during distribution of a table with a lot of partitions and shards.
 
-PR #6714 : Remove auto_explain workaround in citus explain hook for ALTER TABLE
 PR #6724 : fix single tuple result memory leak
 * Fixes memory leak issue with query results that returns single row.
 
-PR #6719 : Fix flaky test
-PR #6718 : Add more powerfull dependency tracking to run_test.py
-PR #6710 : Install non-vulnerable cryptography package
 PR #6693 : prevent memory leak during ConvertTable with a lot of partitions
 TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
 * Fixes memory leak during undistribution and alteration of a table with a lot of partitions.
 
-PR #6711 : Support compilation and run tests on latest PG versions
-PR #6700 : Add auto-formatting and linting to our python code
-PR #6707 : Allow multi_insert_select to run repeatably
-PR #6708 : Fix flakyness in failure_create_distributed_table_non_empty
-PR #6698 : Miscellaneous cleanup
-PR #6704 : Update README for 11.2
-PR #6703 : Fix dubious ownership error from git
-PR #6690 : Bump Citus to 11.3devel
 PR #6688 : Stop background daemon before dropping the database
 * Stop maintenance daemon when dropping a database even without Citus extension
 
