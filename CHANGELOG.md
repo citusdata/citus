@@ -15,7 +15,7 @@ PR #6842 : Add build-cdc-* temporary directories to .gitignore
 PR #6841 : Add build-cdc-* temporary directories to .gitignore
 PR #6840 : Bump Citus to 12.0devel
 PR #6827 : Makefile changes to build CDC in builddir for pgoutput and wal2json.
-* 
+*
 
 PR #6771 : Adds control for background task executors involving a node
 * Adds control for background task executors involving a node
@@ -42,7 +42,7 @@ PR #6805 : Do not override combinefunc of custom aggregates with common names
 * Fix an issue that caused some queries with custom aggregates to fail
 
 PR #6810 : Make CDC decoder an independent extension
-* 
+*
 
 PR #6814 : Make python-regress based tests runnable with run_test.py
 PR #6813 : Fix flaky multi_mx_schema_support test
@@ -70,7 +70,7 @@ TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHAR
 
 PR #6756 : Schedule parallel shard moves in background rebalancer by removing task dependencies between shard moves across colocation groups.
 TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
-* This PR removes the task dependencies between shard moves for which the shards belong to different colocation groups. This change results in scheduling multiple tasks in the RUNNABLE state. Therefore it is possible that the background task monitor can run them concurrently. 
+* This PR removes the task dependencies between shard moves for which the shards belong to different colocation groups. This change results in scheduling multiple tasks in the RUNNABLE state. Therefore it is possible that the background task monitor can run them concurrently.
 
 PR #6776 : Propagate CREATE/ALTER/DROP PUBLICATION statements
 * Propagate CREATE/ALTER/DROP PUBLICATION statements for distributed tables
@@ -141,7 +141,7 @@ PR #6722 : fix memory leak during distribution of a table with a lot of partitio
 TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
 * Fixes memory leak during distribution of a table with a lot of partitions and shards.
 
-PR #6714 : Remove auto_explain workaround in citus explain hook for ALTER TABLE 
+PR #6714 : Remove auto_explain workaround in citus explain hook for ALTER TABLE
 PR #6724 : fix single tuple result memory leak
 * Fixes memory leak issue with query results that returns single row.
 
@@ -162,19 +162,6 @@ PR #6703 : Fix dubious ownership error from git
 PR #6690 : Bump Citus to 11.3devel
 PR #6688 : Stop background daemon before dropping the database
 * Stop maintenance daemon when dropping a database even without Citus extension
-
-PR #6671 : Add changelog entries for 11.2.0
-PR #6685 : Also reset transactions at connection shutdown
-* Fix use-after-free bug introduced in 11.1.1
-
-PR #6683 : Improve rebalance reporting for retried tasks
-PR #6682 : Fix background rebalance when reference table has no PK
-TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
-* Fixes a bug that causes background rebalancer to fail when a reference table doesn't have a primary key
-
-PR #6678 : Fixes validate Output phase of packaging pipeline
-PR #6675 : Revert "Support MERGE on distributed tables with restrictions"
-* Revert "Support MERGE on distributed tables with restrictions"
 
 ### citus v11.2.0 (January 30, 2023) ###
 
