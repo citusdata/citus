@@ -187,6 +187,8 @@ ORDER BY placementid;
 (1 row)
 
 -- reset cluster to original state
+ALTER SEQUENCE pg_dist_node_nodeid_seq RESTART 2;
+ALTER SEQUENCE pg_dist_groupid_seq RESTART 2;
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
 ---------------------------------------------------------------------
@@ -196,7 +198,7 @@ SELECT citus.mitmproxy('conn.allow()');
 SELECT master_add_node('localhost', :worker_2_proxy_port);
  master_add_node
 ---------------------------------------------------------------------
-               4
+               2
 (1 row)
 
 -- verify node is added
