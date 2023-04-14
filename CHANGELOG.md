@@ -7,9 +7,6 @@ PR #6837 : fixes update propagation bug when `citus_set_coordinator_host` is cal
 TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
 * Fixes update propagation bug when `citus_set_coordinator_host` is called more than once.
 
-PR #6827 : Makefile changes to build CDC in builddir for pgoutput and wal2json.
-*
-
 PR #6771 : Adds control for background task executors involving a node
 * Adds control for background task executors involving a node
 
@@ -24,9 +21,6 @@ PR #6725 : Multi tenant monitoring
 
 PR #6805 : Do not override combinefunc of custom aggregates with common names
 * Fix an issue that caused some queries with custom aggregates to fail
-
-PR #6810 : Make CDC decoder an independent extension
-*
 
 PR #6728 : stabilize metadata syncing
 * Fixes memory leak and max allocation block errors during metadata syncing.
