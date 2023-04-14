@@ -7,7 +7,6 @@ cartesianProduct: false
 limit: true
 orderby: true
 forceOrderbyWithLimit: true
-aggregate: false
 useAvgAtTopLevelTarget: true
 dataRange:
   from: 0
@@ -32,7 +31,6 @@ targetTables:
       rowCount: 10
       nullRate: 0.1
       duplicateRate: 0.1
-      useRandom: false
       columns:
         - Column:
           name: id
@@ -45,7 +43,6 @@ targetTables:
       rowCount: 10
       nullRate: 0.1
       duplicateRate: 0.1
-      useRandom: false
       columns:
         - Column:
           name: id
@@ -62,18 +59,9 @@ targetRteTypes:
   - RELATION
   - SUBQUERY
   - CTE
-  #- TABLEFUNC
   - VALUES
 
 targetRestrictOps:
   - LT
   - GT
   - EQ
-
-targetAggregateFunctions:
-  - min
-  - max
-  - count
-
-targetRteTableFunctions:
-  - generate_series(0,100)

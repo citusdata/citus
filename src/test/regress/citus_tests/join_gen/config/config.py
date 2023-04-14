@@ -9,7 +9,7 @@ class Config:
     def __init__(self):
         configObj = Config.parseConfigFile("config/config.yaml")
 
-        self.targetTables = _dupTables(parseTableArray(configObj["targetTables"]))
+        self.targetTables = _distinctCopyTables(parseTableArray(configObj["targetTables"]))
         self.targetJoinTypes = parseJoinTypeArray(configObj["targetJoinTypes"])
         self.targetRteTypes = parseRteTypeArray(configObj["targetRteTypes"])
         self.targetRestrictOps = parseRestrictOpArray(configObj["targetRestrictOps"])
@@ -17,14 +17,11 @@ class Config:
         self.targetRteCount = configObj["targetRteCount"]
         self.targetCteCount = configObj["targetCteCount"]
         self.targetCteRteCount = configObj["targetCteRteCount"]
-        self.targetAggregateFunctions = configObj["targetAggregateFunctions"]
-        self.targetRteTableFunctions = configObj["targetRteTableFunctions"]
         self.semiAntiJoin = configObj["semiAntiJoin"]
         self.cartesianProduct = configObj["cartesianProduct"]
         self.limit = configObj["limit"]
         self.orderby = configObj["orderby"]
         self.forceOrderbyWithLimit = configObj["forceOrderbyWithLimit"]
-        self.aggregate = configObj["aggregate"]
         self.useAvgAtTopLevelTarget = configObj["useAvgAtTopLevelTarget"]
         self.interactiveMode = configObj["interactiveMode"]
         self.queryOutFile = configObj["queryOutFile"]
@@ -98,14 +95,14 @@ def isTableReference(table):
     return table.citusType == CitusType.REFERENCE
 
 
-def _dupTables(tables):
-    dupTables = []
+def _distinctCopyTables(tables):
+    distinctCopyTables = []
     for table in tables:
         distinctCopyCount = table.distinctCopyCount
-        for dupIdx in range(1, distinctCopyCount):
-            dupTable = copy.deepcopy(table)
-            dupTable.name += str(dupIdx)
-            dupTables.append(dupTable)
+        for tblIdx in range(1, distinctCopyCount):
+            distinctCopyTable = copy.deepcopy(table)
+            distinctCopyTable.name += str(tblIdx)
+            distinctCopyTables.append(distinctCopyTable)
         table.name += "0"
-    tables.extend(dupTables)
+    tables.extend(distinctCopyTables)
     return tables

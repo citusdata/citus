@@ -24,7 +24,6 @@ targetTables: <Table[]>
       rowCount: <int>
       nullRate: <float>
       duplicateRate: <float>
-      useRandom: <bool>
       columns: <Column[]>
         - Column:
           name: <string>
@@ -44,7 +43,6 @@ targetTables: "array of tables that will be used in generated queries"
       rowCount: "total # of rows that will be inserted into table"
       nullRate: "percentage of null rows in rowCount that will be inserted into table"
       duplicateRate: "percentage of duplicates in rowCount that will be inserted into table"
-      useRandom: "should we generate random rows"
       columns: "array of columns in table"
         - Column:
           name: "name of column"
@@ -70,7 +68,6 @@ cartesianProduct: <bool>
 limit: <bool>
 orderby: <bool>
 forceOrderbyWithLimit: <bool>
-aggregate: <bool>
 useAvgAtTopLevelTarget: <bool>
 dataRange:
   from: <int>
@@ -87,7 +84,6 @@ targetCteRteCount: <int>
 targetJoinTypes: <JoinType[]>
 targetRteTypes: <RteType[]>
 targetRestrictOps: <RestrictOp[]>
-targetAggregateFunctions: <string[]>
 ```
 
 Explanation:
@@ -99,7 +95,6 @@ cartesianProduct: "should we support cartesian joins"
 limit: "should we support limit clause"
 orderby: "should we support order by clause"
 forceOrderbyWithLimit: "should we force order by when we use limit"
-aggregate: "should we support aggregate at targetlist"
 useAvgAtTopLevelTarget: "should we make top level query as select avg() from (subquery)"
 dataRange:
   from: "starting boundary for data generation"
@@ -116,7 +111,6 @@ targetCteRteCount: "limits how many rtes should exist in cte part of the query"
 targetJoinTypes: "supported join types"
 targetRteTypes: "supported rte types"
 targetRestrictOps: "supported restrict ops"
-targetAggregateFunctions: "supported aggregate function names"
 ```
 
 ## Misc Configuration
@@ -179,9 +173,6 @@ targetRteTypes:
   - CTE
   - VALUES
 ```
-
-### Aggregation Support
-Tool supports any aggregate functions which takes int column as input and returns int result. e.g. max, min, count
 
 ## How to Generate Queries?
 You have 2 different options.

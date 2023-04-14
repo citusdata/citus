@@ -12,8 +12,7 @@ class RTEType(Enum):
     RELATION = 1
     SUBQUERY = 2
     CTE = 3
-    TABLEFUNC = 4
-    VALUES = 5
+    VALUES = 4
 
 
 class RestrictOp(Enum):
@@ -37,7 +36,6 @@ class Table:
         rowCount,
         nullRate,
         duplicateRate,
-        useRandom,
         columns,
         distinctCopyCount,
     ):
@@ -47,7 +45,6 @@ class Table:
         self.rowCount = rowCount
         self.nullRate = nullRate
         self.duplicateRate = duplicateRate
-        self.useRandom = useRandom
         self.columns = columns
         self.distinctCopyCount = distinctCopyCount
 

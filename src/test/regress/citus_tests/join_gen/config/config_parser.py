@@ -44,7 +44,6 @@ def parseTable(targetTableDict):
     rowCount = targetTableDict["rowCount"]
     nullRate = targetTableDict["nullRate"]
     duplicateRate = targetTableDict["duplicateRate"]
-    useRandom = targetTableDict["useRandom"]
     columns = []
     for columnDict in targetTableDict["columns"]:
         col = parseColumn(columnDict)
@@ -57,7 +56,6 @@ def parseTable(targetTableDict):
         rowCount,
         nullRate,
         duplicateRate,
-        useRandom,
         columns,
         distinctCopyCount,
     )

@@ -37,15 +37,3 @@ def randomRestrictOp():
         raise BaseException("Unknown restrict op")
 
     return " " + opText + " "
-
-
-def randomAggregateFunc():
-    """returns a randomly selected aggregate function name given at config"""
-    targetAggregateFunctions = getConfig().targetAggregateFunctions
-    return random.choice(targetAggregateFunctions)
-
-
-def randomTableFunc():
-    """returns a randomly selected tablefunc definition given at config"""
-    targetTableFuncs = getConfig().targetRteTableFunctions
-    return " " + random.choice(targetTableFuncs) + " "

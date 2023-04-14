@@ -42,22 +42,20 @@ from config.config import *
 # ===Rules===
 # Start -> Query ';' || 'WITH' CteList Query ';'
 # Query -> SelectExpr FromExpr [OrderBy] [Limit] || 'SELECT' 'avg(avgsub.DistColName)' 'FROM' SubqueryRte 'AS avgsub'
-# SelectExpr -> 'SELECT' 'curAlias()' '.' DistColName || 'randomAggregateFunc()' '(' curAlias() '.' DistColName ') AS ' DistColName
+# SelectExpr -> 'SELECT' 'curAlias()' '.' DistColName
 # FromExpr -> 'FROM' (Rte JoinList JoinOp Rte Using || RteList) ['WHERE' 'nextRandomAlias()' '.' DistColName RestrictExpr]
 # RestrictExpr -> ('<' || '>' || '=') Int || ['NOT'] 'IN' SubqueryRte
 # JoinList ->  JoinOp Rte Using JoinList || e
 # Using -> 'USING' '(' DistColName ')'
 # RteList -> Rte [, RteList] || Rte
 # Rte -> SubqueryRte 'AS' 'nextRandomAlias()' || RelationRte 'AS' 'nextRandomAlias()' ||
-#        CteRte 'AS' 'nextRandomAlias()' || TableFuncRte 'AS' 'nextRandomAlias()' ||
-#        ValuesRte 'AS' 'nextRandomAlias()'
+#        CteRte 'AS' 'nextRandomAlias()' || ValuesRte 'AS' 'nextRandomAlias()'
 # SubqueryRte -> '(' Query ')'
 # RelationRte -> 'nextRandomTableName()'
 # CteRte -> 'randomCteName()'
 # CteList -> Cte [',' CteList] || Cte
 # Cte -> 'nextRandomAlias()' 'AS' '(' Query ')'
 # ValuesRte -> '(' 'VALUES' '(' 'random()' ')' ')'
-# TableFuncRte -> 'randomTableFuncName()'
 # JoinOp -> 'INNER JOIN' || 'LEFT JOIN' || 'RIGHT JOIN' || 'FULL JOIN'
 # Limit -> 'LIMIT' 'random()'
 # OrderBy -> 'ORDER BY' DistColName
@@ -218,23 +216,12 @@ def _genLimit(genCtx):
 
 
 def _genSelectExpr(genCtx):
-    # 'SELECT' 'curAlias()' '.' DistColName || 'randomAggregateFunc()' '(' curAlias() '.' DistColName ') AS ' DistColName
+    # 'SELECT' 'curAlias()' '.' DistColName
     query = ""
     query += " SELECT "
     commonColName = getConfig().commonColName
-    if not getConfig().aggregate or shouldSelectThatBranch():
-        query += genCtx.curAlias() + "." + commonColName + " "
-    else:
-        query += (
-            randomAggregateFunc()
-            + "("
-            + genCtx.curAlias()
-            + "."
-            + commonColName
-            + ") AS "
-            + commonColName
-            + " "
-        )
+    query += genCtx.curAlias() + "." + commonColName + " "
+    
     return query
 
 
@@ -347,7 +334,7 @@ def _genUsing(genCtx):
 
 def _genRte(genCtx):
     # SubqueryRte as 'nextRandomAlias()' || RelationRte as 'curAlias()' ||
-    # CteRte as 'curAlias()' || TableFuncRte as 'curAlias()' || ValuesRte 'AS' 'nextRandomAlias()'
+    # CteRte as 'curAlias()' || ValuesRte 'AS' 'nextRandomAlias()'
     alias = genCtx.curAlias()
     modifiedAlias = None
 
@@ -377,8 +364,6 @@ def _genRte(genCtx):
         query += _genRelationRte(genCtx)
     elif rteType == RTEType.CTE:
         query += _genCteRte(genCtx)
-    elif rteType == RTEType.TABLEFUNC:
-        query += _genTableFuncRte(genCtx)
     elif rteType == RTEType.VALUES:
         query += _genValuesRte(genCtx)
         modifiedAlias = alias + "(" + getConfig().commonColName + ") "
@@ -412,13 +397,6 @@ def _genCteRte(genCtx):
     # 'randomCteName()'
     query = ""
     query += genCtx.randomCteName()
-    return query
-
-
-def _genTableFuncRte(genCtx):
-    # 'randomTableFuncName()'
-    query = ""
-    query += randomTableFunc()
     return query
 
 
