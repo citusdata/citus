@@ -6,7 +6,7 @@ SET citus.shard_count TO 32;
 SET citus.shard_replication_factor TO 1;
 
 CREATE SEQUENCE dist_seq;
-CREATE TABLE null_dist_table(a bigint DEFAULT nextval('dist_seq'), "b" text);
+CREATE TABLE null_dist_table(a bigint DEFAULT nextval('dist_seq') UNIQUE, "b" text);
 INSERT INTO null_dist_table("b") VALUES ('test');
 SELECT create_distributed_table('null_dist_table', null, colocate_with=>'none', distribution_type=>null);
 
