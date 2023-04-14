@@ -36,6 +36,12 @@ SELECT * FROM null_dist_table;
 -- add exclusion constraint
 ALTER TABLE null_dist_table ADD CONSTRAINT exc_b EXCLUDE USING btree (b with =);
 
+-- test multiple subcommands
+ALTER TABLE null_dist_table ADD COLUMN int_column1 INTEGER,
+	DROP COLUMN d;
+
+SELECT * FROM null_dist_table;
+
 -- cleanup
 SET client_min_messages TO ERROR;
 DROP SCHEMA alter_null_dist_key CASCADE;
