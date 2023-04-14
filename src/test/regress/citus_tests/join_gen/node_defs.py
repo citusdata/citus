@@ -39,7 +39,7 @@ class Table:
         duplicateRate,
         useRandom,
         columns,
-        dupCount,
+        distinctCopyCount,
     ):
         self.name = name
         self.citusType = citusType
@@ -49,7 +49,7 @@ class Table:
         self.duplicateRate = duplicateRate
         self.useRandom = useRandom
         self.columns = columns
-        self.dupCount = dupCount
+        self.distinctCopyCount = distinctCopyCount
 
 
 class Column:

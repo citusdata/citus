@@ -101,8 +101,8 @@ def isTableReference(table):
 def _dupTables(tables):
     dupTables = []
     for table in tables:
-        dupCount = table.dupCount
-        for dupIdx in range(1, dupCount):
+        distinctCopyCount = table.distinctCopyCount
+        for dupIdx in range(1, distinctCopyCount):
             dupTable = copy.deepcopy(table)
             dupTable.name += str(dupIdx)
             dupTables.append(dupTable)

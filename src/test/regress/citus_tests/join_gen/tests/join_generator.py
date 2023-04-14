@@ -34,8 +34,8 @@ def run_test(config):
 
     # run test
     scriptDirPath = os.path.dirname(os.path.abspath(__file__))
-    testRunCommand = "bash {}/citus_compare_dist_local_joins.sh {}".format(
-        scriptDirPath, config.coordinator_port()
+    testRunCommand = "bash {}/citus_compare_dist_local_joins.sh {} {}".format(
+        scriptDirPath, config.user, config.coordinator_port()
     )
     process = subprocess.Popen(
         testRunCommand.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE
@@ -54,8 +54,8 @@ def run_test(config):
 
 
 if __name__ == "__main__":
-    citusBaseClusterConfig = cfg.CitusBaseClusterConfig(
+    citusClusterConfig = cfg.CitusSuperUserDefaultClusterConfig(
         docopt(__doc__, version="join_gen_test")
     )
 
-    run_test(citusBaseClusterConfig)
+    run_test(citusClusterConfig)

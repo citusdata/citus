@@ -49,7 +49,7 @@ def parseTable(targetTableDict):
     for columnDict in targetTableDict["columns"]:
         col = parseColumn(columnDict)
         columns.append(col)
-    dupCount = targetTableDict["dupCount"]
+    distinctCopyCount = targetTableDict["distinctCopyCount"]
     return Table(
         name,
         citusType,
@@ -59,7 +59,7 @@ def parseTable(targetTableDict):
         duplicateRate,
         useRandom,
         columns,
-        dupCount,
+        distinctCopyCount,
     )
 
 

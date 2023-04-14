@@ -29,7 +29,7 @@ targetTables: <Table[]>
         - Column:
           name: <string>
           type: <string>
-      dupCount: <int>
+      distinctCopyCount: <int>
 ```
 
 Explanation:
@@ -49,7 +49,7 @@ targetTables: "array of tables that will be used in generated queries"
         - Column:
           name: "name of column"
           type: "name of data type of column(only support 'int' now)"
-      dupCount: "how many tables with the same configuration we should create(only by changing full name, still using the same name prefix)"
+      distinctCopyCount: "how many tables with the same configuration we should create(only by changing full name, still using the same name prefix)"
 ```
 
 
@@ -211,7 +211,7 @@ python main.py
 ```
 
 ## How to Run Citus Join Verification?
-You can verify if Citus breaks any default PG join behaviour via `tests/citus_compare_dist_local_joins.sh`. It creates
+You can verify if Citus breaks any default PG join behaviour via `citus_compare_dist_local_joins.sh`. It creates
 tables specified in config. Then, it runs generated queries on those tables and saves the results into `out/dist_queries.out`.
 After running those queries for Citus tables, it creates PG tables with the same names as previous run, executes the same
 queries, and saves the results into `out/local_queries.out`. In final step, it generates diff between local and distributed results.
@@ -223,6 +223,6 @@ citus_dev make testCluster --destroy
 ```
 2. Run the test,
 ```bash
-bash tests/citus_compare_dist_local_joins.sh 9700
+bash citus_compare_dist_local_joins.sh <username> <coordinator_port>
 ```
 3. See the diff content in `out/local_dist_diffs`
