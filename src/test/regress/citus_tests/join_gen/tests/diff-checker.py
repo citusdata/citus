@@ -4,11 +4,7 @@ import subprocess
 import sys
 
 
-def createPatternForFailedQueryBlock():
-    acceptableErrors = [
-        "ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns",
-        "ERROR:  recursive complex joins are only supported when all distributed tables are co-located and joined on their distribution columns",
-    ]
+def createPatternForFailedQueryBlock(acceptableErrors):
     totalAcceptableOrders = len(acceptableErrors)
 
     failedQueryBlockPattern = "-- queryId: [0-9]+\n.*\npsql:.*(?:"
@@ -21,14 +17,14 @@ def createPatternForFailedQueryBlock():
     return failedQueryBlockPattern
 
 
-def findFailedQueriesFromFile(distQueryOutFile):
+def findFailedQueriesFromFile(queryOutFile, acceptableErrors):
     failedQueryIds = []
-    distOutFileContent = ""
-    failedQueryBlockPattern = createPatternForFailedQueryBlock()
+    outFileContent = ""
+    failedQueryBlockPattern = createPatternForFailedQueryBlock(acceptableErrors)
     queryIdPattern = "queryId: ([0-9]+)"
-    with open(distQueryOutFile, "r") as f:
-        distOutFileContent = f.read()
-        failedQueryContents = re.findall(failedQueryBlockPattern, distOutFileContent)
+    with open(queryOutFile, "r") as f:
+        outFileContent = f.read()
+        failedQueryContents = re.findall(failedQueryBlockPattern, outFileContent)
         failedQueryIds = [
             re.search(queryIdPattern, failedQueryContent)[1]
             for failedQueryContent in failedQueryContents
@@ -38,6 +34,9 @@ def findFailedQueriesFromFile(distQueryOutFile):
 
 
 def removeFailedQueryOutputFromFile(outFile, failedQueryIds):
+    if len(failedQueryIds) == 0:
+        return
+
     distOutFileContentAsLines = []
     with open(outFile, "r") as f:
         distOutFileContentAsLines = f.readlines()
@@ -69,17 +68,14 @@ def removeFailedQueryOutputFromFile(outFile, failedQueryIds):
 
 
 def removeFailedQueryOutputFromFiles(distQueryOutFile, localQueryOutFile):
-    failedLocalQueryIds = findFailedQueriesFromFile(localQueryOutFile)
-    assert len(failedLocalQueryIds) == 0 , """There might be an internal error related to query generator or 
-                                              we might find a Postgres bug."""
-    failedDistQueryIds = findFailedQueriesFromFile(distQueryOutFile)
-
-    if len(failedDistQueryIds) == 0:
-        return
-
+    # remove the failed distributed query from both local and distributed query files to prevent diff for acceptable errors
+    acceptableErrors = [
+        "ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns",
+        "ERROR:  recursive complex joins are only supported when all distributed tables are co-located and joined on their distribution columns",
+    ]
+    failedDistQueryIds = findFailedQueriesFromFile(distQueryOutFile, acceptableErrors)
     removeFailedQueryOutputFromFile(distQueryOutFile, failedDistQueryIds)
     removeFailedQueryOutputFromFile(localQueryOutFile, failedDistQueryIds)
-
     return
 
 
@@ -95,12 +91,23 @@ def showDiffs(distQueryOutFile, localQueryOutFile, diffFile):
     return exitCode
 
 
+def exitIfAnyLocalQueryFailed(localQueryOutFile):
+    allErrors = [ "ERROR:" ]
+    failedLocalQueryIds = findFailedQueriesFromFile(localQueryOutFile, allErrors)
+    assert len(failedLocalQueryIds) == 0, """There might be an internal error related to query generator or 
+                                              we might find a Postgres bug. Check local_queries.out to see the error."""
+    return
+
+
 if __name__ == "__main__":
     scriptDirPath = os.path.dirname(os.path.abspath(__file__))
     outFolderPath = scriptDirPath + "/../out"
     localQueryOutFile = "{}/local_queries.out".format(outFolderPath)
     distQueryOutFile = "{}/dist_queries.out".format(outFolderPath)
     diffFile = "{}/local_dist.diffs".format(outFolderPath)
+
+    # exit if we have any error from local queries
+    exitIfAnyLocalQueryFailed(localQueryOutFile)
 
     # find failed queries from distQueryOutFile and then remove failed queries and their results from
     # both distQueryOutFile and localQueryOutFile
