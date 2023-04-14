@@ -247,25 +247,6 @@ create_distributed_table(PG_FUNCTION_ARGS)
 		shardCountIsStrict = true;
 	}
 
-	EnsureCitusTableCanBeCreated(relationId);
-
-	/* enable create_distributed_table on an empty node */
-	InsertCoordinatorIfClusterEmpty();
-
-	/*
-	 * Lock target relation with an exclusive lock - there's no way to make
-	 * sense of this table until we've committed, and we don't want multiple
-	 * backends manipulating this relation.
-	 */
-	Relation relation = try_relation_open(relationId, ExclusiveLock);
-	if (relation == NULL)
-	{
-		ereport(ERROR, (errmsg("could not create distributed table: "
-							   "relation does not exist")));
-	}
-
-	relation_close(relation, NoLock);
-
 	char *distributionColumnName = text_to_cstring(distributionColumnText);
 	Assert(distributionColumnName != NULL);
 
@@ -887,38 +868,6 @@ create_reference_table(PG_FUNCTION_ARGS)
 	CheckCitusVersion(ERROR);
 	Oid relationId = PG_GETARG_OID(0);
 
-	EnsureCitusTableCanBeCreated(relationId);
-
-	/* enable create_reference_table on an empty node */
-	InsertCoordinatorIfClusterEmpty();
-
-	/*
-	 * Lock target relation with an exclusive lock - there's no way to make
-	 * sense of this table until we've committed, and we don't want multiple
-	 * backends manipulating this relation.
-	 */
-	Relation relation = try_relation_open(relationId, ExclusiveLock);
-	if (relation == NULL)
-	{
-		ereport(ERROR, (errmsg("could not create reference table: "
-							   "relation does not exist")));
-	}
-
-	relation_close(relation, NoLock);
-
-	List *workerNodeList = ActivePrimaryNodeList(ShareLock);
-	int workerCount = list_length(workerNodeList);
-
-	/* if there are no workers, error out */
-	if (workerCount == 0)
-	{
-		char *relationName = get_rel_name(relationId);
-
-		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
-						errmsg("cannot create reference table \"%s\"", relationName),
-						errdetail("There are no active worker nodes.")));
-	}
-
 	CreateReferenceTable(relationId);
 	PG_RETURN_VOID();
 }
@@ -1057,6 +1006,20 @@ CreateCitusTable(Oid relationId, CitusTableType tableType,
 							   "when creating a distributed table and must "
 							   "not be otherwise")));
 	}
+
+	EnsureCitusTableCanBeCreated(relationId);
+
+	/* allow creating a Citus table on an empty cluster */
+	InsertCoordinatorIfClusterEmpty();
+
+	Relation relation = try_relation_open(relationId, ExclusiveLock);
+	if (relation == NULL)
+	{
+		ereport(ERROR, (errmsg("could not create Citus table: "
+							   "relation does not exist")));
+	}
+
+	relation_close(relation, NoLock);
 
 	/*
 	 * EnsureTableNotDistributed errors out when relation is a citus table but
