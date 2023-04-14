@@ -680,10 +680,14 @@ ALTER TABLE null_key_dist DROP CONSTRAINT fkey_add_test_3;
 ALTER TABLE null_key_dist DROP CONSTRAINT fkey_add_test_4;
 ALTER TABLE "NULL_!_dist_key"."nullKeyTable.1!?!9012345678901234567890123456789012345678901234567890123456789" DROP CONSTRAINT fkey_to_dummy_dist;
 
+-- create a view that depends on the null shard key table
+CREATE VIEW public.v1 AS SELECT * FROM null_key_dist;
+SELECT * FROM public.v1;
+
 DELETE FROM null_key_dist;
 VACUUM null_key_dist;
 TRUNCATE null_key_dist;
-DROP TABLE null_key_dist;
+DROP TABLE null_key_dist CASCADE;
 
 RESET client_min_messages;
 
