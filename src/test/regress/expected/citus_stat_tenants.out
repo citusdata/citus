@@ -255,7 +255,7 @@ ORDER BY tenant_attribute;
 (2 rows)
 
 -- simulate passing the period
-SET citus.stat_tenants_period TO 2;
+SET citus.stat_tenants_period TO 5;
 SELECT sleep_until_next_period();
  sleep_until_next_period
 ---------------------------------------------------------------------
@@ -503,13 +503,17 @@ SELECT count(*)>=0 FROM dist_tbl_text WHERE a = 'bcde*';
  t
 (1 row)
 
+DELETE FROM dist_tbl_text WHERE a = '/b*c/de';
+DELETE FROM dist_tbl_text WHERE a = '/bcde';
+DELETE FROM dist_tbl_text WHERE a = U&'\0061\0308bc';
+DELETE FROM dist_tbl_text WHERE a = 'bcde*';
 SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, query_count_in_this_period, query_count_in_last_period FROM citus_stat_tenants_local ORDER BY tenant_attribute;
  tenant_attribute | read_count_in_this_period | read_count_in_last_period | query_count_in_this_period | query_count_in_last_period
 ---------------------------------------------------------------------
- /b*c/de          |                         1 |                         0 |                          1 |                          0
- /bcde            |                         1 |                         0 |                          1 |                          0
- äbc              |                         1 |                         0 |                          1 |                          0
- bcde*            |                         1 |                         0 |                          1 |                          0
+ /b*c/de          |                         1 |                         0 |                          2 |                          0
+ /bcde            |                         1 |                         0 |                          2 |                          0
+ äbc              |                         1 |                         0 |                          2 |                          0
+ bcde*            |                         1 |                         0 |                          2 |                          0
 (4 rows)
 
 -- test local cached queries & prepared statements
@@ -589,10 +593,10 @@ EXECUTE dist_tbl_text_select_plan('bcde*');
 SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, query_count_in_this_period, query_count_in_last_period FROM citus_stat_tenants_local ORDER BY tenant_attribute;
  tenant_attribute | read_count_in_this_period | read_count_in_last_period | query_count_in_this_period | query_count_in_last_period
 ---------------------------------------------------------------------
- /b*c/de          |                         4 |                         0 |                          4 |                          0
- /bcde            |                         4 |                         0 |                          4 |                          0
- äbc              |                         4 |                         0 |                          4 |                          0
- bcde*            |                         4 |                         0 |                          4 |                          0
+ /b*c/de          |                         4 |                         0 |                          5 |                          0
+ /bcde            |                         4 |                         0 |                          5 |                          0
+ äbc              |                         4 |                         0 |                          5 |                          0
+ bcde*            |                         4 |                         0 |                          5 |                          0
 (4 rows)
 
 \c - - - :master_port
@@ -675,10 +679,10 @@ SET search_path TO citus_stat_tenants;
 SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, query_count_in_this_period, query_count_in_last_period FROM citus_stat_tenants ORDER BY tenant_attribute;
  tenant_attribute | read_count_in_this_period | read_count_in_last_period | query_count_in_this_period | query_count_in_last_period
 ---------------------------------------------------------------------
- /b*c/de          |                         7 |                         0 |                          7 |                          0
- /bcde            |                         7 |                         0 |                          7 |                          0
- äbc              |                         7 |                         0 |                          7 |                          0
- bcde*            |                         7 |                         0 |                          7 |                          0
+ /b*c/de          |                         7 |                         0 |                          8 |                          0
+ /bcde            |                         7 |                         0 |                          8 |                          0
+ äbc              |                         7 |                         0 |                          8 |                          0
+ bcde*            |                         7 |                         0 |                          8 |                          0
 (4 rows)
 
 \c - - - :master_port

@@ -93,7 +93,7 @@ FROM citus_stat_tenants_local
 ORDER BY tenant_attribute;
 
 -- simulate passing the period
-SET citus.stat_tenants_period TO 2;
+SET citus.stat_tenants_period TO 5;
 SELECT sleep_until_next_period();
 
 SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, query_count_in_this_period, query_count_in_last_period,
@@ -173,6 +173,11 @@ SELECT count(*)>=0 FROM dist_tbl_text WHERE a = '/b*c/de';
 SELECT count(*)>=0 FROM dist_tbl_text WHERE a = '/bcde';
 SELECT count(*)>=0 FROM dist_tbl_text WHERE a = U&'\0061\0308bc';
 SELECT count(*)>=0 FROM dist_tbl_text WHERE a = 'bcde*';
+
+DELETE FROM dist_tbl_text WHERE a = '/b*c/de';
+DELETE FROM dist_tbl_text WHERE a = '/bcde';
+DELETE FROM dist_tbl_text WHERE a = U&'\0061\0308bc';
+DELETE FROM dist_tbl_text WHERE a = 'bcde*';
 
 SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, query_count_in_this_period, query_count_in_last_period FROM citus_stat_tenants_local ORDER BY tenant_attribute;
 
