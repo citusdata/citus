@@ -80,8 +80,8 @@ class GeneratorContext:
         self.currentCteRteCount = 0
         # rte counts per table to enforce rte limit per table
         self.perTableRtes = {}
-        # blacklisted table names to not randomly generate
-        self.tableBlacklist = set()
+        # tables which hit count limit
+        self.disallowedTables = set()
         # useful to track usage avg only at first select
         self.usedAvg = False
 
@@ -130,8 +130,8 @@ class GeneratorContext:
             return " " + rteName + " "
 
         while True:
-            # keep trying to find random name by eliminating blacklist of names
-            allowedNames = set(getAllTableNames()) - self.tableBlacklist
+            # keep trying to find random table by eliminating the ones which hit table limit
+            allowedNames = set(getAllTableNames()) - self.disallowedTables
             assert len(allowedNames) > 0
             rteName = random.choice(list(allowedNames))
 
@@ -143,7 +143,7 @@ class GeneratorContext:
             if self.perTableRtes[rteName] < getMaxCountForTable(rteName):
                 break
             else:
-                self.tableBlacklist.add(rteName)
+                self.disallowedTables.add(rteName)
 
         # increment rte count for the table name
         self.perTableRtes[rteName] += 1
