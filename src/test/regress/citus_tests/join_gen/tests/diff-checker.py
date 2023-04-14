@@ -69,13 +69,16 @@ def removeFailedQueryOutputFromFile(outFile, failedQueryIds):
 
 
 def removeFailedQueryOutputFromFiles(distQueryOutFile, localQueryOutFile):
-    failedQueryIds = findFailedQueriesFromFile(distQueryOutFile)
+    failedLocalQueryIds = findFailedQueriesFromFile(localQueryOutFile)
+    assert len(failedLocalQueryIds) == 0 , """There might be an internal error related to query generator or 
+                                              we might find a Postgres bug."""
+    failedDistQueryIds = findFailedQueriesFromFile(distQueryOutFile)
 
-    if len(failedQueryIds) == 0:
+    if len(failedDistQueryIds) == 0:
         return
 
-    removeFailedQueryOutputFromFile(distQueryOutFile, failedQueryIds)
-    removeFailedQueryOutputFromFile(localQueryOutFile, failedQueryIds)
+    removeFailedQueryOutputFromFile(distQueryOutFile, failedDistQueryIds)
+    removeFailedQueryOutputFromFile(localQueryOutFile, failedDistQueryIds)
 
     return
 
