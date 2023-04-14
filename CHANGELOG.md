@@ -1,11 +1,13 @@
 ### citus v11.3.0 (April 13, 2023) ###
 
-PR #6845 : When creating a HTAB we need to use HASH_COMPARE  flag in order to set a user defined comparison function.
+PR #6845 : When creating a HTAB we need to use HASH_COMPARE  flag in order to
+set a user defined comparison function.
 * Fixes an uninitialized memory access in shard split API
 
-PR #6837 : fixes update propagation bug when `citus_set_coordinator_host` is called more than once
-TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
-* Fixes update propagation bug when `citus_set_coordinator_host` is called more than once.
+PR #6837 : fixes update propagation bug when `citus_set_coordinator_host` is
+called more than once
+* Fixes update propagation bug when `citus_set_coordinator_host` is called more
+  than once.
 
 PR #6771 : Adds control for background task executors involving a node
 * Adds control for background task executors involving a node
@@ -30,18 +32,21 @@ PR #6728 : stabilize metadata syncing
 * Introduces the GUC `citus.metadata_sync_mode` to switch sync modes
 
 PR #6738 :  Identity column implementation refactorings
-TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
-* Prevents using identity columns on data types other than `bigint` on distributed tables
+* Prevents using identity columns on data types other than `bigint` on
+  distributed tables
 
-TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
-* Prevents using `alter_distributed_table` and `undistribute_table` UDFs when a table has identity columns
+* Prevents using `alter_distributed_table` and `undistribute_table` UDFs when a
+  table has identity columns
 
-TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
-* Fixes a bug that prevents enforcing identity column restrictions on worker nodes
+* Fixes a bug that prevents enforcing identity column restrictions on worker
+  nodes
 
-PR #6756 : Schedule parallel shard moves in background rebalancer by removing task dependencies between shard moves across colocation groups.
-TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
-* This PR removes the task dependencies between shard moves for which the shards belong to different colocation groups. This change results in scheduling multiple tasks in the RUNNABLE state. Therefore it is possible that the background task monitor can run them concurrently.
+PR #6756 : Schedule parallel shard moves in background rebalancer by removing
+task dependencies between shard moves across colocation groups.
+* This PR removes the task dependencies between shard moves for which the shards
+  belong to different colocation groups. This change results in scheduling
+  multiple tasks in the RUNNABLE state. Therefore it is possible that the
+  background task monitor can run them concurrently.
 
 PR #6776 : Propagate CREATE/ALTER/DROP PUBLICATION statements
 * Propagate CREATE/ALTER/DROP PUBLICATION statements for distributed tables
@@ -52,9 +57,11 @@ PR #6802 : Handle identity columns properly in the router planner
 PR #6775 : Add appropriate locks for MERGE to run in in parallel
 * PR description that will go into the change log, up to 78 characters
 
-PR #6793 : Add a GUC to disallow planning the queries that reference non-colocated tables via router planner
-TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
-* Adds `citus.enable_non_colocated_router_query_pushdown` GUC to ensure generating a consistent distributed plan for the queries that reference non-colocated distributed tables (when set to "false", the default is "true").
+PR #6793 : Add a GUC to disallow planning the queries that reference
+non-colocated tables via router planner
+* Adds `citus.enable_non_colocated_router_query_pushdown` GUC to ensure
+  generating a consistent distributed plan for the queries that reference
+  non-colocated distributed tables (when set to "false", the default is "true").
 
 PR #6754 : Check before logicalrep for rebalancer, error if needed
 * Check before logicalrep for rebalancer, error if needed
@@ -68,23 +75,25 @@ PR #6739 : Rebalance shard groups with placement count less than worker count
 PR #6748 : Use pg_total_relation_size in citus_shards
 * Correctly report shard size in citus_shards vie
 
-PR #6726 : fix memory leak during altering distributed table with a lot of partition and shards
-TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
-* Fixes a memory leak issue during altering distributed table with a lot of partition and shards.
+PR #6726 : fix memory leak during altering distributed table with a lot of
+partition and shards
+* Fixes a memory leak issue during altering distributed table with a lot of
+  partition and shards.
 
 PR #6732 : Move common code to a new routine.
 * PR description that will go into the change log, up to 78 characters
 
-PR #6722 : fix memory leak during distribution of a table with a lot of partitions
-TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
-* Fixes memory leak during distribution of a table with a lot of partitions and shards.
+PR #6722 : fix memory leak during distribution of a table with a lot of
+partitions
+* Fixes memory leak during distribution of a table with a lot of partitions and
+  shards.
 
 PR #6724 : fix single tuple result memory leak
 * Fixes memory leak issue with query results that returns single row.
 
 PR #6693 : prevent memory leak during ConvertTable with a lot of partitions
-TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
-* Fixes memory leak during undistribution and alteration of a table with a lot of partitions.
+* Fixes memory leak during undistribution and alteration of a table with a lot
+  of partitions.
 
 PR #6688 : Stop background daemon before dropping the database
 * Stop maintenance daemon when dropping a database even without Citus extension
