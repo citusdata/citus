@@ -9,7 +9,9 @@ class Config:
     def __init__(self):
         configObj = Config.parseConfigFile("config/config.yaml")
 
-        self.targetTables = _distinctCopyTables(parseTableArray(configObj["targetTables"]))
+        self.targetTables = _distinctCopyTables(
+            parseTableArray(configObj["targetTables"])
+        )
         self.targetJoinTypes = parseJoinTypeArray(configObj["targetJoinTypes"])
         self.targetRteTypes = parseRteTypeArray(configObj["targetRteTypes"])
         self.targetRestrictOps = parseRestrictOpArray(configObj["targetRestrictOps"])

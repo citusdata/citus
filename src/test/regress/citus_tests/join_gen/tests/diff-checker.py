@@ -92,9 +92,11 @@ def showDiffs(distQueryOutFile, localQueryOutFile, diffFile):
 
 
 def exitIfAnyLocalQueryFailed(localQueryOutFile):
-    allErrors = [ "ERROR:" ]
+    allErrors = ["ERROR:"]
     failedLocalQueryIds = findFailedQueriesFromFile(localQueryOutFile, allErrors)
-    assert len(failedLocalQueryIds) == 0, """There might be an internal error related to query generator or 
+    assert (
+        len(failedLocalQueryIds) == 0
+    ), """There might be an internal error related to query generator or
                                               we might find a Postgres bug. Check local_queries.out to see the error."""
     return
 

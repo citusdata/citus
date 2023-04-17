@@ -221,7 +221,7 @@ def _genSelectExpr(genCtx):
     query += " SELECT "
     commonColName = getConfig().commonColName
     query += genCtx.curAlias() + "." + commonColName + " "
-    
+
     return query
 
 
