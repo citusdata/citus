@@ -1,4 +1,6 @@
-from config.config import *
+from node_defs import CitusType
+
+from config.config import getConfig
 
 
 def getTableData():

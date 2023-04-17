@@ -1,4 +1,4 @@
-from node_defs import *
+from node_defs import CitusType, Column, JoinType, RestrictOp, RTEType, Table
 
 
 def parseJoinType(joinTypeText):

@@ -20,9 +20,11 @@ sys.path.append(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 )
 
-import common
 
-import config as cfg
+# ignore E402 because these imports require addition to path
+import common  # noqa: E402
+
+import config as cfg  # noqa: E402
 
 
 def run_test(config):

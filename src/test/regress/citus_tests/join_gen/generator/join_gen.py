@@ -1,9 +1,14 @@
 import random
 
-from generator.random_selections import *
-from node_defs import *
+from generator.random_selections import (
+    randomJoinOp,
+    randomRestrictOp,
+    randomRteType,
+    shouldSelectThatBranch,
+)
+from node_defs import RTEType
 
-from config.config import *
+from config.config import getAllTableNames, getConfig, getMaxAllowedCountForTable
 
 # grammar syntax
 #

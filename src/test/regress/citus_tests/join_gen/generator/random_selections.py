@@ -1,8 +1,8 @@
 import random
 
-from node_defs import *
+from node_defs import RestrictOp
 
-from config.config import *
+from config.config import getConfig
 
 
 def shouldSelectThatBranch():

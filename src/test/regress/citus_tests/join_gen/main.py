@@ -1,11 +1,11 @@
 import signal
 import sys
 
-from generator.data_gen import *
-from generator.ddl_gen import *
-from generator.join_gen import *
+from generator.data_gen import getTableData
+from generator.ddl_gen import getTableDDLs
+from generator.join_gen import newQuery
 
-from config.config import *
+from config.config import getConfig, resetConfig
 
 
 def _signal_handler(sig, frame):

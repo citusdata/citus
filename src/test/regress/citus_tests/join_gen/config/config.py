@@ -1,8 +1,14 @@
 import copy
 
 import yaml
-from config.config_parser import *
-from node_defs import *
+from config.config_parser import (
+    parseJoinTypeArray,
+    parseRange,
+    parseRestrictOpArray,
+    parseRteTypeArray,
+    parseTableArray,
+)
+from node_defs import CitusType
 
 
 class Config:
@@ -68,8 +74,11 @@ class Config:
         try:
             with open(path, "r") as configFile:
                 return yaml.load(configFile, yaml.Loader)
-        except:
+        except IOError as e:
+            print(f"I/O error({0}): {1}".format(e.errno, e.strerror))
             raise BaseException("cannot parse config.yaml")
+        except Exception:
+            print("Unexpected error while parsing config.yml.")
 
 
 _config = None
