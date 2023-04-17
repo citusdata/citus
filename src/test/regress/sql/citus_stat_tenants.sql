@@ -93,7 +93,7 @@ FROM citus_stat_tenants_local
 ORDER BY tenant_attribute;
 
 -- simulate passing the period
-SET citus.stat_tenants_period TO 2;
+SET citus.stat_tenants_period TO 5;
 SELECT sleep_until_next_period();
 
 SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, query_count_in_this_period, query_count_in_last_period,
@@ -174,6 +174,11 @@ SELECT count(*)>=0 FROM dist_tbl_text WHERE a = '/bcde';
 SELECT count(*)>=0 FROM dist_tbl_text WHERE a = U&'\0061\0308bc';
 SELECT count(*)>=0 FROM dist_tbl_text WHERE a = 'bcde*';
 
+DELETE FROM dist_tbl_text WHERE a = '/b*c/de';
+DELETE FROM dist_tbl_text WHERE a = '/bcde';
+DELETE FROM dist_tbl_text WHERE a = U&'\0061\0308bc';
+DELETE FROM dist_tbl_text WHERE a = 'bcde*';
+
 SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, query_count_in_this_period, query_count_in_last_period FROM citus_stat_tenants_local ORDER BY tenant_attribute;
 
 -- test local cached queries & prepared statements
@@ -246,6 +251,65 @@ SELECT count(*)>=0 FROM citus_stat_tenants_local();
 
 RESET ROLE;
 DROP ROLE stats_non_superuser;
+
+-- test function push down
+CREATE OR REPLACE FUNCTION
+  select_from_dist_tbl_text(p_keyword text)
+RETURNS boolean LANGUAGE plpgsql AS $fn$
+BEGIN
+  RETURN(SELECT count(*)>=0 FROM citus_stat_tenants.dist_tbl_text WHERE a = $1);
+END;
+$fn$;
+
+SELECT create_distributed_function(
+  'select_from_dist_tbl_text(text)', 'p_keyword', colocate_with => 'dist_tbl_text'
+);
+
+SELECT citus_stat_tenants_reset();
+
+SELECT select_from_dist_tbl_text('/b*c/de');
+SELECT select_from_dist_tbl_text('/b*c/de');
+SELECT select_from_dist_tbl_text(U&'\0061\0308bc');
+SELECT select_from_dist_tbl_text(U&'\0061\0308bc');
+
+SELECT tenant_attribute, query_count_in_this_period FROM citus_stat_tenants;
+
+CREATE OR REPLACE PROCEDURE select_from_dist_tbl_text_proc(
+   p_keyword text
+)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    PERFORM select_from_dist_tbl_text(p_keyword);
+    PERFORM count(*)>=0 FROM citus_stat_tenants.dist_tbl_text WHERE b < 0;
+    PERFORM count(*)>=0 FROM citus_stat_tenants.dist_tbl_text;
+    PERFORM count(*)>=0 FROM citus_stat_tenants.dist_tbl_text WHERE a = p_keyword;
+    COMMIT;
+END;$$;
+
+CALL citus_stat_tenants.select_from_dist_tbl_text_proc('/b*c/de');
+CALL citus_stat_tenants.select_from_dist_tbl_text_proc('/b*c/de');
+CALL citus_stat_tenants.select_from_dist_tbl_text_proc('/b*c/de');
+CALL citus_stat_tenants.select_from_dist_tbl_text_proc(U&'\0061\0308bc');
+CALL citus_stat_tenants.select_from_dist_tbl_text_proc(U&'\0061\0308bc');
+CALL citus_stat_tenants.select_from_dist_tbl_text_proc(U&'\0061\0308bc');
+CALL citus_stat_tenants.select_from_dist_tbl_text_proc(NULL);
+
+SELECT tenant_attribute, query_count_in_this_period FROM citus_stat_tenants;
+
+CREATE OR REPLACE VIEW
+  select_from_dist_tbl_text_view
+AS
+  SELECT * FROM citus_stat_tenants.dist_tbl_text;
+
+SELECT count(*)>=0 FROM select_from_dist_tbl_text_view WHERE a = '/b*c/de';
+SELECT count(*)>=0 FROM select_from_dist_tbl_text_view WHERE a = '/b*c/de';
+SELECT count(*)>=0 FROM select_from_dist_tbl_text_view WHERE a = '/b*c/de';
+SELECT count(*)>=0 FROM select_from_dist_tbl_text_view WHERE a = U&'\0061\0308bc';
+SELECT count(*)>=0 FROM select_from_dist_tbl_text_view WHERE a = U&'\0061\0308bc';
+SELECT count(*)>=0 FROM select_from_dist_tbl_text_view WHERE a = U&'\0061\0308bc';
+
+SELECT tenant_attribute, query_count_in_this_period FROM citus_stat_tenants;
 
 SET client_min_messages TO ERROR;
 DROP SCHEMA citus_stat_tenants CASCADE;
