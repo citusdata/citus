@@ -96,6 +96,9 @@ DEPS = {
     "multi_cluster_management": TestDeps(
         None, ["multi_test_helpers_superuser"], repeatable=False
     ),
+    "minimal_cluster_management": TestDeps(
+        None, ["multi_test_helpers_superuser"], repeatable=False
+    ),
     "create_role_propagation": TestDeps(None, ["multi_cluster_management"]),
     "single_node_enterprise": TestDeps(None),
     "single_node": TestDeps(None),

@@ -25,6 +25,9 @@ import utils
 from psycopg import sql
 from utils import USER
 
+# This SQL returns true ( 't' ) if the Citus version >= 11.0.
+IS_CITUS_VERSION_11_SQL = "SELECT (split_part(extversion, '.', 1)::int >= 11) as is_11 FROM pg_extension WHERE extname = 'citus';"
+
 LINUX = False
 MACOS = False
 FREEBSD = False
@@ -272,9 +275,7 @@ def stop_metadata_to_workers(pg_path, worker_ports, coordinator_port):
 
 
 def add_coordinator_to_metadata(pg_path, coordinator_port):
-    command = "SELECT citus_add_node('localhost', {}, groupId := 0)".format(
-        coordinator_port
-    )
+    command = "SELECT citus_set_coordinator_host('localhost');"
     utils.psql(pg_path, coordinator_port, command)
 
 
@@ -327,6 +328,10 @@ def stop_databases(
             stop(node_name)
 
 
+def is_citus_set_coordinator_host_udf_exist(pg_path, port):
+    return utils.psql_capture(pg_path, port, IS_CITUS_VERSION_11_SQL) == b" t\n\n"
+
+
 def initialize_citus_cluster(bindir, datadir, settings, config):
     # In case there was a leftover from previous runs, stop the databases
     stop_databases(
@@ -339,11 +344,16 @@ def initialize_citus_cluster(bindir, datadir, settings, config):
         bindir, datadir, config.node_name_to_ports, config.name, config.env_variables
     )
     create_citus_extension(bindir, config.node_name_to_ports.values())
+
+    # In upgrade tests, it is possible that Citus version < 11.0
+    # where the citus_set_coordinator_host UDF does not exist.
+    if is_citus_set_coordinator_host_udf_exist(bindir, config.coordinator_port()):
+        add_coordinator_to_metadata(bindir, config.coordinator_port())
+
     add_workers(bindir, config.worker_ports, config.coordinator_port())
     if not config.is_mx:
         stop_metadata_to_workers(bindir, config.worker_ports, config.coordinator_port())
-    if config.add_coordinator_to_metadata:
-        add_coordinator_to_metadata(bindir, config.coordinator_port())
+
     config.setup_steps()
 
 
