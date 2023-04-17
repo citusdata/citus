@@ -223,6 +223,9 @@ distributed_planner(Query *parse,
 		}
 	}
 
+	/* ensure parse is not null */
+	Assert(parse != NULL);
+
 	/*
 	 * Make sure that we hide shard names on the Citus MX worker nodes. See comments in
 	 * HideShardsFromSomeApplications() for the details.
@@ -235,6 +238,9 @@ distributed_planner(Query *parse,
 	 * postgres vanilla tests.
 	 */
 	HideCitusDependentObjectsOnQueriesOfPgMetaTables((Node *) parse, NULL);
+
+	/*  */
+
 
 	/* create a restriction context and put it at the end if context list */
 	planContext.plannerRestrictionContext = CreateAndPushPlannerRestrictionContext();
