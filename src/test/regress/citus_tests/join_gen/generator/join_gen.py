@@ -140,7 +140,7 @@ class GeneratorContext:
                 self.perTableRtes[rteName] = 0
                 break
             # limit is not exceeded, so we can allow the name
-            if self.perTableRtes[rteName] < getMaxCountForTable(rteName):
+            if self.perTableRtes[rteName] < getMaxAllowedCountForTable(rteName):
                 break
             else:
                 self.disallowedTables.add(rteName)
@@ -181,7 +181,7 @@ def _genQuery(genCtx):
     ):
         genCtx.usedAvg = True
         query += "SELECT "
-        query += "avg(avgsub." + getConfig().commonColName + ") FROM "
+        query += "count(*), avg(avgsub." + getConfig().commonColName + ") FROM "
         query += _genSubqueryRte(genCtx)
         query += " AS avgsub"
     else:

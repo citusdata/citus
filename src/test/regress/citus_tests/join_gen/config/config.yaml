@@ -1,5 +1,5 @@
 interactiveMode: false
-queryCount: 10000
+queryCount: 1000
 queryOutFile: queries.sql
 ddlOutFile: ddls.sql
 semiAntiJoin: true
@@ -10,16 +10,16 @@ forceOrderbyWithLimit: true
 useAvgAtTopLevelTarget: true
 dataRange:
   from: 0
-  to: 1000
+  to: 100
 filterRange:
   from: 0
-  to: 10
+  to: 100
 limitRange:
   from: 0
   to: 100
-targetRteCount: 5
-targetCteCount: 1
-targetCteRteCount: 1
+targetRteCount: 250
+targetCteCount: 3
+targetCteRteCount: 2
 
 commonColName: id
 
@@ -27,8 +27,8 @@ targetTables:
   - Table:
       name: dist
       citusType: DISTRIBUTED
-      maxCount: 3
-      rowCount: 10
+      maxAllowedUseOnQuery: 70
+      rowCount: 100
       nullRate: 0.1
       duplicateRate: 0.1
       columns:
@@ -39,8 +39,8 @@ targetTables:
   - Table:
       name: ref
       citusType: REFERENCE
-      maxCount: 3
-      rowCount: 10
+      maxAllowedUseOnQuery: 70
+      rowCount: 100
       nullRate: 0.1
       duplicateRate: 0.1
       columns:

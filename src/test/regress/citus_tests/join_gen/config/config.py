@@ -32,6 +32,7 @@ class Config:
         self.dataRange = parseRange(configObj["dataRange"])
         self.filterRange = parseRange(configObj["filterRange"])
         self.limitRange = parseRange(configObj["limitRange"])
+        self._ensureRteLimitsAreSane()
         # print(self)
 
     def __repr__(self):
@@ -52,6 +53,15 @@ class Config:
             rep += "\t{}\n".format(restrictOp)
 
         return rep
+
+    def _ensureRteLimitsAreSane(self):
+        totalAllowedUseForAllTables = 0
+        for table in self.targetTables:
+            totalAllowedUseForAllTables += table.maxAllowedUseOnQuery
+        assert (
+            totalAllowedUseForAllTables >= self.targetRteCount
+        ), """targetRteCount cannot be greater than sum of maxAllowedUseOnQuery for all tables.
+              Set targetRteCount to a lower value or increase maxAllowedUseOnQuery for tables at config.yml."""
 
     @staticmethod
     def parseConfigFile(path):
@@ -81,12 +91,12 @@ def getAllTableNames():
     return tableNames
 
 
-def getMaxCountForTable(tableName):
+def getMaxAllowedCountForTable(tableName):
     tables = getConfig().targetTables
     filtered = filter(lambda el: el.name == tableName, tables)
     filtered = list(filtered)
     assert len(filtered) == 1
-    return filtered[0].maxCount
+    return filtered[0].maxAllowedUseOnQuery
 
 
 def isTableDistributed(table):

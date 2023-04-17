@@ -34,7 +34,7 @@ MULTI_REGRESS_OPTS = --inputdir=$(citus_abs_srcdir) $(pg_regress_locale_flags) -
 pg_upgrade_check = $(citus_abs_srcdir)/citus_tests/upgrade/pg_upgrade_test.py
 citus_upgrade_check =CITUS_OLD_VERSION=$(citus-old-version) $(citus_abs_srcdir)/citus_tests/upgrade/citus_upgrade_test.py
 arbitrary_config_check = $(citus_abs_srcdir)/citus_tests/arbitrary_configs/citus_arbitrary_configs.py
-join_generator_check = $(citus_abs_srcdir)/citus_tests/join_gen/tests/join_generator.py
+query_generator_check = $(citus_abs_srcdir)/citus_tests/join_gen/tests/join_generator.py
 
 template_isolation_files = $(shell find $(citus_abs_srcdir)/spec/ -name '*.spec')
 generated_isolation_files = $(patsubst $(citus_abs_srcdir)/spec/%,$(citus_abs_srcdir)/build/specs/%,$(template_isolation_files))
@@ -263,8 +263,8 @@ check-arbitrary-base: all
 check-pytest:
 	pytest -n auto
 
-check-join-generator: all
-	${join_generator_check} --bindir=$(bindir) --pgxsdir=$(pgxsdir)
+check-query-generator: all
+	${query_generator_check} --bindir=$(bindir) --pgxsdir=$(pgxsdir)
 
 check-citus-upgrade: all
 	$(citus_upgrade_check) \

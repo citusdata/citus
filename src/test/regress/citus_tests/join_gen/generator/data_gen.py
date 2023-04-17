@@ -69,7 +69,7 @@ def _genDupData(tableName, dupRowCount):
 
 def _genNonOverlappingData(tableName, startVal, tableIdx):
     """returns string to fill table with different integers for given table"""
-    startVal = startVal + tableIdx * 5
+    startVal = startVal + tableIdx * 20
     endVal = startVal + 20
     dataGenerationSql = ""
     dataGenerationSql += "INSERT INTO " + tableName

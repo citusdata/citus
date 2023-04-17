@@ -36,8 +36,10 @@ def _fileMode(ddls, data):
     queryCount = getConfig().queryCount
     fileName = "out/" + getConfig().queryOutFile
     with open(fileName, "w") as f:
+        # enable repartition joins
+        enableRepartitionJoinCommand = "SET citus.enable_repartition_joins TO on;\n"
+        queryLines = [enableRepartitionJoinCommand]
         queryId = 1
-        queryLines = []
         for _ in range(queryCount):
             query = newQuery()
 

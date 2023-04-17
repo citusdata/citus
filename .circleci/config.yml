@@ -421,8 +421,8 @@ jobs:
       - coverage:
           flags: 'test_<< parameters.pg_major >>,upgrade'
 
-  test-join-generator:
-    description: Runs tests on generated join queries
+  test-query-generator:
+    description: Expects that the generated queries that are run on distributed and local tables would have the same results
     parameters:
       pg_major:
         description: 'postgres major version'
@@ -452,7 +452,7 @@ jobs:
       - run:
           name: 'Run Test'
           command: |
-            gosu circleci make -C src/test/regress check-join-generator
+            gosu circleci make -C src/test/regress check-query-generator
           no_output_timeout: 5m
       - run:
           name: 'Show regressions'
@@ -480,7 +480,7 @@ jobs:
           path: src/test/regress/citus_tests/join_gen/out/queries.sql
       - stack_trace
       - coverage:
-          flags: 'test_<< parameters.pg_major >>,joingen'
+          flags: 'test_<< parameters.pg_major >>,querygen'
 
   test-citus:
     description: Runs the common tests of citus
@@ -996,20 +996,20 @@ workflows:
           image_tag: '<< pipeline.parameters.pg15_version >>'
           requires: [build-15]
 
-      - test-join-generator:
-          name: 'test-13_check-join-generator'
+      - test-query-generator:
+          name: 'test-13_check-query-generator'
           pg_major: 13
           image_tag: '<< pipeline.parameters.pg13_version >>'
           requires: [build-13]
 
-      - test-join-generator:
-          name: 'test-14_check-join-generator'
+      - test-query-generator:
+          name: 'test-14_check-query-generator'
           pg_major: 14
           image_tag: '<< pipeline.parameters.pg14_version >>'
           requires: [build-14]
 
-      - test-join-generator:
-          name: 'test-15_check-join-generator'
+      - test-query-generator:
+          name: 'test-15_check-query-generator'
           pg_major: 15
           image_tag: '<< pipeline.parameters.pg15_version >>'
           requires: [build-15]
@@ -1054,7 +1054,7 @@ workflows:
             - test-13_check-enterprise-failure
             - test-13_check-split
             - test-13_check-arbitrary-configs
-            - test-13_check-join-generator
+            - test-13_check-query-generator
             - test-14_check-multi
             - test-14_check-multi-1
             - test-14_check-mx
@@ -1073,7 +1073,7 @@ workflows:
             - test-14_check-enterprise-failure
             - test-14_check-split
             - test-14_check-arbitrary-configs
-            - test-14_check-join-generator
+            - test-14_check-query-generator
             - test-15_check-multi
             - test-15_check-multi-1
             - test-15_check-mx
@@ -1092,7 +1092,7 @@ workflows:
             - test-15_check-enterprise-failure
             - test-15_check-split
             - test-15_check-arbitrary-configs
-            - test-15_check-join-generator
+            - test-15_check-query-generator
             - test-13-14_check-pg-upgrade
             - test-14-15_check-pg-upgrade
             - test-13_check-citus-upgrade

@@ -40,7 +40,7 @@ def parseRestrictOpArray(restrictOpTexts):
 def parseTable(targetTableDict):
     name = targetTableDict["name"]
     citusType = CitusType[targetTableDict["citusType"]]
-    maxCount = targetTableDict["maxCount"]
+    maxAllowedUseOnQuery = targetTableDict["maxAllowedUseOnQuery"]
     rowCount = targetTableDict["rowCount"]
     nullRate = targetTableDict["nullRate"]
     duplicateRate = targetTableDict["duplicateRate"]
@@ -52,7 +52,7 @@ def parseTable(targetTableDict):
     return Table(
         name,
         citusType,
-        maxCount,
+        maxAllowedUseOnQuery,
         rowCount,
         nullRate,
         duplicateRate,

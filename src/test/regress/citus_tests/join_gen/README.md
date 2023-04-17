@@ -20,7 +20,7 @@ targetTables: <Table[]>
   - Table:
       name: <string>
       citusType: <CitusType>
-      maxCount: <int>
+      maxAllowedUseOnQuery: <int>
       rowCount: <int>
       nullRate: <float>
       duplicateRate: <float>
@@ -39,7 +39,7 @@ targetTables: "array of tables that will be used in generated queries"
   - Table:
       name: "name prefix of table"
       citusType: "citus type of table"
-      maxCount: "limits how many times table can appear in query"
+      maxAllowedUseOnQuery: "limits how many times table can appear in query"
       rowCount: "total # of rows that will be inserted into table"
       nullRate: "percentage of null rows in rowCount that will be inserted into table"
       duplicateRate: "percentage of duplicates in rowCount that will be inserted into table"
@@ -191,7 +191,7 @@ python main.py
 ```
 
 ### File Mode
-In this mode, generated ddls and queries will be written into configured files.
+In this mode, generated ddls and queries will be written into the files configured in [config.yml](./config/config.yaml).
 
 1. Configure `interactiveMode: false`,
 2. Configure `queryCount: <total_query>`,
@@ -209,11 +209,13 @@ queries, and saves the results into `out/local_queries.out`. In final step, it g
 You can see the contents of `out/local_dist_diffs` to see if there is any Citus unsupported query.
 
 1. Create a Citus local cluster with 2 workers by using [citus_dev](https://github.com/citusdata/tools/tree/develop/citus_dev) tool
+(Note: make sure you do not configure psql via .psqlrc file as it would fail the test.)
 ```bash
 citus_dev make testCluster --destroy
 ```
 2. Run the test,
 ```bash
+cd src/test/regress/citus_tests/join_gen/tests
 bash citus_compare_dist_local_joins.sh <username> <coordinator_port>
 ```
-3. See the diff content in `out/local_dist_diffs`
+3. See the diff content in `src/test/regress/citus_tests/join_gen/out/local_dist_diffs`

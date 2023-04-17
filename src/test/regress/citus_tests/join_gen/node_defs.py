@@ -32,7 +32,7 @@ class Table:
         self,
         name,
         citusType,
-        maxCount,
+        maxAllowedUseOnQuery,
         rowCount,
         nullRate,
         duplicateRate,
@@ -41,7 +41,7 @@ class Table:
     ):
         self.name = name
         self.citusType = citusType
-        self.maxCount = maxCount
+        self.maxAllowedUseOnQuery = maxAllowedUseOnQuery
         self.rowCount = rowCount
         self.nullRate = nullRate
         self.duplicateRate = duplicateRate
