@@ -345,7 +345,7 @@ def initialize_citus_cluster(bindir, datadir, settings, config):
     )
     create_citus_extension(bindir, config.node_name_to_ports.values())
 
-    # In upgrade tests, it is possible that Citus version < 11.0 
+    # In upgrade tests, it is possible that Citus version < 11.0
     # where the citus_set_coordinator_host UDF does not exist.
     if is_citus_set_coordinator_host_udf_exist(bindir, config.coordinator_port()):
         add_coordinator_to_metadata(bindir, config.coordinator_port())
