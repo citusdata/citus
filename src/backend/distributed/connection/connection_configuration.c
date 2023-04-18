@@ -436,10 +436,10 @@ GetEffectiveConnKey(ConnectionHashKey *key)
 {
 	PQconninfoOption *option = NULL, *optionArray = NULL;
 
-	if (!IsTransactionState())
+	if (!IsTransactionState() || !CitusHasBeenLoaded())
 	{
 		/* we're in the task tracker, so should only see loopback */
-		Assert(strncmp(LOCAL_HOST_NAME, key->hostname, MAX_NODE_LENGTH) == 0 &&
+		Assert(strncmp(LocalHostName, key->hostname, MAX_NODE_LENGTH) == 0 &&
 			   PostPortNumber == key->port);
 		return key;
 	}
@@ -505,10 +505,10 @@ char *
 GetAuthinfo(char *hostname, int32 port, char *user)
 {
 	char *authinfo = NULL;
-	bool isLoopback = (strncmp(LOCAL_HOST_NAME, hostname, MAX_NODE_LENGTH) == 0 &&
+	bool isLoopback = (strncmp(LocalHostName, hostname, MAX_NODE_LENGTH) == 0 &&
 					   PostPortNumber == port);
 
-	if (IsTransactionState())
+	if (IsTransactionState() && CitusHasBeenLoaded())
 	{
 		int64 nodeId = WILDCARD_NODE_ID;
 

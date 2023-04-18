@@ -35,6 +35,7 @@
 #include "access/htup_details.h"
 #include "catalog/catalog.h"
 #include "catalog/dependency.h"
+#include "catalog/pg_database.h"
 #include "citus_version.h"
 #include "commands/dbcommands.h"
 #include "commands/defrem.h"
@@ -48,6 +49,7 @@
 #include "distributed/commands/multi_copy.h"
 #include "distributed/commands/utility_hook.h" /* IWYU pragma: keep */
 #include "distributed/coordinator_protocol.h"
+#include "distributed/database/database_sharding.h"
 #include "distributed/deparser.h"
 #include "distributed/deparse_shard_query.h"
 #include "distributed/executor_util.h"
@@ -226,12 +228,22 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 
 	if (!CitusHasBeenLoaded())
 	{
+		bool runPreviousHook = true;
+
+		if (DatabaseShardingEnabled())
+		{
+			HandleDDLInDatabaseShard(parsetree, &runPreviousHook);
+		}
+
 		/*
 		 * Ensure that utility commands do not behave any differently until CREATE
 		 * EXTENSION is invoked.
 		 */
-		PrevProcessUtility(pstmt, queryString, false, context,
-						   params, queryEnv, dest, completionTag);
+		if (runPreviousHook)
+		{
+			PrevProcessUtility(pstmt, queryString, false, context,
+							   params, queryEnv, dest, completionTag);
+		}
 
 		return;
 	}
@@ -680,7 +692,7 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 	}
 
 	/* inform the user about potential caveats */
-	if (IsA(parsetree, CreatedbStmt))
+	if (IsA(parsetree, CreatedbStmt) && !EnableCreateDatabasePropagation)
 	{
 		if (EnableUnsupportedFeatureMessages)
 		{
@@ -724,6 +736,27 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 		if (list_length(distributedDropRoles) > 0)
 		{
 			UnmarkRolesDistributed(distributedDropRoles);
+		}
+	}
+	/*
+	 * Similar logic as above applies to DROP DATABASE.
+	 */
+	else if (IsA(parsetree, DropdbStmt))
+	{
+		DropdbStmt *stmt = castNode(DropdbStmt, parsetree);
+		char *databaseName = stmt->dbname;
+		bool missingOk = false;
+		Oid databaseId = get_database_oid(databaseName, missingOk);
+
+		ObjectAddress dbAddress = { 0 };
+		ObjectAddressSet(dbAddress, DatabaseRelationId, databaseId);
+
+		if (IsObjectDistributed(&dbAddress))
+		{
+			UnmarkObjectDistributed(&dbAddress);
+
+			/* in case this was a shard, remove it (noop otherwise) */
+			DeleteDatabaseShardByDatabaseId(databaseId);
 		}
 	}
 

@@ -216,8 +216,12 @@ extern List * DefineCollationStmtObjectAddress(Node *stmt, bool missing_ok, bool
 											   isPostprocess);
 
 /* database.c - forward declarations */
+extern List * PostprocessCreatedbStmt(Node *node, const char *queryString);
+extern List * CreatedbStmtObjectAddress(Node *node, bool missing_ok, bool isPostprocess);
 extern List * AlterDatabaseOwnerObjectAddress(Node *node, bool missing_ok, bool
 											  isPostprocess);
+extern List * PreprocessDropdbStmt(Node *node, const char *queryString,
+								   ProcessUtilityContext processUtilityContext);
 extern List * DatabaseOwnerDDLCommands(const ObjectAddress *address);
 
 /* domain.c - forward declarations */

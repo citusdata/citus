@@ -42,6 +42,7 @@
 #include "distributed/commands/utility_hook.h"
 #include "distributed/connection_management.h"
 #include "distributed/cte_inline.h"
+#include "distributed/database/database_sharding.h"
 #include "distributed/distributed_deadlock_detection.h"
 #include "distributed/errormessage.h"
 #include "distributed/repartition_executor.h"
@@ -1115,6 +1116,27 @@ RegisterCitusConfigVariables(void)
 		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 		NULL, NULL, NULL);
 
+	DefineCustomStringVariable(
+		"citus.database_sharding_control_dbname",
+		gettext_noop("The name of the database that acts as control database "
+					 "for database sharding."),
+		NULL,
+		&DatabaseShardingControlDBName,
+		"",
+		PGC_SU_BACKEND,
+		GUC_STANDARD,
+		NULL, NULL, NULL);
+
+	DefineCustomStringVariable(
+		"citus.database_sharding_pgbouncer_file",
+		gettext_noop("The path to a file that contains pgbouncer database entries."),
+		NULL,
+		&DatabaseShardingPgbouncerFile,
+		"",
+		PGC_SU_BACKEND,
+		GUC_STANDARD,
+		NULL, NULL, NULL);
+
 	DefineCustomBoolVariable(
 		"citus.defer_drop_after_shard_move",
 		gettext_noop("Deprecated, Citus always defers drop after shard move"),
@@ -1253,6 +1275,17 @@ RegisterCitusConfigVariables(void)
 		true,
 		PGC_USERSET,
 		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		"citus.enable_create_database_propagation",
+		gettext_noop("Enables propagating CREATE DATABASE "
+					 "and DROP DATABASE statements to workers"),
+		NULL,
+		&EnableCreateDatabasePropagation,
+		false,
+		PGC_USERSET,
+		GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(

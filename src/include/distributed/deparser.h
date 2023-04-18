@@ -209,7 +209,9 @@ extern char * DeparseAlterExtensionSchemaStmt(Node *stmt);
 extern char * DeparseAlterExtensionStmt(Node *stmt);
 
 /* forward declarations for deparse_database_stmts.c */
+extern char * DeparseCreatedbStmt(Node *node);
 extern char * DeparseAlterDatabaseOwnerStmt(Node *node);
+extern char * DeparseDropdbStmt(Node *node);
 
 /* forward declaration for deparse_publication_stmts.c */
 extern char * DeparseCreatePublicationStmt(Node *stmt);

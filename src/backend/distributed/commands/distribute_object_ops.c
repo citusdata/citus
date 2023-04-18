@@ -188,6 +188,15 @@ static DistributeObjectOps Any_CompositeType = {
 	.address = CompositeTypeStmtObjectAddress,
 	.markDistributed = true,
 };
+static DistributeObjectOps Any_Createdb = {
+	.deparse = DeparseCreatedbStmt,
+	.qualify = NULL,
+	.preprocess = NULL,
+	.postprocess = PostprocessCreatedbStmt,
+	.operationType = DIST_OPS_CREATE,
+	.address = CreatedbStmtObjectAddress,
+	.markDistributed = true,
+};
 static DistributeObjectOps Any_CreateDomain = {
 	.deparse = DeparseCreateDomainStmt,
 	.qualify = QualifyCreateDomainStmt,
@@ -262,6 +271,15 @@ static DistributeObjectOps Any_CreateRole = {
 	.operationType = DIST_OPS_CREATE,
 	.address = CreateRoleStmtObjectAddress,
 	.markDistributed = true,
+};
+static DistributeObjectOps Any_Dropdb = {
+	.deparse = DeparseDropdbStmt,
+	.qualify = NULL,
+	.preprocess = PreprocessDropdbStmt,
+	.postprocess = NULL,
+	.operationType = DIST_OPS_DROP,
+	.address = NULL,
+	.markDistributed = false,
 };
 static DistributeObjectOps Any_DropOwned = {
 	.deparse = DeparseDropOwnedStmt,
@@ -1652,6 +1670,11 @@ GetDistributeObjectOps(Node *node)
 			return &Any_CompositeType;
 		}
 
+		case T_CreatedbStmt:
+		{
+			return &Any_Createdb;
+		}
+
 		case T_CreateDomainStmt:
 		{
 			return &Any_CreateDomain;
@@ -1737,6 +1760,11 @@ GetDistributeObjectOps(Node *node)
 					return &NoDistributeOps;
 				}
 			}
+		}
+
+		case T_DropdbStmt:
+		{
+			return &Any_Dropdb;
 		}
 
 		case T_DropRoleStmt:

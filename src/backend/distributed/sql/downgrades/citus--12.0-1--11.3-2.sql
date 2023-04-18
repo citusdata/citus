@@ -1,5 +1,4 @@
 -- citus--12.0-1--11.3-1
-
 DO $$
 BEGIN
     -- Throw an error if user has created any tenant schemas.
@@ -78,3 +77,7 @@ DROP FUNCTION pg_catalog.citus_stat_tenants_local_internal(
 -- because there's no way of knowing if the rebalance strategy before the
 -- upgrade was by_disk_size or by_shard_count. And even in previous versions
 -- by_disk_size is considered superior for quite some time.
+
+DROP SCHEMA citus_catalog CASCADE;
+DROP FUNCTION pg_catalog.execute_command_on_all_nodes(text);
+DROP FUNCTION pg_catalog.execute_command_on_other_nodes(text);

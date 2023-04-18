@@ -3280,8 +3280,7 @@ EnsureCoordinatorInitiatedOperation(void)
 	 * check. The other two checks are to ensure that the operation is initiated
 	 * by the coordinator.
 	 */
-	if (!(IsCitusInternalBackend() || IsRebalancerInternalBackend()) ||
-		GetLocalGroupId() == COORDINATOR_GROUP_ID)
+	if (!(IsCitusInternalBackend() || IsRebalancerInternalBackend()))
 	{
 		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
 						errmsg("This is an internal Citus function can only be "
@@ -4267,7 +4266,7 @@ SendOrCollectCommandListToMetadataNodes(MetadataSyncContext *context, List *comm
 
 	if (context->transactionMode == METADATA_SYNC_TRANSACTIONAL)
 	{
-		List *metadataNodes = TargetWorkerSetNodeList(NON_COORDINATOR_METADATA_NODES,
+		List *metadataNodes = TargetWorkerSetNodeList(OTHER_METADATA_NODES,
 													  RowShareLock);
 		SendMetadataCommandListToWorkerListInCoordinatedTransaction(metadataNodes,
 																	CurrentUserName(),
