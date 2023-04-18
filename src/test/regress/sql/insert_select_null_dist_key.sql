@@ -412,7 +412,10 @@ SELECT create_distributed_table('upsert_test_3', null);
 
 INSERT INTO upsert_test_3 VALUES (1, DEFAULT, '1') RETURNING *;
 INSERT INTO upsert_test_3 VALUES (5, DEFAULT, DEFAULT) RETURNING *;
+
+SET client_min_messages TO DEBUG1;
 INSERT INTO upsert_test_3 SELECT 7, other_col, 'harcoded_text_value' FROM upsert_test_1 RETURNING *;
+SET client_min_messages TO DEBUG2;
 
 -- not yet supported
 INSERT INTO upsert_test_3 VALUES (1, 1, '2') ON CONFLICT (key_1, key_2) DO UPDATE SET key_2 = DEFAULT;
