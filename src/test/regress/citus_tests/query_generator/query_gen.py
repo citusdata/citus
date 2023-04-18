@@ -10,6 +10,27 @@ from random_selections import (
 
 from config.config import getAllTableNames, getConfig, getMaxAllowedCountForTable
 
+# query_gen.py generates a new query from grammar rules below. It randomly chooses allowed rules
+# to generate a query. Here are some important notes about the query generation:
+#
+# - We enforce the max allowed # of usage for each table. It also enforces global total # of tables.
+# - Table names, restriction types and any other selections are chosen between the values provided by
+#   configuration file (config.yml).
+# - Entry point for the generator is newQuery and all other methods are internal methods. We pass a context
+#   object named GeneratorContext to all internal methods as parameter to perform checks and generations
+#   on the query via the context.
+# - shouldSelectThatBranch() is useful utility method to randomly chose a grammar rule. Some of the rules
+#   are only selected if we allowed them in configuration file.
+# - We enforce table limits separately if we are inside cte part of the query(see targetCteRteCount).
+#   We also enforce max # of ctes for a query.
+# - commonColName from the config is used at select and where clauses.
+# - useAvgAtTopLevelTarget is useful to return single row as query result. It is also useful to track Citus
+#   query bugs via run_query_compare_test.py.
+# - '=' restriction is removed from the config by default to return values different than null most of the time.
+# - 'RTE.VALUES' is also removed from the config for the same reason as above.
+# - Filter range is selected as same with data range for the same reason as above.
+# - aliasStack at GeneratorContext is useful to put correct table names into where clause.
+
 # grammar syntax
 #
 # ======Assumptions======
