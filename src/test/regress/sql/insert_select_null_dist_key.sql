@@ -402,8 +402,20 @@ INSERT INTO upsert_test_1 (unique_col, other_col) VALUES (1, 1) ON CONFLICT (uni
 INSERT INTO upsert_test_1 (unique_col, other_col) VALUES (1, 1) ON CONFLICT (unique_col)
 	DO UPDATE SET other_col = 5 WHERE upsert_test_1.other_col = random()::int;
 
+INSERT INTO upsert_test_1 VALUES (3, 5, 7);
+
 INSERT INTO upsert_test_1 (unique_col, other_col) VALUES (1, 1) ON CONFLICT (unique_col) WHERE unique_col = random()::int
 	DO UPDATE SET other_col = 5;
+
+CREATE TABLE upsert_test_3 (key_1 int, key_2 bigserial, value text DEFAULT 'default_value', PRIMARY KEY (key_1, key_2));
+SELECT create_distributed_table('upsert_test_3', null);
+
+INSERT INTO upsert_test_3 VALUES (1, DEFAULT, '1') RETURNING *;
+INSERT INTO upsert_test_3 VALUES (5, DEFAULT, DEFAULT) RETURNING *;
+INSERT INTO upsert_test_3 SELECT 7, other_col, 'harcoded_text_value' FROM upsert_test_1 RETURNING *;
+
+-- not yet supported
+INSERT INTO upsert_test_3 VALUES (1, 1, '2') ON CONFLICT (key_1, key_2) DO UPDATE SET key_2 = DEFAULT;
 
 -- test upsert with INSERT .. SELECT queries
 

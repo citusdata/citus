@@ -620,10 +620,46 @@ INSERT INTO upsert_test_1 (unique_col, other_col) VALUES (1, 1) ON CONFLICT (uni
 	DO UPDATE SET other_col = 5 WHERE upsert_test_1.other_col = random()::int;
 ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
 DETAIL:  functions used in the WHERE clause of the ON CONFLICT clause of INSERTs on distributed tables must be marked IMMUTABLE
+INSERT INTO upsert_test_1 VALUES (3, 5, 7);
+DEBUG:  Creating router plan
 INSERT INTO upsert_test_1 (unique_col, other_col) VALUES (1, 1) ON CONFLICT (unique_col) WHERE unique_col = random()::int
 	DO UPDATE SET other_col = 5;
 ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
 DETAIL:  functions used in the WHERE clause of the ON CONFLICT clause of INSERTs on distributed tables must be marked IMMUTABLE
+CREATE TABLE upsert_test_3 (key_1 int, key_2 bigserial, value text DEFAULT 'default_value', PRIMARY KEY (key_1, key_2));
+DEBUG:  CREATE TABLE will create implicit sequence "upsert_test_3_key_2_seq" for serial column "upsert_test_3.key_2"
+DEBUG:  CREATE TABLE / PRIMARY KEY will create implicit index "upsert_test_3_pkey" for table "upsert_test_3"
+SELECT create_distributed_table('upsert_test_3', null);
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO upsert_test_3 VALUES (1, DEFAULT, '1') RETURNING *;
+DEBUG:  Creating router plan
+ key_1 | key_2 | value
+---------------------------------------------------------------------
+     1 |     1 | 1
+(1 row)
+
+INSERT INTO upsert_test_3 VALUES (5, DEFAULT, DEFAULT) RETURNING *;
+DEBUG:  Creating router plan
+ key_1 | key_2 |     value
+---------------------------------------------------------------------
+     5 |     2 | default_value
+(1 row)
+
+INSERT INTO upsert_test_3 SELECT 7, other_col, 'harcoded_text_value' FROM upsert_test_1 RETURNING *;
+DEBUG:  distributed statement: INSERT INTO insert_select_null_dist_key.upsert_test_3_1820108 AS citus_table_alias (key_1, key_2, value) SELECT 7, upsert_test_1.other_col, 'harcoded_text_value'::text AS value FROM insert_select_null_dist_key.upsert_test_1_1820106 upsert_test_1 RETURNING citus_table_alias.key_1, citus_table_alias.key_2, citus_table_alias.value
+ key_1 | key_2 |        value
+---------------------------------------------------------------------
+     7 |     5 | harcoded_text_value
+(1 row)
+
+-- not yet supported
+INSERT INTO upsert_test_3 VALUES (1, 1, '2') ON CONFLICT (key_1, key_2) DO UPDATE SET key_2 = DEFAULT;
+ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
+DETAIL:  functions used in the DO UPDATE SET clause of INSERTs on distributed tables must be marked IMMUTABLE
 -- test upsert with INSERT .. SELECT queries
 SET client_min_messages TO DEBUG1;
 INSERT INTO upsert_test_1 (unique_col, other_col) SELECT unique_col, other_col FROM upsert_test_1 ON CONFLICT (unique_col)
