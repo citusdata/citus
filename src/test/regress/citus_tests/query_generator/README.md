@@ -1,6 +1,28 @@
+## Goal of the Tool
+Tool supports a simple syntax to be useful to generate queries with different join orders. Main motivation for me to create the tool was to compare results of the generated queries for different [Citus](https://github.com/citusdata/citus) tables and Postgres tables. That is why we support a basic syntax for now. It can be extended to support different queries.
+
 ## Query Generator for Postgres
 Tool generates SELECT queries, whose depth can be configured, with different join orders. It also generates DDLs required for query execution.
 You can also tweak configuration parameters for data inserting command generation.
+
+## How to Run Citus Join Verification?
+You can verify if Citus breaks any default PG join behaviour via `citus_compare_dist_local_joins.sh`. It creates
+tables specified in config. Then, it runs generated queries on those tables and saves the results into `out/dist_queries.out`.
+After running those queries for Citus tables, it creates PG tables with the same names as previous run, executes the same
+queries, and saves the results into `out/local_queries.out`. In final step, it generates diff between local and distributed results.
+You can see the contents of `out/local_dist_diffs` to see if there is any Citus unsupported query.
+
+1. Create a Citus local cluster with 2 workers by using [citus_dev](https://github.com/citusdata/tools/tree/develop/citus_dev) tool
+(Note: make sure you do not configure psql via .psqlrc file as it would fail the test.)
+```bash
+citus_dev make testCluster --destroy
+```
+2. Run the test,
+```bash
+cd src/test/regress/citus_tests/query_generator/bin
+bash citus_compare_dist_local_joins.sh <username> <coordinator_port>
+```
+3. See the diff content in `src/test/regress/citus_tests/query_generator/out/local_dist_diffs`
 
 ### Configuration
 You can configure 3 different parts:
@@ -126,9 +148,6 @@ Explanation:
 interactiveMode: "when true, interactively prints generated ddls and queries. Otherwise, it writes them to configured files."
 ```
 
-## Goal of the Tool
-Tool supports a simple syntax to be useful to generate queries with different join orders. Main motivation for me to create the tool was to compare results of the generated queries for different [Citus](https://github.com/citusdata/citus) tables and Postgres tables. That is why we support a basic syntax for now. It can be extended to support different queries.
-
 ## Supported Operations
 It uses `commonColName` for any kind of target selection required for any supported query clause.
 
@@ -160,8 +179,8 @@ Tool supports following restrict operations:
 ```yaml
 targetRestrictOps:
   - LT
-  - EQ
   - GT
+  - EQ
 ```
 
 ### Rte Support
@@ -187,7 +206,8 @@ You will need to hit to `x` to exit.
 1. Configure `interactiveMode: true` in config.yml,
 2. Run the command shown below
 ```bash
-python main.py
+cd src/test/regress/citus_tests/query_generator
+python generate_queries.py
 ```
 
 ### File Mode
@@ -198,24 +218,6 @@ In this mode, generated ddls and queries will be written into the files configur
 3. Configure `queryOutFile: <query_file_path>` and `ddlOutFile: <ddlfile_path>`
 4. Run the command shown below
 ```bash
-python main.py
+cd src/test/regress/citus_tests/query_generator
+python generate_queries.py
 ```
-
-## How to Run Citus Join Verification?
-You can verify if Citus breaks any default PG join behaviour via `citus_compare_dist_local_joins.sh`. It creates
-tables specified in config. Then, it runs generated queries on those tables and saves the results into `out/dist_queries.out`.
-After running those queries for Citus tables, it creates PG tables with the same names as previous run, executes the same
-queries, and saves the results into `out/local_queries.out`. In final step, it generates diff between local and distributed results.
-You can see the contents of `out/local_dist_diffs` to see if there is any Citus unsupported query.
-
-1. Create a Citus local cluster with 2 workers by using [citus_dev](https://github.com/citusdata/tools/tree/develop/citus_dev) tool
-(Note: make sure you do not configure psql via .psqlrc file as it would fail the test.)
-```bash
-citus_dev make testCluster --destroy
-```
-2. Run the test,
-```bash
-cd src/test/regress/citus_tests/join_gen/tests
-bash citus_compare_dist_local_joins.sh <username> <coordinator_port>
-```
-3. See the diff content in `src/test/regress/citus_tests/join_gen/out/local_dist_diffs`

@@ -457,8 +457,8 @@ jobs:
       - run:
           name: 'Show regressions'
           command: |
-            find src/test/regress/citus_tests/join_gen/out/ -name "local_dist.diffs" -exec cat {} +
-            lines=$(find src/test/regress/citus_tests/join_gen/out/ -name "local_dist.diffs" | wc -l)
+            find src/test/regress/citus_tests/query_generator/out/ -name "local_dist.diffs" -exec cat {} +
+            lines=$(find src/test/regress/citus_tests/query_generator/out/ -name "local_dist.diffs" | wc -l)
             if [ $lines -ne 0 ]; then
                exit 1
             fi
@@ -474,10 +474,10 @@ jobs:
           path: src/test/regress/tmp_citus_test/logfiles
       - store_artifacts:
           name: 'Save ddls'
-          path: src/test/regress/citus_tests/join_gen/out/ddls.sql
+          path: src/test/regress/citus_tests/query_generator/out/ddls.sql
       - store_artifacts:
           name: 'Save dmls'
-          path: src/test/regress/citus_tests/join_gen/out/queries.sql
+          path: src/test/regress/citus_tests/query_generator/out/queries.sql
       - stack_trace
       - coverage:
           flags: 'test_<< parameters.pg_major >>,querygen'

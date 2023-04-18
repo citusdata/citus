@@ -69,6 +69,7 @@ def removeFailedQueryOutputFromFile(outFile, failedQueryIds):
 
 def removeFailedQueryOutputFromFiles(distQueryOutFile, localQueryOutFile):
     # remove the failed distributed query from both local and distributed query files to prevent diff for acceptable errors
+    # some of generated queries fails with below errors due to https://github.com/citusdata/citus/issues/6653, we skip those until we support them
     acceptableErrors = [
         "ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns",
         "ERROR:  recursive complex joins are only supported when all distributed tables are co-located and joined on their distribution columns",

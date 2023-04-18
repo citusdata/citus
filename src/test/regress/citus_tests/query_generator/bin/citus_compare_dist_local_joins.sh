@@ -37,9 +37,8 @@ showDiffs()
 
 # run query generator and let it create output ddls and queries
 script_folder=$(dirname "$0")
-query_gen_folder="${script_folder}"/..
-out_folder="${query_gen_folder}"/out
-pushd . && cd "${query_gen_folder}" && python3 main.py && popd
+out_folder="${script_folder}"/../out
+pushd . && cd "${script_folder}"/.. && python3 generate_queries.py && popd
 
 # remove result files if exists
 rm -rf "${out_folder}"/dist_queries.out "${out_folder}"/local_queries.out

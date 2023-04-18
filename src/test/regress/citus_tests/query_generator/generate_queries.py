@@ -1,9 +1,9 @@
 import signal
 import sys
 
-from generator.data_gen import getTableData
-from generator.ddl_gen import getTableDDLs
-from generator.join_gen import newQuery
+from data_gen import getTableData
+from ddl_gen import getTableDDLs
+from query_gen import newQuery
 
 from config.config import getConfig, resetConfig
 
@@ -36,7 +36,7 @@ def _fileMode(ddls, data):
     queryCount = getConfig().queryCount
     fileName = "out/" + getConfig().queryOutFile
     with open(fileName, "w") as f:
-        # enable repartition joins
+        # enable repartition joins due to https://github.com/citusdata/citus/issues/6865
         enableRepartitionJoinCommand = "SET citus.enable_repartition_joins TO on;\n"
         queryLines = [enableRepartitionJoinCommand]
         queryId = 1

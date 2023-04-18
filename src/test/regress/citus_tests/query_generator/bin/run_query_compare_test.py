@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 
-"""join_gen_test
+"""query_gen_test
 Usage:
-    join_gen_test --bindir=<bindir> --pgxsdir=<pgxsdir>
+    run_query_compare_test --bindir=<bindir> --pgxsdir=<pgxsdir>
 
 Options:
     --bindir=<bindir>                      PostgreSQL executable directory(ex: '~/.pgenv/pgsql-10.4/bin')
@@ -57,7 +57,7 @@ def run_test(config):
 
 if __name__ == "__main__":
     citusClusterConfig = cfg.CitusSuperUserDefaultClusterConfig(
-        docopt(__doc__, version="join_gen_test")
+        docopt(__doc__, version="run_query_compare_test")
     )
 
     run_test(citusClusterConfig)

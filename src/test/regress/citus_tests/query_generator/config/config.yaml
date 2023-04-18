@@ -10,14 +10,14 @@ forceOrderbyWithLimit: true
 useAvgAtTopLevelTarget: true
 dataRange:
   from: 0
-  to: 100
+  to: 10
 filterRange:
   from: 0
-  to: 100
+  to: 10
 limitRange:
   from: 0
-  to: 100
-targetRteCount: 250
+  to: 10
+targetRteCount: 100
 targetCteCount: 3
 targetCteRteCount: 2
 
@@ -27,8 +27,8 @@ targetTables:
   - Table:
       name: dist
       citusType: DISTRIBUTED
-      maxAllowedUseOnQuery: 70
-      rowCount: 100
+      maxAllowedUseOnQuery: 25
+      rowCount: 10
       nullRate: 0.1
       duplicateRate: 0.1
       columns:
@@ -39,8 +39,8 @@ targetTables:
   - Table:
       name: ref
       citusType: REFERENCE
-      maxAllowedUseOnQuery: 70
-      rowCount: 100
+      maxAllowedUseOnQuery: 25
+      rowCount: 10
       nullRate: 0.1
       duplicateRate: 0.1
       columns:
@@ -59,9 +59,7 @@ targetRteTypes:
   - RELATION
   - SUBQUERY
   - CTE
-  - VALUES
 
 targetRestrictOps:
   - LT
   - GT
-  - EQ

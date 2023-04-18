@@ -27,12 +27,12 @@ def randomRestrictOp():
     restrictOps = getConfig().targetRestrictOps
     restrictOp = random.choice(restrictOps)
     opText = ""
-    if restrictOp == RestrictOp.EQ:
-        opText = "="
-    elif restrictOp == RestrictOp.LT:
+    if restrictOp == RestrictOp.LT:
         opText = "<"
     elif restrictOp == RestrictOp.GT:
         opText = ">"
+    elif restrictOp == RestrictOp.EQ:
+        opText = "="
     else:
         raise BaseException("Unknown restrict op")
 
