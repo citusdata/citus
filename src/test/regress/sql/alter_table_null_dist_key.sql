@@ -95,3 +95,4 @@ SELECT * FROM alter_null_dist_key.null_dist_key_with_policy;
 -- cleanup
 SET client_min_messages TO ERROR;
 DROP SCHEMA alter_null_dist_key CASCADE;
+DROP ROLE user_1, user_2;
