@@ -26,26 +26,23 @@
 
 * Fixes a bug with `INSERT .. SELECT` queries with identity columns (#6802)
 
-* Fixes a memory leak issue during altering distributed table with a lot of
-  partition and shards (#6726)
-
 * Fixes an issue that caused some queries with custom aggregates to fail (#6805)
+
+* Fixes an issue when `citus_set_coordinator_host` is called more than once
+  (#6837)
 
 * Fixes an uninitialized memory access in shard split API (#6845)
 
 * Fixes memory leak and max allocation block errors during metadata syncing
   (#6728)
 
-* Fixes memory leak during distribution of a table with a lot of partitions and
-  shards (#6722)
+* Fixes memory leak in `undistribute_table` (#6693)
 
-* Fixes memory leak during undistribution and alteration of a table with a lot
-  of partitions (#6693)
+* Fixes memory leak in `alter_distributed_table` (#6726)
+
+* Fixes memory leak in `create_distributed_table` (#6722)
 
 * Fixes memory leak issue with query results that returns single row (#6724)
-
-* Fixes update propagation bug when `citus_set_coordinator_host` is called more
-  than once (#6837)
 
 * Improves rebalancer when shard groups have placement count less than worker
   count (#6739)
