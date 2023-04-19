@@ -1,3 +1,25 @@
+### citus v11.2.1 (April 20, 2023) ###
+
+* Correctly reports shard size in `citus_shards` view (#6748)
+
+* Fixes a bug in shard copy operations (#6721)
+
+* Fixes a bug with `INSERT .. SELECT` queries with identity columns (#6802)
+
+* Fixes an uninitialized memory access in shard split API (#6845)
+
+* Fixes compilation for PG13.10 and PG14.7 (#6711)
+
+* Fixes memory leak in `alter_distributed_table` (#6726)
+
+* Fixes memory leak issue with query results that returns single row (#6724)
+
+* Prevents using `alter_distributed_table` and `undistribute_table` UDFs when a
+  table has identity columns (#6738)
+
+* Prevents using identity columns on data types other than `bigint` on
+  distributed tables (#6738)
+
 ### citus v11.1.6 (April 20, 2023) ###
 
 * Correctly reports shard size in `citus_shards` view (#6748)
