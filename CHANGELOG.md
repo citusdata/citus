@@ -1,6 +1,6 @@
 ### citus v11.3.0 (April 13, 2023) ###
 
-* Adds `citus.enable_non_colocated_router_query_pushdown` GUC to ensure
+* Adds the GUC `citus.enable_non_colocated_router_query_pushdown` to ensure
   generating a consistent distributed plan for the queries that reference
   non-colocated distributed tables when set to "false" (#6793)
 
@@ -12,11 +12,9 @@
 
 * Allows parallel shard moves in background rebalancer (#6756)
 
-* Check before logicalrep for rebalancer, error if needed (#6754)
+* Checks before logicalrep for rebalancer, error if needed (#6754)
 
-* Correctly report shard size in citus_shards view (#6748)
-
-* Fix an issue that caused some queries with custom aggregates to fail (#6805)
+* Correctly reports shard size in citus_shards view (#6748)
 
 * Fixes a bug in shard copy operations (#6721)
 
@@ -27,6 +25,8 @@
 
 * Fixes a memory leak issue during altering distributed table with a lot of
   partition and shards (#6726)
+
+* Fixes an issue that caused some queries with custom aggregates to fail (#6805)
 
 * Fixes an uninitialized memory access in shard split API (#6845)
 
