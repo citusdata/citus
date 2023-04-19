@@ -1,3 +1,26 @@
+### citus v11.0.8 (April 20, 2023) ###
+
+* Correctly reports shard size in `citus_shards` view (#6748)
+
+* Fixes a bug that breaks pg upgrades if the user has a columnar table (#6624)
+
+* Fixes an unexpected foreign table error by disallowing to drop the
+  `table_name` option (#6669)
+
+* Fixes compilation warning on PG13 + OpenSSL 3.0 (#6038, #6502)
+
+* Fixes crash that happens when trying to replicate a reference table that is
+  actually dropped (#6595)
+
+* Fixes memory leak issue with query results that returns single row (#6724)
+
+* Fixes the modifiers for subscription and role creation (#6603)
+
+* Fixes two potential dangling pointer issues (#6504, #6507)
+
+* Makes sure to quote all identifiers used for logical replication to prevent
+  potential issues (#6604)
+
 ### citus v11.0.7 (November 8, 2022) ###
 
 * Adds the GUC `citus.allow_unsafe_constraints` to allow unique/exclusion/
