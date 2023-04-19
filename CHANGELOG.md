@@ -1,88 +1,64 @@
 ### citus v11.3.0 (April 13, 2023) ###
 
-PR #6845 : When creating a HTAB we need to use HASH_COMPARE  flag in order to
-set a user defined comparison function.
-* Fixes an uninitialized memory access in shard split API
+* Fixes an uninitialized memory access in shard split API (#6845)
 
-PR #6837 : fixes update propagation bug when `citus_set_coordinator_host` is
-called more than once
 * Fixes update propagation bug when `citus_set_coordinator_host` is called more
-  than once.
+  than once (#6837)
 
-PR #6771 : Adds control for background task executors involving a node
 * Adds the GUC `citus.max_background_task_executors_per_node` to control number
-  of background task executors involving a node
+  of background task executors involving a node (#6771)
 
-PR #6725 : Multi tenant monitoring
 * Adds the view `citus_stats_tenants` that monitor statistics on tenant usages
+  (#6725)
 
-PR #6805 : Do not override combinefunc of custom aggregates with common names
-* Fix an issue that caused some queries with custom aggregates to fail
+* Fix an issue that caused some queries with custom aggregates to fail (#6805)
 
-PR #6728 : stabilize metadata syncing
 * Fixes memory leak and max allocation block errors during metadata syncing
+  (#6728)
 
 * Introduces the GUC `citus.metadata_sync_mode` that introduces nontransactional
-  mode for metadata sync
+  mode for metadata sync (#6728)
 
-PR #6738 :  Identity column implementation refactorings
 * Prevents using identity columns on data types other than `bigint` on
-  distributed tables
+  distributed tables (#6738)
 
 * Prevents using `alter_distributed_table` and `undistribute_table` UDFs when a
-  table has identity columns
+  table has identity columns (#6738)
 
 * Fixes a bug that prevents enforcing identity column restrictions on worker
-  nodes
+  nodes (#6738)
 
-PR #6756 : Schedule parallel shard moves in background rebalancer by removing
-task dependencies between shard moves across colocation groups.
-* Allows parallel shard moves in background rebalancer
+* Allows parallel shard moves in background rebalancer (#6756)
 
-PR #6776 : Propagate CREATE/ALTER/DROP PUBLICATION statements
-* Propagate CREATE/ALTER/DROP PUBLICATION statements for distributed tables
+* Propagates CREATE/ALTER/DROP PUBLICATION statements for distributed tables (#6776)
 
-PR #6802 : Handle identity columns properly in the router planner
-* Fixes a bug with insert..select queries with identity columns
+* Fixes a bug with `INSERT .. SELECT` queries with identity columns (#6802)
 
-PR #6793 : Add a GUC to disallow planning the queries that reference
-non-colocated tables via router planner
 * Adds `citus.enable_non_colocated_router_query_pushdown` GUC to ensure
   generating a consistent distributed plan for the queries that reference
-  non-colocated distributed tables (when set to "false", the default is "true").
+  non-colocated distributed tables when set to "false" (#6793)
 
-PR #6754 : Check before logicalrep for rebalancer, error if needed
-* Check before logicalrep for rebalancer, error if needed
+* Check before logicalrep for rebalancer, error if needed (#6754)
 
-PR #6721 : Exclude-Generated-Columns-In-Copy
-* Fixes a bug in shard copy operations.
+* Fixes a bug in shard copy operations (#6721)
 
-PR #6739 : Rebalance shard groups with placement count less than worker count
-* Adds logic to distribute unbalanced shards
+* Adds logic to distribute unbalanced shards (#6739)
 
-PR #6748 : Use pg_total_relation_size in citus_shards
-* Correctly report shard size in citus_shards vie
+* Correctly report shard size in citus_shards view (#6748)
 
-PR #6726 : fix memory leak during altering distributed table with a lot of
-partition and shards
 * Fixes a memory leak issue during altering distributed table with a lot of
-  partition and shards.
+  partition and shards (#6726)
 
-PR #6722 : fix memory leak during distribution of a table with a lot of
-partitions
 * Fixes memory leak during distribution of a table with a lot of partitions and
-  shards.
+  shards (#6722)
 
-PR #6724 : fix single tuple result memory leak
-* Fixes memory leak issue with query results that returns single row.
+* Fixes memory leak issue with query results that returns single row (#6724)
 
-PR #6693 : prevent memory leak during ConvertTable with a lot of partitions
 * Fixes memory leak during undistribution and alteration of a table with a lot
-  of partitions.
+  of partitions (#6693)
 
-PR #6688 : Stop background daemon before dropping the database
 * Makes sure to stop maintenance daemon when dropping a database even without
-  Citus extension
+  Citus extension (#6688)
 
 ### citus v11.2.0 (January 30, 2023) ###
 
