@@ -593,6 +593,16 @@ SELECT * FROM multi_extension.print_extension_changes();
 
 -- Test downgrade to 11.3-1 from 12.0-1
 ALTER EXTENSION citus UPDATE TO '12.0-1';
+
+CREATE TABLE null_shard_key (x int, y int);
+SELECT create_distributed_table('null_shard_key', null);
+
+-- Show that we cannot downgrade to 11.3-1 becuase the cluster has a
+-- distributed table with single-shard.
+ALTER EXTENSION citus UPDATE TO '11.3-1';
+
+DROP TABLE null_shard_key;
+
 ALTER EXTENSION citus UPDATE TO '11.3-1';
 -- Should be empty result since upgrade+downgrade should be a no-op
 SELECT * FROM multi_extension.print_extension_changes();
