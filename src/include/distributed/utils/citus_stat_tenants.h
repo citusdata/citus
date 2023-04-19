@@ -70,8 +70,7 @@ typedef struct TenantStats
 	/*
 	 * Locks needed to update this tenant's statistics.
 	 */
-	NamedLWLockTranche namedLockTranche;
-	LWLock lock;
+	slock_t lock;
 } TenantStats;
 
 /*

@@ -50,7 +50,6 @@ static clock_t QueryEndClock = { 0 };
 
 static const char *SharedMemoryNameForMultiTenantMonitor =
 	"Shared memory for multi tenant monitor";
-static char *TenantTrancheName = "Tenant Tranche";
 static char *MonitorTrancheName = "Multi Tenant Monitor Tranche";
 
 static shmem_startup_hook_type prev_shmem_startup_hook = NULL;
@@ -358,13 +357,13 @@ AttributeMetricsIfApplicable()
 	if (currentTenantIndex != -1)
 	{
 		TenantStats *tenantStats = &monitor->tenants[currentTenantIndex];
-		LWLockAcquire(&tenantStats->lock, LW_EXCLUSIVE);
+		SpinLockAcquire(&tenantStats->lock);
 
 		UpdatePeriodsIfNecessary(tenantStats, queryTime);
 		ReduceScoreIfNecessary(tenantStats, queryTime);
 		RecordTenantStats(tenantStats, queryTime);
 
-		LWLockRelease(&tenantStats->lock);
+		SpinLockRelease(&tenantStats->lock);
 	}
 	else
 	{
@@ -385,13 +384,13 @@ AttributeMetricsIfApplicable()
 		if (currentTenantIndex != -1)
 		{
 			TenantStats *tenantStats = &monitor->tenants[currentTenantIndex];
-			LWLockAcquire(&tenantStats->lock, LW_EXCLUSIVE);
+			SpinLockAcquire(&tenantStats->lock);
 
 			UpdatePeriodsIfNecessary(tenantStats, queryTime);
 			ReduceScoreIfNecessary(tenantStats, queryTime);
 			RecordTenantStats(tenantStats, queryTime);
 
-			LWLockRelease(&tenantStats->lock);
+			SpinLockRelease(&tenantStats->lock);
 		}
 	}
 	LWLockRelease(&monitor->lock);
@@ -659,14 +658,7 @@ CreateTenantStats(MultiTenantMonitor *monitor, TimestampTz queryTime)
 	strcpy_s(monitor->tenants[tenantIndex].tenantAttribute,
 			 sizeof(monitor->tenants[tenantIndex].tenantAttribute), AttributeToTenant);
 	monitor->tenants[tenantIndex].colocationGroupId = AttributeToColocationGroupId;
-
-	monitor->tenants[tenantIndex].namedLockTranche.trancheId = LWLockNewTrancheId();
-	monitor->tenants[tenantIndex].namedLockTranche.trancheName = TenantTrancheName;
-
-	LWLockRegisterTranche(monitor->tenants[tenantIndex].namedLockTranche.trancheId,
-						  monitor->tenants[tenantIndex].namedLockTranche.trancheName);
-	LWLockInitialize(&monitor->tenants[tenantIndex].lock,
-					 monitor->tenants[tenantIndex].namedLockTranche.trancheId);
+	SpinLockInit(&monitor->tenants[tenantIndex].lock);
 
 	monitor->tenantCount++;
 
