@@ -18,16 +18,39 @@ HINT:  To remove the local data, run: SELECT truncate_local_data_after_distribut
 
 -- add column
 ALTER TABLE null_dist_table ADD COLUMN d bigint DEFAULT 2;
-SELECT * FROM null_dist_table;
+SELECT * FROM null_dist_table ORDER BY c;
  a |  b   | c | d
 ---------------------------------------------------------------------
  1 | test | 1 | 2
 (1 row)
 
+-- alter default, set to 3
+ALTER TABLE null_dist_table ALTER COLUMN d SET DEFAULT 3;
+INSERT INTO null_dist_table("b") VALUES ('test');
+SELECT * FROM null_dist_table ORDER BY c;
+ a |  b   | c | d
+---------------------------------------------------------------------
+ 1 | test | 1 | 2
+ 2 | test | 2 | 3
+(2 rows)
+
+-- drop default, see null
+ALTER TABLE null_dist_table ALTER COLUMN d DROP DEFAULT;
+INSERT INTO null_dist_table("b") VALUES ('test');
+SELECT * FROM null_dist_table ORDER BY c;
+ a |  b   | c | d
+---------------------------------------------------------------------
+ 1 | test | 1 | 2
+ 2 | test | 2 | 3
+ 3 | test | 3 |
+(3 rows)
+
+-- cleanup the rows that were added to test the default behavior
+DELETE FROM null_dist_table WHERE "b" = 'test' AND a > 1;
 -- alter column type
 ALTER TABLE null_dist_table ALTER COLUMN d TYPE text;
 UPDATE null_dist_table SET d = 'this is a text' WHERE d = '2';
-SELECT * FROM null_dist_table;
+SELECT * FROM null_dist_table ORDER BY c;
  a |  b   | c |       d
 ---------------------------------------------------------------------
  1 | test | 1 | this is a text
@@ -35,7 +58,7 @@ SELECT * FROM null_dist_table;
 
 -- drop seq column
 ALTER TABLE null_dist_table DROP COLUMN a;
-SELECT * FROM null_dist_table;
+SELECT * FROM null_dist_table ORDER BY c;
   b   | c |       d
 ---------------------------------------------------------------------
  test | 1 | this is a text
@@ -51,7 +74,7 @@ CONTEXT:  while executing command on localhost:xxxxx
 -- drop not null constraint and try again
 ALTER TABLE null_dist_table ALTER COLUMN b DROP NOT NULL;
 INSERT INTO null_dist_table VALUES (NULL, 3, 'test');
-SELECT * FROM null_dist_table;
+SELECT * FROM null_dist_table ORDER BY c;
   b   | c |       d
 ---------------------------------------------------------------------
  test | 1 | this is a text
@@ -60,10 +83,17 @@ SELECT * FROM null_dist_table;
 
 -- add exclusion constraint
 ALTER TABLE null_dist_table ADD CONSTRAINT exc_b EXCLUDE USING btree (b with =);
+-- rename the exclusion constraint, errors out
+ALTER TABLE null_dist_table RENAME CONSTRAINT exc_b TO exc_b_1;
+ERROR:  renaming constraints belonging to distributed tables is currently unsupported
+-- create exclusion constraint without a name
+ALTER TABLE null_dist_table ADD EXCLUDE USING btree (b with =);
+-- test setting autovacuum option
+ALTER TABLE null_dist_table SET (autovacuum_enabled = false);
 -- test multiple subcommands
 ALTER TABLE null_dist_table ADD COLUMN int_column1 INTEGER,
 	DROP COLUMN d;
-SELECT * FROM null_dist_table;
+SELECT * FROM null_dist_table ORDER BY c;
   b   | c | int_column1
 ---------------------------------------------------------------------
  test | 1 |

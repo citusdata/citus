@@ -12,16 +12,29 @@ SELECT create_distributed_table('null_dist_table', null, colocate_with=>'none', 
 
 -- add column
 ALTER TABLE null_dist_table ADD COLUMN d bigint DEFAULT 2;
-SELECT * FROM null_dist_table;
+SELECT * FROM null_dist_table ORDER BY c;
+
+-- alter default, set to 3
+ALTER TABLE null_dist_table ALTER COLUMN d SET DEFAULT 3;
+INSERT INTO null_dist_table("b") VALUES ('test');
+SELECT * FROM null_dist_table ORDER BY c;
+
+-- drop default, see null
+ALTER TABLE null_dist_table ALTER COLUMN d DROP DEFAULT;
+INSERT INTO null_dist_table("b") VALUES ('test');
+SELECT * FROM null_dist_table ORDER BY c;
+
+-- cleanup the rows that were added to test the default behavior
+DELETE FROM null_dist_table WHERE "b" = 'test' AND a > 1;
 
 -- alter column type
 ALTER TABLE null_dist_table ALTER COLUMN d TYPE text;
 UPDATE null_dist_table SET d = 'this is a text' WHERE d = '2';
-SELECT * FROM null_dist_table;
+SELECT * FROM null_dist_table ORDER BY c;
 
 -- drop seq column
 ALTER TABLE null_dist_table DROP COLUMN a;
-SELECT * FROM null_dist_table;
+SELECT * FROM null_dist_table ORDER BY c;
 
 -- add not null constraint
 ALTER TABLE null_dist_table ALTER COLUMN b SET NOT NULL;
@@ -31,16 +44,23 @@ INSERT INTO null_dist_table VALUES (NULL, 2, 'test');
 -- drop not null constraint and try again
 ALTER TABLE null_dist_table ALTER COLUMN b DROP NOT NULL;
 INSERT INTO null_dist_table VALUES (NULL, 3, 'test');
-SELECT * FROM null_dist_table;
+SELECT * FROM null_dist_table ORDER BY c;
 
 -- add exclusion constraint
 ALTER TABLE null_dist_table ADD CONSTRAINT exc_b EXCLUDE USING btree (b with =);
+-- rename the exclusion constraint, errors out
+ALTER TABLE null_dist_table RENAME CONSTRAINT exc_b TO exc_b_1;
+-- create exclusion constraint without a name
+ALTER TABLE null_dist_table ADD EXCLUDE USING btree (b with =);
+
+-- test setting autovacuum option
+ALTER TABLE null_dist_table SET (autovacuum_enabled = false);
 
 -- test multiple subcommands
 ALTER TABLE null_dist_table ADD COLUMN int_column1 INTEGER,
 	DROP COLUMN d;
 
-SELECT * FROM null_dist_table;
+SELECT * FROM null_dist_table ORDER BY c;
 
 -- cleanup
 SET client_min_messages TO ERROR;
