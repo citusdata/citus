@@ -12,12 +12,6 @@ called more than once
 PR #6771 : Adds control for background task executors involving a node
 * Adds control for background task executors involving a node
 
-PR #6820 : Add upgrade/downgrade paths between v11.2.2 and v11.3.1
-* PR description that will go into the change log, up to 78 characters
-
-PR #6794 : Move cleanup record test to upgrade schedule
-* Move cleanup record test to upgrade schedule
-
 PR #6725 : Multi tenant monitoring
 * Adds views that monitor statistics on tenant usages
 
@@ -54,9 +48,6 @@ PR #6776 : Propagate CREATE/ALTER/DROP PUBLICATION statements
 PR #6802 : Handle identity columns properly in the router planner
 * Fixes a bug with insert..select queries with identity columns
 
-PR #6775 : Add appropriate locks for MERGE to run in in parallel
-* PR description that will go into the change log, up to 78 characters
-
 PR #6793 : Add a GUC to disallow planning the queries that reference
 non-colocated tables via router planner
 * Adds `citus.enable_non_colocated_router_query_pushdown` GUC to ensure
@@ -79,9 +70,6 @@ PR #6726 : fix memory leak during altering distributed table with a lot of
 partition and shards
 * Fixes a memory leak issue during altering distributed table with a lot of
   partition and shards.
-
-PR #6732 : Move common code to a new routine.
-* PR description that will go into the change log, up to 78 characters
 
 PR #6722 : fix memory leak during distribution of a table with a lot of
 partitions
