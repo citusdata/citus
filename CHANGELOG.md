@@ -10,20 +10,20 @@ called more than once
   than once.
 
 PR #6771 : Adds control for background task executors involving a node
-* Adds control for background task executors involving a node
+* Adds the GUC `citus.max_background_task_executors_per_node` to control number
+  of background task executors involving a node
 
 PR #6725 : Multi tenant monitoring
-* Adds views that monitor statistics on tenant usages
+* Adds the view `citus_stats_tenants` that monitor statistics on tenant usages
 
 PR #6805 : Do not override combinefunc of custom aggregates with common names
 * Fix an issue that caused some queries with custom aggregates to fail
 
 PR #6728 : stabilize metadata syncing
-* Fixes memory leak and max allocation block errors during metadata syncing.
+* Fixes memory leak and max allocation block errors during metadata syncing
 
-* Introduces nontransactional mode for metadata sync.
-
-* Introduces the GUC `citus.metadata_sync_mode` to switch sync modes
+* Introduces the GUC `citus.metadata_sync_mode` that introduces nontransactional
+  mode for metadata sync
 
 PR #6738 :  Identity column implementation refactorings
 * Prevents using identity columns on data types other than `bigint` on
@@ -37,10 +37,7 @@ PR #6738 :  Identity column implementation refactorings
 
 PR #6756 : Schedule parallel shard moves in background rebalancer by removing
 task dependencies between shard moves across colocation groups.
-* This PR removes the task dependencies between shard moves for which the shards
-  belong to different colocation groups. This change results in scheduling
-  multiple tasks in the RUNNABLE state. Therefore it is possible that the
-  background task monitor can run them concurrently.
+* Allows parallel shard moves in background rebalancer
 
 PR #6776 : Propagate CREATE/ALTER/DROP PUBLICATION statements
 * Propagate CREATE/ALTER/DROP PUBLICATION statements for distributed tables
@@ -84,7 +81,8 @@ PR #6693 : prevent memory leak during ConvertTable with a lot of partitions
   of partitions.
 
 PR #6688 : Stop background daemon before dropping the database
-* Stop maintenance daemon when dropping a database even without Citus extension
+* Makes sure to stop maintenance daemon when dropping a database even without
+  Citus extension
 
 ### citus v11.2.0 (January 30, 2023) ###
 
