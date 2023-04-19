@@ -26,3 +26,7 @@ GRANT SELECT ON pg_catalog.pg_dist_tenant_schema TO public;
 
 #include "udfs/citus_tables/12.0-1.sql"
 #include "udfs/citus_shards/12.0-1.sql"
+
+-- udfs to convert a regular/tenant schema to a tenant/regular schema
+#include "udfs/citus_schema_tenant_set/12.0-1.sql"
+#include "udfs/citus_schema_tenant_unset/12.0-1.sql"

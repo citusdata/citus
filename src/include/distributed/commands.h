@@ -793,5 +793,6 @@ extern void ErrorIfIllegalPartitioningInTenantSchema(Oid parentRelationId,
 extern void CreateTenantSchemaTable(Oid relationId);
 extern void ErrorIfTenantTable(Oid relationId, char *operationName);
 extern void ErrorIfTenantSchema(Oid nspOid, char *operationName);
+extern uint32 CreateTenantSchemaColocationId(void);
 
 #endif /*CITUS_COMMANDS_H */

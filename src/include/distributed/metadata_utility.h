@@ -383,6 +383,7 @@ extern void EnsureTableOwner(Oid relationId);
 extern void EnsureHashDistributedTable(Oid relationId);
 extern void EnsureHashOrSingleShardDistributedTable(Oid relationId);
 extern void EnsureFunctionOwner(Oid functionId);
+extern void EnsureSchemaOwner(Oid schemaId);
 extern void EnsureSuperUser(void);
 extern void ErrorIfTableIsACatalogTable(Relation relation);
 extern void EnsureTableNotDistributed(Oid relationId);

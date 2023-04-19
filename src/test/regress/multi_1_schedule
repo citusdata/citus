@@ -306,6 +306,11 @@ test: sequences_owned_by
 test: remove_coordinator
 
 # ----------
+# conversion between regular and tenant schemas
+test: citus_schema_tenant_set_unset
+# ----------
+
+# ----------
 # multi_transactional_drop_shards tests for dropping shards using connection API
 # ----------
 test: multi_transactional_drop_shards
