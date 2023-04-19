@@ -42,7 +42,8 @@
 
 * Fixes a bug in shard copy operations (#6721)
 
-* Adds logic to distribute unbalanced shards (#6739)
+* Improves rebalancer when shard groups have placement count less than worker
+  count (#6739)
 
 * Correctly report shard size in citus_shards view (#6748)
 
