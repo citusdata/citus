@@ -1,5 +1,8 @@
 ### citus v11.3.0 (April 13, 2023) ###
 
+* Introduces CDC implementation for Citus using logical replication
+  (#6623, #6810, #6827)
+
 * Adds the GUC `citus.enable_non_colocated_router_query_pushdown` to ensure
   generating a consistent distributed plan for the queries that reference
   non-colocated distributed tables when set to "false" (#6793)
