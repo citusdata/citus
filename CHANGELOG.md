@@ -1,3 +1,37 @@
+### citus v11.1.6 (April 20, 2023) ###
+
+* Correctly reports shard size in `citus_shards` view (#6748)
+
+* Fixes a bug in shard copy operations (#6721)
+
+* Fixes a bug that breaks pg upgrades if the user has a columnar table (#6624)
+
+* Fixes a bug that causes background rebalancer to fail when a reference table
+  doesn't have a primary key (#6682)
+
+* Fixes a regression in allowed foreign keys on distributed tables (#6550)
+
+* Fixes a use-after-free bug in connection management (#6685)
+
+* Fixes an unexpected foreign table error by disallowing to drop the
+  `table_name` option (#6669)
+
+* Fixes an uninitialized memory access in shard split API (#6845)
+
+* Fixes compilation for PG13.10 and PG14.7 (#6711)
+
+* Fixes crash that happens when trying to replicate a reference table that is
+  actually dropped (#6595)
+
+* Fixes memory leak issue with query results that returns single row (#6724)
+
+* Fixes the modifiers for subscription and role creation (#6603)
+
+* Makes sure to quote all identifiers used for logical replication to prevent
+  potential issues (#6604)
+
+* Makes sure to skip foreign key validations at the end of shard moves (#6640)
+
 ### citus v11.0.8 (April 20, 2023) ###
 
 * Correctly reports shard size in `citus_shards` view (#6748)
