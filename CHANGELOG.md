@@ -20,7 +20,7 @@
 
 * Checks before logicalrep for rebalancer, error if needed (#6754)
 
-* Correctly reports shard size in citus_shards view (#6748)
+* Correctly reports shard size in `citus_shards` view (#6748)
 
 * Fixes a bug in shard copy operations (#6721)
 
