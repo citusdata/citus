@@ -62,6 +62,36 @@ ALTER TABLE null_dist_table ADD COLUMN int_column1 INTEGER,
 
 SELECT * FROM null_dist_table ORDER BY c;
 
+-- test policy and row level security
+CREATE TABLE null_dist_key_with_policy (table_user text);
+INSERT INTO null_dist_key_with_policy VALUES ('user_1');
+SELECT create_distributed_table('null_dist_key_with_policy', null);
+
+-- enable rls
+ALTER TABLE null_dist_key_with_policy ENABLE ROW LEVEL SECURITY;
+
+-- user_1 will be allowed to see the inserted row
+CREATE ROLE user_1 WITH LOGIN;
+GRANT ALL ON SCHEMA alter_null_dist_key TO user_1;
+GRANT ALL ON TABLE alter_null_dist_key.null_dist_key_with_policy TO user_1;
+CREATE POLICY table_policy ON null_dist_key_with_policy TO user_1
+   USING (table_user = current_user);
+
+-- user_2 will not be allowed to see the inserted row
+CREATE ROLE user_2 WITH LOGIN;
+GRANT ALL ON SCHEMA alter_null_dist_key TO user_2;
+GRANT ALL ON TABLE alter_null_dist_key.null_dist_key_with_policy TO user_2;
+CREATE POLICY table_policy_1 ON null_dist_key_with_policy TO user_2
+   USING (table_user = current_user);
+
+\c - user_1 -
+SELECT * FROM alter_null_dist_key.null_dist_key_with_policy;
+\c - user_2 -
+SELECT * FROM alter_null_dist_key.null_dist_key_with_policy;
+-- postgres will always be allowed to see the row as a superuser
+\c - postgres -
+SELECT * FROM alter_null_dist_key.null_dist_key_with_policy;
+
 -- cleanup
 SET client_min_messages TO ERROR;
 DROP SCHEMA alter_null_dist_key CASCADE;
