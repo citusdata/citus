@@ -6,7 +6,7 @@ orbs:
 parameters:
   image_suffix:
     type: string
-    default: '-v3417e8d'
+    default: '-dev-b581dab'
   pg13_version:
     type: string
     default: '13.10'
@@ -444,10 +444,6 @@ jobs:
       - install_extension:
           pg_major: << parameters.pg_major >>
       - configure
-      - run:
-          name: 'Install pyyaml'
-          command: |
-            pip3 install pyyaml
       - enable_core
       - run:
           name: 'Run Test'
