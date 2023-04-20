@@ -1,3 +1,19 @@
+### citus v10.2.9 (April 20, 2023) ###
+
+* Correctly reports shard size in `citus_shards` view (#6748)
+
+* Fixes a bug in `ALTER EXTENSION citus UPDATE` (#6383)
+
+* Fixes a bug that breaks pg upgrades if the user has a columnar table (#6624)
+
+* Fixes a bug that prevents retaining columnar table options after a
+  table-rewrite (#6337)
+
+* Fixes memory leak issue with query results that returns single row (#6724)
+
+* Raises memory limits in columnar from 256MB to 1GB for reads and writes
+  (#6419)
+
 ### citus v10.1.5 (April 20, 2023) ###
 
 * Fixes a crash that occurs when the aggregate that cannot be pushed-down
