@@ -20,7 +20,7 @@ citus_dev make testCluster --destroy
 2. Run the test,
 ```bash
 cd src/test/regress/citus_tests/query_generator/bin
-bash citus_compare_dist_local_joins.sh <username> <coordinator_port>
+bash citus_compare_dist_local_joins.sh <username> <dbname> <coordinator_port>
 ```
 3. See the diff content in `src/test/regress/citus_tests/query_generator/out/local_dist_diffs`
 

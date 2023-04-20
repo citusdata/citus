@@ -4,19 +4,20 @@
 set -euo pipefail
 
 psql_user=$1
-psql_port=$2
+psql_db=$2
+psql_port=$3
 
 runDDLs()
 {
     # run ddls
-    psql -U "${psql_user}" -p "${psql_port}" -f "${out_folder}"/ddls.sql > /dev/null
+    psql -U "${psql_user}" -d "${psql_db}" -p "${psql_port}" -f "${out_folder}"/ddls.sql > /dev/null
 }
 
 runUndistributeTables()
 {
     undistribute_all_tables_command='SELECT undistribute_table(logicalrelid) FROM pg_dist_partition;'
     # run undistribute all tables
-    psql -U "${psql_user}" -p "${psql_port}" -c "${undistribute_all_tables_command}" > /dev/null
+    psql -U "${psql_user}" -d "${psql_db}" -p "${psql_port}" -c "${undistribute_all_tables_command}" > /dev/null
 }
 
 runQueries()
@@ -25,7 +26,7 @@ runQueries()
 
     # run dmls
     # echo queries and comments for query tracing
-    psql -U "${psql_user}" -p "${psql_port}" \
+    psql -U "${psql_user}" -d "${psql_db}" -p "${psql_port}" \
         --echo-all \
         -f "${out_folder}"/queries.sql > "${out_filename}" 2>&1
 }

@@ -36,8 +36,8 @@ def run_test(config):
 
     # run test
     scriptDirPath = os.path.dirname(os.path.abspath(__file__))
-    testRunCommand = "bash {}/citus_compare_dist_local_joins.sh {} {}".format(
-        scriptDirPath, config.user, config.coordinator_port()
+    testRunCommand = "bash {}/citus_compare_dist_local_joins.sh {} {} {}".format(
+        scriptDirPath, config.user, config.dbname, config.coordinator_port()
     )
     process = subprocess.Popen(
         testRunCommand.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE
