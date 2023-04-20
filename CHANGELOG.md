@@ -1,3 +1,14 @@
+### citus v10.1.6 (April 20, 2023) ###
+
+* Fixes a crash that occurs when the aggregate that cannot be pushed-down
+  returns empty result from a worker (#5679)
+
+* Fixes columnar freezing/wraparound bug (#5962)
+
+* Fixes memory leak issue with query results that returns single row (#6724)
+
+* Prevents alter table functions from dropping extensions (#5974)
+
 ### citus v10.1.4 (February 1, 2022) ###
 
 * Adds missing version checks for columnar tables
