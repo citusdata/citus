@@ -1,3 +1,12 @@
+### citus v9.5.11 (April 20, 2023) ###
+
+* Fixes a crash that occurs when the aggregate that cannot be pushed-down
+  returns empty result from a worker (#5679)
+
+* Fixes memory leak issue with query results that returns single row (#6724)
+
+* Prevents alter table functions from dropping extensions (#5974)
+
 ### citus v11.2.0 (January 30, 2023) ###
 
 * Adds support for outer joins with reference tables / complex subquery-CTEs
