@@ -29,13 +29,17 @@ typedef struct DatabaseShard
 	bool isAvailable;
 } DatabaseShard;
 
-extern char *DatabaseShardingControlDBName;
-extern char *DatabaseShardingPgbouncerFile;
+/* citus.enable_database_sharding setting */
+extern bool EnableDatabaseSharding;
+
+/* citus.database_sharding_pgbouncer_file setting */
+extern char *DatabaseShardingPgBouncerFile;
 
 void HandleDDLInDatabaseShard(Node *parseTree, bool *runPreviousUtilityHook);
 bool DatabaseShardingEnabled(void);
 void AssignDatabaseToShard(Oid databaseOid);
-void DeleteDatabaseShardByDatabaseId(Oid databaseOid);
+void DeleteDatabaseShardByDatabaseIdLocally(Oid databaseOid);
+void GeneratePgbouncerDatabaseFile(void);
 
 
 #endif

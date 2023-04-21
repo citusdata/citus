@@ -17,6 +17,8 @@
 #define MAX_SHARD_COUNT 64000
 #define MAX_SHARD_REPLICATION_FACTOR 100
 
+extern char *CitusMainDatabase;
+
 extern ColumnarSupportsIndexAM_type extern_ColumnarSupportsIndexAM;
 extern CompressionTypeStr_type extern_CompressionTypeStr;
 extern IsColumnarTableAmTable_type extern_IsColumnarTableAmTable;

@@ -79,9 +79,20 @@ PostprocessCreatedbStmt(Node *node, const char *queryString)
 	ObjectAddressSet(dbAddress, DatabaseRelationId, databaseOid);
 	MarkObjectDistributed(&dbAddress);
 
-	if (DatabaseShardingEnabled())
+	if (EnableDatabaseSharding)
 	{
 		AssignDatabaseToShard(databaseOid);
+
+		if (list_length(workerNodes) > 0)
+		{
+			/* TODO: make fault tolerant */
+			char *regenerateCommand =
+				"SELECT pg_catalog.regenerate_pgbouncer_database_file()";
+
+			SendCommandToWorkersWithMetadata(regenerateCommand);
+		}
+
+		GeneratePgbouncerDatabaseFile();
 	}
 
 	return NIL;

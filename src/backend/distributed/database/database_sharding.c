@@ -25,7 +25,9 @@
 #include "distributed/listutils.h"
 #include "distributed/metadata_sync.h"
 #include "distributed/remote_commands.h"
+#include "distributed/shared_library_init.h"
 #include "distributed/worker_transaction.h"
+#include "nodes/makefuncs.h"
 #include "nodes/parsenodes.h"
 #include "postmaster/postmaster.h"
 #include "tcop/utility.h"
@@ -34,6 +36,7 @@
 
 
 static void ExecuteCommandInControlDatabase(char *command);
+static void AllowConnectionsOnlyOnNodeGroup(Oid databaseOid, Oid nodeGroupId);
 static void InsertDatabaseShardAssignment(Oid databaseOid, int nodeGroupId);
 static void InsertDatabaseShardAssignmentLocally(Oid databaseOid, int nodeGroupId);
 static void InsertDatabaseShardAssignmentOnOtherNodes(Oid databaseOid, int nodeGroupId);
@@ -41,36 +44,28 @@ static List * ListDatabaseShards(void);
 static DatabaseShard * TupleToDatabaseShard(HeapTuple heapTuple,
 											TupleDesc tupleDescriptor);
 
+
 PG_FUNCTION_INFO_V1(database_shard_assign);
+PG_FUNCTION_INFO_V1(regenerate_pgbouncer_database_file);
 
 
-/* citus.database_sharding_control_dbname setting */
-char *DatabaseShardingControlDBName = "";
+/* citus.enable_database_sharding setting */
+bool EnableDatabaseSharding = false;
 
 /* citus.database_sharding_pgbouncer_file setting */
-char *DatabaseShardingPgbouncerFile = "";
+char *DatabaseShardingPgBouncerFile = "";
 
 
 /*
- * DatabaseShardingEnabled returns whether Citus database sharding is enabled.
- */
-bool
-DatabaseShardingEnabled(void)
-{
-	return DatabaseShardingControlDBName[0] != '\0';
-}
-
-
-/*
- * HandleDDLInDatabaseShard handles commands that are relevant to
- * database sharding:
+ * HandleDDLInDatabaseShard handles DDL commands that occur within a
+ * database shard and require global coordination:
  * - CREATE/ALTER/DROP DATABASE
  * - CREATE/ALTER/DROP ROLE/USER/GROUP
  */
 void
 HandleDDLInDatabaseShard(Node *parseTree, bool *runPreviousUtilityHook)
 {
-	if (!DatabaseShardingEnabled())
+	if (!EnableDatabaseSharding)
 	{
 		return;
 	}
@@ -96,7 +91,7 @@ HandleDDLInDatabaseShard(Node *parseTree, bool *runPreviousUtilityHook)
 
 /*
  * ExecuteCommandInControlDatabase connects to localhost to execute a command
- * in the control database.
+ * in the main Citus database.
  */
 static void
 ExecuteCommandInControlDatabase(char *command)
@@ -105,7 +100,7 @@ ExecuteCommandInControlDatabase(char *command)
 
 	MultiConnection *connection =
 		GetNodeUserDatabaseConnection(connectionFlag, LocalHostName, PostPortNumber,
-									  NULL, DatabaseShardingControlDBName);
+									  NULL, CitusMainDatabase);
 
 	ExecuteCriticalRemoteCommand(connection,
 								 "SET application_name TO 'citus_database_shard'");
@@ -160,6 +155,52 @@ AssignDatabaseToShard(Oid databaseOid)
 	}
 
 	InsertDatabaseShardAssignment(databaseOid, nodeGroupId);
+	AllowConnectionsOnlyOnNodeGroup(databaseOid, nodeGroupId);
+}
+
+
+/*
+ * AllowConnectionsOnlyOnNodeGroup sets the ALLOW_CONNECTIONS properties on
+ * the database to false, except on nodeGroupId.
+ */
+static void
+AllowConnectionsOnlyOnNodeGroup(Oid databaseOid, Oid nodeGroupId)
+{
+	StringInfo command = makeStringInfo();
+	char *databaseName = get_database_name(databaseOid);
+
+	List *workerNodes = TargetWorkerSetNodeList(ALL_SHARD_NODES, RowShareLock);
+	WorkerNode *workerNode = NULL;
+
+	foreach_ptr(workerNode, workerNodes)
+	{
+		bool allowConns = workerNode->groupId == nodeGroupId;
+
+		if (workerNode->groupId == GetLocalGroupId())
+		{
+			AlterDatabaseStmt *stmt = makeNode(AlterDatabaseStmt);
+			stmt->dbname = databaseName;
+
+			DefElem *allowConnectionsOption =
+				makeDefElem("allow_connections", (Node *) makeBoolean(allowConns), -1);
+			stmt->options = list_make1(allowConnectionsOption);
+
+			bool isTopLevel = false;
+			ParseState *pstate = NULL;
+
+			AlterDatabase(pstate, stmt, isTopLevel);
+		}
+		else
+		{
+			resetStringInfo(command);
+			appendStringInfo(command, "ALTER DATABASE %s ALLOW_CONNECTIONS %s",
+							 quote_identifier(databaseName),
+							 allowConns ? "true" : "false");
+
+			SendCommandToWorker(workerNode->workerName, workerNode->workerPort,
+								command->data);
+		}
+	}
 }
 
 
@@ -287,10 +328,10 @@ TupleToDatabaseShard(HeapTuple heapTuple, TupleDesc tupleDescriptor)
 
 
 /*
- * DeleteDatabaseShardByDatabaseId deletes a database_shard record by database OID.
+ * DeleteDatabaseShardByDatabaseIdLocally deletes a database_shard record by database OID.
  */
 void
-DeleteDatabaseShardByDatabaseId(Oid databaseOid)
+DeleteDatabaseShardByDatabaseIdLocally(Oid databaseOid)
 {
 	Relation databaseShardTable = table_open(DatabaseShardRelationId(),
 											 RowExclusiveLock);
@@ -321,20 +362,32 @@ DeleteDatabaseShardByDatabaseId(Oid databaseOid)
 
 
 /*
+ * regenerate_pgbouncer_database_file regenerates the pgbouncer configuration
+ * include file that maps database names to hosts.
+ */
+Datum
+regenerate_pgbouncer_database_file(PG_FUNCTION_ARGS)
+{
+	GeneratePgbouncerDatabaseFile();
+	PG_RETURN_VOID();
+}
+
+
+/*
  * GeneratePgbouncerDatabaseFile generates the database section of a
  * pgbouncer configuration file.
  */
 void
 GeneratePgbouncerDatabaseFile(void)
 {
-	if (DatabaseShardingPgbouncerFile[0] == '\0')
+	if (DatabaseShardingPgBouncerFile[0] == '\0')
 	{
 		/* no pgbouncer file requested */
 		return;
 	}
 
 	char tempFileName[MAXPGPATH];
-	snprintf(tempFileName, MAXPGPATH, "%s.tmp", DatabaseShardingPgbouncerFile);
+	snprintf(tempFileName, MAXPGPATH, "%s.tmp", DatabaseShardingPgBouncerFile);
 
 	FILE *tempFile = AllocateFile(tempFileName, PG_BINARY_W);
 	if (tempFile == NULL)
@@ -370,10 +423,10 @@ GeneratePgbouncerDatabaseFile(void)
 	}
 
 	/* rename to atomically overwrite the file */
-	if (rename(tempFileName, DatabaseShardingPgbouncerFile) < 0)
+	if (rename(tempFileName, DatabaseShardingPgBouncerFile) < 0)
 	{
 		ereport(ERROR, (errcode_for_file_access(),
 						errmsg("could not rename file \"%s\" to \"%s\": %m",
-							   tempFileName, DatabaseShardingPgbouncerFile)));
+							   tempFileName, DatabaseShardingPgBouncerFile)));
 	}
 }

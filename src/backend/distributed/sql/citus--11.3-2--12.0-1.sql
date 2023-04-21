@@ -91,3 +91,16 @@ CREATE OR REPLACE FUNCTION pg_catalog.database_shard_assign(database_name text)
 AS 'MODULE_PATHNAME', $$database_shard_assign$$;
 COMMENT ON FUNCTION pg_catalog.database_shard_assign(text) IS
  'run a command on all other nodes in a 2PC';
+
+
+/*
+ * regenerate_pgbouncer_database_file regenerates the pgbouncer
+ * database configuration file.
+ */
+CREATE OR REPLACE FUNCTION pg_catalog.regenerate_pgbouncer_database_file()
+ RETURNS void
+ LANGUAGE C
+ STRICT
+AS 'MODULE_PATHNAME', $$regenerate_pgbouncer_database_file$$;
+COMMENT ON FUNCTION pg_catalog.regenerate_pgbouncer_database_file() IS
+ 'run a command on all other nodes in a 2PC';

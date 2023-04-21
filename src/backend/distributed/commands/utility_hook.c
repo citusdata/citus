@@ -228,12 +228,10 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 
 	if (!CitusHasBeenLoaded())
 	{
-		bool runPreviousHook = true;
+		/* Citus extension does not exist in the current database */
 
-		if (DatabaseShardingEnabled())
-		{
-			HandleDDLInDatabaseShard(parsetree, &runPreviousHook);
-		}
+		bool runPreviousHook = true;
+		HandleDDLInDatabaseShard(parsetree, &runPreviousHook);
 
 		/*
 		 * Ensure that utility commands do not behave any differently until CREATE
@@ -247,7 +245,8 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 
 		return;
 	}
-	else if (IsA(parsetree, CallStmt))
+
+	if (IsA(parsetree, CallStmt))
 	{
 		CallStmt *callStmt = (CallStmt *) parsetree;
 
@@ -756,7 +755,10 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 			UnmarkObjectDistributed(&dbAddress);
 
 			/* in case this was a shard, remove it (noop otherwise) */
-			DeleteDatabaseShardByDatabaseId(databaseId);
+			DeleteDatabaseShardByDatabaseIdLocally(databaseId);
+
+			/* TODO: should be done post-commit */
+			GeneratePgbouncerDatabaseFile();
 		}
 	}
 
