@@ -64,6 +64,7 @@
 #include "distributed/multi_executor.h"
 #include "distributed/multi_explain.h"
 #include "distributed/multi_physical_planner.h"
+#include "distributed/pooler/pgbouncer_manager.h"
 #include "distributed/reference_table_utils.h"
 #include "distributed/resource_lock.h"
 #include "distributed/string_utils.h"
@@ -757,8 +758,7 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 			/* in case this was a shard, remove it (noop otherwise) */
 			DeleteDatabaseShardByDatabaseIdLocally(databaseId);
 
-			/* TODO: should be done post-commit */
-			GeneratePgbouncerDatabaseFile();
+			ReconfigurePgBouncersOnCommit = true;
 		}
 	}
 

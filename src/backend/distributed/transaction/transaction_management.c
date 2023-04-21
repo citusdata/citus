@@ -33,6 +33,7 @@
 #include "distributed/multi_executor.h"
 #include "distributed/multi_logical_replication.h"
 #include "distributed/multi_explain.h"
+#include "distributed/pooler/pgbouncer_manager.h"
 #include "distributed/repartition_join_execution.h"
 #include "distributed/replication_origin_session_utils.h"
 #include "distributed/transaction_management.h"
@@ -318,6 +319,8 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			{
 				TriggerNodeMetadataSync(MyDatabaseId);
 			}
+
+			TriggerPgBouncerReconfigureIfNeeded();
 
 			ResetGlobalVariables();
 			ResetRelationAccessHash();

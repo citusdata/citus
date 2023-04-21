@@ -30,10 +30,13 @@ extern int PgBouncerInboundPort;
 /* GUC variable that sets the path to pgbouncer executable */
 extern char *PgBouncerPath;
 
+/* global variable to request pgbouncer reconfiguration */
+extern bool ReconfigurePgBouncersOnCommit;
+
 void InitializeSharedPgBouncerManager(void);
 size_t SharedPgBouncerManagerShmemSize(void);
 void PgBouncerManagerMain(Datum arg);
-void EnsurePgBouncersRunning(void);
+void TriggerPgBouncerReconfigureIfNeeded(void);
 
 
 #endif /* PGBOUNCER_MANAGER_H */

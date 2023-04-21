@@ -37,6 +37,7 @@
 
 
 #define PGBOUNCER_USERS_FILE "citus-pgbouncer-users.txt"
+#define PGBOUNCER_DATABASES_FILE "citus-pgbouncer-databases.txt"
 
 
 /*
@@ -85,12 +86,14 @@ static void PgBouncerManagerSigHupHandler(SIGNAL_ARGS);
 static void PgBouncerManagerShmemExit(int code, Datum arg);
 static void GenerateInboundPgBouncerConfigs(void);
 static void GenerateUsersFile(void);
+static void GenerateDatabaseShardsFile(void);
 static void GenerateInboundPgBouncerConfig(int pgBouncerId);
 static int CalculatePeerIdForNodeGroup(int nodeGroupId, int pgBouncerId);
 static int GetInboundPgBouncerDefaultPoolSize(void);
 static char * GetInboundPgBouncerUnixDomainSocketDir(int pgBouncerId);
 static char * GetFirstUnixSocketDirectory(void);
 static void SafeWriteToFile(char *content, int contentLength, char *path);
+static void EnsurePgBouncersRunning(void);
 static void EnsurePgBouncerRunning(int pgBouncerId);
 static void SignalPgBouncers(int signo);
 static void LockInboundPgBouncerState(LWLockMode lockMode);
@@ -105,6 +108,9 @@ int PgBouncerInboundPort = 6432;
 
 /* GUC variable that sets the path to pgbouncer executable */
 char *PgBouncerPath = "pgbouncer";
+
+/* global variable to trigger reconfigure post-commit */
+bool ReconfigurePgBouncersOnCommit = false;
 
 /* set when a SIGHUP was received */
 static volatile sig_atomic_t got_SIGHUP = false;
@@ -285,13 +291,12 @@ PgBouncerManagerMain(Datum arg)
 			ResetLatch(MyLatch);
 			CHECK_FOR_INTERRUPTS();
 
-			if (got_SIGTERM)
-			{
-				break;
-			}
-
-			/* if someone set the latch for non-SIGTERM, we reconfigure */
 			doReconfigure = true;
+		}
+
+		if (got_SIGTERM)
+		{
+			break;
 		}
 
 		if (got_SIGHUP)
@@ -384,12 +389,7 @@ PgBouncerManagerSigChldHandler(SIGNAL_ARGS)
 static void
 PgBouncerManagerShmemExit(int code, Datum arg)
 {
-	if (!IsParent)
-	{
-		return;
-	}
 
-	SignalPgBouncers(SIGTERM);
 }
 
 
@@ -401,6 +401,11 @@ static void
 GenerateInboundPgBouncerConfigs(void)
 {
 	GenerateUsersFile();
+
+	if (EnableDatabaseSharding)
+	{
+		GenerateDatabaseShardsFile();
+	}
 
 	for (int pgBouncerId = 0; pgBouncerId < PgBouncerInboundProcs; pgBouncerId++)
 	{
@@ -466,6 +471,34 @@ GenerateUsersFile(void)
 
 
 /*
+ * GenerateInboundPgbouncerDatabaseFile generates the database section of a
+ * pgbouncer configuration file for database shards.
+ */
+static void
+GenerateDatabaseShardsFile(void)
+{
+	List *databaseShardList = ListDatabaseShards();
+	DatabaseShard *databaseShard = NULL;
+
+	StringInfoData databaseList;
+	initStringInfo(&databaseList);
+
+	foreach_ptr(databaseShard, databaseShardList)
+	{
+		WorkerNode *workerNode = LookupNodeForGroup(databaseShard->nodeGroupId);
+		char *databaseName = get_database_name(databaseShard->databaseOid);
+
+		appendStringInfo(&databaseList, "%s = host=%s port=%d\n",
+						 quote_identifier(databaseName),
+						 workerNode->workerName,
+						 workerNode->workerPort);
+	}
+
+	SafeWriteToFile(databaseList.data, databaseList.len, PGBOUNCER_DATABASES_FILE);
+}
+
+
+/*
  * GenerateInboundPgBouncerConfig generates a pgbouncer ini file for the given
  * peer ID.
  */
@@ -490,12 +523,14 @@ GenerateInboundPgBouncerConfig(int myPgBouncerId)
 					 GetFirstUnixSocketDirectory(),
 					 PostPortNumber,
 					 CitusMainDatabase,
-					 EnableDatabaseSharding ? DatabaseShardingPgBouncerFile : "");
+					 EnableDatabaseSharding ? "%include " PGBOUNCER_DATABASES_FILE : "");
 
 	appendStringInfo(pgbouncerConfig,
 					 "[pgbouncer]\n"
 					 "peer_id = %d\n"
 					 "unix_socket_dir = %s\n"
+					 /* TODO: make configurable */
+					 "listen_addr = 127.0.0.1\n"
 					 "listen_port = %d\n"
 					 "so_reuseport = 1\n"
 					 "pidfile = citus-pgbouncer-inbound-%d.pid\n"
@@ -508,7 +543,8 @@ GenerateInboundPgBouncerConfig(int myPgBouncerId)
 
 	/* TODO: auth_hba_file */
 	appendStringInfo(pgbouncerConfig,
-					 "auth_type = md5\n"
+					 /* TODO: make configurable */
+					 "auth_type = trust\n"
 					 "auth_file = %s\n",
 					 PGBOUNCER_USERS_FILE);
 
@@ -849,7 +885,6 @@ EnsurePgBouncerRunning(int pgBouncerId)
 	else if (pgbouncerPid == 0)
 	{
 		/* drop our connection to postmaster's shared memory */
-		dsm_detach_all();
 		PGSharedMemoryDetach();
 
 		/* guard callbacks against pgbouncer entering */
@@ -909,8 +944,41 @@ UnlockInboundPgBouncerState(void)
 }
 
 
+/*
+ * SignalPgBouncers sends a signal to all pgbouncers.
+ */
 static void
 SignalPgBouncers(int signo)
 {
-	/* TODO: implement, but without taking a lock */
+	LockInboundPgBouncerState(LW_SHARED);
+
+	for (int pgBouncerId = 0; pgBouncerId < PgBouncerInboundProcs; pgBouncerId++)
+	{
+		PgBouncerProcess *proc = &(PgBouncerState->inboundPgBouncers[pgBouncerId]);
+
+		kill(proc->pgbouncerPid, signo);
+	}
+
+	UnlockInboundPgBouncerState();
+}
+
+
+/*
+ * TriggerPgBouncerReconfigureIfNeeded sets the latch on the pgbouncer manager to
+ * trigger a reconfigure.
+ */
+void
+TriggerPgBouncerReconfigureIfNeeded(void)
+{
+	if (!ReconfigurePgBouncersOnCommit)
+	{
+		return;
+	}
+
+	if (PgBouncerState->pgBouncerManagerLatch != NULL)
+	{
+		SetLatch(PgBouncerState->pgBouncerManagerLatch);
+	}
+
+	ReconfigurePgBouncersOnCommit = false;
 }

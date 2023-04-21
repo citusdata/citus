@@ -24,6 +24,7 @@
 #include "distributed/deparse_shard_query.h"
 #include "distributed/listutils.h"
 #include "distributed/metadata_sync.h"
+#include "distributed/pooler/pgbouncer_manager.h"
 #include "distributed/remote_commands.h"
 #include "distributed/shared_library_init.h"
 #include "distributed/worker_transaction.h"
@@ -40,7 +41,6 @@ static void AllowConnectionsOnlyOnNodeGroup(Oid databaseOid, Oid nodeGroupId);
 static void InsertDatabaseShardAssignment(Oid databaseOid, int nodeGroupId);
 static void InsertDatabaseShardAssignmentLocally(Oid databaseOid, int nodeGroupId);
 static void InsertDatabaseShardAssignmentOnOtherNodes(Oid databaseOid, int nodeGroupId);
-static List * ListDatabaseShards(void);
 static DatabaseShard * TupleToDatabaseShard(HeapTuple heapTuple,
 											TupleDesc tupleDescriptor);
 
@@ -156,6 +156,17 @@ AssignDatabaseToShard(Oid databaseOid)
 
 	InsertDatabaseShardAssignment(databaseOid, nodeGroupId);
 	AllowConnectionsOnlyOnNodeGroup(databaseOid, nodeGroupId);
+
+	if (list_length(workerNodes) > 0)
+	{
+		/* TODO: use function to do insert + regenerate  */
+		char *regenerateCommand =
+			"SELECT pg_catalog.regenerate_pgbouncer_database_file()";
+
+		SendCommandToWorkersWithMetadata(regenerateCommand);
+	}
+
+	ReconfigurePgBouncersOnCommit = true;
 }
 
 
@@ -275,7 +286,7 @@ InsertDatabaseShardAssignmentOnOtherNodes(Oid databaseOid, int nodeGroupId)
 /*
  * ListDatabaseShards lists all database shards in citus_catalog.database_shard.
  */
-static List *
+List *
 ListDatabaseShards(void)
 {
 	Relation databaseShardTable = table_open(DatabaseShardRelationId(), AccessShareLock);
@@ -368,65 +379,6 @@ DeleteDatabaseShardByDatabaseIdLocally(Oid databaseOid)
 Datum
 regenerate_pgbouncer_database_file(PG_FUNCTION_ARGS)
 {
-	GeneratePgbouncerDatabaseFile();
+	ReconfigurePgBouncersOnCommit = true;
 	PG_RETURN_VOID();
-}
-
-
-/*
- * GeneratePgbouncerDatabaseFile generates the database section of a
- * pgbouncer configuration file.
- */
-void
-GeneratePgbouncerDatabaseFile(void)
-{
-	if (DatabaseShardingPgBouncerFile[0] == '\0')
-	{
-		/* no pgbouncer file requested */
-		return;
-	}
-
-	char tempFileName[MAXPGPATH];
-	snprintf(tempFileName, MAXPGPATH, "%s.tmp", DatabaseShardingPgBouncerFile);
-
-	FILE *tempFile = AllocateFile(tempFileName, PG_BINARY_W);
-	if (tempFile == NULL)
-	{
-		ereport(ERROR, (errcode_for_file_access(),
-						errmsg("could not create file \"%s\": %m",
-							   tempFileName)));
-	}
-
-	List *databaseShardList = ListDatabaseShards();
-	DatabaseShard *databaseShard = NULL;
-
-	foreach_ptr(databaseShard, databaseShardList)
-	{
-		WorkerNode *workerNode = LookupNodeForGroup(databaseShard->nodeGroupId);
-		char *databaseName = get_database_name(databaseShard->databaseOid);
-
-		if (fprintf(tempFile, "%s = host=%s port=%d\n",
-					quote_identifier(databaseName),
-					workerNode->workerName, workerNode->workerPort) < 0)
-		{
-			ereport(ERROR, (errcode_for_file_access(),
-							errmsg("could not write to file \"%s\": %m",
-								   tempFileName)));
-		}
-	}
-
-	if (FreeFile(tempFile))
-	{
-		ereport(ERROR, (errcode_for_file_access(),
-						errmsg("could not write to file \"%s\": %m",
-							   tempFileName)));
-	}
-
-	/* rename to atomically overwrite the file */
-	if (rename(tempFileName, DatabaseShardingPgBouncerFile) < 0)
-	{
-		ereport(ERROR, (errcode_for_file_access(),
-						errmsg("could not rename file \"%s\" to \"%s\": %m",
-							   tempFileName, DatabaseShardingPgBouncerFile)));
-	}
 }
