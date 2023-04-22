@@ -39,14 +39,13 @@
 static void ExecuteCommandInControlDatabase(char *command);
 static void AllowConnectionsOnlyOnNodeGroup(Oid databaseOid, Oid nodeGroupId);
 static void InsertDatabaseShardAssignment(Oid databaseOid, int nodeGroupId);
-static void InsertDatabaseShardAssignmentLocally(Oid databaseOid, int nodeGroupId);
 static void InsertDatabaseShardAssignmentOnOtherNodes(Oid databaseOid, int nodeGroupId);
 static DatabaseShard * TupleToDatabaseShard(HeapTuple heapTuple,
 											TupleDesc tupleDescriptor);
 
 
 PG_FUNCTION_INFO_V1(database_shard_assign);
-PG_FUNCTION_INFO_V1(regenerate_pgbouncer_database_file);
+PG_FUNCTION_INFO_V1(citus_internal_add_database_shard);
 
 
 /* citus.enable_database_sharding setting */
@@ -157,15 +156,6 @@ AssignDatabaseToShard(Oid databaseOid)
 	InsertDatabaseShardAssignment(databaseOid, nodeGroupId);
 	AllowConnectionsOnlyOnNodeGroup(databaseOid, nodeGroupId);
 
-	if (list_length(workerNodes) > 0)
-	{
-		/* TODO: use function to do insert + regenerate  */
-		char *regenerateCommand =
-			"SELECT pg_catalog.regenerate_pgbouncer_database_file()";
-
-		SendCommandToWorkersWithMetadata(regenerateCommand);
-	}
-
 	ReconfigurePgBouncersOnCommit = true;
 }
 
@@ -235,7 +225,7 @@ InsertDatabaseShardAssignment(Oid databaseOid, int nodeGroupId)
  * InsertDatabaseShardAssignmentLocally inserts a record into the local
  * citus_catalog.database_sharding table.
  */
-static void
+void
 InsertDatabaseShardAssignmentLocally(Oid databaseOid, int nodeGroupId)
 {
 	Datum values[Natts_database_shard];
@@ -273,9 +263,7 @@ InsertDatabaseShardAssignmentOnOtherNodes(Oid databaseOid, int nodeGroupId)
 	char *databaseName = get_database_name(databaseOid);
 
 	appendStringInfo(command,
-					 "INSERT INTO citus_catalog.database_shard "
-					 "(database_oid, node_group_id, is_available) "
-					 "VALUES ((SELECT oid FROM pg_database WHERE datname = %s),%d,true)",
+					 "SELECT pg_catalog.citus_internal_add_database_shard(%s,%d)",
 					 quote_literal_cstr(databaseName),
 					 nodeGroupId);
 
@@ -373,12 +361,28 @@ DeleteDatabaseShardByDatabaseIdLocally(Oid databaseOid)
 
 
 /*
- * regenerate_pgbouncer_database_file regenerates the pgbouncer configuration
- * include file that maps database names to hosts.
+ * citus_internal_add_database_shard is an internal UDF to
+ * add a row to database_shard.
  */
 Datum
-regenerate_pgbouncer_database_file(PG_FUNCTION_ARGS)
+citus_internal_add_database_shard(PG_FUNCTION_ARGS)
 {
+	char *databaseName = TextDatumGetCString(PG_GETARG_DATUM(0));
+	int nodeGroupId = PG_GETARG_INT32(1);
+
+	bool missingOk = false;
+	Oid databaseOid = get_database_oid(databaseName, missingOk);
+
+	if (!pg_database_ownercheck(databaseOid, GetUserId()))
+	{
+		aclcheck_error(ACLCHECK_NOT_OWNER, OBJECT_DATABASE,
+					   databaseName);
+	}
+
+	InsertDatabaseShardAssignmentLocally(databaseOid, nodeGroupId);
+
+	/* make sure new database is added to pgbouncer config */
 	ReconfigurePgBouncersOnCommit = true;
+
 	PG_RETURN_VOID();
 }

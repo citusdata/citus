@@ -18,6 +18,7 @@
 #include "commands/dbcommands.h"
 #include "miscadmin.h"
 #include "nodes/parsenodes.h"
+#include "utils/builtins.h"
 #include "utils/syscache.h"
 
 #include "distributed/adaptive_executor.h"
@@ -32,12 +33,17 @@
 #include "distributed/metadata/distobject.h"
 #include "distributed/multi_executor.h"
 #include "distributed/relation_access_tracking.h"
+#include "distributed/worker_protocol.h"
 #include "distributed/worker_transaction.h"
 
 
 static AlterOwnerStmt * RecreateAlterDatabaseOwnerStmt(Oid databaseOid);
 static Oid get_database_owner(Oid db_oid);
-static List * CreateDDLTaskListOutsideTransaction(char *command, List *workerNodeList);
+static List * CreateDDLTaskList(char *command, List *workerNodeList,
+								bool outsideTransaction);
+
+PG_FUNCTION_INFO_V1(citus_internal_database_command);
+
 
 /* controlled via GUC */
 bool EnableCreateDatabasePropagation = true;
@@ -62,13 +68,30 @@ PostprocessCreatedbStmt(Node *node, const char *queryString)
 	bool missingOk = false;
 	Oid databaseOid = get_database_oid(databaseName, missingOk);
 
+	/*
+	 * TODO: try to reuse regular DDL infrastructure
+	 *
+	 * We do not do this right now because of the AssignDatabaseToShard at the end.
+	 */
 	List *workerNodes = TargetWorkerSetNodeList(OTHER_METADATA_NODES, RowShareLock);
 	if (list_length(workerNodes) > 0)
 	{
-		/* TODO: make the operation idempotent */
 		char *createDatabaseCommand = DeparseTreeNode(node);
-		List *taskList = CreateDDLTaskListOutsideTransaction(createDatabaseCommand,
-															 workerNodes);
+
+		StringInfo internalCreateCommand = makeStringInfo();
+		appendStringInfo(internalCreateCommand,
+						 "SELECT pg_catalog.citus_internal_database_command(%s)",
+						 quote_literal_cstr(createDatabaseCommand));
+
+		/*
+		 * For the moment, we run CREATE DATABASE in 2PC, though that prevents
+		 * us from immediately doing a pg_dump | pg_restore when dealing with
+		 * a remote template database.
+		 */
+		bool outsideTransaction = false;
+
+		List *taskList = CreateDDLTaskList(internalCreateCommand->data, workerNodes,
+										   outsideTransaction);
 
 		bool localExecutionSupported = false;
 		ExecuteUtilityTaskList(taskList, localExecutionSupported);
@@ -199,30 +222,26 @@ PreprocessDropdbStmt(Node *node, const char *queryString,
 		return NIL;
 	}
 
-	List *workerNodes = TargetWorkerSetNodeList(OTHER_METADATA_NODES, RowShareLock);
-	if (list_length(workerNodes) == 0)
-	{
-		return NIL;
-	}
-
-	/* TODO: make the operation idempotent */
 	char *dropDatabaseCommand = DeparseTreeNode(node);
-	List *taskList = CreateDDLTaskListOutsideTransaction(dropDatabaseCommand,
-														 workerNodes);
 
-	bool localExecutionSupported = false;
-	ExecuteUtilityTaskList(taskList, localExecutionSupported);
+	StringInfo internalDropCommand = makeStringInfo();
+	appendStringInfo(internalDropCommand,
+					 "SELECT pg_catalog.citus_internal_database_command(%s)",
+					 quote_literal_cstr(dropDatabaseCommand));
 
-	return NIL;
+	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
+								internalDropCommand->data,
+								ENABLE_DDL_PROPAGATION);
+
+	return NodeDDLTaskList(OTHER_METADATA_NODES, commands);
 }
 
 
 /*
- * CreateDDLTaskListOutsideTransaction creates a single task DDL job that
- * should run outside of a transaction block on all nodes in workerNodeList.
+ * CreateDDLTaskList creates a task list for running a single DDL command.
  */
 static List *
-CreateDDLTaskListOutsideTransaction(char *command, List *workerNodeList)
+CreateDDLTaskList(char *command, List *workerNodeList, bool outsideTransaction)
 {
 	List *commandList = list_make3(DISABLE_DDL_PROPAGATION,
 								   command,
@@ -231,7 +250,7 @@ CreateDDLTaskListOutsideTransaction(char *command, List *workerNodeList)
 	Task *task = CitusMakeNode(Task);
 	task->taskType = DDL_TASK;
 	SetTaskQueryStringList(task, commandList);
-	task->cannotBeExecutedInTransction = true;
+	task->cannotBeExecutedInTransction = outsideTransaction;
 
 	WorkerNode *workerNode = NULL;
 	foreach_ptr(workerNode, workerNodeList)
@@ -245,4 +264,44 @@ CreateDDLTaskListOutsideTransaction(char *command, List *workerNodeList)
 	}
 
 	return list_make1(task);
+}
+
+
+/*
+ * citus_internal_database_command is an internal UDF to
+ * create/drop a database without transaction block restrictions.
+ */
+Datum
+citus_internal_database_command(PG_FUNCTION_ARGS)
+{
+	text *commandText = PG_GETARG_TEXT_P(0);
+	char *command = text_to_cstring(commandText);
+	Node *parseTree = ParseTreeNode(command);
+
+	if (IsA(parseTree, CreatedbStmt))
+	{
+		CreatedbStmt *stmt = castNode(CreatedbStmt, parseTree);
+
+		bool missingOk = true;
+		Oid databaseOid = get_database_oid(stmt->dbname, missingOk);
+
+		if (!OidIsValid(databaseOid))
+		{
+			createdb(NULL, (CreatedbStmt *) parseTree);
+		}
+		else
+		{
+			/* TODO: check database properties */
+		}
+	}
+	else if (IsA(parseTree, DropdbStmt))
+	{
+		DropDatabase(NULL, (DropdbStmt *) parseTree);
+	}
+	else
+	{
+		ereport(ERROR, (errmsg("unsupported command type %d", nodeTag(parseTree))));
+	}
+
+	PG_RETURN_VOID();
 }

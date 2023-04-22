@@ -388,9 +388,7 @@ PgBouncerManagerSigChldHandler(SIGNAL_ARGS)
 
 static void
 PgBouncerManagerShmemExit(int code, Datum arg)
-{
-
-}
+{ }
 
 
 /*
@@ -487,6 +485,11 @@ GenerateDatabaseShardsFile(void)
 	{
 		WorkerNode *workerNode = LookupNodeForGroup(databaseShard->nodeGroupId);
 		char *databaseName = get_database_name(databaseShard->databaseOid);
+		if (databaseName == NULL)
+		{
+			/* database no longer exists */
+			continue;
+		}
 
 		appendStringInfo(&databaseList, "%s = host=%s port=%d\n",
 						 quote_identifier(databaseName),
@@ -529,7 +532,8 @@ GenerateInboundPgBouncerConfig(int myPgBouncerId)
 					 "[pgbouncer]\n"
 					 "peer_id = %d\n"
 					 "unix_socket_dir = %s\n"
-					 /* TODO: make configurable */
+
+	                 /* TODO: make configurable */
 					 "listen_addr = 127.0.0.1\n"
 					 "listen_port = %d\n"
 					 "so_reuseport = 1\n"
@@ -543,8 +547,9 @@ GenerateInboundPgBouncerConfig(int myPgBouncerId)
 
 	/* TODO: auth_hba_file */
 	appendStringInfo(pgbouncerConfig,
-					 /* TODO: make configurable */
-					 "auth_type = trust\n"
+
+	                 /* TODO: make configurable */
+					 "auth_type = md5\n"
 					 "auth_file = %s\n",
 					 PGBOUNCER_USERS_FILE);
 
@@ -893,6 +898,7 @@ EnsurePgBouncerRunning(int pgBouncerId)
 		/* child process will now become pgbouncer */
 		char *argv[4];
 		argv[0] = "pgbouncer";
+
 		/*argv[1] = "-q"; */
 		argv[1] = configFile->data;
 		argv[2] = NULL;

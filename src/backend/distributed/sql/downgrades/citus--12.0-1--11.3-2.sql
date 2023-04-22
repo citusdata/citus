@@ -81,4 +81,5 @@ DROP FUNCTION pg_catalog.citus_stat_tenants_local_internal(
 DROP SCHEMA citus_catalog CASCADE;
 DROP FUNCTION pg_catalog.execute_command_on_all_nodes(text);
 DROP FUNCTION pg_catalog.execute_command_on_other_nodes(text);
-DROP FUNCTION pg_catalog.regenerate_pgbouncer_database_file();
+DROP FUNCTION pg_catalog.citus_internal_database_command(text);
+DROP FUNCTION pg_catalog.citus_internal_add_database_shard(text,int);
