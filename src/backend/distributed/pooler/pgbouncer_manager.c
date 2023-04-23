@@ -458,7 +458,11 @@ GenerateUsersFile(void)
 			appendStringInfo(&usersList, "\"%s\"", quotedRoleName);
 		}
 
-		appendStringInfoString(&usersList, " \"\"\n");
+		Datum passwordDatum = heap_getattr(heapTuple, Anum_pg_authid_rolpassword,
+										   tupleDescriptor, &isNull);
+		char *password = TextDatumGetCString(passwordDatum);
+
+		appendStringInfo(&usersList, " \"%s\"\n", password);
 	}
 
 	SafeWriteToFile(usersList.data, usersList.len, PGBOUNCER_USERS_FILE);
