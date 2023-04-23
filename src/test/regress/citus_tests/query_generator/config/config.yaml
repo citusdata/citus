@@ -1,0 +1,65 @@
+interactiveMode: false
+queryCount: 250
+queryOutFile: queries.sql
+ddlOutFile: ddls.sql
+semiAntiJoin: true
+cartesianProduct: false
+limit: true
+orderby: true
+forceOrderbyWithLimit: true
+useAvgAtTopLevelTarget: true
+dataRange:
+  from: 0
+  to: 10
+filterRange:
+  from: 0
+  to: 10
+limitRange:
+  from: 0
+  to: 10
+targetRteCount: 40
+targetCteCount: 3
+targetCteRteCount: 2
+
+commonColName: id
+
+targetTables:
+  - Table:
+      name: dist
+      citusType: DISTRIBUTED
+      maxAllowedUseOnQuery: 10
+      rowCount: 10
+      nullRate: 0.1
+      duplicateRate: 0.1
+      columns:
+        - Column:
+          name: id
+          type: int
+      distinctCopyCount: 2
+  - Table:
+      name: ref
+      citusType: REFERENCE
+      maxAllowedUseOnQuery: 10
+      rowCount: 10
+      nullRate: 0.1
+      duplicateRate: 0.1
+      columns:
+        - Column:
+          name: id
+          type: int
+      distinctCopyCount: 2
+
+targetJoinTypes:
+  - INNER
+  - LEFT
+  - RIGHT
+  - FULL
+
+targetRteTypes:
+  - RELATION
+  - SUBQUERY
+  - CTE
+
+targetRestrictOps:
+  - LT
+  - GT

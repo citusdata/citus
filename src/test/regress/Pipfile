@@ -15,6 +15,7 @@ pytest-asyncio = "*"
 pytest-timeout = "*"
 pytest-xdist = "*"
 pytest-repeat = "*"
+pyyaml = "*"
 
 [dev-packages]
 black = "*"
