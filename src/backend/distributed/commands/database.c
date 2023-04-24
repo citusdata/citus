@@ -280,7 +280,8 @@ CreateDDLTaskList(char *command, List *workerNodeList, bool outsideTransaction)
 
 /*
  * citus_internal_database_command is an internal UDF to
- * create/drop a database without transaction block restrictions.
+ * create/drop a database in an idempotent maner without
+ * transaction block restrictions.
  */
 Datum
 citus_internal_database_command(PG_FUNCTION_ARGS)
@@ -307,7 +308,19 @@ citus_internal_database_command(PG_FUNCTION_ARGS)
 	}
 	else if (IsA(parseTree, DropdbStmt))
 	{
-		DropDatabase(NULL, (DropdbStmt *) parseTree);
+		DropdbStmt *stmt = castNode(DropdbStmt, parseTree);
+
+		bool missingOk = true;
+		Oid databaseOid = get_database_oid(stmt->dbname, missingOk);
+
+		if (!OidIsValid(databaseOid))
+		{
+			/* already dropped? */
+		}
+		else
+		{
+			DropDatabase(NULL, (DropdbStmt *) parseTree);
+		}
 	}
 	else
 	{
