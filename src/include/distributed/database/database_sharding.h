@@ -35,8 +35,9 @@ extern bool EnableDatabaseSharding;
 void HandleDDLInDatabaseShard(Node *parseTree, bool *runPreviousUtilityHook);
 bool DatabaseShardingEnabled(void);
 void AssignDatabaseToShard(Oid databaseOid);
-void InsertDatabaseShardAssignmentLocally(Oid databaseOid, int nodeGroupId);
+void UpdateDatabaseShard(Oid databaseOid, int targetNodeGroupId);
 void DeleteDatabaseShardByDatabaseIdLocally(Oid databaseOid);
+DatabaseShard * GetDatabaseShardByOid(Oid databaseOid);
 List * ListDatabaseShards(void);
 
 

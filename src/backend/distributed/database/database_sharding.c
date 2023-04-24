@@ -28,6 +28,7 @@
 #include "distributed/remote_commands.h"
 #include "distributed/shared_library_init.h"
 #include "distributed/worker_transaction.h"
+#include "executor/spi.h"
 #include "nodes/makefuncs.h"
 #include "nodes/parsenodes.h"
 #include "postmaster/postmaster.h"
@@ -39,13 +40,19 @@
 static void ExecuteCommandInControlDatabase(char *command);
 static void AllowConnectionsOnlyOnNodeGroup(Oid databaseOid, Oid nodeGroupId);
 static void InsertDatabaseShardAssignment(Oid databaseOid, int nodeGroupId);
+static void InsertDatabaseShardAssignmentLocally(Oid databaseOid, int nodeGroupId);
 static void InsertDatabaseShardAssignmentOnOtherNodes(Oid databaseOid, int nodeGroupId);
+static void DeleteDatabaseShardByDatabaseId(Oid databaseOid);
+static void DeleteDatabaseShardByDatabaseIdOnOtherNodes(Oid databaseOid);
 static DatabaseShard * TupleToDatabaseShard(HeapTuple heapTuple,
 											TupleDesc tupleDescriptor);
+static char * InsertDatabaseShardAssignmentCommand(Oid databaseOid, int nodeGroupId);
+static char * DeleteDatabaseShardByDatabaseIdCommand(Oid databaseOid);
 
 
 PG_FUNCTION_INFO_V1(database_shard_assign);
 PG_FUNCTION_INFO_V1(citus_internal_add_database_shard);
+PG_FUNCTION_INFO_V1(citus_internal_delete_database_shard);
 
 
 /* citus.enable_database_sharding setting */
@@ -109,7 +116,7 @@ ExecuteCommandInControlDatabase(char *command)
 
 
 /*
- * database_shard_assign assigns the given database to a node.
+ * database_shard_assign assigns an existing database to a node.
  */
 Datum
 database_shard_assign(PG_FUNCTION_ARGS)
@@ -127,6 +134,11 @@ database_shard_assign(PG_FUNCTION_ARGS)
 						errmsg("permission denied to assign database \"%s\" "
 							   "to a shard",
 							   databaseName)));
+	}
+
+	if (GetDatabaseShardByOid(databaseOid) != NULL)
+	{
+		ereport(ERROR, (errmsg("database is already assigned to a shard")));
 	}
 
 	AssignDatabaseToShard(databaseOid);
@@ -175,29 +187,25 @@ AllowConnectionsOnlyOnNodeGroup(Oid databaseOid, Oid nodeGroupId)
 
 	foreach_ptr(workerNode, workerNodes)
 	{
-		bool allowConns = workerNode->groupId == nodeGroupId;
+		resetStringInfo(command);
 
-		if (workerNode->groupId == GetLocalGroupId())
+		if (workerNode->groupId == nodeGroupId)
 		{
-			AlterDatabaseStmt *stmt = makeNode(AlterDatabaseStmt);
-			stmt->dbname = databaseName;
-
-			DefElem *allowConnectionsOption =
-				makeDefElem("allow_connections", (Node *) makeBoolean(allowConns), -1);
-			stmt->options = list_make1(allowConnectionsOption);
-
-			bool isTopLevel = false;
-			ParseState *pstate = NULL;
-
-			AlterDatabase(pstate, stmt, isTopLevel);
+			appendStringInfo(command, "GRANT CONNECT ON DATABASE %s TO public",
+							 quote_identifier(databaseName));
 		}
 		else
 		{
-			resetStringInfo(command);
-			appendStringInfo(command, "ALTER DATABASE %s ALLOW_CONNECTIONS %s",
-							 quote_identifier(databaseName),
-							 allowConns ? "true" : "false");
+			appendStringInfo(command, "REVOKE CONNECT ON DATABASE %s FROM public",
+							 quote_identifier(databaseName));
+		}
 
+		if (workerNode->groupId == GetLocalGroupId())
+		{
+			ExecuteQueryViaSPI(command->data, SPI_OK_UTILITY);
+		}
+		else
+		{
 			SendCommandToWorker(workerNode->workerName, workerNode->workerPort,
 								command->data);
 		}
@@ -225,7 +233,7 @@ InsertDatabaseShardAssignment(Oid databaseOid, int nodeGroupId)
  * InsertDatabaseShardAssignmentLocally inserts a record into the local
  * citus_catalog.database_sharding table.
  */
-void
+static void
 InsertDatabaseShardAssignmentLocally(Oid databaseOid, int nodeGroupId)
 {
 	Datum values[Natts_database_shard];
@@ -259,70 +267,38 @@ InsertDatabaseShardAssignmentLocally(Oid databaseOid, int nodeGroupId)
 static void
 InsertDatabaseShardAssignmentOnOtherNodes(Oid databaseOid, int nodeGroupId)
 {
-	StringInfo command = makeStringInfo();
-	char *databaseName = get_database_name(databaseOid);
-
-	appendStringInfo(command,
-					 "SELECT pg_catalog.citus_internal_add_database_shard(%s,%d)",
-					 quote_literal_cstr(databaseName),
-					 nodeGroupId);
-
-	SendCommandToWorkersWithMetadata(command->data);
+	char *insertCommand = InsertDatabaseShardAssignmentCommand(databaseOid, nodeGroupId);
+	SendCommandToWorkersWithMetadata(insertCommand);
 }
 
 
 /*
- * ListDatabaseShards lists all database shards in citus_catalog.database_shard.
+ * UpdateDatabaseShard updates a database shard after it is moved to a new node.
  */
-List *
-ListDatabaseShards(void)
+void
+UpdateDatabaseShard(Oid databaseOid, int targetNodeGroupId)
 {
-	Relation databaseShardTable = table_open(DatabaseShardRelationId(), AccessShareLock);
-	TupleDesc tupleDescriptor = RelationGetDescr(databaseShardTable);
+	DeleteDatabaseShardByDatabaseId(databaseOid);
+	InsertDatabaseShardAssignment(databaseOid, targetNodeGroupId);
+	AllowConnectionsOnlyOnNodeGroup(databaseOid, targetNodeGroupId);
 
-	List *dbShardList = NIL;
-	int scanKeyCount = 0;
-	bool indexOK = false;
+	ReconfigurePgBouncersOnCommit = true;
+}
 
-	SysScanDesc scanDescriptor = systable_beginscan(databaseShardTable, InvalidOid,
-													indexOK, NULL, scanKeyCount, NULL);
 
-	HeapTuple heapTuple = NULL;
-	while (HeapTupleIsValid(heapTuple = systable_getnext(scanDescriptor)))
+/*
+ * DeleteDatabaseShardByDatabaseId deletes a record from the
+ * citus_catalog.database_sharding table.
+ */
+static void
+DeleteDatabaseShardByDatabaseId(Oid databaseOid)
+{
+	DeleteDatabaseShardByDatabaseIdLocally(databaseOid);
+
+	if (EnableMetadataSync)
 	{
-		DatabaseShard *dbShard = TupleToDatabaseShard(heapTuple, tupleDescriptor);
-		dbShardList = lappend(dbShardList, dbShard);
+		DeleteDatabaseShardByDatabaseIdOnOtherNodes(databaseOid);
 	}
-
-	systable_endscan(scanDescriptor);
-	table_close(databaseShardTable, NoLock);
-
-	return dbShardList;
-}
-
-
-/*
- * TupleToDatabaseShard converts a database_shard record tuple into a DatabaseShard struct.
- */
-static DatabaseShard *
-TupleToDatabaseShard(HeapTuple heapTuple, TupleDesc tupleDescriptor)
-{
-	Datum datumArray[Natts_database_shard];
-	bool isNullArray[Natts_database_shard];
-	heap_deform_tuple(heapTuple, tupleDescriptor, datumArray, isNullArray);
-
-	DatabaseShard *record = palloc0(sizeof(DatabaseShard));
-
-	record->databaseOid =
-		DatumGetObjectId(datumArray[Anum_database_shard_database_id - 1]);
-
-	record->nodeGroupId =
-		DatumGetInt32(datumArray[Anum_database_shard_node_group_id - 1]);
-
-	record->isAvailable =
-		DatumGetBool(datumArray[Anum_database_shard_is_available - 1]);
-
-	return record;
 }
 
 
@@ -361,6 +337,110 @@ DeleteDatabaseShardByDatabaseIdLocally(Oid databaseOid)
 
 
 /*
+ * DeleteDatabaseShardByDatabaseIdOnOtherNodes deletes a record from the
+ * citus_catalog.database_sharding table on other nodes.
+ */
+static void
+DeleteDatabaseShardByDatabaseIdOnOtherNodes(Oid databaseOid)
+{
+	char *deleteCommand = DeleteDatabaseShardByDatabaseIdCommand(databaseOid);
+	SendCommandToWorkersWithMetadata(deleteCommand);
+}
+
+
+/*
+ * ListDatabaseShards lists all database shards in citus_catalog.database_shard.
+ */
+List *
+ListDatabaseShards(void)
+{
+	Relation databaseShardTable = table_open(DatabaseShardRelationId(), AccessShareLock);
+	TupleDesc tupleDescriptor = RelationGetDescr(databaseShardTable);
+
+	List *dbShardList = NIL;
+	int scanKeyCount = 0;
+	bool indexOK = false;
+
+	SysScanDesc scanDescriptor = systable_beginscan(databaseShardTable, InvalidOid,
+													indexOK, NULL, scanKeyCount, NULL);
+
+	HeapTuple heapTuple = NULL;
+	while (HeapTupleIsValid(heapTuple = systable_getnext(scanDescriptor)))
+	{
+		DatabaseShard *dbShard = TupleToDatabaseShard(heapTuple, tupleDescriptor);
+		dbShardList = lappend(dbShardList, dbShard);
+	}
+
+	systable_endscan(scanDescriptor);
+	table_close(databaseShardTable, NoLock);
+
+	return dbShardList;
+}
+
+
+/*
+ * GetDatabaseShardByOid gets a database shard by database OID or
+ * NULL if no database shard could be found.
+ */
+DatabaseShard *
+GetDatabaseShardByOid(Oid databaseOid)
+{
+	DatabaseShard *result = NULL;
+
+	Relation databaseShardTable = table_open(DatabaseShardRelationId(), AccessShareLock);
+	TupleDesc tupleDescriptor = RelationGetDescr(databaseShardTable);
+
+	const int scanKeyCount = 1;
+	ScanKeyData scanKey[1];
+	bool indexOK = true;
+
+	ScanKeyInit(&scanKey[0], Anum_database_shard_database_id,
+				BTEqualStrategyNumber, F_OIDEQ, ObjectIdGetDatum(databaseOid));
+
+	SysScanDesc scanDescriptor = systable_beginscan(databaseShardTable,
+													DatabaseShardPrimaryKeyIndexId(),
+													indexOK,
+													NULL, scanKeyCount, scanKey);
+
+	HeapTuple heapTuple = systable_getnext(scanDescriptor);
+	if (HeapTupleIsValid(heapTuple))
+	{
+		result = TupleToDatabaseShard(heapTuple, tupleDescriptor);
+	}
+
+	systable_endscan(scanDescriptor);
+	table_close(databaseShardTable, NoLock);
+
+	return result;
+}
+
+
+/*
+ * TupleToDatabaseShard converts a database_shard record tuple into a DatabaseShard struct.
+ */
+static DatabaseShard *
+TupleToDatabaseShard(HeapTuple heapTuple, TupleDesc tupleDescriptor)
+{
+	Datum datumArray[Natts_database_shard];
+	bool isNullArray[Natts_database_shard];
+	heap_deform_tuple(heapTuple, tupleDescriptor, datumArray, isNullArray);
+
+	DatabaseShard *record = palloc0(sizeof(DatabaseShard));
+
+	record->databaseOid =
+		DatumGetObjectId(datumArray[Anum_database_shard_database_id - 1]);
+
+	record->nodeGroupId =
+		DatumGetInt32(datumArray[Anum_database_shard_node_group_id - 1]);
+
+	record->isAvailable =
+		DatumGetBool(datumArray[Anum_database_shard_is_available - 1]);
+
+	return record;
+}
+
+
+/*
  * citus_internal_add_database_shard is an internal UDF to
  * add a row to database_shard.
  */
@@ -385,4 +465,68 @@ citus_internal_add_database_shard(PG_FUNCTION_ARGS)
 	ReconfigurePgBouncersOnCommit = true;
 
 	PG_RETURN_VOID();
+}
+
+
+/*
+ * InsertDatabaseShardAssignmentCommand returns a command to insert a database shard
+ * assignment into the metadata on a remote node.
+ */
+static char *
+InsertDatabaseShardAssignmentCommand(Oid databaseOid, int nodeGroupId)
+{
+	StringInfo command = makeStringInfo();
+	char *databaseName = get_database_name(databaseOid);
+
+	appendStringInfo(command,
+					 "SELECT pg_catalog.citus_internal_add_database_shard(%s,%d)",
+					 quote_literal_cstr(databaseName),
+					 nodeGroupId);
+
+	return command->data;
+}
+
+
+/*
+ * citus_internal_delete_database_shard is an internal UDF to
+ * delete a row from database_shard.
+ */
+Datum
+citus_internal_delete_database_shard(PG_FUNCTION_ARGS)
+{
+	char *databaseName = TextDatumGetCString(PG_GETARG_DATUM(0));
+
+	bool missingOk = false;
+	Oid databaseOid = get_database_oid(databaseName, missingOk);
+
+	if (!pg_database_ownercheck(databaseOid, GetUserId()))
+	{
+		aclcheck_error(ACLCHECK_NOT_OWNER, OBJECT_DATABASE,
+					   databaseName);
+	}
+
+	DeleteDatabaseShardByDatabaseIdLocally(databaseOid);
+
+	/* make sure new database is added to pgbouncer config */
+	ReconfigurePgBouncersOnCommit = true;
+
+	PG_RETURN_VOID();
+}
+
+
+/*
+ * DeleteDatabaseShardByDatabaseIdCommand returns a command to delete a database shard
+ * assignment from the metadata on a remote node.
+ */
+static char *
+DeleteDatabaseShardByDatabaseIdCommand(Oid databaseOid)
+{
+	StringInfo command = makeStringInfo();
+	char *databaseName = get_database_name(databaseOid);
+
+	appendStringInfo(command,
+					 "SELECT pg_catalog.citus_internal_delete_database_shard(%s)",
+					 quote_literal_cstr(databaseName));
+
+	return command->data;
 }

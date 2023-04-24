@@ -222,6 +222,12 @@ PreprocessDropdbStmt(Node *node, const char *queryString,
 		return NIL;
 	}
 
+	List *workerNodes = TargetWorkerSetNodeList(OTHER_METADATA_NODES, RowShareLock);
+	if (list_length(workerNodes) == 0)
+	{
+		return NIL;
+	}
+
 	char *dropDatabaseCommand = DeparseTreeNode(node);
 
 	StringInfo internalDropCommand = makeStringInfo();
@@ -229,11 +235,16 @@ PreprocessDropdbStmt(Node *node, const char *queryString,
 					 "SELECT pg_catalog.citus_internal_database_command(%s)",
 					 quote_literal_cstr(dropDatabaseCommand));
 
-	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
-								internalDropCommand->data,
-								ENABLE_DDL_PROPAGATION);
 
-	return NodeDDLTaskList(OTHER_METADATA_NODES, commands);
+	/* we execute here to avoid EnsureCoordinator check in ExecuteDistributedDDLJob */
+	bool outsideTransaction = false;
+	List *taskList = CreateDDLTaskList(internalDropCommand->data, workerNodes,
+									   outsideTransaction);
+
+	bool localExecutionSupported = false;
+	ExecuteUtilityTaskList(taskList, localExecutionSupported);
+
+	return NIL;
 }
 
 

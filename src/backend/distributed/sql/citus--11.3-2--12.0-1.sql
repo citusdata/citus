@@ -54,6 +54,7 @@ CREATE TABLE citus_catalog.database_shard (
 	is_available bool not null,
 	PRIMARY KEY (database_oid)
 );
+GRANT SELECT ON TABLE citus_catalog.database_shard TO public;
 
 /*
  * execute_command_on_all_nodes runs a command on all nodes
@@ -104,7 +105,7 @@ COMMENT ON FUNCTION pg_catalog.citus_internal_database_command(text) IS
  'run a database command without transaction block restrictions';
 
 /*
- * citus_internal_add_database_shard creates a database and inserts it
+ * citus_internal_add_database_shard inserts a database shard
  * into the database shards metadata.
  */
 CREATE OR REPLACE FUNCTION pg_catalog.citus_internal_add_database_shard(database_name text, node_group_id int)
@@ -114,4 +115,39 @@ CREATE OR REPLACE FUNCTION pg_catalog.citus_internal_add_database_shard(database
 AS 'MODULE_PATHNAME', $$citus_internal_add_database_shard$$;
 COMMENT ON FUNCTION pg_catalog.citus_internal_add_database_shard(text,int) IS
  'add a database shard to the metadata';
+
+/*
+ * citus_internal_delete_database_shard deletes a database shard
+ * from the metadata
+ */
+CREATE OR REPLACE FUNCTION pg_catalog.citus_internal_delete_database_shard(database_name text)
+ RETURNS void
+ LANGUAGE C
+ STRICT
+AS 'MODULE_PATHNAME', $$citus_internal_delete_database_shard$$;
+COMMENT ON FUNCTION pg_catalog.citus_internal_delete_database_shard(text) IS
+ 'delete a database shard from the metadata';
+
+
+CREATE FUNCTION pg_catalog.database_shard_move_start(
+	database_name text,
+	target_node_group_id int,
+	drop_if_exists bool default false,
+	require_replica_identities bool default true)
+RETURNS text
+LANGUAGE C STRICT
+AS 'MODULE_PATHNAME', $$database_shard_move_start$$;
+COMMENT ON FUNCTION pg_catalog.database_shard_move_start(text, int, bool, bool)
+IS 'start a database shard move';
+
+CREATE FUNCTION pg_catalog.database_shard_move_finish(
+	database_name text,
+	target_node_group_id int,
+	switch_source_to_read_only bool default false)
+ RETURNS text
+ LANGUAGE C STRICT
+ AS 'MODULE_PATHNAME', $$database_shard_move_finish$$;
+COMMENT ON FUNCTION pg_catalog.database_shard_move_finish(text,int,bool)
+IS 'finish a database shard move';
+
 

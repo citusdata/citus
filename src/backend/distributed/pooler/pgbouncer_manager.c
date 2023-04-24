@@ -106,6 +106,9 @@ int PgBouncerInboundProcs = PGBOUNCER_INBOUND_PROCS_DEFAULT;
 /* GUC variable that sets the inbound pgbouncer port */
 int PgBouncerInboundPort = 6432;
 
+/* GUC variable that sets the pgbouncer config file to include */
+char *PgBouncerIncludeConfig = "";
+
 /* GUC variable that sets the path to pgbouncer executable */
 char *PgBouncerPath = "pgbouncer";
 
@@ -536,15 +539,14 @@ GenerateInboundPgBouncerConfig(int myPgBouncerId)
 					 "[pgbouncer]\n"
 					 "peer_id = %d\n"
 					 "unix_socket_dir = %s\n"
-
-	                 /* TODO: make configurable */
-					 "listen_addr = 127.0.0.1\n"
+					 "listen_addr = %s\n"
 					 "listen_port = %d\n"
 					 "so_reuseport = 1\n"
 					 "pidfile = citus-pgbouncer-inbound-%d.pid\n"
 					 "syslog_ident = citus-pgbouncer-inbound-%d\n",
 					 myPeerId,
 					 unixDomainSocketDir,
+					 ListenAddresses,
 					 PgBouncerInboundPort,
 					 myPgBouncerId,
 					 myPgBouncerId);
@@ -553,7 +555,7 @@ GenerateInboundPgBouncerConfig(int myPgBouncerId)
 	appendStringInfo(pgbouncerConfig,
 
 	                 /* TODO: make configurable */
-					 "auth_type = md5\n"
+					 "auth_type = trust\n"
 					 "auth_file = %s\n",
 					 PGBOUNCER_USERS_FILE);
 
@@ -600,9 +602,15 @@ GenerateInboundPgBouncerConfig(int myPgBouncerId)
 						 ssl_ca_file);
 	}
 
+	if (PgBouncerIncludeConfig != NULL && PgBouncerIncludeConfig[0] != '\0')
+	{
+		appendStringInfo(pgbouncerConfig,
+						 "%%include %s\n",
+						 PgBouncerIncludeConfig);
+	}
+
 	appendStringInfoString(pgbouncerConfig,
-						   "\n"
-						   "[peers]\n");
+						   "\n[peers]\n");
 
 	/* add the peer IDs of local inbound pgbouncers using unix domain socket dirs */
 	for (int pgBouncerId = 0; pgBouncerId < PgBouncerInboundProcs; pgBouncerId++)

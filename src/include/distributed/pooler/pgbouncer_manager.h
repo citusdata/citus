@@ -30,6 +30,9 @@ extern int PgBouncerInboundPort;
 /* GUC variable that sets the path to pgbouncer executable */
 extern char *PgBouncerPath;
 
+/* GUC variable that sets a pgbouncer file to include */
+extern char *PgBouncerIncludeConfig;
+
 /* global variable to request pgbouncer reconfiguration */
 extern bool ReconfigurePgBouncersOnCommit;
 

@@ -2196,6 +2196,17 @@ RegisterCitusConfigVariables(void)
 		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 		NULL, NULL, NULL);
 
+	DefineCustomStringVariable(
+		"citus.pgbouncer_include_config",
+		gettext_noop("Sets the path to a file to include in the pgbouncer "
+					 "configuration"),
+		NULL,
+		&PgBouncerIncludeConfig,
+		"",
+		PGC_SIGHUP,
+		GUC_STANDARD,
+		NULL, NULL, NULL);
+
 	DefineCustomIntVariable(
 		"citus.pgbouncer_inbound_port",
 		gettext_noop("Sets the port on which inbound pgbouncer processes "
