@@ -97,7 +97,7 @@ DropRemoteSubscription(MultiConnection *conn, char *subscriptionName)
 	StringInfo dropCommand = makeStringInfo();
 
 	appendStringInfo(dropCommand,
-					 "ALTER SUBSCRIPTION %s SET (slot_name = 'none')",
+					 "DROP SUBSCRIPTION %s",
 					 quote_identifier(subscriptionName));
 
 	ExecuteCriticalRemoteCommand(conn, dropCommand->data);
