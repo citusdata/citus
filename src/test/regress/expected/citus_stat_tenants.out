@@ -791,7 +791,7 @@ SELECT select_from_dist_tbl_text(U&'\0061\0308bc');
  t
 (1 row)
 
-SELECT tenant_attribute, query_count_in_this_period FROM citus_stat_tenants;
+SELECT tenant_attribute, query_count_in_this_period FROM citus_stat_tenants ORDER BY tenant_attribute;
  tenant_attribute | query_count_in_this_period
 ---------------------------------------------------------------------
  /b*c/de          |                          2
@@ -817,7 +817,7 @@ CALL citus_stat_tenants.select_from_dist_tbl_text_proc(U&'\0061\0308bc');
 CALL citus_stat_tenants.select_from_dist_tbl_text_proc(U&'\0061\0308bc');
 CALL citus_stat_tenants.select_from_dist_tbl_text_proc(U&'\0061\0308bc');
 CALL citus_stat_tenants.select_from_dist_tbl_text_proc(NULL);
-SELECT tenant_attribute, query_count_in_this_period FROM citus_stat_tenants;
+SELECT tenant_attribute, query_count_in_this_period FROM citus_stat_tenants ORDER BY tenant_attribute;
  tenant_attribute | query_count_in_this_period
 ---------------------------------------------------------------------
  /b*c/de          |                          8
@@ -864,7 +864,7 @@ SELECT count(*)>=0 FROM select_from_dist_tbl_text_view WHERE a = U&'\0061\0308bc
  t
 (1 row)
 
-SELECT tenant_attribute, query_count_in_this_period FROM citus_stat_tenants;
+SELECT tenant_attribute, query_count_in_this_period FROM citus_stat_tenants ORDER BY tenant_attribute;
  tenant_attribute | query_count_in_this_period
 ---------------------------------------------------------------------
  /b*c/de          |                         11

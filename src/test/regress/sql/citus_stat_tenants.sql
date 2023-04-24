@@ -272,7 +272,7 @@ SELECT select_from_dist_tbl_text('/b*c/de');
 SELECT select_from_dist_tbl_text(U&'\0061\0308bc');
 SELECT select_from_dist_tbl_text(U&'\0061\0308bc');
 
-SELECT tenant_attribute, query_count_in_this_period FROM citus_stat_tenants;
+SELECT tenant_attribute, query_count_in_this_period FROM citus_stat_tenants ORDER BY tenant_attribute;
 
 CREATE OR REPLACE PROCEDURE select_from_dist_tbl_text_proc(
    p_keyword text
@@ -295,7 +295,7 @@ CALL citus_stat_tenants.select_from_dist_tbl_text_proc(U&'\0061\0308bc');
 CALL citus_stat_tenants.select_from_dist_tbl_text_proc(U&'\0061\0308bc');
 CALL citus_stat_tenants.select_from_dist_tbl_text_proc(NULL);
 
-SELECT tenant_attribute, query_count_in_this_period FROM citus_stat_tenants;
+SELECT tenant_attribute, query_count_in_this_period FROM citus_stat_tenants ORDER BY tenant_attribute;
 
 CREATE OR REPLACE VIEW
   select_from_dist_tbl_text_view
@@ -309,7 +309,7 @@ SELECT count(*)>=0 FROM select_from_dist_tbl_text_view WHERE a = U&'\0061\0308bc
 SELECT count(*)>=0 FROM select_from_dist_tbl_text_view WHERE a = U&'\0061\0308bc';
 SELECT count(*)>=0 FROM select_from_dist_tbl_text_view WHERE a = U&'\0061\0308bc';
 
-SELECT tenant_attribute, query_count_in_this_period FROM citus_stat_tenants;
+SELECT tenant_attribute, query_count_in_this_period FROM citus_stat_tenants ORDER BY tenant_attribute;
 
 SET client_min_messages TO ERROR;
 DROP SCHEMA citus_stat_tenants CASCADE;
