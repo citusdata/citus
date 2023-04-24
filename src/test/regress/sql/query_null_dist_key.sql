@@ -514,7 +514,11 @@ SET client_min_messages TO DEBUG2;
 INSERT INTO nullkey_c1_t1 SELECT * FROM nullkey_c2_t1;
 
 --    between a null dist key table and a table of different type
+SET client_min_messages TO WARNING;
+EXPLAIN (ANALYZE TRUE, TIMING FALSE, COSTS FALSE, SUMMARY FALSE, VERBOSE FALSE)
 INSERT INTO nullkey_c1_t1 SELECT * FROM reference_table;
+SET client_min_messages TO DEBUG2;
+
 INSERT INTO nullkey_c1_t1 SELECT * FROM distributed_table;
 INSERT INTO nullkey_c1_t1 SELECT * FROM citus_local_table;
 INSERT INTO nullkey_c1_t1 SELECT * FROM postgres_local_table;
@@ -543,7 +547,7 @@ WITH level_0 AS (
     WITH RECURSIVE level_2_recursive(x) AS (
         VALUES (1)
       UNION ALL
-        SELECT a + 1 FROM nullkey_c1_t1 JOIN level_2_recursive ON (a = x) WHERE a < 100
+        SELECT a + 1 FROM nullkey_c1_t1 JOIN level_2_recursive ON (a = x) WHERE a < 2
     )
     SELECT * FROM level_2_recursive RIGHT JOIN reference_table ON (level_2_recursive.x = reference_table.a)
   )
@@ -638,6 +642,8 @@ SET client_min_messages TO DEBUG1;
 
 INSERT INTO bigserial_test (x, y) SELECT x, y FROM bigserial_test;
 
+INSERT INTO bigserial_test (x, y) SELECT a, a FROM reference_table;
+
 INSERT INTO agg_events
             (user_id)
 SELECT f2.id FROM
@@ -689,6 +695,19 @@ FROM
   raw_events_first LEFT JOIN raw_events_second ON raw_events_first.user_id = raw_events_second.user_id
   WHERE raw_events_second.user_id = 10 OR raw_events_second.user_id = 11;
 
+INSERT INTO agg_events (user_id)
+SELECT
+  users_ref_table.user_id
+FROM
+  users_ref_table LEFT JOIN raw_events_second ON users_ref_table.user_id = raw_events_second.user_id
+  WHERE raw_events_second.user_id = 10 OR raw_events_second.user_id = 11;
+
+INSERT INTO agg_events (user_id)
+SELECT COALESCE(raw_events_first.user_id, users_ref_table.user_id)
+FROM raw_events_first
+     RIGHT JOIN (users_ref_table LEFT JOIN raw_events_second ON users_ref_table.user_id = raw_events_second.user_id)
+     ON raw_events_first.user_id = users_ref_table.user_id;
+
 -- using a full join
 INSERT INTO agg_events (user_id, value_1_agg)
 SELECT t1.user_id AS col1,
@@ -715,11 +734,24 @@ WHERE  NOT EXISTS (SELECT 1
                    FROM   raw_events_second
                    WHERE  raw_events_second.user_id =raw_events_first.user_id);
 
+INSERT INTO raw_events_second
+            (user_id)
+SELECT user_id
+FROM   users_ref_table
+WHERE  NOT EXISTS (SELECT 1
+                   FROM   raw_events_second
+                   WHERE  raw_events_second.user_id = users_ref_table.user_id);
+
 -- using inner join
 INSERT INTO agg_events (user_id)
 SELECT raw_events_first.user_id
 FROM raw_events_first INNER JOIN raw_events_second ON raw_events_first.user_id = raw_events_second.value_1
 WHERE raw_events_first.value_1 IN (10, 11,12) OR raw_events_second.user_id IN (1,2,3,4);
+
+INSERT INTO agg_events (user_id)
+SELECT raw_events_first.user_id
+FROM raw_events_first INNER JOIN users_ref_table ON raw_events_first.user_id = users_ref_table.user_id
+WHERE raw_events_first.value_1 IN (10, 11,12) OR users_ref_table.user_id IN (1,2,3,4);
 
 -- We could relax distributed insert .. select checks to allow pushing
 -- down more clauses down to the worker nodes when inserting into a single
@@ -734,6 +766,7 @@ WHERE raw_events_first.value_1 IN (10, 11,12) OR raw_events_second.user_id IN (1
 -- limit / offset clause
 INSERT INTO agg_events (user_id) SELECT raw_events_first.user_id FROM raw_events_first LIMIT 1;
 INSERT INTO agg_events (user_id) SELECT raw_events_first.user_id FROM raw_events_first OFFSET 1;
+INSERT INTO agg_events (user_id) SELECT users_ref_table.user_id FROM users_ref_table LIMIT 1;
 
 -- using a materialized cte
 WITH cte AS MATERIALIZED
@@ -744,6 +777,10 @@ SELECT v1_agg, user_id FROM cte;
 INSERT INTO raw_events_second
   WITH cte AS MATERIALIZED (SELECT * FROM raw_events_first)
   SELECT user_id * 1000, time, value_1, value_2, value_3, value_4 FROM cte;
+
+INSERT INTO raw_events_second (user_id)
+  WITH cte AS MATERIALIZED (SELECT * FROM users_ref_table)
+  SELECT user_id FROM cte;
 
 -- using a regular cte
 WITH cte AS (SELECT * FROM raw_events_first)
@@ -763,24 +800,29 @@ INSERT INTO agg_events
 
 -- we still support complex joins via INSERT's cte list ..
 WITH cte AS (
-    SELECT reference_table.a AS a, 1 AS b
+    SELECT DISTINCT(reference_table.a) AS a, 1 AS b
     FROM distributed_table RIGHT JOIN reference_table USING (a)
 )
 INSERT INTO raw_events_second (user_id, value_1)
   SELECT (a+5)*-1, b FROM cte;
 
--- .. but can't do so via via SELECT's cte list
+-- .. and via SELECT's cte list too
 INSERT INTO raw_events_second (user_id, value_1)
 WITH cte AS (
-    SELECT reference_table.a AS a, 1 AS b
+    SELECT DISTINCT(reference_table.a) AS a, 1 AS b
     FROM distributed_table RIGHT JOIN reference_table USING (a)
 )
-  SELECT (a+5)*-1, b FROM cte;
+  SELECT (a+5)*2, b FROM cte;
 
 -- using set operations
 INSERT INTO
   raw_events_first(user_id)
   (SELECT user_id FROM raw_events_first) INTERSECT
+  (SELECT user_id FROM raw_events_first);
+
+INSERT INTO
+  raw_events_first(user_id)
+  (SELECT user_id FROM users_ref_table) INTERSECT
   (SELECT user_id FROM raw_events_first);
 
 -- group by clause inside subquery
@@ -841,6 +883,11 @@ SELECT SUM(value_3),
        Avg(value_2)
 FROM   raw_events_first
 GROUP  BY user_id;
+
+INSERT INTO agg_events (value_3_agg, value_1_agg)
+SELECT AVG(user_id), SUM(user_id)
+FROM users_ref_table
+GROUP BY user_id;
 
 -- using generate_series
 INSERT INTO raw_events_first (user_id, value_1, value_2)

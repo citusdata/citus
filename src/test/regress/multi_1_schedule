@@ -201,6 +201,7 @@ test: local_dist_join_mixed
 test: citus_local_dist_joins
 test: recurring_outer_join
 test: query_null_dist_key
+test: insert_select_null_dist_key
 test: pg_dump
 
 # ---------
