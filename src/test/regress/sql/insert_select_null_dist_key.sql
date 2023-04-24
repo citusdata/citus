@@ -127,6 +127,7 @@ INSERT INTO distributed_table_c1_t1 SELECT nullkey_c1_t2.a, nullkey_c1_t2.b FROM
 INSERT INTO range_table SELECT * FROM nullkey_c1_t1;
 INSERT INTO append_table SELECT * FROM nullkey_c1_t1;
 
+SELECT avg(a), avg(b) FROM distributed_table_c1_t1 ORDER BY 1, 2;
 TRUNCATE distributed_table_c1_t1;
 INSERT INTO distributed_table_c1_t1 SELECT i, i FROM generate_series(3, 8) i;
 
@@ -161,6 +162,7 @@ INSERT INTO reference_table SELECT nullkey_c1_t1.a, nullkey_c1_t1.b FROM nullkey
 -- use a postgres local table
 INSERT INTO reference_table SELECT nullkey_c1_t2.a, nullkey_c1_t2.b FROM nullkey_c1_t2 JOIN postgres_local_table USING (a);
 
+SELECT avg(a), avg(b) FROM reference_table ORDER BY 1, 2;
 TRUNCATE reference_table;
 INSERT INTO reference_table SELECT i, i FROM generate_series(0, 5) i;
 
@@ -185,6 +187,7 @@ INSERT INTO citus_local_table SELECT nullkey_c1_t1.a, nullkey_c1_t1.b FROM nullk
 -- use a postgres local table
 INSERT INTO citus_local_table SELECT nullkey_c1_t2.a, nullkey_c1_t2.b FROM nullkey_c1_t2 JOIN postgres_local_table USING (a);
 
+SELECT avg(a), avg(b) FROM citus_local_table ORDER BY 1, 2;
 TRUNCATE citus_local_table;
 INSERT INTO citus_local_table SELECT i, i FROM generate_series(0, 10) i;
 
@@ -218,6 +221,8 @@ INSERT INTO nullkey_c1_t1 SELECT q.* FROM (SELECT reference_table.* FROM referen
 INSERT INTO nullkey_c1_t1 SELECT * FROM range_table;
 INSERT INTO nullkey_c1_t1 SELECT * FROM append_table;
 
+SELECT avg(a), avg(b) FROM nullkey_c1_t1 ORDER BY 1, 2;
+SELECT avg(a), avg(b) FROM nullkey_c2_t1 ORDER BY 1, 2;
 TRUNCATE nullkey_c1_t1, nullkey_c2_t1;
 INSERT INTO nullkey_c1_t1 SELECT i, i FROM generate_series(1, 8) i;
 INSERT INTO nullkey_c2_t1 SELECT i, i FROM generate_series(2, 7) i;
@@ -236,6 +241,7 @@ INSERT INTO postgres_local_table SELECT cte_1.* FROM cte_1 LEFT JOIN nullkey_c1_
 
 INSERT INTO postgres_local_table SELECT * FROM nullkey_c1_t1 EXCEPT SELECT * FROM postgres_local_table;
 
+SELECT avg(a), avg(b) FROM postgres_local_table ORDER BY 1, 2;
 TRUNCATE postgres_local_table;
 INSERT INTO postgres_local_table SELECT i, i FROM generate_series(5, 10) i;
 

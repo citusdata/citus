@@ -208,6 +208,13 @@ INSERT INTO append_table SELECT * FROM nullkey_c1_t1;
 DEBUG:  distributed INSERT ... SELECT cannot reference a distributed table without a shard key together with non-colocated distributed tables
 ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
 DETAIL:  INSERT ... SELECT into an append-distributed table is not supported
+SELECT avg(a), avg(b) FROM distributed_table_c1_t1 ORDER BY 1, 2;
+DEBUG:  Router planner cannot handle multi-shard select queries
+        avg         |        avg
+---------------------------------------------------------------------
+ 4.2105263157894737 | 4.2105263157894737
+(1 row)
+
 TRUNCATE distributed_table_c1_t1;
 INSERT INTO distributed_table_c1_t1 SELECT i, i FROM generate_series(3, 8) i;
 DEBUG:  distributed INSERT ... SELECT can only select from distributed tables
@@ -279,6 +286,14 @@ INSERT INTO reference_table SELECT nullkey_c1_t2.a, nullkey_c1_t2.b FROM nullkey
 DEBUG:  distributed INSERT ... SELECT cannot select from distributed tables and local tables at the same time
 ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
 DETAIL:  Local tables cannot be used in distributed queries.
+SELECT avg(a), avg(b) FROM reference_table ORDER BY 1, 2;
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+        avg         |        avg
+---------------------------------------------------------------------
+ 4.0428571428571429 | 4.0428571428571429
+(1 row)
+
 TRUNCATE reference_table;
 INSERT INTO reference_table SELECT i, i FROM generate_series(0, 5) i;
 DEBUG:  distributed INSERT ... SELECT can only select from distributed tables
@@ -316,6 +331,14 @@ INSERT INTO citus_local_table SELECT nullkey_c1_t2.a, nullkey_c1_t2.b FROM nullk
 DEBUG:  distributed INSERT ... SELECT cannot select from distributed tables and local tables at the same time
 ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
 DETAIL:  Local tables cannot be used in distributed queries.
+SELECT avg(a), avg(b) FROM citus_local_table ORDER BY 1, 2;
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+        avg         |        avg
+---------------------------------------------------------------------
+ 4.4333333333333333 | 4.4333333333333333
+(1 row)
+
 TRUNCATE citus_local_table;
 INSERT INTO citus_local_table SELECT i, i FROM generate_series(0, 10) i;
 DEBUG:  distributed INSERT ... SELECT can only select from distributed tables
@@ -387,6 +410,22 @@ INSERT INTO nullkey_c1_t1 SELECT * FROM append_table;
 DEBUG:  distributed INSERT ... SELECT cannot reference a distributed table without a shard key together with non-colocated distributed tables
 DEBUG:  Router planner does not support append-partitioned tables.
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
+SELECT avg(a), avg(b) FROM nullkey_c1_t1 ORDER BY 1, 2;
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+        avg         |         avg
+---------------------------------------------------------------------
+ 5.8611111111111111 | 13.9305555555555556
+(1 row)
+
+SELECT avg(a), avg(b) FROM nullkey_c2_t1 ORDER BY 1, 2;
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+        avg         |        avg
+---------------------------------------------------------------------
+ 3.8750000000000000 | 3.8750000000000000
+(1 row)
+
 TRUNCATE nullkey_c1_t1, nullkey_c2_t1;
 INSERT INTO nullkey_c1_t1 SELECT i, i FROM generate_series(1, 8) i;
 DEBUG:  distributed INSERT ... SELECT can only select from distributed tables
@@ -408,6 +447,12 @@ DEBUG:  Creating router plan
 INSERT INTO postgres_local_table SELECT * FROM nullkey_c1_t1 EXCEPT SELECT * FROM postgres_local_table;
 ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
 DETAIL:  Local tables cannot be used in distributed queries.
+SELECT avg(a), avg(b) FROM postgres_local_table ORDER BY 1, 2;
+        avg         |        avg
+---------------------------------------------------------------------
+ 5.0000000000000000 | 5.0000000000000000
+(1 row)
+
 TRUNCATE postgres_local_table;
 INSERT INTO postgres_local_table SELECT i, i FROM generate_series(5, 10) i;
 -- Try slightly more complex queries.
