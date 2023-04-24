@@ -15,7 +15,7 @@ from typing import Optional
 import common
 from common import REGRESS_DIR, capture, run
 
-from config import ARBITRARY_SCHEDULE_NAMES, MASTER_VERSION, CitusDefaultClusterConfig
+from config import ARBITRARY_SCHEDULE_NAMES, MASTER_VERSION, CitusBaseClusterConfig
 
 
 def main():
@@ -178,7 +178,7 @@ def run_schedule_with_python(schedule):
         "--bindir": bindir,
     }
 
-    config = CitusDefaultClusterConfig(args)
+    config = CitusBaseClusterConfig(args)
     common.initialize_temp_dir(config.temp_dir)
     common.initialize_citus_cluster(
         config.bindir, config.datadir, config.settings, config
@@ -242,7 +242,7 @@ def default_base_schedule(test_schedule, args):
         return None
 
     if "pg_upgrade" in test_schedule:
-        return "minimal_schedule"
+        return "minimal_pg_upgrade_schedule"
 
     if test_schedule in ARBITRARY_SCHEDULE_NAMES:
         print(f"WARNING: Arbitrary config schedule ({test_schedule}) is not supported.")
@@ -301,9 +301,21 @@ def test_dependencies(test_name, test_schedule, schedule_line, args):
 
     if schedule_line_is_upgrade_after(schedule_line):
         # upgrade_xxx_after tests always depend on upgrade_xxx_before
+        test_names = schedule_line.split()[1:]
+        before_tests = []
+        # _after tests have implicit dependencies on _before tests
+        for test_name in test_names:
+            if "_after" in test_name:
+                before_tests.append(test_name.replace("_after", "_before"))
+
+        # the upgrade_columnar_before renames the schema, on which other
+        # "after" tests depend. So we make sure to execute it always.
+        if "upgrade_columnar_before" not in before_tests:
+            before_tests.append("upgrade_columnar_before")
+
         return TestDeps(
             default_base_schedule(test_schedule, args),
-            [test_name.replace("_after", "_before")],
+            before_tests,
         )
 
     # before_ tests leave stuff around on purpose for the after tests. So they
