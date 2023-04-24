@@ -809,8 +809,8 @@ InlineCtesAndCreateDistributedPlannedStmt(uint64 planId,
 {
 	/*
 	 * We'll inline the CTEs and try distributed planning, preserve the original
-	 * query in case the planning fails and we fallback to recursive planning of
-	 * CTEs.
+	 * query ,the modified query, and planner context in case the planning fails
+	 * and we fallback to recursive planning of CTEs.
 	 */
 	Query *copyOfOriginalQuery = copyObject(planContext->originalQuery);
 
@@ -819,13 +819,21 @@ InlineCtesAndCreateDistributedPlannedStmt(uint64 planId,
 	/* after inlining, we shouldn't have any inlinable CTEs */
 	Assert(!QueryTreeContainsInlinableCTE(copyOfOriginalQuery));
 
+	/* recompute modified query and planner context after we inlined the query */
+	PlannerRestrictionContext *plannerContextForInlinedQuery =
+		CreateAndPushPlannerRestrictionContext();
+	Query *copyOfInlinedOriginalQuery = copyObject(copyOfOriginalQuery);
+	standard_planner(copyOfInlinedOriginalQuery, NULL, 0, planContext->boundParams);
+	Query *modifiedInlinedQuery = copyOfInlinedOriginalQuery;
+
 	/* simply recurse into CreateDistributedPlannedStmt() in a PG_TRY() block */
 	PlannedStmt *result = TryCreateDistributedPlannedStmt(planContext->plan,
 														  copyOfOriginalQuery,
-														  planContext->query,
+														  modifiedInlinedQuery,
 														  planContext->boundParams,
-														  planContext->
-														  plannerRestrictionContext);
+														  plannerContextForInlinedQuery);
+
+	PopPlannerRestrictionContext();
 
 	return result;
 }
