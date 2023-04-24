@@ -142,12 +142,11 @@ IS 'start a database shard move';
 
 CREATE FUNCTION pg_catalog.database_shard_move_finish(
 	database_name text,
-	target_node_group_id int,
-	switch_source_to_read_only bool default false)
+	target_node_group_id int)
  RETURNS text
  LANGUAGE C STRICT
  AS 'MODULE_PATHNAME', $$database_shard_move_finish$$;
-COMMENT ON FUNCTION pg_catalog.database_shard_move_finish(text,int,bool)
+COMMENT ON FUNCTION pg_catalog.database_shard_move_finish(text,int)
 IS 'finish a database shard move';
 
 

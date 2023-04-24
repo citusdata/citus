@@ -61,7 +61,6 @@ static void MigrateSchema(char *sourceConnectionString,
 						  char *snapshotName,
 						  bool dropIfExists);
 static void CheckReplicaIdentities(List *tableList);
-static void SwitchSourceToReadOnly(MultiConnection *conn);
 static void AdjustSequences(MultiConnection *conn, List *sequenceList);
 static void SetSequenceValue(MultiConnection *conn, char *schemaName, char *sequenceName,
 							 int64 value);
@@ -381,7 +380,6 @@ database_shard_move_finish(PG_FUNCTION_ARGS)
 
 	/* TODO: this should be stored in shared memory */
 	int targetNodeGroupId = PG_GETARG_INT32(1);
-	bool switchSourceToReadOnly = PG_GETARG_BOOL(2);
 
 	char *subscriptionName = SubscriptionNameForMigration(migrationNameString);
 
@@ -420,12 +418,6 @@ database_shard_move_finish(PG_FUNCTION_ARGS)
 		ReportConnectionError(destConn, ERROR);
 	}
 
-
-	if (switchSourceToReadOnly)
-	{
-		SwitchSourceToReadOnly(sourceConn);
-	}
-
 	/* TODO: wait for final changes */
 
 	DropRemoteSubscription(destConn, subscriptionName);
@@ -442,33 +434,6 @@ database_shard_move_finish(PG_FUNCTION_ARGS)
 	UpdateDatabaseShard(databaseOid, targetNodeGroupId);
 
 	PG_RETURN_TEXT_P(cstring_to_text("finished"));
-}
-
-
-/*
- * SwitchSourceToReadOnly switches the source database to read only
- * to prevent a split brain scenario.
- */
-static void
-SwitchSourceToReadOnly(MultiConnection *conn)
-{
-	StringInfo command = makeStringInfo();
-	char *databaseName = PQdb(conn->pgConn);
-
-	appendStringInfo(command,
-					 "ALTER DATABASE %s SET default_transaction_read_only TO on",
-					 quote_identifier(databaseName));
-
-	ExecuteCriticalRemoteCommand(conn, command->data);
-
-	char *reloadCommand = "SELECT pg_reload_conf()";
-
-	ExecuteCriticalRemoteCommand(conn, reloadCommand);
-
-	/* keep the current session writable */
-	char *setReadOnlyCommand = "SET default_transaction_read_only TO off";
-
-	ExecuteCriticalRemoteCommand(conn, setReadOnlyCommand);
 }
 
 
