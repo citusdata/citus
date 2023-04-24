@@ -457,6 +457,13 @@ INSERT INTO nullkey_c1_t1 AS t1 (a, b) SELECT t3.a, t3.b FROM distributed_table_
     DO UPDATE SET a = (SELECT max(b)+1 FROM distributed_table_c1_t1 WHERE a = 3);
 SET client_min_messages TO DEBUG2;
 
+SELECT avg(a), avg(b) FROM distributed_table_c1_t1;
+SELECT avg(a), avg(b) FROM nullkey_c1_t1;
+SELECT avg(a), avg(b) FROM nullkey_c1_t2;
+SELECT * FROM upsert_test_1 ORDER BY unique_col;
+SELECT * FROM upsert_test_2 ORDER BY key;
+SELECT * FROM upsert_test_3 ORDER BY key_1, key_2;
+
 SET client_min_messages TO WARNING;
 DROP SCHEMA insert_select_null_dist_key CASCADE;
 

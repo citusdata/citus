@@ -755,6 +755,55 @@ DETAIL:  Executing a distributed query in a function call that may be pushed to 
 HINT:  Avoid nesting of distributed queries or use alter user current_user set citus.allow_nested_distributed_execution to on to allow it with possible incorrectness.
 CONTEXT:  while executing command on localhost:xxxxx
 SET client_min_messages TO DEBUG2;
+SELECT avg(a), avg(b) FROM distributed_table_c1_t1;
+DEBUG:  Router planner cannot handle multi-shard select queries
+        avg         |        avg
+---------------------------------------------------------------------
+ 5.0000000000000000 | 9.2857142857142857
+(1 row)
+
+SELECT avg(a), avg(b) FROM nullkey_c1_t1;
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+        avg         |        avg
+---------------------------------------------------------------------
+ 7.5000000000000000 | 4.1666666666666667
+(1 row)
+
+SELECT avg(a), avg(b) FROM nullkey_c1_t2;
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+        avg         |        avg
+---------------------------------------------------------------------
+ 4.5000000000000000 | 4.5000000000000000
+(1 row)
+
+SELECT * FROM upsert_test_1 ORDER BY unique_col;
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+ unique_col | other_col | third_col
+---------------------------------------------------------------------
+          3 |         6 |         7
+(1 row)
+
+SELECT * FROM upsert_test_2 ORDER BY key;
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+ key | value
+---------------------------------------------------------------------
+   1 | 15
+(1 row)
+
+SELECT * FROM upsert_test_3 ORDER BY key_1, key_2;
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+ key_1 | key_2 |        value
+---------------------------------------------------------------------
+     1 |     1 | 1
+     5 |     2 | default_value
+     7 |     5 | harcoded_text_value
+(3 rows)
+
 SET client_min_messages TO WARNING;
 DROP SCHEMA insert_select_null_dist_key CASCADE;
 SELECT citus_remove_node('localhost', :master_port);
