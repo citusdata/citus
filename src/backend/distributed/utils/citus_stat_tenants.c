@@ -29,6 +29,7 @@
 #include "utils/builtins.h"
 #include "utils/datetime.h"
 #include "utils/json.h"
+#include "utils/numeric.h"
 
 
 #include <time.h>
@@ -245,8 +246,22 @@ AnnotateQuery(char *queryString, Const *partitionKeyValue, int colocationId)
 		return queryString;
 	}
 
-	char *partitionKeyValueString = DatumToString(partitionKeyValue->constvalue,
-												  partitionKeyValue->consttype);
+	char *partitionKeyValueString = NULL;
+
+	/*
+	 * We need to normalize the numeric values to avoid the difference between
+	 * different number of trailing zeros.
+	 */
+	if (partitionKeyValue->consttype == NUMERICOID)
+	{
+		Numeric num = DatumGetNumeric(partitionKeyValue->constvalue);
+		partitionKeyValueString = numeric_normalize(num);
+	}
+	else
+	{
+		partitionKeyValueString = DatumToString(partitionKeyValue->constvalue,
+												partitionKeyValue->consttype);
+	}
 
 	char *commentCharsEscaped = EscapeCommentChars(partitionKeyValueString);
 	StringInfo escapedSourceName = makeStringInfo();

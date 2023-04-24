@@ -311,5 +311,19 @@ SELECT count(*)>=0 FROM select_from_dist_tbl_text_view WHERE a = U&'\0061\0308bc
 
 SELECT tenant_attribute, query_count_in_this_period FROM citus_stat_tenants;
 
+-- test numeric values with different numbers of trailing zeros
+SELECT citus_stat_tenants_reset();
+SET citus.shard_replication_factor TO 1;
+
+CREATE TABLE dist_tbl_numeric(a numeric);
+SELECT create_distributed_table('dist_tbl_numeric', 'a');
+
+INSERT INTO dist_tbl_numeric VALUES (1);
+INSERT INTO dist_tbl_numeric VALUES (1.0);
+INSERT INTO dist_tbl_numeric VALUES (1.00);
+INSERT INTO dist_tbl_numeric VALUES (1.000);
+
+SELECT tenant_attribute, query_count_in_this_period FROM citus_stat_tenants;
+
 SET client_min_messages TO ERROR;
 DROP SCHEMA citus_stat_tenants CASCADE;
