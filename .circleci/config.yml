@@ -474,6 +474,9 @@ jobs:
       - store_artifacts:
           name: 'Save dmls'
           path: src/test/regress/citus_tests/query_generator/out/queries.sql
+      - store_artifacts:
+          name: 'Save diffs'
+          path: src/test/regress/citus_tests/query_generator/out/local_dist.diffs
       - stack_trace
       - coverage:
           flags: 'test_<< parameters.pg_major >>,querygen'

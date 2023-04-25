@@ -1,4 +1,5 @@
 import random
+import time
 
 from node_defs import RestrictOp
 
@@ -8,6 +9,11 @@ from config.config import getConfig
 def shouldSelectThatBranch():
     """returns 0 or 1 randomly"""
     return random.randint(0, 1)
+
+
+def currentMilliSecs():
+    """returns total milliseconds since epoch"""
+    return round(time.time() * 1000)
 
 
 def randomRteType():

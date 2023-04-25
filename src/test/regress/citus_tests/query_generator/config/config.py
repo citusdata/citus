@@ -1,4 +1,5 @@
 import copy
+import os
 
 import yaml
 from config.config_parser import (
@@ -13,7 +14,9 @@ from node_defs import CitusType
 
 class Config:
     def __init__(self):
-        configObj = Config.parseConfigFile("config/config.yaml")
+        configObj = Config.parseConfigFile(
+            f"{os.path.dirname(os.path.abspath(__file__))}/config.yaml"
+        )
 
         self.targetTables = _distinctCopyTables(
             parseTableArray(configObj["targetTables"])
