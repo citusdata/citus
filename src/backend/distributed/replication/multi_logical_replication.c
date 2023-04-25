@@ -128,8 +128,6 @@ static void ExecuteClusterOnCommands(List *logicalRepTargetList);
 static void ExecuteCreateIndexStatisticsCommands(List *logicalRepTargetList);
 static void ExecuteRemainingPostLoadTableCommands(List *logicalRepTargetList);
 static char * escape_param_str(const char *str);
-static XLogRecPtr GetRemoteLSN(MultiConnection *connection, char *command);
-static void WaitForMiliseconds(long timeout);
 static XLogRecPtr GetSubscriptionPosition(
 	GroupedLogicalRepTargets *groupedLogicalRepTargets);
 static void AcquireLogicalReplicationLock(void);
@@ -1639,7 +1637,7 @@ GetRemoteLogPosition(MultiConnection *connection)
  * GetRemoteLSN executes a command that returns a single LSN over the given connection
  * and returns it as an XLogRecPtr (uint64).
  */
-static XLogRecPtr
+XLogRecPtr
 GetRemoteLSN(MultiConnection *connection, char *command)
 {
 	bool raiseInterrupts = false;
@@ -1912,7 +1910,7 @@ WaitForGroupedLogicalRepTargetsToCatchUp(XLogRecPtr sourcePosition,
  * WaitForMiliseconds waits for given timeout and then checks for some
  * interrupts.
  */
-static void
+void
 WaitForMiliseconds(long timeout)
 {
 	int latchFlags = WL_LATCH_SET | WL_TIMEOUT | WL_POSTMASTER_DEATH;

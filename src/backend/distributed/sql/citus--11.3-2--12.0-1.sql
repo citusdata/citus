@@ -129,24 +129,29 @@ COMMENT ON FUNCTION pg_catalog.citus_internal_delete_database_shard(text) IS
  'delete a database shard from the metadata';
 
 
+CREATE FUNCTION pg_catalog.database_shard_move(
+	database_name text,
+	target_node_group_id int)
+RETURNS void
+LANGUAGE C STRICT
+AS 'MODULE_PATHNAME', $$database_shard_move$$;
+COMMENT ON FUNCTION pg_catalog.database_shard_move(text, int)
+IS 'start a database shard move';
+
 CREATE FUNCTION pg_catalog.database_shard_move_start(
 	database_name text,
-	target_node_group_id int,
-	drop_if_exists bool default false,
-	require_replica_identities bool default true)
-RETURNS text
+	target_node_group_id int)
+RETURNS void
 LANGUAGE C STRICT
 AS 'MODULE_PATHNAME', $$database_shard_move_start$$;
-COMMENT ON FUNCTION pg_catalog.database_shard_move_start(text, int, bool, bool)
+COMMENT ON FUNCTION pg_catalog.database_shard_move_start(text, int)
 IS 'start a database shard move';
 
 CREATE FUNCTION pg_catalog.database_shard_move_finish(
 	database_name text,
 	target_node_group_id int)
- RETURNS text
+ RETURNS void
  LANGUAGE C STRICT
  AS 'MODULE_PATHNAME', $$database_shard_move_finish$$;
 COMMENT ON FUNCTION pg_catalog.database_shard_move_finish(text,int)
 IS 'finish a database shard move';
-
-

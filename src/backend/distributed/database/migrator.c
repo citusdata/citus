@@ -3,6 +3,7 @@
 #include "libpq-fe.h"
 #include "miscadmin.h"
 #include "port.h"
+#include "safe_mem_lib.h"
 
 #include "access/htup_details.h"
 #include "access/xact.h"
@@ -23,7 +24,10 @@
 #include "distributed/database/remote_publication.h"
 #include "distributed/database/remote_subscription.h"
 #include "distributed/database/source_database_info.h"
+#include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/multi_logical_replication.h"
+#include "distributed/pooler/pgbouncer_manager.h"
 #include "distributed/remote_commands.h"
 #include "distributed/worker_manager.h"
 #include "nodes/makefuncs.h"
@@ -31,6 +35,7 @@
 #include "nodes/pg_list.h"
 #include "parser/analyze.h"
 #include "postmaster/postmaster.h"
+#include "storage/ipc.h"
 #include "tcop/pquery.h"
 #include "tcop/tcopprot.h"
 #include "tcop/utility.h"
@@ -45,13 +50,72 @@
 #include "utils/rel.h"
 #include "utils/snapmgr.h"
 #include "utils/syscache.h"
+#include "utils/wait_event.h"
 
 
 #define MAX_MIGRATION_NAME_LENGTH 50
 
+/*
+ * DatabaseMigrationState represents the current state of a migration.
+ */
+typedef enum DatabaseMigrationState
+{
+	DATABASE_MIGRATION_INITIAL,
+	DATABASE_MIGRATION_WAIT_FOR_DATA,
+	DATABASE_MIGRATION_WAIT_FOR_CATCHUP,
+	DATABASE_MIGRATION_FINISHED,
+	DATABASE_MIGRATION_FAILED,
+	DATABASE_MIGRATION_FINISHED_FAILED
+} DatabaseMigrationState;
+
+/*
+ * DatabaseMigrationMode represents different ways of doing a database
+ * migration:
+ * - schema only (pg_dump without data)
+ * - dump only (pg_dump with data)
+ * - full (pg_dump for schema, logical replication for data & changes)
+ */
+typedef enum DatabaseMigrationMode
+{
+	MIGRATION_MODE_SCHEMA_ONLY,
+	MIGRATION_MODE_DUMP_ONLY,
+	MIGRATION_MODE_LOGICAL_REPLICATION
+} DatabaseMigrationMode;
+
+typedef struct DatabaseMigration
+{
+	/* name of the migration */
+	char *migrationName;
+
+	/* name of the database to migrate */
+	char *databaseName;
+
+	/* node group ID of the target node */
+	int targetNodeGroupId;
+
+	/* type of migration we want to do */
+	DatabaseMigrationMode mode;
+
+	/* connection info for the source node */
+	char *sourceConnectionInfo;
+
+	/* whether a publication was created on the source */
+	bool createdPublication;
+
+	/* whether a replication slot was created on the source */
+	bool createdReplicationSlot;
+
+	/* whether a subscription was created on the target */
+	bool createdSubscription;
+
+	/* current state of the migration */
+	DatabaseMigrationState state;
+} DatabaseMigration;
+
 
 void _PG_init(void);
 
+static bool DatabaseMigrationStart(DatabaseMigration *migration);
 static char * ReplicationSlotNameForMigration(char *migrationName);
 static char * PublicationNameForMigration(char *migrationName);
 static char * SubscriptionNameForMigration(char *migrationName);
@@ -59,15 +123,48 @@ static char * GetConnectionString(MultiConnection *connection);
 static void MigrateSchema(char *sourceConnectionString,
 						  MultiConnection *destConn,
 						  char *snapshotName,
+						  bool includeData,
 						  bool dropIfExists);
-static void CheckReplicaIdentities(List *tableList);
+static List * PreProcessPgDumpParseTrees(List *pgDumpParseTrees);
+static bool IsPgCronPolicy(CreatePolicyStmt *statement);
+static bool AllTablesHaveReplicaIdentity(List *tableList);
+static bool DatabaseMigrationFinish(DatabaseMigration *migration);
+static void WaitForCatchUp(MultiConnection *sourceConn, MultiConnection *destConn,
+						   char *subscriptionName);
 static void AdjustSequences(MultiConnection *conn, List *sequenceList);
 static void SetSequenceValue(MultiConnection *conn, char *schemaName, char *sequenceName,
 							 int64 value);
 
 
+PG_FUNCTION_INFO_V1(database_shard_move);
 PG_FUNCTION_INFO_V1(database_shard_move_start);
 PG_FUNCTION_INFO_V1(database_shard_move_finish);
+
+
+/*
+ * migrator_start_move does a full migration of a database.
+ */
+Datum
+database_shard_move(PG_FUNCTION_ARGS)
+{
+	text *databaseNameText = PG_GETARG_TEXT_P(0);
+	char *databaseName = text_to_cstring(databaseNameText);
+	int targetNodeGroupId = PG_GETARG_INT32(1);
+
+	DatabaseMigration migration = {
+		.migrationName = "0",
+		.databaseName = databaseName,
+		.targetNodeGroupId = targetNodeGroupId,
+		.mode = MIGRATION_MODE_LOGICAL_REPLICATION
+	};
+
+	if (DatabaseMigrationStart(&migration))
+	{
+		DatabaseMigrationFinish(&migration);
+	}
+
+	PG_RETURN_VOID();
+}
 
 
 /*
@@ -77,13 +174,29 @@ Datum
 database_shard_move_start(PG_FUNCTION_ARGS)
 {
 	/* use one global name for migrations for now */
-	char *migrationNameString = "0";
 	text *databaseNameText = PG_GETARG_TEXT_P(0);
 	char *databaseName = text_to_cstring(databaseNameText);
 	int targetNodeGroupId = PG_GETARG_INT32(1);
-	bool dropIfExists = PG_GETARG_BOOL(2);
-	bool requireReplicaIdentity = PG_GETARG_BOOL(3);
 
+	DatabaseMigration migration = {
+		.migrationName = "0",
+		.databaseName = databaseName,
+		.targetNodeGroupId = targetNodeGroupId,
+		.mode = MIGRATION_MODE_LOGICAL_REPLICATION
+	};
+
+	DatabaseMigrationStart(&migration);
+	PG_RETURN_VOID();
+}
+
+
+/*
+ * DatabaseMigrationStart does the initial steps to initiate a shard
+ * move.
+ */
+static bool
+DatabaseMigrationStart(DatabaseMigration *migration)
+{
 	/* verify that pg_dump is on PATH before doing any work */
 	char *pgDumpPath = GetPgDumpPath();
 	if (pgDumpPath == NULL)
@@ -91,15 +204,19 @@ database_shard_move_start(PG_FUNCTION_ARGS)
 		ereport(ERROR, (errmsg("could not locate pg_dump on PATH")));
 	}
 
-	if (strlen(migrationNameString) > MAX_MIGRATION_NAME_LENGTH)
+	if (strlen(migration->migrationName) > MAX_MIGRATION_NAME_LENGTH)
 	{
 		ereport(ERROR, (errmsg("migration name cannot be longer than %d characters",
 							   MAX_MIGRATION_NAME_LENGTH)));
 	}
 
-	char *slotName = ReplicationSlotNameForMigration(migrationNameString);
-	char *publicationName = PublicationNameForMigration(migrationNameString);
-	char *subscriptionName = SubscriptionNameForMigration(migrationNameString);
+	char *migrationName = migration->migrationName;
+	char *databaseName = migration->databaseName;
+	int targetNodeGroupId = migration->targetNodeGroupId;
+
+	char *slotName = ReplicationSlotNameForMigration(migrationName);
+	char *publicationName = PublicationNameForMigration(migrationName);
+	char *subscriptionName = SubscriptionNameForMigration(migrationName);
 
 	bool missingOk = false;
 	Oid databaseOid = get_database_oid(databaseName, missingOk);
@@ -115,7 +232,7 @@ database_shard_move_start(PG_FUNCTION_ARGS)
 	{
 		ereport(NOTICE, (errmsg("database is already on node group %d",
 								targetNodeGroupId)));
-		PG_RETURN_VOID();
+		return false;
 	}
 
 	WorkerNode *source = LookupNodeForGroup(dbShard->nodeGroupId);
@@ -135,14 +252,19 @@ database_shard_move_start(PG_FUNCTION_ARGS)
 
 	/* open a replication connection to create a replication slot */
 	connectionFlags = REQUIRE_REPLICATION_CONNECTION_PARAM;
-	MultiConnection *replicationConn = GetNodeUserDatabaseConnection(connectionFlags,
-																	 source->workerName,
-																	 source->workerPort,
-																	 CurrentUserName(),
-																	 databaseName);
-	if (PQstatus(replicationConn->pgConn) != CONNECTION_OK)
+	MultiConnection *replicationConn = NULL;
+
+	if (migration->mode == MIGRATION_MODE_LOGICAL_REPLICATION)
 	{
-		ReportConnectionError(replicationConn, ERROR);
+		replicationConn = GetNodeUserDatabaseConnection(connectionFlags,
+														source->workerName,
+														source->workerPort,
+														CurrentUserName(),
+														databaseName);
+		if (PQstatus(replicationConn->pgConn) != CONNECTION_OK)
+		{
+			ReportConnectionError(replicationConn, ERROR);
+		}
 	}
 
 	connectionFlags = 0;
@@ -156,11 +278,12 @@ database_shard_move_start(PG_FUNCTION_ARGS)
 		ReportConnectionError(destConn, ERROR);
 	}
 
-	if (RemoteSubscriptionExists(destConn, subscriptionName))
+	if (migration->mode == MIGRATION_MODE_LOGICAL_REPLICATION &&
+		RemoteSubscriptionExists(destConn, subscriptionName))
 	{
 		ereport(ERROR, (errcode(ERRCODE_DUPLICATE_OBJECT),
 						errmsg("migration \"%s\" already exists",
-							   migrationNameString)));
+							   migration->migrationName)));
 	}
 
 	bool hasPgMigratorSource =
@@ -172,25 +295,29 @@ database_shard_move_start(PG_FUNCTION_ARGS)
 								"replicated")));
 	}
 
-	char *sourceConnectionString = GetConnectionString(sourceConn);
-
-	volatile bool createdReplicationSlot = false;
-	volatile bool createdPublication = false;
+	migration->sourceConnectionInfo = GetConnectionString(sourceConn);
 
 	PG_TRY();
 	{
-		XLogRecPtr lsn = InvalidXLogRecPtr;
-		bool exportSnapshot = true;
-		char *snapshotName = CreateRemoteReplicationSlot(replicationConn, slotName,
-														 exportSnapshot, &lsn);
+		char *snapshotName = NULL;
 
-		createdReplicationSlot = true;
+		if (migration->mode == MIGRATION_MODE_LOGICAL_REPLICATION)
+		{
+			XLogRecPtr lsn = InvalidXLogRecPtr;
+			bool exportSnapshot = true;
+			snapshotName = CreateRemoteReplicationSlot(replicationConn, slotName,
+													   exportSnapshot, &lsn);
+		}
+
+		migration->createdReplicationSlot = true;
 
 		List *tableList = ListSourceDatabaseTables(sourceConn);
 
-		if (requireReplicaIdentity)
+		if (!AllTablesHaveReplicaIdentity(tableList))
 		{
-			CheckReplicaIdentities(tableList);
+			ereport(WARNING, (errmsg("not all tables have replica identities"),
+							  errdetail("some UPDATE/DELETE commands may fail "
+										"on the source during migration")));
 		}
 
 		if (hasPgMigratorSource)
@@ -204,19 +331,31 @@ database_shard_move_start(PG_FUNCTION_ARGS)
 
 		ereport(NOTICE, (errmsg("migrating schema")));
 
-		MigrateSchema(sourceConnectionString, destConn,
-					  snapshotName, dropIfExists);
+		/* DUMP_ONLY mode copies data using pg_dump (for small, immediate migrations) */
+		bool includeData = migration->mode == MIGRATION_MODE_DUMP_ONLY;
 
-		ereport(NOTICE, (errmsg("starting replication")));
+		/* TODO: drop and recreate database */
+		bool dropIfExists = true;
 
-		CreateRemotePublication(sourceConn, publicationName);
-		createdPublication = true;
+		MigrateSchema(migration->sourceConnectionInfo, destConn,
+					  snapshotName, includeData, dropIfExists);
 
-		CreateRemoteSubscription(destConn, sourceConnectionString, subscriptionName,
-								 publicationName, slotName);
+		if (migration->mode == MIGRATION_MODE_LOGICAL_REPLICATION)
+		{
+			ereport(NOTICE, (errmsg("starting replication")));
+
+			CreateRemotePublication(sourceConn, publicationName);
+			migration->createdPublication = true;
+
+			CreateRemoteSubscription(destConn, migration->sourceConnectionInfo,
+									 subscriptionName,
+									 publicationName,
+									 slotName);
+
+			CloseConnection(replicationConn);
+		}
 
 		CloseConnection(sourceConn);
-		CloseConnection(replicationConn);
 		CloseConnection(destConn);
 	}
 	PG_CATCH();
@@ -233,12 +372,12 @@ database_shard_move_start(PG_FUNCTION_ARGS)
 		if (PQstatus(cleanupConn->pgConn) == CONNECTION_OK)
 		{
 			/* try to clean up in case of failure */
-			if (createdPublication)
+			if (migration->createdPublication)
 			{
 				DropRemotePublication(cleanupConn, publicationName);
 			}
 
-			if (createdReplicationSlot)
+			if (migration->createdReplicationSlot)
 			{
 				DropRemoteReplicationSlot(cleanupConn, slotName);
 			}
@@ -250,7 +389,7 @@ database_shard_move_start(PG_FUNCTION_ARGS)
 	}
 	PG_END_TRY();
 
-	PG_RETURN_TEXT_P(cstring_to_text(subscriptionName));
+	return true;
 }
 
 
@@ -318,11 +457,11 @@ GetConnectionString(MultiConnection *conn)
 
 
 /*
- * CheckReplicaIdentities throws an error if one of the tables does not have
+ * AllTablesHaveReplicaIdentity returns whether all tables in the list have
  * a replica identity.
  */
-static void
-CheckReplicaIdentities(List *tableList)
+static bool
+AllTablesHaveReplicaIdentity(List *tableList)
 {
 	ListCell *tableCell = NULL;
 
@@ -332,15 +471,11 @@ CheckReplicaIdentities(List *tableList)
 
 		if (!userTable->hasReplicaIdentity)
 		{
-			char *qualifiedTableName = quote_qualified_identifier(userTable->schemaName,
-																  userTable->tableName);
-
-			ereport(ERROR, (errmsg("table %s does not have a primary key or replica "
-								   "identity", qualifiedTableName),
-							errhint("Create a primary key or re-run with "
-									"require_replica_identities := false ")));
+			return false;
 		}
 	}
+
+	return true;
 }
 
 
@@ -350,19 +485,98 @@ CheckReplicaIdentities(List *tableList)
  */
 static void
 MigrateSchema(char *sourceConnectionString, MultiConnection *destConn,
-			  char *snapshotName, bool dropIfExists)
+			  char *snapshotName, bool includeData, bool dropIfExists)
 {
 	List *schemaList = NIL;
 	List *excludeTableList = NIL;
 
 	/* obtain the full pg_dump output */
 	char *databaseDump = RunPgDump(sourceConnectionString, snapshotName, schemaList,
-								   excludeTableList, dropIfExists);
+								   excludeTableList, includeData, dropIfExists);
 
 	/* run the pg_dump output through the parser */
-	/*List *pgDumpParseTrees = pg_parse_query(databaseDump); */
+	List *pgDumpParseTrees = pg_parse_query(databaseDump);
 
-	ExecuteCriticalRemoteCommand(destConn, databaseDump);
+	/* apply checks and transformations before executing pg_dump statements */
+	pgDumpParseTrees = PreProcessPgDumpParseTrees(pgDumpParseTrees);
+
+	StringInfo filteredDump = makeStringInfo();
+
+	RawStmt *parseTree = NULL;
+	foreach_ptr(parseTree, pgDumpParseTrees)
+	{
+		Assert(parseTree->stmt_location >= 0);
+		Assert(parseTree->stmt_len >= 0);
+
+		char *command = palloc(parseTree->stmt_len + 2);
+		memcpy_s(command, parseTree->stmt_len + 2,
+				 databaseDump + parseTree->stmt_location, parseTree->stmt_len);
+		command[parseTree->stmt_len] = ';';
+		command[parseTree->stmt_len + 1] = '\0';
+
+		appendStringInfoString(filteredDump, command);
+	}
+
+	ExecuteCriticalRemoteCommand(destConn, filteredDump->data);
+}
+
+
+/*
+ * PreProcessPgDumpParseTrees pre-processes statements from pg_dump,
+ * which are not always directly replayable.
+ */
+static List *
+PreProcessPgDumpParseTrees(List *pgDumpParseTrees)
+{
+	List *finalParseTrees = NIL;
+
+	RawStmt *parseTree = NULL;
+	foreach_ptr(parseTree, pgDumpParseTrees)
+	{
+		Assert(parseTree->stmt_location >= 0);
+		Assert(parseTree->stmt_len >= 0);
+
+		Node *statement = parseTree->stmt;
+
+		if (IsA(statement, CreatePolicyStmt))
+		{
+			CreatePolicyStmt *createPolicyStmt = castNode(CreatePolicyStmt, statement);
+
+			if (IsPgCronPolicy(createPolicyStmt))
+			{
+				/* pg_dump erroneously shows CREATE POLICY for extension-owned tables */
+				continue;
+			}
+		}
+
+		finalParseTrees = lappend(finalParseTrees, parseTree);
+	}
+
+	return finalParseTrees;
+}
+
+
+/*
+ * IsPgCronPolicy returns whether a given CREATE POLICY statement belongs
+ * to pg_cron.
+ */
+static bool
+IsPgCronPolicy(CreatePolicyStmt *statement)
+{
+	if (strcmp(statement->table->schemaname, "cron") != 0)
+	{
+		/* policy is not on a table in the cron schema */
+		return false;
+	}
+
+	if (strcmp(statement->policy_name, "cron_job_policy") != 0 &&
+		strcmp(statement->policy_name, "cron_job_run_details_policy") != 0)
+	{
+		/* policy is not one of the ones created by pg_cron */
+		return false;
+	}
+
+	return true;
 }
 
 
@@ -372,16 +586,37 @@ MigrateSchema(char *sourceConnectionString, MultiConnection *destConn,
 Datum
 database_shard_move_finish(PG_FUNCTION_ARGS)
 {
-	/* use one global name for migrations for now */
-	char *migrationNameString = "0";
-
 	text *databaseNameText = PG_GETARG_TEXT_P(0);
 	char *databaseName = text_to_cstring(databaseNameText);
 
-	/* TODO: this should be stored in shared memory */
+	/* TODO: this should be stored */
 	int targetNodeGroupId = PG_GETARG_INT32(1);
 
-	char *subscriptionName = SubscriptionNameForMigration(migrationNameString);
+	DatabaseMigration migration = {
+		.migrationName = "0",
+		.databaseName = databaseName,
+		.targetNodeGroupId = targetNodeGroupId,
+		.mode = MIGRATION_MODE_LOGICAL_REPLICATION
+	};
+
+	DatabaseMigrationFinish(&migration);
+
+	PG_RETURN_VOID();
+}
+
+
+/*
+ * DatabaseMigrationFinish finishes a migration by shutting down logical replication,
+ * copying over sequence values, and updating the metadata.
+ */
+static bool
+DatabaseMigrationFinish(DatabaseMigration *migration)
+{
+	char *migrationName = migration->migrationName;
+	char *databaseName = migration->databaseName;
+	int targetNodeGroupId = migration->targetNodeGroupId;
+
+	char *subscriptionName = SubscriptionNameForMigration(migrationName);
 
 	bool missingOk = false;
 	Oid databaseOid = get_database_oid(databaseName, missingOk);
@@ -418,14 +653,18 @@ database_shard_move_finish(PG_FUNCTION_ARGS)
 		ReportConnectionError(destConn, ERROR);
 	}
 
+	WaitForCatchUp(sourceConn, destConn, subscriptionName);
+
+	PauseDatabaseOnInboundPgBouncers(databaseName);
+
 	/* TODO: wait for final changes */
 
 	DropRemoteSubscription(destConn, subscriptionName);
 
-	char *publicationName = PublicationNameForMigration(migrationNameString);
+	char *publicationName = PublicationNameForMigration(migrationName);
 	DropRemotePublication(sourceConn, publicationName);
 
-	char *slotName = ReplicationSlotNameForMigration(migrationNameString);
+	char *slotName = ReplicationSlotNameForMigration(migration->migrationName);
 	DropRemoteReplicationSlot(sourceConn, slotName);
 
 	List *sequenceList = ListSourceDatabaseSequences(sourceConn);
@@ -433,7 +672,57 @@ database_shard_move_finish(PG_FUNCTION_ARGS)
 
 	UpdateDatabaseShard(databaseOid, targetNodeGroupId);
 
-	PG_RETURN_TEXT_P(cstring_to_text("finished"));
+	ResumeDatabaseOnInboundPgBouncers(databaseName);
+
+	return true;
+}
+
+
+/*
+ * WaitForCatchUp waits for the logical replication to catch up between
+ * the two connections.
+ */
+static void
+WaitForCatchUp(MultiConnection *sourceConn,
+			   MultiConnection *destConn,
+			   char *subscriptionName)
+{
+	XLogRecPtr sourcePosition = GetRemoteLogPosition(sourceConn);
+
+	char *subscriptionLSNCommand = psprintf("SELECT pg_catalog.min(latest_end_lsn) "
+											"FROM pg_catalog.pg_stat_subscription "
+											"WHERE subname = %s",
+											quote_literal_cstr(subscriptionName));
+
+	MemoryContext loopContext = AllocSetContextCreateInternal(CurrentMemoryContext,
+															  "WaitForCatchUp",
+															  ALLOCSET_DEFAULT_MINSIZE,
+															  ALLOCSET_DEFAULT_INITSIZE,
+															  ALLOCSET_DEFAULT_MAXSIZE);
+
+	MemoryContext oldContext = MemoryContextSwitchTo(loopContext);
+
+
+	while (true)
+	{
+		XLogRecPtr targetPosition = GetRemoteLSN(destConn, subscriptionLSNCommand);
+		if (targetPosition >= sourcePosition)
+		{
+			ereport(NOTICE, (errmsg("the subscription on node %s:%d has caught up with "
+									"the source LSN %X/%X",
+									destConn->hostname, destConn->port,
+									LSN_FORMAT_ARGS(sourcePosition))));
+			break;
+		}
+
+		/* TODO: timeouts */
+
+		WaitForMiliseconds(2000);
+
+		MemoryContextReset(loopContext);
+	}
+
+	MemoryContextSwitchTo(oldContext);
 }
 
 

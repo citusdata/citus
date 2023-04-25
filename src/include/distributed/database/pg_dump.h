@@ -15,6 +15,6 @@
 
 char * GetPgDumpPath(void);
 char * RunPgDump(char *sourceConnectionString, char *snapshotName, List *schemaList,
-				 List *excludeTableList, bool dropIfExists);
+				 List *excludeTableList, bool includeData, bool dropIfExists);
 
 #endif

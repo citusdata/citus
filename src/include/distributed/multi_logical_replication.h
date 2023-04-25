@@ -139,6 +139,8 @@ extern void CreateReplicaIdentitiesOnNode(List *shardList,
 										  char *nodeName,
 										  int32 nodePort);
 extern XLogRecPtr GetRemoteLogPosition(MultiConnection *connection);
+extern XLogRecPtr GetRemoteLSN(MultiConnection *connection, char *command);
+extern void WaitForMiliseconds(long timeout);
 extern List * GetQueryResultStringList(MultiConnection *connection, char *query);
 
 extern MultiConnection * GetReplicationConnection(char *nodeName, int nodePort);

@@ -49,12 +49,14 @@ GetPgDumpPath(void)
  * If snapshotName is not NULL, then we pass --snapshot to use an exported
  * snapshot.
  *
+ * If includeData is true, we also include data in the dump.
+ *
  * If dropIfExists is specified, we pass --clean to pg_dump to get DROP statements
  * for every object.
  */
 char *
 RunPgDump(char *sourceConnectionString, char *snapshotName, List *schemaList,
-		  List *excludeTableList, bool dropIfExists)
+		  List *excludeTableList, bool includeData, bool dropIfExists)
 {
 	char *pgDumpPath = GetPgDumpPath();
 
@@ -66,10 +68,14 @@ RunPgDump(char *sourceConnectionString, char *snapshotName, List *schemaList,
 	List *argList = NIL;
 
 	argList = lappend(argList, pgDumpPath);
-	argList = lappend(argList, "--schema-only");
 	argList = lappend(argList, "--no-publications");
 	argList = lappend(argList, "--no-subscriptions");
 	argList = lappend(argList, "--no-tablespaces");
+
+	if (!includeData)
+	{
+		argList = lappend(argList, "--schema-only");
+	}
 
 	if (snapshotName != NULL)
 	{

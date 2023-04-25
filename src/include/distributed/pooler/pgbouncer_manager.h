@@ -39,6 +39,8 @@ extern bool ReconfigurePgBouncersOnCommit;
 void InitializeSharedPgBouncerManager(void);
 size_t SharedPgBouncerManagerShmemSize(void);
 void PgBouncerManagerMain(Datum arg);
+bool PauseDatabaseOnInboundPgBouncers(char *databaseName);
+bool ResumeDatabaseOnInboundPgBouncers(char *databaseName);
 void TriggerPgBouncerReconfigureIfNeeded(void);
 
 

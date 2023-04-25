@@ -18,6 +18,7 @@
 #include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/pooler/pgbouncer_manager.h"
+#include "distributed/remote_commands.h"
 #include "distributed/shared_connection_stats.h"
 #include "distributed/shared_library_init.h"
 #include "distributed/worker_transaction.h"
@@ -92,10 +93,12 @@ static int CalculatePeerIdForNodeGroup(int nodeGroupId, int pgBouncerId);
 static int GetInboundPgBouncerDefaultPoolSize(void);
 static char * GetInboundPgBouncerUnixDomainSocketDir(int pgBouncerId);
 static char * GetFirstUnixSocketDirectory(void);
+static char * GetCommaSeparatedSuperusers(void);
 static void SafeWriteToFile(char *content, int contentLength, char *path);
 static void EnsurePgBouncersRunning(void);
 static void EnsurePgBouncerRunning(int pgBouncerId);
-static void SignalPgBouncers(int signo);
+static void SignalInboundPgBouncers(int signo);
+static bool ExecuteCommandOnAllInboundPgBouncers(char *command);
 static void LockInboundPgBouncerState(LWLockMode lockMode);
 static void UnlockInboundPgBouncerState(void);
 
@@ -319,7 +322,7 @@ PgBouncerManagerMain(Datum arg)
 			GenerateInboundPgBouncerConfigs();
 
 			/* tell the pgbouncers about possibly changed configs */
-			SignalPgBouncers(SIGHUP);
+			SignalInboundPgBouncers(SIGHUP);
 		}
 
 		/* in every iteration, make sure pgbouncers are running */
@@ -522,6 +525,7 @@ GenerateInboundPgBouncerConfig(int myPgBouncerId)
 	int defaultPoolSize = GetInboundPgBouncerDefaultPoolSize();
 
 	char *unixDomainSocketDir = GetInboundPgBouncerUnixDomainSocketDir(myPgBouncerId);
+	char *superusers = GetCommaSeparatedSuperusers();
 
 	StringInfo pgbouncerConfig = makeStringInfo();
 
@@ -537,6 +541,7 @@ GenerateInboundPgBouncerConfig(int myPgBouncerId)
 
 	appendStringInfo(pgbouncerConfig,
 					 "[pgbouncer]\n"
+					 "pool_mode = transaction\n"
 					 "peer_id = %d\n"
 					 "unix_socket_dir = %s\n"
 					 "listen_addr = %s\n"
@@ -556,8 +561,10 @@ GenerateInboundPgBouncerConfig(int myPgBouncerId)
 
 	                 /* TODO: make configurable */
 					 "auth_type = trust\n"
-					 "auth_file = %s\n",
-					 PGBOUNCER_USERS_FILE);
+					 "auth_file = %s\n"
+					 "admin_users = %s\n",
+					 PGBOUNCER_USERS_FILE,
+					 superusers);
 
 	appendStringInfo(pgbouncerConfig,
 					 "default_pool_size = %d\n"
@@ -748,6 +755,54 @@ GetFirstUnixSocketDirectory(void)
 
 
 /*
+ * GetCommaSeparatedSuperusers returns a comma-separate list of database superusers.
+ */
+static char *
+GetCommaSeparatedSuperusers(void)
+{
+	ScanKeyData scanKey[2];
+	int scanKeyCount = 2;
+	bool indexOK = false;
+	HeapTuple heapTuple = NULL;
+
+	Relation pgAuthId = table_open(AuthIdRelationId, AccessShareLock);
+	TupleDesc tupleDescriptor = RelationGetDescr(pgAuthId);
+
+	ScanKeyInit(&scanKey[0], Anum_pg_authid_rolcanlogin,
+				BTEqualStrategyNumber, F_BOOLEQ, BoolGetDatum(true));
+
+	ScanKeyInit(&scanKey[1], Anum_pg_authid_rolsuper,
+				BTEqualStrategyNumber, F_BOOLEQ, BoolGetDatum(true));
+
+	SysScanDesc scanDescriptor = systable_beginscan(pgAuthId, InvalidOid, indexOK,
+													NULL, scanKeyCount, scanKey);
+
+	StringInfoData usersList;
+	initStringInfo(&usersList);
+
+	while (HeapTupleIsValid(heapTuple = systable_getnext(scanDescriptor)))
+	{
+		bool isNull = false;
+
+		Datum roleNameDatum = heap_getattr(heapTuple, Anum_pg_authid_rolname,
+										   tupleDescriptor, &isNull);
+		Name roleName = DatumGetName(roleNameDatum);
+		char *roleNameStr = NameStr(*roleName);
+		const char *quotedRoleName = quote_identifier(roleNameStr);
+
+		appendStringInfo(&usersList, "%s%s",
+						 usersList.len > 0 ? ", " : "",
+						 quotedRoleName);
+	}
+
+	systable_endscan(scanDescriptor);
+	table_close(pgAuthId, AccessShareLock);
+
+	return usersList.data;
+}
+
+
+/*
  * SafeWriteToFile writes the contents to a staging file (<path>.stage) and
  * then performs a durable_rename.
  */
@@ -862,8 +917,8 @@ EnsurePgBouncerRunning(int pgBouncerId)
 		/* parse PID from file */
 		if (fscanf(pidFileStream, "%d", &readPid) == 1)
 		{
-			/* found a PID, check if it is running */
-			if (kill(readPid, 0) == 0)
+			/* found a PID, check if it is running (reload configs if so) */
+			if (kill(readPid, SIGHUP) == 0)
 			{
 				/* TODO: check if process is actually pgbouncer */
 				ereport(LOG, (errmsg("pgbouncer running with PID %d", readPid)));
@@ -963,10 +1018,10 @@ UnlockInboundPgBouncerState(void)
 
 
 /*
- * SignalPgBouncers sends a signal to all pgbouncers.
+ * SignalInboundPgBouncers sends a signal to all pgbouncers.
  */
 static void
-SignalPgBouncers(int signo)
+SignalInboundPgBouncers(int signo)
 {
 	LockInboundPgBouncerState(LW_SHARED);
 
@@ -978,6 +1033,101 @@ SignalPgBouncers(int signo)
 	}
 
 	UnlockInboundPgBouncerState();
+}
+
+
+/*
+ * PauseDatabaseOnInboundPgBouncers pauses traffic to a database on all
+ * inbound pgbouncers.
+ */
+bool
+PauseDatabaseOnInboundPgBouncers(char *databaseName)
+{
+	StringInfo command = makeStringInfo();
+
+	appendStringInfo(command, "PAUSE %s", quote_identifier(databaseName));
+
+	return ExecuteCommandOnAllInboundPgBouncers(command->data);
+}
+
+
+/*
+ * ResumeDatabaseOnInboundPgBouncers resumes traffic to a database on all
+ * inbound pgbouncers.
+ */
+bool
+ResumeDatabaseOnInboundPgBouncers(char *databaseName)
+{
+	StringInfo command = makeStringInfo();
+
+	appendStringInfo(command, "RESUME %s", quote_identifier(databaseName));
+
+	return ExecuteCommandOnAllInboundPgBouncers(command->data);
+}
+
+
+/*
+ * ExecuteCommandOnAllInboundPgBouncers executes a command on all pgbouncers.
+ */
+static bool
+ExecuteCommandOnAllInboundPgBouncers(char *command)
+{
+	bool success = true;
+
+	LockInboundPgBouncerState(LW_SHARED);
+
+	List *connectionList = NIL;
+
+	for (int pgBouncerId = 0; pgBouncerId < PgBouncerInboundProcs; pgBouncerId++)
+	{
+		PgBouncerProcess *proc = &(PgBouncerState->inboundPgBouncers[pgBouncerId]);
+
+		/* open an admin connection */
+		int connectionFlags = 0;
+		char *databaseName = "pgbouncer";
+		MultiConnection *conn = StartNodeUserDatabaseConnection(connectionFlags,
+																proc->unixDomainSocketDir,
+																PgBouncerInboundPort,
+																NULL, databaseName);
+
+
+		connectionList = lappend(connectionList, conn);
+	}
+
+	FinishConnectionListEstablishment(connectionList);
+
+	/* send commands in parallel */
+	MultiConnection *connection = NULL;
+	foreach_ptr(connection, connectionList)
+	{
+		int querySent = SendRemoteCommand(connection, command);
+		if (querySent == 0)
+		{
+			ReportConnectionError(connection, WARNING);
+			success = false;
+		}
+	}
+
+	/* get results */
+	foreach_ptr(connection, connectionList)
+	{
+		bool raiseErrors = false;
+		PGresult *result = GetRemoteCommandResult(connection, raiseErrors);
+		if (!IsResponseOK(result))
+		{
+			ReportResultError(connection, result, WARNING);
+			success = false;
+		}
+
+		PQclear(result);
+		ClearResults(connection, raiseErrors);
+
+		CloseConnection(connection);
+	}
+
+	UnlockInboundPgBouncerState();
+
+	return success;
 }
 
 
