@@ -27,6 +27,8 @@
 #include <zstd.h>
 #endif
 
+#include "varatt.h"
+
 /*
  *	The information at the start of the compressed data. This decription is taken
  *	from pg_lzcompress in pre-9.5 version of PostgreSQL.
