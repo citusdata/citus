@@ -1,6 +1,13 @@
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 360005;
 ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 100000;
 
+-- Clean up any left over objects from the previous run of this test.
+-- We cannot do that at the end of the test because some other tests
+-- depend on them, such as the ones in multi_load_data_superuser.sql.
+SET client_min_messages TO WARNING;
+DROP TABLE IF EXISTS lineitem_hash_part, orders_hash_part;
+RESET client_min_messages;
+
 SET citus.shard_replication_factor TO 1;
 
 -- test that range and append distributed tables have coordinator replication
@@ -166,6 +173,15 @@ ROLLBACK;
 -- Table exists on the worker node.
 \c - - :public_worker_1_host :worker_1_port
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid = 'public.append_tt1_360077'::regclass;
+
+-- .. so we need to drop it to make this test idempotent
+DROP TABLE append_tt1_360077;
+
+\c - - :public_worker_2_host :worker_2_port
+
+-- from other worker node too, due to shard replication factor > 1
+DROP TABLE append_tt1_360077;
+
 \c - - :master_host :master_port
 
 -- There should be no table on the worker node
@@ -356,12 +372,15 @@ SELECT run_command_on_workers($$SELECT relreplident FROM pg_class join informati
 DROP TABLE tt1;
 DROP TABLE tt2;
 DROP TABLE alter_replica_table;
+
+SET client_min_messages TO WARNING;
 DROP SCHEMA sc CASCADE;
 DROP SCHEMA sc2 CASCADE;
 DROP SCHEMA sc3 CASCADE;
 DROP SCHEMA sc4 CASCADE;
 DROP SCHEMA sc5 CASCADE;
 DROP SCHEMA sc6 CASCADE;
+RESET client_min_messages;
 
 CREATE TABLE shard_col_table (a INT, b INT);
 CREATE TABLE shard_col_table_2 (a INT, b INT);
@@ -386,4 +405,4 @@ UPDATE pg_dist_colocation SET shardcount = 12 WHERE colocationid IN
 	SELECT colocation_id FROM citus_tables WHERE table_name = 'shard_col_table'::regclass
 );
 
-DROP TABLE shard_col_table, shard_col_table_2;
+DROP TABLE shard_col_table, shard_col_table_2, unlogged_table;

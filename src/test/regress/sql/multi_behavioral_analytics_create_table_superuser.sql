@@ -1,7 +1,31 @@
 SET citus.next_shard_id TO 1400285;
+
+-- Clean up any left over objects from the previous run of this test.
+-- We cannot do that at the end of the test because some other tests
+-- depend on them, such as the ones in multi_explain.sql.
+SELECT run_command_on_master_and_workers($f$
+    SET LOCAL client_min_messages TO WARNING;
+    DROP OPERATOR CLASS IF EXISTS cats_2_op_fam_clas3 USING BTREE;
+    DROP OPERATOR CLASS IF EXISTS cats_2_op_fam_class USING HASH;
+    DROP OPERATOR FAMILY IF EXISTS cats_2_op_fam USING HASH;
+    DROP OPERATOR IF EXISTS > (user_composite_type, user_composite_type);
+    DROP OPERATOR IF EXISTS >= (user_composite_type, user_composite_type);
+    DROP OPERATOR IF EXISTS < (user_composite_type, user_composite_type);
+    DROP OPERATOR IF EXISTS <= (user_composite_type, user_composite_type);
+    DROP OPERATOR IF EXISTS = (user_composite_type, user_composite_type);
+$f$);
+
+BEGIN;
+    SET LOCAL client_min_messages TO WARNING;
+    DROP TABLE IF EXISTS events;
+    DROP TABLE IF EXISTS users;
+    DROP TABLE IF EXISTS lineitem_subquery;
+    DROP TABLE IF EXISTS orders_subquery;
+COMMIT;
+
 SELECT run_command_on_master_and_workers($f$
 
-	CREATE FUNCTION cmp_user_composite_type_function(user_composite_type, user_composite_type) RETURNS int
+	CREATE OR REPLACE FUNCTION cmp_user_composite_type_function(user_composite_type, user_composite_type) RETURNS int
 	LANGUAGE 'internal'
 	AS 'btrecordcmp'
 	IMMUTABLE
@@ -10,7 +34,7 @@ $f$);
 
 SELECT run_command_on_master_and_workers($f$
 
-	CREATE FUNCTION gt_user_composite_type_function(user_composite_type, user_composite_type) RETURNS boolean
+	CREATE OR REPLACE FUNCTION gt_user_composite_type_function(user_composite_type, user_composite_type) RETURNS boolean
 	LANGUAGE 'internal'
 	AS 'record_gt'
 	IMMUTABLE
@@ -19,7 +43,7 @@ $f$);
 
 SELECT run_command_on_master_and_workers($f$
 
-	CREATE FUNCTION ge_user_composite_type_function(user_composite_type, user_composite_type) RETURNS boolean
+	CREATE OR REPLACE FUNCTION ge_user_composite_type_function(user_composite_type, user_composite_type) RETURNS boolean
 	LANGUAGE 'internal'
 	AS 'record_ge'
 	IMMUTABLE
@@ -28,7 +52,7 @@ $f$);
 
 SELECT run_command_on_master_and_workers($f$
 
-	CREATE FUNCTION equal_user_composite_type_function(user_composite_type, user_composite_type) RETURNS boolean
+	CREATE OR REPLACE FUNCTION equal_user_composite_type_function(user_composite_type, user_composite_type) RETURNS boolean
 	LANGUAGE 'internal'
 	AS 'record_eq'
 	IMMUTABLE;
@@ -36,7 +60,7 @@ $f$);
 
 SELECT run_command_on_master_and_workers($f$
 
-	CREATE FUNCTION lt_user_composite_type_function(user_composite_type, user_composite_type) RETURNS boolean
+	CREATE OR REPLACE FUNCTION lt_user_composite_type_function(user_composite_type, user_composite_type) RETURNS boolean
 	LANGUAGE 'internal'
 	AS 'record_lt'
 	IMMUTABLE
@@ -45,7 +69,7 @@ $f$);
 
 SELECT run_command_on_master_and_workers($f$
 
-	CREATE FUNCTION le_user_composite_type_function(user_composite_type, user_composite_type) RETURNS boolean
+	CREATE OR REPLACE FUNCTION le_user_composite_type_function(user_composite_type, user_composite_type) RETURNS boolean
 	LANGUAGE 'internal'
 	AS 'record_lt'
 	IMMUTABLE
