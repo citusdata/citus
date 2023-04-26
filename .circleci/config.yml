@@ -6,7 +6,7 @@ orbs:
 parameters:
   image_suffix:
     type: string
-    default: '-v3417e8d'
+    default: '-vabeb997'
   pg13_version:
     type: string
     default: '13.10'
@@ -420,6 +420,63 @@ jobs:
       - stack_trace
       - coverage:
           flags: 'test_<< parameters.pg_major >>,upgrade'
+
+  test-query-generator:
+    description: Expects that the generated queries that are run on distributed and local tables would have the same results
+    parameters:
+      pg_major:
+        description: 'postgres major version'
+        type: integer
+      image:
+        description: 'docker image to use as for the tests'
+        type: string
+        default: citus/failtester
+      image_tag:
+        description: 'docker image tag to use'
+        type: string
+    docker:
+      - image: '<< parameters.image >>:<< parameters.image_tag >><< pipeline.parameters.image_suffix >>'
+    working_directory: /home/circleci/project
+    steps:
+      - checkout
+      - attach_workspace:
+          at: .
+      - install_extension:
+          pg_major: << parameters.pg_major >>
+      - configure
+      - enable_core
+      - run:
+          name: 'Run Test'
+          command: |
+            gosu circleci make -C src/test/regress check-query-generator
+          no_output_timeout: 5m
+      - run:
+          name: 'Show regressions'
+          command: |
+            find src/test/regress/citus_tests/query_generator/out/ -name "local_dist.diffs" -exec cat {} +
+            lines=$(find src/test/regress/citus_tests/query_generator/out/ -name "local_dist.diffs" | wc -l)
+            if [ $lines -ne 0 ]; then
+               exit 1
+            fi
+          when: on_fail
+      - run:
+          name: 'Copy logfiles'
+          command: |
+            mkdir src/test/regress/tmp_citus_test/logfiles
+            find src/test/regress/tmp_citus_test/ -name "logfile_*" -exec cp -t src/test/regress/tmp_citus_test/logfiles/ {} +
+          when: on_fail
+      - store_artifacts:
+          name: 'Save logfiles'
+          path: src/test/regress/tmp_citus_test/logfiles
+      - store_artifacts:
+          name: 'Save ddls'
+          path: src/test/regress/citus_tests/query_generator/out/ddls.sql
+      - store_artifacts:
+          name: 'Save dmls'
+          path: src/test/regress/citus_tests/query_generator/out/queries.sql
+      - stack_trace
+      - coverage:
+          flags: 'test_<< parameters.pg_major >>,querygen'
 
   test-citus:
     description: Runs the common tests of citus
@@ -935,6 +992,24 @@ workflows:
           image_tag: '<< pipeline.parameters.pg15_version >>'
           requires: [build-15]
 
+      - test-query-generator:
+          name: 'test-13_check-query-generator'
+          pg_major: 13
+          image_tag: '<< pipeline.parameters.pg13_version >>'
+          requires: [build-13]
+
+      - test-query-generator:
+          name: 'test-14_check-query-generator'
+          pg_major: 14
+          image_tag: '<< pipeline.parameters.pg14_version >>'
+          requires: [build-14]
+
+      - test-query-generator:
+          name: 'test-15_check-query-generator'
+          pg_major: 15
+          image_tag: '<< pipeline.parameters.pg15_version >>'
+          requires: [build-15]
+
       - test-pg-upgrade:
           name: 'test-13-14_check-pg-upgrade'
           old_pg_major: 13
@@ -975,6 +1050,7 @@ workflows:
             - test-13_check-enterprise-failure
             - test-13_check-split
             - test-13_check-arbitrary-configs
+            - test-13_check-query-generator
             - test-14_check-multi
             - test-14_check-multi-1
             - test-14_check-mx
@@ -993,6 +1069,7 @@ workflows:
             - test-14_check-enterprise-failure
             - test-14_check-split
             - test-14_check-arbitrary-configs
+            - test-14_check-query-generator
             - test-15_check-multi
             - test-15_check-multi-1
             - test-15_check-mx
@@ -1011,6 +1088,7 @@ workflows:
             - test-15_check-enterprise-failure
             - test-15_check-split
             - test-15_check-arbitrary-configs
+            - test-15_check-query-generator
             - test-13-14_check-pg-upgrade
             - test-14-15_check-pg-upgrade
             - test-13_check-citus-upgrade

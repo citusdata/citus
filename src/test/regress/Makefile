@@ -34,6 +34,7 @@ MULTI_REGRESS_OPTS = --inputdir=$(citus_abs_srcdir) $(pg_regress_locale_flags) -
 pg_upgrade_check = $(citus_abs_srcdir)/citus_tests/upgrade/pg_upgrade_test.py
 citus_upgrade_check =CITUS_OLD_VERSION=$(citus-old-version) $(citus_abs_srcdir)/citus_tests/upgrade/citus_upgrade_test.py
 arbitrary_config_check = $(citus_abs_srcdir)/citus_tests/arbitrary_configs/citus_arbitrary_configs.py
+query_generator_check = $(citus_abs_srcdir)/citus_tests/query_generator/bin/run_query_compare_test.py
 
 template_isolation_files = $(shell find $(citus_abs_srcdir)/spec/ -name '*.spec')
 generated_isolation_files = $(patsubst $(citus_abs_srcdir)/spec/%,$(citus_abs_srcdir)/build/specs/%,$(template_isolation_files))
@@ -44,7 +45,7 @@ vanilla_diffs_file = $(citus_abs_srcdir)/pg_vanilla_outputs/$(MAJORVERSION)/regr
 # intermediate, for muscle memory backward compatibility.
 check: check-full check-enterprise-full
 # check-full triggers all tests that ought to be run routinely
-check-full: check-multi check-multi-mx check-multi-1 check-operations check-follower-cluster check-isolation check-failure check-split check-vanilla check-columnar check-columnar-isolation check-pg-upgrade check-arbitrary-configs check-citus-upgrade check-citus-upgrade-mixed check-citus-upgrade-local check-citus-upgrade-mixed-local check-pytest
+check-full: check-multi check-multi-mx check-multi-1 check-operations check-follower-cluster check-isolation check-failure check-split check-vanilla check-columnar check-columnar-isolation check-pg-upgrade check-arbitrary-configs check-citus-upgrade check-citus-upgrade-mixed check-citus-upgrade-local check-citus-upgrade-mixed-local check-pytest check-query-generator
 # check-enterprise-full triggers all enterprise specific tests
 check-enterprise-full: check-enterprise check-enterprise-isolation check-enterprise-failure check-enterprise-isolation-logicalrep-1 check-enterprise-isolation-logicalrep-2 check-enterprise-isolation-logicalrep-3
 
@@ -261,6 +262,9 @@ check-arbitrary-base: all
 
 check-pytest:
 	pytest -n auto
+
+check-query-generator: all
+	${query_generator_check} --bindir=$(bindir) --pgxsdir=$(pgxsdir)
 
 check-citus-upgrade: all
 	$(citus_upgrade_check) \

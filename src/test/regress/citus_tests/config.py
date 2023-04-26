@@ -15,6 +15,8 @@ WORKER2 = "worker2"
 REGULAR_USER_NAME = "regularuser"
 SUPER_USER_NAME = "postgres"
 
+DATABASE_NAME = "postgres"
+
 ARBITRARY_SCHEDULE_NAMES = [
     "create_schedule",
     "sql_schedule",
@@ -96,6 +98,7 @@ class CitusBaseClusterConfig(object, metaclass=NewInitCaller):
         self.temp_dir = CITUS_ARBITRARY_TEST_DIR
         self.worker_amount = 2
         self.user = REGULAR_USER_NAME
+        self.dbname = DATABASE_NAME
         self.is_mx = True
         self.is_citus = True
         self.name = type(self).__name__
