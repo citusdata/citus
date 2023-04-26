@@ -393,8 +393,16 @@ GetDependencyCreateDDLCommands(const ObjectAddress *dependency)
 												  tableDDLCommand));
 					}
 
-					/* we need to drop table, if exists, first to make table creation idempotent */
+					/*
+					 * We need to drop table, if exists, first to make table creation
+					 * idempotent. Before dropping the table, we should also break
+					 * dependencies with sequences since `drop cascade table` would also
+					 * drop depended sequences. This is safe as we still record dependency
+					 * with the sequence during table creation.
+					 */
 					commandList = lcons(DropTableIfExistsCommand(relationId),
+										commandList);
+					commandList = lcons(WorkerDropSequenceDependencyCommand(relationId),
 										commandList);
 				}
 
