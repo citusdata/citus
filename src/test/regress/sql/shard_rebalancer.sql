@@ -13,7 +13,9 @@ CREATE TABLE postgres_table_test(a int primary key);
 
 -- make sure that all rebalance operations works fine when
 -- reference tables are replicated to the coordinator
+SET client_min_messages TO ERROR;
 SELECT 1 FROM master_add_node('localhost', :master_port, groupId=>0);
+RESET client_min_messages;
 
 -- should just be noops even if we add the coordinator to the pg_dist_node
 SELECT rebalance_table_shards('dist_table_test');
