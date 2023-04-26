@@ -37,7 +37,7 @@ struct ColumnarWriteState
 {
 	TupleDesc tupleDescriptor;
 	FmgrInfo **comparisonFunctionArray;
-	RelFileNode relfilenode;
+	RelFileLocator relfilelocator;
 
 	MemoryContext stripeWriteContext;
 	MemoryContext perTupleContext;
@@ -84,7 +84,7 @@ static StringInfo CopyStringInfo(StringInfo sourceString);
  * data load operation.
  */
 ColumnarWriteState *
-ColumnarBeginWrite(RelFileNode relfilenode,
+ColumnarBeginWrite(RelFileLocator relFileLocator,
 				   ColumnarOptions options,
 				   TupleDesc tupleDescriptor)
 {
@@ -124,7 +124,7 @@ ColumnarBeginWrite(RelFileNode relfilenode,
 												options.chunkRowCount);
 
 	ColumnarWriteState *writeState = palloc0(sizeof(ColumnarWriteState));
-	writeState->relfilenode = relfilenode;
+	writeState->relfilelocator = relFileLocator;
 	writeState->options = options;
 	writeState->tupleDescriptor = CreateTupleDescCopy(tupleDescriptor);
 	writeState->comparisonFunctionArray = comparisonFunctionArray;
@@ -174,8 +174,8 @@ ColumnarWriteRow(ColumnarWriteState *writeState, Datum *columnValues, bool *colu
 		writeState->stripeSkipList = stripeSkipList;
 		writeState->compressionBuffer = makeStringInfo();
 
-		Oid relationId = RelidByRelfilenode(writeState->relfilenode.spcNode,
-											writeState->relfilenode.relNode);
+		Oid relationId = RelidByRelfilenode(writeState->relfilelocator.spcOid,
+											writeState->relfilelocator.relNumber);
 		Relation relation = relation_open(relationId, NoLock);
 		writeState->emptyStripeReservation =
 			ReserveEmptyStripe(relation, columnCount, chunkRowCount,
@@ -393,8 +393,8 @@ FlushStripe(ColumnarWriteState *writeState)
 
 	elog(DEBUG1, "Flushing Stripe of size %d", stripeBuffers->rowCount);
 
-	Oid relationId = RelidByRelfilenode(writeState->relfilenode.spcNode,
-										writeState->relfilenode.relNode);
+	Oid relationId = RelidByRelfilenode(writeState->relfilelocator.spcNode,
+										writeState->relfilelocator.relNode);
 	Relation relation = relation_open(relationId, NoLock);
 
 	/*
@@ -486,10 +486,10 @@ FlushStripe(ColumnarWriteState *writeState)
 		}
 	}
 
-	SaveChunkGroups(writeState->relfilenode,
+	SaveChunkGroups(writeState->relfilelocator,
 					stripeMetadata->id,
 					writeState->chunkGroupRowCounts);
-	SaveStripeSkipList(writeState->relfilenode,
+	SaveStripeSkipList(writeState->relfilelocator,
 					   stripeMetadata->id,
 					   stripeSkipList, tupleDescriptor);
 

@@ -208,7 +208,7 @@ columnar_beginscan_extended(Relation relation, Snapshot snapshot,
 							uint32 flags, Bitmapset *attr_needed, List *scanQual)
 {
 	CheckCitusColumnarVersion(ERROR);
-	Oid relfilenode = relation->rd_node.relNode;
+	Oid relfilenode = relation->rd_locator.relNumber;
 
 	/*
 	 * A memory context to use for scan-wide data, including the lazily
@@ -434,7 +434,7 @@ columnar_index_fetch_begin(Relation rel)
 {
 	CheckCitusColumnarVersion(ERROR);
 
-	Oid relfilenode = rel->rd_node.relNode;
+	Oid relfilenode = rel->rd_locator.relNumber;
 	if (PendingWritesInUpperTransactions(relfilenode, GetCurrentSubTransactionId()))
 	{
 		/* XXX: maybe we can just flush the data and continue */
@@ -857,8 +857,8 @@ columnar_finish_bulk_insert(Relation relation, int options)
 
 
 static void
-columnar_relation_set_new_filenode(Relation rel,
-								   const RelFileNode *newrnode,
+columnar_relation_set_new_filelocator(Relation rel,
+								   const RelFileLocator *newlocator,
 								   char persistence,
 								   TransactionId *freezeXid,
 								   MultiXactId *minmulti)
@@ -877,16 +877,16 @@ columnar_relation_set_new_filenode(Relation rel,
 	 * state. If they are equal, this is a new relation object and we don't
 	 * need to clean anything.
 	 */
-	if (rel->rd_node.relNode != newrnode->relNode)
+	if (rel->rd_locator.relNumber != newlocator->relNumber)
 	{
-		MarkRelfilenodeDropped(rel->rd_node.relNode, GetCurrentSubTransactionId());
+		MarkRelfilenodeDropped(rel->rd_locator.relNumber, GetCurrentSubTransactionId());
 
-		DeleteMetadataRows(rel->rd_node);
+		DeleteMetadataRows(rel->rd_locator);
 	}
 
 	*freezeXid = RecentXmin;
 	*minmulti = GetOldestMultiXactId();
-	SMgrRelation srel = RelationCreateStorage_compat(*newrnode, persistence, true);
+	SMgrRelation srel = RelationCreateStorage_compat(*newlocator, persistence, true);
 
 	ColumnarStorageInit(srel, ColumnarMetadataNewStorageId());
 	InitColumnarOptions(rel->rd_id);
@@ -901,12 +901,12 @@ static void
 columnar_relation_nontransactional_truncate(Relation rel)
 {
 	CheckCitusColumnarVersion(ERROR);
-	RelFileNode relfilenode = rel->rd_node;
+	RelFileLocator relFileLocator = rel->rd_locator;
 
-	NonTransactionDropWriteState(relfilenode.relNode);
+	NonTransactionDropWriteState(relFileLocator.relNumber);
 
 	/* Delete old relfilenode metadata */
-	DeleteMetadataRows(relfilenode);
+	DeleteMetadataRows(relFileLocator);
 
 	/*
 	 * No need to set new relfilenode, since the table was created in this
@@ -923,7 +923,7 @@ columnar_relation_nontransactional_truncate(Relation rel)
 
 
 static void
-columnar_relation_copy_data(Relation rel, const RelFileNode *newrnode)
+columnar_relation_copy_data(Relation rel, const RelFileLocator *newrnode)
 {
 	elog(ERROR, "columnar_relation_copy_data not implemented");
 }
@@ -969,7 +969,7 @@ columnar_relation_copy_for_cluster(Relation OldHeap, Relation NewHeap,
 	ColumnarOptions columnarOptions = { 0 };
 	ReadColumnarOptions(OldHeap->rd_id, &columnarOptions);
 
-	ColumnarWriteState *writeState = ColumnarBeginWrite(NewHeap->rd_node,
+	ColumnarWriteState *writeState = ColumnarBeginWrite(NewHeap->rd_locator,
 														columnarOptions,
 														targetDesc);
 
@@ -1044,7 +1044,7 @@ NeededColumnsList(TupleDesc tupdesc, Bitmapset *attr_needed)
 static uint64
 ColumnarTableTupleCount(Relation relation)
 {
-	List *stripeList = StripesForRelfilenode(relation->rd_node);
+	List *stripeList = StripesForRelfilenode(relation->rd_locator);
 	uint64 tupleCount = 0;
 
 	ListCell *lc = NULL;
@@ -1182,7 +1182,7 @@ static void
 LogRelationStats(Relation rel, int elevel)
 {
 	ListCell *stripeMetadataCell = NULL;
-	RelFileNode relfilenode = rel->rd_node;
+	RelFileLocator relfilelocator = rel->rd_locator;
 	StringInfo infoBuf = makeStringInfo();
 
 	int compressionStats[COMPRESSION_COUNT] = { 0 };
@@ -1193,13 +1193,13 @@ LogRelationStats(Relation rel, int elevel)
 	uint64 droppedChunksWithData = 0;
 	uint64 totalDecompressedLength = 0;
 
-	List *stripeList = StripesForRelfilenode(relfilenode);
+	List *stripeList = StripesForRelfilenode(relfilelocator);
 	int stripeCount = list_length(stripeList);
 
 	foreach(stripeMetadataCell, stripeList)
 	{
 		StripeMetadata *stripe = lfirst(stripeMetadataCell);
-		StripeSkipList *skiplist = ReadStripeSkipList(relfilenode, stripe->id,
+		StripeSkipList *skiplist = ReadStripeSkipList(relfilelocator, stripe->id,
 													  RelationGetDescr(rel),
 													  stripe->chunkCount,
 													  GetTransactionSnapshot());
@@ -1335,7 +1335,7 @@ TruncateColumnar(Relation rel, int elevel)
 	 * new stripes be added beyond highestPhysicalAddress while
 	 * we're truncating.
 	 */
-	uint64 newDataReservation = Max(GetHighestUsedAddress(rel->rd_node) + 1,
+	uint64 newDataReservation = Max(GetHighestUsedAddress(rel->rd_locator) + 1,
 									ColumnarFirstLogicalOffset);
 
 	BlockNumber old_rel_pages = smgrnblocks(RelationGetSmgr(rel), MAIN_FORKNUM);
@@ -2085,12 +2085,12 @@ ColumnarTableDropHook(Oid relid)
 		 * tableam tables storage is managed by postgres.
 		 */
 		Relation rel = table_open(relid, AccessExclusiveLock);
-		RelFileNode relfilenode = rel->rd_node;
+		RelFileLocator relfilenode = rel->rd_locator;
 
 		DeleteMetadataRows(relfilenode);
 		DeleteColumnarTableOptions(rel->rd_id, true);
 
-		MarkRelfilenodeDropped(relfilenode.relNode, GetCurrentSubTransactionId());
+		MarkRelfilenodeDropped(relfilenode.relNumber, GetCurrentSubTransactionId());
 
 		/* keep the lock since we did physical changes to the relation */
 		table_close(rel, NoLock);
@@ -2515,7 +2515,7 @@ static const TableAmRoutine columnar_am_methods = {
 	.tuple_lock = columnar_tuple_lock,
 	.finish_bulk_insert = columnar_finish_bulk_insert,
 
-	.relation_set_new_filenode = columnar_relation_set_new_filenode,
+	.relation_set_new_filelocator = columnar_relation_set_new_filelocator,
 	.relation_nontransactional_truncate = columnar_relation_nontransactional_truncate,
 	.relation_copy_data = columnar_relation_copy_data,
 	.relation_copy_for_cluster = columnar_relation_copy_for_cluster,

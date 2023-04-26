@@ -18,7 +18,7 @@
 #include "nodes/parsenodes.h"
 #include "storage/bufpage.h"
 #include "storage/lockdefs.h"
-#include "storage/relfilenode.h"
+#include "storage/relfilelocator.h"
 #include "utils/relcache.h"
 #include "utils/snapmgr.h"
 
@@ -224,7 +224,7 @@ extern void columnar_init_gucs(void);
 extern CompressionType ParseCompressionType(const char *compressionTypeString);
 
 /* Function declarations for writing to a columnar table */
-extern ColumnarWriteState * ColumnarBeginWrite(RelFileNode relfilenode,
+extern ColumnarWriteState * ColumnarBeginWrite(RelFileLocator relfilenode,
 											   ColumnarOptions options,
 											   TupleDesc tupleDescriptor);
 extern uint64 ColumnarWriteRow(ColumnarWriteState *state, Datum *columnValues,
@@ -279,21 +279,21 @@ extern bool ReadColumnarOptions(Oid regclass, ColumnarOptions *options);
 extern bool IsColumnarTableAmTable(Oid relationId);
 
 /* columnar_metadata_tables.c */
-extern void DeleteMetadataRows(RelFileNode relfilenode);
+extern void DeleteMetadataRows(RelFileLocator relFileLocator);
 extern uint64 ColumnarMetadataNewStorageId(void);
-extern uint64 GetHighestUsedAddress(RelFileNode relfilenode);
+extern uint64 GetHighestUsedAddress(RelFileLocator relFileLocator);
 extern EmptyStripeReservation * ReserveEmptyStripe(Relation rel, uint64 columnCount,
 												   uint64 chunkGroupRowCount,
 												   uint64 stripeRowCount);
 extern StripeMetadata * CompleteStripeReservation(Relation rel, uint64 stripeId,
 												  uint64 sizeBytes, uint64 rowCount,
 												  uint64 chunkCount);
-extern void SaveStripeSkipList(RelFileNode relfilenode, uint64 stripe,
+extern void SaveStripeSkipList(RelFileLocator relFileLocator, uint64 stripe,
 							   StripeSkipList *stripeSkipList,
 							   TupleDesc tupleDescriptor);
-extern void SaveChunkGroups(RelFileNode relfilenode, uint64 stripe,
+extern void SaveChunkGroups(RelFileLocator relFileLocator, uint64 stripe,
 							List *chunkGroupRowCounts);
-extern StripeSkipList * ReadStripeSkipList(RelFileNode relfilenode, uint64 stripe,
+extern StripeSkipList * ReadStripeSkipList(RelFileLocator relFileLocator, uint64 stripe,
 										   TupleDesc tupleDescriptor,
 										   uint32 chunkCount,
 										   Snapshot snapshot);
