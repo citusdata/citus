@@ -703,12 +703,12 @@ MakeSetStatementArguments(char *configurationName, char *configurationValue)
 	 * is no other way to determine allowed units, and value types other than
 	 * using this function
 	 */
-	struct config_generic **gucVariables = get_guc_variables();
-	int numOpts = GetNumConfigOptions();
+	 int                     gucCount;
+	struct config_generic **gucVariables = get_guc_variables(&gucCount);
 	struct config_generic **matchingConfig =
 		(struct config_generic **) SafeBsearch((void *) &key,
 											   (void *) gucVariables,
-											   numOpts,
+											   gucCount,
 											   sizeof(struct config_generic *),
 											   ConfigGenericNameCompare);
 
