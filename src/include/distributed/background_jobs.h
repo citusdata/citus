@@ -102,8 +102,8 @@ typedef struct ParallelTasksPerNodeEntry
 
 extern BackgroundWorkerHandle * StartCitusBackgroundTaskQueueMonitor(Oid database,
 																	 Oid extensionOwner);
-extern void CitusBackgroundTaskQueueMonitorMain(Datum arg);
-extern void CitusBackgroundTaskExecutor(Datum main_arg);
+extern PGDLLEXPORT void CitusBackgroundTaskQueueMonitorMain(Datum arg);
+extern PGDLLEXPORT void CitusBackgroundTaskExecutor(Datum main_arg);
 
 extern Datum citus_job_cancel(PG_FUNCTION_ARGS);
 extern Datum citus_job_wait(PG_FUNCTION_ARGS);
