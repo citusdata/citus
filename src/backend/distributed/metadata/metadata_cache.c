@@ -83,7 +83,6 @@
 #include "utils/memutils.h"
 #include "utils/palloc.h"
 #include "utils/rel.h"
-#include "utils/relfilenodemap.h"
 #include "utils/relmapper.h"
 #include "utils/resowner.h"
 #include "utils/syscache.h"

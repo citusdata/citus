@@ -27,8 +27,8 @@
 #include "utils/guc.h"
 #include "utils/memutils.h"
 #include "utils/rel.h"
-#include "utils/relfilenodemap.h"
-
+#include "storage/relfilelocator.h"
+#include "utils/relfilenumbermap.h"
 #include "columnar/columnar.h"
 #include "columnar/columnar_storage.h"
 #include "columnar/columnar_version_compat.h"
@@ -174,7 +174,7 @@ ColumnarWriteRow(ColumnarWriteState *writeState, Datum *columnValues, bool *colu
 		writeState->stripeSkipList = stripeSkipList;
 		writeState->compressionBuffer = makeStringInfo();
 
-		Oid relationId = RelidByRelfilenode(writeState->relfilelocator.spcOid,
+		Oid relationId = RelidByRelfilenumber(writeState->relfilelocator.spcOid,
 											writeState->relfilelocator.relNumber);
 		Relation relation = relation_open(relationId, NoLock);
 		writeState->emptyStripeReservation =
@@ -393,8 +393,8 @@ FlushStripe(ColumnarWriteState *writeState)
 
 	elog(DEBUG1, "Flushing Stripe of size %d", stripeBuffers->rowCount);
 
-	Oid relationId = RelidByRelfilenode(writeState->relfilelocator.spcNode,
-										writeState->relfilelocator.relNode);
+	Oid relationId = RelidByRelfilenumber(writeState->relfilelocator.spcOid,
+										writeState->relfilelocator.relNumber);
 	Relation relation = relation_open(relationId, NoLock);
 
 	/*
