@@ -23,6 +23,8 @@
 
 #define float_abs(a) fabs(a)
 
+#define tuplesort_getdatum_compat(a, b, c, d, e, f) tuplesort_getdatum(a, b, c, d, e, f)
+
 #else
 
 #include "storage/relfilenode.h"
@@ -37,6 +39,8 @@ typedef Oid RelFileNumber;
 #define RelidByRelfilenumber(a, b) RelidByRelfilenode(a, b)
 
 #define float_abs(a) Abs(a)
+
+#define tuplesort_getdatum_compat(a, b, c, d, e, f) tuplesort_getdatum(a, b, d, e, f)
 
 #endif
 
