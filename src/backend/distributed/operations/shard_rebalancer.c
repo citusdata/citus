@@ -515,6 +515,16 @@ GetRebalanceSteps(RebalanceOptions *options)
 
 	/* sort the lists to make the function more deterministic */
 	List *activeWorkerList = SortedActiveWorkers();
+	int shardAllowedNodeCount = 0;
+	WorkerNode *workerNode = NULL;
+	foreach_ptr(workerNode, activeWorkerList)
+	{
+		if (workerNode->shouldHaveShards)
+		{
+			shardAllowedNodeCount++;
+		}
+	}
+
 	List *activeShardPlacementListList = NIL;
 	List *unbalancedShards = NIL;
 
@@ -532,8 +542,7 @@ GetRebalanceSteps(RebalanceOptions *options)
 				shardPlacementList, options->workerNode);
 		}
 
-		if (list_length(activeShardPlacementListForRelation) >= list_length(
-				activeWorkerList))
+		if (list_length(activeShardPlacementListForRelation) >= shardAllowedNodeCount)
 		{
 			activeShardPlacementListList = lappend(activeShardPlacementListList,
 												   activeShardPlacementListForRelation);
