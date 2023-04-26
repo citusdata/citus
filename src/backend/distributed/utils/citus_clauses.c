@@ -485,10 +485,11 @@ CitusIsMutableFunction(Node *node)
 		return true;
 	}
 
-	if (IsA(node, SQLValueFunction))
+	//if (IsA(node, SQLValueFunction))
 	{
+		/* TODO: PG16 doesn have sqlvaluefunc, see commit f193883fc9cebe8fa20359b0797832837a788112*/
 		/* all variants of SQLValueFunction are stable */
-		return true;
+		//return true;
 	}
 
 	if (IsA(node, NextValueExpr))
