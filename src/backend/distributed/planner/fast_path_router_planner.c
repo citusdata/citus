@@ -103,15 +103,14 @@ PlannedStmt *
 GeneratePlaceHolderPlannedStmt(Query *parse)
 {
 	PlannedStmt *result = makeNode(PlannedStmt);
-	Scan *scanNode = makeNode(Scan);
-	Plan *plan = &scanNode->plan;
-
+	SeqScan *scanNode = makeNode(SeqScan);
+	Plan *plan = &(scanNode->scan.plan); 
 	Node *distKey PG_USED_FOR_ASSERTS_ONLY = NULL;
 
 	Assert(FastPathRouterQuery(parse, &distKey));
 
 	/* there is only a single relation rte */
-	scanNode->scanrelid = 1;
+	scanNode->scan.scanrelid = 1;
 
 	plan->targetlist =
 		copyObject(FetchStatementTargetList((Node *) parse));
