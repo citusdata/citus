@@ -1,5 +1,8 @@
 ### citus v10.0.8 (April 20, 2023) ###
 
+* Fixes a bug that could break `DROP SCHEMA/EXTENSON` commands when there is a
+  columnar table (#5458)
+
 * Fixes a crash that occurs when the aggregate that cannot be pushed-down
   returns empty result from a worker (#5679)
 
