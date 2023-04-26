@@ -1722,7 +1722,7 @@ create_estate_for_relation(Relation rel)
 	rte->relid = RelationGetRelid(rel);
 	rte->relkind = rel->rd_rel->relkind;
 	rte->rellockmode = AccessShareLock;
-	ExecInitRangeTable(estate, list_make1(rte));
+	ExecInitRangeTable(estate, list_make1(rte), NIL /*TODO: fill properly*/);
 
 #if PG_VERSION_NUM < PG_VERSION_14
 	ResultRelInfo *resultRelInfo = makeNode(ResultRelInfo);

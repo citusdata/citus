@@ -33,6 +33,7 @@
 #include "optimizer/paths.h"
 #include "optimizer/plancat.h"
 #include "optimizer/restrictinfo.h"
+#include "parser/parse_relation.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
 #include "utils/relcache.h"
@@ -1371,7 +1372,9 @@ AddColumnarScanPath(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte,
 		cpath->custom_private = list_make2(NIL, NIL);
 	}
 
-	int numberOfColumnsRead = bms_num_members(rte->selectedCols);
+	/* TODO: can perminfo be NULL??? */
+	RTEPermissionInfo *perminfo = getRTEPermissionInfo(root->parse->rteperminfos, rte);
+	int numberOfColumnsRead = bms_num_members(perminfo->selectedCols);
 	int numberOfClausesPushed = list_length(allClauses);
 
 	CostColumnarScan(root, rel, rte->relid, cpath, numberOfColumnsRead,
