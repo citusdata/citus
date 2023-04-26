@@ -3190,6 +3190,10 @@ CheckCopyPermissions(CopyStmt *copyStatement)
 	RangeTblEntry *rte = (RangeTblEntry*) linitial(range_table);
 	tupDesc = RelationGetDescr(rel);
 
+	RTEPermissionInfo *perminfo = (RTEPermissionInfo *) palloc(sizeof(RTEPermissionInfo));
+	perminfo->requiredPerms = required_access;
+	perminfo->relid = rel->rd_id;
+
 	attnums = CopyGetAttnums(tupDesc, rel, copyStatement->attlist);
 	foreach(cur, attnums)
 	{
@@ -3197,15 +3201,15 @@ CheckCopyPermissions(CopyStmt *copyStatement)
 
 		if (is_from)
 		{
-			rte->insertedCols = bms_add_member(rte->insertedCols, attno);
+			perminfo->insertedCols = bms_add_member(perminfo->insertedCols, attno);
 		}
 		else
 		{
-			rte->selectedCols = bms_add_member(rte->selectedCols, attno);
+			perminfo->selectedCols = bms_add_member(perminfo->selectedCols, attno);
 		}
 	}
 
-	ExecCheckRTPerms(range_table, true);
+	ExecCheckPermissions(list_make1(rte), list_make1(perminfo), true);
 
 	/* TODO: Perform RLS checks once supported */
 
@@ -3224,7 +3228,6 @@ CreateRangeTable(Relation rel, AclMode requiredAccess)
 	rte->rtekind = RTE_RELATION;
 	rte->relid = rel->rd_id;
 	rte->relkind = rel->rd_rel->relkind;
-	rte->requiredPerms = requiredAccess;
 	return list_make1(rte);
 }
 
