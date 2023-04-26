@@ -128,25 +128,24 @@ citus_stat_tenants_local(PG_FUNCTION_ARGS)
 								   StatTenantsLimit);
 	}
 
+	// Allocate an array to hold the tenants.
 	TenantStats **stats = palloc(tenantStatsCount *
 								 sizeof(TenantStats *));
 
 	HASH_SEQ_STATUS hash_seq;
 	TenantStats *stat;
 
+	// Get all the tenants from the hash table.
 	int j = 0;
 	hash_seq_init(&hash_seq, monitor->tenants);
 	while ((stat = hash_seq_search(&hash_seq)) != NULL)
 	{
-		SpinLockAcquire(&stat->lock);
-
 		stats[j++] = stat;
 		UpdatePeriodsIfNecessary(stat, monitoringTime);
 		ReduceScoreIfNecessary(stat, monitoringTime);
-
-		SpinLockRelease(&stat->lock);
 	}
 
+	// Sort the tenants by their score.
 	SafeQsort(stats, j, sizeof(TenantStats *),
 			  CompareTenantScore);
 
@@ -156,8 +155,6 @@ citus_stat_tenants_local(PG_FUNCTION_ARGS)
 		memset(isNulls, false, sizeof(isNulls));
 
 		TenantStats *tenantStats = stats[i];
-
-		SpinLockAcquire(&tenantStats->lock);
 
 		values[0] = Int32GetDatum(tenantStats->key.colocationGroupId);
 		values[1] = PointerGetDatum(cstring_to_text(tenantStats->key.tenantAttribute));
@@ -170,8 +167,6 @@ citus_stat_tenants_local(PG_FUNCTION_ARGS)
 		values[6] = Float8GetDatum(tenantStats->cpuUsageInThisPeriod);
 		values[7] = Float8GetDatum(tenantStats->cpuUsageInLastPeriod);
 		values[8] = Int64GetDatum(tenantStats->score);
-
-		SpinLockRelease(&tenantStats->lock);
 
 		tuplestore_putvalues(tupleStore, tupleDescriptor, values, isNulls);
 	}
@@ -212,22 +207,7 @@ citus_stat_tenants_local_reset(PG_FUNCTION_ARGS)
 	hash_seq_init(&hash_seq, monitor->tenants);
 	while ((stats = hash_seq_search(&hash_seq)) != NULL)
 	{
-		bool found = false;
-		hash_search(monitor->tenants, &stats->key, HASH_REMOVE, &found);
-
-		if (found)
-		{
-			stats->writesInLastPeriod = 0;
-			stats->writesInThisPeriod = 0;
-			stats->readsInLastPeriod = 0;
-			stats->readsInThisPeriod = 0;
-			stats->cpuUsageInLastPeriod = 0;
-			stats->cpuUsageInThisPeriod = 0;
-			stats->score = 0;
-			stats->lastScoreReduction = 0;
-
-			/* pfree(stats); */
-		}
+		hash_search(monitor->tenants, &stats->key, HASH_REMOVE, NULL);
 	}
 
 	LWLockRelease(&monitor->lock);
@@ -738,6 +718,15 @@ CreateTenantStats(MultiTenantMonitor *monitor, TimestampTz queryTime)
 													 HASH_ENTER, &found);
 
 	pfree(key);
+
+	stats->writesInLastPeriod = 0;
+	stats->writesInThisPeriod = 0;
+	stats->readsInLastPeriod = 0;
+	stats->readsInThisPeriod = 0;
+	stats->cpuUsageInLastPeriod = 0;
+	stats->cpuUsageInThisPeriod = 0;
+	stats->score = 0;
+	stats->lastScoreReduction = 0;
 
 	if (!found)
 	{
