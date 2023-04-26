@@ -737,13 +737,14 @@ AddEdgesForLockWaits(WaitGraph *waitGraph, PGPROC *waitingProc, PROCStack *remai
 	int conflictMask = lockMethodTable->conflictTab[waitingProc->waitLockMode];
 
 	/* iterate through the queue of processes holding the lock */
-	SHM_QUEUE *procLocks = &waitLock->procLocks;
-	PROCLOCK *procLock = (PROCLOCK *) SHMQueueNext(procLocks, procLocks,
-												   offsetof(PROCLOCK, lockLink));
+	dlist_head *procLocks = &waitLock->procLocks;
 
-	while (procLock != NULL)
+	dlist_iter	iter;
+
+	dlist_foreach(iter, procLocks)
 	{
-		PGPROC *currentProc = procLock->tag.myProc;
+		PROCLOCK   *procLock = dlist_container(PROCLOCK, lockLink, iter.cur);
+ 		PGPROC *currentProc = procLock->tag.myProc;
 
 		/*
 		 * Skip processes from the same lock group, processes that don't conflict,
@@ -754,10 +755,7 @@ AddEdgesForLockWaits(WaitGraph *waitGraph, PGPROC *waitingProc, PROCStack *remai
 			!IsProcessWaitingForSafeOperations(currentProc))
 		{
 			AddWaitEdge(waitGraph, waitingProc, currentProc, remaining);
-		}
-
-		procLock = (PROCLOCK *) SHMQueueNext(procLocks, &procLock->lockLink,
-											 offsetof(PROCLOCK, lockLink));
+		}	
 	}
 }
 
@@ -777,16 +775,25 @@ AddEdgesForWaitQueue(WaitGraph *waitGraph, PGPROC *waitingProc, PROCStack *remai
 	int conflictMask = lockMethodTable->conflictTab[waitingProc->waitLockMode];
 
 	/* iterate through the wait queue */
-	PROC_QUEUE *waitQueue = &(waitLock->waitProcs);
-	int queueSize = waitQueue->size;
-	PGPROC *currentProc = (PGPROC *) waitQueue->links.next;
+	dclist_head *waitQueue = &waitLock->waitProcs;
+	int queueSize = waitQueue->count;
 
-	/*
-	 * Iterate through the queue from the start until we encounter waitingProc,
-	 * since we only care about processes in front of waitingProc in the queue.
-	 */
-	while (queueSize-- > 0 && currentProc != waitingProc)
+
+	dlist_iter	iter;
+
+	dclist_foreach(iter, waitQueue)
 	{
+		PGPROC	   *currentProc = dlist_container(PGPROC, links, iter.cur);
+
+		if (currentProc == waitingProc)
+		{
+				/*
+				* Iterate through the queue from the start until we encounter waitingProc,
+				* since we only care about processes in front of waitingProc in the queue.
+				*/
+			break;
+		}
+	
 		int awaitMask = LOCKBIT_ON(currentProc->waitLockMode);
 
 		/*
