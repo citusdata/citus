@@ -2098,7 +2098,7 @@ ColumnarProcessUtility(PlannedStmt *pstmt,
  * ColumnarSupportsIndexAM returns true if indexAM with given name is
  * supported by columnar tables.
  */
-bool
+PGDLLEXPORT bool
 ColumnarSupportsIndexAM(char *indexAMName)
 {
 	return strncmp(indexAMName, "btree", NAMEDATALEN) == 0 ||
