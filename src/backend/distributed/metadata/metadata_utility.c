@@ -2248,13 +2248,13 @@ EnsureTablePermissions(Oid relationId, AclMode mode)
 void
 EnsureTableOwner(Oid relationId)
 {
-	if (!pg_class_ownercheck(relationId, GetUserId()))
+	if (!object_ownercheck(RelationRelationId, relationId, GetUserId()))
 	{
 		aclcheck_error(ACLCHECK_NOT_OWNER, OBJECT_TABLE,
 					   get_rel_name(relationId));
 	}
 }
-
+#include "catalog/pg_proc_d.h"
 
 /*
  * Check that the current user has owner rights to functionId, error out if
@@ -2264,7 +2264,7 @@ EnsureTableOwner(Oid relationId)
 void
 EnsureFunctionOwner(Oid functionId)
 {
-	if (!pg_proc_ownercheck(functionId, GetUserId()))
+	if (!object_ownercheck(ProcedureRelationId, functionId, GetUserId()))
 	{
 		aclcheck_error(ACLCHECK_NOT_OWNER, OBJECT_FUNCTION,
 					   get_func_name(functionId));

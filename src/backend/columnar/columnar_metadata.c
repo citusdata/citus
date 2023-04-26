@@ -1969,7 +1969,7 @@ columnar_relation_storageid(PG_FUNCTION_ARGS)
 	Oid relationId = PG_GETARG_OID(0);
 	Relation relation = relation_open(relationId, AccessShareLock);
 
-	if (!pg_class_ownercheck(relationId, GetUserId()))
+	if (!object_ownercheck(RelationRelationId, relationId, GetUserId()))
 	{
 		aclcheck_error(ACLCHECK_NOT_OWNER, OBJECT_TABLE,
 					   get_rel_name(relationId));
