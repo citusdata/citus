@@ -526,7 +526,7 @@ CreateRenameTypeStmt(const ObjectAddress *address, char *newName)
 
 	stmt->renameType = OBJECT_TYPE;
 	stmt->object = (Node *) stringToQualifiedNameList(format_type_be_qualified(
-														  address->objectId));
+														  address->objectId), NULL);
 	stmt->newname = newName;
 
 
