@@ -21,6 +21,8 @@
 #define RelationPhysicalIdentifierNumberPtr_compat(a) (a->relNumber)
 #define RelationPhysicalIdentifierBackend_compat(a) (a->smgr_rlocator.locator)
 
+#define float_abs(a) fabs(a)
+
 #else
 
 #include "storage/relfilenode.h"
@@ -33,6 +35,8 @@
 typedef RelFileNode RelFileLocator;
 typedef Oid RelFileNumber;
 #define RelidByRelfilenumber(a, b) RelidByRelfilenode(a, b)
+
+#define float_abs(a) Abs(a)
 
 #endif
 
