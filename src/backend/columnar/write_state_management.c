@@ -153,6 +153,7 @@ columnar_init_write_state(Relation relation, TupleDesc tupdesc,
 		hashEntry->writeStateStack = NULL;
 		hashEntry->dropped = false;
 	}
+	
 
 	Assert(!hashEntry->dropped);
 
