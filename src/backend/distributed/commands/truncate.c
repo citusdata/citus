@@ -182,7 +182,7 @@ truncate_local_data_after_distributing_table(PG_FUNCTION_ARGS)
 	TruncateStmt *truncateStmt = makeNode(TruncateStmt);
 
 	char *relationName = generate_qualified_relation_name(relationId);
-	List *names = stringToQualifiedNameList(relationName);
+	List *names = stringToQualifiedNameList_compat(relationName, NULL);
 	truncateStmt->relations = list_make1(makeRangeVarFromNameList(names));
 	truncateStmt->restart_seqs = false;
 	truncateStmt->behavior = DROP_CASCADE;

@@ -37,6 +37,9 @@ get_guc_variables_compat(int *gucCount)
 
 #define PG_FUNCNAME_MACRO __func__
 
+#define stringToQualifiedNameList_compat(a, b) stringToQualifiedNameList(a, b)
+#define typeStringToTypeName_compat(a, b) typeStringToTypeName(a, b)
+
 #else
 
 #include "storage/relfilenode.h"
@@ -64,6 +67,9 @@ get_guc_variables_compat(int *gucCount)
 	*gucCount = GetNumConfigOptions();
 	return get_guc_variables();
 }
+
+#define stringToQualifiedNameList_compat(a, b) stringToQualifiedNameList(a)
+#define typeStringToTypeName_compat(a, b) typeStringToTypeName(a)
 
 #endif
 
