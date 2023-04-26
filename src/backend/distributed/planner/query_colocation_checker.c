@@ -126,7 +126,7 @@ static RangeTblEntry *
 AnchorRte(Query *subquery)
 {
 	FromExpr *joinTree = subquery->jointree;
-	Relids joinRelIds = get_relids_in_jointree((Node *) joinTree, false);
+	Relids joinRelIds = get_relids_in_jointree((Node *) joinTree, false, false);
 	int currentRTEIndex = -1;
 	RangeTblEntry *anchorRangeTblEntry = NULL;
 
