@@ -820,7 +820,7 @@ GenerateGrantRoleStmtsFromOptions(RoleSpec *roleSpec, List *options)
 
 		if (strcmp(option->defname, "adminmembers") == 0)
 		{
-			grantRoleStmt->admin_opt = true;
+			/* TODO: PG commit */
 		}
 
 		stmts = lappend(stmts, grantRoleStmt);
@@ -867,8 +867,6 @@ GenerateGrantRoleStmtsOfRole(Oid roleid)
 		grantRoleStmt->grantee_roles = list_make1(granteeRole);
 
 		grantRoleStmt->grantor = NULL;
-
-		grantRoleStmt->admin_opt = membership->admin_option;
 
 		stmts = lappend(stmts, grantRoleStmt);
 	}

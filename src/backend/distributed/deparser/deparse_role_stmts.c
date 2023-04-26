@@ -349,9 +349,9 @@ AppendGrantRoleStmt(StringInfo buf, GrantRoleStmt *stmt)
 {
 	appendStringInfo(buf, "%s ", stmt->is_grant ? "GRANT" : "REVOKE");
 
-	if (!stmt->is_grant && stmt->admin_opt)
+	if (!stmt->is_grant && false)
 	{
-		appendStringInfo(buf, "ADMIN OPTION FOR ");
+			/* TODO PG commit: e3ce2de09d814f8770b2e3b3c152b7671bcdb83f*/
 	}
 
 	AppendRoleList(buf, stmt->granted_roles);
@@ -362,9 +362,9 @@ AppendGrantRoleStmt(StringInfo buf, GrantRoleStmt *stmt)
 
 	if (stmt->is_grant)
 	{
-		if (stmt->admin_opt)
+		if (false)
 		{
-			appendStringInfo(buf, " WITH ADMIN OPTION");
+			/* TODO PG commit: e3ce2de09d814f8770b2e3b3c152b7671bcdb83f*/
 		}
 
 		if (stmt->grantor)
