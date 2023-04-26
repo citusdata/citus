@@ -93,7 +93,7 @@
 * Raises memory limits in columnar from 256MB to 1GB for reads and writes
   (#6419)
 
-### citus v10.1.5 (April 20, 2023) ###
+### citus v10.1.6 (April 20, 2023) ###
 
 * Fixes a crash that occurs when the aggregate that cannot be pushed-down
   returns empty result from a worker (#5679)
@@ -104,7 +104,7 @@
 
 * Prevents alter table functions from dropping extensions (#5974)
 
-### citus v10.0.7 (April 20, 2023) ###
+### citus v10.0.8 (April 20, 2023) ###
 
 * Fixes a crash that occurs when the aggregate that cannot be pushed-down
   returns empty result from a worker (#5679)
@@ -115,7 +115,7 @@
 
 * Prevents alter table functions from dropping extensions (#5974)
 
-### citus v9.5.11 (April 20, 2023) ###
+### citus v9.5.12 (April 20, 2023) ###
 
 * Fixes a crash that occurs when the aggregate that cannot be pushed-down
   returns empty result from a worker (#5679)
