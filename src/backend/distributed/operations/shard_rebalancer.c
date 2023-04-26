@@ -2373,8 +2373,8 @@ GetSetCommandListForNewConnections(void)
 {
 	List *commandList = NIL;
 
-	struct config_generic **guc_vars = get_guc_variables();
-	int gucCount = GetNumConfigOptions();
+	int gucCount = 0;
+	struct config_generic **guc_vars = get_guc_variables_compat(&gucCount);
 
 	for (int gucIndex = 0; gucIndex < gucCount; gucIndex++)
 	{
