@@ -15,6 +15,8 @@
 
 #if PG_VERSION_NUM >= PG_VERSION_16
 
+#define pg_clean_ascii_compat(a, b) pg_clean_ascii(a, b)
+
 #define RelationPhysicalIdentifier_compat(a) ((a)->rd_locator)
 #define RelationTablespace_compat(a) (a.spcOid)
 #define RelationPhysicalIdentifierNumber_compat(a) (a.relNumber)
@@ -28,6 +30,8 @@
 #else
 
 #include "storage/relfilenode.h"
+
+#define pg_clean_ascii_compat(a, b) pg_clean_ascii(a)
 
 #define RelationPhysicalIdentifier_compat(a) ((a)->rd_node)
 #define RelationTablespace_compat(a) (a.spcNode)
