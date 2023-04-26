@@ -37,6 +37,7 @@ get_guc_variables_compat(int *gucCount)
 	return get_guc_variables(gucCount);
 }
 
+
 #define PG_FUNCNAME_MACRO __func__
 
 #define stringToQualifiedNameList_compat(a, b) stringToQualifiedNameList(a, b)
@@ -44,8 +45,14 @@ get_guc_variables_compat(int *gucCount)
 
 #define get_relids_in_jointree_compat(a, b, c) get_relids_in_jointree(a, b, c)
 
+#define object_ownercheck(a, b, c) object_ownercheck(a, b, c)
+#define object_aclcheck(a, b, c, d) object_aclcheck(a, b, c, d)
+
 #else
 
+#include "catalog/pg_class_d.h"
+#include "catalog/pg_namespace.h"
+#include "catalog/pg_proc_d.h"
 #include "storage/relfilenode.h"
 #include "utils/guc.h"
 #include "utils/guc_tables.h"
@@ -74,10 +81,66 @@ get_guc_variables_compat(int *gucCount)
 	return get_guc_variables();
 }
 
+
 #define stringToQualifiedNameList_compat(a, b) stringToQualifiedNameList(a)
 #define typeStringToTypeName_compat(a, b) typeStringToTypeName(a)
 
 #define get_relids_in_jointree_compat(a, b, c) get_relids_in_jointree(a, b)
+
+static inline bool
+object_ownercheck(Oid classid, Oid objectid, Oid roleid)
+{
+	switch (classid)
+	{
+		case RelationRelationId:
+		{
+			return pg_class_ownercheck(objectid, roleid);
+		}
+
+		case NamespaceRelationId:
+		{
+			return pg_namespace_ownercheck(objectid, roleid);
+		}
+
+		case ProcedureRelationId:
+		{
+			return pg_proc_ownercheck(objectid, roleid);
+		}
+
+		default:
+		{
+			ereport(ERROR,
+					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED), errmsg("Missing classid:%d",
+																	classid)));
+		}
+	}
+}
+
+
+static inline AclResult
+object_aclcheck(Oid classid, Oid objectid, Oid roleid, AclMode mode)
+{
+	switch (classid)
+	{
+		case NamespaceRelationId:
+		{
+			return pg_namespace_aclcheck(objectid, roleid, mode);
+		}
+
+		case ProcedureRelationId:
+		{
+			return pg_proc_aclcheck(objectid, roleid, mode);
+		}
+
+		default:
+		{
+			ereport(ERROR,
+					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED), errmsg("Missing classid:%d",
+																	classid)));
+		}
+	}
+}
+
 
 typedef bool TU_UpdateIndexes;
 
