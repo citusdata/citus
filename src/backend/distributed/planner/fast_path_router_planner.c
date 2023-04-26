@@ -108,7 +108,7 @@ GeneratePlaceHolderPlannedStmt(Query *parse)
 
 	Node *distKey PG_USED_FOR_ASSERTS_ONLY = NULL;
 
-	AssertArg(FastPathRouterQuery(parse, &distKey));
+	Assert(FastPathRouterQuery(parse, &distKey));
 
 	/* there is only a single relation rte */
 	scanNode->scanrelid = 1;

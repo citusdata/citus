@@ -496,7 +496,7 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 		VariableSetStmt *setStmt = (VariableSetStmt *) parsetree;
 
 		/* at present, we only implement the NONE and LOCAL behaviors */
-		AssertState(PropagateSetCommands == PROPSETCMD_NONE ||
+		Assert(PropagateSetCommands == PROPSETCMD_NONE ||
 					PropagateSetCommands == PROPSETCMD_LOCAL);
 
 		if (IsMultiStatementTransaction() && ShouldPropagateSetCommand(setStmt))
