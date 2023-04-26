@@ -33,6 +33,7 @@ typedef struct DeferredErrorMessage
  * using RaiseDeferredError().  These error messages can be
  * serialized/copied/deserialized, i.e. can be embedded in plans and such.
  */
+#define PG_FUNCNAME_MACRO __func__
 #define DeferredError(code, message, detail, hint) \
 	DeferredErrorInternal(code, message, detail, hint, __FILE__, __LINE__, \
 						  PG_FUNCNAME_MACRO)
