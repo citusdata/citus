@@ -349,10 +349,12 @@ AppendGrantRoleStmt(StringInfo buf, GrantRoleStmt *stmt)
 {
 	appendStringInfo(buf, "%s ", stmt->is_grant ? "GRANT" : "REVOKE");
 
+#if PG_VERSION_NUM < PG_VERSION_16
 	if (!stmt->is_grant && stmt->admin_opt)
 	{
 		appendStringInfo(buf, "ADMIN OPTION FOR ");
 	}
+#endif
 
 	AppendRoleList(buf, stmt->granted_roles);
 
@@ -362,10 +364,12 @@ AppendGrantRoleStmt(StringInfo buf, GrantRoleStmt *stmt)
 
 	if (stmt->is_grant)
 	{
+#if PG_VERSION_NUM < PG_VERSION_16
 		if (stmt->admin_opt)
 		{
 			appendStringInfo(buf, " WITH ADMIN OPTION");
 		}
+#endif
 
 		if (stmt->grantor)
 		{
