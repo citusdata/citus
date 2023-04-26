@@ -558,7 +558,7 @@ ReindexStmtFindRelationOid(ReindexStmt *reindexStmt, bool missingOk)
 	{
 		relationId = RangeVarGetRelidExtended(reindexStmt->relation, lockmode,
 											  (missingOk) ? RVR_MISSING_OK : 0,
-											  RangeVarCallbackOwnsTable, NULL);
+											  RANGE_VAR_TABLE_CALLBACK, NULL);
 	}
 
 	return relationId;
