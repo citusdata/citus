@@ -35,6 +35,8 @@ get_guc_variables_compat(int *gucCount)
 	return get_guc_variables(gucCount);
 }
 
+#define PG_FUNCNAME_MACRO __func__
+
 #else
 
 #include "storage/relfilenode.h"
