@@ -128,14 +128,14 @@ citus_stat_tenants_local(PG_FUNCTION_ARGS)
 								   StatTenantsLimit);
 	}
 
-	// Allocate an array to hold the tenants.
+	/* Allocate an array to hold the tenants. */
 	TenantStats **stats = palloc(tenantStatsCount *
 								 sizeof(TenantStats *));
 
 	HASH_SEQ_STATUS hash_seq;
 	TenantStats *stat;
 
-	// Get all the tenants from the hash table.
+	/* Get all the tenants from the hash table. */
 	int j = 0;
 	hash_seq_init(&hash_seq, monitor->tenants);
 	while ((stat = hash_seq_search(&hash_seq)) != NULL)
@@ -145,7 +145,7 @@ citus_stat_tenants_local(PG_FUNCTION_ARGS)
 		ReduceScoreIfNecessary(stat, monitoringTime);
 	}
 
-	// Sort the tenants by their score.
+	/* Sort the tenants by their score. */
 	SafeQsort(stats, j, sizeof(TenantStats *),
 			  CompareTenantScore);
 
