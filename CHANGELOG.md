@@ -18,7 +18,8 @@
 
 * Allows parallel shard moves in background rebalancer (#6756)
 
-* Checks before logicalrep for rebalancer, error if needed (#6754)
+* Checks if all moves are able to be done via logical replication for rebalancer
+  (#6754)
 
 * Correctly reports shard size in `citus_shards` view (#6748)
 
