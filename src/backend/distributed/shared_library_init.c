@@ -1926,6 +1926,17 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
+		"citus.metadata_sync_batch_size",
+		gettext_noop("Sets total number of commands in a batch for metadata syncs."),
+		gettext_noop("metadata sync commands are sent as batches configured by "
+					 "the batch size to reduce network round trip delay."),
+		&MetadataSyncBatchCount,
+		METADATA_SYNC_DEFAULT_BATCH_COUNT, 1, 1000,
+		PGC_SUSET,
+		GUC_SUPERUSER_ONLY | GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
+
+	DefineCustomIntVariable(
 		"citus.metadata_sync_interval",
 		gettext_noop("Sets the time to wait between metadata syncs."),
 		gettext_noop("metadata sync needs to run every so often "

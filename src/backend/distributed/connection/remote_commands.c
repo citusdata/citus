@@ -574,6 +574,178 @@ SendRemoteCommand(MultiConnection *connection, const char *command)
 
 
 /*
+ * EnterRemotePipelineMode puts connection into pipeline mode.
+ */
+int
+EnterRemotePipelineMode(MultiConnection *connection)
+{
+	PGconn *pgConn = connection->pgConn;
+
+	/*
+	 * Don't try to send command if connection is entirely gone
+	 * (PQisnonblocking() would crash).
+	 */
+	if (!pgConn || PQstatus(pgConn) != CONNECTION_OK)
+	{
+		return 0;
+	}
+
+	Assert(PQisnonblocking(pgConn));
+	Assert(PQpipelineStatus(pgConn) == PQ_PIPELINE_OFF);
+
+	int rc = PQenterPipelineMode(pgConn);
+
+	return rc;
+}
+
+
+/*
+ * SyncRemotePipelineMode syncs the pipeline in the connection.
+ */
+int
+SyncRemotePipelineMode(MultiConnection *connection)
+{
+	PGconn *pgConn = connection->pgConn;
+
+	/*
+	 * Don't try to send command if connection is entirely gone
+	 * (PQisnonblocking() would crash).
+	 */
+	if (!pgConn || PQstatus(pgConn) != CONNECTION_OK)
+	{
+		return 0;
+	}
+
+	Assert(PQisnonblocking(pgConn));
+	Assert(PQpipelineStatus(pgConn) == PQ_PIPELINE_ON);
+
+	int rc = PQpipelineSync(pgConn);
+
+	return rc;
+}
+
+
+/*
+ * ExitRemotePipelineMode puts connection out of pipeline mode.
+ */
+int
+ExitRemotePipelineMode(MultiConnection *connection)
+{
+	PGconn *pgConn = connection->pgConn;
+
+	/*
+	 * Don't try to send command if connection is entirely gone
+	 * (PQisnonblocking() would crash).
+	 */
+	if (!pgConn || PQstatus(pgConn) != CONNECTION_OK)
+	{
+		return 0;
+	}
+
+	Assert(PQisnonblocking(pgConn));
+	Assert(PQpipelineStatus(pgConn) == PQ_PIPELINE_ON);
+
+	int rc = PQexitPipelineMode(pgConn);
+
+	return rc;
+}
+
+
+#if PG_VERSION_NUM >= PG_VERSION_14
+
+/*
+ * ExecuteRemoteCommandsInConnectionsInPipelineMode executes commands in pipeline mode
+ * for given connections.
+ */
+void
+ExecuteRemoteCommandsInConnectionsInPipelineMode(List *connections, List *commands)
+{
+	MultiConnection *connection = NULL;
+	foreach_ptr(connection, connections)
+	{
+		ExecuteRemoteCommandsInPipelineMode(connection, commands);
+	}
+}
+
+
+/*
+ * ExecuteRemoteCommandsInPipelineMode executes commands in pipeline mode for given
+ * connection.
+ */
+void
+ExecuteRemoteCommandsInPipelineMode(MultiConnection *connection, List *commands)
+{
+	/* PQtrace(connection->pgConn, stdout); */
+	/* PQsetTraceFlags(connection->pgConn, */
+	/*              PQTRACE_SUPPRESS_TIMESTAMPS | PQTRACE_REGRESS_MODE); */
+
+	/* start pipeline mode */
+	int rc = EnterRemotePipelineMode(connection);
+	if (rc != 1)
+	{
+		ReportConnectionError(connection, ERROR);
+	}
+	Assert(PQpipelineStatus(connection->pgConn) == PQ_PIPELINE_ON);
+
+	/* send commands */
+	char *command = NULL;
+	foreach_ptr(command, commands)
+	{
+		SendRemoteCommandParams(connection, command, 0, NULL, NULL, 0);
+	}
+
+	/* create sync point in pipeline which would flush send buffer */
+	rc = SyncRemotePipelineMode(connection);
+	if (rc != 1)
+	{
+		ReportConnectionError(connection, ERROR);
+	}
+
+	/* start processing the results */
+	bool raiseInterrupts = true;
+	PGresult *result = NULL;
+	int i = 0;
+	for (i = 0; i < list_length(commands); i++)
+	{
+		/* process i th command */
+		result = GetRemoteCommandResult(connection, raiseInterrupts);
+		if (!IsResponseOK(result))
+		{
+			ReportResultError(connection, result, ERROR);
+		}
+		PQclear(result);
+
+		/* marks end of i th command */
+		result = GetRemoteCommandResult(connection, raiseInterrupts);
+		if (result != NULL)
+		{
+			ReportResultError(connection, result, ERROR);
+		}
+		PQclear(result);
+	}
+
+	/* sync response */
+	result = GetRemoteCommandResult(connection, raiseInterrupts);
+	if (PQresultStatus(result) != PGRES_PIPELINE_SYNC)
+	{
+		ReportResultError(connection, result, ERROR);
+	}
+	PQclear(result);
+
+	/* exit pipeline mode */
+	rc = ExitRemotePipelineMode(connection);
+	if (rc != 1)
+	{
+		ReportConnectionError(connection, ERROR);
+	}
+	Assert(PQpipelineStatus(connection->pgConn) == PQ_PIPELINE_OFF);
+}
+
+
+#endif
+
+
+/*
  * ExecuteRemoteCommandAndCheckResult executes the given command in the remote node and
  * checks if the result is equal to the expected result. If the result is equal to the
  * expected result, the function returns true, otherwise it returns false.

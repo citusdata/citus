@@ -51,14 +51,14 @@ activate_node_snapshot(PG_FUNCTION_ARGS)
 
 	/*
 	 * Create MetadataSyncContext which is used throughout nodes' activation.
-	 * As we set collectCommands to true, it would not create connections to workers.
-	 * Instead it would collect and return sync commands to be sent to workers.
+	 * As we set noConnectionMode to true, it would not establish connections to
+	 * workers. Instead it would collect and return sync commands to be sent to workers.
 	 */
-	bool collectCommands = true;
 	bool nodesAddedInSameTransaction = false;
+	bool noConnectionMode = true;
 	MetadataSyncContext *context = CreateMetadataSyncContext(list_make1(dummyWorkerNode),
-															 collectCommands,
-															 nodesAddedInSameTransaction);
+															 nodesAddedInSameTransaction,
+															 noConnectionMode);
 
 	ActivateNodeList(context);
 

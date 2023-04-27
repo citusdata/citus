@@ -53,6 +53,15 @@ extern bool ExecuteRemoteCommandAndCheckResult(MultiConnection *connection,
 extern int ExecuteOptionalRemoteCommand(MultiConnection *connection,
 										const char *command,
 										PGresult **result);
+#if PG_VERSION_NUM >= PG_VERSION_14
+extern void ExecuteRemoteCommandsInConnectionsInPipelineMode(List *connections,
+															 List *commands);
+extern void ExecuteRemoteCommandsInPipelineMode(MultiConnection *connection,
+												List *commands);
+extern int EnterRemotePipelineMode(MultiConnection *connection);
+extern int SyncRemotePipelineMode(MultiConnection *connection);
+extern int ExitRemotePipelineMode(MultiConnection *connection);
+#endif
 extern int SendRemoteCommand(MultiConnection *connection, const char *command);
 extern int SendRemoteCommandParams(MultiConnection *connection, const char *command,
 								   int parameterCount, const Oid *parameterTypes,

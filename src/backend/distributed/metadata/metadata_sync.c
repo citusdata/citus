@@ -36,16 +36,18 @@
 #include "catalog/pg_proc.h"
 #include "catalog/pg_type.h"
 #include "commands/async.h"
+#include "distributed/adaptive_executor.h"
 #include "distributed/argutils.h"
 #include "distributed/backend_data.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/commands.h"
+#include "distributed/coordinator_protocol.h"
 #include "distributed/deparser.h"
+#include "distributed/deparse_shard_query.h"
 #include "distributed/distribution_column.h"
 #include "distributed/listutils.h"
 #include "distributed/metadata_utility.h"
-#include "distributed/coordinator_protocol.h"
 #include "distributed/maintenanced.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata_sync.h"
@@ -91,6 +93,7 @@
 /* managed via a GUC */
 char *EnableManualMetadataChangesForUser = "";
 int MetadataSyncTransMode = METADATA_SYNC_TRANSACTIONAL;
+int MetadataSyncBatchCount = METADATA_SYNC_DEFAULT_BATCH_COUNT;
 
 
 static void EnsureObjectMetadataIsSane(int distributionArgumentIndex,
@@ -146,6 +149,7 @@ static char * ColocationGroupCreateCommand(uint32 colocationId, int shardCount,
 static char * ColocationGroupDeleteCommand(uint32 colocationId);
 static char * RemoteTypeIdExpression(Oid typeId);
 static char * RemoteCollationIdExpression(Oid colocationId);
+static bool ExceedsSyncBatchCount(MetadataSyncContext *context);
 
 
 PG_FUNCTION_INFO_V1(start_metadata_sync_to_all_nodes);
@@ -201,11 +205,11 @@ start_metadata_sync_to_node(PG_FUNCTION_ARGS)
 	 * It contains activated nodes, bare connections if the mode is nontransactional,
 	 * and a memory context for allocation.
 	 */
-	bool collectCommands = false;
 	bool nodesAddedInSameTransaction = false;
+	bool noConnectionMode = false;
 	MetadataSyncContext *context = CreateMetadataSyncContext(list_make1(workerNode),
-															 collectCommands,
-															 nodesAddedInSameTransaction);
+															 nodesAddedInSameTransaction,
+															 noConnectionMode);
 
 	ActivateNodeList(context);
 	TransactionModifiedNodeMetadata = true;
@@ -234,11 +238,11 @@ start_metadata_sync_to_all_nodes(PG_FUNCTION_ARGS)
 	 * It contains activated nodes, bare connections if the mode is nontransactional,
 	 * and a memory context for allocation.
 	 */
-	bool collectCommands = false;
 	bool nodesAddedInSameTransaction = false;
+	bool noConnectionMode = false;
 	MetadataSyncContext *context = CreateMetadataSyncContext(nodeList,
-															 collectCommands,
-															 nodesAddedInSameTransaction);
+															 nodesAddedInSameTransaction,
+															 noConnectionMode);
 
 	ActivateNodeList(context);
 	TransactionModifiedNodeMetadata = true;
@@ -4008,15 +4012,15 @@ EstablishAndSetMetadataSyncBareConnections(MetadataSyncContext *context)
  * CreateMetadataSyncContext creates a context which contains worker connections
  * and a MemoryContext to be used throughout the metadata sync.
  *
- * If we collect commands, connections will not be established as caller's intent
- * is to collect sync commands.
+ * If noConnectionMode is set, we do not establish connection. Instead, we just
+ * collect commands.
  *
  * If the nodes are newly added before activation, we would not try to unset
  * metadatasynced in separate transaction during nontransactional metadatasync.
  */
 MetadataSyncContext *
-CreateMetadataSyncContext(List *nodeList, bool collectCommands,
-						  bool nodesAddedInSameTransaction)
+CreateMetadataSyncContext(List *nodeList, bool nodesAddedInSameTransaction,
+						  bool noConnectionMode)
 {
 	/* should be alive during local transaction during the sync */
 	MemoryContext context = AllocSetContextCreate(TopTransactionContext,
@@ -4028,18 +4032,18 @@ CreateMetadataSyncContext(List *nodeList, bool collectCommands,
 
 	metadataSyncContext->context = context;
 	metadataSyncContext->transactionMode = MetadataSyncTransMode;
-	metadataSyncContext->collectCommands = collectCommands;
 	metadataSyncContext->collectedCommands = NIL;
 	metadataSyncContext->nodesAddedInSameTransaction = nodesAddedInSameTransaction;
+	metadataSyncContext->noConnectionMode = noConnectionMode;
 
 	/* filter the nodes that needs to be activated from given node list */
 	SetMetadataSyncNodesFromNodeList(metadataSyncContext, nodeList);
 
 	/*
-	 * establish connections only for nontransactional mode to prevent connection
-	 * open-close for each command
+	 * Establish connections only for nontransactional mode to prevent connection
+	 * open-close for each command.
 	 */
-	if (!collectCommands && MetadataSyncTransMode == METADATA_SYNC_NON_TRANSACTIONAL)
+	if (!noConnectionMode && MetadataSyncTransMode == METADATA_SYNC_NON_TRANSACTIONAL)
 	{
 		EstablishAndSetMetadataSyncBareConnections(metadataSyncContext);
 	}
@@ -4055,53 +4059,131 @@ CreateMetadataSyncContext(List *nodeList, bool collectCommands,
 
 
 /*
- * ResetMetadataSyncMemoryContext resets memory context inside metadataSyncContext, if
- * we are not collecting commands.
+ * ExceedsSyncBatchCount returns whether given context accumulated
+ * more than METADATA_SYNC_DEFAULT_BATCH_COUNT.
  */
-void
-ResetMetadataSyncMemoryContext(MetadataSyncContext *context)
+static bool
+ExceedsSyncBatchCount(MetadataSyncContext *context)
 {
-	if (!MetadataSyncCollectsCommands(context))
-	{
-		MemoryContextReset(context->context);
-	}
+	int collectedCommandCount = list_length(context->collectedCommands);
+	return collectedCommandCount > METADATA_SYNC_DEFAULT_BATCH_COUNT;
 }
 
 
 /*
- * MetadataSyncCollectsCommands returns whether context is used for collecting
- * commands instead of sending them to workers.
- */
-bool
-MetadataSyncCollectsCommands(MetadataSyncContext *context)
-{
-	return context->collectCommands;
-}
-
-
-/*
- * SendOrCollectCommandListToActivatedNodes sends the commands to the activated nodes with
- * bare connections inside metadatacontext or via coordinated connections.
- * Note that when context only collects commands, we add commands into the context
- * without sending the commands.
+ * ProcessBatchCommandsToActivatedNodes processes collected commands inside
+ * metadataSyncContext. Sends commands to activated workers if batch limit
+ * is exceeded or user forces. If noConnectionMode is set, it would not process
+ * the commands.
  */
 void
-SendOrCollectCommandListToActivatedNodes(MetadataSyncContext *context, List *commands)
+ProcessBatchCommandsToActivatedNodes(MetadataSyncContext *context, bool forceSend)
 {
-	/* do nothing if no commands */
-	if (commands == NIL)
+	/* do not send and reset commands if we are in noConnectionMode */
+	if (MetadataSyncInNoConnectionMode(context))
 	{
 		return;
 	}
 
-	/*
-	 * do not send any command to workers if we collect commands.
-	 * Collect commands into metadataSyncContext's collected command
-	 * list.
-	 */
-	if (MetadataSyncCollectsCommands(context))
+	if (forceSend || ExceedsSyncBatchCount(context))
 	{
-		context->collectedCommands = list_concat(context->collectedCommands, commands);
+		SendCollectedCommandsToActivatedNodes(context);
+		ResetMetadataSyncMemoryContext(context);
+	}
+}
+
+
+/*
+ * ProcessBatchCommandsToMetadataNodes does the same operation as
+ * ProcessBatchCommandsToActivatedNodes but for metadata nodes.
+ */
+void
+ProcessBatchCommandsToMetadataNodes(MetadataSyncContext *context, bool forceSend)
+{
+	/* do not send and reset commands if we are in noConnectionMode */
+	if (MetadataSyncInNoConnectionMode(context))
+	{
+		return;
+	}
+
+	if (forceSend || ExceedsSyncBatchCount(context))
+	{
+		SendCollectedCommandsToMetadataNodes(context);
+		ResetMetadataSyncMemoryContext(context);
+	}
+}
+
+
+/*
+ * ProcessBatchCommandsToSingleNode does the same as operation
+ * ProcessBatchCommandsToActivatedNodes but for only given node.
+ */
+void
+ProcessBatchCommandsToSingleNode(MetadataSyncContext *context, int nodeIdx,
+								 bool forceSend)
+{
+	/* do not send and reset commands if we are in noConnectionMode */
+	if (MetadataSyncInNoConnectionMode(context))
+	{
+		return;
+	}
+
+	if (forceSend || ExceedsSyncBatchCount(context))
+	{
+		SendCollectedCommandsToSingleNode(context, nodeIdx);
+		ResetMetadataSyncMemoryContext(context);
+	}
+}
+
+
+/*
+ * ResetMetadataSyncMemoryContext resets memory context inside metadataSyncContext.
+ */
+void
+ResetMetadataSyncMemoryContext(MetadataSyncContext *context)
+{
+	Assert(!MetadataSyncInNoConnectionMode(context));
+	MemoryContextReset(context->context);
+	context->collectedCommands = NIL;
+}
+
+
+/*
+ * CollectCommandIntoMetadataSyncContext collcets given commands into metadataSyncContext.
+ */
+void
+CollectCommandIntoMetadataSyncContext(MetadataSyncContext *context, List *commandList)
+{
+	context->collectedCommands = list_concat(context->collectedCommands, commandList);
+}
+
+
+/*
+ * MetadataSyncInNoConnectionMode returns whether context is used for collecting
+ * commands instead of sending them to workers.
+ */
+bool
+MetadataSyncInNoConnectionMode(MetadataSyncContext *context)
+{
+	return context->noConnectionMode;
+}
+
+
+/*
+ * SendCollectedCommandsToActivatedNodes sends collected commands to the activated
+ * nodes with bare connections inside metadatacontext or via coordinated connections.
+ * Note that when we are in noConnectionMode, we add commands into the context without
+ * sending the commands.
+ */
+void
+SendCollectedCommandsToActivatedNodes(MetadataSyncContext *context)
+{
+	Assert(!MetadataSyncInNoConnectionMode(context));
+
+	/* do nothing if no commands */
+	List *commands = context->collectedCommands;
+	if (commands == NIL)
+	{
 		return;
 	}
 
@@ -4117,8 +4199,12 @@ SendOrCollectCommandListToActivatedNodes(MetadataSyncContext *context, List *com
 	}
 	else if (context->transactionMode == METADATA_SYNC_NON_TRANSACTIONAL)
 	{
-		List *workerConnections = context->activatedWorkerBareConnections;
-		SendCommandListToWorkerListWithBareConnections(workerConnections, commands);
+		List *connections = context->activatedWorkerBareConnections;
+		#if PG_VERSION_NUM >= PG_VERSION_14
+		ExecuteRemoteCommandsInConnectionsInPipelineMode(connections, commands);
+		#else
+		SendCommandListToWorkerListWithBareConnections(connections, commands);
+		#endif
 	}
 	else
 	{
@@ -4128,22 +4214,20 @@ SendOrCollectCommandListToActivatedNodes(MetadataSyncContext *context, List *com
 
 
 /*
- * SendOrCollectCommandListToMetadataNodes sends the commands to the metadata nodes with
- * bare connections inside metadatacontext or via coordinated connections.
- * Note that when context only collects commands, we add commands into the context
- * without sending the commands.
+ * SendCollectedCommandsToMetadataNodes sends collected commands to the metadata
+ * nodes with bare connections inside metadatacontext or via coordinated connections.
+ * Note that when we are in noConnectionMode, we add commands into the context without
+ * sending the commands.
  */
 void
-SendOrCollectCommandListToMetadataNodes(MetadataSyncContext *context, List *commands)
+SendCollectedCommandsToMetadataNodes(MetadataSyncContext *context)
 {
-	/*
-	 * do not send any command to workers if we collcet commands.
-	 * Collect commands into metadataSyncContext's collected command
-	 * list.
-	 */
-	if (MetadataSyncCollectsCommands(context))
+	Assert(!MetadataSyncInNoConnectionMode(context));
+
+	/* do nothing if no commands */
+	List *commands = context->collectedCommands;
+	if (commands == NIL)
 	{
-		context->collectedCommands = list_concat(context->collectedCommands, commands);
 		return;
 	}
 
@@ -4170,23 +4254,20 @@ SendOrCollectCommandListToMetadataNodes(MetadataSyncContext *context, List *comm
 
 
 /*
- * SendOrCollectCommandListToSingleNode sends the commands to the specific worker
+ * SendCollectedCommandsToSingleNode sends collected commands to the specific worker
  * indexed by nodeIdx with bare connection inside metadatacontext or via coordinated
- * connection. Note that when context only collects commands, we add commands into
+ * connection. Note that when we are in noConnectionMode, we add commands into
  * the context without sending the commands.
  */
 void
-SendOrCollectCommandListToSingleNode(MetadataSyncContext *context, List *commands,
-									 int nodeIdx)
+SendCollectedCommandsToSingleNode(MetadataSyncContext *context, int nodeIdx)
 {
-	/*
-	 * Do not send any command to workers if we collect commands.
-	 * Collect commands into metadataSyncContext's collected command
-	 * list.
-	 */
-	if (MetadataSyncCollectsCommands(context))
+	Assert(!MetadataSyncInNoConnectionMode(context));
+
+	/* do nothing if no commands */
+	List *commands = context->collectedCommands;
+	if (commands == NIL)
 	{
-		context->collectedCommands = list_concat(context->collectedCommands, commands);
 		return;
 	}
 
@@ -4243,7 +4324,6 @@ WorkerDropAllShellTablesCommand(bool singleTransaction)
 static List *
 PropagateNodeWideObjectsCommandList(void)
 {
-	/* collect all commands */
 	List *ddlCommands = NIL;
 
 	if (EnableAlterRoleSetPropagation)
@@ -4330,17 +4410,24 @@ SyncDistributedObjects(MetadataSyncContext *context)
 void
 SendNodeWideObjectsSyncCommands(MetadataSyncContext *context)
 {
+	MemoryContext oldContext = MemoryContextSwitchTo(context->context);
+
 	/* propagate node wide objects. It includes only roles for now. */
 	List *commandList = PropagateNodeWideObjectsCommandList();
 
 	if (commandList == NIL)
 	{
+		MemoryContextSwitchTo(oldContext);
 		return;
 	}
 
 	commandList = lcons(DISABLE_DDL_PROPAGATION, commandList);
 	commandList = lappend(commandList, ENABLE_DDL_PROPAGATION);
-	SendOrCollectCommandListToActivatedNodes(context, commandList);
+
+	bool forceSend = true;
+	CollectCommandIntoMetadataSyncContext(context, commandList);
+	ProcessBatchCommandsToActivatedNodes(context, forceSend);
+	MemoryContextSwitchTo(oldContext);
 }
 
 
@@ -4352,14 +4439,22 @@ SendNodeWideObjectsSyncCommands(MetadataSyncContext *context)
 void
 SendShellTableDeletionCommands(MetadataSyncContext *context)
 {
+	bool forceSend = true;
+
+	MemoryContext oldContext = MemoryContextSwitchTo(context->context);
+
 	/* break all sequence deps for citus tables and remove all shell tables */
 	char *breakSeqDepsCommand = BREAK_CITUS_TABLE_SEQUENCE_DEPENDENCY_COMMAND;
-	SendOrCollectCommandListToActivatedNodes(context, list_make1(breakSeqDepsCommand));
+	CollectCommandIntoMetadataSyncContext(context, list_make1(breakSeqDepsCommand));
+	ProcessBatchCommandsToActivatedNodes(context, forceSend);
 
 	/* remove shell tables */
 	bool singleTransaction = (context->transactionMode == METADATA_SYNC_TRANSACTIONAL);
 	char *dropShellTablesCommand = WorkerDropAllShellTablesCommand(singleTransaction);
-	SendOrCollectCommandListToActivatedNodes(context, list_make1(dropShellTablesCommand));
+	CollectCommandIntoMetadataSyncContext(context, list_make1(dropShellTablesCommand));
+	ProcessBatchCommandsToActivatedNodes(context, forceSend);
+
+	MemoryContextSwitchTo(oldContext);
 }
 
 
@@ -4371,21 +4466,27 @@ SendShellTableDeletionCommands(MetadataSyncContext *context)
 void
 SendMetadataDeletionCommands(MetadataSyncContext *context)
 {
+	MemoryContext oldContext = MemoryContextSwitchTo(context->context);
+
 	/* remove pg_dist_partition entries */
-	SendOrCollectCommandListToActivatedNodes(context, list_make1(DELETE_ALL_PARTITIONS));
+	CollectCommandIntoMetadataSyncContext(context, list_make1(DELETE_ALL_PARTITIONS));
 
 	/* remove pg_dist_shard entries */
-	SendOrCollectCommandListToActivatedNodes(context, list_make1(DELETE_ALL_SHARDS));
+	CollectCommandIntoMetadataSyncContext(context, list_make1(DELETE_ALL_SHARDS));
 
 	/* remove pg_dist_placement entries */
-	SendOrCollectCommandListToActivatedNodes(context, list_make1(DELETE_ALL_PLACEMENTS));
+	CollectCommandIntoMetadataSyncContext(context, list_make1(DELETE_ALL_PLACEMENTS));
 
 	/* remove pg_dist_object entries */
-	SendOrCollectCommandListToActivatedNodes(context,
-											 list_make1(DELETE_ALL_DISTRIBUTED_OBJECTS));
+	CollectCommandIntoMetadataSyncContext(context,
+										  list_make1(DELETE_ALL_DISTRIBUTED_OBJECTS));
 
 	/* remove pg_dist_colocation entries */
-	SendOrCollectCommandListToActivatedNodes(context, list_make1(DELETE_ALL_COLOCATION));
+	CollectCommandIntoMetadataSyncContext(context, list_make1(DELETE_ALL_COLOCATION));
+
+	bool forceSend = true;
+	ProcessBatchCommandsToActivatedNodes(context, forceSend);
+	MemoryContextSwitchTo(oldContext);
 }
 
 
@@ -4396,6 +4497,7 @@ SendMetadataDeletionCommands(MetadataSyncContext *context)
 void
 SendColocationMetadataCommands(MetadataSyncContext *context)
 {
+	bool forceSend = false;
 	ScanKeyData scanKey[1];
 	int scanKeyCount = 0;
 
@@ -4407,11 +4509,12 @@ SendColocationMetadataCommands(MetadataSyncContext *context)
 	HeapTuple nextTuple = NULL;
 	while (true)
 	{
-		ResetMetadataSyncMemoryContext(context);
-
 		nextTuple = systable_getnext(scanDesc);
 		if (!HeapTupleIsValid(nextTuple))
 		{
+			/* send if we have commands that are not sent */
+			forceSend = true;
+			ProcessBatchCommandsToActivatedNodes(context, forceSend);
 			break;
 		}
 
@@ -4476,7 +4579,8 @@ SendColocationMetadataCommands(MetadataSyncContext *context)
 						 " = c.collnamespace)");
 
 		List *commandList = list_make1(colocationGroupCreateCommand->data);
-		SendOrCollectCommandListToActivatedNodes(context, commandList);
+		CollectCommandIntoMetadataSyncContext(context, commandList);
+		ProcessBatchCommandsToActivatedNodes(context, forceSend);
 	}
 	MemoryContextSwitchTo(oldContext);
 
@@ -4493,11 +4597,14 @@ SendColocationMetadataCommands(MetadataSyncContext *context)
 void
 SendDependencyCreationCommands(MetadataSyncContext *context)
 {
-	/* disable ddl propagation */
-	SendOrCollectCommandListToActivatedNodes(context,
-											 list_make1(DISABLE_DDL_PROPAGATION));
-
-	MemoryContext oldContext = MemoryContextSwitchTo(context->context);
+	/*
+	 * We need to preserve collected dependencies as we reset memory context
+	 * inside metadataSyncContext during commands generation below.
+	 */
+	MemoryContext dependencyContext = AllocSetContextCreate(CurrentMemoryContext,
+															"dependency context",
+															ALLOCSET_DEFAULT_SIZES);
+	MemoryContext oldContext = MemoryContextSwitchTo(dependencyContext);
 
 	/* collect all dependencies in creation order and get their ddl commands */
 	List *dependencies = GetDistributedObjectAddressList();
@@ -4512,22 +4619,16 @@ SendDependencyCreationCommands(MetadataSyncContext *context)
 
 	dependencies = OrderObjectAddressListInDependencyOrder(dependencies);
 
-	/*
-	 * We need to create a subcontext as we reset the context after each dependency
-	 * creation but we want to preserve all dependency objects at metadataSyncContext.
-	 */
-	MemoryContext commandsContext = AllocSetContextCreate(context->context,
-														  "dependency commands context",
-														  ALLOCSET_DEFAULT_SIZES);
-	MemoryContextSwitchTo(commandsContext);
+	MemoryContextSwitchTo(context->context);
+
+	/* disable ddl propagation */
+	bool forceSend = true;
+	CollectCommandIntoMetadataSyncContext(context, list_make1(DISABLE_DDL_PROPAGATION));
+	ProcessBatchCommandsToActivatedNodes(context, forceSend);
+
 	ObjectAddress *dependency = NULL;
 	foreach_ptr(dependency, dependencies)
 	{
-		if (!MetadataSyncCollectsCommands(context))
-		{
-			MemoryContextReset(commandsContext);
-		}
-
 		if (IsAnyObjectAddressOwnedByExtension(list_make1(dependency), NULL))
 		{
 			/*
@@ -4538,19 +4639,18 @@ SendDependencyCreationCommands(MetadataSyncContext *context)
 		}
 
 		/* dependency creation commands */
+		forceSend = false;
 		List *ddlCommands = GetAllDependencyCreateDDLCommands(list_make1(dependency));
-		SendOrCollectCommandListToActivatedNodes(context, ddlCommands);
+		CollectCommandIntoMetadataSyncContext(context, ddlCommands);
+		ProcessBatchCommandsToActivatedNodes(context, forceSend);
 	}
-	MemoryContextSwitchTo(oldContext);
-
-	if (!MetadataSyncCollectsCommands(context))
-	{
-		MemoryContextDelete(commandsContext);
-	}
-	ResetMetadataSyncMemoryContext(context);
 
 	/* enable ddl propagation */
-	SendOrCollectCommandListToActivatedNodes(context, list_make1(ENABLE_DDL_PROPAGATION));
+	forceSend = true;
+	CollectCommandIntoMetadataSyncContext(context, list_make1(ENABLE_DDL_PROPAGATION));
+	ProcessBatchCommandsToActivatedNodes(context, forceSend);
+	MemoryContextSwitchTo(oldContext);
+	MemoryContextDelete(dependencyContext);
 }
 
 
@@ -4562,6 +4662,7 @@ SendDependencyCreationCommands(MetadataSyncContext *context)
 void
 SendDistTableMetadataCommands(MetadataSyncContext *context)
 {
+	bool forceSend = false;
 	ScanKeyData scanKey[1];
 	int scanKeyCount = 0;
 
@@ -4575,11 +4676,12 @@ SendDistTableMetadataCommands(MetadataSyncContext *context)
 	HeapTuple nextTuple = NULL;
 	while (true)
 	{
-		ResetMetadataSyncMemoryContext(context);
-
 		nextTuple = systable_getnext(scanDesc);
 		if (!HeapTupleIsValid(nextTuple))
 		{
+			/* send if we have commands that are not sent */
+			forceSend = true;
+			ProcessBatchCommandsToActivatedNodes(context, forceSend);
 			break;
 		}
 
@@ -4594,7 +4696,8 @@ SendDistTableMetadataCommands(MetadataSyncContext *context)
 		}
 
 		List *commandList = CitusTableMetadataCreateCommandList(relationId);
-		SendOrCollectCommandListToActivatedNodes(context, commandList);
+		CollectCommandIntoMetadataSyncContext(context, commandList);
+		ProcessBatchCommandsToActivatedNodes(context, forceSend);
 	}
 	MemoryContextSwitchTo(oldContext);
 
@@ -4611,6 +4714,7 @@ SendDistTableMetadataCommands(MetadataSyncContext *context)
 void
 SendDistObjectCommands(MetadataSyncContext *context)
 {
+	bool forceSend = false;
 	ScanKeyData scanKey[1];
 	int scanKeyCount = 0;
 
@@ -4624,11 +4728,12 @@ SendDistObjectCommands(MetadataSyncContext *context)
 	HeapTuple nextTuple = NULL;
 	while (true)
 	{
-		ResetMetadataSyncMemoryContext(context);
-
 		nextTuple = systable_getnext(scanDesc);
 		if (!HeapTupleIsValid(nextTuple))
 		{
+			/* send if we have commands that are not sent */
+			forceSend = true;
+			ProcessBatchCommandsToActivatedNodes(context, forceSend);
 			break;
 		}
 
@@ -4678,13 +4783,15 @@ SendDistObjectCommands(MetadataSyncContext *context)
 			forceDelegation = NO_FORCE_PUSHDOWN;
 		}
 
+		forceSend = false;
 		char *workerMetadataUpdateCommand =
 			MarkObjectsDistributedCreateCommand(list_make1(address),
 												list_make1_int(distributionArgumentIndex),
 												list_make1_int(colocationId),
 												list_make1_int(forceDelegation));
-		SendOrCollectCommandListToActivatedNodes(context,
-												 list_make1(workerMetadataUpdateCommand));
+		List *commandList = list_make1(workerMetadataUpdateCommand);
+		CollectCommandIntoMetadataSyncContext(context, commandList);
+		ProcessBatchCommandsToActivatedNodes(context, forceSend);
 	}
 	MemoryContextSwitchTo(oldContext);
 
@@ -4702,10 +4809,6 @@ SendDistObjectCommands(MetadataSyncContext *context)
 void
 SendInterTableRelationshipCommands(MetadataSyncContext *context)
 {
-	/* disable ddl propagation */
-	SendOrCollectCommandListToActivatedNodes(context,
-											 list_make1(DISABLE_DDL_PROPAGATION));
-
 	ScanKeyData scanKey[1];
 	int scanKeyCount = 0;
 
@@ -4716,11 +4819,15 @@ SendInterTableRelationshipCommands(MetadataSyncContext *context)
 											  scanKeyCount, scanKey);
 
 	MemoryContext oldContext = MemoryContextSwitchTo(context->context);
+
+	/* disable ddl propagation */
+	bool forceSend = true;
+	CollectCommandIntoMetadataSyncContext(context, list_make1(DISABLE_DDL_PROPAGATION));
+	ProcessBatchCommandsToActivatedNodes(context, forceSend);
+
 	HeapTuple nextTuple = NULL;
 	while (true)
 	{
-		ResetMetadataSyncMemoryContext(context);
-
 		nextTuple = systable_getnext(scanDesc);
 		if (!HeapTupleIsValid(nextTuple))
 		{
@@ -4742,14 +4849,18 @@ SendInterTableRelationshipCommands(MetadataSyncContext *context)
 			continue;
 		}
 
+		forceSend = false;
 		List *commandList = InterTableRelationshipOfRelationCommandList(relationId);
-		SendOrCollectCommandListToActivatedNodes(context, commandList);
+		CollectCommandIntoMetadataSyncContext(context, commandList);
+		ProcessBatchCommandsToActivatedNodes(context, forceSend);
 	}
+
+	/* enable ddl propagation */
+	forceSend = true;
+	CollectCommandIntoMetadataSyncContext(context, list_make1(ENABLE_DDL_PROPAGATION));
+	ProcessBatchCommandsToActivatedNodes(context, forceSend);
 	MemoryContextSwitchTo(oldContext);
 
 	systable_endscan(scanDesc);
 	table_close(relation, AccessShareLock);
-
-	/* enable ddl propagation */
-	SendOrCollectCommandListToActivatedNodes(context, list_make1(ENABLE_DDL_PROPAGATION));
 }

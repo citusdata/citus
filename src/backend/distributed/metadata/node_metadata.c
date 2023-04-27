@@ -763,11 +763,11 @@ citus_activate_node(PG_FUNCTION_ARGS)
 	 * It contains activated nodes, bare connections if the mode is nontransactional,
 	 * and a memory context for allocation.
 	 */
-	bool collectCommands = false;
 	bool nodesAddedInSameTransaction = false;
+	bool noConnectionMode = false;
 	MetadataSyncContext *context = CreateMetadataSyncContext(list_make1(workerNode),
-															 collectCommands,
-															 nodesAddedInSameTransaction);
+															 nodesAddedInSameTransaction,
+															 noConnectionMode);
 
 	ActivateNodeList(context);
 	TransactionModifiedNodeMetadata = true;
@@ -933,7 +933,7 @@ MarkNodesNotSyncedInLoopBackConnection(MetadataSyncContext *context,
 									   pid_t parentSessionPid)
 {
 	Assert(context->transactionMode == METADATA_SYNC_NON_TRANSACTIONAL);
-	Assert(!MetadataSyncCollectsCommands(context));
+	Assert(!MetadataSyncInNoConnectionMode(context));
 
 	/*
 	 * Set metadatasynced to false for all activated nodes to mark the nodes as not synced
@@ -1001,8 +1001,8 @@ MarkNodesNotSyncedInLoopBackConnection(MetadataSyncContext *context,
 static void
 SetNodeMetadata(MetadataSyncContext *context, bool localOnly)
 {
-	/* do not execute local transaction if we collect commands */
-	if (!MetadataSyncCollectsCommands(context))
+	/* do not execute local transaction if we are in noConnectionMode */
+	if (!MetadataSyncInNoConnectionMode(context))
 	{
 		List *updatedActivatedNodeList = NIL;
 
@@ -1023,7 +1023,7 @@ SetNodeMetadata(MetadataSyncContext *context, bool localOnly)
 		SetMetadataSyncNodesFromNodeList(context, updatedActivatedNodeList);
 	}
 
-	if (!localOnly && EnableMetadataSync)
+	if (!localOnly)
 	{
 		WorkerNode *node = NULL;
 		foreach_ptr(node, context->activatedWorkerNodeList)
@@ -1041,7 +1041,7 @@ SetNodeMetadata(MetadataSyncContext *context, bool localOnly)
  * The function operates in 3 different modes according to transactionMode inside
  * metadataSyncContext.
  *
- * 1. MetadataSyncCollectsCommands(context):
+ * 1. MetadataSyncInNoConnectionMode(context):
  *      Only collect commands instead of sending them to workers,
  * 2. context.transactionMode == METADATA_SYNC_TRANSACTIONAL:
  *      Send all commands using coordinated transaction,
@@ -1091,15 +1091,14 @@ ActivateNodeList(MetadataSyncContext *context)
 
 	/*
 	 * we need to unset metadatasynced flag to false at coordinator in separate
-	 * transaction only at nontransactional sync mode and if we do not collect
-	 * commands.
+	 * transaction only at nontransactional sync mode and if are in noConnectionMode.
 	 *
 	 * We make sure we set the flag to false at the start of nontransactional
 	 * metadata sync to mark those nodes are not synced in case of a failure in
 	 * the middle of the sync.
 	 */
 	if (context->transactionMode == METADATA_SYNC_NON_TRANSACTIONAL &&
-		!MetadataSyncCollectsCommands(context))
+		!MetadataSyncInNoConnectionMode(context))
 	{
 		MarkNodesNotSyncedInLoopBackConnection(context, MyProcPid);
 	}
@@ -2217,16 +2216,19 @@ AddNodeMetadataViaMetadataContext(char *nodeName, int32 nodePort,
 	}
 
 	List *nodeList = list_make1(node);
-	bool collectCommands = false;
 	bool nodesAddedInSameTransaction = true;
-	MetadataSyncContext *context = CreateMetadataSyncContext(nodeList, collectCommands,
-															 nodesAddedInSameTransaction);
+	bool noConnectionMode = false;
+	MetadataSyncContext *context = CreateMetadataSyncContext(nodeList,
+															 nodesAddedInSameTransaction,
+															 noConnectionMode);
 
 	if (EnableMetadataSync)
 	{
+		MemoryContext oldContext = MemoryContextSwitchTo(context->context);
+
 		/* send the delete command to all primary nodes with metadata */
 		char *nodeDeleteCommand = NodeDeleteCommand(node->nodeId);
-		SendOrCollectCommandListToMetadataNodes(context, list_make1(nodeDeleteCommand));
+		CollectCommandIntoMetadataSyncContext(context, list_make1(nodeDeleteCommand));
 
 		/* finally prepare the insert command and send it to all primary nodes */
 		uint32 primariesWithMetadata = CountPrimariesWithMetadata();
@@ -2246,9 +2248,12 @@ AddNodeMetadataViaMetadataContext(char *nodeName, int32 nodePort,
 				nodeInsertCommand = NodeListIdempotentInsertCommand(nodeList);
 			}
 			Assert(nodeInsertCommand != NULL);
-			SendOrCollectCommandListToMetadataNodes(context,
-													list_make1(nodeInsertCommand));
+			CollectCommandIntoMetadataSyncContext(context, list_make1(nodeInsertCommand));
 		}
+
+		bool forceSend = true;
+		ProcessBatchCommandsToMetadataNodes(context, forceSend);
+		MemoryContextSwitchTo(oldContext);
 	}
 
 	ActivateNodeList(context);
@@ -2289,6 +2294,8 @@ static void
 SetNodeStateViaMetadataContext(MetadataSyncContext *context, WorkerNode *workerNode,
 							   Datum value)
 {
+	MemoryContext oldContext = MemoryContextSwitchTo(context->context);
+
 	char *isActiveCommand =
 		GetMetadataSyncCommandToSetNodeColumn(workerNode, Anum_pg_dist_node_isactive,
 											  value);
@@ -2301,7 +2308,10 @@ SetNodeStateViaMetadataContext(MetadataSyncContext *context, WorkerNode *workerN
 	List *commandList = list_make3(isActiveCommand, metadatasyncedCommand,
 								   hasmetadataCommand);
 
-	SendOrCollectCommandListToMetadataNodes(context, commandList);
+	bool forceSend = true;
+	CollectCommandIntoMetadataSyncContext(context, commandList);
+	ProcessBatchCommandsToMetadataNodes(context, forceSend);
+	MemoryContextSwitchTo(oldContext);
 }
 
 
@@ -3049,18 +3059,18 @@ ErrorIfAnyNodeNotExist(List *nodeList)
 static void
 UpdateLocalGroupIdsViaMetadataContext(MetadataSyncContext *context)
 {
+	MemoryContext oldContext = MemoryContextSwitchTo(context->context);
+	bool forceSend = true;
 	int activatedPrimaryCount = list_length(context->activatedWorkerNodeList);
 	int nodeIdx = 0;
 	for (nodeIdx = 0; nodeIdx < activatedPrimaryCount; nodeIdx++)
 	{
 		WorkerNode *node = list_nth(context->activatedWorkerNodeList, nodeIdx);
 		List *commandList = list_make1(LocalGroupIdUpdateCommand(node->groupId));
-
-		/* send commands to new workers, the current user should be a superuser */
-		Assert(superuser());
-
-		SendOrCollectCommandListToSingleNode(context, commandList, nodeIdx);
+		CollectCommandIntoMetadataSyncContext(context, commandList);
+		ProcessBatchCommandsToSingleNode(context, nodeIdx, forceSend);
 	}
+	MemoryContextSwitchTo(oldContext);
 }
 
 
@@ -3105,7 +3115,7 @@ SyncNodeMetadata(MetadataSyncContext *context)
 	 * Do not fail when we call this method from activate_node_snapshot
 	 * from workers.
 	 */
-	if (!MetadataSyncCollectsCommands(context))
+	if (!MetadataSyncInNoConnectionMode(context))
 	{
 		EnsureCoordinator();
 	}
@@ -3114,6 +3124,8 @@ SyncNodeMetadata(MetadataSyncContext *context)
 	EnsureSequentialModeMetadataOperations();
 
 	LockRelationOid(DistNodeRelationId(), ExclusiveLock);
+
+	MemoryContext oldContext = MemoryContextSwitchTo(context->context);
 
 	/* generate the queries which drop the node metadata */
 	List *dropMetadataCommandList = NodeMetadataDropCommands();
@@ -3129,5 +3141,8 @@ SyncNodeMetadata(MetadataSyncContext *context)
 	 * We should have already added node metadata to metadata workers. Sync node
 	 * metadata just for activated workers.
 	 */
-	SendOrCollectCommandListToActivatedNodes(context, recreateNodeSnapshotCommandList);
+	bool forceSend = true;
+	CollectCommandIntoMetadataSyncContext(context, recreateNodeSnapshotCommandList);
+	ProcessBatchCommandsToActivatedNodes(context, forceSend);
+	MemoryContextSwitchTo(oldContext);
 }

@@ -18,6 +18,8 @@
 #include "distributed/metadata_cache.h"
 #include "nodes/pg_list.h"
 
+#define METADATA_SYNC_DEFAULT_BATCH_COUNT 10
+
 /* managed via guc.c */
 typedef enum
 {
@@ -29,6 +31,7 @@ typedef enum
 extern int MetadataSyncInterval;
 extern int MetadataSyncRetryInterval;
 extern int MetadataSyncTransMode;
+extern int MetadataSyncBatchCount;
 
 /*
  * MetadataSyncContext is used throughout metadata sync.
@@ -39,9 +42,9 @@ typedef struct MetadataSyncContext
 	List *activatedWorkerBareConnections; /* bare connections to activated nodes */
 	MemoryContext context; /* memory context for all allocations */
 	MetadataSyncTransactionMode transactionMode; /* transaction mode for the sync */
-	bool collectCommands; /* if we collect commands instead of sending and resetting */
-	List *collectedCommands; /* collected commands. (NIL if collectCommands == false) */
+	List *collectedCommands; /* collected commands. */
 	bool nodesAddedInSameTransaction; /* if the nodes are added just before activation */
+	bool noConnectionMode; /* should we establish connections or just collect commands */
 } MetadataSyncContext;
 
 typedef enum
@@ -139,19 +142,24 @@ extern void SyncNewColocationGroupToNodes(uint32 colocationId, int shardCount,
 extern void SyncDeleteColocationGroupToNodes(uint32 colocationId);
 
 extern MetadataSyncContext * CreateMetadataSyncContext(List *nodeList,
-													   bool collectCommands,
-													   bool nodesAddedInSameTransaction);
+													   bool nodesAddedInSameTransaction,
+													   bool noConnectionMode);
 extern void EstablishAndSetMetadataSyncBareConnections(MetadataSyncContext *context);
 extern void SetMetadataSyncNodesFromNodeList(MetadataSyncContext *context,
 											 List *nodeList);
 extern void ResetMetadataSyncMemoryContext(MetadataSyncContext *context);
-extern bool MetadataSyncCollectsCommands(MetadataSyncContext *context);
-extern void SendOrCollectCommandListToActivatedNodes(MetadataSyncContext *context,
-													 List *commands);
-extern void SendOrCollectCommandListToMetadataNodes(MetadataSyncContext *context,
-													List *commands);
-extern void SendOrCollectCommandListToSingleNode(MetadataSyncContext *context,
-												 List *commands, int nodeIdx);
+extern void CollectCommandIntoMetadataSyncContext(MetadataSyncContext *context,
+												  List *commandList);
+extern void ProcessBatchCommandsToActivatedNodes(MetadataSyncContext *context, bool
+												 forceSend);
+extern void ProcessBatchCommandsToMetadataNodes(MetadataSyncContext *context,
+												bool forceSend);
+extern void ProcessBatchCommandsToSingleNode(MetadataSyncContext *context, int nodeIdx,
+											 bool forceSend);
+extern bool MetadataSyncInNoConnectionMode(MetadataSyncContext *context);
+extern void SendCollectedCommandsToActivatedNodes(MetadataSyncContext *context);
+extern void SendCollectedCommandsToMetadataNodes(MetadataSyncContext *context);
+extern void SendCollectedCommandsToSingleNode(MetadataSyncContext *context, int nodeIdx);
 
 extern void ActivateNodeList(MetadataSyncContext *context);
 
