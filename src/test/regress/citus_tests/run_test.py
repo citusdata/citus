@@ -15,7 +15,7 @@ from typing import Optional
 import common
 from common import REGRESS_DIR, capture, run
 
-from config import ARBITRARY_SCHEDULE_NAMES, MASTER_VERSION, CitusDefaultClusterConfig
+from config import ARBITRARY_SCHEDULE_NAMES, MASTER_VERSION, CitusBaseClusterConfig
 
 
 def main():
@@ -154,6 +154,8 @@ def run_python_test(test_name, args):
 
 def run_regress_test(test_name, args):
     original_schedule, schedule_line = find_test_schedule_and_line(test_name, args)
+    print(f"SCHEDULE: {original_schedule}")
+    print(f"SCHEDULE_LINE: {schedule_line}")
 
     dependencies = test_dependencies(test_name, original_schedule, schedule_line, args)
 
@@ -178,7 +180,7 @@ def run_schedule_with_python(schedule):
         "--bindir": bindir,
     }
 
-    config = CitusDefaultClusterConfig(args)
+    config = CitusBaseClusterConfig(args)
     common.initialize_temp_dir(config.temp_dir)
     common.initialize_citus_cluster(
         config.bindir, config.datadir, config.settings, config
@@ -242,7 +244,7 @@ def default_base_schedule(test_schedule, args):
         return None
 
     if "pg_upgrade" in test_schedule:
-        return "minimal_schedule"
+        return "minimal_pg_upgrade_schedule"
 
     if test_schedule in ARBITRARY_SCHEDULE_NAMES:
         print(f"WARNING: Arbitrary config schedule ({test_schedule}) is not supported.")
@@ -287,7 +289,7 @@ def get_test_name(args):
 def find_test_schedule_and_line(test_name, args):
     for schedule_file_path in sorted(REGRESS_DIR.glob("*_schedule")):
         for schedule_line in open(schedule_file_path, "r"):
-            if re.search(r"\b" + test_name + r"\b", schedule_line):
+            if re.search(r"^test:.*\b" + test_name + r"\b", schedule_line):
                 test_schedule = pathlib.Path(schedule_file_path).stem
                 if args["use_whole_schedule_line"]:
                     return test_schedule, schedule_line
@@ -301,9 +303,21 @@ def test_dependencies(test_name, test_schedule, schedule_line, args):
 
     if schedule_line_is_upgrade_after(schedule_line):
         # upgrade_xxx_after tests always depend on upgrade_xxx_before
+        test_names = schedule_line.split()[1:]
+        before_tests = []
+        # _after tests have implicit dependencies on _before tests
+        for test_name in test_names:
+            if "_after" in test_name:
+                before_tests.append(test_name.replace("_after", "_before"))
+
+        # the upgrade_columnar_before renames the schema, on which other
+        # "after" tests depend. So we make sure to execute it always.
+        if "upgrade_columnar_before" not in before_tests:
+            before_tests.append("upgrade_columnar_before")
+
         return TestDeps(
             default_base_schedule(test_schedule, args),
-            [test_name.replace("_after", "_before")],
+            before_tests,
         )
 
     # before_ tests leave stuff around on purpose for the after tests. So they
