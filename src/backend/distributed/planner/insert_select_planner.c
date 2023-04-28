@@ -848,7 +848,7 @@ RouterModifyTaskForShardInterval(Query *originalQuery,
 		 * Note that this is only the case with PG14 as the parameter doesn't exist
 		 * prior to that.
 		 */
-		shardRestrictionList = make_simple_restrictinfo_compat(NULL,
+		shardRestrictionList = make_simple_restrictinfo_compat(restriction->plannerInfo,
 															   (Expr *) shardOpExpressions);
 		extendedBaseRestrictInfo = lappend(extendedBaseRestrictInfo,
 										   shardRestrictionList);
