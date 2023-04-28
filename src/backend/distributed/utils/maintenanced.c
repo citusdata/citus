@@ -275,7 +275,7 @@ WarnMaintenanceDaemonNotStarted(void)
  * be started by the background worker infrastructure.  If it errors out,
  * it'll be restarted after a few seconds.
  */
-void
+PGDLLEXPORT void
 CitusMaintenanceDaemonMain(Datum main_arg)
 {
 	Oid databaseOid = DatumGetObjectId(main_arg);
