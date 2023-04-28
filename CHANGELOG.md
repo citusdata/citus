@@ -6,17 +6,23 @@
 * Adds support for `MERGE` command on co-located distributed tables joined on
   distribution column (#6696, #6733)
 
-* Adds the GUC `citus.enable_non_colocated_router_query_pushdown` to ensure
-  generating a consistent distributed plan for the queries that reference
-  non-colocated distributed tables when set to "false" (#6793)
+* Adds the view `citus_stats_tenants` that monitor statistics on tenant usages
+  (#6725)
 
 * Adds the GUC `citus.max_background_task_executors_per_node` to control number
   of background task executors involving a node (#6771)
 
-* Adds the view `citus_stats_tenants` that monitor statistics on tenant usages
-  (#6725)
-
 * Allows parallel shard moves in background rebalancer (#6756)
+
+* Introduces the GUC `citus.metadata_sync_mode` that introduces nontransactional
+  mode for metadata sync (#6728)
+
+* Propagates CREATE/ALTER/DROP PUBLICATION statements for distributed tables
+  (#6776)
+
+* Adds the GUC `citus.enable_non_colocated_router_query_pushdown` to ensure
+  generating a consistent distributed plan for the queries that reference
+  non-colocated distributed tables when set to "false" (#6793)
 
 * Checks if all moves are able to be done via logical replication for rebalancer
   (#6754)
@@ -51,9 +57,6 @@
 * Improves rebalancer when shard groups have placement count less than worker
   count (#6739)
 
-* Introduces the GUC `citus.metadata_sync_mode` that introduces nontransactional
-  mode for metadata sync (#6728)
-
 * Makes sure to stop maintenance daemon when dropping a database even without
   Citus extension (#6688)
 
@@ -62,9 +65,6 @@
 
 * Prevents using identity columns on data types other than `bigint` on
   distributed tables (#6738)
-
-* Propagates CREATE/ALTER/DROP PUBLICATION statements for distributed tables
-  (#6776)
 
 ### citus v11.2.1 (April 20, 2023) ###
 
