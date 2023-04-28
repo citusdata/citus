@@ -18,11 +18,36 @@ SET client_min_messages TO ERROR;
 CREATE ROLE foo1;
 CREATE ROLE foo2;
 
+-- Create collation
+CREATE COLLATION german_phonebook (provider = icu, locale = 'de-u-co-phonebk');
+
+-- Create type
+CREATE TYPE pair_type AS (a int, b int);
+
+-- Create function
+CREATE FUNCTION one_as_result() RETURNS INT LANGUAGE SQL AS
+$$
+  SELECT 1;
+$$;
+
+-- Create text search dictionary
+CREATE TEXT SEARCH DICTIONARY my_german_dict (
+    template = snowball,
+    language = german,
+    stopwords = german
+);
+
+-- Create text search config
+CREATE TEXT SEARCH CONFIGURATION my_ts_config ( parser = default );
+ALTER TEXT SEARCH CONFIGURATION my_ts_config ALTER MAPPING FOR asciiword WITH my_german_dict;
+
 -- Create sequence
 CREATE SEQUENCE seq;
 
 -- Create colocated distributed tables
-CREATE TABLE dist1 (id int PRIMARY KEY default nextval('seq'));
+CREATE TABLE dist1 (id int PRIMARY KEY default nextval('seq'), col int default (one_as_result()), myserial serial, phone text COLLATE german_phonebook, initials pair_type);
+CREATE SEQUENCE seq_owned OWNED BY dist1.id;
+CREATE INDEX dist1_search_phone_idx ON dist1 USING gin (to_tsvector('my_ts_config'::regconfig, (COALESCE(phone, ''::text))::text));
 SELECT create_distributed_table('dist1', 'id');
 INSERT INTO dist1 SELECT i FROM generate_series(1,100) i;
 
@@ -41,6 +66,9 @@ INSERT INTO loc1 SELECT i FROM generate_series(1,100) i;
 
 CREATE TABLE loc2 (id int REFERENCES loc1(id));
 INSERT INTO loc2 SELECT i FROM generate_series(1,100) i;
+
+-- Create publication
+CREATE PUBLICATION pub_all;
 
 -- citus_set_coordinator_host with wrong port
 SELECT citus_set_coordinator_host('localhost', 9999);
@@ -88,10 +116,10 @@ SELECT citus_activate_node('localhost', :worker_2_proxy_port);
 SELECT citus.mitmproxy('conn.onQuery(query="INSERT INTO pg_dist_node").kill()');
 SELECT citus_activate_node('localhost', :worker_2_proxy_port);
 
--- Failure to drop sequence
-SELECT citus.mitmproxy('conn.onQuery(query="SELECT pg_catalog.worker_drop_sequence_dependency").cancel(' || :pid || ')');
+-- Failure to drop sequence dependency for all tables
+SELECT citus.mitmproxy('conn.onQuery(query="SELECT pg_catalog.worker_drop_sequence_dependency.*FROM pg_dist_partition").cancel(' || :pid || ')');
 SELECT citus_activate_node('localhost', :worker_2_proxy_port);
-SELECT citus.mitmproxy('conn.onQuery(query="SELECT pg_catalog.worker_drop_sequence_dependency").kill()');
+SELECT citus.mitmproxy('conn.onQuery(query="SELECT pg_catalog.worker_drop_sequence_dependency.*FROM pg_dist_partition").kill()');
 SELECT citus_activate_node('localhost', :worker_2_proxy_port);
 
 -- Failure to drop shell table
@@ -142,10 +170,46 @@ SELECT citus_activate_node('localhost', :worker_2_proxy_port);
 SELECT citus.mitmproxy('conn.onQuery(query="ALTER DATABASE.*OWNER TO").kill()');
 SELECT citus_activate_node('localhost', :worker_2_proxy_port);
 
--- Filure to create schema
+-- Failure to create schema
 SELECT citus.mitmproxy('conn.onQuery(query="CREATE SCHEMA IF NOT EXISTS mx_metadata_sync_multi_trans AUTHORIZATION").cancel(' || :pid || ')');
 SELECT citus_activate_node('localhost', :worker_2_proxy_port);
 SELECT citus.mitmproxy('conn.onQuery(query="CREATE SCHEMA IF NOT EXISTS mx_metadata_sync_multi_trans AUTHORIZATION").kill()');
+SELECT citus_activate_node('localhost', :worker_2_proxy_port);
+
+-- Failure to create collation
+SELECT citus.mitmproxy('conn.onQuery(query="SELECT worker_create_or_replace_object.*CREATE COLLATION mx_metadata_sync_multi_trans.german_phonebook").cancel(' || :pid || ')');
+SELECT citus_activate_node('localhost', :worker_2_proxy_port);
+SELECT citus.mitmproxy('conn.onQuery(query="SELECT worker_create_or_replace_object.*CREATE COLLATION mx_metadata_sync_multi_trans.german_phonebook").kill()');
+SELECT citus_activate_node('localhost', :worker_2_proxy_port);
+
+-- Failure to create function
+SELECT citus.mitmproxy('conn.onQuery(query="CREATE OR REPLACE FUNCTION mx_metadata_sync_multi_trans.one_as_result").cancel(' || :pid || ')');
+SELECT citus_activate_node('localhost', :worker_2_proxy_port);
+SELECT citus.mitmproxy('conn.onQuery(query="CREATE OR REPLACE FUNCTION mx_metadata_sync_multi_trans.one_as_result").kill()');
+SELECT citus_activate_node('localhost', :worker_2_proxy_port);
+
+-- Failure to create text search dictionary
+SELECT citus.mitmproxy('conn.onQuery(query="SELECT worker_create_or_replace_object.*my_german_dict").cancel(' || :pid || ')');
+SELECT citus_activate_node('localhost', :worker_2_proxy_port);
+SELECT citus.mitmproxy('conn.onQuery(query="SELECT worker_create_or_replace_object.*my_german_dict").kill()');
+SELECT citus_activate_node('localhost', :worker_2_proxy_port);
+
+-- Failure to create text search config
+SELECT citus.mitmproxy('conn.onQuery(query="SELECT worker_create_or_replace_object.*my_ts_config").cancel(' || :pid || ')');
+SELECT citus_activate_node('localhost', :worker_2_proxy_port);
+SELECT citus.mitmproxy('conn.onQuery(query="SELECT worker_create_or_replace_object.*my_ts_config").kill()');
+SELECT citus_activate_node('localhost', :worker_2_proxy_port);
+
+-- Failure to create type
+SELECT citus.mitmproxy('conn.onQuery(query="SELECT worker_create_or_replace_object.*pair_type").cancel(' || :pid || ')');
+SELECT citus_activate_node('localhost', :worker_2_proxy_port);
+SELECT citus.mitmproxy('conn.onQuery(query="SELECT worker_create_or_replace_object.*pair_type").kill()');
+SELECT citus_activate_node('localhost', :worker_2_proxy_port);
+
+-- Failure to create publication
+SELECT citus.mitmproxy('conn.onQuery(query="CREATE PUBLICATION.*pub_all").cancel(' || :pid || ')');
+SELECT citus_activate_node('localhost', :worker_2_proxy_port);
+SELECT citus.mitmproxy('conn.onQuery(query="CREATE PUBLICATION.*pub_all").kill()');
 SELECT citus_activate_node('localhost', :worker_2_proxy_port);
 
 -- Failure to create sequence
@@ -154,10 +218,34 @@ SELECT citus_activate_node('localhost', :worker_2_proxy_port);
 SELECT citus.mitmproxy('conn.onQuery(query="SELECT worker_apply_sequence_command").kill()');
 SELECT citus_activate_node('localhost', :worker_2_proxy_port);
 
+-- Failure to drop sequence dependency for distributed table
+SELECT citus.mitmproxy('conn.onQuery(query="SELECT pg_catalog.worker_drop_sequence_dependency.*mx_metadata_sync_multi_trans.dist1").cancel(' || :pid || ')');
+SELECT citus_activate_node('localhost', :worker_2_proxy_port);
+SELECT citus.mitmproxy('conn.onQuery(query="SELECT pg_catalog.worker_drop_sequence_dependency.*mx_metadata_sync_multi_trans.dist1").kill()');
+SELECT citus_activate_node('localhost', :worker_2_proxy_port);
+
+-- Failure to drop distributed table if exists
+SELECT citus.mitmproxy('conn.onQuery(query="DROP TABLE IF EXISTS mx_metadata_sync_multi_trans.dist1").cancel(' || :pid || ')');
+SELECT citus_activate_node('localhost', :worker_2_proxy_port);
+SELECT citus.mitmproxy('conn.onQuery(query="DROP TABLE IF EXISTS mx_metadata_sync_multi_trans.dist1").kill()');
+SELECT citus_activate_node('localhost', :worker_2_proxy_port);
+
 -- Failure to create distributed table
 SELECT citus.mitmproxy('conn.onQuery(query="CREATE TABLE mx_metadata_sync_multi_trans.dist1").cancel(' || :pid || ')');
 SELECT citus_activate_node('localhost', :worker_2_proxy_port);
 SELECT citus.mitmproxy('conn.onQuery(query="CREATE TABLE mx_metadata_sync_multi_trans.dist1").kill()');
+SELECT citus_activate_node('localhost', :worker_2_proxy_port);
+
+-- Failure to record sequence dependency for table
+SELECT citus.mitmproxy('conn.onQuery(query="SELECT pg_catalog.worker_record_sequence_dependency").cancel(' || :pid || ')');
+SELECT citus_activate_node('localhost', :worker_2_proxy_port);
+SELECT citus.mitmproxy('conn.onQuery(query="SELECT pg_catalog.worker_record_sequence_dependency").kill()');
+SELECT citus_activate_node('localhost', :worker_2_proxy_port);
+
+-- Failure to create index for table
+SELECT citus.mitmproxy('conn.onQuery(query="CREATE INDEX dist1_search_phone_idx ON mx_metadata_sync_multi_trans.dist1 USING gin").cancel(' || :pid || ')');
+SELECT citus_activate_node('localhost', :worker_2_proxy_port);
+SELECT citus.mitmproxy('conn.onQuery(query="CREATE INDEX dist1_search_phone_idx ON mx_metadata_sync_multi_trans.dist1 USING gin").kill()');
 SELECT citus_activate_node('localhost', :worker_2_proxy_port);
 
 -- Failure to create reference table
@@ -220,6 +308,48 @@ SELECT citus_activate_node('localhost', :worker_2_proxy_port);
 SELECT citus.mitmproxy('conn.onQuery(query="SELECT citus_internal_add_object_metadata").kill()');
 SELECT citus_activate_node('localhost', :worker_2_proxy_port);
 
+-- Failure to mark function as distributed
+SELECT citus.mitmproxy('conn.onQuery(query="WITH distributed_object_data.*one_as_result").cancel(' || :pid || ')');
+SELECT citus_activate_node('localhost', :worker_2_proxy_port);
+SELECT citus.mitmproxy('conn.onQuery(query="WITH distributed_object_data.*one_as_result").kill()');
+SELECT citus_activate_node('localhost', :worker_2_proxy_port);
+
+-- Failure to mark collation as distributed
+SELECT citus.mitmproxy('conn.onQuery(query="WITH distributed_object_data.*german_phonebook").cancel(' || :pid || ')');
+SELECT citus_activate_node('localhost', :worker_2_proxy_port);
+SELECT citus.mitmproxy('conn.onQuery(query="WITH distributed_object_data.*german_phonebook").kill()');
+SELECT citus_activate_node('localhost', :worker_2_proxy_port);
+
+-- Failure to mark text search dictionary as distributed
+SELECT citus.mitmproxy('conn.onQuery(query="WITH distributed_object_data.*my_german_dict").cancel(' || :pid || ')');
+SELECT citus_activate_node('localhost', :worker_2_proxy_port);
+SELECT citus.mitmproxy('conn.onQuery(query="WITH distributed_object_data.*my_german_dict").kill()');
+SELECT citus_activate_node('localhost', :worker_2_proxy_port);
+
+-- Failure to mark text search configuration as distributed
+SELECT citus.mitmproxy('conn.onQuery(query="WITH distributed_object_data.*my_ts_config").cancel(' || :pid || ')');
+SELECT citus_activate_node('localhost', :worker_2_proxy_port);
+SELECT citus.mitmproxy('conn.onQuery(query="WITH distributed_object_data.*my_ts_config").kill()');
+SELECT citus_activate_node('localhost', :worker_2_proxy_port);
+
+-- Failure to mark type as distributed
+SELECT citus.mitmproxy('conn.onQuery(query="WITH distributed_object_data.*pair_type").cancel(' || :pid || ')');
+SELECT citus_activate_node('localhost', :worker_2_proxy_port);
+SELECT citus.mitmproxy('conn.onQuery(query="WITH distributed_object_data.*pair_type").kill()');
+SELECT citus_activate_node('localhost', :worker_2_proxy_port);
+
+-- Failure to mark sequence as distributed
+SELECT citus.mitmproxy('conn.onQuery(query="WITH distributed_object_data.*seq_owned").cancel(' || :pid || ')');
+SELECT citus_activate_node('localhost', :worker_2_proxy_port);
+SELECT citus.mitmproxy('conn.onQuery(query="WITH distributed_object_data.*seq_owned").kill()');
+SELECT citus_activate_node('localhost', :worker_2_proxy_port);
+
+-- Failure to mark publication as distributed
+SELECT citus.mitmproxy('conn.onQuery(query="WITH distributed_object_data.*pub_all").cancel(' || :pid || ')');
+SELECT citus_activate_node('localhost', :worker_2_proxy_port);
+SELECT citus.mitmproxy('conn.onQuery(query="WITH distributed_object_data.*pub_all").kill()');
+SELECT citus_activate_node('localhost', :worker_2_proxy_port);
+
 -- Failure to set isactive to true
 SELECT citus.mitmproxy('conn.onQuery(query="UPDATE pg_dist_node SET isactive = TRUE").cancel(' || :pid || ')');
 SELECT citus_activate_node('localhost', :worker_2_proxy_port);
@@ -277,6 +407,7 @@ SELECT * FROM pg_dist_node ORDER BY nodeport;
 SELECT citus.mitmproxy('conn.allow()');
 
 RESET citus.metadata_sync_mode;
+DROP PUBLICATION pub_all;
 DROP SCHEMA dummy;
 DROP SCHEMA mx_metadata_sync_multi_trans CASCADE;
 DROP ROLE foo1;
