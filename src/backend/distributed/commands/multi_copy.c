@@ -3193,6 +3193,9 @@ CheckCopyPermissions(CopyStmt *copyStatement)
 	RTEPermissionInfo *perminfo = (RTEPermissionInfo *) palloc(sizeof(RTEPermissionInfo));
 	perminfo->requiredPerms = required_access;
 	perminfo->relid = rel->rd_id;
+	perminfo->insertedCols = NULL;
+	perminfo->selectedCols = NULL;
+	perminfo->checkAsUser = GetUserId();
 
 	attnums = CopyGetAttnums(tupDesc, rel, copyStatement->attlist);
 	foreach(cur, attnums)
