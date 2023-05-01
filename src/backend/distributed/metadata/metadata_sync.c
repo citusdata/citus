@@ -686,7 +686,7 @@ DropMetadataSnapshotOnNode(WorkerNode *workerNode)
 	bool singleTransaction = true;
 	List *dropMetadataCommandList = DetachPartitionCommandList();
 	dropMetadataCommandList = lappend(dropMetadataCommandList,
-									  BREAK_CITUS_TABLE_SEQUENCE_DEPENDENCY_COMMAND);
+									  BREAK_ALL_CITUS_TABLE_SEQUENCE_DEPENDENCY_COMMAND);
 	dropMetadataCommandList = lappend(dropMetadataCommandList,
 									  WorkerDropAllShellTablesCommand(singleTransaction));
 	dropMetadataCommandList = list_concat(dropMetadataCommandList,
@@ -4236,6 +4236,22 @@ WorkerDropAllShellTablesCommand(bool singleTransaction)
 
 
 /*
+ * WorkerDropSequenceDependencyCommand returns command to drop sequence dependencies for
+ * given table.
+ */
+char *
+WorkerDropSequenceDependencyCommand(Oid relationId)
+{
+	char *qualifiedTableName = generate_qualified_relation_name(relationId);
+	StringInfo breakSequenceDepCommand = makeStringInfo();
+	appendStringInfo(breakSequenceDepCommand,
+					 BREAK_CITUS_TABLE_SEQUENCE_DEPENDENCY_COMMAND,
+					 quote_literal_cstr(qualifiedTableName));
+	return breakSequenceDepCommand->data;
+}
+
+
+/*
  * PropagateNodeWideObjectsCommandList is called during node activation to
  * propagate any object that should be propagated for every node. These are
  * generally not linked to any distributed object but change system wide behaviour.
@@ -4352,8 +4368,8 @@ SendNodeWideObjectsSyncCommands(MetadataSyncContext *context)
 void
 SendShellTableDeletionCommands(MetadataSyncContext *context)
 {
-	/* break all sequence deps for citus tables and remove all shell tables */
-	char *breakSeqDepsCommand = BREAK_CITUS_TABLE_SEQUENCE_DEPENDENCY_COMMAND;
+	/* break all sequence deps for citus tables */
+	char *breakSeqDepsCommand = BREAK_ALL_CITUS_TABLE_SEQUENCE_DEPENDENCY_COMMAND;
 	SendOrCollectCommandListToActivatedNodes(context, list_make1(breakSeqDepsCommand));
 
 	/* remove shell tables */
