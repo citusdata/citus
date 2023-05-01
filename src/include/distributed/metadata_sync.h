@@ -156,6 +156,7 @@ extern void SendOrCollectCommandListToSingleNode(MetadataSyncContext *context,
 extern void ActivateNodeList(MetadataSyncContext *context);
 
 extern char * WorkerDropAllShellTablesCommand(bool singleTransaction);
+extern char * WorkerDropSequenceDependencyCommand(Oid relationId);
 
 extern void SyncDistributedObjects(MetadataSyncContext *context);
 extern void SendNodeWideObjectsSyncCommands(MetadataSyncContext *context);
@@ -180,8 +181,10 @@ extern void SendInterTableRelationshipCommands(MetadataSyncContext *context);
 
 #define REMOVE_ALL_CITUS_TABLES_COMMAND \
 	"SELECT worker_drop_distributed_table(logicalrelid::regclass::text) FROM pg_dist_partition"
-#define BREAK_CITUS_TABLE_SEQUENCE_DEPENDENCY_COMMAND \
+#define BREAK_ALL_CITUS_TABLE_SEQUENCE_DEPENDENCY_COMMAND \
 	"SELECT pg_catalog.worker_drop_sequence_dependency(logicalrelid::regclass::text) FROM pg_dist_partition"
+#define BREAK_CITUS_TABLE_SEQUENCE_DEPENDENCY_COMMAND \
+	"SELECT pg_catalog.worker_drop_sequence_dependency(%s);"
 
 #define DISABLE_DDL_PROPAGATION "SET citus.enable_ddl_propagation TO 'off'"
 #define ENABLE_DDL_PROPAGATION "SET citus.enable_ddl_propagation TO 'on'"
