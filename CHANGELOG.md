@@ -31,6 +31,8 @@
 
 * Fixes a bug in shard copy operations (#6721)
 
+* Fixes a bug related to sequence idempotency at non-transactional sync (#6889)
+
 * Fixes a bug that prevents enforcing identity column restrictions on worker
   nodes (#6738)
 
