@@ -1,4 +1,4 @@
-### citus v11.3.0 (April 13, 2023) ###
+### citus v11.3.0 (May 2, 2023) ###
 
 * Introduces CDC implementation for Citus using logical replication
   (#6623, #6810, #6827)
