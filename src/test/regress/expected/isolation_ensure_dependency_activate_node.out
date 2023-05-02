@@ -29,9 +29,10 @@ step s1-print-distributed-objects:
 pg_identify_object_as_address
 ---------------------------------------------------------------------
 (database,{regression},{})
+(function,"{public,wait_until_metadata_sync}",{integer})
 (role,{postgres},{})
 (schema,{public},{})
-(3 rows)
+(4 rows)
 
 count
 ---------------------------------------------------------------------
@@ -116,10 +117,11 @@ step s2-print-distributed-objects:
 pg_identify_object_as_address
 ---------------------------------------------------------------------
 (database,{regression},{})
+(function,"{public,wait_until_metadata_sync}",{integer})
 (role,{postgres},{})
 (schema,{public},{})
 (table,"{public,t1}",{})
-(4 rows)
+(5 rows)
 
 count
 ---------------------------------------------------------------------
@@ -200,9 +202,10 @@ step s1-print-distributed-objects:
 pg_identify_object_as_address
 ---------------------------------------------------------------------
 (database,{regression},{})
+(function,"{public,wait_until_metadata_sync}",{integer})
 (role,{postgres},{})
 (schema,{public},{})
-(3 rows)
+(4 rows)
 
 count
 ---------------------------------------------------------------------
@@ -293,10 +296,11 @@ step s2-print-distributed-objects:
 pg_identify_object_as_address
 ---------------------------------------------------------------------
 (database,{regression},{})
+(function,"{public,wait_until_metadata_sync}",{integer})
 (role,{postgres},{})
 (schema,{public},{})
 (table,"{public,t1}",{})
-(4 rows)
+(5 rows)
 
 count
 ---------------------------------------------------------------------
@@ -377,9 +381,10 @@ step s1-print-distributed-objects:
 pg_identify_object_as_address
 ---------------------------------------------------------------------
 (database,{regression},{})
+(function,"{public,wait_until_metadata_sync}",{integer})
 (role,{postgres},{})
 (schema,{public},{})
-(3 rows)
+(4 rows)
 
 count
 ---------------------------------------------------------------------
@@ -470,10 +475,11 @@ step s2-print-distributed-objects:
 pg_identify_object_as_address
 ---------------------------------------------------------------------
 (database,{regression},{})
+(function,"{public,wait_until_metadata_sync}",{integer})
 (role,{postgres},{})
 (schema,{public},{})
 (table,"{public,t1}",{})
-(4 rows)
+(5 rows)
 
 count
 ---------------------------------------------------------------------
@@ -554,9 +560,10 @@ step s1-print-distributed-objects:
 pg_identify_object_as_address
 ---------------------------------------------------------------------
 (database,{regression},{})
+(function,"{public,wait_until_metadata_sync}",{integer})
 (role,{postgres},{})
 (schema,{public},{})
-(3 rows)
+(4 rows)
 
 count
 ---------------------------------------------------------------------
@@ -642,11 +649,12 @@ step s2-print-distributed-objects:
 pg_identify_object_as_address
 ---------------------------------------------------------------------
 (database,{regression},{})
+(function,"{public,wait_until_metadata_sync}",{integer})
 (role,{postgres},{})
 (schema,{myschema},{})
 (schema,{public},{})
 (table,"{myschema,t1}",{})
-(5 rows)
+(6 rows)
 
 count
 ---------------------------------------------------------------------
@@ -727,9 +735,10 @@ step s1-print-distributed-objects:
 pg_identify_object_as_address
 ---------------------------------------------------------------------
 (database,{regression},{})
+(function,"{public,wait_until_metadata_sync}",{integer})
 (role,{postgres},{})
 (schema,{public},{})
-(3 rows)
+(4 rows)
 
 count
 ---------------------------------------------------------------------
@@ -821,11 +830,12 @@ step s2-print-distributed-objects:
 pg_identify_object_as_address
 ---------------------------------------------------------------------
 (database,{regression},{})
+(function,"{public,wait_until_metadata_sync}",{integer})
 (role,{postgres},{})
 (schema,{myschema},{})
 (schema,{public},{})
 (table,"{myschema,t1}",{})
-(5 rows)
+(6 rows)
 
 count
 ---------------------------------------------------------------------
@@ -906,9 +916,10 @@ step s1-print-distributed-objects:
 pg_identify_object_as_address
 ---------------------------------------------------------------------
 (database,{regression},{})
+(function,"{public,wait_until_metadata_sync}",{integer})
 (role,{postgres},{})
 (schema,{public},{})
-(3 rows)
+(4 rows)
 
 count
 ---------------------------------------------------------------------
@@ -1000,11 +1011,12 @@ step s2-print-distributed-objects:
 pg_identify_object_as_address
 ---------------------------------------------------------------------
 (database,{regression},{})
+(function,"{public,wait_until_metadata_sync}",{integer})
 (role,{postgres},{})
 (schema,{myschema},{})
 (schema,{public},{})
 (table,"{myschema,t1}",{})
-(5 rows)
+(6 rows)
 
 count
 ---------------------------------------------------------------------
@@ -1085,9 +1097,10 @@ step s1-print-distributed-objects:
 pg_identify_object_as_address
 ---------------------------------------------------------------------
 (database,{regression},{})
+(function,"{public,wait_until_metadata_sync}",{integer})
 (role,{postgres},{})
 (schema,{public},{})
-(3 rows)
+(4 rows)
 
 count
 ---------------------------------------------------------------------
@@ -1179,11 +1192,12 @@ step s2-print-distributed-objects:
 pg_identify_object_as_address
 ---------------------------------------------------------------------
 (database,{regression},{})
+(function,"{public,wait_until_metadata_sync}",{integer})
 (role,{postgres},{})
 (schema,{myschema},{})
 (schema,{public},{})
 (table,"{myschema,t1}",{})
-(5 rows)
+(6 rows)
 
 count
 ---------------------------------------------------------------------
@@ -1264,9 +1278,10 @@ step s1-print-distributed-objects:
 pg_identify_object_as_address
 ---------------------------------------------------------------------
 (database,{regression},{})
+(function,"{public,wait_until_metadata_sync}",{integer})
 (role,{postgres},{})
 (schema,{public},{})
-(3 rows)
+(4 rows)
 
 count
 ---------------------------------------------------------------------
@@ -1381,6 +1396,7 @@ step s2-print-distributed-objects:
 pg_identify_object_as_address
 ---------------------------------------------------------------------
 (database,{regression},{})
+(function,"{public,wait_until_metadata_sync}",{integer})
 (role,{postgres},{})
 (schema,{col_schema},{})
 (schema,{myschema},{})
@@ -1388,7 +1404,7 @@ pg_identify_object_as_address
 (table,"{col_schema,col_tbl}",{})
 (table,"{myschema,t1}",{})
 (table,"{myschema,t2}",{})
-(8 rows)
+(9 rows)
 
 count
 ---------------------------------------------------------------------
@@ -1469,9 +1485,10 @@ step s1-print-distributed-objects:
 pg_identify_object_as_address
 ---------------------------------------------------------------------
 (database,{regression},{})
+(function,"{public,wait_until_metadata_sync}",{integer})
 (role,{postgres},{})
 (schema,{public},{})
-(3 rows)
+(4 rows)
 
 count
 ---------------------------------------------------------------------
@@ -1585,13 +1602,14 @@ step s2-print-distributed-objects:
 pg_identify_object_as_address
 ---------------------------------------------------------------------
 (database,{regression},{})
+(function,"{public,wait_until_metadata_sync}",{integer})
 (role,{postgres},{})
 (schema,{myschema},{})
 (schema,{myschema2},{})
 (schema,{public},{})
 (table,"{myschema,t1}",{})
 (table,"{myschema2,t2}",{})
-(7 rows)
+(8 rows)
 
 count
 ---------------------------------------------------------------------
@@ -1672,9 +1690,10 @@ step s1-print-distributed-objects:
 pg_identify_object_as_address
 ---------------------------------------------------------------------
 (database,{regression},{})
+(function,"{public,wait_until_metadata_sync}",{integer})
 (role,{postgres},{})
 (schema,{public},{})
-(3 rows)
+(4 rows)
 
 count
 ---------------------------------------------------------------------
@@ -1751,10 +1770,11 @@ step s2-print-distributed-objects:
 pg_identify_object_as_address
 ---------------------------------------------------------------------
 (database,{regression},{})
+(function,"{public,wait_until_metadata_sync}",{integer})
 (role,{postgres},{})
 (schema,{public},{})
 (type,{public.tt1},{})
-(4 rows)
+(5 rows)
 
 count
 ---------------------------------------------------------------------
@@ -1835,9 +1855,10 @@ step s1-print-distributed-objects:
 pg_identify_object_as_address
 ---------------------------------------------------------------------
 (database,{regression},{})
+(function,"{public,wait_until_metadata_sync}",{integer})
 (role,{postgres},{})
 (schema,{public},{})
-(3 rows)
+(4 rows)
 
 count
 ---------------------------------------------------------------------
@@ -1913,10 +1934,11 @@ step s2-print-distributed-objects:
 pg_identify_object_as_address
 ---------------------------------------------------------------------
 (database,{regression},{})
+(function,"{public,wait_until_metadata_sync}",{integer})
 (role,{postgres},{})
 (schema,{public},{})
 (type,{public.tt1},{})
-(4 rows)
+(5 rows)
 
 count
 ---------------------------------------------------------------------
@@ -1997,9 +2019,10 @@ step s1-print-distributed-objects:
 pg_identify_object_as_address
 ---------------------------------------------------------------------
 (database,{regression},{})
+(function,"{public,wait_until_metadata_sync}",{integer})
 (role,{postgres},{})
 (schema,{public},{})
-(3 rows)
+(4 rows)
 
 count
 ---------------------------------------------------------------------
@@ -2094,12 +2117,13 @@ step s2-print-distributed-objects:
 pg_identify_object_as_address
 ---------------------------------------------------------------------
 (database,{regression},{})
+(function,"{public,wait_until_metadata_sync}",{integer})
 (role,{postgres},{})
 (schema,{myschema},{})
 (schema,{public},{})
 (table,"{myschema,t1}",{})
 (type,{myschema.tt1},{})
-(6 rows)
+(7 rows)
 
 count
 ---------------------------------------------------------------------
@@ -2180,9 +2204,10 @@ step s1-print-distributed-objects:
 pg_identify_object_as_address
 ---------------------------------------------------------------------
 (database,{regression},{})
+(function,"{public,wait_until_metadata_sync}",{integer})
 (role,{postgres},{})
 (schema,{public},{})
-(3 rows)
+(4 rows)
 
 count
 ---------------------------------------------------------------------
@@ -2290,11 +2315,12 @@ pg_identify_object_as_address
 ---------------------------------------------------------------------
 (database,{regression},{})
 (function,"{public,add}","{integer,integer}")
+(function,"{public,wait_until_metadata_sync}",{integer})
 (role,{postgres},{})
 (schema,{col_schema},{})
 (schema,{public},{})
 (table,"{col_schema,col_tbl}",{})
-(6 rows)
+(7 rows)
 
 count
 ---------------------------------------------------------------------
@@ -2375,9 +2401,10 @@ step s1-print-distributed-objects:
 pg_identify_object_as_address
 ---------------------------------------------------------------------
 (database,{regression},{})
+(function,"{public,wait_until_metadata_sync}",{integer})
 (role,{postgres},{})
 (schema,{public},{})
-(3 rows)
+(4 rows)
 
 count
 ---------------------------------------------------------------------
@@ -2492,11 +2519,12 @@ pg_identify_object_as_address
 ---------------------------------------------------------------------
 (database,{regression},{})
 (function,"{public,add}","{integer,integer}")
+(function,"{public,wait_until_metadata_sync}",{integer})
 (role,{postgres},{})
 (schema,{col_schema},{})
 (schema,{public},{})
 (table,"{col_schema,col_tbl}",{})
-(6 rows)
+(7 rows)
 
 count
 ---------------------------------------------------------------------
@@ -2577,9 +2605,10 @@ step s1-print-distributed-objects:
 pg_identify_object_as_address
 ---------------------------------------------------------------------
 (database,{regression},{})
+(function,"{public,wait_until_metadata_sync}",{integer})
 (role,{postgres},{})
 (schema,{public},{})
-(3 rows)
+(4 rows)
 
 count
 ---------------------------------------------------------------------
@@ -2695,12 +2724,13 @@ pg_identify_object_as_address
 ---------------------------------------------------------------------
 (database,{regression},{})
 (function,"{myschema,add}","{integer,integer}")
+(function,"{public,wait_until_metadata_sync}",{integer})
 (role,{postgres},{})
 (schema,{col_schema},{})
 (schema,{myschema},{})
 (schema,{public},{})
 (table,"{col_schema,col_tbl}",{})
-(7 rows)
+(8 rows)
 
 count
 ---------------------------------------------------------------------

@@ -30,12 +30,13 @@ obj_repr
 ---------------------------------------------------------------------
 (database,{regression},{})
 (extension,{seg},{})
+(function,"{public,wait_until_metadata_sync}",{integer})
 (role,{postgres},{})
 (schema,{public},{})
 (schema,{schema1},{})
 (schema,{schema2},{})
 (schema,{schema3},{})
-(7 rows)
+(8 rows)
 
 extname|extversion|nspname
 ---------------------------------------------------------------------
@@ -97,12 +98,13 @@ obj_repr
 ---------------------------------------------------------------------
 (database,{regression},{})
 (extension,{seg},{})
+(function,"{public,wait_until_metadata_sync}",{integer})
 (role,{postgres},{})
 (schema,{public},{})
 (schema,{schema1},{})
 (schema,{schema2},{})
 (schema,{schema3},{})
-(7 rows)
+(8 rows)
 
 extname|extversion|nspname
 ---------------------------------------------------------------------
@@ -171,12 +173,13 @@ step s1-print:
 obj_repr
 ---------------------------------------------------------------------
 (database,{regression},{})
+(function,"{public,wait_until_metadata_sync}",{integer})
 (role,{postgres},{})
 (schema,{public},{})
 (schema,{schema1},{})
 (schema,{schema2},{})
 (schema,{schema3},{})
-(6 rows)
+(7 rows)
 
 extname|extversion|nspname
 ---------------------------------------------------------------------
@@ -233,12 +236,13 @@ obj_repr
 ---------------------------------------------------------------------
 (database,{regression},{})
 (extension,{seg},{})
+(function,"{public,wait_until_metadata_sync}",{integer})
 (role,{postgres},{})
 (schema,{public},{})
 (schema,{schema1},{})
 (schema,{schema2},{})
 (schema,{schema3},{})
-(7 rows)
+(8 rows)
 
 extname|extversion|nspname
 ---------------------------------------------------------------------
@@ -299,12 +303,13 @@ step s1-print:
 obj_repr
 ---------------------------------------------------------------------
 (database,{regression},{})
+(function,"{public,wait_until_metadata_sync}",{integer})
 (role,{postgres},{})
 (schema,{public},{})
 (schema,{schema1},{})
 (schema,{schema2},{})
 (schema,{schema3},{})
-(6 rows)
+(7 rows)
 
 extname|extversion|nspname
 ---------------------------------------------------------------------
@@ -376,12 +381,13 @@ obj_repr
 ---------------------------------------------------------------------
 (database,{regression},{})
 (extension,{seg},{})
+(function,"{public,wait_until_metadata_sync}",{integer})
 (role,{postgres},{})
 (schema,{public},{})
 (schema,{schema1},{})
 (schema,{schema2},{})
 (schema,{schema3},{})
-(7 rows)
+(8 rows)
 
 extname|extversion|nspname
 ---------------------------------------------------------------------
@@ -450,12 +456,13 @@ obj_repr
 ---------------------------------------------------------------------
 (database,{regression},{})
 (extension,{seg},{})
+(function,"{public,wait_until_metadata_sync}",{integer})
 (role,{postgres},{})
 (schema,{public},{})
 (schema,{schema1},{})
 (schema,{schema2},{})
 (schema,{schema3},{})
-(7 rows)
+(8 rows)
 
 extname|extversion|nspname
 ---------------------------------------------------------------------
@@ -532,12 +539,13 @@ obj_repr
 ---------------------------------------------------------------------
 (database,{regression},{})
 (extension,{seg},{})
+(function,"{public,wait_until_metadata_sync}",{integer})
 (role,{postgres},{})
 (schema,{public},{})
 (schema,{schema1},{})
 (schema,{schema2},{})
 (schema,{schema3},{})
-(7 rows)
+(8 rows)
 
 extname|extversion|nspname
 ---------------------------------------------------------------------
@@ -621,12 +629,13 @@ obj_repr
 ---------------------------------------------------------------------
 (database,{regression},{})
 (extension,{seg},{})
+(function,"{public,wait_until_metadata_sync}",{integer})
 (role,{postgres},{})
 (schema,{public},{})
 (schema,{schema1},{})
 (schema,{schema2},{})
 (schema,{schema3},{})
-(7 rows)
+(8 rows)
 
 extname|extversion|nspname
 ---------------------------------------------------------------------
@@ -695,12 +704,13 @@ step s1-print:
 obj_repr
 ---------------------------------------------------------------------
 (database,{regression},{})
+(function,"{public,wait_until_metadata_sync}",{integer})
 (role,{postgres},{})
 (schema,{public},{})
 (schema,{schema1},{})
 (schema,{schema2},{})
 (schema,{schema3},{})
-(6 rows)
+(7 rows)
 
 extname|extversion|nspname
 ---------------------------------------------------------------------
@@ -757,12 +767,13 @@ obj_repr
 ---------------------------------------------------------------------
 (database,{regression},{})
 (extension,{seg},{})
+(function,"{public,wait_until_metadata_sync}",{integer})
 (role,{postgres},{})
 (schema,{public},{})
 (schema,{schema1},{})
 (schema,{schema2},{})
 (schema,{schema3},{})
-(7 rows)
+(8 rows)
 
 extname|extversion|nspname
 ---------------------------------------------------------------------
@@ -838,12 +849,13 @@ obj_repr
 ---------------------------------------------------------------------
 (database,{regression},{})
 (extension,{seg},{})
+(function,"{public,wait_until_metadata_sync}",{integer})
 (role,{postgres},{})
 (schema,{public},{})
 (schema,{schema1},{})
 (schema,{schema2},{})
 (schema,{schema3},{})
-(7 rows)
+(8 rows)
 
 extname|extversion|nspname
 ---------------------------------------------------------------------
@@ -912,12 +924,13 @@ obj_repr
 ---------------------------------------------------------------------
 (database,{regression},{})
 (extension,{seg},{})
+(function,"{public,wait_until_metadata_sync}",{integer})
 (role,{postgres},{})
 (schema,{public},{})
 (schema,{schema1},{})
 (schema,{schema2},{})
 (schema,{schema3},{})
-(7 rows)
+(8 rows)
 
 extname|extversion|nspname
 ---------------------------------------------------------------------
@@ -996,12 +1009,13 @@ step s1-print:
 obj_repr
 ---------------------------------------------------------------------
 (database,{regression},{})
+(function,"{public,wait_until_metadata_sync}",{integer})
 (role,{postgres},{})
 (schema,{public},{})
 (schema,{schema1},{})
 (schema,{schema2},{})
 (schema,{schema3},{})
-(6 rows)
+(7 rows)
 
 extname|extversion|nspname
 ---------------------------------------------------------------------

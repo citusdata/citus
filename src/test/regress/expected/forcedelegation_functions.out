@@ -91,6 +91,7 @@ SELECT create_distributed_function(
 SET client_min_messages TO DEBUG1;
 --SET citus.log_remote_commands TO on;
 SELECT public.wait_until_metadata_sync(30000);
+DEBUG:  function does not have co-located tables
  wait_until_metadata_sync
 ---------------------------------------------------------------------
 
@@ -315,6 +316,7 @@ DETAIL:  A command for a distributed function is run. To make sure subsequent co
 (1 row)
 
 SELECT public.wait_until_metadata_sync(30000);
+DEBUG:  function does not have co-located tables
  wait_until_metadata_sync
 ---------------------------------------------------------------------
 
