@@ -135,16 +135,13 @@ AppendCreatedbStmt(StringInfo buf, CreatedbStmt *stmt)
 
 			appendStringInfo(buf, " CONNECTION_LIMIT %d", connectionLimit);
 		}
+#if PG_VERSION_NUM >= PG_VERSION_15
 		else if (strcmp(option->defname, "collation_version") == 0)
 		{
 			char *collationVersion = defGetString(option);
 
 			appendStringInfo(buf, " COLLATION_VERSION %s",
 							 quote_literal_cstr(collationVersion));
-		}
-		else if (strcmp(option->defname, "location") == 0)
-		{
-			/* deprecated option */
 		}
 		else if (strcmp(option->defname, "oid") == 0)
 		{
@@ -158,6 +155,11 @@ AppendCreatedbStmt(StringInfo buf, CreatedbStmt *stmt)
 
 			appendStringInfo(buf, " STRATEGY %s",
 							 quote_literal_cstr(strategy));
+		}
+#endif
+		else if (strcmp(option->defname, "location") == 0)
+		{
+			/* deprecated option */
 		}
 		else
 		{

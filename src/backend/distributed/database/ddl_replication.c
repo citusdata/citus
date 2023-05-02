@@ -571,7 +571,11 @@ PreProcessDDLReplicationParseTrees(List *parseTreeList)
 			CreateTableAsStmt *createTableAsStmt = (CreateTableAsStmt *) statement;
 			IntoClause *into = createTableAsStmt->into;
 
+#if PG_VERSION_NUM >= PG_VERSION_14
 			if (createTableAsStmt->objtype != OBJECT_MATVIEW)
+#else
+			if (createTableAsStmt->relkind != OBJECT_MATVIEW)
+#endif
 			{
 				/* logical replication will copy data for us */
 				into->skipData = true;

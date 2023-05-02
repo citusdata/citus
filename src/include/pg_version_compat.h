@@ -164,6 +164,8 @@ typedef bool TU_UpdateIndexes;
 
 typedef Value String;
 
+#define LSN_FORMAT_ARGS(lsn) (AssertVariableIsOfTypeMacro((lsn), XLogRecPtr), (uint32) ((lsn) >> 32)), ((uint32) (lsn))
+
 #ifdef HAVE_LONG_INT_64
 #define strtoi64(str, endptr, base) ((int64) strtol(str, endptr, base))
 #define strtou64(str, endptr, base) ((uint64) strtoul(str, endptr, base))
@@ -204,7 +206,6 @@ RelationGetSmgr(Relation rel)
 	}
 	return rel->rd_smgr;
 }
-
 
 #endif
 

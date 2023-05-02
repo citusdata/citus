@@ -4,6 +4,7 @@
 #include "miscadmin.h"
 #include "port.h"
 #include "safe_mem_lib.h"
+#include "pg_version_compat.h"
 
 #include "access/htup_details.h"
 #include "access/xact.h"
@@ -38,6 +39,7 @@
 #include "parser/analyze.h"
 #include "postmaster/postmaster.h"
 #include "storage/ipc.h"
+#include "storage/latch.h"
 #include "tcop/pquery.h"
 #include "tcop/tcopprot.h"
 #include "tcop/utility.h"
@@ -52,7 +54,9 @@
 #include "utils/rel.h"
 #include "utils/snapmgr.h"
 #include "utils/syscache.h"
+#if PG_VERSION_NUM >= PG_VERSION_15
 #include "utils/wait_event.h"
+#endif
 
 
 #define MAX_MIGRATION_NAME_LENGTH 50
