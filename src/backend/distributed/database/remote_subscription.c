@@ -102,3 +102,22 @@ DropRemoteSubscription(MultiConnection *conn, char *subscriptionName)
 
 	ExecuteCriticalRemoteCommand(conn, dropCommand->data);
 }
+
+
+/*
+ * StartRemoteMigrationMonitor starts a migration monitor background process
+ * on the remote node.
+ */
+void
+StartRemoteMigrationMonitor(MultiConnection *conn, char *databaseName,
+							char *subscriptionName)
+{
+	StringInfo startCommand = makeStringInfo();
+
+	appendStringInfo(startCommand,
+					 "SELECT pg_catalog.citus_internal_start_migration_monitor(%s,%s)",
+					 quote_literal_cstr(databaseName),
+					 quote_literal_cstr(subscriptionName));
+
+	ExecuteCriticalRemoteCommand(conn, startCommand->data);
+}

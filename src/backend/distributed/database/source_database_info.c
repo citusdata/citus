@@ -7,6 +7,7 @@
 #include "lib/stringinfo.h"
 #include "distributed/connection_management.h"
 #include "distributed/database/source_database_info.h"
+#include "distributed/listutils.h"
 #include "distributed/remote_commands.h"
 #include "nodes/pg_list.h"
 #include "utils/builtins.h"
@@ -132,44 +133,6 @@ SemanticVersionToString(SemanticVersion *version)
 	}
 
 	return versionStr->data;
-}
-
-
-/*
- * SourceDatabaseHasPgMigratorSourceExtension returns whether the remote database has
- * the pg_migrator_source extension installed.
- */
-bool
-SourceDatabaseHasPgMigratorSourceExtension(MultiConnection *conn)
-{
-	char *versionQuery =
-		"SELECT extversion FROM pg_catalog.pg_extension "
-		"WHERE extname = 'pg_migrator_source'";
-
-	if (!SendRemoteCommand(conn, versionQuery))
-	{
-		ReportConnectionError(conn, ERROR);
-	}
-
-	bool raiseErrors = true;
-	PGresult *result = GetRemoteCommandResult(conn, raiseErrors);
-	if (!IsResponseOK(result))
-	{
-		ReportResultError(conn, result, ERROR);
-	}
-
-	bool hasPgMigratorSourceExtension = false;
-
-	int tupleCount = PQntuples(result);
-	if (tupleCount > 0)
-	{
-		hasPgMigratorSourceExtension = true;
-	}
-
-	PQclear(result);
-	ClearResults(conn, raiseErrors);
-
-	return hasPgMigratorSourceExtension;
 }
 
 
@@ -337,13 +300,32 @@ ListSourceDatabaseSequences(MultiConnection *conn)
 	{
 		char *schemaName = PQgetvalue(sequenceListRes, row, 0);
 		char *sequenceName = PQgetvalue(sequenceListRes, row, 1);
+
+		SourceDatabaseSequence *sequence =
+			(SourceDatabaseSequence *) palloc0(sizeof(SourceDatabaseSequence));
+		sequence->schemaName = pstrdup(schemaName);
+		sequence->sequenceName = pstrdup(sequenceName);
+		sequence->lastValue = 0L;
+
+		sequenceList = lappend(sequenceList, sequence);
+	}
+
+	PQclear(sequenceListRes);
+	ClearResults(conn, raiseErrors);
+
+	SourceDatabaseSequence *sequence = NULL;
+	foreach_ptr(sequence, sequenceList)
+	{
+		char *schemaName = sequence->schemaName;
+		char *sequenceName = sequence->sequenceName;
+
 		StringInfo getSequenceValueQuery = makeStringInfo();
 
 		appendStringInfo(getSequenceValueQuery,
 						 "SELECT last_value FROM %s",
 						 quote_qualified_identifier(schemaName, sequenceName));
 
-		if (!SendRemoteCommand(conn, sequenceListQuery))
+		if (!SendRemoteCommand(conn, getSequenceValueQuery->data))
 		{
 			ReportConnectionError(conn, ERROR);
 		}
@@ -351,30 +333,16 @@ ListSourceDatabaseSequences(MultiConnection *conn)
 		PGresult *seqRes = GetRemoteCommandResult(conn, raiseErrors);
 		if (!IsResponseOK(sequenceListRes))
 		{
-			/*
-			 * We assume this means that we cannot read from the sequence.
-			 *
-			 * TODO: check actual error code.
-			 */
+			/* TODO: error */
+			ReportResultError(conn, seqRes, WARNING);
 			PQclear(seqRes);
 			continue;
 		}
 
-		int64 lastValue = pg_strtoint64(PQgetvalue(seqRes, 0, 0));
-
-		SourceDatabaseSequence *sequence =
-			(SourceDatabaseSequence *) palloc0(sizeof(SourceDatabaseSequence));
-		sequence->schemaName = pstrdup(schemaName);
-		sequence->sequenceName = pstrdup(sequenceName);
-		sequence->lastValue = lastValue;
-
-		sequenceList = lappend(sequenceList, sequence);
-
+		sequence->lastValue = pg_strtoint64(PQgetvalue(seqRes, 0, 0));
 		PQclear(seqRes);
+		ClearResults(conn, raiseErrors);
 	}
-
-	PQclear(sequenceListRes);
-	ClearResults(conn, raiseErrors);
 
 	return sequenceList;
 }
@@ -438,14 +406,53 @@ ParseBool(char *boolString)
 
 
 /*
- * DeleteDDLPropagationRecordsOnSource deletes all records in
- * migrator.ddl_propagation on the remote database.
+ * CreateDDLReplicationTable creates the table for DDL replication.
+ * We make sure regular users cannot create this table themselves
+ * by creating it in the pg_catalog schema.
  */
 void
-DeleteDDLPropagationRecordsOnSource(MultiConnection *conn)
+CreateDDLReplicationTable(MultiConnection *conn)
 {
-	char *deleteQuery =
-		"DELETE FROM migrator.ddl_propagation";
+	char *createCommand =
+		"DO LANGUAGE plpgsql $do$\n"
+		"BEGIN\n"
+		"DROP TABLE IF EXISTS pg_catalog.ddl_statements;\n"
+		"CREATE SCHEMA citus_db_migration_tmp;\n"
+		"CREATE TABLE citus_db_migration_tmp.ddl_statements (\n"
+		" ddl_id bigserial primary key,\n"
+		" ddl_command text not null,\n"
+		" search_path text not null,\n"
+		" user_name name not null,\n"
+		" execution_time timestamptz not null default now()\n"
+		");\n"
+		"ALTER TABLE citus_db_migration_tmp.ddl_statements SET SCHEMA pg_catalog;\n"
+		"DROP SCHEMA citus_db_migration_tmp;\n"
+		"END\n"
+		"$do$;";
 
-	ExecuteCriticalRemoteCommand(conn, deleteQuery);
+	ExecuteCriticalRemoteCommand(conn, createCommand);
+}
+
+
+/*
+ * CreateDDLReplicationTrigger creates the trigger for DDL replication on the
+ * source database.
+ */
+void
+CreateDDLReplicationTrigger(MultiConnection *conn)
+{
+	char *createTriggerCommand =
+		"DO LANGUAGE plpgsql $do$\n"
+		"BEGIN\n"
+		"DROP FUNCTION IF EXISTS pg_catalog.ddl_trigger();\n"
+		"CREATE FUNCTION pg_catalog.ddl_trigger()\n"
+		"RETURNS trigger LANGUAGE C STRICT AS 'citus', $$database_shard_move_trigger$$;\n"
+		"CREATE TRIGGER ddl_insert BEFORE INSERT ON pg_catalog.ddl_statements "
+		"FOR EACH ROW EXECUTE FUNCTION pg_catalog.ddl_trigger();\n"
+		"ALTER TABLE pg_catalog.ddl_statements "
+		"ENABLE REPLICA TRIGGER ddl_insert;\n"
+		"END\n"
+		"$do$;";
+
+	ExecuteCriticalRemoteCommand(conn, createTriggerCommand);
 }

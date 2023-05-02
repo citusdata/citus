@@ -1,15 +1,18 @@
 /*-------------------------------------------------------------------------
  *
- * migrator.h
- *	  definition of migrator data types
+ * migration_worker.h
+ *	  definition of migration worker functions
  *
  * Copyright (c), Microsoft, Inc.
  *
  *-------------------------------------------------------------------------
  */
 
-#ifndef MIGRATOR_H
-#define MIGRATOR_H
+#ifndef PG_MIGRATION_MONITOR_H
+#define PG_MIGRATION_MONITOR_H
+
+
+pid_t StartMigrationMonitor(Oid databaseId, Oid subscriptionId);
 
 
 #endif

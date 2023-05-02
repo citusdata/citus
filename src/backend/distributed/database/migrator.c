@@ -19,12 +19,14 @@
 #include "lib/stringinfo.h"
 #include "distributed/connection_management.h"
 #include "distributed/database/database_sharding.h"
+#include "distributed/database/ddl_replication.h"
 #include "distributed/database/migrator.h"
 #include "distributed/database/pg_dump.h"
 #include "distributed/database/remote_publication.h"
 #include "distributed/database/remote_subscription.h"
 #include "distributed/database/source_database_info.h"
 #include "distributed/listutils.h"
+#include "distributed/local_executor.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_logical_replication.h"
 #include "distributed/pooler/pgbouncer_manager.h"
@@ -142,7 +144,7 @@ PG_FUNCTION_INFO_V1(database_shard_move_finish);
 
 
 /*
- * migrator_start_move does a full migration of a database.
+ * database_shard_move does a full migration of a database.
  */
 Datum
 database_shard_move(PG_FUNCTION_ARGS)
@@ -168,7 +170,7 @@ database_shard_move(PG_FUNCTION_ARGS)
 
 
 /*
- * migrator_start_migration_from starts a migration from the remote database.
+ * database_shard_move_start starts a migration from the remote database.
  */
 Datum
 database_shard_move_start(PG_FUNCTION_ARGS)
@@ -251,11 +253,13 @@ DatabaseMigrationStart(DatabaseMigration *migration)
 	}
 
 	/* open a replication connection to create a replication slot */
-	connectionFlags = REQUIRE_REPLICATION_CONNECTION_PARAM;
 	MultiConnection *replicationConn = NULL;
+	MultiConnection *destCitusConn = NULL;
 
 	if (migration->mode == MIGRATION_MODE_LOGICAL_REPLICATION)
 	{
+		/* replication connection to the source database */
+		connectionFlags = REQUIRE_REPLICATION_CONNECTION_PARAM;
 		replicationConn = GetNodeUserDatabaseConnection(connectionFlags,
 														source->workerName,
 														source->workerPort,
@@ -265,8 +269,21 @@ DatabaseMigrationStart(DatabaseMigration *migration)
 		{
 			ReportConnectionError(replicationConn, ERROR);
 		}
+
+		/* connection to Citus database on target node */
+		connectionFlags = 0;
+		destCitusConn = GetNodeUserDatabaseConnection(connectionFlags,
+													  destination->workerName,
+													  destination->workerPort,
+													  CurrentUserName(),
+													  NULL);
+		if (PQstatus(replicationConn->pgConn) != CONNECTION_OK)
+		{
+			ReportConnectionError(replicationConn, ERROR);
+		}
 	}
 
+	/* regular connection to the target database */
 	connectionFlags = 0;
 	MultiConnection *destConn = GetNodeUserDatabaseConnection(connectionFlags,
 															  destination->workerName,
@@ -286,15 +303,6 @@ DatabaseMigrationStart(DatabaseMigration *migration)
 							   migration->migrationName)));
 	}
 
-	bool hasPgMigratorSource =
-		SourceDatabaseHasPgMigratorSourceExtension(sourceConn);
-	if (!hasPgMigratorSource)
-	{
-		ereport(DEBUG2, (errmsg("source database does not have the "
-								"pg_migrator_source extension, DDL will not be "
-								"replicated")));
-	}
-
 	migration->sourceConnectionInfo = GetConnectionString(sourceConn);
 
 	PG_TRY();
@@ -303,6 +311,14 @@ DatabaseMigrationStart(DatabaseMigration *migration)
 
 		if (migration->mode == MIGRATION_MODE_LOGICAL_REPLICATION)
 		{
+			if (EnableDDLReplicationInDatabaseShardMove)
+			{
+				/* create a DDL replication table on both nodes */
+				CreateDDLReplicationTable(sourceConn);
+				CreateDDLReplicationTable(destConn);
+				CreateDDLReplicationTrigger(destConn);
+			}
+
 			XLogRecPtr lsn = InvalidXLogRecPtr;
 			bool exportSnapshot = true;
 			snapshotName = CreateRemoteReplicationSlot(replicationConn, slotName,
@@ -318,15 +334,6 @@ DatabaseMigrationStart(DatabaseMigration *migration)
 			ereport(WARNING, (errmsg("not all tables have replica identities"),
 							  errdetail("some UPDATE/DELETE commands may fail "
 										"on the source during migration")));
-		}
-
-		if (hasPgMigratorSource)
-		{
-			/*
-			 * Hack: delete ddl_propagation records before starting replication.
-			 * to avoid replaying past records. This is not concurrency safe.
-			 */
-			DeleteDDLPropagationRecordsOnSource(sourceConn);
 		}
 
 		ereport(NOTICE, (errmsg("migrating schema")));
@@ -351,8 +358,12 @@ DatabaseMigrationStart(DatabaseMigration *migration)
 									 subscriptionName,
 									 publicationName,
 									 slotName);
+			migration->createdSubscription = true;
+
+			StartRemoteMigrationMonitor(destCitusConn, databaseName, subscriptionName);
 
 			CloseConnection(replicationConn);
+			CloseConnection(destCitusConn);
 		}
 
 		CloseConnection(sourceConn);
@@ -360,30 +371,59 @@ DatabaseMigrationStart(DatabaseMigration *migration)
 	}
 	PG_CATCH();
 	{
+		/* close connections, which might be in a broken state */
 		CloseConnection(sourceConn);
-		CloseConnection(replicationConn);
 		CloseConnection(destConn);
 
-		MultiConnection *cleanupConn = GetNodeUserDatabaseConnection(connectionFlags,
-																	 source->workerName,
-																	 source->workerPort,
-																	 CurrentUserName(),
-																	 databaseName);
-		if (PQstatus(cleanupConn->pgConn) == CONNECTION_OK)
+		if (migration->mode == MIGRATION_MODE_LOGICAL_REPLICATION)
 		{
-			/* try to clean up in case of failure */
-			if (migration->createdPublication)
-			{
-				DropRemotePublication(cleanupConn, publicationName);
-			}
-
-			if (migration->createdReplicationSlot)
-			{
-				DropRemoteReplicationSlot(cleanupConn, slotName);
-			}
+			CloseConnection(replicationConn);
+			CloseConnection(destCitusConn);
 		}
 
-		CloseConnection(cleanupConn);
+		/* try to clean up in case of failure */
+		MultiConnection *cleanupConn;
+
+		/* clean up subscription first */
+		if (migration->createdSubscription)
+		{
+			cleanupConn = GetNodeUserDatabaseConnection(connectionFlags,
+														destination->workerName,
+														destination->workerPort,
+														CurrentUserName(),
+														databaseName);
+
+			if (PQstatus(cleanupConn->pgConn) == CONNECTION_OK)
+			{
+				DropRemoteSubscription(cleanupConn, subscriptionName);
+			}
+
+			CloseConnection(cleanupConn);
+		}
+
+		if (migration->createdPublication || migration->createdReplicationSlot)
+		{
+			cleanupConn = GetNodeUserDatabaseConnection(connectionFlags,
+														source->workerName,
+														source->workerPort,
+														CurrentUserName(),
+														databaseName);
+
+			if (PQstatus(cleanupConn->pgConn) == CONNECTION_OK)
+			{
+				if (migration->createdPublication)
+				{
+					DropRemotePublication(cleanupConn, publicationName);
+				}
+
+				if (migration->createdReplicationSlot)
+				{
+					DropRemoteReplicationSlot(cleanupConn, slotName);
+				}
+			}
+
+			CloseConnection(cleanupConn);
+		}
 
 		PG_RE_THROW();
 	}
@@ -651,6 +691,14 @@ DatabaseMigrationFinish(DatabaseMigration *migration)
 	if (PQstatus(destConn->pgConn) != CONNECTION_OK)
 	{
 		ReportConnectionError(destConn, ERROR);
+	}
+
+	if (migration->mode == MIGRATION_MODE_LOGICAL_REPLICATION &&
+		!RemoteSubscriptionExists(destConn, subscriptionName))
+	{
+		ereport(ERROR, (errcode(ERRCODE_DUPLICATE_OBJECT),
+						errmsg("subscription \"%s\" does not exist on target node",
+							   subscriptionName)));
 	}
 
 	WaitForCatchUp(sourceConn, destConn, subscriptionName);

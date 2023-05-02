@@ -10,6 +10,9 @@
 #define DATABASE_SHARDING_H
 
 
+#include "tcop/utility.h"
+
+
 /* attributes of citus_catalog.database_shard */
 #define Natts_database_shard 3
 #define Anum_database_shard_database_id 1
@@ -32,7 +35,11 @@ typedef struct DatabaseShard
 /* citus.enable_database_sharding setting */
 extern bool EnableDatabaseSharding;
 
-void HandleDDLInDatabaseShard(Node *parseTree, bool *runPreviousUtilityHook);
+void PreProcessUtilityInDatabaseShard(Node *parseTree, const char *queryString,
+									  ProcessUtilityContext context,
+									  bool *runPreviousUtilityHook);
+void PostProcessUtilityInDatabaseShard(Node *parseTree, const char *queryString,
+									   ProcessUtilityContext context);
 bool DatabaseShardingEnabled(void);
 void AssignDatabaseToShard(Oid databaseOid);
 void UpdateDatabaseShard(Oid databaseOid, int targetNodeGroupId);

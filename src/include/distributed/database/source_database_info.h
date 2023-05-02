@@ -71,7 +71,6 @@ typedef struct SourceDatabaseSequence
 
 
 SemanticVersion * GetSourceDatabaseVersion(MultiConnection *conn);
-bool SourceDatabaseHasPgMigratorSourceExtension(MultiConnection *conn);
 char * SemanticVersionToString(SemanticVersion *version);
 List * ListSourceDatabaseSchemas(MultiConnection *conn);
 List * ListSourceDatabaseTables(MultiConnection *conn);
@@ -79,7 +78,8 @@ List * ListSourceDatabaseRegularTableNames(List *tableList);
 List * ListSourceDatabaseSequences(MultiConnection *conn);
 List * ListSourceMigrationPublications(MultiConnection *conn,
 									   char *publicationNamePrefix);
-void DeleteDDLPropagationRecordsOnSource(MultiConnection *Conn);
+void CreateDDLReplicationTable(MultiConnection *conn);
+void CreateDDLReplicationTrigger(MultiConnection *conn);
 
 
 #endif

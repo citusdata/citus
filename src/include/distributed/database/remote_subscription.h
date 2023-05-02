@@ -17,6 +17,8 @@ void CreateRemoteSubscription(MultiConnection *conn,
 							  char *sourceConnectionString, char *subscriptionName,
 							  char *publicationName, char *slotName);
 void DropRemoteSubscription(MultiConnection *conn, char *subscriptionName);
+void StartRemoteMigrationMonitor(MultiConnection *conn, char *databaseName,
+								 char *subscriptionName);
 
 
 #endif

@@ -905,6 +905,8 @@ EnsurePgBouncerRunning(int pgBouncerId)
 		}
 	}
 
+	char *unixDomainSocketDir = GetInboundPgBouncerUnixDomainSocketDir(pgBouncerId);
+
 	StringInfo pidFile = makeStringInfo();
 	appendStringInfo(pidFile, "citus-pgbouncer-inbound-%d.pid", pgBouncerId);
 
@@ -925,6 +927,7 @@ EnsurePgBouncerRunning(int pgBouncerId)
 
 				proc->isActive = true;
 				proc->pgbouncerPid = readPid;
+				strlcpy(proc->unixDomainSocketDir, unixDomainSocketDir, MAXPGPATH);
 
 				UnlockInboundPgBouncerState();
 				fclose(pidFileStream);
@@ -939,7 +942,6 @@ EnsurePgBouncerRunning(int pgBouncerId)
 	proc->isActive = false;
 
 	/* make sure the unix domain socket directory exists */
-	char *unixDomainSocketDir = GetInboundPgBouncerUnixDomainSocketDir(pgBouncerId);
 	mkdir(unixDomainSocketDir, pg_dir_create_mode);
 
 	StringInfo configFile = makeStringInfo();

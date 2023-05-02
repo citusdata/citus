@@ -155,3 +155,12 @@ CREATE FUNCTION pg_catalog.database_shard_move_finish(
  AS 'MODULE_PATHNAME', $$database_shard_move_finish$$;
 COMMENT ON FUNCTION pg_catalog.database_shard_move_finish(text,int)
 IS 'finish a database shard move';
+
+CREATE FUNCTION pg_catalog.citus_internal_start_migration_monitor(
+	database_name text,
+	subscription_name text)
+ RETURNS void
+ LANGUAGE C STRICT
+ AS 'MODULE_PATHNAME', $$citus_internal_start_migration_monitor$$;
+COMMENT ON FUNCTION pg_catalog.citus_internal_start_migration_monitor(text,text)
+IS 'start a background worker that monitors an ongoing migration';

@@ -50,6 +50,7 @@
 #include "distributed/commands/utility_hook.h" /* IWYU pragma: keep */
 #include "distributed/coordinator_protocol.h"
 #include "distributed/database/database_sharding.h"
+#include "distributed/database/ddl_replication.h"
 #include "distributed/deparser.h"
 #include "distributed/deparse_shard_query.h"
 #include "distributed/executor_util.h"
@@ -231,8 +232,18 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 	{
 		/* Citus extension does not exist in the current database */
 
+		/*
+		 * We check whether DDL needs to be replicated before executing it,
+		 * because in case of a DROP statement we might not have enough
+		 * information.
+		 */
+		bool shouldReplicateDDL = EnableDatabaseSharding &&
+								  context == PROCESS_UTILITY_TOPLEVEL &&
+								  ShouldReplicateDDLCommand(parsetree);
+
 		bool runPreviousHook = true;
-		HandleDDLInDatabaseShard(parsetree, &runPreviousHook);
+		PreProcessUtilityInDatabaseShard(parsetree, queryString, context,
+										 &runPreviousHook);
 
 		/*
 		 * Ensure that utility commands do not behave any differently until CREATE
@@ -242,6 +253,13 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		{
 			PrevProcessUtility(pstmt, queryString, false, context,
 							   params, queryEnv, dest, completionTag);
+		}
+
+		PostProcessUtilityInDatabaseShard(parsetree, queryString, context);
+
+		if (shouldReplicateDDL)
+		{
+			ReplicateDDLCommand(parsetree, queryString, namespace_search_path);
 		}
 
 		return;

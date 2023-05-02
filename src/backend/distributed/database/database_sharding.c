@@ -20,6 +20,7 @@
 #include "commands/dbcommands.h"
 #include "distributed/connection_management.h"
 #include "distributed/database/database_sharding.h"
+#include "distributed/database/ddl_replication.h"
 #include "distributed/deparser.h"
 #include "distributed/deparse_shard_query.h"
 #include "distributed/listutils.h"
@@ -63,15 +64,17 @@ char *DatabaseShardingPgBouncerFile = "";
 
 
 /*
- * HandleDDLInDatabaseShard handles DDL commands that occur within a
+ * PreProcessUtilityInDatabaseShard handles DDL commands that occur within a
  * database shard and require global coordination:
  * - CREATE/ALTER/DROP DATABASE
  * - CREATE/ALTER/DROP ROLE/USER/GROUP
  */
 void
-HandleDDLInDatabaseShard(Node *parseTree, bool *runPreviousUtilityHook)
+PreProcessUtilityInDatabaseShard(Node *parseTree, const char *queryString,
+								 ProcessUtilityContext context,
+								 bool *runPreviousUtilityHook)
 {
-	if (!EnableDatabaseSharding)
+	if (!EnableDatabaseSharding || context != PROCESS_UTILITY_TOPLEVEL)
 	{
 		return;
 	}
@@ -92,6 +95,21 @@ HandleDDLInDatabaseShard(Node *parseTree, bool *runPreviousUtilityHook)
 		/* command is fully delegated to control database */
 		*runPreviousUtilityHook = false;
 	}
+}
+
+
+/*
+ * PostProcessUtilityInDatabaseShard is currently a noop.
+ */
+void
+PostProcessUtilityInDatabaseShard(Node *parseTree, const char *queryString,
+								  ProcessUtilityContext context)
+{
+	if (!EnableDatabaseSharding || context != PROCESS_UTILITY_TOPLEVEL)
+	{
+		return;
+	}
+
 }
 
 
