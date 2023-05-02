@@ -15,7 +15,7 @@
 * Allows parallel shard moves in background rebalancer (#6756)
 
 * Introduces the GUC `citus.metadata_sync_mode` that introduces nontransactional
-  mode for metadata sync (#6728)
+  mode for metadata sync (#6728, #6889)
 
 * Propagates CREATE/ALTER/DROP PUBLICATION statements for distributed tables
   (#6776)
@@ -30,8 +30,6 @@
 * Correctly reports shard size in `citus_shards` view (#6748)
 
 * Fixes a bug in shard copy operations (#6721)
-
-* Fixes a bug related to sequence idempotency at non-transactional sync (#6889)
 
 * Fixes a bug that prevents enforcing identity column restrictions on worker
   nodes (#6738)
