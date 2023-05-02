@@ -623,7 +623,7 @@ GenerateInboundPgBouncerConfig(int myPgBouncerId)
 	for (int pgBouncerId = 0; pgBouncerId < PgBouncerInboundProcs; pgBouncerId++)
 	{
 		int peerId = CalculatePeerIdForNodeGroup(myGroupId, pgBouncerId);
-		char *peerUnixDomainSocket = GetInboundPgBouncerUnixDomainSocketDir(peerId);
+		char *peerUnixDomainSocket = GetInboundPgBouncerUnixDomainSocketDir(pgBouncerId);
 
 		appendStringInfo(pgbouncerConfig, "%d = host=%s port=%d\n",
 						 peerId,
