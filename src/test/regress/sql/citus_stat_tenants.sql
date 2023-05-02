@@ -158,11 +158,11 @@ SELECT count(*)>=0 FROM dist_tbl_text WHERE a = 'bcde*/';
 SELECT count(*)>=0 FROM dist_tbl_text WHERE a = U&'\0061\0308bc';
 
 \c - - - :worker_1_port
-SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, query_count_in_this_period, query_count_in_last_period FROM citus_stat_tenants ORDER BY tenant_attribute;
+SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, query_count_in_this_period, query_count_in_last_period FROM citus_stat_tenants(true) ORDER BY tenant_attribute;
 \c - - - :worker_2_port
 SET search_path TO citus_stat_tenants;
 
-SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, query_count_in_this_period, query_count_in_last_period FROM citus_stat_tenants ORDER BY tenant_attribute;
+SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, query_count_in_this_period, query_count_in_last_period FROM citus_stat_tenants(true) ORDER BY tenant_attribute;
 
 SELECT citus_stat_tenants_reset();
 
@@ -179,7 +179,7 @@ DELETE FROM dist_tbl_text WHERE a = '/bcde';
 DELETE FROM dist_tbl_text WHERE a = U&'\0061\0308bc';
 DELETE FROM dist_tbl_text WHERE a = 'bcde*';
 
-SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, query_count_in_this_period, query_count_in_last_period FROM citus_stat_tenants_local ORDER BY tenant_attribute;
+SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, query_count_in_this_period, query_count_in_last_period FROM citus_stat_tenants_local(true) ORDER BY tenant_attribute;
 
 -- test local cached queries & prepared statements
 
@@ -198,7 +198,7 @@ EXECUTE dist_tbl_text_select_plan('/bcde');
 EXECUTE dist_tbl_text_select_plan(U&'\0061\0308bc');
 EXECUTE dist_tbl_text_select_plan('bcde*');
 
-SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, query_count_in_this_period, query_count_in_last_period FROM citus_stat_tenants_local ORDER BY tenant_attribute;
+SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, query_count_in_this_period, query_count_in_last_period FROM citus_stat_tenants_local(true) ORDER BY tenant_attribute;
 
 \c - - - :master_port
 SET search_path TO citus_stat_tenants;
@@ -221,7 +221,7 @@ EXECUTE dist_tbl_text_select_plan('bcde*');
 \c - - - :worker_2_port
 SET search_path TO citus_stat_tenants;
 
-SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, query_count_in_this_period, query_count_in_last_period FROM citus_stat_tenants ORDER BY tenant_attribute;
+SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, query_count_in_this_period, query_count_in_last_period FROM citus_stat_tenants(true) ORDER BY tenant_attribute;
 
 \c - - - :master_port
 SET search_path TO citus_stat_tenants;
