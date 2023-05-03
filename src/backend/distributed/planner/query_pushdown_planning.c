@@ -185,15 +185,6 @@ ShouldUseSubqueryPushDown(Query *originalQuery, Query *rewrittenQuery,
 	}
 
 	/*
-	 * We handle outer joins as subqueries, since the join order planner
-	 * does not know how to handle them.
-	 */
-	if (FindNodeMatchingCheckFunction((Node *) originalQuery->jointree, IsOuterJoinExpr))
-	{
-		return true;
-	}
-
-	/*
 	 * Original query may not have an outer join while rewritten query does.
 	 * We should push down in this case.
 	 * An example of this is https://github.com/citusdata/citus/issues/2739

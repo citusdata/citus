@@ -420,6 +420,16 @@ ShouldRecursivelyPlanNonColocatedSubqueries(Query *subquery,
 	}
 
 	/*
+	 * recursively plan noncolocated outer relations inside subquery
+	 */
+	JoinRestrictionContext *joinRestrictionContext =
+		context->plannerRestrictionContext->joinRestrictionContext;
+	if (joinRestrictionContext && joinRestrictionContext->hasOuterJoin)
+	{
+		return true;
+	}
+
+	/*
 	 * This check helps us in two ways:
 	 *   (i) We're not targeting queries that don't include subqueries at all,
 	 *       they should go through regular planning.
@@ -583,20 +593,52 @@ RecursivelyPlanNonColocatedJoinWalker(Node *joinNode,
 		RangeTblEntry *rte = rt_fetch(rangeTableIndex, rangeTableList);
 
 		/* we're only interested in subqueries for now */
-		if (rte->rtekind != RTE_SUBQUERY)
+		if (rte->rtekind == RTE_SUBQUERY)
 		{
-			return;
+			/*
+			 * If the subquery is not colocated with the anchor subquery,
+			 * recursively plan it.
+			 */
+			Query *subquery = rte->subquery;
+			if (!SubqueryColocated(subquery, colocatedJoinChecker))
+			{
+				RecursivelyPlanSubquery(subquery, recursivePlanningContext);
+			}
+		}
+		else if (rte->rtekind == RTE_RELATION)
+		{
+			/*
+			 * when query tree contains only inner joins, we let logical planner handle
+			 * it, otherwise we recursively plan the relation.
+			 */
+			JoinRestrictionContext *joinRestrictionContext =
+				recursivePlanningContext->plannerRestrictionContext->
+				joinRestrictionContext;
+			if (joinRestrictionContext == NULL ||
+				!joinRestrictionContext->hasOuterJoin)
+			{
+				return;
+			}
+
+			/*
+			 * wrap the relation into subquery just since SubqueryColocated expects
+			 * a query as input
+			 */
+			Query *subquery = WrapRteRelationIntoSubquery(rte, NIL);
+			if (!SubqueryColocated(subquery, colocatedJoinChecker))
+			{
+				ereport(DEBUG1, (errmsg("recursively planning noncolocated relation")));
+				PlannerRestrictionContext *restrictionContext =
+					GetPlannerRestrictionContext(recursivePlanningContext);
+				List *requiredAttributes =
+					RequiredAttrNumbersForRelation(rte, restrictionContext);
+
+				ReplaceRTERelationWithRteSubquery(rte, requiredAttributes,
+												  recursivePlanningContext);
+			}
 		}
 
-		/*
-		 * If the subquery is not colocated with the anchor subquery,
-		 * recursively plan it.
-		 */
-		Query *subquery = rte->subquery;
-		if (!SubqueryColocated(subquery, colocatedJoinChecker))
-		{
-			RecursivelyPlanSubquery(subquery, recursivePlanningContext);
-		}
+		return;
 	}
 	else
 	{

@@ -64,7 +64,6 @@ FROM (
   ) t2 ON (t1.user_id = t2.user_id)
   GROUP BY  t1.user_id, hasdone_event
 ) t GROUP BY user_id, hasdone_event;
-ERROR:  complex joins are only supported when all distributed tables are joined on their distribution columns with equal operator
 -- not pushable since the JOIN is not an equi join right part of the UNION
 -- is not joined on the partition key
 INSERT INTO agg_results_third (user_id, value_1_agg, value_2_agg )
@@ -104,8 +103,6 @@ FROM (
   ) t2 ON (t1.user_id = t2.user_id)
   GROUP BY  t1.user_id, hasdone_event
 ) t GROUP BY user_id, hasdone_event;
-ERROR:  the query contains a join that requires repartitioning
-HINT:  Set citus.enable_repartition_joins to on to enable repartitioning
 -- the LEFT JOIN conditon is not on the partition column (i.e., is it part_key divided by 2)
 -- but, we can plan the query thanks to recursive planning
 SET client_min_messages TO DEBUG1;
@@ -234,7 +231,6 @@ GROUP BY
   count_pay, user_id
 ORDER BY
   count_pay;
-ERROR:  complex joins are only supported when all distributed tables are joined on their distribution columns with equal operator
 -- not pushable since the JOIN condition is not equi JOIN
 -- (subquery_1 JOIN subquery_2)
 -- but, we can plan the query thanks to recursive planning
