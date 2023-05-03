@@ -138,6 +138,13 @@ master_create_empty_shard(PG_FUNCTION_ARGS)
 						errdetail("We currently don't support creating shards "
 								  "on hash-partitioned tables")));
 	}
+	else if (IsCitusTableType(relationId, SINGLE_SHARD_DISTRIBUTED))
+	{
+		ereport(ERROR, (errmsg("relation \"%s\" is a single shard table",
+							   relationName),
+						errdetail("We currently don't support creating shards "
+								  "on single shard tables")));
+	}
 	else if (IsCitusTableType(relationId, REFERENCE_TABLE))
 	{
 		ereport(ERROR, (errmsg("relation \"%s\" is a reference table",
