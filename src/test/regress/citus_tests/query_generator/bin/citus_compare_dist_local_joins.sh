@@ -6,6 +6,7 @@ set -euo pipefail
 psql_user=$1
 psql_db=$2
 psql_port=$3
+seed=${4:-""}
 
 runDDLs()
 {
@@ -39,7 +40,7 @@ showDiffs()
 # run query generator and let it create output ddls and queries
 script_folder=$(dirname "$0")
 out_folder="${script_folder}"/../out
-pushd . && cd "${script_folder}"/.. && python3 generate_queries.py && popd
+pushd . && cd "${script_folder}"/.. && python3 generate_queries.py --seed="${seed}" && popd
 
 # remove result files if exists
 rm -rf "${out_folder}"/dist_queries.out "${out_folder}"/local_queries.out
