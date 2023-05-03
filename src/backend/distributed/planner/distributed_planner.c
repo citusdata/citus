@@ -1025,6 +1025,17 @@ CreateDistributedPlan(uint64 planId, bool allowRecursivePlanning, Query *origina
 	{
 		return distributedPlan;
 	}
+	else if (ContainsSingleShardTable(originalQuery))
+	{
+		/*
+		 * We only support router queries if the query contains reference to
+		 * a single-shard table. This temporary restriction will be removed
+		 * once we support recursive planning for the queries that reference
+		 * single-shard tables.
+		 */
+		WrapRouterErrorForSingleShardTable(distributedPlan->planningError);
+		RaiseDeferredError(distributedPlan->planningError, ERROR);
+	}
 	else
 	{
 		RaiseDeferredError(distributedPlan->planningError, DEBUG2);
@@ -2463,6 +2474,18 @@ HasUnresolvedExternParamsWalker(Node *expression, ParamListInfo boundParams)
 
 
 /*
+ * ContainsSingleShardTable returns true if given query contains reference
+ * to a single-shard table.
+ */
+bool
+ContainsSingleShardTable(Query *query)
+{
+	RTEListProperties *rteListProperties = GetRTEListPropertiesForQuery(query);
+	return rteListProperties->hasSingleShardDistTable;
+}
+
+
+/*
  * GetRTEListPropertiesForQuery is a wrapper around GetRTEListProperties that
  * returns RTEListProperties for the rte list retrieved from query.
  */
@@ -2538,6 +2561,15 @@ GetRTEListProperties(List *rangeTableList)
 		else if (IsCitusTableTypeCacheEntry(cacheEntry, DISTRIBUTED_TABLE))
 		{
 			rteListProperties->hasDistributedTable = true;
+
+			if (!HasDistributionKeyCacheEntry(cacheEntry))
+			{
+				rteListProperties->hasSingleShardDistTable = true;
+			}
+			else
+			{
+				rteListProperties->hasDistTableWithShardKey = true;
+			}
 		}
 		else
 		{

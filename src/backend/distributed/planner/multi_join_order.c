@@ -1404,7 +1404,7 @@ DistPartitionKeyOrError(Oid relationId)
 	if (partitionKey == NULL)
 	{
 		ereport(ERROR, (errmsg(
-							"no distribution column found for relation %d, because it is a reference table",
+							"no distribution column found for relation %d",
 							relationId)));
 	}
 

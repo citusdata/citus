@@ -259,6 +259,22 @@ CreateModifyPlan(Query *originalQuery, Query *query,
 
 
 /*
+ * WrapRouterErrorForSingleShardTable wraps given planning error with a
+ * generic error message if given query references a distributed table
+ * that doesn't have a distribution key.
+ */
+void
+WrapRouterErrorForSingleShardTable(DeferredErrorMessage *planningError)
+{
+	planningError->detail = planningError->message;
+	planningError->message = pstrdup("queries that reference a distributed "
+									 "table without a shard key can only "
+									 "reference colocated distributed "
+									 "tables or reference tables");
+}
+
+
+/*
  * CreateSingleTaskRouterSelectPlan creates a physical plan for given SELECT query.
  * The returned plan is a router task that returns query results from a single worker.
  * If not router plannable, the returned plan's planningError describes the problem.
@@ -1870,6 +1886,11 @@ RouterJob(Query *originalQuery, PlannerRestrictionContext *plannerRestrictionCon
 		 */
 		if (IsMergeQuery(originalQuery))
 		{
+			if (ContainsSingleShardTable(originalQuery))
+			{
+				WrapRouterErrorForSingleShardTable(*planningError);
+			}
+
 			RaiseDeferredError(*planningError, ERROR);
 		}
 		else
@@ -2684,7 +2705,7 @@ TargetShardIntervalForFastPathQuery(Query *query, bool *isMultiShardQuery,
 
 	if (!HasDistributionKey(relationId))
 	{
-		/* we don't need to do shard pruning for non-distributed tables */
+		/* we don't need to do shard pruning for single shard tables */
 		return list_make1(LoadShardIntervalList(relationId));
 	}
 
@@ -2974,7 +2995,7 @@ BuildRoutesForInsert(Query *query, DeferredErrorMessage **planningError)
 
 	Assert(query->commandType == CMD_INSERT);
 
-	/* reference tables and citus local tables can only have one shard */
+	/* tables that don't have distribution column can only have one shard */
 	if (!HasDistributionKeyCacheEntry(cacheEntry))
 	{
 		List *shardIntervalList = LoadShardIntervalList(distributedTableId);
@@ -2990,6 +3011,12 @@ BuildRoutesForInsert(Query *query, DeferredErrorMessage **planningError)
 			else if (IsCitusTableTypeCacheEntry(cacheEntry, CITUS_LOCAL_TABLE))
 			{
 				ereport(ERROR, (errmsg("local table cannot have %d shards",
+									   shardCount)));
+			}
+			else if (IsCitusTableTypeCacheEntry(cacheEntry, SINGLE_SHARD_DISTRIBUTED))
+			{
+				ereport(ERROR, (errmsg("distributed tables having a null shard key "
+									   "cannot have %d shards",
 									   shardCount)));
 			}
 		}
@@ -3849,7 +3876,8 @@ ErrorIfQueryHasUnroutableModifyingCTE(Query *queryTree)
 			CitusTableCacheEntry *modificationTableCacheEntry =
 				GetCitusTableCacheEntry(distributedTableId);
 
-			if (!HasDistributionKeyCacheEntry(modificationTableCacheEntry))
+			if (!IsCitusTableTypeCacheEntry(modificationTableCacheEntry,
+											DISTRIBUTED_TABLE))
 			{
 				return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
 									 "cannot router plan modification of a non-distributed table",

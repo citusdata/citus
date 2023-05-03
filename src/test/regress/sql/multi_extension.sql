@@ -904,6 +904,20 @@ SELECT create_distributed_table('test','x');
 DROP TABLE test;
 TRUNCATE pg_dist_node;
 
+-- confirm that we can create a single-shard table on an empty node
+CREATE TABLE test (x int, y int);
+INSERT INTO test VALUES (1,2);
+SET citus.shard_replication_factor TO 1;
+SELECT create_distributed_table('test', null, colocate_with=>'none', distribution_type=>null);
+
+-- and make sure that we can't remove the coordinator due to "test"
+SELECT citus_remove_node('localhost', :master_port);
+
+DROP TABLE test;
+
+-- and now we should be able to remove the coordinator
+SELECT citus_remove_node('localhost', :master_port);
+
 -- confirm that we can create a reference table on an empty node
 CREATE TABLE test (x int, y int);
 INSERT INTO test VALUES (1,2);

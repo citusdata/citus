@@ -509,6 +509,11 @@ InsertDistributionColumnMatchesSource(Oid targetRelationId, Query *query)
 		return NULL;
 	}
 
+	if (!HasDistributionKey(targetRelationId))
+	{
+		return NULL;
+	}
+
 	bool foundDistributionColumn = false;
 	MergeAction *action = NULL;
 	foreach_ptr(action, query->mergeActionList)
