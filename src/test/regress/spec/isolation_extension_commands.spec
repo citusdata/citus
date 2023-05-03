@@ -41,7 +41,7 @@ step "s1-create-extension-with-schema2"
 
 step "s1-print"
 {
-	select count(*) from pg_catalog.pg_dist_object ;
+	select pg_identify_object_as_address(classid, objid, objsubid)::text as obj_repr from pg_dist_object order by obj_repr;
 	select extname, extversion, nspname from pg_extension, pg_namespace where pg_namespace.oid=pg_extension.extnamespace and extname='seg';
 	SELECT run_command_on_workers($$select extname from pg_extension where extname='seg'$$);
 	SELECT run_command_on_workers($$select extversion from pg_extension where extname='seg'$$);
