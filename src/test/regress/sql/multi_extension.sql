@@ -904,7 +904,7 @@ SELECT create_distributed_table('test','x');
 DROP TABLE test;
 TRUNCATE pg_dist_node;
 
--- confirm that we can create a null shard key table on an empty node
+-- confirm that we can create a single-shard table on an empty node
 CREATE TABLE test (x int, y int);
 INSERT INTO test VALUES (1,2);
 SET citus.shard_replication_factor TO 1;

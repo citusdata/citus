@@ -1,5 +1,5 @@
-CREATE SCHEMA insert_select_null_dist_key;
-SET search_path TO insert_select_null_dist_key;
+CREATE SCHEMA insert_select_single_shard_table;
+SET search_path TO insert_select_single_shard_table;
 
 SET citus.next_shard_id TO 1820000;
 SET citus.shard_count TO 32;
@@ -87,9 +87,9 @@ CREATE MATERIALIZED VIEW matview AS SELECT b*2+a AS a, a*a AS b FROM nullkey_c1_
 SET client_min_messages TO DEBUG2;
 
 -- Test inserting into a distributed table by selecting from a combination of
--- different table types together with null-shard-key tables.
+-- different table types together with single-shard tables.
 
--- use a null-shard-key table
+-- use a single-shard table
 INSERT INTO distributed_table_c1_t1 SELECT nullkey_c1_t1.a, nullkey_c1_t1.b FROM nullkey_c1_t1;
 
 -- use a reference table
@@ -98,13 +98,13 @@ INSERT INTO distributed_table_c1_t1 SELECT nullkey_c1_t1.a, nullkey_c1_t1.b FROM
 INSERT INTO distributed_table_c1_t1 SELECT nullkey_c1_t2.a, nullkey_c1_t2.b FROM nullkey_c1_t2 LEFT JOIN reference_table USING (b);
 INSERT INTO distributed_table_c1_t1 SELECT nullkey_c1_t1.a, nullkey_c1_t1.b FROM nullkey_c1_t1 INTERSECT SELECT * FROM reference_table;
 
--- use a colocated null-shard-key table
+-- use a colocated single-shard table
 INSERT INTO distributed_table_c1_t1 SELECT nullkey_c1_t1.a, nullkey_c1_t1.b FROM nullkey_c1_t1 JOIN nullkey_c1_t2 USING (b);
 INSERT INTO distributed_table_c1_t1 SELECT nullkey_c1_t1.a, nullkey_c1_t1.b FROM nullkey_c1_t1 FULL JOIN nullkey_c1_t2 USING (a);
 INSERT INTO distributed_table_c1_t1 SELECT nullkey_c1_t1.a, nullkey_c1_t1.b FROM nullkey_c1_t1 FULL JOIN matview USING (a);
 INSERT INTO distributed_table_c1_t1 SELECT * FROM nullkey_c1_t1 UNION SELECT * FROM nullkey_c1_t2;
 
--- use a non-colocated null-shard-key table
+-- use a non-colocated single-shard table
 INSERT INTO distributed_table_c1_t1 SELECT nullkey_c1_t2.a, nullkey_c1_t2.b FROM nullkey_c1_t2 LEFT JOIN nullkey_c2_t1 USING (a);
 INSERT INTO distributed_table_c1_t1 SELECT * FROM nullkey_c1_t1 UNION SELECT * FROM nullkey_c2_t1;
 
@@ -132,9 +132,9 @@ TRUNCATE distributed_table_c1_t1;
 INSERT INTO distributed_table_c1_t1 SELECT i, i FROM generate_series(3, 8) i;
 
 -- Test inserting into a reference table by selecting from a combination of
--- different table types together with null-shard-key tables.
+-- different table types together with single-shard tables.
 
--- use a null-shard-key table
+-- use a single-shard table
 INSERT INTO reference_table SELECT nullkey_c1_t1.a, nullkey_c1_t1.b FROM nullkey_c1_t1;
 
 -- use a reference table
@@ -143,11 +143,11 @@ INSERT INTO reference_table SELECT nullkey_c1_t2.a, nullkey_c1_t2.b FROM nullkey
 INSERT INTO reference_table SELECT nullkey_c1_t1.a, nullkey_c1_t1.b FROM nullkey_c1_t1 UNION SELECT * FROM reference_table;
 INSERT INTO reference_table SELECT nullkey_c1_t2.a, nullkey_c1_t2.b FROM nullkey_c1_t2 LEFT JOIN reference_table USING (b) WHERE b IN (SELECT b FROM matview);
 
--- use a colocated null-shard-key table
+-- use a colocated single-shard table
 INSERT INTO reference_table SELECT nullkey_c1_t1.a, nullkey_c1_t1.b FROM nullkey_c1_t1 JOIN nullkey_c1_t2 USING (b);
 INSERT INTO reference_table SELECT nullkey_c1_t1.a, nullkey_c1_t1.b FROM nullkey_c1_t1 FULL JOIN nullkey_c1_t2 USING (a);
 
--- use a non-colocated null-shard-key table
+-- use a non-colocated single-shard table
 INSERT INTO reference_table SELECT nullkey_c1_t2.a, nullkey_c1_t2.b FROM nullkey_c1_t2 LEFT JOIN nullkey_c2_t1 USING (a);
 
 -- use a distributed table
@@ -167,15 +167,15 @@ TRUNCATE reference_table;
 INSERT INTO reference_table SELECT i, i FROM generate_series(0, 5) i;
 
 -- Test inserting into a citus local table by selecting from a combination of
--- different table types together with null-shard-key tables.
+-- different table types together with single-shard tables.
 
--- use a null-shard-key table
+-- use a single-shard table
 INSERT INTO citus_local_table SELECT nullkey_c1_t1.a, nullkey_c1_t1.b FROM nullkey_c1_t1;
 
 -- use a reference table
 INSERT INTO citus_local_table SELECT nullkey_c1_t1.a, nullkey_c1_t1.b FROM nullkey_c1_t1 JOIN reference_table USING (a);
 
--- use a colocated null-shard-key table
+-- use a colocated single-shard table
 INSERT INTO citus_local_table SELECT nullkey_c1_t1.a, nullkey_c1_t1.b FROM nullkey_c1_t1 JOIN nullkey_c1_t2 USING (b);
 
 -- use a distributed table
@@ -191,8 +191,8 @@ SELECT avg(a), avg(b) FROM citus_local_table ORDER BY 1, 2;
 TRUNCATE citus_local_table;
 INSERT INTO citus_local_table SELECT i, i FROM generate_series(0, 10) i;
 
--- Test inserting into a null-shard-key table by selecting from a combination of
--- different table types, together with or without null-shard-key tables.
+-- Test inserting into a single-shard table by selecting from a combination of
+-- different table types, together with or without single-shard tables.
 
 -- use a postgres local table
 INSERT INTO nullkey_c1_t1 SELECT postgres_local_table.a, postgres_local_table.b FROM postgres_local_table;
@@ -209,7 +209,7 @@ INSERT INTO nullkey_c1_t1 SELECT distributed_table_c1_t2.a, distributed_table_c1
 INSERT INTO nullkey_c1_t1 SELECT distributed_table_c1_t2.a, distributed_table_c1_t2.b FROM distributed_table_c1_t2 JOIN reference_table USING (a);
 INSERT INTO nullkey_c1_t1 SELECT distributed_table_c1_t2.a, distributed_table_c1_t2.b FROM distributed_table_c1_t2 JOIN nullkey_c1_t1 USING (a);
 
--- use a non-colocated null-shard-key table
+-- use a non-colocated single-shard table
 INSERT INTO nullkey_c2_t1 SELECT q.* FROM (SELECT reference_table.* FROM reference_table LEFT JOIN nullkey_c1_t1 USING (a)) q JOIN nullkey_c1_t2 USING (a);
 
 -- use a materialized view
@@ -228,7 +228,7 @@ INSERT INTO nullkey_c1_t1 SELECT i, i FROM generate_series(1, 8) i;
 INSERT INTO nullkey_c2_t1 SELECT i, i FROM generate_series(2, 7) i;
 
 -- Test inserting into a local table by selecting from a combination of
--- different table types, together with or without null-shard-key tables.
+-- different table types, together with or without single-shard tables.
 
 INSERT INTO postgres_local_table SELECT nullkey_c1_t1.a, nullkey_c1_t1.b FROM nullkey_c1_t1 JOIN reference_table USING (a);
 
@@ -465,6 +465,6 @@ SELECT * FROM upsert_test_2 ORDER BY key;
 SELECT * FROM upsert_test_3 ORDER BY key_1, key_2;
 
 SET client_min_messages TO WARNING;
-DROP SCHEMA insert_select_null_dist_key CASCADE;
+DROP SCHEMA insert_select_single_shard_table CASCADE;
 
 SELECT citus_remove_node('localhost', :master_port);

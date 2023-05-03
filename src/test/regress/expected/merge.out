@@ -3228,9 +3228,9 @@ WHEN NOT MATCHED THEN
 INSERT VALUES(dist_source.id, dist_source.val);
 ERROR:  For MERGE command, all the distributed tables must be colocated, for append/range distribution, colocation is not supported
 HINT:  Consider using hash distribution instead
--- test merge with null shard key tables
-CREATE SCHEMA query_null_dist_key;
-SET search_path TO query_null_dist_key;
+-- test merge with single-shard tables
+CREATE SCHEMA query_single_shard_table;
+SET search_path TO query_single_shard_table;
 SET client_min_messages TO DEBUG2;
 CREATE TABLE nullkey_c1_t1(a int, b int);
 CREATE TABLE nullkey_c1_t2(a int, b int);
@@ -3295,23 +3295,23 @@ INSERT INTO postgres_local_table SELECT i, i FROM generate_series(5, 10) i;
 -- with a colocated table
 MERGE INTO nullkey_c1_t1 USING nullkey_c1_t2 ON (nullkey_c1_t1.a = nullkey_c1_t2.a)
 WHEN MATCHED THEN UPDATE SET b = nullkey_c1_t2.b;
-DEBUG:  <Deparsed MERGE query: MERGE INTO query_null_dist_key.nullkey_c1_t1_4000145 nullkey_c1_t1 USING query_null_dist_key.nullkey_c1_t2_4000146 nullkey_c1_t2 ON (nullkey_c1_t1.a OPERATOR(pg_catalog.=) nullkey_c1_t2.a) WHEN MATCHED THEN UPDATE SET b = nullkey_c1_t2.b>
+DEBUG:  <Deparsed MERGE query: MERGE INTO query_single_shard_table.nullkey_c1_t1_4000147 nullkey_c1_t1 USING query_single_shard_table.nullkey_c1_t2_4000148 nullkey_c1_t2 ON (nullkey_c1_t1.a OPERATOR(pg_catalog.=) nullkey_c1_t2.a) WHEN MATCHED THEN UPDATE SET b = nullkey_c1_t2.b>
 DEBUG:  Creating MERGE router plan
 MERGE INTO nullkey_c1_t1 USING nullkey_c1_t2 ON (nullkey_c1_t1.a = nullkey_c1_t2.a)
 WHEN MATCHED THEN DELETE;
-DEBUG:  <Deparsed MERGE query: MERGE INTO query_null_dist_key.nullkey_c1_t1_4000145 nullkey_c1_t1 USING query_null_dist_key.nullkey_c1_t2_4000146 nullkey_c1_t2 ON (nullkey_c1_t1.a OPERATOR(pg_catalog.=) nullkey_c1_t2.a) WHEN MATCHED THEN DELETE>
+DEBUG:  <Deparsed MERGE query: MERGE INTO query_single_shard_table.nullkey_c1_t1_4000147 nullkey_c1_t1 USING query_single_shard_table.nullkey_c1_t2_4000148 nullkey_c1_t2 ON (nullkey_c1_t1.a OPERATOR(pg_catalog.=) nullkey_c1_t2.a) WHEN MATCHED THEN DELETE>
 DEBUG:  Creating MERGE router plan
 MERGE INTO nullkey_c1_t1 USING nullkey_c1_t2 ON (nullkey_c1_t1.a = nullkey_c1_t2.a)
 WHEN MATCHED THEN UPDATE SET b = nullkey_c1_t2.b
 WHEN NOT MATCHED THEN INSERT VALUES (nullkey_c1_t2.a, nullkey_c1_t2.b);
-DEBUG:  <Deparsed MERGE query: MERGE INTO query_null_dist_key.nullkey_c1_t1_4000145 nullkey_c1_t1 USING query_null_dist_key.nullkey_c1_t2_4000146 nullkey_c1_t2 ON (nullkey_c1_t1.a OPERATOR(pg_catalog.=) nullkey_c1_t2.a) WHEN MATCHED THEN UPDATE SET b = nullkey_c1_t2.b WHEN NOT MATCHED THEN INSERT (a, b) VALUES (nullkey_c1_t2.a, nullkey_c1_t2.b)>
+DEBUG:  <Deparsed MERGE query: MERGE INTO query_single_shard_table.nullkey_c1_t1_4000147 nullkey_c1_t1 USING query_single_shard_table.nullkey_c1_t2_4000148 nullkey_c1_t2 ON (nullkey_c1_t1.a OPERATOR(pg_catalog.=) nullkey_c1_t2.a) WHEN MATCHED THEN UPDATE SET b = nullkey_c1_t2.b WHEN NOT MATCHED THEN INSERT (a, b) VALUES (nullkey_c1_t2.a, nullkey_c1_t2.b)>
 DEBUG:  Creating MERGE router plan
 MERGE INTO nullkey_c1_t1 USING nullkey_c1_t2 ON (nullkey_c1_t1.a = nullkey_c1_t2.a)
 WHEN MATCHED THEN DELETE
 WHEN NOT MATCHED THEN INSERT VALUES (nullkey_c1_t2.a, nullkey_c1_t2.b);
-DEBUG:  <Deparsed MERGE query: MERGE INTO query_null_dist_key.nullkey_c1_t1_4000145 nullkey_c1_t1 USING query_null_dist_key.nullkey_c1_t2_4000146 nullkey_c1_t2 ON (nullkey_c1_t1.a OPERATOR(pg_catalog.=) nullkey_c1_t2.a) WHEN MATCHED THEN DELETE WHEN NOT MATCHED THEN INSERT (a, b) VALUES (nullkey_c1_t2.a, nullkey_c1_t2.b)>
+DEBUG:  <Deparsed MERGE query: MERGE INTO query_single_shard_table.nullkey_c1_t1_4000147 nullkey_c1_t1 USING query_single_shard_table.nullkey_c1_t2_4000148 nullkey_c1_t2 ON (nullkey_c1_t1.a OPERATOR(pg_catalog.=) nullkey_c1_t2.a) WHEN MATCHED THEN DELETE WHEN NOT MATCHED THEN INSERT (a, b) VALUES (nullkey_c1_t2.a, nullkey_c1_t2.b)>
 DEBUG:  Creating MERGE router plan
--- with non-colocated null-dist-key table
+-- with non-colocated single-shard table
 MERGE INTO nullkey_c1_t1 USING nullkey_c2_t1 ON (nullkey_c1_t1.a = nullkey_c2_t1.a)
 WHEN MATCHED THEN UPDATE SET b = nullkey_c2_t1.b;
 ERROR:  For MERGE command, all the distributed tables must be colocated
@@ -3331,11 +3331,12 @@ ERROR:  For MERGE command, all the distributed tables must be colocated
 -- with a reference table
 MERGE INTO nullkey_c1_t1 USING reference_table ON (nullkey_c1_t1.a = reference_table.a)
 WHEN MATCHED THEN UPDATE SET b = reference_table.b;
-ERROR:  MERGE command is not supported on reference tables yet
+ERROR:  MERGE command is not supported with combination of distributed/reference yet
+HINT:  If target is distributed, source must be distributed and co-located
 MERGE INTO reference_table USING nullkey_c1_t1 ON (nullkey_c1_t1.a = reference_table.a)
 WHEN MATCHED THEN UPDATE SET b = nullkey_c1_t1.b
 WHEN NOT MATCHED THEN INSERT VALUES (nullkey_c1_t1.a, nullkey_c1_t1.b);
-ERROR:  MERGE command is not supported on reference tables yet
+ERROR:  Reference table as target is not allowed in MERGE command
 -- with a citus local table
 MERGE INTO nullkey_c1_t1 USING citus_local_table ON (nullkey_c1_t1.a = citus_local_table.a)
 WHEN MATCHED THEN UPDATE SET b = citus_local_table.b;
@@ -3357,7 +3358,7 @@ WITH cte AS (
 )
 MERGE INTO nullkey_c1_t1 USING cte ON (nullkey_c1_t1.a = cte.a)
 WHEN MATCHED THEN UPDATE SET b = cte.b;
-DEBUG:  <Deparsed MERGE query: WITH cte AS (SELECT nullkey_c1_t1_1.a, nullkey_c1_t1_1.b FROM query_null_dist_key.nullkey_c1_t1_4000145 nullkey_c1_t1_1) MERGE INTO query_null_dist_key.nullkey_c1_t1_4000145 nullkey_c1_t1 USING cte ON (nullkey_c1_t1.a OPERATOR(pg_catalog.=) cte.a) WHEN MATCHED THEN UPDATE SET b = cte.b>
+DEBUG:  <Deparsed MERGE query: WITH cte AS (SELECT nullkey_c1_t1_1.a, nullkey_c1_t1_1.b FROM query_single_shard_table.nullkey_c1_t1_4000147 nullkey_c1_t1_1) MERGE INTO query_single_shard_table.nullkey_c1_t1_4000147 nullkey_c1_t1 USING cte ON (nullkey_c1_t1.a OPERATOR(pg_catalog.=) cte.a) WHEN MATCHED THEN UPDATE SET b = cte.b>
 DEBUG:  Creating MERGE router plan
 WITH cte AS (
     SELECT * FROM distributed_table
@@ -3372,7 +3373,7 @@ MERGE INTO nullkey_c1_t1 USING cte ON (nullkey_c1_t1.a = cte.a)
 WHEN MATCHED THEN UPDATE SET b = cte.b;
 ERROR:  For MERGE command, all the distributed tables must be colocated
 SET client_min_messages TO WARNING;
-DROP SCHEMA query_null_dist_key CASCADE;
+DROP SCHEMA query_single_shard_table CASCADE;
 RESET client_min_messages;
 SET search_path TO merge_schema;
 DROP SERVER foreign_server CASCADE;

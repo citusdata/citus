@@ -141,8 +141,8 @@ static void CreateCitusTable(Oid relationId, CitusTableType tableType,
 							 DistributedTableParams *distributedTableParams);
 static void CreateHashDistributedTableShards(Oid relationId, int shardCount,
 											 Oid colocatedTableId, bool localTableEmpty);
-static void CreateNullShardKeyDistTableShard(Oid relationId, Oid colocatedTableId,
-											 uint32 colocationId);
+static void CreateSingleShardTableShard(Oid relationId, Oid colocatedTableId,
+										uint32 colocationId);
 static uint32 ColocationIdForNewTable(Oid relationId, CitusTableType tableType,
 									  DistributedTableParams *distributedTableParams,
 									  Var *distributionColumn);
@@ -285,7 +285,7 @@ create_distributed_table(PG_FUNCTION_ARGS)
 		{
 			/*
 			 * As we do for shard_count parameter, we could throw an error if
-			 * distribution_type is not NULL when creating a null-shard-key table.
+			 * distribution_type is not NULL when creating a single-shard table.
 			 * However, this requires changing the default value of distribution_type
 			 * parameter to NULL and this would mean a breaking change for most
 			 * users because they're mostly using this API to create sharded
@@ -296,7 +296,7 @@ create_distributed_table(PG_FUNCTION_ARGS)
 								   "when the distribution column is null ")));
 		}
 
-		CreateNullShardKeyDistTable(relationId, colocateWithTableName);
+		CreateSingleShardTable(relationId, colocateWithTableName);
 	}
 
 	PG_RETURN_VOID();
@@ -1027,11 +1027,11 @@ CreateReferenceTable(Oid relationId)
 
 
 /*
- * CreateNullShardKeyDistTable is a wrapper around CreateCitusTable that creates a
+ * CreateSingleShardTable is a wrapper around CreateCitusTable that creates a
  * single shard distributed table that doesn't have a shard key.
  */
 void
-CreateNullShardKeyDistTable(Oid relationId, char *colocateWithTableName)
+CreateSingleShardTable(Oid relationId, char *colocateWithTableName)
 {
 	DistributedTableParams distributedTableParams = {
 		.colocateWithTableName = colocateWithTableName,
@@ -1039,7 +1039,7 @@ CreateNullShardKeyDistTable(Oid relationId, char *colocateWithTableName)
 		.shardCountIsStrict = true,
 		.distributionColumnName = NULL
 	};
-	CreateCitusTable(relationId, NULL_KEY_DISTRIBUTED_TABLE, &distributedTableParams);
+	CreateCitusTable(relationId, SINGLE_SHARD_DISTRIBUTED, &distributedTableParams);
 }
 
 
@@ -1061,7 +1061,7 @@ CreateCitusTable(Oid relationId, CitusTableType tableType,
 				 DistributedTableParams *distributedTableParams)
 {
 	if ((tableType == HASH_DISTRIBUTED || tableType == APPEND_DISTRIBUTED ||
-		 tableType == RANGE_DISTRIBUTED || tableType == NULL_KEY_DISTRIBUTED_TABLE) !=
+		 tableType == RANGE_DISTRIBUTED || tableType == SINGLE_SHARD_DISTRIBUTED) !=
 		(distributedTableParams != NULL))
 	{
 		ereport(ERROR, (errmsg("distributed table params must be provided "
@@ -1212,10 +1212,10 @@ CreateCitusTable(Oid relationId, CitusTableType tableType,
 	{
 		CreateReferenceTableShard(relationId);
 	}
-	else if (tableType == NULL_KEY_DISTRIBUTED_TABLE)
+	else if (tableType == SINGLE_SHARD_DISTRIBUTED)
 	{
-		CreateNullShardKeyDistTableShard(relationId, colocatedTableId,
-										 colocationId);
+		CreateSingleShardTableShard(relationId, colocatedTableId,
+									colocationId);
 	}
 
 	if (ShouldSyncTableMetadata(relationId))
@@ -1271,7 +1271,7 @@ CreateCitusTable(Oid relationId, CitusTableType tableType,
 	}
 
 	/* copy over data for hash distributed and reference tables */
-	if (tableType == HASH_DISTRIBUTED || tableType == NULL_KEY_DISTRIBUTED_TABLE ||
+	if (tableType == HASH_DISTRIBUTED || tableType == SINGLE_SHARD_DISTRIBUTED ||
 		tableType == REFERENCE_TABLE)
 	{
 		if (RegularTable(relationId))
@@ -1336,7 +1336,7 @@ DecideCitusTableParams(CitusTableType tableType,
 			break;
 		}
 
-		case NULL_KEY_DISTRIBUTED_TABLE:
+		case SINGLE_SHARD_DISTRIBUTED:
 		{
 			citusTableParams.distributionMethod = DISTRIBUTE_BY_NONE;
 			citusTableParams.replicationModel = REPLICATION_MODEL_STREAMING;
@@ -1706,12 +1706,12 @@ CreateHashDistributedTableShards(Oid relationId, int shardCount,
 
 
 /*
- * CreateHashDistributedTableShards creates the shard of given null-shard-key
+ * CreateHashDistributedTableShards creates the shard of given single-shard
  * distributed table.
  */
 static void
-CreateNullShardKeyDistTableShard(Oid relationId, Oid colocatedTableId,
-								 uint32 colocationId)
+CreateSingleShardTableShard(Oid relationId, Oid colocatedTableId,
+							uint32 colocationId)
 {
 	if (colocatedTableId != InvalidOid)
 	{
@@ -1735,7 +1735,7 @@ CreateNullShardKeyDistTableShard(Oid relationId, Oid colocatedTableId,
 	}
 	else
 	{
-		CreateNullKeyShardWithRoundRobinPolicy(relationId, colocationId);
+		CreateSingleShardTableShardWithRoundRobinPolicy(relationId, colocationId);
 	}
 }
 
@@ -1984,13 +1984,13 @@ EnsureRelationCanBeDistributed(Oid relationId, Var *distributionColumn,
 	{
 		/*
 		 * Distributing partitioned tables is only supported for hash-distribution
-		 * or null-shard-key tables.
+		 * or single-shard tables.
 		 */
-		bool isNullShardKeyTable =
+		bool isSingleShardTable =
 			distributionMethod == DISTRIBUTE_BY_NONE &&
 			replicationModel == REPLICATION_MODEL_STREAMING &&
 			colocationId != INVALID_COLOCATION_ID;
-		if (distributionMethod != DISTRIBUTE_BY_HASH && !isNullShardKeyTable)
+		if (distributionMethod != DISTRIBUTE_BY_HASH && !isSingleShardTable)
 		{
 			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 							errmsg("distributing partitioned tables in only supported "

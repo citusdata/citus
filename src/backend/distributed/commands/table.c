@@ -385,7 +385,7 @@ PostprocessCreateTableStmtPartitionOf(CreateStmt *createStatement, const
 	if (IsCitusTable(parentRelationId))
 	{
 		/*
-		 * We can create Citus local tables and distributed tables with null shard keys
+		 * We can create Citus local tables and single-shard distributed tables
 		 * right away, without switching to sequential mode, because they are going to
 		 * have only one shard.
 		 */
@@ -398,9 +398,9 @@ PostprocessCreateTableStmtPartitionOf(CreateStmt *createStatement, const
 
 		char *parentRelationName = generate_qualified_relation_name(parentRelationId);
 
-		if (IsCitusTableType(parentRelationId, NULL_KEY_DISTRIBUTED_TABLE))
+		if (IsCitusTableType(parentRelationId, SINGLE_SHARD_DISTRIBUTED))
 		{
-			CreateNullShardKeyDistTable(relationId, parentRelationName);
+			CreateSingleShardTable(relationId, parentRelationName);
 			return;
 		}
 
@@ -618,7 +618,7 @@ DistributePartitionUsingParent(Oid parentCitusRelationId, Oid partitionRelationI
 		 * If the parent is null key distributed, we should distribute the partition
 		 * with null distribution key as well.
 		 */
-		CreateNullShardKeyDistTable(partitionRelationId, parentRelationName);
+		CreateSingleShardTable(partitionRelationId, parentRelationName);
 		return;
 	}
 

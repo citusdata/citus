@@ -1,5 +1,5 @@
-CREATE SCHEMA query_null_dist_key;
-SET search_path TO query_null_dist_key;
+CREATE SCHEMA query_single_shard_table;
+SET search_path TO query_single_shard_table;
 SET citus.next_shard_id TO 1620000;
 SET citus.shard_count TO 32;
 SET client_min_messages TO WARNING;
@@ -92,7 +92,7 @@ SELECT create_distributed_table('articles_hash', null, colocate_with=>'none');
 NOTICE:  Copying data from local table...
 NOTICE:  copying the data has completed
 DETAIL:  The local data in the table is no longer visible, but is still on disk.
-HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$query_null_dist_key.articles_hash$$)
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$query_single_shard_table.articles_hash$$)
  create_distributed_table
 ---------------------------------------------------------------------
 
@@ -247,7 +247,7 @@ DETAIL:  Local tables cannot be used in distributed queries.
 SELECT COUNT(*) FROM postgres_local_table d1, nullkey_c1_t1;
 ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
 DETAIL:  Local tables cannot be used in distributed queries.
---    with a colocated null dist key table
+--    with a colocated single-shard table
 SELECT COUNT(*) FROM nullkey_c1_t1 d1, nullkey_c1_t2;
 DEBUG:  Creating router plan
  count
@@ -255,14 +255,14 @@ DEBUG:  Creating router plan
    110
 (1 row)
 
---    with a non-colocated null dist key table
+--    with a non-colocated single-shard table
 SELECT COUNT(*) FROM nullkey_c1_t1 d1, nullkey_c2_t1;
 ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
 DETAIL:  found no worker with all shard placements
 -- First, show that nullkey_c1_t1 and nullkey_c3_t1 are not colocated.
 SELECT
-  (SELECT colocationid FROM pg_dist_partition WHERE logicalrelid = 'query_null_dist_key.nullkey_c1_t1'::regclass) !=
-  (SELECT colocationid FROM pg_dist_partition WHERE logicalrelid = 'query_null_dist_key.nullkey_c3_t1'::regclass);
+  (SELECT colocationid FROM pg_dist_partition WHERE logicalrelid = 'query_single_shard_table.nullkey_c1_t1'::regclass) !=
+  (SELECT colocationid FROM pg_dist_partition WHERE logicalrelid = 'query_single_shard_table.nullkey_c3_t1'::regclass);
  ?column?
 ---------------------------------------------------------------------
  t
@@ -284,7 +284,7 @@ SELECT COUNT(*) FROM nullkey_c1_t1 JOIN nullkey_c3_t1 USING(a);
 ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
 DETAIL:  router planner does not support queries that reference non-colocated distributed tables
 RESET citus.enable_non_colocated_router_query_pushdown;
--- colocated join between null dist key tables
+-- colocated join between single-shard tables
 SELECT COUNT(*) FROM nullkey_c1_t1 JOIN nullkey_c1_t2 USING(a);
 DEBUG:  Creating router plan
  count
@@ -356,7 +356,7 @@ DEBUG:  Creating router plan
      7
 (1 row)
 
--- non-colocated inner joins between null dist key tables
+-- non-colocated inner joins between single-shard tables
 SELECT * FROM nullkey_c1_t1 JOIN nullkey_c2_t1 USING(a) ORDER BY 1,2,3;
 ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
 DETAIL:  found no worker with all shard placements
@@ -366,7 +366,7 @@ JOIN LATERAL (
 ) q USING(a);
 ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
 DETAIL:  found no worker with all shard placements
--- non-colocated outer joins between null dist key tables
+-- non-colocated outer joins between single-shard tables
 SELECT * FROM nullkey_c1_t1 LEFT JOIN nullkey_c2_t2 USING(a) ORDER BY 1,2,3 LIMIT 4;
 ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
 DETAIL:  found no worker with all shard placements
@@ -803,7 +803,7 @@ JOIN LATERAL (
 ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
 DETAIL:  Local tables cannot be used in distributed queries.
 -- insert .. select
---    between two colocated null dist key tables
+--    between two colocated single-shard tables
 --    The target list of "distributed statement"s that we send to workers
 --    differ(*) in Postgres versions < 15. For this reason, we temporarily
 --    disable debug messages here and run the EXPLAIN'ed version of the
@@ -825,13 +825,13 @@ INSERT INTO nullkey_c1_t1 SELECT * FROM nullkey_c1_t2;
 (7 rows)
 
 SET client_min_messages TO DEBUG2;
---    between two non-colocated null dist key tables
+--    between two non-colocated single-shard tables
 INSERT INTO nullkey_c1_t1 SELECT * FROM nullkey_c2_t1;
 DEBUG:  distributed INSERT ... SELECT cannot reference a distributed table without a shard key together with non-colocated distributed tables
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
---    between a null dist key table and a table of different type
+--    between a single-shard table and a table of different type
 SET client_min_messages TO WARNING;
 EXPLAIN (ANALYZE TRUE, TIMING FALSE, COSTS FALSE, SUMMARY FALSE, VERBOSE FALSE)
 INSERT INTO nullkey_c1_t1 SELECT * FROM reference_table;
@@ -1300,8 +1300,8 @@ DEBUG:  CTE cte is going to be inlined via distributed planning
 DEBUG:  recursively planning left side of the right join since the outer side is a recurring rel
 DEBUG:  recursively planning distributed relation "distributed_table" since it is part of a distributed join node that is outer joined with a recurring rel
 DEBUG:  Wrapping relation "distributed_table" to a subquery
-DEBUG:  generating subplan XXX_1 for subquery SELECT a FROM query_null_dist_key.distributed_table WHERE true
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT "?column?" AS user_id, b AS value_1 FROM (SELECT ((cte.a OPERATOR(pg_catalog.+) 5) OPERATOR(pg_catalog.*) '-1'::integer), cte.b FROM (SELECT DISTINCT reference_table.a, 1 AS b FROM ((SELECT distributed_table_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) distributed_table_1) distributed_table RIGHT JOIN query_null_dist_key.reference_table USING (a))) cte) citus_insert_select_subquery("?column?", b)
+DEBUG:  generating subplan XXX_1 for subquery SELECT a FROM query_single_shard_table.distributed_table WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT "?column?" AS user_id, b AS value_1 FROM (SELECT ((cte.a OPERATOR(pg_catalog.+) 5) OPERATOR(pg_catalog.*) '-1'::integer), cte.b FROM (SELECT DISTINCT reference_table.a, 1 AS b FROM ((SELECT distributed_table_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) distributed_table_1) distributed_table RIGHT JOIN query_single_shard_table.reference_table USING (a))) cte) citus_insert_select_subquery("?column?", b)
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 -- .. and via SELECT's cte list too
 INSERT INTO raw_events_second (user_id, value_1)
@@ -1315,8 +1315,8 @@ DEBUG:  distributed INSERT ... SELECT cannot reference a distributed table witho
 DEBUG:  recursively planning left side of the right join since the outer side is a recurring rel
 DEBUG:  recursively planning distributed relation "distributed_table" since it is part of a distributed join node that is outer joined with a recurring rel
 DEBUG:  Wrapping relation "distributed_table" to a subquery
-DEBUG:  generating subplan XXX_1 for subquery SELECT a FROM query_null_dist_key.distributed_table WHERE true
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT ((a OPERATOR(pg_catalog.+) 5) OPERATOR(pg_catalog.*) 2) AS user_id, b AS value_1 FROM (SELECT DISTINCT reference_table.a, 1 AS b FROM ((SELECT distributed_table_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) distributed_table_1) distributed_table RIGHT JOIN query_null_dist_key.reference_table USING (a))) cte
+DEBUG:  generating subplan XXX_1 for subquery SELECT a FROM query_single_shard_table.distributed_table WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT ((a OPERATOR(pg_catalog.+) 5) OPERATOR(pg_catalog.*) 2) AS user_id, b AS value_1 FROM (SELECT DISTINCT reference_table.a, 1 AS b FROM ((SELECT distributed_table_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) distributed_table_1) distributed_table RIGHT JOIN query_single_shard_table.reference_table USING (a))) cte
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 -- using set operations
 INSERT INTO
@@ -1738,7 +1738,7 @@ WITH cte AS (
 SELECT * FROM nullkey_c1_t1 WHERE a IN (SELECT a FROM cte);
 DEBUG:  Creating router plan
 DEBUG:  query has a single distribution column value: 1
-ERROR:  relation "query_null_dist_key.nullkey_c1_t1_1620000" does not exist
+ERROR:  relation "query_single_shard_table.nullkey_c1_t1_1620000" does not exist
 CONTEXT:  while executing command on localhost:xxxxx
 WITH cte AS (
     DELETE FROM distributed_table WHERE a = 1 RETURNING *
@@ -1746,7 +1746,7 @@ WITH cte AS (
 SELECT * FROM nullkey_c1_t1 WHERE b IN (SELECT b FROM cte);
 DEBUG:  Creating router plan
 DEBUG:  query has a single distribution column value: 1
-ERROR:  relation "query_null_dist_key.nullkey_c1_t1_1620000" does not exist
+ERROR:  relation "query_single_shard_table.nullkey_c1_t1_1620000" does not exist
 CONTEXT:  while executing command on localhost:xxxxx
 SET citus.enable_non_colocated_router_query_pushdown TO OFF;
 WITH cte AS (
@@ -1864,7 +1864,7 @@ DEBUG:  Creating router plan
 (10 rows)
 
 SET client_min_messages TO ERROR;
-DROP SCHEMA query_null_dist_key CASCADE;
+DROP SCHEMA query_single_shard_table CASCADE;
 SELECT citus_remove_node('localhost', :master_port);
  citus_remove_node
 ---------------------------------------------------------------------

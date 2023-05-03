@@ -259,12 +259,12 @@ CreateModifyPlan(Query *originalQuery, Query *query,
 
 
 /*
- * WrapRouterErrorForNullDistKeyTable wraps given planning error with a
+ * WrapRouterErrorForSingleShardTable wraps given planning error with a
  * generic error message if given query references a distributed table
  * that doesn't have a distribution key.
  */
 void
-WrapRouterErrorForNullDistKeyTable(DeferredErrorMessage *planningError)
+WrapRouterErrorForSingleShardTable(DeferredErrorMessage *planningError)
 {
 	planningError->detail = planningError->message;
 	planningError->message = pstrdup("queries that reference a distributed "
@@ -1886,9 +1886,9 @@ RouterJob(Query *originalQuery, PlannerRestrictionContext *plannerRestrictionCon
 		 */
 		if (IsMergeQuery(originalQuery))
 		{
-			if (ContainsNullDistKeyTable(originalQuery))
+			if (ContainsSingleShardTable(originalQuery))
 			{
-				WrapRouterErrorForNullDistKeyTable(*planningError);
+				WrapRouterErrorForSingleShardTable(*planningError);
 			}
 
 			RaiseDeferredError(*planningError, ERROR);
@@ -3013,7 +3013,7 @@ BuildRoutesForInsert(Query *query, DeferredErrorMessage **planningError)
 				ereport(ERROR, (errmsg("local table cannot have %d shards",
 									   shardCount)));
 			}
-			else if (IsCitusTableTypeCacheEntry(cacheEntry, NULL_KEY_DISTRIBUTED_TABLE))
+			else if (IsCitusTableTypeCacheEntry(cacheEntry, SINGLE_SHARD_DISTRIBUTED))
 			{
 				ereport(ERROR, (errmsg("distributed tables having a null shard key "
 									   "cannot have %d shards",

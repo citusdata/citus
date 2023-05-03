@@ -1,5 +1,5 @@
-CREATE SCHEMA query_null_dist_key;
-SET search_path TO query_null_dist_key;
+CREATE SCHEMA query_single_shard_table;
+SET search_path TO query_single_shard_table;
 
 SET citus.next_shard_id TO 1620000;
 SET citus.shard_count TO 32;
@@ -138,16 +138,16 @@ SELECT COUNT(*) FROM reference_table d1, nullkey_c1_t1;
 SELECT COUNT(*) FROM citus_local_table d1, nullkey_c1_t1;
 SELECT COUNT(*) FROM postgres_local_table d1, nullkey_c1_t1;
 
---    with a colocated null dist key table
+--    with a colocated single-shard table
 SELECT COUNT(*) FROM nullkey_c1_t1 d1, nullkey_c1_t2;
 
---    with a non-colocated null dist key table
+--    with a non-colocated single-shard table
 SELECT COUNT(*) FROM nullkey_c1_t1 d1, nullkey_c2_t1;
 
 -- First, show that nullkey_c1_t1 and nullkey_c3_t1 are not colocated.
 SELECT
-  (SELECT colocationid FROM pg_dist_partition WHERE logicalrelid = 'query_null_dist_key.nullkey_c1_t1'::regclass) !=
-  (SELECT colocationid FROM pg_dist_partition WHERE logicalrelid = 'query_null_dist_key.nullkey_c3_t1'::regclass);
+  (SELECT colocationid FROM pg_dist_partition WHERE logicalrelid = 'query_single_shard_table.nullkey_c1_t1'::regclass) !=
+  (SELECT colocationid FROM pg_dist_partition WHERE logicalrelid = 'query_single_shard_table.nullkey_c3_t1'::regclass);
 
 -- Now verify that we can join them via router planner because it doesn't care
 -- about whether two tables are colocated or not but physical location of shards
@@ -163,7 +163,7 @@ SELECT COUNT(*) FROM nullkey_c1_t1 JOIN nullkey_c3_t1 USING(a);
 
 RESET citus.enable_non_colocated_router_query_pushdown;
 
--- colocated join between null dist key tables
+-- colocated join between single-shard tables
 SELECT COUNT(*) FROM nullkey_c1_t1 JOIN nullkey_c1_t2 USING(a);
 SELECT COUNT(*) FROM nullkey_c1_t1 LEFT JOIN nullkey_c1_t2 USING(a);
 SELECT COUNT(*) FROM nullkey_c1_t1 FULL JOIN nullkey_c1_t2 USING(a);
@@ -193,7 +193,7 @@ WHERE t1.b NOT IN (
     SELECT a FROM nullkey_c1_t2 t2 WHERE t2.b > t1.a
 );
 
--- non-colocated inner joins between null dist key tables
+-- non-colocated inner joins between single-shard tables
 SELECT * FROM nullkey_c1_t1 JOIN nullkey_c2_t1 USING(a) ORDER BY 1,2,3;
 
 SELECT COUNT(*) FROM nullkey_c1_t1 t1
@@ -201,7 +201,7 @@ JOIN LATERAL (
     SELECT * FROM nullkey_c2_t2 t2 WHERE t2.b > t1.a
 ) q USING(a);
 
--- non-colocated outer joins between null dist key tables
+-- non-colocated outer joins between single-shard tables
 SELECT * FROM nullkey_c1_t1 LEFT JOIN nullkey_c2_t2 USING(a) ORDER BY 1,2,3 LIMIT 4;
 SELECT * FROM nullkey_c1_t1 FULL JOIN nullkey_c2_t2 USING(a) ORDER BY 1,2,3 LIMIT 4;
 SELECT * FROM nullkey_c1_t1 t1
@@ -497,7 +497,7 @@ JOIN LATERAL (
 
 -- insert .. select
 
---    between two colocated null dist key tables
+--    between two colocated single-shard tables
 
 --    The target list of "distributed statement"s that we send to workers
 --    differ(*) in Postgres versions < 15. For this reason, we temporarily
@@ -510,10 +510,10 @@ EXPLAIN (ANALYZE TRUE, TIMING FALSE, COSTS FALSE, SUMMARY FALSE, VERBOSE FALSE)
 INSERT INTO nullkey_c1_t1 SELECT * FROM nullkey_c1_t2;
 SET client_min_messages TO DEBUG2;
 
---    between two non-colocated null dist key tables
+--    between two non-colocated single-shard tables
 INSERT INTO nullkey_c1_t1 SELECT * FROM nullkey_c2_t1;
 
---    between a null dist key table and a table of different type
+--    between a single-shard table and a table of different type
 SET client_min_messages TO WARNING;
 EXPLAIN (ANALYZE TRUE, TIMING FALSE, COSTS FALSE, SUMMARY FALSE, VERBOSE FALSE)
 INSERT INTO nullkey_c1_t1 SELECT * FROM reference_table;
@@ -1174,6 +1174,6 @@ ORDER BY
 LIMIT 10;
 
 SET client_min_messages TO ERROR;
-DROP SCHEMA query_null_dist_key CASCADE;
+DROP SCHEMA query_single_shard_table CASCADE;
 
 SELECT citus_remove_node('localhost', :master_port);

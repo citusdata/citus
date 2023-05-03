@@ -731,7 +731,7 @@ DistributedInsertSelectSupported(Query *queryTree, RangeTblEntry *insertRte,
 		}
 
 		if (!HasDistributionKey(targetRelationId) ||
-			subqueryRteListProperties->hasDistTableWithoutShardKey)
+			subqueryRteListProperties->hasSingleShardDistTable)
 		{
 			/*
 			 * XXX: Better to check this regardless of the fact that the target table
@@ -1563,16 +1563,16 @@ CreateNonPushableInsertSelectPlan(uint64 planId, Query *parse, ParamListInfo bou
 
 	/*
 	 * Today it's not possible to generate a distributed plan for a SELECT
-	 * having more than one tasks if it references a null-shard-key table.
+	 * having more than one tasks if it references a single-shard table.
 	 * This is because, we don't support queries beyond router planner
-	 * if the query references a null-shard-key table.
+	 * if the query references a single-shard table.
 	 *
 	 * For this reason, right now we don't expect an INSERT .. SELECT
 	 * query to go through the repartitioned INSERT .. SELECT logic if the
-	 * SELECT query references a null-shard-key table.
+	 * SELECT query references a single-shard table.
 	 */
 	Assert(!repartitioned ||
-		   !GetRTEListPropertiesForQuery(selectQueryCopy)->hasDistTableWithoutShardKey);
+		   !GetRTEListPropertiesForQuery(selectQueryCopy)->hasSingleShardDistTable);
 
 	distributedPlan->insertSelectQuery = insertSelectQuery;
 	distributedPlan->selectPlanForInsertSelect = selectPlan;

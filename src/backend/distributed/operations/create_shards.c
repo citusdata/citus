@@ -373,16 +373,18 @@ CreateReferenceTableShard(Oid distributedTableId)
 
 
 /*
- * CreateNullKeyShardWithRoundRobinPolicy creates a single shard for the given
- * distributedTableId. The created shard does not have min/max values.
- * Unlike CreateReferenceTableShard, the shard is _not_ replicated to
- * all nodes but would have a single placement like Citus local tables.
+ * CreateSingleShardTableShardWithRoundRobinPolicy creates a single
+ * shard for the given distributedTableId. The created shard does not
+ * have min/max values. Unlike CreateReferenceTableShard, the shard is
+ * _not_ replicated to all nodes but would have a single placement like
+ * Citus local tables.
+ *
  * However, this placement doesn't necessarily need to be placed on
  * coordinator. This is determined based on modulo of the colocation
  * id that given table has been associated to.
  */
 void
-CreateNullKeyShardWithRoundRobinPolicy(Oid relationId, uint32 colocationId)
+CreateSingleShardTableShardWithRoundRobinPolicy(Oid relationId, uint32 colocationId)
 {
 	EnsureTableOwner(relationId);
 

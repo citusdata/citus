@@ -2051,11 +2051,11 @@ UPDATE SET val = dist_source.val
 WHEN NOT MATCHED THEN
 INSERT VALUES(dist_source.id, dist_source.val);
 
--- test merge with null shard key tables
+-- test merge with single-shard tables
 
-CREATE SCHEMA query_null_dist_key;
+CREATE SCHEMA query_single_shard_table;
 
-SET search_path TO query_null_dist_key;
+SET search_path TO query_single_shard_table;
 SET client_min_messages TO DEBUG2;
 
 CREATE TABLE nullkey_c1_t1(a int, b int);
@@ -2098,7 +2098,7 @@ MERGE INTO nullkey_c1_t1 USING nullkey_c1_t2 ON (nullkey_c1_t1.a = nullkey_c1_t2
 WHEN MATCHED THEN DELETE
 WHEN NOT MATCHED THEN INSERT VALUES (nullkey_c1_t2.a, nullkey_c1_t2.b);
 
--- with non-colocated null-dist-key table
+-- with non-colocated single-shard table
 MERGE INTO nullkey_c1_t1 USING nullkey_c2_t1 ON (nullkey_c1_t1.a = nullkey_c2_t1.a)
 WHEN MATCHED THEN UPDATE SET b = nullkey_c2_t1.b;
 
@@ -2158,7 +2158,7 @@ MERGE INTO nullkey_c1_t1 USING cte ON (nullkey_c1_t1.a = cte.a)
 WHEN MATCHED THEN UPDATE SET b = cte.b;
 
 SET client_min_messages TO WARNING;
-DROP SCHEMA query_null_dist_key CASCADE;
+DROP SCHEMA query_single_shard_table CASCADE;
 
 RESET client_min_messages;
 SET search_path TO merge_schema;

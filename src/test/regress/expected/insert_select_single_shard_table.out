@@ -1,5 +1,5 @@
-CREATE SCHEMA insert_select_null_dist_key;
-SET search_path TO insert_select_null_dist_key;
+CREATE SCHEMA insert_select_single_shard_table;
+SET search_path TO insert_select_single_shard_table;
 SET citus.next_shard_id TO 1820000;
 SET citus.shard_count TO 32;
 SET client_min_messages TO WARNING;
@@ -115,8 +115,8 @@ INSERT INTO range_table VALUES (0, 1), (1, 2), (2, 3), (3, 4), (4, 5), (5, 6), (
 CREATE MATERIALIZED VIEW matview AS SELECT b*2+a AS a, a*a AS b FROM nullkey_c1_t1;
 SET client_min_messages TO DEBUG2;
 -- Test inserting into a distributed table by selecting from a combination of
--- different table types together with null-shard-key tables.
--- use a null-shard-key table
+-- different table types together with single-shard tables.
+-- use a single-shard table
 INSERT INTO distributed_table_c1_t1 SELECT nullkey_c1_t1.a, nullkey_c1_t1.b FROM nullkey_c1_t1;
 DEBUG:  distributed INSERT ... SELECT cannot reference a distributed table without a shard key together with non-colocated distributed tables
 DEBUG:  Distributed planning for a fast-path router query
@@ -139,7 +139,7 @@ INSERT INTO distributed_table_c1_t1 SELECT nullkey_c1_t1.a, nullkey_c1_t1.b FROM
 DEBUG:  Set operations are not allowed in distributed INSERT ... SELECT queries
 DEBUG:  Creating router plan
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
--- use a colocated null-shard-key table
+-- use a colocated single-shard table
 INSERT INTO distributed_table_c1_t1 SELECT nullkey_c1_t1.a, nullkey_c1_t1.b FROM nullkey_c1_t1 JOIN nullkey_c1_t2 USING (b);
 DEBUG:  distributed INSERT ... SELECT cannot reference a distributed table without a shard key together with non-colocated distributed tables
 DEBUG:  Creating router plan
@@ -156,7 +156,7 @@ INSERT INTO distributed_table_c1_t1 SELECT * FROM nullkey_c1_t1 UNION SELECT * F
 DEBUG:  Set operations are not allowed in distributed INSERT ... SELECT queries
 DEBUG:  Creating router plan
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
--- use a non-colocated null-shard-key table
+-- use a non-colocated single-shard table
 INSERT INTO distributed_table_c1_t1 SELECT nullkey_c1_t2.a, nullkey_c1_t2.b FROM nullkey_c1_t2 LEFT JOIN nullkey_c2_t1 USING (a);
 DEBUG:  distributed INSERT ... SELECT cannot reference a distributed table without a shard key together with non-colocated distributed tables
 ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
@@ -220,8 +220,8 @@ INSERT INTO distributed_table_c1_t1 SELECT i, i FROM generate_series(3, 8) i;
 DEBUG:  distributed INSERT ... SELECT can only select from distributed tables
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 -- Test inserting into a reference table by selecting from a combination of
--- different table types together with null-shard-key tables.
--- use a null-shard-key table
+-- different table types together with single-shard tables.
+-- use a single-shard table
 INSERT INTO reference_table SELECT nullkey_c1_t1.a, nullkey_c1_t1.b FROM nullkey_c1_t1;
 DEBUG:  only reference tables may be queried when targeting a reference table with distributed INSERT ... SELECT
 DEBUG:  Distributed planning for a fast-path router query
@@ -244,7 +244,7 @@ INSERT INTO reference_table SELECT nullkey_c1_t2.a, nullkey_c1_t2.b FROM nullkey
 DEBUG:  only reference tables may be queried when targeting a reference table with distributed INSERT ... SELECT
 ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
 DETAIL:  Local tables cannot be used in distributed queries.
--- use a colocated null-shard-key table
+-- use a colocated single-shard table
 INSERT INTO reference_table SELECT nullkey_c1_t1.a, nullkey_c1_t1.b FROM nullkey_c1_t1 JOIN nullkey_c1_t2 USING (b);
 DEBUG:  only reference tables may be queried when targeting a reference table with distributed INSERT ... SELECT
 DEBUG:  Creating router plan
@@ -253,7 +253,7 @@ INSERT INTO reference_table SELECT nullkey_c1_t1.a, nullkey_c1_t1.b FROM nullkey
 DEBUG:  only reference tables may be queried when targeting a reference table with distributed INSERT ... SELECT
 DEBUG:  Creating router plan
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
--- use a non-colocated null-shard-key table
+-- use a non-colocated single-shard table
 INSERT INTO reference_table SELECT nullkey_c1_t2.a, nullkey_c1_t2.b FROM nullkey_c1_t2 LEFT JOIN nullkey_c2_t1 USING (a);
 DEBUG:  only reference tables may be queried when targeting a reference table with distributed INSERT ... SELECT
 ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
@@ -299,8 +299,8 @@ INSERT INTO reference_table SELECT i, i FROM generate_series(0, 5) i;
 DEBUG:  distributed INSERT ... SELECT can only select from distributed tables
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 -- Test inserting into a citus local table by selecting from a combination of
--- different table types together with null-shard-key tables.
--- use a null-shard-key table
+-- different table types together with single-shard tables.
+-- use a single-shard table
 INSERT INTO citus_local_table SELECT nullkey_c1_t1.a, nullkey_c1_t1.b FROM nullkey_c1_t1;
 DEBUG:  distributed INSERT ... SELECT cannot insert into a local table that is added to metadata
 DEBUG:  Distributed planning for a fast-path router query
@@ -311,7 +311,7 @@ INSERT INTO citus_local_table SELECT nullkey_c1_t1.a, nullkey_c1_t1.b FROM nullk
 DEBUG:  distributed INSERT ... SELECT cannot insert into a local table that is added to metadata
 DEBUG:  Creating router plan
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
--- use a colocated null-shard-key table
+-- use a colocated single-shard table
 INSERT INTO citus_local_table SELECT nullkey_c1_t1.a, nullkey_c1_t1.b FROM nullkey_c1_t1 JOIN nullkey_c1_t2 USING (b);
 DEBUG:  distributed INSERT ... SELECT cannot insert into a local table that is added to metadata
 DEBUG:  Creating router plan
@@ -343,8 +343,8 @@ TRUNCATE citus_local_table;
 INSERT INTO citus_local_table SELECT i, i FROM generate_series(0, 10) i;
 DEBUG:  distributed INSERT ... SELECT can only select from distributed tables
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
--- Test inserting into a null-shard-key table by selecting from a combination of
--- different table types, together with or without null-shard-key tables.
+-- Test inserting into a single-shard table by selecting from a combination of
+-- different table types, together with or without single-shard tables.
 -- use a postgres local table
 INSERT INTO nullkey_c1_t1 SELECT postgres_local_table.a, postgres_local_table.b FROM postgres_local_table;
 DEBUG:  distributed INSERT ... SELECT can only select from distributed tables
@@ -384,7 +384,7 @@ INSERT INTO nullkey_c1_t1 SELECT distributed_table_c1_t2.a, distributed_table_c1
 DEBUG:  distributed INSERT ... SELECT cannot reference a distributed table without a shard key together with non-colocated distributed tables
 ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
 DETAIL:  Router planner cannot handle multi-shard select queries
--- use a non-colocated null-shard-key table
+-- use a non-colocated single-shard table
 INSERT INTO nullkey_c2_t1 SELECT q.* FROM (SELECT reference_table.* FROM reference_table LEFT JOIN nullkey_c1_t1 USING (a)) q JOIN nullkey_c1_t2 USING (a);
 DEBUG:  distributed INSERT ... SELECT cannot reference a distributed table without a shard key together with non-colocated distributed tables
 DEBUG:  Creating router plan
@@ -434,7 +434,7 @@ INSERT INTO nullkey_c2_t1 SELECT i, i FROM generate_series(2, 7) i;
 DEBUG:  distributed INSERT ... SELECT can only select from distributed tables
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 -- Test inserting into a local table by selecting from a combination of
--- different table types, together with or without null-shard-key tables.
+-- different table types, together with or without single-shard tables.
 INSERT INTO postgres_local_table SELECT nullkey_c1_t1.a, nullkey_c1_t1.b FROM nullkey_c1_t1 JOIN reference_table USING (a);
 DEBUG:  Creating router plan
 INSERT INTO postgres_local_table SELECT * FROM nullkey_c1_t1 ORDER BY 1,2 OFFSET 3 LIMIT 2;
@@ -620,8 +620,8 @@ WHERE t1.a IN (
   ) AS t2
 );
 DEBUG:  distributed INSERT ... SELECT cannot reference a distributed table without a shard key together with non-colocated distributed tables
-DEBUG:  generating subplan XXX_1 for subquery SELECT a FROM (SELECT t3.a FROM ((SELECT distributed_table_c1_t1.a FROM insert_select_null_dist_key.distributed_table_c1_t1 WHERE (distributed_table_c1_t1.b OPERATOR(pg_catalog.>) 4)) t3 JOIN (SELECT distributed_table_c1_t2.a FROM insert_select_null_dist_key.distributed_table_c1_t2 WHERE (distributed_table_c1_t2.b OPERATOR(pg_catalog.<) 7)) t4 ON ((t3.a OPERATOR(pg_catalog.=) t4.a)))) t2
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT a, b FROM insert_select_null_dist_key.reference_table t1 WHERE (a OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)))
+DEBUG:  generating subplan XXX_1 for subquery SELECT a FROM (SELECT t3.a FROM ((SELECT distributed_table_c1_t1.a FROM insert_select_single_shard_table.distributed_table_c1_t1 WHERE (distributed_table_c1_t1.b OPERATOR(pg_catalog.>) 4)) t3 JOIN (SELECT distributed_table_c1_t2.a FROM insert_select_single_shard_table.distributed_table_c1_t2 WHERE (distributed_table_c1_t2.b OPERATOR(pg_catalog.<) 7)) t4 ON ((t3.a OPERATOR(pg_catalog.=) t4.a)))) t2
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT a, b FROM insert_select_single_shard_table.reference_table t1 WHERE (a OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)))
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 SET client_min_messages TO DEBUG2;
 -- test upsert with plain INSERT query
@@ -735,7 +735,7 @@ DEBUG:  ALTER TABLE / ADD PRIMARY KEY will create implicit index "distributed_ta
 DEBUG:  verifying table "distributed_table_c1_t1"
 INSERT INTO nullkey_c1_t1 AS t1 (a, b) SELECT t3.a, t3.b FROM nullkey_c1_t2 t2 JOIN reference_table t3 ON (t2.a = t3.a) ON CONFLICT (a)
     DO UPDATE SET a = t1.a + 10;
-DEBUG:  distributed statement: INSERT INTO insert_select_null_dist_key.nullkey_c1_t1_1820000 AS t1 (a, b) SELECT t3.a, t3.b FROM (insert_select_null_dist_key.nullkey_c1_t2_1820001 t2 JOIN insert_select_null_dist_key.reference_table_1820003 t3 ON ((t2.a OPERATOR(pg_catalog.=) t3.a))) ON CONFLICT(a) DO UPDATE SET a = (t1.a OPERATOR(pg_catalog.+) 10)
+DEBUG:  distributed statement: INSERT INTO insert_select_single_shard_table.nullkey_c1_t1_1820000 AS t1 (a, b) SELECT t3.a, t3.b FROM (insert_select_single_shard_table.nullkey_c1_t2_1820001 t2 JOIN insert_select_single_shard_table.reference_table_1820003 t3 ON ((t2.a OPERATOR(pg_catalog.=) t3.a))) ON CONFLICT(a) DO UPDATE SET a = (t1.a OPERATOR(pg_catalog.+) 10)
 SET client_min_messages TO DEBUG1;
 INSERT INTO distributed_table_c1_t1 AS t1 (a, b) SELECT t3.a, t3.b FROM nullkey_c1_t2 t2 JOIN reference_table t3 ON (t2.a = t3.a) ON CONFLICT (a, b)
     DO UPDATE SET b = t1.b + 10;
@@ -805,7 +805,7 @@ DEBUG:  Creating router plan
 (3 rows)
 
 SET client_min_messages TO WARNING;
-DROP SCHEMA insert_select_null_dist_key CASCADE;
+DROP SCHEMA insert_select_single_shard_table CASCADE;
 SELECT citus_remove_node('localhost', :master_port);
  citus_remove_node
 ---------------------------------------------------------------------

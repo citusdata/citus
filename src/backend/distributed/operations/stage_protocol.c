@@ -522,7 +522,7 @@ RelationShardListForShardCreate(ShardInterval *shardInterval)
 	List *relationShardList = list_make1(relationShard);
 
 	if ((IsCitusTableTypeCacheEntry(cacheEntry, HASH_DISTRIBUTED) ||
-		 IsCitusTableTypeCacheEntry(cacheEntry, NULL_KEY_DISTRIBUTED_TABLE)) &&
+		 IsCitusTableTypeCacheEntry(cacheEntry, SINGLE_SHARD_DISTRIBUTED)) &&
 		cacheEntry->colocationId != INVALID_COLOCATION_ID)
 	{
 		shardIndex = ShardIndex(shardInterval);
