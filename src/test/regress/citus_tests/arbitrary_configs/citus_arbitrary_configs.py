@@ -81,7 +81,7 @@ def run_for_config(config, lock, sql_schedule_name):
             config.bindir,
             config.pg_srcdir,
             config.coordinator_port(),
-            cfg.NULL_DIST_KEY_PREP_SCHEDULE,
+            cfg.SINGLE_SHARD_PREP_SCHEDULE,
             config.output_dir,
             config.input_dir,
             cfg.SUPER_USER_NAME,

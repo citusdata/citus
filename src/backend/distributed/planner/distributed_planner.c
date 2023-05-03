@@ -1025,15 +1025,15 @@ CreateDistributedPlan(uint64 planId, bool allowRecursivePlanning, Query *origina
 	{
 		return distributedPlan;
 	}
-	else if (ContainsNullDistKeyTable(originalQuery))
+	else if (ContainsSingleShardTable(originalQuery))
 	{
 		/*
 		 * We only support router queries if the query contains reference to
-		 * a null-dist-key table. This temporary restriction will be removed
+		 * a single-shard table. This temporary restriction will be removed
 		 * once we support recursive planning for the queries that reference
-		 * null-dist-key tables.
+		 * single-shard tables.
 		 */
-		WrapRouterErrorForNullDistKeyTable(distributedPlan->planningError);
+		WrapRouterErrorForSingleShardTable(distributedPlan->planningError);
 		RaiseDeferredError(distributedPlan->planningError, ERROR);
 	}
 	else
@@ -2474,14 +2474,14 @@ HasUnresolvedExternParamsWalker(Node *expression, ParamListInfo boundParams)
 
 
 /*
- * ContainsNullDistKeyTable returns true if given query contains reference
- * to a null-dist-key table.
+ * ContainsSingleShardTable returns true if given query contains reference
+ * to a single-shard table.
  */
 bool
-ContainsNullDistKeyTable(Query *query)
+ContainsSingleShardTable(Query *query)
 {
 	RTEListProperties *rteListProperties = GetRTEListPropertiesForQuery(query);
-	return rteListProperties->hasDistTableWithoutShardKey;
+	return rteListProperties->hasSingleShardDistTable;
 }
 
 
@@ -2564,7 +2564,7 @@ GetRTEListProperties(List *rangeTableList)
 
 			if (!HasDistributionKeyCacheEntry(cacheEntry))
 			{
-				rteListProperties->hasDistTableWithoutShardKey = true;
+				rteListProperties->hasSingleShardDistTable = true;
 			}
 			else
 			{

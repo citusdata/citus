@@ -94,7 +94,7 @@ WHERE shardid = (
     WHERE logicalrelid = 'single_node.single_node_nullkey_c2'::regclass
 );
 
--- try creating a null-shard-key distributed table from a shard relation
+-- try creating a single-shard table from a shard relation
 SELECT shardid AS round_robin_test_c1_shard_id FROM pg_dist_shard WHERE logicalrelid = 'single_node.single_node_nullkey_c1'::regclass \gset
 SELECT create_distributed_table('single_node_nullkey_c1_' || :round_robin_test_c1_shard_id , null, colocate_with=>'none', distribution_type=>null);
 

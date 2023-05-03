@@ -1950,7 +1950,7 @@ UPDATE SET val = dist_source.val
 WHEN NOT MATCHED THEN
 INSERT VALUES(dist_source.id, dist_source.val);
 
--- test merge with null shard key tables
+-- test merge with single-shard tables
 
 CREATE SCHEMA query_null_dist_key;
 
@@ -1997,7 +1997,7 @@ MERGE INTO nullkey_c1_t1 USING nullkey_c1_t2 ON (nullkey_c1_t1.a = nullkey_c1_t2
 WHEN MATCHED THEN DELETE
 WHEN NOT MATCHED THEN INSERT VALUES (nullkey_c1_t2.a, nullkey_c1_t2.b);
 
--- with non-colocated null-dist-key table
+-- with non-colocated single-shard table
 MERGE INTO nullkey_c1_t1 USING nullkey_c2_t1 ON (nullkey_c1_t1.a = nullkey_c2_t1.a)
 WHEN MATCHED THEN UPDATE SET b = nullkey_c2_t1.b;
 

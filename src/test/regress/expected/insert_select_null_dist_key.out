@@ -115,8 +115,8 @@ INSERT INTO range_table VALUES (0, 1), (1, 2), (2, 3), (3, 4), (4, 5), (5, 6), (
 CREATE MATERIALIZED VIEW matview AS SELECT b*2+a AS a, a*a AS b FROM nullkey_c1_t1;
 SET client_min_messages TO DEBUG2;
 -- Test inserting into a distributed table by selecting from a combination of
--- different table types together with null-shard-key tables.
--- use a null-shard-key table
+-- different table types together with single-shard tables.
+-- use a single-shard table
 INSERT INTO distributed_table_c1_t1 SELECT nullkey_c1_t1.a, nullkey_c1_t1.b FROM nullkey_c1_t1;
 DEBUG:  distributed INSERT ... SELECT cannot reference a distributed table without a shard key together with non-colocated distributed tables
 DEBUG:  Distributed planning for a fast-path router query
@@ -139,7 +139,7 @@ INSERT INTO distributed_table_c1_t1 SELECT nullkey_c1_t1.a, nullkey_c1_t1.b FROM
 DEBUG:  Set operations are not allowed in distributed INSERT ... SELECT queries
 DEBUG:  Creating router plan
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
--- use a colocated null-shard-key table
+-- use a colocated single-shard table
 INSERT INTO distributed_table_c1_t1 SELECT nullkey_c1_t1.a, nullkey_c1_t1.b FROM nullkey_c1_t1 JOIN nullkey_c1_t2 USING (b);
 DEBUG:  distributed INSERT ... SELECT cannot reference a distributed table without a shard key together with non-colocated distributed tables
 DEBUG:  Creating router plan
@@ -156,7 +156,7 @@ INSERT INTO distributed_table_c1_t1 SELECT * FROM nullkey_c1_t1 UNION SELECT * F
 DEBUG:  Set operations are not allowed in distributed INSERT ... SELECT queries
 DEBUG:  Creating router plan
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
--- use a non-colocated null-shard-key table
+-- use a non-colocated single-shard table
 INSERT INTO distributed_table_c1_t1 SELECT nullkey_c1_t2.a, nullkey_c1_t2.b FROM nullkey_c1_t2 LEFT JOIN nullkey_c2_t1 USING (a);
 DEBUG:  distributed INSERT ... SELECT cannot reference a distributed table without a shard key together with non-colocated distributed tables
 ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
@@ -220,8 +220,8 @@ INSERT INTO distributed_table_c1_t1 SELECT i, i FROM generate_series(3, 8) i;
 DEBUG:  distributed INSERT ... SELECT can only select from distributed tables
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 -- Test inserting into a reference table by selecting from a combination of
--- different table types together with null-shard-key tables.
--- use a null-shard-key table
+-- different table types together with single-shard tables.
+-- use a single-shard table
 INSERT INTO reference_table SELECT nullkey_c1_t1.a, nullkey_c1_t1.b FROM nullkey_c1_t1;
 DEBUG:  only reference tables may be queried when targeting a reference table with distributed INSERT ... SELECT
 DEBUG:  Distributed planning for a fast-path router query
@@ -244,7 +244,7 @@ INSERT INTO reference_table SELECT nullkey_c1_t2.a, nullkey_c1_t2.b FROM nullkey
 DEBUG:  only reference tables may be queried when targeting a reference table with distributed INSERT ... SELECT
 ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
 DETAIL:  Local tables cannot be used in distributed queries.
--- use a colocated null-shard-key table
+-- use a colocated single-shard table
 INSERT INTO reference_table SELECT nullkey_c1_t1.a, nullkey_c1_t1.b FROM nullkey_c1_t1 JOIN nullkey_c1_t2 USING (b);
 DEBUG:  only reference tables may be queried when targeting a reference table with distributed INSERT ... SELECT
 DEBUG:  Creating router plan
@@ -253,7 +253,7 @@ INSERT INTO reference_table SELECT nullkey_c1_t1.a, nullkey_c1_t1.b FROM nullkey
 DEBUG:  only reference tables may be queried when targeting a reference table with distributed INSERT ... SELECT
 DEBUG:  Creating router plan
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
--- use a non-colocated null-shard-key table
+-- use a non-colocated single-shard table
 INSERT INTO reference_table SELECT nullkey_c1_t2.a, nullkey_c1_t2.b FROM nullkey_c1_t2 LEFT JOIN nullkey_c2_t1 USING (a);
 DEBUG:  only reference tables may be queried when targeting a reference table with distributed INSERT ... SELECT
 ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
@@ -299,8 +299,8 @@ INSERT INTO reference_table SELECT i, i FROM generate_series(0, 5) i;
 DEBUG:  distributed INSERT ... SELECT can only select from distributed tables
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 -- Test inserting into a citus local table by selecting from a combination of
--- different table types together with null-shard-key tables.
--- use a null-shard-key table
+-- different table types together with single-shard tables.
+-- use a single-shard table
 INSERT INTO citus_local_table SELECT nullkey_c1_t1.a, nullkey_c1_t1.b FROM nullkey_c1_t1;
 DEBUG:  distributed INSERT ... SELECT cannot insert into a local table that is added to metadata
 DEBUG:  Distributed planning for a fast-path router query
@@ -311,7 +311,7 @@ INSERT INTO citus_local_table SELECT nullkey_c1_t1.a, nullkey_c1_t1.b FROM nullk
 DEBUG:  distributed INSERT ... SELECT cannot insert into a local table that is added to metadata
 DEBUG:  Creating router plan
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
--- use a colocated null-shard-key table
+-- use a colocated single-shard table
 INSERT INTO citus_local_table SELECT nullkey_c1_t1.a, nullkey_c1_t1.b FROM nullkey_c1_t1 JOIN nullkey_c1_t2 USING (b);
 DEBUG:  distributed INSERT ... SELECT cannot insert into a local table that is added to metadata
 DEBUG:  Creating router plan
@@ -343,8 +343,8 @@ TRUNCATE citus_local_table;
 INSERT INTO citus_local_table SELECT i, i FROM generate_series(0, 10) i;
 DEBUG:  distributed INSERT ... SELECT can only select from distributed tables
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
--- Test inserting into a null-shard-key table by selecting from a combination of
--- different table types, together with or without null-shard-key tables.
+-- Test inserting into a single-shard table by selecting from a combination of
+-- different table types, together with or without single-shard tables.
 -- use a postgres local table
 INSERT INTO nullkey_c1_t1 SELECT postgres_local_table.a, postgres_local_table.b FROM postgres_local_table;
 DEBUG:  distributed INSERT ... SELECT can only select from distributed tables
@@ -384,7 +384,7 @@ INSERT INTO nullkey_c1_t1 SELECT distributed_table_c1_t2.a, distributed_table_c1
 DEBUG:  distributed INSERT ... SELECT cannot reference a distributed table without a shard key together with non-colocated distributed tables
 ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
 DETAIL:  Router planner cannot handle multi-shard select queries
--- use a non-colocated null-shard-key table
+-- use a non-colocated single-shard table
 INSERT INTO nullkey_c2_t1 SELECT q.* FROM (SELECT reference_table.* FROM reference_table LEFT JOIN nullkey_c1_t1 USING (a)) q JOIN nullkey_c1_t2 USING (a);
 DEBUG:  distributed INSERT ... SELECT cannot reference a distributed table without a shard key together with non-colocated distributed tables
 DEBUG:  Creating router plan
@@ -434,7 +434,7 @@ INSERT INTO nullkey_c2_t1 SELECT i, i FROM generate_series(2, 7) i;
 DEBUG:  distributed INSERT ... SELECT can only select from distributed tables
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 -- Test inserting into a local table by selecting from a combination of
--- different table types, together with or without null-shard-key tables.
+-- different table types, together with or without single-shard tables.
 INSERT INTO postgres_local_table SELECT nullkey_c1_t1.a, nullkey_c1_t1.b FROM nullkey_c1_t1 JOIN reference_table USING (a);
 DEBUG:  Creating router plan
 INSERT INTO postgres_local_table SELECT * FROM nullkey_c1_t1 ORDER BY 1,2 OFFSET 3 LIMIT 2;

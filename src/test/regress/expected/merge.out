@@ -3103,7 +3103,7 @@ WHEN NOT MATCHED THEN
 INSERT VALUES(dist_source.id, dist_source.val);
 ERROR:  For MERGE command, all the distributed tables must be colocated, for append/range distribution, colocation is not supported
 HINT:  Consider using hash distribution instead
--- test merge with null shard key tables
+-- test merge with single-shard tables
 CREATE SCHEMA query_null_dist_key;
 SET search_path TO query_null_dist_key;
 SET client_min_messages TO DEBUG2;
@@ -3186,7 +3186,7 @@ WHEN MATCHED THEN DELETE
 WHEN NOT MATCHED THEN INSERT VALUES (nullkey_c1_t2.a, nullkey_c1_t2.b);
 DEBUG:  <Deparsed MERGE query: MERGE INTO query_null_dist_key.nullkey_c1_t1_4000145 nullkey_c1_t1 USING query_null_dist_key.nullkey_c1_t2_4000146 nullkey_c1_t2 ON (nullkey_c1_t1.a OPERATOR(pg_catalog.=) nullkey_c1_t2.a) WHEN MATCHED THEN DELETE WHEN NOT MATCHED THEN INSERT (a, b) VALUES (nullkey_c1_t2.a, nullkey_c1_t2.b)>
 DEBUG:  Creating MERGE router plan
--- with non-colocated null-dist-key table
+-- with non-colocated single-shard table
 MERGE INTO nullkey_c1_t1 USING nullkey_c2_t1 ON (nullkey_c1_t1.a = nullkey_c2_t1.a)
 WHEN MATCHED THEN UPDATE SET b = nullkey_c2_t1.b;
 ERROR:  For MERGE command, all the distributed tables must be colocated

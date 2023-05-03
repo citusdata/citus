@@ -30,7 +30,7 @@ AFTER_PG_UPGRADE_SCHEDULE = "./after_pg_upgrade_schedule"
 
 CREATE_SCHEDULE = "./create_schedule"
 POSTGRES_SCHEDULE = "./postgres_schedule"
-NULL_DIST_KEY_PREP_SCHEDULE = "./null_dist_key_prep_schedule"
+SINGLE_SHARD_PREP_SCHEDULE = "./null_dist_key_prep_schedule"
 SQL_SCHEDULE = "./sql_schedule"
 SQL_BASE_SCHEDULE = "./sql_base_schedule"
 
@@ -206,7 +206,7 @@ class PostgresConfig(CitusDefaultClusterConfig):
         ]
 
 
-class AllNullDistKeyDefaultConfig(CitusDefaultClusterConfig):
+class AllSingleShardTableDefaultConfig(CitusDefaultClusterConfig):
     def __init__(self, arguments):
         super().__init__(arguments)
         self.all_null_dist_key = True

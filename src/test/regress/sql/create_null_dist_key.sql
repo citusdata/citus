@@ -10,12 +10,12 @@ SELECT 1 FROM citus_remove_node('localhost', :worker_2_port);
 
 CREATE TABLE add_node_test(a int, "b" text);
 
--- add a node before creating the null-shard-key table
+-- add a node before creating the single-shard table
 SELECT 1 FROM citus_add_node('localhost', :worker_1_port);
 
 SELECT create_distributed_table('add_node_test', null, colocate_with=>'none', distribution_type=>null);
 
--- add a node after creating the null-shard-key table
+-- add a node after creating the single-shard table
 SELECT 1 FROM citus_add_node('localhost', :worker_2_port);
 
 -- make sure that table is created on the worker nodes added before/after create_distributed_table
@@ -255,7 +255,7 @@ SELECT
 
 CREATE TABLE distributed_table(a int, b int);
 
--- cannot colocate a sharded table with null shard key table
+-- cannot colocate a sharded table with single-shard table
 SELECT create_distributed_table('distributed_table', 'a', colocate_with=>'nullkey_c1_t1');
 
 CREATE TABLE reference_table(a int, b int);
@@ -263,7 +263,7 @@ CREATE TABLE local(a int, b int);
 SELECT create_reference_table('reference_table');
 SELECT create_distributed_table('distributed_table', 'a');
 
--- cannot colocate null shard key tables with other table types
+-- cannot colocate single-shard tables with other table types
 CREATE TABLE cannot_colocate_with_other_types (a int, b int);
 SELECT create_distributed_table('cannot_colocate_with_other_types', null, colocate_with=>'reference_table');
 SELECT create_distributed_table('cannot_colocate_with_other_types', null, colocate_with=>'distributed_table');
@@ -271,7 +271,7 @@ SELECT create_distributed_table('cannot_colocate_with_other_types', null, coloca
 
 SELECT citus_add_local_table_to_metadata('local');
 
--- cannot colocate null shard key tables with citus local tables
+-- cannot colocate single-shard tables with citus local tables
 SELECT create_distributed_table('cannot_colocate_with_other_types', null, colocate_with=>'local'); -- citus local
 
 SET client_min_messages TO WARNING;
@@ -282,30 +282,30 @@ SELECT create_distributed_table('distributed_table', null, colocate_with=>'none'
 SELECT create_distributed_table('local', null, colocate_with=>'none');
 
 BEGIN;
-  -- creating a null-shard-key table from a temporary table is not supported
+  -- creating a single-shard table from a temporary table is not supported
   CREATE TEMPORARY TABLE temp_table (a int);
   SELECT create_distributed_table('temp_table', null, colocate_with=>'none', distribution_type=>null);
 ROLLBACK;
 
--- creating a null-shard-key table from a catalog table is not supported
+-- creating a single-shard table from a catalog table is not supported
 SELECT create_distributed_table('pg_catalog.pg_index', NULL, distribution_type=>null);
 
--- creating a null-shard-key table from an unlogged table is supported
+-- creating a single-shard table from an unlogged table is supported
 CREATE UNLOGGED TABLE unlogged_table (a int);
 SELECT create_distributed_table('unlogged_table', null, colocate_with=>'none', distribution_type=>null);
 
--- creating a null-shard-key table from a foreign table is not supported
+-- creating a single-shard table from a foreign table is not supported
 CREATE FOREIGN TABLE foreign_table (
   id bigint not null,
   full_name text not null default ''
 ) SERVER fake_fdw_server OPTIONS (encoding 'utf-8', compression 'true', table_name 'foreign_table');
 SELECT create_distributed_table('foreign_table', null, colocate_with=>'none', distribution_type=>null);
 
--- create a null dist key table that has no tuples
+-- create a single-shard table that has no tuples
 CREATE TABLE null_dist_key_table_1 (a int primary key);
 SELECT create_distributed_table('null_dist_key_table_1', null, colocate_with=>'none');
 
--- create a null dist key table that has some tuples
+-- create a single-shard table that has some tuples
 CREATE TABLE null_dist_key_table_2(a int primary key);
 INSERT INTO null_dist_key_table_2 VALUES(1);
 SELECT create_distributed_table('null_dist_key_table_2', null, colocate_with=>'none');
@@ -314,7 +314,7 @@ SELECT * FROM null_dist_key_table_2 ORDER BY a;
 
 DROP TABLE null_dist_key_table_1, null_dist_key_table_2;
 
--- create indexes before creating the null dist key tables
+-- create indexes before creating the single-shard tables
 
 -- .. for an initially empty table
 CREATE TABLE null_dist_key_table_1(a int, b int);
@@ -323,7 +323,7 @@ CREATE INDEX null_dist_key_table_1_idx ON null_dist_key_table_1(a);
 SELECT create_distributed_table('null_dist_key_table_1', null, colocate_with=>'none');
 CREATE STATISTICS s2 (dependencies) ON a, b FROM null_dist_key_table_1;
 
--- .. and for another table having data in it before creating null dist key table
+-- .. and for another table having data in it before creating single-shard table
 CREATE TABLE null_dist_key_table_2(a int);
 INSERT INTO null_dist_key_table_2 VALUES(1);
 CREATE INDEX null_dist_key_table_2_idx ON null_dist_key_table_2(a);
@@ -460,11 +460,11 @@ SELECT create_distributed_table('sensors', NULL, distribution_type=>null);
 -- verify we can create new partitions after distributing the parent table
 CREATE TABLE sensors_2001 PARTITION OF sensors FOR VALUES FROM ('2001-01-01') TO ('2002-01-01');
 
--- verify we can attach to a null dist key table
+-- verify we can attach to a single-shard table
 CREATE TABLE sensors_2002 (measureid integer, eventdatetime date, measure_data jsonb, PRIMARY KEY (measureid, eventdatetime, measure_data));
 ALTER TABLE sensors ATTACH PARTITION sensors_2002 FOR VALUES FROM ('2002-01-01') TO ('2003-01-01');
 
--- verify we can detach from a null dist key table
+-- verify we can detach from a single-shard table
 ALTER TABLE sensors DETACH PARTITION sensors_2001;
 
 -- error out when attaching a noncolocated partition
@@ -507,7 +507,7 @@ SELECT COUNT(*) FROM run_command_on_workers($$
     SELECT relpartbound FROM pg_class WHERE relname LIKE 'sensors_2002_1______';$$)
     WHERE length(result) > 0;
 
--- create a partitioned citus local table and verify we error out when attaching a partition with null dist key
+-- create a partitioned citus local table and verify we error out when attaching a partition with single-shard
 CREATE TABLE partitioned_citus_local_tbl(
     measureid integer,
     eventdatetime date,
@@ -629,7 +629,7 @@ ALTER TABLE "NULL_!_dist_key"."nullKeyTable.1!?!90123456789012345678901234567890
 
 -- Normally, we support foreign keys from Postgres tables to distributed
 -- tables assuming that the user will soon distribute the local table too
--- anyway. However, this is not the case for null-shard-key tables before
+-- anyway. However, this is not the case for single-shard tables before
 -- we improve SQL support.
 ALTER TABLE local_table_for_fkey
     ADD CONSTRAINT fkey_from_dummy_local FOREIGN KEY (a) REFERENCES "NULL_!_dist_key"."nullKeyTable.1!?!9012345678901234567890123456789012345678901234567890123456789"(id);
@@ -680,7 +680,7 @@ ALTER TABLE null_key_dist DROP CONSTRAINT fkey_add_test_3;
 ALTER TABLE null_key_dist DROP CONSTRAINT fkey_add_test_4;
 ALTER TABLE "NULL_!_dist_key"."nullKeyTable.1!?!9012345678901234567890123456789012345678901234567890123456789" DROP CONSTRAINT fkey_to_dummy_dist;
 
--- create a view that depends on the null shard key table
+-- create a view that depends on the single-shard table
 CREATE VIEW public.v1 AS SELECT * FROM null_key_dist;
 SELECT * FROM public.v1;
 
@@ -781,7 +781,7 @@ CREATE TABLE referenced_table(a int UNIQUE, b int);
 CREATE TABLE referencing_table(a int, b int,
     FOREIGN KEY (a) REFERENCES referenced_table(a));
 
--- to a colocated null dist key table
+-- to a colocated single-shard table
 BEGIN;
   SELECT create_distributed_table('referenced_table', NULL, distribution_type=>null);
   SELECT create_distributed_table('referencing_table', NULL, distribution_type=>null, colocate_with=>'referenced_table');
@@ -793,7 +793,7 @@ BEGIN;
   INSERT INTO referencing_table VALUES (2, 2);
 ROLLBACK;
 
--- to a non-colocated null dist key table
+-- to a non-colocated single-shard table
 BEGIN;
   SELECT create_distributed_table('referenced_table', NULL, distribution_type=>null);
   SELECT create_distributed_table('referencing_table', NULL, distribution_type=>null, colocate_with=>'none');
@@ -885,9 +885,9 @@ INSERT INTO self_fkey_test VALUES (2, 3); -- fails
 
 -- similar foreign key tests but this time create the referencing table later on
 
--- referencing table is a null shard key table
+-- referencing table is a single-shard table
 
--- to a colocated null dist key table
+-- to a colocated single-shard table
 BEGIN;
   CREATE TABLE referenced_table(a int UNIQUE, b int);
   SELECT create_distributed_table('referenced_table', NULL, distribution_type=>null);
@@ -947,7 +947,7 @@ BEGIN;
   ALTER TABLE referencing_table ADD CONSTRAINT fkey_to_dummy_ref_on_update FOREIGN KEY (a) REFERENCES referenced_table(a) ON UPDATE SET DEFAULT;
 ROLLBACK;
 
--- to a non-colocated null dist key table
+-- to a non-colocated single-shard table
 BEGIN;
   CREATE TABLE referenced_table(a int UNIQUE, b int);
   SELECT create_distributed_table('referenced_table', NULL, distribution_type=>null);
@@ -1010,7 +1010,7 @@ BEGIN;
   SELECT create_distributed_table('referencing_table', NULL, distribution_type=>null, colocate_with=>'none');
 ROLLBACK;
 
--- referenced table is a null shard key table
+-- referenced table is a single-shard table
 
 -- from a sharded table
 BEGIN;
@@ -1060,9 +1060,9 @@ SET client_min_messages TO DEBUG1;
 
 BEGIN;
 	-- Switches to sequential execution because referenced_table is a reference table
-	-- and referenced by a null-shard-key distributed table.
+	-- and referenced by a single-shard table.
     --
-    -- Given that we cannot do parallel access on null-shard-key, this is not useful.
+    -- Given that we cannot do parallel access on a single-shard table, this is not useful.
     -- However, this is already what we're doing for, e.g., a foreign key from a
     -- reference table to another reference table.
 	TRUNCATE referenced_table CASCADE;
@@ -1089,9 +1089,9 @@ ROLLBACK;
 
 BEGIN;
 	-- Switches to sequential execution because referenced_table is a reference table
-	-- and referenced by a null-shard-key distributed table.
+	-- and referenced by a single-shard table.
     --
-    -- Given that we cannot do parallel access on null-shard-key, this is not useful.
+    -- Given that we cannot do parallel access on a single-shard table, this is not useful.
     -- However, this is already what we're doing for, e.g., a foreign key from a
     -- reference table to another reference table.
 	UPDATE referenced_table SET id = 101 WHERE id = 99;
@@ -1109,7 +1109,7 @@ SET client_min_messages TO WARNING;
 DROP TABLE referenced_table, referencing_table;
 
 -- Test whether we unnecessarily switch to sequential execution
--- when the referenced relation is a null-shard-key table.
+-- when the referenced relation is a single-shard table.
 
 CREATE TABLE referenced_table(id int PRIMARY KEY, value_1 int);
 SELECT create_distributed_table('referenced_table', null, colocate_with=>'none', distribution_type=>null);
@@ -1122,13 +1122,13 @@ SET client_min_messages TO DEBUG1;
 BEGIN;
 	SELECT COUNT(*) FROM referenced_table;
 	-- Doesn't switch to sequential execution because the referenced_table is
-	-- a null-shard-key distributed table.
+	-- a single-shard table.
 	ALTER TABLE referencing_table ADD COLUMN X INT;
 ROLLBACK;
 
 BEGIN;
 	-- Doesn't switch to sequential execution because the referenced_table is
-	-- a null-shard-key distributed table.
+	-- a single-shard table.
 	TRUNCATE referenced_table CASCADE;
 	SELECT COUNT(*) FROM referencing_table;
 COMMIT;
