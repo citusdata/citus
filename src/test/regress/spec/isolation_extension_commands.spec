@@ -48,6 +48,11 @@ step "s1-print"
 	SELECT run_command_on_workers($$select nspname from pg_extension, pg_namespace where extname='seg' and pg_extension.extnamespace=pg_namespace.oid$$);
 }
 
+step "s1-cleanup-node-1"
+{
+    SELECT run_command_on_workers($$drop extension if exists seg$$);
+}
+
 session "s2"
 
 step "s2-begin"
@@ -121,4 +126,4 @@ permutation "s2-add-node-1" "s2-begin" "s2-drop-extension" "s1-remove-node-1" "s
 permutation "s2-begin" "s2-create-extension-with-schema1" "s1-add-node-1" "s2-commit" "s1-print"
 permutation "s2-drop-extension" "s2-add-node-1" "s2-create-extension-with-schema2" "s2-begin" "s2-alter-extension-version-13" "s1-remove-node-1" "s2-commit" "s1-print"
 permutation "s2-drop-extension" "s2-add-node-1" "s2-begin" "s2-create-extension-version-11" "s1-remove-node-1" "s2-commit" "s1-print"
-permutation "s2-drop-extension" "s2-add-node-1" "s2-create-extension-version-11" "s2-remove-node-1" "s2-begin" "s2-drop-extension" "s1-add-node-1" "s2-commit" "s1-print"
+permutation "s2-drop-extension" "s2-add-node-1" "s2-create-extension-version-11" "s2-remove-node-1" "s2-begin" "s2-drop-extension" "s1-add-node-1" "s2-commit" "s1-print" "s1-cleanup-node-1"
