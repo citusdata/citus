@@ -1736,7 +1736,7 @@ NodeContainsSubqueryReferencingOuterQuery(Node *node)
 
 	return false;
 }
-
+#include "parser/parse_relation.h"
 
 /*
  * ReplaceRTERelationWithRteSubquery replaces the input rte relation target entry
@@ -1755,6 +1755,8 @@ ReplaceRTERelationWithRteSubquery(RangeTblEntry *rangeTableEntry,
 								  RecursivePlanningContext *context)
 {
 	Query *subquery = WrapRteRelationIntoSubquery(rangeTableEntry, requiredAttrNumbers);
+
+
 	List *outerQueryTargetList = CreateAllTargetListForRelation(rangeTableEntry->relid,
 																requiredAttrNumbers);
 
@@ -1850,6 +1852,9 @@ CreateOuterSubquery(RangeTblEntry *rangeTableEntry, List *outerSubqueryTargetLis
 
 	innerSubqueryRTE->eref->colnames = innerSubqueryColNames;
 	outerSubquery->rtable = list_make1(innerSubqueryRTE);
+
+	addRTEPermissionInfo(&outerSubquery->rteperminfos, innerSubqueryRTE);
+
 
 	/* set the FROM expression to the subquery */
 	RangeTblRef *newRangeTableRef = makeNode(RangeTblRef);
@@ -2395,6 +2400,9 @@ BuildReadIntermediateResultsQuery(List *targetEntryList, List *columnAliasList,
 	resultQuery->rtable = list_make1(rangeTableEntry);
 	resultQuery->jointree = joinTree;
 	resultQuery->targetList = targetList;
+
+	addRTEPermissionInfo(&resultQuery->rteperminfos, rangeTableEntry);
+
 
 	return resultQuery;
 }

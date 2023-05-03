@@ -278,6 +278,9 @@ WrapRteRelationIntoSubquery(RangeTblEntry *rteRelation, List *requiredAttributes
 	RangeTblEntry *newRangeTableEntry = copyObject(rteRelation);
 	subquery->rtable = list_make1(newRangeTableEntry);
 
+	addRTEPermissionInfo(&subquery->rteperminfos, newRangeTableEntry);
+
+
 	/* set the FROM expression to the subquery */
 	newRangeTableRef = makeNode(RangeTblRef);
 	newRangeTableRef->rtindex = SINGLE_RTE_INDEX;
