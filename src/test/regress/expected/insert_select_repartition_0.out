@@ -761,7 +761,7 @@ WITH r AS (
 )
 INSERT INTO target_table SELECT source_table.a, max(source_table.b) FROM source_table NATURAL JOIN r GROUP BY source_table.a;
 DEBUG:  INSERT target table and the source relation of the SELECT partition column value must be colocated in distributed INSERT ... SELECT
-DEBUG:  only SELECT, UPDATE, or DELETE common table expressions may be router planned
+DEBUG:  router planner does not support queries that reference non-colocated distributed tables
 DEBUG:  generating subplan XXX_1 for CTE r: INSERT INTO insert_select_repartition.target_table (a, b) SELECT a, b FROM insert_select_repartition.source_table RETURNING target_table.a, target_table.b
 DEBUG:  INSERT target table and the source relation of the SELECT partition column value must be colocated in distributed INSERT ... SELECT
 DEBUG:  Router planner cannot handle multi-shard select queries
