@@ -132,6 +132,7 @@ DEPS = {
     "isolation_extension_commands": TestDeps(
         None, ["isolation_setup", "isolation_add_remove_node"]
     ),
+    "schema_based_sharding": TestDeps("minimal_schedule"),
 }
 
 

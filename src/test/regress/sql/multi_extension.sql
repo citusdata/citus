@@ -928,6 +928,41 @@ DROP TABLE test;
 -- and now we should be able to remove the coordinator
 SELECT citus_remove_node('localhost', :master_port);
 
+-- confirm that we can create a tenant schema / table on an empty node
+
+SET citus.enable_schema_based_sharding TO ON;
+
+CREATE SCHEMA tenant_schema;
+CREATE TABLE tenant_schema.test(x int, y int);
+
+SELECT colocation_id = (
+    SELECT colocationid FROM pg_dist_partition WHERE logicalrelid = 'tenant_schema.test'::regclass
+)
+FROM pg_dist_tenant_schema
+WHERE schema_id::regnamespace::text = 'tenant_schema';
+
+-- and make sure that we can't remove the coordinator due to "test"
+SELECT citus_remove_node('localhost', :master_port);
+
+BEGIN;
+  SET LOCAL client_min_messages TO WARNING;
+  DROP SCHEMA tenant_schema CASCADE;
+COMMIT;
+
+-- and now we should be able to remove the coordinator
+SELECT citus_remove_node('localhost', :master_port);
+
+CREATE SCHEMA tenant_schema;
+
+-- Make sure that we can sync metadata for empty tenant schemas
+-- when adding the first node to the cluster.
+SELECT 1 FROM citus_add_node('localhost', :worker_1_port);
+
+DROP SCHEMA tenant_schema;
+SELECT citus_remove_node('localhost', :worker_1_port);
+
+RESET citus.enable_schema_based_sharding;
+
 -- confirm that we can create a reference table on an empty node
 CREATE TABLE test (x int, y int);
 INSERT INTO test VALUES (1,2);
@@ -940,6 +975,19 @@ CREATE TABLE test (x int, y int);
 INSERT INTO test VALUES (1,2);
 SELECT citus_add_local_table_to_metadata('test');
 DROP TABLE test;
+
+-- Verify that we don't consider the schemas created by extensions as tenant schemas.
+-- Easiest way of verifying this is to drop and re-create columnar extension.
+DROP EXTENSION citus_columnar;
+
+SET citus.enable_schema_based_sharding TO ON;
+
+CREATE EXTENSION citus_columnar;
+SELECT COUNT(*)=0 FROM pg_dist_tenant_schema
+WHERE schema_id IN ('columnar'::regnamespace, 'columnar_internal'::regnamespace);
+
+RESET citus.enable_schema_based_sharding;
+
 DROP EXTENSION citus;
 CREATE EXTENSION citus;
 

@@ -282,6 +282,15 @@ PostprocessCreateTableStmtForeignKeys(CreateStmt *createStatement)
 	bool missingOk = false;
 	Oid relationId = RangeVarGetRelid(createStatement->relation, NoLock, missingOk);
 
+	if (ShouldCreateTenantTable(relationId))
+	{
+		/*
+		 * Avoid unnecessarily adding the table into metadata if we will
+		 * distribute it as a tenant table later.
+		 */
+		return;
+	}
+
 	/*
 	 * As we are just creating the table, we cannot have foreign keys that our
 	 * relation is referenced. So we use INCLUDE_REFERENCING_CONSTRAINTS here.

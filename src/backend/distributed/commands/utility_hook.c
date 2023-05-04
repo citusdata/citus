@@ -346,7 +346,7 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 
 			/*
 			 * We're only interested in top-level CREATE TABLE commands
-			 * to create a Citus managed table.
+			 * to create a tenant table or a Citus managed table.
 			 */
 			Oid createdRelationId = InvalidOid;
 			if (context == PROCESS_UTILITY_TOPLEVEL &&
@@ -367,9 +367,18 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 													 NoLock, missingOk);
 			}
 
+			/*
+			 * Check ShouldCreateTenantTable() before ShouldAddNewTableToMetadata()
+			 * because we don't want to unnecessarily add the table into metadata
+			 * (as a Citus managed table) before distributing it as a tenant table.
+			 */
 			if (!OidIsValid(createdRelationId))
 			{
 				/* no tables were created by this command, or it wasn't a top-level one */
+			}
+			else if (ShouldCreateTenantTable(createdRelationId))
+			{
+				CreateTenantTable(createdRelationId);
 			}
 			else if (ShouldAddNewTableToMetadata(createdRelationId))
 			{

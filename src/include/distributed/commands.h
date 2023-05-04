@@ -23,6 +23,7 @@
 
 
 extern bool AddAllLocalTablesToMetadata;
+extern bool EnableSchemaBasedSharding;
 
 /* controlled via GUC, should be accessed via EnableLocalReferenceForeignKeys() */
 extern bool EnableLocalReferenceForeignKeys;
@@ -458,8 +459,7 @@ extern void UnmarkRolesDistributed(List *roles);
 extern List * FilterDistributedRoles(List *roles);
 
 /* schema.c - forward declarations */
-extern List * PreprocessCreateSchemaStmt(Node *node, const char *queryString,
-										 ProcessUtilityContext processUtilityContext);
+extern List * PostprocessCreateSchemaStmt(Node *node, const char *queryString);
 extern List * PreprocessDropSchemaStmt(Node *dropSchemaStatement,
 									   const char *queryString,
 									   ProcessUtilityContext processUtilityContext);
@@ -779,5 +779,13 @@ extern void CreateCitusLocalTablePartitionOf(CreateStmt *createStatement,
 											 Oid relationId, Oid parentRelationId);
 extern void UpdateAutoConvertedForConnectedRelations(List *relationId, bool
 													 autoConverted);
+
+/* schema_based_sharding.c */
+extern bool ShouldUseSchemaBasedSharding(char *schemaName);
+extern bool ShouldCreateTenantTable(Oid relationId);
+extern void CreateTenantTable(Oid relationId);
+extern char * RegisterTenantSchema(Oid schemaId);
+extern void UnregisterTenantSchema(Oid schemaId);
+extern void DisassociateTenantSchemaIfAny(uint32 colocationId);
 
 #endif /*CITUS_COMMANDS_H */

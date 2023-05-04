@@ -1,0 +1,595 @@
+CREATE SCHEMA regular_schema;
+SET search_path TO regular_schema;
+SET citus.next_shard_id TO 1920000;
+SET citus.shard_count TO 32;
+SET citus.shard_replication_factor TO 1;
+SET client_min_messages TO WARNING;
+SELECT 1 FROM citus_add_node('localhost', :master_port, groupid => 0);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+SET client_min_messages TO NOTICE;
+-- Verify that the UDFs used to sync tenant schema metadata to workers
+-- fail on NULL input.
+SELECT citus_internal_insert_tenant_schema(NULL, 1);
+ERROR:  schema_id cannot be NULL
+SELECT citus_internal_insert_tenant_schema(1, NULL);
+ERROR:  colocation_id cannot be NULL
+SELECT citus_internal_delete_tenant_schema(NULL);
+ERROR:  schema_id cannot be NULL
+SELECT citus_internal_set_tenant_schema_colocation_id(NULL, 1);
+ERROR:  schema_id cannot be NULL
+SELECT citus_internal_set_tenant_schema_colocation_id(1, NULL);
+ERROR:  colocation_id cannot be NULL
+CREATE ROLE test_non_super_user WITH LOGIN;
+ALTER ROLE test_non_super_user NOSUPERUSER;
+\c - test_non_super_user
+-- Verify that the UDFs used to sync tenant schema metadata to workers
+-- fail when called via a non-superuser.
+SELECT citus_internal_insert_tenant_schema(1, 1);
+ERROR:  operation is not allowed
+HINT:  Run the command with a superuser.
+SELECT citus_internal_delete_tenant_schema(1);
+ERROR:  operation is not allowed
+HINT:  Run the command with a superuser.
+SELECT citus_internal_set_tenant_schema_colocation_id(1, 1);
+ERROR:  operation is not allowed
+HINT:  Run the command with a superuser.
+\c - postgres
+DROP ROLE test_non_super_user;
+SET search_path TO regular_schema;
+SET citus.next_shard_id TO 1930000;
+SET citus.shard_count TO 32;
+SET citus.shard_replication_factor TO 1;
+SET client_min_messages TO NOTICE;
+-- Verify that the UDFs used to sync tenant schema metadata to workers
+-- fail when called via a superuser that is not allowed to modify metadata.
+SELECT citus_internal_insert_tenant_schema(1, 1);
+ERROR:  This is an internal Citus function can only be used in a distributed transaction
+SELECT citus_internal_delete_tenant_schema(1);
+ERROR:  This is an internal Citus function can only be used in a distributed transaction
+SELECT citus_internal_set_tenant_schema_colocation_id(1, 1);
+ERROR:  This is an internal Citus function can only be used in a distributed transaction
+ALTER SYSTEM SET citus.enable_manual_metadata_changes_for_user TO 'postgres';
+SELECT pg_reload_conf();
+ pg_reload_conf
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT pg_sleep(0.1);
+ pg_sleep
+---------------------------------------------------------------------
+
+(1 row)
+
+-- Verify that the UDFs used to sync tenant schema metadata to workers
+-- fail on schema_id = InvalidOid
+SELECT citus_internal_insert_tenant_schema(0, 1);
+ERROR:  schema id is invalid
+SELECT citus_internal_delete_tenant_schema(0);
+ERROR:  schema id is invalid
+SELECT citus_internal_set_tenant_schema_colocation_id(0, 1);
+ERROR:  schema id is invalid
+-- Verify that the UDFs used to sync tenant schema metadata to workers
+-- fail on non-existing schema_id.
+SELECT citus_internal_delete_tenant_schema(456456);
+ERROR:  could not find tuple for tenant schema 456456
+SELECT citus_internal_set_tenant_schema_colocation_id(456456, 1);
+ERROR:  could not find tuple for tenant schema 456456
+ALTER SYSTEM RESET citus.enable_manual_metadata_changes_for_user;
+SELECT pg_reload_conf();
+ pg_reload_conf
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT pg_sleep(0.1);
+ pg_sleep
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT 1 FROM citus_remove_node('localhost', :worker_2_port);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+CREATE TABLE regular_schema.test_table(a int, b text);
+SET citus.enable_schema_based_sharding TO ON;
+-- show that regular_schema doesn't show up in pg_dist_tenant_schema
+SELECT COUNT(*)=0 FROM pg_dist_tenant_schema WHERE schema_id::regnamespace::text = 'regular_schema';
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+-- empty tenant
+CREATE SCHEMA "tenant\'_1";
+-- non-empty tenant
+CREATE SCHEMA "tenant\'_2";
+CREATE TABLE "tenant\'_2".test_table(a int, b text);
+-- empty tenant
+CREATE SCHEMA "tenant\'_3";
+CREATE TABLE "tenant\'_3".test_table(a int, b text);
+DROP TABLE "tenant\'_3".test_table;
+-- add a node after creating tenant schemas
+SELECT 1 FROM citus_add_node('localhost', :worker_2_port);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+ALTER SCHEMA "tenant\'_1" RENAME TO tenant_1;
+ALTER SCHEMA "tenant\'_2" RENAME TO tenant_2;
+ALTER SCHEMA "tenant\'_3" RENAME TO tenant_3;
+-- verify that create_distributed_table() and others fail when called on tenant tables
+SELECT create_distributed_table('tenant_2.test_table', 'a');
+ERROR:  table "test_table" is already distributed
+SELECT create_reference_table('tenant_2.test_table');
+ERROR:  table "test_table" is already distributed
+SELECT citus_add_local_table_to_metadata('tenant_2.test_table');
+ERROR:  table "test_table" is already distributed
+-- (on coordinator) verify that colocation id is not set for empty tenants
+SELECT colocation_id IS NULL FROM pg_dist_tenant_schema
+WHERE schema_id::regnamespace::text IN ('tenant_1', 'tenant_3');
+ ?column?
+---------------------------------------------------------------------
+ t
+ t
+(2 rows)
+
+-- (on workers) verify that colocation id is not set for empty tenants
+SELECT result FROM run_command_on_workers($$
+    SELECT array_agg(colocation_id IS NULL) FROM pg_dist_tenant_schema
+    WHERE schema_id::regnamespace::text IN ('tenant_1', 'tenant_3');
+$$);
+ result
+---------------------------------------------------------------------
+ {t,t}
+ {t,t}
+(2 rows)
+
+-- Verify that tenant_2.test_table is recorded in pg_dist_partition as a
+-- single-shard table.
+SELECT COUNT(*)=1 FROM pg_dist_partition
+WHERE logicalrelid = 'tenant_2.test_table'::regclass AND
+      partmethod = 'n' AND repmodel = 's' AND colocationid > 0;
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+-- (on coordinator) verify that colocation id is properly set for non-empty tenant schema
+SELECT colocation_id = (
+    SELECT colocationid FROM pg_dist_partition WHERE logicalrelid = 'tenant_2.test_table'::regclass
+)
+FROM pg_dist_tenant_schema
+WHERE schema_id::regnamespace::text = 'tenant_2';
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+-- (on workers) verify that colocation id is properly set for non-empty tenant schema
+SELECT result FROM run_command_on_workers($$
+    SELECT colocation_id = (
+        SELECT colocationid FROM pg_dist_partition WHERE logicalrelid = 'tenant_2.test_table'::regclass
+    )
+    FROM pg_dist_tenant_schema
+    WHERE schema_id::regnamespace::text = 'tenant_2';
+$$);
+ result
+---------------------------------------------------------------------
+ t
+ t
+(2 rows)
+
+-- create a tenant table for tenant_1 after add_node
+CREATE TABLE tenant_1.test_table(a int, b text);
+-- (on coordinator) verify that colocation id is properly set for now-non-empty tenant schema
+SELECT colocation_id = (
+    SELECT colocationid FROM pg_dist_partition WHERE logicalrelid = 'tenant_1.test_table'::regclass
+)
+FROM pg_dist_tenant_schema
+WHERE schema_id::regnamespace::text = 'tenant_1';
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+-- (on workers) verify that colocation id is properly set for now-non-empty tenant schema
+SELECT result FROM run_command_on_workers($$
+    SELECT colocation_id = (
+        SELECT colocationid FROM pg_dist_partition WHERE logicalrelid = 'tenant_1.test_table'::regclass
+    )
+    FROM pg_dist_tenant_schema
+    WHERE schema_id::regnamespace::text = 'tenant_1';
+$$);
+ result
+---------------------------------------------------------------------
+ t
+ t
+(2 rows)
+
+-- verify that tenant_1 and tenant_2 have different colocation ids
+SELECT COUNT(DISTINCT(colocation_id))=2 FROM pg_dist_tenant_schema
+WHERE schema_id::regnamespace::text IN ('tenant_1', 'tenant_2');
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+CREATE SCHEMA tenant_4;
+CREATE TABLE tenant_4.tbl_1(a int, b text);
+CREATE TABLE tenant_4.tbl_2(a int, b text);
+CREATE SCHEMA tenant_5;
+CREATE TABLE tenant_5.tbl_1(a int, b text);
+CREATE TABLE tenant_4.tbl_3(a int, b text);
+CREATE TABLE tenant_5.tbl_2(a int, b text);
+SET citus.enable_schema_based_sharding TO OFF;
+-- Show that the tables created in tenant schemas are considered to be
+-- tenant tables even if the GUC was set to off when creating the table.
+CREATE TABLE tenant_5.tbl_3(a int, b text);
+SELECT COUNT(*)=1 FROM pg_dist_partition WHERE logicalrelid = 'tenant_5.tbl_3'::regclass;
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SET citus.enable_schema_based_sharding TO ON;
+-- Verify that tables that belong to tenant_4 and tenant_5 are stored on
+-- different worker nodes due to order we followed when creating first tenant
+-- tables in each of them.
+SELECT COUNT(DISTINCT(nodename, nodeport))=2 FROM citus_shards
+WHERE table_name IN ('tenant_4.tbl_1'::regclass, 'tenant_5.tbl_1'::regclass);
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+-- show that all the tables in tenant_4 are colocated with each other.
+SELECT COUNT(DISTINCT(colocationid))=1 FROM pg_dist_partition
+WHERE logicalrelid::regclass::text LIKE 'tenant_4.%';
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+-- verify the same for tenant_5 too
+SELECT COUNT(DISTINCT(colocationid))=1 FROM pg_dist_partition
+WHERE logicalrelid::regclass::text LIKE 'tenant_5.%';
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SET client_min_messages TO WARNING;
+DROP SCHEMA tenant_4 CASCADE;
+SET client_min_messages TO NOTICE;
+-- (on coordinator) Verify that dropping a tenant schema deletes the associated
+-- pg_dist_tenant_schema entry too.
+SELECT COUNT(*)=0 FROM pg_dist_tenant_schema
+WHERE schema_id::regnamespace::text = 'tenant_4';
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+-- (on workers) Verify that dropping a tenant schema deletes the associated
+-- pg_dist_tenant_schema entry too.
+SELECT result FROM run_command_on_workers($$
+    SELECT COUNT(*)=0 FROM pg_dist_tenant_schema
+    WHERE schema_id::regnamespace::text = 'tenant_4';
+$$);
+ result
+---------------------------------------------------------------------
+ t
+ t
+(2 rows)
+
+-- show that we don't allow colocating a Citus table with a tenant table
+CREATE TABLE regular_schema.null_shard_key_1(a int, b text);
+SELECT create_distributed_table('regular_schema.null_shard_key_1', null, colocate_with => 'tenant_5.tbl_2');
+ERROR:  cannot colocate tables tbl_2 and null_shard_key_1
+DETAIL:  Cannot colocate tables with tenant tables by using colocate_with option.
+HINT:  Consider using "ALTER TABLE null_shard_key_1 SET SCHEMA tenant_5;" to move the table to the same schema with the tenant table.
+SELECT create_distributed_table('regular_schema.null_shard_key_1', 'a', colocate_with => 'tenant_5.tbl_2');
+ERROR:  cannot colocate tables tbl_2 and null_shard_key_1
+DETAIL:  Distribution column types don't match for tbl_2 and null_shard_key_1.
+CREATE TABLE regular_schema.null_shard_key_table_2(a int, b text);
+SELECT create_distributed_table('regular_schema.null_shard_key_table_2', null);
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- Show that we don't chose to colocate regular single-shard tables with
+-- tenant tables by default.
+SELECT * FROM pg_dist_tenant_schema WHERE colocation_id = (
+    SELECT colocationid FROM pg_dist_partition WHERE logicalrelid = 'regular_schema.null_shard_key_table_2'::regclass
+);
+ schema_id | colocation_id
+---------------------------------------------------------------------
+(0 rows)
+
+-- save the colocation id used for tenant_5
+SELECT colocation_id AS tenant_5_old_colocation_id FROM pg_dist_tenant_schema
+WHERE schema_id::regnamespace::text = 'tenant_5' \gset
+-- drop all the tables that belong to tenant_5 and create a new one
+DROP TABLE tenant_5.tbl_1, tenant_5.tbl_2, tenant_5.tbl_3;
+CREATE TABLE tenant_5.tbl_4(a int, b text);
+-- (on coordinator) verify that tenant_5 is now associated with a new colocation id
+SELECT colocation_id != :tenant_5_old_colocation_id FROM pg_dist_tenant_schema
+WHERE schema_id::regnamespace::text = 'tenant_5';
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+-- (on workers) verify that tenant_5 is now associated with a new colocation id
+SELECT format(
+    'SELECT result FROM run_command_on_workers($$
+        SELECT colocation_id != %s FROM pg_dist_tenant_schema
+        WHERE schema_id::regnamespace::text = ''tenant_5'';
+    $$);',
+:tenant_5_old_colocation_id) AS verify_workers_query \gset
+:verify_workers_query
+ result
+---------------------------------------------------------------------
+ t
+ t
+(2 rows)
+
+SET client_min_messages TO WARNING;
+SET citus.enable_schema_based_sharding TO OFF;
+DROP SCHEMA tenant_1, tenant_2 CASCADE;
+SET client_min_messages TO NOTICE;
+-- (on coordinator) Verify that dropping a tenant schema always deletes
+-- the associated pg_dist_tenant_schema entry even if the the schema was
+-- dropped while the GUC was set to off.
+SELECT COUNT(*)=0 FROM pg_dist_tenant_schema
+WHERE schema_id::regnamespace::text IN ('tenant_1', 'tenant_2');
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+-- (on workers) Verify that dropping a tenant schema always deletes
+-- the associated pg_dist_tenant_schema entry even if the the schema was
+-- dropped while the GUC was set to off.
+SELECT result FROM run_command_on_workers($$
+    SELECT COUNT(*)=0 FROM pg_dist_tenant_schema
+    WHERE schema_id::regnamespace::text IN ('tenant_1', 'tenant_2');
+$$);
+ result
+---------------------------------------------------------------------
+ t
+ t
+(2 rows)
+
+SET citus.enable_schema_based_sharding TO ON;
+SET client_min_messages TO NOTICE;
+-- show that all schema_id values are unique and non-null in pg_dist_tenant_schema
+SELECT COUNT(*)=0 FROM pg_dist_tenant_schema WHERE schema_id IS NULL;
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT (SELECT COUNT(*) FROM pg_dist_tenant_schema) =
+       (SELECT COUNT(DISTINCT(schema_id)) FROM pg_dist_tenant_schema);
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+-- show that all colocation_id values are unique in pg_dist_tenant_schema
+SELECT (SELECT COUNT(*) FROM pg_dist_tenant_schema) =
+       (SELECT COUNT(DISTINCT(colocation_id)) FROM pg_dist_tenant_schema) +
+       (SELECT COUNT(*) FROM pg_dist_tenant_schema WHERE colocation_id IS NULL);
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+CREATE TABLE public.cannot_be_a_tenant_table(a int, b text);
+-- show that we don't consider public schema as a tenant schema
+SELECT COUNT(*)=0 FROM pg_dist_tenant_schema WHERE schema_id::regnamespace::text = 'public';
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+DROP TABLE public.cannot_be_a_tenant_table;
+BEGIN;
+    ALTER SCHEMA public RENAME TO public_renamed;
+    CREATE SCHEMA public;
+    -- Show that we don't consider public schema as a tenant schema,
+    -- even if it's recreated.
+    SELECT COUNT(*)=0 FROM pg_dist_tenant_schema WHERE schema_id::regnamespace::text = 'public';
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+ROLLBACK;
+CREATE TEMPORARY TABLE temp_table(a int, b text);
+-- show that we don't consider temporary schemas as tenant schemas
+SELECT COUNT(*)=0 FROM pg_dist_tenant_schema WHERE schema_id::regnamespace::text = '%pg_temp%';
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+DROP TABLE temp_table;
+-- test the UDFs that we use to sync pg_dist_tenant_schema to workers, all should fail
+SELECT pg_catalog.citus_internal_insert_tenant_schema(1, 1);
+ERROR:  This is an internal Citus function can only be used in a distributed transaction
+SELECT pg_catalog.citus_internal_set_tenant_schema_colocation_id(1, 1);
+ERROR:  This is an internal Citus function can only be used in a distributed transaction
+SELECT pg_catalog.citus_internal_delete_tenant_schema(1);
+ERROR:  This is an internal Citus function can only be used in a distributed transaction
+-- test creating a tenant schema and a tenant table for it in the same transaction
+BEGIN;
+    CREATE SCHEMA tenant_7;
+    CREATE TABLE tenant_7.tbl_1(a int, b text);
+    CREATE TABLE tenant_7.tbl_2(a int, b text);
+    SELECT colocation_id = (
+        SELECT colocationid FROM pg_dist_partition WHERE logicalrelid = 'tenant_7.tbl_1'::regclass
+    )
+    FROM pg_dist_tenant_schema
+    WHERE schema_id::regnamespace::text = 'tenant_7';
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+    -- make sure that both tables created in tenant_7 are colocated
+    SELECT COUNT(DISTINCT(colocationid)) = 1 FROM pg_dist_partition
+    WHERE logicalrelid IN ('tenant_7.tbl_1'::regclass, 'tenant_7.tbl_2'::regclass);
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+COMMIT;
+-- Test creating a tenant schema and a tenant table for it in the same transaction
+-- but this time rollback the transaction.
+BEGIN;
+    CREATE SCHEMA tenant_8;
+    CREATE TABLE tenant_8.tbl_1(a int, b text);
+    CREATE TABLE tenant_8.tbl_2(a int, b text);
+ROLLBACK;
+SELECT COUNT(*)=0 FROM pg_dist_tenant_schema WHERE schema_id::regnamespace::text = 'tenant_8';
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT COUNT(*)=0 FROM pg_dist_partition WHERE logicalrelid::text LIKE 'tenant_8.%';
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+-- Verify that citus.enable_schema_based_sharding and citus.use_citus_managed_tables
+-- GUC don't interfere with each other when creating a table in tenant schema.
+--
+-- In utility hook, we check whether the CREATE TABLE command is issued on a tenant
+-- schema before checking whether citus.use_citus_managed_tables is set to ON to
+-- avoid converting the table into a Citus managed table unnecessarily.
+--
+-- If the CREATE TABLE command is issued on a tenant schema, we skip the check
+-- for citus.use_citus_managed_tables.
+SET citus.use_citus_managed_tables TO ON;
+CREATE TABLE tenant_7.tbl_3(a int, b text, PRIMARY KEY(a));
+RESET citus.use_citus_managed_tables;
+-- Verify that we don't unnecessarily convert a table into a Citus managed
+-- table when creating it with a pre-defined foreign key to a reference table.
+CREATE TABLE reference_table(a int PRIMARY KEY);
+SELECT create_reference_table('reference_table');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- Notice that tenant_7.tbl_4 have foreign keys both to tenant_7.tbl_3 and
+-- to reference_table.
+CREATE TABLE tenant_7.tbl_4(a int REFERENCES reference_table, FOREIGN KEY(a) REFERENCES tenant_7.tbl_3(a));
+SELECT COUNT(*)=2 FROM pg_dist_partition
+WHERE logicalrelid IN ('tenant_7.tbl_3'::regclass, 'tenant_7.tbl_4'::regclass) AND
+      partmethod = 'n' AND repmodel = 's' AND
+      colocationid = (SELECT colocationid FROM pg_dist_partition WHERE logicalrelid = 'tenant_7.tbl_1'::regclass);
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+CREATE TABLE local_table(a int PRIMARY KEY);
+-- fails because tenant tables cannot have foreign keys to local tables
+CREATE TABLE tenant_7.tbl_5(a int REFERENCES local_table(a));
+ERROR:  referenced table "local_table" must be a distributed table or a reference table
+DETAIL:  To enforce foreign keys, the referencing and referenced rows need to be stored on the same node.
+HINT:  You could use SELECT create_reference_table('local_table') to replicate the referenced table to all nodes or consider dropping the foreign key
+-- Fails because tenant tables cannot have foreign keys to tenant tables
+-- that belong to different tenant schemas.
+CREATE TABLE tenant_5.tbl_5(a int, b text, FOREIGN KEY(a) REFERENCES tenant_7.tbl_3(a));
+ERROR:  cannot create foreign key constraint since relations are not colocated or not referencing a reference table
+DETAIL:  A distributed table can only have foreign keys if it is referencing another colocated hash distributed table or a reference table
+\c - - - :worker_1_port
+-- test creating a tenant table from workers
+CREATE TABLE tenant_3.tbl_1(a int, b text);
+ERROR:  cannot create a tenant table from a worker node
+HINT:  Connect to the coordinator node and try again.
+-- test creating a tenant schema from workers
+SET citus.enable_schema_based_sharding TO ON;
+CREATE SCHEMA worker_tenant_schema;
+ERROR:  operation is not allowed on this node
+HINT:  Connect to the coordinator and run it again.
+SET citus.enable_schema_based_sharding TO OFF;
+-- Enable the GUC on workers to make sure that the CREATE SCHEMA/ TABLE
+-- commands that we send to workers don't recursively try creating a
+-- tenant schema / table.
+ALTER SYSTEM SET citus.enable_schema_based_sharding TO ON;
+SELECT pg_reload_conf();
+ pg_reload_conf
+---------------------------------------------------------------------
+ t
+(1 row)
+
+\c - - - :worker_2_port
+ALTER SYSTEM SET citus.enable_schema_based_sharding TO ON;
+SELECT pg_reload_conf();
+ pg_reload_conf
+---------------------------------------------------------------------
+ t
+(1 row)
+
+\c - - - :master_port
+SET search_path TO regular_schema;
+SET citus.next_shard_id TO 1940000;
+SET citus.shard_count TO 32;
+SET citus.shard_replication_factor TO 1;
+SET client_min_messages TO NOTICE;
+CREATE TABLE tenant_3.tbl_1(a int, b text);
+SET citus.enable_schema_based_sharding TO ON;
+CREATE SCHEMA tenant_6;
+CREATE TABLE tenant_6.tbl_1(a int, b text);
+-- verify pg_dist_partition entries for tenant_3.tbl_1 and tenant_6.tbl_1
+SELECT COUNT(*)=2 FROM pg_dist_partition
+WHERE logicalrelid IN ('tenant_3.tbl_1'::regclass, 'tenant_6.tbl_1'::regclass) AND
+      partmethod = 'n' AND repmodel = 's' AND colocationid > 0;
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+\c - - - :worker_1_port
+ALTER SYSTEM RESET citus.enable_schema_based_sharding;
+SELECT pg_reload_conf();
+ pg_reload_conf
+---------------------------------------------------------------------
+ t
+(1 row)
+
+\c - - - :worker_2_port
+ALTER SYSTEM RESET citus.enable_schema_based_sharding;
+SELECT pg_reload_conf();
+ pg_reload_conf
+---------------------------------------------------------------------
+ t
+(1 row)
+
+\c - - - :master_port
+SET client_min_messages TO WARNING;
+DROP SCHEMA regular_schema, tenant_3, tenant_5, tenant_7, tenant_6 CASCADE;
+SELECT citus_remove_node('localhost', :master_port);
+ citus_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+

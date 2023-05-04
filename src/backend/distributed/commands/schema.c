@@ -33,6 +33,7 @@
 #include "distributed/resource_lock.h"
 #include <distributed/remote_commands.h>
 #include <distributed/remote_commands.h>
+#include "distributed/tenant_schema_metadata.h"
 #include "distributed/version_compat.h"
 #include "nodes/parsenodes.h"
 #include "utils/fmgroids.h"
@@ -48,13 +49,14 @@ static List * GetGrantCommandsFromCreateSchemaStmt(Node *node);
 
 
 /*
- * PreprocessCreateSchemaStmt is called during the planning phase for
+ * PostprocessCreateSchemaStmt is called during the planning phase for
  * CREATE SCHEMA ..
  */
 List *
-PreprocessCreateSchemaStmt(Node *node, const char *queryString,
-						   ProcessUtilityContext processUtilityContext)
+PostprocessCreateSchemaStmt(Node *node, const char *queryString)
 {
+	CreateSchemaStmt *createSchemaStmt = castNode(CreateSchemaStmt, node);
+
 	if (!ShouldPropagateCreateSchemaStmt())
 	{
 		return NIL;
@@ -73,6 +75,19 @@ PreprocessCreateSchemaStmt(Node *node, const char *queryString,
 	commands = lappend(commands, (void *) sql);
 
 	commands = list_concat(commands, GetGrantCommandsFromCreateSchemaStmt(node));
+
+	if (ShouldUseSchemaBasedSharding(createSchemaStmt->schemaname))
+	{
+		bool missingOk = false;
+		Oid schemaId = get_namespace_oid(createSchemaStmt->schemaname, missingOk);
+
+		/*
+		 * Register the tenant schema on the coordinator and get the command
+		 * to register it on the workers.
+		 */
+		char *remoteRegisterCommand = RegisterTenantSchema(schemaId);
+		commands = lappend(commands, remoteRegisterCommand);
+	}
 
 	commands = lappend(commands, ENABLE_DDL_PROPAGATION);
 
@@ -108,6 +123,17 @@ PreprocessDropSchemaStmt(Node *node, const char *queryString,
 	EnsureSequentialMode(OBJECT_SCHEMA);
 
 	String *schemaVal = NULL;
+	foreach_ptr(schemaVal, distributedSchemas)
+	{
+		bool missingOk = false;
+		Oid schemaId = get_namespace_oid(strVal(schemaVal), missingOk);
+		if (IsTenantSchema(schemaId))
+		{
+			UnregisterTenantSchema(schemaId);
+		}
+	}
+
+	schemaVal = NULL;
 	foreach_ptr(schemaVal, distributedSchemas)
 	{
 		if (SchemaHasDistributedTableWithFKey(strVal(schemaVal)))

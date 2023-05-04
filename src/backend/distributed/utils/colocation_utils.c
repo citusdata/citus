@@ -20,6 +20,7 @@
 #include "catalog/pg_type.h"
 #include "commands/sequence.h"
 #include "distributed/colocation_utils.h"
+#include "distributed/commands.h"
 #include "distributed/listutils.h"
 #include "distributed/metadata_utility.h"
 #include "distributed/coordinator_protocol.h"
@@ -28,8 +29,10 @@
 #include "distributed/multi_logical_planner.h"
 #include "distributed/multi_partitioning_utils.h"
 #include "distributed/pg_dist_colocation.h"
+#include "distributed/reference_table_utils.h"
 #include "distributed/resource_lock.h"
 #include "distributed/shardinterval_utils.h"
+#include "distributed/tenant_schema_metadata.h"
 #include "distributed/version_compat.h"
 #include "distributed/utils/array_type.h"
 #include "distributed/worker_protocol.h"
@@ -546,6 +549,13 @@ ColocationId(int shardCount, int replicationFactor, Oid distributionColumnType, 
 		Form_pg_dist_colocation colocationForm =
 			(Form_pg_dist_colocation) GETSTRUCT(colocationTuple);
 
+		/* avoid chosing a colocation group that belongs to a tenant schema */
+		if (ColocationIdGetTenantSchemaId(colocationForm->colocationid))
+		{
+			colocationTuple = systable_getnext(scanDescriptor);
+			continue;
+		}
+
 		if (colocationId == INVALID_COLOCATION_ID || colocationId >
 			colocationForm->colocationid)
 		{
@@ -593,6 +603,44 @@ ReleaseColocationDefaultLock(void)
 	const bool sessionLock = false;
 
 	SET_LOCKTAG_CITUS_OPERATION(tag, CITUS_CREATE_COLOCATION_DEFAULT);
+
+	LockRelease(&tag, ExclusiveLock, sessionLock);
+}
+
+
+/*
+ * AcquireCitusTenantSchemaDefaultColocationLock serializes concurrent
+ * creation of a colocation entry for given (presumably) tenant schema.
+ */
+void
+AcquireCitusTenantSchemaDefaultColocationLock(Oid schemaId)
+{
+	Assert(IsTenantSchema(schemaId));
+
+	LOCKTAG tag;
+	const bool sessionLock = false;
+	const bool dontWait = false;
+
+	SET_LOCKTAG_CITUS_TENANT_SCHEMA_DEFAULT_COLOCATION(tag, schemaId);
+
+	(void) LockAcquire(&tag, ExclusiveLock, sessionLock, dontWait);
+}
+
+
+/*
+ * ReleaseCitusTenantSchemaDefaultColocationLock releases the lock acquired
+ * to prevent concurrent creation of a colocation entry for given (presumably)
+ * tenant schema.
+ */
+void
+ReleaseCitusTenantSchemaDefaultColocationLock(Oid schemaId)
+{
+	Assert(IsTenantSchema(schemaId));
+
+	LOCKTAG tag;
+	const bool sessionLock = false;
+
+	SET_LOCKTAG_CITUS_TENANT_SCHEMA_DEFAULT_COLOCATION(tag, schemaId);
 
 	LockRelease(&tag, ExclusiveLock, sessionLock);
 }
@@ -920,6 +968,20 @@ ShardsColocated(ShardInterval *leftShardInterval, ShardInterval *rightShardInter
 	}
 
 	return false;
+}
+
+
+/*
+ * ColocationGroupGetTableWithLowestOid returns the table with the lowest oid
+ * in given colocation group. If the colocation group is empty or there is no
+ * such colocation group, then returns InvalidOid.
+ */
+Oid
+ColocationGroupGetTableWithLowestOid(uint32 colocationId)
+{
+	List *colocatedTableList = ColocationGroupTableList(colocationId, 0);
+	SortList(colocatedTableList, CompareOids);
+	return colocatedTableList ? linitial_oid(colocatedTableList) : InvalidOid;
 }
 
 
@@ -1258,13 +1320,15 @@ DeleteColocationGroupIfNoTablesBelong(uint32 colocationId)
 
 /*
  * DeleteColocationGroup deletes the colocation group from pg_dist_colocation
- * throughout the cluster.
+ * throughout the cluster and diasociates the tenant schema if any.
  */
 static void
 DeleteColocationGroup(uint32 colocationId)
 {
 	DeleteColocationGroupLocally(colocationId);
 	SyncDeleteColocationGroupToNodes(colocationId);
+
+	DisassociateTenantSchemaIfAny(colocationId);
 }
 
 
@@ -1421,5 +1485,25 @@ EnsureTableCanBeColocatedWith(Oid relationId, char replicationModel,
 						errdetail("Distribution column types don't match for "
 								  "%s and %s.", sourceRelationName,
 								  relationName)));
+	}
+
+	/* prevent colocating regular tables with tenant tables */
+	Oid targetRelationSchemaId = get_rel_namespace(relationId);
+	Oid sourceRelationSchemaId = get_rel_namespace(sourceRelationId);
+	if (IsTenantSchema(sourceRelationSchemaId) &&
+		targetRelationSchemaId != sourceRelationSchemaId)
+	{
+		char *relationName = get_rel_name(relationId);
+		char *sourceRelationName = get_rel_name(sourceRelationId);
+		char *sourceRelationSchemaName = get_namespace_name(sourceRelationSchemaId);
+
+		ereport(ERROR, (errmsg("cannot colocate tables %s and %s",
+							   sourceRelationName, relationName),
+						errdetail("Cannot colocate tables with tenant tables "
+								  "by using colocate_with option."),
+						errhint("Consider using \"ALTER TABLE %s SET SCHEMA %s;\" "
+								"to move the table to the same schema with the "
+								"tenant table.",
+								relationName, sourceRelationSchemaName)));
 	}
 }
