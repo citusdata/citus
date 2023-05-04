@@ -1728,6 +1728,17 @@ ReplaceTable(Oid sourceId, Oid targetId, List *justBeforeDropCommands,
 
 	if (!suppressNoticeMessages)
 	{
+		ereport(NOTICE, (errmsg("analyzing the new %s",
+								quote_qualified_identifier(schemaName, sourceName))));
+	}
+
+	resetStringInfo(query);
+	appendStringInfo(query, "ANALYZE %s",
+					 quote_qualified_identifier(schemaName, sourceName));
+	ExecuteQueryViaSPI(query->data, SPI_OK_UTILITY);
+
+	if (!suppressNoticeMessages)
+	{
 		ereport(NOTICE, (errmsg("dropping the old %s",
 								quote_qualified_identifier(schemaName, sourceName))));
 	}
