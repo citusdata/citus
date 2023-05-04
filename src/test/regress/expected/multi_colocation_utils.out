@@ -612,10 +612,10 @@ CREATE TABLE table_postgresql( id int );
 CREATE TABLE table_failing ( id int );
 SELECT create_distributed_table('table_failing', 'id', colocate_with => 'table_append');
 ERROR:  cannot distribute relation
-DETAIL:  Currently, colocate_with option is only supported for hash distributed tables.
+DETAIL:  Currently, colocate_with option is not supported with append / range distributed tables and local tables added to metadata.
 SELECT create_distributed_table('table_failing', 'id', 'append', 'table1_groupE');
 ERROR:  cannot distribute relation
-DETAIL:  Currently, colocate_with option is only supported for hash distributed tables.
+DETAIL:  Currently, colocate_with option is not supported for append / range distributed tables.
 SELECT create_distributed_table('table_failing', 'id', colocate_with => 'table_postgresql');
 ERROR:  relation table_postgresql is not distributed
 SELECT create_distributed_table('table_failing', 'id', colocate_with => 'no_table');

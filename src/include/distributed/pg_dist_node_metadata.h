@@ -19,4 +19,6 @@
 #define Natts_pg_dist_node_metadata 1
 #define Anum_pg_dist_node_metadata_metadata 1
 
+extern int FindCoordinatorNodeId(void);
+
 #endif /* PG_DIST_NODE_METADATA_H */

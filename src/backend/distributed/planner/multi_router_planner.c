@@ -259,6 +259,22 @@ CreateModifyPlan(Query *originalQuery, Query *query,
 
 
 /*
+ * WrapRouterErrorForSingleShardTable wraps given planning error with a
+ * generic error message if given query references a distributed table
+ * that doesn't have a distribution key.
+ */
+void
+WrapRouterErrorForSingleShardTable(DeferredErrorMessage *planningError)
+{
+	planningError->detail = planningError->message;
+	planningError->message = pstrdup("queries that reference a distributed "
+									 "table without a shard key can only "
+									 "reference colocated distributed "
+									 "tables or reference tables");
+}
+
+
+/*
  * CreateSingleTaskRouterSelectPlan creates a physical plan for given SELECT query.
  * The returned plan is a router task that returns query results from a single worker.
  * If not router plannable, the returned plan's planningError describes the problem.
@@ -1870,6 +1886,11 @@ RouterJob(Query *originalQuery, PlannerRestrictionContext *plannerRestrictionCon
 		 */
 		if (IsMergeQuery(originalQuery))
 		{
+			if (ContainsSingleShardTable(originalQuery))
+			{
+				WrapRouterErrorForSingleShardTable(*planningError);
+			}
+
 			RaiseDeferredError(*planningError, ERROR);
 		}
 		else
@@ -2246,10 +2267,8 @@ SelectsFromDistributedTable(List *rangeTableList, Query *query)
 }
 
 
-static bool ContainsOnlyLocalTables(RTEListProperties *rteProperties);
-
 /*
- * RouterQuery runs router pruning logic for SELECT, UPDATE and DELETE queries.
+ * RouterQuery runs router pruning logic for SELECT, UPDATE, DELETE, and MERGE queries.
  * If there are shards present and query is routable, all RTEs have been updated
  * to point to the relevant shards in the originalQuery. Also, placementList is
  * filled with the list of worker nodes that has all the required shard placements
@@ -2282,6 +2301,7 @@ PlanRouterQuery(Query *originalQuery,
 	DeferredErrorMessage *planningError = NULL;
 	bool shardsPresent = false;
 	CmdType commandType = originalQuery->commandType;
+	Oid targetRelationId = InvalidOid;
 	bool fastPathRouterQuery =
 		plannerRestrictionContext->fastPathRestrictionContext->fastPathRouterQuery;
 
@@ -2350,7 +2370,8 @@ PlanRouterQuery(Query *originalQuery,
 
 		if (IsMergeQuery(originalQuery))
 		{
-			planningError = MergeQuerySupported(originalQuery,
+			targetRelationId = ModifyQueryResultRelationId(originalQuery);
+			planningError = MergeQuerySupported(targetRelationId, originalQuery,
 												isMultiShardQuery,
 												plannerRestrictionContext);
 		}
@@ -2403,13 +2424,14 @@ PlanRouterQuery(Query *originalQuery,
 
 	/* both Postgres tables and materialized tables are locally avaliable */
 	RTEListProperties *rteProperties = GetRTEListPropertiesForQuery(originalQuery);
-	if (shardId == INVALID_SHARD_ID && ContainsOnlyLocalTables(rteProperties))
+
+	if (isLocalTableModification)
 	{
-		if (commandType != CMD_SELECT)
-		{
-			*isLocalTableModification = true;
-		}
+		*isLocalTableModification =
+			IsLocalTableModification(targetRelationId, originalQuery, shardId,
+									 rteProperties);
 	}
+
 	bool hasPostgresLocalRelation =
 		rteProperties->hasPostgresLocalTable || rteProperties->hasMaterializedView;
 	List *taskPlacementList =
@@ -2447,7 +2469,7 @@ PlanRouterQuery(Query *originalQuery,
  * ContainsOnlyLocalTables returns true if there is only
  * local tables and not any distributed or reference table.
  */
-static bool
+bool
 ContainsOnlyLocalTables(RTEListProperties *rteProperties)
 {
 	return !rteProperties->hasDistributedTable && !rteProperties->hasReferenceTable;
@@ -2683,7 +2705,7 @@ TargetShardIntervalForFastPathQuery(Query *query, bool *isMultiShardQuery,
 
 	if (!HasDistributionKey(relationId))
 	{
-		/* we don't need to do shard pruning for non-distributed tables */
+		/* we don't need to do shard pruning for single shard tables */
 		return list_make1(LoadShardIntervalList(relationId));
 	}
 
@@ -2973,7 +2995,7 @@ BuildRoutesForInsert(Query *query, DeferredErrorMessage **planningError)
 
 	Assert(query->commandType == CMD_INSERT);
 
-	/* reference tables and citus local tables can only have one shard */
+	/* tables that don't have distribution column can only have one shard */
 	if (!HasDistributionKeyCacheEntry(cacheEntry))
 	{
 		List *shardIntervalList = LoadShardIntervalList(distributedTableId);
@@ -2989,6 +3011,12 @@ BuildRoutesForInsert(Query *query, DeferredErrorMessage **planningError)
 			else if (IsCitusTableTypeCacheEntry(cacheEntry, CITUS_LOCAL_TABLE))
 			{
 				ereport(ERROR, (errmsg("local table cannot have %d shards",
+									   shardCount)));
+			}
+			else if (IsCitusTableTypeCacheEntry(cacheEntry, SINGLE_SHARD_DISTRIBUTED))
+			{
+				ereport(ERROR, (errmsg("distributed tables having a null shard key "
+									   "cannot have %d shards",
 									   shardCount)));
 			}
 		}
@@ -3848,7 +3876,8 @@ ErrorIfQueryHasUnroutableModifyingCTE(Query *queryTree)
 			CitusTableCacheEntry *modificationTableCacheEntry =
 				GetCitusTableCacheEntry(distributedTableId);
 
-			if (!HasDistributionKeyCacheEntry(modificationTableCacheEntry))
+			if (!IsCitusTableTypeCacheEntry(modificationTableCacheEntry,
+											DISTRIBUTED_TABLE))
 			{
 				return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
 									 "cannot router plan modification of a non-distributed table",

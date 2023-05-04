@@ -22,29 +22,27 @@
 #include "distributed/merge_planner.h"
 #include "distributed/multi_logical_optimizer.h"
 #include "distributed/multi_router_planner.h"
+#include "distributed/pg_dist_node_metadata.h"
 #include "distributed/pg_version_constants.h"
 #include "distributed/query_pushdown_planning.h"
 
 #if PG_VERSION_NUM >= PG_VERSION_15
 
-static DeferredErrorMessage * CheckIfRTETypeIsUnsupported(Query *parse,
-														  RangeTblEntry *rangeTableEntry);
 static DeferredErrorMessage * ErrorIfDistTablesNotColocated(Query *parse,
 															List *
 															distTablesList,
 															PlannerRestrictionContext
 															*
 															plannerRestrictionContext);
-static DeferredErrorMessage * ErrorIfMergeHasUnsupportedTables(Query *parse,
+static DeferredErrorMessage * ErrorIfMergeHasUnsupportedTables(Oid targetRelationId,
+															   Query *parse,
 															   List *rangeTableList,
 															   PlannerRestrictionContext *
 															   restrictionContext);
 static bool IsDistributionColumnInMergeSource(Expr *columnExpression, Query *query, bool
 											  skipOuterVars);
-static DeferredErrorMessage * InsertDistributionColumnMatchesSource(Query *query,
-																	RangeTblEntry *
-																	resultRte);
-
+static DeferredErrorMessage * InsertDistributionColumnMatchesSource(Oid targetRelationId,
+																	Query *query);
 static DeferredErrorMessage * MergeQualAndTargetListFunctionsSupported(Oid
 																	   resultRelationId,
 																	   FromExpr *joinTree,
@@ -65,12 +63,15 @@ CreateMergePlan(Query *originalQuery, Query *query,
 {
 	DistributedPlan *distributedPlan = CitusMakeNode(DistributedPlan);
 	bool multiShardQuery = false;
+	Oid targetRelationId = ModifyQueryResultRelationId(originalQuery);
 
 	Assert(originalQuery->commandType == CMD_MERGE);
+	Assert(OidIsValid(targetRelationId));
 
+	distributedPlan->targetRelationId = targetRelationId;
 	distributedPlan->modLevel = RowModifyLevelForQuery(query);
-
-	distributedPlan->planningError = MergeQuerySupported(originalQuery,
+	distributedPlan->planningError = MergeQuerySupported(targetRelationId,
+														 originalQuery,
 														 multiShardQuery,
 														 plannerRestrictionContext);
 
@@ -94,8 +95,6 @@ CreateMergePlan(Query *originalQuery, Query *query,
 
 	/* MERGE doesn't support RETURNING clause */
 	distributedPlan->expectResults = false;
-	distributedPlan->targetRelationId = ResultRelationOidForQuery(query);
-
 	distributedPlan->fastPathRouterPlan =
 		plannerRestrictionContext->fastPathRestrictionContext->fastPathRouterQuery;
 
@@ -111,7 +110,7 @@ CreateMergePlan(Query *originalQuery, Query *query,
  * - Checks target-lists and functions-in-quals in TargetlistAndFunctionsSupported
  */
 DeferredErrorMessage *
-MergeQuerySupported(Query *originalQuery, bool multiShardQuery,
+MergeQuerySupported(Oid resultRelationId, Query *originalQuery, bool multiShardQuery,
 					PlannerRestrictionContext *plannerRestrictionContext)
 {
 	/* function is void for pre-15 versions of Postgres */
@@ -138,7 +137,6 @@ MergeQuerySupported(Query *originalQuery, bool multiShardQuery,
 	}
 
 	List *rangeTableList = ExtractRangeTableEntryList(originalQuery);
-	RangeTblEntry *resultRte = ExtractResultRelationRTE(originalQuery);
 
 	/*
 	 * Fast path queries cannot have merge command, and we prevent the remaining here.
@@ -149,7 +147,8 @@ MergeQuerySupported(Query *originalQuery, bool multiShardQuery,
 	 * ErrorIfDistTablesNotColocated for details.
 	 */
 	DeferredErrorMessage *deferredError =
-		ErrorIfMergeHasUnsupportedTables(originalQuery,
+		ErrorIfMergeHasUnsupportedTables(resultRelationId,
+										 originalQuery,
 										 rangeTableList,
 										 plannerRestrictionContext);
 	if (deferredError)
@@ -158,7 +157,6 @@ MergeQuerySupported(Query *originalQuery, bool multiShardQuery,
 		RaiseDeferredError(deferredError, ERROR);
 	}
 
-	Oid resultRelationId = resultRte->relid;
 	deferredError = MergeQualAndTargetListFunctionsSupported(resultRelationId,
 															 originalQuery->jointree,
 															 originalQuery->jointree->
@@ -191,7 +189,7 @@ MergeQuerySupported(Query *originalQuery, bool multiShardQuery,
 	}
 
 	deferredError =
-		InsertDistributionColumnMatchesSource(originalQuery, resultRte);
+		InsertDistributionColumnMatchesSource(resultRelationId, originalQuery);
 	if (deferredError)
 	{
 		/* MERGE's unsupported scenario, raise the exception */
@@ -219,32 +217,6 @@ MergeQuerySupported(Query *originalQuery, bool multiShardQuery,
 	return NULL;
 
 	#endif
-}
-
-
-/*
- * IsMergeAllowedOnRelation takes a relation entry and checks if MERGE command is
- * permitted on special relations, such as materialized view, returns true only if
- * it's a "source" relation.
- */
-bool
-IsMergeAllowedOnRelation(Query *parse, RangeTblEntry *rte)
-{
-	if (!IsMergeQuery(parse))
-	{
-		return false;
-	}
-
-	/* Fetch the MERGE target relation */
-	RangeTblEntry *targetRte = rt_fetch(parse->resultRelation, parse->rtable);
-
-	/* Is it a target relation? */
-	if (targetRte->relid == rte->relid)
-	{
-		return false;
-	}
-
-	return true;
 }
 
 
@@ -284,70 +256,6 @@ ErrorIfDistTablesNotColocated(Query *parse, List *distTablesList,
 
 
 /*
- * ErrorIfRTETypeIsUnsupported Checks for types of tables that are not supported, such
- * as, reference tables, append-distributed tables and materialized view as target relation.
- * Routine returns NULL for the supported types, error message for everything else.
- */
-static DeferredErrorMessage *
-CheckIfRTETypeIsUnsupported(Query *parse, RangeTblEntry *rangeTableEntry)
-{
-	if (rangeTableEntry->relkind == RELKIND_MATVIEW ||
-		rangeTableEntry->relkind == RELKIND_FOREIGN_TABLE)
-	{
-		/* Materialized view or Foreign table as target is not allowed */
-		if (IsMergeAllowedOnRelation(parse, rangeTableEntry))
-		{
-			/* Non target relation is ok */
-			return NULL;
-		}
-		else
-		{
-			/* Usually we don't reach this exception as the Postgres parser catches it */
-			StringInfo errorMessage = makeStringInfo();
-			appendStringInfo(errorMessage, "MERGE command is not allowed on "
-										   "relation type(relkind:%c)",
-							 rangeTableEntry->relkind);
-			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-								 errorMessage->data, NULL, NULL);
-		}
-	}
-
-	if (rangeTableEntry->relkind != RELKIND_RELATION &&
-		rangeTableEntry->relkind != RELKIND_PARTITIONED_TABLE)
-	{
-		StringInfo errorMessage = makeStringInfo();
-		appendStringInfo(errorMessage, "Unexpected table type(relkind:%c) "
-									   "in MERGE command", rangeTableEntry->relkind);
-		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-							 errorMessage->data, NULL, NULL);
-	}
-
-	Assert(rangeTableEntry->relid != 0);
-
-	/* Reference tables are not supported yet */
-	if (IsCitusTableType(rangeTableEntry->relid, REFERENCE_TABLE))
-	{
-		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-							 "MERGE command is not supported on reference "
-							 "tables yet", NULL, NULL);
-	}
-
-	/* Append/Range tables are not supported */
-	if (IsCitusTableType(rangeTableEntry->relid, APPEND_DISTRIBUTED) ||
-		IsCitusTableType(rangeTableEntry->relid, RANGE_DISTRIBUTED))
-	{
-		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-							 "For MERGE command, all the distributed tables "
-							 "must be colocated, for append/range distribution, "
-							 "colocation is not supported", NULL,
-							 "Consider using hash distribution instead");
-	}
-
-	return NULL;
-}
-
-
-/*
  * ErrorIfMergeHasUnsupportedTables checks if all the tables(target, source or any CTE
  * present) in the MERGE command are local i.e. a combination of Citus local and Non-Citus
  * tables (regular Postgres tables), or distributed tables with some restrictions, please
@@ -355,11 +263,12 @@ CheckIfRTETypeIsUnsupported(Query *parse, RangeTblEntry *rangeTableEntry)
  * for all other combinations.
  */
 static DeferredErrorMessage *
-ErrorIfMergeHasUnsupportedTables(Query *parse, List *rangeTableList,
+ErrorIfMergeHasUnsupportedTables(Oid targetRelationId, Query *parse, List *rangeTableList,
 								 PlannerRestrictionContext *restrictionContext)
 {
 	List *distTablesList = NIL;
 	bool foundLocalTables = false;
+	bool foundReferenceTables = false;
 
 	RangeTblEntry *rangeTableEntry = NULL;
 	foreach_ptr(rangeTableEntry, rangeTableList)
@@ -410,18 +319,48 @@ ErrorIfMergeHasUnsupportedTables(Query *parse, List *rangeTableList,
 		}
 
 		/* RTE Relation can be of various types, check them now */
-
-		/* skip the regular views as they are replaced with subqueries */
-		if (rangeTableEntry->relkind == RELKIND_VIEW)
+		switch (rangeTableEntry->relkind)
 		{
-			continue;
-		}
+			/* skip the regular views as they are replaced with subqueries */
+			case RELKIND_VIEW:
+			{
+				continue;
+			}
 
-		DeferredErrorMessage *errorMessage =
-			CheckIfRTETypeIsUnsupported(parse, rangeTableEntry);
-		if (errorMessage)
-		{
-			return errorMessage;
+			case RELKIND_MATVIEW:
+			case RELKIND_FOREIGN_TABLE:
+			{
+				/* These two cases as a target is not allowed */
+				if (relationId == targetRelationId)
+				{
+					/* Usually we don't reach this exception as the Postgres parser catches it */
+					StringInfo errorMessage = makeStringInfo();
+					appendStringInfo(errorMessage, "MERGE command is not allowed on "
+												   "relation type(relkind:%c)",
+									 rangeTableEntry->relkind);
+					return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+										 errorMessage->data, NULL, NULL);
+				}
+				break;
+			}
+
+			case RELKIND_RELATION:
+			case RELKIND_PARTITIONED_TABLE:
+			{
+				/* Check for citus/postgres table types */
+				Assert(OidIsValid(relationId));
+				break;
+			}
+
+			default:
+			{
+				StringInfo errorMessage = makeStringInfo();
+				appendStringInfo(errorMessage, "Unexpected table type(relkind:%c) "
+											   "in MERGE command",
+								 rangeTableEntry->relkind);
+				return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+									 errorMessage->data, NULL, NULL);
+			}
 		}
 
 		/*
@@ -430,34 +369,80 @@ ErrorIfMergeHasUnsupportedTables(Query *parse, List *rangeTableList,
 		 */
 		if (IsCitusTableType(relationId, DISTRIBUTED_TABLE))
 		{
-			distTablesList = lappend(distTablesList, rangeTableEntry);
-			continue;
-		}
+			/* Append/Range distributed tables are not supported */
+			if (IsCitusTableType(relationId, APPEND_DISTRIBUTED) ||
+				IsCitusTableType(relationId, RANGE_DISTRIBUTED))
+			{
+				return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+									 "For MERGE command, all the distributed tables "
+									 "must be colocated, for append/range distribution, "
+									 "colocation is not supported", NULL,
+									 "Consider using hash distribution instead");
+			}
 
-		/* Regular Postgres tables and Citus local tables are allowed */
-		if (!IsCitusTable(relationId) ||
-			IsCitusTableType(relationId, CITUS_LOCAL_TABLE))
+			distTablesList = lappend(distTablesList, rangeTableEntry);
+		}
+		else if (IsCitusTableType(relationId, REFERENCE_TABLE))
 		{
+			/* Reference table as a target is not allowed */
+			if (relationId == targetRelationId)
+			{
+				return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+									 "Reference table as target "
+									 "is not allowed in "
+									 "MERGE command", NULL, NULL);
+			}
+
+			foundReferenceTables = true;
+		}
+		else if (IsCitusTableType(relationId, CITUS_LOCAL_TABLE))
+		{
+			/* Citus local tables */
 			foundLocalTables = true;
-			continue;
+		}
+		else if (!IsCitusTable(relationId))
+		{
+			/* Regular Postgres table */
+			foundLocalTables = true;
 		}
 
 		/* Any other Citus table type missing ? */
 	}
 
-	/* Ensure all tables are indeed local */
-	if (foundLocalTables && list_length(distTablesList) == 0)
+	/* Ensure all tables are indeed local (or a combination of reference and local) */
+	if (list_length(distTablesList) == 0)
 	{
-		/* All the tables are local, supported */
+		/*
+		 * All the tables are local/reference, supported as long as
+		 * coordinator is in the metadata.
+		 */
+		if (FindCoordinatorNodeId() == -1)
+		{
+			elog(ERROR, "Coordinator node is not in the metadata. TODO better meesage");
+		}
+
+		/* All the tables are local/reference, supported */
 		return NULL;
 	}
-	else if (foundLocalTables && list_length(distTablesList) > 0)
+
+	if (foundLocalTables)
 	{
 		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
 							 "MERGE command is not supported with "
 							 "combination of distributed/local tables yet",
 							 NULL, NULL);
 	}
+
+	if (foundReferenceTables)
+	{
+		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+							 "MERGE command is not supported with "
+							 "combination of distributed/reference yet",
+							 NULL,
+							 "If target is distributed, source "
+							 "must be distributed and co-located");
+	}
+
 
 	/* Ensure all distributed tables are indeed co-located */
 	return ErrorIfDistTablesNotColocated(parse,
@@ -515,11 +500,16 @@ IsDistributionColumnInMergeSource(Expr *columnExpression, Query *query, bool
  * prevent such mishaps, we disallow such inserts here.
  */
 static DeferredErrorMessage *
-InsertDistributionColumnMatchesSource(Query *query, RangeTblEntry *resultRte)
+InsertDistributionColumnMatchesSource(Oid targetRelationId, Query *query)
 {
 	Assert(IsMergeQuery(query));
 
-	if (!IsCitusTableType(resultRte->relid, DISTRIBUTED_TABLE))
+	if (!IsCitusTableType(targetRelationId, DISTRIBUTED_TABLE))
+	{
+		return NULL;
+	}
+
+	if (!HasDistributionKey(targetRelationId))
 	{
 		return NULL;
 	}
@@ -549,7 +539,7 @@ InsertDistributionColumnMatchesSource(Query *query, RangeTblEntry *resultRte)
 		}
 
 		Assert(action->commandType == CMD_INSERT);
-		Var *targetKey = PartitionColumn(resultRte->relid, 1);
+		Var *targetKey = PartitionColumn(targetRelationId, 1);
 
 		TargetEntry *targetEntry = NULL;
 		foreach_ptr(targetEntry, action->targetList)
@@ -736,3 +726,34 @@ MergeQualAndTargetListFunctionsSupported(Oid resultRelationId, FromExpr *joinTre
 
 
 #endif
+
+
+/*
+ * IsLocalTableModification returns true if the table modified is a Postgres table.
+ * We do not support recursive planning for MERGE yet, so we could have a join
+ * between local and Citus tables. Only allow local tables when it is the target table.
+ */
+bool
+IsLocalTableModification(Oid targetRelationId, Query *query, uint64 shardId,
+						 RTEListProperties *rteProperties)
+{
+	/* No-op for SELECT command */
+	if (!IsModifyCommand(query))
+	{
+		return false;
+	}
+
+	/* For MERGE, we have to check only the target relation */
+	if (IsMergeQuery(query) && !IsCitusTable(targetRelationId))
+	{
+		/* Postgres table */
+		return true;
+	}
+
+	if (shardId == INVALID_SHARD_ID && ContainsOnlyLocalTables(rteProperties))
+	{
+		return true;
+	}
+
+	return false;
+}

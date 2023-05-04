@@ -264,7 +264,7 @@ check-pytest:
 	pytest -n auto
 
 check-query-generator: all
-	${query_generator_check} --bindir=$(bindir) --pgxsdir=$(pgxsdir)
+	${query_generator_check} --bindir=$(bindir) --pgxsdir=$(pgxsdir) --seed=$(seed)
 
 check-citus-upgrade: all
 	$(citus_upgrade_check) \

@@ -1735,6 +1735,33 @@ HINT:  To remove the local data, run: SELECT truncate_local_data_after_distribut
 
 DROP TABLE test;
 TRUNCATE pg_dist_node;
+-- confirm that we can create a single-shard table on an empty node
+CREATE TABLE test (x int, y int);
+INSERT INTO test VALUES (1,2);
+SET citus.shard_replication_factor TO 1;
+SELECT create_distributed_table('test', null, colocate_with=>'none', distribution_type=>null);
+NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$public.test$$)
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- and make sure that we can't remove the coordinator due to "test"
+SELECT citus_remove_node('localhost', :master_port);
+ERROR:  cannot remove or disable the node localhost:xxxxx because because it contains the only shard placement for shard xxxxx
+DETAIL:  One of the table(s) that prevents the operation complete successfully is public.test
+HINT:  To proceed, either drop the tables or use undistribute_table() function to convert them to local tables
+DROP TABLE test;
+-- and now we should be able to remove the coordinator
+SELECT citus_remove_node('localhost', :master_port);
+ citus_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
 -- confirm that we can create a reference table on an empty node
 CREATE TABLE test (x int, y int);
 INSERT INTO test VALUES (1,2);

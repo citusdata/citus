@@ -36,6 +36,7 @@ extern DistributedPlan * CreateRouterPlan(Query *originalQuery, Query *query,
 extern DistributedPlan * CreateModifyPlan(Query *originalQuery, Query *query,
 										  PlannerRestrictionContext *
 										  plannerRestrictionContext);
+extern void WrapRouterErrorForSingleShardTable(DeferredErrorMessage *planningError);
 extern DeferredErrorMessage * PlanRouterQuery(Query *originalQuery,
 											  PlannerRestrictionContext *
 											  plannerRestrictionContext,
@@ -117,5 +118,6 @@ extern bool HasDangerousJoinUsing(List *rtableList, Node *jtnode);
 extern Job * RouterJob(Query *originalQuery,
 					   PlannerRestrictionContext *plannerRestrictionContext,
 					   DeferredErrorMessage **planningError);
+extern bool ContainsOnlyLocalTables(RTEListProperties *rteProperties);
 
 #endif /* MULTI_ROUTER_PLANNER_H */

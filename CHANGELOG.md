@@ -1,3 +1,71 @@
+### citus v11.3.0 (May 2, 2023) ###
+
+* Introduces CDC implementation for Citus using logical replication
+  (#6623, #6810, #6827)
+
+* Adds support for `MERGE` command on co-located distributed tables joined on
+  distribution column (#6696, #6733)
+
+* Adds the view `citus_stats_tenants` that monitor statistics on tenant usages
+  (#6725)
+
+* Adds the GUC `citus.max_background_task_executors_per_node` to control number
+  of background task executors involving a node (#6771)
+
+* Allows parallel shard moves in background rebalancer (#6756)
+
+* Introduces the GUC `citus.metadata_sync_mode` that introduces nontransactional
+  mode for metadata sync (#6728, #6889)
+
+* Propagates CREATE/ALTER/DROP PUBLICATION statements for distributed tables
+  (#6776)
+
+* Adds the GUC `citus.enable_non_colocated_router_query_pushdown` to ensure
+  generating a consistent distributed plan for the queries that reference
+  non-colocated distributed tables when set to "false" (#6793)
+
+* Checks if all moves are able to be done via logical replication for rebalancer
+  (#6754)
+
+* Correctly reports shard size in `citus_shards` view (#6748)
+
+* Fixes a bug in shard copy operations (#6721)
+
+* Fixes a bug that prevents enforcing identity column restrictions on worker
+  nodes (#6738)
+
+* Fixes a bug with `INSERT .. SELECT` queries with identity columns (#6802)
+
+* Fixes an issue that caused some queries with custom aggregates to fail (#6805)
+
+* Fixes an issue when `citus_set_coordinator_host` is called more than once
+  (#6837)
+
+* Fixes an uninitialized memory access in shard split API (#6845)
+
+* Fixes memory leak and max allocation block errors during metadata syncing
+  (#6728)
+
+* Fixes memory leak in `undistribute_table` (#6693)
+
+* Fixes memory leak in `alter_distributed_table` (#6726)
+
+* Fixes memory leak in `create_distributed_table` (#6722)
+
+* Fixes memory leak issue with query results that returns single row (#6724)
+
+* Improves rebalancer when shard groups have placement count less than worker
+  count (#6739)
+
+* Makes sure to stop maintenance daemon when dropping a database even without
+  Citus extension (#6688)
+
+* Prevents using `alter_distributed_table` and `undistribute_table` UDFs when a
+  table has identity columns (#6738)
+
+* Prevents using identity columns on data types other than `bigint` on
+  distributed tables (#6738)
+
 ### citus v11.2.1 (April 20, 2023) ###
 
 * Correctly reports shard size in `citus_shards` view (#6748)
@@ -105,6 +173,9 @@
 * Prevents alter table functions from dropping extensions (#5974)
 
 ### citus v10.0.8 (April 20, 2023) ###
+
+* Fixes a bug that could break `DROP SCHEMA/EXTENSON` commands when there is a
+  columnar table (#5458)
 
 * Fixes a crash that occurs when the aggregate that cannot be pushed-down
   returns empty result from a worker (#5679)

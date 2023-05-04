@@ -128,6 +128,7 @@ DEPS = {
     "multi_mx_copy_data": TestDeps(None, ["multi_mx_create_table"]),
     "multi_mx_schema_support": TestDeps(None, ["multi_mx_copy_data"]),
     "multi_simple_queries": TestDeps("base_schedule"),
+    "create_single_shard_table": TestDeps("minimal_schedule"),
 }
 
 
@@ -154,6 +155,8 @@ def run_python_test(test_name, args):
 
 def run_regress_test(test_name, args):
     original_schedule, schedule_line = find_test_schedule_and_line(test_name, args)
+    print(f"SCHEDULE: {original_schedule}")
+    print(f"SCHEDULE_LINE: {schedule_line}")
 
     dependencies = test_dependencies(test_name, original_schedule, schedule_line, args)
 
@@ -287,7 +290,7 @@ def get_test_name(args):
 def find_test_schedule_and_line(test_name, args):
     for schedule_file_path in sorted(REGRESS_DIR.glob("*_schedule")):
         for schedule_line in open(schedule_file_path, "r"):
-            if re.search(r"\b" + test_name + r"\b", schedule_line):
+            if re.search(r"^test:.*\b" + test_name + r"\b", schedule_line):
                 test_schedule = pathlib.Path(schedule_file_path).stem
                 if args["use_whole_schedule_line"]:
                     return test_schedule, schedule_line

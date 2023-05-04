@@ -1537,8 +1537,109 @@ WHEN NOT MATCHED THEN
 SELECT * FROM target_set ORDER BY 1, 2;
 
 --
+-- Reference as a source
+--
+CREATE TABLE reftarget_local(t1 int, t2 int);
+CREATE TABLE refsource_ref(s1 int, s2 int);
+
+INSERT INTO reftarget_local VALUES(1, 0);
+INSERT INTO reftarget_local VALUES(3, 100);
+INSERT INTO refsource_ref VALUES(1, 1);
+INSERT INTO refsource_ref VALUES(2, 2);
+INSERT INTO refsource_ref VALUES(3, 3);
+
+MERGE INTO reftarget_local
+USING (SELECT * FROM refsource_ref UNION SELECT * FROM refsource_ref) AS foo ON reftarget_local.t1 = foo.s1
+WHEN MATCHED AND reftarget_local.t2 = 100 THEN
+	DELETE
+WHEN MATCHED THEN
+        UPDATE SET t2 = t2 + 100
+WHEN NOT MATCHED THEN
+	INSERT VALUES(foo.s1);
+
+DROP TABLE IF EXISTS pg_result;
+SELECT * INTO pg_result FROM reftarget_local ORDER BY 1, 2;
+
+-- Make source table as reference (target is Postgres)
+TRUNCATE reftarget_local;
+TRUNCATE refsource_ref;
+INSERT INTO reftarget_local VALUES(1, 0);
+INSERT INTO reftarget_local VALUES(3, 100);
+INSERT INTO refsource_ref VALUES(1, 1);
+INSERT INTO refsource_ref VALUES(2, 2);
+INSERT INTO refsource_ref VALUES(3, 3);
+SELECT create_reference_table('refsource_ref');
+
+MERGE INTO reftarget_local
+USING (SELECT * FROM refsource_ref UNION SELECT * FROM refsource_ref) AS foo ON reftarget_local.t1 = foo.s1
+WHEN MATCHED AND reftarget_local.t2 = 100 THEN
+	DELETE
+WHEN MATCHED THEN
+        UPDATE SET t2 = t2 + 100
+WHEN NOT MATCHED THEN
+	INSERT VALUES(foo.s1);
+SELECT * INTO pg_ref FROM reftarget_local ORDER BY 1, 2;
+
+-- Should be equal
+SELECT c.*, p.*
+FROM pg_ref c, pg_result p
+WHERE c.t1 = p.t1
+ORDER BY 1,2;
+
+-- Must return zero rows
+SELECT count(*)
+FROM pg_result FULL OUTER JOIN pg_ref ON pg_result.t1 = pg_ref.t1
+WHERE pg_result.t1 IS NULL OR pg_ref.t1 IS NULL;
+
+-- Now make both Citus tables, reference as source, local as target
+TRUNCATE reftarget_local;
+TRUNCATE refsource_ref;
+INSERT INTO reftarget_local VALUES(1, 0);
+INSERT INTO reftarget_local VALUES(3, 100);
+INSERT INTO refsource_ref VALUES(1, 1);
+INSERT INTO refsource_ref VALUES(2, 2);
+INSERT INTO refsource_ref VALUES(3, 3);
+
+SELECT citus_add_local_table_to_metadata('reftarget_local');
+
+MERGE INTO reftarget_local
+USING (SELECT * FROM refsource_ref UNION SELECT * FROM refsource_ref) AS foo ON reftarget_local.t1 = foo.s1
+WHEN MATCHED AND reftarget_local.t2 = 100 THEN
+	DELETE
+WHEN MATCHED THEN
+        UPDATE SET t2 = t2 + 100
+WHEN NOT MATCHED THEN
+	INSERT VALUES(foo.s1);
+SELECT * INTO local_ref FROM reftarget_local ORDER BY 1, 2;
+
+-- Should be equal
+SELECT c.*, p.*
+FROM local_ref c, pg_result p
+WHERE c.t1 = p.t1
+ORDER BY 1,2;
+
+-- Must return zero rows
+SELECT count(*)
+FROM pg_result FULL OUTER JOIN local_ref ON pg_result.t1 = local_ref.t1
+WHERE pg_result.t1 IS NULL OR local_ref.t1 IS NULL;
+
+--
 -- Error and Unsupported scenarios
 --
+
+-- Reference as a target and local as source
+MERGE INTO refsource_ref
+USING (SELECT * FROM reftarget_local UNION SELECT * FROM reftarget_local) AS foo ON refsource_ref.s1 = foo.t1
+WHEN MATCHED THEN
+        UPDATE SET s2 = s2 + 100
+WHEN NOT MATCHED THEN
+	INSERT VALUES(foo.t1);
+
+-- Reference as a source and distributed as target
+MERGE INTO target_set t
+USING refsource_ref AS s ON t.t1 = s.s1
+WHEN MATCHED THEN
+        DO NOTHING;
 
 MERGE INTO target_set
 USING source_set AS foo ON target_set.t1 = foo.s1
@@ -1949,6 +2050,118 @@ WHEN MATCHED THEN
 UPDATE SET val = dist_source.val
 WHEN NOT MATCHED THEN
 INSERT VALUES(dist_source.id, dist_source.val);
+
+-- test merge with single-shard tables
+
+CREATE SCHEMA query_single_shard_table;
+
+SET search_path TO query_single_shard_table;
+SET client_min_messages TO DEBUG2;
+
+CREATE TABLE nullkey_c1_t1(a int, b int);
+CREATE TABLE nullkey_c1_t2(a int, b int);
+SELECT create_distributed_table('nullkey_c1_t1', null, colocate_with=>'none');
+SELECT create_distributed_table('nullkey_c1_t2', null, colocate_with=>'nullkey_c1_t1');
+
+CREATE TABLE nullkey_c2_t1(a int, b int);
+CREATE TABLE nullkey_c2_t2(a int, b int);
+SELECT create_distributed_table('nullkey_c2_t1', null, colocate_with=>'none');
+SELECT create_distributed_table('nullkey_c2_t2', null, colocate_with=>'nullkey_c2_t1', distribution_type=>null);
+
+CREATE TABLE reference_table(a int, b int);
+SELECT create_reference_table('reference_table');
+INSERT INTO reference_table SELECT i, i FROM generate_series(0, 5) i;
+
+CREATE TABLE distributed_table(a int, b int);
+SELECT create_distributed_table('distributed_table', 'a');
+INSERT INTO distributed_table SELECT i, i FROM generate_series(3, 8) i;
+
+CREATE TABLE citus_local_table(a int, b int);
+SELECT citus_add_local_table_to_metadata('citus_local_table');
+INSERT INTO citus_local_table SELECT i, i FROM generate_series(0, 10) i;
+
+CREATE TABLE postgres_local_table(a int, b int);
+INSERT INTO postgres_local_table SELECT i, i FROM generate_series(5, 10) i;
+
+-- with a colocated table
+MERGE INTO nullkey_c1_t1 USING nullkey_c1_t2 ON (nullkey_c1_t1.a = nullkey_c1_t2.a)
+WHEN MATCHED THEN UPDATE SET b = nullkey_c1_t2.b;
+
+MERGE INTO nullkey_c1_t1 USING nullkey_c1_t2 ON (nullkey_c1_t1.a = nullkey_c1_t2.a)
+WHEN MATCHED THEN DELETE;
+
+MERGE INTO nullkey_c1_t1 USING nullkey_c1_t2 ON (nullkey_c1_t1.a = nullkey_c1_t2.a)
+WHEN MATCHED THEN UPDATE SET b = nullkey_c1_t2.b
+WHEN NOT MATCHED THEN INSERT VALUES (nullkey_c1_t2.a, nullkey_c1_t2.b);
+
+MERGE INTO nullkey_c1_t1 USING nullkey_c1_t2 ON (nullkey_c1_t1.a = nullkey_c1_t2.a)
+WHEN MATCHED THEN DELETE
+WHEN NOT MATCHED THEN INSERT VALUES (nullkey_c1_t2.a, nullkey_c1_t2.b);
+
+-- with non-colocated single-shard table
+MERGE INTO nullkey_c1_t1 USING nullkey_c2_t1 ON (nullkey_c1_t1.a = nullkey_c2_t1.a)
+WHEN MATCHED THEN UPDATE SET b = nullkey_c2_t1.b;
+
+MERGE INTO nullkey_c1_t1 USING nullkey_c2_t1 ON (nullkey_c1_t1.a = nullkey_c2_t1.a)
+WHEN MATCHED THEN UPDATE SET b = nullkey_c2_t1.b
+WHEN NOT MATCHED THEN INSERT VALUES (nullkey_c2_t1.a, nullkey_c2_t1.b);
+
+-- with a distributed table
+MERGE INTO nullkey_c1_t1 USING distributed_table ON (nullkey_c1_t1.a = distributed_table.a)
+WHEN MATCHED THEN UPDATE SET b = distributed_table.b
+WHEN NOT MATCHED THEN INSERT VALUES (distributed_table.a, distributed_table.b);
+
+MERGE INTO distributed_table USING nullkey_c1_t1 ON (nullkey_c1_t1.a = distributed_table.a)
+WHEN MATCHED THEN DELETE
+WHEN NOT MATCHED THEN INSERT VALUES (nullkey_c1_t1.a, nullkey_c1_t1.b);
+
+-- with a reference table
+MERGE INTO nullkey_c1_t1 USING reference_table ON (nullkey_c1_t1.a = reference_table.a)
+WHEN MATCHED THEN UPDATE SET b = reference_table.b;
+
+MERGE INTO reference_table USING nullkey_c1_t1 ON (nullkey_c1_t1.a = reference_table.a)
+WHEN MATCHED THEN UPDATE SET b = nullkey_c1_t1.b
+WHEN NOT MATCHED THEN INSERT VALUES (nullkey_c1_t1.a, nullkey_c1_t1.b);
+
+-- with a citus local table
+MERGE INTO nullkey_c1_t1 USING citus_local_table ON (nullkey_c1_t1.a = citus_local_table.a)
+WHEN MATCHED THEN UPDATE SET b = citus_local_table.b;
+
+MERGE INTO citus_local_table USING nullkey_c1_t1 ON (nullkey_c1_t1.a = citus_local_table.a)
+WHEN MATCHED THEN DELETE;
+
+-- with a postgres table
+MERGE INTO nullkey_c1_t1 USING postgres_local_table ON (nullkey_c1_t1.a = postgres_local_table.a)
+WHEN MATCHED THEN UPDATE SET b = postgres_local_table.b;
+
+MERGE INTO postgres_local_table USING nullkey_c1_t1 ON (nullkey_c1_t1.a = postgres_local_table.a)
+WHEN MATCHED THEN UPDATE SET b = nullkey_c1_t1.b
+WHEN NOT MATCHED THEN INSERT VALUES (nullkey_c1_t1.a, nullkey_c1_t1.b);
+
+-- using ctes
+WITH cte AS (
+    SELECT * FROM nullkey_c1_t1
+)
+MERGE INTO nullkey_c1_t1 USING cte ON (nullkey_c1_t1.a = cte.a)
+WHEN MATCHED THEN UPDATE SET b = cte.b;
+
+WITH cte AS (
+    SELECT * FROM distributed_table
+)
+MERGE INTO nullkey_c1_t1 USING cte ON (nullkey_c1_t1.a = cte.a)
+WHEN MATCHED THEN UPDATE SET b = cte.b;
+
+WITH cte AS materialized (
+    SELECT * FROM distributed_table
+)
+MERGE INTO nullkey_c1_t1 USING cte ON (nullkey_c1_t1.a = cte.a)
+WHEN MATCHED THEN UPDATE SET b = cte.b;
+
+SET client_min_messages TO WARNING;
+DROP SCHEMA query_single_shard_table CASCADE;
+
+RESET client_min_messages;
+SET search_path TO merge_schema;
 
 DROP SERVER foreign_server CASCADE;
 DROP FUNCTION merge_when_and_write();
