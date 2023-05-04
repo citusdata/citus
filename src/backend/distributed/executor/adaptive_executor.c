@@ -1040,6 +1040,12 @@ ExecuteTaskListIntoTupleDest(RowModifyLevel modLevel, List *taskList,
 uint64
 ExecuteTaskListExtended(ExecutionParams *executionParams)
 {
+	/* if there are no tasks to execute, we can return early */
+	if (list_length(executionParams->taskList) == 0)
+	{
+		return 0;
+	}
+
 	ParamListInfo paramListInfo = NULL;
 	uint64 locallyProcessedRows = 0;
 

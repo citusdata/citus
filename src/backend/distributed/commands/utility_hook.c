@@ -1214,10 +1214,7 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 			}
 		}
 
-		if (ddlJob->taskList)
-		{
-			ExecuteUtilityTaskList(ddlJob->taskList, localExecutionSupported);
-		}
+		ExecuteUtilityTaskList(ddlJob->taskList, localExecutionSupported);
 	}
 	else
 	{
@@ -1318,10 +1315,7 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 
 		PG_TRY();
 		{
-			if (ddlJob->taskList)
-			{
-				ExecuteUtilityTaskList(ddlJob->taskList, localExecutionSupported);
-			}
+			ExecuteUtilityTaskList(ddlJob->taskList, localExecutionSupported);
 
 			if (shouldSyncMetadata)
 			{
