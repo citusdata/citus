@@ -1345,6 +1345,16 @@ convert_aclright_to_string(int aclright)
 			return "TEMPORARY";
 		case ACL_CONNECT:
 			return "CONNECT";
+#if PG_VERSION_NUM >= PG_VERSION_15
+		case ACL_SET:
+			return "SET";
+		case ACL_ALTER_SYSTEM:
+			return "ALTER SYSTEM";
+#endif
+#if PG_VERSION_NUM >= PG_VERSION_16
+		case ACL_MAINTAIN:
+			return "MAINTAIN";
+#endif
 		default:
 			elog(ERROR, "unrecognized aclright: %d", aclright);
 			return NULL;
