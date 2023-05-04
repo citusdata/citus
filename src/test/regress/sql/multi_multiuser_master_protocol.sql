@@ -1,6 +1,12 @@
 --
 -- MULTI_MULTIUSER_MASTER_PROTOCOL
 --
+-- This test file has an alternative output because of the new MAINTAIN
+-- privilege in PG16
+--
+
+SHOW server_version \gset
+SELECT substring(:'server_version', '\d+')::int >= 16 AS server_version_ge_16;
 
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 109079;
 
@@ -118,6 +124,7 @@ RESET ROLE;
 -- verify column level grants are not supported
 GRANT UPDATE (id) ON trivial_postgres TO read_access;
 
+DROP TABLE checkperm;
 DROP TABLE trivial_full_access;
 DROP TABLE trivial_postgres;
 DROP TABLE stage_full_access;
