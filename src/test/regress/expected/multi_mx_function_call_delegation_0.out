@@ -289,7 +289,6 @@ RESET citus.enable_binary_protocol;
 -- We don't allow distributing calls inside transactions
 begin;
 select mx_call_func(2, 0);
-DEBUG:  not pushing down function calls in a multi-statement transaction
 DEBUG:  generating subplan XXX_1 for subquery SELECT sum((t1.val OPERATOR(pg_catalog.+) t2.val)) AS sum FROM (multi_mx_function_call_delegation.mx_call_dist_table_1 t1 JOIN multi_mx_function_call_delegation.mx_call_dist_table_2 t2 ON ((t1.id OPERATOR(pg_catalog.=) t2.id)))
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT (3 OPERATOR(pg_catalog.+) (SELECT intermediate_result.sum FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint)))
  mx_call_func
@@ -693,7 +692,6 @@ ERROR:  cannot execute a distributed query from a query on a shard
 select mx_call_func_copy(2) from mx_call_dist_table_1 where id = 3;
 ERROR:  cannot execute a distributed query from a query on a shard
 DO $$ BEGIN perform mx_call_func_tbl(40); END; $$;
-DEBUG:  not pushing down function calls in a multi-statement transaction
 SELECT * FROM mx_call_dist_table_1 WHERE id >= 40 ORDER BY id, val;
  id | val
 ---------------------------------------------------------------------
@@ -777,7 +775,6 @@ DEBUG:  pushing down the function call
 -- not delegated in a transaction block
 BEGIN;
 SELECT mx_call_func(2, 0);
-DEBUG:  not pushing down function calls in a multi-statement transaction
 DEBUG:  generating subplan XXX_1 for subquery SELECT sum((t1.val OPERATOR(pg_catalog.+) t2.val)) AS sum FROM (multi_mx_function_call_delegation.mx_call_dist_table_1 t1 JOIN multi_mx_function_call_delegation.mx_call_dist_table_2 t2 ON ((t1.id OPERATOR(pg_catalog.=) t2.id)))
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT (2 OPERATOR(pg_catalog.+) (SELECT intermediate_result.sum FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint)))
  mx_call_func
@@ -792,7 +789,6 @@ BEGIN
   PERFORM mx_call_func(2, 0);
 END;
 $$ LANGUAGE plpgsql;
-DEBUG:  not pushing down function calls in a multi-statement transaction
 DEBUG:  generating subplan XXX_1 for subquery SELECT sum((t1.val OPERATOR(pg_catalog.+) t2.val)) AS sum FROM (multi_mx_function_call_delegation.mx_call_dist_table_1 t1 JOIN multi_mx_function_call_delegation.mx_call_dist_table_2 t2 ON ((t1.id OPERATOR(pg_catalog.=) t2.id)))
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT (2 OPERATOR(pg_catalog.+) (SELECT intermediate_result.sum FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint)))
 -- forced calls are delegated in a transaction block

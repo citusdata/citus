@@ -324,7 +324,6 @@ DEBUG:  function does not have co-located tables
 
 BEGIN;
 SELECT func_calls_forcepush_func();
-DEBUG:  not pushing down function calls in a multi-statement transaction
 DEBUG:  pushing down function call in a multi-statement transaction
 CONTEXT:  SQL statement "SELECT inner_force_delegation_function                      FROM inner_force_delegation_function(100)"
 PL/pgSQL function func_calls_forcepush_func() line XX at SQL statement
@@ -400,7 +399,6 @@ PL/pgSQL function func_calls_forcepush_func_infrom() line XX at SQL statement
 
 BEGIN;
 SELECT func_calls_forcepush_func_infrom();
-DEBUG:  not pushing down function calls in a multi-statement transaction
 DEBUG:  pushing down function call in a multi-statement transaction
 CONTEXT:  SQL statement "SELECT inner_force_delegation_function                      FROM inner_force_delegation_function(add_val + 100)"
 PL/pgSQL function func_calls_forcepush_func_infrom() line XX at SQL statement
@@ -455,7 +453,6 @@ PL/pgSQL function func_calls_forcepush_func_intarget() line XX at SQL statement
 
 BEGIN;
 SELECT func_calls_forcepush_func_intarget();
-DEBUG:  not pushing down function calls in a multi-statement transaction
 NOTICE:  inner_force_delegation_function():201
 DETAIL:  from localhost:xxxxx
 CONTEXT:  SQL statement "SELECT inner_force_delegation_function(100 + 100)                      OFFSET 0"
@@ -1284,7 +1281,6 @@ DETAIL:  A command for a distributed function is run. To make sure subsequent co
 -- First 5 get delegated and succeeds
 BEGIN;
 SELECT outer_test_prepare(1,1);
-DEBUG:  not pushing down function calls in a multi-statement transaction
 DEBUG:  pushing down function call in a multi-statement transaction
 CONTEXT:  SQL statement "SELECT FROM test_prepare(x, y)"
 PL/pgSQL function outer_test_prepare(integer,integer) line XX at PERFORM
@@ -1303,7 +1299,6 @@ PL/pgSQL function outer_test_prepare(integer,integer) line XX at PERFORM
 (1 row)
 
 SELECT outer_test_prepare(1,1);
-DEBUG:  not pushing down function calls in a multi-statement transaction
 DEBUG:  pushing down function call in a multi-statement transaction
 CONTEXT:  SQL statement "SELECT FROM test_prepare(x, y)"
 PL/pgSQL function outer_test_prepare(integer,integer) line XX at PERFORM
@@ -1322,7 +1317,6 @@ PL/pgSQL function outer_test_prepare(integer,integer) line XX at PERFORM
 (1 row)
 
 SELECT outer_test_prepare(1,1);
-DEBUG:  not pushing down function calls in a multi-statement transaction
 DEBUG:  pushing down function call in a multi-statement transaction
 CONTEXT:  SQL statement "SELECT FROM test_prepare(x, y)"
 PL/pgSQL function outer_test_prepare(integer,integer) line XX at PERFORM
@@ -1341,7 +1335,6 @@ PL/pgSQL function outer_test_prepare(integer,integer) line XX at PERFORM
 (1 row)
 
 SELECT outer_test_prepare(1,1);
-DEBUG:  not pushing down function calls in a multi-statement transaction
 DEBUG:  pushing down function call in a multi-statement transaction
 CONTEXT:  SQL statement "SELECT FROM test_prepare(x, y)"
 PL/pgSQL function outer_test_prepare(integer,integer) line XX at PERFORM
@@ -1360,7 +1353,6 @@ PL/pgSQL function outer_test_prepare(integer,integer) line XX at PERFORM
 (1 row)
 
 SELECT outer_test_prepare(1,1);
-DEBUG:  not pushing down function calls in a multi-statement transaction
 DEBUG:  pushing down function call in a multi-statement transaction
 CONTEXT:  SQL statement "SELECT FROM test_prepare(x, y)"
 PL/pgSQL function outer_test_prepare(integer,integer) line XX at PERFORM
@@ -1387,7 +1379,6 @@ SELECT COUNT(*) FROM table_test_prepare;
 
 -- 6th execution will be generic plan and should get delegated
 SELECT outer_test_prepare(1,1);
-DEBUG:  not pushing down function calls in a multi-statement transaction
 DEBUG:  pushing down function call in a multi-statement transaction
 CONTEXT:  SQL statement "SELECT FROM test_prepare(x, y)"
 PL/pgSQL function outer_test_prepare(integer,integer) line XX at PERFORM
@@ -1406,7 +1397,6 @@ PL/pgSQL function outer_test_prepare(integer,integer) line XX at PERFORM
 (1 row)
 
 SELECT outer_test_prepare(1,1);
-DEBUG:  not pushing down function calls in a multi-statement transaction
 DEBUG:  pushing down function call in a multi-statement transaction
 CONTEXT:  SQL statement "SELECT FROM test_prepare(x, y)"
 PL/pgSQL function outer_test_prepare(integer,integer) line XX at PERFORM
@@ -1557,7 +1547,6 @@ SELECT * FROM testnested_table ORDER BY 1;
 
 BEGIN;
 SELECT outer_local_fn();
-DEBUG:  not pushing down function calls in a multi-statement transaction
  outer_local_fn
 ---------------------------------------------------------------------
 

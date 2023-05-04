@@ -18,13 +18,10 @@ INSERT INTO t
         -- sample memusage instead of recording everyr row for speed
         CASE WHEN i % 100 = 0 THEN columnar_test_helpers.top_memory_context_usage() ELSE 0 END
  FROM generate_series(1, 49999) i;
-DEBUG:  not pushing down function calls in a multi-statement transaction
-CONTEXT:  SQL function "top_memory_context_usage" during startup
 SELECT TopMemoryContext as top0,
        TopTransactionContext xact0,
 	   WriteStateContext write0
 FROM columnar_test_helpers.columnar_store_memory_stats() \gset
-DEBUG:  not pushing down function calls in a multi-statement transaction
 -- flush 1st stripe, and measure memory just before flushing 2nd stripe
 INSERT INTO t
  SELECT i, 'second batch', 0 /* no need to record memusage per row */
@@ -34,7 +31,6 @@ SELECT TopMemoryContext as top1,
        TopTransactionContext xact1,
 	   WriteStateContext write1
 FROM columnar_test_helpers.columnar_store_memory_stats() \gset
-DEBUG:  not pushing down function calls in a multi-statement transaction
 -- flush 2nd stripe, and measure memory just before flushing 3rd stripe
 INSERT INTO t
  SELECT i, 'third batch', 0 /* no need to record memusage per row */
@@ -44,7 +40,6 @@ SELECT TopMemoryContext as top2,
        TopTransactionContext xact2,
 	   WriteStateContext write2
 FROM columnar_test_helpers.columnar_store_memory_stats() \gset
-DEBUG:  not pushing down function calls in a multi-statement transaction
 -- insert a large batch
 INSERT INTO t
  SELECT i, 'large batch',
@@ -52,8 +47,6 @@ INSERT INTO t
         CASE WHEN i % 100 = 0 THEN columnar_test_helpers.top_memory_context_usage() ELSE 0 END
  FROM generate_series(1, 100000) i;
 DEBUG:  Flushing Stripe of size 50000
-DEBUG:  not pushing down function calls in a multi-statement transaction
-CONTEXT:  SQL function "top_memory_context_usage" during startup
 DEBUG:  Flushing Stripe of size 50000
 COMMIT;
 DEBUG:  Flushing Stripe of size 49999

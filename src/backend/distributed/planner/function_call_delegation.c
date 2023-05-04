@@ -337,7 +337,7 @@ TryToDelegateFunctionCall(DistributedPlanningContext *planContext)
 		if (!procedure->forceDelegation)
 		{
 			/* cannot delegate function calls in a multi-statement transaction */
-			ereport(DEBUG1, (errmsg("not pushing down function calls in "
+			ereport(DEBUG4, (errmsg("not pushing down function calls in "
 									"a multi-statement transaction")));
 			return NULL;
 		}
