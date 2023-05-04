@@ -1362,6 +1362,12 @@ convert_aclright_to_string(int aclright)
 			return "TEMPORARY";
 		case ACL_CONNECT:
 			return "CONNECT";
+		case ACL_SET:
+			return "SET";
+		case ACL_ALTER_SYSTEM:
+			return "ALTER SYSTEM";
+		case ACL_MAINTAIN:
+			return "MAINTAIN";
 		default:
 			elog(ERROR, "unrecognized aclright: %d", aclright);
 			return NULL;
