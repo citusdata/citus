@@ -6,7 +6,7 @@
 * Adds support for `MERGE` command on co-located distributed tables joined on
   distribution column (#6696, #6733)
 
-* Adds the view `citus_stats_tenants` that monitor statistics on tenant usages
+* Adds the view `citus_stat_tenants` that monitor statistics on tenant usages
   (#6725)
 
 * Adds the GUC `citus.max_background_task_executors_per_node` to control number
