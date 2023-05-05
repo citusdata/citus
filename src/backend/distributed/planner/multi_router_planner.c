@@ -2223,7 +2223,8 @@ SelectsFromDistributedTable(List *rangeTableList, Query *query)
 		}
 
 		if (rangeTableEntry->relkind == RELKIND_VIEW ||
-			rangeTableEntry->relkind == RELKIND_MATVIEW)
+			rangeTableEntry->relkind == RELKIND_MATVIEW ||
+			rangeTableEntry->rtekind == RTE_SUBQUERY)
 		{
 			/*
 			 * Skip over views, which would error out in GetCitusTableCacheEntry.
