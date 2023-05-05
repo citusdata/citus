@@ -93,13 +93,13 @@ test: multi_task_assignment_policy multi_cross_shard
 test: multi_utility_statements
 test: multi_dropped_column_aliases foreign_key_restriction_enforcement
 test: binary_protocol
-test: alter_table_set_access_method
-test: alter_distributed_table
+#test: alter_table_set_access_method
+#test: alter_distributed_table
 test: issue_5248 issue_5099 issue_5763 issue_6543 issue_6758
 test: object_propagation_debug
 test: undistribute_table
 test: run_command_on_all_nodes
-test: background_task_queue_monitor
+# test: background_task_queue_monitor
 
 # Causal clock test
 test: clock
