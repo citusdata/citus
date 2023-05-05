@@ -75,7 +75,7 @@ select relation, stripe_num, row_count, first_row_number
 select relation, stripe_num, attr_num, chunk_group_num, value_count
   from columnar.chunk
   where relation in ('no_access'::regclass, 'columnar_permissions'::regclass)
-  order by relation, stripe_num;
+  order by relation, stripe_num, attr_num;
 select relation, stripe_num, chunk_group_num, row_count
   from columnar.chunk_group
   where relation in ('no_access'::regclass, 'columnar_permissions'::regclass)
