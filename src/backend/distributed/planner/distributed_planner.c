@@ -16,6 +16,7 @@
 #include <float.h>
 #include <limits.h>
 
+#include "access/genam.h"
 #include "access/htup_details.h"
 #include "access/xact.h"
 #include "catalog/pg_class.h"
@@ -2007,6 +2008,71 @@ multi_relation_restriction_hook(PlannerInfo *root, RelOptInfo *relOptInfo,
 		lappend(relationRestrictionContext->relationRestrictionList, relationRestriction);
 
 	MemoryContextSwitchTo(oldMemoryContext);
+}
+
+
+/*
+ * Normally, we should not need this. However, the combination of
+ * Postgres commit 3c569049b7b502bb4952483d19ce622ff0af5fd6 and
+ * Citus function AdjustPartitioningForDistributedPlanning()
+ * forces us to do this. The commit expects partitioned indexes
+ * to belong to relations with "inh" flag set properly. Whereas, the
+ * function overrides "inh" flag. To avoid a crash,
+ * we go over the list of indexinfos and remove all partitioned indexes.
+ * Partitioned indexes were ignored pre PG16 anyway, we are essentially
+ * not breaking any logic.
+ *
+ * AdjustPartitioningForDistributedPlanning() is a hack that we use
+ * to prevent Postgres' standard_planner() to expand all the partitions
+ * for the distributed planning when a distributed partitioned table
+ * is queried. It is required for both correctness and performance
+ * reasons. Although we can eliminate the use of the function for
+ * the correctness (e.g., make sure that rest of the planner can handle
+ * partitions), it's performance implication is hard to avoid. Certain
+ * planning logic of Citus (such as router or query pushdown) relies
+ * heavily on the relationRestrictionList. If
+ * AdjustPartitioningForDistributedPlanning() is removed, all the
+ * partitions show up in the, causing high planning times for
+ * such queries.
+ */
+void
+multi_partitioned_index_hook(PlannerInfo *root, Oid relationObjectId, bool inhparent,
+							 RelOptInfo *rel)
+{
+	bool partitioningAdjusted = false;
+	List *rangeTableList = ExtractRangeTableEntryList(root->parse);
+
+	ListCell *rangeTableCell = NULL;
+	foreach(rangeTableCell, rangeTableList)
+	{
+		RangeTblEntry *rangeTableEntry = (RangeTblEntry *) lfirst(rangeTableCell);
+
+		if (rangeTableEntry->rtekind == RTE_RELATION &&
+			PartitionedTable(rangeTableEntry->relid) &&
+			rangeTableEntry->inh == false)
+		{
+			partitioningAdjusted = true;
+			break;
+		}
+	}
+
+	if (partitioningAdjusted && PartitionedTable(relationObjectId))
+	{
+		Index varno = rel->relid;
+		LOCKMODE lmode = root->simple_rte_array[varno]->rellockmode;
+		List *indexinfos = NIL;
+		IndexOptInfo *indexOptInfo = NULL;
+		foreach_ptr(indexOptInfo, rel->indexlist)
+		{
+			Relation indexRelation = index_open(indexOptInfo->indexoid, lmode);
+			if (indexRelation->rd_rel->relkind != RELKIND_PARTITIONED_INDEX)
+			{
+				indexinfos = lappend(indexinfos, indexOptInfo);
+			}
+			index_close(indexRelation, NoLock);
+		}
+		rel->indexlist = indexinfos;
+	}
 }
 
 
