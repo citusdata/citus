@@ -1267,6 +1267,20 @@ AddRteSubqueryToAttributeEquivalenceClass(AttributeEquivalenceClass
 										  PlannerInfo *root,
 										  Var *varToBeAdded)
 {
+#if PG_VERSION_NUM >= PG_VERSION_16
+	if (root->simple_rel_array_size <= varToBeAdded->varno)
+	{
+		return;
+	}
+
+	RelOptInfo *rel = root->simple_rel_array[varToBeAdded->varno];
+	if (rel == NULL)
+	{
+		/* must be an outer join*/
+		return;
+	}
+#endif
+
 	RelOptInfo *baseRelOptInfo = find_base_rel(root, varToBeAdded->varno);
 	Query *targetSubquery = GetTargetSubquery(root, rangeTableEntry, varToBeAdded);
 
@@ -1357,6 +1371,19 @@ GetTargetSubquery(PlannerInfo *root, RangeTblEntry *rangeTableEntry, Var *varToB
 	 */
 	if (!rangeTableEntry->inh)
 	{
+#if PG_VERSION_NUM >= PG_VERSION_16
+		if (root->simple_rel_array_size <= varToBeAdded->varno)
+		{
+			return NULL;
+		}
+
+		RelOptInfo *rel = root->simple_rel_array[varToBeAdded->varno];
+		if (rel == NULL)
+		{
+			/* must be an outer join*/
+			return NULL;
+		}
+#endif
 		RelOptInfo *baseRelOptInfo = find_base_rel(root, varToBeAdded->varno);
 
 		/* If the targetSubquery was not planned, we have to punt */
