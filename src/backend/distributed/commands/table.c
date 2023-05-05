@@ -400,7 +400,11 @@ PostprocessCreateTableStmtPartitionOf(CreateStmt *createStatement, const
 
 		if (IsCitusTableType(parentRelationId, SINGLE_SHARD_DISTRIBUTED))
 		{
-			CreateSingleShardTable(relationId, parentRelationName);
+			ColocationParam colocationParam = {
+				.colocationParamType = COLOCATE_WITH_TABLE_LIKE_OPT,
+				.colocateWithTableName = parentRelationName,
+			};
+			CreateSingleShardTable(relationId, colocationParam);
 			return;
 		}
 
@@ -618,7 +622,11 @@ DistributePartitionUsingParent(Oid parentCitusRelationId, Oid partitionRelationI
 		 * If the parent is null key distributed, we should distribute the partition
 		 * with null distribution key as well.
 		 */
-		CreateSingleShardTable(partitionRelationId, parentRelationName);
+		ColocationParam colocationParam = {
+			.colocationParamType = COLOCATE_WITH_TABLE_LIKE_OPT,
+			.colocateWithTableName = parentRelationName,
+		};
+		CreateSingleShardTable(partitionRelationId, colocationParam);
 		return;
 	}
 
