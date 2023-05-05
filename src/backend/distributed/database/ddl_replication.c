@@ -264,6 +264,9 @@ ShouldReplicateCommandType(Node *parsetree)
 		}
 
 		case T_AlterDatabaseStmt:
+#if PG_VERSION_NUM >= PG_VERSION_15
+		case T_AlterDatabaseRefreshCollStmt:
+#endif
 		case T_AlterDatabaseSetStmt:
 		case T_CreatedbStmt:
 		case T_DropdbStmt:
@@ -274,30 +277,39 @@ ShouldReplicateCommandType(Node *parsetree)
 
 		case T_AlterSystemStmt:
 		case T_CallStmt:
-		case T_DoStmt:
+		case T_ClusterStmt:
+		case T_CopyStmt:
 		case T_CheckPointStmt:
 		case T_ClosePortalStmt:
 		case T_ConstraintsSetStmt:
 		case T_DeallocateStmt:
 		case T_DeclareCursorStmt:
+		case T_DeleteStmt:
 		case T_DiscardStmt:
+		case T_DoStmt:
 		case T_ExecuteStmt:
-		case T_FetchStmt:
-		case T_LoadStmt:
-		case T_PrepareStmt:
-		case T_UnlistenStmt:
-		case T_VariableSetStmt:
-		case T_ClusterStmt:
-		case T_ReindexStmt:
-		case T_VacuumStmt:
-		case T_CopyStmt:
 		case T_ExplainStmt:
-		case T_VariableShowStmt:
+		case T_FetchStmt:
+		case T_InsertStmt:
 		case T_ListenStmt:
-		case T_NotifyStmt:
+		case T_LoadStmt:
 		case T_LockStmt:
+#if PG_VERSION_NUM >= PG_VERSION_15
+		case T_MergeStmt:
+#endif
+		case T_NotifyStmt:
+		case T_PLAssignStmt:
+		case T_PrepareStmt:
+		case T_ReindexStmt:
+		case T_SelectStmt:
+		case T_SetOperationStmt:
 		case T_TransactionStmt:
 		case T_TruncateStmt:
+		case T_UnlistenStmt:
+		case T_UpdateStmt:
+		case T_VacuumStmt:
+		case T_VariableSetStmt:
+		case T_VariableShowStmt:
 		{
 			/* these commands do not affect pg_catalog */
 			return false;
@@ -677,13 +689,13 @@ ExecuteRawStmt(RawStmt *parsetree, char *queryString)
 {
 	bool isTopLevel = false;
 
-	#if PG_VERSION_NUM < 130000
+#if PG_VERSION_NUM < 130000
 	const char *commandTag;
 	char completionTag[COMPLETION_TAG_BUFSIZE];
-	#else
+#else
 	CommandTag commandTag;
 	QueryCompletion qc;
-	#endif
+#endif
 
 	List *querytree_list;
 	List *plantree_list;
