@@ -15,8 +15,6 @@ SET client_min_messages TO NOTICE;
 SELECT citus_internal_add_tenant_schema(NULL, 1);
 SELECT citus_internal_add_tenant_schema(1, NULL);
 SELECT citus_internal_delete_tenant_schema(NULL);
-SELECT citus_internal_set_tenant_schema_colocation_id(NULL, 1);
-SELECT citus_internal_set_tenant_schema_colocation_id(1, NULL);
 
 CREATE ROLE test_non_super_user WITH LOGIN;
 ALTER ROLE test_non_super_user NOSUPERUSER;
@@ -27,7 +25,6 @@ ALTER ROLE test_non_super_user NOSUPERUSER;
 -- fail when called via a non-superuser.
 SELECT citus_internal_add_tenant_schema(1, 1);
 SELECT citus_internal_delete_tenant_schema(1);
-SELECT citus_internal_set_tenant_schema_colocation_id(1, 1);
 
 \c - postgres
 
@@ -43,22 +40,20 @@ SET client_min_messages TO NOTICE;
 -- fail when called via a superuser that is not allowed to modify metadata.
 SELECT citus_internal_add_tenant_schema(1, 1);
 SELECT citus_internal_delete_tenant_schema(1);
-SELECT citus_internal_set_tenant_schema_colocation_id(1, 1);
 
 ALTER SYSTEM SET citus.enable_manual_metadata_changes_for_user TO 'postgres';
 SELECT pg_reload_conf();
 SELECT pg_sleep(0.1);
 
 -- Verify that the UDFs used to sync tenant schema metadata to workers
--- fail on schema_id = InvalidOid
+-- fail on schema_id = InvalidOid / colocation_id = INVALID_COLOCATION_ID.
 SELECT citus_internal_add_tenant_schema(0, 1);
+SELECT citus_internal_add_tenant_schema(1, 0);
 SELECT citus_internal_delete_tenant_schema(0);
-SELECT citus_internal_set_tenant_schema_colocation_id(0, 1);
 
 -- Verify that the UDFs used to sync tenant schema metadata to workers
 -- fail on non-existing schema_id.
 SELECT citus_internal_delete_tenant_schema(456456);
-SELECT citus_internal_set_tenant_schema_colocation_id(456456, 1);
 
 ALTER SYSTEM RESET citus.enable_manual_metadata_changes_for_user;
 SELECT pg_reload_conf();
@@ -97,13 +92,13 @@ SELECT create_distributed_table('tenant_2.test_table', 'a');
 SELECT create_reference_table('tenant_2.test_table');
 SELECT citus_add_local_table_to_metadata('tenant_2.test_table');
 
--- (on coordinator) verify that colocation id is not set for empty tenants
-SELECT colocation_id IS NULL FROM pg_dist_tenant_schema
+-- (on coordinator) verify that colocation id is set for empty tenants too
+SELECT colocation_id > 0 FROM pg_dist_tenant_schema
 WHERE schema_id::regnamespace::text IN ('tenant_1', 'tenant_3');
 
--- (on workers) verify that colocation id is not set for empty tenants
+-- (on workers) verify that colocation id is set for empty tenants too
 SELECT result FROM run_command_on_workers($$
-    SELECT array_agg(colocation_id IS NULL) FROM pg_dist_tenant_schema
+    SELECT array_agg(colocation_id > 0) FROM pg_dist_tenant_schema
     WHERE schema_id::regnamespace::text IN ('tenant_1', 'tenant_3');
 $$);
 
@@ -224,14 +219,14 @@ WHERE schema_id::regnamespace::text = 'tenant_5' \gset
 DROP TABLE tenant_5.tbl_1, tenant_5.tbl_2, tenant_5.tbl_3;
 CREATE TABLE tenant_5.tbl_4(a int, b text);
 
--- (on coordinator) verify that tenant_5 is now associated with a new colocation id
-SELECT colocation_id != :tenant_5_old_colocation_id FROM pg_dist_tenant_schema
+-- (on coordinator) verify that tenant_5 is still associated with the same colocation id
+SELECT colocation_id = :tenant_5_old_colocation_id FROM pg_dist_tenant_schema
 WHERE schema_id::regnamespace::text = 'tenant_5';
 
--- (on workers) verify that tenant_5 is now associated with a new colocation id
+-- (on workers) verify that tenant_5 is still associated with the same colocation id
 SELECT format(
     'SELECT result FROM run_command_on_workers($$
-        SELECT colocation_id != %s FROM pg_dist_tenant_schema
+        SELECT colocation_id = %s FROM pg_dist_tenant_schema
         WHERE schema_id::regnamespace::text = ''tenant_5'';
     $$);',
 :tenant_5_old_colocation_id) AS verify_workers_query \gset
@@ -267,10 +262,10 @@ SELECT COUNT(*)=0 FROM pg_dist_tenant_schema WHERE schema_id IS NULL;
 SELECT (SELECT COUNT(*) FROM pg_dist_tenant_schema) =
        (SELECT COUNT(DISTINCT(schema_id)) FROM pg_dist_tenant_schema);
 
--- show that all colocation_id values are unique in pg_dist_tenant_schema
+-- show that all colocation_id values are unique and non-null in pg_dist_tenant_schema
+SELECT COUNT(*)=0 FROM pg_dist_tenant_schema WHERE colocation_id IS NULL;
 SELECT (SELECT COUNT(*) FROM pg_dist_tenant_schema) =
-       (SELECT COUNT(DISTINCT(colocation_id)) FROM pg_dist_tenant_schema) +
-       (SELECT COUNT(*) FROM pg_dist_tenant_schema WHERE colocation_id IS NULL);
+       (SELECT COUNT(DISTINCT(colocation_id)) FROM pg_dist_tenant_schema);
 
 CREATE TABLE public.cannot_be_a_tenant_table(a int, b text);
 
@@ -294,11 +289,6 @@ CREATE TEMPORARY TABLE temp_table(a int, b text);
 SELECT COUNT(*)=0 FROM pg_dist_tenant_schema WHERE schema_id::regnamespace::text = '%pg_temp%';
 
 DROP TABLE temp_table;
-
--- test the UDFs that we use to sync pg_dist_tenant_schema to workers, all should fail
-SELECT pg_catalog.citus_internal_add_tenant_schema(1, 1);
-SELECT pg_catalog.citus_internal_set_tenant_schema_colocation_id(1, 1);
-SELECT pg_catalog.citus_internal_delete_tenant_schema(1);
 
 -- test creating a tenant schema and a tenant table for it in the same transaction
 BEGIN;

@@ -60,7 +60,5 @@ extern void EnsureTableCanBeColocatedWith(Oid relationId, char replicationModel,
 										  Oid sourceRelationId);
 extern void AcquireColocationDefaultLock(void);
 extern void ReleaseColocationDefaultLock(void);
-extern void AcquireCitusTenantSchemaDefaultColocationLock(Oid schemaId);
-extern void ReleaseCitusTenantSchemaDefaultColocationLock(Oid schemaId);
 
 #endif /* COLOCATION_UTILS_H_ */

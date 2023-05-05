@@ -4,9 +4,8 @@ starting permutation: s1-begin s2-begin s1-tenant-1-create-table-1 s2-tenant-1-c
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
 step s1-tenant-1-create-table-1: CREATE TABLE tenant_1.tbl_1 (a int);
-step s2-tenant-1-create-table-2: CREATE TABLE tenant_1.tbl_2 (a int); <waiting ...>
+step s2-tenant-1-create-table-2: CREATE TABLE tenant_1.tbl_2 (a int);
 step s1-commit: COMMIT;
-step s2-tenant-1-create-table-2: <... completed>
 step s2-tenant-1-verify-colocation: SELECT COUNT(DISTINCT(colocationid))=1 FROM pg_dist_partition WHERE logicalrelid::text LIKE 'tenant_1.%';
 ?column?
 ---------------------------------------------------------------------

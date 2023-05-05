@@ -90,7 +90,27 @@ master_remove_partition_metadata(PG_FUNCTION_ARGS)
 
 	DeletePartitionRow(relationId);
 
-	DeleteColocationGroupIfNoTablesBelong(colocationId);
+	/*
+	 * We want to keep using the same colocation group for the tenant even if
+	 * all the tables that belong to it are dropped and new tables are created
+	 * for the tenant etc. For this reason, if a colocation group belongs to a
+	 * tenant schema, we don't delete the colocation group even if there are no
+	 * tables that belong to it.
+	 *
+	 * We do the same if system catalog cannot find the schema of the table
+	 * because this means that the whole schema is dropped.
+	 *
+	 * In that case, we want to delete the colocation group regardless of
+	 * whether the schema is a tenant schema or not. Even more, calling
+	 * IsTenantSchema() with InvalidOid would cause an error, hence we check
+	 * whether the schema is valid beforehand.
+	 */
+	bool missingOk = true;
+	Oid schemaId = get_namespace_oid(schemaName, missingOk);
+	if (!OidIsValid(schemaId) || !IsTenantSchema(schemaId))
+	{
+		DeleteColocationGroupIfNoTablesBelong(colocationId);
+	}
 
 	PG_RETURN_VOID();
 }

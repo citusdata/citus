@@ -1,7 +1,7 @@
 ALTER SCHEMA "tenant\'_1" RENAME TO tenant_1;
 ALTER SCHEMA "tenant\'_2" RENAME TO tenant_2;
--- verify that colocation id is not set for empty tenant
-SELECT colocation_id IS NULL FROM pg_dist_tenant_schema
+-- verify that colocation id is set even for empty tenant
+SELECT colocation_id > 0 FROM pg_dist_tenant_schema
 WHERE schema_id::regnamespace::text = 'tenant_1';
  ?column?
 ---------------------------------------------------------------------
@@ -10,7 +10,7 @@ WHERE schema_id::regnamespace::text = 'tenant_1';
 
 -- verify the same on workers
 SELECT result FROM run_command_on_workers($$
-    SELECT colocation_id IS NULL FROM pg_dist_tenant_schema
+    SELECT colocation_id > 0 FROM pg_dist_tenant_schema
     WHERE schema_id::regnamespace::text = 'tenant_1';
 $$);
  result
@@ -51,6 +51,30 @@ CREATE TABLE tenant_2.tbl_1(a int, b text);
 SELECT COUNT(*)=2 FROM pg_dist_partition
 WHERE logicalrelid IN ('tenant_1.tbl_1'::regclass, 'tenant_2.tbl_1'::regclass) AND
       partmethod = 'n' AND repmodel = 's' AND colocationid > 0;
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT colocation_id = (
+    SELECT colocationid FROM pg_dist_partition
+    WHERE logicalrelid = 'tenant_1.tbl_1'::regclass AND
+          partmethod = 'n' AND repmodel = 's'
+)
+FROM pg_dist_tenant_schema
+WHERE schema_id::regnamespace::text = 'tenant_1';
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT colocation_id = (
+    SELECT colocationid FROM pg_dist_partition
+    WHERE logicalrelid = 'tenant_2.tbl_1'::regclass AND
+          partmethod = 'n' AND repmodel = 's'
+)
+FROM pg_dist_tenant_schema
+WHERE schema_id::regnamespace::text = 'tenant_2';
  ?column?
 ---------------------------------------------------------------------
  t

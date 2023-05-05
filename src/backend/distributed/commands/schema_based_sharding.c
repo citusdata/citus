@@ -24,9 +24,6 @@
 bool EnableSchemaBasedSharding = false;
 
 
-static void SetTenantSchemaColocationId(Oid schemaId, uint32 colocationId);
-
-
 /*
  * ShouldUseSchemaBasedSharding returns true if schema given name should be
  * used as a tenant schema.
@@ -106,6 +103,42 @@ ShouldCreateTenantTable(Oid relationId)
 
 
 /*
+ * IsTenantSchema returns true if there is a tenant schema with given schemaId.
+ */
+bool
+IsTenantSchema(Oid schemaId)
+{
+	/*
+	 * We don't allow creating tenant schemas when there is a version
+	 * mismatch. Even more, SchemaIdGetTenantColocationId() would throw an
+	 * error if the underlying pg_dist_tenant_schema metadata table has not
+	 * been created yet, which is the case in older versions. For this reason,
+	 * it's safe to assume that it cannot be a tenant schema when there is a
+	 * version mismatch.
+	 *
+	 * But it's a bit tricky that we do the same when version checks are
+	 * disabled because then CheckCitusVersion() returns true even if there
+	 * is a version mismatch. And in that case, the test that tries to create
+	 * a distributed table (in multi_extension.sql) in an older version would
+	 * fail when deciding whether we're trying to colocate given distributed
+	 * table with a tenant table.
+	 *
+	 * The downside of doing so is that, for example, we will skip deleting
+	 * the tenant schema entry from pg_dist_tenant_schema when dropping a
+	 * tenant schema while the version checks are disabled even if there was
+	 * no version mismatch. But we're okay with that because we don't expect
+	 * users to disable version checks anyway.
+	 */
+	if (!EnableVersionChecks || !CheckCitusVersion(DEBUG4))
+	{
+		return false;
+	}
+
+	return SchemaIdGetTenantColocationId(schemaId) != INVALID_COLOCATION_ID;
+}
+
+
+/*
  * CreateTenantTable creates a tenant table with given relationId.
  *
  * This means creating a single shard distributed table without a shard
@@ -132,45 +165,22 @@ CreateTenantTable(Oid relationId)
 	}
 
 	/*
-	 * Decide name of the table with lowest oid in the colocation group
-	 * and use it as the colocate_with parameter.
-	 */
-	char *colocateWithTableName = "none";
-
-	/*
-	 * Acquire default colocation lock to prevent concurrently forming
-	 * multiple colocation groups for the same schema.
-	 *
-	 * Note that the lock is based on schemaId to avoid serializing
-	 * default colocation group creation for all tenant schemas.
+	 * We don't expect this to happen because ShouldCreateTenantTable()
+	 * should've already verified that; but better to check.
 	 */
 	Oid schemaId = get_rel_namespace(relationId);
-	AcquireCitusTenantSchemaDefaultColocationLock(schemaId);
-
 	uint32 colocationId = SchemaIdGetTenantColocationId(schemaId);
-	bool firstTableInSchema = (colocationId == INVALID_COLOCATION_ID);
-	if (!firstTableInSchema)
+	if (colocationId == INVALID_COLOCATION_ID)
 	{
-		/*
-		 * Release the lock if the schema is already associated with a
-		 * colocation group.
-		 */
-		ReleaseCitusTenantSchemaDefaultColocationLock(schemaId);
-
-		Oid colocateWithTableId = ColocationGroupGetTableWithLowestOid(colocationId);
-		colocateWithTableName = generate_qualified_relation_name(colocateWithTableId);
+		ereport(ERROR, (errmsg("schema \"%s\" is not a tenant schema",
+							   get_namespace_name(schemaId))));
 	}
 
-	CreateSingleShardTable(relationId, colocateWithTableName);
-
-	if (firstTableInSchema)
-	{
-		/*
-		 * Save it into pg_dist_tenant_schema if this is the first tenant
-		 * table in the schema.
-		 */
-		SetTenantSchemaColocationId(schemaId, TableColocationId(relationId));
-	}
+	ColocationParam colocationParam = {
+		.colocationParamType = COLOCATE_WITH_COLOCATION_ID,
+		.colocationId = colocationId,
+	};
+	CreateSingleShardTable(relationId, colocationParam);
 }
 
 
@@ -183,8 +193,13 @@ RegisterTenantSchema(Oid schemaId)
 {
 	CheckCitusVersion(ERROR);
 
-	/* not assign a colocation id until creating the first table */
-	uint32 colocationId = INVALID_COLOCATION_ID;
+	int shardCount = 1;
+	int replicationFactor = 1;
+	Oid distributionColumnType = InvalidOid;
+	Oid distributionColumnCollation = InvalidOid;
+	uint32 colocationId = CreateColocationGroup(
+		shardCount, replicationFactor, distributionColumnType,
+		distributionColumnCollation);
 
 	InsertTenantSchemaLocally(schemaId, colocationId);
 
@@ -203,35 +218,4 @@ UnregisterTenantSchema(Oid schemaId)
 
 	SendCommandToWorkersWithMetadataViaSuperUser(
 		TenantSchemaDeleteCommand(schemaId));
-}
-
-
-/*
- * DisassociateTenantSchemaIfAny disassociates given colocation id from its
- * tenant schema if any.
- */
-void
-DisassociateTenantSchemaIfAny(uint32 colocationId)
-{
-	Oid schemaId = ColocationIdGetTenantSchemaId(colocationId);
-	if (OidIsValid(schemaId))
-	{
-		SetTenantSchemaColocationId(schemaId, INVALID_COLOCATION_ID);
-	}
-}
-
-
-/*
- * SetTenantSchemaColocationId sets the colocation id of given tenant schema.
- *
- * If colocationId is INVALID_COLOCATION_ID, then the colocation_id column
- * is set to NULL.
- */
-static void
-SetTenantSchemaColocationId(Oid schemaId, uint32 colocationId)
-{
-	SetTenantSchemaColocationIdLocally(schemaId, colocationId);
-
-	SendCommandToWorkersWithMetadataViaSuperUser(
-		TenantSchemaSetColocationIdCommand(schemaId, colocationId));
 }

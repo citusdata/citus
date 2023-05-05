@@ -175,7 +175,6 @@ PG_FUNCTION_INFO_V1(citus_internal_add_colocation_metadata);
 PG_FUNCTION_INFO_V1(citus_internal_delete_colocation_metadata);
 PG_FUNCTION_INFO_V1(citus_internal_add_tenant_schema);
 PG_FUNCTION_INFO_V1(citus_internal_delete_tenant_schema);
-PG_FUNCTION_INFO_V1(citus_internal_set_tenant_schema_colocation_id);
 
 
 static bool got_SIGTERM = false;
@@ -3851,36 +3850,6 @@ citus_internal_delete_tenant_schema(PG_FUNCTION_ARGS)
 
 
 /*
- * citus_internal_set_tenant_schema_colocation_id is an internal UDF to
- * call SetTenantSchemaColocationIdLocally on a remote node.
- *
- * None of the parameters are allowed to be NULL. To set the colocation
- * id to NULL in metadata, use INVALID_COLOCATION_ID.
- */
-Datum
-citus_internal_set_tenant_schema_colocation_id(PG_FUNCTION_ARGS)
-{
-	CheckCitusVersion(ERROR);
-	EnsureSuperUser();
-
-	PG_ENSURE_ARGNOTNULL(0, "schema_id");
-	Oid schemaId = PG_GETARG_OID(0);
-
-	PG_ENSURE_ARGNOTNULL(1, "colocation_id");
-	uint32 colocationId = PG_GETARG_INT32(1);
-
-	if (!ShouldSkipMetadataChecks())
-	{
-		EnsureCoordinatorInitiatedOperation();
-	}
-
-	SetTenantSchemaColocationIdLocally(schemaId, colocationId);
-
-	PG_RETURN_VOID();
-}
-
-
-/*
  * SyncNewColocationGroup synchronizes a new pg_dist_colocation entry to a worker.
  */
 void
@@ -4055,22 +4024,6 @@ TenantSchemaDeleteCommand(Oid schemaId)
 	StringInfo command = makeStringInfo();
 	appendStringInfo(command, "SELECT pg_catalog.citus_internal_delete_tenant_schema(%s)",
 					 RemoteSchemaIdExpression(schemaId));
-
-	return command->data;
-}
-
-
-/*
- * TenantSchemaSetColocationIdCommand returns a command to call
- * citus_internal_set_tenant_schema_colocation_id().
- */
-char *
-TenantSchemaSetColocationIdCommand(Oid schemaId, uint32 colocationId)
-{
-	StringInfo command = makeStringInfo();
-	appendStringInfo(command,
-					 "SELECT pg_catalog.citus_internal_set_tenant_schema_colocation_id(%s, %u)",
-					 RemoteSchemaIdExpression(schemaId), colocationId);
 
 	return command->data;
 }
@@ -4706,26 +4659,11 @@ SendTenantSchemaMetadataCommands(MetadataSyncContext *context)
 		Form_pg_dist_tenant_schema tenantSchemaForm =
 			(Form_pg_dist_tenant_schema) GETSTRUCT(heapTuple);
 
-		/*
-		 * Not directly read colocation id from FormData because it might
-		 * be set to NULL.
-		 */
-		bool colocationIdIsNull = false;
-		uint32 colocationId = DatumGetUInt32(
-			heap_getattr(heapTuple,
-						 Anum_pg_dist_tenant_schema_colocationid,
-						 RelationGetDescr(pgDistTenantSchema),
-						 &colocationIdIsNull));
-		if (colocationIdIsNull)
-		{
-			colocationId = INVALID_COLOCATION_ID;
-		}
-
 		StringInfo insertTenantSchemaCommand = makeStringInfo();
 		appendStringInfo(insertTenantSchemaCommand,
 						 "SELECT pg_catalog.citus_internal_add_tenant_schema(%s, %u)",
 						 RemoteSchemaIdExpression(tenantSchemaForm->schemaid),
-						 colocationId);
+						 tenantSchemaForm->colocationid);
 
 		List *commandList = list_make1(insertTenantSchemaCommand->data);
 		SendOrCollectCommandListToActivatedNodes(context, commandList);

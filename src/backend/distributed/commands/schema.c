@@ -33,7 +33,6 @@
 #include "distributed/resource_lock.h"
 #include <distributed/remote_commands.h>
 #include <distributed/remote_commands.h>
-#include "distributed/tenant_schema_metadata.h"
 #include "distributed/version_compat.h"
 #include "nodes/parsenodes.h"
 #include "utils/fmgroids.h"

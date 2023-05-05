@@ -15,7 +15,6 @@
 #include "postgres.h"
 
 /* accessors */
-extern bool IsTenantSchema(Oid schemaId);
 extern uint32 SchemaIdGetTenantColocationId(Oid schemaId);
 extern Oid ColocationIdGetTenantSchemaId(uint32 colocationId);
 
@@ -28,6 +27,5 @@ extern Oid ColocationIdGetTenantSchemaId(uint32 colocationId);
  */
 extern void InsertTenantSchemaLocally(Oid schemaId, uint32 colocationId);
 extern void DeleteTenantSchemaLocally(Oid schemaId);
-extern void SetTenantSchemaColocationIdLocally(Oid schemaId, uint32 colocationId);
 
 #endif /* TENANT_SCHEMA_METADATA_H */

@@ -609,44 +609,6 @@ ReleaseColocationDefaultLock(void)
 
 
 /*
- * AcquireCitusTenantSchemaDefaultColocationLock serializes concurrent
- * creation of a colocation entry for given (presumably) tenant schema.
- */
-void
-AcquireCitusTenantSchemaDefaultColocationLock(Oid schemaId)
-{
-	Assert(IsTenantSchema(schemaId));
-
-	LOCKTAG tag;
-	const bool sessionLock = false;
-	const bool dontWait = false;
-
-	SET_LOCKTAG_CITUS_TENANT_SCHEMA_DEFAULT_COLOCATION(tag, schemaId);
-
-	(void) LockAcquire(&tag, ExclusiveLock, sessionLock, dontWait);
-}
-
-
-/*
- * ReleaseCitusTenantSchemaDefaultColocationLock releases the lock acquired
- * to prevent concurrent creation of a colocation entry for given (presumably)
- * tenant schema.
- */
-void
-ReleaseCitusTenantSchemaDefaultColocationLock(Oid schemaId)
-{
-	Assert(IsTenantSchema(schemaId));
-
-	LOCKTAG tag;
-	const bool sessionLock = false;
-
-	SET_LOCKTAG_CITUS_TENANT_SCHEMA_DEFAULT_COLOCATION(tag, schemaId);
-
-	LockRelease(&tag, ExclusiveLock, sessionLock);
-}
-
-
-/*
  * CreateColocationGroup creates a new colocation id and writes it into
  * pg_dist_colocation with the given configuration. It also returns the created
  * colocation id.
@@ -1327,8 +1289,6 @@ DeleteColocationGroup(uint32 colocationId)
 {
 	DeleteColocationGroupLocally(colocationId);
 	SyncDeleteColocationGroupToNodes(colocationId);
-
-	DisassociateTenantSchemaIfAny(colocationId);
 }
 
 

@@ -19,10 +19,6 @@ SELECT citus_internal_add_tenant_schema(1, NULL);
 ERROR:  colocation_id cannot be NULL
 SELECT citus_internal_delete_tenant_schema(NULL);
 ERROR:  schema_id cannot be NULL
-SELECT citus_internal_set_tenant_schema_colocation_id(NULL, 1);
-ERROR:  schema_id cannot be NULL
-SELECT citus_internal_set_tenant_schema_colocation_id(1, NULL);
-ERROR:  colocation_id cannot be NULL
 CREATE ROLE test_non_super_user WITH LOGIN;
 ALTER ROLE test_non_super_user NOSUPERUSER;
 \c - test_non_super_user
@@ -32,9 +28,6 @@ SELECT citus_internal_add_tenant_schema(1, 1);
 ERROR:  operation is not allowed
 HINT:  Run the command with a superuser.
 SELECT citus_internal_delete_tenant_schema(1);
-ERROR:  operation is not allowed
-HINT:  Run the command with a superuser.
-SELECT citus_internal_set_tenant_schema_colocation_id(1, 1);
 ERROR:  operation is not allowed
 HINT:  Run the command with a superuser.
 \c - postgres
@@ -50,8 +43,6 @@ SELECT citus_internal_add_tenant_schema(1, 1);
 ERROR:  This is an internal Citus function can only be used in a distributed transaction
 SELECT citus_internal_delete_tenant_schema(1);
 ERROR:  This is an internal Citus function can only be used in a distributed transaction
-SELECT citus_internal_set_tenant_schema_colocation_id(1, 1);
-ERROR:  This is an internal Citus function can only be used in a distributed transaction
 ALTER SYSTEM SET citus.enable_manual_metadata_changes_for_user TO 'postgres';
 SELECT pg_reload_conf();
  pg_reload_conf
@@ -66,18 +57,16 @@ SELECT pg_sleep(0.1);
 (1 row)
 
 -- Verify that the UDFs used to sync tenant schema metadata to workers
--- fail on schema_id = InvalidOid
+-- fail on schema_id = InvalidOid / colocation_id = INVALID_COLOCATION_ID.
 SELECT citus_internal_add_tenant_schema(0, 1);
 ERROR:  schema id is invalid
+SELECT citus_internal_add_tenant_schema(1, 0);
+ERROR:  colocation id is invalid
 SELECT citus_internal_delete_tenant_schema(0);
-ERROR:  schema id is invalid
-SELECT citus_internal_set_tenant_schema_colocation_id(0, 1);
 ERROR:  schema id is invalid
 -- Verify that the UDFs used to sync tenant schema metadata to workers
 -- fail on non-existing schema_id.
 SELECT citus_internal_delete_tenant_schema(456456);
-ERROR:  could not find tuple for tenant schema 456456
-SELECT citus_internal_set_tenant_schema_colocation_id(456456, 1);
 ERROR:  could not find tuple for tenant schema 456456
 ALTER SYSTEM RESET citus.enable_manual_metadata_changes_for_user;
 SELECT pg_reload_conf();
@@ -133,8 +122,8 @@ SELECT create_reference_table('tenant_2.test_table');
 ERROR:  table "test_table" is already distributed
 SELECT citus_add_local_table_to_metadata('tenant_2.test_table');
 ERROR:  table "test_table" is already distributed
--- (on coordinator) verify that colocation id is not set for empty tenants
-SELECT colocation_id IS NULL FROM pg_dist_tenant_schema
+-- (on coordinator) verify that colocation id is set for empty tenants too
+SELECT colocation_id > 0 FROM pg_dist_tenant_schema
 WHERE schema_id::regnamespace::text IN ('tenant_1', 'tenant_3');
  ?column?
 ---------------------------------------------------------------------
@@ -142,9 +131,9 @@ WHERE schema_id::regnamespace::text IN ('tenant_1', 'tenant_3');
  t
 (2 rows)
 
--- (on workers) verify that colocation id is not set for empty tenants
+-- (on workers) verify that colocation id is set for empty tenants too
 SELECT result FROM run_command_on_workers($$
-    SELECT array_agg(colocation_id IS NULL) FROM pg_dist_tenant_schema
+    SELECT array_agg(colocation_id > 0) FROM pg_dist_tenant_schema
     WHERE schema_id::regnamespace::text IN ('tenant_1', 'tenant_3');
 $$);
  result
@@ -322,18 +311,18 @@ WHERE schema_id::regnamespace::text = 'tenant_5' \gset
 -- drop all the tables that belong to tenant_5 and create a new one
 DROP TABLE tenant_5.tbl_1, tenant_5.tbl_2, tenant_5.tbl_3;
 CREATE TABLE tenant_5.tbl_4(a int, b text);
--- (on coordinator) verify that tenant_5 is now associated with a new colocation id
-SELECT colocation_id != :tenant_5_old_colocation_id FROM pg_dist_tenant_schema
+-- (on coordinator) verify that tenant_5 is still associated with the same colocation id
+SELECT colocation_id = :tenant_5_old_colocation_id FROM pg_dist_tenant_schema
 WHERE schema_id::regnamespace::text = 'tenant_5';
  ?column?
 ---------------------------------------------------------------------
  t
 (1 row)
 
--- (on workers) verify that tenant_5 is now associated with a new colocation id
+-- (on workers) verify that tenant_5 is still associated with the same colocation id
 SELECT format(
     'SELECT result FROM run_command_on_workers($$
-        SELECT colocation_id != %s FROM pg_dist_tenant_schema
+        SELECT colocation_id = %s FROM pg_dist_tenant_schema
         WHERE schema_id::regnamespace::text = ''tenant_5'';
     $$);',
 :tenant_5_old_colocation_id) AS verify_workers_query \gset
@@ -387,10 +376,15 @@ SELECT (SELECT COUNT(*) FROM pg_dist_tenant_schema) =
  t
 (1 row)
 
--- show that all colocation_id values are unique in pg_dist_tenant_schema
+-- show that all colocation_id values are unique and non-null in pg_dist_tenant_schema
+SELECT COUNT(*)=0 FROM pg_dist_tenant_schema WHERE colocation_id IS NULL;
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
 SELECT (SELECT COUNT(*) FROM pg_dist_tenant_schema) =
-       (SELECT COUNT(DISTINCT(colocation_id)) FROM pg_dist_tenant_schema) +
-       (SELECT COUNT(*) FROM pg_dist_tenant_schema WHERE colocation_id IS NULL);
+       (SELECT COUNT(DISTINCT(colocation_id)) FROM pg_dist_tenant_schema);
  ?column?
 ---------------------------------------------------------------------
  t
@@ -426,13 +420,6 @@ SELECT COUNT(*)=0 FROM pg_dist_tenant_schema WHERE schema_id::regnamespace::text
 (1 row)
 
 DROP TABLE temp_table;
--- test the UDFs that we use to sync pg_dist_tenant_schema to workers, all should fail
-SELECT pg_catalog.citus_internal_add_tenant_schema(1, 1);
-ERROR:  This is an internal Citus function can only be used in a distributed transaction
-SELECT pg_catalog.citus_internal_set_tenant_schema_colocation_id(1, 1);
-ERROR:  This is an internal Citus function can only be used in a distributed transaction
-SELECT pg_catalog.citus_internal_delete_tenant_schema(1);
-ERROR:  This is an internal Citus function can only be used in a distributed transaction
 -- test creating a tenant schema and a tenant table for it in the same transaction
 BEGIN;
     CREATE SCHEMA tenant_7;

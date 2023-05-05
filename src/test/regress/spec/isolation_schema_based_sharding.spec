@@ -32,12 +32,11 @@ step "s2-tenant-4-verify-colocation" { SELECT COUNT(DISTINCT(colocationid))=1 FR
 step "s2-tenant-3-create-table-1" { CREATE TABLE tenant_3.tbl_1 (a int); }
 step "s2-commit" { COMMIT; }
 
-// Verify that we serialize creation of the first table in a tenant schema to prevent
-// tables getting created in different colocation groups.
+// two sessions competing with each other to create the first table in the same schema
 permutation "s1-begin" "s2-begin" "s1-tenant-1-create-table-1" "s2-tenant-1-create-table-2" "s1-commit" "s2-tenant-1-verify-colocation" "s2-commit"
 
-// But we don't do the same for the latter tables in the tenant schema.
+// two sessions creating further tenant tables in the same schema
 permutation "s1-begin" "s2-begin" "s1-tenant-4-create-table-1" "s2-tenant-4-create-table-2" "s1-commit" "s2-tenant-4-verify-colocation" "s2-commit"
 
-// And we don't do the same if the tables are being created in different schemas.
+// two sessions creating tenant tables in different schemas
 permutation "s1-begin" "s2-begin" "s1-tenant-2-create-table-1" "s2-tenant-3-create-table-1" "s1-commit" "s2-commit"
