@@ -13,7 +13,7 @@ ALTER TABLE citus.pg_dist_tenant_schema SET SCHEMA pg_catalog;
 
 GRANT SELECT ON pg_catalog.pg_dist_tenant_schema TO public;
 
-#include "udfs/citus_internal_insert_tenant_schema/12.0-1.sql"
+#include "udfs/citus_internal_add_tenant_schema/12.0-1.sql"
 #include "udfs/citus_internal_delete_tenant_schema/12.0-1.sql"
 #include "udfs/citus_internal_set_tenant_schema_colocation_id/12.0-1.sql"
 

@@ -30,7 +30,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-DROP FUNCTION pg_catalog.citus_internal_insert_tenant_schema(Oid, int);
+DROP FUNCTION pg_catalog.citus_internal_add_tenant_schema(Oid, int);
 DROP FUNCTION pg_catalog.citus_internal_delete_tenant_schema(Oid);
 DROP FUNCTION pg_catalog.citus_internal_set_tenant_schema_colocation_id(Oid, int);
 

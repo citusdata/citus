@@ -173,7 +173,7 @@ PG_FUNCTION_INFO_V1(citus_internal_update_relation_colocation);
 PG_FUNCTION_INFO_V1(citus_internal_add_object_metadata);
 PG_FUNCTION_INFO_V1(citus_internal_add_colocation_metadata);
 PG_FUNCTION_INFO_V1(citus_internal_delete_colocation_metadata);
-PG_FUNCTION_INFO_V1(citus_internal_insert_tenant_schema);
+PG_FUNCTION_INFO_V1(citus_internal_add_tenant_schema);
 PG_FUNCTION_INFO_V1(citus_internal_delete_tenant_schema);
 PG_FUNCTION_INFO_V1(citus_internal_set_tenant_schema_colocation_id);
 
@@ -3795,14 +3795,14 @@ citus_internal_delete_colocation_metadata(PG_FUNCTION_ARGS)
 
 
 /*
- * citus_internal_insert_tenant_schema is an internal UDF to
+ * citus_internal_add_tenant_schema is an internal UDF to
  * call InsertTenantSchemaLocally on a remote node.
  *
  * None of the parameters are allowed to be NULL. To set the colocation
  * id to NULL in metadata, use INVALID_COLOCATION_ID.
  */
 Datum
-citus_internal_insert_tenant_schema(PG_FUNCTION_ARGS)
+citus_internal_add_tenant_schema(PG_FUNCTION_ARGS)
 {
 	CheckCitusVersion(ERROR);
 	EnsureSuperUser();
@@ -4031,14 +4031,14 @@ ColocationGroupDeleteCommand(uint32 colocationId)
 
 /*
  * TenantSchemaInsertCommand returns a command to call
- * citus_internal_insert_tenant_schema().
+ * citus_internal_add_tenant_schema().
  */
 char *
 TenantSchemaInsertCommand(Oid schemaId, uint32 colocationId)
 {
 	StringInfo command = makeStringInfo();
 	appendStringInfo(command,
-					 "SELECT pg_catalog.citus_internal_insert_tenant_schema(%s, %u)",
+					 "SELECT pg_catalog.citus_internal_add_tenant_schema(%s, %u)",
 					 RemoteSchemaIdExpression(schemaId), colocationId);
 
 	return command->data;
@@ -4723,7 +4723,7 @@ SendTenantSchemaMetadataCommands(MetadataSyncContext *context)
 
 		StringInfo insertTenantSchemaCommand = makeStringInfo();
 		appendStringInfo(insertTenantSchemaCommand,
-						 "SELECT pg_catalog.citus_internal_insert_tenant_schema(%s, %u)",
+						 "SELECT pg_catalog.citus_internal_add_tenant_schema(%s, %u)",
 						 RemoteSchemaIdExpression(tenantSchemaForm->schemaid),
 						 colocationId);
 

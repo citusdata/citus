@@ -12,8 +12,8 @@ SET client_min_messages TO NOTICE;
 
 -- Verify that the UDFs used to sync tenant schema metadata to workers
 -- fail on NULL input.
-SELECT citus_internal_insert_tenant_schema(NULL, 1);
-SELECT citus_internal_insert_tenant_schema(1, NULL);
+SELECT citus_internal_add_tenant_schema(NULL, 1);
+SELECT citus_internal_add_tenant_schema(1, NULL);
 SELECT citus_internal_delete_tenant_schema(NULL);
 SELECT citus_internal_set_tenant_schema_colocation_id(NULL, 1);
 SELECT citus_internal_set_tenant_schema_colocation_id(1, NULL);
@@ -25,7 +25,7 @@ ALTER ROLE test_non_super_user NOSUPERUSER;
 
 -- Verify that the UDFs used to sync tenant schema metadata to workers
 -- fail when called via a non-superuser.
-SELECT citus_internal_insert_tenant_schema(1, 1);
+SELECT citus_internal_add_tenant_schema(1, 1);
 SELECT citus_internal_delete_tenant_schema(1);
 SELECT citus_internal_set_tenant_schema_colocation_id(1, 1);
 
@@ -41,7 +41,7 @@ SET client_min_messages TO NOTICE;
 
 -- Verify that the UDFs used to sync tenant schema metadata to workers
 -- fail when called via a superuser that is not allowed to modify metadata.
-SELECT citus_internal_insert_tenant_schema(1, 1);
+SELECT citus_internal_add_tenant_schema(1, 1);
 SELECT citus_internal_delete_tenant_schema(1);
 SELECT citus_internal_set_tenant_schema_colocation_id(1, 1);
 
@@ -51,7 +51,7 @@ SELECT pg_sleep(0.1);
 
 -- Verify that the UDFs used to sync tenant schema metadata to workers
 -- fail on schema_id = InvalidOid
-SELECT citus_internal_insert_tenant_schema(0, 1);
+SELECT citus_internal_add_tenant_schema(0, 1);
 SELECT citus_internal_delete_tenant_schema(0);
 SELECT citus_internal_set_tenant_schema_colocation_id(0, 1);
 
@@ -296,7 +296,7 @@ SELECT COUNT(*)=0 FROM pg_dist_tenant_schema WHERE schema_id::regnamespace::text
 DROP TABLE temp_table;
 
 -- test the UDFs that we use to sync pg_dist_tenant_schema to workers, all should fail
-SELECT pg_catalog.citus_internal_insert_tenant_schema(1, 1);
+SELECT pg_catalog.citus_internal_add_tenant_schema(1, 1);
 SELECT pg_catalog.citus_internal_set_tenant_schema_colocation_id(1, 1);
 SELECT pg_catalog.citus_internal_delete_tenant_schema(1);
 
