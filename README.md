@@ -1,4 +1,4 @@
-| **<br/>The Citus database is 100% open source.<br/><img width=1000/><br/>Learn what's new in the [Citus 11.3 release blog](?????) and the [Citus Updates page](https://www.citusdata.com/updates/).<br/><br/>**|
+| **<br/>The Citus database is 100% open source.<br/><img width=1000/><br/>Learn what's new in the [Citus 11.3 release blog](https://www.citusdata.com/blog/2023/05/05/whats-new-in-citus-11-3-multi-tenant-saas/) and the [Citus Updates page](https://www.citusdata.com/updates/).<br/><br/>**|
 |---|
 <br/>
 
