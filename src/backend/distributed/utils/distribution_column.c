@@ -135,7 +135,7 @@ BuildDistributionKeyFromColumnName(Oid relationId, char *columnName, LOCKMODE lo
 
 	char *tableName = get_rel_name(relationId);
 
-	/* short circuit for reference tables */
+	/* short circuit for reference tables and single-shard tables */
 	if (columnName == NULL)
 	{
 		return NULL;

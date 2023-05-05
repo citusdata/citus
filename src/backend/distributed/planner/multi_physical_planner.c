@@ -28,6 +28,7 @@
 #include "access/xlog.h"
 #include "catalog/pg_aggregate.h"
 #include "catalog/pg_am.h"
+#include "catalog/pg_collation.h"
 #include "catalog/pg_operator.h"
 #include "catalog/pg_type.h"
 #include "commands/defrem.h"
@@ -69,6 +70,7 @@
 #include "optimizer/restrictinfo.h"
 #include "optimizer/tlist.h"
 #include "parser/parse_relation.h"
+#include "parser/parse_type.h"
 #include "parser/parsetree.h"
 #include "rewrite/rewriteManip.h"
 #include "utils/builtins.h"
@@ -79,6 +81,7 @@
 #include "utils/lsyscache.h"
 #include "utils/memutils.h"
 #include "utils/rel.h"
+#include "utils/syscache.h"
 #include "utils/typcache.h"
 
 /* RepartitionJoinBucketCountPerNode determines bucket amount during repartitions */
@@ -231,6 +234,11 @@ static List * FetchEqualityAttrNumsForRTEBoolExpr(BoolExpr *boolExpr);
 static List * FetchEqualityAttrNumsForList(List *nodeList);
 static int PartitionColumnIndex(Var *targetVar, List *targetList);
 static List * GetColumnOriginalIndexes(Oid relationId);
+static bool QueryTreeHasImproperForDeparseNodes(Node *inputNode);
+static Node * AdjustImproperForDeparseNodes(Node *inputNode);
+static bool IsImproperForDeparseRelabelTypeNode(Node *inputNode);
+static bool IsImproperForDeparseCoerceViaIONode(Node *inputNode);
+static CollateExpr * RelabelTypeToCollateExpr(RelabelType *relabelType);
 
 
 /*
@@ -2487,7 +2495,7 @@ QueryPushdownTaskCreate(Query *originalQuery, int shardIndex,
 			/* non-distributed tables have only one shard */
 			shardInterval = cacheEntry->sortedShardIntervalArray[0];
 
-			/* only use reference table as anchor shard if none exists yet */
+			/* use as anchor shard only if we couldn't find any yet */
 			if (anchorShardId == INVALID_SHARD_ID)
 			{
 				anchorShardId = shardInterval->shardId;
@@ -2683,6 +2691,18 @@ SqlTaskList(Job *job)
 	List *fragmentCombinationList = FragmentCombinationList(rangeTableFragmentsList,
 															jobQuery, dependentJobList);
 
+	/*
+	 * Adjust RelabelType and CoerceViaIO nodes that are improper for deparsing.
+	 * We first check if there are any such nodes by using a query tree walker.
+	 * The reason is that a query tree mutator will create a deep copy of all
+	 * the query sublinks, and we don't want to do that unless necessary, as it
+	 * would be inefficient.
+	 */
+	if (QueryTreeHasImproperForDeparseNodes((Node *) jobQuery))
+	{
+		jobQuery = (Query *) AdjustImproperForDeparseNodes((Node *) jobQuery);
+	}
+
 	ListCell *fragmentCombinationCell = NULL;
 	foreach(fragmentCombinationCell, fragmentCombinationList)
 	{
@@ -2733,7 +2753,7 @@ SqlTaskList(Job *job)
  * RelabelTypeToCollateExpr converts RelabelType's into CollationExpr's.
  * With that, we will be able to pushdown COLLATE's.
  */
-CollateExpr *
+static CollateExpr *
 RelabelTypeToCollateExpr(RelabelType *relabelType)
 {
 	Assert(OidIsValid(relabelType->resultcollid));
@@ -5592,4 +5612,127 @@ TaskListHighestTaskId(List *taskList)
 	}
 
 	return highestTaskId;
+}
+
+
+/*
+ * QueryTreeHasImproperForDeparseNodes walks over the node,
+ * and returns true if there are RelabelType or
+ * CoerceViaIONodes which are improper for deparse
+ */
+static bool
+QueryTreeHasImproperForDeparseNodes(Node *inputNode)
+{
+	if (inputNode == NULL)
+	{
+		return false;
+	}
+	else if (IsImproperForDeparseRelabelTypeNode(inputNode) ||
+			 IsImproperForDeparseCoerceViaIONode(inputNode))
+	{
+		return true;
+	}
+	else if (IsA(inputNode, Query))
+	{
+		return query_tree_walker((Query *) inputNode,
+								 QueryTreeHasImproperForDeparseNodes,
+								 NULL, 0);
+	}
+
+	return expression_tree_walker(inputNode,
+								  QueryTreeHasImproperForDeparseNodes,
+								  NULL);
+}
+
+
+/*
+ * AdjustImproperForDeparseNodes takes an input rewritten query and modifies
+ * nodes which, after going through our planner, pose a problem when
+ * deparsing. So far we have two such type of Nodes that may pose problems:
+ * RelabelType and CoerceIO nodes.
+ * Details will be written in comments in the corresponding if conditions.
+ */
+static Node *
+AdjustImproperForDeparseNodes(Node *inputNode)
+{
+	if (inputNode == NULL)
+	{
+		return NULL;
+	}
+
+	if (IsImproperForDeparseRelabelTypeNode(inputNode))
+	{
+		/*
+		 * The planner converts CollateExpr to RelabelType
+		 * and here we convert back.
+		 */
+		return (Node *) RelabelTypeToCollateExpr((RelabelType *) inputNode);
+	}
+	else if (IsImproperForDeparseCoerceViaIONode(inputNode))
+	{
+		/*
+		 * The planner converts some ::text/::varchar casts to ::cstring
+		 * and here we convert back to text because cstring is a pseudotype
+		 * and it cannot be casted to most resulttypes
+		 */
+
+		CoerceViaIO *iocoerce = (CoerceViaIO *) inputNode;
+		Node *arg = (Node *) iocoerce->arg;
+		Const *cstringToText = (Const *) arg;
+
+		cstringToText->consttype = TEXTOID;
+		cstringToText->constlen = -1;
+
+		Type textType = typeidType(TEXTOID);
+		char *constvalue = NULL;
+
+		if (!cstringToText->constisnull)
+		{
+			constvalue = DatumGetCString(cstringToText->constvalue);
+		}
+
+		cstringToText->constvalue = stringTypeDatum(textType,
+													constvalue,
+													cstringToText->consttypmod);
+		ReleaseSysCache(textType);
+		return inputNode;
+	}
+	else if (IsA(inputNode, Query))
+	{
+		return (Node *) query_tree_mutator((Query *) inputNode,
+										   AdjustImproperForDeparseNodes,
+										   NULL, QTW_DONT_COPY_QUERY);
+	}
+
+	return expression_tree_mutator(inputNode, AdjustImproperForDeparseNodes, NULL);
+}
+
+
+/*
+ * Checks if the given node is of Relabel type which is improper for deparsing
+ * The planner converts some CollateExpr to RelabelType nodes, and we need
+ * to find these nodes. They would be improperly deparsed without the
+ * "COLLATE" expression.
+ */
+static bool
+IsImproperForDeparseRelabelTypeNode(Node *inputNode)
+{
+	return (IsA(inputNode, RelabelType) &&
+			OidIsValid(((RelabelType *) inputNode)->resultcollid) &&
+			((RelabelType *) inputNode)->resultcollid != DEFAULT_COLLATION_OID);
+}
+
+
+/*
+ * Checks if the given node is of CoerceViaIO type which is improper for deparsing
+ * The planner converts some ::text/::varchar casts to ::cstring, and we need
+ * to find these nodes. They would be improperly deparsed with "cstring" which cannot
+ * be casted to most resulttypes.
+ */
+static bool
+IsImproperForDeparseCoerceViaIONode(Node *inputNode)
+{
+	return (IsA(inputNode, CoerceViaIO) &&
+			IsA(((CoerceViaIO *) inputNode)->arg, Const) &&
+			((Const *) ((CoerceViaIO *) inputNode)->arg)->consttype == CSTRINGOID);
 }

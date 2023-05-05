@@ -2,11 +2,12 @@
 
 """query_gen_test
 Usage:
-    run_query_compare_test --bindir=<bindir> --pgxsdir=<pgxsdir>
+    run_query_compare_test --bindir=<bindir> --pgxsdir=<pgxsdir> --seed=<seed>
 
 Options:
     --bindir=<bindir>                      PostgreSQL executable directory(ex: '~/.pgenv/pgsql-10.4/bin')
     --pgxsdir=<pgxsdir>           	       Path to the PGXS directory(ex: ~/.pgenv/src/postgresql-11.3)
+    --seed=<seed>                          Seed number used by the query generator.(ex: 123)
 """
 
 import os
@@ -27,7 +28,7 @@ import common  # noqa: E402
 import config as cfg  # noqa: E402
 
 
-def run_test(config):
+def run_test(config, seed):
     # start cluster
     common.initialize_temp_dir(cfg.CITUS_ARBITRARY_TEST_DIR)
     common.initialize_citus_cluster(
@@ -36,8 +37,8 @@ def run_test(config):
 
     # run test
     scriptDirPath = os.path.dirname(os.path.abspath(__file__))
-    testRunCommand = "bash {}/citus_compare_dist_local_joins.sh {} {} {}".format(
-        scriptDirPath, config.user, config.dbname, config.coordinator_port()
+    testRunCommand = "bash {}/citus_compare_dist_local_joins.sh {} {} {} {}".format(
+        scriptDirPath, config.user, config.dbname, config.coordinator_port(), seed
     )
     process = subprocess.Popen(
         testRunCommand.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE
@@ -56,8 +57,10 @@ def run_test(config):
 
 
 if __name__ == "__main__":
-    citusClusterConfig = cfg.CitusSuperUserDefaultClusterConfig(
-        docopt(__doc__, version="run_query_compare_test")
-    )
+    arguments = docopt(__doc__, version="run_query_compare_test")
+    citusClusterConfig = cfg.CitusSuperUserDefaultClusterConfig(arguments)
 
-    run_test(citusClusterConfig)
+    seed = ""
+    if "--seed" in arguments and arguments["--seed"] != "":
+        seed = arguments["--seed"]
+    run_test(citusClusterConfig, seed)

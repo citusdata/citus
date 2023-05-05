@@ -12,6 +12,7 @@ def getTableData():
     for table in tables:
         # generate base rows
         dataGenerationSql += _genOverlappingData(table.name, fromVal, table.rowCount)
+        dataGenerationSql += "\n"
         dataGenerationSql += _genNonOverlappingData(table.name, toVal, tableIdx)
         dataGenerationSql += "\n"
 

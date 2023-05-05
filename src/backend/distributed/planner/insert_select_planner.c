@@ -730,25 +730,49 @@ DistributedInsertSelectSupported(Query *queryTree, RangeTblEntry *insertRte,
 								 "table", NULL, NULL);
 		}
 
-		/* ensure that INSERT's partition column comes from SELECT's partition column */
-		error = InsertPartitionColumnMatchesSelect(queryTree, insertRte, subqueryRte,
-												   &selectPartitionColumnTableId);
-		if (error)
+		if (!HasDistributionKey(targetRelationId) ||
+			subqueryRteListProperties->hasSingleShardDistTable)
 		{
-			return error;
+			/*
+			 * XXX: Better to check this regardless of the fact that the target table
+			 *      has a distribution column or not.
+			 */
+			List *distributedRelationIdList = DistributedRelationIdList(subquery);
+			distributedRelationIdList = lappend_oid(distributedRelationIdList,
+													targetRelationId);
+
+			if (!AllDistributedRelationsInListColocated(distributedRelationIdList))
+			{
+				return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+									 "distributed INSERT ... SELECT cannot reference a "
+									 "distributed table without a shard key together "
+									 "with non-colocated distributed tables",
+									 NULL, NULL);
+			}
 		}
 
-		/*
-		 * We expect partition column values come from colocated tables. Note that we
-		 * skip this check from the reference table case given that all reference tables
-		 * are already (and by default) co-located.
-		 */
-		if (!TablesColocated(insertRte->relid, selectPartitionColumnTableId))
+		if (HasDistributionKey(targetRelationId))
 		{
-			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-								 "INSERT target table and the source relation of the SELECT partition "
-								 "column value must be colocated in distributed INSERT ... SELECT",
-								 NULL, NULL);
+			/* ensure that INSERT's partition column comes from SELECT's partition column */
+			error = InsertPartitionColumnMatchesSelect(queryTree, insertRte, subqueryRte,
+													   &selectPartitionColumnTableId);
+			if (error)
+			{
+				return error;
+			}
+
+			/*
+			 * We expect partition column values come from colocated tables. Note that we
+			 * skip this check from the reference table case given that all reference tables
+			 * are already (and by default) co-located.
+			 */
+			if (!TablesColocated(insertRte->relid, selectPartitionColumnTableId))
+			{
+				return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+									 "INSERT target table and the source relation of the SELECT partition "
+									 "column value must be colocated in distributed INSERT ... SELECT",
+									 NULL, NULL);
+			}
 		}
 	}
 
@@ -867,7 +891,7 @@ RouterModifyTaskForShardInterval(Query *originalQuery,
 	 */
 	RTEListProperties *subqueryRteListProperties = GetRTEListPropertiesForQuery(
 		copiedSubquery);
-	if (subqueryRteListProperties->hasDistributedTable)
+	if (subqueryRteListProperties->hasDistTableWithShardKey)
 	{
 		AddPartitionKeyNotNullFilterToSelect(copiedSubquery);
 	}
@@ -1536,6 +1560,19 @@ CreateNonPushableInsertSelectPlan(uint64 planId, Query *parse, ParamListInfo bou
 
 	bool repartitioned = IsRedistributablePlan(selectPlan->planTree) &&
 						 IsSupportedRedistributionTarget(targetRelationId);
+
+	/*
+	 * Today it's not possible to generate a distributed plan for a SELECT
+	 * having more than one tasks if it references a single-shard table.
+	 * This is because, we don't support queries beyond router planner
+	 * if the query references a single-shard table.
+	 *
+	 * For this reason, right now we don't expect an INSERT .. SELECT
+	 * query to go through the repartitioned INSERT .. SELECT logic if the
+	 * SELECT query references a single-shard table.
+	 */
+	Assert(!repartitioned ||
+		   !GetRTEListPropertiesForQuery(selectQueryCopy)->hasSingleShardDistTable);
 
 	distributedPlan->insertSelectQuery = insertSelectQuery;
 	distributedPlan->selectPlanForInsertSelect = selectPlan;

@@ -22,6 +22,7 @@ ARBITRARY_SCHEDULE_NAMES = [
     "sql_schedule",
     "sql_base_schedule",
     "postgres_schedule",
+    "single_shard_table_prep_schedule",
 ]
 
 BEFORE_PG_UPGRADE_SCHEDULE = "./before_pg_upgrade_schedule"
@@ -29,6 +30,7 @@ AFTER_PG_UPGRADE_SCHEDULE = "./after_pg_upgrade_schedule"
 
 CREATE_SCHEDULE = "./create_schedule"
 POSTGRES_SCHEDULE = "./postgres_schedule"
+SINGLE_SHARD_PREP_SCHEDULE = "./single_shard_table_prep_schedule"
 SQL_SCHEDULE = "./sql_schedule"
 SQL_BASE_SCHEDULE = "./sql_base_schedule"
 
@@ -101,6 +103,7 @@ class CitusBaseClusterConfig(object, metaclass=NewInitCaller):
         self.dbname = DATABASE_NAME
         self.is_mx = True
         self.is_citus = True
+        self.all_null_dist_key = False
         self.name = type(self).__name__
         self.settings = {
             "shared_preload_libraries": "citus",
@@ -200,6 +203,43 @@ class PostgresConfig(CitusDefaultClusterConfig):
             # Alter Table statement cannot be run from an arbitrary node so this test will fail
             "arbitrary_configs_alter_table_add_constraint_without_name_create",
             "arbitrary_configs_alter_table_add_constraint_without_name",
+        ]
+
+
+class AllSingleShardTableDefaultConfig(CitusDefaultClusterConfig):
+    def __init__(self, arguments):
+        super().__init__(arguments)
+        self.all_null_dist_key = True
+        self.skip_tests += [
+            # i) Skip the following tests because they require SQL support beyond
+            #    router planner / supporting more DDL command types.
+            #
+            # group 1
+            "dropped_columns_create_load",
+            "dropped_columns_1",
+            # group 2
+            "distributed_planning_create_load",
+            "distributed_planning",
+            # group 4
+            "views_create",
+            "views",
+            # group 5
+            "intermediate_result_pruning_create",
+            "intermediate_result_pruning_queries_1",
+            "intermediate_result_pruning_queries_2",
+            # group 6
+            "local_dist_join_load",
+            "local_dist_join",
+            "arbitrary_configs_recurring_outer_join",
+            # group 7
+            "sequences_create",
+            "sequences",
+            # group 8
+            "function_create",
+            "functions",
+            #
+            # ii) Skip the following test as it requires support for create_distributed_function.
+            "nested_execution",
         ]
 
 

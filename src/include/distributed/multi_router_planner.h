@@ -36,6 +36,7 @@ extern DistributedPlan * CreateRouterPlan(Query *originalQuery, Query *query,
 extern DistributedPlan * CreateModifyPlan(Query *originalQuery, Query *query,
 										  PlannerRestrictionContext *
 										  plannerRestrictionContext);
+extern void WrapRouterErrorForSingleShardTable(DeferredErrorMessage *planningError);
 extern DeferredErrorMessage * PlanRouterQuery(Query *originalQuery,
 											  PlannerRestrictionContext *
 											  plannerRestrictionContext,

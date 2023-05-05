@@ -123,6 +123,7 @@ typedef enum
 	HASH_DISTRIBUTED,
 	APPEND_DISTRIBUTED,
 	RANGE_DISTRIBUTED,
+	SINGLE_SHARD_DISTRIBUTED,
 
 	/* hash, range or append distributed table */
 	DISTRIBUTED_TABLE,
@@ -157,6 +158,8 @@ extern uint32 ColocationIdViaCatalog(Oid relationId);
 bool IsReferenceTableByDistParams(char partitionMethod, char replicationModel);
 extern bool IsCitusLocalTableByDistParams(char partitionMethod, char replicationModel,
 										  uint32 colocationId);
+extern bool IsSingleShardTableByDistParams(char partitionMethod, char replicationModel,
+										   uint32 colocationId);
 extern List * CitusTableList(void);
 extern ShardInterval * LoadShardInterval(uint64 shardId);
 extern bool ShardExists(uint64 shardId);
