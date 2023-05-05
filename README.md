@@ -349,7 +349,7 @@ To learn more about columnar storage, check out the [columnar storage README](ht
 
 ## Setting up with High Availability
 
-One of the most popular high availability solutions for PostgreSQL, [Patroni 3.0](https://github.com/zalando/patroni), has [first class support for Citus 10.0 and above](https://patroni.readthedocs.io/en/latest/citus.html#citus), additionally Citus 11.3 ships with improvements for smoother node switchover in Patroni.
+One of the most popular high availability solutions for PostgreSQL, [Patroni 3.0](https://github.com/zalando/patroni), has [first class support for Citus 10.0 and above](https://patroni.readthedocs.io/en/latest/citus.html#citus), additionally since Citus 11.2 ships with improvements for smoother node switchover in Patroni.
 
 An example of patronictl list output for the Citus cluster:
 
