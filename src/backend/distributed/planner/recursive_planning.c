@@ -2401,9 +2401,6 @@ BuildReadIntermediateResultsQuery(List *targetEntryList, List *columnAliasList,
 	resultQuery->jointree = joinTree;
 	resultQuery->targetList = targetList;
 
-	addRTEPermissionInfo(&resultQuery->rteperminfos, rangeTableEntry);
-
-
 	return resultQuery;
 }
 
