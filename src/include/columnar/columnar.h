@@ -269,14 +269,14 @@ extern ChunkData * CreateEmptyChunkData(uint32 columnCount, bool *columnMask,
 										uint32 chunkGroupRowCount);
 extern void FreeChunkData(ChunkData *chunkData);
 extern uint64 ColumnarTableRowCount(Relation relation);
-extern const char * CompressionTypeStr(CompressionType type);
+extern PGDLLEXPORT const char * CompressionTypeStr(CompressionType type);
 
 /* columnar_metadata_tables.c */
-extern void InitColumnarOptions(Oid regclass);
-extern void SetColumnarOptions(Oid regclass, ColumnarOptions *options);
-extern bool DeleteColumnarTableOptions(Oid regclass, bool missingOk);
-extern bool ReadColumnarOptions(Oid regclass, ColumnarOptions *options);
-extern bool IsColumnarTableAmTable(Oid relationId);
+extern PGDLLEXPORT void InitColumnarOptions(Oid regclass);
+extern PGDLLEXPORT void SetColumnarOptions(Oid regclass, ColumnarOptions *options);
+extern PGDLLEXPORT bool DeleteColumnarTableOptions(Oid regclass, bool missingOk);
+extern PGDLLEXPORT bool ReadColumnarOptions(Oid regclass, ColumnarOptions *options);
+extern PGDLLEXPORT bool IsColumnarTableAmTable(Oid relationId);
 
 /* columnar_metadata_tables.c */
 extern void DeleteMetadataRows(RelFileLocator relFileLocator);

@@ -631,12 +631,12 @@ GetPreLoadTableCreationCommands(Oid relationId,
 
 
 	/* add columnar options for cstore tables */
-	//if (accessMethod == NULL && extern_IsColumnarTableAmTable(relationId))
+	if (accessMethod == NULL && extern_IsColumnarTableAmTable(relationId))
 	{
-	//	TableDDLCommand *cstoreOptionsDDL = ColumnarGetTableOptionsDDL(relationId);
-	//	if (cstoreOptionsDDL != NULL)
+		TableDDLCommand *cstoreOptionsDDL = ColumnarGetTableOptionsDDL(relationId);
+		if (cstoreOptionsDDL != NULL)
 		{
-	//		tableDDLEventList = lappend(tableDDLEventList, cstoreOptionsDDL);
+			tableDDLEventList = lappend(tableDDLEventList, cstoreOptionsDDL);
 		}
 	}
 

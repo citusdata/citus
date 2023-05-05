@@ -118,7 +118,7 @@ PG_MODULE_MAGIC;
 
 ColumnarSupportsIndexAM_type extern_ColumnarSupportsIndexAM = NULL;
 CompressionTypeStr_type extern_CompressionTypeStr = NULL;
-IsColumnarTableAmTable_type extern_IsColumnarTableAmTable = NULL;
+PGDLLEXPORT IsColumnarTableAmTable_type extern_IsColumnarTableAmTable = NULL;
 ReadColumnarOptions_type extern_ReadColumnarOptions = NULL;
 
 /*

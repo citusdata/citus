@@ -148,7 +148,7 @@ ParseCompressionType(const char *compressionTypeString)
  * For compression algorithms that are invalid or not compiled, it
  * returns NULL.
  */
-const char *
+PGDLLEXPORT const char *
 CompressionTypeStr(CompressionType requestedType)
 {
 	for (int compressionIndex = 0;

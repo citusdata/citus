@@ -528,7 +528,7 @@ DeleteColumnarTableOptions(Oid regclass, bool missingOk)
 }
 
 
-bool
+PGDLLEXPORT bool
 ReadColumnarOptions(Oid regclass, ColumnarOptions *options)
 {
 	ScanKeyData scanKey[1];
@@ -1382,14 +1382,14 @@ UpdateStripeMetadataRow(uint64 storageId, uint64 stripeId, bool *update,
 	Relation columnarStripes = table_open(columnarStripesOid, AccessShareLock);
 
 	Oid indexId = ColumnarStripePKeyIndexRelationId();
-	bool indexOk = OidIsValid(indexId);
+	bool indexOk = false && OidIsValid(indexId);
 	SysScanDesc scanDescriptor = systable_beginscan(columnarStripes, indexId, indexOk,
 													&dirtySnapshot, 2, scanKey);
 
 	static bool loggedSlowMetadataAccessWarning = false;
 	if (!indexOk && !loggedSlowMetadataAccessWarning)
 	{
-		ereport(WARNING, (errmsg(SLOW_METADATA_ACCESS_WARNING, "stripe_pkey")));
+		//ereport(WARNING, (errmsg(SLOW_METADATA_ACCESS_WARNING, "stripe_pkey")));
 		loggedSlowMetadataAccessWarning = true;
 	}
 
