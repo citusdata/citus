@@ -68,8 +68,9 @@ step s2-begin: BEGIN;
 step s1-drop: DROP TABLE drop_hash;
 step s2-ddl-create-index: CREATE INDEX drop_hash_index ON drop_hash(id); <waiting ...>
 step s1-commit: COMMIT;
+s2: WARNING:  relation "drop_tests.drop_hash" does not exist
 step s2-ddl-create-index: <... completed>
-ERROR:  relation "drop_hash" does not exist
+ERROR:  failure on connection marked as essential: localhost:xxxxx
 step s2-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM drop_hash;
 ERROR:  relation "drop_hash" does not exist

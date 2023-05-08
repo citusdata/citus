@@ -749,16 +749,6 @@ PreprocessDropIndexStmt(Node *node, const char *dropIndexCommand,
 		}
 
 		/*
-		 * Acquire global lock to prevent concurrent writes or DDL. However,
-		 * we do not bother for DROP INDEX CONCURRENTLY, since we'll have
-		 * to release the lock.
-		 */
-		if (!dropIndexStatement->concurrent)
-		{
-			AcquireDistributedLockOnRelations(list_make1(rangeVar), lockmode, 0);
-		}
-
-		/*
 		 * The next few statements are based on RemoveRelations() in
 		 * commands/tablecmds.c in Postgres source.
 		 */
@@ -779,6 +769,16 @@ PreprocessDropIndexStmt(Node *node, const char *dropIndexCommand,
 		if (!OidIsValid(indexId))
 		{
 			continue;
+		}
+
+		/*
+		 * Acquire global lock to prevent concurrent writes or DDL. However,
+		 * we do not bother for DROP INDEX CONCURRENTLY, since we'll have
+		 * to release the lock.
+		 */
+		if (!dropIndexStatement->concurrent)
+		{
+			AcquireDistributedLockOnRelations(list_make1(rangeVar), lockmode, 0);
 		}
 
 		Oid relationId = IndexGetRelation(indexId, false);
