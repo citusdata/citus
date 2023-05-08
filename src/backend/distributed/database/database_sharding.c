@@ -79,21 +79,24 @@ PreProcessUtilityInDatabaseShard(Node *parseTree, const char *queryString,
 		return;
 	}
 
-	if (IsA(parseTree, CreatedbStmt))
+	if (EnableCreateDatabasePropagation)
 	{
-		char *command = DeparseCreatedbStmt(parseTree);
-		ExecuteCommandInControlDatabase(command);
+		if (IsA(parseTree, CreatedbStmt))
+		{
+			char *command = DeparseCreatedbStmt(parseTree);
+			ExecuteCommandInControlDatabase(command);
 
-		/* command is fully delegated to control database */
-		*runPreviousUtilityHook = false;
-	}
-	else if (IsA(parseTree, DropdbStmt))
-	{
-		char *command = DeparseDropdbStmt(parseTree);
-		ExecuteCommandInControlDatabase(command);
+			/* command is fully delegated to control database */
+			*runPreviousUtilityHook = false;
+		}
+		else if (IsA(parseTree, DropdbStmt))
+		{
+			char *command = DeparseDropdbStmt(parseTree);
+			ExecuteCommandInControlDatabase(command);
 
-		/* command is fully delegated to control database */
-		*runPreviousUtilityHook = false;
+			/* command is fully delegated to control database */
+			*runPreviousUtilityHook = false;
+		}
 	}
 }
 
