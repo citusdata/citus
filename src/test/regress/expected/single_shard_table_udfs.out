@@ -1,0 +1,207 @@
+CREATE SCHEMA null_dist_key_udfs;
+SET search_path TO null_dist_key_udfs;
+SET citus.next_shard_id TO 1720000;
+SET citus.shard_count TO 32;
+SET citus.shard_replication_factor TO 1;
+-- test some other udf's with citus local tables
+CREATE TABLE null_dist_key_table(a int);
+SELECT create_distributed_table('null_dist_key_table', null, colocate_with=>'none', distribution_type=>null);
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- should work --
+-- insert some data & create an index for table size udf's
+INSERT INTO null_dist_key_table VALUES (1), (2), (3);
+CREATE INDEX null_dist_key_idx ON null_dist_key_table(a);
+SELECT citus_table_size('null_dist_key_table');
+ citus_table_size
+---------------------------------------------------------------------
+             8192
+(1 row)
+
+SELECT citus_total_relation_size('null_dist_key_table');
+ citus_total_relation_size
+---------------------------------------------------------------------
+                     24576
+(1 row)
+
+SELECT citus_relation_size('null_dist_key_table');
+ citus_relation_size
+---------------------------------------------------------------------
+                8192
+(1 row)
+
+SELECT * FROM pg_catalog.citus_shard_sizes() WHERE table_name LIKE '%null_dist_key_table%';
+                   table_name                   | size
+---------------------------------------------------------------------
+ null_dist_key_udfs.null_dist_key_table_1720000 | 24576
+(1 row)
+
+BEGIN;
+  SELECT lock_relation_if_exists('null_dist_key_table', 'ACCESS SHARE');
+ lock_relation_if_exists
+---------------------------------------------------------------------
+ t
+(1 row)
+
+  SELECT count(*) FROM pg_locks where relation='null_dist_key_table'::regclass;
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+COMMIT;
+SELECT partmethod, repmodel FROM pg_dist_partition WHERE logicalrelid = 'null_dist_key_table'::regclass;
+ partmethod | repmodel
+---------------------------------------------------------------------
+ n          | s
+(1 row)
+
+SELECT master_get_table_ddl_events('null_dist_key_table');
+                               master_get_table_ddl_events
+---------------------------------------------------------------------
+ CREATE TABLE null_dist_key_udfs.null_dist_key_table (a integer) USING heap
+ ALTER TABLE null_dist_key_udfs.null_dist_key_table OWNER TO postgres
+ CREATE INDEX null_dist_key_idx ON null_dist_key_udfs.null_dist_key_table USING btree (a)
+(3 rows)
+
+SELECT column_to_column_name(logicalrelid, partkey)
+FROM pg_dist_partition WHERE logicalrelid = 'null_dist_key_table'::regclass;
+ column_to_column_name
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT column_name_to_column('null_dist_key_table', 'a');
+                                                  column_name_to_column
+---------------------------------------------------------------------
+ {VAR :varno 1 :varattno 1 :vartype 23 :vartypmod -1 :varcollid 0 :varlevelsup 0 :varnosyn 1 :varattnosyn 1 :location -1}
+(1 row)
+
+SELECT master_update_shard_statistics(shardid)
+FROM (SELECT shardid FROM pg_dist_shard WHERE logicalrelid='null_dist_key_table'::regclass) as shardid;
+ master_update_shard_statistics
+---------------------------------------------------------------------
+                           8192
+(1 row)
+
+-- will always be no-op as we create the shell table from scratch
+-- while creating a citus local table, but let's see it works
+SELECT truncate_local_data_after_distributing_table('null_dist_key_table');
+ truncate_local_data_after_distributing_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- should return a single element array that only includes its own shard id
+SELECT shardid=unnest(get_colocated_shard_array(shardid))
+FROM (SELECT shardid FROM pg_dist_shard WHERE logicalrelid='null_dist_key_table'::regclass) as shardid;
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+BEGIN;
+  SELECT master_remove_partition_metadata('null_dist_key_table'::regclass::oid, 'null_dist_key_udfs', 'null_dist_key_table');
+ master_remove_partition_metadata
+---------------------------------------------------------------------
+
+(1 row)
+
+  -- should print 0
+  select count(*) from pg_dist_partition where logicalrelid='null_dist_key_table'::regclass;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+ROLLBACK;
+-- should fail --
+SELECT update_distributed_table_colocation('null_dist_key_table', colocate_with => 'none');
+ERROR:  relation null_dist_key_table should be a hash distributed table
+SELECT master_create_empty_shard('null_dist_key_table');
+ERROR:  relation "null_dist_key_table" is a single shard table
+DETAIL:  We currently don't support creating shards on single shard tables
+-- return true
+SELECT citus_table_is_visible('null_dist_key_table'::regclass::oid);
+ citus_table_is_visible
+---------------------------------------------------------------------
+ t
+(1 row)
+
+-- return false
+SELECT relation_is_a_known_shard('null_dist_key_table');
+ relation_is_a_known_shard
+---------------------------------------------------------------------
+ f
+(1 row)
+
+-- return | false | true |
+SELECT citus_table_is_visible(tableName::regclass::oid), relation_is_a_known_shard(tableName::regclass)
+FROM (SELECT tableName FROM pg_catalog.pg_tables WHERE tablename LIKE 'null_dist_key_table%') as tableName;
+ citus_table_is_visible | relation_is_a_known_shard
+---------------------------------------------------------------------
+ t                      | f
+(1 row)
+
+-- should fail, maybe support in the future
+SELECT create_reference_table('null_dist_key_table');
+ERROR:  table "null_dist_key_table" is already distributed
+SELECT create_distributed_table('null_dist_key_table', 'a');
+ERROR:  table "null_dist_key_table" is already distributed
+SELECT create_distributed_table_concurrently('null_dist_key_table', 'a');
+ERROR:  table "null_dist_key_table" is already distributed
+SELECT citus_add_local_table_to_metadata('null_dist_key_table');
+ERROR:  table "null_dist_key_table" is already distributed
+-- test altering distribution column, fails for single shard tables
+SELECT alter_distributed_table('null_dist_key_table', distribution_column := 'a');
+ERROR:  relation null_dist_key_table should be a hash distributed table
+-- test altering shard count, fails for single shard tables
+SELECT alter_distributed_table('null_dist_key_table', shard_count := 6);
+ERROR:  relation null_dist_key_table should be a hash distributed table
+-- test shard splitting udf, fails for single shard tables
+SELECT nodeid AS worker_1_node FROM pg_dist_node WHERE nodeport=:worker_1_port \gset
+SELECT nodeid AS worker_2_node FROM pg_dist_node WHERE nodeport=:worker_2_port \gset
+SELECT citus_split_shard_by_split_points(
+	1720000,
+	ARRAY['-1073741826'],
+	ARRAY[:worker_1_node, :worker_2_node],
+    'block_writes');
+ERROR:  Cannot split shard as operation is only supported for hash distributed tables.
+-- test alter_table_set_access_method, fails for single shard tables
+SELECT alter_table_set_access_method('null_dist_key_table', 'columnar');
+ERROR:  relation null_dist_key_table should be a hash distributed table
+-- undistribute
+SELECT undistribute_table('null_dist_key_table');
+NOTICE:  creating a new table for null_dist_key_udfs.null_dist_key_table
+NOTICE:  moving the data of null_dist_key_udfs.null_dist_key_table
+NOTICE:  dropping the old null_dist_key_udfs.null_dist_key_table
+NOTICE:  renaming the new table to null_dist_key_udfs.null_dist_key_table
+ undistribute_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- verify that the metadata is gone
+SELECT COUNT(*) = 0 FROM pg_dist_partition;
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT COUNT(*) = 0 FROM pg_dist_placement;
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT COUNT(*) = 0 FROM pg_dist_shard;
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+DROP SCHEMA null_dist_key_udfs CASCADE;
+NOTICE:  drop cascades to table null_dist_key_table
