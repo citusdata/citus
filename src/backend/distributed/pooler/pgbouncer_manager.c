@@ -566,7 +566,7 @@ GenerateInboundPgBouncerConfig(int myPgBouncerId)
 	appendStringInfo(pgbouncerConfig,
 
 	                 /* TODO: make configurable */
-					 "auth_type = trust\n"
+					 "auth_type = md5\n"
 					 "auth_file = %s\n"
 					 "admin_users = %s\n",
 					 PGBOUNCER_USERS_FILE,
