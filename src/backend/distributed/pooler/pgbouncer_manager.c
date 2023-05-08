@@ -449,6 +449,14 @@ GenerateUsersFile(void)
 
 		Datum roleNameDatum = heap_getattr(heapTuple, Anum_pg_authid_rolname,
 										   tupleDescriptor, &isNull);
+		Datum passwordDatum = heap_getattr(heapTuple, Anum_pg_authid_rolpassword,
+										   tupleDescriptor, &isNull);
+		if (isNull)
+		{
+			/* skip users without a password */
+			continue;
+		}
+
 		Name roleName = DatumGetName(roleNameDatum);
 		char *roleNameStr = NameStr(*roleName);
 		const char *quotedRoleName = quote_identifier(roleNameStr);
@@ -464,18 +472,9 @@ GenerateUsersFile(void)
 			appendStringInfo(&usersList, "\"%s\"", quotedRoleName);
 		}
 
-		Datum passwordDatum = heap_getattr(heapTuple, Anum_pg_authid_rolpassword,
-										   tupleDescriptor, &isNull);
-		if (!isNull)
-		{
-			char *password = TextDatumGetCString(passwordDatum);
+		char *password = TextDatumGetCString(passwordDatum);
 
-			appendStringInfo(&usersList, " \"%s\"\n", password);
-		}
-		else
-		{
-			appendStringInfoString(&usersList, " \"\"\n");
-		}
+		appendStringInfo(&usersList, " \"%s\"\n", password);
 	}
 
 	SafeWriteToFile(usersList.data, usersList.len, PGBOUNCER_USERS_FILE);
