@@ -96,6 +96,7 @@ SELECT count(1) FROM pg_dist_node WHERE nodename='localhost' AND nodeport=5432;
 
 \c - - - :master_port
 SELECT master_remove_node('localhost', 5432);
+SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);
 
 \c - - - :worker_1_port
 

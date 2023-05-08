@@ -157,6 +157,13 @@ SELECT master_remove_node('localhost', 5432);
 
 (1 row)
 
+SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);
+NOTICE:  dropping metadata on the node (localhost,57638)
+ stop_metadata_sync_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
 \c - - - :worker_1_port
 UPDATE pg_dist_partition SET colocationid = 0 WHERE logicalrelid='mx_table_2'::regclass;
 SELECT update_distributed_table_colocation('mx_table', colocate_with => 'mx_table_2');
@@ -181,7 +188,7 @@ HINT:  Connect to the coordinator and run it again.
 SELECT hasmetadata FROM pg_dist_node WHERE nodeport=:worker_2_port;
  hasmetadata
 ---------------------------------------------------------------------
- t
+ f
 (1 row)
 
 -- stop_metadata_sync_to_node
