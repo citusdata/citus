@@ -513,6 +513,12 @@ FROM pg_dist_background_task WHERE job_id in (:job_id) ORDER BY task_id;
 (8 rows)
 
 -- increase citus.max_background_task_executors_per_node
+SELECT citus_task_wait(1013, desired_status => 'done');
+ citus_task_wait
+---------------------------------------------------------------------
+
+(1 row)
+
 ALTER SYSTEM SET citus.max_background_task_executors_per_node = 2;
 SELECT pg_reload_conf();
  pg_reload_conf
@@ -520,13 +526,13 @@ SELECT pg_reload_conf();
  t
 (1 row)
 
-SELECT citus_task_wait(1015, desired_status => 'running');
+SELECT citus_task_wait(1014, desired_status => 'running');
  citus_task_wait
 ---------------------------------------------------------------------
 
 (1 row)
 
-SELECT citus_task_wait(1013, desired_status => 'done');
+SELECT citus_task_wait(1015, desired_status => 'running');
  citus_task_wait
 ---------------------------------------------------------------------
 
