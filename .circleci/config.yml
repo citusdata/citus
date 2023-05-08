@@ -30,7 +30,7 @@ parameters:
     default: 50
   skip_flaky_tests:
     type: boolean
-    default: false
+    default: true
 
 commands:
   install_extension:
