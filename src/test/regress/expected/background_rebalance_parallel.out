@@ -466,17 +466,27 @@ SELECT citus_rebalance_start AS job_id from citus_rebalance_start() \gset
 -- see dependent tasks to understand which tasks remain runnable because of
 -- citus.max_background_task_executors_per_node
 -- and which tasks are actually blocked from colocation group dependencies
-SELECT D.task_id,
-       (SELECT T.command FROM pg_dist_background_task T WHERE T.task_id = D.task_id),
-       D.depends_on,
-       (SELECT T.command FROM pg_dist_background_task T WHERE T.task_id = D.depends_on)
-FROM pg_dist_background_task_depend D  WHERE job_id in (:job_id) ORDER BY D.task_id, D.depends_on ASC;
- task_id |                               command                               | depends_on |                               command
+SELECT (SELECT T.command FROM pg_dist_background_task T WHERE T.task_id = D.task_id),
+       (SELECT T.command depends_on_command FROM pg_dist_background_task T WHERE T.task_id = D.depends_on)
+FROM pg_dist_background_task_depend D  WHERE job_id in (:job_id) ORDER BY 1, 2 ASC;
+                               command                               |                         depends_on_command
 ---------------------------------------------------------------------
-    1014 | SELECT pg_catalog.citus_move_shard_placement(85674026,50,57,'auto') |       1013 | SELECT pg_catalog.citus_move_shard_placement(85674025,50,56,'auto')
-    1016 | SELECT pg_catalog.citus_move_shard_placement(85674032,50,57,'auto') |       1015 | SELECT pg_catalog.citus_move_shard_placement(85674031,50,56,'auto')
-    1018 | SELECT pg_catalog.citus_move_shard_placement(85674038,50,57,'auto') |       1017 | SELECT pg_catalog.citus_move_shard_placement(85674037,50,56,'auto')
-    1020 | SELECT pg_catalog.citus_move_shard_placement(85674044,50,57,'auto') |       1019 | SELECT pg_catalog.citus_move_shard_placement(85674043,50,56,'auto')
+ SELECT pg_catalog.citus_move_shard_placement(85674026,50,57,'auto') | SELECT pg_catalog.citus_move_shard_placement(85674025,50,56,'auto')
+ SELECT pg_catalog.citus_move_shard_placement(85674032,50,57,'auto') | SELECT pg_catalog.citus_move_shard_placement(85674031,50,56,'auto')
+ SELECT pg_catalog.citus_move_shard_placement(85674038,50,57,'auto') | SELECT pg_catalog.citus_move_shard_placement(85674037,50,56,'auto')
+ SELECT pg_catalog.citus_move_shard_placement(85674044,50,57,'auto') | SELECT pg_catalog.citus_move_shard_placement(85674043,50,56,'auto')
+(4 rows)
+
+SELECT task_id, depends_on
+FROM pg_dist_background_task_depend
+WHERE job_id in (:job_id)
+ORDER BY 1, 2 ASC;
+ task_id | depends_on
+---------------------------------------------------------------------
+    1014 |       1013
+    1016 |       1015
+    1018 |       1017
+    1020 |       1019
 (4 rows)
 
 -- default citus.max_background_task_executors_per_node is 1
@@ -503,6 +513,12 @@ FROM pg_dist_background_task WHERE job_id in (:job_id) ORDER BY task_id;
 (8 rows)
 
 -- increase citus.max_background_task_executors_per_node
+SELECT citus_task_wait(1013, desired_status => 'done');
+ citus_task_wait
+---------------------------------------------------------------------
+
+(1 row)
+
 ALTER SYSTEM SET citus.max_background_task_executors_per_node = 2;
 SELECT pg_reload_conf();
  pg_reload_conf
@@ -510,13 +526,13 @@ SELECT pg_reload_conf();
  t
 (1 row)
 
-SELECT citus_task_wait(1015, desired_status => 'running');
+SELECT citus_task_wait(1014, desired_status => 'running');
  citus_task_wait
 ---------------------------------------------------------------------
 
 (1 row)
 
-SELECT citus_task_wait(1013, desired_status => 'done');
+SELECT citus_task_wait(1015, desired_status => 'running');
  citus_task_wait
 ---------------------------------------------------------------------
 
