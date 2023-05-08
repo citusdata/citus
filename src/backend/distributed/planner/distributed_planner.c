@@ -306,10 +306,14 @@ distributed_planner(Query *parse,
 						errhint("Consider using PL/pgSQL functions instead.")));
 	}
 
+//	elog(WARNING, "slm1 %s", query_string);
+
 	/*
 	 * We annotate the query for tenant statisisics.
 	 */
-	AttributeQueryIfAnnotated(query_string, parse->commandType);
+	AttributeQueryIfAnnotated(query_string, parse->commandType, true);
+
+//	elog(WARNING, "slm2 %s", query_string);
 
 	return result;
 }

@@ -689,7 +689,7 @@ LocallyExecuteTaskPlan(PlannedStmt *taskPlan, char *queryString,
 												task->partitionKeyValue->consttype);
 	}
 
-	AttributeTask(partitionKeyValueString, task->colocationId, taskPlan->commandType);
+	AttributeTask(partitionKeyValueString, task->colocationId, taskPlan->commandType, true);
 
 	PG_TRY();
 	{

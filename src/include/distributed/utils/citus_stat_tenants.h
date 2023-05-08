@@ -104,11 +104,11 @@ typedef enum
 } StatTenantsTrackType;
 
 extern void CitusAttributeToEnd(QueryDesc *queryDesc);
-extern void AttributeQueryIfAnnotated(const char *queryString, CmdType commandType);
+extern void AttributeQueryIfAnnotated(const char *queryString, CmdType commandType, bool istrue);
 extern char * AnnotateQuery(char *queryString, Const *partitionKeyValue,
 							int colocationId);
 extern void InitializeMultiTenantMonitorSMHandleManagement(void);
-extern void AttributeTask(char *tenantId, int colocationGroupId, CmdType commandType);
+extern void AttributeTask(char *tenantId, int colocationGroupId, CmdType commandType, bool istrue);
 
 extern ExecutorEnd_hook_type prev_ExecutorEnd;
 
