@@ -536,7 +536,7 @@ INSERT INTO agg_events
               fist_table_agg;
 ROLLBACK;
 
--- We don't support CTEs that are referenced in the target list
+-- We do support CTEs that are referenced in the target list
 INSERT INTO agg_events
   WITH sub_cte AS (SELECT 1)
   SELECT
@@ -544,7 +544,7 @@ INSERT INTO agg_events
   FROM
     raw_events_first;
 
--- We support set operations via the coordinator
+-- We support set operations
 BEGIN;
 
 INSERT INTO

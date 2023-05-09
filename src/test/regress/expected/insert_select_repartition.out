@@ -761,7 +761,7 @@ WITH r AS (
   INSERT INTO target_table SELECT * FROM source_table RETURNING *
 )
 INSERT INTO target_table SELECT source_table.a, max(source_table.b) FROM source_table NATURAL JOIN r GROUP BY source_table.a;
-DEBUG:  INSERT target table and the source relation of the SELECT partition column value must be colocated in distributed INSERT ... SELECT
+DEBUG:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
 DEBUG:  only SELECT, UPDATE, or DELETE common table expressions may be router planned
 DEBUG:  generating subplan XXX_1 for CTE r: INSERT INTO insert_select_repartition.target_table (a, b) SELECT source_table.a, source_table.b FROM insert_select_repartition.source_table RETURNING target_table.a, target_table.b
 DEBUG:  INSERT target table and the source relation of the SELECT partition column value must be colocated in distributed INSERT ... SELECT
@@ -1104,7 +1104,7 @@ EXPLAIN (costs off) INSERT INTO test(y, x) SELECT a.x, b.y FROM test a JOIN test
 
 SET client_min_messages TO DEBUG1;
 INSERT INTO test(y, x) SELECT a.x, b.y FROM test a JOIN test b USING (y);
-DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition columns in the source table and subquery do not match
+DEBUG:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 RESET client_min_messages;
 SELECT count(*) FROM test;
@@ -1133,7 +1133,7 @@ EXPLAIN (costs off) INSERT INTO test SELECT a.* FROM test a JOIN test b USING (y
 
 SET client_min_messages TO DEBUG1;
 INSERT INTO test SELECT a.* FROM test a JOIN test b USING (y);
-DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 RESET client_min_messages;
 SELECT count(*) FROM test;

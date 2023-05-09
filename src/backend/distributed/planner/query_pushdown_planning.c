@@ -533,9 +533,11 @@ SubqueryMultiNodeTree(Query *originalQuery, Query *queryTree,
 		RaiseDeferredError(unsupportedQueryError, ERROR);
 	}
 
+	bool requireSubqueryPushdownCondsForTopLevel = false;
 	DeferredErrorMessage *subqueryPushdownError = DeferErrorIfUnsupportedSubqueryPushdown(
 		originalQuery,
-		plannerRestrictionContext);
+		plannerRestrictionContext,
+		requireSubqueryPushdownCondsForTopLevel);
 	if (subqueryPushdownError != NULL)
 	{
 		RaiseDeferredError(subqueryPushdownError, ERROR);
@@ -558,7 +560,8 @@ SubqueryMultiNodeTree(Query *originalQuery, Query *queryTree,
 DeferredErrorMessage *
 DeferErrorIfUnsupportedSubqueryPushdown(Query *originalQuery,
 										PlannerRestrictionContext *
-										plannerRestrictionContext)
+										plannerRestrictionContext,
+										bool requireSubqueryPushdownCondsForTopLevel)
 {
 	bool outerMostQueryHasLimit = false;
 	ListCell *subqueryCell = NULL;
@@ -614,6 +617,15 @@ DeferErrorIfUnsupportedSubqueryPushdown(Query *originalQuery,
 	if (error)
 	{
 		return error;
+	}
+
+	if (requireSubqueryPushdownCondsForTopLevel)
+	{
+		error = DeferErrorIfCannotPushdownSubquery(originalQuery, false);
+		if (error)
+		{
+			return error;
+		}
 	}
 
 	/*
