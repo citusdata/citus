@@ -68,8 +68,6 @@ static TenantStats * CreateTenantStats(MultiTenantMonitor *monitor, TimestampTz
 static TenantStatsHashKey * CreateTenantStatsHashKey(char *tenantAttribute, uint32
 													 colocationGroupId);
 static TenantStats * FindTenantStats(MultiTenantMonitor *monitor);
-static uint32 TenantStatsHashFn(const void *key, Size keysize);
-static int TenantStatsMatchFn(const void *key1, const void *key2, Size keysize);
 static size_t MultiTenantMonitorshmemSize(void);
 static char * ExtractTopComment(const char *inputString);
 static char * EscapeCommentChars(const char *str);
@@ -636,13 +634,11 @@ CreateSharedMemoryForMultiTenantMonitor()
 	memset(&info, 0, sizeof(info));
 	info.keysize = sizeof(TenantStatsHashKey);
 	info.entrysize = sizeof(TenantStats);
-	info.hash = TenantStatsHashFn;
-	info.match = TenantStatsMatchFn;
 
 	monitor->tenants = ShmemInitHash("citus_stats_tenants hash",
 									 StatTenantsLimit * 3, StatTenantsLimit * 3,
-									 &info, HASH_ELEM | HASH_FUNCTION | HASH_COMPARE |
-									 HASH_SHARED_MEM);
+									 &info, HASH_ELEM |
+									 HASH_SHARED_MEM | HASH_BLOBS);
 
 	return monitor;
 }
@@ -765,39 +761,6 @@ CreateTenantStatsHashKey(char *tenantAttribute, uint32 colocationGroupId)
 	key->colocationGroupId = colocationGroupId;
 
 	return key;
-}
-
-
-/*
- * CitusQuerysStatsHashFn calculates and returns hash value for a key
- */
-static uint32
-TenantStatsHashFn(const void *key, Size keysize)
-{
-	const TenantStatsHashKey *k = (const TenantStatsHashKey *) key;
-
-	return hash_any((const unsigned char *) (k->tenantAttribute), strlen(
-						k->tenantAttribute)) ^
-		   hash_uint32((uint32) k->colocationGroupId);
-}
-
-
-/*
- * TenantStatsMatchFn compares two keys - zero means match.
- * See definition of HashCompareFunc in hsearch.h for more info.
- */
-static int
-TenantStatsMatchFn(const void *key1, const void *key2, Size keysize)
-{
-	const TenantStatsHashKey *k1 = (const TenantStatsHashKey *) key1;
-	const TenantStatsHashKey *k2 = (const TenantStatsHashKey *) key2;
-
-	if (strcmp(k1->tenantAttribute, k2->tenantAttribute) == 0 &&
-		k1->colocationGroupId == k2->colocationGroupId)
-	{
-		return 0;
-	}
-	return 1;
 }
 
 

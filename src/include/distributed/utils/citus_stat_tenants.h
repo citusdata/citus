@@ -11,6 +11,7 @@
 #ifndef CITUS_ATTRIBUTE_H
 #define CITUS_ATTRIBUTE_H
 
+#include "distributed/hash_helpers.h"
 #include "executor/execdesc.h"
 #include "executor/executor.h"
 #include "storage/lwlock.h"
@@ -28,6 +29,7 @@ typedef struct TenantStatsHashKey
 	char tenantAttribute[MAX_TENANT_ATTRIBUTE_LENGTH];
 	int colocationGroupId;
 } TenantStatsHashKey;
+assert_valid_hash_key2(TenantStatsHashKey, tenantAttribute, colocationGroupId);
 
 /*
  * TenantStats is the struct that keeps statistics about one tenant.
