@@ -2341,5 +2341,26 @@ join dist_table_2 t2 using (dist_col)
 limit 1
 returning text_col_1;
 
+CREATE TABLE dist_table_3(
+dist_col bigint,
+int_col integer
+);
+
+SELECT create_distributed_table('dist_table_3', 'dist_col');
+
+-- dist_table_2 and dist_table_3 are non-colocated source tables. Pulling the SELECT part to coordinator is also not possible.
+-- Citus would not be able to handle this complex insert select.
+INSERT INTO dist_table_1 SELECT dist_table_2.dist_col FROM dist_table_2 JOIN dist_table_3 USING(dist_col);
+
+CREATE TABLE dist_table_4(
+dist_col integer,
+int_col integer
+);
+SELECT create_distributed_table('dist_table_4', 'dist_col');
+
+-- Even if target table distribution column is colocated with dist_table_2's distributed column, source tables dist_table_2 and dist_table_4
+-- are non-colocated. Hence, SELECT part of the query should be pulled to coordinator.
+INSERT INTO dist_table_1 SELECT dist_table_2.dist_col FROM dist_table_2 JOIN dist_table_4 ON dist_table_2.dist_col = dist_table_4.int_col;
+
 SET client_min_messages TO ERROR;
 DROP SCHEMA multi_insert_select CASCADE;

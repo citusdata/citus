@@ -827,7 +827,7 @@ INSERT INTO nullkey_c1_t1 SELECT * FROM nullkey_c1_t2;
 SET client_min_messages TO DEBUG2;
 --    between two non-colocated single-shard tables
 INSERT INTO nullkey_c1_t1 SELECT * FROM nullkey_c2_t1;
-DEBUG:  distributed INSERT ... SELECT cannot reference a distributed table without a shard key together with non-colocated distributed tables
+DEBUG:  INSERT target relation and all source relations of the SELECT must be colocated in distributed INSERT ... SELECT
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
@@ -848,7 +848,7 @@ INSERT INTO nullkey_c1_t1 SELECT * FROM reference_table;
 
 SET client_min_messages TO DEBUG2;
 INSERT INTO nullkey_c1_t1 SELECT * FROM distributed_table;
-DEBUG:  distributed INSERT ... SELECT cannot reference a distributed table without a shard key together with non-colocated distributed tables
+DEBUG:  INSERT target relation and all source relations of the SELECT must be colocated in distributed INSERT ... SELECT
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 INSERT INTO nullkey_c1_t1 SELECT * FROM citus_local_table;
@@ -865,7 +865,8 @@ DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 INSERT INTO distributed_table SELECT * FROM nullkey_c1_t1;
-DEBUG:  distributed INSERT ... SELECT cannot reference a distributed table without a shard key together with non-colocated distributed tables
+DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition columns in the source table and subquery do not match
+DETAIL:  The target table's partition column should correspond to a partition column in the subquery.
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
@@ -1311,7 +1312,7 @@ WITH cte AS (
 )
   SELECT (a+5)*2, b FROM cte;
 DEBUG:  CTE cte is going to be inlined via distributed planning
-DEBUG:  distributed INSERT ... SELECT cannot reference a distributed table without a shard key together with non-colocated distributed tables
+DEBUG:  INSERT target relation and all source relations of the SELECT must be colocated in distributed INSERT ... SELECT
 DEBUG:  recursively planning left side of the right join since the outer side is a recurring rel
 DEBUG:  recursively planning distributed relation "distributed_table" since it is part of a distributed join node that is outer joined with a recurring rel
 DEBUG:  Wrapping relation "distributed_table" to a subquery

@@ -730,27 +730,6 @@ DistributedInsertSelectSupported(Query *queryTree, RangeTblEntry *insertRte,
 								 "table", NULL, NULL);
 		}
 
-		if (!HasDistributionKey(targetRelationId) ||
-			subqueryRteListProperties->hasSingleShardDistTable)
-		{
-			/*
-			 * XXX: Better to check this regardless of the fact that the target table
-			 *      has a distribution column or not.
-			 */
-			List *distributedRelationIdList = DistributedRelationIdList(subquery);
-			distributedRelationIdList = lappend_oid(distributedRelationIdList,
-													targetRelationId);
-
-			if (!AllDistributedRelationsInListColocated(distributedRelationIdList))
-			{
-				return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-									 "distributed INSERT ... SELECT cannot reference a "
-									 "distributed table without a shard key together "
-									 "with non-colocated distributed tables",
-									 NULL, NULL);
-			}
-		}
-
 		if (HasDistributionKey(targetRelationId))
 		{
 			/* ensure that INSERT's partition column comes from SELECT's partition column */
@@ -760,20 +739,20 @@ DistributedInsertSelectSupported(Query *queryTree, RangeTblEntry *insertRte,
 			{
 				return error;
 			}
-
-			/*
-			 * We expect partition column values come from colocated tables. Note that we
-			 * skip this check from the reference table case given that all reference tables
-			 * are already (and by default) co-located.
-			 */
-			if (!TablesColocated(insertRte->relid, selectPartitionColumnTableId))
-			{
-				return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-									 "INSERT target table and the source relation of the SELECT partition "
-									 "column value must be colocated in distributed INSERT ... SELECT",
-									 NULL, NULL);
-			}
 		}
+	}
+
+	/* All tables in source list and target table should be colocated. */
+	List *distributedRelationIdList = DistributedRelationIdList(subquery);
+	distributedRelationIdList = lappend_oid(distributedRelationIdList,
+											targetRelationId);
+
+	if (!AllDistributedRelationsInListColocated(distributedRelationIdList))
+	{
+		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+							 "INSERT target relation and all source relations of the "
+							 "SELECT must be colocated in distributed INSERT ... SELECT",
+							 NULL, NULL);
 	}
 
 	return NULL;
