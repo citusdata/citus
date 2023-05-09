@@ -16,7 +16,7 @@ SELECT cte.user_id, cte.value_2 FROM cte,cte2 ORDER BY 1,2 LIMIT 10;
 ERROR:  the intermediate result size exceeds citus.max_intermediate_result_size (currently 2 kB)
 DETAIL:  Citus restricts the size of intermediate results of complex subqueries and CTEs to avoid accidentally pulling large result sets into once place.
 HINT:  To run the current query, set citus.max_intermediate_result_size to a higher value or -1 to disable.
-SET citus.max_intermediate_result_size TO 9;
+SET citus.max_intermediate_result_size TO 17;
 WITH cte AS MATERIALIZED
 (
 	SELECT

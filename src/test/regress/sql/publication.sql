@@ -3,9 +3,6 @@ CREATE SCHEMA "publication-1";
 SET search_path TO publication;
 SET citus.shard_replication_factor TO 1;
 
--- for citus_add_local_table_to_metadata / create_distributed_table_concurrently
-SELECT citus_set_coordinator_host('localhost', :master_port);
-
 CREATE OR REPLACE FUNCTION activate_node_snapshot()
     RETURNS text[]
     LANGUAGE C STRICT
@@ -187,8 +184,6 @@ SELECT substring(:'server_version', '\d+')::int >= 15 AS server_version_ge_15
 SET client_min_messages TO ERROR;
 DROP SCHEMA publication CASCADE;
 DROP SCHEMA "publication-1" CASCADE;
-
-SELECT citus_remove_node('localhost', :master_port);
 \q
 \endif
 
@@ -265,5 +260,3 @@ DROP PUBLICATION pubpartitioned;
 SET client_min_messages TO ERROR;
 DROP SCHEMA publication CASCADE;
 DROP SCHEMA "publication-1" CASCADE;
-
-SELECT citus_remove_node('localhost', :master_port);

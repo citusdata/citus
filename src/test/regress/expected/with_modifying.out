@@ -1083,4 +1083,4 @@ WITH mb AS (DELETE FROM modify_table WHERE id = 3 RETURNING NULL, NULL) SELECT *
 
 \set VERBOSITY terse
 DROP SCHEMA with_modifying CASCADE;
-NOTICE:  drop cascades to 9 other objects
+NOTICE:  drop cascades to 10 other objects

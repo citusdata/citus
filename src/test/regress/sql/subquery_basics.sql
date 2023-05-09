@@ -391,6 +391,7 @@ WHERE
 -- sublinks in the targetlist are not supported
 SELECT (SELECT id FROM dist WHERE dist.id > d1.id GROUP BY id) FROM ref FULL JOIN dist d1 USING (id);
 
+SET client_min_messages TO WARNING;
 DROP TABLE dist;
 DROP TABLE ref;
 DROP TABLE local;

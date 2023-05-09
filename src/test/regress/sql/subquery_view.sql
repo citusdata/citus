@@ -443,5 +443,6 @@ EXPLAIN (COSTS OFF) WITH cte AS (
 ) SELECT * FROM reference_table JOIN cte USING (text_col);
 $Q$);
 
+SET client_min_messages TO WARNING;
 DROP SCHEMA subquery_view CASCADE;
 SET search_path TO public;

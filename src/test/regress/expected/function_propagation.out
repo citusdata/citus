@@ -864,13 +864,6 @@ BEGIN;
 (0 rows)
 
     CREATE TABLE citus_local_table_to_test_func(l1 int DEFAULT func_in_transaction_for_local_table());
-    SET LOCAL client_min_messages TO WARNING;
-    SELECT 1 FROM master_add_node('localhost', :master_port, groupid => 0);
- ?column?
----------------------------------------------------------------------
-        1
-(1 row)
-
     SELECT citus_add_local_table_to_metadata('citus_local_table_to_test_func');
  citus_add_local_table_to_metadata
 ---------------------------------------------------------------------

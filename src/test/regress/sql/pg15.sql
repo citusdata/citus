@@ -179,11 +179,6 @@ CREATE TABLE tbl2
 MERGE INTO tbl1 USING tbl2 ON (true)
 WHEN MATCHED THEN DELETE;
 
--- add coordinator node as a worker
-SET client_min_messages to ERROR;
-SELECT 1 FROM master_add_node('localhost', :master_port, groupId => 0);
-RESET client_min_messages;
-
 -- one table is Citus local table, fails
 SELECT citus_add_local_table_to_metadata('tbl1');
 
@@ -253,8 +248,6 @@ SET search_path TO pg15;
 SET client_min_messages to ERROR;
 DROP TABLE FKTABLE_local, PKTABLE_local;
 RESET client_min_messages;
-
-SELECT 1 FROM citus_remove_node('localhost', :master_port);
 
 SELECT create_distributed_table('tbl1', 'x');
 SELECT create_distributed_table('tbl2', 'x');
@@ -810,6 +803,7 @@ CREATE TABLE set_on_default_test_referenced(
 );
 SELECT create_reference_table('set_on_default_test_referenced');
 
+-- should error since col_3 defaults to a sequence
 CREATE TABLE set_on_default_test_referencing(
     col_1 int, col_2 int, col_3 serial, col_4 int,
     FOREIGN KEY(col_1, col_3)
@@ -818,10 +812,6 @@ CREATE TABLE set_on_default_test_referencing(
     ON UPDATE SET DEFAULT
 );
 
--- should error since col_3 defaults to a sequence
-SELECT create_reference_table('set_on_default_test_referencing');
-
-DROP TABLE set_on_default_test_referencing;
 CREATE TABLE set_on_default_test_referencing(
     col_1 int, col_2 int, col_3 serial, col_4 int,
     FOREIGN KEY(col_1, col_3)
@@ -921,7 +911,6 @@ SELECT * FROM foreign_table WHERE c1::text LIKE 'foo' LIMIT 1; -- ERROR; cast no
 RESET citus.use_citus_managed_tables;
 SELECT undistribute_table('foreign_table');
 SELECT undistribute_table('foreign_table_test');
-SELECT 1 FROM citus_remove_node('localhost', :master_port);
 DROP SERVER foreign_server CASCADE;
 
 -- PG15 now supports specifying oid on CREATE DATABASE

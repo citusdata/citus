@@ -802,9 +802,3 @@ select alter_table_set_access_method('view_test_view','columnar');
 ERROR:  you cannot alter access method of a view
 SET client_min_messages TO WARNING;
 DROP SCHEMA alter_table_set_access_method CASCADE;
-SELECT 1 FROM master_remove_node('localhost', :master_port);
- ?column?
----------------------------------------------------------------------
-        1
-(1 row)
-

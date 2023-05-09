@@ -17,15 +17,33 @@ DEBUG:  Router planner does not support append-partitioned tables.
 DEBUG:  join prunable for task partitionId 0 and 1
 DEBUG:  join prunable for task partitionId 0 and 2
 DEBUG:  join prunable for task partitionId 0 and 3
+DEBUG:  join prunable for task partitionId 0 and 4
+DEBUG:  join prunable for task partitionId 0 and 5
 DEBUG:  join prunable for task partitionId 1 and 0
 DEBUG:  join prunable for task partitionId 1 and 2
 DEBUG:  join prunable for task partitionId 1 and 3
+DEBUG:  join prunable for task partitionId 1 and 4
+DEBUG:  join prunable for task partitionId 1 and 5
 DEBUG:  join prunable for task partitionId 2 and 0
 DEBUG:  join prunable for task partitionId 2 and 1
 DEBUG:  join prunable for task partitionId 2 and 3
+DEBUG:  join prunable for task partitionId 2 and 4
+DEBUG:  join prunable for task partitionId 2 and 5
 DEBUG:  join prunable for task partitionId 3 and 0
 DEBUG:  join prunable for task partitionId 3 and 1
 DEBUG:  join prunable for task partitionId 3 and 2
+DEBUG:  join prunable for task partitionId 3 and 4
+DEBUG:  join prunable for task partitionId 3 and 5
+DEBUG:  join prunable for task partitionId 4 and 0
+DEBUG:  join prunable for task partitionId 4 and 1
+DEBUG:  join prunable for task partitionId 4 and 2
+DEBUG:  join prunable for task partitionId 4 and 3
+DEBUG:  join prunable for task partitionId 4 and 5
+DEBUG:  join prunable for task partitionId 5 and 0
+DEBUG:  join prunable for task partitionId 5 and 1
+DEBUG:  join prunable for task partitionId 5 and 2
+DEBUG:  join prunable for task partitionId 5 and 3
+DEBUG:  join prunable for task partitionId 5 and 4
 DEBUG:  pruning merge fetch taskId 1
 DETAIL:  Creating dependency on merge taskId 3
 DEBUG:  pruning merge fetch taskId 2
@@ -42,18 +60,26 @@ DEBUG:  pruning merge fetch taskId 10
 DETAIL:  Creating dependency on merge taskId 12
 DEBUG:  pruning merge fetch taskId 11
 DETAIL:  Creating dependency on merge taskId 16
+DEBUG:  pruning merge fetch taskId 13
+DETAIL:  Creating dependency on merge taskId 15
+DEBUG:  pruning merge fetch taskId 14
+DETAIL:  Creating dependency on merge taskId 20
+DEBUG:  pruning merge fetch taskId 16
+DETAIL:  Creating dependency on merge taskId 18
+DEBUG:  pruning merge fetch taskId 17
+DETAIL:  Creating dependency on merge taskId 24
                             QUERY PLAN
 ---------------------------------------------------------------------
  Aggregate
    ->  Custom Scan (Citus Adaptive)
-         Task Count: 4
+         Task Count: 6
          Tasks Shown: None, not supported for re-partition queries
          ->  MapMergeJob
                Map Task Count: 2
-               Merge Task Count: 4
+               Merge Task Count: 6
          ->  MapMergeJob
                Map Task Count: 3
-               Merge Task Count: 4
+               Merge Task Count: 6
 (10 rows)
 
 SELECT
@@ -66,15 +92,33 @@ DEBUG:  Router planner does not support append-partitioned tables.
 DEBUG:  join prunable for task partitionId 0 and 1
 DEBUG:  join prunable for task partitionId 0 and 2
 DEBUG:  join prunable for task partitionId 0 and 3
+DEBUG:  join prunable for task partitionId 0 and 4
+DEBUG:  join prunable for task partitionId 0 and 5
 DEBUG:  join prunable for task partitionId 1 and 0
 DEBUG:  join prunable for task partitionId 1 and 2
 DEBUG:  join prunable for task partitionId 1 and 3
+DEBUG:  join prunable for task partitionId 1 and 4
+DEBUG:  join prunable for task partitionId 1 and 5
 DEBUG:  join prunable for task partitionId 2 and 0
 DEBUG:  join prunable for task partitionId 2 and 1
 DEBUG:  join prunable for task partitionId 2 and 3
+DEBUG:  join prunable for task partitionId 2 and 4
+DEBUG:  join prunable for task partitionId 2 and 5
 DEBUG:  join prunable for task partitionId 3 and 0
 DEBUG:  join prunable for task partitionId 3 and 1
 DEBUG:  join prunable for task partitionId 3 and 2
+DEBUG:  join prunable for task partitionId 3 and 4
+DEBUG:  join prunable for task partitionId 3 and 5
+DEBUG:  join prunable for task partitionId 4 and 0
+DEBUG:  join prunable for task partitionId 4 and 1
+DEBUG:  join prunable for task partitionId 4 and 2
+DEBUG:  join prunable for task partitionId 4 and 3
+DEBUG:  join prunable for task partitionId 4 and 5
+DEBUG:  join prunable for task partitionId 5 and 0
+DEBUG:  join prunable for task partitionId 5 and 1
+DEBUG:  join prunable for task partitionId 5 and 2
+DEBUG:  join prunable for task partitionId 5 and 3
+DEBUG:  join prunable for task partitionId 5 and 4
 DEBUG:  pruning merge fetch taskId 1
 DETAIL:  Creating dependency on merge taskId 3
 DEBUG:  pruning merge fetch taskId 2
@@ -91,6 +135,14 @@ DEBUG:  pruning merge fetch taskId 10
 DETAIL:  Creating dependency on merge taskId 12
 DEBUG:  pruning merge fetch taskId 11
 DETAIL:  Creating dependency on merge taskId 16
+DEBUG:  pruning merge fetch taskId 13
+DETAIL:  Creating dependency on merge taskId 15
+DEBUG:  pruning merge fetch taskId 14
+DETAIL:  Creating dependency on merge taskId 20
+DEBUG:  pruning merge fetch taskId 16
+DETAIL:  Creating dependency on merge taskId 18
+DEBUG:  pruning merge fetch taskId 17
+DETAIL:  Creating dependency on merge taskId 24
  count
 ---------------------------------------------------------------------
   2985
@@ -110,15 +162,33 @@ DEBUG:  Router planner does not support append-partitioned tables.
 DEBUG:  join prunable for task partitionId 0 and 1
 DEBUG:  join prunable for task partitionId 0 and 2
 DEBUG:  join prunable for task partitionId 0 and 3
+DEBUG:  join prunable for task partitionId 0 and 4
+DEBUG:  join prunable for task partitionId 0 and 5
 DEBUG:  join prunable for task partitionId 1 and 0
 DEBUG:  join prunable for task partitionId 1 and 2
 DEBUG:  join prunable for task partitionId 1 and 3
+DEBUG:  join prunable for task partitionId 1 and 4
+DEBUG:  join prunable for task partitionId 1 and 5
 DEBUG:  join prunable for task partitionId 2 and 0
 DEBUG:  join prunable for task partitionId 2 and 1
 DEBUG:  join prunable for task partitionId 2 and 3
+DEBUG:  join prunable for task partitionId 2 and 4
+DEBUG:  join prunable for task partitionId 2 and 5
 DEBUG:  join prunable for task partitionId 3 and 0
 DEBUG:  join prunable for task partitionId 3 and 1
 DEBUG:  join prunable for task partitionId 3 and 2
+DEBUG:  join prunable for task partitionId 3 and 4
+DEBUG:  join prunable for task partitionId 3 and 5
+DEBUG:  join prunable for task partitionId 4 and 0
+DEBUG:  join prunable for task partitionId 4 and 1
+DEBUG:  join prunable for task partitionId 4 and 2
+DEBUG:  join prunable for task partitionId 4 and 3
+DEBUG:  join prunable for task partitionId 4 and 5
+DEBUG:  join prunable for task partitionId 5 and 0
+DEBUG:  join prunable for task partitionId 5 and 1
+DEBUG:  join prunable for task partitionId 5 and 2
+DEBUG:  join prunable for task partitionId 5 and 3
+DEBUG:  join prunable for task partitionId 5 and 4
 DEBUG:  pruning merge fetch taskId 1
 DETAIL:  Creating dependency on merge taskId 3
 DEBUG:  pruning merge fetch taskId 2
@@ -135,18 +205,26 @@ DEBUG:  pruning merge fetch taskId 10
 DETAIL:  Creating dependency on merge taskId 12
 DEBUG:  pruning merge fetch taskId 11
 DETAIL:  Creating dependency on merge taskId 16
+DEBUG:  pruning merge fetch taskId 13
+DETAIL:  Creating dependency on merge taskId 15
+DEBUG:  pruning merge fetch taskId 14
+DETAIL:  Creating dependency on merge taskId 20
+DEBUG:  pruning merge fetch taskId 16
+DETAIL:  Creating dependency on merge taskId 18
+DEBUG:  pruning merge fetch taskId 17
+DETAIL:  Creating dependency on merge taskId 24
                             QUERY PLAN
 ---------------------------------------------------------------------
  Aggregate
    ->  Custom Scan (Citus Adaptive)
-         Task Count: 4
+         Task Count: 6
          Tasks Shown: None, not supported for re-partition queries
          ->  MapMergeJob
                Map Task Count: 2
-               Merge Task Count: 4
+               Merge Task Count: 6
          ->  MapMergeJob
                Map Task Count: 3
-               Merge Task Count: 4
+               Merge Task Count: 6
 (10 rows)
 
 SELECT
@@ -160,15 +238,33 @@ DEBUG:  Router planner does not support append-partitioned tables.
 DEBUG:  join prunable for task partitionId 0 and 1
 DEBUG:  join prunable for task partitionId 0 and 2
 DEBUG:  join prunable for task partitionId 0 and 3
+DEBUG:  join prunable for task partitionId 0 and 4
+DEBUG:  join prunable for task partitionId 0 and 5
 DEBUG:  join prunable for task partitionId 1 and 0
 DEBUG:  join prunable for task partitionId 1 and 2
 DEBUG:  join prunable for task partitionId 1 and 3
+DEBUG:  join prunable for task partitionId 1 and 4
+DEBUG:  join prunable for task partitionId 1 and 5
 DEBUG:  join prunable for task partitionId 2 and 0
 DEBUG:  join prunable for task partitionId 2 and 1
 DEBUG:  join prunable for task partitionId 2 and 3
+DEBUG:  join prunable for task partitionId 2 and 4
+DEBUG:  join prunable for task partitionId 2 and 5
 DEBUG:  join prunable for task partitionId 3 and 0
 DEBUG:  join prunable for task partitionId 3 and 1
 DEBUG:  join prunable for task partitionId 3 and 2
+DEBUG:  join prunable for task partitionId 3 and 4
+DEBUG:  join prunable for task partitionId 3 and 5
+DEBUG:  join prunable for task partitionId 4 and 0
+DEBUG:  join prunable for task partitionId 4 and 1
+DEBUG:  join prunable for task partitionId 4 and 2
+DEBUG:  join prunable for task partitionId 4 and 3
+DEBUG:  join prunable for task partitionId 4 and 5
+DEBUG:  join prunable for task partitionId 5 and 0
+DEBUG:  join prunable for task partitionId 5 and 1
+DEBUG:  join prunable for task partitionId 5 and 2
+DEBUG:  join prunable for task partitionId 5 and 3
+DEBUG:  join prunable for task partitionId 5 and 4
 DEBUG:  pruning merge fetch taskId 1
 DETAIL:  Creating dependency on merge taskId 3
 DEBUG:  pruning merge fetch taskId 2
@@ -185,6 +281,14 @@ DEBUG:  pruning merge fetch taskId 10
 DETAIL:  Creating dependency on merge taskId 12
 DEBUG:  pruning merge fetch taskId 11
 DETAIL:  Creating dependency on merge taskId 16
+DEBUG:  pruning merge fetch taskId 13
+DETAIL:  Creating dependency on merge taskId 15
+DEBUG:  pruning merge fetch taskId 14
+DETAIL:  Creating dependency on merge taskId 20
+DEBUG:  pruning merge fetch taskId 16
+DETAIL:  Creating dependency on merge taskId 18
+DEBUG:  pruning merge fetch taskId 17
+DETAIL:  Creating dependency on merge taskId 24
  count
 ---------------------------------------------------------------------
      0
@@ -204,15 +308,33 @@ DEBUG:  Router planner does not support append-partitioned tables.
 DEBUG:  join prunable for task partitionId 0 and 1
 DEBUG:  join prunable for task partitionId 0 and 2
 DEBUG:  join prunable for task partitionId 0 and 3
+DEBUG:  join prunable for task partitionId 0 and 4
+DEBUG:  join prunable for task partitionId 0 and 5
 DEBUG:  join prunable for task partitionId 1 and 0
 DEBUG:  join prunable for task partitionId 1 and 2
 DEBUG:  join prunable for task partitionId 1 and 3
+DEBUG:  join prunable for task partitionId 1 and 4
+DEBUG:  join prunable for task partitionId 1 and 5
 DEBUG:  join prunable for task partitionId 2 and 0
 DEBUG:  join prunable for task partitionId 2 and 1
 DEBUG:  join prunable for task partitionId 2 and 3
+DEBUG:  join prunable for task partitionId 2 and 4
+DEBUG:  join prunable for task partitionId 2 and 5
 DEBUG:  join prunable for task partitionId 3 and 0
 DEBUG:  join prunable for task partitionId 3 and 1
 DEBUG:  join prunable for task partitionId 3 and 2
+DEBUG:  join prunable for task partitionId 3 and 4
+DEBUG:  join prunable for task partitionId 3 and 5
+DEBUG:  join prunable for task partitionId 4 and 0
+DEBUG:  join prunable for task partitionId 4 and 1
+DEBUG:  join prunable for task partitionId 4 and 2
+DEBUG:  join prunable for task partitionId 4 and 3
+DEBUG:  join prunable for task partitionId 4 and 5
+DEBUG:  join prunable for task partitionId 5 and 0
+DEBUG:  join prunable for task partitionId 5 and 1
+DEBUG:  join prunable for task partitionId 5 and 2
+DEBUG:  join prunable for task partitionId 5 and 3
+DEBUG:  join prunable for task partitionId 5 and 4
 DEBUG:  pruning merge fetch taskId 1
 DETAIL:  Creating dependency on merge taskId 3
 DEBUG:  pruning merge fetch taskId 2
@@ -229,18 +351,26 @@ DEBUG:  pruning merge fetch taskId 10
 DETAIL:  Creating dependency on merge taskId 12
 DEBUG:  pruning merge fetch taskId 11
 DETAIL:  Creating dependency on merge taskId 16
+DEBUG:  pruning merge fetch taskId 13
+DETAIL:  Creating dependency on merge taskId 15
+DEBUG:  pruning merge fetch taskId 14
+DETAIL:  Creating dependency on merge taskId 20
+DEBUG:  pruning merge fetch taskId 16
+DETAIL:  Creating dependency on merge taskId 18
+DEBUG:  pruning merge fetch taskId 17
+DETAIL:  Creating dependency on merge taskId 24
                             QUERY PLAN
 ---------------------------------------------------------------------
  Aggregate
    ->  Custom Scan (Citus Adaptive)
-         Task Count: 4
+         Task Count: 6
          Tasks Shown: None, not supported for re-partition queries
          ->  MapMergeJob
                Map Task Count: 2
-               Merge Task Count: 4
+               Merge Task Count: 6
          ->  MapMergeJob
                Map Task Count: 3
-               Merge Task Count: 4
+               Merge Task Count: 6
 (10 rows)
 
 SELECT
@@ -254,15 +384,33 @@ DEBUG:  Router planner does not support append-partitioned tables.
 DEBUG:  join prunable for task partitionId 0 and 1
 DEBUG:  join prunable for task partitionId 0 and 2
 DEBUG:  join prunable for task partitionId 0 and 3
+DEBUG:  join prunable for task partitionId 0 and 4
+DEBUG:  join prunable for task partitionId 0 and 5
 DEBUG:  join prunable for task partitionId 1 and 0
 DEBUG:  join prunable for task partitionId 1 and 2
 DEBUG:  join prunable for task partitionId 1 and 3
+DEBUG:  join prunable for task partitionId 1 and 4
+DEBUG:  join prunable for task partitionId 1 and 5
 DEBUG:  join prunable for task partitionId 2 and 0
 DEBUG:  join prunable for task partitionId 2 and 1
 DEBUG:  join prunable for task partitionId 2 and 3
+DEBUG:  join prunable for task partitionId 2 and 4
+DEBUG:  join prunable for task partitionId 2 and 5
 DEBUG:  join prunable for task partitionId 3 and 0
 DEBUG:  join prunable for task partitionId 3 and 1
 DEBUG:  join prunable for task partitionId 3 and 2
+DEBUG:  join prunable for task partitionId 3 and 4
+DEBUG:  join prunable for task partitionId 3 and 5
+DEBUG:  join prunable for task partitionId 4 and 0
+DEBUG:  join prunable for task partitionId 4 and 1
+DEBUG:  join prunable for task partitionId 4 and 2
+DEBUG:  join prunable for task partitionId 4 and 3
+DEBUG:  join prunable for task partitionId 4 and 5
+DEBUG:  join prunable for task partitionId 5 and 0
+DEBUG:  join prunable for task partitionId 5 and 1
+DEBUG:  join prunable for task partitionId 5 and 2
+DEBUG:  join prunable for task partitionId 5 and 3
+DEBUG:  join prunable for task partitionId 5 and 4
 DEBUG:  pruning merge fetch taskId 1
 DETAIL:  Creating dependency on merge taskId 3
 DEBUG:  pruning merge fetch taskId 2
@@ -279,6 +427,14 @@ DEBUG:  pruning merge fetch taskId 10
 DETAIL:  Creating dependency on merge taskId 12
 DEBUG:  pruning merge fetch taskId 11
 DETAIL:  Creating dependency on merge taskId 16
+DEBUG:  pruning merge fetch taskId 13
+DETAIL:  Creating dependency on merge taskId 15
+DEBUG:  pruning merge fetch taskId 14
+DETAIL:  Creating dependency on merge taskId 20
+DEBUG:  pruning merge fetch taskId 16
+DETAIL:  Creating dependency on merge taskId 18
+DEBUG:  pruning merge fetch taskId 17
+DETAIL:  Creating dependency on merge taskId 24
  count
 ---------------------------------------------------------------------
      0
@@ -298,15 +454,33 @@ DEBUG:  Router planner does not support append-partitioned tables.
 DEBUG:  join prunable for task partitionId 0 and 1
 DEBUG:  join prunable for task partitionId 0 and 2
 DEBUG:  join prunable for task partitionId 0 and 3
+DEBUG:  join prunable for task partitionId 0 and 4
+DEBUG:  join prunable for task partitionId 0 and 5
 DEBUG:  join prunable for task partitionId 1 and 0
 DEBUG:  join prunable for task partitionId 1 and 2
 DEBUG:  join prunable for task partitionId 1 and 3
+DEBUG:  join prunable for task partitionId 1 and 4
+DEBUG:  join prunable for task partitionId 1 and 5
 DEBUG:  join prunable for task partitionId 2 and 0
 DEBUG:  join prunable for task partitionId 2 and 1
 DEBUG:  join prunable for task partitionId 2 and 3
+DEBUG:  join prunable for task partitionId 2 and 4
+DEBUG:  join prunable for task partitionId 2 and 5
 DEBUG:  join prunable for task partitionId 3 and 0
 DEBUG:  join prunable for task partitionId 3 and 1
 DEBUG:  join prunable for task partitionId 3 and 2
+DEBUG:  join prunable for task partitionId 3 and 4
+DEBUG:  join prunable for task partitionId 3 and 5
+DEBUG:  join prunable for task partitionId 4 and 0
+DEBUG:  join prunable for task partitionId 4 and 1
+DEBUG:  join prunable for task partitionId 4 and 2
+DEBUG:  join prunable for task partitionId 4 and 3
+DEBUG:  join prunable for task partitionId 4 and 5
+DEBUG:  join prunable for task partitionId 5 and 0
+DEBUG:  join prunable for task partitionId 5 and 1
+DEBUG:  join prunable for task partitionId 5 and 2
+DEBUG:  join prunable for task partitionId 5 and 3
+DEBUG:  join prunable for task partitionId 5 and 4
 DEBUG:  pruning merge fetch taskId 1
 DETAIL:  Creating dependency on merge taskId 3
 DEBUG:  pruning merge fetch taskId 2
@@ -323,18 +497,26 @@ DEBUG:  pruning merge fetch taskId 10
 DETAIL:  Creating dependency on merge taskId 12
 DEBUG:  pruning merge fetch taskId 11
 DETAIL:  Creating dependency on merge taskId 16
+DEBUG:  pruning merge fetch taskId 13
+DETAIL:  Creating dependency on merge taskId 15
+DEBUG:  pruning merge fetch taskId 14
+DETAIL:  Creating dependency on merge taskId 20
+DEBUG:  pruning merge fetch taskId 16
+DETAIL:  Creating dependency on merge taskId 18
+DEBUG:  pruning merge fetch taskId 17
+DETAIL:  Creating dependency on merge taskId 24
                             QUERY PLAN
 ---------------------------------------------------------------------
  Aggregate
    ->  Custom Scan (Citus Adaptive)
-         Task Count: 4
+         Task Count: 6
          Tasks Shown: None, not supported for re-partition queries
          ->  MapMergeJob
                Map Task Count: 2
-               Merge Task Count: 4
+               Merge Task Count: 6
          ->  MapMergeJob
                Map Task Count: 3
-               Merge Task Count: 4
+               Merge Task Count: 6
 (10 rows)
 
 SELECT
@@ -347,15 +529,33 @@ DEBUG:  Router planner does not support append-partitioned tables.
 DEBUG:  join prunable for task partitionId 0 and 1
 DEBUG:  join prunable for task partitionId 0 and 2
 DEBUG:  join prunable for task partitionId 0 and 3
+DEBUG:  join prunable for task partitionId 0 and 4
+DEBUG:  join prunable for task partitionId 0 and 5
 DEBUG:  join prunable for task partitionId 1 and 0
 DEBUG:  join prunable for task partitionId 1 and 2
 DEBUG:  join prunable for task partitionId 1 and 3
+DEBUG:  join prunable for task partitionId 1 and 4
+DEBUG:  join prunable for task partitionId 1 and 5
 DEBUG:  join prunable for task partitionId 2 and 0
 DEBUG:  join prunable for task partitionId 2 and 1
 DEBUG:  join prunable for task partitionId 2 and 3
+DEBUG:  join prunable for task partitionId 2 and 4
+DEBUG:  join prunable for task partitionId 2 and 5
 DEBUG:  join prunable for task partitionId 3 and 0
 DEBUG:  join prunable for task partitionId 3 and 1
 DEBUG:  join prunable for task partitionId 3 and 2
+DEBUG:  join prunable for task partitionId 3 and 4
+DEBUG:  join prunable for task partitionId 3 and 5
+DEBUG:  join prunable for task partitionId 4 and 0
+DEBUG:  join prunable for task partitionId 4 and 1
+DEBUG:  join prunable for task partitionId 4 and 2
+DEBUG:  join prunable for task partitionId 4 and 3
+DEBUG:  join prunable for task partitionId 4 and 5
+DEBUG:  join prunable for task partitionId 5 and 0
+DEBUG:  join prunable for task partitionId 5 and 1
+DEBUG:  join prunable for task partitionId 5 and 2
+DEBUG:  join prunable for task partitionId 5 and 3
+DEBUG:  join prunable for task partitionId 5 and 4
 DEBUG:  pruning merge fetch taskId 1
 DETAIL:  Creating dependency on merge taskId 3
 DEBUG:  pruning merge fetch taskId 2
@@ -372,6 +572,14 @@ DEBUG:  pruning merge fetch taskId 10
 DETAIL:  Creating dependency on merge taskId 12
 DEBUG:  pruning merge fetch taskId 11
 DETAIL:  Creating dependency on merge taskId 16
+DEBUG:  pruning merge fetch taskId 13
+DETAIL:  Creating dependency on merge taskId 15
+DEBUG:  pruning merge fetch taskId 14
+DETAIL:  Creating dependency on merge taskId 20
+DEBUG:  pruning merge fetch taskId 16
+DETAIL:  Creating dependency on merge taskId 18
+DEBUG:  pruning merge fetch taskId 17
+DETAIL:  Creating dependency on merge taskId 24
  count
 ---------------------------------------------------------------------
    125
@@ -391,15 +599,33 @@ DEBUG:  Router planner does not support append-partitioned tables.
 DEBUG:  join prunable for task partitionId 0 and 1
 DEBUG:  join prunable for task partitionId 0 and 2
 DEBUG:  join prunable for task partitionId 0 and 3
+DEBUG:  join prunable for task partitionId 0 and 4
+DEBUG:  join prunable for task partitionId 0 and 5
 DEBUG:  join prunable for task partitionId 1 and 0
 DEBUG:  join prunable for task partitionId 1 and 2
 DEBUG:  join prunable for task partitionId 1 and 3
+DEBUG:  join prunable for task partitionId 1 and 4
+DEBUG:  join prunable for task partitionId 1 and 5
 DEBUG:  join prunable for task partitionId 2 and 0
 DEBUG:  join prunable for task partitionId 2 and 1
 DEBUG:  join prunable for task partitionId 2 and 3
+DEBUG:  join prunable for task partitionId 2 and 4
+DEBUG:  join prunable for task partitionId 2 and 5
 DEBUG:  join prunable for task partitionId 3 and 0
 DEBUG:  join prunable for task partitionId 3 and 1
 DEBUG:  join prunable for task partitionId 3 and 2
+DEBUG:  join prunable for task partitionId 3 and 4
+DEBUG:  join prunable for task partitionId 3 and 5
+DEBUG:  join prunable for task partitionId 4 and 0
+DEBUG:  join prunable for task partitionId 4 and 1
+DEBUG:  join prunable for task partitionId 4 and 2
+DEBUG:  join prunable for task partitionId 4 and 3
+DEBUG:  join prunable for task partitionId 4 and 5
+DEBUG:  join prunable for task partitionId 5 and 0
+DEBUG:  join prunable for task partitionId 5 and 1
+DEBUG:  join prunable for task partitionId 5 and 2
+DEBUG:  join prunable for task partitionId 5 and 3
+DEBUG:  join prunable for task partitionId 5 and 4
 DEBUG:  pruning merge fetch taskId 1
 DETAIL:  Creating dependency on merge taskId 3
 DEBUG:  pruning merge fetch taskId 2
@@ -416,18 +642,26 @@ DEBUG:  pruning merge fetch taskId 10
 DETAIL:  Creating dependency on merge taskId 12
 DEBUG:  pruning merge fetch taskId 11
 DETAIL:  Creating dependency on merge taskId 16
+DEBUG:  pruning merge fetch taskId 13
+DETAIL:  Creating dependency on merge taskId 15
+DEBUG:  pruning merge fetch taskId 14
+DETAIL:  Creating dependency on merge taskId 20
+DEBUG:  pruning merge fetch taskId 16
+DETAIL:  Creating dependency on merge taskId 18
+DEBUG:  pruning merge fetch taskId 17
+DETAIL:  Creating dependency on merge taskId 24
                             QUERY PLAN
 ---------------------------------------------------------------------
  Aggregate
    ->  Custom Scan (Citus Adaptive)
-         Task Count: 4
+         Task Count: 6
          Tasks Shown: None, not supported for re-partition queries
          ->  MapMergeJob
                Map Task Count: 2
-               Merge Task Count: 4
+               Merge Task Count: 6
          ->  MapMergeJob
                Map Task Count: 3
-               Merge Task Count: 4
+               Merge Task Count: 6
 (10 rows)
 
 SELECT
@@ -441,15 +675,33 @@ DEBUG:  Router planner does not support append-partitioned tables.
 DEBUG:  join prunable for task partitionId 0 and 1
 DEBUG:  join prunable for task partitionId 0 and 2
 DEBUG:  join prunable for task partitionId 0 and 3
+DEBUG:  join prunable for task partitionId 0 and 4
+DEBUG:  join prunable for task partitionId 0 and 5
 DEBUG:  join prunable for task partitionId 1 and 0
 DEBUG:  join prunable for task partitionId 1 and 2
 DEBUG:  join prunable for task partitionId 1 and 3
+DEBUG:  join prunable for task partitionId 1 and 4
+DEBUG:  join prunable for task partitionId 1 and 5
 DEBUG:  join prunable for task partitionId 2 and 0
 DEBUG:  join prunable for task partitionId 2 and 1
 DEBUG:  join prunable for task partitionId 2 and 3
+DEBUG:  join prunable for task partitionId 2 and 4
+DEBUG:  join prunable for task partitionId 2 and 5
 DEBUG:  join prunable for task partitionId 3 and 0
 DEBUG:  join prunable for task partitionId 3 and 1
 DEBUG:  join prunable for task partitionId 3 and 2
+DEBUG:  join prunable for task partitionId 3 and 4
+DEBUG:  join prunable for task partitionId 3 and 5
+DEBUG:  join prunable for task partitionId 4 and 0
+DEBUG:  join prunable for task partitionId 4 and 1
+DEBUG:  join prunable for task partitionId 4 and 2
+DEBUG:  join prunable for task partitionId 4 and 3
+DEBUG:  join prunable for task partitionId 4 and 5
+DEBUG:  join prunable for task partitionId 5 and 0
+DEBUG:  join prunable for task partitionId 5 and 1
+DEBUG:  join prunable for task partitionId 5 and 2
+DEBUG:  join prunable for task partitionId 5 and 3
+DEBUG:  join prunable for task partitionId 5 and 4
 DEBUG:  pruning merge fetch taskId 1
 DETAIL:  Creating dependency on merge taskId 3
 DEBUG:  pruning merge fetch taskId 2
@@ -466,6 +718,14 @@ DEBUG:  pruning merge fetch taskId 10
 DETAIL:  Creating dependency on merge taskId 12
 DEBUG:  pruning merge fetch taskId 11
 DETAIL:  Creating dependency on merge taskId 16
+DEBUG:  pruning merge fetch taskId 13
+DETAIL:  Creating dependency on merge taskId 15
+DEBUG:  pruning merge fetch taskId 14
+DETAIL:  Creating dependency on merge taskId 20
+DEBUG:  pruning merge fetch taskId 16
+DETAIL:  Creating dependency on merge taskId 18
+DEBUG:  pruning merge fetch taskId 17
+DETAIL:  Creating dependency on merge taskId 24
  count
 ---------------------------------------------------------------------
      0

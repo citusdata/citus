@@ -589,8 +589,9 @@ DEBUG:  Collecting INSERT ... SELECT results on coordinator
 
 RESET client_min_messages;
 DROP SCHEMA on_conflict CASCADE;
-NOTICE:  drop cascades to 7 other objects
+NOTICE:  drop cascades to 8 other objects
 DETAIL:  drop cascades to table test_ref_table
+drop cascades to table test_ref_table_1900012
 drop cascades to table source_table_3
 drop cascades to table source_table_4
 drop cascades to table target_table_2

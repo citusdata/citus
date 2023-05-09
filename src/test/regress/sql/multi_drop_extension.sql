@@ -23,8 +23,6 @@ BEGIN;
   SET search_path TO public;
   CREATE EXTENSION citus;
 
-  SELECT 1 FROM master_add_node('localhost', :master_port, groupId => 0);
-
   create table l1 (a int unique);
   SELECT create_reference_table('l1');
 
@@ -135,6 +133,7 @@ ROLLBACK;
 CREATE EXTENSION citus;
 
 -- re-add the nodes to the cluster
+SELECT citus_set_coordinator_host('localhost');
 SELECT 1 FROM master_add_node('localhost', :worker_1_port);
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 

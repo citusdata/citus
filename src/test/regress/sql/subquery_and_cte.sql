@@ -510,7 +510,6 @@ RAISE '(%/3) failed to execute one of the tasks', errors_received;
 END;
 $$;
 
-SET client_min_messages TO DEFAULT;
-
+SET client_min_messages TO WARNING;
 DROP SCHEMA subquery_and_ctes CASCADE;
 SET search_path TO public;

@@ -15,8 +15,6 @@ SELECT oid AS postgres_oid FROM pg_roles where rolname = 'postgres' \gset
 SELECT create_distributed_table('dist', 'id');
 INSERT INTO dist SELECT generate_series(1, 100);
 
-SELECT 1 from citus_add_node('localhost', :master_port, groupId := 0);
-
 -- Create a publiction and subscription (including replication slot) manually.
 -- This allows us to test the cleanup logic at the start of the shard move.
 \c - - - :worker_1_port
@@ -54,8 +52,6 @@ SELECT count(*) FROM dist;
 SET search_path TO logical_replication;
 
 select citus_move_shard_placement(6830002, 'localhost', :worker_1_port, 'localhost', :worker_2_port, 'force_logical');
-
-SELECT citus_remove_node('localhost', :master_port);
 
 -- the subscription is still there, as there is no cleanup record for it
 -- we have created it manually

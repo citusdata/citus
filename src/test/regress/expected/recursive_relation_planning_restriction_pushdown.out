@@ -491,18 +491,14 @@ SELECT MAX(x) FROM (
 	UNION ALL
 	SELECT 1 as x FROM (SELECT 1 FROM tbl1, tbl2 WHERE b > 0) AS s1 WHERE false
 ) as res;
-DEBUG:  Wrapping relation "tbl2" to a subquery
-DEBUG:  generating subplan XXX_1 for subquery SELECT b FROM push_down_filters.tbl2 WHERE (b OPERATOR(pg_catalog.>) 0)
-DEBUG:  Wrapping relation "tbl2" to a subquery
-DEBUG:  generating subplan XXX_2 for subquery SELECT b FROM push_down_filters.tbl2 WHERE false
-DEBUG:  generating subplan XXX_3 for subquery SELECT 1 AS x FROM (SELECT 1 FROM push_down_filters.tbl1, (SELECT tbl2_1.b FROM (SELECT intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(b integer)) tbl2_1) tbl2 WHERE (tbl2.b OPERATOR(pg_catalog.>) 0)) s1("?column?") WHERE true UNION ALL SELECT 1 AS x FROM (SELECT 1 FROM push_down_filters.tbl1, (SELECT tbl2_1.b FROM (SELECT intermediate_result.b FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(b integer)) tbl2_1) tbl2 WHERE (tbl2.b OPERATOR(pg_catalog.>) 0)) s1("?column?") WHERE false
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT max(x) AS max FROM (SELECT intermediate_result.x FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(x integer)) res
  max
 ---------------------------------------------------------------------
    1
 (1 row)
 
 DROP TABLE tbl1, tbl2;
+CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
+PL/pgSQL function citus_drop_trigger() line XX at PERFORM
 CREATE table tbl2(a int, b int, d int);
 CREATE table tbl1(a int, b int, c int);
 INSERT INTO tbl1 VALUES (1,1,1);
@@ -563,12 +559,6 @@ SELECT 1 as x FROM (SELECT 1 FROM tbl1, tbl2 WHERE tbl2.b > 0) AS s1 WHERE true
 UNION ALL
 SELECT 1 as x FROM (SELECT 1 FROM tbl1, tbl2 WHERE tbl2.b > 0) AS s1 WHERE false
 ) as res;
-DEBUG:  Wrapping relation "tbl2" to a subquery
-DEBUG:  generating subplan XXX_1 for subquery SELECT b FROM push_down_filters.tbl2 WHERE (b OPERATOR(pg_catalog.>) 0)
-DEBUG:  Wrapping relation "tbl2" to a subquery
-DEBUG:  generating subplan XXX_2 for subquery SELECT b FROM push_down_filters.tbl2 WHERE false
-DEBUG:  generating subplan XXX_3 for subquery SELECT 1 AS x FROM (SELECT 1 FROM push_down_filters.tbl1, (SELECT NULL::integer AS a, tbl2_1.b, NULL::integer AS d FROM (SELECT intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(b integer)) tbl2_1) tbl2 WHERE (tbl2.b OPERATOR(pg_catalog.>) 0)) s1("?column?") WHERE true UNION ALL SELECT 1 AS x FROM (SELECT 1 FROM push_down_filters.tbl1, (SELECT NULL::integer AS a, tbl2_1.b, NULL::integer AS d FROM (SELECT intermediate_result.b FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(b integer)) tbl2_1) tbl2 WHERE (tbl2.b OPERATOR(pg_catalog.>) 0)) s1("?column?") WHERE false
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT max(x) AS max FROM (SELECT intermediate_result.x FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(x integer)) res
  max
 ---------------------------------------------------------------------
    1
@@ -577,4 +567,4 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT max(x) AS max
 \set VERBOSITY terse
 RESET client_min_messages;
 DROP SCHEMA push_down_filters CASCADE;
-NOTICE:  drop cascades to 7 other objects
+NOTICE:  drop cascades to 8 other objects

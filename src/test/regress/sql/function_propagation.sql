@@ -565,8 +565,6 @@ BEGIN;
     SELECT pg_identify_object_as_address(classid, objid, objsubid) from pg_catalog.pg_dist_object where objid = 'function_propagation_schema.func_in_transaction_for_local_table'::regproc::oid;
 
     CREATE TABLE citus_local_table_to_test_func(l1 int DEFAULT func_in_transaction_for_local_table());
-    SET LOCAL client_min_messages TO WARNING;
-    SELECT 1 FROM master_add_node('localhost', :master_port, groupid => 0);
     SELECT citus_add_local_table_to_metadata('citus_local_table_to_test_func');
 
     -- Function should be marked as distributed after distributing the table that depends on it

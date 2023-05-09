@@ -58,6 +58,7 @@ DROP EXTENSION citus;
 CREATE EXTENSION citus;
 
 -- re-add the nodes to the cluster
+SELECT 1 FROM citus_set_coordinator_host('localhost');
 SELECT 1 FROM master_add_node('localhost', :worker_1_port);
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 

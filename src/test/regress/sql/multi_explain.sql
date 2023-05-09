@@ -1151,8 +1151,6 @@ EXPLAIN :default_analyze_flags EXECUTE q2('(1)');
 CREATE SCHEMA test_auto_explain;
 SET search_path TO 'test_auto_explain';
 
-SELECT citus_set_coordinator_host('localhost');
-
 CREATE TABLE test_ref_table (key int PRIMARY KEY);
 SELECT create_reference_table('test_ref_table');
 
@@ -1164,8 +1162,6 @@ set auto_explain.log_analyze to true;
 select * from test_ref_table;
 
 DROP SCHEMA test_auto_explain CASCADE;
-select master_remove_node('localhost', :master_port);
-SELECT public.wait_until_metadata_sync(30000);
 
 SET client_min_messages TO ERROR;
 DROP SCHEMA multi_explain CASCADE;

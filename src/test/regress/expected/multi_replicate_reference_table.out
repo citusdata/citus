@@ -284,7 +284,7 @@ DROP TABLE replicate_reference_table_rollback;
 SELECT count(*) FROM pg_dist_node;
  count
 ---------------------------------------------------------------------
-     1
+     2
 (1 row)
 
 -- test whether we can create distributed objects on a single worker node
@@ -376,12 +376,6 @@ SELECT citus_add_node('localhost', :worker_2_port);
 (1 row)
 
 -- required for create_distributed_table_concurrently
-SELECT 1 FROM citus_set_coordinator_host('localhost', :master_port);
- ?column?
----------------------------------------------------------------------
-        1
-(1 row)
-
 SET citus.shard_replication_factor TO 1;
 CREATE TABLE distributed_table_cdtc(column1 int primary key);
 SELECT create_distributed_table_concurrently('distributed_table_cdtc', 'column1');
@@ -391,12 +385,6 @@ SELECT create_distributed_table_concurrently('distributed_table_cdtc', 'column1'
 (1 row)
 
 RESET citus.shard_replication_factor;
-SELECT citus_remove_node('localhost', :master_port);
- citus_remove_node
----------------------------------------------------------------------
-
-(1 row)
-
 SELECT
     shardid, shardstate, shardlength, nodename, nodeport
 FROM
@@ -712,12 +700,22 @@ SELECT master_remove_node('localhost', :worker_2_port);
 CREATE TABLE ref_table_1(id int primary key, v int);
 CREATE TABLE ref_table_2(id int primary key, v int references ref_table_1(id));
 CREATE TABLE ref_table_3(id int primary key, v int references ref_table_2(id));
-SELECT create_reference_table('ref_table_1'),
-       create_reference_table('ref_table_2'),
-       create_reference_table('ref_table_3');
- create_reference_table | create_reference_table | create_reference_table
+SELECT create_reference_table('ref_table_1');
+ create_reference_table
 ---------------------------------------------------------------------
-                        |                        |
+
+(1 row)
+
+SELECT create_reference_table('ref_table_2');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_reference_table('ref_table_3');
+ create_reference_table
+---------------------------------------------------------------------
+
 (1 row)
 
 -- status before master_add_node
@@ -795,7 +793,7 @@ WHERE
 ORDER BY 1,4,5;
  shardid | shardstate | shardlength | nodename  | nodeport
 ---------------------------------------------------------------------
- 1370019 |          1 |           0 | localhost |    57637
+ 1370021 |          1 |           0 | localhost |    57637
 (1 row)
 
 -- we should see the two shard placements after activation
@@ -820,7 +818,7 @@ WHERE
 ORDER BY 1,4,5;
  shardid | shardstate | shardlength | nodename  | nodeport
 ---------------------------------------------------------------------
- 1370019 |          1 |           0 | localhost |    57637
+ 1370021 |          1 |           0 | localhost |    57637
 (1 row)
 
 SELECT 1 FROM master_remove_node('localhost', :worker_2_port);
@@ -850,7 +848,7 @@ HINT:  Add the target node via SELECT citus_add_node('localhost', 57638);
 SELECT citus_add_secondary_node('localhost', :worker_2_port, 'localhost', :worker_1_port);
  citus_add_secondary_node
 ---------------------------------------------------------------------
-                  1370014
+                  1370013
 (1 row)
 
 SELECT citus_copy_shard_placement(
@@ -1139,8 +1137,10 @@ select 1 FROM master_add_node('localhost', :worker_2_port);
 BEGIN;
 DROP TABLE test;
 CREATE TABLE test (x int, y int references ref(a));
-SELECT create_distributed_table('test','x');
 ERROR:  canceling the transaction since it was involved in a distributed deadlock
+DETAIL:  When adding a foreign key from a local table to a reference table, Citus applies a conversion to all the local tables in the foreign key graph
+SELECT create_distributed_table('test','x');
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
 END;
 -- verify the split fails if we still need to replicate reference tables
 SELECT citus_remove_node('localhost', :worker_2_port);
@@ -1158,7 +1158,7 @@ SELECT create_distributed_table('test','x');
 SELECT citus_add_node('localhost', :worker_2_port);
  citus_add_node
 ---------------------------------------------------------------------
-        1370022
+        1370020
 (1 row)
 
 SELECT
@@ -1194,7 +1194,7 @@ errors_received := 0;
 RAISE '(%/1) failed to add node', errors_received;
 END;
 $$;
-ERROR:  (1/1) failed to add node
+ERROR:  (0/1) failed to add node
 -- drop unnecassary tables
 DROP TABLE initially_not_replicated_reference_table;
 -- reload pg_dist_shard_placement table

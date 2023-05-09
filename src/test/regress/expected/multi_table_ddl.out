@@ -78,6 +78,12 @@ SELECT * FROM pg_dist_shard_placement;
 DROP EXTENSION citus;
 CREATE EXTENSION citus;
 -- re-add the nodes to the cluster
+SELECT 1 FROM citus_set_coordinator_host('localhost');
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
 SELECT 1 FROM master_add_node('localhost', :worker_1_port);
  ?column?
 ---------------------------------------------------------------------

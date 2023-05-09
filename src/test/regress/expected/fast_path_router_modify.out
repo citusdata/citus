@@ -489,8 +489,9 @@ RESET citus.enable_fast_path_router_planner;
 RESET client_min_messages;
 RESET citus.log_remote_commands;
 DROP SCHEMA fast_path_router_modify CASCADE;
-NOTICE:  drop cascades to 4 other objects
+NOTICE:  drop cascades to 5 other objects
 DETAIL:  drop cascades to table modify_fast_path
 drop cascades to table modify_fast_path_replication_2
 drop cascades to table modify_fast_path_reference
+drop cascades to table modify_fast_path_reference_1840008
 drop cascades to function modify_fast_path_plpsql(integer,integer)

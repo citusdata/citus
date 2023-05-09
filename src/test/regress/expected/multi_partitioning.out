@@ -1952,6 +1952,8 @@ DEBUG:  switching to sequential query execution mode
 DETAIL:  Table "<dropped>" is modified, which might lead to data inconsistencies or distributed deadlocks via parallel accesses to hash distributed tables due to foreign keys. Any parallel modification to those hash distributed tables in the same transaction can only be executed in sequential query execution mode
 CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
 PL/pgSQL function citus_drop_trigger() line XX at PERFORM
+CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
+PL/pgSQL function citus_drop_trigger() line XX at PERFORM
 DEBUG:  drop cascades to 2 other objects
 DETAIL:  drop cascades to constraint partitioning_reference_fkey_1660302 on table partitioning_schema.partitioning_test_1660302
 drop cascades to constraint partitioning_reference_fkey_1660304 on table partitioning_schema.partitioning_test_1660304
@@ -3772,13 +3774,6 @@ BEGIN;
 ROLLBACK;
 DROP TABLE pi_table;
 -- 6) test with citus local table
-select 1 from citus_add_node('localhost', :master_port, groupid=>0);
-NOTICE:  localhost:xxxxx is the coordinator and already contains metadata, skipping syncing the metadata
- ?column?
----------------------------------------------------------------------
-        1
-(1 row)
-
 CREATE TABLE date_partitioned_citus_local_table(
  measureid integer,
  eventdate date,
@@ -4214,12 +4209,6 @@ DROP TABLE date_partitioned_table_to_exp;
 DROP TABLE date_partitioned_citus_local_table CASCADE;
 DROP TABLE date_partitioned_citus_local_table_2;
 set client_min_messages to notice;
-SELECT citus_remove_node('localhost', :master_port);
- citus_remove_node
----------------------------------------------------------------------
-
-(1 row)
-
 -- d) invalid tables for helper UDFs
 CREATE TABLE multiple_partition_column_table(
   event_id bigserial,

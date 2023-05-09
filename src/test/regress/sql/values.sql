@@ -393,5 +393,5 @@ BEGIN;
 
 COMMIT;
 
-RESET client_min_messages;
+SET client_min_messages TO WARNING;
 DROP SCHEMA values_subquery CASCADE;

@@ -5,3 +5,10 @@ SELECT master_remove_node('localhost', :master_port);
 
 (1 row)
 
+-- restore coordinator for the rest of the tests
+SELECT citus_set_coordinator_host('localhost', :master_port);
+ citus_set_coordinator_host
+---------------------------------------------------------------------
+
+(1 row)
+

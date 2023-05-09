@@ -1,7 +1,6 @@
 CREATE SCHEMA citus_local_dist_joins;
 SET search_path TO citus_local_dist_joins;
 SET client_min_messages to ERROR;
-SELECT master_add_node('localhost', :master_port, groupId => 0) AS coordinator_nodeid \gset
 CREATE TABLE citus_local(key int, value text);
 SELECT citus_add_local_table_to_metadata('citus_local');
  citus_add_local_table_to_metadata
@@ -523,11 +522,5 @@ ERROR:  recursive complex joins are only supported when all distributed tables a
 RESET citus.local_table_join_policy;
 SET client_min_messages to ERROR;
 DROP TABLE citus_local;
-SELECT master_remove_node('localhost', :master_port);
- master_remove_node
----------------------------------------------------------------------
-
-(1 row)
-
 \set VERBOSITY terse
 DROP SCHEMA citus_local_dist_joins CASCADE;

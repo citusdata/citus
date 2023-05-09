@@ -14,13 +14,6 @@ SELECT create_distributed_table('dist', 'id');
 (1 row)
 
 INSERT INTO dist SELECT generate_series(1, 100);
-SELECT 1 from citus_add_node('localhost', :master_port, groupId := 0);
-NOTICE:  localhost:xxxxx is the coordinator and already contains metadata, skipping syncing the metadata
- ?column?
----------------------------------------------------------------------
-        1
-(1 row)
-
 -- Create a publiction and subscription (including replication slot) manually.
 -- This allows us to test the cleanup logic at the start of the shard move.
 \c - - - :worker_1_port
@@ -93,12 +86,6 @@ SELECT count(*) FROM dist;
 SET search_path TO logical_replication;
 select citus_move_shard_placement(6830002, 'localhost', :worker_1_port, 'localhost', :worker_2_port, 'force_logical');
  citus_move_shard_placement
----------------------------------------------------------------------
-
-(1 row)
-
-SELECT citus_remove_node('localhost', :master_port);
- citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)

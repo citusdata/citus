@@ -620,10 +620,6 @@ DROP TABLE AT_AddConstNoName.dist_partitioned_table;
 
 -- Test "ADD PRIMARY KEY"
 \c - - :master_host :master_port
-SET client_min_messages to ERROR;
-SELECT 1 FROM master_add_node('localhost', :master_port, groupId => 0);
-RESET client_min_messages;
-
 CREATE TABLE AT_AddConstNoName.citus_local_table(id int, other_column int);
 SELECT citus_add_local_table_to_metadata('AT_AddConstNoName.citus_local_table');
 
@@ -821,8 +817,6 @@ SELECT con.conname
           WHERE rel.relname LIKE 'longlonglonglonglonglonglonglonglong%' ORDER BY con.conname ASC;
 
 \c - - :master_host :master_port
-SELECT 1 FROM master_remove_node('localhost', :master_port);
-
 -- Test with unusual table and column names
 CREATE TABLE AT_AddConstNoName."2nd table" ( "2nd id" INTEGER, "3rd id" INTEGER);
 SELECT create_distributed_table('AT_AddConstNoName."2nd table"','2nd id');

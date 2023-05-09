@@ -196,15 +196,33 @@ DETAIL:  Creating dependency on merge taskId 20
 DEBUG:  join prunable for task partitionId 0 and 1
 DEBUG:  join prunable for task partitionId 0 and 2
 DEBUG:  join prunable for task partitionId 0 and 3
+DEBUG:  join prunable for task partitionId 0 and 4
+DEBUG:  join prunable for task partitionId 0 and 5
 DEBUG:  join prunable for task partitionId 1 and 0
 DEBUG:  join prunable for task partitionId 1 and 2
 DEBUG:  join prunable for task partitionId 1 and 3
+DEBUG:  join prunable for task partitionId 1 and 4
+DEBUG:  join prunable for task partitionId 1 and 5
 DEBUG:  join prunable for task partitionId 2 and 0
 DEBUG:  join prunable for task partitionId 2 and 1
 DEBUG:  join prunable for task partitionId 2 and 3
+DEBUG:  join prunable for task partitionId 2 and 4
+DEBUG:  join prunable for task partitionId 2 and 5
 DEBUG:  join prunable for task partitionId 3 and 0
 DEBUG:  join prunable for task partitionId 3 and 1
 DEBUG:  join prunable for task partitionId 3 and 2
+DEBUG:  join prunable for task partitionId 3 and 4
+DEBUG:  join prunable for task partitionId 3 and 5
+DEBUG:  join prunable for task partitionId 4 and 0
+DEBUG:  join prunable for task partitionId 4 and 1
+DEBUG:  join prunable for task partitionId 4 and 2
+DEBUG:  join prunable for task partitionId 4 and 3
+DEBUG:  join prunable for task partitionId 4 and 5
+DEBUG:  join prunable for task partitionId 5 and 0
+DEBUG:  join prunable for task partitionId 5 and 1
+DEBUG:  join prunable for task partitionId 5 and 2
+DEBUG:  join prunable for task partitionId 5 and 3
+DEBUG:  join prunable for task partitionId 5 and 4
 DEBUG:  pruning merge fetch taskId 1
 DETAIL:  Creating dependency on merge taskId 9
 DEBUG:  pruning merge fetch taskId 2
@@ -221,6 +239,14 @@ DEBUG:  pruning merge fetch taskId 10
 DETAIL:  Creating dependency on merge taskId 24
 DEBUG:  pruning merge fetch taskId 11
 DETAIL:  Creating dependency on merge taskId 20
+DEBUG:  pruning merge fetch taskId 13
+DETAIL:  Creating dependency on merge taskId 29
+DEBUG:  pruning merge fetch taskId 14
+DETAIL:  Creating dependency on merge taskId 25
+DEBUG:  pruning merge fetch taskId 16
+DETAIL:  Creating dependency on merge taskId 34
+DEBUG:  pruning merge fetch taskId 17
+DETAIL:  Creating dependency on merge taskId 30
 ERROR:  the query contains a join that requires repartitioning
 HINT:  Set citus.enable_repartition_joins to on to enable repartitioning
 -- single hash repartitioning is not supported between different column types
