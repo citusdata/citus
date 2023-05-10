@@ -21,7 +21,6 @@ extern uint32 TableColocationId(Oid distributedTableId);
 extern bool TablesColocated(Oid leftDistributedTableId, Oid rightDistributedTableId);
 extern bool ShardsColocated(ShardInterval *leftShardInterval,
 							ShardInterval *rightShardInterval);
-extern Oid ColocationGroupGetTableWithLowestOid(uint32 colocationId);
 extern List * ColocatedTableList(Oid distributedTableId);
 extern List * ColocatedShardIntervalList(ShardInterval *shardInterval);
 extern List * ColocatedNonPartitionShardIntervalList(ShardInterval *shardInterval);

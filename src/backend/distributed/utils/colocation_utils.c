@@ -29,7 +29,6 @@
 #include "distributed/multi_logical_planner.h"
 #include "distributed/multi_partitioning_utils.h"
 #include "distributed/pg_dist_colocation.h"
-#include "distributed/reference_table_utils.h"
 #include "distributed/resource_lock.h"
 #include "distributed/shardinterval_utils.h"
 #include "distributed/tenant_schema_metadata.h"
@@ -930,20 +929,6 @@ ShardsColocated(ShardInterval *leftShardInterval, ShardInterval *rightShardInter
 	}
 
 	return false;
-}
-
-
-/*
- * ColocationGroupGetTableWithLowestOid returns the table with the lowest oid
- * in given colocation group. If the colocation group is empty or there is no
- * such colocation group, then returns InvalidOid.
- */
-Oid
-ColocationGroupGetTableWithLowestOid(uint32 colocationId)
-{
-	List *colocatedTableList = ColocationGroupTableList(colocationId, 0);
-	SortList(colocatedTableList, CompareOids);
-	return colocatedTableList ? linitial_oid(colocatedTableList) : InvalidOid;
 }
 
 
