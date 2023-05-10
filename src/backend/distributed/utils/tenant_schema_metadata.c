@@ -24,6 +24,55 @@
 #include "utils/fmgroids.h"
 
 
+static Oid ColocationIdGetTenantSchemaId(uint32 colocationId);
+
+
+/*
+ * IsTenantSchema returns true if there is a tenant schema with given schemaId.
+ */
+bool
+IsTenantSchema(Oid schemaId)
+{
+	/*
+	 * We don't allow creating tenant schemas when there is a version
+	 * mismatch. Even more, SchemaIdGetTenantColocationId() would throw an
+	 * error if the underlying pg_dist_tenant_schema metadata table has not
+	 * been created yet, which is the case in older versions. For this reason,
+	 * it's safe to assume that it cannot be a tenant schema when there is a
+	 * version mismatch.
+	 *
+	 * But it's a bit tricky that we do the same when version checks are
+	 * disabled because then CheckCitusVersion() returns true even if there
+	 * is a version mismatch. And in that case, the tests that are trying to
+	 * create tables (in multi_extension.sql) in older versions would
+	 * fail when deciding whether we should create a tenant table or not.
+	 *
+	 * The downside of doing so is that, for example, we will skip deleting
+	 * the tenant schema entry from pg_dist_tenant_schema when dropping a
+	 * tenant schema while the version checks are disabled even if there was
+	 * no version mismatch. But we're okay with that because we don't expect
+	 * users to disable version checks anyway.
+	 */
+	if (!EnableVersionChecks || !CheckCitusVersion(DEBUG4))
+	{
+		return false;
+	}
+
+	return SchemaIdGetTenantColocationId(schemaId) != INVALID_COLOCATION_ID;
+}
+
+
+/*
+ * IsTenantSchemaColocationGroup returns true if there is a tenant schema
+ * that is associated with given colocation id.
+ */
+bool
+IsTenantSchemaColocationGroup(uint32 colocationId)
+{
+	return OidIsValid(ColocationIdGetTenantSchemaId(colocationId));
+}
+
+
 /*
  * SchemaIdGetTenantColocationId returns the colocation id associated with
  * the tenant schema with given id.
@@ -71,12 +120,12 @@ SchemaIdGetTenantColocationId(Oid schemaId)
 
 
 /*
- * ColocationIdGetTenantSchemaId returns the oid of the tenant schame that
+ * ColocationIdGetTenantSchemaId returns the oid of the tenant schema that
  * is associated with given colocation id.
  *
  * Returns InvalidOid if there is no such tenant schema.
  */
-Oid
+static Oid
 ColocationIdGetTenantSchemaId(uint32 colocationId)
 {
 	if (colocationId == INVALID_COLOCATION_ID)

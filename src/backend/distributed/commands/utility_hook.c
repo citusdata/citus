@@ -378,7 +378,7 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 			}
 			else if (ShouldCreateTenantSchemaTable(createdRelationId))
 			{
-				CreateTenantTable(createdRelationId);
+				CreateTenantSchemaTable(createdRelationId);
 			}
 			else if (ShouldAddNewTableToMetadata(createdRelationId))
 			{

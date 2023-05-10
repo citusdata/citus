@@ -16,7 +16,8 @@
 
 /* accessors */
 extern uint32 SchemaIdGetTenantColocationId(Oid schemaId);
-extern Oid ColocationIdGetTenantSchemaId(uint32 colocationId);
+extern bool IsTenantSchema(Oid schemaId);
+extern bool IsTenantSchemaColocationGroup(uint32 colocationId);
 
 /*
  * Local only modifiers.

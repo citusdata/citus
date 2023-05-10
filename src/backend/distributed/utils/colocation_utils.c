@@ -550,7 +550,7 @@ ColocationId(int shardCount, int replicationFactor, Oid distributionColumnType, 
 			(Form_pg_dist_colocation) GETSTRUCT(colocationTuple);
 
 		/* avoid chosing a colocation group that belongs to a tenant schema */
-		if (ColocationIdGetTenantSchemaId(colocationForm->colocationid))
+		if (IsTenantSchemaColocationGroup(colocationForm->colocationid))
 		{
 			colocationTuple = systable_getnext(scanDescriptor);
 			continue;

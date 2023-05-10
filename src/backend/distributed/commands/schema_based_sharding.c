@@ -13,7 +13,6 @@
 #include "distributed/backend_data.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/commands.h"
-#include "distributed/metadata_cache.h"
 #include "distributed/metadata_sync.h"
 #include "distributed/tenant_schema_metadata.h"
 #include "distributed/metadata/distobject.h"
@@ -103,49 +102,13 @@ ShouldCreateTenantSchemaTable(Oid relationId)
 
 
 /*
- * IsTenantSchema returns true if there is a tenant schema with given schemaId.
- */
-bool
-IsTenantSchema(Oid schemaId)
-{
-	/*
-	 * We don't allow creating tenant schemas when there is a version
-	 * mismatch. Even more, SchemaIdGetTenantColocationId() would throw an
-	 * error if the underlying pg_dist_tenant_schema metadata table has not
-	 * been created yet, which is the case in older versions. For this reason,
-	 * it's safe to assume that it cannot be a tenant schema when there is a
-	 * version mismatch.
-	 *
-	 * But it's a bit tricky that we do the same when version checks are
-	 * disabled because then CheckCitusVersion() returns true even if there
-	 * is a version mismatch. And in that case, the test that tries to create
-	 * a distributed table (in multi_extension.sql) in an older version would
-	 * fail when deciding whether we're trying to colocate given distributed
-	 * table with a tenant table.
-	 *
-	 * The downside of doing so is that, for example, we will skip deleting
-	 * the tenant schema entry from pg_dist_tenant_schema when dropping a
-	 * tenant schema while the version checks are disabled even if there was
-	 * no version mismatch. But we're okay with that because we don't expect
-	 * users to disable version checks anyway.
-	 */
-	if (!EnableVersionChecks || !CheckCitusVersion(DEBUG4))
-	{
-		return false;
-	}
-
-	return SchemaIdGetTenantColocationId(schemaId) != INVALID_COLOCATION_ID;
-}
-
-
-/*
- * CreateTenantTable creates a tenant table with given relationId.
+ * CreateTenantSchemaTable creates a tenant table with given relationId.
  *
  * This means creating a single shard distributed table without a shard
  * key and colocating it with the other tables in its schema.
  */
 void
-CreateTenantTable(Oid relationId)
+CreateTenantSchemaTable(Oid relationId)
 {
 	if (!IsCoordinator())
 	{
