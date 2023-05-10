@@ -49,7 +49,7 @@ BEGIN
     CREATE TABLE public.pg_dist_colocation AS SELECT * FROM pg_catalog.pg_dist_colocation;
     CREATE TABLE public.pg_dist_cleanup AS SELECT * FROM pg_catalog.pg_dist_cleanup;
     -- save names of the tenant schemas instead of their oids because the oids might change after pg upgrade
-    CREATE TABLE public.pg_dist_tenant_schema AS SELECT schema_id::regnamespace::text AS schema_name, colocation_id FROM pg_catalog.pg_dist_tenant_schema;
+    CREATE TABLE public.pg_dist_tenant_schema AS SELECT schemaid::regnamespace::text AS schemaname, colocationid FROM pg_catalog.pg_dist_tenant_schema;
     -- enterprise catalog tables
     CREATE TABLE public.pg_dist_authinfo AS SELECT * FROM pg_catalog.pg_dist_authinfo;
     CREATE TABLE public.pg_dist_poolinfo AS SELECT * FROM pg_catalog.pg_dist_poolinfo;

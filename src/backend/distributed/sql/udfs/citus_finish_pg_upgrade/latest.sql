@@ -63,7 +63,7 @@ BEGIN
     INSERT INTO pg_catalog.pg_dist_transaction SELECT * FROM public.pg_dist_transaction;
     INSERT INTO pg_catalog.pg_dist_colocation SELECT * FROM public.pg_dist_colocation;
     INSERT INTO pg_catalog.pg_dist_cleanup SELECT * FROM public.pg_dist_cleanup;
-    INSERT INTO pg_catalog.pg_dist_tenant_schema SELECT schema_name::regnamespace, colocation_id FROM public.pg_dist_tenant_schema;
+    INSERT INTO pg_catalog.pg_dist_tenant_schema SELECT schemaname::regnamespace, colocationid FROM public.pg_dist_tenant_schema;
     -- enterprise catalog tables
     INSERT INTO pg_catalog.pg_dist_authinfo SELECT * FROM public.pg_dist_authinfo;
     INSERT INTO pg_catalog.pg_dist_poolinfo SELECT * FROM public.pg_dist_poolinfo;

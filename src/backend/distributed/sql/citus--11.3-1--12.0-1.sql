@@ -3,10 +3,10 @@
 -- bump version to 12.0-1
 
 CREATE TABLE citus.pg_dist_tenant_schema (
-    schema_id oid NOT NULL,
-    colocation_id int NOT NULL,
-    CONSTRAINT pg_dist_tenant_schema_pkey PRIMARY KEY (schema_id),
-    CONSTRAINT pg_dist_tenant_schema_unique_colocationid_index UNIQUE (colocation_id)
+    schemaid oid NOT NULL,
+    colocationid int NOT NULL,
+    CONSTRAINT pg_dist_tenant_schema_pkey PRIMARY KEY (schemaid),
+    CONSTRAINT pg_dist_tenant_schema_unique_colocationid_index UNIQUE (colocationid)
 );
 
 ALTER TABLE citus.pg_dist_tenant_schema SET SCHEMA pg_catalog;

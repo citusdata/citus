@@ -935,11 +935,11 @@ SET citus.enable_schema_based_sharding TO ON;
 CREATE SCHEMA tenant_schema;
 CREATE TABLE tenant_schema.test(x int, y int);
 
-SELECT colocation_id = (
+SELECT colocationid = (
     SELECT colocationid FROM pg_dist_partition WHERE logicalrelid = 'tenant_schema.test'::regclass
 )
 FROM pg_dist_tenant_schema
-WHERE schema_id::regnamespace::text = 'tenant_schema';
+WHERE schemaid::regnamespace::text = 'tenant_schema';
 
 -- and make sure that we can't remove the coordinator due to "test"
 SELECT citus_remove_node('localhost', :master_port);
@@ -984,7 +984,7 @@ SET citus.enable_schema_based_sharding TO ON;
 
 CREATE EXTENSION citus_columnar;
 SELECT COUNT(*)=0 FROM pg_dist_tenant_schema
-WHERE schema_id IN ('columnar'::regnamespace, 'columnar_internal'::regnamespace);
+WHERE schemaid IN ('columnar'::regnamespace, 'columnar_internal'::regnamespace);
 
 RESET citus.enable_schema_based_sharding;
 
