@@ -34,6 +34,13 @@ DECLARE
 
     -- used to determine whether the partition_interval is a day multiple
     is_day_multiple boolean;
+
+    -- used to support dynamic type casting between the partition column type and timestamptz
+    custom_cast text;
+    is_partition_column_castable boolean;
+    partition regclass;
+    partition_covers_query text;
+    partition_exist_query text;
 BEGIN
     -- check whether the table is time partitioned table, if not error out
     SELECT relname, nspname, partnatts, partattrs[0]
@@ -58,10 +65,17 @@ BEGIN
     AND attnum = partition_column_index;
 
     -- we currently only support partitioning by date, timestamp, and timestamptz
+    custom_cast = '';
     IF partition_column_type <> 'date'::regtype
     AND partition_column_type <> 'timestamp'::regtype
-    AND partition_column_type <> 'timestamptz'::regtype  THEN
+    AND partition_column_type <> 'timestamptz'::regtype THEN
+      SELECT EXISTS(SELECT OID FROM pg_cast WHERE castsource = partition_column_type AND casttarget = 'timestamptz'::regtype) AND
+             EXISTS(SELECT OID FROM pg_cast WHERE castsource = partition_column_type AND casttarget = 'timestamptz'::regtype)
+      INTO is_partition_column_castable;
+      IF not is_partition_column_castable THEN
         RAISE 'type of the partition column of the table % must be date, timestamp or timestamptz', table_name;
+      END IF;
+      custom_cast = format('::%s', partition_column_type);
     END IF;
 
     IF partition_column_type = 'date'::regtype AND partition_interval IS NOT NULL THEN
@@ -76,14 +90,15 @@ BEGIN
     -- If no partition exists, truncate from_value to find intuitive initial value.
     -- If any partition exist, use the initial partition as the pivot partition.
     -- tp.to_value and tp.from_value are equal to '', if default partition exists.
-    SELECT tp.from_value::timestamptz, tp.to_value::timestamptz
+    EXECUTE format('SELECT tp.from_value%1$s::timestamptz, tp.to_value%1$s::timestamptz
+        FROM pg_catalog.time_partitions tp
+        WHERE parent_table = $1 AND tp.to_value <> '' AND tp.from_value <> ''
+        ORDER BY tp.from_value%1$s::timestamptz ASC
+        LIMIT 1', custom_cast)
     INTO current_range_from_value, current_range_to_value
-    FROM pg_catalog.time_partitions tp
-    WHERE parent_table = table_name AND tp.to_value <> '' AND tp.from_value <> ''
-    ORDER BY tp.from_value::timestamptz ASC
-    LIMIT 1;
+    USING table_name;
 
-    IF NOT FOUND THEN
+    IF current_range_from_value is NULL THEN
         -- Decide on the current_range_from_value of the initial partition according to interval of the table.
         -- Since we will create all other partitions by adding intervals, truncating given start time will provide
         -- more intuitive interval ranges, instead of starting from from_value directly.
@@ -150,16 +165,24 @@ BEGIN
         END IF;
     END IF;
 
+    partition_exist_query = format('SELECT partition FROM pg_catalog.time_partitions tp
+        WHERE tp.from_value%1$s::timestamptz = $1 AND tp.to_value%1$s::timestamptz = $2 AND parent_table = $3',
+        custom_cast);
+    partition_covers_query = format('SELECT partition, tp.from_value, tp.to_value
+        FROM pg_catalog.time_partitions tp
+        WHERE
+            (($1 >= tp.from_value%1$s::timestamptz AND $1 < tp.to_value%1$s::timestamptz) OR
+            ($2 > tp.from_value%1$s::timestamptz AND $2 < tp.to_value%1$s::timestamptz)) AND
+            parent_table = $3',
+        custom_cast);
+
     WHILE current_range_from_value < to_value LOOP
         -- Check whether partition with given range has already been created
         -- Since partition interval can be given with different types, we are converting
         -- all variables to timestamptz to make sure that we are comparing same type of parameters
-        PERFORM * FROM pg_catalog.time_partitions tp
-        WHERE
-            tp.from_value::timestamptz = current_range_from_value::timestamptz AND
-            tp.to_value::timestamptz = current_range_to_value::timestamptz AND
-            parent_table = table_name;
-        IF found THEN
+        EXECUTE partition_exist_query into partition using current_range_from_value, current_range_to_value, table_name;
+
+        IF partition is not NULL THEN
             current_range_from_value := current_range_to_value;
             current_range_to_value := current_range_to_value + partition_interval;
             CONTINUE;
@@ -168,20 +191,16 @@ BEGIN
         -- Check whether any other partition covers from_value or to_value
         -- That means some partitions doesn't align with the initial partition.
         -- In other words, gap(s) exist between partitions which is not multiple of intervals.
-        SELECT partition, tp.from_value::text, tp.to_value::text
+        EXECUTE partition_covers_query
         INTO manual_partition, manual_partition_from_value_text, manual_partition_to_value_text
-        FROM pg_catalog.time_partitions tp
-        WHERE
-            ((current_range_from_value::timestamptz >= tp.from_value::timestamptz AND current_range_from_value < tp.to_value::timestamptz) OR
-            (current_range_to_value::timestamptz > tp.from_value::timestamptz AND current_range_to_value::timestamptz < tp.to_value::timestamptz)) AND
-            parent_table = table_name;
+        using current_range_from_value, current_range_to_value, table_name;
 
-        IF found THEN
+        IF manual_partition is not NULL THEN
             RAISE 'partition % with the range from % to % does not align with the initial partition given the partition interval',
             manual_partition::text,
             manual_partition_from_value_text,
             manual_partition_to_value_text
-			USING HINT = 'Only use partitions of the same size, without gaps between partitions.';
+            USING HINT = 'Only use partitions of the same size, without gaps between partitions.';
         END IF;
 
         IF partition_column_type = 'date'::regtype THEN
@@ -194,7 +213,8 @@ BEGIN
             SELECT current_range_from_value::timestamptz::text INTO current_range_from_value_text;
             SELECT current_range_to_value::timestamptz::text INTO current_range_to_value_text;
         ELSE
-            RAISE 'type of the partition column of the table % must be date, timestamp or timestamptz', table_name;
+            EXECUTE format('SELECT $1%s::text', custom_cast) INTO current_range_from_value_text using current_range_from_value;
+            EXECUTE format('SELECT $1%s::text', custom_cast) INTO current_range_to_value_text using current_range_to_value;
         END IF;
 
         -- use range values within the name of partition to have unique partition names
@@ -212,7 +232,7 @@ BEGIN
 END;
 $$;
 COMMENT ON FUNCTION pg_catalog.get_missing_time_partition_ranges(
-	table_name regclass,
+    table_name regclass,
     partition_interval INTERVAL,
     to_value timestamptz,
     from_value timestamptz)
