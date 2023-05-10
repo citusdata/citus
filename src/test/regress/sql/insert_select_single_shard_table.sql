@@ -1,3 +1,13 @@
+--
+-- INSERT_SELECT_SINGLE_SHARD_TABLE
+--
+-- This test file has an alternative output because of the change in the
+-- display of SQL-standard function's arguments in INSERT/SELECT in PG15.
+-- The alternative output can be deleted when we drop support for PG14
+--
+SHOW server_version \gset
+SELECT substring(:'server_version', '\d+')::int >= 15 AS server_version_ge_15;
+
 CREATE SCHEMA insert_select_single_shard_table;
 SET search_path TO insert_select_single_shard_table;
 
