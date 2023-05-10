@@ -1315,10 +1315,9 @@ MultiShardUpdateDeleteSupported(Query *originalQuery,
 	}
 	else
 	{
-		bool requireSubqueryPushdownCondsForTopLevel = false;
-		errorMessage = DeferErrorIfUnsupportedSubqueryPushdown(originalQuery,
-															   plannerRestrictionContext,
-															   requireSubqueryPushdownCondsForTopLevel);
+		errorMessage = DeferErrorIfUnsupportedSubqueryPushdown(
+			originalQuery,
+			plannerRestrictionContext);
 	}
 
 	return errorMessage;

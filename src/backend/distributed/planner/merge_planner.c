@@ -653,11 +653,9 @@ MergeQuerySupported(Oid resultRelationId, Query *originalQuery, bool multiShardQ
 
 	if (multiShardQuery)
 	{
-		bool requireSubqueryPushdownCondsForTopLevel = false;
 		deferredError =
 			DeferErrorIfUnsupportedSubqueryPushdown(originalQuery,
-													plannerRestrictionContext,
-													requireSubqueryPushdownCondsForTopLevel);
+													plannerRestrictionContext);
 		if (deferredError)
 		{
 			return deferredError;
