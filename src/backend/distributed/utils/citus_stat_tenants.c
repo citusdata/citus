@@ -65,7 +65,7 @@ static MultiTenantMonitor * GetMultiTenantMonitor(void);
 static void MultiTenantMonitorSMInit(void);
 static TenantStats * CreateTenantStats(MultiTenantMonitor *monitor, TimestampTz
 									   queryTime);
-static TenantStatsHashKey * CreateTenantStatsHashKey(char *tenantAttribute, uint32
+static void FillTenantStatsHashKey(TenantStatsHashKey *key, char *tenantAttribute, uint32
 													 colocationGroupId);
 static TenantStats * FindTenantStats(MultiTenantMonitor *monitor);
 static size_t MultiTenantMonitorshmemSize(void);
@@ -706,13 +706,11 @@ CreateTenantStats(MultiTenantMonitor *monitor, TimestampTz queryTime)
 	 */
 	EvictTenantsIfNecessary(queryTime);
 
-	TenantStatsHashKey *key = CreateTenantStatsHashKey(AttributeToTenant,
-													   AttributeToColocationGroupId);
+	TenantStatsHashKey *key = (TenantStatsHashKey *) palloc(sizeof(TenantStatsHashKey));
+	FillTenantStatsHashKey(key, AttributeToTenant, AttributeToColocationGroupId);
 
 	TenantStats *stats = (TenantStats *) hash_search(monitor->tenants, key,
 													 HASH_ENTER, NULL);
-
-	pfree(key);
 
 	stats->writesInLastPeriod = 0;
 	stats->writesInThisPeriod = 0;
@@ -735,27 +733,22 @@ CreateTenantStats(MultiTenantMonitor *monitor, TimestampTz queryTime)
 static TenantStats *
 FindTenantStats(MultiTenantMonitor *monitor)
 {
-	TenantStatsHashKey *key = CreateTenantStatsHashKey(AttributeToTenant,
-													   AttributeToColocationGroupId);
+	TenantStatsHashKey *key = (TenantStatsHashKey *) palloc(sizeof(TenantStatsHashKey));
+	FillTenantStatsHashKey(key, AttributeToTenant, AttributeToColocationGroupId);
 
 	TenantStats *stats = (TenantStats *) hash_search(monitor->tenants, key,
 													 HASH_FIND, NULL);
-
-	pfree(key);
 
 	return stats;
 }
 
 
-static TenantStatsHashKey *
-CreateTenantStatsHashKey(char *tenantAttribute, uint32 colocationGroupId)
+static void
+FillTenantStatsHashKey(TenantStatsHashKey *key, char *tenantAttribute, uint32 colocationGroupId)
 {
-	TenantStatsHashKey *key = (TenantStatsHashKey *) palloc(sizeof(TenantStatsHashKey));
 	memset(key->tenantAttribute, 0, MAX_TENANT_ATTRIBUTE_LENGTH);
 	strlcpy(key->tenantAttribute, tenantAttribute, MAX_TENANT_ATTRIBUTE_LENGTH);
 	key->colocationGroupId = colocationGroupId;
-
-	return key;
 }
 
 
