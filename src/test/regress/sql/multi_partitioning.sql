@@ -1871,6 +1871,9 @@ BEGIN;
   SELECT * FROM time_partitions WHERE parent_table = 'bigint_partitioned_table'::regclass ORDER BY 3;
 ROLLBACK;
 
+DROP CAST (bigint AS timestamptz);
+DROP CAST (timestamptz AS bigint);
+
 -- c) test drop_old_time_partitions
 -- 1) test with date partitioned table
 CREATE TABLE date_partitioned_table_to_exp (event_date date, event int) partition by range (event_date);

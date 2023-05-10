@@ -19,3 +19,5 @@ BEGIN
     END IF;
 END;
 $$ LANGUAGE plpgsql;
+
+#include "../udfs/get_missing_time_partition_ranges/10.2-1.sql"

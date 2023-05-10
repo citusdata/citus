@@ -4064,6 +4064,47 @@ BEGIN;
 
 ROLLBACK;
 set client_min_messages to notice;
+-- 7) test with bigint partition column
+CREATE FUNCTION nanos_to_timestamptz(nanos bigint) RETURNS timestamptz LANGUAGE plpgsql AS
+$$
+DECLARE
+  value timestamptz;
+BEGIN
+  select to_timestamp(nanos * 1.0 / 1000000000) into value;
+  return value;
+END;
+$$;
+CREATE CAST (bigint AS timestamptz) WITH FUNCTION nanos_to_timestamptz(bigint);
+CREATE FUNCTION timestamptz_to_nanos(ts timestamptz) RETURNS bigint LANGUAGE plpgsql AS
+$$
+DECLARE
+  value bigint;
+BEGIN
+  select extract(epoch from ts) * 1000000000 into value;
+  return value;
+END;
+$$;
+CREATE CAST (timestamptz AS bigint) WITH FUNCTION timestamptz_to_nanos(timestamptz);
+CREATE TABLE bigint_partitioned_table (timestamp bigint, description text) partition by range (timestamp);
+BEGIN;
+  SELECT create_time_partitions('bigint_partitioned_table', INTERVAL '1 month', '2023-05-01', '2023-01-1');
+ create_time_partitions
+---------------------------------------------------------------------
+ t
+(1 row)
+
+  SELECT * FROM time_partitions WHERE parent_table = 'bigint_partitioned_table'::regclass ORDER BY 3;
+       parent_table       | partition_column |             partition             |     from_value      |      to_value       | access_method
+---------------------------------------------------------------------
+ bigint_partitioned_table | timestamp        | bigint_partitioned_table_p2023_01 | 1672560000000000000 | 1675238400000000000 | heap
+ bigint_partitioned_table | timestamp        | bigint_partitioned_table_p2023_02 | 1675238400000000000 | 1677657600000000000 | heap
+ bigint_partitioned_table | timestamp        | bigint_partitioned_table_p2023_03 | 1677657600000000000 | 1680332400000000000 | heap
+ bigint_partitioned_table | timestamp        | bigint_partitioned_table_p2023_04 | 1680332400000000000 | 1682924400000000000 | heap
+(4 rows)
+
+ROLLBACK;
+DROP CAST (bigint AS timestamptz);
+DROP CAST (timestamptz AS bigint);
 -- c) test drop_old_time_partitions
 -- 1) test with date partitioned table
 CREATE TABLE date_partitioned_table_to_exp (event_date date, event int) partition by range (event_date);
@@ -4370,10 +4411,13 @@ SELECT a, b FROM stxdinp GROUP BY 1, 2;
 (10 rows)
 
 DROP SCHEMA partitioning_schema CASCADE;
-NOTICE:  drop cascades to 5 other objects
+NOTICE:  drop cascades to 8 other objects
 DETAIL:  drop cascades to table "schema-test"
 drop cascades to table another_distributed_table
 drop cascades to table distributed_parent_table
+drop cascades to function nanos_to_timestamptz(bigint)
+drop cascades to function timestamptz_to_nanos(timestamp with time zone)
+drop cascades to table bigint_partitioned_table
 drop cascades to table part_table_with_very_long_name
 drop cascades to table stxdinp
 RESET search_path;
