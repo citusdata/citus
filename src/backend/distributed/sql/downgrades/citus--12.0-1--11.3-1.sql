@@ -20,4 +20,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+#include "../udfs/drop_old_time_partitions/10.2-1.sql"
 #include "../udfs/get_missing_time_partition_ranges/10.2-1.sql"
+
