@@ -66,7 +66,7 @@ static void MultiTenantMonitorSMInit(void);
 static TenantStats * CreateTenantStats(MultiTenantMonitor *monitor, TimestampTz
 									   queryTime);
 static void FillTenantStatsHashKey(TenantStatsHashKey *key, char *tenantAttribute, uint32
-													 colocationGroupId);
+								   colocationGroupId);
 static TenantStats * FindTenantStats(MultiTenantMonitor *monitor);
 static size_t MultiTenantMonitorshmemSize(void);
 static char * ExtractTopComment(const char *inputString);
@@ -744,7 +744,8 @@ FindTenantStats(MultiTenantMonitor *monitor)
 
 
 static void
-FillTenantStatsHashKey(TenantStatsHashKey *key, char *tenantAttribute, uint32 colocationGroupId)
+FillTenantStatsHashKey(TenantStatsHashKey *key, char *tenantAttribute, uint32
+					   colocationGroupId)
 {
 	memset(key->tenantAttribute, 0, MAX_TENANT_ATTRIBUTE_LENGTH);
 	strlcpy(key->tenantAttribute, tenantAttribute, MAX_TENANT_ATTRIBUTE_LENGTH);
