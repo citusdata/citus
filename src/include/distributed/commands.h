@@ -782,7 +782,7 @@ extern void UpdateAutoConvertedForConnectedRelations(List *relationId, bool
 
 /* schema_based_sharding.c */
 extern bool ShouldUseSchemaBasedSharding(char *schemaName);
-extern bool ShouldCreateTenantTable(Oid relationId);
+extern bool ShouldCreateTenantSchemaTable(Oid relationId);
 extern bool IsTenantSchema(Oid schemaId);
 extern void CreateTenantTable(Oid relationId);
 extern char * RegisterTenantSchema(Oid schemaId);

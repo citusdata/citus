@@ -368,7 +368,7 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 			}
 
 			/*
-			 * Check ShouldCreateTenantTable() before ShouldAddNewTableToMetadata()
+			 * Check ShouldCreateTenantSchemaTable() before ShouldAddNewTableToMetadata()
 			 * because we don't want to unnecessarily add the table into metadata
 			 * (as a Citus managed table) before distributing it as a tenant table.
 			 */
@@ -376,7 +376,7 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 			{
 				/* no tables were created by this command, or it wasn't a top-level one */
 			}
-			else if (ShouldCreateTenantTable(createdRelationId))
+			else if (ShouldCreateTenantSchemaTable(createdRelationId))
 			{
 				CreateTenantTable(createdRelationId);
 			}

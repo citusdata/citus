@@ -77,11 +77,11 @@ ShouldUseSchemaBasedSharding(char *schemaName)
 
 
 /*
- * ShouldCreateTenantTable returns true if given parsetree is a CREATE TABLE
- * statement and the table should be treated as a tenant table.
+ * ShouldCreateTenantSchemaTable returns true if we should create a tenant
+ * schema table for given relationId.
  */
 bool
-ShouldCreateTenantTable(Oid relationId)
+ShouldCreateTenantSchemaTable(Oid relationId)
 {
 	if (IsBinaryUpgrade)
 	{
@@ -151,8 +151,8 @@ CreateTenantTable(Oid relationId)
 	{
 		/*
 		 * We don't support creating tenant tables from workers. We could
-		 * let ShouldCreateTenantTable() to return false to allow users to
-		 * create a local table as usual but that would be confusing because
+		 * let ShouldCreateTenantSchemaTable() to return false to allow users
+		 * to create a local table as usual but that would be confusing because
 		 * it might sound like we allow creating tenant tables from workers.
 		 * For this reason, we prefer to throw an error instead.
 		 *
@@ -165,7 +165,7 @@ CreateTenantTable(Oid relationId)
 	}
 
 	/*
-	 * We don't expect this to happen because ShouldCreateTenantTable()
+	 * We don't expect this to happen because ShouldCreateTenantSchemaTable()
 	 * should've already verified that; but better to check.
 	 */
 	Oid schemaId = get_rel_namespace(relationId);

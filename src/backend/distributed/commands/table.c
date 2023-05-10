@@ -282,7 +282,7 @@ PostprocessCreateTableStmtForeignKeys(CreateStmt *createStatement)
 	bool missingOk = false;
 	Oid relationId = RangeVarGetRelid(createStatement->relation, NoLock, missingOk);
 
-	if (ShouldCreateTenantTable(relationId))
+	if (ShouldCreateTenantSchemaTable(relationId))
 	{
 		/*
 		 * Avoid unnecessarily adding the table into metadata if we will
