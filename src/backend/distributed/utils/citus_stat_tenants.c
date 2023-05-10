@@ -706,12 +706,11 @@ CreateTenantStats(MultiTenantMonitor *monitor, TimestampTz queryTime)
 	 */
 	EvictTenantsIfNecessary(queryTime);
 
-	bool found;
 	TenantStatsHashKey *key = CreateTenantStatsHashKey(AttributeToTenant,
 													   AttributeToColocationGroupId);
 
 	TenantStats *stats = (TenantStats *) hash_search(monitor->tenants, key,
-													 HASH_ENTER, &found);
+													 HASH_ENTER, NULL);
 
 	pfree(key);
 
@@ -724,11 +723,7 @@ CreateTenantStats(MultiTenantMonitor *monitor, TimestampTz queryTime)
 	stats->score = 0;
 	stats->lastScoreReduction = 0;
 
-	if (!found)
-	{
-		/* initialize the stats lock for the new entry in the hash table */
-		SpinLockInit(&stats->lock);
-	}
+	SpinLockInit(&stats->lock);
 
 	return stats;
 }
