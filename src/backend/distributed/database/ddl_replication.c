@@ -530,11 +530,22 @@ database_shard_move_trigger(PG_FUNCTION_ARGS)
 	bool isNull = false;
 	Datum ddlDatum = heap_getattr(insertedTuple, 2, tupleDescriptor, &isNull);
 	Datum searchPathDatum = heap_getattr(insertedTuple, 3, tupleDescriptor, &isNull);
+	Datum userNameDatum = heap_getattr(insertedTuple, 4, tupleDescriptor, &isNull);
 
 	char *ddlCommand = TextDatumGetCString(ddlDatum);
 	char *searchPath = TextDatumGetCString(searchPathDatum);
+	char *userName = NameStr(*(DatumGetName(userNameDatum)));
+
+	/* TODO: decide what to do in case of a missing role (alert?) */
+	bool missingOk = false;
+	Oid userId = get_role_oid(userName, missingOk);
 
 	char *savedSearchPath = namespace_search_path;
+
+	Oid savedUserId = InvalidOid;
+	int savedSecurityContext = 0;
+	GetUserIdAndSecContext(&savedUserId, &savedSecurityContext);
+	SetUserIdAndSecContext(userId, SECURITY_LOCAL_USERID_CHANGE);
 
 	set_config_option("search_path", searchPath, PGC_USERSET, PGC_S_SESSION,
 					  GUC_ACTION_LOCAL, true, 0, false);
@@ -548,6 +559,8 @@ database_shard_move_trigger(PG_FUNCTION_ARGS)
 	ExecuteParseTreeList(ddlParseTrees, ddlCommand);
 
 	PostProcessDDLReplicationParseTrees(ddlParseTrees);
+
+	SetUserIdAndSecContext(savedUserId, savedSecurityContext);
 
 	set_config_option("search_path", savedSearchPath, PGC_USERSET, PGC_S_SESSION,
 					  GUC_ACTION_LOCAL, true, 0, false);
