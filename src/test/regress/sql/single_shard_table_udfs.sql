@@ -4,7 +4,7 @@ SET search_path TO null_dist_key_udfs;
 SET citus.next_shard_id TO 1720000;
 SET citus.shard_count TO 32;
 SET citus.shard_replication_factor TO 1;
--- test some other udf's with citus local tables
+-- test some other udf's with single shard tables
 CREATE TABLE null_dist_key_table(a int);
 SELECT create_distributed_table('null_dist_key_table', null, colocate_with=>'none', distribution_type=>null);
 
@@ -34,8 +34,6 @@ SELECT column_name_to_column('null_dist_key_table', 'a');
 SELECT master_update_shard_statistics(shardid)
 FROM (SELECT shardid FROM pg_dist_shard WHERE logicalrelid='null_dist_key_table'::regclass) as shardid;
 
--- will always be no-op as we create the shell table from scratch
--- while creating a citus local table, but let's see it works
 SELECT truncate_local_data_after_distributing_table('null_dist_key_table');
 
 -- should return a single element array that only includes its own shard id
