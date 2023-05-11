@@ -70,7 +70,7 @@ BEGIN
     AND partition_column_type <> 'timestamp'::regtype
     AND partition_column_type <> 'timestamptz'::regtype THEN
       SELECT EXISTS(SELECT OID FROM pg_cast WHERE castsource = partition_column_type AND casttarget = 'timestamptz'::regtype) AND
-             EXISTS(SELECT OID FROM pg_cast WHERE castsource = partition_column_type AND casttarget = 'timestamptz'::regtype)
+             EXISTS(SELECT OID FROM pg_cast WHERE castsource = 'timestamptz'::regtype AND casttarget = partition_column_type)
       INTO is_partition_column_castable;
       IF not is_partition_column_castable THEN
         RAISE 'type of the partition column of the table % must be date, timestamp or timestamptz', table_name;
