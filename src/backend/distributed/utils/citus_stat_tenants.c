@@ -706,7 +706,7 @@ CreateTenantStats(MultiTenantMonitor *monitor, TimestampTz queryTime)
 	 */
 	EvictTenantsIfNecessary(queryTime);
 
-	TenantStatsHashKey key = {0};
+	TenantStatsHashKey key = { 0 };
 	FillTenantStatsHashKey(&key, AttributeToTenant, AttributeToColocationGroupId);
 
 	TenantStats *stats = (TenantStats *) hash_search(monitor->tenants, &key,
@@ -733,7 +733,7 @@ CreateTenantStats(MultiTenantMonitor *monitor, TimestampTz queryTime)
 static TenantStats *
 FindTenantStats(MultiTenantMonitor *monitor)
 {
-	TenantStatsHashKey key = {0};
+	TenantStatsHashKey key = { 0 };
 	FillTenantStatsHashKey(&key, AttributeToTenant, AttributeToColocationGroupId);
 
 	TenantStats *stats = (TenantStats *) hash_search(monitor->tenants, &key,
