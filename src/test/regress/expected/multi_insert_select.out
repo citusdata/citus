@@ -3269,5 +3269,54 @@ SELECT create_distributed_table('dist_table_4', 'dist_col');
 -- Even if target table distribution column is colocated with dist_table_2's distributed column, source tables dist_table_2 and dist_table_4
 -- are non-colocated. Hence, SELECT part of the query should be pulled to coordinator.
 INSERT INTO dist_table_1 SELECT dist_table_2.dist_col FROM dist_table_2 JOIN dist_table_4 ON dist_table_2.dist_col = dist_table_4.int_col;
+-- For INSERT SELECT, when a lateral query references an outer query, push-down is possible even if limit clause exists in the lateral query.
+-- It is because subquery with limit does not need to be merged at coordinator as it is a lateral query.
+EXPLAIN INSERT INTO dist_table_1 SELECT d1.dist_col FROM dist_table_1 d1 LEFT JOIN LATERAL (SELECT * FROM dist_table_2 d2 WHERE d1.dist_col = d2.dist_col LIMIT 3) dummy USING(dist_col);
+                                                  QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0)
+   Task Count: 4
+   Tasks Shown: One of 4
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  Insert on dist_table_1_13300071 citus_table_alias  (cost=0.00..8464.43 rows=0 width=0)
+               ->  Nested Loop Left Join  (cost=0.00..8464.43 rows=806 width=72)
+                     ->  Seq Scan on dist_table_1_13300071 d1  (cost=0.00..18.10 rows=806 width=4)
+                           Filter: (dist_col IS NOT NULL)
+                     ->  Subquery Scan on dummy  (cost=0.00..10.47 rows=1 width=4)
+                           Filter: (d1.dist_col = dummy.dist_col)
+                           ->  Limit  (cost=0.00..10.43 rows=3 width=8)
+                                 ->  Seq Scan on dist_table_2_13300075 d2  (cost=0.00..38.25 rows=11 width=8)
+                                       Filter: (d1.dist_col = dist_col)
+(14 rows)
+
+-- For INSERT SELECT, when push-down is NOT possible when limit clause exists in a subquery at SELECT part of INSERT SELECT.
+-- It is because the subquery with limit needs to be merged at coordinator.
+EXPLAIN INSERT INTO dist_table_1 SELECT d1.dist_col FROM dist_table_1 d1 LEFT JOIN (SELECT * FROM dist_table_2 LIMIT 3) dummy USING(dist_col);
+                                                           QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (Citus INSERT ... SELECT)  (cost=0.00..0.00 rows=0 width=0)
+   INSERT/SELECT method: repartition
+   ->  Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=100000 width=4)
+         ->  Distributed Subplan XXX_1
+               ->  Limit  (cost=0.00..0.00 rows=3 width=8)
+                     ->  Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=100000 width=8)
+                           Task Count: 4
+                           Tasks Shown: One of 4
+                           ->  Task
+                                 Node: host=localhost port=xxxxx dbname=regression
+                                 ->  Limit  (cost=0.00..0.04 rows=3 width=8)
+                                       ->  Seq Scan on dist_table_2_13300075 dist_table_2  (cost=0.00..32.60 rows=2260 width=8)
+         Task Count: 4
+         Tasks Shown: One of 4
+         ->  Task
+               Node: host=localhost port=xxxxx dbname=regression
+               ->  Hash Right Join  (cost=28.23..182.48 rows=4050 width=4)
+                     Hash Cond: (intermediate_result.dist_col = d1.dist_col)
+                     ->  Function Scan on read_intermediate_result intermediate_result  (cost=0.00..10.00 rows=1000 width=4)
+                     ->  Hash  (cost=18.10..18.10 rows=810 width=4)
+                           ->  Seq Scan on dist_table_1_13300071 d1  (cost=0.00..18.10 rows=810 width=4)
+(21 rows)
+
 SET client_min_messages TO ERROR;
 DROP SCHEMA multi_insert_select CASCADE;

@@ -689,20 +689,6 @@ DistributedInsertSelectSupported(Query *queryTree, RangeTblEntry *insertRte,
 							 NULL, NULL);
 	}
 
-
-	/*
-	 * For INSERT SELECT, we should always fail if limit exists in subquery to prevent
-	 * insertions. Otherwise, all other checks by `DeferErrorIfCannotPushdownSubquery`
-	 * are applicable for SELECT part of INSERT SELECT.
-	 */
-	if (subquery->limitCount != NULL)
-	{
-		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-							 "LIMIT clauses are not allowed in distributed INSERT "
-							 "... SELECT queries",
-							 NULL, NULL);
-	}
-
 	/* first apply toplevel pushdown checks to SELECT query */
 	DeferredErrorMessage *error = DeferErrorIfUnsupportedSubqueryPushdown(subquery,
 																		  plannerRestrictionContext);
