@@ -2370,5 +2370,13 @@ EXPLAIN INSERT INTO dist_table_1 SELECT d1.dist_col FROM dist_table_1 d1 LEFT JO
 -- It is because the subquery with limit needs to be merged at coordinator.
 EXPLAIN INSERT INTO dist_table_1 SELECT d1.dist_col FROM dist_table_1 d1 LEFT JOIN (SELECT * FROM dist_table_2 LIMIT 3) dummy USING(dist_col);
 
+CREATE TABLE dist_table_5(id int);
+SELECT create_distributed_table('dist_table_5','id');
+CREATE TABLE dist_table_6(id int, id2 int);
+SELECT create_distributed_table('dist_table_6','id');
+
+-- verify that insert select with union can be pushed down since UNION clause has FROM clause at top level query.
+explain INSERT INTO dist_table_5(id) SELECT id FROM (SELECT id FROM dist_table_5 UNION SELECT id FROM dist_table_6) dummy;
+
 SET client_min_messages TO ERROR;
 DROP SCHEMA multi_insert_select CASCADE;

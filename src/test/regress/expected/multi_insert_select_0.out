@@ -3318,5 +3318,38 @@ EXPLAIN INSERT INTO dist_table_1 SELECT d1.dist_col FROM dist_table_1 d1 LEFT JO
                            ->  Seq Scan on dist_table_1_13300071 d1  (cost=0.00..18.10 rows=810 width=4)
 (21 rows)
 
+CREATE TABLE dist_table_5(id int);
+SELECT create_distributed_table('dist_table_5','id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE dist_table_6(id int, id2 int);
+SELECT create_distributed_table('dist_table_6','id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- verify that insert select with union can be pushed down since UNION clause has FROM clause at top level query.
+explain INSERT INTO dist_table_5(id) SELECT id FROM (SELECT id FROM dist_table_5 UNION SELECT id FROM dist_table_6) dummy;
+                                                     QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0)
+   Task Count: 4
+   Tasks Shown: One of 4
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  Insert on dist_table_5_13300087 citus_table_alias  (cost=151.86..247.58 rows=0 width=0)
+               ->  HashAggregate  (cost=151.86..199.72 rows=4786 width=4)
+                     Group Key: dist_table_5.id
+                     ->  Append  (cost=0.00..139.89 rows=4786 width=4)
+                           ->  Seq Scan on dist_table_5_13300087 dist_table_5  (cost=0.00..35.50 rows=2537 width=4)
+                                 Filter: (id IS NOT NULL)
+                           ->  Seq Scan on dist_table_6_13300091 dist_table_6  (cost=0.00..32.60 rows=2249 width=4)
+                                 Filter: (id IS NOT NULL)
+(13 rows)
+
 SET client_min_messages TO ERROR;
 DROP SCHEMA multi_insert_select CASCADE;

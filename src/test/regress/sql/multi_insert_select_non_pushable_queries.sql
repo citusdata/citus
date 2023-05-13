@@ -716,3 +716,12 @@ FROM (
         GROUP BY user_id
 ) AS shard_union
 ORDER BY user_lastseen DESC;
+
+CREATE TABLE dist_table_1(id int);
+SELECT create_distributed_table('dist_table_1','id');
+CREATE TABLE dist_table_2(id int, id2 int);
+SELECT create_distributed_table('dist_table_2','id2');
+
+-- verify that insert select with union can be pulled to coordinator. We cannot push down the query
+-- since UNION clause has no FROM clause at top level query.
+explain INSERT INTO dist_table_1(id) SELECT id FROM dist_table_1 UNION SELECT id FROM dist_table_2;

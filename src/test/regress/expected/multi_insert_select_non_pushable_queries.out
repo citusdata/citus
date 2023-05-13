@@ -808,3 +808,57 @@ FROM (
         GROUP BY user_id
 ) AS shard_union
 ORDER BY user_lastseen DESC;
+CREATE TABLE dist_table_1(id int);
+SELECT create_distributed_table('dist_table_1','id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE dist_table_2(id int, id2 int);
+SELECT create_distributed_table('dist_table_2','id2');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- verify that insert select with union can be pulled to coordinator. We cannot push down the query
+-- since UNION clause has no FROM clause at top level query.
+explain INSERT INTO dist_table_1(id) SELECT id FROM dist_table_1 UNION SELECT id FROM dist_table_2;
+                                                                   QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (Citus INSERT ... SELECT)  (cost=0.00..0.00 rows=0 width=0)
+   INSERT/SELECT method: pull to coordinator
+   ->  Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0)
+         ->  Distributed Subplan XXX_1
+               ->  Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=100000 width=4)
+                     Task Count: 4
+                     Tasks Shown: One of 4
+                     ->  Task
+                           Node: host=localhost port=xxxxx dbname=regression
+                           ->  Seq Scan on dist_table_1_360147 dist_table_1  (cost=0.00..35.50 rows=2550 width=4)
+         ->  Distributed Subplan XXX_2
+               ->  Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=100000 width=4)
+                     Task Count: 4
+                     Tasks Shown: One of 4
+                     ->  Task
+                           Node: host=localhost port=xxxxx dbname=regression
+                           ->  Seq Scan on dist_table_2_360151 dist_table_2  (cost=0.00..32.60 rows=2260 width=4)
+         ->  Distributed Subplan XXX_3
+               ->  Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0)
+                     Task Count: 1
+                     Tasks Shown: All
+                     ->  Task
+                           Node: host=localhost port=xxxxx dbname=regression
+                           ->  HashAggregate  (cost=55.00..75.00 rows=2000 width=4)
+                                 Group Key: intermediate_result.id
+                                 ->  Append  (cost=0.00..50.00 rows=2000 width=4)
+                                       ->  Function Scan on read_intermediate_result intermediate_result  (cost=0.00..10.00 rows=1000 width=4)
+                                       ->  Function Scan on read_intermediate_result intermediate_result_1  (cost=0.00..10.00 rows=1000 width=4)
+         Task Count: 1
+         Tasks Shown: All
+         ->  Task
+               Node: host=localhost port=xxxxx dbname=regression
+               ->  Function Scan on read_intermediate_result intermediate_result  (cost=0.00..10.00 rows=1000 width=4)
+(33 rows)
+

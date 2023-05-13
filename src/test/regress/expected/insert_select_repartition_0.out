@@ -1302,6 +1302,39 @@ explain (costs off) insert into table_with_user_sequences select y, x from table
                ->  Seq Scan on table_with_user_sequences_4213652 table_with_user_sequences
 (8 rows)
 
+CREATE TABLE dist_table_1(id int);
+SELECT create_distributed_table('dist_table_1','id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE dist_table_2(id int);
+SELECT create_distributed_table('dist_table_2','id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- verify that insert select with union can be repartitioned. We cannot push down the query
+-- since UNION clause has no FROM clause at top level query.
+explain INSERT INTO dist_table_1(id) SELECT id FROM dist_table_1 UNION SELECT id FROM dist_table_2;
+                                                    QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (Citus INSERT ... SELECT)  (cost=0.00..0.00 rows=0 width=0)
+   INSERT/SELECT method: repartition
+   ->  Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=100000 width=4)
+         Task Count: 4
+         Tasks Shown: One of 4
+         ->  Task
+               Node: host=localhost port=xxxxx dbname=regression
+               ->  HashAggregate  (cost=160.25..211.25 rows=5100 width=4)
+                     Group Key: dist_table_1.id
+                     ->  Append  (cost=0.00..147.50 rows=5100 width=4)
+                           ->  Seq Scan on dist_table_1_4213656 dist_table_1  (cost=0.00..35.50 rows=2550 width=4)
+                           ->  Seq Scan on dist_table_2_4213660 dist_table_2  (cost=0.00..35.50 rows=2550 width=4)
+(12 rows)
+
 -- clean-up
 SET client_min_messages TO WARNING;
 DROP SCHEMA insert_select_repartition CASCADE;
