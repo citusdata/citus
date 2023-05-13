@@ -1,13 +1,3 @@
---
--- INSERT_SELECT_SINGLE_SHARD_TABLE
---
--- This test file has an alternative output because of the change in the
--- display of SQL-standard function's arguments in INSERT/SELECT in PG15.
--- The alternative output can be deleted when we drop support for PG14
---
-SHOW server_version \gset
-SELECT substring(:'server_version', '\d+')::int >= 15 AS server_version_ge_15;
-
 CREATE SCHEMA insert_select_single_shard_table;
 SET search_path TO insert_select_single_shard_table;
 
@@ -335,10 +325,16 @@ JOIN (
 ) t2 ON t1.b = t2.b
 WHERE t2.sum_val > 2;
 
+-- Temporaryly reduce the verbosity to avoid noise
+-- in the output of the next query.
+SET client_min_messages TO DEBUG1;
+
 -- MultiTaskRouterSelectQuerySupported() is unnecessarily restrictive
 -- about pushing down queries with DISTINCT ON clause even if the table
 -- doesn't have a shard key. See https://github.com/citusdata/citus/pull/6752.
 INSERT INTO nullkey_c1_t1 SELECT DISTINCT ON (a) a, b FROM nullkey_c1_t2;
+
+SET client_min_messages TO DEBUG2;
 
 -- Similarly, we could push down the following query as well. see
 -- https://github.com/citusdata/citus/pull/6831.
