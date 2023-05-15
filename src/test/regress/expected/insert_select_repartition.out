@@ -756,6 +756,7 @@ DEALLOCATE insert_plan;
 --
 TRUNCATE target_table;
 SET client_min_messages TO DEBUG2;
+SET citus.enable_non_colocated_router_query_pushdown TO ON;
 WITH r AS (
   INSERT INTO target_table SELECT * FROM source_table RETURNING *
 )
@@ -777,6 +778,7 @@ DEBUG:  partitioning SELECT query by column index 0 with name 'a'
 DEBUG:  distributed statement: INSERT INTO insert_select_repartition.target_table_4213610 AS citus_table_alias (a, b) SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_results('{repartitioned_results_xxxxx_from_4213606_to_0,repartitioned_results_xxxxx_from_4213607_to_0}'::text[], 'binary'::citus_copy_format) intermediate_result(a integer, b integer)
 DEBUG:  distributed statement: INSERT INTO insert_select_repartition.target_table_4213611 AS citus_table_alias (a, b) SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_results('{repartitioned_results_xxxxx_from_4213607_to_1}'::text[], 'binary'::citus_copy_format) intermediate_result(a integer, b integer)
 DEBUG:  distributed statement: INSERT INTO insert_select_repartition.target_table_4213612 AS citus_table_alias (a, b) SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_results('{repartitioned_results_xxxxx_from_4213609_to_2}'::text[], 'binary'::citus_copy_format) intermediate_result(a integer, b integer)
+RESET citus.enable_non_colocated_router_query_pushdown;
 RESET client_min_messages;
 SELECT * FROM target_table ORDER BY a, b;
  a |  b

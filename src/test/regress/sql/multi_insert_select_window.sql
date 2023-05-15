@@ -751,4 +751,6 @@ FROM (
         )
 ) AS ftop;
 
+TRUNCATE agg_results_window;
+
 DROP VIEW view_with_window_func;
