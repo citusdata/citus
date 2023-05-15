@@ -2364,11 +2364,15 @@ INSERT INTO dist_table_1 SELECT dist_table_2.dist_col FROM dist_table_2 JOIN dis
 
 -- For INSERT SELECT, when a lateral query references an outer query, push-down is possible even if limit clause exists in the lateral query.
 -- It is because subquery with limit does not need to be merged at coordinator as it is a lateral query.
-EXPLAIN INSERT INTO dist_table_1 SELECT d1.dist_col FROM dist_table_1 d1 LEFT JOIN LATERAL (SELECT * FROM dist_table_2 d2 WHERE d1.dist_col = d2.dist_col LIMIT 3) dummy USING(dist_col);
+SELECT coordinator_plan($$
+  EXPLAIN (COSTS FALSE) INSERT INTO dist_table_1 SELECT d1.dist_col FROM dist_table_1 d1 LEFT JOIN LATERAL (SELECT * FROM dist_table_2 d2 WHERE d1.dist_col = d2.dist_col LIMIT 3) dummy USING(dist_col);
+$$);
 
 -- For INSERT SELECT, when push-down is NOT possible when limit clause exists in a subquery at SELECT part of INSERT SELECT.
 -- It is because the subquery with limit needs to be merged at coordinator.
-EXPLAIN INSERT INTO dist_table_1 SELECT d1.dist_col FROM dist_table_1 d1 LEFT JOIN (SELECT * FROM dist_table_2 LIMIT 3) dummy USING(dist_col);
+SELECT coordinator_plan($$
+  EXPLAIN (COSTS FALSE) INSERT INTO dist_table_1 SELECT d1.dist_col FROM dist_table_1 d1 LEFT JOIN (SELECT * FROM dist_table_2 LIMIT 3) dummy USING(dist_col);
+$$);
 
 CREATE TABLE dist_table_5(id int);
 SELECT create_distributed_table('dist_table_5','id');
@@ -2376,7 +2380,7 @@ CREATE TABLE dist_table_6(id int, id2 int);
 SELECT create_distributed_table('dist_table_6','id');
 
 -- verify that insert select with union can be pushed down since UNION clause has FROM clause at top level query.
-explain INSERT INTO dist_table_5(id) SELECT id FROM (SELECT id FROM dist_table_5 UNION SELECT id FROM dist_table_6) dummy;
+INSERT INTO dist_table_5(id) SELECT id FROM (SELECT id FROM dist_table_5 UNION SELECT id FROM dist_table_6) dummy;
 
 SET client_min_messages TO ERROR;
 DROP SCHEMA multi_insert_select CASCADE;

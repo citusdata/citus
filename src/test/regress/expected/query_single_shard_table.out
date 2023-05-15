@@ -1252,14 +1252,16 @@ WHERE raw_events_first.value_1 IN (10, 11,12) OR users_ref_table.user_id IN (1,2
 -- Below "limit / offset clause" test and some others are examples of this.
 -- limit / offset clause
 INSERT INTO agg_events (user_id) SELECT raw_events_first.user_id FROM raw_events_first LIMIT 1;
-DEBUG:  LIMIT clauses are not allowed in distributed INSERT ... SELECT queries
+DEBUG:  cannot push down this subquery
+DETAIL:  Limit clause is currently unsupported when a subquery references a column from another query
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 INSERT INTO agg_events (user_id) SELECT raw_events_first.user_id FROM raw_events_first OFFSET 1;
 DEBUG:  cannot push down this subquery
 DETAIL:  Offset clause is currently unsupported when a subquery references a column from another query
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 INSERT INTO agg_events (user_id) SELECT users_ref_table.user_id FROM users_ref_table LIMIT 1;
-DEBUG:  LIMIT clauses are not allowed in distributed INSERT ... SELECT queries
+DEBUG:  cannot push down this subquery
+DETAIL:  Limit clause is currently unsupported when a subquery references a column from another query
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 -- using a materialized cte
 WITH cte AS MATERIALIZED
