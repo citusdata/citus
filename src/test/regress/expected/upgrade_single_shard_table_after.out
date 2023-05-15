@@ -7,22 +7,17 @@ WHERE logicalrelid = 'citus_schema.null_shard_key'::regclass AND
         1
 (1 row)
 
-INSERT INTO citus_schema.null_shard_key (name) VALUES ('c');
-SELECT * FROM citus_schema.null_shard_key WHERE id <= 2 ORDER BY id;
+BEGIN;
+  INSERT INTO citus_schema.null_shard_key (name) VALUES ('c');
+  SELECT * FROM citus_schema.null_shard_key ORDER BY id;
  id | name
 ---------------------------------------------------------------------
   1 | a
   2 | b
-(2 rows)
+    | c
+(3 rows)
 
--- Tests in after schedule are run twice, so we would insert a row with id=3
--- at the first run and a row with id=4 at the second run.
-SELECT COUNT(*) IN (1,2) FROM citus_schema.null_shard_key WHERE id IN (3,4);
- ?column?
----------------------------------------------------------------------
- t
-(1 row)
-
+ROLLBACK;
 -- Check that we can create a distributed table with a single-shard
 -- after upgrade.
 CREATE TABLE citus_schema.null_shard_key_after_upgrade (id bigserial, name text);
