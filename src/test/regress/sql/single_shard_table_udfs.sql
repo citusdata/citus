@@ -84,7 +84,7 @@ SELECT citus_split_shard_by_split_points(
 	ARRAY[:worker_1_node, :worker_2_node],
     'block_writes');
 
--- test alter_table_set_access_method, fails for single shard tables
+-- test alter_table_set_access_method
 SELECT alter_table_set_access_method('null_dist_key_table', 'columnar');
 
 -- undistribute

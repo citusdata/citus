@@ -477,8 +477,11 @@ AlterTableSetAccessMethod(TableConversionParameters *params)
 	EnsureTableNotReferencing(params->relationId, ALTER_TABLE_SET_ACCESS_METHOD);
 	EnsureTableNotReferenced(params->relationId, ALTER_TABLE_SET_ACCESS_METHOD);
 	EnsureTableNotForeign(params->relationId);
-	if (IsCitusTableType(params->relationId, DISTRIBUTED_TABLE))
+
+	if (!IsCitusTableType(params->relationId, SINGLE_SHARD_DISTRIBUTED) &&
+		IsCitusTableType(params->relationId, DISTRIBUTED_TABLE))
 	{
+		/* we do not support non-hash distributed tables, except single shard tables */
 		EnsureHashDistributedTable(params->relationId);
 	}
 
@@ -1363,7 +1366,12 @@ CreateDistributedTableLike(TableConversionState *con)
 void
 CreateCitusTableLike(TableConversionState *con)
 {
-	if (IsCitusTableType(con->relationId, DISTRIBUTED_TABLE))
+	if (IsCitusTableType(con->relationId, SINGLE_SHARD_DISTRIBUTED))
+	{
+		char *colocateWithTableName = con->colocateWith ? con->colocateWith : "default";
+		CreateSingleShardTable(con->newRelationId, colocateWithTableName);
+	}
+	else if (IsCitusTableType(con->relationId, DISTRIBUTED_TABLE))
 	{
 		CreateDistributedTableLike(con);
 	}

@@ -168,9 +168,17 @@ SELECT citus_split_shard_by_split_points(
 	ARRAY[:worker_1_node, :worker_2_node],
     'block_writes');
 ERROR:  Cannot split shard as operation is only supported for hash distributed tables.
--- test alter_table_set_access_method, fails for single shard tables
+-- test alter_table_set_access_method
 SELECT alter_table_set_access_method('null_dist_key_table', 'columnar');
-ERROR:  relation null_dist_key_table should be a hash distributed table
+NOTICE:  creating a new table for null_dist_key_udfs.null_dist_key_table
+NOTICE:  moving the data of null_dist_key_udfs.null_dist_key_table
+NOTICE:  dropping the old null_dist_key_udfs.null_dist_key_table
+NOTICE:  renaming the new table to null_dist_key_udfs.null_dist_key_table
+ alter_table_set_access_method
+---------------------------------------------------------------------
+
+(1 row)
+
 -- undistribute
 SELECT undistribute_table('null_dist_key_table');
 NOTICE:  creating a new table for null_dist_key_udfs.null_dist_key_table
