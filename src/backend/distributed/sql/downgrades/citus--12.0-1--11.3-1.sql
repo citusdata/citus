@@ -9,9 +9,13 @@ BEGIN
     THEN
         RAISE EXCEPTION 'cannot downgrade Citus because there are '
                         'distributed tables without a shard key.'
-        USING HINT = 'To downgrade Citus to an older version, you should '
-                     'first convert those tables to Postgres tables by '
-                     'executing SELECT undistribute_table("%s").';
+        USING HINT = 'You can find the distributed tables without a shard '
+                     'key in the cluster by using the following query: '
+                     '"SELECT * FROM citus_tables WHERE distribution_column '
+                     '= ''<none>'' AND colocation_id > 0".',
+        DETAIL = 'To downgrade Citus to an older version, you should '
+                 'first convert those tables to Postgres tables by '
+                 'executing SELECT undistribute_table("%s").';
     END IF;
 END;
 $$ LANGUAGE plpgsql;
