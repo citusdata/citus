@@ -1346,7 +1346,7 @@ RegisterCitusConfigVariables(void)
 					 "or altering the shard count of one of those distributed "
 					 "tables."),
 		&EnableNonColocatedRouterQueryPushdown,
-		true,
+		false,
 		PGC_USERSET,
 		GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
