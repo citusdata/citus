@@ -213,6 +213,7 @@ static bool IsSuperuser(char *userName);
 static void AdjustDynamicLibraryPathForCdcDecoders(void);
 
 static ClientAuthentication_hook_type original_client_auth_hook = NULL;
+static emit_log_hook_type original_emit_log_hook = NULL;
 
 /* *INDENT-OFF* */
 /* GUC enum definitions */
@@ -458,6 +459,7 @@ _PG_init(void)
 	ExecutorEnd_hook = CitusAttributeToEnd;
 
 	/* register hook for error messages */
+	original_emit_log_hook = emit_log_hook;
 	emit_log_hook = multi_log_hook;
 
 
@@ -697,6 +699,11 @@ multi_log_hook(ErrorData *edata)
 		 */
 		edata->message = pstrdup("canceling the transaction since it was "
 								 "involved in a distributed deadlock");
+	}
+
+	if (original_emit_log_hook)
+	{
+		original_emit_log_hook(edata);
 	}
 }
 
@@ -1339,7 +1346,7 @@ RegisterCitusConfigVariables(void)
 					 "or altering the shard count of one of those distributed "
 					 "tables."),
 		&EnableNonColocatedRouterQueryPushdown,
-		true,
+		false,
 		PGC_USERSET,
 		GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);

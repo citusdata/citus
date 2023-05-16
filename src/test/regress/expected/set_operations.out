@@ -1067,7 +1067,7 @@ DEBUG:  Creating router plan
 
 -- queries on non-colocated tables that would push down if they were not colocated are recursivelu planned
 SELECT * FROM (SELECT * FROM test UNION SELECT * FROM test_not_colocated) u ORDER BY 1,2;
-DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  router planner does not support queries that reference non-colocated distributed tables
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  generating subplan XXX_1 for subquery SELECT x, y FROM recursive_union.test
 DEBUG:  Router planner cannot handle multi-shard select queries
@@ -1083,7 +1083,7 @@ DEBUG:  Creating router plan
 (2 rows)
 
 SELECT * FROM (SELECT * FROM test UNION ALL SELECT * FROM test_not_colocated) u ORDER BY 1,2;
-DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  router planner does not support queries that reference non-colocated distributed tables
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  generating subplan XXX_1 for subquery SELECT x, y FROM recursive_union.test
 DEBUG:  Router planner cannot handle multi-shard select queries

@@ -543,7 +543,6 @@ extern Node *  WrapUngroupedVarsInAnyValueAggregate(Node *expression,
 													List *groupClauseList,
 													List *targetList,
 													bool checkExpressionEquality);
-extern CollateExpr * RelabelTypeToCollateExpr(RelabelType *relabelType);
 
 /*
  * Function declarations for building, updating constraints and simple operator

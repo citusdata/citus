@@ -1332,6 +1332,21 @@ SELECT * FROM multi_extension.print_extension_changes();
 
 -- Test downgrade to 11.3-1 from 12.0-1
 ALTER EXTENSION citus UPDATE TO '12.0-1';
+CREATE TABLE null_shard_key (x int, y int);
+SELECT create_distributed_table('null_shard_key', null);
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- Show that we cannot downgrade to 11.3-1 becuase the cluster has a
+-- distributed table with single-shard.
+ALTER EXTENSION citus UPDATE TO '11.3-1';
+ERROR:  cannot downgrade Citus because there are distributed tables without a shard key.
+DETAIL:  To downgrade Citus to an older version, you should first convert those tables to Postgres tables by executing SELECT undistribute_table("%s").
+HINT:  You can find the distributed tables without a shard key in the cluster by using the following query: "SELECT * FROM citus_tables WHERE distribution_column = '<none>' AND colocation_id > 0".
+CONTEXT:  PL/pgSQL function inline_code_block line XX at RAISE
+DROP TABLE null_shard_key;
 ALTER EXTENSION citus UPDATE TO '11.3-1';
 -- Should be empty result since upgrade+downgrade should be a no-op
 SELECT * FROM multi_extension.print_extension_changes();
