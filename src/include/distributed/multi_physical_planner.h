@@ -463,6 +463,13 @@ typedef struct DistributedPlan
 	 * or if prepared statement parameters prevented successful planning.
 	 */
 	DeferredErrorMessage *planningError;
+
+	/*
+	 * When performing query execution scenarios that require repartitioning
+	 * the source rows, this field stores the index of the column in the list
+	 * of source rows to be repartitioned for colocation with the target.
+	 */
+	int sourceResultRepartitionColumnIndex;
 } DistributedPlan;
 
 

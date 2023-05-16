@@ -1016,6 +1016,32 @@ ExecuteTaskListOutsideTransaction(RowModifyLevel modLevel, List *taskList,
 
 
 /*
+ * ExecuteTaskListIntoTupleDestWithParam is a proxy to ExecuteTaskListExtended() which uses
+ * bind params from executor state, and with defaults for some of the arguments.
+ */
+uint64
+ExecuteTaskListIntoTupleDestWithParam(RowModifyLevel modLevel, List *taskList,
+									  TupleDestination *tupleDest,
+									  bool expectResults,
+									  ParamListInfo paramListInfo)
+{
+	int targetPoolSize = MaxAdaptiveExecutorPoolSize;
+	bool localExecutionSupported = true;
+	ExecutionParams *executionParams = CreateBasicExecutionParams(
+		modLevel, taskList, targetPoolSize, localExecutionSupported
+		);
+
+	executionParams->xactProperties = DecideTransactionPropertiesForTaskList(
+		modLevel, taskList, false);
+	executionParams->expectResults = expectResults;
+	executionParams->tupleDestination = tupleDest;
+	executionParams->paramListInfo = paramListInfo;
+
+	return ExecuteTaskListExtended(executionParams);
+}
+
+
+/*
  * ExecuteTaskListIntoTupleDest is a proxy to ExecuteTaskListExtended() with defaults
  * for some of the arguments.
  */
@@ -1052,7 +1078,6 @@ ExecuteTaskListExtended(ExecutionParams *executionParams)
 		return 0;
 	}
 
-	ParamListInfo paramListInfo = NULL;
 	uint64 locallyProcessedRows = 0;
 
 	TupleDestination *defaultTupleDest = executionParams->tupleDestination;
@@ -1065,7 +1090,7 @@ ExecuteTaskListExtended(ExecutionParams *executionParams)
 	DistributedExecution *execution =
 		CreateDistributedExecution(
 			executionParams->modLevel, executionParams->taskList,
-			paramListInfo, executionParams->targetPoolSize,
+			executionParams->paramListInfo, executionParams->targetPoolSize,
 			defaultTupleDest, &executionParams->xactProperties,
 			executionParams->jobIdList, executionParams->localExecutionSupported);
 
@@ -1117,6 +1142,7 @@ CreateBasicExecutionParams(RowModifyLevel modLevel,
 	executionParams->expectResults = false;
 	executionParams->isUtilityCommand = false;
 	executionParams->jobIdList = NIL;
+	executionParams->paramListInfo = NULL;
 
 	return executionParams;
 }

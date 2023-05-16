@@ -610,6 +610,18 @@ QueryStringForFragmentsTransfer(NodeToNodeFragmentsTransfer *fragmentsTransfer)
 	StringInfo fragmentNamesArrayString = makeStringInfo();
 	int fragmentCount = 0;
 	NodePair *nodePair = &fragmentsTransfer->nodes;
+	uint32 sourceNodeId = nodePair->sourceNodeId;
+
+	/*
+	 * If the placement is dummy, for example, queries that generate
+	 * intermediate results at the coordinator that need to be redistributed
+	 * to worker nodes, we need the local id.
+	 */
+	if (sourceNodeId == LOCAL_NODE_ID)
+	{
+		nodePair->sourceNodeId = GetLocalNodeId();
+	}
+
 	WorkerNode *sourceNode = LookupNodeByNodeIdOrError(nodePair->sourceNodeId);
 
 	appendStringInfoString(fragmentNamesArrayString, "ARRAY[");

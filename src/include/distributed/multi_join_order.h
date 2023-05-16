@@ -108,6 +108,8 @@ extern Var * DistPartitionKey(Oid relationId);
 extern Var * DistPartitionKeyOrError(Oid relationId);
 extern char PartitionMethod(Oid relationId);
 extern char TableReplicationModel(Oid relationId);
+extern bool JoinOnColumns(List *currentPartitionColumnList, Var *candidatePartitionColumn,
+						  List *joinClauseList);
 
 
 #endif   /* MULTI_JOIN_ORDER_H */

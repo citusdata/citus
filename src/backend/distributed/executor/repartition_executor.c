@@ -120,7 +120,7 @@ GenerateTaskListWithColocatedIntermediateResults(Oid targetRelationId,
 	 */
 	Query *modifyWithResultQuery = copyObject(modifyQueryViaCoordinatorOrRepartition);
 	RangeTblEntry *insertRte = ExtractResultRelationRTE(modifyWithResultQuery);
-	RangeTblEntry *selectRte = ExtractSelectRangeTableEntry(modifyWithResultQuery);
+	RangeTblEntry *selectRte = ExtractSourceResultRangeTableEntry(modifyWithResultQuery);
 
 	CitusTableCacheEntry *targetCacheEntry = GetCitusTableCacheEntry(targetRelationId);
 	int shardCount = targetCacheEntry->shardIntervalArrayLength;
@@ -139,11 +139,18 @@ GenerateTaskListWithColocatedIntermediateResults(Oid targetRelationId,
 		/* during COPY, the shard ID is appended to the result name */
 		appendStringInfo(resultId, "%s_" UINT64_FORMAT, resultIdPrefix, shardId);
 
+		/*
+		 * For MERGE SQL, use the USING clause list, the main query target list
+		 * is NULL
+		 */
+		List *targetList = IsMergeQuery(modifyQueryViaCoordinatorOrRepartition) ?
+						   selectRte->subquery->targetList :
+						   modifyQueryViaCoordinatorOrRepartition->targetList;
+
 		/* generate the query on the intermediate result */
-		Query *resultSelectQuery = BuildSubPlanResultQuery(
-			modifyQueryViaCoordinatorOrRepartition->targetList,
-			columnAliasList,
-			resultId->data);
+		Query *resultSelectQuery = BuildSubPlanResultQuery(targetList,
+														   columnAliasList,
+														   resultId->data);
 
 		/* put the intermediate result query in the INSERT..SELECT */
 		selectRte->subquery = resultSelectQuery;
@@ -214,14 +221,16 @@ GenerateTaskListWithRedistributedResults(Query *modifyQueryViaCoordinatorOrRepar
 	 */
 	Query *modifyResultQuery = copyObject(modifyQueryViaCoordinatorOrRepartition);
 	RangeTblEntry *insertRte = ExtractResultRelationRTE(modifyResultQuery);
-	RangeTblEntry *selectRte = ExtractSelectRangeTableEntry(modifyResultQuery);
-	List *selectTargetList = selectRte->subquery->targetList;
 	Oid targetRelationId = targetRelation->relationId;
 
 	int shardCount = targetRelation->shardIntervalArrayLength;
 	int shardOffset = 0;
 	uint32 taskIdIndex = 1;
 	uint64 jobId = INVALID_JOB_ID;
+
+	RangeTblEntry *selectRte =
+		ExtractSourceResultRangeTableEntry(modifyResultQuery);
+	List *selectTargetList = selectRte->subquery->targetList;
 
 	for (shardOffset = 0; shardOffset < shardCount; shardOffset++)
 	{

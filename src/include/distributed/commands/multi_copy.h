@@ -152,6 +152,12 @@ typedef struct CitusCopyDestReceiver
 	 * upfront.
 	 */
 	uint64 appendShardId;
+
+	/*
+	 * When copying to intermediate files, we can skip coercions and run them
+	 * when merging into the target tables.
+	 */
+	bool skipCoercions;
 } CitusCopyDestReceiver;
 
 

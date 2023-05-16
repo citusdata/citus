@@ -70,3 +70,77 @@ SELECT citus_add_local_table_to_metadata('s1');
 
 (1 row)
 
+-- Test prepared statements with repartition
+CREATE TABLE pg_target(id int, val int);
+CREATE TABLE pg_source(id int, val int, const int);
+CREATE TABLE citus_target(id int, val int);
+CREATE TABLE citus_source(id int, val int, const int);
+SELECT citus_add_local_table_to_metadata('pg_target');
+ citus_add_local_table_to_metadata
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT citus_add_local_table_to_metadata('pg_source');
+ citus_add_local_table_to_metadata
+---------------------------------------------------------------------
+
+(1 row)
+
+--
+-- Load same set of data to both Postgres and Citus tables
+--
+CREATE OR REPLACE FUNCTION setup_data() RETURNS VOID AS $$
+    INSERT INTO pg_source SELECT i, i+1, 1 FROM generate_series(1, 10000) i;
+    INSERT INTO pg_target SELECT i, 1 FROM generate_series(5001, 10000) i;
+    INSERT INTO citus_source SELECT i, i+1, 1 FROM generate_series(1, 10000) i;
+    INSERT INTO citus_target SELECT i, 1 FROM generate_series(5001, 10000) i;
+$$
+LANGUAGE SQL;
+--
+-- Compares the final target tables, merge-modified data, of both Postgres and Citus tables
+--
+CREATE OR REPLACE FUNCTION check_data(table1_name text, column1_name text, table2_name text, column2_name text)
+RETURNS VOID AS $$
+DECLARE
+    table1_avg numeric;
+    table2_avg numeric;
+BEGIN
+    EXECUTE format('SELECT COALESCE(AVG(%I), 0) FROM %I', column1_name, table1_name) INTO table1_avg;
+    EXECUTE format('SELECT COALESCE(AVG(%I), 0) FROM %I', column2_name, table2_name) INTO table2_avg;
+
+    IF table1_avg > table2_avg THEN
+        RAISE EXCEPTION 'The average of %.% is greater than %.%', table1_name, column1_name, table2_name, column2_name;
+    ELSIF table1_avg < table2_avg THEN
+        RAISE EXCEPTION 'The average of %.% is less than %.%', table1_name, column1_name, table2_name, column2_name;
+    ELSE
+        RAISE NOTICE 'The average of %.% is equal to %.%', table1_name, column1_name, table2_name, column2_name;
+    END IF;
+END;
+$$ LANGUAGE plpgsql;
+CREATE OR REPLACE FUNCTION compare_data() RETURNS VOID AS $$
+    SELECT check_data('pg_target', 'id', 'citus_target', 'id');
+    SELECT check_data('pg_target', 'val', 'citus_target', 'val');
+$$
+LANGUAGE SQL;
+--
+-- Target and source are distributed, and non-colocated
+--
+SELECT setup_data();
+ setup_data
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_distributed_table('citus_target', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_distributed_table('citus_source', 'id', colocate_with=>'none');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+

@@ -20,6 +20,7 @@
 #include "distributed/insert_select_planner.h"
 #include "distributed/intermediate_results.h"
 #include "distributed/local_executor.h"
+#include "distributed/merge_planner.h"
 #include "distributed/multi_executor.h"
 #include "distributed/multi_partitioning_utils.h"
 #include "distributed/multi_physical_planner.h"
@@ -63,8 +64,6 @@ static HTAB * ExecutePlanIntoColocatedIntermediateResults(Oid targetRelationId,
 														  PlannedStmt *selectPlan,
 														  EState *executorState,
 														  char *intermediateResultIdPrefix);
-static List * BuildColumnNameListFromTargetList(Oid targetRelationId,
-												List *insertTargetList);
 static int PartitionColumnIndexFromColumnList(Oid relationId, List *columnNameList);
 static void WrapTaskListForProjection(List *taskList, List *projectedTargetEntries);
 
@@ -374,7 +373,7 @@ ExecutePlanIntoRelation(Oid targetRelationId, List *insertTargetList,
  * BuildColumnNameListForCopyStatement build the column name list given the insert
  * target list.
  */
-static List *
+List *
 BuildColumnNameListFromTargetList(Oid targetRelationId, List *insertTargetList)
 {
 	List *columnNameList = NIL;
@@ -424,13 +423,13 @@ PartitionColumnIndexFromColumnList(Oid relationId, List *columnNameList)
  * given target list.
  */
 int
-DistributionColumnIndex(List *insertTargetList, Var *partitionColumn)
+DistributionColumnIndex(List *insertTargetList, Var *distributionColumn)
 {
 	TargetEntry *insertTargetEntry = NULL;
 	int targetEntryIndex = 0;
 	foreach_ptr(insertTargetEntry, insertTargetList)
 	{
-		if (insertTargetEntry->resno == partitionColumn->varattno)
+		if (insertTargetEntry->resno == distributionColumn->varattno)
 		{
 			return targetEntryIndex;
 		}
