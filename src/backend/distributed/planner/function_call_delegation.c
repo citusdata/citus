@@ -116,7 +116,6 @@ contain_param_walker(Node *node, void *context)
 PlannedStmt *
 TryToDelegateFunctionCall(DistributedPlanningContext *planContext)
 {
-	bool colocatedWithReferenceTable = false;
 	ShardPlacement *placement = NULL;
 	struct ParamWalkerContext walkerParamContext = { 0 };
 	bool inTransactionBlock = false;
@@ -392,13 +391,6 @@ TryToDelegateFunctionCall(DistributedPlanningContext *planContext)
 		return NULL;
 	}
 
-	CitusTableCacheEntry *distTable = GetCitusTableCacheEntry(colocatedRelationId);
-	Var *partitionColumn = distTable->partitionColumn;
-	if (partitionColumn == NULL)
-	{
-		colocatedWithReferenceTable = true;
-	}
-
 	/*
 	 * This can be called in queries like SELECT ... WHERE EXISTS(SELECT func()), or other
 	 * forms of CTEs or subqueries. We don't push-down in those cases.
@@ -410,14 +402,20 @@ TryToDelegateFunctionCall(DistributedPlanningContext *planContext)
 		return NULL;
 	}
 
-	if (colocatedWithReferenceTable)
+	CitusTableCacheEntry *distTable = GetCitusTableCacheEntry(colocatedRelationId);
+	if (IsCitusTableType(colocatedRelationId, REFERENCE_TABLE))
 	{
 		placement = ShardPlacementForFunctionColocatedWithReferenceTable(distTable);
+	}
+	else if (IsCitusTableType(colocatedRelationId, SINGLE_SHARD_DISTRIBUTED))
+	{
+		placement = linitial(ActiveShardPlacementList(distTable->relationId));
 	}
 	else
 	{
 		placement = ShardPlacementForFunctionColocatedWithDistTable(procedure,
 																	funcExpr->args,
+																	distTable->
 																	partitionColumn,
 																	distTable,
 																	planContext->plan);
