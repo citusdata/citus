@@ -57,7 +57,12 @@
 #include "utils/memutils.h"
 #include "utils/lsyscache.h"
 #include "utils/rel.h"
+#if PG_VERSION_NUM >= PG_VERSION_16
+#include "storage/relfilelocator.h"
+#include "utils/relfilenumbermap.h"
+#else
 #include "utils/relfilenodemap.h"
+#endif
 
 #define COLUMNAR_RELOPTION_NAMESPACE "columnar"
 #define SLOW_METADATA_ACCESS_WARNING \
@@ -112,7 +117,7 @@ static Oid ColumnarChunkGroupRelationId(void);
 static Oid ColumnarChunkIndexRelationId(void);
 static Oid ColumnarChunkGroupIndexRelationId(void);
 static Oid ColumnarNamespaceId(void);
-static uint64 LookupStorageId(RelFileNode relfilenode);
+static uint64 LookupStorageId(RelFileLocator relfilelocator);
 static uint64 GetHighestUsedRowNumber(uint64 storageId);
 static void DeleteStorageFromColumnarMetadataTable(Oid metadataTableId,
 												   AttrNumber storageIdAtrrNumber,
@@ -591,14 +596,15 @@ ReadColumnarOptions(Oid regclass, ColumnarOptions *options)
  * of columnar.chunk.
  */
 void
-SaveStripeSkipList(RelFileNode relfilenode, uint64 stripe, StripeSkipList *chunkList,
+SaveStripeSkipList(RelFileLocator relfilelocator, uint64 stripe,
+				   StripeSkipList *chunkList,
 				   TupleDesc tupleDescriptor)
 {
 	uint32 columnIndex = 0;
 	uint32 chunkIndex = 0;
 	uint32 columnCount = chunkList->columnCount;
 
-	uint64 storageId = LookupStorageId(relfilenode);
+	uint64 storageId = LookupStorageId(relfilelocator);
 	Oid columnarChunkOid = ColumnarChunkRelationId();
 	Relation columnarChunk = table_open(columnarChunkOid, RowExclusiveLock);
 	ModifyState *modifyState = StartModifyRelation(columnarChunk);
@@ -657,10 +663,10 @@ SaveStripeSkipList(RelFileNode relfilenode, uint64 stripe, StripeSkipList *chunk
  * SaveChunkGroups saves the metadata for given chunk groups in columnar.chunk_group.
  */
 void
-SaveChunkGroups(RelFileNode relfilenode, uint64 stripe,
+SaveChunkGroups(RelFileLocator relfilelocator, uint64 stripe,
 				List *chunkGroupRowCounts)
 {
-	uint64 storageId = LookupStorageId(relfilenode);
+	uint64 storageId = LookupStorageId(relfilelocator);
 	Oid columnarChunkGroupOid = ColumnarChunkGroupRelationId();
 	Relation columnarChunkGroup = table_open(columnarChunkGroupOid, RowExclusiveLock);
 	ModifyState *modifyState = StartModifyRelation(columnarChunkGroup);
@@ -693,7 +699,8 @@ SaveChunkGroups(RelFileNode relfilenode, uint64 stripe,
  * ReadStripeSkipList fetches chunk metadata for a given stripe.
  */
 StripeSkipList *
-ReadStripeSkipList(RelFileNode relfilenode, uint64 stripe, TupleDesc tupleDescriptor,
+ReadStripeSkipList(RelFileLocator relfilelocator, uint64 stripe,
+				   TupleDesc tupleDescriptor,
 				   uint32 chunkCount, Snapshot snapshot)
 {
 	int32 columnIndex = 0;
@@ -701,7 +708,7 @@ ReadStripeSkipList(RelFileNode relfilenode, uint64 stripe, TupleDesc tupleDescri
 	uint32 columnCount = tupleDescriptor->natts;
 	ScanKeyData scanKey[2];
 
-	uint64 storageId = LookupStorageId(relfilenode);
+	uint64 storageId = LookupStorageId(relfilelocator);
 
 	Oid columnarChunkOid = ColumnarChunkRelationId();
 	Relation columnarChunk = table_open(columnarChunkOid, AccessShareLock);
@@ -1235,13 +1242,13 @@ InsertEmptyStripeMetadataRow(uint64 storageId, uint64 stripeId, uint32 columnCou
 
 
 /*
- * StripesForRelfilenode returns a list of StripeMetadata for stripes
+ * StripesForRelfilelocator returns a list of StripeMetadata for stripes
  * of the given relfilenode.
  */
 List *
-StripesForRelfilenode(RelFileNode relfilenode)
+StripesForRelfilelocator(RelFileLocator relfilelocator)
 {
-	uint64 storageId = LookupStorageId(relfilenode);
+	uint64 storageId = LookupStorageId(relfilelocator);
 
 	return ReadDataFileStripeList(storageId, GetTransactionSnapshot());
 }
@@ -1256,9 +1263,9 @@ StripesForRelfilenode(RelFileNode relfilenode)
  * returns 0.
  */
 uint64
-GetHighestUsedAddress(RelFileNode relfilenode)
+GetHighestUsedAddress(RelFileLocator relfilelocator)
 {
-	uint64 storageId = LookupStorageId(relfilenode);
+	uint64 storageId = LookupStorageId(relfilelocator);
 
 	uint64 highestUsedAddress = 0;
 	uint64 highestUsedId = 0;
@@ -1539,7 +1546,7 @@ BuildStripeMetadata(Relation columnarStripes, HeapTuple heapTuple)
  * metadata tables.
  */
 void
-DeleteMetadataRows(RelFileNode relfilenode)
+DeleteMetadataRows(RelFileLocator relfilelocator)
 {
 	/*
 	 * During a restore for binary upgrade, metadata tables and indexes may or
@@ -1550,7 +1557,7 @@ DeleteMetadataRows(RelFileNode relfilenode)
 		return;
 	}
 
-	uint64 storageId = LookupStorageId(relfilenode);
+	uint64 storageId = LookupStorageId(relfilelocator);
 
 	DeleteStorageFromColumnarMetadataTable(ColumnarStripeRelationId(),
 										   Anum_columnar_stripe_storageid,
@@ -1917,10 +1924,11 @@ ColumnarNamespaceId(void)
  * false if the relation doesn't have a meta page yet.
  */
 static uint64
-LookupStorageId(RelFileNode relfilenode)
+LookupStorageId(RelFileLocator relfilelocator)
 {
-	Oid relationId = RelidByRelfilenode(relfilenode.spcNode,
-										relfilenode.relNode);
+	Oid relationId = RelidByRelfilenumber(RelationTablespace_compat(relfilelocator),
+										  RelationPhysicalIdentifierNumber_compat(
+											  relfilelocator));
 
 	Relation relation = relation_open(relationId, AccessShareLock);
 	uint64 storageId = ColumnarStorageGetStorageId(relation, false);

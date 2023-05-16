@@ -13,6 +13,29 @@
 
 #include "distributed/pg_version_constants.h"
 
+#if PG_VERSION_NUM >= PG_VERSION_16
+
+#define RelationPhysicalIdentifier_compat(a) ((a)->rd_locator)
+#define RelationTablespace_compat(a) (a.spcOid)
+#define RelationPhysicalIdentifierNumber_compat(a) (a.relNumber)
+#define RelationPhysicalIdentifierNumberPtr_compat(a) (a->relNumber)
+#define RelationPhysicalIdentifierBackend_compat(a) (a->smgr_rlocator.locator)
+
+#else
+
+#include "storage/relfilenode.h"
+
+#define RelationPhysicalIdentifier_compat(a) ((a)->rd_node)
+#define RelationTablespace_compat(a) (a.spcNode)
+#define RelationPhysicalIdentifierNumber_compat(a) (a.relNode)
+#define RelationPhysicalIdentifierNumberPtr_compat(a) (a->relNode)
+#define RelationPhysicalIdentifierBackend_compat(a) (a->smgr_rnode.node)
+typedef RelFileNode RelFileLocator;
+typedef Oid RelFileNumber;
+#define RelidByRelfilenumber(a, b) RelidByRelfilenode(a, b)
+
+#endif
+
 #if PG_VERSION_NUM >= PG_VERSION_15
 #define ProcessCompletedNotifies()
 #define RelationCreateStorage_compat(a, b, c) RelationCreateStorage(a, b, c)
