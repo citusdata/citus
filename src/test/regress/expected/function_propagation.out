@@ -1097,6 +1097,14 @@ SELECT create_reference_table('tbl_to_colocate_ref');
 
 (1 row)
 
+-- test colocating function with single shard table
+CREATE TABLE single_shard_tbl (a int);
+SELECT create_distributed_table('single_shard_tbl', null);
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
 CREATE FUNCTION func_to_colocate (a int) returns int as $$select 1;$$ language sql;
 -- see the empty pg_dist_object entries
 SELECT distribution_argument_index, colocationid, force_delegation FROM pg_catalog.pg_dist_object WHERE objid = 'func_to_colocate'::regproc;
@@ -1117,6 +1125,20 @@ SELECT distribution_argument_index, colocationid, force_delegation FROM pg_catal
  distribution_argument_index | colocationid | force_delegation
 ---------------------------------------------------------------------
                              |        10002 |
+(1 row)
+
+-- colocate the function with single shard table table
+SELECT create_distributed_function('func_to_colocate(int)', colocate_with:='single_shard_tbl');
+ create_distributed_function
+---------------------------------------------------------------------
+
+(1 row)
+
+-- see the pg_dist_object entry
+SELECT distribution_argument_index, colocationid, force_delegation FROM pg_catalog.pg_dist_object WHERE objid = 'func_to_colocate'::regproc;
+ distribution_argument_index | colocationid | force_delegation
+---------------------------------------------------------------------
+                             |        10003 |
 (1 row)
 
 -- convert to non-delegated

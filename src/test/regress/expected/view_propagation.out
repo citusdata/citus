@@ -411,7 +411,7 @@ DROP TABLE view_table_2 CASCADE;
 NOTICE:  drop cascades to 2 other objects
 DETAIL:  drop cascades to view prop_view_2
 drop cascades to constraint f_key_for_local_table on table view_table_3
-NOTICE:  drop cascades to constraint f_key_for_local_table_1410200 on table view_prop_schema.view_table_3_1410200
+NOTICE:  drop cascades to constraint f_key_for_local_table_1410201 on table view_prop_schema.view_table_3_1410201
 CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
 PL/pgSQL function citus_drop_trigger() line XX at PERFORM
 NOTICE:  removing table view_prop_schema.view_table_3 from metadata as it is not connected to any reference tables via foreign keys

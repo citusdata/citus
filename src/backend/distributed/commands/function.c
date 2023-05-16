@@ -133,6 +133,7 @@ create_distributed_function(PG_FUNCTION_ARGS)
 
 	Oid distributionArgumentOid = InvalidOid;
 	bool colocatedWithReferenceTable = false;
+	bool colocatedWithSingleShardTable = false;
 
 	char *distributionArgumentName = NULL;
 	char *colocateWithTableName = NULL;
@@ -187,6 +188,8 @@ create_distributed_function(PG_FUNCTION_ARGS)
 			Oid colocationRelationId = ResolveRelationId(colocateWithText, false);
 			colocatedWithReferenceTable = IsCitusTableType(colocationRelationId,
 														   REFERENCE_TABLE);
+			colocatedWithSingleShardTable = IsCitusTableType(colocationRelationId,
+															 SINGLE_SHARD_DISTRIBUTED);
 		}
 	}
 
@@ -276,10 +279,21 @@ create_distributed_function(PG_FUNCTION_ARGS)
 												   forceDelegationAddress,
 												   functionAddress);
 	}
-	else if (!colocatedWithReferenceTable)
+	else if (!colocatedWithReferenceTable && !colocatedWithSingleShardTable)
 	{
 		DistributeFunctionColocatedWithDistributedTable(funcOid, colocateWithTableName,
 														functionAddress);
+	}
+	else if (colocatedWithSingleShardTable)
+	{
+		/* get the single shard table's colocation id */
+		int colocationId = TableColocationId(ResolveRelationId(colocateWithText, false));
+
+		/* set distribution argument to NULL */
+		int *distributionArgumentIndex = NULL;
+		UpdateFunctionDistributionInfo(functionAddress, distributionArgumentIndex,
+									   &colocationId,
+									   NULL);
 	}
 	else if (colocatedWithReferenceTable)
 	{
