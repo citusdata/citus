@@ -133,7 +133,11 @@ BEGIN;
 ROLLBACK;
 -- should fail --
 SELECT update_distributed_table_colocation('null_dist_key_table', colocate_with => 'none');
-ERROR:  relation null_dist_key_table should be a hash distributed table
+ update_distributed_table_colocation
+---------------------------------------------------------------------
+
+(1 row)
+
 SELECT master_create_empty_shard('null_dist_key_table');
 ERROR:  relation "null_dist_key_table" is a single shard table
 DETAIL:  We currently don't support creating shards on single shard tables
@@ -186,7 +190,7 @@ ERROR:  Cannot split shard as operation is only supported for hash distributed t
 SELECT colocationid FROM pg_dist_partition WHERE logicalrelid::text LIKE '%null_dist_key_table%';
  colocationid
 ---------------------------------------------------------------------
-       198000
+       198001
 (1 row)
 
 -- test alter_table_set_access_method and verify it doesn't change the colocation id
@@ -203,7 +207,7 @@ NOTICE:  renaming the new table to null_dist_key_udfs.null_dist_key_table
 SELECT colocationid FROM pg_dist_partition WHERE logicalrelid::text LIKE '%null_dist_key_table%';
  colocationid
 ---------------------------------------------------------------------
-       198000
+       198001
 (1 row)
 
 -- undistribute
@@ -236,5 +240,126 @@ SELECT COUNT(*) = 0 FROM pg_dist_shard WHERE logicalrelid::text LIKE '%null_dist
  t
 (1 row)
 
+-- test update_distributed_table_colocation
+CREATE TABLE update_col_1 (a INT);
+CREATE TABLE update_col_2 (a INT);
+CREATE TABLE update_col_3 (a INT);
+-- create colocated single shard distributed tables, so the shards will be
+-- in the same worker node
+SELECT create_distributed_table ('update_col_1', null, colocate_with:='none');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_distributed_table ('update_col_2', null, colocate_with:='update_col_1');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- now create a third single shard distributed table that is not colocated,
+-- with the new colocation id the new table will be in the other worker node
+SELECT create_distributed_table ('update_col_3', null, colocate_with:='none');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- make sure nodes are correct
+SELECT c1.nodeport = c2.nodeport AS same_node
+FROM citus_shards c1, citus_shards c2, pg_dist_node p1, pg_dist_node p2
+WHERE c1.table_name::text = 'update_col_1' AND c2.table_name::text = 'update_col_2' AND
+      p1.nodeport = c1.nodeport AND p2.nodeport = c2.nodeport AND
+      p1.noderole = 'primary' AND p2.noderole = 'primary';
+ same_node
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT c1.nodeport = c2.nodeport AS same_node
+FROM citus_shards c1, citus_shards c2, pg_dist_node p1, pg_dist_node p2
+WHERE c1.table_name::text = 'update_col_1' AND c2.table_name::text = 'update_col_3' AND
+      p1.nodeport = c1.nodeport AND p2.nodeport = c2.nodeport AND
+      p1.noderole = 'primary' AND p2.noderole = 'primary';
+ same_node
+---------------------------------------------------------------------
+ f
+(1 row)
+
+-- and the update_col_1 and update_col_2 are colocated
+SELECT c1.colocation_id = c2.colocation_id AS colocated
+FROM public.citus_tables c1, public.citus_tables c2
+WHERE c1.table_name::text = 'update_col_1' AND c2.table_name::text = 'update_col_2';
+ colocated
+---------------------------------------------------------------------
+ t
+(1 row)
+
+-- break the colocation
+SELECT update_distributed_table_colocation('update_col_2', colocate_with:='none');
+ update_distributed_table_colocation
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT c1.colocation_id = c2.colocation_id AS colocated
+FROM public.citus_tables c1, public.citus_tables c2
+WHERE c1.table_name::text = 'update_col_1' AND c2.table_name::text = 'update_col_2';
+ colocated
+---------------------------------------------------------------------
+ f
+(1 row)
+
+-- re-colocate, the shards were already in the same node
+SELECT update_distributed_table_colocation('update_col_2', colocate_with:='update_col_1');
+ update_distributed_table_colocation
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT c1.colocation_id = c2.colocation_id AS colocated
+FROM public.citus_tables c1, public.citus_tables c2
+WHERE c1.table_name::text = 'update_col_1' AND c2.table_name::text = 'update_col_2';
+ colocated
+---------------------------------------------------------------------
+ t
+(1 row)
+
+-- update_col_1 and update_col_3 are not colocated, because they are not in the some node
+SELECT c1.colocation_id = c2.colocation_id AS colocated
+FROM public.citus_tables c1, public.citus_tables c2
+WHERE c1.table_name::text = 'update_col_1' AND c2.table_name::text = 'update_col_3';
+ colocated
+---------------------------------------------------------------------
+ f
+(1 row)
+
+-- they should not be able to be colocated since the shards are in different nodes
+SELECT update_distributed_table_colocation('update_col_3', colocate_with:='update_col_1');
+ERROR:  cannot colocate tables update_col_1 and update_col_3
+DETAIL:  Shard xxxxx of update_col_1 and shard xxxxx of update_col_3 are not colocated.
+SELECT c1.colocation_id = c2.colocation_id AS colocated
+FROM public.citus_tables c1, public.citus_tables c2
+WHERE c1.table_name::text = 'update_col_1' AND c2.table_name::text = 'update_col_3';
+ colocated
+---------------------------------------------------------------------
+ f
+(1 row)
+
+-- hash distributed and single shard distributed tables cannot be colocated
+CREATE TABLE update_col_4 (a INT);
+SELECT create_distributed_table ('update_col_4', 'a', colocate_with:='none');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT update_distributed_table_colocation('update_col_1', colocate_with:='update_col_4');
+ERROR:  cannot colocate tables update_col_4 and update_col_1
+DETAIL:  Distribution column types don't match for update_col_4 and update_col_1.
+SELECT update_distributed_table_colocation('update_col_4', colocate_with:='update_col_1');
+ERROR:  cannot colocate tables update_col_1 and update_col_4
+DETAIL:  Distribution column types don't match for update_col_1 and update_col_4.
+SET client_min_messages TO WARNING;
 DROP SCHEMA null_dist_key_udfs CASCADE;
-NOTICE:  drop cascades to table null_dist_key_table

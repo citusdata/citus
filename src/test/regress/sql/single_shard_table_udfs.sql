@@ -102,4 +102,70 @@ SELECT COUNT(*) = 0 FROM pg_dist_partition WHERE logicalrelid::text LIKE '%null_
 SELECT COUNT(*) = 0 FROM pg_dist_placement WHERE shardid IN (SELECT shardid FROM pg_dist_shard WHERE logicalrelid::text LIKE '%null_dist_key_table%');
 SELECT COUNT(*) = 0 FROM pg_dist_shard WHERE logicalrelid::text LIKE '%null_dist_key_table%';
 
+-- test update_distributed_table_colocation
+CREATE TABLE update_col_1 (a INT);
+CREATE TABLE update_col_2 (a INT);
+CREATE TABLE update_col_3 (a INT);
+
+-- create colocated single shard distributed tables, so the shards will be
+-- in the same worker node
+SELECT create_distributed_table ('update_col_1', null, colocate_with:='none');
+SELECT create_distributed_table ('update_col_2', null, colocate_with:='update_col_1');
+
+-- now create a third single shard distributed table that is not colocated,
+-- with the new colocation id the new table will be in the other worker node
+SELECT create_distributed_table ('update_col_3', null, colocate_with:='none');
+
+-- make sure nodes are correct
+SELECT c1.nodeport = c2.nodeport AS same_node
+FROM citus_shards c1, citus_shards c2, pg_dist_node p1, pg_dist_node p2
+WHERE c1.table_name::text = 'update_col_1' AND c2.table_name::text = 'update_col_2' AND
+      p1.nodeport = c1.nodeport AND p2.nodeport = c2.nodeport AND
+      p1.noderole = 'primary' AND p2.noderole = 'primary';
+
+SELECT c1.nodeport = c2.nodeport AS same_node
+FROM citus_shards c1, citus_shards c2, pg_dist_node p1, pg_dist_node p2
+WHERE c1.table_name::text = 'update_col_1' AND c2.table_name::text = 'update_col_3' AND
+      p1.nodeport = c1.nodeport AND p2.nodeport = c2.nodeport AND
+      p1.noderole = 'primary' AND p2.noderole = 'primary';
+
+-- and the update_col_1 and update_col_2 are colocated
+SELECT c1.colocation_id = c2.colocation_id AS colocated
+FROM public.citus_tables c1, public.citus_tables c2
+WHERE c1.table_name::text = 'update_col_1' AND c2.table_name::text = 'update_col_2';
+
+-- break the colocation
+SELECT update_distributed_table_colocation('update_col_2', colocate_with:='none');
+
+SELECT c1.colocation_id = c2.colocation_id AS colocated
+FROM public.citus_tables c1, public.citus_tables c2
+WHERE c1.table_name::text = 'update_col_1' AND c2.table_name::text = 'update_col_2';
+
+-- re-colocate, the shards were already in the same node
+SELECT update_distributed_table_colocation('update_col_2', colocate_with:='update_col_1');
+
+SELECT c1.colocation_id = c2.colocation_id AS colocated
+FROM public.citus_tables c1, public.citus_tables c2
+WHERE c1.table_name::text = 'update_col_1' AND c2.table_name::text = 'update_col_2';
+
+-- update_col_1 and update_col_3 are not colocated, because they are not in the some node
+SELECT c1.colocation_id = c2.colocation_id AS colocated
+FROM public.citus_tables c1, public.citus_tables c2
+WHERE c1.table_name::text = 'update_col_1' AND c2.table_name::text = 'update_col_3';
+
+-- they should not be able to be colocated since the shards are in different nodes
+SELECT update_distributed_table_colocation('update_col_3', colocate_with:='update_col_1');
+
+SELECT c1.colocation_id = c2.colocation_id AS colocated
+FROM public.citus_tables c1, public.citus_tables c2
+WHERE c1.table_name::text = 'update_col_1' AND c2.table_name::text = 'update_col_3';
+
+-- hash distributed and single shard distributed tables cannot be colocated
+CREATE TABLE update_col_4 (a INT);
+SELECT create_distributed_table ('update_col_4', 'a', colocate_with:='none');
+
+SELECT update_distributed_table_colocation('update_col_1', colocate_with:='update_col_4');
+SELECT update_distributed_table_colocation('update_col_4', colocate_with:='update_col_1');
+
+SET client_min_messages TO WARNING;
 DROP SCHEMA null_dist_key_udfs CASCADE;

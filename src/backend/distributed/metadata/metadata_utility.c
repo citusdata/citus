@@ -2289,6 +2289,24 @@ EnsureHashDistributedTable(Oid relationId)
 
 
 /*
+ * EnsureHashOrSingleShardDistributedTable error out if the given relation is not a
+ * hash or single shard distributed table with the given message.
+ */
+void
+EnsureHashOrSingleShardDistributedTable(Oid relationId)
+{
+	if (!IsCitusTableType(relationId, HASH_DISTRIBUTED) &&
+		!IsCitusTableType(relationId, SINGLE_SHARD_DISTRIBUTED))
+	{
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("relation %s should be a "
+							   "hash or single shard distributed table",
+							   get_rel_name(relationId))));
+	}
+}
+
+
+/*
  * EnsureSuperUser check that the current user is a superuser and errors out if not.
  */
 void
