@@ -788,6 +788,5 @@ extern bool ShouldCreateTenantSchemaTable(Oid relationId);
 extern bool IsTenantSchema(Oid schemaId);
 extern void CreateTenantSchemaTable(Oid relationId);
 extern char * RegisterTenantSchema(Oid schemaId);
-extern void UnregisterTenantSchema(Oid schemaId);
 
 #endif /*CITUS_COMMANDS_H */

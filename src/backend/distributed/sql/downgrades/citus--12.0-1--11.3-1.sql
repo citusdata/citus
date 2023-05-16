@@ -36,4 +36,9 @@ DROP FUNCTION pg_catalog.citus_internal_delete_tenant_schema(Oid);
 #include "../udfs/citus_prepare_pg_upgrade/11.2-1.sql"
 #include "../udfs/citus_finish_pg_upgrade/11.2-1.sql"
 
+DROP FUNCTION pg_catalog.citus_internal_delete_colocation_metadata_globally(int);
+DROP FUNCTION pg_catalog.citus_internal_delete_tenant_schema_globally(Oid, text);
+
+#include "../udfs/citus_drop_trigger/10.2-1.sql"
+
 DROP TABLE pg_catalog.pg_dist_tenant_schema;

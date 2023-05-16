@@ -19,7 +19,6 @@
 #include "catalog/namespace.h"
 #include "catalog/pg_class.h"
 #include "catalog/pg_namespace.h"
-#include "distributed/colocation_utils.h"
 #include "distributed/commands.h"
 #include <distributed/connection_management.h>
 #include "distributed/commands/utility_hook.h"
@@ -34,7 +33,6 @@
 #include "distributed/resource_lock.h"
 #include <distributed/remote_commands.h>
 #include <distributed/remote_commands.h>
-#include "distributed/tenant_schema_metadata.h"
 #include "distributed/version_compat.h"
 #include "nodes/parsenodes.h"
 #include "utils/fmgroids.h"
@@ -124,33 +122,6 @@ PreprocessDropSchemaStmt(Node *node, const char *queryString,
 	EnsureSequentialMode(OBJECT_SCHEMA);
 
 	String *schemaVal = NULL;
-	foreach_ptr(schemaVal, distributedSchemas)
-	{
-		bool missingOk = false;
-		Oid schemaId = get_namespace_oid(strVal(schemaVal), missingOk);
-		if (IsTenantSchema(schemaId))
-		{
-			/*
-			 * Normally, we delete a colocation group when it becomes empty,
-			 * i.e., when dropping the last distributed table that belongs to
-			 * that colocaton group. However, we do not do the same if the
-			 * colocation group belongs to a tenant schema. For this reason;
-			 * when dropping a tenant schema, here we delete the associated
-			 * colocation group too.
-			 *
-			 * Note that here we do not delete the colocation group if it is
-			 * not empty. This is because, it would anyway get deleted when
-			 * the last table that belongs to that colocation group gets
-			 * dropped. See master_remove_partition_metadata().
-			 */
-			uint32 tenantSchemaColocationId = SchemaIdGetTenantColocationId(schemaId);
-			DeleteColocationGroupIfNoTablesBelong(tenantSchemaColocationId);
-
-			UnregisterTenantSchema(schemaId);
-		}
-	}
-
-	schemaVal = NULL;
 	foreach_ptr(schemaVal, distributedSchemas)
 	{
 		if (SchemaHasDistributedTableWithFKey(strVal(schemaVal)))

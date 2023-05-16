@@ -19,6 +19,7 @@
 #include "catalog/indexing.h"
 #include "catalog/pg_type.h"
 #include "commands/sequence.h"
+#include "distributed/argutils.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/commands.h"
 #include "distributed/listutils.h"
@@ -60,6 +61,7 @@ static void BreakColocation(Oid sourceRelationId);
 PG_FUNCTION_INFO_V1(mark_tables_colocated);
 PG_FUNCTION_INFO_V1(get_colocated_shard_array);
 PG_FUNCTION_INFO_V1(update_distributed_table_colocation);
+PG_FUNCTION_INFO_V1(citus_internal_delete_colocation_metadata_globally);
 
 
 /*
@@ -130,6 +132,31 @@ update_distributed_table_colocation(PG_FUNCTION_ARGS)
 		EnsureTableOwner(colocateWithTableId);
 		MarkTablesColocated(colocateWithTableId, targetRelationId);
 	}
+	PG_RETURN_VOID();
+}
+
+
+/*
+ * citus_internal_delete_colocation_metadata is an internal UDF to
+ * call DeleteColocationGroup on all nodes.
+ *
+ * The colocationId parameter is not allowed to be NULL.
+ *
+ * This is only supposed to be called via drop trigger, hence lacks of
+ * ShouldSkipMetadataChecks() check.
+ */
+Datum
+citus_internal_delete_colocation_metadata_globally(PG_FUNCTION_ARGS)
+{
+	CheckCitusVersion(ERROR);
+	EnsureSuperUser();
+	EnsureCoordinator();
+
+	PG_ENSURE_ARGNOTNULL(0, "colocation_id");
+	int colocationId = PG_GETARG_INT32(0);
+
+	DeleteColocationGroup(colocationId);
+
 	PG_RETURN_VOID();
 }
 

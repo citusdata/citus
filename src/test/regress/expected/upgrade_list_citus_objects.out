@@ -72,9 +72,11 @@ ORDER BY 1;
  function citus_internal_add_tenant_schema(oid,integer)
  function citus_internal_adjust_local_clock_to_remote(cluster_clock)
  function citus_internal_delete_colocation_metadata(integer)
+ function citus_internal_delete_colocation_metadata_globally(integer)
  function citus_internal_delete_partition_metadata(regclass)
  function citus_internal_delete_shard_metadata(bigint)
  function citus_internal_delete_tenant_schema(oid)
+ function citus_internal_delete_tenant_schema_globally(oid,text)
  function citus_internal_global_blocked_processes()
  function citus_internal_is_replication_origin_tracking_active()
  function citus_internal_local_blocked_processes()
@@ -333,5 +335,5 @@ ORDER BY 1;
  view citus_stat_tenants_local
  view pg_dist_shard_placement
  view time_partitions
-(325 rows)
+(327 rows)
 

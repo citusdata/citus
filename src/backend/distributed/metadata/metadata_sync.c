@@ -146,7 +146,8 @@ static char * ColocationGroupCreateCommand(uint32 colocationId, int shardCount,
 										   Oid distributionColumnType,
 										   Oid distributionColumnCollation);
 static char * ColocationGroupDeleteCommand(uint32 colocationId);
-static char * RemoteSchemaIdExpression(Oid schemaId);
+static char * RemoteSchemaIdExpressionFromSchemaId(Oid schemaId);
+static char * RemoteSchemaIdExpressionFromSchemaName(char *schemaName);
 static char * RemoteTypeIdExpression(Oid typeId);
 static char * RemoteCollationIdExpression(Oid colocationId);
 
@@ -4008,34 +4009,51 @@ TenantSchemaInsertCommand(Oid schemaId, uint32 colocationId)
 	StringInfo command = makeStringInfo();
 	appendStringInfo(command,
 					 "SELECT pg_catalog.citus_internal_add_tenant_schema(%s, %u)",
-					 RemoteSchemaIdExpression(schemaId), colocationId);
+					 RemoteSchemaIdExpressionFromSchemaId(schemaId), colocationId);
 
 	return command->data;
 }
 
 
 /*
- * TenantSchemaDeleteCommand returns a command to call
- * citus_internal_delete_tenant_schema().
+ * TenantSchemaDeleteCommandBySchemaId returns a command to call
+ * citus_internal_delete_tenant_schema() based on fiven given
+ * schemaId.
  */
 char *
-TenantSchemaDeleteCommand(Oid schemaId)
+TenantSchemaDeleteCommandBySchemaId(Oid schemaId)
 {
 	StringInfo command = makeStringInfo();
 	appendStringInfo(command, "SELECT pg_catalog.citus_internal_delete_tenant_schema(%s)",
-					 RemoteSchemaIdExpression(schemaId));
+					 RemoteSchemaIdExpressionFromSchemaId(schemaId));
 
 	return command->data;
 }
 
 
 /*
- * RemoteSchemaIdExpression returns an expression in text form that can
- * be used to obtain the OID of a schema on a different node when included
- * in a query string.
+ * TenantSchemaDeleteCommandBySchemaName returns a command to call
+ * citus_internal_delete_tenant_schema() based on fiven given
+ * schema name.
+ */
+char *
+TenantSchemaDeleteCommandBySchemaName(char *schemaName)
+{
+	StringInfo command = makeStringInfo();
+	appendStringInfo(command, "SELECT pg_catalog.citus_internal_delete_tenant_schema(%s)",
+					 RemoteSchemaIdExpressionFromSchemaName(schemaName));
+
+	return command->data;
+}
+
+
+/*
+ * RemoteSchemaIdExpressionFromSchemaId returns an expression in text form that
+ * can be used to obtain the OID of the schema with given schema id on a different
+ * node when included in a query string.
  */
 static char *
-RemoteSchemaIdExpression(Oid schemaId)
+RemoteSchemaIdExpressionFromSchemaId(Oid schemaId)
 {
 	char *schemaName = get_namespace_name(schemaId);
 	if (schemaName == NULL)
@@ -4044,8 +4062,24 @@ RemoteSchemaIdExpression(Oid schemaId)
 	}
 
 	StringInfo regnamespaceExpr = makeStringInfo();
-	appendStringInfo(regnamespaceExpr, "%s::regnamespace", quote_literal_cstr(
-						 schemaName));
+	appendStringInfo(regnamespaceExpr, "%s::regnamespace",
+					 quote_literal_cstr(schemaName));
+
+	return regnamespaceExpr->data;
+}
+
+
+/*
+ * RemoteSchemaIdExpressionFromSchemaName returns an expression in text form that
+ * can be used to obtain the OID of the schema with given name on a different
+ * node when included in a query string.
+ */
+static char *
+RemoteSchemaIdExpressionFromSchemaName(char *schemaName)
+{
+	StringInfo regnamespaceExpr = makeStringInfo();
+	appendStringInfo(regnamespaceExpr, "%s::regnamespace",
+					 quote_literal_cstr(schemaName));
 
 	return regnamespaceExpr->data;
 }
@@ -4662,7 +4696,7 @@ SendTenantSchemaMetadataCommands(MetadataSyncContext *context)
 		StringInfo insertTenantSchemaCommand = makeStringInfo();
 		appendStringInfo(insertTenantSchemaCommand,
 						 "SELECT pg_catalog.citus_internal_add_tenant_schema(%s, %u)",
-						 RemoteSchemaIdExpression(tenantSchemaForm->schemaid),
+						 RemoteSchemaIdExpressionFromSchemaId(tenantSchemaForm->schemaid),
 						 tenantSchemaForm->colocationid);
 
 		List *commandList = list_make1(insertTenantSchemaCommand->data);
