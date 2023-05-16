@@ -19,6 +19,10 @@ SET citus.use_citus_managed_tables to true;
 
 SET citus.next_shard_id TO 4001000;
 
+SET client_min_messages = warning;
+SELECT 1 FROM master_add_node('localhost', :master_port, groupid => 0);
+RESET client_min_messages;
+
 CREATE USER regress_merge_privs;
 CREATE USER regress_merge_no_privs;
 DROP TABLE IF EXISTS target;

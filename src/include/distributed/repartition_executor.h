@@ -15,7 +15,7 @@
 
 extern bool EnableRepartitionedInsertSelect;
 
-extern int DistributionColumnIndex(List *insertTargetList, Var *partitionColumn);
+extern int DistributionColumnIndex(List *insertTargetList, Var *distributionColumn);
 extern List * GenerateTaskListWithColocatedIntermediateResults(Oid targetRelationId,
 															   Query *
 															   modifyQueryViaCoordinatorOrRepartition,

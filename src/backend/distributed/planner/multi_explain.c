@@ -33,6 +33,7 @@
 #include "distributed/insert_select_planner.h"
 #include "distributed/insert_select_executor.h"
 #include "distributed/listutils.h"
+#include "distributed/merge_planner.h"
 #include "distributed/multi_executor.h"
 #include "distributed/multi_explain.h"
 #include "distributed/multi_logical_optimizer.h"
@@ -244,9 +245,8 @@ NonPushableInsertSelectExplainScan(CustomScanState *node, List *ancestors,
 	 */
 	Query *queryCopy = copyObject(selectRte->subquery);
 
-	bool repartition = distributedPlan->modifyWithSelectMethod ==
-					   MODIFY_WITH_SELECT_REPARTITION;
-
+	bool repartition =
+		distributedPlan->modifyWithSelectMethod == MODIFY_WITH_SELECT_REPARTITION;
 
 	if (es->analyze)
 	{
@@ -279,6 +279,67 @@ NonPushableInsertSelectExplainScan(CustomScanState *node, List *ancestors,
 	ExplainOneQuery(queryCopy, 0, into, es, queryString, params, NULL);
 
 	ExplainCloseGroup("Select Query", "Select Query", false, es);
+}
+
+
+/*
+ * NonPushableMergeSqlExplainScan is a custom scan explain callback function
+ * which is used to print explain information of a Citus plan for MERGE INTO
+ * distributed_table USING (source query/table), where source can be any query
+ * whose results are repartitioned to colocated with the target table.
+ */
+void
+NonPushableMergeCommandExplainScan(CustomScanState *node, List *ancestors,
+								   struct ExplainState *es)
+{
+	CitusScanState *scanState = (CitusScanState *) node;
+	DistributedPlan *distributedPlan = scanState->distributedPlan;
+	Query *mergeQuery = distributedPlan->modifyQueryViaCoordinatorOrRepartition;
+	RangeTblEntry *sourceRte = ExtractMergeSourceRangeTableEntry(mergeQuery);
+
+	/*
+	 * Create a copy because ExplainOneQuery can modify the query, and later
+	 * executions of prepared statements might require it. See
+	 * https://github.com/citusdata/citus/issues/3947 for what can happen.
+	 */
+	Query *sourceQueryCopy = copyObject(sourceRte->subquery);
+	bool repartition =
+		distributedPlan->modifyWithSelectMethod == MODIFY_WITH_SELECT_REPARTITION;
+
+	if (es->analyze)
+	{
+		ereport(ERROR, (errmsg("EXPLAIN ANALYZE is currently not supported for "
+							   "MERGE INTO ... commands with repartitioning")));
+	}
+
+	Oid targetRelationId = ModifyQueryResultRelationId(mergeQuery);
+	StringInfo mergeMethodMessage = makeStringInfo();
+	appendStringInfo(mergeMethodMessage,
+					 "MERGE INTO %s method", get_rel_name(targetRelationId));
+
+	if (repartition)
+	{
+		ExplainPropertyText(mergeMethodMessage->data, "repartition", es);
+	}
+	else
+	{
+		ExplainPropertyText(mergeMethodMessage->data, "pull to coordinator", es);
+	}
+
+	ExplainOpenGroup("Source Query", "Source Query", false, es);
+
+	/* explain the MERGE source query */
+	IntoClause *into = NULL;
+	ParamListInfo params = NULL;
+
+	/*
+	 * With PG14, we need to provide a string here, for now we put an empty
+	 * string, which is valid according to postgres.
+	 */
+	char *queryString = pstrdup("");
+	ExplainOneQuery(sourceQueryCopy, 0, into, es, queryString, params, NULL);
+
+	ExplainCloseGroup("Source Query", "Source Query", false, es);
 }
 
 

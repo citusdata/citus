@@ -131,3 +131,48 @@ BEGIN;
 EXECUTE local(0, 1);
 SELECT * FROM t1 order by id;
 ROLLBACK;
+
+-- Test prepared statements with repartition
+PREPARE merge_repartition_pg(int,int,int,int) as
+        MERGE INTO pg_target target
+        USING (SELECT id+1+$1 as key, val FROM (SELECT * FROM pg_source UNION SELECT * FROM pg_source WHERE id = $2) as foo) as source
+        ON (source.key = target.id AND $3 < 10000)
+        WHEN MATCHED THEN UPDATE SET val = (source.key::int+$4)
+        WHEN NOT MATCHED THEN INSERT VALUES (source.key, source.val);
+
+PREPARE merge_repartition_citus(int,int,int,int) as
+        MERGE INTO citus_target target
+        USING (SELECT id+1+$1 as key, val FROM (SELECT * FROM citus_source UNION SELECT * FROM citus_source WHERE id = $2) as foo) as source
+        ON (source.key = target.id AND $3 < 10000)
+        WHEN MATCHED THEN UPDATE SET val = (source.key::int+$4)
+        WHEN NOT MATCHED THEN INSERT VALUES (source.key, source.val);
+
+EXECUTE merge_repartition_pg(1,1,1,1);
+EXECUTE merge_repartition_citus(1,1,1,1);
+
+SET client_min_messages = NOTICE;
+SELECT compare_data();
+RESET client_min_messages;
+
+EXECUTE merge_repartition_pg(1,100,1,1);
+EXECUTE merge_repartition_citus(1,100,1,1);
+
+EXECUTE merge_repartition_pg(2,200,1,1);
+EXECUTE merge_repartition_citus(2,200,1,1);
+
+EXECUTE merge_repartition_pg(3,300,1,1);
+EXECUTE merge_repartition_citus(3,300,1,1);
+
+EXECUTE merge_repartition_pg(4,400,1,1);
+EXECUTE merge_repartition_citus(4,400,1,1);
+
+EXECUTE merge_repartition_pg(5,500,1,1);
+EXECUTE merge_repartition_citus(5,500,1,1);
+
+-- Sixth time
+EXECUTE merge_repartition_pg(6,600,1,6);
+EXECUTE merge_repartition_citus(6,600,1,6);
+
+SET client_min_messages = NOTICE;
+SELECT compare_data();
+RESET client_min_messages;

@@ -220,6 +220,7 @@ class AllSingleShardTableDefaultConfig(CitusDefaultClusterConfig):
             # "dist_query_single_shard" table  acts differently when the table
             # has a single shard. This is explained with a comment in the test.
             "nested_execution",
+            "merge_arbitrary",
         ]
 
 

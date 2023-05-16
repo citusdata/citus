@@ -2128,12 +2128,36 @@ CitusCopyDestReceiverStartup(DestReceiver *dest, int operation,
 		int columnCount = inputTupleDescriptor->natts;
 		Oid *finalTypeArray = palloc0(columnCount * sizeof(Oid));
 
-		copyDest->columnCoercionPaths =
-			ColumnCoercionPaths(destTupleDescriptor, inputTupleDescriptor,
-								tableId, columnNameList, finalTypeArray);
-
-		copyDest->columnOutputFunctions =
-			TypeOutputFunctions(columnCount, finalTypeArray, copyOutState->binary);
+		/*
+		 * To ensure the proper co-location and distribution of the target table,
+		 * the entire process of repartitioning intermediate files requires the
+		 * destReceiver to be created on the target rather than the source.
+		 *
+		 * Within this specific code path, it is assumed that the employed model
+		 * is for insert-select. Consequently, it validates the column types of
+		 * destTupleDescriptor(target) during the intermediate result generation
+		 * process. However, this approach varies significantly for MERGE operations,
+		 * where the source tuple(s) can have arbitrary types and are not required to
+		 * align with the target column names.
+		 *
+		 * Despite this minor setback, a significant portion of the code responsible
+		 * for repartitioning intermediate files can be reused for the MERGE
+		 * operation. By leveraging the ability to perform actual coercion during
+		 * the writing process to the target table, we can bypass this specific route.
+		 */
+		if (copyDest->skipCoercions)
+		{
+			copyDest->columnOutputFunctions =
+				ColumnOutputFunctions(inputTupleDescriptor, copyOutState->binary);
+		}
+		else
+		{
+			copyDest->columnCoercionPaths =
+				ColumnCoercionPaths(destTupleDescriptor, inputTupleDescriptor,
+									tableId, columnNameList, finalTypeArray);
+			copyDest->columnOutputFunctions =
+				TypeOutputFunctions(columnCount, finalTypeArray, copyOutState->binary);
+		}
 	}
 
 	/* wrap the column names as Values */
@@ -2597,9 +2621,11 @@ ShardIdForTuple(CitusCopyDestReceiver *copyDest, Datum *columnValues, bool *colu
 
 		/* find the partition column value */
 		partitionColumnValue = columnValues[partitionColumnIndex];
-
-		/* annoyingly this is evaluated twice, but at least we don't crash! */
-		partitionColumnValue = CoerceColumnValue(partitionColumnValue, coercePath);
+		if (!copyDest->skipCoercions)
+		{
+			/* annoyingly this is evaluated twice, but at least we don't crash! */
+			partitionColumnValue = CoerceColumnValue(partitionColumnValue, coercePath);
+		}
 	}
 
 	/*

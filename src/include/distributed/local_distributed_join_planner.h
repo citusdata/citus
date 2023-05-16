@@ -33,5 +33,6 @@ extern void RecursivelyPlanLocalTableJoins(Query *query,
 extern List * RequiredAttrNumbersForRelation(RangeTblEntry *relationRte,
 											 PlannerRestrictionContext *
 											 plannerRestrictionContext);
+extern List * RequiredAttrNumbersForRelationInternal(Query *queryToProcess, int rteIndex);
 
 #endif /* LOCAL_DISTRIBUTED_JOIN_PLANNER_H */
