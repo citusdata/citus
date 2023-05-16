@@ -2348,8 +2348,8 @@ int_col integer
 
 SELECT create_distributed_table('dist_table_3', 'dist_col');
 
--- dist_table_2 and dist_table_3 are non-colocated source tables. Pulling the SELECT part to coordinator is also not possible.
--- Citus would not be able to handle this complex insert select.
+-- dist_table_2 and dist_table_3 are non-colocated source tables. Repartitioning is also not possible due to
+-- different types for distribution columns. Citus would not be able to handle this complex insert select.
 INSERT INTO dist_table_1 SELECT dist_table_2.dist_col FROM dist_table_2 JOIN dist_table_3 USING(dist_col);
 
 CREATE TABLE dist_table_4(
@@ -2441,6 +2441,21 @@ SELECT master_create_empty_shard('append_table');
 
 -- verify that insert select push down for append tables are not supported.
 INSERT INTO append_table SELECT * FROM append_table;
+
+-- verify that CTEs at top level of INSERT SELECT, that can normally be inlined, would not be inlined by INSERT SELECT pushdown planner
+-- and handled by pull to coordinator.
+SELECT coordinator_plan($$
+  EXPLAIN (COSTS FALSE) WITH cte_1 AS (SELECT id FROM dist_table_5 WHERE id = 5)
+  INSERT INTO dist_table_5
+  SELECT id FROM dist_table_5 JOIN cte_1 USING(id);
+$$);
+
+-- verify that CTEs at top level of SELECT part, would be inlined by Postgres and pushed down by INSERT SELECT planner.
+SELECT coordinator_plan($$
+  EXPLAIN (COSTS FALSE) INSERT INTO dist_table_5
+  WITH cte_1 AS (SELECT id FROM dist_table_5 WHERE id = 5)
+  SELECT id FROM dist_table_5 JOIN cte_1 USING(id);
+$$);
 
 SET client_min_messages TO ERROR;
 DROP SCHEMA multi_insert_select CASCADE;
