@@ -285,6 +285,9 @@ CREATE ROLE test_non_super_user;
 ALTER ROLE test_non_super_user NOSUPERUSER;
 
 ALTER SCHEMA tenant_2 OWNER TO test_non_super_user;
+-- XXX: ALTER SCHEMA .. OWNER TO .. is not propagated to workers,
+--      see https://github.com/citusdata/citus/issues/4812.
+SELECT result FROM run_command_on_workers($$ALTER SCHEMA tenant_2 OWNER TO test_non_super_user$$);
 
 DROP OWNED BY test_non_super_user CASCADE;
 
@@ -460,12 +463,21 @@ SELECT result FROM run_command_on_workers($$
     DROP TABLE tenant_9_schemaid
 $$);
 
+CREATE USER test_non_super_user WITH superuser;
+
+\c - test_non_super_user
+
+SET citus.enable_schema_based_sharding TO ON;
 CREATE SCHEMA tenant_9;
 
-CREATE ROLE test_non_super_user;
-ALTER ROLE test_non_super_user NOSUPERUSER;
+\c - postgres
 
-ALTER SCHEMA tenant_9 OWNER TO test_non_super_user;
+SET search_path TO regular_schema;
+SET citus.next_shard_id TO 1940000;
+SET citus.shard_count TO 32;
+SET citus.shard_replication_factor TO 1;
+SET client_min_messages TO NOTICE;
+SET citus.enable_schema_based_sharding TO ON;
 
 SELECT schemaid AS tenant_9_schemaid FROM pg_dist_tenant_schema WHERE schemaid::regnamespace::text = 'tenant_9' \gset
 SELECT colocationid AS tenant_9_colocationid FROM pg_dist_tenant_schema WHERE schemaid::regnamespace::text = 'tenant_9' \gset
@@ -503,7 +515,7 @@ SELECT result FROM run_command_on_workers($$
     DROP TABLE tenant_9_schemaid
 $$);
 
-DROP ROLE test_non_super_user;
+DROP USER test_non_super_user;
 
 \c - - - :worker_1_port
 
@@ -529,7 +541,7 @@ SELECT pg_reload_conf();
 \c - - - :master_port
 
 SET search_path TO regular_schema;
-SET citus.next_shard_id TO 1940000;
+SET citus.next_shard_id TO 1950000;
 SET citus.shard_count TO 32;
 SET citus.shard_replication_factor TO 1;
 SET client_min_messages TO NOTICE;
