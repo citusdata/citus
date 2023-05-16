@@ -129,6 +129,9 @@ DEPS = {
     "multi_mx_schema_support": TestDeps(None, ["multi_mx_copy_data"]),
     "multi_simple_queries": TestDeps("base_schedule"),
     "create_single_shard_table": TestDeps("minimal_schedule"),
+    "isolation_extension_commands": TestDeps(
+        None, ["isolation_setup", "isolation_add_remove_node"]
+    ),
 }
 
 
@@ -195,9 +198,9 @@ def run_schedule_with_multiregress(test_name, schedule, dependencies, args):
     worker_count = needed_worker_count(test_name, dependencies)
 
     # find suitable make recipe
-    if dependencies.schedule == "base_isolation_schedule":
+    if dependencies.schedule == "base_isolation_schedule" or "isolation" in test_name:
         make_recipe = "check-isolation-custom-schedule"
-    elif dependencies.schedule == "failure_base_schedule":
+    elif dependencies.schedule == "failure_base_schedule" or "failure" in test_name:
         make_recipe = "check-failure-custom-schedule"
     else:
         make_recipe = "check-custom-schedule"

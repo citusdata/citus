@@ -1612,7 +1612,6 @@ DETAIL:  A command for a distributed function is run. To make sure subsequent co
 -- since the query results verifies the correctness
 \set VERBOSITY terse
 SELECT author_articles_max_id();
-DEBUG:  function does not have co-located tables
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  query has a single distribution column value: 1
@@ -1622,35 +1621,30 @@ DEBUG:  query has a single distribution column value: 1
 (1 row)
 
 SELECT author_articles_max_id();
-DEBUG:  function does not have co-located tables
  author_articles_max_id
 ---------------------------------------------------------------------
                      41
 (1 row)
 
 SELECT author_articles_max_id();
-DEBUG:  function does not have co-located tables
  author_articles_max_id
 ---------------------------------------------------------------------
                      41
 (1 row)
 
 SELECT author_articles_max_id();
-DEBUG:  function does not have co-located tables
  author_articles_max_id
 ---------------------------------------------------------------------
                      41
 (1 row)
 
 SELECT author_articles_max_id();
-DEBUG:  function does not have co-located tables
  author_articles_max_id
 ---------------------------------------------------------------------
                      41
 (1 row)
 
 SELECT author_articles_max_id();
-DEBUG:  function does not have co-located tables
  author_articles_max_id
 ---------------------------------------------------------------------
                      41
@@ -1669,7 +1663,6 @@ END;
 $$ LANGUAGE plpgsql;
 DEBUG:  switching to sequential query execution mode
 SELECT author_articles_max_id(1);
-DEBUG:  function does not have co-located tables
 DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
  author_articles_max_id
@@ -1678,7 +1671,6 @@ DEBUG:  Creating router plan
 (1 row)
 
 SELECT author_articles_max_id(1);
-DEBUG:  function does not have co-located tables
 DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
  author_articles_max_id
@@ -1687,7 +1679,6 @@ DEBUG:  Creating router plan
 (1 row)
 
 SELECT author_articles_max_id(1);
-DEBUG:  function does not have co-located tables
 DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
  author_articles_max_id
@@ -1696,7 +1687,6 @@ DEBUG:  Creating router plan
 (1 row)
 
 SELECT author_articles_max_id(1);
-DEBUG:  function does not have co-located tables
 DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
  author_articles_max_id
@@ -1705,7 +1695,6 @@ DEBUG:  Creating router plan
 (1 row)
 
 SELECT author_articles_max_id(1);
-DEBUG:  function does not have co-located tables
 DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
  author_articles_max_id
@@ -1714,7 +1703,6 @@ DEBUG:  Creating router plan
 (1 row)
 
 SELECT author_articles_max_id(1);
-DEBUG:  function does not have co-located tables
 DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
  author_articles_max_id
@@ -1735,7 +1723,6 @@ END;
 $$ LANGUAGE plpgsql;
 DEBUG:  switching to sequential query execution mode
 SELECT * FROM author_articles_id_word_count();
-DEBUG:  function does not have co-located tables
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  query has a single distribution column value: 1
@@ -1749,7 +1736,6 @@ DEBUG:  query has a single distribution column value: 1
 (5 rows)
 
 SELECT * FROM author_articles_id_word_count();
-DEBUG:  function does not have co-located tables
  id | word_count
 ---------------------------------------------------------------------
   1 |       9572
@@ -1760,7 +1746,6 @@ DEBUG:  function does not have co-located tables
 (5 rows)
 
 SELECT * FROM author_articles_id_word_count();
-DEBUG:  function does not have co-located tables
  id | word_count
 ---------------------------------------------------------------------
   1 |       9572
@@ -1771,7 +1756,6 @@ DEBUG:  function does not have co-located tables
 (5 rows)
 
 SELECT * FROM author_articles_id_word_count();
-DEBUG:  function does not have co-located tables
  id | word_count
 ---------------------------------------------------------------------
   1 |       9572
@@ -1782,7 +1766,6 @@ DEBUG:  function does not have co-located tables
 (5 rows)
 
 SELECT * FROM author_articles_id_word_count();
-DEBUG:  function does not have co-located tables
  id | word_count
 ---------------------------------------------------------------------
   1 |       9572
@@ -1793,7 +1776,6 @@ DEBUG:  function does not have co-located tables
 (5 rows)
 
 SELECT * FROM author_articles_id_word_count();
-DEBUG:  function does not have co-located tables
  id | word_count
 ---------------------------------------------------------------------
   1 |       9572
@@ -1816,7 +1798,6 @@ END;
 $$ LANGUAGE plpgsql;
 DEBUG:  switching to sequential query execution mode
 SELECT * FROM author_articles_id_word_count(1);
-DEBUG:  function does not have co-located tables
 DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
  id | word_count
@@ -1829,7 +1810,6 @@ DEBUG:  Creating router plan
 (5 rows)
 
 SELECT * FROM author_articles_id_word_count(1);
-DEBUG:  function does not have co-located tables
 DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
  id | word_count
@@ -1842,7 +1822,6 @@ DEBUG:  Creating router plan
 (5 rows)
 
 SELECT * FROM author_articles_id_word_count(1);
-DEBUG:  function does not have co-located tables
 DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
  id | word_count
@@ -1855,7 +1834,6 @@ DEBUG:  Creating router plan
 (5 rows)
 
 SELECT * FROM author_articles_id_word_count(1);
-DEBUG:  function does not have co-located tables
 DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
  id | word_count
@@ -1868,7 +1846,6 @@ DEBUG:  Creating router plan
 (5 rows)
 
 SELECT * FROM author_articles_id_word_count(1);
-DEBUG:  function does not have co-located tables
 DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
  id | word_count
@@ -1881,7 +1858,6 @@ DEBUG:  Creating router plan
 (5 rows)
 
 SELECT * FROM author_articles_id_word_count(1);
-DEBUG:  function does not have co-located tables
 DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
  id | word_count

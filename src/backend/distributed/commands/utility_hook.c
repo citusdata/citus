@@ -1591,37 +1591,37 @@ DDLTaskList(Oid relationId, const char *commandString)
 List *
 NodeDDLTaskList(TargetWorkerSet targets, List *commands)
 {
-	/* don't allow concurrent node list changes that require an exclusive lock */
-	List *workerNodes = TargetWorkerSetNodeList(targets, RowShareLock);
-
-	if (list_length(workerNodes) <= 0)
-	{
-		/*
-		 * if there are no nodes we don't have to plan any ddl tasks. Planning them would
-		 * cause the executor to stop responding.
-		 */
-		return NIL;
-	}
-
-	Task *task = CitusMakeNode(Task);
-	task->taskType = DDL_TASK;
-	SetTaskQueryStringList(task, commands);
-
-	WorkerNode *workerNode = NULL;
-	foreach_ptr(workerNode, workerNodes)
-	{
-		ShardPlacement *targetPlacement = CitusMakeNode(ShardPlacement);
-		targetPlacement->nodeName = workerNode->workerName;
-		targetPlacement->nodePort = workerNode->workerPort;
-		targetPlacement->groupId = workerNode->groupId;
-
-		task->taskPlacementList = lappend(task->taskPlacementList, targetPlacement);
-	}
-
 	DDLJob *ddlJob = palloc0(sizeof(DDLJob));
 	ddlJob->targetObjectAddress = InvalidObjectAddress;
 	ddlJob->metadataSyncCommand = NULL;
-	ddlJob->taskList = list_make1(task);
+
+	/* don't allow concurrent node list changes that require an exclusive lock */
+	List *workerNodes = TargetWorkerSetNodeList(targets, RowShareLock);
+
+	/*
+	 * if there are no nodes we don't have to plan any ddl tasks. Planning them would
+	 * cause the executor to stop responding.
+	 */
+	if (list_length(workerNodes) > 0)
+	{
+		Task *task = CitusMakeNode(Task);
+		task->taskType = DDL_TASK;
+		SetTaskQueryStringList(task, commands);
+
+		WorkerNode *workerNode = NULL;
+		foreach_ptr(workerNode, workerNodes)
+		{
+			ShardPlacement *targetPlacement = CitusMakeNode(ShardPlacement);
+			targetPlacement->nodeName = workerNode->workerName;
+			targetPlacement->nodePort = workerNode->workerPort;
+			targetPlacement->groupId = workerNode->groupId;
+
+			task->taskPlacementList = lappend(task->taskPlacementList, targetPlacement);
+		}
+
+		ddlJob->taskList = list_make1(task);
+	}
+
 	return list_make1(ddlJob);
 }
 

@@ -337,7 +337,7 @@ TryToDelegateFunctionCall(DistributedPlanningContext *planContext)
 		if (!procedure->forceDelegation)
 		{
 			/* cannot delegate function calls in a multi-statement transaction */
-			ereport(DEBUG1, (errmsg("not pushing down function calls in "
+			ereport(DEBUG4, (errmsg("not pushing down function calls in "
 									"a multi-statement transaction")));
 			return NULL;
 		}
@@ -388,7 +388,7 @@ TryToDelegateFunctionCall(DistributedPlanningContext *planContext)
 	Oid colocatedRelationId = ColocatedTableId(procedure->colocationId);
 	if (colocatedRelationId == InvalidOid)
 	{
-		ereport(DEBUG1, (errmsg("function does not have co-located tables")));
+		ereport(DEBUG4, (errmsg("function does not have co-located tables")));
 		return NULL;
 	}
 

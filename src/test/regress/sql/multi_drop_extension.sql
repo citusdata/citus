@@ -34,8 +34,13 @@ BEGIN;
 
   alter table other_schema.l3 add constraint fkey foreign key (a) references l1(a);
 
-  -- show that works fine
-  drop schema public cascade;
+  -- Commented out because it fails due to the issue documented in
+  -- https://github.com/citusdata/citus/issues/6901.
+  --
+  -- This wasn't the case before https://github.com/citusdata/citus/pull/6900.
+  -- This is because, we were not marking the schemas as distributed when there
+  -- are no worker nodes in the cluster before that PR.
+  -- drop schema public cascade;
 ROLLBACK;
 
 CREATE EXTENSION citus;
