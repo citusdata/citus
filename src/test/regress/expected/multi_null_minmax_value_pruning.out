@@ -37,7 +37,6 @@ SELECT public.coordinator_plan($Q$
 EXPLAIN (COSTS FALSE)
 SELECT l_orderkey, l_linenumber, l_shipdate FROM lineitem WHERE l_orderkey = 9030 or l_orderkey = 1;
 $Q$);
-DEBUG:  function does not have co-located tables
 DEBUG:  Router planner cannot handle multi-shard select queries
 CONTEXT:  PL/pgSQL function public.coordinator_plan(text) line XX at FOR over EXECUTE statement
 LOG:  join order: [ "lineitem" ]
@@ -87,7 +86,6 @@ SELECT public.coordinator_plan($Q$
 EXPLAIN (COSTS FALSE)
 SELECT l_orderkey, l_linenumber, l_shipdate FROM lineitem WHERE l_orderkey = 9030;
 $Q$);
-DEBUG:  function does not have co-located tables
 DEBUG:  Router planner cannot handle multi-shard select queries
 CONTEXT:  PL/pgSQL function public.coordinator_plan(text) line XX at FOR over EXECUTE statement
 LOG:  join order: [ "lineitem" ]
@@ -153,7 +151,6 @@ SELECT public.coordinator_plan($Q$
 EXPLAIN (COSTS FALSE)
 SELECT l_orderkey, l_linenumber, l_shipdate FROM lineitem WHERE l_orderkey = 9030;
 $Q$);
-DEBUG:  function does not have co-located tables
 DEBUG:  Router planner cannot handle multi-shard select queries
 CONTEXT:  PL/pgSQL function public.coordinator_plan(text) line XX at FOR over EXECUTE statement
 LOG:  join order: [ "lineitem" ]
@@ -219,7 +216,6 @@ SELECT public.coordinator_plan($Q$
 EXPLAIN (COSTS FALSE)
 SELECT l_orderkey, l_linenumber, l_shipdate FROM lineitem WHERE l_orderkey = 9030;
 $Q$);
-DEBUG:  function does not have co-located tables
 DEBUG:  Creating router plan
 CONTEXT:  PL/pgSQL function public.coordinator_plan(text) line XX at FOR over EXECUTE statement
        coordinator_plan

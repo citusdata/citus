@@ -170,23 +170,20 @@ NOTICE:  procedure multi_mx_function_call_delegation.squares is already distribu
 -- colocated with any distributed tables.
 SET client_min_messages TO DEBUG1;
 select mx_call_func(2, 0);
-DEBUG:  function does not have co-located tables
 DEBUG:  generating subplan XXX_1 for subquery SELECT sum((t1.val OPERATOR(pg_catalog.+) t2.val)) AS sum FROM (multi_mx_function_call_delegation.mx_call_dist_table_1 t1 JOIN multi_mx_function_call_delegation.mx_call_dist_table_2 t2 ON ((t1.id OPERATOR(pg_catalog.=) t2.id)))
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT (3 OPERATOR(pg_catalog.+) (SELECT intermediate_result.sum FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint)))
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT ((3 OPERATOR(pg_catalog.+) (SELECT intermediate_result.sum FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint))))::integer
  mx_call_func
 ---------------------------------------------------------------------
            29
 (1 row)
 
 select multi_mx_function_call_delegation.mx_call_func_bigint(4, 2);
-DEBUG:  function does not have co-located tables
  mx_call_func_bigint
 ---------------------------------------------------------------------
                    8
 (1 row)
 
 select mx_call_func_custom_types('S', 'A');
-DEBUG:  function does not have co-located tables
  mx_call_func_custom_types
 ---------------------------------------------------------------------
  (F,S)
@@ -194,21 +191,18 @@ DEBUG:  function does not have co-located tables
 
 -- Mark them as colocated with a table. Now we should route them to workers.
 select colocate_proc_with_table('mx_call_func', 'mx_call_dist_table_1'::regclass, 1);
-DEBUG:  function does not have co-located tables
  colocate_proc_with_table
 ---------------------------------------------------------------------
 
 (1 row)
 
 select colocate_proc_with_table('mx_call_func_custom_types', 'mx_call_dist_table_enum'::regclass, 1);
-DEBUG:  function does not have co-located tables
  colocate_proc_with_table
 ---------------------------------------------------------------------
 
 (1 row)
 
 select colocate_proc_with_table('squares', 'mx_call_dist_table_2'::regclass, 0);
-DEBUG:  function does not have co-located tables
  colocate_proc_with_table
 ---------------------------------------------------------------------
 
@@ -290,7 +284,7 @@ RESET citus.enable_binary_protocol;
 begin;
 select mx_call_func(2, 0);
 DEBUG:  generating subplan XXX_1 for subquery SELECT sum((t1.val OPERATOR(pg_catalog.+) t2.val)) AS sum FROM (multi_mx_function_call_delegation.mx_call_dist_table_1 t1 JOIN multi_mx_function_call_delegation.mx_call_dist_table_2 t2 ON ((t1.id OPERATOR(pg_catalog.=) t2.id)))
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT (3 OPERATOR(pg_catalog.+) (SELECT intermediate_result.sum FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint)))
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT ((3 OPERATOR(pg_catalog.+) (SELECT intermediate_result.sum FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint))))::integer
  mx_call_func
 ---------------------------------------------------------------------
            29
@@ -303,7 +297,6 @@ SET client_min_messages TO NOTICE;
 drop table mx_call_dist_table_enum;
 SET client_min_messages TO DEBUG1;
 select mx_call_func_custom_types('S', 'A');
-DEBUG:  function does not have co-located tables
  mx_call_func_custom_types
 ---------------------------------------------------------------------
  (F,S)
@@ -312,7 +305,6 @@ DEBUG:  function does not have co-located tables
 -- Make sure we do bounds checking on distributed argument index
 -- This also tests that we have cache invalidation for pg_dist_object updates
 select colocate_proc_with_table('mx_call_func', 'mx_call_dist_table_1'::regclass, -1);
-DEBUG:  function does not have co-located tables
  colocate_proc_with_table
 ---------------------------------------------------------------------
 
@@ -321,14 +313,13 @@ DEBUG:  function does not have co-located tables
 select mx_call_func(2, 0);
 DEBUG:  cannot push down invalid distribution_argument_index
 DEBUG:  generating subplan XXX_1 for subquery SELECT sum((t1.val OPERATOR(pg_catalog.+) t2.val)) AS sum FROM (multi_mx_function_call_delegation.mx_call_dist_table_1 t1 JOIN multi_mx_function_call_delegation.mx_call_dist_table_2 t2 ON ((t1.id OPERATOR(pg_catalog.=) t2.id)))
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT (3 OPERATOR(pg_catalog.+) (SELECT intermediate_result.sum FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint)))
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT ((3 OPERATOR(pg_catalog.+) (SELECT intermediate_result.sum FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint))))::integer
  mx_call_func
 ---------------------------------------------------------------------
            29
 (1 row)
 
 select colocate_proc_with_table('mx_call_func', 'mx_call_dist_table_1'::regclass, 2);
-DEBUG:  function does not have co-located tables
  colocate_proc_with_table
 ---------------------------------------------------------------------
 
@@ -337,7 +328,7 @@ DEBUG:  function does not have co-located tables
 select mx_call_func(2, 0);
 DEBUG:  cannot push down invalid distribution_argument_index
 DEBUG:  generating subplan XXX_1 for subquery SELECT sum((t1.val OPERATOR(pg_catalog.+) t2.val)) AS sum FROM (multi_mx_function_call_delegation.mx_call_dist_table_1 t1 JOIN multi_mx_function_call_delegation.mx_call_dist_table_2 t2 ON ((t1.id OPERATOR(pg_catalog.=) t2.id)))
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT (3 OPERATOR(pg_catalog.+) (SELECT intermediate_result.sum FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint)))
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT ((3 OPERATOR(pg_catalog.+) (SELECT intermediate_result.sum FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint))))::integer
  mx_call_func
 ---------------------------------------------------------------------
            29
@@ -345,7 +336,6 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT (3 OPERATOR(p
 
 -- We don't currently support colocating with reference tables
 select colocate_proc_with_table('mx_call_func', 'mx_call_dist_table_ref'::regclass, 1);
-DEBUG:  function does not have co-located tables
  colocate_proc_with_table
 ---------------------------------------------------------------------
 
@@ -360,7 +350,6 @@ DEBUG:  pushing down the function call
 
 -- We don't currently support colocating with replicated tables
 select colocate_proc_with_table('mx_call_func', 'mx_call_dist_table_replica'::regclass, 1);
-DEBUG:  function does not have co-located tables
  colocate_proc_with_table
 ---------------------------------------------------------------------
 
@@ -369,7 +358,7 @@ DEBUG:  function does not have co-located tables
 select mx_call_func(2, 0);
 DEBUG:  cannot push down function call for replicated distributed tables
 DEBUG:  generating subplan XXX_1 for subquery SELECT sum((t1.val OPERATOR(pg_catalog.+) t2.val)) AS sum FROM (multi_mx_function_call_delegation.mx_call_dist_table_1 t1 JOIN multi_mx_function_call_delegation.mx_call_dist_table_2 t2 ON ((t1.id OPERATOR(pg_catalog.=) t2.id)))
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT (3 OPERATOR(pg_catalog.+) (SELECT intermediate_result.sum FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint)))
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT ((3 OPERATOR(pg_catalog.+) (SELECT intermediate_result.sum FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint))))::integer
  mx_call_func
 ---------------------------------------------------------------------
            29
@@ -379,7 +368,6 @@ SET client_min_messages TO NOTICE;
 drop table mx_call_dist_table_replica;
 SET client_min_messages TO DEBUG1;
 select colocate_proc_with_table('mx_call_func', 'mx_call_dist_table_1'::regclass, 1);
-DEBUG:  function does not have co-located tables
  colocate_proc_with_table
 ---------------------------------------------------------------------
 
@@ -402,7 +390,6 @@ END;$$;
 DEBUG:  switching to sequential query execution mode
 -- before distribution ...
 select mx_call_func_tbl(10);
-DEBUG:  function does not have co-located tables
  mx_call_func_tbl
 ---------------------------------------------------------------------
  (10,-1)
@@ -549,10 +536,10 @@ SET client_min_messages TO DEBUG1;
 select mx_call_func(2, 0);
 DEBUG:  the worker node does not have metadata
 DEBUG:  generating subplan XXX_1 for subquery SELECT sum((t1.val OPERATOR(pg_catalog.+) t2.val)) AS sum FROM (multi_mx_function_call_delegation.mx_call_dist_table_1 t1 JOIN multi_mx_function_call_delegation.mx_call_dist_table_2 t2 ON ((t1.id OPERATOR(pg_catalog.=) t2.id)))
-CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from multi_mx_function_call_delegation.mx_call_dist_table_1 t1 join multi_mx_function_call_delegation.mx_call_dist_table_2 t2 on t1.id = t2.id)"
+CONTEXT:  PL/pgSQL assignment "y := y + (select sum(t1.val + t2.val) from multi_mx_function_call_delegation.mx_call_dist_table_1 t1 join multi_mx_function_call_delegation.mx_call_dist_table_2 t2 on t1.id = t2.id)"
 PL/pgSQL function mx_call_func(integer,integer) line XX at assignment
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT (3 OPERATOR(pg_catalog.+) (SELECT intermediate_result.sum FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint)))
-CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from multi_mx_function_call_delegation.mx_call_dist_table_1 t1 join multi_mx_function_call_delegation.mx_call_dist_table_2 t2 on t1.id = t2.id)"
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT ((3 OPERATOR(pg_catalog.+) (SELECT intermediate_result.sum FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint))))::integer
+CONTEXT:  PL/pgSQL assignment "y := y + (select sum(t1.val + t2.val) from multi_mx_function_call_delegation.mx_call_dist_table_1 t1 join multi_mx_function_call_delegation.mx_call_dist_table_2 t2 on t1.id = t2.id)"
 PL/pgSQL function mx_call_func(integer,integer) line XX at assignment
  mx_call_func
 ---------------------------------------------------------------------
@@ -597,7 +584,7 @@ DEBUG:  switching to sequential query execution mode
 select mx_call_func((select x + 1 from mx_call_add(3, 4) x), 2);
 DEBUG:  arguments in a distributed function must not contain subqueries
 DEBUG:  generating subplan XXX_1 for subquery SELECT sum((t1.val OPERATOR(pg_catalog.+) t2.val)) AS sum FROM (multi_mx_function_call_delegation.mx_call_dist_table_1 t1 JOIN multi_mx_function_call_delegation.mx_call_dist_table_2 t2 ON ((t1.id OPERATOR(pg_catalog.=) t2.id)))
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT (9 OPERATOR(pg_catalog.+) (SELECT intermediate_result.sum FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint)))
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT ((9 OPERATOR(pg_catalog.+) (SELECT intermediate_result.sum FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint))))::integer
  mx_call_func
 ---------------------------------------------------------------------
            35
@@ -607,7 +594,7 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT (9 OPERATOR(p
 select mx_call_func(floor(random())::int, 2);
 DEBUG:  arguments in a distributed function must be constant expressions
 DEBUG:  generating subplan XXX_1 for subquery SELECT sum((t1.val OPERATOR(pg_catalog.+) t2.val)) AS sum FROM (multi_mx_function_call_delegation.mx_call_dist_table_1 t1 JOIN multi_mx_function_call_delegation.mx_call_dist_table_2 t2 ON ((t1.id OPERATOR(pg_catalog.=) t2.id)))
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT (1 OPERATOR(pg_catalog.+) (SELECT intermediate_result.sum FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint)))
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT ((1 OPERATOR(pg_catalog.+) (SELECT intermediate_result.sum FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint))))::integer
  mx_call_func
 ---------------------------------------------------------------------
            27
@@ -616,16 +603,16 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT (1 OPERATOR(p
 -- test forms we don't distribute
 select mx_call_func(2, 0) where mx_call_func(0, 2) = 0;
 DEBUG:  generating subplan XXX_1 for subquery SELECT sum((t1.val OPERATOR(pg_catalog.+) t2.val)) AS sum FROM (multi_mx_function_call_delegation.mx_call_dist_table_1 t1 JOIN multi_mx_function_call_delegation.mx_call_dist_table_2 t2 ON ((t1.id OPERATOR(pg_catalog.=) t2.id)))
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT (1 OPERATOR(pg_catalog.+) (SELECT intermediate_result.sum FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint)))
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT ((1 OPERATOR(pg_catalog.+) (SELECT intermediate_result.sum FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint))))::integer
  mx_call_func
 ---------------------------------------------------------------------
 (0 rows)
 
 select mx_call_func(2, 0), mx_call_func(0, 2);
 DEBUG:  generating subplan XXX_1 for subquery SELECT sum((t1.val OPERATOR(pg_catalog.+) t2.val)) AS sum FROM (multi_mx_function_call_delegation.mx_call_dist_table_1 t1 JOIN multi_mx_function_call_delegation.mx_call_dist_table_2 t2 ON ((t1.id OPERATOR(pg_catalog.=) t2.id)))
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT (3 OPERATOR(pg_catalog.+) (SELECT intermediate_result.sum FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint)))
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT ((3 OPERATOR(pg_catalog.+) (SELECT intermediate_result.sum FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint))))::integer
 DEBUG:  generating subplan XXX_1 for subquery SELECT sum((t1.val OPERATOR(pg_catalog.+) t2.val)) AS sum FROM (multi_mx_function_call_delegation.mx_call_dist_table_1 t1 JOIN multi_mx_function_call_delegation.mx_call_dist_table_2 t2 ON ((t1.id OPERATOR(pg_catalog.=) t2.id)))
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT (1 OPERATOR(pg_catalog.+) (SELECT intermediate_result.sum FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint)))
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT ((1 OPERATOR(pg_catalog.+) (SELECT intermediate_result.sum FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint))))::integer
  mx_call_func | mx_call_func
 ---------------------------------------------------------------------
            29 |           27
@@ -776,7 +763,7 @@ DEBUG:  pushing down the function call
 BEGIN;
 SELECT mx_call_func(2, 0);
 DEBUG:  generating subplan XXX_1 for subquery SELECT sum((t1.val OPERATOR(pg_catalog.+) t2.val)) AS sum FROM (multi_mx_function_call_delegation.mx_call_dist_table_1 t1 JOIN multi_mx_function_call_delegation.mx_call_dist_table_2 t2 ON ((t1.id OPERATOR(pg_catalog.=) t2.id)))
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT (2 OPERATOR(pg_catalog.+) (SELECT intermediate_result.sum FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint)))
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT ((2 OPERATOR(pg_catalog.+) (SELECT intermediate_result.sum FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint))))::integer
  mx_call_func
 ---------------------------------------------------------------------
            28
@@ -790,7 +777,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 DEBUG:  generating subplan XXX_1 for subquery SELECT sum((t1.val OPERATOR(pg_catalog.+) t2.val)) AS sum FROM (multi_mx_function_call_delegation.mx_call_dist_table_1 t1 JOIN multi_mx_function_call_delegation.mx_call_dist_table_2 t2 ON ((t1.id OPERATOR(pg_catalog.=) t2.id)))
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT (2 OPERATOR(pg_catalog.+) (SELECT intermediate_result.sum FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint)))
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT ((2 OPERATOR(pg_catalog.+) (SELECT intermediate_result.sum FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint))))::integer
 -- forced calls are delegated in a transaction block
 BEGIN;
 SELECT mx_call_func_bigint_force(4, 2);

@@ -719,7 +719,6 @@ INSERT INTO upsert_test_1 (unique_col, other_col) SELECT unique_col, other_col F
 	DO UPDATE SET other_col = 5 WHERE upsert_test_1.other_col = random()::int;
 ERROR:  functions used in the WHERE clause of the ON CONFLICT clause of INSERTs on distributed tables must be marked IMMUTABLE
 SELECT reload_tables();
-DEBUG:  function does not have co-located tables
  reload_tables
 ---------------------------------------------------------------------
 

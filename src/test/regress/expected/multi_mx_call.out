@@ -235,28 +235,24 @@ CONTEXT:  SQL statement "INSERT INTO multi_mx_call.mx_call_dist_table_1
 PL/pgSQL function mx_call_proc_copy(integer) line XX at SQL statement
 -- Mark them as colocated with a table. Now we should route them to workers.
 select colocate_proc_with_table('mx_call_proc', 'mx_call_dist_table_1'::regclass, 1);
-DEBUG:  function does not have co-located tables
  colocate_proc_with_table
 ---------------------------------------------------------------------
 
 (1 row)
 
 select colocate_proc_with_table('mx_call_proc_bigint', 'mx_call_dist_table_bigint'::regclass, 1);
-DEBUG:  function does not have co-located tables
  colocate_proc_with_table
 ---------------------------------------------------------------------
 
 (1 row)
 
 select colocate_proc_with_table('mx_call_proc_custom_types', 'mx_call_dist_table_enum'::regclass, 1);
-DEBUG:  function does not have co-located tables
  colocate_proc_with_table
 ---------------------------------------------------------------------
 
 (1 row)
 
 select colocate_proc_with_table('mx_call_proc_copy', 'mx_call_dist_table_1'::regclass, 0);
-DEBUG:  function does not have co-located tables
  colocate_proc_with_table
 ---------------------------------------------------------------------
 
@@ -331,7 +327,6 @@ DEBUG:  stored procedure does not have co-located tables
 -- Make sure we do bounds checking on distributed argument index
 -- This also tests that we have cache invalidation for pg_dist_object updates
 select colocate_proc_with_table('mx_call_proc', 'mx_call_dist_table_1'::regclass, -1);
-DEBUG:  function does not have co-located tables
  colocate_proc_with_table
 ---------------------------------------------------------------------
 
@@ -351,7 +346,6 @@ PL/pgSQL function mx_call_proc(integer,integer) line XX at assignment
 (1 row)
 
 select colocate_proc_with_table('mx_call_proc', 'mx_call_dist_table_1'::regclass, 2);
-DEBUG:  function does not have co-located tables
  colocate_proc_with_table
 ---------------------------------------------------------------------
 
@@ -372,7 +366,6 @@ PL/pgSQL function mx_call_proc(integer,integer) line XX at assignment
 
 -- We support colocating with reference tables
 select colocate_proc_with_table('mx_call_proc', 'mx_call_dist_table_ref'::regclass, NULL);
-DEBUG:  function does not have co-located tables
  colocate_proc_with_table
 ---------------------------------------------------------------------
 
@@ -388,7 +381,6 @@ DEBUG:  pushing down the procedure
 
 -- We don't currently support colocating with replicated tables
 select colocate_proc_with_table('mx_call_proc', 'mx_call_dist_table_replica'::regclass, 1);
-DEBUG:  function does not have co-located tables
  colocate_proc_with_table
 ---------------------------------------------------------------------
 
@@ -411,7 +403,6 @@ SET client_min_messages TO NOTICE;
 drop table mx_call_dist_table_replica;
 SET client_min_messages TO DEBUG1;
 select colocate_proc_with_table('mx_call_proc', 'mx_call_dist_table_1'::regclass, 1);
-DEBUG:  function does not have co-located tables
  colocate_proc_with_table
 ---------------------------------------------------------------------
 

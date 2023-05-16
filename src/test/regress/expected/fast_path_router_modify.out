@@ -231,7 +231,6 @@ $$ LANGUAGE plpgsql;
 DEBUG:  switching to sequential query execution mode
 DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
 SELECT modify_fast_path_plpsql(1,1);
-DEBUG:  function does not have co-located tables
 DEBUG:  Deferred pruning for a fast-path router query
 CONTEXT:  SQL statement "DELETE FROM modify_fast_path WHERE key = $1 AND value_1 = $2"
 PL/pgSQL function modify_fast_path_plpsql(integer,integer) line XX at SQL statement
@@ -244,7 +243,6 @@ PL/pgSQL function modify_fast_path_plpsql(integer,integer) line XX at SQL statem
 (1 row)
 
 SELECT modify_fast_path_plpsql(2,2);
-DEBUG:  function does not have co-located tables
 DEBUG:  Deferred pruning for a fast-path router query
 CONTEXT:  SQL statement "DELETE FROM modify_fast_path WHERE key = $1 AND value_1 = $2"
 PL/pgSQL function modify_fast_path_plpsql(integer,integer) line XX at SQL statement
@@ -257,7 +255,6 @@ PL/pgSQL function modify_fast_path_plpsql(integer,integer) line XX at SQL statem
 (1 row)
 
 SELECT modify_fast_path_plpsql(3,3);
-DEBUG:  function does not have co-located tables
 DEBUG:  Deferred pruning for a fast-path router query
 CONTEXT:  SQL statement "DELETE FROM modify_fast_path WHERE key = $1 AND value_1 = $2"
 PL/pgSQL function modify_fast_path_plpsql(integer,integer) line XX at SQL statement
@@ -270,7 +267,6 @@ PL/pgSQL function modify_fast_path_plpsql(integer,integer) line XX at SQL statem
 (1 row)
 
 SELECT modify_fast_path_plpsql(4,4);
-DEBUG:  function does not have co-located tables
 DEBUG:  Deferred pruning for a fast-path router query
 CONTEXT:  SQL statement "DELETE FROM modify_fast_path WHERE key = $1 AND value_1 = $2"
 PL/pgSQL function modify_fast_path_plpsql(integer,integer) line XX at SQL statement
@@ -283,7 +279,6 @@ PL/pgSQL function modify_fast_path_plpsql(integer,integer) line XX at SQL statem
 (1 row)
 
 SELECT modify_fast_path_plpsql(5,5);
-DEBUG:  function does not have co-located tables
 DEBUG:  Deferred pruning for a fast-path router query
 CONTEXT:  SQL statement "DELETE FROM modify_fast_path WHERE key = $1 AND value_1 = $2"
 PL/pgSQL function modify_fast_path_plpsql(integer,integer) line XX at SQL statement
@@ -296,7 +291,6 @@ PL/pgSQL function modify_fast_path_plpsql(integer,integer) line XX at SQL statem
 (1 row)
 
 SELECT modify_fast_path_plpsql(6,6);
-DEBUG:  function does not have co-located tables
 DEBUG:  Deferred pruning for a fast-path router query
 CONTEXT:  SQL statement "DELETE FROM modify_fast_path WHERE key = $1 AND value_1 = $2"
 PL/pgSQL function modify_fast_path_plpsql(integer,integer) line XX at SQL statement
@@ -309,7 +303,6 @@ PL/pgSQL function modify_fast_path_plpsql(integer,integer) line XX at SQL statem
 (1 row)
 
 SELECT modify_fast_path_plpsql(6,6);
-DEBUG:  function does not have co-located tables
  modify_fast_path_plpsql
 ---------------------------------------------------------------------
 
