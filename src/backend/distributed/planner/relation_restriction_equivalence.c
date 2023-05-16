@@ -171,8 +171,6 @@ static bool FindQueryContainingRTEIdentityInternal(Node *node,
 
 static int ParentCountPriorToAppendRel(List *appendRelList, AppendRelInfo *appendRelInfo);
 
-static bool AllRelationsSame(List *relationList);
-
 
 /*
  * AllDistributionKeysInQueryAreEqual returns true if either
@@ -1963,42 +1961,12 @@ AllDistributedRelationsInRTEListColocated(List *rangeTableEntryList)
 
 
 /*
- * AllRelationsSame determines whether all of the relations are the same.
- */
-static bool
-AllRelationsSame(List *relationList)
-{
-	if (relationList == NULL || list_length(relationList) == 0)
-	{
-		return true;
-	}
-
-	Oid firstRelationId = linitial_oid(relationList);
-	Oid relationId = InvalidOid;
-	foreach_oid(relationId, relationList)
-	{
-		if (relationId != firstRelationId)
-		{
-			return false;
-		}
-	}
-
-	return true;
-}
-
-
-/*
  * AllDistributedRelationsInListColocated determines whether all of the
  * distributed relations in the given list are co-located.
  */
 bool
 AllDistributedRelationsInListColocated(List *relationList)
 {
-	if (AllRelationsSame(relationList))
-	{
-		return true;
-	}
-
 	int initialColocationId = INVALID_COLOCATION_ID;
 	Oid relationId = InvalidOid;
 

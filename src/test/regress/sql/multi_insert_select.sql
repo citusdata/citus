@@ -2360,7 +2360,9 @@ SELECT create_distributed_table('dist_table_4', 'dist_col');
 
 -- Even if target table distribution column is colocated with dist_table_2's distributed column, source tables dist_table_2 and dist_table_4
 -- are non-colocated. Hence, SELECT part of the query should be pulled to coordinator.
-INSERT INTO dist_table_1 SELECT dist_table_2.dist_col FROM dist_table_2 JOIN dist_table_4 ON dist_table_2.dist_col = dist_table_4.int_col;
+SELECT coordinator_plan($$
+  EXPLAIN (COSTS FALSE) INSERT INTO dist_table_1 SELECT dist_table_2.dist_col FROM dist_table_2 JOIN dist_table_4 ON dist_table_2.dist_col = dist_table_4.int_col;
+$$);
 
 -- For INSERT SELECT, when a lateral query references an outer query, push-down is possible even if limit clause exists in the lateral query.
 -- It is because subquery with limit does not need to be merged at coordinator as it is a lateral query.
@@ -2374,13 +2376,71 @@ SELECT coordinator_plan($$
   EXPLAIN (COSTS FALSE) INSERT INTO dist_table_1 SELECT d1.dist_col FROM dist_table_1 d1 LEFT JOIN (SELECT * FROM dist_table_2 LIMIT 3) dummy USING(dist_col);
 $$);
 
-CREATE TABLE dist_table_5(id int);
+CREATE TABLE dist_table_5(id int, id2 int);
 SELECT create_distributed_table('dist_table_5','id');
 CREATE TABLE dist_table_6(id int, id2 int);
 SELECT create_distributed_table('dist_table_6','id');
 
 -- verify that insert select with union can be pushed down since UNION clause has FROM clause at top level query.
-INSERT INTO dist_table_5(id) SELECT id FROM (SELECT id FROM dist_table_5 UNION SELECT id FROM dist_table_6) dummy;
+SELECT coordinator_plan($$
+  EXPLAIN (COSTS FALSE) INSERT INTO dist_table_5(id) SELECT id FROM (SELECT id FROM dist_table_5 UNION SELECT id FROM dist_table_6) dummy;
+$$);
+
+-- verify that insert select with sublink can be pushed down when tables are colocated.
+SELECT coordinator_plan($$
+  EXPLAIN (COSTS FALSE) INSERT INTO dist_table_5 SELECT id, (SELECT id FROM dist_table_5 WHERE dist_table_5.id = dist_table_6.id) FROM dist_table_6;
+$$);
+
+CREATE TABLE ref_table_1(id int);
+SELECT create_reference_table('ref_table_1');
+
+-- verify that insert select with sublink cannot be pushed down when from clause does not contain any distributed relation.
+INSERT INTO dist_table_5 SELECT id, (SELECT id FROM dist_table_5 WHERE dist_table_5.id = ref_table_1.id) FROM ref_table_1;
+
+-- verify that insert select cannot be pushed down when we have recurring range table in from clause.
+SELECT coordinator_plan($$
+  EXPLAIN (COSTS FALSE) INSERT INTO dist_table_5 SELECT id, (SELECT id FROM ref_table_1 WHERE id = 1) FROM ref_table_1;
+$$);
+
+-- verify that insert select cannot be pushed down when we have reference table in outside of outer join.
+SELECT coordinator_plan($$
+  EXPLAIN (COSTS FALSE) INSERT INTO dist_table_5 SELECT a.id FROM dist_table_5 a LEFT JOIN ref_table_1 b ON (true) RIGHT JOIN ref_table_1 c ON (true);
+$$);
+
+-- verify that insert select cannot be pushed down when it has a recurring outer join in a subquery.
+SELECT coordinator_plan($$
+  EXPLAIN (COSTS FALSE) INSERT INTO dist_table_5 SELECT id FROM ref_table_1 LEFT JOIN dist_table_5 USING(id);
+$$);
+
+CREATE TABLE loc_table_1(id int);
+
+-- verify that insert select cannot be pushed down when it contains join between local and distributed tables.
+SELECT coordinator_plan($$
+  EXPLAIN (COSTS FALSE) INSERT INTO dist_table_5 SELECT id FROM dist_table_5 JOIN loc_table_1 USING(id);
+$$);
+
+CREATE VIEW view_1 AS
+  SELECT id FROM dist_table_6;
+
+CREATE MATERIALIZED VIEW view_2 AS
+  SELECT id FROM dist_table_6;
+
+-- verify that insert select cannot be pushed down when it contains view.
+SELECT coordinator_plan($$
+  EXPLAIN (COSTS FALSE) INSERT INTO dist_table_5 SELECT * FROM view_1;
+$$);
+
+-- verify that insert select cannot be pushed down when it contains materialized view.
+SELECT coordinator_plan($$
+  EXPLAIN (COSTS FALSE) INSERT INTO dist_table_5 SELECT * FROM view_2;
+$$);
+
+CREATE TABLE append_table(id integer, data text, int_data int);
+SELECT create_distributed_table('append_table', 'id', 'append');
+SELECT master_create_empty_shard('append_table');
+
+-- verify that insert select push down for append tables are not supported.
+INSERT INTO append_table SELECT * FROM append_table;
 
 SET client_min_messages TO ERROR;
 DROP SCHEMA multi_insert_select CASCADE;
