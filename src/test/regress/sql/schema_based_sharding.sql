@@ -181,21 +181,32 @@ WHERE logicalrelid::regclass::text LIKE 'tenant_4.%';
 SELECT COUNT(DISTINCT(colocationid))=1 FROM pg_dist_partition
 WHERE logicalrelid::regclass::text LIKE 'tenant_5.%';
 
+SELECT colocationid AS tenant_4_colocationid FROM pg_dist_tenant_schema WHERE schemaid::regnamespace::text = 'tenant_4' \gset
+
 SET client_min_messages TO WARNING;
 DROP SCHEMA tenant_4 CASCADE;
 SET client_min_messages TO NOTICE;
 
 -- (on coordinator) Verify that dropping a tenant schema deletes the associated
--- pg_dist_tenant_schema entry too.
+-- pg_dist_tenant_schema entry and pg_dist_colocation too.
 SELECT COUNT(*)=0 FROM pg_dist_tenant_schema
 WHERE schemaid::regnamespace::text = 'tenant_4';
+SELECT COUNT(*)=0 FROM pg_dist_colocation WHERE colocationid = :tenant_4_colocationid;
 
 -- (on workers) Verify that dropping a tenant schema deletes the associated
--- pg_dist_tenant_schema entry too.
+-- pg_dist_tenant_schema entry and pg_dist_colocation too.
 SELECT result FROM run_command_on_workers($$
     SELECT COUNT(*)=0 FROM pg_dist_tenant_schema
     WHERE schemaid::regnamespace::text = 'tenant_4';
 $$);
+
+SELECT format(
+    'SELECT result FROM run_command_on_workers($$
+        SELECT COUNT(*)=0 FROM pg_dist_colocation WHERE colocationid = %s;
+    $$);',
+:tenant_4_colocationid) AS verify_non_empty_tenant_drop_on_workers_query \gset
+
+:verify_non_empty_tenant_drop_on_workers_query
 
 -- show that we don't allow colocating a Citus table with a tenant table
 CREATE TABLE regular_schema.null_shard_key_1(a int, b text);
@@ -353,6 +364,33 @@ CREATE TABLE tenant_7.tbl_5(a int REFERENCES local_table(a));
 -- Fails because tenant tables cannot have foreign keys to tenant tables
 -- that belong to different tenant schemas.
 CREATE TABLE tenant_5.tbl_5(a int, b text, FOREIGN KEY(a) REFERENCES tenant_7.tbl_3(a));
+
+CREATE SCHEMA tenant_9;
+
+SELECT colocationid AS tenant_9_colocationid FROM pg_dist_tenant_schema WHERE schemaid::regnamespace::text = 'tenant_9' \gset
+
+DROP SCHEMA tenant_9;
+
+-- (on coordinator) Make sure that dropping an empty tenant schema
+-- doesn't leave any dangling entries in pg_dist_tenant_schema and
+-- pg_dist_colocation.
+SELECT COUNT(*)=0 FROM pg_dist_tenant_schema WHERE schemaid::regnamespace::text = 'tenant_9';
+SELECT COUNT(*)=0 FROM pg_dist_colocation WHERE colocationid = :tenant_9_colocationid;
+
+-- (on workers) Make sure that dropping an empty tenant schema
+-- doesn't leave any dangling entries in pg_dist_tenant_schema and
+-- pg_dist_colocation.
+SELECT result FROM run_command_on_workers($$
+    SELECT COUNT(*)=0 FROM pg_dist_tenant_schema WHERE schemaid::regnamespace::text = 'tenant_9';
+$$);
+
+SELECT format(
+    'SELECT result FROM run_command_on_workers($$
+        SELECT COUNT(*)=0 FROM pg_dist_colocation WHERE colocationid = %s;
+    $$);',
+:tenant_9_colocationid) AS verify_empty_tenant_drop_on_workers_query \gset
+
+:verify_empty_tenant_drop_on_workers_query
 
 \c - - - :worker_1_port
 

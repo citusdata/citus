@@ -256,11 +256,12 @@ WHERE logicalrelid::regclass::text LIKE 'tenant_5.%';
  t
 (1 row)
 
+SELECT colocationid AS tenant_4_colocationid FROM pg_dist_tenant_schema WHERE schemaid::regnamespace::text = 'tenant_4' \gset
 SET client_min_messages TO WARNING;
 DROP SCHEMA tenant_4 CASCADE;
 SET client_min_messages TO NOTICE;
 -- (on coordinator) Verify that dropping a tenant schema deletes the associated
--- pg_dist_tenant_schema entry too.
+-- pg_dist_tenant_schema entry and pg_dist_colocation too.
 SELECT COUNT(*)=0 FROM pg_dist_tenant_schema
 WHERE schemaid::regnamespace::text = 'tenant_4';
  ?column?
@@ -268,12 +269,30 @@ WHERE schemaid::regnamespace::text = 'tenant_4';
  t
 (1 row)
 
+SELECT COUNT(*)=0 FROM pg_dist_colocation WHERE colocationid = :tenant_4_colocationid;
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
 -- (on workers) Verify that dropping a tenant schema deletes the associated
--- pg_dist_tenant_schema entry too.
+-- pg_dist_tenant_schema entry and pg_dist_colocation too.
 SELECT result FROM run_command_on_workers($$
     SELECT COUNT(*)=0 FROM pg_dist_tenant_schema
     WHERE schemaid::regnamespace::text = 'tenant_4';
 $$);
+ result
+---------------------------------------------------------------------
+ t
+ t
+(2 rows)
+
+SELECT format(
+    'SELECT result FROM run_command_on_workers($$
+        SELECT COUNT(*)=0 FROM pg_dist_colocation WHERE colocationid = %s;
+    $$);',
+:tenant_4_colocationid) AS verify_non_empty_tenant_drop_on_workers_query \gset
+:verify_non_empty_tenant_drop_on_workers_query
  result
 ---------------------------------------------------------------------
  t
@@ -507,6 +526,48 @@ HINT:  You could use SELECT create_reference_table('local_table') to replicate t
 CREATE TABLE tenant_5.tbl_5(a int, b text, FOREIGN KEY(a) REFERENCES tenant_7.tbl_3(a));
 ERROR:  cannot create foreign key constraint since relations are not colocated or not referencing a reference table
 DETAIL:  A distributed table can only have foreign keys if it is referencing another colocated hash distributed table or a reference table
+CREATE SCHEMA tenant_9;
+SELECT colocationid AS tenant_9_colocationid FROM pg_dist_tenant_schema WHERE schemaid::regnamespace::text = 'tenant_9' \gset
+DROP SCHEMA tenant_9;
+-- (on coordinator) Make sure that dropping an empty tenant schema
+-- doesn't leave any dangling entries in pg_dist_tenant_schema and
+-- pg_dist_colocation.
+SELECT COUNT(*)=0 FROM pg_dist_tenant_schema WHERE schemaid::regnamespace::text = 'tenant_9';
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT COUNT(*)=0 FROM pg_dist_colocation WHERE colocationid = :tenant_9_colocationid;
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+-- (on workers) Make sure that dropping an empty tenant schema
+-- doesn't leave any dangling entries in pg_dist_tenant_schema and
+-- pg_dist_colocation.
+SELECT result FROM run_command_on_workers($$
+    SELECT COUNT(*)=0 FROM pg_dist_tenant_schema WHERE schemaid::regnamespace::text = 'tenant_9';
+$$);
+ result
+---------------------------------------------------------------------
+ t
+ t
+(2 rows)
+
+SELECT format(
+    'SELECT result FROM run_command_on_workers($$
+        SELECT COUNT(*)=0 FROM pg_dist_colocation WHERE colocationid = %s;
+    $$);',
+:tenant_9_colocationid) AS verify_empty_tenant_drop_on_workers_query \gset
+:verify_empty_tenant_drop_on_workers_query
+ result
+---------------------------------------------------------------------
+ t
+ t
+(2 rows)
+
 \c - - - :worker_1_port
 -- test creating a tenant table from workers
 CREATE TABLE tenant_3.tbl_1(a int, b text);
