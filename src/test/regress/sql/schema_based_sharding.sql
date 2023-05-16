@@ -181,32 +181,48 @@ WHERE logicalrelid::regclass::text LIKE 'tenant_4.%';
 SELECT COUNT(DISTINCT(colocationid))=1 FROM pg_dist_partition
 WHERE logicalrelid::regclass::text LIKE 'tenant_5.%';
 
+SELECT schemaid AS tenant_4_schemaid FROM pg_dist_tenant_schema WHERE schemaid::regnamespace::text = 'tenant_4' \gset
 SELECT colocationid AS tenant_4_colocationid FROM pg_dist_tenant_schema WHERE schemaid::regnamespace::text = 'tenant_4' \gset
 
+SELECT result FROM run_command_on_workers($$
+    SELECT schemaid INTO tenant_4_schemaid FROM pg_dist_tenant_schema
+    WHERE schemaid::regnamespace::text = 'tenant_4'
+$$);
+
 SET client_min_messages TO WARNING;
-DROP SCHEMA tenant_4 CASCADE;
+
+-- Rename it to a name that contains a single quote to verify that we properly
+-- escape its name when sending the command to delete the pg_dist_tenant_schema
+-- entry on workers.
+ALTER SCHEMA tenant_4 RENAME TO "tenant\'_4";
+
+DROP SCHEMA "tenant\'_4" CASCADE;
+
 SET client_min_messages TO NOTICE;
 
 -- (on coordinator) Verify that dropping a tenant schema deletes the associated
 -- pg_dist_tenant_schema entry and pg_dist_colocation too.
-SELECT COUNT(*)=0 FROM pg_dist_tenant_schema
-WHERE schemaid::regnamespace::text = 'tenant_4';
+SELECT COUNT(*)=0 FROM pg_dist_tenant_schema WHERE schemaid = :tenant_4_schemaid;
 SELECT COUNT(*)=0 FROM pg_dist_colocation WHERE colocationid = :tenant_4_colocationid;
 
 -- (on workers) Verify that dropping a tenant schema deletes the associated
 -- pg_dist_tenant_schema entry and pg_dist_colocation too.
 SELECT result FROM run_command_on_workers($$
     SELECT COUNT(*)=0 FROM pg_dist_tenant_schema
-    WHERE schemaid::regnamespace::text = 'tenant_4';
+    WHERE schemaid = (SELECT schemaid FROM tenant_4_schemaid)
 $$);
 
 SELECT format(
     'SELECT result FROM run_command_on_workers($$
         SELECT COUNT(*)=0 FROM pg_dist_colocation WHERE colocationid = %s;
     $$);',
-:tenant_4_colocationid) AS verify_non_empty_tenant_drop_on_workers_query \gset
+:tenant_4_colocationid) AS verify_workers_query \gset
 
-:verify_non_empty_tenant_drop_on_workers_query
+:verify_workers_query
+
+SELECT result FROM run_command_on_workers($$
+    DROP TABLE tenant_4_schemaid
+$$);
 
 -- show that we don't allow colocating a Citus table with a tenant table
 CREATE TABLE regular_schema.null_shard_key_1(a int, b text);
@@ -244,25 +260,66 @@ SELECT format(
 
 :verify_workers_query
 
+SELECT schemaid AS tenant_1_schemaid FROM pg_dist_tenant_schema WHERE schemaid::regnamespace::text = 'tenant_1' \gset
+SELECT colocationid AS tenant_1_colocationid FROM pg_dist_tenant_schema WHERE schemaid::regnamespace::text = 'tenant_1' \gset
+
+SELECT schemaid AS tenant_2_schemaid FROM pg_dist_tenant_schema WHERE schemaid::regnamespace::text = 'tenant_2' \gset
+SELECT colocationid AS tenant_2_colocationid FROM pg_dist_tenant_schema WHERE schemaid::regnamespace::text = 'tenant_2' \gset
+
+SELECT result FROM run_command_on_workers($$
+    SELECT schemaid INTO tenant_1_schemaid FROM pg_dist_tenant_schema
+    WHERE schemaid::regnamespace::text = 'tenant_1'
+$$);
+
+SELECT result FROM run_command_on_workers($$
+    SELECT schemaid INTO tenant_2_schemaid FROM pg_dist_tenant_schema
+    WHERE schemaid::regnamespace::text = 'tenant_2'
+$$);
+
 SET client_min_messages TO WARNING;
 SET citus.enable_schema_based_sharding TO OFF;
 
-DROP SCHEMA tenant_1, tenant_2 CASCADE;
+DROP SCHEMA tenant_1 CASCADE;
+
+CREATE ROLE test_non_super_user;
+ALTER ROLE test_non_super_user NOSUPERUSER;
+
+ALTER SCHEMA tenant_2 OWNER TO test_non_super_user;
+
+DROP OWNED BY test_non_super_user CASCADE;
+
+DROP ROLE test_non_super_user;
 
 SET client_min_messages TO NOTICE;
 
 -- (on coordinator) Verify that dropping a tenant schema always deletes
 -- the associated pg_dist_tenant_schema entry even if the the schema was
 -- dropped while the GUC was set to off.
-SELECT COUNT(*)=0 FROM pg_dist_tenant_schema
-WHERE schemaid::regnamespace::text IN ('tenant_1', 'tenant_2');
+SELECT COUNT(*)=0 FROM pg_dist_tenant_schema WHERE schemaid IN (:tenant_1_schemaid, :tenant_2_schemaid);
+SELECT COUNT(*)=0 FROM pg_dist_colocation WHERE colocationid IN (:tenant_1_colocationid, :tenant_2_colocationid);
 
 -- (on workers) Verify that dropping a tenant schema always deletes
 -- the associated pg_dist_tenant_schema entry even if the the schema was
 -- dropped while the GUC was set to off.
 SELECT result FROM run_command_on_workers($$
     SELECT COUNT(*)=0 FROM pg_dist_tenant_schema
-    WHERE schemaid::regnamespace::text IN ('tenant_1', 'tenant_2');
+    WHERE schemaid IN (SELECT schemaid FROM tenant_1_schemaid UNION SELECT schemaid FROM tenant_2_schemaid)
+$$);
+
+SELECT format(
+    'SELECT result FROM run_command_on_workers($$
+        SELECT COUNT(*)=0 FROM pg_dist_colocation WHERE colocationid IN (%s, %s);
+    $$);',
+:tenant_1_colocationid, :tenant_2_colocationid) AS verify_workers_query \gset
+
+:verify_workers_query
+
+SELECT result FROM run_command_on_workers($$
+    DROP TABLE tenant_1_schemaid
+$$);
+
+SELECT result FROM run_command_on_workers($$
+    DROP TABLE tenant_2_schemaid
 $$);
 
 SET citus.enable_schema_based_sharding TO ON;
@@ -367,30 +424,86 @@ CREATE TABLE tenant_5.tbl_5(a int, b text, FOREIGN KEY(a) REFERENCES tenant_7.tb
 
 CREATE SCHEMA tenant_9;
 
+SELECT schemaid AS tenant_9_schemaid FROM pg_dist_tenant_schema WHERE schemaid::regnamespace::text = 'tenant_9' \gset
 SELECT colocationid AS tenant_9_colocationid FROM pg_dist_tenant_schema WHERE schemaid::regnamespace::text = 'tenant_9' \gset
+
+SELECT result FROM run_command_on_workers($$
+    SELECT schemaid INTO tenant_9_schemaid FROM pg_dist_tenant_schema
+    WHERE schemaid::regnamespace::text = 'tenant_9'
+$$);
 
 DROP SCHEMA tenant_9;
 
 -- (on coordinator) Make sure that dropping an empty tenant schema
 -- doesn't leave any dangling entries in pg_dist_tenant_schema and
 -- pg_dist_colocation.
-SELECT COUNT(*)=0 FROM pg_dist_tenant_schema WHERE schemaid::regnamespace::text = 'tenant_9';
+SELECT COUNT(*)=0 FROM pg_dist_tenant_schema WHERE schemaid = :tenant_9_schemaid;
 SELECT COUNT(*)=0 FROM pg_dist_colocation WHERE colocationid = :tenant_9_colocationid;
 
 -- (on workers) Make sure that dropping an empty tenant schema
 -- doesn't leave any dangling entries in pg_dist_tenant_schema and
 -- pg_dist_colocation.
 SELECT result FROM run_command_on_workers($$
-    SELECT COUNT(*)=0 FROM pg_dist_tenant_schema WHERE schemaid::regnamespace::text = 'tenant_9';
+    SELECT COUNT(*)=0 FROM pg_dist_tenant_schema
+    WHERE schemaid = (SELECT schemaid FROM tenant_9_schemaid)
 $$);
 
 SELECT format(
     'SELECT result FROM run_command_on_workers($$
         SELECT COUNT(*)=0 FROM pg_dist_colocation WHERE colocationid = %s;
     $$);',
-:tenant_9_colocationid) AS verify_empty_tenant_drop_on_workers_query \gset
+:tenant_9_colocationid) AS verify_workers_query \gset
 
-:verify_empty_tenant_drop_on_workers_query
+:verify_workers_query
+
+SELECT result FROM run_command_on_workers($$
+    DROP TABLE tenant_9_schemaid
+$$);
+
+CREATE SCHEMA tenant_9;
+
+CREATE ROLE test_non_super_user;
+ALTER ROLE test_non_super_user NOSUPERUSER;
+
+ALTER SCHEMA tenant_9 OWNER TO test_non_super_user;
+
+SELECT schemaid AS tenant_9_schemaid FROM pg_dist_tenant_schema WHERE schemaid::regnamespace::text = 'tenant_9' \gset
+SELECT colocationid AS tenant_9_colocationid FROM pg_dist_tenant_schema WHERE schemaid::regnamespace::text = 'tenant_9' \gset
+
+SELECT result FROM run_command_on_workers($$
+    SELECT schemaid INTO tenant_9_schemaid FROM pg_dist_tenant_schema
+    WHERE schemaid::regnamespace::text = 'tenant_9'
+$$);
+
+DROP OWNED BY test_non_super_user;
+
+-- (on coordinator) Make sure that dropping an empty tenant schema
+-- (via DROP OWNED BY) doesn't leave any dangling entries in
+-- pg_dist_tenant_schema and pg_dist_colocation.
+SELECT COUNT(*)=0 FROM pg_dist_tenant_schema WHERE schemaid = :tenant_9_schemaid;
+SELECT COUNT(*)=0 FROM pg_dist_colocation WHERE colocationid = :tenant_9_colocationid;
+
+-- (on workers) Make sure that dropping an empty tenant schema
+-- (via DROP OWNED BY) doesn't leave any dangling entries in
+-- pg_dist_tenant_schema and pg_dist_colocation.
+SELECT result FROM run_command_on_workers($$
+    SELECT COUNT(*)=0 FROM pg_dist_tenant_schema
+    WHERE schemaid = (SELECT schemaid FROM tenant_9_schemaid)
+$$);
+
+SELECT format(
+    'SELECT result FROM run_command_on_workers($$
+        SELECT COUNT(*)=0 FROM pg_dist_colocation WHERE colocationid = %s;
+    $$);',
+:tenant_9_colocationid) AS verify_workers_query \gset
+
+:verify_workers_query
+
+SELECT result FROM run_command_on_workers($$
+    DROP TABLE tenant_9_schemaid
+$$);
+
+DROP ROLE test_non_super_user;
 
 \c - - - :worker_1_port
 
