@@ -4073,3 +4073,43 @@ ErrorIfTableHasIdentityColumn(Oid relationId)
 
 	relation_close(relation, NoLock);
 }
+
+
+/*
+ * ConvertNewTableIfNecessary converts the given table to a tenant schema
+ * table or a Citus managed table if necessary.
+ */
+void
+ConvertNewTableIfNecessary(CreateStmt *baseCreateTableStmt)
+{
+	/*
+	 * Need to increment command counter so that next command
+	 * can see the new table.
+	 */
+	CommandCounterIncrement();
+
+	bool missingOk = false;
+	Oid createdRelationId = RangeVarGetRelid(baseCreateTableStmt->relation,
+											 NoLock, missingOk);
+
+	/*
+	 * Check ShouldCreateTenantSchemaTable() before ShouldAddNewTableToMetadata()
+	 * because we don't want to unnecessarily add the table into metadata
+	 * (as a Citus managed table) before distributing it as a tenant table.
+	 */
+	if (ShouldCreateTenantSchemaTable(createdRelationId))
+	{
+		CreateTenantSchemaTable(createdRelationId);
+	}
+	else if (ShouldAddNewTableToMetadata(createdRelationId))
+	{
+		/*
+		 * Here we set autoConverted to false, since the user explicitly
+		 * wants these tables to be added to metadata, by setting the
+		 * GUC use_citus_managed_tables to true.
+		 */
+		bool autoConverted = false;
+		bool cascade = true;
+		CreateCitusLocalTable(createdRelationId, cascade, autoConverted);
+	}
+}

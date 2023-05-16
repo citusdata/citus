@@ -586,6 +586,7 @@ extern char * GetAlterColumnWithNextvalDefaultCmd(Oid sequenceOid, Oid relationI
 
 extern void ErrorIfTableHasUnsupportedIdentityColumn(Oid relationId);
 extern void ErrorIfTableHasIdentityColumn(Oid relationId);
+extern void ConvertNewTableIfNecessary(CreateStmt *baseCreateTableStmt);
 
 /* text_search.c - forward declarations */
 extern List * GetCreateTextSearchConfigStatements(const ObjectAddress *address);
@@ -770,6 +771,7 @@ extern void ExecuteForeignKeyCreateCommandList(List *ddlCommandList,
 /* create_citus_local_table.c */
 extern void CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys,
 								  bool autoConverted);
+extern bool ShouldAddNewTableToMetadata(Oid relationId);
 extern List * GetExplicitIndexOidList(Oid relationId);
 
 extern bool ShouldPropagateSetCommand(VariableSetStmt *setStmt);
