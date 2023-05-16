@@ -11,6 +11,12 @@ SELECT create_distributed_table('null_dist_key_table', null, colocate_with=>'non
 
 (1 row)
 
+SELECT truncate_local_data_after_distributing_table('null_dist_key_table');
+ truncate_local_data_after_distributing_table
+---------------------------------------------------------------------
+
+(1 row)
+
 -- should work --
 -- insert some data & create an index for table size udf's
 INSERT INTO null_dist_key_table VALUES (1), (2), (3);

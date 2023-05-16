@@ -8,6 +8,8 @@ SET citus.shard_replication_factor TO 1;
 CREATE TABLE null_dist_key_table(a int);
 SELECT create_distributed_table('null_dist_key_table', null, colocate_with=>'none', distribution_type=>null);
 
+SELECT truncate_local_data_after_distributing_table('null_dist_key_table');
+
 -- should work --
 -- insert some data & create an index for table size udf's
 INSERT INTO null_dist_key_table VALUES (1), (2), (3);
