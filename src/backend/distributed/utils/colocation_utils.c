@@ -1266,6 +1266,29 @@ DeleteColocationGroupIfNoTablesBelong(uint32 colocationId)
 
 
 /*
+ * DeleteColocationGroupLocallyIfNoTablesBelong function deletes given co-location group
+ * if there is no relation in that co-location group. While DeleteColocationGroupIfNoTablesBelong
+ * function deletes co-location group from all nodes, this function deletes co-location group
+ * only from local node.
+ */
+void
+DeleteColocationGroupLocallyIfNoTablesBelong(uint32 colocationId)
+{
+	if (colocationId != INVALID_COLOCATION_ID)
+	{
+		int count = 1;
+		List *colocatedTableList = ColocationGroupTableList(colocationId, count);
+		int colocatedTableCount = list_length(colocatedTableList);
+
+		if (colocatedTableCount == 0)
+		{
+			DeleteColocationGroupLocally(colocationId);
+		}
+	}
+}
+
+
+/*
  * DeleteColocationGroup deletes the colocation group from pg_dist_colocation
  * throughout the cluster and diasociates the tenant schema if any.
  */

@@ -47,6 +47,7 @@ extern void EnsureColumnTypeEquality(Oid sourceRelationId, Oid targetRelationId,
 extern void UpdateRelationColocationGroup(Oid distributedRelationId, uint32 colocationId,
 										  bool localOnly);
 extern void DeleteColocationGroupIfNoTablesBelong(uint32 colocationId);
+extern void DeleteColocationGroupLocallyIfNoTablesBelong(uint32 colocationId);
 extern List * ColocationGroupTableList(uint32 colocationId, uint32 count);
 extern void DeleteColocationGroupLocally(uint32 colocationId);
 extern uint32 FindColocateWithColocationId(Oid relationId, char replicationModel,
