@@ -16,28 +16,8 @@ SELECT citus_internal_add_tenant_schema(NULL, 1);
 SELECT citus_internal_add_tenant_schema(1, NULL);
 SELECT citus_internal_delete_tenant_schema(NULL);
 
-CREATE ROLE test_non_super_user WITH LOGIN;
-ALTER ROLE test_non_super_user NOSUPERUSER;
-
-\c - test_non_super_user
-
 -- Verify that the UDFs used to sync tenant schema metadata to workers
--- fail when called via a non-superuser.
-SELECT citus_internal_add_tenant_schema(1, 1);
-SELECT citus_internal_delete_tenant_schema(1);
-
-\c - postgres
-
-DROP ROLE test_non_super_user;
-
-SET search_path TO regular_schema;
-SET citus.next_shard_id TO 1930000;
-SET citus.shard_count TO 32;
-SET citus.shard_replication_factor TO 1;
-SET client_min_messages TO NOTICE;
-
--- Verify that the UDFs used to sync tenant schema metadata to workers
--- fail when called via a superuser that is not allowed to modify metadata.
+-- fail when called via a user that is not allowed to modify metadata.
 SELECT citus_internal_add_tenant_schema(1, 1);
 SELECT citus_internal_delete_tenant_schema(1);
 
@@ -463,9 +443,9 @@ SELECT result FROM run_command_on_workers($$
     DROP TABLE tenant_9_schemaid
 $$);
 
-CREATE USER test_non_super_user WITH superuser;
+CREATE USER test_other_super_user WITH superuser;
 
-\c - test_non_super_user
+\c - test_other_super_user
 
 SET citus.enable_schema_based_sharding TO ON;
 CREATE SCHEMA tenant_9;
@@ -473,7 +453,7 @@ CREATE SCHEMA tenant_9;
 \c - postgres
 
 SET search_path TO regular_schema;
-SET citus.next_shard_id TO 1940000;
+SET citus.next_shard_id TO 1930000;
 SET citus.shard_count TO 32;
 SET citus.shard_replication_factor TO 1;
 SET client_min_messages TO NOTICE;
@@ -487,7 +467,7 @@ SELECT result FROM run_command_on_workers($$
     WHERE schemaid::regnamespace::text = 'tenant_9'
 $$);
 
-DROP OWNED BY test_non_super_user;
+DROP OWNED BY test_other_super_user;
 
 -- (on coordinator) Make sure that dropping an empty tenant schema
 -- (via DROP OWNED BY) doesn't leave any dangling entries in
@@ -515,7 +495,109 @@ SELECT result FROM run_command_on_workers($$
     DROP TABLE tenant_9_schemaid
 $$);
 
-DROP USER test_non_super_user;
+DROP USER test_other_super_user;
+
+CREATE ROLE test_non_super_user WITH LOGIN;
+ALTER ROLE test_non_super_user NOSUPERUSER;
+
+GRANT CREATE ON DATABASE regression TO test_non_super_user;
+SELECT result FROM run_command_on_workers($$GRANT CREATE ON DATABASE regression TO test_non_super_user$$);
+
+GRANT CREATE ON SCHEMA public TO test_non_super_user ;
+
+\c - test_non_super_user
+
+SET search_path TO regular_schema;
+SET citus.next_shard_id TO 1940000;
+SET citus.shard_count TO 32;
+SET citus.shard_replication_factor TO 1;
+SET client_min_messages TO NOTICE;
+SET citus.enable_schema_based_sharding TO ON;
+
+-- test create / drop tenant schema / table
+
+CREATE SCHEMA tenant_10;
+CREATE TABLE tenant_10.tbl_1(a int, b text);
+CREATE TABLE tenant_10.tbl_2(a int, b text);
+
+DROP TABLE tenant_10.tbl_2;
+
+CREATE SCHEMA tenant_11;
+
+SELECT schemaid AS tenant_10_schemaid FROM pg_dist_tenant_schema WHERE schemaid::regnamespace::text = 'tenant_10' \gset
+SELECT colocationid AS tenant_10_colocationid FROM pg_dist_tenant_schema WHERE schemaid::regnamespace::text = 'tenant_10' \gset
+
+SELECT schemaid AS tenant_11_schemaid FROM pg_dist_tenant_schema WHERE schemaid::regnamespace::text = 'tenant_11' \gset
+SELECT colocationid AS tenant_11_colocationid FROM pg_dist_tenant_schema WHERE schemaid::regnamespace::text = 'tenant_11' \gset
+
+SELECT result FROM run_command_on_workers($$
+    SELECT schemaid INTO tenant_10_schemaid FROM pg_dist_tenant_schema
+    WHERE schemaid::regnamespace::text = 'tenant_10'
+$$);
+
+SELECT result FROM run_command_on_workers($$
+    SELECT schemaid INTO tenant_11_schemaid FROM pg_dist_tenant_schema
+    WHERE schemaid::regnamespace::text = 'tenant_11'
+$$);
+
+-- (on coordinator) Verify metadata for tenant schemas that are created via non-super-user.
+SELECT COUNT(DISTINCT(schemaid))=2 FROM pg_dist_tenant_schema WHERE schemaid IN (:tenant_10_schemaid, :tenant_11_schemaid);
+SELECT COUNT(DISTINCT(colocationid))=2 FROM pg_dist_colocation WHERE colocationid IN (:tenant_10_colocationid, :tenant_11_colocationid);
+
+-- (on workers) Verify metadata for tenant schemas that are created via non-super-user.
+SELECT result FROM run_command_on_workers($$
+    SELECT COUNT(DISTINCT(schemaid))=2 FROM pg_dist_tenant_schema
+    WHERE schemaid IN (SELECT schemaid FROM tenant_10_schemaid UNION SELECT schemaid FROM tenant_11_schemaid)
+$$);
+
+SELECT format(
+    'SELECT result FROM run_command_on_workers($$
+        SELECT COUNT(DISTINCT(colocationid))=2 FROM pg_dist_colocation WHERE colocationid IN (%s, %s);
+    $$);',
+:tenant_10_colocationid, :tenant_11_colocationid) AS verify_workers_query \gset
+
+:verify_workers_query
+
+SET client_min_messages TO WARNING;
+DROP SCHEMA tenant_10, tenant_11 CASCADE;
+SET client_min_messages TO NOTICE;
+
+-- (on coordinator) Verify that dropping a tenant schema via non-super-user
+-- deletes the associated pg_dist_tenant_schema entry.
+SELECT COUNT(*)=0 FROM pg_dist_tenant_schema WHERE schemaid IN (:tenant_10_schemaid, :tenant_11_schemaid);
+SELECT COUNT(*)=0 FROM pg_dist_colocation WHERE colocationid IN (:tenant_10_colocationid, :tenant_11_colocationid);
+
+-- (on workers) Verify that dropping a tenant schema via non-super-user
+-- deletes the associated pg_dist_tenant_schema entry.
+SELECT result FROM run_command_on_workers($$
+    SELECT COUNT(*)=0 FROM pg_dist_tenant_schema
+    WHERE schemaid IN (SELECT schemaid FROM tenant_10_schemaid UNION SELECT schemaid FROM tenant_11_schemaid)
+$$);
+
+SELECT format(
+    'SELECT result FROM run_command_on_workers($$
+        SELECT COUNT(*)=0 FROM pg_dist_colocation WHERE colocationid IN (%s, %s);
+    $$);',
+:tenant_10_colocationid, :tenant_11_colocationid) AS verify_workers_query \gset
+
+:verify_workers_query
+
+SELECT result FROM run_command_on_workers($$
+    DROP TABLE tenant_10_schemaid
+$$);
+
+SELECT result FROM run_command_on_workers($$
+    DROP TABLE tenant_11_schemaid
+$$);
+
+\c - postgres
+
+REVOKE CREATE ON DATABASE regression FROM test_non_super_user;
+SELECT result FROM run_command_on_workers($$REVOKE CREATE ON DATABASE regression FROM test_non_super_user$$);
+
+REVOKE CREATE ON SCHEMA public FROM test_non_super_user;
+
+DROP ROLE test_non_super_user;
 
 \c - - - :worker_1_port
 

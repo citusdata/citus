@@ -138,7 +138,6 @@ extern void SyncNewColocationGroupToNodes(uint32 colocationId, int shardCount,
 										  Oid distributionColumnCollation);
 extern void SyncDeleteColocationGroupToNodes(uint32 colocationId);
 extern char * TenantSchemaInsertCommand(Oid schemaId, uint32 colocationId);
-extern char * TenantSchemaDeleteCommandBySchemaId(Oid schemaId);
 extern char * TenantSchemaDeleteCommandBySchemaName(char *schemaName);
 
 extern MetadataSyncContext * CreateMetadataSyncContext(List *nodeList,

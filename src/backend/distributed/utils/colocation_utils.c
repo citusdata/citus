@@ -141,15 +141,11 @@ update_distributed_table_colocation(PG_FUNCTION_ARGS)
  * call DeleteColocationGroup on all nodes.
  *
  * The colocationId parameter is not allowed to be NULL.
- *
- * This is only supposed to be called via drop trigger, hence lacks of
- * ShouldSkipMetadataChecks() check.
  */
 Datum
 citus_internal_delete_colocation_metadata_globally(PG_FUNCTION_ARGS)
 {
 	CheckCitusVersion(ERROR);
-	EnsureSuperUser();
 	EnsureCoordinator();
 
 	PG_ENSURE_ARGNOTNULL(0, "colocation_id");

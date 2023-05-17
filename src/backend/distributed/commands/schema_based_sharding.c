@@ -181,9 +181,6 @@ RegisterTenantSchema(Oid schemaId)
  *
  * schemaId and schemaName parameters are not allowed to be NULL.
  *
- * This is only supposed to be called via drop trigger, hence lacks of
- * ShouldSkipMetadataChecks() check.
- *
  * While the schemaId parameter is used to delete the tenant schema locally,
  * the schemaName parameter is used to send a command to the workers to delete
  * the tenant schema metadata. This is because, after a schema is dropped, we
@@ -195,7 +192,6 @@ Datum
 citus_internal_delete_tenant_schema_globally(PG_FUNCTION_ARGS)
 {
 	CheckCitusVersion(ERROR);
-	EnsureSuperUser();
 	EnsureCoordinator();
 
 	PG_ENSURE_ARGNOTNULL(0, "schema_id");
@@ -205,7 +201,7 @@ citus_internal_delete_tenant_schema_globally(PG_FUNCTION_ARGS)
 	text *schemaName = PG_GETARG_TEXT_PP(1);
 
 	DeleteTenantSchemaLocally(schemaId);
-	SendCommandToWorkersWithMetadataViaSuperUser(
+	SendCommandToWorkersWithMetadata(
 		TenantSchemaDeleteCommandBySchemaName(text_to_cstring(schemaName)));
 
 	PG_RETURN_VOID();

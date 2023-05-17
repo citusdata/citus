@@ -3805,7 +3805,6 @@ Datum
 citus_internal_add_tenant_schema(PG_FUNCTION_ARGS)
 {
 	CheckCitusVersion(ERROR);
-	EnsureSuperUser();
 
 	PG_ENSURE_ARGNOTNULL(0, "schema_id");
 	Oid schemaId = PG_GETARG_OID(0);
@@ -3834,7 +3833,6 @@ Datum
 citus_internal_delete_tenant_schema(PG_FUNCTION_ARGS)
 {
 	CheckCitusVersion(ERROR);
-	EnsureSuperUser();
 
 	PG_ENSURE_ARGNOTNULL(0, "schema_id");
 	Oid schemaId = PG_GETARG_OID(0);
@@ -4010,22 +4008,6 @@ TenantSchemaInsertCommand(Oid schemaId, uint32 colocationId)
 	appendStringInfo(command,
 					 "SELECT pg_catalog.citus_internal_add_tenant_schema(%s, %u)",
 					 RemoteSchemaIdExpressionFromSchemaId(schemaId), colocationId);
-
-	return command->data;
-}
-
-
-/*
- * TenantSchemaDeleteCommandBySchemaId returns a command to call
- * citus_internal_delete_tenant_schema() based on fiven given
- * schemaId.
- */
-char *
-TenantSchemaDeleteCommandBySchemaId(Oid schemaId)
-{
-	StringInfo command = makeStringInfo();
-	appendStringInfo(command, "SELECT pg_catalog.citus_internal_delete_tenant_schema(%s)",
-					 RemoteSchemaIdExpressionFromSchemaId(schemaId));
 
 	return command->data;
 }
