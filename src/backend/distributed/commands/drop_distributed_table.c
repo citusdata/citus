@@ -109,7 +109,7 @@ master_remove_partition_metadata(PG_FUNCTION_ARGS)
 	Oid schemaId = get_namespace_oid(schemaName, missingOk);
 	if (!OidIsValid(schemaId) || !IsTenantSchema(schemaId))
 	{
-		DeleteColocationGroupLocallyIfNoTablesBelong(colocationId);
+		DeleteColocationGroupIfNoTablesBelong(colocationId);
 	}
 
 	PG_RETURN_VOID();
