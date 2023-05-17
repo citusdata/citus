@@ -115,6 +115,14 @@ DEPS = {
             "multi_mx_function_table_reference",
         ],
     ),
+    "background_rebalance": TestDeps(
+        None,
+        [
+            "multi_test_helpers",
+            "multi_cluster_management",
+        ],
+        worker_count=3,
+    ),
     "background_rebalance_parallel": TestDeps(
         None,
         [
