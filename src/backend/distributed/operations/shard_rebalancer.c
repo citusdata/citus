@@ -2174,7 +2174,10 @@ RebalanceTableShardsBackground(RebalanceOptions *options, Oid shardReplicationMo
 						 quote_literal_cstr(shardTranferModeLabel));
 
 		int32 nodesInvolved[] = { 0 };
-		BackgroundTask *task = ScheduleBackgroundTask(jobId, CitusExtensionOwner(), buf.data, 0,
+
+		/* replicate_reference_tables permissions require superuser */
+		Oid superUserId = CitusExtensionOwner();
+		BackgroundTask *task = ScheduleBackgroundTask(jobId, superUserId, buf.data, 0,
 													  NULL, 0, nodesInvolved);
 		replicateRefTablesTaskId = task->taskid;
 	}
