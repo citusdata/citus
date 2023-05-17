@@ -66,6 +66,7 @@
 #include "utils/varlena.h"
 #include "utils/guc_tables.h"
 #include "distributed/commands/utility_hook.h"
+#include "catalog/pg_authid.h"
 
 /* RebalanceOptions are the options used to control the rebalance algorithm */
 typedef struct RebalanceOptions
@@ -340,6 +341,28 @@ static const char *PlacementUpdateStatusNames[] = {
 };
 
 #ifdef USE_ASSERT_CHECKING
+
+static Oid
+GetUserIdFromName(char *roleName)
+{
+        Assert(roleName != NULL);
+
+        HeapTuple roleTuple = SearchSysCache1(AUTHNAME, CStringGetDatum(roleName));
+        if (!HeapTupleIsValid(roleTuple))
+        {
+                 ereport(ERROR,
+                     (errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
+                      errmsg("role \"%s\" does not exist", roleName)));
+        }
+
+        Form_pg_authid rform = (Form_pg_authid) GETSTRUCT(roleTuple);
+
+        Oid userId = rform->oid;
+
+        ReleaseSysCache(roleTuple);
+
+        return userId;
+}
 
 /*
  * Check that all the invariants of the state hold.
@@ -2174,7 +2197,11 @@ RebalanceTableShardsBackground(RebalanceOptions *options, Oid shardReplicationMo
 						 quote_literal_cstr(shardTranferModeLabel));
 
 		int32 nodesInvolved[] = { 0 };
-		BackgroundTask *task = ScheduleBackgroundTask(jobId, GetUserId(), buf.data, 0,
+
+		/* replicate_reference_tables function needs to be run by a superuser */
+		char *superUser = CitusExtensionOwnerName();
+
+		BackgroundTask *task = ScheduleBackgroundTask(jobId, GetUserIdFromName(superUser), buf.data, 0,
 													  NULL, 0, nodesInvolved);
 		replicateRefTablesTaskId = task->taskid;
 	}
