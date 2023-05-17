@@ -1357,14 +1357,12 @@ SELECT * FROM multi_extension.print_extension_changes();
 -- Snapshot of state at 12.0-1
 ALTER EXTENSION citus UPDATE TO '12.0-1';
 SELECT * FROM multi_extension.print_extension_changes();
- previous_object |                              current_object
+ previous_object |                       current_object
 ---------------------------------------------------------------------
                  | function citus_internal_add_tenant_schema(oid,integer) void
-                 | function citus_internal_delete_colocation_metadata_globally(integer) void
                  | function citus_internal_delete_tenant_schema(oid) void
-                 | function citus_internal_delete_tenant_schema_globally(oid,text) void
                  | table pg_dist_tenant_schema
-(5 rows)
+(3 rows)
 
 DROP TABLE multi_extension.prev_objects, multi_extension.extension_diff;
 -- show running version

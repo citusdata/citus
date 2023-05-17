@@ -16,28 +16,9 @@ SELECT citus_internal_add_tenant_schema(NULL, 1);
 SELECT citus_internal_add_tenant_schema(1, NULL);
 SELECT citus_internal_delete_tenant_schema(NULL);
 
--- Verify that the UDFs used to sync tenant schema metadata to workers
--- fail when called via a user that is not allowed to modify metadata.
-SELECT citus_internal_add_tenant_schema(1, 1);
-SELECT citus_internal_delete_tenant_schema(1);
-
-ALTER SYSTEM SET citus.enable_manual_metadata_changes_for_user TO 'postgres';
-SELECT pg_reload_conf();
-SELECT pg_sleep(0.1);
-
--- Verify that the UDFs used to sync tenant schema metadata to workers
--- fail on schemaid = InvalidOid / colocationid = INVALID_COLOCATION_ID.
-SELECT citus_internal_add_tenant_schema(0, 1);
-SELECT citus_internal_add_tenant_schema(1, 0);
-SELECT citus_internal_delete_tenant_schema(0);
-
--- Verify that the UDFs used to sync tenant schema metadata to workers
--- fail on non-existing schemaid.
-SELECT citus_internal_delete_tenant_schema(456456);
-
-ALTER SYSTEM RESET citus.enable_manual_metadata_changes_for_user;
-SELECT pg_reload_conf();
-SELECT pg_sleep(0.1);
+-- Verify that citus_internal_delete_tenant_schema() fails when called on
+-- a schema that is "not dropped" yet.
+SELECT citus_internal_delete_tenant_schema('regular_schema'::regnamespace);
 
 SELECT 1 FROM citus_remove_node('localhost', :worker_2_port);
 

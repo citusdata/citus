@@ -7,7 +7,6 @@ DECLARE
     constraint_event_count INTEGER;
     v_obj record;
     dropped_table_is_a_partition boolean := false;
-    tenant_schema_colocation_id int;
 BEGIN
     FOR v_obj IN SELECT * FROM pg_event_trigger_dropped_objects()
                  WHERE object_type IN ('table', 'foreign table')
@@ -45,12 +44,7 @@ BEGIN
     LOOP
         IF EXISTS (SELECT 1 FROM pg_catalog.pg_dist_tenant_schema WHERE schemaid = v_obj.objid)
         THEN
-            tenant_schema_colocation_id := (
-                SELECT colocationid FROM pg_catalog.pg_dist_tenant_schema WHERE schemaid = v_obj.objid
-            );
-            PERFORM citus_internal_delete_colocation_metadata_globally(tenant_schema_colocation_id);
-
-            PERFORM citus_internal_delete_tenant_schema_globally(v_obj.objid, v_obj.object_name);
+            PERFORM pg_catalog.citus_internal_delete_tenant_schema(v_obj.objid);
         END IF;
     END LOOP;
 

@@ -19,50 +19,10 @@ SELECT citus_internal_add_tenant_schema(1, NULL);
 ERROR:  colocation_id cannot be NULL
 SELECT citus_internal_delete_tenant_schema(NULL);
 ERROR:  schema_id cannot be NULL
--- Verify that the UDFs used to sync tenant schema metadata to workers
--- fail when called via a user that is not allowed to modify metadata.
-SELECT citus_internal_add_tenant_schema(1, 1);
-ERROR:  This is an internal Citus function can only be used in a distributed transaction
-SELECT citus_internal_delete_tenant_schema(1);
-ERROR:  This is an internal Citus function can only be used in a distributed transaction
-ALTER SYSTEM SET citus.enable_manual_metadata_changes_for_user TO 'postgres';
-SELECT pg_reload_conf();
- pg_reload_conf
----------------------------------------------------------------------
- t
-(1 row)
-
-SELECT pg_sleep(0.1);
- pg_sleep
----------------------------------------------------------------------
-
-(1 row)
-
--- Verify that the UDFs used to sync tenant schema metadata to workers
--- fail on schemaid = InvalidOid / colocationid = INVALID_COLOCATION_ID.
-SELECT citus_internal_add_tenant_schema(0, 1);
-ERROR:  schema id is invalid
-SELECT citus_internal_add_tenant_schema(1, 0);
-ERROR:  colocation id is invalid
-SELECT citus_internal_delete_tenant_schema(0);
-ERROR:  schema id is invalid
--- Verify that the UDFs used to sync tenant schema metadata to workers
--- fail on non-existing schemaid.
-SELECT citus_internal_delete_tenant_schema(456456);
-ERROR:  could not find tuple for tenant schema 456456
-ALTER SYSTEM RESET citus.enable_manual_metadata_changes_for_user;
-SELECT pg_reload_conf();
- pg_reload_conf
----------------------------------------------------------------------
- t
-(1 row)
-
-SELECT pg_sleep(0.1);
- pg_sleep
----------------------------------------------------------------------
-
-(1 row)
-
+-- Verify that citus_internal_delete_tenant_schema() fails when called on
+-- a schema that is "not dropped" yet.
+SELECT citus_internal_delete_tenant_schema('regular_schema'::regnamespace);
+ERROR:  schema is expected to be already dropped because this function is only expected to be called from Citus drop hook
 SELECT 1 FROM citus_remove_node('localhost', :worker_2_port);
  ?column?
 ---------------------------------------------------------------------

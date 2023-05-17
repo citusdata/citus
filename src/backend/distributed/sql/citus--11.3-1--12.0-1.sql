@@ -15,12 +15,10 @@ GRANT SELECT ON pg_catalog.pg_dist_tenant_schema TO public;
 
 -- udfs used to modify pg_dist_tenant_schema on workers, to sync metadata
 #include "udfs/citus_internal_add_tenant_schema/12.0-1.sql"
-#include "udfs/citus_internal_delete_tenant_schema/12.0-1.sql"
 
 #include "udfs/citus_prepare_pg_upgrade/12.0-1.sql"
 #include "udfs/citus_finish_pg_upgrade/12.0-1.sql"
 
 -- udfs used to modify pg_dist_tenant_schema globally via drop trigger
-#include "udfs/citus_internal_delete_colocation_metadata_globally/12.0-1.sql"
-#include "udfs/citus_internal_delete_tenant_schema_globally/12.0-1.sql"
+#include "udfs/citus_internal_delete_tenant_schema/12.0-1.sql"
 #include "udfs/citus_drop_trigger/12.0-1.sql"

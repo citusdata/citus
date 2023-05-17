@@ -10,18 +10,13 @@
 #include "miscadmin.h"
 #include "catalog/pg_namespace_d.h"
 #include "commands/extension.h"
-#include "distributed/argutils.h"
 #include "distributed/backend_data.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/commands.h"
 #include "distributed/metadata_sync.h"
 #include "distributed/tenant_schema_metadata.h"
 #include "distributed/metadata/distobject.h"
-#include "utils/builtins.h"
 #include "utils/lsyscache.h"
-
-
-PG_FUNCTION_INFO_V1(citus_internal_delete_tenant_schema_globally);
 
 
 /* controlled via citus.enable_schema_based_sharding GUC */
@@ -172,37 +167,4 @@ RegisterTenantSchema(Oid schemaId)
 	InsertTenantSchemaLocally(schemaId, colocationId);
 
 	return TenantSchemaInsertCommand(schemaId, colocationId);
-}
-
-
-/*
- * citus_internal_delete_tenant_schema_globally is an internal UDF to
- * call DeleteTenantSchemaLocally on all nodes.
- *
- * schemaId and schemaName parameters are not allowed to be NULL.
- *
- * While the schemaId parameter is used to delete the tenant schema locally,
- * the schemaName parameter is used to send a command to the workers to delete
- * the tenant schema metadata. This is because, after a schema is dropped, we
- * cannot use its oid to send a command to the workers. And similarly, we
- * cannot use its name to retrieve its oid locally because the schema is
- * already dropped.
- */
-Datum
-citus_internal_delete_tenant_schema_globally(PG_FUNCTION_ARGS)
-{
-	CheckCitusVersion(ERROR);
-	EnsureCoordinator();
-
-	PG_ENSURE_ARGNOTNULL(0, "schema_id");
-	Oid schemaId = PG_GETARG_OID(0);
-
-	PG_ENSURE_ARGNOTNULL(1, "schema_name");
-	text *schemaName = PG_GETARG_TEXT_PP(1);
-
-	DeleteTenantSchemaLocally(schemaId);
-	SendCommandToWorkersWithMetadata(
-		TenantSchemaDeleteCommandBySchemaName(text_to_cstring(schemaName)));
-
-	PG_RETURN_VOID();
 }
