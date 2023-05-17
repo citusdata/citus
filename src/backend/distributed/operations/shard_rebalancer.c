@@ -2280,7 +2280,7 @@ UpdateShardPlacement(PlacementUpdateEvent *placementUpdateEvent,
 	if (updateType == PLACEMENT_UPDATE_MOVE)
 	{
 		appendStringInfo(placementUpdateCommand,
-						 "SELECT citus_move_shard_placement(%ld,%u,%u,%s)",
+						 "SELECT pg_catalog.citus_move_shard_placement(%ld,%u,%u,%s)",
 						 shardId,
 						 sourceNode->nodeId,
 						 targetNode->nodeId,
@@ -2289,7 +2289,7 @@ UpdateShardPlacement(PlacementUpdateEvent *placementUpdateEvent,
 	else if (updateType == PLACEMENT_UPDATE_COPY)
 	{
 		appendStringInfo(placementUpdateCommand,
-						 "SELECT citus_copy_shard_placement(%ld,%u,%u,%s)",
+						 "SELECT pg_catalog.citus_copy_shard_placement(%ld,%u,%u,%s)",
 						 shardId,
 						 sourceNode->nodeId,
 						 targetNode->nodeId,
