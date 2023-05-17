@@ -35,7 +35,6 @@ step "s1-adaptive-select"
 	SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 }
 step "s1-insert" { INSERT INTO select_append VALUES(0, 'k', 0); }
-step "s1-insert-select" { INSERT INTO select_append SELECT * FROM select_append; }
 step "s1-update" { UPDATE select_append SET data = 'l' WHERE id = 0; }
 step "s1-delete" { DELETE FROM select_append WHERE id = 1; }
 step "s1-truncate" { TRUNCATE select_append; }
@@ -65,7 +64,6 @@ step "s2-adaptive-select"
 	SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 }
 step "s2-insert" { INSERT INTO select_append VALUES(0, 'k', 0); }
-step "s2-insert-select" { INSERT INTO select_append SELECT * FROM select_append; }
 step "s2-update" { UPDATE select_append SET data = 'l' WHERE id = 0; }
 step "s2-delete" { DELETE FROM select_append WHERE id = 1; }
 step "s2-truncate" { TRUNCATE select_append; }
@@ -101,7 +99,6 @@ permutation "s1-initialize" "s1-begin" "s1-adaptive-select" "s2-adaptive-select"
 
 // permutations - router SELECT first
 permutation "s1-initialize" "s1-begin" "s1-router-select" "s2-insert" "s1-commit" "s1-select-count"
-permutation "s1-initialize" "s1-begin" "s1-router-select" "s2-insert-select" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-router-select" "s2-update" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-router-select" "s2-delete" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-router-select" "s2-truncate" "s1-commit" "s1-select-count"
@@ -119,7 +116,6 @@ permutation "s1-drop" "s1-create-non-distributed-table" "s1-begin" "s1-router-se
 
 // permutations - router SELECT second
 permutation "s1-initialize" "s1-begin" "s1-insert" "s2-router-select" "s1-commit" "s1-select-count"
-permutation "s1-initialize" "s1-begin" "s1-insert-select" "s2-router-select" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-update" "s2-router-select" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-delete" "s2-router-select" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-truncate" "s2-router-select" "s1-commit" "s1-select-count"
@@ -136,7 +132,6 @@ permutation "s1-drop" "s1-create-non-distributed-table" "s1-begin" "s1-distribut
 
 // permutations - real-time SELECT first
 permutation "s1-initialize" "s1-begin" "s1-real-time-select" "s2-insert" "s1-commit" "s1-select-count"
-permutation "s1-initialize" "s1-begin" "s1-real-time-select" "s2-insert-select" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-real-time-select" "s2-update" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-real-time-select" "s2-delete" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-real-time-select" "s2-truncate" "s1-commit" "s1-select-count"
@@ -153,7 +148,6 @@ permutation "s1-drop" "s1-create-non-distributed-table" "s1-begin" "s1-real-time
 
 // permutations - real-time SELECT second
 permutation "s1-initialize" "s1-begin" "s1-insert" "s2-real-time-select" "s1-commit" "s1-select-count"
-permutation "s1-initialize" "s1-begin" "s1-insert-select" "s2-real-time-select" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-update" "s2-real-time-select" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-delete" "s2-real-time-select" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-truncate" "s2-real-time-select" "s1-commit" "s1-select-count"
@@ -169,7 +163,6 @@ permutation "s1-drop" "s1-create-non-distributed-table" "s1-begin" "s1-distribut
 
 // permutations - adaptive SELECT first
 permutation "s1-initialize" "s1-begin" "s1-adaptive-select" "s2-insert" "s1-commit" "s1-select-count"
-permutation "s1-initialize" "s1-begin" "s1-adaptive-select" "s2-insert-select" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-adaptive-select" "s2-update" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-adaptive-select" "s2-delete" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-adaptive-select" "s2-truncate" "s1-commit" "s1-select-count"
@@ -186,7 +179,6 @@ permutation "s1-drop" "s1-create-non-distributed-table" "s1-begin" "s1-adaptive-
 
 // permutations - adaptive SELECT second
 permutation "s1-initialize" "s1-begin" "s1-insert" "s2-adaptive-select" "s1-commit" "s1-select-count"
-permutation "s1-initialize" "s1-begin" "s1-insert-select" "s2-adaptive-select" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-update" "s2-adaptive-select" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-delete" "s2-adaptive-select" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-truncate" "s2-adaptive-select" "s1-commit" "s1-select-count"

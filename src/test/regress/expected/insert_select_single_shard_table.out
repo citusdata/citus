@@ -118,73 +118,82 @@ SET client_min_messages TO DEBUG2;
 -- different table types together with single-shard tables.
 -- use a single-shard table
 INSERT INTO distributed_table_c1_t1 SELECT nullkey_c1_t1.a, nullkey_c1_t1.b FROM nullkey_c1_t1;
-DEBUG:  distributed INSERT ... SELECT cannot reference a distributed table without a shard key together with non-colocated distributed tables
+DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition columns in the source table and subquery do not match
+DETAIL:  The target table's partition column should correspond to a partition column in the subquery.
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 -- use a reference table
 INSERT INTO distributed_table_c1_t1 SELECT nullkey_c1_t1.a, nullkey_c1_t1.b FROM nullkey_c1_t1 JOIN reference_table USING (a);
-DEBUG:  distributed INSERT ... SELECT cannot reference a distributed table without a shard key together with non-colocated distributed tables
+DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition columns in the source table and subquery do not match
+DETAIL:  The target table's partition column should correspond to a partition column in the subquery.
 DEBUG:  Creating router plan
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 INSERT INTO distributed_table_c1_t1 SELECT nullkey_c1_t1.a, nullkey_c1_t1.b FROM nullkey_c1_t1 RIGHT JOIN reference_table USING (b) WHERE reference_table.a >= 1 AND reference_table.a <= 5;
-DEBUG:  distributed INSERT ... SELECT cannot reference a distributed table without a shard key together with non-colocated distributed tables
+DEBUG:  cannot perform a lateral outer join when a distributed subquery references a reference table
 DEBUG:  Creating router plan
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 INSERT INTO distributed_table_c1_t1 SELECT nullkey_c1_t2.a, nullkey_c1_t2.b FROM nullkey_c1_t2 LEFT JOIN reference_table USING (b);
-DEBUG:  distributed INSERT ... SELECT cannot reference a distributed table without a shard key together with non-colocated distributed tables
+DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition columns in the source table and subquery do not match
+DETAIL:  The target table's partition column should correspond to a partition column in the subquery.
 DEBUG:  Creating router plan
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 INSERT INTO distributed_table_c1_t1 SELECT nullkey_c1_t1.a, nullkey_c1_t1.b FROM nullkey_c1_t1 INTERSECT SELECT * FROM reference_table;
-DEBUG:  Set operations are not allowed in distributed INSERT ... SELECT queries
+DEBUG:  cannot push down this subquery
+DETAIL:  Intersect and Except are currently unsupported
 DEBUG:  Creating router plan
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 -- use a colocated single-shard table
 INSERT INTO distributed_table_c1_t1 SELECT nullkey_c1_t1.a, nullkey_c1_t1.b FROM nullkey_c1_t1 JOIN nullkey_c1_t2 USING (b);
-DEBUG:  distributed INSERT ... SELECT cannot reference a distributed table without a shard key together with non-colocated distributed tables
+DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition columns in the source table and subquery do not match
+DETAIL:  The target table's partition column should correspond to a partition column in the subquery.
 DEBUG:  Creating router plan
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 INSERT INTO distributed_table_c1_t1 SELECT nullkey_c1_t1.a, nullkey_c1_t1.b FROM nullkey_c1_t1 FULL JOIN nullkey_c1_t2 USING (a);
-DEBUG:  distributed INSERT ... SELECT cannot reference a distributed table without a shard key together with non-colocated distributed tables
+DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition columns in the source table and subquery do not match
+DETAIL:  The target table's partition column should correspond to a partition column in the subquery.
 DEBUG:  Creating router plan
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 INSERT INTO distributed_table_c1_t1 SELECT nullkey_c1_t1.a, nullkey_c1_t1.b FROM nullkey_c1_t1 FULL JOIN matview USING (a);
-DEBUG:  distributed INSERT ... SELECT cannot select from a local relation when inserting into a distributed table
+DEBUG:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
 ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
 DETAIL:  Local tables cannot be used in distributed queries.
 INSERT INTO distributed_table_c1_t1 SELECT * FROM nullkey_c1_t1 UNION SELECT * FROM nullkey_c1_t2;
-DEBUG:  Set operations are not allowed in distributed INSERT ... SELECT queries
+DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition columns in the source table and subquery do not match
+DETAIL:  The target table's partition column should correspond to a partition column in the subquery.
 DEBUG:  Creating router plan
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 -- use a non-colocated single-shard table
 INSERT INTO distributed_table_c1_t1 SELECT nullkey_c1_t2.a, nullkey_c1_t2.b FROM nullkey_c1_t2 LEFT JOIN nullkey_c2_t1 USING (a);
-DEBUG:  distributed INSERT ... SELECT cannot reference a distributed table without a shard key together with non-colocated distributed tables
+DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition columns in the source table and subquery do not match
+DETAIL:  The target table's partition column should correspond to a partition column in the subquery.
 ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
 DETAIL:  router planner does not support queries that reference non-colocated distributed tables
 INSERT INTO distributed_table_c1_t1 SELECT * FROM nullkey_c1_t1 UNION SELECT * FROM nullkey_c2_t1;
-DEBUG:  Set operations are not allowed in distributed INSERT ... SELECT queries
+DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition columns in the source table and subquery do not match
+DETAIL:  The target table's partition column should correspond to a partition column in the subquery.
 ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
 DETAIL:  router planner does not support queries that reference non-colocated distributed tables
 -- use a distributed table that is colocated with the target table
 INSERT INTO distributed_table_c1_t1 SELECT nullkey_c1_t1.a, nullkey_c1_t1.b FROM nullkey_c1_t1 JOIN distributed_table_c1_t2 USING (a);
-DEBUG:  distributed INSERT ... SELECT cannot reference a distributed table without a shard key together with non-colocated distributed tables
+DEBUG:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
 ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
 DETAIL:  router planner does not support queries that reference non-colocated distributed tables
 INSERT INTO distributed_table_c1_t1 SELECT distributed_table_c1_t2.a, distributed_table_c1_t2.b FROM nullkey_c1_t1 JOIN distributed_table_c1_t2 USING (a);
-DEBUG:  distributed INSERT ... SELECT cannot reference a distributed table without a shard key together with non-colocated distributed tables
+DEBUG:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
 ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
 DETAIL:  router planner does not support queries that reference non-colocated distributed tables
 INSERT INTO distributed_table_c1_t1 SELECT distributed_table_c1_t2.a, distributed_table_c1_t2.b FROM nullkey_c1_t1 JOIN distributed_table_c1_t2 USING (b);
-DEBUG:  distributed INSERT ... SELECT cannot reference a distributed table without a shard key together with non-colocated distributed tables
+DEBUG:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
 ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
 DETAIL:  router planner does not support queries that reference non-colocated distributed tables
 INSERT INTO distributed_table_c1_t1 SELECT distributed_table_c1_t2.a, distributed_table_c1_t2.b FROM nullkey_c1_t1 JOIN distributed_table_c1_t2 USING (a) WHERE distributed_table_c1_t2.a = 1;
-DEBUG:  distributed INSERT ... SELECT cannot reference a distributed table without a shard key together with non-colocated distributed tables
+DEBUG:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
 ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
 DETAIL:  router planner does not support queries that reference non-colocated distributed tables
 -- use a distributed table that is not colocated with the target table
 INSERT INTO distributed_table_c1_t1 SELECT nullkey_c1_t2.a, nullkey_c1_t2.b FROM nullkey_c1_t2 JOIN distributed_table_c2_t1 USING (a);
-DEBUG:  distributed INSERT ... SELECT cannot reference a distributed table without a shard key together with non-colocated distributed tables
+DEBUG:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
 ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
 DETAIL:  router planner does not support queries that reference non-colocated distributed tables
 -- use a citus local table
@@ -199,12 +208,14 @@ ERROR:  queries that reference a distributed table without a shard key can only 
 DETAIL:  Local tables cannot be used in distributed queries.
 -- use append / range distributed tables
 INSERT INTO range_table SELECT * FROM nullkey_c1_t1;
-DEBUG:  distributed INSERT ... SELECT cannot reference a distributed table without a shard key together with non-colocated distributed tables
+DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition columns in the source table and subquery do not match
+DETAIL:  The target table's partition column should correspond to a partition column in the subquery.
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 INSERT INTO append_table SELECT * FROM nullkey_c1_t1;
-DEBUG:  distributed INSERT ... SELECT cannot reference a distributed table without a shard key together with non-colocated distributed tables
+DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition columns in the source table and subquery do not match
+DETAIL:  The target table's partition column should correspond to a partition column in the subquery.
 ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
 DETAIL:  INSERT ... SELECT into an append-distributed table is not supported
 SELECT avg(a), avg(b) FROM distributed_table_c1_t1 ORDER BY 1, 2;
@@ -236,11 +247,12 @@ DEBUG:  only reference tables may be queried when targeting a reference table wi
 DEBUG:  Creating router plan
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 INSERT INTO reference_table SELECT nullkey_c1_t1.a, nullkey_c1_t1.b FROM nullkey_c1_t1 UNION SELECT * FROM reference_table;
-DEBUG:  Set operations are not allowed in distributed INSERT ... SELECT queries
+DEBUG:  cannot push down this subquery
+DETAIL:  Reference tables are not supported with union operator
 DEBUG:  Creating router plan
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 INSERT INTO reference_table SELECT nullkey_c1_t2.a, nullkey_c1_t2.b FROM nullkey_c1_t2 LEFT JOIN reference_table USING (b) WHERE b IN (SELECT b FROM matview);
-DEBUG:  only reference tables may be queried when targeting a reference table with distributed INSERT ... SELECT
+DEBUG:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
 ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
 DETAIL:  Local tables cannot be used in distributed queries.
 -- use a colocated single-shard table
@@ -259,19 +271,19 @@ ERROR:  queries that reference a distributed table without a shard key can only 
 DETAIL:  router planner does not support queries that reference non-colocated distributed tables
 -- use a distributed table
 INSERT INTO reference_table SELECT nullkey_c1_t1.a, nullkey_c1_t1.b FROM nullkey_c1_t1 JOIN distributed_table_c1_t2 USING (a);
-DEBUG:  only reference tables may be queried when targeting a reference table with distributed INSERT ... SELECT
+DEBUG:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
 ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
 DETAIL:  router planner does not support queries that reference non-colocated distributed tables
 INSERT INTO reference_table SELECT distributed_table_c1_t2.a, distributed_table_c1_t2.b FROM nullkey_c1_t1 JOIN distributed_table_c1_t2 USING (a);
-DEBUG:  only reference tables may be queried when targeting a reference table with distributed INSERT ... SELECT
+DEBUG:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
 ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
 DETAIL:  router planner does not support queries that reference non-colocated distributed tables
 INSERT INTO reference_table SELECT distributed_table_c1_t2.a, distributed_table_c1_t2.b FROM nullkey_c1_t1 JOIN distributed_table_c1_t2 USING (b);
-DEBUG:  only reference tables may be queried when targeting a reference table with distributed INSERT ... SELECT
+DEBUG:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
 ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
 DETAIL:  router planner does not support queries that reference non-colocated distributed tables
 INSERT INTO reference_table SELECT distributed_table_c1_t2.a, distributed_table_c1_t2.b FROM nullkey_c1_t1 JOIN distributed_table_c1_t2 USING (a) WHERE distributed_table_c1_t2.a = 1;
-DEBUG:  only reference tables may be queried when targeting a reference table with distributed INSERT ... SELECT
+DEBUG:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
 ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
 DETAIL:  router planner does not support queries that reference non-colocated distributed tables
 -- use a citus local table
@@ -371,20 +383,20 @@ ERROR:  queries that reference a distributed table without a shard key can only 
 DETAIL:  Local tables cannot be used in distributed queries.
 -- use a distributed table
 INSERT INTO nullkey_c1_t1 SELECT distributed_table_c1_t2.a, distributed_table_c1_t2.b FROM distributed_table_c1_t2;
-DEBUG:  distributed INSERT ... SELECT cannot reference a distributed table without a shard key together with non-colocated distributed tables
+DEBUG:  INSERT target relation and all source relations of the SELECT must be colocated in distributed INSERT ... SELECT
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 INSERT INTO nullkey_c1_t1 SELECT distributed_table_c1_t2.a, distributed_table_c1_t2.b FROM distributed_table_c1_t2 JOIN reference_table USING (a);
-DEBUG:  distributed INSERT ... SELECT cannot reference a distributed table without a shard key together with non-colocated distributed tables
+DEBUG:  INSERT target relation and all source relations of the SELECT must be colocated in distributed INSERT ... SELECT
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 INSERT INTO nullkey_c1_t1 SELECT distributed_table_c1_t2.a, distributed_table_c1_t2.b FROM distributed_table_c1_t2 JOIN nullkey_c1_t1 USING (a);
-DEBUG:  distributed INSERT ... SELECT cannot reference a distributed table without a shard key together with non-colocated distributed tables
+DEBUG:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
 ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
 DETAIL:  router planner does not support queries that reference non-colocated distributed tables
 -- use a non-colocated single-shard table
 INSERT INTO nullkey_c2_t1 SELECT q.* FROM (SELECT reference_table.* FROM reference_table LEFT JOIN nullkey_c1_t1 USING (a)) q JOIN nullkey_c1_t2 USING (a);
-DEBUG:  distributed INSERT ... SELECT cannot reference a distributed table without a shard key together with non-colocated distributed tables
+DEBUG:  cannot perform a lateral outer join when a distributed subquery references a reference table
 DEBUG:  Creating router plan
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 -- use a materialized view
@@ -392,11 +404,11 @@ INSERT INTO nullkey_c1_t1 SELECT * FROM matview;
 DEBUG:  distributed INSERT ... SELECT can only select from distributed tables
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 INSERT INTO nullkey_c1_t1 SELECT reference_table.a, reference_table.b FROM reference_table JOIN matview ON (reference_table.a = matview.a);
-DEBUG:  distributed INSERT ... SELECT cannot select from a local relation when inserting into a distributed table
+DEBUG:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
 DEBUG:  Creating router plan
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 INSERT INTO nullkey_c1_t1 SELECT q.* FROM (SELECT reference_table.* FROM reference_table JOIN nullkey_c1_t1 USING (a)) q JOIN matview USING (a);
-DEBUG:  distributed INSERT ... SELECT cannot select from a local relation when inserting into a distributed table
+DEBUG:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
 ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
 DETAIL:  Local tables cannot be used in distributed queries.
 -- use append / range distributed tables
@@ -405,7 +417,7 @@ DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 INSERT INTO nullkey_c1_t1 SELECT * FROM append_table;
-DEBUG:  distributed INSERT ... SELECT cannot reference a distributed table without a shard key together with non-colocated distributed tables
+DEBUG:  INSERT target relation and all source relations of the SELECT must be colocated in distributed INSERT ... SELECT
 DEBUG:  Router planner does not support append-partitioned tables.
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 SELECT avg(a), avg(b) FROM nullkey_c1_t1 ORDER BY 1, 2;
@@ -462,8 +474,7 @@ cte_2 AS (
 )
 INSERT INTO distributed_table_c1_t1
 SELECT cte_1.* FROM cte_1 JOIN cte_2 USING (a) JOIN distributed_table_c1_t2 USING (a) ORDER BY 1,2;
-DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition columns in the source table and subquery do not match
-DETAIL:  The target table's partition column should correspond to a partition column in the subquery.
+DEBUG:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
 DEBUG:  CTE cte_1 is going to be inlined via distributed planning
 DEBUG:  CTE cte_2 is going to be inlined via distributed planning
 ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
@@ -479,7 +490,8 @@ cte_2 AS (
 )
 INSERT INTO distributed_table_c1_t1
 SELECT * FROM cte_1 UNION SELECT * FROM cte_2 EXCEPT SELECT * FROM reference_table;
-DEBUG:  Set operations are not allowed in distributed INSERT ... SELECT queries
+DEBUG:  cannot push down this subquery
+DETAIL:  CTEs in subqueries are currently unsupported
 DEBUG:  CTE cte_1 is going to be inlined via distributed planning
 DEBUG:  CTE cte_2 is going to be inlined via distributed planning
 DEBUG:  Creating router plan
@@ -491,7 +503,8 @@ JOIN (
   SELECT b FROM nullkey_c1_t2 ORDER BY b DESC LIMIT 1
 ) t2
 ON t1.b < t2.b;
-DEBUG:  LIMIT clauses are not allowed in distributed INSERT ... SELECT queries
+DEBUG:  cannot push down this subquery
+DETAIL:  Limit clause is currently unsupported when a subquery references a column from another query
 DEBUG:  Creating router plan
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 INSERT INTO distributed_table_c1_t1 (a, b)
@@ -503,7 +516,9 @@ WITH cte AS (
 )
 SELECT d1, COALESCE(d2, a) FROM cte WHERE d1 IS NOT NULL AND d2 IS NOT NULL;
 DEBUG:  CTE cte is going to be inlined via distributed planning
-DEBUG:  distributed INSERT ... SELECT cannot reference a distributed table without a shard key together with non-colocated distributed tables
+DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition columns in the source table and subquery do not match
+DETAIL:  Subquery contains an expression that is not a simple column reference in the same position as the target table's partition column.
+HINT:  Ensure the target table's partition column has a corresponding simple column reference to a distributed table's partition column in the subquery.
 DEBUG:  Creating router plan
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 INSERT INTO citus_local_table (a, b)
@@ -523,7 +538,8 @@ LEFT JOIN (
   FROM nullkey_c1_t1
 ) t2 ON t1.b = t2.b
 WHERE t2.rn > 0;
-DEBUG:  Window functions without PARTITION BY on distribution column is currently unsupported
+DEBUG:  cannot push down this subquery
+DETAIL:  Window functions without PARTITION BY on distribution column is currently unsupported
 DEBUG:  Creating router plan
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 INSERT INTO nullkey_c1_t1 (a, b)
@@ -537,7 +553,7 @@ JOIN (
   ) q
 ) t2 ON t1.b = t2.b
 WHERE t2.rn > 2;
-DEBUG:  Window functions without PARTITION BY on distribution column is currently unsupported
+DEBUG:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
 ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
 DETAIL:  router planner does not support queries that reference non-colocated distributed tables
 INSERT INTO distributed_table_c1_t1 (a, b)
@@ -551,21 +567,23 @@ JOIN (
   ) q
 ) t2 ON t1.b = t2.b
 WHERE t2.sum_val > 2;
-DEBUG:  distributed INSERT ... SELECT cannot reference a distributed table without a shard key together with non-colocated distributed tables
+DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition columns in the source table and subquery do not match
+DETAIL:  The target table's partition column should correspond to a partition column in the subquery.
 DEBUG:  Creating router plan
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
+-- Temporaryly reduce the verbosity to avoid noise
+-- in the output of the next query.
+SET client_min_messages TO DEBUG1;
 -- MultiTaskRouterSelectQuerySupported() is unnecessarily restrictive
 -- about pushing down queries with DISTINCT ON clause even if the table
 -- doesn't have a shard key. See https://github.com/citusdata/citus/pull/6752.
 INSERT INTO nullkey_c1_t1 SELECT DISTINCT ON (a) a, b FROM nullkey_c1_t2;
-DEBUG:  DISTINCT ON (non-partition column) clauses are not allowed in distributed INSERT ... SELECT queries
-DEBUG:  Distributed planning for a fast-path router query
-DEBUG:  Creating router plan
-DEBUG:  Collecting INSERT ... SELECT results on coordinator
+SET client_min_messages TO DEBUG2;
 -- Similarly, we could push down the following query as well. see
 -- https://github.com/citusdata/citus/pull/6831.
 INSERT INTO nullkey_c1_t1 SELECT b, SUM(a) OVER (ORDER BY b) AS sum_val FROM nullkey_c1_t1;
-DEBUG:  Window functions without PARTITION BY on distribution column is currently unsupported
+DEBUG:  cannot push down this subquery
+DETAIL:  Window functions without PARTITION BY on distribution column is currently unsupported
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
@@ -576,7 +594,7 @@ JOIN reference_table AS t3 ON (t2.a = t3.a)
 WHERE NOT EXISTS (
   SELECT 1 FROM nullkey_c1_t2 AS t1 WHERE t1.b = t3.b
 );
-DEBUG:  distributed INSERT ... SELECT cannot reference a distributed table without a shard key together with non-colocated distributed tables
+DEBUG:  INSERT target relation and all source relations of the SELECT must be colocated in distributed INSERT ... SELECT
 DEBUG:  Creating router plan
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 INSERT INTO distributed_table_c1_t1
@@ -585,7 +603,7 @@ FROM nullkey_c1_t1 AS t1
 WHERE t1.a NOT IN (
   SELECT DISTINCT t2.a FROM distributed_table_c1_t2 AS t2
 );
-DEBUG:  distributed INSERT ... SELECT cannot reference a distributed table without a shard key together with non-colocated distributed tables
+DEBUG:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
 ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
 DETAIL:  Router planner cannot handle multi-shard select queries
 INSERT INTO distributed_table_c1_t1
@@ -598,7 +616,8 @@ JOIN (
     SELECT a FROM nullkey_c1_t2
   ) AS t2
 ) AS t3 ON t1.a = t3.a;
-DEBUG:  Set operations are not allowed in distributed INSERT ... SELECT queries
+DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition columns in the source table and subquery do not match
+DETAIL:  The target table's partition column should correspond to a partition column in the subquery.
 DEBUG:  Creating router plan
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 -- Temporaryly reduce the verbosity to avoid noise
@@ -617,7 +636,7 @@ WHERE t1.a IN (
     ) AS t4 ON t3.a = t4.a
   ) AS t2
 );
-DEBUG:  distributed INSERT ... SELECT cannot reference a distributed table without a shard key together with non-colocated distributed tables
+DEBUG:  correlated subqueries are not supported when the FROM clause contains a reference table
 DEBUG:  generating subplan XXX_1 for subquery SELECT a FROM (SELECT t3.a FROM ((SELECT distributed_table_c1_t1.a FROM insert_select_single_shard_table.distributed_table_c1_t1 WHERE (distributed_table_c1_t1.b OPERATOR(pg_catalog.>) 4)) t3 JOIN (SELECT distributed_table_c1_t2.a FROM insert_select_single_shard_table.distributed_table_c1_t2 WHERE (distributed_table_c1_t2.b OPERATOR(pg_catalog.<) 7)) t4 ON ((t3.a OPERATOR(pg_catalog.=) t4.a)))) t2
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT a, b FROM insert_select_single_shard_table.reference_table t1 WHERE (a OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)))
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
@@ -736,16 +755,17 @@ DEBUG:  distributed statement: INSERT INTO insert_select_single_shard_table.null
 SET client_min_messages TO DEBUG1;
 INSERT INTO distributed_table_c1_t1 AS t1 (a, b) SELECT t3.a, t3.b FROM nullkey_c1_t2 t2 JOIN reference_table t3 ON (t2.a = t3.a) ON CONFLICT (a, b)
     DO UPDATE SET b = t1.b + 10;
-DEBUG:  distributed INSERT ... SELECT cannot reference a distributed table without a shard key together with non-colocated distributed tables
+DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition columns in the source table and subquery do not match
+DETAIL:  The target table's partition column should correspond to a partition column in the subquery.
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 INSERT INTO nullkey_c1_t1 AS t1 (a, b) SELECT t3.a, t3.b FROM distributed_table_c1_t1 t2 JOIN reference_table t3 ON (t2.a = t3.a) ON CONFLICT (a)
     DO UPDATE SET a = t1.a + 10;
-DEBUG:  distributed INSERT ... SELECT cannot reference a distributed table without a shard key together with non-colocated distributed tables
+DEBUG:  INSERT target relation and all source relations of the SELECT must be colocated in distributed INSERT ... SELECT
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 -- This also fails due to https://github.com/citusdata/citus/issues/6826.
 INSERT INTO nullkey_c1_t1 AS t1 (a, b) SELECT t3.a, t3.b FROM distributed_table_c1_t1 t2 JOIN reference_table t3 ON (t2.a = t3.a) WHERE t2.a = 3 ON CONFLICT (a)
     DO UPDATE SET a = (SELECT max(b)+1 FROM distributed_table_c1_t1 WHERE a = 3);
-DEBUG:  distributed INSERT ... SELECT cannot reference a distributed table without a shard key together with non-colocated distributed tables
+DEBUG:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 ERROR:  cannot execute a distributed query from a query on a shard
 DETAIL:  Executing a distributed query in a function call that may be pushed to a remote node can lead to incorrect results.
