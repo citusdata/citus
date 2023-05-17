@@ -170,12 +170,11 @@ BreakColocation(Oid sourceRelationId)
 	 */
 	Relation pgDistColocation = table_open(DistColocationRelationId(), ExclusiveLock);
 
-	uint32 newColocationId = GetNextColocationId();
-	bool localOnly = false;
-	UpdateRelationColocationGroup(sourceRelationId, newColocationId, localOnly);
+	uint32 oldColocationId = TableColocationId(sourceRelationId);
+	CreateColocationGroupForRelation(sourceRelationId);
 
-	/* if there is not any remaining table in the colocation group, delete it */
-	DeleteColocationGroupIfNoTablesBelong(sourceRelationId);
+	/* if there is not any remaining table in the old colocation group, delete it */
+	DeleteColocationGroupIfNoTablesBelong(oldColocationId);
 
 	table_close(pgDistColocation, NoLock);
 }
