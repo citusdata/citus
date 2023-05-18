@@ -1949,7 +1949,9 @@ RebalanceTableShardsBackground(RebalanceOptions *options, Oid shardReplicationMo
 		appendStringInfo(&buf,
 						 "SELECT pg_catalog.replicate_reference_tables(%s)",
 						 quote_literal_cstr(shardTranferModeLabel));
-		BackgroundTask *task = ScheduleBackgroundTask(jobId, GetUserId(), buf.data,
+
+		Oid superUserId = CitusExtensionOwner();
+		BackgroundTask *task = ScheduleBackgroundTask(jobId, superUserId, buf.data,
 													  prevJobIdx, prevJobId);
 		prevJobId[prevJobIdx] = task->taskid;
 		prevJobIdx++;
@@ -2034,7 +2036,7 @@ UpdateShardPlacement(PlacementUpdateEvent *placementUpdateEvent,
 	if (updateType == PLACEMENT_UPDATE_MOVE)
 	{
 		appendStringInfo(placementUpdateCommand,
-						 "SELECT citus_move_shard_placement(%ld,%u,%u,%s)",
+						 "SELECT pg_catalog.citus_move_shard_placement(%ld,%u,%u,%s)",
 						 shardId,
 						 sourceNode->nodeId,
 						 targetNode->nodeId,
@@ -2043,7 +2045,7 @@ UpdateShardPlacement(PlacementUpdateEvent *placementUpdateEvent,
 	else if (updateType == PLACEMENT_UPDATE_COPY)
 	{
 		appendStringInfo(placementUpdateCommand,
-						 "SELECT citus_copy_shard_placement(%ld,%u,%u,%s)",
+						 "SELECT pg_catalog.citus_copy_shard_placement(%ld,%u,%u,%s)",
 						 shardId,
 						 sourceNode->nodeId,
 						 targetNode->nodeId,

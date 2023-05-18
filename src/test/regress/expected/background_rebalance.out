@@ -304,6 +304,61 @@ SELECT public.wait_until_metadata_sync(30000);
 
 (1 row)
 
+-- make sure a non-super user can rebalance when there are reference tables to replicate
+CREATE TABLE ref_table(a int primary key);
+SELECT create_reference_table('ref_table');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- add a new node to trigger replicate_reference_tables task
+SELECT 1 FROM citus_add_node('localhost', :worker_3_port);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+SET ROLE non_super_user_rebalance;
+SELECT 1 FROM citus_rebalance_start(shard_transfer_mode := 'force_logical');
+NOTICE:  Scheduled 1 moves as job xxx
+DETAIL:  Rebalance scheduled as background job
+HINT:  To monitor progress, run: SELECT * FROM citus_rebalance_status();
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+-- wait for success
+SELECT citus_rebalance_wait();
+ citus_rebalance_wait
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT state, details from citus_rebalance_status();
+  state   |                     details
+---------------------------------------------------------------------
+ finished | {"tasks": [], "task_state_counts": {"done": 2}}
+(1 row)
+
+RESET ROLE;
+-- reset the the number of nodes by removing the previously added node
+SELECT 1 FROM citus_drain_node('localhost', :worker_3_port);
+NOTICE:  Moving shard xxxxx from localhost:xxxxx to localhost:xxxxx ...
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+CALL citus_cleanup_orphaned_resources();
+NOTICE:  cleaned up 1 orphaned resources
+SELECT 1 FROM citus_remove_node('localhost', :worker_3_port);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
 SET client_min_messages TO WARNING;
 DROP SCHEMA background_rebalance CASCADE;
 DROP USER non_super_user_rebalance;

@@ -1,10 +1,10 @@
 test: multi_test_helpers multi_test_helpers_superuser
 test: multi_cluster_management
 test: multi_test_catalog_views
+test: worker_copy_table_to_node
 test: shard_rebalancer_unit
 test: shard_rebalancer
 test: background_rebalance
-test: worker_copy_table_to_node
 test: foreign_key_to_reference_shard_rebalance
 test: multi_move_mx
 test: shard_move_deferred_delete

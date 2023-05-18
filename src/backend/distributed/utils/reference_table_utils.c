@@ -420,7 +420,7 @@ CopyShardPlacementToWorkerNodeQuery(ShardPlacement *sourceShardPlacement,
 		"auto";
 
 	appendStringInfo(queryString,
-					 "SELECT citus_copy_shard_placement("
+					 "SELECT pg_catalog.citus_copy_shard_placement("
 					 UINT64_FORMAT ", %d, %d, "
 								   "transfer_mode := %s)",
 					 sourceShardPlacement->shardId,
