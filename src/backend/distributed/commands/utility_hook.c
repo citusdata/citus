@@ -435,6 +435,15 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 			}
 		}
 
+		/*
+		 * EXPLAIN ANALYZE is tricky with local execution, and there is not
+		 * much difference between the local and distributed execution in terms
+		 * of the actual EXPLAIN output.
+		 *
+		 * TODO: It might be nice to have a way to show that the query is locally
+		 * executed. Shall we add a INFO output?
+		 */
+		DisableLocalExecution();
 	}
 
 	if (IsA(parsetree, CreateSubscriptionStmt))
