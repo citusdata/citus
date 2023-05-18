@@ -3156,5 +3156,7 @@ select * from test_ref_table;
 DROP SCHEMA test_auto_explain CASCADE;
 select master_remove_node('localhost', :master_port);
 
+SELECT public.wait_until_metadata_sync(30000);
+
 SET client_min_messages TO ERROR;
 DROP SCHEMA multi_explain CASCADE;
