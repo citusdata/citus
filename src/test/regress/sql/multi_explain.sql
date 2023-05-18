@@ -1142,5 +1142,24 @@ PREPARE q2(int_wrapper_type) AS WITH a AS (UPDATE tbl SET b = $1 WHERE a = 1 RET
 EXPLAIN (COSTS false) EXECUTE q2('(1)');
 EXPLAIN :default_analyze_flags EXECUTE q2('(1)');
 
+-- check when auto explain + analyze is enabled, we do not allow local execution.
+CREATE SCHEMA test_auto_explain;
+SET search_path TO 'test_auto_explain';
+
+SELECT citus_set_coordinator_host('localhost');
+
+CREATE TABLE test_ref_table (key int PRIMARY KEY);
+SELECT create_reference_table('test_ref_table');
+
+LOAD 'auto_explain';
+SET auto_explain.log_min_duration = 0;
+set auto_explain.log_analyze to true;
+
+-- the following should not be locally executed since explain analyze is on
+select * from test_ref_table;
+
+DROP SCHEMA test_auto_explain CASCADE;
+select master_remove_node('localhost', :master_port);
+
 SET client_min_messages TO ERROR;
 DROP SCHEMA multi_explain CASCADE;
