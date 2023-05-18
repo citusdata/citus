@@ -62,8 +62,16 @@ reset citus.shard_replication_factor;
 -- considered as an MX table
 UPDATE pg_dist_partition SET repmodel='s' WHERE logicalrelid='mx_test_table'::regclass;
 
+-- add a single shard table and verify the creation commands are included in the activate node snapshot
+CREATE TABLE single_shard_tbl(a int);
+SELECT create_distributed_table('single_shard_tbl', null);
+INSERT INTO single_shard_tbl VALUES (1);
+
 -- Show that the created MX table is and its sequences are included in the activate node snapshot
 SELECT unnest(activate_node_snapshot()) order by 1;
+
+-- Drop single shard table
+DROP TABLE single_shard_tbl;
 
 -- Show that CREATE INDEX commands are included in the activate node snapshot
 CREATE INDEX mx_index ON mx_test_table(col_2);
