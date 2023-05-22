@@ -79,6 +79,8 @@ get_guc_variables_compat(int *gucCount)
 
 #define get_relids_in_jointree_compat(a, b, c) get_relids_in_jointree(a, b)
 
+typedef bool TU_UpdateIndexes;
+
 #endif
 
 #if PG_VERSION_NUM >= PG_VERSION_15

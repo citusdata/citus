@@ -31,6 +31,7 @@
 #include "executor/executor.h"
 #include "nodes/makefuncs.h"
 #include "optimizer/plancat.h"
+#include "pg_version_compat.h"
 #include "pgstat.h"
 #include "safe_lib.h"
 #include "storage/bufmgr.h"
@@ -817,7 +818,7 @@ static TM_Result
 columnar_tuple_update(Relation relation, ItemPointer otid, TupleTableSlot *slot,
 					  CommandId cid, Snapshot snapshot, Snapshot crosscheck,
 					  bool wait, TM_FailureData *tmfd,
-					  LockTupleMode *lockmode, bool *update_indexes)
+					  LockTupleMode *lockmode, TU_UpdateIndexes *update_indexes)
 {
 	elog(ERROR, "columnar_tuple_update not implemented");
 }
