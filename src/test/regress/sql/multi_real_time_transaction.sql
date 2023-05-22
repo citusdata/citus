@@ -399,3 +399,4 @@ SELECT id, pg_advisory_xact_lock(16) FROM test_table ORDER BY id;
 END;
 
 DROP SCHEMA multi_real_time_transaction CASCADE;
+DROP USER rls_user;
