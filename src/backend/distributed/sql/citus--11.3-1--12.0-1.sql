@@ -19,6 +19,10 @@ GRANT SELECT ON pg_catalog.pg_dist_tenant_schema TO public;
 #include "udfs/citus_prepare_pg_upgrade/12.0-1.sql"
 #include "udfs/citus_finish_pg_upgrade/12.0-1.sql"
 
+-- udfs that are no longer used by drop trigger
+DROP FUNCTION master_remove_distributed_table_metadata_from_workers(regclass, text, text);
+DROP FUNCTION worker_drop_distributed_table(text);
+
 -- udfs used to modify pg_dist_tenant_schema globally via drop trigger
 #include "udfs/citus_internal_delete_tenant_schema/12.0-1.sql"
 #include "udfs/citus_drop_trigger/12.0-1.sql"

@@ -24,12 +24,6 @@
 #include "utils/lsyscache.h"
 
 
-/* local function forward declarations */
-static void MasterRemoveDistributedTableMetadataFromWorkers(Oid relationId,
-															char *schemaName,
-															char *tableName);
-
-
 /* exports for SQL callable functions */
 PG_FUNCTION_INFO_V1(master_drop_distributed_table_metadata);
 PG_FUNCTION_INFO_V1(master_remove_partition_metadata);
@@ -109,7 +103,8 @@ master_remove_partition_metadata(PG_FUNCTION_ARGS)
 	Oid schemaId = get_namespace_oid(schemaName, missingOk);
 	if (!OidIsValid(schemaId) || !IsTenantSchema(schemaId))
 	{
-		DeleteColocationGroupIfNoTablesBelong(colocationId);
+		bool localOnly = true;
+		DeleteColocationGroupIfNoTablesBelong(colocationId, localOnly);
 	}
 
 	PG_RETURN_VOID();
@@ -117,79 +112,14 @@ master_remove_partition_metadata(PG_FUNCTION_ARGS)
 
 
 /*
- * master_remove_distributed_table_metadata_from_workers removes the entry of the
- * specified distributed table from pg_dist_partition and drops the table from
- * the workers if needed.
+ * master_remove_distributed_table_metadata_from_workers is a deprecated function.
  */
 Datum
 master_remove_distributed_table_metadata_from_workers(PG_FUNCTION_ARGS)
 {
-	CheckCitusVersion(ERROR);
-
-	Oid relationId = PG_GETARG_OID(0);
-	text *schemaNameText = PG_GETARG_TEXT_P(1);
-	text *tableNameText = PG_GETARG_TEXT_P(2);
-
-	char *schemaName = text_to_cstring(schemaNameText);
-	char *tableName = text_to_cstring(tableNameText);
-
-	CheckTableSchemaNameForDrop(relationId, &schemaName, &tableName);
-
-	MasterRemoveDistributedTableMetadataFromWorkers(relationId, schemaName, tableName);
+	ereport(INFO, (errmsg("this function is deprecated and no longer is used")));
 
 	PG_RETURN_VOID();
-}
-
-
-/*
- * MasterRemoveDistributedTableMetadataFromWorkers drops the table and removes
- * all the metadata belonging the distributed table in the worker nodes
- * with metadata. The function doesn't drop the tables that are
- * the shards on the workers.
- *
- * The function is a no-op for non-distributed tables and clusters that don't
- * have any workers with metadata. Also, the function errors out if called
- * from a worker node.
- *
- * This function assumed that it is called via a trigger. But we cannot do the
- * typical CALLED_AS_TRIGGER check because this is called via another trigger,
- * which CALLED_AS_TRIGGER does not cover.
- */
-static void
-MasterRemoveDistributedTableMetadataFromWorkers(Oid relationId, char *schemaName,
-												char *tableName)
-{
-	/*
-	 * The SQL_DROP trigger calls this function even for tables that are
-	 * not distributed. In that case, silently ignore. This is not very
-	 * user-friendly, but this function is really only meant to be called
-	 * from the trigger.
-	 */
-	if (!IsCitusTableViaCatalog(relationId) || !EnableDDLPropagation)
-	{
-		return;
-	}
-
-	EnsureCoordinator();
-
-	if (!ShouldSyncTableMetadataViaCatalog(relationId))
-	{
-		return;
-	}
-
-	if (PartitionTable(relationId))
-	{
-		/*
-		 * MasterRemoveDistributedTableMetadataFromWorkers is only called from drop trigger.
-		 * When parent is dropped in a drop trigger, we remove all the corresponding
-		 * partitions via the parent, mostly for performance reasons.
-		 */
-		return;
-	}
-
-	/* drop the distributed table metadata on the workers */
-	char *deleteDistributionCommand = DistributionDeleteCommand(schemaName, tableName);
-	SendCommandToWorkersWithMetadata(deleteDistributionCommand);
 }
 
 
