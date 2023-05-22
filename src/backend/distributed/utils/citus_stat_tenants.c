@@ -77,7 +77,7 @@ int StatTenantsLogLevel = CITUS_LOG_LEVEL_OFF;
 int StatTenantsPeriod = (time_t) 60;
 int StatTenantsLimit = 100;
 int StatTenantsTrack = STAT_TENANTS_TRACK_NONE;
-
+int StatTenantsSampleRateForNewTenants = 100;
 
 PG_FUNCTION_INFO_V1(citus_stat_tenants_local);
 PG_FUNCTION_INFO_V1(citus_stat_tenants_local_reset);
@@ -177,8 +177,6 @@ citus_stat_tenants_local(PG_FUNCTION_ARGS)
 }
 
 
-#include "miscadmin.h"
-
 /*
  * citus_stat_tenants_local_reset resets monitor for tenant statistics
  * on the local node.
@@ -186,9 +184,6 @@ citus_stat_tenants_local(PG_FUNCTION_ARGS)
 Datum
 citus_stat_tenants_local_reset(PG_FUNCTION_ARGS)
 {
-	/* ereport(NOTICE, (errmsg("MyProcPid: %d", MyProcPid))); */
-	/*sleep(10); */
-
 	MultiTenantMonitor *monitor = GetMultiTenantMonitor();
 
 	/* if monitor is not created yet, there is nothing to reset */
@@ -264,6 +259,21 @@ AttributeTask(char *tenantId, int colocationId, CmdType commandType)
 {
 	if (StatTenantsTrack == STAT_TENANTS_TRACK_NONE ||
 		tenantId == NULL || colocationId == INVALID_COLOCATION_ID)
+	{
+		return;
+	}
+
+	TenantStatsHashKey key = { 0 };
+	FillTenantStatsHashKey(&key, tenantId, colocationId);
+
+	MultiTenantMonitor *monitor = GetMultiTenantMonitor();
+	bool found = false;
+	hash_search(monitor->tenants, &key, HASH_FIND, NULL);
+
+	int randomValue = rand() % 100;
+
+	/* If the tenant is not found in the hash table, we will track the query with a probability of StatTenantsSampleRateForNewTenants.*/
+	if (!(!found && randomValue < StatTenantsSampleRateForNewTenants))
 	{
 		return;
 	}

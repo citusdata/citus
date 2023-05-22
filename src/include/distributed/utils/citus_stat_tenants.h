@@ -121,5 +121,6 @@ extern int StatTenantsLogLevel;
 extern int StatTenantsPeriod;
 extern int StatTenantsLimit;
 extern int StatTenantsTrack;
+extern int StatTenantsSampleRateForNewTenants;
 
 #endif /*CITUS_ATTRIBUTE_H */

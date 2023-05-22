@@ -2402,7 +2402,6 @@ RegisterCitusConfigVariables(void)
 		PGC_POSTMASTER,
 		GUC_STANDARD,
 		NULL, NULL, NULL);
-
 	DefineCustomEnumVariable(
 		"citus.stat_tenants_log_level",
 		gettext_noop("Sets the level of citus_stat_tenants log messages"),
@@ -2420,6 +2419,17 @@ RegisterCitusConfigVariables(void)
 		NULL,
 		&StatTenantsPeriod,
 		60, 1, 60 * 60 * 24,
+		PGC_USERSET,
+		GUC_STANDARD,
+		NULL, NULL, NULL);
+
+
+	DefineCustomIntVariable(
+		"citus.stat_tenants_sample_rate_for_new_tenants",
+		gettext_noop("Sampling rate for new tenants in citus_stat_tenants."),
+		NULL,
+		&StatTenantsSampleRateForNewTenants,
+		100, 1, 100,
 		PGC_USERSET,
 		GUC_STANDARD,
 		NULL, NULL, NULL);
