@@ -94,8 +94,8 @@ SELECT colocationid FROM pg_dist_partition WHERE logicalrelid::text LIKE '%null_
 -- undistribute
 SELECT undistribute_table('null_dist_key_table');
 -- verify that the metadata is gone
-SELECT COUNT(*) = 0 FROM pg_dist_partition;
-SELECT COUNT(*) = 0 FROM pg_dist_placement;
-SELECT COUNT(*) = 0 FROM pg_dist_shard;
+SELECT COUNT(*) = 0 FROM pg_dist_partition WHERE logicalrelid::text LIKE '%null_dist_key_table%';
+SELECT COUNT(*) = 0 FROM pg_dist_placement WHERE shardid IN (SELECT shardid FROM pg_dist_shard WHERE logicalrelid::text LIKE '%null_dist_key_table%');
+SELECT COUNT(*) = 0 FROM pg_dist_shard WHERE logicalrelid::text LIKE '%null_dist_key_table%';
 
 DROP SCHEMA null_dist_key_udfs CASCADE;

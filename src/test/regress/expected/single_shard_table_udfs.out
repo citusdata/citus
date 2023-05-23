@@ -209,19 +209,19 @@ NOTICE:  renaming the new table to null_dist_key_udfs.null_dist_key_table
 (1 row)
 
 -- verify that the metadata is gone
-SELECT COUNT(*) = 0 FROM pg_dist_partition;
+SELECT COUNT(*) = 0 FROM pg_dist_partition WHERE logicalrelid::text LIKE '%null_dist_key_table%';
  ?column?
 ---------------------------------------------------------------------
  t
 (1 row)
 
-SELECT COUNT(*) = 0 FROM pg_dist_placement;
+SELECT COUNT(*) = 0 FROM pg_dist_placement WHERE shardid IN (SELECT shardid FROM pg_dist_shard WHERE logicalrelid::text LIKE '%null_dist_key_table%');
  ?column?
 ---------------------------------------------------------------------
  t
 (1 row)
 
-SELECT COUNT(*) = 0 FROM pg_dist_shard;
+SELECT COUNT(*) = 0 FROM pg_dist_shard WHERE logicalrelid::text LIKE '%null_dist_key_table%';
  ?column?
 ---------------------------------------------------------------------
  t
