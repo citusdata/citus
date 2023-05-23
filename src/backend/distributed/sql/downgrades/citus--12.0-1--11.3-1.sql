@@ -36,7 +36,7 @@ DROP FUNCTION pg_catalog.citus_internal_add_tenant_schema(Oid, int);
 #include "../udfs/citus_finish_pg_upgrade/11.2-1.sql"
 
 DROP FUNCTION pg_catalog.citus_internal_delete_tenant_schema(Oid);
-DROP FUNCTION pg_catalog.citus_internal_unregister_tenant_schema(Oid, text);
+DROP FUNCTION pg_catalog.citus_internal_unregister_tenant_schema_globally(Oid, text);
 
 #include "../udfs/citus_drop_trigger/10.2-1.sql"
 

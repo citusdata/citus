@@ -44,7 +44,7 @@ BEGIN
     LOOP
         IF EXISTS (SELECT 1 FROM pg_catalog.pg_dist_tenant_schema WHERE schemaid = v_obj.objid)
         THEN
-            PERFORM pg_catalog.citus_internal_unregister_tenant_schema(v_obj.objid, v_obj.object_name);
+            PERFORM pg_catalog.citus_internal_unregister_tenant_schema_globally(v_obj.objid, v_obj.object_name);
         END IF;
     END LOOP;
 

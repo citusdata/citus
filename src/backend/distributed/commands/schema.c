@@ -19,6 +19,7 @@
 #include "catalog/namespace.h"
 #include "catalog/pg_class.h"
 #include "catalog/pg_namespace.h"
+#include "distributed/colocation_utils.h"
 #include "distributed/commands.h"
 #include <distributed/connection_management.h>
 #include "distributed/commands/utility_hook.h"
@@ -33,6 +34,7 @@
 #include "distributed/resource_lock.h"
 #include <distributed/remote_commands.h>
 #include <distributed/remote_commands.h>
+#include "distributed/tenant_schema_metadata.h"
 #include "distributed/version_compat.h"
 #include "nodes/parsenodes.h"
 #include "utils/fmgroids.h"
@@ -81,11 +83,20 @@ PostprocessCreateSchemaStmt(Node *node, const char *queryString)
 		Oid schemaId = get_namespace_oid(createSchemaStmt->schemaname, missingOk);
 
 		/*
-		 * Register the tenant schema on the coordinator and get the command
+		 * Register the tenant schema on the coordinator and save the command
 		 * to register it on the workers.
 		 */
-		char *remoteRegisterCommand = RegisterTenantSchema(schemaId);
-		commands = lappend(commands, remoteRegisterCommand);
+		int shardCount = 1;
+		int replicationFactor = 1;
+		Oid distributionColumnType = InvalidOid;
+		Oid distributionColumnCollation = InvalidOid;
+		uint32 colocationId = CreateColocationGroup(
+			shardCount, replicationFactor, distributionColumnType,
+			distributionColumnCollation);
+
+		InsertTenantSchemaLocally(schemaId, colocationId);
+
+		commands = lappend(commands, TenantSchemaInsertCommand(schemaId, colocationId));
 	}
 
 	commands = lappend(commands, ENABLE_DDL_PROPAGATION);

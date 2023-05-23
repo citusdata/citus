@@ -22,7 +22,7 @@
 #include "utils/syscache.h"
 
 
-PG_FUNCTION_INFO_V1(citus_internal_unregister_tenant_schema);
+PG_FUNCTION_INFO_V1(citus_internal_unregister_tenant_schema_globally);
 
 
 /* controlled via citus.enable_schema_based_sharding GUC */
@@ -154,35 +154,12 @@ CreateTenantSchemaTable(Oid relationId)
 
 
 /*
- * RegisterTenantSchema registers given schema as a tenant schema locally and
- * returns the command to do the same on the workers.
- */
-char *
-RegisterTenantSchema(Oid schemaId)
-{
-	CheckCitusVersion(ERROR);
-
-	int shardCount = 1;
-	int replicationFactor = 1;
-	Oid distributionColumnType = InvalidOid;
-	Oid distributionColumnCollation = InvalidOid;
-	uint32 colocationId = CreateColocationGroup(
-		shardCount, replicationFactor, distributionColumnType,
-		distributionColumnCollation);
-
-	InsertTenantSchemaLocally(schemaId, colocationId);
-
-	return TenantSchemaInsertCommand(schemaId, colocationId);
-}
-
-
-/*
  * citus_internal_unregister_tenant_schema_globally removes given schema from
  * the tenant schema metadata table, deletes the colocation group of the schema
  * and sends the command to do the same on the workers.
  */
 Datum
-citus_internal_unregister_tenant_schema(PG_FUNCTION_ARGS)
+citus_internal_unregister_tenant_schema_globally(PG_FUNCTION_ARGS)
 {
 	PG_ENSURE_ARGNOTNULL(0, "schema_id");
 	Oid schemaId = PG_GETARG_OID(0);
