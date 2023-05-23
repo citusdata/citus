@@ -8,11 +8,14 @@ DECLARE
     v_obj record;
     dropped_table_is_a_partition boolean := false;
 BEGIN
-
-    -- Drop all the shards on the workers and remove the pg_dist_partition entry locally.
     FOR v_obj IN SELECT * FROM pg_event_trigger_dropped_objects()
                  WHERE object_type IN ('table', 'foreign table')
     LOOP
+        -- first drop the table and metadata on the workers
+        -- then drop all the shards on the workers
+        -- finally remove the pg_dist_partition entry on the coordinator
+        PERFORM master_remove_distributed_table_metadata_from_workers(v_obj.objid, v_obj.schema_name, v_obj.object_name);
+
         -- If both original and normal values are false, the dropped table was a partition
         -- that was dropped as a result of its parent being dropped
         -- NOTE: the other way around is not true:

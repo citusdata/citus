@@ -92,6 +92,8 @@ extern char * MarkObjectsDistributedCreateCommand(List *addresses,
 												  List *colocationIds,
 												  List *forceDelegations);
 extern char * DistributionCreateCommand(CitusTableCacheEntry *cacheEntry);
+extern char * DistributionDeleteCommand(const char *schemaName,
+										const char *tableName);
 extern char * DistributionDeleteMetadataCommand(Oid relationId);
 extern char * TableOwnerResetCommand(Oid distributedRelationId);
 extern char * NodeListInsertCommand(List *workerNodeList);
@@ -180,6 +182,8 @@ extern void SendInterTableRelationshipCommands(MetadataSyncContext *context);
 #define CITUS_INTERNAL_MARK_NODE_NOT_SYNCED \
 	"SELECT citus_internal_mark_node_not_synced(%d, %d)"
 
+#define REMOVE_ALL_CITUS_TABLES_COMMAND \
+	"SELECT worker_drop_distributed_table(logicalrelid::regclass::text) FROM pg_dist_partition"
 #define BREAK_ALL_CITUS_TABLE_SEQUENCE_DEPENDENCY_COMMAND \
 	"SELECT pg_catalog.worker_drop_sequence_dependency(logicalrelid::regclass::text) FROM pg_dist_partition"
 #define BREAK_CITUS_TABLE_SEQUENCE_DEPENDENCY_COMMAND \

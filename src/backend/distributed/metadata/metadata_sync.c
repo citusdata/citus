@@ -1126,6 +1126,25 @@ DistributionCreateCommand(CitusTableCacheEntry *cacheEntry)
 
 
 /*
+ * DistributionDeleteCommand generates a command that can be executed
+ * to drop a distributed table and its metadata on a remote node.
+ */
+char *
+DistributionDeleteCommand(const char *schemaName, const char *tableName)
+{
+	StringInfo deleteDistributionCommand = makeStringInfo();
+
+	char *distributedRelationName = quote_qualified_identifier(schemaName, tableName);
+
+	appendStringInfo(deleteDistributionCommand,
+					 "SELECT worker_drop_distributed_table(%s)",
+					 quote_literal_cstr(distributedRelationName));
+
+	return deleteDistributionCommand->data;
+}
+
+
+/*
  * DistributionDeleteMetadataCommand returns a query to delete pg_dist_partition
  * metadata from a worker node for a given table.
  */

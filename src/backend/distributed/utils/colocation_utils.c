@@ -51,7 +51,7 @@ static bool HashPartitionedShardIntervalsEqual(ShardInterval *leftShardInterval,
 											   ShardInterval *rightShardInterval);
 static int CompareShardPlacementsByNode(const void *leftElement,
 										const void *rightElement);
-static void DeleteColocationGroup(uint32 colocationId, bool localOnly);
+static void DeleteColocationGroup(uint32 colocationId);
 static uint32 CreateColocationGroupForRelation(Oid sourceRelationId);
 static void BreakColocation(Oid sourceRelationId);
 
@@ -177,7 +177,7 @@ BreakColocation(Oid sourceRelationId)
 	UpdateRelationColocationGroup(sourceRelationId, newColocationId, localOnly);
 
 	/* if there is not any remaining table in the colocation group, delete it */
-	DeleteColocationGroupIfNoTablesBelong(sourceRelationId, localOnly);
+	DeleteColocationGroupIfNoTablesBelong(sourceRelationId);
 
 	table_close(pgDistColocation, NoLock);
 }
@@ -297,7 +297,7 @@ MarkTablesColocated(Oid sourceRelationId, Oid targetRelationId)
 	UpdateRelationColocationGroup(targetRelationId, sourceColocationId, localOnly);
 
 	/* if there is not any remaining table in the colocation group, delete it */
-	DeleteColocationGroupIfNoTablesBelong(targetColocationId, localOnly);
+	DeleteColocationGroupIfNoTablesBelong(targetColocationId);
 
 	table_close(pgDistColocation, NoLock);
 }
@@ -1249,7 +1249,7 @@ ColocatedShardIdInRelation(Oid relationId, int shardIndex)
  * remove empty co-location group to prevent orphaned co-location groups.
  */
 void
-DeleteColocationGroupIfNoTablesBelong(uint32 colocationId, bool localOnly)
+DeleteColocationGroupIfNoTablesBelong(uint32 colocationId)
 {
 	if (colocationId != INVALID_COLOCATION_ID)
 	{
@@ -1259,7 +1259,7 @@ DeleteColocationGroupIfNoTablesBelong(uint32 colocationId, bool localOnly)
 
 		if (colocatedTableCount == 0)
 		{
-			DeleteColocationGroup(colocationId, localOnly);
+			DeleteColocationGroup(colocationId);
 		}
 	}
 }
@@ -1270,14 +1270,10 @@ DeleteColocationGroupIfNoTablesBelong(uint32 colocationId, bool localOnly)
  * throughout the cluster and diasociates the tenant schema if any.
  */
 static void
-DeleteColocationGroup(uint32 colocationId, bool localOnly)
+DeleteColocationGroup(uint32 colocationId)
 {
 	DeleteColocationGroupLocally(colocationId);
-
-	if (!localOnly)
-	{
-		SyncDeleteColocationGroupToNodes(colocationId);
-	}
+	SyncDeleteColocationGroupToNodes(colocationId);
 }
 
 
