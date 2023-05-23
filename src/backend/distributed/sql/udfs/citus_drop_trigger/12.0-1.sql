@@ -34,23 +34,20 @@ BEGIN
         PERFORM master_remove_partition_metadata(v_obj.objid, v_obj.schema_name, v_obj.object_name);
     END LOOP;
 
-    -- Remove entries from pg_catalog.pg_dist_tenant_schema for all dropped tenant schemas.
-    -- Also delete the corresponding colocation group from pg_catalog.pg_dist_colocation.
-    --
-    -- Although normally we automatically delete the colocation groups when they become empty,
-    -- we don't do so for the colocation groups that are created for tenant schemas. For this
-    -- reason, here we need to delete the colocation group when the tenant schema is dropped.
-    FOR v_obj IN SELECT * FROM pg_event_trigger_dropped_objects() WHERE object_type = 'schema'
+    FOR v_obj IN SELECT * FROM pg_event_trigger_dropped_objects()
     LOOP
-        IF EXISTS (SELECT 1 FROM pg_catalog.pg_dist_tenant_schema WHERE schemaid = v_obj.objid)
+        -- Remove entries from pg_catalog.pg_dist_tenant_schema for all dropped tenant schemas.
+        -- Also delete the corresponding colocation group from pg_catalog.pg_dist_colocation.
+        --
+        -- Although normally we automatically delete the colocation groups when they become empty,
+        -- we don't do so for the colocation groups that are created for tenant schemas. For this
+        -- reason, here we need to delete the colocation group when the tenant schema is dropped.
+        IF v_obj.object_type = 'schema' AND EXISTS (SELECT 1 FROM pg_catalog.pg_dist_tenant_schema WHERE schemaid = v_obj.objid)
         THEN
             PERFORM pg_catalog.citus_internal_unregister_tenant_schema_globally(v_obj.objid, v_obj.object_name);
         END IF;
-    END LOOP;
 
-    -- remove entries from citus.pg_dist_object for all dropped root (objsubid = 0) objects
-    FOR v_obj IN SELECT * FROM pg_event_trigger_dropped_objects()
-    LOOP
+        -- remove entries from citus.pg_dist_object for all dropped root (objsubid = 0) objects
         PERFORM master_unmark_object_distributed(v_obj.classid, v_obj.objid, v_obj.objsubid);
     END LOOP;
 
