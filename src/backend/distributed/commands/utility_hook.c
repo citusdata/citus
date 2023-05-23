@@ -351,6 +351,10 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 				(IsA(parsetree, CreateStmt) ||
 				 IsA(parsetree, CreateForeignTableStmt)))
 			{
+				/*
+				 * Not directly cast to CreateStmt to guard against the case where
+				 * the definition of CreateForeignTableStmt changes in future.
+				 */
 				CreateStmt *baseCreateTableStmt =
 					IsA(parsetree, CreateStmt) ? (CreateStmt *) parsetree :
 					(CreateStmt *) &(((CreateForeignTableStmt *) parsetree)->base);

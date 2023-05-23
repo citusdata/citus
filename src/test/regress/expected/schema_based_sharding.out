@@ -273,7 +273,7 @@ CREATE TABLE regular_schema.null_shard_key_1(a int, b text);
 SELECT create_distributed_table('regular_schema.null_shard_key_1', null, colocate_with => 'tenant_5.tbl_2');
 ERROR:  cannot colocate tables tbl_2 and null_shard_key_1
 DETAIL:  Cannot colocate tables with tenant tables by using colocate_with option.
-HINT:  Consider using "ALTER TABLE null_shard_key_1 SET SCHEMA tenant_5;" to move the table to the same schema with the tenant table.
+HINT:  Consider using "CREATE TABLE" statement to create this table as a tenant table in the same schema to automatically colocate it with tenant_5.tbl_2
 SELECT create_distributed_table('regular_schema.null_shard_key_1', 'a', colocate_with => 'tenant_5.tbl_2');
 ERROR:  cannot colocate tables tbl_2 and null_shard_key_1
 DETAIL:  Distribution column types don't match for tbl_2 and null_shard_key_1.
@@ -547,7 +547,17 @@ SELECT create_reference_table('reference_table');
 
 -- Notice that tenant_7.tbl_4 have foreign keys both to tenant_7.tbl_3 and
 -- to reference_table.
-CREATE TABLE tenant_7.tbl_4(a int REFERENCES reference_table, FOREIGN KEY(a) REFERENCES tenant_7.tbl_3(a));
+CREATE TABLE tenant_7.tbl_4(a int REFERENCES reference_table, FOREIGN KEY(a) REFERENCES tenant_7.tbl_3(a) ON DELETE CASCADE);
+INSERT INTO tenant_7.tbl_3 VALUES (1, 'a'), (2, 'b'), (3, 'c');
+INSERT INTO reference_table VALUES (1), (2), (3);
+INSERT INTO tenant_7.tbl_4 VALUES (1), (2), (3);
+DELETE FROM tenant_7.tbl_3 WHERE a < 3;
+SELECT * FROM tenant_7.tbl_4 ORDER BY a;
+ a
+---------------------------------------------------------------------
+ 3
+(1 row)
+
 SELECT COUNT(*)=2 FROM pg_dist_partition
 WHERE logicalrelid IN ('tenant_7.tbl_3'::regclass, 'tenant_7.tbl_4'::regclass) AND
       partmethod = 'n' AND repmodel = 's' AND
@@ -631,6 +641,77 @@ $$);
  DROP TABLE
 (2 rows)
 
+CREATE TABLE tenant_3.search_path_test(a int);
+INSERT INTO tenant_3.search_path_test VALUES (1), (10);
+CREATE TABLE tenant_5.search_path_test(a int);
+INSERT INTO tenant_5.search_path_test VALUES (2);
+CREATE TABLE tenant_7.search_path_test(a int);
+INSERT INTO tenant_7.search_path_test VALUES (3);
+CREATE FUNCTION increment_one()
+RETURNS void
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    UPDATE search_path_test SET a = a + 1;
+END;
+$$;
+CREATE FUNCTION decrement_one()
+RETURNS void
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    UPDATE search_path_test SET a = a - 1;
+END;
+$$;
+SET search_path TO tenant_5;
+PREPARE list_tuples AS SELECT * FROM search_path_test ORDER BY a;
+SELECT * FROM search_path_test ORDER BY a;
+ a
+---------------------------------------------------------------------
+ 2
+(1 row)
+
+SET search_path TO tenant_3;
+DELETE FROM search_path_test WHERE a = 1;
+SELECT * FROM search_path_test ORDER BY a;
+ a
+---------------------------------------------------------------------
+ 10
+(1 row)
+
+SELECT regular_schema.increment_one();
+ increment_one
+---------------------------------------------------------------------
+
+(1 row)
+
+EXECUTE list_tuples;
+ a
+---------------------------------------------------------------------
+ 11
+(1 row)
+
+SET search_path TO tenant_7;
+DROP TABLE search_path_test;
+SELECT * FROM pg_dist_partition WHERE logicalrelid::text = 'search_path_test';
+ logicalrelid | partmethod | partkey | colocationid | repmodel | autoconverted
+---------------------------------------------------------------------
+(0 rows)
+
+SET search_path TO tenant_5;
+SELECT regular_schema.decrement_one();
+ decrement_one
+---------------------------------------------------------------------
+
+(1 row)
+
+EXECUTE list_tuples;
+ a
+---------------------------------------------------------------------
+ 1
+(1 row)
+
+SET search_path TO regular_schema;
 CREATE USER test_other_super_user WITH superuser;
 \c - test_other_super_user
 SET citus.enable_schema_based_sharding TO ON;

@@ -1432,11 +1432,17 @@ EnsureTableCanBeColocatedWith(Oid relationId, char replicationModel,
 	}
 
 	/* prevent colocating regular tables with tenant tables */
-	Oid targetRelationSchemaId = get_rel_namespace(relationId);
 	Oid sourceRelationSchemaId = get_rel_namespace(sourceRelationId);
-	if (IsTenantSchema(sourceRelationSchemaId) &&
-		targetRelationSchemaId != sourceRelationSchemaId)
+	if (IsTenantSchema(sourceRelationSchemaId))
 	{
+		/*
+		 * We don't allow having local tables in tenant schemas, so they must
+		 * be in different schemas.
+		 */
+		Oid targetRelationSchemaId PG_USED_FOR_ASSERTS_ONLY =
+			get_rel_namespace(relationId);
+		Assert(sourceRelationSchemaId != targetRelationSchemaId);
+
 		char *relationName = get_rel_name(relationId);
 		char *sourceRelationName = get_rel_name(sourceRelationId);
 		char *sourceRelationSchemaName = get_namespace_name(sourceRelationSchemaId);
@@ -1445,9 +1451,10 @@ EnsureTableCanBeColocatedWith(Oid relationId, char replicationModel,
 							   sourceRelationName, relationName),
 						errdetail("Cannot colocate tables with tenant tables "
 								  "by using colocate_with option."),
-						errhint("Consider using \"ALTER TABLE %s SET SCHEMA %s;\" "
-								"to move the table to the same schema with the "
-								"tenant table.",
-								relationName, sourceRelationSchemaName)));
+						errhint("Consider using \"CREATE TABLE\" statement "
+								"to create this table as a tenant table in "
+								"the same schema to automatically colocate "
+								"it with %s.%s",
+								sourceRelationSchemaName, sourceRelationName)));
 	}
 }

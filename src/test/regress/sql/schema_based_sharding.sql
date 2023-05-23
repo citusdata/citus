@@ -372,7 +372,14 @@ SELECT create_reference_table('reference_table');
 
 -- Notice that tenant_7.tbl_4 have foreign keys both to tenant_7.tbl_3 and
 -- to reference_table.
-CREATE TABLE tenant_7.tbl_4(a int REFERENCES reference_table, FOREIGN KEY(a) REFERENCES tenant_7.tbl_3(a));
+CREATE TABLE tenant_7.tbl_4(a int REFERENCES reference_table, FOREIGN KEY(a) REFERENCES tenant_7.tbl_3(a) ON DELETE CASCADE);
+
+INSERT INTO tenant_7.tbl_3 VALUES (1, 'a'), (2, 'b'), (3, 'c');
+INSERT INTO reference_table VALUES (1), (2), (3);
+INSERT INTO tenant_7.tbl_4 VALUES (1), (2), (3);
+
+DELETE FROM tenant_7.tbl_3 WHERE a < 3;
+SELECT * FROM tenant_7.tbl_4 ORDER BY a;
 
 SELECT COUNT(*)=2 FROM pg_dist_partition
 WHERE logicalrelid IN ('tenant_7.tbl_3'::regclass, 'tenant_7.tbl_4'::regclass) AND
@@ -425,6 +432,55 @@ SELECT format(
 SELECT result FROM run_command_on_workers($$
     DROP TABLE tenant_9_schemaid
 $$);
+
+CREATE TABLE tenant_3.search_path_test(a int);
+INSERT INTO tenant_3.search_path_test VALUES (1), (10);
+
+CREATE TABLE tenant_5.search_path_test(a int);
+INSERT INTO tenant_5.search_path_test VALUES (2);
+
+CREATE TABLE tenant_7.search_path_test(a int);
+INSERT INTO tenant_7.search_path_test VALUES (3);
+
+CREATE FUNCTION increment_one()
+RETURNS void
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    UPDATE search_path_test SET a = a + 1;
+END;
+$$;
+
+CREATE FUNCTION decrement_one()
+RETURNS void
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    UPDATE search_path_test SET a = a - 1;
+END;
+$$;
+
+SET search_path TO tenant_5;
+
+PREPARE list_tuples AS SELECT * FROM search_path_test ORDER BY a;
+
+SELECT * FROM search_path_test ORDER BY a;
+
+SET search_path TO tenant_3;
+DELETE FROM search_path_test WHERE a = 1;
+SELECT * FROM search_path_test ORDER BY a;
+SELECT regular_schema.increment_one();
+EXECUTE list_tuples;
+
+SET search_path TO tenant_7;
+DROP TABLE search_path_test;
+SELECT * FROM pg_dist_partition WHERE logicalrelid::text = 'search_path_test';
+
+SET search_path TO tenant_5;
+SELECT regular_schema.decrement_one();
+EXECUTE list_tuples;
+
+SET search_path TO regular_schema;
 
 CREATE USER test_other_super_user WITH superuser;
 
