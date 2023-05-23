@@ -12,7 +12,12 @@ test: replicated_table_disable_node
 test: multi_create_table
 test: multi_create_table_superuser
 test: multi_create_table_constraints multi_master_protocol multi_load_data multi_load_data_superuser multi_behavioral_analytics_create_table
-test: multi_behavioral_analytics_basics multi_behavioral_analytics_single_shard_queries multi_insert_select_non_pushable_queries multi_insert_select multi_behavioral_analytics_create_table_superuser
+test: multi_behavioral_analytics_basics multi_behavioral_analytics_single_shard_queries multi_behavioral_analytics_create_table_superuser
+
+# We don't parallelize the following test with the ones above because they're
+# not idempotent and hence causing flaky test detection check to fail.
+test: multi_insert_select_non_pushable_queries multi_insert_select
+
 test: multi_shard_update_delete recursive_dml_with_different_planners_executors
 test: insert_select_repartition window_functions dml_recursive multi_insert_select_window
 test: multi_insert_select_conflict citus_table_triggers
@@ -67,7 +72,8 @@ test: tableam
 # Miscellaneous tests to check our query planning behavior
 # ----------
 test: multi_deparse_shard_query multi_distributed_transaction_id intermediate_results limit_intermediate_size
-test: multi_explain hyperscale_tutorial partitioned_intermediate_results distributed_intermediate_results multi_real_time_transaction
+test: multi_explain
+test: hyperscale_tutorial partitioned_intermediate_results distributed_intermediate_results multi_real_time_transaction
 test: multi_basic_queries cross_join multi_complex_expressions multi_subquery multi_subquery_complex_queries multi_subquery_behavioral_analytics
 test: multi_subquery_complex_reference_clause multi_subquery_window_functions multi_view multi_sql_function multi_prepare_sql
 test: sql_procedure multi_function_in_join row_types materialized_view

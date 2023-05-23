@@ -179,10 +179,10 @@ class CitusDefaultClusterConfig(CitusBaseClusterConfig):
 
 
 class CitusUpgradeConfig(CitusBaseClusterConfig):
-    def __init__(self, arguments):
+    def __init__(self, arguments, pre_tar, post_tar):
         super().__init__(arguments)
-        self.pre_tar_path = arguments["--citus-pre-tar"]
-        self.post_tar_path = arguments["--citus-post-tar"]
+        self.pre_tar_path = pre_tar
+        self.post_tar_path = post_tar
         self.temp_dir = "./tmp_citus_upgrade"
         self.new_settings = {"citus.enable_version_checks": "false"}
         self.user = SUPER_USER_NAME

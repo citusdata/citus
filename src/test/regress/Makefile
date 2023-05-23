@@ -295,7 +295,7 @@ check-citus-upgrade-mixed-local: all clean-upgrade-artifacts
 		--mixed
 
 clean-upgrade-artifacts:
-	rm -rf $(citus_abs_srcdir)/tmp_citus_tarballs/ $(citus_abs_srcdir)/tmp_citus_upgrade/ /tmp/citus_copy/
+	rm -rf $(citus_abs_srcdir)/tmp_citus_upgrade/ /tmp/citus_copy/
 
 clean distclean maintainer-clean:
 	rm -rf input/ output/

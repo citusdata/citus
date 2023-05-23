@@ -48,6 +48,54 @@ TIMEOUT_DEFAULT = timedelta(seconds=int(os.getenv("PG_TEST_TIMEOUT_DEFAULT", "10
 FORCE_PORTS = os.getenv("PG_FORCE_PORTS", "NO").lower() not in ("no", "0", "n", "")
 
 REGRESS_DIR = pathlib.Path(os.path.realpath(__file__)).parent.parent
+REPO_ROOT = REGRESS_DIR.parent.parent.parent
+CI = os.environ.get("CI") == "true"
+
+
+def eprint(*args, **kwargs):
+    """eprint prints to stderr"""
+
+    print(*args, file=sys.stderr, **kwargs)
+
+
+def run(command, *args, check=True, shell=True, silent=False, **kwargs):
+    """run runs the given command and prints it to stderr"""
+
+    if not silent:
+        eprint(f"+ {command} ")
+    if silent:
+        kwargs.setdefault("stdout", subprocess.DEVNULL)
+    return subprocess.run(command, *args, check=check, shell=shell, **kwargs)
+
+
+def capture(command, *args, **kwargs):
+    """runs the given command and returns its output as a string"""
+    return run(command, *args, stdout=subprocess.PIPE, text=True, **kwargs).stdout
+
+
+PG_CONFIG = os.environ.get("PG_CONFIG", "pg_config")
+PG_BINDIR = capture([PG_CONFIG, "--bindir"], shell=False).rstrip()
+os.environ["PATH"] = PG_BINDIR + os.pathsep + os.environ["PATH"]
+
+
+def get_pg_major_version():
+    full_version_string = run(
+        "initdb --version", stdout=subprocess.PIPE, encoding="utf-8", silent=True
+    ).stdout
+    major_version_string = re.search("[0-9]+", full_version_string)
+    assert major_version_string is not None
+    return int(major_version_string.group(0))
+
+
+PG_MAJOR_VERSION = get_pg_major_version()
+
+OLDEST_SUPPORTED_CITUS_VERSION_MATRIX = {
+    13: "9.5.0",
+    14: "10.2.0",
+    15: "11.1.5",
+}
+
+OLDEST_SUPPORTED_CITUS_VERSION = OLDEST_SUPPORTED_CITUS_VERSION_MATRIX[PG_MAJOR_VERSION]
 
 
 def initialize_temp_dir(temp_dir):
@@ -355,27 +403,6 @@ def initialize_citus_cluster(bindir, datadir, settings, config):
         stop_metadata_to_workers(bindir, config.worker_ports, config.coordinator_port())
 
     config.setup_steps()
-
-
-def eprint(*args, **kwargs):
-    """eprint prints to stderr"""
-
-    print(*args, file=sys.stderr, **kwargs)
-
-
-def run(command, *args, check=True, shell=True, silent=False, **kwargs):
-    """run runs the given command and prints it to stderr"""
-
-    if not silent:
-        eprint(f"+ {command} ")
-    if silent:
-        kwargs.setdefault("stdout", subprocess.DEVNULL)
-    return subprocess.run(command, *args, check=check, shell=shell, **kwargs)
-
-
-def capture(command, *args, **kwargs):
-    """runs the given command and returns its output as a string"""
-    return run(command, *args, stdout=subprocess.PIPE, text=True, **kwargs).stdout
 
 
 def sudo(command, *args, shell=True, **kwargs):

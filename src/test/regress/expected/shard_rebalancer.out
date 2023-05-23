@@ -222,7 +222,7 @@ NOTICE:  issuing SET LOCAL citus.shard_count TO '4';
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing SET LOCAL citus.shard_replication_factor TO '2';
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SELECT citus_copy_shard_placement(43xxxx,xx,xx,'block_writes')
+NOTICE:  issuing SELECT pg_catalog.citus_copy_shard_placement(43xxxx,xx,xx,'block_writes')
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing COMMIT
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
@@ -245,7 +245,7 @@ NOTICE:  issuing SET LOCAL citus.shard_count TO '4';
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing SET LOCAL citus.shard_replication_factor TO '2';
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SELECT citus_copy_shard_placement(43xxxx,xx,xx,'block_writes')
+NOTICE:  issuing SELECT pg_catalog.citus_copy_shard_placement(43xxxx,xx,xx,'block_writes')
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing COMMIT
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
@@ -268,7 +268,7 @@ NOTICE:  issuing SET LOCAL citus.shard_count TO '4';
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing SET LOCAL citus.shard_replication_factor TO '2';
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SELECT citus_copy_shard_placement(43xxxx,xx,xx,'block_writes')
+NOTICE:  issuing SELECT pg_catalog.citus_copy_shard_placement(43xxxx,xx,xx,'block_writes')
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing COMMIT
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
@@ -291,7 +291,7 @@ NOTICE:  issuing SET LOCAL citus.shard_count TO '4';
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing SET LOCAL citus.shard_replication_factor TO '2';
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SELECT citus_copy_shard_placement(43xxxx,xx,xx,'block_writes')
+NOTICE:  issuing SELECT pg_catalog.citus_copy_shard_placement(43xxxx,xx,xx,'block_writes')
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing COMMIT
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
