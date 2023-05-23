@@ -103,7 +103,9 @@ DEPS = {
     "single_node_enterprise": TestDeps(None),
     "single_node": TestDeps(None),
     "single_node_truncate": TestDeps(None),
-    "multi_explain": TestDeps("base_schedule", ["multi_insert_select_non_pushable_queries"]),
+    "multi_explain": TestDeps(
+        "base_schedule", ["multi_insert_select_non_pushable_queries"]
+    ),
     "multi_extension": TestDeps(None, repeatable=False),
     "multi_test_helpers": TestDeps(None),
     "multi_insert_select": TestDeps("base_schedule"),
