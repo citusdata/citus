@@ -409,7 +409,10 @@ TryToDelegateFunctionCall(DistributedPlanningContext *planContext)
 	}
 	else if (IsCitusTableType(colocatedRelationId, SINGLE_SHARD_DISTRIBUTED))
 	{
-		placement = linitial(ActiveShardPlacementList(distTable->relationId));
+		ShardInterval *shardInverval =
+			linitial(LoadUnsortedShardIntervalListViaCatalog(distTable->relationId));
+		uint64 shardId = shardInverval->shardId;
+		placement = linitial(ActiveShardPlacementList(shardId));
 	}
 	else
 	{
