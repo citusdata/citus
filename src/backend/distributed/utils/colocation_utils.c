@@ -51,7 +51,6 @@ static bool HashPartitionedShardIntervalsEqual(ShardInterval *leftShardInterval,
 											   ShardInterval *rightShardInterval);
 static int CompareShardPlacementsByNode(const void *leftElement,
 										const void *rightElement);
-static void DeleteColocationGroup(uint32 colocationId);
 static uint32 CreateColocationGroupForRelation(Oid sourceRelationId);
 static void BreakColocation(Oid sourceRelationId);
 
@@ -1269,7 +1268,7 @@ DeleteColocationGroupIfNoTablesBelong(uint32 colocationId)
  * DeleteColocationGroup deletes the colocation group from pg_dist_colocation
  * throughout the cluster and diasociates the tenant schema if any.
  */
-static void
+void
 DeleteColocationGroup(uint32 colocationId)
 {
 	DeleteColocationGroupLocally(colocationId);

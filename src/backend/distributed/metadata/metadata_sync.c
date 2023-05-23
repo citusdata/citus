@@ -146,7 +146,8 @@ static char * ColocationGroupCreateCommand(uint32 colocationId, int shardCount,
 										   Oid distributionColumnType,
 										   Oid distributionColumnCollation);
 static char * ColocationGroupDeleteCommand(uint32 colocationId);
-static char * RemoteSchemaIdExpression(Oid schemaId);
+static char * RemoteSchemaIdExpressionById(Oid schemaId);
+static char * RemoteSchemaIdExpressionByName(char *schemaName);
 static char * RemoteTypeIdExpression(Oid typeId);
 static char * RemoteCollationIdExpression(Oid colocationId);
 
@@ -3833,21 +3834,7 @@ citus_internal_delete_tenant_schema(PG_FUNCTION_ARGS)
 	PG_ENSURE_ARGNOTNULL(0, "schema_id");
 	Oid schemaId = PG_GETARG_OID(0);
 
-	/* make sure that the schema is dropped already */
-	HeapTuple namespaceTuple = SearchSysCache1(NAMESPACEOID, ObjectIdGetDatum(schemaId));
-	if (HeapTupleIsValid(namespaceTuple))
-	{
-		ReleaseSysCache(namespaceTuple);
-
-		ereport(ERROR, (errmsg("schema is expected to be already dropped "
-							   "because this function is only expected to "
-							   "be called from Citus drop hook")));
-	}
-
-	uint32 tenantSchemaColocationId = SchemaIdGetTenantColocationId(schemaId);
-
 	DeleteTenantSchemaLocally(schemaId);
-	DeleteColocationGroupLocally(tenantSchemaColocationId);
 
 	PG_RETURN_VOID();
 }
@@ -4012,19 +3999,35 @@ TenantSchemaInsertCommand(Oid schemaId, uint32 colocationId)
 	StringInfo command = makeStringInfo();
 	appendStringInfo(command,
 					 "SELECT pg_catalog.citus_internal_add_tenant_schema(%s, %u)",
-					 RemoteSchemaIdExpression(schemaId), colocationId);
+					 RemoteSchemaIdExpressionById(schemaId), colocationId);
 
 	return command->data;
 }
 
 
 /*
- * RemoteSchemaIdExpression returns an expression in text form that
+ * TenantSchemaDeleteCommand returns a command to call
+ * citus_internal_delete_tenant_schema().
+ */
+char *
+TenantSchemaDeleteCommand(char *schemaName)
+{
+	StringInfo command = makeStringInfo();
+	appendStringInfo(command,
+					 "SELECT pg_catalog.citus_internal_delete_tenant_schema(%s)",
+					 RemoteSchemaIdExpressionByName(schemaName));
+
+	return command->data;
+}
+
+
+/*
+ * RemoteSchemaIdExpressionById returns an expression in text form that
  * can be used to obtain the OID of the schema with given schema id on a
  * different node when included in a query string.
  */
 static char *
-RemoteSchemaIdExpression(Oid schemaId)
+RemoteSchemaIdExpressionById(Oid schemaId)
 {
 	char *schemaName = get_namespace_name(schemaId);
 	if (schemaName == NULL)
@@ -4032,6 +4035,22 @@ RemoteSchemaIdExpression(Oid schemaId)
 		ereport(ERROR, (errmsg("schema with OID %u does not exist", schemaId)));
 	}
 
+	StringInfo regnamespaceExpr = makeStringInfo();
+	appendStringInfo(regnamespaceExpr, "%s::regnamespace",
+					 quote_literal_cstr(schemaName));
+
+	return regnamespaceExpr->data;
+}
+
+
+/*
+ * RemoteSchemaIdExpressionByName returns an expression in text form that
+ * can be used to obtain the OID of the schema with given schema name on a
+ * different node when included in a query string.
+ */
+static char *
+RemoteSchemaIdExpressionByName(char *schemaName)
+{
 	StringInfo regnamespaceExpr = makeStringInfo();
 	appendStringInfo(regnamespaceExpr, "%s::regnamespace",
 					 quote_literal_cstr(schemaName));
@@ -4651,7 +4670,7 @@ SendTenantSchemaMetadataCommands(MetadataSyncContext *context)
 		StringInfo insertTenantSchemaCommand = makeStringInfo();
 		appendStringInfo(insertTenantSchemaCommand,
 						 "SELECT pg_catalog.citus_internal_add_tenant_schema(%s, %u)",
-						 RemoteSchemaIdExpression(tenantSchemaForm->schemaid),
+						 RemoteSchemaIdExpressionById(tenantSchemaForm->schemaid),
 						 tenantSchemaForm->colocationid);
 
 		List *commandList = list_make1(insertTenantSchemaCommand->data);

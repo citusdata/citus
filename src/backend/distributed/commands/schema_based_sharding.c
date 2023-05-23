@@ -10,13 +10,19 @@
 #include "miscadmin.h"
 #include "catalog/pg_namespace_d.h"
 #include "commands/extension.h"
+#include "distributed/argutils.h"
 #include "distributed/backend_data.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/commands.h"
 #include "distributed/metadata_sync.h"
 #include "distributed/tenant_schema_metadata.h"
 #include "distributed/metadata/distobject.h"
+#include "utils/builtins.h"
 #include "utils/lsyscache.h"
+#include "utils/syscache.h"
+
+
+PG_FUNCTION_INFO_V1(citus_internal_unregister_tenant_schema);
 
 
 /* controlled via citus.enable_schema_based_sharding GUC */
@@ -167,4 +173,50 @@ RegisterTenantSchema(Oid schemaId)
 	InsertTenantSchemaLocally(schemaId, colocationId);
 
 	return TenantSchemaInsertCommand(schemaId, colocationId);
+}
+
+
+/*
+ * citus_internal_unregister_tenant_schema_globally removes given schema from
+ * the tenant schema metadata table, deletes the colocation group of the schema
+ * and sends the command to do the same on the workers.
+ */
+Datum
+citus_internal_unregister_tenant_schema(PG_FUNCTION_ARGS)
+{
+	PG_ENSURE_ARGNOTNULL(0, "schema_id");
+	Oid schemaId = PG_GETARG_OID(0);
+
+	PG_ENSURE_ARGNOTNULL(1, "schema_name");
+	text *schemaName = PG_GETARG_TEXT_PP(1);
+	char *schemaNameStr = text_to_cstring(schemaName);
+
+	/*
+	 * Skip on workers because we expect this to be called from the coordinator
+	 * only via drop hook.
+	 */
+	if (!IsCoordinator())
+	{
+		PG_RETURN_VOID();
+	}
+
+	/* make sure that the schema is dropped already */
+	HeapTuple namespaceTuple = SearchSysCache1(NAMESPACEOID, ObjectIdGetDatum(schemaId));
+	if (HeapTupleIsValid(namespaceTuple))
+	{
+		ReleaseSysCache(namespaceTuple);
+
+		ereport(ERROR, (errmsg("schema is expected to be already dropped "
+							   "because this function is only expected to "
+							   "be called from Citus drop hook")));
+	}
+
+	uint32 tenantSchemaColocationId = SchemaIdGetTenantColocationId(schemaId);
+
+	DeleteTenantSchemaLocally(schemaId);
+	SendCommandToWorkersWithMetadata(TenantSchemaDeleteCommand(schemaNameStr));
+
+	DeleteColocationGroup(tenantSchemaColocationId);
+
+	PG_RETURN_VOID();
 }

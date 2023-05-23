@@ -48,6 +48,7 @@ extern void UpdateRelationColocationGroup(Oid distributedRelationId, uint32 colo
 										  bool localOnly);
 extern void DeleteColocationGroupIfNoTablesBelong(uint32 colocationId);
 extern List * ColocationGroupTableList(uint32 colocationId, uint32 count);
+extern void DeleteColocationGroup(uint32 colocationId);
 extern void DeleteColocationGroupLocally(uint32 colocationId);
 extern uint32 FindColocateWithColocationId(Oid relationId, char replicationModel,
 										   Oid distributionColumnType,

@@ -19,9 +19,13 @@ SELECT citus_internal_add_tenant_schema(1, NULL);
 ERROR:  colocation_id cannot be NULL
 SELECT citus_internal_delete_tenant_schema(NULL);
 ERROR:  schema_id cannot be NULL
--- Verify that citus_internal_delete_tenant_schema() fails when called on
--- a schema that is "not dropped" yet.
-SELECT citus_internal_delete_tenant_schema('regular_schema'::regnamespace);
+SELECT citus_internal_unregister_tenant_schema(1, NULL);
+ERROR:  schema_name cannot be NULL
+SELECT citus_internal_unregister_tenant_schema(NULL, 'text');
+ERROR:  schema_id cannot be NULL
+-- Verify that citus_internal_unregister_tenant_schema can only
+-- be called on schemas that are dropped already.
+SELECT citus_internal_unregister_tenant_schema('regular_schema'::regnamespace, 'regular_schema');
 ERROR:  schema is expected to be already dropped because this function is only expected to be called from Citus drop hook
 SELECT 1 FROM citus_remove_node('localhost', :worker_2_port);
  ?column?
@@ -882,6 +886,14 @@ SELECT pg_reload_conf();
  pg_reload_conf
 ---------------------------------------------------------------------
  t
+(1 row)
+
+-- Verify that citus_internal_unregister_tenant_schema is a no-op
+-- on workers.
+SELECT citus_internal_unregister_tenant_schema('tenant_3'::regnamespace, 'tenant_3');
+ citus_internal_unregister_tenant_schema
+---------------------------------------------------------------------
+
 (1 row)
 
 \c - - - :master_port

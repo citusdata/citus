@@ -20,5 +20,6 @@ GRANT SELECT ON pg_catalog.pg_dist_tenant_schema TO public;
 #include "udfs/citus_finish_pg_upgrade/12.0-1.sql"
 
 -- udfs used to modify pg_dist_tenant_schema globally via drop trigger
+#include "udfs/citus_internal_unregister_tenant_schema/12.0-1.sql"
 #include "udfs/citus_internal_delete_tenant_schema/12.0-1.sql"
 #include "udfs/citus_drop_trigger/12.0-1.sql"

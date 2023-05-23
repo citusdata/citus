@@ -15,10 +15,12 @@ SET client_min_messages TO NOTICE;
 SELECT citus_internal_add_tenant_schema(NULL, 1);
 SELECT citus_internal_add_tenant_schema(1, NULL);
 SELECT citus_internal_delete_tenant_schema(NULL);
+SELECT citus_internal_unregister_tenant_schema(1, NULL);
+SELECT citus_internal_unregister_tenant_schema(NULL, 'text');
 
--- Verify that citus_internal_delete_tenant_schema() fails when called on
--- a schema that is "not dropped" yet.
-SELECT citus_internal_delete_tenant_schema('regular_schema'::regnamespace);
+-- Verify that citus_internal_unregister_tenant_schema can only
+-- be called on schemas that are dropped already.
+SELECT citus_internal_unregister_tenant_schema('regular_schema'::regnamespace, 'regular_schema');
 
 SELECT 1 FROM citus_remove_node('localhost', :worker_2_port);
 
@@ -600,6 +602,10 @@ SELECT pg_reload_conf();
 
 ALTER SYSTEM SET citus.enable_schema_based_sharding TO ON;
 SELECT pg_reload_conf();
+
+-- Verify that citus_internal_unregister_tenant_schema is a no-op
+-- on workers.
+SELECT citus_internal_unregister_tenant_schema('tenant_3'::regnamespace, 'tenant_3');
 
 \c - - - :master_port
 
