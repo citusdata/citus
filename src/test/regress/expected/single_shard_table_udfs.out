@@ -174,7 +174,13 @@ SELECT citus_split_shard_by_split_points(
 	ARRAY[:worker_1_node, :worker_2_node],
     'block_writes');
 ERROR:  Cannot split shard as operation is only supported for hash distributed tables.
--- test alter_table_set_access_method
+SELECT colocationid FROM pg_dist_partition WHERE logicalrelid::text LIKE '%null_dist_key_table%';
+ colocationid
+---------------------------------------------------------------------
+      1390063
+(1 row)
+
+-- test alter_table_set_access_method and verify it doesn't change the colocation id
 SELECT alter_table_set_access_method('null_dist_key_table', 'columnar');
 NOTICE:  creating a new table for null_dist_key_udfs.null_dist_key_table
 NOTICE:  moving the data of null_dist_key_udfs.null_dist_key_table
@@ -183,6 +189,12 @@ NOTICE:  renaming the new table to null_dist_key_udfs.null_dist_key_table
  alter_table_set_access_method
 ---------------------------------------------------------------------
 
+(1 row)
+
+SELECT colocationid FROM pg_dist_partition WHERE logicalrelid::text LIKE '%null_dist_key_table%';
+ colocationid
+---------------------------------------------------------------------
+      1390063
 (1 row)
 
 -- undistribute

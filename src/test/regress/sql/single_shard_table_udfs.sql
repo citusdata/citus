@@ -86,8 +86,10 @@ SELECT citus_split_shard_by_split_points(
 	ARRAY[:worker_1_node, :worker_2_node],
     'block_writes');
 
--- test alter_table_set_access_method
+SELECT colocationid FROM pg_dist_partition WHERE logicalrelid::text LIKE '%null_dist_key_table%';
+-- test alter_table_set_access_method and verify it doesn't change the colocation id
 SELECT alter_table_set_access_method('null_dist_key_table', 'columnar');
+SELECT colocationid FROM pg_dist_partition WHERE logicalrelid::text LIKE '%null_dist_key_table%';
 
 -- undistribute
 SELECT undistribute_table('null_dist_key_table');

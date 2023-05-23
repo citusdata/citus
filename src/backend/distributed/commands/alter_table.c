@@ -1366,14 +1366,18 @@ CreateDistributedTableLike(TableConversionState *con)
 void
 CreateCitusTableLike(TableConversionState *con)
 {
-	if (IsCitusTableType(con->relationId, SINGLE_SHARD_DISTRIBUTED))
+	if (IsCitusTableType(con->relationId, DISTRIBUTED_TABLE))
 	{
-		char *colocateWithTableName = con->colocateWith ? con->colocateWith : "default";
-		CreateSingleShardTable(con->newRelationId, colocateWithTableName);
-	}
-	else if (IsCitusTableType(con->relationId, DISTRIBUTED_TABLE))
-	{
-		CreateDistributedTableLike(con);
+		if (IsCitusTableType(con->relationId, SINGLE_SHARD_DISTRIBUTED))
+		{
+			char *newColocateWith =
+				quote_qualified_identifier(con->schemaName, con->relationName);
+			CreateSingleShardTable(con->newRelationId, newColocateWith);
+		}
+		else
+		{
+			CreateDistributedTableLike(con);
+		}
 	}
 	else if (IsCitusTableType(con->relationId, REFERENCE_TABLE))
 	{
