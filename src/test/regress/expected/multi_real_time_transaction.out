@@ -2,12 +2,6 @@ SET citus.next_shard_id TO 1610000;
 -- enforce 1 connection per placement since
 -- the tests are prepared for that
 SET citus.force_max_query_parallelization TO ON;
-SELECT citus_set_coordinator_host('localhost');
- citus_set_coordinator_host
----------------------------------------------------------------------
-
-(1 row)
-
 CREATE SCHEMA multi_real_time_transaction;
 SET search_path = 'multi_real_time_transaction';
 SET citus.shard_replication_factor to 1;
@@ -674,10 +668,8 @@ SELECT id, pg_advisory_xact_lock(16) FROM test_table ORDER BY id;
 
 END;
 DROP SCHEMA multi_real_time_transaction CASCADE;
-NOTICE:  drop cascades to 5 other objects
+NOTICE:  drop cascades to 4 other objects
 DETAIL:  drop cascades to table test_table
 drop cascades to table co_test_table
 drop cascades to table ref_test_table
-drop cascades to table ref_test_table_1610008
 drop cascades to function insert_row_test(name)
-DROP USER rls_user;

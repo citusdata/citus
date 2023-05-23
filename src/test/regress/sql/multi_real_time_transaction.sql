@@ -4,8 +4,6 @@ SET citus.next_shard_id TO 1610000;
 -- the tests are prepared for that
 SET citus.force_max_query_parallelization TO ON;
 
-SELECT citus_set_coordinator_host('localhost');
-
 CREATE SCHEMA multi_real_time_transaction;
 SET search_path = 'multi_real_time_transaction';
 SET citus.shard_replication_factor to 1;
@@ -399,4 +397,3 @@ SELECT id, pg_advisory_xact_lock(16) FROM test_table ORDER BY id;
 END;
 
 DROP SCHEMA multi_real_time_transaction CASCADE;
-DROP USER rls_user;

@@ -8,7 +8,7 @@ SET citus.enable_repartition_joins to ON;
 -- Ensure tuple data in explain analyze output is the same on all PG versions
 SET citus.enable_binary_protocol = TRUE;
 -- Function that parses explain output as JSON
-CREATE FUNCTION explain_json(query text)
+CREATE OR REPLACE FUNCTION explain_json(query text)
 RETURNS jsonb
 AS $BODY$
 DECLARE
@@ -18,7 +18,7 @@ BEGIN
   RETURN result;
 END;
 $BODY$ LANGUAGE plpgsql;
-CREATE FUNCTION explain_analyze_json(query text)
+CREATE OR REPLACE FUNCTION explain_analyze_json(query text)
 RETURNS jsonb
 AS $BODY$
 DECLARE
@@ -29,7 +29,7 @@ BEGIN
 END;
 $BODY$ LANGUAGE plpgsql;
 -- Function that parses explain output as XML
-CREATE FUNCTION explain_xml(query text)
+CREATE OR REPLACE FUNCTION explain_xml(query text)
 RETURNS xml
 AS $BODY$
 DECLARE
@@ -40,7 +40,7 @@ BEGIN
 END;
 $BODY$ LANGUAGE plpgsql;
 -- Function that parses explain output as XML
-CREATE FUNCTION explain_analyze_xml(query text)
+CREATE OR REPLACE FUNCTION explain_analyze_xml(query text)
 RETURNS xml
 AS $BODY$
 DECLARE
@@ -331,16 +331,16 @@ BEGIN;
 SET LOCAL citus.enable_repartition_joins TO true;
 EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off) SELECT count(*) FROM t1, t2 WHERE t1.a=t2.b;
 Aggregate (actual rows=1 loops=1)
-  ->  Custom Scan (Citus Adaptive) (actual rows=6 loops=1)
-        Task Count: 6
-        Tuple data received from nodes: 48 bytes
+  ->  Custom Scan (Citus Adaptive) (actual rows=4 loops=1)
+        Task Count: 4
+        Tuple data received from nodes: 32 bytes
         Tasks Shown: None, not supported for re-partition queries
         ->  MapMergeJob
               Map Task Count: 3
-              Merge Task Count: 6
+              Merge Task Count: 4
         ->  MapMergeJob
               Map Task Count: 3
-              Merge Task Count: 6
+              Merge Task Count: 4
 -- Confirm repartiton join in distributed subplan works
 EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off)
 WITH repartition AS (SELECT count(*) FROM t1, t2 WHERE t1.a=t2.b)
@@ -350,16 +350,16 @@ Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
         Intermediate Data Size: 14 bytes
         Result destination: Write locally
         ->  Aggregate (actual rows=1 loops=1)
-              ->  Custom Scan (Citus Adaptive) (actual rows=6 loops=1)
-                    Task Count: 6
-                    Tuple data received from nodes: 48 bytes
+              ->  Custom Scan (Citus Adaptive) (actual rows=4 loops=1)
+                    Task Count: 4
+                    Tuple data received from nodes: 32 bytes
                     Tasks Shown: None, not supported for re-partition queries
                     ->  MapMergeJob
                           Map Task Count: 3
-                          Merge Task Count: 6
+                          Merge Task Count: 4
                     ->  MapMergeJob
                           Map Task Count: 3
-                          Merge Task Count: 6
+                          Merge Task Count: 4
   Task Count: 1
   Tuple data received from nodes: 8 bytes
   Tasks Shown: All
@@ -1108,20 +1108,20 @@ EXPLAIN (COSTS FALSE)
 	AND l_suppkey = s_suppkey;
 Aggregate
   ->  Custom Scan (Citus Adaptive)
-        Task Count: 6
+        Task Count: 4
         Tasks Shown: None, not supported for re-partition queries
         ->  MapMergeJob
-              Map Task Count: 6
-              Merge Task Count: 6
+              Map Task Count: 4
+              Merge Task Count: 4
               ->  MapMergeJob
                     Map Task Count: 2
-                    Merge Task Count: 6
+                    Merge Task Count: 4
               ->  MapMergeJob
                     Map Task Count: 1
-                    Merge Task Count: 6
+                    Merge Task Count: 4
         ->  MapMergeJob
               Map Task Count: 1
-              Merge Task Count: 6
+              Merge Task Count: 4
 EXPLAIN (COSTS FALSE, FORMAT JSON)
 	SELECT count(*)
 	FROM lineitem, orders, customer_append, supplier_single_shard
@@ -1142,26 +1142,26 @@ EXPLAIN (COSTS FALSE, FORMAT JSON)
           "Parallel Aware": false,
           "Distributed Query": {
             "Job": {
-              "Task Count": 6,
+              "Task Count": 4,
               "Tasks Shown": "None, not supported for re-partition queries",
               "Dependent Jobs": [
                 {
-                  "Map Task Count": 6,
-                  "Merge Task Count": 6,
+                  "Map Task Count": 4,
+                  "Merge Task Count": 4,
                   "Dependent Jobs": [
                     {
                       "Map Task Count": 2,
-                      "Merge Task Count": 6
+                      "Merge Task Count": 4
                     },
                     {
                       "Map Task Count": 1,
-                      "Merge Task Count": 6
+                      "Merge Task Count": 4
                     }
                   ]
                 },
                 {
                   "Map Task Count": 1,
-                  "Merge Task Count": 6
+                  "Merge Task Count": 4
                 }
               ]
             }
@@ -1198,26 +1198,26 @@ EXPLAIN (COSTS FALSE, FORMAT XML)
           <Parallel-Aware>false</Parallel-Aware>
           <Distributed-Query>
             <Job>
-              <Task-Count>6</Task-Count>
+              <Task-Count>4</Task-Count>
               <Tasks-Shown>None, not supported for re-partition queries</Tasks-Shown>
               <Dependent-Jobs>
                 <MapMergeJob>
-                  <Map-Task-Count>6</Map-Task-Count>
-                  <Merge-Task-Count>6</Merge-Task-Count>
+                  <Map-Task-Count>4</Map-Task-Count>
+                  <Merge-Task-Count>4</Merge-Task-Count>
                   <Dependent-Jobs>
                     <MapMergeJob>
                       <Map-Task-Count>2</Map-Task-Count>
-                      <Merge-Task-Count>6</Merge-Task-Count>
+                      <Merge-Task-Count>4</Merge-Task-Count>
                     </MapMergeJob>
                     <MapMergeJob>
                       <Map-Task-Count>1</Map-Task-Count>
-                      <Merge-Task-Count>6</Merge-Task-Count>
+                      <Merge-Task-Count>4</Merge-Task-Count>
                     </MapMergeJob>
                   </Dependent-Jobs>
                 </MapMergeJob>
                 <MapMergeJob>
                   <Map-Task-Count>1</Map-Task-Count>
-                  <Merge-Task-Count>6</Merge-Task-Count>
+                  <Merge-Task-Count>4</Merge-Task-Count>
                 </MapMergeJob>
               </Dependent-Jobs>
             </Job>
@@ -1264,18 +1264,19 @@ EXPLAIN (COSTS FALSE, FORMAT YAML)
         Parallel Aware: false
         Distributed Query:
           Job:
-            Task Count: 6
+            Task Count: 4
             Tasks Shown: "None, not supported for re-partition queries"
             Dependent Jobs:
               - Map Task Count: 2
-                Merge Task Count: 6
+                Merge Task Count: 4
               - Map Task Count: 1
-                Merge Task Count: 6
+                Merge Task Count: 4
 -- ensure local plans display correctly
 CREATE TABLE lineitem_clone (LIKE lineitem);
 EXPLAIN (COSTS FALSE) SELECT avg(l_linenumber) FROM lineitem_clone;
 Aggregate
   ->  Seq Scan on lineitem_clone
+DROP TABLE lineitem_clone;
 -- ensure distributed plans don't break
 EXPLAIN (COSTS FALSE) SELECT avg(l_linenumber) FROM lineitem;
 Aggregate
@@ -2316,7 +2317,7 @@ SELECT count(distinct a) from r NATURAL JOIN ref_table;
 Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
   ->  Distributed Subplan XXX_1
         Intermediate Data Size: 220 bytes
-        Result destination: Send to 3 nodes
+        Result destination: Send to 2 nodes
         ->  Custom Scan (Citus Adaptive) (actual rows=10 loops=1)
               Task Count: 4
               Tuple data received from nodes: 120 bytes
@@ -2884,6 +2885,7 @@ Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
                     Filter: ((id IS NOT NULL) AND (name = ANY (ARRAY[$1, $2])))
                     Rows Removed by Filter: 1
 deallocate distributed_insert_select;
+DROP TABLE simple;
 -- prepared cte
 BEGIN;
 PREPARE cte_query AS
@@ -2976,6 +2978,7 @@ Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
         Node: host=localhost port=xxxxx dbname=regression
         ->  Seq Scan on users_table_2_570028 users_table_2 (actual rows=0 loops=1)
               Filter: ((value_1)::text = '00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000X'::text)
+DROP TABLE users_table_2;
 -- sorted explain analyze output
 CREATE TABLE explain_analyze_execution_time (a int);
 INSERT INTO explain_analyze_execution_time VALUES (2);
