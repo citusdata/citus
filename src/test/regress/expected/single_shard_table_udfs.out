@@ -354,5 +354,75 @@ DETAIL:  Distribution column types don't match for update_col_4 and update_col_1
 SELECT update_distributed_table_colocation('update_col_4', colocate_with:='update_col_1');
 ERROR:  cannot colocate tables update_col_1 and update_col_4
 DETAIL:  Distribution column types don't match for update_col_1 and update_col_4.
+-- test columnar UDFs
+CREATE TABLE columnar_tbl (a INT) USING COLUMNAR;
+SELECT * FROM columnar.options WHERE relation = 'columnar_tbl'::regclass;
+   relation   | chunk_group_row_limit | stripe_row_limit | compression | compression_level
+---------------------------------------------------------------------
+ columnar_tbl |                 10000 |           150000 | zstd        |                 3
+(1 row)
+
+SELECT alter_columnar_table_set('columnar_tbl', compression_level => 2);
+ alter_columnar_table_set
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT * FROM columnar.options WHERE relation = 'columnar_tbl'::regclass;
+   relation   | chunk_group_row_limit | stripe_row_limit | compression | compression_level
+---------------------------------------------------------------------
+ columnar_tbl |                 10000 |           150000 | zstd        |                 2
+(1 row)
+
+SELECT alter_columnar_table_reset('columnar_tbl', compression_level => true);
+ alter_columnar_table_reset
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT * FROM columnar.options WHERE relation = 'columnar_tbl'::regclass;
+   relation   | chunk_group_row_limit | stripe_row_limit | compression | compression_level
+---------------------------------------------------------------------
+ columnar_tbl |                 10000 |           150000 | zstd        |                 3
+(1 row)
+
+SELECT columnar_internal.upgrade_columnar_storage(c.oid)
+FROM pg_class c, pg_am a
+WHERE c.relam = a.oid AND amname = 'columnar' AND relname = 'columnar_tbl';
+ upgrade_columnar_storage
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT columnar_internal.downgrade_columnar_storage(c.oid)
+FROM pg_class c, pg_am a
+WHERE c.relam = a.oid AND amname = 'columnar' AND relname = 'columnar_tbl';
+ downgrade_columnar_storage
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE OR REPLACE FUNCTION columnar_storage_info(
+    rel regclass,
+    version_major OUT int4,
+    version_minor OUT int4,
+    storage_id OUT int8,
+    reserved_stripe_id OUT int8,
+    reserved_row_number OUT int8,
+    reserved_offset OUT int8)
+  STRICT
+  LANGUAGE c AS 'citus', $$columnar_storage_info$$;
+SELECT * FROM columnar_storage_info('columnar_tbl');
+ version_major | version_minor | storage_id  | reserved_stripe_id | reserved_row_number | reserved_offset
+---------------------------------------------------------------------
+             2 |             0 | 10000000000 |                  1 |                   1 |           16336
+(1 row)
+
+SELECT columnar.get_storage_id(oid) FROM pg_class WHERE relname = 'columnar_tbl';
+ get_storage_id
+---------------------------------------------------------------------
+    10000000000
+(1 row)
+
 SET client_min_messages TO WARNING;
 DROP SCHEMA null_dist_key_udfs CASCADE;

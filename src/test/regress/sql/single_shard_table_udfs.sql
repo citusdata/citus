@@ -163,5 +163,36 @@ SELECT create_distributed_table ('update_col_4', 'a', colocate_with:='none');
 SELECT update_distributed_table_colocation('update_col_1', colocate_with:='update_col_4');
 SELECT update_distributed_table_colocation('update_col_4', colocate_with:='update_col_1');
 
+-- test columnar UDFs
+CREATE TABLE columnar_tbl (a INT) USING COLUMNAR;
+SELECT * FROM columnar.options WHERE relation = 'columnar_tbl'::regclass;
+SELECT alter_columnar_table_set('columnar_tbl', compression_level => 2);
+SELECT * FROM columnar.options WHERE relation = 'columnar_tbl'::regclass;
+SELECT alter_columnar_table_reset('columnar_tbl', compression_level => true);
+SELECT * FROM columnar.options WHERE relation = 'columnar_tbl'::regclass;
+
+SELECT columnar_internal.upgrade_columnar_storage(c.oid)
+FROM pg_class c, pg_am a
+WHERE c.relam = a.oid AND amname = 'columnar' AND relname = 'columnar_tbl';
+
+SELECT columnar_internal.downgrade_columnar_storage(c.oid)
+FROM pg_class c, pg_am a
+WHERE c.relam = a.oid AND amname = 'columnar' AND relname = 'columnar_tbl';
+
+CREATE OR REPLACE FUNCTION columnar_storage_info(
+    rel regclass,
+    version_major OUT int4,
+    version_minor OUT int4,
+    storage_id OUT int8,
+    reserved_stripe_id OUT int8,
+    reserved_row_number OUT int8,
+    reserved_offset OUT int8)
+  STRICT
+  LANGUAGE c AS 'citus', $$columnar_storage_info$$;
+
+SELECT * FROM columnar_storage_info('columnar_tbl');
+
+SELECT columnar.get_storage_id(oid) FROM pg_class WHERE relname = 'columnar_tbl';
+
 SET client_min_messages TO WARNING;
 DROP SCHEMA null_dist_key_udfs CASCADE;
