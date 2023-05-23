@@ -1,7 +1,7 @@
 CREATE SCHEMA null_dist_key_udfs;
 SET search_path TO null_dist_key_udfs;
 
-SET citus.next_shard_id TO 1720000;
+SET citus.next_shard_id TO 1820000;
 SET citus.shard_count TO 32;
 SET citus.shard_replication_factor TO 1;
 -- test some other udf's with single shard tables
@@ -81,7 +81,7 @@ SELECT alter_distributed_table('null_dist_key_table', shard_count := 6);
 SELECT nodeid AS worker_1_node FROM pg_dist_node WHERE nodeport=:worker_1_port \gset
 SELECT nodeid AS worker_2_node FROM pg_dist_node WHERE nodeport=:worker_2_port \gset
 SELECT citus_split_shard_by_split_points(
-	1720000,
+	1820000,
 	ARRAY['-1073741826'],
 	ARRAY[:worker_1_node, :worker_2_node],
     'block_writes');
