@@ -409,10 +409,7 @@ TryToDelegateFunctionCall(DistributedPlanningContext *planContext)
 	}
 	else if (IsCitusTableType(colocatedRelationId, SINGLE_SHARD_DISTRIBUTED))
 	{
-		ShardInterval *shardInverval =
-			linitial(LoadUnsortedShardIntervalListViaCatalog(distTable->relationId));
-		uint64 shardId = shardInverval->shardId;
-		placement = linitial(ActiveShardPlacementList(shardId));
+		placement = ShardPlacementForFunctionColocatedWithSingleShardTable(distTable);
 	}
 	else
 	{
@@ -568,6 +565,34 @@ ShardPlacementForFunctionColocatedWithDistTable(DistObjectCacheEntry *procedure,
 	}
 
 	return linitial(placementList);
+}
+
+
+/*
+ * ShardPlacementForFunctionColocatedWithSingleShardTable decides on a placement
+ * for delegating a function call that reads from a single shard table.
+ */
+ShardPlacement *
+ShardPlacementForFunctionColocatedWithSingleShardTable(CitusTableCacheEntry *cacheEntry)
+{
+	const ShardInterval *shardInterval = cacheEntry->sortedShardIntervalArray[0];
+
+	if (shardInterval == NULL)
+	{
+		ereport(DEBUG1, (errmsg("cannot push down call, failed to find shard interval")));
+		return NULL;
+	}
+
+	List *placementList = ActiveShardPlacementList(shardInterval->shardId);
+	if (list_length(placementList) != 1)
+	{
+		/* punt on this for now */
+		ereport(DEBUG1, (errmsg(
+							 "cannot push down function call for replicated distributed tables")));
+		return NULL;
+	}
+
+	return (ShardPlacement *) linitial(placementList);
 }
 
 
