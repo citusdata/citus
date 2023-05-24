@@ -825,4 +825,4 @@ SET search_path TO multi_mx_function_call_delegation, public;
 RESET client_min_messages;
 \set VERBOSITY terse
 DROP SCHEMA multi_mx_function_call_delegation CASCADE;
-NOTICE:  drop cascades to 16 other objects
+NOTICE:  drop cascades to 17 other objects
