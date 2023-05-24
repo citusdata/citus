@@ -105,6 +105,9 @@ static void DistributeFunctionColocatedWithDistributedTable(RegProcedure funcOid
 															char *colocateWithTableName,
 															const ObjectAddress *
 															functionAddress);
+static void DistributeFunctionColocatedWithSingleShardTable(const
+															ObjectAddress *functionAddress,
+															text *colocateWithText);
 static void DistributeFunctionColocatedWithReferenceTable(const
 														  ObjectAddress *functionAddress);
 static List * FilterDistributedFunctions(GrantStmt *grantStmt);
@@ -286,14 +289,8 @@ create_distributed_function(PG_FUNCTION_ARGS)
 	}
 	else if (colocatedWithSingleShardTable)
 	{
-		/* get the single shard table's colocation id */
-		int colocationId = TableColocationId(ResolveRelationId(colocateWithText, false));
-
-		/* set distribution argument to NULL */
-		int *distributionArgumentIndex = NULL;
-		UpdateFunctionDistributionInfo(functionAddress, distributionArgumentIndex,
-									   &colocationId,
-									   NULL);
+		DistributeFunctionColocatedWithSingleShardTable(functionAddress,
+														colocateWithText);
 	}
 	else if (colocatedWithReferenceTable)
 	{
@@ -446,6 +443,25 @@ DistributeFunctionColocatedWithDistributedTable(RegProcedure funcOid,
 
 	/* set distribution argument and colocationId to NULL */
 	UpdateFunctionDistributionInfo(functionAddress, NULL, NULL, NULL);
+}
+
+
+/*
+ * DistributeFunctionColocatedWithSingleShardTable updates pg_dist_object records for
+ * a function/procedure that is colocated with a single shard table.
+ */
+static void
+DistributeFunctionColocatedWithSingleShardTable(const ObjectAddress *functionAddress,
+												text *colocateWithText)
+{
+	/* get the single shard table's colocation id */
+	int colocationId = TableColocationId(ResolveRelationId(colocateWithText, false));
+
+	/* set distribution argument to NULL */
+	int *distributionArgumentIndex = NULL;
+	UpdateFunctionDistributionInfo(functionAddress, distributionArgumentIndex,
+								   &colocationId,
+								   NULL);
 }
 
 
