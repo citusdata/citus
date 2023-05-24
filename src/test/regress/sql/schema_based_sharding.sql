@@ -123,9 +123,11 @@ CREATE FOREIGN TABLE tenant_4.foreign_table (
 -- verify that we don't allow creating a foreign table in a tenant schema
 CREATE TEMPORARY TABLE tenant_4.temp_table (a int, b text);
 
-CREATE TABLE tenant_4.partitioned_table(a int, b text) PARTITION BY RANGE (a);
-
+CREATE TABLE tenant_4.partitioned_table(a int, b text, PRIMARY KEY (a)) PARTITION BY RANGE (a);
 CREATE TABLE tenant_4.partitioned_table_child_1 PARTITION OF tenant_4.partitioned_table FOR VALUES FROM (1) TO (2);
+
+CREATE TABLE tenant_4.another_partitioned_table(a int, b text, FOREIGN KEY (a) REFERENCES tenant_4.partitioned_table(a)) PARTITION BY RANGE (a);
+CREATE TABLE tenant_4.another_partitioned_table_child PARTITION OF tenant_4.another_partitioned_table FOR VALUES FROM (1) TO (2);
 
 -- verify that we allow creating partitioned tables in a tenant schema
 SELECT COUNT(*)=1 FROM pg_dist_partition
@@ -133,6 +135,40 @@ WHERE logicalrelid = 'tenant_4.partitioned_table_child_1'::regclass AND
        partmethod = 'n' AND repmodel = 's' AND colocationid = (
         SELECT colocationid FROM pg_dist_partition
         WHERE logicalrelid = 'tenant_4.partitioned_table'::regclass);
+
+SELECT EXISTS(
+    SELECT 1
+    FROM pg_inherits
+    WHERE inhrelid = 'tenant_4.partitioned_table_child_1'::regclass AND
+          inhparent = 'tenant_4.partitioned_table'::regclass
+) AS is_partition;
+
+SELECT COUNT(*)=1 FROM pg_dist_partition
+WHERE logicalrelid = 'tenant_4.another_partitioned_table_child'::regclass AND
+       partmethod = 'n' AND repmodel = 's' AND colocationid = (
+        SELECT colocationid FROM pg_dist_partition
+        WHERE logicalrelid = 'tenant_4.another_partitioned_table'::regclass);
+
+SELECT EXISTS(
+    SELECT 1
+    FROM pg_inherits
+    WHERE inhrelid = 'tenant_4.another_partitioned_table_child'::regclass AND
+          inhparent = 'tenant_4.another_partitioned_table'::regclass
+) AS is_partition;
+
+-- verify the foreign key between parents
+SELECT EXISTS(
+    SELECT 1
+    FROM pg_constraint
+    WHERE conrelid = 'tenant_4.another_partitioned_table'::regclass AND
+          confrelid = 'tenant_4.partitioned_table'::regclass AND
+          contype = 'f'
+) AS foreign_key_exists;
+
+INSERT INTO tenant_4.another_partitioned_table VALUES (1, 'a');
+
+INSERT INTO tenant_4.partitioned_table VALUES (1, 'a');
+INSERT INTO tenant_4.another_partitioned_table VALUES (1, 'a');
 
 CREATE SCHEMA tenant_5;
 CREATE TABLE tenant_5.tbl_1(a int, b text);
@@ -209,6 +245,13 @@ WHERE logicalrelid = 'tenant_4.parent_attach_test'::regclass AND
        partmethod = 'n' AND repmodel = 's' AND colocationid = (
         SELECT colocationid FROM pg_dist_partition
         WHERE logicalrelid = 'tenant_4.child_attach_test'::regclass);
+
+SELECT EXISTS(
+    SELECT 1
+    FROM pg_inherits
+    WHERE inhrelid = 'tenant_4.child_attach_test'::regclass AND
+          inhparent = 'tenant_4.parent_attach_test'::regclass
+) AS is_partition;
 
 CREATE TABLE tenant_4.tbl_3(a int, b text);
 
