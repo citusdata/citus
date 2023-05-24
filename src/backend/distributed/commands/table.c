@@ -387,6 +387,8 @@ PostprocessCreateTableStmtPartitionOf(CreateStmt *createStatement, const
 		}
 	}
 
+	ErrorIfIllegalPartitioningInTenantSchema(PartitionParentOid(relationId), relationId);
+
 	/*
 	 * If a partition is being created and if its parent is a distributed
 	 * table, we will distribute this table as well.
@@ -405,29 +407,7 @@ PostprocessCreateTableStmtPartitionOf(CreateStmt *createStatement, const
 			return;
 		}
 
-		char *parentRelationName = generate_qualified_relation_name(parentRelationId);
-
-		if (IsCitusTableType(parentRelationId, SINGLE_SHARD_DISTRIBUTED))
-		{
-			ColocationParam colocationParam = {
-				.colocationParamType = COLOCATE_WITH_TABLE_LIKE_OPT,
-				.colocateWithTableName = parentRelationName,
-			};
-			CreateSingleShardTable(relationId, colocationParam);
-			return;
-		}
-
-		Var *parentDistributionColumn = DistPartitionKeyOrError(parentRelationId);
-		char *distributionColumnName =
-			ColumnToColumnName(parentRelationId, (Node *) parentDistributionColumn);
-		char parentDistributionMethod = DISTRIBUTE_BY_HASH;
-
-		SwitchToSequentialAndLocalExecutionIfPartitionNameTooLong(parentRelationId,
-																  relationId);
-
-		CreateDistributedTable(relationId, distributionColumnName,
-							   parentDistributionMethod, ShardCount, false,
-							   parentRelationName);
+		DistributePartitionUsingParent(parentRelationId, relationId);
 	}
 }
 
@@ -489,6 +469,9 @@ PreprocessAlterTableStmtAttachPartition(AlterTableStmt *alterTableStatement,
 				 */
 				return NIL;
 			}
+
+			ErrorIfIllegalPartitioningInTenantSchema(parentRelationId,
+													 partitionRelationId);
 
 			if (!IsCitusTable(parentRelationId))
 			{
@@ -625,7 +608,12 @@ DistributePartitionUsingParent(Oid parentCitusRelationId, Oid partitionRelationI
 {
 	char *parentRelationName = generate_qualified_relation_name(parentCitusRelationId);
 
-	if (!HasDistributionKey(parentCitusRelationId))
+	if (ShouldCreateTenantSchemaTable(partitionRelationId))
+	{
+		CreateTenantSchemaTable(partitionRelationId);
+		return;
+	}
+	else if (!HasDistributionKey(parentCitusRelationId))
 	{
 		/*
 		 * If the parent is null key distributed, we should distribute the partition
@@ -4099,7 +4087,15 @@ ConvertNewTableIfNecessary(CreateStmt *baseCreateTableStmt)
 	 */
 	if (ShouldCreateTenantSchemaTable(createdRelationId))
 	{
-		CreateTenantSchemaTable(createdRelationId);
+		/*
+		 * We skip creating tenant schema table if the table is a partition
+		 * table because in that case PostprocessCreateTableStmt() should've
+		 * already created a tenant schema table from the partition table.
+		 */
+		if (!PartitionTable(createdRelationId))
+		{
+			CreateTenantSchemaTable(createdRelationId);
+		}
 	}
 	else if (ShouldAddNewTableToMetadata(createdRelationId))
 	{

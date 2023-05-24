@@ -114,8 +114,101 @@ CREATE SCHEMA tenant_4;
 CREATE TABLE tenant_4.tbl_1(a int, b text);
 CREATE TABLE tenant_4.tbl_2(a int, b text);
 
+-- verify that we don't allow creating a foreign table in a tenant schema, with a nice error message
+CREATE FOREIGN TABLE tenant_4.foreign_table (
+  id bigint not null,
+  full_name text not null default ''
+) SERVER fake_fdw_server OPTIONS (encoding 'utf-8', compression 'true', table_name 'foreign_table');
+
+-- verify that we don't allow creating a foreign table in a tenant schema
+CREATE TEMPORARY TABLE tenant_4.temp_table (a int, b text);
+
+CREATE TABLE tenant_4.partitioned_table(a int, b text) PARTITION BY RANGE (a);
+
+CREATE TABLE tenant_4.partitioned_table_child_1 PARTITION OF tenant_4.partitioned_table FOR VALUES FROM (1) TO (2);
+
+-- verify that we allow creating partitioned tables in a tenant schema
+SELECT COUNT(*)=1 FROM pg_dist_partition
+WHERE logicalrelid = 'tenant_4.partitioned_table_child_1'::regclass AND
+       partmethod = 'n' AND repmodel = 's' AND colocationid = (
+        SELECT colocationid FROM pg_dist_partition
+        WHERE logicalrelid = 'tenant_4.partitioned_table'::regclass);
+
 CREATE SCHEMA tenant_5;
 CREATE TABLE tenant_5.tbl_1(a int, b text);
+
+CREATE TABLE tenant_5.partitioned_table(a int, b text) PARTITION BY RANGE (a);
+
+-- verify that we don't allow creating a partition table that is child of a partitioned table in a different tenant schema
+CREATE TABLE tenant_4.partitioned_table_child_2 PARTITION OF tenant_5.partitioned_table FOR VALUES FROM (1) TO (2);
+
+-- verify that we don't allow creating a local partition table that is child of a tenant partitioned table
+CREATE TABLE regular_schema.local_child_table PARTITION OF tenant_5.partitioned_table FOR VALUES FROM (1) TO (2);
+
+SET citus.use_citus_managed_tables TO ON;
+CREATE TABLE regular_schema.local_child_table PARTITION OF tenant_5.partitioned_table FOR VALUES FROM (1) TO (2);
+RESET citus.use_citus_managed_tables;
+
+CREATE TABLE regular_schema.local_partitioned_table(a int, b text) PARTITION BY RANGE (a);
+
+CREATE TABLE regular_schema.citus_local_partitioned_table(a int, b text) PARTITION BY RANGE (a);
+SELECT citus_add_local_table_to_metadata('regular_schema.citus_local_partitioned_table');
+
+CREATE TABLE regular_schema.dist_partitioned_table(a int, b text) PARTITION BY RANGE (a);
+SELECT create_distributed_table('regular_schema.dist_partitioned_table', 'a');
+
+-- verify that we don't allow creating a partition table that is child of a non-tenant partitioned table
+CREATE TABLE tenant_4.partitioned_table_child_2 PARTITION OF regular_schema.local_partitioned_table FOR VALUES FROM (1) TO (2);
+CREATE TABLE tenant_4.partitioned_table_child_2 PARTITION OF regular_schema.citus_local_partitioned_table FOR VALUES FROM (1) TO (2);
+CREATE TABLE tenant_4.partitioned_table_child_2 PARTITION OF regular_schema.dist_partitioned_table FOR VALUES FROM (1) TO (2);
+
+CREATE TABLE tenant_4.parent_attach_test(a int, b text) PARTITION BY RANGE (a);
+CREATE TABLE tenant_4.child_attach_test(a int, b text);
+
+CREATE TABLE tenant_5.parent_attach_test(a int, b text) PARTITION BY RANGE (a);
+CREATE TABLE tenant_5.child_attach_test(a int, b text);
+
+CREATE TABLE regular_schema.parent_attach_test_local(a int, b text) PARTITION BY RANGE (a);
+
+CREATE TABLE regular_schema.parent_attach_test_citus_local(a int, b text) PARTITION BY RANGE (a);
+SELECT citus_add_local_table_to_metadata('regular_schema.parent_attach_test_citus_local');
+
+CREATE TABLE regular_schema.parent_attach_test_dist(a int, b text) PARTITION BY RANGE (a);
+SELECT create_distributed_table('regular_schema.parent_attach_test_dist', 'a');
+
+CREATE TABLE regular_schema.child_attach_test_local(a int, b text);
+
+CREATE TABLE regular_schema.child_attach_test_citus_local(a int, b text);
+SELECT citus_add_local_table_to_metadata('regular_schema.child_attach_test_citus_local');
+
+CREATE TABLE regular_schema.child_attach_test_dist(a int, b text);
+SELECT create_distributed_table('regular_schema.child_attach_test_dist', 'a');
+
+-- verify that we don't allow attaching a tenant table into a tenant partitioned table, if they are not in the same schema
+ALTER TABLE tenant_4.parent_attach_test ATTACH PARTITION tenant_5.child_attach_test FOR VALUES FROM (1) TO (2);
+
+-- verify that we don't allow attaching a non-tenant table into a tenant partitioned table
+ALTER TABLE tenant_4.parent_attach_test ATTACH PARTITION regular_schema.child_attach_test_local FOR VALUES FROM (1) TO (2);
+ALTER TABLE tenant_4.parent_attach_test ATTACH PARTITION regular_schema.child_attach_test_citus_local FOR VALUES FROM (1) TO (2);
+ALTER TABLE tenant_4.parent_attach_test ATTACH PARTITION regular_schema.child_attach_test_dist FOR VALUES FROM (1) TO (2);
+
+-- verify that we don't allow attaching a tenant table into a non-tenant partitioned table
+ALTER TABLE regular_schema.parent_attach_test_local ATTACH PARTITION tenant_4.child_attach_test FOR VALUES FROM (1) TO (2);
+ALTER TABLE regular_schema.parent_attach_test_citus_local ATTACH PARTITION tenant_4.child_attach_test FOR VALUES FROM (1) TO (2);
+ALTER TABLE regular_schema.parent_attach_test_dist ATTACH PARTITION tenant_4.child_attach_test FOR VALUES FROM (1) TO (2);
+
+ALTER TABLE tenant_4.parent_attach_test ATTACH PARTITION tenant_4.child_attach_test FOR VALUES FROM (1) TO (2);
+
+-- verify that we don't allow multi-level partitioning on tenant tables
+CREATE TABLE tenant_4.multi_level_test(a int, b text) PARTITION BY RANGE (a);
+ALTER TABLE tenant_4.parent_attach_test ATTACH PARTITION tenant_4.multi_level_test FOR VALUES FROM (1) TO (2);
+
+-- verify that we allow attaching a tenant table into a tenant partitioned table, if they are in the same schema
+SELECT COUNT(*)=1 FROM pg_dist_partition
+WHERE logicalrelid = 'tenant_4.parent_attach_test'::regclass AND
+       partmethod = 'n' AND repmodel = 's' AND colocationid = (
+        SELECT colocationid FROM pg_dist_partition
+        WHERE logicalrelid = 'tenant_4.child_attach_test'::regclass);
 
 CREATE TABLE tenant_4.tbl_3(a int, b text);
 

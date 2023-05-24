@@ -1433,16 +1433,10 @@ EnsureTableCanBeColocatedWith(Oid relationId, char replicationModel,
 
 	/* prevent colocating regular tables with tenant tables */
 	Oid sourceRelationSchemaId = get_rel_namespace(sourceRelationId);
-	if (IsTenantSchema(sourceRelationSchemaId))
+	Oid targetRelationSchemaId = get_rel_namespace(relationId);
+	if (IsTenantSchema(sourceRelationSchemaId) &&
+		sourceRelationSchemaId != targetRelationSchemaId)
 	{
-		/*
-		 * We don't allow having local tables in tenant schemas, so they must
-		 * be in different schemas.
-		 */
-		Oid targetRelationSchemaId PG_USED_FOR_ASSERTS_ONLY =
-			get_rel_namespace(relationId);
-		Assert(sourceRelationSchemaId != targetRelationSchemaId);
-
 		char *relationName = get_rel_name(relationId);
 		char *sourceRelationName = get_rel_name(sourceRelationId);
 		char *sourceRelationSchemaName = get_namespace_name(sourceRelationSchemaId);

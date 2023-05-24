@@ -15,6 +15,7 @@
 #include "distributed/colocation_utils.h"
 #include "distributed/commands.h"
 #include "distributed/metadata_sync.h"
+#include "distributed/multi_partitioning_utils.h"
 #include "distributed/tenant_schema_metadata.h"
 #include "distributed/metadata/distobject.h"
 #include "utils/builtins.h"
@@ -133,6 +134,17 @@ CreateTenantSchemaTable(Oid relationId)
 						errhint("Connect to the coordinator node and try again.")));
 	}
 
+	if (IsForeignTable(relationId))
+	{
+		/* throw an error that is nicer than the one CreateSingleShardTable() would throw */
+		ereport(ERROR, (errmsg("cannot create a tenant table from a foreign table")));
+	}
+	else if (PartitionTable(relationId))
+	{
+		ErrorIfIllegalPartitioningInTenantSchema(PartitionParentOid(relationId),
+												 relationId);
+	}
+
 	/*
 	 * We don't expect this to happen because ShouldCreateTenantSchemaTable()
 	 * should've already verified that; but better to check.
@@ -150,6 +162,39 @@ CreateTenantSchemaTable(Oid relationId)
 		.colocationId = colocationId,
 	};
 	CreateSingleShardTable(relationId, colocationParam);
+}
+
+
+/*
+ * ErrorIfIllegalPartitioningInTenantSchema throws an error if the
+ * partitioning relationship between the parent and the child is illegal
+ * because they are in different schemas while one of them is a tenant table.
+ */
+void
+ErrorIfIllegalPartitioningInTenantSchema(Oid parentRelationId, Oid partitionRelationId)
+{
+	Oid partitionSchemaId = get_rel_namespace(partitionRelationId);
+	Oid parentSchemaId = get_rel_namespace(parentRelationId);
+
+	bool partitionIsTenantTable = IsTenantSchema(partitionSchemaId);
+	bool parentIsTenantTable = IsTenantSchema(parentSchemaId);
+
+	bool illegalPartitioning = false;
+	if (partitionIsTenantTable != parentIsTenantTable)
+	{
+		illegalPartitioning = true;
+	}
+	else if (partitionIsTenantTable && parentIsTenantTable)
+	{
+		illegalPartitioning = (parentSchemaId != partitionSchemaId);
+	}
+
+	if (illegalPartitioning)
+	{
+		ereport(ERROR, (errmsg("partitioning with tenant tables is not "
+							   "supported when the parent and the child "
+							   "are in different schemas")));
+	}
 }
 
 
