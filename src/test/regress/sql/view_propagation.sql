@@ -1,6 +1,7 @@
 -- Tests to check propagation of all view commands
 CREATE SCHEMA view_prop_schema;
 SET search_path to view_prop_schema;
+SET citus.next_shard_id TO 1420195;
 
 -- Check creating views depending on different types of tables
 -- and from multiple schemas
