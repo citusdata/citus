@@ -1868,6 +1868,12 @@ CheckAlterDistributedTableConversionParameters(TableConversionState *con)
 								   "it is not a distributed table",
 								   con->colocateWith)));
 		}
+		else if (IsCitusTableType(colocateWithTableOid, SINGLE_SHARD_DISTRIBUTED))
+		{
+			ereport(ERROR, (errmsg("cannot colocate with %s because "
+								   "it is a single shard distributed table",
+								   con->colocateWith)));
+		}
 	}
 
 	/* shard_count:=0 is not allowed */
