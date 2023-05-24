@@ -419,6 +419,11 @@ FROM pg_dist_partition, pg_catalog.pg_dist_object as objects
 WHERE pg_dist_partition.logicalrelid = 'replicated_table_func_test_4'::regclass AND
 	  objects.objid = 'eq_with_param_names(macaddr, macaddr)'::regprocedure;
 
+-- a function cannot be colocated with a single shard distributed table when a distribution column is provided
+SELECT create_distributed_table('replicated_table_func_test_3', null);
+SELECT create_distributed_function('eq_with_param_names(macaddr, macaddr)', 'val1', colocate_with:='replicated_table_func_test_3');
+SELECT undistribute_table('replicated_table_func_test_3');
+
 -- a function cannot be colocated with a reference table when a distribution column is provided
 SELECT create_reference_table('replicated_table_func_test_3');
 SELECT create_distributed_function('eq_with_param_names(macaddr, macaddr)', 'val1', colocate_with:='replicated_table_func_test_3');

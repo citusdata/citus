@@ -671,6 +671,19 @@ EnsureFunctionCanBeColocatedWithTable(Oid functionOid, Oid distributionColumnTyp
 	CitusTableCacheEntry *sourceTableEntry = GetCitusTableCacheEntry(sourceRelationId);
 	char sourceReplicationModel = sourceTableEntry->replicationModel;
 
+	if (IsCitusTableTypeCacheEntry(sourceTableEntry, SINGLE_SHARD_DISTRIBUTED) &&
+		distributionColumnType != InvalidOid)
+	{
+		char *functionName = get_func_name(functionOid);
+		char *sourceRelationName = get_rel_name(sourceRelationId);
+
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("cannot colocate function \"%s\" and table \"%s\" because "
+							   "distribution arguments are not supported when "
+							   "colocating with single shard distributed tables.",
+							   functionName, sourceRelationName)));
+	}
+
 	if (!IsCitusTableTypeCacheEntry(sourceTableEntry, HASH_DISTRIBUTED) &&
 		!IsCitusTableTypeCacheEntry(sourceTableEntry, REFERENCE_TABLE))
 	{
