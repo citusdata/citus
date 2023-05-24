@@ -1020,6 +1020,16 @@ SELECT create_reference_table('reference_table');
 
 SELECT alter_distributed_table('dist_table', colocate_with:='reference_table');
 ERROR:  cannot colocate with reference_table because it is not a distributed table
+-- test colocating with single shard table
+CREATE TABLE single_shard_table (a INT);
+SELECT create_distributed_table('single_shard_table', null);
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT alter_distributed_table('dist_table', colocate_with:='single_shard_table');
+ERROR:  cannot colocate with single_shard_table because it is a single shard distributed table
 -- test append table
 CREATE TABLE append_table (a INT);
 SELECT create_distributed_table('append_table', 'a', 'append');
