@@ -165,6 +165,43 @@ CREATE SCHEMA tenant_5;
 CREATE TABLE tenant_5.tbl_1(a int, b text);
 CREATE TABLE tenant_4.tbl_3(a int, b text);
 CREATE TABLE tenant_5.tbl_2(a int, b text);
+CREATE SCHEMA "CiTuS.TeeN_108";
+ALTER SCHEMA "CiTuS.TeeN_108" RENAME TO citus_teen_proper;
+SELECT schemaid AS citus_teen_schemaid FROM pg_dist_tenant_schema WHERE schemaid::regnamespace::text = 'citus_teen_proper' \gset
+SELECT colocationid AS citus_teen_colocationid FROM pg_dist_tenant_schema WHERE schemaid::regnamespace::text = 'citus_teen_proper' \gset
+SELECT result FROM run_command_on_workers($$
+    SELECT schemaid INTO citus_teen_schemaid FROM pg_dist_tenant_schema
+    WHERE schemaid::regnamespace::text = 'citus_teen_proper'
+$$);
+  result
+---------------------------------------------------------------------
+ SELECT 1
+ SELECT 1
+(2 rows)
+
+-- (on coordinator) verify that colocation id is set for the tenant with a weird name too
+SELECT :citus_teen_colocationid > 0;
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+-- (on workers) verify that the same colocation id is used on workers too
+SELECT format(
+    'SELECT result FROM run_command_on_workers($$
+        SELECT COUNT(*)=1 FROM pg_dist_tenant_schema
+        WHERE schemaid::regnamespace::text = ''citus_teen_proper'' AND
+              colocationid = %s;
+    $$);',
+:citus_teen_colocationid) AS verify_workers_query \gset
+:verify_workers_query
+ result
+---------------------------------------------------------------------
+ t
+ t
+(2 rows)
+
+ALTER SCHEMA citus_teen_proper RENAME TO "CiTuS.TeeN_108";
 SET citus.enable_schema_based_sharding TO OFF;
 -- Show that the tables created in tenant schemas are considered to be
 -- tenant tables even if the GUC was set to off when creating the table.
@@ -219,7 +256,7 @@ SET client_min_messages TO WARNING;
 -- escape its name when sending the command to delete the pg_dist_tenant_schema
 -- entry on workers.
 ALTER SCHEMA tenant_4 RENAME TO "tenant\'_4";
-DROP SCHEMA "tenant\'_4" CASCADE;
+DROP SCHEMA "tenant\'_4", "CiTuS.TeeN_108" CASCADE;
 SET client_min_messages TO NOTICE;
 -- (on coordinator) Verify that dropping a tenant schema deletes the associated
 -- pg_dist_tenant_schema entry and pg_dist_colocation too.
@@ -235,11 +272,33 @@ SELECT COUNT(*)=0 FROM pg_dist_colocation WHERE colocationid = :tenant_4_colocat
  t
 (1 row)
 
+SELECT COUNT(*)=0 FROM pg_dist_tenant_schema WHERE schemaid = :citus_teen_schemaid;
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT COUNT(*)=0 FROM pg_dist_colocation WHERE colocationid = :citus_teen_colocationid;
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
 -- (on workers) Verify that dropping a tenant schema deletes the associated
 -- pg_dist_tenant_schema entry and pg_dist_colocation too.
 SELECT result FROM run_command_on_workers($$
     SELECT COUNT(*)=0 FROM pg_dist_tenant_schema
     WHERE schemaid = (SELECT schemaid FROM tenant_4_schemaid)
+$$);
+ result
+---------------------------------------------------------------------
+ t
+ t
+(2 rows)
+
+SELECT result FROM run_command_on_workers($$
+    SELECT COUNT(*)=0 FROM pg_dist_tenant_schema
+    WHERE schemaid = (SELECT schemaid FROM citus_teen_schemaid)
 $$);
  result
 ---------------------------------------------------------------------
@@ -261,6 +320,27 @@ SELECT format(
 
 SELECT result FROM run_command_on_workers($$
     DROP TABLE tenant_4_schemaid
+$$);
+   result
+---------------------------------------------------------------------
+ DROP TABLE
+ DROP TABLE
+(2 rows)
+
+SELECT format(
+    'SELECT result FROM run_command_on_workers($$
+        SELECT COUNT(*)=0 FROM pg_dist_colocation WHERE colocationid = %s;
+    $$);',
+:citus_teen_colocationid) AS verify_workers_query \gset
+:verify_workers_query
+ result
+---------------------------------------------------------------------
+ t
+ t
+(2 rows)
+
+SELECT result FROM run_command_on_workers($$
+    DROP TABLE citus_teen_schemaid
 $$);
    result
 ---------------------------------------------------------------------

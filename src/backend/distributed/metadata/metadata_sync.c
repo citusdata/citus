@@ -4035,11 +4035,7 @@ RemoteSchemaIdExpressionById(Oid schemaId)
 		ereport(ERROR, (errmsg("schema with OID %u does not exist", schemaId)));
 	}
 
-	StringInfo regnamespaceExpr = makeStringInfo();
-	appendStringInfo(regnamespaceExpr, "%s::regnamespace",
-					 quote_literal_cstr(schemaName));
-
-	return regnamespaceExpr->data;
+	return RemoteSchemaIdExpressionByName(schemaName);
 }
 
 
@@ -4053,7 +4049,7 @@ RemoteSchemaIdExpressionByName(char *schemaName)
 {
 	StringInfo regnamespaceExpr = makeStringInfo();
 	appendStringInfo(regnamespaceExpr, "%s::regnamespace",
-					 quote_literal_cstr(schemaName));
+					 quote_literal_cstr(quote_identifier(schemaName)));
 
 	return regnamespaceExpr->data;
 }

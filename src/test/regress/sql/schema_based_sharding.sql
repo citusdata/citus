@@ -121,6 +121,33 @@ CREATE TABLE tenant_4.tbl_3(a int, b text);
 
 CREATE TABLE tenant_5.tbl_2(a int, b text);
 
+CREATE SCHEMA "CiTuS.TeeN_108";
+ALTER SCHEMA "CiTuS.TeeN_108" RENAME TO citus_teen_proper;
+
+SELECT schemaid AS citus_teen_schemaid FROM pg_dist_tenant_schema WHERE schemaid::regnamespace::text = 'citus_teen_proper' \gset
+SELECT colocationid AS citus_teen_colocationid FROM pg_dist_tenant_schema WHERE schemaid::regnamespace::text = 'citus_teen_proper' \gset
+
+SELECT result FROM run_command_on_workers($$
+    SELECT schemaid INTO citus_teen_schemaid FROM pg_dist_tenant_schema
+    WHERE schemaid::regnamespace::text = 'citus_teen_proper'
+$$);
+
+-- (on coordinator) verify that colocation id is set for the tenant with a weird name too
+SELECT :citus_teen_colocationid > 0;
+
+-- (on workers) verify that the same colocation id is used on workers too
+SELECT format(
+    'SELECT result FROM run_command_on_workers($$
+        SELECT COUNT(*)=1 FROM pg_dist_tenant_schema
+        WHERE schemaid::regnamespace::text = ''citus_teen_proper'' AND
+              colocationid = %s;
+    $$);',
+:citus_teen_colocationid) AS verify_workers_query \gset
+
+:verify_workers_query
+
+ALTER SCHEMA citus_teen_proper RENAME TO "CiTuS.TeeN_108";
+
 SET citus.enable_schema_based_sharding TO OFF;
 
 -- Show that the tables created in tenant schemas are considered to be
@@ -159,7 +186,7 @@ SET client_min_messages TO WARNING;
 -- entry on workers.
 ALTER SCHEMA tenant_4 RENAME TO "tenant\'_4";
 
-DROP SCHEMA "tenant\'_4" CASCADE;
+DROP SCHEMA "tenant\'_4", "CiTuS.TeeN_108" CASCADE;
 
 SET client_min_messages TO NOTICE;
 
@@ -168,11 +195,19 @@ SET client_min_messages TO NOTICE;
 SELECT COUNT(*)=0 FROM pg_dist_tenant_schema WHERE schemaid = :tenant_4_schemaid;
 SELECT COUNT(*)=0 FROM pg_dist_colocation WHERE colocationid = :tenant_4_colocationid;
 
+SELECT COUNT(*)=0 FROM pg_dist_tenant_schema WHERE schemaid = :citus_teen_schemaid;
+SELECT COUNT(*)=0 FROM pg_dist_colocation WHERE colocationid = :citus_teen_colocationid;
+
 -- (on workers) Verify that dropping a tenant schema deletes the associated
 -- pg_dist_tenant_schema entry and pg_dist_colocation too.
 SELECT result FROM run_command_on_workers($$
     SELECT COUNT(*)=0 FROM pg_dist_tenant_schema
     WHERE schemaid = (SELECT schemaid FROM tenant_4_schemaid)
+$$);
+
+SELECT result FROM run_command_on_workers($$
+    SELECT COUNT(*)=0 FROM pg_dist_tenant_schema
+    WHERE schemaid = (SELECT schemaid FROM citus_teen_schemaid)
 $$);
 
 SELECT format(
@@ -185,6 +220,18 @@ SELECT format(
 
 SELECT result FROM run_command_on_workers($$
     DROP TABLE tenant_4_schemaid
+$$);
+
+SELECT format(
+    'SELECT result FROM run_command_on_workers($$
+        SELECT COUNT(*)=0 FROM pg_dist_colocation WHERE colocationid = %s;
+    $$);',
+:citus_teen_colocationid) AS verify_workers_query \gset
+
+:verify_workers_query
+
+SELECT result FROM run_command_on_workers($$
+    DROP TABLE citus_teen_schemaid
 $$);
 
 -- show that we don't allow colocating a Citus table with a tenant table
