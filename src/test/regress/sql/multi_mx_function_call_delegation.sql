@@ -28,6 +28,10 @@ create table mx_call_dist_table_bigint(id bigint, val bigint);
 select create_distributed_table('mx_call_dist_table_bigint', 'id');
 insert into mx_call_dist_table_bigint values (1,1),(1,2),(2,2),(3,3),(3,4);
 
+create table mx_call_dist_table_single_shard(id int, val int);
+select create_distributed_table('mx_call_dist_table_single_shard', null);
+insert into mx_call_dist_table_single_shard values (2,7),(1,8),(2,8),(1,8),(2,8);
+
 create table mx_call_dist_table_ref(id int, val int);
 select create_reference_table('mx_call_dist_table_ref');
 insert into mx_call_dist_table_ref values (2,7),(1,8),(2,8),(1,8),(2,8);
@@ -155,6 +159,10 @@ select mx_call_func(2, 0);
 
 -- We don't currently support colocating with reference tables
 select colocate_proc_with_table('mx_call_func', 'mx_call_dist_table_ref'::regclass, 1);
+select mx_call_func(2, 0);
+
+-- We support colocating with single shard tables
+select colocate_proc_with_table('mx_call_func', 'mx_call_dist_table_single_shard'::regclass, 1);
 select mx_call_func(2, 0);
 
 -- We don't currently support colocating with replicated tables
