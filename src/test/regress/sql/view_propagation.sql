@@ -543,5 +543,7 @@ CREATE OR REPLACE VIEW vv3 as SELECT * FROM vv4;
 RESET citus.enable_unsupported_feature_messages;
 RESET citus.enforce_object_restrictions_for_local_objects;
 SET client_min_messages TO ERROR;
+DROP TABLE public.parent_1, public.employees CASCADE;
 DROP SCHEMA view_prop_schema_inner CASCADE;
 DROP SCHEMA view_prop_schema, axx CASCADE;
+DROP ROLE view_creation_user, alter_view_user, grant_view_user;
