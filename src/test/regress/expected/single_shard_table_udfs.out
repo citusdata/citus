@@ -412,16 +412,16 @@ CREATE OR REPLACE FUNCTION columnar_storage_info(
     reserved_offset OUT int8)
   STRICT
   LANGUAGE c AS 'citus', $$columnar_storage_info$$;
-SELECT * FROM columnar_storage_info('columnar_tbl');
- version_major | version_minor | storage_id  | reserved_stripe_id | reserved_row_number | reserved_offset
+SELECT version_major, version_minor, reserved_stripe_id, reserved_row_number, reserved_offset FROM columnar_storage_info('columnar_tbl');
+ version_major | version_minor | reserved_stripe_id | reserved_row_number | reserved_offset
 ---------------------------------------------------------------------
-             2 |             0 | 10000000000 |                  1 |                   1 |           16336
+             2 |             0 |                  1 |                   1 |           16336
 (1 row)
 
-SELECT columnar.get_storage_id(oid) FROM pg_class WHERE relname = 'columnar_tbl';
- get_storage_id
+SELECT columnar.get_storage_id(oid) = storage_id FROM pg_class, columnar_storage_info('columnar_tbl') WHERE relname = 'columnar_tbl';
+ ?column?
 ---------------------------------------------------------------------
-    10000000000
+ t
 (1 row)
 
 SET client_min_messages TO WARNING;

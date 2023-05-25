@@ -190,9 +190,9 @@ CREATE OR REPLACE FUNCTION columnar_storage_info(
   STRICT
   LANGUAGE c AS 'citus', $$columnar_storage_info$$;
 
-SELECT * FROM columnar_storage_info('columnar_tbl');
+SELECT version_major, version_minor, reserved_stripe_id, reserved_row_number, reserved_offset FROM columnar_storage_info('columnar_tbl');
 
-SELECT columnar.get_storage_id(oid) FROM pg_class WHERE relname = 'columnar_tbl';
+SELECT columnar.get_storage_id(oid) = storage_id FROM pg_class, columnar_storage_info('columnar_tbl') WHERE relname = 'columnar_tbl';
 
 SET client_min_messages TO WARNING;
 DROP SCHEMA null_dist_key_udfs CASCADE;
