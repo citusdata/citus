@@ -349,17 +349,26 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 			 */
 			if (context == PROCESS_UTILITY_TOPLEVEL &&
 				(IsA(parsetree, CreateStmt) ||
-				 IsA(parsetree, CreateForeignTableStmt)))
+				 IsA(parsetree, CreateForeignTableStmt) ||
+				 IsA(parsetree, CreateTableAsStmt)))
 			{
-				/*
-				 * Not directly cast to CreateStmt to guard against the case where
-				 * the definition of CreateForeignTableStmt changes in future.
-				 */
-				CreateStmt *baseCreateTableStmt =
-					IsA(parsetree, CreateStmt) ? (CreateStmt *) parsetree :
-					(CreateStmt *) &(((CreateForeignTableStmt *) parsetree)->base);
+				Node *createStmt = NULL;
+				if (IsA(parsetree, CreateTableAsStmt))
+				{
+					createStmt = parsetree;
+				}
+				else
+				{
+					/*
+					 * Not directly cast to CreateStmt to guard against the case where
+					 * the definition of CreateForeignTableStmt changes in future.
+					 */
+					createStmt =
+						IsA(parsetree, CreateStmt) ? parsetree :
+						(Node *) &(((CreateForeignTableStmt *) parsetree)->base);
+				}
 
-				ConvertNewTableIfNecessary(baseCreateTableStmt);
+				ConvertNewTableIfNecessary(createStmt);
 			}
 		}
 

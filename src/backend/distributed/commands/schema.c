@@ -47,6 +47,7 @@ static List * FilterDistributedSchemas(List *schemas);
 static bool SchemaHasDistributedTableWithFKey(char *schemaName);
 static bool ShouldPropagateCreateSchemaStmt(void);
 static List * GetGrantCommandsFromCreateSchemaStmt(Node *node);
+static bool CreateSchemaStmtCreatesTable(CreateSchemaStmt *stmt);
 
 
 /*
@@ -79,6 +80,16 @@ PostprocessCreateSchemaStmt(Node *node, const char *queryString)
 
 	if (ShouldUseSchemaBasedSharding(createSchemaStmt->schemaname))
 	{
+		/* for now, we don't allow creating tenant tables when creating the schema itself */
+		if (CreateSchemaStmtCreatesTable(createSchemaStmt))
+		{
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("cannot create tenant table in CREATE "
+								   "SCHEMA statement"),
+							errhint("Use CREATE TABLE statement to create "
+									"tenant tables.")));
+		}
+
 		bool missingOk = false;
 		Oid schemaId = get_namespace_oid(createSchemaStmt->schemaname, missingOk);
 
@@ -426,4 +437,28 @@ GetGrantCommandsFromCreateSchemaStmt(Node *node)
 	}
 
 	return commands;
+}
+
+
+/*
+ * CreateSchemaStmtCreatesTable returns true if given CreateSchemaStmt
+ * creates a table using "schema_element" list.
+ */
+static bool
+CreateSchemaStmtCreatesTable(CreateSchemaStmt *stmt)
+{
+	Node *element = NULL;
+	foreach_ptr(element, stmt->schemaElts)
+	{
+		/*
+		 * CREATE TABLE AS and CREATE FOREIGN TABLE commands cannot be
+		 * used as schema_elements anyway, so we don't need to check them.
+		 */
+		if (IsA(element, CreateStmt))
+		{
+			return true;
+		}
+	}
+
+	return false;
 }

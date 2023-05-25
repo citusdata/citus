@@ -214,7 +214,11 @@ DROP TABLE IF EXISTS citus_local_table_1, citus_local_table_2, citus_local_table
 
 -- this GUC will add the next three tables to metadata automatically
 SET citus.use_citus_managed_tables TO ON;
-CREATE TABLE citus_local_table_1(a INT UNIQUE);
+
+-- try to create the table twice by using IF NOT EXISTS syntax
+CREATE TABLE IF NOT EXISTS citus_local_table_1(a INT UNIQUE);
+CREATE TABLE IF NOT EXISTS citus_local_table_1(a INT UNIQUE);
+
 CREATE TABLE citus_local_table_2(a INT UNIQUE);
 CREATE TABLE citus_local_table_3(a INT UNIQUE);
 RESET citus.use_citus_managed_tables;
@@ -738,3 +742,4 @@ CALL drop_constraint_via_proc_exception();
 SELECT logicalrelid, partmethod, repmodel FROM pg_dist_partition WHERE logicalrelid IN ('reference_table_1'::regclass, 'citus_local_table_1'::regclass) ORDER BY logicalrelid;
 
 DROP SCHEMA drop_fkey_cascade CASCADE;
+DROP USER another_user;

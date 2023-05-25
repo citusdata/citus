@@ -110,6 +110,9 @@ $$);
 SELECT COUNT(DISTINCT(colocationid))=2 FROM pg_dist_tenant_schema
 WHERE schemaid::regnamespace::text IN ('tenant_1', 'tenant_2');
 
+-- verify that we don't allow creating tenant tables via CREATE SCHEMA command
+CREATE SCHEMA schema_using_schema_elements CREATE TABLE test_table(a int, b text);
+
 CREATE SCHEMA tenant_4;
 CREATE TABLE tenant_4.tbl_1(a int, b text);
 CREATE TABLE tenant_4.tbl_2(a int, b text);
@@ -253,7 +256,62 @@ SELECT EXISTS(
           inhparent = 'tenant_4.parent_attach_test'::regclass
 ) AS is_partition;
 
-CREATE TABLE tenant_4.tbl_3(a int, b text);
+-- verify that we don't allow creating tenant tables by using CREATE TABLE AS / SELECT INTO commands
+CREATE TABLE tenant_4.tbl_3 AS SELECT 1 AS a, 'text' as b;
+CREATE TABLE IF NOT EXISTS tenant_4.tbl_3 AS SELECT 1 as a, 'text' as b;
+SELECT 1 as a, 'text' as b INTO tenant_4.tbl_3;
+
+CREATE TYPE employee_type AS (name text, salary numeric);
+
+-- verify that we don't allow creating tenant tables by using CREATE TABLE OF commands
+CREATE TABLE tenant_4.employees OF employee_type (
+    PRIMARY KEY (name),
+    salary WITH OPTIONS DEFAULT 1000
+);
+
+-- verify that we act accordingly when if not exists is used
+CREATE TABLE IF NOT EXISTS tenant_4.tbl_3(a int, b text);
+CREATE TABLE IF NOT EXISTS tenant_4.tbl_3(a int, b text);
+
+CREATE TABLE regular_schema.local(a int, b text);
+
+CREATE TABLE regular_schema.citus_local(a int, b text);
+SELECT citus_add_local_table_to_metadata('regular_schema.citus_local');
+
+CREATE TABLE regular_schema.dist(a int, b text);
+SELECT create_distributed_table('regular_schema.dist', 'a');
+
+-- verify that we can create a table LIKE another table
+CREATE TABLE tenant_5.test_table_like_1(LIKE tenant_5.tbl_1); -- using a table from the same schema
+CREATE TABLE tenant_5.test_table_like_2(LIKE tenant_4.tbl_1); -- using a table from another schema
+CREATE TABLE tenant_5.test_table_like_3(LIKE regular_schema.local); -- using a local table
+CREATE TABLE tenant_5.test_table_like_4(LIKE regular_schema.citus_local); -- using a citus local table
+CREATE TABLE tenant_5.test_table_like_5(LIKE regular_schema.dist); -- using a distributed table
+
+-- verify that all of them are converted to tenant tables
+SELECT COUNT(*) = 5
+FROM pg_dist_partition
+WHERE logicalrelid::text LIKE 'tenant_5.test_table_like_%' AND
+      partmethod = 'n' AND repmodel = 's' AND colocationid = (
+        SELECT colocationid FROM pg_dist_tenant_schema
+        WHERE schemaid::regnamespace::text = 'tenant_5'
+        );
+
+CREATE TABLE regular_schema.local_table_using_like(LIKE tenant_5.tbl_1);
+
+-- verify that regular_schema.local_table_using_like is not a tenant table
+SELECT COUNT(*) = 0 FROM pg_dist_partition
+WHERE logicalrelid = 'regular_schema.local_table_using_like'::regclass;
+
+-- verify that INHERITS syntax is not supported when creating a tenant table
+CREATE TABLE tenant_5.test_table_inherits_1(x int) INHERITS (tenant_5.tbl_1); -- using a table from the same schema
+CREATE TABLE tenant_5.test_table_inherits_2(x int) INHERITS (tenant_4.tbl_1); -- using a table from another schema
+CREATE TABLE tenant_5.test_table_inherits_3(x int) INHERITS (regular_schema.local); -- using a local table
+CREATE TABLE tenant_5.test_table_inherits_4(x int) INHERITS (regular_schema.citus_local); -- using a citus local table
+CREATE TABLE tenant_5.test_table_inherits_5(x int) INHERITS (regular_schema.dist); -- using a distributed table
+
+-- verify that INHERITS syntax is not supported when creating a local table based on a tenant table
+CREATE TABLE regular_schema.local_table_using_inherits(x int) INHERITS (tenant_5.tbl_1);
 
 CREATE TABLE tenant_5.tbl_2(a int, b text);
 

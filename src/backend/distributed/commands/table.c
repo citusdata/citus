@@ -229,6 +229,17 @@ PostprocessCreateTableStmt(CreateStmt *createStatement, const char *queryString)
 {
 	PostprocessCreateTableStmtForeignKeys(createStatement);
 
+	bool missingOk = false;
+	Oid relationId = RangeVarGetRelid(createStatement->relation, NoLock, missingOk);
+	Oid schemaId = get_rel_namespace(relationId);
+	if (createStatement->ofTypename && IsTenantSchema(schemaId))
+	{
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("cannot create a tenant table by using CREATE TABLE "
+						"OF syntax")));
+	}
+
 	if (createStatement->inhRelations != NIL)
 	{
 		if (createStatement->partbound != NULL)
@@ -239,15 +250,31 @@ PostprocessCreateTableStmt(CreateStmt *createStatement, const char *queryString)
 		else
 		{
 			/* process CREATE TABLE ... INHERITS ... */
+
+			if (IsTenantSchema(schemaId))
+			{
+				ereport(ERROR, (errmsg("tenant tables cannot inherit or "
+									   "be inherited")));
+			}
+
 			RangeVar *parentRelation = NULL;
 			foreach_ptr(parentRelation, createStatement->inhRelations)
 			{
-				bool missingOk = false;
 				Oid parentRelationId = RangeVarGetRelid(parentRelation, NoLock,
 														missingOk);
 				Assert(parentRelationId != InvalidOid);
 
-				if (IsCitusTable(parentRelationId))
+				/*
+				 * Throw a better error message if the user tries to inherit a
+				 * tenant table or if the user tries to inherit from a tenant
+				 * table.
+				 */
+				if (IsTenantSchema(get_rel_namespace(parentRelationId)))
+				{
+					ereport(ERROR, (errmsg("tenant tables cannot inherit or "
+										   "be inherited")));
+				}
+				else if (IsCitusTable(parentRelationId))
 				{
 					/* here we error out if inheriting a distributed table */
 					ereport(ERROR, (errmsg("non-distributed tables cannot inherit "
@@ -396,9 +423,8 @@ PostprocessCreateTableStmtPartitionOf(CreateStmt *createStatement, const
 	if (IsCitusTable(parentRelationId))
 	{
 		/*
-		 * We can create Citus local tables and single-shard distributed tables
-		 * right away, without switching to sequential mode, because they are going to
-		 * have only one shard.
+		 * We can create Citus local tables right away, without switching to
+		 * sequential mode, because they are going to have only one shard.
 		 */
 		if (IsCitusTableType(parentRelationId, CITUS_LOCAL_TABLE))
 		{
@@ -608,6 +634,10 @@ DistributePartitionUsingParent(Oid parentCitusRelationId, Oid partitionRelationI
 {
 	char *parentRelationName = generate_qualified_relation_name(parentCitusRelationId);
 
+	/*
+	 * We can create tenant tables and single shard tables right away, without
+	 * switching to sequential mode, because they are going to have only one shard.
+	 */
 	if (ShouldCreateTenantSchemaTable(partitionRelationId))
 	{
 		CreateTenantSchemaTable(partitionRelationId);
@@ -4066,9 +4096,11 @@ ErrorIfTableHasIdentityColumn(Oid relationId)
 /*
  * ConvertNewTableIfNecessary converts the given table to a tenant schema
  * table or a Citus managed table if necessary.
+ *
+ * Input node is expected to be a CreateStmt or a CreateTableAsStmt.
  */
 void
-ConvertNewTableIfNecessary(CreateStmt *baseCreateTableStmt)
+ConvertNewTableIfNecessary(Node *createStmt)
 {
 	/*
 	 * Need to increment command counter so that next command
@@ -4076,9 +4108,40 @@ ConvertNewTableIfNecessary(CreateStmt *baseCreateTableStmt)
 	 */
 	CommandCounterIncrement();
 
+	if (IsA(createStmt, CreateTableAsStmt))
+	{
+		CreateTableAsStmt *createTableAsStmt = (CreateTableAsStmt *) createStmt;
+
+		bool missingOk = false;
+		Oid createdRelationId = RangeVarGetRelid(createTableAsStmt->into->rel,
+												 NoLock, missingOk);
+
+		if (ShouldCreateTenantSchemaTable(createdRelationId))
+		{
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("cannot create a tenant table using "
+								   "CREATE TABLE AS or SELECT INTO "
+								   "statements")));
+		}
+
+		/*
+		 * We simply ignore the tables created by using that syntax when using
+		 * Citus managed tables.
+		 */
+		return;
+	}
+
+	CreateStmt *baseCreateTableStmt = (CreateStmt *) createStmt;
+
 	bool missingOk = false;
 	Oid createdRelationId = RangeVarGetRelid(baseCreateTableStmt->relation,
 											 NoLock, missingOk);
+
+	/* not try to convert the table if it already exists and IF NOT EXISTS syntax is used */
+	if (baseCreateTableStmt->if_not_exists && IsCitusTable(createdRelationId))
+	{
+		return;
+	}
 
 	/*
 	 * Check ShouldCreateTenantSchemaTable() before ShouldAddNewTableToMetadata()

@@ -586,7 +586,7 @@ extern char * GetAlterColumnWithNextvalDefaultCmd(Oid sequenceOid, Oid relationI
 
 extern void ErrorIfTableHasUnsupportedIdentityColumn(Oid relationId);
 extern void ErrorIfTableHasIdentityColumn(Oid relationId);
-extern void ConvertNewTableIfNecessary(CreateStmt *baseCreateTableStmt);
+extern void ConvertNewTableIfNecessary(Node *createStmt);
 
 /* text_search.c - forward declarations */
 extern List * GetCreateTextSearchConfigStatements(const ObjectAddress *address);
