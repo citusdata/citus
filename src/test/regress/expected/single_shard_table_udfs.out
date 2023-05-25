@@ -3,6 +3,15 @@ SET search_path TO null_dist_key_udfs;
 SET citus.next_shard_id TO 1820000;
 SET citus.shard_count TO 32;
 SET citus.shard_replication_factor TO 1;
+ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 198000;
+SET client_min_messages TO ERROR;
+SELECT 1 FROM citus_add_node('localhost', :master_port, groupid=>0);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+RESET client_min_messages;
 -- test some other udf's with single shard tables
 CREATE TABLE null_dist_key_table(a int);
 SELECT create_distributed_table('null_dist_key_table', null, colocate_with=>'none', distribution_type=>null);
@@ -177,7 +186,7 @@ ERROR:  Cannot split shard as operation is only supported for hash distributed t
 SELECT colocationid FROM pg_dist_partition WHERE logicalrelid::text LIKE '%null_dist_key_table%';
  colocationid
 ---------------------------------------------------------------------
-      1390063
+       198000
 (1 row)
 
 -- test alter_table_set_access_method and verify it doesn't change the colocation id
@@ -194,7 +203,7 @@ NOTICE:  renaming the new table to null_dist_key_udfs.null_dist_key_table
 SELECT colocationid FROM pg_dist_partition WHERE logicalrelid::text LIKE '%null_dist_key_table%';
  colocationid
 ---------------------------------------------------------------------
-      1390063
+       198000
 (1 row)
 
 -- undistribute

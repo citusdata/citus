@@ -4,6 +4,10 @@ SET search_path TO null_dist_key_udfs;
 SET citus.next_shard_id TO 1820000;
 SET citus.shard_count TO 32;
 SET citus.shard_replication_factor TO 1;
+ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 198000;
+SET client_min_messages TO ERROR;
+SELECT 1 FROM citus_add_node('localhost', :master_port, groupid=>0);
+RESET client_min_messages;
 -- test some other udf's with single shard tables
 CREATE TABLE null_dist_key_table(a int);
 SELECT create_distributed_table('null_dist_key_table', null, colocate_with=>'none', distribution_type=>null);
