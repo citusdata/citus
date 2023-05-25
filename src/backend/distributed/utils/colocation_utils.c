@@ -1266,7 +1266,7 @@ DeleteColocationGroupIfNoTablesBelong(uint32 colocationId)
 
 /*
  * DeleteColocationGroup deletes the colocation group from pg_dist_colocation
- * throughout the cluster and diasociates the tenant schema if any.
+ * throughout the cluster and dissociates the tenant schema if any.
  */
 void
 DeleteColocationGroup(uint32 colocationId)
