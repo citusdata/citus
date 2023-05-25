@@ -709,6 +709,7 @@ TRUNCATE pg_dist_node;
 
 SET client_min_messages TO ERROR;
 DROP USER functionuser;
+DROP ROLE r1;
 SELECT 1 FROM run_command_on_workers($$DROP USER functionuser$$);
 
 -- sync metadata again
