@@ -1370,9 +1370,12 @@ CreateCitusTableLike(TableConversionState *con)
 	{
 		if (IsCitusTableType(con->relationId, SINGLE_SHARD_DISTRIBUTED))
 		{
-			char *newColocateWith =
-				quote_qualified_identifier(con->schemaName, con->relationName);
-			CreateSingleShardTable(con->newRelationId, newColocateWith);
+			ColocationParam colocationParam = {
+				.colocationParamType = COLOCATE_WITH_TABLE_LIKE_OPT,
+				.colocateWithTableName = quote_qualified_identifier(con->schemaName,
+																	con->relationName)
+			};
+			CreateSingleShardTable(con->newRelationId, colocationParam);
 		}
 		else
 		{
