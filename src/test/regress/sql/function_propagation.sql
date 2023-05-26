@@ -565,6 +565,7 @@ BEGIN;
     SELECT pg_identify_object_as_address(classid, objid, objsubid) from pg_catalog.pg_dist_object where objid = 'function_propagation_schema.func_in_transaction_for_local_table'::regproc::oid;
 
     CREATE TABLE citus_local_table_to_test_func(l1 int DEFAULT func_in_transaction_for_local_table());
+    SET LOCAL client_min_messages TO WARNING;
     SELECT 1 FROM master_add_node('localhost', :master_port, groupid => 0);
     SELECT citus_add_local_table_to_metadata('citus_local_table_to_test_func');
 
@@ -717,6 +718,9 @@ SELECT create_distributed_table('tbl_to_colocate', 'a');
 -- first test colocating function with a ref table
 CREATE TABLE tbl_to_colocate_ref (a int);
 SELECT create_reference_table('tbl_to_colocate_ref');
+-- test colocating function with single shard table
+CREATE TABLE single_shard_tbl (a int);
+SELECT create_distributed_table('single_shard_tbl', null);
 
 CREATE FUNCTION func_to_colocate (a int) returns int as $$select 1;$$ language sql;
 -- see the empty pg_dist_object entries
@@ -724,6 +728,11 @@ SELECT distribution_argument_index, colocationid, force_delegation FROM pg_catal
 
 -- colocate the function with ref table
 SELECT create_distributed_function('func_to_colocate(int)', colocate_with:='tbl_to_colocate_ref');
+-- see the pg_dist_object entry
+SELECT distribution_argument_index, colocationid, force_delegation FROM pg_catalog.pg_dist_object WHERE objid = 'func_to_colocate'::regproc;
+
+-- colocate the function with single shard table table
+SELECT create_distributed_function('func_to_colocate(int)', colocate_with:='single_shard_tbl');
 -- see the pg_dist_object entry
 SELECT distribution_argument_index, colocationid, force_delegation FROM pg_catalog.pg_dist_object WHERE objid = 'func_to_colocate'::regproc;
 

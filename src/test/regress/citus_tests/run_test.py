@@ -143,6 +143,7 @@ DEPS = {
         ],
         worker_count=6,
     ),
+    "function_propagation": TestDeps("minimal_schedule"),
     "multi_mx_modifying_xacts": TestDeps(None, ["multi_mx_create_table"]),
     "multi_mx_router_planner": TestDeps(None, ["multi_mx_create_table"]),
     "multi_mx_copy_data": TestDeps(None, ["multi_mx_create_table"]),

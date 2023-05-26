@@ -196,6 +196,8 @@ extern bool HasOverlappingShardInterval(ShardInterval **shardIntervalArray,
 										Oid shardIntervalCollation,
 										FmgrInfo *shardIntervalSortCompareFunction);
 
+extern ShardPlacement * ShardPlacementForFunctionColocatedWithSingleShardTable(
+	CitusTableCacheEntry *cacheEntry);
 extern ShardPlacement * ShardPlacementForFunctionColocatedWithReferenceTable(
 	CitusTableCacheEntry *cacheEntry);
 extern ShardPlacement * ShardPlacementForFunctionColocatedWithDistTable(

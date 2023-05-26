@@ -40,6 +40,14 @@ select create_distributed_table('mx_call_dist_table_bigint', 'id');
 (1 row)
 
 insert into mx_call_dist_table_bigint values (1,1),(1,2),(2,2),(3,3),(3,4);
+create table mx_call_dist_table_single_shard(id int, val int);
+select create_distributed_table('mx_call_dist_table_single_shard', null);
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+insert into mx_call_dist_table_single_shard values (2,7),(1,8),(2,8),(1,8),(2,8);
 create table mx_call_dist_table_ref(id int, val int);
 select create_reference_table('mx_call_dist_table_ref');
  create_reference_table
@@ -336,6 +344,20 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT ((3 OPERATOR(
 
 -- We don't currently support colocating with reference tables
 select colocate_proc_with_table('mx_call_func', 'mx_call_dist_table_ref'::regclass, 1);
+ colocate_proc_with_table
+---------------------------------------------------------------------
+
+(1 row)
+
+select mx_call_func(2, 0);
+DEBUG:  pushing down the function call
+ mx_call_func
+---------------------------------------------------------------------
+           28
+(1 row)
+
+-- We support colocating with single shard tables
+select colocate_proc_with_table('mx_call_func', 'mx_call_dist_table_single_shard'::regclass, 1);
  colocate_proc_with_table
 ---------------------------------------------------------------------
 
@@ -803,4 +825,4 @@ SET search_path TO multi_mx_function_call_delegation, public;
 RESET client_min_messages;
 \set VERBOSITY terse
 DROP SCHEMA multi_mx_function_call_delegation CASCADE;
-NOTICE:  drop cascades to 16 other objects
+NOTICE:  drop cascades to 17 other objects

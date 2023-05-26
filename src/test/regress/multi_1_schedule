@@ -33,6 +33,7 @@ test: ref_citus_local_fkeys
 test: alter_database_owner
 test: distributed_triggers
 test: create_single_shard_table
+test: single_shard_table_udfs
 test: schema_based_sharding
 
 test: multi_test_catalog_views

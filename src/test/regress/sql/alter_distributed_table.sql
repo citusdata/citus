@@ -386,6 +386,11 @@ CREATE TABLE reference_table (a INT);
 SELECT create_reference_table('reference_table');
 SELECT alter_distributed_table('dist_table', colocate_with:='reference_table');
 
+-- test colocating with single shard table
+CREATE TABLE single_shard_table (a INT);
+SELECT create_distributed_table('single_shard_table', null);
+SELECT alter_distributed_table('dist_table', colocate_with:='single_shard_table');
+
 -- test append table
 CREATE TABLE append_table (a INT);
 SELECT create_distributed_table('append_table', 'a', 'append');

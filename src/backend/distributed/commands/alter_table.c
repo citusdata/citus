@@ -477,8 +477,11 @@ AlterTableSetAccessMethod(TableConversionParameters *params)
 	EnsureTableNotReferencing(params->relationId, ALTER_TABLE_SET_ACCESS_METHOD);
 	EnsureTableNotReferenced(params->relationId, ALTER_TABLE_SET_ACCESS_METHOD);
 	EnsureTableNotForeign(params->relationId);
-	if (IsCitusTableType(params->relationId, DISTRIBUTED_TABLE))
+
+	if (!IsCitusTableType(params->relationId, SINGLE_SHARD_DISTRIBUTED) &&
+		IsCitusTableType(params->relationId, DISTRIBUTED_TABLE))
 	{
+		/* we do not support non-hash distributed tables, except single shard tables */
 		EnsureHashDistributedTable(params->relationId);
 	}
 
@@ -1365,7 +1368,19 @@ CreateCitusTableLike(TableConversionState *con)
 {
 	if (IsCitusTableType(con->relationId, DISTRIBUTED_TABLE))
 	{
-		CreateDistributedTableLike(con);
+		if (IsCitusTableType(con->relationId, SINGLE_SHARD_DISTRIBUTED))
+		{
+			ColocationParam colocationParam = {
+				.colocationParamType = COLOCATE_WITH_TABLE_LIKE_OPT,
+				.colocateWithTableName = quote_qualified_identifier(con->schemaName,
+																	con->relationName)
+			};
+			CreateSingleShardTable(con->newRelationId, colocationParam);
+		}
+		else
+		{
+			CreateDistributedTableLike(con);
+		}
 	}
 	else if (IsCitusTableType(con->relationId, REFERENCE_TABLE))
 	{
@@ -1854,6 +1869,12 @@ CheckAlterDistributedTableConversionParameters(TableConversionState *con)
 		{
 			ereport(ERROR, (errmsg("cannot colocate with %s because "
 								   "it is not a distributed table",
+								   con->colocateWith)));
+		}
+		else if (IsCitusTableType(colocateWithTableOid, SINGLE_SHARD_DISTRIBUTED))
+		{
+			ereport(ERROR, (errmsg("cannot colocate with %s because "
+								   "it is a single shard distributed table",
 								   con->colocateWith)));
 		}
 	}
