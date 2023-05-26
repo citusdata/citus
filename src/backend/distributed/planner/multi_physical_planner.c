@@ -234,8 +234,8 @@ static List * FetchEqualityAttrNumsForRTEBoolExpr(BoolExpr *boolExpr);
 static List * FetchEqualityAttrNumsForList(List *nodeList);
 static int PartitionColumnIndex(Var *targetVar, List *targetList);
 static List * GetColumnOriginalIndexes(Oid relationId);
-static bool QueryTreeHasImproperForDeparseNodes(Node *inputNode);
-static Node * AdjustImproperForDeparseNodes(Node *inputNode);
+static bool QueryTreeHasImproperForDeparseNodes(Node *inputNode, void *context);
+static Node * AdjustImproperForDeparseNodes(Node *inputNode, void *context);
 static bool IsImproperForDeparseRelabelTypeNode(Node *inputNode);
 static bool IsImproperForDeparseCoerceViaIONode(Node *inputNode);
 static CollateExpr * RelabelTypeToCollateExpr(RelabelType *relabelType);
@@ -2698,9 +2698,9 @@ SqlTaskList(Job *job)
 	 * the query sublinks, and we don't want to do that unless necessary, as it
 	 * would be inefficient.
 	 */
-	if (QueryTreeHasImproperForDeparseNodes((Node *) jobQuery))
+	if (QueryTreeHasImproperForDeparseNodes((Node *) jobQuery, NULL))
 	{
-		jobQuery = (Query *) AdjustImproperForDeparseNodes((Node *) jobQuery);
+		jobQuery = (Query *) AdjustImproperForDeparseNodes((Node *) jobQuery, NULL);
 	}
 
 	ListCell *fragmentCombinationCell = NULL;
@@ -5621,7 +5621,7 @@ TaskListHighestTaskId(List *taskList)
  * CoerceViaIONodes which are improper for deparse
  */
 static bool
-QueryTreeHasImproperForDeparseNodes(Node *inputNode)
+QueryTreeHasImproperForDeparseNodes(Node *inputNode, void *context)
 {
 	if (inputNode == NULL)
 	{
@@ -5653,7 +5653,7 @@ QueryTreeHasImproperForDeparseNodes(Node *inputNode)
  * Details will be written in comments in the corresponding if conditions.
  */
 static Node *
-AdjustImproperForDeparseNodes(Node *inputNode)
+AdjustImproperForDeparseNodes(Node *inputNode, void *context)
 {
 	if (inputNode == NULL)
 	{
