@@ -1856,6 +1856,102 @@ SELECT COUNT(*) FROM demo_distributed where val1 = 150;
 SELECT COUNT(*) FROM demo_distributed where id1 = 2;
 
 --
+-- Test FALSE filters
+--
+CREATE TABLE source_filter(order_id INT, customer_id INT, order_center VARCHAR, order_time timestamp);
+CREATE TABLE target_filter(customer_id INT, last_order_id INT, order_center VARCHAR, order_count INT, last_order timestamp);
+
+SELECT create_distributed_table('source_filter', 'customer_id');
+SELECT create_distributed_table('target_filter', 'customer_id', colocate_with => 'source_filter');
+
+CREATE FUNCTION load_filter() RETURNS VOID AS $$
+
+TRUNCATE target_filter;
+TRUNCATE source_filter;
+
+INSERT INTO target_filter VALUES(100, 11, 'trg', -1, '2022-01-01 00:00:00'); -- Match UPDATE
+INSERT INTO target_filter VALUES(200, 11, 'trg', -1, '2022-01-01 00:00:00'); -- Match DELETE
+
+INSERT INTO source_filter VALUES(12, 100, 'src', '2022-01-01 00:00:00');
+INSERT INTO source_filter VALUES(12, 200, 'src', '2022-01-01 00:00:00');
+INSERT INTO source_filter VALUES(12, 300, 'src', '2022-01-01 00:00:00');
+
+$$
+LANGUAGE SQL;
+
+--WHEN MATCH and FALSE
+SELECT load_filter();
+MERGE INTO target_filter t
+USING source_filter s
+ON s.customer_id = t.customer_id
+WHEN MATCHED AND t.customer_id = 100 AND (FALSE) THEN
+	UPDATE SET order_count = 999
+WHEN MATCHED AND t.customer_id = 200 THEN
+	DELETE
+WHEN NOT MATCHED THEN
+	INSERT VALUES(s.customer_id, s.order_id, s.order_center, 1, s.order_time);
+
+SELECT * FROM target_filter ORDER BY 1, 2;
+
+--WHEN NOT MATCH and 1=0
+SELECT load_filter();
+MERGE INTO target_filter t
+USING source_filter s
+ON s.customer_id = t.customer_id
+WHEN MATCHED AND t.customer_id = 100 THEN
+	UPDATE SET order_count = 999
+WHEN MATCHED AND t.customer_id = 200 THEN
+	DELETE
+WHEN NOT MATCHED AND (1=0) THEN
+	INSERT VALUES(s.customer_id, s.order_id, s.order_center, 1, s.order_time);
+
+SELECT * FROM target_filter ORDER BY 1, 2;
+
+--ON t.key = s.key AND 1 < 0
+SELECT load_filter();
+MERGE INTO target_filter t
+USING source_filter s
+ON s.customer_id = t.customer_id AND 1 < 0
+WHEN MATCHED AND t.customer_id = 100 THEN
+	UPDATE SET order_count = 999
+WHEN MATCHED AND t.customer_id = 200 THEN
+	DELETE
+WHEN NOT MATCHED THEN
+	INSERT VALUES(s.customer_id, s.order_id, s.order_center, 1, s.order_time);
+
+SELECT * FROM target_filter ORDER BY 1, 2;
+
+--(SELECT * FROM source_filter WHERE false) as source_filter
+SELECT load_filter();
+MERGE INTO target_filter t
+USING (SELECT * FROM source_filter WHERE false) s
+ON s.customer_id = t.customer_id
+WHEN MATCHED AND t.customer_id = 100 THEN
+	UPDATE SET order_count = 999
+WHEN MATCHED AND t.customer_id = 200 THEN
+	DELETE
+WHEN NOT MATCHED THEN
+	INSERT VALUES(s.customer_id, s.order_id, s.order_center, 1, s.order_time);
+
+SELECT * FROM target_filter ORDER BY 1, 2;
+
+-- Bug 6785
+CREATE TABLE source_6785( id   integer, z int, d jsonb);
+CREATE TABLE target_6785( id   integer, z int, d jsonb);
+SELECT create_distributed_table('target_6785','id'), create_distributed_table('source_6785', 'id');
+INSERT INTO source_6785 SELECT i,i FROM generate_series(0,5)i;
+
+SET client_min_messages TO DEBUG1;
+MERGE INTO target_6785 sda
+USING (SELECT * FROM source_6785 WHERE id = 1) sdn
+ON sda.id = sdn.id AND sda.id = 2
+WHEN NOT matched THEN
+      INSERT (id, z) VALUES (sdn.id, 5);
+RESET client_min_messages;
+
+SELECT * FROM target_6785 ORDER BY 1;
+
+--
 -- Error and Unsupported scenarios
 --
 
