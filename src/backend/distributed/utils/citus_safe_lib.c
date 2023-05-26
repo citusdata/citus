@@ -23,8 +23,6 @@
 #include "distributed/citus_safe_lib.h"
 #include "lib/stringinfo.h"
 
-#define citus_vsnprintf pg_vsnprintf
-
 
 /*
  * ereport_constraint_handler is a constraint handler that calls ereport. A
@@ -338,7 +336,7 @@ SafeSnprintf(char *restrict buffer, rsize_t bufsz, const char *restrict format, 
 	va_list args;
 
 	va_start(args, format);
-	size_t result = citus_vsnprintf(buffer, bufsz, format, args);
+	int result = pg_vsnprintf(buffer, bufsz, format, args);
 	va_end(args);
 	return result;
 }
