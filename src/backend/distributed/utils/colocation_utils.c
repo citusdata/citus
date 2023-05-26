@@ -20,6 +20,7 @@
 #include "catalog/pg_type.h"
 #include "commands/sequence.h"
 #include "distributed/colocation_utils.h"
+#include "distributed/commands.h"
 #include "distributed/listutils.h"
 #include "distributed/metadata_utility.h"
 #include "distributed/coordinator_protocol.h"
@@ -30,6 +31,7 @@
 #include "distributed/pg_dist_colocation.h"
 #include "distributed/resource_lock.h"
 #include "distributed/shardinterval_utils.h"
+#include "distributed/tenant_schema_metadata.h"
 #include "distributed/version_compat.h"
 #include "distributed/utils/array_type.h"
 #include "distributed/worker_protocol.h"
@@ -49,7 +51,6 @@ static bool HashPartitionedShardIntervalsEqual(ShardInterval *leftShardInterval,
 											   ShardInterval *rightShardInterval);
 static int CompareShardPlacementsByNode(const void *leftElement,
 										const void *rightElement);
-static void DeleteColocationGroup(uint32 colocationId);
 static uint32 CreateColocationGroupForRelation(Oid sourceRelationId);
 static void BreakColocation(Oid sourceRelationId);
 
@@ -545,6 +546,13 @@ ColocationId(int shardCount, int replicationFactor, Oid distributionColumnType, 
 	{
 		Form_pg_dist_colocation colocationForm =
 			(Form_pg_dist_colocation) GETSTRUCT(colocationTuple);
+
+		/* avoid chosing a colocation group that belongs to a tenant schema */
+		if (IsTenantSchemaColocationGroup(colocationForm->colocationid))
+		{
+			colocationTuple = systable_getnext(scanDescriptor);
+			continue;
+		}
 
 		if (colocationId == INVALID_COLOCATION_ID || colocationId >
 			colocationForm->colocationid)
@@ -1258,9 +1266,9 @@ DeleteColocationGroupIfNoTablesBelong(uint32 colocationId)
 
 /*
  * DeleteColocationGroup deletes the colocation group from pg_dist_colocation
- * throughout the cluster.
+ * throughout the cluster and dissociates the tenant schema if any.
  */
-static void
+void
 DeleteColocationGroup(uint32 colocationId)
 {
 	DeleteColocationGroupLocally(colocationId);
@@ -1421,5 +1429,26 @@ EnsureTableCanBeColocatedWith(Oid relationId, char replicationModel,
 						errdetail("Distribution column types don't match for "
 								  "%s and %s.", sourceRelationName,
 								  relationName)));
+	}
+
+	/* prevent colocating regular tables with tenant tables */
+	Oid sourceRelationSchemaId = get_rel_namespace(sourceRelationId);
+	Oid targetRelationSchemaId = get_rel_namespace(relationId);
+	if (IsTenantSchema(sourceRelationSchemaId) &&
+		sourceRelationSchemaId != targetRelationSchemaId)
+	{
+		char *relationName = get_rel_name(relationId);
+		char *sourceRelationName = get_rel_name(sourceRelationId);
+		char *sourceRelationSchemaName = get_namespace_name(sourceRelationSchemaId);
+
+		ereport(ERROR, (errmsg("cannot colocate tables %s and %s",
+							   sourceRelationName, relationName),
+						errdetail("Cannot colocate tables with tenant tables "
+								  "by using colocate_with option."),
+						errhint("Consider using \"CREATE TABLE\" statement "
+								"to create this table as a tenant table in "
+								"the same schema to automatically colocate "
+								"it with %s.%s",
+								sourceRelationSchemaName, sourceRelationName)));
 	}
 }

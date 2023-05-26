@@ -23,6 +23,7 @@
 
 
 extern bool AddAllLocalTablesToMetadata;
+extern bool EnableSchemaBasedSharding;
 
 /* controlled via GUC, should be accessed via EnableLocalReferenceForeignKeys() */
 extern bool EnableLocalReferenceForeignKeys;
@@ -458,8 +459,7 @@ extern void UnmarkRolesDistributed(List *roles);
 extern List * FilterDistributedRoles(List *roles);
 
 /* schema.c - forward declarations */
-extern List * PreprocessCreateSchemaStmt(Node *node, const char *queryString,
-										 ProcessUtilityContext processUtilityContext);
+extern List * PostprocessCreateSchemaStmt(Node *node, const char *queryString);
 extern List * PreprocessDropSchemaStmt(Node *dropSchemaStatement,
 									   const char *queryString,
 									   ProcessUtilityContext processUtilityContext);
@@ -586,6 +586,7 @@ extern char * GetAlterColumnWithNextvalDefaultCmd(Oid sequenceOid, Oid relationI
 
 extern void ErrorIfTableHasUnsupportedIdentityColumn(Oid relationId);
 extern void ErrorIfTableHasIdentityColumn(Oid relationId);
+extern void ConvertNewTableIfNecessary(Node *createStmt);
 
 /* text_search.c - forward declarations */
 extern List * GetCreateTextSearchConfigStatements(const ObjectAddress *address);
@@ -770,6 +771,7 @@ extern void ExecuteForeignKeyCreateCommandList(List *ddlCommandList,
 /* create_citus_local_table.c */
 extern void CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys,
 								  bool autoConverted);
+extern bool ShouldAddNewTableToMetadata(Oid relationId);
 extern List * GetExplicitIndexOidList(Oid relationId);
 
 extern bool ShouldPropagateSetCommand(VariableSetStmt *setStmt);
@@ -779,5 +781,13 @@ extern void CreateCitusLocalTablePartitionOf(CreateStmt *createStatement,
 											 Oid relationId, Oid parentRelationId);
 extern void UpdateAutoConvertedForConnectedRelations(List *relationId, bool
 													 autoConverted);
+
+/* schema_based_sharding.c */
+extern bool ShouldUseSchemaBasedSharding(char *schemaName);
+extern bool ShouldCreateTenantSchemaTable(Oid relationId);
+extern bool IsTenantSchema(Oid schemaId);
+extern void ErrorIfIllegalPartitioningInTenantSchema(Oid parentRelationId,
+													 Oid partitionRelationId);
+extern void CreateTenantSchemaTable(Oid relationId);
 
 #endif /*CITUS_COMMANDS_H */

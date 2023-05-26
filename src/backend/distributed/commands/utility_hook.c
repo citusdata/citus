@@ -116,7 +116,6 @@ static void PostStandardProcessUtility(Node *parsetree);
 static void DecrementUtilityHookCountersIfNecessary(Node *parsetree);
 static bool IsDropSchemaOrDB(Node *parsetree);
 static bool ShouldCheckUndistributeCitusLocalTables(void);
-static bool ShouldAddNewTableToMetadata(Node *parsetree);
 
 /*
  * ProcessUtilityParseTree is a convenience method to create a PlannedStmt out of
@@ -344,26 +343,32 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 			}
 			ResetConstraintDropped();
 
+			/*
+			 * We're only interested in top-level CREATE TABLE commands
+			 * to create a tenant schema table or a Citus managed table.
+			 */
 			if (context == PROCESS_UTILITY_TOPLEVEL &&
-				ShouldAddNewTableToMetadata(parsetree))
+				(IsA(parsetree, CreateStmt) ||
+				 IsA(parsetree, CreateForeignTableStmt) ||
+				 IsA(parsetree, CreateTableAsStmt)))
 			{
-				/*
-				 * Here we need to increment command counter so that next command
-				 * can see the new table.
-				 */
-				CommandCounterIncrement();
-				CreateStmt *createTableStmt = (CreateStmt *) parsetree;
-				Oid relationId = RangeVarGetRelid(createTableStmt->relation,
-												  NoLock, false);
+				Node *createStmt = NULL;
+				if (IsA(parsetree, CreateTableAsStmt))
+				{
+					createStmt = parsetree;
+				}
+				else
+				{
+					/*
+					 * Not directly cast to CreateStmt to guard against the case where
+					 * the definition of CreateForeignTableStmt changes in future.
+					 */
+					createStmt =
+						IsA(parsetree, CreateStmt) ? parsetree :
+						(Node *) &(((CreateForeignTableStmt *) parsetree)->base);
+				}
 
-				/*
-				 * Here we set autoConverted to false, since the user explicitly
-				 * wants these tables to be added to metadata, by setting the
-				 * GUC use_citus_managed_tables to true.
-				 */
-				bool autoConverted = false;
-				bool cascade = true;
-				CreateCitusLocalTable(relationId, cascade, autoConverted);
+				ConvertNewTableIfNecessary(createStmt);
 			}
 		}
 
@@ -1057,60 +1062,6 @@ ShouldCheckUndistributeCitusLocalTables(void)
 	}
 
 	return true;
-}
-
-
-/*
- * ShouldAddNewTableToMetadata takes a Node* and returns true if we need to add a
- * newly created table to metadata, false otherwise.
- * This function checks whether the given Node* is a CREATE TABLE statement.
- * For partitions and temporary tables, ShouldAddNewTableToMetadata returns false.
- * For other tables created, returns true, if we are on a coordinator that is added
- * as worker, and ofcourse, if the GUC use_citus_managed_tables is set to on.
- */
-static bool
-ShouldAddNewTableToMetadata(Node *parsetree)
-{
-	CreateStmt *createTableStmt;
-
-	if (IsA(parsetree, CreateStmt))
-	{
-		createTableStmt = (CreateStmt *) parsetree;
-	}
-	else if (IsA(parsetree, CreateForeignTableStmt))
-	{
-		CreateForeignTableStmt *createForeignTableStmt =
-			(CreateForeignTableStmt *) parsetree;
-		createTableStmt = (CreateStmt *) &(createForeignTableStmt->base);
-	}
-	else
-	{
-		/* if the command is not CREATE [FOREIGN] TABLE, we can early return false */
-		return false;
-	}
-
-	if (createTableStmt->relation->relpersistence == RELPERSISTENCE_TEMP ||
-		createTableStmt->partbound != NULL)
-	{
-		/*
-		 * Shouldn't add table to metadata if it's a temp table, or a partition.
-		 * Creating partitions of a table that is added to metadata is already handled.
-		 */
-		return false;
-	}
-
-	if (AddAllLocalTablesToMetadata && !IsBinaryUpgrade &&
-		IsCoordinator() && CoordinatorAddedAsWorkerNode())
-	{
-		/*
-		 * We have verified that the GUC is set to true, and we are not upgrading,
-		 * and we are on the coordinator that is added as worker node.
-		 * So return true here, to add this newly created table to metadata.
-		 */
-		return true;
-	}
-
-	return false;
 }
 
 

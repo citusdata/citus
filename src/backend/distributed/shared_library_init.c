@@ -1382,6 +1382,20 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
+		"citus.enable_schema_based_sharding",
+		gettext_noop("Enables schema based sharding."),
+		gettext_noop("The schemas created while this is ON will be automatically "
+					 "associated with individual colocation groups such that the "
+					 "tables created in those schemas will be automatically "
+					 "converted to colocated distributed tables without a shard "
+					 "key."),
+		&EnableSchemaBasedSharding,
+		false,
+		PGC_USERSET,
+		GUC_STANDARD,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
 		"citus.enable_single_hash_repartition_joins",
 		gettext_noop("Enables single hash repartitioning between hash "
 					 "distributed tables"),

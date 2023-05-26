@@ -40,6 +40,7 @@
 #include "distributed/backend_data.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/colocation_utils.h"
+#include "distributed/tenant_schema_metadata.h"
 #include "distributed/commands.h"
 #include "distributed/deparser.h"
 #include "distributed/distribution_column.h"
@@ -60,6 +61,7 @@
 #include "distributed/pg_dist_colocation.h"
 #include "distributed/pg_dist_node.h"
 #include "distributed/pg_dist_shard.h"
+#include "distributed/pg_dist_tenant_schema.h"
 #include "distributed/relation_access_tracking.h"
 #include "distributed/remote_commands.h"
 #include "distributed/resource_lock.h"
@@ -144,6 +146,8 @@ static char * ColocationGroupCreateCommand(uint32 colocationId, int shardCount,
 										   Oid distributionColumnType,
 										   Oid distributionColumnCollation);
 static char * ColocationGroupDeleteCommand(uint32 colocationId);
+static char * RemoteSchemaIdExpressionById(Oid schemaId);
+static char * RemoteSchemaIdExpressionByName(char *schemaName);
 static char * RemoteTypeIdExpression(Oid typeId);
 static char * RemoteCollationIdExpression(Oid colocationId);
 
@@ -170,6 +174,8 @@ PG_FUNCTION_INFO_V1(citus_internal_update_relation_colocation);
 PG_FUNCTION_INFO_V1(citus_internal_add_object_metadata);
 PG_FUNCTION_INFO_V1(citus_internal_add_colocation_metadata);
 PG_FUNCTION_INFO_V1(citus_internal_delete_colocation_metadata);
+PG_FUNCTION_INFO_V1(citus_internal_add_tenant_schema);
+PG_FUNCTION_INFO_V1(citus_internal_delete_tenant_schema);
 
 
 static bool got_SIGTERM = false;
@@ -3789,6 +3795,52 @@ citus_internal_delete_colocation_metadata(PG_FUNCTION_ARGS)
 
 
 /*
+ * citus_internal_add_tenant_schema is an internal UDF to
+ * call InsertTenantSchemaLocally on a remote node.
+ *
+ * None of the parameters are allowed to be NULL. To set the colocation
+ * id to NULL in metadata, use INVALID_COLOCATION_ID.
+ */
+Datum
+citus_internal_add_tenant_schema(PG_FUNCTION_ARGS)
+{
+	CheckCitusVersion(ERROR);
+
+	PG_ENSURE_ARGNOTNULL(0, "schema_id");
+	Oid schemaId = PG_GETARG_OID(0);
+
+	PG_ENSURE_ARGNOTNULL(1, "colocation_id");
+	uint32 colocationId = PG_GETARG_INT32(1);
+
+	InsertTenantSchemaLocally(schemaId, colocationId);
+
+	PG_RETURN_VOID();
+}
+
+
+/*
+ * citus_internal_delete_tenant_schema is an internal UDF to
+ * call DeleteTenantSchemaLocally on a remote node.
+ *
+ * The schemaId parameter is not allowed to be NULL. Morever, input schema is
+ * expected to be dropped already because this function is called from Citus
+ * drop hook and only used to clean up metadata after the schema is dropped.
+ */
+Datum
+citus_internal_delete_tenant_schema(PG_FUNCTION_ARGS)
+{
+	CheckCitusVersion(ERROR);
+
+	PG_ENSURE_ARGNOTNULL(0, "schema_id");
+	Oid schemaId = PG_GETARG_OID(0);
+
+	DeleteTenantSchemaLocally(schemaId);
+
+	PG_RETURN_VOID();
+}
+
+
+/*
  * SyncNewColocationGroup synchronizes a new pg_dist_colocation entry to a worker.
  */
 void
@@ -3934,6 +3986,72 @@ ColocationGroupDeleteCommand(uint32 colocationId)
 					 colocationId);
 
 	return deleteColocationCommand->data;
+}
+
+
+/*
+ * TenantSchemaInsertCommand returns a command to call
+ * citus_internal_add_tenant_schema().
+ */
+char *
+TenantSchemaInsertCommand(Oid schemaId, uint32 colocationId)
+{
+	StringInfo command = makeStringInfo();
+	appendStringInfo(command,
+					 "SELECT pg_catalog.citus_internal_add_tenant_schema(%s, %u)",
+					 RemoteSchemaIdExpressionById(schemaId), colocationId);
+
+	return command->data;
+}
+
+
+/*
+ * TenantSchemaDeleteCommand returns a command to call
+ * citus_internal_delete_tenant_schema().
+ */
+char *
+TenantSchemaDeleteCommand(char *schemaName)
+{
+	StringInfo command = makeStringInfo();
+	appendStringInfo(command,
+					 "SELECT pg_catalog.citus_internal_delete_tenant_schema(%s)",
+					 RemoteSchemaIdExpressionByName(schemaName));
+
+	return command->data;
+}
+
+
+/*
+ * RemoteSchemaIdExpressionById returns an expression in text form that
+ * can be used to obtain the OID of the schema with given schema id on a
+ * different node when included in a query string.
+ */
+static char *
+RemoteSchemaIdExpressionById(Oid schemaId)
+{
+	char *schemaName = get_namespace_name(schemaId);
+	if (schemaName == NULL)
+	{
+		ereport(ERROR, (errmsg("schema with OID %u does not exist", schemaId)));
+	}
+
+	return RemoteSchemaIdExpressionByName(schemaName);
+}
+
+
+/*
+ * RemoteSchemaIdExpressionByName returns an expression in text form that
+ * can be used to obtain the OID of the schema with given schema name on a
+ * different node when included in a query string.
+ */
+static char *
+RemoteSchemaIdExpressionByName(char *schemaName)
+{
+	StringInfo regnamespaceExpr = makeStringInfo();
+	appendStringInfo(regnamespaceExpr, "%s::regnamespace",
+					 quote_literal_cstr(quote_identifier(schemaName)));
+
+	return regnamespaceExpr->data;
 }
 
 
@@ -4332,6 +4450,14 @@ SyncDistributedObjects(MetadataSyncContext *context)
 	SendDistObjectCommands(context);
 
 	/*
+	 * Commands to insert pg_dist_tenant_schema entries.
+	 *
+	 * Need to be done after syncing distributed objects because the schemas
+	 * need to exist on the worker.
+	 */
+	SendTenantSchemaMetadataCommands(context);
+
+	/*
 	 * After creating each table, handle the inter table relationship between
 	 * those tables.
 	 */
@@ -4403,6 +4529,10 @@ SendMetadataDeletionCommands(MetadataSyncContext *context)
 
 	/* remove pg_dist_colocation entries */
 	SendOrCollectCommandListToActivatedNodes(context, list_make1(DELETE_ALL_COLOCATION));
+
+	/* remove pg_dist_tenant_schema entries */
+	SendOrCollectCommandListToActivatedNodes(context,
+											 list_make1(DELETE_ALL_TENANT_SCHEMAS));
 }
 
 
@@ -4499,6 +4629,53 @@ SendColocationMetadataCommands(MetadataSyncContext *context)
 
 	systable_endscan(scanDesc);
 	table_close(relation, AccessShareLock);
+}
+
+
+/*
+ * SendTenantSchemaMetadataCommands sends tenant schema metadata entries with
+ * transactional or nontransactional mode according to transactionMode inside
+ * metadataSyncContext.
+ */
+void
+SendTenantSchemaMetadataCommands(MetadataSyncContext *context)
+{
+	ScanKeyData scanKey[1];
+	int scanKeyCount = 0;
+
+	Relation pgDistTenantSchema = table_open(DistTenantSchemaRelationId(),
+											 AccessShareLock);
+	SysScanDesc scanDesc = systable_beginscan(pgDistTenantSchema, InvalidOid, false, NULL,
+											  scanKeyCount, scanKey);
+
+	MemoryContext oldContext = MemoryContextSwitchTo(context->context);
+	HeapTuple heapTuple = NULL;
+	while (true)
+	{
+		ResetMetadataSyncMemoryContext(context);
+
+		heapTuple = systable_getnext(scanDesc);
+		if (!HeapTupleIsValid(heapTuple))
+		{
+			break;
+		}
+
+		Form_pg_dist_tenant_schema tenantSchemaForm =
+			(Form_pg_dist_tenant_schema) GETSTRUCT(heapTuple);
+
+		StringInfo insertTenantSchemaCommand = makeStringInfo();
+		appendStringInfo(insertTenantSchemaCommand,
+						 "SELECT pg_catalog.citus_internal_add_tenant_schema(%s, %u)",
+						 RemoteSchemaIdExpressionById(tenantSchemaForm->schemaid),
+						 tenantSchemaForm->colocationid);
+
+		List *commandList = list_make1(insertTenantSchemaCommand->data);
+		SendOrCollectCommandListToActivatedNodes(context, commandList);
+	}
+	MemoryContextSwitchTo(oldContext);
+
+	systable_endscan(scanDesc);
+	table_close(pgDistTenantSchema, AccessShareLock);
 }
 
 
