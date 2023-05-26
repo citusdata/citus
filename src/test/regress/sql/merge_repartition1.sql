@@ -434,7 +434,9 @@ WHEN NOT MATCHED THEN
 SELECT compare_data();
 
 -- Test source-query that requires repartitioning on top of MERGE repartitioning
+SET client_min_messages TO WARNING;
 SELECT cleanup_data();
+RESET client_min_messages;
 SELECT setup_data();
 SELECT create_distributed_table('citus_target', 'id');
 SELECT create_distributed_table('citus_source', 'id', colocate_with=>'none');
@@ -489,7 +491,9 @@ SELECT compare_data();
 SELECT alter_table_set_access_method('citus_source', 'heap');
 
 -- Test CTE/Subquery in merge-actions (works only for router query)
+SET client_min_messages TO WARNING;
 SELECT cleanup_data();
+RESET client_min_messages;
 SELECT setup_data();
 SELECT create_distributed_table('citus_target', 'id');
 SELECT create_distributed_table('citus_source', 'id', colocate_with=>'citus_target');
@@ -510,6 +514,65 @@ WHEN MATCHED AND (SELECT max_a > 5001 FROM (SELECT max(id) as max_a, max(val) as
 WHEN NOT MATCHED AND (SELECT max_a < 5001 FROM (SELECT max(id) as max_a, max(val) as b FROM citus_target WHERE id = citus_source.id) AS foo) THEN
         INSERT VALUES (citus_source.id, 100);
 
+SELECT compare_data();
+
+--
+-- Test target with false clause
+--
+SET client_min_messages TO WARNING;
+SELECT cleanup_data();
+RESET client_min_messages;
+SELECT setup_data();
+SELECT create_distributed_table('citus_target', 'id');
+SELECT create_distributed_table('citus_source', 'id', colocate_with => 'citus_target');
+
+MERGE INTO pg_target t
+USING (SELECT * FROM pg_source WHERE id > 25000) AS s
+ON t.id = s.id AND t.id < 25000
+WHEN MATCHED AND t.id <= 55000 THEN
+        UPDATE SET val = s.val + 1
+WHEN MATCHED THEN
+        DELETE
+WHEN NOT MATCHED THEN
+        INSERT VALUES(s.id, s.val);
+
+MERGE INTO citus_target t
+USING (SELECT * FROM citus_source WHERE id > 25000) AS s
+ON t.id = s.id AND t.id < 25000
+WHEN MATCHED AND t.id <= 55000 THEN
+        UPDATE SET val = s.val + 1
+WHEN MATCHED THEN
+        DELETE
+WHEN NOT MATCHED THEN
+        INSERT VALUES(s.id, s.val);
+SELECT compare_data();
+
+SET client_min_messages TO WARNING;
+SELECT cleanup_data();
+RESET client_min_messages;
+SELECT setup_data();
+SELECT create_distributed_table('citus_target', 'id');
+SELECT create_distributed_table('citus_source', 'id', colocate_with => 'citus_target');
+
+MERGE INTO pg_target t
+USING (SELECT * FROM pg_source WHERE id = 25000) AS s
+ON t.id = s.id AND t.id = 50000
+WHEN MATCHED AND t.id <= 55000 THEN
+        UPDATE SET val = s.val + 1
+WHEN MATCHED THEN
+        DELETE
+WHEN NOT MATCHED THEN
+        INSERT VALUES(s.id, s.val);
+
+MERGE INTO citus_target t
+USING (SELECT * FROM citus_source WHERE id = 25000) AS s
+ON t.id = s.id AND t.id = 50000
+WHEN MATCHED AND t.id <= 55000 THEN
+        UPDATE SET val = s.val + 1
+WHEN MATCHED THEN
+        DELETE
+WHEN NOT MATCHED THEN
+        INSERT VALUES(s.id, s.val);
 SELECT compare_data();
 
 DROP SCHEMA merge_repartition1_schema CASCADE;

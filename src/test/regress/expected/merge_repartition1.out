@@ -1000,28 +1000,14 @@ SQL function "compare_data" statement 2
 (1 row)
 
 -- Test source-query that requires repartitioning on top of MERGE repartitioning
+SET client_min_messages TO WARNING;
 SELECT cleanup_data();
-NOTICE:  creating a new table for merge_repartition1_schema.citus_target
-CONTEXT:  SQL function "cleanup_data" statement 5
-NOTICE:  moving the data of merge_repartition1_schema.citus_target
-CONTEXT:  SQL function "cleanup_data" statement 5
-NOTICE:  dropping the old merge_repartition1_schema.citus_target
-CONTEXT:  SQL function "cleanup_data" statement 5
-NOTICE:  renaming the new table to merge_repartition1_schema.citus_target
-CONTEXT:  SQL function "cleanup_data" statement 5
-NOTICE:  creating a new table for merge_repartition1_schema.citus_source
-CONTEXT:  SQL function "cleanup_data" statement 6
-NOTICE:  moving the data of merge_repartition1_schema.citus_source
-CONTEXT:  SQL function "cleanup_data" statement 6
-NOTICE:  dropping the old merge_repartition1_schema.citus_source
-CONTEXT:  SQL function "cleanup_data" statement 6
-NOTICE:  renaming the new table to merge_repartition1_schema.citus_source
-CONTEXT:  SQL function "cleanup_data" statement 6
  cleanup_data
 ---------------------------------------------------------------------
 
 (1 row)
 
+RESET client_min_messages;
 SELECT setup_data();
  setup_data
 ---------------------------------------------------------------------
@@ -1159,28 +1145,14 @@ NOTICE:  renaming the new table to merge_repartition1_schema.citus_source
 (1 row)
 
 -- Test CTE/Subquery in merge-actions (works only for router query)
+SET client_min_messages TO WARNING;
 SELECT cleanup_data();
-NOTICE:  creating a new table for merge_repartition1_schema.citus_target
-CONTEXT:  SQL function "cleanup_data" statement 5
-NOTICE:  moving the data of merge_repartition1_schema.citus_target
-CONTEXT:  SQL function "cleanup_data" statement 5
-NOTICE:  dropping the old merge_repartition1_schema.citus_target
-CONTEXT:  SQL function "cleanup_data" statement 5
-NOTICE:  renaming the new table to merge_repartition1_schema.citus_target
-CONTEXT:  SQL function "cleanup_data" statement 5
-NOTICE:  creating a new table for merge_repartition1_schema.citus_source
-CONTEXT:  SQL function "cleanup_data" statement 6
-NOTICE:  moving the data of merge_repartition1_schema.citus_source
-CONTEXT:  SQL function "cleanup_data" statement 6
-NOTICE:  dropping the old merge_repartition1_schema.citus_source
-CONTEXT:  SQL function "cleanup_data" statement 6
-NOTICE:  renaming the new table to merge_repartition1_schema.citus_source
-CONTEXT:  SQL function "cleanup_data" statement 6
  cleanup_data
 ---------------------------------------------------------------------
 
 (1 row)
 
+RESET client_min_messages;
 SELECT setup_data();
  setup_data
 ---------------------------------------------------------------------
@@ -1221,6 +1193,137 @@ WHEN MATCHED AND (SELECT max_a > 5001 FROM (SELECT max(id) as max_a, max(val) as
         DELETE
 WHEN NOT MATCHED AND (SELECT max_a < 5001 FROM (SELECT max(id) as max_a, max(val) as b FROM citus_target WHERE id = citus_source.id) AS foo) THEN
         INSERT VALUES (citus_source.id, 100);
+SELECT compare_data();
+NOTICE:  The average of pg_target.id is equal to citus_target.id
+CONTEXT:  PL/pgSQL function check_data(text,text,text,text) line XX at RAISE
+SQL function "compare_data" statement 1
+NOTICE:  The average of pg_target.val is equal to citus_target.val
+CONTEXT:  PL/pgSQL function check_data(text,text,text,text) line XX at RAISE
+SQL function "compare_data" statement 2
+ compare_data
+---------------------------------------------------------------------
+
+(1 row)
+
+--
+-- Test target with false clause
+--
+SET client_min_messages TO WARNING;
+SELECT cleanup_data();
+ cleanup_data
+---------------------------------------------------------------------
+
+(1 row)
+
+RESET client_min_messages;
+SELECT setup_data();
+ setup_data
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_distributed_table('citus_target', 'id');
+NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$merge_repartition1_schema.citus_target$$)
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_distributed_table('citus_source', 'id', colocate_with => 'citus_target');
+NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$merge_repartition1_schema.citus_source$$)
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+MERGE INTO pg_target t
+USING (SELECT * FROM pg_source WHERE id > 25000) AS s
+ON t.id = s.id AND t.id < 25000
+WHEN MATCHED AND t.id <= 55000 THEN
+        UPDATE SET val = s.val + 1
+WHEN MATCHED THEN
+        DELETE
+WHEN NOT MATCHED THEN
+        INSERT VALUES(s.id, s.val);
+MERGE INTO citus_target t
+USING (SELECT * FROM citus_source WHERE id > 25000) AS s
+ON t.id = s.id AND t.id < 25000
+WHEN MATCHED AND t.id <= 55000 THEN
+        UPDATE SET val = s.val + 1
+WHEN MATCHED THEN
+        DELETE
+WHEN NOT MATCHED THEN
+        INSERT VALUES(s.id, s.val);
+SELECT compare_data();
+NOTICE:  The average of pg_target.id is equal to citus_target.id
+CONTEXT:  PL/pgSQL function check_data(text,text,text,text) line XX at RAISE
+SQL function "compare_data" statement 1
+NOTICE:  The average of pg_target.val is equal to citus_target.val
+CONTEXT:  PL/pgSQL function check_data(text,text,text,text) line XX at RAISE
+SQL function "compare_data" statement 2
+ compare_data
+---------------------------------------------------------------------
+
+(1 row)
+
+SET client_min_messages TO WARNING;
+SELECT cleanup_data();
+ cleanup_data
+---------------------------------------------------------------------
+
+(1 row)
+
+RESET client_min_messages;
+SELECT setup_data();
+ setup_data
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_distributed_table('citus_target', 'id');
+NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$merge_repartition1_schema.citus_target$$)
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_distributed_table('citus_source', 'id', colocate_with => 'citus_target');
+NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$merge_repartition1_schema.citus_source$$)
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+MERGE INTO pg_target t
+USING (SELECT * FROM pg_source WHERE id = 25000) AS s
+ON t.id = s.id AND t.id = 50000
+WHEN MATCHED AND t.id <= 55000 THEN
+        UPDATE SET val = s.val + 1
+WHEN MATCHED THEN
+        DELETE
+WHEN NOT MATCHED THEN
+        INSERT VALUES(s.id, s.val);
+MERGE INTO citus_target t
+USING (SELECT * FROM citus_source WHERE id = 25000) AS s
+ON t.id = s.id AND t.id = 50000
+WHEN MATCHED AND t.id <= 55000 THEN
+        UPDATE SET val = s.val + 1
+WHEN MATCHED THEN
+        DELETE
+WHEN NOT MATCHED THEN
+        INSERT VALUES(s.id, s.val);
 SELECT compare_data();
 NOTICE:  The average of pg_target.id is equal to citus_target.id
 CONTEXT:  PL/pgSQL function check_data(text,text,text,text) line XX at RAISE
