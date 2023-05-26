@@ -165,6 +165,8 @@ SELECT update_distributed_table_colocation('update_col_4', colocate_with:='updat
 
 -- test columnar UDFs
 CREATE TABLE columnar_tbl (a INT) USING COLUMNAR;
+SELECT create_distributed_table('columnar_tbl', NULL, colocate_with:='none');
+
 SELECT * FROM columnar.options WHERE relation = 'columnar_tbl'::regclass;
 SELECT alter_columnar_table_set('columnar_tbl', compression_level => 2);
 SELECT * FROM columnar.options WHERE relation = 'columnar_tbl'::regclass;

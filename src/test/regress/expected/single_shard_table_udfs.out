@@ -356,6 +356,12 @@ ERROR:  cannot colocate tables update_col_1 and update_col_4
 DETAIL:  Distribution column types don't match for update_col_1 and update_col_4.
 -- test columnar UDFs
 CREATE TABLE columnar_tbl (a INT) USING COLUMNAR;
+SELECT create_distributed_table('columnar_tbl', NULL, colocate_with:='none');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
 SELECT * FROM columnar.options WHERE relation = 'columnar_tbl'::regclass;
    relation   | chunk_group_row_limit | stripe_row_limit | compression | compression_level
 ---------------------------------------------------------------------
