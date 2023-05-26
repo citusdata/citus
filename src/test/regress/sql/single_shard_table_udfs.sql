@@ -251,7 +251,7 @@ SELECT locktype, table_name, mode, granted
 FROM pg_locks, citus_shards
 WHERE
       objid = shardid AND
-      table_name::text LIKE 'lock\_tbl\_'
+      table_name::text LIKE 'lock\_tbl\__'
       ORDER BY 2, 3;
 END;
 
