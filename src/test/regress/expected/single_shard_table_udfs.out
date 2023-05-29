@@ -547,9 +547,12 @@ WHERE
       objid = shardid AND
       table_name::text LIKE 'lock\_tbl\__'
       ORDER BY 2, 3;
- locktype | table_name | mode | granted
+ locktype | table_name |       mode       | granted
 ---------------------------------------------------------------------
-(0 rows)
+ advisory | lock_tbl_1 | RowExclusiveLock | t
+ advisory | lock_tbl_1 | ShareLock        | t
+ advisory | lock_tbl_2 | ShareLock        | t
+(3 rows)
 
 END;
 SET client_min_messages TO WARNING;
