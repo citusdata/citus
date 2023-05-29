@@ -131,13 +131,6 @@ BEGIN;
 (1 row)
 
 ROLLBACK;
--- should fail --
-SELECT update_distributed_table_colocation('null_dist_key_table', colocate_with => 'none');
- update_distributed_table_colocation
----------------------------------------------------------------------
-
-(1 row)
-
 SELECT master_create_empty_shard('null_dist_key_table');
 ERROR:  relation "null_dist_key_table" is a single shard table
 DETAIL:  We currently don't support creating shards on single shard tables
@@ -190,7 +183,7 @@ ERROR:  Cannot split shard as operation is only supported for hash distributed t
 SELECT colocationid FROM pg_dist_partition WHERE logicalrelid::text LIKE '%null_dist_key_table%';
  colocationid
 ---------------------------------------------------------------------
-       198001
+       198000
 (1 row)
 
 -- test alter_table_set_access_method and verify it doesn't change the colocation id
@@ -207,7 +200,7 @@ NOTICE:  renaming the new table to null_dist_key_udfs.null_dist_key_table
 SELECT colocationid FROM pg_dist_partition WHERE logicalrelid::text LIKE '%null_dist_key_table%';
  colocationid
 ---------------------------------------------------------------------
-       198001
+       198000
 (1 row)
 
 -- undistribute

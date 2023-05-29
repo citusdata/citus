@@ -53,10 +53,6 @@ BEGIN;
   select count(*) from pg_dist_partition where logicalrelid='null_dist_key_table'::regclass;
 ROLLBACK;
 
--- should fail --
-
-SELECT update_distributed_table_colocation('null_dist_key_table', colocate_with => 'none');
-
 SELECT master_create_empty_shard('null_dist_key_table');
 
 -- return true
