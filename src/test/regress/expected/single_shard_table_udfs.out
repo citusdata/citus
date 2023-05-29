@@ -430,5 +430,56 @@ SELECT columnar.get_storage_id(oid) = storage_id FROM pg_class, columnar_storage
  t
 (1 row)
 
+-- test time series functions
+CREATE TABLE part_tbl (a DATE) PARTITION BY RANGE (a);
+CREATE TABLE part_tbl_1 PARTITION OF part_tbl FOR VALUES FROM ('2000-01-01') TO ('2010-01-01');
+CREATE TABLE part_tbl_2 PARTITION OF part_tbl FOR VALUES FROM ('2020-01-01') TO ('2030-01-01');
+SELECT create_distributed_table('part_tbl', NULL, colocate_with:='none');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT * FROM time_partitions WHERE parent_table::text = 'part_tbl';
+ parent_table | partition_column | partition  | from_value |  to_value  | access_method
+---------------------------------------------------------------------
+ part_tbl     | a                | part_tbl_1 | 01-01-2000 | 01-01-2010 | heap
+ part_tbl     | a                | part_tbl_2 | 01-01-2020 | 01-01-2030 | heap
+(2 rows)
+
+SELECT time_partition_range('part_tbl_2');
+  time_partition_range
+---------------------------------------------------------------------
+ (01-01-2020,01-01-2030)
+(1 row)
+
+SELECT get_missing_time_partition_ranges('part_tbl', INTERVAL '10 years', '2050-01-01', '2000-01-01');
+   get_missing_time_partition_ranges
+---------------------------------------------------------------------
+ (part_tbl_p2010,01-01-2010,01-01-2020)
+ (part_tbl_p2030,01-01-2030,01-01-2040)
+ (part_tbl_p2040,01-01-2040,01-01-2050)
+(3 rows)
+
+SELECT create_time_partitions('part_tbl', INTERVAL '10 years', '2050-01-01', '2000-01-01');
+ create_time_partitions
+---------------------------------------------------------------------
+ t
+(1 row)
+
+CALL drop_old_time_partitions('part_tbl', '2030-01-01');
+NOTICE:  dropping part_tbl_1 with start time 01-01-2000 and end time 01-01-2010
+CONTEXT:  PL/pgSQL function drop_old_time_partitions(regclass,timestamp with time zone) line XX at RAISE
+NOTICE:  dropping part_tbl_p2010 with start time 01-01-2010 and end time 01-01-2020
+CONTEXT:  PL/pgSQL function drop_old_time_partitions(regclass,timestamp with time zone) line XX at RAISE
+NOTICE:  dropping part_tbl_2 with start time 01-01-2020 and end time 01-01-2030
+CONTEXT:  PL/pgSQL function drop_old_time_partitions(regclass,timestamp with time zone) line XX at RAISE
+SELECT * FROM time_partitions WHERE parent_table::text = 'part_tbl';
+ parent_table | partition_column |   partition    | from_value |  to_value  | access_method
+---------------------------------------------------------------------
+ part_tbl     | a                | part_tbl_p2030 | 01-01-2030 | 01-01-2040 | heap
+ part_tbl     | a                | part_tbl_p2040 | 01-01-2040 | 01-01-2050 | heap
+(2 rows)
+
 SET client_min_messages TO WARNING;
 DROP SCHEMA null_dist_key_udfs CASCADE;

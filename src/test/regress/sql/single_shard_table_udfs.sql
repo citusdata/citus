@@ -196,5 +196,25 @@ SELECT version_major, version_minor, reserved_stripe_id, reserved_row_number, re
 
 SELECT columnar.get_storage_id(oid) = storage_id FROM pg_class, columnar_storage_info('columnar_tbl') WHERE relname = 'columnar_tbl';
 
+
+-- test time series functions
+CREATE TABLE part_tbl (a DATE) PARTITION BY RANGE (a);
+CREATE TABLE part_tbl_1 PARTITION OF part_tbl FOR VALUES FROM ('2000-01-01') TO ('2010-01-01');
+CREATE TABLE part_tbl_2 PARTITION OF part_tbl FOR VALUES FROM ('2020-01-01') TO ('2030-01-01');
+
+SELECT create_distributed_table('part_tbl', NULL, colocate_with:='none');
+
+SELECT * FROM time_partitions WHERE parent_table::text = 'part_tbl';
+
+SELECT time_partition_range('part_tbl_2');
+
+SELECT get_missing_time_partition_ranges('part_tbl', INTERVAL '10 years', '2050-01-01', '2000-01-01');
+
+SELECT create_time_partitions('part_tbl', INTERVAL '10 years', '2050-01-01', '2000-01-01');
+
+CALL drop_old_time_partitions('part_tbl', '2030-01-01');
+
+SELECT * FROM time_partitions WHERE parent_table::text = 'part_tbl';
+
 SET client_min_messages TO WARNING;
 DROP SCHEMA null_dist_key_udfs CASCADE;
