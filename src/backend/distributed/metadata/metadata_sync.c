@@ -3708,12 +3708,14 @@ citus_internal_update_relation_colocation(PG_FUNCTION_ARGS)
 								   "entry in pg_dist_partition.",
 								   get_rel_name(relationId))));
 		}
-		else if (partitionMethod != DISTRIBUTE_BY_HASH)
+		else if (!IsCitusTableType(relationId, HASH_DISTRIBUTED) &&
+				 !IsCitusTableType(relationId, SINGLE_SHARD_DISTRIBUTED))
 		{
 			/* connection from the coordinator operating on a shard */
 			ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
 							errmsg("Updating colocation ids are only allowed for hash "
-								   "distributed tables: %c", partitionMethod)));
+								   "and single shard distributed tables: %c",
+								   partitionMethod)));
 		}
 
 		int count = 1;
