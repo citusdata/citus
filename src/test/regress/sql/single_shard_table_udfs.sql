@@ -224,10 +224,10 @@ CREATE TABLE lock_tbl_2 (a INT);
 SELECT create_distributed_table('lock_tbl_2', NULL, colocate_with:='none');
 
 BEGIN;
-SELECT lock_shard_metadata(3, ARRAY[shardid])
+SELECT lock_shard_metadata(3, array_agg(distinct(shardid)))
 FROM citus_shards WHERE table_name::text = 'lock_tbl_1';
 
-SELECT lock_shard_metadata(5, array_agg(shardid))
+SELECT lock_shard_metadata(5, array_agg(distinct(shardid)))
 FROM citus_shards WHERE table_name::text LIKE 'lock\_tbl\__';
 
 SELECT table_name, classid, mode, granted
@@ -241,17 +241,19 @@ END;
 
 
 BEGIN;
-SELECT lock_shard_resources(3, ARRAY[shardid])
+SELECT lock_shard_resources(3, array_agg(distinct(shardid)))
 FROM citus_shards WHERE table_name::text = 'lock_tbl_1';
 
-SELECT lock_shard_resources(5, array_agg(shardid))
+SELECT lock_shard_resources(5, array_agg(distinct(shardid)))
 FROM citus_shards WHERE table_name::text LIKE 'lock\_tbl\__';
 
 SELECT locktype, table_name, mode, granted
-FROM pg_locks, citus_shards
+FROM pg_locks, citus_shards, pg_dist_node
 WHERE
       objid = shardid AND
-      table_name::text LIKE 'lock\_tbl\__'
+      table_name::text LIKE 'lock\_tbl\__' AND
+      citus_shards.nodeport = pg_dist_node.nodeport AND
+      noderole = 'primary'
       ORDER BY 2, 3;
 END;
 
