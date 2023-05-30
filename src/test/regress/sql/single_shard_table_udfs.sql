@@ -551,5 +551,52 @@ WHERE c1.table_name::TEXT = 'size_tbl_dist' AND c2.table_name::TEXT = 'size_tbl_
 ORDER BY c1.shard_size DESC
 LIMIT 1;
 
+-- test update statistics UDFs
+TRUNCATE size_tbl_dist, size_tbl_single;
+
+SELECT shardid AS shard_single
+FROM citus_shards
+WHERE table_name::TEXT = 'size_tbl_single'
+LIMIT 1 \gset
+
+SELECT get_shard_id_for_distribution_column('size_tbl_dist', 1) AS shard_dist  \gset
+
+SELECT dsp1.shardlength, dsp2.shardlength
+FROM pg_dist_shard_placement dsp1, pg_dist_shard_placement dsp2
+WHERE dsp1.shardid = :shard_single AND dsp2.shardid = :shard_dist
+LIMIT 1;
+
+INSERT INTO size_tbl_dist SELECT 1, '1234567890' FROM generate_series(1, 10000);
+INSERT INTO size_tbl_single SELECT 1, '1234567890' FROM generate_series(1, 10000);
+
+SELECT dsp1.shardlength, dsp2.shardlength
+FROM pg_dist_shard_placement dsp1, pg_dist_shard_placement dsp2
+WHERE dsp1.shardid = :shard_single AND dsp2.shardid = :shard_dist
+LIMIT 1;
+
+SELECT citus_update_table_statistics('size_tbl_dist');
+SELECT citus_update_table_statistics('size_tbl_single');
+
+SELECT dsp1.shardlength, dsp2.shardlength
+FROM pg_dist_shard_placement dsp1, pg_dist_shard_placement dsp2
+WHERE dsp1.shardid = :shard_single AND dsp2.shardid = :shard_dist
+LIMIT 1;
+
+INSERT INTO size_tbl_dist SELECT 1, '1234567890' FROM generate_series(1, 10000);
+INSERT INTO size_tbl_single SELECT 1, '1234567890' FROM generate_series(1, 10000);
+
+SELECT dsp1.shardlength, dsp2.shardlength
+FROM pg_dist_shard_placement dsp1, pg_dist_shard_placement dsp2
+WHERE dsp1.shardid = :shard_single AND dsp2.shardid = :shard_dist
+LIMIT 1;
+
+SELECT citus_update_shard_statistics(shardid) FROM citus_shards WHERE table_name::TEXT = 'size_tbl_dist' ORDER BY shard_size DESC LIMIT 1;
+SELECT citus_update_shard_statistics(shardid) FROM citus_shards WHERE table_name::TEXT = 'size_tbl_single' LIMIT 1;
+
+SELECT dsp1.shardlength, dsp2.shardlength
+FROM pg_dist_shard_placement dsp1, pg_dist_shard_placement dsp2
+WHERE dsp1.shardid = :shard_single AND dsp2.shardid = :shard_dist
+LIMIT 1;
+
 SET client_min_messages TO WARNING;
 DROP SCHEMA null_dist_key_udfs CASCADE;
