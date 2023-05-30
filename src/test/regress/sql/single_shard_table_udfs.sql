@@ -39,6 +39,11 @@ RETURNS bool
 LANGUAGE C
 AS 'citus', $$is_citus_depended_object$$;
 
+CREATE FUNCTION shards_colocated(bigint, bigint)
+RETURNS bool
+AS 'citus'
+LANGUAGE C STRICT;
+
 -- test some other udf's with single shard tables
 CREATE TABLE null_dist_key_table(a int);
 SELECT create_distributed_table('null_dist_key_table', null, colocate_with=>'none', distribution_type=>null);
@@ -226,14 +231,14 @@ SELECT create_distributed_table ('update_col_2', null, colocate_with:='update_co
 -- with the new colocation id the new table will be in the other worker node
 SELECT create_distributed_table ('update_col_3', null, colocate_with:='none');
 
--- make sure nodes are correct
-SELECT c1.nodeport = c2.nodeport AS same_node
+-- make sure nodes are correct and test shards_colocated UDF
+SELECT c1.nodeport = c2.nodeport AS same_node, shards_colocated(c1.shardid, c2.shardid)
 FROM citus_shards c1, citus_shards c2, pg_dist_node p1, pg_dist_node p2
 WHERE c1.table_name::text = 'update_col_1' AND c2.table_name::text = 'update_col_2' AND
       p1.nodeport = c1.nodeport AND p2.nodeport = c2.nodeport AND
       p1.noderole = 'primary' AND p2.noderole = 'primary';
 
-SELECT c1.nodeport = c2.nodeport AS same_node
+SELECT c1.nodeport = c2.nodeport AS same_node, shards_colocated(c1.shardid, c2.shardid)
 FROM citus_shards c1, citus_shards c2, pg_dist_node p1, pg_dist_node p2
 WHERE c1.table_name::text = 'update_col_1' AND c2.table_name::text = 'update_col_3' AND
       p1.nodeport = c1.nodeport AND p2.nodeport = c2.nodeport AND
@@ -250,6 +255,13 @@ SELECT update_distributed_table_colocation('update_col_2', colocate_with:='none'
 SELECT c1.colocation_id = c2.colocation_id AS colocated
 FROM public.citus_tables c1, public.citus_tables c2
 WHERE c1.table_name::text = 'update_col_1' AND c2.table_name::text = 'update_col_2';
+
+-- test shards_colocated UDF with shards in same node but different colocation groups
+SELECT shards_colocated(c1.shardid, c2.shardid)
+FROM citus_shards c1, citus_shards c2, pg_dist_node p1, pg_dist_node p2
+WHERE c1.table_name::text = 'update_col_1' AND c2.table_name::text = 'update_col_2' AND
+      p1.nodeport = c1.nodeport AND p2.nodeport = c2.nodeport AND
+      p1.noderole = 'primary' AND p2.noderole = 'primary';
 
 -- re-colocate, the shards were already in the same node
 SELECT update_distributed_table_colocation('update_col_2', colocate_with:='update_col_1');
