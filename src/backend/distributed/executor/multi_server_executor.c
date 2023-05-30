@@ -47,7 +47,7 @@ JobExecutorType(DistributedPlan *distributedPlan)
 {
 	Job *job = distributedPlan->workerJob;
 
-	if (distributedPlan->insertSelectQuery != NULL)
+	if (distributedPlan->modifyQueryViaCoordinatorOrRepartition != NULL)
 	{
 		/*
 		 * We go through

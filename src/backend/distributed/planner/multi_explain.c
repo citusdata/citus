@@ -234,7 +234,7 @@ NonPushableInsertSelectExplainScan(CustomScanState *node, List *ancestors,
 {
 	CitusScanState *scanState = (CitusScanState *) node;
 	DistributedPlan *distributedPlan = scanState->distributedPlan;
-	Query *insertSelectQuery = distributedPlan->insertSelectQuery;
+	Query *insertSelectQuery = distributedPlan->modifyQueryViaCoordinatorOrRepartition;
 	RangeTblEntry *selectRte = ExtractSelectRangeTableEntry(insertSelectQuery);
 
 	/*
@@ -244,7 +244,8 @@ NonPushableInsertSelectExplainScan(CustomScanState *node, List *ancestors,
 	 */
 	Query *queryCopy = copyObject(selectRte->subquery);
 
-	bool repartition = distributedPlan->insertSelectMethod == INSERT_SELECT_REPARTITION;
+	bool repartition = distributedPlan->modifyWithSelectMethod ==
+					   MODIFY_WITH_SELECT_REPARTITION;
 
 
 	if (es->analyze)
