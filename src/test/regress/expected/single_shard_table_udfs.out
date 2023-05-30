@@ -1197,13 +1197,13 @@ LIMIT 1;
       483328 |      483328
 (1 row)
 
-SELECT citus_update_shard_statistics(shardid) FROM citus_shards WHERE table_name::TEXT = 'size_tbl_dist' ORDER BY shard_size DESC LIMIT 1;
+SELECT citus_update_shard_statistics(:shard_dist);
  citus_update_shard_statistics
 ---------------------------------------------------------------------
                         925696
 (1 row)
 
-SELECT citus_update_shard_statistics(shardid) FROM citus_shards WHERE table_name::TEXT = 'size_tbl_single' LIMIT 1;
+SELECT citus_update_shard_statistics(:shard_single);
  citus_update_shard_statistics
 ---------------------------------------------------------------------
                         925696

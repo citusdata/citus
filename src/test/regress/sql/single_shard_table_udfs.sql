@@ -590,8 +590,8 @@ FROM pg_dist_shard_placement dsp1, pg_dist_shard_placement dsp2
 WHERE dsp1.shardid = :shard_single AND dsp2.shardid = :shard_dist
 LIMIT 1;
 
-SELECT citus_update_shard_statistics(shardid) FROM citus_shards WHERE table_name::TEXT = 'size_tbl_dist' ORDER BY shard_size DESC LIMIT 1;
-SELECT citus_update_shard_statistics(shardid) FROM citus_shards WHERE table_name::TEXT = 'size_tbl_single' LIMIT 1;
+SELECT citus_update_shard_statistics(:shard_dist);
+SELECT citus_update_shard_statistics(:shard_single);
 
 SELECT dsp1.shardlength, dsp2.shardlength
 FROM pg_dist_shard_placement dsp1, pg_dist_shard_placement dsp2
