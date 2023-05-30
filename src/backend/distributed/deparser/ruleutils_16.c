@@ -4,7 +4,7 @@
  *	  Functions to convert stored expressions/querytrees back to
  *	  source text
  *
- * Portions Copyright (c) 1996-2022, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -369,13 +369,13 @@ static void get_insert_query_def(Query *query, deparse_context *context,
 								 bool colNamesVisible);
 static void get_update_query_def(Query *query, deparse_context *context,
 								 bool colNamesVisible);
-static void get_merge_query_def(Query *query, deparse_context *context);
-
 static void get_update_query_targetlist_def(Query *query, List *targetList,
 								deparse_context *context,
 								RangeTblEntry *rte);
 static void get_delete_query_def(Query *query, deparse_context *context,
 								 bool colNamesVisible);
+static void get_merge_query_def(Query *query, deparse_context *context,
+								bool colNamesVisible);
 static void get_utility_query_def(Query *query, deparse_context *context);
 static void get_basic_select_query(Query *query, deparse_context *context,
 					   TupleDesc resultDesc, bool colNamesVisible);
@@ -424,9 +424,15 @@ static void get_proc_expr(CallStmt *stmt, deparse_context *context,
 			  bool showimplicit);
 static void get_agg_expr(Aggref *aggref, deparse_context *context,
 			 Aggref *original_aggref);
+static void get_agg_expr_helper(Aggref *aggref, deparse_context *context,
+								Aggref *original_aggref, const char *funcname,
+								const char *options, bool is_json_objectagg);
 static void get_agg_combine_expr(Node *node, deparse_context *context,
 					 void *callback_arg);
 static void get_windowfunc_expr(WindowFunc *wfunc, deparse_context *context);
+static void get_windowfunc_expr_helper(WindowFunc *wfunc, deparse_context *context,
+									   const char *funcname, const char *options,
+									   bool is_json_objectagg);
 static bool get_func_sql_syntax(FuncExpr *expr, deparse_context *context);
 static void get_coercion_expr(Node *arg, deparse_context *context,
 				  Oid resulttype, int32 resulttypmod,
@@ -434,6 +440,15 @@ static void get_coercion_expr(Node *arg, deparse_context *context,
 static void get_const_expr(Const *constval, deparse_context *context,
 			   int showtype);
 static void get_const_collation(Const *constval, deparse_context *context);
+static void get_json_format(JsonFormat *format, StringInfo buf);
+static void get_json_constructor(JsonConstructorExpr *ctor,
+								 deparse_context *context, bool showimplicit);
+static void get_json_constructor_options(JsonConstructorExpr *ctor,
+										 StringInfo buf);
+static void get_json_agg_constructor(JsonConstructorExpr *ctor,
+									 deparse_context *context,
+									 const char *funcname,
+									 bool is_json_objectagg);
 static void simple_quote_literal(StringInfo buf, const char *val);
 static void get_sublink_expr(SubLink *sublink, deparse_context *context);
 static void get_tablefunc(TableFunc *tf, deparse_context *context,
@@ -442,6 +457,8 @@ static void get_from_clause(Query *query, const char *prefix,
 				deparse_context *context);
 static void get_from_clause_item(Node *jtnode, Query *query,
 					 deparse_context *context);
+static void get_rte_alias(RangeTblEntry *rte, int varno, bool use_as,
+						  deparse_context *context);
 static void get_column_alias_list(deparse_columns *colinfo,
 					  deparse_context *context);
 static void get_from_clause_coldeflist(RangeTblFunction *rtfunc,
@@ -1686,13 +1703,10 @@ expand_colnames_array_to(deparse_columns *colinfo, int n)
 	if (n > colinfo->num_cols)
 	{
 		if (colinfo->colnames == NULL)
-			colinfo->colnames = (char **) palloc0(n * sizeof(char *));
+			colinfo->colnames = palloc0_array(char *, n);
 		else
 		{
-			colinfo->colnames = (char **) repalloc(colinfo->colnames,
-												   n * sizeof(char *));
-			memset(colinfo->colnames + colinfo->num_cols, 0,
-				   (n - colinfo->num_cols) * sizeof(char *));
+			colinfo->colnames = repalloc0_array(colinfo->colnames, char *, colinfo->num_cols, n);
 		}
 		colinfo->num_cols = n;
 	}
@@ -2100,7 +2114,7 @@ get_query_def_extended(Query *query, StringInfo buf, List *parentnamespace,
 			break;
 
 		case CMD_MERGE:
-			get_merge_query_def(query, &context);
+			get_merge_query_def(query, &context, colNamesVisible);
 			break;
 
 		case CMD_NOTHING:
@@ -2951,7 +2965,8 @@ get_rule_sortgroupclause(Index ref, List *tlist, bool force_colno,
 		bool		need_paren = (PRETTY_PAREN(context)
 								  || IsA(expr, FuncExpr)
 								  || IsA(expr, Aggref)
-								  || IsA(expr, WindowFunc));
+								  || IsA(expr, WindowFunc)
+								  || IsA(expr, JsonConstructorExpr));
 
 		if (need_paren)
 			appendStringInfoChar(context->buf, '(');
@@ -3275,14 +3290,16 @@ get_insert_query_def(Query *query, deparse_context *context,
 		context->indentLevel += PRETTYINDENT_STD;
 		appendStringInfoChar(buf, ' ');
 	}
-	appendStringInfo(buf, "INSERT INTO %s ",
+	appendStringInfo(buf, "INSERT INTO %s",
 					 generate_relation_or_shard_name(rte->relid,
 													 context->distrelid,
 													 context->shardid, NIL));
-	/* INSERT requires AS keyword for target alias */
-	if (rte->alias != NULL)
-		appendStringInfo(buf, "AS %s ",
-						 quote_identifier(get_rtable_name(query->resultRelation, context)));
+
+	/* Print the relation alias, if needed; INSERT requires explicit AS */
+	get_rte_alias(rte, query->resultRelation, true, context);
+
+	/* always want a space here */
+	appendStringInfoChar(buf, ' ');
 
 	/*
 	 * Add the insert-column-names list.  Any indirection decoration needed on
@@ -3460,9 +3477,8 @@ get_update_query_def(Query *query, deparse_context *context,
 														 context->distrelid,
 														 context->shardid, NIL));
 
-		if (rte->alias != NULL)
-			appendStringInfo(buf, " %s",
-							 quote_identifier(get_rtable_name(query->resultRelation, context)));
+		/* Print the relation alias, if needed */
+		get_rte_alias(rte, query->resultRelation, false, context);
 	}
 
 	appendStringInfoString(buf, " SET ");
@@ -3691,9 +3707,8 @@ get_delete_query_def(Query *query, deparse_context *context,
 														 context->distrelid,
 														 context->shardid, NIL));
 
-		if (rte->alias != NULL)
-			appendStringInfo(buf, " %s",
-							 quote_identifier(get_rtable_name(query->resultRelation, context)));
+		/* Print the relation alias, if needed */
+		get_rte_alias(rte, query->resultRelation, false, context);
 	}
 
 	/* Add the USING clause if given */
@@ -3716,22 +3731,26 @@ get_delete_query_def(Query *query, deparse_context *context,
 	}
 }
 
+
 /* ----------
- * get_merge_query_def			- Parse back a MERGE parsetree
+ * get_merge_query_def				- Parse back a MERGE parsetree
  * ----------
  */
 static void
-get_merge_query_def(Query *query, deparse_context *context)
+get_merge_query_def(Query *query, deparse_context *context,
+					bool colNamesVisible)
 {
-	StringInfo buf = context->buf;
+	StringInfo	buf = context->buf;
+	RangeTblEntry *rte;
+	ListCell   *lc;
 
 	/* Insert the WITH clause if given */
 	get_with_clause(query, context);
 
 	/*
-	 * Start the query with MERGE INTO <target>
+	 * Start the query with MERGE INTO relname
 	 */
-	RangeTblEntry *targetRte = ExtractResultRelationRTE(query);
+	rte = ExtractResultRelationRTE(query);
 
 	if (PRETTY_INDENT(context))
 	{
@@ -3740,127 +3759,122 @@ get_merge_query_def(Query *query, deparse_context *context)
 	}
 
 	/* if it's a shard, do differently */
-	if (GetRangeTblKind(targetRte) == CITUS_RTE_SHARD)
+	if (GetRangeTblKind(rte) == CITUS_RTE_SHARD)
 	{
 		char *fragmentSchemaName = NULL;
 		char *fragmentTableName = NULL;
 
-		ExtractRangeTblExtraData(targetRte, NULL, &fragmentSchemaName, &fragmentTableName, NULL);
+		ExtractRangeTblExtraData(rte, NULL, &fragmentSchemaName, &fragmentTableName, NULL);
 
 		/* use schema and table name from the remote alias */
 		appendStringInfo(buf, "MERGE INTO %s%s",
-						 only_marker(targetRte),
+						 only_marker(rte),
 						 generate_fragment_name(fragmentSchemaName, fragmentTableName));
 
-		if(targetRte->eref != NULL)
+		if(rte->eref != NULL)
 			appendStringInfo(buf, " %s",
 					quote_identifier(get_rtable_name(query->resultRelation, context)));
 	}
 	else
 	{
 		appendStringInfo(buf, "MERGE INTO %s%s",
-						 only_marker(targetRte),
-						 generate_relation_or_shard_name(targetRte->relid,
+						 only_marker(rte),
+						 generate_relation_or_shard_name(rte->relid,
 										context->distrelid,
 										context->shardid, NIL));
 
-		if (targetRte->alias != NULL)
+		if (rte->alias != NULL)
 			appendStringInfo(buf, " %s",
 							 quote_identifier(get_rtable_name(query->resultRelation, context)));
 	}
 
-	/*
-	 * Add the MERGE source relation -- USING <source>
-	 */
+	/* Print the source relation and join clause */
 	get_from_clause(query, " USING ", context);
+	appendContextKeyword(context, " ON ",
+						 -PRETTYINDENT_STD, PRETTYINDENT_STD, 2);
+	get_rule_expr(query->jointree->quals, context, false);
 
-	/*
-	 * Add the MERGE ON condition
-	 */
-	Assert(query->jointree->quals != NULL);
+	/* Print each merge action */
+	foreach(lc, query->mergeActionList)
 	{
-		appendContextKeyword(context, " ON ",
-							 -PRETTYINDENT_STD, PRETTYINDENT_STD, 1);
-		get_rule_expr(query->jointree->quals, context, false);
-	}
+		MergeAction *action = lfirst_node(MergeAction, lc);
 
-	ListCell *actionCell = NULL;
-	foreach(actionCell, query->mergeActionList)
-	{
-		MergeAction *action = (MergeAction *) lfirst(actionCell);
+		appendContextKeyword(context, " WHEN ",
+							 -PRETTYINDENT_STD, PRETTYINDENT_STD, 2);
+		appendStringInfo(buf, "%sMATCHED", action->matched ? "" : "NOT ");
 
-		/* Add WHEN [NOT] MATCHED */
-		appendContextKeyword(context, " WHEN",
-							 -PRETTYINDENT_STD, PRETTYINDENT_STD, 1);
-		appendStringInfo(buf, " %s", action->matched ? "MATCHED" : "NOT MATCHED");
-
-		/* Add optional AND <condition> */
 		if (action->qual)
 		{
 			appendContextKeyword(context, " AND ",
-							 -PRETTYINDENT_STD, PRETTYINDENT_STD, 1);
+								 -PRETTYINDENT_STD, PRETTYINDENT_STD, 3);
 			get_rule_expr(action->qual, context, false);
 		}
+		appendContextKeyword(context, " THEN ",
+							 -PRETTYINDENT_STD, PRETTYINDENT_STD, 3);
 
-		appendContextKeyword(context, " THEN",
-						 -PRETTYINDENT_STD, PRETTYINDENT_STD, 1);
-
-		switch (action->commandType)
+		if (action->commandType == CMD_INSERT)
 		{
-			case CMD_INSERT:
+			/* This generally matches get_insert_query_def() */
+			List	   *strippedexprs = NIL;
+			const char *sep = "";
+			ListCell   *lc2;
+
+			appendStringInfoString(buf, "INSERT");
+
+			if (action->targetList)
+				appendStringInfoString(buf, " (");
+			foreach(lc2, action->targetList)
 			{
-				appendStringInfo(buf, " INSERT " );
-				List *strippedexprs = NIL;
+				TargetEntry *tle = (TargetEntry *) lfirst(lc2);
 
-				if (action->targetList)
-				{
-					strippedexprs = get_insert_column_names_list(action->targetList,
-										buf, context, targetRte);
-				}
+				Assert(!tle->resjunk);
 
-				if (strippedexprs)
-				{
-					/* Add the single-VALUES expression list */
-					appendContextKeyword(context, "VALUES (",
-										 -PRETTYINDENT_STD, PRETTYINDENT_STD, 2);
-					get_rule_list_toplevel(strippedexprs, context, false);
-					appendStringInfoChar(buf, ')');
-				}
-				else
-				{
-					/* No expressions, so it must be DEFAULT VALUES */
-					appendStringInfoString(buf, "DEFAULT VALUES");
-				}
+				appendStringInfoString(buf, sep);
+				sep = ", ";
+
+				appendStringInfoString(buf,
+									   quote_identifier(get_attname(rte->relid,
+																	tle->resno,
+																	false)));
+				strippedexprs = lappend(strippedexprs,
+										processIndirection((Node *) tle->expr,
+														   context));
 			}
-			break;
+			if (action->targetList)
+				appendStringInfoChar(buf, ')');
 
-			case CMD_UPDATE:
-				appendStringInfo(buf, " UPDATE SET " );
-				get_update_query_targetlist_def(query, action->targetList,
-									context, targetRte);
-				break;
+			if (action->override)
+			{
+				if (action->override == OVERRIDING_SYSTEM_VALUE)
+					appendStringInfoString(buf, " OVERRIDING SYSTEM VALUE");
+				else if (action->override == OVERRIDING_USER_VALUE)
+					appendStringInfoString(buf, " OVERRIDING USER VALUE");
+			}
 
-			case CMD_DELETE:
-				appendStringInfo(buf, " DELETE" );
-				break;
-
-			case CMD_NOTHING:
-				appendStringInfo(buf, " DO NOTHING " );
-				break;
-
-			default:
-				elog(ERROR, "unknown action in MERGE WHEN clause");
+			if (strippedexprs)
+			{
+				appendContextKeyword(context, " VALUES (",
+									 -PRETTYINDENT_STD, PRETTYINDENT_STD, 4);
+				get_rule_list_toplevel(strippedexprs, context, false);
+				appendStringInfoChar(buf, ')');
+			}
+			else
+				appendStringInfoString(buf, " DEFAULT VALUES");
 		}
+		else if (action->commandType == CMD_UPDATE)
+		{
+			appendStringInfoString(buf, "UPDATE SET ");
+			get_update_query_targetlist_def(query, action->targetList,
+											context, rte);
+		}
+		else if (action->commandType == CMD_DELETE)
+			appendStringInfoString(buf, "DELETE");
+		else if (action->commandType == CMD_NOTHING)
+			appendStringInfoString(buf, "DO NOTHING");
 	}
 
-	/*
-	 * RETURNING is not supported in MERGE, so it must be NULL, but if PG adds it later,
-	 * we might miss it, let's raise an exception to investigate.
-	 */
-	if (unlikely(query->returningList))
-	{
-		elog(ERROR, "Unexpected RETURNING clause in MERGE");
-	}
+	/* No RETURNING support in MERGE yet */
+	Assert(query->returningList == NIL);
 
 	ereport(DEBUG1, (errmsg("<Deparsed MERGE query: %s>", buf->data)));
 }
@@ -4341,7 +4355,8 @@ get_name_for_var_field(Var *var, int fieldno,
 
 	/*
 	 * If it's a RowExpr that was expanded from a whole-row Var, use the
-	 * column names attached to it.
+	 * column names attached to it.  (We could let get_expr_result_tupdesc()
+	 * handle this, but it's much cheaper to just pull out the name we need.)
 	 */
 	if (IsA(var, RowExpr))
 	{
@@ -4737,12 +4752,10 @@ find_param_referent(Param *param, deparse_context *context,
 	{
 		deparse_namespace *dpns;
 		Plan  *child_plan;
-		bool		in_same_plan_level;
 		ListCell   *lc;
 
 		dpns = (deparse_namespace *) linitial(context->namespaces);
 		child_plan = dpns->plan;
-		in_same_plan_level = true;
 
 		foreach(lc, dpns->ancestors)
 		{
@@ -4750,13 +4763,10 @@ find_param_referent(Param *param, deparse_context *context,
 			ListCell   *lc2;
 
 			/*
-			 * NestLoops transmit params to their inner child only; also, once
-			 * we've crawled up out of a subplan, this couldn't possibly be
-			 * the right match.
+			 * NestLoops transmit params to their inner child only.
 			 */
 			if (IsA(ancestor, NestLoop) &&
-				child_plan == innerPlan(ancestor) &&
-				in_same_plan_level)
+				child_plan == innerPlan(ancestor))
 			{
 				NestLoop   *nl = (NestLoop *) ancestor;
 
@@ -4815,34 +4825,14 @@ find_param_referent(Param *param, deparse_context *context,
 					}
 				}
 
-				/* We have emerged from a subplan. */
-				in_same_plan_level = false;
-
 				/* SubPlan isn't a kind of Plan, so skip the rest */
 				continue;
 			}
 
 			/*
-			 * Check to see if we're emerging from an initplan of the current
-			 * ancestor plan.  Initplans never have any parParams, so no need
-			 * to search that list, but we need to know if we should reset
-			 * in_same_plan_level.
+			 * We need not consider the ancestor's initPlan list, since
+			 * initplans never have any parParams.
 			 */
-			foreach(lc2, ((Plan *) ancestor)->initPlan)
-			{
-				SubPlan    *subplan = lfirst_node(SubPlan, lc2);
-
-				if (child_plan != (Plan *) list_nth(dpns->subplans,
-													subplan->plan_id - 1))
-					continue;
-
-				/* No parameters to be had here. */
-				Assert(subplan->parParam == NIL);
-
-				/* We have emerged from an initplan. */
-				in_same_plan_level = false;
-				break;
-			}
 
 			/* No luck, crawl up to next ancestor */
 			child_plan = (Plan *) ancestor;
@@ -4937,9 +4927,9 @@ get_parameter(Param *param, deparse_context *context)
 				 */
 				foreach(lc, context->namespaces)
 				{
-					deparse_namespace *dp_ns = lfirst(lc);
+					deparse_namespace *depns = lfirst(lc);
 
-					if (list_length(dp_ns->rtable_names) > 0)
+					if (depns->rtable_names != NIL)
 					{
 						should_qualify = true;
 						break;
@@ -5035,6 +5025,7 @@ isSimpleNode(Node *node, Node *parentNode, int prettyFlags)
         case T_GroupingFunc:
 		case T_WindowFunc:
 		case T_FuncExpr:
+		case T_JsonConstructorExpr:
 			/* function-like: name(..) or name[..] */
 			return true;
 
@@ -5128,15 +5119,17 @@ isSimpleNode(Node *node, Node *parentNode, int prettyFlags)
 		case T_NullTest:
 		case T_BooleanTest:
 		case T_DistinctExpr:
+		case T_JsonIsPredicate:
 			switch (nodeTag(parentNode))
 			{
 				case T_FuncExpr:
 					{
-						/* special handling for casts */
+						/* special handling for casts and COERCE_SQL_SYNTAX */
 						CoercionForm type = ((FuncExpr *) parentNode)->funcformat;
 
 						if (type == COERCE_EXPLICIT_CAST ||
-							type == COERCE_IMPLICIT_CAST)
+							type == COERCE_IMPLICIT_CAST ||
+							type == COERCE_SQL_SYNTAX)
 							return false;
 						return true;	/* own parentheses */
 					}
@@ -5184,11 +5177,12 @@ isSimpleNode(Node *node, Node *parentNode, int prettyFlags)
 					return false;
 				case T_FuncExpr:
 					{
-						/* special handling for casts */
+						/* special handling for casts and COERCE_SQL_SYNTAX */
 						CoercionForm type = ((FuncExpr *) parentNode)->funcformat;
 
 						if (type == COERCE_EXPLICIT_CAST ||
-							type == COERCE_IMPLICIT_CAST)
+							type == COERCE_IMPLICIT_CAST ||
+							type == COERCE_SQL_SYNTAX)
 							return false;
 						return true;	/* own parentheses */
 					}
@@ -5207,6 +5201,11 @@ isSimpleNode(Node *node, Node *parentNode, int prettyFlags)
 				default:
 					return false;
 			}
+
+		case T_JsonValueExpr:
+			/* maybe simple, check args */
+			return isSimpleNode((Node *) ((JsonValueExpr *) node)->raw_expr,
+								node, prettyFlags);
 
 		default:
 			break;
@@ -6469,6 +6468,55 @@ get_rule_expr(Node *node, deparse_context *context,
 			}
 			break;
 
+		case T_JsonValueExpr:
+			{
+				JsonValueExpr *jve = (JsonValueExpr *) node;
+
+				get_rule_expr((Node *) jve->raw_expr, context, false);
+				get_json_format(jve->format, context->buf);
+			}
+			break;
+
+		case T_JsonConstructorExpr:
+			get_json_constructor((JsonConstructorExpr *) node, context, false);
+			break;
+
+		case T_JsonIsPredicate:
+			{
+				JsonIsPredicate *pred = (JsonIsPredicate *) node;
+
+				if (!PRETTY_PAREN(context))
+					appendStringInfoChar(context->buf, '(');
+
+				get_rule_expr_paren(pred->expr, context, true, node);
+
+				appendStringInfoString(context->buf, " IS JSON");
+
+				/* TODO: handle FORMAT clause */
+
+				switch (pred->item_type)
+				{
+					case JS_TYPE_SCALAR:
+						appendStringInfoString(context->buf, " SCALAR");
+						break;
+					case JS_TYPE_ARRAY:
+						appendStringInfoString(context->buf, " ARRAY");
+						break;
+					case JS_TYPE_OBJECT:
+						appendStringInfoString(context->buf, " OBJECT");
+						break;
+					default:
+						break;
+				}
+
+				if (pred->unique_keys)
+					appendStringInfoString(context->buf, " WITH UNIQUE KEYS");
+
+				if (!PRETTY_PAREN(context))
+					appendStringInfoChar(context->buf, ')');
+			}
+			break;
+
 		case T_List:
 			{
 				char	   *sep;
@@ -6793,10 +6841,23 @@ static void
 get_agg_expr(Aggref *aggref, deparse_context *context,
 			 Aggref *original_aggref)
 {
+	get_agg_expr_helper(aggref, context, original_aggref, NULL, NULL,
+						false);
+}
+
+/*
+ * get_agg_expr_helper		- subroutine for get_agg_expr and
+ *							get_json_agg_constructor
+ */
+static void
+get_agg_expr_helper(Aggref *aggref, deparse_context *context,
+					Aggref *original_aggref, const char *funcname,
+					const char *options, bool is_json_objectagg)
+{
 	StringInfo	buf = context->buf;
 	Oid			argtypes[FUNC_MAX_ARGS];
 	int			nargs;
-	bool use_variadic;
+	bool use_variadic = false;
 
 	/*
 	 * For a combining aggregate, we look up and deparse the corresponding
@@ -6827,13 +6888,14 @@ get_agg_expr(Aggref *aggref, deparse_context *context,
 	/* Extract the argument types as seen by the parser */
 	nargs = get_aggregate_argtypes(aggref, argtypes);
 
+	if (!funcname)
+		funcname = generate_function_name(aggref->aggfnoid, nargs, NIL,
+										  argtypes, aggref->aggvariadic,
+										  &use_variadic,
+										  context->special_exprkind);
+
 	/* Print the aggregate name, schema-qualified if needed */
-	appendStringInfo(buf, "%s(%s",
-					 generate_function_name(aggref->aggfnoid, nargs,
-											NIL, argtypes,
-											aggref->aggvariadic,
-											&use_variadic,
-											context->special_exprkind),
+	appendStringInfo(buf, "%s(%s", funcname,
 					 (aggref->aggdistinct != NIL) ? "DISTINCT " : "");
 
 	if (AGGKIND_IS_ORDERED_SET(aggref->aggkind))
@@ -6869,7 +6931,21 @@ get_agg_expr(Aggref *aggref, deparse_context *context,
 				if (tle->resjunk)
 					continue;
 				if (i++ > 0)
-					appendStringInfoString(buf, ", ");
+				{
+					if (is_json_objectagg)
+					{
+						/*
+						 * the ABSENT ON NULL and WITH UNIQUE args are printed
+						 * separately, so ignore them here
+						 */
+						if (i > 2)
+							break;
+
+						appendStringInfoString(buf, " : ");
+					}
+					else
+						appendStringInfoString(buf, ", ");
+				}
 				if (use_variadic && i == nargs)
 					appendStringInfoString(buf, "VARIADIC ");
 				get_rule_expr(arg, context, true);
@@ -6882,6 +6958,9 @@ get_agg_expr(Aggref *aggref, deparse_context *context,
 			get_rule_orderby(aggref->aggorder, aggref->args, false, context);
 		}
 	}
+
+	if (options)
+		appendStringInfoString(buf, options);
 
 	if (aggref->aggfilter != NULL)
 	{
@@ -6916,6 +6995,19 @@ get_agg_combine_expr(Node *node, deparse_context *context, void *callback_arg)
 static void
 get_windowfunc_expr(WindowFunc *wfunc, deparse_context *context)
 {
+	get_windowfunc_expr_helper(wfunc, context, NULL, NULL, false);
+}
+
+
+/*
+ * get_windowfunc_expr_helper	- subroutine for get_windowfunc_expr and
+ *								get_json_agg_constructor
+ */
+static void
+get_windowfunc_expr_helper(WindowFunc *wfunc, deparse_context *context,
+						   const char *funcname, const char *options,
+						   bool is_json_objectagg)
+{
 	StringInfo	buf = context->buf;
 	Oid			argtypes[FUNC_MAX_ARGS];
 	int			nargs;
@@ -6938,17 +7030,30 @@ get_windowfunc_expr(WindowFunc *wfunc, deparse_context *context)
 		nargs++;
 	}
 
-	appendStringInfo(buf, "%s(",
-					 generate_function_name(wfunc->winfnoid, nargs,
-											argnames, argtypes,
-											false, NULL,
-											context->special_exprkind));
+	if (!funcname)
+		funcname = generate_function_name(wfunc->winfnoid, nargs, argnames,
+										  argtypes, false, NULL,
+										  context->special_exprkind);
+
+	appendStringInfo(buf, "%s(", funcname);
 
 	/* winstar can be set only in zero-argument aggregates */
 	if (wfunc->winstar)
 		appendStringInfoChar(buf, '*');
 	else
-		get_rule_expr((Node *) wfunc->args, context, true);
+	{
+		if (is_json_objectagg)
+		{
+			get_rule_expr((Node *) linitial(wfunc->args), context, false);
+			appendStringInfoString(buf, " : ");
+			get_rule_expr((Node *) lsecond(wfunc->args), context, false);
+		}
+		else
+			get_rule_expr((Node *) wfunc->args, context, true);
+	}
+
+	if (options)
+		appendStringInfoString(buf, options);
 
 	if (wfunc->aggfilter != NULL)
 	{
@@ -7007,9 +7112,11 @@ get_func_sql_syntax(FuncExpr *expr, deparse_context *context)
 		case F_TIMEZONE_TEXT_TIMETZ:
 			/* AT TIME ZONE ... note reversed argument order */
 			appendStringInfoChar(buf, '(');
-			get_rule_expr((Node *) lsecond(expr->args), context, false);
+			get_rule_expr_paren((Node *) lsecond(expr->args), context, false,
+								(Node *) expr);
 			appendStringInfoString(buf, " AT TIME ZONE ");
-			get_rule_expr((Node *) linitial(expr->args), context, false);
+			get_rule_expr_paren((Node *) linitial(expr->args), context, false,
+								(Node *) expr);
 			appendStringInfoChar(buf, ')');
 			return true;
 
@@ -7061,9 +7168,10 @@ get_func_sql_syntax(FuncExpr *expr, deparse_context *context)
 
 		case F_IS_NORMALIZED:
 			/* IS xxx NORMALIZED */
-			appendStringInfoString(buf, "((");
-			get_rule_expr((Node *) linitial(expr->args), context, false);
-			appendStringInfoString(buf, ") IS");
+			appendStringInfoString(buf, "(");
+			get_rule_expr_paren((Node *) linitial(expr->args), context, false,
+								(Node *) expr);
+			appendStringInfoString(buf, " IS");
 			if (list_length(expr->args) == 2)
 			{
 				Const	   *con = (Const *) lsecond(expr->args);
@@ -7083,11 +7191,6 @@ get_func_sql_syntax(FuncExpr *expr, deparse_context *context)
 			get_rule_expr((Node *) linitial(expr->args), context, false);
 			appendStringInfoChar(buf, ')');
 			return true;
-
-			/*
-			 * XXX EXTRACT, a/k/a date_part(), is intentionally not covered
-			 * yet.  Add it after we change the return type to numeric.
-			 */
 
 		case F_NORMALIZE:
 			/* NORMALIZE() */
@@ -7211,6 +7314,10 @@ get_func_sql_syntax(FuncExpr *expr, deparse_context *context)
 			appendStringInfoString(buf, " FROM ");
 			get_rule_expr((Node *) linitial(expr->args), context, false);
 			appendStringInfoChar(buf, ')');
+			return true;
+
+		case F_SYSTEM_USER:
+			appendStringInfoString(buf, "SYSTEM_USER");
 			return true;
 
 		case F_XMLEXISTS:
@@ -7437,6 +7544,158 @@ get_const_collation(Const *constval, deparse_context *context)
 							 generate_collation_name(constval->constcollid));
 		}
 	}
+}
+
+/*
+ * get_json_format			- Parse back a JsonFormat node
+ */
+static void
+get_json_format(JsonFormat *format, StringInfo buf)
+{
+	if (format->format_type == JS_FORMAT_DEFAULT)
+		return;
+
+	appendStringInfoString(buf,
+						   format->format_type == JS_FORMAT_JSONB ?
+						   " FORMAT JSONB" : " FORMAT JSON");
+
+	if (format->encoding != JS_ENC_DEFAULT)
+	{
+		const char *encoding;
+
+		encoding =
+			format->encoding == JS_ENC_UTF16 ? "UTF16" :
+			format->encoding == JS_ENC_UTF32 ? "UTF32" : "UTF8";
+
+		appendStringInfo(buf, " ENCODING %s", encoding);
+	}
+}
+
+/*
+ * get_json_returning		- Parse back a JsonReturning structure
+ */
+static void
+get_json_returning(JsonReturning *returning, StringInfo buf,
+				   bool json_format_by_default)
+{
+	if (!OidIsValid(returning->typid))
+		return;
+
+	appendStringInfo(buf, " RETURNING %s",
+					 format_type_with_typemod(returning->typid,
+											  returning->typmod));
+
+	if (!json_format_by_default ||
+		returning->format->format_type !=
+		(returning->typid == JSONBOID ? JS_FORMAT_JSONB : JS_FORMAT_JSON))
+		get_json_format(returning->format, buf);
+}
+
+/*
+ * get_json_constructor		- Parse back a JsonConstructorExpr node
+ */
+static void
+get_json_constructor(JsonConstructorExpr *ctor, deparse_context *context,
+					 bool showimplicit)
+{
+	StringInfo	buf = context->buf;
+	const char *funcname;
+	bool		is_json_object;
+	int			curridx;
+	ListCell   *lc;
+
+	if (ctor->type == JSCTOR_JSON_OBJECTAGG)
+	{
+		get_json_agg_constructor(ctor, context, "JSON_OBJECTAGG", true);
+		return;
+	}
+	else if (ctor->type == JSCTOR_JSON_ARRAYAGG)
+	{
+		get_json_agg_constructor(ctor, context, "JSON_ARRAYAGG", false);
+		return;
+	}
+
+	switch (ctor->type)
+	{
+		case JSCTOR_JSON_OBJECT:
+			funcname = "JSON_OBJECT";
+			break;
+		case JSCTOR_JSON_ARRAY:
+			funcname = "JSON_ARRAY";
+			break;
+		default:
+			elog(ERROR, "invalid JsonConstructorType %d", ctor->type);
+	}
+
+	appendStringInfo(buf, "%s(", funcname);
+
+	is_json_object = ctor->type == JSCTOR_JSON_OBJECT;
+	foreach(lc, ctor->args)
+	{
+		curridx = foreach_current_index(lc);
+		if (curridx > 0)
+		{
+			const char *sep;
+
+			sep = (is_json_object && (curridx % 2) != 0) ? " : " : ", ";
+			appendStringInfoString(buf, sep);
+		}
+
+		get_rule_expr((Node *) lfirst(lc), context, true);
+	}
+
+	get_json_constructor_options(ctor, buf);
+	appendStringInfo(buf, ")");
+}
+
+/*
+ * Append options, if any, to the JSON constructor being deparsed
+ */
+static void
+get_json_constructor_options(JsonConstructorExpr *ctor, StringInfo buf)
+{
+	if (ctor->absent_on_null)
+	{
+		if (ctor->type == JSCTOR_JSON_OBJECT ||
+			ctor->type == JSCTOR_JSON_OBJECTAGG)
+			appendStringInfoString(buf, " ABSENT ON NULL");
+	}
+	else
+	{
+		if (ctor->type == JSCTOR_JSON_ARRAY ||
+			ctor->type == JSCTOR_JSON_ARRAYAGG)
+			appendStringInfoString(buf, " NULL ON NULL");
+	}
+
+	if (ctor->unique)
+		appendStringInfoString(buf, " WITH UNIQUE KEYS");
+
+	get_json_returning(ctor->returning, buf, true);
+}
+
+/*
+ * get_json_agg_constructor - Parse back an aggregate JsonConstructorExpr node
+ */
+static void
+get_json_agg_constructor(JsonConstructorExpr *ctor, deparse_context *context,
+						 const char *funcname, bool is_json_objectagg)
+{
+	StringInfoData options;
+
+	initStringInfo(&options);
+	get_json_constructor_options(ctor, &options);
+
+	if (IsA(ctor->func, Aggref))
+		get_agg_expr_helper((Aggref *) ctor->func, context,
+							(Aggref *) ctor->func,
+							funcname, options.data, is_json_objectagg);
+	else if (IsA(ctor->func, WindowFunc))
+		get_windowfunc_expr_helper((WindowFunc *) ctor->func, context,
+								   funcname, options.data,
+								   is_json_objectagg);
+	else
+		elog(ERROR, "invalid JsonConstructorExpr underlying node type: %d",
+			 nodeTag(ctor->func));
 }
 
 /*
@@ -7801,10 +8060,8 @@ get_from_clause_item(Node *jtnode, Query *query, deparse_context *context)
 	{
 		int			varno = ((RangeTblRef *) jtnode)->rtindex;
 		RangeTblEntry *rte = rt_fetch(varno, query->rtable);
-		char	   *refname = get_rtable_name(varno, context);
 		deparse_columns *colinfo = deparse_columns_fetch(varno, dpns);
 		RangeTblFunction *rtfunc1 = NULL;
-		bool		printalias;
 		CitusRTEKind rteKind = GetRangeTblKind(rte);
 
 		if (rte->lateral)
@@ -7960,59 +8217,7 @@ get_from_clause_item(Node *jtnode, Query *query, deparse_context *context)
 		}
 
 		/* Print the relation alias, if needed */
-		printalias = false;
-		if (rte->alias != NULL)
-		{
-			/* Always print alias if user provided one */
-			printalias = true;
-		}
-		else if (colinfo->printaliases)
-		{
-			/* Always print alias if we need to print column aliases */
-			printalias = true;
-		}
-		else if (rte->rtekind == RTE_RELATION)
-		{
-			/*
-			 * No need to print alias if it's same as relation name (this
-			 * would normally be the case, but not if set_rtable_names had to
-			 * resolve a conflict).
-			 */
-			if (strcmp(refname, get_relation_name(rte->relid)) != 0)
-				printalias = true;
-		}
-		else if (rte->rtekind == RTE_FUNCTION)
-		{
-			/*
-			 * For a function RTE, always print alias.  This covers possible
-			 * renaming of the function and/or instability of the
-			 * FigureColname rules for things that aren't simple functions.
-			 * Note we'd need to force it anyway for the columndef list case.
-			 */
-			printalias = true;
-		}
-		else if (rte->rtekind == RTE_VALUES)
-		{
-			/* Alias is syntactically required for VALUES */
-			printalias = true;
-		}
-		else if (rte->rtekind == RTE_CTE)
-		{
-			/*
-			 * No need to print alias if it's same as CTE name (this would
-			 * normally be the case, but not if set_rtable_names had to
-			 * resolve a conflict).
-			 */
-			if (strcmp(refname, rte->ctename) != 0)
-				printalias = true;
-		}
-		else if (rte->rtekind == RTE_SUBQUERY)
-		{
-			/* subquery requires alias too */
-			printalias = true;
-		}
-		if (printalias)
-			appendStringInfo(buf, " %s", quote_identifier(refname));
+		get_rte_alias(rte, varno, false, context);
 
 		/* Print the column definitions or aliases, if needed */
 		if (rtfunc1 && rtfunc1->funccolnames != NIL)
@@ -8158,6 +8363,77 @@ get_from_clause_item(Node *jtnode, Query *query, deparse_context *context)
 	else
 		elog(ERROR, "unrecognized node type: %d",
 			 (int) nodeTag(jtnode));
+}
+
+/*
+ * get_rte_alias - print the relation's alias, if needed
+ *
+ * If printed, the alias is preceded by a space, or by " AS " if use_as is true.
+ */
+static void
+get_rte_alias(RangeTblEntry *rte, int varno, bool use_as,
+			  deparse_context *context)
+{
+	deparse_namespace *dpns = (deparse_namespace *) linitial(context->namespaces);
+	char	   *refname = get_rtable_name(varno, context);
+	deparse_columns *colinfo = deparse_columns_fetch(varno, dpns);
+	bool		printalias = false;
+
+	if (rte->alias != NULL)
+	{
+		/* Always print alias if user provided one */
+		printalias = true;
+	}
+	else if (colinfo->printaliases)
+	{
+		/* Always print alias if we need to print column aliases */
+		printalias = true;
+	}
+	else if (rte->rtekind == RTE_RELATION)
+	{
+		/*
+		 * No need to print alias if it's same as relation name (this would
+		 * normally be the case, but not if set_rtable_names had to resolve a
+		 * conflict).
+		 */
+		if (strcmp(refname, get_relation_name(rte->relid)) != 0)
+			printalias = true;
+	}
+	else if (rte->rtekind == RTE_FUNCTION)
+	{
+		/*
+		 * For a function RTE, always print alias.  This covers possible
+		 * renaming of the function and/or instability of the FigureColname
+		 * rules for things that aren't simple functions.  Note we'd need to
+		 * force it anyway for the columndef list case.
+		 */
+		printalias = true;
+	}
+	else if (rte->rtekind == RTE_SUBQUERY ||
+			 rte->rtekind == RTE_VALUES)
+	{
+		/*
+		 * For a subquery, always print alias.  This makes the output
+		 * SQL-spec-compliant, even though we allow such aliases to be omitted
+		 * on input.
+		 */
+		printalias = true;
+	}
+	else if (rte->rtekind == RTE_CTE)
+	{
+		/*
+		 * No need to print alias if it's same as CTE name (this would
+		 * normally be the case, but not if set_rtable_names had to resolve a
+		 * conflict).
+		 */
+		if (strcmp(refname, rte->ctename) != 0)
+			printalias = true;
+	}
+
+	if (printalias)
+		appendStringInfo(context->buf, "%s%s",
+						 use_as ? " AS " : " ",
+						 quote_identifier(refname));
 }
 
 /*
@@ -8784,7 +9060,7 @@ get_range_partbound_string(List *bound_datums)
 	foreach(cell, bound_datums)
 	{
 		PartitionRangeDatum *datum =
-		lfirst_node(PartitionRangeDatum, cell);
+				lfirst_node(PartitionRangeDatum, cell);
 
 		appendStringInfoString(buf, sep);
 		if (datum->kind == PARTITION_RANGE_DATUM_MINVALUE)
