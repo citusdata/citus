@@ -69,7 +69,7 @@ FindSubPlanUsages(DistributedPlan *plan)
 												SUBPLAN_ACCESS_REMOTE);
 	}
 
-	if (plan->insertSelectQuery != NULL)
+	if (plan->modifyQueryViaCoordinatorOrRepartition != NULL)
 	{
 		/* INSERT..SELECT plans currently do not have a workerJob */
 		Assert(plan->workerJob == NULL);
@@ -79,8 +79,9 @@ FindSubPlanUsages(DistributedPlan *plan)
 		 * perform pruning. We therefore require all subplans used in the
 		 * INSERT..SELECT to be available all nodes.
 		 */
-		remoteSubPlans = FindSubPlansUsedInNode((Node *) plan->insertSelectQuery,
-												SUBPLAN_ACCESS_ANYWHERE);
+		remoteSubPlans =
+			FindSubPlansUsedInNode((Node *) plan->modifyQueryViaCoordinatorOrRepartition,
+								   SUBPLAN_ACCESS_ANYWHERE);
 	}
 
 	/* merge the used subplans */

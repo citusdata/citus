@@ -1417,11 +1417,11 @@ CreateNonPushableInsertSelectPlan(uint64 planId, Query *parse, ParamListInfo bou
 	Assert(!repartitioned ||
 		   !GetRTEListPropertiesForQuery(selectQueryCopy)->hasSingleShardDistTable);
 
-	distributedPlan->insertSelectQuery = insertSelectQuery;
-	distributedPlan->selectPlanForInsertSelect = selectPlan;
-	distributedPlan->insertSelectMethod = repartitioned ?
-										  INSERT_SELECT_REPARTITION :
-										  INSERT_SELECT_VIA_COORDINATOR;
+	distributedPlan->modifyQueryViaCoordinatorOrRepartition = insertSelectQuery;
+	distributedPlan->selectPlanForModifyViaCoordinatorOrRepartition = selectPlan;
+	distributedPlan->modifyWithSelectMethod = repartitioned ?
+											  MODIFY_WITH_SELECT_REPARTITION :
+											  MODIFY_WITH_SELECT_VIA_COORDINATOR;
 	distributedPlan->expectResults = insertSelectQuery->returningList != NIL;
 	distributedPlan->intermediateResultIdPrefix = InsertSelectResultIdPrefix(planId);
 	distributedPlan->targetRelationId = targetRelationId;
