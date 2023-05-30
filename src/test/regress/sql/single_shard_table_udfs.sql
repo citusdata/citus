@@ -536,18 +536,18 @@ SELECT create_distributed_table ('partcol_tbl', NULL, colocate_with:='none');
 SELECT partition_column_id('partcol_tbl'::regclass);
 
 -- test citus_shard_cost_by_disk_size
-CREATE TABLE size_tbl_1 (a INT, b TEXT);
-SELECT create_distributed_table('size_tbl_1', 'a', shard_count:=4, colocate_with:='none');
+CREATE TABLE size_tbl_dist (a INT, b TEXT);
+SELECT create_distributed_table('size_tbl_dist', 'a', shard_count:=4, colocate_with:='none');
 
-CREATE TABLE size_tbl_2 (a INT, b TEXT);
-SELECT create_distributed_table('size_tbl_2', NULL, colocate_with:='none');
+CREATE TABLE size_tbl_single (a INT, b TEXT);
+SELECT create_distributed_table('size_tbl_single', NULL, colocate_with:='none');
 
-INSERT INTO size_tbl_1 SELECT 1, '1234567890' FROM generate_series(1, 10000);
-INSERT INTO size_tbl_2 SELECT 1, '1234567890' FROM generate_series(1, 10000);
+INSERT INTO size_tbl_dist SELECT 1, '1234567890' FROM generate_series(1, 10000);
+INSERT INTO size_tbl_single SELECT 1, '1234567890' FROM generate_series(1, 10000);
 
 SELECT citus_shard_cost_by_disk_size(c1.shardid) = citus_shard_cost_by_disk_size(c2.shardid) AS equal_cost
 FROM citus_shards c1, citus_shards c2
-WHERE c1.table_name::TEXT = 'size_tbl_1' AND c2.table_name::TEXT = 'size_tbl_2'
+WHERE c1.table_name::TEXT = 'size_tbl_dist' AND c2.table_name::TEXT = 'size_tbl_single'
 ORDER BY c1.shard_size DESC
 LIMIT 1;
 
