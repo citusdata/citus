@@ -98,6 +98,81 @@ SELECT COUNT(*) = 0 FROM pg_dist_partition WHERE logicalrelid::text LIKE '%null_
 SELECT COUNT(*) = 0 FROM pg_dist_placement WHERE shardid IN (SELECT shardid FROM pg_dist_shard WHERE logicalrelid::text LIKE '%null_dist_key_table%');
 SELECT COUNT(*) = 0 FROM pg_dist_shard WHERE logicalrelid::text LIKE '%null_dist_key_table%';
 
+-- create 7 single shard tables, 3 of them are colocated, for testing shard moves / rebalance on them
+CREATE TABLE single_shard_table_col1_1 (a INT PRIMARY KEY);
+CREATE TABLE single_shard_table_col1_2 (a TEXT PRIMARY KEY);
+CREATE TABLE single_shard_table_col1_3 (a TIMESTAMP PRIMARY KEY);
+CREATE TABLE single_shard_table_col2_1 (a INT PRIMARY KEY);
+CREATE TABLE single_shard_table_col3_1 (a INT PRIMARY KEY);
+CREATE TABLE single_shard_table_col4_1 (a INT PRIMARY KEY);
+CREATE TABLE single_shard_table_col5_1 (a INT PRIMARY KEY);
+SELECT create_distributed_table('single_shard_table_col1_1', null, colocate_with=>'none');
+SELECT create_distributed_table('single_shard_table_col1_2', null, colocate_with=>'single_shard_table_col1_1');
+SELECT create_distributed_table('single_shard_table_col1_3', null, colocate_with=>'single_shard_table_col1_2');
+SELECT create_distributed_table('single_shard_table_col2_1', null, colocate_with=>'none');
+SELECT create_distributed_table('single_shard_table_col3_1', null, colocate_with=>'none');
+SELECT create_distributed_table('single_shard_table_col4_1', null, colocate_with=>'none');
+SELECT create_distributed_table('single_shard_table_col5_1', null, colocate_with=>'none');
+
+-- initial status
+SELECT shardid, nodeport FROM pg_dist_shard_placement WHERE shardid > 1820000 ORDER BY shardid;
+
+-- errors out because streaming replicated
+SELECT citus_copy_shard_placement(1820005, 'localhost', :worker_1_port, 'localhost', :worker_2_port);
+SELECT master_copy_shard_placement(1820005, 'localhost', :worker_1_port, 'localhost', :worker_2_port);
+SELECT citus_copy_shard_placement(1820005, :worker_1_node, :worker_2_node);
+
+-- no changes because it's already balanced
+SELECT rebalance_table_shards();
+
+-- same placements
+SELECT shardid, nodeport FROM pg_dist_shard_placement WHERE shardid > 1820000 ORDER BY shardid;
+
+-- manually move 2 shard from 2 colocation groups to make the cluster unbalanced
+SELECT citus_move_shard_placement(1820005, 'localhost', :worker_1_port, 'localhost', :worker_2_port);
+SELECT citus_move_shard_placement(1820007, :worker_1_node, :worker_2_node);
+
+-- all placements are located on worker 2
+SELECT shardid, nodeport FROM pg_dist_shard_placement WHERE shardid > 1820000 ORDER BY shardid;
+
+-- move some of them to worker 1 to balance the cluster
+SELECT rebalance_table_shards();
+
+-- the final status, balanced
+SELECT shardid, nodeport FROM pg_dist_shard_placement WHERE shardid > 1820000 ORDER BY shardid;
+
+-- verify we didn't break any colocations
+SELECT logicalrelid, colocationid FROM pg_dist_partition WHERE logicalrelid::text LIKE '%single_shard_table_col%' ORDER BY colocationid;
+
+-- again, manually move 2 shard from 2 colocation groups to make the cluster unbalanced
+-- consider using citus_drain_node when the issue is fixed: https://github.com/citusdata/citus/issues/6948
+SELECT citus_move_shard_placement(1820005, 'localhost', :worker_1_port, 'localhost', :worker_2_port);
+SELECT citus_move_shard_placement(1820003, :worker_1_node, :worker_2_node);
+
+-- see the plan for moving 4 shards, 3 of them are in the same colocation group
+SELECT * FROM get_rebalance_table_shards_plan();
+
+-- move some of them to worker 1 to balance the cluster
+SELECT 1 FROM citus_rebalance_start();
+
+-- stop it
+SELECT * FROM citus_rebalance_stop();
+
+-- show rebalance status, see the cancelled job for two moves
+SELECT state, details FROM citus_rebalance_status();
+
+-- start again
+SELECT 1 FROM citus_rebalance_start();
+
+-- show rebalance status, scheduled a job for two moves
+SELECT state, details FROM citus_rebalance_status();
+
+-- wait for rebalance to be completed
+SELECT * FROM citus_rebalance_wait();
+
+-- the final status, balanced
+SELECT shardid, nodeport FROM pg_dist_shard_placement WHERE shardid > 1820000 ORDER BY shardid;
+
 -- test update_distributed_table_colocation
 CREATE TABLE update_col_1 (a INT);
 CREATE TABLE update_col_2 (a INT);
