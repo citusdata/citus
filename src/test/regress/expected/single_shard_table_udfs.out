@@ -481,5 +481,81 @@ SELECT * FROM time_partitions WHERE parent_table::text = 'part_tbl';
  part_tbl     | a                | part_tbl_p2040 | 01-01-2040 | 01-01-2050 | heap
 (2 rows)
 
+-- test locking shards
+CREATE TABLE lock_tbl_1 (a INT);
+SELECT create_distributed_table('lock_tbl_1', NULL, colocate_with:='none');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE lock_tbl_2 (a INT);
+SELECT create_distributed_table('lock_tbl_2', NULL, colocate_with:='none');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+BEGIN;
+SELECT lock_shard_metadata(3, array_agg(distinct(shardid)))
+FROM citus_shards WHERE table_name::text = 'lock_tbl_1';
+ lock_shard_metadata
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT lock_shard_metadata(5, array_agg(distinct(shardid)))
+FROM citus_shards WHERE table_name::text LIKE 'lock\_tbl\__';
+ lock_shard_metadata
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT table_name, classid, mode, granted
+FROM pg_locks, public.citus_tables
+WHERE
+      locktype = 'advisory' AND
+      table_name::text LIKE 'lock\_tbl\__' AND
+      objid = colocation_id
+      ORDER BY 1, 3;
+ table_name | classid |       mode       | granted
+---------------------------------------------------------------------
+ lock_tbl_1 |       0 | RowExclusiveLock | t
+ lock_tbl_1 |       0 | ShareLock        | t
+ lock_tbl_2 |       0 | ShareLock        | t
+(3 rows)
+
+END;
+BEGIN;
+SELECT lock_shard_resources(3, array_agg(distinct(shardid)))
+FROM citus_shards WHERE table_name::text = 'lock_tbl_1';
+ lock_shard_resources
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT lock_shard_resources(5, array_agg(distinct(shardid)))
+FROM citus_shards WHERE table_name::text LIKE 'lock\_tbl\__';
+ lock_shard_resources
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT locktype, table_name, mode, granted
+FROM pg_locks, citus_shards, pg_dist_node
+WHERE
+      objid = shardid AND
+      table_name::text LIKE 'lock\_tbl\__' AND
+      citus_shards.nodeport = pg_dist_node.nodeport AND
+      noderole = 'primary'
+      ORDER BY 2, 3;
+ locktype | table_name |       mode       | granted
+---------------------------------------------------------------------
+ advisory | lock_tbl_1 | RowExclusiveLock | t
+ advisory | lock_tbl_1 | ShareLock        | t
+ advisory | lock_tbl_2 | ShareLock        | t
+(3 rows)
+
+END;
 SET client_min_messages TO WARNING;
 DROP SCHEMA null_dist_key_udfs CASCADE;
