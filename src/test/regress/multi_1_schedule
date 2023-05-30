@@ -307,7 +307,7 @@ test: remove_coordinator
 
 # ----------
 # conversion between regular and tenant schemas
-test: citus_schema_tenant_set_unset
+test: citus_schema_distribute_undistribute
 # ----------
 
 # ----------

@@ -21,6 +21,11 @@ INSERT INTO public.ref SELECT i FROM generate_series(1,100) i;
 CREATE TABLE tenant1.table3(id int REFERENCES public.ref(id));
 INSERT INTO tenant1.table3 SELECT i FROM generate_series(1,100) i;
 
+-- Citus local table with autoconverted=false
+CREATE TABLE tenant1.table3x(id int REFERENCES public.ref(id));
+SELECT citus_add_local_table_to_metadata('tenant1.table3x');
+INSERT INTO tenant1.table3x SELECT i FROM generate_series(1,100) i;
+
 -- table with composite type
 CREATE TYPE tenant1.catname AS ENUM ('baby', 'teen', 'mid');
 CREATE TYPE tenant1.agecat AS (below_age int, name tenant1.catname);
@@ -68,82 +73,76 @@ CREATE VIEW tenant1.view1 AS SELECT * FROM tenant1.table1 JOIN tenant1.table2 US
 CREATE MATERIALIZED VIEW tenant1.view2 AS SELECT * FROM tenant1.table1;
 
 -- only allowed from coordinator
-SELECT run_command_on_workers($$SELECT citus_schema_tenant_set('tenant1');$$);
-SELECT run_command_on_workers($$SELECT citus_schema_tenant_unset('tenant1');$$);
+SELECT run_command_on_workers($$SELECT citus_schema_distribute('tenant1');$$);
+SELECT run_command_on_workers($$SELECT citus_schema_undistribute('tenant1');$$);
 
 -- inherited table not allowed
-SELECT citus_schema_tenant_set('tenant1');
+SELECT citus_schema_distribute('tenant1');
 DROP TABLE tenant1.capitals;
 DROP TABLE tenant1.cities;
 
 -- foreign table not allowed
-SELECT citus_schema_tenant_set('tenant1');
+SELECT citus_schema_distribute('tenant1');
 ALTER FOREIGN TABLE tenant1.foreign_table SET SCHEMA public;
 
 -- only allowed for schema owner or superuser
 CREATE USER dummysuper superuser;
 CREATE USER dummyregular;
-GRANT EXECUTE ON FUNCTION citus_schema_tenant_set TO dummyregular;
 SET role 'dummyregular';
-SELECT citus_schema_tenant_set('tenant1');
+SELECT citus_schema_distribute('tenant1');
 SET role 'dummysuper';
-SELECT citus_schema_tenant_set('tenant1');
+SELECT citus_schema_distribute('tenant1');
 RESET role;
-REVOKE EXECUTE ON FUNCTION citus_schema_tenant_set FROM dummyregular;
 DROP USER dummyregular;
 DROP USER dummysuper;
 
-SELECT citus_schema_tenant_unset('tenant1');
+SELECT citus_schema_undistribute('tenant1');
 
 -- already have distributed table error
 CREATE TABLE tenant1.dist(id int);
 SELECT create_distributed_table('tenant1.dist', 'id');
-SELECT citus_schema_tenant_set('tenant1');
+SELECT citus_schema_distribute('tenant1');
 SELECT undistribute_table('tenant1.dist');
 CREATE TABLE tenant1.ref2(id int);
 SELECT create_reference_table('tenant1.ref2');
-SELECT citus_schema_tenant_set('tenant1');
+SELECT citus_schema_distribute('tenant1');
 SELECT undistribute_table('tenant1.ref2');
 
 BEGIN;
-SELECT citus_schema_tenant_set('tenant1');
+SELECT citus_schema_distribute('tenant1');
 ROLLBACK;
 
 -- show the schema is not yet a tenant schema
-SELECT schemaid::regnamespace as schemaname, logicalrelid FROM pg_dist_partition JOIN pg_dist_tenant_schema s USING(colocationid) ORDER BY schemaid, logicalrelid::text;
+SELECT schemaid::regnamespace as schemaname, logicalrelid FROM pg_dist_partition JOIN pg_dist_tenant_schema s USING(colocationid)
+WHERE logicalrelid::text LIKE 'tenant1.%' ORDER BY schemaid, logicalrelid::text;
 
 -- errors not a tenant schema
-SELECT citus_schema_tenant_unset('tenant1');
+SELECT citus_schema_undistribute('tenant1');
 
 -- make it a tenant schema
 BEGIN;
-SELECT citus_schema_tenant_set('tenant1');
+SELECT citus_schema_distribute('tenant1');
 COMMIT;
 
 -- show the schema is a tenant schema now
-SELECT schemaid::regnamespace as schemaname, logicalrelid FROM pg_dist_partition JOIN pg_dist_tenant_schema s USING(colocationid) ORDER BY schemaid, logicalrelid::text;
+SELECT schemaid::regnamespace as schemaname, logicalrelid FROM pg_dist_partition JOIN pg_dist_tenant_schema s USING(colocationid)
+WHERE logicalrelid::text LIKE 'tenant1.%' ORDER BY schemaid, logicalrelid::text;
 
 SELECT colocationid = (SELECT colocationid FROM pg_dist_tenant_schema WHERE schemaid::regnamespace::text = 'tenant1')
 FROM pg_dist_partition WHERE logicalrelid::text LIKE 'tenant1.%';
 
 -- already a tenant schema notice
 SET client_min_messages TO NOTICE;
-SELECT citus_schema_tenant_set('tenant1');
+SELECT citus_schema_distribute('tenant1');
 SET client_min_messages TO WARNING;
 
 -- convert back to a regular schema
-SELECT citus_schema_tenant_unset('tenant1');
+SELECT citus_schema_undistribute('tenant1');
 
--- show the schema is back a regular schema after unsetting the tenant
+-- show the schema is back a regular schema after undistributing the tenant
 SELECT schemaid::regnamespace as schemaname FROM pg_dist_tenant_schema;
--- show tenant1.table3 is left as single shard table after unsetting tenant schema
-SELECT logicalrelid, partmethod, partkey, (colocationid > 0) AS has_non_zero_colocationid, repmodel, autoconverted
-FROM pg_dist_partition WHERE logicalrelid::text = 'tenant1.table3';
--- show tenant1.partitioned_table is left as single shard table after unsetting tenant schema
-SELECT logicalrelid, partmethod, partkey, (colocationid > 0) AS has_non_zero_colocationid, repmodel, autoconverted
-FROM pg_dist_partition WHERE logicalrelid::text LIKE 'tenant1.partition%';
--- save colocationid after unsetting the tenant schema
-SELECT colocationid AS tenant1_colocid FROM pg_dist_partition WHERE logicalrelid::text = 'tenant1.table3' \gset
+-- show all tables are local tables after undistributing the schema
+SELECT * FROM pg_dist_partition WHERE logicalrelid::text LIKE 'tenant1.%' ORDER BY logicalrelid;
 
 -- tables still have valid data
 SELECT COUNT(*) FROM tenant1.partitioned_table;
@@ -153,45 +152,44 @@ TRUNCATE public.ref CASCADE;
 SELECT COUNT(*) FROM tenant1.table3;
 
 -- disallowed namespaces
-SELECT citus_schema_tenant_set('public');
-SELECT citus_schema_tenant_set('pg_catalog');
-SELECT citus_schema_tenant_set('pg_toast');
+SELECT citus_schema_distribute('public');
+SELECT citus_schema_distribute('pg_catalog');
+SELECT citus_schema_distribute('pg_toast');
 CREATE TEMP TABLE xx(id int); -- create a temp table in case we do not have any pg_temp_xx schema yet
 SELECT nspname AS temp_schema_name FROM pg_namespace WHERE nspname LIKE 'pg_temp%' LIMIT 1 \gset
 SELECT nspname AS temp_toast_schema_name FROM pg_namespace WHERE nspname LIKE 'pg_toast_temp%' LIMIT 1 \gset
-SELECT citus_schema_tenant_set(:'temp_schema_name');
-SELECT citus_schema_tenant_set(:'temp_toast_schema_name');
-SELECT citus_schema_tenant_set('citus');
+SELECT citus_schema_distribute(:'temp_schema_name');
+SELECT citus_schema_distribute(:'temp_toast_schema_name');
+SELECT citus_schema_distribute('citus');
 
 -- weird schema and table names
 CREATE SCHEMA "CiTuS.TeeN";
 CREATE TABLE "CiTuS.TeeN"."TeeNTabLE.1!?!"(id int PRIMARY KEY, name text);
 INSERT INTO "CiTuS.TeeN"."TeeNTabLE.1!?!" SELECT i, 'asd'::text FROM generate_series(1,20) i;
-SELECT citus_schema_tenant_set('"CiTuS.TeeN"');
-SELECT citus_schema_tenant_unset('"CiTuS.TeeN"');
+SELECT citus_schema_distribute('"CiTuS.TeeN"');
+SELECT citus_schema_undistribute('"CiTuS.TeeN"');
 
 -- try setting the schema again after adding a distributed table into the schema. It should complain about distributed table.
 CREATE TABLE tenant1.new_dist(id int);
 SELECT create_distributed_table('tenant1.new_dist', 'id');
-SELECT citus_schema_tenant_set('tenant1');
+SELECT citus_schema_distribute('tenant1');
 SELECT undistribute_table('tenant1.new_dist');
 
--- try setting the schema again after adding a non-colocated single shard table into the schema. It should complain about non-colocated shards.
+-- try setting the schema again after adding a single shard table into the schema. It should complain about distributed table.
 CREATE TABLE tenant1.single_shard_t(id int);
-SELECT create_distributed_table('tenant1.single_shard_t', NULL, colocate_with=>'none');
-SELECT citus_schema_tenant_set('tenant1');
+SELECT create_distributed_table('tenant1.single_shard_t', NULL);
+SELECT citus_schema_distribute('tenant1');
 SELECT undistribute_table('tenant1.single_shard_t');
 
--- try setting the schema again. It should succeed and colocation id should be same as saved colocationid
-SELECT citus_schema_tenant_set('tenant1');
-SELECT (colocationid = :tenant1_colocid) AS used_existing_colocid FROM pg_dist_tenant_schema WHERE schemaid::regnamespace::text = 'tenant1';
+-- try setting the schema again. It should succeed now.
+SELECT citus_schema_distribute('tenant1');
 
--- try setting the schema again after removing all single shard tables. It should succeed and colocation id is different than saved colocationid
-SELECT citus_schema_tenant_unset('tenant1');
-SELECT 'drop table if exists"' || tablename || '" cascade;' FROM pg_tables WHERE schemaname = 'tenant1' ORDER BY tablename;
-SELECT citus_schema_tenant_set('tenant1');
-SELECT (colocationid = :tenant1_colocid) AS used_existing_colocid FROM pg_dist_tenant_schema WHERE schemaid::regnamespace::text = 'tenant1';
-SELECT citus_schema_tenant_unset('tenant1');
+SELECT schemaid::regnamespace as schemaname FROM pg_dist_tenant_schema WHERE schemaid::regnamespace::text = 'tenant1';
+
+SELECT colocationid = (SELECT colocationid FROM pg_dist_tenant_schema WHERE schemaid::regnamespace::text = 'tenant1')
+FROM pg_dist_partition WHERE logicalrelid::text LIKE 'tenant1.%';
+
+SELECT citus_schema_undistribute('tenant1');
 
 -- cleanup
 DROP SCHEMA "CiTuS.TeeN" CASCADE;

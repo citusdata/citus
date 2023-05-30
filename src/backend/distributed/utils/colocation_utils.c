@@ -882,30 +882,6 @@ TableColocationId(Oid distributedTableId)
 
 
 /*
- * AllTablesColocated decides if all tables are colocated.
- */
-bool
-AllTablesColocated(List *relationIds)
-{
-	if (relationIds == NIL)
-	{
-		return true;
-	}
-
-	Oid firstRelationId = linitial_oid(relationIds);
-	Oid relationId = InvalidOid;
-	foreach_oid(relationId, relationIds)
-	{
-		if (!TablesColocated(firstRelationId, relationId))
-		{
-			return false;
-		}
-	}
-	return true;
-}
-
-
-/*
  * TablesColocated function checks whether given two tables are co-located and
  * returns true if they are co-located. A table is always co-located with itself.
  * If given two tables are different and they are not distributed, this function

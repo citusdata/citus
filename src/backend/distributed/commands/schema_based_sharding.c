@@ -49,8 +49,8 @@ static bool SchemaHasCitusTableType(SchemaTables *schemaTables, List *citusTable
 static SchemaTables * TablesUnderSchema(Oid schemaId);
 static List * GetRelationIdsInSchema(Oid schemaId);
 static void EnsureTenantSchemaAllowed(Oid schemaId);
-static List * DisAllowedTableTypesDuringSchemaSet(void);
-static List * DisAllowedTableTypesDuringSchemaUnset(void);
+static List * DisAllowedTableTypesForDistributeSchema(void);
+static List * DisAllowedTableTypesForUndistributeSchema(void);
 static void EnsureTableKindsSupportedForTenantSchema(List *relationIds);
 
 /* controlled via citus.enable_schema_based_sharding GUC */
@@ -58,8 +58,8 @@ bool EnableSchemaBasedSharding = false;
 
 
 PG_FUNCTION_INFO_V1(citus_internal_unregister_tenant_schema_globally);
-PG_FUNCTION_INFO_V1(citus_schema_tenant_set);
-PG_FUNCTION_INFO_V1(citus_schema_tenant_unset);
+PG_FUNCTION_INFO_V1(citus_schema_distribute);
+PG_FUNCTION_INFO_V1(citus_schema_undistribute);
 
 /*
  * ShouldUseSchemaBasedSharding returns true if schema given name should be
@@ -378,6 +378,10 @@ TablesUnderSchema(Oid schemaId)
 }
 
 
+/*
+ * SchemaHasCitusTableType determines if tables under schema has any Citus
+ * table type given in the list.
+ */
 static bool
 SchemaHasCitusTableType(SchemaTables *schemaTables, List *citusTableTypes)
 {
@@ -451,28 +455,32 @@ SchemaHasCitusTableType(SchemaTables *schemaTables, List *citusTableTypes)
 
 
 /*
- * DisAllowedTableTypesDuringSchemaSet returns Citus table tables which are
- * not allowed inside a schema to be set as a tenant schema.
+ * DisAllowedTableTypesForDistributeSchema returns Citus tables which are
+ * not allowed inside a schema to be distributed. Currently, we allow
+ * only Citus local and PG local tables.
  */
 static List *
-DisAllowedTableTypesDuringSchemaSet(void)
+DisAllowedTableTypesForDistributeSchema(void)
 {
 	List *disallowedCitusTableTypes = NIL;
 	disallowedCitusTableTypes = lappend_int(disallowedCitusTableTypes, HASH_DISTRIBUTED);
-	disallowedCitusTableTypes = lappend_int(disallowedCitusTableTypes, RANGE_DISTRIBUTED);
 	disallowedCitusTableTypes = lappend_int(disallowedCitusTableTypes,
 											APPEND_DISTRIBUTED);
+	disallowedCitusTableTypes = lappend_int(disallowedCitusTableTypes, RANGE_DISTRIBUTED);
+	disallowedCitusTableTypes = lappend_int(disallowedCitusTableTypes,
+											SINGLE_SHARD_DISTRIBUTED);
 	disallowedCitusTableTypes = lappend_int(disallowedCitusTableTypes, REFERENCE_TABLE);
 	return disallowedCitusTableTypes;
 }
 
 
 /*
- * DisAllowedTableTypesDuringSchemaUnset returns Citus table tables which are
- * not allowed inside a schema during unset.
+ * DisAllowedTableTypesForUndistributeSchema returns Citus tables which are
+ * not allowed inside a schema during the undistribution of the schema. We
+ * expect only single shard tables.
  */
 static List *
-DisAllowedTableTypesDuringSchemaUnset(void)
+DisAllowedTableTypesForUndistributeSchema(void)
 {
 	List *disallowedCitusTableTypes = NIL;
 	disallowedCitusTableTypes = lappend_int(disallowedCitusTableTypes, HASH_DISTRIBUTED);
@@ -497,32 +505,31 @@ EnsureTenantSchemaAllowed(Oid schemaId)
 	/* public schema is not allowed */
 	if (strcmp(schemaName, "public") == 0)
 	{
-		ereport(ERROR, (errmsg("public schema cannot be set as a tenant schema")));
+		ereport(ERROR, (errmsg("public schema cannot be distributed")));
 	}
 
 	/* information_schema schema is not allowed */
 	if (strcmp(schemaName, "information_schema") == 0)
 	{
-		ereport(ERROR, (errmsg("information_schema schema cannot be set as a tenant "
-							   "schema")));
+		ereport(ERROR, (errmsg("information_schema schema cannot be distributed")));
 	}
 
 	/* pg_temp_xx and pg_toast_temp_xx schemas are not allowed */
 	if (isAnyTempNamespace(schemaId))
 	{
-		ereport(ERROR, (errmsg("temporary schema cannot be set as a tenant schema")));
+		ereport(ERROR, (errmsg("temporary schema cannot be distributed")));
 	}
 
 	/* pg_catalog schema is not allowed */
 	if (IsCatalogNamespace(schemaId))
 	{
-		ereport(ERROR, (errmsg("pg_catalog schema cannot be set as a tenant schema")));
+		ereport(ERROR, (errmsg("pg_catalog schema cannot be distributed")));
 	}
 
 	/* pg_toast schema is not allowed */
 	if (IsToastNamespace(schemaId))
 	{
-		ereport(ERROR, (errmsg("pg_toast schemacannot be set as a tenant schema")));
+		ereport(ERROR, (errmsg("pg_toast schema cannot be distributed")));
 	}
 
 	/* any schema owned by extension is not allowed */
@@ -531,7 +538,7 @@ EnsureTenantSchemaAllowed(Oid schemaId)
 	if (IsAnyObjectAddressOwnedByExtension(list_make1(schemaAddress), NULL))
 	{
 		ereport(ERROR, (errmsg(
-							"the schema %s, which is owned by an extension, cannot be set as a tenant schema",
+							"the schema %s, which is owned by an extension, cannot be distributed",
 							schemaName)));
 	}
 }
@@ -566,12 +573,10 @@ citus_internal_unregister_tenant_schema_globally(PG_FUNCTION_ARGS)
 	if (HeapTupleIsValid(namespaceTuple))
 	{
 		ReleaseSysCache(namespaceTuple);
-
 		ereport(ERROR, (errmsg("schema is expected to be already dropped "
 							   "because this function is only expected to "
 							   "be called from Citus drop hook")));
 	}
-
 	uint32 tenantSchemaColocationId = SchemaIdGetTenantColocationId(schemaId);
 
 	DeleteTenantSchemaLocally(schemaId);
@@ -583,11 +588,11 @@ citus_internal_unregister_tenant_schema_globally(PG_FUNCTION_ARGS)
 
 
 /*
- * citus_schema_tenant_set gets a regular schema name, then converts it to a tenant
+ * citus_schema_distribute gets a regular schema name, then converts it to a tenant
  * schema.
  */
 Datum
-citus_schema_tenant_set(PG_FUNCTION_ARGS)
+citus_schema_distribute(PG_FUNCTION_ARGS)
 {
 	CheckCitusVersion(ERROR);
 
@@ -615,47 +620,22 @@ citus_schema_tenant_set(PG_FUNCTION_ARGS)
 	/* Collect all tables by their types in the schema */
 	SchemaTables *schemaTables = TablesUnderSchema(schemaId);
 
-	/* Allow only (Citus) local tables and single shard tables in the schema */
-	List *disallowedCitusTableTypes = DisAllowedTableTypesDuringSchemaSet();
+	/* Allow only Citus local and PG local tables in the schema */
+	List *disallowedCitusTableTypes = DisAllowedTableTypesForDistributeSchema();
 	if (SchemaHasCitusTableType(schemaTables, disallowedCitusTableTypes))
 	{
 		ereport(ERROR, (errmsg("schema already has distributed tables"),
-						errhint("Undistribute hash distributed and reference "
-								"tables under the schema before setting it.")));
+						errhint("Undistribute distributed tables under "
+								"the schema before distributing the schema.")));
 	}
-
-	List *singleShardRelationIds = schemaTables->singleShardRelationIds;
-	List *localRelationIds = schemaTables->localRelationIds;
-	localRelationIds = list_concat(localRelationIds, schemaTables->citusLocalRelationIds);
 
 	/* We check that all table relation kinds are supported by a tenant schema */
-	EnsureTableKindsSupportedForTenantSchema(singleShardRelationIds);
+	List *localRelationIds = schemaTables->localRelationIds;
+	localRelationIds = list_concat(localRelationIds, schemaTables->citusLocalRelationIds);
 	EnsureTableKindsSupportedForTenantSchema(localRelationIds);
 
-	/* All single shard tables should be colocated in the schema */
-	if (!AllTablesColocated(singleShardRelationIds))
-	{
-		ereport(ERROR, (errmsg("schema %s has non-colocated single shard "
-							   "tables", schemaName)));
-	}
-
-	/*
-	 * When we have colocated single shard tables, we want to use their colocation id
-	 * during the schema registration. Otherwise, register he schema with a new
-	 * colocation id.
-	 */
-	uint32 colocationId = INVALID_COLOCATION_ID;
-	if (singleShardRelationIds != NIL)
-	{
-		Oid firstSingleShardRelationId = linitial_oid(singleShardRelationIds);
-		colocationId = ColocationIdViaCatalog(firstSingleShardRelationId);
-	}
-	else
-	{
-		colocationId = CreateTenantSchemaColocationId();
-	}
-
 	/* Register the schema locally and sync it to workers */
+	uint32 colocationId = CreateTenantSchemaColocationId();
 	InsertTenantSchemaLocally(schemaId, colocationId);
 	char *registerSchemaCommand = TenantSchemaInsertCommand(schemaId, colocationId);
 	if (EnableMetadataSync)
@@ -663,11 +643,7 @@ citus_schema_tenant_set(PG_FUNCTION_ARGS)
 		SendCommandToWorkersWithMetadata(registerSchemaCommand);
 	}
 
-	/*
-	 * Now we can convert all local relations to single shard relation. Note that we
-	 * already verified that all single tables are colocated and all tables' kind are
-	 * supported by a tenant schema.
-	 */
+	/* Convert each local relation to a single shard relation */
 	Oid relationId = InvalidOid;
 	List *tablesToConvert = NIL;
 	foreach_oid(relationId, localRelationIds)
@@ -695,11 +671,11 @@ citus_schema_tenant_set(PG_FUNCTION_ARGS)
 
 
 /*
- * citus_schema_tenant_unset gets a tenant schema name, then converts it to a regular
- * schema.
+ * citus_schema_undistribute gets a tenant schema name, then converts it to a regular
+ * schema by undistributing all tables under it.
  */
 Datum
-citus_schema_tenant_unset(PG_FUNCTION_ARGS)
+citus_schema_undistribute(PG_FUNCTION_ARGS)
 {
 	CheckCitusVersion(ERROR);
 
@@ -722,22 +698,25 @@ citus_schema_tenant_unset(PG_FUNCTION_ARGS)
 	ereport(NOTICE, (errmsg("schema %s is converted back to a regular schema",
 							schemaName)));
 
-	/* Only single shard tables are expected during unsetting the tenant schema */
-	List *disallowedTableTypesForUnset PG_USED_FOR_ASSERTS_ONLY =
-		DisAllowedTableTypesDuringSchemaUnset();
+	/* Only single shard tables are expected during the undistribution of the schema */
+	List *disallowedCitusTableTypesForUndistribute PG_USED_FOR_ASSERTS_ONLY =
+		DisAllowedTableTypesForUndistributeSchema();
 	SchemaTables *schemaTables PG_USED_FOR_ASSERTS_ONLY = TablesUnderSchema(schemaId);
-	Assert(!SchemaHasCitusTableType(schemaTables, disallowedTableTypesForUnset));
+	Assert(!SchemaHasCitusTableType(schemaTables,
+									disallowedCitusTableTypesForUndistribute));
+	Assert(!schemaTables->localRelationIds);
 
-	/*
-	 * Unregister schema without removing colocation metadata. Let the user decide
-	 * to convert single shard tables into (Citus) local ones later.
-	 */
-	DeleteTenantSchemaLocally(schemaId);
+	/* Undistribute all single shard tables in the schema */
+	UndistributeTables(schemaTables->singleShardRelationIds);
+
+	/* Delete schema metadata and saync to workers */
 	char *unregisterSchemaCommand = TenantSchemaDeleteCommand(schemaName);
-	if (EnableMetadataSync)
-	{
-		SendCommandToWorkersWithMetadata(unregisterSchemaCommand);
-	}
+	DeleteTenantSchemaLocally(schemaId);
+	SendCommandToWorkersWithMetadata(unregisterSchemaCommand);
+
+	/* Delete colocation metadata and sync to workers */
+	uint32 schemaColocationId = SchemaIdGetTenantColocationId(schemaId);
+	DeleteColocationGroup(schemaColocationId);
 
 	PG_RETURN_VOID();
 }

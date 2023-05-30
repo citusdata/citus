@@ -159,9 +159,6 @@ static void EnsureCitusTableCanBeCreated(Oid relationOid);
 static void PropagatePrerequisiteObjectsForDistributedTable(Oid relationId);
 static void EnsureDistributedSequencesHaveOneType(Oid relationId,
 												  List *seqInfoList);
-static List * GetFKeyCreationCommandsRelationInvolvedWithTableType(Oid relationId,
-																   int tableTypeFlag);
-static Oid DropFKeysAndUndistributeTable(Oid relationId);
 static void DropFKeysRelationInvolvedWithTableType(Oid relationId, int tableTypeFlag);
 static void CopyLocalDataIntoShards(Oid relationId);
 static List * TupleDescColumnNameList(TupleDesc tupleDescriptor);
@@ -1580,7 +1577,7 @@ EnsureDistributedSequencesHaveOneType(Oid relationId, List *seqInfoList)
  * commands to recreate the foreign keys that relation with relationId is involved
  * with given table type.
  */
-static List *
+List *
 GetFKeyCreationCommandsRelationInvolvedWithTableType(Oid relationId, int tableTypeFlag)
 {
 	int referencingFKeysFlag = INCLUDE_REFERENCING_CONSTRAINTS |
@@ -1606,7 +1603,7 @@ GetFKeyCreationCommandsRelationInvolvedWithTableType(Oid relationId, int tableTy
  * Also note that callers are responsible for storing & recreating foreign
  * keys to be dropped if needed.
  */
-static Oid
+Oid
 DropFKeysAndUndistributeTable(Oid relationId)
 {
 	DropFKeysRelationInvolvedWithTableType(relationId, INCLUDE_ALL_TABLE_TYPES);

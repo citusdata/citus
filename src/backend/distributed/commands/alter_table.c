@@ -362,6 +362,54 @@ worker_change_sequence_dependency(PG_FUNCTION_ARGS)
 
 
 /*
+ * UndistributeTables undistributes given relations. It first collects all foreign keys
+ * to recreate them after the undistribution. Then, drops the foreign keys and
+ * undistributes the relations. Finally, it recreates foreign keys.
+ */
+void
+UndistributeTables(List *relationIds)
+{
+	List *tablesToConvert = NIL;
+	Oid relationId = InvalidOid;
+	foreach_oid(relationId, relationIds)
+	{
+		/*
+		 * Skip partitions as they would be distributed/undistibuted by partitioned table.
+		 *
+		 * We should filter out partitions here before calling CreateTenantSchemaTable.
+		 * Otherwise, converted partitioned table would change oid of partitions and its
+		 * partition tables would fail wih oid not exist.
+		 */
+		if (PartitionTable(relationId))
+		{
+			continue;
+		}
+		tablesToConvert = lappend_oid(tablesToConvert, relationId);
+	}
+
+	/*
+	 * Collect foreign keys for recreation and then drop fkeys and undistribute
+	 * tables.
+	 */
+	List *originalForeignKeyRecreationCommands = NIL;
+	foreach_oid(relationId, tablesToConvert)
+	{
+		List *fkeyCommandsForRelation =
+			GetFKeyCreationCommandsRelationInvolvedWithTableType(relationId,
+																 INCLUDE_ALL_TABLE_TYPES);
+		originalForeignKeyRecreationCommands = list_concat(
+			originalForeignKeyRecreationCommands, fkeyCommandsForRelation);
+		DropFKeysAndUndistributeTable(relationId);
+	}
+
+	/* We can skip foreign key validations as we are sure about them at start */
+	bool skip_validation = true;
+	ExecuteForeignKeyCreateCommandList(originalForeignKeyRecreationCommands,
+									   skip_validation);
+}
+
+
+/*
  * UndistributeTable undistributes the given table. It uses ConvertTable function to
  * create a new local table and move everything to that table.
  *
