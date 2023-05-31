@@ -98,6 +98,89 @@ SELECT COUNT(*) = 0 FROM pg_dist_partition WHERE logicalrelid::text LIKE '%null_
 SELECT COUNT(*) = 0 FROM pg_dist_placement WHERE shardid IN (SELECT shardid FROM pg_dist_shard WHERE logicalrelid::text LIKE '%null_dist_key_table%');
 SELECT COUNT(*) = 0 FROM pg_dist_shard WHERE logicalrelid::text LIKE '%null_dist_key_table%';
 
+-- create 7 single shard tables, 3 of them are colocated, for testing shard moves / rebalance on them
+CREATE TABLE single_shard_table_col1_1 (a INT PRIMARY KEY);
+CREATE TABLE single_shard_table_col1_2 (a TEXT PRIMARY KEY);
+CREATE TABLE single_shard_table_col1_3 (a TIMESTAMP PRIMARY KEY);
+CREATE TABLE single_shard_table_col2_1 (a INT PRIMARY KEY);
+CREATE TABLE single_shard_table_col3_1 (a INT PRIMARY KEY);
+CREATE TABLE single_shard_table_col4_1 (a INT PRIMARY KEY);
+CREATE TABLE single_shard_table_col5_1 (a INT PRIMARY KEY);
+SELECT create_distributed_table('single_shard_table_col1_1', null, colocate_with=>'none');
+SELECT create_distributed_table('single_shard_table_col1_2', null, colocate_with=>'single_shard_table_col1_1');
+SELECT create_distributed_table('single_shard_table_col1_3', null, colocate_with=>'single_shard_table_col1_2');
+SELECT create_distributed_table('single_shard_table_col2_1', null, colocate_with=>'none');
+SELECT create_distributed_table('single_shard_table_col3_1', null, colocate_with=>'none');
+SELECT create_distributed_table('single_shard_table_col4_1', null, colocate_with=>'none');
+SELECT create_distributed_table('single_shard_table_col5_1', null, colocate_with=>'none');
+
+-- initial status
+SELECT shardid, nodeport FROM pg_dist_shard_placement WHERE shardid > 1820000 ORDER BY shardid;
+
+-- errors out because streaming replicated
+SELECT citus_copy_shard_placement(1820005, 'localhost', :worker_1_port, 'localhost', :worker_2_port);
+SELECT master_copy_shard_placement(1820005, 'localhost', :worker_1_port, 'localhost', :worker_2_port);
+SELECT citus_copy_shard_placement(1820005, :worker_1_node, :worker_2_node);
+
+-- no changes because it's already balanced
+SELECT rebalance_table_shards();
+
+-- same placements
+SELECT shardid, nodeport FROM pg_dist_shard_placement WHERE shardid > 1820000 ORDER BY shardid;
+
+-- manually move 2 shard from 2 colocation groups to make the cluster unbalanced
+SELECT citus_move_shard_placement(1820005, 'localhost', :worker_1_port, 'localhost', :worker_2_port);
+SELECT citus_move_shard_placement(1820007, :worker_1_node, :worker_2_node);
+
+-- all placements are located on worker 2
+SELECT shardid, nodeport FROM pg_dist_shard_placement WHERE shardid > 1820000 ORDER BY shardid;
+
+-- move some of them to worker 1 to balance the cluster
+SELECT rebalance_table_shards();
+
+-- the final status, balanced
+SELECT shardid, nodeport FROM pg_dist_shard_placement WHERE shardid > 1820000 ORDER BY shardid;
+
+-- verify we didn't break any colocations
+SELECT logicalrelid, colocationid FROM pg_dist_partition WHERE logicalrelid::text LIKE '%single_shard_table_col%' ORDER BY colocationid;
+
+-- drop preexisting tables
+-- we can remove the drop commands once the issue is fixed: https://github.com/citusdata/citus/issues/6948
+SET client_min_messages TO ERROR;
+DROP TABLE IF EXISTS public.lineitem, public.orders, public.customer_append, public.part_append, public.supplier_single_shard,
+    public.events, public.users, public.lineitem_hash_part, public.lineitem_subquery, public.orders_hash_part,
+    public.orders_subquery, public.unlogged_table CASCADE;
+DROP SCHEMA IF EXISTS with_basics, subquery_and_ctes CASCADE;
+DROP TABLE IF EXISTS public.users_table, public.events_table, public.agg_results, public.agg_results_second, public.agg_results_third, public.agg_results_fourth, public.agg_results_window CASCADE;
+-- drain node
+SELECT citus_drain_node('localhost', :worker_2_port, 'block_writes');
+SELECT citus_set_node_property('localhost', :worker_2_port, 'shouldhaveshards', true);
+RESET client_min_messages;
+
+-- see the plan for moving 4 shards, 3 of them are in the same colocation group
+SELECT * FROM get_rebalance_table_shards_plan();
+
+-- move some of them to worker 2 to balance the cluster
+SELECT 1 FROM citus_rebalance_start();
+
+-- stop it
+SELECT * FROM citus_rebalance_stop();
+
+-- show rebalance status, see the cancelled job for two moves
+SELECT state, details FROM citus_rebalance_status();
+
+-- start again
+SELECT 1 FROM citus_rebalance_start();
+
+-- show rebalance status, scheduled a job for two moves
+SELECT state, details FROM citus_rebalance_status();
+
+-- wait for rebalance to be completed
+SELECT * FROM citus_rebalance_wait();
+
+-- the final status, balanced
+SELECT shardid, nodeport FROM pg_dist_shard_placement WHERE shardid > 1820000 ORDER BY shardid;
+
 -- test update_distributed_table_colocation
 CREATE TABLE update_col_1 (a INT);
 CREATE TABLE update_col_2 (a INT);
