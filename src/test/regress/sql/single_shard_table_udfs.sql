@@ -24,6 +24,21 @@ RETURNS SETOF RECORD
 LANGUAGE C STRICT
 AS 'citus', $$get_foreign_key_connected_relations$$;
 
+CREATE OR REPLACE FUNCTION citus_get_all_dependencies_for_object(classid oid, objid oid, objsubid int)
+RETURNS SETOF RECORD
+LANGUAGE C STRICT
+AS 'citus', $$citus_get_all_dependencies_for_object$$;
+
+CREATE OR REPLACE FUNCTION citus_get_dependencies_for_object(classid oid, objid oid, objsubid int)
+RETURNS SETOF RECORD
+LANGUAGE C STRICT
+AS 'citus', $$citus_get_dependencies_for_object$$;
+
+CREATE OR REPLACE FUNCTION pg_catalog.is_citus_depended_object(oid,oid)
+RETURNS bool
+LANGUAGE C
+AS 'citus', $$is_citus_depended_object$$;
+
 -- test some other udf's with single shard tables
 CREATE TABLE null_dist_key_table(a int);
 SELECT create_distributed_table('null_dist_key_table', null, colocate_with=>'none', distribution_type=>null);
@@ -379,6 +394,48 @@ SELECT get_referencing_relation_id_list::regclass::text FROM get_referencing_rel
 SELECT get_referenced_relation_id_list::regclass::text FROM get_referenced_relation_id_list('fkey_s2'::regclass) ORDER BY 1;
 
 SELECT oid::regclass::text FROM get_foreign_key_connected_relations('fkey_s1'::regclass) AS f(oid oid) ORDER BY 1;
+
+--test dependency functions
+CREATE TYPE dep_type AS (a INT);
+CREATE TABLE dep_tbl(a INT, b dep_type);
+SELECT create_distributed_table('dep_tbl', NULL, colocate_with:='none');
+CREATE VIEW dep_view AS SELECT * FROM dep_tbl;
+
+-- find all the dependencies of table dep_tbl
+SELECT
+	pg_identify_object(t.classid, t.objid, t.objsubid)
+FROM
+	(SELECT * FROM pg_get_object_address('table', '{dep_tbl}', '{}')) as addr
+JOIN LATERAL
+	citus_get_all_dependencies_for_object(addr.classid, addr.objid, addr.objsubid) as t(classid oid, objid oid, objsubid int)
+ON TRUE
+	ORDER BY 1;
+
+-- find all the dependencies of view dep_view
+SELECT
+	pg_identify_object(t.classid, t.objid, t.objsubid)
+FROM
+	(SELECT * FROM pg_get_object_address('view', '{dep_view}', '{}')) as addr
+JOIN LATERAL
+	citus_get_all_dependencies_for_object(addr.classid, addr.objid, addr.objsubid) as t(classid oid, objid oid, objsubid int)
+ON TRUE
+	ORDER BY 1;
+
+-- find non-distributed dependencies of table dep_tbl
+SELECT
+	pg_identify_object(t.classid, t.objid, t.objsubid)
+FROM
+	(SELECT * FROM pg_get_object_address('table', '{dep_tbl}', '{}')) as addr
+JOIN LATERAL
+	citus_get_dependencies_for_object(addr.classid, addr.objid, addr.objsubid) as t(classid oid, objid oid, objsubid int)
+ON TRUE
+	ORDER BY 1;
+
+SET citus.hide_citus_dependent_objects TO true;
+CREATE TABLE citus_dep_tbl (a noderole);
+SELECT create_distributed_table('citus_dep_tbl', NULL, colocate_with:='none');
+
+SELECT is_citus_depended_object('pg_class'::regclass, 'citus_dep_tbl'::regclass);
 
 SET client_min_messages TO WARNING;
 DROP SCHEMA null_dist_key_udfs CASCADE;
