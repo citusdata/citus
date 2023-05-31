@@ -144,15 +144,23 @@ SELECT shardid, nodeport FROM pg_dist_shard_placement WHERE shardid > 1820000 OR
 -- verify we didn't break any colocations
 SELECT logicalrelid, colocationid FROM pg_dist_partition WHERE logicalrelid::text LIKE '%single_shard_table_col%' ORDER BY colocationid;
 
--- again, manually move 2 shard from 2 colocation groups to make the cluster unbalanced
--- consider using citus_drain_node when the issue is fixed: https://github.com/citusdata/citus/issues/6948
-SELECT citus_move_shard_placement(1820005, 'localhost', :worker_1_port, 'localhost', :worker_2_port);
-SELECT citus_move_shard_placement(1820003, :worker_1_node, :worker_2_node);
+-- drop preexisting tables
+-- we can remove the drop commands once the issue is fixed: https://github.com/citusdata/citus/issues/6948
+SET client_min_messages TO ERROR;
+DROP TABLE IF EXISTS public.lineitem, public.orders, public.customer_append, public.part_append, public.supplier_single_shard,
+    public.events, public.users, public.lineitem_hash_part, public.lineitem_subquery, public.orders_hash_part,
+    public.orders_subquery, public.unlogged_table CASCADE;
+DROP SCHEMA IF EXISTS with_basics, subquery_and_ctes CASCADE;
+DROP TABLE IF EXISTS public.users_table, public.events_table, public.agg_results, public.agg_results_second, public.agg_results_third, public.agg_results_fourth, public.agg_results_window CASCADE;
+-- drain node
+SELECT citus_drain_node('localhost', :worker_2_port, 'block_writes');
+SELECT citus_set_node_property('localhost', :worker_2_port, 'shouldhaveshards', true);
+RESET client_min_messages;
 
 -- see the plan for moving 4 shards, 3 of them are in the same colocation group
 SELECT * FROM get_rebalance_table_shards_plan();
 
--- move some of them to worker 1 to balance the cluster
+-- move some of them to worker 2 to balance the cluster
 SELECT 1 FROM citus_rebalance_start();
 
 -- stop it

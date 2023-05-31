@@ -385,31 +385,39 @@ SELECT logicalrelid, colocationid FROM pg_dist_partition WHERE logicalrelid::tex
  single_shard_table_col5_1 |       198005
 (7 rows)
 
--- again, manually move 2 shard from 2 colocation groups to make the cluster unbalanced
--- consider using citus_drain_node when the issue is fixed: https://github.com/citusdata/citus/issues/6948
-SELECT citus_move_shard_placement(1820005, 'localhost', :worker_1_port, 'localhost', :worker_2_port);
- citus_move_shard_placement
+-- drop preexisting tables
+-- we can remove the drop commands once the issue is fixed: https://github.com/citusdata/citus/issues/6948
+SET client_min_messages TO ERROR;
+DROP TABLE IF EXISTS public.lineitem, public.orders, public.customer_append, public.part_append, public.supplier_single_shard,
+    public.events, public.users, public.lineitem_hash_part, public.lineitem_subquery, public.orders_hash_part,
+    public.orders_subquery, public.unlogged_table CASCADE;
+DROP SCHEMA IF EXISTS with_basics, subquery_and_ctes CASCADE;
+DROP TABLE IF EXISTS public.users_table, public.events_table, public.agg_results, public.agg_results_second, public.agg_results_third, public.agg_results_fourth, public.agg_results_window CASCADE;
+-- drain node
+SELECT citus_drain_node('localhost', :worker_2_port, 'block_writes');
+ citus_drain_node
 ---------------------------------------------------------------------
 
 (1 row)
 
-SELECT citus_move_shard_placement(1820003, :worker_1_node, :worker_2_node);
- citus_move_shard_placement
+SELECT citus_set_node_property('localhost', :worker_2_port, 'shouldhaveshards', true);
+ citus_set_node_property
 ---------------------------------------------------------------------
 
 (1 row)
 
+RESET client_min_messages;
 -- see the plan for moving 4 shards, 3 of them are in the same colocation group
 SELECT * FROM get_rebalance_table_shards_plan();
         table_name         | shardid | shard_size | sourcename | sourceport | targetname | targetport
 ---------------------------------------------------------------------
- single_shard_table_col1_1 | 1820002 |          0 | localhost  |      57638 | localhost  |      57637
- single_shard_table_col1_2 | 1820003 |          0 | localhost  |      57638 | localhost  |      57637
- single_shard_table_col1_3 | 1820004 |          0 | localhost  |      57638 | localhost  |      57637
- single_shard_table_col2_1 | 1820005 |          0 | localhost  |      57638 | localhost  |      57637
+ single_shard_table_col1_1 | 1820002 |          0 | localhost  |      57637 | localhost  |      57638
+ single_shard_table_col1_2 | 1820003 |          0 | localhost  |      57637 | localhost  |      57638
+ single_shard_table_col1_3 | 1820004 |          0 | localhost  |      57637 | localhost  |      57638
+ single_shard_table_col2_1 | 1820005 |          0 | localhost  |      57637 | localhost  |      57638
 (4 rows)
 
--- move some of them to worker 1 to balance the cluster
+-- move some of them to worker 2 to balance the cluster
 SELECT 1 FROM citus_rebalance_start();
 NOTICE:  Scheduled 2 moves as job xxx
 DETAIL:  Rebalance scheduled as background job
@@ -461,13 +469,13 @@ SELECT * FROM citus_rebalance_wait();
 SELECT shardid, nodeport FROM pg_dist_shard_placement WHERE shardid > 1820000 ORDER BY shardid;
  shardid | nodeport
 ---------------------------------------------------------------------
- 1820002 |    57637
- 1820003 |    57637
- 1820004 |    57637
- 1820005 |    57637
- 1820006 |    57638
- 1820007 |    57638
- 1820008 |    57638
+ 1820002 |    57638
+ 1820003 |    57638
+ 1820004 |    57638
+ 1820005 |    57638
+ 1820006 |    57637
+ 1820007 |    57637
+ 1820008 |    57637
 (7 rows)
 
 -- test update_distributed_table_colocation
