@@ -8,6 +8,22 @@ ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 198000;
 SET client_min_messages TO ERROR;
 SELECT 1 FROM citus_add_node('localhost', :master_port, groupid=>0);
 RESET client_min_messages;
+
+CREATE FUNCTION get_referencing_relation_id_list(Oid)
+RETURNS SETOF Oid
+LANGUAGE C STABLE STRICT
+AS 'citus', $$get_referencing_relation_id_list$$;
+
+CREATE FUNCTION get_referenced_relation_id_list(Oid)
+RETURNS SETOF Oid
+LANGUAGE C STABLE STRICT
+AS 'citus', $$get_referenced_relation_id_list$$;
+
+CREATE OR REPLACE FUNCTION get_foreign_key_connected_relations(IN table_name regclass)
+RETURNS SETOF RECORD
+LANGUAGE C STRICT
+AS 'citus', $$get_foreign_key_connected_relations$$;
+
 -- test some other udf's with single shard tables
 CREATE TABLE null_dist_key_table(a int);
 SELECT create_distributed_table('null_dist_key_table', null, colocate_with=>'none', distribution_type=>null);
@@ -339,6 +355,30 @@ WHERE
       noderole = 'primary'
       ORDER BY 2, 3;
 END;
+
+-- test foreign key UDFs
+CREATE TABLE fkey_s1 (a INT UNIQUE);
+CREATE TABLE fkey_r (a INT UNIQUE);
+
+CREATE TABLE fkey_s2 (x INT, y INT);
+CREATE TABLE fkey_s3 (x INT, y INT);
+
+SELECT create_distributed_table('fkey_s1', NULL, colocate_with:='none');
+SELECT create_reference_table('fkey_r');
+
+SELECT create_distributed_table('fkey_s2', NULL, colocate_with:='fkey_s1');
+SELECT create_distributed_table('fkey_s3', NULL, colocate_with:='fkey_s1');
+
+ALTER TABLE fkey_s2 ADD CONSTRAINT f1 FOREIGN KEY (x) REFERENCES fkey_s1 (a);
+ALTER TABLE fkey_s2 ADD CONSTRAINT f2 FOREIGN KEY (y) REFERENCES fkey_r (a);
+
+ALTER TABLE fkey_s3 ADD CONSTRAINT f3 FOREIGN KEY (x) REFERENCES fkey_s1 (a);
+ALTER TABLE fkey_s3 ADD CONSTRAINT f4 FOREIGN KEY (y) REFERENCES fkey_r (a);
+
+SELECT get_referencing_relation_id_list::regclass::text FROM get_referencing_relation_id_list('fkey_s1'::regclass) ORDER BY 1;
+SELECT get_referenced_relation_id_list::regclass::text FROM get_referenced_relation_id_list('fkey_s2'::regclass) ORDER BY 1;
+
+SELECT oid::regclass::text FROM get_foreign_key_connected_relations('fkey_s1'::regclass) AS f(oid oid) ORDER BY 1;
 
 SET client_min_messages TO WARNING;
 DROP SCHEMA null_dist_key_udfs CASCADE;
