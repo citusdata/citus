@@ -492,5 +492,10 @@ SELECT tablename, indexname FROM pg_indexes WHERE schemaname = 'null_dist_key_ud
 \c - - - :master_port
 SET search_path TO null_dist_key_udfs;
 
+--test isolate_tenant_to_new_shard
+CREATE TABLE iso_tbl (a INT);
+SELECT create_distributed_table('iso_tbl', NULL, colocate_with:='none');
+SELECT isolate_tenant_to_new_shard('iso_tbl', 5);
+
 SET client_min_messages TO WARNING;
 DROP SCHEMA null_dist_key_udfs CASCADE;
