@@ -437,5 +437,28 @@ SELECT create_distributed_table('citus_dep_tbl', NULL, colocate_with:='none');
 
 SELECT is_citus_depended_object('pg_class'::regclass, 'citus_dep_tbl'::regclass);
 
+-- test replicate_reference_tables
+SET client_min_messages TO WARNING;
+DROP SCHEMA null_dist_key_udfs CASCADE;
+RESET client_min_messages;
+CREATE SCHEMA null_dist_key_udfs;
+SET search_path TO null_dist_key_udfs;
+
+SELECT citus_remove_node('localhost', :worker_2_port);
+
+CREATE TABLE rep_ref (a INT UNIQUE);
+SELECT create_reference_table('rep_ref');
+
+CREATE TABLE rep_sing (a INT);
+SELECT create_distributed_table('rep_sing', NULL, colocate_with:='none');
+
+ALTER TABLE rep_sing ADD CONSTRAINT rep_fkey FOREIGN KEY (a) REFERENCES rep_ref(a);
+
+SELECT 1 FROM citus_add_node('localhost', :worker_2_port);
+
+SELECT count(*) FROM citus_shards WHERE table_name = 'rep_ref'::regclass AND nodeport = :worker_2_port;
+SELECT replicate_reference_tables('block_writes');
+SELECT count(*) FROM citus_shards WHERE table_name = 'rep_ref'::regclass AND nodeport = :worker_2_port;
+
 SET client_min_messages TO WARNING;
 DROP SCHEMA null_dist_key_udfs CASCADE;
