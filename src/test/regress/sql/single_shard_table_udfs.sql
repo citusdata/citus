@@ -513,5 +513,15 @@ CREATE TABLE debug_tbl (a INT);
 SELECT create_distributed_table ('debug_tbl', NULL, colocate_with:='none');
 SELECT debug_equality_expression('debug_tbl'::regclass);
 
+-- test partition_column_id
+CREATE FUNCTION partition_column_id(regclass)
+RETURNS smallint
+AS 'citus'
+LANGUAGE C STRICT;
+
+CREATE TABLE partcol_tbl (a INT);
+SELECT create_distributed_table ('partcol_tbl', NULL, colocate_with:='none');
+SELECT partition_column_id('partcol_tbl'::regclass);
+
 SET client_min_messages TO WARNING;
 DROP SCHEMA null_dist_key_udfs CASCADE;
