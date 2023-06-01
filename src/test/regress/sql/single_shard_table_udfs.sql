@@ -503,5 +503,15 @@ CREATE TABLE rep_tbl (a INT);
 SELECT create_distributed_table('rep_tbl', NULL, colocate_with:='none');
 SELECT replicate_table_shards('rep_tbl');
 
+-- test debug_equality_expression
+CREATE FUNCTION debug_equality_expression(regclass)
+RETURNS cstring
+AS 'citus'
+LANGUAGE C STRICT;
+
+CREATE TABLE debug_tbl (a INT);
+SELECT create_distributed_table ('debug_tbl', NULL, colocate_with:='none');
+SELECT debug_equality_expression('debug_tbl'::regclass);
+
 SET client_min_messages TO WARNING;
 DROP SCHEMA null_dist_key_udfs CASCADE;

@@ -139,6 +139,10 @@ debug_equality_expression(PG_FUNCTION_ARGS)
 {
 	Oid distributedTableId = PG_GETARG_OID(0);
 	uint32 rangeTableId = 1;
+	if (!IsCitusTableType(distributedTableId, HASH_DISTRIBUTED))
+	{
+		ereport(ERROR, (errmsg("relation needs to be a hash distributed table")));
+	}
 	Var *partitionColumn = PartitionColumn(distributedTableId, rangeTableId);
 	OpExpr *equalityExpression = MakeOpExpression(partitionColumn, BTEqualStrategyNumber);
 
