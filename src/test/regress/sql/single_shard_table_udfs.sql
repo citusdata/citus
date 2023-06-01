@@ -460,5 +460,37 @@ SELECT count(*) FROM citus_shards WHERE table_name = 'rep_ref'::regclass AND nod
 SELECT replicate_reference_tables('block_writes');
 SELECT count(*) FROM citus_shards WHERE table_name = 'rep_ref'::regclass AND nodeport = :worker_2_port;
 
+-- test fix_partition_shard_index_names
+SET citus.next_shard_id TO 3820000;
+CREATE TABLE part_tbl_sing (dist_col int, another_col int, partition_col timestamp) PARTITION BY RANGE (partition_col);
+SELECT create_distributed_table('part_tbl_sing', NULL, colocate_with:='none');
+
+-- create a partition with a long name and another with a short name
+CREATE TABLE partition_table_with_very_long_name PARTITION OF part_tbl_sing FOR VALUES FROM ('2018-01-01') TO ('2019-01-01');
+CREATE TABLE p PARTITION OF part_tbl_sing FOR VALUES FROM ('2019-01-01') TO ('2020-01-01');
+
+-- create an index on parent table
+-- we will see that it doesn't matter whether we name the index on parent or not
+-- indexes auto-generated on partitions will not use this name
+-- SELECT fix_partition_shard_index_names('dist_partitioned_table') will be executed
+-- automatically at the end of the CREATE INDEX command
+CREATE INDEX short ON part_tbl_sing USING btree (another_col, partition_col);
+
+SELECT tablename, indexname FROM pg_indexes WHERE schemaname = 'null_dist_key_udfs' AND tablename SIMILAR TO 'p%' ORDER BY 1, 2;
+
+SELECT nodeport AS part_tbl_sing_port
+FROM citus_shards
+WHERE table_name = 'part_tbl_sing'::regclass AND
+      nodeport IN (:worker_1_port, :worker_2_port) \gset
+
+\c - - - :part_tbl_sing_port
+-- the names are generated correctly
+-- shard id has been appended to all index names which didn't end in shard id
+-- this goes in line with Citus's way of naming indexes of shards: always append shardid to the end
+SELECT tablename, indexname FROM pg_indexes WHERE schemaname = 'null_dist_key_udfs' AND tablename SIMILAR TO 'p%\_\d*' ORDER BY 1, 2;
+
+\c - - - :master_port
+SET search_path TO null_dist_key_udfs;
+
 SET client_min_messages TO WARNING;
 DROP SCHEMA null_dist_key_udfs CASCADE;
