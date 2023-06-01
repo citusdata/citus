@@ -497,5 +497,10 @@ CREATE TABLE iso_tbl (a INT);
 SELECT create_distributed_table('iso_tbl', NULL, colocate_with:='none');
 SELECT isolate_tenant_to_new_shard('iso_tbl', 5);
 
+-- test replicate_table_shards
+CREATE TABLE rep_tbl (a INT);
+SELECT create_distributed_table('rep_tbl', NULL, colocate_with:='none');
+SELECT replicate_table_shards('rep_tbl');
+
 SET client_min_messages TO WARNING;
 DROP SCHEMA null_dist_key_udfs CASCADE;

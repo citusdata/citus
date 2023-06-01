@@ -1178,6 +1178,11 @@ replicate_table_shards(PG_FUNCTION_ARGS)
 	ArrayType *excludedShardArray = PG_GETARG_ARRAYTYPE_P(3);
 	Oid shardReplicationModeOid = PG_GETARG_OID(4);
 
+	if (IsCitusTableType(relationId, SINGLE_SHARD_DISTRIBUTED))
+	{
+		ereport(ERROR, (errmsg("cannot replicate singe shard tables' shards")));
+	}
+
 	char transferMode = LookupShardTransferMode(shardReplicationModeOid);
 	EnsureReferenceTablesExistOnAllNodesExtended(transferMode);
 
