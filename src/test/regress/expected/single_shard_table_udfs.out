@@ -397,7 +397,7 @@ SELECT shardid, nodeport FROM pg_dist_shard_placement WHERE shardid > 1820000 OR
 (7 rows)
 
 -- verify we didn't break any colocations
-SELECT logicalrelid, colocationid FROM pg_dist_partition WHERE logicalrelid::text LIKE '%single_shard_table_col%' ORDER BY colocationid;
+SELECT logicalrelid, colocationid FROM pg_dist_partition WHERE logicalrelid::text LIKE '%single_shard_table_col%' ORDER BY colocationid, logicalrelid;
        logicalrelid        | colocationid
 ---------------------------------------------------------------------
  single_shard_table_col1_1 |       198001

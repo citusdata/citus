@@ -173,7 +173,7 @@ SELECT rebalance_table_shards();
 SELECT shardid, nodeport FROM pg_dist_shard_placement WHERE shardid > 1820000 ORDER BY shardid;
 
 -- verify we didn't break any colocations
-SELECT logicalrelid, colocationid FROM pg_dist_partition WHERE logicalrelid::text LIKE '%single_shard_table_col%' ORDER BY colocationid;
+SELECT logicalrelid, colocationid FROM pg_dist_partition WHERE logicalrelid::text LIKE '%single_shard_table_col%' ORDER BY colocationid, logicalrelid;
 
 -- drop preexisting tables
 -- we can remove the drop commands once the issue is fixed: https://github.com/citusdata/citus/issues/6948
