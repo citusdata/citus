@@ -380,6 +380,8 @@ UndistributeTable(TableConversionParameters *params)
 							   "because the table is not distributed")));
 	}
 
+	ErrorIfTenantTable(params->relationId, "undistribute_table");
+
 	if (!params->cascadeViaForeignKeys)
 	{
 		EnsureTableNotReferencing(params->relationId, UNDISTRIBUTE_TABLE);

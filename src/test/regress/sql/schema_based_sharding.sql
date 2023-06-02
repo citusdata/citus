@@ -59,6 +59,8 @@ SELECT citus_add_local_table_to_metadata('tenant_2.test_table');
 SELECT update_distributed_table_colocation('tenant_2.test_table', colocate_with => 'none');
 -- verify we also don't allow colocate_with a tenant table
 SELECT update_distributed_table_colocation('regular_schema.test_table', colocate_with => 'tenant_2.test_table');
+-- verify we don't allow undistribute_table for tenant tables
+SELECT undistribute_table('tenant_2.test_table');
 
 -- (on coordinator) verify that colocation id is set for empty tenants too
 SELECT colocationid > 0 FROM pg_dist_tenant_schema
