@@ -13,6 +13,8 @@
 #ifndef REPARTITION_EXECUTOR_H
 #define REPARTITION_EXECUTOR_H
 
+extern bool EnableRepartitionedInsertSelect;
+
 extern int DistributionColumnIndex(List *insertTargetList, Var *partitionColumn);
 extern List * GenerateTaskListWithColocatedIntermediateResults(Oid targetRelationId,
 															   Query *
@@ -24,5 +26,7 @@ extern List * GenerateTaskListWithRedistributedResults(
 	targetRelation,
 	List **redistributedResults,
 	bool useBinaryFormat);
+extern bool IsSupportedRedistributionTarget(Oid targetRelationId);
+extern bool IsRedistributablePlan(Plan *selectPlan);
 
 #endif /* REPARTITION_EXECUTOR_H */

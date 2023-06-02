@@ -15,6 +15,7 @@
 #include "nodes/makefuncs.h"
 #include "nodes/parsenodes.h"
 
+#include "distributed/citus_custom_scan.h"
 #include "distributed/intermediate_results.h"
 #include "distributed/listutils.h"
 #include "distributed/multi_physical_planner.h"
@@ -22,6 +23,81 @@
 #include "distributed/recursive_planning.h"
 #include "distributed/repartition_executor.h"
 #include "distributed/resource_lock.h"
+
+
+/*
+ * IsSupportedRedistributionTarget determines whether re-partitioning into the
+ * given target relation is supported.
+ */
+bool
+IsSupportedRedistributionTarget(Oid targetRelationId)
+{
+	CitusTableCacheEntry *tableEntry = GetCitusTableCacheEntry(targetRelationId);
+
+	if (!IsCitusTableTypeCacheEntry(tableEntry, HASH_DISTRIBUTED) &&
+		!IsCitusTableTypeCacheEntry(tableEntry, RANGE_DISTRIBUTED))
+	{
+		return false;
+	}
+
+	return true;
+}
+
+
+/*
+ * IsRedistributablePlan returns true if the given plan is a distributable plan.
+ */
+bool
+IsRedistributablePlan(Plan *selectPlan)
+{
+	if (!EnableRepartitionedInsertSelect)
+	{
+		return false;
+	}
+
+	/*
+	 * Don't redistribute if query is not distributed or requires
+	 * merge on coordinator
+	 */
+	if (!IsCitusCustomScan(selectPlan))
+	{
+		return false;
+	}
+
+	DistributedPlan *distSelectPlan =
+		GetDistributedPlan((CustomScan *) selectPlan);
+	Job *distSelectJob = distSelectPlan->workerJob;
+	List *distSelectTaskList = distSelectJob->taskList;
+
+	/*
+	 * Don't use redistribution if only one task. This is to keep the existing
+	 * behaviour for CTEs that the last step is a read_intermediate_result()
+	 * call. It doesn't hurt much in other cases too.
+	 */
+	if (list_length(distSelectTaskList) <= 1)
+	{
+		return false;
+	}
+
+	/* don't use redistribution for repartition joins for now */
+	if (distSelectJob->dependentJobList != NIL)
+	{
+		return false;
+	}
+
+	if (distSelectPlan->combineQuery != NULL)
+	{
+		Query *combineQuery = (Query *) distSelectPlan->combineQuery;
+
+		if (contain_nextval_expression_walker((Node *) combineQuery->targetList, NULL))
+		{
+			/* nextval needs to be evaluated on the coordinator */
+			return false;
+		}
+	}
+
+	return true;
+}
 
 
 /*

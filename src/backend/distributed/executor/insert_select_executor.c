@@ -420,25 +420,6 @@ PartitionColumnIndexFromColumnList(Oid relationId, List *columnNameList)
 
 
 /*
- * IsSupportedRedistributionTarget determines whether re-partitioning into the
- * given target relation is supported.
- */
-bool
-IsSupportedRedistributionTarget(Oid targetRelationId)
-{
-	CitusTableCacheEntry *tableEntry = GetCitusTableCacheEntry(targetRelationId);
-
-	if (!IsCitusTableTypeCacheEntry(tableEntry, HASH_DISTRIBUTED) &&
-		!IsCitusTableTypeCacheEntry(tableEntry, RANGE_DISTRIBUTED))
-	{
-		return false;
-	}
-
-	return true;
-}
-
-
-/*
  * DistributionColumnIndex finds the index of given distribution column in the
  * given target list.
  */
@@ -458,59 +439,6 @@ DistributionColumnIndex(List *insertTargetList, Var *partitionColumn)
 	}
 
 	return -1;
-}
-
-
-/*
- * IsRedistributablePlan returns true if the given plan is a redistrituable plan.
- */
-bool
-IsRedistributablePlan(Plan *selectPlan)
-{
-	if (!EnableRepartitionedInsertSelect)
-	{
-		return false;
-	}
-
-	/* don't redistribute if query is not distributed or requires merge on coordinator */
-	if (!IsCitusCustomScan(selectPlan))
-	{
-		return false;
-	}
-
-	DistributedPlan *distSelectPlan =
-		GetDistributedPlan((CustomScan *) selectPlan);
-	Job *distSelectJob = distSelectPlan->workerJob;
-	List *distSelectTaskList = distSelectJob->taskList;
-
-	/*
-	 * Don't use redistribution if only one task. This is to keep the existing
-	 * behaviour for CTEs that the last step is a read_intermediate_result()
-	 * call. It doesn't hurt much in other cases too.
-	 */
-	if (list_length(distSelectTaskList) <= 1)
-	{
-		return false;
-	}
-
-	/* don't use redistribution for repartition joins for now */
-	if (distSelectJob->dependentJobList != NIL)
-	{
-		return false;
-	}
-
-	if (distSelectPlan->combineQuery != NULL)
-	{
-		Query *combineQuery = (Query *) distSelectPlan->combineQuery;
-
-		if (contain_nextval_expression_walker((Node *) combineQuery->targetList, NULL))
-		{
-			/* nextval needs to be evaluated on the coordinator */
-			return false;
-		}
-	}
-
-	return true;
 }
 
 

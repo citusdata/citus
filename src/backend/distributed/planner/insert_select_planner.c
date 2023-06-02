@@ -31,6 +31,7 @@
 #include "distributed/pg_dist_partition.h"
 #include "distributed/query_pushdown_planning.h"
 #include "distributed/recursive_planning.h"
+#include "distributed/repartition_executor.h"
 #include "distributed/resource_lock.h"
 #include "distributed/version_compat.h"
 #include "nodes/makefuncs.h"
