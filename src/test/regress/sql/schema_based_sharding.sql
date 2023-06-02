@@ -61,6 +61,10 @@ SELECT update_distributed_table_colocation('tenant_2.test_table', colocate_with 
 SELECT update_distributed_table_colocation('regular_schema.test_table', colocate_with => 'tenant_2.test_table');
 -- verify we don't allow undistribute_table for tenant tables
 SELECT undistribute_table('tenant_2.test_table');
+-- verify we don't allow alter_distributed_table for tenant tables
+SELECT alter_distributed_table('tenant_2.test_table', colocate_with => 'none');
+-- verify we also don't allow colocate_with a tenant table
+SELECT alter_distributed_table('regular_schema.test_table', colocate_with => 'tenant_2.test_table');
 
 -- (on coordinator) verify that colocation id is set for empty tenants too
 SELECT colocationid > 0 FROM pg_dist_tenant_schema

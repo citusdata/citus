@@ -196,6 +196,7 @@ static void EnsureTableNotReferencing(Oid relationId, char conversionType);
 static void EnsureTableNotReferenced(Oid relationId, char conversionType);
 static void EnsureTableNotForeign(Oid relationId);
 static void EnsureTableNotPartition(Oid relationId);
+static void ErrorIfColocateWithTenantTable(char *colocateWith);
 static TableConversionState * CreateTableConversion(TableConversionParameters *params);
 static void CreateDistributedTableLike(TableConversionState *con);
 static void CreateCitusTableLike(TableConversionState *con);
@@ -436,6 +437,9 @@ AlterDistributedTable(TableConversionParameters *params)
 		ereport(ERROR, (errmsg("cannot alter table because the table "
 							   "is not distributed")));
 	}
+
+	ErrorIfTenantTable(params->relationId, "alter_distributed_table");
+	ErrorIfColocateWithTenantTable(params->colocateWith);
 
 	EnsureTableNotForeign(params->relationId);
 	EnsureTableNotPartition(params->relationId);
@@ -1178,6 +1182,24 @@ EnsureTableNotPartition(Oid relationId)
 							   "because table is a partition"),
 						errhint("the parent table is \"%s\"",
 								parentRelationName)));
+	}
+}
+
+
+/*
+ * ErrorIfColocateWithTenantTable errors out if given colocateWith text refers to
+ * a tenant table.
+ */
+void
+ErrorIfColocateWithTenantTable(char *colocateWith)
+{
+	if (colocateWith != NULL &&
+		!IsColocateWithDefault(colocateWith) &&
+		!IsColocateWithNone(colocateWith))
+	{
+		text *colocateWithTableNameText = cstring_to_text(colocateWith);
+		Oid colocateWithTableId = ResolveRelationId(colocateWithTableNameText, false);
+		ErrorIfTenantTable(colocateWithTableId, "colocate_with");
 	}
 }
 

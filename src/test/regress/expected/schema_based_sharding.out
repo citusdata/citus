@@ -83,6 +83,12 @@ ERROR:  test_table is not allowed for colocate_with because it is a tenant table
 -- verify we don't allow undistribute_table for tenant tables
 SELECT undistribute_table('tenant_2.test_table');
 ERROR:  test_table is not allowed for undistribute_table because it is a tenant table
+-- verify we don't allow alter_distributed_table for tenant tables
+SELECT alter_distributed_table('tenant_2.test_table', colocate_with => 'none');
+ERROR:  test_table is not allowed for alter_distributed_table because it is a tenant table
+-- verify we also don't allow colocate_with a tenant table
+SELECT alter_distributed_table('regular_schema.test_table', colocate_with => 'tenant_2.test_table');
+ERROR:  test_table is not allowed for colocate_with because it is a tenant table
 -- (on coordinator) verify that colocation id is set for empty tenants too
 SELECT colocationid > 0 FROM pg_dist_tenant_schema
 WHERE schemaid::regnamespace::text IN ('tenant_1', 'tenant_3');
