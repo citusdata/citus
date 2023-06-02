@@ -436,6 +436,7 @@ CREATE TABLE citus_dep_tbl (a noderole);
 SELECT create_distributed_table('citus_dep_tbl', NULL, colocate_with:='none');
 
 SELECT is_citus_depended_object('pg_class'::regclass, 'citus_dep_tbl'::regclass);
+RESET citus.hide_citus_dependent_objects;
 
 -- test replicate_reference_tables
 SET client_min_messages TO WARNING;

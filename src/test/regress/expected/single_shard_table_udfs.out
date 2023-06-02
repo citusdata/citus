@@ -952,6 +952,7 @@ SELECT is_citus_depended_object('pg_class'::regclass, 'citus_dep_tbl'::regclass)
  t
 (1 row)
 
+RESET citus.hide_citus_dependent_objects;
 -- test replicate_reference_tables
 SET client_min_messages TO WARNING;
 DROP SCHEMA null_dist_key_udfs CASCADE;
