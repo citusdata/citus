@@ -254,6 +254,7 @@ ErrorIfTenantTable(Oid relationId, char *operationName)
 	if (IsTenantSchema(get_rel_namespace(relationId)))
 	{
 		ereport(ERROR, (errmsg("%s is not allowed for %s because it is a tenant table",
-							   get_rel_name(relationId), operationName)));
+							   generate_qualified_relation_name(relationId),
+							   operationName)));
 	}
 }
