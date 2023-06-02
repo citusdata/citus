@@ -1180,7 +1180,7 @@ replicate_table_shards(PG_FUNCTION_ARGS)
 
 	if (IsCitusTableType(relationId, SINGLE_SHARD_DISTRIBUTED))
 	{
-		ereport(ERROR, (errmsg("cannot replicate singe shard tables' shards")));
+		ereport(ERROR, (errmsg("cannot replicate single shard tables' shards")));
 	}
 
 	char transferMode = LookupShardTransferMode(shardReplicationModeOid);

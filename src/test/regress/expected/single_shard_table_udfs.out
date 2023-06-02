@@ -1066,6 +1066,6 @@ SELECT create_distributed_table('rep_tbl', NULL, colocate_with:='none');
 (1 row)
 
 SELECT replicate_table_shards('rep_tbl');
-ERROR:  cannot replicate singe shard tables' shards
+ERROR:  cannot replicate single shard tables' shards
 SET client_min_messages TO WARNING;
 DROP SCHEMA null_dist_key_udfs CASCADE;
