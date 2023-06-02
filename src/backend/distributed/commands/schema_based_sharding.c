@@ -242,3 +242,18 @@ citus_internal_unregister_tenant_schema_globally(PG_FUNCTION_ARGS)
 
 	PG_RETURN_VOID();
 }
+
+
+/*
+ * ErrorIfTenantTable errors out with the given operation name,
+ * if the given relation is a tenant table.
+ */
+void
+ErrorIfTenantTable(Oid relationId, char *operationName)
+{
+	if (IsTenantSchema(get_rel_namespace(relationId)))
+	{
+		ereport(ERROR, (errmsg("%s is not allowed for %s because it is a tenant table",
+			get_rel_name(relationId), operationName)));
+	}
+}

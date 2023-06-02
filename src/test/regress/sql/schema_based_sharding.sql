@@ -25,7 +25,7 @@ SELECT citus_internal_unregister_tenant_schema_globally('regular_schema'::regnam
 SELECT 1 FROM citus_remove_node('localhost', :worker_2_port);
 
 CREATE TABLE regular_schema.test_table(a int, b text);
-
+SELECT create_distributed_table('regular_schema.test_table', 'a');
 SET citus.enable_schema_based_sharding TO ON;
 
 -- show that regular_schema doesn't show up in pg_dist_tenant_schema
@@ -54,6 +54,11 @@ ALTER SCHEMA "tenant\'_3" RENAME TO tenant_3;
 SELECT create_distributed_table('tenant_2.test_table', 'a');
 SELECT create_reference_table('tenant_2.test_table');
 SELECT citus_add_local_table_to_metadata('tenant_2.test_table');
+
+-- verify we don't allow update_distributed_table_colocation for tenant tables
+SELECT update_distributed_table_colocation('tenant_2.test_table', colocate_with => 'none');
+-- verify we also don't allow colocate_with a tenant table
+SELECT update_distributed_table_colocation('regular_schema.test_table', colocate_with => 'tenant_2.test_table');
 
 -- (on coordinator) verify that colocation id is set for empty tenants too
 SELECT colocationid > 0 FROM pg_dist_tenant_schema

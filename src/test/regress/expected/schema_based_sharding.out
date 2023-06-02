@@ -34,6 +34,12 @@ SELECT 1 FROM citus_remove_node('localhost', :worker_2_port);
 (1 row)
 
 CREATE TABLE regular_schema.test_table(a int, b text);
+SELECT create_distributed_table('regular_schema.test_table', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
 SET citus.enable_schema_based_sharding TO ON;
 -- show that regular_schema doesn't show up in pg_dist_tenant_schema
 SELECT COUNT(*)=0 FROM pg_dist_tenant_schema WHERE schemaid::regnamespace::text = 'regular_schema';
@@ -68,6 +74,12 @@ SELECT create_reference_table('tenant_2.test_table');
 ERROR:  table "test_table" is already distributed
 SELECT citus_add_local_table_to_metadata('tenant_2.test_table');
 ERROR:  table "test_table" is already distributed
+-- verify we don't allow update_distributed_table_colocation for tenant tables
+SELECT update_distributed_table_colocation('tenant_2.test_table', colocate_with => 'none');
+ERROR:  test_table is not allowed for update_distributed_table_colocation because it is a tenant table
+-- verify we also don't allow colocate_with a tenant table
+SELECT update_distributed_table_colocation('regular_schema.test_table', colocate_with => 'tenant_2.test_table');
+ERROR:  test_table is not allowed for colocate_with because it is a tenant table
 -- (on coordinator) verify that colocation id is set for empty tenants too
 SELECT colocationid > 0 FROM pg_dist_tenant_schema
 WHERE schemaid::regnamespace::text IN ('tenant_1', 'tenant_3');
@@ -235,8 +247,8 @@ SELECT EXISTS(
 (1 row)
 
 INSERT INTO tenant_4.another_partitioned_table VALUES (1, 'a');
-ERROR:  insert or update on table "another_partitioned_table_child_1920008" violates foreign key constraint "another_partitioned_table_a_fkey_1920007"
-DETAIL:  Key (a)=(1) is not present in table "partitioned_table_1920005".
+ERROR:  insert or update on table "another_partitioned_table_child_1920040" violates foreign key constraint "another_partitioned_table_a_fkey_1920039"
+DETAIL:  Key (a)=(1) is not present in table "partitioned_table_1920037".
 CONTEXT:  while executing command on localhost:xxxxx
 INSERT INTO tenant_4.partitioned_table VALUES (1, 'a');
 INSERT INTO tenant_4.another_partitioned_table VALUES (1, 'a');
