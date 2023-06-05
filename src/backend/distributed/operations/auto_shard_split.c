@@ -1,5 +1,6 @@
 #include "postgres.h"
 #include "libpq-fe.h"
+#include "executor/spi.h"
 #include <math.h>
 #include "distributed/pg_version_constants.h"
 #include "access/htup_details.h"
@@ -14,8 +15,6 @@
 #include "distributed/citus_ruleutils.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/connection_management.h"
-#include "distributed/enterprise.h"
-#include "distributed/hash_helpers.h"
 #include "distributed/listutils.h"
 #include "distributed/lock_graph.h"
 #include "distributed/coordinator_protocol.h"
@@ -52,90 +51,110 @@
 #include "utils/guc_tables.h"
 #include "distributed/commands/utility_hook.h"
 
-#define MAX_SHARD_SIZE  1
+
+#define MAX_SHARD_SIZE  20000
 PG_FUNCTION_INFO_V1(citus_auto_shard_split_start); 
 
-void Citus_Table_List(void)
-{
-	Assert(CitusHasBeenLoaded() && CheckCitusVersion(WARNING));
+const char* GetSplitQuery(int64 shardminvalue , int64 shardmaxvalue , int64 nodeid , int64 shardid){
 
-	/* first, we need to iterate over pg_dist_partition */
-	List *citusTableIdList = CitusTableTypeIdList(DISTRIBUTED_TABLE);
+    char* query = NULL;
+    int64 query_length =0;
 
-	Oid relationId = InvalidOid;
-	foreach_oid(relationId, citusTableIdList)
-	{
-		CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
-        Oid tempRelationId = cacheEntry->relationId;
-        List *tuplesFromEachDistributedTable =LookupDistShardTuples(tempRelationId);
-        HeapTuple tempTuple;
+    int64 midpoint = (shardminvalue + ((shardmaxvalue-shardminvalue)>>1));
+    query_length = snprintf(NULL, 0 , "SELECT citus_split_shard_by_split_points(%ld, ARRAY['%ld'], ARRAY[%ld,%ld], 'block_writes')",
+             shardid, midpoint, nodeid, nodeid);
+    query = (char*)palloc((query_length + 1) * sizeof(char));
 
-        ListCell* cell;
-        foreach(cell, tuplesFromEachDistributedTable) {
-            tempTuple = lfirst(cell);
-            Form_pg_dist_shard distShard = (Form_pg_dist_shard)GETSTRUCT(tempTuple);
-            ShardInterval *shardInterval = LoadShardInterval(distShard->shardid);
-            int32 shardMinValue = DatumGetInt32(shardInterval->minValue);
-            int32 shardMaxValue = DatumGetInt32(shardInterval->maxValue);
+    snprintf(query, query_length + 1, "SELECT citus_split_shard_by_split_points(%ld, ARRAY['%ld'], ARRAY[%ld,%ld], 'block_writes')",
+             shardid, midpoint, nodeid, nodeid);
 
-            ereport(LOG, (errmsg("Shard ID: %d,ShardMinValue: %d, ShardMaxValue: %d", distShard->shardid,shardMinValue,shardMaxValue)));
-        }
-        
-       
-        
-    }
+    return query ;
+
 }
 
-void Citus_get_Data_by_view(){
-    bool missingOk = false;
-    int connectionFlags = 0;
-    WorkerNode *workerNode = FindNodeWithNodeId(1, missingOk);
-    MultiConnection *connection = GetNodeConnection(connectionFlags,
-													workerNode->workerName,
-													workerNode->workerPort);
+
+void Citus_get_shard_data(){
+    
 
     StringInfo query = makeStringInfo();
+    bool isnull;
     appendStringInfoString(
 		query,
-		" SELECT s.*, c.shard_size, n.nodeid, c.nodeport"
-		" FROM pg_dist_shard s JOIN citus_shards c ON s.shardid=c.shardid"
-        " JOIN pg_dist_node n ON c.nodeport=n.nodeport"
+		" SELECT cs.shardid,pd.shardminvalue,pd.shardmaxvalue,cs.shard_size,pn.nodeid"
+        " FROM pg_catalog.pg_dist_shard pd JOIN pg_catalog.citus_shards cs ON pd.shardid = cs.shardid JOIN pg_catalog.pg_dist_node pn ON cs.nodename = pn.nodename AND cs.nodeport = pn.nodeport"
+        " JOIN ("
+        " SELECT cs.colocation_id,pd.shardminvalue,MAX(cs.shard_size) AS max_shard_size"
+        " FROM pg_catalog.citus_shards cs JOIN pg_catalog.pg_dist_shard pd ON cs.shardid = pd.shardid"
+        " GROUP BY cs.colocation_id,pd.shardminvalue"
+        " HAVING MAX(cs.shard_size) > 20000"
+        " )AS max_sizes ON cs.colocation_id = max_sizes.colocation_id AND pd.shardminvalue = max_sizes.shardminvalue AND cs.shard_size = max_sizes.max_shard_size"
+
     );
 
-    PGresult *result = NULL;
-	int queryResult = ExecuteOptionalRemoteCommand(connection, query->data, &result);
+    if(SPI_connect()!=SPI_OK_CONNECT){
+        elog(ERROR,"SPI_connect to the query failed");
+    }
+    if(SPI_exec(query->data,0)!=SPI_OK_SELECT){
+        elog(ERROR,"SPI_exec for the execution failed");
+    }
 
-    int rowCount = PQntuples(result);
-	int colCount = PQnfields(result);
+    SPITupleTable *tupletable = SPI_tuptable;
+    int rowCount = SPI_processed;
+    int64** shardInfo = (int64**)palloc(rowCount * sizeof(int64*));
+    for (int i = 0; i < rowCount; i++) {
+        shardInfo[i] = (int64*)palloc(5 * sizeof(int64));
+    }
+    
+    int64 jobId = CreateBackgroundJob("auto split", "Automatic Split Shards having Size greater than threshold");
 
     for (int rowIndex = 0; rowIndex < rowCount; rowIndex++)
 	{
-		char *shardIdString = PQgetvalue(result, rowIndex, 1);
-		uint64 shardId = strtou64(shardIdString, NULL, 10);
+        HeapTuple tuple = tupletable->vals[rowIndex];
 
-		char *sizeString = PQgetvalue(result, rowIndex, 5);
-		uint64 totalSize = strtou64(sizeString, NULL, 10);
+        Datum shardId = SPI_getbinval(tuple,tupletable->tupdesc,1,&isnull);
+        shardInfo[rowIndex][0]= DatumGetInt64(shardId);
 
-        char *nodeIdString = PQgetvalue(result, rowIndex, 6);
-        uint64 nodeId = strtou64(nodeIdString, NULL, 10);
+		Datum shardSize = SPI_getbinval(tuple,tupletable->tupdesc,4,&isnull);
+        shardInfo[rowIndex][1]= DatumGetInt64(shardSize);
 
-        char *minValueString = PQgetvalue(result, rowIndex, 3);
-		uint64 shardMinValue = strtou64(minValueString, NULL, 10);
+		Datum nodeId = SPI_getbinval(tuple,tupletable->tupdesc,5,&isnull);
+        shardInfo[rowIndex][2]= DatumGetInt64(nodeId);
 
-        char *maxValueString= PQgetvalue(result, rowIndex, 4);
-		uint64 shardMaxValue = strtou64(maxValueString, NULL, 10);
+        char *shardMinVal = SPI_getvalue(tuple,tupletable->tupdesc,2);
+        shardInfo[rowIndex][3]= strtoi64(shardMinVal,NULL,10);
 
-        ereport(LOG, (errmsg("Shard ID: %d,ShardMinValue: %d, ShardMaxValue: %d , totalSize: %d , nodeId: %d", shardId,shardMinValue,shardMaxValue,totalSize,nodeId)));
+        char *shardMaxVal = SPI_getvalue(tuple,tupletable->tupdesc,3);
+        shardInfo[rowIndex][4]= strtoi64(shardMaxVal,NULL,10);
 
+        ereport(LOG, (errmsg("Shard ID: %ld,ShardMinValue: %ld, ShardMaxValue: %ld , totalSize: %ld , nodeId: %ld", shardInfo[rowIndex][0],shardInfo[rowIndex][3],shardInfo[rowIndex][4],shardInfo[rowIndex][1],shardInfo[rowIndex][2])));
+           
+
+        
 	}
+    for (int rowIndex = 0; rowIndex < rowCount; rowIndex++)
+    {
+        char *splitquery = GetSplitQuery(shardInfo[rowIndex][3],shardInfo[rowIndex][4],shardInfo[rowIndex][2],shardInfo[rowIndex][0]);
+        ereport(LOG, (errmsg(splitquery))); 
+        StringInfoData buf = { 0 };
+	    initStringInfo(&buf);
+        appendStringInfo(&buf, splitquery);
+        int32 nodesInvolved[] = { 0 };
+		Oid superUserId = CitusExtensionOwner();
+		BackgroundTask *task = ScheduleBackgroundTask(jobId, superUserId, buf.data, 0,
+													  NULL, 0, nodesInvolved);    
+        
+    }
 
-
+    SPI_freetuptable(tupletable);
+    SPI_finish();
+    
+    
+    
 }
 
 Datum
 citus_auto_shard_split_start(PG_FUNCTION_ARGS){
-   // Citus_Table_List();
-    Citus_get_Data_by_view();
+    Citus_get_shard_data();
     PG_RETURN_VOID();
 
 }
