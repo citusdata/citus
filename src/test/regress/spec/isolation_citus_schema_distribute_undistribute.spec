@@ -18,7 +18,7 @@ setup
 teardown
 {
     DROP TABLE public.ref CASCADE;
-    DROP SCHEMA tenant1 CASCADE;
+    DROP SCHEMA IF EXISTS tenant1, tenant2 CASCADE;
     SELECT citus_remove_node('localhost', 57636);
 }
 
@@ -39,12 +39,27 @@ step "s1-schema-undistribute"
     SELECT citus_schema_undistribute('tenant1');
 }
 
+step "s1-verify-distributed-schema"
+{
+    SELECT logicalrelid, partmethod, partkey, (colocationid = (SELECT colocationid AS tenant_colocid FROM pg_dist_tenant_schema)) AS is_correct_colocid, repmodel, autoconverted FROM pg_dist_partition WHERE logicalrelid::text LIKE 'tenant%' ORDER BY logicalrelid;
+}
+
 step "s1-commit"
 {
     COMMIT;
 }
 
 session "s2"
+
+step "s2-drop-schema"
+{
+    DROP SCHEMA tenant1 CASCADE;
+}
+
+step "s2-rename-schema"
+{
+    ALTER SCHEMA tenant1 RENAME TO tenant2;
+}
 
 step "s2-add-table"
 {
@@ -103,46 +118,54 @@ step "s2-update"
     UPDATE tenant1.table3 SET col = 11 WHERE col = 11;
 }
 
+// DROP SCHEMA
+permutation "s1-begin" "s1-schema-distribute" "s2-drop-schema" "s1-commit" "s1-verify-distributed-schema"
+permutation "s1-schema-distribute" "s1-begin" "s1-schema-undistribute" "s2-drop-schema" "s1-commit" "s1-verify-distributed-schema"
+
+// RENAME SCHEMA
+permutation "s1-begin" "s1-schema-distribute" "s2-rename-schema" "s1-commit" "s1-verify-distributed-schema"
+permutation "s1-schema-distribute" "s1-begin" "s1-schema-undistribute" "s2-rename-schema" "s1-commit" "s1-verify-distributed-schema"
+
 // CREATE TABLE
-permutation "s1-begin" "s1-schema-distribute" "s2-add-table" "s1-commit"
-permutation "s1-schema-distribute" "s1-begin" "s1-schema-undistribute" "s2-add-table" "s1-commit"
+permutation "s1-begin" "s1-schema-distribute" "s2-add-table" "s1-commit" "s1-verify-distributed-schema"
+permutation "s1-schema-distribute" "s1-begin" "s1-schema-undistribute" "s2-add-table" "s1-commit" "s1-verify-distributed-schema"
 
 // DROP TABLE
-permutation "s1-begin" "s1-schema-distribute" "s2-drop-table" "s1-commit"
-permutation "s1-schema-distribute" "s1-begin" "s1-schema-undistribute" "s2-drop-table" "s1-commit"
+permutation "s1-begin" "s1-schema-distribute" "s2-drop-table" "s1-commit" "s1-verify-distributed-schema"
+permutation "s1-schema-distribute" "s1-begin" "s1-schema-undistribute" "s2-drop-table" "s1-commit" "s1-verify-distributed-schema"
 
 // ALTER TABLE ALTER COLUMN TYPE
-permutation "s1-begin" "s1-schema-distribute" "s2-alter-col-type" "s1-commit"
-permutation "s1-schema-distribute" "s1-begin" "s1-schema-undistribute" "s2-alter-col-type" "s1-commit"
+permutation "s1-begin" "s1-schema-distribute" "s2-alter-col-type" "s1-commit" "s1-verify-distributed-schema"
+permutation "s1-schema-distribute" "s1-begin" "s1-schema-undistribute" "s2-alter-col-type" "s1-commit" "s1-verify-distributed-schema"
 
 // ADD FOREIGN KEY
-permutation "s1-begin" "s1-schema-distribute" "s2-add-foreign-key" "s1-commit"
-permutation "s1-schema-distribute" "s1-begin" "s1-schema-undistribute" "s2-add-foreign-key" "s1-commit"
+permutation "s1-begin" "s1-schema-distribute" "s2-add-foreign-key" "s1-commit" "s1-verify-distributed-schema"
+permutation "s1-schema-distribute" "s1-begin" "s1-schema-undistribute" "s2-add-foreign-key" "s1-commit" "s1-verify-distributed-schema"
 
 // DROP FOREIGN KEY
-permutation "s1-begin" "s1-schema-distribute" "s2-drop-foreign-key" "s1-commit"
-permutation "s1-schema-distribute" "s1-begin" "s1-schema-undistribute" "s2-drop-foreign-key" "s1-commit"
+permutation "s1-begin" "s1-schema-distribute" "s2-drop-foreign-key" "s1-commit" "s1-verify-distributed-schema"
+permutation "s1-schema-distribute" "s1-begin" "s1-schema-undistribute" "s2-drop-foreign-key" "s1-commit" "s1-verify-distributed-schema"
 
 // CREATE UNIQUE INDEX
-permutation "s1-begin" "s1-schema-distribute" "s2-create-unique-index" "s1-commit"
-permutation "s1-schema-distribute" "s1-begin" "s1-schema-undistribute" "s2-create-unique-index" "s1-commit"
+permutation "s1-begin" "s1-schema-distribute" "s2-create-unique-index" "s1-commit" "s1-verify-distributed-schema"
+permutation "s1-schema-distribute" "s1-begin" "s1-schema-undistribute" "s2-create-unique-index" "s1-commit" "s1-verify-distributed-schema"
 
 // CREATE UNIQUE INDEX CONCURRENTLY
-permutation "s1-begin" "s1-schema-distribute" "s2-create-unique-index-concurrently" "s1-commit"
-permutation "s1-schema-distribute" "s1-begin" "s1-schema-undistribute" "s2-create-unique-index-concurrently" "s1-commit"
+permutation "s1-begin" "s1-schema-distribute" "s2-create-unique-index-concurrently" "s1-commit" "s1-verify-distributed-schema"
+permutation "s1-schema-distribute" "s1-begin" "s1-schema-undistribute" "s2-create-unique-index-concurrently" "s1-commit" "s1-verify-distributed-schema"
 
 // REINDEX CONCURRENTLY
-permutation "s2-create-unique-index" "s1-begin" "s1-schema-distribute" "s2-reindex-unique-concurrently" "s1-commit"
-permutation "s2-create-unique-index" "s1-schema-distribute" "s1-begin" "s1-schema-undistribute" "s2-reindex-unique-concurrently" "s1-commit"
+permutation "s2-create-unique-index" "s1-begin" "s1-schema-distribute" "s2-reindex-unique-concurrently" "s1-commit" "s1-verify-distributed-schema"
+permutation "s2-create-unique-index" "s1-schema-distribute" "s1-begin" "s1-schema-undistribute" "s2-reindex-unique-concurrently" "s1-commit" "s1-verify-distributed-schema"
 
 // INSERT
-permutation "s1-begin" "s1-schema-distribute" "s2-insert" "s1-commit"
-permutation "s1-schema-distribute" "s1-begin" "s1-schema-undistribute" "s2-insert" "s1-commit"
+permutation "s1-begin" "s1-schema-distribute" "s2-insert" "s1-commit" "s1-verify-distributed-schema"
+permutation "s1-schema-distribute" "s1-begin" "s1-schema-undistribute" "s2-insert" "s1-commit" "s1-verify-distributed-schema"
 
 // UPDATE
-permutation "s2-insert" "s1-begin" "s1-schema-distribute" "s2-update" "s1-commit"
-permutation "s2-insert" "s1-schema-distribute" "s1-begin" "s1-schema-undistribute" "s2-update" "s1-commit"
+permutation "s2-insert" "s1-begin" "s1-schema-distribute" "s2-update" "s1-commit" "s1-verify-distributed-schema"
+permutation "s2-insert" "s1-schema-distribute" "s1-begin" "s1-schema-undistribute" "s2-update" "s1-commit" "s1-verify-distributed-schema"
 
 // DELETE
-permutation "s2-insert" "s1-begin" "s1-schema-distribute" "s2-delete" "s1-commit"
-permutation "s2-insert" "s1-schema-distribute" "s1-begin" "s1-schema-undistribute" "s2-delete" "s1-commit"
+permutation "s2-insert" "s1-begin" "s1-schema-distribute" "s2-delete" "s1-commit" "s1-verify-distributed-schema"
+permutation "s2-insert" "s1-schema-distribute" "s1-begin" "s1-schema-undistribute" "s2-delete" "s1-commit" "s1-verify-distributed-schema"
