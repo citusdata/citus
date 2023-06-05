@@ -313,8 +313,6 @@ static void InvalidateCitusTableCacheEntrySlot(CitusTableCacheEntrySlot *cacheSl
 static void InvalidateDistTableCache(void);
 static void InvalidateDistObjectCache(void);
 static bool InitializeTableCacheEntry(int64 shardId, bool missingOk);
-static bool IsCitusTableTypeInternal(char partitionMethod, char replicationModel,
-									 uint32 colocationId, CitusTableType tableType);
 static bool RefreshTableCacheEntryIfInvalid(ShardIdCacheEntry *shardEntry, bool
 											missingOk);
 
@@ -426,6 +424,58 @@ EnsureModificationsCanRunOnRelation(Oid relationId)
 
 
 /*
+ * GetCitusTableTypeCacheEntry returns the Citus table type of given
+ * Citus cache entry.
+ */
+CitusTableType
+GetCitusTableTypeCacheEntry(CitusTableCacheEntry *tableEntry)
+{
+	Assert(tableEntry != NULL);
+
+	char partitionMethod = tableEntry->partitionMethod;
+	char replicationModel = tableEntry->replicationModel;
+	uint32 colocationId = tableEntry->colocationId;
+
+	CitusTableType citusTableType = 0;
+	if (partitionMethod == DISTRIBUTE_BY_HASH)
+	{
+		citusTableType = HASH_DISTRIBUTED;
+	}
+	else if (partitionMethod == DISTRIBUTE_BY_APPEND)
+	{
+		citusTableType = APPEND_DISTRIBUTED;
+	}
+	else if (partitionMethod == DISTRIBUTE_BY_RANGE)
+	{
+		citusTableType = RANGE_DISTRIBUTED;
+	}
+	else if (partitionMethod == DISTRIBUTE_BY_NONE &&
+			 replicationModel != REPLICATION_MODEL_2PC &&
+			 colocationId != INVALID_COLOCATION_ID)
+	{
+		citusTableType = SINGLE_SHARD_DISTRIBUTED;
+	}
+	else if (partitionMethod == DISTRIBUTE_BY_NONE &&
+			 replicationModel == REPLICATION_MODEL_2PC)
+	{
+		citusTableType = REFERENCE_TABLE;
+	}
+	else if (partitionMethod == DISTRIBUTE_BY_NONE &&
+			 replicationModel != REPLICATION_MODEL_2PC &&
+			 colocationId == INVALID_COLOCATION_ID)
+	{
+		citusTableType = CITUS_LOCAL_TABLE;
+	}
+	else
+	{
+		ereport(ERROR, (errmsg("unexpected Citus table")));
+	}
+
+	return citusTableType;
+}
+
+
+/*
  * IsCitusTableType returns true if the given table with relationId
  * belongs to a citus table that matches the given table type. If cache
  * entry already exists, prefer using IsCitusTableTypeCacheEntry to avoid
@@ -442,19 +492,6 @@ IsCitusTableType(Oid relationId, CitusTableType tableType)
 		return false;
 	}
 	return IsCitusTableTypeCacheEntry(tableEntry, tableType);
-}
-
-
-/*
- * IsCitusTableTypeCacheEntry returns true if the given table cache entry
- * belongs to a citus table that matches the given table type.
- */
-bool
-IsCitusTableTypeCacheEntry(CitusTableCacheEntry *tableEntry, CitusTableType tableType)
-{
-	return IsCitusTableTypeInternal(tableEntry->partitionMethod,
-									tableEntry->replicationModel,
-									tableEntry->colocationId, tableType);
 }
 
 
@@ -487,64 +524,59 @@ HasDistributionKeyCacheEntry(CitusTableCacheEntry *tableEntry)
 
 
 /*
- * IsCitusTableTypeInternal returns true if the given table entry belongs to
- * the given table type group. For definition of table types, see CitusTableType.
+ * IsCitusTableTypeCacheEntry returns true if the given table cache entry
+ * belongs to a citus table that matches the given table type.
  */
-static bool
-IsCitusTableTypeInternal(char partitionMethod, char replicationModel,
-						 uint32 colocationId, CitusTableType tableType)
+bool
+IsCitusTableTypeCacheEntry(CitusTableCacheEntry *tableEntry, CitusTableType
+						   expectedTableType)
 {
-	switch (tableType)
+	CitusTableType tableEntryCitusType = GetCitusTableTypeCacheEntry(tableEntry);
+
+	switch (expectedTableType)
 	{
 		case HASH_DISTRIBUTED:
 		{
-			return partitionMethod == DISTRIBUTE_BY_HASH;
+			return tableEntryCitusType == HASH_DISTRIBUTED;
 		}
 
 		case APPEND_DISTRIBUTED:
 		{
-			return partitionMethod == DISTRIBUTE_BY_APPEND;
+			return tableEntryCitusType == APPEND_DISTRIBUTED;
 		}
 
 		case RANGE_DISTRIBUTED:
 		{
-			return partitionMethod == DISTRIBUTE_BY_RANGE;
+			return tableEntryCitusType == RANGE_DISTRIBUTED;
 		}
 
 		case SINGLE_SHARD_DISTRIBUTED:
 		{
-			return partitionMethod == DISTRIBUTE_BY_NONE &&
-				   replicationModel != REPLICATION_MODEL_2PC &&
-				   colocationId != INVALID_COLOCATION_ID;
+			return tableEntryCitusType == SINGLE_SHARD_DISTRIBUTED;
 		}
 
 		case DISTRIBUTED_TABLE:
 		{
-			return partitionMethod == DISTRIBUTE_BY_HASH ||
-				   partitionMethod == DISTRIBUTE_BY_RANGE ||
-				   partitionMethod == DISTRIBUTE_BY_APPEND ||
-				   (partitionMethod == DISTRIBUTE_BY_NONE &&
-					replicationModel != REPLICATION_MODEL_2PC &&
-					colocationId != INVALID_COLOCATION_ID);
+			return tableEntryCitusType == HASH_DISTRIBUTED ||
+				   tableEntryCitusType == APPEND_DISTRIBUTED ||
+				   tableEntryCitusType == RANGE_DISTRIBUTED ||
+				   tableEntryCitusType == SINGLE_SHARD_DISTRIBUTED;
 		}
 
 		case STRICTLY_PARTITIONED_DISTRIBUTED_TABLE:
 		{
-			return partitionMethod == DISTRIBUTE_BY_HASH ||
-				   partitionMethod == DISTRIBUTE_BY_RANGE;
+			return tableEntryCitusType == HASH_DISTRIBUTED ||
+				   tableEntryCitusType == RANGE_DISTRIBUTED;
 		}
 
 		case REFERENCE_TABLE:
 		{
-			return partitionMethod == DISTRIBUTE_BY_NONE &&
-				   replicationModel == REPLICATION_MODEL_2PC;
+			return tableEntryCitusType == REFERENCE_TABLE;
 		}
 
 		case CITUS_LOCAL_TABLE:
 		{
-			return partitionMethod == DISTRIBUTE_BY_NONE &&
-				   replicationModel != REPLICATION_MODEL_2PC &&
-				   colocationId == INVALID_COLOCATION_ID;
+			return tableEntryCitusType == CITUS_LOCAL_TABLE;
 		}
 
 		case ANY_CITUS_TABLE_TYPE:
@@ -554,9 +586,10 @@ IsCitusTableTypeInternal(char partitionMethod, char replicationModel,
 
 		default:
 		{
-			ereport(ERROR, (errmsg("Unknown table type %d", tableType)));
+			ereport(ERROR, (errmsg("Unknown table type %d", expectedTableType)));
 		}
 	}
+
 	return false;
 }
 
@@ -4935,21 +4968,10 @@ CitusTableTypeIdList(CitusTableType citusTableType)
 		Datum datumArray[Natts_pg_dist_partition];
 		heap_deform_tuple(heapTuple, tupleDescriptor, datumArray, isNullArray);
 
-		Datum partMethodDatum = datumArray[Anum_pg_dist_partition_partmethod - 1];
-		Datum replicationModelDatum = datumArray[Anum_pg_dist_partition_repmodel - 1];
-		Datum colocationIdDatum = datumArray[Anum_pg_dist_partition_colocationid - 1];
-
-		Oid partitionMethod = DatumGetChar(partMethodDatum);
-		Oid replicationModel = DatumGetChar(replicationModelDatum);
-		uint32 colocationId = DatumGetUInt32(colocationIdDatum);
-
-		if (IsCitusTableTypeInternal(partitionMethod, replicationModel, colocationId,
-									 citusTableType))
+		Datum relationIdDatum = datumArray[Anum_pg_dist_partition_logicalrelid - 1];
+		Oid relationId = DatumGetObjectId(relationIdDatum);
+		if (IsCitusTableType(relationId, citusTableType))
 		{
-			Datum relationIdDatum = datumArray[Anum_pg_dist_partition_logicalrelid - 1];
-
-			Oid relationId = DatumGetObjectId(relationIdDatum);
-
 			relationIdList = lappend_oid(relationIdList, relationId);
 		}
 

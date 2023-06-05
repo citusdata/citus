@@ -138,6 +138,7 @@ typedef enum
 } CitusTableType;
 
 extern List * AllCitusTableIds(void);
+extern CitusTableType GetCitusTableTypeCacheEntry(CitusTableCacheEntry *tableEntry);
 extern bool IsCitusTableType(Oid relationId, CitusTableType tableType);
 extern bool IsCitusTableTypeCacheEntry(CitusTableCacheEntry *tableEtnry,
 									   CitusTableType tableType);

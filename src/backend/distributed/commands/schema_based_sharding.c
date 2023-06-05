@@ -48,9 +48,11 @@ typedef struct SchemaTables
 static bool SchemaHasCitusTableType(SchemaTables *schemaTables, List *citusTableTypeList);
 static SchemaTables * TablesUnderSchema(Oid schemaId);
 static List * GetRegularAndForeignCitusTablesInSchema(Oid schemaId);
-static void EnsureTenantSchemaAllowed(Oid schemaId);
+static void EnsureSchemaCanBeDistributed(Oid schemaId, SchemaTables *schemaTables);
+static void EnsureTenantSchemaNameAllowed(Oid schemaId);
 static List * DisallowedTableTypesForDistributeSchema(void);
 static List * DisallowedTableTypesForUndistributeSchema(void);
+static List * GetAllTableIdListUnderSchema(SchemaTables *schemaTables);
 static void EnsureTableKindSupportedForTenantSchema(Oid relationId);
 
 /* controlled via citus.enable_schema_based_sharding GUC */
@@ -328,44 +330,67 @@ TablesUnderSchema(Oid schemaId)
 	Oid relationId = InvalidOid;
 	foreach_oid(relationId, relationIdListInSchema)
 	{
-		CitusTableCacheEntry *tableEntry = LookupCitusTableCacheEntry(relationId);
-		if (tableEntry == NULL)
+		if (!IsCitusTable(relationId))
 		{
 			schemaTables->postgresTableIdList = lappend_oid(
-				schemaTables->postgresTableIdList,
-				relationId);
+				schemaTables->postgresTableIdList, relationId);
+			continue;
 		}
-		else if (IsCitusTableType(relationId, HASH_DISTRIBUTED))
+
+		CitusTableCacheEntry *tableEntry = GetCitusTableCacheEntry(relationId);
+		CitusTableType citusTableType = GetCitusTableTypeCacheEntry(tableEntry);
+		switch (citusTableType)
 		{
-			schemaTables->hashDistributedTableIdList = lappend_oid(
-				schemaTables->hashDistributedTableIdList, relationId);
-		}
-		else if (IsCitusTableType(relationId, RANGE_DISTRIBUTED))
-		{
-			schemaTables->rangeDistributedTableIdList = lappend_oid(
-				schemaTables->rangeDistributedTableIdList, relationId);
-		}
-		else if (IsCitusTableType(relationId, APPEND_DISTRIBUTED))
-		{
-			schemaTables->appendDistributedTableIdList = lappend_oid(
-				schemaTables->appendDistributedTableIdList, relationId);
-		}
-		else if (IsCitusTableType(relationId, SINGLE_SHARD_DISTRIBUTED))
-		{
-			schemaTables->singleShardTableIdList = lappend_oid(
-				schemaTables->singleShardTableIdList, relationId);
-		}
-		else if (IsCitusTableType(relationId, REFERENCE_TABLE))
-		{
-			schemaTables->referenceTableIdList = lappend_oid(
-				schemaTables->referenceTableIdList, relationId);
-		}
-		else if (IsCitusTableType(relationId, CITUS_LOCAL_TABLE))
-		{
-			schemaTables->citusLocalTableIdList = lappend_oid(
-				schemaTables->citusLocalTableIdList, relationId);
+			case HASH_DISTRIBUTED:
+			{
+				schemaTables->hashDistributedTableIdList = lappend_oid(
+					schemaTables->hashDistributedTableIdList, relationId);
+				break;
+			}
+
+			case RANGE_DISTRIBUTED:
+			{
+				schemaTables->rangeDistributedTableIdList = lappend_oid(
+					schemaTables->rangeDistributedTableIdList, relationId);
+				break;
+			}
+
+			case APPEND_DISTRIBUTED:
+			{
+				schemaTables->appendDistributedTableIdList = lappend_oid(
+					schemaTables->appendDistributedTableIdList, relationId);
+				break;
+			}
+
+			case SINGLE_SHARD_DISTRIBUTED:
+			{
+				schemaTables->singleShardTableIdList = lappend_oid(
+					schemaTables->singleShardTableIdList, relationId);
+				break;
+			}
+
+			case REFERENCE_TABLE:
+			{
+				schemaTables->referenceTableIdList = lappend_oid(
+					schemaTables->referenceTableIdList, relationId);
+				break;
+			}
+
+			case CITUS_LOCAL_TABLE:
+			{
+				schemaTables->citusLocalTableIdList = lappend_oid(
+					schemaTables->citusLocalTableIdList, relationId);
+				break;
+			}
+
+			default:
+			{
+				ereport(ERROR, (errmsg("unexpected table type when collecting schema "
+									   "tables")));
+			}
 		}
 	}
+
 	return schemaTables;
 }
 
@@ -467,8 +492,6 @@ DisallowedTableTypesForDistributeSchema(void)
 }
 
 
-#ifdef USE_ASSERT_CHECKING
-
 /*
  * DisallowedTableTypesForUndistributeSchema returns Citus tables which are
  * not allowed inside a schema during the undistribution of the schema. We
@@ -488,14 +511,65 @@ DisallowedTableTypesForUndistributeSchema(void)
 }
 
 
-#endif
+/*
+ * GetAllTableIdListUnderSchema merges classified table lists under the schema
+ * into a single list and returns it.
+ */
+static List *
+GetAllTableIdListUnderSchema(SchemaTables *schemaTables)
+{
+	List *allTableList = NIL;
+	allTableList = list_concat(allTableList, schemaTables->hashDistributedTableIdList);
+	allTableList = list_concat(allTableList, schemaTables->appendDistributedTableIdList);
+	allTableList = list_concat(allTableList, schemaTables->rangeDistributedTableIdList);
+	allTableList = list_concat(allTableList, schemaTables->singleShardTableIdList);
+	allTableList = list_concat(allTableList, schemaTables->referenceTableIdList);
+	allTableList = list_concat(allTableList, schemaTables->citusLocalTableIdList);
+	allTableList = list_concat(allTableList, schemaTables->postgresTableIdList);
+	return allTableList;
+}
+
 
 /*
- * EnsureTenantSchemaAllowed ensures if given schema is applicable for registering
+ * EnsureSchemaCanBeDistributed ensures the schema can be distributed.
+ * Checks
+ *  - Schema name is in the allowed-list,
+ *  - Only Citus local and Postgres tables exist under the schema,
+ *  - All Relation kinds are supported.
+ */
+static void
+EnsureSchemaCanBeDistributed(Oid schemaId, SchemaTables *schemaTables)
+{
+	/* Ensure schema name is allowed */
+	EnsureTenantSchemaNameAllowed(schemaId);
+
+	/* Allow only Citus local and PG local tables in the schema */
+	List *disallowedCitusTableTypeList = DisallowedTableTypesForDistributeSchema();
+	if (SchemaHasCitusTableType(schemaTables, disallowedCitusTableTypeList))
+	{
+		ereport(ERROR, (errmsg("schema already has distributed tables"),
+						errhint("Undistribute distributed tables under "
+								"the schema before distributing the schema.")));
+	}
+
+	/* We already verified we only have Citus local and Postgres local tables. */
+	List *tableIdList = GetAllTableIdListUnderSchema(schemaTables);
+
+	/* Check relation kinds */
+	Oid relationId = InvalidOid;
+	foreach_oid(relationId, tableIdList)
+	{
+		EnsureTableKindSupportedForTenantSchema(relationId);
+	}
+}
+
+
+/*
+ * EnsureTenantSchemaNameAllowed ensures if given schema is applicable for registering
  * as a tenant schema.
  */
 static void
-EnsureTenantSchemaAllowed(Oid schemaId)
+EnsureTenantSchemaNameAllowed(Oid schemaId)
 {
 	char *schemaName = get_namespace_name(schemaId);
 
@@ -594,6 +668,7 @@ citus_schema_distribute(PG_FUNCTION_ARGS)
 	EnsureCoordinator();
 
 	Oid schemaId = PG_GETARG_OID(0);
+	EnsureSchemaOwner(schemaId);
 
 	/* Prevent concurrent schema deletion and table creation under the schema */
 	LockDatabaseObject(NamespaceRelationId, schemaId, 0, AccessExclusiveLock);
@@ -609,10 +684,6 @@ citus_schema_distribute(PG_FUNCTION_ARGS)
 						errmsg("concurrent operation removed the schema")));
 	}
 
-	/* Ensure schema checks */
-	EnsureTenantSchemaAllowed(schemaId);
-	EnsureSchemaOwner(schemaId);
-
 	/* Return if the schema is already a tenant schema */
 	char *schemaName = get_namespace_name(schemaId);
 	if (IsTenantSchema(schemaId))
@@ -620,35 +691,21 @@ citus_schema_distribute(PG_FUNCTION_ARGS)
 		ereport(NOTICE, (errmsg("schema %s is already distributed", schemaName)));
 		PG_RETURN_VOID();
 	}
-	else
-	{
-		ereport(NOTICE, (errmsg("distributing the schema %s", schemaName)));
-	}
 
 	/* Collect all tables by their types in the schema */
 	SchemaTables *schemaTables = TablesUnderSchema(schemaId);
 
-	/* Allow only Citus local and PG local tables in the schema */
-	List *disallowedCitusTableTypeList = DisallowedTableTypesForDistributeSchema();
-	if (SchemaHasCitusTableType(schemaTables, disallowedCitusTableTypeList))
-	{
-		ereport(ERROR, (errmsg("schema already has distributed tables"),
-						errhint("Undistribute distributed tables under "
-								"the schema before distributing the schema.")));
-	}
+	/* Makes sure the schema can be distributed. */
+	EnsureSchemaCanBeDistributed(schemaId, schemaTables);
 
-	/* We check that all table relation kinds are supported by a tenant schema */
-	List *postgresTableIdList = schemaTables->postgresTableIdList;
-	postgresTableIdList = list_concat(postgresTableIdList,
-									  schemaTables->citusLocalTableIdList);
+	/* We already verified we only have Citus local and Postgres local tables. */
+	List *tableIdList = GetAllTableIdListUnderSchema(schemaTables);
 
 	/* Convert each local relation to a single shard relation */
 	Oid relationId = InvalidOid;
 	List *tableListToConvert = NIL;
-	foreach_oid(relationId, postgresTableIdList)
+	foreach_oid(relationId, tableIdList)
 	{
-		EnsureTableKindSupportedForTenantSchema(relationId);
-
 		/*
 		 * Skip partitions as they would be distributed by the parent table.
 		 *
@@ -670,6 +727,8 @@ citus_schema_distribute(PG_FUNCTION_ARGS)
 		EnsureRelationExists(relationId);
 		tableListToConvert = lappend_oid(tableListToConvert, relationId);
 	}
+
+	ereport(NOTICE, (errmsg("distributing the schema %s", schemaName)));
 
 	/* Create colocation id for single shard tables */
 	uint32 colocationId = CreateTenantSchemaColocationId();
@@ -714,6 +773,7 @@ citus_schema_undistribute(PG_FUNCTION_ARGS)
 	EnsureCoordinator();
 
 	Oid schemaId = PG_GETARG_OID(0);
+	EnsureSchemaOwner(schemaId);
 
 	/* Prevent concurrent schema deletion and table creation under the schema */
 	LockDatabaseObject(NamespaceRelationId, schemaId, 0, AccessExclusiveLock);
@@ -729,9 +789,6 @@ citus_schema_undistribute(PG_FUNCTION_ARGS)
 						errmsg("concurrent operation removed the schema")));
 	}
 
-	/* Ensure schema checks */
-	EnsureSchemaOwner(schemaId);
-
 	/* The schema should be a tenant schema */
 	char *schemaName = get_namespace_name(schemaId);
 	if (!IsTenantSchema(schemaId))
@@ -742,9 +799,9 @@ citus_schema_undistribute(PG_FUNCTION_ARGS)
 	ereport(NOTICE, (errmsg("undistributing schema %s", schemaName)));
 
 	/* Only single shard tables are expected during the undistribution of the schema */
+	SchemaTables *schemaTables PG_USED_FOR_ASSERTS_ONLY = TablesUnderSchema(schemaId);
 	List *disallowedCitusTableTypeListForUndistribute PG_USED_FOR_ASSERTS_ONLY =
 		DisallowedTableTypesForUndistributeSchema();
-	SchemaTables *schemaTables PG_USED_FOR_ASSERTS_ONLY = TablesUnderSchema(schemaId);
 	Assert(!SchemaHasCitusTableType(schemaTables,
 									disallowedCitusTableTypeListForUndistribute));
 	Assert(schemaTables->postgresTableIdList == NIL);
@@ -787,11 +844,11 @@ citus_schema_undistribute(PG_FUNCTION_ARGS)
 		tableListToConvert = lappend_oid(tableListToConvert, relationId);
 	}
 
+	/*
+	 * No need to drop colocation entries explicitly here, since colocation entry would be
+	 * automatically dropped when we undistribute the last table in the schema.
+	 */
 	UndistributeTables(tableListToConvert);
-
-	/* Delete colocation metadata and sync to workers */
-	uint32 schemaColocationId = SchemaIdGetTenantColocationId(schemaId);
-	DeleteColocationGroup(schemaColocationId);
 
 	PG_RETURN_VOID();
 }
