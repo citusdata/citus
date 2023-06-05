@@ -384,6 +384,14 @@ UndistributeTables(List *relationIds)
 		{
 			continue;
 		}
+
+		/*
+		 * Error early before undistributing the schema if concurrent drop or some alter
+		 * statements occurred on the table. Note that we already had the AccessShareLock
+		 * lock when we call PartitionTable, so after this point we are guaranteed to
+		 * prevent concurrent drop and some modification on the table.
+		 */
+		EnsureRelationExists(relationId);
 		tablesToConvert = lappend_oid(tablesToConvert, relationId);
 	}
 

@@ -595,17 +595,30 @@ Datum
 citus_schema_distribute(PG_FUNCTION_ARGS)
 {
 	CheckCitusVersion(ERROR);
-
-	Oid schemaId = PG_GETARG_OID(0);
-	char *schemaName = get_namespace_name(schemaId);
-	EnsureTenantSchemaAllowed(schemaId);
-	EnsureSchemaOwner(schemaId);
 	EnsureCoordinator();
 
-	/* Prevent any update to the schema */
+	Oid schemaId = PG_GETARG_OID(0);
+
+	/* Prevent concurrent schema deletion and table creation under the schema */
 	LockDatabaseObject(NamespaceRelationId, schemaId, 0, AccessExclusiveLock);
 
+	/*
+	 * It is possible that by the time we acquire the lock on schema,
+	 * concurrent DDL has removed it. We can test this by checking the
+	 * existence of schema.
+	 */
+	if (!SearchSysCacheExists1(NAMESPACEOID, ObjectIdGetDatum(schemaId)))
+	{
+		ereport(ERROR, (errcode(ERRCODE_UNDEFINED_SCHEMA),
+						errmsg("concurrent operation removed the schema")));
+	}
+
+	/* Ensure schema checks */
+	EnsureTenantSchemaAllowed(schemaId);
+	EnsureSchemaOwner(schemaId);
+
 	/* Return if the schema is already a tenant schema */
+	char *schemaName = get_namespace_name(schemaId);
 	if (IsTenantSchema(schemaId))
 	{
 		ereport(NOTICE, (errmsg("schema %s is already a tenant schema", schemaName)));
@@ -634,14 +647,12 @@ citus_schema_distribute(PG_FUNCTION_ARGS)
 	localRelationIds = list_concat(localRelationIds, schemaTables->citusLocalRelationIds);
 	EnsureTableKindsSupportedForTenantSchema(localRelationIds);
 
-	/* Register the schema locally and sync it to workers */
+	/* Create colocation id for single shard tables */
 	uint32 colocationId = CreateTenantSchemaColocationId();
-	InsertTenantSchemaLocally(schemaId, colocationId);
-	char *registerSchemaCommand = TenantSchemaInsertCommand(schemaId, colocationId);
-	if (EnableMetadataSync)
-	{
-		SendCommandToWorkersWithMetadata(registerSchemaCommand);
-	}
+	ColocationParam colocationParam = {
+		.colocationParamType = COLOCATE_WITH_COLOCATION_ID,
+		.colocationId = colocationId,
+	};
 
 	/* Convert each local relation to a single shard relation */
 	Oid relationId = InvalidOid;
@@ -659,11 +670,35 @@ citus_schema_distribute(PG_FUNCTION_ARGS)
 		{
 			continue;
 		}
+
+		/*
+		 * Error early before distributing the schema if concurrent drop or some alter
+		 * statements occurred on the table. Note that we already had the AccessShareLock
+		 * lock when we call PartitionTable, so after this point we are guaranteed to
+		 * prevent concurrent drop and some modification on the table.
+		 */
+		EnsureRelationExists(relationId);
 		tablesToConvert = lappend_oid(tablesToConvert, relationId);
 	}
 	foreach_oid(relationId, tablesToConvert)
 	{
-		CreateTenantSchemaTable(relationId);
+		/*
+		 * We cannot simply call CreateTenantSchemaTable since we need to register
+		 * the schema before calling it. And during the table creation, if we have
+		 * any Citus local table under the schema, it would first undistributed and
+		 * then converted to a single shard. It would throw an error from
+		 * `ErrorIfTenantTable` while undistributing the Citus local table. That is
+		 * why we first create single shards before registering the schema.
+		 */
+		CreateSingleShardTable(relationId, colocationParam);
+	}
+
+	/* Register the schema locally and sync it to workers */
+	InsertTenantSchemaLocally(schemaId, colocationId);
+	char *registerSchemaCommand = TenantSchemaInsertCommand(schemaId, colocationId);
+	if (EnableMetadataSync)
+	{
+		SendCommandToWorkersWithMetadata(registerSchemaCommand);
 	}
 
 	PG_RETURN_VOID();
@@ -678,18 +713,30 @@ Datum
 citus_schema_undistribute(PG_FUNCTION_ARGS)
 {
 	CheckCitusVersion(ERROR);
-
 	EnsureCoordinator();
 
 	Oid schemaId = PG_GETARG_OID(0);
-	char *schemaName = get_namespace_name(schemaId);
+
+	/* Prevent concurrent schema deletion and table creation under the schema */
+	LockDatabaseObject(NamespaceRelationId, schemaId, 0, AccessExclusiveLock);
+
+	/*
+	 * It is possible that by the time we acquire the lock on schema,
+	 * concurrent DDL has removed it. We can test this by checking the
+	 * existence of schema.
+	 */
+	if (!SearchSysCacheExists1(NAMESPACEOID, ObjectIdGetDatum(schemaId)))
+	{
+		ereport(ERROR, (errcode(ERRCODE_UNDEFINED_SCHEMA),
+						errmsg("concurrent operation removed the schema")));
+	}
+
+	/* Ensure schema checks */
 	EnsureTenantSchemaAllowed(schemaId);
 	EnsureSchemaOwner(schemaId);
 
-	/* Prevent any update to the schema */
-	LockDatabaseObject(NamespaceRelationId, schemaId, 0, AccessExclusiveLock);
-
 	/* The schema should be a tenant schema */
+	char *schemaName = get_namespace_name(schemaId);
 	if (!IsTenantSchema(schemaId))
 	{
 		ereport(ERROR, (errmsg("schema %s is not a tenant schema", schemaName)));
@@ -706,13 +753,16 @@ citus_schema_undistribute(PG_FUNCTION_ARGS)
 									disallowedCitusTableTypesForUndistribute));
 	Assert(!schemaTables->localRelationIds);
 
-	/* Undistribute all single shard tables in the schema */
-	UndistributeTables(schemaTables->singleShardRelationIds);
-
-	/* Delete schema metadata and saync to workers */
+	/*
+	 * First, we need to delete schema metadata and sync it to workers. Otherwise,
+	 * we would get error from `ErrorIfTenantTable` while undistributing the tables.
+	 */
 	char *unregisterSchemaCommand = TenantSchemaDeleteCommand(schemaName);
 	DeleteTenantSchemaLocally(schemaId);
 	SendCommandToWorkersWithMetadata(unregisterSchemaCommand);
+
+	/* Undistribute all single shard tables in the schema */
+	UndistributeTables(schemaTables->singleShardRelationIds);
 
 	/* Delete colocation metadata and sync to workers */
 	uint32 schemaColocationId = SchemaIdGetTenantColocationId(schemaId);
