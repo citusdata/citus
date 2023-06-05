@@ -128,3 +128,4 @@ test: check_mx
 
 test: generated_identity
 test: drop_database
+test: check_cluster_state

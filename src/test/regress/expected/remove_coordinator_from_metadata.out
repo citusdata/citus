@@ -1,0 +1,6 @@
+SELECT master_remove_node('localhost', :master_port);
+ master_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+

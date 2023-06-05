@@ -95,7 +95,7 @@ SELECT unnest(activate_node_snapshot()) order by 1;
 
 -- Test start_metadata_sync_to_node and citus_activate_node UDFs
 
--- Ensure that hasmetadata=false for all nodes
+-- Ensure that hasmetadata=false for all nodes except for the coordinator node
 SELECT count(*) FROM pg_dist_node WHERE hasmetadata=true;
 
 -- Show that metadata can not be synced on secondary node
@@ -770,7 +770,6 @@ SELECT create_reference_table('dist_table_2');
 
 ALTER TABLE dist_table_1 ADD COLUMN b int;
 
-SELECT master_add_node('localhost', :master_port, groupid => 0);
 SELECT citus_disable_node_and_wait('localhost', :worker_1_port);
 SELECT citus_disable_node_and_wait('localhost', :worker_2_port);
 SELECT master_remove_node('localhost', :worker_1_port);

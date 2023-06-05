@@ -357,9 +357,10 @@ DEBUG:  generating subplan XXX_1 for subquery SELECT tenant_id FROM recursive_dm
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: UPDATE recursive_dml_queries.local_table SET id = 'citus_test'::text FROM (SELECT distributed_table_1.tenant_id, NULL::integer AS dept, NULL::jsonb AS info FROM (SELECT intermediate_result.tenant_id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(tenant_id text)) distributed_table_1) distributed_table WHERE (distributed_table.tenant_id OPERATOR(pg_catalog.=) local_table.id)
 RESET client_min_messages;
 DROP SCHEMA recursive_dml_queries CASCADE;
-NOTICE:  drop cascades to 5 other objects
+NOTICE:  drop cascades to 6 other objects
 DETAIL:  drop cascades to table distributed_table
 drop cascades to table second_distributed_table
 drop cascades to table reference_table
+drop cascades to table reference_table_2370008
 drop cascades to table local_table
 drop cascades to view tenant_ids

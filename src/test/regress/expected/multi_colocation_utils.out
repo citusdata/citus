@@ -825,11 +825,13 @@ ORDER BY
  table1_group_default            | 1300070 | t            |    57638 | -715827883    | 715827881
  table1_group_default            | 1300071 | t            |    57637 | 715827882     | 2147483647
  table1_group_default            | 1300071 | t            |    57638 | 715827882     | 2147483647
+ table1_groupf                   | 1300080 | t            |    57636 |               |
  table1_groupf                   | 1300080 | t            |    57637 |               |
  table1_groupf                   | 1300080 | t            |    57638 |               |
+ table2_groupf                   | 1300081 | t            |    57636 |               |
  table2_groupf                   | 1300081 | t            |    57637 |               |
  table2_groupf                   | 1300081 | t            |    57638 |               |
-(92 rows)
+(94 rows)
 
 -- reset colocation ids to test update_distributed_table_colocation
 ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 1;

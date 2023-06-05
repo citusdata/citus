@@ -709,11 +709,6 @@ CREATE TABLE set_on_default_test_referencing(
     ON UPDATE SET DEFAULT
 );
 
--- from distributed / reference to reference, fkey exists before calling the UDFs
-SELECT create_distributed_table('set_on_default_test_referencing', 'col_1');
-SELECT create_reference_table('set_on_default_test_referencing');
-
-DROP TABLE set_on_default_test_referencing;
 CREATE TABLE set_on_default_test_referencing(
     col_1 serial, col_2 int, col_3 int, col_4 int
 );

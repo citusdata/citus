@@ -884,7 +884,7 @@ $Q$);
  Custom Scan (Citus INSERT ... SELECT)
    INSERT/SELECT method: pull to coordinator
    ->  Custom Scan (Citus Adaptive)
-         Task Count: 4
+         Task Count: 6
 (4 rows)
 
 -- EXPLAIN ANALYZE is not supported for INSERT ... SELECT via coordinator
@@ -921,7 +921,7 @@ $Q$);
  Custom Scan (Citus INSERT ... SELECT)
    INSERT/SELECT method: pull to coordinator
    ->  Custom Scan (Citus Adaptive)
-         Task Count: 4
+         Task Count: 6
 (4 rows)
 
  -- make things a bit more complicate with IN clauses
@@ -940,7 +940,7 @@ $Q$);
  Custom Scan (Citus INSERT ... SELECT)
    INSERT/SELECT method: pull to coordinator
    ->  Custom Scan (Citus Adaptive)
-         Task Count: 4
+         Task Count: 6
 (4 rows)
 
  -- implicit join on non partition column should also not be pushed down,
@@ -959,7 +959,7 @@ $Q$);
  Custom Scan (Citus INSERT ... SELECT)
    INSERT/SELECT method: pull to coordinator
    ->  Custom Scan (Citus Adaptive)
-         Task Count: 4
+         Task Count: 6
 (4 rows)
 
 RESET client_min_messages;
@@ -981,7 +981,7 @@ $Q$);
  Custom Scan (Citus INSERT ... SELECT)
    INSERT/SELECT method: pull to coordinator
    ->  Custom Scan (Citus Adaptive)
-         Task Count: 4
+         Task Count: 6
 (4 rows)
 
  -- foo is not joined on the partition key so the query is not
@@ -1046,7 +1046,7 @@ $Q$);
  Custom Scan (Citus INSERT ... SELECT)
    INSERT/SELECT method: pull to coordinator
    ->  Custom Scan (Citus Adaptive)
-         Task Count: 4
+         Task Count: 6
 (4 rows)
 
  -- foo is not joined on the partition key so the query is not
@@ -1437,7 +1437,7 @@ $Q$);
                            Group Key: remote_scan.id
                            Filter: (pg_catalog.sum(remote_scan.worker_column_4) > '10'::numeric)
                            ->  Custom Scan (Citus Adaptive)
-                                 Task Count: 4
+                                 Task Count: 6
 (11 rows)
 
 -- cannot push down since foo doesn't have en equi join
@@ -1514,7 +1514,7 @@ $Q$);
    ->  HashAggregate
          Group Key: remote_scan.user_id
          ->  Custom Scan (Citus Adaptive)
-               Task Count: 4
+               Task Count: 6
 (6 rows)
 
 -- join among reference_ids and averages is not on the partition key
@@ -1576,7 +1576,7 @@ $Q$);
  Custom Scan (Citus INSERT ... SELECT)
    INSERT/SELECT method: pull to coordinator
    ->  Custom Scan (Citus Adaptive)
-         Task Count: 4
+         Task Count: 6
 (4 rows)
 
 -- Selected value in the WHERE is not partition key, so we cannot use distributed
@@ -3276,7 +3276,7 @@ $$);
  Custom Scan (Citus INSERT ... SELECT)
    INSERT/SELECT method: pull to coordinator
    ->  Custom Scan (Citus Adaptive)
-         Task Count: 4
+         Task Count: 6
 (4 rows)
 
 -- For INSERT SELECT, when a lateral query references an outer query, push-down is possible even if limit clause exists in the lateral query.

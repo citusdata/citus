@@ -170,5 +170,5 @@ SELECT avg(table_5.id) FROM (
 ) AS table_5 INNER JOIN dist0 AS table_9 USING (id);
 
 
-RESET client_min_messages;
+SET client_min_messages TO WARNING;
 DROP SCHEMA multi_recursive CASCADE;

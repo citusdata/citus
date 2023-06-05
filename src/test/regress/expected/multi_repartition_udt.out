@@ -155,14 +155,14 @@ LOG:  join order: [ "repartition_udt" ][ dual partition join "repartition_udt_ot
                          QUERY PLAN
 ---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)
-   Task Count: 4
+   Task Count: 6
    Tasks Shown: None, not supported for re-partition queries
    ->  MapMergeJob
          Map Task Count: 3
-         Merge Task Count: 4
+         Merge Task Count: 6
    ->  MapMergeJob
          Map Task Count: 5
-         Merge Task Count: 4
+         Merge Task Count: 6
 (9 rows)
 
 SELECT * FROM repartition_udt JOIN repartition_udt_other

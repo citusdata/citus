@@ -60,10 +60,15 @@ CREATE MATERIALIZED VIEW mv2 AS SELECT * FROM distributed_table;
 SET client_min_messages TO DEBUG1;
 
 
--- the user doesn't allow local / distributed table joinn
+-- the user doesn't allow local / distributed table join
+
+SELECT master_remove_node('localhost', :master_port); -- https://github.com/citusdata/citus/issues/6958
+
 SET citus.local_table_join_policy TO 'never';
 SELECT count(*) FROM postgres_table JOIN distributed_table USING(key);
 SELECT count(*) FROM postgres_table JOIN reference_table USING(key);
+
+SELECT citus_set_coordinator_host('localhost'); -- https://github.com/citusdata/citus/issues/6958
 
 -- the user prefers local table recursively planned
 SET citus.local_table_join_policy TO 'prefer-local';
@@ -466,6 +471,7 @@ SELECT create_distributed_table('table2', 'a');
 SELECT 1 AS res FROM table2 RIGHT JOIN (SELECT 1 FROM table1, table2) AS sub1 ON false;
 ROLLBACK;
 
+SELECT master_remove_node('localhost', :master_port); -- https://github.com/citusdata/citus/issues/6958
 BEGIN;
 SELECT create_reference_table('table1');
 SELECT 1 AS res FROM table2 RIGHT JOIN (SELECT 1 FROM table1, table2) AS sub1 ON false;
@@ -476,6 +482,7 @@ SELECT create_reference_table('table2');
 SELECT 1 AS res FROM table2 RIGHT JOIN (SELECT 1 FROM table1, table2) AS sub1 ON false;
 ROLLBACK;
 
+SELECT citus_set_coordinator_host('localhost'); -- https://github.com/citusdata/citus/issues/6958
 
 RESET client_min_messages;
 \set VERBOSITY terse

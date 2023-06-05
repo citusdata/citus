@@ -696,7 +696,7 @@ DROP SCHEMA function_tests CASCADE;
 DROP SCHEMA function_tests2 CASCADE;
 
 -- clear objects
-SELECT stop_metadata_sync_to_node(nodename,nodeport) FROM pg_dist_node WHERE isactive AND noderole = 'primary';
+SELECT stop_metadata_sync_to_node(nodename,nodeport) FROM pg_dist_node WHERE isactive AND noderole = 'primary' AND groupid <> 0;
 -- This is hacky, but we should clean-up the resources as below
 
 \c - - - :worker_1_port
@@ -710,7 +710,8 @@ TRUNCATE pg_dist_node;
 SET client_min_messages TO ERROR;
 DROP USER functionuser;
 DROP ROLE r1;
+
 SELECT 1 FROM run_command_on_workers($$DROP USER functionuser$$);
 
 -- sync metadata again
-SELECT start_metadata_sync_to_node(nodename,nodeport) FROM pg_dist_node WHERE isactive AND noderole = 'primary';
+SELECT start_metadata_sync_to_node(nodename,nodeport) FROM pg_dist_node WHERE isactive AND noderole = 'primary' AND groupid <> 0;

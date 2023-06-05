@@ -140,3 +140,7 @@ DEBUG:  join prunable for intervals [BA1000U2AMO4ZGX,BZZXSP27F21T6] and [AA1000U
          explain statements for distributed queries are not enabled
 (3 rows)
 
+SET client_min_messages TO WARNING;	
+DROP TABLE varchar_partitioned_table;
+DROP TABLE array_partitioned_table;
+DROP TABLE composite_partitioned_table;

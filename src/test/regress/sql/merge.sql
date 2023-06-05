@@ -21,7 +21,6 @@ SET citus.next_shard_id TO 4000000;
 SET citus.explain_all_tasks TO true;
 SET citus.shard_replication_factor TO 1;
 SET citus.max_adaptive_executor_pool_size TO 1;
-SELECT 1 FROM master_add_node('localhost', :master_port, groupid => 0);
 
 CREATE TABLE source
 (
@@ -2166,4 +2165,3 @@ SET search_path TO merge_schema;
 DROP SERVER foreign_server CASCADE;
 DROP FUNCTION merge_when_and_write();
 DROP SCHEMA merge_schema CASCADE;
-SELECT 1 FROM master_remove_node('localhost', :master_port);

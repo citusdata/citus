@@ -404,13 +404,6 @@ where val = 'asdf';
      3
 (1 row)
 
-SELECT 1 FROM citus_add_node('localhost', :master_port, groupId => 0);
-NOTICE:  localhost:xxxxx is the coordinator and already contains metadata, skipping syncing the metadata
- ?column?
----------------------------------------------------------------------
-        1
-(1 row)
-
 BEGIN;
   CREATE TABLE generated_stored_col_test (x int, y int generated always as (x+1) stored);
   SELECT citus_add_local_table_to_metadata('generated_stored_col_test');
@@ -639,12 +632,6 @@ NOTICE:  renaming the new table to test_pg12.generated_stored_ref
 (4 rows)
 
 ROLLBACK;
-SELECT citus_remove_node('localhost', :master_port);
- citus_remove_node
----------------------------------------------------------------------
-
-(1 row)
-
 CREATE TABLE superuser_columnar_table (a int) USING columnar;
 CREATE USER read_access;
 SET ROLE read_access;

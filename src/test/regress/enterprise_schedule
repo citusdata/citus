@@ -16,11 +16,11 @@ test: add_coordinator
 
 test: citus_local_tables_ent
 
-test: remove_coordinator
 # --------
 
 test: publication
 test: logical_replication
+test: check_cluster_state
 test: multi_create_table
 test: multi_create_table_superuser
 test: multi_create_role_dependency

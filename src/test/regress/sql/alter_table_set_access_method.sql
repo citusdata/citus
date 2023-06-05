@@ -278,4 +278,3 @@ select alter_table_set_access_method('view_test_view','columnar');
 
 SET client_min_messages TO WARNING;
 DROP SCHEMA alter_table_set_access_method CASCADE;
-SELECT 1 FROM master_remove_node('localhost', :master_port);

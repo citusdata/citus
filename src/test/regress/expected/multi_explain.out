@@ -331,16 +331,16 @@ BEGIN;
 SET LOCAL citus.enable_repartition_joins TO true;
 EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off) SELECT count(*) FROM t1, t2 WHERE t1.a=t2.b;
 Aggregate (actual rows=1 loops=1)
-  ->  Custom Scan (Citus Adaptive) (actual rows=4 loops=1)
-        Task Count: 4
-        Tuple data received from nodes: 32 bytes
+  ->  Custom Scan (Citus Adaptive) (actual rows=6 loops=1)
+        Task Count: 6
+        Tuple data received from nodes: 48 bytes
         Tasks Shown: None, not supported for re-partition queries
         ->  MapMergeJob
               Map Task Count: 3
-              Merge Task Count: 4
+              Merge Task Count: 6
         ->  MapMergeJob
               Map Task Count: 3
-              Merge Task Count: 4
+              Merge Task Count: 6
 -- Confirm repartiton join in distributed subplan works
 EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off)
 WITH repartition AS (SELECT count(*) FROM t1, t2 WHERE t1.a=t2.b)
@@ -350,16 +350,16 @@ Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
         Intermediate Data Size: 14 bytes
         Result destination: Write locally
         ->  Aggregate (actual rows=1 loops=1)
-              ->  Custom Scan (Citus Adaptive) (actual rows=4 loops=1)
-                    Task Count: 4
-                    Tuple data received from nodes: 32 bytes
+              ->  Custom Scan (Citus Adaptive) (actual rows=6 loops=1)
+                    Task Count: 6
+                    Tuple data received from nodes: 48 bytes
                     Tasks Shown: None, not supported for re-partition queries
                     ->  MapMergeJob
                           Map Task Count: 3
-                          Merge Task Count: 4
+                          Merge Task Count: 6
                     ->  MapMergeJob
                           Map Task Count: 3
-                          Merge Task Count: 4
+                          Merge Task Count: 6
   Task Count: 1
   Tuple data received from nodes: 8 bytes
   Tasks Shown: All
@@ -1108,20 +1108,20 @@ EXPLAIN (COSTS FALSE)
 	AND l_suppkey = s_suppkey;
 Aggregate
   ->  Custom Scan (Citus Adaptive)
-        Task Count: 4
+        Task Count: 6
         Tasks Shown: None, not supported for re-partition queries
         ->  MapMergeJob
-              Map Task Count: 4
-              Merge Task Count: 4
+              Map Task Count: 6
+              Merge Task Count: 6
               ->  MapMergeJob
                     Map Task Count: 2
-                    Merge Task Count: 4
+                    Merge Task Count: 6
               ->  MapMergeJob
                     Map Task Count: 1
-                    Merge Task Count: 4
+                    Merge Task Count: 6
         ->  MapMergeJob
               Map Task Count: 1
-              Merge Task Count: 4
+              Merge Task Count: 6
 EXPLAIN (COSTS FALSE, FORMAT JSON)
 	SELECT count(*)
 	FROM lineitem, orders, customer_append, supplier_single_shard
@@ -1142,26 +1142,26 @@ EXPLAIN (COSTS FALSE, FORMAT JSON)
           "Parallel Aware": false,
           "Distributed Query": {
             "Job": {
-              "Task Count": 4,
+              "Task Count": 6,
               "Tasks Shown": "None, not supported for re-partition queries",
               "Dependent Jobs": [
                 {
-                  "Map Task Count": 4,
-                  "Merge Task Count": 4,
+                  "Map Task Count": 6,
+                  "Merge Task Count": 6,
                   "Dependent Jobs": [
                     {
                       "Map Task Count": 2,
-                      "Merge Task Count": 4
+                      "Merge Task Count": 6
                     },
                     {
                       "Map Task Count": 1,
-                      "Merge Task Count": 4
+                      "Merge Task Count": 6
                     }
                   ]
                 },
                 {
                   "Map Task Count": 1,
-                  "Merge Task Count": 4
+                  "Merge Task Count": 6
                 }
               ]
             }
@@ -1198,26 +1198,26 @@ EXPLAIN (COSTS FALSE, FORMAT XML)
           <Parallel-Aware>false</Parallel-Aware>
           <Distributed-Query>
             <Job>
-              <Task-Count>4</Task-Count>
+              <Task-Count>6</Task-Count>
               <Tasks-Shown>None, not supported for re-partition queries</Tasks-Shown>
               <Dependent-Jobs>
                 <MapMergeJob>
-                  <Map-Task-Count>4</Map-Task-Count>
-                  <Merge-Task-Count>4</Merge-Task-Count>
+                  <Map-Task-Count>6</Map-Task-Count>
+                  <Merge-Task-Count>6</Merge-Task-Count>
                   <Dependent-Jobs>
                     <MapMergeJob>
                       <Map-Task-Count>2</Map-Task-Count>
-                      <Merge-Task-Count>4</Merge-Task-Count>
+                      <Merge-Task-Count>6</Merge-Task-Count>
                     </MapMergeJob>
                     <MapMergeJob>
                       <Map-Task-Count>1</Map-Task-Count>
-                      <Merge-Task-Count>4</Merge-Task-Count>
+                      <Merge-Task-Count>6</Merge-Task-Count>
                     </MapMergeJob>
                   </Dependent-Jobs>
                 </MapMergeJob>
                 <MapMergeJob>
                   <Map-Task-Count>1</Map-Task-Count>
-                  <Merge-Task-Count>4</Merge-Task-Count>
+                  <Merge-Task-Count>6</Merge-Task-Count>
                 </MapMergeJob>
               </Dependent-Jobs>
             </Job>
@@ -1264,13 +1264,13 @@ EXPLAIN (COSTS FALSE, FORMAT YAML)
         Parallel Aware: false
         Distributed Query:
           Job:
-            Task Count: 4
+            Task Count: 6
             Tasks Shown: "None, not supported for re-partition queries"
             Dependent Jobs:
               - Map Task Count: 2
-                Merge Task Count: 4
+                Merge Task Count: 6
               - Map Task Count: 1
-                Merge Task Count: 4
+                Merge Task Count: 6
 -- ensure local plans display correctly
 CREATE TABLE lineitem_clone (LIKE lineitem);
 EXPLAIN (COSTS FALSE) SELECT avg(l_linenumber) FROM lineitem_clone;
@@ -2317,7 +2317,7 @@ SELECT count(distinct a) from r NATURAL JOIN ref_table;
 Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
   ->  Distributed Subplan XXX_1
         Intermediate Data Size: 220 bytes
-        Result destination: Send to 2 nodes
+        Result destination: Send to 3 nodes
         ->  Custom Scan (Citus Adaptive) (actual rows=10 loops=1)
               Task Count: 4
               Tuple data received from nodes: 120 bytes
@@ -3146,8 +3146,6 @@ Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
 -- check when auto explain + analyze is enabled, we do not allow local execution.
 CREATE SCHEMA test_auto_explain;
 SET search_path TO 'test_auto_explain';
-SELECT citus_set_coordinator_host('localhost');
-
 CREATE TABLE test_ref_table (key int PRIMARY KEY);
 SELECT create_reference_table('test_ref_table');
 
@@ -3157,9 +3155,5 @@ set auto_explain.log_analyze to true;
 -- the following should not be locally executed since explain analyze is on
 select * from test_ref_table;
 DROP SCHEMA test_auto_explain CASCADE;
-select master_remove_node('localhost', :master_port);
-
-SELECT public.wait_until_metadata_sync(30000);
-
 SET client_min_messages TO ERROR;
 DROP SCHEMA multi_explain CASCADE;

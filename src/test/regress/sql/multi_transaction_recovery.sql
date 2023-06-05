@@ -1,13 +1,6 @@
 -- Tests for prepared transaction recovery
 SET citus.next_shard_id TO 1220000;
 
--- reference tables can have placements on the coordinator. Add it so
--- verify we recover transactions which do DML on coordinator placements
--- properly.
-SET client_min_messages TO ERROR;
-SELECT 1 FROM master_add_node('localhost', :master_port, groupid => 0);
-RESET client_min_messages;
-
 -- enforce 1 connection per placement since
 -- the tests are prepared for that
 SET citus.force_max_query_parallelization TO ON;
@@ -264,5 +257,3 @@ DROP TABLE test_recovery;
 DROP TABLE test_recovery_single;
 DROP TABLE test_2pcskip;
 DROP TABLE test_reference;
-
-SELECT 1 FROM master_remove_node('localhost', :master_port);

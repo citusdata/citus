@@ -120,7 +120,7 @@ ERROR:  cannot create foreign key constraint since relations are not colocated o
 DETAIL:  A distributed table can only have foreign keys if it is referencing another colocated hash distributed table or a reference table
 DROP TABLE referencing_table;
 DROP TABLE referenced_table;
--- test foreign constraint creation is not supported when one of the tables is not a citus table
+-- test foreign constraint creation is supported when coordinator is in metadata
 CREATE TABLE referenced_local_table(id int PRIMARY KEY, other_column int);
 CREATE TABLE reference_table(id int, referencing_column int);
 SELECT create_reference_table('reference_table');
@@ -130,11 +130,12 @@ SELECT create_reference_table('reference_table');
 (1 row)
 
 ALTER TABLE reference_table ADD FOREIGN KEY (referencing_column) REFERENCES referenced_local_table(id);
-ERROR:  referenced table "referenced_local_table" must be a distributed table or a reference table
-DETAIL:  To enforce foreign keys, the referencing and referenced rows need to be stored on the same node.
-HINT:  You could use SELECT create_reference_table('referenced_local_table') to replicate the referenced table to all nodes or consider dropping the foreign key
 DROP TABLE referenced_local_table;
-DROP TABLE reference_table;
+ERROR:  cannot drop table referenced_local_table because other objects depend on it
+DETAIL:  constraint reference_table_referencing_column_fkey on table reference_table depends on table referenced_local_table
+HINT:  Use DROP ... CASCADE to drop the dependent objects too.
+DROP TABLE reference_table CASCADE;
+NOTICE:  removing table at_add_fk.referenced_local_table from metadata as it is not connected to any reference tables via foreign keys
 -- test foreign constraint with correct conditions
 CREATE TABLE referenced_table(id int PRIMARY KEY, test_column int);
 CREATE TABLE referencing_table(id int, ref_id int);
@@ -170,8 +171,8 @@ SELECT con.conname
                 conname
 ---------------------------------------------------------------------
  referencing_table_ref_id_fkey
- referencing_table_ref_id_fkey_1770033
- referencing_table_ref_id_fkey_1770035
+ referencing_table_ref_id_fkey_1770034
+ referencing_table_ref_id_fkey_1770036
 (3 rows)
 
 \c - - :master_host :master_port
@@ -198,8 +199,8 @@ SELECT con.conname
                 conname
 ---------------------------------------------------------------------
  referencing_table_ref_id_fkey
- referencing_table_ref_id_fkey_1770033
- referencing_table_ref_id_fkey_1770035
+ referencing_table_ref_id_fkey_1770034
+ referencing_table_ref_id_fkey_1770036
 (3 rows)
 
 \c - - :master_host :master_port
@@ -244,8 +245,8 @@ SELECT con.conname, con.confupdtype, con.confdeltype, con.confmatchtype
                 conname                | confupdtype | confdeltype | confmatchtype
 ---------------------------------------------------------------------
  referencing_table_ref_id_fkey         | a           | c           | s
- referencing_table_ref_id_fkey_1770041 | a           | c           | s
- referencing_table_ref_id_fkey_1770043 | a           | c           | s
+ referencing_table_ref_id_fkey_1770042 | a           | c           | s
+ referencing_table_ref_id_fkey_1770044 | a           | c           | s
 (3 rows)
 
 \c - - :master_host :master_port
@@ -272,8 +273,8 @@ SELECT con.conname, con.convalidated
                 conname                | convalidated
 ---------------------------------------------------------------------
  referencing_table_ref_id_fkey         | f
- referencing_table_ref_id_fkey_1770041 | f
- referencing_table_ref_id_fkey_1770043 | f
+ referencing_table_ref_id_fkey_1770042 | f
+ referencing_table_ref_id_fkey_1770044 | f
 (3 rows)
 
 \c - - :master_host :master_port
@@ -300,8 +301,8 @@ SELECT con.conname, con.confupdtype, con.confdeltype, con.confmatchtype
                 conname                | confupdtype | confdeltype | confmatchtype
 ---------------------------------------------------------------------
  referencing_table_ref_id_fkey         | a           | a           | s
- referencing_table_ref_id_fkey_1770041 | a           | a           | s
- referencing_table_ref_id_fkey_1770043 | a           | a           | s
+ referencing_table_ref_id_fkey_1770042 | a           | a           | s
+ referencing_table_ref_id_fkey_1770044 | a           | a           | s
 (3 rows)
 
 \c - - :master_host :master_port
@@ -328,8 +329,8 @@ SELECT con.conname, con.confupdtype, con.confdeltype, con.confmatchtype
                 conname                | confupdtype | confdeltype | confmatchtype
 ---------------------------------------------------------------------
  referencing_table_ref_id_fkey         | a           | r           | s
- referencing_table_ref_id_fkey_1770041 | a           | r           | s
- referencing_table_ref_id_fkey_1770043 | a           | r           | s
+ referencing_table_ref_id_fkey_1770042 | a           | r           | s
+ referencing_table_ref_id_fkey_1770044 | a           | r           | s
 (3 rows)
 
 \c - - :master_host :master_port
@@ -356,8 +357,8 @@ SELECT con.conname, con.confupdtype, con.confdeltype, con.confmatchtype
                  conname                  | confupdtype | confdeltype | confmatchtype
 ---------------------------------------------------------------------
  referencing_table_ref_id_id_fkey         | a           | a           | s
- referencing_table_ref_id_id_fkey_1770041 | a           | a           | s
- referencing_table_ref_id_id_fkey_1770043 | a           | a           | s
+ referencing_table_ref_id_id_fkey_1770042 | a           | a           | s
+ referencing_table_ref_id_id_fkey_1770044 | a           | a           | s
 (3 rows)
 
 \c - - :master_host :master_port
@@ -384,8 +385,8 @@ SELECT con.conname, con.confupdtype, con.confdeltype, con.confmatchtype
                  conname                  | confupdtype | confdeltype | confmatchtype
 ---------------------------------------------------------------------
  referencing_table_ref_id_id_fkey         | r           | a           | s
- referencing_table_ref_id_id_fkey_1770041 | r           | a           | s
- referencing_table_ref_id_id_fkey_1770043 | r           | a           | s
+ referencing_table_ref_id_id_fkey_1770042 | r           | a           | s
+ referencing_table_ref_id_id_fkey_1770044 | r           | a           | s
 (3 rows)
 
 \c - - :master_host :master_port
@@ -412,8 +413,8 @@ SELECT con.conname, con.confupdtype, con.confdeltype, con.confmatchtype
                  conname                  | confupdtype | confdeltype | confmatchtype
 ---------------------------------------------------------------------
  referencing_table_ref_id_id_fkey         | a           | a           | s
- referencing_table_ref_id_id_fkey_1770041 | a           | a           | s
- referencing_table_ref_id_id_fkey_1770043 | a           | a           | s
+ referencing_table_ref_id_id_fkey_1770042 | a           | a           | s
+ referencing_table_ref_id_id_fkey_1770044 | a           | a           | s
 (3 rows)
 
 \c - - :master_host :master_port
@@ -440,8 +441,8 @@ SELECT con.conname, con.confupdtype, con.confdeltype, con.confmatchtype
                  conname                  | confupdtype | confdeltype | confmatchtype
 ---------------------------------------------------------------------
  referencing_table_ref_id_id_fkey         | a           | a           | f
- referencing_table_ref_id_id_fkey_1770041 | a           | a           | f
- referencing_table_ref_id_id_fkey_1770043 | a           | a           | f
+ referencing_table_ref_id_id_fkey_1770042 | a           | a           | f
+ referencing_table_ref_id_id_fkey_1770044 | a           | a           | f
 (3 rows)
 
 \c - - :master_host :master_port
@@ -524,13 +525,6 @@ BEGIN;
 DROP TABLE dist_table CASCADE;
 DROP TABLE reference_table CASCADE;
 -- test ADD FOREIGN KEY from citus local to reference table
-SELECT 1 FROM master_add_node('localhost', :master_port, groupId => 0);
-NOTICE:  localhost:xxxxx is the coordinator and already contains metadata, skipping syncing the metadata
- ?column?
----------------------------------------------------------------------
-        1
-(1 row)
-
 CREATE TABLE citus_local_table(l1 int);
 SELECT citus_add_local_table_to_metadata('citus_local_table');
  citus_add_local_table_to_metadata
@@ -557,17 +551,12 @@ ALTER TABLE citus_local_table ADD FOREIGN KEY(l1) REFERENCES reference_table(r1)
 ALTER TABLE citus_local_table ADD FOREIGN KEY(l1) REFERENCES reference_table(r1) ON DELETE NO ACTION;
 ALTER TABLE citus_local_table ADD FOREIGN KEY(l1) REFERENCES reference_table(r1) ON DELETE RESTRICT;
 DROP TABLE citus_local_table CASCADE;
-SELECT 1 FROM master_remove_node('localhost', :master_port);
- ?column?
----------------------------------------------------------------------
-        1
-(1 row)
-
 RESET SEARCH_PATH;
 RESET client_min_messages;
 DROP SCHEMA at_add_fk CASCADE;
-NOTICE:  drop cascades to 4 other objects
-DETAIL:  drop cascades to table at_add_fk.referenced_table
+NOTICE:  drop cascades to 5 other objects
+DETAIL:  drop cascades to table at_add_fk.referenced_local_table
+drop cascades to table at_add_fk.referenced_table
 drop cascades to table at_add_fk.referencing_table
 drop cascades to table at_add_fk.reference_table
-drop cascades to table at_add_fk.reference_table_1770051
+drop cascades to table at_add_fk.reference_table_1770052

@@ -2,13 +2,6 @@ CREATE SCHEMA query_single_shard_table;
 SET search_path TO query_single_shard_table;
 SET citus.next_shard_id TO 1620000;
 SET citus.shard_count TO 32;
-SET client_min_messages TO WARNING;
-SELECT 1 FROM citus_add_node('localhost', :master_port, groupid => 0);
- ?column?
----------------------------------------------------------------------
-        1
-(1 row)
-
 SET client_min_messages TO NOTICE;
 CREATE TABLE nullkey_c1_t1(a int, b int);
 CREATE TABLE nullkey_c1_t2(a int, b int);
@@ -1879,9 +1872,3 @@ DEBUG:  Creating router plan
 
 SET client_min_messages TO ERROR;
 DROP SCHEMA query_single_shard_table CASCADE;
-SELECT citus_remove_node('localhost', :master_port);
- citus_remove_node
----------------------------------------------------------------------
-
-(1 row)
-

@@ -218,6 +218,9 @@ BEGIN;
 NOTICE:  drop cascades to 2 other objects
 DETAIL:  drop cascades to column col_3 of table generated_stored_ref
 drop cascades to column col_5 of table generated_stored_ref
+NOTICE:  drop cascades to 2 other objects
+DETAIL:  drop cascades to column col_3 of table generated_stored_ref_960016
+drop cascades to column col_5 of table generated_stored_ref_960016
   ALTER TABLE generated_stored_ref DROP COLUMN col_4;
   -- show that undistribute_table works fine
   SELECT undistribute_table('generated_stored_ref');
@@ -269,15 +272,6 @@ CREATE TABLE tbl2
 -- on local tables works fine
 MERGE INTO tbl1 USING tbl2 ON (true)
 WHEN MATCHED THEN DELETE;
--- add coordinator node as a worker
-SET client_min_messages to ERROR;
-SELECT 1 FROM master_add_node('localhost', :master_port, groupId => 0);
- ?column?
----------------------------------------------------------------------
-        1
-(1 row)
-
-RESET client_min_messages;
 -- one table is Citus local table, fails
 SELECT citus_add_local_table_to_metadata('tbl1');
  citus_add_local_table_to_metadata
@@ -398,12 +392,6 @@ SET search_path TO pg15;
 SET client_min_messages to ERROR;
 DROP TABLE FKTABLE_local, PKTABLE_local;
 RESET client_min_messages;
-SELECT 1 FROM citus_remove_node('localhost', :master_port);
- ?column?
----------------------------------------------------------------------
-        1
-(1 row)
-
 SELECT create_distributed_table('tbl1', 'x');
  create_distributed_table
 ---------------------------------------------------------------------
@@ -880,8 +868,8 @@ SELECT create_reference_table('FKTABLE');
 SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conrelid = 'fktable'::regclass::oid ORDER BY oid;
                                                 pg_get_constraintdef
 ---------------------------------------------------------------------
- FOREIGN KEY (tid, fk_id_del_set_null) REFERENCES pktable(tid, id) ON DELETE SET NULL (fk_id_del_set_null)
  FOREIGN KEY (tid, fk_id_del_set_default) REFERENCES pktable(tid, id) ON DELETE SET DEFAULT (fk_id_del_set_default)
+ FOREIGN KEY (tid, fk_id_del_set_null) REFERENCES pktable(tid, id) ON DELETE SET NULL (fk_id_del_set_null)
 (2 rows)
 
 \c - - - :worker_1_port
@@ -1274,6 +1262,7 @@ SELECT create_reference_table('set_on_default_test_referenced');
 
 (1 row)
 
+-- should error since col_3 defaults to a sequence
 CREATE TABLE set_on_default_test_referencing(
     col_1 int, col_2 int, col_3 serial, col_4 int,
     FOREIGN KEY(col_1, col_3)
@@ -1281,10 +1270,7 @@ CREATE TABLE set_on_default_test_referencing(
     ON DELETE SET DEFAULT (col_1)
     ON UPDATE SET DEFAULT
 );
--- should error since col_3 defaults to a sequence
-SELECT create_reference_table('set_on_default_test_referencing');
 ERROR:  cannot create foreign key constraint since Citus does not support ON DELETE / UPDATE SET DEFAULT actions on the columns that default to sequences
-DROP TABLE set_on_default_test_referencing;
 CREATE TABLE set_on_default_test_referencing(
     col_1 int, col_2 int, col_3 serial, col_4 int,
     FOREIGN KEY(col_1, col_3)
@@ -1445,12 +1431,6 @@ NOTICE:  renaming the new table to pg15.foreign_table_test
  undistribute_table
 ---------------------------------------------------------------------
 
-(1 row)
-
-SELECT 1 FROM citus_remove_node('localhost', :master_port);
- ?column?
----------------------------------------------------------------------
-        1
 (1 row)
 
 DROP SERVER foreign_server CASCADE;

@@ -355,9 +355,10 @@ SELECT * FROM run_command_on_placements('multiuser_schema.reference_table', $$ s
 ORDER BY nodename, nodeport, shardid;
  nodename  | nodeport | shardid | success | result
 ---------------------------------------------------------------------
+ localhost |    57636 |  109094 | t       | t
  localhost |    57637 |  109094 | t       | t
  localhost |    57638 |  109094 | t       | t
-(2 rows)
+(3 rows)
 
 -- create another table in the schema, verify select is not granted
 CREATE TABLE multiuser_schema.another_table(a int, b int);
@@ -483,9 +484,10 @@ ORDER BY nodename, nodeport, shardid;
 (6 rows)
 
 DROP SCHEMA multiuser_schema CASCADE;
-NOTICE:  drop cascades to 3 other objects
+NOTICE:  drop cascades to 4 other objects
 DETAIL:  drop cascades to table multiuser_schema.hash_table
 drop cascades to table multiuser_schema.reference_table
+drop cascades to table multiuser_schema.reference_table_109094
 drop cascades to table multiuser_schema.another_table
 DROP SCHEMA multiuser_second_schema CASCADE;
 NOTICE:  drop cascades to table multiuser_second_schema.hash_table

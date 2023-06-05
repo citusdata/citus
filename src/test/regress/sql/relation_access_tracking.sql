@@ -583,5 +583,6 @@ BEGIN;
 	SELECT * FROM relation_accesses  WHERE table_name IN ('table_3')  ORDER BY 1;
 COMMIT;
 
+SET client_min_messages TO WARNING;
 SET search_path TO 'public';
 DROP SCHEMA access_tracking CASCADE;

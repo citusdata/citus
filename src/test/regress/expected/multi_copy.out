@@ -756,9 +756,10 @@ SELECT shardid, shardstate, nodename, nodeport
 	WHERE logicalrelid = 'numbers_reference'::regclass order by placementid;
  shardid | shardstate | nodename  | nodeport
 ---------------------------------------------------------------------
+  560165 |          1 | localhost |    57636
   560165 |          1 | localhost |    57637
   560165 |          1 | localhost |    57638
-(2 rows)
+(3 rows)
 
 -- try to insert into numbers_hash_other. copy should fail and rollback
 -- since it can not insert into either copies of a shard. shards are expected to

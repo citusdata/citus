@@ -616,12 +616,15 @@ BEGIN;
 	ALTER TABLE reference_table ALTER COLUMN id SET DATA TYPE smallint;
 DEBUG:  rewriting table "reference_table"
 DEBUG:  validating foreign key constraint "fkey"
+DEBUG:  rewriting table "reference_table_2380001"
 	CREATE INDEX fkey_test_index_1 ON on_update_fkey_table(value_1);
 ROLLBACK;
 BEGIN;
 	ALTER TABLE transitive_reference_table ALTER COLUMN id SET DATA TYPE smallint;
 DEBUG:  rewriting table "transitive_reference_table"
 DEBUG:  validating foreign key constraint "fkey"
+DEBUG:  rewriting table "transitive_reference_table_2380000"
+DEBUG:  validating foreign key constraint "fkey_xxxxxxx"
 	CREATE INDEX fkey_test_index_1 ON on_update_fkey_table(value_1);
 ROLLBACK;
 -- case 4.6: DDL to reference table followed by a DDL to dist table, both touching fkey columns
@@ -629,6 +632,7 @@ BEGIN;
 	ALTER TABLE reference_table ALTER COLUMN id SET DATA TYPE smallint;
 DEBUG:  rewriting table "reference_table"
 DEBUG:  validating foreign key constraint "fkey"
+DEBUG:  rewriting table "reference_table_2380001"
 	ALTER TABLE on_update_fkey_table ALTER COLUMN value_1 SET DATA TYPE smallint;
 DEBUG:  rewriting table "on_update_fkey_table"
 DEBUG:  validating foreign key constraint "fkey"
@@ -637,6 +641,8 @@ BEGIN;
 	ALTER TABLE transitive_reference_table ALTER COLUMN id SET DATA TYPE smallint;
 DEBUG:  rewriting table "transitive_reference_table"
 DEBUG:  validating foreign key constraint "fkey"
+DEBUG:  rewriting table "transitive_reference_table_2380000"
+DEBUG:  validating foreign key constraint "fkey_xxxxxxx"
 	ALTER TABLE on_update_fkey_table ALTER COLUMN value_1 SET DATA TYPE smallint;
 DEBUG:  rewriting table "on_update_fkey_table"
 DEBUG:  validating foreign key constraint "fkey"
@@ -672,12 +678,15 @@ BEGIN;
 	ALTER TABLE reference_table ALTER COLUMN id SET DATA TYPE smallint;
 DEBUG:  rewriting table "reference_table"
 DEBUG:  validating foreign key constraint "fkey"
+DEBUG:  rewriting table "reference_table_2380001"
 	TRUNCATE on_update_fkey_table;
 ROLLBACK;
 BEGIN;
 	ALTER TABLE transitive_reference_table ALTER COLUMN id SET DATA TYPE smallint;
 DEBUG:  rewriting table "transitive_reference_table"
 DEBUG:  validating foreign key constraint "fkey"
+DEBUG:  rewriting table "transitive_reference_table_2380000"
+DEBUG:  validating foreign key constraint "fkey_xxxxxxx"
 	TRUNCATE on_update_fkey_table;
 ROLLBACK;
 ---------------------------------------------------------------------
@@ -834,6 +843,7 @@ BEGIN;
 	TRUNCATE transitive_reference_table CASCADE;
 NOTICE:  truncate cascades to table "reference_table"
 NOTICE:  truncate cascades to table "on_update_fkey_table"
+NOTICE:  truncate cascades to table "reference_table_xxxxx"
 ROLLBACK;
 -- case 4.7: SELECT to a dist table is followed by a DROP
 -- DROP following SELECT is important as we error out after
@@ -1101,6 +1111,12 @@ ROLLBACK;
 -- the fails since we're trying to switch sequential mode after
 -- already executed a parallel query
 BEGIN;
+	SELECT master_remove_node('localhost', :master_port);
+ master_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
 	CREATE TABLE test_table_1(id int PRIMARY KEY);
 	SELECT create_reference_table('test_table_1');
  create_reference_table
@@ -1129,6 +1145,12 @@ ROLLBACK;
 -- same test with the above, but this time using
 -- sequential mode, succeeds
 BEGIN;
+	SELECT master_remove_node('localhost', :master_port);
+ master_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
 	SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
 	CREATE TABLE test_table_1(id int PRIMARY KEY);
 	SELECT create_reference_table('test_table_1');
@@ -1499,6 +1521,6 @@ ROLLBACK;
 RESET client_min_messages;
 \set VERBOSITY terse
 DROP SCHEMA test_fkey_to_ref_in_tx CASCADE;
-NOTICE:  drop cascades to 5 other objects
+NOTICE:  drop cascades to 7 other objects
 \set VERBOSITY default
 SET search_path TO public;

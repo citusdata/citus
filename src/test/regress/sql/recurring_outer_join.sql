@@ -4,12 +4,7 @@ SET search_path TO recurring_outer_join;
 SET citus.next_shard_id TO 1520000;
 SET citus.shard_count TO 32;
 
--- idempotently add node to allow this test to run without add_coordinator
-SET client_min_messages TO WARNING;
-SELECT 1 FROM citus_add_node('localhost', :master_port, groupid => 0);
-
 SET client_min_messages TO DEBUG1;
-
 CREATE TABLE dist_1 (a int, b int);
 SELECT create_distributed_table('dist_1', 'a');
 INSERT INTO dist_1 VALUES
@@ -1026,5 +1021,3 @@ ROLLBACK;
 
 SET client_min_messages TO ERROR;
 DROP SCHEMA recurring_outer_join CASCADE;
-
-SELECT master_remove_node('localhost', :master_port);

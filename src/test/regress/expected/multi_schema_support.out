@@ -1153,7 +1153,12 @@ SELECT create_reference_table('schema_with_user.test_table');
 SET citus.next_shard_id TO 1197000;
 -- we do not use run_command_on_coordinator_and_workers here because when there is CASCADE, it causes deadlock
 DROP OWNED BY "test-user" CASCADE;
-NOTICE:  drop cascades to table schema_with_user.test_table
+NOTICE:  drop cascades to 2 other objects
+DETAIL:  drop cascades to table schema_with_user.test_table
+drop cascades to table schema_with_user.test_table_1190039
+NOTICE:  schema "schema_with_user" does not exist, skipping
+CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
+PL/pgSQL function citus_drop_trigger() line XX at PERFORM
 DROP USER "test-user";
 DROP FUNCTION run_command_on_coordinator_and_workers(p_sql text);
 -- test run_command_on_* UDFs with schema

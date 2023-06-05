@@ -528,8 +528,8 @@ SELECT COUNT(DISTINCT colocationid) FROM pg_dist_partition WHERE logicalrelid::r
 -- test references
 CREATE TABLE referenced_dist_table (a INT UNIQUE);
 CREATE TABLE referenced_ref_table (a INT UNIQUE);
-CREATE TABLE table_with_references (a1 INT UNIQUE REFERENCES referenced_dist_table(a), a2 INT REFERENCES referenced_ref_table(a));
-CREATE TABLE referencing_dist_table (a INT REFERENCES table_with_references(a1));
+CREATE TABLE table_with_references (a1 INT UNIQUE, a2 INT);
+CREATE TABLE referencing_dist_table (a INT);
 SELECT create_distributed_table('referenced_dist_table', 'a', colocate_with:='none');
  create_distributed_table
 ---------------------------------------------------------------------
@@ -554,6 +554,9 @@ SELECT create_distributed_table('referencing_dist_table', 'a', colocate_with:='r
 
 (1 row)
 
+ALTER TABLE table_with_references ADD FOREIGN KEY (a1) REFERENCES referenced_dist_table(a);
+ALTER TABLE table_with_references ADD FOREIGN KEY (a2) REFERENCES referenced_ref_table(a);
+ALTER TABLE referencing_dist_table ADD FOREIGN KEY (a) REFERENCES table_with_references(a1);
 SET client_min_messages TO WARNING;
 SELECT conrelid::regclass::text AS "Referencing Table", pg_get_constraintdef(oid, true) AS "Definition" FROM  pg_constraint
     WHERE (conrelid::regclass::text = 'table_with_references' OR confrelid::regclass::text = 'table_with_references') AND contype = 'f' ORDER BY 1,2;
@@ -1255,3 +1258,4 @@ SELECT run_command_on_workers($$SELECT count(*) FROM pg_matviews WHERE matviewna
 RESET search_path;
 DROP SCHEMA alter_distributed_table CASCADE;
 DROP SCHEMA schema_to_test_alter_dist_table CASCADE;
+DROP USER alter_dist_table_test_user;

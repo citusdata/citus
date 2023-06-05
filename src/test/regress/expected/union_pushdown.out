@@ -1469,14 +1469,5 @@ $$);
  f
 (1 row)
 
-RESET client_min_messages;
+SET client_min_messages TO WARNING;
 DROP SCHEMA union_pushdown CASCADE;
-NOTICE:  drop cascades to 8 other objects
-DETAIL:  drop cascades to table users_table_part
-drop cascades to table events_table_part
-drop cascades to table events_table_ref
-drop cascades to table events_table_local
-drop cascades to table test_a
-drop cascades to table test_b
-drop cascades to type comp_type
-drop cascades to view v

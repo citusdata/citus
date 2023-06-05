@@ -267,8 +267,6 @@ select count(*)
 from col_test
 where val = 'asdf';
 
-SELECT 1 FROM citus_add_node('localhost', :master_port, groupId => 0);
-
 BEGIN;
   CREATE TABLE generated_stored_col_test (x int, y int generated always as (x+1) stored);
   SELECT citus_add_local_table_to_metadata('generated_stored_col_test');
@@ -373,8 +371,6 @@ BEGIN;
 
   SELECT * FROM generated_stored_ref;
 ROLLBACK;
-
-SELECT citus_remove_node('localhost', :master_port);
 
 CREATE TABLE superuser_columnar_table (a int) USING columnar;
 

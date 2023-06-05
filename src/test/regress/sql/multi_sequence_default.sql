@@ -12,7 +12,6 @@ SET search_path = sequence_default, public;
 
 
 -- test both distributed and citus local tables
-SELECT 1 FROM citus_add_node('localhost', :master_port, groupId => 0);
 -- Cannot add a column involving DEFAULT nextval('..') because the table is not empty
 CREATE SEQUENCE seq_0;
 CREATE SEQUENCE seq_0_local_table;
@@ -451,5 +450,4 @@ DROP TABLE test_seq_dist;
 DROP TABLE sequence_default.seq_test_7_par;
 SET client_min_messages TO error; -- suppress cascading objects dropping
 DROP SCHEMA sequence_default CASCADE;
-SELECT master_remove_node('localhost', :master_port);
 SET search_path TO public;

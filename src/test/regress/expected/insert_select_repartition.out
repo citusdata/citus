@@ -1092,14 +1092,14 @@ EXPLAIN (costs off) INSERT INTO test(y, x) SELECT a.x, b.y FROM test a JOIN test
  Custom Scan (Citus INSERT ... SELECT)
    INSERT/SELECT method: pull to coordinator
    ->  Custom Scan (Citus Adaptive)
-         Task Count: 4
+         Task Count: 6
          Tasks Shown: None, not supported for re-partition queries
          ->  MapMergeJob
                Map Task Count: 3
-               Merge Task Count: 4
+               Merge Task Count: 6
          ->  MapMergeJob
                Map Task Count: 3
-               Merge Task Count: 4
+               Merge Task Count: 6
 (11 rows)
 
 SET client_min_messages TO DEBUG1;
@@ -1121,14 +1121,14 @@ EXPLAIN (costs off) INSERT INTO test SELECT a.* FROM test a JOIN test b USING (y
  Custom Scan (Citus INSERT ... SELECT)
    INSERT/SELECT method: pull to coordinator
    ->  Custom Scan (Citus Adaptive)
-         Task Count: 4
+         Task Count: 6
          Tasks Shown: None, not supported for re-partition queries
          ->  MapMergeJob
                Map Task Count: 3
-               Merge Task Count: 4
+               Merge Task Count: 6
          ->  MapMergeJob
                Map Task Count: 3
-               Merge Task Count: 4
+               Merge Task Count: 6
 (11 rows)
 
 SET client_min_messages TO DEBUG1;

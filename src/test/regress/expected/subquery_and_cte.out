@@ -718,15 +718,6 @@ END;
 $$;
 ERROR:  (3/3) failed to execute one of the tasks
 CONTEXT:  PL/pgSQL function inline_code_block line XX at RAISE
-SET client_min_messages TO DEFAULT;
+SET client_min_messages TO WARNING;
 DROP SCHEMA subquery_and_ctes CASCADE;
-NOTICE:  drop cascades to 8 other objects
-DETAIL:  drop cascades to table users_table
-drop cascades to table events_table
-drop cascades to table users_table_local
-drop cascades to table dist_table
-drop cascades to function func()
-drop cascades to table ref_table_1
-drop cascades to table ref_table_2
-drop cascades to table dist
 SET search_path TO public;

@@ -1786,7 +1786,6 @@ ROLLBACK;
 DROP TABLE pi_table;
 
 -- 6) test with citus local table
-select 1 from citus_add_node('localhost', :master_port, groupid=>0);
 CREATE TABLE date_partitioned_citus_local_table(
  measureid integer,
  eventdate date,
@@ -1937,8 +1936,6 @@ DROP TABLE date_partitioned_table_to_exp;
 DROP TABLE date_partitioned_citus_local_table CASCADE;
 DROP TABLE date_partitioned_citus_local_table_2;
 set client_min_messages to notice;
-
-SELECT citus_remove_node('localhost', :master_port);
 
 -- d) invalid tables for helper UDFs
 CREATE TABLE multiple_partition_column_table(

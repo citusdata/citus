@@ -127,6 +127,9 @@ DEPS = {
             "multi_mx_function_table_reference",
         ],
     ),
+    "alter_distributed_table": TestDeps(
+        "minimal_schedule", ["multi_behavioral_analytics_create_table"]
+    ),
     "background_rebalance": TestDeps(
         None,
         [
@@ -144,6 +147,7 @@ DEPS = {
         worker_count=6,
     ),
     "function_propagation": TestDeps("minimal_schedule"),
+    "grant_on_foreign_server_propagation": TestDeps("minimal_schedule"),
     "multi_mx_modifying_xacts": TestDeps(None, ["multi_mx_create_table"]),
     "multi_mx_router_planner": TestDeps(None, ["multi_mx_create_table"]),
     "multi_mx_copy_data": TestDeps(None, ["multi_mx_create_table"]),
