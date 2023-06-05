@@ -229,6 +229,10 @@ AttributeTask(char *tenantId, int colocationId, CmdType commandType)
 		return;
 	}
 
+	/*
+	 * if tenantId is NULL, it must be a schema-based tenant and
+	 * we try to get the tenantId from the colocationId to lookup schema name and use it as a tenantId
+	 */
 	if (tenantId == NULL)
 	{
 		if (!IsTenantSchemaColocationGroup(colocationId))
@@ -259,42 +263,44 @@ AttributeTask(char *tenantId, int colocationId, CmdType commandType)
 char *
 AnnotateQuery(char *queryString, Const *partitionKeyValue, int colocationId)
 {
-	if (StatTenantsTrack == STAT_TENANTS_TRACK_NONE || colocationId == INVALID_COLOCATION_ID)
+	if (StatTenantsTrack == STAT_TENANTS_TRACK_NONE || colocationId ==
+		INVALID_COLOCATION_ID)
 	{
 		return queryString;
 	}
 
 	StringInfo newQuery = makeStringInfo();
 
-	// if the query doesn't have a parititon key value, check if it is a tenant schema
+	/* if the query doesn't have a parititon key value, check if it is a tenant schema */
 	if (partitionKeyValue == NULL)
 	{
 		if (IsTenantSchemaColocationGroup(colocationId))
 		{
-			// If it is a schema-based tenant, we only annotate the query with colocationId
+			/* If it is a schema-based tenant, we only annotate the query with colocationId */
 			appendStringInfo(newQuery, ATTRIBUTE_STRING_FORMAT_WITHOUT_TID,
-					 colocationId);
+							 colocationId);
 		}
 		else
 		{
-			// If it is not a schema-based tenant query and doesn't have a parititon key,
-			// we don't annotate it
+			/* If it is not a schema-based tenant query and doesn't have a parititon key,
+			 * we don't annotate it
+			 */
 			return queryString;
 		}
 	}
 	else
 	{
-		// if the query has a partition key value, we annotate it with both tenantId and colocationId
+		/* if the query has a partition key value, we annotate it with both tenantId and colocationId */
 		char *partitionKeyValueString = DatumToString(partitionKeyValue->constvalue,
-														partitionKeyValue->consttype);
+													  partitionKeyValue->consttype);
 
 		char *commentCharsEscaped = EscapeCommentChars(partitionKeyValueString);
 		StringInfo escapedSourceName = makeStringInfo();
 		escape_json(escapedSourceName, commentCharsEscaped);
 
-		appendStringInfo(newQuery, ATTRIBUTE_STRING_FORMAT, colocationId, escapedSourceName->data
-						);
-
+		appendStringInfo(newQuery, ATTRIBUTE_STRING_FORMAT, colocationId,
+						 escapedSourceName->data
+						 );
 	}
 
 	appendStringInfoString(newQuery, queryString);
