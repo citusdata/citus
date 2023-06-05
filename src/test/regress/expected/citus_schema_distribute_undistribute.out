@@ -3,12 +3,6 @@ SET citus.shard_replication_factor TO 1;
 SET client_min_messages TO WARNING;
 SET citus.enable_schema_based_sharding TO off;
 CREATE SCHEMA tenant1;
-SELECT citus_set_coordinator_host('localhost', :master_port);
- citus_set_coordinator_host
----------------------------------------------------------------------
-
-(1 row)
-
 CREATE TABLE tenant1.table1(id int PRIMARY KEY, name text);
 INSERT INTO tenant1.table1 SELECT i, 'asd'::text FROM generate_series(1,20) i;
 CREATE TABLE tenant1.table2(id int REFERENCES tenant1.table1(id), num bigint UNIQUE);
@@ -92,12 +86,12 @@ SELECT run_command_on_workers($$SELECT citus_schema_undistribute('tenant1');$$);
 
 -- inherited table not allowed
 SELECT citus_schema_distribute('tenant1');
-ERROR:  tenant tables cannot inherit or be inherited
+ERROR:  tables in a distributed schema cannot inherit or be inherited
 DROP TABLE tenant1.capitals;
 DROP TABLE tenant1.cities;
 -- foreign table not allowed
 SELECT citus_schema_distribute('tenant1');
-ERROR:  cannot create a tenant table from a foreign table
+ERROR:  cannot create a foreign table in a distributed schema
 ALTER FOREIGN TABLE tenant1.foreign_table SET SCHEMA public;
 -- only allowed for schema owner or superuser
 CREATE USER dummysuper superuser;
@@ -171,7 +165,7 @@ WHERE logicalrelid::text LIKE 'tenant1.%' ORDER BY schemaid, logicalrelid::text;
 
 -- errors not a tenant schema
 SELECT citus_schema_undistribute('tenant1');
-ERROR:  schema tenant1 is not a tenant schema
+ERROR:  schema tenant1 is not distributed
 -- make it a tenant schema
 BEGIN;
 SELECT citus_schema_distribute('tenant1');
@@ -219,7 +213,7 @@ FROM pg_dist_partition WHERE logicalrelid::text LIKE 'tenant1.%';
 -- already a tenant schema notice
 SET client_min_messages TO NOTICE;
 SELECT citus_schema_distribute('tenant1');
-NOTICE:  schema tenant1 is already a tenant schema
+NOTICE:  schema tenant1 is already distributed
  citus_schema_distribute
 ---------------------------------------------------------------------
 
@@ -291,7 +285,7 @@ ERROR:  temporary schema cannot be distributed
 SELECT citus_schema_distribute(:'temp_toast_schema_name');
 ERROR:  temporary schema cannot be distributed
 SELECT citus_schema_distribute('citus');
-ERROR:  the schema citus, which is owned by an extension, cannot be distributed
+ERROR:  schema citus, which is owned by an extension, cannot be distributed
 -- weird schema and table names
 CREATE SCHEMA "CiTuS.TeeN";
 CREATE TABLE "CiTuS.TeeN"."TeeNTabLE.1!?!"(id int PRIMARY KEY, name text);
@@ -385,9 +379,3 @@ DROP SCHEMA "CiTuS.TeeN" CASCADE;
 DROP SCHEMA tenant1 CASCADE;
 DROP TABLE public.ref;
 DROP EXTENSION postgres_fdw CASCADE;
-SELECT citus_remove_node('localhost', :master_port);
- citus_remove_node
----------------------------------------------------------------------
-
-(1 row)
-

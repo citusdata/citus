@@ -5,8 +5,6 @@ SET citus.enable_schema_based_sharding TO off;
 
 CREATE SCHEMA tenant1;
 
-SELECT citus_set_coordinator_host('localhost', :master_port);
-
 CREATE TABLE tenant1.table1(id int PRIMARY KEY, name text);
 INSERT INTO tenant1.table1 SELECT i, 'asd'::text FROM generate_series(1,20) i;
 
@@ -196,4 +194,3 @@ DROP SCHEMA "CiTuS.TeeN" CASCADE;
 DROP SCHEMA tenant1 CASCADE;
 DROP TABLE public.ref;
 DROP EXTENSION postgres_fdw CASCADE;
-SELECT citus_remove_node('localhost', :master_port);

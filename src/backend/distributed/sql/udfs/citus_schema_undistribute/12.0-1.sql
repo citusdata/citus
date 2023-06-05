@@ -3,4 +3,4 @@ CREATE OR REPLACE FUNCTION pg_catalog.citus_schema_undistribute(schemaname regna
 	LANGUAGE C STRICT
 	AS 'MODULE_PATHNAME', $$citus_schema_undistribute$$;
 COMMENT ON FUNCTION pg_catalog.citus_schema_undistribute(schemaname regnamespace)
-	IS 'converts a tenant schema back to a regular schema';
+	IS 'reverts schema distribution, moving it back to the coordinator';

@@ -367,40 +367,15 @@ worker_change_sequence_dependency(PG_FUNCTION_ARGS)
  * undistributes the relations. Finally, it recreates foreign keys.
  */
 void
-UndistributeTables(List *relationIds)
+UndistributeTables(List *relationIdList)
 {
-	List *tablesToConvert = NIL;
-	Oid relationId = InvalidOid;
-	foreach_oid(relationId, relationIds)
-	{
-		/*
-		 * Skip partitions as they would be distributed/undistibuted by partitioned table.
-		 *
-		 * We should filter out partitions here before calling CreateTenantSchemaTable.
-		 * Otherwise, converted partitioned table would change oid of partitions and its
-		 * partition tables would fail wih oid not exist.
-		 */
-		if (PartitionTable(relationId))
-		{
-			continue;
-		}
-
-		/*
-		 * Error early before undistributing the schema if concurrent drop or some alter
-		 * statements occurred on the table. Note that we already had the AccessShareLock
-		 * lock when we call PartitionTable, so after this point we are guaranteed to
-		 * prevent concurrent drop and some modification on the table.
-		 */
-		EnsureRelationExists(relationId);
-		tablesToConvert = lappend_oid(tablesToConvert, relationId);
-	}
-
 	/*
 	 * Collect foreign keys for recreation and then drop fkeys and undistribute
 	 * tables.
 	 */
 	List *originalForeignKeyRecreationCommands = NIL;
-	foreach_oid(relationId, tablesToConvert)
+	Oid relationId = InvalidOid;
+	foreach_oid(relationId, relationIdList)
 	{
 		List *fkeyCommandsForRelation =
 			GetFKeyCreationCommandsRelationInvolvedWithTableType(relationId,

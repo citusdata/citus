@@ -36,22 +36,22 @@
 typedef struct SchemaTables
 {
 	Oid schemaId;
-	List *hashDistributedRelationIds;
-	List *rangeDistributedRelationIds;
-	List *appendDistributedRelationIds;
-	List *referenceRelationIds;
-	List *singleShardRelationIds;
-	List *citusLocalRelationIds;
-	List *localRelationIds;
+	List *hashDistributedTableIdList;
+	List *rangeDistributedTableIdList;
+	List *appendDistributedTableIdList;
+	List *singleShardTableIdList;
+	List *referenceTableIdList;
+	List *citusLocalTableIdList;
+	List *postgresTableIdList;
 } SchemaTables;
 
-static bool SchemaHasCitusTableType(SchemaTables *schemaTables, List *citusTableTypes);
+static bool SchemaHasCitusTableType(SchemaTables *schemaTables, List *citusTableTypeList);
 static SchemaTables * TablesUnderSchema(Oid schemaId);
-static List * GetRelationIdsInSchema(Oid schemaId);
+static List * GetRegularAndForeignCitusTablesInSchema(Oid schemaId);
 static void EnsureTenantSchemaAllowed(Oid schemaId);
-static List * DisAllowedTableTypesForDistributeSchema(void);
-static List * DisAllowedTableTypesForUndistributeSchema(void);
-static void EnsureTableKindsSupportedForTenantSchema(List *relationIds);
+static List * DisallowedTableTypesForDistributeSchema(void);
+static List * DisallowedTableTypesForUndistributeSchema(void);
+static void EnsureTableKindSupportedForTenantSchema(Oid relationId);
 
 /* controlled via citus.enable_schema_based_sharding GUC */
 bool EnableSchemaBasedSharding = false;
@@ -140,29 +140,26 @@ ShouldCreateTenantSchemaTable(Oid relationId)
 
 
 /*
- * EnsureTableKindsSupportedForTenantSchema ensures that given tables' kinds are
+ * EnsureTableKindSupportedForTenantSchema ensures that given table's kind is
  * supported by a tenant schema.
  */
 static void
-EnsureTableKindsSupportedForTenantSchema(List *relationIds)
+EnsureTableKindSupportedForTenantSchema(Oid relationId)
 {
-	Oid relationId = InvalidOid;
-	foreach_oid(relationId, relationIds)
+	if (IsForeignTable(relationId))
 	{
-		if (IsForeignTable(relationId))
-		{
-			/* throw an error that is nicer than the one CreateSingleShardTable() would throw */
-			ereport(ERROR, (errmsg("cannot create a tenant table from a foreign table")));
-		}
-		else if (PartitionTable(relationId))
-		{
-			ErrorIfIllegalPartitioningInTenantSchema(PartitionParentOid(relationId),
-													 relationId);
-		}
-		else if (IsChildTable(relationId) || IsParentTable(relationId))
-		{
-			ereport(ERROR, (errmsg("tenant tables cannot inherit or be inherited")));
-		}
+		ereport(ERROR, (errmsg("cannot create a foreign table in a distributed "
+							   "schema")));
+	}
+	else if (PartitionTable(relationId))
+	{
+		ErrorIfIllegalPartitioningInTenantSchema(PartitionParentOid(relationId),
+												 relationId);
+	}
+	else if (IsChildTable(relationId) || IsParentTable(relationId))
+	{
+		ereport(ERROR, (errmsg("tables in a distributed schema cannot inherit or "
+							   "be inherited")));
 	}
 }
 
@@ -189,11 +186,12 @@ CreateTenantSchemaTable(Oid relationId)
 		 * prefer to throw an error with a more meaningful message, rather
 		 * than saying "operation is not allowed on this node".
 		 */
-		ereport(ERROR, (errmsg("cannot create a tenant table from a worker node"),
+		ereport(ERROR, (errmsg("cannot create tables in a distributed schema from "
+							   "a worker node"),
 						errhint("Connect to the coordinator node and try again.")));
 	}
 
-	EnsureTableKindsSupportedForTenantSchema(list_make1_oid(relationId));
+	EnsureTableKindSupportedForTenantSchema(relationId);
 
 	/*
 	 * We don't expect this to happen because ShouldCreateTenantSchemaTable()
@@ -203,7 +201,7 @@ CreateTenantSchemaTable(Oid relationId)
 	uint32 colocationId = SchemaIdGetTenantColocationId(schemaId);
 	if (colocationId == INVALID_COLOCATION_ID)
 	{
-		ereport(ERROR, (errmsg("schema \"%s\" is not a tenant schema",
+		ereport(ERROR, (errmsg("schema \"%s\" is not distributed",
 							   get_namespace_name(schemaId))));
 	}
 
@@ -241,7 +239,7 @@ ErrorIfIllegalPartitioningInTenantSchema(Oid parentRelationId, Oid partitionRela
 
 	if (illegalPartitioning)
 	{
-		ereport(ERROR, (errmsg("partitioning with tenant tables is not "
+		ereport(ERROR, (errmsg("partitioning within a distributed schema is not "
 							   "supported when the parent and the child "
 							   "are in different schemas")));
 	}
@@ -266,11 +264,11 @@ CreateTenantSchemaColocationId(void)
 
 
 /*
- * GetRelationIdsInSchema returns all nonshard relation ids, with relkind = relation or
- * partitioned or foreign, inside given schema.
+ * GetRegularAndForeignCitusTablesInSchema returns all nonshard relation ids,
+ * with relkind = relation or partitioned or foreign, inside given schema.
  */
 static List *
-GetRelationIdsInSchema(Oid schemaId)
+GetRegularAndForeignCitusTablesInSchema(Oid schemaId)
 {
 	List *relationIdList = NIL;
 
@@ -301,13 +299,6 @@ GetRelationIdsInSchema(Oid schemaId)
 			continue;
 		}
 
-		/*
-		 * Collect only the relkinds of 'relation' and 'partitioned' since others are
-		 * created as dependency. e.g. index, sequence, type, view, matview
-		 *
-		 * We also collect foreign tables here since we will apply error checks for them
-		 * later.
-		 */
 		if (RegularTable(relationId) || IsForeignTable(relationId))
 		{
 			relationIdList = lappend_oid(relationIdList, relationId);
@@ -324,54 +315,55 @@ GetRelationIdsInSchema(Oid schemaId)
 /*
  * TablesUnderSchema filters all Citus tables, given in the schema,
  * inside the relations. Returns SchemaTables which contains separate list
- * fir different table types.
+ * for different table types.
  */
 static SchemaTables *
 TablesUnderSchema(Oid schemaId)
 {
-	List *relationIdsInSchema = GetRelationIdsInSchema(schemaId);
+	List *relationIdListInSchema = GetRegularAndForeignCitusTablesInSchema(schemaId);
 
 	SchemaTables *schemaTables = palloc0(sizeof(SchemaTables));
 	schemaTables->schemaId = schemaId;
 
 	Oid relationId = InvalidOid;
-	foreach_oid(relationId, relationIdsInSchema)
+	foreach_oid(relationId, relationIdListInSchema)
 	{
 		CitusTableCacheEntry *tableEntry = LookupCitusTableCacheEntry(relationId);
 		if (tableEntry == NULL)
 		{
-			schemaTables->localRelationIds = lappend_oid(schemaTables->localRelationIds,
-														 relationId);
+			schemaTables->postgresTableIdList = lappend_oid(
+				schemaTables->postgresTableIdList,
+				relationId);
 		}
 		else if (IsCitusTableType(relationId, HASH_DISTRIBUTED))
 		{
-			schemaTables->hashDistributedRelationIds = lappend_oid(
-				schemaTables->hashDistributedRelationIds, relationId);
+			schemaTables->hashDistributedTableIdList = lappend_oid(
+				schemaTables->hashDistributedTableIdList, relationId);
 		}
 		else if (IsCitusTableType(relationId, RANGE_DISTRIBUTED))
 		{
-			schemaTables->rangeDistributedRelationIds = lappend_oid(
-				schemaTables->rangeDistributedRelationIds, relationId);
+			schemaTables->rangeDistributedTableIdList = lappend_oid(
+				schemaTables->rangeDistributedTableIdList, relationId);
 		}
 		else if (IsCitusTableType(relationId, APPEND_DISTRIBUTED))
 		{
-			schemaTables->appendDistributedRelationIds = lappend_oid(
-				schemaTables->appendDistributedRelationIds, relationId);
+			schemaTables->appendDistributedTableIdList = lappend_oid(
+				schemaTables->appendDistributedTableIdList, relationId);
 		}
 		else if (IsCitusTableType(relationId, SINGLE_SHARD_DISTRIBUTED))
 		{
-			schemaTables->singleShardRelationIds = lappend_oid(
-				schemaTables->singleShardRelationIds, relationId);
+			schemaTables->singleShardTableIdList = lappend_oid(
+				schemaTables->singleShardTableIdList, relationId);
 		}
 		else if (IsCitusTableType(relationId, REFERENCE_TABLE))
 		{
-			schemaTables->referenceRelationIds = lappend_oid(
-				schemaTables->referenceRelationIds, relationId);
+			schemaTables->referenceTableIdList = lappend_oid(
+				schemaTables->referenceTableIdList, relationId);
 		}
 		else if (IsCitusTableType(relationId, CITUS_LOCAL_TABLE))
 		{
-			schemaTables->citusLocalRelationIds = lappend_oid(
-				schemaTables->citusLocalRelationIds, relationId);
+			schemaTables->citusLocalTableIdList = lappend_oid(
+				schemaTables->citusLocalTableIdList, relationId);
 		}
 	}
 	return schemaTables;
@@ -383,16 +375,16 @@ TablesUnderSchema(Oid schemaId)
  * table type given in the list.
  */
 static bool
-SchemaHasCitusTableType(SchemaTables *schemaTables, List *citusTableTypes)
+SchemaHasCitusTableType(SchemaTables *schemaTables, List *citusTableTypeList)
 {
 	CitusTableType citusTableType = 0;
-	foreach_int(citusTableType, citusTableTypes)
+	foreach_int(citusTableType, citusTableTypeList)
 	{
 		switch (citusTableType)
 		{
 			case HASH_DISTRIBUTED:
 			{
-				if (schemaTables->hashDistributedRelationIds)
+				if (schemaTables->hashDistributedTableIdList)
 				{
 					return true;
 				}
@@ -401,7 +393,7 @@ SchemaHasCitusTableType(SchemaTables *schemaTables, List *citusTableTypes)
 
 			case RANGE_DISTRIBUTED:
 			{
-				if (schemaTables->rangeDistributedRelationIds)
+				if (schemaTables->rangeDistributedTableIdList)
 				{
 					return true;
 				}
@@ -410,7 +402,7 @@ SchemaHasCitusTableType(SchemaTables *schemaTables, List *citusTableTypes)
 
 			case APPEND_DISTRIBUTED:
 			{
-				if (schemaTables->appendDistributedRelationIds)
+				if (schemaTables->appendDistributedTableIdList)
 				{
 					return true;
 				}
@@ -419,7 +411,7 @@ SchemaHasCitusTableType(SchemaTables *schemaTables, List *citusTableTypes)
 
 			case SINGLE_SHARD_DISTRIBUTED:
 			{
-				if (schemaTables->singleShardRelationIds)
+				if (schemaTables->singleShardTableIdList)
 				{
 					return true;
 				}
@@ -428,7 +420,7 @@ SchemaHasCitusTableType(SchemaTables *schemaTables, List *citusTableTypes)
 
 			case REFERENCE_TABLE:
 			{
-				if (schemaTables->referenceRelationIds)
+				if (schemaTables->referenceTableIdList)
 				{
 					return true;
 				}
@@ -437,7 +429,7 @@ SchemaHasCitusTableType(SchemaTables *schemaTables, List *citusTableTypes)
 
 			case CITUS_LOCAL_TABLE:
 			{
-				if (schemaTables->citusLocalRelationIds)
+				if (schemaTables->citusLocalTableIdList)
 				{
 					return true;
 				}
@@ -446,7 +438,8 @@ SchemaHasCitusTableType(SchemaTables *schemaTables, List *citusTableTypes)
 
 			default:
 			{
-				break;
+				ereport(ERROR, (errmsg("unexpected table type when verifying schema "
+									   "tables")));
 			}
 		}
 	}
@@ -455,12 +448,12 @@ SchemaHasCitusTableType(SchemaTables *schemaTables, List *citusTableTypes)
 
 
 /*
- * DisAllowedTableTypesForDistributeSchema returns Citus tables which are
+ * DisallowedTableTypesForDistributeSchema returns Citus tables which are
  * not allowed inside a schema to be distributed. Currently, we allow
  * only Citus local and PG local tables.
  */
 static List *
-DisAllowedTableTypesForDistributeSchema(void)
+DisallowedTableTypesForDistributeSchema(void)
 {
 	List *disallowedCitusTableTypes = NIL;
 	disallowedCitusTableTypes = lappend_int(disallowedCitusTableTypes, HASH_DISTRIBUTED);
@@ -474,13 +467,15 @@ DisAllowedTableTypesForDistributeSchema(void)
 }
 
 
+#ifdef USE_ASSERT_CHECKING
+
 /*
- * DisAllowedTableTypesForUndistributeSchema returns Citus tables which are
+ * DisallowedTableTypesForUndistributeSchema returns Citus tables which are
  * not allowed inside a schema during the undistribution of the schema. We
  * expect only single shard tables.
  */
 static List *
-DisAllowedTableTypesForUndistributeSchema(void)
+DisallowedTableTypesForUndistributeSchema(void)
 {
 	List *disallowedCitusTableTypes = NIL;
 	disallowedCitusTableTypes = lappend_int(disallowedCitusTableTypes, HASH_DISTRIBUTED);
@@ -492,6 +487,8 @@ DisAllowedTableTypesForUndistributeSchema(void)
 	return disallowedCitusTableTypes;
 }
 
+
+#endif
 
 /*
  * EnsureTenantSchemaAllowed ensures if given schema is applicable for registering
@@ -537,9 +534,8 @@ EnsureTenantSchemaAllowed(Oid schemaId)
 	ObjectAddressSet(*schemaAddress, NamespaceRelationId, schemaId);
 	if (IsAnyObjectAddressOwnedByExtension(list_make1(schemaAddress), NULL))
 	{
-		ereport(ERROR, (errmsg(
-							"the schema %s, which is owned by an extension, cannot be distributed",
-							schemaName)));
+		ereport(ERROR, (errmsg("schema %s, which is owned by an extension, cannot "
+							   "be distributed", schemaName)));
 	}
 }
 
@@ -621,21 +617,20 @@ citus_schema_distribute(PG_FUNCTION_ARGS)
 	char *schemaName = get_namespace_name(schemaId);
 	if (IsTenantSchema(schemaId))
 	{
-		ereport(NOTICE, (errmsg("schema %s is already a tenant schema", schemaName)));
+		ereport(NOTICE, (errmsg("schema %s is already distributed", schemaName)));
 		PG_RETURN_VOID();
 	}
 	else
 	{
-		ereport(NOTICE, (errmsg("schema %s is converted to a tenant schema",
-								schemaName)));
+		ereport(NOTICE, (errmsg("distributing the schema %s", schemaName)));
 	}
 
 	/* Collect all tables by their types in the schema */
 	SchemaTables *schemaTables = TablesUnderSchema(schemaId);
 
 	/* Allow only Citus local and PG local tables in the schema */
-	List *disallowedCitusTableTypes = DisAllowedTableTypesForDistributeSchema();
-	if (SchemaHasCitusTableType(schemaTables, disallowedCitusTableTypes))
+	List *disallowedCitusTableTypeList = DisallowedTableTypesForDistributeSchema();
+	if (SchemaHasCitusTableType(schemaTables, disallowedCitusTableTypeList))
 	{
 		ereport(ERROR, (errmsg("schema already has distributed tables"),
 						errhint("Undistribute distributed tables under "
@@ -643,28 +638,23 @@ citus_schema_distribute(PG_FUNCTION_ARGS)
 	}
 
 	/* We check that all table relation kinds are supported by a tenant schema */
-	List *localRelationIds = schemaTables->localRelationIds;
-	localRelationIds = list_concat(localRelationIds, schemaTables->citusLocalRelationIds);
-	EnsureTableKindsSupportedForTenantSchema(localRelationIds);
-
-	/* Create colocation id for single shard tables */
-	uint32 colocationId = CreateTenantSchemaColocationId();
-	ColocationParam colocationParam = {
-		.colocationParamType = COLOCATE_WITH_COLOCATION_ID,
-		.colocationId = colocationId,
-	};
+	List *postgresTableIdList = schemaTables->postgresTableIdList;
+	postgresTableIdList = list_concat(postgresTableIdList,
+									  schemaTables->citusLocalTableIdList);
 
 	/* Convert each local relation to a single shard relation */
 	Oid relationId = InvalidOid;
-	List *tablesToConvert = NIL;
-	foreach_oid(relationId, localRelationIds)
+	List *tableListToConvert = NIL;
+	foreach_oid(relationId, postgresTableIdList)
 	{
+		EnsureTableKindSupportedForTenantSchema(relationId);
+
 		/*
-		 * Skip partitions as they would be distributed/undistibuted by partitioned table.
+		 * Skip partitions as they would be distributed by the parent table.
 		 *
-		 * We should filter out partitions here before calling CreateTenantSchemaTable.
+		 * We should filter out partitions here before distributing the schema.
 		 * Otherwise, converted partitioned table would change oid of partitions and its
-		 * partition tables would fail wih oid not exist.
+		 * partition tables would fail with oid not exist.
 		 */
 		if (PartitionTable(relationId))
 		{
@@ -678,9 +668,17 @@ citus_schema_distribute(PG_FUNCTION_ARGS)
 		 * prevent concurrent drop and some modification on the table.
 		 */
 		EnsureRelationExists(relationId);
-		tablesToConvert = lappend_oid(tablesToConvert, relationId);
+		tableListToConvert = lappend_oid(tableListToConvert, relationId);
 	}
-	foreach_oid(relationId, tablesToConvert)
+
+	/* Create colocation id for single shard tables */
+	uint32 colocationId = CreateTenantSchemaColocationId();
+	ColocationParam colocationParam = {
+		.colocationParamType = COLOCATE_WITH_COLOCATION_ID,
+		.colocationId = colocationId,
+	};
+
+	foreach_oid(relationId, tableListToConvert)
 	{
 		/*
 		 * We cannot simply call CreateTenantSchemaTable since we need to register
@@ -732,26 +730,24 @@ citus_schema_undistribute(PG_FUNCTION_ARGS)
 	}
 
 	/* Ensure schema checks */
-	EnsureTenantSchemaAllowed(schemaId);
 	EnsureSchemaOwner(schemaId);
 
 	/* The schema should be a tenant schema */
 	char *schemaName = get_namespace_name(schemaId);
 	if (!IsTenantSchema(schemaId))
 	{
-		ereport(ERROR, (errmsg("schema %s is not a tenant schema", schemaName)));
+		ereport(ERROR, (errmsg("schema %s is not distributed", schemaName)));
 	}
 
-	ereport(NOTICE, (errmsg("schema %s is converted back to a regular schema",
-							schemaName)));
+	ereport(NOTICE, (errmsg("undistributing schema %s", schemaName)));
 
 	/* Only single shard tables are expected during the undistribution of the schema */
-	List *disallowedCitusTableTypesForUndistribute PG_USED_FOR_ASSERTS_ONLY =
-		DisAllowedTableTypesForUndistributeSchema();
+	List *disallowedCitusTableTypeListForUndistribute PG_USED_FOR_ASSERTS_ONLY =
+		DisallowedTableTypesForUndistributeSchema();
 	SchemaTables *schemaTables PG_USED_FOR_ASSERTS_ONLY = TablesUnderSchema(schemaId);
 	Assert(!SchemaHasCitusTableType(schemaTables,
-									disallowedCitusTableTypesForUndistribute));
-	Assert(!schemaTables->localRelationIds);
+									disallowedCitusTableTypeListForUndistribute));
+	Assert(schemaTables->postgresTableIdList == NIL);
 
 	/*
 	 * First, we need to delete schema metadata and sync it to workers. Otherwise,
@@ -759,10 +755,39 @@ citus_schema_undistribute(PG_FUNCTION_ARGS)
 	 */
 	char *unregisterSchemaCommand = TenantSchemaDeleteCommand(schemaName);
 	DeleteTenantSchemaLocally(schemaId);
-	SendCommandToWorkersWithMetadata(unregisterSchemaCommand);
+	if (EnableMetadataSync)
+	{
+		SendCommandToWorkersWithMetadata(unregisterSchemaCommand);
+	}
 
 	/* Undistribute all single shard tables in the schema */
-	UndistributeTables(schemaTables->singleShardRelationIds);
+	List *tableListToConvert = NIL;
+	Oid relationId = InvalidOid;
+	foreach_oid(relationId, schemaTables->singleShardTableIdList)
+	{
+		/*
+		 * Skip partitions as they would be undistributed by the parent table.
+		 *
+		 * We should filter out partitions here before undistributing the schema.
+		 * Otherwise, converted partitioned table would change oid of partitions and its
+		 * partition tables would fail with oid not exist.
+		 */
+		if (PartitionTable(relationId))
+		{
+			continue;
+		}
+
+		/*
+		 * Error early before undistributing the schema if concurrent drop or some alter
+		 * statements occurred on the table. Note that we already had the AccessShareLock
+		 * lock when we call PartitionTable, so after this point we are guaranteed to
+		 * prevent concurrent drop and some modification on the table.
+		 */
+		EnsureRelationExists(relationId);
+		tableListToConvert = lappend_oid(tableListToConvert, relationId);
+	}
+
+	UndistributeTables(tableListToConvert);
 
 	/* Delete colocation metadata and sync to workers */
 	uint32 schemaColocationId = SchemaIdGetTenantColocationId(schemaId);
@@ -781,7 +806,8 @@ ErrorIfTenantTable(Oid relationId, char *operationName)
 {
 	if (IsTenantSchema(get_rel_namespace(relationId)))
 	{
-		ereport(ERROR, (errmsg("%s is not allowed for %s because it is a tenant table",
+		ereport(ERROR, (errmsg("%s is not allowed for %s because it belongs to "
+							   "a distributed schema",
 							   generate_qualified_relation_name(relationId),
 							   operationName)));
 	}
