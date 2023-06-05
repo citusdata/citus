@@ -19,6 +19,7 @@
 #include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_executor.h"
+#include "distributed/tenant_schema_metadata.h"
 #include "distributed/tuplestore.h"
 #include "distributed/utils/citus_stat_tenants.h"
 #include "executor/execdesc.h"
@@ -29,7 +30,8 @@
 #include "utils/builtins.h"
 #include "utils/datetime.h"
 #include "utils/json.h"
-
+#include "utils/lsyscache.h"
+#include "utils/syscache.h"
 
 #include <time.h>
 
@@ -37,8 +39,9 @@ static void AttributeMetricsIfApplicable(void);
 
 ExecutorEnd_hook_type prev_ExecutorEnd = NULL;
 
-#define ATTRIBUTE_PREFIX "/*{\"tId\":"
-#define ATTRIBUTE_STRING_FORMAT "/*{\"tId\":%s,\"cId\":%d}*/"
+#define ATTRIBUTE_PREFIX "/*{\"cId\":"
+#define ATTRIBUTE_STRING_FORMAT "/*{\"cId\":%d,\"tId\":%s}*/"
+#define ATTRIBUTE_STRING_FORMAT_WITHOUT_TID "/*{\"cId\":%d}*/"
 #define STAT_TENANTS_COLUMNS 9
 #define ONE_QUERY_SCORE 1000000000
 
@@ -221,9 +224,23 @@ void
 AttributeTask(char *tenantId, int colocationId, CmdType commandType)
 {
 	if (StatTenantsTrack == STAT_TENANTS_TRACK_NONE ||
-		tenantId == NULL || colocationId == INVALID_COLOCATION_ID)
+		colocationId == INVALID_COLOCATION_ID)
 	{
 		return;
+	}
+
+	if (tenantId == NULL)
+	{
+		if (!IsTenantSchemaColocationGroup(colocationId))
+		{
+			return;
+		}
+
+		uint32 schemaId = ColocationIdGetTenantSchemaId(colocationId);
+		if (schemaId != InvalidOid)
+		{
+			tenantId = get_namespace_name(schemaId);
+		}
 	}
 
 	AttributeToColocationGroupId = colocationId;
@@ -236,26 +253,49 @@ AttributeTask(char *tenantId, int colocationId, CmdType commandType)
 
 /*
  * AnnotateQuery annotates the query with tenant attributes.
+ * if the query has a partition key, we annotate it with the partition key value and colocationId
+ * if the query doesn't have a partition key and if it's a schema-based tenant, we annotate it with the colocationId only.
  */
 char *
 AnnotateQuery(char *queryString, Const *partitionKeyValue, int colocationId)
 {
-	if (StatTenantsTrack == STAT_TENANTS_TRACK_NONE || partitionKeyValue == NULL)
+	if (StatTenantsTrack == STAT_TENANTS_TRACK_NONE || colocationId == INVALID_COLOCATION_ID)
 	{
 		return queryString;
 	}
 
-	char *partitionKeyValueString = DatumToString(partitionKeyValue->constvalue,
-												  partitionKeyValue->consttype);
-
-	char *commentCharsEscaped = EscapeCommentChars(partitionKeyValueString);
-	StringInfo escapedSourceName = makeStringInfo();
-
-	escape_json(escapedSourceName, commentCharsEscaped);
-
 	StringInfo newQuery = makeStringInfo();
-	appendStringInfo(newQuery, ATTRIBUTE_STRING_FORMAT, escapedSourceName->data,
+
+	// if the query doesn't have a parititon key value, check if it is a tenant schema
+	if (partitionKeyValue == NULL)
+	{
+		if (IsTenantSchemaColocationGroup(colocationId))
+		{
+			// If it is a schema-based tenant, we only annotate the query with colocationId
+			appendStringInfo(newQuery, ATTRIBUTE_STRING_FORMAT_WITHOUT_TID,
 					 colocationId);
+		}
+		else
+		{
+			// If it is not a schema-based tenant query and doesn't have a parititon key,
+			// we don't annotate it
+			return queryString;
+		}
+	}
+	else
+	{
+		// if the query has a partition key value, we annotate it with both tenantId and colocationId
+		char *partitionKeyValueString = DatumToString(partitionKeyValue->constvalue,
+														partitionKeyValue->consttype);
+
+		char *commentCharsEscaped = EscapeCommentChars(partitionKeyValueString);
+		StringInfo escapedSourceName = makeStringInfo();
+		escape_json(escapedSourceName, commentCharsEscaped);
+
+		appendStringInfo(newQuery, ATTRIBUTE_STRING_FORMAT, colocationId, escapedSourceName->data
+						);
+
+	}
 
 	appendStringInfoString(newQuery, queryString);
 
