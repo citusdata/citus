@@ -382,20 +382,16 @@ ExecuteLocalTaskListExtended(List *taskList,
 
 /*
  * SetColocationIdAndPartitionKeyValueForTasks sets colocationId and partitionKeyValue
- * for the tasks in the taskList if workerJob has a colocationId and partitionKeyValue.
+ * for the tasks in the taskList.
  */
 static void
 SetColocationIdAndPartitionKeyValueForTasks(List *taskList, Job *workerJob)
 {
-	if (workerJob->colocationId != 0 &&
-		workerJob->partitionKeyValue != NULL)
+	Task *task = NULL;
+	foreach_ptr(task, taskList)
 	{
-		Task *task = NULL;
-		foreach_ptr(task, taskList)
-		{
-			task->colocationId = workerJob->colocationId;
-			task->partitionKeyValue = workerJob->partitionKeyValue;
-		}
+		task->colocationId = workerJob->colocationId;
+		task->partitionKeyValue = workerJob->partitionKeyValue;
 	}
 }
 
