@@ -622,7 +622,7 @@ DistributedInsertSelectSupported(Query *queryTree, RangeTblEntry *insertRte,
 	ListCell *rangeTableCell = NULL;
 
 	/* we only do this check for INSERT ... SELECT queries */
-	AssertArg(InsertSelectIntoCitusTable(queryTree));
+	Assert(InsertSelectIntoCitusTable(queryTree));
 
 	Query *subquery = subqueryRte->subquery;
 

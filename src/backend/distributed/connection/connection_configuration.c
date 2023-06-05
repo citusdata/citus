@@ -183,7 +183,7 @@ CheckConninfo(const char *conninfo, const char **allowedConninfoKeywords,
 		const char *prev = allowedConninfoKeywords[keywordIdx - 1];
 		const char *curr = allowedConninfoKeywords[keywordIdx];
 
-		AssertArg(strcmp(prev, curr) < 0);
+		Assert(strcmp(prev, curr) < 0);
 	}
 #endif
 
