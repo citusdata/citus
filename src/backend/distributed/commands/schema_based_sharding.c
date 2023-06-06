@@ -269,8 +269,9 @@ ErrorIfTenantSchema(Oid nspOid, char *operationName)
 {
 	if (IsTenantSchema(nspOid))
 	{
-		ereport(ERROR, (errmsg("%s is not allowed for %s because it is a tenant schema",
-							   get_namespace_name(nspOid),
-							   operationName)));
+		ereport(ERROR, (errmsg(
+							"%s is not allowed for %s because it is a distributed schema",
+							get_namespace_name(nspOid),
+							operationName)));
 	}
 }

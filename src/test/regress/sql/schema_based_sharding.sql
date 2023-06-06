@@ -69,6 +69,8 @@ SELECT alter_distributed_table('regular_schema.test_table', colocate_with => 'te
 ALTER TABLE tenant_2.test_table SET SCHEMA regular_schema;
 -- verify we don't allow ALTER TABLE SET SCHEMA for tenant schemas
 ALTER TABLE regular_schema.test_table SET SCHEMA tenant_2;
+-- the same, from tenant schema to tenant schema
+ALTER TABLE tenant_2.test_table SET SCHEMA tenant_3;
 
 -- (on coordinator) verify that colocation id is set for empty tenants too
 SELECT colocationid > 0 FROM pg_dist_tenant_schema
