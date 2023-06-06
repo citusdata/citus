@@ -172,7 +172,7 @@ partition_column_id(PG_FUNCTION_ARGS)
 	uint32 rangeTableId = 1;
 	if (!IsCitusTableType(distributedTableId, HASH_DISTRIBUTED))
 	{
-		ereport(ERROR, (errmsg("relation needs to be a hash distributed table")));
+		ereport(ERROR, (errmsg("table needs to be hash distributed")));
 	}
 	Var *partitionColumn = PartitionColumn(distributedTableId, rangeTableId);
 

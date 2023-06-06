@@ -1081,7 +1081,7 @@ SELECT create_distributed_table ('debug_tbl', NULL, colocate_with:='none');
 (1 row)
 
 SELECT debug_equality_expression('debug_tbl'::regclass);
-ERROR:  relation needs to be a hash distributed table
+ERROR:  table needs to be hash distributed
 -- test partition_column_id
 CREATE FUNCTION partition_column_id(regclass)
 RETURNS smallint
@@ -1095,6 +1095,6 @@ SELECT create_distributed_table ('partcol_tbl', NULL, colocate_with:='none');
 (1 row)
 
 SELECT partition_column_id('partcol_tbl'::regclass);
-ERROR:  relation needs to be a hash distributed table
+ERROR:  table needs to be hash distributed
 SET client_min_messages TO WARNING;
 DROP SCHEMA null_dist_key_udfs CASCADE;
