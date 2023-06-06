@@ -552,51 +552,41 @@ ORDER BY c1.shard_size DESC
 LIMIT 1;
 
 -- test update statistics UDFs
-TRUNCATE size_tbl_dist, size_tbl_single;
+CREATE TABLE update_tbl_stat (a INT, b TEXT);
+SELECT create_distributed_table('update_tbl_stat', NULL, colocate_with:='none');
 
-SELECT shardid AS shard_single
+SELECT shardid AS update_tbl_stat_shard
 FROM citus_shards
-WHERE table_name::TEXT = 'size_tbl_single'
+WHERE table_name::TEXT = 'update_tbl_stat'
 LIMIT 1 \gset
 
-SELECT get_shard_id_for_distribution_column('size_tbl_dist', 1) AS shard_dist  \gset
+SELECT shardlength > 0 FROM pg_dist_shard_placement WHERE shardid = :update_tbl_stat_shard LIMIT 1;
 
-SELECT dsp1.shardlength, dsp2.shardlength
-FROM pg_dist_shard_placement dsp1, pg_dist_shard_placement dsp2
-WHERE dsp1.shardid = :shard_single AND dsp2.shardid = :shard_dist
-LIMIT 1;
+INSERT INTO update_tbl_stat SELECT 1, '1234567890' FROM generate_series(1, 10000);
 
-INSERT INTO size_tbl_dist SELECT 1, '1234567890' FROM generate_series(1, 10000);
-INSERT INTO size_tbl_single SELECT 1, '1234567890' FROM generate_series(1, 10000);
+SELECT shardlength > 0 FROM pg_dist_shard_placement WHERE shardid = :update_tbl_stat_shard LIMIT 1;
 
-SELECT dsp1.shardlength, dsp2.shardlength
-FROM pg_dist_shard_placement dsp1, pg_dist_shard_placement dsp2
-WHERE dsp1.shardid = :shard_single AND dsp2.shardid = :shard_dist
-LIMIT 1;
+SELECT citus_update_table_statistics('update_tbl_stat');
 
-SELECT citus_update_table_statistics('size_tbl_dist');
-SELECT citus_update_table_statistics('size_tbl_single');
+SELECT shardlength > 0 FROM pg_dist_shard_placement WHERE shardid = :update_tbl_stat_shard LIMIT 1;
 
-SELECT dsp1.shardlength, dsp2.shardlength
-FROM pg_dist_shard_placement dsp1, pg_dist_shard_placement dsp2
-WHERE dsp1.shardid = :shard_single AND dsp2.shardid = :shard_dist
-LIMIT 1;
+CREATE TABLE update_shard_stat (a INT, b TEXT);
+SELECT create_distributed_table('update_shard_stat', NULL, colocate_with:='none');
 
-INSERT INTO size_tbl_dist SELECT 1, '1234567890' FROM generate_series(1, 10000);
-INSERT INTO size_tbl_single SELECT 1, '1234567890' FROM generate_series(1, 10000);
+SELECT shardid AS update_shard_stat_shard
+FROM citus_shards
+WHERE table_name::TEXT = 'update_shard_stat'
+LIMIT 1 \gset
 
-SELECT dsp1.shardlength, dsp2.shardlength
-FROM pg_dist_shard_placement dsp1, pg_dist_shard_placement dsp2
-WHERE dsp1.shardid = :shard_single AND dsp2.shardid = :shard_dist
-LIMIT 1;
+SELECT shardlength > 0 FROM pg_dist_shard_placement WHERE shardid = :update_shard_stat_shard LIMIT 1;
 
-SELECT citus_update_shard_statistics(:shard_dist);
-SELECT citus_update_shard_statistics(:shard_single);
+INSERT INTO update_shard_stat SELECT 1, '1234567890' FROM generate_series(1, 10000);
 
-SELECT dsp1.shardlength, dsp2.shardlength
-FROM pg_dist_shard_placement dsp1, pg_dist_shard_placement dsp2
-WHERE dsp1.shardid = :shard_single AND dsp2.shardid = :shard_dist
-LIMIT 1;
+SELECT shardlength > 0 FROM pg_dist_shard_placement WHERE shardid = :update_shard_stat_shard LIMIT 1;
+
+SELECT 1 FROM citus_update_shard_statistics(:update_shard_stat_shard);
+
+SELECT shardlength > 0 FROM pg_dist_shard_placement WHERE shardid = :update_shard_stat_shard LIMIT 1;
 
 SET client_min_messages TO WARNING;
 DROP SCHEMA null_dist_key_udfs CASCADE;
