@@ -154,7 +154,7 @@ static DeferredErrorMessage * DeferErrorIfUnsupportedRouterPlannableSelectQuery(
 static DeferredErrorMessage * ErrorIfQueryHasUnroutableModifyingCTE(Query *queryTree);
 #if PG_VERSION_NUM >= PG_VERSION_14
 static DeferredErrorMessage * ErrorIfQueryHasCTEWithSearchClause(Query *queryTree);
-static bool ContainsSearchClauseWalker(Node *node);
+static bool ContainsSearchClauseWalker(Node *node, void *context);
 #endif
 static bool SelectsFromDistributedTable(List *rangeTableList, Query *query);
 static ShardPlacement * CreateDummyPlacement(bool hasLocalRelation);
@@ -3929,7 +3929,7 @@ ErrorIfQueryHasUnroutableModifyingCTE(Query *queryTree)
 static DeferredErrorMessage *
 ErrorIfQueryHasCTEWithSearchClause(Query *queryTree)
 {
-	if (ContainsSearchClauseWalker((Node *) queryTree))
+	if (ContainsSearchClauseWalker((Node *) queryTree, NULL))
 	{
 		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
 							 "CTEs with search clauses are not supported",
@@ -3944,7 +3944,7 @@ ErrorIfQueryHasCTEWithSearchClause(Query *queryTree)
  * CommonTableExprs with search clause
  */
 static bool
-ContainsSearchClauseWalker(Node *node)
+ContainsSearchClauseWalker(Node *node, void *context)
 {
 	if (node == NULL)
 	{
