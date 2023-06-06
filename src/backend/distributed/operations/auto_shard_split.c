@@ -55,29 +55,27 @@
 #define MAX_SHARD_SIZE  20000
 PG_FUNCTION_INFO_V1(citus_auto_shard_split_start); 
 
-const char* GetSplitQuery(int64 shardminvalue , int64 shardmaxvalue , int64 nodeid , int64 shardid){
+StringInfo GetSplitQuery(int64 shardminvalue , int64 shardmaxvalue , int64 nodeid , int64 shardid){
 
-    char* query = NULL;
-    int64 query_length =0;
-
-    int64 midpoint = (shardminvalue + ((shardmaxvalue-shardminvalue)>>1));
-    query_length = snprintf(NULL, 0 , "SELECT citus_split_shard_by_split_points(%ld, ARRAY['%ld'], ARRAY[%ld,%ld], 'block_writes')",
-             shardid, midpoint, nodeid, nodeid);
-    query = (char*)palloc((query_length + 1) * sizeof(char));
-
-    snprintf(query, query_length + 1, "SELECT citus_split_shard_by_split_points(%ld, ARRAY['%ld'], ARRAY[%ld,%ld], 'block_writes')",
-             shardid, midpoint, nodeid, nodeid);
-
-    return query ;
+    int64 midpoint = shardminvalue + ((shardmaxvalue - shardminvalue) >> 1);
+    StringInfo query = makeStringInfo();
+    appendStringInfo(query,"SELECT citus_split_shard_by_split_points(%ld, ARRAY['%ld'], ARRAY[%ld, %ld], 'block_writes')",
+        shardid, midpoint, nodeid, nodeid);      
+    return query;
 
 }
 
 
-void Citus_get_shard_data(){
+void CitusGetShardData(){
     
 
     StringInfo query = makeStringInfo();
     bool isnull;
+
+    /* This query is written to group the shards on the basis of colocation id and shardminvalue and get the shards with maximum shardsize
+     which is greater than a threshold . So for that first pg_dist_shard and citus_shards are joined followed by the joining of pg_dist_node
+     and citus_shards and finally joined by the table obtained by the grouping of colocation id and shardminvalue and shardsize exceeding the threshold.*/
+
     appendStringInfoString(
 		query,
 		" SELECT cs.shardid,pd.shardminvalue,pd.shardmaxvalue,cs.shard_size,pn.nodeid"
@@ -91,10 +89,10 @@ void Citus_get_shard_data(){
 
     );
 
-    if(SPI_connect()!=SPI_OK_CONNECT){
+    if(SPI_connect() != SPI_OK_CONNECT){
         elog(ERROR,"SPI_connect to the query failed");
     }
-    if(SPI_exec(query->data,0)!=SPI_OK_SELECT){
+    if(SPI_exec(query->data,0) != SPI_OK_SELECT){
         elog(ERROR,"SPI_exec for the execution failed");
     }
 
@@ -131,10 +129,14 @@ void Citus_get_shard_data(){
 
         
 	}
+
+    SPI_freetuptable(tupletable);
+
     for (int rowIndex = 0; rowIndex < rowCount; rowIndex++)
-    {
-        char *splitquery = GetSplitQuery(shardInfo[rowIndex][3],shardInfo[rowIndex][4],shardInfo[rowIndex][2],shardInfo[rowIndex][0]);
-        ereport(LOG, (errmsg(splitquery))); 
+    {   
+        StringInfo splitquery = NULL;
+        splitquery = GetSplitQuery(shardInfo[rowIndex][3],shardInfo[rowIndex][4],shardInfo[rowIndex][2],shardInfo[rowIndex][0]);
+        ereport(LOG, (errmsg(splitquery->data))); 
         StringInfoData buf = { 0 };
 	    initStringInfo(&buf);
         appendStringInfo(&buf, splitquery);
@@ -145,16 +147,14 @@ void Citus_get_shard_data(){
         
     }
 
-    SPI_freetuptable(tupletable);
+   
     SPI_finish();
-    
-    
     
 }
 
 Datum
 citus_auto_shard_split_start(PG_FUNCTION_ARGS){
-    Citus_get_shard_data();
+    CitusGetShardData();
     PG_RETURN_VOID();
 
 }
