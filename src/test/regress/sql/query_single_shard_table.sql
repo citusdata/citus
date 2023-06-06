@@ -109,6 +109,38 @@ SELECT create_distributed_table('range_table', 'a', 'range');
 CALL public.create_range_partitioned_shards('range_table', '{"0","25"}','{"24","49"}');
 INSERT INTO range_table VALUES (0, 1), (1, 2), (2, 3), (3, 4), (4, 5), (5, 6), (6, 50);
 
+\set users_table_data_file :abs_srcdir '/data/users_table.data'
+\set events_table_data_file :abs_srcdir '/data/events_table.data'
+
+CREATE TABLE users_table (user_id int, time timestamp, value_1 int, value_2 int, value_3 float, value_4 bigint);
+SELECT create_distributed_table('users_table', null, colocate_with=>'none');
+\set client_side_copy_command '\\copy users_table FROM ' :'users_table_data_file' ' WITH CSV;'
+:client_side_copy_command
+
+CREATE TABLE non_colocated_users_table (id int, value int);
+SELECT create_distributed_table('non_colocated_users_table', null, colocate_with => 'none');
+INSERT INTO non_colocated_users_table (id, value) VALUES(1, 2),(2, 3),(3,4);
+
+CREATE TABLE colocated_events_table (user_id int, time timestamp, event_type int, value_2 int, value_3 float, value_4 bigint);
+SELECT create_distributed_table('colocated_events_table', null, colocate_with=>'users_table');
+\set client_side_copy_command '\\copy colocated_events_table FROM ' :'events_table_data_file' ' WITH CSV;'
+:client_side_copy_command
+
+CREATE TABLE non_colocated_events_table (user_id int, time timestamp, event_type int, value_2 int, value_3 float, value_4 bigint);
+SELECT create_distributed_table('non_colocated_events_table', null, colocate_with=>'none');
+\set client_side_copy_command '\\copy non_colocated_events_table FROM ' :'events_table_data_file' ' WITH CSV;'
+:client_side_copy_command
+
+CREATE TABLE users_table_local AS SELECT * FROM users_table;
+
+CREATE TABLE colocated_users_table (id int, value int);
+SELECT create_distributed_table('colocated_users_table', null, colocate_with => 'users_table');
+INSERT INTO colocated_users_table (id, value) VALUES(1, 2),(2, 3),(3,4);
+
+CREATE FUNCTION func() RETURNS TABLE (id int, value int) AS $$
+	SELECT 1, 2
+$$ LANGUAGE SQL;
+
 SET client_min_messages to DEBUG2;
 
 -- simple insert
@@ -197,15 +229,12 @@ WHERE t1.b NOT IN (
 -- non-colocated inner joins between single-shard tables
 
 SET client_min_messages to DEBUG1;
+SET citus.enable_repartition_joins TO ON;
 
 SELECT * FROM nullkey_c1_t1 JOIN nullkey_c2_t1 USING(a) ORDER BY 1,2,3;
 
-SELECT COUNT(*) FROM nullkey_c1_t1 t1
-JOIN LATERAL (
-    SELECT * FROM nullkey_c2_t2 t2 WHERE t2.b > t1.a
-) q USING(a);
-
-SET citus.enable_repartition_joins TO ON;
+SELECT * FROM (SELECT * FROM nullkey_c1_t1) nullkey_c1_t1 JOIN nullkey_c2_t1 USING(a) ORDER BY 1,2,3;
+SELECT * FROM nullkey_c2_t1 JOIN (SELECT * FROM nullkey_c1_t1) nullkey_c1_t1 USING(a) ORDER BY 1,2,3;
 
 SELECT COUNT(*) FROM nullkey_c1_t1 t1
 JOIN LATERAL (
@@ -213,7 +242,6 @@ JOIN LATERAL (
 ) q USING(a);
 
 SET citus.enable_repartition_joins TO OFF;
-
 SET client_min_messages to DEBUG2;
 
 -- non-colocated outer joins between single-shard tables
@@ -261,6 +289,25 @@ SET citus.enable_repartition_joins TO ON;
 SET client_min_messages TO DEBUG1;
 
 SELECT * FROM distributed_table d1 JOIN nullkey_c1_t1 USING(a) ORDER BY 1,2,3;
+
+SELECT * FROM (SELECT * FROM distributed_table) d1 JOIN nullkey_c1_t1 USING(a) ORDER BY 1,2,3;
+SELECT * FROM nullkey_c1_t1 JOIN (SELECT * FROM distributed_table) d1 USING(a) ORDER BY 1,2,3;
+SELECT * FROM distributed_table d1 JOIN (SELECT * FROM nullkey_c1_t1) nullkey_c1_t1 USING(a) ORDER BY 1,2,3;
+SELECT * FROM (SELECT * FROM nullkey_c1_t1) nullkey_c1_t1 JOIN distributed_table d1 USING(a) ORDER BY 1,2,3;
+
+-- test joins with non-colocated distributed tables, by using subqueries
+SELECT * FROM nullkey_c1_t1 t1 JOIN (SELECT * FROM distributed_table) t2 USING (a) JOIN (SELECT * FROM nullkey_c1_t2) t3 USING (a) ORDER BY 1,2,3,4 LIMIT 1;
+SELECT * FROM (SELECT * FROM nullkey_c1_t1) t1 JOIN nullkey_c2_t1 t2 USING (a) JOIN (SELECT * FROM nullkey_c1_t2) t3 USING (a) ORDER BY 1,2,3,4 LIMIT 1;
+SELECT * FROM distributed_table t1 JOIN (SELECT * FROM nullkey_c1_t1) t2 USING (a) JOIN (SELECT b as a FROM distributed_table) t3 USING (a) ORDER BY 1,2,3 LIMIT 1;
+SELECT * FROM (SELECT * FROM nullkey_c2_t1) t1 JOIN nullkey_c1_t1 t2 USING (a) JOIN (SELECT * FROM nullkey_c2_t1) t3 USING (a) ORDER BY 1,2,3,4 LIMIT 1;
+SELECT * FROM nullkey_c1_t1 t1 JOIN (SELECT * FROM distributed_table) t2 USING (a) JOIN (SELECT * FROM distributed_table) t3 USING (a) ORDER BY 1,2,3,4 LIMIT 1;
+SELECT * FROM (SELECT * FROM nullkey_c1_t1) t1 JOIN nullkey_c2_t1 t2 USING (a) JOIN (SELECT * FROM nullkey_c2_t1) t3 USING (a) ORDER BY 1,2,3,4 LIMIT 1;
+SELECT * FROM distributed_table t1 JOIN (SELECT * FROM nullkey_c1_t1) t2 USING (a) JOIN (SELECT * FROM nullkey_c1_t1) t3 USING (a) ORDER BY 1,2,3,4 LIMIT 1;
+SELECT * FROM (SELECT * FROM nullkey_c2_t1) t1 JOIN nullkey_c1_t1 t2 USING (a) JOIN (SELECT * FROM nullkey_c1_t1) t3 USING (a) ORDER BY 1,2,3,4 LIMIT 1;
+SELECT * FROM nullkey_c1_t1 t1 JOIN (SELECT * FROM nullkey_c1_t1) t2 USING (a) JOIN distributed_table t3 USING (a) ORDER BY 1,2,3,4 LIMIT 1;
+SELECT * FROM nullkey_c1_t1 t1 JOIN nullkey_c1_t1 t2 USING (a) JOIN nullkey_c2_t1 t3 USING (a) ORDER BY 1,2,3,4 LIMIT 1;
+SELECT * FROM (SELECT * FROM distributed_table) t1 JOIN distributed_table t2 USING (a) JOIN (SELECT * FROM nullkey_c1_t1) t3 USING (a) ORDER BY 1,2,3,4 LIMIT 1;
+SELECT * FROM (SELECT * FROM nullkey_c2_t1) t1 JOIN nullkey_c2_t1 t2 USING (a) JOIN (SELECT * FROM nullkey_c1_t1) t3 USING (a) ORDER BY 1,2,3,4 LIMIT 1;
 
 SELECT COUNT(*) FROM nullkey_c1_t1 t1
 JOIN LATERAL (
@@ -622,6 +669,33 @@ SELECT
 -- subquery in SELECT clause
 SELECT a.title AS name, (SELECT a2.id FROM articles_hash a2 WHERE a.id = a2.id  LIMIT 1)
 						 AS special_price FROM articles_hash a
+ORDER BY 1,2;
+
+-- test having clause
+SELECT COUNT(*), b FROM nullkey_c1_t1 GROUP BY 2
+HAVING (SELECT COUNT(*) FROM nullkey_c1_t2) > 0
+ORDER BY 1,2;
+
+SELECT COUNT(*), b FROM nullkey_c1_t1 GROUP BY 2
+HAVING (SELECT COUNT(*) FROM nullkey_c2_t1) > 0
+ORDER BY 1,2;
+
+SELECT COUNT(*), b FROM nullkey_c1_t1 GROUP BY 2
+HAVING (SELECT COUNT(*) FROM distributed_table) > 0
+ORDER BY 1,2;
+
+SELECT COUNT(*), b FROM nullkey_c1_t1 t4 GROUP BY 2
+HAVING (
+    SELECT COUNT(*) FROM nullkey_c1_t1 t1 JOIN (SELECT * FROM nullkey_c1_t2) t2 USING (a) JOIN (SELECT * FROM nullkey_c1_t2) t3 USING (a)
+    WHERE t2.b > t4.b
+) > 5
+ORDER BY 1,2;
+
+SELECT COUNT(*), b FROM distributed_table t4 GROUP BY 2
+HAVING (
+    SELECT COUNT(*) FROM nullkey_c1_t1 t1 JOIN (SELECT * FROM distributed_table) t2 USING (a) JOIN (SELECT * FROM nullkey_c1_t2) t3 USING (a)
+    WHERE t2.b > t4.b
+) > 5
 ORDER BY 1,2;
 
 -- test prepared statements
@@ -1215,6 +1289,207 @@ WINDOW
 ORDER BY
 	rnk DESC, 1 DESC
 LIMIT 10;
+
+-- more tests with ctes and subqueries
+
+-- CTEs are recursively planned, and subquery foo is also recursively planned.
+-- Then the final plan becomes a router plan.
+WITH cte AS MATERIALIZED (
+	WITH local_cte AS MATERIALIZED (
+		SELECT * FROM users_table_local
+	),
+	dist_cte AS MATERIALIZED (
+		SELECT user_id FROM colocated_events_table
+	)
+	SELECT dist_cte.user_id FROM local_cte JOIN dist_cte ON dist_cte.user_id=local_cte.user_id
+)
+SELECT count(*)
+FROM cte,
+	 (
+        SELECT DISTINCT users_table.user_id
+        FROM users_table, colocated_events_table
+        WHERE users_table.user_id = colocated_events_table.user_id AND event_type IN (1,2,3,4)
+        ORDER BY 1 DESC LIMIT 5
+    ) AS foo
+WHERE foo.user_id = cte.user_id;
+
+-- CTEs are colocated, route entire query.
+WITH cte1 AS (
+   SELECT * FROM users_table WHERE user_id = 1
+), cte2 AS (
+   SELECT * FROM colocated_events_table WHERE user_id = 1
+)
+SELECT cte1.user_id, cte1.value_1, cte2.user_id, cte2.event_type
+FROM cte1, cte2
+ORDER BY cte1.user_id, cte1.value_1, cte2.user_id, cte2.event_type
+LIMIT 5;
+
+-- CTEs aren't colocated, CTEs become intermediate results.
+WITH cte1 AS MATERIALIZED (
+   SELECT * FROM users_table WHERE user_id = 1
+), cte2 AS MATERIALIZED (
+   SELECT * FROM non_colocated_events_table WHERE user_id = 6
+)
+SELECT cte1.user_id, cte1.value_1, cte2.user_id, cte2.user_id
+FROM cte1, cte2
+ORDER BY cte1.user_id, cte1.value_1, cte2.user_id, cte2.event_type
+LIMIT 5;
+
+-- users_table & colocated_users_table are colocated, route entire query.
+WITH cte1 AS (
+   SELECT * FROM users_table WHERE user_id = 1
+)
+UPDATE colocated_users_table dt SET value = cte1.value_1
+FROM cte1 WHERE cte1.user_id = dt.id AND dt.id = 1;
+
+-- users_table & non_colocated_users_table are not colocated, cte is recursive planned.
+WITH cte1 AS (
+   SELECT * FROM users_table WHERE user_id = 1
+)
+UPDATE non_colocated_users_table dt SET value = cte1.value_1
+FROM cte1 WHERE cte1.user_id = dt.id AND dt.id = 1;
+
+-- All relations are not colocated, CTEs become intermediate results.
+WITH cte1 AS MATERIALIZED (
+   SELECT * FROM users_table WHERE user_id = 1
+), cte2 AS MATERIALIZED (
+   SELECT * FROM non_colocated_events_table WHERE user_id = 6
+)
+UPDATE non_colocated_users_table dt SET value = cte1.value_1 + cte2.event_type
+FROM cte1, cte2 WHERE cte1.user_id = dt.id AND dt.id = 1;
+
+-- Volatile function calls should not be routed.
+WITH cte1 AS MATERIALIZED (SELECT id, value FROM func())
+UPDATE colocated_users_table dt SET value = cte1.value
+FROM cte1 WHERE dt.id = 1;
+
+-- CTEs are recursively planned, and subquery foo is also recursively planned.
+WITH cte AS MATERIALIZED (
+	WITH local_cte AS MATERIALIZED (
+		SELECT * FROM users_table_local
+	),
+	dist_cte AS MATERIALIZED (
+		SELECT user_id FROM colocated_events_table
+	)
+	SELECT dist_cte.user_id FROM local_cte JOIN dist_cte ON dist_cte.user_id=local_cte.user_id
+)
+SELECT count(*)
+FROM
+	cte,
+	  (
+        SELECT DISTINCT users_table.user_id
+        FROM users_table, colocated_events_table
+        WHERE users_table.user_id = colocated_events_table.user_id AND event_type IN (1,2,3,4)
+        ORDER BY 1 DESC LIMIT 5
+     ) AS foo, colocated_events_table
+WHERE foo.user_id = cte.user_id AND colocated_events_table.user_id = cte.user_id;
+
+-- CTEs are replaced and subquery in WHERE is also replaced.
+WITH cte AS MATERIALIZED (
+	WITH local_cte AS MATERIALIZED (
+		SELECT * FROM users_table_local
+	),
+	dist_cte AS MATERIALIZED (
+		SELECT user_id FROM colocated_events_table
+	)
+	SELECT dist_cte.user_id FROM local_cte JOIN dist_cte ON dist_cte.user_id=local_cte.user_id
+)
+SELECT DISTINCT cte.user_id
+FROM users_table, cte
+WHERE users_table.user_id = cte.user_id AND
+	  users_table.user_id IN (
+        SELECT DISTINCT value_2 FROM users_table WHERE value_1 >= 1 AND value_1 <= 20 ORDER BY 1 LIMIT 5
+      )
+ORDER BY 1 DESC;
+
+-- Subquery in WHERE clause is planned recursively due to the recurring table
+-- in FROM clause.
+WITH cte AS MATERIALIZED (
+	WITH local_cte AS MATERIALIZED (
+		SELECT * FROM users_table_local
+	),
+	dist_cte AS MATERIALIZED (
+		SELECT user_id FROM colocated_events_table
+	)
+	SELECT dist_cte.user_id FROM local_cte JOIN dist_cte ON dist_cte.user_id=local_cte.user_id
+)
+SELECT DISTINCT cte.user_id
+FROM cte
+WHERE cte.user_id IN (SELECT DISTINCT user_id FROM users_table WHERE value_1 >= 1 AND value_1 <= 20)
+ORDER BY 1 DESC;
+
+-- CTEs inside a subquery and the final query becomes a router
+-- query.
+SELECT
+   user_id
+FROM
+    (
+        WITH cte AS MATERIALIZED (
+	        SELECT DISTINCT users_table.user_id
+	        FROM users_table, colocated_events_table
+	        WHERE users_table.user_id = colocated_events_table.user_id AND
+	              event_type IN (1,2,3,4)
+	    )
+        SELECT * FROM cte ORDER BY 1 DESC
+     ) AS foo
+ORDER BY 1 DESC;
+
+-- CTEs inside a deeper subquery and also the subquery that contains the CTE are
+-- recursively planned.
+SELECT DISTINCT bar.user_id
+FROM
+    (
+        WITH cte AS MATERIALIZED (
+	        SELECT DISTINCT users_table.user_id
+	        FROM users_table, colocated_events_table
+	        WHERE users_table.user_id = colocated_events_table.user_id AND event_type IN (1,2,3,4)
+	    )
+        SELECT * FROM cte ORDER BY 1 DESC
+    ) AS foo,
+    (
+	    SELECT users_table.user_id, some_events.event_type
+	    FROM
+            users_table,
+	     	(
+	     		WITH cte AS MATERIALIZED (
+			        SELECT event_type, users_table.user_id
+			        FROM users_table, colocated_events_table
+			        WHERE users_table.user_id = colocated_events_table.user_id AND value_1 IN (1,2)
+			     ) SELECT * FROM cte ORDER BY 1 DESC
+	     	) AS some_events
+	     WHERE users_table.user_id = some_events.user_id AND event_type IN (1,2,3,4)
+	     ORDER BY 2,1 LIMIT 2
+    ) AS bar
+WHERE foo.user_id = bar.user_id
+ORDER BY 1 DESC LIMIT 5;
+
+-- Recursively plan subqueries inside the CTEs that contains LIMIT and OFFSET.
+WITH cte AS MATERIALIZED (
+	WITH local_cte AS MATERIALIZED (
+		SELECT * FROM users_table_local
+	),
+	dist_cte AS MATERIALIZED (
+		SELECT
+			user_id
+		FROM
+			colocated_events_table,
+			(SELECT DISTINCT value_2 FROM users_table OFFSET 0) as foo
+		WHERE
+			colocated_events_table.user_id = foo.value_2 AND
+			colocated_events_table.user_id IN (SELECT DISTINCT value_1 FROM users_table ORDER BY 1 LIMIT 3)
+	)
+	SELECT dist_cte.user_id FROM local_cte JOIN dist_cte ON dist_cte.user_id=local_cte.user_id
+)
+SELECT count(*)
+FROM
+	cte,
+	(
+        SELECT DISTINCT users_table.user_id
+        FROM users_table, colocated_events_table
+        WHERE users_table.user_id = colocated_events_table.user_id AND event_type IN (1,2,3,4)
+        ORDER BY 1 DESC LIMIT 5
+     ) AS foo
+WHERE foo.user_id = cte.user_id;
 
 SET client_min_messages TO ERROR;
 DROP SCHEMA query_single_shard_table CASCADE;
