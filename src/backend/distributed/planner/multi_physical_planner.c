@@ -2440,8 +2440,9 @@ ErrorIfUnsupportedShardDistribution(Query *query)
 		{
 			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 							errmsg("cannot push down this subquery"),
-							errdetail("Shards of relations in subquery need to "
-									  "have 1-to-1 shard partitioning")));
+							errdetail("%s and %s are not colocated",
+									  get_rel_name(firstTableRelationId),
+									  get_rel_name(currentRelationId))));
 		}
 	}
 }

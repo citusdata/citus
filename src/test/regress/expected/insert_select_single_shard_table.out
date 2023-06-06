@@ -172,7 +172,7 @@ DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition 
 DETAIL:  The target table's partition column should correspond to a partition column in the subquery.
 DEBUG:  router planner does not support queries that reference non-colocated distributed tables
 ERROR:  cannot push down this subquery
-DETAIL:  Shards of relations in subquery need to have 1-to-1 shard partitioning
+DETAIL:  nullkey_c1_t2 and nullkey_c2_t1 are not colocated
 INSERT INTO distributed_table_c1_t1 SELECT * FROM nullkey_c1_t1 UNION SELECT * FROM nullkey_c2_t1;
 DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition columns in the source table and subquery do not match
 DETAIL:  The target table's partition column should correspond to a partition column in the subquery.
@@ -295,7 +295,7 @@ INSERT INTO reference_table SELECT nullkey_c1_t2.a, nullkey_c1_t2.b FROM nullkey
 DEBUG:  only reference tables may be queried when targeting a reference table with distributed INSERT ... SELECT
 DEBUG:  router planner does not support queries that reference non-colocated distributed tables
 ERROR:  cannot push down this subquery
-DETAIL:  Shards of relations in subquery need to have 1-to-1 shard partitioning
+DETAIL:  nullkey_c1_t2 and nullkey_c2_t1 are not colocated
 -- use a distributed table
 SET client_min_messages TO DEBUG1;
 SET citus.enable_repartition_joins TO ON;
