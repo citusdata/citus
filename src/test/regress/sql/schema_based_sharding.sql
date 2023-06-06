@@ -945,8 +945,21 @@ ALTER SYSTEM RESET citus.enable_schema_based_sharding;
 SELECT pg_reload_conf();
 
 \c - - - :master_port
+SET search_path TO regular_schema;
+
+CREATE TABLE type_sing(a INT);
+SELECT create_distributed_table('type_sing', NULL, colocate_with:='none');
+
+SET citus.enable_schema_based_sharding TO ON;
+CREATE SCHEMA type_sch;
+CREATE TABLE type_sch.tbl (a INT);
+
+SELECT table_name, citus_table_type FROM public.citus_tables WHERE table_name::text LIKE 'type_%';
+SELECT table_name, citus_table_type FROM citus_shards WHERE table_name::text LIKE 'type_%' AND nodeport IN (:worker_1_port, :worker_2_port);
+
+RESET citus.enable_schema_based_sharding;
 
 SET client_min_messages TO WARNING;
-DROP SCHEMA regular_schema, tenant_3, tenant_5, tenant_7, tenant_6 CASCADE;
+DROP SCHEMA regular_schema, tenant_3, tenant_5, tenant_7, tenant_6, type_sch CASCADE;
 
 SELECT citus_remove_node('localhost', :master_port);
