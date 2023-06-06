@@ -1406,7 +1406,7 @@ SELECT table_name, citus_table_type FROM citus_shards WHERE table_name::text LIK
 
 RESET citus.enable_schema_based_sharding;
 SET client_min_messages TO WARNING;
-DROP SCHEMA regular_schema, tenant_3, tenant_5, tenant_7, tenant_6 CASCADE;
+DROP SCHEMA regular_schema, tenant_3, tenant_5, tenant_7, tenant_6, type_sch CASCADE;
 SELECT citus_remove_node('localhost', :master_port);
  citus_remove_node
 ---------------------------------------------------------------------
