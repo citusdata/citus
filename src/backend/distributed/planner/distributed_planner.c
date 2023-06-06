@@ -1025,17 +1025,6 @@ CreateDistributedPlan(uint64 planId, bool allowRecursivePlanning, Query *origina
 	{
 		return distributedPlan;
 	}
-	else if (ContainsSingleShardTable(originalQuery))
-	{
-		/*
-		 * We only support router queries if the query contains reference to
-		 * a single-shard table. This temporary restriction will be removed
-		 * once we support recursive planning for the queries that reference
-		 * single-shard tables.
-		 */
-		WrapRouterErrorForSingleShardTable(distributedPlan->planningError);
-		RaiseDeferredError(distributedPlan->planningError, ERROR);
-	}
 	else
 	{
 		RaiseDeferredError(distributedPlan->planningError, DEBUG2);

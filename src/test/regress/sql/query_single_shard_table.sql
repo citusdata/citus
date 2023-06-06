@@ -155,9 +155,13 @@ SET citus.enable_non_colocated_router_query_pushdown TO ON;
 SELECT COUNT(*) FROM nullkey_c1_t1 JOIN nullkey_c3_t1 USING(a);
 
 SET citus.enable_non_colocated_router_query_pushdown TO OFF;
+SET citus.enable_repartition_joins TO ON;
+SET client_min_messages TO DEBUG1;
 
 SELECT COUNT(*) FROM nullkey_c1_t1 JOIN nullkey_c3_t1 USING(a);
 
+SET client_min_messages TO DEBUG2;
+SET citus.enable_repartition_joins TO OFF;
 RESET citus.enable_non_colocated_router_query_pushdown;
 
 -- colocated join between single-shard tables
@@ -191,12 +195,26 @@ WHERE t1.b NOT IN (
 );
 
 -- non-colocated inner joins between single-shard tables
+
+SET client_min_messages to DEBUG1;
+
 SELECT * FROM nullkey_c1_t1 JOIN nullkey_c2_t1 USING(a) ORDER BY 1,2,3;
 
 SELECT COUNT(*) FROM nullkey_c1_t1 t1
 JOIN LATERAL (
     SELECT * FROM nullkey_c2_t2 t2 WHERE t2.b > t1.a
 ) q USING(a);
+
+SET citus.enable_repartition_joins TO ON;
+
+SELECT COUNT(*) FROM nullkey_c1_t1 t1
+JOIN LATERAL (
+    SELECT * FROM nullkey_c2_t2 t2 WHERE t2.b > t1.a
+) q USING(a);
+
+SET citus.enable_repartition_joins TO OFF;
+
+SET client_min_messages to DEBUG2;
 
 -- non-colocated outer joins between single-shard tables
 SELECT * FROM nullkey_c1_t1 LEFT JOIN nullkey_c2_t2 USING(a) ORDER BY 1,2,3 LIMIT 4;
@@ -234,11 +252,15 @@ WITH cte_1 AS
 SELECT COUNT(*) FROM cte_1;
 
 -- join with postgres / citus local tables
-SELECT * FROM nullkey_c1_t1 JOIN postgres_local_table USING(a);
-SELECT * FROM nullkey_c1_t1 JOIN citus_local_table USING(a);
+SELECT * FROM nullkey_c1_t1 JOIN postgres_local_table USING(a) ORDER BY 1,2,3;
+SELECT * FROM nullkey_c1_t1 JOIN citus_local_table USING(a) ORDER BY 1,2,3;
 
 -- join with a distributed table
-SELECT * FROM distributed_table d1 JOIN nullkey_c1_t1 USING(a);
+
+SET citus.enable_repartition_joins TO ON;
+SET client_min_messages TO DEBUG1;
+
+SELECT * FROM distributed_table d1 JOIN nullkey_c1_t1 USING(a) ORDER BY 1,2,3;
 
 SELECT COUNT(*) FROM nullkey_c1_t1 t1
 JOIN LATERAL (
@@ -249,6 +271,9 @@ SELECT COUNT(*) FROM distributed_table t1
 JOIN LATERAL (
     SELECT * FROM nullkey_c1_t1 t2 WHERE t2.b > t1.a
 ) q USING(a);
+
+SET client_min_messages TO DEBUG2;
+SET citus.enable_repartition_joins TO OFF;
 
 -- outer joins with different table types
 SELECT COUNT(*) FROM nullkey_c1_t1 LEFT JOIN reference_table USING(a);
@@ -264,17 +289,27 @@ SELECT COUNT(*) FROM nullkey_c1_t1 FULL JOIN citus_local_table USING(a);
 SELECT COUNT(*) FROM nullkey_c1_t1 FULL JOIN postgres_local_table USING(a);
 SELECT COUNT(*) FROM nullkey_c1_t1 FULL JOIN reference_table USING(a);
 
+SET citus.enable_repartition_joins TO ON;
+SET client_min_messages TO DEBUG1;
+
 SELECT COUNT(*) FROM nullkey_c1_t1 JOIN append_table USING(a);
 SELECT COUNT(*) FROM nullkey_c1_t1 JOIN range_table USING(a);
+
+SET client_min_messages TO DEBUG2;
+SET citus.enable_repartition_joins TO OFF;
 
 SET citus.enable_non_colocated_router_query_pushdown TO ON;
 
 SELECT COUNT(*) FROM nullkey_c1_t1 JOIN range_table USING(a) WHERE range_table.a = 20;
 
 SET citus.enable_non_colocated_router_query_pushdown TO OFF;
+SET citus.enable_repartition_joins TO ON;
+SET client_min_messages TO DEBUG1;
 
 SELECT COUNT(*) FROM nullkey_c1_t1 JOIN range_table USING(a) WHERE range_table.a = 20;
 
+SET client_min_messages TO DEBUG2;
+SET citus.enable_repartition_joins TO OFF;
 RESET citus.enable_non_colocated_router_query_pushdown;
 
 -- lateral / semi / anti joins with different table types
@@ -412,6 +447,17 @@ JOIN LATERAL (
     SELECT * FROM citus_local_table t2 WHERE t2.b > t1.a
 ) q USING(a);
 
+-- The following and a few other tests in this file unnecessarily go through
+-- recursive planning. This is because we recursive plan distributed tables
+-- when they are referred in the inner side of an outer join, if the outer
+-- side is a recurring rel. In future, we can optimize that such that we
+-- can skip recursively planning the single-shard table because such a join
+-- wouldn't result in returning recurring tuples.
+--
+-- And specifically for the tests that contains a sublink (as below), things
+-- get even more interesting. We try to recursively plan the single-shard
+-- table but we cannot do so due to the sublink. However, the final query
+-- can go through router planner and hence is supported.
 SELECT COUNT(*) FROM citus_local_table t1
 LEFT JOIN LATERAL (
     SELECT * FROM nullkey_c1_t1 t2 WHERE t2.b > t1.a

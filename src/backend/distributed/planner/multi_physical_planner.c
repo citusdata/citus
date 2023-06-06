@@ -2367,7 +2367,7 @@ ErrorIfUnsupportedShardDistribution(Query *query)
 	ListCell *relationIdCell = NULL;
 	uint32 relationIndex = 0;
 	uint32 rangeDistributedRelationCount = 0;
-	uint32 hashDistributedRelationCount = 0;
+	uint32 hashDistOrSingleShardRelCount = 0;
 	uint32 appendDistributedRelationCount = 0;
 
 	foreach(relationIdCell, relationIdList)
@@ -2379,9 +2379,10 @@ ErrorIfUnsupportedShardDistribution(Query *query)
 			nonReferenceRelations = lappend_oid(nonReferenceRelations,
 												relationId);
 		}
-		else if (IsCitusTableType(relationId, HASH_DISTRIBUTED))
+		else if (IsCitusTableType(relationId, HASH_DISTRIBUTED) ||
+				 IsCitusTableType(relationId, SINGLE_SHARD_DISTRIBUTED))
 		{
-			hashDistributedRelationCount++;
+			hashDistOrSingleShardRelCount++;
 			nonReferenceRelations = lappend_oid(nonReferenceRelations,
 												relationId);
 		}
@@ -2396,7 +2397,7 @@ ErrorIfUnsupportedShardDistribution(Query *query)
 		}
 	}
 
-	if ((rangeDistributedRelationCount > 0) && (hashDistributedRelationCount > 0))
+	if ((rangeDistributedRelationCount > 0) && (hashDistOrSingleShardRelCount > 0))
 	{
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 						errmsg("cannot push down this subquery"),
@@ -2410,7 +2411,7 @@ ErrorIfUnsupportedShardDistribution(Query *query)
 						errdetail("A query including both range and append "
 								  "partitioned relations are unsupported")));
 	}
-	else if ((appendDistributedRelationCount > 0) && (hashDistributedRelationCount > 0))
+	else if ((appendDistributedRelationCount > 0) && (hashDistOrSingleShardRelCount > 0))
 	{
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 						errmsg("cannot push down this subquery"),
