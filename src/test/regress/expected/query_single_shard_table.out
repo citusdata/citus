@@ -402,45 +402,50 @@ SET client_min_messages to DEBUG2;
 -- non-colocated outer joins between single-shard tables
 SELECT * FROM nullkey_c1_t1 LEFT JOIN nullkey_c2_t2 USING(a) ORDER BY 1,2,3 LIMIT 4;
 DEBUG:  router planner does not support queries that reference non-colocated distributed tables
-ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
+DEBUG:  push down of limit count: 4
+ERROR:  cannot push down this subquery
+DETAIL:  nullkey_c1_t1 and nullkey_c2_t2 are not colocated
 SELECT * FROM nullkey_c1_t1 FULL JOIN nullkey_c2_t2 USING(a) ORDER BY 1,2,3 LIMIT 4;
 DEBUG:  router planner does not support queries that reference non-colocated distributed tables
-ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
+DEBUG:  push down of limit count: 4
+ERROR:  cannot push down this subquery
+DETAIL:  nullkey_c1_t1 and nullkey_c2_t2 are not colocated
 SELECT * FROM nullkey_c1_t1 t1
 LEFT JOIN LATERAL (
     SELECT * FROM nullkey_c2_t2 t2 WHERE t2.b > t1.a
 ) q USING(a) ORDER BY 1,2,3 OFFSET 3 LIMIT 4;
 DEBUG:  router planner does not support queries that reference non-colocated distributed tables
-DEBUG:  skipping recursive planning for the subquery since it contains references to outer queries
-ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
+DEBUG:  push down of limit count: 7
+ERROR:  cannot push down this subquery
+DETAIL:  nullkey_c1_t1 and nullkey_c2_t2 are not colocated
 SELECT COUNT(*) FROM nullkey_c1_t1 t1
 LEFT JOIN LATERAL (
     SELECT * FROM nullkey_c2_t2 t2 WHERE t2.b > t1.a
 ) q USING(a);
 DEBUG:  router planner does not support queries that reference non-colocated distributed tables
-DEBUG:  skipping recursive planning for the subquery since it contains references to outer queries
-ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
+ERROR:  cannot push down this subquery
+DETAIL:  nullkey_c1_t1 and nullkey_c2_t2 are not colocated
 SELECT COUNT(*) FROM nullkey_c1_t1 t1
 WHERE EXISTS (
     SELECT * FROM nullkey_c2_t2 t2 WHERE t2.b > t1.a
 );
 DEBUG:  router planner does not support queries that reference non-colocated distributed tables
-DEBUG:  skipping recursive planning for the subquery since it contains references to outer queries
-ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
+ERROR:  cannot push down this subquery
+DETAIL:  nullkey_c2_t2 and nullkey_c1_t1 are not colocated
 SELECT COUNT(*) FROM nullkey_c1_t1 t1
 WHERE t1.b IN (
     SELECT b+1 FROM nullkey_c2_t2 t2 WHERE t2.b = t1.a
 );
 DEBUG:  found no worker with all shard placements
-DEBUG:  skipping recursive planning for the subquery since it contains references to outer queries
-ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
+ERROR:  cannot push down this subquery
+DETAIL:  nullkey_c2_t2 and nullkey_c1_t1 are not colocated
 SELECT COUNT(*) FROM nullkey_c1_t1 t1
 WHERE t1.b NOT IN (
     SELECT a FROM nullkey_c2_t2 t2 WHERE t2.b > t1.a
 );
 DEBUG:  found no worker with all shard placements
-DEBUG:  skipping recursive planning for the subquery since it contains references to outer queries
-ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
+ERROR:  cannot push down this subquery
+DETAIL:  nullkey_c2_t2 and nullkey_c1_t1 are not colocated
 -- join with a reference table
 SELECT COUNT(*) FROM nullkey_c1_t1, reference_table WHERE nullkey_c1_t1.a = reference_table.a;
 DEBUG:  Creating router plan

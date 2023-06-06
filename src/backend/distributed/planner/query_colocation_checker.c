@@ -253,12 +253,6 @@ SubqueryColocated(Query *subquery, ColocatedJoinChecker *checker)
 		return false;
 	}
 
-	if (!AllDistributedRelationsInRestrictionContextColocated(
-			unionedRelationRestrictionContext))
-	{
-		return false;
-	}
-
 	return true;
 }
 

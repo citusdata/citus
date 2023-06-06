@@ -101,7 +101,7 @@ struct RecursivePlanningContextInternal
 {
 	int level;
 	uint64 planId;
-	bool allDistKeysInQueryAreEqualAndColocated; /* used for some optimizations */
+	bool allDistributionKeysInQueryAreEqual; /* used for some optimizations */
 	List *subPlanList;
 	PlannerRestrictionContext *plannerRestrictionContext;
 };
@@ -230,10 +230,8 @@ GenerateSubplansForSubqueriesAndCTEs(uint64 planId, Query *originalQuery,
 	 * calculating this wouldn't help us at all, we should individually check
 	 * each each subquery and subquery joins among subqueries.
 	 */
-	context.allDistKeysInQueryAreEqualAndColocated =
-		AllDistributionKeysInQueryAreEqual(originalQuery, plannerRestrictionContext) &&
-		AllDistributedRelationsInRestrictionContextColocated(
-			plannerRestrictionContext->relationRestrictionContext);
+	context.allDistributionKeysInQueryAreEqual =
+		AllDistributionKeysInQueryAreEqual(originalQuery, plannerRestrictionContext);
 
 	DeferredErrorMessage *error = RecursivelyPlanSubqueriesAndCTEs(originalQuery,
 																   &context);
@@ -416,7 +414,7 @@ ShouldRecursivelyPlanNonColocatedSubqueries(Query *subquery,
 	 * If the input query already contains the equality, simply return since it is not
 	 * possible to find any non colocated subqueries.
 	 */
-	if (context->allDistKeysInQueryAreEqualAndColocated)
+	if (context->allDistributionKeysInQueryAreEqual)
 	{
 		return false;
 	}
@@ -446,13 +444,6 @@ ShouldRecursivelyPlanNonColocatedSubqueries(Query *subquery,
 	 */
 	if (!AllDistributionKeysInSubqueryAreEqual(subquery,
 											   context->plannerRestrictionContext))
-	{
-		return true;
-	}
-
-	if (!AllDistributedRelationsInSubqueryRestrictionContextColocated(
-			subquery,
-			context->plannerRestrictionContext->relationRestrictionContext))
 	{
 		return true;
 	}
@@ -1300,17 +1291,9 @@ ShouldRecursivelyPlanSubquery(Query *subquery, RecursivePlanningContext *context
 		 * subquery, we cannot push push it down and therefore we should try to
 		 * recursively plan it.
 		 */
-		if (!context->allDistKeysInQueryAreEqualAndColocated &&
+		if (!context->allDistributionKeysInQueryAreEqual &&
 			!AllDistributionKeysInSubqueryAreEqual(subquery,
 												   context->plannerRestrictionContext))
-		{
-			return true;
-		}
-
-		if (!context->allDistKeysInQueryAreEqualAndColocated &&
-			!AllDistributedRelationsInSubqueryRestrictionContextColocated(
-				subquery,
-				context->plannerRestrictionContext->relationRestrictionContext))
 		{
 			return true;
 		}
