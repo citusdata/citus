@@ -54,6 +54,13 @@ extern RelationRestrictionContext * FilterRelationRestrictionContext(
 	RelationRestrictionContext *relationRestrictionContext,
 	Relids
 	queryRteIdentities);
+extern bool AllDistributedRelationsInSubqueryRestrictionContextColocated(Query *subquery,
+																		 RelationRestrictionContext
+																		 *
+																		 relationRestrictionContext);
+extern bool AllDistributedRelationsInRestrictionContextColocated(
+	RelationRestrictionContext *
+	restrictionContext);
 extern bool AllDistributedRelationsInRTEListColocated(List *rangeTableEntryList);
 extern bool AllDistributedRelationsInListColocated(List *relationList);
 #endif /* RELATION_RESTRICTION_EQUIVALENCE_H */

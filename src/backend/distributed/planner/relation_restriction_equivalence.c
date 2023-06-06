@@ -151,9 +151,6 @@ static void ListConcatUniqueAttributeClassMemberLists(AttributeEquivalenceClass 
 													  secondClass);
 static Var * PartitionKeyForRTEIdentityInQuery(Query *query, int targetRTEIndex,
 											   Index *partitionKeyIndex);
-static bool AllDistributedRelationsInRestrictionContextColocated(
-	RelationRestrictionContext *
-	restrictionContext);
 static bool IsNotSafeRestrictionToRecursivelyPlan(Node *node);
 static bool HasPlaceHolderVar(Node *node);
 static JoinRestrictionContext * FilterJoinRestrictionContext(
@@ -1921,10 +1918,30 @@ FindQueryContainingRTEIdentityInternal(Node *node,
 
 
 /*
+ * AllDistributedRelationsInSubqueryRestrictionContextColocated determines whether all of the
+ * distributed relations in given subquery are co-located.
+ */
+bool
+AllDistributedRelationsInSubqueryRestrictionContextColocated(Query *subquery,
+															 RelationRestrictionContext *
+															 relationRestrictionContext)
+{
+	Relids subqueryRteIdentities = QueryRteIdentities(subquery);
+
+	RelationRestrictionContext *filteredRelationRestrictionContext =
+		FilterRelationRestrictionContext(relationRestrictionContext,
+										 subqueryRteIdentities);
+
+	return AllDistributedRelationsInRestrictionContextColocated(
+		filteredRelationRestrictionContext);
+}
+
+
+/*
  * AllDistributedRelationsInRestrictionContextColocated determines whether all of the
  * distributed  relations in the given relation restrictions list are co-located.
  */
-static bool
+bool
 AllDistributedRelationsInRestrictionContextColocated(
 	RelationRestrictionContext *restrictionContext)
 {
@@ -1968,6 +1985,7 @@ bool
 AllDistributedRelationsInListColocated(List *relationList)
 {
 	int initialColocationId = INVALID_COLOCATION_ID;
+	bool gotAppendTable = false;
 	Oid relationId = InvalidOid;
 
 	foreach_oid(relationId, relationList)
@@ -1986,13 +2004,19 @@ AllDistributedRelationsInListColocated(List *relationList)
 
 		if (IsCitusTableType(relationId, APPEND_DISTRIBUTED))
 		{
-			/*
-			 * If we got to this point, it means there are multiple distributed
-			 * relations and at least one of them is append-distributed. Since
-			 * we do not consider append-distributed tables to be co-located,
-			 * we can immediately return false.
-			 */
-			return false;
+			if (gotAppendTable)
+			{
+				/*
+				 * If we got to this point, it means there are multiple append
+				 * distributed relations. Since we do not consider append
+				 * distributed tables to be co-located, we can immediately
+				 * return false.
+				 */
+				return false;
+			}
+
+			gotAppendTable = true;
+			continue;
 		}
 
 		int colocationId = TableColocationId(relationId);
@@ -2005,6 +2029,11 @@ AllDistributedRelationsInListColocated(List *relationList)
 		{
 			return false;
 		}
+	}
+
+	if (gotAppendTable && initialColocationId != INVALID_COLOCATION_ID)
+	{
+		return false;
 	}
 
 	return true;

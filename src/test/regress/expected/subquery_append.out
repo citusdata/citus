@@ -120,7 +120,20 @@ SELECT key, value FROM append_table a WHERE value IN (SELECT * FROM ref_table) O
 (9 rows)
 
 SELECT key, value FROM append_table a WHERE key IN (SELECT key FROM append_table WHERE value > 100) ORDER BY 1,2;
-ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
+ key | value
+---------------------------------------------------------------------
+ abc |   123
+ abc |   234
+ bcd |   123
+ bcd |   234
+ cde |   345
+ def |   456
+ efg |   123
+ efg |   234
+ hij |   123
+ hij |   234
+(10 rows)
+
 SELECT key, value FROM append_table a WHERE value = (SELECT max(value) FROM ref_table) ORDER BY 1,2;
  key | value
 ---------------------------------------------------------------------

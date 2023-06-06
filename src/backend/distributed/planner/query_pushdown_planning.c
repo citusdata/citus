@@ -589,7 +589,9 @@ DeferErrorIfUnsupportedSubqueryPushdown(Query *originalQuery,
 								 NULL);
 		}
 	}
-	else if (!RestrictionEquivalenceForPartitionKeys(plannerRestrictionContext))
+	else if (!RestrictionEquivalenceForPartitionKeys(plannerRestrictionContext) ||
+			 !AllDistributedRelationsInRestrictionContextColocated(
+				 plannerRestrictionContext->relationRestrictionContext))
 	{
 		StringInfo errorMessage = makeStringInfo();
 		bool isMergeCmd = IsMergeQuery(originalQuery);
