@@ -2294,6 +2294,7 @@ PreprocessAlterTableSchemaStmt(Node *node, const char *queryString,
 	}
 
 	ErrorIfTenantTable(relationId, "SET SCHEMA");
+	ErrorIfTenantSchema(get_namespace_oid(stmt->newschema, true), "SET SCHEMA");
 
 	DDLJob *ddlJob = palloc0(sizeof(DDLJob));
 	QualifyTreeNode((Node *) stmt);
