@@ -2,6 +2,8 @@ interactiveMode: false
 queryCount: 250
 queryOutFile: queries.sql
 ddlOutFile: ddls.sql
+repartitionJoin: true
+singleRepartitionJoin: false
 semiAntiJoin: true
 cartesianProduct: false
 limit: true

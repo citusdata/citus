@@ -89,6 +89,8 @@ Schema for Query configuration:
 ```yaml
 queryCount: <int>
 queryOutFile: <string>
+repartitionJoin: <bool>
+singleRepartitionJoin: <bool>
 semiAntiJoin: <bool>
 cartesianProduct: <bool>
 limit: <bool>
@@ -116,6 +118,8 @@ Explanation:
 ```yaml
 queryCount: "number of queries to generate"
 queryOutFile: "file to write generated queries"
+repartitionJoin: "should we enable repartition join"
+singleRepartitionJoin: "should we make default repartition join mode as single repartition join (default is dual)"
 semiAntiJoin: "should we support semi joins (WHERE col IN (Subquery))"
 cartesianProduct: "should we support cartesian joins"
 limit: "should we support limit clause"
