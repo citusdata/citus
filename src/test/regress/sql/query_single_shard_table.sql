@@ -1630,6 +1630,10 @@ FROM (
 
 SET citus.enable_single_hash_repartition_joins TO ON;
 
+-- We prefer dual-hash repartition join over single-hash repartition join
+-- even if citus.enable_single_hash_repartition_joins is set to ON. This
+-- happens because single shard tables don't have a shard key.
+
 SELECT count(*), avg(avgsub.a)
 FROM (
     SELECT table_0.a
