@@ -1614,5 +1614,35 @@ SET client_min_messages TO DEBUG2;
 RESET citus.enable_repartition_joins;
 RESET citus.enable_single_hash_repartition_joins;
 
+SET client_min_messages TO DEBUG1;
+SET citus.enable_repartition_joins TO ON;
+
+SELECT count(*), avg(avgsub.a)
+FROM (
+    SELECT table_0.a
+    FROM reference_table AS table_0
+    INNER JOIN nullkey_c1_t1 AS table_1 USING (a)
+    INNER JOIN reference_table AS table_2 USING (a)
+    INNER JOIN nullkey_c2_t1 AS table_3 USING (a)
+    ORDER BY a LIMIT 7
+) AS avgsub;
+
+SET client_min_messages TO DEBUG2;
+RESET citus.enable_repartition_joins;
+
+SELECT count(*), avg(avgsub.a)
+FROM (
+    SELECT table_0.a
+    FROM nullkey_c1_t1 AS table_0
+    RIGHT JOIN (
+        SELECT table_2.a FROM (
+            SELECT table_3.a FROM nullkey_c2_t1 AS table_3
+            ORDER BY a LIMIT 0
+        ) AS table_2
+        INNER JOIN nullkey_c2_t1 AS table_4 USING (a)
+        WHERE table_4.a < 8
+    ) AS table_1 USING (a)
+) AS avgsub;
+
 SET client_min_messages TO ERROR;
 DROP SCHEMA query_single_shard_table CASCADE;
