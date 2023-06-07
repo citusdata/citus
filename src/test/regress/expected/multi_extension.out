@@ -88,10 +88,11 @@ WHERE pgd.refclassid = 'pg_extension'::regclass AND
 	  pge.extname    = 'citus' AND
 	  pgio.schema    NOT IN ('pg_catalog', 'citus', 'citus_internal', 'test', 'columnar', 'columnar_internal')
 ORDER BY 1, 2;
- type |      identity
+ type |       identity
 ---------------------------------------------------------------------
+ view | public.citus_schemas
  view | public.citus_tables
-(1 row)
+(2 rows)
 
 -- DROP EXTENSION pre-created by the regression suite
 DROP EXTENSION citus;
@@ -1367,7 +1368,8 @@ SELECT * FROM multi_extension.print_extension_changes();
                  | function citus_schema_undistribute(regnamespace) void
 				 | function citus_stat_tenants_local_internal(boolean) SETOF record
                  | table pg_dist_schema
-(7 rows)
+                 | view public.citus_schemas
+(8 rows)
 
 DROP TABLE multi_extension.prev_objects, multi_extension.extension_diff;
 -- show running version
@@ -1387,10 +1389,11 @@ WHERE pgd.refclassid = 'pg_extension'::regclass AND
 	  pge.extname    = 'citus' AND
 	  pgio.schema    NOT IN ('pg_catalog', 'citus', 'citus_internal', 'test', 'columnar', 'columnar_internal')
 ORDER BY 1, 2;
- type |      identity
+ type |       identity
 ---------------------------------------------------------------------
+ view | public.citus_schemas
  view | public.citus_tables
-(1 row)
+(2 rows)
 
 -- see incompatible version errors out
 RESET citus.enable_version_checks;
@@ -1498,10 +1501,11 @@ ALTER EXTENSION citus UPDATE;
 -- if cache is invalidated succesfull, this \d should work without any problem
 \d
             List of relations
- Schema |     Name     | Type |  Owner
+ Schema |     Name      | Type |  Owner
 ---------------------------------------------------------------------
- public | citus_tables | view | postgres
-(1 row)
+ public | citus_schemas | view | postgres
+ public | citus_tables  | view | postgres
+(2 rows)
 
 \c - - - :master_port
 -- test https://github.com/citusdata/citus/issues/3409
