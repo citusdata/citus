@@ -39,6 +39,7 @@ class Table:
         duplicateRate,
         columns,
         distinctCopyCount,
+        colocateWith,
     ):
         self.name = name
         self.citusType = citusType
@@ -48,6 +49,7 @@ class Table:
         self.duplicateRate = duplicateRate
         self.columns = columns
         self.distinctCopyCount = distinctCopyCount
+        self.colocateWith = colocateWith
 
 
 class Column:

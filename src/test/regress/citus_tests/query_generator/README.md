@@ -53,6 +53,7 @@ targetTables: <Table[]>
           name: <string>
           type: <string>
       distinctCopyCount: <int>
+      colocateWith: Optional<string>
 ```
 
 Explanation:
@@ -72,6 +73,7 @@ targetTables: "array of tables that will be used in generated queries"
           name: "name of column"
           type: "name of data type of column(only support 'int' now)"
       distinctCopyCount: "how many tables with the same configuration we should create(only by changing full name, still using the same name prefix)"
+      colocateWith: "colocated_with parameter"
 ```
 
 
