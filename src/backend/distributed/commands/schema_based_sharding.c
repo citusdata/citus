@@ -258,3 +258,20 @@ ErrorIfTenantTable(Oid relationId, char *operationName)
 							   operationName)));
 	}
 }
+
+
+/*
+ * ErrorIfTenantSchema errors out with the given operation name,
+ * if the given schema is a tenant schema.
+ */
+void
+ErrorIfTenantSchema(Oid nspOid, char *operationName)
+{
+	if (IsTenantSchema(nspOid))
+	{
+		ereport(ERROR, (errmsg(
+							"%s is not allowed for %s because it is a distributed schema",
+							get_namespace_name(nspOid),
+							operationName)));
+	}
+}
