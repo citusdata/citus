@@ -127,7 +127,7 @@ SELECT create_distributed_table('colocated_events_table', null, colocate_with=>'
 :client_side_copy_command
 
 CREATE TABLE non_colocated_events_table (user_id int, time timestamp, event_type int, value_2 int, value_3 float, value_4 bigint);
-SELECT create_distributed_table('non_colocated_events_table', null, colocate_with=>'none');
+SELECT create_distributed_table('non_colocated_events_table', null, colocate_with=>'non_colocated_users_table');
 \set client_side_copy_command '\\copy non_colocated_events_table FROM ' :'events_table_data_file' ' WITH CSV;'
 :client_side_copy_command
 
@@ -136,6 +136,12 @@ CREATE TABLE users_table_local AS SELECT * FROM users_table;
 CREATE TABLE colocated_users_table (id int, value int);
 SELECT create_distributed_table('colocated_users_table', null, colocate_with => 'users_table');
 INSERT INTO colocated_users_table (id, value) VALUES(1, 2),(2, 3),(3,4);
+
+CREATE TABLE users_reference_table (like users_table including all);
+SELECT create_reference_table('users_reference_table');
+
+CREATE TABLE events_reference_table (like colocated_events_table including all);
+SELECT create_reference_table('events_reference_table');
 
 CREATE FUNCTION func() RETURNS TABLE (id int, value int) AS $$
 	SELECT 1, 2
@@ -283,6 +289,10 @@ SELECT COUNT(*) FROM cte_1;
 SELECT * FROM nullkey_c1_t1 JOIN postgres_local_table USING(a) ORDER BY 1,2,3;
 SELECT * FROM nullkey_c1_t1 JOIN citus_local_table USING(a) ORDER BY 1,2,3;
 
+SET citus.local_table_join_policy TO 'prefer-distributed';
+SELECT * FROM nullkey_c1_t1 JOIN citus_local_table USING(a) ORDER BY 1,2,3;
+RESET citus.local_table_join_policy;
+
 -- join with a distributed table
 
 SET citus.enable_repartition_joins TO ON;
@@ -312,6 +322,11 @@ SELECT * FROM (SELECT * FROM nullkey_c2_t1) t1 JOIN nullkey_c2_t1 t2 USING (a) J
 SELECT COUNT(*) FROM nullkey_c1_t1 t1
 JOIN LATERAL (
     SELECT * FROM distributed_table t2 WHERE t2.b > t1.a
+) q USING(a);
+
+SELECT COUNT(*) FROM nullkey_c1_t1 t1
+JOIN LATERAL (
+    SELECT *, random() FROM distributed_table t2 WHERE t2.b > t1.a
 ) q USING(a);
 
 SELECT COUNT(*) FROM distributed_table t1
@@ -1490,6 +1505,114 @@ FROM
         ORDER BY 1 DESC LIMIT 5
      ) AS foo
 WHERE foo.user_id = cte.user_id;
+
+-- more tests with sublinks and subqueries in targetlist
+
+SELECT event_type, (SELECT e.value_2 FROM users_reference_table WHERE user_id = 1 AND value_1 = 1), (SELECT e.value_2)
+FROM non_colocated_events_table e
+ORDER BY 1,2 LIMIT 1;
+
+SELECT event_type, (SELECT time FROM users_table WHERE user_id = e.user_id ORDER BY time LIMIT 1)
+FROM non_colocated_events_table e
+ORDER BY 1,2 LIMIT 1;
+
+SELECT event_type, (SELECT max(time) FROM users_table WHERE user_id = e.value_2)
+FROM non_colocated_events_table e
+ORDER BY 1,2 LIMIT 1;
+
+SELECT event_type, (SELECT max(time) FROM users_table)
+FROM non_colocated_events_table e
+ORDER BY 1,2 LIMIT 1;
+
+WITH cte_1 AS (SELECT max(time) FROM users_table)
+SELECT event_type, (SELECT * FROM cte_1)
+FROM non_colocated_events_table e
+ORDER BY 1,2 LIMIT 1;
+
+WITH cte_1 AS (SELECT max(time) FROM users_table)
+SELECT event_type, (SELECT * FROM cte_1 LIMIT 1)
+FROM non_colocated_events_table e
+ORDER BY 1,2 LIMIT 1;
+
+WITH cte_1 AS (SELECT max(time) m FROM users_table)
+SELECT count(*), (SELECT * FROM cte_1 c1 join cte_1 c2 using (m))
+FROM non_colocated_events_table e
+GROUP BY 2
+ORDER BY 1,2 LIMIT 1;
+
+WITH cte_1 AS (SELECT min(user_id) u, max(time) m FROM users_table)
+SELECT count(*), (SELECT max(time) FROM users_table WHERE user_id = cte_1.u GROUP BY user_id)
+FROM cte_1
+GROUP BY 2
+ORDER BY 1,2 LIMIT 1;
+
+SELECT sum(e.user_id) + (SELECT max(value_3) FROM users_table WHERE user_id = e.user_id GROUP BY user_id)
+FROM non_colocated_events_table e
+GROUP BY e.user_id
+ORDER BY 1 LIMIT 3;
+
+SELECT e.user_id, sum((SELECT any_value(value_3) FROM users_reference_table WHERE user_id = e.user_id GROUP BY user_id)) OVER (PARTITION BY e.user_id)
+FROM non_colocated_events_table e
+ORDER BY 1, 2 LIMIT 3;
+
+SELECT (SELECT (SELECT e.user_id + user_id) FROM users_table WHERE user_id = e.user_id GROUP BY user_id)
+FROM non_colocated_events_table e
+GROUP BY 1
+ORDER BY 1 LIMIT 3;
+
+SELECT (SELECT (SELECT e.user_id + user_id) FROM users_reference_table WHERE user_id = e.user_id GROUP BY user_id)
+FROM non_colocated_events_table e
+GROUP BY 1
+ORDER BY 1 LIMIT 3;
+
+WITH cte_1 AS (SELECT user_id FROM users_table ORDER BY 1 LIMIT 1)
+SELECT (SELECT (SELECT e.user_id + user_id) FROM cte_1 WHERE user_id = e.user_id GROUP BY user_id)
+FROM non_colocated_events_table e
+GROUP BY 1
+ORDER BY 1 LIMIT 3;
+
+SELECT (SELECT (SELECT e.user_id + user_id) FROM (SELECT 1 AS user_id) s WHERE user_id = e.user_id GROUP BY user_id)
+FROM non_colocated_events_table e
+GROUP BY 1
+ORDER BY 1 LIMIT 3;
+
+CREATE TEMP VIEW view_1 AS (SELECT user_id, value_2 FROM users_table WHERE user_id = 1 AND value_1 = 1 ORDER BY 1,2);
+
+SELECT (SELECT value_2 FROM view_1 WHERE user_id = e.user_id GROUP BY value_2)
+FROM non_colocated_events_table e
+GROUP BY 1
+ORDER BY 1 LIMIT 3;
+
+SELECT
+	user_id, count(*)
+FROM
+	non_colocated_events_table e1
+GROUP BY user_id
+	HAVING
+		count(*) > (SELECT count(*) FROM (SELECT
+					  (SELECT sum(user_id)  FROM users_table WHERE user_id = u1.user_id GROUP BY user_id)
+					FROM users_table u1
+					GROUP BY user_id) as foo) ORDER BY 1 DESC;
+
+SELECT count(*) FROM (SELECT
+  (SELECT user_id FROM users_table WHERE user_id = u1.user_id FOR UPDATE)
+FROM users_table u1
+GROUP BY user_id) as foo;
+
+-- test single hash repartition join
+
+SET citus.log_multi_join_order TO ON;
+SET client_min_messages TO DEBUG1;
+SET citus.enable_repartition_joins TO ON;
+SET citus.enable_single_hash_repartition_joins TO ON;
+
+SELECT count(*) FROM nullkey_c1_t1 JOIN distributed_table USING(a);
+select count(*) from nullkey_c1_t1 JOIN nullkey_c2_t2 USING(a);
+
+RESET citus.log_multi_join_order;
+SET client_min_messages TO DEBUG2;
+RESET citus.enable_repartition_joins;
+RESET citus.enable_single_hash_repartition_joins;
 
 SET client_min_messages TO ERROR;
 DROP SCHEMA query_single_shard_table CASCADE;

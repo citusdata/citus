@@ -193,7 +193,7 @@ SELECT create_distributed_table('colocated_events_table', null, colocate_with=>'
 \set client_side_copy_command '\\copy colocated_events_table FROM ' :'events_table_data_file' ' WITH CSV;'
 :client_side_copy_command
 CREATE TABLE non_colocated_events_table (user_id int, time timestamp, event_type int, value_2 int, value_3 float, value_4 bigint);
-SELECT create_distributed_table('non_colocated_events_table', null, colocate_with=>'none');
+SELECT create_distributed_table('non_colocated_events_table', null, colocate_with=>'non_colocated_users_table');
  create_distributed_table
 ---------------------------------------------------------------------
 
@@ -210,6 +210,20 @@ SELECT create_distributed_table('colocated_users_table', null, colocate_with => 
 (1 row)
 
 INSERT INTO colocated_users_table (id, value) VALUES(1, 2),(2, 3),(3,4);
+CREATE TABLE users_reference_table (like users_table including all);
+SELECT create_reference_table('users_reference_table');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE events_reference_table (like colocated_events_table including all);
+SELECT create_reference_table('events_reference_table');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
 CREATE FUNCTION func() RETURNS TABLE (id int, value int) AS $$
 	SELECT 1, 2
 $$ LANGUAGE SQL;
@@ -598,6 +612,31 @@ DEBUG:  Creating router plan
  8 | 8 | 8
 (11 rows)
 
+SET citus.local_table_join_policy TO 'prefer-distributed';
+SELECT * FROM nullkey_c1_t1 JOIN citus_local_table USING(a) ORDER BY 1,2,3;
+DEBUG:  Local tables cannot be used in distributed queries.
+DEBUG:  Wrapping relation "nullkey_c1_t1" to a subquery
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  generating subplan XXX_1 for subquery SELECT a, b FROM query_single_shard_table.nullkey_c1_t1 WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT nullkey_c1_t1.a, nullkey_c1_t1.b, citus_local_table.b FROM ((SELECT nullkey_c1_t1_1.a, nullkey_c1_t1_1.b FROM (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) nullkey_c1_t1_1) nullkey_c1_t1 JOIN query_single_shard_table.citus_local_table USING (a)) ORDER BY nullkey_c1_t1.a, nullkey_c1_t1.b, citus_local_table.b
+DEBUG:  Creating router plan
+ a | b | b
+---------------------------------------------------------------------
+ 1 | 1 | 1
+ 1 | 2 | 1
+ 2 | 2 | 2
+ 2 | 2 | 2
+ 3 | 3 | 3
+ 3 | 4 | 3
+ 4 | 4 | 4
+ 5 | 5 | 5
+ 6 | 6 | 6
+ 7 | 7 | 7
+ 8 | 8 | 8
+(11 rows)
+
+RESET citus.local_table_join_policy;
 -- join with a distributed table
 SET citus.enable_repartition_joins TO ON;
 SET client_min_messages TO DEBUG1;
@@ -770,6 +809,11 @@ JOIN LATERAL (
      0
 (1 row)
 
+SELECT COUNT(*) FROM nullkey_c1_t1 t1
+JOIN LATERAL (
+    SELECT *, random() FROM distributed_table t2 WHERE t2.b > t1.a
+) q USING(a);
+ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
 SELECT COUNT(*) FROM distributed_table t1
 JOIN LATERAL (
     SELECT * FROM nullkey_c1_t1 t2 WHERE t2.b > t1.a
@@ -2972,5 +3016,240 @@ DEBUG:  Creating router plan
    432
 (1 row)
 
+-- more tests with sublinks and subqueries in targetlist
+SELECT event_type, (SELECT e.value_2 FROM users_reference_table WHERE user_id = 1 AND value_1 = 1), (SELECT e.value_2)
+FROM non_colocated_events_table e
+ORDER BY 1,2 LIMIT 1;
+DEBUG:  Creating router plan
+ event_type | value_2 | value_2
+---------------------------------------------------------------------
+          0 |         |       0
+(1 row)
+
+SELECT event_type, (SELECT time FROM users_table WHERE user_id = e.user_id ORDER BY time LIMIT 1)
+FROM non_colocated_events_table e
+ORDER BY 1,2 LIMIT 1;
+DEBUG:  found no worker with all shard placements
+DEBUG:  push down of limit count: 1
+ERROR:  cannot push down this subquery
+DETAIL:  users_table and non_colocated_events_table are not colocated
+SELECT event_type, (SELECT max(time) FROM users_table WHERE user_id = e.value_2)
+FROM non_colocated_events_table e
+ORDER BY 1,2 LIMIT 1;
+DEBUG:  found no worker with all shard placements
+DEBUG:  push down of limit count: 1
+ERROR:  cannot push down this subquery
+DETAIL:  users_table and non_colocated_events_table are not colocated
+SELECT event_type, (SELECT max(time) FROM users_table)
+FROM non_colocated_events_table e
+ORDER BY 1,2 LIMIT 1;
+DEBUG:  found no worker with all shard placements
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  generating subplan XXX_1 for subquery SELECT max("time") AS max FROM query_single_shard_table.users_table
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT event_type, (SELECT intermediate_result.max FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(max timestamp without time zone)) AS max FROM query_single_shard_table.non_colocated_events_table e ORDER BY event_type, (SELECT intermediate_result.max FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(max timestamp without time zone)) LIMIT 1
+DEBUG:  Creating router plan
+ event_type |               max
+---------------------------------------------------------------------
+          0 | Thu Nov 23 17:30:34.635085 2017
+(1 row)
+
+WITH cte_1 AS (SELECT max(time) FROM users_table)
+SELECT event_type, (SELECT * FROM cte_1)
+FROM non_colocated_events_table e
+ORDER BY 1,2 LIMIT 1;
+DEBUG:  CTE cte_1 is going to be inlined via distributed planning
+DEBUG:  router planner does not support queries that reference non-colocated distributed tables
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  generating subplan XXX_1 for subquery SELECT max("time") AS max FROM query_single_shard_table.users_table
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT event_type, (SELECT cte_1.max FROM (SELECT intermediate_result.max FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(max timestamp without time zone)) cte_1) AS max FROM query_single_shard_table.non_colocated_events_table e ORDER BY event_type, (SELECT cte_1.max FROM (SELECT intermediate_result.max FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(max timestamp without time zone)) cte_1) LIMIT 1
+DEBUG:  Creating router plan
+ event_type |               max
+---------------------------------------------------------------------
+          0 | Thu Nov 23 17:30:34.635085 2017
+(1 row)
+
+WITH cte_1 AS (SELECT max(time) FROM users_table)
+SELECT event_type, (SELECT * FROM cte_1 LIMIT 1)
+FROM non_colocated_events_table e
+ORDER BY 1,2 LIMIT 1;
+DEBUG:  CTE cte_1 is going to be inlined via distributed planning
+DEBUG:  router planner does not support queries that reference non-colocated distributed tables
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  generating subplan XXX_1 for subquery SELECT max("time") AS max FROM query_single_shard_table.users_table
+DEBUG:  Creating router plan
+DEBUG:  generating subplan XXX_2 for subquery SELECT max FROM (SELECT intermediate_result.max FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(max timestamp without time zone)) cte_1 LIMIT 1
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT event_type, (SELECT intermediate_result.max FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(max timestamp without time zone)) AS max FROM query_single_shard_table.non_colocated_events_table e ORDER BY event_type, (SELECT intermediate_result.max FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(max timestamp without time zone)) LIMIT 1
+DEBUG:  Creating router plan
+ event_type |               max
+---------------------------------------------------------------------
+          0 | Thu Nov 23 17:30:34.635085 2017
+(1 row)
+
+WITH cte_1 AS (SELECT max(time) m FROM users_table)
+SELECT count(*), (SELECT * FROM cte_1 c1 join cte_1 c2 using (m))
+FROM non_colocated_events_table e
+GROUP BY 2
+ORDER BY 1,2 LIMIT 1;
+DEBUG:  router planner does not support queries that reference non-colocated distributed tables
+DEBUG:  generating subplan XXX_1 for CTE cte_1: SELECT max("time") AS m FROM query_single_shard_table.users_table
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count, (SELECT c1.m FROM ((SELECT intermediate_result.m FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(m timestamp without time zone)) c1 JOIN (SELECT intermediate_result.m FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(m timestamp without time zone)) c2 USING (m))) AS m FROM query_single_shard_table.non_colocated_events_table e GROUP BY (SELECT c1.m FROM ((SELECT intermediate_result.m FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(m timestamp without time zone)) c1 JOIN (SELECT intermediate_result.m FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(m timestamp without time zone)) c2 USING (m))) ORDER BY (count(*)), (SELECT c1.m FROM ((SELECT intermediate_result.m FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(m timestamp without time zone)) c1 JOIN (SELECT intermediate_result.m FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(m timestamp without time zone)) c2 USING (m))) LIMIT 1
+DEBUG:  Creating router plan
+ count |                m
+---------------------------------------------------------------------
+   101 | Thu Nov 23 17:30:34.635085 2017
+(1 row)
+
+WITH cte_1 AS (SELECT min(user_id) u, max(time) m FROM users_table)
+SELECT count(*), (SELECT max(time) FROM users_table WHERE user_id = cte_1.u GROUP BY user_id)
+FROM cte_1
+GROUP BY 2
+ORDER BY 1,2 LIMIT 1;
+DEBUG:  CTE cte_1 is going to be inlined via distributed planning
+DEBUG:  Creating router plan
+ count |               max
+---------------------------------------------------------------------
+     1 | Thu Nov 23 17:30:34.635085 2017
+(1 row)
+
+SELECT sum(e.user_id) + (SELECT max(value_3) FROM users_table WHERE user_id = e.user_id GROUP BY user_id)
+FROM non_colocated_events_table e
+GROUP BY e.user_id
+ORDER BY 1 LIMIT 3;
+DEBUG:  found no worker with all shard placements
+ERROR:  cannot push down subquery on the target list
+DETAIL:  Subqueries in the SELECT part of the query can only be pushed down if they happen before aggregates and window functions
+SELECT e.user_id, sum((SELECT any_value(value_3) FROM users_reference_table WHERE user_id = e.user_id GROUP BY user_id)) OVER (PARTITION BY e.user_id)
+FROM non_colocated_events_table e
+ORDER BY 1, 2 LIMIT 3;
+DEBUG:  Creating router plan
+ user_id | sum
+---------------------------------------------------------------------
+       1 |
+       1 |
+       1 |
+(3 rows)
+
+SELECT (SELECT (SELECT e.user_id + user_id) FROM users_table WHERE user_id = e.user_id GROUP BY user_id)
+FROM non_colocated_events_table e
+GROUP BY 1
+ORDER BY 1 LIMIT 3;
+DEBUG:  found no worker with all shard placements
+DEBUG:  push down of limit count: 3
+ERROR:  cannot push down this subquery
+DETAIL:  users_table and non_colocated_events_table are not colocated
+SELECT (SELECT (SELECT e.user_id + user_id) FROM users_reference_table WHERE user_id = e.user_id GROUP BY user_id)
+FROM non_colocated_events_table e
+GROUP BY 1
+ORDER BY 1 LIMIT 3;
+DEBUG:  Creating router plan
+ ?column?
+---------------------------------------------------------------------
+
+(1 row)
+
+WITH cte_1 AS (SELECT user_id FROM users_table ORDER BY 1 LIMIT 1)
+SELECT (SELECT (SELECT e.user_id + user_id) FROM cte_1 WHERE user_id = e.user_id GROUP BY user_id)
+FROM non_colocated_events_table e
+GROUP BY 1
+ORDER BY 1 LIMIT 3;
+DEBUG:  CTE cte_1 is going to be inlined via distributed planning
+DEBUG:  router planner does not support queries that reference non-colocated distributed tables
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  generating subplan XXX_1 for subquery SELECT user_id FROM query_single_shard_table.users_table ORDER BY user_id LIMIT 1
+DEBUG:  skipping recursive planning for the subquery since it contains references to outer queries
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT (SELECT (SELECT (e.user_id OPERATOR(pg_catalog.+) cte_1.user_id)) FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) cte_1 WHERE (cte_1.user_id OPERATOR(pg_catalog.=) e.user_id) GROUP BY cte_1.user_id) FROM query_single_shard_table.non_colocated_events_table e GROUP BY (SELECT (SELECT (e.user_id OPERATOR(pg_catalog.+) cte_1.user_id)) FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) cte_1 WHERE (cte_1.user_id OPERATOR(pg_catalog.=) e.user_id) GROUP BY cte_1.user_id) ORDER BY (SELECT (SELECT (e.user_id OPERATOR(pg_catalog.+) cte_1.user_id)) FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) cte_1 WHERE (cte_1.user_id OPERATOR(pg_catalog.=) e.user_id) GROUP BY cte_1.user_id) LIMIT 3
+DEBUG:  Creating router plan
+ ?column?
+---------------------------------------------------------------------
+        2
+
+(2 rows)
+
+SELECT (SELECT (SELECT e.user_id + user_id) FROM (SELECT 1 AS user_id) s WHERE user_id = e.user_id GROUP BY user_id)
+FROM non_colocated_events_table e
+GROUP BY 1
+ORDER BY 1 LIMIT 3;
+DEBUG:  Creating router plan
+ ?column?
+---------------------------------------------------------------------
+        2
+
+(2 rows)
+
+CREATE TEMP VIEW view_1 AS (SELECT user_id, value_2 FROM users_table WHERE user_id = 1 AND value_1 = 1 ORDER BY 1,2);
+WARNING:  "view view_1" has dependency on unsupported object "schema pg_temp_xxx"
+DETAIL:  "view view_1" will be created only locally
+SELECT (SELECT value_2 FROM view_1 WHERE user_id = e.user_id GROUP BY value_2)
+FROM non_colocated_events_table e
+GROUP BY 1
+ORDER BY 1 LIMIT 3;
+DEBUG:  found no worker with all shard placements
+DEBUG:  push down of limit count: 3
+ERROR:  cannot push down this subquery
+DETAIL:  users_table and non_colocated_events_table are not colocated
+SELECT
+	user_id, count(*)
+FROM
+	non_colocated_events_table e1
+GROUP BY user_id
+	HAVING
+		count(*) > (SELECT count(*) FROM (SELECT
+					  (SELECT sum(user_id)  FROM users_table WHERE user_id = u1.user_id GROUP BY user_id)
+					FROM users_table u1
+					GROUP BY user_id) as foo) ORDER BY 1 DESC;
+DEBUG:  found no worker with all shard placements
+DEBUG:  Creating router plan
+DEBUG:  generating subplan XXX_1 for subquery SELECT count(*) AS count FROM (SELECT (SELECT sum(users_table.user_id) AS sum FROM query_single_shard_table.users_table WHERE (users_table.user_id OPERATOR(pg_catalog.=) u1.user_id) GROUP BY users_table.user_id) AS sum FROM query_single_shard_table.users_table u1 GROUP BY u1.user_id) foo
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT user_id, count(*) AS count FROM query_single_shard_table.non_colocated_events_table e1 GROUP BY user_id HAVING (count(*) OPERATOR(pg_catalog.>) (SELECT intermediate_result.count FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(count bigint))) ORDER BY user_id DESC
+DEBUG:  Creating router plan
+ user_id | count
+---------------------------------------------------------------------
+       6 |    10
+       5 |    14
+       4 |    17
+       3 |    21
+       2 |    24
+       1 |    15
+(6 rows)
+
+SELECT count(*) FROM (SELECT
+  (SELECT user_id FROM users_table WHERE user_id = u1.user_id FOR UPDATE)
+FROM users_table u1
+GROUP BY user_id) as foo;
+DEBUG:  Creating router plan
+ count
+---------------------------------------------------------------------
+     6
+(1 row)
+
+-- test single hash repartition join
+SET citus.log_multi_join_order TO ON;
+SET client_min_messages TO DEBUG1;
+SET citus.enable_repartition_joins TO ON;
+SET citus.enable_single_hash_repartition_joins TO ON;
+SELECT count(*) FROM nullkey_c1_t1 JOIN distributed_table USING(a);
+LOG:  join order: [ "nullkey_c1_t1" ][ single hash partition join "distributed_table" ]
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+select count(*) from nullkey_c1_t1 JOIN nullkey_c2_t2 USING(a);
+LOG:  join order: [ "nullkey_c1_t1" ][ dual partition join "nullkey_c2_t2" ]
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+RESET citus.log_multi_join_order;
+SET client_min_messages TO DEBUG2;
+RESET citus.enable_repartition_joins;
+RESET citus.enable_single_hash_repartition_joins;
 SET client_min_messages TO ERROR;
 DROP SCHEMA query_single_shard_table CASCADE;
