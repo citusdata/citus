@@ -263,8 +263,8 @@ AttributeTask(char *tenantId, int colocationId, CmdType commandType)
 char *
 AnnotateQuery(char *queryString, Const *partitionKeyValue, int colocationId)
 {
-	if (StatTenantsTrack == STAT_TENANTS_TRACK_NONE || colocationId ==
-		INVALID_COLOCATION_ID)
+	if (StatTenantsTrack == STAT_TENANTS_TRACK_NONE || 
+	    colocationId == INVALID_COLOCATION_ID)
 	{
 		return queryString;
 	}
