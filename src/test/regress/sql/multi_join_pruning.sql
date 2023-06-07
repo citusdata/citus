@@ -66,3 +66,8 @@ EXPLAIN (COSTS OFF)
 SELECT count(*)
 	FROM varchar_partitioned_table table1, varchar_partitioned_table table2
 	WHERE table1.varchar_column = table2.varchar_column;
+
+SET client_min_messages TO WARNING;
+DROP TABLE varchar_partitioned_table;
+DROP TABLE array_partitioned_table;
+DROP TABLE composite_partitioned_table;

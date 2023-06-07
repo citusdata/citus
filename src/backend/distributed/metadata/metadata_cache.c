@@ -178,6 +178,7 @@ typedef struct MetadataCacheData
 	Oid distColocationRelationId;
 	Oid distColocationConfigurationIndexId;
 	Oid distPartitionRelationId;
+	Oid distTenantSchemaRelationId;
 	Oid distPartitionLogicalRelidIndexId;
 	Oid distPartitionColocationidIndexId;
 	Oid distShardLogicalRelidIndexId;
@@ -188,6 +189,8 @@ typedef struct MetadataCacheData
 	Oid distPlacementGroupidIndexId;
 	Oid distTransactionRelationId;
 	Oid distTransactionGroupIndexId;
+	Oid distTenantSchemaPrimaryKeyIndexId;
+	Oid distTenantSchemaUniqueColocationIdIndexId;
 	Oid citusCatalogNamespaceId;
 	Oid copyFormatTypeId;
 	Oid readIntermediateResultFuncId;
@@ -2840,6 +2843,39 @@ DistColocationConfigurationIndexId(void)
 						 &MetadataCache.distColocationConfigurationIndexId);
 
 	return MetadataCache.distColocationConfigurationIndexId;
+}
+
+
+/* return oid of pg_dist_tenant_schema relation */
+Oid
+DistTenantSchemaRelationId(void)
+{
+	CachedRelationLookup("pg_dist_tenant_schema",
+						 &MetadataCache.distTenantSchemaRelationId);
+
+	return MetadataCache.distTenantSchemaRelationId;
+}
+
+
+/* return oid of pg_dist_tenant_schema_pkey index */
+Oid
+DistTenantSchemaPrimaryKeyIndexId(void)
+{
+	CachedRelationLookup("pg_dist_tenant_schema_pkey",
+						 &MetadataCache.distTenantSchemaPrimaryKeyIndexId);
+
+	return MetadataCache.distTenantSchemaPrimaryKeyIndexId;
+}
+
+
+/* return oid of pg_dist_tenant_schema_unique_colocationid_index index */
+Oid
+DistTenantSchemaUniqueColocationIdIndexId(void)
+{
+	CachedRelationLookup("pg_dist_tenant_schema_unique_colocationid_index",
+						 &MetadataCache.distTenantSchemaUniqueColocationIdIndexId);
+
+	return MetadataCache.distTenantSchemaUniqueColocationIdIndexId;
 }
 
 

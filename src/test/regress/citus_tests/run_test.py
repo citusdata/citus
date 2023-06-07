@@ -13,9 +13,10 @@ from contextlib import contextmanager
 from typing import Optional
 
 import common
-from common import REGRESS_DIR, capture, run
+from common import OLDEST_SUPPORTED_CITUS_VERSION, PG_BINDIR, REGRESS_DIR, capture, run
+from upgrade import generate_citus_tarball, run_citus_upgrade_tests
 
-from config import ARBITRARY_SCHEDULE_NAMES, MASTER_VERSION, CitusBaseClusterConfig
+from config import ARBITRARY_SCHEDULE_NAMES, CitusBaseClusterConfig, CitusUpgradeConfig
 
 
 def main():
@@ -75,11 +76,19 @@ class TestDeps:
     schedule: Optional[str]
     direct_extra_tests: list[str]
 
-    def __init__(self, schedule, extra_tests=None, repeatable=True, worker_count=2):
+    def __init__(
+        self,
+        schedule,
+        extra_tests=None,
+        repeatable=True,
+        worker_count=2,
+        citus_upgrade_infra=False,
+    ):
         self.schedule = schedule
         self.direct_extra_tests = extra_tests or []
         self.repeatable = repeatable
         self.worker_count = worker_count
+        self.citus_upgrade_infra = citus_upgrade_infra
 
     def extra_tests(self):
         all_deps = OrderedDict()
@@ -103,6 +112,9 @@ DEPS = {
     "single_node_enterprise": TestDeps(None),
     "single_node": TestDeps(None),
     "single_node_truncate": TestDeps(None),
+    "multi_explain": TestDeps(
+        "base_schedule", ["multi_insert_select_non_pushable_queries"]
+    ),
     "multi_extension": TestDeps(None, repeatable=False),
     "multi_test_helpers": TestDeps(None),
     "multi_insert_select": TestDeps("base_schedule"),
@@ -114,6 +126,9 @@ DEPS = {
             "multi_cluster_management",
             "multi_mx_function_table_reference",
         ],
+    ),
+    "alter_distributed_table": TestDeps(
+        "minimal_schedule", ["multi_behavioral_analytics_create_table"]
     ),
     "background_rebalance": TestDeps(
         None,
@@ -131,6 +146,8 @@ DEPS = {
         ],
         worker_count=6,
     ),
+    "function_propagation": TestDeps("minimal_schedule"),
+    "grant_on_foreign_server_propagation": TestDeps("minimal_schedule"),
     "multi_mx_modifying_xacts": TestDeps(None, ["multi_mx_create_table"]),
     "multi_mx_router_planner": TestDeps(None, ["multi_mx_create_table"]),
     "multi_mx_copy_data": TestDeps(None, ["multi_mx_create_table"]),
@@ -140,6 +157,7 @@ DEPS = {
     "isolation_extension_commands": TestDeps(
         None, ["isolation_setup", "isolation_add_remove_node"]
     ),
+    "schema_based_sharding": TestDeps("minimal_schedule"),
 }
 
 
@@ -173,26 +191,29 @@ def run_regress_test(test_name, args):
 
     with tmp_schedule(test_name, dependencies, schedule_line, args) as schedule:
         if "upgrade" in original_schedule:
-            run_schedule_with_python(schedule)
+            run_schedule_with_python(test_name, schedule, dependencies)
         else:
             run_schedule_with_multiregress(test_name, schedule, dependencies, args)
 
 
-def run_schedule_with_python(schedule):
-    bindir = capture("pg_config --bindir").rstrip()
+def run_schedule_with_python(test_name, schedule, dependencies):
     pgxs_path = pathlib.Path(capture("pg_config --pgxs").rstrip())
 
     os.chdir(REGRESS_DIR)
     os.environ["PATH"] = str(REGRESS_DIR / "bin") + os.pathsep + os.environ["PATH"]
     os.environ["PG_REGRESS_DIFF_OPTS"] = "-dU10 -w"
-    os.environ["CITUS_OLD_VERSION"] = f"v{MASTER_VERSION}.0"
 
-    args = {
+    fake_config_args = {
         "--pgxsdir": str(pgxs_path.parent.parent.parent),
-        "--bindir": bindir,
+        "--bindir": PG_BINDIR,
+        "--mixed": False,
     }
 
-    config = CitusBaseClusterConfig(args)
+    if dependencies.citus_upgrade_infra:
+        run_single_citus_upgrade_test(test_name, schedule, fake_config_args)
+        return
+
+    config = CitusBaseClusterConfig(fake_config_args)
     common.initialize_temp_dir(config.temp_dir)
     common.initialize_citus_cluster(
         config.bindir, config.datadir, config.settings, config
@@ -200,6 +221,29 @@ def run_schedule_with_python(schedule):
     common.run_pg_regress(
         config.bindir, config.pg_srcdir, config.coordinator_port(), schedule
     )
+
+
+def run_single_citus_upgrade_test(test_name, schedule, fake_config_args):
+    os.environ["CITUS_OLD_VERSION"] = f"v{OLDEST_SUPPORTED_CITUS_VERSION}"
+    citus_tarball_path = generate_citus_tarball(f"v{OLDEST_SUPPORTED_CITUS_VERSION}")
+    config = CitusUpgradeConfig(fake_config_args, citus_tarball_path, None)
+
+    # Before tests are a simple case, because no actual upgrade is needed
+    if "_before" in test_name:
+        run_citus_upgrade_tests(config, schedule, None)
+        return
+
+    before_schedule_name = f"{schedule}_before"
+    before_schedule_path = REGRESS_DIR / before_schedule_name
+
+    before_test_name = test_name.replace("_after", "_before")
+    with open(before_schedule_path, "w") as before_schedule_file:
+        before_schedule_file.write(f"test: {before_test_name}\n")
+
+    try:
+        run_citus_upgrade_tests(config, before_schedule_name, schedule)
+    finally:
+        os.remove(before_schedule_path)
 
 
 def run_schedule_with_multiregress(test_name, schedule, dependencies, args):
@@ -245,15 +289,6 @@ def default_base_schedule(test_schedule, args):
 
     if "operations" in test_schedule:
         return "minimal_schedule"
-
-    if "after_citus_upgrade" in test_schedule:
-        print(
-            f"WARNING: After citus upgrade schedule ({test_schedule}) is not supported."
-        )
-        sys.exit(0)
-
-    if "citus_upgrade" in test_schedule:
-        return None
 
     if "pg_upgrade" in test_schedule:
         return "minimal_pg_upgrade_schedule"
@@ -312,6 +347,9 @@ def find_test_schedule_and_line(test_name, args):
 def test_dependencies(test_name, test_schedule, schedule_line, args):
     if test_name in DEPS:
         return DEPS[test_name]
+
+    if "citus_upgrade" in test_schedule:
+        return TestDeps(None, citus_upgrade_infra=True)
 
     if schedule_line_is_upgrade_after(schedule_line):
         # upgrade_xxx_after tests always depend on upgrade_xxx_before

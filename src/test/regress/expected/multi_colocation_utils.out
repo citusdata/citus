@@ -825,11 +825,13 @@ ORDER BY
  table1_group_default            | 1300070 | t            |    57638 | -715827883    | 715827881
  table1_group_default            | 1300071 | t            |    57637 | 715827882     | 2147483647
  table1_group_default            | 1300071 | t            |    57638 | 715827882     | 2147483647
+ table1_groupf                   | 1300080 | t            |    57636 |               |
  table1_groupf                   | 1300080 | t            |    57637 |               |
  table1_groupf                   | 1300080 | t            |    57638 |               |
+ table2_groupf                   | 1300081 | t            |    57636 |               |
  table2_groupf                   | 1300081 | t            |    57637 |               |
  table2_groupf                   | 1300081 | t            |    57638 |               |
-(92 rows)
+(94 rows)
 
 -- reset colocation ids to test update_distributed_table_colocation
 ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 1;
@@ -868,9 +870,9 @@ ERROR:  cannot colocate tables table1_groupd and table1_groupb
 DETAIL:  Shard counts don't match for table1_groupd and table1_groupb.
 SELECT update_distributed_table_colocation('table1_groupB', colocate_with => 'table1_groupE');
 ERROR:  cannot colocate tables table1_groupe and table1_groupb
-DETAIL:  Shard 1300050 of table1_groupe and shard xxxxx of table1_groupb have different number of shard placements.
+DETAIL:  Shard xxxxx of table1_groupe and shard xxxxx of table1_groupb have different number of shard placements.
 SELECT update_distributed_table_colocation('table1_groupB', colocate_with => 'table1_groupF');
-ERROR:  relation table1_groupf should be a hash distributed table
+ERROR:  relation table1_groupf should be a hash or single shard distributed table
 SELECT update_distributed_table_colocation('table1_groupB', colocate_with => 'table1_groupD');
 ERROR:  cannot colocate tables table1_groupd and table1_groupb
 DETAIL:  Shard counts don't match for table1_groupd and table1_groupb.
@@ -1369,9 +1371,9 @@ SELECT tables_colocated('d2', 'none');
 
 -- make sure reference and local tables return an error.
 SELECT update_distributed_table_colocation('ref', colocate_with => 'none');
-ERROR:  relation ref should be a hash distributed table
+ERROR:  relation ref should be a hash or single shard distributed table
 SELECT update_distributed_table_colocation('local_table', colocate_with => 'none');
-ERROR:  relation local_table should be a hash distributed table
+ERROR:  relation local_table should be a hash or single shard distributed table
 -- make sure that different types cannot be colocated
 SELECT update_distributed_table_colocation('different_d1', colocate_with => 'd1');
 ERROR:  cannot colocate tables d1 and different_d1
@@ -1381,13 +1383,13 @@ ERROR:  cannot colocate tables different_d1 and d1
 DETAIL:  Distribution column types don't match for different_d1 and d1.
 -- make sure that append distributed tables cannot be colocated
 SELECT update_distributed_table_colocation('append_table', colocate_with => 'd1');
-ERROR:  relation append_table should be a hash distributed table
+ERROR:  relation append_table should be a hash or single shard distributed table
 SELECT update_distributed_table_colocation('d1', colocate_with => 'append_table');
-ERROR:  relation append_table should be a hash distributed table
+ERROR:  relation append_table should be a hash or single shard distributed table
 SELECT update_distributed_table_colocation('range_table', colocate_with => 'd1');
-ERROR:  relation range_table should be a hash distributed table
+ERROR:  relation range_table should be a hash or single shard distributed table
 SELECT update_distributed_table_colocation('d1', colocate_with => 'range_table');
-ERROR:  relation range_table should be a hash distributed table
+ERROR:  relation range_table should be a hash or single shard distributed table
 -- drop tables to clean test space
 DROP TABLE table1_groupb;
 DROP TABLE table2_groupb;

@@ -98,8 +98,25 @@ WHERE shardid = (
 SELECT shardid AS round_robin_test_c1_shard_id FROM pg_dist_shard WHERE logicalrelid = 'single_node.single_node_nullkey_c1'::regclass \gset
 SELECT create_distributed_table('single_node_nullkey_c1_' || :round_robin_test_c1_shard_id , null, colocate_with=>'none', distribution_type=>null);
 
+-- create a tenant schema on single node setup
+SET citus.enable_schema_based_sharding TO ON;
+
+CREATE SCHEMA tenant_1;
+CREATE TABLE tenant_1.tbl_1 (a int);
+
+-- verify that we recorded tenant_1 in pg_dist_tenant_schema
+SELECT COUNT(*)=1 FROM pg_dist_tenant_schema WHERE schemaid::regnamespace::text = 'tenant_1';
+
+-- verify that tenant_1.tbl_1 is recorded in pg_dist_partition, as a single-shard table
+SELECT COUNT(*)=1 FROM pg_dist_partition
+WHERE logicalrelid = 'tenant_1.tbl_1'::regclass AND
+      partmethod = 'n' AND repmodel = 's' AND colocationid IS NOT NULL;
+
+RESET citus.enable_schema_based_sharding;
+
 SET client_min_messages TO WARNING;
 DROP TABLE failover_to_local, single_node_nullkey_c1, single_node_nullkey_c2;
+DROP SCHEMA tenant_1 CASCADE;
 RESET client_min_messages;
 
 -- so that we don't have to update rest of the test output

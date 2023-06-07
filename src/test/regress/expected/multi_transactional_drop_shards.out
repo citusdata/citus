@@ -374,9 +374,10 @@ ORDER BY
     shardid, nodename, nodeport;
  shardid | shardstate | nodename  | nodeport
 ---------------------------------------------------------------------
+ 1410006 |          1 | localhost |    57636
  1410006 |          1 | localhost |    57637
  1410006 |          1 | localhost |    57638
-(2 rows)
+(3 rows)
 
 -- verify table is not dropped
 \dt transactional_drop_reference
@@ -516,7 +517,7 @@ SET citus.override_table_visibility TO false;
 (8 rows)
 
 \ds transactional_drop_serial_column2_seq
-      List of relations
+                          List of relations
  Schema |                 Name                  |   Type   |  Owner
 ---------------------------------------------------------------------
  public | transactional_drop_serial_column2_seq | sequence | postgres
@@ -670,13 +671,6 @@ ORDER BY
 
 \c - - - :master_port
 SET client_min_messages TO WARNING;
--- try using the coordinator as a worker and then dropping the table
-SELECT 1 FROM master_add_node('localhost', :master_port, groupid := 0);
- ?column?
----------------------------------------------------------------------
-        1
-(1 row)
-
 CREATE TABLE citus_local (id serial, k int);
 SELECT create_distributed_table('citus_local', 'id');
  create_distributed_table
@@ -686,12 +680,6 @@ SELECT create_distributed_table('citus_local', 'id');
 
 INSERT INTO citus_local (k) VALUES (2);
 DROP TABLE citus_local;
-SELECT master_remove_node('localhost', :master_port);
- master_remove_node
----------------------------------------------------------------------
-
-(1 row)
-
 -- clean the workspace
 DROP TABLE transactional_drop_shards, transactional_drop_reference;
 -- test DROP TABLE as a non-superuser in a transaction block

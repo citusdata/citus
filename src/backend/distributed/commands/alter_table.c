@@ -196,6 +196,7 @@ static void EnsureTableNotReferencing(Oid relationId, char conversionType);
 static void EnsureTableNotReferenced(Oid relationId, char conversionType);
 static void EnsureTableNotForeign(Oid relationId);
 static void EnsureTableNotPartition(Oid relationId);
+static void ErrorIfColocateWithTenantTable(char *colocateWith);
 static TableConversionState * CreateTableConversion(TableConversionParameters *params);
 static void CreateDistributedTableLike(TableConversionState *con);
 static void CreateCitusTableLike(TableConversionState *con);
@@ -380,6 +381,8 @@ UndistributeTable(TableConversionParameters *params)
 							   "because the table is not distributed")));
 	}
 
+	ErrorIfTenantTable(params->relationId, "undistribute_table");
+
 	if (!params->cascadeViaForeignKeys)
 	{
 		EnsureTableNotReferencing(params->relationId, UNDISTRIBUTE_TABLE);
@@ -435,6 +438,9 @@ AlterDistributedTable(TableConversionParameters *params)
 							   "is not distributed")));
 	}
 
+	ErrorIfTenantTable(params->relationId, "alter_distributed_table");
+	ErrorIfColocateWithTenantTable(params->colocateWith);
+
 	EnsureTableNotForeign(params->relationId);
 	EnsureTableNotPartition(params->relationId);
 	EnsureHashDistributedTable(params->relationId);
@@ -477,8 +483,11 @@ AlterTableSetAccessMethod(TableConversionParameters *params)
 	EnsureTableNotReferencing(params->relationId, ALTER_TABLE_SET_ACCESS_METHOD);
 	EnsureTableNotReferenced(params->relationId, ALTER_TABLE_SET_ACCESS_METHOD);
 	EnsureTableNotForeign(params->relationId);
-	if (IsCitusTableType(params->relationId, DISTRIBUTED_TABLE))
+
+	if (!IsCitusTableType(params->relationId, SINGLE_SHARD_DISTRIBUTED) &&
+		IsCitusTableType(params->relationId, DISTRIBUTED_TABLE))
 	{
+		/* we do not support non-hash distributed tables, except single shard tables */
 		EnsureHashDistributedTable(params->relationId);
 	}
 
@@ -1177,6 +1186,24 @@ EnsureTableNotPartition(Oid relationId)
 }
 
 
+/*
+ * ErrorIfColocateWithTenantTable errors out if given colocateWith text refers to
+ * a tenant table.
+ */
+void
+ErrorIfColocateWithTenantTable(char *colocateWith)
+{
+	if (colocateWith != NULL &&
+		!IsColocateWithDefault(colocateWith) &&
+		!IsColocateWithNone(colocateWith))
+	{
+		text *colocateWithTableNameText = cstring_to_text(colocateWith);
+		Oid colocateWithTableId = ResolveRelationId(colocateWithTableNameText, false);
+		ErrorIfTenantTable(colocateWithTableId, "colocate_with");
+	}
+}
+
+
 TableConversionState *
 CreateTableConversion(TableConversionParameters *params)
 {
@@ -1365,7 +1392,19 @@ CreateCitusTableLike(TableConversionState *con)
 {
 	if (IsCitusTableType(con->relationId, DISTRIBUTED_TABLE))
 	{
-		CreateDistributedTableLike(con);
+		if (IsCitusTableType(con->relationId, SINGLE_SHARD_DISTRIBUTED))
+		{
+			ColocationParam colocationParam = {
+				.colocationParamType = COLOCATE_WITH_TABLE_LIKE_OPT,
+				.colocateWithTableName = quote_qualified_identifier(con->schemaName,
+																	con->relationName)
+			};
+			CreateSingleShardTable(con->newRelationId, colocationParam);
+		}
+		else
+		{
+			CreateDistributedTableLike(con);
+		}
 	}
 	else if (IsCitusTableType(con->relationId, REFERENCE_TABLE))
 	{
@@ -1854,6 +1893,12 @@ CheckAlterDistributedTableConversionParameters(TableConversionState *con)
 		{
 			ereport(ERROR, (errmsg("cannot colocate with %s because "
 								   "it is not a distributed table",
+								   con->colocateWith)));
+		}
+		else if (IsCitusTableType(colocateWithTableOid, SINGLE_SHARD_DISTRIBUTED))
+		{
+			ereport(ERROR, (errmsg("cannot colocate with %s because "
+								   "it is a single shard distributed table",
 								   con->colocateWith)));
 		}
 	}

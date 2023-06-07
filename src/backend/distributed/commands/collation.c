@@ -109,7 +109,7 @@ CreateCollationDDLInternal(Oid collationId, Oid *collowner, char **quotedCollati
 		colliculocale = NULL;
 	}
 
-	AssertArg((collcollate && collctype) || colliculocale);
+	Assert((collcollate && collctype) || colliculocale);
 #else
 
 	/*

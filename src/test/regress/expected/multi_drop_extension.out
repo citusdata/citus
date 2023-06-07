@@ -21,12 +21,6 @@ BEGIN;
   SET client_min_messages TO ERROR;
   SET search_path TO public;
   CREATE EXTENSION citus;
-  SELECT 1 FROM master_add_node('localhost', :master_port, groupId => 0);
- ?column?
----------------------------------------------------------------------
-        1
-(1 row)
-
   create table l1 (a int unique);
   SELECT create_reference_table('l1');
  create_reference_table
@@ -136,6 +130,12 @@ ROLLBACK TO  SAVEPOINT s3;
 ROLLBACK;
 CREATE EXTENSION citus;
 -- re-add the nodes to the cluster
+SELECT citus_set_coordinator_host('localhost');
+ citus_set_coordinator_host
+---------------------------------------------------------------------
+
+(1 row)
+
 SELECT 1 FROM master_add_node('localhost', :worker_1_port);
  ?column?
 ---------------------------------------------------------------------

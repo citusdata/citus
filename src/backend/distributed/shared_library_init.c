@@ -44,7 +44,7 @@
 #include "distributed/cte_inline.h"
 #include "distributed/distributed_deadlock_detection.h"
 #include "distributed/errormessage.h"
-#include "distributed/insert_select_executor.h"
+#include "distributed/repartition_executor.h"
 #include "distributed/intermediate_result_pruning.h"
 #include "distributed/local_multi_copy.h"
 #include "distributed/local_executor.h"
@@ -1379,6 +1379,20 @@ RegisterCitusConfigVariables(void)
 		true,
 		PGC_USERSET,
 		GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		"citus.enable_schema_based_sharding",
+		gettext_noop("Enables schema based sharding."),
+		gettext_noop("The schemas created while this is ON will be automatically "
+					 "associated with individual colocation groups such that the "
+					 "tables created in those schemas will be automatically "
+					 "converted to colocated distributed tables without a shard "
+					 "key."),
+		&EnableSchemaBasedSharding,
+		false,
+		PGC_USERSET,
+		GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(

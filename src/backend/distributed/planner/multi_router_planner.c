@@ -154,7 +154,7 @@ static DeferredErrorMessage * DeferErrorIfUnsupportedRouterPlannableSelectQuery(
 static DeferredErrorMessage * ErrorIfQueryHasUnroutableModifyingCTE(Query *queryTree);
 #if PG_VERSION_NUM >= PG_VERSION_14
 static DeferredErrorMessage * ErrorIfQueryHasCTEWithSearchClause(Query *queryTree);
-static bool ContainsSearchClauseWalker(Node *node);
+static bool ContainsSearchClauseWalker(Node *node, void *context);
 #endif
 static bool SelectsFromDistributedTable(List *rangeTableList, Query *query);
 static ShardPlacement * CreateDummyPlacement(bool hasLocalRelation);
@@ -1906,17 +1906,36 @@ RouterJob(Query *originalQuery, PlannerRestrictionContext *plannerRestrictionCon
 	{
 		RangeTblEntry *updateOrDeleteOrMergeRTE = ExtractResultRelationRTE(originalQuery);
 
-		/*
-		 * If all of the shards are pruned, we replace the relation RTE into
-		 * subquery RTE that returns no results. However, this is not useful
-		 * for UPDATE and DELETE queries. Therefore, if we detect a UPDATE or
-		 * DELETE RTE with subquery type, we just set task list to empty and return
-		 * the job.
-		 */
 		if (updateOrDeleteOrMergeRTE->rtekind == RTE_SUBQUERY)
 		{
-			job->taskList = NIL;
-			return job;
+			/*
+			 * Not generating tasks for MERGE target relation might
+			 * result in incorrect behavior as source rows with NOT
+			 * MATCHED clause might qualify for insertion.
+			 */
+			if (IsMergeQuery(originalQuery))
+			{
+				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+								errmsg("Merge command is currently "
+									   "unsupported with filters that "
+									   "prunes down to zero shards"),
+								errhint("Avoid `WHERE false` clause or "
+										"any equivalent filters that "
+										"could prune down to zero shards")));
+			}
+			else
+			{
+				/*
+				 * If all of the shards are pruned, we replace the
+				 * relation RTE into subquery RTE that returns no
+				 * results. However, this is not useful for UPDATE
+				 * and DELETE queries. Therefore, if we detect a
+				 * UPDATE or DELETE RTE with subquery type, we just
+				 * set task list to empty and return the job.
+				 */
+				job->taskList = NIL;
+				return job;
+			}
 		}
 	}
 
@@ -3910,7 +3929,7 @@ ErrorIfQueryHasUnroutableModifyingCTE(Query *queryTree)
 static DeferredErrorMessage *
 ErrorIfQueryHasCTEWithSearchClause(Query *queryTree)
 {
-	if (ContainsSearchClauseWalker((Node *) queryTree))
+	if (ContainsSearchClauseWalker((Node *) queryTree, NULL))
 	{
 		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
 							 "CTEs with search clauses are not supported",
@@ -3925,7 +3944,7 @@ ErrorIfQueryHasCTEWithSearchClause(Query *queryTree)
  * CommonTableExprs with search clause
  */
 static bool
-ContainsSearchClauseWalker(Node *node)
+ContainsSearchClauseWalker(Node *node, void *context)
 {
 	if (node == NULL)
 	{

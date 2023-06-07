@@ -66,12 +66,12 @@ CREATE TABLE nullkey_c1_t2(a int, b int);
 CREATE TABLE nullkey_c1_t3(a int, b int);
 SELECT create_distributed_table('nullkey_c1_t1', null, colocate_with=>'none');
 
-SELECT colocationid AS nullkey_c1_t1_colocation_id FROM pg_dist_partition WHERE logicalrelid = 'create_single_shard_table.nullkey_c1_t1'::regclass \gset
+SELECT colocationid AS nullkey_c1_t1_colocationid FROM pg_dist_partition WHERE logicalrelid = 'create_single_shard_table.nullkey_c1_t1'::regclass \gset
 
 BEGIN;
   DROP TABLE nullkey_c1_t1;
   -- make sure that we delete the colocation group after dropping the last table that belongs to it
-  SELECT COUNT(*)=0 FROM pg_dist_colocation WHERE colocationid = :'nullkey_c1_t1_colocation_id';
+  SELECT COUNT(*)=0 FROM pg_dist_colocation WHERE colocationid = :'nullkey_c1_t1_colocationid';
 ROLLBACK;
 
 SELECT create_distributed_table('nullkey_c1_t2', null, colocate_with=>'nullkey_c1_t1');

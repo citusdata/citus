@@ -1112,4 +1112,4 @@ RETURNING *;
 ROLLBACK;
 \set VERBOSITY terse
 DROP SCHEMA insert_select_into_local_table CASCADE;
-NOTICE:  drop cascades to 12 other objects
+NOTICE:  drop cascades to 13 other objects

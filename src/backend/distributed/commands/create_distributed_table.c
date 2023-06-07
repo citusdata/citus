@@ -111,8 +111,8 @@ typedef struct
 {
 	int shardCount;
 	bool shardCountIsStrict;
-	char *colocateWithTableName;
 	char *distributionColumnName;
+	ColocationParam colocationParam;
 } DistributedTableParams;
 
 
@@ -296,7 +296,11 @@ create_distributed_table(PG_FUNCTION_ARGS)
 								   "when the distribution column is null ")));
 		}
 
-		CreateSingleShardTable(relationId, colocateWithTableName);
+		ColocationParam colocationParam = {
+			.colocationParamType = COLOCATE_WITH_TABLE_LIKE_OPT,
+			.colocateWithTableName = colocateWithTableName,
+		};
+		CreateSingleShardTable(relationId, colocationParam);
 	}
 
 	PG_RETURN_VOID();
@@ -1006,7 +1010,10 @@ CreateDistributedTable(Oid relationId, char *distributionColumnName,
 	}
 
 	DistributedTableParams distributedTableParams = {
-		.colocateWithTableName = colocateWithTableName,
+		.colocationParam = {
+			.colocateWithTableName = colocateWithTableName,
+			.colocationParamType = COLOCATE_WITH_TABLE_LIKE_OPT
+		},
 		.shardCount = shardCount,
 		.shardCountIsStrict = shardCountIsStrict,
 		.distributionColumnName = distributionColumnName
@@ -1031,10 +1038,10 @@ CreateReferenceTable(Oid relationId)
  * single shard distributed table that doesn't have a shard key.
  */
 void
-CreateSingleShardTable(Oid relationId, char *colocateWithTableName)
+CreateSingleShardTable(Oid relationId, ColocationParam colocationParam)
 {
 	DistributedTableParams distributedTableParams = {
-		.colocateWithTableName = colocateWithTableName,
+		.colocationParam = colocationParam,
 		.shardCount = 1,
 		.shardCountIsStrict = true,
 		.distributionColumnName = NULL
@@ -1155,9 +1162,23 @@ CreateCitusTable(Oid relationId, CitusTableType tableType,
 	 * ColocationIdForNewTable assumes caller acquires lock on relationId. In our case,
 	 * our caller already acquired lock on relationId.
 	 */
-	uint32 colocationId = ColocationIdForNewTable(relationId, tableType,
-												  distributedTableParams,
-												  distributionColumn);
+	uint32 colocationId = INVALID_COLOCATION_ID;
+	if (distributedTableParams &&
+		distributedTableParams->colocationParam.colocationParamType ==
+		COLOCATE_WITH_COLOCATION_ID)
+	{
+		colocationId = distributedTableParams->colocationParam.colocationId;
+	}
+	else
+	{
+		/*
+		 * ColocationIdForNewTable assumes caller acquires lock on relationId. In our case,
+		 * our caller already acquired lock on relationId.
+		 */
+		colocationId = ColocationIdForNewTable(relationId, tableType,
+											   distributedTableParams,
+											   distributionColumn);
+	}
 
 	EnsureRelationCanBeDistributed(relationId, distributionColumn,
 								   citusTableParams.distributionMethod,
@@ -1257,7 +1278,10 @@ CreateCitusTable(Oid relationId, CitusTableType tableType,
 			MemoryContextReset(citusPartitionContext);
 
 			DistributedTableParams childDistributedTableParams = {
-				.colocateWithTableName = parentRelationName,
+				.colocationParam = {
+					.colocationParamType = COLOCATE_WITH_TABLE_LIKE_OPT,
+					.colocateWithTableName = parentRelationName,
+				},
 				.shardCount = distributedTableParams->shardCount,
 				.shardCountIsStrict = false,
 				.distributionColumnName = distributedTableParams->distributionColumnName,
@@ -1308,30 +1332,39 @@ DecideCitusTableParams(CitusTableType tableType,
 	{
 		case HASH_DISTRIBUTED:
 		{
+			Assert(distributedTableParams->colocationParam.colocationParamType ==
+				   COLOCATE_WITH_TABLE_LIKE_OPT);
+
 			citusTableParams.distributionMethod = DISTRIBUTE_BY_HASH;
 			citusTableParams.replicationModel =
 				DecideDistTableReplicationModel(DISTRIBUTE_BY_HASH,
-												distributedTableParams->
+												distributedTableParams->colocationParam.
 												colocateWithTableName);
 			break;
 		}
 
 		case APPEND_DISTRIBUTED:
 		{
+			Assert(distributedTableParams->colocationParam.colocationParamType ==
+				   COLOCATE_WITH_TABLE_LIKE_OPT);
+
 			citusTableParams.distributionMethod = DISTRIBUTE_BY_APPEND;
 			citusTableParams.replicationModel =
 				DecideDistTableReplicationModel(APPEND_DISTRIBUTED,
-												distributedTableParams->
+												distributedTableParams->colocationParam.
 												colocateWithTableName);
 			break;
 		}
 
 		case RANGE_DISTRIBUTED:
 		{
+			Assert(distributedTableParams->colocationParam.colocationParamType ==
+				   COLOCATE_WITH_TABLE_LIKE_OPT);
+
 			citusTableParams.distributionMethod = DISTRIBUTE_BY_RANGE;
 			citusTableParams.replicationModel =
 				DecideDistTableReplicationModel(RANGE_DISTRIBUTED,
-												distributedTableParams->
+												distributedTableParams->colocationParam.
 												colocateWithTableName);
 			break;
 		}
@@ -1768,7 +1801,11 @@ ColocationIdForNewTable(Oid relationId, CitusTableType tableType,
 
 	if (tableType == APPEND_DISTRIBUTED || tableType == RANGE_DISTRIBUTED)
 	{
-		if (!IsColocateWithDefault(distributedTableParams->colocateWithTableName))
+		Assert(distributedTableParams->colocationParam.colocationParamType ==
+			   COLOCATE_WITH_TABLE_LIKE_OPT);
+		char *colocateWithTableName =
+			distributedTableParams->colocationParam.colocateWithTableName;
+		if (!IsColocateWithDefault(colocateWithTableName))
 		{
 			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 							errmsg("cannot distribute relation"),
@@ -1795,8 +1832,13 @@ ColocationIdForNewTable(Oid relationId, CitusTableType tableType,
 		Oid distributionColumnCollation =
 			distributionColumn ? get_typcollation(distributionColumnType) : InvalidOid;
 
+		Assert(distributedTableParams->colocationParam.colocationParamType ==
+			   COLOCATE_WITH_TABLE_LIKE_OPT);
+		char *colocateWithTableName =
+			distributedTableParams->colocationParam.colocateWithTableName;
+
 		/* get an advisory lock to serialize concurrent default group creations */
-		if (IsColocateWithDefault(distributedTableParams->colocateWithTableName))
+		if (IsColocateWithDefault(colocateWithTableName))
 		{
 			AcquireColocationDefaultLock();
 		}
@@ -1808,10 +1850,9 @@ ColocationIdForNewTable(Oid relationId, CitusTableType tableType,
 													distributedTableParams->shardCount,
 													distributedTableParams->
 													shardCountIsStrict,
-													distributedTableParams->
 													colocateWithTableName);
 
-		if (IsColocateWithDefault(distributedTableParams->colocateWithTableName) &&
+		if (IsColocateWithDefault(colocateWithTableName) &&
 			(colocationId != INVALID_COLOCATION_ID))
 		{
 			/*
@@ -1824,7 +1865,7 @@ ColocationIdForNewTable(Oid relationId, CitusTableType tableType,
 
 		if (colocationId == INVALID_COLOCATION_ID)
 		{
-			if (IsColocateWithDefault(distributedTableParams->colocateWithTableName))
+			if (IsColocateWithDefault(colocateWithTableName))
 			{
 				/*
 				 * Generate a new colocation ID and insert a pg_dist_colocation
@@ -1835,7 +1876,7 @@ ColocationIdForNewTable(Oid relationId, CitusTableType tableType,
 													 distributionColumnType,
 													 distributionColumnCollation);
 			}
-			else if (IsColocateWithNone(distributedTableParams->colocateWithTableName))
+			else if (IsColocateWithNone(colocateWithTableName))
 			{
 				/*
 				 * Generate a new colocation ID and insert a pg_dist_colocation

@@ -1357,9 +1357,13 @@ SELECT * FROM multi_extension.print_extension_changes();
 -- Snapshot of state at 12.0-1
 ALTER EXTENSION citus UPDATE TO '12.0-1';
 SELECT * FROM multi_extension.print_extension_changes();
- previous_object | current_object
+ previous_object |                         current_object
 ---------------------------------------------------------------------
-(0 rows)
+                 | function citus_internal_add_tenant_schema(oid,integer) void
+                 | function citus_internal_delete_tenant_schema(oid) void
+                 | function citus_internal_unregister_tenant_schema_globally(oid,text) void
+                 | table pg_dist_tenant_schema
+(4 rows)
 
 DROP TABLE multi_extension.prev_objects, multi_extension.extension_diff;
 -- show running version
@@ -1777,6 +1781,53 @@ SELECT citus_remove_node('localhost', :master_port);
 
 (1 row)
 
+-- confirm that we can create a tenant schema / table on an empty node
+SET citus.enable_schema_based_sharding TO ON;
+CREATE SCHEMA tenant_schema;
+CREATE TABLE tenant_schema.test(x int, y int);
+SELECT colocationid = (
+    SELECT colocationid FROM pg_dist_partition WHERE logicalrelid = 'tenant_schema.test'::regclass
+)
+FROM pg_dist_tenant_schema
+WHERE schemaid::regnamespace::text = 'tenant_schema';
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+-- and make sure that we can't remove the coordinator due to "test"
+SELECT citus_remove_node('localhost', :master_port);
+ERROR:  cannot remove or disable the node localhost:xxxxx because because it contains the only shard placement for shard xxxxx
+DETAIL:  One of the table(s) that prevents the operation complete successfully is tenant_schema.test
+HINT:  To proceed, either drop the tables or use undistribute_table() function to convert them to local tables
+BEGIN;
+  SET LOCAL client_min_messages TO WARNING;
+  DROP SCHEMA tenant_schema CASCADE;
+COMMIT;
+-- and now we should be able to remove the coordinator
+SELECT citus_remove_node('localhost', :master_port);
+ citus_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE SCHEMA tenant_schema;
+-- Make sure that we can sync metadata for empty tenant schemas
+-- when adding the first node to the cluster.
+SELECT 1 FROM citus_add_node('localhost', :worker_1_port);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+DROP SCHEMA tenant_schema;
+SELECT citus_remove_node('localhost', :worker_1_port);
+ citus_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
+RESET citus.enable_schema_based_sharding;
 -- confirm that we can create a reference table on an empty node
 CREATE TABLE test (x int, y int);
 INSERT INTO test VALUES (1,2);
@@ -1802,6 +1853,19 @@ SELECT citus_add_local_table_to_metadata('test');
 (1 row)
 
 DROP TABLE test;
+-- Verify that we don't consider the schemas created by extensions as tenant schemas.
+-- Easiest way of verifying this is to drop and re-create columnar extension.
+DROP EXTENSION citus_columnar;
+SET citus.enable_schema_based_sharding TO ON;
+CREATE EXTENSION citus_columnar;
+SELECT COUNT(*)=0 FROM pg_dist_tenant_schema
+WHERE schemaid IN ('columnar'::regnamespace, 'columnar_internal'::regnamespace);
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+RESET citus.enable_schema_based_sharding;
 DROP EXTENSION citus;
 CREATE EXTENSION citus;
 DROP TABLE version_mismatch_table;

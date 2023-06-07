@@ -2985,7 +2985,7 @@ AppendTargetEntryToGroupClause(TargetEntry *targetEntry,
 	Expr *targetExpr PG_USED_FOR_ASSERTS_ONLY = targetEntry->expr;
 
 	/* we currently only support appending Var target entries */
-	AssertArg(IsA(targetExpr, Var));
+	Assert(IsA(targetExpr, Var));
 
 	Var *targetColumn = (Var *) targetEntry->expr;
 	SortGroupClause *groupByClause = CreateSortGroupClause(targetColumn);

@@ -31,6 +31,7 @@
 #include "distributed/pg_dist_partition.h"
 #include "distributed/query_pushdown_planning.h"
 #include "distributed/recursive_planning.h"
+#include "distributed/repartition_executor.h"
 #include "distributed/resource_lock.h"
 #include "distributed/version_compat.h"
 #include "nodes/makefuncs.h"
@@ -622,7 +623,7 @@ DistributedInsertSelectSupported(Query *queryTree, RangeTblEntry *insertRte,
 	ListCell *rangeTableCell = NULL;
 
 	/* we only do this check for INSERT ... SELECT queries */
-	AssertArg(InsertSelectIntoCitusTable(queryTree));
+	Assert(InsertSelectIntoCitusTable(queryTree));
 
 	Query *subquery = subqueryRte->subquery;
 
@@ -1417,11 +1418,11 @@ CreateNonPushableInsertSelectPlan(uint64 planId, Query *parse, ParamListInfo bou
 	Assert(!repartitioned ||
 		   !GetRTEListPropertiesForQuery(selectQueryCopy)->hasSingleShardDistTable);
 
-	distributedPlan->insertSelectQuery = insertSelectQuery;
-	distributedPlan->selectPlanForInsertSelect = selectPlan;
-	distributedPlan->insertSelectMethod = repartitioned ?
-										  INSERT_SELECT_REPARTITION :
-										  INSERT_SELECT_VIA_COORDINATOR;
+	distributedPlan->modifyQueryViaCoordinatorOrRepartition = insertSelectQuery;
+	distributedPlan->selectPlanForModifyViaCoordinatorOrRepartition = selectPlan;
+	distributedPlan->modifyWithSelectMethod = repartitioned ?
+											  MODIFY_WITH_SELECT_REPARTITION :
+											  MODIFY_WITH_SELECT_VIA_COORDINATOR;
 	distributedPlan->expectResults = insertSelectQuery->returningList != NIL;
 	distributedPlan->intermediateResultIdPrefix = InsertSelectResultIdPrefix(planId);
 	distributedPlan->targetRelationId = targetRelationId;

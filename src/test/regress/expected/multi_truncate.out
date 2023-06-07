@@ -432,8 +432,12 @@ CREATE TABLE dist(id int, ref_id int REFERENCES ref(id));
 INSERT INTO dist SELECT x,x FROM generate_series(1,10000) x;
 -- test that we do not cascade truncates to local referencing tables
 SELECT truncate_local_data_after_distributing_table('ref');
-ERROR:  cannot truncate a table referenced in a foreign key constraint by a local table
-DETAIL:  Table "dist" references "ref"
+NOTICE:  truncate cascades to table "dist"
+ truncate_local_data_after_distributing_table
+---------------------------------------------------------------------
+
+(1 row)
+
 -- test that we allow distributing tables that have foreign keys to reference tables
 SELECT create_distributed_table('dist','id');
 NOTICE:  Copying data from local table...
@@ -461,11 +465,12 @@ NOTICE:  truncate cascades to table "dist"
 (1 row)
 
 SELECT * FROM table_sizes;
- name | has_data
+    name     | has_data
 ---------------------------------------------------------------------
- dist | f
- ref  | f
-(2 rows)
+ dist        | f
+ ref         | f
+ ref_1210032 | t
+(3 rows)
 
 ROLLBACK;
 -- the following should truncate dist table only
@@ -477,11 +482,12 @@ SELECT truncate_local_data_after_distributing_table('dist');
 (1 row)
 
 SELECT * FROM table_sizes;
- name | has_data
+    name     | has_data
 ---------------------------------------------------------------------
- dist | f
- ref  | t
-(2 rows)
+ dist        | f
+ ref         | f
+ ref_1210032 | t
+(3 rows)
 
 ROLLBACK;
 DROP TABLE ref, dist;

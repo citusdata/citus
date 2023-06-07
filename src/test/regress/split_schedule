@@ -2,6 +2,7 @@
 # Include tests from 'minimal_schedule' for setup.
 test: multi_test_helpers multi_test_helpers_superuser columnar_test_helpers
 test: multi_cluster_management
+test: remove_coordinator_from_metadata
 test: multi_test_catalog_views
 test: tablespace
 # Helpers for foreign key catalogs.

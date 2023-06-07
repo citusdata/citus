@@ -157,5 +157,5 @@ WITH ids_to_delete AS (
 )
 DELETE FROM reference_table WHERE id = ANY(SELECT id FROM ids_to_delete);
 
-RESET client_min_messages;
+SET client_min_messages TO WARNING;
 DROP SCHEMA with_dml CASCADE;

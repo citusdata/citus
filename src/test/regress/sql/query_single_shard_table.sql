@@ -4,9 +4,6 @@ SET search_path TO query_single_shard_table;
 SET citus.next_shard_id TO 1620000;
 SET citus.shard_count TO 32;
 
-SET client_min_messages TO WARNING;
-SELECT 1 FROM citus_add_node('localhost', :master_port, groupid => 0);
-
 SET client_min_messages TO NOTICE;
 
 CREATE TABLE nullkey_c1_t1(a int, b int);
@@ -1175,5 +1172,3 @@ LIMIT 10;
 
 SET client_min_messages TO ERROR;
 DROP SCHEMA query_single_shard_table CASCADE;
-
-SELECT citus_remove_node('localhost', :master_port);

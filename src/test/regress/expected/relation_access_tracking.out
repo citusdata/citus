@@ -1020,20 +1020,6 @@ HINT:  To remove the local data, run: SELECT truncate_local_data_after_distribut
 (1 row)
 
 COMMIT;
+SET client_min_messages TO WARNING;
 SET search_path TO 'public';
 DROP SCHEMA access_tracking CASCADE;
-NOTICE:  drop cascades to 14 other objects
-DETAIL:  drop cascades to function access_tracking.relation_select_access_mode(oid)
-drop cascades to function access_tracking.relation_dml_access_mode(oid)
-drop cascades to function access_tracking.relation_ddl_access_mode(oid)
-drop cascades to function access_tracking.distributed_relation(text)
-drop cascades to function access_tracking.relation_access_mode_to_text(text,integer)
-drop cascades to view access_tracking.relation_accesses
-drop cascades to table access_tracking.table_1
-drop cascades to table access_tracking.table_2
-drop cascades to table access_tracking.table_4
-drop cascades to table access_tracking.table_5
-drop cascades to table access_tracking.table_6
-drop cascades to table access_tracking.table_7
-drop cascades to table access_tracking.partitioning_test
-drop cascades to table access_tracking.table_3

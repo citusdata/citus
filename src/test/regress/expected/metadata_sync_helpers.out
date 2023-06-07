@@ -1317,7 +1317,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 	UPDATE pg_dist_partition SET partmethod = 'a'
 	WHERE logicalrelid = 'test_2'::regclass;
 	SELECT citus_internal_update_relation_colocation('test_2'::regclass, 251);
-ERROR:  Updating colocation ids are only allowed for hash distributed tables: a
+ERROR:  Updating colocation ids are only allowed for hash and single shard distributed tables: a
 ROLLBACK;
 -- colocated hash distributed table should have the same dist key columns
 CREATE TABLE test_5(int_col int, text_col text);

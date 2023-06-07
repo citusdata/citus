@@ -229,6 +229,17 @@ PostprocessCreateTableStmt(CreateStmt *createStatement, const char *queryString)
 {
 	PostprocessCreateTableStmtForeignKeys(createStatement);
 
+	bool missingOk = false;
+	Oid relationId = RangeVarGetRelid(createStatement->relation, NoLock, missingOk);
+	Oid schemaId = get_rel_namespace(relationId);
+	if (createStatement->ofTypename && IsTenantSchema(schemaId))
+	{
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("cannot create a tenant table by using CREATE TABLE "
+						"OF syntax")));
+	}
+
 	if (createStatement->inhRelations != NIL)
 	{
 		if (createStatement->partbound != NULL)
@@ -239,15 +250,31 @@ PostprocessCreateTableStmt(CreateStmt *createStatement, const char *queryString)
 		else
 		{
 			/* process CREATE TABLE ... INHERITS ... */
+
+			if (IsTenantSchema(schemaId))
+			{
+				ereport(ERROR, (errmsg("tenant tables cannot inherit or "
+									   "be inherited")));
+			}
+
 			RangeVar *parentRelation = NULL;
 			foreach_ptr(parentRelation, createStatement->inhRelations)
 			{
-				bool missingOk = false;
 				Oid parentRelationId = RangeVarGetRelid(parentRelation, NoLock,
 														missingOk);
 				Assert(parentRelationId != InvalidOid);
 
-				if (IsCitusTable(parentRelationId))
+				/*
+				 * Throw a better error message if the user tries to inherit a
+				 * tenant table or if the user tries to inherit from a tenant
+				 * table.
+				 */
+				if (IsTenantSchema(get_rel_namespace(parentRelationId)))
+				{
+					ereport(ERROR, (errmsg("tenant tables cannot inherit or "
+										   "be inherited")));
+				}
+				else if (IsCitusTable(parentRelationId))
 				{
 					/* here we error out if inheriting a distributed table */
 					ereport(ERROR, (errmsg("non-distributed tables cannot inherit "
@@ -281,6 +308,15 @@ PostprocessCreateTableStmtForeignKeys(CreateStmt *createStatement)
 	 */
 	bool missingOk = false;
 	Oid relationId = RangeVarGetRelid(createStatement->relation, NoLock, missingOk);
+
+	if (ShouldCreateTenantSchemaTable(relationId))
+	{
+		/*
+		 * Avoid unnecessarily adding the table into metadata if we will
+		 * distribute it as a tenant table later.
+		 */
+		return;
+	}
 
 	/*
 	 * As we are just creating the table, we cannot have foreign keys that our
@@ -378,6 +414,8 @@ PostprocessCreateTableStmtPartitionOf(CreateStmt *createStatement, const
 		}
 	}
 
+	ErrorIfIllegalPartitioningInTenantSchema(PartitionParentOid(relationId), relationId);
+
 	/*
 	 * If a partition is being created and if its parent is a distributed
 	 * table, we will distribute this table as well.
@@ -385,9 +423,8 @@ PostprocessCreateTableStmtPartitionOf(CreateStmt *createStatement, const
 	if (IsCitusTable(parentRelationId))
 	{
 		/*
-		 * We can create Citus local tables and single-shard distributed tables
-		 * right away, without switching to sequential mode, because they are going to
-		 * have only one shard.
+		 * We can create Citus local tables right away, without switching to
+		 * sequential mode, because they are going to have only one shard.
 		 */
 		if (IsCitusTableType(parentRelationId, CITUS_LOCAL_TABLE))
 		{
@@ -396,25 +433,7 @@ PostprocessCreateTableStmtPartitionOf(CreateStmt *createStatement, const
 			return;
 		}
 
-		char *parentRelationName = generate_qualified_relation_name(parentRelationId);
-
-		if (IsCitusTableType(parentRelationId, SINGLE_SHARD_DISTRIBUTED))
-		{
-			CreateSingleShardTable(relationId, parentRelationName);
-			return;
-		}
-
-		Var *parentDistributionColumn = DistPartitionKeyOrError(parentRelationId);
-		char *distributionColumnName =
-			ColumnToColumnName(parentRelationId, (Node *) parentDistributionColumn);
-		char parentDistributionMethod = DISTRIBUTE_BY_HASH;
-
-		SwitchToSequentialAndLocalExecutionIfPartitionNameTooLong(parentRelationId,
-																  relationId);
-
-		CreateDistributedTable(relationId, distributionColumnName,
-							   parentDistributionMethod, ShardCount, false,
-							   parentRelationName);
+		DistributePartitionUsingParent(parentRelationId, relationId);
 	}
 }
 
@@ -476,6 +495,9 @@ PreprocessAlterTableStmtAttachPartition(AlterTableStmt *alterTableStatement,
 				 */
 				return NIL;
 			}
+
+			ErrorIfIllegalPartitioningInTenantSchema(parentRelationId,
+													 partitionRelationId);
 
 			if (!IsCitusTable(parentRelationId))
 			{
@@ -612,13 +634,26 @@ DistributePartitionUsingParent(Oid parentCitusRelationId, Oid partitionRelationI
 {
 	char *parentRelationName = generate_qualified_relation_name(parentCitusRelationId);
 
-	if (!HasDistributionKey(parentCitusRelationId))
+	/*
+	 * We can create tenant tables and single shard tables right away, without
+	 * switching to sequential mode, because they are going to have only one shard.
+	 */
+	if (ShouldCreateTenantSchemaTable(partitionRelationId))
+	{
+		CreateTenantSchemaTable(partitionRelationId);
+		return;
+	}
+	else if (!HasDistributionKey(parentCitusRelationId))
 	{
 		/*
 		 * If the parent is null key distributed, we should distribute the partition
 		 * with null distribution key as well.
 		 */
-		CreateSingleShardTable(partitionRelationId, parentRelationName);
+		ColocationParam colocationParam = {
+			.colocationParamType = COLOCATE_WITH_TABLE_LIKE_OPT,
+			.colocateWithTableName = parentRelationName,
+		};
+		CreateSingleShardTable(partitionRelationId, colocationParam);
 		return;
 	}
 
@@ -4055,4 +4090,85 @@ ErrorIfTableHasIdentityColumn(Oid relationId)
 	}
 
 	relation_close(relation, NoLock);
+}
+
+
+/*
+ * ConvertNewTableIfNecessary converts the given table to a tenant schema
+ * table or a Citus managed table if necessary.
+ *
+ * Input node is expected to be a CreateStmt or a CreateTableAsStmt.
+ */
+void
+ConvertNewTableIfNecessary(Node *createStmt)
+{
+	/*
+	 * Need to increment command counter so that next command
+	 * can see the new table.
+	 */
+	CommandCounterIncrement();
+
+	if (IsA(createStmt, CreateTableAsStmt))
+	{
+		CreateTableAsStmt *createTableAsStmt = (CreateTableAsStmt *) createStmt;
+
+		bool missingOk = false;
+		Oid createdRelationId = RangeVarGetRelid(createTableAsStmt->into->rel,
+												 NoLock, missingOk);
+
+		if (ShouldCreateTenantSchemaTable(createdRelationId))
+		{
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("cannot create a tenant table using "
+								   "CREATE TABLE AS or SELECT INTO "
+								   "statements")));
+		}
+
+		/*
+		 * We simply ignore the tables created by using that syntax when using
+		 * Citus managed tables.
+		 */
+		return;
+	}
+
+	CreateStmt *baseCreateTableStmt = (CreateStmt *) createStmt;
+
+	bool missingOk = false;
+	Oid createdRelationId = RangeVarGetRelid(baseCreateTableStmt->relation,
+											 NoLock, missingOk);
+
+	/* not try to convert the table if it already exists and IF NOT EXISTS syntax is used */
+	if (baseCreateTableStmt->if_not_exists && IsCitusTable(createdRelationId))
+	{
+		return;
+	}
+
+	/*
+	 * Check ShouldCreateTenantSchemaTable() before ShouldAddNewTableToMetadata()
+	 * because we don't want to unnecessarily add the table into metadata
+	 * (as a Citus managed table) before distributing it as a tenant table.
+	 */
+	if (ShouldCreateTenantSchemaTable(createdRelationId))
+	{
+		/*
+		 * We skip creating tenant schema table if the table is a partition
+		 * table because in that case PostprocessCreateTableStmt() should've
+		 * already created a tenant schema table from the partition table.
+		 */
+		if (!PartitionTable(createdRelationId))
+		{
+			CreateTenantSchemaTable(createdRelationId);
+		}
+	}
+	else if (ShouldAddNewTableToMetadata(createdRelationId))
+	{
+		/*
+		 * Here we set autoConverted to false, since the user explicitly
+		 * wants these tables to be added to metadata, by setting the
+		 * GUC use_citus_managed_tables to true.
+		 */
+		bool autoConverted = false;
+		bool cascade = true;
+		CreateCitusLocalTable(createdRelationId, cascade, autoConverted);
+	}
 }

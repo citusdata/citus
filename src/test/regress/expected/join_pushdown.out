@@ -463,10 +463,11 @@ SELECT * FROM abcd first join abcd second USING(b) join abcd third on first.b=th
 
 END;
 DROP SCHEMA join_schema CASCADE;
-NOTICE:  drop cascades to 6 other objects
+NOTICE:  drop cascades to 7 other objects
 DETAIL:  drop cascades to table abcd
 drop cascades to table distributed_table
 drop cascades to table reference_table
+drop cascades to table reference_table_9000004
 drop cascades to table test_table_1
 drop cascades to table test_table_2
 drop cascades to view abcd_view

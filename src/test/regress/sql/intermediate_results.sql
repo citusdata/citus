@@ -337,3 +337,5 @@ COMMIT;
 SET client_min_messages TO ERROR;
 DROP SCHEMA other_schema CASCADE;
 DROP SCHEMA intermediate_results CASCADE;
+DROP OWNED BY some_other_user;
+DROP USER some_other_user;
