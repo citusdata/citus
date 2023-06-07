@@ -30,8 +30,8 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-DROP FUNCTION IF EXISTS pg_catalog.citus_schema_distribute(regnamespace);
-DROP FUNCTION IF EXISTS pg_catalog.citus_schema_undistribute(regnamespace);
+DROP FUNCTION pg_catalog.citus_schema_distribute(regnamespace);
+DROP FUNCTION pg_catalog.citus_schema_undistribute(regnamespace);
 
 DROP FUNCTION pg_catalog.citus_internal_add_tenant_schema(Oid, int);
 

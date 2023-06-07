@@ -301,8 +301,10 @@ GetRegularAndForeignCitusTablesInSchema(Oid schemaId)
  *
  * It checks:
  *  - Schema name is in the allowed-list,
- *  - Only Citus local and Postgres tables exist under the schema,
- *  - Table kinds are supported.
+ *  - Schema is not owned by an extension,
+ *  - Current user should be the owner of tables under the schema,
+ *  - Table kinds are supported,
+ *  - Only Citus local and Postgres local tables exist under the schema.
  */
 static void
 EnsureSchemaCanBeDistributed(Oid schemaId, List *schemaTableIdList)
@@ -310,9 +312,22 @@ EnsureSchemaCanBeDistributed(Oid schemaId, List *schemaTableIdList)
 	/* Ensure schema name is allowed */
 	EnsureTenantSchemaNameAllowed(schemaId);
 
+	/* Any schema owned by extension is not allowed */
+	ObjectAddress *schemaAddress = palloc0(sizeof(ObjectAddress));
+	ObjectAddressSet(*schemaAddress, NamespaceRelationId, schemaId);
+	if (IsAnyObjectAddressOwnedByExtension(list_make1(schemaAddress), NULL))
+	{
+		char *schemaName = get_namespace_name(schemaId);
+		ereport(ERROR, (errmsg("schema %s, which is owned by an extension, cannot "
+							   "be distributed", schemaName)));
+	}
+
 	Oid relationId = InvalidOid;
 	foreach_oid(relationId, schemaTableIdList)
 	{
+		/* Ensure table owner */
+		EnsureTableOwner(relationId);
+
 		/* Check relation kind */
 		EnsureTableKindSupportedForTenantSchema(relationId);
 
@@ -323,9 +338,7 @@ EnsureSchemaCanBeDistributed(Oid schemaId, List *schemaTableIdList)
 		}
 
 		/* Only Citus local tables, amongst Citus table types, are allowed */
-		CitusTableCacheEntry *tableEntry = GetCitusTableCacheEntry(relationId);
-		CitusTableType citusTableType = GetCitusTableTypeCacheEntry(tableEntry);
-		if (citusTableType != CITUS_LOCAL_TABLE)
+		if (!IsCitusTableType(relationId, CITUS_LOCAL_TABLE))
 		{
 			ereport(ERROR, (errmsg("schema already has distributed tables"),
 							errhint("Undistribute distributed tables under "
@@ -372,15 +385,6 @@ EnsureTenantSchemaNameAllowed(Oid schemaId)
 	if (IsToastNamespace(schemaId))
 	{
 		ereport(ERROR, (errmsg("pg_toast schema cannot be distributed")));
-	}
-
-	/* any schema owned by extension is not allowed */
-	ObjectAddress *schemaAddress = palloc0(sizeof(ObjectAddress));
-	ObjectAddressSet(*schemaAddress, NamespaceRelationId, schemaId);
-	if (IsAnyObjectAddressOwnedByExtension(list_make1(schemaAddress), NULL))
-	{
-		ereport(ERROR, (errmsg("schema %s, which is owned by an extension, cannot "
-							   "be distributed", schemaName)));
 	}
 }
 
@@ -454,6 +458,8 @@ citus_schema_distribute(PG_FUNCTION_ARGS)
 	EnsureCoordinator();
 
 	Oid schemaId = PG_GETARG_OID(0);
+	EnsureSchemaExist(schemaId);
+	EnsureSchemaOwner(schemaId);
 
 	/* Prevent concurrent table creation under the schema */
 	LockDatabaseObject(NamespaceRelationId, schemaId, 0, AccessExclusiveLock);
@@ -473,10 +479,8 @@ citus_schema_distribute(PG_FUNCTION_ARGS)
 		PG_RETURN_VOID();
 	}
 
-	/* Collect all tables under the schema */
-	List *tableIdListInSchema = GetRegularAndForeignCitusTablesInSchema(schemaId);
-
 	/* Take lock on the relations and filter out partition tables */
+	List *tableIdListInSchema = GetRegularAndForeignCitusTablesInSchema(schemaId);
 	List *tableIdListToConvert = NIL;
 	Oid relationId = InvalidOid;
 	foreach_oid(relationId, tableIdListInSchema)
@@ -505,25 +509,34 @@ citus_schema_distribute(PG_FUNCTION_ARGS)
 
 	ereport(NOTICE, (errmsg("distributing the schema %s", schemaName)));
 
-	/* Create colocation id for single shard tables */
+	/* Create colocation id and then single shard tables with the colocation id */
 	uint32 colocationId = CreateTenantSchemaColocationId();
 	ColocationParam colocationParam = {
 		.colocationParamType = COLOCATE_WITH_COLOCATION_ID,
 		.colocationId = colocationId,
 	};
 
+	/*
+	 * Collect foreign keys for recreation and then drop fkeys and create single shard
+	 * tables.
+	 */
+	List *originalForeignKeyRecreationCommands = NIL;
 	foreach_oid(relationId, tableIdListToConvert)
 	{
-		/*
-		 * We cannot simply call CreateTenantSchemaTable since we need to register
-		 * the schema before calling it. And during the table creation, if we have
-		 * any Citus local table under the schema, it would first undistributed and
-		 * then converted to a single shard. It would throw an error from
-		 * `ErrorIfTenantTable` while undistributing the Citus local table. That is
-		 * why we first create single shards before registering the schema.
-		 */
+		List *fkeyCommandsForRelation =
+			GetFKeyCreationCommandsRelationInvolvedWithTableType(relationId,
+																 INCLUDE_ALL_TABLE_TYPES);
+		originalForeignKeyRecreationCommands = list_concat(
+			originalForeignKeyRecreationCommands, fkeyCommandsForRelation);
+
+		DropFKeysRelationInvolvedWithTableType(relationId, INCLUDE_ALL_TABLE_TYPES);
 		CreateSingleShardTable(relationId, colocationParam);
 	}
+
+	/* We can skip foreign key validations as we are sure about them at start */
+	bool skip_validation = true;
+	ExecuteForeignKeyCreateCommandList(originalForeignKeyRecreationCommands,
+									   skip_validation);
 
 	/* Register the schema locally and sync it to workers */
 	InsertTenantSchemaLocally(schemaId, colocationId);
@@ -548,6 +561,8 @@ citus_schema_undistribute(PG_FUNCTION_ARGS)
 	EnsureCoordinator();
 
 	Oid schemaId = PG_GETARG_OID(0);
+	EnsureSchemaExist(schemaId);
+	EnsureSchemaOwner(schemaId);
 
 	/* Prevent concurrent table creation under the schema */
 	LockDatabaseObject(NamespaceRelationId, schemaId, 0, AccessExclusiveLock);
@@ -568,10 +583,8 @@ citus_schema_undistribute(PG_FUNCTION_ARGS)
 
 	ereport(NOTICE, (errmsg("undistributing schema %s", schemaName)));
 
-	/* Collect all tables under the schema */
-	List *tableIdListInSchema = GetRegularAndForeignCitusTablesInSchema(schemaId);
-
 	/* Take lock on the relations and filter out partition tables */
+	List *tableIdListInSchema = GetRegularAndForeignCitusTablesInSchema(schemaId);
 	List *tableIdListToConvert = NIL;
 	Oid relationId = InvalidOid;
 	foreach_oid(relationId, tableIdListInSchema)

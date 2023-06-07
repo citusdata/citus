@@ -159,7 +159,6 @@ static void EnsureCitusTableCanBeCreated(Oid relationOid);
 static void PropagatePrerequisiteObjectsForDistributedTable(Oid relationId);
 static void EnsureDistributedSequencesHaveOneType(Oid relationId,
 												  List *seqInfoList);
-static void DropFKeysRelationInvolvedWithTableType(Oid relationId, int tableTypeFlag);
 static void CopyLocalDataIntoShards(Oid relationId);
 static List * TupleDescColumnNameList(TupleDesc tupleDescriptor);
 
@@ -1636,7 +1635,7 @@ DropFKeysAndUndistributeTable(Oid relationId)
  * DropFKeysRelationInvolvedWithTableType drops foreign keys that relation
  * with relationId is involved with given table type.
  */
-static void
+void
 DropFKeysRelationInvolvedWithTableType(Oid relationId, int tableTypeFlag)
 {
 	int referencingFKeysFlag = INCLUDE_REFERENCING_CONSTRAINTS |

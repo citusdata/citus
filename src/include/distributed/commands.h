@@ -15,6 +15,7 @@
 
 #include "postgres.h"
 
+#include "distributed/metadata_utility.h"
 #include "utils/rel.h"
 #include "nodes/parsenodes.h"
 #include "tcop/dest.h"
@@ -274,6 +275,7 @@ extern List * GetForeignConstraintToDistributedTablesCommands(Oid relationId);
 extern List * GetForeignConstraintFromDistributedTablesCommands(Oid relationId);
 extern List * GetForeignConstraintCommandsInternal(Oid relationId, int flags);
 extern Oid DropFKeysAndUndistributeTable(Oid relationId);
+extern void DropFKeysRelationInvolvedWithTableType(Oid relationId, int tableTypeFlag);
 extern List * GetFKeyCreationCommandsRelationInvolvedWithTableType(Oid relationId,
 																   int tableTypeFlag);
 extern bool AnyForeignKeyDependsOnIndex(Oid indexId);
