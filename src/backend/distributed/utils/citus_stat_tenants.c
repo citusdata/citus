@@ -141,7 +141,16 @@ citus_stat_tenants_local(PG_FUNCTION_ARGS)
 		TenantStats *tenantStats = &monitor->tenants[i];
 
 		values[0] = Int32GetDatum(tenantStats->colocationGroupId);
-		values[1] = PointerGetDatum(cstring_to_text(tenantStats->tenantAttribute));
+
+		if (tenantStats->tenantAttribute[0] == '\0')
+		{
+			isNulls[1] = true;
+		}
+		else
+		{
+			values[1] = PointerGetDatum(cstring_to_text(tenantStats->tenantAttribute));
+		}
+
 		values[2] = Int32GetDatum(tenantStats->readsInThisPeriod);
 		values[3] = Int32GetDatum(tenantStats->readsInLastPeriod);
 		values[4] = Int32GetDatum(tenantStats->readsInThisPeriod +
@@ -187,7 +196,7 @@ AttributeQueryIfAnnotated(const char *query_string, CmdType commandType)
 		return;
 	}
 
-	strcpy_s(AttributeToTenant, sizeof(AttributeToTenant), "");
+	AttributeToColocationGroupId = INVALID_COLOCATION_ID;
 
 	if (query_string == NULL)
 	{
@@ -240,16 +249,18 @@ AttributeTask(char *tenantId, int colocationId, CmdType commandType)
 			return;
 		}
 
-		uint32 schemaId = ColocationIdGetTenantSchemaId(colocationId);
-		if (schemaId != InvalidOid)
-		{
-			tenantId = get_namespace_name(schemaId);
-		}
 	}
 
 	AttributeToColocationGroupId = colocationId;
-	strncpy_s(AttributeToTenant, MAX_TENANT_ATTRIBUTE_LENGTH, tenantId,
-			  MAX_TENANT_ATTRIBUTE_LENGTH - 1);
+	if (tenantId != NULL)
+	{
+		strncpy_s(AttributeToTenant, MAX_TENANT_ATTRIBUTE_LENGTH, tenantId,
+				  MAX_TENANT_ATTRIBUTE_LENGTH - 1);
+	}
+	else
+	{
+		strcpy_s(AttributeToTenant, sizeof(AttributeToTenant), "");
+	}
 	AttributeToCommandType = commandType;
 	QueryStartClock = clock();
 }
@@ -363,7 +374,7 @@ static void
 AttributeMetricsIfApplicable()
 {
 	if (StatTenantsTrack == STAT_TENANTS_TRACK_NONE ||
-		AttributeToTenant[0] == '\0')
+		AttributeToColocationGroupId == INVALID_COLOCATION_ID)
 	{
 		return;
 	}
@@ -442,7 +453,7 @@ AttributeMetricsIfApplicable()
 	}
 	LWLockRelease(&monitor->lock);
 
-	strcpy_s(AttributeToTenant, sizeof(AttributeToTenant), "");
+	AttributeToColocationGroupId = INVALID_COLOCATION_ID;
 }
 
 
@@ -729,7 +740,8 @@ FindTenantStats(MultiTenantMonitor *monitor)
 	for (int i = 0; i < monitor->tenantCount; i++)
 	{
 		TenantStats *tenantStats = &monitor->tenants[i];
-		if (strcmp(tenantStats->tenantAttribute, AttributeToTenant) == 0 &&
+
+		if (strncmp(tenantStats->tenantAttribute, AttributeToTenant, MAX_TENANT_ATTRIBUTE_LENGTH) == 0 &&
 			tenantStats->colocationGroupId == AttributeToColocationGroupId)
 		{
 			return i;
