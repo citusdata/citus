@@ -3318,5 +3318,48 @@ DEBUG:  generating subplan XXX_1 for subquery SELECT a FROM query_single_shard_t
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count, avg(a) AS avg FROM (SELECT table_0.a FROM (query_single_shard_table.nullkey_c1_t1 table_0 RIGHT JOIN (SELECT table_2.a FROM ((SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) table_2 JOIN query_single_shard_table.nullkey_c2_t1 table_4 USING (a)) WHERE (table_4.a OPERATOR(pg_catalog.<) 8)) table_1 USING (a))) avgsub
 DEBUG:  router planner does not support queries that reference non-colocated distributed tables
 ERROR:  cannot perform a lateral outer join when a distributed subquery references complex subqueries, CTEs or local tables
+-- test nested exec
+CREATE FUNCTION dist_query_single_shard(p_key int)
+RETURNS bigint
+LANGUAGE plpgsql AS $$
+DECLARE
+	result bigint;
+BEGIN
+    SELECT count(*) INTO result FROM query_single_shard_table.nullkey_c1_t1 WHERE a = p_key;
+	RETURN result;
+END;
+$$;
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
+CREATE FUNCTION ref_query()
+RETURNS bigint
+LANGUAGE plpgsql AS $$
+DECLARE
+	result bigint;
+BEGIN
+    SELECT count(*) INTO result FROM query_single_shard_table.reference_table;
+	RETURN result;
+END;
+$$;
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
+SELECT dist_query_single_shard(count(*)::int) FROM nullkey_c1_t1;
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+ERROR:  cannot execute a distributed query from a query on a shard
+DETAIL:  Executing a distributed query in a function call that may be pushed to a remote node can lead to incorrect results.
+HINT:  Avoid nesting of distributed queries or use alter user current_user set citus.allow_nested_distributed_execution to on to allow it with possible incorrectness.
+CONTEXT:  SQL statement "SELECT count(*)             FROM query_single_shard_table.nullkey_c1_t1 WHERE a = p_key"
+PL/pgSQL function query_single_shard_table.dist_query_single_shard(integer) line XX at SQL statement
+while executing command on localhost:xxxxx
+SELECT ref_query()+count(*) FROM nullkey_c1_t1;
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+ERROR:  cannot execute a distributed query from a query on a shard
+DETAIL:  Executing a distributed query in a function call that may be pushed to a remote node can lead to incorrect results.
+HINT:  Avoid nesting of distributed queries or use alter user current_user set citus.allow_nested_distributed_execution to on to allow it with possible incorrectness.
+CONTEXT:  SQL statement "SELECT count(*)             FROM query_single_shard_table.reference_table"
+PL/pgSQL function query_single_shard_table.ref_query() line XX at SQL statement
+while executing command on localhost:xxxxx
 SET client_min_messages TO ERROR;
 DROP SCHEMA query_single_shard_table CASCADE;

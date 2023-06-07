@@ -1664,5 +1664,32 @@ FROM (
     ) AS table_1 USING (a)
 ) AS avgsub;
 
+-- test nested exec
+
+CREATE FUNCTION dist_query_single_shard(p_key int)
+RETURNS bigint
+LANGUAGE plpgsql AS $$
+DECLARE
+	result bigint;
+BEGIN
+    SELECT count(*) INTO result FROM query_single_shard_table.nullkey_c1_t1 WHERE a = p_key;
+	RETURN result;
+END;
+$$;
+
+CREATE FUNCTION ref_query()
+RETURNS bigint
+LANGUAGE plpgsql AS $$
+DECLARE
+	result bigint;
+BEGIN
+    SELECT count(*) INTO result FROM query_single_shard_table.reference_table;
+	RETURN result;
+END;
+$$;
+
+SELECT dist_query_single_shard(count(*)::int) FROM nullkey_c1_t1;
+SELECT ref_query()+count(*) FROM nullkey_c1_t1;
+
 SET client_min_messages TO ERROR;
 DROP SCHEMA query_single_shard_table CASCADE;
