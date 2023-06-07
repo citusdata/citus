@@ -1616,6 +1616,7 @@ RESET citus.enable_single_hash_repartition_joins;
 
 SET client_min_messages TO DEBUG1;
 SET citus.enable_repartition_joins TO ON;
+SET citus.log_multi_join_order TO ON;
 
 SELECT count(*), avg(avgsub.a)
 FROM (
@@ -1627,8 +1628,23 @@ FROM (
     ORDER BY a LIMIT 7
 ) AS avgsub;
 
+SET citus.enable_single_hash_repartition_joins TO ON;
+
+SELECT count(*), avg(avgsub.a)
+FROM (
+    SELECT table_0.a
+    FROM reference_table AS table_0
+    INNER JOIN nullkey_c1_t1 AS table_1 USING (a)
+    INNER JOIN reference_table AS table_2 USING (a)
+    INNER JOIN nullkey_c2_t1 AS table_3 USING (a)
+    ORDER BY a LIMIT 7
+) AS avgsub;
+
+RESET citus.enable_single_hash_repartition_joins;
+
 SET client_min_messages TO DEBUG2;
 RESET citus.enable_repartition_joins;
+RESET citus.log_multi_join_order;
 
 SELECT count(*), avg(avgsub.a)
 FROM (

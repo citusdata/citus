@@ -3253,6 +3253,7 @@ RESET citus.enable_repartition_joins;
 RESET citus.enable_single_hash_repartition_joins;
 SET client_min_messages TO DEBUG1;
 SET citus.enable_repartition_joins TO ON;
+SET citus.log_multi_join_order TO ON;
 SELECT count(*), avg(avgsub.a)
 FROM (
     SELECT table_0.a
@@ -3262,13 +3263,38 @@ FROM (
     INNER JOIN nullkey_c2_t1 AS table_3 USING (a)
     ORDER BY a LIMIT 7
 ) AS avgsub;
+LOG:  join order: [ "nullkey_c1_t1" ][ reference join "reference_table" ][ reference join "reference_table" ][ dual partition join "nullkey_c2_t1" ]
 DEBUG:  push down of limit count: 7
 DEBUG:  generating subplan XXX_1 for subquery SELECT table_0.a FROM (((query_single_shard_table.reference_table table_0 JOIN query_single_shard_table.nullkey_c1_t1 table_1 USING (a)) JOIN query_single_shard_table.reference_table table_2 USING (a)) JOIN query_single_shard_table.nullkey_c2_t1 table_3 USING (a)) ORDER BY table_0.a LIMIT 7
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count, avg(a) AS avg FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) avgsub
-DEBUG:  relation "query_single_shard_table.nullkey_c1_t1_1620000" does not exist
-ERROR:  relation "query_single_shard_table.nullkey_c1_t1_1620000" does not exist
+ count | avg
+---------------------------------------------------------------------
+     0 |
+(1 row)
+
+SET citus.enable_single_hash_repartition_joins TO ON;
+SELECT count(*), avg(avgsub.a)
+FROM (
+    SELECT table_0.a
+    FROM reference_table AS table_0
+    INNER JOIN nullkey_c1_t1 AS table_1 USING (a)
+    INNER JOIN reference_table AS table_2 USING (a)
+    INNER JOIN nullkey_c2_t1 AS table_3 USING (a)
+    ORDER BY a LIMIT 7
+) AS avgsub;
+LOG:  join order: [ "nullkey_c1_t1" ][ reference join "reference_table" ][ reference join "reference_table" ][ dual partition join "nullkey_c2_t1" ]
+DEBUG:  push down of limit count: 7
+DEBUG:  generating subplan XXX_1 for subquery SELECT table_0.a FROM (((query_single_shard_table.reference_table table_0 JOIN query_single_shard_table.nullkey_c1_t1 table_1 USING (a)) JOIN query_single_shard_table.reference_table table_2 USING (a)) JOIN query_single_shard_table.nullkey_c2_t1 table_3 USING (a)) ORDER BY table_0.a LIMIT 7
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count, avg(a) AS avg FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) avgsub
+ count | avg
+---------------------------------------------------------------------
+     0 |
+(1 row)
+
+RESET citus.enable_single_hash_repartition_joins;
 SET client_min_messages TO DEBUG2;
 RESET citus.enable_repartition_joins;
+RESET citus.log_multi_join_order;
 SELECT count(*), avg(avgsub.a)
 FROM (
     SELECT table_0.a
