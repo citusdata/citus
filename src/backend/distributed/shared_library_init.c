@@ -2602,6 +2602,17 @@ OverridePostgresConfigAssignHooks(void)
 			OldApplicationNameAssignHook = stringVar->assign_hook;
 			stringVar->assign_hook = ApplicationNameAssignHook;
 		}
+
+		/*
+		 * Turn on GUC_REPORT for search_path. GUC_REPORT provides that an S (Parameter Status)
+		 * packet is appended after the C (Command Complete) packet sent from the server
+		 * for SET command. S packet contains the new value of the parameter
+		 * if its value has been changed.
+		 */
+		if (strcmp(var->name, "search_path") == 0)
+		{
+			var->flags |= GUC_REPORT;
+		}
 	}
 }
 
