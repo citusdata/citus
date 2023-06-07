@@ -1,4 +1,9 @@
-from config.config import getConfig, isTableDistributed, isTableReference
+from config.config import (
+    getConfig,
+    isTableHashDistributed,
+    isTableReference,
+    isTableSingleShardDistributed,
+)
 
 
 def getTableDDLs():
@@ -23,7 +28,7 @@ def _genTableDDL(table):
         ddl += _genColumnDDL(table.columns[-1])
     ddl += ");\n"
 
-    if isTableDistributed(table):
+    if isTableHashDistributed(table):
         ddl += (
             "SELECT create_distributed_table("
             + "'"
@@ -33,6 +38,9 @@ def _genTableDDL(table):
             + "'"
             + ");"
         )
+        ddl += "\n"
+    if isTableSingleShardDistributed(table):
+        ddl += "SELECT create_distributed_table(" + "'" + table.name + "'" ",NULL);"
         ddl += "\n"
     elif isTableReference(table):
         ddl += "SELECT create_reference_table(" + "'" + table.name + "'" + ");"

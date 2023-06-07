@@ -111,8 +111,12 @@ def getMaxAllowedCountForTable(tableName):
     return filtered[0].maxAllowedUseOnQuery
 
 
-def isTableDistributed(table):
-    return table.citusType == CitusType.DISTRIBUTED
+def isTableHashDistributed(table):
+    return table.citusType == CitusType.HASH_DISTRIBUTED
+
+
+def isTableSingleShardDistributed(table):
+    return table.citusType == CitusType.SINGLE_SHARD_DISTRIBUTED
 
 
 def isTableReference(table):

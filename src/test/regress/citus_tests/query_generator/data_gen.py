@@ -17,7 +17,10 @@ def getTableData():
         dataGenerationSql += "\n"
 
         # generate null rows
-        if not table.citusType == CitusType.DISTRIBUTED:
+        if table.citusType not in (
+            CitusType.HASH_DISTRIBUTED,
+            CitusType.SINGLE_SHARD_DISTRIBUTED,
+        ):
             targetNullRows = int(table.rowCount * table.nullRate)
             dataGenerationSql += _genNullData(table.name, targetNullRows)
             dataGenerationSql += "\n"

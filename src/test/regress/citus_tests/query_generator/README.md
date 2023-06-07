@@ -172,7 +172,7 @@ Tool supports following citus table types:
 targetTables:
   - Table:
     ...
-    citusType: <one of (DISTRIBUTED || REFERENCE || POSTGRES)>
+    citusType: <one of (HASH_DISTRIBUTED || SINGLE_SHARD_DISTRIBUTED || REFERENCE || POSTGRES)>
     ...
 ```
 
