@@ -89,6 +89,15 @@ ERROR:  tenant_2.test_table is not allowed for alter_distributed_table because i
 -- verify we also don't allow colocate_with a tenant table
 SELECT alter_distributed_table('regular_schema.test_table', colocate_with => 'tenant_2.test_table');
 ERROR:  tenant_2.test_table is not allowed for colocate_with because it is a tenant table
+-- verify we don't allow ALTER TABLE SET SCHEMA for tenant tables
+ALTER TABLE tenant_2.test_table SET SCHEMA regular_schema;
+ERROR:  tenant_2.test_table is not allowed for ALTER TABLE SET SCHEMA because it is a tenant table
+-- verify we don't allow ALTER TABLE SET SCHEMA for tenant schemas
+ALTER TABLE regular_schema.test_table SET SCHEMA tenant_2;
+ERROR:  tenant_2 is not allowed for ALTER TABLE SET SCHEMA because it is a distributed schema
+-- the same, from tenant schema to tenant schema
+ALTER TABLE tenant_2.test_table SET SCHEMA tenant_3;
+ERROR:  tenant_2.test_table is not allowed for ALTER TABLE SET SCHEMA because it is a tenant table
 -- (on coordinator) verify that colocation id is set for empty tenants too
 SELECT colocationid > 0 FROM pg_dist_tenant_schema
 WHERE schemaid::regnamespace::text IN ('tenant_1', 'tenant_3');

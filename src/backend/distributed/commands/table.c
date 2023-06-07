@@ -2293,6 +2293,10 @@ PreprocessAlterTableSchemaStmt(Node *node, const char *queryString,
 		return NIL;
 	}
 
+	ErrorIfTenantTable(relationId, "ALTER TABLE SET SCHEMA");
+	ErrorIfTenantSchema(get_namespace_oid(stmt->newschema, false),
+						"ALTER TABLE SET SCHEMA");
+
 	DDLJob *ddlJob = palloc0(sizeof(DDLJob));
 	QualifyTreeNode((Node *) stmt);
 	ObjectAddressSet(ddlJob->targetObjectAddress, RelationRelationId, relationId);
