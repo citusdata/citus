@@ -113,7 +113,8 @@ CREATE TABLE ref_table(a int primary key);
 SELECT create_reference_table('ref_table');
 
 -- add a new node to trigger replicate_reference_tables task
-SELECT 1 FROM citus_add_node('localhost', :worker_3_port);
+SELECT 1 FROM citus_set_coordinator_host('localhost');
+SELECT 1 FROM master_set_node_property('localhost', :master_port, 'shouldhaveshards', true);
 
 SET ROLE non_super_user_rebalance;
 SELECT 1 FROM citus_rebalance_start(shard_transfer_mode := 'force_logical');
@@ -124,11 +125,7 @@ SELECT state, details from citus_rebalance_status();
 
 RESET ROLE;
 
--- reset the the number of nodes by removing the previously added node
-SELECT 1 FROM citus_drain_node('localhost', :worker_3_port);
-CALL citus_cleanup_orphaned_resources();
-SELECT 1 FROM citus_remove_node('localhost', :worker_3_port);
-
 SET client_min_messages TO WARNING;
 DROP SCHEMA background_rebalance CASCADE;
 DROP USER non_super_user_rebalance;
+SELECT 1 FROM citus_remove_node('localhost', :master_port);
