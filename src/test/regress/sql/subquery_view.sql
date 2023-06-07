@@ -434,6 +434,17 @@ EXPLAIN (COSTS OFF) WITH cte AS (
 ) SELECT * FROM reference_table JOIN cte USING (text_col);
 $Q$);
 
+CREATE TABLE dist_table(text_col text, int_col int);
+SELECT create_distributed_table('dist_table', 'text_col');
+
+SELECT public.coordinator_plan_with_subplans($Q$
+EXPLAIN (COSTS OFF) WITH cte AS (
+  SELECT application_name AS text_col
+  FROM pg_stat_activity
+) SELECT * FROM dist_table JOIN cte USING (text_col);
+$Q$);
+
+
 CREATE OR REPLACE VIEW view_on_views AS SELECT pg_stat_activity.application_name, pg_locks.pid FROM pg_stat_activity, pg_locks;
 
 SELECT public.coordinator_plan_with_subplans($Q$
@@ -441,6 +452,13 @@ EXPLAIN (COSTS OFF) WITH cte AS (
   SELECT application_name AS text_col
   FROM view_on_views
 ) SELECT * FROM reference_table JOIN cte USING (text_col);
+$Q$);
+
+SELECT public.coordinator_plan_with_subplans($Q$
+EXPLAIN (COSTS OFF) WITH cte AS (
+  SELECT application_name AS text_col
+  FROM view_on_views
+) SELECT * FROM dist_table JOIN cte USING (text_col);
 $Q$);
 
 SET client_min_messages TO WARNING;
