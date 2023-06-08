@@ -471,6 +471,7 @@ AnyObjectViolatesOwnership(DropStmt *dropStmt)
 	Node *object = NULL;
 	foreach_ptr(object, dropStmt->objects)
 	{
+		MemoryContext savedContext = CurrentMemoryContext;
 		PG_TRY();
 		{
 			objectAddress = get_object_address(objectType, object,
@@ -490,6 +491,21 @@ AnyObjectViolatesOwnership(DropStmt *dropStmt)
 		}
 		PG_CATCH();
 		{
+			MemoryContextSwitchTo(savedContext);
+			ErrorData *edata = CopyErrorData();
+			FlushErrorState();
+
+			/* Jump to upper handler if the error is critical */
+			if (edata->elevel > ERROR)
+			{
+				PG_RE_THROW();
+			}
+
+			/* Throw error with LOG_SERVER_ONLY to prevent log to be sent to client */
+			edata->elevel = LOG_SERVER_ONLY;
+			ThrowErrorData(edata);
+
+			/* Check if object valid */
 			if (OidIsValid(objectAddress.objectId))
 			{
 				/* ownership violation */
