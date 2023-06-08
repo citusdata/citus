@@ -2938,6 +2938,12 @@ AnchorRangeTableIdList(List *rangeTableList, List *baseRangeTableIdList)
 		}
 	}
 
+	/*
+	 * We favor distributed tables over reference tables as anchor tables. But
+	 * in case we cannot find any distributed tables, we let reference table to be
+	 * anchor table. For now, we cannot see a query that might require this, but we
+	 * want to be backward compatiable.
+	 */
 	if (list_length(anchorTableRTIList) == 0)
 	{
 		return referenceTableRTI > 0 ? list_make1_int(referenceTableRTI) : NIL;
