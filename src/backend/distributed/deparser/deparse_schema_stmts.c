@@ -24,6 +24,7 @@ static void AppendDropSchemaStmt(StringInfo buf, DropStmt *stmt);
 static void AppendGrantOnSchemaStmt(StringInfo buf, GrantStmt *stmt);
 static void AppendGrantOnSchemaSchemas(StringInfo buf, GrantStmt *stmt);
 static void AppendAlterSchemaRenameStmt(StringInfo buf, RenameStmt *stmt);
+static void AppendAlterSchemaOwnerStmt(StringInfo buf, AlterOwnerStmt *stmt);
 
 char *
 DeparseCreateSchemaStmt(Node *node)
@@ -65,6 +66,31 @@ DeparseGrantOnSchemaStmt(Node *node)
 	AppendGrantOnSchemaStmt(&str, stmt);
 
 	return str.data;
+}
+
+
+char *
+DeparseAlterSchemaOwnerStmt(Node *node)
+{
+	AlterOwnerStmt *stmt = castNode(AlterOwnerStmt, node);
+
+	StringInfoData str = { 0 };
+	initStringInfo(&str);
+
+	AppendAlterSchemaOwnerStmt(&str, stmt);
+
+	return str.data;
+}
+
+
+static void
+AppendAlterSchemaOwnerStmt(StringInfo buf, AlterOwnerStmt *stmt)
+{
+	Assert(stmt->objectType == OBJECT_SCHEMA);
+
+	appendStringInfo(buf, "ALTER SCHEMA %s OWNER TO %s;",
+					 quote_identifier(strVal(stmt->object)),
+					 RoleSpecString(stmt->newowner, true));
 }
 
 

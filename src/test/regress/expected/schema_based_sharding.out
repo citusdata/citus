@@ -726,13 +726,23 @@ DROP SCHEMA tenant_1 CASCADE;
 CREATE ROLE test_non_super_user;
 ALTER ROLE test_non_super_user NOSUPERUSER;
 ALTER SCHEMA tenant_2 OWNER TO test_non_super_user;
--- XXX: ALTER SCHEMA .. OWNER TO .. is not propagated to workers,
---      see https://github.com/citusdata/citus/issues/4812.
-SELECT result FROM run_command_on_workers($$ALTER SCHEMA tenant_2 OWNER TO test_non_super_user$$);
-    result
+SELECT pg_get_userbyid(nspowner) AS schema_owner
+    FROM pg_namespace
+    WHERE nspname = 'tenant_2';
+    schema_owner
 ---------------------------------------------------------------------
- ALTER SCHEMA
- ALTER SCHEMA
+ test_non_super_user
+(1 row)
+
+select result from run_command_on_workers ($$
+  SELECT pg_get_userbyid(nspowner) AS schema_owner
+  FROM pg_namespace
+  WHERE nspname = 'tenant_2'
+$$);
+       result
+---------------------------------------------------------------------
+ test_non_super_user
+ test_non_super_user
 (2 rows)
 
 DROP OWNED BY test_non_super_user CASCADE;

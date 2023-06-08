@@ -1024,6 +1024,15 @@ static DistributeObjectOps Routine_Rename = {
 	.address = RenameFunctionStmtObjectAddress,
 	.markDistributed = false,
 };
+static DistributeObjectOps Schema_AlterOwner = {
+	.deparse = DeparseAlterSchemaOwnerStmt,
+	.qualify = NULL,
+	.preprocess = PreprocessAlterDistributedObjectStmt,
+	.operationType = DIST_OPS_ALTER,
+	.postprocess = NULL,
+	.address = AlterSchemaOwnerStmtObjectAddress,
+	.markDistributed = false,
+};
 static DistributeObjectOps Schema_Drop = {
 	.deparse = DeparseDropSchemaStmt,
 	.qualify = NULL,
@@ -1455,6 +1464,11 @@ GetDistributeObjectOps(Node *node)
 				case OBJECT_ROUTINE:
 				{
 					return &Routine_AlterOwner;
+				}
+
+				case OBJECT_SCHEMA:
+				{
+					return &Schema_AlterOwner;
 				}
 
 				case OBJECT_STATISTIC_EXT:
