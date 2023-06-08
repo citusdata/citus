@@ -9,9 +9,9 @@
 -- this test is relevant only for pg14-15 upgrade
 --
 SHOW server_version \gset
-SELECT substring(:'server_version', '\d+')::int = 15 AS server_version_eq_15
+SELECT substring(:'server_version', '\d+')::int = 15 AND EXISTS (SELECT * FROM pg_namespace WHERE nspname = 'upgrade_distributed_triggers') AS is_14_15_pg_upgrade
 \gset
-\if :server_version_eq_15
+\if :is_14_15_pg_upgrade
 \else
 \q
 \endif
