@@ -1406,17 +1406,15 @@ CreateNonPushableInsertSelectPlan(uint64 planId, Query *parse, ParamListInfo bou
 						 IsSupportedRedistributionTarget(targetRelationId);
 
 	/*
-	 * Today it's not possible to generate a distributed plan for a SELECT
+	 * It's not possible to generate a distributed plan for a SELECT
 	 * having more than one tasks if it references a single-shard table.
-	 * This is because, we don't support queries beyond router planner
-	 * if the query references a single-shard table.
 	 *
 	 * For this reason, right now we don't expect an INSERT .. SELECT
 	 * query to go through the repartitioned INSERT .. SELECT logic if the
 	 * SELECT query references a single-shard table.
 	 */
 	Assert(!repartitioned ||
-		   !GetRTEListPropertiesForQuery(selectQueryCopy)->hasSingleShardDistTable);
+		   !ContainsSingleShardTable(selectQueryCopy));
 
 	distributedPlan->modifyQueryViaCoordinatorOrRepartition = insertSelectQuery;
 	distributedPlan->selectPlanForModifyViaCoordinatorOrRepartition = selectPlan;

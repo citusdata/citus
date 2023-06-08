@@ -627,12 +627,12 @@ CREATE TABLE local_table_for_fkey (a INT PRIMARY KEY);
 ALTER TABLE "NULL_!_dist_key"."nullKeyTable.1!?!9012345678901234567890123456789012345678901234567890123456789"
     ADD CONSTRAINT fkey_to_dummy_local FOREIGN KEY (id) REFERENCES local_table_for_fkey(a);
 
--- Normally, we support foreign keys from Postgres tables to distributed
--- tables assuming that the user will soon distribute the local table too
--- anyway. However, this is not the case for single-shard tables before
--- we improve SQL support.
+-- foreign key from a local table
 ALTER TABLE local_table_for_fkey
     ADD CONSTRAINT fkey_from_dummy_local FOREIGN KEY (a) REFERENCES "NULL_!_dist_key"."nullKeyTable.1!?!9012345678901234567890123456789012345678901234567890123456789"(id);
+
+SELECT create_distributed_table('local_table_for_fkey', null, colocate_with=>'none');
+SELECT create_distributed_table('local_table_for_fkey', null, colocate_with=>'"NULL_!_dist_key"."nullKeyTable.1!?!9012345678901234567890123456789012345678901234567890123456789"');
 
 -- foreign key to a citus local table, errors out
 CREATE TABLE citus_local_table_for_fkey (a INT PRIMARY KEY);

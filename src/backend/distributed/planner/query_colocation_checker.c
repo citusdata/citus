@@ -168,11 +168,10 @@ AnchorRte(Query *subquery)
 		{
 			Oid relationId = currentRte->relid;
 
-			if (IsCitusTable(relationId) && !HasDistributionKey(relationId))
+			if (!IsCitusTableType(relationId, DISTRIBUTED_TABLE))
 			{
 				/*
-				 * Non-distributed tables should not be the anchor rte since they
-				 * don't have distribution key.
+				 * We're not interested in non distributed relations.
 				 */
 				continue;
 			}
