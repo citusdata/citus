@@ -33,6 +33,7 @@ static List * GetRegularAndForeignCitusTablesInSchema(Oid schemaId);
 static void EnsureSchemaCanBeDistributed(Oid schemaId, List *schemaTableIdList);
 static void EnsureTenantSchemaNameAllowed(Oid schemaId);
 static void EnsureTableKindSupportedForTenantSchema(Oid relationId);
+static void EnsureFKeysForTenantTable(Oid relationId);
 static void EnsureSchemaExist(Oid schemaId);
 
 /* controlled via citus.enable_schema_based_sharding GUC */
@@ -142,6 +143,69 @@ EnsureTableKindSupportedForTenantSchema(Oid relationId)
 	{
 		ereport(ERROR, (errmsg("tables in a distributed schema cannot inherit or "
 							   "be inherited")));
+	}
+}
+
+
+/*
+ * EnsureFKeysForTenantTable ensures that all referencing and referenced foreign
+ * keys are allowed for given table.
+ */
+static void
+EnsureFKeysForTenantTable(Oid relationId)
+{
+	Oid tenantSchemaId = get_rel_namespace(relationId);
+	int fKeyReferencingFlags = INCLUDE_REFERENCING_CONSTRAINTS | INCLUDE_ALL_TABLE_TYPES;
+	List *referencingForeignKeys = GetForeignKeyOids(relationId, fKeyReferencingFlags);
+	Oid foreignKeyId = InvalidOid;
+	foreach_oid(foreignKeyId, referencingForeignKeys)
+	{
+		Oid referencedTableId = GetReferencedTableId(foreignKeyId);
+		Oid referencedTableSchemaId = get_rel_namespace(referencedTableId);
+
+		/* We allow foreign keys to a table in the same schema */
+		if (tenantSchemaId == referencedTableSchemaId)
+		{
+			continue;
+		}
+
+		/*
+		 * Allow foreign keys to the other schema only if the referenced table is
+		 * a reference table.
+		 */
+		if (!IsCitusTable(referencedTableId) ||
+			!IsCitusTableType(referencedTableId, REFERENCE_TABLE))
+		{
+			ereport(ERROR, errmsg("when referenced table is in another schema, "
+								  "only foreign keys to a reference table is "
+								  "allowed from a table in distributed schema"));
+		}
+	}
+
+	int fKeyReferencedFlags = INCLUDE_REFERENCED_CONSTRAINTS | INCLUDE_ALL_TABLE_TYPES;
+	List *referencedForeignKeys = GetForeignKeyOids(relationId, fKeyReferencedFlags);
+	foreach_oid(foreignKeyId, referencedForeignKeys)
+	{
+		Oid referencingTableId = GetReferencingTableId(foreignKeyId);
+		Oid referencingTableSchemaId = get_rel_namespace(referencingTableId);
+
+		/* We allow foreign keys from a table in the same schema */
+		if (tenantSchemaId == referencingTableSchemaId)
+		{
+			continue;
+		}
+
+		/*
+		 * Allow foreign keys from the other schema only if the referencing table is
+		 * a reference table.
+		 */
+		if (!IsCitusTable(referencingTableId) ||
+			!IsCitusTableType(referencingTableId, REFERENCE_TABLE))
+		{
+			ereport(ERROR, errmsg("when referencing table is in another schema, "
+								  "only foreign keys from a reference table is "
+								  "allowed to a table in distributed schema"));
+		}
 	}
 }
 
@@ -331,6 +395,9 @@ EnsureSchemaCanBeDistributed(Oid schemaId, List *schemaTableIdList)
 		/* Check relation kind */
 		EnsureTableKindSupportedForTenantSchema(relationId);
 
+		/* Check foreign keys */
+		EnsureFKeysForTenantTable(relationId);
+
 		/* Postgres local tables are allowed */
 		if (!IsCitusTable(relationId))
 		{
@@ -399,7 +466,7 @@ EnsureSchemaExist(Oid schemaId)
 	if (!SearchSysCacheExists1(NAMESPACEOID, ObjectIdGetDatum(schemaId)))
 	{
 		ereport(ERROR, (errcode(ERRCODE_UNDEFINED_SCHEMA),
-						errmsg("concurrent operation removed the schema")));
+						errmsg("schema with OID %u does not exist", schemaId)));
 	}
 }
 

@@ -92,6 +92,14 @@ DROP TABLE citus_schema_distribute_undistribute.tbl2 CASCADE;
 SELECT citus_schema_distribute('tenant1');
 SELECT citus_schema_undistribute('tenant1');
 
+-- foreign key from a local table in another schema is not allowed
+CREATE TABLE tenant1.table3q(id int PRIMARY KEY);
+CREATE TABLE citus_schema_distribute_undistribute.tbl3(id int PRIMARY KEY REFERENCES tenant1.table3q(id));
+SELECT citus_schema_distribute('tenant1');
+DROP TABLE citus_schema_distribute_undistribute.tbl3 CASCADE;
+SELECT citus_schema_distribute('tenant1');
+SELECT citus_schema_undistribute('tenant1');
+
 -- only allowed for schema owner or superuser
 CREATE USER dummyregular;
 SET role dummyregular;
@@ -115,6 +123,7 @@ SELECT citus_schema_distribute('tenant1');
 
 -- show the schema is a tenant schema now
 SELECT colocationid AS tenant1_colocid FROM pg_dist_tenant_schema schemaid \gset
+-- below query verifies the same colocationid in pg_dist_tenant_schema, pg_dist_colocation and all entries in pg_dist_partition at the same time
 SELECT '$$' ||
        ' SELECT colocationid = ' || :tenant1_colocid ||
        ' FROM pg_dist_tenant_schema JOIN pg_dist_colocation USING(colocationid)' ||
@@ -128,7 +137,8 @@ SELECT citus_schema_undistribute('tenant1');
 
 -- show the schema is a regular schema
 SELECT result FROM run_command_on_all_nodes($$ SELECT schemaid::regnamespace as schemaname FROM pg_dist_tenant_schema $$);
-SELECT result FROM run_command_on_all_nodes($$ SELECT COUNT(*)=0 FROM pg_dist_colocation FULL JOIN pg_dist_partition USING(colocationid) WHERE logicalrelid::text LIKE 'tenant1.%' AND colocationid > 0 $$);
+-- below query verifies the tenant colocationid is removed from both pg_dist_colocation and all entries in pg_dist_partition at the same time
+SELECT result FROM run_command_on_all_nodes($$ SELECT COUNT(*)=0 FROM pg_dist_colocation FULL JOIN pg_dist_partition USING(colocationid) WHERE (logicalrelid::text LIKE 'tenant1.%' OR logicalrelid is NULL) AND colocationid > 0 $$);
 SELECT result FROM run_command_on_all_nodes($$ SELECT array_agg(logicalrelid ORDER BY logicalrelid) FROM pg_dist_partition WHERE logicalrelid::text LIKE 'tenant1.%' $$);
 
 RESET role;
@@ -154,7 +164,7 @@ SELECT citus_schema_undistribute('tenant1');
 
 -- show the schema is a regular schema
 SELECT result FROM run_command_on_all_nodes($$ SELECT schemaid::regnamespace as schemaname FROM pg_dist_tenant_schema $$);
-SELECT result FROM run_command_on_all_nodes($$ SELECT COUNT(*)=0 FROM pg_dist_colocation FULL JOIN pg_dist_partition USING(colocationid) WHERE logicalrelid::text LIKE 'tenant1.%' AND colocationid > 0 $$);
+SELECT result FROM run_command_on_all_nodes($$ SELECT COUNT(*)=0 FROM pg_dist_colocation FULL JOIN pg_dist_partition USING(colocationid) WHERE (logicalrelid::text LIKE 'tenant1.%' OR logicalrelid is NULL) AND colocationid > 0 $$);
 SELECT result FROM run_command_on_all_nodes($$ SELECT array_agg(logicalrelid ORDER BY logicalrelid) FROM pg_dist_partition WHERE logicalrelid::text LIKE 'tenant1.%' $$);
 
 RESET role;
@@ -205,7 +215,7 @@ ROLLBACK;
 
 -- show the schema is a regular schema
 SELECT result FROM run_command_on_all_nodes($$ SELECT schemaid::regnamespace as schemaname FROM pg_dist_tenant_schema $$);
-SELECT result FROM run_command_on_all_nodes($$ SELECT COUNT(*)=0 FROM pg_dist_colocation FULL JOIN pg_dist_partition USING(colocationid) WHERE logicalrelid::text LIKE 'tenant1.%' AND colocationid > 0 $$);
+SELECT result FROM run_command_on_all_nodes($$ SELECT COUNT(*)=0 FROM pg_dist_colocation FULL JOIN pg_dist_partition USING(colocationid) WHERE (logicalrelid::text LIKE 'tenant1.%' OR logicalrelid is NULL) AND colocationid > 0 $$);
 SELECT result FROM run_command_on_all_nodes($$ SELECT array_agg(logicalrelid ORDER BY logicalrelid) FROM pg_dist_partition WHERE logicalrelid::text LIKE 'tenant1.%' $$);
 
 -- errors not a tenant schema
@@ -237,7 +247,7 @@ SELECT citus_schema_undistribute('tenant1');
 
 -- show the schema is a regular schema now
 SELECT result FROM run_command_on_all_nodes($$ SELECT schemaid::regnamespace as schemaname FROM pg_dist_tenant_schema $$);
-SELECT result FROM run_command_on_all_nodes($$ SELECT COUNT(*)=0 FROM pg_dist_colocation FULL JOIN pg_dist_partition USING(colocationid) WHERE logicalrelid::text LIKE 'tenant1.%' AND colocationid > 0 $$);
+SELECT result FROM run_command_on_all_nodes($$ SELECT COUNT(*)=0 FROM pg_dist_colocation FULL JOIN pg_dist_partition USING(colocationid) WHERE (logicalrelid::text LIKE 'tenant1.%' OR logicalrelid is NULL) AND colocationid > 0 $$);
 SELECT result FROM run_command_on_all_nodes($$ SELECT array_agg(logicalrelid ORDER BY logicalrelid) FROM pg_dist_partition WHERE logicalrelid::text LIKE 'tenant1.%' $$);
 
 -- tables still have valid data
@@ -279,7 +289,7 @@ SELECT citus_schema_undistribute('"CiTuS.TeeN"');
 
 -- show the schema is a regular schema
 SELECT result FROM run_command_on_all_nodes($$ SELECT schemaid::regnamespace as schemaname FROM pg_dist_tenant_schema $$);
-SELECT result FROM run_command_on_all_nodes($$ SELECT COUNT(*)=0 FROM pg_dist_colocation FULL JOIN pg_dist_partition USING(colocationid) WHERE logicalrelid::text LIKE 'tenant1.%' AND colocationid > 0 $$);
+SELECT result FROM run_command_on_all_nodes($$ SELECT COUNT(*)=0 FROM pg_dist_colocation FULL JOIN pg_dist_partition USING(colocationid) WHERE (logicalrelid::text LIKE 'tenant1.%' OR logicalrelid is NULL) AND colocationid > 0 $$);
 SELECT result FROM run_command_on_all_nodes($$ SELECT array_agg(logicalrelid ORDER BY logicalrelid) FROM pg_dist_partition WHERE logicalrelid::text LIKE 'tenant1.%' $$);
 
 -- try setting the schema again after adding a distributed table into the schema. It should complain about distributed table.
@@ -314,7 +324,7 @@ SELECT citus_schema_undistribute('tenant1');
 
 -- show the schema is a regular schema now
 SELECT result FROM run_command_on_all_nodes($$ SELECT schemaid::regnamespace as schemaname FROM pg_dist_tenant_schema $$);
-SELECT result FROM run_command_on_all_nodes($$ SELECT COUNT(*)=0 FROM pg_dist_colocation FULL JOIN pg_dist_partition USING(colocationid) WHERE logicalrelid::text LIKE 'tenant1.%' AND colocationid > 0 $$);
+SELECT result FROM run_command_on_all_nodes($$ SELECT COUNT(*)=0 FROM pg_dist_colocation FULL JOIN pg_dist_partition USING(colocationid) WHERE (logicalrelid::text LIKE 'tenant1.%' OR logicalrelid is NULL) AND colocationid > 0 $$);
 SELECT result FROM run_command_on_all_nodes($$ SELECT array_agg(logicalrelid ORDER BY logicalrelid) FROM pg_dist_partition WHERE logicalrelid::text LIKE 'tenant1.%' $$);
 
 -- cleanup
