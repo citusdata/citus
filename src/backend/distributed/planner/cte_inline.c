@@ -43,7 +43,7 @@ static bool contain_dml_walker(Node *node, void *context);
 /* the following utility functions are related to Citus' logic */
 static bool RecursivelyInlineCteWalker(Node *node, void *context);
 static void InlineCTEsInQueryTree(Query *query);
-static bool QueryTreeContainsInlinableCteWalker(Node *node);
+static bool QueryTreeContainsInlinableCteWalker(Node *node, void *context);
 
 
 /*
@@ -135,7 +135,7 @@ InlineCTEsInQueryTree(Query *query)
 bool
 QueryTreeContainsInlinableCTE(Query *queryTree)
 {
-	return QueryTreeContainsInlinableCteWalker((Node *) queryTree);
+	return QueryTreeContainsInlinableCteWalker((Node *) queryTree, NULL);
 }
 
 
@@ -144,7 +144,7 @@ QueryTreeContainsInlinableCTE(Query *queryTree)
  * the (sub)queries in the node contains at least one CTE.
  */
 static bool
-QueryTreeContainsInlinableCteWalker(Node *node)
+QueryTreeContainsInlinableCteWalker(Node *node, void *context)
 {
 	if (node == NULL)
 	{

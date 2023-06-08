@@ -40,6 +40,9 @@ DROP FUNCTION pg_catalog.citus_internal_unregister_tenant_schema_globally(Oid, t
 
 #include "../udfs/citus_drop_trigger/10.2-1.sql"
 
+#include "../udfs/citus_tables/11.1-1.sql"
+#include "../udfs/citus_shards/11.1-1.sql"
+
 DROP TABLE pg_catalog.pg_dist_tenant_schema;
 
 #include "../udfs/citus_stat_tenants_local/11.3-1.sql"

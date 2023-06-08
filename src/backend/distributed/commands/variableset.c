@@ -89,7 +89,7 @@ PostprocessVariableSetStmt(VariableSetStmt *setStmt, const char *setStmtString)
 	List *connectionList = NIL;
 
 	/* at present we only support SET LOCAL and SET TRANSACTION */
-	AssertArg(ShouldPropagateSetCommand(setStmt));
+	Assert(ShouldPropagateSetCommand(setStmt));
 
 	/* haven't seen any SET stmts so far in this (sub-)xact: initialize StringInfo */
 	if (activeSetStmts == NULL)

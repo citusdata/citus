@@ -89,6 +89,15 @@ ERROR:  tenant_2.test_table is not allowed for alter_distributed_table because i
 -- verify we also don't allow colocate_with a tenant table
 SELECT alter_distributed_table('regular_schema.test_table', colocate_with => 'tenant_2.test_table');
 ERROR:  tenant_2.test_table is not allowed for colocate_with because it is a tenant table
+-- verify we don't allow ALTER TABLE SET SCHEMA for tenant tables
+ALTER TABLE tenant_2.test_table SET SCHEMA regular_schema;
+ERROR:  tenant_2.test_table is not allowed for ALTER TABLE SET SCHEMA because it is a tenant table
+-- verify we don't allow ALTER TABLE SET SCHEMA for tenant schemas
+ALTER TABLE regular_schema.test_table SET SCHEMA tenant_2;
+ERROR:  tenant_2 is not allowed for ALTER TABLE SET SCHEMA because it is a distributed schema
+-- the same, from tenant schema to tenant schema
+ALTER TABLE tenant_2.test_table SET SCHEMA tenant_3;
+ERROR:  tenant_2.test_table is not allowed for ALTER TABLE SET SCHEMA because it is a tenant table
 -- (on coordinator) verify that colocation id is set for empty tenants too
 SELECT colocationid > 0 FROM pg_dist_tenant_schema
 WHERE schemaid::regnamespace::text IN ('tenant_1', 'tenant_3');
@@ -1379,8 +1388,34 @@ SELECT pg_reload_conf();
 (1 row)
 
 \c - - - :master_port
+SET search_path TO regular_schema;
+CREATE TABLE type_sing(a INT);
+SELECT create_distributed_table('type_sing', NULL, colocate_with:='none');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SET citus.enable_schema_based_sharding TO ON;
+CREATE SCHEMA type_sch;
+CREATE TABLE type_sch.tbl (a INT);
+SELECT table_name, citus_table_type FROM public.citus_tables WHERE table_name::text LIKE 'type_%';
+  table_name  | citus_table_type
+---------------------------------------------------------------------
+ type_sch.tbl | schema
+ type_sing    | distributed
+(2 rows)
+
+SELECT table_name, citus_table_type FROM citus_shards WHERE table_name::text LIKE 'type_%' AND nodeport IN (:worker_1_port, :worker_2_port);
+  table_name  | citus_table_type
+---------------------------------------------------------------------
+ type_sch.tbl | schema
+ type_sing    | distributed
+(2 rows)
+
+RESET citus.enable_schema_based_sharding;
 SET client_min_messages TO WARNING;
-DROP SCHEMA regular_schema, tenant_3, tenant_5, tenant_7, tenant_6 CASCADE;
+DROP SCHEMA regular_schema, tenant_3, tenant_5, tenant_7, tenant_6, type_sch CASCADE;
 SELECT citus_remove_node('localhost', :master_port);
  citus_remove_node
 ---------------------------------------------------------------------
