@@ -164,6 +164,69 @@ SELECT create_distributed_table('range_table', 'a', 'range');
 
 CALL public.create_range_partitioned_shards('range_table', '{"0","25"}','{"24","49"}');
 INSERT INTO range_table VALUES (0, 1), (1, 2), (2, 3), (3, 4), (4, 5), (5, 6), (6, 50);
+\set users_table_data_file :abs_srcdir '/data/users_table.data'
+\set events_table_data_file :abs_srcdir '/data/events_table.data'
+CREATE TABLE users_table (user_id int, time timestamp, value_1 int, value_2 int, value_3 float, value_4 bigint);
+SELECT create_distributed_table('users_table', null, colocate_with=>'none');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+\set client_side_copy_command '\\copy users_table FROM ' :'users_table_data_file' ' WITH CSV;'
+:client_side_copy_command
+CREATE TABLE non_colocated_users_table (id int, value int);
+SELECT create_distributed_table('non_colocated_users_table', null, colocate_with => 'none');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO non_colocated_users_table (id, value) VALUES(1, 2),(2, 3),(3,4);
+CREATE TABLE colocated_events_table (user_id int, time timestamp, event_type int, value_2 int, value_3 float, value_4 bigint);
+SELECT create_distributed_table('colocated_events_table', null, colocate_with=>'users_table');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+\set client_side_copy_command '\\copy colocated_events_table FROM ' :'events_table_data_file' ' WITH CSV;'
+:client_side_copy_command
+CREATE TABLE non_colocated_events_table (user_id int, time timestamp, event_type int, value_2 int, value_3 float, value_4 bigint);
+SELECT create_distributed_table('non_colocated_events_table', null, colocate_with=>'non_colocated_users_table');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+\set client_side_copy_command '\\copy non_colocated_events_table FROM ' :'events_table_data_file' ' WITH CSV;'
+:client_side_copy_command
+CREATE TABLE users_table_local AS SELECT * FROM users_table;
+CREATE TABLE colocated_users_table (id int, value int);
+SELECT create_distributed_table('colocated_users_table', null, colocate_with => 'users_table');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO colocated_users_table (id, value) VALUES(1, 2),(2, 3),(3,4);
+CREATE TABLE users_reference_table (like users_table including all);
+SELECT create_reference_table('users_reference_table');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE events_reference_table (like colocated_events_table including all);
+SELECT create_reference_table('events_reference_table');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE FUNCTION func() RETURNS TABLE (id int, value int) AS $$
+	SELECT 1, 2
+$$ LANGUAGE SQL;
 SET client_min_messages to DEBUG2;
 -- simple insert
 INSERT INTO nullkey_c1_t1 VALUES (1,2), (2,2), (3,4);
@@ -225,8 +288,9 @@ DEBUG:  Creating router plan
 -- cartesian product with different table types
 --    with other table types
 SELECT COUNT(*) FROM distributed_table d1, nullkey_c1_t1;
-ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
-DETAIL:  router planner does not support queries that reference non-colocated distributed tables
+DEBUG:  router planner does not support queries that reference non-colocated distributed tables
+ERROR:  cannot perform distributed planning on this query
+DETAIL:  Cartesian products are currently unsupported
 SELECT COUNT(*) FROM reference_table d1, nullkey_c1_t1;
 DEBUG:  Creating router plan
  count
@@ -235,11 +299,29 @@ DEBUG:  Creating router plan
 (1 row)
 
 SELECT COUNT(*) FROM citus_local_table d1, nullkey_c1_t1;
-ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
-DETAIL:  Local tables cannot be used in distributed queries.
+DEBUG:  Local tables cannot be used in distributed queries.
+DEBUG:  Wrapping relation "citus_local_table" "d1" to a subquery
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  generating subplan XXX_1 for subquery SELECT NULL::integer AS "dummy-1" FROM query_single_shard_table.citus_local_table d1 WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT NULL::integer AS a, NULL::integer AS b FROM (SELECT intermediate_result."dummy-1" FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result("dummy-1" integer)) d1_1) d1, query_single_shard_table.nullkey_c1_t1
+DEBUG:  Creating router plan
+ count
+---------------------------------------------------------------------
+   121
+(1 row)
+
 SELECT COUNT(*) FROM postgres_local_table d1, nullkey_c1_t1;
-ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
-DETAIL:  Local tables cannot be used in distributed queries.
+DEBUG:  Local tables cannot be used in distributed queries.
+DEBUG:  Wrapping relation "postgres_local_table" "d1" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT NULL::integer AS "dummy-1" FROM query_single_shard_table.postgres_local_table d1 WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT NULL::integer AS a, NULL::integer AS b FROM (SELECT intermediate_result."dummy-1" FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result("dummy-1" integer)) d1_1) d1, query_single_shard_table.nullkey_c1_t1
+DEBUG:  Creating router plan
+ count
+---------------------------------------------------------------------
+    66
+(1 row)
+
 --    with a colocated single-shard table
 SELECT COUNT(*) FROM nullkey_c1_t1 d1, nullkey_c1_t2;
 DEBUG:  Creating router plan
@@ -250,8 +332,9 @@ DEBUG:  Creating router plan
 
 --    with a non-colocated single-shard table
 SELECT COUNT(*) FROM nullkey_c1_t1 d1, nullkey_c2_t1;
-ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
-DETAIL:  router planner does not support queries that reference non-colocated distributed tables
+DEBUG:  router planner does not support queries that reference non-colocated distributed tables
+ERROR:  cannot perform distributed planning on this query
+DETAIL:  Cartesian products are currently unsupported
 -- First, show that nullkey_c1_t1 and nullkey_c3_t1 are not colocated.
 SELECT
   (SELECT colocationid FROM pg_dist_partition WHERE logicalrelid = 'query_single_shard_table.nullkey_c1_t1'::regclass) !=
@@ -273,9 +356,16 @@ DEBUG:  Creating router plan
 (1 row)
 
 SET citus.enable_non_colocated_router_query_pushdown TO OFF;
+SET citus.enable_repartition_joins TO ON;
+SET client_min_messages TO DEBUG1;
 SELECT COUNT(*) FROM nullkey_c1_t1 JOIN nullkey_c3_t1 USING(a);
-ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
-DETAIL:  router planner does not support queries that reference non-colocated distributed tables
+ count
+---------------------------------------------------------------------
+    11
+(1 row)
+
+SET client_min_messages TO DEBUG2;
+SET citus.enable_repartition_joins TO OFF;
 RESET citus.enable_non_colocated_router_query_pushdown;
 -- colocated join between single-shard tables
 SELECT COUNT(*) FROM nullkey_c1_t1 JOIN nullkey_c1_t2 USING(a);
@@ -350,52 +440,123 @@ DEBUG:  Creating router plan
 (1 row)
 
 -- non-colocated inner joins between single-shard tables
+SET client_min_messages to DEBUG1;
+SET citus.enable_repartition_joins TO ON;
 SELECT * FROM nullkey_c1_t1 JOIN nullkey_c2_t1 USING(a) ORDER BY 1,2,3;
-ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
-DETAIL:  router planner does not support queries that reference non-colocated distributed tables
+ a | b | b
+---------------------------------------------------------------------
+ 1 | 1 | 0
+ 1 | 2 | 0
+ 2 | 2 | 2
+ 2 | 2 | 2
+ 2 | 2 | 5
+ 2 | 2 | 5
+ 3 | 3 | 3
+ 3 | 4 | 3
+ 4 | 4 | 3
+ 4 | 4 | 4
+ 5 | 5 | 2
+ 5 | 5 | 5
+ 6 | 6 | 6
+ 7 | 7 | 7
+(14 rows)
+
+SELECT * FROM (SELECT * FROM nullkey_c1_t1) nullkey_c1_t1 JOIN nullkey_c2_t1 USING(a) ORDER BY 1,2,3;
+ a | b | b
+---------------------------------------------------------------------
+ 1 | 1 | 0
+ 1 | 2 | 0
+ 2 | 2 | 2
+ 2 | 2 | 2
+ 2 | 2 | 5
+ 2 | 2 | 5
+ 3 | 3 | 3
+ 3 | 4 | 3
+ 4 | 4 | 3
+ 4 | 4 | 4
+ 5 | 5 | 2
+ 5 | 5 | 5
+ 6 | 6 | 6
+ 7 | 7 | 7
+(14 rows)
+
+SELECT * FROM nullkey_c2_t1 JOIN (SELECT * FROM nullkey_c1_t1) nullkey_c1_t1 USING(a) ORDER BY 1,2,3;
+ a | b | b
+---------------------------------------------------------------------
+ 1 | 0 | 1
+ 1 | 0 | 2
+ 2 | 2 | 2
+ 2 | 2 | 2
+ 2 | 5 | 2
+ 2 | 5 | 2
+ 3 | 3 | 3
+ 3 | 3 | 4
+ 4 | 3 | 4
+ 4 | 4 | 4
+ 5 | 2 | 5
+ 5 | 5 | 5
+ 6 | 6 | 6
+ 7 | 7 | 7
+(14 rows)
+
 SELECT COUNT(*) FROM nullkey_c1_t1 t1
 JOIN LATERAL (
     SELECT * FROM nullkey_c2_t2 t2 WHERE t2.b > t1.a
 ) q USING(a);
-ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
-DETAIL:  router planner does not support queries that reference non-colocated distributed tables
+ count
+---------------------------------------------------------------------
+     2
+(1 row)
+
+SET citus.enable_repartition_joins TO OFF;
+SET client_min_messages to DEBUG2;
 -- non-colocated outer joins between single-shard tables
 SELECT * FROM nullkey_c1_t1 LEFT JOIN nullkey_c2_t2 USING(a) ORDER BY 1,2,3 LIMIT 4;
-ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
-DETAIL:  router planner does not support queries that reference non-colocated distributed tables
+DEBUG:  router planner does not support queries that reference non-colocated distributed tables
+DEBUG:  push down of limit count: 4
+ERROR:  cannot push down this subquery
+DETAIL:  nullkey_c1_t1 and nullkey_c2_t2 are not colocated
 SELECT * FROM nullkey_c1_t1 FULL JOIN nullkey_c2_t2 USING(a) ORDER BY 1,2,3 LIMIT 4;
-ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
-DETAIL:  router planner does not support queries that reference non-colocated distributed tables
+DEBUG:  router planner does not support queries that reference non-colocated distributed tables
+DEBUG:  push down of limit count: 4
+ERROR:  cannot push down this subquery
+DETAIL:  nullkey_c1_t1 and nullkey_c2_t2 are not colocated
 SELECT * FROM nullkey_c1_t1 t1
 LEFT JOIN LATERAL (
     SELECT * FROM nullkey_c2_t2 t2 WHERE t2.b > t1.a
 ) q USING(a) ORDER BY 1,2,3 OFFSET 3 LIMIT 4;
-ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
-DETAIL:  router planner does not support queries that reference non-colocated distributed tables
+DEBUG:  router planner does not support queries that reference non-colocated distributed tables
+DEBUG:  push down of limit count: 7
+ERROR:  cannot push down this subquery
+DETAIL:  nullkey_c1_t1 and nullkey_c2_t2 are not colocated
 SELECT COUNT(*) FROM nullkey_c1_t1 t1
 LEFT JOIN LATERAL (
     SELECT * FROM nullkey_c2_t2 t2 WHERE t2.b > t1.a
 ) q USING(a);
-ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
-DETAIL:  router planner does not support queries that reference non-colocated distributed tables
+DEBUG:  router planner does not support queries that reference non-colocated distributed tables
+ERROR:  cannot push down this subquery
+DETAIL:  nullkey_c1_t1 and nullkey_c2_t2 are not colocated
 SELECT COUNT(*) FROM nullkey_c1_t1 t1
 WHERE EXISTS (
     SELECT * FROM nullkey_c2_t2 t2 WHERE t2.b > t1.a
 );
-ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
-DETAIL:  router planner does not support queries that reference non-colocated distributed tables
+DEBUG:  router planner does not support queries that reference non-colocated distributed tables
+ERROR:  cannot push down this subquery
+DETAIL:  nullkey_c2_t2 and nullkey_c1_t1 are not colocated
 SELECT COUNT(*) FROM nullkey_c1_t1 t1
 WHERE t1.b IN (
     SELECT b+1 FROM nullkey_c2_t2 t2 WHERE t2.b = t1.a
 );
-ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
-DETAIL:  found no worker with all shard placements
+DEBUG:  found no worker with all shard placements
+ERROR:  cannot push down this subquery
+DETAIL:  nullkey_c2_t2 and nullkey_c1_t1 are not colocated
 SELECT COUNT(*) FROM nullkey_c1_t1 t1
 WHERE t1.b NOT IN (
     SELECT a FROM nullkey_c2_t2 t2 WHERE t2.b > t1.a
 );
-ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
-DETAIL:  found no worker with all shard placements
+DEBUG:  found no worker with all shard placements
+ERROR:  cannot push down this subquery
+DETAIL:  nullkey_c2_t2 and nullkey_c1_t1 are not colocated
 -- join with a reference table
 SELECT COUNT(*) FROM nullkey_c1_t1, reference_table WHERE nullkey_c1_t1.a = reference_table.a;
 DEBUG:  Creating router plan
@@ -414,28 +575,256 @@ DEBUG:  Creating router plan
 (1 row)
 
 -- join with postgres / citus local tables
-SELECT * FROM nullkey_c1_t1 JOIN postgres_local_table USING(a);
-ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
-DETAIL:  Local tables cannot be used in distributed queries.
-SELECT * FROM nullkey_c1_t1 JOIN citus_local_table USING(a);
-ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
-DETAIL:  Local tables cannot be used in distributed queries.
+SELECT * FROM nullkey_c1_t1 JOIN postgres_local_table USING(a) ORDER BY 1,2,3;
+DEBUG:  Local tables cannot be used in distributed queries.
+DEBUG:  Wrapping relation "postgres_local_table" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT a, b FROM query_single_shard_table.postgres_local_table WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT nullkey_c1_t1.a, nullkey_c1_t1.b, postgres_local_table.b FROM (query_single_shard_table.nullkey_c1_t1 JOIN (SELECT postgres_local_table_1.a, postgres_local_table_1.b FROM (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) postgres_local_table_1) postgres_local_table USING (a)) ORDER BY nullkey_c1_t1.a, nullkey_c1_t1.b, postgres_local_table.b
+DEBUG:  Creating router plan
+ a | b | b
+---------------------------------------------------------------------
+ 5 | 5 | 5
+ 6 | 6 | 6
+ 7 | 7 | 7
+ 8 | 8 | 8
+(4 rows)
+
+SELECT * FROM nullkey_c1_t1 JOIN citus_local_table USING(a) ORDER BY 1,2,3;
+DEBUG:  Local tables cannot be used in distributed queries.
+DEBUG:  Wrapping relation "citus_local_table" to a subquery
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  generating subplan XXX_1 for subquery SELECT a, b FROM query_single_shard_table.citus_local_table WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT nullkey_c1_t1.a, nullkey_c1_t1.b, citus_local_table.b FROM (query_single_shard_table.nullkey_c1_t1 JOIN (SELECT citus_local_table_1.a, citus_local_table_1.b FROM (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) citus_local_table_1) citus_local_table USING (a)) ORDER BY nullkey_c1_t1.a, nullkey_c1_t1.b, citus_local_table.b
+DEBUG:  Creating router plan
+ a | b | b
+---------------------------------------------------------------------
+ 1 | 1 | 1
+ 1 | 2 | 1
+ 2 | 2 | 2
+ 2 | 2 | 2
+ 3 | 3 | 3
+ 3 | 4 | 3
+ 4 | 4 | 4
+ 5 | 5 | 5
+ 6 | 6 | 6
+ 7 | 7 | 7
+ 8 | 8 | 8
+(11 rows)
+
+SET citus.local_table_join_policy TO 'prefer-distributed';
+SELECT * FROM nullkey_c1_t1 JOIN citus_local_table USING(a) ORDER BY 1,2,3;
+DEBUG:  Local tables cannot be used in distributed queries.
+DEBUG:  Wrapping relation "nullkey_c1_t1" to a subquery
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  generating subplan XXX_1 for subquery SELECT a, b FROM query_single_shard_table.nullkey_c1_t1 WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT nullkey_c1_t1.a, nullkey_c1_t1.b, citus_local_table.b FROM ((SELECT nullkey_c1_t1_1.a, nullkey_c1_t1_1.b FROM (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) nullkey_c1_t1_1) nullkey_c1_t1 JOIN query_single_shard_table.citus_local_table USING (a)) ORDER BY nullkey_c1_t1.a, nullkey_c1_t1.b, citus_local_table.b
+DEBUG:  Creating router plan
+ a | b | b
+---------------------------------------------------------------------
+ 1 | 1 | 1
+ 1 | 2 | 1
+ 2 | 2 | 2
+ 2 | 2 | 2
+ 3 | 3 | 3
+ 3 | 4 | 3
+ 4 | 4 | 4
+ 5 | 5 | 5
+ 6 | 6 | 6
+ 7 | 7 | 7
+ 8 | 8 | 8
+(11 rows)
+
+RESET citus.local_table_join_policy;
 -- join with a distributed table
-SELECT * FROM distributed_table d1 JOIN nullkey_c1_t1 USING(a);
-ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
-DETAIL:  router planner does not support queries that reference non-colocated distributed tables
+SET citus.enable_repartition_joins TO ON;
+SET client_min_messages TO DEBUG1;
+SELECT * FROM distributed_table d1 JOIN nullkey_c1_t1 USING(a) ORDER BY 1,2,3;
+ a | b | b
+---------------------------------------------------------------------
+ 3 | 3 | 3
+ 3 | 3 | 4
+ 4 | 4 | 4
+ 5 | 5 | 5
+ 6 | 6 | 6
+ 7 | 7 | 7
+ 8 | 8 | 8
+(7 rows)
+
+SELECT * FROM (SELECT * FROM distributed_table) d1 JOIN nullkey_c1_t1 USING(a) ORDER BY 1,2,3;
+DEBUG:  generating subplan XXX_1 for subquery SELECT a, b FROM query_single_shard_table.distributed_table
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT d1.a, d1.b, nullkey_c1_t1.b FROM ((SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) d1 JOIN query_single_shard_table.nullkey_c1_t1 USING (a)) ORDER BY d1.a, d1.b, nullkey_c1_t1.b
+ a | b | b
+---------------------------------------------------------------------
+ 3 | 3 | 3
+ 3 | 3 | 4
+ 4 | 4 | 4
+ 5 | 5 | 5
+ 6 | 6 | 6
+ 7 | 7 | 7
+ 8 | 8 | 8
+(7 rows)
+
+SELECT * FROM nullkey_c1_t1 JOIN (SELECT * FROM distributed_table) d1 USING(a) ORDER BY 1,2,3;
+DEBUG:  generating subplan XXX_1 for subquery SELECT a, b FROM query_single_shard_table.distributed_table
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT nullkey_c1_t1.a, nullkey_c1_t1.b, d1.b FROM (query_single_shard_table.nullkey_c1_t1 JOIN (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) d1 USING (a)) ORDER BY nullkey_c1_t1.a, nullkey_c1_t1.b, d1.b
+ a | b | b
+---------------------------------------------------------------------
+ 3 | 3 | 3
+ 3 | 4 | 3
+ 4 | 4 | 4
+ 5 | 5 | 5
+ 6 | 6 | 6
+ 7 | 7 | 7
+ 8 | 8 | 8
+(7 rows)
+
+SELECT * FROM distributed_table d1 JOIN (SELECT * FROM nullkey_c1_t1) nullkey_c1_t1 USING(a) ORDER BY 1,2,3;
+DEBUG:  generating subplan XXX_1 for subquery SELECT a, b FROM query_single_shard_table.nullkey_c1_t1
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT d1.a, d1.b, nullkey_c1_t1.b FROM (query_single_shard_table.distributed_table d1 JOIN (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) nullkey_c1_t1 USING (a)) ORDER BY d1.a, d1.b, nullkey_c1_t1.b
+ a | b | b
+---------------------------------------------------------------------
+ 3 | 3 | 3
+ 3 | 3 | 4
+ 4 | 4 | 4
+ 5 | 5 | 5
+ 6 | 6 | 6
+ 7 | 7 | 7
+ 8 | 8 | 8
+(7 rows)
+
+SELECT * FROM (SELECT * FROM nullkey_c1_t1) nullkey_c1_t1 JOIN distributed_table d1 USING(a) ORDER BY 1,2,3;
+DEBUG:  generating subplan XXX_1 for subquery SELECT a, b FROM query_single_shard_table.nullkey_c1_t1
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT nullkey_c1_t1.a, nullkey_c1_t1.b, d1.b FROM ((SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) nullkey_c1_t1 JOIN query_single_shard_table.distributed_table d1 USING (a)) ORDER BY nullkey_c1_t1.a, nullkey_c1_t1.b, d1.b
+ a | b | b
+---------------------------------------------------------------------
+ 3 | 3 | 3
+ 3 | 4 | 3
+ 4 | 4 | 4
+ 5 | 5 | 5
+ 6 | 6 | 6
+ 7 | 7 | 7
+ 8 | 8 | 8
+(7 rows)
+
+-- test joins with non-colocated distributed tables, by using subqueries
+SELECT * FROM nullkey_c1_t1 t1 JOIN (SELECT * FROM distributed_table) t2 USING (a) JOIN (SELECT * FROM nullkey_c1_t2) t3 USING (a) ORDER BY 1,2,3,4 LIMIT 1;
+DEBUG:  generating subplan XXX_1 for subquery SELECT a, b FROM query_single_shard_table.distributed_table
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT t1.a, t1.b, t2.b, t3.b FROM ((query_single_shard_table.nullkey_c1_t1 t1 JOIN (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) t2 USING (a)) JOIN (SELECT nullkey_c1_t2.a, nullkey_c1_t2.b FROM query_single_shard_table.nullkey_c1_t2) t3 USING (a)) ORDER BY t1.a, t1.b, t2.b, t3.b LIMIT 1
+ a | b | b | b
+---------------------------------------------------------------------
+ 3 | 3 | 3 | 3
+(1 row)
+
+SELECT * FROM (SELECT * FROM nullkey_c1_t1) t1 JOIN nullkey_c2_t1 t2 USING (a) JOIN (SELECT * FROM nullkey_c1_t2) t3 USING (a) ORDER BY 1,2,3,4 LIMIT 1;
+DEBUG:  push down of limit count: 1
+ a | b | b | b
+---------------------------------------------------------------------
+ 1 | 1 | 0 | 3
+(1 row)
+
+SELECT * FROM distributed_table t1 JOIN (SELECT * FROM nullkey_c1_t1) t2 USING (a) JOIN (SELECT b as a FROM distributed_table) t3 USING (a) ORDER BY 1,2,3 LIMIT 1;
+DEBUG:  generating subplan XXX_1 for subquery SELECT a, b FROM query_single_shard_table.nullkey_c1_t1
+DEBUG:  generating subplan XXX_2 for subquery SELECT b AS a FROM query_single_shard_table.distributed_table
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT t1.a, t1.b, t2.b FROM ((query_single_shard_table.distributed_table t1 JOIN (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) t2 USING (a)) JOIN (SELECT intermediate_result.a FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) t3 USING (a)) ORDER BY t1.a, t1.b, t2.b LIMIT 1
+DEBUG:  push down of limit count: 1
+ a | b | b
+---------------------------------------------------------------------
+ 3 | 3 | 3
+(1 row)
+
+SELECT * FROM (SELECT * FROM nullkey_c2_t1) t1 JOIN nullkey_c1_t1 t2 USING (a) JOIN (SELECT * FROM nullkey_c2_t1) t3 USING (a) ORDER BY 1,2,3,4 LIMIT 1;
+DEBUG:  push down of limit count: 1
+ a | b | b | b
+---------------------------------------------------------------------
+ 1 | 0 | 1 | 0
+(1 row)
+
+SELECT * FROM nullkey_c1_t1 t1 JOIN (SELECT * FROM distributed_table) t2 USING (a) JOIN (SELECT * FROM distributed_table) t3 USING (a) ORDER BY 1,2,3,4 LIMIT 1;
+DEBUG:  push down of limit count: 1
+ a | b | b | b
+---------------------------------------------------------------------
+ 3 | 3 | 3 | 3
+(1 row)
+
+SELECT * FROM (SELECT * FROM nullkey_c1_t1) t1 JOIN nullkey_c2_t1 t2 USING (a) JOIN (SELECT * FROM nullkey_c2_t1) t3 USING (a) ORDER BY 1,2,3,4 LIMIT 1;
+DEBUG:  push down of limit count: 1
+ a | b | b | b
+---------------------------------------------------------------------
+ 1 | 1 | 0 | 0
+(1 row)
+
+SELECT * FROM distributed_table t1 JOIN (SELECT * FROM nullkey_c1_t1) t2 USING (a) JOIN (SELECT * FROM nullkey_c1_t1) t3 USING (a) ORDER BY 1,2,3,4 LIMIT 1;
+DEBUG:  generating subplan XXX_1 for subquery SELECT a, b FROM query_single_shard_table.nullkey_c1_t1
+DEBUG:  generating subplan XXX_2 for subquery SELECT a, b FROM query_single_shard_table.nullkey_c1_t1
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT t1.a, t1.b, t2.b, t3.b FROM ((query_single_shard_table.distributed_table t1 JOIN (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) t2 USING (a)) JOIN (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) t3 USING (a)) ORDER BY t1.a, t1.b, t2.b, t3.b LIMIT 1
+DEBUG:  push down of limit count: 1
+ a | b | b | b
+---------------------------------------------------------------------
+ 3 | 3 | 3 | 3
+(1 row)
+
+SELECT * FROM (SELECT * FROM nullkey_c2_t1) t1 JOIN nullkey_c1_t1 t2 USING (a) JOIN (SELECT * FROM nullkey_c1_t1) t3 USING (a) ORDER BY 1,2,3,4 LIMIT 1;
+DEBUG:  push down of limit count: 1
+ a | b | b | b
+---------------------------------------------------------------------
+ 1 | 0 | 1 | 1
+(1 row)
+
+SELECT * FROM nullkey_c1_t1 t1 JOIN (SELECT * FROM nullkey_c1_t1) t2 USING (a) JOIN distributed_table t3 USING (a) ORDER BY 1,2,3,4 LIMIT 1;
+DEBUG:  push down of limit count: 1
+ a | b | b | b
+---------------------------------------------------------------------
+ 3 | 3 | 3 | 3
+(1 row)
+
+SELECT * FROM nullkey_c1_t1 t1 JOIN nullkey_c1_t1 t2 USING (a) JOIN nullkey_c2_t1 t3 USING (a) ORDER BY 1,2,3,4 LIMIT 1;
+DEBUG:  push down of limit count: 1
+ a | b | b | b
+---------------------------------------------------------------------
+ 1 | 1 | 1 | 0
+(1 row)
+
+SELECT * FROM (SELECT * FROM distributed_table) t1 JOIN distributed_table t2 USING (a) JOIN (SELECT * FROM nullkey_c1_t1) t3 USING (a) ORDER BY 1,2,3,4 LIMIT 1;
+DEBUG:  push down of limit count: 1
+ a | b | b | b
+---------------------------------------------------------------------
+ 3 | 3 | 3 | 3
+(1 row)
+
+SELECT * FROM (SELECT * FROM nullkey_c2_t1) t1 JOIN nullkey_c2_t1 t2 USING (a) JOIN (SELECT * FROM nullkey_c1_t1) t3 USING (a) ORDER BY 1,2,3,4 LIMIT 1;
+DEBUG:  push down of limit count: 1
+ a | b | b | b
+---------------------------------------------------------------------
+ 1 | 0 | 0 | 1
+(1 row)
+
 SELECT COUNT(*) FROM nullkey_c1_t1 t1
 JOIN LATERAL (
     SELECT * FROM distributed_table t2 WHERE t2.b > t1.a
 ) q USING(a);
-ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
-DETAIL:  router planner does not support queries that reference non-colocated distributed tables
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+SELECT COUNT(*) FROM nullkey_c1_t1 t1
+JOIN LATERAL (
+    SELECT *, random() FROM distributed_table t2 WHERE t2.b > t1.a
+) q USING(a);
+ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
 SELECT COUNT(*) FROM distributed_table t1
 JOIN LATERAL (
     SELECT * FROM nullkey_c1_t1 t2 WHERE t2.b > t1.a
 ) q USING(a);
-ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
-DETAIL:  router planner does not support queries that reference non-colocated distributed tables
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+SET client_min_messages TO DEBUG2;
+SET citus.enable_repartition_joins TO OFF;
 -- outer joins with different table types
 SELECT COUNT(*) FROM nullkey_c1_t1 LEFT JOIN reference_table USING(a);
 DEBUG:  Creating router plan
@@ -452,23 +841,101 @@ DEBUG:  Creating router plan
 (1 row)
 
 SELECT COUNT(*) FROM nullkey_c1_t1 LEFT JOIN citus_local_table USING(a);
-ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
-DETAIL:  Local tables cannot be used in distributed queries.
+DEBUG:  Local tables cannot be used in distributed queries.
+DEBUG:  Wrapping relation "citus_local_table" to a subquery
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  generating subplan XXX_1 for subquery SELECT a FROM query_single_shard_table.citus_local_table WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (query_single_shard_table.nullkey_c1_t1 LEFT JOIN (SELECT citus_local_table_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) citus_local_table_1) citus_local_table USING (a))
+DEBUG:  Creating router plan
+ count
+---------------------------------------------------------------------
+    11
+(1 row)
+
 SELECT COUNT(*) FROM citus_local_table LEFT JOIN nullkey_c1_t1 USING(a);
-ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
-DETAIL:  Local tables cannot be used in distributed queries.
+DEBUG:  Local tables cannot be used in distributed queries.
+DEBUG:  Wrapping relation "citus_local_table" to a subquery
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  generating subplan XXX_1 for subquery SELECT a FROM query_single_shard_table.citus_local_table WHERE true
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning distributed relation "nullkey_c1_t1" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "nullkey_c1_t1" to a subquery
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  generating subplan XXX_2 for subquery SELECT a FROM query_single_shard_table.nullkey_c1_t1 WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT citus_local_table_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) citus_local_table_1) citus_local_table LEFT JOIN (SELECT nullkey_c1_t1_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) nullkey_c1_t1_1) nullkey_c1_t1 USING (a))
+DEBUG:  Creating router plan
+ count
+---------------------------------------------------------------------
+    14
+(1 row)
+
 SELECT COUNT(*) FROM nullkey_c1_t1 LEFT JOIN postgres_local_table USING(a);
-ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
-DETAIL:  Local tables cannot be used in distributed queries.
+DEBUG:  Local tables cannot be used in distributed queries.
+DEBUG:  Wrapping relation "postgres_local_table" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT a FROM query_single_shard_table.postgres_local_table WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (query_single_shard_table.nullkey_c1_t1 LEFT JOIN (SELECT postgres_local_table_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) postgres_local_table_1) postgres_local_table USING (a))
+DEBUG:  Creating router plan
+ count
+---------------------------------------------------------------------
+    11
+(1 row)
+
 SELECT COUNT(*) FROM postgres_local_table LEFT JOIN nullkey_c1_t1 USING(a);
-ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
-DETAIL:  Local tables cannot be used in distributed queries.
+DEBUG:  Local tables cannot be used in distributed queries.
+DEBUG:  Wrapping relation "postgres_local_table" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT a FROM query_single_shard_table.postgres_local_table WHERE true
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning distributed relation "nullkey_c1_t1" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "nullkey_c1_t1" to a subquery
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  generating subplan XXX_2 for subquery SELECT a FROM query_single_shard_table.nullkey_c1_t1 WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT postgres_local_table_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) postgres_local_table_1) postgres_local_table LEFT JOIN (SELECT nullkey_c1_t1_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) nullkey_c1_t1_1) nullkey_c1_t1 USING (a))
+DEBUG:  Creating router plan
+ count
+---------------------------------------------------------------------
+     6
+(1 row)
+
 SELECT COUNT(*) FROM nullkey_c1_t1 FULL JOIN citus_local_table USING(a);
-ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
-DETAIL:  Local tables cannot be used in distributed queries.
+DEBUG:  Local tables cannot be used in distributed queries.
+DEBUG:  Wrapping relation "citus_local_table" to a subquery
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  generating subplan XXX_1 for subquery SELECT a FROM query_single_shard_table.citus_local_table WHERE true
+DEBUG:  recursively planning left side of the full join since the other side is a recurring rel
+DEBUG:  recursively planning distributed relation "nullkey_c1_t1" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "nullkey_c1_t1" to a subquery
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  generating subplan XXX_2 for subquery SELECT a FROM query_single_shard_table.nullkey_c1_t1 WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT nullkey_c1_t1_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) nullkey_c1_t1_1) nullkey_c1_t1 FULL JOIN (SELECT citus_local_table_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) citus_local_table_1) citus_local_table USING (a))
+DEBUG:  Creating router plan
+ count
+---------------------------------------------------------------------
+    14
+(1 row)
+
 SELECT COUNT(*) FROM nullkey_c1_t1 FULL JOIN postgres_local_table USING(a);
-ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
-DETAIL:  Local tables cannot be used in distributed queries.
+DEBUG:  Local tables cannot be used in distributed queries.
+DEBUG:  Wrapping relation "postgres_local_table" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT a FROM query_single_shard_table.postgres_local_table WHERE true
+DEBUG:  recursively planning left side of the full join since the other side is a recurring rel
+DEBUG:  recursively planning distributed relation "nullkey_c1_t1" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "nullkey_c1_t1" to a subquery
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  generating subplan XXX_2 for subquery SELECT a FROM query_single_shard_table.nullkey_c1_t1 WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT nullkey_c1_t1_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) nullkey_c1_t1_1) nullkey_c1_t1 FULL JOIN (SELECT postgres_local_table_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) postgres_local_table_1) postgres_local_table USING (a))
+DEBUG:  Creating router plan
+ count
+---------------------------------------------------------------------
+    13
+(1 row)
+
 SELECT COUNT(*) FROM nullkey_c1_t1 FULL JOIN reference_table USING(a);
 DEBUG:  Creating router plan
  count
@@ -476,12 +943,22 @@ DEBUG:  Creating router plan
     12
 (1 row)
 
+SET citus.enable_repartition_joins TO ON;
+SET client_min_messages TO DEBUG1;
 SELECT COUNT(*) FROM nullkey_c1_t1 JOIN append_table USING(a);
-ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
-DETAIL:  Router planner does not support append-partitioned tables.
+ count
+---------------------------------------------------------------------
+     2
+(1 row)
+
 SELECT COUNT(*) FROM nullkey_c1_t1 JOIN range_table USING(a);
-ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
-DETAIL:  router planner does not support queries that reference non-colocated distributed tables
+ count
+---------------------------------------------------------------------
+     9
+(1 row)
+
+SET client_min_messages TO DEBUG2;
+SET citus.enable_repartition_joins TO OFF;
 SET citus.enable_non_colocated_router_query_pushdown TO ON;
 SELECT COUNT(*) FROM nullkey_c1_t1 JOIN range_table USING(a) WHERE range_table.a = 20;
 DEBUG:  Creating router plan
@@ -491,9 +968,16 @@ DEBUG:  Creating router plan
 (1 row)
 
 SET citus.enable_non_colocated_router_query_pushdown TO OFF;
+SET citus.enable_repartition_joins TO ON;
+SET client_min_messages TO DEBUG1;
 SELECT COUNT(*) FROM nullkey_c1_t1 JOIN range_table USING(a) WHERE range_table.a = 20;
-ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
-DETAIL:  router planner does not support queries that reference non-colocated distributed tables
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+SET client_min_messages TO DEBUG2;
+SET citus.enable_repartition_joins TO OFF;
 RESET citus.enable_non_colocated_router_query_pushdown;
 -- lateral / semi / anti joins with different table types
 --    with a reference table
@@ -612,189 +1096,278 @@ SELECT COUNT(*) FROM nullkey_c1_t1 t1
 LEFT JOIN LATERAL (
     SELECT * FROM distributed_table t2 WHERE t2.b > t1.a
 ) q USING(a);
-ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
-DETAIL:  router planner does not support queries that reference non-colocated distributed tables
+DEBUG:  router planner does not support queries that reference non-colocated distributed tables
+DEBUG:  skipping recursive planning for the subquery since it contains references to outer queries
+ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
 SELECT COUNT(*) FROM nullkey_c1_t1 t1
 WHERE EXISTS (
     SELECT * FROM distributed_table t2 WHERE t2.b > t1.a
 );
-ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
-DETAIL:  router planner does not support queries that reference non-colocated distributed tables
+DEBUG:  router planner does not support queries that reference non-colocated distributed tables
+DEBUG:  skipping recursive planning for the subquery since it contains references to outer queries
+ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
 SELECT COUNT(*) FROM nullkey_c1_t1 t1
 WHERE NOT EXISTS (
     SELECT * FROM distributed_table t2 WHERE t2.b > t1.a
 );
-ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
-DETAIL:  router planner does not support queries that reference non-colocated distributed tables
+DEBUG:  router planner does not support queries that reference non-colocated distributed tables
+DEBUG:  skipping recursive planning for the subquery since it contains references to outer queries
+ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
 SELECT COUNT(*) FROM nullkey_c1_t1 t1
 WHERE t1.b IN (
     SELECT b+1 FROM distributed_table t2 WHERE t2.b = t1.a
 );
-ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
-DETAIL:  Router planner cannot handle multi-shard select queries
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  skipping recursive planning for the subquery since it contains references to outer queries
+ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
 SELECT COUNT(*) FROM nullkey_c1_t1 t1
 WHERE t1.b NOT IN (
     SELECT a FROM distributed_table t2 WHERE t2.b > t1.a
 );
-ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
-DETAIL:  Router planner cannot handle multi-shard select queries
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  skipping recursive planning for the subquery since it contains references to outer queries
+ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
 SELECT COUNT(*) FROM distributed_table t1
 LEFT JOIN LATERAL (
     SELECT * FROM nullkey_c1_t1 t2 WHERE t2.b > t1.a
 ) q USING(a);
-ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
-DETAIL:  router planner does not support queries that reference non-colocated distributed tables
+DEBUG:  router planner does not support queries that reference non-colocated distributed tables
+DEBUG:  skipping recursive planning for the subquery since it contains references to outer queries
+ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
 SELECT COUNT(*) FROM distributed_table t1
 WHERE EXISTS (
     SELECT * FROM nullkey_c1_t1 t2 WHERE t2.b > t1.a
 );
-ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
-DETAIL:  router planner does not support queries that reference non-colocated distributed tables
+DEBUG:  router planner does not support queries that reference non-colocated distributed tables
+DEBUG:  skipping recursive planning for the subquery since it contains references to outer queries
+ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
 SELECT COUNT(*) FROM distributed_table t1
 WHERE t1.b IN (
     SELECT b+1 FROM nullkey_c1_t1 t2 WHERE t2.b = t1.a
 );
-ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
-DETAIL:  Router planner cannot handle multi-shard select queries
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  skipping recursive planning for the subquery since it contains references to outer queries
+ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
 SELECT COUNT(*) FROM distributed_table t1
 WHERE t1.b NOT IN (
     SELECT a FROM nullkey_c1_t1 t2 WHERE t2.b > t1.a
 );
-ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
-DETAIL:  Router planner cannot handle multi-shard select queries
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  skipping recursive planning for the subquery since it contains references to outer queries
+ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
 --    with postgres / citus local tables
 SELECT COUNT(*) FROM nullkey_c1_t1 t1
 LEFT JOIN LATERAL (
     SELECT * FROM citus_local_table t2 WHERE t2.b > t1.a
 ) q USING(a);
-ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
-DETAIL:  Local tables cannot be used in distributed queries.
+DEBUG:  Local tables cannot be used in distributed queries.
+DEBUG:  skipping recursive planning for the subquery since it contains references to outer queries
+ERROR:  direct joins between distributed and local tables are not supported
 SELECT COUNT(*) FROM nullkey_c1_t1 t1
 WHERE EXISTS (
     SELECT * FROM citus_local_table t2 WHERE t2.b > t1.a
 );
-ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
-DETAIL:  Local tables cannot be used in distributed queries.
+DEBUG:  Local tables cannot be used in distributed queries.
+DEBUG:  skipping recursive planning for the subquery since it contains references to outer queries
+ERROR:  direct joins between distributed and local tables are not supported
 SELECT COUNT(*) FROM nullkey_c1_t1 t1
 WHERE NOT EXISTS (
     SELECT * FROM citus_local_table t2 WHERE t2.b > t1.a
 );
-ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
-DETAIL:  Local tables cannot be used in distributed queries.
+DEBUG:  Local tables cannot be used in distributed queries.
+DEBUG:  skipping recursive planning for the subquery since it contains references to outer queries
+ERROR:  direct joins between distributed and local tables are not supported
 SELECT COUNT(*) FROM nullkey_c1_t1 t1
 WHERE t1.b IN (
     SELECT b+1 FROM citus_local_table t2 WHERE t2.b = t1.a
 );
-ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
-DETAIL:  found no worker with all shard placements
+DEBUG:  found no worker with all shard placements
+DEBUG:  skipping recursive planning for the subquery since it contains references to outer queries
+ERROR:  direct joins between distributed and local tables are not supported
 SELECT COUNT(*) FROM nullkey_c1_t1 t1
 WHERE t1.b NOT IN (
     SELECT a FROM citus_local_table t2 WHERE t2.b > t1.a
 );
-ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
-DETAIL:  found no worker with all shard placements
+DEBUG:  found no worker with all shard placements
+DEBUG:  skipping recursive planning for the subquery since it contains references to outer queries
+ERROR:  direct joins between distributed and local tables are not supported
 SELECT COUNT(*) FROM nullkey_c1_t1 t1
 JOIN LATERAL (
     SELECT * FROM citus_local_table t2 WHERE t2.b > t1.a
 ) q USING(a);
-ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
-DETAIL:  Local tables cannot be used in distributed queries.
+DEBUG:  Local tables cannot be used in distributed queries.
+DEBUG:  skipping recursive planning for the subquery since it contains references to outer queries
+ERROR:  direct joins between distributed and local tables are not supported
+-- The following and a few other tests in this file unnecessarily go through
+-- recursive planning. This is because we recursive plan distributed tables
+-- when they are referred in the inner side of an outer join, if the outer
+-- side is a recurring rel. In future, we can optimize that such that we
+-- can skip recursively planning the single-shard table because such a join
+-- wouldn't result in returning recurring tuples.
+--
+-- And specifically for the tests that contains a sublink (as below), things
+-- get even more interesting. We try to recursively plan the single-shard
+-- table but we cannot do so due to the sublink. However, the final query
+-- can go through router planner and hence is supported.
 SELECT COUNT(*) FROM citus_local_table t1
 LEFT JOIN LATERAL (
     SELECT * FROM nullkey_c1_t1 t2 WHERE t2.b > t1.a
 ) q USING(a);
-ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
-DETAIL:  Local tables cannot be used in distributed queries.
+DEBUG:  Local tables cannot be used in distributed queries.
+DEBUG:  Wrapping relation "citus_local_table" "t1" to a subquery
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  generating subplan XXX_1 for subquery SELECT a FROM query_single_shard_table.citus_local_table t1 WHERE true
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning the distributed subquery since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  skipping recursive planning for the subquery since it contains references to outer queries
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT t1_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) t1_1) t1 LEFT JOIN LATERAL (SELECT t2.a, t2.b FROM query_single_shard_table.nullkey_c1_t1 t2 WHERE (t2.b OPERATOR(pg_catalog.>) t1.a)) q USING (a))
+DEBUG:  Creating router plan
+ count
+---------------------------------------------------------------------
+    11
+(1 row)
+
 SELECT COUNT(*) FROM postgres_local_table t1
 LEFT JOIN LATERAL (
     SELECT * FROM nullkey_c1_t1 t2 WHERE t2.b > t1.a
 ) q USING(a);
-ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
-DETAIL:  Local tables cannot be used in distributed queries.
+DEBUG:  Local tables cannot be used in distributed queries.
+DEBUG:  Wrapping relation "postgres_local_table" "t1" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT a FROM query_single_shard_table.postgres_local_table t1 WHERE true
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning the distributed subquery since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  skipping recursive planning for the subquery since it contains references to outer queries
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT t1_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) t1_1) t1 LEFT JOIN LATERAL (SELECT t2.a, t2.b FROM query_single_shard_table.nullkey_c1_t1 t2 WHERE (t2.b OPERATOR(pg_catalog.>) t1.a)) q USING (a))
+DEBUG:  Creating router plan
+ count
+---------------------------------------------------------------------
+     6
+(1 row)
+
 SELECT COUNT(*) FROM citus_local_table t1
 WHERE EXISTS (
     SELECT * FROM nullkey_c1_t1 t2 WHERE t2.b > t1.a
 );
-ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
-DETAIL:  Local tables cannot be used in distributed queries.
+DEBUG:  Local tables cannot be used in distributed queries.
+DEBUG:  skipping recursive planning for the subquery since it contains references to outer queries
+ERROR:  direct joins between distributed and local tables are not supported
 SELECT COUNT(*) FROM citus_local_table t1
 WHERE t1.b IN (
     SELECT b+1 FROM nullkey_c1_t1 t2 WHERE t2.b = t1.a
 );
-ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
-DETAIL:  found no worker with all shard placements
+DEBUG:  found no worker with all shard placements
+DEBUG:  skipping recursive planning for the subquery since it contains references to outer queries
+ERROR:  direct joins between distributed and local tables are not supported
 SELECT COUNT(*) FROM citus_local_table t1
 WHERE t1.b NOT IN (
     SELECT a FROM nullkey_c1_t1 t2 WHERE t2.b > t1.a
 );
-ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
-DETAIL:  found no worker with all shard placements
+DEBUG:  found no worker with all shard placements
+DEBUG:  skipping recursive planning for the subquery since it contains references to outer queries
+ERROR:  direct joins between distributed and local tables are not supported
 SELECT COUNT(*) FROM citus_local_table t1
 JOIN LATERAL (
     SELECT * FROM nullkey_c1_t1 t2 WHERE t2.b > t1.a
 ) q USING(a);
-ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
-DETAIL:  Local tables cannot be used in distributed queries.
+DEBUG:  Local tables cannot be used in distributed queries.
+DEBUG:  Wrapping relation "citus_local_table" "t1" to a subquery
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  generating subplan XXX_1 for subquery SELECT a FROM query_single_shard_table.citus_local_table t1 WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT t1_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) t1_1) t1 JOIN LATERAL (SELECT t2.a, t2.b FROM query_single_shard_table.nullkey_c1_t1 t2 WHERE (t2.b OPERATOR(pg_catalog.>) t1.a)) q USING (a))
+DEBUG:  Creating router plan
+ count
+---------------------------------------------------------------------
+     2
+(1 row)
+
 SELECT COUNT(*) FROM nullkey_c1_t1 t1
 LEFT JOIN LATERAL (
     SELECT * FROM postgres_local_table t2 WHERE t2.b > t1.a
 ) q USING(a);
-ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
-DETAIL:  Local tables cannot be used in distributed queries.
+DEBUG:  Local tables cannot be used in distributed queries.
+DEBUG:  skipping recursive planning for the subquery since it contains references to outer queries
+ERROR:  direct joins between distributed and local tables are not supported
+HINT:  Use CTE's or subqueries to select from local tables and use them in joins
 SELECT COUNT(*) FROM nullkey_c1_t1 t1
 WHERE EXISTS (
     SELECT * FROM postgres_local_table t2 WHERE t2.b > t1.a
 );
-ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
-DETAIL:  Local tables cannot be used in distributed queries.
+DEBUG:  Local tables cannot be used in distributed queries.
+DEBUG:  skipping recursive planning for the subquery since it contains references to outer queries
+ERROR:  direct joins between distributed and local tables are not supported
+HINT:  Use CTE's or subqueries to select from local tables and use them in joins
 SELECT COUNT(*) FROM nullkey_c1_t1 t1
 WHERE NOT EXISTS (
     SELECT * FROM postgres_local_table t2 WHERE t2.b > t1.a
 );
-ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
-DETAIL:  Local tables cannot be used in distributed queries.
+DEBUG:  Local tables cannot be used in distributed queries.
+DEBUG:  skipping recursive planning for the subquery since it contains references to outer queries
+ERROR:  direct joins between distributed and local tables are not supported
+HINT:  Use CTE's or subqueries to select from local tables and use them in joins
 SELECT COUNT(*) FROM nullkey_c1_t1 t1
 WHERE t1.b IN (
     SELECT b+1 FROM postgres_local_table t2 WHERE t2.b = t1.a
 );
-ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
-DETAIL:  found no worker with all shard placements
+DEBUG:  found no worker with all shard placements
+DEBUG:  skipping recursive planning for the subquery since it contains references to outer queries
+ERROR:  direct joins between distributed and local tables are not supported
+HINT:  Use CTE's or subqueries to select from local tables and use them in joins
 SELECT COUNT(*) FROM nullkey_c1_t1 t1
 WHERE t1.b NOT IN (
     SELECT a FROM postgres_local_table t2 WHERE t2.b > t1.a
 );
-ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
-DETAIL:  found no worker with all shard placements
+DEBUG:  found no worker with all shard placements
+DEBUG:  skipping recursive planning for the subquery since it contains references to outer queries
+ERROR:  direct joins between distributed and local tables are not supported
+HINT:  Use CTE's or subqueries to select from local tables and use them in joins
 SELECT COUNT(*) FROM nullkey_c1_t1 t1
 JOIN LATERAL (
     SELECT * FROM postgres_local_table t2 WHERE t2.b > t1.a
 ) q USING(a);
-ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
-DETAIL:  Local tables cannot be used in distributed queries.
+DEBUG:  Local tables cannot be used in distributed queries.
+DEBUG:  skipping recursive planning for the subquery since it contains references to outer queries
+ERROR:  direct joins between distributed and local tables are not supported
+HINT:  Use CTE's or subqueries to select from local tables and use them in joins
 SELECT COUNT(*) FROM postgres_local_table t1
 WHERE EXISTS (
     SELECT * FROM nullkey_c1_t1 t2 WHERE t2.b > t1.a
 );
-ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
-DETAIL:  Local tables cannot be used in distributed queries.
+DEBUG:  Local tables cannot be used in distributed queries.
+DEBUG:  skipping recursive planning for the subquery since it contains references to outer queries
+ERROR:  direct joins between distributed and local tables are not supported
+HINT:  Use CTE's or subqueries to select from local tables and use them in joins
 SELECT COUNT(*) FROM postgres_local_table t1
 WHERE t1.b IN (
     SELECT b+1 FROM nullkey_c1_t1 t2 WHERE t2.b = t1.a
 );
-ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
-DETAIL:  found no worker with all shard placements
+DEBUG:  found no worker with all shard placements
+DEBUG:  skipping recursive planning for the subquery since it contains references to outer queries
+ERROR:  direct joins between distributed and local tables are not supported
+HINT:  Use CTE's or subqueries to select from local tables and use them in joins
 SELECT COUNT(*) FROM postgres_local_table t1
 WHERE t1.b NOT IN (
     SELECT a FROM nullkey_c1_t1 t2 WHERE t2.b > t1.a
 );
-ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
-DETAIL:  found no worker with all shard placements
+DEBUG:  found no worker with all shard placements
+DEBUG:  skipping recursive planning for the subquery since it contains references to outer queries
+ERROR:  direct joins between distributed and local tables are not supported
+HINT:  Use CTE's or subqueries to select from local tables and use them in joins
 SELECT COUNT(*) FROM postgres_local_table t1
 JOIN LATERAL (
     SELECT * FROM nullkey_c1_t1 t2 WHERE t2.b > t1.a
 ) q USING(a);
-ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
-DETAIL:  Local tables cannot be used in distributed queries.
+DEBUG:  Local tables cannot be used in distributed queries.
+DEBUG:  Wrapping relation "postgres_local_table" "t1" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT a FROM query_single_shard_table.postgres_local_table t1 WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT t1_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) t1_1) t1 JOIN LATERAL (SELECT t2.a, t2.b FROM query_single_shard_table.nullkey_c1_t1 t2 WHERE (t2.b OPERATOR(pg_catalog.>) t1.a)) q USING (a))
+DEBUG:  Creating router plan
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
 -- insert .. select
 --    between two colocated single-shard tables
 --    The target list of "distributed statement"s that we send to workers
@@ -890,8 +1463,18 @@ WHERE cte_nullkey_c1_t1.a > 3 AND cte_distributed_table.a < 5;
 DEBUG:  CTE cte_nullkey_c1_t1 is going to be inlined via distributed planning
 DEBUG:  CTE cte_postgres_local_table is going to be inlined via distributed planning
 DEBUG:  CTE cte_distributed_table is going to be inlined via distributed planning
-ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
-DETAIL:  Local tables cannot be used in distributed queries.
+DEBUG:  Local tables cannot be used in distributed queries.
+DEBUG:  generating subplan XXX_1 for subquery SELECT a, b FROM query_single_shard_table.postgres_local_table
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  generating subplan XXX_2 for subquery SELECT a, b FROM query_single_shard_table.nullkey_c1_t1
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT distributed_table.a, distributed_table.b FROM query_single_shard_table.distributed_table) cte_distributed_table, (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) cte_nullkey_c1_t1, (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) cte_postgres_local_table WHERE ((cte_nullkey_c1_t1.a OPERATOR(pg_catalog.>) 3) AND (cte_distributed_table.a OPERATOR(pg_catalog.<) 5))
+DEBUG:  Router planner cannot handle multi-shard select queries
+ count
+---------------------------------------------------------------------
+ 78144
+(1 row)
+
 -- test recursive ctes
 WITH level_0 AS (
   WITH level_1 AS (
@@ -927,8 +1510,15 @@ WITH level_0 AS (
 SELECT COUNT(*) FROM level_0;
 DEBUG:  CTE level_0 is going to be inlined via distributed planning
 DEBUG:  CTE level_1 is going to be inlined via distributed planning
-ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
-DETAIL:  router planner does not support queries that reference non-colocated distributed tables
+DEBUG:  router planner does not support queries that reference non-colocated distributed tables
+DEBUG:  router planner does not support queries that reference non-colocated distributed tables
+DEBUG:  generating subplan XXX_1 for CTE level_0: WITH level_1 AS (WITH RECURSIVE level_2_recursive(x) AS (VALUES (1) UNION ALL SELECT (nullkey_c1_t1.a OPERATOR(pg_catalog.+) 1) FROM (query_single_shard_table.nullkey_c1_t1 JOIN level_2_recursive level_2_recursive_1 ON ((nullkey_c1_t1.a OPERATOR(pg_catalog.=) level_2_recursive_1.x))) WHERE (nullkey_c1_t1.a OPERATOR(pg_catalog.<) 100)) SELECT level_2_recursive.x, distributed_table.a, distributed_table.b FROM (level_2_recursive JOIN query_single_shard_table.distributed_table ON ((level_2_recursive.x OPERATOR(pg_catalog.=) distributed_table.a)))) SELECT x, a, b FROM level_1
+DEBUG:  CTE level_1 is going to be inlined via distributed planning
+DEBUG:  router planner does not support queries that reference non-colocated distributed tables
+DEBUG:  router planner does not support queries that reference non-colocated distributed tables
+DEBUG:  generating subplan XXX_1 for CTE level_1: WITH RECURSIVE level_2_recursive(x) AS (VALUES (1) UNION ALL SELECT (nullkey_c1_t1.a OPERATOR(pg_catalog.+) 1) FROM (query_single_shard_table.nullkey_c1_t1 JOIN level_2_recursive level_2_recursive_1 ON ((nullkey_c1_t1.a OPERATOR(pg_catalog.=) level_2_recursive_1.x))) WHERE (nullkey_c1_t1.a OPERATOR(pg_catalog.<) 100)) SELECT level_2_recursive.x, distributed_table.a, distributed_table.b FROM (level_2_recursive JOIN query_single_shard_table.distributed_table ON ((level_2_recursive.x OPERATOR(pg_catalog.=) distributed_table.a)))
+DEBUG:  router planner does not support queries that reference non-colocated distributed tables
+ERROR:  recursive CTEs are not supported in distributed queries
 -- grouping set
 SELECT
 	id, substring(title, 2, 1) AS subtitle, count(*)
@@ -965,6 +1555,101 @@ DEBUG:  Creating router plan
  ausable    |            42
 (12 rows)
 
+-- test having clause
+SELECT COUNT(*), b FROM nullkey_c1_t1 GROUP BY 2
+HAVING (SELECT COUNT(*) FROM nullkey_c1_t2) > 0
+ORDER BY 1,2;
+DEBUG:  Creating router plan
+ count | b
+---------------------------------------------------------------------
+     2 |  9
+     2 | 10
+     3 |  0
+     4 |  1
+     4 |  8
+     6 |  6
+     6 |  7
+     8 |  3
+     8 |  4
+     8 |  5
+     9 |  2
+(11 rows)
+
+SELECT COUNT(*), b FROM nullkey_c1_t1 GROUP BY 2
+HAVING (SELECT COUNT(*) FROM nullkey_c2_t1) > 0
+ORDER BY 1,2;
+DEBUG:  found no worker with all shard placements
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  generating subplan XXX_1 for subquery SELECT count(*) AS count FROM query_single_shard_table.nullkey_c2_t1
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count, b FROM query_single_shard_table.nullkey_c1_t1 GROUP BY b HAVING ((SELECT intermediate_result.count FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(count bigint)) OPERATOR(pg_catalog.>) 0) ORDER BY (count(*)), b
+DEBUG:  Creating router plan
+ count | b
+---------------------------------------------------------------------
+     2 |  9
+     2 | 10
+     3 |  0
+     4 |  1
+     4 |  8
+     6 |  6
+     6 |  7
+     8 |  3
+     8 |  4
+     8 |  5
+     9 |  2
+(11 rows)
+
+SELECT COUNT(*), b FROM nullkey_c1_t1 GROUP BY 2
+HAVING (SELECT COUNT(*) FROM distributed_table) > 0
+ORDER BY 1,2;
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  generating subplan XXX_1 for subquery SELECT count(*) AS count FROM query_single_shard_table.distributed_table
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count, b FROM query_single_shard_table.nullkey_c1_t1 GROUP BY b HAVING ((SELECT intermediate_result.count FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(count bigint)) OPERATOR(pg_catalog.>) 0) ORDER BY (count(*)), b
+DEBUG:  Creating router plan
+ count | b
+---------------------------------------------------------------------
+     2 |  9
+     2 | 10
+     3 |  0
+     4 |  1
+     4 |  8
+     6 |  6
+     6 |  7
+     8 |  3
+     8 |  4
+     8 |  5
+     9 |  2
+(11 rows)
+
+SELECT COUNT(*), b FROM nullkey_c1_t1 t4 GROUP BY 2
+HAVING (
+    SELECT COUNT(*) FROM nullkey_c1_t1 t1 JOIN (SELECT * FROM nullkey_c1_t2) t2 USING (a) JOIN (SELECT * FROM nullkey_c1_t2) t3 USING (a)
+    WHERE t2.b > t4.b
+) > 5
+ORDER BY 1,2;
+DEBUG:  Creating router plan
+ count | b
+---------------------------------------------------------------------
+     3 | 0
+     4 | 1
+     6 | 6
+     8 | 3
+     8 | 4
+     8 | 5
+     9 | 2
+(7 rows)
+
+SELECT COUNT(*), b FROM distributed_table t4 GROUP BY 2
+HAVING (
+    SELECT COUNT(*) FROM nullkey_c1_t1 t1 JOIN (SELECT * FROM distributed_table) t2 USING (a) JOIN (SELECT * FROM nullkey_c1_t2) t3 USING (a)
+    WHERE t2.b > t4.b
+) > 5
+ORDER BY 1,2;
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  generating subplan XXX_1 for subquery SELECT a, b FROM query_single_shard_table.distributed_table
+ERROR:  Subqueries in HAVING cannot refer to outer query
 -- test prepared statements
 -- prepare queries can be router plannable
 PREPARE author_1_articles as
@@ -1118,8 +1803,7 @@ EXECUTE author_articles_update(NULL);
 SET client_min_messages TO DEBUG1;
 INSERT INTO bigserial_test (x, y) SELECT x, y FROM bigserial_test;
 DEBUG:  volatile functions are not allowed in distributed INSERT ... SELECT queries
-ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
-DETAIL:  Sequences cannot be used in router queries
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
 INSERT INTO bigserial_test (x, y) SELECT a, a FROM reference_table;
 DEBUG:  volatile functions are not allowed in distributed INSERT ... SELECT queries
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
@@ -1411,8 +2095,7 @@ DEBUG:  distributed INSERT ... SELECT can only select from distributed tables
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 -- non-immutable function
 INSERT INTO modify_fast_path (key, value_1) VALUES (2,1) RETURNING value_1, random() * key;
-ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
-DETAIL:  non-IMMUTABLE functions are not allowed in the RETURNING clause
+ERROR:  non-IMMUTABLE functions are not allowed in the RETURNING clause
 SET client_min_messages TO DEBUG2;
 -- update / delete
 UPDATE nullkey_c1_t1 SET a = 1 WHERE b = 5;
@@ -1422,102 +2105,154 @@ UPDATE nullkey_c1_t1 SET a = 1 WHERE a = 5;
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
 UPDATE nullkey_c1_t1 SET a = random();
-ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
-DETAIL:  functions used in UPDATE queries on distributed tables must not be VOLATILE
+DEBUG:  functions used in UPDATE queries on distributed tables must not be VOLATILE
+ERROR:  functions used in UPDATE queries on distributed tables must not be VOLATILE
 UPDATE nullkey_c1_t1 SET a = 1 WHERE a = random();
-ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
-DETAIL:  functions used in the WHERE/ON/WHEN clause of modification queries on distributed tables must not be VOLATILE
+DEBUG:  functions used in the WHERE/ON/WHEN clause of modification queries on distributed tables must not be VOLATILE
+ERROR:  functions used in the WHERE/ON/WHEN clause of modification queries on distributed tables must not be VOLATILE
 DELETE FROM nullkey_c1_t1 WHERE b = 5;
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
 DELETE FROM nullkey_c1_t1 WHERE a = random();
-ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
-DETAIL:  functions used in the WHERE/ON/WHEN clause of modification queries on distributed tables must not be VOLATILE
+DEBUG:  functions used in the WHERE/ON/WHEN clause of modification queries on distributed tables must not be VOLATILE
+ERROR:  functions used in the WHERE/ON/WHEN clause of modification queries on distributed tables must not be VOLATILE
 -- simple update queries between different table types / colocated tables
 UPDATE nullkey_c1_t1 SET b = 5 FROM nullkey_c1_t2 WHERE nullkey_c1_t1.b = nullkey_c1_t2.b;
 DEBUG:  Creating router plan
 UPDATE nullkey_c1_t1 SET b = 5 FROM nullkey_c2_t1 WHERE nullkey_c1_t1.b = nullkey_c2_t1.b;
-ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
-DETAIL:  found no worker with all shard placements
+DEBUG:  found no worker with all shard placements
+ERROR:  found no worker with all shard placements
 UPDATE nullkey_c1_t1 SET b = 5 FROM reference_table WHERE nullkey_c1_t1.b = reference_table.b;
 DEBUG:  Creating router plan
 UPDATE nullkey_c1_t1 SET b = 5 FROM distributed_table WHERE nullkey_c1_t1.b = distributed_table.b;
-ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
-DETAIL:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
+DEBUG:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
+ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
 UPDATE nullkey_c1_t1 SET b = 5 FROM distributed_table WHERE nullkey_c1_t1.b = distributed_table.a;
-ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
-DETAIL:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
+DEBUG:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
+ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
 UPDATE nullkey_c1_t1 SET b = 5 FROM citus_local_table WHERE nullkey_c1_t1.b = citus_local_table.b;
-ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
-DETAIL:  local table citus_local_table cannot be joined with these distributed tables
+DEBUG:  local table citus_local_table cannot be joined with these distributed tables
+DEBUG:  Wrapping relation "citus_local_table" to a subquery
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  generating subplan XXX_1 for subquery SELECT b FROM query_single_shard_table.citus_local_table WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: UPDATE query_single_shard_table.nullkey_c1_t1 SET b = 5 FROM (SELECT NULL::integer AS a, citus_local_table_1.b FROM (SELECT intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(b integer)) citus_local_table_1) citus_local_table WHERE (nullkey_c1_t1.b OPERATOR(pg_catalog.=) citus_local_table.b)
+DEBUG:  Creating router plan
 UPDATE nullkey_c1_t1 SET b = 5 FROM postgres_local_table WHERE nullkey_c1_t1.b = postgres_local_table.b;
-ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
-DETAIL:  relation postgres_local_table is not distributed
+DEBUG:  relation postgres_local_table is not distributed
+DEBUG:  Wrapping relation "postgres_local_table" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT b FROM query_single_shard_table.postgres_local_table WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: UPDATE query_single_shard_table.nullkey_c1_t1 SET b = 5 FROM (SELECT NULL::integer AS a, postgres_local_table_1.b FROM (SELECT intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(b integer)) postgres_local_table_1) postgres_local_table WHERE (nullkey_c1_t1.b OPERATOR(pg_catalog.=) postgres_local_table.b)
+DEBUG:  Creating router plan
 UPDATE reference_table SET b = 5 FROM nullkey_c1_t1 WHERE nullkey_c1_t1.b = reference_table.b;
 ERROR:  cannot perform select on a distributed table and modify a reference table
 UPDATE distributed_table SET b = 5 FROM nullkey_c1_t1 WHERE nullkey_c1_t1.b = distributed_table.b;
-ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
-DETAIL:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
+DEBUG:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
+ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
 UPDATE distributed_table SET b = 5 FROM nullkey_c1_t1 WHERE nullkey_c1_t1.b = distributed_table.a;
-ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
-DETAIL:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
+DEBUG:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
+ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
 UPDATE citus_local_table SET b = 5 FROM nullkey_c1_t1 WHERE nullkey_c1_t1.b = citus_local_table.b;
-ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
-DETAIL:  local table citus_local_table cannot be joined with these distributed tables
+DEBUG:  local table citus_local_table cannot be joined with these distributed tables
+DEBUG:  Wrapping relation "nullkey_c1_t1" to a subquery
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  generating subplan XXX_1 for subquery SELECT b FROM query_single_shard_table.nullkey_c1_t1 WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: UPDATE query_single_shard_table.citus_local_table SET b = 5 FROM (SELECT NULL::integer AS a, nullkey_c1_t1_1.b FROM (SELECT intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(b integer)) nullkey_c1_t1_1) nullkey_c1_t1 WHERE (nullkey_c1_t1.b OPERATOR(pg_catalog.=) citus_local_table.b)
+DEBUG:  Creating router plan
 UPDATE postgres_local_table SET b = 5 FROM nullkey_c1_t1 WHERE nullkey_c1_t1.b = postgres_local_table.b;
-ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
-DETAIL:  relation postgres_local_table is not distributed
+DEBUG:  relation postgres_local_table is not distributed
+DEBUG:  Wrapping relation "nullkey_c1_t1" to a subquery
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  generating subplan XXX_1 for subquery SELECT b FROM query_single_shard_table.nullkey_c1_t1 WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: UPDATE query_single_shard_table.postgres_local_table SET b = 5 FROM (SELECT NULL::integer AS a, nullkey_c1_t1_1.b FROM (SELECT intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(b integer)) nullkey_c1_t1_1) nullkey_c1_t1 WHERE (nullkey_c1_t1.b OPERATOR(pg_catalog.=) postgres_local_table.b)
+DEBUG:  Creating router plan
 -- simple delete queries between different table types / colocated tables
 DELETE FROM nullkey_c1_t1 USING nullkey_c1_t2 WHERE nullkey_c1_t1.b = nullkey_c1_t2.b;
 DEBUG:  Creating router plan
 DELETE FROM nullkey_c1_t1 USING nullkey_c2_t1 WHERE nullkey_c1_t1.b = nullkey_c2_t1.b;
-ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
-DETAIL:  found no worker with all shard placements
+DEBUG:  found no worker with all shard placements
+ERROR:  found no worker with all shard placements
 DELETE FROM nullkey_c1_t1 USING reference_table WHERE nullkey_c1_t1.b = reference_table.b;
 DEBUG:  Creating router plan
 DELETE FROM nullkey_c1_t1 USING distributed_table WHERE nullkey_c1_t1.b = distributed_table.b;
-ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
-DETAIL:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
+DEBUG:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
+ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
 DELETE FROM nullkey_c1_t1 USING distributed_table WHERE nullkey_c1_t1.b = distributed_table.a;
-ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
-DETAIL:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
+DEBUG:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
+ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
 DELETE FROM nullkey_c1_t1 USING citus_local_table WHERE nullkey_c1_t1.b = citus_local_table.b;
-ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
-DETAIL:  local table citus_local_table cannot be joined with these distributed tables
+DEBUG:  local table citus_local_table cannot be joined with these distributed tables
+DEBUG:  Wrapping relation "citus_local_table" to a subquery
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  generating subplan XXX_1 for subquery SELECT b FROM query_single_shard_table.citus_local_table WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: DELETE FROM query_single_shard_table.nullkey_c1_t1 USING (SELECT NULL::integer AS a, citus_local_table_1.b FROM (SELECT intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(b integer)) citus_local_table_1) citus_local_table WHERE (nullkey_c1_t1.b OPERATOR(pg_catalog.=) citus_local_table.b)
+DEBUG:  Creating router plan
 DELETE FROM nullkey_c1_t1 USING postgres_local_table WHERE nullkey_c1_t1.b = postgres_local_table.b;
-ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
-DETAIL:  relation postgres_local_table is not distributed
+DEBUG:  relation postgres_local_table is not distributed
+DEBUG:  Wrapping relation "postgres_local_table" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT b FROM query_single_shard_table.postgres_local_table WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: DELETE FROM query_single_shard_table.nullkey_c1_t1 USING (SELECT NULL::integer AS a, postgres_local_table_1.b FROM (SELECT intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(b integer)) postgres_local_table_1) postgres_local_table WHERE (nullkey_c1_t1.b OPERATOR(pg_catalog.=) postgres_local_table.b)
+DEBUG:  Creating router plan
 DELETE FROM reference_table USING nullkey_c1_t1 WHERE nullkey_c1_t1.b = reference_table.b;
 ERROR:  cannot perform select on a distributed table and modify a reference table
 DELETE FROM distributed_table USING nullkey_c1_t1 WHERE nullkey_c1_t1.b = distributed_table.b;
-ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
-DETAIL:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
+DEBUG:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
+ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
 DELETE FROM distributed_table USING nullkey_c1_t1 WHERE nullkey_c1_t1.b = distributed_table.a;
-ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
-DETAIL:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
+DEBUG:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
+ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
 DELETE FROM citus_local_table USING nullkey_c1_t1 WHERE nullkey_c1_t1.b = citus_local_table.b;
-ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
-DETAIL:  local table citus_local_table cannot be joined with these distributed tables
+DEBUG:  local table citus_local_table cannot be joined with these distributed tables
+DEBUG:  Wrapping relation "nullkey_c1_t1" to a subquery
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  generating subplan XXX_1 for subquery SELECT b FROM query_single_shard_table.nullkey_c1_t1 WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: DELETE FROM query_single_shard_table.citus_local_table USING (SELECT NULL::integer AS a, nullkey_c1_t1_1.b FROM (SELECT intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(b integer)) nullkey_c1_t1_1) nullkey_c1_t1 WHERE (nullkey_c1_t1.b OPERATOR(pg_catalog.=) citus_local_table.b)
+DEBUG:  Creating router plan
 DELETE FROM postgres_local_table USING nullkey_c1_t1 WHERE nullkey_c1_t1.b = postgres_local_table.b;
-ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
-DETAIL:  relation postgres_local_table is not distributed
+DEBUG:  relation postgres_local_table is not distributed
+DEBUG:  Wrapping relation "nullkey_c1_t1" to a subquery
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  generating subplan XXX_1 for subquery SELECT b FROM query_single_shard_table.nullkey_c1_t1 WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: DELETE FROM query_single_shard_table.postgres_local_table USING (SELECT NULL::integer AS a, nullkey_c1_t1_1.b FROM (SELECT intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(b integer)) nullkey_c1_t1_1) nullkey_c1_t1 WHERE (nullkey_c1_t1.b OPERATOR(pg_catalog.=) postgres_local_table.b)
+DEBUG:  Creating router plan
 -- slightly more complex update queries
 UPDATE nullkey_c1_t1 SET b = 5 WHERE nullkey_c1_t1.b IN (SELECT b FROM distributed_table);
-ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
-DETAIL:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
+DEBUG:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  generating subplan XXX_1 for subquery SELECT b FROM query_single_shard_table.distributed_table
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: UPDATE query_single_shard_table.nullkey_c1_t1 SET b = 5 WHERE (b OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(b integer)))
+DEBUG:  Creating router plan
 WITH cte AS materialized(
     SELECT * FROM distributed_table
 )
 UPDATE nullkey_c1_t1 SET b = 5 FROM cte WHERE nullkey_c1_t1.b = cte.a;
-ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
-DETAIL:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
+DEBUG:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
+DEBUG:  generating subplan XXX_1 for CTE cte: SELECT a, b FROM query_single_shard_table.distributed_table
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: UPDATE query_single_shard_table.nullkey_c1_t1 SET b = 5 FROM (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) cte WHERE (nullkey_c1_t1.b OPERATOR(pg_catalog.=) cte.a)
+DEBUG:  Creating router plan
 WITH cte AS (
     SELECT reference_table.a AS a, 1 AS b
     FROM distributed_table RIGHT JOIN reference_table USING (a)
 )
 UPDATE nullkey_c1_t1 SET b = 5 WHERE nullkey_c1_t1.b IN (SELECT b FROM cte);
-ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
-DETAIL:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
+DEBUG:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
+DEBUG:  generating subplan XXX_1 for CTE cte: SELECT reference_table.a, 1 AS b FROM (query_single_shard_table.distributed_table RIGHT JOIN query_single_shard_table.reference_table USING (a))
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  recursively planning left side of the right join since the outer side is a recurring rel
+DEBUG:  recursively planning distributed relation "distributed_table" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "distributed_table" to a subquery
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  generating subplan XXX_1 for subquery SELECT a FROM query_single_shard_table.distributed_table WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT reference_table.a, 1 AS b FROM ((SELECT distributed_table_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) distributed_table_1) distributed_table RIGHT JOIN query_single_shard_table.reference_table USING (a))
+DEBUG:  Creating router plan
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: UPDATE query_single_shard_table.nullkey_c1_t1 SET b = 5 WHERE (b OPERATOR(pg_catalog.=) ANY (SELECT cte.b FROM (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) cte))
+DEBUG:  Creating router plan
 UPDATE nullkey_c1_t1 SET b = 5 FROM reference_table WHERE EXISTS (
     SELECT 1 FROM reference_table LEFT JOIN nullkey_c1_t1 USING (a) WHERE nullkey_c1_t1.b IS NULL
 );
@@ -1597,21 +2332,37 @@ DEBUG:  Creating router plan
 EXECUTE prepared_zero_shard_update(7);
 -- slightly more complex delete queries
 DELETE FROM nullkey_c1_t1 WHERE nullkey_c1_t1.b IN (SELECT b FROM distributed_table);
-ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
-DETAIL:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
+DEBUG:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  generating subplan XXX_1 for subquery SELECT b FROM query_single_shard_table.distributed_table
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: DELETE FROM query_single_shard_table.nullkey_c1_t1 WHERE (b OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(b integer)))
+DEBUG:  Creating router plan
 WITH cte AS materialized(
     SELECT * FROM distributed_table
 )
 DELETE FROM nullkey_c1_t1 USING cte WHERE nullkey_c1_t1.b = cte.a;
-ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
-DETAIL:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
+DEBUG:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
+DEBUG:  generating subplan XXX_1 for CTE cte: SELECT a, b FROM query_single_shard_table.distributed_table
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: DELETE FROM query_single_shard_table.nullkey_c1_t1 USING (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) cte WHERE (nullkey_c1_t1.b OPERATOR(pg_catalog.=) cte.a)
+DEBUG:  Creating router plan
 WITH cte AS (
     SELECT reference_table.a AS a, 1 AS b
     FROM distributed_table RIGHT JOIN reference_table USING (a)
 )
 DELETE FROM nullkey_c1_t1 WHERE nullkey_c1_t1.b IN (SELECT b FROM cte);
-ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
-DETAIL:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
+DEBUG:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
+DEBUG:  generating subplan XXX_1 for CTE cte: SELECT reference_table.a, 1 AS b FROM (query_single_shard_table.distributed_table RIGHT JOIN query_single_shard_table.reference_table USING (a))
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  recursively planning left side of the right join since the outer side is a recurring rel
+DEBUG:  recursively planning distributed relation "distributed_table" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "distributed_table" to a subquery
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  generating subplan XXX_1 for subquery SELECT a FROM query_single_shard_table.distributed_table WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT reference_table.a, 1 AS b FROM ((SELECT distributed_table_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) distributed_table_1) distributed_table RIGHT JOIN query_single_shard_table.reference_table USING (a))
+DEBUG:  Creating router plan
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: DELETE FROM query_single_shard_table.nullkey_c1_t1 WHERE (b OPERATOR(pg_catalog.=) ANY (SELECT cte.b FROM (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) cte))
+DEBUG:  Creating router plan
 DELETE FROM nullkey_c1_t1 USING reference_table WHERE EXISTS (
     SELECT 1 FROM reference_table LEFT JOIN nullkey_c1_t1 USING (a) WHERE nullkey_c1_t1.b IS NULL
 );
@@ -1713,8 +2464,16 @@ WITH cte AS (
     DELETE FROM reference_table WHERE a = 1 RETURNING *
 )
 SELECT * FROM nullkey_c1_t1 WHERE a IN (SELECT a FROM cte);
-ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
-DETAIL:  cannot router plan modification of a non-distributed table
+DEBUG:  cannot router plan modification of a non-distributed table
+DEBUG:  generating subplan XXX_1 for CTE cte: DELETE FROM query_single_shard_table.reference_table WHERE (a OPERATOR(pg_catalog.=) 1) RETURNING a, b
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT a, b FROM query_single_shard_table.nullkey_c1_t1 WHERE (a OPERATOR(pg_catalog.=) ANY (SELECT cte.a FROM (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) cte))
+DEBUG:  Creating router plan
+ a | b
+---------------------------------------------------------------------
+(0 rows)
+
 WITH cte AS (
     DELETE FROM nullkey_c1_t1 WHERE a = 1 RETURNING *
 )
@@ -1728,14 +2487,30 @@ WITH cte AS (
     DELETE FROM nullkey_c1_t1 WHERE a = 1 RETURNING *
 )
 SELECT * FROM nullkey_c2_t1 WHERE a IN (SELECT a FROM cte);
-ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
-DETAIL:  router planner does not support queries that reference non-colocated distributed tables
+DEBUG:  router planner does not support queries that reference non-colocated distributed tables
+DEBUG:  generating subplan XXX_1 for CTE cte: DELETE FROM query_single_shard_table.nullkey_c1_t1 WHERE (a OPERATOR(pg_catalog.=) 1) RETURNING a, b
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT a, b FROM query_single_shard_table.nullkey_c2_t1 WHERE (a OPERATOR(pg_catalog.=) ANY (SELECT cte.a FROM (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) cte))
+DEBUG:  Creating router plan
+ a | b
+---------------------------------------------------------------------
+(0 rows)
+
 WITH cte AS (
     DELETE FROM nullkey_c1_t1 WHERE a = 1 RETURNING *
 )
 SELECT * FROM distributed_table WHERE a IN (SELECT a FROM cte);
-ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
-DETAIL:  router planner does not support queries that reference non-colocated distributed tables
+DEBUG:  router planner does not support queries that reference non-colocated distributed tables
+DEBUG:  generating subplan XXX_1 for CTE cte: DELETE FROM query_single_shard_table.nullkey_c1_t1 WHERE (a OPERATOR(pg_catalog.=) 1) RETURNING a, b
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT a, b FROM query_single_shard_table.distributed_table WHERE (a OPERATOR(pg_catalog.=) ANY (SELECT cte.a FROM (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) cte))
+DEBUG:  Router planner cannot handle multi-shard select queries
+ a | b
+---------------------------------------------------------------------
+(0 rows)
+
 -- Below two queries fail very late when
 -- citus.enable_non_colocated_router_query_pushdown is set to on.
 SET citus.enable_non_colocated_router_query_pushdown TO ON;
@@ -1760,14 +2535,32 @@ WITH cte AS (
     DELETE FROM distributed_table WHERE a = 1 RETURNING *
 )
 SELECT * FROM nullkey_c1_t1 WHERE a IN (SELECT a FROM cte);
-ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
-DETAIL:  router planner does not support queries that reference non-colocated distributed tables
+DEBUG:  router planner does not support queries that reference non-colocated distributed tables
+DEBUG:  generating subplan XXX_1 for CTE cte: DELETE FROM query_single_shard_table.distributed_table WHERE (a OPERATOR(pg_catalog.=) 1) RETURNING a, b
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  query has a single distribution column value: 1
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT a, b FROM query_single_shard_table.nullkey_c1_t1 WHERE (a OPERATOR(pg_catalog.=) ANY (SELECT cte.a FROM (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) cte))
+DEBUG:  Creating router plan
+ a | b
+---------------------------------------------------------------------
+(0 rows)
+
 WITH cte AS (
     DELETE FROM distributed_table WHERE a = 1 RETURNING *
 )
 SELECT * FROM nullkey_c1_t1 WHERE b IN (SELECT b FROM cte);
-ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
-DETAIL:  router planner does not support queries that reference non-colocated distributed tables
+DEBUG:  router planner does not support queries that reference non-colocated distributed tables
+DEBUG:  generating subplan XXX_1 for CTE cte: DELETE FROM query_single_shard_table.distributed_table WHERE (a OPERATOR(pg_catalog.=) 1) RETURNING a, b
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  query has a single distribution column value: 1
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT a, b FROM query_single_shard_table.nullkey_c1_t1 WHERE (b OPERATOR(pg_catalog.=) ANY (SELECT cte.b FROM (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) cte))
+DEBUG:  Creating router plan
+ a | b
+---------------------------------------------------------------------
+(0 rows)
+
 RESET citus.enable_non_colocated_router_query_pushdown;
 WITH cte AS (
     UPDATE modify_fast_path SET value_1 = value_1 + 1 WHERE key = 1 RETURNING *
@@ -1870,5 +2663,703 @@ DEBUG:  Creating router plan
        3 |   1
 (10 rows)
 
+-- more tests with ctes and subqueries
+-- CTEs are recursively planned, and subquery foo is also recursively planned.
+-- Then the final plan becomes a router plan.
+WITH cte AS MATERIALIZED (
+	WITH local_cte AS MATERIALIZED (
+		SELECT * FROM users_table_local
+	),
+	dist_cte AS MATERIALIZED (
+		SELECT user_id FROM colocated_events_table
+	)
+	SELECT dist_cte.user_id FROM local_cte JOIN dist_cte ON dist_cte.user_id=local_cte.user_id
+)
+SELECT count(*)
+FROM cte,
+	 (
+        SELECT DISTINCT users_table.user_id
+        FROM users_table, colocated_events_table
+        WHERE users_table.user_id = colocated_events_table.user_id AND event_type IN (1,2,3,4)
+        ORDER BY 1 DESC LIMIT 5
+    ) AS foo
+WHERE foo.user_id = cte.user_id;
+DEBUG:  Local tables cannot be used in distributed queries.
+DEBUG:  generating subplan XXX_1 for CTE cte: WITH local_cte AS MATERIALIZED (SELECT users_table_local.user_id, users_table_local."time", users_table_local.value_1, users_table_local.value_2, users_table_local.value_3, users_table_local.value_4 FROM query_single_shard_table.users_table_local), dist_cte AS MATERIALIZED (SELECT colocated_events_table.user_id FROM query_single_shard_table.colocated_events_table) SELECT dist_cte.user_id FROM (local_cte JOIN dist_cte ON ((dist_cte.user_id OPERATOR(pg_catalog.=) local_cte.user_id)))
+DEBUG:  Local tables cannot be used in distributed queries.
+DEBUG:  generating subplan XXX_1 for CTE local_cte: SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM query_single_shard_table.users_table_local
+DEBUG:  generating subplan XXX_2 for CTE dist_cte: SELECT user_id FROM query_single_shard_table.colocated_events_table
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT dist_cte.user_id FROM ((SELECT intermediate_result.user_id, intermediate_result."time", intermediate_result.value_1, intermediate_result.value_2, intermediate_result.value_3, intermediate_result.value_4 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, "time" timestamp without time zone, value_1 integer, value_2 integer, value_3 double precision, value_4 bigint)) local_cte JOIN (SELECT intermediate_result.user_id FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) dist_cte ON ((dist_cte.user_id OPERATOR(pg_catalog.=) local_cte.user_id)))
+DEBUG:  Creating router plan
+DEBUG:  Creating router plan
+DEBUG:  generating subplan XXX_2 for subquery SELECT DISTINCT users_table.user_id FROM query_single_shard_table.users_table, query_single_shard_table.colocated_events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) colocated_events_table.user_id) AND (colocated_events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4]))) ORDER BY users_table.user_id DESC LIMIT 5
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) cte, (SELECT intermediate_result.user_id FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) foo WHERE (foo.user_id OPERATOR(pg_catalog.=) cte.user_id)
+DEBUG:  Creating router plan
+ count
+---------------------------------------------------------------------
+  1644
+(1 row)
+
+-- CTEs are colocated, route entire query.
+WITH cte1 AS (
+   SELECT * FROM users_table WHERE user_id = 1
+), cte2 AS (
+   SELECT * FROM colocated_events_table WHERE user_id = 1
+)
+SELECT cte1.user_id, cte1.value_1, cte2.user_id, cte2.event_type
+FROM cte1, cte2
+ORDER BY cte1.user_id, cte1.value_1, cte2.user_id, cte2.event_type
+LIMIT 5;
+DEBUG:  CTE cte1 is going to be inlined via distributed planning
+DEBUG:  CTE cte2 is going to be inlined via distributed planning
+DEBUG:  Creating router plan
+ user_id | value_1 | user_id | event_type
+---------------------------------------------------------------------
+       1 |       1 |       1 |          0
+       1 |       1 |       1 |          0
+       1 |       1 |       1 |          1
+       1 |       1 |       1 |          1
+       1 |       1 |       1 |          2
+(5 rows)
+
+-- CTEs aren't colocated, CTEs become intermediate results.
+WITH cte1 AS MATERIALIZED (
+   SELECT * FROM users_table WHERE user_id = 1
+), cte2 AS MATERIALIZED (
+   SELECT * FROM non_colocated_events_table WHERE user_id = 6
+)
+SELECT cte1.user_id, cte1.value_1, cte2.user_id, cte2.user_id
+FROM cte1, cte2
+ORDER BY cte1.user_id, cte1.value_1, cte2.user_id, cte2.event_type
+LIMIT 5;
+DEBUG:  router planner does not support queries that reference non-colocated distributed tables
+DEBUG:  generating subplan XXX_1 for CTE cte1: SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM query_single_shard_table.users_table WHERE (user_id OPERATOR(pg_catalog.=) 1)
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  generating subplan XXX_2 for CTE cte2: SELECT user_id, "time", event_type, value_2, value_3, value_4 FROM query_single_shard_table.non_colocated_events_table WHERE (user_id OPERATOR(pg_catalog.=) 6)
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT cte1.user_id, cte1.value_1, cte2.user_id, cte2.user_id FROM (SELECT intermediate_result.user_id, intermediate_result."time", intermediate_result.value_1, intermediate_result.value_2, intermediate_result.value_3, intermediate_result.value_4 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, "time" timestamp without time zone, value_1 integer, value_2 integer, value_3 double precision, value_4 bigint)) cte1, (SELECT intermediate_result.user_id, intermediate_result."time", intermediate_result.event_type, intermediate_result.value_2, intermediate_result.value_3, intermediate_result.value_4 FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, "time" timestamp without time zone, event_type integer, value_2 integer, value_3 double precision, value_4 bigint)) cte2 ORDER BY cte1.user_id, cte1.value_1, cte2.user_id, cte2.event_type LIMIT 5
+DEBUG:  Creating router plan
+ user_id | value_1 | user_id | user_id
+---------------------------------------------------------------------
+       1 |       1 |       6 |       6
+       1 |       1 |       6 |       6
+       1 |       1 |       6 |       6
+       1 |       1 |       6 |       6
+       1 |       1 |       6 |       6
+(5 rows)
+
+-- users_table & colocated_users_table are colocated, route entire query.
+WITH cte1 AS (
+   SELECT * FROM users_table WHERE user_id = 1
+)
+UPDATE colocated_users_table dt SET value = cte1.value_1
+FROM cte1 WHERE cte1.user_id = dt.id AND dt.id = 1;
+DEBUG:  Creating router plan
+-- users_table & non_colocated_users_table are not colocated, cte is recursive planned.
+WITH cte1 AS (
+   SELECT * FROM users_table WHERE user_id = 1
+)
+UPDATE non_colocated_users_table dt SET value = cte1.value_1
+FROM cte1 WHERE cte1.user_id = dt.id AND dt.id = 1;
+DEBUG:  found no worker with all shard placements
+DEBUG:  generating subplan XXX_1 for CTE cte1: SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM query_single_shard_table.users_table WHERE (user_id OPERATOR(pg_catalog.=) 1)
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: UPDATE query_single_shard_table.non_colocated_users_table dt SET value = cte1.value_1 FROM (SELECT intermediate_result.user_id, intermediate_result."time", intermediate_result.value_1, intermediate_result.value_2, intermediate_result.value_3, intermediate_result.value_4 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, "time" timestamp without time zone, value_1 integer, value_2 integer, value_3 double precision, value_4 bigint)) cte1 WHERE ((cte1.user_id OPERATOR(pg_catalog.=) dt.id) AND (dt.id OPERATOR(pg_catalog.=) 1))
+DEBUG:  Creating router plan
+-- All relations are not colocated, CTEs become intermediate results.
+WITH cte1 AS MATERIALIZED (
+   SELECT * FROM users_table WHERE user_id = 1
+), cte2 AS MATERIALIZED (
+   SELECT * FROM non_colocated_events_table WHERE user_id = 6
+)
+UPDATE non_colocated_users_table dt SET value = cte1.value_1 + cte2.event_type
+FROM cte1, cte2 WHERE cte1.user_id = dt.id AND dt.id = 1;
+DEBUG:  found no worker with all shard placements
+DEBUG:  generating subplan XXX_1 for CTE cte1: SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM query_single_shard_table.users_table WHERE (user_id OPERATOR(pg_catalog.=) 1)
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  generating subplan XXX_2 for CTE cte2: SELECT user_id, "time", event_type, value_2, value_3, value_4 FROM query_single_shard_table.non_colocated_events_table WHERE (user_id OPERATOR(pg_catalog.=) 6)
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: UPDATE query_single_shard_table.non_colocated_users_table dt SET value = (cte1.value_1 OPERATOR(pg_catalog.+) cte2.event_type) FROM (SELECT intermediate_result.user_id, intermediate_result."time", intermediate_result.value_1, intermediate_result.value_2, intermediate_result.value_3, intermediate_result.value_4 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, "time" timestamp without time zone, value_1 integer, value_2 integer, value_3 double precision, value_4 bigint)) cte1, (SELECT intermediate_result.user_id, intermediate_result."time", intermediate_result.event_type, intermediate_result.value_2, intermediate_result.value_3, intermediate_result.value_4 FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, "time" timestamp without time zone, event_type integer, value_2 integer, value_3 double precision, value_4 bigint)) cte2 WHERE ((cte1.user_id OPERATOR(pg_catalog.=) dt.id) AND (dt.id OPERATOR(pg_catalog.=) 1))
+DEBUG:  Creating router plan
+-- Volatile function calls should not be routed.
+WITH cte1 AS MATERIALIZED (SELECT id, value FROM func())
+UPDATE colocated_users_table dt SET value = cte1.value
+FROM cte1 WHERE dt.id = 1;
+DEBUG:  Router planner doesn't support VOLATILE functions in common table expressions.
+DEBUG:  generating subplan XXX_1 for CTE cte1: SELECT id, value FROM query_single_shard_table.func() func(id, value)
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: UPDATE query_single_shard_table.colocated_users_table dt SET value = cte1.value FROM (SELECT intermediate_result.id, intermediate_result.value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id integer, value integer)) cte1 WHERE (dt.id OPERATOR(pg_catalog.=) 1)
+DEBUG:  Creating router plan
+-- CTEs are recursively planned, and subquery foo is also recursively planned.
+WITH cte AS MATERIALIZED (
+	WITH local_cte AS MATERIALIZED (
+		SELECT * FROM users_table_local
+	),
+	dist_cte AS MATERIALIZED (
+		SELECT user_id FROM colocated_events_table
+	)
+	SELECT dist_cte.user_id FROM local_cte JOIN dist_cte ON dist_cte.user_id=local_cte.user_id
+)
+SELECT count(*)
+FROM
+	cte,
+	  (
+        SELECT DISTINCT users_table.user_id
+        FROM users_table, colocated_events_table
+        WHERE users_table.user_id = colocated_events_table.user_id AND event_type IN (1,2,3,4)
+        ORDER BY 1 DESC LIMIT 5
+     ) AS foo, colocated_events_table
+WHERE foo.user_id = cte.user_id AND colocated_events_table.user_id = cte.user_id;
+DEBUG:  Local tables cannot be used in distributed queries.
+DEBUG:  generating subplan XXX_1 for CTE cte: WITH local_cte AS MATERIALIZED (SELECT users_table_local.user_id, users_table_local."time", users_table_local.value_1, users_table_local.value_2, users_table_local.value_3, users_table_local.value_4 FROM query_single_shard_table.users_table_local), dist_cte AS MATERIALIZED (SELECT colocated_events_table.user_id FROM query_single_shard_table.colocated_events_table) SELECT dist_cte.user_id FROM (local_cte JOIN dist_cte ON ((dist_cte.user_id OPERATOR(pg_catalog.=) local_cte.user_id)))
+DEBUG:  Local tables cannot be used in distributed queries.
+DEBUG:  generating subplan XXX_1 for CTE local_cte: SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM query_single_shard_table.users_table_local
+DEBUG:  generating subplan XXX_2 for CTE dist_cte: SELECT user_id FROM query_single_shard_table.colocated_events_table
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT dist_cte.user_id FROM ((SELECT intermediate_result.user_id, intermediate_result."time", intermediate_result.value_1, intermediate_result.value_2, intermediate_result.value_3, intermediate_result.value_4 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, "time" timestamp without time zone, value_1 integer, value_2 integer, value_3 double precision, value_4 bigint)) local_cte JOIN (SELECT intermediate_result.user_id FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) dist_cte ON ((dist_cte.user_id OPERATOR(pg_catalog.=) local_cte.user_id)))
+DEBUG:  Creating router plan
+DEBUG:  Creating router plan
+DEBUG:  generating subplan XXX_2 for subquery SELECT DISTINCT users_table.user_id FROM query_single_shard_table.users_table, query_single_shard_table.colocated_events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) colocated_events_table.user_id) AND (colocated_events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4]))) ORDER BY users_table.user_id DESC LIMIT 5
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) cte, (SELECT intermediate_result.user_id FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) foo, query_single_shard_table.colocated_events_table WHERE ((foo.user_id OPERATOR(pg_catalog.=) cte.user_id) AND (colocated_events_table.user_id OPERATOR(pg_catalog.=) cte.user_id))
+DEBUG:  Creating router plan
+ count
+---------------------------------------------------------------------
+ 30608
+(1 row)
+
+-- CTEs are replaced and subquery in WHERE is also replaced.
+WITH cte AS MATERIALIZED (
+	WITH local_cte AS MATERIALIZED (
+		SELECT * FROM users_table_local
+	),
+	dist_cte AS MATERIALIZED (
+		SELECT user_id FROM colocated_events_table
+	)
+	SELECT dist_cte.user_id FROM local_cte JOIN dist_cte ON dist_cte.user_id=local_cte.user_id
+)
+SELECT DISTINCT cte.user_id
+FROM users_table, cte
+WHERE users_table.user_id = cte.user_id AND
+	  users_table.user_id IN (
+        SELECT DISTINCT value_2 FROM users_table WHERE value_1 >= 1 AND value_1 <= 20 ORDER BY 1 LIMIT 5
+      )
+ORDER BY 1 DESC;
+DEBUG:  Local tables cannot be used in distributed queries.
+DEBUG:  generating subplan XXX_1 for CTE cte: WITH local_cte AS MATERIALIZED (SELECT users_table_local.user_id, users_table_local."time", users_table_local.value_1, users_table_local.value_2, users_table_local.value_3, users_table_local.value_4 FROM query_single_shard_table.users_table_local), dist_cte AS MATERIALIZED (SELECT colocated_events_table.user_id FROM query_single_shard_table.colocated_events_table) SELECT dist_cte.user_id FROM (local_cte JOIN dist_cte ON ((dist_cte.user_id OPERATOR(pg_catalog.=) local_cte.user_id)))
+DEBUG:  Local tables cannot be used in distributed queries.
+DEBUG:  generating subplan XXX_1 for CTE local_cte: SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM query_single_shard_table.users_table_local
+DEBUG:  generating subplan XXX_2 for CTE dist_cte: SELECT user_id FROM query_single_shard_table.colocated_events_table
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT dist_cte.user_id FROM ((SELECT intermediate_result.user_id, intermediate_result."time", intermediate_result.value_1, intermediate_result.value_2, intermediate_result.value_3, intermediate_result.value_4 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, "time" timestamp without time zone, value_1 integer, value_2 integer, value_3 double precision, value_4 bigint)) local_cte JOIN (SELECT intermediate_result.user_id FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) dist_cte ON ((dist_cte.user_id OPERATOR(pg_catalog.=) local_cte.user_id)))
+DEBUG:  Creating router plan
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  generating subplan XXX_2 for subquery SELECT DISTINCT value_2 FROM query_single_shard_table.users_table WHERE ((value_1 OPERATOR(pg_catalog.>=) 1) AND (value_1 OPERATOR(pg_catalog.<=) 20)) ORDER BY value_2 LIMIT 5
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT DISTINCT cte.user_id FROM query_single_shard_table.users_table, (SELECT intermediate_result.user_id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) cte WHERE ((users_table.user_id OPERATOR(pg_catalog.=) cte.user_id) AND (users_table.user_id OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.value_2 FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(value_2 integer)))) ORDER BY cte.user_id DESC
+DEBUG:  Creating router plan
+ user_id
+---------------------------------------------------------------------
+       4
+       3
+       2
+       1
+(4 rows)
+
+-- Subquery in WHERE clause is planned recursively due to the recurring table
+-- in FROM clause.
+WITH cte AS MATERIALIZED (
+	WITH local_cte AS MATERIALIZED (
+		SELECT * FROM users_table_local
+	),
+	dist_cte AS MATERIALIZED (
+		SELECT user_id FROM colocated_events_table
+	)
+	SELECT dist_cte.user_id FROM local_cte JOIN dist_cte ON dist_cte.user_id=local_cte.user_id
+)
+SELECT DISTINCT cte.user_id
+FROM cte
+WHERE cte.user_id IN (SELECT DISTINCT user_id FROM users_table WHERE value_1 >= 1 AND value_1 <= 20)
+ORDER BY 1 DESC;
+DEBUG:  Local tables cannot be used in distributed queries.
+DEBUG:  generating subplan XXX_1 for CTE cte: WITH local_cte AS MATERIALIZED (SELECT users_table_local.user_id, users_table_local."time", users_table_local.value_1, users_table_local.value_2, users_table_local.value_3, users_table_local.value_4 FROM query_single_shard_table.users_table_local), dist_cte AS MATERIALIZED (SELECT colocated_events_table.user_id FROM query_single_shard_table.colocated_events_table) SELECT dist_cte.user_id FROM (local_cte JOIN dist_cte ON ((dist_cte.user_id OPERATOR(pg_catalog.=) local_cte.user_id)))
+DEBUG:  Local tables cannot be used in distributed queries.
+DEBUG:  generating subplan XXX_1 for CTE local_cte: SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM query_single_shard_table.users_table_local
+DEBUG:  generating subplan XXX_2 for CTE dist_cte: SELECT user_id FROM query_single_shard_table.colocated_events_table
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT dist_cte.user_id FROM ((SELECT intermediate_result.user_id, intermediate_result."time", intermediate_result.value_1, intermediate_result.value_2, intermediate_result.value_3, intermediate_result.value_4 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, "time" timestamp without time zone, value_1 integer, value_2 integer, value_3 double precision, value_4 bigint)) local_cte JOIN (SELECT intermediate_result.user_id FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) dist_cte ON ((dist_cte.user_id OPERATOR(pg_catalog.=) local_cte.user_id)))
+DEBUG:  Creating router plan
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  generating subplan XXX_2 for subquery SELECT DISTINCT user_id FROM query_single_shard_table.users_table WHERE ((value_1 OPERATOR(pg_catalog.>=) 1) AND (value_1 OPERATOR(pg_catalog.<=) 20))
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT DISTINCT user_id FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) cte WHERE (user_id OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.user_id FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer))) ORDER BY user_id DESC
+DEBUG:  Creating router plan
+ user_id
+---------------------------------------------------------------------
+       6
+       5
+       4
+       3
+       2
+       1
+(6 rows)
+
+-- CTEs inside a subquery and the final query becomes a router
+-- query.
+SELECT
+   user_id
+FROM
+    (
+        WITH cte AS MATERIALIZED (
+	        SELECT DISTINCT users_table.user_id
+	        FROM users_table, colocated_events_table
+	        WHERE users_table.user_id = colocated_events_table.user_id AND
+	              event_type IN (1,2,3,4)
+	    )
+        SELECT * FROM cte ORDER BY 1 DESC
+     ) AS foo
+ORDER BY 1 DESC;
+DEBUG:  Creating router plan
+ user_id
+---------------------------------------------------------------------
+       6
+       5
+       4
+       3
+       2
+       1
+(6 rows)
+
+-- CTEs inside a deeper subquery and also the subquery that contains the CTE are
+-- recursively planned.
+SELECT DISTINCT bar.user_id
+FROM
+    (
+        WITH cte AS MATERIALIZED (
+	        SELECT DISTINCT users_table.user_id
+	        FROM users_table, colocated_events_table
+	        WHERE users_table.user_id = colocated_events_table.user_id AND event_type IN (1,2,3,4)
+	    )
+        SELECT * FROM cte ORDER BY 1 DESC
+    ) AS foo,
+    (
+	    SELECT users_table.user_id, some_events.event_type
+	    FROM
+            users_table,
+	     	(
+	     		WITH cte AS MATERIALIZED (
+			        SELECT event_type, users_table.user_id
+			        FROM users_table, colocated_events_table
+			        WHERE users_table.user_id = colocated_events_table.user_id AND value_1 IN (1,2)
+			     ) SELECT * FROM cte ORDER BY 1 DESC
+	     	) AS some_events
+	     WHERE users_table.user_id = some_events.user_id AND event_type IN (1,2,3,4)
+	     ORDER BY 2,1 LIMIT 2
+    ) AS bar
+WHERE foo.user_id = bar.user_id
+ORDER BY 1 DESC LIMIT 5;
+DEBUG:  Creating router plan
+ user_id
+---------------------------------------------------------------------
+       1
+(1 row)
+
+-- Recursively plan subqueries inside the CTEs that contains LIMIT and OFFSET.
+WITH cte AS MATERIALIZED (
+	WITH local_cte AS MATERIALIZED (
+		SELECT * FROM users_table_local
+	),
+	dist_cte AS MATERIALIZED (
+		SELECT
+			user_id
+		FROM
+			colocated_events_table,
+			(SELECT DISTINCT value_2 FROM users_table OFFSET 0) as foo
+		WHERE
+			colocated_events_table.user_id = foo.value_2 AND
+			colocated_events_table.user_id IN (SELECT DISTINCT value_1 FROM users_table ORDER BY 1 LIMIT 3)
+	)
+	SELECT dist_cte.user_id FROM local_cte JOIN dist_cte ON dist_cte.user_id=local_cte.user_id
+)
+SELECT count(*)
+FROM
+	cte,
+	(
+        SELECT DISTINCT users_table.user_id
+        FROM users_table, colocated_events_table
+        WHERE users_table.user_id = colocated_events_table.user_id AND event_type IN (1,2,3,4)
+        ORDER BY 1 DESC LIMIT 5
+     ) AS foo
+WHERE foo.user_id = cte.user_id;
+DEBUG:  Local tables cannot be used in distributed queries.
+DEBUG:  generating subplan XXX_1 for CTE cte: WITH local_cte AS MATERIALIZED (SELECT users_table_local.user_id, users_table_local."time", users_table_local.value_1, users_table_local.value_2, users_table_local.value_3, users_table_local.value_4 FROM query_single_shard_table.users_table_local), dist_cte AS MATERIALIZED (SELECT colocated_events_table.user_id FROM query_single_shard_table.colocated_events_table, (SELECT DISTINCT users_table.value_2 FROM query_single_shard_table.users_table OFFSET 0) foo WHERE ((colocated_events_table.user_id OPERATOR(pg_catalog.=) foo.value_2) AND (colocated_events_table.user_id OPERATOR(pg_catalog.=) ANY (SELECT DISTINCT users_table.value_1 FROM query_single_shard_table.users_table ORDER BY users_table.value_1 LIMIT 3)))) SELECT dist_cte.user_id FROM (local_cte JOIN dist_cte ON ((dist_cte.user_id OPERATOR(pg_catalog.=) local_cte.user_id)))
+DEBUG:  Local tables cannot be used in distributed queries.
+DEBUG:  generating subplan XXX_1 for CTE local_cte: SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM query_single_shard_table.users_table_local
+DEBUG:  generating subplan XXX_2 for CTE dist_cte: SELECT colocated_events_table.user_id FROM query_single_shard_table.colocated_events_table, (SELECT DISTINCT users_table.value_2 FROM query_single_shard_table.users_table OFFSET 0) foo WHERE ((colocated_events_table.user_id OPERATOR(pg_catalog.=) foo.value_2) AND (colocated_events_table.user_id OPERATOR(pg_catalog.=) ANY (SELECT DISTINCT users_table.value_1 FROM query_single_shard_table.users_table ORDER BY users_table.value_1 LIMIT 3)))
+DEBUG:  Creating router plan
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT dist_cte.user_id FROM ((SELECT intermediate_result.user_id, intermediate_result."time", intermediate_result.value_1, intermediate_result.value_2, intermediate_result.value_3, intermediate_result.value_4 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, "time" timestamp without time zone, value_1 integer, value_2 integer, value_3 double precision, value_4 bigint)) local_cte JOIN (SELECT intermediate_result.user_id FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) dist_cte ON ((dist_cte.user_id OPERATOR(pg_catalog.=) local_cte.user_id)))
+DEBUG:  Creating router plan
+DEBUG:  Creating router plan
+DEBUG:  generating subplan XXX_2 for subquery SELECT DISTINCT users_table.user_id FROM query_single_shard_table.users_table, query_single_shard_table.colocated_events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) colocated_events_table.user_id) AND (colocated_events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4]))) ORDER BY users_table.user_id DESC LIMIT 5
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) cte, (SELECT intermediate_result.user_id FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) foo WHERE (foo.user_id OPERATOR(pg_catalog.=) cte.user_id)
+DEBUG:  Creating router plan
+ count
+---------------------------------------------------------------------
+   432
+(1 row)
+
+-- more tests with sublinks and subqueries in targetlist
+SELECT event_type, (SELECT e.value_2 FROM users_reference_table WHERE user_id = 1 AND value_1 = 1), (SELECT e.value_2)
+FROM non_colocated_events_table e
+ORDER BY 1,2 LIMIT 1;
+DEBUG:  Creating router plan
+ event_type | value_2 | value_2
+---------------------------------------------------------------------
+          0 |         |       0
+(1 row)
+
+SELECT event_type, (SELECT time FROM users_table WHERE user_id = e.user_id ORDER BY time LIMIT 1)
+FROM non_colocated_events_table e
+ORDER BY 1,2 LIMIT 1;
+DEBUG:  found no worker with all shard placements
+DEBUG:  push down of limit count: 1
+ERROR:  cannot push down this subquery
+DETAIL:  users_table and non_colocated_events_table are not colocated
+SELECT event_type, (SELECT max(time) FROM users_table WHERE user_id = e.value_2)
+FROM non_colocated_events_table e
+ORDER BY 1,2 LIMIT 1;
+DEBUG:  found no worker with all shard placements
+DEBUG:  push down of limit count: 1
+ERROR:  cannot push down this subquery
+DETAIL:  users_table and non_colocated_events_table are not colocated
+SELECT event_type, (SELECT max(time) FROM users_table)
+FROM non_colocated_events_table e
+ORDER BY 1,2 LIMIT 1;
+DEBUG:  found no worker with all shard placements
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  generating subplan XXX_1 for subquery SELECT max("time") AS max FROM query_single_shard_table.users_table
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT event_type, (SELECT intermediate_result.max FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(max timestamp without time zone)) AS max FROM query_single_shard_table.non_colocated_events_table e ORDER BY event_type, (SELECT intermediate_result.max FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(max timestamp without time zone)) LIMIT 1
+DEBUG:  Creating router plan
+ event_type |               max
+---------------------------------------------------------------------
+          0 | Thu Nov 23 17:30:34.635085 2017
+(1 row)
+
+WITH cte_1 AS (SELECT max(time) FROM users_table)
+SELECT event_type, (SELECT * FROM cte_1)
+FROM non_colocated_events_table e
+ORDER BY 1,2 LIMIT 1;
+DEBUG:  CTE cte_1 is going to be inlined via distributed planning
+DEBUG:  router planner does not support queries that reference non-colocated distributed tables
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  generating subplan XXX_1 for subquery SELECT max("time") AS max FROM query_single_shard_table.users_table
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT event_type, (SELECT cte_1.max FROM (SELECT intermediate_result.max FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(max timestamp without time zone)) cte_1) AS max FROM query_single_shard_table.non_colocated_events_table e ORDER BY event_type, (SELECT cte_1.max FROM (SELECT intermediate_result.max FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(max timestamp without time zone)) cte_1) LIMIT 1
+DEBUG:  Creating router plan
+ event_type |               max
+---------------------------------------------------------------------
+          0 | Thu Nov 23 17:30:34.635085 2017
+(1 row)
+
+WITH cte_1 AS (SELECT max(time) FROM users_table)
+SELECT event_type, (SELECT * FROM cte_1 LIMIT 1)
+FROM non_colocated_events_table e
+ORDER BY 1,2 LIMIT 1;
+DEBUG:  CTE cte_1 is going to be inlined via distributed planning
+DEBUG:  router planner does not support queries that reference non-colocated distributed tables
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  generating subplan XXX_1 for subquery SELECT max("time") AS max FROM query_single_shard_table.users_table
+DEBUG:  Creating router plan
+DEBUG:  generating subplan XXX_2 for subquery SELECT max FROM (SELECT intermediate_result.max FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(max timestamp without time zone)) cte_1 LIMIT 1
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT event_type, (SELECT intermediate_result.max FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(max timestamp without time zone)) AS max FROM query_single_shard_table.non_colocated_events_table e ORDER BY event_type, (SELECT intermediate_result.max FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(max timestamp without time zone)) LIMIT 1
+DEBUG:  Creating router plan
+ event_type |               max
+---------------------------------------------------------------------
+          0 | Thu Nov 23 17:30:34.635085 2017
+(1 row)
+
+WITH cte_1 AS (SELECT max(time) m FROM users_table)
+SELECT count(*), (SELECT * FROM cte_1 c1 join cte_1 c2 using (m))
+FROM non_colocated_events_table e
+GROUP BY 2
+ORDER BY 1,2 LIMIT 1;
+DEBUG:  router planner does not support queries that reference non-colocated distributed tables
+DEBUG:  generating subplan XXX_1 for CTE cte_1: SELECT max("time") AS m FROM query_single_shard_table.users_table
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count, (SELECT c1.m FROM ((SELECT intermediate_result.m FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(m timestamp without time zone)) c1 JOIN (SELECT intermediate_result.m FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(m timestamp without time zone)) c2 USING (m))) AS m FROM query_single_shard_table.non_colocated_events_table e GROUP BY (SELECT c1.m FROM ((SELECT intermediate_result.m FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(m timestamp without time zone)) c1 JOIN (SELECT intermediate_result.m FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(m timestamp without time zone)) c2 USING (m))) ORDER BY (count(*)), (SELECT c1.m FROM ((SELECT intermediate_result.m FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(m timestamp without time zone)) c1 JOIN (SELECT intermediate_result.m FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(m timestamp without time zone)) c2 USING (m))) LIMIT 1
+DEBUG:  Creating router plan
+ count |                m
+---------------------------------------------------------------------
+   101 | Thu Nov 23 17:30:34.635085 2017
+(1 row)
+
+WITH cte_1 AS (SELECT min(user_id) u, max(time) m FROM users_table)
+SELECT count(*), (SELECT max(time) FROM users_table WHERE user_id = cte_1.u GROUP BY user_id)
+FROM cte_1
+GROUP BY 2
+ORDER BY 1,2 LIMIT 1;
+DEBUG:  CTE cte_1 is going to be inlined via distributed planning
+DEBUG:  Creating router plan
+ count |               max
+---------------------------------------------------------------------
+     1 | Thu Nov 23 17:30:34.635085 2017
+(1 row)
+
+SELECT sum(e.user_id) + (SELECT max(value_3) FROM users_table WHERE user_id = e.user_id GROUP BY user_id)
+FROM non_colocated_events_table e
+GROUP BY e.user_id
+ORDER BY 1 LIMIT 3;
+DEBUG:  found no worker with all shard placements
+ERROR:  cannot push down subquery on the target list
+DETAIL:  Subqueries in the SELECT part of the query can only be pushed down if they happen before aggregates and window functions
+SELECT e.user_id, sum((SELECT any_value(value_3) FROM users_reference_table WHERE user_id = e.user_id GROUP BY user_id)) OVER (PARTITION BY e.user_id)
+FROM non_colocated_events_table e
+ORDER BY 1, 2 LIMIT 3;
+DEBUG:  Creating router plan
+ user_id | sum
+---------------------------------------------------------------------
+       1 |
+       1 |
+       1 |
+(3 rows)
+
+SELECT (SELECT (SELECT e.user_id + user_id) FROM users_table WHERE user_id = e.user_id GROUP BY user_id)
+FROM non_colocated_events_table e
+GROUP BY 1
+ORDER BY 1 LIMIT 3;
+DEBUG:  found no worker with all shard placements
+DEBUG:  push down of limit count: 3
+ERROR:  cannot push down this subquery
+DETAIL:  users_table and non_colocated_events_table are not colocated
+SELECT (SELECT (SELECT e.user_id + user_id) FROM users_reference_table WHERE user_id = e.user_id GROUP BY user_id)
+FROM non_colocated_events_table e
+GROUP BY 1
+ORDER BY 1 LIMIT 3;
+DEBUG:  Creating router plan
+ ?column?
+---------------------------------------------------------------------
+
+(1 row)
+
+WITH cte_1 AS (SELECT user_id FROM users_table ORDER BY 1 LIMIT 1)
+SELECT (SELECT (SELECT e.user_id + user_id) FROM cte_1 WHERE user_id = e.user_id GROUP BY user_id)
+FROM non_colocated_events_table e
+GROUP BY 1
+ORDER BY 1 LIMIT 3;
+DEBUG:  CTE cte_1 is going to be inlined via distributed planning
+DEBUG:  router planner does not support queries that reference non-colocated distributed tables
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  generating subplan XXX_1 for subquery SELECT user_id FROM query_single_shard_table.users_table ORDER BY user_id LIMIT 1
+DEBUG:  skipping recursive planning for the subquery since it contains references to outer queries
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT (SELECT (SELECT (e.user_id OPERATOR(pg_catalog.+) cte_1.user_id)) FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) cte_1 WHERE (cte_1.user_id OPERATOR(pg_catalog.=) e.user_id) GROUP BY cte_1.user_id) FROM query_single_shard_table.non_colocated_events_table e GROUP BY (SELECT (SELECT (e.user_id OPERATOR(pg_catalog.+) cte_1.user_id)) FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) cte_1 WHERE (cte_1.user_id OPERATOR(pg_catalog.=) e.user_id) GROUP BY cte_1.user_id) ORDER BY (SELECT (SELECT (e.user_id OPERATOR(pg_catalog.+) cte_1.user_id)) FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) cte_1 WHERE (cte_1.user_id OPERATOR(pg_catalog.=) e.user_id) GROUP BY cte_1.user_id) LIMIT 3
+DEBUG:  Creating router plan
+ ?column?
+---------------------------------------------------------------------
+        2
+
+(2 rows)
+
+SELECT (SELECT (SELECT e.user_id + user_id) FROM (SELECT 1 AS user_id) s WHERE user_id = e.user_id GROUP BY user_id)
+FROM non_colocated_events_table e
+GROUP BY 1
+ORDER BY 1 LIMIT 3;
+DEBUG:  Creating router plan
+ ?column?
+---------------------------------------------------------------------
+        2
+
+(2 rows)
+
+CREATE TEMP VIEW view_1 AS (SELECT user_id, value_2 FROM users_table WHERE user_id = 1 AND value_1 = 1 ORDER BY 1,2);
+WARNING:  "view view_1" has dependency on unsupported object "schema pg_temp_xxx"
+DETAIL:  "view view_1" will be created only locally
+SELECT (SELECT value_2 FROM view_1 WHERE user_id = e.user_id GROUP BY value_2)
+FROM non_colocated_events_table e
+GROUP BY 1
+ORDER BY 1 LIMIT 3;
+DEBUG:  found no worker with all shard placements
+DEBUG:  push down of limit count: 3
+ERROR:  cannot push down this subquery
+DETAIL:  users_table and non_colocated_events_table are not colocated
+SELECT
+	user_id, count(*)
+FROM
+	non_colocated_events_table e1
+GROUP BY user_id
+	HAVING
+		count(*) > (SELECT count(*) FROM (SELECT
+					  (SELECT sum(user_id)  FROM users_table WHERE user_id = u1.user_id GROUP BY user_id)
+					FROM users_table u1
+					GROUP BY user_id) as foo) ORDER BY 1 DESC;
+DEBUG:  found no worker with all shard placements
+DEBUG:  Creating router plan
+DEBUG:  generating subplan XXX_1 for subquery SELECT count(*) AS count FROM (SELECT (SELECT sum(users_table.user_id) AS sum FROM query_single_shard_table.users_table WHERE (users_table.user_id OPERATOR(pg_catalog.=) u1.user_id) GROUP BY users_table.user_id) AS sum FROM query_single_shard_table.users_table u1 GROUP BY u1.user_id) foo
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT user_id, count(*) AS count FROM query_single_shard_table.non_colocated_events_table e1 GROUP BY user_id HAVING (count(*) OPERATOR(pg_catalog.>) (SELECT intermediate_result.count FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(count bigint))) ORDER BY user_id DESC
+DEBUG:  Creating router plan
+ user_id | count
+---------------------------------------------------------------------
+       6 |    10
+       5 |    14
+       4 |    17
+       3 |    21
+       2 |    24
+       1 |    15
+(6 rows)
+
+SELECT count(*) FROM (SELECT
+  (SELECT user_id FROM users_table WHERE user_id = u1.user_id FOR UPDATE)
+FROM users_table u1
+GROUP BY user_id) as foo;
+DEBUG:  Creating router plan
+ count
+---------------------------------------------------------------------
+     6
+(1 row)
+
+-- test single hash repartition join
+SET citus.log_multi_join_order TO ON;
+SET client_min_messages TO DEBUG1;
+SET citus.enable_repartition_joins TO ON;
+SET citus.enable_single_hash_repartition_joins TO ON;
+SELECT count(*) FROM nullkey_c1_t1 JOIN distributed_table USING(a);
+LOG:  join order: [ "nullkey_c1_t1" ][ single hash partition join "distributed_table" ]
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+select count(*) from nullkey_c1_t1 JOIN nullkey_c2_t2 USING(a);
+LOG:  join order: [ "nullkey_c1_t1" ][ dual partition join "nullkey_c2_t2" ]
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+RESET citus.log_multi_join_order;
+SET client_min_messages TO DEBUG2;
+RESET citus.enable_repartition_joins;
+RESET citus.enable_single_hash_repartition_joins;
+SET client_min_messages TO DEBUG1;
+SET citus.enable_repartition_joins TO ON;
+SET citus.log_multi_join_order TO ON;
+SELECT count(*), avg(avgsub.a)
+FROM (
+    SELECT table_0.a
+    FROM reference_table AS table_0
+    INNER JOIN nullkey_c1_t1 AS table_1 USING (a)
+    INNER JOIN reference_table AS table_2 USING (a)
+    INNER JOIN nullkey_c2_t1 AS table_3 USING (a)
+    ORDER BY a LIMIT 7
+) AS avgsub;
+LOG:  join order: [ "nullkey_c1_t1" ][ reference join "reference_table" ][ reference join "reference_table" ][ dual partition join "nullkey_c2_t1" ]
+DEBUG:  push down of limit count: 7
+DEBUG:  generating subplan XXX_1 for subquery SELECT table_0.a FROM (((query_single_shard_table.reference_table table_0 JOIN query_single_shard_table.nullkey_c1_t1 table_1 USING (a)) JOIN query_single_shard_table.reference_table table_2 USING (a)) JOIN query_single_shard_table.nullkey_c2_t1 table_3 USING (a)) ORDER BY table_0.a LIMIT 7
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count, avg(a) AS avg FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) avgsub
+ count | avg
+---------------------------------------------------------------------
+     0 |
+(1 row)
+
+SET citus.enable_single_hash_repartition_joins TO ON;
+-- We prefer dual-hash repartition join over single-hash repartition join
+-- even if citus.enable_single_hash_repartition_joins is set to ON. This
+-- happens because single shard tables don't have a shard key.
+SELECT count(*), avg(avgsub.a)
+FROM (
+    SELECT table_0.a
+    FROM reference_table AS table_0
+    INNER JOIN nullkey_c1_t1 AS table_1 USING (a)
+    INNER JOIN reference_table AS table_2 USING (a)
+    INNER JOIN nullkey_c2_t1 AS table_3 USING (a)
+    ORDER BY a LIMIT 7
+) AS avgsub;
+LOG:  join order: [ "nullkey_c1_t1" ][ reference join "reference_table" ][ reference join "reference_table" ][ dual partition join "nullkey_c2_t1" ]
+DEBUG:  push down of limit count: 7
+DEBUG:  generating subplan XXX_1 for subquery SELECT table_0.a FROM (((query_single_shard_table.reference_table table_0 JOIN query_single_shard_table.nullkey_c1_t1 table_1 USING (a)) JOIN query_single_shard_table.reference_table table_2 USING (a)) JOIN query_single_shard_table.nullkey_c2_t1 table_3 USING (a)) ORDER BY table_0.a LIMIT 7
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count, avg(a) AS avg FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) avgsub
+ count | avg
+---------------------------------------------------------------------
+     0 |
+(1 row)
+
+RESET citus.enable_single_hash_repartition_joins;
+SET client_min_messages TO DEBUG2;
+RESET citus.enable_repartition_joins;
+RESET citus.log_multi_join_order;
+SELECT count(*), avg(avgsub.a)
+FROM (
+    SELECT table_0.a
+    FROM nullkey_c1_t1 AS table_0
+    RIGHT JOIN (
+        SELECT table_2.a FROM (
+            SELECT table_3.a FROM nullkey_c2_t1 AS table_3
+            ORDER BY a LIMIT 0
+        ) AS table_2
+        INNER JOIN nullkey_c2_t1 AS table_4 USING (a)
+        WHERE table_4.a < 8
+    ) AS table_1 USING (a)
+) AS avgsub;
+DEBUG:  router planner does not support queries that reference non-colocated distributed tables
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  generating subplan XXX_1 for subquery SELECT a FROM query_single_shard_table.nullkey_c2_t1 table_3 ORDER BY a LIMIT 0
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count, avg(a) AS avg FROM (SELECT table_0.a FROM (query_single_shard_table.nullkey_c1_t1 table_0 RIGHT JOIN (SELECT table_2.a FROM ((SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) table_2 JOIN query_single_shard_table.nullkey_c2_t1 table_4 USING (a)) WHERE (table_4.a OPERATOR(pg_catalog.<) 8)) table_1 USING (a))) avgsub
+DEBUG:  router planner does not support queries that reference non-colocated distributed tables
+ERROR:  cannot perform a lateral outer join when a distributed subquery references complex subqueries, CTEs or local tables
+-- test nested exec
+CREATE FUNCTION dist_query_single_shard(p_key int)
+RETURNS bigint
+LANGUAGE plpgsql AS $$
+DECLARE
+	result bigint;
+BEGIN
+    SELECT count(*) INTO result FROM query_single_shard_table.nullkey_c1_t1 WHERE a = p_key;
+	RETURN result;
+END;
+$$;
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
+CREATE FUNCTION ref_query()
+RETURNS bigint
+LANGUAGE plpgsql AS $$
+DECLARE
+	result bigint;
+BEGIN
+    SELECT count(*) INTO result FROM query_single_shard_table.reference_table;
+	RETURN result;
+END;
+$$;
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
+SELECT dist_query_single_shard(count(*)::int) FROM nullkey_c1_t1;
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+ERROR:  cannot execute a distributed query from a query on a shard
+DETAIL:  Executing a distributed query in a function call that may be pushed to a remote node can lead to incorrect results.
+HINT:  Avoid nesting of distributed queries or use alter user current_user set citus.allow_nested_distributed_execution to on to allow it with possible incorrectness.
+CONTEXT:  SQL statement "SELECT count(*)             FROM query_single_shard_table.nullkey_c1_t1 WHERE a = p_key"
+PL/pgSQL function query_single_shard_table.dist_query_single_shard(integer) line XX at SQL statement
+while executing command on localhost:xxxxx
+SELECT ref_query()+count(*) FROM nullkey_c1_t1;
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+ERROR:  cannot execute a distributed query from a query on a shard
+DETAIL:  Executing a distributed query in a function call that may be pushed to a remote node can lead to incorrect results.
+HINT:  Avoid nesting of distributed queries or use alter user current_user set citus.allow_nested_distributed_execution to on to allow it with possible incorrectness.
+CONTEXT:  SQL statement "SELECT count(*)             FROM query_single_shard_table.reference_table"
+PL/pgSQL function query_single_shard_table.ref_query() line XX at SQL statement
+while executing command on localhost:xxxxx
 SET client_min_messages TO ERROR;
 DROP SCHEMA query_single_shard_table CASCADE;

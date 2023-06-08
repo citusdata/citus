@@ -2367,7 +2367,7 @@ ErrorIfUnsupportedShardDistribution(Query *query)
 	ListCell *relationIdCell = NULL;
 	uint32 relationIndex = 0;
 	uint32 rangeDistributedRelationCount = 0;
-	uint32 hashDistributedRelationCount = 0;
+	uint32 hashDistOrSingleShardRelCount = 0;
 	uint32 appendDistributedRelationCount = 0;
 
 	foreach(relationIdCell, relationIdList)
@@ -2379,9 +2379,10 @@ ErrorIfUnsupportedShardDistribution(Query *query)
 			nonReferenceRelations = lappend_oid(nonReferenceRelations,
 												relationId);
 		}
-		else if (IsCitusTableType(relationId, HASH_DISTRIBUTED))
+		else if (IsCitusTableType(relationId, HASH_DISTRIBUTED) ||
+				 IsCitusTableType(relationId, SINGLE_SHARD_DISTRIBUTED))
 		{
-			hashDistributedRelationCount++;
+			hashDistOrSingleShardRelCount++;
 			nonReferenceRelations = lappend_oid(nonReferenceRelations,
 												relationId);
 		}
@@ -2396,7 +2397,7 @@ ErrorIfUnsupportedShardDistribution(Query *query)
 		}
 	}
 
-	if ((rangeDistributedRelationCount > 0) && (hashDistributedRelationCount > 0))
+	if ((rangeDistributedRelationCount > 0) && (hashDistOrSingleShardRelCount > 0))
 	{
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 						errmsg("cannot push down this subquery"),
@@ -2410,7 +2411,7 @@ ErrorIfUnsupportedShardDistribution(Query *query)
 						errdetail("A query including both range and append "
 								  "partitioned relations are unsupported")));
 	}
-	else if ((appendDistributedRelationCount > 0) && (hashDistributedRelationCount > 0))
+	else if ((appendDistributedRelationCount > 0) && (hashDistOrSingleShardRelCount > 0))
 	{
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 						errmsg("cannot push down this subquery"),
@@ -2439,8 +2440,9 @@ ErrorIfUnsupportedShardDistribution(Query *query)
 		{
 			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 							errmsg("cannot push down this subquery"),
-							errdetail("Shards of relations in subquery need to "
-									  "have 1-to-1 shard partitioning")));
+							errdetail("%s and %s are not colocated",
+									  get_rel_name(firstTableRelationId),
+									  get_rel_name(currentRelationId))));
 		}
 	}
 }
@@ -2813,15 +2815,15 @@ AnchorRangeTableId(List *rangeTableList)
 	 * have the most number of shards, we have a draw.
 	 */
 	List *baseTableIdList = BaseRangeTableIdList(rangeTableList);
-	List *anchorTableIdList = AnchorRangeTableIdList(rangeTableList, baseTableIdList);
+	List *anchorTableRTIList = AnchorRangeTableIdList(rangeTableList, baseTableIdList);
 	ListCell *anchorTableIdCell = NULL;
 
-	int anchorTableIdCount = list_length(anchorTableIdList);
+	int anchorTableIdCount = list_length(anchorTableRTIList);
 	Assert(anchorTableIdCount > 0);
 
 	if (anchorTableIdCount == 1)
 	{
-		anchorRangeTableId = (uint32) linitial_int(anchorTableIdList);
+		anchorRangeTableId = (uint32) linitial_int(anchorTableRTIList);
 		return anchorRangeTableId;
 	}
 
@@ -2829,7 +2831,7 @@ AnchorRangeTableId(List *rangeTableList)
 	 * If more than one table has the most number of shards, we break the draw
 	 * by comparing table sizes and picking the table with the largest size.
 	 */
-	foreach(anchorTableIdCell, anchorTableIdList)
+	foreach(anchorTableIdCell, anchorTableRTIList)
 	{
 		uint32 anchorTableId = (uint32) lfirst_int(anchorTableIdCell);
 		RangeTblEntry *tableEntry = rt_fetch(anchorTableId, rangeTableList);
@@ -2857,7 +2859,7 @@ AnchorRangeTableId(List *rangeTableList)
 	if (anchorRangeTableId == 0)
 	{
 		/* all tables have the same shard count and size 0, pick the first */
-		anchorRangeTableId = (uint32) linitial_int(anchorTableIdList);
+		anchorRangeTableId = (uint32) linitial_int(anchorTableRTIList);
 	}
 
 	return anchorRangeTableId;
@@ -2898,7 +2900,7 @@ BaseRangeTableIdList(List *rangeTableList)
 static List *
 AnchorRangeTableIdList(List *rangeTableList, List *baseRangeTableIdList)
 {
-	List *anchorTableIdList = NIL;
+	List *anchorTableRTIList = NIL;
 	uint32 maxShardCount = 0;
 	ListCell *baseRangeTableIdCell = NULL;
 
@@ -2908,25 +2910,46 @@ AnchorRangeTableIdList(List *rangeTableList, List *baseRangeTableIdList)
 		return baseRangeTableIdList;
 	}
 
+	uint32 referenceTableRTI = 0;
+
 	foreach(baseRangeTableIdCell, baseRangeTableIdList)
 	{
 		uint32 baseRangeTableId = (uint32) lfirst_int(baseRangeTableIdCell);
 		RangeTblEntry *tableEntry = rt_fetch(baseRangeTableId, rangeTableList);
-		List *shardList = LoadShardList(tableEntry->relid);
+
+		Oid citusTableId = tableEntry->relid;
+		if (IsCitusTableType(citusTableId, REFERENCE_TABLE))
+		{
+			referenceTableRTI = baseRangeTableId;
+			continue;
+		}
+
+		List *shardList = LoadShardList(citusTableId);
 
 		uint32 shardCount = (uint32) list_length(shardList);
 		if (shardCount > maxShardCount)
 		{
-			anchorTableIdList = list_make1_int(baseRangeTableId);
+			anchorTableRTIList = list_make1_int(baseRangeTableId);
 			maxShardCount = shardCount;
 		}
 		else if (shardCount == maxShardCount)
 		{
-			anchorTableIdList = lappend_int(anchorTableIdList, baseRangeTableId);
+			anchorTableRTIList = lappend_int(anchorTableRTIList, baseRangeTableId);
 		}
 	}
 
-	return anchorTableIdList;
+	/*
+	 * We favor distributed tables over reference tables as anchor tables. But
+	 * in case we cannot find any distributed tables, we let reference table to be
+	 * anchor table. For now, we cannot see a query that might require this, but we
+	 * want to be backward compatiable.
+	 */
+	if (list_length(anchorTableRTIList) == 0)
+	{
+		return referenceTableRTI > 0 ? list_make1_int(referenceTableRTI) : NIL;
+	}
+
+	return anchorTableRTIList;
 }
 
 
