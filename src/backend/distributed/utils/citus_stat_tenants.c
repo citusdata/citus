@@ -248,7 +248,6 @@ AttributeTask(char *tenantId, int colocationId, CmdType commandType)
 		{
 			return;
 		}
-
 	}
 
 	AttributeToColocationGroupId = colocationId;
@@ -741,7 +740,8 @@ FindTenantStats(MultiTenantMonitor *monitor)
 	{
 		TenantStats *tenantStats = &monitor->tenants[i];
 
-		if (strncmp(tenantStats->tenantAttribute, AttributeToTenant, MAX_TENANT_ATTRIBUTE_LENGTH) == 0 &&
+		if (strncmp(tenantStats->tenantAttribute, AttributeToTenant,
+					MAX_TENANT_ATTRIBUTE_LENGTH) == 0 &&
 			tenantStats->colocationGroupId == AttributeToColocationGroupId)
 		{
 			return i;
