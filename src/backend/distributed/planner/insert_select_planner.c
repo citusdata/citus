@@ -31,6 +31,7 @@
 #include "distributed/pg_dist_partition.h"
 #include "distributed/query_pushdown_planning.h"
 #include "distributed/recursive_planning.h"
+#include "distributed/relation_utils.h"
 #include "distributed/repartition_executor.h"
 #include "distributed/resource_lock.h"
 #include "distributed/version_compat.h"
@@ -602,6 +603,22 @@ CreateCombineQueryForRouterPlan(DistributedPlan *distPlan)
 	combineQuery->querySource = QSRC_ORIGINAL;
 	combineQuery->canSetTag = true;
 	combineQuery->rtable = list_make1(rangeTableEntry);
+
+#if PG_VERSION_NUM >= PG_VERSION_16
+	combineQuery->rteperminfos = NIL;
+	if (rangeTableEntry->perminfoindex != 0)
+	{
+		/* create permission info for newRangeTableEntry */
+		RTEPermissionInfo *perminfo = GetFilledPermissionInfo(rangeTableEntry->relid,
+															  rangeTableEntry->inh,
+															  CMD_SELECT);
+
+		/* update the subquery's rteperminfos accordingly */
+		rangeTableEntry->perminfoindex = 1;
+		combineQuery->rteperminfos = list_make1(perminfo);
+	}
+#endif
+
 	combineQuery->targetList = targetList;
 	combineQuery->jointree = joinTree;
 	return combineQuery;
@@ -1538,6 +1555,21 @@ WrapSubquery(Query *subquery)
 			pstate, subquery,
 			selectAlias, false, true));
 	outerQuery->rtable = list_make1(newRangeTableEntry);
+
+#if PG_VERSION_NUM >= PG_VERSION_16
+	outerQuery->rteperminfos = NIL;
+	if (newRangeTableEntry->perminfoindex != 0)
+	{
+		/* create permission info for newRangeTableEntry */
+		RTEPermissionInfo *perminfo = GetFilledPermissionInfo(newRangeTableEntry->relid,
+															  newRangeTableEntry->inh,
+															  CMD_SELECT);
+
+		/* update the subquery's rteperminfos accordingly */
+		newRangeTableEntry->perminfoindex = 1;
+		outerQuery->rteperminfos = list_make1(perminfo);
+	}
+#endif
 
 	/* set the FROM expression to the subquery */
 	RangeTblRef *newRangeTableRef = makeNode(RangeTblRef);

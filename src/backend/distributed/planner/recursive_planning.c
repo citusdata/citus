@@ -72,6 +72,7 @@
 #include "distributed/query_pushdown_planning.h"
 #include "distributed/recursive_planning.h"
 #include "distributed/relation_restriction_equivalence.h"
+#include "distributed/relation_utils.h"
 #include "distributed/log_utils.h"
 #include "distributed/shard_pruning.h"
 #include "distributed/version_compat.h"
@@ -88,6 +89,7 @@
 #include "nodes/pg_list.h"
 #include "nodes/primnodes.h"
 #include "nodes/pathnodes.h"
+#include "parser/parse_relation.h"
 #include "utils/builtins.h"
 #include "utils/guc.h"
 #include "utils/lsyscache.h"
@@ -1850,6 +1852,24 @@ CreateOuterSubquery(RangeTblEntry *rangeTableEntry, List *outerSubqueryTargetLis
 	innerSubqueryRTE->eref->colnames = innerSubqueryColNames;
 	outerSubquery->rtable = list_make1(innerSubqueryRTE);
 
+#if PG_VERSION_NUM >= PG_VERSION_16
+	outerSubquery->rteperminfos = NIL;
+	innerSubqueryRTE->perminfoindex = 0;
+
+	if (rangeTableEntry->perminfoindex != 0)
+	{
+		/* create permission info for innerSubqueryRTE */
+		RTEPermissionInfo *perminfo = GetFilledPermissionInfo(innerSubqueryRTE->relid,
+															  innerSubqueryRTE->inh,
+															  ACL_SELECT);
+
+		/* update the outerSubquery's rteperminfos accordingly */
+		innerSubqueryRTE->perminfoindex = 1;
+		outerSubquery->rteperminfos = list_make1(perminfo);
+	}
+#endif
+
+
 	/* set the FROM expression to the subquery */
 	RangeTblRef *newRangeTableRef = makeNode(RangeTblRef);
 	newRangeTableRef->rtindex = 1;
@@ -2022,6 +2042,24 @@ TransformFunctionRTE(RangeTblEntry *rangeTblEntry)
 
 	/* set the FROM expression to the subquery */
 	subquery->rtable = list_make1(newRangeTableEntry);
+
+#if PG_VERSION_NUM >= PG_VERSION_16
+	subquery->rteperminfos = NIL;
+	newRangeTableEntry->perminfoindex = 0;
+
+	if (rangeTblEntry->perminfoindex != 0)
+	{
+		/* create permission info for newRangeTableEntry */
+		RTEPermissionInfo *perminfo = GetFilledPermissionInfo(newRangeTableEntry->relid,
+															  newRangeTableEntry->inh,
+															  CMD_SELECT);
+
+		/* update the subquery's rteperminfos accordingly */
+		newRangeTableEntry->perminfoindex = 1;
+		subquery->rteperminfos = list_make1(perminfo);
+	}
+#endif
+
 	newRangeTableRef->rtindex = 1;
 	subquery->jointree = makeFromExpr(list_make1(newRangeTableRef), NULL);
 
@@ -2392,6 +2430,22 @@ BuildReadIntermediateResultsQuery(List *targetEntryList, List *columnAliasList,
 	Query *resultQuery = makeNode(Query);
 	resultQuery->commandType = CMD_SELECT;
 	resultQuery->rtable = list_make1(rangeTableEntry);
+
+#if PG_VERSION_NUM >= PG_VERSION_16
+	resultQuery->rteperminfos = NIL;
+	if (rangeTableEntry->perminfoindex != 0)
+	{
+		/* create permission info for newRangeTableEntry */
+		RTEPermissionInfo *perminfo = GetFilledPermissionInfo(rangeTableEntry->relid,
+															  rangeTableEntry->inh,
+															  CMD_SELECT);
+
+		/* update the subquery's rteperminfos accordingly */
+		rangeTableEntry->perminfoindex = 1;
+		resultQuery->rteperminfos = list_make1(perminfo);
+	}
+#endif
+
 	resultQuery->jointree = joinTree;
 	resultQuery->targetList = targetList;
 

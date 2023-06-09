@@ -56,6 +56,9 @@
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
 #include "nodes/pg_list.h"
+#if PG_VERSION_NUM >= PG_VERSION_16
+#include "parser/parse_relation.h"
+#endif
 #include "parser/parsetree.h"
 #include "parser/parse_type.h"
 #include "optimizer/optimizer.h"
@@ -1467,6 +1470,27 @@ FinalizeNonRouterPlan(PlannedStmt *localPlan, DistributedPlan *distributedPlan,
 	/* add original range table list for access permission checks */
 	finalPlan->rtable = list_concat(finalPlan->rtable, localPlan->rtable);
 
+#if PG_VERSION_NUM >= PG_VERSION_16
+
+	/*
+	 * Original range table list is concatented to final plan's range table list
+	 * therefore all the perminfoindexes should be updated to their value
+	 * PLUS the length of final plan's perminfos.
+	 */
+	int list_length_final_permInfos = list_length(finalPlan->permInfos);
+	finalPlan->permInfos = list_concat(finalPlan->permInfos, localPlan->permInfos);
+
+	ListCell *lc;
+	foreach(lc, localPlan->rtable)
+	{
+		RangeTblEntry *rte = (RangeTblEntry *) lfirst(lc);
+		if (rte->perminfoindex != 0)
+		{
+			rte->perminfoindex = rte->perminfoindex + list_length_final_permInfos;
+		}
+	}
+#endif
+
 	return finalPlan;
 }
 
@@ -1503,6 +1527,16 @@ FinalizeRouterPlan(PlannedStmt *localPlan, CustomScan *customScan)
 
 	/* add original range table list for access permission checks */
 	routerPlan->rtable = list_concat(routerPlan->rtable, localPlan->rtable);
+
+#if PG_VERSION_NUM >= PG_VERSION_16
+
+	/*
+	 * We know that extra remoteScanRangeTableEntry has perminfoindex 0
+	 * therefore we can simply use the perminfos we had in localplan
+	 */
+	Assert(remoteScanRangeTableEntry->perminfoindex == 0);
+	routerPlan->permInfos = localPlan->permInfos;
+#endif
 
 	routerPlan->canSetTag = true;
 	routerPlan->relationOids = NIL;

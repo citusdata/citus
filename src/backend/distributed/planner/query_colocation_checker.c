@@ -28,6 +28,7 @@
 #include "distributed/query_colocation_checker.h"
 #include "distributed/pg_dist_partition.h"
 #include "distributed/relation_restriction_equivalence.h"
+#include "distributed/relation_utils.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_logical_planner.h" /* only to access utility functions */
 
@@ -276,6 +277,22 @@ WrapRteRelationIntoSubquery(RangeTblEntry *rteRelation, List *requiredAttributes
 	/* we copy the input rteRelation to preserve the rteIdentity */
 	RangeTblEntry *newRangeTableEntry = copyObject(rteRelation);
 	subquery->rtable = list_make1(newRangeTableEntry);
+
+#if PG_VERSION_NUM >= PG_VERSION_16
+	subquery->rteperminfos = NIL;
+	newRangeTableEntry->perminfoindex = 0;
+	if (rteRelation->perminfoindex != 0)
+	{
+		/* create permission info for newRangeTableEntry */
+		RTEPermissionInfo *perminfo = GetFilledPermissionInfo(newRangeTableEntry->relid,
+															  newRangeTableEntry->inh,
+															  ACL_SELECT);
+
+		/* update the subquery's rteperminfos accordingly */
+		newRangeTableEntry->perminfoindex = 1;
+		subquery->rteperminfos = list_make1(perminfo);
+	}
+#endif
 
 	/* set the FROM expression to the subquery */
 	newRangeTableRef = makeNode(RangeTblRef);
