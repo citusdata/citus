@@ -469,6 +469,8 @@ extern List * PreprocessGrantOnSchemaStmt(Node *node, const char *queryString,
 										  ProcessUtilityContext processUtilityContext);
 extern List * CreateSchemaStmtObjectAddress(Node *node, bool missing_ok, bool
 											isPostprocess);
+extern List * AlterSchemaOwnerStmtObjectAddress(Node *node, bool missing_ok,
+												bool isPostprocess);
 extern List * AlterSchemaRenameStmtObjectAddress(Node *node, bool missing_ok, bool
 												 isPostprocess);
 
