@@ -83,7 +83,16 @@ CreateColocatedJoinChecker(Query *subquery, PlannerRestrictionContext *restricti
 		 * functions (i.e., FilterPlannerRestrictionForQuery()) rely on queries
 		 * not relations.
 		 */
+#if PG_VERSION_NUM >= PG_VERSION_16
+		RTEPermissionInfo *perminfo = NULL;
+		if (anchorRangeTblEntry->perminfoindex)
+		{
+			perminfo = getRTEPermissionInfo(subquery->rteperminfos, anchorRangeTblEntry);
+		}
+		anchorSubquery = WrapRteRelationIntoSubquery(anchorRangeTblEntry, NIL, perminfo);
+#else
 		anchorSubquery = WrapRteRelationIntoSubquery(anchorRangeTblEntry, NIL);
+#endif
 	}
 	else if (anchorRangeTblEntry->rtekind == RTE_SUBQUERY)
 	{
@@ -266,7 +275,13 @@ SubqueryColocated(Query *subquery, ColocatedJoinChecker *checker)
  * designed for generating a stub query.
  */
 Query *
-WrapRteRelationIntoSubquery(RangeTblEntry *rteRelation, List *requiredAttributes)
+WrapRteRelationIntoSubquery(RangeTblEntry *rteRelation,
+#if PG_VERSION_NUM >= PG_VERSION_16
+							List *requiredAttributes,
+							RTEPermissionInfo *perminfo)
+#else
+							List * requiredAttributes)
+#endif
 {
 	Query *subquery = makeNode(Query);
 	RangeTblRef *newRangeTableRef = makeNode(RangeTblRef);
@@ -276,6 +291,14 @@ WrapRteRelationIntoSubquery(RangeTblEntry *rteRelation, List *requiredAttributes
 	/* we copy the input rteRelation to preserve the rteIdentity */
 	RangeTblEntry *newRangeTableEntry = copyObject(rteRelation);
 	subquery->rtable = list_make1(newRangeTableEntry);
+
+#if PG_VERSION_NUM >= PG_VERSION_16
+	if (perminfo)
+	{
+		newRangeTableEntry->perminfoindex = 1;
+		subquery->rteperminfos = list_make1(perminfo);
+	}
+#endif
 
 	/* set the FROM expression to the subquery */
 	newRangeTableRef = makeNode(RangeTblRef);
