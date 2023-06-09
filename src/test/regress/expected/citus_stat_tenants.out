@@ -869,6 +869,34 @@ SELECT tenant_attribute, query_count_in_this_period FROM citus_stat_tenants;
  äbc              |                         11
 (2 rows)
 
+-- single shard distributed table, which is not part of a tenant schema
+SELECT citus_stat_tenants_reset();
+ citus_stat_tenants_reset
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE dist_tbl_text_single_shard(a text, b int);
+select create_distributed_table('dist_tbl_text_single_shard', NULL);
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO dist_tbl_text_single_shard VALUES ('/b*c/de', 1);
+SELECT count(*)>=0 FROM dist_tbl_text_single_shard WHERE a = '/b*c/de';
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+DELETE FROM dist_tbl_text_single_shard WHERE a = '/b*c/de';
+UPDATE dist_tbl_text_single_shard SET b = 1 WHERE a = '/b*c/de';
+SELECT tenant_attribute, query_count_in_this_period FROM citus_stat_tenants;
+ tenant_attribute | query_count_in_this_period
+---------------------------------------------------------------------
+(0 rows)
+
 -- schema based tenants
 SELECT citus_stat_tenants_reset();
  citus_stat_tenants_reset

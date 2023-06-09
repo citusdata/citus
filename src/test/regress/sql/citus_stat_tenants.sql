@@ -311,6 +311,19 @@ SELECT count(*)>=0 FROM select_from_dist_tbl_text_view WHERE a = U&'\0061\0308bc
 
 SELECT tenant_attribute, query_count_in_this_period FROM citus_stat_tenants;
 
+-- single shard distributed table, which is not part of a tenant schema
+SELECT citus_stat_tenants_reset();
+
+CREATE TABLE dist_tbl_text_single_shard(a text, b int);
+select create_distributed_table('dist_tbl_text_single_shard', NULL);
+
+INSERT INTO dist_tbl_text_single_shard VALUES ('/b*c/de', 1);
+SELECT count(*)>=0 FROM dist_tbl_text_single_shard WHERE a = '/b*c/de';
+DELETE FROM dist_tbl_text_single_shard WHERE a = '/b*c/de';
+UPDATE dist_tbl_text_single_shard SET b = 1 WHERE a = '/b*c/de';
+
+SELECT tenant_attribute, query_count_in_this_period FROM citus_stat_tenants;
+
 -- schema based tenants
 SELECT citus_stat_tenants_reset();
 
