@@ -173,6 +173,6 @@ DETAIL:  drop cascades to table ab
 drop cascades to table single_hash_repartition_first
 drop cascades to table single_hash_repartition_second
 drop cascades to table ref_table
-drop cascades to table ref_table_361397
+drop cascades to table ref_table_361398
 drop cascades to table cars
 drop cascades to table trips

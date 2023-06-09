@@ -45,4 +45,16 @@ DROP FUNCTION pg_catalog.citus_internal_unregister_tenant_schema_globally(Oid, t
 
 DROP TABLE pg_catalog.pg_dist_tenant_schema;
 
+DROP VIEW pg_catalog.citus_stat_tenants_local;
+DROP FUNCTION pg_catalog.citus_stat_tenants_local_internal(
+    BOOLEAN,
+    OUT INT,
+    OUT TEXT,
+    OUT INT,
+    OUT INT,
+    OUT INT,
+    OUT INT,
+    OUT DOUBLE PRECISION,
+    OUT DOUBLE PRECISION,
+    OUT BIGINT);
 #include "../udfs/citus_stat_tenants_local/11.3-1.sql"
