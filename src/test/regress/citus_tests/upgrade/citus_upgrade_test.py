@@ -13,7 +13,7 @@ Options:
     --mixed                                 Run the verification phase with one node not upgraded.
 """
 
-import atexit
+import multiprocessing
 import os
 import re
 import subprocess
@@ -27,6 +27,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # ignore E402 because these imports require addition to path
 import common  # noqa: E402
 import utils  # noqa: E402
+from common import CI, PG_MAJOR_VERSION, REPO_ROOT, run  # noqa: E402
 from utils import USER  # noqa: E402
 
 from config import (  # noqa: E402
@@ -41,6 +42,12 @@ from config import (  # noqa: E402
 
 
 def main(config):
+    before_upgrade_schedule = get_before_upgrade_schedule(config.mixed_mode)
+    after_upgrade_schedule = get_after_upgrade_schedule(config.mixed_mode)
+    run_citus_upgrade_tests(config, before_upgrade_schedule, after_upgrade_schedule)
+
+
+def run_citus_upgrade_tests(config, before_upgrade_schedule, after_upgrade_schedule):
     install_citus(config.pre_tar_path)
     common.initialize_temp_dir(config.temp_dir)
     common.initialize_citus_cluster(
@@ -48,23 +55,28 @@ def main(config):
     )
 
     report_initial_version(config)
-    before_upgrade_schedule = get_before_upgrade_schedule(config.mixed_mode)
     run_test_on_coordinator(config, before_upgrade_schedule)
     remove_citus(config.pre_tar_path)
+    if after_upgrade_schedule is None:
+        return
+
     install_citus(config.post_tar_path)
 
     restart_databases(config.bindir, config.datadir, config.mixed_mode, config)
     run_alter_citus(config.bindir, config.mixed_mode, config)
     verify_upgrade(config, config.mixed_mode, config.node_name_to_ports.values())
 
-    after_upgrade_schedule = get_after_upgrade_schedule(config.mixed_mode)
     run_test_on_coordinator(config, after_upgrade_schedule)
     remove_citus(config.post_tar_path)
 
 
 def install_citus(tar_path):
-    with utils.cd("/"):
-        subprocess.run(["tar", "xvf", tar_path], check=True)
+    if tar_path:
+        with utils.cd("/"):
+            run(["tar", "xvf", tar_path], shell=False)
+    else:
+        with utils.cd(REPO_ROOT):
+            run(f"make -j{multiprocessing.cpu_count()} -s install")
 
 
 def report_initial_version(config):
@@ -90,8 +102,9 @@ def run_test_on_coordinator(config, schedule):
 
 
 def remove_citus(tar_path):
-    with utils.cd("/"):
-        remove_tar_files(tar_path)
+    if tar_path:
+        with utils.cd("/"):
+            remove_tar_files(tar_path)
 
 
 def remove_tar_files(tar_path):
@@ -171,43 +184,29 @@ def get_after_upgrade_schedule(mixed_mode):
         return AFTER_CITUS_UPGRADE_COORD_SCHEDULE
 
 
-# IsRunningOnLocalMachine returns true if the upgrade test is run on
-# local machine, in which case the old citus version will be installed
-# and it will be upgraded to the current code.
-def IsRunningOnLocalMachine(arguments):
-    return arguments["--citus-old-version"]
-
-
-def generate_citus_tarballs(citus_version):
+def generate_citus_tarball(citus_version):
     tmp_dir = "tmp_citus_tarballs"
     citus_old_tarpath = os.path.abspath(
-        os.path.join(tmp_dir, "install-citus{}.tar".format(citus_version))
-    )
-    citus_new_tarpath = os.path.abspath(
-        os.path.join(tmp_dir, "install-citusmaster.tar")
+        os.path.join(tmp_dir, f"install-pg{PG_MAJOR_VERSION}-citus{citus_version}.tar")
     )
 
     common.initialize_temp_dir_if_not_exists(tmp_dir)
     dirpath = os.path.dirname(os.path.realpath(__file__))
     local_script_path = os.path.join(dirpath, "generate_citus_tarballs.sh")
     with utils.cd(tmp_dir):
-        subprocess.check_call([local_script_path, citus_version])
+        subprocess.check_call([local_script_path, str(PG_MAJOR_VERSION), citus_version])
 
-    return [citus_old_tarpath, citus_new_tarpath]
+    return citus_old_tarpath
 
 
 if __name__ == "__main__":
     args = docopt(__doc__, version="citus_upgrade_test")
-    if IsRunningOnLocalMachine(args):
-        citus_tarball_paths = generate_citus_tarballs(args["--citus-old-version"])
-        args["--citus-pre-tar"] = citus_tarball_paths[0]
-        args["--citus-post-tar"] = citus_tarball_paths[1]
-    config = CitusUpgradeConfig(args)
-    atexit.register(
-        common.stop_databases,
-        config.bindir,
-        config.datadir,
-        config.node_name_to_ports,
-        config.name,
-    )
+    if not CI:
+        citus_tarball_path = generate_citus_tarball(args["--citus-old-version"])
+        config = CitusUpgradeConfig(args, citus_tarball_path, None)
+    else:
+        config = CitusUpgradeConfig(
+            args, args["--citus-pre-tar"], args["--citus-post-tar"]
+        )
+
     main(config)

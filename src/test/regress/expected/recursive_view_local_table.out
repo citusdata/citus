@@ -152,8 +152,11 @@ SELECT ref_table.* FROM ref_table JOIN (SELECT * FROM recursive_defined_non_recu
 (3 rows)
 
 SELECT ref_table.* FROM ref_table WHERE EXISTS (SELECT * FROM local_table l WHERE l.a = ref_table.a);
-ERROR:  direct joins between distributed and local tables are not supported
-HINT:  Use CTE's or subqueries to select from local tables and use them in joins
+ a | b
+---------------------------------------------------------------------
+ 1 | 1
+(1 row)
+
 SELECT ref_table.* FROM ref_table WHERE EXISTS (SELECT * FROM local_table l WHERE l.a = ref_table.a) AND false;
  a | b
 ---------------------------------------------------------------------
@@ -196,9 +199,5 @@ SELECT ref_table.* FROM ref_table WHERE EXISTS (SELECT * FROM recursive_defined_
 ---------------------------------------------------------------------
 (0 rows)
 
+SET client_min_messages TO WARNING;
 DROP SCHEMA postgres_local_table CASCADE;
-NOTICE:  drop cascades to 4 other objects
-DETAIL:  drop cascades to table local_table
-drop cascades to view recursive_view
-drop cascades to view recursive_defined_non_recursive_view
-drop cascades to table ref_table

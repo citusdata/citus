@@ -29,8 +29,6 @@ CREATE FOREIGN TABLE foreign_table (
         SERVER foreign_server_dependent_schema
         OPTIONS (schema_name 'test_dependent_schema', table_name 'foreign_table_test');
 
-SELECT 1 FROM citus_add_node('localhost', :master_port, groupId=>0);
-
 -- verify that the aggregate is propagated to the new node
 SELECT run_command_on_workers($$select aggfnoid from pg_aggregate where aggfnoid::text like '%propagate_foreign_server.array_agg%';$$);
 

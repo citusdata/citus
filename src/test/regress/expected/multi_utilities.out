@@ -370,6 +370,8 @@ NOTICE:  issuing VACUUM multi_utilities.reference_vacuum_table_970000
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing VACUUM multi_utilities.reference_vacuum_table_970000
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing VACUUM multi_utilities.reference_vacuum_table_970000
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 -- should propagate to all workers because table is distributed table
 VACUUM distributed_vacuum_table;
 NOTICE:  issuing VACUUM multi_utilities.distributed_vacuum_table_970001
@@ -382,8 +384,12 @@ NOTICE:  issuing VACUUM multi_utilities.reference_vacuum_table_970000
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing VACUUM multi_utilities.reference_vacuum_table_970000
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing VACUUM multi_utilities.reference_vacuum_table_970000
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 -- only reference_vacuum_table should propagate
 VACUUM local_vacuum_table, reference_vacuum_table;
+NOTICE:  issuing VACUUM multi_utilities.reference_vacuum_table_970000
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing VACUUM multi_utilities.reference_vacuum_table_970000
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing VACUUM multi_utilities.reference_vacuum_table_970000
@@ -436,6 +442,8 @@ select analyze_count from pg_stat_all_tables where relname = 'local_vacuum_table
 (2 rows)
 
 vacuum (analyze) local_vacuum_table, reference_vacuum_table;
+NOTICE:  issuing VACUUM (ANALYZE) multi_utilities.reference_vacuum_table_970000
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing VACUUM (ANALYZE) multi_utilities.reference_vacuum_table_970000
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing VACUUM (ANALYZE) multi_utilities.reference_vacuum_table_970000
@@ -499,6 +507,8 @@ NOTICE:  issuing ANALYZE multi_utilities.reference_analyze_table_970002
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing ANALYZE multi_utilities.reference_analyze_table_970002
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ANALYZE multi_utilities.reference_analyze_table_970002
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 -- should propagate to all workers because table is distributed table
 ANALYZE distributed_analyze_table;
 NOTICE:  issuing ANALYZE multi_utilities.distributed_analyze_table_970003
@@ -511,8 +521,12 @@ NOTICE:  issuing ANALYZE multi_utilities.reference_analyze_table_970002
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing ANALYZE multi_utilities.reference_analyze_table_970002
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ANALYZE multi_utilities.reference_analyze_table_970002
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 -- only reference_analyze_table should propagate
 ANALYZE local_analyze_table, reference_analyze_table;
+NOTICE:  issuing ANALYZE multi_utilities.reference_analyze_table_970002
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing ANALYZE multi_utilities.reference_analyze_table_970002
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing ANALYZE multi_utilities.reference_analyze_table_970002

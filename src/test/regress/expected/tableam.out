@@ -96,9 +96,7 @@ HINT:  To remove the local data, run: SELECT truncate_local_data_after_distribut
 
 select * from test_ref;
 WARNING:  fake_scan_getnextslot
-DETAIL:  from localhost:xxxxx
 WARNING:  fake_scan_getnextslot
-DETAIL:  from localhost:xxxxx
  a
 ---------------------------------------------------------------------
  1
@@ -109,6 +107,7 @@ WARNING:  fake_tuple_insert
 DETAIL:  from localhost:xxxxx
 WARNING:  fake_tuple_insert
 DETAIL:  from localhost:xxxxx
+WARNING:  fake_tuple_insert
 -- we should error on following, since this AM is append only
 SET client_min_messages TO ERROR;
 delete from test_ref;
@@ -292,4 +291,4 @@ ERROR:  specifying a table access method is not supported on a partitioned table
 ALTER EXTENSION citus DROP ACCESS METHOD fake_am;
 NOTICE:  Citus does not propagate adding/dropping member objects
 drop schema test_tableam cascade;
-NOTICE:  drop cascades to 5 other objects
+NOTICE:  drop cascades to 6 other objects

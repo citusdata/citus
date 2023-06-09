@@ -805,6 +805,8 @@ AdaptiveExecutor(CitusScanState *scanState)
 	TupleDestination *defaultTupleDest =
 		CreateTupleStoreTupleDest(scanState->tuplestorestate, tupleDescriptor);
 
+	bool localExecutionSupported = true;
+
 	if (RequestedForExplainAnalyze(scanState))
 	{
 		/*
@@ -814,6 +816,12 @@ AdaptiveExecutor(CitusScanState *scanState)
 		UseCoordinatedTransaction();
 		taskList = ExplainAnalyzeTaskList(taskList, defaultTupleDest, tupleDescriptor,
 										  paramListInfo);
+
+		/*
+		 * Multiple queries per task is not supported with local execution. See the Assert in
+		 * TupleDestDestReceiverReceive.
+		 */
+		localExecutionSupported = false;
 	}
 
 	bool hasDependentJobs = job->dependentJobList != NIL;
@@ -835,8 +843,6 @@ AdaptiveExecutor(CitusScanState *scanState)
 
 	TransactionProperties xactProperties = DecideTransactionPropertiesForTaskList(
 		distributedPlan->modLevel, taskList, excludeFromXact);
-
-	bool localExecutionSupported = true;
 
 	/*
 	 * In some rare cases, we have prepared statements that pass a parameter
@@ -1040,6 +1046,12 @@ ExecuteTaskListIntoTupleDest(RowModifyLevel modLevel, List *taskList,
 uint64
 ExecuteTaskListExtended(ExecutionParams *executionParams)
 {
+	/* if there are no tasks to execute, we can return early */
+	if (list_length(executionParams->taskList) == 0)
+	{
+		return 0;
+	}
+
 	ParamListInfo paramListInfo = NULL;
 	uint64 locallyProcessedRows = 0;
 

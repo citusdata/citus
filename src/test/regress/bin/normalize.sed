@@ -11,6 +11,7 @@ s/localhost:[0-9]+/localhost:xxxxx/g
 s/ port=[0-9]+ / port=xxxxx /g
 s/placement [0-9]+/placement xxxxx/g
 s/shard [0-9]+/shard xxxxx/g
+s/Shard [0-9]+/Shard xxxxx/g
 s/assigned task [0-9]+ to node/assigned task to node/
 s/node group [12] (but|does)/node group \1/
 
@@ -257,7 +258,7 @@ s/pg_cancel_backend\('[0-9]+'::bigint\)/pg_cancel_backend('xxxxx'::bigint)/g
 s/issuing SELECT pg_cancel_backend\([0-9]+::integer\)/issuing SELECT pg_cancel_backend(xxxxx::integer)/g
 
 # shard_rebalancer output for flaky nodeIds
-s/issuing SELECT citus_copy_shard_placement\(43[0-9]+,[0-9]+,[0-9]+,'block_writes'\)/issuing SELECT citus_copy_shard_placement(43xxxx,xx,xx,'block_writes')/g
+s/issuing SELECT pg_catalog.citus_copy_shard_placement\(43[0-9]+,[0-9]+,[0-9]+,'block_writes'\)/issuing SELECT pg_catalog.citus_copy_shard_placement(43xxxx,xx,xx,'block_writes')/g
 
 # node id in run_command_on_all_nodes warning
 s/Error on node with node id [0-9]+/Error on node with node id xxxxx/g

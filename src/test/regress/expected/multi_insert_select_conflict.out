@@ -106,7 +106,8 @@ FROM (
 	LIMIT 5
 ) as foo
 ON CONFLICT DO NOTHING;
-DEBUG:  LIMIT clauses are not allowed in distributed INSERT ... SELECT queries
+DEBUG:  cannot push down this subquery
+DETAIL:  Limit clause is currently unsupported when a subquery references a column from another query
 DEBUG:  push down of limit count: 5
 DEBUG:  generating subplan XXX_1 for subquery SELECT col_1, col_2, col_3 FROM on_conflict.source_table_1 LIMIT 5
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT col_1, col_2 FROM (SELECT intermediate_result.col_1, intermediate_result.col_2, intermediate_result.col_3 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(col_1 integer, col_2 integer, col_3 integer)) foo
@@ -127,7 +128,8 @@ WITH inserted_table AS (
 	ON CONFLICT(col_1) DO UPDATE SET col_2 = EXCLUDED.col_2 RETURNING *
 ) SELECT * FROM inserted_table ORDER BY 1;
 DEBUG:  generating subplan XXX_1 for CTE inserted_table: INSERT INTO on_conflict.target_table (col_1, col_2) SELECT foo.col_1, foo.col_2 FROM (SELECT source_table_1.col_1, source_table_1.col_2, source_table_1.col_3 FROM on_conflict.source_table_1 LIMIT 5) foo ON CONFLICT(col_1) DO UPDATE SET col_2 = excluded.col_2 RETURNING target_table.col_1, target_table.col_2
-DEBUG:  LIMIT clauses are not allowed in distributed INSERT ... SELECT queries
+DEBUG:  cannot push down this subquery
+DETAIL:  Limit clause is currently unsupported when a subquery references a column from another query
 DEBUG:  push down of limit count: 5
 DEBUG:  generating subplan XXX_1 for subquery SELECT col_1, col_2, col_3 FROM on_conflict.source_table_1 LIMIT 5
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT col_1, col_2 FROM (SELECT intermediate_result.col_1, intermediate_result.col_2, intermediate_result.col_3 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(col_1 integer, col_2 integer, col_3 integer)) foo
@@ -163,7 +165,8 @@ WITH inserted_table AS (
 	ON CONFLICT(col_1) DO UPDATE SET col_2 = 0 RETURNING *
 ) SELECT * FROM inserted_table ORDER BY 1;
 DEBUG:  generating subplan XXX_1 for CTE inserted_table: INSERT INTO on_conflict.target_table (col_1, col_2) SELECT foo.col_1, foo.col_2 FROM ((SELECT source_table_1.col_1, source_table_1.col_2, source_table_1.col_3 FROM on_conflict.source_table_1 LIMIT 5) UNION (SELECT source_table_2.col_1, source_table_2.col_2, source_table_2.col_3 FROM on_conflict.source_table_2 LIMIT 5)) foo ON CONFLICT(col_1) DO UPDATE SET col_2 = 0 RETURNING target_table.col_1, target_table.col_2
-DEBUG:  Set operations are not allowed in distributed INSERT ... SELECT queries
+DEBUG:  cannot push down this subquery
+DETAIL:  Limit clause is currently unsupported when a subquery references a column from another query
 DEBUG:  push down of limit count: 5
 DEBUG:  generating subplan XXX_1 for subquery SELECT col_1, col_2, col_3 FROM on_conflict.source_table_1 LIMIT 5
 DEBUG:  push down of limit count: 5
@@ -498,7 +501,8 @@ FROM (
 	LIMIT 5)
 ) as foo
 ON CONFLICT(col_1) DO UPDATE SET col_2 = 0;
-DEBUG:  Set operations are not allowed in distributed INSERT ... SELECT queries
+DEBUG:  cannot push down this subquery
+DETAIL:  Limit clause is currently unsupported when a subquery references a column from another query
 DEBUG:  push down of limit count: 5
 DEBUG:  generating subplan XXX_1 for subquery SELECT col_1, col_2, col_3 FROM on_conflict.source_table_1 LIMIT 5
 DEBUG:  push down of limit count: 5
@@ -560,7 +564,8 @@ DEBUG:  Collecting INSERT ... SELECT results on coordinator
 -- intermediate result file
 SET citus.max_adaptive_executor_pool_size TO 1;
 INSERT INTO target_table SELECT * FROM target_table LIMIT 10000 ON CONFLICT(col_1) DO UPDATE SET col_2 = EXCLUDED.col_2 + 1;
-DEBUG:  LIMIT clauses are not allowed in distributed INSERT ... SELECT queries
+DEBUG:  cannot push down this subquery
+DETAIL:  Limit clause is currently unsupported when a subquery references a column from another query
 DEBUG:  push down of limit count: 10000
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 SELECT DISTINCT col_2 FROM target_table;
@@ -572,7 +577,8 @@ SELECT DISTINCT col_2 FROM target_table;
 WITH cte_1 AS (INSERT INTO target_table SELECT * FROM target_table LIMIT 10000 ON CONFLICT(col_1) DO UPDATE SET col_2 = EXCLUDED.col_2 + 1 RETURNING *)
 SELECT DISTINCT col_2 FROM cte_1;
 DEBUG:  generating subplan XXX_1 for CTE cte_1: INSERT INTO on_conflict.target_table (col_1, col_2) SELECT target_table_1.col_1, target_table_1.col_2 FROM on_conflict.target_table target_table_1 LIMIT 10000 ON CONFLICT(col_1) DO UPDATE SET col_2 = (excluded.col_2 OPERATOR(pg_catalog.+) 1) RETURNING target_table.col_1, target_table.col_2
-DEBUG:  LIMIT clauses are not allowed in distributed INSERT ... SELECT queries
+DEBUG:  cannot push down this subquery
+DETAIL:  Limit clause is currently unsupported when a subquery references a column from another query
 DEBUG:  push down of limit count: 10000
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT DISTINCT col_2 FROM (SELECT intermediate_result.col_1, intermediate_result.col_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(col_1 integer, col_2 integer)) cte_1
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
@@ -583,8 +589,9 @@ DEBUG:  Collecting INSERT ... SELECT results on coordinator
 
 RESET client_min_messages;
 DROP SCHEMA on_conflict CASCADE;
-NOTICE:  drop cascades to 7 other objects
+NOTICE:  drop cascades to 8 other objects
 DETAIL:  drop cascades to table test_ref_table
+drop cascades to table test_ref_table_1900012
 drop cascades to table source_table_3
 drop cascades to table source_table_4
 drop cascades to table target_table_2

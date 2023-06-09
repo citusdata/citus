@@ -916,15 +916,33 @@ DEBUG:  push down of limit count: 0
 DEBUG:  join prunable for task partitionId 0 and 1
 DEBUG:  join prunable for task partitionId 0 and 2
 DEBUG:  join prunable for task partitionId 0 and 3
+DEBUG:  join prunable for task partitionId 0 and 4
+DEBUG:  join prunable for task partitionId 0 and 5
 DEBUG:  join prunable for task partitionId 1 and 0
 DEBUG:  join prunable for task partitionId 1 and 2
 DEBUG:  join prunable for task partitionId 1 and 3
+DEBUG:  join prunable for task partitionId 1 and 4
+DEBUG:  join prunable for task partitionId 1 and 5
 DEBUG:  join prunable for task partitionId 2 and 0
 DEBUG:  join prunable for task partitionId 2 and 1
 DEBUG:  join prunable for task partitionId 2 and 3
+DEBUG:  join prunable for task partitionId 2 and 4
+DEBUG:  join prunable for task partitionId 2 and 5
 DEBUG:  join prunable for task partitionId 3 and 0
 DEBUG:  join prunable for task partitionId 3 and 1
 DEBUG:  join prunable for task partitionId 3 and 2
+DEBUG:  join prunable for task partitionId 3 and 4
+DEBUG:  join prunable for task partitionId 3 and 5
+DEBUG:  join prunable for task partitionId 4 and 0
+DEBUG:  join prunable for task partitionId 4 and 1
+DEBUG:  join prunable for task partitionId 4 and 2
+DEBUG:  join prunable for task partitionId 4 and 3
+DEBUG:  join prunable for task partitionId 4 and 5
+DEBUG:  join prunable for task partitionId 5 and 0
+DEBUG:  join prunable for task partitionId 5 and 1
+DEBUG:  join prunable for task partitionId 5 and 2
+DEBUG:  join prunable for task partitionId 5 and 3
+DEBUG:  join prunable for task partitionId 5 and 4
 DEBUG:  pruning merge fetch taskId 1
 DETAIL:  Creating dependency on merge taskId 5
 DEBUG:  pruning merge fetch taskId 2
@@ -941,6 +959,14 @@ DEBUG:  pruning merge fetch taskId 10
 DETAIL:  Creating dependency on merge taskId 20
 DEBUG:  pruning merge fetch taskId 11
 DETAIL:  Creating dependency on merge taskId 20
+DEBUG:  pruning merge fetch taskId 13
+DETAIL:  Creating dependency on merge taskId 25
+DEBUG:  pruning merge fetch taskId 14
+DETAIL:  Creating dependency on merge taskId 25
+DEBUG:  pruning merge fetch taskId 16
+DETAIL:  Creating dependency on merge taskId 30
+DEBUG:  pruning merge fetch taskId 17
+DETAIL:  Creating dependency on merge taskId 30
 DEBUG:  generating subplan XXX_1 for subquery SELECT t1.x FROM recursive_union.test t1, recursive_union.test t2 WHERE (t1.x OPERATOR(pg_catalog.=) t2.y) LIMIT 0
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  generating subplan XXX_2 for subquery SELECT x FROM recursive_union.test
@@ -957,15 +983,33 @@ DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  join prunable for task partitionId 0 and 1
 DEBUG:  join prunable for task partitionId 0 and 2
 DEBUG:  join prunable for task partitionId 0 and 3
+DEBUG:  join prunable for task partitionId 0 and 4
+DEBUG:  join prunable for task partitionId 0 and 5
 DEBUG:  join prunable for task partitionId 1 and 0
 DEBUG:  join prunable for task partitionId 1 and 2
 DEBUG:  join prunable for task partitionId 1 and 3
+DEBUG:  join prunable for task partitionId 1 and 4
+DEBUG:  join prunable for task partitionId 1 and 5
 DEBUG:  join prunable for task partitionId 2 and 0
 DEBUG:  join prunable for task partitionId 2 and 1
 DEBUG:  join prunable for task partitionId 2 and 3
+DEBUG:  join prunable for task partitionId 2 and 4
+DEBUG:  join prunable for task partitionId 2 and 5
 DEBUG:  join prunable for task partitionId 3 and 0
 DEBUG:  join prunable for task partitionId 3 and 1
 DEBUG:  join prunable for task partitionId 3 and 2
+DEBUG:  join prunable for task partitionId 3 and 4
+DEBUG:  join prunable for task partitionId 3 and 5
+DEBUG:  join prunable for task partitionId 4 and 0
+DEBUG:  join prunable for task partitionId 4 and 1
+DEBUG:  join prunable for task partitionId 4 and 2
+DEBUG:  join prunable for task partitionId 4 and 3
+DEBUG:  join prunable for task partitionId 4 and 5
+DEBUG:  join prunable for task partitionId 5 and 0
+DEBUG:  join prunable for task partitionId 5 and 1
+DEBUG:  join prunable for task partitionId 5 and 2
+DEBUG:  join prunable for task partitionId 5 and 3
+DEBUG:  join prunable for task partitionId 5 and 4
 DEBUG:  pruning merge fetch taskId 1
 DETAIL:  Creating dependency on merge taskId 5
 DEBUG:  pruning merge fetch taskId 2
@@ -982,6 +1026,14 @@ DEBUG:  pruning merge fetch taskId 10
 DETAIL:  Creating dependency on merge taskId 20
 DEBUG:  pruning merge fetch taskId 11
 DETAIL:  Creating dependency on merge taskId 20
+DEBUG:  pruning merge fetch taskId 13
+DETAIL:  Creating dependency on merge taskId 25
+DEBUG:  pruning merge fetch taskId 14
+DETAIL:  Creating dependency on merge taskId 25
+DEBUG:  pruning merge fetch taskId 16
+DETAIL:  Creating dependency on merge taskId 30
+DEBUG:  pruning merge fetch taskId 17
+DETAIL:  Creating dependency on merge taskId 30
 DEBUG:  generating subplan XXX_1 for subquery SELECT t1.x FROM recursive_union.test t1, recursive_union.test t2 WHERE (t1.x OPERATOR(pg_catalog.=) t2.y)
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  generating subplan XXX_2 for subquery SELECT x FROM recursive_union.test
@@ -1067,7 +1119,7 @@ DEBUG:  Creating router plan
 
 -- queries on non-colocated tables that would push down if they were not colocated are recursivelu planned
 SELECT * FROM (SELECT * FROM test UNION SELECT * FROM test_not_colocated) u ORDER BY 1,2;
-DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  router planner does not support queries that reference non-colocated distributed tables
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  generating subplan XXX_1 for subquery SELECT x, y FROM recursive_union.test
 DEBUG:  Router planner cannot handle multi-shard select queries
@@ -1083,7 +1135,7 @@ DEBUG:  Creating router plan
 (2 rows)
 
 SELECT * FROM (SELECT * FROM test UNION ALL SELECT * FROM test_not_colocated) u ORDER BY 1,2;
-DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  router planner does not support queries that reference non-colocated distributed tables
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  generating subplan XXX_1 for subquery SELECT x, y FROM recursive_union.test
 DEBUG:  Router planner cannot handle multi-shard select queries
@@ -1098,12 +1150,5 @@ DEBUG:  Creating router plan
  2 | 2
 (2 rows)
 
-RESET client_min_messages;
+SET client_min_messages TO WARNING;
 DROP SCHEMA recursive_union CASCADE;
-NOTICE:  drop cascades to 6 other objects
-DETAIL:  drop cascades to table test
-drop cascades to table ref
-drop cascades to table test_not_colocated
-drop cascades to view set_view_recursive
-drop cascades to view set_view_pushdown
-drop cascades to view set_view_recursive_second

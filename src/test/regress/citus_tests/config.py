@@ -179,10 +179,10 @@ class CitusDefaultClusterConfig(CitusBaseClusterConfig):
 
 
 class CitusUpgradeConfig(CitusBaseClusterConfig):
-    def __init__(self, arguments):
+    def __init__(self, arguments, pre_tar, post_tar):
         super().__init__(arguments)
-        self.pre_tar_path = arguments["--citus-pre-tar"]
-        self.post_tar_path = arguments["--citus-post-tar"]
+        self.pre_tar_path = pre_tar
+        self.post_tar_path = post_tar
         self.temp_dir = "./tmp_citus_upgrade"
         self.new_settings = {"citus.enable_version_checks": "false"}
         self.user = SUPER_USER_NAME
@@ -211,34 +211,14 @@ class AllSingleShardTableDefaultConfig(CitusDefaultClusterConfig):
         super().__init__(arguments)
         self.all_null_dist_key = True
         self.skip_tests += [
-            # i) Skip the following tests because they require SQL support beyond
-            #    router planner / supporting more DDL command types.
-            #
-            # group 1
-            "dropped_columns_create_load",
-            "dropped_columns_1",
-            # group 2
-            "distributed_planning_create_load",
-            "distributed_planning",
-            # group 4
-            "views_create",
-            "views",
-            # group 5
-            "intermediate_result_pruning_create",
-            "intermediate_result_pruning_queries_1",
-            "intermediate_result_pruning_queries_2",
-            # group 6
-            "local_dist_join_load",
-            "local_dist_join",
-            "arbitrary_configs_recurring_outer_join",
-            # group 7
-            "sequences_create",
-            "sequences",
-            # group 8
+            # One of the distributed functions created in "function_create"
+            # requires setting a distribution column, which cannot be the
+            # case with single shard tables.
             "function_create",
             "functions",
-            #
-            # ii) Skip the following test as it requires support for create_distributed_function.
+            # In "nested_execution", one of the tests that query
+            # "dist_query_single_shard" table  acts differently when the table
+            # has a single shard. This is explained with a comment in the test.
             "nested_execution",
         ]
 

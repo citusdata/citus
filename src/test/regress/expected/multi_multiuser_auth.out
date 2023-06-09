@@ -15,7 +15,7 @@
 SELECT nodeid AS worker_1_id FROM pg_dist_node WHERE nodename = 'localhost' AND nodeport = :worker_1_port;
  worker_1_id
 ---------------------------------------------------------------------
-          16
+          17
 (1 row)
 
 \gset

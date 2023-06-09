@@ -680,6 +680,8 @@ ROLLBACK;
 -- the fails since we're trying to switch sequential mode after
 -- already executed a parallel query
 BEGIN;
+	SELECT master_remove_node('localhost', :master_port);
+
 	CREATE TABLE test_table_1(id int PRIMARY KEY);
 	SELECT create_reference_table('test_table_1');
 
@@ -697,6 +699,8 @@ ROLLBACK;
 -- same test with the above, but this time using
 -- sequential mode, succeeds
 BEGIN;
+	SELECT master_remove_node('localhost', :master_port);
+
 	SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
 	CREATE TABLE test_table_1(id int PRIMARY KEY);
 	SELECT create_reference_table('test_table_1');

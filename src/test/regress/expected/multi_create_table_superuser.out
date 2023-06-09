@@ -642,13 +642,15 @@ DROP TABLE tt1;
 DROP TABLE tt2;
 DROP TABLE alter_replica_table;
 DROP SCHEMA sc CASCADE;
-NOTICE:  drop cascades to 2 other objects
+NOTICE:  drop cascades to 3 other objects
 DETAIL:  drop cascades to table sc.ref
+drop cascades to table sc.ref_360102
 drop cascades to table sc.hash
 DROP SCHEMA sc2 CASCADE;
-NOTICE:  drop cascades to 2 other objects
+NOTICE:  drop cascades to 3 other objects
 DETAIL:  drop cascades to table sc2.hash
 drop cascades to table sc2.ref
+drop cascades to table sc2.ref_360111
 DROP SCHEMA sc3 CASCADE;
 NOTICE:  drop cascades to table sc3.alter_replica_table
 DROP SCHEMA sc4 CASCADE;

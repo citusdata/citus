@@ -1028,7 +1028,8 @@ ErrorHintRequired(const char *errorHint, Query *queryTree)
 		{
 			continue;
 		}
-		else if (IsCitusTableType(relationId, HASH_DISTRIBUTED))
+		else if (IsCitusTableType(relationId, HASH_DISTRIBUTED) ||
+				 IsCitusTableType(relationId, SINGLE_SHARD_DISTRIBUTED))
 		{
 			int colocationId = TableColocationId(relationId);
 			colocationIdList = list_append_unique_int(colocationIdList, colocationId);

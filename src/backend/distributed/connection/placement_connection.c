@@ -958,7 +958,7 @@ ResetShardPlacementAssociation(struct MultiConnection *connection)
 
 
 /*
- * ResetPlacementConnectionManagement() disassociates connections from
+ * ResetPlacementConnectionManagement() dissociates connections from
  * placements and shards. This will be called at the end of XACT_EVENT_COMMIT
  * and XACT_EVENT_ABORT.
  */

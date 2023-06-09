@@ -30,6 +30,7 @@
 #include "distributed/distributed_planner.h"
 #include "distributed/recursive_planning.h"
 #include "distributed/relation_access_tracking.h"
+#include "distributed/repartition_executor.h"
 #include "distributed/resource_lock.h"
 #include "distributed/shardinterval_utils.h"
 #include "distributed/subplan_execution.h"
@@ -55,8 +56,6 @@
 bool EnableRepartitionedInsertSelect = true;
 
 
-static List * TwoPhaseInsertSelectTaskList(Oid targetRelationId, Query *insertSelectQuery,
-										   char *resultIdPrefix);
 static void ExecutePlanIntoRelation(Oid targetRelationId, List *insertTargetList,
 									PlannedStmt *selectPlan, EState *executorState);
 static HTAB * ExecutePlanIntoColocatedIntermediateResults(Oid targetRelationId,
@@ -67,11 +66,6 @@ static HTAB * ExecutePlanIntoColocatedIntermediateResults(Oid targetRelationId,
 static List * BuildColumnNameListFromTargetList(Oid targetRelationId,
 												List *insertTargetList);
 static int PartitionColumnIndexFromColumnList(Oid relationId, List *columnNameList);
-static List * RedistributedInsertSelectTaskList(Query *insertSelectQuery,
-												CitusTableCacheEntry *targetRelation,
-												List **redistributedResults,
-												bool useBinaryFormat);
-static int PartitionColumnIndex(List *insertTargetList, Var *partitionColumn);
 static void WrapTaskListForProjection(List *taskList, List *projectedTargetEntries);
 
 
@@ -89,7 +83,8 @@ NonPushableInsertSelectExecScan(CustomScanState *node)
 	{
 		EState *executorState = ScanStateGetExecutorState(scanState);
 		DistributedPlan *distributedPlan = scanState->distributedPlan;
-		Query *insertSelectQuery = copyObject(distributedPlan->insertSelectQuery);
+		Query *insertSelectQuery =
+			copyObject(distributedPlan->modifyQueryViaCoordinatorOrRepartition);
 		List *insertTargetList = insertSelectQuery->targetList;
 		RangeTblEntry *selectRte = ExtractSelectRangeTableEntry(insertSelectQuery);
 		RangeTblEntry *insertRte = ExtractResultRelationRTE(insertSelectQuery);
@@ -99,7 +94,8 @@ NonPushableInsertSelectExecScan(CustomScanState *node)
 		HTAB *shardStateHash = NULL;
 
 		Query *selectQuery = selectRte->subquery;
-		PlannedStmt *selectPlan = copyObject(distributedPlan->selectPlanForInsertSelect);
+		PlannedStmt *selectPlan =
+			copyObject(distributedPlan->selectPlanForModifyViaCoordinatorOrRepartition);
 
 		/*
 		 * If we are dealing with partitioned table, we also need to lock its
@@ -111,7 +107,7 @@ NonPushableInsertSelectExecScan(CustomScanState *node)
 			LockPartitionRelations(targetRelationId, RowExclusiveLock);
 		}
 
-		if (distributedPlan->insertSelectMethod == INSERT_SELECT_REPARTITION)
+		if (distributedPlan->modifyWithSelectMethod == MODIFY_WITH_SELECT_REPARTITION)
 		{
 			ereport(DEBUG1, (errmsg("performing repartitioned INSERT ... SELECT")));
 
@@ -142,9 +138,10 @@ NonPushableInsertSelectExecScan(CustomScanState *node)
 			CitusTableCacheEntry *targetRelation =
 				GetCitusTableCacheEntry(targetRelationId);
 
-			int partitionColumnIndex =
-				PartitionColumnIndex(insertTargetList, targetRelation->partitionColumn);
-			if (partitionColumnIndex == -1)
+			int distributionColumnIndex =
+				DistributionColumnIndex(insertTargetList,
+										targetRelation->partitionColumn);
+			if (distributionColumnIndex == -1)
 			{
 				char *relationName = get_rel_name(targetRelationId);
 				Oid schemaOid = get_rel_namespace(targetRelationId);
@@ -158,13 +155,13 @@ NonPushableInsertSelectExecScan(CustomScanState *node)
 			}
 
 			TargetEntry *selectPartitionTE = list_nth(selectQuery->targetList,
-													  partitionColumnIndex);
+													  distributionColumnIndex);
 			const char *partitionColumnName = selectPartitionTE->resname ?
 											  selectPartitionTE->resname : "(none)";
 
 			ereport(DEBUG2, (errmsg(
 								 "partitioning SELECT query by column index %d with name %s",
-								 partitionColumnIndex, quote_literal_cstr(
+								 distributionColumnIndex, quote_literal_cstr(
 									 partitionColumnName))));
 
 			/*
@@ -182,7 +179,7 @@ NonPushableInsertSelectExecScan(CustomScanState *node)
 
 			List **redistributedResults = RedistributeTaskListResults(distResultPrefix,
 																	  distSelectTaskList,
-																	  partitionColumnIndex,
+																	  distributionColumnIndex,
 																	  targetRelation,
 																	  binaryFormat);
 
@@ -192,10 +189,10 @@ NonPushableInsertSelectExecScan(CustomScanState *node)
 			 * target shard. Create and execute a list of tasks of form
 			 * INSERT INTO ... SELECT * FROM read_intermediate_results(...);
 			 */
-			List *taskList = RedistributedInsertSelectTaskList(insertSelectQuery,
-															   targetRelation,
-															   redistributedResults,
-															   binaryFormat);
+			List *taskList = GenerateTaskListWithRedistributedResults(insertSelectQuery,
+																	  targetRelation,
+																	  redistributedResults,
+																	  binaryFormat);
 
 			scanState->tuplestorestate =
 				tuplestore_begin_heap(randomAccess, interTransactions, work_mem);
@@ -235,9 +232,10 @@ NonPushableInsertSelectExecScan(CustomScanState *node)
 				intermediateResultIdPrefix);
 
 			/* generate tasks for the INSERT..SELECT phase */
-			List *taskList = TwoPhaseInsertSelectTaskList(targetRelationId,
-														  insertSelectQuery,
-														  intermediateResultIdPrefix);
+			List *taskList =
+				GenerateTaskListWithColocatedIntermediateResults(
+					targetRelationId, insertSelectQuery,
+					intermediateResultIdPrefix);
 
 			/*
 			 * We cannot actually execute INSERT...SELECT tasks that read from
@@ -295,94 +293,6 @@ NonPushableInsertSelectExecScan(CustomScanState *node)
 	TupleTableSlot *resultSlot = ReturnTupleFromTuplestore(scanState);
 
 	return resultSlot;
-}
-
-
-/*
- * TwoPhaseInsertSelectTaskList generates a list of tasks for a query that
- * inserts into a target relation and selects from a set of co-located
- * intermediate results.
- */
-static List *
-TwoPhaseInsertSelectTaskList(Oid targetRelationId, Query *insertSelectQuery,
-							 char *resultIdPrefix)
-{
-	List *taskList = NIL;
-
-	/*
-	 * Make a copy of the INSERT ... SELECT. We'll repeatedly replace the
-	 * subquery of insertResultQuery for different intermediate results and
-	 * then deparse it.
-	 */
-	Query *insertResultQuery = copyObject(insertSelectQuery);
-	RangeTblEntry *insertRte = ExtractResultRelationRTE(insertResultQuery);
-	RangeTblEntry *selectRte = ExtractSelectRangeTableEntry(insertResultQuery);
-
-	CitusTableCacheEntry *targetCacheEntry = GetCitusTableCacheEntry(targetRelationId);
-	int shardCount = targetCacheEntry->shardIntervalArrayLength;
-	uint32 taskIdIndex = 1;
-	uint64 jobId = INVALID_JOB_ID;
-
-	for (int shardOffset = 0; shardOffset < shardCount; shardOffset++)
-	{
-		ShardInterval *targetShardInterval =
-			targetCacheEntry->sortedShardIntervalArray[shardOffset];
-		uint64 shardId = targetShardInterval->shardId;
-		List *columnAliasList = NIL;
-		StringInfo queryString = makeStringInfo();
-		StringInfo resultId = makeStringInfo();
-
-		/* during COPY, the shard ID is appended to the result name */
-		appendStringInfo(resultId, "%s_" UINT64_FORMAT, resultIdPrefix, shardId);
-
-		/* generate the query on the intermediate result */
-		Query *resultSelectQuery = BuildSubPlanResultQuery(insertSelectQuery->targetList,
-														   columnAliasList,
-														   resultId->data);
-
-		/* put the intermediate result query in the INSERT..SELECT */
-		selectRte->subquery = resultSelectQuery;
-
-		/* setting an alias simplifies deparsing of RETURNING */
-		if (insertRte->alias == NULL)
-		{
-			Alias *alias = makeAlias(CITUS_TABLE_ALIAS, NIL);
-			insertRte->alias = alias;
-		}
-
-		/*
-		 * Generate a query string for the query that inserts into a shard and reads
-		 * from an intermediate result.
-		 *
-		 * Since CTEs have already been converted to intermediate results, they need
-		 * to removed from the query. Otherwise, worker queries include both
-		 * intermediate results and CTEs in the query.
-		 */
-		insertResultQuery->cteList = NIL;
-		deparse_shard_query(insertResultQuery, targetRelationId, shardId, queryString);
-		ereport(DEBUG2, (errmsg("distributed statement: %s", queryString->data)));
-
-		LockShardDistributionMetadata(shardId, ShareLock);
-		List *insertShardPlacementList = ActiveShardPlacementList(shardId);
-
-		RelationShard *relationShard = CitusMakeNode(RelationShard);
-		relationShard->relationId = targetShardInterval->relationId;
-		relationShard->shardId = targetShardInterval->shardId;
-
-		Task *modifyTask = CreateBasicTask(jobId, taskIdIndex, MODIFY_TASK,
-										   queryString->data);
-		modifyTask->dependentTaskList = NIL;
-		modifyTask->anchorShardId = shardId;
-		modifyTask->taskPlacementList = insertShardPlacementList;
-		modifyTask->relationShardList = list_make1(relationShard);
-		modifyTask->replicationModel = targetCacheEntry->replicationModel;
-
-		taskList = lappend(taskList, modifyTask);
-
-		taskIdIndex++;
-	}
-
-	return taskList;
 }
 
 
@@ -510,130 +420,11 @@ PartitionColumnIndexFromColumnList(Oid relationId, List *columnNameList)
 
 
 /*
- * IsSupportedRedistributionTarget determines whether re-partitioning into the
- * given target relation is supported.
- */
-bool
-IsSupportedRedistributionTarget(Oid targetRelationId)
-{
-	CitusTableCacheEntry *tableEntry = GetCitusTableCacheEntry(targetRelationId);
-
-	if (!IsCitusTableTypeCacheEntry(tableEntry, HASH_DISTRIBUTED) &&
-		!IsCitusTableTypeCacheEntry(tableEntry, RANGE_DISTRIBUTED))
-	{
-		return false;
-	}
-
-	return true;
-}
-
-
-/*
- * RedistributedInsertSelectTaskList returns a task list to insert given
- * redistributedResults into the given target relation.
- * redistributedResults[shardIndex] is list of cstrings each of which is
- * a result name which should be inserted into
- * targetRelation->sortedShardIntervalArray[shardIndex].
- */
-static List *
-RedistributedInsertSelectTaskList(Query *insertSelectQuery,
-								  CitusTableCacheEntry *targetRelation,
-								  List **redistributedResults,
-								  bool useBinaryFormat)
-{
-	List *taskList = NIL;
-
-	/*
-	 * Make a copy of the INSERT ... SELECT. We'll repeatedly replace the
-	 * subquery of insertResultQuery for different intermediate results and
-	 * then deparse it.
-	 */
-	Query *insertResultQuery = copyObject(insertSelectQuery);
-	RangeTblEntry *insertRte = ExtractResultRelationRTE(insertResultQuery);
-	RangeTblEntry *selectRte = ExtractSelectRangeTableEntry(insertResultQuery);
-	List *selectTargetList = selectRte->subquery->targetList;
-	Oid targetRelationId = targetRelation->relationId;
-
-	int shardCount = targetRelation->shardIntervalArrayLength;
-	int shardOffset = 0;
-	uint32 taskIdIndex = 1;
-	uint64 jobId = INVALID_JOB_ID;
-
-	for (shardOffset = 0; shardOffset < shardCount; shardOffset++)
-	{
-		ShardInterval *targetShardInterval =
-			targetRelation->sortedShardIntervalArray[shardOffset];
-		List *resultIdList = redistributedResults[targetShardInterval->shardIndex];
-		uint64 shardId = targetShardInterval->shardId;
-		StringInfo queryString = makeStringInfo();
-
-		/* skip empty tasks */
-		if (resultIdList == NIL)
-		{
-			continue;
-		}
-
-		/* sort result ids for consistent test output */
-		List *sortedResultIds = SortList(resultIdList, pg_qsort_strcmp);
-
-		/* generate the query on the intermediate result */
-		Query *fragmentSetQuery = BuildReadIntermediateResultsArrayQuery(selectTargetList,
-																		 NIL,
-																		 sortedResultIds,
-																		 useBinaryFormat);
-
-		/* put the intermediate result query in the INSERT..SELECT */
-		selectRte->subquery = fragmentSetQuery;
-
-		/* setting an alias simplifies deparsing of RETURNING */
-		if (insertRte->alias == NULL)
-		{
-			Alias *alias = makeAlias(CITUS_TABLE_ALIAS, NIL);
-			insertRte->alias = alias;
-		}
-
-		/*
-		 * Generate a query string for the query that inserts into a shard and reads
-		 * from an intermediate result.
-		 *
-		 * Since CTEs have already been converted to intermediate results, they need
-		 * to removed from the query. Otherwise, worker queries include both
-		 * intermediate results and CTEs in the query.
-		 */
-		insertResultQuery->cteList = NIL;
-		deparse_shard_query(insertResultQuery, targetRelationId, shardId, queryString);
-		ereport(DEBUG2, (errmsg("distributed statement: %s", queryString->data)));
-
-		LockShardDistributionMetadata(shardId, ShareLock);
-		List *insertShardPlacementList = ActiveShardPlacementList(shardId);
-
-		RelationShard *relationShard = CitusMakeNode(RelationShard);
-		relationShard->relationId = targetShardInterval->relationId;
-		relationShard->shardId = targetShardInterval->shardId;
-
-		Task *modifyTask = CreateBasicTask(jobId, taskIdIndex, MODIFY_TASK,
-										   queryString->data);
-		modifyTask->dependentTaskList = NIL;
-		modifyTask->anchorShardId = shardId;
-		modifyTask->taskPlacementList = insertShardPlacementList;
-		modifyTask->relationShardList = list_make1(relationShard);
-		modifyTask->replicationModel = targetRelation->replicationModel;
-
-		taskList = lappend(taskList, modifyTask);
-
-		taskIdIndex++;
-	}
-
-	return taskList;
-}
-
-
-/*
- * PartitionColumnIndex finds the index of given partition column in the
+ * DistributionColumnIndex finds the index of given distribution column in the
  * given target list.
  */
-static int
-PartitionColumnIndex(List *insertTargetList, Var *partitionColumn)
+int
+DistributionColumnIndex(List *insertTargetList, Var *partitionColumn)
 {
 	TargetEntry *insertTargetEntry = NULL;
 	int targetEntryIndex = 0;
@@ -648,59 +439,6 @@ PartitionColumnIndex(List *insertTargetList, Var *partitionColumn)
 	}
 
 	return -1;
-}
-
-
-/*
- * IsRedistributablePlan returns true if the given plan is a redistrituable plan.
- */
-bool
-IsRedistributablePlan(Plan *selectPlan)
-{
-	if (!EnableRepartitionedInsertSelect)
-	{
-		return false;
-	}
-
-	/* don't redistribute if query is not distributed or requires merge on coordinator */
-	if (!IsCitusCustomScan(selectPlan))
-	{
-		return false;
-	}
-
-	DistributedPlan *distSelectPlan =
-		GetDistributedPlan((CustomScan *) selectPlan);
-	Job *distSelectJob = distSelectPlan->workerJob;
-	List *distSelectTaskList = distSelectJob->taskList;
-
-	/*
-	 * Don't use redistribution if only one task. This is to keep the existing
-	 * behaviour for CTEs that the last step is a read_intermediate_result()
-	 * call. It doesn't hurt much in other cases too.
-	 */
-	if (list_length(distSelectTaskList) <= 1)
-	{
-		return false;
-	}
-
-	/* don't use redistribution for repartition joins for now */
-	if (distSelectJob->dependentJobList != NIL)
-	{
-		return false;
-	}
-
-	if (distSelectPlan->combineQuery != NULL)
-	{
-		Query *combineQuery = (Query *) distSelectPlan->combineQuery;
-
-		if (contain_nextval_expression_walker((Node *) combineQuery->targetList, NULL))
-		{
-			/* nextval needs to be evaluated on the coordinator */
-			return false;
-		}
-	}
-
-	return true;
 }
 
 

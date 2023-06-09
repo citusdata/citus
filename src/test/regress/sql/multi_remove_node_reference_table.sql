@@ -107,7 +107,12 @@ WHERE colocationid IN
      FROM pg_dist_partition
      WHERE logicalrelid = 'remove_node_reference_table'::regclass);
 
+-- test that we cannot remove a node if it has the only placement for a shard
+SELECT master_remove_node('localhost', :master_port);
 SELECT master_remove_node('localhost', :worker_1_port);
+
+-- restore the coordinator
+SELECT citus_set_coordinator_host('localhost');
 
 \c - - - :worker_1_port
 
@@ -574,7 +579,6 @@ WHERE
 ORDER BY shardid ASC;
 
 \c - - - :master_port
-SELECT 1 FROM citus_set_coordinator_host('localhost', :master_port);
 SELECT citus_disable_node('localhost', :worker_2_port);
 SELECT public.wait_until_metadata_sync();
 
@@ -583,8 +587,6 @@ SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
 
 -- never mark coordinator metadatasynced = false
 SELECT hasmetadata, metadatasynced FROM pg_dist_node WHERE nodeport = :master_port;
-
-SELECT 1 FROM citus_remove_node('localhost', :master_port);
 
 
 SELECT

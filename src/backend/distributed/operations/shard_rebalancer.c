@@ -1178,6 +1178,11 @@ replicate_table_shards(PG_FUNCTION_ARGS)
 	ArrayType *excludedShardArray = PG_GETARG_ARRAYTYPE_P(3);
 	Oid shardReplicationModeOid = PG_GETARG_OID(4);
 
+	if (IsCitusTableType(relationId, SINGLE_SHARD_DISTRIBUTED))
+	{
+		ereport(ERROR, (errmsg("cannot replicate single shard tables' shards")));
+	}
+
 	char transferMode = LookupShardTransferMode(shardReplicationModeOid);
 	EnsureReferenceTablesExistOnAllNodesExtended(transferMode);
 
@@ -2174,7 +2179,10 @@ RebalanceTableShardsBackground(RebalanceOptions *options, Oid shardReplicationMo
 						 quote_literal_cstr(shardTranferModeLabel));
 
 		int32 nodesInvolved[] = { 0 };
-		BackgroundTask *task = ScheduleBackgroundTask(jobId, GetUserId(), buf.data, 0,
+
+		/* replicate_reference_tables permissions require superuser */
+		Oid superUserId = CitusExtensionOwner();
+		BackgroundTask *task = ScheduleBackgroundTask(jobId, superUserId, buf.data, 0,
 													  NULL, 0, nodesInvolved);
 		replicateRefTablesTaskId = task->taskid;
 	}
@@ -2277,7 +2285,7 @@ UpdateShardPlacement(PlacementUpdateEvent *placementUpdateEvent,
 	if (updateType == PLACEMENT_UPDATE_MOVE)
 	{
 		appendStringInfo(placementUpdateCommand,
-						 "SELECT citus_move_shard_placement(%ld,%u,%u,%s)",
+						 "SELECT pg_catalog.citus_move_shard_placement(%ld,%u,%u,%s)",
 						 shardId,
 						 sourceNode->nodeId,
 						 targetNode->nodeId,
@@ -2286,7 +2294,7 @@ UpdateShardPlacement(PlacementUpdateEvent *placementUpdateEvent,
 	else if (updateType == PLACEMENT_UPDATE_COPY)
 	{
 		appendStringInfo(placementUpdateCommand,
-						 "SELECT citus_copy_shard_placement(%ld,%u,%u,%s)",
+						 "SELECT pg_catalog.citus_copy_shard_placement(%ld,%u,%u,%s)",
 						 shardId,
 						 sourceNode->nodeId,
 						 targetNode->nodeId,

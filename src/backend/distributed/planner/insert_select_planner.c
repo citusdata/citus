@@ -31,6 +31,7 @@
 #include "distributed/pg_dist_partition.h"
 #include "distributed/query_pushdown_planning.h"
 #include "distributed/recursive_planning.h"
+#include "distributed/repartition_executor.h"
 #include "distributed/resource_lock.h"
 #include "distributed/version_compat.h"
 #include "nodes/makefuncs.h"
@@ -73,9 +74,9 @@ static List * CreateTargetListForCombineQuery(List *targetList);
 static DeferredErrorMessage * DistributedInsertSelectSupported(Query *queryTree,
 															   RangeTblEntry *insertRte,
 															   RangeTblEntry *subqueryRte,
-															   bool allReferenceTables);
-static DeferredErrorMessage * MultiTaskRouterSelectQuerySupported(Query *query);
-static bool HasUnsupportedDistinctOn(Query *query);
+															   bool allReferenceTables,
+															   PlannerRestrictionContext *
+															   plannerRestrictionContext);
 static DeferredErrorMessage * InsertPartitionColumnMatchesSelect(Query *query,
 																 RangeTblEntry *insertRte,
 																 RangeTblEntry *
@@ -292,7 +293,8 @@ CreateDistributedInsertSelectPlan(Query *originalQuery,
 	distributedPlan->planningError = DistributedInsertSelectSupported(originalQuery,
 																	  insertRte,
 																	  subqueryRte,
-																	  allReferenceTables);
+																	  allReferenceTables,
+																	  plannerRestrictionContext);
 	if (distributedPlan->planningError)
 	{
 		return distributedPlan;
@@ -613,14 +615,15 @@ CreateTargetListForCombineQuery(List *targetList)
  */
 static DeferredErrorMessage *
 DistributedInsertSelectSupported(Query *queryTree, RangeTblEntry *insertRte,
-								 RangeTblEntry *subqueryRte, bool allReferenceTables)
+								 RangeTblEntry *subqueryRte, bool allReferenceTables,
+								 PlannerRestrictionContext *plannerRestrictionContext)
 {
 	Oid selectPartitionColumnTableId = InvalidOid;
 	Oid targetRelationId = insertRte->relid;
 	ListCell *rangeTableCell = NULL;
 
 	/* we only do this check for INSERT ... SELECT queries */
-	AssertArg(InsertSelectIntoCitusTable(queryTree));
+	Assert(InsertSelectIntoCitusTable(queryTree));
 
 	Query *subquery = subqueryRte->subquery;
 
@@ -687,8 +690,16 @@ DistributedInsertSelectSupported(Query *queryTree, RangeTblEntry *insertRte,
 							 NULL, NULL);
 	}
 
-	/* we don't support LIMIT, OFFSET and WINDOW functions */
-	DeferredErrorMessage *error = MultiTaskRouterSelectQuerySupported(subquery);
+	/* first apply toplevel pushdown checks to SELECT query */
+	DeferredErrorMessage *error = DeferErrorIfUnsupportedSubqueryPushdown(subquery,
+																		  plannerRestrictionContext);
+	if (error)
+	{
+		return error;
+	}
+
+	/* then apply subquery pushdown checks to SELECT query */
+	error = DeferErrorIfCannotPushdownSubquery(subquery, false);
 	if (error)
 	{
 		return error;
@@ -730,27 +741,6 @@ DistributedInsertSelectSupported(Query *queryTree, RangeTblEntry *insertRte,
 								 "table", NULL, NULL);
 		}
 
-		if (!HasDistributionKey(targetRelationId) ||
-			subqueryRteListProperties->hasSingleShardDistTable)
-		{
-			/*
-			 * XXX: Better to check this regardless of the fact that the target table
-			 *      has a distribution column or not.
-			 */
-			List *distributedRelationIdList = DistributedRelationIdList(subquery);
-			distributedRelationIdList = lappend_oid(distributedRelationIdList,
-													targetRelationId);
-
-			if (!AllDistributedRelationsInListColocated(distributedRelationIdList))
-			{
-				return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-									 "distributed INSERT ... SELECT cannot reference a "
-									 "distributed table without a shard key together "
-									 "with non-colocated distributed tables",
-									 NULL, NULL);
-			}
-		}
-
 		if (HasDistributionKey(targetRelationId))
 		{
 			/* ensure that INSERT's partition column comes from SELECT's partition column */
@@ -760,20 +750,20 @@ DistributedInsertSelectSupported(Query *queryTree, RangeTblEntry *insertRte,
 			{
 				return error;
 			}
-
-			/*
-			 * We expect partition column values come from colocated tables. Note that we
-			 * skip this check from the reference table case given that all reference tables
-			 * are already (and by default) co-located.
-			 */
-			if (!TablesColocated(insertRte->relid, selectPartitionColumnTableId))
-			{
-				return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-									 "INSERT target table and the source relation of the SELECT partition "
-									 "column value must be colocated in distributed INSERT ... SELECT",
-									 NULL, NULL);
-			}
 		}
+	}
+
+	/* All tables in source list and target table should be colocated. */
+	List *distributedRelationIdList = DistributedRelationIdList(subquery);
+	distributedRelationIdList = lappend_oid(distributedRelationIdList,
+											targetRelationId);
+
+	if (!AllDistributedRelationsInListColocated(distributedRelationIdList))
+	{
+		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+							 "INSERT target relation and all source relations of the "
+							 "SELECT must be colocated in distributed INSERT ... SELECT",
+							 NULL, NULL);
 	}
 
 	return NULL;
@@ -1132,152 +1122,6 @@ ReorderInsertSelectTargetLists(Query *originalQuery, RangeTblEntry *insertRte,
 
 
 /*
- * MultiTaskRouterSelectQuerySupported returns NULL if the query may be used
- * as the source for an INSERT ... SELECT or returns a description why not.
- */
-static DeferredErrorMessage *
-MultiTaskRouterSelectQuerySupported(Query *query)
-{
-	List *queryList = NIL;
-	ListCell *queryCell = NULL;
-	StringInfo errorDetail = NULL;
-	bool hasUnsupportedDistinctOn = false;
-
-	ExtractQueryWalker((Node *) query, &queryList);
-	foreach(queryCell, queryList)
-	{
-		Query *subquery = (Query *) lfirst(queryCell);
-
-		Assert(subquery->commandType == CMD_SELECT);
-
-		/* pushing down rtes without relations yields (shardCount * expectedRows) */
-		if (HasEmptyJoinTree(subquery))
-		{
-			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-								 "Subqueries without relations are not allowed in "
-								 "distributed INSERT ... SELECT queries",
-								 NULL, NULL);
-		}
-
-		/* pushing down limit per shard would yield wrong results */
-		if (subquery->limitCount != NULL)
-		{
-			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-								 "LIMIT clauses are not allowed in distributed INSERT "
-								 "... SELECT queries",
-								 NULL, NULL);
-		}
-
-		/* pushing down limit offest per shard would yield wrong results */
-		if (subquery->limitOffset != NULL)
-		{
-			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-								 "OFFSET clauses are not allowed in distributed "
-								 "INSERT ... SELECT queries",
-								 NULL, NULL);
-		}
-
-		/* group clause list must include partition column */
-		if (subquery->groupClause)
-		{
-			List *groupClauseList = subquery->groupClause;
-			List *targetEntryList = subquery->targetList;
-			List *groupTargetEntryList = GroupTargetEntryList(groupClauseList,
-															  targetEntryList);
-			bool groupOnPartitionColumn = TargetListOnPartitionColumn(subquery,
-																	  groupTargetEntryList);
-			if (!groupOnPartitionColumn)
-			{
-				return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-									 "Group by list without distribution column is "
-									 "not allowed  in distributed INSERT ... "
-									 "SELECT queries",
-									 NULL, NULL);
-			}
-		}
-
-		/*
-		 * We support window functions when the window function
-		 * is partitioned on distribution column.
-		 */
-		if (subquery->windowClause && !SafeToPushdownWindowFunction(subquery,
-																	&errorDetail))
-		{
-			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED, errorDetail->data, NULL,
-								 NULL);
-		}
-
-		if (subquery->setOperations != NULL)
-		{
-			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-								 "Set operations are not allowed in distributed "
-								 "INSERT ... SELECT queries",
-								 NULL, NULL);
-		}
-
-		/*
-		 * We currently do not support grouping sets since it could generate NULL
-		 * results even after the restrictions are applied to the query. A solution
-		 * would be to add the whole query into a subquery and add the restrictions
-		 * on that subquery.
-		 */
-		if (subquery->groupingSets != NULL)
-		{
-			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-								 "grouping sets are not allowed in distributed "
-								 "INSERT ... SELECT queries",
-								 NULL, NULL);
-		}
-
-		/*
-		 * We don't support DISTINCT ON clauses on non-partition columns.
-		 */
-		hasUnsupportedDistinctOn = HasUnsupportedDistinctOn(subquery);
-		if (hasUnsupportedDistinctOn)
-		{
-			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-								 "DISTINCT ON (non-partition column) clauses are not "
-								 "allowed in distributed INSERT ... SELECT queries",
-								 NULL, NULL);
-		}
-	}
-
-	return NULL;
-}
-
-
-/*
- * HasUnsupportedDistinctOn returns true if the query has distinct on and
- * distinct targets do not contain partition column.
- */
-static bool
-HasUnsupportedDistinctOn(Query *query)
-{
-	ListCell *distinctCell = NULL;
-
-	if (!query->hasDistinctOn)
-	{
-		return false;
-	}
-
-	foreach(distinctCell, query->distinctClause)
-	{
-		SortGroupClause *distinctClause = lfirst(distinctCell);
-		TargetEntry *distinctEntry = get_sortgroupclause_tle(distinctClause,
-															 query->targetList);
-
-		bool skipOuterVars = true;
-		if (IsPartitionColumn(distinctEntry->expr, query, skipOuterVars))
-		{
-			return false;
-		}
-	}
-
-	return true;
-}
-
-
-/*
  * InsertPartitionColumnMatchesSelect returns NULL the partition column in the
  * table targeted by INSERTed matches with the any of the SELECTed table's
  * partition column.  Returns the error description if there's no match.
@@ -1562,23 +1406,21 @@ CreateNonPushableInsertSelectPlan(uint64 planId, Query *parse, ParamListInfo bou
 						 IsSupportedRedistributionTarget(targetRelationId);
 
 	/*
-	 * Today it's not possible to generate a distributed plan for a SELECT
+	 * It's not possible to generate a distributed plan for a SELECT
 	 * having more than one tasks if it references a single-shard table.
-	 * This is because, we don't support queries beyond router planner
-	 * if the query references a single-shard table.
 	 *
 	 * For this reason, right now we don't expect an INSERT .. SELECT
 	 * query to go through the repartitioned INSERT .. SELECT logic if the
 	 * SELECT query references a single-shard table.
 	 */
 	Assert(!repartitioned ||
-		   !GetRTEListPropertiesForQuery(selectQueryCopy)->hasSingleShardDistTable);
+		   !ContainsSingleShardTable(selectQueryCopy));
 
-	distributedPlan->insertSelectQuery = insertSelectQuery;
-	distributedPlan->selectPlanForInsertSelect = selectPlan;
-	distributedPlan->insertSelectMethod = repartitioned ?
-										  INSERT_SELECT_REPARTITION :
-										  INSERT_SELECT_VIA_COORDINATOR;
+	distributedPlan->modifyQueryViaCoordinatorOrRepartition = insertSelectQuery;
+	distributedPlan->selectPlanForModifyViaCoordinatorOrRepartition = selectPlan;
+	distributedPlan->modifyWithSelectMethod = repartitioned ?
+											  MODIFY_WITH_SELECT_REPARTITION :
+											  MODIFY_WITH_SELECT_VIA_COORDINATOR;
 	distributedPlan->expectResults = insertSelectQuery->returningList != NIL;
 	distributedPlan->intermediateResultIdPrefix = InsertSelectResultIdPrefix(planId);
 	distributedPlan->targetRelationId = targetRelationId;

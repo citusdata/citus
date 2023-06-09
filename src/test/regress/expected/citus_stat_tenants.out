@@ -224,10 +224,8 @@ SELECT tenant_attribute, query_count_in_this_period, score FROM citus_stat_tenan
  bcde             |                          3 | 3000000000
  2                |                          1 | 1000000000
  3                |                          1 | 1000000000
- 4                |                          1 | 1000000000
- cdef             |                          1 | 1000000000
  defg             |                          1 | 1000000000
-(7 rows)
+(5 rows)
 
 -- test period passing
 SELECT citus_stat_tenants_reset();
@@ -439,7 +437,7 @@ SELECT count(*)>=0 FROM dist_tbl_text WHERE a = U&'\0061\0308bc';
 (1 row)
 
 \c - - - :worker_1_port
-SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, query_count_in_this_period, query_count_in_last_period FROM citus_stat_tenants ORDER BY tenant_attribute;
+SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, query_count_in_this_period, query_count_in_last_period FROM citus_stat_tenants(true) ORDER BY tenant_attribute;
  tenant_attribute | read_count_in_this_period | read_count_in_last_period | query_count_in_this_period | query_count_in_last_period
 ---------------------------------------------------------------------
  /*bcde           |                         1 |                         0 |                          1 |                          0
@@ -456,7 +454,7 @@ SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, q
 
 \c - - - :worker_2_port
 SET search_path TO citus_stat_tenants;
-SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, query_count_in_this_period, query_count_in_last_period FROM citus_stat_tenants ORDER BY tenant_attribute;
+SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, query_count_in_this_period, query_count_in_last_period FROM citus_stat_tenants(true) ORDER BY tenant_attribute;
  tenant_attribute | read_count_in_this_period | read_count_in_last_period | query_count_in_this_period | query_count_in_last_period
 ---------------------------------------------------------------------
  /*bcde           |                         1 |                         0 |                          1 |                          0
@@ -507,7 +505,7 @@ DELETE FROM dist_tbl_text WHERE a = '/b*c/de';
 DELETE FROM dist_tbl_text WHERE a = '/bcde';
 DELETE FROM dist_tbl_text WHERE a = U&'\0061\0308bc';
 DELETE FROM dist_tbl_text WHERE a = 'bcde*';
-SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, query_count_in_this_period, query_count_in_last_period FROM citus_stat_tenants_local ORDER BY tenant_attribute;
+SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, query_count_in_this_period, query_count_in_last_period FROM citus_stat_tenants_local(true) ORDER BY tenant_attribute;
  tenant_attribute | read_count_in_this_period | read_count_in_last_period | query_count_in_this_period | query_count_in_last_period
 ---------------------------------------------------------------------
  /b*c/de          |                         1 |                         0 |                          2 |                          0
@@ -590,7 +588,7 @@ EXECUTE dist_tbl_text_select_plan('bcde*');
  t
 (1 row)
 
-SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, query_count_in_this_period, query_count_in_last_period FROM citus_stat_tenants_local ORDER BY tenant_attribute;
+SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, query_count_in_this_period, query_count_in_last_period FROM citus_stat_tenants_local(true) ORDER BY tenant_attribute;
  tenant_attribute | read_count_in_this_period | read_count_in_last_period | query_count_in_this_period | query_count_in_last_period
 ---------------------------------------------------------------------
  /b*c/de          |                         4 |                         0 |                          5 |                          0
@@ -676,7 +674,7 @@ EXECUTE dist_tbl_text_select_plan('bcde*');
 
 \c - - - :worker_2_port
 SET search_path TO citus_stat_tenants;
-SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, query_count_in_this_period, query_count_in_last_period FROM citus_stat_tenants ORDER BY tenant_attribute;
+SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, query_count_in_this_period, query_count_in_last_period FROM citus_stat_tenants(true) ORDER BY tenant_attribute;
  tenant_attribute | read_count_in_this_period | read_count_in_last_period | query_count_in_this_period | query_count_in_last_period
 ---------------------------------------------------------------------
  /b*c/de          |                         7 |                         0 |                          8 |                          0

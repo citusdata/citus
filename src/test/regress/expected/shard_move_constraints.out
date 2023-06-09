@@ -472,12 +472,13 @@ SELECT start_metadata_sync_to_node('localhost', :worker_2_port);
 (1 row)
 
 DROP SCHEMA "shard Move Fkeys Indexes" CASCADE;
-NOTICE:  drop cascades to 7 other objects
+NOTICE:  drop cascades to 8 other objects
 DETAIL:  drop cascades to extension btree_gist
 drop cascades to table "shard Move Fkeys Indexes".sensors
 drop cascades to table "shard Move Fkeys Indexes".colocated_dist_table
 drop cascades to table "shard Move Fkeys Indexes".colocated_partitioned_table
 drop cascades to table "shard Move Fkeys Indexes".reference_table
+drop cascades to table "shard Move Fkeys Indexes".reference_table_8970028
 drop cascades to table "shard Move Fkeys Indexes".index_backed_rep_identity
 drop cascades to table "shard Move Fkeys Indexes".multiple_unique_keys
 DROP ROLE mx_rebalancer_role_ent;

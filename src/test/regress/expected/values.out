@@ -636,9 +636,5 @@ DEBUG:  CTE cte_1 is going to be inlined via distributed planning
 (1 row)
 
 COMMIT;
-RESET client_min_messages;
+SET client_min_messages TO WARNING;
 DROP SCHEMA values_subquery CASCADE;
-NOTICE:  drop cascades to 3 other objects
-DETAIL:  drop cascades to table test_values
-drop cascades to table test_values_ref
-drop cascades to function fixed_volatile_value()

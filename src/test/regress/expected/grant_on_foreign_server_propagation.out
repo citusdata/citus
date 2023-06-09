@@ -5,6 +5,12 @@
 CREATE SCHEMA "grant on server";
 SET search_path TO "grant on server";
 -- remove one of the worker nodes to test adding a new node later
+SELECT 1 FROM citus_remove_node('localhost', :master_port);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
 SELECT 1 FROM citus_remove_node('localhost', :worker_2_port);
  ?column?
 ---------------------------------------------------------------------
@@ -173,9 +179,3 @@ SET client_min_messages TO ERROR;
 DROP SERVER "Foreign Server" CASCADE;
 DROP SCHEMA "grant on server" CASCADE;
 DROP ROLE role_test_servers, role_test_servers_2, ownerrole;
-SELECT 1 FROM citus_remove_node('localhost', :master_port);
- ?column?
----------------------------------------------------------------------
-        1
-(1 row)
-

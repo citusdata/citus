@@ -201,6 +201,37 @@ typedef enum SizeQueryType
 	TABLE_SIZE /* pg_table_size() */
 } SizeQueryType;
 
+
+typedef enum
+{
+	COLOCATE_WITH_TABLE_LIKE_OPT,
+	COLOCATE_WITH_COLOCATION_ID
+} ColocationParamType;
+
+/*
+ * Param used to specify the colocation target of a distributed table. It can
+ * be either a table name or a colocation id.
+ *
+ * When colocationParamType is COLOCATE_WITH_COLOCATION_ID, colocationId is
+ * expected to be a valid colocation id. When colocationParamType is set to
+ * COLOCATE_WITH_TABLE_LIKE_OPT, colocateWithTableName is expected to
+ * be a valid table name, "default" or "none".
+ *
+ * Among the functions used to create a Citus table, right now only
+ * CreateSingleShardTable() accepts a ColocationParam.
+ */
+typedef struct
+{
+	union
+	{
+		char *colocateWithTableName;
+		uint32 colocationId;
+	};
+
+	ColocationParamType colocationParamType;
+} ColocationParam;
+
+
 typedef enum BackgroundJobStatus
 {
 	BACKGROUND_JOB_STATUS_SCHEDULED,
@@ -326,7 +357,7 @@ extern void DeletePartitionRow(Oid distributedRelationId);
 extern void DeleteShardRow(uint64 shardId);
 extern void UpdatePlacementGroupId(uint64 placementId, int groupId);
 extern void DeleteShardPlacementRow(uint64 placementId);
-extern void CreateSingleShardTable(Oid relationId, char *colocateWithTableName);
+extern void CreateSingleShardTable(Oid relationId, ColocationParam colocationParam);
 extern void CreateDistributedTable(Oid relationId, char *distributionColumnName,
 								   char distributionMethod, int shardCount,
 								   bool shardCountIsStrict, char *colocateWithTableName);
@@ -350,6 +381,7 @@ extern char * TableOwner(Oid relationId);
 extern void EnsureTablePermissions(Oid relationId, AclMode mode);
 extern void EnsureTableOwner(Oid relationId);
 extern void EnsureHashDistributedTable(Oid relationId);
+extern void EnsureHashOrSingleShardDistributedTable(Oid relationId);
 extern void EnsureFunctionOwner(Oid functionId);
 extern void EnsureSuperUser(void);
 extern void ErrorIfTableIsACatalogTable(Relation relation);

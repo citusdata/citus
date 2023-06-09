@@ -693,7 +693,7 @@ BEGIN;
 ROLLBACK;
 -- should fail --
 SELECT update_distributed_table_colocation('citus_local_table_4', colocate_with => 'none');
-ERROR:  relation citus_local_table_4 should be a hash distributed table
+ERROR:  relation citus_local_table_4 should be a hash or single shard distributed table
 SELECT master_create_empty_shard('citus_local_table_4');
 ERROR:  relation "citus_local_table_4" is a local table
 -- return true

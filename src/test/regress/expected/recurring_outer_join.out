@@ -2,14 +2,6 @@ CREATE SCHEMA recurring_outer_join;
 SET search_path TO recurring_outer_join;
 SET citus.next_shard_id TO 1520000;
 SET citus.shard_count TO 32;
--- idempotently add node to allow this test to run without add_coordinator
-SET client_min_messages TO WARNING;
-SELECT 1 FROM citus_add_node('localhost', :master_port, groupid => 0);
- ?column?
----------------------------------------------------------------------
-        1
-(1 row)
-
 SET client_min_messages TO DEBUG1;
 CREATE TABLE dist_1 (a int, b int);
 SELECT create_distributed_table('dist_1', 'a');
@@ -1969,8 +1961,7 @@ BEGIN;
   FROM ref_1 t1
   LEFT JOIN dist_1 t2
   ON (t1.a = t2.a);
-DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition columns in the source table and subquery do not match
-DETAIL:  The target table's partition column should correspond to a partition column in the subquery.
+DEBUG:  cannot perform a lateral outer join when a distributed subquery references a reference table
 DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
 DEBUG:  recursively planning distributed relation "dist_1" "t2" since it is part of a distributed join node that is outer joined with a recurring rel
 DEBUG:  Wrapping relation "dist_1" "t2" to a subquery
@@ -1986,9 +1977,7 @@ BEGIN;
   JOIN
   (ref_1 t2 LEFT JOIN dist_1 t3 USING(a)) t4
   ON (t1.a = t4.a);
-DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition columns in the source table and subquery do not match
-DETAIL:  Subquery contains an operator in the same position as the target table's partition column.
-HINT:  Ensure the target table's partition column has a corresponding simple column reference to a distributed table's partition column in the subquery.
+DEBUG:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
 DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
 DEBUG:  recursively planning distributed relation "dist_1" "t3" since it is part of a distributed join node that is outer joined with a recurring rel
 DEBUG:  Wrapping relation "dist_1" "t3" to a subquery
@@ -2005,7 +1994,7 @@ BEGIN;
   JOIN
   (ref_1 t2 LEFT JOIN dist_1 t3 USING(a)) t4
   ON (t1.a = t4.a);
-DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
 DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
 DEBUG:  recursively planning distributed relation "dist_1" "t3" since it is part of a distributed join node that is outer joined with a recurring rel
 DEBUG:  Wrapping relation "dist_1" "t3" to a subquery
@@ -2015,9 +2004,3 @@ DEBUG:  performing repartitioned INSERT ... SELECT
 ROLLBACK;
 SET client_min_messages TO ERROR;
 DROP SCHEMA recurring_outer_join CASCADE;
-SELECT master_remove_node('localhost', :master_port);
- master_remove_node
----------------------------------------------------------------------
-
-(1 row)
-

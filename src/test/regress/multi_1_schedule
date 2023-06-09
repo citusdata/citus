@@ -33,6 +33,9 @@ test: ref_citus_local_fkeys
 test: alter_database_owner
 test: distributed_triggers
 test: create_single_shard_table
+# don't parallelize single_shard_table_udfs to make sure colocation ids are sequential
+test: single_shard_table_udfs
+test: schema_based_sharding
 
 test: multi_test_catalog_views
 test: multi_table_ddl
@@ -65,7 +68,12 @@ test: multi_remove_node_reference_table
 test: multi_create_table
 test: multi_create_table_superuser
 test: multi_master_protocol multi_load_data multi_load_data_superuser multi_behavioral_analytics_create_table
-test: multi_behavioral_analytics_basics multi_behavioral_analytics_single_shard_queries multi_insert_select_non_pushable_queries multi_insert_select multi_behavioral_analytics_create_table_superuser
+test: multi_behavioral_analytics_basics multi_behavioral_analytics_single_shard_queries multi_behavioral_analytics_create_table_superuser
+
+# We don't parallelize the following test with the ones above because they're
+# not idempotent and hence causing flaky test detection check to fail.
+test: multi_insert_select_non_pushable_queries multi_insert_select
+
 test: multi_shard_update_delete recursive_dml_with_different_planners_executors
 test: insert_select_repartition window_functions dml_recursive multi_insert_select_window
 test: multi_insert_select_conflict citus_table_triggers alter_table_single_shard_table
@@ -366,3 +374,4 @@ test: ensure_no_intermediate_data_leak
 test: ensure_no_shared_connection_leak
 
 test: check_mx
+test: check_cluster_state

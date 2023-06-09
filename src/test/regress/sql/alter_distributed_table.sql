@@ -195,13 +195,17 @@ SELECT COUNT(DISTINCT colocationid) FROM pg_dist_partition WHERE logicalrelid::r
 -- test references
 CREATE TABLE referenced_dist_table (a INT UNIQUE);
 CREATE TABLE referenced_ref_table (a INT UNIQUE);
-CREATE TABLE table_with_references (a1 INT UNIQUE REFERENCES referenced_dist_table(a), a2 INT REFERENCES referenced_ref_table(a));
-CREATE TABLE referencing_dist_table (a INT REFERENCES table_with_references(a1));
+CREATE TABLE table_with_references (a1 INT UNIQUE, a2 INT);
+CREATE TABLE referencing_dist_table (a INT);
 
 SELECT create_distributed_table('referenced_dist_table', 'a', colocate_with:='none');
 SELECT create_reference_table('referenced_ref_table');
 SELECT create_distributed_table('table_with_references', 'a1', colocate_with:='referenced_dist_table');
 SELECT create_distributed_table('referencing_dist_table', 'a', colocate_with:='referenced_dist_table');
+
+ALTER TABLE table_with_references ADD FOREIGN KEY (a1) REFERENCES referenced_dist_table(a);
+ALTER TABLE table_with_references ADD FOREIGN KEY (a2) REFERENCES referenced_ref_table(a);
+ALTER TABLE referencing_dist_table ADD FOREIGN KEY (a) REFERENCES table_with_references(a1);
 
 SET client_min_messages TO WARNING;
 SELECT conrelid::regclass::text AS "Referencing Table", pg_get_constraintdef(oid, true) AS "Definition" FROM  pg_constraint
@@ -386,6 +390,11 @@ CREATE TABLE reference_table (a INT);
 SELECT create_reference_table('reference_table');
 SELECT alter_distributed_table('dist_table', colocate_with:='reference_table');
 
+-- test colocating with single shard table
+CREATE TABLE single_shard_table (a INT);
+SELECT create_distributed_table('single_shard_table', null);
+SELECT alter_distributed_table('dist_table', colocate_with:='single_shard_table');
+
 -- test append table
 CREATE TABLE append_table (a INT);
 SELECT create_distributed_table('append_table', 'a', 'append');
@@ -472,3 +481,4 @@ RESET search_path;
 
 DROP SCHEMA alter_distributed_table CASCADE;
 DROP SCHEMA schema_to_test_alter_dist_table CASCADE;
+DROP USER alter_dist_table_test_user;

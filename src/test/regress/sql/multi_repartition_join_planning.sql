@@ -9,6 +9,7 @@
 SET citus.next_shard_id TO 690000;
 SET citus.enable_unique_job_ids TO off;
 SET citus.enable_repartition_joins to ON;
+SET citus.shard_replication_factor to 1;
 
 create schema repartition_join;
 DROP TABLE IF EXISTS repartition_join.order_line;

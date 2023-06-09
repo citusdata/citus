@@ -272,6 +272,7 @@ SELECT nodename, nodeport FROM pg_dist_node WHERE nodename='localhost' AND nodep
 \c - - - :master_port
 
 SELECT master_remove_node(nodename, nodeport) FROM pg_dist_node;
+SELECT citus_set_coordinator_host('localhost');
 SELECT 1 FROM master_add_node('localhost', :worker_1_port);
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 

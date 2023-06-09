@@ -1109,6 +1109,5 @@ SELECT k, COUNT(*) FROM v GROUP BY k ORDER BY k;
 $$);
 
 
-
-RESET client_min_messages;
+SET client_min_messages TO WARNING;
 DROP SCHEMA union_pushdown CASCADE;

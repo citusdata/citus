@@ -182,7 +182,7 @@ CitusBeginScan(CustomScanState *node, EState *estate, int eflags)
 	node->ss.ps.qual = ExecInitQual(node->ss.ps.plan->qual, (PlanState *) node);
 
 	DistributedPlan *distributedPlan = scanState->distributedPlan;
-	if (distributedPlan->insertSelectQuery != NULL)
+	if (distributedPlan->modifyQueryViaCoordinatorOrRepartition != NULL)
 	{
 		/*
 		 * INSERT..SELECT via coordinator or re-partitioning are special because

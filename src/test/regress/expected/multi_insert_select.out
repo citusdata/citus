@@ -620,7 +620,8 @@ INSERT INTO agg_events (value_1_agg, user_id)
     DISTINCT ON (value_1) value_1, user_id
   FROM
     raw_events_first;
-DEBUG:  DISTINCT ON (non-partition column) clauses are not allowed in distributed INSERT ... SELECT queries
+DEBUG:  cannot push down this subquery
+DETAIL:  Distinct on columns without partition column is currently unsupported
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 SELECT user_id, value_1_agg FROM agg_events ORDER BY 1,2;
@@ -686,7 +687,7 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT user_id, v1_a
 DEBUG:  Creating router plan
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 ROLLBACK;
--- We don't support CTEs that are referenced in the target list
+-- We do support CTEs that are referenced in the target list
 INSERT INTO agg_events
   WITH sub_cte AS (SELECT 1)
   SELECT
@@ -694,15 +695,11 @@ INSERT INTO agg_events
   FROM
     raw_events_first;
 DEBUG:  CTE sub_cte is going to be inlined via distributed planning
-DEBUG:  Subqueries without relations are not allowed in distributed INSERT ... SELECT queries
-DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  performing repartitioned INSERT ... SELECT
-DEBUG:  partitioning SELECT query by column index 0 with name 'user_id'
-DEBUG:  distributed statement: INSERT INTO multi_insert_select.agg_events_13300008 AS citus_table_alias (user_id, value_1_agg) SELECT intermediate_result.user_id, intermediate_result.value_1_agg FROM read_intermediate_results('{repartitioned_results_xxxxx_from_13300000_to_0}'::text[], 'binary'::citus_copy_format) intermediate_result(user_id integer, value_1_agg integer)
-DEBUG:  distributed statement: INSERT INTO multi_insert_select.agg_events_13300009 AS citus_table_alias (user_id, value_1_agg) SELECT intermediate_result.user_id, intermediate_result.value_1_agg FROM read_intermediate_results('{repartitioned_results_xxxxx_from_13300001_to_1}'::text[], 'binary'::citus_copy_format) intermediate_result(user_id integer, value_1_agg integer)
-DEBUG:  distributed statement: INSERT INTO multi_insert_select.agg_events_13300010 AS citus_table_alias (user_id, value_1_agg) SELECT intermediate_result.user_id, intermediate_result.value_1_agg FROM read_intermediate_results('{repartitioned_results_xxxxx_from_13300002_to_2}'::text[], 'binary'::citus_copy_format) intermediate_result(user_id integer, value_1_agg integer)
-DEBUG:  distributed statement: INSERT INTO multi_insert_select.agg_events_13300011 AS citus_table_alias (user_id, value_1_agg) SELECT intermediate_result.user_id, intermediate_result.value_1_agg FROM read_intermediate_results('{repartitioned_results_xxxxx_from_13300003_to_3}'::text[], 'binary'::citus_copy_format) intermediate_result(user_id integer, value_1_agg integer)
--- We support set operations via the coordinator
+DEBUG:  distributed statement: INSERT INTO multi_insert_select.agg_events_13300008 AS citus_table_alias (user_id, value_1_agg) SELECT raw_events_first.user_id, (SELECT sub_cte."?column?" FROM (SELECT 1) sub_cte("?column?")) FROM multi_insert_select.raw_events_first_13300000 raw_events_first WHERE (raw_events_first.user_id IS NOT NULL)
+DEBUG:  distributed statement: INSERT INTO multi_insert_select.agg_events_13300009 AS citus_table_alias (user_id, value_1_agg) SELECT raw_events_first.user_id, (SELECT sub_cte."?column?" FROM (SELECT 1) sub_cte("?column?")) FROM multi_insert_select.raw_events_first_13300001 raw_events_first WHERE (raw_events_first.user_id IS NOT NULL)
+DEBUG:  distributed statement: INSERT INTO multi_insert_select.agg_events_13300010 AS citus_table_alias (user_id, value_1_agg) SELECT raw_events_first.user_id, (SELECT sub_cte."?column?" FROM (SELECT 1) sub_cte("?column?")) FROM multi_insert_select.raw_events_first_13300002 raw_events_first WHERE (raw_events_first.user_id IS NOT NULL)
+DEBUG:  distributed statement: INSERT INTO multi_insert_select.agg_events_13300011 AS citus_table_alias (user_id, value_1_agg) SELECT raw_events_first.user_id, (SELECT sub_cte."?column?" FROM (SELECT 1) sub_cte("?column?")) FROM multi_insert_select.raw_events_first_13300003 raw_events_first WHERE (raw_events_first.user_id IS NOT NULL)
+-- We support set operations
 BEGIN;
 INSERT INTO
   raw_events_first(user_id)
@@ -711,14 +708,10 @@ SELECT
 FROM
   ((SELECT user_id FROM raw_events_first) UNION
    (SELECT user_id FROM raw_events_second)) as foo;
-DEBUG:  Set operations are not allowed in distributed INSERT ... SELECT queries
-DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  performing repartitioned INSERT ... SELECT
-DEBUG:  partitioning SELECT query by column index 0 with name 'user_id'
-DEBUG:  distributed statement: INSERT INTO multi_insert_select.raw_events_first_13300000 AS citus_table_alias (user_id) SELECT intermediate_result.user_id FROM read_intermediate_results('{repartitioned_results_xxxxx_from_13300004_to_0}'::text[], 'binary'::citus_copy_format) intermediate_result(user_id integer)
-DEBUG:  distributed statement: INSERT INTO multi_insert_select.raw_events_first_13300001 AS citus_table_alias (user_id) SELECT intermediate_result.user_id FROM read_intermediate_results('{repartitioned_results_xxxxx_from_13300005_to_1}'::text[], 'binary'::citus_copy_format) intermediate_result(user_id integer)
-DEBUG:  distributed statement: INSERT INTO multi_insert_select.raw_events_first_13300002 AS citus_table_alias (user_id) SELECT intermediate_result.user_id FROM read_intermediate_results('{repartitioned_results_xxxxx_from_13300006_to_2}'::text[], 'binary'::citus_copy_format) intermediate_result(user_id integer)
-DEBUG:  distributed statement: INSERT INTO multi_insert_select.raw_events_first_13300003 AS citus_table_alias (user_id) SELECT intermediate_result.user_id FROM read_intermediate_results('{repartitioned_results_xxxxx_from_13300007_to_3}'::text[], 'binary'::citus_copy_format) intermediate_result(user_id integer)
+DEBUG:  distributed statement: INSERT INTO multi_insert_select.raw_events_first_13300000 AS citus_table_alias (user_id) SELECT foo.user_id FROM (SELECT raw_events_first.user_id FROM multi_insert_select.raw_events_first_13300000 raw_events_first UNION SELECT raw_events_second.user_id FROM multi_insert_select.raw_events_second_13300004 raw_events_second) foo WHERE (foo.user_id IS NOT NULL)
+DEBUG:  distributed statement: INSERT INTO multi_insert_select.raw_events_first_13300001 AS citus_table_alias (user_id) SELECT foo.user_id FROM (SELECT raw_events_first.user_id FROM multi_insert_select.raw_events_first_13300001 raw_events_first UNION SELECT raw_events_second.user_id FROM multi_insert_select.raw_events_second_13300005 raw_events_second) foo WHERE (foo.user_id IS NOT NULL)
+DEBUG:  distributed statement: INSERT INTO multi_insert_select.raw_events_first_13300002 AS citus_table_alias (user_id) SELECT foo.user_id FROM (SELECT raw_events_first.user_id FROM multi_insert_select.raw_events_first_13300002 raw_events_first UNION SELECT raw_events_second.user_id FROM multi_insert_select.raw_events_second_13300006 raw_events_second) foo WHERE (foo.user_id IS NOT NULL)
+DEBUG:  distributed statement: INSERT INTO multi_insert_select.raw_events_first_13300003 AS citus_table_alias (user_id) SELECT foo.user_id FROM (SELECT raw_events_first.user_id FROM multi_insert_select.raw_events_first_13300003 raw_events_first UNION SELECT raw_events_second.user_id FROM multi_insert_select.raw_events_second_13300007 raw_events_second) foo WHERE (foo.user_id IS NOT NULL)
 ROLLBACK;
 -- We do support set operations through recursive planning
 BEGIN;
@@ -727,7 +720,7 @@ INSERT INTO
   raw_events_first(user_id)
   (SELECT user_id FROM raw_events_first) INTERSECT
   (SELECT user_id FROM raw_events_first);
-DEBUG:  Set operations are not allowed in distributed INSERT ... SELECT queries
+DEBUG:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  generating subplan XXX_1 for subquery SELECT user_id FROM multi_insert_select.raw_events_first
@@ -747,7 +740,7 @@ SELECT
 FROM
   ((SELECT user_id FROM raw_events_first WHERE user_id = 15) EXCEPT
    (SELECT user_id FROM raw_events_second where user_id = 17)) as foo;
-DEBUG:  Set operations are not allowed in distributed INSERT ... SELECT queries
+DEBUG:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
 DEBUG:  Creating router plan
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 -- some supported LEFT joins
@@ -765,10 +758,16 @@ DEBUG:  distributed statement: INSERT INTO multi_insert_select.agg_events_133000
    raw_events_second.user_id
  FROM
    reference_table LEFT JOIN raw_events_second ON reference_table.user_id = raw_events_second.user_id;
-DEBUG:  distributed statement: INSERT INTO multi_insert_select.agg_events_13300008 AS citus_table_alias (user_id) SELECT raw_events_second.user_id FROM (multi_insert_select.reference_table_13300012 reference_table LEFT JOIN multi_insert_select.raw_events_second_13300004 raw_events_second ON ((reference_table.user_id OPERATOR(pg_catalog.=) raw_events_second.user_id))) WHERE (raw_events_second.user_id IS NOT NULL)
-DEBUG:  distributed statement: INSERT INTO multi_insert_select.agg_events_13300009 AS citus_table_alias (user_id) SELECT raw_events_second.user_id FROM (multi_insert_select.reference_table_13300012 reference_table LEFT JOIN multi_insert_select.raw_events_second_13300005 raw_events_second ON ((reference_table.user_id OPERATOR(pg_catalog.=) raw_events_second.user_id))) WHERE (raw_events_second.user_id IS NOT NULL)
-DEBUG:  distributed statement: INSERT INTO multi_insert_select.agg_events_13300010 AS citus_table_alias (user_id) SELECT raw_events_second.user_id FROM (multi_insert_select.reference_table_13300012 reference_table LEFT JOIN multi_insert_select.raw_events_second_13300006 raw_events_second ON ((reference_table.user_id OPERATOR(pg_catalog.=) raw_events_second.user_id))) WHERE (raw_events_second.user_id IS NOT NULL)
-DEBUG:  distributed statement: INSERT INTO multi_insert_select.agg_events_13300011 AS citus_table_alias (user_id) SELECT raw_events_second.user_id FROM (multi_insert_select.reference_table_13300012 reference_table LEFT JOIN multi_insert_select.raw_events_second_13300007 raw_events_second ON ((reference_table.user_id OPERATOR(pg_catalog.=) raw_events_second.user_id))) WHERE (raw_events_second.user_id IS NOT NULL)
+DEBUG:  cannot perform a lateral outer join when a distributed subquery references a reference table
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning distributed relation "raw_events_second" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "raw_events_second" to a subquery
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  generating subplan XXX_1 for subquery SELECT user_id FROM multi_insert_select.raw_events_second WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT raw_events_second.user_id FROM (multi_insert_select.reference_table LEFT JOIN (SELECT raw_events_second_1.user_id, NULL::timestamp without time zone AS "time", NULL::integer AS value_1, NULL::integer AS value_2, NULL::double precision AS value_3, NULL::bigint AS value_4 FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) raw_events_second_1) raw_events_second ON ((reference_table.user_id OPERATOR(pg_catalog.=) raw_events_second.user_id)))
+DEBUG:  Creating router plan
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
  INSERT INTO agg_events (user_id)
  SELECT
    raw_events_first.user_id
@@ -885,7 +884,7 @@ $Q$);
  Custom Scan (Citus INSERT ... SELECT)
    INSERT/SELECT method: pull to coordinator
    ->  Custom Scan (Citus Adaptive)
-         Task Count: 4
+         Task Count: 6
 (4 rows)
 
 -- EXPLAIN ANALYZE is not supported for INSERT ... SELECT via coordinator
@@ -922,7 +921,7 @@ $Q$);
  Custom Scan (Citus INSERT ... SELECT)
    INSERT/SELECT method: pull to coordinator
    ->  Custom Scan (Citus Adaptive)
-         Task Count: 4
+         Task Count: 6
 (4 rows)
 
  -- make things a bit more complicate with IN clauses
@@ -941,7 +940,7 @@ $Q$);
  Custom Scan (Citus INSERT ... SELECT)
    INSERT/SELECT method: pull to coordinator
    ->  Custom Scan (Citus Adaptive)
-         Task Count: 4
+         Task Count: 6
 (4 rows)
 
  -- implicit join on non partition column should also not be pushed down,
@@ -960,7 +959,7 @@ $Q$);
  Custom Scan (Citus INSERT ... SELECT)
    INSERT/SELECT method: pull to coordinator
    ->  Custom Scan (Citus Adaptive)
-         Task Count: 4
+         Task Count: 6
 (4 rows)
 
 RESET client_min_messages;
@@ -982,7 +981,7 @@ $Q$);
  Custom Scan (Citus INSERT ... SELECT)
    INSERT/SELECT method: pull to coordinator
    ->  Custom Scan (Citus Adaptive)
-         Task Count: 4
+         Task Count: 6
 (4 rows)
 
  -- foo is not joined on the partition key so the query is not
@@ -1047,7 +1046,7 @@ $Q$);
  Custom Scan (Citus INSERT ... SELECT)
    INSERT/SELECT method: pull to coordinator
    ->  Custom Scan (Citus Adaptive)
-         Task Count: 4
+         Task Count: 6
 (4 rows)
 
  -- foo is not joined on the partition key so the query is not
@@ -1126,7 +1125,8 @@ FROM   (SELECT SUM(raw_events_second.value_4) AS v4,
                raw_events_second
         WHERE  raw_events_first.user_id = raw_events_second.user_id
         GROUP  BY raw_events_second.value_3) AS foo;
-DEBUG:  Group by list without distribution column is not allowed  in distributed INSERT ... SELECT queries
+DEBUG:  cannot push down this subquery
+DETAIL:  Group by list without partition column is currently unsupported when a subquery references a column from another query
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [-1073741824,-1]
@@ -1281,7 +1281,7 @@ FROM   (SELECT SUM(raw_events_second.value_4) AS v4,
         GROUP  BY raw_events_second.value_1
         HAVING SUM(raw_events_second.value_4) > 10) AS foo2 ) as f2
 ON (f.id = f2.id);
-DEBUG:  Group by list without distribution column is not allowed  in distributed INSERT ... SELECT queries
+DEBUG:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [-1073741824,-1]
@@ -1327,7 +1327,7 @@ FROM   (SELECT SUM(raw_events_second.value_4) AS v4,
         GROUP  BY raw_events_second.value_1
         HAVING SUM(raw_events_second.value_4) > 10) AS foo2 ) as f2
 ON (f.id = f2.id);
-DEBUG:  Group by list without distribution column is not allowed  in distributed INSERT ... SELECT queries
+DEBUG:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [-1073741824,-1]
@@ -1437,7 +1437,7 @@ $Q$);
                            Group Key: remote_scan.id
                            Filter: (pg_catalog.sum(remote_scan.worker_column_4) > '10'::numeric)
                            ->  Custom Scan (Citus Adaptive)
-                                 Task Count: 4
+                                 Task Count: 6
 (11 rows)
 
 -- cannot push down since foo doesn't have en equi join
@@ -1514,7 +1514,7 @@ $Q$);
    ->  HashAggregate
          Group Key: remote_scan.user_id
          ->  Custom Scan (Citus Adaptive)
-               Task Count: 4
+               Task Count: 6
 (6 rows)
 
 -- join among reference_ids and averages is not on the partition key
@@ -1576,7 +1576,7 @@ $Q$);
  Custom Scan (Citus INSERT ... SELECT)
    INSERT/SELECT method: pull to coordinator
    ->  Custom Scan (Citus Adaptive)
-         Task Count: 4
+         Task Count: 6
 (4 rows)
 
 -- Selected value in the WHERE is not partition key, so we cannot use distributed
@@ -3241,6 +3241,237 @@ returning text_col_1;
 ---------------------------------------------------------------------
  string
 (1 row)
+
+CREATE TABLE dist_table_3(
+dist_col bigint,
+int_col integer
+);
+SELECT create_distributed_table('dist_table_3', 'dist_col');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- dist_table_2 and dist_table_3 are non-colocated source tables. Repartitioning is also not possible due to
+-- different types for distribution columns. Citus would not be able to handle this complex insert select.
+INSERT INTO dist_table_1 SELECT dist_table_2.dist_col FROM dist_table_2 JOIN dist_table_3 USING(dist_col);
+ERROR:  complex joins are only supported when all distributed tables are joined on their distribution columns with equal operator
+CREATE TABLE dist_table_4(
+dist_col integer,
+int_col integer
+);
+SELECT create_distributed_table('dist_table_4', 'dist_col');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- Even if target table distribution column is colocated with dist_table_2's distributed column, source tables dist_table_2 and dist_table_4
+-- are non-colocated. Hence, SELECT part of the query should be pulled to coordinator.
+SELECT coordinator_plan($$
+  EXPLAIN (COSTS FALSE) INSERT INTO dist_table_1 SELECT dist_table_2.dist_col FROM dist_table_2 JOIN dist_table_4 ON dist_table_2.dist_col = dist_table_4.int_col;
+$$);
+              coordinator_plan
+---------------------------------------------------------------------
+ Custom Scan (Citus INSERT ... SELECT)
+   INSERT/SELECT method: pull to coordinator
+   ->  Custom Scan (Citus Adaptive)
+         Task Count: 6
+(4 rows)
+
+-- For INSERT SELECT, when a lateral query references an outer query, push-down is possible even if limit clause exists in the lateral query.
+-- It is because subquery with limit does not need to be merged at coordinator as it is a lateral query.
+SELECT coordinator_plan($$
+  EXPLAIN (COSTS FALSE) INSERT INTO dist_table_1 SELECT d1.dist_col FROM dist_table_1 d1 LEFT JOIN LATERAL (SELECT * FROM dist_table_2 d2 WHERE d1.dist_col = d2.dist_col LIMIT 3) dummy USING(dist_col);
+$$);
+       coordinator_plan
+---------------------------------------------------------------------
+ Custom Scan (Citus Adaptive)
+   Task Count: 4
+(2 rows)
+
+-- For INSERT SELECT, when push-down is NOT possible when limit clause exists in a subquery at SELECT part of INSERT SELECT.
+-- It is because the subquery with limit needs to be merged at coordinator.
+SELECT coordinator_plan($$
+  EXPLAIN (COSTS FALSE) INSERT INTO dist_table_1 SELECT d1.dist_col FROM dist_table_1 d1 LEFT JOIN (SELECT * FROM dist_table_2 LIMIT 3) dummy USING(dist_col);
+$$);
+                   coordinator_plan
+---------------------------------------------------------------------
+ Custom Scan (Citus INSERT ... SELECT)
+   INSERT/SELECT method: repartition
+   ->  Custom Scan (Citus Adaptive)
+         ->  Distributed Subplan XXX_1
+               ->  Limit
+                     ->  Custom Scan (Citus Adaptive)
+                           Task Count: 4
+(7 rows)
+
+CREATE TABLE dist_table_5(id int, id2 int);
+SELECT create_distributed_table('dist_table_5','id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE dist_table_6(id int, id2 int);
+SELECT create_distributed_table('dist_table_6','id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- verify that insert select with union can be pushed down since UNION clause has FROM clause at top level query.
+SELECT coordinator_plan($$
+  EXPLAIN (COSTS FALSE) INSERT INTO dist_table_5(id) SELECT id FROM (SELECT id FROM dist_table_5 UNION SELECT id FROM dist_table_6) dummy;
+$$);
+       coordinator_plan
+---------------------------------------------------------------------
+ Custom Scan (Citus Adaptive)
+   Task Count: 4
+(2 rows)
+
+-- verify that insert select with sublink can be pushed down when tables are colocated.
+SELECT coordinator_plan($$
+  EXPLAIN (COSTS FALSE) INSERT INTO dist_table_5 SELECT id, (SELECT id FROM dist_table_5 WHERE dist_table_5.id = dist_table_6.id) FROM dist_table_6;
+$$);
+       coordinator_plan
+---------------------------------------------------------------------
+ Custom Scan (Citus Adaptive)
+   Task Count: 4
+(2 rows)
+
+CREATE TABLE ref_table_1(id int);
+SELECT create_reference_table('ref_table_1');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- verify that insert select with sublink cannot be pushed down when from clause does not contain any distributed relation.
+INSERT INTO dist_table_5 SELECT id, (SELECT id FROM dist_table_5 WHERE dist_table_5.id = ref_table_1.id) FROM ref_table_1;
+ERROR:  correlated subqueries are not supported when the FROM clause contains a reference table
+-- verify that insert select cannot be pushed down when we have recurring range table in from clause.
+SELECT coordinator_plan($$
+  EXPLAIN (COSTS FALSE) INSERT INTO dist_table_5 SELECT id, (SELECT id FROM ref_table_1 WHERE id = 1) FROM ref_table_1;
+$$);
+              coordinator_plan
+---------------------------------------------------------------------
+ Custom Scan (Citus INSERT ... SELECT)
+   INSERT/SELECT method: pull to coordinator
+   ->  Custom Scan (Citus Adaptive)
+         Task Count: 1
+(4 rows)
+
+-- verify that insert select cannot be pushed down when we have reference table in outside of outer join.
+SELECT coordinator_plan($$
+  EXPLAIN (COSTS FALSE) INSERT INTO dist_table_5 SELECT a.id FROM dist_table_5 a LEFT JOIN ref_table_1 b ON (true) RIGHT JOIN ref_table_1 c ON (true);
+$$);
+                coordinator_plan
+---------------------------------------------------------------------
+ Custom Scan (Citus INSERT ... SELECT)
+   INSERT/SELECT method: pull to coordinator
+   ->  Custom Scan (Citus Adaptive)
+         ->  Distributed Subplan XXX_1
+               ->  Custom Scan (Citus Adaptive)
+                     Task Count: 4
+(6 rows)
+
+-- verify that insert select cannot be pushed down when it has a recurring outer join in a subquery.
+SELECT coordinator_plan($$
+  EXPLAIN (COSTS FALSE) INSERT INTO dist_table_5 SELECT id FROM ref_table_1 LEFT JOIN dist_table_5 USING(id);
+$$);
+                coordinator_plan
+---------------------------------------------------------------------
+ Custom Scan (Citus INSERT ... SELECT)
+   INSERT/SELECT method: pull to coordinator
+   ->  Custom Scan (Citus Adaptive)
+         ->  Distributed Subplan XXX_1
+               ->  Custom Scan (Citus Adaptive)
+                     Task Count: 4
+(6 rows)
+
+CREATE TABLE loc_table_1(id int);
+-- verify that insert select cannot be pushed down when it contains join between local and distributed tables.
+SELECT coordinator_plan($$
+  EXPLAIN (COSTS FALSE) INSERT INTO dist_table_5 SELECT id FROM dist_table_5 JOIN loc_table_1 USING(id);
+$$);
+             coordinator_plan
+---------------------------------------------------------------------
+ Custom Scan (Citus INSERT ... SELECT)
+   INSERT/SELECT method: repartition
+   ->  Custom Scan (Citus Adaptive)
+         ->  Distributed Subplan XXX_1
+               ->  Seq Scan on loc_table_1
+         Task Count: 4
+(6 rows)
+
+CREATE VIEW view_1 AS
+  SELECT id FROM dist_table_6;
+CREATE MATERIALIZED VIEW view_2 AS
+  SELECT id FROM dist_table_6;
+-- verify that insert select cannot be pushed down when it contains view.
+SELECT coordinator_plan($$
+  EXPLAIN (COSTS FALSE) INSERT INTO dist_table_5 SELECT * FROM view_1;
+$$);
+       coordinator_plan
+---------------------------------------------------------------------
+ Custom Scan (Citus Adaptive)
+   Task Count: 4
+(2 rows)
+
+-- verify that insert select cannot be pushed down when it contains materialized view.
+SELECT coordinator_plan($$
+  EXPLAIN (COSTS FALSE) INSERT INTO dist_table_5 SELECT * FROM view_2;
+$$);
+              coordinator_plan
+---------------------------------------------------------------------
+ Custom Scan (Citus INSERT ... SELECT)
+   INSERT/SELECT method: pull to coordinator
+   ->  Seq Scan on view_2
+(3 rows)
+
+CREATE TABLE append_table(id integer, data text, int_data int);
+SELECT create_distributed_table('append_table', 'id', 'append');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT master_create_empty_shard('append_table');
+ master_create_empty_shard
+---------------------------------------------------------------------
+                  13300096
+(1 row)
+
+-- verify that insert select push down for append tables are not supported.
+INSERT INTO append_table SELECT * FROM append_table;
+ERROR:  INSERT ... SELECT into an append-distributed table is not supported
+-- verify that CTEs at top level of INSERT SELECT, that can normally be inlined, would not be inlined by INSERT SELECT pushdown planner
+-- and handled by pull to coordinator.
+SELECT coordinator_plan($$
+  EXPLAIN (COSTS FALSE) WITH cte_1 AS (SELECT id FROM dist_table_5 WHERE id = 5)
+  INSERT INTO dist_table_5
+  SELECT id FROM dist_table_5 JOIN cte_1 USING(id);
+$$);
+              coordinator_plan
+---------------------------------------------------------------------
+ Custom Scan (Citus INSERT ... SELECT)
+   INSERT/SELECT method: pull to coordinator
+   ->  Custom Scan (Citus Adaptive)
+         Task Count: 1
+(4 rows)
+
+-- verify that CTEs at top level of SELECT part, would be inlined by Postgres and pushed down by INSERT SELECT planner.
+SELECT coordinator_plan($$
+  EXPLAIN (COSTS FALSE) INSERT INTO dist_table_5
+  WITH cte_1 AS (SELECT id FROM dist_table_5 WHERE id = 5)
+  SELECT id FROM dist_table_5 JOIN cte_1 USING(id);
+$$);
+       coordinator_plan
+---------------------------------------------------------------------
+ Custom Scan (Citus Adaptive)
+   Task Count: 1
+(2 rows)
 
 SET client_min_messages TO ERROR;
 DROP SCHEMA multi_insert_select CASCADE;

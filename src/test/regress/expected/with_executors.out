@@ -427,7 +427,5 @@ WHERE
  4365606
 (1 row)
 
+SET client_min_messages TO WARNING;
 DROP SCHEMA with_executors CASCADE;
-NOTICE:  drop cascades to 2 other objects
-DETAIL:  drop cascades to table local_table
-drop cascades to table ref_table
