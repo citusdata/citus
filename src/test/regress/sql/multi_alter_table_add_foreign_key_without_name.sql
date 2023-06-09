@@ -89,14 +89,14 @@ SELECT con.conname
     FROM pg_catalog.pg_constraint con
       INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
       INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-              WHERE rel.relname = 'referencing_table';
+              WHERE rel.relname = 'referencing_table' ORDER BY con.conname ASC;
 
 \c - - :public_worker_1_host :worker_1_port
 SELECT con.conname
     FROM pg_catalog.pg_constraint con
       INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
       INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-              WHERE rel.relname LIKE 'referencing_table%';
+              WHERE rel.relname LIKE 'referencing_table%' ORDER BY con.conname ASC;
 
 \c - - :master_host :master_port
 SET SEARCH_PATH = at_add_fk;
@@ -109,14 +109,14 @@ SELECT con.conname
   FROM pg_catalog.pg_constraint con
       INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
       INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-              WHERE rel.relname = 'referencing_table';
+              WHERE rel.relname = 'referencing_table' ORDER BY con.conname ASC;
 
 \c - - :public_worker_1_host :worker_1_port
 SELECT con.conname
     FROM pg_catalog.pg_constraint con
       INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
       INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-              WHERE rel.relname LIKE 'referencing_table%';
+              WHERE rel.relname LIKE 'referencing_table%' ORDER BY con.conname ASC;
 
 \c - - :master_host :master_port
 SET SEARCH_PATH = at_add_fk;
@@ -376,3 +376,16 @@ DROP TABLE citus_local_table CASCADE;
 RESET SEARCH_PATH;
 RESET client_min_messages;
 DROP SCHEMA at_add_fk CASCADE;
+
+-- test ADD FOREIGN KEY when REFERENCED table is in another schema.
+CREATE SCHEMA schema_1;
+
+CREATE TABLE schema_1.referenced_table(a int PRIMARY KEY, b int);
+SELECT create_reference_table('schema_1.referenced_table');
+
+CREATE SCHEMA schema_2;
+
+CREATE TABLE schema_2.referencing_table (a int PRIMARY KEY, b int, c text);
+ALTER TABLE schema_2.referencing_table ADD FOREIGN KEY (b) REFERENCES schema_1.referenced_table(a);
+
+DROP SCHEMA schema_1, schema_2 CASCADE;
