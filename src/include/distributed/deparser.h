@@ -105,6 +105,7 @@ extern char * DeparseCreateSchemaStmt(Node *node);
 extern char * DeparseDropSchemaStmt(Node *node);
 extern char * DeparseGrantOnSchemaStmt(Node *stmt);
 extern char * DeparseAlterSchemaRenameStmt(Node *stmt);
+extern char * DeparseAlterSchemaOwnerStmt(Node *node);
 
 extern void AppendGrantPrivileges(StringInfo buf, GrantStmt *stmt);
 extern void AppendGrantGrantees(StringInfo buf, GrantStmt *stmt);
