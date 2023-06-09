@@ -84,6 +84,7 @@
 #include "distributed/commands/utility_hook.h"
 #include "distributed/citus_custom_scan.h"
 #include "distributed/citus_ruleutils.h"
+#include "distributed/colocation_utils.h"
 #include "distributed/query_utils.h"
 #include "distributed/deparse_shard_query.h"
 #include "distributed/listutils.h"
