@@ -618,6 +618,9 @@ SELECT citus_get_transaction_clock();
 END;
 
 -- Transaction with single shard table access
+SELECT nodeport AS clock_shard_nodeport FROM citus_shards
+WHERE table_name::text = 'clock_single' AND nodeport IN (:worker_1_port, :worker_2_port) \gset
+
 BEGIN;
 COPY clock_single FROM STDIN;
 1
@@ -628,9 +631,6 @@ SET client_min_messages TO DEBUG1;
 -- Capture the transaction timestamp
 SELECT citus_get_transaction_clock() as txnclock \gset
 COMMIT;
-
-SELECT nodeport AS clock_shard_nodeport FROM citus_shards
-WHERE table_name::text = 'clock_single' AND nodeport IN (:worker_1_port, :worker_2_port) \gset
 
 -- Check to see if the clock is persisted in the sequence.
 SELECT result as logseq from run_command_on_workers($$SELECT last_value FROM pg_dist_clock_logical_seq$$)
