@@ -45,9 +45,6 @@ RelationGetNamespaceName(Relation relation)
  * we are dealing with GetUserId().
  * Currently the following entries are filled like this:
  *      perminfo->checkAsUser = GetUserId();
- *		perminfo->selectedCols = NULL;
- *		perminfo->insertedCols = NULL;
- *		perminfo->updatedCols = NULL;
  */
 RTEPermissionInfo *
 GetFilledPermissionInfo(Oid relid, bool inh, AclMode requiredPerms)
@@ -57,9 +54,6 @@ GetFilledPermissionInfo(Oid relid, bool inh, AclMode requiredPerms)
 	perminfo->inh = inh;
 	perminfo->requiredPerms = requiredPerms;
 	perminfo->checkAsUser = GetUserId();
-	perminfo->selectedCols = NULL;
-	perminfo->insertedCols = NULL;
-	perminfo->updatedCols = NULL;
 	return perminfo;
 }
 
