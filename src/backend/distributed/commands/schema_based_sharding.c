@@ -29,6 +29,7 @@
 #include "utils/syscache.h"
 
 
+static void UnregisterTenantSchemaGlobally(Oid schemaId, char *schemaName);
 static List * GetRegularAndForeignCitusTablesInSchema(Oid schemaId);
 static void EnsureSchemaCanBeDistributed(Oid schemaId, List *schemaTableIdList);
 static void EnsureTenantSchemaNameAllowed(Oid schemaId);
@@ -160,6 +161,7 @@ EnsureFKeysForTenantTable(Oid relationId)
 	Oid foreignKeyId = InvalidOid;
 	foreach_oid(foreignKeyId, referencingForeignKeys)
 	{
+		Oid referencingTableId = GetReferencingTableId(foreignKeyId);
 		Oid referencedTableId = GetReferencedTableId(foreignKeyId);
 		Oid referencedTableSchemaId = get_rel_namespace(referencedTableId);
 
@@ -176,9 +178,15 @@ EnsureFKeysForTenantTable(Oid relationId)
 		if (!IsCitusTable(referencedTableId) ||
 			!IsCitusTableType(referencedTableId, REFERENCE_TABLE))
 		{
-			ereport(ERROR, errmsg("when referenced table is in another schema, "
-								  "only foreign keys to a reference table is "
-								  "allowed from a table in distributed schema"));
+			ereport(ERROR, (errmsg("foreign keys from distributed schemas can only "
+								   "point to the same distributed schema or reference "
+								   "tables in regular schemas"),
+							errdetail("\"%s\" references \"%s\" via foreign key "
+									  "constraint \"%s\"",
+									  generate_qualified_relation_name(
+										  referencingTableId),
+									  generate_qualified_relation_name(referencedTableId),
+									  get_constraint_name(foreignKeyId))));
 		}
 	}
 
@@ -187,6 +195,7 @@ EnsureFKeysForTenantTable(Oid relationId)
 	foreach_oid(foreignKeyId, referencedForeignKeys)
 	{
 		Oid referencingTableId = GetReferencingTableId(foreignKeyId);
+		Oid referencedTableId = GetReferencedTableId(foreignKeyId);
 		Oid referencingTableSchemaId = get_rel_namespace(referencingTableId);
 
 		/* We allow foreign keys from a table in the same schema */
@@ -195,17 +204,14 @@ EnsureFKeysForTenantTable(Oid relationId)
 			continue;
 		}
 
-		/*
-		 * Allow foreign keys from the other schema only if the referencing table is
-		 * a reference table.
-		 */
-		if (!IsCitusTable(referencingTableId) ||
-			!IsCitusTableType(referencingTableId, REFERENCE_TABLE))
-		{
-			ereport(ERROR, errmsg("when referencing table is in another schema, "
-								  "only foreign keys from a reference table is "
-								  "allowed to a table in distributed schema"));
-		}
+		/* Not allow any foreign keys from the other schema */
+		ereport(ERROR, (errmsg("cannot create foreign keys to tables in a distributed "
+							   "schema from another schema"),
+						errdetail("\"%s\" references \"%s\" via foreign key "
+								  "constraint \"%s\"",
+								  generate_qualified_relation_name(referencingTableId),
+								  generate_qualified_relation_name(referencedTableId),
+								  get_constraint_name(foreignKeyId))));
 	}
 }
 
@@ -319,7 +325,7 @@ GetRegularAndForeignCitusTablesInSchema(Oid schemaId)
 	List *relationIdList = NIL;
 
 	/* scan all relations in pg_class and return all tables inside given schema */
-	Relation relationRelation = relation_open(RelationRelationId, RowExclusiveLock);
+	Relation relationRelation = relation_open(RelationRelationId, AccessShareLock);
 
 	ScanKeyData scanKey[1] = { 0 };
 	ScanKeyInit(&scanKey[0], Anum_pg_class_relnamespace, BTEqualStrategyNumber,
@@ -353,7 +359,7 @@ GetRegularAndForeignCitusTablesInSchema(Oid schemaId)
 	}
 
 	systable_endscan(scanDescriptor);
-	relation_close(relationRelation, RowExclusiveLock);
+	relation_close(relationRelation, AccessShareLock);
 
 	return relationIdList;
 }
@@ -365,9 +371,13 @@ GetRegularAndForeignCitusTablesInSchema(Oid schemaId)
  *
  * It checks:
  *  - Schema name is in the allowed-list,
- *  - Schema is not owned by an extension,
+ *  - Schema does not depend on an extension (created by extension),
+ *  - No extension depends on the schema (CREATE EXTENSION <ext> SCHEMA <schema>),
  *  - Current user should be the owner of tables under the schema,
  *  - Table kinds are supported,
+ *  - Referencing and referenced foreign keys for the tables under the schema are
+ *    supported,
+ *	- Tables under the schema are not owned by an extension,
  *  - Only Citus local and Postgres local tables exist under the schema.
  */
 static void
@@ -377,13 +387,22 @@ EnsureSchemaCanBeDistributed(Oid schemaId, List *schemaTableIdList)
 	EnsureTenantSchemaNameAllowed(schemaId);
 
 	/* Any schema owned by extension is not allowed */
+	char *schemaName = get_namespace_name(schemaId);
 	ObjectAddress *schemaAddress = palloc0(sizeof(ObjectAddress));
 	ObjectAddressSet(*schemaAddress, NamespaceRelationId, schemaId);
 	if (IsAnyObjectAddressOwnedByExtension(list_make1(schemaAddress), NULL))
 	{
-		char *schemaName = get_namespace_name(schemaId);
 		ereport(ERROR, (errmsg("schema %s, which is owned by an extension, cannot "
 							   "be distributed", schemaName)));
+	}
+
+	/* Extension schemas are not allowed */
+	ObjectAddress *extensionAddress = FirstExtensionWithSchema(schemaId);
+	if (extensionAddress)
+	{
+		char *extensionName = get_extension_name(extensionAddress->objectId);
+		ereport(ERROR, (errmsg("schema %s cannot be distributed since it is the schema "
+							   "of extension %s", schemaName, extensionName)));
 	}
 
 	Oid relationId = InvalidOid;
@@ -397,6 +416,17 @@ EnsureSchemaCanBeDistributed(Oid schemaId, List *schemaTableIdList)
 
 		/* Check foreign keys */
 		EnsureFKeysForTenantTable(relationId);
+
+		/* Check table not owned by an extension */
+		ObjectAddress *tableAddress = palloc0(sizeof(ObjectAddress));
+		ObjectAddressSet(*tableAddress, RelationRelationId, relationId);
+		if (IsAnyObjectAddressOwnedByExtension(list_make1(tableAddress), NULL))
+		{
+			char *tableName = get_namespace_name(schemaId);
+			ereport(ERROR, (errmsg("schema cannot be distributed since it has "
+								   "table %s which is owned by an extension",
+								   tableName)));
+		}
 
 		/* Postgres local tables are allowed */
 		if (!IsCitusTable(relationId))
@@ -472,9 +502,32 @@ EnsureSchemaExist(Oid schemaId)
 
 
 /*
- * citus_internal_unregister_tenant_schema_globally removes given schema from
- * the tenant schema metadata table, deletes the colocation group of the schema
- * and sends the command to do the same on the workers.
+ * UnregisterTenantSchemaGlobally removes given schema from the tenant schema
+ * metadata table, deletes the colocation group of the schema and sends the
+ * command to do the same on the workers.
+ */
+static void
+UnregisterTenantSchemaGlobally(Oid schemaId, char *schemaName)
+{
+	uint32 tenantSchemaColocationId = SchemaIdGetTenantColocationId(schemaId);
+
+	DeleteTenantSchemaLocally(schemaId);
+	if (EnableMetadataSync)
+	{
+		SendCommandToWorkersWithMetadata(TenantSchemaDeleteCommand(schemaName));
+	}
+
+	DeleteColocationGroup(tenantSchemaColocationId);
+}
+
+
+/*
+ * citus_internal_unregister_tenant_schema_globally, called by Citus drop hook,
+ * unregisters the schema when a tenant schema is dropped.
+ *
+ * NOTE: We need to pass schema_name as an argument. We cannot use schema id
+ * to obtain schema name since the schema would have already been dropped when this
+ * udf is called by the drop hook.
  */
 Datum
 citus_internal_unregister_tenant_schema_globally(PG_FUNCTION_ARGS)
@@ -504,12 +557,7 @@ citus_internal_unregister_tenant_schema_globally(PG_FUNCTION_ARGS)
 							   "because this function is only expected to "
 							   "be called from Citus drop hook")));
 	}
-	uint32 tenantSchemaColocationId = SchemaIdGetTenantColocationId(schemaId);
-
-	DeleteTenantSchemaLocally(schemaId);
-	SendCommandToWorkersWithMetadata(TenantSchemaDeleteCommand(schemaNameStr));
-
-	DeleteColocationGroup(tenantSchemaColocationId);
+	UnregisterTenantSchemaGlobally(schemaId, schemaNameStr);
 	PG_RETURN_VOID();
 }
 
@@ -682,17 +730,7 @@ citus_schema_undistribute(PG_FUNCTION_ARGS)
 	 * First, we need to delete schema metadata and sync it to workers. Otherwise,
 	 * we would get error from `ErrorIfTenantTable` while undistributing the tables.
 	 */
-	char *unregisterSchemaCommand = TenantSchemaDeleteCommand(schemaName);
-	DeleteTenantSchemaLocally(schemaId);
-	if (EnableMetadataSync)
-	{
-		SendCommandToWorkersWithMetadata(unregisterSchemaCommand);
-	}
-
-	/*
-	 * No need to drop colocation entries explicitly here, since colocation entry would be
-	 * automatically dropped when we undistribute the last table in the schema.
-	 */
+	UnregisterTenantSchemaGlobally(schemaId, schemaName);
 	UndistributeTables(tableIdListToConvert);
 
 	PG_RETURN_VOID();

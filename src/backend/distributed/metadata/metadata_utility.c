@@ -2266,7 +2266,7 @@ EnsureSchemaOwner(Oid schemaId)
 	if (!pg_namespace_ownercheck(schemaId, GetUserId()))
 	{
 		aclcheck_error(ACLCHECK_NOT_OWNER, OBJECT_SCHEMA,
-					   get_rel_name(schemaId));
+					   get_namespace_name(schemaId));
 	}
 }
 
