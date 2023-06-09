@@ -591,8 +591,8 @@ SELECT shardlength > 0 FROM pg_dist_shard_placement WHERE shardid = :update_shar
 -- test citus clock
 SET citus.enable_cluster_clock TO ON;
 
-CREATE TABLE single_shard_1(a INT);
-SELECT create_distributed_table('single_shard_1', NULL, colocate_with:='none');
+CREATE TABLE clock_single(a INT);
+SELECT create_distributed_table('clock_single', NULL, colocate_with:='none');
 
 SELECT citus_get_node_clock() AS nc1 \gset
 SELECT citus_get_node_clock() AS nc2 \gset
@@ -603,7 +603,7 @@ SELECT citus_is_clock_after(:'nc3', :'nc2');
 
 BEGIN;
 SELECT citus_get_node_clock() AS nc4 \gset
-COPY single_shard_1 FROM STDIN;
+COPY clock_single FROM STDIN;
 1
 2
 \.
@@ -619,7 +619,7 @@ END;
 
 -- Transaction with single shard table access
 BEGIN;
-COPY single_shard_1 FROM STDIN;
+COPY clock_single FROM STDIN;
 1
 2
 \.
@@ -629,13 +629,17 @@ SET client_min_messages TO DEBUG1;
 SELECT citus_get_transaction_clock() as txnclock \gset
 COMMIT;
 
+SELECT nodeport AS clock_shard_nodeport FROM citus_shards
+WHERE table_name::text = 'clock_single' AND nodeport IN (:worker_1_port, :worker_2_port) \gset
+
 -- Check to see if the clock is persisted in the sequence.
-SELECT result as logseq from run_command_on_workers($$SELECT last_value FROM pg_dist_clock_logical_seq$$) limit 1 \gset
+SELECT result as logseq from run_command_on_workers($$SELECT last_value FROM pg_dist_clock_logical_seq$$)
+WHERE nodeport = :clock_shard_nodeport \gset
 SELECT cluster_clock_logical(:'txnclock') as txnlog \gset
 SELECT :logseq = :txnlog;
 
 BEGIN;
-COPY single_shard_1 FROM STDIN;
+COPY clock_single FROM STDIN;
 1
 2
 \.
@@ -645,7 +649,8 @@ SET client_min_messages TO DEBUG1;
 SELECT citus_get_transaction_clock() as txnclock \gset
 ROLLBACK;
 
-SELECT result as logseq from run_command_on_workers($$SELECT last_value FROM pg_dist_clock_logical_seq$$) limit 1 \gset
+SELECT result as logseq from run_command_on_workers($$SELECT last_value FROM pg_dist_clock_logical_seq$$)
+WHERE nodeport = :clock_shard_nodeport \gset
 SELECT cluster_clock_logical(:'txnclock') as txnlog \gset
 SELECT :logseq = :txnlog;
 
