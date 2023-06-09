@@ -506,7 +506,6 @@ CREATE ROLE test_non_super_user;
 ALTER ROLE test_non_super_user NOSUPERUSER;
 
 ALTER SCHEMA tenant_2 OWNER TO non_existing_role;
-ALTER SCHEMA tenant_2 OWNER TO CURRENT_ROLE;
 ALTER SCHEMA tenant_2 OWNER TO test_non_super_user;
 
 SELECT pg_get_userbyid(nspowner) AS schema_owner
