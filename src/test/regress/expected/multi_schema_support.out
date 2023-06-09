@@ -868,7 +868,7 @@ SELECT create_distributed_table('old_schema.table_set_schema', 'id');
 CREATE SCHEMA new_schema;
 SELECT objid::oid::regnamespace as "Distributed Schemas"
     FROM pg_catalog.pg_dist_object
-    WHERE objid::oid::regnamespace IN ('old_schema', 'new_schema');
+    WHERE objid::oid::regnamespace IN ('old_schema', 'new_schema') ORDER BY objid::oid::regnamespace;
  Distributed Schemas
 ---------------------------------------------------------------------
  old_schema
@@ -890,7 +890,7 @@ SELECT table_schema AS "Shards' Schema"
 ALTER TABLE old_schema.table_set_schema SET SCHEMA new_schema;
 SELECT objid::oid::regnamespace as "Distributed Schemas"
     FROM pg_catalog.pg_dist_object
-    WHERE objid::oid::regnamespace IN ('old_schema', 'new_schema');
+    WHERE objid::oid::regnamespace IN ('old_schema', 'new_schema') ORDER BY objid::oid::regnamespace;
  Distributed Schemas
 ---------------------------------------------------------------------
  old_schema
@@ -994,7 +994,7 @@ SELECT create_distributed_table('table_set_schema', 'id');
 CREATE SCHEMA new_schema;
 SELECT objid::oid::regnamespace as "Distributed Schemas"
     FROM pg_catalog.pg_dist_object
-    WHERE objid::oid::regnamespace IN ('old_schema', 'new_schema');
+    WHERE objid::oid::regnamespace IN ('old_schema', 'new_schema') ORDER BY objid::oid::regnamespace;
  Distributed Schemas
 ---------------------------------------------------------------------
  old_schema
@@ -1018,7 +1018,7 @@ SET search_path TO old_schema;
 ALTER TABLE table_set_schema SET SCHEMA new_schema;
 SELECT objid::oid::regnamespace as "Distributed Schemas"
     FROM pg_catalog.pg_dist_object
-    WHERE objid::oid::regnamespace IN ('old_schema', 'new_schema');
+    WHERE objid::oid::regnamespace IN ('old_schema', 'new_schema') ORDER BY objid::oid::regnamespace;
  Distributed Schemas
 ---------------------------------------------------------------------
  old_schema
@@ -1160,7 +1160,6 @@ NOTICE:  schema "schema_with_user" does not exist, skipping
 CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
 PL/pgSQL function citus_drop_trigger() line XX at PERFORM
 DROP USER "test-user";
-DROP FUNCTION run_command_on_coordinator_and_workers(p_sql text);
 -- test run_command_on_* UDFs with schema
 CREATE SCHEMA run_test_schema;
 CREATE TABLE run_test_schema.test_table(id int);
@@ -1399,3 +1398,4 @@ SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM pg_catalog.p
 ---------------------------------------------------------------------
 (0 rows)
 
+DROP TABLE public.nation_local CASCADE;
