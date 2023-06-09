@@ -89,14 +89,14 @@ SELECT con.conname
     FROM pg_catalog.pg_constraint con
       INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
       INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-              WHERE rel.relname = 'referencing_table';
+              WHERE rel.relname = 'referencing_table' ORDER BY con.conname ASC;
 
 \c - - :public_worker_1_host :worker_1_port
 SELECT con.conname
     FROM pg_catalog.pg_constraint con
       INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
       INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-              WHERE rel.relname LIKE 'referencing_table%';
+              WHERE rel.relname LIKE 'referencing_table%' ORDER BY con.conname ASC;
 
 \c - - :master_host :master_port
 SET SEARCH_PATH = at_add_fk;
@@ -109,14 +109,14 @@ SELECT con.conname
   FROM pg_catalog.pg_constraint con
       INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
       INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-              WHERE rel.relname = 'referencing_table';
+              WHERE rel.relname = 'referencing_table' ORDER BY con.conname ASC;
 
 \c - - :public_worker_1_host :worker_1_port
 SELECT con.conname
     FROM pg_catalog.pg_constraint con
       INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
       INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-              WHERE rel.relname LIKE 'referencing_table%';
+              WHERE rel.relname LIKE 'referencing_table%' ORDER BY con.conname ASC;
 
 \c - - :master_host :master_port
 SET SEARCH_PATH = at_add_fk;

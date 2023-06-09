@@ -156,7 +156,7 @@ SELECT con.conname
     FROM pg_catalog.pg_constraint con
       INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
       INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-              WHERE rel.relname = 'referencing_table';
+              WHERE rel.relname = 'referencing_table' ORDER BY con.conname ASC;
             conname
 ---------------------------------------------------------------------
  referencing_table_ref_id_fkey
@@ -167,7 +167,7 @@ SELECT con.conname
     FROM pg_catalog.pg_constraint con
       INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
       INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-              WHERE rel.relname LIKE 'referencing_table%';
+              WHERE rel.relname LIKE 'referencing_table%' ORDER BY con.conname ASC;
                 conname
 ---------------------------------------------------------------------
  referencing_table_ref_id_fkey
@@ -184,7 +184,7 @@ SELECT con.conname
   FROM pg_catalog.pg_constraint con
       INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
       INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-              WHERE rel.relname = 'referencing_table';
+              WHERE rel.relname = 'referencing_table' ORDER BY con.conname ASC;
             conname
 ---------------------------------------------------------------------
  referencing_table_ref_id_fkey
@@ -195,7 +195,7 @@ SELECT con.conname
     FROM pg_catalog.pg_constraint con
       INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
       INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-              WHERE rel.relname LIKE 'referencing_table%';
+              WHERE rel.relname LIKE 'referencing_table%' ORDER BY con.conname ASC;
                 conname
 ---------------------------------------------------------------------
  referencing_table_ref_id_fkey
