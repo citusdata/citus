@@ -1333,6 +1333,31 @@ SELECT * FROM "Citus'Teen123"."TeeNTabLE.1!?!" ORDER BY id;
   4 |         4 |
 (4 rows)
 
+-- test alter owner propagation
+CREATE ROLE test_non_super_user;
+ALTER ROLE test_non_super_user NOSUPERUSER;
+SELECT pg_get_userbyid(nspowner) AS schema_owner
+    FROM pg_namespace
+    WHERE nspname = 'bar';
+ schema_owner
+---------------------------------------------------------------------
+ postgres
+(1 row)
+
+ALTER SCHEMA bar OWNER TO test_non_super_user;
+select result from run_command_on_workers ($$
+  SELECT pg_get_userbyid(nspowner) AS schema_owner
+  FROM pg_namespace
+  WHERE nspname = 'bar'
+$$);
+       result
+---------------------------------------------------------------------
+ test_non_super_user
+ test_non_super_user
+(2 rows)
+
+ALTER SCHEMA bar OWNER TO postgres;
+DROP ROLE test_non_super_user;
 -- test error
 INSERT INTO bar.test VALUES (3,3), (4,4), (5,5), (6,6), (7,7), (8,8), (9,9);
 BEGIN;

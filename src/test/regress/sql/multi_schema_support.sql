@@ -949,6 +949,25 @@ SELECT COUNT(*) FROM bar.test;
 ALTER SCHEMA "CiTuS.TeeN" RENAME TO "Citus'Teen123";
 SELECT * FROM "Citus'Teen123"."TeeNTabLE.1!?!" ORDER BY id;
 
+-- test alter owner propagation
+CREATE ROLE test_non_super_user;
+ALTER ROLE test_non_super_user NOSUPERUSER;
+
+SELECT pg_get_userbyid(nspowner) AS schema_owner
+    FROM pg_namespace
+    WHERE nspname = 'bar';
+
+ALTER SCHEMA bar OWNER TO test_non_super_user;
+
+select result from run_command_on_workers ($$
+  SELECT pg_get_userbyid(nspowner) AS schema_owner
+  FROM pg_namespace
+  WHERE nspname = 'bar'
+$$);
+
+ALTER SCHEMA bar OWNER TO postgres;
+DROP ROLE test_non_super_user;
+
 -- test error
 INSERT INTO bar.test VALUES (3,3), (4,4), (5,5), (6,6), (7,7), (8,8), (9,9);
 
