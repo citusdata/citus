@@ -550,6 +550,16 @@ ALTER TABLE citus_local_table ADD FOREIGN KEY(l1) REFERENCES reference_table(r1)
 ALTER TABLE citus_local_table ADD FOREIGN KEY(l1) REFERENCES reference_table(r1) ON DELETE SET DEFAULT;
 ALTER TABLE citus_local_table ADD FOREIGN KEY(l1) REFERENCES reference_table(r1) ON DELETE NO ACTION;
 ALTER TABLE citus_local_table ADD FOREIGN KEY(l1) REFERENCES reference_table(r1) ON DELETE RESTRICT;
+DROP TABLE citus_local_table CASCADE;
+RESET SEARCH_PATH;
+RESET client_min_messages;
+DROP SCHEMA at_add_fk CASCADE;
+NOTICE:  drop cascades to 5 other objects
+DETAIL:  drop cascades to table at_add_fk.referenced_local_table
+drop cascades to table at_add_fk.referenced_table
+drop cascades to table at_add_fk.referencing_table
+drop cascades to table at_add_fk.reference_table
+drop cascades to table at_add_fk.reference_table_1770052
 -- test ADD FOREIGN KEY when REFERENCED table is in another schema.
 CREATE SCHEMA schema_1;
 CREATE TABLE schema_1.referenced_table(a int PRIMARY KEY, b int);
@@ -568,13 +578,3 @@ DETAIL:  drop cascades to table schema_2.referencing_table_1770054
 drop cascades to table schema_2.referencing_table
 drop cascades to table schema_1.referenced_table
 drop cascades to table schema_1.referenced_table_1770053
-DROP TABLE citus_local_table CASCADE;
-RESET SEARCH_PATH;
-RESET client_min_messages;
-DROP SCHEMA at_add_fk CASCADE;
-NOTICE:  drop cascades to 5 other objects
-DETAIL:  drop cascades to table at_add_fk.referenced_local_table
-drop cascades to table at_add_fk.referenced_table
-drop cascades to table at_add_fk.referencing_table
-drop cascades to table at_add_fk.reference_table
-drop cascades to table at_add_fk.reference_table_1770052
