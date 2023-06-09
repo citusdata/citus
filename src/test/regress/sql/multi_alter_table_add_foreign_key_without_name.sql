@@ -382,7 +382,7 @@ CREATE SCHEMA schema_2;
 CREATE TABLE schema_2.referencing_table (a int PRIMARY KEY, b int, c text);
 ALTER TABLE schema_2.referencing_table ADD FOREIGN KEY (b) REFERENCES schema_1.referenced_table(a);
 
-DROP SCHEMA schema_1, schema_2 CASCADE; 
+DROP SCHEMA schema_1, schema_2 CASCADE;
 
 DROP TABLE citus_local_table CASCADE;
 
