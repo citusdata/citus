@@ -671,7 +671,7 @@ CREATE SCHEMA new_schema;
 
 SELECT objid::oid::regnamespace as "Distributed Schemas"
     FROM pg_catalog.pg_dist_object
-    WHERE objid::oid::regnamespace IN ('old_schema', 'new_schema');
+    WHERE objid::oid::regnamespace IN ('old_schema', 'new_schema') ORDER BY objid::oid::regnamespace;
 \c - - - :worker_1_port
 SELECT table_schema AS "Shards' Schema"
     FROM information_schema.tables
@@ -684,7 +684,7 @@ ALTER TABLE old_schema.table_set_schema SET SCHEMA new_schema;
 
 SELECT objid::oid::regnamespace as "Distributed Schemas"
     FROM pg_catalog.pg_dist_object
-    WHERE objid::oid::regnamespace IN ('old_schema', 'new_schema');
+    WHERE objid::oid::regnamespace IN ('old_schema', 'new_schema') ORDER BY objid::oid::regnamespace;
 \c - - - :worker_1_port
 SELECT table_schema AS "Shards' Schema"
     FROM information_schema.tables
@@ -742,7 +742,7 @@ CREATE SCHEMA new_schema;
 
 SELECT objid::oid::regnamespace as "Distributed Schemas"
     FROM pg_catalog.pg_dist_object
-    WHERE objid::oid::regnamespace IN ('old_schema', 'new_schema');
+    WHERE objid::oid::regnamespace IN ('old_schema', 'new_schema') ORDER BY objid::oid::regnamespace;
 \c - - - :worker_1_port
 SELECT table_schema AS "Shards' Schema", COUNT(*) AS "Counts"
     FROM information_schema.tables
@@ -756,7 +756,7 @@ ALTER TABLE table_set_schema SET SCHEMA new_schema;
 
 SELECT objid::oid::regnamespace as "Distributed Schemas"
     FROM pg_catalog.pg_dist_object
-    WHERE objid::oid::regnamespace IN ('old_schema', 'new_schema');
+    WHERE objid::oid::regnamespace IN ('old_schema', 'new_schema') ORDER BY objid::oid::regnamespace;
 \c - - - :worker_1_port
 SELECT table_schema AS "Shards' Schema", COUNT(*) AS "Counts"
     FROM information_schema.tables
@@ -843,8 +843,6 @@ SET citus.next_shard_id TO 1197000;
 -- we do not use run_command_on_coordinator_and_workers here because when there is CASCADE, it causes deadlock
 DROP OWNED BY "test-user" CASCADE;
 DROP USER "test-user";
-
-DROP FUNCTION run_command_on_coordinator_and_workers(p_sql text);
 
 -- test run_command_on_* UDFs with schema
 CREATE SCHEMA run_test_schema;
@@ -991,3 +989,4 @@ DROP SCHEMA run_test_schema, test_schema_support_join_1, test_schema_support_joi
 -- verify that the dropped schema is removed from worker's pg_dist_object
 SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM pg_catalog.pg_dist_object
     WHERE classid=2615 and objid IN (select oid from pg_namespace where nspname='run_test_schema');
+DROP TABLE public.nation_local CASCADE;
