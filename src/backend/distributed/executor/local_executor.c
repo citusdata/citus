@@ -387,7 +387,7 @@ ExecuteLocalTaskListExtended(List *taskList,
 static void
 SetColocationIdAndPartitionKeyValueForTasks(List *taskList, Job *workerJob)
 {
-	if (workerJob->colocationId != 0)
+	if (workerJob->colocationId != INVALID_COLOCATION_ID)
 	{
 		Task *task = NULL;
 		foreach_ptr(task, taskList)
