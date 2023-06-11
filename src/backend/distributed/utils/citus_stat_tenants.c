@@ -165,7 +165,8 @@ citus_stat_tenants_local(PG_FUNCTION_ARGS)
 		}
 		else
 		{
-			values[1] = PointerGetDatum(cstring_to_text(tenantStats->key.tenantAttribute));
+			values[1] = PointerGetDatum(cstring_to_text(
+											tenantStats->key.tenantAttribute));
 		}
 
 		values[2] = Int32GetDatum(tenantStats->readsInThisPeriod);
@@ -817,7 +818,12 @@ FillTenantStatsHashKey(TenantStatsHashKey *key, char *tenantAttribute, uint32
 					   colocationGroupId)
 {
 	memset(key->tenantAttribute, 0, MAX_TENANT_ATTRIBUTE_LENGTH);
-	strlcpy(key->tenantAttribute, tenantAttribute, MAX_TENANT_ATTRIBUTE_LENGTH);
+
+	if (tenantAttribute != NULL)
+	{
+		strlcpy(key->tenantAttribute, tenantAttribute, MAX_TENANT_ATTRIBUTE_LENGTH);
+	}
+
 	key->colocationGroupId = colocationGroupId;
 }
 
