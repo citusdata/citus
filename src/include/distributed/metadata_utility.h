@@ -364,6 +364,7 @@ extern void CreateDistributedTable(Oid relationId, char *distributionColumnName,
 extern void CreateReferenceTable(Oid relationId);
 extern void CreateTruncateTrigger(Oid relationId);
 extern TableConversionReturn * UndistributeTable(TableConversionParameters *params);
+extern void UndistributeTables(List *relationIdList);
 
 extern void EnsureAllObjectDependenciesExistOnAllNodes(const List *targets);
 extern DeferredErrorMessage * DeferErrorIfCircularDependencyExists(const
@@ -383,6 +384,7 @@ extern void EnsureTableOwner(Oid relationId);
 extern void EnsureHashDistributedTable(Oid relationId);
 extern void EnsureHashOrSingleShardDistributedTable(Oid relationId);
 extern void EnsureFunctionOwner(Oid functionId);
+extern void EnsureSchemaOwner(Oid schemaId);
 extern void EnsureSuperUser(void);
 extern void ErrorIfTableIsACatalogTable(Relation relation);
 extern void EnsureTableNotDistributed(Oid relationId);

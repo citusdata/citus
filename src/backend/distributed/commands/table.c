@@ -414,7 +414,11 @@ PostprocessCreateTableStmtPartitionOf(CreateStmt *createStatement, const
 		}
 	}
 
-	ErrorIfIllegalPartitioningInTenantSchema(PartitionParentOid(relationId), relationId);
+	if (IsTenantSchema(get_rel_namespace(parentRelationId)) ||
+		IsTenantSchema(get_rel_namespace(relationId)))
+	{
+		ErrorIfIllegalPartitioningInTenantSchema(parentRelationId, relationId);
+	}
 
 	/*
 	 * If a partition is being created and if its parent is a distributed
@@ -496,8 +500,12 @@ PreprocessAlterTableStmtAttachPartition(AlterTableStmt *alterTableStatement,
 				return NIL;
 			}
 
-			ErrorIfIllegalPartitioningInTenantSchema(parentRelationId,
-													 partitionRelationId);
+			if (IsTenantSchema(get_rel_namespace(parentRelationId)) ||
+				IsTenantSchema(get_rel_namespace(partitionRelationId)))
+			{
+				ErrorIfIllegalPartitioningInTenantSchema(parentRelationId,
+														 partitionRelationId);
+			}
 
 			if (!IsCitusTable(parentRelationId))
 			{

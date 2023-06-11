@@ -30,6 +30,7 @@ extern bool IsTableOwnedByExtension(Oid relationId);
 extern bool ObjectAddressDependsOnExtension(const ObjectAddress *target);
 extern bool IsAnyObjectAddressOwnedByExtension(const List *targets,
 											   ObjectAddress *extensionAddress);
+extern ObjectAddress * FirstExtensionWithSchema(Oid schemaId);
 extern bool IsObjectAddressOwnedByCitus(const ObjectAddress *objectAddress);
 extern ObjectAddress PgGetObjectAddress(char *ttype, ArrayType *namearr,
 										ArrayType *argsarr);

@@ -1193,6 +1193,47 @@ IsAnyObjectAddressOwnedByExtension(const List *targets,
 
 
 /*
+ * FirstExtensionWithSchema returns the first extension address whose schema is the same
+ * as given schema. If no extension depends on the schema, it returns NULL.
+ * i.e. decide if given schema is an extension schema as in
+ *  `CREATE EXTENSION <ext> [WITH] SCHEMA <schema>;`
+ */
+ObjectAddress *
+FirstExtensionWithSchema(Oid schemaId)
+{
+	ObjectAddress *extensionAddress = NULL;
+
+	Relation relation = table_open(ExtensionRelationId, AccessShareLock);
+
+	ScanKeyData entry[1];
+	ScanKeyInit(&entry[0], Anum_pg_extension_extnamespace, BTEqualStrategyNumber,
+				F_INT4EQ, schemaId);
+
+	SysScanDesc scan = systable_beginscan(relation, InvalidOid, false, NULL, 1, entry);
+	HeapTuple extensionTuple = systable_getnext(scan);
+	if (HeapTupleIsValid(extensionTuple))
+	{
+		int extensionIdIndex = Anum_pg_extension_oid;
+		TupleDesc tupleDescriptor = RelationGetDescr(relation);
+		bool isNull = false;
+		Datum extensionIdDatum = heap_getattr(extensionTuple, extensionIdIndex,
+											  tupleDescriptor, &isNull);
+		Oid extensionId = DatumGetObjectId(extensionIdDatum);
+
+		extensionAddress = palloc0(sizeof(ObjectAddress));
+		extensionAddress->objectId = extensionId;
+		extensionAddress->classId = ExtensionRelationId;
+		extensionAddress->objectSubId = 0;
+	}
+
+	systable_endscan(scan);
+	table_close(relation, AccessShareLock);
+
+	return extensionAddress;
+}
+
+
+/*
  * IsObjectAddressOwnedByCitus returns true if the given object address
  * is owned by the citus or citus_columnar extensions.
  */
