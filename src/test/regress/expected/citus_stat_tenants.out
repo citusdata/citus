@@ -137,6 +137,18 @@ SELECT count(*)>=0 FROM dist_tbl WHERE a = 2;
  t
 (1 row)
 
+SELECT count(*)>=0 FROM dist_tbl WHERE a = 2;
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT count(*)>=0 FROM dist_tbl WHERE a = 3;
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
 SELECT count(*)>=0 FROM dist_tbl WHERE a = 3;
  ?column?
 ---------------------------------------------------------------------
@@ -158,8 +170,8 @@ SELECT count(*)>=0 FROM dist_tbl_text WHERE a = 'abcd';
 SELECT tenant_attribute, query_count_in_this_period, score FROM citus_stat_tenants(true) WHERE nodeid = :worker_2_nodeid ORDER BY score DESC, tenant_attribute;
  tenant_attribute | query_count_in_this_period |   score
 ---------------------------------------------------------------------
- 2                |                          1 | 1000000000
- 3                |                          1 | 1000000000
+ 2                |                          2 | 2000000000
+ 3                |                          2 | 2000000000
  4                |                          1 | 1000000000
  abcd             |                          1 | 1000000000
 (4 rows)
@@ -192,8 +204,8 @@ SELECT tenant_attribute, query_count_in_this_period, score FROM citus_stat_tenan
  tenant_attribute | query_count_in_this_period |   score
 ---------------------------------------------------------------------
  abcd             |                          3 | 3000000000
- 2                |                          1 | 1000000000
- 3                |                          1 | 1000000000
+ 2                |                          2 | 2000000000
+ 3                |                          2 | 2000000000
  4                |                          1 | 1000000000
  bcde             |                          1 | 1000000000
  cdef             |                          1 | 1000000000
@@ -222,10 +234,8 @@ SELECT tenant_attribute, query_count_in_this_period, score FROM citus_stat_tenan
 ---------------------------------------------------------------------
  abcd             |                          3 | 3000000000
  bcde             |                          3 | 3000000000
- 2                |                          1 | 1000000000
- 3                |                          1 | 1000000000
- 4                |                          1 | 1000000000
- cdef             |                          1 | 1000000000
+ 2                |                          2 | 2000000000
+ 3                |                          2 | 2000000000
  defg             |                          1 | 1000000000
 (7 rows)
 
@@ -791,7 +801,7 @@ SELECT select_from_dist_tbl_text(U&'\0061\0308bc');
  t
 (1 row)
 
-SELECT tenant_attribute, query_count_in_this_period FROM citus_stat_tenants;
+SELECT tenant_attribute, query_count_in_this_period FROM citus_stat_tenants ORDER BY tenant_attribute;
  tenant_attribute | query_count_in_this_period
 ---------------------------------------------------------------------
  /b*c/de          |                          2
@@ -817,7 +827,7 @@ CALL citus_stat_tenants.select_from_dist_tbl_text_proc(U&'\0061\0308bc');
 CALL citus_stat_tenants.select_from_dist_tbl_text_proc(U&'\0061\0308bc');
 CALL citus_stat_tenants.select_from_dist_tbl_text_proc(U&'\0061\0308bc');
 CALL citus_stat_tenants.select_from_dist_tbl_text_proc(NULL);
-SELECT tenant_attribute, query_count_in_this_period FROM citus_stat_tenants;
+SELECT tenant_attribute, query_count_in_this_period FROM citus_stat_tenants ORDER BY tenant_attribute;
  tenant_attribute | query_count_in_this_period
 ---------------------------------------------------------------------
  /b*c/de          |                          8
@@ -864,7 +874,7 @@ SELECT count(*)>=0 FROM select_from_dist_tbl_text_view WHERE a = U&'\0061\0308bc
  t
 (1 row)
 
-SELECT tenant_attribute, query_count_in_this_period FROM citus_stat_tenants;
+SELECT tenant_attribute, query_count_in_this_period FROM citus_stat_tenants ORDER BY tenant_attribute;
  tenant_attribute | query_count_in_this_period
 ---------------------------------------------------------------------
  /b*c/de          |                         11
