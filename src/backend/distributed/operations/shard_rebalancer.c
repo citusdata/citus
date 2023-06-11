@@ -2017,7 +2017,7 @@ GenerateTaskMoveDependencyList(PlacementUpdateEvent *move, int64 colocationId,
 	 * overlaps with the current move's target node.
 	 * The earlier/first move might make space for the later/second move.
 	 * So we could run out of disk space (or at least overload the node)
-	 * if we move the second shard to it before the first one is moved away. 
+	 * if we move the second shard to it before the first one is moved away.
 	 */
 	ShardMoveSourceNodeHashEntry *shardMoveSourceNodeHashEntry = hash_search(
 		shardMoveDependencies.nodeDependencies, &move->targetNode->nodeId, HASH_FIND,

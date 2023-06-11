@@ -11,6 +11,7 @@
 #include "postgres.h"
 #include "unistd.h"
 
+#include "access/hash.h"
 #include "distributed/citus_safe_lib.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/distributed_planner.h"
@@ -53,7 +54,6 @@ static clock_t QueryEndClock = { 0 };
 
 static const char *SharedMemoryNameForMultiTenantMonitor =
 	"Shared memory for multi tenant monitor";
-static char *TenantTrancheName = "Tenant Tranche";
 static char *MonitorTrancheName = "Multi Tenant Monitor Tranche";
 
 static shmem_startup_hook_type prev_shmem_startup_hook = NULL;
@@ -63,12 +63,14 @@ static void UpdatePeriodsIfNecessary(TenantStats *tenantStats, TimestampTz query
 static void ReduceScoreIfNecessary(TenantStats *tenantStats, TimestampTz queryTime);
 static void EvictTenantsIfNecessary(TimestampTz queryTime);
 static void RecordTenantStats(TenantStats *tenantStats, TimestampTz queryTime);
-static void CreateMultiTenantMonitor(void);
 static MultiTenantMonitor * CreateSharedMemoryForMultiTenantMonitor(void);
 static MultiTenantMonitor * GetMultiTenantMonitor(void);
 static void MultiTenantMonitorSMInit(void);
-static int CreateTenantStats(MultiTenantMonitor *monitor, TimestampTz queryTime);
-static int FindTenantStats(MultiTenantMonitor *monitor);
+static TenantStats * CreateTenantStats(MultiTenantMonitor *monitor, TimestampTz
+									   queryTime);
+static void FillTenantStatsHashKey(TenantStatsHashKey *key, char *tenantAttribute, uint32
+								   colocationGroupId);
+static TenantStats * FindTenantStats(MultiTenantMonitor *monitor);
 static size_t MultiTenantMonitorshmemSize(void);
 static char * ExtractTopComment(const char *inputString);
 static char * EscapeCommentChars(const char *str);
@@ -78,7 +80,7 @@ int StatTenantsLogLevel = CITUS_LOG_LEVEL_OFF;
 int StatTenantsPeriod = (time_t) 60;
 int StatTenantsLimit = 100;
 int StatTenantsTrack = STAT_TENANTS_TRACK_NONE;
-
+int StatTenantsSampleRateForNewTenants = 100;
 
 PG_FUNCTION_INFO_V1(citus_stat_tenants_local);
 PG_FUNCTION_INFO_V1(citus_stat_tenants_local_reset);
@@ -116,21 +118,36 @@ citus_stat_tenants_local(PG_FUNCTION_ARGS)
 	LWLockAcquire(&monitor->lock, LW_EXCLUSIVE);
 
 	int numberOfRowsToReturn = 0;
+	int tenantStatsCount = hash_get_num_entries(monitor->tenants);
 	if (returnAllTenants)
 	{
-		numberOfRowsToReturn = monitor->tenantCount;
+		numberOfRowsToReturn = tenantStatsCount;
 	}
 	else
 	{
-		numberOfRowsToReturn = Min(monitor->tenantCount, StatTenantsLimit);
+		numberOfRowsToReturn = Min(tenantStatsCount,
+								   StatTenantsLimit);
 	}
 
-	for (int tenantIndex = 0; tenantIndex < monitor->tenantCount; tenantIndex++)
+	/* Allocate an array to hold the tenants. */
+	TenantStats **stats = palloc(tenantStatsCount *
+								 sizeof(TenantStats *));
+
+	HASH_SEQ_STATUS hash_seq;
+	TenantStats *stat;
+
+	/* Get all the tenants from the hash table. */
+	int j = 0;
+	hash_seq_init(&hash_seq, monitor->tenants);
+	while ((stat = hash_seq_search(&hash_seq)) != NULL)
 	{
-		UpdatePeriodsIfNecessary(&monitor->tenants[tenantIndex], monitoringTime);
-		ReduceScoreIfNecessary(&monitor->tenants[tenantIndex], monitoringTime);
+		stats[j++] = stat;
+		UpdatePeriodsIfNecessary(stat, monitoringTime);
+		ReduceScoreIfNecessary(stat, monitoringTime);
 	}
-	SafeQsort(monitor->tenants, monitor->tenantCount, sizeof(TenantStats),
+
+	/* Sort the tenants by their score. */
+	SafeQsort(stats, j, sizeof(TenantStats *),
 			  CompareTenantScore);
 
 	for (int i = 0; i < numberOfRowsToReturn; i++)
@@ -138,17 +155,17 @@ citus_stat_tenants_local(PG_FUNCTION_ARGS)
 		memset(values, 0, sizeof(values));
 		memset(isNulls, false, sizeof(isNulls));
 
-		TenantStats *tenantStats = &monitor->tenants[i];
+		TenantStats *tenantStats = stats[i];
 
-		values[0] = Int32GetDatum(tenantStats->colocationGroupId);
+		values[0] = Int32GetDatum(tenantStats->key.colocationGroupId);
 
-		if (tenantStats->tenantAttribute[0] == '\0')
+		if (tenantStats->key.tenantAttribute[0] == '\0')
 		{
 			isNulls[1] = true;
 		}
 		else
 		{
-			values[1] = PointerGetDatum(cstring_to_text(tenantStats->tenantAttribute));
+			values[1] = PointerGetDatum(cstring_to_text(tenantStats->key.tenantAttribute));
 		}
 
 		values[2] = Int32GetDatum(tenantStats->readsInThisPeriod);
@@ -164,6 +181,8 @@ citus_stat_tenants_local(PG_FUNCTION_ARGS)
 		tuplestore_putvalues(tupleStore, tupleDescriptor, values, isNulls);
 	}
 
+	pfree(stats);
+
 	LWLockRelease(&monitor->lock);
 
 	PG_RETURN_VOID();
@@ -178,7 +197,25 @@ Datum
 citus_stat_tenants_local_reset(PG_FUNCTION_ARGS)
 {
 	MultiTenantMonitor *monitor = GetMultiTenantMonitor();
-	monitor->tenantCount = 0;
+
+	/* if monitor is not created yet, there is nothing to reset */
+	if (monitor == NULL)
+	{
+		PG_RETURN_VOID();
+	}
+
+	HASH_SEQ_STATUS hash_seq;
+	TenantStats *stats;
+
+	LWLockAcquire(&monitor->lock, LW_EXCLUSIVE);
+
+	hash_seq_init(&hash_seq, monitor->tenants);
+	while ((stats = hash_seq_search(&hash_seq)) != NULL)
+	{
+		hash_search(monitor->tenants, &stats->key, HASH_REMOVE, NULL);
+	}
+
+	LWLockRelease(&monitor->lock);
 
 	PG_RETURN_VOID();
 }
@@ -236,6 +273,24 @@ AttributeTask(char *tenantId, int colocationId, CmdType commandType)
 		colocationId == INVALID_COLOCATION_ID)
 	{
 		return;
+	}
+
+	TenantStatsHashKey key = { 0 };
+	FillTenantStatsHashKey(&key, tenantId, colocationId);
+
+	MultiTenantMonitor *monitor = GetMultiTenantMonitor();
+	bool found = false;
+	hash_search(monitor->tenants, &key, HASH_FIND, &found);
+
+	/* If the tenant is not found in the hash table, we will track the query with a probability of StatTenantsSampleRateForNewTenants. */
+	if (!found)
+	{
+		int randomValue = rand() % 100;
+		bool shouldTrackQuery = randomValue < StatTenantsSampleRateForNewTenants;
+		if (!shouldTrackQuery)
+		{
+			return;
+		}
 	}
 
 	/*
@@ -351,14 +406,14 @@ CitusAttributeToEnd(QueryDesc *queryDesc)
 static int
 CompareTenantScore(const void *leftElement, const void *rightElement)
 {
-	const TenantStats *leftTenant = (const TenantStats *) leftElement;
-	const TenantStats *rightTenant = (const TenantStats *) rightElement;
+	double l_usage = (*(TenantStats *const *) leftElement)->score;
+	double r_usage = (*(TenantStats *const *) rightElement)->score;
 
-	if (leftTenant->score > rightTenant->score)
+	if (l_usage > r_usage)
 	{
 		return -1;
 	}
-	else if (leftTenant->score < rightTenant->score)
+	else if (l_usage < r_usage)
 	{
 		return 1;
 	}
@@ -409,45 +464,43 @@ AttributeMetricsIfApplicable()
 	 */
 	LWLockAcquire(&monitor->lock, LW_SHARED);
 
-	int currentTenantIndex = FindTenantStats(monitor);
+	TenantStats *tenantStats = FindTenantStats(monitor);
 
-	if (currentTenantIndex != -1)
+	if (tenantStats != NULL)
 	{
-		TenantStats *tenantStats = &monitor->tenants[currentTenantIndex];
-		LWLockAcquire(&tenantStats->lock, LW_EXCLUSIVE);
+		SpinLockAcquire(&tenantStats->lock);
 
 		UpdatePeriodsIfNecessary(tenantStats, queryTime);
 		ReduceScoreIfNecessary(tenantStats, queryTime);
 		RecordTenantStats(tenantStats, queryTime);
 
-		LWLockRelease(&tenantStats->lock);
+		SpinLockRelease(&tenantStats->lock);
 	}
 	else
 	{
 		LWLockRelease(&monitor->lock);
 
 		LWLockAcquire(&monitor->lock, LW_EXCLUSIVE);
-		currentTenantIndex = FindTenantStats(monitor);
+		tenantStats = FindTenantStats(monitor);
 
-		if (currentTenantIndex == -1)
+		if (tenantStats == NULL)
 		{
-			currentTenantIndex = CreateTenantStats(monitor, queryTime);
+			tenantStats = CreateTenantStats(monitor, queryTime);
 		}
 
 		LWLockRelease(&monitor->lock);
 
 		LWLockAcquire(&monitor->lock, LW_SHARED);
-		currentTenantIndex = FindTenantStats(monitor);
-		if (currentTenantIndex != -1)
+		tenantStats = FindTenantStats(monitor);
+		if (tenantStats != NULL)
 		{
-			TenantStats *tenantStats = &monitor->tenants[currentTenantIndex];
-			LWLockAcquire(&tenantStats->lock, LW_EXCLUSIVE);
+			SpinLockAcquire(&tenantStats->lock);
 
 			UpdatePeriodsIfNecessary(tenantStats, queryTime);
 			ReduceScoreIfNecessary(tenantStats, queryTime);
 			RecordTenantStats(tenantStats, queryTime);
 
-			LWLockRelease(&tenantStats->lock);
+			SpinLockRelease(&tenantStats->lock);
 		}
 	}
 	LWLockRelease(&monitor->lock);
@@ -563,15 +616,29 @@ EvictTenantsIfNecessary(TimestampTz queryTime)
 	 *
 	 * Every time tenant count hits StatTenantsLimit * 3, we reduce it back to StatTenantsLimit * 2.
 	 */
-	if (monitor->tenantCount >= StatTenantsLimit * 3)
+	long tenantStatsCount = hash_get_num_entries(monitor->tenants);
+	if (tenantStatsCount >= StatTenantsLimit * 3)
 	{
-		for (int tenantIndex = 0; tenantIndex < monitor->tenantCount; tenantIndex++)
+		HASH_SEQ_STATUS hash_seq;
+		TenantStats *stat;
+		TenantStats **stats = palloc(tenantStatsCount *
+									 sizeof(TenantStats *));
+
+		int i = 0;
+		hash_seq_init(&hash_seq, monitor->tenants);
+		while ((stat = hash_seq_search(&hash_seq)) != NULL)
 		{
-			ReduceScoreIfNecessary(&monitor->tenants[tenantIndex], queryTime);
+			stats[i++] = stat;
 		}
-		SafeQsort(monitor->tenants, monitor->tenantCount, sizeof(TenantStats),
-				  CompareTenantScore);
-		monitor->tenantCount = StatTenantsLimit * 2;
+
+		SafeQsort(stats, i, sizeof(TenantStats *), CompareTenantScore);
+
+		for (i = StatTenantsLimit * 2; i < tenantStatsCount; i++)
+		{
+			hash_search(monitor->tenants, &stats[i]->key, HASH_REMOVE, NULL);
+		}
+
+		pfree(stats);
 	}
 }
 
@@ -610,17 +677,6 @@ RecordTenantStats(TenantStats *tenantStats, TimestampTz queryTime)
 
 
 /*
- * CreateMultiTenantMonitor creates the data structure for multi tenant monitor.
- */
-static void
-CreateMultiTenantMonitor()
-{
-	MultiTenantMonitor *monitor = CreateSharedMemoryForMultiTenantMonitor();
-	monitor->tenantCount = 0;
-}
-
-
-/*
  * CreateSharedMemoryForMultiTenantMonitor creates a dynamic shared memory segment for multi tenant monitor.
  */
 static MultiTenantMonitor *
@@ -641,6 +697,17 @@ CreateSharedMemoryForMultiTenantMonitor()
 	LWLockRegisterTranche(monitor->namedLockTranche.trancheId,
 						  monitor->namedLockTranche.trancheName);
 	LWLockInitialize(&monitor->lock, monitor->namedLockTranche.trancheId);
+
+	HASHCTL info;
+
+	memset(&info, 0, sizeof(info));
+	info.keysize = sizeof(TenantStatsHashKey);
+	info.entrysize = sizeof(TenantStats);
+
+	monitor->tenants = ShmemInitHash("citus_stats_tenants hash",
+									 StatTenantsLimit * 3, StatTenantsLimit * 3,
+									 &info, HASH_ELEM |
+									 HASH_SHARED_MEM | HASH_BLOBS);
 
 	return monitor;
 }
@@ -685,7 +752,7 @@ InitializeMultiTenantMonitorSMHandleManagement()
 static void
 MultiTenantMonitorSMInit()
 {
-	CreateMultiTenantMonitor();
+	CreateSharedMemoryForMultiTenantMonitor();
 
 	if (prev_shmem_startup_hook != NULL)
 	{
@@ -699,7 +766,7 @@ MultiTenantMonitorSMInit()
  *
  * Calling this function should be protected by the monitor->lock in LW_EXCLUSIVE mode.
  */
-static int
+static TenantStats *
 CreateTenantStats(MultiTenantMonitor *monitor, TimestampTz queryTime)
 {
 	/*
@@ -708,47 +775,50 @@ CreateTenantStats(MultiTenantMonitor *monitor, TimestampTz queryTime)
 	 */
 	EvictTenantsIfNecessary(queryTime);
 
-	int tenantIndex = monitor->tenantCount;
+	TenantStatsHashKey key = { 0 };
+	FillTenantStatsHashKey(&key, AttributeToTenant, AttributeToColocationGroupId);
 
-	memset(&monitor->tenants[tenantIndex], 0, sizeof(monitor->tenants[tenantIndex]));
+	TenantStats *stats = (TenantStats *) hash_search(monitor->tenants, &key,
+													 HASH_ENTER, NULL);
 
-	strcpy_s(monitor->tenants[tenantIndex].tenantAttribute,
-			 sizeof(monitor->tenants[tenantIndex].tenantAttribute), AttributeToTenant);
-	monitor->tenants[tenantIndex].colocationGroupId = AttributeToColocationGroupId;
+	stats->writesInLastPeriod = 0;
+	stats->writesInThisPeriod = 0;
+	stats->readsInLastPeriod = 0;
+	stats->readsInThisPeriod = 0;
+	stats->cpuUsageInLastPeriod = 0;
+	stats->cpuUsageInThisPeriod = 0;
+	stats->score = 0;
+	stats->lastScoreReduction = 0;
 
-	monitor->tenants[tenantIndex].namedLockTranche.trancheId = LWLockNewTrancheId();
-	monitor->tenants[tenantIndex].namedLockTranche.trancheName = TenantTrancheName;
+	SpinLockInit(&stats->lock);
 
-	LWLockRegisterTranche(monitor->tenants[tenantIndex].namedLockTranche.trancheId,
-						  monitor->tenants[tenantIndex].namedLockTranche.trancheName);
-	LWLockInitialize(&monitor->tenants[tenantIndex].lock,
-					 monitor->tenants[tenantIndex].namedLockTranche.trancheId);
-
-	monitor->tenantCount++;
-
-	return tenantIndex;
+	return stats;
 }
 
 
 /*
- * FindTenantStats finds the index for the current tenant's statistics.
+ * FindTenantStats finds the current tenant's statistics.
  */
-static int
+static TenantStats *
 FindTenantStats(MultiTenantMonitor *monitor)
 {
-	for (int i = 0; i < monitor->tenantCount; i++)
-	{
-		TenantStats *tenantStats = &monitor->tenants[i];
+	TenantStatsHashKey key = { 0 };
+	FillTenantStatsHashKey(&key, AttributeToTenant, AttributeToColocationGroupId);
 
-		if (strncmp(tenantStats->tenantAttribute, AttributeToTenant,
-					MAX_TENANT_ATTRIBUTE_LENGTH) == 0 &&
-			tenantStats->colocationGroupId == AttributeToColocationGroupId)
-		{
-			return i;
-		}
-	}
+	TenantStats *stats = (TenantStats *) hash_search(monitor->tenants, &key,
+													 HASH_FIND, NULL);
 
-	return -1;
+	return stats;
+}
+
+
+static void
+FillTenantStatsHashKey(TenantStatsHashKey *key, char *tenantAttribute, uint32
+					   colocationGroupId)
+{
+	memset(key->tenantAttribute, 0, MAX_TENANT_ATTRIBUTE_LENGTH);
+	strlcpy(key->tenantAttribute, tenantAttribute, MAX_TENANT_ATTRIBUTE_LENGTH);
+	key->colocationGroupId = colocationGroupId;
 }
 
 
