@@ -347,14 +347,14 @@ CitusAttributeToEnd(QueryDesc *queryDesc)
 static int
 CompareTenantScore(const void *leftElement, const void *rightElement)
 {
-	const TenantStats *leftTenant = (const TenantStats *) leftElement;
-	const TenantStats *rightTenant = (const TenantStats *) rightElement;
+	double l_usage = (*(TenantStats *const *) leftElement)->score;
+	double r_usage = (*(TenantStats *const *) rightElement)->score;
 
-	if (leftTenant->score > rightTenant->score)
+	if (l_usage > r_usage)
 	{
 		return -1;
 	}
-	else if (leftTenant->score < rightTenant->score)
+	else if (l_usage < r_usage)
 	{
 		return 1;
 	}
