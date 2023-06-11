@@ -268,14 +268,17 @@ AttributeTask(char *tenantId, int colocationId, CmdType commandType)
 
 	MultiTenantMonitor *monitor = GetMultiTenantMonitor();
 	bool found = false;
-	hash_search(monitor->tenants, &key, HASH_FIND, NULL);
+	hash_search(monitor->tenants, &key, HASH_FIND, &found);
 
-	int randomValue = rand() % 100;
-
-	/* If the tenant is not found in the hash table, we will track the query with a probability of StatTenantsSampleRateForNewTenants.*/
-	if (!(!found && randomValue < StatTenantsSampleRateForNewTenants))
+	/* If the tenant is not found in the hash table, we will track the query with a probability of StatTenantsSampleRateForNewTenants. */
+	if (!found)
 	{
-		return;
+		int randomValue = rand() % 100;
+		bool shouldTrackQuery = randomValue < StatTenantsSampleRateForNewTenants;
+		if (!shouldTrackQuery)
+		{
+			return;
+		}
 	}
 
 	AttributeToColocationGroupId = colocationId;
