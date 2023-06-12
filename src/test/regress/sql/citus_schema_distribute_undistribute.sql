@@ -8,6 +8,18 @@ SELECT 1 FROM citus_add_node('localhost', :master_port, groupid => 0);
 CREATE USER tenantuser superuser;
 SET role tenantuser;
 
+-- check invalid input
+SELECT citus_schema_distribute(1);
+SELECT citus_schema_undistribute(1);
+
+-- noop
+SELECT citus_schema_distribute(null);
+SELECT citus_schema_undistribute(null);
+
+-- public and some others cannot be distributed as a tenant schema, but check what happens
+-- if we try to call citus_schema_undistribute() for such a schema.
+SELECT citus_schema_undistribute('public');
+
 -- create non-tenant schema
 CREATE SCHEMA citus_schema_distribute_undistribute;
 
@@ -60,18 +72,41 @@ SELECT run_command_on_workers($$SELECT citus_schema_distribute('tenant1');$$);
 SELECT run_command_on_workers($$SELECT citus_schema_undistribute('tenant1');$$);
 
 -- inherited table not allowed
-CREATE TABLE tenant1.cities (
+CREATE TABLE citus_schema_distribute_undistribute.cities (
   name       text,
   population real,
   elevation  int
 );
-CREATE TABLE tenant1.capitals (
+CREATE TABLE citus_schema_distribute_undistribute.capitals (
   state      char(2) UNIQUE NOT NULL
-) INHERITS (tenant1.cities);
+) INHERITS (citus_schema_distribute_undistribute.cities);
+
+-- temporarily move "cities" into tenant1 (not a tenant schema yet) to test citus_schema_distribute() with a table that is inherited
+ALTER TABLE citus_schema_distribute_undistribute.cities SET SCHEMA tenant1;
+SELECT citus_schema_distribute('tenant1');
+ALTER TABLE tenant1.cities SET SCHEMA citus_schema_distribute_undistribute;
+
+-- temporarily move "capitals" into tenant1 (not a tenant schema yet) to test citus_schema_distribute() with a table that inherits
+ALTER TABLE citus_schema_distribute_undistribute.capitals SET SCHEMA tenant1;
+SELECT citus_schema_distribute('tenant1');
+ALTER TABLE tenant1.capitals SET SCHEMA citus_schema_distribute_undistribute;
 
 SELECT citus_schema_distribute('tenant1');
-DROP TABLE tenant1.capitals;
-DROP TABLE tenant1.cities;
+SELECT citus_schema_undistribute('tenant1');
+
+CREATE TABLE citus_schema_distribute_undistribute.illegal_partitioned_table(id int) PARTITION BY RANGE(id);
+CREATE TABLE citus_schema_distribute_undistribute.illegal_partition1 PARTITION OF citus_schema_distribute_undistribute.illegal_partitioned_table FOR VALUES FROM (1) TO (11);
+
+-- temporarily move "illegal_partitioned_table" into tenant1 (not a tenant schema yet) to test citus_schema_distribute() with a partition table whose parent is created in another schema
+ALTER TABLE citus_schema_distribute_undistribute.illegal_partitioned_table SET SCHEMA tenant1;
+SELECT citus_schema_distribute('tenant1');
+ALTER TABLE tenant1.illegal_partitioned_table SET SCHEMA citus_schema_distribute_undistribute;
+
+-- temporarily move "illegal_partition1" into tenant1 (not a tenant schema yet) to test citus_schema_distribute() with a parent table whose partition is created in another schema
+ALTER TABLE citus_schema_distribute_undistribute.illegal_partition1 SET SCHEMA tenant1;
+SELECT citus_schema_distribute('tenant1');
+ALTER TABLE tenant1.illegal_partition1 SET SCHEMA citus_schema_distribute_undistribute;
+
 SELECT citus_schema_distribute('tenant1');
 SELECT citus_schema_undistribute('tenant1');
 

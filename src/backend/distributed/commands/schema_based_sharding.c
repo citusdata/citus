@@ -30,7 +30,7 @@
 
 
 static void UnregisterTenantSchemaGlobally(Oid schemaId, char *schemaName);
-static List * GetRegularAndForeignCitusTablesInSchema(Oid schemaId);
+static List * SchemaGetNonShardTableIdList(Oid schemaId);
 static void EnsureSchemaCanBeDistributed(Oid schemaId, List *schemaTableIdList);
 static void EnsureTenantSchemaNameAllowed(Oid schemaId);
 static void EnsureTableKindSupportedForTenantSchema(Oid relationId);
@@ -135,12 +135,25 @@ EnsureTableKindSupportedForTenantSchema(Oid relationId)
 		ereport(ERROR, (errmsg("cannot create a foreign table in a distributed "
 							   "schema")));
 	}
-	else if (PartitionTable(relationId))
+
+	if (PartitionTable(relationId))
 	{
 		ErrorIfIllegalPartitioningInTenantSchema(PartitionParentOid(relationId),
 												 relationId);
 	}
-	else if (IsChildTable(relationId) || IsParentTable(relationId))
+
+	if (PartitionedTable(relationId))
+	{
+		List *partitionList = PartitionList(relationId);
+
+		Oid partitionRelationId = InvalidOid;
+		foreach_oid(partitionRelationId, partitionList)
+		{
+			ErrorIfIllegalPartitioningInTenantSchema(relationId, partitionRelationId);
+		}
+	}
+
+	if (IsChildTable(relationId) || IsParentTable(relationId))
 	{
 		ereport(ERROR, (errmsg("tables in a distributed schema cannot inherit or "
 							   "be inherited")));
@@ -269,27 +282,14 @@ CreateTenantSchemaTable(Oid relationId)
  * ErrorIfIllegalPartitioningInTenantSchema throws an error if the
  * partitioning relationship between the parent and the child is illegal
  * because they are in different schemas while one of them is a tenant table.
+ *
+ * This function assumes that either the parent or the child are in a tenant
+ * schema.
  */
 void
 ErrorIfIllegalPartitioningInTenantSchema(Oid parentRelationId, Oid partitionRelationId)
 {
-	Oid partitionSchemaId = get_rel_namespace(partitionRelationId);
-	Oid parentSchemaId = get_rel_namespace(parentRelationId);
-
-	bool partitionIsTenantTable = IsTenantSchema(partitionSchemaId);
-	bool parentIsTenantTable = IsTenantSchema(parentSchemaId);
-
-	bool illegalPartitioning = false;
-	if (partitionIsTenantTable != parentIsTenantTable)
-	{
-		illegalPartitioning = true;
-	}
-	else if (partitionIsTenantTable && parentIsTenantTable)
-	{
-		illegalPartitioning = (parentSchemaId != partitionSchemaId);
-	}
-
-	if (illegalPartitioning)
+	if (get_rel_namespace(partitionRelationId) != get_rel_namespace(parentRelationId))
 	{
 		ereport(ERROR, (errmsg("partitioning within a distributed schema is not "
 							   "supported when the parent and the child "
@@ -316,11 +316,11 @@ CreateTenantSchemaColocationId(void)
 
 
 /*
- * GetRegularAndForeignCitusTablesInSchema returns all nonshard relation ids,
- * with relkind = relation or partitioned or foreign, inside given schema.
+ * SchemaGetNonShardTableIdList returns all nonshard relation ids
+ * inside given schema.
  */
 static List *
-GetRegularAndForeignCitusTablesInSchema(Oid schemaId)
+SchemaGetNonShardTableIdList(Oid schemaId)
 {
 	List *relationIdList = NIL;
 
@@ -352,7 +352,8 @@ GetRegularAndForeignCitusTablesInSchema(Oid schemaId)
 			continue;
 		}
 
-		if (RegularTable(relationId) || IsForeignTable(relationId))
+		if (RegularTable(relationId) || PartitionTable(relationId) ||
+			IsForeignTable(relationId))
 		{
 			relationIdList = lappend_oid(relationIdList, relationId);
 		}
@@ -595,7 +596,7 @@ citus_schema_distribute(PG_FUNCTION_ARGS)
 	}
 
 	/* Take lock on the relations and filter out partition tables */
-	List *tableIdListInSchema = GetRegularAndForeignCitusTablesInSchema(schemaId);
+	List *tableIdListInSchema = SchemaGetNonShardTableIdList(schemaId);
 	List *tableIdListToConvert = NIL;
 	Oid relationId = InvalidOid;
 	foreach_oid(relationId, tableIdListInSchema)
@@ -699,7 +700,7 @@ citus_schema_undistribute(PG_FUNCTION_ARGS)
 	ereport(NOTICE, (errmsg("undistributing schema %s", schemaName)));
 
 	/* Take lock on the relations and filter out partition tables */
-	List *tableIdListInSchema = GetRegularAndForeignCitusTablesInSchema(schemaId);
+	List *tableIdListInSchema = SchemaGetNonShardTableIdList(schemaId);
 	List *tableIdListToConvert = NIL;
 	Oid relationId = InvalidOid;
 	foreach_oid(relationId, tableIdListInSchema)
