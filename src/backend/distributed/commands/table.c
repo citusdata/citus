@@ -4128,12 +4128,10 @@ ConvertNewTableIfNecessary(Node *createStmt)
 		Oid createdRelationId = RangeVarGetRelid(createTableAsStmt->into->rel,
 												 NoLock, missingOk);
 
-		if (ShouldCreateTenantSchemaTable(createdRelationId))
+		if (ShouldCreateTenantSchemaTable(createdRelationId) &&
+			!PartitionTable(createdRelationId))
 		{
-			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							errmsg("cannot create a tenant table using "
-								   "CREATE TABLE AS or SELECT INTO "
-								   "statements")));
+			CreateTenantSchemaTable(createdRelationId);
 		}
 
 		/*

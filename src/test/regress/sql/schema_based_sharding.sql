@@ -273,10 +273,10 @@ SELECT EXISTS(
           inhparent = 'tenant_4.parent_attach_test'::regclass
 ) AS is_partition;
 
--- verify that we don't allow creating tenant tables by using CREATE TABLE AS / SELECT INTO commands
+-- verify that we allow creating tenant tables by using CREATE TABLE AS / SELECT INTO commands
 CREATE TABLE tenant_4.tbl_3 AS SELECT 1 AS a, 'text' as b;
-CREATE TABLE IF NOT EXISTS tenant_4.tbl_3 AS SELECT 1 as a, 'text' as b;
-SELECT 1 as a, 'text' as b INTO tenant_4.tbl_3;
+CREATE TABLE IF NOT EXISTS tenant_4.tbl_4 AS SELECT 1 as a, 'text' as b;
+SELECT 1 as a, 'text' as b INTO tenant_4.tbl_5;
 
 CREATE TYPE employee_type AS (name text, salary numeric);
 
@@ -287,8 +287,13 @@ CREATE TABLE tenant_4.employees OF employee_type (
 );
 
 -- verify that we act accordingly when if not exists is used
-CREATE TABLE IF NOT EXISTS tenant_4.tbl_3(a int, b text);
-CREATE TABLE IF NOT EXISTS tenant_4.tbl_3(a int, b text);
+CREATE TABLE IF NOT EXISTS tenant_4.tbl_6(a int, b text);
+CREATE TABLE IF NOT EXISTS tenant_4.tbl_6(a int, b text);
+
+SELECT logicalrelid, partmethod
+    FROM pg_dist_partition
+    WHERE logicalrelid::text LIKE 'tenant_4.tbl%'
+    ORDER BY logicalrelid;
 
 CREATE TABLE regular_schema.local(a int, b text);
 
