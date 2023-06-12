@@ -223,7 +223,7 @@ Any other SQL you can put directly in the main sql file, e.g.
 
 1. Check out the release branch that you want to backport to `git checkout release-11.3`
 2. Make sure you have the latest changes `git pull`
-3. Create a new release branch with a unique name `git checkout release-11.3-<yourname>`
+3. Create a new release branch with a unique name `git checkout -b release-11.3-<yourname>`
 4. Cherry-pick the commit that you want to backport `git cherry-pick -x <sha>` (the `-x` is important)
 5. Push the branch `git push`
 6. Wait for tests to pass
