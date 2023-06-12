@@ -3606,6 +3606,14 @@ ExtractInsertPartitionKeyValue(Query *query)
 		/* single-row INSERT with a constant partition column value */
 		singlePartitionValueConst = (Const *) targetExpression;
 	}
+	else if (IsA(targetExpression, ArrayExpr))
+	{
+		singlePartitionValueConst =
+			(Const *) evaluate_expr((Expr *) targetExpression,
+									exprType(targetExpression),
+									exprTypmod(targetExpression),
+									exprCollation(targetExpression));
+	}
 	else
 	{
 		/* single-row INSERT with a non-constant partition column value */

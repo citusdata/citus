@@ -313,5 +313,21 @@ SELECT count(*)>=0 FROM select_from_dist_tbl_text_view WHERE a = U&'\0061\0308bc
 
 SELECT tenant_attribute, query_count_in_this_period FROM citus_stat_tenants ORDER BY tenant_attribute;
 
+-- test array data type
+SELECT citus_stat_tenants_reset();
+SET citus.shard_replication_factor TO 1;
+
+CREATE TABLE array_tbl (a int[][]);
+SELECT create_distributed_table ('array_tbl', 'a');
+
+INSERT INTO array_tbl VALUES (ARRAY[ARRAY[1,2], ARRAY[2,3]]);
+INSERT INTO array_tbl VALUES (ARRAY[ARRAY[1,2], ARRAY[2,3]]);
+
+INSERT INTO array_tbl VALUES (ARRAY[ARRAY[5,4], ARRAY[3,2]]);
+
+SELECT count(*)>=0 FROM array_tbl WHERE a = ARRAY[ARRAY[1,2], ARRAY[2,3]];
+
+SELECT tenant_attribute, read_count_in_this_period, query_count_in_this_period FROM citus_stat_tenants;
+
 SET client_min_messages TO ERROR;
 DROP SCHEMA citus_stat_tenants CASCADE;
