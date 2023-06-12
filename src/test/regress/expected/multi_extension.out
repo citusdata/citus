@@ -1362,8 +1362,10 @@ SELECT * FROM multi_extension.print_extension_changes();
                  | function citus_internal_add_tenant_schema(oid,integer) void
                  | function citus_internal_delete_tenant_schema(oid) void
                  | function citus_internal_unregister_tenant_schema_globally(oid,text) void
+                 | function citus_schema_distribute(regnamespace) void
+                 | function citus_schema_undistribute(regnamespace) void
                  | table pg_dist_tenant_schema
-(4 rows)
+(6 rows)
 
 DROP TABLE multi_extension.prev_objects, multi_extension.extension_diff;
 -- show running version

@@ -30,6 +30,9 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP FUNCTION pg_catalog.citus_schema_distribute(regnamespace);
+DROP FUNCTION pg_catalog.citus_schema_undistribute(regnamespace);
+
 DROP FUNCTION pg_catalog.citus_internal_add_tenant_schema(Oid, int);
 
 #include "../udfs/citus_prepare_pg_upgrade/11.2-1.sql"

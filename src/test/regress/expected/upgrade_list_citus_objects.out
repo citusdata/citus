@@ -114,6 +114,8 @@ ORDER BY 1;
  function citus_remote_connection_stats()
  function citus_remove_node(text,integer)
  function citus_run_local_command(text)
+ function citus_schema_distribute(regnamespace)
+ function citus_schema_undistribute(regnamespace)
  function citus_server_id()
  function citus_set_coordinator_host(text,integer,noderole,name)
  function citus_set_default_rebalance_strategy(text)
@@ -334,5 +336,5 @@ ORDER BY 1;
  view citus_stat_tenants_local
  view pg_dist_shard_placement
  view time_partitions
-(326 rows)
+(328 rows)
 
