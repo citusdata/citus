@@ -64,8 +64,41 @@ INSERT INTO tenant1.partitioned_table SELECT i FROM generate_series(1,20) i;
 -- create view
 CREATE VIEW tenant1.view1 AS SELECT * FROM tenant1.table1 JOIN tenant1.table2 USING(id);
 
+-- create view in regular schema
+CREATE VIEW citus_schema_distribute_undistribute.view2 AS SELECT * FROM tenant1.view1;
+
 -- create materialized view
 CREATE MATERIALIZED VIEW tenant1.view2 AS SELECT * FROM tenant1.table1;
+
+-- create collation
+CREATE COLLATION citus_schema_distribute_undistribute.german_phonebook (provider = icu, locale = 'de-u-co-phonebk');
+
+-- create type
+CREATE TYPE citus_schema_distribute_undistribute.pair_type AS (a int, b int);
+
+-- Create function
+CREATE FUNCTION citus_schema_distribute_undistribute.one_as_result() RETURNS INT LANGUAGE SQL AS
+$$
+  SELECT 1;
+$$;
+
+-- create text search dictionary
+CREATE TEXT SEARCH DICTIONARY citus_schema_distribute_undistribute.my_german_dict (
+    template = snowball,
+    language = german,
+    stopwords = german
+);
+
+-- create text search config
+CREATE TEXT SEARCH CONFIGURATION citus_schema_distribute_undistribute.my_ts_config ( parser = default );
+ALTER TEXT SEARCH CONFIGURATION citus_schema_distribute_undistribute.my_ts_config ALTER MAPPING FOR asciiword WITH citus_schema_distribute_undistribute.my_german_dict;
+
+-- create sequence
+CREATE SEQUENCE citus_schema_distribute_undistribute.seq;
+
+-- create complex table
+CREATE TABLE tenant1.complextable (id int PRIMARY KEY default nextval('citus_schema_distribute_undistribute.seq'), col int default (citus_schema_distribute_undistribute.one_as_result()), myserial serial, phone text COLLATE citus_schema_distribute_undistribute.german_phonebook, initials citus_schema_distribute_undistribute.pair_type);
+CREATE SEQUENCE tenant1.seq_owned OWNED BY tenant1.complextable.id;
 
 -- not allowed from workers
 SELECT run_command_on_workers($$SELECT citus_schema_distribute('tenant1');$$);
@@ -315,6 +348,9 @@ CREATE SCHEMA extensionschema;
 CREATE EXTENSION citext SCHEMA extensionschema;
 SELECT citus_schema_distribute('extensionschema');
 DROP SCHEMA extensionschema CASCADE;
+ALTER EXTENSION citus ADD TABLE tenant1.table1;
+SELECT citus_schema_distribute('tenant1');
+ALTER EXTENSION citus DROP TABLE tenant1.table1;
 
 -- weird schema and table names
 CREATE SCHEMA "CiTuS.TeeN";

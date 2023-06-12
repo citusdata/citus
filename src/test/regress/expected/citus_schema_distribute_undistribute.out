@@ -83,8 +83,36 @@ CREATE VIEW tenant1.view1 AS SELECT * FROM tenant1.table1 JOIN tenant1.table2 US
 WARNING:  "view tenant1.view1" has dependency to "table tenant1.table2" that is not in Citus' metadata
 DETAIL:  "view tenant1.view1" will be created only locally
 HINT:  Distribute "table tenant1.table2" first to distribute "view tenant1.view1"
+-- create view in regular schema
+CREATE VIEW citus_schema_distribute_undistribute.view2 AS SELECT * FROM tenant1.view1;
+WARNING:  "view citus_schema_distribute_undistribute.view2" has dependency to "table tenant1.table2" that is not in Citus' metadata
+DETAIL:  "view citus_schema_distribute_undistribute.view2" will be created only locally
+HINT:  Distribute "table tenant1.table2" first to distribute "view citus_schema_distribute_undistribute.view2"
 -- create materialized view
 CREATE MATERIALIZED VIEW tenant1.view2 AS SELECT * FROM tenant1.table1;
+-- create collation
+CREATE COLLATION citus_schema_distribute_undistribute.german_phonebook (provider = icu, locale = 'de-u-co-phonebk');
+-- create type
+CREATE TYPE citus_schema_distribute_undistribute.pair_type AS (a int, b int);
+-- Create function
+CREATE FUNCTION citus_schema_distribute_undistribute.one_as_result() RETURNS INT LANGUAGE SQL AS
+$$
+  SELECT 1;
+$$;
+-- create text search dictionary
+CREATE TEXT SEARCH DICTIONARY citus_schema_distribute_undistribute.my_german_dict (
+    template = snowball,
+    language = german,
+    stopwords = german
+);
+-- create text search config
+CREATE TEXT SEARCH CONFIGURATION citus_schema_distribute_undistribute.my_ts_config ( parser = default );
+ALTER TEXT SEARCH CONFIGURATION citus_schema_distribute_undistribute.my_ts_config ALTER MAPPING FOR asciiword WITH citus_schema_distribute_undistribute.my_german_dict;
+-- create sequence
+CREATE SEQUENCE citus_schema_distribute_undistribute.seq;
+-- create complex table
+CREATE TABLE tenant1.complextable (id int PRIMARY KEY default nextval('citus_schema_distribute_undistribute.seq'), col int default (citus_schema_distribute_undistribute.one_as_result()), myserial serial, phone text COLLATE citus_schema_distribute_undistribute.german_phonebook, initials citus_schema_distribute_undistribute.pair_type);
+CREATE SEQUENCE tenant1.seq_owned OWNED BY tenant1.complextable.id;
 -- not allowed from workers
 SELECT run_command_on_workers($$SELECT citus_schema_distribute('tenant1');$$);
                        run_command_on_workers
@@ -292,9 +320,9 @@ AS verify_tenant_query \gset
 SELECT result FROM run_command_on_all_nodes($$ SELECT COUNT(*) AS total FROM pg_dist_partition WHERE logicalrelid::text LIKE 'tenant1%' $$);
  result
 ---------------------------------------------------------------------
- 14
- 14
- 14
+ 15
+ 15
+ 15
 (3 rows)
 
 SELECT result FROM run_command_on_all_nodes(:verify_tenant_query);
@@ -366,9 +394,9 @@ AS verify_tenant_query \gset
 SELECT result FROM run_command_on_all_nodes($$ SELECT COUNT(*) AS total FROM pg_dist_partition WHERE logicalrelid::text LIKE 'tenant1%' $$);
  result
 ---------------------------------------------------------------------
- 14
- 14
- 14
+ 15
+ 15
+ 15
 (3 rows)
 
 SELECT result FROM run_command_on_all_nodes(:verify_tenant_query);
@@ -558,9 +586,9 @@ AS verify_tenant_query \gset
 SELECT result FROM run_command_on_all_nodes($$ SELECT COUNT(*) AS total FROM pg_dist_partition WHERE logicalrelid::text LIKE 'tenant1%' $$);
  result
 ---------------------------------------------------------------------
- 17
- 17
- 17
+ 18
+ 18
+ 18
 (3 rows)
 
 SELECT result FROM run_command_on_all_nodes(:verify_tenant_query);
@@ -660,6 +688,10 @@ CREATE EXTENSION citext SCHEMA extensionschema;
 SELECT citus_schema_distribute('extensionschema');
 ERROR:  schema extensionschema cannot be distributed since it is the schema of extension citext
 DROP SCHEMA extensionschema CASCADE;
+ALTER EXTENSION citus ADD TABLE tenant1.table1;
+SELECT citus_schema_distribute('tenant1');
+ERROR:  schema cannot be distributed since it has table tenant1 which is owned by an extension
+ALTER EXTENSION citus DROP TABLE tenant1.table1;
 -- weird schema and table names
 CREATE SCHEMA "CiTuS.TeeN";
 CREATE TABLE "CiTuS.TeeN"."TeeNTabLE.1!?!"(id int PRIMARY KEY, name text);
@@ -789,9 +821,9 @@ AS verify_tenant_query \gset
 SELECT result FROM run_command_on_all_nodes($$ SELECT COUNT(*) AS total FROM pg_dist_partition WHERE logicalrelid::text LIKE 'tenant1%' $$);
  result
 ---------------------------------------------------------------------
- 19
- 19
- 19
+ 20
+ 20
+ 20
 (3 rows)
 
 SELECT result FROM run_command_on_all_nodes(:verify_tenant_query);
