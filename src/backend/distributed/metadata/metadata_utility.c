@@ -2257,6 +2257,21 @@ EnsureTableOwner(Oid relationId)
 
 
 /*
+ * Check that the current user has owner rights to schemaId, error out if
+ * not. Superusers are regarded as owners.
+ */
+void
+EnsureSchemaOwner(Oid schemaId)
+{
+	if (!pg_namespace_ownercheck(schemaId, GetUserId()))
+	{
+		aclcheck_error(ACLCHECK_NOT_OWNER, OBJECT_SCHEMA,
+					   get_namespace_name(schemaId));
+	}
+}
+
+
+/*
  * Check that the current user has owner rights to functionId, error out if
  * not. Superusers are regarded as owners. Functions and procedures are
  * treated equally.
