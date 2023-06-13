@@ -275,8 +275,13 @@ SELECT EXISTS(
 
 -- verify that we allow creating tenant tables by using CREATE TABLE AS / SELECT INTO commands
 CREATE TABLE tenant_4.tbl_3 AS SELECT 1 AS a, 'text' as b;
-CREATE TABLE IF NOT EXISTS tenant_4.tbl_4 AS SELECT 1 as a, 'text' as b;
+CREATE TEMP TABLE IF NOT EXISTS tenant_4.tbl_4 AS SELECT 1 as a, 'text' as b;
+CREATE UNLOGGED TABLE IF NOT EXISTS tenant_4.tbl_4 AS SELECT 1 as a, 'text' as b WITH NO DATA;
 SELECT 1 as a, 'text' as b INTO tenant_4.tbl_5;
+
+-- verify we can query the newly created tenant tables
+SELECT * FROM tenant_4.tbl_3 t3 JOIN tenant_4.tbl_4 t4 ON t3.a = t4.a;
+SELECT COUNT(*) FROM tenant_4.tbl_5;
 
 CREATE TYPE employee_type AS (name text, salary numeric);
 

@@ -4128,8 +4128,7 @@ ConvertNewTableIfNecessary(Node *createStmt)
 		Oid createdRelationId = RangeVarGetRelid(createTableAsStmt->into->rel,
 												 NoLock, missingOk);
 
-		if (ShouldCreateTenantSchemaTable(createdRelationId) &&
-			!PartitionTable(createdRelationId))
+		if (ShouldCreateTenantSchemaTable(createdRelationId))
 		{
 			CreateTenantSchemaTable(createdRelationId);
 		}
