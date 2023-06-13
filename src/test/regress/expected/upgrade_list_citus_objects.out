@@ -311,8 +311,8 @@ ORDER BY 1;
  table pg_dist_placement
  table pg_dist_poolinfo
  table pg_dist_rebalance_strategy
- table pg_dist_shard
  table pg_dist_schema
+ table pg_dist_shard
  table pg_dist_transaction
  type citus.distribution_type
  type citus.shard_transfer_mode
