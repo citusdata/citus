@@ -897,6 +897,48 @@ GetForeignConstraintCommandsInternal(Oid relationId, int flags)
 
 
 /*
+ * GetFKeyCreationCommandsRelationInvolvedWithTableType returns a list of DDL
+ * commands to recreate the foreign keys that relation with relationId is involved
+ * with given table type.
+ */
+List *
+GetFKeyCreationCommandsRelationInvolvedWithTableType(Oid relationId, int tableTypeFlag)
+{
+	int referencingFKeysFlag = INCLUDE_REFERENCING_CONSTRAINTS |
+							   tableTypeFlag;
+	List *referencingFKeyCreationCommands =
+		GetForeignConstraintCommandsInternal(relationId, referencingFKeysFlag);
+
+	/* already captured self referencing foreign keys, so use EXCLUDE_SELF_REFERENCES */
+	int referencedFKeysFlag = INCLUDE_REFERENCED_CONSTRAINTS |
+							  EXCLUDE_SELF_REFERENCES |
+							  tableTypeFlag;
+	List *referencedFKeyCreationCommands =
+		GetForeignConstraintCommandsInternal(relationId, referencedFKeysFlag);
+	return list_concat(referencingFKeyCreationCommands, referencedFKeyCreationCommands);
+}
+
+
+/*
+ * DropFKeysRelationInvolvedWithTableType drops foreign keys that relation
+ * with relationId is involved with given table type.
+ */
+void
+DropFKeysRelationInvolvedWithTableType(Oid relationId, int tableTypeFlag)
+{
+	int referencingFKeysFlag = INCLUDE_REFERENCING_CONSTRAINTS |
+							   tableTypeFlag;
+	DropRelationForeignKeys(relationId, referencingFKeysFlag);
+
+	/* already captured self referencing foreign keys, so use EXCLUDE_SELF_REFERENCES */
+	int referencedFKeysFlag = INCLUDE_REFERENCED_CONSTRAINTS |
+							  EXCLUDE_SELF_REFERENCES |
+							  tableTypeFlag;
+	DropRelationForeignKeys(relationId, referencedFKeysFlag);
+}
+
+
+/*
  * HasForeignKeyWithLocalTable returns true if relation has foreign key
  * relationship with a local table.
  */
