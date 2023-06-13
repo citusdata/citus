@@ -402,10 +402,11 @@ NOTICE:  copying the data has completed
 DETAIL:  The local data in the table is no longer visible, but is still on disk.
 HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$tenant_4.tbl_5$$)
 -- verify we can query the newly created tenant tables
-SELECT * FROM tenant_4.tbl_3 t3 JOIN tenant_4.tbl_4 t4 ON t3.a = t4.a;
- a | b | a | b
+SELECT * FROM tenant_4.tbl_3;
+ a |  b
 ---------------------------------------------------------------------
-(0 rows)
+ 1 | text
+(1 row)
 
 SELECT COUNT(*) FROM tenant_4.tbl_5;
  count

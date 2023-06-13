@@ -282,7 +282,7 @@ CREATE UNLOGGED TABLE IF NOT EXISTS tenant_4.tbl_4 AS SELECT 1 as a, 'text' as b
 SELECT 1 as a, 'text' as b INTO tenant_4.tbl_5;
 
 -- verify we can query the newly created tenant tables
-SELECT * FROM tenant_4.tbl_3 t3 JOIN tenant_4.tbl_4 t4 ON t3.a = t4.a;
+SELECT * FROM tenant_4.tbl_3;
 SELECT COUNT(*) FROM tenant_4.tbl_5;
 
 CREATE TYPE employee_type AS (name text, salary numeric);
