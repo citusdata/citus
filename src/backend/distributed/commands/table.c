@@ -41,6 +41,7 @@
 #include "distributed/resource_lock.h"
 #include "distributed/version_compat.h"
 #include "distributed/worker_shard_visibility.h"
+#include "distributed/tenant_schema_metadata.h"
 #include "foreign/foreign.h"
 #include "lib/stringinfo.h"
 #include "nodes/parsenodes.h"
@@ -760,6 +761,15 @@ PostprocessAlterTableSchemaStmt(Node *node, const char *queryString)
 	{
 		stmt->objectType = OBJECT_VIEW;
 		return PostprocessAlterViewSchemaStmt((Node *) stmt, queryString);
+	}
+
+	/* Create table under the new tenant schema if the new schema is a tenant schema */
+	Oid schemaId = get_namespace_oid(stmt->newschema, false);
+	if (IsTenantSchema(schemaId))
+	{
+		Oid relationId = tableAddress->objectId;
+		EnsureTenantTable(relationId);
+		CreateTenantSchemaTable(relationId);
 	}
 
 	if (!ShouldPropagate() || !IsCitusTable(tableAddress->objectId))
@@ -2310,9 +2320,41 @@ PreprocessAlterTableSchemaStmt(Node *node, const char *queryString,
 		return NIL;
 	}
 
-	ErrorIfTenantTable(relationId, "ALTER TABLE SET SCHEMA");
-	ErrorIfTenantSchema(get_namespace_oid(stmt->newschema, false),
-						"ALTER TABLE SET SCHEMA");
+	/* Undistribute table if it is under a tenant schema */
+	Oid oldSchemaId = get_rel_namespace(relationId);
+	if (IsTenantSchema(oldSchemaId))
+	{
+		/*
+		 * We deregister the schema first to prevent `ErrorIfTenantTable` error. We will
+		 * register the schema as tenant schema again after undistributing the table.
+		 */
+		uint32 tenantSchemaColocationId = SchemaIdGetTenantColocationId(oldSchemaId);
+		DeleteTenantSchemaLocally(oldSchemaId);
+		if (EnableMetadataSync)
+		{
+			char *oldSchemaName = get_namespace_name(oldSchemaId);
+			SendCommandToWorkersWithMetadata(TenantSchemaDeleteCommand(oldSchemaName));
+		}
+
+		List *fkeyCommandsForRelation =
+			GetFKeyCreationCommandsRelationInvolvedWithTableType(relationId,
+																 INCLUDE_ALL_TABLE_TYPES);
+		relationId = DropFKeysAndUndistributeTable(relationId);
+		bool skip_validation = true;
+		ExecuteForeignKeyCreateCommandList(fkeyCommandsForRelation,
+										   skip_validation);
+
+		/* Register the schema back */
+		InsertTenantSchemaLocally(oldSchemaId, tenantSchemaColocationId);
+		char *registerSchemaCommand = TenantSchemaInsertCommand(oldSchemaId,
+																tenantSchemaColocationId);
+		if (EnableMetadataSync)
+		{
+			SendCommandToWorkersWithMetadata(registerSchemaCommand);
+		}
+
+		return NIL;
+	}
 
 	DDLJob *ddlJob = palloc0(sizeof(DDLJob));
 	QualifyTreeNode((Node *) stmt);

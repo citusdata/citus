@@ -792,11 +792,11 @@ extern void UpdateAutoConvertedForConnectedRelations(List *relationId, bool
 extern bool ShouldUseSchemaBasedSharding(char *schemaName);
 extern bool ShouldCreateTenantSchemaTable(Oid relationId);
 extern bool IsTenantSchema(Oid schemaId);
+extern void EnsureTenantTable(Oid relationId);
 extern void ErrorIfIllegalPartitioningInTenantSchema(Oid parentRelationId,
 													 Oid partitionRelationId);
 extern void CreateTenantSchemaTable(Oid relationId);
 extern void ErrorIfTenantTable(Oid relationId, char *operationName);
-extern void ErrorIfTenantSchema(Oid nspOid, char *operationName);
 extern uint32 CreateTenantSchemaColocationId(void);
 
 #endif /*CITUS_COMMANDS_H */
