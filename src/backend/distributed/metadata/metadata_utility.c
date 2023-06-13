@@ -488,9 +488,9 @@ ReceiveShardIdAndSizeResults(List *connectionList, Tuplestorestate *tupleStore,
 			memset(values, 0, sizeof(values));
 			memset(isNulls, false, sizeof(isNulls));
 
-			/* format is [0] shard id, [1] shard name, [2] size */
+			/* format is [0] shard id, [1] size */
 			values[0] = ParseIntField(result, rowIndex, 0);
-			values[1] = ParseIntField(result, rowIndex, 2);
+			values[1] = ParseIntField(result, rowIndex, 1);
 
 			tuplestore_putvalues(tupleStore, tupleDescriptor, values, isNulls);
 		}
@@ -938,7 +938,7 @@ GenerateAllShardStatisticsQueryForNode(WorkerNode *workerNode, List *citusTableI
 	}
 
 	/* Add a dummy entry so that UNION ALL doesn't complain */
-	appendStringInfo(allShardStatisticsQuery, "SELECT 0::bigint, NULL::text, 0::bigint;");
+	appendStringInfo(allShardStatisticsQuery, "SELECT 0::bigint, 0::bigint;");
 
 	return allShardStatisticsQuery->data;
 }
@@ -982,7 +982,6 @@ AppendShardSizeQuery(StringInfo selectQuery, ShardInterval *shardInterval)
 	char *quotedShardName = quote_literal_cstr(shardQualifiedName);
 
 	appendStringInfo(selectQuery, "SELECT " UINT64_FORMAT " AS shard_id, ", shardId);
-	appendStringInfo(selectQuery, "%s AS shard_name, ", quotedShardName);
 	appendStringInfo(selectQuery, PG_TOTAL_RELATION_SIZE_FUNCTION, quotedShardName);
 }
 
