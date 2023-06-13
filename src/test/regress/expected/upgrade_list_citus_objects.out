@@ -132,6 +132,7 @@ ORDER BY 1;
  function citus_stat_statements_reset()
  function citus_stat_tenants(boolean)
  function citus_stat_tenants_local(boolean)
+ function citus_stat_tenants_local_internal(boolean)
  function citus_stat_tenants_local_reset()
  function citus_stat_tenants_reset()
  function citus_table_is_visible(oid)
@@ -336,5 +337,5 @@ ORDER BY 1;
  view citus_stat_tenants_local
  view pg_dist_shard_placement
  view time_partitions
-(328 rows)
+(329 rows)
 

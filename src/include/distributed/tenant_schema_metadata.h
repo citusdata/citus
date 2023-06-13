@@ -15,6 +15,7 @@
 #include "postgres.h"
 
 /* accessors */
+extern Oid ColocationIdGetTenantSchemaId(uint32 colocationId);
 extern uint32 SchemaIdGetTenantColocationId(Oid schemaId);
 extern bool IsTenantSchema(Oid schemaId);
 extern bool IsTenantSchemaColocationGroup(uint32 colocationId);

@@ -24,9 +24,6 @@
 #include "utils/fmgroids.h"
 
 
-static Oid ColocationIdGetTenantSchemaId(uint32 colocationId);
-
-
 /*
  * IsTenantSchema returns true if there is a tenant schema with given schemaId.
  */
@@ -125,7 +122,7 @@ SchemaIdGetTenantColocationId(Oid schemaId)
  *
  * Returns InvalidOid if there is no such tenant schema.
  */
-static Oid
+Oid
 ColocationIdGetTenantSchemaId(uint32 colocationId)
 {
 	if (colocationId == INVALID_COLOCATION_ID)
