@@ -4128,6 +4128,12 @@ ConvertNewTableIfNecessary(Node *createStmt)
 		Oid createdRelationId = RangeVarGetRelid(createTableAsStmt->into->rel,
 												 NoLock, missingOk);
 
+		/* not try to convert the table if it already exists and IF NOT EXISTS syntax is used */
+		if (createTableAsStmt->if_not_exists && IsCitusTable(createdRelationId))
+		{
+			return;
+		}
+
 		if (ShouldCreateTenantSchemaTable(createdRelationId))
 		{
 			CreateTenantSchemaTable(createdRelationId);

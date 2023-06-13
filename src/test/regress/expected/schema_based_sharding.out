@@ -393,6 +393,9 @@ HINT:  To remove the local data, run: SELECT truncate_local_data_after_distribut
 CREATE TEMP TABLE IF NOT EXISTS tenant_4.tbl_4 AS SELECT 1 as a, 'text' as b;
 ERROR:  cannot create temporary relation in non-temporary schema
 CREATE UNLOGGED TABLE IF NOT EXISTS tenant_4.tbl_4 AS SELECT 1 as a, 'text' as b WITH NO DATA;
+-- the same command, no changes because of IF NOT EXISTS
+CREATE UNLOGGED TABLE IF NOT EXISTS tenant_4.tbl_4 AS SELECT 1 as a, 'text' as b WITH NO DATA;
+NOTICE:  relation "tbl_4" already exists, skipping
 SELECT 1 as a, 'text' as b INTO tenant_4.tbl_5;
 NOTICE:  Copying data from local table...
 NOTICE:  copying the data has completed

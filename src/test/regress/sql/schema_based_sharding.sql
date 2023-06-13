@@ -277,6 +277,8 @@ SELECT EXISTS(
 CREATE TABLE tenant_4.tbl_3 AS SELECT 1 AS a, 'text' as b;
 CREATE TEMP TABLE IF NOT EXISTS tenant_4.tbl_4 AS SELECT 1 as a, 'text' as b;
 CREATE UNLOGGED TABLE IF NOT EXISTS tenant_4.tbl_4 AS SELECT 1 as a, 'text' as b WITH NO DATA;
+-- the same command, no changes because of IF NOT EXISTS
+CREATE UNLOGGED TABLE IF NOT EXISTS tenant_4.tbl_4 AS SELECT 1 as a, 'text' as b WITH NO DATA;
 SELECT 1 as a, 'text' as b INTO tenant_4.tbl_5;
 
 -- verify we can query the newly created tenant tables
