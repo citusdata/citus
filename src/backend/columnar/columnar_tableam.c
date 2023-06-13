@@ -1468,8 +1468,7 @@ columnar_index_build_range_scan(Relation columnarRelation,
 	if (!IsBootstrapProcessingMode() && !indexInfo->ii_Concurrent)
 	{
 		/* ignore lazy VACUUM's */
-		OldestXmin = GetOldestNonRemovableTransactionId_compat(columnarRelation,
-															   PROCARRAY_FLAGS_VACUUM);
+		OldestXmin = GetOldestNonRemovableTransactionId(columnarRelation);
 	}
 
 	Snapshot snapshot = { 0 };
@@ -1797,8 +1796,8 @@ ColumnarReadMissingRowsIntoIndex(TableScanDesc scan, Relation indexRelation,
 		Relation columnarRelation = scan->rs_rd;
 		IndexUniqueCheck indexUniqueCheck =
 			indexInfo->ii_Unique ? UNIQUE_CHECK_YES : UNIQUE_CHECK_NO;
-		index_insert_compat(indexRelation, indexValues, indexNulls, columnarItemPointer,
-							columnarRelation, indexUniqueCheck, false, indexInfo);
+		index_insert(indexRelation, indexValues, indexNulls, columnarItemPointer,
+					 columnarRelation, indexUniqueCheck, false, indexInfo);
 
 		validateIndexState->tups_inserted += 1;
 	}
@@ -2351,8 +2350,8 @@ ColumnarProcessUtility(PlannedStmt *pstmt,
 		CheckCitusColumnarAlterExtensionStmt(parsetree);
 	}
 
-	PrevProcessUtilityHook_compat(pstmt, queryString, false, context,
-								  params, queryEnv, dest, completionTag);
+	PrevProcessUtilityHook(pstmt, queryString, false, context,
+						   params, queryEnv, dest, completionTag);
 
 	if (columnarOptions != NIL)
 	{

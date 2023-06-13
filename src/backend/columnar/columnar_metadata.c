@@ -1654,7 +1654,7 @@ InsertTupleAndEnforceConstraints(ModifyState *state, Datum *values, bool *nulls)
 	ExecStoreHeapTuple(tuple, slot, false);
 
 	/* use ExecSimpleRelationInsert to enforce constraints */
-	ExecSimpleRelationInsert_compat(state->resultRelInfo, state->estate, slot);
+	ExecSimpleRelationInsert(state->resultRelInfo, state->estate, slot);
 }
 
 
