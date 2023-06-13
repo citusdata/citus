@@ -48,8 +48,8 @@ MemoryContextTotalSpace(MemoryContext context)
 	Size totalSpace = 0;
 
 	MemoryContextCounters totals = { 0 };
-	TopTransactionContext->methods->stats_compat(TopTransactionContext, NULL, NULL,
-												 &totals, true);
+	TopTransactionContext->methods->stats(TopTransactionContext, NULL, NULL,
+										  &totals, true);
 	totalSpace += totals.totalspace;
 
 	for (MemoryContext child = context->firstchild;

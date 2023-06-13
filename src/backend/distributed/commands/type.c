@@ -350,7 +350,7 @@ List *
 AlterTypeStmtObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
 {
 	AlterTableStmt *stmt = castNode(AlterTableStmt, node);
-	Assert(AlterTableStmtObjType_compat(stmt) == OBJECT_TYPE);
+	Assert(stmt->objtype == OBJECT_TYPE);
 
 	TypeName *typeName = MakeTypeNameFromRangeVar(stmt->relation);
 	Oid typeOid = LookupTypeNameOid(NULL, typeName, missing_ok);
@@ -549,7 +549,7 @@ CreateTypeDDLCommandsIdempotent(const ObjectAddress *typeAddress)
 	const char *username = GetUserNameFromId(GetTypeOwner(typeAddress->objectId), false);
 	initStringInfo(&buf);
 	appendStringInfo(&buf, ALTER_TYPE_OWNER_COMMAND,
-					 getObjectIdentity_compat(typeAddress, false),
+					 getObjectIdentity(typeAddress, false),
 					 quote_identifier(username));
 	ddlCommands = lappend(ddlCommands, buf.data);
 

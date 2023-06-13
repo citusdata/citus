@@ -123,8 +123,8 @@ ProcessUtilityParseTree(Node *node, const char *queryString, ProcessUtilityConte
 	plannedStmt->commandType = CMD_UTILITY;
 	plannedStmt->utilityStmt = node;
 
-	ProcessUtility_compat(plannedStmt, queryString, false, context, params, NULL, dest,
-						  completionTag);
+	ProcessUtility(plannedStmt, queryString, false, context, params, NULL, dest,
+				   completionTag);
 }
 
 
@@ -185,8 +185,8 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		 * that state. Since we never need to intercept transaction statements,
 		 * skip our checks and immediately fall into standard_ProcessUtility.
 		 */
-		PrevProcessUtility_compat(pstmt, queryString, false, context,
-								  params, queryEnv, dest, completionTag);
+		PrevProcessUtility(pstmt, queryString, false, context,
+						   params, queryEnv, dest, completionTag);
 
 		return;
 	}
@@ -230,8 +230,8 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		 * Ensure that utility commands do not behave any differently until CREATE
 		 * EXTENSION is invoked.
 		 */
-		PrevProcessUtility_compat(pstmt, queryString, false, context,
-								  params, queryEnv, dest, completionTag);
+		PrevProcessUtility(pstmt, queryString, false, context,
+						   params, queryEnv, dest, completionTag);
 
 		return;
 	}
@@ -262,8 +262,8 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 
 		PG_TRY();
 		{
-			PrevProcessUtility_compat(pstmt, queryString, false, context,
-									  params, queryEnv, dest, completionTag);
+			PrevProcessUtility(pstmt, queryString, false, context,
+							   params, queryEnv, dest, completionTag);
 
 			StoredProcedureLevel -= 1;
 
@@ -296,8 +296,8 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 
 		PG_TRY();
 		{
-			PrevProcessUtility_compat(pstmt, queryString, false, context,
-									  params, queryEnv, dest, completionTag);
+			PrevProcessUtility(pstmt, queryString, false, context,
+							   params, queryEnv, dest, completionTag);
 
 			DoBlockLevel -= 1;
 		}
@@ -635,8 +635,8 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 		if (IsA(parsetree, AlterTableStmt))
 		{
 			AlterTableStmt *alterTableStmt = (AlterTableStmt *) parsetree;
-			if (AlterTableStmtObjType_compat(alterTableStmt) == OBJECT_TABLE ||
-				AlterTableStmtObjType_compat(alterTableStmt) == OBJECT_FOREIGN_TABLE)
+			if (alterTableStmt->objtype == OBJECT_TABLE ||
+				alterTableStmt->objtype == OBJECT_FOREIGN_TABLE)
 			{
 				ErrorIfAlterDropsPartitionColumn(alterTableStmt);
 
@@ -755,8 +755,8 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 			PreprocessAlterExtensionCitusStmtForCitusColumnar(parsetree);
 		}
 
-		PrevProcessUtility_compat(pstmt, queryString, false, context,
-								  params, queryEnv, dest, completionTag);
+		PrevProcessUtility(pstmt, queryString, false, context,
+						   params, queryEnv, dest, completionTag);
 
 		if (isAlterExtensionUpdateCitusStmt)
 		{

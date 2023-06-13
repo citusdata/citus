@@ -193,7 +193,7 @@ DeparseAlterSequenceOwnerStmt(Node *node)
 	StringInfoData str = { 0 };
 	initStringInfo(&str);
 
-	Assert(AlterTableStmtObjType_compat(stmt) == OBJECT_SEQUENCE);
+	Assert(stmt->objtype == OBJECT_SEQUENCE);
 
 	AppendAlterSequenceOwnerStmt(&str, stmt);
 
@@ -208,7 +208,7 @@ DeparseAlterSequenceOwnerStmt(Node *node)
 static void
 AppendAlterSequenceOwnerStmt(StringInfo buf, AlterTableStmt *stmt)
 {
-	Assert(AlterTableStmtObjType_compat(stmt) == OBJECT_SEQUENCE);
+	Assert(stmt->objtype == OBJECT_SEQUENCE);
 	RangeVar *seq = stmt->relation;
 	char *qualifiedSequenceName = quote_qualified_identifier(seq->schemaname,
 															 seq->relname);
@@ -274,7 +274,7 @@ DeparseAlterSequencePersistenceStmt(Node *node)
 	StringInfoData str = { 0 };
 	initStringInfo(&str);
 
-	Assert(AlterTableStmtObjType_compat(stmt) == OBJECT_SEQUENCE);
+	Assert(stmt->objtype == OBJECT_SEQUENCE);
 
 	AppendAlterSequencePersistenceStmt(&str, stmt);
 
@@ -289,7 +289,7 @@ DeparseAlterSequencePersistenceStmt(Node *node)
 static void
 AppendAlterSequencePersistenceStmt(StringInfo buf, AlterTableStmt *stmt)
 {
-	Assert(AlterTableStmtObjType_compat(stmt) == OBJECT_SEQUENCE);
+	Assert(stmt->objtype == OBJECT_SEQUENCE);
 
 	RangeVar *seq = stmt->relation;
 	char *qualifiedSequenceName = quote_qualified_identifier(seq->schemaname,

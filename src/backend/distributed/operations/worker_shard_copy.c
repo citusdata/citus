@@ -527,13 +527,13 @@ LocalCopyToShard(ShardCopyDestReceiver *copyDest, CopyOutState localCopyOutState
 										 false /* inFromCl */);
 
 	List *options = (isBinaryCopy) ? list_make1(binaryFormatOption) : NULL;
-	CopyFromState cstate = BeginCopyFrom_compat(pState, shard,
-												NULL /* whereClause */,
-												NULL /* fileName */,
-												false /* is_program */,
-												ReadFromLocalBufferCallback,
-												NULL /* attlist (NULL is all columns) */,
-												options);
+	CopyFromState cstate = BeginCopyFrom(pState, shard,
+										 NULL /* whereClause */,
+										 NULL /* fileName */,
+										 false /* is_program */,
+										 ReadFromLocalBufferCallback,
+										 NULL /* attlist (NULL is all columns) */,
+										 options);
 	CopyFrom(cstate);
 	EndCopyFrom(cstate);
 	resetStringInfo(localCopyOutState->fe_msgbuf);

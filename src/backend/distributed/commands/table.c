@@ -1135,7 +1135,7 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 	if (relKind == RELKIND_SEQUENCE)
 	{
 		AlterTableStmt *stmtCopy = copyObject(alterTableStatement);
-		AlterTableStmtObjType_compat(stmtCopy) = OBJECT_SEQUENCE;
+		stmtCopy->objtype = OBJECT_SEQUENCE;
 #if (PG_VERSION_NUM >= PG_VERSION_15)
 
 		/*
@@ -1165,7 +1165,7 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 		 * passes through an AlterTableStmt
 		 */
 		AlterTableStmt *stmtCopy = copyObject(alterTableStatement);
-		AlterTableStmtObjType_compat(stmtCopy) = OBJECT_VIEW;
+		stmtCopy->objtype = OBJECT_VIEW;
 		return PreprocessAlterViewStmt((Node *) stmtCopy, alterTableCommand,
 									   processUtilityContext);
 	}
@@ -2521,13 +2521,13 @@ PostprocessAlterTableStmt(AlterTableStmt *alterTableStatement)
 		char relKind = get_rel_relkind(relationId);
 		if (relKind == RELKIND_SEQUENCE)
 		{
-			AlterTableStmtObjType_compat(alterTableStatement) = OBJECT_SEQUENCE;
+			alterTableStatement->objtype = OBJECT_SEQUENCE;
 			PostprocessAlterSequenceOwnerStmt((Node *) alterTableStatement, NULL);
 			return;
 		}
 		else if (relKind == RELKIND_VIEW)
 		{
-			AlterTableStmtObjType_compat(alterTableStatement) = OBJECT_VIEW;
+			alterTableStatement->objtype = OBJECT_VIEW;
 			PostprocessAlterViewStmt((Node *) alterTableStatement, NULL);
 			return;
 		}

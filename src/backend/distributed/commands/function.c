@@ -1641,7 +1641,7 @@ PreprocessAlterFunctionDependsStmt(Node *node, const char *queryString,
 	 * workers
 	 */
 	const char *functionName =
-		getObjectIdentity_compat(address, /* missingOk: */ false);
+		getObjectIdentity(address, /* missingOk: */ false);
 	ereport(ERROR, (errmsg("distrtibuted functions are not allowed to depend on an "
 						   "extension"),
 					errdetail("Function \"%s\" is already distributed. Functions from "
@@ -1811,8 +1811,8 @@ GenerateBackupNameForProcCollision(const ObjectAddress *address)
 		List *newProcName = list_make2(namespace, makeString(newName));
 
 		/* don't need to rename if the input arguments don't match */
-		FuncCandidateList clist = FuncnameGetCandidates_compat(newProcName, numargs, NIL,
-															   false, false, false, true);
+		FuncCandidateList clist = FuncnameGetCandidates(newProcName, numargs, NIL,
+														false, false, false, true);
 		for (; clist; clist = clist->next)
 		{
 			if (memcmp(clist->args, argtypes, sizeof(Oid) * numargs) == 0)

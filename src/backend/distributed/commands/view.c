@@ -598,7 +598,7 @@ List *
 PostprocessAlterViewStmt(Node *node, const char *queryString)
 {
 	AlterTableStmt *stmt = castNode(AlterTableStmt, node);
-	Assert(AlterTableStmtObjType_compat(stmt) == OBJECT_VIEW);
+	Assert(stmt->objtype == OBJECT_VIEW);
 
 	List *viewAddresses = GetObjectAddressListFromParseTree((Node *) stmt, true, true);
 

@@ -3616,8 +3616,8 @@ static Oid
 CitusFunctionOidWithSignature(char *functionName, int numargs, Oid *argtypes)
 {
 	List *aggregateName = list_make2(makeString("pg_catalog"), makeString(functionName));
-	FuncCandidateList clist = FuncnameGetCandidates_compat(aggregateName, numargs, NIL,
-														   false, false, false, true);
+	FuncCandidateList clist = FuncnameGetCandidates(aggregateName, numargs, NIL,
+													false, false, false, true);
 
 	for (; clist; clist = clist->next)
 	{

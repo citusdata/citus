@@ -1101,8 +1101,8 @@ worker_save_query_explain_analyze(PG_FUNCTION_ARGS)
 	TupleDesc tupleDescriptor = NULL;
 	Tuplestorestate *tupleStore = SetupTuplestore(fcinfo, &tupleDescriptor);
 	DestReceiver *tupleStoreDest = CreateTuplestoreDestReceiver();
-	SetTuplestoreDestReceiverParams_compat(tupleStoreDest, tupleStore,
-										   CurrentMemoryContext, false, NULL, NULL);
+	SetTuplestoreDestReceiverParams(tupleStoreDest, tupleStore,
+									CurrentMemoryContext, false, NULL, NULL);
 
 	List *parseTreeList = pg_parse_query(queryString);
 	if (list_length(parseTreeList) != 1)

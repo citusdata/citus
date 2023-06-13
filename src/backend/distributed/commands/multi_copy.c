@@ -606,14 +606,14 @@ CopyToExistingShards(CopyStmt *copyStatement, QueryCompletion *completionTag)
 	}
 
 	/* initialize copy state to read from COPY data source */
-	CopyFromState copyState = BeginCopyFrom_compat(NULL,
-												   copiedDistributedRelation,
-												   NULL,
-												   copyStatement->filename,
-												   copyStatement->is_program,
-												   NULL,
-												   copyStatement->attlist,
-												   copyStatement->options);
+	CopyFromState copyState = BeginCopyFrom(NULL,
+											copiedDistributedRelation,
+											NULL,
+											copyStatement->filename,
+											copyStatement->is_program,
+											NULL,
+											copyStatement->attlist,
+											copyStatement->options);
 
 	/* set up callback to identify error line number */
 	errorCallback.callback = CopyFromErrorCallback;
