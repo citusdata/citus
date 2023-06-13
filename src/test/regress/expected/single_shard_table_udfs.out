@@ -1303,7 +1303,7 @@ SELECT :logseq = :txnlog;
  t
 (1 row)
 
--- test table whose with space in its name in citus_shards
+-- test table with space in its name in citus_shards
 CREATE TABLE "t b l" (a INT);
 SELECT create_distributed_table('"t b l"', NULL, colocate_with:='none');
  create_distributed_table
