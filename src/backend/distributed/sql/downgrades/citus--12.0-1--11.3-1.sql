@@ -43,6 +43,21 @@ DROP FUNCTION pg_catalog.citus_internal_unregister_tenant_schema_globally(Oid, t
 
 #include "../udfs/citus_drop_trigger/10.2-1.sql"
 
+DROP VIEW pg_catalog.citus_shards;
+DROP FUNCTION pg_catalog.citus_shard_sizes;
+#include "../udfs/citus_shard_sizes/10.0-1.sql"
+CREATE VIEW citus.citus_shards AS
+SELECT
+     NULL::REGCLASS AS table_name,
+     0::BIGINT AS shardid,
+     ''::TEXT AS shard_name,
+     ''::TEXT AS citus_table_type,
+     0::INTEGER AS colocation_id,
+     ''::TEXT AS nodename,
+     0::INTEGER AS nodeport,
+     0::BIGINT AS shard_size;
+ALTER VIEW citus.citus_shards SET SCHEMA pg_catalog;
+
 #include "../udfs/citus_tables/11.1-1.sql"
 #include "../udfs/citus_shards/11.1-1.sql"
 
