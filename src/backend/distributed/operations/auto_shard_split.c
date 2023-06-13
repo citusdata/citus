@@ -58,7 +58,7 @@ ExecuteAvgHashQuery(ShardInfo shardinfo )
 
     StringInfo AvgHashQuery = makeStringInfo();
     appendStringInfo(AvgHashQuery, "SELECT avg(h)::int,count(*)"
-    " FROM (SELECT worker_hash(%s) h FROM %s tablesample system(1)"
+    " FROM (SELECT worker_hash(%s) h FROM %s tablesample system(10)"
     " WHERE worker_hash(%s)>=%ld AND worker_hash(%s)<=%ld) s"
     , shardinfo->distributionColumn, shardinfo->tablename , shardinfo->distributionColumn , shardinfo->shardminvalue , shardinfo->distributionColumn , shardinfo->shardmaxvalue
     );
