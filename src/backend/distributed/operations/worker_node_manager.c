@@ -31,11 +31,7 @@
 #include "utils/guc.h"
 #include "utils/hsearch.h"
 #include "utils/memutils.h"
-#if PG_VERSION_NUM < PG_VERSION_13
-#include "utils/hashutils.h"
-#else
 #include "common/hashfn.h"
-#endif
 
 
 /* Config variables managed via guc.c */

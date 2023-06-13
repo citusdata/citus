@@ -1436,13 +1436,11 @@ error_severity(int elevel)
 			break;
 		}
 
-#if PG_VERSION_NUM >= PG_VERSION_14
 		case WARNING_CLIENT_ONLY:
 		{
 			prefix = gettext_noop("WARNING");
 			break;
 		}
-#endif
 
 		case ERROR:
 		{

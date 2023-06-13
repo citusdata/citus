@@ -1623,12 +1623,8 @@ StartModifyRelation(Relation rel)
 {
 	EState *estate = create_estate_for_relation(rel);
 
-#if PG_VERSION_NUM >= PG_VERSION_14
 	ResultRelInfo *resultRelInfo = makeNode(ResultRelInfo);
 	InitResultRelInfo(resultRelInfo, rel, 1, NULL, 0);
-#else
-	ResultRelInfo *resultRelInfo = estate->es_result_relation_info;
-#endif
 
 	/* ExecSimpleRelationInsert, ... require caller to open indexes */
 	ExecOpenIndices(resultRelInfo, false);
@@ -1689,12 +1685,8 @@ FinishModifyRelation(ModifyState *state)
 	ExecCloseIndices(state->resultRelInfo);
 
 	AfterTriggerEndQuery(state->estate);
-#if PG_VERSION_NUM >= PG_VERSION_14
 	ExecCloseResultRelations(state->estate);
 	ExecCloseRangeTableRelations(state->estate);
-#else
-	ExecCleanUpTriggerState(state->estate);
-#endif
 	ExecResetTupleTable(state->estate->es_tupleTable, false);
 	FreeExecutorState(state->estate);
 
@@ -1722,15 +1714,6 @@ create_estate_for_relation(Relation rel)
 	rte->relkind = rel->rd_rel->relkind;
 	rte->rellockmode = AccessShareLock;
 	ExecInitRangeTable(estate, list_make1(rte));
-
-#if PG_VERSION_NUM < PG_VERSION_14
-	ResultRelInfo *resultRelInfo = makeNode(ResultRelInfo);
-	InitResultRelInfo(resultRelInfo, rel, 1, NULL, 0);
-
-	estate->es_result_relations = resultRelInfo;
-	estate->es_num_result_relations = 1;
-	estate->es_result_relation_info = resultRelInfo;
-#endif
 
 	estate->es_output_cid = GetCurrentCommandId(true);
 

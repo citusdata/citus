@@ -503,11 +503,7 @@ UserHasPermissionToViewStatsOf(Oid currentUserId, Oid backendOwnedId)
 	}
 
 	if (is_member_of_role(currentUserId,
-#if PG_VERSION_NUM >= PG_VERSION_14
 						  ROLE_PG_READ_ALL_STATS))
-#else
-						  DEFAULT_ROLE_READ_ALL_STATS))
-#endif
 	{
 		return true;
 	}

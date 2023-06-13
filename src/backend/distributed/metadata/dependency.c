@@ -896,18 +896,11 @@ DeferErrorIfHasUnsupportedDependency(const ObjectAddress *objectAddress)
 		return NULL;
 	}
 
-	char *objectDescription = NULL;
-	char *dependencyDescription = NULL;
 	StringInfo errorInfo = makeStringInfo();
 	StringInfo detailInfo = makeStringInfo();
 
-	#if PG_VERSION_NUM >= PG_VERSION_14
-	objectDescription = getObjectDescription(objectAddress, false);
-	dependencyDescription = getObjectDescription(undistributableDependency, false);
-	#else
-	objectDescription = getObjectDescription(objectAddress);
-	dependencyDescription = getObjectDescription(undistributableDependency);
-	#endif
+	char *objectDescription = getObjectDescription(objectAddress, false);
+	char *dependencyDescription = getObjectDescription(undistributableDependency, false);
 
 	/*
 	 * We expect callers to interpret the error returned from this function

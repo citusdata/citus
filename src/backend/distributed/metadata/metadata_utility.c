@@ -4031,11 +4031,7 @@ CancelTasksForJob(int64 jobid)
 							errmsg("must be a superuser to cancel superuser tasks")));
 		}
 		else if (!has_privs_of_role(GetUserId(), taskOwner) &&
-#if PG_VERSION_NUM >= 140000
 				 !has_privs_of_role(GetUserId(), ROLE_PG_SIGNAL_BACKEND))
-#else
-				 !has_privs_of_role(GetUserId(), DEFAULT_ROLE_SIGNAL_BACKENDID))
-#endif
 		{
 			/* user doesn't have the permissions to cancel this job */
 			ereport(ERROR, (errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),

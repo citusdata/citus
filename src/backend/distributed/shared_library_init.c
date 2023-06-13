@@ -1215,11 +1215,7 @@ RegisterCitusConfigVariables(void)
 			"Enables communication between nodes using binary protocol when possible"),
 		NULL,
 		&EnableBinaryProtocol,
-#if PG_VERSION_NUM >= PG_VERSION_14
 		true,
-#else
-		false,
-#endif
 		PGC_USERSET,
 		GUC_STANDARD,
 		NULL, NULL, NULL);

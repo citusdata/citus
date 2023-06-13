@@ -206,11 +206,7 @@ MakeCollateClauseFromOid(Oid collationOid)
 	List *objName = NIL;
 	List *objArgs = NIL;
 
-	#if PG_VERSION_NUM >= PG_VERSION_14
 	getObjectIdentityParts(&collateAddress, &objName, &objArgs, false);
-	#else
-	getObjectIdentityParts(&collateAddress, &objName, &objArgs);
-	#endif
 
 	char *name = NULL;
 	foreach_ptr(name, objName)

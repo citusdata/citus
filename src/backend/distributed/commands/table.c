@@ -3517,7 +3517,6 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 				break;
 			}
 
-#if PG_VERSION_NUM >= PG_VERSION_14
 			case AT_DetachPartitionFinalize:
 			{
 				ereport(ERROR, (errmsg("ALTER TABLE .. DETACH PARTITION .. FINALIZE "
@@ -3525,7 +3524,6 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 				break;
 			}
 
-#endif
 			case AT_DetachPartition:
 			{
 				/* we only allow partitioning commands if they are only subcommand */
@@ -3537,7 +3535,7 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 									errhint("You can issue each subcommand "
 											"separately.")));
 				}
-				#if PG_VERSION_NUM >= PG_VERSION_14
+
 				PartitionCmd *partitionCommand = (PartitionCmd *) command->def;
 
 				if (partitionCommand->concurrent)
@@ -3546,7 +3544,6 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 										   "CONCURRENTLY commands are currently "
 										   "unsupported.")));
 				}
-				#endif
 
 				break;
 			}
@@ -3589,20 +3586,18 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 			case AT_NoForceRowSecurity:
 			case AT_ValidateConstraint:
 			case AT_DropConstraint: /* we do the check for invalidation in AlterTableDropsForeignKey */
-#if PG_VERSION_NUM >= PG_VERSION_14
 			case AT_SetCompression:
-#endif
-				{
-					/*
-					 * We will not perform any special check for:
-					 * ALTER TABLE .. SET ACCESS METHOD ..
-					 * ALTER TABLE .. ALTER COLUMN .. SET NOT NULL
-					 * ALTER TABLE .. REPLICA IDENTITY ..
-					 * ALTER TABLE .. VALIDATE CONSTRAINT ..
-					 * ALTER TABLE .. ALTER COLUMN .. SET COMPRESSION ..
-					 */
-					break;
-				}
+			{
+				/*
+				 * We will not perform any special check for:
+				 * ALTER TABLE .. SET ACCESS METHOD ..
+				 * ALTER TABLE .. ALTER COLUMN .. SET NOT NULL
+				 * ALTER TABLE .. REPLICA IDENTITY ..
+				 * ALTER TABLE .. VALIDATE CONSTRAINT ..
+				 * ALTER TABLE .. ALTER COLUMN .. SET COMPRESSION ..
+				 */
+				break;
+			}
 
 			case AT_SetRelOptions:  /* SET (...) */
 			case AT_ResetRelOptions:    /* RESET (...) */

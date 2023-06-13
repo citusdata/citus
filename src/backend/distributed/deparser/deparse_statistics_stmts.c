@@ -229,7 +229,6 @@ AppendStatTypes(StringInfo buf, CreateStatsStmt *stmt)
 }
 
 
-#if PG_VERSION_NUM >= PG_VERSION_14
 static void
 AppendColumnNames(StringInfo buf, CreateStatsStmt *stmt)
 {
@@ -256,36 +255,6 @@ AppendColumnNames(StringInfo buf, CreateStatsStmt *stmt)
 	}
 }
 
-
-#else
-static void
-AppendColumnNames(StringInfo buf, CreateStatsStmt *stmt)
-{
-	ColumnRef *column = NULL;
-
-	foreach_ptr(column, stmt->exprs)
-	{
-		if (!IsA(column, ColumnRef) || list_length(column->fields) != 1)
-		{
-			ereport(ERROR,
-					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-					 errmsg(
-						 "only simple column references are allowed in CREATE STATISTICS")));
-		}
-
-		char *columnName = NameListToQuotedString(column->fields);
-
-		appendStringInfoString(buf, columnName);
-
-		if (column != llast(stmt->exprs))
-		{
-			appendStringInfoString(buf, ", ");
-		}
-	}
-}
-
-
-#endif
 
 static void
 AppendTableName(StringInfo buf, CreateStatsStmt *stmt)

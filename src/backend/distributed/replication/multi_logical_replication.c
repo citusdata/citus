@@ -1536,7 +1536,7 @@ CreateSubscriptions(MultiConnection *sourceConnection,
 						 quote_identifier(target->publication->name),
 						 quote_identifier(target->replicationSlot->name));
 
-		if (EnableBinaryProtocol && PG_VERSION_NUM >= PG_VERSION_14)
+		if (EnableBinaryProtocol)
 		{
 			appendStringInfoString(createSubscriptionCommand, ", binary=true)");
 		}

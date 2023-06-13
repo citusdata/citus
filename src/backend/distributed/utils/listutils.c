@@ -118,9 +118,7 @@ ListToHashSet(List *itemList, Size keySize, bool isStringList)
 
 	if (isStringList)
 	{
-#if PG_VERSION_NUM >= PG_VERSION_14
 		flags |= HASH_STRINGS;
-#endif
 	}
 	else
 	{

@@ -61,8 +61,7 @@ pg_strtoint64(char *s)
  * We want to use it in all versions. So we backport it ourselves in earlier
  * versions, and rely on the Postgres provided version in the later versions.
  */
-#if PG_VERSION_NUM >= PG_VERSION_13 && PG_VERSION_NUM < 130010 \
-	|| PG_VERSION_NUM >= PG_VERSION_14 && PG_VERSION_NUM < 140007
+#if PG_VERSION_NUM < 140007
 static inline SMgrRelation
 RelationGetSmgr(Relation rel)
 {

@@ -33,9 +33,6 @@
 #include "access/attnum.h"
 #include "access/heapam.h"
 #include "access/htup_details.h"
-#if PG_VERSION_NUM < 140000
-#include "access/xact.h"
-#endif
 #include "catalog/catalog.h"
 #include "catalog/dependency.h"
 #include "citus_version.h"
@@ -60,9 +57,6 @@
 #include "distributed/maintenanced.h"
 #include "distributed/multi_logical_replication.h"
 #include "distributed/multi_partitioning_utils.h"
-#if PG_VERSION_NUM < 140000
-#include "distributed/metadata_cache.h"
-#endif
 #include "distributed/metadata_sync.h"
 #include "distributed/metadata/distobject.h"
 #include "distributed/multi_executor.h"
@@ -107,9 +101,7 @@ static void ProcessUtilityInternal(PlannedStmt *pstmt,
 								   struct QueryEnvironment *queryEnv,
 								   DestReceiver *dest,
 								   QueryCompletion *completionTag);
-#if PG_VERSION_NUM >= 140000
 static void set_indexsafe_procflags(void);
-#endif
 static char * CurrentSearchPath(void);
 static void IncrementUtilityHookCountersIfNecessary(Node *parsetree);
 static void PostStandardProcessUtility(Node *parsetree);
@@ -148,25 +140,19 @@ ProcessUtilityParseTree(Node *node, const char *queryString, ProcessUtilityConte
 void
 multi_ProcessUtility(PlannedStmt *pstmt,
 					 const char *queryString,
-#if PG_VERSION_NUM >= PG_VERSION_14
 					 bool readOnlyTree,
-#endif
 					 ProcessUtilityContext context,
 					 ParamListInfo params,
 					 struct QueryEnvironment *queryEnv,
 					 DestReceiver *dest,
 					 QueryCompletion *completionTag)
 {
-	Node *parsetree;
-
-#if PG_VERSION_NUM >= PG_VERSION_14
 	if (readOnlyTree)
 	{
 		pstmt = copyObject(pstmt);
 	}
-#endif
 
-	parsetree = pstmt->utilityStmt;
+	Node *parsetree = pstmt->utilityStmt;
 
 	if (IsA(parsetree, TransactionStmt))
 	{
@@ -1208,38 +1194,6 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 		 */
 		if (ddlJob->startNewTransaction)
 		{
-#if PG_VERSION_NUM < 140000
-
-			/*
-			 * Older versions of postgres doesn't have PROC_IN_SAFE_IC flag
-			 * so we cannot use set_indexsafe_procflags in those versions.
-			 *
-			 * For this reason, we do our best to ensure not grabbing any
-			 * snapshots later in the executor.
-			 */
-
-			/*
-			 * If cache is not populated, system catalog lookups will cause
-			 * the xmin of current backend to change. Then the last phase
-			 * of CREATE INDEX CONCURRENTLY, which is in a separate backend,
-			 * will hang waiting for our backend and result in a deadlock.
-			 *
-			 * We populate the cache before starting the next transaction to
-			 * avoid this. Most of the metadata has already been resolved in
-			 * planning phase, we only need to lookup metadata needed for
-			 * connection establishment.
-			 */
-			(void) CurrentDatabaseName();
-
-			/*
-			 * ConnParams (AuthInfo and PoolInfo) gets a snapshot, which
-			 * will blocks the remote connections to localhost. Hence we warm up
-			 * the cache here so that after we start a new transaction, the entries
-			 * will already be in the hash table, hence we won't be holding any snapshots.
-			 */
-			WarmUpConnParamsHash();
-#endif
-
 			/*
 			 * Since it is not certain whether the code-path that we followed
 			 * until reaching here caused grabbing any snapshots or not, we
@@ -1258,8 +1212,6 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 			CommitTransactionCommand();
 			StartTransactionCommand();
 
-#if PG_VERSION_NUM >= 140000
-
 			/*
 			 * Tell other backends to ignore us, even if we grab any
 			 * snapshots via adaptive executor.
@@ -1274,7 +1226,6 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 			 * given above.
 			 */
 			Assert(localExecutionSupported == false);
-#endif
 		}
 
 		MemoryContext savedContext = CurrentMemoryContext;
@@ -1340,8 +1291,6 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 }
 
 
-#if PG_VERSION_NUM >= 140000
-
 /*
  * set_indexsafe_procflags sets PROC_IN_SAFE_IC flag in MyProc->statusFlags.
  *
@@ -1362,9 +1311,6 @@ set_indexsafe_procflags(void)
 	ProcGlobal->statusFlags[MyProc->pgxactoff] = MyProc->statusFlags;
 	LWLockRelease(ProcArrayLock);
 }
-
-
-#endif
 
 
 /*

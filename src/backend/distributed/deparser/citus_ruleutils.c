@@ -22,9 +22,7 @@
 #include "access/skey.h"
 #include "access/stratnum.h"
 #include "access/sysattr.h"
-#if PG_VERSION_NUM >= PG_VERSION_14
 #include "access/toast_compression.h"
-#endif
 #include "access/tupdesc.h"
 #include "catalog/dependency.h"
 #include "catalog/indexing.h"
@@ -386,13 +384,11 @@ pg_get_tableschemadef_string(Oid tableRelationId, IncludeSequenceDefaults
 				atttypmod);
 			appendStringInfoString(&buffer, attributeTypeName);
 
-#if PG_VERSION_NUM >= PG_VERSION_14
 			if (CompressionMethodIsValid(attributeForm->attcompression))
 			{
 				appendStringInfo(&buffer, " COMPRESSION %s",
 								 GetCompressionMethodName(attributeForm->attcompression));
 			}
-#endif
 
 			if (attributeForm->attidentity && includeIdentityDefaults)
 			{
@@ -939,17 +935,6 @@ deparse_shard_reindex_statement(ReindexStmt *origStmt, Oid distrelid, int64 shar
 bool
 IsReindexWithParam_compat(ReindexStmt *reindexStmt, char *param)
 {
-#if PG_VERSION_NUM < PG_VERSION_14
-	if (strcmp(param, "concurrently") == 0)
-	{
-		return reindexStmt->concurrent;
-	}
-	else if (strcmp(param, "verbose") == 0)
-	{
-		return reindexStmt->options & REINDEXOPT_VERBOSE;
-	}
-	return false;
-#else
 	DefElem *opt = NULL;
 	foreach_ptr(opt, reindexStmt->params)
 	{
@@ -959,7 +944,6 @@ IsReindexWithParam_compat(ReindexStmt *reindexStmt, char *param)
 		}
 	}
 	return false;
-#endif
 }
 
 
@@ -974,7 +958,7 @@ AddVacuumParams(ReindexStmt *reindexStmt, StringInfo buffer)
 	{
 		appendStringInfoString(temp, "VERBOSE");
 	}
-#if PG_VERSION_NUM >= PG_VERSION_14
+
 	char *tableSpaceName = NULL;
 	DefElem *opt = NULL;
 	foreach_ptr(opt, reindexStmt->params)
@@ -997,7 +981,6 @@ AddVacuumParams(ReindexStmt *reindexStmt, StringInfo buffer)
 			appendStringInfo(temp, "TABLESPACE %s", tableSpaceName);
 		}
 	}
-#endif
 
 	if (temp->len > 0)
 	{
@@ -1627,9 +1610,7 @@ RoleSpecString(RoleSpec *spec, bool withQuoteIdentifier)
 				   spec->rolename;
 		}
 
-		#if PG_VERSION_NUM >= PG_VERSION_14
 		case ROLESPEC_CURRENT_ROLE:
-		#endif
 		case ROLESPEC_CURRENT_USER:
 		{
 			return withQuoteIdentifier ?

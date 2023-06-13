@@ -1126,15 +1126,9 @@ worker_save_query_explain_analyze(PG_FUNCTION_ARGS)
 	Query *analyzedQuery = parse_analyze_varparams_compat(parseTree, queryString,
 														  &paramTypes, &numParams, NULL);
 
-#if PG_VERSION_NUM >= PG_VERSION_14
-
 	/* pg_rewrite_query is a wrapper around QueryRewrite with some debugging logic */
 	List *queryList = pg_rewrite_query(analyzedQuery);
-#else
 
-	/* pg_rewrite_query is not yet public in PostgreSQL 13 */
-	List *queryList = QueryRewrite(analyzedQuery);
-#endif
 	if (list_length(queryList) != 1)
 	{
 		ereport(ERROR, (errmsg("cannot EXPLAIN ANALYZE a query rewritten "
