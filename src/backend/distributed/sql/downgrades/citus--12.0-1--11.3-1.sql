@@ -3,7 +3,7 @@
 DO $$
 BEGIN
     -- Throw an error if user has created any tenant schemas.
-    IF EXISTS (SELECT 1 FROM pg_catalog.pg_dist_tenant_schema)
+    IF EXISTS (SELECT 1 FROM pg_catalog.pg_dist_schema)
     THEN
         RAISE EXCEPTION 'cannot downgrade Citus because there are '
                         'tenant schemas created.'
@@ -46,7 +46,7 @@ DROP FUNCTION pg_catalog.citus_internal_unregister_tenant_schema_globally(Oid, t
 #include "../udfs/citus_tables/11.1-1.sql"
 #include "../udfs/citus_shards/11.1-1.sql"
 
-DROP TABLE pg_catalog.pg_dist_tenant_schema;
+DROP TABLE pg_catalog.pg_dist_schema;
 
 DROP VIEW pg_catalog.citus_stat_tenants_local;
 DROP FUNCTION pg_catalog.citus_stat_tenants_local_internal(

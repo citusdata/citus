@@ -5,4 +5,4 @@ CREATE OR REPLACE FUNCTION pg_catalog.citus_internal_add_tenant_schema(schema_id
     AS 'MODULE_PATHNAME';
 
 COMMENT ON FUNCTION pg_catalog.citus_internal_add_tenant_schema(Oid, int) IS
-    'insert given tenant schema into pg_dist_tenant_schema with given colocation id';
+    'insert given tenant schema into pg_dist_schema with given colocation id';

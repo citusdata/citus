@@ -61,7 +61,7 @@
 #include "distributed/pg_dist_colocation.h"
 #include "distributed/pg_dist_node.h"
 #include "distributed/pg_dist_shard.h"
-#include "distributed/pg_dist_tenant_schema.h"
+#include "distributed/pg_dist_schema.h"
 #include "distributed/relation_access_tracking.h"
 #include "distributed/remote_commands.h"
 #include "distributed/resource_lock.h"
@@ -4452,7 +4452,7 @@ SyncDistributedObjects(MetadataSyncContext *context)
 	SendDistObjectCommands(context);
 
 	/*
-	 * Commands to insert pg_dist_tenant_schema entries.
+	 * Commands to insert pg_dist_schema entries.
 	 *
 	 * Need to be done after syncing distributed objects because the schemas
 	 * need to exist on the worker.
@@ -4532,7 +4532,7 @@ SendMetadataDeletionCommands(MetadataSyncContext *context)
 	/* remove pg_dist_colocation entries */
 	SendOrCollectCommandListToActivatedNodes(context, list_make1(DELETE_ALL_COLOCATION));
 
-	/* remove pg_dist_tenant_schema entries */
+	/* remove pg_dist_schema entries */
 	SendOrCollectCommandListToActivatedNodes(context,
 											 list_make1(DELETE_ALL_TENANT_SCHEMAS));
 }
@@ -4662,8 +4662,8 @@ SendTenantSchemaMetadataCommands(MetadataSyncContext *context)
 			break;
 		}
 
-		Form_pg_dist_tenant_schema tenantSchemaForm =
-			(Form_pg_dist_tenant_schema) GETSTRUCT(heapTuple);
+		Form_pg_dist_schema tenantSchemaForm =
+			(Form_pg_dist_schema) GETSTRUCT(heapTuple);
 
 		StringInfo insertTenantSchemaCommand = makeStringInfo();
 		appendStringInfo(insertTenantSchemaCommand,

@@ -1365,7 +1365,7 @@ SELECT * FROM multi_extension.print_extension_changes();
                  | function citus_schema_distribute(regnamespace) void
                  | function citus_schema_undistribute(regnamespace) void
 				 | function citus_stat_tenants_local_internal(boolean) SETOF record
-                 | table pg_dist_tenant_schema
+                 | table pg_dist_schema
 (7 rows)
 
 DROP TABLE multi_extension.prev_objects, multi_extension.extension_diff;

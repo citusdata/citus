@@ -309,11 +309,11 @@ SELECT citus_schema_distribute('tenant1');
 (1 row)
 
 -- show the schema is a tenant schema now
-SELECT colocationid AS tenant1_colocid FROM pg_dist_tenant_schema schemaid \gset
--- below query verifies the same colocationid in pg_dist_tenant_schema, pg_dist_colocation and all entries in pg_dist_partition at the same time
+SELECT colocationid AS tenant1_colocid FROM pg_dist_schema schemaid \gset
+-- below query verifies the same colocationid in pg_dist_schema, pg_dist_colocation and all entries in pg_dist_partition at the same time
 SELECT '$$' ||
        ' SELECT colocationid = ' || :tenant1_colocid ||
-       ' FROM pg_dist_tenant_schema JOIN pg_dist_colocation USING(colocationid)' ||
+       ' FROM pg_dist_schema JOIN pg_dist_colocation USING(colocationid)' ||
        ' WHERE colocationid = ALL(SELECT colocationid FROM pg_dist_partition WHERE logicalrelid::text LIKE ''tenant1%'')' ||
        '$$'
 AS verify_tenant_query \gset
@@ -340,7 +340,7 @@ SELECT citus_schema_undistribute('tenant1');
 (1 row)
 
 -- show the schema is a regular schema
-SELECT result FROM run_command_on_all_nodes($$ SELECT schemaid::regnamespace as schemaname FROM pg_dist_tenant_schema $$);
+SELECT result FROM run_command_on_all_nodes($$ SELECT schemaid::regnamespace as schemaname FROM pg_dist_schema $$);
  result
 ---------------------------------------------------------------------
 
@@ -384,10 +384,10 @@ SELECT citus_schema_distribute('tenant1');
 (1 row)
 
 -- show the schema is a tenant schema now
-SELECT colocationid AS tenant1_colocid FROM pg_dist_tenant_schema schemaid \gset
+SELECT colocationid AS tenant1_colocid FROM pg_dist_schema schemaid \gset
 SELECT '$$' ||
        ' SELECT colocationid = ' || :tenant1_colocid ||
-       ' FROM pg_dist_tenant_schema JOIN pg_dist_colocation USING(colocationid)' ||
+       ' FROM pg_dist_schema JOIN pg_dist_colocation USING(colocationid)' ||
        ' WHERE colocationid = ALL(SELECT colocationid FROM pg_dist_partition WHERE logicalrelid::text LIKE ''tenant1%'')' ||
        '$$'
 AS verify_tenant_query \gset
@@ -414,7 +414,7 @@ SELECT citus_schema_undistribute('tenant1');
 (1 row)
 
 -- show the schema is a regular schema
-SELECT result FROM run_command_on_all_nodes($$ SELECT schemaid::regnamespace as schemaname FROM pg_dist_tenant_schema $$);
+SELECT result FROM run_command_on_all_nodes($$ SELECT schemaid::regnamespace as schemaname FROM pg_dist_schema $$);
  result
 ---------------------------------------------------------------------
 
@@ -539,7 +539,7 @@ SELECT citus_schema_distribute('tenant1');
 
 ROLLBACK;
 -- show the schema is a regular schema
-SELECT result FROM run_command_on_all_nodes($$ SELECT schemaid::regnamespace as schemaname FROM pg_dist_tenant_schema $$);
+SELECT result FROM run_command_on_all_nodes($$ SELECT schemaid::regnamespace as schemaname FROM pg_dist_schema $$);
  result
 ---------------------------------------------------------------------
 
@@ -576,10 +576,10 @@ SELECT citus_schema_distribute('tenant1');
 
 COMMIT;
 -- show the schema is a tenant schema now
-SELECT colocationid AS tenant1_colocid FROM pg_dist_tenant_schema schemaid \gset
+SELECT colocationid AS tenant1_colocid FROM pg_dist_schema schemaid \gset
 SELECT '$$' ||
        ' SELECT colocationid = ' || :tenant1_colocid ||
-       ' FROM pg_dist_tenant_schema JOIN pg_dist_colocation USING(colocationid)' ||
+       ' FROM pg_dist_schema JOIN pg_dist_colocation USING(colocationid)' ||
        ' WHERE colocationid = ALL(SELECT colocationid FROM pg_dist_partition WHERE logicalrelid::text LIKE ''tenant1%'')' ||
        '$$'
 AS verify_tenant_query \gset
@@ -617,7 +617,7 @@ SELECT citus_schema_undistribute('tenant1');
 (1 row)
 
 -- show the schema is a regular schema now
-SELECT result FROM run_command_on_all_nodes($$ SELECT schemaid::regnamespace as schemaname FROM pg_dist_tenant_schema $$);
+SELECT result FROM run_command_on_all_nodes($$ SELECT schemaid::regnamespace as schemaname FROM pg_dist_schema $$);
  result
 ---------------------------------------------------------------------
 
@@ -703,10 +703,10 @@ SELECT citus_schema_distribute('"CiTuS.TeeN"');
 (1 row)
 
 -- show the schema is a tenant schema now
-SELECT colocationid AS tenant1_colocid FROM pg_dist_tenant_schema schemaid \gset
+SELECT colocationid AS tenant1_colocid FROM pg_dist_schema schemaid \gset
 SELECT '$$' ||
        ' SELECT colocationid = ' || :tenant1_colocid ||
-       ' FROM pg_dist_tenant_schema JOIN pg_dist_colocation USING(colocationid)' ||
+       ' FROM pg_dist_schema JOIN pg_dist_colocation USING(colocationid)' ||
        ' WHERE colocationid = ALL(SELECT colocationid FROM pg_dist_partition WHERE logicalrelid::text LIKE ''"CiTuS.TeeN"%'')' ||
        '$$'
 AS verify_tenant_query \gset
@@ -733,7 +733,7 @@ SELECT citus_schema_undistribute('"CiTuS.TeeN"');
 (1 row)
 
 -- show the schema is a regular schema
-SELECT result FROM run_command_on_all_nodes($$ SELECT schemaid::regnamespace as schemaname FROM pg_dist_tenant_schema $$);
+SELECT result FROM run_command_on_all_nodes($$ SELECT schemaid::regnamespace as schemaname FROM pg_dist_schema $$);
  result
 ---------------------------------------------------------------------
 
@@ -811,10 +811,10 @@ SELECT citus_schema_distribute('tenant1');
 (1 row)
 
 -- show the schema is a tenant schema now
-SELECT colocationid AS tenant1_colocid FROM pg_dist_tenant_schema schemaid \gset
+SELECT colocationid AS tenant1_colocid FROM pg_dist_schema schemaid \gset
 SELECT '$$' ||
        ' SELECT colocationid = ' || :tenant1_colocid ||
-       ' FROM pg_dist_tenant_schema JOIN pg_dist_colocation USING(colocationid)' ||
+       ' FROM pg_dist_schema JOIN pg_dist_colocation USING(colocationid)' ||
        ' WHERE colocationid = ALL(SELECT colocationid FROM pg_dist_partition WHERE logicalrelid::text LIKE ''tenant1%'')' ||
        '$$'
 AS verify_tenant_query \gset
@@ -841,7 +841,7 @@ SELECT citus_schema_undistribute('tenant1');
 (1 row)
 
 -- show the schema is a regular schema now
-SELECT result FROM run_command_on_all_nodes($$ SELECT schemaid::regnamespace as schemaname FROM pg_dist_tenant_schema $$);
+SELECT result FROM run_command_on_all_nodes($$ SELECT schemaid::regnamespace as schemaname FROM pg_dist_schema $$);
  result
 ---------------------------------------------------------------------
 
@@ -874,8 +874,8 @@ SELECT citus_schema_distribute('empty_tenant');
 (1 row)
 
 -- show the schema is a tenant schema now
-SELECT colocationid AS empty_tenant_colocid FROM pg_dist_tenant_schema schemaid \gset
-SELECT result FROM run_command_on_all_nodes($$ SELECT schemaid::regnamespace FROM pg_dist_colocation JOIN pg_dist_tenant_schema USING(colocationid) $$);
+SELECT colocationid AS empty_tenant_colocid FROM pg_dist_schema schemaid \gset
+SELECT result FROM run_command_on_all_nodes($$ SELECT schemaid::regnamespace FROM pg_dist_colocation JOIN pg_dist_schema USING(colocationid) $$);
     result
 ---------------------------------------------------------------------
  empty_tenant
@@ -890,7 +890,7 @@ SELECT citus_schema_undistribute('empty_tenant');
 (1 row)
 
 -- show the schema is a regular schema now
-SELECT result FROM run_command_on_all_nodes($$ SELECT schemaid::regnamespace as schemaname FROM pg_dist_tenant_schema $$);
+SELECT result FROM run_command_on_all_nodes($$ SELECT schemaid::regnamespace as schemaname FROM pg_dist_schema $$);
  result
 ---------------------------------------------------------------------
 

@@ -3,7 +3,7 @@ SELECT
      pg_dist_shard.logicalrelid AS table_name,
      pg_dist_shard.shardid,
      shard_name(pg_dist_shard.logicalrelid, pg_dist_shard.shardid) as shard_name,
-     CASE WHEN colocationid IN (SELECT colocationid FROM pg_dist_tenant_schema) THEN 'schema'
+     CASE WHEN colocationid IN (SELECT colocationid FROM pg_dist_schema) THEN 'schema'
       WHEN partkey IS NOT NULL THEN 'distributed'
       WHEN repmodel = 't' THEN 'reference'
       WHEN colocationid = 0 THEN 'local'
