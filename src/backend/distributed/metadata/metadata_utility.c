@@ -101,9 +101,9 @@ static char * GenerateAllShardStatisticsQueryForNode(WorkerNode *workerNode,
 static List * GenerateShardStatisticsQueryList(List *workerNodeList, List *citusTableIds);
 static void ErrorIfNotSuitableToGetSize(Oid relationId);
 static List * OpenConnectionToNodes(List *workerNodeList);
-static void ReceiveShardNameAndSizeResults(List *connectionList,
-										   Tuplestorestate *tupleStore,
-										   TupleDesc tupleDescriptor);
+static void ReceiveShardIdAndSizeResults(List *connectionList,
+										 Tuplestorestate *tupleStore,
+										 TupleDesc tupleDescriptor);
 static void AppendShardSizeQuery(StringInfo selectQuery, ShardInterval *shardInterval);
 
 static HeapTuple CreateDiskSpaceTuple(TupleDesc tupleDesc, uint64 availableBytes,
@@ -253,7 +253,7 @@ GetNodeDiskSpaceStatsForConnection(MultiConnection *connection, uint64 *availabl
 
 
 /*
- * citus_shard_sizes returns all shard names and their sizes.
+ * citus_shard_sizes returns all shard ids and their sizes.
  */
 Datum
 citus_shard_sizes(PG_FUNCTION_ARGS)
@@ -271,7 +271,7 @@ citus_shard_sizes(PG_FUNCTION_ARGS)
 	TupleDesc tupleDescriptor = NULL;
 	Tuplestorestate *tupleStore = SetupTuplestore(fcinfo, &tupleDescriptor);
 
-	ReceiveShardNameAndSizeResults(connectionList, tupleStore, tupleDescriptor);
+	ReceiveShardIdAndSizeResults(connectionList, tupleStore, tupleDescriptor);
 
 	PG_RETURN_VOID();
 }
@@ -446,12 +446,12 @@ GenerateShardStatisticsQueryList(List *workerNodeList, List *citusTableIds)
 
 
 /*
- * ReceiveShardNameAndSizeResults receives shard name and size results from the given
+ * ReceiveShardIdAndSizeResults receives shard id and size results from the given
  * connection list.
  */
 static void
-ReceiveShardNameAndSizeResults(List *connectionList, Tuplestorestate *tupleStore,
-							   TupleDesc tupleDescriptor)
+ReceiveShardIdAndSizeResults(List *connectionList, Tuplestorestate *tupleStore,
+							 TupleDesc tupleDescriptor)
 {
 	MultiConnection *connection = NULL;
 	foreach_ptr(connection, connectionList)
@@ -489,11 +489,7 @@ ReceiveShardNameAndSizeResults(List *connectionList, Tuplestorestate *tupleStore
 			memset(isNulls, false, sizeof(isNulls));
 
 			/* format is [0] shard id, [1] shard name, [2] size */
-			char *tableName = PQgetvalue(result, rowIndex, 1);
-			Datum resultStringDatum = CStringGetDatum(tableName);
-			Datum textDatum = DirectFunctionCall1(textin, resultStringDatum);
-
-			values[0] = textDatum;
+			values[0] = ParseIntField(result, rowIndex, 0);
 			values[1] = ParseIntField(result, rowIndex, 2);
 
 			tuplestore_putvalues(tupleStore, tupleDescriptor, values, isNulls);
