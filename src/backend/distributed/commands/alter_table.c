@@ -362,6 +362,43 @@ worker_change_sequence_dependency(PG_FUNCTION_ARGS)
 
 
 /*
+ * DropFKeysAndUndistributeTable drops all foreign keys that relation with
+ * relationId is involved then undistributes it.
+ * Note that as UndistributeTable changes relationId of relation, this
+ * function also returns new relationId of relation.
+ * Also note that callers are responsible for storing & recreating foreign
+ * keys to be dropped if needed.
+ */
+Oid
+DropFKeysAndUndistributeTable(Oid relationId)
+{
+	DropFKeysRelationInvolvedWithTableType(relationId, INCLUDE_ALL_TABLE_TYPES);
+
+	/* store them before calling UndistributeTable as it changes relationId */
+	char *relationName = get_rel_name(relationId);
+	Oid schemaId = get_rel_namespace(relationId);
+
+	/* suppress notices messages not to be too verbose */
+	TableConversionParameters params = {
+		.relationId = relationId,
+		.cascadeViaForeignKeys = false,
+		.suppressNoticeMessages = true
+	};
+	UndistributeTable(&params);
+
+	Oid newRelationId = get_relname_relid(relationName, schemaId);
+
+	/*
+	 * We don't expect this to happen but to be on the safe side let's error
+	 * out here.
+	 */
+	EnsureRelationExists(newRelationId);
+
+	return newRelationId;
+}
+
+
+/*
  * UndistributeTables undistributes given relations. It first collects all foreign keys
  * to recreate them after the undistribution. Then, drops the foreign keys and
  * undistributes the relations. Finally, it recreates foreign keys.
