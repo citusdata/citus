@@ -58,7 +58,8 @@ CREATE INDEX null_dist_key_idx ON null_dist_key_table(a);
 SELECT citus_table_size('null_dist_key_table');
 SELECT citus_total_relation_size('null_dist_key_table');
 SELECT citus_relation_size('null_dist_key_table');
-SELECT * FROM pg_catalog.citus_shard_sizes() WHERE table_name LIKE '%null_dist_key_table%';
+SELECT shard_name, shard_size FROM pg_catalog.citus_shard_sizes(), citus_shards
+WHERE shardid = shard_id AND shard_name LIKE '%null_dist_key_table%' AND nodeport IN (:worker_1_port, :worker_2_port);
 
 BEGIN;
   SELECT lock_relation_if_exists('null_dist_key_table', 'ACCESS SHARE');
@@ -653,6 +654,13 @@ SELECT result as logseq from run_command_on_workers($$SELECT last_value FROM pg_
 WHERE nodeport = :clock_shard_nodeport \gset
 SELECT cluster_clock_logical(:'txnclock') as txnlog \gset
 SELECT :logseq = :txnlog;
+
+-- test table with space in its name in citus_shards
+CREATE TABLE "t b l" (a INT);
+SELECT create_distributed_table('"t b l"', NULL, colocate_with:='none');
+
+SELECT table_name, shard_size FROM citus_shards
+WHERE table_name = '"t b l"'::regclass AND nodeport IN (:worker_1_port, :worker_2_port);
 
 SET client_min_messages TO WARNING;
 DROP SCHEMA null_dist_key_udfs CASCADE;

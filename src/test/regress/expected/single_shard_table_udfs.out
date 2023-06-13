@@ -76,10 +76,11 @@ SELECT citus_relation_size('null_dist_key_table');
                 8192
 (1 row)
 
-SELECT * FROM pg_catalog.citus_shard_sizes() WHERE table_name LIKE '%null_dist_key_table%';
-                   table_name                   | size
+SELECT shard_name, shard_size FROM pg_catalog.citus_shard_sizes(), citus_shards
+WHERE shardid = shard_id AND shard_name LIKE '%null_dist_key_table%' AND nodeport IN (:worker_1_port, :worker_2_port);
+                   shard_name                   | shard_size
 ---------------------------------------------------------------------
- null_dist_key_udfs.null_dist_key_table_1820000 | 24576
+ null_dist_key_udfs.null_dist_key_table_1820000 |      24576
 (1 row)
 
 BEGIN;
@@ -1300,6 +1301,21 @@ SELECT :logseq = :txnlog;
  ?column?
 ---------------------------------------------------------------------
  t
+(1 row)
+
+-- test table whose with space in its name in citus_shards
+CREATE TABLE "t b l" (a INT);
+SELECT create_distributed_table('"t b l"', NULL, colocate_with:='none');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT table_name, shard_size FROM citus_shards
+WHERE table_name = '"t b l"'::regclass AND nodeport IN (:worker_1_port, :worker_2_port);
+ table_name | shard_size
+---------------------------------------------------------------------
+ "t b l"    |          0
 (1 row)
 
 SET client_min_messages TO WARNING;
