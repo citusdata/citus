@@ -86,6 +86,7 @@ ALTER SCHEMA tenant_1 RENAME TO "tenant\'_1";
 ALTER SCHEMA tenant_2 RENAME TO "tenant\'_2";
 SET citus.enable_schema_based_sharding TO ON;
 CREATE SCHEMA tenant_3;
+NOTICE:  distributing the schema tenant_3
 -- Show that we can create furher tenant schemas after pg upgrade.
 SELECT COUNT(*)=1 FROM pg_dist_schema WHERE schemaid::regnamespace::text = 'tenant_3';
  ?column?

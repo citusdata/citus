@@ -919,6 +919,7 @@ SELECT citus_stat_tenants_reset();
 
 SET citus.enable_schema_based_sharding TO ON;
 CREATE SCHEMA citus_stat_tenants_t1;
+NOTICE:  distributing the schema citus_stat_tenants_t1
 CREATE TABLE citus_stat_tenants_t1.users(id int);
 SELECT id FROM citus_stat_tenants_t1.users WHERE id = 2;
  id

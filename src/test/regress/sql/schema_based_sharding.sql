@@ -209,8 +209,66 @@ $$);
 SELECT COUNT(DISTINCT(colocationid))=2 FROM pg_dist_schema
 WHERE schemaid::regnamespace::text IN ('tenant_1', 'tenant_2');
 
--- verify that we don't allow creating tenant tables via CREATE SCHEMA command
-CREATE SCHEMA schema_using_schema_elements CREATE TABLE test_table(a int, b text);
+-- verify that we allow creating tenant tables via CREATE SCHEMA command
+CREATE SCHEMA schema_using_schema_elements
+    CREATE TABLE test_table(a int, b text);
+SELECT COUNT(*)=1 FROM pg_dist_partition
+WHERE logicalrelid = 'schema_using_schema_elements.test_table'::regclass AND
+       partmethod = 'n' AND repmodel = 's' AND colocationid = (
+        SELECT colocationid FROM pg_dist_partition
+        WHERE logicalrelid = 'schema_using_schema_elements.test_table'::regclass);
+
+-- verify that we allow creating tenant tables with other objects via CREATE SCHEMA command
+CREATE OR REPLACE FUNCTION dummy_trigger_fn()
+RETURNS trigger
+AS $$
+BEGIN
+    RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+
+SET citus.enable_unsafe_triggers TO on;
+
+CREATE SCHEMA schema_using_schema_elements_complex
+    CREATE SEQUENCE seq
+    CREATE TABLE test_table(a int DEFAULT nextval('seq'), b tsvector)
+    CREATE INDEX gin_idx ON test_table USING GIN (b)
+    CREATE VIEW v AS SELECT * FROM test_table
+    GRANT CREATE ON SCHEMA schema_using_schema_elements_complex TO public
+    GRANT SELECT ON TABLE test_table TO public
+    CREATE TRIGGER dummy_trigger
+        AFTER INSERT OR UPDATE OR DELETE ON test_table
+        FOR EACH ROW EXECUTE FUNCTION dummy_trigger_fn();
+
+RESET citus.enable_unsafe_triggers;
+
+SELECT COUNT(*)=1 FROM pg_dist_partition
+WHERE logicalrelid = 'schema_using_schema_elements_complex.test_table'::regclass AND
+       partmethod = 'n' AND repmodel = 's' AND colocationid = (
+        SELECT colocationid FROM pg_dist_partition
+        WHERE logicalrelid = 'schema_using_schema_elements_complex.test_table'::regclass);
+
+-- verify that we allow fkeys with reference tables while creating tenant tables with other objects via CREATE SCHEMA command
+CREATE SCHEMA schema_using_schema_elements_with_local
+    CREATE TABLE local_table(id int PRIMARY KEY REFERENCES regular_schema.ref_tbl(id))
+    CREATE TABLE test_table(a int REFERENCES local_table(id), b text);
+SELECT COUNT(*)=1 FROM pg_dist_partition
+WHERE logicalrelid = 'schema_using_schema_elements_with_local.test_table'::regclass AND
+       partmethod = 'n' AND repmodel = 's' AND colocationid = (
+        SELECT colocationid FROM pg_dist_partition
+        WHERE logicalrelid = 'schema_using_schema_elements_with_local.test_table'::regclass);
+SELECT COUNT(*)=1 FROM pg_dist_partition
+WHERE logicalrelid = 'schema_using_schema_elements_with_local.local_table'::regclass AND
+       partmethod = 'n' AND repmodel = 's' AND colocationid = (
+        SELECT colocationid FROM pg_dist_partition
+        WHERE logicalrelid = 'schema_using_schema_elements_with_local.local_table'::regclass);
+
+-- verify that we do not allow fkeys with other schemas while creating tenant tables with other objects via CREATE SCHEMA command
+CREATE TABLE regular_schema.loc_t(id int PRIMARY KEY REFERENCES regular_schema.ref_tbl(id));
+CREATE SCHEMA schema_using_schema_elements_with_local2
+    CREATE TABLE local_table(id int PRIMARY KEY REFERENCES regular_schema.loc_t(id))
+    CREATE TABLE test_table(a int REFERENCES local_table(id), b text);
+
 
 CREATE SCHEMA tenant_4;
 CREATE TABLE tenant_4.tbl_1(a int, b text);
@@ -1154,7 +1212,9 @@ SELECT result FROM run_command_on_all_nodes($$
 $$);
 
 SET client_min_messages TO WARNING;
-DROP SCHEMA regular_schema, tenant_3, tenant_5, tenant_7, tenant_6, type_sch, citus_sch1, citus_sch2, citus_empty_sch1, citus_empty_sch2, authschema CASCADE;
+DROP SCHEMA regular_schema, tenant_3, tenant_5, tenant_7, tenant_6,
+            type_sch, citus_sch1, citus_sch2, citus_empty_sch1,
+            citus_empty_sch2, authschema, schema_using_schema_elements,
+            schema_using_schema_elements_complex, schema_using_schema_elements_with_local CASCADE;
 DROP ROLE citus_schema_role, citus_schema_nonpri, authschema;
-
 SELECT citus_remove_node('localhost', :master_port);

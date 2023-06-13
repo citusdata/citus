@@ -4263,3 +4263,30 @@ ConvertToTenantTableIfNecessary(AlterObjectSchemaStmt *stmt)
 		CreateTenantSchemaTable(relationId);
 	}
 }
+
+
+/*
+ * DistributeSchemaIfNecessary distributes the schema if the schema is not already
+ * distributed and the GUC `EnableSchemaBasedSharding` is enabled.
+ */
+void
+DistributeSchemaIfNecessary(CreateSchemaStmt *createSchemaStmt)
+{
+	bool missingOk = createSchemaStmt->if_not_exists;
+	List *schemaAdressList = CreateSchemaStmtObjectAddress((Node *) createSchemaStmt,
+														   missingOk, true);
+	Assert(list_length(schemaAdressList) == 1);
+	ObjectAddress *schemaAdress = linitial(schemaAdressList);
+	Oid schemaId = schemaAdress->objectId;
+	if (!OidIsValid(schemaId))
+	{
+		return;
+	}
+
+	char *schemaName = get_namespace_name(schemaId);
+	if (ShouldUseSchemaBasedSharding(schemaName) &&
+		!IsTenantSchema(schemaId))
+	{
+		DistributeSchema(schemaId);
+	}
+}

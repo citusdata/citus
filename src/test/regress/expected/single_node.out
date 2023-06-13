@@ -159,6 +159,7 @@ ERROR:  relation "single_node_nullkey_c1_90630532" is a shard relation
 -- create a tenant schema on single node setup
 SET citus.enable_schema_based_sharding TO ON;
 CREATE SCHEMA tenant_1;
+NOTICE:  distributing the schema tenant_1
 CREATE TABLE tenant_1.tbl_1 (a int);
 -- verify that we recorded tenant_1 in pg_dist_schema
 SELECT COUNT(*)=1 FROM pg_dist_schema WHERE schemaid::regnamespace::text = 'tenant_1';

@@ -593,6 +593,43 @@ citus_schema_distribute(PG_FUNCTION_ARGS)
 	EnsureCoordinator();
 
 	Oid schemaId = PG_GETARG_OID(0);
+	DistributeSchema(schemaId);
+
+	PG_RETURN_VOID();
+}
+
+
+/*
+ * PropagateSchema propagates the schema to workers and mark it as distributed.
+ */
+void
+PropagateSchema(Oid schemaId)
+{
+	/* Propagate the schema to workers */
+	ObjectAddress *schemaAddress = palloc0(sizeof(ObjectAddress));
+	ObjectAddressSet(*schemaAddress, NamespaceRelationId, schemaId);
+
+	List *schemaCommands = GetAllDependencyCreateDDLCommands(list_make1(schemaAddress));
+	schemaCommands = lcons(DISABLE_DDL_PROPAGATION, schemaCommands);
+	schemaCommands = lappend(schemaCommands, ENABLE_DDL_PROPAGATION);
+
+	List *metadataNodes = TargetWorkerSetNodeList(NON_COORDINATOR_NODES,
+												  RowShareLock);
+	SendMetadataCommandListToWorkerListInCoordinatedTransaction(metadataNodes,
+																CurrentUserName(),
+																schemaCommands);
+
+	/* Mark the schema as distributed object */
+	MarkObjectDistributed(schemaAddress);
+}
+
+
+/*
+ * DistributeSchema distributes given schema if all required checks pass.
+ */
+void
+DistributeSchema(Oid schemaId)
+{
 	EnsureSchemaExist(schemaId);
 	EnsureSchemaOwner(schemaId);
 
@@ -611,7 +648,7 @@ citus_schema_distribute(PG_FUNCTION_ARGS)
 	if (IsTenantSchema(schemaId))
 	{
 		ereport(NOTICE, (errmsg("schema %s is already distributed", schemaName)));
-		PG_RETURN_VOID();
+		return;
 	}
 
 	/* Take lock on the relations and filter out partition tables */
@@ -673,6 +710,15 @@ citus_schema_distribute(PG_FUNCTION_ARGS)
 	ExecuteForeignKeyCreateCommandList(originalForeignKeyRecreationCommands,
 									   skip_validation);
 
+	/*
+	 * The schema is propagated during table creation above when there is at least
+	 * one table under the schema. (`EnsureDependenciesExistOnAllNodes`) In cases
+	 * there is no table under it, the schema should be propagated explicitly. The
+	 * schema propagation is idempotent so it is safe to propagate it even if we
+	 * already propagated it.
+	 */
+	PropagateSchema(schemaId);
+
 	/* Register the schema locally and sync it to workers */
 	InsertTenantSchemaLocally(schemaId, colocationId);
 	char *registerSchemaCommand = TenantSchemaInsertCommand(schemaId, colocationId);
@@ -680,8 +726,6 @@ citus_schema_distribute(PG_FUNCTION_ARGS)
 	{
 		SendCommandToWorkersWithMetadata(registerSchemaCommand);
 	}
-
-	PG_RETURN_VOID();
 }
 
 

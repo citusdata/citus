@@ -4,7 +4,9 @@ SET citus.enable_schema_based_sharding TO ON;
 -- them into public schema.
 -- empty tenant
 CREATE SCHEMA "tenant\'_1";
+NOTICE:  distributing the schema tenant\'_1
 -- non-empty tenant
 CREATE SCHEMA "tenant\'_2";
+NOTICE:  distributing the schema tenant\'_2
 CREATE TABLE "tenant\'_2".test_table(a int, b text);
 RESET citus.enable_schema_based_sharding;
