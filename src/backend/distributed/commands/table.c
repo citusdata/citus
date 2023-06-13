@@ -763,11 +763,16 @@ PostprocessAlterTableSchemaStmt(Node *node, const char *queryString)
 		return PostprocessAlterViewSchemaStmt((Node *) stmt, queryString);
 	}
 
-	/* Create table under the new tenant schema if the new schema is a tenant schema */
+	/*
+	 * Create table under the new tenant schema if the new schema is a tenant schema and
+	 * the table is not already a single shard table. (It can happen so if the old schema
+	 * is the same as the new one)
+	 */
+	Oid relationId = tableAddress->objectId;
 	Oid schemaId = get_namespace_oid(stmt->newschema, false);
-	if (IsTenantSchema(schemaId))
+	if (!IsCitusTableType(relationId, SINGLE_SHARD_DISTRIBUTED) &&
+		IsTenantSchema(schemaId))
 	{
-		Oid relationId = tableAddress->objectId;
 		EnsureTenantTable(relationId);
 		CreateTenantSchemaTable(relationId);
 	}
@@ -2320,8 +2325,15 @@ PreprocessAlterTableSchemaStmt(Node *node, const char *queryString,
 		return NIL;
 	}
 
-	/* Undistribute table if it is under a tenant schema */
+	/*  Do nothing if new schema is the same as old schema */
 	Oid oldSchemaId = get_rel_namespace(relationId);
+	Oid newSchemaId = get_namespace_oid(stmt->newschema, false);
+	if (newSchemaId == oldSchemaId)
+	{
+		return NIL;
+	}
+
+	/* Undistribute table if its old schema is a tenant schema */
 	if (IsTenantSchema(oldSchemaId))
 	{
 		/*
