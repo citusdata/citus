@@ -3,12 +3,7 @@
 --
 -- tests citus_stat_statements functionality
 
-SHOW server_version \gset
-SELECT substring(:'server_version', '\d+')::int >= 14 AS server_version_ge_14
-\gset
-\if :server_version_ge_14
 SET compute_query_id = 'on';
-\endif
 
 -- check if pg_stat_statements is available
 SELECT name FROM pg_available_extensions WHERE name = 'pg_stat_statements';
@@ -50,11 +45,7 @@ SELECT create_distributed_table('test','a');
 insert into test values(1);
 
 select query, calls from citus_stat_statements();
-\if :server_version_ge_14
 SET compute_query_id = 'off';
-\else
-set citus.stat_statements_track = 'none';
-\endif
 
 -- for pg >= 14, since compute_query_id is off, this insert
 -- shouldn't be tracked
@@ -64,11 +55,7 @@ insert into test values(1);
 select query, calls from citus_stat_statements();
 
 
-\if :server_version_ge_14
 SET compute_query_id = 'on';
-\else
-RESET citus.stat_statements_track;
-\endif
 
 
 SELECT citus_stat_statements_reset();
@@ -290,6 +277,4 @@ DROP TABLE stat_test_text, stat_test_bigint, stat_test_bigint_other, stat_test_r
 DROP FUNCTION normalize_query_string(text);
 
 
-\if :server_version_ge_14
 SET compute_query_id = 'off';
-\endif
