@@ -494,9 +494,35 @@ ORDER BY table_name::text;
  supplier_mx                                            | reference        | <none>              |           1 | postgres
 (23 rows)
 
+\c - - - :master_port
+-- test table with space in its name
+CREATE TABLE "tbl 1" (a INT);
+SELECT create_distributed_table('"tbl 1"', 'a', shard_count:=2);
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+\c - - - :worker_1_port
 SELECT shard_name, table_name, citus_table_type, shard_size FROM citus_shards ORDER BY shard_name::text;
                            shard_name                           |                       table_name                       | citus_table_type | shard_size
 ---------------------------------------------------------------------
+ "tbl 1_1220111"                                                | "tbl 1"                                                | distributed      |          0
+ "tbl 1_1220111"                                                | "tbl 1"                                                | distributed      |          0
+ "tbl 1_1220111"                                                | "tbl 1"                                                | distributed      |          0
+ "tbl 1_1220111"                                                | "tbl 1"                                                | distributed      |          0
+ "tbl 1_1220111"                                                | "tbl 1"                                                | distributed      |          0
+ "tbl 1_1220111"                                                | "tbl 1"                                                | distributed      |          0
+ "tbl 1_1220111"                                                | "tbl 1"                                                | distributed      |          0
+ "tbl 1_1220111"                                                | "tbl 1"                                                | distributed      |          0
+ "tbl 1_1220112"                                                | "tbl 1"                                                | distributed      |          0
+ "tbl 1_1220112"                                                | "tbl 1"                                                | distributed      |          0
+ "tbl 1_1220112"                                                | "tbl 1"                                                | distributed      |          0
+ "tbl 1_1220112"                                                | "tbl 1"                                                | distributed      |          0
+ "tbl 1_1220112"                                                | "tbl 1"                                                | distributed      |          0
+ "tbl 1_1220112"                                                | "tbl 1"                                                | distributed      |          0
+ "tbl 1_1220112"                                                | "tbl 1"                                                | distributed      |          0
+ "tbl 1_1220112"                                                | "tbl 1"                                                | distributed      |          0
  app_analytics_events_mx_1220096                                | app_analytics_events_mx                                | distributed      |       8192
  app_analytics_events_mx_1220096                                | app_analytics_events_mx                                | distributed      |       8192
  app_analytics_events_mx_1220096                                | app_analytics_events_mx                                | distributed      |       8192
@@ -966,8 +992,11 @@ SELECT shard_name, table_name, citus_table_type, shard_size FROM citus_shards OR
  supplier_mx_1220087                                            | supplier_mx                                            | reference        |          0
  supplier_mx_1220087                                            | supplier_mx                                            | reference        |          0
  supplier_mx_1220087                                            | supplier_mx                                            | reference        |          0
-(469 rows)
+(485 rows)
 
+\c - - - :master_port
+DROP TABLE "tbl 1";
+\c - - - :worker_1_port
 -- Show that altering type name is not supported from worker node
 ALTER TYPE order_side_mx RENAME TO temp_order_side_mx;
 ERROR:  operation is not allowed on this node

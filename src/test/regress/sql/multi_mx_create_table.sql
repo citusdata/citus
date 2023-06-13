@@ -379,7 +379,17 @@ SELECT table_name, citus_table_type, distribution_column, shard_count, table_own
 FROM citus_tables
 ORDER BY table_name::text;
 
+\c - - - :master_port
+-- test table with space in its name
+CREATE TABLE "tbl 1" (a INT);
+SELECT create_distributed_table('"tbl 1"', 'a', shard_count:=2);
+\c - - - :worker_1_port
+
 SELECT shard_name, table_name, citus_table_type, shard_size FROM citus_shards ORDER BY shard_name::text;
+
+\c - - - :master_port
+DROP TABLE "tbl 1";
+\c - - - :worker_1_port
 
 -- Show that altering type name is not supported from worker node
 ALTER TYPE order_side_mx RENAME TO temp_order_side_mx;
