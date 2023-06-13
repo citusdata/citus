@@ -89,15 +89,51 @@ ERROR:  tenant_2.test_table is not allowed for alter_distributed_table because i
 -- verify we also don't allow colocate_with a tenant table
 SELECT alter_distributed_table('regular_schema.test_table', colocate_with => 'tenant_2.test_table');
 ERROR:  tenant_2.test_table is not allowed for colocate_with because it belongs to a distributed schema
--- verify we don't allow ALTER TABLE SET SCHEMA for tenant tables
-ALTER TABLE tenant_2.test_table SET SCHEMA regular_schema;
-ERROR:  tenant_2.test_table is not allowed for ALTER TABLE SET SCHEMA because it belongs to a distributed schema
--- verify we don't allow ALTER TABLE SET SCHEMA for tenant schemas
-ALTER TABLE regular_schema.test_table SET SCHEMA tenant_2;
-ERROR:  tenant_2 is not allowed for ALTER TABLE SET SCHEMA because it is a distributed schema
--- the same, from tenant schema to tenant schema
-ALTER TABLE tenant_2.test_table SET SCHEMA tenant_3;
-ERROR:  tenant_2.test_table is not allowed for ALTER TABLE SET SCHEMA because it belongs to a distributed schema
+-- verify we can set tenant table's schema to regular schema
+CREATE TABLE tenant_2.test_table2(id int);
+ALTER TABLE tenant_2.test_table2 SET SCHEMA regular_schema;
+-- verify that regular_schema.test_table2 does not exist in pg_dist_partition
+SELECT COUNT(*)=0 FROM pg_dist_partition
+WHERE logicalrelid = 'regular_schema.test_table2'::regclass AND
+      partmethod = 'n' AND repmodel = 's' AND colocationid > 0;
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+-- verify that tenant_2.test_table2 does not exist
+SELECT * FROM tenant_2.test_table2;
+ERROR:  relation "tenant_2.test_table2" does not exist
+-- verify we can set regular table's schema to distributed schema
+CREATE TABLE regular_schema.test_table3(id int);
+ALTER TABLE regular_schema.test_table3 SET SCHEMA tenant_2;
+-- verify that tenant_2.test_table3 is recorded in pg_dist_partition as a single-shard table.
+SELECT COUNT(*)=1 FROM pg_dist_partition
+WHERE logicalrelid = 'tenant_2.test_table3'::regclass AND
+      partmethod = 'n' AND repmodel = 's' AND colocationid > 0;
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+-- verify that regular_schema.test_table3 does not exist
+SELECT * FROM regular_schema.test_table3;
+ERROR:  relation "regular_schema.test_table3" does not exist
+-- verify we can set tenant table's schema to another distributed schema
+CREATE TABLE tenant_2.test_table4(id int);
+ALTER TABLE tenant_2.test_table4 SET SCHEMA tenant_3;
+-- verify that tenant_3.test_table4 is recorded in pg_dist_partition as a single-shard table.
+SELECT COUNT(*)=1 FROM pg_dist_partition
+WHERE logicalrelid = 'tenant_3.test_table4'::regclass AND
+      partmethod = 'n' AND repmodel = 's' AND colocationid > 0;
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+-- verify that tenant_2.test_table4 does not exist
+SELECT * FROM tenant_2.test_table4;
+ERROR:  relation "tenant_2.test_table4" does not exist
 -- (on coordinator) verify that colocation id is set for empty tenants too
 SELECT colocationid > 0 FROM pg_dist_schema
 WHERE schemaid::regnamespace::text IN ('tenant_1', 'tenant_3');
@@ -265,8 +301,8 @@ SELECT EXISTS(
 (1 row)
 
 INSERT INTO tenant_4.another_partitioned_table VALUES (1, 'a');
-ERROR:  insert or update on table "another_partitioned_table_child_1920040" violates foreign key constraint "another_partitioned_table_a_fkey_1920039"
-DETAIL:  Key (a)=(1) is not present in table "partitioned_table_1920037".
+ERROR:  insert or update on table "another_partitioned_table_child_1920044" violates foreign key constraint "another_partitioned_table_a_fkey_1920043"
+DETAIL:  Key (a)=(1) is not present in table "partitioned_table_1920041".
 CONTEXT:  while executing command on localhost:xxxxx
 INSERT INTO tenant_4.partitioned_table VALUES (1, 'a');
 INSERT INTO tenant_4.another_partitioned_table VALUES (1, 'a');

@@ -65,12 +65,36 @@ SELECT undistribute_table('tenant_2.test_table');
 SELECT alter_distributed_table('tenant_2.test_table', colocate_with => 'none');
 -- verify we also don't allow colocate_with a tenant table
 SELECT alter_distributed_table('regular_schema.test_table', colocate_with => 'tenant_2.test_table');
--- verify we don't allow ALTER TABLE SET SCHEMA for tenant tables
-ALTER TABLE tenant_2.test_table SET SCHEMA regular_schema;
--- verify we don't allow ALTER TABLE SET SCHEMA for tenant schemas
-ALTER TABLE regular_schema.test_table SET SCHEMA tenant_2;
--- the same, from tenant schema to tenant schema
-ALTER TABLE tenant_2.test_table SET SCHEMA tenant_3;
+
+-- verify we can set tenant table's schema to regular schema
+CREATE TABLE tenant_2.test_table2(id int);
+ALTER TABLE tenant_2.test_table2 SET SCHEMA regular_schema;
+-- verify that regular_schema.test_table2 does not exist in pg_dist_partition
+SELECT COUNT(*)=0 FROM pg_dist_partition
+WHERE logicalrelid = 'regular_schema.test_table2'::regclass AND
+      partmethod = 'n' AND repmodel = 's' AND colocationid > 0;
+-- verify that tenant_2.test_table2 does not exist
+SELECT * FROM tenant_2.test_table2;
+
+-- verify we can set regular table's schema to distributed schema
+CREATE TABLE regular_schema.test_table3(id int);
+ALTER TABLE regular_schema.test_table3 SET SCHEMA tenant_2;
+-- verify that tenant_2.test_table3 is recorded in pg_dist_partition as a single-shard table.
+SELECT COUNT(*)=1 FROM pg_dist_partition
+WHERE logicalrelid = 'tenant_2.test_table3'::regclass AND
+      partmethod = 'n' AND repmodel = 's' AND colocationid > 0;
+-- verify that regular_schema.test_table3 does not exist
+SELECT * FROM regular_schema.test_table3;
+
+-- verify we can set tenant table's schema to another distributed schema
+CREATE TABLE tenant_2.test_table4(id int);
+ALTER TABLE tenant_2.test_table4 SET SCHEMA tenant_3;
+-- verify that tenant_3.test_table4 is recorded in pg_dist_partition as a single-shard table.
+SELECT COUNT(*)=1 FROM pg_dist_partition
+WHERE logicalrelid = 'tenant_3.test_table4'::regclass AND
+      partmethod = 'n' AND repmodel = 's' AND colocationid > 0;
+-- verify that tenant_2.test_table4 does not exist
+SELECT * FROM tenant_2.test_table4;
 
 -- (on coordinator) verify that colocation id is set for empty tenants too
 SELECT colocationid > 0 FROM pg_dist_schema
