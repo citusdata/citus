@@ -47,6 +47,9 @@
 #include "miscadmin.h"
 #include "nodes/execnodes.h"
 #include "lib/stringinfo.h"
+#if PG_VERSION_NUM >= PG_VERSION_16
+#include "parser/parse_relation.h"
+#endif
 #include "port.h"
 #include "storage/fd.h"
 #include "storage/lmgr.h"
@@ -1720,7 +1723,14 @@ create_estate_for_relation(Relation rel)
 	rte->relid = RelationGetRelid(rel);
 	rte->relkind = rel->rd_rel->relkind;
 	rte->rellockmode = AccessShareLock;
+
+#if PG_VERSION_NUM >= PG_VERSION_16
+	List *perminfos = NIL;
+	addRTEPermissionInfo(&perminfos, rte);
+	ExecInitRangeTable(estate, list_make1(rte), perminfos);
+#else
 	ExecInitRangeTable(estate, list_make1(rte));
+#endif
 
 	estate->es_output_cid = GetCurrentCommandId(true);
 
