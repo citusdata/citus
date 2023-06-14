@@ -76,10 +76,11 @@ SELECT citus_relation_size('null_dist_key_table');
                 8192
 (1 row)
 
-SELECT * FROM pg_catalog.citus_shard_sizes() WHERE table_name LIKE '%null_dist_key_table%';
-                   table_name                   | size
+SELECT shard_name, shard_size FROM pg_catalog.citus_shard_sizes(), citus_shards
+WHERE shardid = shard_id AND shard_name LIKE '%null_dist_key_table%' AND nodeport IN (:worker_1_port, :worker_2_port);
+                   shard_name                   | shard_size
 ---------------------------------------------------------------------
- null_dist_key_udfs.null_dist_key_table_1820000 | 24576
+ null_dist_key_udfs.null_dist_key_table_1820000 |      24576
 (1 row)
 
 BEGIN;
@@ -1209,6 +1210,112 @@ SELECT shardlength > 0 FROM pg_dist_shard_placement WHERE shardid = :update_shar
  ?column?
 ---------------------------------------------------------------------
  t
+(1 row)
+
+-- test citus clock
+SET citus.enable_cluster_clock TO ON;
+CREATE TABLE clock_single(a INT);
+SELECT create_distributed_table('clock_single', NULL, colocate_with:='none');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT citus_get_node_clock() AS nc1 \gset
+SELECT citus_get_node_clock() AS nc2 \gset
+SELECT citus_get_node_clock() AS nc3 \gset
+SELECT citus_is_clock_after(:'nc2', :'nc1');
+ citus_is_clock_after
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT citus_is_clock_after(:'nc3', :'nc2');
+ citus_is_clock_after
+---------------------------------------------------------------------
+ t
+(1 row)
+
+BEGIN;
+SELECT citus_get_node_clock() AS nc4 \gset
+COPY clock_single FROM STDIN;
+SELECT citus_get_node_clock() AS nc5 \gset
+END;
+SELECT citus_is_clock_after(:'nc4', :'nc3');
+ citus_is_clock_after
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT citus_is_clock_after(:'nc5', :'nc4');
+ citus_is_clock_after
+---------------------------------------------------------------------
+ t
+(1 row)
+
+BEGIN;
+SELECT citus_get_transaction_clock();
+ citus_get_transaction_clock
+---------------------------------------------------------------------
+ (xxxxxxxxxxxxx,x)
+(1 row)
+
+END;
+-- Transaction with single shard table access
+SELECT nodeport AS clock_shard_nodeport FROM citus_shards
+WHERE table_name::text = 'clock_single' AND nodeport IN (:worker_1_port, :worker_2_port) \gset
+BEGIN;
+COPY clock_single FROM STDIN;
+SELECT get_current_transaction_id() \gset tid
+SET client_min_messages TO DEBUG1;
+-- Capture the transaction timestamp
+SELECT citus_get_transaction_clock() as txnclock \gset
+DEBUG:  node xxxx transaction clock xxxxxx
+DEBUG:  node xxxx transaction clock xxxxxx
+DEBUG:  final global transaction clock xxxxxx
+COMMIT;
+-- Check to see if the clock is persisted in the sequence.
+SELECT result as logseq from run_command_on_workers($$SELECT last_value FROM pg_dist_clock_logical_seq$$)
+WHERE nodeport = :clock_shard_nodeport \gset
+SELECT cluster_clock_logical(:'txnclock') as txnlog \gset
+SELECT :logseq = :txnlog;
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+BEGIN;
+COPY clock_single FROM STDIN;
+SELECT get_current_transaction_id() \gset tid
+SET client_min_messages TO DEBUG1;
+-- Capture the transaction timestamp
+SELECT citus_get_transaction_clock() as txnclock \gset
+DEBUG:  node xxxx transaction clock xxxxxx
+DEBUG:  node xxxx transaction clock xxxxxx
+DEBUG:  final global transaction clock xxxxxx
+ROLLBACK;
+SELECT result as logseq from run_command_on_workers($$SELECT last_value FROM pg_dist_clock_logical_seq$$)
+WHERE nodeport = :clock_shard_nodeport \gset
+SELECT cluster_clock_logical(:'txnclock') as txnlog \gset
+SELECT :logseq = :txnlog;
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+-- test table with space in its name in citus_shards
+CREATE TABLE "t b l" (a INT);
+SELECT create_distributed_table('"t b l"', NULL, colocate_with:='none');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT table_name, shard_size FROM citus_shards
+WHERE table_name = '"t b l"'::regclass AND nodeport IN (:worker_1_port, :worker_2_port);
+ table_name | shard_size
+---------------------------------------------------------------------
+ "t b l"    |          0
 (1 row)
 
 SET client_min_messages TO WARNING;

@@ -119,7 +119,7 @@ get_referencing_relation_id_list(PG_FUNCTION_ARGS)
 
 		wrapper->listCell = lnext(wrapper->list, wrapper->listCell);
 
-		SRF_RETURN_NEXT(functionContext, PointerGetDatum(refId));
+		SRF_RETURN_NEXT(functionContext, ObjectIdGetDatum(refId));
 	}
 	else
 	{
@@ -178,7 +178,7 @@ get_referenced_relation_id_list(PG_FUNCTION_ARGS)
 
 		wrapper->listCell = lnext(wrapper->list, wrapper->listCell);
 
-		SRF_RETURN_NEXT(functionContext, PointerGetDatum(refId));
+		SRF_RETURN_NEXT(functionContext, ObjectIdGetDatum(refId));
 	}
 	else
 	{

@@ -84,6 +84,7 @@
 #include "distributed/commands/utility_hook.h"
 #include "distributed/citus_custom_scan.h"
 #include "distributed/citus_ruleutils.h"
+#include "distributed/colocation_utils.h"
 #include "distributed/query_utils.h"
 #include "distributed/deparse_shard_query.h"
 #include "distributed/listutils.h"
@@ -382,13 +383,12 @@ ExecuteLocalTaskListExtended(List *taskList,
 
 /*
  * SetColocationIdAndPartitionKeyValueForTasks sets colocationId and partitionKeyValue
- * for the tasks in the taskList if workerJob has a colocationId and partitionKeyValue.
+ * for the tasks in the taskList.
  */
 static void
 SetColocationIdAndPartitionKeyValueForTasks(List *taskList, Job *workerJob)
 {
-	if (workerJob->colocationId != 0 &&
-		workerJob->partitionKeyValue != NULL)
+	if (workerJob->colocationId != INVALID_COLOCATION_ID)
 	{
 		Task *task = NULL;
 		foreach_ptr(task, taskList)

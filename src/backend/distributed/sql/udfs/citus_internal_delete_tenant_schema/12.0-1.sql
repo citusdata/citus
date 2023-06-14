@@ -5,4 +5,4 @@ CREATE OR REPLACE FUNCTION pg_catalog.citus_internal_delete_tenant_schema(schema
     AS 'MODULE_PATHNAME';
 
 COMMENT ON FUNCTION pg_catalog.citus_internal_delete_tenant_schema(Oid) IS
-    'delete given tenant schema from pg_dist_tenant_schema';
+    'delete given tenant schema from pg_dist_schema';

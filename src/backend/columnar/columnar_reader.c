@@ -1557,7 +1557,7 @@ DeserializeDatumArray(StringInfo datumBuffer, bool *existsArray, uint32 datumCou
 										   datumTypeLength);
 		currentDatumDataOffset = att_addlength_datum(currentDatumDataOffset,
 													 datumTypeLength,
-													 currentDatumDataPointer);
+													 datumArray[datumIndex]);
 		currentDatumDataOffset = att_align_nominal(currentDatumDataOffset,
 												   datumTypeAlign);
 

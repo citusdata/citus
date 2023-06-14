@@ -6,7 +6,7 @@ citus_tables_create_query=$CTCQ$
     CREATE OR REPLACE VIEW %I.citus_tables AS
     SELECT
         logicalrelid AS table_name,
-        CASE WHEN colocationid IN (SELECT colocationid FROM pg_dist_tenant_schema) THEN 'schema'
+        CASE WHEN colocationid IN (SELECT colocationid FROM pg_dist_schema) THEN 'schema'
             WHEN partkey IS NOT NULL THEN 'distributed'
             WHEN repmodel = 't' THEN 'reference'
             WHEN colocationid = 0 THEN 'local'

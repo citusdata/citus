@@ -219,6 +219,18 @@ style `#include` statements like this:
 Any other SQL you can put directly in the main sql file, e.g.
 `src/backend/distributed/sql/citus--8.3-1--9.0-1.sql`.
 
+### Backporting a commit to a release branch
+
+1. Check out the release branch that you want to backport to `git checkout release-11.3`
+2. Make sure you have the latest changes `git pull`
+3. Create a new release branch with a unique name `git checkout -b release-11.3-<yourname>`
+4. Cherry-pick the commit that you want to backport `git cherry-pick -x <sha>` (the `-x` is important)
+5. Push the branch `git push`
+6. Wait for tests to pass
+7. If the cherry-pick required non-trivial merge conflicts, create a PR and ask
+   for a review.
+8. After the tests pass on CI, fast-forward the release branch `git push origin release-11.3-<yourname>:release-11.3`
+
 ### Running tests
 
 See [`src/test/regress/README.md`](https://github.com/citusdata/citus/blob/master/src/test/regress/README.md)

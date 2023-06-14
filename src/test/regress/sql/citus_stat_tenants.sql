@@ -61,6 +61,8 @@ SELECT tenant_attribute, query_count_in_this_period FROM citus_stat_tenants(true
 SELECT nodeid AS worker_2_nodeid FROM pg_dist_node WHERE nodeport = :worker_2_port \gset
 
 SELECT count(*)>=0 FROM dist_tbl WHERE a = 2;
+SELECT count(*)>=0 FROM dist_tbl WHERE a = 2;
+SELECT count(*)>=0 FROM dist_tbl WHERE a = 3;
 SELECT count(*)>=0 FROM dist_tbl WHERE a = 3;
 SELECT count(*)>=0 FROM dist_tbl WHERE a = 4;
 SELECT count(*)>=0 FROM dist_tbl_text WHERE a = 'abcd';
@@ -272,7 +274,7 @@ SELECT select_from_dist_tbl_text('/b*c/de');
 SELECT select_from_dist_tbl_text(U&'\0061\0308bc');
 SELECT select_from_dist_tbl_text(U&'\0061\0308bc');
 
-SELECT tenant_attribute, query_count_in_this_period FROM citus_stat_tenants;
+SELECT tenant_attribute, query_count_in_this_period FROM citus_stat_tenants ORDER BY tenant_attribute;
 
 CREATE OR REPLACE PROCEDURE select_from_dist_tbl_text_proc(
    p_keyword text
@@ -295,7 +297,7 @@ CALL citus_stat_tenants.select_from_dist_tbl_text_proc(U&'\0061\0308bc');
 CALL citus_stat_tenants.select_from_dist_tbl_text_proc(U&'\0061\0308bc');
 CALL citus_stat_tenants.select_from_dist_tbl_text_proc(NULL);
 
-SELECT tenant_attribute, query_count_in_this_period FROM citus_stat_tenants;
+SELECT tenant_attribute, query_count_in_this_period FROM citus_stat_tenants ORDER BY tenant_attribute;
 
 CREATE OR REPLACE VIEW
   select_from_dist_tbl_text_view
@@ -309,7 +311,71 @@ SELECT count(*)>=0 FROM select_from_dist_tbl_text_view WHERE a = U&'\0061\0308bc
 SELECT count(*)>=0 FROM select_from_dist_tbl_text_view WHERE a = U&'\0061\0308bc';
 SELECT count(*)>=0 FROM select_from_dist_tbl_text_view WHERE a = U&'\0061\0308bc';
 
+SELECT tenant_attribute, query_count_in_this_period FROM citus_stat_tenants ORDER BY tenant_attribute;
+
+-- single shard distributed table, which is not part of a tenant schema
+SELECT citus_stat_tenants_reset();
+
+CREATE TABLE dist_tbl_text_single_shard(a text, b int);
+select create_distributed_table('dist_tbl_text_single_shard', NULL);
+
+INSERT INTO dist_tbl_text_single_shard VALUES ('/b*c/de', 1);
+SELECT count(*)>=0 FROM dist_tbl_text_single_shard WHERE a = '/b*c/de';
+DELETE FROM dist_tbl_text_single_shard WHERE a = '/b*c/de';
+UPDATE dist_tbl_text_single_shard SET b = 1 WHERE a = '/b*c/de';
+
 SELECT tenant_attribute, query_count_in_this_period FROM citus_stat_tenants;
+
+-- schema based tenants
+SELECT citus_stat_tenants_reset();
+
+SET citus.enable_schema_based_sharding TO ON;
+
+CREATE SCHEMA citus_stat_tenants_t1;
+CREATE TABLE citus_stat_tenants_t1.users(id int);
+
+SELECT id FROM citus_stat_tenants_t1.users WHERE id = 2;
+INSERT INTO citus_stat_tenants_t1.users VALUES (1);
+UPDATE citus_stat_tenants_t1.users SET id = 2 WHERE id = 1;
+DELETE FROM citus_stat_tenants_t1.users WHERE id = 2;
+
+SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, query_count_in_this_period, query_count_in_last_period FROM citus_stat_tenants ORDER BY tenant_attribute;
+
+SELECT citus_stat_tenants_reset();
+
+PREPARE schema_tenant_insert_plan (int) AS insert into citus_stat_tenants_t1.users values ($1);
+EXECUTE schema_tenant_insert_plan(1);
+
+PREPARE schema_tenant_select_plan (int) AS SELECT count(*) > 1 FROM citus_stat_tenants_t1.users where Id = $1;
+EXECUTE schema_tenant_select_plan(1);
+
+SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, query_count_in_this_period, query_count_in_last_period FROM citus_stat_tenants ORDER BY tenant_attribute;
+
+SELECT citus_stat_tenants_reset();
+
+-- local execution & prepared statements
+\c - - - :worker_2_port
+SET search_path TO citus_stat_tenants;
+
+PREPARE schema_tenant_insert_plan (int) AS insert into citus_stat_tenants_t1.users values ($1);
+EXECUTE schema_tenant_insert_plan(1);
+EXECUTE schema_tenant_insert_plan(1);
+EXECUTE schema_tenant_insert_plan(1);
+EXECUTE schema_tenant_insert_plan(1);
+EXECUTE schema_tenant_insert_plan(1);
+
+PREPARE schema_tenant_select_plan (int) AS SELECT count(*) > 1 FROM citus_stat_tenants_t1.users where Id = $1;
+EXECUTE schema_tenant_select_plan(1);
+EXECUTE schema_tenant_select_plan(1);
+EXECUTE schema_tenant_select_plan(1);
+EXECUTE schema_tenant_select_plan(1);
+EXECUTE schema_tenant_select_plan(1);
+
+SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, query_count_in_this_period, query_count_in_last_period FROM citus_stat_tenants ORDER BY tenant_attribute;
+
+\c - - - :master_port
+SET search_path TO citus_stat_tenants;
 
 SET client_min_messages TO ERROR;
 DROP SCHEMA citus_stat_tenants CASCADE;
+DROP SCHEMA citus_stat_tenants_t1 CASCADE;

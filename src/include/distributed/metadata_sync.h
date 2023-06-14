@@ -177,7 +177,7 @@ extern void SendInterTableRelationshipCommands(MetadataSyncContext *context);
 #define DELETE_ALL_DISTRIBUTED_OBJECTS "DELETE FROM pg_catalog.pg_dist_object"
 #define DELETE_ALL_PARTITIONS "DELETE FROM pg_dist_partition"
 #define DELETE_ALL_COLOCATION "DELETE FROM pg_catalog.pg_dist_colocation"
-#define DELETE_ALL_TENANT_SCHEMAS "DELETE FROM pg_catalog.pg_dist_tenant_schema"
+#define DELETE_ALL_TENANT_SCHEMAS "DELETE FROM pg_catalog.pg_dist_schema"
 #define WORKER_DROP_ALL_SHELL_TABLES \
 	"CALL pg_catalog.worker_drop_all_shell_tables(%s)"
 #define CITUS_INTERNAL_MARK_NODE_NOT_SYNCED \

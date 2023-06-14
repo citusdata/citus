@@ -198,7 +198,7 @@ columnar_customscan_init()
 		&EnableColumnarCustomScan,
 		true,
 		PGC_USERSET,
-		GUC_NO_SHOW_ALL,
+		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 		NULL, NULL, NULL);
 	DefineCustomBoolVariable(
 		"columnar.enable_qual_pushdown",
@@ -208,7 +208,7 @@ columnar_customscan_init()
 		&EnableColumnarQualPushdown,
 		true,
 		PGC_USERSET,
-		GUC_NO_SHOW_ALL,
+		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 		NULL, NULL, NULL);
 	DefineCustomRealVariable(
 		"columnar.qual_pushdown_correlation_threshold",
@@ -222,7 +222,7 @@ columnar_customscan_init()
 		0.0,
 		1.0,
 		PGC_USERSET,
-		GUC_NO_SHOW_ALL,
+		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 		NULL, NULL, NULL);
 	DefineCustomIntVariable(
 		"columnar.max_custom_scan_paths",
@@ -234,7 +234,7 @@ columnar_customscan_init()
 		1,
 		1024,
 		PGC_USERSET,
-		GUC_NO_SHOW_ALL,
+		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 		NULL, NULL, NULL);
 	DefineCustomEnumVariable(
 		"columnar.planner_debug_level",

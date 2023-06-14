@@ -938,7 +938,7 @@ CREATE TABLE tenant_schema.test(x int, y int);
 SELECT colocationid = (
     SELECT colocationid FROM pg_dist_partition WHERE logicalrelid = 'tenant_schema.test'::regclass
 )
-FROM pg_dist_tenant_schema
+FROM pg_dist_schema
 WHERE schemaid::regnamespace::text = 'tenant_schema';
 
 -- and make sure that we can't remove the coordinator due to "test"
@@ -983,7 +983,7 @@ DROP EXTENSION citus_columnar;
 SET citus.enable_schema_based_sharding TO ON;
 
 CREATE EXTENSION citus_columnar;
-SELECT COUNT(*)=0 FROM pg_dist_tenant_schema
+SELECT COUNT(*)=0 FROM pg_dist_schema
 WHERE schemaid IN ('columnar'::regnamespace, 'columnar_internal'::regnamespace);
 
 RESET citus.enable_schema_based_sharding;
