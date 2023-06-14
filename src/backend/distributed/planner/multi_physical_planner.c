@@ -85,7 +85,7 @@
 #include "utils/typcache.h"
 
 /* RepartitionJoinBucketCountPerNode determines bucket amount during repartitions */
-int RepartitionJoinBucketCountPerNode = 8;
+int RepartitionJoinBucketCountPerNode = 4;
 
 /* Policy to use when assigning tasks to worker nodes */
 int TaskAssignmentPolicy = TASK_ASSIGNMENT_GREEDY;

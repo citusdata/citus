@@ -4130,10 +4130,13 @@ ConvertNewTableIfNecessary(Node *createStmt)
 
 		if (ShouldCreateTenantSchemaTable(createdRelationId))
 		{
-			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							errmsg("cannot create a tenant table using "
-								   "CREATE TABLE AS or SELECT INTO "
-								   "statements")));
+			/* not try to convert the table if it already exists and IF NOT EXISTS syntax is used */
+			if (createTableAsStmt->if_not_exists && IsCitusTable(createdRelationId))
+			{
+				return;
+			}
+
+			CreateTenantSchemaTable(createdRelationId);
 		}
 
 		/*

@@ -2018,7 +2018,7 @@ columnar_tableam_init()
 		&EnableVersionChecksColumnar,
 		true,
 		PGC_USERSET,
-		GUC_NO_SHOW_ALL,
+		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 		NULL, NULL, NULL);
 }
 

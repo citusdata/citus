@@ -1,4 +1,4 @@
-CREATE OR REPLACE VIEW pg_catalog.citus_shards AS
+CREATE OR REPLACE VIEW citus.citus_shards AS
 SELECT
      pg_dist_shard.logicalrelid AS table_name,
      pg_dist_shard.shardid,
@@ -27,7 +27,7 @@ JOIN
 ON
    pg_dist_partition.logicalrelid = pg_dist_shard.logicalrelid
 LEFT JOIN
-   (SELECT (regexp_matches(table_name,'_(\d+)$'))[1]::int as shard_id, max(size) as size from citus_shard_sizes() GROUP BY shard_id) as shard_sizes
+   (SELECT shard_id, max(size) as size from citus_shard_sizes() GROUP BY shard_id) as shard_sizes
 ON
     pg_dist_shard.shardid = shard_sizes.shard_id
 WHERE
@@ -46,4 +46,5 @@ ORDER BY
    pg_dist_shard.logicalrelid::text, shardid
 ;
 
+ALTER VIEW citus.citus_shards SET SCHEMA pg_catalog;
 GRANT SELECT ON pg_catalog.citus_shards TO public;

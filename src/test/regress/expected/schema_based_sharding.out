@@ -384,13 +384,36 @@ SELECT EXISTS(
  t
 (1 row)
 
--- verify that we don't allow creating tenant tables by using CREATE TABLE AS / SELECT INTO commands
+-- verify that we allow creating tenant tables by using CREATE TABLE AS / SELECT INTO commands
 CREATE TABLE tenant_4.tbl_3 AS SELECT 1 AS a, 'text' as b;
-ERROR:  cannot create a tenant table using CREATE TABLE AS or SELECT INTO statements
-CREATE TABLE IF NOT EXISTS tenant_4.tbl_3 AS SELECT 1 as a, 'text' as b;
-ERROR:  cannot create a tenant table using CREATE TABLE AS or SELECT INTO statements
-SELECT 1 as a, 'text' as b INTO tenant_4.tbl_3;
-ERROR:  cannot create a tenant table using CREATE TABLE AS or SELECT INTO statements
+NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$tenant_4.tbl_3$$)
+CREATE TEMP TABLE IF NOT EXISTS tenant_4.tbl_4 AS SELECT 1 as a, 'text' as b;
+ERROR:  cannot create temporary relation in non-temporary schema
+CREATE UNLOGGED TABLE IF NOT EXISTS tenant_4.tbl_4 AS SELECT 1 as a, 'text' as b WITH NO DATA;
+-- the same command, no changes because of IF NOT EXISTS
+CREATE UNLOGGED TABLE IF NOT EXISTS tenant_4.tbl_4 AS SELECT 1 as a, 'text' as b WITH NO DATA;
+NOTICE:  relation "tbl_4" already exists, skipping
+SELECT 1 as a, 'text' as b INTO tenant_4.tbl_5;
+NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$tenant_4.tbl_5$$)
+-- verify we can query the newly created tenant tables
+SELECT * FROM tenant_4.tbl_3;
+ a |  b
+---------------------------------------------------------------------
+ 1 | text
+(1 row)
+
+SELECT COUNT(*) FROM tenant_4.tbl_5;
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
 CREATE TYPE employee_type AS (name text, salary numeric);
 -- verify that we don't allow creating tenant tables by using CREATE TABLE OF commands
 CREATE TABLE tenant_4.employees OF employee_type (
@@ -399,9 +422,23 @@ CREATE TABLE tenant_4.employees OF employee_type (
 );
 ERROR:  cannot create a tenant table by using CREATE TABLE OF syntax
 -- verify that we act accordingly when if not exists is used
-CREATE TABLE IF NOT EXISTS tenant_4.tbl_3(a int, b text);
-CREATE TABLE IF NOT EXISTS tenant_4.tbl_3(a int, b text);
-NOTICE:  relation "tbl_3" already exists, skipping
+CREATE TABLE IF NOT EXISTS tenant_4.tbl_6(a int, b text);
+CREATE TABLE IF NOT EXISTS tenant_4.tbl_6(a int, b text);
+NOTICE:  relation "tbl_6" already exists, skipping
+SELECT logicalrelid, partmethod
+    FROM pg_dist_partition
+    WHERE logicalrelid::text LIKE 'tenant_4.tbl%'
+    ORDER BY logicalrelid;
+  logicalrelid  | partmethod
+---------------------------------------------------------------------
+ tenant_4.tbl_1 | n
+ tenant_4.tbl_2 | n
+ tenant_4.tbl_3 | n
+ tenant_4.tbl_4 | n
+ tenant_4.tbl_5 | n
+ tenant_4.tbl_6 | n
+(6 rows)
+
 CREATE TABLE regular_schema.local(a int, b text);
 CREATE TABLE regular_schema.citus_local(a int, b text);
 SELECT citus_add_local_table_to_metadata('regular_schema.citus_local');
