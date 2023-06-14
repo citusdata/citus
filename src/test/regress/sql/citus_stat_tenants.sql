@@ -316,6 +316,7 @@ SELECT tenant_attribute, query_count_in_this_period FROM citus_stat_tenants ORDE
 -- single shard distributed table, which is not part of a tenant schema
 SELECT citus_stat_tenants_reset();
 
+SET citus.shard_replication_factor TO 1;
 CREATE TABLE dist_tbl_text_single_shard(a text, b int);
 select create_distributed_table('dist_tbl_text_single_shard', NULL);
 

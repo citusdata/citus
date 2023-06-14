@@ -8,6 +8,7 @@ citus_add_local_table_to_metadata
 
 step s1-begin:
     BEGIN;
+    SET citus.shard_replication_factor TO 1;
 
 step s1-schema-distribute:
     SELECT citus_schema_distribute('tenant1');
@@ -53,6 +54,7 @@ citus_schema_distribute
 
 step s1-begin:
     BEGIN;
+    SET citus.shard_replication_factor TO 1;
 
 step s1-schema-undistribute:
     SELECT citus_schema_undistribute('tenant1');
@@ -90,6 +92,7 @@ citus_add_local_table_to_metadata
 
 step s1-begin:
     BEGIN;
+    SET citus.shard_replication_factor TO 1;
 
 step s1-schema-distribute:
     SELECT citus_schema_distribute('tenant1');
@@ -137,6 +140,7 @@ citus_schema_distribute
 
 step s1-begin:
     BEGIN;
+    SET citus.shard_replication_factor TO 1;
 
 step s1-schema-undistribute:
     SELECT citus_schema_undistribute('tenant1');
@@ -174,6 +178,7 @@ citus_add_local_table_to_metadata
 
 step s1-begin:
     BEGIN;
+    SET citus.shard_replication_factor TO 1;
 
 step s1-schema-distribute:
     SELECT citus_schema_distribute('tenant1');
@@ -184,6 +189,7 @@ citus_schema_distribute
 (1 row)
 
 step s2-add-table:
+    SET citus.shard_replication_factor TO 1;
     CREATE TABLE tenant1.table4(id int PRIMARY KEY, name text, col bigint);
  <waiting ...>
 step s1-commit:
@@ -223,6 +229,7 @@ citus_schema_distribute
 
 step s1-begin:
     BEGIN;
+    SET citus.shard_replication_factor TO 1;
 
 step s1-schema-undistribute:
     SELECT citus_schema_undistribute('tenant1');
@@ -233,6 +240,7 @@ citus_schema_undistribute
 (1 row)
 
 step s2-add-table:
+    SET citus.shard_replication_factor TO 1;
     CREATE TABLE tenant1.table4(id int PRIMARY KEY, name text, col bigint);
  <waiting ...>
 step s1-commit:
@@ -261,6 +269,7 @@ citus_add_local_table_to_metadata
 
 step s1-begin:
     BEGIN;
+    SET citus.shard_replication_factor TO 1;
 
 step s1-schema-distribute:
     SELECT citus_schema_distribute('tenant1');
@@ -308,6 +317,7 @@ citus_schema_distribute
 
 step s1-begin:
     BEGIN;
+    SET citus.shard_replication_factor TO 1;
 
 step s1-schema-undistribute:
     SELECT citus_schema_undistribute('tenant1');
@@ -345,6 +355,7 @@ citus_add_local_table_to_metadata
 
 step s1-begin:
     BEGIN;
+    SET citus.shard_replication_factor TO 1;
 
 step s1-schema-distribute:
     SELECT citus_schema_distribute('tenant1');
@@ -393,6 +404,7 @@ citus_schema_distribute
 
 step s1-begin:
     BEGIN;
+    SET citus.shard_replication_factor TO 1;
 
 step s1-schema-undistribute:
     SELECT citus_schema_undistribute('tenant1');
@@ -431,6 +443,7 @@ citus_add_local_table_to_metadata
 
 step s1-begin:
     BEGIN;
+    SET citus.shard_replication_factor TO 1;
 
 step s1-schema-distribute:
     SELECT citus_schema_distribute('tenant1');
@@ -479,6 +492,7 @@ citus_schema_distribute
 
 step s1-begin:
     BEGIN;
+    SET citus.shard_replication_factor TO 1;
 
 step s1-schema-undistribute:
     SELECT citus_schema_undistribute('tenant1');
@@ -518,6 +532,7 @@ citus_add_local_table_to_metadata
 
 step s1-begin:
     BEGIN;
+    SET citus.shard_replication_factor TO 1;
 
 step s1-schema-distribute:
     SELECT citus_schema_distribute('tenant1');
@@ -566,6 +581,7 @@ citus_schema_distribute
 
 step s1-begin:
     BEGIN;
+    SET citus.shard_replication_factor TO 1;
 
 step s1-schema-undistribute:
     SELECT citus_schema_undistribute('tenant1');
@@ -603,6 +619,7 @@ citus_add_local_table_to_metadata
 
 step s1-begin:
     BEGIN;
+    SET citus.shard_replication_factor TO 1;
 
 step s1-schema-distribute:
     SELECT citus_schema_distribute('tenant1');
@@ -651,6 +668,7 @@ citus_schema_distribute
 
 step s1-begin:
     BEGIN;
+    SET citus.shard_replication_factor TO 1;
 
 step s1-schema-undistribute:
     SELECT citus_schema_undistribute('tenant1');
@@ -689,6 +707,7 @@ citus_add_local_table_to_metadata
 
 step s1-begin:
     BEGIN;
+    SET citus.shard_replication_factor TO 1;
 
 step s1-schema-distribute:
     SELECT citus_schema_distribute('tenant1');
@@ -737,6 +756,7 @@ citus_schema_distribute
 
 step s1-begin:
     BEGIN;
+    SET citus.shard_replication_factor TO 1;
 
 step s1-schema-undistribute:
     SELECT citus_schema_undistribute('tenant1');
@@ -778,6 +798,7 @@ step s2-create-unique-index:
 
 step s1-begin:
     BEGIN;
+    SET citus.shard_replication_factor TO 1;
 
 step s1-schema-distribute:
     SELECT citus_schema_distribute('tenant1');
@@ -829,6 +850,7 @@ citus_schema_distribute
 
 step s1-begin:
     BEGIN;
+    SET citus.shard_replication_factor TO 1;
 
 step s1-schema-undistribute:
     SELECT citus_schema_undistribute('tenant1');
@@ -867,6 +889,7 @@ citus_add_local_table_to_metadata
 
 step s1-begin:
     BEGIN;
+    SET citus.shard_replication_factor TO 1;
 
 step s1-schema-distribute:
     SELECT citus_schema_distribute('tenant1');
@@ -916,6 +939,7 @@ citus_schema_distribute
 
 step s1-begin:
     BEGIN;
+    SET citus.shard_replication_factor TO 1;
 
 step s1-schema-undistribute:
     SELECT citus_schema_undistribute('tenant1');
@@ -959,6 +983,7 @@ step s2-insert:
 
 step s1-begin:
     BEGIN;
+    SET citus.shard_replication_factor TO 1;
 
 step s1-schema-distribute:
     SELECT citus_schema_distribute('tenant1');
@@ -1011,6 +1036,7 @@ citus_schema_distribute
 
 step s1-begin:
     BEGIN;
+    SET citus.shard_replication_factor TO 1;
 
 step s1-schema-undistribute:
     SELECT citus_schema_undistribute('tenant1');
@@ -1053,6 +1079,7 @@ step s2-insert:
 
 step s1-begin:
     BEGIN;
+    SET citus.shard_replication_factor TO 1;
 
 step s1-schema-distribute:
     SELECT citus_schema_distribute('tenant1');
@@ -1105,6 +1132,7 @@ citus_schema_distribute
 
 step s1-begin:
     BEGIN;
+    SET citus.shard_replication_factor TO 1;
 
 step s1-schema-undistribute:
     SELECT citus_schema_undistribute('tenant1');

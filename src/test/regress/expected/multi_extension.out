@@ -1333,6 +1333,7 @@ SELECT * FROM multi_extension.print_extension_changes();
 -- Test downgrade to 11.3-1 from 12.0-1
 ALTER EXTENSION citus UPDATE TO '12.0-1';
 CREATE TABLE null_shard_key (x int, y int);
+SET citus.shard_replication_factor TO 1;
 SELECT create_distributed_table('null_shard_key', null);
  create_distributed_table
 ---------------------------------------------------------------------

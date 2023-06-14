@@ -1,6 +1,7 @@
 setup
 {
     SET citus.enable_schema_based_sharding TO ON;
+    SET citus.shard_replication_factor TO 1;
     CREATE SCHEMA tenant_1;
     CREATE SCHEMA tenant_2;
     CREATE SCHEMA tenant_3;
@@ -16,7 +17,7 @@ teardown
 
 session "s1"
 
-step "s1-begin" { BEGIN; }
+step "s1-begin" { BEGIN; SET citus.shard_replication_factor TO 1;}
 step "s1-tenant-1-create-table-1" { CREATE TABLE tenant_1.tbl_1 (a int); }
 step "s1-tenant-4-create-table-1" { CREATE TABLE tenant_4.tbl_1 (a int); }
 step "s1-tenant-2-create-table-1" { CREATE TABLE tenant_2.tbl_1 (a int); }
@@ -24,7 +25,7 @@ step "s1-commit" { COMMIT; }
 
 session "s2"
 
-step "s2-begin" { BEGIN; }
+step "s2-begin" { BEGIN; SET citus.shard_replication_factor TO 1;}
 step "s2-tenant-1-create-table-2" { CREATE TABLE tenant_1.tbl_2 (a int); }
 step "s2-tenant-4-create-table-2" { CREATE TABLE tenant_4.tbl_2 (a int); }
 step "s2-tenant-1-verify-colocation" { SELECT COUNT(DISTINCT(colocationid))=1 FROM pg_dist_partition WHERE logicalrelid::text LIKE 'tenant_1.%'; }

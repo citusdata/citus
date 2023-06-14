@@ -508,6 +508,7 @@ SET search_path TO null_dist_key_udfs;
 
 --test isolate_tenant_to_new_shard
 CREATE TABLE iso_tbl (a INT);
+SET citus.shard_replication_factor TO 1;
 SELECT create_distributed_table('iso_tbl', NULL, colocate_with:='none');
 SELECT isolate_tenant_to_new_shard('iso_tbl', 5);
 

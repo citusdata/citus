@@ -3,6 +3,7 @@ SET search_path TO query_single_shard_table;
 
 SET citus.next_shard_id TO 1620000;
 SET citus.shard_count TO 32;
+SET citus.shard_replication_factor TO 1;
 
 SET client_min_messages TO NOTICE;
 
@@ -23,6 +24,8 @@ INSERT INTO nullkey_c2_t2 SELECT i, i FROM generate_series(1, 8) i;
 CREATE TABLE nullkey_c3_t1(a int, b int);
 SELECT create_distributed_table('nullkey_c3_t1', null, colocate_with=>'none');
 INSERT INTO nullkey_c3_t1 SELECT i, i FROM generate_series(1, 8) i;
+
+RESET citus.shard_replication_factor;
 
 CREATE TABLE reference_table(a int, b int);
 SELECT create_reference_table('reference_table');
@@ -53,6 +56,7 @@ INSERT INTO articles_hash VALUES ( 4,  4, 'altdorfer', 14551),( 5,  5, 'aruru', 
 								 (42,  2, 'ausable', 15885),(43,  3, 'affixal', 12723),
 								 (49,  9, 'anyone', 2681),(50, 10, 'anjanette', 19519);
 
+SET citus.shard_replication_factor TO 1;
 SELECT create_distributed_table('articles_hash', null, colocate_with=>'none');
 
 CREATE TABLE raw_events_first (user_id int, time timestamp, value_1 int, value_2 int, value_3 float, value_4 bigint, UNIQUE(user_id, value_1));
@@ -79,6 +83,8 @@ SELECT create_reference_table('modify_fast_path_reference');
 
 CREATE TABLE bigserial_test (x int, y int, z bigserial);
 SELECT create_distributed_table('bigserial_test', null);
+
+RESET citus.shard_replication_factor;
 
 CREATE TABLE append_table (text_col text, a int);
 SELECT create_distributed_table('append_table', 'a', 'append');
@@ -112,6 +118,7 @@ INSERT INTO range_table VALUES (0, 1), (1, 2), (2, 3), (3, 4), (4, 5), (5, 6), (
 \set users_table_data_file :abs_srcdir '/data/users_table.data'
 \set events_table_data_file :abs_srcdir '/data/events_table.data'
 
+SET citus.shard_replication_factor TO 1;
 CREATE TABLE users_table (user_id int, time timestamp, value_1 int, value_2 int, value_3 float, value_4 bigint);
 SELECT create_distributed_table('users_table', null, colocate_with=>'none');
 \set client_side_copy_command '\\copy users_table FROM ' :'users_table_data_file' ' WITH CSV;'
