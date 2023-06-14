@@ -974,6 +974,11 @@ SELECT pg_reload_conf();
 SET search_path TO regular_schema;
 
 CREATE TABLE type_sing(a INT);
+
+-- errors out because shard_replication_factor = 2
+SELECT create_distributed_table('type_sing', NULL, colocate_with:='none');
+
+SET citus.shard_replication_factor TO 1;
 SELECT create_distributed_table('type_sing', NULL, colocate_with:='none');
 
 SET citus.enable_schema_based_sharding TO ON;

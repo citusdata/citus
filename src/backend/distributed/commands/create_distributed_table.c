@@ -1136,6 +1136,14 @@ CreateCitusTable(Oid relationId, CitusTableType tableType,
 		DropFKeysRelationInvolvedWithTableType(relationId, INCLUDE_LOCAL_TABLES);
 	}
 
+	if (tableType == SINGLE_SHARD_DISTRIBUTED && ShardReplicationFactor > 1)
+	{
+		ereport(ERROR, (errmsg("could not create single shard table: "
+							   "citus.shard_replication_factor is greater than 1"),
+						errhint("Consider setting citus.shard_replication_factor to 1 "
+								"and try again")));
+	}
+
 	LockRelationOid(relationId, ExclusiveLock);
 
 	EnsureTableNotDistributed(relationId);
