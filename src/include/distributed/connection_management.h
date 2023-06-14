@@ -285,6 +285,7 @@ extern int MaxCachedConnectionLifetime;
 /* parameters used for outbound connections */
 extern char *NodeConninfo;
 extern char *LocalHostName;
+extern bool checkAtBootPassed;
 
 /* the hash tables are externally accessiable */
 extern HTAB *ConnectionHash;
