@@ -430,6 +430,34 @@ UndistributeTables(List *relationIdList)
 
 
 /*
+ * EnsureUndistributeTenantTableSafe ensures that it is safe to undistribute a tenant table.
+ */
+void
+EnsureUndistributeTenantTableSafe(Oid relationId)
+{
+	Oid schemaId = get_rel_namespace(relationId);
+	Assert(IsTenantSchema(schemaId));
+
+	/*
+	 * When table is referenced by or referencing to a table in the same tenant
+	 * schema, we should disallow undistributing the table since we do not allow
+	 * foreign keys from/to Citus local or Postgres local table to/from distributed
+	 * schema.
+	 */
+	List *fkeyCommandsWithSingleShardTables =
+		GetFKeyCreationCommandsRelationInvolvedWithTableType(
+			relationId, INCLUDE_SINGLE_SHARD_TABLES);
+	if (fkeyCommandsWithSingleShardTables != NIL)
+	{
+		ereport(ERROR, (errmsg("cannot undistribute table %s in distributed schema %s",
+							   get_rel_name(relationId), get_namespace_name(schemaId)),
+						errdetail("distributed schemas cannot have foreign keys from/to "
+								  "local tables")));
+	}
+}
+
+
+/*
  * UndistributeTable undistributes the given table. It uses ConvertTable function to
  * create a new local table and move everything to that table.
  *
@@ -449,7 +477,11 @@ UndistributeTable(TableConversionParameters *params)
 							   "because the table is not distributed")));
 	}
 
-	ErrorIfTenantTable(params->relationId, "undistribute_table");
+	Oid schemaId = get_rel_namespace(params->relationId);
+	if (IsTenantSchema(schemaId))
+	{
+		EnsureUndistributeTenantTableSafe(params->relationId);
+	}
 
 	if (!params->cascadeViaForeignKeys)
 	{

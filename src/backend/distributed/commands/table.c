@@ -763,20 +763,6 @@ PostprocessAlterTableSchemaStmt(Node *node, const char *queryString)
 		return PostprocessAlterViewSchemaStmt((Node *) stmt, queryString);
 	}
 
-	/*
-	 * Create table under the new tenant schema if the new schema is a tenant schema and
-	 * the table is not already a single shard table. (It can happen so if the old schema
-	 * is the same as the new one)
-	 */
-	Oid relationId = tableAddress->objectId;
-	Oid schemaId = get_namespace_oid(stmt->newschema, false);
-	if (!IsCitusTableType(relationId, SINGLE_SHARD_DISTRIBUTED) &&
-		IsTenantSchema(schemaId))
-	{
-		EnsureTenantTable(relationId);
-		CreateTenantSchemaTable(relationId);
-	}
-
 	if (!ShouldPropagate() || !IsCitusTable(tableAddress->objectId))
 	{
 		return NIL;
@@ -2325,17 +2311,39 @@ PreprocessAlterTableSchemaStmt(Node *node, const char *queryString,
 		return NIL;
 	}
 
-	/*  Do nothing if new schema is the same as old schema */
 	Oid oldSchemaId = get_rel_namespace(relationId);
-	Oid newSchemaId = get_namespace_oid(stmt->newschema, false);
+	Oid newSchemaId = get_namespace_oid(stmt->newschema, stmt->missing_ok);
+	if (!OidIsValid(oldSchemaId) || !OidIsValid(newSchemaId))
+	{
+		return NIL;
+	}
+
+	/*  Do nothing if new schema is the same as old schema */
 	if (newSchemaId == oldSchemaId)
 	{
 		return NIL;
 	}
 
 	/* Undistribute table if its old schema is a tenant schema */
-	if (IsTenantSchema(oldSchemaId))
+	if (IsTenantSchema(oldSchemaId) && IsCoordinator())
 	{
+		/*
+		 * When table is referenced by or referencing to a table in the same tenant
+		 * schema, we should disallow changing its schema since it breaks foreign
+		 * key checks for tenant tables in distributed schema.
+		 */
+		List *fkeyCommandsWithSingleShardTables =
+			GetFKeyCreationCommandsRelationInvolvedWithTableType(
+				relationId, INCLUDE_SINGLE_SHARD_TABLES);
+		if (fkeyCommandsWithSingleShardTables != NIL)
+		{
+			ereport(ERROR, (errmsg("cannot alter the schema of table %s",
+								   get_rel_name(relationId)),
+							errdetail(
+								"distributed schemas cannot have foreign keys from/to "
+								"another schema")));
+		}
+
 		/*
 		 * We deregister the schema first to prevent `ErrorIfTenantTable` error. We will
 		 * register the schema as tenant schema again after undistributing the table.
@@ -2356,6 +2364,10 @@ PreprocessAlterTableSchemaStmt(Node *node, const char *queryString,
 		ExecuteForeignKeyCreateCommandList(fkeyCommandsForRelation,
 										   skip_validation);
 
+		/* relation id might change after adding foreign key (conversion to Citus table) */
+		relationId = get_relname_relid(stmt->relation->relname, oldSchemaId);
+
+
 		/* Register the schema back */
 		InsertTenantSchemaLocally(oldSchemaId, tenantSchemaColocationId);
 		char *registerSchemaCommand = TenantSchemaInsertCommand(oldSchemaId,
@@ -2365,7 +2377,14 @@ PreprocessAlterTableSchemaStmt(Node *node, const char *queryString,
 			SendCommandToWorkersWithMetadata(registerSchemaCommand);
 		}
 
-		return NIL;
+		/*
+		 * After undistribution, the table could be Citus table or Postgres table.
+		 * If it is Postgres table, do not propagate the command to workers.
+		 */
+		if (!IsCitusTable(relationId))
+		{
+			return NIL;
+		}
 	}
 
 	DDLJob *ddlJob = palloc0(sizeof(DDLJob));
@@ -4218,5 +4237,57 @@ ConvertNewTableIfNecessary(Node *createStmt)
 		bool autoConverted = false;
 		bool cascade = true;
 		CreateCitusLocalTable(createdRelationId, cascade, autoConverted);
+	}
+}
+
+
+/*
+ * ConvertToTenantTableIfNecessary converts given relation to a tenant table if its
+ * schema changed to a distributed schema.
+ */
+void
+ConvertToTenantTableIfNecessary(Node *alterObjectSchemaStmt)
+{
+	if (!IsCoordinator())
+	{
+		return;
+	}
+
+	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, alterObjectSchemaStmt);
+	Assert(stmt->objectType == OBJECT_TABLE || stmt->objectType == OBJECT_FOREIGN_TABLE);
+
+	/*
+	 * We will let Postgres deal with missing_ok
+	 */
+	List *tableAddresses = GetObjectAddressListFromParseTree((Node *) stmt, true, true);
+
+	/*  the code-path only supports a single object */
+	Assert(list_length(tableAddresses) == 1);
+
+	/* We have already asserted that we have exactly 1 address in the addresses. */
+	ObjectAddress *tableAddress = linitial(tableAddresses);
+	char relKind = get_rel_relkind(tableAddress->objectId);
+	if (relKind == RELKIND_SEQUENCE || relKind == RELKIND_VIEW)
+	{
+		return;
+	}
+
+	Oid relationId = tableAddress->objectId;
+	Oid schemaId = get_namespace_oid(stmt->newschema, stmt->missing_ok);
+	if (!OidIsValid(schemaId))
+	{
+		return;
+	}
+
+	/*
+	 * Create table under the new tenant schema if the new schema is a tenant schema and
+	 * the table is not already a single shard table. (It can happen so if the old schema
+	 * is the same as the new one)
+	 */
+	if (!IsCitusTableType(relationId, SINGLE_SHARD_DISTRIBUTED) &&
+		IsTenantSchema(schemaId))
+	{
+		EnsureTenantTable(relationId, "ALTER TABLE SET SCHEMA");
+		CreateTenantSchemaTable(relationId);
 	}
 }

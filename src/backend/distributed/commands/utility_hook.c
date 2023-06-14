@@ -370,6 +370,12 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 
 				ConvertNewTableIfNecessary(createStmt);
 			}
+
+			if (context == PROCESS_UTILITY_TOPLEVEL &&
+				IsA(parsetree, AlterObjectSchemaStmt))
+			{
+				ConvertToTenantTableIfNecessary(parsetree);
+			}
 		}
 
 		UtilityHookLevel--;

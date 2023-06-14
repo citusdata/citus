@@ -404,7 +404,7 @@ EnsureSchemaCanBeDistributed(Oid schemaId, List *schemaTableIdList)
 	Oid relationId = InvalidOid;
 	foreach_oid(relationId, schemaTableIdList)
 	{
-		EnsureTenantTable(relationId);
+		EnsureTenantTable(relationId, "citus_schema_distribute");
 	}
 }
 
@@ -418,7 +418,7 @@ EnsureSchemaCanBeDistributed(Oid schemaId, List *schemaTableIdList)
  *  - Table should be Citus local or Postgres local table.
  */
 void
-EnsureTenantTable(Oid relationId)
+EnsureTenantTable(Oid relationId, char *operationName)
 {
 	/* Ensure table owner */
 	EnsureTableOwner(relationId);
@@ -450,9 +450,9 @@ EnsureTenantTable(Oid relationId)
 	/* Only Citus local tables, amongst Citus table types, are allowed */
 	if (!IsCitusTableType(relationId, CITUS_LOCAL_TABLE))
 	{
-		ereport(ERROR, (errmsg("schema already has distributed tables"),
-						errhint("Undistribute distributed tables under "
-								"the schema before distributing the schema.")));
+		ereport(ERROR, (errmsg("distributed schema cannot have distributed tables"),
+						errhint("Undistribute distributed tables before "
+								"'%s'.", operationName)));
 	}
 }
 
