@@ -40,7 +40,7 @@ BEGIN
         L.cpu_usage_in_last_period,
         L.score
     FROM pg_catalog.citus_stat_tenants_local_internal(return_all_tenants) L
-    LEFT JOIN pg_dist_tenant_schema S ON L.tenant_attribute IS NULL AND L.colocation_id = S.colocationid
+    LEFT JOIN pg_dist_schema S ON L.tenant_attribute IS NULL AND L.colocation_id = S.colocationid
     LEFT JOIN pg_namespace N ON N.oid = S.schemaid
     ORDER BY L.score DESC;
 END;

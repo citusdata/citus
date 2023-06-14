@@ -104,8 +104,8 @@ SET citus.enable_schema_based_sharding TO ON;
 CREATE SCHEMA tenant_1;
 CREATE TABLE tenant_1.tbl_1 (a int);
 
--- verify that we recorded tenant_1 in pg_dist_tenant_schema
-SELECT COUNT(*)=1 FROM pg_dist_tenant_schema WHERE schemaid::regnamespace::text = 'tenant_1';
+-- verify that we recorded tenant_1 in pg_dist_schema
+SELECT COUNT(*)=1 FROM pg_dist_schema WHERE schemaid::regnamespace::text = 'tenant_1';
 
 -- verify that tenant_1.tbl_1 is recorded in pg_dist_partition, as a single-shard table
 SELECT COUNT(*)=1 FROM pg_dist_partition

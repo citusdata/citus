@@ -76,7 +76,7 @@ SELECT unnest(activate_node_snapshot()) order by 1;
  CREATE SCHEMA IF NOT EXISTS public AUTHORIZATION postgres
  DELETE FROM pg_catalog.pg_dist_colocation
  DELETE FROM pg_catalog.pg_dist_object
- DELETE FROM pg_catalog.pg_dist_tenant_schema
+ DELETE FROM pg_catalog.pg_dist_schema
  DELETE FROM pg_dist_node
  DELETE FROM pg_dist_partition
  DELETE FROM pg_dist_placement
@@ -147,7 +147,7 @@ SELECT unnest(activate_node_snapshot()) order by 1;
  CREATE TABLE public.single_shard_tbl (a integer) USING heap
  DELETE FROM pg_catalog.pg_dist_colocation
  DELETE FROM pg_catalog.pg_dist_object
- DELETE FROM pg_catalog.pg_dist_tenant_schema
+ DELETE FROM pg_catalog.pg_dist_schema
  DELETE FROM pg_dist_node
  DELETE FROM pg_dist_partition
  DELETE FROM pg_dist_placement
@@ -216,7 +216,7 @@ SELECT unnest(activate_node_snapshot()) order by 1;
  CREATE TABLE public.mx_test_table (col_1 integer, col_2 text NOT NULL, col_3 bigint DEFAULT nextval('public.mx_test_table_col_3_seq'::regclass) NOT NULL, col_4 bigint DEFAULT nextval('public.user_defined_seq'::regclass)) USING heap
  DELETE FROM pg_catalog.pg_dist_colocation
  DELETE FROM pg_catalog.pg_dist_object
- DELETE FROM pg_catalog.pg_dist_tenant_schema
+ DELETE FROM pg_catalog.pg_dist_schema
  DELETE FROM pg_dist_node
  DELETE FROM pg_dist_partition
  DELETE FROM pg_dist_placement
@@ -277,7 +277,7 @@ SELECT unnest(activate_node_snapshot()) order by 1;
  CREATE TABLE mx_testing_schema.mx_test_table (col_1 integer, col_2 text NOT NULL, col_3 bigint DEFAULT nextval('mx_testing_schema.mx_test_table_col_3_seq'::regclass) NOT NULL, col_4 bigint DEFAULT nextval('public.user_defined_seq'::regclass)) USING heap
  DELETE FROM pg_catalog.pg_dist_colocation
  DELETE FROM pg_catalog.pg_dist_object
- DELETE FROM pg_catalog.pg_dist_tenant_schema
+ DELETE FROM pg_catalog.pg_dist_schema
  DELETE FROM pg_dist_node
  DELETE FROM pg_dist_partition
  DELETE FROM pg_dist_placement
@@ -345,7 +345,7 @@ SELECT unnest(activate_node_snapshot()) order by 1;
  CREATE TABLE mx_testing_schema.mx_test_table (col_1 integer, col_2 text NOT NULL, col_3 bigint DEFAULT nextval('mx_testing_schema.mx_test_table_col_3_seq'::regclass) NOT NULL, col_4 bigint DEFAULT nextval('public.user_defined_seq'::regclass)) USING heap
  DELETE FROM pg_catalog.pg_dist_colocation
  DELETE FROM pg_catalog.pg_dist_object
- DELETE FROM pg_catalog.pg_dist_tenant_schema
+ DELETE FROM pg_catalog.pg_dist_schema
  DELETE FROM pg_dist_node
  DELETE FROM pg_dist_partition
  DELETE FROM pg_dist_placement
@@ -406,7 +406,7 @@ SELECT unnest(activate_node_snapshot()) order by 1;
  CREATE TABLE mx_testing_schema.mx_test_table (col_1 integer, col_2 text NOT NULL, col_3 bigint DEFAULT nextval('mx_testing_schema.mx_test_table_col_3_seq'::regclass) NOT NULL, col_4 bigint DEFAULT nextval('public.user_defined_seq'::regclass)) USING heap
  DELETE FROM pg_catalog.pg_dist_colocation
  DELETE FROM pg_catalog.pg_dist_object
- DELETE FROM pg_catalog.pg_dist_tenant_schema
+ DELETE FROM pg_catalog.pg_dist_schema
  DELETE FROM pg_dist_node
  DELETE FROM pg_dist_partition
  DELETE FROM pg_dist_placement
@@ -1977,7 +1977,7 @@ SELECT unnest(activate_node_snapshot()) order by 1;
  CREATE TABLE public.test_table (id integer DEFAULT worker_nextval('public.mx_test_sequence_0'::regclass), id2 integer DEFAULT worker_nextval('public.mx_test_sequence_1'::regclass)) USING heap
  DELETE FROM pg_catalog.pg_dist_colocation
  DELETE FROM pg_catalog.pg_dist_object
- DELETE FROM pg_catalog.pg_dist_tenant_schema
+ DELETE FROM pg_catalog.pg_dist_schema
  DELETE FROM pg_dist_node
  DELETE FROM pg_dist_partition
  DELETE FROM pg_dist_placement

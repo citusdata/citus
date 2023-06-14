@@ -41,7 +41,7 @@ step "s1-schema-undistribute"
 
 step "s1-verify-distributed-schema"
 {
-    SELECT logicalrelid, partmethod, partkey, (colocationid = (SELECT colocationid AS tenant_colocid FROM pg_dist_tenant_schema)) AS is_correct_colocid, repmodel, autoconverted FROM pg_dist_partition WHERE logicalrelid::text LIKE 'tenant%' ORDER BY logicalrelid;
+    SELECT logicalrelid, partmethod, partkey, (colocationid = (SELECT colocationid AS tenant_colocid FROM pg_dist_schema)) AS is_correct_colocid, repmodel, autoconverted FROM pg_dist_partition WHERE logicalrelid::text LIKE 'tenant%' ORDER BY logicalrelid;
 }
 
 step "s1-commit"

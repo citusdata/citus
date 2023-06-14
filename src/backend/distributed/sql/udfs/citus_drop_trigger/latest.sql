@@ -36,13 +36,13 @@ BEGIN
 
     FOR v_obj IN SELECT * FROM pg_event_trigger_dropped_objects()
     LOOP
-        -- Remove entries from pg_catalog.pg_dist_tenant_schema for all dropped tenant schemas.
+        -- Remove entries from pg_catalog.pg_dist_schema for all dropped tenant schemas.
         -- Also delete the corresponding colocation group from pg_catalog.pg_dist_colocation.
         --
         -- Although normally we automatically delete the colocation groups when they become empty,
         -- we don't do so for the colocation groups that are created for tenant schemas. For this
         -- reason, here we need to delete the colocation group when the tenant schema is dropped.
-        IF v_obj.object_type = 'schema' AND EXISTS (SELECT 1 FROM pg_catalog.pg_dist_tenant_schema WHERE schemaid = v_obj.objid)
+        IF v_obj.object_type = 'schema' AND EXISTS (SELECT 1 FROM pg_catalog.pg_dist_schema WHERE schemaid = v_obj.objid)
         THEN
             PERFORM pg_catalog.citus_internal_unregister_tenant_schema_globally(v_obj.objid, v_obj.object_name);
         END IF;

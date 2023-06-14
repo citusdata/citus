@@ -2846,33 +2846,33 @@ DistColocationConfigurationIndexId(void)
 }
 
 
-/* return oid of pg_dist_tenant_schema relation */
+/* return oid of pg_dist_schema relation */
 Oid
 DistTenantSchemaRelationId(void)
 {
-	CachedRelationLookup("pg_dist_tenant_schema",
+	CachedRelationLookup("pg_dist_schema",
 						 &MetadataCache.distTenantSchemaRelationId);
 
 	return MetadataCache.distTenantSchemaRelationId;
 }
 
 
-/* return oid of pg_dist_tenant_schema_pkey index */
+/* return oid of pg_dist_schema_pkey index */
 Oid
 DistTenantSchemaPrimaryKeyIndexId(void)
 {
-	CachedRelationLookup("pg_dist_tenant_schema_pkey",
+	CachedRelationLookup("pg_dist_schema_pkey",
 						 &MetadataCache.distTenantSchemaPrimaryKeyIndexId);
 
 	return MetadataCache.distTenantSchemaPrimaryKeyIndexId;
 }
 
 
-/* return oid of pg_dist_tenant_schema_unique_colocationid_index index */
+/* return oid of pg_dist_schema_unique_colocationid_index index */
 Oid
 DistTenantSchemaUniqueColocationIdIndexId(void)
 {
-	CachedRelationLookup("pg_dist_tenant_schema_unique_colocationid_index",
+	CachedRelationLookup("pg_dist_schema_unique_colocationid_index",
 						 &MetadataCache.distTenantSchemaUniqueColocationIdIndexId);
 
 	return MetadataCache.distTenantSchemaUniqueColocationIdIndexId;
