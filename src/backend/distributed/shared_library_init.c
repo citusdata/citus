@@ -191,7 +191,7 @@ static void CitusCleanupConnectionsAtExit(int code, Datum arg);
 static void DecrementExternalClientBackendCounterAtExit(int code, Datum arg);
 static void CreateRequiredDirectories(void);
 static void RegisterCitusConfigVariables(void);
-static void OverridePostgresConfigAssignHooks(void);
+static void OverridePostgresConfigProperties(void);
 static bool ErrorIfNotASuitableDeadlockFactor(double *newval, void **extra,
 											  GucSource source);
 static bool WarnIfDeprecatedExecutorUsed(int *newval, void **extra, GucSource source);
@@ -2587,16 +2587,17 @@ RegisterCitusConfigVariables(void)
 	/* warn about config items in the citus namespace that are not registered above */
 	EmitWarningsOnPlaceholders("citus");
 
-	OverridePostgresConfigAssignHooks();
+	OverridePostgresConfigProperties();
 }
 
 
 /*
- * OverridePostgresConfigAssignHooks overrides GUC assign hooks where we want
- * custom behaviour.
+ * OverridePostgresConfigProperties overrides GUC properties where we want
+ * custom behaviour. We should consider using Postgres function find_option
+ * in this function once it is exported by Postgres in a later release.
  */
 static void
-OverridePostgresConfigAssignHooks(void)
+OverridePostgresConfigProperties(void)
 {
 	struct config_generic **guc_vars = get_guc_variables();
 	int gucCount = GetNumConfigOptions();
@@ -2611,6 +2612,17 @@ OverridePostgresConfigAssignHooks(void)
 
 			OldApplicationNameAssignHook = stringVar->assign_hook;
 			stringVar->assign_hook = ApplicationNameAssignHook;
+		}
+
+		/*
+		 * Turn on GUC_REPORT for search_path. GUC_REPORT provides that an S (Parameter Status)
+		 * packet is appended after the C (Command Complete) packet sent from the server
+		 * for SET command. S packet contains the new value of the parameter
+		 * if its value has been changed.
+		 */
+		if (strcmp(var->name, "search_path") == 0)
+		{
+			var->flags |= GUC_REPORT;
 		}
 	}
 }
