@@ -159,6 +159,19 @@ typedef enum SearchForeignKeyColumnFlags
 	/* callers can also pass union of above flags */
 } SearchForeignKeyColumnFlags;
 
+
+typedef enum TenantOperation
+{
+	TENANT_UNDISTRIBUTE_TABLE = 0,
+	TENANT_ALTER_TABLE,
+	TENANT_COLOCATE_WITH,
+	TENANT_UPDATE_COLOCATION,
+	TENANT_SET_SCHEMA,
+} TenantOperation;
+
+#define TOTAL_TENANT_OPERATION 5
+extern const char *TenantOperationNames[TOTAL_TENANT_OPERATION];
+
 /* begin.c - forward declarations */
 extern void SaveBeginCommandProperties(TransactionStmt *transactionStmt);
 
@@ -597,7 +610,7 @@ extern char * GetAlterColumnWithNextvalDefaultCmd(Oid sequenceOid, Oid relationI
 
 extern void ErrorIfTableHasIdentityColumn(Oid relationId);
 extern void ConvertNewTableIfNecessary(Node *createStmt);
-extern void ConvertToTenantTableIfNecessary(Node *alterObjectSchemaStmt);
+extern void ConvertToTenantTableIfNecessary(AlterObjectSchemaStmt *alterObjectSchemaStmt);
 
 /* text_search.c - forward declarations */
 extern List * GetCreateTextSearchConfigStatements(const ObjectAddress *address);
@@ -801,7 +814,7 @@ extern void EnsureTenantTable(Oid relationId, char *operationName);
 extern void ErrorIfIllegalPartitioningInTenantSchema(Oid parentRelationId,
 													 Oid partitionRelationId);
 extern void CreateTenantSchemaTable(Oid relationId);
-extern void ErrorIfTenantTable(Oid relationId, char *operationName);
+extern void ErrorIfTenantTable(Oid relationId, const char *operationName);
 extern uint32 CreateTenantSchemaColocationId(void);
 
 #endif /*CITUS_COMMANDS_H */

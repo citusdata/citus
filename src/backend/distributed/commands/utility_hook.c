@@ -374,7 +374,13 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 			if (context == PROCESS_UTILITY_TOPLEVEL &&
 				IsA(parsetree, AlterObjectSchemaStmt))
 			{
-				ConvertToTenantTableIfNecessary(parsetree);
+				AlterObjectSchemaStmt *alterSchemaStmt = castNode(AlterObjectSchemaStmt,
+																  parsetree);
+				if (alterSchemaStmt->objectType == OBJECT_TABLE ||
+					alterSchemaStmt->objectType == OBJECT_FOREIGN_TABLE)
+				{
+					ConvertToTenantTableIfNecessary(alterSchemaStmt);
+				}
 			}
 		}
 
@@ -1005,7 +1011,8 @@ UndistributeDisconnectedCitusLocalTables(void)
 		TableConversionParameters params = {
 			.relationId = citusLocalTableId,
 			.cascadeViaForeignKeys = true,
-			.suppressNoticeMessages = true
+			.suppressNoticeMessages = true,
+			.bypassTenantCheck = false
 		};
 		UndistributeTable(&params);
 	}

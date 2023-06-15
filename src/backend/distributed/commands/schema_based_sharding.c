@@ -40,6 +40,14 @@ static void EnsureSchemaExist(Oid schemaId);
 /* controlled via citus.enable_schema_based_sharding GUC */
 bool EnableSchemaBasedSharding = false;
 
+const char *TenantOperationNames[TOTAL_TENANT_OPERATION] = {
+	"undistribute_table",
+	"alter_distributed_table",
+	"colocate_with",
+	"update_distributed_table_colocation",
+	"set schema",
+};
+
 
 PG_FUNCTION_INFO_V1(citus_internal_unregister_tenant_schema_globally);
 PG_FUNCTION_INFO_V1(citus_schema_distribute);
@@ -754,7 +762,7 @@ citus_schema_undistribute(PG_FUNCTION_ARGS)
  * if the given relation is a tenant table.
  */
 void
-ErrorIfTenantTable(Oid relationId, char *operationName)
+ErrorIfTenantTable(Oid relationId, const char *operationName)
 {
 	if (IsTenantSchema(get_rel_namespace(relationId)))
 	{

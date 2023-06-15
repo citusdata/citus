@@ -2327,59 +2327,22 @@ PreprocessAlterTableSchemaStmt(Node *node, const char *queryString,
 	/* Undistribute table if its old schema is a tenant schema */
 	if (IsTenantSchema(oldSchemaId) && IsCoordinator())
 	{
-		/*
-		 * When table is referenced by or referencing to a table in the same tenant
-		 * schema, we should disallow changing its schema since it breaks foreign
-		 * key checks for tenant tables in distributed schema.
-		 */
-		List *fkeyCommandsWithSingleShardTables =
-			GetFKeyCreationCommandsRelationInvolvedWithTableType(
-				relationId, INCLUDE_SINGLE_SHARD_TABLES);
-		if (fkeyCommandsWithSingleShardTables != NIL)
-		{
-			ereport(ERROR, (errmsg("cannot alter the schema of table %s",
-								   get_rel_name(relationId)),
-							errdetail(
-								"distributed schemas cannot have foreign keys from/to "
-								"another schema")));
-		}
+		EnsureUndistributeTenantTableSafe(relationId,
+										  TenantOperationNames[TENANT_SET_SCHEMA]);
+		TableConversionParameters params = {
+			.relationId = relationId,
+			.cascadeViaForeignKeys = false,
+			.bypassTenantCheck = true
+		};
+		UndistributeTable(&params);
 
-		/*
-		 * We deregister the schema first to prevent `ErrorIfTenantTable` error. We will
-		 * register the schema as tenant schema again after undistributing the table.
-		 */
-		uint32 tenantSchemaColocationId = SchemaIdGetTenantColocationId(oldSchemaId);
-		DeleteTenantSchemaLocally(oldSchemaId);
-		if (EnableMetadataSync)
-		{
-			char *oldSchemaName = get_namespace_name(oldSchemaId);
-			SendCommandToWorkersWithMetadata(TenantSchemaDeleteCommand(oldSchemaName));
-		}
-
-		List *fkeyCommandsForRelation =
-			GetFKeyCreationCommandsRelationInvolvedWithTableType(relationId,
-																 INCLUDE_ALL_TABLE_TYPES);
-		relationId = DropFKeysAndUndistributeTable(relationId);
-		bool skip_validation = true;
-		ExecuteForeignKeyCreateCommandList(fkeyCommandsForRelation,
-										   skip_validation);
-
-		/* relation id might change after adding foreign key (conversion to Citus table) */
+		/* relation id changes after undistribute_table */
 		relationId = get_relname_relid(stmt->relation->relname, oldSchemaId);
-
-
-		/* Register the schema back */
-		InsertTenantSchemaLocally(oldSchemaId, tenantSchemaColocationId);
-		char *registerSchemaCommand = TenantSchemaInsertCommand(oldSchemaId,
-																tenantSchemaColocationId);
-		if (EnableMetadataSync)
-		{
-			SendCommandToWorkersWithMetadata(registerSchemaCommand);
-		}
 
 		/*
 		 * After undistribution, the table could be Citus table or Postgres table.
-		 * If it is Postgres table, do not propagate the command to workers.
+		 * If it is Postgres table, do not propagate the `ALTER TABLE SET SCHEMA`
+		 * command to workers.
 		 */
 		if (!IsCitusTable(relationId))
 		{
@@ -4246,15 +4209,14 @@ ConvertNewTableIfNecessary(Node *createStmt)
  * schema changed to a distributed schema.
  */
 void
-ConvertToTenantTableIfNecessary(Node *alterObjectSchemaStmt)
+ConvertToTenantTableIfNecessary(AlterObjectSchemaStmt *stmt)
 {
+	Assert(stmt->objectType == OBJECT_TABLE || stmt->objectType == OBJECT_FOREIGN_TABLE);
+
 	if (!IsCoordinator())
 	{
 		return;
 	}
-
-	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, alterObjectSchemaStmt);
-	Assert(stmt->objectType == OBJECT_TABLE || stmt->objectType == OBJECT_FOREIGN_TABLE);
 
 	/*
 	 * We will let Postgres deal with missing_ok
@@ -4280,9 +4242,10 @@ ConvertToTenantTableIfNecessary(Node *alterObjectSchemaStmt)
 	}
 
 	/*
-	 * Create table under the new tenant schema if the new schema is a tenant schema and
-	 * the table is not already a single shard table. (It can happen so if the old schema
-	 * is the same as the new one)
+	 * Make table a tenant table when its schema actually changed. When its schema
+	 * is not changed as in `ALTER TABLE <tbl> SET SCHEMA <same_schema>`, we detect
+	 * that by seeing the table is still a single shard table. (i.e. not undistributed
+	 * at `preprocess` step)
 	 */
 	if (!IsCitusTableType(relationId, SINGLE_SHARD_DISTRIBUTED) &&
 		IsTenantSchema(schemaId))

@@ -172,6 +172,12 @@ typedef struct TableConversionParameters
 	 * messages that we explicitly issue
 	 */
 	bool suppressNoticeMessages;
+
+	/*
+	 * bypassTenantCheck skips tenant table checks to allow some internal
+	 * operations which are normally disallowed
+	 */
+	bool bypassTenantCheck;
 } TableConversionParameters;
 
 typedef struct TableConversionReturn
@@ -363,7 +369,7 @@ extern void CreateDistributedTable(Oid relationId, char *distributionColumnName,
 								   bool shardCountIsStrict, char *colocateWithTableName);
 extern void CreateReferenceTable(Oid relationId);
 extern void CreateTruncateTrigger(Oid relationId);
-extern void EnsureUndistributeTenantTableSafe(Oid relationId);
+extern void EnsureUndistributeTenantTableSafe(Oid relationId, const char *operationName);
 extern TableConversionReturn * UndistributeTable(TableConversionParameters *params);
 extern void UndistributeTables(List *relationIdList);
 

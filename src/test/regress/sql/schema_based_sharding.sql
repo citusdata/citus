@@ -60,14 +60,9 @@ SELECT update_distributed_table_colocation('tenant_2.test_table', colocate_with 
 -- verify we also don't allow colocate_with a tenant table
 SELECT update_distributed_table_colocation('regular_schema.test_table', colocate_with => 'tenant_2.test_table');
 
--- verify we allow undistribute_table for tenant tables if they do not have foreign key to/from its distributed schema
-CREATE TABLE tenant_2.undist_table1(id int);
-SELECT undistribute_table('tenant_2.undist_table1');
-
--- verify we do not allow undistribute_table for tenant tables if they have foreign key to/from its distributed schema
-CREATE TABLE tenant_2.undist_table2(id int PRIMARY KEY);
-CREATE TABLE tenant_2.undist_table3(id int REFERENCES tenant_2.undist_table2(id));
-SELECT undistribute_table('tenant_2.undist_table3');
+-- verify we do not allow undistribute_table for tenant tables
+CREATE TABLE tenant_2.undist_table(id int);
+SELECT undistribute_table('tenant_2.undist_table');
 
 -- verify we don't allow alter_distributed_table for tenant tables
 SELECT alter_distributed_table('tenant_2.test_table', colocate_with => 'none');
