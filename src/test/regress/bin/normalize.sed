@@ -211,9 +211,6 @@ s/ERROR:  cannot append to shardId [0-9]+/ERROR:  cannot append to shardId xxxxx
 /local tables that are added to metadata automatically by citus, but not chained with reference tables via foreign keys might be automatically converted back to postgres tables$/d
 /Executing citus_add_local_table_to_metadata(.*) prevents this for the given relation, and all of the connected relations$/d
 
-# normalize partitioned table shard constraint name errors for upgrade_partition_constraints_(before|after)
-s/^(ERROR:  child table is missing constraint "\w+)_([0-9])+"/\1_xxxxxx"/g
-
 # normalize for distributed deadlock delay in isolation_metadata_sync_deadlock
 # isolation tester first detects a lock, but then deadlock detector cancels the
 # session. Sometimes happens that deadlock detector cancels the session before

@@ -90,7 +90,6 @@ def get_pg_major_version():
 PG_MAJOR_VERSION = get_pg_major_version()
 
 OLDEST_SUPPORTED_CITUS_VERSION_MATRIX = {
-    13: "9.5.0",
     14: "10.2.0",
     15: "11.1.5",
 }
