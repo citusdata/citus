@@ -273,6 +273,10 @@ SELECT EXISTS(
           inhparent = 'tenant_4.parent_attach_test'::regclass
 ) AS is_partition;
 
+-- errors out because shard replication factor > 1
+SET citus.shard_replication_factor TO 2;
+CREATE TABLE tenant_4.tbl_3 AS SELECT 1 AS a, 'text' as b;
+SET citus.shard_replication_factor TO 1;
 -- verify that we allow creating tenant tables by using CREATE TABLE AS / SELECT INTO commands
 CREATE TABLE tenant_4.tbl_3 AS SELECT 1 AS a, 'text' as b;
 CREATE TEMP TABLE IF NOT EXISTS tenant_4.tbl_4 AS SELECT 1 as a, 'text' as b;
