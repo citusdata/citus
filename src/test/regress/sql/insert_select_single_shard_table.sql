@@ -3,6 +3,7 @@ SET search_path TO insert_select_single_shard_table;
 
 SET citus.next_shard_id TO 1820000;
 SET citus.shard_count TO 32;
+SET citus.shard_replication_factor TO 1;
 
 SET client_min_messages TO NOTICE;
 

@@ -384,6 +384,12 @@ SELECT EXISTS(
  t
 (1 row)
 
+-- errors out because shard replication factor > 1
+SET citus.shard_replication_factor TO 2;
+CREATE TABLE tenant_4.tbl_3 AS SELECT 1 AS a, 'text' as b;
+ERROR:  could not create single shard table: citus.shard_replication_factor is greater than 1
+HINT:  Consider setting citus.shard_replication_factor to 1 and try again
+SET citus.shard_replication_factor TO 1;
 -- verify that we allow creating tenant tables by using CREATE TABLE AS / SELECT INTO commands
 CREATE TABLE tenant_4.tbl_3 AS SELECT 1 AS a, 'text' as b;
 NOTICE:  Copying data from local table...
@@ -1439,6 +1445,11 @@ SELECT pg_reload_conf();
 \c - - - :master_port
 SET search_path TO regular_schema;
 CREATE TABLE type_sing(a INT);
+-- errors out because shard_replication_factor = 2
+SELECT create_distributed_table('type_sing', NULL, colocate_with:='none');
+ERROR:  could not create single shard table: citus.shard_replication_factor is greater than 1
+HINT:  Consider setting citus.shard_replication_factor to 1 and try again
+SET citus.shard_replication_factor TO 1;
 SELECT create_distributed_table('type_sing', NULL, colocate_with:='none');
  create_distributed_table
 ---------------------------------------------------------------------

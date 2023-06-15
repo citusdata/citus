@@ -2,6 +2,7 @@ CREATE SCHEMA insert_select_single_shard_table;
 SET search_path TO insert_select_single_shard_table;
 SET citus.next_shard_id TO 1820000;
 SET citus.shard_count TO 32;
+SET citus.shard_replication_factor TO 1;
 SET client_min_messages TO NOTICE;
 CREATE TABLE nullkey_c1_t1(a int, b int);
 CREATE TABLE nullkey_c1_t2(a int, b int);

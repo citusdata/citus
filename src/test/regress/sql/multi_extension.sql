@@ -595,6 +595,7 @@ SELECT * FROM multi_extension.print_extension_changes();
 ALTER EXTENSION citus UPDATE TO '12.0-1';
 
 CREATE TABLE null_shard_key (x int, y int);
+SET citus.shard_replication_factor TO 1;
 SELECT create_distributed_table('null_shard_key', null);
 
 -- Show that we cannot downgrade to 11.3-1 becuase the cluster has a

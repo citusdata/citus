@@ -273,6 +273,10 @@ SELECT EXISTS(
           inhparent = 'tenant_4.parent_attach_test'::regclass
 ) AS is_partition;
 
+-- errors out because shard replication factor > 1
+SET citus.shard_replication_factor TO 2;
+CREATE TABLE tenant_4.tbl_3 AS SELECT 1 AS a, 'text' as b;
+SET citus.shard_replication_factor TO 1;
 -- verify that we allow creating tenant tables by using CREATE TABLE AS / SELECT INTO commands
 CREATE TABLE tenant_4.tbl_3 AS SELECT 1 AS a, 'text' as b;
 CREATE TEMP TABLE IF NOT EXISTS tenant_4.tbl_4 AS SELECT 1 as a, 'text' as b;
@@ -974,6 +978,11 @@ SELECT pg_reload_conf();
 SET search_path TO regular_schema;
 
 CREATE TABLE type_sing(a INT);
+
+-- errors out because shard_replication_factor = 2
+SELECT create_distributed_table('type_sing', NULL, colocate_with:='none');
+
+SET citus.shard_replication_factor TO 1;
 SELECT create_distributed_table('type_sing', NULL, colocate_with:='none');
 
 SET citus.enable_schema_based_sharding TO ON;

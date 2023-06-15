@@ -1,7 +1,7 @@
 setup
 {
     SELECT citus_set_coordinator_host('localhost', 57636);
-
+    SET citus.shard_replication_factor TO 1;
     CREATE SCHEMA tenant1;
     CREATE TABLE tenant1.table1(id int PRIMARY KEY, name text, col bigint);
     INSERT INTO tenant1.table1 SELECT i, 'asd', i*1000 FROM generate_series(11, 20) i;
@@ -27,6 +27,7 @@ session "s1"
 step "s1-begin"
 {
     BEGIN;
+    SET citus.shard_replication_factor TO 1;
 }
 
 step "s1-schema-distribute"
@@ -63,6 +64,7 @@ step "s2-rename-schema"
 
 step "s2-add-table"
 {
+    SET citus.shard_replication_factor TO 1;
     CREATE TABLE tenant1.table4(id int PRIMARY KEY, name text, col bigint);
 }
 
