@@ -6,10 +6,7 @@ orbs:
 parameters:
   image_suffix:
     type: string
-    default: '-vf5dc39a'
-  pg13_version:
-    type: string
-    default: '13.11'
+    default: '-vbab548a'
   pg14_version:
     type: string
     default: '14.8'
@@ -18,7 +15,7 @@ parameters:
     default: '15.3'
   upgrade_pg_versions:
     type: string
-    default: '13.11-14.8-15.3'
+    default: '14.8-15.3'
   style_checker_tools_version:
     type: string
     default: '0.8.18'
@@ -565,7 +562,7 @@ jobs:
 
   check-merge-to-enterprise:
     docker:
-      - image: citus/extbuilder:<< pipeline.parameters.pg13_version >>
+      - image: citus/extbuilder:<< pipeline.parameters.pg14_version >>
     working_directory: /home/circleci/project
     steps:
       - checkout
@@ -718,10 +715,6 @@ workflows:
       not: << pipeline.parameters.flaky_test >>
     jobs:
       - build:
-          name: build-13
-          pg_major: 13
-          image_tag: '<< pipeline.parameters.pg13_version >>'
-      - build:
           name: build-14
           pg_major: 14
           image_tag: '<< pipeline.parameters.pg14_version >>'
@@ -732,79 +725,6 @@ workflows:
 
       - check-style
       - check-sql-snapshots
-
-      - test-citus: &test-citus-13
-          name: 'test-13_check-multi'
-          make: check-multi
-          pg_major: 13
-          image_tag: '<< pipeline.parameters.pg13_version >>'
-          requires: [build-13]
-      - test-citus:
-          <<:  *test-citus-13
-          name: 'test-13_check-multi-1'
-          make: check-multi-1
-      - test-citus:
-          <<:  *test-citus-13
-          name: 'test-13_check-mx'
-          make: check-multi-mx
-      - test-citus:
-          <<:  *test-citus-13
-          name: 'test-13_check-vanilla'
-          make: check-vanilla
-      - test-citus:
-          <<:  *test-citus-13
-          name: 'test-13_check-isolation'
-          make: check-isolation
-      - test-citus:
-          <<:  *test-citus-13
-          name: 'test-13_check-operations'
-          make: check-operations
-      - test-citus:
-          <<:  *test-citus-13
-          name: 'test-13_check-follower-cluster'
-          make: check-follower-cluster
-      - test-citus:
-          <<:  *test-citus-13
-          name: 'test-13_check-columnar'
-          make: check-columnar
-      - test-citus:
-          <<:  *test-citus-13
-          name: 'test-13_check-columnar-isolation'
-          make: check-columnar-isolation
-      - test-citus:
-          <<:  *test-citus-13
-          name: 'test-13_check-failure'
-          image: citus/failtester
-          make: check-failure
-      - test-citus:
-          <<:  *test-citus-13
-          name: 'test-13_check-enterprise'
-          make: check-enterprise
-      - test-citus:
-          <<:  *test-citus-13
-          name: 'test-13_check-enterprise-isolation'
-          make: check-enterprise-isolation
-      - test-citus:
-          <<:  *test-citus-13
-          name: 'test-13_check-enterprise-isolation-logicalrep-1'
-          make: check-enterprise-isolation-logicalrep-1
-      - test-citus:
-          <<:  *test-citus-13
-          name: 'test-13_check-enterprise-isolation-logicalrep-2'
-          make: check-enterprise-isolation-logicalrep-2
-      - test-citus:
-          <<:  *test-citus-13
-          name: 'test-13_check-enterprise-isolation-logicalrep-3'
-          make: check-enterprise-isolation-logicalrep-3
-      - test-citus:
-          <<:  *test-citus-13
-          name: 'test-13_check-enterprise-failure'
-          image: citus/failtester
-          make: check-enterprise-failure
-      - test-citus:
-          <<:  *test-citus-13
-          name: 'test-13_check-split'
-          make: check-split
 
       - test-citus: &test-citus-14
           name: 'test-14_check-split'
@@ -953,12 +873,6 @@ workflows:
           make: check-failure
 
       - test-pytest:
-          name: 'test-13_pytest'
-          pg_major: 13
-          image_tag: '<< pipeline.parameters.pg13_version >>'
-          requires: [build-13]
-
-      - test-pytest:
           name: 'test-14_pytest'
           pg_major: 14
           image_tag: '<< pipeline.parameters.pg14_version >>'
@@ -978,12 +892,6 @@ workflows:
           requires: [build-15]
 
       - test-arbitrary-configs:
-          name: 'test-13_check-arbitrary-configs'
-          pg_major: 13
-          image_tag: '<< pipeline.parameters.pg13_version >>'
-          requires: [build-13]
-
-      - test-arbitrary-configs:
           name: 'test-14_check-arbitrary-configs'
           pg_major: 14
           image_tag: '<< pipeline.parameters.pg14_version >>'
@@ -994,12 +902,6 @@ workflows:
           pg_major: 15
           image_tag: '<< pipeline.parameters.pg15_version >>'
           requires: [build-15]
-
-      - test-query-generator:
-          name: 'test-13_check-query-generator'
-          pg_major: 13
-          image_tag: '<< pipeline.parameters.pg13_version >>'
-          requires: [build-13]
 
       - test-query-generator:
           name: 'test-14_check-query-generator'
@@ -1014,13 +916,6 @@ workflows:
           requires: [build-15]
 
       - test-pg-upgrade:
-          name: 'test-13-14_check-pg-upgrade'
-          old_pg_major: 13
-          new_pg_major: 14
-          image_tag: '<< pipeline.parameters.upgrade_pg_versions >>'
-          requires: [build-13, build-14]
-
-      - test-pg-upgrade:
           name: 'test-14-15_check-pg-upgrade'
           old_pg_major: 14
           new_pg_major: 15
@@ -1028,32 +923,13 @@ workflows:
           requires: [build-14, build-15]
 
       - test-citus-upgrade:
-          name: test-13_check-citus-upgrade
-          pg_major: 13
-          image_tag: '<< pipeline.parameters.pg13_version >>'
-          requires: [build-13]
+          name: test-14_check-citus-upgrade
+          pg_major: 14
+          image_tag: '<< pipeline.parameters.pg14_version >>'
+          requires: [build-14]
 
       - upload-coverage:
           requires:
-            - test-13_check-multi
-            - test-13_check-multi-1
-            - test-13_check-mx
-            - test-13_check-vanilla
-            - test-13_check-isolation
-            - test-13_check-operations
-            - test-13_check-follower-cluster
-            - test-13_check-columnar
-            - test-13_check-columnar-isolation
-            - test-13_check-failure
-            - test-13_check-enterprise
-            - test-13_check-enterprise-isolation
-            - test-13_check-enterprise-isolation-logicalrep-1
-            - test-13_check-enterprise-isolation-logicalrep-2
-            - test-13_check-enterprise-isolation-logicalrep-3
-            - test-13_check-enterprise-failure
-            - test-13_check-split
-            - test-13_check-arbitrary-configs
-            - test-13_check-query-generator
             - test-14_check-multi
             - test-14_check-multi-1
             - test-14_check-mx
@@ -1092,18 +968,17 @@ workflows:
             - test-15_check-split
             - test-15_check-arbitrary-configs
             - test-15_check-query-generator
-            - test-13-14_check-pg-upgrade
             - test-14-15_check-pg-upgrade
-            - test-13_check-citus-upgrade
+            - test-14_check-citus-upgrade
 
       - ch_benchmark:
-          requires: [build-13]
+          requires: [build-14]
           filters:
             branches:
               only:
                 - /ch_benchmark\/.*/ # match with ch_benchmark/ prefix
       - tpcc_benchmark:
-          requires: [build-13]
+          requires: [build-14]
           filters:
             branches:
               only:

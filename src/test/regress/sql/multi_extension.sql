@@ -595,6 +595,7 @@ SELECT * FROM multi_extension.print_extension_changes();
 ALTER EXTENSION citus UPDATE TO '12.0-1';
 
 CREATE TABLE null_shard_key (x int, y int);
+SET citus.shard_replication_factor TO 1;
 SELECT create_distributed_table('null_shard_key', null);
 
 -- Show that we cannot downgrade to 11.3-1 becuase the cluster has a
@@ -938,7 +939,7 @@ CREATE TABLE tenant_schema.test(x int, y int);
 SELECT colocationid = (
     SELECT colocationid FROM pg_dist_partition WHERE logicalrelid = 'tenant_schema.test'::regclass
 )
-FROM pg_dist_tenant_schema
+FROM pg_dist_schema
 WHERE schemaid::regnamespace::text = 'tenant_schema';
 
 -- and make sure that we can't remove the coordinator due to "test"
@@ -983,7 +984,7 @@ DROP EXTENSION citus_columnar;
 SET citus.enable_schema_based_sharding TO ON;
 
 CREATE EXTENSION citus_columnar;
-SELECT COUNT(*)=0 FROM pg_dist_tenant_schema
+SELECT COUNT(*)=0 FROM pg_dist_schema
 WHERE schemaid IN ('columnar'::regnamespace, 'columnar_internal'::regnamespace);
 
 RESET citus.enable_schema_based_sharding;

@@ -159,10 +159,6 @@ static void EnsureCitusTableCanBeCreated(Oid relationOid);
 static void PropagatePrerequisiteObjectsForDistributedTable(Oid relationId);
 static void EnsureDistributedSequencesHaveOneType(Oid relationId,
 												  List *seqInfoList);
-static List * GetFKeyCreationCommandsRelationInvolvedWithTableType(Oid relationId,
-																   int tableTypeFlag);
-static Oid DropFKeysAndUndistributeTable(Oid relationId);
-static void DropFKeysRelationInvolvedWithTableType(Oid relationId, int tableTypeFlag);
 static void CopyLocalDataIntoShards(Oid relationId);
 static List * TupleDescColumnNameList(TupleDesc tupleDescriptor);
 
@@ -1090,6 +1086,14 @@ CreateCitusTable(Oid relationId, CitusTableType tableType,
 
 	relation_close(relation, NoLock);
 
+	if (tableType == SINGLE_SHARD_DISTRIBUTED && ShardReplicationFactor > 1)
+	{
+		ereport(ERROR, (errmsg("could not create single shard table: "
+							   "citus.shard_replication_factor is greater than 1"),
+						errhint("Consider setting citus.shard_replication_factor to 1 "
+								"and try again")));
+	}
+
 	/*
 	 * EnsureTableNotDistributed errors out when relation is a citus table but
 	 * we don't want to ask user to first undistribute their citus local tables
@@ -1572,85 +1576,6 @@ EnsureDistributedSequencesHaveOneType(Oid relationId, List *seqInfoList)
 			AlterSequenceType(sequenceOid, attributeTypeId);
 		}
 	}
-}
-
-
-/*
- * GetFKeyCreationCommandsRelationInvolvedWithTableType returns a list of DDL
- * commands to recreate the foreign keys that relation with relationId is involved
- * with given table type.
- */
-static List *
-GetFKeyCreationCommandsRelationInvolvedWithTableType(Oid relationId, int tableTypeFlag)
-{
-	int referencingFKeysFlag = INCLUDE_REFERENCING_CONSTRAINTS |
-							   tableTypeFlag;
-	List *referencingFKeyCreationCommands =
-		GetForeignConstraintCommandsInternal(relationId, referencingFKeysFlag);
-
-	/* already captured self referencing foreign keys, so use EXCLUDE_SELF_REFERENCES */
-	int referencedFKeysFlag = INCLUDE_REFERENCED_CONSTRAINTS |
-							  EXCLUDE_SELF_REFERENCES |
-							  tableTypeFlag;
-	List *referencedFKeyCreationCommands =
-		GetForeignConstraintCommandsInternal(relationId, referencedFKeysFlag);
-	return list_concat(referencingFKeyCreationCommands, referencedFKeyCreationCommands);
-}
-
-
-/*
- * DropFKeysAndUndistributeTable drops all foreign keys that relation with
- * relationId is involved then undistributes it.
- * Note that as UndistributeTable changes relationId of relation, this
- * function also returns new relationId of relation.
- * Also note that callers are responsible for storing & recreating foreign
- * keys to be dropped if needed.
- */
-static Oid
-DropFKeysAndUndistributeTable(Oid relationId)
-{
-	DropFKeysRelationInvolvedWithTableType(relationId, INCLUDE_ALL_TABLE_TYPES);
-
-	/* store them before calling UndistributeTable as it changes relationId */
-	char *relationName = get_rel_name(relationId);
-	Oid schemaId = get_rel_namespace(relationId);
-
-	/* suppress notices messages not to be too verbose */
-	TableConversionParameters params = {
-		.relationId = relationId,
-		.cascadeViaForeignKeys = false,
-		.suppressNoticeMessages = true
-	};
-	UndistributeTable(&params);
-
-	Oid newRelationId = get_relname_relid(relationName, schemaId);
-
-	/*
-	 * We don't expect this to happen but to be on the safe side let's error
-	 * out here.
-	 */
-	EnsureRelationExists(newRelationId);
-
-	return newRelationId;
-}
-
-
-/*
- * DropFKeysRelationInvolvedWithTableType drops foreign keys that relation
- * with relationId is involved with given table type.
- */
-static void
-DropFKeysRelationInvolvedWithTableType(Oid relationId, int tableTypeFlag)
-{
-	int referencingFKeysFlag = INCLUDE_REFERENCING_CONSTRAINTS |
-							   tableTypeFlag;
-	DropRelationForeignKeys(relationId, referencingFKeysFlag);
-
-	/* already captured self referencing foreign keys, so use EXCLUDE_SELF_REFERENCES */
-	int referencedFKeysFlag = INCLUDE_REFERENCED_CONSTRAINTS |
-							  EXCLUDE_SELF_REFERENCES |
-							  tableTypeFlag;
-	DropRelationForeignKeys(relationId, referencedFKeysFlag);
 }
 
 

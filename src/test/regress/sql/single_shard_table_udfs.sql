@@ -39,6 +39,11 @@ RETURNS bool
 LANGUAGE C
 AS 'citus', $$is_citus_depended_object$$;
 
+CREATE FUNCTION shards_colocated(bigint, bigint)
+RETURNS bool
+AS 'citus'
+LANGUAGE C STRICT;
+
 -- test some other udf's with single shard tables
 CREATE TABLE null_dist_key_table(a int);
 SELECT create_distributed_table('null_dist_key_table', null, colocate_with=>'none', distribution_type=>null);
@@ -53,7 +58,8 @@ CREATE INDEX null_dist_key_idx ON null_dist_key_table(a);
 SELECT citus_table_size('null_dist_key_table');
 SELECT citus_total_relation_size('null_dist_key_table');
 SELECT citus_relation_size('null_dist_key_table');
-SELECT * FROM pg_catalog.citus_shard_sizes() WHERE table_name LIKE '%null_dist_key_table%';
+SELECT shard_name, shard_size FROM pg_catalog.citus_shard_sizes(), citus_shards
+WHERE shardid = shard_id AND shard_name LIKE '%null_dist_key_table%' AND nodeport IN (:worker_1_port, :worker_2_port);
 
 BEGIN;
   SELECT lock_relation_if_exists('null_dist_key_table', 'ACCESS SHARE');
@@ -226,14 +232,14 @@ SELECT create_distributed_table ('update_col_2', null, colocate_with:='update_co
 -- with the new colocation id the new table will be in the other worker node
 SELECT create_distributed_table ('update_col_3', null, colocate_with:='none');
 
--- make sure nodes are correct
-SELECT c1.nodeport = c2.nodeport AS same_node
+-- make sure nodes are correct and test shards_colocated UDF
+SELECT c1.nodeport = c2.nodeport AS same_node, shards_colocated(c1.shardid, c2.shardid)
 FROM citus_shards c1, citus_shards c2, pg_dist_node p1, pg_dist_node p2
 WHERE c1.table_name::text = 'update_col_1' AND c2.table_name::text = 'update_col_2' AND
       p1.nodeport = c1.nodeport AND p2.nodeport = c2.nodeport AND
       p1.noderole = 'primary' AND p2.noderole = 'primary';
 
-SELECT c1.nodeport = c2.nodeport AS same_node
+SELECT c1.nodeport = c2.nodeport AS same_node, shards_colocated(c1.shardid, c2.shardid)
 FROM citus_shards c1, citus_shards c2, pg_dist_node p1, pg_dist_node p2
 WHERE c1.table_name::text = 'update_col_1' AND c2.table_name::text = 'update_col_3' AND
       p1.nodeport = c1.nodeport AND p2.nodeport = c2.nodeport AND
@@ -250,6 +256,13 @@ SELECT update_distributed_table_colocation('update_col_2', colocate_with:='none'
 SELECT c1.colocation_id = c2.colocation_id AS colocated
 FROM public.citus_tables c1, public.citus_tables c2
 WHERE c1.table_name::text = 'update_col_1' AND c2.table_name::text = 'update_col_2';
+
+-- test shards_colocated UDF with shards in same node but different colocation groups
+SELECT shards_colocated(c1.shardid, c2.shardid)
+FROM citus_shards c1, citus_shards c2, pg_dist_node p1, pg_dist_node p2
+WHERE c1.table_name::text = 'update_col_1' AND c2.table_name::text = 'update_col_2' AND
+      p1.nodeport = c1.nodeport AND p2.nodeport = c2.nodeport AND
+      p1.noderole = 'primary' AND p2.noderole = 'primary';
 
 -- re-colocate, the shards were already in the same node
 SELECT update_distributed_table_colocation('update_col_2', colocate_with:='update_col_1');
@@ -495,6 +508,7 @@ SET search_path TO null_dist_key_udfs;
 
 --test isolate_tenant_to_new_shard
 CREATE TABLE iso_tbl (a INT);
+SET citus.shard_replication_factor TO 1;
 SELECT create_distributed_table('iso_tbl', NULL, colocate_with:='none');
 SELECT isolate_tenant_to_new_shard('iso_tbl', 5);
 
@@ -522,6 +536,132 @@ LANGUAGE C STRICT;
 CREATE TABLE partcol_tbl (a INT);
 SELECT create_distributed_table ('partcol_tbl', NULL, colocate_with:='none');
 SELECT partition_column_id('partcol_tbl'::regclass);
+
+-- test citus_shard_cost_by_disk_size
+CREATE TABLE size_tbl_dist (a INT, b TEXT);
+SELECT create_distributed_table('size_tbl_dist', 'a', shard_count:=4, colocate_with:='none');
+
+CREATE TABLE size_tbl_single (a INT, b TEXT);
+SELECT create_distributed_table('size_tbl_single', NULL, colocate_with:='none');
+
+INSERT INTO size_tbl_dist SELECT 1, '1234567890' FROM generate_series(1, 10000);
+INSERT INTO size_tbl_single SELECT 1, '1234567890' FROM generate_series(1, 10000);
+
+SELECT citus_shard_cost_by_disk_size(c1.shardid) = citus_shard_cost_by_disk_size(c2.shardid) AS equal_cost
+FROM citus_shards c1, citus_shards c2
+WHERE c1.table_name::TEXT = 'size_tbl_dist' AND c2.table_name::TEXT = 'size_tbl_single'
+ORDER BY c1.shard_size DESC
+LIMIT 1;
+
+-- test update statistics UDFs
+CREATE TABLE update_tbl_stat (a INT, b TEXT);
+SELECT create_distributed_table('update_tbl_stat', NULL, colocate_with:='none');
+
+SELECT shardid AS update_tbl_stat_shard
+FROM citus_shards
+WHERE table_name::TEXT = 'update_tbl_stat'
+LIMIT 1 \gset
+
+SELECT shardlength > 0 FROM pg_dist_shard_placement WHERE shardid = :update_tbl_stat_shard LIMIT 1;
+
+INSERT INTO update_tbl_stat SELECT 1, '1234567890' FROM generate_series(1, 10000);
+
+SELECT shardlength > 0 FROM pg_dist_shard_placement WHERE shardid = :update_tbl_stat_shard LIMIT 1;
+
+SELECT citus_update_table_statistics('update_tbl_stat');
+
+SELECT shardlength > 0 FROM pg_dist_shard_placement WHERE shardid = :update_tbl_stat_shard LIMIT 1;
+
+CREATE TABLE update_shard_stat (a INT, b TEXT);
+SELECT create_distributed_table('update_shard_stat', NULL, colocate_with:='none');
+
+SELECT shardid AS update_shard_stat_shard
+FROM citus_shards
+WHERE table_name::TEXT = 'update_shard_stat'
+LIMIT 1 \gset
+
+SELECT shardlength > 0 FROM pg_dist_shard_placement WHERE shardid = :update_shard_stat_shard LIMIT 1;
+
+INSERT INTO update_shard_stat SELECT 1, '1234567890' FROM generate_series(1, 10000);
+
+SELECT shardlength > 0 FROM pg_dist_shard_placement WHERE shardid = :update_shard_stat_shard LIMIT 1;
+
+SELECT 1 FROM citus_update_shard_statistics(:update_shard_stat_shard);
+
+SELECT shardlength > 0 FROM pg_dist_shard_placement WHERE shardid = :update_shard_stat_shard LIMIT 1;
+
+-- test citus clock
+SET citus.enable_cluster_clock TO ON;
+
+CREATE TABLE clock_single(a INT);
+SELECT create_distributed_table('clock_single', NULL, colocate_with:='none');
+
+SELECT citus_get_node_clock() AS nc1 \gset
+SELECT citus_get_node_clock() AS nc2 \gset
+SELECT citus_get_node_clock() AS nc3 \gset
+
+SELECT citus_is_clock_after(:'nc2', :'nc1');
+SELECT citus_is_clock_after(:'nc3', :'nc2');
+
+BEGIN;
+SELECT citus_get_node_clock() AS nc4 \gset
+COPY clock_single FROM STDIN;
+1
+2
+\.
+SELECT citus_get_node_clock() AS nc5 \gset
+END;
+
+SELECT citus_is_clock_after(:'nc4', :'nc3');
+SELECT citus_is_clock_after(:'nc5', :'nc4');
+
+BEGIN;
+SELECT citus_get_transaction_clock();
+END;
+
+-- Transaction with single shard table access
+SELECT nodeport AS clock_shard_nodeport FROM citus_shards
+WHERE table_name::text = 'clock_single' AND nodeport IN (:worker_1_port, :worker_2_port) \gset
+
+BEGIN;
+COPY clock_single FROM STDIN;
+1
+2
+\.
+SELECT get_current_transaction_id() \gset tid
+SET client_min_messages TO DEBUG1;
+-- Capture the transaction timestamp
+SELECT citus_get_transaction_clock() as txnclock \gset
+COMMIT;
+
+-- Check to see if the clock is persisted in the sequence.
+SELECT result as logseq from run_command_on_workers($$SELECT last_value FROM pg_dist_clock_logical_seq$$)
+WHERE nodeport = :clock_shard_nodeport \gset
+SELECT cluster_clock_logical(:'txnclock') as txnlog \gset
+SELECT :logseq = :txnlog;
+
+BEGIN;
+COPY clock_single FROM STDIN;
+1
+2
+\.
+SELECT get_current_transaction_id() \gset tid
+SET client_min_messages TO DEBUG1;
+-- Capture the transaction timestamp
+SELECT citus_get_transaction_clock() as txnclock \gset
+ROLLBACK;
+
+SELECT result as logseq from run_command_on_workers($$SELECT last_value FROM pg_dist_clock_logical_seq$$)
+WHERE nodeport = :clock_shard_nodeport \gset
+SELECT cluster_clock_logical(:'txnclock') as txnlog \gset
+SELECT :logseq = :txnlog;
+
+-- test table with space in its name in citus_shards
+CREATE TABLE "t b l" (a INT);
+SELECT create_distributed_table('"t b l"', NULL, colocate_with:='none');
+
+SELECT table_name, shard_size FROM citus_shards
+WHERE table_name = '"t b l"'::regclass AND nodeport IN (:worker_1_port, :worker_2_port);
 
 SET client_min_messages TO WARNING;
 DROP SCHEMA null_dist_key_udfs CASCADE;

@@ -211,9 +211,6 @@ s/ERROR:  cannot append to shardId [0-9]+/ERROR:  cannot append to shardId xxxxx
 /local tables that are added to metadata automatically by citus, but not chained with reference tables via foreign keys might be automatically converted back to postgres tables$/d
 /Executing citus_add_local_table_to_metadata(.*) prevents this for the given relation, and all of the connected relations$/d
 
-# normalize partitioned table shard constraint name errors for upgrade_partition_constraints_(before|after)
-s/^(ERROR:  child table is missing constraint "\w+)_([0-9])+"/\1_xxxxxx"/g
-
 # normalize for distributed deadlock delay in isolation_metadata_sync_deadlock
 # isolation tester first detects a lock, but then deadlock detector cancels the
 # session. Sometimes happens that deadlock detector cancels the session before
@@ -309,7 +306,7 @@ s/(NOTICE:  issuing SET LOCAL application_name TO 'citus_rebalancer gpid=)[0-9]+
 # shard_rebalancer output, flaky improvement number
 s/improvement of 0.1[0-9]* is lower/improvement of 0.1xxxxx is lower/g
 # normalize tenants statistics annotations
-s/\/\*\{"tId":.*\*\///g
+s/\/\*\{"cId":.*\*\///g
 
 # Notice message that contains current columnar version that makes it harder to bump versions
 s/(NOTICE:  issuing CREATE EXTENSION IF NOT EXISTS citus_columnar WITH SCHEMA  pg_catalog VERSION )"[0-9]+\.[0-9]+-[0-9]+"/\1 "x.y-z"/

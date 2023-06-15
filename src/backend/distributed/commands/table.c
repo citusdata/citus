@@ -414,7 +414,11 @@ PostprocessCreateTableStmtPartitionOf(CreateStmt *createStatement, const
 		}
 	}
 
-	ErrorIfIllegalPartitioningInTenantSchema(PartitionParentOid(relationId), relationId);
+	if (IsTenantSchema(get_rel_namespace(parentRelationId)) ||
+		IsTenantSchema(get_rel_namespace(relationId)))
+	{
+		ErrorIfIllegalPartitioningInTenantSchema(parentRelationId, relationId);
+	}
 
 	/*
 	 * If a partition is being created and if its parent is a distributed
@@ -496,8 +500,12 @@ PreprocessAlterTableStmtAttachPartition(AlterTableStmt *alterTableStatement,
 				return NIL;
 			}
 
-			ErrorIfIllegalPartitioningInTenantSchema(parentRelationId,
-													 partitionRelationId);
+			if (IsTenantSchema(get_rel_namespace(parentRelationId)) ||
+				IsTenantSchema(get_rel_namespace(partitionRelationId)))
+			{
+				ErrorIfIllegalPartitioningInTenantSchema(parentRelationId,
+														 partitionRelationId);
+			}
 
 			if (!IsCitusTable(parentRelationId))
 			{
@@ -2292,6 +2300,10 @@ PreprocessAlterTableSchemaStmt(Node *node, const char *queryString,
 	{
 		return NIL;
 	}
+
+	ErrorIfTenantTable(relationId, "ALTER TABLE SET SCHEMA");
+	ErrorIfTenantSchema(get_namespace_oid(stmt->newschema, false),
+						"ALTER TABLE SET SCHEMA");
 
 	DDLJob *ddlJob = palloc0(sizeof(DDLJob));
 	QualifyTreeNode((Node *) stmt);
@@ -4118,10 +4130,13 @@ ConvertNewTableIfNecessary(Node *createStmt)
 
 		if (ShouldCreateTenantSchemaTable(createdRelationId))
 		{
-			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							errmsg("cannot create a tenant table using "
-								   "CREATE TABLE AS or SELECT INTO "
-								   "statements")));
+			/* not try to convert the table if it already exists and IF NOT EXISTS syntax is used */
+			if (createTableAsStmt->if_not_exists && IsCitusTable(createdRelationId))
+			{
+				return;
+			}
+
+			CreateTenantSchemaTable(createdRelationId);
 		}
 
 		/*

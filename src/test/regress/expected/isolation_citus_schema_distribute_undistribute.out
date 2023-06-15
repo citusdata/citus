@@ -1,0 +1,1164 @@
+Parsed test spec with 2 sessions
+
+starting permutation: s1-begin s1-schema-distribute s2-drop-schema s1-commit s1-verify-distributed-schema
+citus_add_local_table_to_metadata
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-begin:
+    BEGIN;
+    SET citus.shard_replication_factor TO 1;
+
+step s1-schema-distribute:
+    SELECT citus_schema_distribute('tenant1');
+
+citus_schema_distribute
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-drop-schema:
+    DROP SCHEMA tenant1 CASCADE;
+ <waiting ...>
+step s1-commit:
+    COMMIT;
+
+step s2-drop-schema: <... completed>
+step s1-verify-distributed-schema:
+    SELECT logicalrelid, partmethod, partkey, (colocationid = (SELECT colocationid AS tenant_colocid FROM pg_dist_schema)) AS is_correct_colocid, repmodel, autoconverted FROM pg_dist_partition WHERE logicalrelid::text LIKE 'tenant%' ORDER BY logicalrelid;
+
+logicalrelid|partmethod|partkey|is_correct_colocid|repmodel|autoconverted
+---------------------------------------------------------------------
+(0 rows)
+
+citus_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
+
+starting permutation: s1-schema-distribute s1-begin s1-schema-undistribute s2-drop-schema s1-commit s1-verify-distributed-schema
+citus_add_local_table_to_metadata
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-schema-distribute:
+    SELECT citus_schema_distribute('tenant1');
+
+citus_schema_distribute
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-begin:
+    BEGIN;
+    SET citus.shard_replication_factor TO 1;
+
+step s1-schema-undistribute:
+    SELECT citus_schema_undistribute('tenant1');
+
+citus_schema_undistribute
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-drop-schema:
+    DROP SCHEMA tenant1 CASCADE;
+ <waiting ...>
+step s1-commit:
+    COMMIT;
+
+step s2-drop-schema: <... completed>
+step s1-verify-distributed-schema:
+    SELECT logicalrelid, partmethod, partkey, (colocationid = (SELECT colocationid AS tenant_colocid FROM pg_dist_schema)) AS is_correct_colocid, repmodel, autoconverted FROM pg_dist_partition WHERE logicalrelid::text LIKE 'tenant%' ORDER BY logicalrelid;
+
+logicalrelid|partmethod|partkey|is_correct_colocid|repmodel|autoconverted
+---------------------------------------------------------------------
+(0 rows)
+
+citus_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
+
+starting permutation: s1-begin s1-schema-distribute s2-rename-schema s1-commit s1-verify-distributed-schema
+citus_add_local_table_to_metadata
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-begin:
+    BEGIN;
+    SET citus.shard_replication_factor TO 1;
+
+step s1-schema-distribute:
+    SELECT citus_schema_distribute('tenant1');
+
+citus_schema_distribute
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-rename-schema:
+    ALTER SCHEMA tenant1 RENAME TO tenant2;
+
+step s1-commit:
+    COMMIT;
+
+step s1-verify-distributed-schema:
+    SELECT logicalrelid, partmethod, partkey, (colocationid = (SELECT colocationid AS tenant_colocid FROM pg_dist_schema)) AS is_correct_colocid, repmodel, autoconverted FROM pg_dist_partition WHERE logicalrelid::text LIKE 'tenant%' ORDER BY logicalrelid;
+
+logicalrelid  |partmethod|partkey|is_correct_colocid|repmodel|autoconverted
+---------------------------------------------------------------------
+tenant2.table1|n         |       |t                 |s       |f
+tenant2.table2|n         |       |t                 |s       |f
+tenant2.table3|n         |       |t                 |s       |f
+(3 rows)
+
+citus_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
+
+starting permutation: s1-schema-distribute s1-begin s1-schema-undistribute s2-rename-schema s1-commit s1-verify-distributed-schema
+citus_add_local_table_to_metadata
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-schema-distribute:
+    SELECT citus_schema_distribute('tenant1');
+
+citus_schema_distribute
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-begin:
+    BEGIN;
+    SET citus.shard_replication_factor TO 1;
+
+step s1-schema-undistribute:
+    SELECT citus_schema_undistribute('tenant1');
+
+citus_schema_undistribute
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-rename-schema:
+    ALTER SCHEMA tenant1 RENAME TO tenant2;
+
+step s1-commit:
+    COMMIT;
+
+step s1-verify-distributed-schema:
+    SELECT logicalrelid, partmethod, partkey, (colocationid = (SELECT colocationid AS tenant_colocid FROM pg_dist_schema)) AS is_correct_colocid, repmodel, autoconverted FROM pg_dist_partition WHERE logicalrelid::text LIKE 'tenant%' ORDER BY logicalrelid;
+
+logicalrelid  |partmethod|partkey|is_correct_colocid|repmodel|autoconverted
+---------------------------------------------------------------------
+tenant2.table3|n         |       |                  |s       |t
+(1 row)
+
+citus_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
+
+starting permutation: s1-begin s1-schema-distribute s2-add-table s1-commit s1-verify-distributed-schema
+citus_add_local_table_to_metadata
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-begin:
+    BEGIN;
+    SET citus.shard_replication_factor TO 1;
+
+step s1-schema-distribute:
+    SELECT citus_schema_distribute('tenant1');
+
+citus_schema_distribute
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-add-table:
+    SET citus.shard_replication_factor TO 1;
+    CREATE TABLE tenant1.table4(id int PRIMARY KEY, name text, col bigint);
+ <waiting ...>
+step s1-commit:
+    COMMIT;
+
+step s2-add-table: <... completed>
+step s1-verify-distributed-schema:
+    SELECT logicalrelid, partmethod, partkey, (colocationid = (SELECT colocationid AS tenant_colocid FROM pg_dist_schema)) AS is_correct_colocid, repmodel, autoconverted FROM pg_dist_partition WHERE logicalrelid::text LIKE 'tenant%' ORDER BY logicalrelid;
+
+logicalrelid  |partmethod|partkey|is_correct_colocid|repmodel|autoconverted
+---------------------------------------------------------------------
+tenant1.table1|n         |       |t                 |s       |f
+tenant1.table2|n         |       |t                 |s       |f
+tenant1.table3|n         |       |t                 |s       |f
+tenant1.table4|n         |       |t                 |s       |f
+(4 rows)
+
+citus_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
+
+starting permutation: s1-schema-distribute s1-begin s1-schema-undistribute s2-add-table s1-commit s1-verify-distributed-schema
+citus_add_local_table_to_metadata
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-schema-distribute:
+    SELECT citus_schema_distribute('tenant1');
+
+citus_schema_distribute
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-begin:
+    BEGIN;
+    SET citus.shard_replication_factor TO 1;
+
+step s1-schema-undistribute:
+    SELECT citus_schema_undistribute('tenant1');
+
+citus_schema_undistribute
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-add-table:
+    SET citus.shard_replication_factor TO 1;
+    CREATE TABLE tenant1.table4(id int PRIMARY KEY, name text, col bigint);
+ <waiting ...>
+step s1-commit:
+    COMMIT;
+
+step s2-add-table: <... completed>
+step s1-verify-distributed-schema:
+    SELECT logicalrelid, partmethod, partkey, (colocationid = (SELECT colocationid AS tenant_colocid FROM pg_dist_schema)) AS is_correct_colocid, repmodel, autoconverted FROM pg_dist_partition WHERE logicalrelid::text LIKE 'tenant%' ORDER BY logicalrelid;
+
+logicalrelid  |partmethod|partkey|is_correct_colocid|repmodel|autoconverted
+---------------------------------------------------------------------
+tenant1.table3|n         |       |                  |s       |t
+(1 row)
+
+citus_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
+
+starting permutation: s1-begin s1-schema-distribute s2-drop-table s1-commit s1-verify-distributed-schema
+citus_add_local_table_to_metadata
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-begin:
+    BEGIN;
+    SET citus.shard_replication_factor TO 1;
+
+step s1-schema-distribute:
+    SELECT citus_schema_distribute('tenant1');
+
+citus_schema_distribute
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-drop-table:
+    DROP TABLE tenant1.table3;
+ <waiting ...>
+step s1-commit:
+    COMMIT;
+
+step s2-drop-table: <... completed>
+step s1-verify-distributed-schema:
+    SELECT logicalrelid, partmethod, partkey, (colocationid = (SELECT colocationid AS tenant_colocid FROM pg_dist_schema)) AS is_correct_colocid, repmodel, autoconverted FROM pg_dist_partition WHERE logicalrelid::text LIKE 'tenant%' ORDER BY logicalrelid;
+
+logicalrelid  |partmethod|partkey|is_correct_colocid|repmodel|autoconverted
+---------------------------------------------------------------------
+tenant1.table1|n         |       |t                 |s       |f
+tenant1.table2|n         |       |t                 |s       |f
+(2 rows)
+
+citus_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
+
+starting permutation: s1-schema-distribute s1-begin s1-schema-undistribute s2-drop-table s1-commit s1-verify-distributed-schema
+citus_add_local_table_to_metadata
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-schema-distribute:
+    SELECT citus_schema_distribute('tenant1');
+
+citus_schema_distribute
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-begin:
+    BEGIN;
+    SET citus.shard_replication_factor TO 1;
+
+step s1-schema-undistribute:
+    SELECT citus_schema_undistribute('tenant1');
+
+citus_schema_undistribute
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-drop-table:
+    DROP TABLE tenant1.table3;
+ <waiting ...>
+step s1-commit:
+    COMMIT;
+
+step s2-drop-table: <... completed>
+step s1-verify-distributed-schema:
+    SELECT logicalrelid, partmethod, partkey, (colocationid = (SELECT colocationid AS tenant_colocid FROM pg_dist_schema)) AS is_correct_colocid, repmodel, autoconverted FROM pg_dist_partition WHERE logicalrelid::text LIKE 'tenant%' ORDER BY logicalrelid;
+
+logicalrelid|partmethod|partkey|is_correct_colocid|repmodel|autoconverted
+---------------------------------------------------------------------
+(0 rows)
+
+citus_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
+
+starting permutation: s1-begin s1-schema-distribute s2-alter-col-type s1-commit s1-verify-distributed-schema
+citus_add_local_table_to_metadata
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-begin:
+    BEGIN;
+    SET citus.shard_replication_factor TO 1;
+
+step s1-schema-distribute:
+    SELECT citus_schema_distribute('tenant1');
+
+citus_schema_distribute
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-alter-col-type:
+    ALTER TABLE tenant1.table3 ALTER COLUMN col1 TYPE text;
+ <waiting ...>
+step s1-commit:
+    COMMIT;
+
+step s2-alter-col-type: <... completed>
+step s1-verify-distributed-schema:
+    SELECT logicalrelid, partmethod, partkey, (colocationid = (SELECT colocationid AS tenant_colocid FROM pg_dist_schema)) AS is_correct_colocid, repmodel, autoconverted FROM pg_dist_partition WHERE logicalrelid::text LIKE 'tenant%' ORDER BY logicalrelid;
+
+logicalrelid  |partmethod|partkey|is_correct_colocid|repmodel|autoconverted
+---------------------------------------------------------------------
+tenant1.table1|n         |       |t                 |s       |f
+tenant1.table2|n         |       |t                 |s       |f
+tenant1.table3|n         |       |t                 |s       |f
+(3 rows)
+
+citus_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
+
+starting permutation: s1-schema-distribute s1-begin s1-schema-undistribute s2-alter-col-type s1-commit s1-verify-distributed-schema
+citus_add_local_table_to_metadata
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-schema-distribute:
+    SELECT citus_schema_distribute('tenant1');
+
+citus_schema_distribute
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-begin:
+    BEGIN;
+    SET citus.shard_replication_factor TO 1;
+
+step s1-schema-undistribute:
+    SELECT citus_schema_undistribute('tenant1');
+
+citus_schema_undistribute
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-alter-col-type:
+    ALTER TABLE tenant1.table3 ALTER COLUMN col1 TYPE text;
+ <waiting ...>
+step s1-commit:
+    COMMIT;
+
+step s2-alter-col-type: <... completed>
+step s1-verify-distributed-schema:
+    SELECT logicalrelid, partmethod, partkey, (colocationid = (SELECT colocationid AS tenant_colocid FROM pg_dist_schema)) AS is_correct_colocid, repmodel, autoconverted FROM pg_dist_partition WHERE logicalrelid::text LIKE 'tenant%' ORDER BY logicalrelid;
+
+logicalrelid  |partmethod|partkey|is_correct_colocid|repmodel|autoconverted
+---------------------------------------------------------------------
+tenant1.table3|n         |       |                  |s       |t
+(1 row)
+
+citus_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
+
+starting permutation: s1-begin s1-schema-distribute s2-add-foreign-key s1-commit s1-verify-distributed-schema
+citus_add_local_table_to_metadata
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-begin:
+    BEGIN;
+    SET citus.shard_replication_factor TO 1;
+
+step s1-schema-distribute:
+    SELECT citus_schema_distribute('tenant1');
+
+citus_schema_distribute
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-add-foreign-key:
+    ALTER TABLE tenant1.table3 ADD CONSTRAINT table3_fk1 FOREIGN KEY (id) REFERENCES tenant1.table2 (id);
+ <waiting ...>
+step s1-commit:
+    COMMIT;
+
+step s2-add-foreign-key: <... completed>
+step s1-verify-distributed-schema:
+    SELECT logicalrelid, partmethod, partkey, (colocationid = (SELECT colocationid AS tenant_colocid FROM pg_dist_schema)) AS is_correct_colocid, repmodel, autoconverted FROM pg_dist_partition WHERE logicalrelid::text LIKE 'tenant%' ORDER BY logicalrelid;
+
+logicalrelid  |partmethod|partkey|is_correct_colocid|repmodel|autoconverted
+---------------------------------------------------------------------
+tenant1.table1|n         |       |t                 |s       |f
+tenant1.table2|n         |       |t                 |s       |f
+tenant1.table3|n         |       |t                 |s       |f
+(3 rows)
+
+citus_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
+
+starting permutation: s1-schema-distribute s1-begin s1-schema-undistribute s2-add-foreign-key s1-commit s1-verify-distributed-schema
+citus_add_local_table_to_metadata
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-schema-distribute:
+    SELECT citus_schema_distribute('tenant1');
+
+citus_schema_distribute
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-begin:
+    BEGIN;
+    SET citus.shard_replication_factor TO 1;
+
+step s1-schema-undistribute:
+    SELECT citus_schema_undistribute('tenant1');
+
+citus_schema_undistribute
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-add-foreign-key:
+    ALTER TABLE tenant1.table3 ADD CONSTRAINT table3_fk1 FOREIGN KEY (id) REFERENCES tenant1.table2 (id);
+ <waiting ...>
+step s1-commit:
+    COMMIT;
+
+step s2-add-foreign-key: <... completed>
+step s1-verify-distributed-schema:
+    SELECT logicalrelid, partmethod, partkey, (colocationid = (SELECT colocationid AS tenant_colocid FROM pg_dist_schema)) AS is_correct_colocid, repmodel, autoconverted FROM pg_dist_partition WHERE logicalrelid::text LIKE 'tenant%' ORDER BY logicalrelid;
+
+logicalrelid  |partmethod|partkey|is_correct_colocid|repmodel|autoconverted
+---------------------------------------------------------------------
+tenant1.table3|n         |       |                  |s       |t
+tenant1.table2|n         |       |                  |s       |t
+(2 rows)
+
+citus_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
+
+starting permutation: s1-begin s1-schema-distribute s2-drop-foreign-key s1-commit s1-verify-distributed-schema
+citus_add_local_table_to_metadata
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-begin:
+    BEGIN;
+    SET citus.shard_replication_factor TO 1;
+
+step s1-schema-distribute:
+    SELECT citus_schema_distribute('tenant1');
+
+citus_schema_distribute
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-drop-foreign-key:
+    ALTER TABLE tenant1.table3 DROP CONSTRAINT table3_col_fkey;
+ <waiting ...>
+step s1-commit:
+    COMMIT;
+
+step s2-drop-foreign-key: <... completed>
+step s1-verify-distributed-schema:
+    SELECT logicalrelid, partmethod, partkey, (colocationid = (SELECT colocationid AS tenant_colocid FROM pg_dist_schema)) AS is_correct_colocid, repmodel, autoconverted FROM pg_dist_partition WHERE logicalrelid::text LIKE 'tenant%' ORDER BY logicalrelid;
+
+logicalrelid  |partmethod|partkey|is_correct_colocid|repmodel|autoconverted
+---------------------------------------------------------------------
+tenant1.table1|n         |       |t                 |s       |f
+tenant1.table2|n         |       |t                 |s       |f
+tenant1.table3|n         |       |t                 |s       |f
+(3 rows)
+
+citus_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
+
+starting permutation: s1-schema-distribute s1-begin s1-schema-undistribute s2-drop-foreign-key s1-commit s1-verify-distributed-schema
+citus_add_local_table_to_metadata
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-schema-distribute:
+    SELECT citus_schema_distribute('tenant1');
+
+citus_schema_distribute
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-begin:
+    BEGIN;
+    SET citus.shard_replication_factor TO 1;
+
+step s1-schema-undistribute:
+    SELECT citus_schema_undistribute('tenant1');
+
+citus_schema_undistribute
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-drop-foreign-key:
+    ALTER TABLE tenant1.table3 DROP CONSTRAINT table3_col_fkey;
+ <waiting ...>
+step s1-commit:
+    COMMIT;
+
+step s2-drop-foreign-key: <... completed>
+step s1-verify-distributed-schema:
+    SELECT logicalrelid, partmethod, partkey, (colocationid = (SELECT colocationid AS tenant_colocid FROM pg_dist_schema)) AS is_correct_colocid, repmodel, autoconverted FROM pg_dist_partition WHERE logicalrelid::text LIKE 'tenant%' ORDER BY logicalrelid;
+
+logicalrelid|partmethod|partkey|is_correct_colocid|repmodel|autoconverted
+---------------------------------------------------------------------
+(0 rows)
+
+citus_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
+
+starting permutation: s1-begin s1-schema-distribute s2-create-unique-index s1-commit s1-verify-distributed-schema
+citus_add_local_table_to_metadata
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-begin:
+    BEGIN;
+    SET citus.shard_replication_factor TO 1;
+
+step s1-schema-distribute:
+    SELECT citus_schema_distribute('tenant1');
+
+citus_schema_distribute
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-create-unique-index:
+    CREATE UNIQUE INDEX idx_2 ON tenant1.table3 (col);
+ <waiting ...>
+step s1-commit:
+    COMMIT;
+
+step s2-create-unique-index: <... completed>
+step s1-verify-distributed-schema:
+    SELECT logicalrelid, partmethod, partkey, (colocationid = (SELECT colocationid AS tenant_colocid FROM pg_dist_schema)) AS is_correct_colocid, repmodel, autoconverted FROM pg_dist_partition WHERE logicalrelid::text LIKE 'tenant%' ORDER BY logicalrelid;
+
+logicalrelid  |partmethod|partkey|is_correct_colocid|repmodel|autoconverted
+---------------------------------------------------------------------
+tenant1.table1|n         |       |t                 |s       |f
+tenant1.table2|n         |       |t                 |s       |f
+tenant1.table3|n         |       |t                 |s       |f
+(3 rows)
+
+citus_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
+
+starting permutation: s1-schema-distribute s1-begin s1-schema-undistribute s2-create-unique-index s1-commit s1-verify-distributed-schema
+citus_add_local_table_to_metadata
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-schema-distribute:
+    SELECT citus_schema_distribute('tenant1');
+
+citus_schema_distribute
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-begin:
+    BEGIN;
+    SET citus.shard_replication_factor TO 1;
+
+step s1-schema-undistribute:
+    SELECT citus_schema_undistribute('tenant1');
+
+citus_schema_undistribute
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-create-unique-index:
+    CREATE UNIQUE INDEX idx_2 ON tenant1.table3 (col);
+ <waiting ...>
+step s1-commit:
+    COMMIT;
+
+step s2-create-unique-index: <... completed>
+step s1-verify-distributed-schema:
+    SELECT logicalrelid, partmethod, partkey, (colocationid = (SELECT colocationid AS tenant_colocid FROM pg_dist_schema)) AS is_correct_colocid, repmodel, autoconverted FROM pg_dist_partition WHERE logicalrelid::text LIKE 'tenant%' ORDER BY logicalrelid;
+
+logicalrelid  |partmethod|partkey|is_correct_colocid|repmodel|autoconverted
+---------------------------------------------------------------------
+tenant1.table3|n         |       |                  |s       |t
+(1 row)
+
+citus_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
+
+starting permutation: s1-begin s1-schema-distribute s2-create-unique-index-concurrently s1-commit s1-verify-distributed-schema
+citus_add_local_table_to_metadata
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-begin:
+    BEGIN;
+    SET citus.shard_replication_factor TO 1;
+
+step s1-schema-distribute:
+    SELECT citus_schema_distribute('tenant1');
+
+citus_schema_distribute
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-create-unique-index-concurrently:
+    CREATE UNIQUE INDEX CONCURRENTLY idx_3 ON tenant1.table3 (col);
+ <waiting ...>
+step s1-commit:
+    COMMIT;
+
+step s2-create-unique-index-concurrently: <... completed>
+step s1-verify-distributed-schema:
+    SELECT logicalrelid, partmethod, partkey, (colocationid = (SELECT colocationid AS tenant_colocid FROM pg_dist_schema)) AS is_correct_colocid, repmodel, autoconverted FROM pg_dist_partition WHERE logicalrelid::text LIKE 'tenant%' ORDER BY logicalrelid;
+
+logicalrelid  |partmethod|partkey|is_correct_colocid|repmodel|autoconverted
+---------------------------------------------------------------------
+tenant1.table1|n         |       |t                 |s       |f
+tenant1.table2|n         |       |t                 |s       |f
+tenant1.table3|n         |       |t                 |s       |f
+(3 rows)
+
+citus_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
+
+starting permutation: s1-schema-distribute s1-begin s1-schema-undistribute s2-create-unique-index-concurrently s1-commit s1-verify-distributed-schema
+citus_add_local_table_to_metadata
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-schema-distribute:
+    SELECT citus_schema_distribute('tenant1');
+
+citus_schema_distribute
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-begin:
+    BEGIN;
+    SET citus.shard_replication_factor TO 1;
+
+step s1-schema-undistribute:
+    SELECT citus_schema_undistribute('tenant1');
+
+citus_schema_undistribute
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-create-unique-index-concurrently:
+    CREATE UNIQUE INDEX CONCURRENTLY idx_3 ON tenant1.table3 (col);
+ <waiting ...>
+step s1-commit:
+    COMMIT;
+
+step s2-create-unique-index-concurrently: <... completed>
+step s1-verify-distributed-schema:
+    SELECT logicalrelid, partmethod, partkey, (colocationid = (SELECT colocationid AS tenant_colocid FROM pg_dist_schema)) AS is_correct_colocid, repmodel, autoconverted FROM pg_dist_partition WHERE logicalrelid::text LIKE 'tenant%' ORDER BY logicalrelid;
+
+logicalrelid  |partmethod|partkey|is_correct_colocid|repmodel|autoconverted
+---------------------------------------------------------------------
+tenant1.table3|n         |       |                  |s       |t
+(1 row)
+
+citus_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
+
+starting permutation: s2-create-unique-index s1-begin s1-schema-distribute s2-reindex-unique-concurrently s1-commit s1-verify-distributed-schema
+citus_add_local_table_to_metadata
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-create-unique-index:
+    CREATE UNIQUE INDEX idx_2 ON tenant1.table3 (col);
+
+step s1-begin:
+    BEGIN;
+    SET citus.shard_replication_factor TO 1;
+
+step s1-schema-distribute:
+    SELECT citus_schema_distribute('tenant1');
+
+citus_schema_distribute
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-reindex-unique-concurrently:
+    REINDEX INDEX CONCURRENTLY tenant1.idx_2;
+ <waiting ...>
+step s1-commit:
+    COMMIT;
+
+step s2-reindex-unique-concurrently: <... completed>
+step s1-verify-distributed-schema:
+    SELECT logicalrelid, partmethod, partkey, (colocationid = (SELECT colocationid AS tenant_colocid FROM pg_dist_schema)) AS is_correct_colocid, repmodel, autoconverted FROM pg_dist_partition WHERE logicalrelid::text LIKE 'tenant%' ORDER BY logicalrelid;
+
+logicalrelid  |partmethod|partkey|is_correct_colocid|repmodel|autoconverted
+---------------------------------------------------------------------
+tenant1.table1|n         |       |t                 |s       |f
+tenant1.table2|n         |       |t                 |s       |f
+tenant1.table3|n         |       |t                 |s       |f
+(3 rows)
+
+citus_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
+
+starting permutation: s2-create-unique-index s1-schema-distribute s1-begin s1-schema-undistribute s2-reindex-unique-concurrently s1-commit s1-verify-distributed-schema
+citus_add_local_table_to_metadata
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-create-unique-index:
+    CREATE UNIQUE INDEX idx_2 ON tenant1.table3 (col);
+
+step s1-schema-distribute:
+    SELECT citus_schema_distribute('tenant1');
+
+citus_schema_distribute
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-begin:
+    BEGIN;
+    SET citus.shard_replication_factor TO 1;
+
+step s1-schema-undistribute:
+    SELECT citus_schema_undistribute('tenant1');
+
+citus_schema_undistribute
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-reindex-unique-concurrently:
+    REINDEX INDEX CONCURRENTLY tenant1.idx_2;
+ <waiting ...>
+step s1-commit:
+    COMMIT;
+
+step s2-reindex-unique-concurrently: <... completed>
+step s1-verify-distributed-schema:
+    SELECT logicalrelid, partmethod, partkey, (colocationid = (SELECT colocationid AS tenant_colocid FROM pg_dist_schema)) AS is_correct_colocid, repmodel, autoconverted FROM pg_dist_partition WHERE logicalrelid::text LIKE 'tenant%' ORDER BY logicalrelid;
+
+logicalrelid  |partmethod|partkey|is_correct_colocid|repmodel|autoconverted
+---------------------------------------------------------------------
+tenant1.table3|n         |       |                  |s       |t
+(1 row)
+
+citus_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
+
+starting permutation: s1-begin s1-schema-distribute s2-insert s1-commit s1-verify-distributed-schema
+citus_add_local_table_to_metadata
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-begin:
+    BEGIN;
+    SET citus.shard_replication_factor TO 1;
+
+step s1-schema-distribute:
+    SELECT citus_schema_distribute('tenant1');
+
+citus_schema_distribute
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-insert:
+    INSERT INTO public.ref SELECT i FROM generate_series(11, 20) i;
+    INSERT INTO tenant1.table3 SELECT i, 'asd', i*1000 FROM generate_series(11, 20) i;
+ <waiting ...>
+step s1-commit:
+    COMMIT;
+
+step s2-insert: <... completed>
+step s1-verify-distributed-schema:
+    SELECT logicalrelid, partmethod, partkey, (colocationid = (SELECT colocationid AS tenant_colocid FROM pg_dist_schema)) AS is_correct_colocid, repmodel, autoconverted FROM pg_dist_partition WHERE logicalrelid::text LIKE 'tenant%' ORDER BY logicalrelid;
+
+logicalrelid  |partmethod|partkey|is_correct_colocid|repmodel|autoconverted
+---------------------------------------------------------------------
+tenant1.table1|n         |       |t                 |s       |f
+tenant1.table2|n         |       |t                 |s       |f
+tenant1.table3|n         |       |t                 |s       |f
+(3 rows)
+
+citus_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
+
+starting permutation: s1-schema-distribute s1-begin s1-schema-undistribute s2-insert s1-commit s1-verify-distributed-schema
+citus_add_local_table_to_metadata
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-schema-distribute:
+    SELECT citus_schema_distribute('tenant1');
+
+citus_schema_distribute
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-begin:
+    BEGIN;
+    SET citus.shard_replication_factor TO 1;
+
+step s1-schema-undistribute:
+    SELECT citus_schema_undistribute('tenant1');
+
+citus_schema_undistribute
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-insert:
+    INSERT INTO public.ref SELECT i FROM generate_series(11, 20) i;
+    INSERT INTO tenant1.table3 SELECT i, 'asd', i*1000 FROM generate_series(11, 20) i;
+ <waiting ...>
+step s1-commit:
+    COMMIT;
+
+step s2-insert: <... completed>
+step s1-verify-distributed-schema:
+    SELECT logicalrelid, partmethod, partkey, (colocationid = (SELECT colocationid AS tenant_colocid FROM pg_dist_schema)) AS is_correct_colocid, repmodel, autoconverted FROM pg_dist_partition WHERE logicalrelid::text LIKE 'tenant%' ORDER BY logicalrelid;
+
+logicalrelid  |partmethod|partkey|is_correct_colocid|repmodel|autoconverted
+---------------------------------------------------------------------
+tenant1.table3|n         |       |                  |s       |t
+(1 row)
+
+citus_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
+
+starting permutation: s2-insert s1-begin s1-schema-distribute s2-update s1-commit s1-verify-distributed-schema
+citus_add_local_table_to_metadata
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-insert:
+    INSERT INTO public.ref SELECT i FROM generate_series(11, 20) i;
+    INSERT INTO tenant1.table3 SELECT i, 'asd', i*1000 FROM generate_series(11, 20) i;
+
+step s1-begin:
+    BEGIN;
+    SET citus.shard_replication_factor TO 1;
+
+step s1-schema-distribute:
+    SELECT citus_schema_distribute('tenant1');
+
+citus_schema_distribute
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-update:
+    UPDATE tenant1.table3 SET col = 11 WHERE col = 11;
+ <waiting ...>
+step s1-commit:
+    COMMIT;
+
+step s2-update: <... completed>
+step s1-verify-distributed-schema:
+    SELECT logicalrelid, partmethod, partkey, (colocationid = (SELECT colocationid AS tenant_colocid FROM pg_dist_schema)) AS is_correct_colocid, repmodel, autoconverted FROM pg_dist_partition WHERE logicalrelid::text LIKE 'tenant%' ORDER BY logicalrelid;
+
+logicalrelid  |partmethod|partkey|is_correct_colocid|repmodel|autoconverted
+---------------------------------------------------------------------
+tenant1.table1|n         |       |t                 |s       |f
+tenant1.table2|n         |       |t                 |s       |f
+tenant1.table3|n         |       |t                 |s       |f
+(3 rows)
+
+citus_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
+
+starting permutation: s2-insert s1-schema-distribute s1-begin s1-schema-undistribute s2-update s1-commit s1-verify-distributed-schema
+citus_add_local_table_to_metadata
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-insert:
+    INSERT INTO public.ref SELECT i FROM generate_series(11, 20) i;
+    INSERT INTO tenant1.table3 SELECT i, 'asd', i*1000 FROM generate_series(11, 20) i;
+
+step s1-schema-distribute:
+    SELECT citus_schema_distribute('tenant1');
+
+citus_schema_distribute
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-begin:
+    BEGIN;
+    SET citus.shard_replication_factor TO 1;
+
+step s1-schema-undistribute:
+    SELECT citus_schema_undistribute('tenant1');
+
+citus_schema_undistribute
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-update:
+    UPDATE tenant1.table3 SET col = 11 WHERE col = 11;
+ <waiting ...>
+step s1-commit:
+    COMMIT;
+
+step s2-update: <... completed>
+step s1-verify-distributed-schema:
+    SELECT logicalrelid, partmethod, partkey, (colocationid = (SELECT colocationid AS tenant_colocid FROM pg_dist_schema)) AS is_correct_colocid, repmodel, autoconverted FROM pg_dist_partition WHERE logicalrelid::text LIKE 'tenant%' ORDER BY logicalrelid;
+
+logicalrelid  |partmethod|partkey|is_correct_colocid|repmodel|autoconverted
+---------------------------------------------------------------------
+tenant1.table3|n         |       |                  |s       |t
+(1 row)
+
+citus_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
+
+starting permutation: s2-insert s1-begin s1-schema-distribute s2-delete s1-commit s1-verify-distributed-schema
+citus_add_local_table_to_metadata
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-insert:
+    INSERT INTO public.ref SELECT i FROM generate_series(11, 20) i;
+    INSERT INTO tenant1.table3 SELECT i, 'asd', i*1000 FROM generate_series(11, 20) i;
+
+step s1-begin:
+    BEGIN;
+    SET citus.shard_replication_factor TO 1;
+
+step s1-schema-distribute:
+    SELECT citus_schema_distribute('tenant1');
+
+citus_schema_distribute
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-delete:
+    DELETE FROM tenant1.table3;
+ <waiting ...>
+step s1-commit:
+    COMMIT;
+
+step s2-delete: <... completed>
+step s1-verify-distributed-schema:
+    SELECT logicalrelid, partmethod, partkey, (colocationid = (SELECT colocationid AS tenant_colocid FROM pg_dist_schema)) AS is_correct_colocid, repmodel, autoconverted FROM pg_dist_partition WHERE logicalrelid::text LIKE 'tenant%' ORDER BY logicalrelid;
+
+logicalrelid  |partmethod|partkey|is_correct_colocid|repmodel|autoconverted
+---------------------------------------------------------------------
+tenant1.table1|n         |       |t                 |s       |f
+tenant1.table2|n         |       |t                 |s       |f
+tenant1.table3|n         |       |t                 |s       |f
+(3 rows)
+
+citus_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
+
+starting permutation: s2-insert s1-schema-distribute s1-begin s1-schema-undistribute s2-delete s1-commit s1-verify-distributed-schema
+citus_add_local_table_to_metadata
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-insert:
+    INSERT INTO public.ref SELECT i FROM generate_series(11, 20) i;
+    INSERT INTO tenant1.table3 SELECT i, 'asd', i*1000 FROM generate_series(11, 20) i;
+
+step s1-schema-distribute:
+    SELECT citus_schema_distribute('tenant1');
+
+citus_schema_distribute
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-begin:
+    BEGIN;
+    SET citus.shard_replication_factor TO 1;
+
+step s1-schema-undistribute:
+    SELECT citus_schema_undistribute('tenant1');
+
+citus_schema_undistribute
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-delete:
+    DELETE FROM tenant1.table3;
+ <waiting ...>
+step s1-commit:
+    COMMIT;
+
+step s2-delete: <... completed>
+step s1-verify-distributed-schema:
+    SELECT logicalrelid, partmethod, partkey, (colocationid = (SELECT colocationid AS tenant_colocid FROM pg_dist_schema)) AS is_correct_colocid, repmodel, autoconverted FROM pg_dist_partition WHERE logicalrelid::text LIKE 'tenant%' ORDER BY logicalrelid;
+
+logicalrelid  |partmethod|partkey|is_correct_colocid|repmodel|autoconverted
+---------------------------------------------------------------------
+tenant1.table3|n         |       |                  |s       |t
+(1 row)
+
+citus_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+

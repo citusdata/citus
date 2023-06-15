@@ -3,7 +3,7 @@
 DO $$
 BEGIN
     -- Throw an error if user has created any tenant schemas.
-    IF EXISTS (SELECT 1 FROM pg_catalog.pg_dist_tenant_schema)
+    IF EXISTS (SELECT 1 FROM pg_catalog.pg_dist_schema)
     THEN
         RAISE EXCEPTION 'cannot downgrade Citus because there are '
                         'tenant schemas created.'
@@ -30,6 +30,9 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP FUNCTION pg_catalog.citus_schema_distribute(regnamespace);
+DROP FUNCTION pg_catalog.citus_schema_undistribute(regnamespace);
+
 DROP FUNCTION pg_catalog.citus_internal_add_tenant_schema(Oid, int);
 
 #include "../udfs/citus_prepare_pg_upgrade/11.2-1.sql"
@@ -40,10 +43,32 @@ DROP FUNCTION pg_catalog.citus_internal_unregister_tenant_schema_globally(Oid, t
 
 #include "../udfs/citus_drop_trigger/10.2-1.sql"
 
+DROP VIEW pg_catalog.citus_shards;
+DROP FUNCTION pg_catalog.citus_shard_sizes;
+#include "../udfs/citus_shard_sizes/10.0-1.sql"
+-- citus_shards/11.1-1.sql tries to create citus_shards in pg_catalog but it is not allowed.
+-- Here we use citus_shards/10.0-1.sql to properly create the view in citus schema and
+-- then alter it to pg_catalog, so citus_shards/11.1-1.sql can REPLACE it without any errors.
+#include "../udfs/citus_shards/10.0-1.sql"
+
 #include "../udfs/citus_tables/11.1-1.sql"
 #include "../udfs/citus_shards/11.1-1.sql"
 
-DROP TABLE pg_catalog.pg_dist_tenant_schema;
+DROP TABLE pg_catalog.pg_dist_schema;
+
+DROP VIEW pg_catalog.citus_stat_tenants_local;
+DROP FUNCTION pg_catalog.citus_stat_tenants_local_internal(
+    BOOLEAN,
+    OUT INT,
+    OUT TEXT,
+    OUT INT,
+    OUT INT,
+    OUT INT,
+    OUT INT,
+    OUT DOUBLE PRECISION,
+    OUT DOUBLE PRECISION,
+    OUT BIGINT);
+#include "../udfs/citus_stat_tenants_local/11.3-1.sql"
 
 #include "../udfs/drop_old_time_partitions/10.2-1.sql"
 #include "../udfs/get_missing_time_partition_ranges/10.2-1.sql"

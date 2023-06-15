@@ -251,6 +251,20 @@ CreateSchemaStmtObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
 
 
 /*
+ * AlterSchemaOwnerStmtObjectAddress returns the ObjectAddress of the schema that is
+ * the object of the AlterOwnerStmt. Errors if missing_ok is false.
+ */
+List *
+AlterSchemaOwnerStmtObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
+{
+	AlterOwnerStmt *stmt = castNode(AlterOwnerStmt, node);
+	Assert(stmt->objectType == OBJECT_SCHEMA);
+
+	return GetObjectAddressBySchemaName(strVal(stmt->object), missing_ok);
+}
+
+
+/*
  * AlterSchemaRenameStmtObjectAddress returns the ObjectAddress of the schema that is
  * the object of the RenameStmt. Errors if missing_ok is false.
  */

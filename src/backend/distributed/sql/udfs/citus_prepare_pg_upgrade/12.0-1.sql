@@ -33,7 +33,7 @@ BEGIN
     DROP TABLE IF EXISTS public.pg_dist_rebalance_strategy;
     DROP TABLE IF EXISTS public.pg_dist_object;
     DROP TABLE IF EXISTS public.pg_dist_cleanup;
-    DROP TABLE IF EXISTS public.pg_dist_tenant_schema;
+    DROP TABLE IF EXISTS public.pg_dist_schema;
     DROP TABLE IF EXISTS public.pg_dist_clock_logical_seq;
 
     --
@@ -49,7 +49,7 @@ BEGIN
     CREATE TABLE public.pg_dist_colocation AS SELECT * FROM pg_catalog.pg_dist_colocation;
     CREATE TABLE public.pg_dist_cleanup AS SELECT * FROM pg_catalog.pg_dist_cleanup;
     -- save names of the tenant schemas instead of their oids because the oids might change after pg upgrade
-    CREATE TABLE public.pg_dist_tenant_schema AS SELECT schemaid::regnamespace::text AS schemaname, colocationid FROM pg_catalog.pg_dist_tenant_schema;
+    CREATE TABLE public.pg_dist_schema AS SELECT schemaid::regnamespace::text AS schemaname, colocationid FROM pg_catalog.pg_dist_schema;
     -- enterprise catalog tables
     CREATE TABLE public.pg_dist_authinfo AS SELECT * FROM pg_catalog.pg_dist_authinfo;
     CREATE TABLE public.pg_dist_poolinfo AS SELECT * FROM pg_catalog.pg_dist_poolinfo;

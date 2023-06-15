@@ -56,7 +56,6 @@ set citus.shard_count to 8;
 set citus.shard_replication_factor to 1;
 SELECT create_distributed_table('mx_test_table', 'col_1');
 reset citus.shard_count;
-reset citus.shard_replication_factor;
 
 -- Set the replication model of the test table to streaming replication so that it is
 -- considered as an MX table
@@ -66,6 +65,8 @@ UPDATE pg_dist_partition SET repmodel='s' WHERE logicalrelid='mx_test_table'::re
 CREATE TABLE single_shard_tbl(a int);
 SELECT create_distributed_table('single_shard_tbl', null);
 INSERT INTO single_shard_tbl VALUES (1);
+
+reset citus.shard_replication_factor;
 
 -- Show that the created MX table is and its sequences are included in the activate node snapshot
 SELECT unnest(activate_node_snapshot()) order by 1;

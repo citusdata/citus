@@ -3,6 +3,7 @@ SET search_path TO insert_select_single_shard_table;
 
 SET citus.next_shard_id TO 1820000;
 SET citus.shard_count TO 32;
+SET citus.shard_replication_factor TO 1;
 
 SET client_min_messages TO NOTICE;
 
@@ -98,21 +99,27 @@ INSERT INTO distributed_table_c1_t1 SELECT nullkey_c1_t1.a, nullkey_c1_t1.b FROM
 -- use a colocated single-shard table
 INSERT INTO distributed_table_c1_t1 SELECT nullkey_c1_t1.a, nullkey_c1_t1.b FROM nullkey_c1_t1 JOIN nullkey_c1_t2 USING (b);
 INSERT INTO distributed_table_c1_t1 SELECT nullkey_c1_t1.a, nullkey_c1_t1.b FROM nullkey_c1_t1 FULL JOIN nullkey_c1_t2 USING (a);
-INSERT INTO distributed_table_c1_t1 SELECT nullkey_c1_t1.a, nullkey_c1_t1.b FROM nullkey_c1_t1 FULL JOIN matview USING (a);
+INSERT INTO distributed_table_c1_t1 SELECT COALESCE(nullkey_c1_t1.a, 1), nullkey_c1_t1.b FROM nullkey_c1_t1 FULL JOIN matview USING (a);
 INSERT INTO distributed_table_c1_t1 SELECT * FROM nullkey_c1_t1 UNION SELECT * FROM nullkey_c1_t2;
 
 -- use a non-colocated single-shard table
 INSERT INTO distributed_table_c1_t1 SELECT nullkey_c1_t2.a, nullkey_c1_t2.b FROM nullkey_c1_t2 LEFT JOIN nullkey_c2_t1 USING (a);
 INSERT INTO distributed_table_c1_t1 SELECT * FROM nullkey_c1_t1 UNION SELECT * FROM nullkey_c2_t1;
 
--- use a distributed table that is colocated with the target table
+SET client_min_messages TO DEBUG1;
+SET citus.enable_repartition_joins TO ON;
+
+-- use a distributed table that is colocated with the target table, with repartition joins enabled
 INSERT INTO distributed_table_c1_t1 SELECT nullkey_c1_t1.a, nullkey_c1_t1.b FROM nullkey_c1_t1 JOIN distributed_table_c1_t2 USING (a);
 INSERT INTO distributed_table_c1_t1 SELECT distributed_table_c1_t2.a, distributed_table_c1_t2.b FROM nullkey_c1_t1 JOIN distributed_table_c1_t2 USING (a);
 INSERT INTO distributed_table_c1_t1 SELECT distributed_table_c1_t2.a, distributed_table_c1_t2.b FROM nullkey_c1_t1 JOIN distributed_table_c1_t2 USING (b);
 INSERT INTO distributed_table_c1_t1 SELECT distributed_table_c1_t2.a, distributed_table_c1_t2.b FROM nullkey_c1_t1 JOIN distributed_table_c1_t2 USING (a) WHERE distributed_table_c1_t2.a = 1;
 
--- use a distributed table that is not colocated with the target table
+-- use a distributed table that is not colocated with the target table, with repartition joins enabled
 INSERT INTO distributed_table_c1_t1 SELECT nullkey_c1_t2.a, nullkey_c1_t2.b FROM nullkey_c1_t2 JOIN distributed_table_c2_t1 USING (a);
+
+RESET citus.enable_repartition_joins;
+SET client_min_messages TO DEBUG2;
 
 -- use a citus local table
 INSERT INTO distributed_table_c1_t1 SELECT nullkey_c1_t1.a, nullkey_c1_t1.b FROM nullkey_c1_t1 JOIN citus_local_table USING (a);
@@ -148,10 +155,17 @@ INSERT INTO reference_table SELECT nullkey_c1_t1.a, nullkey_c1_t1.b FROM nullkey
 INSERT INTO reference_table SELECT nullkey_c1_t2.a, nullkey_c1_t2.b FROM nullkey_c1_t2 LEFT JOIN nullkey_c2_t1 USING (a);
 
 -- use a distributed table
+
+SET client_min_messages TO DEBUG1;
+SET citus.enable_repartition_joins TO ON;
+
 INSERT INTO reference_table SELECT nullkey_c1_t1.a, nullkey_c1_t1.b FROM nullkey_c1_t1 JOIN distributed_table_c1_t2 USING (a);
 INSERT INTO reference_table SELECT distributed_table_c1_t2.a, distributed_table_c1_t2.b FROM nullkey_c1_t1 JOIN distributed_table_c1_t2 USING (a);
 INSERT INTO reference_table SELECT distributed_table_c1_t2.a, distributed_table_c1_t2.b FROM nullkey_c1_t1 JOIN distributed_table_c1_t2 USING (b);
 INSERT INTO reference_table SELECT distributed_table_c1_t2.a, distributed_table_c1_t2.b FROM nullkey_c1_t1 JOIN distributed_table_c1_t2 USING (a) WHERE distributed_table_c1_t2.a = 1;
+
+RESET citus.enable_repartition_joins;
+SET client_min_messages TO DEBUG2;
 
 -- use a citus local table
 INSERT INTO reference_table SELECT nullkey_c1_t1.a, nullkey_c1_t1.b FROM nullkey_c1_t1 JOIN citus_local_table USING (a);
@@ -176,7 +190,11 @@ INSERT INTO citus_local_table SELECT nullkey_c1_t1.a, nullkey_c1_t1.b FROM nullk
 INSERT INTO citus_local_table SELECT nullkey_c1_t1.a, nullkey_c1_t1.b FROM nullkey_c1_t1 JOIN nullkey_c1_t2 USING (b);
 
 -- use a distributed table
+SET client_min_messages TO DEBUG1;
+SET citus.enable_repartition_joins TO ON;
 INSERT INTO citus_local_table SELECT nullkey_c1_t1.a, nullkey_c1_t1.b FROM nullkey_c1_t1 JOIN distributed_table_c1_t2 USING (a);
+RESET citus.enable_repartition_joins;
+SET client_min_messages TO DEBUG2;
 
 -- use a citus local table
 INSERT INTO citus_local_table SELECT nullkey_c1_t1.a, nullkey_c1_t1.b FROM nullkey_c1_t1 JOIN citus_local_table USING (a);
@@ -204,7 +222,12 @@ INSERT INTO nullkey_c1_t1 SELECT citus_local_table.a, citus_local_table.b FROM c
 -- use a distributed table
 INSERT INTO nullkey_c1_t1 SELECT distributed_table_c1_t2.a, distributed_table_c1_t2.b FROM distributed_table_c1_t2;
 INSERT INTO nullkey_c1_t1 SELECT distributed_table_c1_t2.a, distributed_table_c1_t2.b FROM distributed_table_c1_t2 JOIN reference_table USING (a);
+
+SET client_min_messages TO DEBUG1;
+SET citus.enable_repartition_joins TO ON;
 INSERT INTO nullkey_c1_t1 SELECT distributed_table_c1_t2.a, distributed_table_c1_t2.b FROM distributed_table_c1_t2 JOIN nullkey_c1_t1 USING (a);
+RESET citus.enable_repartition_joins;
+SET client_min_messages TO DEBUG2;
 
 -- use a non-colocated single-shard table
 INSERT INTO nullkey_c2_t1 SELECT q.* FROM (SELECT reference_table.* FROM reference_table LEFT JOIN nullkey_c1_t1 USING (a)) q JOIN nullkey_c1_t2 USING (a);
@@ -244,6 +267,8 @@ INSERT INTO postgres_local_table SELECT i, i FROM generate_series(5, 10) i;
 
 -- Try slightly more complex queries.
 
+SET client_min_messages TO DEBUG1;
+
 WITH cte_1 AS (
   SELECT nullkey_c1_t1.a, reference_table.b FROM nullkey_c1_t1 JOIN reference_table USING (a)
 ),
@@ -252,6 +277,8 @@ cte_2 AS (
 )
 INSERT INTO distributed_table_c1_t1
 SELECT cte_1.* FROM cte_1 JOIN cte_2 USING (a) JOIN distributed_table_c1_t2 USING (a) ORDER BY 1,2;
+
+SET client_min_messages TO DEBUG2;
 
 WITH cte_1 AS (
   SELECT nullkey_c1_t1.a, reference_table.b FROM nullkey_c1_t1 JOIN reference_table USING (a)
@@ -326,9 +353,6 @@ WHERE t2.sum_val > 2;
 -- in the output of the next query.
 SET client_min_messages TO DEBUG1;
 
--- MultiTaskRouterSelectQuerySupported() is unnecessarily restrictive
--- about pushing down queries with DISTINCT ON clause even if the table
--- doesn't have a shard key. See https://github.com/citusdata/citus/pull/6752.
 INSERT INTO nullkey_c1_t1 SELECT DISTINCT ON (a) a, b FROM nullkey_c1_t2;
 
 SET client_min_messages TO DEBUG2;

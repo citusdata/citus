@@ -30,7 +30,7 @@
 #include "distributed/worker_protocol.h"
 #include "utils/lsyscache.h"
 
-int RemoteTaskCheckInterval = 100; /* per cycle sleep interval in millisecs */
+int RemoteTaskCheckInterval = 10; /* per cycle sleep interval in millisecs */
 int TaskExecutorType = MULTI_EXECUTOR_ADAPTIVE; /* distributed executor type */
 bool EnableRepartitionJoins = false;
 

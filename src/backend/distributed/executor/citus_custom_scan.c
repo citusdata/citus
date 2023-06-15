@@ -896,12 +896,6 @@ SetJobColocationId(Job *job)
 {
 	uint32 jobColocationId = INVALID_COLOCATION_ID;
 
-	if (!job->partitionKeyValue)
-	{
-		/* if the Job has no shard key, nothing to do */
-		return;
-	}
-
 	List *rangeTableList = ExtractRangeTableEntryList(job->jobQuery);
 	ListCell *rangeTableCell = NULL;
 	foreach(rangeTableCell, rangeTableList)

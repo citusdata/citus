@@ -17,14 +17,11 @@
 #include "distributed/colocation_utils.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata_sync.h"
-#include "distributed/pg_dist_tenant_schema.h"
+#include "distributed/pg_dist_schema.h"
 #include "distributed/tenant_schema_metadata.h"
 #include "storage/lockdefs.h"
 #include "utils/relcache.h"
 #include "utils/fmgroids.h"
-
-
-static Oid ColocationIdGetTenantSchemaId(uint32 colocationId);
 
 
 /*
@@ -36,7 +33,7 @@ IsTenantSchema(Oid schemaId)
 	/*
 	 * We don't allow creating tenant schemas when there is a version
 	 * mismatch. Even more, SchemaIdGetTenantColocationId() would throw an
-	 * error if the underlying pg_dist_tenant_schema metadata table has not
+	 * error if the underlying pg_dist_schema metadata table has not
 	 * been created yet, which is the case in older versions. For this reason,
 	 * it's safe to assume that it cannot be a tenant schema when there is a
 	 * version mismatch.
@@ -48,7 +45,7 @@ IsTenantSchema(Oid schemaId)
 	 * fail when deciding whether we should create a tenant table or not.
 	 *
 	 * The downside of doing so is that, for example, we will skip deleting
-	 * the tenant schema entry from pg_dist_tenant_schema when dropping a
+	 * the tenant schema entry from pg_dist_schema when dropping a
 	 * tenant schema while the version checks are disabled even if there was
 	 * no version mismatch. But we're okay with that because we don't expect
 	 * users to disable version checks anyway.
@@ -92,7 +89,7 @@ SchemaIdGetTenantColocationId(Oid schemaId)
 	Relation pgDistTenantSchema = table_open(DistTenantSchemaRelationId(),
 											 AccessShareLock);
 	ScanKeyData scanKey[1];
-	ScanKeyInit(&scanKey[0], Anum_pg_dist_tenant_schema_schemaid, BTEqualStrategyNumber,
+	ScanKeyInit(&scanKey[0], Anum_pg_dist_schema_schemaid, BTEqualStrategyNumber,
 				F_OIDEQ, ObjectIdGetDatum(schemaId));
 
 	bool indexOk = true;
@@ -106,7 +103,7 @@ SchemaIdGetTenantColocationId(Oid schemaId)
 		bool isNull = false;
 		colocationId = DatumGetUInt32(
 			heap_getattr(heapTuple,
-						 Anum_pg_dist_tenant_schema_colocationid,
+						 Anum_pg_dist_schema_colocationid,
 						 RelationGetDescr(pgDistTenantSchema),
 						 &isNull));
 		Assert(!isNull);
@@ -125,7 +122,7 @@ SchemaIdGetTenantColocationId(Oid schemaId)
  *
  * Returns InvalidOid if there is no such tenant schema.
  */
-static Oid
+Oid
 ColocationIdGetTenantSchemaId(uint32 colocationId)
 {
 	if (colocationId == INVALID_COLOCATION_ID)
@@ -136,7 +133,7 @@ ColocationIdGetTenantSchemaId(uint32 colocationId)
 	Relation pgDistTenantSchema = table_open(DistTenantSchemaRelationId(),
 											 AccessShareLock);
 	ScanKeyData scanKey[1];
-	ScanKeyInit(&scanKey[0], Anum_pg_dist_tenant_schema_colocationid,
+	ScanKeyInit(&scanKey[0], Anum_pg_dist_schema_colocationid,
 				BTEqualStrategyNumber, F_INT4EQ, UInt32GetDatum(colocationId));
 
 	bool indexOk = true;
@@ -149,7 +146,7 @@ ColocationIdGetTenantSchemaId(uint32 colocationId)
 	if (HeapTupleIsValid(heapTuple))
 	{
 		bool isNull = false;
-		schemaId = heap_getattr(heapTuple, Anum_pg_dist_tenant_schema_schemaid,
+		schemaId = heap_getattr(heapTuple, Anum_pg_dist_schema_schemaid,
 								RelationGetDescr(pgDistTenantSchema), &isNull);
 		Assert(!isNull);
 	}
@@ -162,7 +159,7 @@ ColocationIdGetTenantSchemaId(uint32 colocationId)
 
 
 /*
- * InsertTenantSchemaLocally inserts an entry into pg_dist_tenant_schema
+ * InsertTenantSchemaLocally inserts an entry into pg_dist_schema
  * with given schemaId and colocationId.
  *
  * Throws a constraint violation error if there is already an entry with
@@ -182,11 +179,11 @@ InsertTenantSchemaLocally(Oid schemaId, uint32 colocationId)
 		ereport(ERROR, (errmsg("colocation id is invalid")));
 	}
 
-	Datum values[Natts_pg_dist_tenant_schema] = { 0 };
-	bool isNulls[Natts_pg_dist_tenant_schema] = { 0 };
+	Datum values[Natts_pg_dist_schema] = { 0 };
+	bool isNulls[Natts_pg_dist_schema] = { 0 };
 
-	values[Anum_pg_dist_tenant_schema_schemaid - 1] = ObjectIdGetDatum(schemaId);
-	values[Anum_pg_dist_tenant_schema_colocationid - 1] = UInt32GetDatum(colocationId);
+	values[Anum_pg_dist_schema_schemaid - 1] = ObjectIdGetDatum(schemaId);
+	values[Anum_pg_dist_schema_colocationid - 1] = UInt32GetDatum(colocationId);
 
 	Relation pgDistTenantSchema = table_open(DistTenantSchemaRelationId(),
 											 RowExclusiveLock);
@@ -202,7 +199,7 @@ InsertTenantSchemaLocally(Oid schemaId, uint32 colocationId)
 
 /*
  * DeleteTenantSchemaLocally deletes the entry for given schemaId from
- * pg_dist_tenant_schema.
+ * pg_dist_schema.
  *
  * Throws an error if there is no such tenant schema.
  */
@@ -217,7 +214,7 @@ DeleteTenantSchemaLocally(Oid schemaId)
 	Relation pgDistTenantSchema = table_open(DistTenantSchemaRelationId(),
 											 RowExclusiveLock);
 	ScanKeyData scanKey[1];
-	ScanKeyInit(&scanKey[0], Anum_pg_dist_tenant_schema_schemaid, BTEqualStrategyNumber,
+	ScanKeyInit(&scanKey[0], Anum_pg_dist_schema_schemaid, BTEqualStrategyNumber,
 				F_OIDEQ, ObjectIdGetDatum(schemaId));
 
 	bool indexOk = true;

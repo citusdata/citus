@@ -24,7 +24,19 @@
 #include "utils/builtins.h"
 
 /* stores the string representation of our node connection GUC */
-char *NodeConninfo = "";
+#ifdef USE_SSL
+char *NodeConninfo = "sslmode=require";
+#else
+char *NodeConninfo = "sslmode=prefer";
+#endif
+
+/*
+ * Previously we would use an empty initial value for NodeConnInfo
+ * PG16 however requires same initial and boot values for configuration parameters
+ * Therefore we now use this flag in NodeConninfoGucAssignHook
+ */
+bool checkAtBootPassed = false;
+
 char *LocalHostName = "localhost";
 
 /* represents a list of libpq parameter settings */

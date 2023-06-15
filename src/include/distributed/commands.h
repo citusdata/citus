@@ -15,6 +15,7 @@
 
 #include "postgres.h"
 
+#include "distributed/metadata_utility.h"
 #include "utils/rel.h"
 #include "nodes/parsenodes.h"
 #include "tcop/dest.h"
@@ -273,6 +274,10 @@ extern List * GetForeignConstraintToReferenceTablesCommands(Oid relationId);
 extern List * GetForeignConstraintToDistributedTablesCommands(Oid relationId);
 extern List * GetForeignConstraintFromDistributedTablesCommands(Oid relationId);
 extern List * GetForeignConstraintCommandsInternal(Oid relationId, int flags);
+extern Oid DropFKeysAndUndistributeTable(Oid relationId);
+extern void DropFKeysRelationInvolvedWithTableType(Oid relationId, int tableTypeFlag);
+extern List * GetFKeyCreationCommandsRelationInvolvedWithTableType(Oid relationId,
+																   int tableTypeFlag);
 extern bool AnyForeignKeyDependsOnIndex(Oid indexId);
 extern bool HasForeignKeyWithLocalTable(Oid relationId);
 extern bool HasForeignKeyToReferenceTable(Oid relationOid);
@@ -469,6 +474,8 @@ extern List * PreprocessGrantOnSchemaStmt(Node *node, const char *queryString,
 										  ProcessUtilityContext processUtilityContext);
 extern List * CreateSchemaStmtObjectAddress(Node *node, bool missing_ok, bool
 											isPostprocess);
+extern List * AlterSchemaOwnerStmtObjectAddress(Node *node, bool missing_ok,
+												bool isPostprocess);
 extern List * AlterSchemaRenameStmtObjectAddress(Node *node, bool missing_ok, bool
 												 isPostprocess);
 
@@ -790,5 +797,7 @@ extern void ErrorIfIllegalPartitioningInTenantSchema(Oid parentRelationId,
 													 Oid partitionRelationId);
 extern void CreateTenantSchemaTable(Oid relationId);
 extern void ErrorIfTenantTable(Oid relationId, char *operationName);
+extern void ErrorIfTenantSchema(Oid nspOid, char *operationName);
+extern uint32 CreateTenantSchemaColocationId(void);
 
 #endif /*CITUS_COMMANDS_H */

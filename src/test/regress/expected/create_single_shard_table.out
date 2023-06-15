@@ -909,15 +909,18 @@ ALTER TABLE "NULL_!_dist_key"."nullKeyTable.1!?!90123456789012345678901234567890
 ERROR:  referenced table "local_table_for_fkey" must be a distributed table or a reference table
 DETAIL:  To enforce foreign keys, the referencing and referenced rows need to be stored on the same node.
 HINT:  You could use SELECT create_reference_table('local_table_for_fkey') to replicate the referenced table to all nodes or consider dropping the foreign key
--- Normally, we support foreign keys from Postgres tables to distributed
--- tables assuming that the user will soon distribute the local table too
--- anyway. However, this is not the case for single-shard tables before
--- we improve SQL support.
+-- foreign key from a local table
 ALTER TABLE local_table_for_fkey
     ADD CONSTRAINT fkey_from_dummy_local FOREIGN KEY (a) REFERENCES "NULL_!_dist_key"."nullKeyTable.1!?!9012345678901234567890123456789012345678901234567890123456789"(id);
-ERROR:  queries that reference a distributed table without a shard key can only reference colocated distributed tables or reference tables
-DETAIL:  Local tables cannot be used in distributed queries.
-CONTEXT:  SQL statement "SELECT fk."a" FROM ONLY "create_single_shard_table"."local_table_for_fkey" fk LEFT OUTER JOIN "NULL_!_dist_key"."nullKeyTable.1!?!9012345678901234567890123456789012345678901234" pk ON ( pk."id" OPERATOR(pg_catalog.=) fk."a") WHERE pk."id" IS NULL AND (fk."a" IS NOT NULL)"
+SELECT create_distributed_table('local_table_for_fkey', null, colocate_with=>'none');
+ERROR:  cannot create foreign key constraint since relations are not colocated or not referencing a reference table
+DETAIL:  A distributed table can only have foreign keys if it is referencing another colocated hash distributed table or a reference table
+SELECT create_distributed_table('local_table_for_fkey', null, colocate_with=>'"NULL_!_dist_key"."nullKeyTable.1!?!9012345678901234567890123456789012345678901234567890123456789"');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
 -- foreign key to a citus local table, errors out
 CREATE TABLE citus_local_table_for_fkey (a INT PRIMARY KEY);
 SELECT citus_add_local_table_to_metadata('citus_local_table_for_fkey');
@@ -1128,7 +1131,7 @@ BEGIN;
   INSERT INTO referencing_table VALUES (1, 2);
   -- fails
   INSERT INTO referencing_table VALUES (2, 2);
-ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_fkey_1730098"
+ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_fkey_1730099"
 DETAIL:  Key (a)=(2) is not present in table "referenced_table_xxxxxxx".
 CONTEXT:  while executing command on localhost:xxxxx
 ROLLBACK;
@@ -1174,7 +1177,7 @@ BEGIN;
   INSERT INTO referencing_table VALUES (1, 2);
   -- fails
   INSERT INTO referencing_table VALUES (2, 2);
-ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_fkey_1730134"
+ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_fkey_1730135"
 DETAIL:  Key (a)=(2) is not present in table "referenced_table_xxxxxxx".
 CONTEXT:  while executing command on localhost:xxxxx
 ROLLBACK;
@@ -1292,8 +1295,8 @@ SELECT result, success FROM run_command_on_workers($$
 $$);
                                                               result                                                              | success
 ---------------------------------------------------------------------
- ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_fkey_1730151" | f
- ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_fkey_1730151" | f
+ ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_fkey_1730152" | f
+ ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_fkey_1730152" | f
 (2 rows)
 
 DROP TABLE referencing_table, referenced_table;
@@ -1308,8 +1311,8 @@ SELECT create_distributed_table('self_fkey_test', NULL, distribution_type=>null)
 
 INSERT INTO self_fkey_test VALUES (1, 1); -- ok
 INSERT INTO self_fkey_test VALUES (2, 3); -- fails
-ERROR:  insert or update on table "self_fkey_test_1730152" violates foreign key constraint "self_fkey_test_b_fkey_1730152"
-DETAIL:  Key (b)=(3) is not present in table "self_fkey_test_1730152".
+ERROR:  insert or update on table "self_fkey_test_1730153" violates foreign key constraint "self_fkey_test_b_fkey_1730153"
+DETAIL:  Key (b)=(3) is not present in table "self_fkey_test_1730153".
 CONTEXT:  while executing command on localhost:xxxxx
 -- similar foreign key tests but this time create the referencing table later on
 -- referencing table is a single-shard table
@@ -1333,7 +1336,7 @@ BEGIN;
   INSERT INTO referencing_table VALUES (1, 2);
   -- fails
   INSERT INTO referencing_table VALUES (2, 2);
-ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_fkey_1730154"
+ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_fkey_1730155"
 DETAIL:  Key (a)=(2) is not present in table "referenced_table_xxxxxxx".
 CONTEXT:  while executing command on localhost:xxxxx
 ROLLBACK;
@@ -1356,7 +1359,7 @@ BEGIN;
   INSERT INTO referencing_table VALUES (2, 1);
   -- fails
   INSERT INTO referencing_table VALUES (1, 2);
-ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_b_fkey_1730156"
+ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_b_fkey_1730157"
 DETAIL:  Key (a, b)=(1, 2) is not present in table "referenced_table_xxxxxxx".
 CONTEXT:  while executing command on localhost:xxxxx
 ROLLBACK;
@@ -1463,7 +1466,7 @@ BEGIN;
   INSERT INTO referencing_table VALUES (1, 2);
   -- fails
   INSERT INTO referencing_table VALUES (2, 2);
-ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_fkey_1730197"
+ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_fkey_1730198"
 DETAIL:  Key (a)=(2) is not present in table "referenced_table_xxxxxxx".
 CONTEXT:  while executing command on localhost:xxxxx
 ROLLBACK;
