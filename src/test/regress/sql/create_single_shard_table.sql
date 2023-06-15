@@ -734,6 +734,11 @@ CREATE TABLE identity_test (
 
 SELECT create_distributed_table('identity_test', NULL, distribution_type=>null);
 
+INSERT INTO identity_test (a) VALUES (DEFAULT) RETURNING a;
+SELECT result FROM run_command_on_workers($$
+    INSERT INTO create_single_shard_table.identity_test (a) VALUES (DEFAULT)
+$$);
+
 DROP TABLE identity_test;
 
 CREATE TABLE identity_test (
