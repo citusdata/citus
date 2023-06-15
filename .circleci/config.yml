@@ -6,7 +6,7 @@ orbs:
 parameters:
   image_suffix:
     type: string
-    default: '-dev-6a6d3b8'
+    default: '-vbab548a'
   pg14_version:
     type: string
     default: '14.8'
