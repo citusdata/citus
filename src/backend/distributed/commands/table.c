@@ -1382,6 +1382,16 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 															   constraintName, missingOk);
 				rightRelationId = GetReferencedTableId(foreignKeyId);
 			}
+
+			/*
+			 * We support deparsing for DROP CONSTRAINT, but currently deparsing is only
+			 * possible if all subcommands are supported.
+			 */
+			if (list_length(commandList) == 1 &&
+				alterTableStatement->objtype == OBJECT_TABLE)
+			{
+				deparseAT = true;
+			}
 		}
 		else if (alterTableType == AT_AddColumn)
 		{
@@ -1589,11 +1599,10 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 	DDLJob *ddlJob = palloc0(sizeof(DDLJob));
 	ObjectAddressSet(ddlJob->targetObjectAddress, RelationRelationId, leftRelationId);
 
-	const char *sqlForTaskList = alterTableCommand;
 	if (deparseAT)
 	{
 		newStmt->cmds = list_make1(newCmd);
-		sqlForTaskList = DeparseTreeNode((Node *) newStmt);
+		alterTableCommand = DeparseTreeNode((Node *) newStmt);
 	}
 
 	ddlJob->metadataSyncCommand = useInitialDDLCommandString ? alterTableCommand : NULL;
@@ -1609,13 +1618,13 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 		{
 			/* if foreign key or attaching partition index related, use specialized task list function ... */
 			ddlJob->taskList = InterShardDDLTaskList(leftRelationId, rightRelationId,
-													 sqlForTaskList);
+													 alterTableCommand);
 		}
 	}
 	else
 	{
 		/* ... otherwise use standard DDL task list function */
-		ddlJob->taskList = DDLTaskList(leftRelationId, sqlForTaskList);
+		ddlJob->taskList = DDLTaskList(leftRelationId, alterTableCommand);
 		if (!propagateCommandToWorkers)
 		{
 			ddlJob->taskList = NIL;

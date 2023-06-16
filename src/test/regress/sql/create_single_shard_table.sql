@@ -677,7 +677,21 @@ ALTER TABLE null_key_dist ADD CONSTRAINT fkey_add_test_4 FOREIGN KEY(a)
 ALTER TABLE null_key_dist DROP CONSTRAINT fkey_add_test_1;
 ALTER TABLE null_key_dist DROP CONSTRAINT fkey_add_test_2;
 ALTER TABLE null_key_dist DROP CONSTRAINT fkey_add_test_3;
-ALTER TABLE null_key_dist DROP CONSTRAINT fkey_add_test_4;
+
+-- mimic a conjoined django command
+CREATE FUNCTION drop_fkey_4()
+  RETURNS void
+  LANGUAGE plpgsql
+AS $function$
+BEGIN
+  EXECUTE $$
+    SET CONSTRAINTS fkey_add_test_4 IMMEDIATE;
+    ALTER TABLE null_key_dist DROP CONSTRAINT fkey_add_test_4;
+  $$;
+END
+$function$;
+SELECT drop_fkey_4();
+
 ALTER TABLE "NULL_!_dist_key"."nullKeyTable.1!?!9012345678901234567890123456789012345678901234567890123456789" DROP CONSTRAINT fkey_to_dummy_dist;
 
 -- create a view that depends on the single-shard table
