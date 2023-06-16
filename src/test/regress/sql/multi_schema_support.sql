@@ -993,4 +993,3 @@ DROP SCHEMA run_test_schema, test_schema_support_join_1, test_schema_support_joi
 -- verify that the dropped schema is removed from worker's pg_dist_object
 SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM pg_catalog.pg_dist_object
     WHERE classid=2615 and objid IN (select oid from pg_namespace where nspname='run_test_schema');
-DROP TABLE public.nation_local CASCADE;

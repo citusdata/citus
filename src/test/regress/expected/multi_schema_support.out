@@ -1402,4 +1402,3 @@ SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM pg_catalog.p
 ---------------------------------------------------------------------
 (0 rows)
 
-DROP TABLE public.nation_local CASCADE;

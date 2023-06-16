@@ -462,21 +462,24 @@ HasDropCommandViolatesOwnership(Node *node)
 static bool
 AnyObjectViolatesOwnership(DropStmt *dropStmt)
 {
+	bool hasOwnershipViolation = false;
 	volatile ObjectAddress objectAddress = { 0 };
 	Relation relation = NULL;
-	bool objectViolatesOwnership = false;
 	ObjectType objectType = dropStmt->removeType;
 	bool missingOk = dropStmt->missing_ok;
 
-	Node *object = NULL;
-	foreach_ptr(object, dropStmt->objects)
+	MemoryContext savedContext = CurrentMemoryContext;
+	ResourceOwner savedOwner = CurrentResourceOwner;
+	BeginInternalSubTransaction(NULL);
+	MemoryContextSwitchTo(savedContext);
+
+	PG_TRY();
 	{
-		MemoryContext savedContext = CurrentMemoryContext;
-		PG_TRY();
+		Node *object = NULL;
+		foreach_ptr(object, dropStmt->objects)
 		{
 			objectAddress = get_object_address(objectType, object,
 											   &relation, AccessShareLock, missingOk);
-
 
 			if (OidIsValid(objectAddress.objectId))
 			{
@@ -488,44 +491,39 @@ AnyObjectViolatesOwnership(DropStmt *dropStmt)
 									   objectAddress,
 									   object, relation);
 			}
-		}
-		PG_CATCH();
-		{
-			MemoryContextSwitchTo(savedContext);
-			ErrorData *edata = CopyErrorData();
-			FlushErrorState();
 
-			/* Jump to upper handler if the error is critical */
-			if (edata->elevel > ERROR)
+			if (relation != NULL)
 			{
-				PG_RE_THROW();
-			}
-
-			/* Throw error with LOG_SERVER_ONLY to prevent log to be sent to client */
-			edata->elevel = LOG_SERVER_ONLY;
-			ThrowErrorData(edata);
-
-			/* Check if object valid */
-			if (OidIsValid(objectAddress.objectId))
-			{
-				/* ownership violation */
-				objectViolatesOwnership = true;
+				relation_close(relation, NoLock);
+				relation = NULL;
 			}
 		}
-		PG_END_TRY();
 
+		ReleaseCurrentSubTransaction();
+		MemoryContextSwitchTo(savedContext);
+		CurrentResourceOwner = savedOwner;
+	}
+	PG_CATCH();
+	{
+		MemoryContextSwitchTo(savedContext);
+		ErrorData *edata = CopyErrorData();
+		FlushErrorState();
+
+		hasOwnershipViolation = true;
 		if (relation != NULL)
 		{
-			relation_close(relation, AccessShareLock);
+			relation_close(relation, NoLock);
 			relation = NULL;
 		}
+		RollbackAndReleaseCurrentSubTransaction();
+		MemoryContextSwitchTo(savedContext);
+		CurrentResourceOwner = savedOwner;
 
-		/* we found ownership violation, so can return here */
-		if (objectViolatesOwnership)
-		{
-			return true;
-		}
+		/* Rethrow error with LOG_SERVER_ONLY to prevent log to be sent to client */
+		edata->elevel = LOG_SERVER_ONLY;
+		ThrowErrorData(edata);
 	}
+	PG_END_TRY();
 
-	return false;
+	return hasOwnershipViolation;
 }
