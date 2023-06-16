@@ -93,10 +93,7 @@ ERROR:  tenant_2.test_table is not allowed for colocate_with because it belongs 
 -- verify we can set tenant table's schema to regular schema
 CREATE TABLE tenant_2.test_table2(id int);
 ALTER TABLE tenant_2.test_table2 SET SCHEMA regular_schema;
-NOTICE:  creating a new table for tenant_2.test_table2
-NOTICE:  moving the data of tenant_2.test_table2
-NOTICE:  dropping the old tenant_2.test_table2
-NOTICE:  renaming the new table to tenant_2.test_table2
+NOTICE:  undistributing table test_table2 in distributed schema tenant_2 before altering its schema
 -- verify that regular_schema.test_table2 does not exist in pg_dist_partition
 SELECT COUNT(*)=0 FROM pg_dist_partition
 WHERE logicalrelid = 'regular_schema.test_table2'::regclass AND
@@ -112,6 +109,7 @@ ERROR:  relation "tenant_2.test_table2" does not exist
 -- verify we can set regular table's schema to distributed schema
 CREATE TABLE regular_schema.test_table3(id int);
 ALTER TABLE regular_schema.test_table3 SET SCHEMA tenant_2;
+NOTICE:  converting table test_table3 to a tenant table in distributed schema tenant_2
 -- verify that tenant_2.test_table3 is recorded in pg_dist_partition as a single-shard table.
 SELECT COUNT(*)=1 FROM pg_dist_partition
 WHERE logicalrelid = 'tenant_2.test_table3'::regclass AND
@@ -127,10 +125,8 @@ ERROR:  relation "regular_schema.test_table3" does not exist
 -- verify we can set tenant table's schema to another distributed schema
 CREATE TABLE tenant_2.test_table4(id int);
 ALTER TABLE tenant_2.test_table4 SET SCHEMA tenant_3;
-NOTICE:  creating a new table for tenant_2.test_table4
-NOTICE:  moving the data of tenant_2.test_table4
-NOTICE:  dropping the old tenant_2.test_table4
-NOTICE:  renaming the new table to tenant_2.test_table4
+NOTICE:  undistributing table test_table4 in distributed schema tenant_2 before altering its schema
+NOTICE:  converting table test_table4 to a tenant table in distributed schema tenant_3
 -- verify that tenant_3.test_table4 is recorded in pg_dist_partition as a single-shard table.
 SELECT COUNT(*)=1 FROM pg_dist_partition
 WHERE logicalrelid = 'tenant_3.test_table4'::regclass AND
@@ -146,6 +142,7 @@ ERROR:  relation "tenant_2.test_table4" does not exist
 -- verify that we can put a local table in regular schema into distributed schema
 CREATE TABLE regular_schema.pg_local_tbl(id int);
 ALTER TABLE regular_schema.pg_local_tbl SET SCHEMA tenant_2;
+NOTICE:  converting table pg_local_tbl to a tenant table in distributed schema tenant_2
 -- verify that we can put a Citus local table in regular schema into distributed schema
 CREATE TABLE regular_schema.citus_local_tbl(id int);
 SELECT citus_add_local_table_to_metadata('regular_schema.citus_local_tbl');
@@ -155,6 +152,7 @@ SELECT citus_add_local_table_to_metadata('regular_schema.citus_local_tbl');
 (1 row)
 
 ALTER TABLE regular_schema.citus_local_tbl SET SCHEMA tenant_2;
+NOTICE:  converting table citus_local_tbl to a tenant table in distributed schema tenant_2
 -- verify that we do not allow a hash distributed table in regular schema into distributed schema
 CREATE TABLE regular_schema.hash_dist_tbl(id int);
 SELECT create_distributed_table('regular_schema.hash_dist_tbl', 'id');
@@ -180,17 +178,12 @@ HINT:  Undistribute distributed tables before 'ALTER TABLE SET SCHEMA'.
 -- verify that we can put a table in tenant schema into regular schema
 CREATE TABLE tenant_2.tenant_tbl(id int);
 ALTER TABLE tenant_2.tenant_tbl SET SCHEMA regular_schema;
-NOTICE:  creating a new table for tenant_2.tenant_tbl
-NOTICE:  moving the data of tenant_2.tenant_tbl
-NOTICE:  dropping the old tenant_2.tenant_tbl
-NOTICE:  renaming the new table to tenant_2.tenant_tbl
+NOTICE:  undistributing table tenant_tbl in distributed schema tenant_2 before altering its schema
 -- verify that we can put a table in tenant schema into another tenant schema
 CREATE TABLE tenant_2.tenant_tbl2(id int);
 ALTER TABLE tenant_2.tenant_tbl2 SET SCHEMA tenant_3;
-NOTICE:  creating a new table for tenant_2.tenant_tbl2
-NOTICE:  moving the data of tenant_2.tenant_tbl2
-NOTICE:  dropping the old tenant_2.tenant_tbl2
-NOTICE:  renaming the new table to tenant_2.tenant_tbl2
+NOTICE:  undistributing table tenant_tbl2 in distributed schema tenant_2 before altering its schema
+NOTICE:  converting table tenant_tbl2 to a tenant table in distributed schema tenant_3
 -- verify that we do not allow a local table in regular schema into distributed schema if it has foreign key to a non-reference table in another schema
 CREATE TABLE regular_schema.pg_local_tbl1(id int PRIMARY KEY);
 CREATE TABLE regular_schema.pg_local_tbl2(id int REFERENCES regular_schema.pg_local_tbl1(id));
@@ -200,6 +193,7 @@ DETAIL:  "tenant_2.pg_local_tbl2" references "regular_schema.pg_local_tbl1" via 
 -- verify that we allow a local table in regular schema into distributed schema if it has foreign key to a reference table in another schema
 CREATE TABLE regular_schema.pg_local_tbl3(id int REFERENCES regular_schema.ref_tbl(id));
 ALTER TABLE regular_schema.pg_local_tbl3 SET SCHEMA tenant_2;
+NOTICE:  converting table pg_local_tbl3 to a tenant table in distributed schema tenant_2
 -- verify that we do not allow a table in tenant schema into regular schema if it has foreign key to/from another table in the same schema
 CREATE TABLE tenant_2.tenant_tbl1(id int PRIMARY KEY);
 CREATE TABLE tenant_2.tenant_tbl2(id int REFERENCES tenant_2.tenant_tbl1(id));

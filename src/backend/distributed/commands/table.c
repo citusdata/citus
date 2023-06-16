@@ -2329,15 +2329,23 @@ PreprocessAlterTableSchemaStmt(Node *node, const char *queryString,
 	{
 		EnsureUndistributeTenantTableSafe(relationId,
 										  TenantOperationNames[TENANT_SET_SCHEMA]);
+
+		char *oldSchemaName = get_namespace_name(oldSchemaId);
+		char *tableName = stmt->relation->relname;
+		ereport(NOTICE, (errmsg("undistributing table %s in distributed schema %s "
+								"before altering its schema", tableName, oldSchemaName)));
+
+		/* Undistribute tenant table by suppressing weird notices */
 		TableConversionParameters params = {
 			.relationId = relationId,
 			.cascadeViaForeignKeys = false,
-			.bypassTenantCheck = true
+			.bypassTenantCheck = true,
+			.suppressNoticeMessages = true,
 		};
 		UndistributeTable(&params);
 
 		/* relation id changes after undistribute_table */
-		relationId = get_relname_relid(stmt->relation->relname, oldSchemaId);
+		relationId = get_relname_relid(tableName, oldSchemaId);
 
 		/*
 		 * After undistribution, the table could be Citus table or Postgres table.
@@ -4251,6 +4259,12 @@ ConvertToTenantTableIfNecessary(AlterObjectSchemaStmt *stmt)
 		IsTenantSchema(schemaId))
 	{
 		EnsureTenantTable(relationId, "ALTER TABLE SET SCHEMA");
+
+		char *schemaName = get_namespace_name(schemaId);
+		char *tableName = stmt->relation->relname;
+		ereport(NOTICE, (errmsg("converting table %s to a tenant table in distributed "
+								"schema %s", tableName, schemaName)));
+
 		CreateTenantSchemaTable(relationId);
 	}
 }
