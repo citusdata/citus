@@ -43,6 +43,10 @@ DROP FUNCTION pg_catalog.citus_internal_unregister_tenant_schema_globally(Oid, t
 
 #include "../udfs/citus_drop_trigger/10.2-1.sql"
 
+-- citus_schemas might be created in either of the schemas
+DROP VIEW IF EXISTS public.citus_schemas;
+DROP VIEW IF EXISTS pg_catalog.citus_schemas;
+
 DROP VIEW pg_catalog.citus_shards;
 DROP FUNCTION pg_catalog.citus_shard_sizes;
 #include "../udfs/citus_shard_sizes/10.0-1.sql"
