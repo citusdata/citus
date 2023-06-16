@@ -994,7 +994,73 @@ SELECT table_name, citus_table_type FROM citus_shards WHERE table_name::text LIK
 
 RESET citus.enable_schema_based_sharding;
 
+-- test citus_schemas
+SET citus.enable_schema_based_sharding TO ON;
+CREATE USER citus_schema_role SUPERUSER;
+SET ROLE citus_schema_role;
+CREATE SCHEMA citus_sch1;
+CREATE TABLE citus_sch1.tbl1(a INT);
+CREATE TABLE citus_sch1.tbl2(a INT);
+RESET ROLE;
+
+CREATE SCHEMA citus_sch2;
+CREATE TABLE citus_sch2.tbl1(a INT);
+SET citus.enable_schema_based_sharding TO OFF;
+
+INSERT INTO citus_sch1.tbl1 SELECT * FROM generate_series(1, 10000);
+INSERT INTO citus_sch1.tbl2 SELECT * FROM generate_series(1, 5000);
+
+INSERT INTO citus_sch2.tbl1 SELECT * FROM generate_series(1, 12000);
+
+SELECT
+    cs.schema_name,
+    cs.colocation_id = ctc.colocation_id AS correct_colocation_id,
+    cs.schema_size = ctc.calculated_size AS correct_size,
+    cs.schema_owner
+FROM public.citus_schemas cs
+JOIN
+(
+    SELECT
+        c.relnamespace, ct.colocation_id,
+        pg_size_pretty(sum(citus_total_relation_size(ct.table_name))) AS calculated_size
+    FROM public.citus_tables ct, pg_class c
+    WHERE ct.table_name::oid = c.oid
+    GROUP BY 1, 2
+) ctc ON cs.schema_name = ctc.relnamespace
+WHERE cs.schema_name::text LIKE 'citus\_sch_'
+ORDER BY cs.schema_name::text;
+
+-- test empty schema and empty tables
+SET citus.enable_schema_based_sharding TO ON;
+CREATE SCHEMA citus_empty_sch1;
+
+CREATE SCHEMA citus_empty_sch2;
+CREATE TABLE citus_empty_sch2.tbl1(a INT);
+SET citus.enable_schema_based_sharding TO OFF;
+
+SELECT schema_name, schema_size FROM public.citus_schemas
+WHERE schema_name::text LIKE 'citus\_empty\_sch_' ORDER BY schema_name::text;
+
+-- test with non-privileged role
+CREATE USER citus_schema_nonpri;
+SET ROLE citus_schema_nonpri;
+
+SET client_min_messages TO ERROR;
+SELECT schema_name, colocation_id > 0 AS colocation_id_visible, schema_size IS NOT NULL AS schema_size_visible, schema_owner
+FROM public.citus_schemas WHERE schema_name::text LIKE 'citus\_sch_' ORDER BY schema_name::text;
+
+RESET client_min_messages;
+RESET ROLE;
+
+-- test using citus_tables from workers
+\c - - - :worker_1_port
+SELECT schema_name, colocation_id > 0 AS colocation_id_visible, schema_size IS NOT NULL AS schema_size_visible, schema_owner
+FROM public.citus_schemas WHERE schema_name::text LIKE 'citus\_sch_' ORDER BY schema_name::text;
+\c - - - :master_port
+SET search_path TO regular_schema;
+
 SET client_min_messages TO WARNING;
-DROP SCHEMA regular_schema, tenant_3, tenant_5, tenant_7, tenant_6, type_sch CASCADE;
+DROP SCHEMA regular_schema, tenant_3, tenant_5, tenant_7, tenant_6, type_sch, citus_sch1, citus_sch2, citus_empty_sch1, citus_empty_sch2 CASCADE;
+DROP ROLE citus_schema_role, citus_schema_nonpri;
 
 SELECT citus_remove_node('localhost', :master_port);
