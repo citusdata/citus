@@ -31,6 +31,8 @@ static void AppendAlterTableStmt(StringInfo buf, AlterTableStmt *stmt);
 static void AppendAlterTableCmd(StringInfo buf, AlterTableCmd *alterTableCmd,
 								AlterTableStmt *stmt);
 static void AppendAlterTableCmdAddColumn(StringInfo buf, AlterTableCmd *alterTableCmd);
+static void AppendAlterTableCmdDropConstraint(StringInfo buf,
+											  AlterTableCmd *alterTableCmd);
 
 char *
 DeparseAlterTableSchemaStmt(Node *node)
@@ -411,6 +413,12 @@ AppendAlterTableCmd(StringInfo buf, AlterTableCmd *alterTableCmd, AlterTableStmt
 			break;
 		}
 
+		case AT_DropConstraint:
+		{
+			AppendAlterTableCmdDropConstraint(buf, alterTableCmd);
+			break;
+		}
+
 		case AT_AddConstraint:
 		{
 			Constraint *constraint = (Constraint *) alterTableCmd->def;
@@ -486,5 +494,29 @@ AppendAlterTableCmdAddColumn(StringInfo buf, AlterTableCmd *alterTableCmd)
 	{
 		const char *identifier = FormatCollateBEQualified(collationOid);
 		appendStringInfo(buf, " COLLATE %s", identifier);
+	}
+}
+
+
+/*
+ * AppendAlterTableCmdDropConstraint builds and appends to the given buffer an
+ * AT_DropConstraint command from given AlterTableCmd object in the form
+ * DROP CONSTRAINT ...
+ */
+static void
+AppendAlterTableCmdDropConstraint(StringInfo buf, AlterTableCmd *alterTableCmd)
+{
+	appendStringInfoString(buf, " DROP CONSTRAINT");
+
+	if (alterTableCmd->missing_ok)
+	{
+		appendStringInfoString(buf, " IF EXISTS");
+	}
+
+	appendStringInfo(buf, " %s", quote_identifier(alterTableCmd->name));
+
+	if (alterTableCmd->behavior == DROP_CASCADE)
+	{
+		appendStringInfoString(buf, " CASCADE");
 	}
 }
