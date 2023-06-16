@@ -716,9 +716,9 @@ multi_log_hook(ErrorData *edata)
 		edata->detail = pstrdup("nextval(sequence) calls in worker nodes "
 								"are not supported for column defaults of "
 								"type int or smallint");
-		edata->hint = pstrdup("If the command was issued on a distributed "
-							  "table / sequence from a worker node, try "
-							  "issuing it from the coordinator node instead.");
+		edata->hint = pstrdup("If the command was issued from a worker node, "
+							  "try issuing it from the coordinator node "
+							  "instead.");
 	}
 
 	if (original_emit_log_hook)

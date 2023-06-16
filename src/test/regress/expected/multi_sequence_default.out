@@ -669,11 +669,11 @@ ERROR:  nextval(sequence) calls in worker nodes are not supported for column def
 SELECT nextval('seq_12');
 ERROR:  nextval: reached maximum value of sequence "seq_12" (32767)
 DETAIL:  nextval(sequence) calls in worker nodes are not supported for column defaults of type int or smallint
-HINT:  If the command was issued on a distributed table / sequence from a worker node, try issuing it from the coordinator node instead.
+HINT:  If the command was issued from a worker node, try issuing it from the coordinator node instead.
 SELECT nextval('seq_13');
 ERROR:  nextval: reached maximum value of sequence "seq_13" (2147483647)
 DETAIL:  nextval(sequence) calls in worker nodes are not supported for column defaults of type int or smallint
-HINT:  If the command was issued on a distributed table / sequence from a worker node, try issuing it from the coordinator node instead.
+HINT:  If the command was issued from a worker node, try issuing it from the coordinator node instead.
 -- nextval from worker should work for bigint sequences
 SELECT nextval('seq_14');
      nextval
@@ -743,11 +743,11 @@ SELECT nextval('seq_12');
 SELECT nextval('seq_13');
 ERROR:  nextval: reached maximum value of sequence "seq_13" (2147483647)
 DETAIL:  nextval(sequence) calls in worker nodes are not supported for column defaults of type int or smallint
-HINT:  If the command was issued on a distributed table / sequence from a worker node, try issuing it from the coordinator node instead.
+HINT:  If the command was issued from a worker node, try issuing it from the coordinator node instead.
 SELECT nextval('seq_14');
 ERROR:  nextval: reached maximum value of sequence "seq_14" (32767)
 DETAIL:  nextval(sequence) calls in worker nodes are not supported for column defaults of type int or smallint
-HINT:  If the command was issued on a distributed table / sequence from a worker node, try issuing it from the coordinator node instead.
+HINT:  If the command was issued from a worker node, try issuing it from the coordinator node instead.
 \c - - - :master_port
 SET citus.shard_replication_factor TO 1;
 SET search_path = sequence_default, public;
@@ -813,11 +813,11 @@ SELECT nextval('seq_12');
 SELECT nextval('seq_13');
 ERROR:  nextval: reached maximum value of sequence "seq_13" (2147483647)
 DETAIL:  nextval(sequence) calls in worker nodes are not supported for column defaults of type int or smallint
-HINT:  If the command was issued on a distributed table / sequence from a worker node, try issuing it from the coordinator node instead.
+HINT:  If the command was issued from a worker node, try issuing it from the coordinator node instead.
 SELECT nextval('seq_14');
 ERROR:  nextval: reached maximum value of sequence "seq_14" (32767)
 DETAIL:  nextval(sequence) calls in worker nodes are not supported for column defaults of type int or smallint
-HINT:  If the command was issued on a distributed table / sequence from a worker node, try issuing it from the coordinator node instead.
+HINT:  If the command was issued from a worker node, try issuing it from the coordinator node instead.
 \c - - - :master_port
 -- Show that sequence and its dependency schema will be propagated if a distributed
 -- table with default column is added
