@@ -4050,36 +4050,6 @@ MakeNameListFromRangeVar(const RangeVar *rel)
 
 
 /*
- * ErrorIfTableHasUnsupportedIdentityColumn errors out if the given table has any identity column other than bigint identity column.
- */
-void
-ErrorIfTableHasUnsupportedIdentityColumn(Oid relationId)
-{
-	Relation relation = relation_open(relationId, AccessShareLock);
-	TupleDesc tupleDescriptor = RelationGetDescr(relation);
-
-	for (int attributeIndex = 0; attributeIndex < tupleDescriptor->natts;
-		 attributeIndex++)
-	{
-		Form_pg_attribute attributeForm = TupleDescAttr(tupleDescriptor, attributeIndex);
-
-		if (attributeForm->attidentity && attributeForm->atttypid != INT8OID)
-		{
-			char *qualifiedRelationName = generate_qualified_relation_name(relationId);
-			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							errmsg(
-								"cannot complete operation on %s with smallint/int identity column",
-								qualifiedRelationName),
-							errhint(
-								"Use bigint identity column instead.")));
-		}
-	}
-
-	relation_close(relation, NoLock);
-}
-
-
-/*
  * ErrorIfTableHasIdentityColumn errors out if the given table has identity column
  */
 void

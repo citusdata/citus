@@ -591,7 +591,6 @@ extern bool ConstrTypeCitusCanDefaultName(ConstrType constrType);
 extern char * GetAlterColumnWithNextvalDefaultCmd(Oid sequenceOid, Oid relationId,
 												  char *colname, bool missingTableOk);
 
-extern void ErrorIfTableHasUnsupportedIdentityColumn(Oid relationId);
 extern void ErrorIfTableHasIdentityColumn(Oid relationId);
 extern void ConvertNewTableIfNecessary(Node *createStmt);
 
