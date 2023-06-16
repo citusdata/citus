@@ -84,8 +84,13 @@ SELECT DISTINCT c FROM (
     SELECT array_agg(c) FROM (SELECT c FROM unnest(activate_node_snapshot()) c WHERE c LIKE '%CREATE PUBLICATION%' AND c LIKE '%pubtables%' ORDER BY 1) s$$)
   ORDER BY c) s;
 
--- distribute a table, creating a mixed publication
+-- distribute a table and create a tenant schema, creating a mixed publication
 SELECT create_distributed_table('test','x', colocate_with := 'none');
+SET citus.enable_schema_based_sharding TO ON;
+CREATE SCHEMA citus_schema_1;
+CREATE TABLE citus_schema_1.test (x int primary key, y int, "column-1" int, doc xml);
+SET citus.enable_schema_based_sharding TO OFF;
+ALTER PUBLICATION pubtables_orig ADD TABLE citus_schema_1.test;
 
 -- some generic operations
 ALTER PUBLICATION pubtables_orig RENAME TO pubtables;
@@ -97,7 +102,12 @@ ALTER PUBLICATION pubtables ADD TABLE notexist;
 -- operations with a distributed table
 ALTER PUBLICATION pubtables DROP TABLE test;
 ALTER PUBLICATION pubtables ADD TABLE test;
-ALTER PUBLICATION pubtables SET TABLE test, "test-pubs", "publication-1"."test-pubs";
+ALTER PUBLICATION pubtables SET TABLE test, "test-pubs", "publication-1"."test-pubs", citus_schema_1.test;
+
+-- operations with a tenant schema table
+ALTER PUBLICATION pubtables DROP TABLE citus_schema_1.test;
+ALTER PUBLICATION pubtables ADD TABLE citus_schema_1.test;
+ALTER PUBLICATION pubtables SET TABLE test, "test-pubs", "publication-1"."test-pubs", citus_schema_1.test;
 
 -- operations with a local table in a mixed publication
 ALTER PUBLICATION pubtables DROP TABLE "test-pubs";
@@ -118,7 +128,7 @@ ALTER PUBLICATION pubtables ADD TABLE "test-pubs";
 
 -- create a publication with distributed and local tables
 DROP PUBLICATION pubtables;
-CREATE PUBLICATION pubtables FOR TABLE test, "test-pubs", "publication-1"."test-pubs";
+CREATE PUBLICATION pubtables FOR TABLE test, "test-pubs", "publication-1"."test-pubs", citus_schema_1.test;
 
 -- change distributed tables
 SELECT alter_distributed_table('test', shard_count := 5, cascade_to_colocated := true);
@@ -188,7 +198,7 @@ DROP SCHEMA "publication-1" CASCADE;
 \endif
 
 -- recreate a mixed publication
-CREATE PUBLICATION pubtables FOR TABLE test, "publication-1"."test-pubs";
+CREATE PUBLICATION pubtables FOR TABLE test, "publication-1"."test-pubs", citus_schema_1.test;
 
 -- operations on an existing distributed table
 ALTER PUBLICATION pubtables DROP TABLE test;
@@ -196,6 +206,19 @@ ALTER PUBLICATION pubtables ADD TABLE test (y);
 ALTER PUBLICATION pubtables SET TABLE test WHERE (doc IS DOCUMENT);
 ALTER PUBLICATION pubtables SET TABLE test WHERE (xmlexists('//foo[text() = ''bar'']' PASSING BY VALUE doc));
 ALTER PUBLICATION pubtables SET TABLE test WHERE (CASE x WHEN 5 THEN true ELSE false END);
+
+SELECT DISTINCT c FROM (
+  SELECT unnest(result::text[]) c
+  FROM run_command_on_workers($$
+    SELECT array_agg(c) FROM (SELECT c FROM unnest(activate_node_snapshot()) c WHERE c LIKE '%CREATE PUBLICATION%' AND c LIKE '%pubtables%' ORDER BY 1) s$$)
+  ORDER BY c) s;
+
+-- operations on an existing tenant schema table
+ALTER PUBLICATION pubtables ADD TABLE citus_schema_1.test (y);
+ALTER PUBLICATION pubtables DROP TABLE citus_schema_1.test;
+ALTER PUBLICATION pubtables SET TABLE citus_schema_1.test WHERE (doc IS DOCUMENT);
+ALTER PUBLICATION pubtables SET TABLE citus_schema_1.test WHERE (xmlexists('//foo[text() = ''bar'']' PASSING BY VALUE doc));
+ALTER PUBLICATION pubtables SET TABLE citus_schema_1.test WHERE (CASE x WHEN 5 THEN true ELSE false END);
 
 SELECT DISTINCT c FROM (
   SELECT unnest(result::text[]) c
