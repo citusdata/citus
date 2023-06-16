@@ -2179,8 +2179,9 @@ QueryPushdownSqlTaskList(Query *query, uint64 jobId,
 {
 	List *sqlTaskList = NIL;
 	uint32 taskIdIndex = 1; /* 0 is reserved for invalid taskId */
-	int shardCount = 0;
-	bool *taskRequiredForShardIndex = NULL;
+	int minShardOffset = INT_MAX;
+	int prevShardCount = 0;
+	Bitmapset *taskRequiredForShardIndex = NULL;
 
 	/* error if shards are not co-partitioned */
 	ErrorIfUnsupportedShardDistribution(query);
@@ -2193,10 +2194,6 @@ QueryPushdownSqlTaskList(Query *query, uint64 jobId,
 									   NULL, NULL);
 		return NIL;
 	}
-
-	/* defaults to be used if this is a reference table-only query */
-	int minShardOffset = 0;
-	int maxShardOffset = 0;
 
 	RelationRestriction *relationRestriction = NULL;
 	List *prunedShardList = NULL;
@@ -2213,7 +2210,7 @@ QueryPushdownSqlTaskList(Query *query, uint64 jobId,
 		}
 
 		/* we expect distributed tables to have the same shard count */
-		if (shardCount > 0 && shardCount != cacheEntry->shardIntervalArrayLength)
+		if (prevShardCount > 0 && prevShardCount != cacheEntry->shardIntervalArrayLength)
 		{
 			*planningError = DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
 										   "shard counts of co-located tables do not "
@@ -2221,16 +2218,7 @@ QueryPushdownSqlTaskList(Query *query, uint64 jobId,
 										   NULL, NULL);
 			return NIL;
 		}
-
-		if (taskRequiredForShardIndex == NULL)
-		{
-			shardCount = cacheEntry->shardIntervalArrayLength;
-			taskRequiredForShardIndex = (bool *) palloc0(shardCount);
-
-			/* there is a distributed table, find the shard range */
-			minShardOffset = shardCount;
-			maxShardOffset = -1;
-		}
+		prevShardCount = cacheEntry->shardIntervalArrayLength;
 
 		/*
 		 * For left joins we don't care about the shards pruned for the right hand side.
@@ -2252,32 +2240,26 @@ QueryPushdownSqlTaskList(Query *query, uint64 jobId,
 		{
 			int shardIndex = shardInterval->shardIndex;
 
-			taskRequiredForShardIndex[shardIndex] = true;
-
+			taskRequiredForShardIndex =
+				bms_add_member(taskRequiredForShardIndex, shardIndex);
 			minShardOffset = Min(minShardOffset, shardIndex);
-			maxShardOffset = Max(maxShardOffset, shardIndex);
 		}
 	}
 
 	/*
-	 * To avoid iterating through all shards indexes we keep the minimum and maximum
-	 * offsets of shards that were not pruned away. This optimisation is primarily
-	 * relevant for queries on range-distributed tables that, due to range filters,
-	 * prune to a small number of adjacent shards.
+	 * We keep track of minShardOffset to skip over a potentially big amount of pruned
+	 * shards. However, we need to start at minShardOffset - 1 to make sure we don't
+	 * miss to first/min shard recorder as bms_next_member will return the first member
+	 * added after shardOffset. Meaning minShardOffset would be the first member we
+	 * expect.
 	 *
-	 * In other cases, such as an OR condition on a hash-distributed table, we may
-	 * still visit most or all shards even if some of them were pruned away. However,
-	 * given that hash-distributed tables typically only have a few shards the
-	 * iteration is still very fast.
+	 * We don't have to keep track of maxShardOffset as the bitmapset will only have been
+	 * allocated till the last shard we have added. Therefore, the iterator will quickly
+	 * identify the end of the bitmapset.
 	 */
-	for (int shardOffset = minShardOffset; shardOffset <= maxShardOffset; shardOffset++)
+	int shardOffset = minShardOffset - 1;
+	while ((shardOffset = bms_next_member(taskRequiredForShardIndex, shardOffset)) >= 0)
 	{
-		if (taskRequiredForShardIndex != NULL && !taskRequiredForShardIndex[shardOffset])
-		{
-			/* this shard index is pruned away for all relations */
-			continue;
-		}
-
 		Task *subqueryTask = QueryPushdownTaskCreate(query, shardOffset,
 													 relationRestrictionContext,
 													 taskIdIndex,
