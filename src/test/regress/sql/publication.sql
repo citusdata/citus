@@ -194,6 +194,7 @@ SELECT substring(:'server_version', '\d+')::int >= 15 AS server_version_ge_15
 SET client_min_messages TO ERROR;
 DROP SCHEMA publication CASCADE;
 DROP SCHEMA "publication-1" CASCADE;
+DROP SCHEMA citus_schema_1 CASCADE;
 \q
 \endif
 
@@ -283,3 +284,4 @@ DROP PUBLICATION pubpartitioned;
 SET client_min_messages TO ERROR;
 DROP SCHEMA publication CASCADE;
 DROP SCHEMA "publication-1" CASCADE;
+DROP SCHEMA citus_schema_1 CASCADE;
