@@ -31,6 +31,8 @@ DROP FUNCTION citus_shard_sizes;
 #include "udfs/citus_tables/12.0-1.sql"
 #include "udfs/citus_shards/12.0-1.sql"
 
+#include "udfs/citus_schemas/12.0-1.sql"
+
 -- udfs used to include schema-based tenants in tenant monitoring
 #include "udfs/citus_stat_tenants_local/12.0-1.sql"
 

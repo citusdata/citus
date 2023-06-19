@@ -1835,8 +1835,6 @@ EnsureRelationCanBeDistributed(Oid relationId, Var *distributionColumn,
 {
 	Oid parentRelationId = InvalidOid;
 
-	ErrorIfTableHasUnsupportedIdentityColumn(relationId);
-
 	EnsureLocalTableEmptyIfNecessary(relationId, distributionMethod);
 
 	/* user really wants triggers? */

@@ -482,8 +482,8 @@ SELECT create_distributed_table('tenant1.dist', 'id');
 (1 row)
 
 SELECT citus_schema_distribute('tenant1');
-ERROR:  schema already has distributed tables
-HINT:  Undistribute distributed tables under the schema before distributing the schema.
+ERROR:  distributed schema cannot have distributed tables
+HINT:  Undistribute distributed tables before 'citus_schema_distribute'.
 SELECT undistribute_table('tenant1.dist');
  undistribute_table
 ---------------------------------------------------------------------
@@ -510,8 +510,8 @@ SELECT create_reference_table('tenant1.ref2');
 (1 row)
 
 SELECT citus_schema_distribute('tenant1');
-ERROR:  schema already has distributed tables
-HINT:  Undistribute distributed tables under the schema before distributing the schema.
+ERROR:  distributed schema cannot have distributed tables
+HINT:  Undistribute distributed tables before 'citus_schema_distribute'.
 SELECT undistribute_table('tenant1.ref2');
  undistribute_table
 ---------------------------------------------------------------------
@@ -766,8 +766,8 @@ SELECT create_distributed_table('tenant1.new_dist', 'id');
 (1 row)
 
 SELECT citus_schema_distribute('tenant1');
-ERROR:  schema already has distributed tables
-HINT:  Undistribute distributed tables under the schema before distributing the schema.
+ERROR:  distributed schema cannot have distributed tables
+HINT:  Undistribute distributed tables before 'citus_schema_distribute'.
 SELECT undistribute_table('tenant1.new_dist');
  undistribute_table
 ---------------------------------------------------------------------
@@ -795,8 +795,8 @@ SELECT create_distributed_table('tenant1.single_shard_t', NULL);
 (1 row)
 
 SELECT citus_schema_distribute('tenant1');
-ERROR:  schema already has distributed tables
-HINT:  Undistribute distributed tables under the schema before distributing the schema.
+ERROR:  distributed schema cannot have distributed tables
+HINT:  Undistribute distributed tables before 'citus_schema_distribute'.
 SELECT undistribute_table('tenant1.single_shard_t');
  undistribute_table
 ---------------------------------------------------------------------

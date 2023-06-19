@@ -468,7 +468,8 @@ ExecuteCascadeOperationForRelationIdList(List *relationIdList,
 				{
 					TableConversionParameters params = {
 						.relationId = relationId,
-						.cascadeViaForeignKeys = cascadeViaForeignKeys
+						.cascadeViaForeignKeys = cascadeViaForeignKeys,
+						.bypassTenantCheck = false
 					};
 					UndistributeTable(&params);
 				}

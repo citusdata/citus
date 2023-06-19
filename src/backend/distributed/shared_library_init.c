@@ -185,6 +185,7 @@ static void CitusObjectAccessHook(ObjectAccessType access, Oid classId, Oid obje
 static void DoInitialCleanup(void);
 static void ResizeStackToMaximumDepth(void);
 static void multi_log_hook(ErrorData *edata);
+static bool IsSequenceOverflowError(ErrorData *edata);
 static void RegisterConnectionCleanup(void);
 static void RegisterExternalClientBackendCounterDecrement(void);
 static void CitusCleanupConnectionsAtExit(int code, Datum arg);
@@ -683,6 +684,15 @@ multi_log_hook(ErrorData *edata)
 	 * Show the user a meaningful error message when a backend is cancelled
 	 * by the distributed deadlock detection. Also reset the state for this,
 	 * since the next cancelation of the backend might have another reason.
+	 *
+	 * We also want to provide a useful hint for sequence overflow errors
+	 * because they're likely to be caused by the way Citus handles smallint/int
+	 * based sequences on worker nodes. Note that we add the hint without checking
+	 * whether we're on a worker node or the sequence was used on a distributed
+	 * table because catalog might not be available at this point. And given
+	 * that this hint might be shown for regular Postgres tables too, we inject
+	 * the hint only when EnableUnsupportedFeatureMessages is set to true.
+	 * Otherwise, vanilla tests would fail.
 	 */
 	bool clearState = true;
 	if (edata->elevel == ERROR && edata->sqlerrcode == ERRCODE_QUERY_CANCELED &&
@@ -700,11 +710,40 @@ multi_log_hook(ErrorData *edata)
 		edata->message = pstrdup("canceling the transaction since it was "
 								 "involved in a distributed deadlock");
 	}
+	else if (EnableUnsupportedFeatureMessages &&
+			 IsSequenceOverflowError(edata))
+	{
+		edata->detail = pstrdup("nextval(sequence) calls in worker nodes "
+								"are not supported for column defaults of "
+								"type int or smallint");
+		edata->hint = pstrdup("If the command was issued from a worker node, "
+							  "try issuing it from the coordinator node "
+							  "instead.");
+	}
 
 	if (original_emit_log_hook)
 	{
 		original_emit_log_hook(edata);
 	}
+}
+
+
+/*
+ * IsSequenceOverflowError returns true if the given error is a sequence
+ * overflow error.
+ */
+static bool
+IsSequenceOverflowError(ErrorData *edata)
+{
+	static const char *sequenceOverflowedMsgPrefix =
+		"nextval: reached maximum value of sequence";
+	static const int sequenceOverflowedMsgPrefixLen = 42;
+
+	return edata->elevel == ERROR &&
+		   edata->sqlerrcode == ERRCODE_SEQUENCE_GENERATOR_LIMIT_EXCEEDED &&
+		   edata->message != NULL &&
+		   strncmp(edata->message, sequenceOverflowedMsgPrefix,
+				   sequenceOverflowedMsgPrefixLen) == 0;
 }
 
 

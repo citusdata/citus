@@ -41,6 +41,7 @@
 #include "distributed/resource_lock.h"
 #include "distributed/version_compat.h"
 #include "distributed/worker_shard_visibility.h"
+#include "distributed/tenant_schema_metadata.h"
 #include "foreign/foreign.h"
 #include "lib/stringinfo.h"
 #include "nodes/parsenodes.h"
@@ -1382,6 +1383,16 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 															   constraintName, missingOk);
 				rightRelationId = GetReferencedTableId(foreignKeyId);
 			}
+
+			/*
+			 * We support deparsing for DROP CONSTRAINT, but currently deparsing is only
+			 * possible if all subcommands are supported.
+			 */
+			if (list_length(commandList) == 1 &&
+				alterTableStatement->objtype == OBJECT_TABLE)
+			{
+				deparseAT = true;
+			}
 		}
 		else if (alterTableType == AT_AddColumn)
 		{
@@ -1589,11 +1600,10 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 	DDLJob *ddlJob = palloc0(sizeof(DDLJob));
 	ObjectAddressSet(ddlJob->targetObjectAddress, RelationRelationId, leftRelationId);
 
-	const char *sqlForTaskList = alterTableCommand;
 	if (deparseAT)
 	{
 		newStmt->cmds = list_make1(newCmd);
-		sqlForTaskList = DeparseTreeNode((Node *) newStmt);
+		alterTableCommand = DeparseTreeNode((Node *) newStmt);
 	}
 
 	ddlJob->metadataSyncCommand = useInitialDDLCommandString ? alterTableCommand : NULL;
@@ -1609,13 +1619,13 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 		{
 			/* if foreign key or attaching partition index related, use specialized task list function ... */
 			ddlJob->taskList = InterShardDDLTaskList(leftRelationId, rightRelationId,
-													 sqlForTaskList);
+													 alterTableCommand);
 		}
 	}
 	else
 	{
 		/* ... otherwise use standard DDL task list function */
-		ddlJob->taskList = DDLTaskList(leftRelationId, sqlForTaskList);
+		ddlJob->taskList = DDLTaskList(leftRelationId, alterTableCommand);
 		if (!propagateCommandToWorkers)
 		{
 			ddlJob->taskList = NIL;
@@ -2301,9 +2311,52 @@ PreprocessAlterTableSchemaStmt(Node *node, const char *queryString,
 		return NIL;
 	}
 
-	ErrorIfTenantTable(relationId, "ALTER TABLE SET SCHEMA");
-	ErrorIfTenantSchema(get_namespace_oid(stmt->newschema, false),
-						"ALTER TABLE SET SCHEMA");
+	Oid oldSchemaId = get_rel_namespace(relationId);
+	Oid newSchemaId = get_namespace_oid(stmt->newschema, stmt->missing_ok);
+	if (!OidIsValid(oldSchemaId) || !OidIsValid(newSchemaId))
+	{
+		return NIL;
+	}
+
+	/*  Do nothing if new schema is the same as old schema */
+	if (newSchemaId == oldSchemaId)
+	{
+		return NIL;
+	}
+
+	/* Undistribute table if its old schema is a tenant schema */
+	if (IsTenantSchema(oldSchemaId) && IsCoordinator())
+	{
+		EnsureUndistributeTenantTableSafe(relationId,
+										  TenantOperationNames[TENANT_SET_SCHEMA]);
+
+		char *oldSchemaName = get_namespace_name(oldSchemaId);
+		char *tableName = stmt->relation->relname;
+		ereport(NOTICE, (errmsg("undistributing table %s in distributed schema %s "
+								"before altering its schema", tableName, oldSchemaName)));
+
+		/* Undistribute tenant table by suppressing weird notices */
+		TableConversionParameters params = {
+			.relationId = relationId,
+			.cascadeViaForeignKeys = false,
+			.bypassTenantCheck = true,
+			.suppressNoticeMessages = true,
+		};
+		UndistributeTable(&params);
+
+		/* relation id changes after undistribute_table */
+		relationId = get_relname_relid(tableName, oldSchemaId);
+
+		/*
+		 * After undistribution, the table could be Citus table or Postgres table.
+		 * If it is Postgres table, do not propagate the `ALTER TABLE SET SCHEMA`
+		 * command to workers.
+		 */
+		if (!IsCitusTable(relationId))
+		{
+			return NIL;
+		}
+	}
 
 	DDLJob *ddlJob = palloc0(sizeof(DDLJob));
 	QualifyTreeNode((Node *) stmt);
@@ -4050,36 +4103,6 @@ MakeNameListFromRangeVar(const RangeVar *rel)
 
 
 /*
- * ErrorIfTableHasUnsupportedIdentityColumn errors out if the given table has any identity column other than bigint identity column.
- */
-void
-ErrorIfTableHasUnsupportedIdentityColumn(Oid relationId)
-{
-	Relation relation = relation_open(relationId, AccessShareLock);
-	TupleDesc tupleDescriptor = RelationGetDescr(relation);
-
-	for (int attributeIndex = 0; attributeIndex < tupleDescriptor->natts;
-		 attributeIndex++)
-	{
-		Form_pg_attribute attributeForm = TupleDescAttr(tupleDescriptor, attributeIndex);
-
-		if (attributeForm->attidentity && attributeForm->atttypid != INT8OID)
-		{
-			char *qualifiedRelationName = generate_qualified_relation_name(relationId);
-			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							errmsg(
-								"cannot complete operation on %s with smallint/int identity column",
-								qualifiedRelationName),
-							errhint(
-								"Use bigint identity column instead.")));
-		}
-	}
-
-	relation_close(relation, NoLock);
-}
-
-
-/*
  * ErrorIfTableHasIdentityColumn errors out if the given table has identity column
  */
 void
@@ -4185,5 +4208,63 @@ ConvertNewTableIfNecessary(Node *createStmt)
 		bool autoConverted = false;
 		bool cascade = true;
 		CreateCitusLocalTable(createdRelationId, cascade, autoConverted);
+	}
+}
+
+
+/*
+ * ConvertToTenantTableIfNecessary converts given relation to a tenant table if its
+ * schema changed to a distributed schema.
+ */
+void
+ConvertToTenantTableIfNecessary(AlterObjectSchemaStmt *stmt)
+{
+	Assert(stmt->objectType == OBJECT_TABLE || stmt->objectType == OBJECT_FOREIGN_TABLE);
+
+	if (!IsCoordinator())
+	{
+		return;
+	}
+
+	/*
+	 * We will let Postgres deal with missing_ok
+	 */
+	List *tableAddresses = GetObjectAddressListFromParseTree((Node *) stmt, true, true);
+
+	/*  the code-path only supports a single object */
+	Assert(list_length(tableAddresses) == 1);
+
+	/* We have already asserted that we have exactly 1 address in the addresses. */
+	ObjectAddress *tableAddress = linitial(tableAddresses);
+	char relKind = get_rel_relkind(tableAddress->objectId);
+	if (relKind == RELKIND_SEQUENCE || relKind == RELKIND_VIEW)
+	{
+		return;
+	}
+
+	Oid relationId = tableAddress->objectId;
+	Oid schemaId = get_namespace_oid(stmt->newschema, stmt->missing_ok);
+	if (!OidIsValid(schemaId))
+	{
+		return;
+	}
+
+	/*
+	 * Make table a tenant table when its schema actually changed. When its schema
+	 * is not changed as in `ALTER TABLE <tbl> SET SCHEMA <same_schema>`, we detect
+	 * that by seeing the table is still a single shard table. (i.e. not undistributed
+	 * at `preprocess` step)
+	 */
+	if (!IsCitusTableType(relationId, SINGLE_SHARD_DISTRIBUTED) &&
+		IsTenantSchema(schemaId))
+	{
+		EnsureTenantTable(relationId, "ALTER TABLE SET SCHEMA");
+
+		char *schemaName = get_namespace_name(schemaId);
+		char *tableName = stmt->relation->relname;
+		ereport(NOTICE, (errmsg("converting table %s to a tenant table in distributed "
+								"schema %s", tableName, schemaName)));
+
+		CreateTenantSchemaTable(relationId);
 	}
 }

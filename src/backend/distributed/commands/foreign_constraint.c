@@ -1356,6 +1356,10 @@ IsTableTypeIncluded(Oid relationId, int flags)
 	{
 		return (flags & INCLUDE_LOCAL_TABLES) != 0;
 	}
+	else if (IsCitusTableType(relationId, SINGLE_SHARD_DISTRIBUTED))
+	{
+		return (flags & INCLUDE_SINGLE_SHARD_TABLES) != 0;
+	}
 	else if (IsCitusTableType(relationId, DISTRIBUTED_TABLE))
 	{
 		return (flags & INCLUDE_DISTRIBUTED_TABLES) != 0;
