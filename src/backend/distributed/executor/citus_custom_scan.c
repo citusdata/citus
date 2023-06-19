@@ -780,7 +780,19 @@ CitusEndScan(CustomScanState *node)
  */
 static void
 CitusReScan(CustomScanState *node)
-{ }
+{
+	if (node->ss.ps.ps_ResultTupleSlot)
+	{
+		ExecClearTuple(node->ss.ps.ps_ResultTupleSlot);
+	}
+	ExecScanReScan(&node->ss);
+
+	CitusScanState *scanState = (CitusScanState *) node;
+	if (scanState->tuplestorestate)
+	{
+		tuplestore_rescan(scanState->tuplestorestate);
+	}
+}
 
 
 /*
