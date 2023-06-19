@@ -1,5 +1,5 @@
 CREATE OR REPLACE FUNCTION pg_catalog.citus_auto_shard_split_start(
-  
+
     )
     RETURNS VOID
 
