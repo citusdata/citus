@@ -116,7 +116,7 @@ update_distributed_table_colocation(PG_FUNCTION_ARGS)
 	text *colocateWithTableNameText = PG_GETARG_TEXT_P(1);
 
 	EnsureTableOwner(targetRelationId);
-	ErrorIfTenantTable(targetRelationId, "update_distributed_table_colocation");
+	ErrorIfTenantTable(targetRelationId, TenantOperationNames[TENANT_UPDATE_COLOCATION]);
 
 	char *colocateWithTableName = text_to_cstring(colocateWithTableNameText);
 	if (IsColocateWithNone(colocateWithTableName))
@@ -127,7 +127,8 @@ update_distributed_table_colocation(PG_FUNCTION_ARGS)
 	else
 	{
 		Oid colocateWithTableId = ResolveRelationId(colocateWithTableNameText, false);
-		ErrorIfTenantTable(colocateWithTableId, "colocate_with");
+		ErrorIfTenantTable(colocateWithTableId,
+						   TenantOperationNames[TENANT_COLOCATE_WITH]);
 		EnsureTableOwner(colocateWithTableId);
 		MarkTablesColocated(colocateWithTableId, targetRelationId);
 	}

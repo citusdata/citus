@@ -80,24 +80,148 @@ ERROR:  tenant_2.test_table is not allowed for update_distributed_table_colocati
 -- verify we also don't allow colocate_with a tenant table
 SELECT update_distributed_table_colocation('regular_schema.test_table', colocate_with => 'tenant_2.test_table');
 ERROR:  tenant_2.test_table is not allowed for colocate_with because it belongs to a distributed schema
--- verify we don't allow undistribute_table for tenant tables
-SELECT undistribute_table('tenant_2.test_table');
-ERROR:  tenant_2.test_table is not allowed for undistribute_table because it belongs to a distributed schema
+-- verify we do not allow undistribute_table for tenant tables
+CREATE TABLE tenant_2.undist_table(id int);
+SELECT undistribute_table('tenant_2.undist_table');
+ERROR:  tenant_2.undist_table is not allowed for undistribute_table because it belongs to a distributed schema
 -- verify we don't allow alter_distributed_table for tenant tables
 SELECT alter_distributed_table('tenant_2.test_table', colocate_with => 'none');
 ERROR:  tenant_2.test_table is not allowed for alter_distributed_table because it belongs to a distributed schema
 -- verify we also don't allow colocate_with a tenant table
 SELECT alter_distributed_table('regular_schema.test_table', colocate_with => 'tenant_2.test_table');
 ERROR:  tenant_2.test_table is not allowed for colocate_with because it belongs to a distributed schema
--- verify we don't allow ALTER TABLE SET SCHEMA for tenant tables
-ALTER TABLE tenant_2.test_table SET SCHEMA regular_schema;
-ERROR:  tenant_2.test_table is not allowed for ALTER TABLE SET SCHEMA because it belongs to a distributed schema
--- verify we don't allow ALTER TABLE SET SCHEMA for tenant schemas
-ALTER TABLE regular_schema.test_table SET SCHEMA tenant_2;
-ERROR:  tenant_2 is not allowed for ALTER TABLE SET SCHEMA because it is a distributed schema
--- the same, from tenant schema to tenant schema
-ALTER TABLE tenant_2.test_table SET SCHEMA tenant_3;
-ERROR:  tenant_2.test_table is not allowed for ALTER TABLE SET SCHEMA because it belongs to a distributed schema
+-- verify we can set tenant table's schema to regular schema
+CREATE TABLE tenant_2.test_table2(id int);
+ALTER TABLE tenant_2.test_table2 SET SCHEMA regular_schema;
+NOTICE:  undistributing table test_table2 in distributed schema tenant_2 before altering its schema
+-- verify that regular_schema.test_table2 does not exist in pg_dist_partition
+SELECT COUNT(*)=0 FROM pg_dist_partition
+WHERE logicalrelid = 'regular_schema.test_table2'::regclass AND
+      partmethod = 'n' AND repmodel = 's' AND colocationid > 0;
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+-- verify that tenant_2.test_table2 does not exist
+SELECT * FROM tenant_2.test_table2;
+ERROR:  relation "tenant_2.test_table2" does not exist
+-- verify we can set regular table's schema to distributed schema
+CREATE TABLE regular_schema.test_table3(id int);
+ALTER TABLE regular_schema.test_table3 SET SCHEMA tenant_2;
+NOTICE:  converting table test_table3 to a tenant table in distributed schema tenant_2
+-- verify that tenant_2.test_table3 is recorded in pg_dist_partition as a single-shard table.
+SELECT COUNT(*)=1 FROM pg_dist_partition
+WHERE logicalrelid = 'tenant_2.test_table3'::regclass AND
+      partmethod = 'n' AND repmodel = 's' AND colocationid > 0;
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+-- verify that regular_schema.test_table3 does not exist
+SELECT * FROM regular_schema.test_table3;
+ERROR:  relation "regular_schema.test_table3" does not exist
+-- verify we can set tenant table's schema to another distributed schema
+CREATE TABLE tenant_2.test_table4(id int);
+ALTER TABLE tenant_2.test_table4 SET SCHEMA tenant_3;
+NOTICE:  undistributing table test_table4 in distributed schema tenant_2 before altering its schema
+NOTICE:  converting table test_table4 to a tenant table in distributed schema tenant_3
+-- verify that tenant_3.test_table4 is recorded in pg_dist_partition as a single-shard table.
+SELECT COUNT(*)=1 FROM pg_dist_partition
+WHERE logicalrelid = 'tenant_3.test_table4'::regclass AND
+      partmethod = 'n' AND repmodel = 's' AND colocationid > 0;
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+-- verify that tenant_2.test_table4 does not exist
+SELECT * FROM tenant_2.test_table4;
+ERROR:  relation "tenant_2.test_table4" does not exist
+-- verify that we can put a local table in regular schema into distributed schema
+CREATE TABLE regular_schema.pg_local_tbl(id int);
+ALTER TABLE regular_schema.pg_local_tbl SET SCHEMA tenant_2;
+NOTICE:  converting table pg_local_tbl to a tenant table in distributed schema tenant_2
+-- verify that we can put a Citus local table in regular schema into distributed schema
+CREATE TABLE regular_schema.citus_local_tbl(id int);
+SELECT citus_add_local_table_to_metadata('regular_schema.citus_local_tbl');
+ citus_add_local_table_to_metadata
+---------------------------------------------------------------------
+
+(1 row)
+
+ALTER TABLE regular_schema.citus_local_tbl SET SCHEMA tenant_2;
+NOTICE:  converting table citus_local_tbl to a tenant table in distributed schema tenant_2
+-- verify that we do not allow a hash distributed table in regular schema into distributed schema
+CREATE TABLE regular_schema.hash_dist_tbl(id int);
+SELECT create_distributed_table('regular_schema.hash_dist_tbl', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+ALTER TABLE regular_schema.hash_dist_tbl SET SCHEMA tenant_2;
+ERROR:  distributed schema cannot have distributed tables
+HINT:  Undistribute distributed tables before 'ALTER TABLE SET SCHEMA'.
+-- verify that we do not allow a reference table in regular schema into distributed schema
+CREATE TABLE regular_schema.ref_tbl(id int  PRIMARY KEY);
+SELECT create_reference_table('regular_schema.ref_tbl');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+ALTER TABLE regular_schema.ref_tbl SET SCHEMA tenant_2;
+ERROR:  distributed schema cannot have distributed tables
+HINT:  Undistribute distributed tables before 'ALTER TABLE SET SCHEMA'.
+-- verify that we can put a table in tenant schema into regular schema
+CREATE TABLE tenant_2.tenant_tbl(id int);
+ALTER TABLE tenant_2.tenant_tbl SET SCHEMA regular_schema;
+NOTICE:  undistributing table tenant_tbl in distributed schema tenant_2 before altering its schema
+-- verify that we can put a table in tenant schema into another tenant schema
+CREATE TABLE tenant_2.tenant_tbl2(id int);
+ALTER TABLE tenant_2.tenant_tbl2 SET SCHEMA tenant_3;
+NOTICE:  undistributing table tenant_tbl2 in distributed schema tenant_2 before altering its schema
+NOTICE:  converting table tenant_tbl2 to a tenant table in distributed schema tenant_3
+-- verify that we do not allow a local table in regular schema into distributed schema if it has foreign key to a non-reference table in another schema
+CREATE TABLE regular_schema.pg_local_tbl1(id int PRIMARY KEY);
+CREATE TABLE regular_schema.pg_local_tbl2(id int REFERENCES regular_schema.pg_local_tbl1(id));
+ALTER TABLE regular_schema.pg_local_tbl2 SET SCHEMA tenant_2;
+ERROR:  foreign keys from distributed schemas can only point to the same distributed schema or reference tables in regular schemas
+DETAIL:  "tenant_2.pg_local_tbl2" references "regular_schema.pg_local_tbl1" via foreign key constraint "pg_local_tbl2_id_fkey"
+-- verify that we allow a local table in regular schema into distributed schema if it has foreign key to a reference table in another schema
+CREATE TABLE regular_schema.pg_local_tbl3(id int REFERENCES regular_schema.ref_tbl(id));
+ALTER TABLE regular_schema.pg_local_tbl3 SET SCHEMA tenant_2;
+NOTICE:  converting table pg_local_tbl3 to a tenant table in distributed schema tenant_2
+-- verify that we do not allow a table in tenant schema into regular schema if it has foreign key to/from another table in the same schema
+CREATE TABLE tenant_2.tenant_tbl1(id int PRIMARY KEY);
+CREATE TABLE tenant_2.tenant_tbl2(id int REFERENCES tenant_2.tenant_tbl1(id));
+ALTER TABLE tenant_2.tenant_tbl1 SET SCHEMA regular_schema;
+ERROR:  set schema is not allowed for table tenant_tbl1 in distributed schema tenant_2
+DETAIL:  distributed schemas cannot have foreign keys from/to local tables or different schema
+ALTER TABLE tenant_2.tenant_tbl2 SET SCHEMA regular_schema;
+ERROR:  set schema is not allowed for table tenant_tbl2 in distributed schema tenant_2
+DETAIL:  distributed schemas cannot have foreign keys from/to local tables or different schema
+-- verify that we do not allow a table in distributed schema into another distributed schema if it has foreign key to/from another table in the same schema
+CREATE TABLE tenant_2.tenant_tbl3(id int PRIMARY KEY);
+CREATE TABLE tenant_2.tenant_tbl4(id int REFERENCES tenant_2.tenant_tbl3(id));
+ALTER TABLE tenant_2.tenant_tbl3 SET SCHEMA tenant_3;
+ERROR:  set schema is not allowed for table tenant_tbl3 in distributed schema tenant_2
+DETAIL:  distributed schemas cannot have foreign keys from/to local tables or different schema
+ALTER TABLE tenant_2.tenant_tbl4 SET SCHEMA tenant_3;
+ERROR:  set schema is not allowed for table tenant_tbl4 in distributed schema tenant_2
+DETAIL:  distributed schemas cannot have foreign keys from/to local tables or different schema
+-- alter set non-existent schema
+ALTER TABLE tenant_2.test_table SET SCHEMA ghost_schema;
+ERROR:  schema "ghost_schema" does not exist
+ALTER TABLE IF EXISTS tenant_2.test_table SET SCHEMA ghost_schema;
+ERROR:  schema "ghost_schema" does not exist
+-- alter set non-existent table
+ALTER TABLE tenant_2.ghost_table SET SCHEMA ghost_schema;
+ERROR:  relation "tenant_2.ghost_table" does not exist
+ALTER TABLE IF EXISTS tenant_2.ghost_table SET SCHEMA ghost_schema;
+NOTICE:  relation "ghost_table" does not exist, skipping
 -- (on coordinator) verify that colocation id is set for empty tenants too
 SELECT colocationid > 0 FROM pg_dist_schema
 WHERE schemaid::regnamespace::text IN ('tenant_1', 'tenant_3');
@@ -265,8 +389,8 @@ SELECT EXISTS(
 (1 row)
 
 INSERT INTO tenant_4.another_partitioned_table VALUES (1, 'a');
-ERROR:  insert or update on table "another_partitioned_table_child_1920040" violates foreign key constraint "another_partitioned_table_a_fkey_1920039"
-DETAIL:  Key (a)=(1) is not present in table "partitioned_table_1920037".
+ERROR:  insert or update on table "another_partitioned_table_child_1920090" violates foreign key constraint "another_partitioned_table_a_fkey_1920089"
+DETAIL:  Key (a)=(1) is not present in table "partitioned_table_1920087".
 CONTEXT:  while executing command on localhost:xxxxx
 INSERT INTO tenant_4.partitioned_table VALUES (1, 'a');
 INSERT INTO tenant_4.another_partitioned_table VALUES (1, 'a');
