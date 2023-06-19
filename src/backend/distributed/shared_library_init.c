@@ -2262,6 +2262,16 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
+		"citus.max_shard_size",
+		gettext_noop("Sets the max size of a Shard"),
+		NULL,
+		&MaxShardSize,
+		104857600, 102400, INT32_MAX,
+		PGC_USERSET,
+		GUC_STANDARD,
+		NULL, NULL, NULL);
+
+	DefineCustomIntVariable(
 		"citus.shard_replication_factor",
 		gettext_noop("Sets the replication factor for shards."),
 		gettext_noop("Shards are replicated across nodes according to this "
