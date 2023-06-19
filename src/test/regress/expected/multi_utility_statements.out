@@ -255,6 +255,76 @@ FETCH FORWARD 3 FROM holdCursor;
 (3 rows)
 
 CLOSE holdCursor;
+-- Test DECLARE CURSOR .. WITH HOLD inside transaction block
+BEGIN;
+DECLARE holdCursor CURSOR WITH HOLD FOR
+		SELECT * FROM cursor_me WHERE x = 1 ORDER BY y;
+FETCH 3 FROM holdCursor;
+ x | y
+---------------------------------------------------------------------
+ 1 | 10
+ 1 | 11
+ 1 | 12
+(3 rows)
+
+FETCH BACKWARD 3 FROM holdCursor;
+ x | y
+---------------------------------------------------------------------
+ 1 | 11
+ 1 | 10
+(2 rows)
+
+FETCH FORWARD 3 FROM holdCursor;
+ x | y
+---------------------------------------------------------------------
+ 1 | 10
+ 1 | 11
+ 1 | 12
+(3 rows)
+
+COMMIT;
+FETCH 3 FROM holdCursor;
+ x | y
+---------------------------------------------------------------------
+ 1 | 13
+ 1 | 14
+ 1 | 15
+(3 rows)
+
+CLOSE holdCursor;
+-- Test DECLARE NO SCROLL CURSOR .. WITH HOLD inside transaction block
+BEGIN;
+DECLARE holdCursor NO SCROLL CURSOR WITH HOLD FOR
+		SELECT * FROM cursor_me WHERE x = 1 ORDER BY y;
+FETCH 3 FROM holdCursor;
+ x | y
+---------------------------------------------------------------------
+ 1 | 10
+ 1 | 11
+ 1 | 12
+(3 rows)
+
+FETCH FORWARD 3 FROM holdCursor;
+ x | y
+---------------------------------------------------------------------
+ 1 | 13
+ 1 | 14
+ 1 | 15
+(3 rows)
+
+COMMIT;
+FETCH 3 FROM holdCursor;
+ x | y
+---------------------------------------------------------------------
+ 1 | 16
+ 1 | 17
+ 1 | 18
+(3 rows)
+
+FETCH BACKWARD 3 FROM holdCursor;
+ERROR:  cursor can only scan forward
+HINT:  Declare it with SCROLL option to enable backward scan.
+CLOSE holdCursor;
 -- Test DECLARE CURSOR .. WITH HOLD with parameter
 CREATE OR REPLACE FUNCTION declares_cursor(p int)
 RETURNS void AS $$

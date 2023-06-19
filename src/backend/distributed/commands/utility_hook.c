@@ -175,7 +175,9 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		IsA(parsetree, ExecuteStmt) ||
 		IsA(parsetree, PrepareStmt) ||
 		IsA(parsetree, DiscardStmt) ||
-		IsA(parsetree, DeallocateStmt))
+		IsA(parsetree, DeallocateStmt) ||
+		IsA(parsetree, DeclareCursorStmt) ||
+		IsA(parsetree, FetchStmt))
 	{
 		/*
 		 * Skip additional checks for common commands that do not have any
