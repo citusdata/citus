@@ -301,7 +301,7 @@ citus_auto_shard_split_start(PG_FUNCTION_ARGS)
 		" FROM citus_shards cs JOIN pg_dist_shard ps USING(shardid)"
 		" WINDOW w AS (PARTITION BY colocation_id, shardminvalue ORDER BY shard_size DESC) )as t where total_sum >= %ld )"
 		" AS max_sizes ON cs.shardid=max_sizes.shardid AND cs.shard_size = max_sizes.max_size JOIN citus_tables ct ON cs.table_name = ct.table_name AND pd.shardminvalue <> pd.shardmaxvalue AND pd.shardminvalue <> ''",
-		0
+		MaxShardSize
 		);
 
 	ereport(LOG, errmsg("%s", query->data));
