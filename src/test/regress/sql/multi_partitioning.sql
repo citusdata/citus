@@ -24,6 +24,7 @@ CREATE TABLE partitioning_test_2010 PARTITION OF partitioning_test FOR VALUES FR
 CREATE TABLE partitioning_hash_test_0 PARTITION OF partitioning_hash_test FOR VALUES WITH (MODULUS 3, REMAINDER 0);
 CREATE TABLE partitioning_hash_test_1 PARTITION OF partitioning_hash_test FOR VALUES WITH (MODULUS 3, REMAINDER 1);
 
+
 -- load some data and distribute tables
 INSERT INTO partitioning_test VALUES (1, '2009-06-06');
 INSERT INTO partitioning_test VALUES (2, '2010-07-07');
