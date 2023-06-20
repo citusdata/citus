@@ -553,11 +553,9 @@ ReindexStmtFindRelationOid(ReindexStmt *reindexStmt, bool missingOk)
 
 	Oid relationId = InvalidOid;
 
-	LOCKMODE lockmode = IsReindexWithParam_compat(reindexStmt, "concurrently") ?
-						ShareUpdateExclusiveLock : AccessExclusiveLock;
-
 	if (reindexStmt->kind == REINDEX_OBJECT_INDEX)
 	{
+		LOCKMODE lockmode = GetReindexIndexRelationLockMode(reindexStmt);
 		struct ReindexIndexCallbackState state;
 		state.concurrent = IsReindexWithParam_compat(reindexStmt,
 													 "concurrently");
@@ -571,12 +569,42 @@ ReindexStmtFindRelationOid(ReindexStmt *reindexStmt, bool missingOk)
 	}
 	else
 	{
+		LOCKMODE lockmode = GetReindexTableRelationLockMode(reindexStmt);
 		relationId = RangeVarGetRelidExtended(reindexStmt->relation, lockmode,
 											  (missingOk) ? RVR_MISSING_OK : 0,
 											  RangeVarCallbackOwnsTable, NULL);
 	}
 
 	return relationId;
+}
+
+
+/*
+ * GetReindexRelationLockMode returns required lock mode to open the
+ * index that given REINDEX INDEX command operates on.
+ */
+LOCKMODE
+GetReindexIndexRelationLockMode(ReindexStmt *reindexStmt)
+{
+	if (IsReindexWithParam_compat(reindexStmt, "concurrently"))
+	{
+		return ShareUpdateExclusiveLock;
+	}
+	else
+	{
+		return AccessExclusiveLock;
+	}
+}
+
+
+/*
+ * GetReindexTableLockMode returns required lock mode to open the
+ * relation that given REINDEX TABLE command operates on.
+ */
+LOCKMODE
+GetReindexTableRelationLockMode(ReindexStmt *reindexStmt)
+{
+	return ShareLock;
 }
 
 
@@ -605,11 +633,11 @@ PreprocessReindexStmt(Node *node, const char *reindexCommand,
 		Oid relationId = ReindexStmtFindRelationOid(reindexStatement, false);
 		MemoryContext relationContext = NULL;
 		Relation relation = NULL;
-		LOCKMODE lockmode = IsReindexWithParam_compat(reindexStatement, "concurrently") ?
-							ShareUpdateExclusiveLock : AccessExclusiveLock;
 
 		if (reindexStatement->kind == REINDEX_OBJECT_INDEX)
 		{
+			LOCKMODE lockmode = GetReindexIndexRelationLockMode(reindexStatement);
+
 			/*
 			 * Acquire global lock to prevent concurrent writes or DDL. However,
 			 * we do not bother for REINDEX CONCURRENTLY, since we'll have
@@ -626,6 +654,8 @@ PreprocessReindexStmt(Node *node, const char *reindexCommand,
 		}
 		else
 		{
+			LOCKMODE lockmode = GetReindexTableRelationLockMode(reindexStatement);
+
 			AcquireDistributedLockOnRelations(list_make1(reindexStatement->relation),
 											  lockmode, 0);
 

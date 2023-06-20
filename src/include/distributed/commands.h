@@ -388,6 +388,8 @@ extern char * ChooseIndexName(const char *tabname, Oid namespaceId,
 extern char * ChooseIndexNameAddition(List *colnames);
 extern List * ChooseIndexColumnNames(List *indexElems);
 extern LOCKMODE GetCreateIndexRelationLockMode(IndexStmt *createIndexStatement);
+extern LOCKMODE GetReindexTableRelationLockMode(ReindexStmt *reindexStmt);
+extern LOCKMODE GetReindexIndexRelationLockMode(ReindexStmt *reindexStmt);
 extern List * PreprocessReindexStmt(Node *ReindexStatement,
 									const char *ReindexCommand,
 									ProcessUtilityContext processUtilityContext);
