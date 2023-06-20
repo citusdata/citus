@@ -1675,9 +1675,26 @@ FROM public.citus_schemas WHERE schema_name::text LIKE 'citus\_sch_' ORDER BY sc
 
 \c - - - :master_port
 SET search_path TO regular_schema;
+-- test we handle create schema with authorization properly for distributed schema
+SET citus.enable_schema_based_sharding TO ON;
+CREATE ROLE authschema;
+CREATE SCHEMA AUTHORIZATION authschema;
+SET citus.enable_schema_based_sharding TO OFF;
+SELECT result FROM run_command_on_all_nodes($$
+    SELECT COUNT(*)=1
+     FROM pg_dist_schema
+    WHERE schemaid::regnamespace::text = 'authschema';
+$$);
+ result
+---------------------------------------------------------------------
+ t
+ t
+ t
+(3 rows)
+
 SET client_min_messages TO WARNING;
-DROP SCHEMA regular_schema, tenant_3, tenant_5, tenant_7, tenant_6, type_sch, citus_sch1, citus_sch2, citus_empty_sch1, citus_empty_sch2 CASCADE;
-DROP ROLE citus_schema_role, citus_schema_nonpri;
+DROP SCHEMA regular_schema, tenant_3, tenant_5, tenant_7, tenant_6, type_sch, citus_sch1, citus_sch2, citus_empty_sch1, citus_empty_sch2, authschema CASCADE;
+DROP ROLE citus_schema_role, citus_schema_nonpri, authschema;
 SELECT citus_remove_node('localhost', :master_port);
  citus_remove_node
 ---------------------------------------------------------------------

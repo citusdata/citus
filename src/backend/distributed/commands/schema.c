@@ -68,6 +68,16 @@ PostprocessCreateSchemaStmt(Node *node, const char *queryString)
 
 	EnsureSequentialMode(OBJECT_SCHEMA);
 
+	bool missingOk = createSchemaStmt->if_not_exists;
+	List *schemaAdressList = CreateSchemaStmtObjectAddress(node, missingOk, true);
+	Assert(list_length(schemaAdressList) == 1);
+	ObjectAddress *schemaAdress = linitial(schemaAdressList);
+	Oid schemaId = schemaAdress->objectId;
+	if (!OidIsValid(schemaId))
+	{
+		return NIL;
+	}
+
 	/* to prevent recursion with mx we disable ddl propagation */
 	List *commands = list_make1(DISABLE_DDL_PROPAGATION);
 
@@ -78,7 +88,8 @@ PostprocessCreateSchemaStmt(Node *node, const char *queryString)
 
 	commands = list_concat(commands, GetGrantCommandsFromCreateSchemaStmt(node));
 
-	if (ShouldUseSchemaBasedSharding(createSchemaStmt->schemaname))
+	char *schemaName = get_namespace_name(schemaId);
+	if (ShouldUseSchemaBasedSharding(schemaName))
 	{
 		/* for now, we don't allow creating tenant tables when creating the schema itself */
 		if (CreateSchemaStmtCreatesTable(createSchemaStmt))
@@ -89,9 +100,6 @@ PostprocessCreateSchemaStmt(Node *node, const char *queryString)
 							errhint("Use CREATE TABLE statement to create "
 									"tenant tables.")));
 		}
-
-		bool missingOk = false;
-		Oid schemaId = get_namespace_oid(createSchemaStmt->schemaname, missingOk);
 
 		/*
 		 * Register the tenant schema on the coordinator and save the command
