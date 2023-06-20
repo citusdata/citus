@@ -95,7 +95,7 @@ extern bool NodeIsPrimaryAndRemote(WorkerNode *worker);
 extern bool NodeIsPrimary(WorkerNode *worker);
 extern bool NodeIsSecondary(WorkerNode *worker);
 extern bool NodeIsReadable(WorkerNode *worker);
-extern bool NodeIsCoordinator(WorkerNode *node);
+extern bool NodeIsCoordinator(const WorkerNode *node);
 extern WorkerNode * SetWorkerColumn(WorkerNode *workerNode, int columnIndex, Datum value);
 extern WorkerNode * SetWorkerColumnOptional(WorkerNode *workerNode, int columnIndex, Datum
 											value);
