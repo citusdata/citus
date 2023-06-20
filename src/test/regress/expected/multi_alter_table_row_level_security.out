@@ -538,6 +538,7 @@ CREATE POLICY fp_s ON information FOR SELECT
 -- this attempt for distribution fails because the table has a disallowed expression
 SELECT create_distributed_table('information', 'group_id');
 ERROR:  cannot create policy
+DETAIL:  Subqueries are not supported in policies on distributed tables
 -- DROP the expression so we can distribute the table
 DROP POLICY fp_s ON information;
 SELECT create_distributed_table('information', 'group_id');
@@ -549,7 +550,7 @@ SELECT create_distributed_table('information', 'group_id');
 -- Try and create the expression on a distributed table, this should also fail
 CREATE POLICY fp_s ON information FOR SELECT
   USING (group_id <= (SELECT group_id FROM users WHERE user_name = current_user));
-ERROR:  cannot create policy
+ERROR:  unexpected non-SELECT command in SubLink
 -- Clean up test
 DROP TABLE information, groups, users;
 SET citus.next_shard_id TO 1810000;

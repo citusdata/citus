@@ -98,34 +98,7 @@ s/of relation ".*" violates not-null constraint/violates not-null constraint/g
 s/partition ".*" would be violated by some row/partition would be violated by some row/g
 s/of relation ".*" contains null values/contains null values/g
 
-#if (PG_VERSION_NUM >= PG_VERSION_13) && (PG_VERSION_NUM < PG_VERSION_14)
-# (This is not preprocessor directive, but a reminder for the developer that will drop PG13 support )
-# libpq message changes for minor versions of pg13
-
-# We ignore multiline error messages, and substitute first line with a single line
-# alternative that is used in some older libpq versions.
-s/(ERROR: |WARNING: |error:) server closed the connection unexpectedly/\1 connection not open/g
-/^\s*This probably means the server terminated abnormally$/d
-/^\s*before or while processing the request.$/d
-/^\s*connection not open$/d
-
-s/ERROR:  fake_fetch_row_version not implemented/ERROR:  fake_tuple_update not implemented/g
-s/ERROR:  COMMIT is not allowed in an SQL function/ERROR:  COMMIT is not allowed in a SQL function/g
-s/ERROR:  ROLLBACK is not allowed in an SQL function/ERROR:  ROLLBACK is not allowed in a SQL function/g
-/.*Async-Capable.*/d
-/.*Async Capable.*/d
-/Parent Relationship/d
-/Parent-Relationship/d
-s/function array_cat_agg\(anyarray\) anyarray/function array_cat_agg\(anycompatiblearray\) anycompatiblearray/g
-s/function array_cat_agg\(anyarray\)/function array_cat_agg\(anycompatiblearray\)/g
-s/TRIM\(BOTH FROM value\)/btrim\(value\)/g
-/DETAIL:  Subqueries are not supported in policies on distributed tables/d
-s/ERROR:  unexpected non-SELECT command in SubLink/ERROR:  cannot create policy/g
-
-# PG13 changes bgworker sigterm message, we can drop that line with PG13 drop
-s/(FATAL: terminating).*Citus Background Task Queue Executor.*(due to administrator command)\+/\1 connection \2                    \+/g
-
-#endif /* (PG_VERSION_NUM >= PG_VERSION_13) && (PG_VERSION_NUM < PG_VERSION_14) */
+s/(Citus Background Task Queue Executor: regression\/postgres for \()[0-9]+\/[0-9]+\)/\1xxxxx\/xxxxx\)/g
 
 # Changed outputs after minor bump to PG14.5 and PG13.8
 s/(ERROR: |WARNING: |error:) invalid socket/\1 connection not open/g
@@ -135,9 +108,18 @@ s/(ERROR: |WARNING: |error:) invalid socket/\1 connection not open/g
 
 # pg15 changes
 # can be removed when dropping PG13&14 support
+#if (PG_VERSION_NUM >= PG_VERSION_14) && (PG_VERSION_NUM < PG_VERSION_15)
+# (This is not preprocessor directive, but a reminder for the developer that will drop PG14 support )
 s/is not a PostgreSQL server process/is not a PostgreSQL backend process/g
 s/ AS "\?column\?"//g
 s/".*\.(.*)": (found .* removable)/"\1": \2/g
+# We ignore multiline error messages, and substitute first line with a single line
+# alternative that is used in some older libpq versions.
+s/(ERROR: |WARNING: |error:) server closed the connection unexpectedly/\1 connection not open/g
+/^\s*This probably means the server terminated abnormally$/d
+/^\s*before or while processing the request.$/d
+/^\s*connection not open$/d
+#endif /* (PG_VERSION_NUM >= PG_VERSION_13) && (PG_VERSION_NUM < PG_VERSION_14) */
 
 # intermediate_results
 s/(ERROR.*)pgsql_job_cache\/([0-9]+_[0-9]+_[0-9]+)\/(.*).data/\1pgsql_job_cache\/xx_x_xxx\/\3.data/g
