@@ -6,16 +6,6 @@
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata_utility.h"
 #include "distributed/multi_logical_replication.h"
-#include "distributed/multi_server_executor.h"
-#include "distributed/pg_dist_rebalance_strategy.h"
-#include "distributed/pg_dist_shard.h"
-#include "distributed/reference_table_utils.h"
-#include "distributed/remote_commands.h"
-#include "distributed/resource_lock.h"
-#include "distributed/tuplestore.h"
-#include "distributed/utils/array_type.h"
-#include "distributed/worker_protocol.h"
-#include "nodes/pg_list.h"
 #include "postmaster/postmaster.h"
 #include "distributed/distribution_column.h"
 #include "utils/builtins.h"
@@ -24,7 +14,7 @@
 
 PG_FUNCTION_INFO_V1(citus_auto_shard_split_start);
 
-int MaxShardSize = 104857600;
+int MaxShardSize = 102400;
 
 /*
  * Struct to store all the information related to
@@ -214,19 +204,21 @@ FindShardSplitPoints(ShardInfo shardinfo)
 													   tenantIdDatum);
 			hashedValue = DatumGetInt32(hashedValueDatum);
 			ereport(LOG, errmsg("%d", hashedValue));
+			/*Switching the memory context to store the unique SplitPoints in a list*/
+
 			MemoryContextSwitchTo(originalContext);
 			if (hashedValue == shardinfo->shardminvalue)
 			{
-				SplitPoints = lappend_unique_int(SplitPoints,hashedValue);
+				SplitPoints = list_append_unique_int(SplitPoints,hashedValue);
 			}
 			else if (hashedValue == shardinfo->shardmaxvalue)
 			{
-				SplitPoints = lappend_unique_int(SplitPoints, hashedValue - 1);
+				SplitPoints = list_append_unique_int(SplitPoints, hashedValue - 1);
 			}
 			else
 			{
-				SplitPoints = lappend_unique_int(SplitPoints, hashedValue - 1);
-				SplitPoints = lappend_unique_int(SplitPoints, hashedValue);
+				SplitPoints = list_append_unique_int(SplitPoints, hashedValue - 1);
+				SplitPoints = list_append_unique_int(SplitPoints, hashedValue);
 			}
 			MemoryContextSwitchTo(spiContext);
 		}
@@ -266,7 +258,7 @@ ScheduleShardSplit(ShardInfo shardinfo , char* shardSplitMode)
 	List *SplitPoints = FindShardSplitPoints(shardinfo);
 	if (list_length(SplitPoints) > 0)
 	{
-		ErrorOnConcurrentOperation();
+		// ErrorOnConcurrentOperation();
 		int64 jobId = CreateBackgroundJob("Automatic Shard Split",
 										  "Split using SplitPoints List");
 		ereport(LOG,errmsg("%s",GetShardSplitQuery(shardinfo,SplitPoints,shardSplitMode)->data));					
@@ -303,7 +295,7 @@ citus_auto_shard_split_start(PG_FUNCTION_ARGS)
 		" FROM citus_shards cs JOIN pg_dist_shard ps USING(shardid)"
 		" WINDOW w AS (PARTITION BY colocation_id, shardminvalue ORDER BY shard_size DESC) )as t where total_sum >= %ld )"
 		" AS max_sizes ON cs.shardid=max_sizes.shardid AND cs.shard_size = max_sizes.max_size JOIN citus_tables ct ON cs.table_name = ct.table_name AND pd.shardminvalue <> pd.shardmaxvalue AND pd.shardminvalue <> ''",
-		MaxShardSize
+		MaxShardSize*1024
 		);
 
 		ereport(LOG, errmsg("%s", query->data));

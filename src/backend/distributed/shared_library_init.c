@@ -2266,9 +2266,9 @@ RegisterCitusConfigVariables(void)
 		gettext_noop("Sets the max size of a Shard"),
 		NULL,
 		&MaxShardSize,
-		104857600, 102400, INT32_MAX,
+		102400, 100, INT32_MAX,
 		PGC_USERSET,
-		GUC_STANDARD,
+		GUC_UNIT_KB | GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
