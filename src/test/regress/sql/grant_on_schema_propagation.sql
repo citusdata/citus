@@ -189,6 +189,9 @@ DROP SCHEMA dist_schema CASCADE;
 SET citus.shard_replication_factor TO 1;
 SELECT master_remove_node('localhost', :worker_2_port);
 
+-- to avoid different output in PG15
+GRANT CREATE ON SCHEMA public TO public;
+
 -- distribute the public schema (it has to be distributed by now but just in case)
 CREATE TABLE public_schema_table (id INT);
 SELECT create_distributed_table('public_schema_table', 'id');
