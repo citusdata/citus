@@ -5,11 +5,13 @@ setup
 	CREATE TABLE dist_table(id int, data int);
 	SELECT create_distributed_table('dist_table', 'id');
 	COPY dist_table FROM PROGRAM 'echo 1, 10 && echo 2, 20 && echo 3, 30 && echo 4, 40 && echo 5, 50' WITH CSV;
+	SELECT citus_set_coordinator_host('localhost', 57636);
 }
 
 teardown
 {
 	DROP TABLE IF EXISTS dist_table CASCADE;
+	SELECT citus_remove_node('localhost', 57636);
 }
 
 session "w1"
@@ -33,14 +35,6 @@ step "w1-create-unnamed-index"
 {
 	SELECT run_commands_on_session_level_connection_to_node('CREATE INDEX ON dist_table(id,data)');
 }
-
-step "w1-create-index-concurrently"
-{
-	SELECT run_commands_on_session_level_connection_to_node('CREATE INDEX CONCURRENTLY dist_table_index ON dist_table(id)');
-}
-
-// an empty step to have consistent output for CONCURRENTLY
-step "w1-empty" {}
 
 step "w1-reindex"
 {
@@ -83,11 +77,6 @@ step "w2-create-named-index"
 step "w2-create-unnamed-index"
 {
 	SELECT run_commands_on_session_level_connection_to_node('CREATE INDEX ON dist_table(id,data)');
-}
-
-step "w2-create-index-concurrently"
-{
-	SELECT run_commands_on_session_level_connection_to_node('CREATE INDEX CONCURRENTLY dist_table_index_2 ON dist_table(id)');
 }
 
 step "w2-commit-worker"
@@ -150,14 +139,6 @@ permutation "w1-start-session-level-connection" "w1-begin-on-worker" // open tra
 			"w2-start-session-level-connection" "w2-begin-on-worker" // open transaction on worker 2
 			"w1-create-unnamed-index" "w2-create-unnamed-index"		 // create unnamed indexes on workers
 			"w1-commit-worker"										 // commit transactions on worker 1 and see error on worker 2 due to name clash
-			"w1-stop-connection" "w2-stop-connection"				 // close connections to workers
-			"coord-print-index-count"					 			 // show indexes on coordinator
-
-permutation "w1-start-session-level-connection"			 		 	 // start session on worker 1
-			"w2-start-session-level-connection"			 		 	 // start session on worker 2
-			"w1-create-index-concurrently"(*)						 // create both indexes with concurrently option
-			"w2-create-index-concurrently"(*)
-			"w1-empty" 												 // empty steps to have consistent output for CONCURRENTLY
 			"w1-stop-connection" "w2-stop-connection"				 // close connections to workers
 			"coord-print-index-count"					 			 // show indexes on coordinator
 

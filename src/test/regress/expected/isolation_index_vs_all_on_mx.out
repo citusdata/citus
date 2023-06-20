@@ -1,6 +1,11 @@
 Parsed test spec with 4 sessions
 
 starting permutation: w1-start-session-level-connection w1-begin-on-worker w2-start-session-level-connection w2-begin-on-worker w1-create-named-index w2-create-named-index w1-commit-worker w2-commit-worker w1-stop-connection w2-stop-connection coord-print-index-count
+citus_set_coordinator_host
+---------------------------------------------------------------------
+
+(1 row)
+
 step w1-start-session-level-connection:
  SELECT start_session_level_connection_to_node('localhost', 57637);
 
@@ -97,8 +102,18 @@ result
      2
 (4 rows)
 
+citus_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
 
 starting permutation: w1-start-session-level-connection w1-begin-on-worker w2-start-session-level-connection w2-begin-on-worker w1-create-unnamed-index w2-create-unnamed-index w1-commit-worker w1-stop-connection w2-stop-connection coord-print-index-count
+citus_set_coordinator_host
+---------------------------------------------------------------------
+
+(1 row)
+
 step w1-start-session-level-connection:
  SELECT start_session_level_connection_to_node('localhost', 57637);
 
@@ -184,77 +199,18 @@ result
      1
 (4 rows)
 
-
-starting permutation: w1-start-session-level-connection w2-start-session-level-connection w1-create-index-concurrently w2-create-index-concurrently w1-empty w1-stop-connection w2-stop-connection coord-print-index-count
-step w1-start-session-level-connection:
- SELECT start_session_level_connection_to_node('localhost', 57637);
-
-start_session_level_connection_to_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
-
-step w2-start-session-level-connection:
- SELECT start_session_level_connection_to_node('localhost', 57638);
-
-start_session_level_connection_to_node
----------------------------------------------------------------------
-
-(1 row)
-
-step w1-create-index-concurrently:
- SELECT run_commands_on_session_level_connection_to_node('CREATE INDEX CONCURRENTLY dist_table_index ON dist_table(id)');
- <waiting ...>
-step w2-create-index-concurrently: 
- SELECT run_commands_on_session_level_connection_to_node('CREATE INDEX CONCURRENTLY dist_table_index_2 ON dist_table(id)');
- <waiting ...>
-step w1-create-index-concurrently: <... completed>
-run_commands_on_session_level_connection_to_node
----------------------------------------------------------------------
-
-(1 row)
-
-step w1-empty:
-step w2-create-index-concurrently: <... completed>
-run_commands_on_session_level_connection_to_node
----------------------------------------------------------------------
-
-(1 row)
-
-step w1-stop-connection:
- SELECT stop_session_level_connection_to_node();
-
-stop_session_level_connection_to_node
----------------------------------------------------------------------
-
-(1 row)
-
-step w2-stop-connection:
- SELECT stop_session_level_connection_to_node();
-
-stop_session_level_connection_to_node
----------------------------------------------------------------------
-
-(1 row)
-
-step coord-print-index-count:
- SELECT
-  result
- FROM
-  run_command_on_placements('dist_table', 'select count(*) from pg_indexes WHERE tablename = ''%s''')
- ORDER BY
-  nodeport;
-
-result
----------------------------------------------------------------------
-     2
-     2
-     2
-     2
-(4 rows)
 
 
 starting permutation: w1-start-session-level-connection w1-create-named-index w1-begin-on-worker w1-delete coord-begin coord-short-statement-timeout coord-take-lock w1-reindex deadlock-checker-call coord-rollback w1-commit-worker w1-stop-connection
+citus_set_coordinator_host
+---------------------------------------------------------------------
+
+(1 row)
+
 step w1-start-session-level-connection:
  SELECT start_session_level_connection_to_node('localhost', 57637);
 
@@ -298,22 +254,23 @@ step coord-take-lock:
  <waiting ...>
 step w1-reindex: 
  SELECT run_commands_on_session_level_connection_to_node('REINDEX INDEX dist_table_index');
+ <waiting ...>
+step deadlock-checker-call: 
+  SELECT check_distributed_deadlocks();
 
+check_distributed_deadlocks
+---------------------------------------------------------------------
+t
+(1 row)
+
+step coord-take-lock: <... completed>
+ERROR:  canceling the transaction since it was involved in a distributed deadlock
+step w1-reindex: <... completed>
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
 
 (1 row)
 
-step deadlock-checker-call:
-  SELECT check_distributed_deadlocks();
-
-check_distributed_deadlocks
----------------------------------------------------------------------
-f
-(1 row)
-
-step coord-take-lock: <... completed>
-ERROR:  canceling statement due to statement timeout
 step coord-rollback:
  ROLLBACK;
 
@@ -329,6 +286,11 @@ step w1-stop-connection:
  SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)

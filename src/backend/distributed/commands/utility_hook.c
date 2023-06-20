@@ -1126,6 +1126,20 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 		EnsureCoordinator();
 	}
 
+	if (!IsCoordinator() && !CoordinatorAddedAsWorkerNode() &&
+		!EnableAcquiringUnsafeLockFromWorkers)
+	{
+		ereport(ERROR,
+				(errmsg(
+					 "Cannot execute DDL command from a worker node since the "
+					 "coordinator is not in the metadata."),
+				 errhint(
+					 "Either run this command on the coordinator or add the coordinator "
+					 "in the metadata by using: SELECT citus_set_coordinator_host('<hostname>', <port>);\n"
+					 "Alternatively, though it is not recommended, you can allow this command by running: "
+					 "SET citus.allow_unsafe_locks_from_workers TO 'on';")));
+	}
+
 	ObjectAddress targetObjectAddress = ddlJob->targetObjectAddress;
 
 	if (OidIsValid(targetObjectAddress.classId))
