@@ -118,7 +118,7 @@ typedef enum ExtractForeignKeyConstraintsMode
 	/* exclude the self-referencing foreign keys */
 	EXCLUDE_SELF_REFERENCES = 1 << 2,
 
-	/* any combination of the 4 flags below is supported */
+	/* any combination of the 5 flags below is supported */
 	/* include foreign keys when the other table is a distributed table*/
 	INCLUDE_DISTRIBUTED_TABLES = 1 << 3,
 
@@ -131,9 +131,13 @@ typedef enum ExtractForeignKeyConstraintsMode
 	/* include foreign keys when the other table is a Postgres local table*/
 	INCLUDE_LOCAL_TABLES = 1 << 6,
 
+	/* include foreign keys when the other table is a single shard table*/
+	INCLUDE_SINGLE_SHARD_TABLES = 1 << 7,
+
 	/* include foreign keys regardless of the other table's type */
 	INCLUDE_ALL_TABLE_TYPES = INCLUDE_DISTRIBUTED_TABLES | INCLUDE_REFERENCE_TABLES |
-							  INCLUDE_CITUS_LOCAL_TABLES | INCLUDE_LOCAL_TABLES
+							  INCLUDE_CITUS_LOCAL_TABLES | INCLUDE_LOCAL_TABLES |
+							  INCLUDE_SINGLE_SHARD_TABLES
 } ExtractForeignKeyConstraintMode;
 
 
@@ -154,6 +158,19 @@ typedef enum SearchForeignKeyColumnFlags
 
 	/* callers can also pass union of above flags */
 } SearchForeignKeyColumnFlags;
+
+
+typedef enum TenantOperation
+{
+	TENANT_UNDISTRIBUTE_TABLE = 0,
+	TENANT_ALTER_TABLE,
+	TENANT_COLOCATE_WITH,
+	TENANT_UPDATE_COLOCATION,
+	TENANT_SET_SCHEMA,
+} TenantOperation;
+
+#define TOTAL_TENANT_OPERATION 5
+extern const char *TenantOperationNames[TOTAL_TENANT_OPERATION];
 
 /* begin.c - forward declarations */
 extern void SaveBeginCommandProperties(TransactionStmt *transactionStmt);
@@ -593,6 +610,7 @@ extern char * GetAlterColumnWithNextvalDefaultCmd(Oid sequenceOid, Oid relationI
 
 extern void ErrorIfTableHasIdentityColumn(Oid relationId);
 extern void ConvertNewTableIfNecessary(Node *createStmt);
+extern void ConvertToTenantTableIfNecessary(AlterObjectSchemaStmt *alterObjectSchemaStmt);
 
 /* text_search.c - forward declarations */
 extern List * GetCreateTextSearchConfigStatements(const ObjectAddress *address);
@@ -792,11 +810,11 @@ extern void UpdateAutoConvertedForConnectedRelations(List *relationId, bool
 extern bool ShouldUseSchemaBasedSharding(char *schemaName);
 extern bool ShouldCreateTenantSchemaTable(Oid relationId);
 extern bool IsTenantSchema(Oid schemaId);
+extern void EnsureTenantTable(Oid relationId, char *operationName);
 extern void ErrorIfIllegalPartitioningInTenantSchema(Oid parentRelationId,
 													 Oid partitionRelationId);
 extern void CreateTenantSchemaTable(Oid relationId);
-extern void ErrorIfTenantTable(Oid relationId, char *operationName);
-extern void ErrorIfTenantSchema(Oid nspOid, char *operationName);
+extern void ErrorIfTenantTable(Oid relationId, const char *operationName);
 extern uint32 CreateTenantSchemaColocationId(void);
 
 #endif /*CITUS_COMMANDS_H */

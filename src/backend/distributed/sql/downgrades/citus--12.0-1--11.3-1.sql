@@ -73,3 +73,6 @@ DROP FUNCTION pg_catalog.citus_stat_tenants_local_internal(
     OUT DOUBLE PRECISION,
     OUT BIGINT);
 #include "../udfs/citus_stat_tenants_local/11.3-1.sql"
+
+#include "../udfs/drop_old_time_partitions/10.2-1.sql"
+#include "../udfs/get_missing_time_partition_ranges/10.2-1.sql"

@@ -248,7 +248,8 @@ undistribute_table(PG_FUNCTION_ARGS)
 
 	TableConversionParameters params = {
 		.relationId = relationId,
-		.cascadeViaForeignKeys = cascadeViaForeignKeys
+		.cascadeViaForeignKeys = cascadeViaForeignKeys,
+		.bypassTenantCheck = false
 	};
 
 	UndistributeTable(&params);
@@ -430,6 +431,55 @@ UndistributeTables(List *relationIdList)
 
 
 /*
+ * EnsureUndistributeTenantTableSafe ensures that it is safe to undistribute a tenant table.
+ */
+void
+EnsureUndistributeTenantTableSafe(Oid relationId, const char *operationName)
+{
+	Oid schemaId = get_rel_namespace(relationId);
+	Assert(IsTenantSchema(schemaId));
+
+	/* We only allow undistribute while altering schema */
+	if (strcmp(operationName, TenantOperationNames[TENANT_SET_SCHEMA]) != 0)
+	{
+		ErrorIfTenantTable(relationId, operationName);
+	}
+
+	char *tableName = get_rel_name(relationId);
+	char *schemaName = get_namespace_name(schemaId);
+
+	/*
+	 * Partition table cannot be undistributed. Otherwise, its parent table would still
+	 * be a tenant table whereas partition table would be a local table.
+	 */
+	if (PartitionTable(relationId))
+	{
+		ereport(ERROR, (errmsg("%s is not allowed for partition table %s in distributed "
+							   "schema %s", operationName, tableName, schemaName),
+						errdetail("partition table should be under the same distributed "
+								  "schema as its parent and be a tenant table.")));
+	}
+
+	/*
+	 * When table is referenced by or referencing to a table in the same tenant
+	 * schema, we should disallow undistributing the table since we do not allow
+	 * foreign keys from/to Citus local or Postgres local table to/from distributed
+	 * schema.
+	 */
+	List *fkeyCommandsWithSingleShardTables =
+		GetFKeyCreationCommandsRelationInvolvedWithTableType(
+			relationId, INCLUDE_SINGLE_SHARD_TABLES);
+	if (fkeyCommandsWithSingleShardTables != NIL)
+	{
+		ereport(ERROR, (errmsg("%s is not allowed for table %s in distributed schema %s",
+							   operationName, tableName, schemaName),
+						errdetail("distributed schemas cannot have foreign keys from/to "
+								  "local tables or different schema")));
+	}
+}
+
+
+/*
  * UndistributeTable undistributes the given table. It uses ConvertTable function to
  * create a new local table and move everything to that table.
  *
@@ -449,7 +499,13 @@ UndistributeTable(TableConversionParameters *params)
 							   "because the table is not distributed")));
 	}
 
-	ErrorIfTenantTable(params->relationId, "undistribute_table");
+	Oid schemaId = get_rel_namespace(params->relationId);
+	if (!params->bypassTenantCheck && IsTenantSchema(schemaId) &&
+		IsCitusTableType(params->relationId, SINGLE_SHARD_DISTRIBUTED))
+	{
+		EnsureUndistributeTenantTableSafe(params->relationId,
+										  TenantOperationNames[TENANT_UNDISTRIBUTE_TABLE]);
+	}
 
 	if (!params->cascadeViaForeignKeys)
 	{
@@ -506,7 +562,7 @@ AlterDistributedTable(TableConversionParameters *params)
 							   "is not distributed")));
 	}
 
-	ErrorIfTenantTable(params->relationId, "alter_distributed_table");
+	ErrorIfTenantTable(params->relationId, TenantOperationNames[TENANT_ALTER_TABLE]);
 	ErrorIfColocateWithTenantTable(params->colocateWith);
 
 	EnsureTableNotForeign(params->relationId);
@@ -1267,7 +1323,8 @@ ErrorIfColocateWithTenantTable(char *colocateWith)
 	{
 		text *colocateWithTableNameText = cstring_to_text(colocateWith);
 		Oid colocateWithTableId = ResolveRelationId(colocateWithTableNameText, false);
-		ErrorIfTenantTable(colocateWithTableId, "colocate_with");
+		ErrorIfTenantTable(colocateWithTableId,
+						   TenantOperationNames[TENANT_COLOCATE_WITH]);
 	}
 }
 

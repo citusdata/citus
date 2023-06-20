@@ -18,6 +18,7 @@
 
 
 extern TupleTableSlot * NonPushableInsertSelectExecScan(CustomScanState *node);
-
+extern List * BuildColumnNameListFromTargetList(Oid targetRelationId,
+												List *insertTargetList);
 
 #endif /* INSERT_SELECT_EXECUTOR_H */

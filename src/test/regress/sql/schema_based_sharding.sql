@@ -59,18 +59,100 @@ SELECT citus_add_local_table_to_metadata('tenant_2.test_table');
 SELECT update_distributed_table_colocation('tenant_2.test_table', colocate_with => 'none');
 -- verify we also don't allow colocate_with a tenant table
 SELECT update_distributed_table_colocation('regular_schema.test_table', colocate_with => 'tenant_2.test_table');
--- verify we don't allow undistribute_table for tenant tables
-SELECT undistribute_table('tenant_2.test_table');
+
+-- verify we do not allow undistribute_table for tenant tables
+CREATE TABLE tenant_2.undist_table(id int);
+SELECT undistribute_table('tenant_2.undist_table');
+
 -- verify we don't allow alter_distributed_table for tenant tables
 SELECT alter_distributed_table('tenant_2.test_table', colocate_with => 'none');
 -- verify we also don't allow colocate_with a tenant table
 SELECT alter_distributed_table('regular_schema.test_table', colocate_with => 'tenant_2.test_table');
--- verify we don't allow ALTER TABLE SET SCHEMA for tenant tables
-ALTER TABLE tenant_2.test_table SET SCHEMA regular_schema;
--- verify we don't allow ALTER TABLE SET SCHEMA for tenant schemas
-ALTER TABLE regular_schema.test_table SET SCHEMA tenant_2;
--- the same, from tenant schema to tenant schema
-ALTER TABLE tenant_2.test_table SET SCHEMA tenant_3;
+
+-- verify we can set tenant table's schema to regular schema
+CREATE TABLE tenant_2.test_table2(id int);
+ALTER TABLE tenant_2.test_table2 SET SCHEMA regular_schema;
+-- verify that regular_schema.test_table2 does not exist in pg_dist_partition
+SELECT COUNT(*)=0 FROM pg_dist_partition
+WHERE logicalrelid = 'regular_schema.test_table2'::regclass AND
+      partmethod = 'n' AND repmodel = 's' AND colocationid > 0;
+-- verify that tenant_2.test_table2 does not exist
+SELECT * FROM tenant_2.test_table2;
+
+-- verify we can set regular table's schema to distributed schema
+CREATE TABLE regular_schema.test_table3(id int);
+ALTER TABLE regular_schema.test_table3 SET SCHEMA tenant_2;
+-- verify that tenant_2.test_table3 is recorded in pg_dist_partition as a single-shard table.
+SELECT COUNT(*)=1 FROM pg_dist_partition
+WHERE logicalrelid = 'tenant_2.test_table3'::regclass AND
+      partmethod = 'n' AND repmodel = 's' AND colocationid > 0;
+-- verify that regular_schema.test_table3 does not exist
+SELECT * FROM regular_schema.test_table3;
+
+-- verify we can set tenant table's schema to another distributed schema
+CREATE TABLE tenant_2.test_table4(id int);
+ALTER TABLE tenant_2.test_table4 SET SCHEMA tenant_3;
+-- verify that tenant_3.test_table4 is recorded in pg_dist_partition as a single-shard table.
+SELECT COUNT(*)=1 FROM pg_dist_partition
+WHERE logicalrelid = 'tenant_3.test_table4'::regclass AND
+      partmethod = 'n' AND repmodel = 's' AND colocationid > 0;
+-- verify that tenant_2.test_table4 does not exist
+SELECT * FROM tenant_2.test_table4;
+
+-- verify that we can put a local table in regular schema into distributed schema
+CREATE TABLE regular_schema.pg_local_tbl(id int);
+ALTER TABLE regular_schema.pg_local_tbl SET SCHEMA tenant_2;
+
+-- verify that we can put a Citus local table in regular schema into distributed schema
+CREATE TABLE regular_schema.citus_local_tbl(id int);
+SELECT citus_add_local_table_to_metadata('regular_schema.citus_local_tbl');
+ALTER TABLE regular_schema.citus_local_tbl SET SCHEMA tenant_2;
+
+-- verify that we do not allow a hash distributed table in regular schema into distributed schema
+CREATE TABLE regular_schema.hash_dist_tbl(id int);
+SELECT create_distributed_table('regular_schema.hash_dist_tbl', 'id');
+ALTER TABLE regular_schema.hash_dist_tbl SET SCHEMA tenant_2;
+
+-- verify that we do not allow a reference table in regular schema into distributed schema
+CREATE TABLE regular_schema.ref_tbl(id int  PRIMARY KEY);
+SELECT create_reference_table('regular_schema.ref_tbl');
+ALTER TABLE regular_schema.ref_tbl SET SCHEMA tenant_2;
+
+-- verify that we can put a table in tenant schema into regular schema
+CREATE TABLE tenant_2.tenant_tbl(id int);
+ALTER TABLE tenant_2.tenant_tbl SET SCHEMA regular_schema;
+
+-- verify that we can put a table in tenant schema into another tenant schema
+CREATE TABLE tenant_2.tenant_tbl2(id int);
+ALTER TABLE tenant_2.tenant_tbl2 SET SCHEMA tenant_3;
+
+-- verify that we do not allow a local table in regular schema into distributed schema if it has foreign key to a non-reference table in another schema
+CREATE TABLE regular_schema.pg_local_tbl1(id int PRIMARY KEY);
+CREATE TABLE regular_schema.pg_local_tbl2(id int REFERENCES regular_schema.pg_local_tbl1(id));
+ALTER TABLE regular_schema.pg_local_tbl2 SET SCHEMA tenant_2;
+
+-- verify that we allow a local table in regular schema into distributed schema if it has foreign key to a reference table in another schema
+CREATE TABLE regular_schema.pg_local_tbl3(id int REFERENCES regular_schema.ref_tbl(id));
+ALTER TABLE regular_schema.pg_local_tbl3 SET SCHEMA tenant_2;
+
+-- verify that we do not allow a table in tenant schema into regular schema if it has foreign key to/from another table in the same schema
+CREATE TABLE tenant_2.tenant_tbl1(id int PRIMARY KEY);
+CREATE TABLE tenant_2.tenant_tbl2(id int REFERENCES tenant_2.tenant_tbl1(id));
+ALTER TABLE tenant_2.tenant_tbl1 SET SCHEMA regular_schema;
+ALTER TABLE tenant_2.tenant_tbl2 SET SCHEMA regular_schema;
+
+-- verify that we do not allow a table in distributed schema into another distributed schema if it has foreign key to/from another table in the same schema
+CREATE TABLE tenant_2.tenant_tbl3(id int PRIMARY KEY);
+CREATE TABLE tenant_2.tenant_tbl4(id int REFERENCES tenant_2.tenant_tbl3(id));
+ALTER TABLE tenant_2.tenant_tbl3 SET SCHEMA tenant_3;
+ALTER TABLE tenant_2.tenant_tbl4 SET SCHEMA tenant_3;
+
+-- alter set non-existent schema
+ALTER TABLE tenant_2.test_table SET SCHEMA ghost_schema;
+ALTER TABLE IF EXISTS tenant_2.test_table SET SCHEMA ghost_schema;
+-- alter set non-existent table
+ALTER TABLE tenant_2.ghost_table SET SCHEMA ghost_schema;
+ALTER TABLE IF EXISTS tenant_2.ghost_table SET SCHEMA ghost_schema;
 
 -- (on coordinator) verify that colocation id is set for empty tenants too
 SELECT colocationid > 0 FROM pg_dist_schema

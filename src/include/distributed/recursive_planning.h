@@ -46,6 +46,7 @@ extern void ReplaceRTERelationWithRteSubquery(RangeTblEntry *rangeTableEntry,
 extern bool IsRecursivelyPlannableRelation(RangeTblEntry *rangeTableEntry);
 extern bool IsRelationLocalTableOrMatView(Oid relationId);
 extern bool ContainsReferencesToOuterQuery(Query *query);
+extern void UpdateVarNosInNode(Node *node, Index newVarNo);
 
 
 #endif /* RECURSIVE_PLANNING_H */

@@ -39,3 +39,6 @@ DROP FUNCTION citus_shard_sizes;
 -- udfs to convert a regular/tenant schema to a tenant/regular schema
 #include "udfs/citus_schema_distribute/12.0-1.sql"
 #include "udfs/citus_schema_undistribute/12.0-1.sql"
+
+#include "udfs/drop_old_time_partitions/12.0-1.sql"
+#include "udfs/get_missing_time_partition_ranges/12.0-1.sql"

@@ -389,6 +389,26 @@ AddPartitionKeyNotNullFilterToSelect(Query *subqery)
 
 
 /*
+ * ExtractSourceResultRangeTableEntry Generic wrapper for modification commands that
+ * utilizes results as input, based on an source query.
+ */
+RangeTblEntry *
+ExtractSourceResultRangeTableEntry(Query *query)
+{
+	if (IsMergeQuery(query))
+	{
+		return ExtractMergeSourceRangeTableEntry(query);
+	}
+	else if (CheckInsertSelectQuery(query))
+	{
+		return ExtractSelectRangeTableEntry(query);
+	}
+
+	return NULL;
+}
+
+
+/*
  * ExtractSelectRangeTableEntry returns the range table entry of the subquery.
  * Note that the function expects and asserts that the input query be
  * an INSERT...SELECT query.
@@ -1863,19 +1883,7 @@ RouterJob(Query *originalQuery, PlannerRestrictionContext *plannerRestrictionCon
 
 	if (*planningError)
 	{
-		/*
-		 * For MERGE, we do _not_ plan any other router job than the MERGE job itself,
-		 * let's not continue further down the lane in distributed planning, simply
-		 * bail out.
-		 */
-		if (IsMergeQuery(originalQuery))
-		{
-			RaiseDeferredError(*planningError, ERROR);
-		}
-		else
-		{
-			return NULL;
-		}
+		return NULL;
 	}
 
 	Job *job = CreateJob(originalQuery);
@@ -2366,14 +2374,7 @@ PlanRouterQuery(Query *originalQuery,
 
 		Assert(UpdateOrDeleteOrMergeQuery(originalQuery));
 
-		if (IsMergeQuery(originalQuery))
-		{
-			targetRelationId = ModifyQueryResultRelationId(originalQuery);
-			planningError = MergeQuerySupported(targetRelationId, originalQuery,
-												isMultiShardQuery,
-												plannerRestrictionContext);
-		}
-		else
+		if (!IsMergeQuery(originalQuery))
 		{
 			planningError = ModifyQuerySupported(originalQuery, originalQuery,
 												 isMultiShardQuery,

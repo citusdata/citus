@@ -40,6 +40,14 @@ static void EnsureSchemaExist(Oid schemaId);
 /* controlled via citus.enable_schema_based_sharding GUC */
 bool EnableSchemaBasedSharding = false;
 
+const char *TenantOperationNames[TOTAL_TENANT_OPERATION] = {
+	"undistribute_table",
+	"alter_distributed_table",
+	"colocate_with",
+	"update_distributed_table_colocation",
+	"set schema",
+};
+
 
 PG_FUNCTION_INFO_V1(citus_internal_unregister_tenant_schema_globally);
 PG_FUNCTION_INFO_V1(citus_schema_distribute);
@@ -374,12 +382,7 @@ SchemaGetNonShardTableIdList(Oid schemaId)
  *  - Schema name is in the allowed-list,
  *  - Schema does not depend on an extension (created by extension),
  *  - No extension depends on the schema (CREATE EXTENSION <ext> SCHEMA <schema>),
- *  - Current user should be the owner of tables under the schema,
- *  - Table kinds are supported,
- *  - Referencing and referenced foreign keys for the tables under the schema are
- *    supported,
- *	- Tables under the schema are not owned by an extension,
- *  - Only Citus local and Postgres local tables exist under the schema.
+ *	- Some checks for the table for being a valid tenant table.
  */
 static void
 EnsureSchemaCanBeDistributed(Oid schemaId, List *schemaTableIdList)
@@ -409,39 +412,55 @@ EnsureSchemaCanBeDistributed(Oid schemaId, List *schemaTableIdList)
 	Oid relationId = InvalidOid;
 	foreach_oid(relationId, schemaTableIdList)
 	{
-		/* Ensure table owner */
-		EnsureTableOwner(relationId);
+		EnsureTenantTable(relationId, "citus_schema_distribute");
+	}
+}
 
-		/* Check relation kind */
-		EnsureTableKindSupportedForTenantSchema(relationId);
 
-		/* Check foreign keys */
-		EnsureFKeysForTenantTable(relationId);
+/*
+ * EnsureTenantTable ensures the table can be a valid tenant table.
+ *  - Current user should be the owner of table,
+ *  - Table kind is supported,
+ *  - Referencing and referenced foreign keys for the table are supported,
+ *	- Table is not owned by an extension,
+ *  - Table should be Citus local or Postgres local table.
+ */
+void
+EnsureTenantTable(Oid relationId, char *operationName)
+{
+	/* Ensure table owner */
+	EnsureTableOwner(relationId);
 
-		/* Check table not owned by an extension */
-		ObjectAddress *tableAddress = palloc0(sizeof(ObjectAddress));
-		ObjectAddressSet(*tableAddress, RelationRelationId, relationId);
-		if (IsAnyObjectAddressOwnedByExtension(list_make1(tableAddress), NULL))
-		{
-			char *tableName = get_namespace_name(schemaId);
-			ereport(ERROR, (errmsg("schema cannot be distributed since it has "
-								   "table %s which is owned by an extension",
-								   tableName)));
-		}
+	/* Check relation kind */
+	EnsureTableKindSupportedForTenantSchema(relationId);
 
-		/* Postgres local tables are allowed */
-		if (!IsCitusTable(relationId))
-		{
-			continue;
-		}
+	/* Check foreign keys */
+	EnsureFKeysForTenantTable(relationId);
 
-		/* Only Citus local tables, amongst Citus table types, are allowed */
-		if (!IsCitusTableType(relationId, CITUS_LOCAL_TABLE))
-		{
-			ereport(ERROR, (errmsg("schema already has distributed tables"),
-							errhint("Undistribute distributed tables under "
-									"the schema before distributing the schema.")));
-		}
+	/* Check table not owned by an extension */
+	ObjectAddress *tableAddress = palloc0(sizeof(ObjectAddress));
+	ObjectAddressSet(*tableAddress, RelationRelationId, relationId);
+	if (IsAnyObjectAddressOwnedByExtension(list_make1(tableAddress), NULL))
+	{
+		Oid schemaId = get_rel_namespace(relationId);
+		char *tableName = get_namespace_name(schemaId);
+		ereport(ERROR, (errmsg("schema cannot be distributed since it has "
+							   "table %s which is owned by an extension",
+							   tableName)));
+	}
+
+	/* Postgres local tables are allowed */
+	if (!IsCitusTable(relationId))
+	{
+		return;
+	}
+
+	/* Only Citus local tables, amongst Citus table types, are allowed */
+	if (!IsCitusTableType(relationId, CITUS_LOCAL_TABLE))
+	{
+		ereport(ERROR, (errmsg("distributed schema cannot have distributed tables"),
+						errhint("Undistribute distributed tables before "
+								"'%s'.", operationName)));
 	}
 }
 
@@ -743,7 +762,7 @@ citus_schema_undistribute(PG_FUNCTION_ARGS)
  * if the given relation is a tenant table.
  */
 void
-ErrorIfTenantTable(Oid relationId, char *operationName)
+ErrorIfTenantTable(Oid relationId, const char *operationName)
 {
 	if (IsTenantSchema(get_rel_namespace(relationId)))
 	{
@@ -751,22 +770,5 @@ ErrorIfTenantTable(Oid relationId, char *operationName)
 							   "a distributed schema",
 							   generate_qualified_relation_name(relationId),
 							   operationName)));
-	}
-}
-
-
-/*
- * ErrorIfTenantSchema errors out with the given operation name,
- * if the given schema is a tenant schema.
- */
-void
-ErrorIfTenantSchema(Oid nspOid, char *operationName)
-{
-	if (IsTenantSchema(nspOid))
-	{
-		ereport(ERROR, (errmsg(
-							"%s is not allowed for %s because it is a distributed schema",
-							get_namespace_name(nspOid),
-							operationName)));
 	}
 }
