@@ -205,7 +205,7 @@ citus_remove_node
 (1 row)
 
 
-starting permutation: w1-start-session-level-connection w1-create-named-index w1-begin-on-worker w1-delete coord-begin coord-short-statement-timeout coord-take-lock w1-reindex deadlock-checker-call coord-rollback w1-commit-worker w1-stop-connection
+starting permutation: w1-start-session-level-connection w1-create-named-index w1-begin-on-worker w1-delete coord-begin coord-take-lock w1-reindex deadlock-checker-call coord-rollback w1-commit-worker w1-stop-connection
 citus_set_coordinator_host
 ---------------------------------------------------------------------
 
@@ -245,9 +245,6 @@ run_commands_on_session_level_connection_to_node
 
 step coord-begin:
  BEGIN;
-
-step coord-short-statement-timeout:
- SET statement_timeout = 100;
 
 step coord-take-lock:
  LOCK TABLE dist_table IN ACCESS EXCLUSIVE MODE;

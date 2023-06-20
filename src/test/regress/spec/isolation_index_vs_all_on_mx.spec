@@ -116,11 +116,6 @@ step "coord-take-lock"
 	LOCK TABLE dist_table IN ACCESS EXCLUSIVE MODE;
 }
 
-step "coord-short-statement-timeout"
-{
-	SET statement_timeout = 100;
-}
-
 session "deadlock-checker"
 
 step "deadlock-checker-call"
@@ -142,13 +137,12 @@ permutation "w1-start-session-level-connection" "w1-begin-on-worker" // open tra
 			"w1-stop-connection" "w2-stop-connection"				 // close connections to workers
 			"coord-print-index-count"					 			 // show indexes on coordinator
 
-// the following permutation is expected to fail with a distributed deadlock. However, we do not detect the deadlock, and get blocked until statement_timeout.
+// the following permutation is expected to fail with a distributed deadlock
 permutation "w1-start-session-level-connection"				 		 // start session on worker 1 only
 			"w1-create-named-index"									 // create index on worker 1
 			"w1-begin-on-worker"									 // open transaction block on worker 1
 			"w1-delete"												 // delete from table on worker 1
 			"coord-begin"											 // open transaction on coordinator to test distributed deadlock
-			"coord-short-statement-timeout"							 // set statement timeout on coordinator to early abort deadlock check
 			"coord-take-lock"										 // take ACCESS EXCLUSIVE lock on table on coordinator, get blocked on worker 1
 			"w1-reindex"											 // reindex on worker that will acquire ACCESS EXCLUSIVE lock on table, create distributed deadlock
 			"deadlock-checker-call"									 // check that distributed deadlock is detected properly
