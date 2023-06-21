@@ -18,9 +18,7 @@
 
 #include "utils/builtins.h"
 
-#if PG_VERSION_NUM >= PG_VERSION_14
 #include "common/cryptohash.h"
-#endif
 
 
 /*

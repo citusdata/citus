@@ -1,7 +1,7 @@
 --
 -- GRANT_ON_SCHEMA_PROPAGATION
 --
--- this test has different output for PG13/14 compared to PG15
+-- this test has different output for PG14 compared to PG15
 -- In PG15, public schema is owned by pg_database_owner role
 -- Relevant PG commit: b073c3ccd06e4cb845e121387a43faa8c68a7b62
 SHOW server_version \gset
@@ -188,6 +188,9 @@ DROP SCHEMA dist_schema CASCADE;
 -- first remove one of the worker nodes
 SET citus.shard_replication_factor TO 1;
 SELECT master_remove_node('localhost', :worker_2_port);
+
+-- to avoid different output in PG15
+GRANT CREATE ON SCHEMA public TO public;
 
 -- distribute the public schema (it has to be distributed by now but just in case)
 CREATE TABLE public_schema_table (id INT);

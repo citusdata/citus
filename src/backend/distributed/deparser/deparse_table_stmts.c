@@ -77,7 +77,7 @@ DeparseAlterTableStmt(Node *node)
 	StringInfoData str = { 0 };
 	initStringInfo(&str);
 
-	Assert(AlterTableStmtObjType_compat(stmt) == OBJECT_TABLE);
+	Assert(stmt->objtype == OBJECT_TABLE);
 
 	AppendAlterTableStmt(&str, stmt);
 	return str.data;
@@ -96,7 +96,7 @@ AppendAlterTableStmt(StringInfo buf, AlterTableStmt *stmt)
 														stmt->relation->relname);
 	ListCell *cmdCell = NULL;
 
-	Assert(AlterTableStmtObjType_compat(stmt) == OBJECT_TABLE);
+	Assert(stmt->objtype == OBJECT_TABLE);
 
 	appendStringInfo(buf, "ALTER TABLE %s", identifier);
 	foreach(cmdCell, stmt->cmds)

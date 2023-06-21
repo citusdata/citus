@@ -916,15 +916,9 @@ MarkObjectsDistributedCreateCommand(List *addresses,
 		int forceDelegation = list_nth_int(forceDelegations, currentObjectCounter);
 		List *names = NIL;
 		List *args = NIL;
-		char *objectType = NULL;
 
-		#if PG_VERSION_NUM >= PG_VERSION_14
-		objectType = getObjectTypeDescription(address, false);
+		char *objectType = getObjectTypeDescription(address, false);
 		getObjectIdentityParts(address, &names, &args, false);
-		#else
-		objectType = getObjectTypeDescription(address);
-		getObjectIdentityParts(address, &names, &args);
-		#endif
 
 		if (!isFirstObject)
 		{

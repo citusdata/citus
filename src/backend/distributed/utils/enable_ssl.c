@@ -19,11 +19,6 @@
  * done before including libpq.h.
  */
 #include "distributed/pg_version_constants.h"
-#if PG_VERSION_NUM < PG_VERSION_14
-#ifndef OPENSSL_API_COMPAT
-#define OPENSSL_API_COMPAT 0x1000100L
-#endif
-#endif
 
 #include "distributed/connection_management.h"
 #include "distributed/memutils.h"

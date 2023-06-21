@@ -122,7 +122,7 @@ DeparseAlterTypeStmt(Node *node)
 	StringInfoData str = { 0 };
 	initStringInfo(&str);
 
-	Assert(AlterTableStmtObjType_compat(stmt) == OBJECT_TYPE);
+	Assert(stmt->objtype == OBJECT_TYPE);
 
 	AppendAlterTypeStmt(&str, stmt);
 
@@ -137,7 +137,7 @@ AppendAlterTypeStmt(StringInfo buf, AlterTableStmt *stmt)
 														stmt->relation->relname);
 	ListCell *cmdCell = NULL;
 
-	Assert(AlterTableStmtObjType_compat(stmt) == OBJECT_TYPE);
+	Assert(stmt->objtype == OBJECT_TYPE);
 
 	appendStringInfo(buf, "ALTER TYPE %s", identifier);
 	foreach(cmdCell, stmt->cmds)

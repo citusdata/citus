@@ -114,7 +114,7 @@ delete from test_ref;
 ERROR:  fake_tuple_delete not implemented
 CONTEXT:  while executing command on localhost:xxxxx
 update test_ref set a=2;
-ERROR:  fake_tuple_update not implemented
+ERROR:  fake_fetch_row_version not implemented
 CONTEXT:  while executing command on localhost:xxxxx
 RESET client_min_messages;
 -- ddl events should include "USING fake_am"

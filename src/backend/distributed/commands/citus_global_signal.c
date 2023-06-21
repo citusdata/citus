@@ -81,13 +81,6 @@ CitusSignalBackend(uint64 globalPID, uint64 timeout, int sig)
 {
 	Assert((sig == SIGINT) || (sig == SIGTERM));
 
-#if PG_VERSION_NUM < PG_VERSION_14
-	if (timeout != 0)
-	{
-		elog(ERROR, "timeout parameter is only supported on Postgres 14 or later");
-	}
-#endif
-
 	bool missingOk = false;
 	int nodeId = ExtractNodeIdFromGlobalPID(globalPID, missingOk);
 	int processId = ExtractProcessIdFromGlobalPID(globalPID);
@@ -102,14 +95,9 @@ CitusSignalBackend(uint64 globalPID, uint64 timeout, int sig)
 	}
 	else
 	{
-#if PG_VERSION_NUM >= PG_VERSION_14
 		appendStringInfo(cancelQuery,
 						 "SELECT pg_terminate_backend(%d::integer, %lu::bigint)",
 						 processId, timeout);
-#else
-		appendStringInfo(cancelQuery, "SELECT pg_terminate_backend(%d::integer)",
-						 processId);
-#endif
 	}
 
 	int connectionFlags = 0;

@@ -98,19 +98,24 @@ EXPLAIN (COSTS FALSE, FORMAT JSON)
     "Plan": {
       "Node Type": "Sort",
       "Parallel Aware": false,
+      "Async Capable": false,
       "Sort Key": ["(COALESCE((pg_catalog.sum(remote_scan.count_quantity))::bigint, '0'::bigint))", "remote_scan.l_quantity"],
       "Plans": [
         {
           "Node Type": "Aggregate",
           "Strategy": "Hashed",
           "Partial Mode": "Simple",
+          "Parent Relationship": "Outer",
           "Parallel Aware": false,
+          "Async Capable": false,
           "Group Key": ["remote_scan.l_quantity"],
           "Plans": [
             {
               "Node Type": "Custom Scan",
+              "Parent Relationship": "Outer",
               "Custom Plan Provider": "Citus Adaptive",
               "Parallel Aware": false,
+              "Async Capable": false,
               "Distributed Query": {
                 "Job": {
                   "Task Count": 2,
@@ -126,11 +131,14 @@ EXPLAIN (COSTS FALSE, FORMAT JSON)
                               "Strategy": "Hashed",
                               "Partial Mode": "Simple",
                               "Parallel Aware": false,
+                              "Async Capable": false,
                               "Group Key": ["l_quantity"],
                               "Plans": [
                                 {
                                   "Node Type": "Seq Scan",
+                                  "Parent Relationship": "Outer",
                                   "Parallel Aware": false,
+                                  "Async Capable": false,
                                   "Relation Name": "lineitem_360000",
                                   "Alias": "lineitem"
                                 }
@@ -172,6 +180,7 @@ EXPLAIN (COSTS FALSE, FORMAT XML)
     <Plan>
       <Node-Type>Sort</Node-Type>
       <Parallel-Aware>false</Parallel-Aware>
+      <Async-Capable>false</Async-Capable>
       <Sort-Key>
         <Item>(COALESCE((pg_catalog.sum(remote_scan.count_quantity))::bigint, '0'::bigint))</Item>
         <Item>remote_scan.l_quantity</Item>
@@ -181,15 +190,19 @@ EXPLAIN (COSTS FALSE, FORMAT XML)
           <Node-Type>Aggregate</Node-Type>
           <Strategy>Hashed</Strategy>
           <Partial-Mode>Simple</Partial-Mode>
+          <Parent-Relationship>Outer</Parent-Relationship>
           <Parallel-Aware>false</Parallel-Aware>
+          <Async-Capable>false</Async-Capable>
           <Group-Key>
             <Item>remote_scan.l_quantity</Item>
           </Group-Key>
           <Plans>
             <Plan>
               <Node-Type>Custom Scan</Node-Type>
+              <Parent-Relationship>Outer</Parent-Relationship>
               <Custom-Plan-Provider>Citus Adaptive</Custom-Plan-Provider>
               <Parallel-Aware>false</Parallel-Aware>
+              <Async-Capable>false</Async-Capable>
               <Distributed-Query>
                 <Job>
                   <Task-Count>2</Task-Count>
@@ -205,13 +218,16 @@ EXPLAIN (COSTS FALSE, FORMAT XML)
                               <Strategy>Hashed</Strategy>
                               <Partial-Mode>Simple</Partial-Mode>
                               <Parallel-Aware>false</Parallel-Aware>
+                              <Async-Capable>false</Async-Capable>
                               <Group-Key>
                                 <Item>l_quantity</Item>
                               </Group-Key>
                               <Plans>
                                 <Plan>
                                   <Node-Type>Seq Scan</Node-Type>
+                                  <Parent-Relationship>Outer</Parent-Relationship>
                                   <Parallel-Aware>false</Parallel-Aware>
+                                  <Async-Capable>false</Async-Capable>
                                   <Relation-Name>lineitem_360000</Relation-Name>
                                   <Alias>lineitem</Alias>
                                 </Plan>
@@ -250,6 +266,7 @@ EXPLAIN (COSTS FALSE, FORMAT YAML)
 - Plan:
     Node Type: "Sort"
     Parallel Aware: false
+    Async Capable: false
     Sort Key:
       - "(COALESCE((pg_catalog.sum(remote_scan.count_quantity))::bigint, '0'::bigint))"
       - "remote_scan.l_quantity"
@@ -257,13 +274,17 @@ EXPLAIN (COSTS FALSE, FORMAT YAML)
       - Node Type: "Aggregate"
         Strategy: "Hashed"
         Partial Mode: "Simple"
+        Parent Relationship: "Outer"
         Parallel Aware: false
+        Async Capable: false
         Group Key:
           - "remote_scan.l_quantity"
         Plans:
           - Node Type: "Custom Scan"
+            Parent Relationship: "Outer"
             Custom Plan Provider: "Citus Adaptive"
             Parallel Aware: false
+            Async Capable: false
             Distributed Query:
               Job:
                 Task Count: 2
@@ -276,11 +297,14 @@ EXPLAIN (COSTS FALSE, FORMAT YAML)
                           Strategy: "Hashed"
                           Partial Mode: "Simple"
                           Parallel Aware: false
+                          Async Capable: false
                           Group Key:
                             - "l_quantity"
                           Plans:
                             - Node Type: "Seq Scan"
+                              Parent Relationship: "Outer"
                               Parallel Aware: false
+                              Async Capable: false
                               Relation Name: "lineitem_360000"
                               Alias: "lineitem"
 
@@ -1135,11 +1159,14 @@ EXPLAIN (COSTS FALSE, FORMAT JSON)
       "Strategy": "Plain",
       "Partial Mode": "Simple",
       "Parallel Aware": false,
+      "Async Capable": false,
       "Plans": [
         {
           "Node Type": "Custom Scan",
+          "Parent Relationship": "Outer",
           "Custom Plan Provider": "Citus Adaptive",
           "Parallel Aware": false,
+          "Async Capable": false,
           "Distributed Query": {
             "Job": {
               "Task Count": 6,
@@ -1191,11 +1218,14 @@ EXPLAIN (COSTS FALSE, FORMAT XML)
       <Strategy>Plain</Strategy>
       <Partial-Mode>Simple</Partial-Mode>
       <Parallel-Aware>false</Parallel-Aware>
+      <Async-Capable>false</Async-Capable>
       <Plans>
         <Plan>
           <Node-Type>Custom Scan</Node-Type>
+          <Parent-Relationship>Outer</Parent-Relationship>
           <Custom-Plan-Provider>Citus Adaptive</Custom-Plan-Provider>
           <Parallel-Aware>false</Parallel-Aware>
+          <Async-Capable>false</Async-Capable>
           <Distributed-Query>
             <Job>
               <Task-Count>6</Task-Count>
@@ -1258,10 +1288,13 @@ EXPLAIN (COSTS FALSE, FORMAT YAML)
     Strategy: "Plain"
     Partial Mode: "Simple"
     Parallel Aware: false
+    Async Capable: false
     Plans:
       - Node Type: "Custom Scan"
+        Parent Relationship: "Outer"
         Custom Plan Provider: "Citus Adaptive"
         Parallel Aware: false
+        Async Capable: false
         Distributed Query:
           Job:
             Task Count: 6
@@ -1684,6 +1717,7 @@ SELECT explain_analyze_output FROM worker_last_saved_explain_analyze();
      "Plan": {                 +
        "Node Type": "Result",  +
        "Parallel Aware": false,+
+       "Async Capable": false, +
        "Actual Rows": 1,       +
        "Actual Loops": 1       +
      },                        +
@@ -1707,6 +1741,7 @@ SELECT explain_analyze_output FROM worker_last_saved_explain_analyze();
      <Plan>                                              +
        <Node-Type>Result</Node-Type>                     +
        <Parallel-Aware>false</Parallel-Aware>            +
+       <Async-Capable>false</Async-Capable>              +
        <Actual-Rows>1</Actual-Rows>                      +
        <Actual-Loops>1</Actual-Loops>                    +
      </Plan>                                             +
@@ -1728,6 +1763,7 @@ SELECT explain_analyze_output FROM worker_last_saved_explain_analyze();
  - Plan:                  +
      Node Type: "Result"  +
      Parallel Aware: false+
+     Async Capable: false +
      Actual Rows: 1       +
      Actual Loops: 1      +
    Triggers:
@@ -2115,6 +2151,7 @@ EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT JSON) INSERT INT
       "Node Type": "Custom Scan",
       "Custom Plan Provider": "Citus Adaptive",
       "Parallel Aware": false,
+      "Async Capable": false,
       "Actual Rows": 0,
       "Actual Loops": 1,
       "Distributed Query": {
@@ -2131,6 +2168,7 @@ EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT JSON) INSERT INT
                       "Node Type": "ModifyTable",
                       "Operation": "Insert",
                       "Parallel Aware": false,
+                      "Async Capable": false,
                       "Relation Name": "explain_pk_570013",
                       "Alias": "citus_table_alias",
                       "Actual Rows": 0,
@@ -2138,7 +2176,9 @@ EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT JSON) INSERT INT
                       "Plans": [
                         {
                           "Node Type": "Result",
+                          "Parent Relationship": "Outer",
                           "Parallel Aware": false,
+                          "Async Capable": false,
                           "Actual Rows": 1,
                           "Actual Loops": 1
                         }
@@ -2167,6 +2207,7 @@ EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT JSON) SELECT * F
       "Node Type": "Custom Scan",
       "Custom Plan Provider": "Citus Adaptive",
       "Parallel Aware": false,
+      "Async Capable": false,
       "Actual Rows": 0,
       "Actual Loops": 1,
       "Distributed Query": {
@@ -2184,6 +2225,7 @@ EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT JSON) SELECT * F
                     "Plan": {
                       "Node Type": "Seq Scan",
                       "Parallel Aware": false,
+                      "Async Capable": false,
                       "Relation Name": "explain_pk_570013",
                       "Alias": "explain_pk",
                       "Actual Rows": 0,
@@ -2212,6 +2254,7 @@ EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT XML) INSERT INTO
       <Node-Type>Custom Scan</Node-Type>
       <Custom-Plan-Provider>Citus Adaptive</Custom-Plan-Provider>
       <Parallel-Aware>false</Parallel-Aware>
+      <Async-Capable>false</Async-Capable>
       <Actual-Rows>0</Actual-Rows>
       <Actual-Loops>1</Actual-Loops>
       <Distributed-Query>
@@ -2228,6 +2271,7 @@ EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT XML) INSERT INTO
                       <Node-Type>ModifyTable</Node-Type>
                       <Operation>Insert</Operation>
                       <Parallel-Aware>false</Parallel-Aware>
+                      <Async-Capable>false</Async-Capable>
                       <Relation-Name>explain_pk_570013</Relation-Name>
                       <Alias>citus_table_alias</Alias>
                       <Actual-Rows>0</Actual-Rows>
@@ -2235,7 +2279,9 @@ EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT XML) INSERT INTO
                       <Plans>
                         <Plan>
                           <Node-Type>Result</Node-Type>
+                          <Parent-Relationship>Outer</Parent-Relationship>
                           <Parallel-Aware>false</Parallel-Aware>
+                          <Async-Capable>false</Async-Capable>
                           <Actual-Rows>1</Actual-Rows>
                           <Actual-Loops>1</Actual-Loops>
                         </Plan>
@@ -2263,6 +2309,7 @@ EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT XML) SELECT * FR
       <Node-Type>Custom Scan</Node-Type>
       <Custom-Plan-Provider>Citus Adaptive</Custom-Plan-Provider>
       <Parallel-Aware>false</Parallel-Aware>
+      <Async-Capable>false</Async-Capable>
       <Actual-Rows>0</Actual-Rows>
       <Actual-Loops>1</Actual-Loops>
       <Distributed-Query>
@@ -2280,6 +2327,7 @@ EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT XML) SELECT * FR
                     <Plan>
                       <Node-Type>Seq Scan</Node-Type>
                       <Parallel-Aware>false</Parallel-Aware>
+                      <Async-Capable>false</Async-Capable>
                       <Relation-Name>explain_pk_570013</Relation-Name>
                       <Alias>explain_pk</Alias>
                       <Actual-Rows>0</Actual-Rows>

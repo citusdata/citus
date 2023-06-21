@@ -664,7 +664,7 @@ IsProcessWaitingForSafeOperations(PGPROC *proc)
 		return false;
 	}
 
-	if (pgproc_statusflags_compat(proc) & PROC_IS_AUTOVACUUM)
+	if (proc->statusFlags & PROC_IS_AUTOVACUUM)
 	{
 		return true;
 	}

@@ -1023,7 +1023,7 @@ IsParentTable(Oid relationId)
 Oid
 PartitionParentOid(Oid partitionOid)
 {
-	Oid partitionParentOid = get_partition_parent_compat(partitionOid, false);
+	Oid partitionParentOid = get_partition_parent(partitionOid, false);
 
 	return partitionParentOid;
 }
@@ -1074,7 +1074,7 @@ PartitionList(Oid parentRelationId)
 
 		ereport(ERROR, (errmsg("\"%s\" is not a parent table", relationName)));
 	}
-	PartitionDesc partDesc = RelationGetPartitionDesc_compat(rel, true);
+	PartitionDesc partDesc = RelationGetPartitionDesc(rel, true);
 	Assert(partDesc != NULL);
 
 	int partitionCount = partDesc->nparts;
@@ -1107,7 +1107,7 @@ GenerateDetachPartitionCommand(Oid partitionTableId)
 		ereport(ERROR, (errmsg("\"%s\" is not a partition", relationName)));
 	}
 
-	Oid parentId = get_partition_parent_compat(partitionTableId, false);
+	Oid parentId = get_partition_parent(partitionTableId, false);
 	char *tableQualifiedName = generate_qualified_relation_name(partitionTableId);
 	char *parentTableQualifiedName = generate_qualified_relation_name(parentId);
 
@@ -1221,7 +1221,7 @@ GenerateAlterTableAttachPartitionCommand(Oid partitionTableId)
 		ereport(ERROR, (errmsg("\"%s\" is not a partition", relationName)));
 	}
 
-	Oid parentId = get_partition_parent_compat(partitionTableId, false);
+	Oid parentId = get_partition_parent(partitionTableId, false);
 	char *tableQualifiedName = generate_qualified_relation_name(partitionTableId);
 	char *parentTableQualifiedName = generate_qualified_relation_name(parentId);
 

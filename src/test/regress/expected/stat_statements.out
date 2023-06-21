@@ -2,12 +2,7 @@
 -- stat_statements
 --
 -- tests citus_stat_statements functionality
-SHOW server_version \gset
-SELECT substring(:'server_version', '\d+')::int >= 14 AS server_version_ge_14
-\gset
-\if :server_version_ge_14
 SET compute_query_id = 'on';
-\endif
 -- check if pg_stat_statements is available
 SELECT name FROM pg_available_extensions WHERE name = 'pg_stat_statements';
         name
@@ -72,11 +67,7 @@ select query, calls from citus_stat_statements();
  insert into test values($1) |     1
 (1 row)
 
-\if :server_version_ge_14
 SET compute_query_id = 'off';
-\else
-set citus.stat_statements_track = 'none';
-\endif
 -- for pg >= 14, since compute_query_id is off, this insert
 -- shouldn't be tracked
 -- for pg < 14, we disable it explicitly so that we don't need
@@ -88,11 +79,7 @@ select query, calls from citus_stat_statements();
  insert into test values($1) |     1
 (1 row)
 
-\if :server_version_ge_14
 SET compute_query_id = 'on';
-\else
-RESET citus.stat_statements_track;
-\endif
 SELECT citus_stat_statements_reset();
  citus_stat_statements_reset
 ---------------------------------------------------------------------
@@ -646,6 +633,4 @@ CONTEXT:  PL/pgSQL function citus_stat_statements() line XX at RAISE
 -- drop created tables
 DROP TABLE stat_test_text, stat_test_bigint, stat_test_bigint_other, stat_test_reference;
 DROP FUNCTION normalize_query_string(text);
-\if :server_version_ge_14
 SET compute_query_id = 'off';
-\endif

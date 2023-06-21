@@ -152,10 +152,8 @@ static List * ExtractInsertValuesList(Query *query, Var *partitionColumn);
 static DeferredErrorMessage * DeferErrorIfUnsupportedRouterPlannableSelectQuery(
 	Query *query);
 static DeferredErrorMessage * ErrorIfQueryHasUnroutableModifyingCTE(Query *queryTree);
-#if PG_VERSION_NUM >= PG_VERSION_14
 static DeferredErrorMessage * ErrorIfQueryHasCTEWithSearchClause(Query *queryTree);
 static bool ContainsSearchClauseWalker(Node *node, void *context);
-#endif
 static bool SelectsFromDistributedTable(List *rangeTableList, Query *query);
 static ShardPlacement * CreateDummyPlacement(bool hasLocalRelation);
 static ShardPlacement * CreateLocalDummyPlacement();
@@ -1118,14 +1116,12 @@ ModifyQuerySupported(Query *queryTree, Query *originalQuery, bool multiShardQuer
 		}
 	}
 
-#if PG_VERSION_NUM >= PG_VERSION_14
 	DeferredErrorMessage *CTEWithSearchClauseError =
 		ErrorIfQueryHasCTEWithSearchClause(originalQuery);
 	if (CTEWithSearchClauseError != NULL)
 	{
 		return CTEWithSearchClauseError;
 	}
-#endif
 
 	return NULL;
 }
@@ -3758,14 +3754,12 @@ DeferErrorIfUnsupportedRouterPlannableSelectQuery(Query *query)
 							 NULL, NULL);
 	}
 
-#if PG_VERSION_NUM >= PG_VERSION_14
 	DeferredErrorMessage *CTEWithSearchClauseError =
 		ErrorIfQueryHasCTEWithSearchClause(query);
 	if (CTEWithSearchClauseError != NULL)
 	{
 		return CTEWithSearchClauseError;
 	}
-#endif
 
 	return ErrorIfQueryHasUnroutableModifyingCTE(query);
 }
@@ -3900,8 +3894,6 @@ ErrorIfQueryHasUnroutableModifyingCTE(Query *queryTree)
 }
 
 
-#if PG_VERSION_NUM >= PG_VERSION_14
-
 /*
  * ErrorIfQueryHasCTEWithSearchClause checks if the query contains any common table
  * expressions with search clause and errors out if it does.
@@ -3946,9 +3938,6 @@ ContainsSearchClauseWalker(Node *node, void *context)
 
 	return expression_tree_walker(node, ContainsSearchClauseWalker, NULL);
 }
-
-
-#endif
 
 
 /*

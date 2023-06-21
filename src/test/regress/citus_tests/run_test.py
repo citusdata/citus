@@ -166,6 +166,7 @@ DEPS = {
             "multi_table_ddl",
         ],
     ),
+    "grant_on_schema_propagation": TestDeps("minimal_schedule"),
 }
 
 

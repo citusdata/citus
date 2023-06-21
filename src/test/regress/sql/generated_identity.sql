@@ -1,7 +1,3 @@
--- This test file has an alternative output because of error messages vary for PG13
-SHOW server_version \gset
-SELECT substring(:'server_version', '\d+')::int <= 13 AS server_version_le_13;
-
 CREATE SCHEMA generated_identities;
 SET search_path TO generated_identities;
 SET client_min_messages to ERROR;

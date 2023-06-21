@@ -1855,11 +1855,7 @@ MasterAggregateExpression(Aggref *originalAggregate,
 		{
 			/* array_cat_agg() takes anyarray as input */
 			catAggregateName = ARRAY_CAT_AGGREGATE_NAME;
-#if PG_VERSION_NUM >= PG_VERSION_14
 			catInputType = ANYCOMPATIBLEARRAYOID;
-#else
-			catInputType = ANYARRAYOID;
-#endif
 		}
 		else if (aggregateType == AGGREGATE_JSONB_AGG ||
 				 aggregateType == AGGREGATE_JSONB_OBJECT_AGG)
@@ -1897,8 +1893,6 @@ MasterAggregateExpression(Aggref *originalAggregate,
 
 		if (aggregateType == AGGREGATE_ARRAY_AGG)
 		{
-#if PG_VERSION_NUM >= PG_VERSION_14
-
 			/*
 			 * Postgres expects the type of the array here such as INT4ARRAYOID.
 			 * Hence we set it to workerReturnType. If we set this to
@@ -1906,9 +1900,6 @@ MasterAggregateExpression(Aggref *originalAggregate,
 			 * "argument declared anycompatiblearray is not an array but type anycompatiblearray"
 			 */
 			newMasterAggregate->aggargtypes = list_make1_oid(workerReturnType);
-#else
-			newMasterAggregate->aggargtypes = list_make1_oid(ANYARRAYOID);
-#endif
 		}
 		else
 		{
@@ -3625,8 +3616,8 @@ static Oid
 CitusFunctionOidWithSignature(char *functionName, int numargs, Oid *argtypes)
 {
 	List *aggregateName = list_make2(makeString("pg_catalog"), makeString(functionName));
-	FuncCandidateList clist = FuncnameGetCandidates_compat(aggregateName, numargs, NIL,
-														   false, false, false, true);
+	FuncCandidateList clist = FuncnameGetCandidates(aggregateName, numargs, NIL,
+													false, false, false, true);
 
 	for (; clist; clist = clist->next)
 	{

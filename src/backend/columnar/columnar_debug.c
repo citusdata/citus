@@ -159,5 +159,5 @@ MemoryContextTotals(MemoryContext context, MemoryContextCounters *counters)
 		MemoryContextTotals(child, counters);
 	}
 
-	context->methods->stats_compat(context, NULL, NULL, counters, true);
+	context->methods->stats(context, NULL, NULL, counters, true);
 }

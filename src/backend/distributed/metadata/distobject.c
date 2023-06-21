@@ -85,12 +85,12 @@ citus_unmark_object_distributed(PG_FUNCTION_ARGS)
 	{
 		ereport(ERROR, (errmsg("object still exists"),
 						errdetail("the %s \"%s\" still exists",
-								  getObjectTypeDescription_compat(&address,
+								  getObjectTypeDescription(&address,
 
-		                                                          /* missingOk: */ false),
-								  getObjectIdentity_compat(&address,
+		                                                   /* missingOk: */ false),
+								  getObjectIdentity(&address,
 
-		                                                   /* missingOk: */ false)),
+		                                            /* missingOk: */ false)),
 						errhint("drop the object via a DROP command")));
 	}
 

@@ -353,7 +353,4 @@ extern bool CitusModifyWaitEvent(WaitEventSet *set, int pos, uint32 events,
 extern double MillisecondsPassedSince(instr_time moment);
 extern long MillisecondsToTimeout(instr_time start, long msAfterStart);
 
-#if PG_VERSION_NUM < 140000
-extern void WarmUpConnParamsHash(void);
-#endif
 #endif /* CONNECTION_MANAGMENT_H */
