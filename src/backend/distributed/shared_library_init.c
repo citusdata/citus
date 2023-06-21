@@ -2473,12 +2473,12 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 
-	DefineCustomIntVariable(
+	DefineCustomRealVariable(
 		"citus.stat_tenants_sample_rate_for_new_tenants",
 		gettext_noop("Sampling rate for new tenants in citus_stat_tenants."),
 		NULL,
 		&StatTenantsSampleRateForNewTenants,
-		100, 1, 100,
+		1, 0, 1,
 		PGC_USERSET,
 		GUC_STANDARD,
 		NULL, NULL, NULL);

@@ -12,6 +12,7 @@
 #include "unistd.h"
 
 #include "access/hash.h"
+#include "common/pg_prng.h"
 #include "distributed/citus_safe_lib.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/distributed_planner.h"
@@ -80,7 +81,7 @@ int StatTenantsLogLevel = CITUS_LOG_LEVEL_OFF;
 int StatTenantsPeriod = (time_t) 60;
 int StatTenantsLimit = 100;
 int StatTenantsTrack = STAT_TENANTS_TRACK_NONE;
-int StatTenantsSampleRateForNewTenants = 100;
+double StatTenantsSampleRateForNewTenants = 1;
 
 PG_FUNCTION_INFO_V1(citus_stat_tenants_local);
 PG_FUNCTION_INFO_V1(citus_stat_tenants_local_reset);
@@ -292,7 +293,8 @@ AttributeTask(char *tenantId, int colocationId, CmdType commandType)
 	/* If the tenant is not found in the hash table, we will track the query with a probability of StatTenantsSampleRateForNewTenants. */
 	if (!found)
 	{
-		int randomValue = rand() % 100;
+		double randomValue = pg_prng_double(&pg_global_prng_state);
+
 		bool shouldTrackQuery = randomValue < StatTenantsSampleRateForNewTenants;
 		if (!shouldTrackQuery)
 		{
