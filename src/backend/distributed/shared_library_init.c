@@ -2271,6 +2271,16 @@ RegisterCitusConfigVariables(void)
 		GUC_UNIT_KB | GUC_STANDARD,
 		NULL, NULL, NULL);
 
+	DefineCustomRealVariable(
+		"citus.tenant_freq",
+		gettext_noop("Sets the threshold tenant frequency for a Shard"),
+		NULL,
+		&TenantFrequency,
+		0.2, 0, 1,
+		PGC_USERSET,
+		GUC_STANDARD,
+		NULL, NULL, NULL);
+
 	DefineCustomIntVariable(
 		"citus.shard_replication_factor",
 		gettext_noop("Sets the replication factor for shards."),

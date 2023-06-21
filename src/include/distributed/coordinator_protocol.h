@@ -214,7 +214,8 @@ extern int ShardCount;
 extern int ShardReplicationFactor;
 extern int NextShardId;
 extern int NextPlacementId;
-extern int MaxShardSize;
+extern uint64 MaxShardSize;
+extern double TenantFrequency;
 
 
 extern bool IsCoordinator(void);
