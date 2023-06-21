@@ -109,7 +109,7 @@ ERROR:  relation "tenant_2.test_table2" does not exist
 -- verify we can set regular table's schema to distributed schema
 CREATE TABLE regular_schema.test_table3(id int);
 ALTER TABLE regular_schema.test_table3 SET SCHEMA tenant_2;
-NOTICE:  converting table test_table3 to a tenant table in distributed schema tenant_2
+NOTICE:  Moving test_table3 into distributed schema tenant_2
 -- verify that tenant_2.test_table3 is recorded in pg_dist_partition as a single-shard table.
 SELECT COUNT(*)=1 FROM pg_dist_partition
 WHERE logicalrelid = 'tenant_2.test_table3'::regclass AND
@@ -126,7 +126,7 @@ ERROR:  relation "regular_schema.test_table3" does not exist
 CREATE TABLE tenant_2.test_table4(id int);
 ALTER TABLE tenant_2.test_table4 SET SCHEMA tenant_3;
 NOTICE:  undistributing table test_table4 in distributed schema tenant_2 before altering its schema
-NOTICE:  converting table test_table4 to a tenant table in distributed schema tenant_3
+NOTICE:  Moving test_table4 into distributed schema tenant_3
 -- verify that tenant_3.test_table4 is recorded in pg_dist_partition as a single-shard table.
 SELECT COUNT(*)=1 FROM pg_dist_partition
 WHERE logicalrelid = 'tenant_3.test_table4'::regclass AND
@@ -142,7 +142,7 @@ ERROR:  relation "tenant_2.test_table4" does not exist
 -- verify that we can put a local table in regular schema into distributed schema
 CREATE TABLE regular_schema.pg_local_tbl(id int);
 ALTER TABLE regular_schema.pg_local_tbl SET SCHEMA tenant_2;
-NOTICE:  converting table pg_local_tbl to a tenant table in distributed schema tenant_2
+NOTICE:  Moving pg_local_tbl into distributed schema tenant_2
 -- verify that we can put a Citus local table in regular schema into distributed schema
 CREATE TABLE regular_schema.citus_local_tbl(id int);
 SELECT citus_add_local_table_to_metadata('regular_schema.citus_local_tbl');
@@ -152,7 +152,7 @@ SELECT citus_add_local_table_to_metadata('regular_schema.citus_local_tbl');
 (1 row)
 
 ALTER TABLE regular_schema.citus_local_tbl SET SCHEMA tenant_2;
-NOTICE:  converting table citus_local_tbl to a tenant table in distributed schema tenant_2
+NOTICE:  Moving citus_local_tbl into distributed schema tenant_2
 -- verify that we do not allow a hash distributed table in regular schema into distributed schema
 CREATE TABLE regular_schema.hash_dist_tbl(id int);
 SELECT create_distributed_table('regular_schema.hash_dist_tbl', 'id');
@@ -183,7 +183,7 @@ NOTICE:  undistributing table tenant_tbl in distributed schema tenant_2 before a
 CREATE TABLE tenant_2.tenant_tbl2(id int);
 ALTER TABLE tenant_2.tenant_tbl2 SET SCHEMA tenant_3;
 NOTICE:  undistributing table tenant_tbl2 in distributed schema tenant_2 before altering its schema
-NOTICE:  converting table tenant_tbl2 to a tenant table in distributed schema tenant_3
+NOTICE:  Moving tenant_tbl2 into distributed schema tenant_3
 -- verify that we do not allow a local table in regular schema into distributed schema if it has foreign key to a non-reference table in another schema
 CREATE TABLE regular_schema.pg_local_tbl1(id int PRIMARY KEY);
 CREATE TABLE regular_schema.pg_local_tbl2(id int REFERENCES regular_schema.pg_local_tbl1(id));
@@ -193,7 +193,7 @@ DETAIL:  "tenant_2.pg_local_tbl2" references "regular_schema.pg_local_tbl1" via 
 -- verify that we allow a local table in regular schema into distributed schema if it has foreign key to a reference table in another schema
 CREATE TABLE regular_schema.pg_local_tbl3(id int REFERENCES regular_schema.ref_tbl(id));
 ALTER TABLE regular_schema.pg_local_tbl3 SET SCHEMA tenant_2;
-NOTICE:  converting table pg_local_tbl3 to a tenant table in distributed schema tenant_2
+NOTICE:  Moving pg_local_tbl3 into distributed schema tenant_2
 -- verify that we do not allow a table in tenant schema into regular schema if it has foreign key to/from another table in the same schema
 CREATE TABLE tenant_2.tenant_tbl1(id int PRIMARY KEY);
 CREATE TABLE tenant_2.tenant_tbl2(id int REFERENCES tenant_2.tenant_tbl1(id));
@@ -550,7 +550,7 @@ CREATE TABLE tenant_4.employees OF employee_type (
     PRIMARY KEY (name),
     salary WITH OPTIONS DEFAULT 1000
 );
-ERROR:  cannot create a tenant table by using CREATE TABLE OF syntax
+ERROR:  cannot create tables in a distributed schema using CREATE TABLE OF syntax
 -- verify that we act accordingly when if not exists is used
 CREATE TABLE IF NOT EXISTS tenant_4.tbl_6(a int, b text);
 CREATE TABLE IF NOT EXISTS tenant_4.tbl_6(a int, b text);
@@ -614,18 +614,18 @@ WHERE logicalrelid = 'regular_schema.local_table_using_like'::regclass;
 
 -- verify that INHERITS syntax is not supported when creating a tenant table
 CREATE TABLE tenant_5.test_table_inherits_1(x int) INHERITS (tenant_5.tbl_1); -- using a table from the same schema
-ERROR:  tenant tables cannot inherit or be inherited
+ERROR:  tables in a distributed schema cannot inherit or be inherited
 CREATE TABLE tenant_5.test_table_inherits_2(x int) INHERITS (tenant_4.tbl_1); -- using a table from another schema
-ERROR:  tenant tables cannot inherit or be inherited
+ERROR:  tables in a distributed schema cannot inherit or be inherited
 CREATE TABLE tenant_5.test_table_inherits_3(x int) INHERITS (regular_schema.local); -- using a local table
-ERROR:  tenant tables cannot inherit or be inherited
+ERROR:  tables in a distributed schema cannot inherit or be inherited
 CREATE TABLE tenant_5.test_table_inherits_4(x int) INHERITS (regular_schema.citus_local); -- using a citus local table
-ERROR:  tenant tables cannot inherit or be inherited
+ERROR:  tables in a distributed schema cannot inherit or be inherited
 CREATE TABLE tenant_5.test_table_inherits_5(x int) INHERITS (regular_schema.dist); -- using a distributed table
-ERROR:  tenant tables cannot inherit or be inherited
+ERROR:  tables in a distributed schema cannot inherit or be inherited
 -- verify that INHERITS syntax is not supported when creating a local table based on a tenant table
 CREATE TABLE regular_schema.local_table_using_inherits(x int) INHERITS (tenant_5.tbl_1);
-ERROR:  tenant tables cannot inherit or be inherited
+ERROR:  tables in a distributed schema cannot inherit or be inherited
 CREATE TABLE tenant_5.tbl_2(a int, b text);
 CREATE SCHEMA "CiTuS.TeeN_108";
 ALTER SCHEMA "CiTuS.TeeN_108" RENAME TO citus_teen_proper;
@@ -814,8 +814,8 @@ $$);
 CREATE TABLE regular_schema.null_shard_key_1(a int, b text);
 SELECT create_distributed_table('regular_schema.null_shard_key_1', null, colocate_with => 'tenant_5.tbl_2');
 ERROR:  cannot colocate tables tbl_2 and null_shard_key_1
-DETAIL:  Cannot colocate tables with tenant tables by using colocate_with option.
-HINT:  Consider using "CREATE TABLE" statement to create this table as a tenant table in the same schema to automatically colocate it with tenant_5.tbl_2
+DETAIL:  Cannot colocate tables with distributed schema tables by using colocate_with option.
+HINT:  Consider using "CREATE TABLE" statement to create this table as a single-shard distributed table in the same schema to automatically colocate it with tenant_5.tbl_2
 SELECT create_distributed_table('regular_schema.null_shard_key_1', 'a', colocate_with => 'tenant_5.tbl_2');
 ERROR:  cannot colocate tables tbl_2 and null_shard_key_1
 DETAIL:  Distribution column types don't match for tbl_2 and null_shard_key_1.
