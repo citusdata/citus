@@ -95,10 +95,11 @@ PostprocessCreateSchemaStmt(Node *node, const char *queryString)
 		if (CreateSchemaStmtCreatesTable(createSchemaStmt))
 		{
 			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							errmsg("cannot create tenant table in CREATE "
-								   "SCHEMA statement"),
-							errhint("Use CREATE TABLE statement to create "
-									"tenant tables.")));
+							errmsg("cannot create distributed schema and table in a "
+								   "single statement"),
+							errhint("SET citus.enable_schema_based_sharding TO off, "
+									"or create the schema and table in separate "
+									"commands.")));
 		}
 
 		/*
