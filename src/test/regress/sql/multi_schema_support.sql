@@ -803,6 +803,9 @@ ALTER TABLE IF EXISTS non_existent_table SET SCHEMA non_existent_schema;
 DROP SCHEMA existing_schema, another_existing_schema CASCADE;
 
 
+-- test DROP SCHEMA with nonexisting schemas
+DROP SCHEMA ax, bx, cx, dx, ex, fx, gx, jx;
+
 -- test ALTER TABLE SET SCHEMA with interesting names
 CREATE SCHEMA "cItuS.T E E N'sSchema";
 CREATE SCHEMA "citus-teen's scnd schm.";
@@ -970,6 +973,7 @@ SET client_min_messages TO WARNING;
 
 SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM pg_catalog.pg_dist_object
     WHERE classid=2615 and objid IN (select oid from pg_namespace where nspname='run_test_schema');
+DROP TABLE public.nation_local;
 DROP SCHEMA run_test_schema, test_schema_support_join_1, test_schema_support_join_2, "Citus'Teen123", "CiTUS.TEEN2", bar, test_schema_support CASCADE;
 -- verify that the dropped schema is removed from worker's pg_dist_object
 SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM pg_catalog.pg_dist_object
