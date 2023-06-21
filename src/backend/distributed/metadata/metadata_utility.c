@@ -85,8 +85,7 @@ static uint64 * AllocateUint64(uint64 value);
 static void RecordDistributedRelationDependencies(Oid distributedRelationId);
 static GroupShardPlacement * TupleToGroupShardPlacement(TupleDesc tupleDesc,
 														HeapTuple heapTuple);
-static bool DistributedTableSize(Oid relationId, SizeQueryType sizeQueryType,
-								 bool failOnError, uint64 *tableSize);
+
 static bool DistributedTableSizeOnWorker(WorkerNode *workerNode, Oid relationId,
 										 SizeQueryType sizeQueryType, bool failOnError,
 										 uint64 *tableSize);
@@ -510,7 +509,7 @@ ReceiveShardNameAndSizeResults(List *connectionList, Tuplestorestate *tupleStore
  * It first checks whether the table is distributed and size query can be run on
  * it. Connection to each node has to be established to get the size of the table.
  */
-static bool
+bool
 DistributedTableSize(Oid relationId, SizeQueryType sizeQueryType, bool failOnError,
 					 uint64 *tableSize)
 {

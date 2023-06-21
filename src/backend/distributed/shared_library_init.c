@@ -2276,7 +2276,7 @@ RegisterCitusConfigVariables(void)
 		gettext_noop("Sets the threshold tenant frequency for a Shard"),
 		NULL,
 		&TenantFrequency,
-		0.2, 0, 1,
+		0.3, 0, 1,
 		PGC_USERSET,
 		GUC_STANDARD,
 		NULL, NULL, NULL);

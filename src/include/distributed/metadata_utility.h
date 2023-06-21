@@ -411,4 +411,6 @@ extern bool IsBackgroundJobStatusTerminal(BackgroundJobStatus status);
 extern bool IsBackgroundTaskStatusTerminal(BackgroundTaskStatus status);
 extern Oid BackgroundJobStatusOid(BackgroundJobStatus status);
 extern Oid BackgroundTaskStatusOid(BackgroundTaskStatus status);
+extern bool DistributedTableSize(Oid relationId, SizeQueryType sizeQueryType,
+								 bool failOnError, uint64 *tableSize);
 #endif   /* METADATA_UTILITY_H */
