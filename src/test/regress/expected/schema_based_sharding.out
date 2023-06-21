@@ -314,8 +314,8 @@ WHERE schemaid::regnamespace::text IN ('tenant_1', 'tenant_2');
 
 -- verify that we don't allow creating tenant tables via CREATE SCHEMA command
 CREATE SCHEMA schema_using_schema_elements CREATE TABLE test_table(a int, b text);
-ERROR:  cannot create tenant table in CREATE SCHEMA statement
-HINT:  Use CREATE TABLE statement to create tenant tables.
+ERROR:  cannot create distributed schema and table in a single statement
+HINT:  SET citus.enable_schema_based_sharding TO off, or create the schema and table in separate commands.
 CREATE SCHEMA tenant_4;
 CREATE TABLE tenant_4.tbl_1(a int, b text);
 CREATE TABLE tenant_4.tbl_2(a int, b text);
