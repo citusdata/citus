@@ -9,6 +9,7 @@
 #include "postgres.h"
 #include "miscadmin.h"
 
+#include "access/xact.h"
 #include "catalog/namespace.h"
 #include "catalog/pg_aggregate.h"
 #include "catalog/pg_am.h"
