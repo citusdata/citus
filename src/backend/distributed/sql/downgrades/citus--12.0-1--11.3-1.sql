@@ -47,6 +47,9 @@ DROP FUNCTION pg_catalog.citus_internal_unregister_tenant_schema_globally(Oid, t
 DROP VIEW IF EXISTS public.citus_schemas;
 DROP VIEW IF EXISTS pg_catalog.citus_schemas;
 
+DROP VIEW IF EXISTS public.citus_tables;
+DROP VIEW IF EXISTS pg_catalog.citus_tables;
+
 DROP VIEW pg_catalog.citus_shards;
 DROP FUNCTION pg_catalog.citus_shard_sizes;
 #include "../udfs/citus_shard_sizes/10.0-1.sql"
