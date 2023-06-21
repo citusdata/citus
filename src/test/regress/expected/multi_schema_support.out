@@ -1095,6 +1095,9 @@ ALTER TABLE IF EXISTS non_existent_table SET SCHEMA non_existent_schema;
 NOTICE:  relation "non_existent_table" does not exist, skipping
 DROP SCHEMA existing_schema, another_existing_schema CASCADE;
 NOTICE:  drop cascades to table existing_schema.table_set_schema
+-- test DROP SCHEMA with nonexisting schemas
+DROP SCHEMA ax, bx, cx, dx, ex, fx, gx, jx;
+ERROR:  schema "ax" does not exist
 -- test ALTER TABLE SET SCHEMA with interesting names
 CREATE SCHEMA "cItuS.T E E N'sSchema";
 CREATE SCHEMA "citus-teen's scnd schm.";
@@ -1361,6 +1364,7 @@ SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM pg_catalog.p
  (schema,{run_test_schema},{})
 (1 row)
 
+DROP TABLE public.nation_local;
 DROP SCHEMA run_test_schema, test_schema_support_join_1, test_schema_support_join_2, "Citus'Teen123", "CiTUS.TEEN2", bar, test_schema_support CASCADE;
 -- verify that the dropped schema is removed from worker's pg_dist_object
 SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM pg_catalog.pg_dist_object
