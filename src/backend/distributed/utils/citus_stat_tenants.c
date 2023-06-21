@@ -281,7 +281,13 @@ AttributeTask(char *tenantId, int colocationId, CmdType commandType)
 
 	MultiTenantMonitor *monitor = GetMultiTenantMonitor();
 	bool found = false;
+
+	/* Acquire the lock in shared mode to check if the tenant is already in the hash table. */
+	LWLockAcquire(&monitor->lock, LW_SHARED);
+
 	hash_search(monitor->tenants, &key, HASH_FIND, &found);
+
+	LWLockRelease(&monitor->lock);
 
 	/* If the tenant is not found in the hash table, we will track the query with a probability of StatTenantsSampleRateForNewTenants. */
 	if (!found)
