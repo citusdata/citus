@@ -331,16 +331,16 @@ CdcPgDistPartitionTupleViaCatalog(Oid relationId)
 
 
 /*
- * CdcPartitionMethodViaCatalog gets a relationId and returns the partition
- * method column from pg_dist_partition via reading from catalog.
+ * CdcIsReferenceTable gets a relationId and returns true if the relation
+ * is a reference table and false otherwise.
  */
 char
-CdcPartitionMethodViaCatalog(Oid relationId)
+CdcIsReferenceTable(Oid relationId)
 {
 	HeapTuple partitionTuple = CdcPgDistPartitionTupleViaCatalog(relationId);
 	if (!HeapTupleIsValid(partitionTuple))
 	{
-		return DISTRIBUTE_BY_INVALID;
+		return false;
 	}
 
 	Datum datumArray[Natts_pg_dist_partition];
@@ -351,21 +351,28 @@ CdcPartitionMethodViaCatalog(Oid relationId)
 	TupleDesc tupleDescriptor = RelationGetDescr(pgDistPartition);
 	heap_deform_tuple(partitionTuple, tupleDescriptor, datumArray, isNullArray);
 
-	if (isNullArray[Anum_pg_dist_partition_partmethod - 1])
+	if (isNullArray[Anum_pg_dist_partition_partmethod - 1] ||
+		isNullArray[Anum_pg_dist_partition_repmodel - 1])
 	{
-		/* partition method cannot be NULL, still let's make sure */
+		/*
+		 * partition method and replication model cannot be NULL,
+		 * still let's make sure
+		 */
 		heap_freetuple(partitionTuple);
 		table_close(pgDistPartition, NoLock);
-		return DISTRIBUTE_BY_INVALID;
+		return false;
 	}
 
 	Datum partitionMethodDatum = datumArray[Anum_pg_dist_partition_partmethod - 1];
 	char partitionMethodChar = DatumGetChar(partitionMethodDatum);
 
+	Datum replicationModelDatum = datumArray[Anum_pg_dist_partition_repmodel - 1];
+	char replicationModelChar = DatumGetChar(replicationModelDatum);
+
 	heap_freetuple(partitionTuple);
 	table_close(pgDistPartition, NoLock);
 
-	return partitionMethodChar;
+	return partitionMethodChar == 'n' && replicationModelChar == 't';
 }
 
 
