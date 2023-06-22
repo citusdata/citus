@@ -12,7 +12,6 @@
 #include "unistd.h"
 
 #include "access/hash.h"
-
 #include "distributed/citus_safe_lib.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/distributed_planner.h"
