@@ -33,6 +33,7 @@
 #include "distributed/query_colocation_checker.h"
 #include "distributed/repartition_executor.h"
 #include "distributed/shared_library_init.h"
+#include "distributed/shard_pruning.h"
 
 #if PG_VERSION_NUM >= PG_VERSION_15
 
@@ -40,6 +41,9 @@ static int SourceResultPartitionColumnIndex(Query *mergeQuery,
 											List *sourceTargetList,
 											CitusTableCacheEntry *targetRelation);
 static Var * ValidateAndReturnVarIfSupported(Node *entryExpr);
+static DeferredErrorMessage * DeferErrorIfTargetHasFalseClause(Oid targetRelationId,
+															   PlannerRestrictionContext *
+															   plannerRestrictionContext);
 static void ErrorIfMergeQueryQualAndTargetListNotSupported(Oid targetRelationId,
 														   Query *originalQuery);
 static void ErrorIfMergeNotSupported(Query *query, Oid targetRelationId,
@@ -51,7 +55,8 @@ static DeferredErrorMessage * DeferErrorIfRoutableMergeNotSupported(Query *query
 																	List *rangeTableList,
 																	PlannerRestrictionContext
 																	*
-																	plannerRestrictionContext);
+																	plannerRestrictionContext,
+																	Oid targetRelationId);
 static DeferredErrorMessage * MergeQualAndTargetListFunctionsSupported(Oid
 																	   resultRelationId,
 																	   Query *query,
@@ -164,7 +169,8 @@ CreateRouterMergePlan(Oid targetRelationId, Query *originalQuery, Query *query,
 
 	distributedPlan->planningError = DeferErrorIfRoutableMergeNotSupported(originalQuery,
 																		   rangeTableList,
-																		   plannerRestrictionContext);
+																		   plannerRestrictionContext,
+																		   targetRelationId);
 	if (distributedPlan->planningError != NULL)
 	{
 		return distributedPlan;
@@ -927,12 +933,51 @@ ErrorIfMergeNotSupported(Query *query, Oid targetRelationId, List *rangeTableLis
 
 
 /*
+ * DeferErrorIfTargetHasFalseClause checks for the presence of a false clause in the
+ * target relation and throws an exception if found. Router planner prunes all the shards
+ * for relations with such clauses, resulting in no task generation for the job. However,
+ * in the case of a MERGE query, tasks still need to be generated for the shards of the
+ * source relation.
+ */
+static DeferredErrorMessage *
+DeferErrorIfTargetHasFalseClause(Oid targetRelationId,
+								 PlannerRestrictionContext *plannerRestrictionContext)
+{
+	ListCell *restrictionCell = NULL;
+	foreach(restrictionCell,
+			plannerRestrictionContext->relationRestrictionContext->relationRestrictionList)
+	{
+		RelationRestriction *relationRestriction =
+			(RelationRestriction *) lfirst(restrictionCell);
+		Oid relationId = relationRestriction->relationId;
+
+		/* Check only for target relation */
+		if (relationId != targetRelationId)
+		{
+			continue;
+		}
+
+		List *baseRestrictionList = relationRestriction->relOptInfo->baserestrictinfo;
+		List *restrictClauseList = get_all_actual_clauses(baseRestrictionList);
+		if (ContainsFalseClause(restrictClauseList))
+		{
+			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+								 "Routing query is not possible with "
+								 "no shards for target", NULL, NULL);
+		}
+	}
+	return NULL;
+}
+
+
+/*
  * DeferErrorIfRoutableMergeNotSupported Checks for conditions that prevent pushable planning, if
  * found, raises a deferred error, which then continues to try repartitioning strategy.
  */
 static DeferredErrorMessage *
 DeferErrorIfRoutableMergeNotSupported(Query *query, List *rangeTableList,
-									  PlannerRestrictionContext *plannerRestrictionContext)
+									  PlannerRestrictionContext *plannerRestrictionContext,
+									  Oid targetRelationId)
 {
 	List *distTablesList = NIL;
 	List *refTablesList = NIL;
@@ -1020,6 +1065,17 @@ DeferErrorIfRoutableMergeNotSupported(Query *query, List *rangeTableList,
 							 "conflict, use ON instead", NULL, NULL);
 	}
 
+	deferredError = DeferErrorIfTargetHasFalseClause(targetRelationId,
+													 plannerRestrictionContext);
+	if (deferredError)
+	{
+		ereport(DEBUG1, (errmsg("Target relation has a filter of the "
+								"form: false (AND ..), which results "
+								"in empty shards, but we still need  "
+								"to evaluate NOT-MATCHED clause, try "
+								"repartitioning")));
+		return deferredError;
+	}
 	return NULL;
 }
 
