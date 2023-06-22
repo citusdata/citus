@@ -12,7 +12,7 @@
 #include "unistd.h"
 
 #include "access/hash.h"
-#include "common/pg_prng.h"
+
 #include "distributed/citus_safe_lib.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/distributed_planner.h"
@@ -36,6 +36,10 @@
 #include "utils/syscache.h"
 
 #include <time.h>
+
+#if (PG_VERSION_NUM >= PG_VERSION_15)
+	#include "common/pg_prng.h"
+#endif
 
 static void AttributeMetricsIfApplicable(void);
 
@@ -293,8 +297,15 @@ AttributeTask(char *tenantId, int colocationId, CmdType commandType)
 	/* If the tenant is not found in the hash table, we will track the query with a probability of StatTenantsSampleRateForNewTenants. */
 	if (!found)
 	{
+#if (PG_VERSION_NUM >= PG_VERSION_15)
 		double randomValue = pg_prng_double(&pg_global_prng_state);
+#else
+	    /* Set a good seed for random */
+    	srandom((unsigned int) time(NULL));
 
+		/* Generate a random double between 0 and 1 */
+		double randomValue = (double) random() / RAND_MAX;
+#endif
 		bool shouldTrackQuery = randomValue < StatTenantsSampleRateForNewTenants;
 		if (!shouldTrackQuery)
 		{
