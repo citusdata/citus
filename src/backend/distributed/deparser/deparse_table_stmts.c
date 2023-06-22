@@ -142,13 +142,19 @@ AppendColumnNameList(StringInfo buf, List *columns)
 
 
 /*
- * AppendAlterTableCmdAddConstraint builds the add constraint command for index constraints
- * in the ADD CONSTRAINT <conname> {PRIMARY KEY, UNIQUE, EXCLUSION} form and appends it to the buf.
+ * AppendAlterTableCmdConstraint builds a string required to create given
+ * constraint as part of an ADD CONSTRAINT subcommand and appends it to
+ * the buf.
  */
 static void
-AppendAlterTableCmdAddConstraint(StringInfo buf, Constraint *constraint,
-								 AlterTableStmt *stmt)
+AppendAlterTableCmdConstraint(StringInfo buf, Constraint *constraint,
+							  AlterTableStmt *stmt, AlterTableType subtype)
 {
+	if (subtype != AT_AddConstraint)
+	{
+		ereport(ERROR, (errmsg("Unsupported alter table subtype: %d", (int) subtype)));
+	}
+
 	/* Need to deparse the alter table constraint command only if we are adding a constraint name.*/
 	if (constraint->conname == NULL)
 	{
@@ -156,7 +162,11 @@ AppendAlterTableCmdAddConstraint(StringInfo buf, Constraint *constraint,
 							"Constraint name can not be NULL when deparsing the constraint.")));
 	}
 
-	appendStringInfoString(buf, " ADD CONSTRAINT ");
+	if (subtype == AT_AddConstraint)
+	{
+		appendStringInfoString(buf, " ADD CONSTRAINT ");
+	}
+
 	appendStringInfo(buf, "%s ", quote_identifier(constraint->conname));
 
 	/* postgres version >= PG15
@@ -184,7 +194,10 @@ AppendAlterTableCmdAddConstraint(StringInfo buf, Constraint *constraint,
 #endif
 		}
 
-		AppendColumnNameList(buf, constraint->keys);
+		if (subtype == AT_AddConstraint)
+		{
+			AppendColumnNameList(buf, constraint->keys);
+		}
 
 		if (constraint->including != NULL)
 		{
@@ -275,9 +288,12 @@ AppendAlterTableCmdAddConstraint(StringInfo buf, Constraint *constraint,
 	}
 	else if (constraint->contype == CONSTR_FOREIGN)
 	{
-		appendStringInfoString(buf, " FOREIGN KEY");
+		if (subtype == AT_AddConstraint)
+		{
+			appendStringInfoString(buf, " FOREIGN KEY");
 
-		AppendColumnNameList(buf, constraint->fk_attrs);
+			AppendColumnNameList(buf, constraint->fk_attrs);
+		}
 
 		appendStringInfoString(buf, " REFERENCES");
 
@@ -379,8 +395,11 @@ AppendAlterTableCmdAddConstraint(StringInfo buf, Constraint *constraint,
 		}
 	}
 
-	/* FOREIGN KEY and CHECK constraints migth have NOT VALID option */
-	if (constraint->skip_validation)
+	/*
+	 * For ADD CONSTRAINT subcommand, FOREIGN KEY and CHECK constraints migth
+	 * have NOT VALID option.
+	 */
+	if (subtype == AT_AddConstraint && constraint->skip_validation)
 	{
 		appendStringInfoString(buf, " NOT VALID ");
 	}
@@ -429,7 +448,7 @@ AppendAlterTableCmd(StringInfo buf, AlterTableCmd *alterTableCmd, AlterTableStmt
 			 */
 			if (ConstrTypeCitusCanDefaultName(constraint->contype))
 			{
-				AppendAlterTableCmdAddConstraint(buf, constraint, stmt);
+				AppendAlterTableCmdConstraint(buf, constraint, stmt, AT_AddConstraint);
 				break;
 			}
 		}
