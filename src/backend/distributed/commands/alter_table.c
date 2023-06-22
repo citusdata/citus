@@ -457,7 +457,8 @@ EnsureUndistributeTenantTableSafe(Oid relationId, const char *operationName)
 		ereport(ERROR, (errmsg("%s is not allowed for partition table %s in distributed "
 							   "schema %s", operationName, tableName, schemaName),
 						errdetail("partition table should be under the same distributed "
-								  "schema as its parent and be a tenant table.")));
+								  "schema as its parent and be a "
+								  "distributed schema table.")));
 	}
 
 	/*

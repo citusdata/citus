@@ -1446,11 +1446,11 @@ EnsureTableCanBeColocatedWith(Oid relationId, char replicationModel,
 
 		ereport(ERROR, (errmsg("cannot colocate tables %s and %s",
 							   sourceRelationName, relationName),
-						errdetail("Cannot colocate tables with tenant tables "
-								  "by using colocate_with option."),
+						errdetail("Cannot colocate tables with distributed schema tables"
+								  " by using colocate_with option."),
 						errhint("Consider using \"CREATE TABLE\" statement "
-								"to create this table as a tenant table in "
-								"the same schema to automatically colocate "
+								"to create this table as a single-shard distributed "
+								"table in the same schema to automatically colocate "
 								"it with %s.%s",
 								sourceRelationSchemaName, sourceRelationName)));
 	}

@@ -237,8 +237,8 @@ PostprocessCreateTableStmt(CreateStmt *createStatement, const char *queryString)
 	{
 		ereport(ERROR,
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-				 errmsg("cannot create a tenant table by using CREATE TABLE "
-						"OF syntax")));
+				 errmsg("cannot create tables in a distributed schema using "
+						"CREATE TABLE OF syntax")));
 	}
 
 	if (createStatement->inhRelations != NIL)
@@ -254,8 +254,8 @@ PostprocessCreateTableStmt(CreateStmt *createStatement, const char *queryString)
 
 			if (IsTenantSchema(schemaId))
 			{
-				ereport(ERROR, (errmsg("tenant tables cannot inherit or "
-									   "be inherited")));
+				ereport(ERROR, (errmsg("tables in a distributed schema cannot inherit "
+									   "or be inherited")));
 			}
 
 			RangeVar *parentRelation = NULL;
@@ -272,8 +272,8 @@ PostprocessCreateTableStmt(CreateStmt *createStatement, const char *queryString)
 				 */
 				if (IsTenantSchema(get_rel_namespace(parentRelationId)))
 				{
-					ereport(ERROR, (errmsg("tenant tables cannot inherit or "
-										   "be inherited")));
+					ereport(ERROR, (errmsg("tables in a distributed schema cannot "
+										   "inherit or be inherited")));
 				}
 				else if (IsCitusTable(parentRelationId))
 				{
@@ -4257,8 +4257,8 @@ ConvertToTenantTableIfNecessary(AlterObjectSchemaStmt *stmt)
 
 		char *schemaName = get_namespace_name(schemaId);
 		char *tableName = stmt->relation->relname;
-		ereport(NOTICE, (errmsg("converting table %s to a tenant table in distributed "
-								"schema %s", tableName, schemaName)));
+		ereport(NOTICE, (errmsg("Moving %s into distributed schema %s",
+								tableName, schemaName)));
 
 		CreateTenantSchemaTable(relationId);
 	}
