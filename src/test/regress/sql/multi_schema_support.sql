@@ -995,6 +995,44 @@ BEGIN;
     ALTER SCHEMA bar RENAME TO foo;
 ROLLBACK;
 
+-- verify that immediate propagation of the schema causes the table creation to fail due to visibility problem during dependency creation
+SET citus.create_object_propagation TO 'immediate';
+BEGIN;
+CREATE SCHEMA prop_guc_sc;
+CREATE TABLE prop_guc_sc.tbl(id serial);
+SELECT create_distributed_table('prop_guc_sc.tbl','id');
+ROLLBACK;
+
+-- verify that automatic propagation of the schema (due to transaction switching into sequential connection) causes the table creation to fail due to visibility problem during dependency creation
+SET citus.create_object_propagation TO 'automatic';
+BEGIN;
+CREATE SCHEMA prop_guc_sc;
+CREATE TABLE prop_guc_sc.tbl(id serial);
+SELECT create_distributed_table('prop_guc_sc.tbl','id');
+ROLLBACK;
+
+-- verify that automatically deferred propagation of the schema (due to transaction that performed parallel query, no switch into sequential mode) lets the table creation succeed via Citus' dependency mechanism
+SET citus.create_object_propagation TO 'automatic';
+BEGIN;
+CREATE TABLE tbl_auto(id serial);
+SELECT create_distributed_table('tbl_auto','id');
+CREATE SCHEMA prop_guc_sc;
+CREATE TABLE prop_guc_sc.tbl(id serial);
+SELECT create_distributed_table('prop_guc_sc.tbl','id');
+COMMIT;
+DROP TABLE tbl_auto;
+DROP SCHEMA prop_guc_sc CASCADE;
+
+-- verify that deferred propagation of the schema (due to deferred mode) lets the table creation succeed via Citus' dependency mechanism
+SET citus.create_object_propagation TO 'deferred';
+BEGIN;
+CREATE SCHEMA prop_guc_sc;
+CREATE TABLE prop_guc_sc.tbl(id serial);
+SELECT create_distributed_table('prop_guc_sc.tbl','id');
+COMMIT;
+DROP SCHEMA prop_guc_sc CASCADE;
+RESET citus.create_object_propagation;
+
 -- Clean up the created schema
 SET client_min_messages TO WARNING;
 

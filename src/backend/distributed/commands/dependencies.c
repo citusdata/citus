@@ -602,33 +602,32 @@ ShouldPropagateCreateInCoordinatedTransction()
 		return true;
 	}
 
-	if (MultiShardConnectionType == SEQUENTIAL_CONNECTION)
-	{
-		/*
-		 * If we are in a transaction that is already switched to sequential, either by
-		 * the user, or automatically by an other command, we will always propagate the
-		 * creation of new objects to the workers.
-		 *
-		 * This guarantees no strange anomalies when the transaction aborts or on
-		 * visibility of the newly created object.
-		 */
-		return true;
-	}
-
 	switch (CreateObjectPropagationMode)
 	{
 		case CREATE_OBJECT_PROPAGATION_DEFERRED:
 		{
 			/*
-			 * We prefer parallelism at this point. Since we did not already return while
-			 * checking for sequential mode we are still in parallel mode. We don't want
-			 * to switch that now, thus not propagating the creation.
+			 * We always defer propagation here by relying on Citus' mechanism to ensure
+			 * the existence of the object if it would be used in the same transaction.
 			 */
 			return false;
 		}
 
 		case CREATE_OBJECT_PROPAGATION_AUTOMATIC:
 		{
+			if (MultiShardConnectionType == SEQUENTIAL_CONNECTION)
+			{
+				/*
+				 * If we are in a transaction that is already switched to sequential, either by
+				 * the user, or automatically by an other command, we will always propagate the
+				 * creation of new objects to the workers.
+				 *
+				 * This guarantees no strange anomalies when the transaction aborts or on
+				 * visibility of the newly created object.
+				 */
+				return true;
+			}
+
 			/*
 			 * When we run in optimistic mode we want to switch to sequential mode, only
 			 * if this would _not_ give an error to the user. Meaning, we either are
@@ -649,6 +648,7 @@ ShouldPropagateCreateInCoordinatedTransction()
 
 		case CREATE_OBJECT_PROPAGATION_IMMEDIATE:
 		{
+			/* Always propagate the objects. */
 			return true;
 		}
 
