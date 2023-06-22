@@ -582,6 +582,8 @@ extern bool ShouldEnableLocalReferenceForeignKeys(void);
 extern List * PreprocessAlterTableStmtAttachPartition(AlterTableStmt *alterTableStatement,
 													  const char *queryString);
 extern List * PostprocessAlterTableSchemaStmt(Node *node, const char *queryString);
+extern void PrepareAlterTableStmtForConstraint(AlterTableStmt *alterTableStatement,
+											   Oid relationId, Constraint *constraint);
 extern List * PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 									   ProcessUtilityContext processUtilityContext);
 extern List * PreprocessAlterTableMoveAllStmt(Node *node, const char *queryString,

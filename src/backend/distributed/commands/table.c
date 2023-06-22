@@ -1028,30 +1028,7 @@ PreprocessAlterTableAddConstraint(AlterTableStmt *alterTableStatement, Oid
 								  relationId,
 								  Constraint *constraint)
 {
-	/*
-	 * We should only preprocess an ADD CONSTRAINT command if we have empty conname
-	 * This only happens when we have to create a constraint name in citus since the client does
-	 * not specify a name.
-	 * indexname should also be NULL to make sure this is not an
-	 * ADD {PRIMARY KEY, UNIQUE} USING INDEX command
-	 * which doesn't need a conname since the indexname will be used
-	 */
-	Assert(constraint->conname == NULL && constraint->indexname == NULL);
-
-	Relation rel = RelationIdGetRelation(relationId);
-
-	/*
-	 * Change the alterTableCommand so that the standard utility
-	 * hook runs it with the name we created.
-	 */
-
-	constraint->conname = GenerateConstraintName(RelationGetRelationName(rel),
-												 RelationGetNamespace(rel),
-												 constraint);
-
-	RelationClose(rel);
-
-	SwitchToSequentialAndLocalExecutionIfConstraintNameTooLong(relationId, constraint);
+	PrepareAlterTableStmtForConstraint(alterTableStatement, relationId, constraint);
 
 	char *ddlCommand = DeparseTreeNode((Node *) alterTableStatement);
 
@@ -1066,11 +1043,6 @@ PreprocessAlterTableAddConstraint(AlterTableStmt *alterTableStatement, Oid
 	{
 		Oid rightRelationId = RangeVarGetRelid(constraint->pktable, NoLock,
 											   false);
-
-		if (IsCitusTableType(rightRelationId, REFERENCE_TABLE))
-		{
-			EnsureSequentialModeForAlterTableOperation();
-		}
 
 		/*
 		 * If one of the relations involved in the FOREIGN KEY constraint is not a distributed table, citus errors out eventually.
@@ -1096,6 +1068,47 @@ PreprocessAlterTableAddConstraint(AlterTableStmt *alterTableStatement, Oid
 	}
 
 	return list_make1(ddlJob);
+}
+
+
+/*
+ * PrepareAlterTableStmtForConstraint assigns a name to the constraint if it
+ * does not have one and switches to sequential and local execution if the
+ * constraint name is too long.
+ */
+void
+PrepareAlterTableStmtForConstraint(AlterTableStmt *alterTableStatement,
+								   Oid relationId,
+								   Constraint *constraint)
+{
+	if (constraint->conname == NULL && constraint->indexname == NULL)
+	{
+		Relation rel = RelationIdGetRelation(relationId);
+
+		/*
+		 * Change the alterTableCommand so that the standard utility
+		 * hook runs it with the name we created.
+		 */
+
+		constraint->conname = GenerateConstraintName(RelationGetRelationName(rel),
+													 RelationGetNamespace(rel),
+													 constraint);
+
+		RelationClose(rel);
+	}
+
+	SwitchToSequentialAndLocalExecutionIfConstraintNameTooLong(relationId, constraint);
+
+	if (constraint->contype == CONSTR_FOREIGN)
+	{
+		Oid rightRelationId = RangeVarGetRelid(constraint->pktable, NoLock,
+											   false);
+
+		if (IsCitusTableType(rightRelationId, REFERENCE_TABLE))
+		{
+			EnsureSequentialModeForAlterTableOperation();
+		}
+	}
 }
 
 
