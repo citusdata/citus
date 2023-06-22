@@ -303,7 +303,7 @@ AttributeTask(char *tenantId, int colocationId, CmdType commandType)
 		/* Generate a random double between 0 and 1 */
 		double randomValue = (double) random() / MAX_RANDOM_VALUE;
 #endif
-		bool shouldTrackQuery = randomValue < StatTenantsSampleRateForNewTenants;
+		bool shouldTrackQuery = randomValue <= StatTenantsSampleRateForNewTenants;
 		if (!shouldTrackQuery)
 		{
 			return;

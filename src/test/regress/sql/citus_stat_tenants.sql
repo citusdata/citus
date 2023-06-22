@@ -399,6 +399,8 @@ SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, q
 SELECT result FROM run_command_on_all_nodes('ALTER SYSTEM set citus.stat_tenants_sample_rate_for_new_tenants to 1;');
 SELECT result FROM run_command_on_all_nodes('SELECT pg_reload_conf()');
 
+SELECT sleep_until_next_period();
+
 INSERT INTO dist_tbl VALUES (1, 'abcd');
 INSERT INTO dist_tbl VALUES (2, 'abcd');
 UPDATE dist_tbl SET b = a + 1 WHERE a = 3;
