@@ -300,8 +300,6 @@ AttributeTask(char *tenantId, int colocationId, CmdType commandType)
 #if (PG_VERSION_NUM >= PG_VERSION_15)
 		double randomValue = pg_prng_double(&pg_global_prng_state);
 #else
-	    /* Set a good seed for random */
-    	srandom((unsigned int) time(NULL));
 
 		/* Generate a random double between 0 and 1 */
 		double randomValue = (double) random() / RAND_MAX;
