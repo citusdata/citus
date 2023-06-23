@@ -42,3 +42,10 @@ DROP FUNCTION citus_shard_sizes;
 
 #include "udfs/drop_old_time_partitions/12.0-1.sql"
 #include "udfs/get_missing_time_partition_ranges/12.0-1.sql"
+
+-- Update the default rebalance strategy to 'by_disk_size', but only if the
+-- default is currently 'by_shard_count'
+SELECT citus_set_default_rebalance_strategy(name)
+FROM pg_dist_rebalance_strategy
+WHERE name = 'by_disk_size'
+    AND (SELECT default_strategy FROM pg_dist_rebalance_strategy WHERE name = 'by_shard_count');
