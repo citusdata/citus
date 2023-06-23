@@ -331,11 +331,11 @@ CdcPgDistPartitionTupleViaCatalog(Oid relationId)
 
 
 /*
- * CdcIsReferenceTable gets a relationId and returns true if the relation
+ * CdcIsReferenceTableViaCatalog gets a relationId and returns true if the relation
  * is a reference table and false otherwise.
  */
 char
-CdcIsReferenceTable(Oid relationId)
+CdcIsReferenceTableViaCatalog(Oid relationId)
 {
 	HeapTuple partitionTuple = CdcPgDistPartitionTupleViaCatalog(relationId);
 	if (!HeapTupleIsValid(partitionTuple))
@@ -372,6 +372,10 @@ CdcIsReferenceTable(Oid relationId)
 	heap_freetuple(partitionTuple);
 	table_close(pgDistPartition, NoLock);
 
+	/*
+	 * A table is a reference table when its partition method is 'none'
+	 * and replication model is 'two phase commit'
+	 */
 	return partitionMethodChar == 'n' && replicationModelChar == 't';
 }
 

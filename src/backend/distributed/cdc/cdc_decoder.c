@@ -203,7 +203,7 @@ AddShardIdToHashTable(uint64 shardId, ShardIdHashEntry *entry)
 {
 	entry->shardId = shardId;
 	entry->distributedTableId = CdcLookupShardRelationFromCatalog(shardId, true);
-	entry->isReferenceTable = CdcIsReferenceTable(entry->distributedTableId);
+	entry->isReferenceTable = CdcIsReferenceTableViaCatalog(entry->distributedTableId);
 	return entry->distributedTableId;
 }
 
