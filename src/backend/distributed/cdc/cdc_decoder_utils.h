@@ -25,7 +25,7 @@ uint64 CdcExtractShardIdFromTableName(const char *tableName, bool missingOk);
 
 Oid CdcLookupShardRelationFromCatalog(int64 shardId, bool missingOk);
 
-char CdcPartitionMethodViaCatalog(Oid relationId);
+char CdcIsReferenceTableViaCatalog(Oid relationId);
 
 bool CdcCitusHasBeenLoaded(void);
 
