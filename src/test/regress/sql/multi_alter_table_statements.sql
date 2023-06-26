@@ -2,8 +2,9 @@
 -- MULTI_ALTER_TABLE_STATEMENTS
 --
 
-ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 220000;
-
+CREATE SCHEMA multi_alter_table_statements;
+SET search_path TO multi_alter_table_statements, public;
+SET citus.next_shard_id TO 220000;
 
 -- Check that we can run ALTER TABLE statements on distributed tables.
 -- We set the shardid sequence here so that the shardids in this test
@@ -38,6 +39,8 @@ SELECT relname, reloptions FROM pg_class WHERE relname = 'lineitem_alter';
 \c - - - :worker_1_port
 SELECT relname, reloptions FROM pg_class WHERE relname LIKE 'lineitem_alter%' ORDER BY relname;
 \c - - - :master_port
+SET search_path TO multi_alter_table_statements, public;
+SET citus.next_shard_id TO 221000;
 
 -- Verify that we can add columns
 
@@ -55,8 +58,10 @@ FROM
     JOIN pg_attribute ON (pc.oid = pg_attribute.attrelid)
 ORDER BY attnum;
 \c - - - :master_port
+SET search_path TO multi_alter_table_statements, public;
+SET citus.next_shard_id TO 222000;
 
-SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.lineitem_alter'::regclass;
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='lineitem_alter'::regclass;
 SELECT float_column, count(*) FROM lineitem_alter GROUP BY float_column;
 SELECT int_column1, count(*) FROM lineitem_alter GROUP BY int_column1;
 
@@ -75,7 +80,7 @@ SELECT int_column1, count(*) FROM lineitem_alter GROUP BY int_column1;
 -- Verify that SET NOT NULL works
 
 ALTER TABLE lineitem_alter ALTER COLUMN int_column2 SET NOT NULL;
-SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.lineitem_alter'::regclass;
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='lineitem_alter'::regclass;
 
 -- Drop default so that NULLs will be inserted for this column
 ALTER TABLE lineitem_alter ALTER COLUMN int_column2 DROP DEFAULT;
@@ -90,7 +95,7 @@ END;
 -- Verify that DROP NOT NULL works
 
 ALTER TABLE lineitem_alter ALTER COLUMN int_column2 DROP NOT NULL;
-SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.lineitem_alter'::regclass;
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='lineitem_alter'::regclass;
 
 -- COPY should succeed now
 SELECT master_create_empty_shard('lineitem_alter') as shardid \gset
@@ -102,7 +107,7 @@ SELECT count(*) from lineitem_alter;
 SELECT int_column2, pg_typeof(int_column2), count(*) from lineitem_alter GROUP BY int_column2;
 
 ALTER TABLE lineitem_alter ALTER COLUMN int_column2 SET DATA TYPE FLOAT;
-SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.lineitem_alter'::regclass;
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='lineitem_alter'::regclass;
 
 SELECT int_column2, pg_typeof(int_column2), count(*) from lineitem_alter GROUP BY int_column2;
 
@@ -130,19 +135,19 @@ ALTER TABLE lineitem_alter DROP COLUMN IF EXISTS int_column2;
 ALTER TABLE IF EXISTS lineitem_alter RENAME COLUMN l_orderkey_renamed TO l_orderkey;
 SELECT SUM(l_orderkey) FROM lineitem_alter;
 
-SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.lineitem_alter'::regclass;
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='lineitem_alter'::regclass;
 
 -- Verify that we can execute commands with multiple subcommands
 
 ALTER TABLE lineitem_alter ADD COLUMN int_column1 INTEGER,
 	ADD COLUMN int_column2 INTEGER;
-SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.lineitem_alter'::regclass;
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='lineitem_alter'::regclass;
 
 ALTER TABLE lineitem_alter ADD COLUMN int_column3 INTEGER,
 	ALTER COLUMN int_column1 SET STATISTICS 10;
 
 ALTER TABLE lineitem_alter DROP COLUMN int_column1, DROP COLUMN int_column2;
-SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.lineitem_alter'::regclass;
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='lineitem_alter'::regclass;
 
 -- Verify that we cannot execute alter commands on the distribution column
 
@@ -174,7 +179,7 @@ ALTER TABLE IF EXISTS non_existent_table RENAME COLUMN column1 TO column2;
 
 -- Verify that none of the failed alter table commands took effect on the master
 -- node
-SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.lineitem_alter'::regclass;
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='lineitem_alter'::regclass;
 
 -- verify that non-propagated ddl commands are allowed inside a transaction block
 SET citus.enable_ddl_propagation to false;
@@ -198,7 +203,7 @@ CREATE INDEX temp_index_2 ON lineitem_alter(l_orderkey);
 ALTER TABLE lineitem_alter ADD COLUMN first integer;
 COMMIT;
 
-SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.lineitem_alter'::regclass;
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='lineitem_alter'::regclass;
 SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
     relid = 'temp_index_2'::regclass;
 
@@ -241,8 +246,10 @@ DROP INDEX temp_index_2;
 
 -- Add column on only one worker...
 \c - - - :worker_2_port
-ALTER TABLE lineitem_alter_220000 ADD COLUMN first integer;
+ALTER TABLE multi_alter_table_statements.lineitem_alter_220000 ADD COLUMN first integer;
 \c - - - :master_port
+SET search_path TO multi_alter_table_statements, public;
+SET citus.next_shard_id TO 223000;
 
 -- and try to add it in a multi-statement block, which fails
 BEGIN;
@@ -288,7 +295,7 @@ ALTER TABLE single_shard_items REPLICA IDENTITY default;
 
 -- Drop the column from the worker...
 \c - - - :worker_2_port
-ALTER TABLE lineitem_alter_220000 DROP COLUMN first;
+ALTER TABLE multi_alter_table_statements.lineitem_alter_220000 DROP COLUMN first;
 
 -- Create table to trigger at-xact-end (deferred) failure
 CREATE TABLE ddl_commands (command text UNIQUE DEFERRABLE INITIALLY DEFERRED);
@@ -305,6 +312,8 @@ RESET citus.enable_metadata_sync;
 CREATE EVENT TRIGGER log_ddl_tag ON ddl_command_end EXECUTE PROCEDURE log_ddl_tag();
 
 \c - - - :master_port
+SET search_path TO multi_alter_table_statements, public;
+SET citus.next_shard_id TO 224000;
 -- The above trigger will cause failure at transaction end on one placement.
 -- Citus always uses 2PC. 2PC should handle this "best" (no divergence)
 BEGIN;
@@ -321,6 +330,8 @@ DROP FUNCTION log_ddl_tag();
 DROP TABLE ddl_commands;
 
 \c - - - :master_port
+SET search_path TO multi_alter_table_statements, public;
+SET citus.next_shard_id TO 225000;
 -- Distributed SELECTs may appear after ALTER
 BEGIN;
 CREATE INDEX temp_index_2 ON lineitem_alter(l_orderkey);
@@ -360,6 +371,8 @@ FROM
     JOIN pg_attribute ON (pc.oid = pg_attribute.attrelid)
 ORDER BY attnum;
 \c - - - :master_port
+SET search_path TO multi_alter_table_statements, public;
+SET citus.next_shard_id TO 226000;
 
 -- verify that we can rename distributed tables
 SHOW citus.enable_ddl_propagation;
@@ -372,29 +385,37 @@ SELECT relname FROM pg_class WHERE relname = 'lineitem_renamed';
 \c - - - :worker_1_port
 SELECT relname FROM pg_class WHERE relname LIKE 'lineitem_renamed%'  ORDER BY relname;
 \c - - - :master_port
+SET search_path TO multi_alter_table_statements, public;
+SET citus.next_shard_id TO 227000;
 
 -- revert it to original name
 ALTER TABLE lineitem_renamed RENAME TO lineitem_alter;
 
 -- show rename worked on one worker, too
 \c - - - :worker_1_port
-SELECT relname FROM pg_class WHERE relname LIKE 'lineitem_alter%' AND relname <> 'lineitem_alter_220002' /* failed copy trails */ ORDER BY relname;
+SELECT relname FROM pg_class WHERE relname LIKE 'lineitem_alter%' AND relname <> 'lineitem_alter_222001' /* failed copy trails */ ORDER BY relname;
 \c - - - :master_port
+SET search_path TO multi_alter_table_statements, public;
+SET citus.next_shard_id TO 228000;
 
 -- verify that we can set and reset storage parameters
 ALTER TABLE lineitem_alter SET(fillfactor=40);
 SELECT relname, reloptions FROM pg_class WHERE relname = 'lineitem_alter';
 
 \c - - - :worker_1_port
-SELECT relname, reloptions FROM pg_class WHERE relname LIKE 'lineitem_alter%' AND relname <> 'lineitem_alter_220002' /* failed copy trails */ ORDER BY relname;
+SELECT relname, reloptions FROM pg_class WHERE relname LIKE 'lineitem_alter%' AND relname <> 'lineitem_alter_222001' /* failed copy trails */ ORDER BY relname;
 \c - - - :master_port
+SET search_path TO multi_alter_table_statements, public;
+SET citus.next_shard_id TO 229000;
 
 ALTER TABLE lineitem_alter RESET(fillfactor);
 SELECT relname, reloptions FROM pg_class WHERE relname = 'lineitem_alter';
 
 \c - - - :worker_1_port
-SELECT relname, reloptions FROM pg_class WHERE relname LIKE 'lineitem_alter%'  AND relname <> 'lineitem_alter_220002' /* failed copy trails */ ORDER BY relname;
+SELECT relname, reloptions FROM pg_class WHERE relname LIKE 'lineitem_alter%'  AND relname <> 'lineitem_alter_222001' /* failed copy trails */ ORDER BY relname;
 \c - - - :master_port
+SET search_path TO multi_alter_table_statements, public;
+SET citus.next_shard_id TO 230000;
 
 -- verify that we can rename indexes on distributed tables
 CREATE INDEX temp_index_1 ON lineitem_alter(l_linenumber);
@@ -407,6 +428,8 @@ SELECT relname FROM pg_class WHERE relname = 'idx_lineitem_linenumber';
 \c - - - :worker_1_port
 SELECT relname FROM pg_class WHERE relname LIKE 'idx_lineitem_linenumber%' ORDER BY relname;
 \c - - - :master_port
+SET search_path TO multi_alter_table_statements, public;
+SET citus.next_shard_id TO 231000;
 
 -- now get rid of the index
 DROP INDEX idx_lineitem_linenumber;
@@ -427,8 +450,10 @@ ALTER TABLE lineitem_alter ADD COLUMN column_only_added_to_master int;
 
 -- verify newly added column is not present in a worker shard
 \c - - - :worker_1_port
-SELECT column_only_added_to_master FROM lineitem_alter_220000 LIMIT 0;
+SELECT column_only_added_to_master FROM multi_alter_table_statements.lineitem_alter_220000 LIMIT 0;
 \c - - - :master_port
+SET search_path TO multi_alter_table_statements, public;
+SET citus.next_shard_id TO 232000;
 
 -- ddl propagation flag is reset to default, disable it again
 SET citus.enable_ddl_propagation to false;
@@ -458,6 +483,8 @@ SELECT  indexname, tablename FROM pg_indexes WHERE tablename = 'lineitem_alter';
 \c - - - :worker_1_port
 SELECT  indexname, tablename FROM pg_indexes WHERE tablename like 'lineitem_alter_%';
 \c - - - :master_port
+SET search_path TO multi_alter_table_statements, public;
+SET citus.next_shard_id TO 233000;
 
 -- verify alter table and drop sequence in the same transaction does not cause deadlock
 SET citus.shard_count TO 4;
@@ -489,7 +516,7 @@ SELECT create_distributed_table('trigger_table', 'id');
 -- first set a trigger on a shard
 \c - - - :worker_1_port
 SET citus.enable_metadata_sync TO OFF;
-CREATE FUNCTION update_value() RETURNS trigger AS $up$
+CREATE OR REPLACE FUNCTION update_value() RETURNS trigger AS $up$
     BEGIN
 		NEW.value := 'trigger enabled';
 		RETURN NEW;
@@ -498,10 +525,12 @@ $up$ LANGUAGE plpgsql;
 RESET citus.enable_metadata_sync;
 
 CREATE TRIGGER update_value
-BEFORE INSERT ON trigger_table_220017
+BEFORE INSERT ON multi_alter_table_statements.trigger_table_233004
 FOR EACH ROW EXECUTE PROCEDURE update_value();
 
 \c - - - :master_port
+SET search_path TO multi_alter_table_statements, public;
+SET citus.next_shard_id TO 234000;
 INSERT INTO trigger_table VALUES (1, 'trigger disabled');
 SELECT value, count(*) FROM trigger_table GROUP BY value ORDER BY value;
 
@@ -529,32 +558,36 @@ SET citus.enable_ddl_propagation to true;
 CREATE USER alter_table_owner WITH LOGIN;
 
 GRANT USAGE ON SCHEMA public TO alter_table_owner;
+GRANT USAGE ON SCHEMA multi_alter_table_statements TO alter_table_owner;
 
 \c - alter_table_owner - :master_port
 -- should not be able to access table without permission
-SELECT count(*) FROM lineitem_alter;
+SELECT count(*) FROM multi_alter_table_statements.lineitem_alter;
 
 -- should not be able to drop the table as non table owner
-DROP TABLE lineitem_alter;
+DROP TABLE multi_alter_table_statements.lineitem_alter;
 
 \c - postgres - :master_port
-ALTER TABLE lineitem_alter OWNER TO alter_table_owner;
+ALTER TABLE multi_alter_table_statements.lineitem_alter OWNER TO alter_table_owner;
 
 \c - alter_table_owner - :master_port
 -- should be able to query the table as table owner
-SELECT count(*) FROM lineitem_alter;
+SELECT count(*) FROM multi_alter_table_statements.lineitem_alter;
 
 -- should be able to drop the table as table owner
-DROP TABLE lineitem_alter;
+DROP TABLE multi_alter_table_statements.lineitem_alter;
 
 -- check that nothing's left over on workers, other than the leftover shard created
 -- during the unsuccessful COPY
 \c - postgres - :worker_1_port
 SELECT relname FROM pg_class WHERE relname LIKE 'lineitem_alter%';
 \c - - - :master_port
+SET search_path TO multi_alter_table_statements, public;
+SET citus.next_shard_id TO 235000;
 
 -- drop the roles created
 REVOKE ALL ON SCHEMA PUBLIC FROM alter_table_owner;
+REVOKE ALL ON SCHEMA multi_alter_table_statements FROM alter_table_owner;
 DROP ROLE alter_table_owner;
 
 -- Test alter table with drop table in the same transaction
@@ -569,6 +602,8 @@ END;
 \c - - - :worker_1_port
 SELECT relname FROM pg_class WHERE relname LIKE 'test_table_1%';
 \c - - - :master_port
+SET search_path TO multi_alter_table_statements, public;
+SET citus.next_shard_id TO 236000;
 
 -- verify logged info is propagated to workers when distributing the table
 CREATE TABLE logged_test(id int);
@@ -577,6 +612,8 @@ SELECT create_distributed_table('logged_test', 'id');
 \c - - - :worker_1_port
 SELECT relname, CASE relpersistence WHEN 'u' THEN 'unlogged' WHEN 'p' then 'logged' ELSE 'unknown' END AS logged_info FROM pg_class WHERE relname ~ 'logged_test_' ORDER BY relname;
 \c - - - :master_port
+SET search_path TO multi_alter_table_statements, public;
+SET citus.next_shard_id TO 237000;
 
 -- verify SET LOGGED/UNLOGGED works after distributing the table
 ALTER TABLE logged_test SET LOGGED;
@@ -584,11 +621,15 @@ SELECT relname, CASE relpersistence WHEN 'u' THEN 'unlogged' WHEN 'p' then 'logg
 \c - - - :worker_1_port
 SELECT relname, CASE relpersistence WHEN 'u' THEN 'unlogged' WHEN 'p' then 'logged' ELSE 'unknown' END AS logged_info FROM pg_class WHERE relname ~ 'logged_test_' ORDER BY relname;
 \c - - - :master_port
+SET search_path TO multi_alter_table_statements, public;
+SET citus.next_shard_id TO 238000;
 ALTER TABLE logged_test SET UNLOGGED;
 SELECT relname, CASE relpersistence WHEN 'u' THEN 'unlogged' WHEN 'p' then 'logged' ELSE 'unknown' END AS logged_info FROM pg_class WHERE relname ~ 'logged_test*' ORDER BY relname;
 \c - - - :worker_1_port
 SELECT relname, CASE relpersistence WHEN 'u' THEN 'unlogged' WHEN 'p' then 'logged' ELSE 'unknown' END AS logged_info FROM pg_class WHERE relname ~ 'logged_test_' ORDER BY relname;
 \c - - - :master_port
+SET search_path TO multi_alter_table_statements, public;
+SET citus.next_shard_id TO 239000;
 DROP TABLE logged_test;
 
 -- Test WITH options on a normal simple hash-distributed table
@@ -601,6 +642,8 @@ SELECT relname, reloptions FROM pg_class WHERE relname = 'hash_dist';
 \c - - - :worker_1_port
 SELECT relname, reloptions FROM pg_class WHERE relkind = 'r' AND relname LIKE 'hash_dist_%' ORDER BY relname;
 \c - - - :master_port
+SET search_path TO multi_alter_table_statements, public;
+SET citus.next_shard_id TO 240000;
 
 -- verify that we can set and reset index storage parameters
 ALTER INDEX hash_dist_pkey SET(fillfactor=40);
@@ -609,6 +652,8 @@ SELECT relname, reloptions FROM pg_class WHERE relname = 'hash_dist_pkey';
 \c - - - :worker_1_port
 SELECT relname, reloptions FROM pg_class WHERE relname LIKE 'hash_dist_pkey_%' ORDER BY relname;
 \c - - - :master_port
+SET search_path TO multi_alter_table_statements, public;
+SET citus.next_shard_id TO 241000;
 
 ALTER INDEX hash_dist_pkey RESET(fillfactor);
 SELECT relname, reloptions FROM pg_class WHERE relname = 'hash_dist_pkey';
@@ -616,6 +661,8 @@ SELECT relname, reloptions FROM pg_class WHERE relname = 'hash_dist_pkey';
 \c - - - :worker_1_port
 SELECT relname, reloptions FROM pg_class WHERE relname LIKE 'hash_dist_pkey_%' ORDER BY relname;
 \c - - - :master_port
+SET search_path TO multi_alter_table_statements, public;
+SET citus.next_shard_id TO 242000;
 
 -- verify error message on ALTER INDEX, SET TABLESPACE is unsupported
 ALTER INDEX hash_dist_pkey SET TABLESPACE foo;
@@ -629,6 +676,8 @@ SELECT relname, reloptions FROM pg_class WHERE relname = 'another_index';
 \c - - - :worker_1_port
 SELECT relname, reloptions FROM pg_class WHERE relname LIKE 'another_index_%' ORDER BY relname;
 \c - - - :master_port
+SET search_path TO multi_alter_table_statements, public;
+SET citus.next_shard_id TO 243000;
 
 -- get rid of the index
 DROP INDEX another_index;
@@ -645,13 +694,24 @@ ALTER TABLE test_table_1 ADD COLUMN test_col int CHECK (test_col > 3);
 
 CREATE TABLE reference_table(i int UNIQUE);
 SELECT create_reference_table('reference_table');
-ALTER TABLE test_table_1 ADD COLUMN test_col int REFERENCES reference_table(i) ON DELETE CASCADE;
-ALTER TABLE test_table_1 ADD COLUMN test_col int REFERENCES reference_table(i) ON DELETE CASCADE ON UPDATE SET NULL;
-DROP TABLE reference_table;
+
+ALTER TABLE test_table_1 ADD COLUMN test_col_1 int REFERENCES reference_table(i) ON DELETE CASCADE;
+ALTER TABLE test_table_1 ADD COLUMN test_col_2 int REFERENCES reference_table(i) ON DELETE CASCADE ON UPDATE SET NULL;
+
+SELECT (groupid = 0) AS is_coordinator, result FROM run_command_on_all_nodes(
+  $$SELECT get_grouped_fkey_constraints FROM get_grouped_fkey_constraints('multi_alter_table_statements.test_table_1')$$
+)
+JOIN pg_dist_node USING (nodeid)
+ORDER BY is_coordinator DESC, result;
+
+BEGIN;
+  SET LOCAL client_min_messages TO WARNING;
+  DROP TABLE reference_table CASCADE;
+COMMIT;
 
 CREATE TABLE referenced_table(i int UNIQUE);
 SELECT create_distributed_table('referenced_table', 'i');
-ALTER TABLE test_table_1 ADD COLUMN test_col int REFERENCES referenced_table(i);
+ALTER TABLE test_table_1 ADD COLUMN test_col_3 int REFERENCES referenced_table(i);
 DROP TABLE referenced_table, test_table_1;
 
 -- Check sequence propagate its own dependencies while adding a column
@@ -667,5 +727,7 @@ ALTER TABLE table_without_sequence ADD COLUMN x BIGINT DEFAULT nextval('test_sch
 SELECT pg_identify_object_as_address(classid, objid, objsubid) from pg_catalog.pg_dist_object WHERE objid IN ('test_schema_for_sequence_propagation.seq_10'::regclass);
 SELECT pg_identify_object_as_address(classid, objid, objsubid) from pg_catalog.pg_dist_object WHERE objid IN ('test_schema_for_sequence_propagation'::regnamespace);
 
+SET client_min_messages TO WARNING;
 DROP SCHEMA test_schema_for_sequence_propagation CASCADE;
 DROP TABLE table_without_sequence;
+DROP SCHEMA multi_alter_table_statements CASCADE;

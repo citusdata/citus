@@ -76,6 +76,8 @@ static void DistributePartitionUsingParent(Oid parentRelationId,
 static void ErrorIfMultiLevelPartitioning(Oid parentRelationId, Oid partitionRelationId);
 static void ErrorIfAttachCitusTableToPgLocalTable(Oid parentRelationId,
 												  Oid partitionRelationId);
+static bool DeparserSupportsAlterTableAddColumn(AlterTableStmt *alterTableStatement,
+												AlterTableCmd *addColumnSubCommand);
 static bool ATDefinesFKeyBetweenPostgresAndCitusLocalOrRef(
 	AlterTableStmt *alterTableStatement);
 static bool ShouldMarkConnectedRelationsNotAutoConverted(Oid leftRelationId,
@@ -1281,6 +1283,7 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 	 *    we also set skip_validation to true to prevent PostgreSQL to verify validity
 	 *    of the foreign constraint in master. Validity will be checked in workers
 	 *    anyway.
+	 *  - an ADD COLUMN .. that is the only subcommand in the list OR
 	 *  - an ADD COLUMN .. DEFAULT nextval('..') OR
 	 *    an ADD COLUMN .. SERIAL pseudo-type OR
 	 *    an ALTER COLUMN .. SET DEFAULT nextval('..'). If there is we set
@@ -1410,13 +1413,6 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 		}
 		else if (alterTableType == AT_AddColumn)
 		{
-			/*
-			 * TODO: This code path is nothing beneficial since we do not
-			 * support ALTER TABLE %s ADD COLUMN %s [constraint] for foreign keys.
-			 * However, the code is kept in case we fix the constraint
-			 * creation without a name and allow foreign key creation with the mentioned
-			 * command.
-			 */
 			ColumnDef *columnDefinition = (ColumnDef *) command->def;
 			List *columnConstraints = columnDefinition->constraints;
 
@@ -1440,12 +1436,36 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 				}
 			}
 
+			if (DeparserSupportsAlterTableAddColumn(alterTableStatement, command))
+			{
+				deparseAT = true;
+
+				constraint = NULL;
+				foreach_ptr(constraint, columnConstraints)
+				{
+					if (ConstrTypeCitusCanDefaultName(constraint->contype))
+					{
+						PrepareAlterTableStmtForConstraint(alterTableStatement,
+														   leftRelationId,
+														   constraint);
+					}
+				}
+
+				/*
+				 * Copy the constraints to the new subcommand because now we
+				 * might have assigned names to some of them.
+				 */
+				ColumnDef *newColumnDef = (ColumnDef *) newCmd->def;
+				newColumnDef->constraints = copyObject(columnConstraints);
+			}
+
 			/*
 			 * We check for ADD COLUMN .. DEFAULT expr
 			 * if expr contains nextval('user_defined_seq')
 			 * we should deparse the statement
 			 */
 			constraint = NULL;
+			int constraintIdx = 0;
 			foreach_ptr(constraint, columnConstraints)
 			{
 				if (constraint->contype == CONSTR_DEFAULT)
@@ -1461,14 +1481,19 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 							deparseAT = true;
 							useInitialDDLCommandString = false;
 
-							/* the new column definition will have no constraint */
-							ColumnDef *newColDef = copyObject(columnDefinition);
-							newColDef->constraints = NULL;
-
-							newCmd->def = (Node *) newColDef;
+							/* drop the default expression from new subcomand */
+							ColumnDef *newColumnDef = (ColumnDef *) newCmd->def;
+							newColumnDef->constraints =
+								list_delete_nth_cell(newColumnDef->constraints,
+													 constraintIdx);
 						}
 					}
+
+					/* there can only be one DEFAULT constraint that can be used per column */
+					break;
 				}
+
+				constraintIdx++;
 			}
 
 
@@ -1649,6 +1674,49 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 	List *ddlJobs = list_make1(ddlJob);
 
 	return ddlJobs;
+}
+
+
+/*
+ * DeparserSupportsAlterTableAddColumn returns true if it's safe to deparse
+ * the given ALTER TABLE statement that is known to contain given ADD COLUMN
+ * subcommand.
+ */
+static bool
+DeparserSupportsAlterTableAddColumn(AlterTableStmt *alterTableStatement,
+									AlterTableCmd *addColumnSubCommand)
+{
+	/*
+	 * We support deparsing for ADD COLUMN only of it's the only
+	 * subcommand.
+	 */
+	if (list_length(alterTableStatement->cmds) == 1 &&
+		alterTableStatement->objtype == OBJECT_TABLE)
+	{
+		ColumnDef *columnDefinition = (ColumnDef *) addColumnSubCommand->def;
+		Constraint *constraint = NULL;
+		foreach_ptr(constraint, columnDefinition->constraints)
+		{
+			if (constraint->contype == CONSTR_CHECK)
+			{
+				/*
+				 * Given that we're in the preprocess, any reference to the
+				 * column that we're adding would break the deparser. This
+				 * can only be the case with CHECK constraints. For this
+				 * reason, we skip deparsing the command and fall back to
+				 * legacy behavior that we follow for ADD COLUMN subcommands.
+				 *
+				 * For other constraint types, we prepare the constraint to
+				 * make sure that we can deparse it.
+				 */
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	return false;
 }
 
 
@@ -3693,13 +3761,6 @@ SetupExecutionModeForAlterTable(Oid relationId, AlterTableCmd *command)
 	}
 	else if (alterTableType == AT_AddColumn)
 	{
-		/*
-		 * TODO: This code path will never be executed since we do not
-		 * support foreign constraint creation via
-		 * ALTER TABLE %s ADD COLUMN %s [constraint]. However, the code
-		 * is kept in case we fix the constraint creation without a name
-		 * and allow foreign key creation with the mentioned command.
-		 */
 		ColumnDef *columnDefinition = (ColumnDef *) command->def;
 		List *columnConstraints = columnDefinition->constraints;
 

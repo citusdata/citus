@@ -156,6 +156,16 @@ RelayEventExtendNames(Node *parseTree, char *schemaName, uint64 shardId)
 					RelayEventExtendConstraintAndIndexNames(alterTableStmt, constraint,
 															shardId);
 				}
+				else if (command->subtype == AT_AddColumn)
+				{
+					ColumnDef *columnDefinition = (ColumnDef *) command->def;
+					Constraint *constraint = NULL;
+					foreach_ptr(constraint, columnDefinition->constraints)
+					{
+						RelayEventExtendConstraintAndIndexNames(alterTableStmt,
+																constraint, shardId);
+					}
+				}
 				else if (command->subtype == AT_DropConstraint ||
 						 command->subtype == AT_ValidateConstraint)
 				{
@@ -677,13 +687,6 @@ RelayEventExtendNamesForInterShardCommands(Node *parseTree, uint64 leftShardId,
 				}
 				else if (command->subtype == AT_AddColumn)
 				{
-					/*
-					 * TODO: This code path will never be executed since we do not
-					 * support foreign constraint creation via
-					 * ALTER TABLE %s ADD COLUMN %s [constraint]. However, the code
-					 * is kept in case we fix the constraint creation without a name
-					 * and allow foreign key creation with the mentioned command.
-					 */
 					ColumnDef *columnDefinition = (ColumnDef *) command->def;
 					List *columnConstraints = columnDefinition->constraints;
 

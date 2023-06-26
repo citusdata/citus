@@ -2134,10 +2134,10 @@ NOTICE:  executing the command locally: SELECT count(*) AS count FROM (SELECT in
 
 -- test with NULL columns
 ALTER TABLE non_binary_copy_test ADD COLUMN z INT;
-NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (90630519, 'single_node', 'ALTER TABLE non_binary_copy_test ADD COLUMN z INT;')
-NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (90630520, 'single_node', 'ALTER TABLE non_binary_copy_test ADD COLUMN z INT;')
-NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (90630521, 'single_node', 'ALTER TABLE non_binary_copy_test ADD COLUMN z INT;')
-NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (90630522, 'single_node', 'ALTER TABLE non_binary_copy_test ADD COLUMN z INT;')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (90630519, 'single_node', 'ALTER TABLE non_binary_copy_test ADD COLUMN z integer;')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (90630520, 'single_node', 'ALTER TABLE non_binary_copy_test ADD COLUMN z integer;')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (90630521, 'single_node', 'ALTER TABLE non_binary_copy_test ADD COLUMN z integer;')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (90630522, 'single_node', 'ALTER TABLE non_binary_copy_test ADD COLUMN z integer;')
 WITH cte_1 AS
 (INSERT INTO non_binary_copy_test SELECT * FROM non_binary_copy_test LIMIT 10000 ON CONFLICT (key) DO UPDATE SET value = (0, 'citus0')::new_type RETURNING z)
 SELECT bool_and(z is null) FROM cte_1;
