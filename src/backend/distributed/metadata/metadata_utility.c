@@ -917,7 +917,7 @@ static char *
 GenerateAllShardStatisticsQueryForNode(WorkerNode *workerNode, List *citusTableIds)
 {
 	StringInfo allShardStatisticsQuery = makeStringInfo();
-	bool firstValue = true;
+	bool insertedValues = false;
 
 	appendStringInfoString(allShardStatisticsQuery, "SELECT shard_id, ");
 	appendStringInfo(allShardStatisticsQuery, PG_TOTAL_RELATION_SIZE_FUNCTION,
@@ -943,11 +943,16 @@ GenerateAllShardStatisticsQueryForNode(WorkerNode *workerNode, List *citusTableI
 				continue;
 			}
 			char *shardIdNameValues =
-				GenerateShardIdNameValuesForShardList(shardIntervalsOnNode, firstValue);
-			firstValue = false;
+				GenerateShardIdNameValuesForShardList(shardIntervalsOnNode, !insertedValues);
+			insertedValues = true;
 			appendStringInfoString(allShardStatisticsQuery, shardIdNameValues);
 			relation_close(relation, AccessShareLock);
 		}
+	}
+
+	if (!insertedValues)
+	{
+		return "SELECT 0 AS shard_id, '' AS table_name LIMIT 0";
 	}
 
 	appendStringInfoString(allShardStatisticsQuery, ") t(shard_id, table_name) "
