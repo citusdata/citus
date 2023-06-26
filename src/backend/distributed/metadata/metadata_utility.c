@@ -943,7 +943,8 @@ GenerateAllShardStatisticsQueryForNode(WorkerNode *workerNode, List *citusTableI
 				continue;
 			}
 			char *shardIdNameValues =
-				GenerateShardIdNameValuesForShardList(shardIntervalsOnNode, !insertedValues);
+				GenerateShardIdNameValuesForShardList(shardIntervalsOnNode,
+													  !insertedValues);
 			insertedValues = true;
 			appendStringInfoString(allShardStatisticsQuery, shardIdNameValues);
 			relation_close(relation, AccessShareLock);
