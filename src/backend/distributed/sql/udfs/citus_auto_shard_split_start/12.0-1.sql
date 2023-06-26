@@ -2,7 +2,7 @@ CREATE OR REPLACE FUNCTION pg_catalog.citus_auto_shard_split_start(
     shard_transfer_mode citus.shard_transfer_mode default 'auto'
 
     )
-    RETURNS VOID
+    RETURNS bigint
 
     AS 'MODULE_PATHNAME'
 
