@@ -937,6 +937,11 @@ GenerateAllShardStatisticsQueryForNode(WorkerNode *workerNode, List *citusTableI
 		{
 			List *shardIntervalsOnNode = ShardIntervalsOnWorkerGroup(workerNode,
 																	 relationId);
+			if (list_length(shardIntervalsOnNode) == 0)
+			{
+				relation_close(relation, AccessShareLock);
+				continue;
+			}
 			char *shardIdNameValues =
 				GenerateShardIdNameValuesForShardList(shardIntervalsOnNode, firstValue);
 			firstValue = false;
