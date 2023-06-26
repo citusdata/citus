@@ -226,7 +226,7 @@ SET search_path TO shard_move_deferred_delete;
 SELECT citus_shard_cost_by_disk_size(20000001);
  citus_shard_cost_by_disk_size
 ---------------------------------------------------------------------
-                          8192
+                   1.04866e+08
 (1 row)
 
 -- When there's not enough space the move should fail

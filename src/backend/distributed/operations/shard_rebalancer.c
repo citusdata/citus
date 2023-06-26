@@ -319,6 +319,7 @@ PG_FUNCTION_INFO_V1(citus_rebalance_wait);
 
 bool RunningUnderIsolationTest = false;
 int MaxRebalancerLoggedIgnoredMoves = 5;
+int RebalancerByDiskSizeBaseCost = 100 * 1024 * 1024;
 bool PropagateSessionSettingsForLoopbackConnection = false;
 
 static const char *PlacementUpdateTypeNames[] = {
@@ -676,6 +677,8 @@ citus_shard_cost_by_disk_size(PG_FUNCTION_ARGS)
 
 	MemoryContextSwitchTo(oldContext);
 	MemoryContextReset(localContext);
+
+	colocationSizeInBytes += RebalancerByDiskSizeBaseCost;
 
 	if (colocationSizeInBytes <= 0)
 	{

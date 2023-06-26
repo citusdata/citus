@@ -118,6 +118,7 @@ DEPS = {
     "multi_extension": TestDeps(None, repeatable=False),
     "multi_test_helpers": TestDeps(None),
     "multi_insert_select": TestDeps("base_schedule"),
+    "multi_partitioning": TestDeps("base_schedule"),
     "multi_mx_create_table": TestDeps(
         None,
         [
