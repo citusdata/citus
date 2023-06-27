@@ -5,6 +5,11 @@
 SET citus.next_shard_id TO 433000;
 SET citus.propagate_session_settings_for_loopback_connection TO ON;
 
+-- Lower the minimum disk size that a shard group is considered as. Otherwise
+-- we need to create shards of more than 100MB.
+ALTER SYSTEM SET citus.rebalancer_by_disk_size_base_cost = 0;
+SELECT pg_reload_conf();
+
 CREATE TABLE ref_table_test(a int primary key);
 SELECT create_reference_table('ref_table_test');
 CREATE TABLE dist_table_test(a int primary key);
@@ -1228,7 +1233,7 @@ DROP TABLE tab;
 
 -- we don't need the coordinator on pg_dist_node anymore
 SELECT 1 FROM master_remove_node('localhost', :master_port);
-SELECT public.wait_until_metadata_sync(30000);
+SELECT public.wait_until_metadata_sync(60000);
 
 --
 -- Make sure that rebalance_table_shards() and replicate_table_shards() replicate
@@ -1569,6 +1574,8 @@ select 1 from citus_add_node('localhost', :worker_2_port);
 select rebalance_table_shards();
 
 DROP TABLE table_with_primary_key, table_without_primary_key;
+ALTER SYSTEM RESET citus.rebalancer_by_disk_size_base_cost;
+SELECT pg_reload_conf();
 \c - - - :worker_1_port
 SET citus.enable_ddl_propagation TO OFF;
 REVOKE ALL ON SCHEMA public FROM testrole;
