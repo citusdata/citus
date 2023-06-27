@@ -2472,17 +2472,6 @@ RegisterCitusConfigVariables(void)
 		GUC_STANDARD,
 		NULL, NULL, NULL);
 
-
-	DefineCustomRealVariable(
-		"citus.stat_tenants_untracked_sample_rate",
-		gettext_noop("Sampling rate for new tenants in citus_stat_tenants."),
-		NULL,
-		&StatTenantsSampleRateForNewTenants,
-		1, 0, 1,
-		PGC_USERSET,
-		GUC_STANDARD,
-		NULL, NULL, NULL);
-
 	DefineCustomEnumVariable(
 		"citus.stat_tenants_track",
 		gettext_noop("Enables/Disables the stats collection for citus_stat_tenants."),
@@ -2493,6 +2482,16 @@ RegisterCitusConfigVariables(void)
 		STAT_TENANTS_TRACK_NONE,
 		stat_tenants_track_options,
 		PGC_SUSET,
+		GUC_STANDARD,
+		NULL, NULL, NULL);
+
+	DefineCustomRealVariable(
+		"citus.stat_tenants_untracked_sample_rate",
+		gettext_noop("Sampling rate for new tenants in citus_stat_tenants."),
+		NULL,
+		&StatTenantsSampleRateForNewTenants,
+		1, 0, 1,
+		PGC_USERSET,
 		GUC_STANDARD,
 		NULL, NULL, NULL);
 
