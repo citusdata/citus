@@ -21,7 +21,7 @@ parameters:
     default: '0.8.18'
   flaky_test:
     type: string
-    default: ''
+    default: 'multi_sequence_default'
   flaky_test_runs_per_job:
     type: integer
     default: 50
