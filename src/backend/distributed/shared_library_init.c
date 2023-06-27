@@ -2474,7 +2474,7 @@ RegisterCitusConfigVariables(void)
 
 
 	DefineCustomRealVariable(
-		"citus.stat_tenants_sample_rate_for_new_tenants",
+		"citus.stat_tenants_untracked_sample_rate",
 		gettext_noop("Sampling rate for new tenants in citus_stat_tenants."),
 		NULL,
 		&StatTenantsSampleRateForNewTenants,

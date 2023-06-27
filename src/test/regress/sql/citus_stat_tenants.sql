@@ -383,7 +383,7 @@ SELECT citus_stat_tenants_reset();
 
 -- test sampling
 -- set rate to 0 to disable sampling
-SELECT result FROM run_command_on_all_nodes('ALTER SYSTEM set citus.stat_tenants_sample_rate_for_new_tenants to 0;');
+SELECT result FROM run_command_on_all_nodes('ALTER SYSTEM set citus.stat_tenants_untracked_sample_rate to 0;');
 SELECT result FROM run_command_on_all_nodes('SELECT pg_reload_conf()');
 
 INSERT INTO dist_tbl VALUES (1, 'abcd');
@@ -396,7 +396,7 @@ SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, q
 
 -- test sampling
 -- set rate to 1 to track all tenants
-SELECT result FROM run_command_on_all_nodes('ALTER SYSTEM set citus.stat_tenants_sample_rate_for_new_tenants to 1;');
+SELECT result FROM run_command_on_all_nodes('ALTER SYSTEM set citus.stat_tenants_untracked_sample_rate to 1;');
 SELECT result FROM run_command_on_all_nodes('SELECT pg_reload_conf()');
 
 SELECT sleep_until_next_period();
