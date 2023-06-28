@@ -545,6 +545,21 @@ class QueryRunner(ABC):
         with self.cur(**kwargs) as cur:
             cur.execute(query, params=params)
 
+    def sql_row(self, query, params=None, allow_empty_result=False, **kwargs):
+        """Run an SQL query that returns a single row and returns this row
+
+        This opens a new connection and closes it once the query is done
+        """
+        with self.cur(**kwargs) as cur:
+            cur.execute(query, params=params)
+            result = cur.fetchall()
+
+            if allow_empty_result and len(result) == 0:
+                return None
+
+            assert len(result) == 1
+            return result[0]
+
     def sql_value(self, query, params=None, allow_empty_result=False, **kwargs):
         """Run an SQL query that returns a single cell and return this value
 
