@@ -402,6 +402,10 @@ PORT_UPPER_BOUND = 32768
 next_port = PORT_LOWER_BOUND
 
 
+def notice_handler(diag: psycopg.errors.Diagnostic):
+    print(f"{diag.severity} ({diag.sqlstate}): {diag.message_primary}")
+
+
 def cleanup_test_leftovers(nodes):
     """
     Cleaning up test leftovers needs to be done in a specific order, because
@@ -499,10 +503,12 @@ class QueryRunner(ABC):
     def conn(self, *, autocommit=True, **kwargs):
         """Open a psycopg connection to this server"""
         self.set_default_connection_options(kwargs)
-        return psycopg.connect(
+        conn = psycopg.connect(
             autocommit=autocommit,
             **kwargs,
         )
+        conn.add_notice_handler(notice_handler)
+        return conn
 
     def aconn(self, *, autocommit=True, **kwargs):
         """Open an asynchronous psycopg connection to this server"""

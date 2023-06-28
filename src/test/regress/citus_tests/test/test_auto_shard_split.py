@@ -14,7 +14,7 @@ def test_isolate(cluster):
 
     row_count1 = cluster.coordinator.sql_value("SELECT count(*) FROM pg_dist_shard")
 
-    query = "SELECT citus_auto_shard_split_start('block_writes')"
+    query = "SET client_min_messages = DEBUG4; SELECT citus_auto_shard_split_start('block_writes')"
     jobId = cluster.coordinator.sql_value(query)
     print(cluster.coordinator.sql_value("select command from pg_dist_background_task where status = 'runnable'"))
 
