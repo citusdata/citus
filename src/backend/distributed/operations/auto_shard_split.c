@@ -37,12 +37,12 @@ typedef struct ShardInfoData
 typedef ShardInfoData *ShardInfo;
 
 void ErrorOnConcurrentOperation(void);
-StringInfo GetShardSplitQuery(ShardInfo shardinfo, Datum datum,
+StringInfo GetShardSplitQuery(ShardInfo shardinfo, Datum splitPointArrayDatum,
 							  char *shardSplitMode);
-void ExecuteSplitBackgroundJob(int64 jobId, ShardInfo shardinfo, Datum datum,
+void ExecuteSplitBackgroundJob(int64 jobId, ShardInfo shardinfo, Datum splitPointArrayDatum,
 							   char *shardSplitMode);
 List * FindShardSplitPoints(int64 shardId);
-int64 ScheduleShardSplit(ShardInfo shardinfo, char *shardSplitMode, int64 jobId);
+bool ScheduleShardSplit(ShardInfo shardinfo, char *shardSplitMode, int64 jobId);
 
 /*
  * It throws an error if a concurrent automatic shard split or Rebalance operation is happening.
@@ -74,11 +74,11 @@ ErrorOnConcurrentOperation()
  * For a given SplitPoints , it creates the SQL query for the Shard Splitting
  */
 StringInfo
-GetShardSplitQuery(ShardInfo shardinfo, Datum datum, char *shardSplitMode)
+GetShardSplitQuery(ShardInfo shardinfo, Datum splitPointArrayDatum, char *shardSplitMode)
 {
 	StringInfo splitQuery = makeStringInfo();
 
-	ArrayType *array = DatumGetArrayTypeP(datum);
+	ArrayType *array = DatumGetArrayTypeP(splitPointArrayDatum);
 	Datum *values;
 	int nelems;
 	deconstruct_array(array,
@@ -98,7 +98,7 @@ GetShardSplitQuery(ShardInfo shardinfo, Datum datum, char *shardSplitMode)
 		}
 	}
 
-/*All the shards after the split will be belonging to the same node */
+    /*All the shards after the split will be belonging to the same node */
 	appendStringInfo(splitQuery, "], ARRAY[");
 
 	for (int i = 0; i < nelems; i++)
@@ -116,11 +116,11 @@ GetShardSplitQuery(ShardInfo shardinfo, Datum datum, char *shardSplitMode)
  * It creates a background job for citus_split_shard_by_split_points and executes it in background.
  */
 void
-ExecuteSplitBackgroundJob(int64 jobId, ShardInfo shardinfo, Datum datum,
+ExecuteSplitBackgroundJob(int64 jobId, ShardInfo shardinfo, Datum splitPointArrayDatum,
 						  char *shardSplitMode)
 {
 	StringInfo splitQuery = makeStringInfo();
-	splitQuery = GetShardSplitQuery(shardinfo, datum, shardSplitMode);
+	splitQuery = GetShardSplitQuery(shardinfo, splitPointArrayDatum, shardSplitMode);
 
 	/* ereport(LOG, (errmsg(splitQuery->data))); */
 	int32 nodesInvolved[] = { shardinfo->nodeId };
@@ -138,11 +138,12 @@ Datum
 citus_find_shard_split_points(PG_FUNCTION_ARGS)
 {
 	int64 shardId = PG_GETARG_INT64(0);
-	int64 shardGroupSize = PG_GETARG_INT64(1);
+	int64 shardSize = PG_GETARG_INT64(1);
+	int64 shardGroupSize = PG_GETARG_INT64(2);	
 	ereport(DEBUG4, errmsg("%ld", shardGroupSize));
 
 	/*Filtering Shards with total GroupSize greater than MaxShardSize*1024 i.e Size based Policy*/
-	if (shardGroupSize < MaxShardSize * 1024)
+	if (shardGroupSize < MaxShardSize*1024)
 	{
 		PG_RETURN_NULL();
 	}
@@ -161,6 +162,7 @@ citus_find_shard_split_points(PG_FUNCTION_ARGS)
 	int64 shardMinValue = shardrange->minValue;
 	int64 shardMaxValue = shardrange->maxValue;
 	char *tableName = generate_qualified_relation_name(tableId);
+	char *schemaName = get_namespace_name(get_rel_namespace(tableId));
 	StringInfo CommonValueQuery = makeStringInfo();
 
 	/*
@@ -177,8 +179,7 @@ citus_find_shard_split_points(PG_FUNCTION_ARGS)
 					 dataType,
 					 quote_literal_cstr(shardName),
 					 quote_literal_cstr(distributionColumnName),
-					 quote_literal_cstr(get_namespace_name(get_rel_namespace(
-															   tableId))),
+					 quote_literal_cstr(schemaName),
 					 TenantFrequency,
 					 shardId);
 
@@ -246,10 +247,6 @@ citus_find_shard_split_points(PG_FUNCTION_ARGS)
 	else
 	{
 		StringInfo AvgHashQuery = makeStringInfo();
-		uint64 tableSize = 0;
-		bool check = DistributedTableSize(tableId, TOTAL_RELATION_SIZE, true,
-										  &tableSize);
-
 		/*
 		 * It executes a query to find the average hash value in a shard considering rows with a limit of 10GB .
 		 * If there exists a hash value it is returned otherwise NULL is returned.
@@ -258,7 +255,7 @@ citus_find_shard_split_points(PG_FUNCTION_ARGS)
 									   " FROM (SELECT worker_hash(%s) h FROM %s TABLESAMPLE SYSTEM(least(10, 100*10000000000/%lu))"
 									   " WHERE worker_hash(%s)>=%ld AND worker_hash(%s)<=%ld) s",
 						 distributionColumnName, tableName,
-						 tableSize,
+						 shardSize,
 						 distributionColumnName, shardMinValue,
 						 distributionColumnName, shardMaxValue
 						 );
@@ -310,35 +307,36 @@ citus_find_shard_split_points(PG_FUNCTION_ARGS)
  * This function calculates the split points of the shard to
  * split and then executes the background job for the shard split.
  */
-int64
+bool
 ScheduleShardSplit(ShardInfo shardinfo, char *shardSplitMode, int64 jobId)
 {
 	SPI_connect();
 	StringInfo findSplitPointsQuery = makeStringInfo();
 	appendStringInfo(findSplitPointsQuery,
-					 "SELECT citus_find_shard_split_points(%ld , %ld)",
+					 "SELECT citus_find_shard_split_points(%ld , %ld , %ld)",
 					 shardinfo->shardId,
+					 shardinfo->shardSize,
 					 shardinfo->shardGroupSize);
 	SPI_exec(findSplitPointsQuery->data, 0);
 
 	SPITupleTable *tupletable = SPI_tuptable;
 	HeapTuple tuple = tupletable->vals[0];
 	bool isnull;
-	Datum resultDatum = SPI_getbinval(tuple, tupletable->tupdesc, 1, &isnull);
+	Datum splitPointArrayDatum = SPI_getbinval(tuple, tupletable->tupdesc, 1, &isnull);
 
 	if (!isnull)
 	{
-		ereport(DEBUG4, errmsg("%s", GetShardSplitQuery(shardinfo, resultDatum,
+		ereport(DEBUG4, errmsg("%s", GetShardSplitQuery(shardinfo, splitPointArrayDatum,
 														shardSplitMode)->data));
-		ExecuteSplitBackgroundJob(jobId, shardinfo, resultDatum, shardSplitMode);
+		ExecuteSplitBackgroundJob(jobId, shardinfo, splitPointArrayDatum, shardSplitMode);
 		SPI_finish();
-		return 1;
+		return true;
 	}
 	else
 	{
 		ereport(LOG, errmsg("No Splitpoints for shard split"));
 		SPI_finish();
-		return 0;
+		return false;
 	}
 }
 
@@ -389,7 +387,7 @@ citus_auto_shard_split_start(PG_FUNCTION_ARGS)
 	bool isnull;
 	int64 jobId = CreateBackgroundJob("Automatic Shard Split",
 									  "Split using SplitPoints List");
-	int64 count = 0;
+	int64 scheduledSplitCount = 0;
 
 	for (int rowIndex = 0; rowIndex < rowCount; rowIndex++)
 	{
@@ -408,14 +406,16 @@ citus_auto_shard_split_start(PG_FUNCTION_ARGS)
 		char *shardGroupSizeValue = SPI_getvalue(tuple, tupletable->tupdesc, 6);
 		shardinfo.shardGroupSize = strtoi64(shardGroupSizeValue, NULL, 10);
 
-		count = count + ScheduleShardSplit(&shardinfo, shardSplitMode, jobId);
+		if(ScheduleShardSplit(&shardinfo, shardSplitMode, jobId)){
+			scheduledSplitCount++;
+		}
 	}
 
 	SPI_freetuptable(tupletable);
 	SPI_finish();
-	if (count == 0)
+	if (scheduledSplitCount == 0)
 	{
-		DirectFunctionCall1(citus_job_cancel, Int64GetDatum(jobId));
+		CancelJob(jobId);
 	}
 
 	PG_RETURN_INT64(jobId);

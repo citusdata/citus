@@ -2262,8 +2262,8 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
-		"citus.max_shard_size",
-		gettext_noop("Sets the max size of a Shard"),
+		"citus.split_shard_group_size_threshold",
+		gettext_noop("Sets the max colocation group size of a Shard"),
 		NULL,
 		&MaxShardSize,
 		102400, 100, INT32_MAX,
@@ -2272,7 +2272,7 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomRealVariable(
-		"citus.tenant_freq",
+		"citus.tenant_isolation_frequency_threshold",
 		gettext_noop("Sets the threshold tenant frequency for a Shard"),
 		NULL,
 		&TenantFrequency,
