@@ -2042,7 +2042,7 @@ SELECT citus_shard_cost_by_disk_size(shardid) FROM pg_dist_shard WHERE logicalre
 DEBUG:  skipping child tables for relation named: events.Energy Added
  citus_shard_cost_by_disk_size
 ---------------------------------------------------------------------
-                         16384
+                   1.04874e+08
 (1 row)
 
 RESET client_min_messages;

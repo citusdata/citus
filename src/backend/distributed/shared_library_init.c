@@ -2195,6 +2195,23 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
+		"citus.rebalancer_by_disk_size_base_cost",
+		gettext_noop(
+			"When using the by_disk_size rebalance strategy each shard group "
+			"will get this cost in bytes added to its actual disk size. This "
+			"is used to avoid creating a bad balance when there's very little "
+			"data in some of the shards. The assumption is that even empty "
+			"shards have some cost, because of parallelism and because empty "
+			"shard groups will likely grow in the future."),
+		gettext_noop(
+			"The main reason this is configurable, is so it can be lowered for Citus its regression tests."),
+		&RebalancerByDiskSizeBaseCost,
+		100 * 1024 * 1024, 0, INT_MAX,
+		PGC_USERSET,
+		GUC_UNIT_BYTE | GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
+		NULL, NULL, NULL);
+
+	DefineCustomIntVariable(
 		"citus.recover_2pc_interval",
 		gettext_noop("Sets the time to wait between recovering 2PCs."),
 		gettext_noop("2PC transaction recovery needs to run every so often "
