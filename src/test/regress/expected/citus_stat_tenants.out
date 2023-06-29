@@ -1068,6 +1068,12 @@ SELECT sleep_until_next_period();
 
 (1 row)
 
+SELECT pg_sleep(0.1);
+ pg_sleep
+---------------------------------------------------------------------
+
+(1 row)
+
 INSERT INTO dist_tbl VALUES (1, 'abcd');
 INSERT INTO dist_tbl VALUES (2, 'abcd');
 UPDATE dist_tbl SET b = a + 1 WHERE a = 3;

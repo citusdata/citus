@@ -400,6 +400,7 @@ SELECT result FROM run_command_on_all_nodes('ALTER SYSTEM set citus.stat_tenants
 SELECT result FROM run_command_on_all_nodes('SELECT pg_reload_conf()');
 
 SELECT sleep_until_next_period();
+SELECT pg_sleep(0.1);
 
 INSERT INTO dist_tbl VALUES (1, 'abcd');
 INSERT INTO dist_tbl VALUES (2, 'abcd');
