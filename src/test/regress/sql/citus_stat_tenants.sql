@@ -83,20 +83,24 @@ SELECT count(*)>=0 FROM dist_tbl_text WHERE a = 'defg';
 SELECT tenant_attribute, query_count_in_this_period, score FROM citus_stat_tenants(true) WHERE nodeid = :worker_2_nodeid ORDER BY score DESC, tenant_attribute;
 
 -- test period passing
+\c - - - :worker_1_port
+
+SET search_path TO citus_stat_tenants;
+SET citus.stat_tenants_period TO 2;
 SELECT citus_stat_tenants_reset();
+SELECT sleep_until_next_period();
 
 SELECT count(*)>=0 FROM dist_tbl WHERE a = 1;
 INSERT INTO dist_tbl VALUES (5, 'abcd');
 
-\c - - - :worker_1_port
 SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, query_count_in_this_period, query_count_in_last_period,
     (cpu_usage_in_this_period>0) AS cpu_is_used_in_this_period, (cpu_usage_in_last_period>0) AS cpu_is_used_in_last_period
 FROM citus_stat_tenants_local
 ORDER BY tenant_attribute;
 
 -- simulate passing the period
-SET citus.stat_tenants_period TO 5;
 SELECT sleep_until_next_period();
+SELECT pg_sleep(1);
 
 SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, query_count_in_this_period, query_count_in_last_period,
     (cpu_usage_in_this_period>0) AS cpu_is_used_in_this_period, (cpu_usage_in_last_period>0) AS cpu_is_used_in_last_period
@@ -104,6 +108,7 @@ FROM citus_stat_tenants_local
 ORDER BY tenant_attribute;
 
 SELECT sleep_until_next_period();
+SELECT pg_sleep(1);
 
 SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, query_count_in_this_period, query_count_in_last_period,
     (cpu_usage_in_this_period>0) AS cpu_is_used_in_this_period, (cpu_usage_in_last_period>0) AS cpu_is_used_in_last_period
@@ -376,6 +381,42 @@ SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, q
 
 \c - - - :master_port
 SET search_path TO citus_stat_tenants;
+
+SET citus.enable_schema_based_sharding TO OFF;
+
+SELECT citus_stat_tenants_reset();
+
+-- test sampling
+-- set rate to 0 to disable sampling
+SELECT result FROM run_command_on_all_nodes('ALTER SYSTEM set citus.stat_tenants_untracked_sample_rate to 0;');
+SELECT result FROM run_command_on_all_nodes('SELECT pg_reload_conf()');
+
+INSERT INTO dist_tbl VALUES (1, 'abcd');
+INSERT INTO dist_tbl VALUES (2, 'abcd');
+UPDATE dist_tbl SET b = a + 1 WHERE a = 3;
+UPDATE dist_tbl SET b = a + 1 WHERE a = 4;
+DELETE FROM dist_tbl WHERE a = 5;
+
+SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, query_count_in_this_period, query_count_in_last_period FROM citus_stat_tenants ORDER BY tenant_attribute;
+
+-- test sampling
+-- set rate to 1 to track all tenants
+SELECT result FROM run_command_on_all_nodes('ALTER SYSTEM set citus.stat_tenants_untracked_sample_rate to 1;');
+SELECT result FROM run_command_on_all_nodes('SELECT pg_reload_conf()');
+
+SELECT sleep_until_next_period();
+SELECT pg_sleep(0.1);
+
+INSERT INTO dist_tbl VALUES (1, 'abcd');
+INSERT INTO dist_tbl VALUES (2, 'abcd');
+UPDATE dist_tbl SET b = a + 1 WHERE a = 3;
+UPDATE dist_tbl SET b = a + 1 WHERE a = 4;
+DELETE FROM dist_tbl WHERE a = 5;
+
+SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, query_count_in_this_period, query_count_in_last_period,
+    (cpu_usage_in_this_period>0) AS cpu_is_used_in_this_period, (cpu_usage_in_last_period>0) AS cpu_is_used_in_last_period
+FROM citus_stat_tenants(true)
+ORDER BY tenant_attribute;
 
 SET client_min_messages TO ERROR;
 DROP SCHEMA citus_stat_tenants CASCADE;

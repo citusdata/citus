@@ -36,6 +36,10 @@
 
 #include <time.h>
 
+#if (PG_VERSION_NUM >= PG_VERSION_15)
+	#include "common/pg_prng.h"
+#endif
+
 static void AttributeMetricsIfApplicable(void);
 
 ExecutorEnd_hook_type prev_ExecutorEnd = NULL;
@@ -80,7 +84,7 @@ int StatTenantsLogLevel = CITUS_LOG_LEVEL_OFF;
 int StatTenantsPeriod = (time_t) 60;
 int StatTenantsLimit = 100;
 int StatTenantsTrack = STAT_TENANTS_TRACK_NONE;
-int StatTenantsSampleRateForNewTenants = 100;
+double StatTenantsSampleRateForNewTenants = 1;
 
 PG_FUNCTION_INFO_V1(citus_stat_tenants_local);
 PG_FUNCTION_INFO_V1(citus_stat_tenants_local_reset);
@@ -281,13 +285,25 @@ AttributeTask(char *tenantId, int colocationId, CmdType commandType)
 
 	MultiTenantMonitor *monitor = GetMultiTenantMonitor();
 	bool found = false;
+
+	/* Acquire the lock in shared mode to check if the tenant is already in the hash table. */
+	LWLockAcquire(&monitor->lock, LW_SHARED);
+
 	hash_search(monitor->tenants, &key, HASH_FIND, &found);
+
+	LWLockRelease(&monitor->lock);
 
 	/* If the tenant is not found in the hash table, we will track the query with a probability of StatTenantsSampleRateForNewTenants. */
 	if (!found)
 	{
-		int randomValue = rand() % 100;
-		bool shouldTrackQuery = randomValue < StatTenantsSampleRateForNewTenants;
+#if (PG_VERSION_NUM >= PG_VERSION_15)
+		double randomValue = pg_prng_double(&pg_global_prng_state);
+#else
+
+		/* Generate a random double between 0 and 1 */
+		double randomValue = (double) random() / MAX_RANDOM_VALUE;
+#endif
+		bool shouldTrackQuery = randomValue <= StatTenantsSampleRateForNewTenants;
 		if (!shouldTrackQuery)
 		{
 			return;
