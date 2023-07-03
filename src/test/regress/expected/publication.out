@@ -99,6 +99,7 @@ SELECT create_distributed_table('test','x', colocate_with := 'none');
 
 SET citus.enable_schema_based_sharding TO ON;
 CREATE SCHEMA citus_schema_1;
+NOTICE:  distributing the schema citus_schema_1
 CREATE TABLE citus_schema_1.test (x int primary key, y int, "column-1" int, doc xml);
 SET citus.enable_schema_based_sharding TO OFF;
 ALTER PUBLICATION pubtables_orig ADD TABLE citus_schema_1.test;

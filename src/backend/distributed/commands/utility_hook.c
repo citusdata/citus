@@ -358,9 +358,8 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 
 				ConvertNewTableIfNecessary(createStmt);
 			}
-
-			if (context == PROCESS_UTILITY_TOPLEVEL &&
-				IsA(parsetree, AlterObjectSchemaStmt))
+			else if (context == PROCESS_UTILITY_TOPLEVEL &&
+					 IsA(parsetree, AlterObjectSchemaStmt))
 			{
 				AlterObjectSchemaStmt *alterSchemaStmt = castNode(AlterObjectSchemaStmt,
 																  parsetree);
@@ -369,6 +368,13 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 				{
 					ConvertToTenantTableIfNecessary(alterSchemaStmt);
 				}
+			}
+			else if (context == PROCESS_UTILITY_TOPLEVEL && IsA(parsetree,
+																CreateSchemaStmt))
+			{
+				CreateSchemaStmt *createSchemaStmt = castNode(CreateSchemaStmt,
+															  parsetree);
+				DistributeSchemaIfNecessary(createSchemaStmt);
 			}
 		}
 

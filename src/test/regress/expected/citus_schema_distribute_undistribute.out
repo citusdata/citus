@@ -303,6 +303,21 @@ SET role tenantuser;
 ALTER TABLE tenant1.table5 OWNER TO dummyregular;
 SET role dummyregular;
 SELECT citus_schema_distribute('tenant1');
+WARNING:  permission denied for database regression
+CONTEXT:  while executing command on localhost:xxxxx
+ERROR:  failure on connection marked as essential: localhost:xxxxx
+-- grant create on database, then redistribute
+SET role tenantuser;
+SELECT result FROM run_command_on_all_nodes($$ GRANT CREATE ON DATABASE regression TO dummyregular; $$);
+ result
+---------------------------------------------------------------------
+ GRANT
+ GRANT
+ GRANT
+(3 rows)
+
+SET role dummyregular;
+SELECT citus_schema_distribute('tenant1');
  citus_schema_distribute
 ---------------------------------------------------------------------
 
@@ -372,6 +387,14 @@ SELECT result FROM run_command_on_all_nodes($$ REASSIGN OWNED BY dummyregular TO
  REASSIGN OWNED
  REASSIGN OWNED
  REASSIGN OWNED
+(3 rows)
+
+SELECT result FROM run_command_on_all_nodes($$ REVOKE CREATE ON DATABASE regression FROM dummyregular; $$);
+ result
+---------------------------------------------------------------------
+ REVOKE
+ REVOKE
+ REVOKE
 (3 rows)
 
 DROP USER dummyregular;

@@ -50,11 +50,14 @@ SELECT COUNT(*)=0 FROM pg_dist_schema WHERE schemaid::regnamespace::text = 'regu
 
 -- empty tenant
 CREATE SCHEMA "tenant\'_1";
+NOTICE:  distributing the schema tenant\'_1
 -- non-empty tenant
 CREATE SCHEMA "tenant\'_2";
+NOTICE:  distributing the schema tenant\'_2
 CREATE TABLE "tenant\'_2".test_table(a int, b text);
 -- empty tenant
 CREATE SCHEMA "tenant\'_3";
+NOTICE:  distributing the schema tenant\'_3
 CREATE TABLE "tenant\'_3".test_table(a int, b text);
 DROP TABLE "tenant\'_3".test_table;
 -- add a node after creating tenant schemas
@@ -312,11 +315,88 @@ WHERE schemaid::regnamespace::text IN ('tenant_1', 'tenant_2');
  t
 (1 row)
 
--- verify that we don't allow creating tenant tables via CREATE SCHEMA command
-CREATE SCHEMA schema_using_schema_elements CREATE TABLE test_table(a int, b text);
-ERROR:  cannot create distributed schema and table in a single statement
-HINT:  SET citus.enable_schema_based_sharding TO off, or create the schema and table in separate commands.
+-- verify that we allow creating tenant tables via CREATE SCHEMA command
+CREATE SCHEMA schema_using_schema_elements
+    CREATE TABLE test_table(a int, b text);
+NOTICE:  distributing the schema schema_using_schema_elements
+SELECT COUNT(*)=1 FROM pg_dist_partition
+WHERE logicalrelid = 'schema_using_schema_elements.test_table'::regclass AND
+       partmethod = 'n' AND repmodel = 's' AND colocationid = (
+        SELECT colocationid FROM pg_dist_partition
+        WHERE logicalrelid = 'schema_using_schema_elements.test_table'::regclass);
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+-- verify that we allow creating tenant tables with other objects via CREATE SCHEMA command
+CREATE OR REPLACE FUNCTION dummy_trigger_fn()
+RETURNS trigger
+AS $$
+BEGIN
+    RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+SET citus.enable_unsafe_triggers TO on;
+CREATE SCHEMA schema_using_schema_elements_complex
+    CREATE SEQUENCE seq
+    CREATE TABLE test_table(a int DEFAULT nextval('seq'), b tsvector)
+    CREATE INDEX gin_idx ON test_table USING GIN (b)
+    CREATE VIEW v AS SELECT * FROM test_table
+    GRANT CREATE ON SCHEMA schema_using_schema_elements_complex TO public
+    GRANT SELECT ON TABLE test_table TO public
+    CREATE TRIGGER dummy_trigger
+        AFTER INSERT OR UPDATE OR DELETE ON test_table
+        FOR EACH ROW EXECUTE FUNCTION dummy_trigger_fn();
+WARNING:  "view v" has dependency to "table test_table" that is not in Citus' metadata
+DETAIL:  "view v" will be created only locally
+HINT:  Distribute "table test_table" first to distribute "view v"
+NOTICE:  distributing the schema schema_using_schema_elements_complex
+RESET citus.enable_unsafe_triggers;
+SELECT COUNT(*)=1 FROM pg_dist_partition
+WHERE logicalrelid = 'schema_using_schema_elements_complex.test_table'::regclass AND
+       partmethod = 'n' AND repmodel = 's' AND colocationid = (
+        SELECT colocationid FROM pg_dist_partition
+        WHERE logicalrelid = 'schema_using_schema_elements_complex.test_table'::regclass);
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+-- verify that we allow fkeys with reference tables while creating tenant tables with other objects via CREATE SCHEMA command
+CREATE SCHEMA schema_using_schema_elements_with_local
+    CREATE TABLE local_table(id int PRIMARY KEY REFERENCES regular_schema.ref_tbl(id))
+    CREATE TABLE test_table(a int REFERENCES local_table(id), b text);
+NOTICE:  distributing the schema schema_using_schema_elements_with_local
+SELECT COUNT(*)=1 FROM pg_dist_partition
+WHERE logicalrelid = 'schema_using_schema_elements_with_local.test_table'::regclass AND
+       partmethod = 'n' AND repmodel = 's' AND colocationid = (
+        SELECT colocationid FROM pg_dist_partition
+        WHERE logicalrelid = 'schema_using_schema_elements_with_local.test_table'::regclass);
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT COUNT(*)=1 FROM pg_dist_partition
+WHERE logicalrelid = 'schema_using_schema_elements_with_local.local_table'::regclass AND
+       partmethod = 'n' AND repmodel = 's' AND colocationid = (
+        SELECT colocationid FROM pg_dist_partition
+        WHERE logicalrelid = 'schema_using_schema_elements_with_local.local_table'::regclass);
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+-- verify that we do not allow fkeys with other schemas while creating tenant tables with other objects via CREATE SCHEMA command
+CREATE TABLE regular_schema.loc_t(id int PRIMARY KEY REFERENCES regular_schema.ref_tbl(id));
+CREATE SCHEMA schema_using_schema_elements_with_local2
+    CREATE TABLE local_table(id int PRIMARY KEY REFERENCES regular_schema.loc_t(id))
+    CREATE TABLE test_table(a int REFERENCES local_table(id), b text);
+ERROR:  foreign keys from distributed schemas can only point to the same distributed schema or reference tables in regular schemas
+DETAIL:  "schema_using_schema_elements_with_local2.local_table" references "regular_schema.loc_t" via foreign key constraint "local_table_id_fkey"
 CREATE SCHEMA tenant_4;
+NOTICE:  distributing the schema tenant_4
 CREATE TABLE tenant_4.tbl_1(a int, b text);
 CREATE TABLE tenant_4.tbl_2(a int, b text);
 -- verify that we don't allow creating a foreign table in a tenant schema, with a nice error message
@@ -389,12 +469,13 @@ SELECT EXISTS(
 (1 row)
 
 INSERT INTO tenant_4.another_partitioned_table VALUES (1, 'a');
-ERROR:  insert or update on table "another_partitioned_table_child_1920090" violates foreign key constraint "another_partitioned_table_a_fkey_1920089"
-DETAIL:  Key (a)=(1) is not present in table "partitioned_table_1920087".
+ERROR:  insert or update on table "another_partitioned_table_child_1920099" violates foreign key constraint "another_partitioned_table_a_fkey_1920098"
+DETAIL:  Key (a)=(1) is not present in table "partitioned_table_1920096".
 CONTEXT:  while executing command on localhost:xxxxx
 INSERT INTO tenant_4.partitioned_table VALUES (1, 'a');
 INSERT INTO tenant_4.another_partitioned_table VALUES (1, 'a');
 CREATE SCHEMA tenant_5;
+NOTICE:  distributing the schema tenant_5
 CREATE TABLE tenant_5.tbl_1(a int, b text);
 CREATE TABLE tenant_5.partitioned_table(a int, b text) PARTITION BY RANGE (a);
 -- verify that we don't allow creating a partition table that is child of a partitioned table in a different tenant schema
@@ -628,6 +709,7 @@ CREATE TABLE regular_schema.local_table_using_inherits(x int) INHERITS (tenant_5
 ERROR:  tables in a distributed schema cannot inherit or be inherited
 CREATE TABLE tenant_5.tbl_2(a int, b text);
 CREATE SCHEMA "CiTuS.TeeN_108";
+NOTICE:  distributing the schema CiTuS.TeeN_108
 ALTER SCHEMA "CiTuS.TeeN_108" RENAME TO citus_teen_proper;
 SELECT schemaid AS citus_teen_schemaid FROM pg_dist_schema WHERE schemaid::regnamespace::text = 'citus_teen_proper' \gset
 SELECT colocationid AS citus_teen_colocationid FROM pg_dist_schema WHERE schemaid::regnamespace::text = 'citus_teen_proper' \gset
@@ -1038,6 +1120,7 @@ DROP TABLE temp_table;
 -- test creating a tenant schema and a tenant table for it in the same transaction
 BEGIN;
     CREATE SCHEMA tenant_7;
+NOTICE:  distributing the schema tenant_7
     CREATE TABLE tenant_7.tbl_1(a int, b text);
     CREATE TABLE tenant_7.tbl_2(a int, b text);
     SELECT colocationid = (
@@ -1063,6 +1146,7 @@ COMMIT;
 -- but this time rollback the transaction.
 BEGIN;
     CREATE SCHEMA tenant_8;
+NOTICE:  distributing the schema tenant_8
     CREATE TABLE tenant_8.tbl_1(a int, b text);
     CREATE TABLE tenant_8.tbl_2(a int, b text);
 ROLLBACK;
@@ -1133,6 +1217,7 @@ CREATE TABLE tenant_5.tbl_5(a int, b text, FOREIGN KEY(a) REFERENCES tenant_7.tb
 ERROR:  cannot create foreign key constraint since relations are not colocated or not referencing a reference table
 DETAIL:  A distributed table can only have foreign keys if it is referencing another colocated hash distributed table or a reference table
 CREATE SCHEMA tenant_9;
+NOTICE:  distributing the schema tenant_9
 SELECT schemaid AS tenant_9_schemaid FROM pg_dist_schema WHERE schemaid::regnamespace::text = 'tenant_9' \gset
 SELECT colocationid AS tenant_9_colocationid FROM pg_dist_schema WHERE schemaid::regnamespace::text = 'tenant_9' \gset
 SELECT result FROM run_command_on_workers($$
@@ -1270,6 +1355,7 @@ CREATE USER test_other_super_user WITH superuser;
 \c - test_other_super_user
 SET citus.enable_schema_based_sharding TO ON;
 CREATE SCHEMA tenant_9;
+NOTICE:  distributing the schema tenant_9
 \c - postgres
 SET search_path TO regular_schema;
 SET citus.next_shard_id TO 1930000;
@@ -1360,10 +1446,12 @@ SET client_min_messages TO NOTICE;
 SET citus.enable_schema_based_sharding TO ON;
 -- test create / drop tenant schema / table
 CREATE SCHEMA tenant_10;
+NOTICE:  distributing the schema tenant_10
 CREATE TABLE tenant_10.tbl_1(a int, b text);
 CREATE TABLE tenant_10.tbl_2(a int, b text);
 DROP TABLE tenant_10.tbl_2;
 CREATE SCHEMA tenant_11;
+NOTICE:  distributing the schema tenant_11
 SELECT schemaid AS tenant_10_schemaid FROM pg_dist_schema WHERE schemaid::regnamespace::text = 'tenant_10' \gset
 SELECT colocationid AS tenant_10_colocationid FROM pg_dist_schema WHERE schemaid::regnamespace::text = 'tenant_10' \gset
 SELECT schemaid AS tenant_11_schemaid FROM pg_dist_schema WHERE schemaid::regnamespace::text = 'tenant_11' \gset
@@ -1540,6 +1628,7 @@ SET client_min_messages TO NOTICE;
 CREATE TABLE tenant_3.tbl_1(a int, b text);
 SET citus.enable_schema_based_sharding TO ON;
 CREATE SCHEMA tenant_6;
+NOTICE:  distributing the schema tenant_6
 CREATE TABLE tenant_6.tbl_1(a int, b text);
 -- verify pg_dist_partition entries for tenant_3.tbl_1 and tenant_6.tbl_1
 SELECT COUNT(*)=2 FROM pg_dist_partition
@@ -1582,6 +1671,7 @@ SELECT create_distributed_table('type_sing', NULL, colocate_with:='none');
 
 SET citus.enable_schema_based_sharding TO ON;
 CREATE SCHEMA type_sch;
+NOTICE:  distributing the schema type_sch
 CREATE TABLE type_sch.tbl (a INT);
 SELECT table_name, citus_table_type FROM public.citus_tables WHERE table_name::text LIKE 'type_%';
   table_name  | citus_table_type
@@ -1603,10 +1693,12 @@ SET citus.enable_schema_based_sharding TO ON;
 CREATE USER citus_schema_role SUPERUSER;
 SET ROLE citus_schema_role;
 CREATE SCHEMA citus_sch1;
+NOTICE:  distributing the schema citus_sch1
 CREATE TABLE citus_sch1.tbl1(a INT);
 CREATE TABLE citus_sch1.tbl2(a INT);
 RESET ROLE;
 CREATE SCHEMA citus_sch2;
+NOTICE:  distributing the schema citus_sch2
 CREATE TABLE citus_sch2.tbl1(a INT);
 SET citus.enable_schema_based_sharding TO OFF;
 INSERT INTO citus_sch1.tbl1 SELECT * FROM generate_series(1, 10000);
@@ -1638,7 +1730,9 @@ ORDER BY cs.schema_name::text;
 -- test empty schema and empty tables
 SET citus.enable_schema_based_sharding TO ON;
 CREATE SCHEMA citus_empty_sch1;
+NOTICE:  distributing the schema citus_empty_sch1
 CREATE SCHEMA citus_empty_sch2;
+NOTICE:  distributing the schema citus_empty_sch2
 CREATE TABLE citus_empty_sch2.tbl1(a INT);
 SET citus.enable_schema_based_sharding TO OFF;
 SELECT schema_name, schema_size FROM public.citus_schemas
@@ -1679,6 +1773,7 @@ SET search_path TO regular_schema;
 SET citus.enable_schema_based_sharding TO ON;
 CREATE ROLE authschema;
 CREATE SCHEMA AUTHORIZATION authschema;
+NOTICE:  distributing the schema authschema
 SET citus.enable_schema_based_sharding TO OFF;
 SELECT result FROM run_command_on_all_nodes($$
     SELECT COUNT(*)=1
@@ -1693,7 +1788,10 @@ $$);
 (3 rows)
 
 SET client_min_messages TO WARNING;
-DROP SCHEMA regular_schema, tenant_3, tenant_5, tenant_7, tenant_6, type_sch, citus_sch1, citus_sch2, citus_empty_sch1, citus_empty_sch2, authschema CASCADE;
+DROP SCHEMA regular_schema, tenant_3, tenant_5, tenant_7, tenant_6,
+            type_sch, citus_sch1, citus_sch2, citus_empty_sch1,
+            citus_empty_sch2, authschema, schema_using_schema_elements,
+            schema_using_schema_elements_complex, schema_using_schema_elements_with_local CASCADE;
 DROP ROLE citus_schema_role, citus_schema_nonpri, authschema;
 SELECT citus_remove_node('localhost', :master_port);
  citus_remove_node

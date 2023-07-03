@@ -45,9 +45,9 @@
 static List * GetObjectAddressBySchemaName(char *schemaName, bool missing_ok);
 static List * FilterDistributedSchemas(List *schemas);
 static bool SchemaHasDistributedTableWithFKey(char *schemaName);
-static bool ShouldPropagateCreateSchemaStmt(void);
+static bool ShouldPropagateCreateSchemaStmt(CreateSchemaStmt *createSchemaStmt);
 static List * GetGrantCommandsFromCreateSchemaStmt(Node *node);
-static bool CreateSchemaStmtCreatesTable(CreateSchemaStmt *stmt);
+static char * CreateSchemaStmtSchemaName(Node *node);
 
 
 /*
@@ -57,20 +57,20 @@ static bool CreateSchemaStmtCreatesTable(CreateSchemaStmt *stmt);
 List *
 PostprocessCreateSchemaStmt(Node *node, const char *queryString)
 {
-	CreateSchemaStmt *createSchemaStmt = castNode(CreateSchemaStmt, node);
+	EnsureCoordinator();
 
-	if (!ShouldPropagateCreateSchemaStmt())
+	CreateSchemaStmt *createSchemaStmt = castNode(CreateSchemaStmt, node);
+	if (!ShouldPropagateCreateSchemaStmt(createSchemaStmt))
 	{
 		return NIL;
 	}
-
-	EnsureCoordinator();
 
 	EnsureSequentialMode(OBJECT_SCHEMA);
 
 	bool missingOk = createSchemaStmt->if_not_exists;
 	List *schemaAdressList = CreateSchemaStmtObjectAddress(node, missingOk, true);
 	Assert(list_length(schemaAdressList) == 1);
+
 	ObjectAddress *schemaAdress = linitial(schemaAdressList);
 	Oid schemaId = schemaAdress->objectId;
 	if (!OidIsValid(schemaId))
@@ -87,37 +87,6 @@ PostprocessCreateSchemaStmt(Node *node, const char *queryString)
 	commands = lappend(commands, (void *) sql);
 
 	commands = list_concat(commands, GetGrantCommandsFromCreateSchemaStmt(node));
-
-	char *schemaName = get_namespace_name(schemaId);
-	if (ShouldUseSchemaBasedSharding(schemaName))
-	{
-		/* for now, we don't allow creating tenant tables when creating the schema itself */
-		if (CreateSchemaStmtCreatesTable(createSchemaStmt))
-		{
-			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							errmsg("cannot create distributed schema and table in a "
-								   "single statement"),
-							errhint("SET citus.enable_schema_based_sharding TO off, "
-									"or create the schema and table in separate "
-									"commands.")));
-		}
-
-		/*
-		 * Register the tenant schema on the coordinator and save the command
-		 * to register it on the workers.
-		 */
-		int shardCount = 1;
-		int replicationFactor = 1;
-		Oid distributionColumnType = InvalidOid;
-		Oid distributionColumnCollation = InvalidOid;
-		uint32 colocationId = CreateColocationGroup(
-			shardCount, replicationFactor, distributionColumnType,
-			distributionColumnCollation);
-
-		InsertTenantSchemaLocally(schemaId, colocationId);
-
-		commands = lappend(commands, TenantSchemaInsertCommand(schemaId, colocationId));
-	}
 
 	commands = lappend(commands, ENABLE_DDL_PROPAGATION);
 
@@ -230,17 +199,14 @@ PreprocessGrantOnSchemaStmt(Node *node, const char *queryString,
 
 
 /*
- * CreateSchemaStmtObjectAddress returns the ObjectAddress of the schema that is
- * the object of the CreateSchemaStmt. Errors if missing_ok is false.
+ * CreateSchemaStmtSchemaName returns the schema name properly from either schemaname
+ * or role specification.
  */
-List *
-CreateSchemaStmtObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
+static char *
+CreateSchemaStmtSchemaName(Node *node)
 {
 	CreateSchemaStmt *stmt = castNode(CreateSchemaStmt, node);
-
-	StringInfoData schemaName = { 0 };
-	initStringInfo(&schemaName);
-
+	StringInfo schemaName = makeStringInfo();
 	if (stmt->schemaname == NULL)
 	{
 		/*
@@ -248,14 +214,26 @@ CreateSchemaStmtObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
 		 * with the name of the authorizated user.
 		 */
 		Assert(stmt->authrole != NULL);
-		appendStringInfoString(&schemaName, RoleSpecString(stmt->authrole, true));
+		appendStringInfoString(schemaName, RoleSpecString(stmt->authrole, true));
 	}
 	else
 	{
-		appendStringInfoString(&schemaName, stmt->schemaname);
+		appendStringInfoString(schemaName, stmt->schemaname);
 	}
 
-	return GetObjectAddressBySchemaName(schemaName.data, missing_ok);
+	return schemaName->data;
+}
+
+
+/*
+ * CreateSchemaStmtObjectAddress returns the ObjectAddress of the schema that is
+ * the object of the CreateSchemaStmt. Errors if missing_ok is false.
+ */
+List *
+CreateSchemaStmtObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
+{
+	char *schemaName = CreateSchemaStmtSchemaName(node);
+	return GetObjectAddressBySchemaName(schemaName, missing_ok);
 }
 
 
@@ -405,9 +383,21 @@ SchemaHasDistributedTableWithFKey(char *schemaName)
  * switched to sequential mode, we don't propagate.
  */
 static bool
-ShouldPropagateCreateSchemaStmt()
+ShouldPropagateCreateSchemaStmt(CreateSchemaStmt *createSchemaStmt)
 {
 	if (!ShouldPropagate())
+	{
+		return false;
+	}
+
+	/*
+	 * We are calling `citus_schema_distribute` after postprocess if the schema is
+	 * going to be a tenant table. We should not propagate the schema here and
+	 * let `citus_schema_distribute` create it during dependency creation outside
+	 * transaction for visibility and deadlock reasons.
+	 */
+	char *schemaName = CreateSchemaStmtSchemaName((Node *) createSchemaStmt);
+	if (ShouldUseSchemaBasedSharding(schemaName))
 	{
 		return false;
 	}
@@ -460,28 +450,4 @@ GetGrantCommandsFromCreateSchemaStmt(Node *node)
 	}
 
 	return commands;
-}
-
-
-/*
- * CreateSchemaStmtCreatesTable returns true if given CreateSchemaStmt
- * creates a table using "schema_element" list.
- */
-static bool
-CreateSchemaStmtCreatesTable(CreateSchemaStmt *stmt)
-{
-	Node *element = NULL;
-	foreach_ptr(element, stmt->schemaElts)
-	{
-		/*
-		 * CREATE TABLE AS and CREATE FOREIGN TABLE commands cannot be
-		 * used as schema_elements anyway, so we don't need to check them.
-		 */
-		if (IsA(element, CreateStmt))
-		{
-			return true;
-		}
-	}
-
-	return false;
 }

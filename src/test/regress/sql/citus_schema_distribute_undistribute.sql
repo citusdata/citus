@@ -198,6 +198,12 @@ ALTER TABLE tenant1.table5 OWNER TO dummyregular;
 SET role dummyregular;
 SELECT citus_schema_distribute('tenant1');
 
+-- grant create on database, then redistribute
+SET role tenantuser;
+SELECT result FROM run_command_on_all_nodes($$ GRANT CREATE ON DATABASE regression TO dummyregular; $$);
+SET role dummyregular;
+SELECT citus_schema_distribute('tenant1');
+
 -- show the schema is a tenant schema now
 SELECT colocationid AS tenant1_colocid FROM pg_dist_schema schemaid \gset
 -- below query verifies the same colocationid in pg_dist_schema, pg_dist_colocation and all entries in pg_dist_partition at the same time
@@ -220,6 +226,7 @@ SELECT result FROM run_command_on_all_nodes($$ SELECT array_agg(logicalrelid ORD
 
 RESET role;
 SELECT result FROM run_command_on_all_nodes($$ REASSIGN OWNED BY dummyregular TO tenantuser; $$);
+SELECT result FROM run_command_on_all_nodes($$ REVOKE CREATE ON DATABASE regression FROM dummyregular; $$);
 DROP USER dummyregular;
 
 CREATE USER dummysuper superuser;
