@@ -70,12 +70,6 @@ PreprocessDropOwnedStmt(Node *node, const char *queryString,
 		return NIL;
 	}
 
-	/* check creation against multi-statement transaction policy */
-	if (!ShouldPropagateCreateInCoordinatedTransction())
-	{
-		return NIL;
-	}
-
 	EnsureCoordinator();
 
 	stmt->roles = distributedDropRoles;

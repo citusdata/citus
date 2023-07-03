@@ -51,12 +51,6 @@ PostprocessCreateDistributedObjectFromCatalogStmt(Node *stmt, const char *queryS
 		return NIL;
 	}
 
-	/* check creation against multi-statement transaction policy */
-	if (!ShouldPropagateCreateInCoordinatedTransction())
-	{
-		return NIL;
-	}
-
 	if (ops->featureFlag && *ops->featureFlag == false)
 	{
 		/* not propagating when a configured feature flag is turned off by the user */

@@ -73,6 +73,7 @@ extern bool SendOptionalMetadataCommandListToWorkerInCoordinatedTransaction(cons
 																			commandList);
 extern void SendCommandToWorkersWithMetadata(const char *command);
 extern void SendCommandToWorkersWithMetadataViaSuperUser(const char *command);
+extern void SendCommandListToWorkersWithMetadataViaSuperUser(List *commands);
 extern void SendBareCommandListToMetadataWorkers(List *commandList);
 extern void EnsureNoModificationsHaveBeenDone(void);
 extern void SendCommandListToWorkerOutsideTransaction(const char *nodeName,

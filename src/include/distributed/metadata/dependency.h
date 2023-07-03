@@ -38,4 +38,9 @@ extern Oid GetDependingView(Form_pg_depend pg_depend);
 extern List * FilterObjectAddressListByPredicate(List *objectAddressList,
 												 AddressPredicate predicate);
 
+extern void InitTxDistObjectContextAndHash(void);
+extern void AddToTxDistObjects(const ObjectAddress *objectAddress);
+extern void ResetTxDistObjects(void);
+extern bool HasDependencyToTxDistObject(const ObjectAddress *objectAddress);
+
 #endif /* CITUS_DEPENDENCY_H */

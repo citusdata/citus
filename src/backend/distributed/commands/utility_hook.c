@@ -55,6 +55,7 @@
 #include "distributed/listutils.h"
 #include "distributed/local_executor.h"
 #include "distributed/maintenanced.h"
+#include "distributed/metadata/dependency.h"
 #include "distributed/multi_logical_replication.h"
 #include "distributed/multi_partitioning_utils.h"
 #include "distributed/metadata_sync.h"
@@ -937,6 +938,7 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 			foreach_ptr(address, addresses)
 			{
 				MarkObjectDistributed(address);
+				AddToTxDistObjects(address);
 			}
 		}
 	}

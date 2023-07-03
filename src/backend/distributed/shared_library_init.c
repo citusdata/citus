@@ -55,6 +55,7 @@
 #include "distributed/shard_cleaner.h"
 #include "distributed/metadata_utility.h"
 #include "distributed/coordinator_protocol.h"
+#include "distributed/metadata/dependency.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata_sync.h"
 #include "distributed/multi_physical_planner.h"
@@ -488,6 +489,7 @@ _PG_init(void)
 	InitializeConnectionManagement();
 	InitPlacementConnectionManagement();
 	InitRelationAccessHash();
+	InitTxDistObjectContextAndHash();
 	InitializeCitusQueryStats();
 	InitializeSharedConnectionStats();
 	InitializeLocallyReservedSharedConnections();
@@ -1106,16 +1108,8 @@ RegisterCitusConfigVariables(void)
 
 	DefineCustomEnumVariable(
 		"citus.create_object_propagation",
-		gettext_noop("Controls the behavior of CREATE statements in transactions for "
-					 "supported objects"),
-		gettext_noop("When creating new objects in transactions this setting is used to "
-					 "determine the behavior for propagating. When objects are created "
-					 "in a multi-statement transaction block Citus needs to switch to "
-					 "sequential mode (if not already) to make sure the objects are "
-					 "visible to later statements on shards. The switch to sequential is "
-					 "not always desired. By changing this behavior the user can trade "
-					 "off performance for full transactional consistency on the creation "
-					 "of new objects."),
+		gettext_noop("Deprecated, Citus always propagates immediately"),
+		NULL,
 		&CreateObjectPropagationMode,
 		CREATE_OBJECT_PROPAGATION_IMMEDIATE, create_object_propagation_options,
 		PGC_USERSET,

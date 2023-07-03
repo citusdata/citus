@@ -147,12 +147,6 @@ PostprocessCreateExtensionStmt(Node *node, const char *queryString)
 		return NIL;
 	}
 
-	/* check creation against multi-statement transaction policy */
-	if (!ShouldPropagateCreateInCoordinatedTransction())
-	{
-		return NIL;
-	}
-
 	/* extension management can only be done via coordinator node */
 	EnsureCoordinator();
 

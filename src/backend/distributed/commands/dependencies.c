@@ -13,9 +13,11 @@
 #include "catalog/dependency.h"
 #include "catalog/objectaddress.h"
 #include "commands/extension.h"
+#include "common/hashfn.h"
 #include "distributed/commands.h"
 #include "distributed/commands/utility_hook.h"
 #include "distributed/connection_management.h"
+#include "distributed/hash_helpers.h"
 #include "distributed/listutils.h"
 #include "distributed/metadata/dependency.h"
 #include "distributed/metadata/distobject.h"
@@ -37,6 +39,88 @@ static void EnsureDependenciesExistOnAllNodes(const ObjectAddress *target);
 static List * GetDependencyCreateDDLCommands(const ObjectAddress *dependency);
 static bool ShouldPropagateObject(const ObjectAddress *address);
 static char * DropTableIfExistsCommand(Oid relationId);
+
+
+/*
+ * Memory context and hash map for the distributed objects created in the current
+ * transaction.
+ */
+static MemoryContext TxDistObjectsContext = NULL;
+static HTAB *TxDistObjectsHash = NULL;
+
+
+/*
+ * InitTxDistObjectContextAndHash allocates memory context and hash map to track
+ * distributed objects created in the current transaction.
+ */
+void
+InitTxDistObjectContextAndHash(void)
+{
+	TxDistObjectsContext = AllocSetContextCreateInternal(TopMemoryContext,
+														 "Tx Dist Object Context",
+														 ALLOCSET_DEFAULT_MINSIZE,
+														 ALLOCSET_DEFAULT_INITSIZE,
+														 ALLOCSET_DEFAULT_MAXSIZE);
+
+	HASHCTL info;
+	memset(&info, 0, sizeof(info));
+	info.keysize = sizeof(ObjectAddress);
+	info.entrysize = sizeof(ObjectAddress);
+	info.hash = tag_hash;
+	info.hcxt = TxDistObjectsContext;
+	uint32 hashFlags = (HASH_ELEM | HASH_BLOBS | HASH_CONTEXT);
+
+	TxDistObjectsHash = hash_create("citus tx dist objects hash",
+									8, &info, hashFlags);
+}
+
+
+/*
+ * AddToTxDistObjects adds given object into the distributed objects created in
+ * the current transaction.
+ */
+void
+AddToTxDistObjects(const ObjectAddress *objectAddress)
+{
+	hash_search(TxDistObjectsHash, objectAddress, HASH_ENTER, NULL);
+}
+
+
+/*
+ * ResetTxDistObjects resets hash map of the distributed objects created in the current
+ * transaction.
+ */
+void
+ResetTxDistObjects(void)
+{
+	hash_delete_all(TxDistObjectsHash);
+}
+
+
+/*
+ * HasDependencyToTxDistObject decides if given objects depends on any distributed
+ * object created  in the current transaction.
+ */
+bool
+HasDependencyToTxDistObject(const ObjectAddress *objectAddress)
+{
+	Assert(TxDistObjectsHash != NULL);
+	List *dependencyList = GetAllSupportedDependenciesForObject(objectAddress);
+
+	ObjectAddress *dependency = NULL;
+	foreach_ptr(dependency, dependencyList)
+	{
+		bool found = false;
+		hash_search(TxDistObjectsHash, dependency, HASH_FIND, &found);
+		if (found)
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
 
 /*
  * EnsureDependenciesExistOnAllNodes finds all the dependencies that we support and makes
@@ -112,15 +196,28 @@ EnsureDependenciesExistOnAllNodes(const ObjectAddress *target)
 						   dependency->objectSubId, ExclusiveLock);
 	}
 
-	WorkerNode *workerNode = NULL;
-	foreach_ptr(workerNode, workerNodeList)
+	/*
+	 * If there is any dependency which is created in the current transaction,
+	 * then, we should propagate target's all dependencies by using metadata connection
+	 * to ensure objects' visibility. Otherwise, it is safe to use outside connection.
+	 */
+	bool shouldUseMetadataConnection = HasDependencyToTxDistObject(target);
+	if (shouldUseMetadataConnection)
 	{
-		const char *nodeName = workerNode->workerName;
-		uint32 nodePort = workerNode->workerPort;
+		SendCommandListToWorkersWithMetadataViaSuperUser(ddlCommands);
+	}
+	else
+	{
+		WorkerNode *workerNode = NULL;
+		foreach_ptr(workerNode, workerNodeList)
+		{
+			const char *nodeName = workerNode->workerName;
+			uint32 nodePort = workerNode->workerPort;
 
-		SendCommandListToWorkerOutsideTransaction(nodeName, nodePort,
-												  CitusExtensionOwnerName(),
-												  ddlCommands);
+			SendCommandListToWorkerOutsideTransaction(nodeName, nodePort,
+													  CitusExtensionOwnerName(),
+													  ddlCommands);
+		}
 	}
 
 	/*
@@ -575,88 +672,6 @@ ShouldPropagate(void)
 	}
 
 	return true;
-}
-
-
-/*
- * ShouldPropagateCreateInCoordinatedTransction returns based the current state of the
- * session and policies if Citus needs to propagate the creation of new objects.
- *
- * Creation of objects on other nodes could be postponed till the object is actually used
- * in a sharded object (eg. distributed table or index on a distributed table). In certain
- * use cases the opportunity for parallelism in a transaction block is preferred. When
- * configured like that the creation of an object might be postponed and backfilled till
- * the object is actually used.
- */
-bool
-ShouldPropagateCreateInCoordinatedTransction()
-{
-	if (!IsMultiStatementTransaction())
-	{
-		/*
-		 * If we are in a single statement transaction we will always propagate the
-		 * creation of objects. There are no downsides in regard to performance or
-		 * transactional limitations. These only arise with transaction blocks consisting
-		 * of multiple statements.
-		 */
-		return true;
-	}
-
-	switch (CreateObjectPropagationMode)
-	{
-		case CREATE_OBJECT_PROPAGATION_DEFERRED:
-		{
-			/*
-			 * We always defer propagation here by relying on Citus' mechanism to ensure
-			 * the existence of the object if it would be used in the same transaction.
-			 */
-			return false;
-		}
-
-		case CREATE_OBJECT_PROPAGATION_AUTOMATIC:
-		{
-			if (MultiShardConnectionType == SEQUENTIAL_CONNECTION)
-			{
-				/*
-				 * If we are in a transaction that is already switched to sequential, either by
-				 * the user, or automatically by an other command, we will always propagate the
-				 * creation of new objects to the workers.
-				 *
-				 * This guarantees no strange anomalies when the transaction aborts or on
-				 * visibility of the newly created object.
-				 */
-				return true;
-			}
-
-			/*
-			 * When we run in optimistic mode we want to switch to sequential mode, only
-			 * if this would _not_ give an error to the user. Meaning, we either are
-			 * already in sequential mode (checked earlier), or there has been no parallel
-			 * execution in the current transaction block.
-			 *
-			 * If switching to sequential would throw an error we would stay in parallel
-			 * mode while creating new objects. We will rely on Citus' mechanism to ensure
-			 * the existence if the object would be used in the same transaction.
-			 */
-			if (ParallelQueryExecutedInTransaction())
-			{
-				return false;
-			}
-
-			return true;
-		}
-
-		case CREATE_OBJECT_PROPAGATION_IMMEDIATE:
-		{
-			/* Always propagate the objects. */
-			return true;
-		}
-
-		default:
-		{
-			elog(ERROR, "unsupported ddl propagation mode");
-		}
-	}
 }
 
 

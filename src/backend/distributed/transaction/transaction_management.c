@@ -30,6 +30,7 @@
 #include "distributed/local_executor.h"
 #include "distributed/locally_reserved_shared_connections.h"
 #include "distributed/maintenanced.h"
+#include "distributed/metadata/dependency.h"
 #include "distributed/multi_executor.h"
 #include "distributed/multi_logical_replication.h"
 #include "distributed/multi_explain.h"
@@ -321,6 +322,7 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 
 			ResetGlobalVariables();
 			ResetRelationAccessHash();
+			ResetTxDistObjects();
 
 			/*
 			 * Make sure that we give the shared connections back to the shared
@@ -391,6 +393,7 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 
 			ResetGlobalVariables();
 			ResetRelationAccessHash();
+			ResetTxDistObjects();
 
 			/* Reset any local replication origin session since transaction has been aborted.*/
 			ResetReplicationOriginLocalSession();

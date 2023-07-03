@@ -1319,11 +1319,6 @@ ShouldPropagateCreateFunction(CreateFunctionStmt *stmt)
 		return false;
 	}
 
-	if (!ShouldPropagateCreateInCoordinatedTransction())
-	{
-		return false;
-	}
-
 	return true;
 }
 

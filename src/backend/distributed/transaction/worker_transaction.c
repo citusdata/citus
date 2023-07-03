@@ -136,6 +136,21 @@ SendCommandToWorkersWithMetadataViaSuperUser(const char *command)
 
 
 /*
+ * SendCommandListToWorkersWithMetadataViaSuperUser sends given commands to all workers
+ * via superuser. See `SendCommandToWorkersWithMetadataViaSuperUser`for details.
+ */
+void
+SendCommandListToWorkersWithMetadataViaSuperUser(List *commands)
+{
+	char *command = NULL;
+	foreach_ptr(command, commands)
+	{
+		SendCommandToWorkersWithMetadataViaSuperUser(command);
+	}
+}
+
+
+/*
  * TargetWorkerSetNodeList returns a list of WorkerNode's that satisfies the
  * TargetWorkerSet.
  */
