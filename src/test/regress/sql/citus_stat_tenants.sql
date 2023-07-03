@@ -83,20 +83,24 @@ SELECT count(*)>=0 FROM dist_tbl_text WHERE a = 'defg';
 SELECT tenant_attribute, query_count_in_this_period, score FROM citus_stat_tenants(true) WHERE nodeid = :worker_2_nodeid ORDER BY score DESC, tenant_attribute;
 
 -- test period passing
+\c - - - :worker_1_port
+
+SET search_path TO citus_stat_tenants;
+SET citus.stat_tenants_period TO 2;
 SELECT citus_stat_tenants_reset();
+SELECT sleep_until_next_period();
 
 SELECT count(*)>=0 FROM dist_tbl WHERE a = 1;
 INSERT INTO dist_tbl VALUES (5, 'abcd');
 
-\c - - - :worker_1_port
 SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, query_count_in_this_period, query_count_in_last_period,
     (cpu_usage_in_this_period>0) AS cpu_is_used_in_this_period, (cpu_usage_in_last_period>0) AS cpu_is_used_in_last_period
 FROM citus_stat_tenants_local
 ORDER BY tenant_attribute;
 
 -- simulate passing the period
-SET citus.stat_tenants_period TO 5;
 SELECT sleep_until_next_period();
+SELECT pg_sleep(1);
 
 SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, query_count_in_this_period, query_count_in_last_period,
     (cpu_usage_in_this_period>0) AS cpu_is_used_in_this_period, (cpu_usage_in_last_period>0) AS cpu_is_used_in_last_period
@@ -104,6 +108,7 @@ FROM citus_stat_tenants_local
 ORDER BY tenant_attribute;
 
 SELECT sleep_until_next_period();
+SELECT pg_sleep(1);
 
 SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, query_count_in_this_period, query_count_in_last_period,
     (cpu_usage_in_this_period>0) AS cpu_is_used_in_this_period, (cpu_usage_in_last_period>0) AS cpu_is_used_in_last_period
