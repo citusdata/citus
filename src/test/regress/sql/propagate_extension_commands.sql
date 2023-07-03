@@ -203,7 +203,6 @@ SET search_path TO "extension'test";
 -- enable it and see that create command errors but continues its execution by changing citus.multi_shard_modify_mode TO 'off
 
 BEGIN;
-    SET LOCAL citus.create_object_propagation TO deferred;
 	CREATE TABLE some_random_table (a int);
 	SELECT create_distributed_table('some_random_table', 'a');
 	CREATE EXTENSION seg;

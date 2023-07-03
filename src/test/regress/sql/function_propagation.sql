@@ -46,7 +46,6 @@ SELECT * FROM run_command_on_workers($$SELECT pg_identify_object_as_address(clas
 
 -- Have a separate check for type created in transaction
 BEGIN;
-    SET LOCAL citus.create_object_propagation TO deferred;
     CREATE TYPE function_prop_type_3 AS (a int, b int);
 COMMIT;
 
@@ -193,7 +192,6 @@ $$;
 
 -- Function as a default column
 BEGIN;
-    SET LOCAL citus.create_object_propagation TO deferred;
     CREATE OR REPLACE FUNCTION func_in_transaction_def()
     RETURNS int
     LANGUAGE plpgsql AS
@@ -218,7 +216,6 @@ SELECT * FROM run_command_on_workers($$SELECT pg_identify_object_as_address(clas
 
 -- Multiple functions as a default column
 BEGIN;
-    SET LOCAL citus.create_object_propagation TO deferred;
     CREATE OR REPLACE FUNCTION func_in_transaction_1()
     RETURNS int
     LANGUAGE plpgsql AS
@@ -277,7 +274,6 @@ COMMIT;
 BEGIN;
     CREATE TABLE table_to_prop_func_4(id int);
 
-    SET LOCAL citus.create_object_propagation TO deferred;
     CREATE OR REPLACE FUNCTION func_in_transaction_4()
     RETURNS int
     LANGUAGE plpgsql AS
@@ -305,7 +301,6 @@ SELECT * FROM run_command_on_workers($$SELECT pg_identify_object_as_address(clas
 BEGIN;
     CREATE TABLE non_dist_table_for_function(id int);
 
-    SET LOCAL citus.create_object_propagation TO deferred;
     CREATE OR REPLACE FUNCTION non_dist_func(col_1 non_dist_table_for_function)
     RETURNS int
     LANGUAGE plpgsql AS
@@ -325,7 +320,6 @@ ROLLBACK;
 
 -- Adding multiple columns with default values should propagate the function
 BEGIN;
-    SET LOCAL citus.create_object_propagation TO deferred;
     CREATE OR REPLACE FUNCTION func_in_transaction_5()
     RETURNS int
     LANGUAGE plpgsql AS
@@ -361,7 +355,6 @@ SELECT * FROM run_command_on_workers($$SELECT pg_identify_object_as_address(clas
 
 -- Adding a constraint with function check should propagate the function
 BEGIN;
-    SET LOCAL citus.create_object_propagation TO deferred;
     CREATE OR REPLACE FUNCTION func_in_transaction_7(param_1 int)
     RETURNS boolean
     LANGUAGE plpgsql AS
@@ -386,7 +379,6 @@ SELECT * FROM run_command_on_workers($$SELECT pg_identify_object_as_address(clas
 
 -- Adding a constraint with multiple functions check should propagate the function
 BEGIN;
-    SET LOCAL citus.create_object_propagation TO deferred;
     CREATE OR REPLACE FUNCTION func_in_transaction_8(param_1 int)
     RETURNS boolean
     LANGUAGE plpgsql AS
@@ -426,7 +418,6 @@ BEGIN;
     CREATE TABLE table_to_prop_func_8(id int, col_1 int);
     SELECT create_distributed_table('table_to_prop_func_8', 'id');
 
-    SET LOCAL citus.create_object_propagation TO deferred;
     CREATE OR REPLACE FUNCTION func_in_transaction_10(param_1 int)
     RETURNS boolean
     LANGUAGE plpgsql AS
@@ -442,10 +433,7 @@ BEGIN;
 
     -- Function should be marked as distributed after adding the constraint
     SELECT pg_identify_object_as_address(classid, objid, objsubid) from pg_catalog.pg_dist_object where objid = 'function_propagation_schema.func_in_transaction_10'::regproc::oid;
-COMMIT;
-
--- Function should be marked as distributed on the worker after committing changes
-SELECT * FROM run_command_on_workers($$SELECT pg_identify_object_as_address(classid, objid, objsubid) from pg_catalog.pg_dist_object where objid = 'function_propagation_schema.func_in_transaction_10'::regproc::oid;$$) ORDER BY 1,2;
+ROLLBACK;
 
 
 -- If constraint depends on a non-distributed table it should error out
@@ -470,7 +458,6 @@ COMMIT;
 
 -- Show that function as a part of generated always is supporte
 BEGIN;
-    SET LOCAL citus.create_object_propagation TO deferred;
 	CREATE OR REPLACE FUNCTION non_sense_func_for_generated_always()
 	RETURNS int
 	LANGUAGE plpgsql IMMUTABLE AS
@@ -496,7 +483,6 @@ COMMIT;
 
 -- Show that functions depending table via rule are also distributed
 BEGIN;
-    SET LOCAL citus.create_object_propagation TO deferred;
     CREATE OR REPLACE FUNCTION func_for_rule()
     RETURNS int
     LANGUAGE plpgsql STABLE AS
@@ -526,7 +512,6 @@ SELECT * FROM run_command_on_workers($$SELECT pg_identify_object_as_address(clas
 
 -- Show that functions as partitioning functions are supported
 BEGIN;
-    SET LOCAL citus.create_object_propagation TO deferred;
 	CREATE OR REPLACE FUNCTION non_sense_func_for_partitioning(int)
 	RETURNS int
 	LANGUAGE plpgsql IMMUTABLE AS
@@ -552,7 +537,6 @@ SELECT * FROM run_command_on_workers($$SELECT pg_identify_object_as_address(clas
 
 -- Test function dependency on citus local table
 BEGIN;
-    SET LOCAL citus.create_object_propagation TO deferred;
     CREATE OR REPLACE FUNCTION func_in_transaction_for_local_table()
     RETURNS int
     LANGUAGE plpgsql AS
@@ -573,7 +557,6 @@ ROLLBACK;
 
 -- Show that having a function dependency on exlude also works
 BEGIN;
-    SET LOCAL citus.create_object_propagation TO deferred;
     CREATE OR REPLACE FUNCTION exclude_bool_func()
     RETURNS boolean
     LANGUAGE plpgsql IMMUTABLE AS
@@ -598,7 +581,6 @@ SELECT * FROM run_command_on_workers($$SELECT pg_identify_object_as_address(clas
 
 -- Show that having a function dependency for index also works
 BEGIN;
-    SET LOCAL citus.create_object_propagation TO deferred;
     CREATE OR REPLACE FUNCTION func_for_index_predicate(col_1 int)
     RETURNS boolean
     LANGUAGE plpgsql IMMUTABLE AS
@@ -657,7 +639,6 @@ SELECT * FROM run_command_on_workers($$SELECT pg_identify_object_as_address(clas
 
 -- Test function with SQL language and sequence dependency
 BEGIN;
-    SET LOCAL citus.create_object_propagation TO deferred;
     CREATE OR REPLACE FUNCTION func_in_transaction_def_with_seq(val bigint)
     RETURNS bigint
     LANGUAGE SQL AS

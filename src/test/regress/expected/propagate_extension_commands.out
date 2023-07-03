@@ -345,7 +345,6 @@ SET search_path TO "extension'test";
 -- check restriction for sequential execution
 -- enable it and see that create command errors but continues its execution by changing citus.multi_shard_modify_mode TO 'off
 BEGIN;
-    SET LOCAL citus.create_object_propagation TO deferred;
 	CREATE TABLE some_random_table (a int);
 	SELECT create_distributed_table('some_random_table', 'a');
  create_distributed_table
@@ -354,13 +353,13 @@ BEGIN;
 (1 row)
 
 	CREATE EXTENSION seg;
+ERROR:  cannot run extension command because there was a parallel operation on a distributed table in the transaction
+DETAIL:  When running command on/for a distributed extension, Citus needs to perform all operations over a single connection per node to ensure consistency.
+HINT:  Try re-running the transaction with "SET LOCAL citus.multi_shard_modify_mode TO 'sequential';"
 	CREATE TABLE some_random_table_2 (a int, b seg);
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
 	SELECT create_distributed_table('some_random_table_2', 'a');
- create_distributed_table
----------------------------------------------------------------------
-
-(1 row)
-
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
 ROLLBACK;
 -- show that the CREATE EXTENSION command propagated even if the transaction
 -- block is rollbacked, that's a shortcoming of dependency creation logic

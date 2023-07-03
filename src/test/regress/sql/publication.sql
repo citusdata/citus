@@ -265,12 +265,8 @@ SELECT DISTINCT c FROM (
   ORDER BY c) s;
 
 -- make sure we propagate schema dependencies
-SET citus.create_object_propagation TO 'deferred';
-BEGIN;
 CREATE SCHEMA deptest;
-END;
 CREATE PUBLICATION pubdep FOR TABLES IN SCHEMA deptest;
-RESET citus.create_object_propagation;
 DROP SCHEMA deptest CASCADE;
 
 -- make sure we can sync all the publication metadata
