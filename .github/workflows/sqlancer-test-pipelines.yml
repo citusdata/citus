@@ -41,7 +41,7 @@ jobs:
       - name: Checkout Sqlancer
         uses: actions/checkout@v3
         with:
-          ref: master
+          ref: main
           repository: sqlancer/sqlancer
 
       - name: Build SQLancer
