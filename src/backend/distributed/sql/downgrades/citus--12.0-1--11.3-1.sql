@@ -76,3 +76,8 @@ DROP FUNCTION pg_catalog.citus_stat_tenants_local_internal(
 
 #include "../udfs/drop_old_time_partitions/10.2-1.sql"
 #include "../udfs/get_missing_time_partition_ranges/10.2-1.sql"
+
+-- This explicitly does not reset the rebalance strategy to by_shard_count,
+-- because there's no way of knowing if the rebalance strategy before the
+-- upgrade was by_disk_size or by_shard_count. And even in previous versions
+-- by_disk_size is considered superior for quite some time.

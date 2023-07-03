@@ -334,7 +334,7 @@ ERROR:  Table 'single_shard_table_col2_1' is streaming replicated. Shards of str
 SELECT citus_copy_shard_placement(1820005, :worker_1_node, :worker_2_node);
 ERROR:  Table 'single_shard_table_col2_1' is streaming replicated. Shards of streaming replicated tables cannot be copied
 -- no changes because it's already balanced
-SELECT rebalance_table_shards();
+SELECT rebalance_table_shards(rebalance_strategy := 'by_shard_count');
  rebalance_table_shards
 ---------------------------------------------------------------------
 
