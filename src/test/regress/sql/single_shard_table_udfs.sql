@@ -160,7 +160,7 @@ SELECT master_copy_shard_placement(1820005, 'localhost', :worker_1_port, 'localh
 SELECT citus_copy_shard_placement(1820005, :worker_1_node, :worker_2_node);
 
 -- no changes because it's already balanced
-SELECT rebalance_table_shards();
+SELECT rebalance_table_shards(rebalance_strategy := 'by_shard_count');
 
 -- same placements
 SELECT shardid, nodeport FROM pg_dist_shard_placement WHERE shardid > 1820000 ORDER BY shardid;

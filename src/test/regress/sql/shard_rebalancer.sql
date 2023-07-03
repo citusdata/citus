@@ -5,6 +5,9 @@
 SET citus.next_shard_id TO 433000;
 SET citus.propagate_session_settings_for_loopback_connection TO ON;
 
+-- Because of historic reasons this test was written in a way that assumes that
+-- by_shard_count is the default strategy.
+SELECT citus_set_default_rebalance_strategy('by_shard_count');
 -- Lower the minimum disk size that a shard group is considered as. Otherwise
 -- we need to create shards of more than 100MB.
 ALTER SYSTEM SET citus.rebalancer_by_disk_size_base_cost = 0;
@@ -1574,6 +1577,7 @@ select 1 from citus_add_node('localhost', :worker_2_port);
 select rebalance_table_shards();
 
 DROP TABLE table_with_primary_key, table_without_primary_key;
+SELECT citus_set_default_rebalance_strategy('by_disk_size');
 ALTER SYSTEM RESET citus.rebalancer_by_disk_size_base_cost;
 SELECT pg_reload_conf();
 \c - - - :worker_1_port
