@@ -84,6 +84,7 @@
 #include "distributed/commands/utility_hook.h"
 #include "distributed/citus_custom_scan.h"
 #include "distributed/citus_ruleutils.h"
+#include "distributed/colocation_utils.h"
 #include "distributed/query_utils.h"
 #include "distributed/deparse_shard_query.h"
 #include "distributed/listutils.h"
@@ -129,6 +130,8 @@ static void LogLocalCommand(Task *task);
 static uint64 LocallyPlanAndExecuteMultipleQueries(List *queryStrings,
 												   TupleDestination *tupleDest,
 												   Task *task);
+static void SetColocationIdAndPartitionKeyValueForTasks(List *taskList,
+														Job *distributedPlan);
 static void LocallyExecuteUtilityTask(Task *task);
 static void ExecuteUdfTaskQuery(Query *localUdfCommandQuery);
 static void EnsureTransitionPossible(LocalExecutionStatus from,
@@ -226,6 +229,17 @@ ExecuteLocalTaskListExtended(List *taskList,
 	{
 		bool isRemote = false;
 		EnsureTaskExecutionAllowed(isRemote);
+	}
+
+	/*
+	 * If workerJob has a partitionKeyValue, we need to set the colocation id
+	 * and partition key value for each task before we start executing them
+	 * because tenant stats are collected based on these values of a task.
+	 */
+	if (distributedPlan != NULL && distributedPlan->workerJob != NULL && taskList != NIL)
+	{
+		SetJobColocationId(distributedPlan->workerJob);
+		SetColocationIdAndPartitionKeyValueForTasks(taskList, distributedPlan->workerJob);
 	}
 
 	/*
@@ -364,6 +378,25 @@ ExecuteLocalTaskListExtended(List *taskList,
 	}
 
 	return totalRowsProcessed;
+}
+
+
+/*
+ * SetColocationIdAndPartitionKeyValueForTasks sets colocationId and partitionKeyValue
+ * for the tasks in the taskList.
+ */
+static void
+SetColocationIdAndPartitionKeyValueForTasks(List *taskList, Job *workerJob)
+{
+	if (workerJob->colocationId != INVALID_COLOCATION_ID)
+	{
+		Task *task = NULL;
+		foreach_ptr(task, taskList)
+		{
+			task->colocationId = workerJob->colocationId;
+			task->partitionKeyValue = workerJob->partitionKeyValue;
+		}
+	}
 }
 
 

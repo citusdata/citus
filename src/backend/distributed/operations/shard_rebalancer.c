@@ -319,6 +319,7 @@ PG_FUNCTION_INFO_V1(citus_rebalance_wait);
 
 bool RunningUnderIsolationTest = false;
 int MaxRebalancerLoggedIgnoredMoves = 5;
+int RebalancerByDiskSizeBaseCost = 100 * 1024 * 1024;
 bool PropagateSessionSettingsForLoopbackConnection = false;
 
 static const char *PlacementUpdateTypeNames[] = {
@@ -515,6 +516,16 @@ GetRebalanceSteps(RebalanceOptions *options)
 
 	/* sort the lists to make the function more deterministic */
 	List *activeWorkerList = SortedActiveWorkers();
+	int shardAllowedNodeCount = 0;
+	WorkerNode *workerNode = NULL;
+	foreach_ptr(workerNode, activeWorkerList)
+	{
+		if (workerNode->shouldHaveShards)
+		{
+			shardAllowedNodeCount++;
+		}
+	}
+
 	List *activeShardPlacementListList = NIL;
 	List *unbalancedShards = NIL;
 
@@ -532,8 +543,7 @@ GetRebalanceSteps(RebalanceOptions *options)
 				shardPlacementList, options->workerNode);
 		}
 
-		if (list_length(activeShardPlacementListForRelation) >= list_length(
-				activeWorkerList))
+		if (list_length(activeShardPlacementListForRelation) >= shardAllowedNodeCount)
 		{
 			activeShardPlacementListList = lappend(activeShardPlacementListList,
 												   activeShardPlacementListForRelation);
@@ -667,6 +677,8 @@ citus_shard_cost_by_disk_size(PG_FUNCTION_ARGS)
 
 	MemoryContextSwitchTo(oldContext);
 	MemoryContextReset(localContext);
+
+	colocationSizeInBytes += RebalancerByDiskSizeBaseCost;
 
 	if (colocationSizeInBytes <= 0)
 	{
@@ -1168,6 +1180,11 @@ replicate_table_shards(PG_FUNCTION_ARGS)
 	int32 maxShardCopies = PG_GETARG_INT32(2);
 	ArrayType *excludedShardArray = PG_GETARG_ARRAYTYPE_P(3);
 	Oid shardReplicationModeOid = PG_GETARG_OID(4);
+
+	if (IsCitusTableType(relationId, SINGLE_SHARD_DISTRIBUTED))
+	{
+		ereport(ERROR, (errmsg("cannot replicate single shard tables' shards")));
+	}
 
 	char transferMode = LookupShardTransferMode(shardReplicationModeOid);
 	EnsureReferenceTablesExistOnAllNodesExtended(transferMode);
@@ -2003,7 +2020,7 @@ GenerateTaskMoveDependencyList(PlacementUpdateEvent *move, int64 colocationId,
 	 * overlaps with the current move's target node.
 	 * The earlier/first move might make space for the later/second move.
 	 * So we could run out of disk space (or at least overload the node)
-	 * if we move the second shard to it before the first one is moved away. 
+	 * if we move the second shard to it before the first one is moved away.
 	 */
 	ShardMoveSourceNodeHashEntry *shardMoveSourceNodeHashEntry = hash_search(
 		shardMoveDependencies.nodeDependencies, &move->targetNode->nodeId, HASH_FIND,
@@ -2165,7 +2182,10 @@ RebalanceTableShardsBackground(RebalanceOptions *options, Oid shardReplicationMo
 						 quote_literal_cstr(shardTranferModeLabel));
 
 		int32 nodesInvolved[] = { 0 };
-		BackgroundTask *task = ScheduleBackgroundTask(jobId, GetUserId(), buf.data, 0,
+
+		/* replicate_reference_tables permissions require superuser */
+		Oid superUserId = CitusExtensionOwner();
+		BackgroundTask *task = ScheduleBackgroundTask(jobId, superUserId, buf.data, 0,
 													  NULL, 0, nodesInvolved);
 		replicateRefTablesTaskId = task->taskid;
 	}
@@ -2268,7 +2288,7 @@ UpdateShardPlacement(PlacementUpdateEvent *placementUpdateEvent,
 	if (updateType == PLACEMENT_UPDATE_MOVE)
 	{
 		appendStringInfo(placementUpdateCommand,
-						 "SELECT citus_move_shard_placement(%ld,%u,%u,%s)",
+						 "SELECT pg_catalog.citus_move_shard_placement(%ld,%u,%u,%s)",
 						 shardId,
 						 sourceNode->nodeId,
 						 targetNode->nodeId,
@@ -2277,7 +2297,7 @@ UpdateShardPlacement(PlacementUpdateEvent *placementUpdateEvent,
 	else if (updateType == PLACEMENT_UPDATE_COPY)
 	{
 		appendStringInfo(placementUpdateCommand,
-						 "SELECT citus_copy_shard_placement(%ld,%u,%u,%s)",
+						 "SELECT pg_catalog.citus_copy_shard_placement(%ld,%u,%u,%s)",
 						 shardId,
 						 sourceNode->nodeId,
 						 targetNode->nodeId,

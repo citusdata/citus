@@ -496,11 +496,7 @@ struct TaskPlacementExecution;
 /* GUC, determining whether Citus opens 1 connection per task */
 bool ForceMaxQueryParallelization = false;
 int MaxAdaptiveExecutorPoolSize = 16;
-#if PG_VERSION_NUM >= PG_VERSION_14
 bool EnableBinaryProtocol = true;
-#else
-bool EnableBinaryProtocol = false;
-#endif
 
 /* GUC, number of ms to wait between opening connections to the same worker */
 int ExecutorSlowStartInterval = 10;
@@ -805,6 +801,8 @@ AdaptiveExecutor(CitusScanState *scanState)
 	TupleDestination *defaultTupleDest =
 		CreateTupleStoreTupleDest(scanState->tuplestorestate, tupleDescriptor);
 
+	bool localExecutionSupported = true;
+
 	if (RequestedForExplainAnalyze(scanState))
 	{
 		/*
@@ -814,6 +812,12 @@ AdaptiveExecutor(CitusScanState *scanState)
 		UseCoordinatedTransaction();
 		taskList = ExplainAnalyzeTaskList(taskList, defaultTupleDest, tupleDescriptor,
 										  paramListInfo);
+
+		/*
+		 * Multiple queries per task is not supported with local execution. See the Assert in
+		 * TupleDestDestReceiverReceive.
+		 */
+		localExecutionSupported = false;
 	}
 
 	bool hasDependentJobs = job->dependentJobList != NIL;
@@ -835,8 +839,6 @@ AdaptiveExecutor(CitusScanState *scanState)
 
 	TransactionProperties xactProperties = DecideTransactionPropertiesForTaskList(
 		distributedPlan->modLevel, taskList, excludeFromXact);
-
-	bool localExecutionSupported = true;
 
 	/*
 	 * In some rare cases, we have prepared statements that pass a parameter
@@ -1010,6 +1012,32 @@ ExecuteTaskListOutsideTransaction(RowModifyLevel modLevel, List *taskList,
 
 
 /*
+ * ExecuteTaskListIntoTupleDestWithParam is a proxy to ExecuteTaskListExtended() which uses
+ * bind params from executor state, and with defaults for some of the arguments.
+ */
+uint64
+ExecuteTaskListIntoTupleDestWithParam(RowModifyLevel modLevel, List *taskList,
+									  TupleDestination *tupleDest,
+									  bool expectResults,
+									  ParamListInfo paramListInfo)
+{
+	int targetPoolSize = MaxAdaptiveExecutorPoolSize;
+	bool localExecutionSupported = true;
+	ExecutionParams *executionParams = CreateBasicExecutionParams(
+		modLevel, taskList, targetPoolSize, localExecutionSupported
+		);
+
+	executionParams->xactProperties = DecideTransactionPropertiesForTaskList(
+		modLevel, taskList, false);
+	executionParams->expectResults = expectResults;
+	executionParams->tupleDestination = tupleDest;
+	executionParams->paramListInfo = paramListInfo;
+
+	return ExecuteTaskListExtended(executionParams);
+}
+
+
+/*
  * ExecuteTaskListIntoTupleDest is a proxy to ExecuteTaskListExtended() with defaults
  * for some of the arguments.
  */
@@ -1040,7 +1068,12 @@ ExecuteTaskListIntoTupleDest(RowModifyLevel modLevel, List *taskList,
 uint64
 ExecuteTaskListExtended(ExecutionParams *executionParams)
 {
-	ParamListInfo paramListInfo = NULL;
+	/* if there are no tasks to execute, we can return early */
+	if (list_length(executionParams->taskList) == 0)
+	{
+		return 0;
+	}
+
 	uint64 locallyProcessedRows = 0;
 
 	TupleDestination *defaultTupleDest = executionParams->tupleDestination;
@@ -1053,7 +1086,7 @@ ExecuteTaskListExtended(ExecutionParams *executionParams)
 	DistributedExecution *execution =
 		CreateDistributedExecution(
 			executionParams->modLevel, executionParams->taskList,
-			paramListInfo, executionParams->targetPoolSize,
+			executionParams->paramListInfo, executionParams->targetPoolSize,
 			defaultTupleDest, &executionParams->xactProperties,
 			executionParams->jobIdList, executionParams->localExecutionSupported);
 
@@ -1105,6 +1138,7 @@ CreateBasicExecutionParams(RowModifyLevel modLevel,
 	executionParams->expectResults = false;
 	executionParams->isUtilityCommand = false;
 	executionParams->jobIdList = NIL;
+	executionParams->paramListInfo = NULL;
 
 	return executionParams;
 }

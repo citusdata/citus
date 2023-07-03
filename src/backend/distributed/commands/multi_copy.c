@@ -258,9 +258,6 @@ static CopyCoercionData * ColumnCoercionPaths(TupleDesc destTupleDescriptor,
 											  Oid *finalColumnTypeArray);
 static FmgrInfo * TypeOutputFunctions(uint32 columnCount, Oid *typeIdArray,
 									  bool binaryFormat);
-#if PG_VERSION_NUM < PG_VERSION_14
-static List * CopyGetAttnums(TupleDesc tupDesc, Relation rel, List *attnamelist);
-#endif
 static bool CopyStatementHasFormat(CopyStmt *copyStatement, char *formatName);
 static void CitusCopyFrom(CopyStmt *copyStatement, QueryCompletion *completionTag);
 static void EnsureCopyCanRunOnRelation(Oid relationId);
@@ -609,14 +606,14 @@ CopyToExistingShards(CopyStmt *copyStatement, QueryCompletion *completionTag)
 	}
 
 	/* initialize copy state to read from COPY data source */
-	CopyFromState copyState = BeginCopyFrom_compat(NULL,
-												   copiedDistributedRelation,
-												   NULL,
-												   copyStatement->filename,
-												   copyStatement->is_program,
-												   NULL,
-												   copyStatement->attlist,
-												   copyStatement->options);
+	CopyFromState copyState = BeginCopyFrom(NULL,
+											copiedDistributedRelation,
+											NULL,
+											copyStatement->filename,
+											copyStatement->is_program,
+											NULL,
+											copyStatement->attlist,
+											copyStatement->options);
 
 	/* set up callback to identify error line number */
 	errorCallback.callback = CopyFromErrorCallback;
@@ -648,9 +645,7 @@ CopyToExistingShards(CopyStmt *copyStatement, QueryCompletion *completionTag)
 
 		++processedRowCount;
 
-#if PG_VERSION_NUM >= PG_VERSION_14
 		pgstat_progress_update_param(PROGRESS_COPY_TUPLES_PROCESSED, processedRowCount);
-#endif
 	}
 
 	EndCopyFrom(copyState);
@@ -890,27 +885,7 @@ CanUseBinaryCopyFormatForType(Oid typeId)
 	HeapTuple typeTup = typeidType(typeId);
 	Form_pg_type type = (Form_pg_type) GETSTRUCT(typeTup);
 	Oid elementType = type->typelem;
-#if PG_VERSION_NUM < PG_VERSION_14
-	char typeCategory = type->typcategory;
-#endif
 	ReleaseSysCache(typeTup);
-
-#if PG_VERSION_NUM < PG_VERSION_14
-
-	/*
-	 * In PG versions before PG14 the array_recv function would error out more
-	 * than necessary.
-	 *
-	 * It errors out when the element type its oids don't match with the oid in
-	 * the received data. This happens pretty much always for non built in
-	 * types, because their oids differ between postgres intallations. So we
-	 * skip binary encoding when the element type is a non built in type.
-	 */
-	if (typeCategory == TYPCATEGORY_ARRAY && elementType >= FirstNormalObjectId)
-	{
-		return false;
-	}
-#endif
 
 	/*
 	 * Any type that is a wrapper around an element type (e.g. arrays and
@@ -1682,20 +1657,6 @@ AppendCopyBinaryFooters(CopyOutState footerOutputState)
 static void
 SendCopyBegin(CopyOutState cstate)
 {
-#if PG_VERSION_NUM < PG_VERSION_14
-	if (PG_PROTOCOL_MAJOR(FrontendProtocol) < 3) {
-		/* old way */
-		if (cstate->binary)
-			ereport(ERROR,
-					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-					 errmsg("COPY BINARY is not supported to stdout or from stdin")));
-		pq_putemptymessage('H');
-		/* grottiness needed for old COPY OUT protocol */
-		pq_startcopyout();
-		cstate->copy_dest = COPY_OLD_FE;
-		return;
-	}
-#endif
 	StringInfoData buf;
 	int			natts = list_length(cstate->attnumlist);
 	int16		format = (cstate->binary ? 1 : 0);
@@ -1715,16 +1676,6 @@ SendCopyBegin(CopyOutState cstate)
 static void
 SendCopyEnd(CopyOutState cstate)
 {
-#if PG_VERSION_NUM < PG_VERSION_14
-	if (cstate->copy_dest != COPY_NEW_FE)
-	{
-		CopySendData(cstate, "\\.", 2);
-		/* Need to flush out the trailer (this also appends a newline) */
-		CopySendEndOfRow(cstate, true);
-		pq_endcopyout(false);
-		return;
-	}
-#endif
 	/* Shouldn't have any unsent data */
 	Assert(cstate->fe_msgbuf->len == 0);
 	/* Send Copy Done message */
@@ -1782,21 +1733,6 @@ CopySendEndOfRow(CopyOutState cstate, bool includeEndOfLine)
 
 	switch (cstate->copy_dest)
 	{
-#if PG_VERSION_NUM < PG_VERSION_14
-		case COPY_OLD_FE:
-			/* The FE/BE protocol uses \n as newline for all platforms */
-			if (!cstate->binary && includeEndOfLine)
-				CopySendChar(cstate, '\n');
-
-			if (pq_putbytes(fe_msgbuf->data, fe_msgbuf->len))
-			{
-				/* no hope of recovering connection sync, so FATAL */
-				ereport(FATAL,
-						(errcode(ERRCODE_CONNECTION_FAILURE),
-						 errmsg("connection lost during COPY to stdout")));
-			}
-			break;
-#endif
 		case COPY_FRONTEND:
 			/* The FE/BE protocol uses \n as newline for all platforms */
 			if (!cstate->binary && includeEndOfLine)
@@ -2128,12 +2064,36 @@ CitusCopyDestReceiverStartup(DestReceiver *dest, int operation,
 		int columnCount = inputTupleDescriptor->natts;
 		Oid *finalTypeArray = palloc0(columnCount * sizeof(Oid));
 
-		copyDest->columnCoercionPaths =
-			ColumnCoercionPaths(destTupleDescriptor, inputTupleDescriptor,
-								tableId, columnNameList, finalTypeArray);
-
-		copyDest->columnOutputFunctions =
-			TypeOutputFunctions(columnCount, finalTypeArray, copyOutState->binary);
+		/*
+		 * To ensure the proper co-location and distribution of the target table,
+		 * the entire process of repartitioning intermediate files requires the
+		 * destReceiver to be created on the target rather than the source.
+		 *
+		 * Within this specific code path, it is assumed that the employed model
+		 * is for insert-select. Consequently, it validates the column types of
+		 * destTupleDescriptor(target) during the intermediate result generation
+		 * process. However, this approach varies significantly for MERGE operations,
+		 * where the source tuple(s) can have arbitrary types and are not required to
+		 * align with the target column names.
+		 *
+		 * Despite this minor setback, a significant portion of the code responsible
+		 * for repartitioning intermediate files can be reused for the MERGE
+		 * operation. By leveraging the ability to perform actual coercion during
+		 * the writing process to the target table, we can bypass this specific route.
+		 */
+		if (copyDest->skipCoercions)
+		{
+			copyDest->columnOutputFunctions =
+				ColumnOutputFunctions(inputTupleDescriptor, copyOutState->binary);
+		}
+		else
+		{
+			copyDest->columnCoercionPaths =
+				ColumnCoercionPaths(destTupleDescriptor, inputTupleDescriptor,
+									tableId, columnNameList, finalTypeArray);
+			copyDest->columnOutputFunctions =
+				TypeOutputFunctions(columnCount, finalTypeArray, copyOutState->binary);
+		}
 	}
 
 	/* wrap the column names as Values */
@@ -2146,6 +2106,7 @@ CitusCopyDestReceiverStartup(DestReceiver *dest, int operation,
 	}
 
 	if (IsCitusTableTypeCacheEntry(cacheEntry, DISTRIBUTED_TABLE) &&
+		!IsCitusTableTypeCacheEntry(cacheEntry, SINGLE_SHARD_DISTRIBUTED) &&
 		copyDest->partitionColumnIndex == INVALID_PARTITION_COLUMN_INDEX)
 	{
 		ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
@@ -2596,9 +2557,11 @@ ShardIdForTuple(CitusCopyDestReceiver *copyDest, Datum *columnValues, bool *colu
 
 		/* find the partition column value */
 		partitionColumnValue = columnValues[partitionColumnIndex];
-
-		/* annoyingly this is evaluated twice, but at least we don't crash! */
-		partitionColumnValue = CoerceColumnValue(partitionColumnValue, coercePath);
+		if (!copyDest->skipCoercions)
+		{
+			/* annoyingly this is evaluated twice, but at least we don't crash! */
+			partitionColumnValue = CoerceColumnValue(partitionColumnValue, coercePath);
+		}
 	}
 
 	/*
@@ -3227,92 +3190,6 @@ CreateRangeTable(Relation rel, AclMode requiredAccess)
 	rte->requiredPerms = requiredAccess;
 	return list_make1(rte);
 }
-
-
-#if PG_VERSION_NUM < PG_VERSION_14
-
-/* Helper for CheckCopyPermissions(), copied from postgres */
-static List *
-CopyGetAttnums(TupleDesc tupDesc, Relation rel, List *attnamelist)
-{
-	/* *INDENT-OFF* */
-	List	   *attnums = NIL;
-
-	if (attnamelist == NIL)
-	{
-		/* Generate default column list */
-		int			attr_count = tupDesc->natts;
-		int			i;
-
-		for (i = 0; i < attr_count; i++)
-		{
-			if (TupleDescAttr(tupDesc, i)->attisdropped)
-				continue;
-			if (TupleDescAttr(tupDesc, i)->attgenerated)
-				continue;
-			attnums = lappend_int(attnums, i + 1);
-		}
-	}
-	else
-	{
-		/* Validate the user-supplied list and extract attnums */
-		ListCell   *l;
-
-		foreach(l, attnamelist)
-		{
-			char	   *name = strVal(lfirst(l));
-			int			attnum;
-			int			i;
-
-			/* Lookup column name */
-			attnum = InvalidAttrNumber;
-			for (i = 0; i < tupDesc->natts; i++)
-			{
-				Form_pg_attribute att = TupleDescAttr(tupDesc, i);
-
-				if (att->attisdropped)
-					continue;
-				if (namestrcmp(&(att->attname), name) == 0)
-				{
-					if (att->attgenerated)
-						ereport(ERROR,
-								(errcode(ERRCODE_INVALID_COLUMN_REFERENCE),
-								 errmsg("column \"%s\" is a generated column",
-										name),
-								 errdetail("Generated columns cannot be used in COPY.")));
-					attnum = att->attnum;
-					break;
-				}
-			}
-			if (attnum == InvalidAttrNumber)
-			{
-				if (rel != NULL)
-					ereport(ERROR,
-					        (errcode(ERRCODE_UNDEFINED_COLUMN),
-							        errmsg("column \"%s\" of relation \"%s\" does not exist",
-							               name, RelationGetRelationName(rel))));
-				else
-					ereport(ERROR,
-					        (errcode(ERRCODE_UNDEFINED_COLUMN),
-							        errmsg("column \"%s\" does not exist",
-							               name)));
-			}
-			/* Check for duplicates */
-			if (list_member_int(attnums, attnum))
-				ereport(ERROR,
-				        (errcode(ERRCODE_DUPLICATE_COLUMN),
-						        errmsg("column \"%s\" specified more than once",
-						               name)));
-			attnums = lappend_int(attnums, attnum);
-		}
-	}
-
-	return attnums;
-	/* *INDENT-ON* */
-}
-
-
-#endif
 
 
 /*

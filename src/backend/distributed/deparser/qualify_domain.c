@@ -245,11 +245,7 @@ QualifyCollate(CollateClause *collClause, bool missing_ok)
 	List *objName = NIL;
 	List *objArgs = NIL;
 
-	#if PG_VERSION_NUM >= PG_VERSION_14
 	getObjectIdentityParts(&collationAddress, &objName, &objArgs, false);
-	#else
-	getObjectIdentityParts(&collationAddress, &objName, &objArgs);
-	#endif
 
 	collClause->collname = NIL;
 	char *name = NULL;

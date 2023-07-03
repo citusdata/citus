@@ -805,11 +805,11 @@ SELECT run_command_on_workers($$SELECT COUNT(*) FROM pg_views WHERE viewname LIK
  (localhost,57638,t,2)
 (2 rows)
 
-SELECT pg_identify_object_as_address(classid, objid, objsubid) from pg_catalog.pg_dist_object where objid IN('viewsc.prop_view'::regclass::oid, 'viewsc.prop_view2'::regclass::oid);
+SELECT pg_identify_object_as_address(classid, objid, objsubid) from pg_catalog.pg_dist_object where objid IN('viewsc.prop_view'::regclass::oid, 'viewsc.prop_view2'::regclass::oid) ORDER BY 1;
   pg_identify_object_as_address
 ---------------------------------------------------------------------
- (view,"{viewsc,prop_view2}",{})
  (view,"{viewsc,prop_view}",{})
+ (view,"{viewsc,prop_view2}",{})
 (2 rows)
 
 -- drop views
@@ -857,7 +857,7 @@ SELECT run_command_on_workers($$SELECT COUNT(*) FROM pg_views WHERE viewname LIK
  (localhost,57638,t,2)
 (2 rows)
 
-SELECT pg_identify_object_as_address(classid, objid, objsubid) from pg_catalog.pg_dist_object where objid IN('viewsc.prop_view3'::regclass::oid, 'viewsc.prop_view4'::regclass::oid);
+SELECT pg_identify_object_as_address(classid, objid, objsubid) from pg_catalog.pg_dist_object where objid IN('viewsc.prop_view3'::regclass::oid, 'viewsc.prop_view4'::regclass::oid) ORDER BY 1;
   pg_identify_object_as_address
 ---------------------------------------------------------------------
  (view,"{viewsc,prop_view3}",{})

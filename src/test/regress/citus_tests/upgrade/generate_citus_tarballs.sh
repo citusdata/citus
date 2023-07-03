@@ -2,7 +2,8 @@
 
 set -euxo pipefail
 
-citus_old_version=$1
+pg_version=$1
+citus_old_version=$2
 
 base="$(pwd)"
 
@@ -17,38 +18,22 @@ install_citus_and_tar() {
 
     cd "${installdir}" && find . -type f -print >"${builddir}/files.lst"
 
-    tar cvf "${basedir}/install-citus${citus_version}.tar" $(cat "${builddir}"/files.lst)
-    mv "${basedir}/install-citus${citus_version}.tar" "${base}/install-citus${citus_version}.tar"
+    tar cvf "${basedir}/install-pg${pg_version}-citus${citus_version}.tar" $(cat "${builddir}"/files.lst)
+    mv "${basedir}/install-pg${pg_version}-citus${citus_version}.tar" "${base}/install-pg${pg_version}-citus${citus_version}.tar"
 
     cd "${builddir}" && rm -rf install files.lst && make clean
 }
 
-build_current() {
-    citus_version="$1"
-    basedir="${base}/${citus_version}"
-
-    mkdir -p "${basedir}"
-    citus_repo=$(git rev-parse --show-toplevel)
-
-    cd "$citus_repo" && cp -R . /tmp/citus_copy
-    # https://stackoverflow.com/questions/957928/is-there-a-way-to-get-the-git-root-directory-in-one-command
-    mv /tmp/citus_copy "${basedir}/citus_${citus_version}"
-    builddir="${basedir}/build"
-    cd "${basedir}"
-
-    citus_dir=${basedir}/citus_$citus_version
-
-    make -C "${citus_dir}" clean
-    cd "${citus_dir}"
-    ./configure --without-libcurl
-
-    install_citus_and_tar
-}
-
 build_ext() {
     citus_version="$1"
+    # If tarball already exsists we're good
+    if [ -f "${base}/install-pg${pg_version}-citus${citus_version}.tar" ]; then
+        return
+    fi
+
     basedir="${base}/${citus_version}"
 
+    rm -rf "${basedir}"
     mkdir -p "${basedir}"
     cd "${basedir}"
     citus_dir=${basedir}/citus_$citus_version
@@ -58,5 +43,4 @@ build_ext() {
     install_citus_and_tar
 }
 
-build_current "master"
 build_ext "${citus_old_version}"

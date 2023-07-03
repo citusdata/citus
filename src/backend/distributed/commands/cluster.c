@@ -114,13 +114,6 @@ PreprocessClusterStmt(Node *node, const char *clusterCommand,
 static bool
 IsClusterStmtVerbose_compat(ClusterStmt *clusterStmt)
 {
-#if PG_VERSION_NUM < PG_VERSION_14
-	if (clusterStmt->options & CLUOPT_VERBOSE)
-	{
-		return true;
-	}
-	return false;
-#else
 	DefElem *opt = NULL;
 	foreach_ptr(opt, clusterStmt->params)
 	{
@@ -130,5 +123,4 @@ IsClusterStmtVerbose_compat(ClusterStmt *clusterStmt)
 		}
 	}
 	return false;
-#endif
 }

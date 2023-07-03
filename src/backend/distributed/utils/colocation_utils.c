@@ -20,6 +20,7 @@
 #include "catalog/pg_type.h"
 #include "commands/sequence.h"
 #include "distributed/colocation_utils.h"
+#include "distributed/commands.h"
 #include "distributed/listutils.h"
 #include "distributed/metadata_utility.h"
 #include "distributed/coordinator_protocol.h"
@@ -30,6 +31,7 @@
 #include "distributed/pg_dist_colocation.h"
 #include "distributed/resource_lock.h"
 #include "distributed/shardinterval_utils.h"
+#include "distributed/tenant_schema_metadata.h"
 #include "distributed/version_compat.h"
 #include "distributed/utils/array_type.h"
 #include "distributed/worker_protocol.h"
@@ -49,7 +51,6 @@ static bool HashPartitionedShardIntervalsEqual(ShardInterval *leftShardInterval,
 											   ShardInterval *rightShardInterval);
 static int CompareShardPlacementsByNode(const void *leftElement,
 										const void *rightElement);
-static void DeleteColocationGroup(uint32 colocationId);
 static uint32 CreateColocationGroupForRelation(Oid sourceRelationId);
 static void BreakColocation(Oid sourceRelationId);
 
@@ -115,16 +116,19 @@ update_distributed_table_colocation(PG_FUNCTION_ARGS)
 	text *colocateWithTableNameText = PG_GETARG_TEXT_P(1);
 
 	EnsureTableOwner(targetRelationId);
+	ErrorIfTenantTable(targetRelationId, TenantOperationNames[TENANT_UPDATE_COLOCATION]);
 
 	char *colocateWithTableName = text_to_cstring(colocateWithTableNameText);
 	if (IsColocateWithNone(colocateWithTableName))
 	{
-		EnsureHashDistributedTable(targetRelationId);
+		EnsureHashOrSingleShardDistributedTable(targetRelationId);
 		BreakColocation(targetRelationId);
 	}
 	else
 	{
 		Oid colocateWithTableId = ResolveRelationId(colocateWithTableNameText, false);
+		ErrorIfTenantTable(colocateWithTableId,
+						   TenantOperationNames[TENANT_COLOCATE_WITH]);
 		EnsureTableOwner(colocateWithTableId);
 		MarkTablesColocated(colocateWithTableId, targetRelationId);
 	}
@@ -263,8 +267,8 @@ MarkTablesColocated(Oid sourceRelationId, Oid targetRelationId)
 							   "other tables")));
 	}
 
-	EnsureHashDistributedTable(sourceRelationId);
-	EnsureHashDistributedTable(targetRelationId);
+	EnsureHashOrSingleShardDistributedTable(sourceRelationId);
+	EnsureHashOrSingleShardDistributedTable(targetRelationId);
 	CheckReplicationModel(sourceRelationId, targetRelationId);
 	CheckDistributionColumnType(sourceRelationId, targetRelationId);
 
@@ -545,6 +549,13 @@ ColocationId(int shardCount, int replicationFactor, Oid distributionColumnType, 
 	{
 		Form_pg_dist_colocation colocationForm =
 			(Form_pg_dist_colocation) GETSTRUCT(colocationTuple);
+
+		/* avoid chosing a colocation group that belongs to a tenant schema */
+		if (IsTenantSchemaColocationGroup(colocationForm->colocationid))
+		{
+			colocationTuple = systable_getnext(scanDescriptor);
+			continue;
+		}
 
 		if (colocationId == INVALID_COLOCATION_ID || colocationId >
 			colocationForm->colocationid)
@@ -1258,9 +1269,9 @@ DeleteColocationGroupIfNoTablesBelong(uint32 colocationId)
 
 /*
  * DeleteColocationGroup deletes the colocation group from pg_dist_colocation
- * throughout the cluster.
+ * throughout the cluster and dissociates the tenant schema if any.
  */
-static void
+void
 DeleteColocationGroup(uint32 colocationId)
 {
 	DeleteColocationGroupLocally(colocationId);
@@ -1384,17 +1395,19 @@ EnsureTableCanBeColocatedWith(Oid relationId, char replicationModel,
 							  Oid distributionColumnType, Oid sourceRelationId)
 {
 	CitusTableCacheEntry *sourceTableEntry = GetCitusTableCacheEntry(sourceRelationId);
-	char sourceReplicationModel = sourceTableEntry->replicationModel;
-	Var *sourceDistributionColumn = DistPartitionKeyOrError(sourceRelationId);
 
-	if (!IsCitusTableTypeCacheEntry(sourceTableEntry, HASH_DISTRIBUTED))
+	if (IsCitusTableTypeCacheEntry(sourceTableEntry, APPEND_DISTRIBUTED) ||
+		IsCitusTableTypeCacheEntry(sourceTableEntry, RANGE_DISTRIBUTED) ||
+		IsCitusTableTypeCacheEntry(sourceTableEntry, CITUS_LOCAL_TABLE))
 	{
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 						errmsg("cannot distribute relation"),
-						errdetail("Currently, colocate_with option is only supported "
-								  "for hash distributed tables.")));
+						errdetail("Currently, colocate_with option is not supported "
+								  "with append / range distributed tables and local "
+								  "tables added to metadata.")));
 	}
 
+	char sourceReplicationModel = sourceTableEntry->replicationModel;
 	if (sourceReplicationModel != replicationModel)
 	{
 		char *relationName = get_rel_name(relationId);
@@ -1406,7 +1419,9 @@ EnsureTableCanBeColocatedWith(Oid relationId, char replicationModel,
 								  sourceRelationName, relationName)));
 	}
 
-	Oid sourceDistributionColumnType = sourceDistributionColumn->vartype;
+	Var *sourceDistributionColumn = DistPartitionKey(sourceRelationId);
+	Oid sourceDistributionColumnType = !sourceDistributionColumn ? InvalidOid :
+									   sourceDistributionColumn->vartype;
 	if (sourceDistributionColumnType != distributionColumnType)
 	{
 		char *relationName = get_rel_name(relationId);
@@ -1417,5 +1432,26 @@ EnsureTableCanBeColocatedWith(Oid relationId, char replicationModel,
 						errdetail("Distribution column types don't match for "
 								  "%s and %s.", sourceRelationName,
 								  relationName)));
+	}
+
+	/* prevent colocating regular tables with tenant tables */
+	Oid sourceRelationSchemaId = get_rel_namespace(sourceRelationId);
+	Oid targetRelationSchemaId = get_rel_namespace(relationId);
+	if (IsTenantSchema(sourceRelationSchemaId) &&
+		sourceRelationSchemaId != targetRelationSchemaId)
+	{
+		char *relationName = get_rel_name(relationId);
+		char *sourceRelationName = get_rel_name(sourceRelationId);
+		char *sourceRelationSchemaName = get_namespace_name(sourceRelationSchemaId);
+
+		ereport(ERROR, (errmsg("cannot colocate tables %s and %s",
+							   sourceRelationName, relationName),
+						errdetail("Cannot colocate tables with distributed schema tables"
+								  " by using colocate_with option."),
+						errhint("Consider using \"CREATE TABLE\" statement "
+								"to create this table as a single-shard distributed "
+								"table in the same schema to automatically colocate "
+								"it with %s.%s",
+								sourceRelationSchemaName, sourceRelationName)));
 	}
 }

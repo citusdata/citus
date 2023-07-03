@@ -794,15 +794,33 @@ DEBUG:  push down of limit count: 3
 DEBUG:  join prunable for task partitionId 0 and 1
 DEBUG:  join prunable for task partitionId 0 and 2
 DEBUG:  join prunable for task partitionId 0 and 3
+DEBUG:  join prunable for task partitionId 0 and 4
+DEBUG:  join prunable for task partitionId 0 and 5
 DEBUG:  join prunable for task partitionId 1 and 0
 DEBUG:  join prunable for task partitionId 1 and 2
 DEBUG:  join prunable for task partitionId 1 and 3
+DEBUG:  join prunable for task partitionId 1 and 4
+DEBUG:  join prunable for task partitionId 1 and 5
 DEBUG:  join prunable for task partitionId 2 and 0
 DEBUG:  join prunable for task partitionId 2 and 1
 DEBUG:  join prunable for task partitionId 2 and 3
+DEBUG:  join prunable for task partitionId 2 and 4
+DEBUG:  join prunable for task partitionId 2 and 5
 DEBUG:  join prunable for task partitionId 3 and 0
 DEBUG:  join prunable for task partitionId 3 and 1
 DEBUG:  join prunable for task partitionId 3 and 2
+DEBUG:  join prunable for task partitionId 3 and 4
+DEBUG:  join prunable for task partitionId 3 and 5
+DEBUG:  join prunable for task partitionId 4 and 0
+DEBUG:  join prunable for task partitionId 4 and 1
+DEBUG:  join prunable for task partitionId 4 and 2
+DEBUG:  join prunable for task partitionId 4 and 3
+DEBUG:  join prunable for task partitionId 4 and 5
+DEBUG:  join prunable for task partitionId 5 and 0
+DEBUG:  join prunable for task partitionId 5 and 1
+DEBUG:  join prunable for task partitionId 5 and 2
+DEBUG:  join prunable for task partitionId 5 and 3
+DEBUG:  join prunable for task partitionId 5 and 4
 DEBUG:  pruning merge fetch taskId 1
 DETAIL:  Creating dependency on merge taskId 2
 DEBUG:  pruning merge fetch taskId 2
@@ -819,6 +837,14 @@ DEBUG:  pruning merge fetch taskId 10
 DETAIL:  Creating dependency on merge taskId 8
 DEBUG:  pruning merge fetch taskId 11
 DETAIL:  Creating dependency on merge taskId 8
+DEBUG:  pruning merge fetch taskId 13
+DETAIL:  Creating dependency on merge taskId 10
+DEBUG:  pruning merge fetch taskId 14
+DETAIL:  Creating dependency on merge taskId 10
+DEBUG:  pruning merge fetch taskId 16
+DETAIL:  Creating dependency on merge taskId 12
+DEBUG:  pruning merge fetch taskId 17
+DETAIL:  Creating dependency on merge taskId 12
 ERROR:  the query contains a join that requires repartitioning
 HINT:  Set citus.enable_repartition_joins to on to enable repartitioning
 RESET citus.enable_non_colocated_router_query_pushdown;
@@ -830,7 +856,7 @@ SELECT a.author_id as first_author, b.word_count as second_word_count
 	FROM articles_hash a, single_shard b
 	WHERE a.author_id = 2 and a.author_id = b.author_id
 	LIMIT 3;
-DEBUG:  found no worker with all shard placements
+DEBUG:  router planner does not support queries that reference non-colocated distributed tables
 DEBUG:  generating subplan XXX_1 for CTE single_shard: SELECT id, author_id, title, word_count FROM multi_router_planner.articles_single_shard_hash
 DEBUG:  Creating router plan
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT a.author_id AS first_author, b.word_count AS second_word_count FROM multi_router_planner.articles_hash a, (SELECT intermediate_result.id, intermediate_result.author_id, intermediate_result.title, intermediate_result.word_count FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, author_id bigint, title character varying(20), word_count integer)) b WHERE ((a.author_id OPERATOR(pg_catalog.=) 2) AND (a.author_id OPERATOR(pg_catalog.=) b.author_id)) LIMIT 3
@@ -1513,21 +1539,67 @@ DEBUG:  Creating router plan
 SELECT a.author_id as first_author, b.word_count as second_word_count
 	FROM articles_hash a, articles_single_shard_hash b
 	WHERE a.author_id = 10 and a.author_id = b.author_id and int4eq(1, 1);
-DEBUG:  Creating router plan
-DEBUG:  query has a single distribution column value: 10
- first_author | second_word_count
----------------------------------------------------------------------
-           10 |             19519
-           10 |             19519
-           10 |             19519
-           10 |             19519
-           10 |             19519
-(5 rows)
-
+DEBUG:  router planner does not support queries that reference non-colocated distributed tables
+DEBUG:  join prunable for task partitionId 0 and 1
+DEBUG:  join prunable for task partitionId 0 and 2
+DEBUG:  join prunable for task partitionId 0 and 3
+DEBUG:  join prunable for task partitionId 0 and 4
+DEBUG:  join prunable for task partitionId 0 and 5
+DEBUG:  join prunable for task partitionId 1 and 0
+DEBUG:  join prunable for task partitionId 1 and 2
+DEBUG:  join prunable for task partitionId 1 and 3
+DEBUG:  join prunable for task partitionId 1 and 4
+DEBUG:  join prunable for task partitionId 1 and 5
+DEBUG:  join prunable for task partitionId 2 and 0
+DEBUG:  join prunable for task partitionId 2 and 1
+DEBUG:  join prunable for task partitionId 2 and 3
+DEBUG:  join prunable for task partitionId 2 and 4
+DEBUG:  join prunable for task partitionId 2 and 5
+DEBUG:  join prunable for task partitionId 3 and 0
+DEBUG:  join prunable for task partitionId 3 and 1
+DEBUG:  join prunable for task partitionId 3 and 2
+DEBUG:  join prunable for task partitionId 3 and 4
+DEBUG:  join prunable for task partitionId 3 and 5
+DEBUG:  join prunable for task partitionId 4 and 0
+DEBUG:  join prunable for task partitionId 4 and 1
+DEBUG:  join prunable for task partitionId 4 and 2
+DEBUG:  join prunable for task partitionId 4 and 3
+DEBUG:  join prunable for task partitionId 4 and 5
+DEBUG:  join prunable for task partitionId 5 and 0
+DEBUG:  join prunable for task partitionId 5 and 1
+DEBUG:  join prunable for task partitionId 5 and 2
+DEBUG:  join prunable for task partitionId 5 and 3
+DEBUG:  join prunable for task partitionId 5 and 4
+DEBUG:  pruning merge fetch taskId 1
+DETAIL:  Creating dependency on merge taskId 2
+DEBUG:  pruning merge fetch taskId 2
+DETAIL:  Creating dependency on merge taskId 2
+DEBUG:  pruning merge fetch taskId 4
+DETAIL:  Creating dependency on merge taskId 4
+DEBUG:  pruning merge fetch taskId 5
+DETAIL:  Creating dependency on merge taskId 4
+DEBUG:  pruning merge fetch taskId 7
+DETAIL:  Creating dependency on merge taskId 6
+DEBUG:  pruning merge fetch taskId 8
+DETAIL:  Creating dependency on merge taskId 6
+DEBUG:  pruning merge fetch taskId 10
+DETAIL:  Creating dependency on merge taskId 8
+DEBUG:  pruning merge fetch taskId 11
+DETAIL:  Creating dependency on merge taskId 8
+DEBUG:  pruning merge fetch taskId 13
+DETAIL:  Creating dependency on merge taskId 10
+DEBUG:  pruning merge fetch taskId 14
+DETAIL:  Creating dependency on merge taskId 10
+DEBUG:  pruning merge fetch taskId 16
+DETAIL:  Creating dependency on merge taskId 12
+DEBUG:  pruning merge fetch taskId 17
+DETAIL:  Creating dependency on merge taskId 12
+ERROR:  the query contains a join that requires repartitioning
+HINT:  Set citus.enable_repartition_joins to on to enable repartitioning
 SELECT a.author_id as first_author, b.word_count as second_word_count
 	FROM articles_hash a, articles_single_shard_hash b
 	WHERE a.author_id = 10 and a.author_id = b.author_id and int4eq(1, 2);
-DEBUG:  Creating router plan
+DEBUG:  router planner does not support queries that reference non-colocated distributed tables
  first_author | second_word_count
 ---------------------------------------------------------------------
 (0 rows)
@@ -1565,7 +1637,7 @@ SELECT a.author_id as first_author, b.word_count as second_word_count
 	FROM articles_hash a, articles_single_shard_hash b
 	WHERE a.author_id = 10 and a.author_id = b.author_id and
 		date_ne_timestamp('1954-04-11', '1954-04-11'::timestamp);
-DEBUG:  Creating router plan
+DEBUG:  router planner does not support queries that reference non-colocated distributed tables
  first_author | second_word_count
 ---------------------------------------------------------------------
 (0 rows)
@@ -1632,12 +1704,6 @@ DETAIL:  A command for a distributed function is run. To make sure subsequent co
 SELECT 1 FROM authors_reference  r JOIN (
   SELECT s.datid FROM number1() s LEFT JOIN pg_database d ON s.datid = d.oid
 ) num_db ON (r.id = num_db.datid) LIMIT 1;
-DEBUG:  found no worker with all shard placements
-DEBUG:  function does not have co-located tables
-DEBUG:  generating subplan XXX_1 for subquery SELECT datid FROM multi_router_planner.number1() s(datid)
-DEBUG:  Creating router plan
-DEBUG:  generating subplan XXX_2 for subquery SELECT s.datid FROM ((SELECT intermediate_result.datid FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(datid integer)) s LEFT JOIN pg_database d ON (((s.datid)::oid OPERATOR(pg_catalog.=) d.oid)))
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT 1 FROM (multi_router_planner.authors_reference r JOIN (SELECT intermediate_result.datid FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(datid integer)) num_db ON ((r.id OPERATOR(pg_catalog.=) num_db.datid))) LIMIT 1
 DEBUG:  Creating router plan
  ?column?
 ---------------------------------------------------------------------
@@ -1647,12 +1713,6 @@ DEBUG:  Creating router plan
 CREATE VIEW num_db AS
 SELECT s.datid FROM number1() s LEFT JOIN pg_database d ON s.datid = d.oid;
 SELECT 1 FROM authors_reference r JOIN num_db ON (r.id = num_db.datid) LIMIT 1;
-DEBUG:  found no worker with all shard placements
-DEBUG:  function does not have co-located tables
-DEBUG:  generating subplan XXX_1 for subquery SELECT datid FROM multi_router_planner.number1() s(datid)
-DEBUG:  Creating router plan
-DEBUG:  generating subplan XXX_2 for subquery SELECT s.datid FROM ((SELECT intermediate_result.datid FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(datid integer)) s LEFT JOIN pg_database d ON (((s.datid)::oid OPERATOR(pg_catalog.=) d.oid)))
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT 1 FROM (multi_router_planner.authors_reference r JOIN (SELECT intermediate_result.datid FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(datid integer)) num_db ON ((r.id OPERATOR(pg_catalog.=) num_db.datid))) LIMIT 1
 DEBUG:  Creating router plan
  ?column?
 ---------------------------------------------------------------------
@@ -1661,9 +1721,6 @@ DEBUG:  Creating router plan
 -- with a CTE in a view
 WITH cte AS MATERIALIZED (SELECT * FROM num_db)
 SELECT 1 FROM authors_reference r JOIN cte ON (r.id = cte.datid) LIMIT 1;
-DEBUG:  found no worker with all shard placements
-DEBUG:  generating subplan XXX_1 for CTE cte: SELECT datid FROM (SELECT s.datid FROM (multi_router_planner.number1() s(datid) LEFT JOIN pg_database d ON (((s.datid)::oid OPERATOR(pg_catalog.=) d.oid)))) num_db
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT 1 FROM (multi_router_planner.authors_reference r JOIN (SELECT intermediate_result.datid FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(datid integer)) cte ON ((r.id OPERATOR(pg_catalog.=) cte.datid))) LIMIT 1
 DEBUG:  Creating router plan
  ?column?
 ---------------------------------------------------------------------
@@ -1879,15 +1936,33 @@ DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  join prunable for task partitionId 0 and 1
 DEBUG:  join prunable for task partitionId 0 and 2
 DEBUG:  join prunable for task partitionId 0 and 3
+DEBUG:  join prunable for task partitionId 0 and 4
+DEBUG:  join prunable for task partitionId 0 and 5
 DEBUG:  join prunable for task partitionId 1 and 0
 DEBUG:  join prunable for task partitionId 1 and 2
 DEBUG:  join prunable for task partitionId 1 and 3
+DEBUG:  join prunable for task partitionId 1 and 4
+DEBUG:  join prunable for task partitionId 1 and 5
 DEBUG:  join prunable for task partitionId 2 and 0
 DEBUG:  join prunable for task partitionId 2 and 1
 DEBUG:  join prunable for task partitionId 2 and 3
+DEBUG:  join prunable for task partitionId 2 and 4
+DEBUG:  join prunable for task partitionId 2 and 5
 DEBUG:  join prunable for task partitionId 3 and 0
 DEBUG:  join prunable for task partitionId 3 and 1
 DEBUG:  join prunable for task partitionId 3 and 2
+DEBUG:  join prunable for task partitionId 3 and 4
+DEBUG:  join prunable for task partitionId 3 and 5
+DEBUG:  join prunable for task partitionId 4 and 0
+DEBUG:  join prunable for task partitionId 4 and 1
+DEBUG:  join prunable for task partitionId 4 and 2
+DEBUG:  join prunable for task partitionId 4 and 3
+DEBUG:  join prunable for task partitionId 4 and 5
+DEBUG:  join prunable for task partitionId 5 and 0
+DEBUG:  join prunable for task partitionId 5 and 1
+DEBUG:  join prunable for task partitionId 5 and 2
+DEBUG:  join prunable for task partitionId 5 and 3
+DEBUG:  join prunable for task partitionId 5 and 4
 DEBUG:  pruning merge fetch taskId 1
 DETAIL:  Creating dependency on merge taskId 2
 DEBUG:  pruning merge fetch taskId 2
@@ -1904,6 +1979,14 @@ DEBUG:  pruning merge fetch taskId 10
 DETAIL:  Creating dependency on merge taskId 8
 DEBUG:  pruning merge fetch taskId 11
 DETAIL:  Creating dependency on merge taskId 20
+DEBUG:  pruning merge fetch taskId 13
+DETAIL:  Creating dependency on merge taskId 10
+DEBUG:  pruning merge fetch taskId 14
+DETAIL:  Creating dependency on merge taskId 25
+DEBUG:  pruning merge fetch taskId 16
+DETAIL:  Creating dependency on merge taskId 12
+DEBUG:  pruning merge fetch taskId 17
+DETAIL:  Creating dependency on merge taskId 30
  id | author_id | title | word_count | name | id
 ---------------------------------------------------------------------
 (0 rows)
@@ -1917,15 +2000,33 @@ DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  join prunable for task partitionId 0 and 1
 DEBUG:  join prunable for task partitionId 0 and 2
 DEBUG:  join prunable for task partitionId 0 and 3
+DEBUG:  join prunable for task partitionId 0 and 4
+DEBUG:  join prunable for task partitionId 0 and 5
 DEBUG:  join prunable for task partitionId 1 and 0
 DEBUG:  join prunable for task partitionId 1 and 2
 DEBUG:  join prunable for task partitionId 1 and 3
+DEBUG:  join prunable for task partitionId 1 and 4
+DEBUG:  join prunable for task partitionId 1 and 5
 DEBUG:  join prunable for task partitionId 2 and 0
 DEBUG:  join prunable for task partitionId 2 and 1
 DEBUG:  join prunable for task partitionId 2 and 3
+DEBUG:  join prunable for task partitionId 2 and 4
+DEBUG:  join prunable for task partitionId 2 and 5
 DEBUG:  join prunable for task partitionId 3 and 0
 DEBUG:  join prunable for task partitionId 3 and 1
 DEBUG:  join prunable for task partitionId 3 and 2
+DEBUG:  join prunable for task partitionId 3 and 4
+DEBUG:  join prunable for task partitionId 3 and 5
+DEBUG:  join prunable for task partitionId 4 and 0
+DEBUG:  join prunable for task partitionId 4 and 1
+DEBUG:  join prunable for task partitionId 4 and 2
+DEBUG:  join prunable for task partitionId 4 and 3
+DEBUG:  join prunable for task partitionId 4 and 5
+DEBUG:  join prunable for task partitionId 5 and 0
+DEBUG:  join prunable for task partitionId 5 and 1
+DEBUG:  join prunable for task partitionId 5 and 2
+DEBUG:  join prunable for task partitionId 5 and 3
+DEBUG:  join prunable for task partitionId 5 and 4
 DEBUG:  pruning merge fetch taskId 1
 DETAIL:  Creating dependency on merge taskId 5
 DEBUG:  pruning merge fetch taskId 2
@@ -1942,6 +2043,14 @@ DEBUG:  pruning merge fetch taskId 10
 DETAIL:  Creating dependency on merge taskId 20
 DEBUG:  pruning merge fetch taskId 11
 DETAIL:  Creating dependency on merge taskId 20
+DEBUG:  pruning merge fetch taskId 13
+DETAIL:  Creating dependency on merge taskId 25
+DEBUG:  pruning merge fetch taskId 14
+DETAIL:  Creating dependency on merge taskId 25
+DEBUG:  pruning merge fetch taskId 16
+DETAIL:  Creating dependency on merge taskId 30
+DEBUG:  pruning merge fetch taskId 17
+DETAIL:  Creating dependency on merge taskId 30
  id | author_id | title | word_count | name | id
 ---------------------------------------------------------------------
 (0 rows)
@@ -1975,15 +2084,33 @@ DEBUG:  router planner does not support queries that reference non-colocated dis
 DEBUG:  join prunable for task partitionId 0 and 1
 DEBUG:  join prunable for task partitionId 0 and 2
 DEBUG:  join prunable for task partitionId 0 and 3
+DEBUG:  join prunable for task partitionId 0 and 4
+DEBUG:  join prunable for task partitionId 0 and 5
 DEBUG:  join prunable for task partitionId 1 and 0
 DEBUG:  join prunable for task partitionId 1 and 2
 DEBUG:  join prunable for task partitionId 1 and 3
+DEBUG:  join prunable for task partitionId 1 and 4
+DEBUG:  join prunable for task partitionId 1 and 5
 DEBUG:  join prunable for task partitionId 2 and 0
 DEBUG:  join prunable for task partitionId 2 and 1
 DEBUG:  join prunable for task partitionId 2 and 3
+DEBUG:  join prunable for task partitionId 2 and 4
+DEBUG:  join prunable for task partitionId 2 and 5
 DEBUG:  join prunable for task partitionId 3 and 0
 DEBUG:  join prunable for task partitionId 3 and 1
 DEBUG:  join prunable for task partitionId 3 and 2
+DEBUG:  join prunable for task partitionId 3 and 4
+DEBUG:  join prunable for task partitionId 3 and 5
+DEBUG:  join prunable for task partitionId 4 and 0
+DEBUG:  join prunable for task partitionId 4 and 1
+DEBUG:  join prunable for task partitionId 4 and 2
+DEBUG:  join prunable for task partitionId 4 and 3
+DEBUG:  join prunable for task partitionId 4 and 5
+DEBUG:  join prunable for task partitionId 5 and 0
+DEBUG:  join prunable for task partitionId 5 and 1
+DEBUG:  join prunable for task partitionId 5 and 2
+DEBUG:  join prunable for task partitionId 5 and 3
+DEBUG:  join prunable for task partitionId 5 and 4
 DEBUG:  pruning merge fetch taskId 1
 DETAIL:  Creating dependency on merge taskId 2
 DEBUG:  pruning merge fetch taskId 2
@@ -2000,6 +2127,14 @@ DEBUG:  pruning merge fetch taskId 10
 DETAIL:  Creating dependency on merge taskId 8
 DEBUG:  pruning merge fetch taskId 11
 DETAIL:  Creating dependency on merge taskId 20
+DEBUG:  pruning merge fetch taskId 13
+DETAIL:  Creating dependency on merge taskId 10
+DEBUG:  pruning merge fetch taskId 14
+DETAIL:  Creating dependency on merge taskId 25
+DEBUG:  pruning merge fetch taskId 16
+DETAIL:  Creating dependency on merge taskId 12
+DEBUG:  pruning merge fetch taskId 17
+DETAIL:  Creating dependency on merge taskId 30
  id | author_id | title | word_count | name | id
 ---------------------------------------------------------------------
 (0 rows)
@@ -2008,19 +2143,37 @@ RESET citus.enable_non_colocated_router_query_pushdown;
 -- not router plannable
 SELECT * FROM articles_hash ar join authors_range au on (ar.author_id = au.id)
 	WHERE ar.author_id = 3;
-DEBUG:  found no worker with all shard placements
+DEBUG:  router planner does not support queries that reference non-colocated distributed tables
 DEBUG:  join prunable for task partitionId 0 and 1
 DEBUG:  join prunable for task partitionId 0 and 2
 DEBUG:  join prunable for task partitionId 0 and 3
+DEBUG:  join prunable for task partitionId 0 and 4
+DEBUG:  join prunable for task partitionId 0 and 5
 DEBUG:  join prunable for task partitionId 1 and 0
 DEBUG:  join prunable for task partitionId 1 and 2
 DEBUG:  join prunable for task partitionId 1 and 3
+DEBUG:  join prunable for task partitionId 1 and 4
+DEBUG:  join prunable for task partitionId 1 and 5
 DEBUG:  join prunable for task partitionId 2 and 0
 DEBUG:  join prunable for task partitionId 2 and 1
 DEBUG:  join prunable for task partitionId 2 and 3
+DEBUG:  join prunable for task partitionId 2 and 4
+DEBUG:  join prunable for task partitionId 2 and 5
 DEBUG:  join prunable for task partitionId 3 and 0
 DEBUG:  join prunable for task partitionId 3 and 1
 DEBUG:  join prunable for task partitionId 3 and 2
+DEBUG:  join prunable for task partitionId 3 and 4
+DEBUG:  join prunable for task partitionId 3 and 5
+DEBUG:  join prunable for task partitionId 4 and 0
+DEBUG:  join prunable for task partitionId 4 and 1
+DEBUG:  join prunable for task partitionId 4 and 2
+DEBUG:  join prunable for task partitionId 4 and 3
+DEBUG:  join prunable for task partitionId 4 and 5
+DEBUG:  join prunable for task partitionId 5 and 0
+DEBUG:  join prunable for task partitionId 5 and 1
+DEBUG:  join prunable for task partitionId 5 and 2
+DEBUG:  join prunable for task partitionId 5 and 3
+DEBUG:  join prunable for task partitionId 5 and 4
 DEBUG:  pruning merge fetch taskId 1
 DETAIL:  Creating dependency on merge taskId 2
 DEBUG:  pruning merge fetch taskId 2
@@ -2037,6 +2190,14 @@ DEBUG:  pruning merge fetch taskId 10
 DETAIL:  Creating dependency on merge taskId 8
 DEBUG:  pruning merge fetch taskId 11
 DETAIL:  Creating dependency on merge taskId 20
+DEBUG:  pruning merge fetch taskId 13
+DETAIL:  Creating dependency on merge taskId 10
+DEBUG:  pruning merge fetch taskId 14
+DETAIL:  Creating dependency on merge taskId 25
+DEBUG:  pruning merge fetch taskId 16
+DETAIL:  Creating dependency on merge taskId 12
+DEBUG:  pruning merge fetch taskId 17
+DETAIL:  Creating dependency on merge taskId 30
  id | author_id | title | word_count | name | id
 ---------------------------------------------------------------------
 (0 rows)
@@ -2402,7 +2563,6 @@ $$ LANGUAGE plpgsql;
 DEBUG:  switching to sequential query execution mode
 DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
 SELECT author_articles_max_id();
-DEBUG:  function does not have co-located tables
 DEBUG:  Creating router plan
 CONTEXT:  SQL statement "SELECT MAX(id) FROM articles_hash ah
 		WHERE author_id = 1"
@@ -2430,7 +2590,6 @@ $$ LANGUAGE plpgsql;
 DEBUG:  switching to sequential query execution mode
 DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
 SELECT * FROM author_articles_id_word_count() ORDER BY 1;
-DEBUG:  function does not have co-located tables
 DEBUG:  Creating router plan
 CONTEXT:  SQL statement "SELECT ah.id, ah.word_count
 		FROM articles_hash ah

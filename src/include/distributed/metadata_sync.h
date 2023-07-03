@@ -137,6 +137,8 @@ extern void SyncNewColocationGroupToNodes(uint32 colocationId, int shardCount,
 										  Oid distributionColumType,
 										  Oid distributionColumnCollation);
 extern void SyncDeleteColocationGroupToNodes(uint32 colocationId);
+extern char * TenantSchemaInsertCommand(Oid schemaId, uint32 colocationId);
+extern char * TenantSchemaDeleteCommand(char *schemaName);
 
 extern MetadataSyncContext * CreateMetadataSyncContext(List *nodeList,
 													   bool collectCommands,
@@ -156,12 +158,14 @@ extern void SendOrCollectCommandListToSingleNode(MetadataSyncContext *context,
 extern void ActivateNodeList(MetadataSyncContext *context);
 
 extern char * WorkerDropAllShellTablesCommand(bool singleTransaction);
+extern char * WorkerDropSequenceDependencyCommand(Oid relationId);
 
 extern void SyncDistributedObjects(MetadataSyncContext *context);
 extern void SendNodeWideObjectsSyncCommands(MetadataSyncContext *context);
 extern void SendShellTableDeletionCommands(MetadataSyncContext *context);
 extern void SendMetadataDeletionCommands(MetadataSyncContext *context);
 extern void SendColocationMetadataCommands(MetadataSyncContext *context);
+extern void SendTenantSchemaMetadataCommands(MetadataSyncContext *context);
 extern void SendDependencyCreationCommands(MetadataSyncContext *context);
 extern void SendDistTableMetadataCommands(MetadataSyncContext *context);
 extern void SendDistObjectCommands(MetadataSyncContext *context);
@@ -173,6 +177,7 @@ extern void SendInterTableRelationshipCommands(MetadataSyncContext *context);
 #define DELETE_ALL_DISTRIBUTED_OBJECTS "DELETE FROM pg_catalog.pg_dist_object"
 #define DELETE_ALL_PARTITIONS "DELETE FROM pg_dist_partition"
 #define DELETE_ALL_COLOCATION "DELETE FROM pg_catalog.pg_dist_colocation"
+#define DELETE_ALL_TENANT_SCHEMAS "DELETE FROM pg_catalog.pg_dist_schema"
 #define WORKER_DROP_ALL_SHELL_TABLES \
 	"CALL pg_catalog.worker_drop_all_shell_tables(%s)"
 #define CITUS_INTERNAL_MARK_NODE_NOT_SYNCED \
@@ -180,8 +185,10 @@ extern void SendInterTableRelationshipCommands(MetadataSyncContext *context);
 
 #define REMOVE_ALL_CITUS_TABLES_COMMAND \
 	"SELECT worker_drop_distributed_table(logicalrelid::regclass::text) FROM pg_dist_partition"
-#define BREAK_CITUS_TABLE_SEQUENCE_DEPENDENCY_COMMAND \
+#define BREAK_ALL_CITUS_TABLE_SEQUENCE_DEPENDENCY_COMMAND \
 	"SELECT pg_catalog.worker_drop_sequence_dependency(logicalrelid::regclass::text) FROM pg_dist_partition"
+#define BREAK_CITUS_TABLE_SEQUENCE_DEPENDENCY_COMMAND \
+	"SELECT pg_catalog.worker_drop_sequence_dependency(%s);"
 
 #define DISABLE_DDL_PROPAGATION "SET citus.enable_ddl_propagation TO 'off'"
 #define ENABLE_DDL_PROPAGATION "SET citus.enable_ddl_propagation TO 'on'"

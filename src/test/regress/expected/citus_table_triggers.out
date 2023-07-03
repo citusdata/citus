@@ -155,4 +155,4 @@ SELECT master_get_table_ddl_events('test_table');
 
 -- cleanup at exit
 DROP SCHEMA table_triggers_schema CASCADE;
-NOTICE:  drop cascades to 8 other objects
+NOTICE:  drop cascades to 9 other objects

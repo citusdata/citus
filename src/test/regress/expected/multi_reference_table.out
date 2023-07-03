@@ -1203,9 +1203,9 @@ RESET client_min_messages;
 -- some tests for mark_tables_colocated
 -- should error out
 SELECT update_distributed_table_colocation('colocated_table_test_2', colocate_with => 'reference_table_test');
-ERROR:  relation reference_table_test should be a hash distributed table
+ERROR:  relation reference_table_test should be a hash or single shard distributed table
 SELECT update_distributed_table_colocation('reference_table_test', colocate_with => 'reference_table_test_fifth');
-ERROR:  relation reference_table_test_fifth should be a hash distributed table
+ERROR:  relation reference_table_test_fifth should be a hash or single shard distributed table
 -- ensure that reference tables on
 -- different queries works as expected
 CREATE SCHEMA reference_schema;

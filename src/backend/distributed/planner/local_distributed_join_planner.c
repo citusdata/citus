@@ -485,6 +485,8 @@ RequiredAttrNumbersForRelation(RangeTblEntry *rangeTableEntry,
 
 	PlannerInfo *plannerInfo = relationRestriction->plannerInfo;
 
+	int rteIndex = relationRestriction->index;
+
 	/*
 	 * Here we used the query from plannerInfo because it has the optimizations
 	 * so that it doesn't have unnecessary columns. The original query doesn't have
@@ -492,8 +494,18 @@ RequiredAttrNumbersForRelation(RangeTblEntry *rangeTableEntry,
 	 * 'required' attributes.
 	 */
 	Query *queryToProcess = plannerInfo->parse;
-	int rteIndex = relationRestriction->index;
 
+	return RequiredAttrNumbersForRelationInternal(queryToProcess, rteIndex);
+}
+
+
+/*
+ * RequiredAttrNumbersForRelationInternal returns the required attribute numbers
+ * for the input range-table-index in the query parameter.
+ */
+List *
+RequiredAttrNumbersForRelationInternal(Query *queryToProcess, int rteIndex)
+{
 	List *allVarsInQuery = pull_vars_of_level((Node *) queryToProcess, 0);
 
 	List *requiredAttrNumbers = NIL;

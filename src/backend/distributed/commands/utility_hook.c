@@ -33,9 +33,6 @@
 #include "access/attnum.h"
 #include "access/heapam.h"
 #include "access/htup_details.h"
-#if PG_VERSION_NUM < 140000
-#include "access/xact.h"
-#endif
 #include "catalog/catalog.h"
 #include "catalog/dependency.h"
 #include "citus_version.h"
@@ -60,9 +57,6 @@
 #include "distributed/maintenanced.h"
 #include "distributed/multi_logical_replication.h"
 #include "distributed/multi_partitioning_utils.h"
-#if PG_VERSION_NUM < 140000
-#include "distributed/metadata_cache.h"
-#endif
 #include "distributed/metadata_sync.h"
 #include "distributed/metadata/distobject.h"
 #include "distributed/multi_executor.h"
@@ -107,16 +101,13 @@ static void ProcessUtilityInternal(PlannedStmt *pstmt,
 								   struct QueryEnvironment *queryEnv,
 								   DestReceiver *dest,
 								   QueryCompletion *completionTag);
-#if PG_VERSION_NUM >= 140000
 static void set_indexsafe_procflags(void);
-#endif
 static char * CurrentSearchPath(void);
 static void IncrementUtilityHookCountersIfNecessary(Node *parsetree);
 static void PostStandardProcessUtility(Node *parsetree);
 static void DecrementUtilityHookCountersIfNecessary(Node *parsetree);
 static bool IsDropSchemaOrDB(Node *parsetree);
 static bool ShouldCheckUndistributeCitusLocalTables(void);
-static bool ShouldAddNewTableToMetadata(Node *parsetree);
 
 /*
  * ProcessUtilityParseTree is a convenience method to create a PlannedStmt out of
@@ -132,8 +123,8 @@ ProcessUtilityParseTree(Node *node, const char *queryString, ProcessUtilityConte
 	plannedStmt->commandType = CMD_UTILITY;
 	plannedStmt->utilityStmt = node;
 
-	ProcessUtility_compat(plannedStmt, queryString, false, context, params, NULL, dest,
-						  completionTag);
+	ProcessUtility(plannedStmt, queryString, false, context, params, NULL, dest,
+				   completionTag);
 }
 
 
@@ -149,25 +140,19 @@ ProcessUtilityParseTree(Node *node, const char *queryString, ProcessUtilityConte
 void
 multi_ProcessUtility(PlannedStmt *pstmt,
 					 const char *queryString,
-#if PG_VERSION_NUM >= PG_VERSION_14
 					 bool readOnlyTree,
-#endif
 					 ProcessUtilityContext context,
 					 ParamListInfo params,
 					 struct QueryEnvironment *queryEnv,
 					 DestReceiver *dest,
 					 QueryCompletion *completionTag)
 {
-	Node *parsetree;
-
-#if PG_VERSION_NUM >= PG_VERSION_14
 	if (readOnlyTree)
 	{
 		pstmt = copyObject(pstmt);
 	}
-#endif
 
-	parsetree = pstmt->utilityStmt;
+	Node *parsetree = pstmt->utilityStmt;
 
 	if (IsA(parsetree, TransactionStmt))
 	{
@@ -187,7 +172,9 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		IsA(parsetree, ExecuteStmt) ||
 		IsA(parsetree, PrepareStmt) ||
 		IsA(parsetree, DiscardStmt) ||
-		IsA(parsetree, DeallocateStmt))
+		IsA(parsetree, DeallocateStmt) ||
+		IsA(parsetree, DeclareCursorStmt) ||
+		IsA(parsetree, FetchStmt))
 	{
 		/*
 		 * Skip additional checks for common commands that do not have any
@@ -198,8 +185,8 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		 * that state. Since we never need to intercept transaction statements,
 		 * skip our checks and immediately fall into standard_ProcessUtility.
 		 */
-		PrevProcessUtility_compat(pstmt, queryString, false, context,
-								  params, queryEnv, dest, completionTag);
+		PrevProcessUtility(pstmt, queryString, false, context,
+						   params, queryEnv, dest, completionTag);
 
 		return;
 	}
@@ -243,8 +230,8 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		 * Ensure that utility commands do not behave any differently until CREATE
 		 * EXTENSION is invoked.
 		 */
-		PrevProcessUtility_compat(pstmt, queryString, false, context,
-								  params, queryEnv, dest, completionTag);
+		PrevProcessUtility(pstmt, queryString, false, context,
+						   params, queryEnv, dest, completionTag);
 
 		return;
 	}
@@ -275,8 +262,8 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 
 		PG_TRY();
 		{
-			PrevProcessUtility_compat(pstmt, queryString, false, context,
-									  params, queryEnv, dest, completionTag);
+			PrevProcessUtility(pstmt, queryString, false, context,
+							   params, queryEnv, dest, completionTag);
 
 			StoredProcedureLevel -= 1;
 
@@ -309,8 +296,8 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 
 		PG_TRY();
 		{
-			PrevProcessUtility_compat(pstmt, queryString, false, context,
-									  params, queryEnv, dest, completionTag);
+			PrevProcessUtility(pstmt, queryString, false, context,
+							   params, queryEnv, dest, completionTag);
 
 			DoBlockLevel -= 1;
 		}
@@ -344,26 +331,44 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 			}
 			ResetConstraintDropped();
 
+			/*
+			 * We're only interested in top-level CREATE TABLE commands
+			 * to create a tenant schema table or a Citus managed table.
+			 */
 			if (context == PROCESS_UTILITY_TOPLEVEL &&
-				ShouldAddNewTableToMetadata(parsetree))
+				(IsA(parsetree, CreateStmt) ||
+				 IsA(parsetree, CreateForeignTableStmt) ||
+				 IsA(parsetree, CreateTableAsStmt)))
 			{
-				/*
-				 * Here we need to increment command counter so that next command
-				 * can see the new table.
-				 */
-				CommandCounterIncrement();
-				CreateStmt *createTableStmt = (CreateStmt *) parsetree;
-				Oid relationId = RangeVarGetRelid(createTableStmt->relation,
-												  NoLock, false);
+				Node *createStmt = NULL;
+				if (IsA(parsetree, CreateTableAsStmt))
+				{
+					createStmt = parsetree;
+				}
+				else
+				{
+					/*
+					 * Not directly cast to CreateStmt to guard against the case where
+					 * the definition of CreateForeignTableStmt changes in future.
+					 */
+					createStmt =
+						IsA(parsetree, CreateStmt) ? parsetree :
+						(Node *) &(((CreateForeignTableStmt *) parsetree)->base);
+				}
 
-				/*
-				 * Here we set autoConverted to false, since the user explicitly
-				 * wants these tables to be added to metadata, by setting the
-				 * GUC use_citus_managed_tables to true.
-				 */
-				bool autoConverted = false;
-				bool cascade = true;
-				CreateCitusLocalTable(relationId, cascade, autoConverted);
+				ConvertNewTableIfNecessary(createStmt);
+			}
+
+			if (context == PROCESS_UTILITY_TOPLEVEL &&
+				IsA(parsetree, AlterObjectSchemaStmt))
+			{
+				AlterObjectSchemaStmt *alterSchemaStmt = castNode(AlterObjectSchemaStmt,
+																  parsetree);
+				if (alterSchemaStmt->objectType == OBJECT_TABLE ||
+					alterSchemaStmt->objectType == OBJECT_FOREIGN_TABLE)
+				{
+					ConvertToTenantTableIfNecessary(alterSchemaStmt);
+				}
 			}
 		}
 
@@ -496,8 +501,8 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 		VariableSetStmt *setStmt = (VariableSetStmt *) parsetree;
 
 		/* at present, we only implement the NONE and LOCAL behaviors */
-		AssertState(PropagateSetCommands == PROPSETCMD_NONE ||
-					PropagateSetCommands == PROPSETCMD_LOCAL);
+		Assert(PropagateSetCommands == PROPSETCMD_NONE ||
+			   PropagateSetCommands == PROPSETCMD_LOCAL);
 
 		if (IsMultiStatementTransaction() && ShouldPropagateSetCommand(setStmt))
 		{
@@ -630,8 +635,8 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 		if (IsA(parsetree, AlterTableStmt))
 		{
 			AlterTableStmt *alterTableStmt = (AlterTableStmt *) parsetree;
-			if (AlterTableStmtObjType_compat(alterTableStmt) == OBJECT_TABLE ||
-				AlterTableStmtObjType_compat(alterTableStmt) == OBJECT_FOREIGN_TABLE)
+			if (alterTableStmt->objtype == OBJECT_TABLE ||
+				alterTableStmt->objtype == OBJECT_FOREIGN_TABLE)
 			{
 				ErrorIfAlterDropsPartitionColumn(alterTableStmt);
 
@@ -750,8 +755,8 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 			PreprocessAlterExtensionCitusStmtForCitusColumnar(parsetree);
 		}
 
-		PrevProcessUtility_compat(pstmt, queryString, false, context,
-								  params, queryEnv, dest, completionTag);
+		PrevProcessUtility(pstmt, queryString, false, context,
+						   params, queryEnv, dest, completionTag);
 
 		if (isAlterExtensionUpdateCitusStmt)
 		{
@@ -994,7 +999,8 @@ UndistributeDisconnectedCitusLocalTables(void)
 		TableConversionParameters params = {
 			.relationId = citusLocalTableId,
 			.cascadeViaForeignKeys = true,
-			.suppressNoticeMessages = true
+			.suppressNoticeMessages = true,
+			.bypassTenantCheck = false
 		};
 		UndistributeTable(&params);
 	}
@@ -1057,60 +1063,6 @@ ShouldCheckUndistributeCitusLocalTables(void)
 	}
 
 	return true;
-}
-
-
-/*
- * ShouldAddNewTableToMetadata takes a Node* and returns true if we need to add a
- * newly created table to metadata, false otherwise.
- * This function checks whether the given Node* is a CREATE TABLE statement.
- * For partitions and temporary tables, ShouldAddNewTableToMetadata returns false.
- * For other tables created, returns true, if we are on a coordinator that is added
- * as worker, and ofcourse, if the GUC use_citus_managed_tables is set to on.
- */
-static bool
-ShouldAddNewTableToMetadata(Node *parsetree)
-{
-	CreateStmt *createTableStmt;
-
-	if (IsA(parsetree, CreateStmt))
-	{
-		createTableStmt = (CreateStmt *) parsetree;
-	}
-	else if (IsA(parsetree, CreateForeignTableStmt))
-	{
-		CreateForeignTableStmt *createForeignTableStmt =
-			(CreateForeignTableStmt *) parsetree;
-		createTableStmt = (CreateStmt *) &(createForeignTableStmt->base);
-	}
-	else
-	{
-		/* if the command is not CREATE [FOREIGN] TABLE, we can early return false */
-		return false;
-	}
-
-	if (createTableStmt->relation->relpersistence == RELPERSISTENCE_TEMP ||
-		createTableStmt->partbound != NULL)
-	{
-		/*
-		 * Shouldn't add table to metadata if it's a temp table, or a partition.
-		 * Creating partitions of a table that is added to metadata is already handled.
-		 */
-		return false;
-	}
-
-	if (AddAllLocalTablesToMetadata && !IsBinaryUpgrade &&
-		IsCoordinator() && CoordinatorAddedAsWorkerNode())
-	{
-		/*
-		 * We have verified that the GUC is set to true, and we are not upgrading,
-		 * and we are on the coordinator that is added as worker node.
-		 * So return true here, to add this newly created table to metadata.
-		 */
-		return true;
-	}
-
-	return false;
 }
 
 
@@ -1242,38 +1194,6 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 		 */
 		if (ddlJob->startNewTransaction)
 		{
-#if PG_VERSION_NUM < 140000
-
-			/*
-			 * Older versions of postgres doesn't have PROC_IN_SAFE_IC flag
-			 * so we cannot use set_indexsafe_procflags in those versions.
-			 *
-			 * For this reason, we do our best to ensure not grabbing any
-			 * snapshots later in the executor.
-			 */
-
-			/*
-			 * If cache is not populated, system catalog lookups will cause
-			 * the xmin of current backend to change. Then the last phase
-			 * of CREATE INDEX CONCURRENTLY, which is in a separate backend,
-			 * will hang waiting for our backend and result in a deadlock.
-			 *
-			 * We populate the cache before starting the next transaction to
-			 * avoid this. Most of the metadata has already been resolved in
-			 * planning phase, we only need to lookup metadata needed for
-			 * connection establishment.
-			 */
-			(void) CurrentDatabaseName();
-
-			/*
-			 * ConnParams (AuthInfo and PoolInfo) gets a snapshot, which
-			 * will blocks the remote connections to localhost. Hence we warm up
-			 * the cache here so that after we start a new transaction, the entries
-			 * will already be in the hash table, hence we won't be holding any snapshots.
-			 */
-			WarmUpConnParamsHash();
-#endif
-
 			/*
 			 * Since it is not certain whether the code-path that we followed
 			 * until reaching here caused grabbing any snapshots or not, we
@@ -1292,8 +1212,6 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 			CommitTransactionCommand();
 			StartTransactionCommand();
 
-#if PG_VERSION_NUM >= 140000
-
 			/*
 			 * Tell other backends to ignore us, even if we grab any
 			 * snapshots via adaptive executor.
@@ -1308,7 +1226,6 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 			 * given above.
 			 */
 			Assert(localExecutionSupported == false);
-#endif
 		}
 
 		MemoryContext savedContext = CurrentMemoryContext;
@@ -1374,8 +1291,6 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 }
 
 
-#if PG_VERSION_NUM >= 140000
-
 /*
  * set_indexsafe_procflags sets PROC_IN_SAFE_IC flag in MyProc->statusFlags.
  *
@@ -1396,9 +1311,6 @@ set_indexsafe_procflags(void)
 	ProcGlobal->statusFlags[MyProc->pgxactoff] = MyProc->statusFlags;
 	LWLockRelease(ProcArrayLock);
 }
-
-
-#endif
 
 
 /*
@@ -1591,37 +1503,37 @@ DDLTaskList(Oid relationId, const char *commandString)
 List *
 NodeDDLTaskList(TargetWorkerSet targets, List *commands)
 {
-	/* don't allow concurrent node list changes that require an exclusive lock */
-	List *workerNodes = TargetWorkerSetNodeList(targets, RowShareLock);
-
-	if (list_length(workerNodes) <= 0)
-	{
-		/*
-		 * if there are no nodes we don't have to plan any ddl tasks. Planning them would
-		 * cause the executor to stop responding.
-		 */
-		return NIL;
-	}
-
-	Task *task = CitusMakeNode(Task);
-	task->taskType = DDL_TASK;
-	SetTaskQueryStringList(task, commands);
-
-	WorkerNode *workerNode = NULL;
-	foreach_ptr(workerNode, workerNodes)
-	{
-		ShardPlacement *targetPlacement = CitusMakeNode(ShardPlacement);
-		targetPlacement->nodeName = workerNode->workerName;
-		targetPlacement->nodePort = workerNode->workerPort;
-		targetPlacement->groupId = workerNode->groupId;
-
-		task->taskPlacementList = lappend(task->taskPlacementList, targetPlacement);
-	}
-
 	DDLJob *ddlJob = palloc0(sizeof(DDLJob));
 	ddlJob->targetObjectAddress = InvalidObjectAddress;
 	ddlJob->metadataSyncCommand = NULL;
-	ddlJob->taskList = list_make1(task);
+
+	/* don't allow concurrent node list changes that require an exclusive lock */
+	List *workerNodes = TargetWorkerSetNodeList(targets, RowShareLock);
+
+	/*
+	 * if there are no nodes we don't have to plan any ddl tasks. Planning them would
+	 * cause the executor to stop responding.
+	 */
+	if (list_length(workerNodes) > 0)
+	{
+		Task *task = CitusMakeNode(Task);
+		task->taskType = DDL_TASK;
+		SetTaskQueryStringList(task, commands);
+
+		WorkerNode *workerNode = NULL;
+		foreach_ptr(workerNode, workerNodes)
+		{
+			ShardPlacement *targetPlacement = CitusMakeNode(ShardPlacement);
+			targetPlacement->nodeName = workerNode->workerName;
+			targetPlacement->nodePort = workerNode->workerPort;
+			targetPlacement->groupId = workerNode->groupId;
+
+			task->taskPlacementList = lappend(task->taskPlacementList, targetPlacement);
+		}
+
+		ddlJob->taskList = list_make1(task);
+	}
+
 	return list_make1(ddlJob);
 }
 

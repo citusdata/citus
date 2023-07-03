@@ -196,6 +196,7 @@ static void EnsureTableNotReferencing(Oid relationId, char conversionType);
 static void EnsureTableNotReferenced(Oid relationId, char conversionType);
 static void EnsureTableNotForeign(Oid relationId);
 static void EnsureTableNotPartition(Oid relationId);
+static void ErrorIfColocateWithTenantTable(char *colocateWith);
 static TableConversionState * CreateTableConversion(TableConversionParameters *params);
 static void CreateDistributedTableLike(TableConversionState *con);
 static void CreateCitusTableLike(TableConversionState *con);
@@ -247,7 +248,8 @@ undistribute_table(PG_FUNCTION_ARGS)
 
 	TableConversionParameters params = {
 		.relationId = relationId,
-		.cascadeViaForeignKeys = cascadeViaForeignKeys
+		.cascadeViaForeignKeys = cascadeViaForeignKeys,
+		.bypassTenantCheck = false
 	};
 
 	UndistributeTable(&params);
@@ -361,6 +363,124 @@ worker_change_sequence_dependency(PG_FUNCTION_ARGS)
 
 
 /*
+ * DropFKeysAndUndistributeTable drops all foreign keys that relation with
+ * relationId is involved then undistributes it.
+ * Note that as UndistributeTable changes relationId of relation, this
+ * function also returns new relationId of relation.
+ * Also note that callers are responsible for storing & recreating foreign
+ * keys to be dropped if needed.
+ */
+Oid
+DropFKeysAndUndistributeTable(Oid relationId)
+{
+	DropFKeysRelationInvolvedWithTableType(relationId, INCLUDE_ALL_TABLE_TYPES);
+
+	/* store them before calling UndistributeTable as it changes relationId */
+	char *relationName = get_rel_name(relationId);
+	Oid schemaId = get_rel_namespace(relationId);
+
+	/* suppress notices messages not to be too verbose */
+	TableConversionParameters params = {
+		.relationId = relationId,
+		.cascadeViaForeignKeys = false,
+		.suppressNoticeMessages = true
+	};
+	UndistributeTable(&params);
+
+	Oid newRelationId = get_relname_relid(relationName, schemaId);
+
+	/*
+	 * We don't expect this to happen but to be on the safe side let's error
+	 * out here.
+	 */
+	EnsureRelationExists(newRelationId);
+
+	return newRelationId;
+}
+
+
+/*
+ * UndistributeTables undistributes given relations. It first collects all foreign keys
+ * to recreate them after the undistribution. Then, drops the foreign keys and
+ * undistributes the relations. Finally, it recreates foreign keys.
+ */
+void
+UndistributeTables(List *relationIdList)
+{
+	/*
+	 * Collect foreign keys for recreation and then drop fkeys and undistribute
+	 * tables.
+	 */
+	List *originalForeignKeyRecreationCommands = NIL;
+	Oid relationId = InvalidOid;
+	foreach_oid(relationId, relationIdList)
+	{
+		List *fkeyCommandsForRelation =
+			GetFKeyCreationCommandsRelationInvolvedWithTableType(relationId,
+																 INCLUDE_ALL_TABLE_TYPES);
+		originalForeignKeyRecreationCommands = list_concat(
+			originalForeignKeyRecreationCommands, fkeyCommandsForRelation);
+		DropFKeysAndUndistributeTable(relationId);
+	}
+
+	/* We can skip foreign key validations as we are sure about them at start */
+	bool skip_validation = true;
+	ExecuteForeignKeyCreateCommandList(originalForeignKeyRecreationCommands,
+									   skip_validation);
+}
+
+
+/*
+ * EnsureUndistributeTenantTableSafe ensures that it is safe to undistribute a tenant table.
+ */
+void
+EnsureUndistributeTenantTableSafe(Oid relationId, const char *operationName)
+{
+	Oid schemaId = get_rel_namespace(relationId);
+	Assert(IsTenantSchema(schemaId));
+
+	/* We only allow undistribute while altering schema */
+	if (strcmp(operationName, TenantOperationNames[TENANT_SET_SCHEMA]) != 0)
+	{
+		ErrorIfTenantTable(relationId, operationName);
+	}
+
+	char *tableName = get_rel_name(relationId);
+	char *schemaName = get_namespace_name(schemaId);
+
+	/*
+	 * Partition table cannot be undistributed. Otherwise, its parent table would still
+	 * be a tenant table whereas partition table would be a local table.
+	 */
+	if (PartitionTable(relationId))
+	{
+		ereport(ERROR, (errmsg("%s is not allowed for partition table %s in distributed "
+							   "schema %s", operationName, tableName, schemaName),
+						errdetail("partition table should be under the same distributed "
+								  "schema as its parent and be a "
+								  "distributed schema table.")));
+	}
+
+	/*
+	 * When table is referenced by or referencing to a table in the same tenant
+	 * schema, we should disallow undistributing the table since we do not allow
+	 * foreign keys from/to Citus local or Postgres local table to/from distributed
+	 * schema.
+	 */
+	List *fkeyCommandsWithSingleShardTables =
+		GetFKeyCreationCommandsRelationInvolvedWithTableType(
+			relationId, INCLUDE_SINGLE_SHARD_TABLES);
+	if (fkeyCommandsWithSingleShardTables != NIL)
+	{
+		ereport(ERROR, (errmsg("%s is not allowed for table %s in distributed schema %s",
+							   operationName, tableName, schemaName),
+						errdetail("distributed schemas cannot have foreign keys from/to "
+								  "local tables or different schema")));
+	}
+}
+
+
+/*
  * UndistributeTable undistributes the given table. It uses ConvertTable function to
  * create a new local table and move everything to that table.
  *
@@ -378,6 +498,14 @@ UndistributeTable(TableConversionParameters *params)
 	{
 		ereport(ERROR, (errmsg("cannot undistribute table "
 							   "because the table is not distributed")));
+	}
+
+	Oid schemaId = get_rel_namespace(params->relationId);
+	if (!params->bypassTenantCheck && IsTenantSchema(schemaId) &&
+		IsCitusTableType(params->relationId, SINGLE_SHARD_DISTRIBUTED))
+	{
+		EnsureUndistributeTenantTableSafe(params->relationId,
+										  TenantOperationNames[TENANT_UNDISTRIBUTE_TABLE]);
 	}
 
 	if (!params->cascadeViaForeignKeys)
@@ -435,6 +563,9 @@ AlterDistributedTable(TableConversionParameters *params)
 							   "is not distributed")));
 	}
 
+	ErrorIfTenantTable(params->relationId, TenantOperationNames[TENANT_ALTER_TABLE]);
+	ErrorIfColocateWithTenantTable(params->colocateWith);
+
 	EnsureTableNotForeign(params->relationId);
 	EnsureTableNotPartition(params->relationId);
 	EnsureHashDistributedTable(params->relationId);
@@ -477,8 +608,11 @@ AlterTableSetAccessMethod(TableConversionParameters *params)
 	EnsureTableNotReferencing(params->relationId, ALTER_TABLE_SET_ACCESS_METHOD);
 	EnsureTableNotReferenced(params->relationId, ALTER_TABLE_SET_ACCESS_METHOD);
 	EnsureTableNotForeign(params->relationId);
-	if (IsCitusTableType(params->relationId, DISTRIBUTED_TABLE))
+
+	if (!IsCitusTableType(params->relationId, SINGLE_SHARD_DISTRIBUTED) &&
+		IsCitusTableType(params->relationId, DISTRIBUTED_TABLE))
 	{
+		/* we do not support non-hash distributed tables, except single shard tables */
 		EnsureHashDistributedTable(params->relationId);
 	}
 
@@ -1177,6 +1311,25 @@ EnsureTableNotPartition(Oid relationId)
 }
 
 
+/*
+ * ErrorIfColocateWithTenantTable errors out if given colocateWith text refers to
+ * a tenant table.
+ */
+void
+ErrorIfColocateWithTenantTable(char *colocateWith)
+{
+	if (colocateWith != NULL &&
+		!IsColocateWithDefault(colocateWith) &&
+		!IsColocateWithNone(colocateWith))
+	{
+		text *colocateWithTableNameText = cstring_to_text(colocateWith);
+		Oid colocateWithTableId = ResolveRelationId(colocateWithTableNameText, false);
+		ErrorIfTenantTable(colocateWithTableId,
+						   TenantOperationNames[TENANT_COLOCATE_WITH]);
+	}
+}
+
+
 TableConversionState *
 CreateTableConversion(TableConversionParameters *params)
 {
@@ -1365,7 +1518,19 @@ CreateCitusTableLike(TableConversionState *con)
 {
 	if (IsCitusTableType(con->relationId, DISTRIBUTED_TABLE))
 	{
-		CreateDistributedTableLike(con);
+		if (IsCitusTableType(con->relationId, SINGLE_SHARD_DISTRIBUTED))
+		{
+			ColocationParam colocationParam = {
+				.colocationParamType = COLOCATE_WITH_TABLE_LIKE_OPT,
+				.colocateWithTableName = quote_qualified_identifier(con->schemaName,
+																	con->relationName)
+			};
+			CreateSingleShardTable(con->newRelationId, colocationParam);
+		}
+		else
+		{
+			CreateDistributedTableLike(con);
+		}
 	}
 	else if (IsCitusTableType(con->relationId, REFERENCE_TABLE))
 	{
@@ -1710,20 +1875,13 @@ ReplaceTable(Oid sourceId, Oid targetId, List *justBeforeDropCommands,
 		}
 		else if (ShouldSyncTableMetadata(sourceId))
 		{
-			char *qualifiedTableName = quote_qualified_identifier(schemaName, sourceName);
-
 			/*
 			 * We are converting a citus local table to a distributed/reference table,
 			 * so we should prevent dropping the sequence on the table. Otherwise, we'd
 			 * lose track of the previous changes in the sequence.
 			 */
-			StringInfo command = makeStringInfo();
-
-			appendStringInfo(command,
-							 "SELECT pg_catalog.worker_drop_sequence_dependency(%s);",
-							 quote_literal_cstr(qualifiedTableName));
-
-			SendCommandToWorkersWithMetadata(command->data);
+			char *command = WorkerDropSequenceDependencyCommand(sourceId);
+			SendCommandToWorkersWithMetadata(command);
 		}
 	}
 
@@ -1861,6 +2019,12 @@ CheckAlterDistributedTableConversionParameters(TableConversionState *con)
 		{
 			ereport(ERROR, (errmsg("cannot colocate with %s because "
 								   "it is not a distributed table",
+								   con->colocateWith)));
+		}
+		else if (IsCitusTableType(colocateWithTableOid, SINGLE_SHARD_DISTRIBUTED))
+		{
+			ereport(ERROR, (errmsg("cannot colocate with %s because "
+								   "it is a single shard distributed table",
 								   con->colocateWith)));
 		}
 	}

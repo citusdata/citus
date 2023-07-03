@@ -1,5 +1,11 @@
 CREATE SCHEMA run_command_on_all_nodes;
 SET search_path TO run_command_on_all_nodes;
+SELECT master_remove_node('localhost', :master_port);
+ master_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
 -- check coordinator isn't in metadata
 SELECT count(*) != 0 AS "Coordinator is in Metadata"
 FROM pg_dist_node
@@ -205,3 +211,9 @@ DROP SCHEMA run_command_on_all_nodes CASCADE;
 NOTICE:  drop cascades to 2 other objects
 DETAIL:  drop cascades to table run_command_on_all_nodes.tbl
 drop cascades to table run_command_on_all_nodes.test
+SELECT citus_set_coordinator_host('localhost');
+ citus_set_coordinator_host
+---------------------------------------------------------------------
+
+(1 row)
+

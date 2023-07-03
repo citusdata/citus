@@ -3,6 +3,8 @@
 -- Vanilla funnel query
 ---------------------------------------------------------------------
 ---------------------------------------------------------------------
+CREATE SCHEMA multi_insert_select_non_pushable_queries;
+SET search_path = multi_insert_select_non_pushable_queries,public;
 -- not pushable since the JOIN is not an equi join
 INSERT INTO agg_results_third (user_id, value_1_agg)
 SELECT user_id, array_length(events_table, 1)
@@ -147,7 +149,7 @@ FROM (
   GROUP BY  t1.user_id, hasdone_event
 ) t GROUP BY user_id, hasdone_event
 RETURNING user_id, value_1_agg, value_2_agg;
-DEBUG:  Set operations are not allowed in distributed INSERT ... SELECT queries
+DEBUG:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
 DEBUG:  generating subplan XXX_1 for subquery SELECT u.user_id, 'step=>1'::text AS event, e."time" FROM public.users_table u, public.events_table e WHERE ((u.user_id OPERATOR(pg_catalog.=) e.user_id) AND (u.user_id OPERATOR(pg_catalog.>=) 10) AND (u.user_id OPERATOR(pg_catalog.<=) 25) AND (e.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[100, 101, 102])))
 DEBUG:  generating subplan XXX_2 for subquery SELECT u.user_id, 'step=>2'::text AS event, e."time" FROM public.users_table u, public.events_table e WHERE ((u.user_id OPERATOR(pg_catalog.=) e.user_id) AND (u.user_id OPERATOR(pg_catalog.>=) 10) AND (u.user_id OPERATOR(pg_catalog.<=) 25) AND (e.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[103, 104, 105])))
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT intermediate_result.user_id, intermediate_result.event, intermediate_result."time" FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, event text, "time" timestamp without time zone) UNION SELECT intermediate_result.user_id, intermediate_result.event, intermediate_result."time" FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, event text, "time" timestamp without time zone)
@@ -305,7 +307,7 @@ GROUP BY
 ORDER BY
   count_pay
 RETURNING user_id, value_1_agg, value_2_agg;
-DEBUG:  Set operations are not allowed in distributed INSERT ... SELECT queries
+DEBUG:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
 DEBUG:  generating subplan XXX_1 for subquery SELECT users_table.user_id, 'action=>1'::text AS event, events_table."time" FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (users_table.user_id OPERATOR(pg_catalog.>=) 10) AND (users_table.user_id OPERATOR(pg_catalog.<=) 70) AND (events_table.event_type OPERATOR(pg_catalog.>) 10) AND (events_table.event_type OPERATOR(pg_catalog.<) 12))
 DEBUG:  generating subplan XXX_2 for subquery SELECT users_table.user_id, 'action=>2'::text AS event, events_table."time" FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (users_table.user_id OPERATOR(pg_catalog.>=) 10) AND (users_table.user_id OPERATOR(pg_catalog.<=) 70) AND (events_table.event_type OPERATOR(pg_catalog.>) 12) AND (events_table.event_type OPERATOR(pg_catalog.<) 14))
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT intermediate_result.user_id, intermediate_result.event, intermediate_result."time" FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, event text, "time" timestamp without time zone) UNION SELECT intermediate_result.user_id, intermediate_result.event, intermediate_result."time" FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, event text, "time" timestamp without time zone)
@@ -808,3 +810,36 @@ FROM (
         GROUP BY user_id
 ) AS shard_union
 ORDER BY user_lastseen DESC;
+CREATE TABLE dist_table_1(id int);
+SELECT create_distributed_table('dist_table_1','id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE dist_table_2(id int, id2 int);
+SELECT create_distributed_table('dist_table_2','id2');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- verify that insert select with union can be pulled to coordinator. We cannot push down the query
+-- since UNION clause has no FROM clause at top level query.
+SELECT coordinator_plan($$
+  EXPLAIN (COSTS FALSE) INSERT INTO dist_table_1(id) SELECT id FROM dist_table_1 UNION SELECT id FROM dist_table_2;
+$$);
+                coordinator_plan
+---------------------------------------------------------------------
+ Custom Scan (Citus INSERT ... SELECT)
+   INSERT/SELECT method: pull to coordinator
+   ->  Custom Scan (Citus Adaptive)
+         ->  Distributed Subplan XXX_1
+               ->  Custom Scan (Citus Adaptive)
+                     Task Count: 4
+(6 rows)
+
+DROP SCHEMA multi_insert_select_non_pushable_queries CASCADE;
+NOTICE:  drop cascades to 2 other objects
+DETAIL:  drop cascades to table dist_table_1
+drop cascades to table dist_table_2

@@ -389,10 +389,12 @@ DEALLOCATE insert_plan;
 TRUNCATE target_table;
 
 SET client_min_messages TO DEBUG2;
+SET citus.enable_non_colocated_router_query_pushdown TO ON;
 WITH r AS (
   INSERT INTO target_table SELECT * FROM source_table RETURNING *
 )
 INSERT INTO target_table SELECT source_table.a, max(source_table.b) FROM source_table NATURAL JOIN r GROUP BY source_table.a;
+RESET citus.enable_non_colocated_router_query_pushdown;
 RESET client_min_messages;
 
 SELECT * FROM target_table ORDER BY a, b;
@@ -644,6 +646,17 @@ create table table_with_user_sequences (x int, y int, z bigint default nextval('
 insert into table_with_user_sequences values (1,1);
 select create_distributed_table('table_with_user_sequences','x');
 explain (costs off) insert into table_with_user_sequences select y, x from table_with_user_sequences;
+
+CREATE TABLE dist_table_1(id int);
+SELECT create_distributed_table('dist_table_1','id');
+CREATE TABLE dist_table_2(id int);
+SELECT create_distributed_table('dist_table_2','id');
+
+-- verify that insert select with union can be repartitioned. We cannot push down the query
+-- since UNION clause has no FROM clause at top level query.
+SELECT public.coordinator_plan($$
+  EXPLAIN (COSTS FALSE) INSERT INTO dist_table_1(id) SELECT id FROM dist_table_1 UNION SELECT id FROM dist_table_2;
+$$);
 
 -- clean-up
 SET client_min_messages TO WARNING;

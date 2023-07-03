@@ -81,8 +81,6 @@ static JoinOrderNode * CartesianProductReferenceJoin(JoinOrderNode *joinNode,
 													 JoinType joinType);
 static JoinOrderNode * LocalJoin(JoinOrderNode *joinNode, TableEntry *candidateTable,
 								 List *applicableJoinClauses, JoinType joinType);
-static bool JoinOnColumns(List *currentPartitionColumnList, Var *candidatePartitionColumn,
-						  List *joinClauseList);
 static JoinOrderNode * SinglePartitionJoin(JoinOrderNode *joinNode,
 										   TableEntry *candidateTable,
 										   List *applicableJoinClauses,
@@ -212,7 +210,7 @@ ExtractLeftMostRangeTableIndex(Node *node, int *rangeTableIndex)
 /*
  * JoinOnColumns determines whether two columns are joined by a given join clause list.
  */
-static bool
+bool
 JoinOnColumns(List *currentPartitionColumnList, Var *candidateColumn,
 			  List *joinClauseList)
 {
@@ -1404,7 +1402,7 @@ DistPartitionKeyOrError(Oid relationId)
 	if (partitionKey == NULL)
 	{
 		ereport(ERROR, (errmsg(
-							"no distribution column found for relation %d, because it is a reference table",
+							"no distribution column found for relation %d",
 							relationId)));
 	}
 

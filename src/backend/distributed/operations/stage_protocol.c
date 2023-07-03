@@ -138,6 +138,13 @@ master_create_empty_shard(PG_FUNCTION_ARGS)
 						errdetail("We currently don't support creating shards "
 								  "on hash-partitioned tables")));
 	}
+	else if (IsCitusTableType(relationId, SINGLE_SHARD_DISTRIBUTED))
+	{
+		ereport(ERROR, (errmsg("relation \"%s\" is a single shard table",
+							   relationName),
+						errdetail("We currently don't support creating shards "
+								  "on single shard tables")));
+	}
 	else if (IsCitusTableType(relationId, REFERENCE_TABLE))
 	{
 		ereport(ERROR, (errmsg("relation \"%s\" is a reference table",
@@ -521,7 +528,8 @@ RelationShardListForShardCreate(ShardInterval *shardInterval)
 	relationShard->shardId = shardInterval->shardId;
 	List *relationShardList = list_make1(relationShard);
 
-	if (IsCitusTableTypeCacheEntry(cacheEntry, HASH_DISTRIBUTED) &&
+	if ((IsCitusTableTypeCacheEntry(cacheEntry, HASH_DISTRIBUTED) ||
+		 IsCitusTableTypeCacheEntry(cacheEntry, SINGLE_SHARD_DISTRIBUTED)) &&
 		cacheEntry->colocationId != INVALID_COLOCATION_ID)
 	{
 		shardIndex = ShardIndex(shardInterval);
@@ -855,7 +863,7 @@ ProcessShardStatisticsRow(PGresult *result, int64 rowIndex, uint64 *shardId,
 		return false;
 	}
 
-	*shardSize = ParseIntField(result, rowIndex, 2);
+	*shardSize = ParseIntField(result, rowIndex, 1);
 	return true;
 }
 

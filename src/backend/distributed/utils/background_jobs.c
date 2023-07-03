@@ -395,7 +395,7 @@ citus_task_wait_internal(int64 taskid, BackgroundTaskStatus *desiredStatus)
 
 		/* sleep for a while, before rechecking the task status */
 		CHECK_FOR_INTERRUPTS();
-		const long delay_ms = 1000;
+		const long delay_ms = 100;
 		(void) WaitLatch(MyLatch,
 						 WL_LATCH_SET | WL_TIMEOUT | WL_EXIT_ON_PM_DEATH,
 						 delay_ms,
@@ -1436,13 +1436,11 @@ error_severity(int elevel)
 			break;
 		}
 
-#if PG_VERSION_NUM >= PG_VERSION_14
 		case WARNING_CLIENT_ONLY:
 		{
 			prefix = gettext_noop("WARNING");
 			break;
 		}
-#endif
 
 		case ERROR:
 		{

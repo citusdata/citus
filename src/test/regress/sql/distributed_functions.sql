@@ -419,6 +419,11 @@ FROM pg_dist_partition, pg_catalog.pg_dist_object as objects
 WHERE pg_dist_partition.logicalrelid = 'replicated_table_func_test_4'::regclass AND
 	  objects.objid = 'eq_with_param_names(macaddr, macaddr)'::regprocedure;
 
+-- a function cannot be colocated with a single shard distributed table when a distribution column is provided
+SELECT create_distributed_table('replicated_table_func_test_3', null);
+SELECT create_distributed_function('eq_with_param_names(macaddr, macaddr)', 'val1', colocate_with:='replicated_table_func_test_3');
+SELECT undistribute_table('replicated_table_func_test_3');
+
 -- a function cannot be colocated with a reference table when a distribution column is provided
 SELECT create_reference_table('replicated_table_func_test_3');
 SELECT create_distributed_function('eq_with_param_names(macaddr, macaddr)', 'val1', colocate_with:='replicated_table_func_test_3');
@@ -691,7 +696,7 @@ DROP SCHEMA function_tests CASCADE;
 DROP SCHEMA function_tests2 CASCADE;
 
 -- clear objects
-SELECT stop_metadata_sync_to_node(nodename,nodeport) FROM pg_dist_node WHERE isactive AND noderole = 'primary';
+SELECT stop_metadata_sync_to_node(nodename,nodeport) FROM pg_dist_node WHERE isactive AND noderole = 'primary' AND groupid <> 0;
 -- This is hacky, but we should clean-up the resources as below
 
 \c - - - :worker_1_port
@@ -704,7 +709,9 @@ TRUNCATE pg_dist_node;
 
 SET client_min_messages TO ERROR;
 DROP USER functionuser;
+DROP ROLE r1;
+
 SELECT 1 FROM run_command_on_workers($$DROP USER functionuser$$);
 
 -- sync metadata again
-SELECT start_metadata_sync_to_node(nodename,nodeport) FROM pg_dist_node WHERE isactive AND noderole = 'primary';
+SELECT start_metadata_sync_to_node(nodename,nodeport) FROM pg_dist_node WHERE isactive AND noderole = 'primary' AND groupid <> 0;

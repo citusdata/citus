@@ -25,7 +25,8 @@ extern void SafeQsort(void *ptr, rsize_t count, rsize_t size,
 					  int (*comp)(const void *, const void *));
 void * SafeBsearch(const void *key, const void *ptr, rsize_t count, rsize_t size,
 				   int (*comp)(const void *, const void *));
-int SafeSnprintf(char *str, rsize_t count, const char *fmt, ...);
+int SafeSnprintf(char *str, rsize_t count, const char *fmt, ...) pg_attribute_printf(3,
+																					 0);
 
 #define memset_struct_0(variable) memset(&variable, 0, sizeof(variable))
 

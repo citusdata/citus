@@ -101,9 +101,9 @@ static char * GenerateAllShardStatisticsQueryForNode(WorkerNode *workerNode,
 static List * GenerateShardStatisticsQueryList(List *workerNodeList, List *citusTableIds);
 static void ErrorIfNotSuitableToGetSize(Oid relationId);
 static List * OpenConnectionToNodes(List *workerNodeList);
-static void ReceiveShardNameAndSizeResults(List *connectionList,
-										   Tuplestorestate *tupleStore,
-										   TupleDesc tupleDescriptor);
+static void ReceiveShardIdAndSizeResults(List *connectionList,
+										 Tuplestorestate *tupleStore,
+										 TupleDesc tupleDescriptor);
 static void AppendShardSizeQuery(StringInfo selectQuery, ShardInterval *shardInterval);
 
 static HeapTuple CreateDiskSpaceTuple(TupleDesc tupleDesc, uint64 availableBytes,
@@ -253,7 +253,7 @@ GetNodeDiskSpaceStatsForConnection(MultiConnection *connection, uint64 *availabl
 
 
 /*
- * citus_shard_sizes returns all shard names and their sizes.
+ * citus_shard_sizes returns all shard ids and their sizes.
  */
 Datum
 citus_shard_sizes(PG_FUNCTION_ARGS)
@@ -271,7 +271,7 @@ citus_shard_sizes(PG_FUNCTION_ARGS)
 	TupleDesc tupleDescriptor = NULL;
 	Tuplestorestate *tupleStore = SetupTuplestore(fcinfo, &tupleDescriptor);
 
-	ReceiveShardNameAndSizeResults(connectionList, tupleStore, tupleDescriptor);
+	ReceiveShardIdAndSizeResults(connectionList, tupleStore, tupleDescriptor);
 
 	PG_RETURN_VOID();
 }
@@ -446,12 +446,12 @@ GenerateShardStatisticsQueryList(List *workerNodeList, List *citusTableIds)
 
 
 /*
- * ReceiveShardNameAndSizeResults receives shard name and size results from the given
+ * ReceiveShardIdAndSizeResults receives shard id and size results from the given
  * connection list.
  */
 static void
-ReceiveShardNameAndSizeResults(List *connectionList, Tuplestorestate *tupleStore,
-							   TupleDesc tupleDescriptor)
+ReceiveShardIdAndSizeResults(List *connectionList, Tuplestorestate *tupleStore,
+							 TupleDesc tupleDescriptor)
 {
 	MultiConnection *connection = NULL;
 	foreach_ptr(connection, connectionList)
@@ -488,13 +488,9 @@ ReceiveShardNameAndSizeResults(List *connectionList, Tuplestorestate *tupleStore
 			memset(values, 0, sizeof(values));
 			memset(isNulls, false, sizeof(isNulls));
 
-			/* format is [0] shard id, [1] shard name, [2] size */
-			char *tableName = PQgetvalue(result, rowIndex, 1);
-			Datum resultStringDatum = CStringGetDatum(tableName);
-			Datum textDatum = DirectFunctionCall1(textin, resultStringDatum);
-
-			values[0] = textDatum;
-			values[1] = ParseIntField(result, rowIndex, 2);
+			/* format is [0] shard id, [1] size */
+			values[0] = ParseIntField(result, rowIndex, 0);
+			values[1] = ParseIntField(result, rowIndex, 1);
 
 			tuplestore_putvalues(tupleStore, tupleDescriptor, values, isNulls);
 		}
@@ -942,7 +938,7 @@ GenerateAllShardStatisticsQueryForNode(WorkerNode *workerNode, List *citusTableI
 	}
 
 	/* Add a dummy entry so that UNION ALL doesn't complain */
-	appendStringInfo(allShardStatisticsQuery, "SELECT 0::bigint, NULL::text, 0::bigint;");
+	appendStringInfo(allShardStatisticsQuery, "SELECT 0::bigint, 0::bigint;");
 
 	return allShardStatisticsQuery->data;
 }
@@ -986,7 +982,6 @@ AppendShardSizeQuery(StringInfo selectQuery, ShardInterval *shardInterval)
 	char *quotedShardName = quote_literal_cstr(shardQualifiedName);
 
 	appendStringInfo(selectQuery, "SELECT " UINT64_FORMAT " AS shard_id, ", shardId);
-	appendStringInfo(selectQuery, "%s AS shard_name, ", quotedShardName);
 	appendStringInfo(selectQuery, PG_TOTAL_RELATION_SIZE_FUNCTION, quotedShardName);
 }
 
@@ -2257,6 +2252,21 @@ EnsureTableOwner(Oid relationId)
 
 
 /*
+ * Check that the current user has owner rights to schemaId, error out if
+ * not. Superusers are regarded as owners.
+ */
+void
+EnsureSchemaOwner(Oid schemaId)
+{
+	if (!pg_namespace_ownercheck(schemaId, GetUserId()))
+	{
+		aclcheck_error(ACLCHECK_NOT_OWNER, OBJECT_SCHEMA,
+					   get_namespace_name(schemaId));
+	}
+}
+
+
+/*
  * Check that the current user has owner rights to functionId, error out if
  * not. Superusers are regarded as owners. Functions and procedures are
  * treated equally.
@@ -2284,6 +2294,24 @@ EnsureHashDistributedTable(Oid relationId)
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 						errmsg("relation %s should be a "
 							   "hash distributed table", get_rel_name(relationId))));
+	}
+}
+
+
+/*
+ * EnsureHashOrSingleShardDistributedTable error out if the given relation is not a
+ * hash or single shard distributed table with the given message.
+ */
+void
+EnsureHashOrSingleShardDistributedTable(Oid relationId)
+{
+	if (!IsCitusTableType(relationId, HASH_DISTRIBUTED) &&
+		!IsCitusTableType(relationId, SINGLE_SHARD_DISTRIBUTED))
+	{
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("relation %s should be a "
+							   "hash or single shard distributed table",
+							   get_rel_name(relationId))));
 	}
 }
 
@@ -4003,11 +4031,7 @@ CancelTasksForJob(int64 jobid)
 							errmsg("must be a superuser to cancel superuser tasks")));
 		}
 		else if (!has_privs_of_role(GetUserId(), taskOwner) &&
-#if PG_VERSION_NUM >= 140000
 				 !has_privs_of_role(GetUserId(), ROLE_PG_SIGNAL_BACKEND))
-#else
-				 !has_privs_of_role(GetUserId(), DEFAULT_ROLE_SIGNAL_BACKENDID))
-#endif
 		{
 			/* user doesn't have the permissions to cancel this job */
 			ereport(ERROR, (errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),

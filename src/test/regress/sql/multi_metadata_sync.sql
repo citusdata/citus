@@ -1,7 +1,7 @@
 --
 -- MULTI_METADATA_SYNC
 --
--- this test has different output for PG13/14 compared to PG15
+-- this test has different output for PG14 compared to PG15
 -- In PG15, public schema is owned by pg_database_owner role
 -- Relevant PG commit: b073c3ccd06e4cb845e121387a43faa8c68a7b62
 SHOW server_version \gset
@@ -56,14 +56,23 @@ set citus.shard_count to 8;
 set citus.shard_replication_factor to 1;
 SELECT create_distributed_table('mx_test_table', 'col_1');
 reset citus.shard_count;
-reset citus.shard_replication_factor;
 
 -- Set the replication model of the test table to streaming replication so that it is
 -- considered as an MX table
 UPDATE pg_dist_partition SET repmodel='s' WHERE logicalrelid='mx_test_table'::regclass;
 
+-- add a single shard table and verify the creation commands are included in the activate node snapshot
+CREATE TABLE single_shard_tbl(a int);
+SELECT create_distributed_table('single_shard_tbl', null);
+INSERT INTO single_shard_tbl VALUES (1);
+
+reset citus.shard_replication_factor;
+
 -- Show that the created MX table is and its sequences are included in the activate node snapshot
 SELECT unnest(activate_node_snapshot()) order by 1;
+
+-- Drop single shard table
+DROP TABLE single_shard_tbl;
 
 -- Show that CREATE INDEX commands are included in the activate node snapshot
 CREATE INDEX mx_index ON mx_test_table(col_2);
@@ -87,7 +96,7 @@ SELECT unnest(activate_node_snapshot()) order by 1;
 
 -- Test start_metadata_sync_to_node and citus_activate_node UDFs
 
--- Ensure that hasmetadata=false for all nodes
+-- Ensure that hasmetadata=false for all nodes except for the coordinator node
 SELECT count(*) FROM pg_dist_node WHERE hasmetadata=true;
 
 -- Show that metadata can not be synced on secondary node
@@ -187,6 +196,10 @@ SELECT 1 FROM citus_activate_node('localhost', :worker_1_port);
 CREATE TABLE mx_query_test (a int, b text, c int);
 SELECT create_distributed_table('mx_query_test', 'a');
 
+CREATE TABLE single_shard_tbl(a int);
+SELECT create_distributed_table('single_shard_tbl', null);
+INSERT INTO single_shard_tbl VALUES (1);
+
 SELECT repmodel FROM pg_dist_partition WHERE logicalrelid='mx_query_test'::regclass;
 
 INSERT INTO mx_query_test VALUES (1, 'one', 1);
@@ -200,11 +213,16 @@ SELECT * FROM mx_query_test ORDER BY a;
 INSERT INTO mx_query_test VALUES (6, 'six', 36);
 UPDATE mx_query_test SET c = 25 WHERE a = 5;
 
+SELECT * FROM single_shard_tbl ORDER BY a;
+INSERT INTO single_shard_tbl VALUES (2);
+
 \c - - - :master_port
 SELECT * FROM mx_query_test ORDER BY a;
+SELECT * FROM single_shard_tbl ORDER BY a;
 
 \c - - - :master_port
 DROP TABLE mx_query_test;
+DROP TABLE single_shard_tbl;
 
 -- Check that stop_metadata_sync_to_node function sets hasmetadata of the node to false
 \c - - - :master_port
@@ -753,7 +771,6 @@ SELECT create_reference_table('dist_table_2');
 
 ALTER TABLE dist_table_1 ADD COLUMN b int;
 
-SELECT master_add_node('localhost', :master_port, groupid => 0);
 SELECT citus_disable_node_and_wait('localhost', :worker_1_port);
 SELECT citus_disable_node_and_wait('localhost', :worker_2_port);
 SELECT master_remove_node('localhost', :worker_1_port);

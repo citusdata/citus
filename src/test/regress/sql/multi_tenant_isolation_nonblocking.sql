@@ -607,3 +607,6 @@ TRUNCATE TABLE pg_catalog.pg_dist_colocation;
 ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 100;
 
 ALTER SEQUENCE pg_catalog.pg_dist_placement_placementid_seq RESTART :last_placement_id;
+
+SELECT 	citus_set_coordinator_host('localhost');
+

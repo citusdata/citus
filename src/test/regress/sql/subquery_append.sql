@@ -87,4 +87,5 @@ SELECT count(*) FROM append_table WHERE extra = 1;
 UPDATE append_table a sET extra = 1 FROM append_table b WHERE a.key = b.key;
 END;
 
+SET client_min_messages TO WARNING;
 DROP SCHEMA subquery_append CASCADE;

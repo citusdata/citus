@@ -797,11 +797,7 @@ BuildExistingQueryIdHash(void)
 {
 	const int userIdAttributeNumber = 1;
 	const int dbIdAttributeNumber = 2;
-#if PG_VERSION_NUM >= PG_VERSION_14
 	const int queryIdAttributeNumber = 4;
-#else
-	const int queryIdAttributeNumber = 3;
-#endif
 	Datum commandTypeDatum = (Datum) 0;
 	bool missingOK = true;
 

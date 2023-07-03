@@ -272,7 +272,7 @@ TargetListOnPartitionColumn(Query *query, List *targetEntryList)
 	if (!targetListOnPartitionColumn)
 	{
 		if (!FindNodeMatchingCheckFunctionInRangeTableList(query->rtable,
-														   IsDistributedTableRTE))
+														   IsTableWithDistKeyRTE))
 		{
 			targetListOnPartitionColumn = true;
 		}
@@ -376,6 +376,20 @@ IsReferenceTableRTE(Node *node)
 {
 	Oid relationId = NodeTryGetRteRelid(node);
 	return relationId != InvalidOid && IsCitusTableType(relationId, REFERENCE_TABLE);
+}
+
+
+/*
+ * IsTableWithDistKeyRTE gets a node and returns true if the node
+ * is a range table relation entry that points to a distributed table
+ * that has a distribution column.
+ */
+bool
+IsTableWithDistKeyRTE(Node *node)
+{
+	Oid relationId = NodeTryGetRteRelid(node);
+	return relationId != InvalidOid && IsCitusTable(relationId) &&
+		   HasDistributionKey(relationId);
 }
 
 
@@ -1014,7 +1028,8 @@ ErrorHintRequired(const char *errorHint, Query *queryTree)
 		{
 			continue;
 		}
-		else if (IsCitusTableType(relationId, HASH_DISTRIBUTED))
+		else if (IsCitusTableType(relationId, HASH_DISTRIBUTED) ||
+				 IsCitusTableType(relationId, SINGLE_SHARD_DISTRIBUTED))
 		{
 			int colocationId = TableColocationId(relationId);
 			colocationIdList = list_append_unique_int(colocationIdList, colocationId);

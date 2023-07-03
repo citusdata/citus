@@ -44,7 +44,7 @@
 #include "distributed/cte_inline.h"
 #include "distributed/distributed_deadlock_detection.h"
 #include "distributed/errormessage.h"
-#include "distributed/insert_select_executor.h"
+#include "distributed/repartition_executor.h"
 #include "distributed/intermediate_result_pruning.h"
 #include "distributed/local_multi_copy.h"
 #include "distributed/local_executor.h"
@@ -185,13 +185,14 @@ static void CitusObjectAccessHook(ObjectAccessType access, Oid classId, Oid obje
 static void DoInitialCleanup(void);
 static void ResizeStackToMaximumDepth(void);
 static void multi_log_hook(ErrorData *edata);
+static bool IsSequenceOverflowError(ErrorData *edata);
 static void RegisterConnectionCleanup(void);
 static void RegisterExternalClientBackendCounterDecrement(void);
 static void CitusCleanupConnectionsAtExit(int code, Datum arg);
 static void DecrementExternalClientBackendCounterAtExit(int code, Datum arg);
 static void CreateRequiredDirectories(void);
 static void RegisterCitusConfigVariables(void);
-static void OverridePostgresConfigAssignHooks(void);
+static void OverridePostgresConfigProperties(void);
 static bool ErrorIfNotASuitableDeadlockFactor(double *newval, void **extra,
 											  GucSource source);
 static bool WarnIfDeprecatedExecutorUsed(int *newval, void **extra, GucSource source);
@@ -213,6 +214,7 @@ static bool IsSuperuser(char *userName);
 static void AdjustDynamicLibraryPathForCdcDecoders(void);
 
 static ClientAuthentication_hook_type original_client_auth_hook = NULL;
+static emit_log_hook_type original_emit_log_hook = NULL;
 
 /* *INDENT-OFF* */
 /* GUC enum definitions */
@@ -458,6 +460,7 @@ _PG_init(void)
 	ExecutorEnd_hook = CitusAttributeToEnd;
 
 	/* register hook for error messages */
+	original_emit_log_hook = emit_log_hook;
 	emit_log_hook = multi_log_hook;
 
 
@@ -681,6 +684,15 @@ multi_log_hook(ErrorData *edata)
 	 * Show the user a meaningful error message when a backend is cancelled
 	 * by the distributed deadlock detection. Also reset the state for this,
 	 * since the next cancelation of the backend might have another reason.
+	 *
+	 * We also want to provide a useful hint for sequence overflow errors
+	 * because they're likely to be caused by the way Citus handles smallint/int
+	 * based sequences on worker nodes. Note that we add the hint without checking
+	 * whether we're on a worker node or the sequence was used on a distributed
+	 * table because catalog might not be available at this point. And given
+	 * that this hint might be shown for regular Postgres tables too, we inject
+	 * the hint only when EnableUnsupportedFeatureMessages is set to true.
+	 * Otherwise, vanilla tests would fail.
 	 */
 	bool clearState = true;
 	if (edata->elevel == ERROR && edata->sqlerrcode == ERRCODE_QUERY_CANCELED &&
@@ -698,6 +710,40 @@ multi_log_hook(ErrorData *edata)
 		edata->message = pstrdup("canceling the transaction since it was "
 								 "involved in a distributed deadlock");
 	}
+	else if (EnableUnsupportedFeatureMessages &&
+			 IsSequenceOverflowError(edata))
+	{
+		edata->detail = pstrdup("nextval(sequence) calls in worker nodes "
+								"are not supported for column defaults of "
+								"type int or smallint");
+		edata->hint = pstrdup("If the command was issued from a worker node, "
+							  "try issuing it from the coordinator node "
+							  "instead.");
+	}
+
+	if (original_emit_log_hook)
+	{
+		original_emit_log_hook(edata);
+	}
+}
+
+
+/*
+ * IsSequenceOverflowError returns true if the given error is a sequence
+ * overflow error.
+ */
+static bool
+IsSequenceOverflowError(ErrorData *edata)
+{
+	static const char *sequenceOverflowedMsgPrefix =
+		"nextval: reached maximum value of sequence";
+	static const int sequenceOverflowedMsgPrefixLen = 42;
+
+	return edata->elevel == ERROR &&
+		   edata->sqlerrcode == ERRCODE_SEQUENCE_GENERATOR_LIMIT_EXCEEDED &&
+		   edata->message != NULL &&
+		   strncmp(edata->message, sequenceOverflowedMsgPrefix,
+				   sequenceOverflowedMsgPrefixLen) == 0;
 }
 
 
@@ -878,7 +924,7 @@ RegisterCitusConfigVariables(void)
 		&AllowModificationsFromWorkersToReplicatedTables,
 		true,
 		PGC_USERSET,
-		GUC_NO_SHOW_ALL,
+		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
@@ -895,7 +941,7 @@ RegisterCitusConfigVariables(void)
 		&AllowNestedDistributedExecution,
 		false,
 		PGC_USERSET,
-		GUC_NO_SHOW_ALL,
+		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
@@ -915,7 +961,7 @@ RegisterCitusConfigVariables(void)
 		&AllowUnsafeConstraints,
 		false,
 		PGC_USERSET,
-		GUC_NO_SHOW_ALL,
+		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
@@ -935,7 +981,7 @@ RegisterCitusConfigVariables(void)
 		&EnableAcquiringUnsafeLockFromWorkers,
 		false,
 		PGC_USERSET,
-		GUC_NO_SHOW_ALL,
+		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
@@ -956,7 +1002,7 @@ RegisterCitusConfigVariables(void)
 		&CheckAvailableSpaceBeforeMove,
 		true,
 		PGC_USERSET,
-		GUC_NO_SHOW_ALL,
+		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 		NULL, NULL, NULL);
 
 	DefineCustomStringVariable(
@@ -995,7 +1041,7 @@ RegisterCitusConfigVariables(void)
 		&CopySwitchOverThresholdBytes,
 		4 * 1024 * 1024, 1, INT_MAX,
 		PGC_USERSET,
-		GUC_UNIT_BYTE | GUC_NO_SHOW_ALL,
+		GUC_UNIT_BYTE | GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 		NULL, NULL, NULL);
 
 	DefineCustomRealVariable(
@@ -1066,7 +1112,7 @@ RegisterCitusConfigVariables(void)
 		&CreateObjectPropagationMode,
 		CREATE_OBJECT_PROPAGATION_IMMEDIATE, create_object_propagation_options,
 		PGC_USERSET,
-		GUC_NO_SHOW_ALL,
+		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
@@ -1139,7 +1185,7 @@ RegisterCitusConfigVariables(void)
 		&EnableAlterDatabaseOwner,
 		true,
 		PGC_USERSET,
-		GUC_NO_SHOW_ALL,
+		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
@@ -1150,7 +1196,7 @@ RegisterCitusConfigVariables(void)
 		&EnableAlterRolePropagation,
 		true,
 		PGC_USERSET,
-		GUC_NO_SHOW_ALL,
+		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
@@ -1160,7 +1206,7 @@ RegisterCitusConfigVariables(void)
 		&EnableAlterRoleSetPropagation,
 		true,
 		PGC_USERSET,
-		GUC_NO_SHOW_ALL,
+		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
@@ -1169,11 +1215,7 @@ RegisterCitusConfigVariables(void)
 			"Enables communication between nodes using binary protocol when possible"),
 		NULL,
 		&EnableBinaryProtocol,
-#if PG_VERSION_NUM >= PG_VERSION_14
 		true,
-#else
-		false,
-#endif
 		PGC_USERSET,
 		GUC_STANDARD,
 		NULL, NULL, NULL);
@@ -1199,7 +1241,7 @@ RegisterCitusConfigVariables(void)
 		&EnableClusterClock,
 		true,
 		PGC_USERSET,
-		GUC_NO_SHOW_ALL,
+		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 		NULL, NULL, NULL);
 	DefineCustomBoolVariable(
 		"citus.enable_cost_based_connection_establishment",
@@ -1210,7 +1252,7 @@ RegisterCitusConfigVariables(void)
 		&EnableCostBasedConnectionEstablishment,
 		true,
 		PGC_USERSET,
-		GUC_NO_SHOW_ALL,
+		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
@@ -1231,7 +1273,7 @@ RegisterCitusConfigVariables(void)
 		&EnableCreateTypePropagation,
 		true,
 		PGC_USERSET,
-		GUC_NO_SHOW_ALL,
+		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
@@ -1241,7 +1283,7 @@ RegisterCitusConfigVariables(void)
 		&EnableDDLPropagation,
 		true,
 		PGC_USERSET,
-		GUC_NO_SHOW_ALL,
+		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
@@ -1266,7 +1308,7 @@ RegisterCitusConfigVariables(void)
 		&EnableFastPathRouterPlanner,
 		true,
 		PGC_USERSET,
-		GUC_NO_SHOW_ALL,
+		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
@@ -1300,7 +1342,7 @@ RegisterCitusConfigVariables(void)
 		&EnableManualChangesToShards,
 		false,
 		PGC_USERSET,
-		GUC_NO_SHOW_ALL,
+		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 		NULL, NULL, NULL);
 
 	DefineCustomStringVariable(
@@ -1311,7 +1353,7 @@ RegisterCitusConfigVariables(void)
 		&EnableManualMetadataChangesForUser,
 		"",
 		PGC_SIGHUP,
-		GUC_SUPERUSER_ONLY | GUC_NO_SHOW_ALL,
+		GUC_SUPERUSER_ONLY | GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
@@ -1321,7 +1363,7 @@ RegisterCitusConfigVariables(void)
 		&EnableMetadataSync,
 		true,
 		PGC_USERSET,
-		GUC_NO_SHOW_ALL,
+		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
@@ -1339,9 +1381,9 @@ RegisterCitusConfigVariables(void)
 					 "or altering the shard count of one of those distributed "
 					 "tables."),
 		&EnableNonColocatedRouterQueryPushdown,
-		true,
+		false,
 		PGC_USERSET,
-		GUC_NO_SHOW_ALL,
+		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
@@ -1361,7 +1403,7 @@ RegisterCitusConfigVariables(void)
 		&EnableRepartitionedInsertSelect,
 		true,
 		PGC_USERSET,
-		GUC_NO_SHOW_ALL,
+		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
@@ -1371,7 +1413,21 @@ RegisterCitusConfigVariables(void)
 		&EnableRouterExecution,
 		true,
 		PGC_USERSET,
-		GUC_NO_SHOW_ALL,
+		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		"citus.enable_schema_based_sharding",
+		gettext_noop("Enables schema based sharding."),
+		gettext_noop("The schemas created while this is ON will be automatically "
+					 "associated with individual colocation groups such that the "
+					 "tables created in those schemas will be automatically "
+					 "converted to colocated distributed tables without a shard "
+					 "key."),
+		&EnableSchemaBasedSharding,
+		false,
+		PGC_USERSET,
+		GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
@@ -1382,7 +1438,7 @@ RegisterCitusConfigVariables(void)
 		&EnableSingleHashRepartitioning,
 		false,
 		PGC_USERSET,
-		GUC_NO_SHOW_ALL,
+		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
@@ -1393,7 +1449,7 @@ RegisterCitusConfigVariables(void)
 					 "and operating system name. This configuration value controls "
 					 "whether these reports are sent."),
 		&EnableStatisticsCollection,
-#if defined(HAVE_LIBCURL) && defined(ENABLE_CITUS_STATISTICS_COLLECTION)
+#if defined(HAVE_LIBCURL)
 		true,
 #else
 		false,
@@ -1412,7 +1468,7 @@ RegisterCitusConfigVariables(void)
 		&EnableUniqueJobIds,
 		true,
 		PGC_USERSET,
-		GUC_SUPERUSER_ONLY | GUC_NO_SHOW_ALL,
+		GUC_SUPERUSER_ONLY | GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
@@ -1423,7 +1479,7 @@ RegisterCitusConfigVariables(void)
 		&EnableUnsafeTriggers,
 		false,
 		PGC_USERSET,
-		GUC_STANDARD | GUC_NO_SHOW_ALL,
+		GUC_STANDARD | GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
@@ -1434,7 +1490,7 @@ RegisterCitusConfigVariables(void)
 		&EnableUnsupportedFeatureMessages,
 		true,
 		PGC_SUSET,
-		GUC_SUPERUSER_ONLY | GUC_NO_SHOW_ALL,
+		GUC_SUPERUSER_ONLY | GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
@@ -1444,7 +1500,7 @@ RegisterCitusConfigVariables(void)
 		&EnableVersionChecks,
 		true,
 		PGC_USERSET,
-		GUC_NO_SHOW_ALL,
+		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
@@ -1457,7 +1513,7 @@ RegisterCitusConfigVariables(void)
 		&EnforceForeignKeyRestrictions,
 		true,
 		PGC_USERSET,
-		GUC_NO_SHOW_ALL,
+		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
@@ -1468,7 +1524,7 @@ RegisterCitusConfigVariables(void)
 		&EnforceLocalObjectRestrictions,
 		true,
 		PGC_USERSET,
-		GUC_NO_SHOW_ALL,
+		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
@@ -1484,7 +1540,7 @@ RegisterCitusConfigVariables(void)
 		&ExecutorSlowStartInterval,
 		10, 0, INT_MAX,
 		PGC_USERSET,
-		GUC_UNIT_MS | GUC_NO_SHOW_ALL,
+		GUC_UNIT_MS | GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
@@ -1524,7 +1580,7 @@ RegisterCitusConfigVariables(void)
 		&ExplainDistributedQueries,
 		true,
 		PGC_USERSET,
-		GUC_NO_SHOW_ALL,
+		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
@@ -1540,7 +1596,7 @@ RegisterCitusConfigVariables(void)
 		&ForceMaxQueryParallelization,
 		false,
 		PGC_USERSET,
-		GUC_NO_SHOW_ALL,
+		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
@@ -1554,7 +1610,7 @@ RegisterCitusConfigVariables(void)
 		&FunctionOpensTransactionBlock,
 		true,
 		PGC_USERSET,
-		GUC_NO_SHOW_ALL,
+		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 		NULL, NULL, NULL);
 
 	DefineCustomStringVariable(
@@ -1566,7 +1622,7 @@ RegisterCitusConfigVariables(void)
 		&GrepRemoteCommands,
 		"",
 		PGC_USERSET,
-		GUC_NO_SHOW_ALL,
+		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
@@ -1578,7 +1634,7 @@ RegisterCitusConfigVariables(void)
 		&HideCitusDependentObjects,
 		false,
 		PGC_USERSET,
-		GUC_SUPERUSER_ONLY | GUC_NO_SHOW_ALL,
+		GUC_SUPERUSER_ONLY | GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 		NULL, NULL, NULL);
 
 	/*
@@ -1598,7 +1654,7 @@ RegisterCitusConfigVariables(void)
 		&DeprecatedEmptyString,
 		"",
 		PGC_SUSET,
-		GUC_NO_SHOW_ALL,
+		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
@@ -1608,7 +1664,7 @@ RegisterCitusConfigVariables(void)
 		&IsolationTestSessionProcessID,
 		-1, -1, INT_MAX,
 		PGC_USERSET,
-		GUC_NO_SHOW_ALL,
+		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
@@ -1618,7 +1674,7 @@ RegisterCitusConfigVariables(void)
 		&IsolationTestSessionRemoteProcessID,
 		-1, -1, INT_MAX,
 		PGC_USERSET,
-		GUC_NO_SHOW_ALL,
+		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
@@ -1643,7 +1699,7 @@ RegisterCitusConfigVariables(void)
 		&LocalCopyFlushThresholdByte,
 		512 * 1024, 1, INT_MAX,
 		PGC_USERSET,
-		GUC_UNIT_BYTE | GUC_NO_SHOW_ALL,
+		GUC_UNIT_BYTE | GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 		NULL, NULL, NULL);
 
 	DefineCustomStringVariable(
@@ -1700,7 +1756,7 @@ RegisterCitusConfigVariables(void)
 		&LogDistributedDeadlockDetection,
 		false,
 		PGC_SIGHUP,
-		GUC_NO_SHOW_ALL,
+		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
@@ -1710,7 +1766,7 @@ RegisterCitusConfigVariables(void)
 		&LogIntermediateResults,
 		false,
 		PGC_USERSET,
-		GUC_NO_SHOW_ALL,
+		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
@@ -1721,7 +1777,7 @@ RegisterCitusConfigVariables(void)
 		&LogLocalCommands,
 		false,
 		PGC_USERSET,
-		GUC_NO_SHOW_ALL,
+		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
@@ -1732,7 +1788,7 @@ RegisterCitusConfigVariables(void)
 		&LogMultiJoinOrder,
 		false,
 		PGC_USERSET,
-		GUC_NO_SHOW_ALL,
+		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
@@ -1754,7 +1810,7 @@ RegisterCitusConfigVariables(void)
 		&LogicalReplicationTimeout,
 		2 * 60 * 60 * 1000, 0, 7 * 24 * 3600 * 1000,
 		PGC_SIGHUP,
-		GUC_NO_SHOW_ALL | GUC_UNIT_MS,
+		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE | GUC_UNIT_MS,
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
@@ -1889,7 +1945,7 @@ RegisterCitusConfigVariables(void)
 		&MaxRebalancerLoggedIgnoredMoves,
 		5, -1, INT_MAX,
 		PGC_USERSET,
-		GUC_NO_SHOW_ALL,
+		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
@@ -1934,7 +1990,7 @@ RegisterCitusConfigVariables(void)
 		&MetadataSyncInterval,
 		60 * MS_PER_SECOND, 1, 7 * MS_PER_DAY,
 		PGC_SIGHUP,
-		GUC_UNIT_MS | GUC_NO_SHOW_ALL,
+		GUC_UNIT_MS | GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 		NULL, NULL, NULL);
 
 	DefineCustomEnumVariable(
@@ -1949,7 +2005,7 @@ RegisterCitusConfigVariables(void)
 		&MetadataSyncTransMode,
 		METADATA_SYNC_TRANSACTIONAL, metadata_sync_mode_options,
 		PGC_SUSET,
-		GUC_SUPERUSER_ONLY | GUC_NO_SHOW_ALL,
+		GUC_SUPERUSER_ONLY | GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
@@ -1961,7 +2017,7 @@ RegisterCitusConfigVariables(void)
 		&MetadataSyncRetryInterval,
 		5 * MS_PER_SECOND, 1, 7 * MS_PER_DAY,
 		PGC_SIGHUP,
-		GUC_UNIT_MS | GUC_NO_SHOW_ALL,
+		GUC_UNIT_MS | GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 		NULL, NULL, NULL);
 
 	/*
@@ -1979,7 +2035,7 @@ RegisterCitusConfigVariables(void)
 		&MitmfifoEmptyString,
 		"",
 		PGC_SUSET,
-		GUC_NO_SHOW_ALL,
+		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 		NULL, NULL, NULL);
 
 	DefineCustomEnumVariable(
@@ -2014,7 +2070,7 @@ RegisterCitusConfigVariables(void)
 		&NextCleanupRecordId,
 		0, 0, INT_MAX,
 		PGC_USERSET,
-		GUC_NO_SHOW_ALL,
+		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
@@ -2029,7 +2085,7 @@ RegisterCitusConfigVariables(void)
 		&NextOperationId,
 		0, 0, INT_MAX,
 		PGC_USERSET,
-		GUC_NO_SHOW_ALL,
+		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
@@ -2044,7 +2100,7 @@ RegisterCitusConfigVariables(void)
 		&NextPlacementId,
 		0, 0, INT_MAX,
 		PGC_USERSET,
-		GUC_NO_SHOW_ALL,
+		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
@@ -2059,7 +2115,7 @@ RegisterCitusConfigVariables(void)
 		&NextShardId,
 		0, 0, INT_MAX,
 		PGC_USERSET,
-		GUC_NO_SHOW_ALL,
+		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
@@ -2098,7 +2154,7 @@ RegisterCitusConfigVariables(void)
 		&OverrideTableVisibility,
 		true,
 		PGC_USERSET,
-		GUC_NO_SHOW_ALL,
+		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
@@ -2113,7 +2169,7 @@ RegisterCitusConfigVariables(void)
 		&PreventIncompleteConnectionEstablishment,
 		true,
 		PGC_USERSET,
-		GUC_NO_SHOW_ALL,
+		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
@@ -2124,7 +2180,7 @@ RegisterCitusConfigVariables(void)
 		&PropagateSessionSettingsForLoopbackConnection,
 		false,
 		PGC_USERSET,
-		GUC_NO_SHOW_ALL,
+		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 		NULL, NULL, NULL);
 
 	DefineCustomEnumVariable(
@@ -2136,6 +2192,23 @@ RegisterCitusConfigVariables(void)
 		propagate_set_commands_options,
 		PGC_USERSET,
 		GUC_STANDARD,
+		NULL, NULL, NULL);
+
+	DefineCustomIntVariable(
+		"citus.rebalancer_by_disk_size_base_cost",
+		gettext_noop(
+			"When using the by_disk_size rebalance strategy each shard group "
+			"will get this cost in bytes added to its actual disk size. This "
+			"is used to avoid creating a bad balance when there's very little "
+			"data in some of the shards. The assumption is that even empty "
+			"shards have some cost, because of parallelism and because empty "
+			"shard groups will likely grow in the future."),
+		gettext_noop(
+			"The main reason this is configurable, is so it can be lowered for Citus its regression tests."),
+		&RebalancerByDiskSizeBaseCost,
+		100 * 1024 * 1024, 0, INT_MAX,
+		PGC_USERSET,
+		GUC_UNIT_BYTE | GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
@@ -2162,7 +2235,7 @@ RegisterCitusConfigVariables(void)
 		&RemoteCopyFlushThreshold,
 		8 * 1024 * 1024, 0, INT_MAX,
 		PGC_USERSET,
-		GUC_UNIT_BYTE | GUC_NO_SHOW_ALL,
+		GUC_UNIT_BYTE | GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
@@ -2186,7 +2259,7 @@ RegisterCitusConfigVariables(void)
 		&RepartitionJoinBucketCountPerNode,
 		4, 1, INT_MAX,
 		PGC_SIGHUP,
-		GUC_STANDARD | GUC_NO_SHOW_ALL,
+		GUC_STANDARD | GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 		NULL, NULL, NULL);
 
 	/* deprecated setting */
@@ -2197,7 +2270,7 @@ RegisterCitusConfigVariables(void)
 		&DeprecatedReplicateReferenceTablesOnActivate,
 		true,
 		PGC_USERSET,
-		GUC_NO_SHOW_ALL,
+		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 		NULL, NULL, NULL);
 
 	DefineCustomEnumVariable(
@@ -2210,7 +2283,7 @@ RegisterCitusConfigVariables(void)
 		REPLICATION_MODEL_STREAMING,
 		replication_model_options,
 		PGC_SUSET,
-		GUC_NO_SHOW_ALL,
+		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 		WarnIfReplicationModelIsSet, NULL, NULL);
 
 	DefineCustomBoolVariable(
@@ -2223,7 +2296,7 @@ RegisterCitusConfigVariables(void)
 		&RunningUnderIsolationTest,
 		false,
 		PGC_SUSET,
-		GUC_SUPERUSER_ONLY | GUC_NO_SHOW_ALL,
+		GUC_SUPERUSER_ONLY | GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
@@ -2240,7 +2313,7 @@ RegisterCitusConfigVariables(void)
 		&SelectOpensTransactionBlock,
 		true,
 		PGC_USERSET,
-		GUC_NO_SHOW_ALL,
+		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
@@ -2297,7 +2370,7 @@ RegisterCitusConfigVariables(void)
 		&SkipAdvisoryLockPermissionChecks,
 		false,
 		GUC_SUPERUSER_ONLY,
-		GUC_NO_SHOW_ALL,
+		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
@@ -2342,7 +2415,7 @@ RegisterCitusConfigVariables(void)
 		&SortReturning,
 		false,
 		PGC_SUSET,
-		GUC_NO_SHOW_ALL,
+		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 		NULL, NULL, NULL);
 
 	/*
@@ -2358,7 +2431,7 @@ RegisterCitusConfigVariables(void)
 		&StatStatementsMax,
 		50000, 1000, 10000000,
 		PGC_POSTMASTER,
-		GUC_NO_SHOW_ALL,
+		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
@@ -2369,7 +2442,7 @@ RegisterCitusConfigVariables(void)
 		&StatStatementsPurgeInterval,
 		10, -1, INT_MAX,
 		PGC_SIGHUP,
-		GUC_UNIT_MS | GUC_NO_SHOW_ALL,
+		GUC_UNIT_MS | GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 		NULL, NULL, NULL);
 
 	DefineCustomEnumVariable(
@@ -2395,7 +2468,6 @@ RegisterCitusConfigVariables(void)
 		PGC_POSTMASTER,
 		GUC_STANDARD,
 		NULL, NULL, NULL);
-
 	DefineCustomEnumVariable(
 		"citus.stat_tenants_log_level",
 		gettext_noop("Sets the level of citus_stat_tenants log messages"),
@@ -2430,6 +2502,16 @@ RegisterCitusConfigVariables(void)
 		GUC_STANDARD,
 		NULL, NULL, NULL);
 
+	DefineCustomRealVariable(
+		"citus.stat_tenants_untracked_sample_rate",
+		gettext_noop("Sampling rate for new tenants in citus_stat_tenants."),
+		NULL,
+		&StatTenantsSampleRateForNewTenants,
+		1, 0, 1,
+		PGC_USERSET,
+		GUC_STANDARD,
+		NULL, NULL, NULL);
+
 	DefineCustomBoolVariable(
 		"citus.subquery_pushdown",
 		gettext_noop("Usage of this GUC is highly discouraged, please read the long "
@@ -2445,7 +2527,7 @@ RegisterCitusConfigVariables(void)
 		&SubqueryPushdown,
 		false,
 		PGC_USERSET,
-		GUC_NO_SHOW_ALL,
+		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 		NoticeIfSubqueryPushdownEnabled, NULL, NULL);
 
 	DefineCustomEnumVariable(
@@ -2556,16 +2638,17 @@ RegisterCitusConfigVariables(void)
 	/* warn about config items in the citus namespace that are not registered above */
 	EmitWarningsOnPlaceholders("citus");
 
-	OverridePostgresConfigAssignHooks();
+	OverridePostgresConfigProperties();
 }
 
 
 /*
- * OverridePostgresConfigAssignHooks overrides GUC assign hooks where we want
- * custom behaviour.
+ * OverridePostgresConfigProperties overrides GUC properties where we want
+ * custom behaviour. We should consider using Postgres function find_option
+ * in this function once it is exported by Postgres in a later release.
  */
 static void
-OverridePostgresConfigAssignHooks(void)
+OverridePostgresConfigProperties(void)
 {
 	struct config_generic **guc_vars = get_guc_variables();
 	int gucCount = GetNumConfigOptions();
@@ -2580,6 +2663,17 @@ OverridePostgresConfigAssignHooks(void)
 
 			OldApplicationNameAssignHook = stringVar->assign_hook;
 			stringVar->assign_hook = ApplicationNameAssignHook;
+		}
+
+		/*
+		 * Turn on GUC_REPORT for search_path. GUC_REPORT provides that an S (Parameter Status)
+		 * packet is appended after the C (Command Complete) packet sent from the server
+		 * for SET command. S packet contains the new value of the parameter
+		 * if its value has been changed.
+		 */
+		if (strcmp(var->name, "search_path") == 0)
+		{
+			var->flags |= GUC_REPORT;
 		}
 	}
 }
@@ -2845,11 +2939,13 @@ NodeConninfoGucAssignHook(const char *newval, void *extra)
 		newval = "";
 	}
 
-	if (strcmp(newval, NodeConninfo) == 0)
+	if (strcmp(newval, NodeConninfo) == 0 && checkAtBootPassed)
 	{
 		/* It did not change, no need to do anything */
 		return;
 	}
+
+	checkAtBootPassed = true;
 
 	PQconninfoOption *optionArray = PQconninfoParse(newval, NULL);
 	if (optionArray == NULL)

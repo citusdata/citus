@@ -1,3 +1,13 @@
+-- run this test only when old citus version is earlier than 11.0
+\set upgrade_test_old_citus_version `echo "$CITUS_OLD_VERSION"`
+SELECT substring(:'upgrade_test_old_citus_version', 'v(\d+)\.\d+\.\d+')::int < 11
+AS upgrade_test_old_citus_version_lt_11_0;
+\gset
+\if :upgrade_test_old_citus_version_lt_11_0
+\else
+\q
+\endif
+
 SET search_path = post_11_upgrade;
 
 -- tables, views and their dependencies become objects with Citus 11+

@@ -11,6 +11,7 @@ s/localhost:[0-9]+/localhost:xxxxx/g
 s/ port=[0-9]+ / port=xxxxx /g
 s/placement [0-9]+/placement xxxxx/g
 s/shard [0-9]+/shard xxxxx/g
+s/Shard [0-9]+/Shard xxxxx/g
 s/assigned task [0-9]+ to node/assigned task to node/
 s/node group [12] (but|does)/node group \1/
 
@@ -97,34 +98,7 @@ s/of relation ".*" violates not-null constraint/violates not-null constraint/g
 s/partition ".*" would be violated by some row/partition would be violated by some row/g
 s/of relation ".*" contains null values/contains null values/g
 
-#if (PG_VERSION_NUM >= PG_VERSION_13) && (PG_VERSION_NUM < PG_VERSION_14)
-# (This is not preprocessor directive, but a reminder for the developer that will drop PG13 support )
-# libpq message changes for minor versions of pg13
-
-# We ignore multiline error messages, and substitute first line with a single line
-# alternative that is used in some older libpq versions.
-s/(ERROR: |WARNING: |error:) server closed the connection unexpectedly/\1 connection not open/g
-/^\s*This probably means the server terminated abnormally$/d
-/^\s*before or while processing the request.$/d
-/^\s*connection not open$/d
-
-s/ERROR:  fake_fetch_row_version not implemented/ERROR:  fake_tuple_update not implemented/g
-s/ERROR:  COMMIT is not allowed in an SQL function/ERROR:  COMMIT is not allowed in a SQL function/g
-s/ERROR:  ROLLBACK is not allowed in an SQL function/ERROR:  ROLLBACK is not allowed in a SQL function/g
-/.*Async-Capable.*/d
-/.*Async Capable.*/d
-/Parent Relationship/d
-/Parent-Relationship/d
-s/function array_cat_agg\(anyarray\) anyarray/function array_cat_agg\(anycompatiblearray\) anycompatiblearray/g
-s/function array_cat_agg\(anyarray\)/function array_cat_agg\(anycompatiblearray\)/g
-s/TRIM\(BOTH FROM value\)/btrim\(value\)/g
-/DETAIL:  Subqueries are not supported in policies on distributed tables/d
-s/ERROR:  unexpected non-SELECT command in SubLink/ERROR:  cannot create policy/g
-
-# PG13 changes bgworker sigterm message, we can drop that line with PG13 drop
-s/(FATAL: terminating).*Citus Background Task Queue Executor.*(due to administrator command)\+/\1 connection \2                    \+/g
-
-#endif /* (PG_VERSION_NUM >= PG_VERSION_13) && (PG_VERSION_NUM < PG_VERSION_14) */
+s/(Citus Background Task Queue Executor: regression\/postgres for \()[0-9]+\/[0-9]+\)/\1xxxxx\/xxxxx\)/g
 
 # Changed outputs after minor bump to PG14.5 and PG13.8
 s/(ERROR: |WARNING: |error:) invalid socket/\1 connection not open/g
@@ -134,9 +108,18 @@ s/(ERROR: |WARNING: |error:) invalid socket/\1 connection not open/g
 
 # pg15 changes
 # can be removed when dropping PG13&14 support
+#if (PG_VERSION_NUM >= PG_VERSION_14) && (PG_VERSION_NUM < PG_VERSION_15)
+# (This is not preprocessor directive, but a reminder for the developer that will drop PG14 support )
 s/is not a PostgreSQL server process/is not a PostgreSQL backend process/g
 s/ AS "\?column\?"//g
 s/".*\.(.*)": (found .* removable)/"\1": \2/g
+# We ignore multiline error messages, and substitute first line with a single line
+# alternative that is used in some older libpq versions.
+s/(ERROR: |WARNING: |error:) server closed the connection unexpectedly/\1 connection not open/g
+/^\s*This probably means the server terminated abnormally$/d
+/^\s*before or while processing the request.$/d
+/^\s*connection not open$/d
+#endif /* (PG_VERSION_NUM >= PG_VERSION_13) && (PG_VERSION_NUM < PG_VERSION_14) */
 
 # intermediate_results
 s/(ERROR.*)pgsql_job_cache\/([0-9]+_[0-9]+_[0-9]+)\/(.*).data/\1pgsql_job_cache\/xx_x_xxx\/\3.data/g
@@ -158,6 +141,8 @@ s/Subplan [0-9]+\_/Subplan XXX\_/g
 
 # Plan numbers in insert select
 s/read_intermediate_result\('insert_select_[0-9]+_/read_intermediate_result('insert_select_XXX_/g
+# Plan numbers in merge into
+s/read_intermediate_result\('merge_into_[0-9]+_/read_intermediate_result('merge_into_XXX_/g
 
 # ignore job id in repartitioned insert/select
 s/repartitioned_results_[0-9]+/repartitioned_results_xxxxx/g
@@ -210,9 +195,6 @@ s/ERROR:  cannot append to shardId [0-9]+/ERROR:  cannot append to shardId xxxxx
 /local tables that are added to metadata automatically by citus, but not chained with reference tables via foreign keys might be automatically converted back to postgres tables$/d
 /Executing citus_add_local_table_to_metadata(.*) prevents this for the given relation, and all of the connected relations$/d
 
-# normalize partitioned table shard constraint name errors for upgrade_partition_constraints_(before|after)
-s/^(ERROR:  child table is missing constraint "\w+)_([0-9])+"/\1_xxxxxx"/g
-
 # normalize for distributed deadlock delay in isolation_metadata_sync_deadlock
 # isolation tester first detects a lock, but then deadlock detector cancels the
 # session. Sometimes happens that deadlock detector cancels the session before
@@ -257,7 +239,7 @@ s/pg_cancel_backend\('[0-9]+'::bigint\)/pg_cancel_backend('xxxxx'::bigint)/g
 s/issuing SELECT pg_cancel_backend\([0-9]+::integer\)/issuing SELECT pg_cancel_backend(xxxxx::integer)/g
 
 # shard_rebalancer output for flaky nodeIds
-s/issuing SELECT citus_copy_shard_placement\(43[0-9]+,[0-9]+,[0-9]+,'block_writes'\)/issuing SELECT citus_copy_shard_placement(43xxxx,xx,xx,'block_writes')/g
+s/issuing SELECT pg_catalog.citus_copy_shard_placement\(43[0-9]+,[0-9]+,[0-9]+,'block_writes'\)/issuing SELECT pg_catalog.citus_copy_shard_placement(43xxxx,xx,xx,'block_writes')/g
 
 # node id in run_command_on_all_nodes warning
 s/Error on node with node id [0-9]+/Error on node with node id xxxxx/g
@@ -308,4 +290,7 @@ s/(NOTICE:  issuing SET LOCAL application_name TO 'citus_rebalancer gpid=)[0-9]+
 # shard_rebalancer output, flaky improvement number
 s/improvement of 0.1[0-9]* is lower/improvement of 0.1xxxxx is lower/g
 # normalize tenants statistics annotations
-s/\/\*\{"tId":.*\*\///g
+s/\/\*\{"cId":.*\*\///g
+
+# Notice message that contains current columnar version that makes it harder to bump versions
+s/(NOTICE:  issuing CREATE EXTENSION IF NOT EXISTS citus_columnar WITH SCHEMA  pg_catalog VERSION )"[0-9]+\.[0-9]+-[0-9]+"/\1 "x.y-z"/

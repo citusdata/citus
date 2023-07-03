@@ -334,4 +334,5 @@ FROM
 WHERE
 	users_table.user_id = cte_merge.u_id;
 
+SET client_min_messages TO WARNING;
 DROP SCHEMA with_executors CASCADE;

@@ -69,14 +69,14 @@ ALTER TABLE referencing_table ADD FOREIGN KEY (id) REFERENCES referenced_table(i
 DROP TABLE referencing_table;
 DROP TABLE referenced_table;
 
--- test foreign constraint creation is not supported when one of the tables is not a citus table
+-- test foreign constraint creation is supported when coordinator is in metadata
 CREATE TABLE referenced_local_table(id int PRIMARY KEY, other_column int);
 CREATE TABLE reference_table(id int, referencing_column int);
 SELECT create_reference_table('reference_table');
 
 ALTER TABLE reference_table ADD FOREIGN KEY (referencing_column) REFERENCES referenced_local_table(id);
 DROP TABLE referenced_local_table;
-DROP TABLE reference_table;
+DROP TABLE reference_table CASCADE;
 
 -- test foreign constraint with correct conditions
 CREATE TABLE referenced_table(id int PRIMARY KEY, test_column int);
@@ -89,14 +89,14 @@ SELECT con.conname
     FROM pg_catalog.pg_constraint con
       INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
       INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-              WHERE rel.relname = 'referencing_table';
+              WHERE rel.relname = 'referencing_table' ORDER BY con.conname ASC;
 
 \c - - :public_worker_1_host :worker_1_port
 SELECT con.conname
     FROM pg_catalog.pg_constraint con
       INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
       INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-              WHERE rel.relname LIKE 'referencing_table%';
+              WHERE rel.relname LIKE 'referencing_table%' ORDER BY con.conname ASC;
 
 \c - - :master_host :master_port
 SET SEARCH_PATH = at_add_fk;
@@ -109,14 +109,14 @@ SELECT con.conname
   FROM pg_catalog.pg_constraint con
       INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
       INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-              WHERE rel.relname = 'referencing_table';
+              WHERE rel.relname = 'referencing_table' ORDER BY con.conname ASC;
 
 \c - - :public_worker_1_host :worker_1_port
 SELECT con.conname
     FROM pg_catalog.pg_constraint con
       INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
       INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-              WHERE rel.relname LIKE 'referencing_table%';
+              WHERE rel.relname LIKE 'referencing_table%' ORDER BY con.conname ASC;
 
 \c - - :master_host :master_port
 SET SEARCH_PATH = at_add_fk;
@@ -352,7 +352,6 @@ DROP TABLE dist_table CASCADE;
 DROP TABLE reference_table CASCADE;
 
 -- test ADD FOREIGN KEY from citus local to reference table
-SELECT 1 FROM master_add_node('localhost', :master_port, groupId => 0);
 CREATE TABLE citus_local_table(l1 int);
 SELECT citus_add_local_table_to_metadata('citus_local_table');
 
@@ -373,8 +372,20 @@ ALTER TABLE citus_local_table ADD FOREIGN KEY(l1) REFERENCES reference_table(r1)
 ALTER TABLE citus_local_table ADD FOREIGN KEY(l1) REFERENCES reference_table(r1) ON DELETE RESTRICT;
 
 DROP TABLE citus_local_table CASCADE;
-SELECT 1 FROM master_remove_node('localhost', :master_port);
 
 RESET SEARCH_PATH;
 RESET client_min_messages;
 DROP SCHEMA at_add_fk CASCADE;
+
+-- test ADD FOREIGN KEY when REFERENCED table is in another schema.
+CREATE SCHEMA schema_1;
+
+CREATE TABLE schema_1.referenced_table(a int PRIMARY KEY, b int);
+SELECT create_reference_table('schema_1.referenced_table');
+
+CREATE SCHEMA schema_2;
+
+CREATE TABLE schema_2.referencing_table (a int PRIMARY KEY, b int, c text);
+ALTER TABLE schema_2.referencing_table ADD FOREIGN KEY (b) REFERENCES schema_1.referenced_table(a);
+
+DROP SCHEMA schema_1, schema_2 CASCADE;

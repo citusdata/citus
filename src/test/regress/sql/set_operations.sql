@@ -200,5 +200,5 @@ SELECT * FROM set_view_recursive_second ORDER BY 1,2;
 SELECT * FROM (SELECT * FROM test UNION SELECT * FROM test_not_colocated) u ORDER BY 1,2;
 SELECT * FROM (SELECT * FROM test UNION ALL SELECT * FROM test_not_colocated) u ORDER BY 1,2;
 
-RESET client_min_messages;
+SET client_min_messages TO WARNING;
 DROP SCHEMA recursive_union CASCADE;

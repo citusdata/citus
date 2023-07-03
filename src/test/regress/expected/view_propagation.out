@@ -1,6 +1,7 @@
 -- Tests to check propagation of all view commands
 CREATE SCHEMA view_prop_schema;
 SET search_path to view_prop_schema;
+SET citus.next_shard_id TO 1420195;
 -- Check creating views depending on different types of tables
 -- and from multiple schemas
 -- Check the most basic one
@@ -411,7 +412,7 @@ DROP TABLE view_table_2 CASCADE;
 NOTICE:  drop cascades to 2 other objects
 DETAIL:  drop cascades to view prop_view_2
 drop cascades to constraint f_key_for_local_table on table view_table_3
-NOTICE:  drop cascades to constraint f_key_for_local_table_1410200 on table view_prop_schema.view_table_3_1410200
+NOTICE:  drop cascades to constraint f_key_for_local_table_1420200 on table view_prop_schema.view_table_3_1420200
 CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
 PL/pgSQL function citus_drop_trigger() line XX at PERFORM
 NOTICE:  removing table view_prop_schema.view_table_3 from metadata as it is not connected to any reference tables via foreign keys
@@ -935,5 +936,7 @@ DETAIL:  "view vv3" circularly depends itself, resolve circular dependency first
 RESET citus.enable_unsupported_feature_messages;
 RESET citus.enforce_object_restrictions_for_local_objects;
 SET client_min_messages TO ERROR;
+DROP TABLE public.parent_1, public.employees CASCADE;
 DROP SCHEMA view_prop_schema_inner CASCADE;
 DROP SCHEMA view_prop_schema, axx CASCADE;
+DROP ROLE view_creation_user, alter_view_user, grant_view_user;

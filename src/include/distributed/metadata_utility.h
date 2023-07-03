@@ -41,7 +41,7 @@
 #define WORKER_PARTITIONED_RELATION_TOTAL_SIZE_FUNCTION \
 	"worker_partitioned_relation_total_size(%s)"
 
-#define SHARD_SIZES_COLUMN_COUNT (3)
+#define SHARD_SIZES_COLUMN_COUNT (2)
 
 /*
  * Flag to keep track of whether the process is currently in a function converting the
@@ -172,6 +172,12 @@ typedef struct TableConversionParameters
 	 * messages that we explicitly issue
 	 */
 	bool suppressNoticeMessages;
+
+	/*
+	 * bypassTenantCheck skips tenant table checks to allow some internal
+	 * operations which are normally disallowed
+	 */
+	bool bypassTenantCheck;
 } TableConversionParameters;
 
 typedef struct TableConversionReturn
@@ -200,6 +206,37 @@ typedef enum SizeQueryType
 	TOTAL_RELATION_SIZE, /* pg_total_relation_size() */
 	TABLE_SIZE /* pg_table_size() */
 } SizeQueryType;
+
+
+typedef enum
+{
+	COLOCATE_WITH_TABLE_LIKE_OPT,
+	COLOCATE_WITH_COLOCATION_ID
+} ColocationParamType;
+
+/*
+ * Param used to specify the colocation target of a distributed table. It can
+ * be either a table name or a colocation id.
+ *
+ * When colocationParamType is COLOCATE_WITH_COLOCATION_ID, colocationId is
+ * expected to be a valid colocation id. When colocationParamType is set to
+ * COLOCATE_WITH_TABLE_LIKE_OPT, colocateWithTableName is expected to
+ * be a valid table name, "default" or "none".
+ *
+ * Among the functions used to create a Citus table, right now only
+ * CreateSingleShardTable() accepts a ColocationParam.
+ */
+typedef struct
+{
+	union
+	{
+		char *colocateWithTableName;
+		uint32 colocationId;
+	};
+
+	ColocationParamType colocationParamType;
+} ColocationParam;
+
 
 typedef enum BackgroundJobStatus
 {
@@ -326,12 +363,15 @@ extern void DeletePartitionRow(Oid distributedRelationId);
 extern void DeleteShardRow(uint64 shardId);
 extern void UpdatePlacementGroupId(uint64 placementId, int groupId);
 extern void DeleteShardPlacementRow(uint64 placementId);
+extern void CreateSingleShardTable(Oid relationId, ColocationParam colocationParam);
 extern void CreateDistributedTable(Oid relationId, char *distributionColumnName,
 								   char distributionMethod, int shardCount,
 								   bool shardCountIsStrict, char *colocateWithTableName);
 extern void CreateReferenceTable(Oid relationId);
 extern void CreateTruncateTrigger(Oid relationId);
+extern void EnsureUndistributeTenantTableSafe(Oid relationId, const char *operationName);
 extern TableConversionReturn * UndistributeTable(TableConversionParameters *params);
+extern void UndistributeTables(List *relationIdList);
 
 extern void EnsureAllObjectDependenciesExistOnAllNodes(const List *targets);
 extern DeferredErrorMessage * DeferErrorIfCircularDependencyExists(const
@@ -349,7 +389,9 @@ extern char * TableOwner(Oid relationId);
 extern void EnsureTablePermissions(Oid relationId, AclMode mode);
 extern void EnsureTableOwner(Oid relationId);
 extern void EnsureHashDistributedTable(Oid relationId);
+extern void EnsureHashOrSingleShardDistributedTable(Oid relationId);
 extern void EnsureFunctionOwner(Oid functionId);
+extern void EnsureSchemaOwner(Oid schemaId);
 extern void EnsureSuperUser(void);
 extern void ErrorIfTableIsACatalogTable(Relation relation);
 extern void EnsureTableNotDistributed(Oid relationId);

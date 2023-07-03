@@ -671,7 +671,7 @@ CREATE SCHEMA new_schema;
 
 SELECT objid::oid::regnamespace as "Distributed Schemas"
     FROM pg_catalog.pg_dist_object
-    WHERE objid::oid::regnamespace IN ('old_schema', 'new_schema');
+    WHERE objid::oid::regnamespace IN ('old_schema', 'new_schema') ORDER BY objid::oid::regnamespace;
 \c - - - :worker_1_port
 SELECT table_schema AS "Shards' Schema"
     FROM information_schema.tables
@@ -684,7 +684,7 @@ ALTER TABLE old_schema.table_set_schema SET SCHEMA new_schema;
 
 SELECT objid::oid::regnamespace as "Distributed Schemas"
     FROM pg_catalog.pg_dist_object
-    WHERE objid::oid::regnamespace IN ('old_schema', 'new_schema');
+    WHERE objid::oid::regnamespace IN ('old_schema', 'new_schema') ORDER BY objid::oid::regnamespace;
 \c - - - :worker_1_port
 SELECT table_schema AS "Shards' Schema"
     FROM information_schema.tables
@@ -742,7 +742,7 @@ CREATE SCHEMA new_schema;
 
 SELECT objid::oid::regnamespace as "Distributed Schemas"
     FROM pg_catalog.pg_dist_object
-    WHERE objid::oid::regnamespace IN ('old_schema', 'new_schema');
+    WHERE objid::oid::regnamespace IN ('old_schema', 'new_schema') ORDER BY objid::oid::regnamespace;
 \c - - - :worker_1_port
 SELECT table_schema AS "Shards' Schema", COUNT(*) AS "Counts"
     FROM information_schema.tables
@@ -756,7 +756,7 @@ ALTER TABLE table_set_schema SET SCHEMA new_schema;
 
 SELECT objid::oid::regnamespace as "Distributed Schemas"
     FROM pg_catalog.pg_dist_object
-    WHERE objid::oid::regnamespace IN ('old_schema', 'new_schema');
+    WHERE objid::oid::regnamespace IN ('old_schema', 'new_schema') ORDER BY objid::oid::regnamespace;
 \c - - - :worker_1_port
 SELECT table_schema AS "Shards' Schema", COUNT(*) AS "Counts"
     FROM information_schema.tables
@@ -802,6 +802,9 @@ ALTER TABLE IF EXISTS non_existent_table SET SCHEMA non_existent_schema;
 DROP SCHEMA existing_schema, another_existing_schema CASCADE;
 
 
+-- test DROP SCHEMA with nonexisting schemas
+DROP SCHEMA ax, bx, cx, dx, ex, fx, gx, jx;
+
 -- test ALTER TABLE SET SCHEMA with interesting names
 CREATE SCHEMA "cItuS.T E E N'sSchema";
 CREATE SCHEMA "citus-teen's scnd schm.";
@@ -843,8 +846,6 @@ SET citus.next_shard_id TO 1197000;
 -- we do not use run_command_on_coordinator_and_workers here because when there is CASCADE, it causes deadlock
 DROP OWNED BY "test-user" CASCADE;
 DROP USER "test-user";
-
-DROP FUNCTION run_command_on_coordinator_and_workers(p_sql text);
 
 -- test run_command_on_* UDFs with schema
 CREATE SCHEMA run_test_schema;
@@ -949,6 +950,25 @@ SELECT COUNT(*) FROM bar.test;
 ALTER SCHEMA "CiTuS.TeeN" RENAME TO "Citus'Teen123";
 SELECT * FROM "Citus'Teen123"."TeeNTabLE.1!?!" ORDER BY id;
 
+-- test alter owner propagation
+CREATE ROLE test_non_super_user;
+ALTER ROLE test_non_super_user NOSUPERUSER;
+
+SELECT pg_get_userbyid(nspowner) AS schema_owner
+    FROM pg_namespace
+    WHERE nspname = 'bar';
+
+ALTER SCHEMA bar OWNER TO test_non_super_user;
+
+select result from run_command_on_workers ($$
+  SELECT pg_get_userbyid(nspowner) AS schema_owner
+  FROM pg_namespace
+  WHERE nspname = 'bar'
+$$);
+
+ALTER SCHEMA bar OWNER TO postgres;
+DROP ROLE test_non_super_user;
+
 -- test error
 INSERT INTO bar.test VALUES (3,3), (4,4), (5,5), (6,6), (7,7), (8,8), (9,9);
 
@@ -968,6 +988,7 @@ SET client_min_messages TO WARNING;
 
 SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM pg_catalog.pg_dist_object
     WHERE classid=2615 and objid IN (select oid from pg_namespace where nspname='run_test_schema');
+DROP TABLE public.nation_local;
 DROP SCHEMA run_test_schema, test_schema_support_join_1, test_schema_support_join_2, "Citus'Teen123", "CiTUS.TEEN2", bar, test_schema_support CASCADE;
 -- verify that the dropped schema is removed from worker's pg_dist_object
 SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM pg_catalog.pg_dist_object

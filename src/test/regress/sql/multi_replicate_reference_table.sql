@@ -238,14 +238,12 @@ SELECT create_reference_table('replicate_reference_table_cdtc');
 SELECT citus_add_node('localhost', :worker_2_port);
 
 -- required for create_distributed_table_concurrently
-SELECT 1 FROM citus_set_coordinator_host('localhost', :master_port);
 SET citus.shard_replication_factor TO 1;
 
 CREATE TABLE distributed_table_cdtc(column1 int primary key);
 SELECT create_distributed_table_concurrently('distributed_table_cdtc', 'column1');
 
 RESET citus.shard_replication_factor;
-SELECT citus_remove_node('localhost', :master_port);
 
 SELECT
     shardid, shardstate, shardlength, nodename, nodeport
@@ -456,9 +454,9 @@ CREATE TABLE ref_table_1(id int primary key, v int);
 CREATE TABLE ref_table_2(id int primary key, v int references ref_table_1(id));
 CREATE TABLE ref_table_3(id int primary key, v int references ref_table_2(id));
 
-SELECT create_reference_table('ref_table_1'),
-       create_reference_table('ref_table_2'),
-       create_reference_table('ref_table_3');
+SELECT create_reference_table('ref_table_1');
+SELECT create_reference_table('ref_table_2');
+SELECT create_reference_table('ref_table_3');
 
 -- status before master_add_node
 SELECT

@@ -214,13 +214,7 @@ DeferErrorIfCircularDependencyExists(const ObjectAddress *objectAddress)
 			dependency->objectId == objectAddress->objectId &&
 			dependency->objectSubId == objectAddress->objectSubId)
 		{
-			char *objectDescription = NULL;
-
-			#if PG_VERSION_NUM >= PG_VERSION_14
-			objectDescription = getObjectDescription(objectAddress, false);
-			#else
-			objectDescription = getObjectDescription(objectAddress);
-			#endif
+			char *objectDescription = getObjectDescription(objectAddress, false);
 
 			StringInfo detailInfo = makeStringInfo();
 			appendStringInfo(detailInfo, "\"%s\" circularly depends itself, resolve "
@@ -393,8 +387,16 @@ GetDependencyCreateDDLCommands(const ObjectAddress *dependency)
 												  tableDDLCommand));
 					}
 
-					/* we need to drop table, if exists, first to make table creation idempotent */
+					/*
+					 * We need to drop table, if exists, first to make table creation
+					 * idempotent. Before dropping the table, we should also break
+					 * dependencies with sequences since `drop cascade table` would also
+					 * drop depended sequences. This is safe as we still record dependency
+					 * with the sequence during table creation.
+					 */
 					commandList = lcons(DropTableIfExistsCommand(relationId),
+										commandList);
+					commandList = lcons(WorkerDropSequenceDependencyCommand(relationId),
 										commandList);
 				}
 
@@ -521,9 +523,9 @@ GetDependencyCreateDDLCommands(const ObjectAddress *dependency)
 	 */
 	Assert(false);
 	ereport(ERROR, (errmsg("unsupported object %s for distribution by citus",
-						   getObjectTypeDescription_compat(dependency,
+						   getObjectTypeDescription(dependency,
 
-	                                                       /* missingOk: */ false)),
+	                                                /* missingOk: */ false)),
 					errdetail(
 						"citus tries to recreate an unsupported object on its workers"),
 					errhint("please report a bug as this should not be happening")));

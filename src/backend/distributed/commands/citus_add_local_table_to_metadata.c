@@ -18,6 +18,7 @@
  */
 
 #include "postgres.h"
+#include "miscadmin.h"
 
 #include "access/genam.h"
 #include "access/htup_details.h"
@@ -54,7 +55,7 @@
  * This is used after every CREATE TABLE statement in utility_hook.c
  * If this variable is set to true, we add all created tables to metadata.
  */
-bool AddAllLocalTablesToMetadata = true;
+bool AddAllLocalTablesToMetadata = false;
 
 static void citus_add_local_table_to_metadata_internal(Oid relationId,
 													   bool cascadeViaForeignKeys);
@@ -1499,4 +1500,39 @@ FinalizeCitusLocalTableCreation(Oid relationId)
 	{
 		InvalidateForeignKeyGraph();
 	}
+}
+
+
+/*
+ * ShouldAddNewTableToMetadata takes a relationId and returns true if we need to add a
+ * newly created table to metadata, false otherwise.
+ * For partitions and temporary tables, ShouldAddNewTableToMetadata returns false.
+ * For other tables created, returns true, if we are on a coordinator that is added
+ * as worker, and ofcourse, if the GUC use_citus_managed_tables is set to on.
+ */
+bool
+ShouldAddNewTableToMetadata(Oid relationId)
+{
+	if (get_rel_persistence(relationId) == RELPERSISTENCE_TEMP ||
+		PartitionTableNoLock(relationId))
+	{
+		/*
+		 * Shouldn't add table to metadata if it's a temp table, or a partition.
+		 * Creating partitions of a table that is added to metadata is already handled.
+		 */
+		return false;
+	}
+
+	if (AddAllLocalTablesToMetadata && !IsBinaryUpgrade &&
+		IsCoordinator() && CoordinatorAddedAsWorkerNode())
+	{
+		/*
+		 * We have verified that the GUC is set to true, and we are not upgrading,
+		 * and we are on the coordinator that is added as worker node.
+		 * So return true here, to add this newly created table to metadata.
+		 */
+		return true;
+	}
+
+	return false;
 }

@@ -61,8 +61,7 @@ pg_strtoint64(char *s)
  * We want to use it in all versions. So we backport it ourselves in earlier
  * versions, and rely on the Postgres provided version in the later versions.
  */
-#if PG_VERSION_NUM >= PG_VERSION_13 && PG_VERSION_NUM < 130010 \
-	|| PG_VERSION_NUM >= PG_VERSION_14 && PG_VERSION_NUM < 140007
+#if PG_VERSION_NUM < 140007
 static inline SMgrRelation
 RelationGetSmgr(Relation rel)
 {
@@ -82,67 +81,6 @@ RelationGetSmgr(Relation rel)
 	" MINVALUE " INT64_FORMAT " MAXVALUE " INT64_FORMAT \
 	" START WITH " INT64_FORMAT " CACHE " INT64_FORMAT " %sCYCLE"
 
-#endif
-
-#if PG_VERSION_NUM >= PG_VERSION_14
-#define AlterTableStmtObjType_compat(a) ((a)->objtype)
-#define getObjectTypeDescription_compat(a, b) getObjectTypeDescription(a, b)
-#define getObjectIdentity_compat(a, b) getObjectIdentity(a, b)
-
-/* for MemoryContextMethods->stats */
-#define stats_compat(a, b, c, d, e) stats(a, b, c, d, e)
-#define FuncnameGetCandidates_compat(a, b, c, d, e, f, g) \
-	FuncnameGetCandidates(a, b, c, d, e, f, g)
-#define expand_function_arguments_compat(a, b, c, d) expand_function_arguments(a, b, c, d)
-#define BeginCopyFrom_compat(a, b, c, d, e, f, g, h) BeginCopyFrom(a, b, c, d, e, f, g, h)
-#define standard_ProcessUtility_compat(a, b, c, d, e, f, g, h) \
-	standard_ProcessUtility(a, b, c, d, e, f, g, h)
-#define ProcessUtility_compat(a, b, c, d, e, f, g, h) \
-	ProcessUtility(a, b, c, d, e, f, g, h)
-#define PrevProcessUtility_compat(a, b, c, d, e, f, g, h) \
-	PrevProcessUtility(a, b, c, d, e, f, g, h)
-#define SetTuplestoreDestReceiverParams_compat(a, b, c, d, e, f) \
-	SetTuplestoreDestReceiverParams(a, b, c, d, e, f)
-#define pgproc_statusflags_compat(pgproc) ((pgproc)->statusFlags)
-#define get_partition_parent_compat(a, b) get_partition_parent(a, b)
-#define RelationGetPartitionDesc_compat(a, b) RelationGetPartitionDesc(a, b)
-#define make_simple_restrictinfo_compat(a, b) make_simple_restrictinfo(a, b)
-#define pull_varnos_compat(a, b) pull_varnos(a, b)
-#else
-#define AlterTableStmtObjType_compat(a) ((a)->relkind)
-#define F_NEXTVAL F_NEXTVAL_OID
-#define ROLE_PG_MONITOR DEFAULT_ROLE_MONITOR
-#define PROC_WAIT_STATUS_WAITING STATUS_WAITING
-#define getObjectTypeDescription_compat(a, b) getObjectTypeDescription(a)
-#define getObjectIdentity_compat(a, b) getObjectIdentity(a)
-
-/* for MemoryContextMethods->stats */
-#define stats_compat(a, b, c, d, e) stats(a, b, c, d)
-#define FuncnameGetCandidates_compat(a, b, c, d, e, f, g) \
-	FuncnameGetCandidates(a, b, c, d, e, g)
-#define expand_function_arguments_compat(a, b, c, d) expand_function_arguments(a, c, d)
-#define VacOptValue VacOptTernaryValue
-#define VACOPTVALUE_UNSPECIFIED VACOPT_TERNARY_DEFAULT
-#define VACOPTVALUE_DISABLED VACOPT_TERNARY_DISABLED
-#define VACOPTVALUE_ENABLED VACOPT_TERNARY_ENABLED
-#define CopyFromState CopyState
-#define BeginCopyFrom_compat(a, b, c, d, e, f, g, h) BeginCopyFrom(a, b, d, e, f, g, h)
-#define standard_ProcessUtility_compat(a, b, c, d, e, f, g, h) \
-	standard_ProcessUtility(a, b, d, e, f, g, h)
-#define ProcessUtility_compat(a, b, c, d, e, f, g, h) ProcessUtility(a, b, d, e, f, g, h)
-#define PrevProcessUtility_compat(a, b, c, d, e, f, g, h) \
-	PrevProcessUtility(a, b, d, e, f, g, h)
-#define COPY_FRONTEND COPY_NEW_FE
-#define SetTuplestoreDestReceiverParams_compat(a, b, c, d, e, f) \
-	SetTuplestoreDestReceiverParams(a, b, c, d)
-#define pgproc_statusflags_compat(pgproc) \
-	((&ProcGlobal->allPgXact[(pgproc)->pgprocno])->vacuumFlags)
-#define get_partition_parent_compat(a, b) get_partition_parent(a)
-#define RelationGetPartitionDesc_compat(a, b) RelationGetPartitionDesc(a)
-#define PQ_LARGE_MESSAGE_LIMIT 0
-#define make_simple_restrictinfo_compat(a, b) make_simple_restrictinfo(b)
-#define pull_varnos_compat(a, b) pull_varnos(b)
-#define ROLE_PG_READ_ALL_STATS DEFAULT_ROLE_READ_ALL_STATS
 #endif
 
 #define SetListCellPtr(a, b) ((a)->ptr_value = (b))

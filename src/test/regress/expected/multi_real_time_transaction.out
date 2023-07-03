@@ -668,8 +668,9 @@ SELECT id, pg_advisory_xact_lock(16) FROM test_table ORDER BY id;
 
 END;
 DROP SCHEMA multi_real_time_transaction CASCADE;
-NOTICE:  drop cascades to 4 other objects
+NOTICE:  drop cascades to 5 other objects
 DETAIL:  drop cascades to table test_table
 drop cascades to table co_test_table
 drop cascades to table ref_test_table
+drop cascades to table ref_test_table_1610008
 drop cascades to function insert_row_test(name)

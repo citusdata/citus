@@ -497,11 +497,18 @@ SELECT create_reference_table('test_reference_table_fkey');
 CREATE TABLE test_colocated_table_1(id int PRIMARY KEY, value_1 int, FOREIGN KEY(id) REFERENCES test_colocated_table_1(id));
 SELECT create_distributed_table('test_colocated_table_1', 'id', colocate_with => 'NONE');
 
-CREATE TABLE test_colocated_table_2(id int PRIMARY KEY, value_1 int, FOREIGN KEY(value_1) REFERENCES test_reference_table_fkey(id), FOREIGN KEY(id) REFERENCES test_colocated_table_1(id));
+CREATE TABLE test_colocated_table_2(id int PRIMARY KEY, value_1 int);
 SELECT create_distributed_table('test_colocated_table_2', 'id', colocate_with => 'test_colocated_table_1');
 
-CREATE TABLE test_colocated_table_3(id int PRIMARY KEY, value_1 int, FOREIGN KEY(value_1) REFERENCES test_reference_table_fkey(id), FOREIGN KEY(id) REFERENCES test_colocated_table_1(id), FOREIGN KEY(id) REFERENCES test_colocated_table_2(id));
+ALTER TABLE test_colocated_table_2 ADD FOREIGN KEY(value_1) REFERENCES test_reference_table_fkey(id);
+ALTER TABLE test_colocated_table_2 ADD FOREIGN KEY(id) REFERENCES test_colocated_table_1(id);
+
+CREATE TABLE test_colocated_table_3(id int PRIMARY KEY, value_1 int);
 SELECT create_distributed_table('test_colocated_table_3', 'id', colocate_with => 'test_colocated_table_1');
+
+ALTER TABLE test_colocated_table_3 ADD FOREIGN KEY(value_1) REFERENCES test_reference_table_fkey(id);
+ALTER TABLE test_colocated_table_3 ADD FOREIGN KEY(id) REFERENCES test_colocated_table_1(id);
+ALTER TABLE test_colocated_table_3 ADD FOREIGN KEY(id) REFERENCES test_colocated_table_2(id);
 
 INSERT INTO test_reference_table_fkey SELECT i FROM generate_series (0, 100) i;
 INSERT INTO test_colocated_table_1 SELECT i, i FROM generate_series (0, 100) i;

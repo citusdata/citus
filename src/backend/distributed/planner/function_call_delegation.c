@@ -116,7 +116,6 @@ contain_param_walker(Node *node, void *context)
 PlannedStmt *
 TryToDelegateFunctionCall(DistributedPlanningContext *planContext)
 {
-	bool colocatedWithReferenceTable = false;
 	ShardPlacement *placement = NULL;
 	struct ParamWalkerContext walkerParamContext = { 0 };
 	bool inTransactionBlock = false;
@@ -337,7 +336,7 @@ TryToDelegateFunctionCall(DistributedPlanningContext *planContext)
 		if (!procedure->forceDelegation)
 		{
 			/* cannot delegate function calls in a multi-statement transaction */
-			ereport(DEBUG1, (errmsg("not pushing down function calls in "
+			ereport(DEBUG4, (errmsg("not pushing down function calls in "
 									"a multi-statement transaction")));
 			return NULL;
 		}
@@ -388,15 +387,8 @@ TryToDelegateFunctionCall(DistributedPlanningContext *planContext)
 	Oid colocatedRelationId = ColocatedTableId(procedure->colocationId);
 	if (colocatedRelationId == InvalidOid)
 	{
-		ereport(DEBUG1, (errmsg("function does not have co-located tables")));
+		ereport(DEBUG4, (errmsg("function does not have co-located tables")));
 		return NULL;
-	}
-
-	CitusTableCacheEntry *distTable = GetCitusTableCacheEntry(colocatedRelationId);
-	Var *partitionColumn = distTable->partitionColumn;
-	if (partitionColumn == NULL)
-	{
-		colocatedWithReferenceTable = true;
 	}
 
 	/*
@@ -410,14 +402,20 @@ TryToDelegateFunctionCall(DistributedPlanningContext *planContext)
 		return NULL;
 	}
 
-	if (colocatedWithReferenceTable)
+	CitusTableCacheEntry *distTable = GetCitusTableCacheEntry(colocatedRelationId);
+	if (IsCitusTableType(colocatedRelationId, REFERENCE_TABLE))
 	{
 		placement = ShardPlacementForFunctionColocatedWithReferenceTable(distTable);
+	}
+	else if (IsCitusTableType(colocatedRelationId, SINGLE_SHARD_DISTRIBUTED))
+	{
+		placement = ShardPlacementForFunctionColocatedWithSingleShardTable(distTable);
 	}
 	else
 	{
 		placement = ShardPlacementForFunctionColocatedWithDistTable(procedure,
 																	funcExpr->args,
+																	distTable->
 																	partitionColumn,
 																	distTable,
 																	planContext->plan);
@@ -567,6 +565,34 @@ ShardPlacementForFunctionColocatedWithDistTable(DistObjectCacheEntry *procedure,
 	}
 
 	return linitial(placementList);
+}
+
+
+/*
+ * ShardPlacementForFunctionColocatedWithSingleShardTable decides on a placement
+ * for delegating a function call that reads from a single shard table.
+ */
+ShardPlacement *
+ShardPlacementForFunctionColocatedWithSingleShardTable(CitusTableCacheEntry *cacheEntry)
+{
+	const ShardInterval *shardInterval = cacheEntry->sortedShardIntervalArray[0];
+
+	if (shardInterval == NULL)
+	{
+		ereport(DEBUG1, (errmsg("cannot push down call, failed to find shard interval")));
+		return NULL;
+	}
+
+	List *placementList = ActiveShardPlacementList(shardInterval->shardId);
+	if (list_length(placementList) != 1)
+	{
+		/* punt on this for now */
+		ereport(DEBUG1, (errmsg(
+							 "cannot push down function call for replicated distributed tables")));
+		return NULL;
+	}
+
+	return (ShardPlacement *) linitial(placementList);
 }
 
 

@@ -1,3 +1,12 @@
+-- run this test only when old citus version is earlier than 11.0
+\set upgrade_test_old_citus_version `echo "$CITUS_OLD_VERSION"`
+SELECT substring(:'upgrade_test_old_citus_version', 'v(\d+)\.\d+\.\d+')::int < 11
+AS upgrade_test_old_citus_version_lt_11_0;
+\gset
+\if :upgrade_test_old_citus_version_lt_11_0
+\else
+\q
+\endif
 
 -- test cases for #3970
 SET citus.shard_count TO 32;

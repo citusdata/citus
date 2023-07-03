@@ -24,13 +24,14 @@
 #include "distributed/multi_executor.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/multi_server_executor.h"
+#include "distributed/multi_router_planner.h"
 #include "distributed/coordinator_protocol.h"
 #include "distributed/subplan_execution.h"
 #include "distributed/tuple_destination.h"
 #include "distributed/worker_protocol.h"
 #include "utils/lsyscache.h"
 
-int RemoteTaskCheckInterval = 100; /* per cycle sleep interval in millisecs */
+int RemoteTaskCheckInterval = 10; /* per cycle sleep interval in millisecs */
 int TaskExecutorType = MULTI_EXECUTOR_ADAPTIVE; /* distributed executor type */
 bool EnableRepartitionJoins = false;
 
@@ -47,8 +48,13 @@ JobExecutorType(DistributedPlan *distributedPlan)
 {
 	Job *job = distributedPlan->workerJob;
 
-	if (distributedPlan->insertSelectQuery != NULL)
+	if (distributedPlan->modifyQueryViaCoordinatorOrRepartition != NULL)
 	{
+		if (IsMergeQuery(distributedPlan->modifyQueryViaCoordinatorOrRepartition))
+		{
+			return MULTI_EXECUTOR_NON_PUSHABLE_MERGE_QUERY;
+		}
+
 		/*
 		 * We go through
 		 * MULTI_EXECUTOR_NON_PUSHABLE_INSERT_SELECT because

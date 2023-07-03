@@ -1275,3 +1275,9 @@ SELECT count(*) FROM pg_catalog.pg_dist_partition WHERE colocationid > 0;
 TRUNCATE TABLE pg_catalog.pg_dist_colocation;
 ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 100;
 ALTER SEQUENCE pg_catalog.pg_dist_placement_placementid_seq RESTART :last_placement_id;
+SELECT 	citus_set_coordinator_host('localhost');
+ citus_set_coordinator_host
+---------------------------------------------------------------------
+
+(1 row)
+

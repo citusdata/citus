@@ -115,9 +115,7 @@ static RangeVar * ColumnarProcessAlterTable(AlterTableStmt *alterTableStmt,
 											List **columnarOptions);
 static void ColumnarProcessUtility(PlannedStmt *pstmt,
 								   const char *queryString,
-#if PG_VERSION_NUM >= PG_VERSION_14
 								   bool readOnlyTree,
-#endif
 								   ProcessUtilityContext context,
 								   ParamListInfo params,
 								   struct QueryEnvironment *queryEnv,
@@ -665,7 +663,6 @@ columnar_tuple_satisfies_snapshot(Relation rel, TupleTableSlot *slot,
 }
 
 
-#if PG_VERSION_NUM >= PG_VERSION_14
 static TransactionId
 columnar_index_delete_tuples(Relation rel,
 							 TM_IndexDeleteOp *delstate)
@@ -712,19 +709,6 @@ columnar_index_delete_tuples(Relation rel,
 		elog(ERROR, "columnar_index_delete_tuples not implemented for simple deletion");
 	}
 }
-
-
-#else
-static TransactionId
-columnar_compute_xid_horizon_for_tuples(Relation rel,
-										ItemPointerData *tids,
-										int nitems)
-{
-	elog(ERROR, "columnar_compute_xid_horizon_for_tuples not implemented");
-}
-
-
-#endif
 
 
 static void
@@ -1484,8 +1468,7 @@ columnar_index_build_range_scan(Relation columnarRelation,
 	if (!IsBootstrapProcessingMode() && !indexInfo->ii_Concurrent)
 	{
 		/* ignore lazy VACUUM's */
-		OldestXmin = GetOldestNonRemovableTransactionId_compat(columnarRelation,
-															   PROCARRAY_FLAGS_VACUUM);
+		OldestXmin = GetOldestNonRemovableTransactionId(columnarRelation);
 	}
 
 	Snapshot snapshot = { 0 };
@@ -1813,8 +1796,8 @@ ColumnarReadMissingRowsIntoIndex(TableScanDesc scan, Relation indexRelation,
 		Relation columnarRelation = scan->rs_rd;
 		IndexUniqueCheck indexUniqueCheck =
 			indexInfo->ii_Unique ? UNIQUE_CHECK_YES : UNIQUE_CHECK_NO;
-		index_insert_compat(indexRelation, indexValues, indexNulls, columnarItemPointer,
-							columnarRelation, indexUniqueCheck, false, indexInfo);
+		index_insert(indexRelation, indexValues, indexNulls, columnarItemPointer,
+					 columnarRelation, indexUniqueCheck, false, indexInfo);
 
 		validateIndexState->tups_inserted += 1;
 	}
@@ -2018,7 +2001,7 @@ columnar_tableam_init()
 		&EnableVersionChecksColumnar,
 		true,
 		PGC_USERSET,
-		GUC_NO_SHOW_ALL,
+		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 		NULL, NULL, NULL);
 }
 
@@ -2240,21 +2223,17 @@ ColumnarProcessAlterTable(AlterTableStmt *alterTableStmt, List **columnarOptions
 static void
 ColumnarProcessUtility(PlannedStmt *pstmt,
 					   const char *queryString,
-#if PG_VERSION_NUM >= PG_VERSION_14
 					   bool readOnlyTree,
-#endif
 					   ProcessUtilityContext context,
 					   ParamListInfo params,
 					   struct QueryEnvironment *queryEnv,
 					   DestReceiver *dest,
 					   QueryCompletion *completionTag)
 {
-#if PG_VERSION_NUM >= PG_VERSION_14
 	if (readOnlyTree)
 	{
 		pstmt = copyObject(pstmt);
 	}
-#endif
 
 	Node *parsetree = pstmt->utilityStmt;
 
@@ -2371,8 +2350,8 @@ ColumnarProcessUtility(PlannedStmt *pstmt,
 		CheckCitusColumnarAlterExtensionStmt(parsetree);
 	}
 
-	PrevProcessUtilityHook_compat(pstmt, queryString, false, context,
-								  params, queryEnv, dest, completionTag);
+	PrevProcessUtilityHook(pstmt, queryString, false, context,
+						   params, queryEnv, dest, completionTag);
 
 	if (columnarOptions != NIL)
 	{
@@ -2500,11 +2479,7 @@ static const TableAmRoutine columnar_am_methods = {
 	.tuple_get_latest_tid = columnar_get_latest_tid,
 	.tuple_tid_valid = columnar_tuple_tid_valid,
 	.tuple_satisfies_snapshot = columnar_tuple_satisfies_snapshot,
-#if PG_VERSION_NUM >= PG_VERSION_14
 	.index_delete_tuples = columnar_index_delete_tuples,
-#else
-	.compute_xid_horizon_for_tuples = columnar_compute_xid_horizon_for_tuples,
-#endif
 
 	.tuple_insert = columnar_tuple_insert,
 	.tuple_insert_speculative = columnar_tuple_insert_speculative,

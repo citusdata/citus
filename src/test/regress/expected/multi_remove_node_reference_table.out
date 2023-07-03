@@ -218,10 +218,24 @@ WHERE colocationid IN
           1 |                -1 |                      0
 (1 row)
 
+-- test that we cannot remove a node if it has the only placement for a shard
+SELECT master_remove_node('localhost', :master_port);
+ master_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
 SELECT master_remove_node('localhost', :worker_1_port);
 ERROR:  cannot remove or disable the node localhost:xxxxx because because it contains the only shard placement for shard xxxxx
 DETAIL:  One of the table(s) that prevents the operation complete successfully is public.remove_node_reference_table
 HINT:  To proceed, either drop the tables or use undistribute_table() function to convert them to local tables
+-- restore the coordinator
+SELECT citus_set_coordinator_host('localhost');
+ citus_set_coordinator_host
+---------------------------------------------------------------------
+
+(1 row)
+
 \c - - - :worker_1_port
 SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
  count
@@ -972,12 +986,6 @@ ORDER BY shardid ASC;
 (0 rows)
 
 \c - - - :master_port
-SELECT 1 FROM citus_set_coordinator_host('localhost', :master_port);
- ?column?
----------------------------------------------------------------------
-        1
-(1 row)
-
 SELECT citus_disable_node('localhost', :worker_2_port);
  citus_disable_node
 ---------------------------------------------------------------------
@@ -1002,12 +1010,6 @@ SELECT hasmetadata, metadatasynced FROM pg_dist_node WHERE nodeport = :master_po
  hasmetadata | metadatasynced
 ---------------------------------------------------------------------
  t           | t
-(1 row)
-
-SELECT 1 FROM citus_remove_node('localhost', :master_port);
- ?column?
----------------------------------------------------------------------
-        1
 (1 row)
 
 SELECT

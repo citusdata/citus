@@ -222,7 +222,7 @@ ExtractDefaultColumnsAndOwnedSequences(Oid relationId, List **columnNameList,
 bool
 ColumnDefaultsToNextVal(Oid relationId, AttrNumber attrNumber)
 {
-	AssertArg(AttributeNumberIsValid(attrNumber));
+	Assert(AttributeNumberIsValid(attrNumber));
 
 	Relation relation = RelationIdGetRelation(relationId);
 	Node *defExpr = build_column_default(relation, attrNumber);
@@ -668,7 +668,7 @@ PreprocessAlterSequenceOwnerStmt(Node *node, const char *queryString,
 								 ProcessUtilityContext processUtilityContext)
 {
 	AlterTableStmt *stmt = castNode(AlterTableStmt, node);
-	Assert(AlterTableStmtObjType_compat(stmt) == OBJECT_SEQUENCE);
+	Assert(stmt->objtype == OBJECT_SEQUENCE);
 
 	List *sequenceAddresses = GetObjectAddressListFromParseTree((Node *) stmt, false,
 																false);
@@ -701,7 +701,7 @@ List *
 AlterSequenceOwnerStmtObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
 {
 	AlterTableStmt *stmt = castNode(AlterTableStmt, node);
-	Assert(AlterTableStmtObjType_compat(stmt) == OBJECT_SEQUENCE);
+	Assert(stmt->objtype == OBJECT_SEQUENCE);
 
 	RangeVar *sequence = stmt->relation;
 	Oid seqOid = RangeVarGetRelid(sequence, NoLock, missing_ok);
@@ -721,7 +721,7 @@ List *
 PostprocessAlterSequenceOwnerStmt(Node *node, const char *queryString)
 {
 	AlterTableStmt *stmt = castNode(AlterTableStmt, node);
-	Assert(AlterTableStmtObjType_compat(stmt) == OBJECT_SEQUENCE);
+	Assert(stmt->objtype == OBJECT_SEQUENCE);
 
 	List *sequenceAddresses = GetObjectAddressListFromParseTree((Node *) stmt, false,
 																true);
@@ -755,7 +755,7 @@ PreprocessAlterSequencePersistenceStmt(Node *node, const char *queryString,
 									   ProcessUtilityContext processUtilityContext)
 {
 	AlterTableStmt *stmt = castNode(AlterTableStmt, node);
-	Assert(AlterTableStmtObjType_compat(stmt) == OBJECT_SEQUENCE);
+	Assert(stmt->objtype == OBJECT_SEQUENCE);
 
 	List *sequenceAddresses = GetObjectAddressListFromParseTree((Node *) stmt, false,
 																false);
@@ -788,7 +788,7 @@ List *
 AlterSequencePersistenceStmtObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
 {
 	AlterTableStmt *stmt = castNode(AlterTableStmt, node);
-	Assert(AlterTableStmtObjType_compat(stmt) == OBJECT_SEQUENCE);
+	Assert(stmt->objtype == OBJECT_SEQUENCE);
 
 	RangeVar *sequence = stmt->relation;
 	Oid seqOid = RangeVarGetRelid(sequence, NoLock, missing_ok);
@@ -811,7 +811,7 @@ PreprocessSequenceAlterTableStmt(Node *node, const char *queryString,
 								 ProcessUtilityContext processUtilityContext)
 {
 	AlterTableStmt *stmt = castNode(AlterTableStmt, node);
-	Assert(AlterTableStmtObjType_compat(stmt) == OBJECT_SEQUENCE);
+	Assert(stmt->objtype == OBJECT_SEQUENCE);
 
 	ListCell *cmdCell = NULL;
 	foreach(cmdCell, stmt->cmds)

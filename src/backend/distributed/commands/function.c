@@ -105,6 +105,9 @@ static void DistributeFunctionColocatedWithDistributedTable(RegProcedure funcOid
 															char *colocateWithTableName,
 															const ObjectAddress *
 															functionAddress);
+static void DistributeFunctionColocatedWithSingleShardTable(const
+															ObjectAddress *functionAddress,
+															text *colocateWithText);
 static void DistributeFunctionColocatedWithReferenceTable(const
 														  ObjectAddress *functionAddress);
 static List * FilterDistributedFunctions(GrantStmt *grantStmt);
@@ -133,6 +136,7 @@ create_distributed_function(PG_FUNCTION_ARGS)
 
 	Oid distributionArgumentOid = InvalidOid;
 	bool colocatedWithReferenceTable = false;
+	bool colocatedWithSingleShardTable = false;
 
 	char *distributionArgumentName = NULL;
 	char *colocateWithTableName = NULL;
@@ -187,6 +191,8 @@ create_distributed_function(PG_FUNCTION_ARGS)
 			Oid colocationRelationId = ResolveRelationId(colocateWithText, false);
 			colocatedWithReferenceTable = IsCitusTableType(colocationRelationId,
 														   REFERENCE_TABLE);
+			colocatedWithSingleShardTable = IsCitusTableType(colocationRelationId,
+															 SINGLE_SHARD_DISTRIBUTED);
 		}
 	}
 
@@ -276,10 +282,15 @@ create_distributed_function(PG_FUNCTION_ARGS)
 												   forceDelegationAddress,
 												   functionAddress);
 	}
-	else if (!colocatedWithReferenceTable)
+	else if (!colocatedWithReferenceTable && !colocatedWithSingleShardTable)
 	{
 		DistributeFunctionColocatedWithDistributedTable(funcOid, colocateWithTableName,
 														functionAddress);
+	}
+	else if (colocatedWithSingleShardTable)
+	{
+		DistributeFunctionColocatedWithSingleShardTable(functionAddress,
+														colocateWithText);
 	}
 	else if (colocatedWithReferenceTable)
 	{
@@ -432,6 +443,25 @@ DistributeFunctionColocatedWithDistributedTable(RegProcedure funcOid,
 
 	/* set distribution argument and colocationId to NULL */
 	UpdateFunctionDistributionInfo(functionAddress, NULL, NULL, NULL);
+}
+
+
+/*
+ * DistributeFunctionColocatedWithSingleShardTable updates pg_dist_object records for
+ * a function/procedure that is colocated with a single shard table.
+ */
+static void
+DistributeFunctionColocatedWithSingleShardTable(const ObjectAddress *functionAddress,
+												text *colocateWithText)
+{
+	/* get the single shard table's colocation id */
+	int colocationId = TableColocationId(ResolveRelationId(colocateWithText, false));
+
+	/* set distribution argument to NULL */
+	int *distributionArgumentIndex = NULL;
+	UpdateFunctionDistributionInfo(functionAddress, distributionArgumentIndex,
+								   &colocationId,
+								   NULL);
 }
 
 
@@ -640,6 +670,19 @@ EnsureFunctionCanBeColocatedWithTable(Oid functionOid, Oid distributionColumnTyp
 {
 	CitusTableCacheEntry *sourceTableEntry = GetCitusTableCacheEntry(sourceRelationId);
 	char sourceReplicationModel = sourceTableEntry->replicationModel;
+
+	if (IsCitusTableTypeCacheEntry(sourceTableEntry, SINGLE_SHARD_DISTRIBUTED) &&
+		distributionColumnType != InvalidOid)
+	{
+		char *functionName = get_func_name(functionOid);
+		char *sourceRelationName = get_rel_name(sourceRelationId);
+
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("cannot colocate function \"%s\" and table \"%s\" because "
+							   "distribution arguments are not supported when "
+							   "colocating with single shard distributed tables.",
+							   functionName, sourceRelationName)));
+	}
 
 	if (!IsCitusTableTypeCacheEntry(sourceTableEntry, HASH_DISTRIBUTED) &&
 		!IsCitusTableTypeCacheEntry(sourceTableEntry, REFERENCE_TABLE))
@@ -1598,7 +1641,7 @@ PreprocessAlterFunctionDependsStmt(Node *node, const char *queryString,
 	 * workers
 	 */
 	const char *functionName =
-		getObjectIdentity_compat(address, /* missingOk: */ false);
+		getObjectIdentity(address, /* missingOk: */ false);
 	ereport(ERROR, (errmsg("distrtibuted functions are not allowed to depend on an "
 						   "extension"),
 					errdetail("Function \"%s\" is already distributed. Functions from "
@@ -1768,8 +1811,8 @@ GenerateBackupNameForProcCollision(const ObjectAddress *address)
 		List *newProcName = list_make2(namespace, makeString(newName));
 
 		/* don't need to rename if the input arguments don't match */
-		FuncCandidateList clist = FuncnameGetCandidates_compat(newProcName, numargs, NIL,
-															   false, false, false, true);
+		FuncCandidateList clist = FuncnameGetCandidates(newProcName, numargs, NIL,
+														false, false, false, true);
 		for (; clist; clist = clist->next)
 		{
 			if (memcmp(clist->args, argtypes, sizeof(Oid) * numargs) == 0)

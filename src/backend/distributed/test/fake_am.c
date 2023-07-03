@@ -169,7 +169,6 @@ fake_tuple_satisfies_snapshot(Relation rel, TupleTableSlot *slot,
 }
 
 
-#if PG_VERSION_NUM >= PG_VERSION_14
 static TransactionId
 fake_index_delete_tuples(Relation rel,
 						 TM_IndexDeleteOp *delstate)
@@ -177,20 +176,6 @@ fake_index_delete_tuples(Relation rel,
 	elog(ERROR, "fake_index_delete_tuples not implemented");
 	return InvalidTransactionId;
 }
-
-
-#else
-static TransactionId
-fake_compute_xid_horizon_for_tuples(Relation rel,
-									ItemPointerData *tids,
-									int nitems)
-{
-	elog(ERROR, "fake_compute_xid_horizon_for_tuples not implemented");
-	return InvalidTransactionId;
-}
-
-
-#endif
 
 
 /* ----------------------------------------------------------------------------
@@ -568,11 +553,7 @@ static const TableAmRoutine fake_methods = {
 	.tuple_get_latest_tid = fake_get_latest_tid,
 	.tuple_tid_valid = fake_tuple_tid_valid,
 	.tuple_satisfies_snapshot = fake_tuple_satisfies_snapshot,
-#if PG_VERSION_NUM >= PG_VERSION_14
 	.index_delete_tuples = fake_index_delete_tuples,
-#else
-	.compute_xid_horizon_for_tuples = fake_compute_xid_horizon_for_tuples,
-#endif
 
 	.relation_set_new_filenode = fake_relation_set_new_filenode,
 	.relation_nontransactional_truncate = fake_relation_nontransactional_truncate,

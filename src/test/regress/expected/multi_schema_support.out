@@ -868,7 +868,7 @@ SELECT create_distributed_table('old_schema.table_set_schema', 'id');
 CREATE SCHEMA new_schema;
 SELECT objid::oid::regnamespace as "Distributed Schemas"
     FROM pg_catalog.pg_dist_object
-    WHERE objid::oid::regnamespace IN ('old_schema', 'new_schema');
+    WHERE objid::oid::regnamespace IN ('old_schema', 'new_schema') ORDER BY objid::oid::regnamespace;
  Distributed Schemas
 ---------------------------------------------------------------------
  old_schema
@@ -890,7 +890,7 @@ SELECT table_schema AS "Shards' Schema"
 ALTER TABLE old_schema.table_set_schema SET SCHEMA new_schema;
 SELECT objid::oid::regnamespace as "Distributed Schemas"
     FROM pg_catalog.pg_dist_object
-    WHERE objid::oid::regnamespace IN ('old_schema', 'new_schema');
+    WHERE objid::oid::regnamespace IN ('old_schema', 'new_schema') ORDER BY objid::oid::regnamespace;
  Distributed Schemas
 ---------------------------------------------------------------------
  old_schema
@@ -994,7 +994,7 @@ SELECT create_distributed_table('table_set_schema', 'id');
 CREATE SCHEMA new_schema;
 SELECT objid::oid::regnamespace as "Distributed Schemas"
     FROM pg_catalog.pg_dist_object
-    WHERE objid::oid::regnamespace IN ('old_schema', 'new_schema');
+    WHERE objid::oid::regnamespace IN ('old_schema', 'new_schema') ORDER BY objid::oid::regnamespace;
  Distributed Schemas
 ---------------------------------------------------------------------
  old_schema
@@ -1018,7 +1018,7 @@ SET search_path TO old_schema;
 ALTER TABLE table_set_schema SET SCHEMA new_schema;
 SELECT objid::oid::regnamespace as "Distributed Schemas"
     FROM pg_catalog.pg_dist_object
-    WHERE objid::oid::regnamespace IN ('old_schema', 'new_schema');
+    WHERE objid::oid::regnamespace IN ('old_schema', 'new_schema') ORDER BY objid::oid::regnamespace;
  Distributed Schemas
 ---------------------------------------------------------------------
  old_schema
@@ -1095,6 +1095,9 @@ ALTER TABLE IF EXISTS non_existent_table SET SCHEMA non_existent_schema;
 NOTICE:  relation "non_existent_table" does not exist, skipping
 DROP SCHEMA existing_schema, another_existing_schema CASCADE;
 NOTICE:  drop cascades to table existing_schema.table_set_schema
+-- test DROP SCHEMA with nonexisting schemas
+DROP SCHEMA ax, bx, cx, dx, ex, fx, gx, jx;
+ERROR:  schema "ax" does not exist
 -- test ALTER TABLE SET SCHEMA with interesting names
 CREATE SCHEMA "cItuS.T E E N'sSchema";
 CREATE SCHEMA "citus-teen's scnd schm.";
@@ -1153,9 +1156,13 @@ SELECT create_reference_table('schema_with_user.test_table');
 SET citus.next_shard_id TO 1197000;
 -- we do not use run_command_on_coordinator_and_workers here because when there is CASCADE, it causes deadlock
 DROP OWNED BY "test-user" CASCADE;
-NOTICE:  drop cascades to table schema_with_user.test_table
+NOTICE:  drop cascades to 2 other objects
+DETAIL:  drop cascades to table schema_with_user.test_table
+drop cascades to table schema_with_user.test_table_1190039
+NOTICE:  schema "schema_with_user" does not exist, skipping
+CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
+PL/pgSQL function citus_drop_trigger() line XX at PERFORM
 DROP USER "test-user";
-DROP FUNCTION run_command_on_coordinator_and_workers(p_sql text);
 -- test run_command_on_* UDFs with schema
 CREATE SCHEMA run_test_schema;
 CREATE TABLE run_test_schema.test_table(id int);
@@ -1328,6 +1335,31 @@ SELECT * FROM "Citus'Teen123"."TeeNTabLE.1!?!" ORDER BY id;
   4 |         4 |
 (4 rows)
 
+-- test alter owner propagation
+CREATE ROLE test_non_super_user;
+ALTER ROLE test_non_super_user NOSUPERUSER;
+SELECT pg_get_userbyid(nspowner) AS schema_owner
+    FROM pg_namespace
+    WHERE nspname = 'bar';
+ schema_owner
+---------------------------------------------------------------------
+ postgres
+(1 row)
+
+ALTER SCHEMA bar OWNER TO test_non_super_user;
+select result from run_command_on_workers ($$
+  SELECT pg_get_userbyid(nspowner) AS schema_owner
+  FROM pg_namespace
+  WHERE nspname = 'bar'
+$$);
+       result
+---------------------------------------------------------------------
+ test_non_super_user
+ test_non_super_user
+(2 rows)
+
+ALTER SCHEMA bar OWNER TO postgres;
+DROP ROLE test_non_super_user;
 -- test error
 INSERT INTO bar.test VALUES (3,3), (4,4), (5,5), (6,6), (7,7), (8,8), (9,9);
 BEGIN;
@@ -1361,6 +1393,7 @@ SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM pg_catalog.p
  (schema,{run_test_schema},{})
 (1 row)
 
+DROP TABLE public.nation_local;
 DROP SCHEMA run_test_schema, test_schema_support_join_1, test_schema_support_join_2, "Citus'Teen123", "CiTUS.TEEN2", bar, test_schema_support CASCADE;
 -- verify that the dropped schema is removed from worker's pg_dist_object
 SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM pg_catalog.pg_dist_object

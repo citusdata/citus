@@ -57,7 +57,6 @@ $$ LANGUAGE plpgsql;
 DEBUG:  switching to sequential query execution mode
 DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
 SELECT * FROM table1 JOIN increment(2) val ON (id = val) ORDER BY id ASC;
-DEBUG:  function does not have co-located tables
 DEBUG:  generating subplan XXX_1 for subquery SELECT val FROM functions_in_joins.increment(2) val(val)
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT table1.id, table1.data, val.val FROM (functions_in_joins.table1 JOIN (SELECT intermediate_result.val FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(val integer)) val ON ((table1.id OPERATOR(pg_catalog.=) val.val))) ORDER BY table1.id
  id | data | val
@@ -96,7 +95,6 @@ LANGUAGE SQL;
 DEBUG:  switching to sequential query execution mode
 DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
 SELECT * FROM table1 JOIN get_set_of_records() AS t2(x int, y int) ON (id = x) ORDER BY id ASC;
-DEBUG:  function does not have co-located tables
 DEBUG:  generating subplan XXX_1 for subquery SELECT x, y FROM functions_in_joins.get_set_of_records() t2(x integer, y integer)
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT table1.id, table1.data, t2.x, t2.y FROM (functions_in_joins.table1 JOIN (SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer)) t2 ON ((table1.id OPERATOR(pg_catalog.=) t2.x))) ORDER BY table1.id
  id | data | x | y
@@ -114,7 +112,6 @@ LANGUAGE SQL;
 DEBUG:  switching to sequential query execution mode
 DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
 SELECT f.* FROM table1 t JOIN dup(32) f ON (f1 = id);
-DEBUG:  function does not have co-located tables
 DEBUG:  generating subplan XXX_1 for subquery SELECT f1, f2 FROM functions_in_joins.dup(32) f(f1, f2)
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT f.f1, f.f2 FROM (functions_in_joins.table1 t JOIN (SELECT intermediate_result.f1, intermediate_result.f2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(f1 integer, f2 text)) f ON ((f.f1 OPERATOR(pg_catalog.=) t.id)))
  f1 |     f2
@@ -128,7 +125,6 @@ CREATE OR REPLACE FUNCTION the_minimum_id()
 DEBUG:  switching to sequential query execution mode
 DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
 SELECT * FROM table1 JOIN the_minimum_id() min_id ON (id = min_id);
-DEBUG:  function does not have co-located tables
 DEBUG:  generating subplan XXX_1 for subquery SELECT min_id FROM functions_in_joins.the_minimum_id() min_id(min_id)
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT table1.id, table1.data, min_id.min_id FROM (functions_in_joins.table1 JOIN (SELECT intermediate_result.min_id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(min_id integer)) min_id ON ((table1.id OPERATOR(pg_catalog.=) min_id.min_id)))
  id | data | min_id
@@ -192,7 +188,6 @@ $$ language plpgsql;
 DEBUG:  switching to sequential query execution mode
 DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
 SELECT * FROM table1 JOIN max_and_min() m ON (m.maximum = data OR m.minimum = data) ORDER BY 1,2,3,4;
-DEBUG:  function does not have co-located tables
 DEBUG:  generating subplan XXX_1 for subquery SELECT minimum, maximum FROM functions_in_joins.max_and_min() m(minimum, maximum)
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT table1.id, table1.data, m.minimum, m.maximum FROM (functions_in_joins.table1 JOIN (SELECT intermediate_result.minimum, intermediate_result.maximum FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(minimum integer, maximum integer)) m ON (((m.maximum OPERATOR(pg_catalog.=) table1.data) OR (m.minimum OPERATOR(pg_catalog.=) table1.data)))) ORDER BY table1.id, table1.data, m.minimum, m.maximum
  id  | data  | minimum | maximum

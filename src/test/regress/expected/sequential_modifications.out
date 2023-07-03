@@ -22,7 +22,7 @@ $$
 DECLARE
     result bool;
 BEGIN
-    SELECT tx_count = worker_count FROM (SELECT count(*) as  tx_count FROM pg_dist_transaction WHERE gid LIKE 'citus_%_' || pg_backend_pid() || '%_%') as s1,  (SELECT count(*) as worker_count FROM pg_dist_node WHERE noderole = 'primary') as s2 INTO result;
+    SELECT tx_count = worker_count FROM (SELECT count(*) as  tx_count FROM pg_dist_transaction WHERE gid LIKE 'citus_%_' || pg_backend_pid() || '%_%') as s1,  (SELECT count(*) as worker_count FROM pg_dist_node WHERE noderole = 'primary' AND groupid <> 0 ) as s2 INTO result;
     RETURN result;
 END;
 $$
@@ -669,13 +669,14 @@ HINT:  To remove the local data, run: SELECT truncate_local_data_after_distribut
 ABORT;
 SET search_path TO 'public';
 DROP SCHEMA test_seq_ddl CASCADE;
-NOTICE:  drop cascades to 11 other objects
+NOTICE:  drop cascades to 12 other objects
 DETAIL:  drop cascades to function test_seq_ddl.distributed_2pcs_are_equal_to_worker_count()
 drop cascades to function test_seq_ddl.distributed_2pcs_are_equal_to_placement_count()
 drop cascades to function test_seq_ddl.no_distributed_2pcs()
 drop cascades to function test_seq_ddl.set_local_multi_shard_modify_mode_to_sequential()
 drop cascades to table test_seq_ddl.test_table
 drop cascades to table test_seq_ddl.ref_test
+drop cascades to table test_seq_ddl.ref_test_16004
 drop cascades to table test_seq_ddl.test_table_rep_2
 drop cascades to table test_seq_ddl.test_seq_truncate
 drop cascades to table test_seq_ddl.test_seq_truncate_rep_2

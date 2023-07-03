@@ -19,10 +19,30 @@ SET client_min_messages TO ERROR;
 -- Create roles
 CREATE ROLE foo1;
 CREATE ROLE foo2;
+-- Create collation
+CREATE COLLATION german_phonebook (provider = icu, locale = 'de-u-co-phonebk');
+-- Create type
+CREATE TYPE pair_type AS (a int, b int);
+-- Create function
+CREATE FUNCTION one_as_result() RETURNS INT LANGUAGE SQL AS
+$$
+  SELECT 1;
+$$;
+-- Create text search dictionary
+CREATE TEXT SEARCH DICTIONARY my_german_dict (
+    template = snowball,
+    language = german,
+    stopwords = german
+);
+-- Create text search config
+CREATE TEXT SEARCH CONFIGURATION my_ts_config ( parser = default );
+ALTER TEXT SEARCH CONFIGURATION my_ts_config ALTER MAPPING FOR asciiword WITH my_german_dict;
 -- Create sequence
 CREATE SEQUENCE seq;
 -- Create colocated distributed tables
-CREATE TABLE dist1 (id int PRIMARY KEY default nextval('seq'));
+CREATE TABLE dist1 (id int PRIMARY KEY default nextval('seq'), col int default (one_as_result()), myserial serial, phone text COLLATE german_phonebook, initials pair_type);
+CREATE SEQUENCE seq_owned OWNED BY dist1.id;
+CREATE INDEX dist1_search_phone_idx ON dist1 USING gin (to_tsvector('my_ts_config'::regconfig, (COALESCE(phone, ''::text))::text));
 SELECT create_distributed_table('dist1', 'id');
  create_distributed_table
 ---------------------------------------------------------------------
@@ -52,6 +72,8 @@ CREATE TABLE loc1 (id int PRIMARY KEY);
 INSERT INTO loc1 SELECT i FROM generate_series(1,100) i;
 CREATE TABLE loc2 (id int REFERENCES loc1(id));
 INSERT INTO loc2 SELECT i FROM generate_series(1,100) i;
+-- Create publication
+CREATE PUBLICATION pub_all;
 -- citus_set_coordinator_host with wrong port
 SELECT citus_set_coordinator_host('localhost', 9999);
  citus_set_coordinator_host
@@ -168,8 +190,8 @@ SELECT citus.mitmproxy('conn.onQuery(query="INSERT INTO pg_dist_node").kill()');
 
 SELECT citus_activate_node('localhost', :worker_2_proxy_port);
 ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
--- Failure to drop sequence
-SELECT citus.mitmproxy('conn.onQuery(query="SELECT pg_catalog.worker_drop_sequence_dependency").cancel(' || :pid || ')');
+-- Failure to drop sequence dependency for all tables
+SELECT citus.mitmproxy('conn.onQuery(query="SELECT pg_catalog.worker_drop_sequence_dependency.*FROM pg_dist_partition").cancel(' || :pid || ')');
  mitmproxy
 ---------------------------------------------------------------------
 
@@ -177,7 +199,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="SELECT pg_catalog.worker_drop_sequen
 
 SELECT citus_activate_node('localhost', :worker_2_proxy_port);
 ERROR:  canceling statement due to user request
-SELECT citus.mitmproxy('conn.onQuery(query="SELECT pg_catalog.worker_drop_sequence_dependency").kill()');
+SELECT citus.mitmproxy('conn.onQuery(query="SELECT pg_catalog.worker_drop_sequence_dependency.*FROM pg_dist_partition").kill()');
  mitmproxy
 ---------------------------------------------------------------------
 
@@ -321,7 +343,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="ALTER DATABASE.*OWNER TO").kill()');
 
 SELECT citus_activate_node('localhost', :worker_2_proxy_port);
 ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
--- Filure to create schema
+-- Failure to create schema
 SELECT citus.mitmproxy('conn.onQuery(query="CREATE SCHEMA IF NOT EXISTS mx_metadata_sync_multi_trans AUTHORIZATION").cancel(' || :pid || ')');
  mitmproxy
 ---------------------------------------------------------------------
@@ -331,6 +353,108 @@ SELECT citus.mitmproxy('conn.onQuery(query="CREATE SCHEMA IF NOT EXISTS mx_metad
 SELECT citus_activate_node('localhost', :worker_2_proxy_port);
 ERROR:  canceling statement due to user request
 SELECT citus.mitmproxy('conn.onQuery(query="CREATE SCHEMA IF NOT EXISTS mx_metadata_sync_multi_trans AUTHORIZATION").kill()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT citus_activate_node('localhost', :worker_2_proxy_port);
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+-- Failure to create collation
+SELECT citus.mitmproxy('conn.onQuery(query="SELECT worker_create_or_replace_object.*CREATE COLLATION mx_metadata_sync_multi_trans.german_phonebook").cancel(' || :pid || ')');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT citus_activate_node('localhost', :worker_2_proxy_port);
+ERROR:  canceling statement due to user request
+SELECT citus.mitmproxy('conn.onQuery(query="SELECT worker_create_or_replace_object.*CREATE COLLATION mx_metadata_sync_multi_trans.german_phonebook").kill()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT citus_activate_node('localhost', :worker_2_proxy_port);
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+-- Failure to create function
+SELECT citus.mitmproxy('conn.onQuery(query="CREATE OR REPLACE FUNCTION mx_metadata_sync_multi_trans.one_as_result").cancel(' || :pid || ')');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT citus_activate_node('localhost', :worker_2_proxy_port);
+ERROR:  canceling statement due to user request
+SELECT citus.mitmproxy('conn.onQuery(query="CREATE OR REPLACE FUNCTION mx_metadata_sync_multi_trans.one_as_result").kill()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT citus_activate_node('localhost', :worker_2_proxy_port);
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+-- Failure to create text search dictionary
+SELECT citus.mitmproxy('conn.onQuery(query="SELECT worker_create_or_replace_object.*my_german_dict").cancel(' || :pid || ')');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT citus_activate_node('localhost', :worker_2_proxy_port);
+ERROR:  canceling statement due to user request
+SELECT citus.mitmproxy('conn.onQuery(query="SELECT worker_create_or_replace_object.*my_german_dict").kill()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT citus_activate_node('localhost', :worker_2_proxy_port);
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+-- Failure to create text search config
+SELECT citus.mitmproxy('conn.onQuery(query="SELECT worker_create_or_replace_object.*my_ts_config").cancel(' || :pid || ')');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT citus_activate_node('localhost', :worker_2_proxy_port);
+ERROR:  canceling statement due to user request
+SELECT citus.mitmproxy('conn.onQuery(query="SELECT worker_create_or_replace_object.*my_ts_config").kill()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT citus_activate_node('localhost', :worker_2_proxy_port);
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+-- Failure to create type
+SELECT citus.mitmproxy('conn.onQuery(query="SELECT worker_create_or_replace_object.*pair_type").cancel(' || :pid || ')');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT citus_activate_node('localhost', :worker_2_proxy_port);
+ERROR:  canceling statement due to user request
+SELECT citus.mitmproxy('conn.onQuery(query="SELECT worker_create_or_replace_object.*pair_type").kill()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT citus_activate_node('localhost', :worker_2_proxy_port);
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+-- Failure to create publication
+SELECT citus.mitmproxy('conn.onQuery(query="CREATE PUBLICATION.*pub_all").cancel(' || :pid || ')');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT citus_activate_node('localhost', :worker_2_proxy_port);
+ERROR:  canceling statement due to user request
+SELECT citus.mitmproxy('conn.onQuery(query="CREATE PUBLICATION.*pub_all").kill()');
  mitmproxy
 ---------------------------------------------------------------------
 
@@ -355,6 +479,40 @@ SELECT citus.mitmproxy('conn.onQuery(query="SELECT worker_apply_sequence_command
 
 SELECT citus_activate_node('localhost', :worker_2_proxy_port);
 ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+-- Failure to drop sequence dependency for distributed table
+SELECT citus.mitmproxy('conn.onQuery(query="SELECT pg_catalog.worker_drop_sequence_dependency.*mx_metadata_sync_multi_trans.dist1").cancel(' || :pid || ')');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT citus_activate_node('localhost', :worker_2_proxy_port);
+ERROR:  canceling statement due to user request
+SELECT citus.mitmproxy('conn.onQuery(query="SELECT pg_catalog.worker_drop_sequence_dependency.*mx_metadata_sync_multi_trans.dist1").kill()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT citus_activate_node('localhost', :worker_2_proxy_port);
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+-- Failure to drop distributed table if exists
+SELECT citus.mitmproxy('conn.onQuery(query="DROP TABLE IF EXISTS mx_metadata_sync_multi_trans.dist1").cancel(' || :pid || ')');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT citus_activate_node('localhost', :worker_2_proxy_port);
+ERROR:  canceling statement due to user request
+SELECT citus.mitmproxy('conn.onQuery(query="DROP TABLE IF EXISTS mx_metadata_sync_multi_trans.dist1").kill()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT citus_activate_node('localhost', :worker_2_proxy_port);
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
 -- Failure to create distributed table
 SELECT citus.mitmproxy('conn.onQuery(query="CREATE TABLE mx_metadata_sync_multi_trans.dist1").cancel(' || :pid || ')');
  mitmproxy
@@ -365,6 +523,40 @@ SELECT citus.mitmproxy('conn.onQuery(query="CREATE TABLE mx_metadata_sync_multi_
 SELECT citus_activate_node('localhost', :worker_2_proxy_port);
 ERROR:  canceling statement due to user request
 SELECT citus.mitmproxy('conn.onQuery(query="CREATE TABLE mx_metadata_sync_multi_trans.dist1").kill()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT citus_activate_node('localhost', :worker_2_proxy_port);
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+-- Failure to record sequence dependency for table
+SELECT citus.mitmproxy('conn.onQuery(query="SELECT pg_catalog.worker_record_sequence_dependency").cancel(' || :pid || ')');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT citus_activate_node('localhost', :worker_2_proxy_port);
+ERROR:  canceling statement due to user request
+SELECT citus.mitmproxy('conn.onQuery(query="SELECT pg_catalog.worker_record_sequence_dependency").kill()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT citus_activate_node('localhost', :worker_2_proxy_port);
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+-- Failure to create index for table
+SELECT citus.mitmproxy('conn.onQuery(query="CREATE INDEX dist1_search_phone_idx ON mx_metadata_sync_multi_trans.dist1 USING gin").cancel(' || :pid || ')');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT citus_activate_node('localhost', :worker_2_proxy_port);
+ERROR:  canceling statement due to user request
+SELECT citus.mitmproxy('conn.onQuery(query="CREATE INDEX dist1_search_phone_idx ON mx_metadata_sync_multi_trans.dist1 USING gin").kill()');
  mitmproxy
 ---------------------------------------------------------------------
 
@@ -542,6 +734,125 @@ SELECT citus.mitmproxy('conn.onQuery(query="SELECT citus_internal_add_object_met
 
 SELECT citus_activate_node('localhost', :worker_2_proxy_port);
 ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+-- Failure to mark function as distributed
+SELECT citus.mitmproxy('conn.onQuery(query="WITH distributed_object_data.*one_as_result").cancel(' || :pid || ')');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT citus_activate_node('localhost', :worker_2_proxy_port);
+ERROR:  canceling statement due to user request
+SELECT citus.mitmproxy('conn.onQuery(query="WITH distributed_object_data.*one_as_result").kill()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT citus_activate_node('localhost', :worker_2_proxy_port);
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+-- Failure to mark collation as distributed
+SELECT citus.mitmproxy('conn.onQuery(query="WITH distributed_object_data.*german_phonebook").cancel(' || :pid || ')');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT citus_activate_node('localhost', :worker_2_proxy_port);
+ERROR:  canceling statement due to user request
+SELECT citus.mitmproxy('conn.onQuery(query="WITH distributed_object_data.*german_phonebook").kill()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT citus_activate_node('localhost', :worker_2_proxy_port);
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+-- Failure to mark text search dictionary as distributed
+SELECT citus.mitmproxy('conn.onQuery(query="WITH distributed_object_data.*my_german_dict").cancel(' || :pid || ')');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT citus_activate_node('localhost', :worker_2_proxy_port);
+ERROR:  canceling statement due to user request
+SELECT citus.mitmproxy('conn.onQuery(query="WITH distributed_object_data.*my_german_dict").kill()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT citus_activate_node('localhost', :worker_2_proxy_port);
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+-- Failure to mark text search configuration as distributed
+SELECT citus.mitmproxy('conn.onQuery(query="WITH distributed_object_data.*my_ts_config").cancel(' || :pid || ')');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT citus_activate_node('localhost', :worker_2_proxy_port);
+ERROR:  canceling statement due to user request
+SELECT citus.mitmproxy('conn.onQuery(query="WITH distributed_object_data.*my_ts_config").kill()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT citus_activate_node('localhost', :worker_2_proxy_port);
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+-- Failure to mark type as distributed
+SELECT citus.mitmproxy('conn.onQuery(query="WITH distributed_object_data.*pair_type").cancel(' || :pid || ')');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT citus_activate_node('localhost', :worker_2_proxy_port);
+ERROR:  canceling statement due to user request
+SELECT citus.mitmproxy('conn.onQuery(query="WITH distributed_object_data.*pair_type").kill()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT citus_activate_node('localhost', :worker_2_proxy_port);
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+-- Failure to mark sequence as distributed
+SELECT citus.mitmproxy('conn.onQuery(query="WITH distributed_object_data.*seq_owned").cancel(' || :pid || ')');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT citus_activate_node('localhost', :worker_2_proxy_port);
+ERROR:  canceling statement due to user request
+SELECT citus.mitmproxy('conn.onQuery(query="WITH distributed_object_data.*seq_owned").kill()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT citus_activate_node('localhost', :worker_2_proxy_port);
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+-- Failure to mark publication as distributed
+SELECT citus.mitmproxy('conn.onQuery(query="WITH distributed_object_data.*pub_all").cancel(' || :pid || ')');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT citus_activate_node('localhost', :worker_2_proxy_port);
+ERROR:  canceling statement due to user request
+SELECT citus.mitmproxy('conn.onQuery(query="WITH distributed_object_data.*pub_all").kill()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT citus_activate_node('localhost', :worker_2_proxy_port);
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
 -- Failure to set isactive to true
 SELECT citus.mitmproxy('conn.onQuery(query="UPDATE pg_dist_node SET isactive = TRUE").cancel(' || :pid || ')');
  mitmproxy
@@ -597,8 +908,8 @@ ERROR:  connection not open
 SELECT * FROM pg_dist_node ORDER BY nodeport;
  nodeid | groupid | nodename  | nodeport | noderack | hasmetadata | isactive | noderole | nodecluster | metadatasynced | shouldhaveshards
 ---------------------------------------------------------------------
-      4 |       4 | localhost |     9060 | default  | f           | t        | primary  | default     | f              | t
-      6 |       0 | localhost |    57636 | default  | t           | t        | primary  | default     | t              | f
+      2 |       2 | localhost |     9060 | default  | f           | t        | primary  | default     | f              | t
+      3 |       0 | localhost |    57636 | default  | t           | t        | primary  | default     | t              | f
       1 |       1 | localhost |    57637 | default  | t           | t        | primary  | default     | t              | t
 (3 rows)
 
@@ -626,24 +937,14 @@ UPDATE dist1 SET id = :failed_node_val WHERE id = :failed_node_val;
 -- Show that we can still delete from a shard at the node from coordinator
 DELETE FROM dist1 WHERE id = :failed_node_val;
 -- Show that DDL would still propagate to the node
-SET client_min_messages TO NOTICE;
-SET citus.log_remote_commands TO 1;
 CREATE SCHEMA dummy;
-NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
-NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
-NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off'
-NOTICE:  issuing CREATE SCHEMA dummy
-NOTICE:  issuing SET citus.enable_ddl_propagation TO 'on'
-NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off'
-NOTICE:  issuing CREATE SCHEMA dummy
-NOTICE:  issuing SET citus.enable_ddl_propagation TO 'on'
-NOTICE:  issuing WITH distributed_object_data(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation)  AS (VALUES ('schema', ARRAY['dummy']::text[], ARRAY[]::text[], -1, 0, false)) SELECT citus_internal_add_object_metadata(typetext, objnames, objargs, distargumentindex::int, colocationid::int, force_delegation::bool) FROM distributed_object_data;
-NOTICE:  issuing PREPARE TRANSACTION 'citus_xx_xx_xx_xx'
-NOTICE:  issuing PREPARE TRANSACTION 'citus_xx_xx_xx_xx'
-NOTICE:  issuing COMMIT PREPARED 'citus_xx_xx_xx_xx'
-NOTICE:  issuing COMMIT PREPARED 'citus_xx_xx_xx_xx'
-SET citus.log_remote_commands TO 0;
-SET client_min_messages TO ERROR;
+SELECT * FROM run_command_on_workers($$SELECT nspname FROM pg_namespace WHERE nspname = 'dummy'$$);
+ nodename  | nodeport | success | result
+---------------------------------------------------------------------
+ localhost |     9060 | t       | dummy
+ localhost |    57637 | t       | dummy
+(2 rows)
+
 -- Successfully activate the node after many failures
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
@@ -654,14 +955,14 @@ SELECT citus.mitmproxy('conn.allow()');
 SELECT citus_activate_node('localhost', :worker_2_proxy_port);
  citus_activate_node
 ---------------------------------------------------------------------
-                   4
+                   2
 (1 row)
 
 -- Activate the node once more to verify it works again with already synced metadata
 SELECT citus_activate_node('localhost', :worker_2_proxy_port);
  citus_activate_node
 ---------------------------------------------------------------------
-                   4
+                   2
 (1 row)
 
 -- Show node metadata info on worker2 and coordinator after success
@@ -669,8 +970,8 @@ SELECT citus_activate_node('localhost', :worker_2_proxy_port);
 SELECT * FROM pg_dist_node ORDER BY nodeport;
  nodeid | groupid | nodename  | nodeport | noderack | hasmetadata | isactive | noderole | nodecluster | metadatasynced | shouldhaveshards
 ---------------------------------------------------------------------
-      4 |       4 | localhost |     9060 | default  | t           | t        | primary  | default     | t              | t
-      6 |       0 | localhost |    57636 | default  | t           | t        | primary  | default     | t              | f
+      2 |       2 | localhost |     9060 | default  | t           | t        | primary  | default     | t              | t
+      3 |       0 | localhost |    57636 | default  | t           | t        | primary  | default     | t              | f
       1 |       1 | localhost |    57637 | default  | t           | t        | primary  | default     | t              | t
 (3 rows)
 
@@ -678,8 +979,8 @@ SELECT * FROM pg_dist_node ORDER BY nodeport;
 SELECT * FROM pg_dist_node ORDER BY nodeport;
  nodeid | groupid | nodename  | nodeport | noderack | hasmetadata | isactive | noderole | nodecluster | metadatasynced | shouldhaveshards
 ---------------------------------------------------------------------
-      4 |       4 | localhost |     9060 | default  | t           | t        | primary  | default     | t              | t
-      6 |       0 | localhost |    57636 | default  | t           | t        | primary  | default     | t              | f
+      2 |       2 | localhost |     9060 | default  | t           | t        | primary  | default     | t              | t
+      3 |       0 | localhost |    57636 | default  | t           | t        | primary  | default     | t              | f
       1 |       1 | localhost |    57637 | default  | t           | t        | primary  | default     | t              | t
 (3 rows)
 
@@ -690,9 +991,10 @@ SELECT citus.mitmproxy('conn.allow()');
 (1 row)
 
 RESET citus.metadata_sync_mode;
+DROP PUBLICATION pub_all;
 DROP SCHEMA dummy;
 DROP SCHEMA mx_metadata_sync_multi_trans CASCADE;
-NOTICE:  drop cascades to 10 other objects
+NOTICE:  drop cascades to 15 other objects
 DROP ROLE foo1;
 DROP ROLE foo2;
 SELECT citus_remove_node('localhost', :master_port);
@@ -701,3 +1003,5 @@ SELECT citus_remove_node('localhost', :master_port);
 
 (1 row)
 
+ALTER SEQUENCE pg_dist_node_nodeid_seq RESTART 3;
+ALTER SEQUENCE pg_dist_groupid_seq RESTART 3;

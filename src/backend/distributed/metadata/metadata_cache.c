@@ -178,6 +178,7 @@ typedef struct MetadataCacheData
 	Oid distColocationRelationId;
 	Oid distColocationConfigurationIndexId;
 	Oid distPartitionRelationId;
+	Oid distTenantSchemaRelationId;
 	Oid distPartitionLogicalRelidIndexId;
 	Oid distPartitionColocationidIndexId;
 	Oid distShardLogicalRelidIndexId;
@@ -188,6 +189,8 @@ typedef struct MetadataCacheData
 	Oid distPlacementGroupidIndexId;
 	Oid distTransactionRelationId;
 	Oid distTransactionGroupIndexId;
+	Oid distTenantSchemaPrimaryKeyIndexId;
+	Oid distTenantSchemaUniqueColocationIdIndexId;
 	Oid citusCatalogNamespaceId;
 	Oid copyFormatTypeId;
 	Oid readIntermediateResultFuncId;
@@ -508,11 +511,21 @@ IsCitusTableTypeInternal(char partitionMethod, char replicationModel,
 			return partitionMethod == DISTRIBUTE_BY_RANGE;
 		}
 
+		case SINGLE_SHARD_DISTRIBUTED:
+		{
+			return partitionMethod == DISTRIBUTE_BY_NONE &&
+				   replicationModel != REPLICATION_MODEL_2PC &&
+				   colocationId != INVALID_COLOCATION_ID;
+		}
+
 		case DISTRIBUTED_TABLE:
 		{
 			return partitionMethod == DISTRIBUTE_BY_HASH ||
 				   partitionMethod == DISTRIBUTE_BY_RANGE ||
-				   partitionMethod == DISTRIBUTE_BY_APPEND;
+				   partitionMethod == DISTRIBUTE_BY_APPEND ||
+				   (partitionMethod == DISTRIBUTE_BY_NONE &&
+					replicationModel != REPLICATION_MODEL_2PC &&
+					colocationId != INVALID_COLOCATION_ID);
 		}
 
 		case STRICTLY_PARTITIONED_DISTRIBUTED_TABLE:
@@ -812,6 +825,21 @@ IsCitusLocalTableByDistParams(char partitionMethod, char replicationModel,
 	return partitionMethod == DISTRIBUTE_BY_NONE &&
 		   replicationModel != REPLICATION_MODEL_2PC &&
 		   colocationId == INVALID_COLOCATION_ID;
+}
+
+
+/*
+ * IsSingleShardTableByDistParams returns true if given partitionMethod,
+ * replicationModel and colocationId would identify a single-shard distributed
+ * table that has a null shard key.
+ */
+bool
+IsSingleShardTableByDistParams(char partitionMethod, char replicationModel,
+							   uint32 colocationId)
+{
+	return partitionMethod == DISTRIBUTE_BY_NONE &&
+		   replicationModel != REPLICATION_MODEL_2PC &&
+		   colocationId != INVALID_COLOCATION_ID;
 }
 
 
@@ -2815,6 +2843,39 @@ DistColocationConfigurationIndexId(void)
 						 &MetadataCache.distColocationConfigurationIndexId);
 
 	return MetadataCache.distColocationConfigurationIndexId;
+}
+
+
+/* return oid of pg_dist_schema relation */
+Oid
+DistTenantSchemaRelationId(void)
+{
+	CachedRelationLookup("pg_dist_schema",
+						 &MetadataCache.distTenantSchemaRelationId);
+
+	return MetadataCache.distTenantSchemaRelationId;
+}
+
+
+/* return oid of pg_dist_schema_pkey index */
+Oid
+DistTenantSchemaPrimaryKeyIndexId(void)
+{
+	CachedRelationLookup("pg_dist_schema_pkey",
+						 &MetadataCache.distTenantSchemaPrimaryKeyIndexId);
+
+	return MetadataCache.distTenantSchemaPrimaryKeyIndexId;
+}
+
+
+/* return oid of pg_dist_schema_unique_colocationid_index index */
+Oid
+DistTenantSchemaUniqueColocationIdIndexId(void)
+{
+	CachedRelationLookup("pg_dist_schema_unique_colocationid_index",
+						 &MetadataCache.distTenantSchemaUniqueColocationIdIndexId);
+
+	return MetadataCache.distTenantSchemaUniqueColocationIdIndexId;
 }
 
 

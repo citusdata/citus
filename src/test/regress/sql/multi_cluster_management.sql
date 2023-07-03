@@ -13,6 +13,10 @@ RESET citus.metadata_sync_mode;
 
 -- I am coordinator
 SELECT citus_is_coordinator();
+
+-- make sure coordinator is always in metadata.
+SELECT citus_set_coordinator_host('localhost');
+
 -- workers are not coordinator
 SELECT result FROM run_command_on_workers('SELECT citus_is_coordinator()');
 
@@ -268,6 +272,7 @@ SELECT nodename, nodeport FROM pg_dist_node WHERE nodename='localhost' AND nodep
 \c - - - :master_port
 
 SELECT master_remove_node(nodename, nodeport) FROM pg_dist_node;
+SELECT citus_set_coordinator_host('localhost');
 SELECT 1 FROM master_add_node('localhost', :worker_1_port);
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 

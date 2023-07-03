@@ -59,6 +59,8 @@ BEGIN
 END;
 $$;
 SELECT create_distributed_function('notice(text)');
+NOTICE:  procedure single_node_ent.notice is already distributed
+DETAIL:  Citus distributes procedures with CREATE [PROCEDURE|FUNCTION|AGGREGATE] commands
  create_distributed_function
 ---------------------------------------------------------------------
 

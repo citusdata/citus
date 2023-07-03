@@ -359,12 +359,12 @@ DeparseVacuumStmtPrefix(CitusVacuumParams vacuumParams)
 	{
 		appendStringInfoString(vacuumPrefix, "SKIP_LOCKED,");
 	}
-	#if PG_VERSION_NUM >= PG_VERSION_14
+
 	if (vacuumFlags & VACOPT_PROCESS_TOAST)
 	{
 		appendStringInfoString(vacuumPrefix, "PROCESS_TOAST,");
 	}
-	#endif
+
 	if (vacuumParams.truncate != VACOPTVALUE_UNSPECIFIED)
 	{
 		appendStringInfoString(vacuumPrefix,
@@ -389,13 +389,11 @@ DeparseVacuumStmtPrefix(CitusVacuumParams vacuumParams)
 				break;
 			}
 
-			#if PG_VERSION_NUM >= PG_VERSION_14
 			case VACOPTVALUE_AUTO:
 			{
 				appendStringInfoString(vacuumPrefix, "INDEX_CLEANUP auto,");
 				break;
 			}
-			#endif
 
 			default:
 			{
@@ -501,9 +499,7 @@ VacuumStmtParams(VacuumStmt *vacstmt)
 	bool freeze = false;
 	bool full = false;
 	bool disable_page_skipping = false;
-	#if PG_VERSION_NUM >= PG_VERSION_14
 	bool process_toast = false;
-	#endif
 
 	/* Set default value */
 	params.index_cleanup = VACOPTVALUE_UNSPECIFIED;
@@ -547,16 +543,12 @@ VacuumStmtParams(VacuumStmt *vacstmt)
 		{
 			disable_page_skipping = defGetBoolean(opt);
 		}
-		#if PG_VERSION_NUM >= PG_VERSION_14
 		else if (strcmp(opt->defname, "process_toast") == 0)
 		{
 			process_toast = defGetBoolean(opt);
 		}
-		#endif
 		else if (strcmp(opt->defname, "index_cleanup") == 0)
 		{
-			#if PG_VERSION_NUM >= PG_VERSION_14
-
 			/* Interpret no string as the default, which is 'auto' */
 			if (!opt->arg)
 			{
@@ -577,10 +569,6 @@ VacuumStmtParams(VacuumStmt *vacstmt)
 										   VACOPTVALUE_DISABLED;
 				}
 			}
-			#else
-			params.index_cleanup = defGetBoolean(opt) ? VACOPTVALUE_ENABLED :
-								   VACOPTVALUE_DISABLED;
-			#endif
 		}
 		else if (strcmp(opt->defname, "truncate") == 0)
 		{
@@ -625,9 +613,7 @@ VacuumStmtParams(VacuumStmt *vacstmt)
 					 (analyze ? VACOPT_ANALYZE : 0) |
 					 (freeze ? VACOPT_FREEZE : 0) |
 					 (full ? VACOPT_FULL : 0) |
-					 #if PG_VERSION_NUM >= PG_VERSION_14
 					 (process_toast ? VACOPT_PROCESS_TOAST : 0) |
-					 #endif
 					 (disable_page_skipping ? VACOPT_DISABLE_PAGE_SKIPPING : 0);
 	return params;
 }

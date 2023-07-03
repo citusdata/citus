@@ -155,6 +155,7 @@ static bool AllDistributedRelationsInRestrictionContextColocated(
 	RelationRestrictionContext *
 	restrictionContext);
 static bool IsNotSafeRestrictionToRecursivelyPlan(Node *node);
+static bool HasPlaceHolderVar(Node *node);
 static JoinRestrictionContext * FilterJoinRestrictionContext(
 	JoinRestrictionContext *joinRestrictionContext, Relids
 	queryRteIdentities);
@@ -2142,9 +2143,20 @@ GetRestrictInfoListForRelation(RangeTblEntry *rangeTblEntry,
 		 * If the restriction involves multiple tables, we cannot add it to
 		 * input relation's expression list.
 		 */
-		Relids varnos = pull_varnos_compat(relationRestriction->plannerInfo,
-										   (Node *) restrictionClause);
+		Relids varnos = pull_varnos(relationRestriction->plannerInfo,
+									(Node *) restrictionClause);
 		if (bms_num_members(varnos) != 1)
+		{
+			continue;
+		}
+
+		/*
+		 * PlaceHolderVar is not relevant to be processed inside a restriction clause.
+		 * Otherwise, pull_var_clause_default would throw error. PG would create
+		 * the restriction to physical Var that PlaceHolderVar points anyway, so it is
+		 * safe to skip this restriction.
+		 */
+		if (FindNodeMatchingCheckFunction((Node *) restrictionClause, HasPlaceHolderVar))
 		{
 			continue;
 		}
@@ -2211,6 +2223,16 @@ IsNotSafeRestrictionToRecursivelyPlan(Node *node)
 		return true;
 	}
 	return false;
+}
+
+
+/*
+ * HasPlaceHolderVar returns true if given node contains any PlaceHolderVar.
+ */
+static bool
+HasPlaceHolderVar(Node *node)
+{
+	return IsA(node, PlaceHolderVar);
 }
 
 

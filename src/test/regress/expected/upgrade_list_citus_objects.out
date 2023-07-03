@@ -69,16 +69,19 @@ ORDER BY 1;
  function citus_internal_add_placement_metadata(bigint,bigint,integer,bigint)
  function citus_internal_add_placement_metadata(bigint,integer,bigint,integer,bigint)
  function citus_internal_add_shard_metadata(regclass,bigint,"char",text,text)
+ function citus_internal_add_tenant_schema(oid,integer)
  function citus_internal_adjust_local_clock_to_remote(cluster_clock)
  function citus_internal_delete_colocation_metadata(integer)
  function citus_internal_delete_partition_metadata(regclass)
  function citus_internal_delete_shard_metadata(bigint)
+ function citus_internal_delete_tenant_schema(oid)
  function citus_internal_global_blocked_processes()
  function citus_internal_is_replication_origin_tracking_active()
  function citus_internal_local_blocked_processes()
  function citus_internal_mark_node_not_synced(integer,integer)
  function citus_internal_start_replication_origin_tracking()
  function citus_internal_stop_replication_origin_tracking()
+ function citus_internal_unregister_tenant_schema_globally(oid,text)
  function citus_internal_update_placement_metadata(bigint,integer,integer)
  function citus_internal_update_relation_colocation(oid,integer)
  function citus_is_clock_after(cluster_clock,cluster_clock)
@@ -111,6 +114,8 @@ ORDER BY 1;
  function citus_remote_connection_stats()
  function citus_remove_node(text,integer)
  function citus_run_local_command(text)
+ function citus_schema_distribute(regnamespace)
+ function citus_schema_undistribute(regnamespace)
  function citus_server_id()
  function citus_set_coordinator_host(text,integer,noderole,name)
  function citus_set_default_rebalance_strategy(text)
@@ -127,6 +132,7 @@ ORDER BY 1;
  function citus_stat_statements_reset()
  function citus_stat_tenants(boolean)
  function citus_stat_tenants_local(boolean)
+ function citus_stat_tenants_local_internal(boolean)
  function citus_stat_tenants_local_reset()
  function citus_stat_tenants_reset()
  function citus_table_is_visible(oid)
@@ -305,6 +311,7 @@ ORDER BY 1;
  table pg_dist_placement
  table pg_dist_poolinfo
  table pg_dist_rebalance_strategy
+ table pg_dist_schema
  table pg_dist_shard
  table pg_dist_transaction
  type citus.distribution_type
@@ -320,6 +327,7 @@ ORDER BY 1;
  view citus_dist_stat_activity
  view citus_lock_waits
  view citus_locks
+ view citus_schema.citus_schemas
  view citus_schema.citus_tables
  view citus_shard_indexes_on_worker
  view citus_shards
@@ -330,5 +338,5 @@ ORDER BY 1;
  view citus_stat_tenants_local
  view pg_dist_shard_placement
  view time_partitions
-(322 rows)
+(330 rows)
 

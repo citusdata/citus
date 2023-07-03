@@ -36,6 +36,7 @@
 #include "distributed/multi_join_order.h"
 #include "distributed/multi_router_planner.h"
 #include "distributed/pg_dist_node.h"
+#include "distributed/pg_dist_node_metadata.h"
 #include "distributed/reference_table_utils.h"
 #include "distributed/remote_commands.h"
 #include "distributed/resource_lock.h"
@@ -119,7 +120,6 @@ static char * NodeMetadataSyncedUpdateCommand(uint32 nodeId, bool metadataSynced
 static void ErrorIfCoordinatorMetadataSetFalse(WorkerNode *workerNode, Datum value,
 											   char *field);
 static WorkerNode * SetShouldHaveShards(WorkerNode *workerNode, bool shouldHaveShards);
-static int FindCoordinatorNodeId(void);
 static WorkerNode * FindNodeAnyClusterByNodeId(uint32 nodeId);
 static void ErrorIfAnyNodeNotExist(List *nodeList);
 static void UpdateLocalGroupIdsViaMetadataContext(MetadataSyncContext *context);
@@ -1800,7 +1800,7 @@ FindNodeWithNodeId(int nodeId, bool missingOk)
 /*
  * FindCoordinatorNodeId returns the node id of the coordinator node
  */
-static int
+int
 FindCoordinatorNodeId()
 {
 	bool includeNodesFromOtherClusters = false;
@@ -2871,15 +2871,15 @@ TupleToWorkerNode(TupleDesc tupleDescriptor, HeapTuple heapTuple)
 	 */
 	heap_deform_tuple(heapTuple, tupleDescriptor, datumArray, isNullArray);
 
-	char *nodeName = DatumGetCString(datumArray[Anum_pg_dist_node_nodename - 1]);
-	char *nodeRack = DatumGetCString(datumArray[Anum_pg_dist_node_noderack - 1]);
+	char *nodeName = TextDatumGetCString(datumArray[Anum_pg_dist_node_nodename - 1]);
+	char *nodeRack = TextDatumGetCString(datumArray[Anum_pg_dist_node_noderack - 1]);
 
 	WorkerNode *workerNode = (WorkerNode *) palloc0(sizeof(WorkerNode));
 	workerNode->nodeId = DatumGetUInt32(datumArray[Anum_pg_dist_node_nodeid - 1]);
 	workerNode->workerPort = DatumGetUInt32(datumArray[Anum_pg_dist_node_nodeport - 1]);
 	workerNode->groupId = DatumGetInt32(datumArray[Anum_pg_dist_node_groupid - 1]);
-	strlcpy(workerNode->workerName, TextDatumGetCString(nodeName), WORKER_LENGTH);
-	strlcpy(workerNode->workerRack, TextDatumGetCString(nodeRack), WORKER_LENGTH);
+	strlcpy(workerNode->workerName, nodeName, WORKER_LENGTH);
+	strlcpy(workerNode->workerRack, nodeRack, WORKER_LENGTH);
 	workerNode->hasMetadata = DatumGetBool(datumArray[Anum_pg_dist_node_hasmetadata - 1]);
 	workerNode->metadataSynced =
 		DatumGetBool(datumArray[Anum_pg_dist_node_metadatasynced - 1]);

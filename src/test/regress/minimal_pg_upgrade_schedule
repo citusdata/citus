@@ -1,0 +1,1 @@
+test: multi_test_helpers multi_test_helpers_superuser multi_test_catalog_views

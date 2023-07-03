@@ -2,13 +2,6 @@ CREATE SCHEMA publication;
 CREATE SCHEMA "publication-1";
 SET search_path TO publication;
 SET citus.shard_replication_factor TO 1;
--- for citus_add_local_table_to_metadata / create_distributed_table_concurrently
-SELECT citus_set_coordinator_host('localhost', :master_port);
- citus_set_coordinator_host
----------------------------------------------------------------------
-
-(1 row)
-
 CREATE OR REPLACE FUNCTION activate_node_snapshot()
     RETURNS text[]
     LANGUAGE C STRICT
@@ -97,13 +90,18 @@ SELECT DISTINCT c FROM (
  SELECT worker_create_or_replace_object('CREATE PUBLICATION pubtables_orig WITH (publish_via_partition_root = ''false'', publish = ''insert, truncate'')');
 (1 row)
 
--- distribute a table, creating a mixed publication
+-- distribute a table and create a tenant schema, creating a mixed publication
 SELECT create_distributed_table('test','x', colocate_with := 'none');
  create_distributed_table
 ---------------------------------------------------------------------
 
 (1 row)
 
+SET citus.enable_schema_based_sharding TO ON;
+CREATE SCHEMA citus_schema_1;
+CREATE TABLE citus_schema_1.test (x int primary key, y int, "column-1" int, doc xml);
+SET citus.enable_schema_based_sharding TO OFF;
+ALTER PUBLICATION pubtables_orig ADD TABLE citus_schema_1.test;
 -- some generic operations
 ALTER PUBLICATION pubtables_orig RENAME TO pubtables;
 ALTER PUBLICATION pubtables SET (publish = 'insert, update, delete');
@@ -115,7 +113,11 @@ ERROR:  relation "notexist" does not exist
 -- operations with a distributed table
 ALTER PUBLICATION pubtables DROP TABLE test;
 ALTER PUBLICATION pubtables ADD TABLE test;
-ALTER PUBLICATION pubtables SET TABLE test, "test-pubs", "publication-1"."test-pubs";
+ALTER PUBLICATION pubtables SET TABLE test, "test-pubs", "publication-1"."test-pubs", citus_schema_1.test;
+-- operations with a tenant schema table
+ALTER PUBLICATION pubtables DROP TABLE citus_schema_1.test;
+ALTER PUBLICATION pubtables ADD TABLE citus_schema_1.test;
+ALTER PUBLICATION pubtables SET TABLE test, "test-pubs", "publication-1"."test-pubs", citus_schema_1.test;
 -- operations with a local table in a mixed publication
 ALTER PUBLICATION pubtables DROP TABLE "test-pubs";
 ALTER PUBLICATION pubtables ADD TABLE "test-pubs";
@@ -131,9 +133,9 @@ SELECT DISTINCT c FROM (
   FROM run_command_on_workers($$
     SELECT array_agg(c) FROM (SELECT c FROM unnest(activate_node_snapshot()) c WHERE c LIKE '%CREATE PUBLICATION%' AND c LIKE '%pubtables%' ORDER BY 1) s$$)
   ORDER BY c) s;
-                                                                                                        c
+                                                                                                                  c
 ---------------------------------------------------------------------
- SELECT worker_create_or_replace_object('CREATE PUBLICATION pubtables FOR TABLE publication.test, publication."test-pubs" WITH (publish_via_partition_root = ''false'', publish = ''insert, update, delete'')');
+ SELECT worker_create_or_replace_object('CREATE PUBLICATION pubtables FOR TABLE publication.test, citus_schema_1.test, publication."test-pubs" WITH (publish_via_partition_root = ''false'', publish = ''insert, update, delete'')');
 (1 row)
 
 -- operations with a strangely named distributed table in a mixed publication
@@ -141,7 +143,7 @@ ALTER PUBLICATION pubtables DROP TABLE "test-pubs";
 ALTER PUBLICATION pubtables ADD TABLE "test-pubs";
 -- create a publication with distributed and local tables
 DROP PUBLICATION pubtables;
-CREATE PUBLICATION pubtables FOR TABLE test, "test-pubs", "publication-1"."test-pubs";
+CREATE PUBLICATION pubtables FOR TABLE test, "test-pubs", "publication-1"."test-pubs", citus_schema_1.test;
 -- change distributed tables
 SELECT alter_distributed_table('test', shard_count := 5, cascade_to_colocated := true);
 NOTICE:  creating a new table for publication.test
@@ -201,9 +203,9 @@ SELECT DISTINCT c FROM (
   FROM run_command_on_workers($$
     SELECT array_agg(c) FROM (SELECT c FROM unnest(activate_node_snapshot()) c WHERE c LIKE '%CREATE PUBLICATION%' AND c LIKE '%pubtables%' ORDER BY 1) s$$)
   ORDER BY c) s;
-                                                                                                             c
+                                                                                                                       c
 ---------------------------------------------------------------------
- SELECT worker_create_or_replace_object('CREATE PUBLICATION pubtables FOR TABLE publication.test, publication."test-pubs" WITH (publish_via_partition_root = ''false'', publish = ''insert, update, delete, truncate'')');
+ SELECT worker_create_or_replace_object('CREATE PUBLICATION pubtables FOR TABLE citus_schema_1.test, publication.test, publication."test-pubs" WITH (publish_via_partition_root = ''false'', publish = ''insert, update, delete, truncate'')');
 (1 row)
 
 -- partitioned table
@@ -264,10 +266,5 @@ SELECT substring(:'server_version', '\d+')::int >= 15 AS server_version_ge_15
 SET client_min_messages TO ERROR;
 DROP SCHEMA publication CASCADE;
 DROP SCHEMA "publication-1" CASCADE;
-SELECT citus_remove_node('localhost', :master_port);
- citus_remove_node
----------------------------------------------------------------------
-
-(1 row)
-
+DROP SCHEMA citus_schema_1 CASCADE;
 \q

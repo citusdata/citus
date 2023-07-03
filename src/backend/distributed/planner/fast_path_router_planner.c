@@ -108,7 +108,7 @@ GeneratePlaceHolderPlannedStmt(Query *parse)
 
 	Node *distKey PG_USED_FOR_ASSERTS_ONLY = NULL;
 
-	AssertArg(FastPathRouterQuery(parse, &distKey));
+	Assert(FastPathRouterQuery(parse, &distKey));
 
 	/* there is only a single relation rte */
 	scanNode->scanrelid = 1;
@@ -212,19 +212,22 @@ FastPathRouterQuery(Query *query, Node **distributionKeyValue)
 		return false;
 	}
 
+	/*
+	 * If the table doesn't have a distribution column, we don't need to
+	 * check anything further.
+	 */
+	Var *distributionKey = PartitionColumn(distributedTableId, 1);
+	if (!distributionKey)
+	{
+		return true;
+	}
+
 	/* WHERE clause should not be empty for distributed tables */
 	if (joinTree == NULL ||
 		(IsCitusTableTypeCacheEntry(cacheEntry, DISTRIBUTED_TABLE) && joinTree->quals ==
 		 NULL))
 	{
 		return false;
-	}
-
-	/* if that's a reference table, we don't need to check anything further */
-	Var *distributionKey = PartitionColumn(distributedTableId, 1);
-	if (!distributionKey)
-	{
-		return true;
 	}
 
 	/* convert list of expressions into expression tree for further processing */

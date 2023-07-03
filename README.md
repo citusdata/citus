@@ -1,4 +1,4 @@
-| **<br/>The Citus database is 100% open source.<br/><img width=1000/><br/>Learn what's new in the [Citus 11.2 release blog](https://www.citusdata.com/blog/2023/02/08/whats-new-in-citus-11-2-patroni-ha-support/) and the [Citus Updates page](https://www.citusdata.com/updates/).<br/><br/>**|
+| **<br/>The Citus database is 100% open source.<br/><img width=1000/><br/>Learn what's new in the [Citus 11.3 release blog](https://www.citusdata.com/blog/2023/05/05/whats-new-in-citus-11-3-multi-tenant-saas/) and the [Citus Updates page](https://www.citusdata.com/updates/).<br/><br/>**|
 |---|
 <br/>
 
@@ -8,7 +8,7 @@
 
 [![Latest Docs](https://img.shields.io/badge/docs-latest-brightgreen.svg)](https://docs.citusdata.com/)
 [![Stack Overflow](https://img.shields.io/badge/Stack%20Overflow-%20-545353?logo=Stack%20Overflow)](https://stackoverflow.com/questions/tagged/citus)
-[![Slack Status](https://citus-slack.herokuapp.com/badge.svg)](https://citus-public.slack.com/)
+[Slack](https://citus-public.slack.com/)
 [![Code Coverage](https://codecov.io/gh/citusdata/citus/branch/master/graph/badge.svg)](https://app.codecov.io/gh/citusdata/citus)
 [![Twitter](https://img.shields.io/twitter/follow/citusdata.svg?label=Follow%20@citusdata)](https://twitter.com/intent/follow?screen_name=citusdata)
 
@@ -94,14 +94,14 @@ Install packages on Ubuntu / Debian:
 ```bash
 curl https://install.citusdata.com/community/deb.sh > add-citus-repo.sh
 sudo bash add-citus-repo.sh
-sudo apt-get -y install postgresql-15-citus-11.2
+sudo apt-get -y install postgresql-15-citus-11.3
 ```
 
 Install packages on CentOS / Red Hat:
 ```bash
 curl https://install.citusdata.com/community/rpm.sh > add-citus-repo.sh
 sudo bash add-citus-repo.sh
-sudo yum install -y citus112_15
+sudo yum install -y citus113_15
 ```
 
 To add Citus to your local PostgreSQL database, add the following to `postgresql.conf`:
@@ -349,7 +349,7 @@ To learn more about columnar storage, check out the [columnar storage README](ht
 
 ## Setting up with High Availability
 
-One of the most popular high availability solutions for PostgreSQL, [Patroni 3.0](https://github.com/zalando/patroni), has [first class support for Citus 10.0 and above](https://patroni.readthedocs.io/en/latest/citus.html#citus), additionally Citus 11.2 ships with improvements for smoother node switchover in Patroni.
+One of the most popular high availability solutions for PostgreSQL, [Patroni 3.0](https://github.com/zalando/patroni), has [first class support for Citus 10.0 and above](https://patroni.readthedocs.io/en/latest/citus.html#citus), additionally since Citus 11.2 ships with improvements for smoother node switchover in Patroni.
 
 An example of patronictl list output for the Citus cluster:
 

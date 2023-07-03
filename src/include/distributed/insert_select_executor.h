@@ -16,11 +16,9 @@
 
 #include "executor/execdesc.h"
 
-extern bool EnableRepartitionedInsertSelect;
 
 extern TupleTableSlot * NonPushableInsertSelectExecScan(CustomScanState *node);
-extern bool IsSupportedRedistributionTarget(Oid targetRelationId);
-extern bool IsRedistributablePlan(Plan *selectPlan);
-
+extern List * BuildColumnNameListFromTargetList(Oid targetRelationId,
+												List *insertTargetList);
 
 #endif /* INSERT_SELECT_EXECUTOR_H */

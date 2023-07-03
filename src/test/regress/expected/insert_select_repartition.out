@@ -549,7 +549,7 @@ SELECT create_distributed_table('target_table', 'a');
 INSERT INTO source_table SELECT floor(i/4), i*i FROM generate_series(1, 20) i;
 SET client_min_messages TO DEBUG1;
 INSERT INTO target_table SELECT a, max(b) FROM source_table GROUP BY a;
-DEBUG:  INSERT target table and the source relation of the SELECT partition column value must be colocated in distributed INSERT ... SELECT
+DEBUG:  INSERT target relation and all source relations of the SELECT must be colocated in distributed INSERT ... SELECT
 DEBUG:  performing repartitioned INSERT ... SELECT
 RESET client_min_messages;
 SELECT * FROM target_table ORDER BY a;
@@ -622,40 +622,40 @@ INSERT INTO target_table
   WHERE a BETWEEN $1 AND $2 GROUP BY a;
 SET client_min_messages TO DEBUG1;
 EXECUTE insert_plan(0, 2);
-DEBUG:  INSERT target table and the source relation of the SELECT partition column value must be colocated in distributed INSERT ... SELECT
+DEBUG:  INSERT target relation and all source relations of the SELECT must be colocated in distributed INSERT ... SELECT
 DEBUG:  performing repartitioned INSERT ... SELECT
 EXECUTE insert_plan(0, 2);
-DEBUG:  INSERT target table and the source relation of the SELECT partition column value must be colocated in distributed INSERT ... SELECT
+DEBUG:  INSERT target relation and all source relations of the SELECT must be colocated in distributed INSERT ... SELECT
 DEBUG:  performing repartitioned INSERT ... SELECT
 EXECUTE insert_plan(0, 2);
-DEBUG:  INSERT target table and the source relation of the SELECT partition column value must be colocated in distributed INSERT ... SELECT
+DEBUG:  INSERT target relation and all source relations of the SELECT must be colocated in distributed INSERT ... SELECT
 DEBUG:  performing repartitioned INSERT ... SELECT
 EXECUTE insert_plan(0, 2);
-DEBUG:  INSERT target table and the source relation of the SELECT partition column value must be colocated in distributed INSERT ... SELECT
+DEBUG:  INSERT target relation and all source relations of the SELECT must be colocated in distributed INSERT ... SELECT
 DEBUG:  performing repartitioned INSERT ... SELECT
 EXECUTE insert_plan(0, 2);
-DEBUG:  INSERT target table and the source relation of the SELECT partition column value must be colocated in distributed INSERT ... SELECT
+DEBUG:  INSERT target relation and all source relations of the SELECT must be colocated in distributed INSERT ... SELECT
 DEBUG:  performing repartitioned INSERT ... SELECT
 EXECUTE insert_plan(0, 2);
-DEBUG:  INSERT target table and the source relation of the SELECT partition column value must be colocated in distributed INSERT ... SELECT
+DEBUG:  INSERT target relation and all source relations of the SELECT must be colocated in distributed INSERT ... SELECT
 DEBUG:  performing repartitioned INSERT ... SELECT
 EXECUTE insert_plan(2, 4);
-DEBUG:  INSERT target table and the source relation of the SELECT partition column value must be colocated in distributed INSERT ... SELECT
+DEBUG:  INSERT target relation and all source relations of the SELECT must be colocated in distributed INSERT ... SELECT
 DEBUG:  performing repartitioned INSERT ... SELECT
 EXECUTE insert_plan(2, 4);
-DEBUG:  INSERT target table and the source relation of the SELECT partition column value must be colocated in distributed INSERT ... SELECT
+DEBUG:  INSERT target relation and all source relations of the SELECT must be colocated in distributed INSERT ... SELECT
 DEBUG:  performing repartitioned INSERT ... SELECT
 EXECUTE insert_plan(2, 4);
-DEBUG:  INSERT target table and the source relation of the SELECT partition column value must be colocated in distributed INSERT ... SELECT
+DEBUG:  INSERT target relation and all source relations of the SELECT must be colocated in distributed INSERT ... SELECT
 DEBUG:  performing repartitioned INSERT ... SELECT
 EXECUTE insert_plan(2, 4);
-DEBUG:  INSERT target table and the source relation of the SELECT partition column value must be colocated in distributed INSERT ... SELECT
+DEBUG:  INSERT target relation and all source relations of the SELECT must be colocated in distributed INSERT ... SELECT
 DEBUG:  performing repartitioned INSERT ... SELECT
 EXECUTE insert_plan(2, 4);
-DEBUG:  INSERT target table and the source relation of the SELECT partition column value must be colocated in distributed INSERT ... SELECT
+DEBUG:  INSERT target relation and all source relations of the SELECT must be colocated in distributed INSERT ... SELECT
 DEBUG:  performing repartitioned INSERT ... SELECT
 EXECUTE insert_plan(2, 4);
-DEBUG:  INSERT target table and the source relation of the SELECT partition column value must be colocated in distributed INSERT ... SELECT
+DEBUG:  INSERT target relation and all source relations of the SELECT must be colocated in distributed INSERT ... SELECT
 DEBUG:  performing repartitioned INSERT ... SELECT
 RESET client_min_messages;
 SELECT a, count(*), count(distinct b) distinct_values FROM target_table GROUP BY a ORDER BY a;
@@ -680,25 +680,25 @@ INSERT INTO target_table
   WHERE a=$1 GROUP BY a;
 SET client_min_messages TO DEBUG1;
 EXECUTE insert_plan(0);
-DEBUG:  INSERT target table and the source relation of the SELECT partition column value must be colocated in distributed INSERT ... SELECT
+DEBUG:  INSERT target relation and all source relations of the SELECT must be colocated in distributed INSERT ... SELECT
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 EXECUTE insert_plan(0);
-DEBUG:  INSERT target table and the source relation of the SELECT partition column value must be colocated in distributed INSERT ... SELECT
+DEBUG:  INSERT target relation and all source relations of the SELECT must be colocated in distributed INSERT ... SELECT
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 EXECUTE insert_plan(0);
-DEBUG:  INSERT target table and the source relation of the SELECT partition column value must be colocated in distributed INSERT ... SELECT
+DEBUG:  INSERT target relation and all source relations of the SELECT must be colocated in distributed INSERT ... SELECT
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 EXECUTE insert_plan(0);
-DEBUG:  INSERT target table and the source relation of the SELECT partition column value must be colocated in distributed INSERT ... SELECT
+DEBUG:  INSERT target relation and all source relations of the SELECT must be colocated in distributed INSERT ... SELECT
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 EXECUTE insert_plan(0);
-DEBUG:  INSERT target table and the source relation of the SELECT partition column value must be colocated in distributed INSERT ... SELECT
+DEBUG:  INSERT target relation and all source relations of the SELECT must be colocated in distributed INSERT ... SELECT
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 EXECUTE insert_plan(0);
-DEBUG:  INSERT target table and the source relation of the SELECT partition column value must be colocated in distributed INSERT ... SELECT
+DEBUG:  INSERT target relation and all source relations of the SELECT must be colocated in distributed INSERT ... SELECT
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 EXECUTE insert_plan(0);
-DEBUG:  INSERT target table and the source relation of the SELECT partition column value must be colocated in distributed INSERT ... SELECT
+DEBUG:  INSERT target relation and all source relations of the SELECT must be colocated in distributed INSERT ... SELECT
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 RESET client_min_messages;
 SELECT a, count(*), count(distinct b) distinct_values FROM target_table GROUP BY a ORDER BY a;
@@ -756,14 +756,15 @@ DEALLOCATE insert_plan;
 --
 TRUNCATE target_table;
 SET client_min_messages TO DEBUG2;
+SET citus.enable_non_colocated_router_query_pushdown TO ON;
 WITH r AS (
   INSERT INTO target_table SELECT * FROM source_table RETURNING *
 )
 INSERT INTO target_table SELECT source_table.a, max(source_table.b) FROM source_table NATURAL JOIN r GROUP BY source_table.a;
-DEBUG:  INSERT target table and the source relation of the SELECT partition column value must be colocated in distributed INSERT ... SELECT
+DEBUG:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
 DEBUG:  only SELECT, UPDATE, or DELETE common table expressions may be router planned
 DEBUG:  generating subplan XXX_1 for CTE r: INSERT INTO insert_select_repartition.target_table (a, b) SELECT source_table.a, source_table.b FROM insert_select_repartition.source_table RETURNING target_table.a, target_table.b
-DEBUG:  INSERT target table and the source relation of the SELECT partition column value must be colocated in distributed INSERT ... SELECT
+DEBUG:  INSERT target relation and all source relations of the SELECT must be colocated in distributed INSERT ... SELECT
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT a, max AS b FROM (SELECT source_table.a, max(source_table.b) AS max FROM (insert_select_repartition.source_table JOIN (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) r USING (a, b)) GROUP BY source_table.a) citus_insert_select_subquery
 DEBUG:  Router planner cannot handle multi-shard select queries
@@ -777,6 +778,7 @@ DEBUG:  partitioning SELECT query by column index 0 with name 'a'
 DEBUG:  distributed statement: INSERT INTO insert_select_repartition.target_table_4213610 AS citus_table_alias (a, b) SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_results('{repartitioned_results_xxxxx_from_4213606_to_0,repartitioned_results_xxxxx_from_4213607_to_0}'::text[], 'binary'::citus_copy_format) intermediate_result(a integer, b integer)
 DEBUG:  distributed statement: INSERT INTO insert_select_repartition.target_table_4213611 AS citus_table_alias (a, b) SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_results('{repartitioned_results_xxxxx_from_4213607_to_1}'::text[], 'binary'::citus_copy_format) intermediate_result(a integer, b integer)
 DEBUG:  distributed statement: INSERT INTO insert_select_repartition.target_table_4213612 AS citus_table_alias (a, b) SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_results('{repartitioned_results_xxxxx_from_4213609_to_2}'::text[], 'binary'::citus_copy_format) intermediate_result(a integer, b integer)
+RESET citus.enable_non_colocated_router_query_pushdown;
 RESET client_min_messages;
 SELECT * FROM target_table ORDER BY a, b;
  a |  b
@@ -1013,7 +1015,7 @@ SELECT create_distributed_table('target_table', 'a');
 INSERT INTO source_table SELECT i, i * i FROM generate_series(1, 10) i;
 SET client_min_messages TO DEBUG2;
 INSERT INTO target_table SELECT a AS aa, b AS aa, 1 AS aa, 2 AS aa FROM source_table;
-DEBUG:  INSERT target table and the source relation of the SELECT partition column value must be colocated in distributed INSERT ... SELECT
+DEBUG:  INSERT target relation and all source relations of the SELECT must be colocated in distributed INSERT ... SELECT
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  performing repartitioned INSERT ... SELECT
 DEBUG:  partitioning SELECT query by column index 0 with name 'a'
@@ -1047,7 +1049,7 @@ EXPLAIN (costs off) INSERT INTO target_table SELECT a AS aa, b AS aa, 1 AS aa, 2
 
 SET client_min_messages TO DEBUG2;
 INSERT INTO target_table SELECT a AS aa, b AS aa, 1 AS aa, 2 AS aa FROM source_table;
-DEBUG:  INSERT target table and the source relation of the SELECT partition column value must be colocated in distributed INSERT ... SELECT
+DEBUG:  INSERT target relation and all source relations of the SELECT must be colocated in distributed INSERT ... SELECT
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 RESET client_min_messages;
@@ -1090,19 +1092,19 @@ EXPLAIN (costs off) INSERT INTO test(y, x) SELECT a.x, b.y FROM test a JOIN test
  Custom Scan (Citus INSERT ... SELECT)
    INSERT/SELECT method: pull to coordinator
    ->  Custom Scan (Citus Adaptive)
-         Task Count: 4
+         Task Count: 6
          Tasks Shown: None, not supported for re-partition queries
          ->  MapMergeJob
                Map Task Count: 3
-               Merge Task Count: 4
+               Merge Task Count: 6
          ->  MapMergeJob
                Map Task Count: 3
-               Merge Task Count: 4
+               Merge Task Count: 6
 (11 rows)
 
 SET client_min_messages TO DEBUG1;
 INSERT INTO test(y, x) SELECT a.x, b.y FROM test a JOIN test b USING (y);
-DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition columns in the source table and subquery do not match
+DEBUG:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 RESET client_min_messages;
 SELECT count(*) FROM test;
@@ -1119,19 +1121,19 @@ EXPLAIN (costs off) INSERT INTO test SELECT a.* FROM test a JOIN test b USING (y
  Custom Scan (Citus INSERT ... SELECT)
    INSERT/SELECT method: pull to coordinator
    ->  Custom Scan (Citus Adaptive)
-         Task Count: 4
+         Task Count: 6
          Tasks Shown: None, not supported for re-partition queries
          ->  MapMergeJob
                Map Task Count: 3
-               Merge Task Count: 4
+               Merge Task Count: 6
          ->  MapMergeJob
                Map Task Count: 3
-               Merge Task Count: 4
+               Merge Task Count: 6
 (11 rows)
 
 SET client_min_messages TO DEBUG1;
 INSERT INTO test SELECT a.* FROM test a JOIN test b USING (y);
-DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 RESET client_min_messages;
 SELECT count(*) FROM test;
@@ -1217,7 +1219,7 @@ ON CONFLICT(c1, c2, c3, c4, c5, c6)
 DO UPDATE SET
  cardinality = enriched.cardinality + excluded.cardinality,
  sum = enriched.sum + excluded.sum;
-DEBUG:  INSERT target table and the source relation of the SELECT partition column value must be colocated in distributed INSERT ... SELECT
+DEBUG:  INSERT target relation and all source relations of the SELECT must be colocated in distributed INSERT ... SELECT
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  performing repartitioned INSERT ... SELECT
 DEBUG:  partitioning SELECT query by column index 0 with name 'c1'
@@ -1299,6 +1301,33 @@ explain (costs off) insert into table_with_user_sequences select y, x from table
                Node: host=localhost port=xxxxx dbname=regression
                ->  Seq Scan on table_with_user_sequences_4213652 table_with_user_sequences
 (8 rows)
+
+CREATE TABLE dist_table_1(id int);
+SELECT create_distributed_table('dist_table_1','id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE dist_table_2(id int);
+SELECT create_distributed_table('dist_table_2','id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- verify that insert select with union can be repartitioned. We cannot push down the query
+-- since UNION clause has no FROM clause at top level query.
+SELECT public.coordinator_plan($$
+  EXPLAIN (COSTS FALSE) INSERT INTO dist_table_1(id) SELECT id FROM dist_table_1 UNION SELECT id FROM dist_table_2;
+$$);
+           coordinator_plan
+---------------------------------------------------------------------
+ Custom Scan (Citus INSERT ... SELECT)
+   INSERT/SELECT method: repartition
+   ->  Custom Scan (Citus Adaptive)
+         Task Count: 4
+(4 rows)
 
 -- clean-up
 SET client_min_messages TO WARNING;

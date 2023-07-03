@@ -60,7 +60,6 @@ UPDATE distributed_table SET dept = foo.max_dept FROM
 				(SELECT tenant_id FROM second_distributed_table WHERE dept IN (1, 2, 3, 4))
 ) as  foo WHERE foo.max_dept >= dept and tenant_id = '8';
 
-
-RESET client_min_messages;
+SET client_min_messages TO WARNING;
 DROP SCHEMA recursive_dml_with_different_planner_executors CASCADE;
 SET search_path TO public;

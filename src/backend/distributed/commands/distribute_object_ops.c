@@ -294,8 +294,8 @@ static DistributeObjectOps Any_CreateForeignServer = {
 static DistributeObjectOps Any_CreateSchema = {
 	.deparse = DeparseCreateSchemaStmt,
 	.qualify = NULL,
-	.preprocess = PreprocessCreateSchemaStmt,
-	.postprocess = NULL,
+	.preprocess = NULL,
+	.postprocess = PostprocessCreateSchemaStmt,
 	.operationType = DIST_OPS_CREATE,
 	.address = CreateSchemaStmtObjectAddress,
 	.markDistributed = true,
@@ -1024,6 +1024,15 @@ static DistributeObjectOps Routine_Rename = {
 	.address = RenameFunctionStmtObjectAddress,
 	.markDistributed = false,
 };
+static DistributeObjectOps Schema_AlterOwner = {
+	.deparse = DeparseAlterSchemaOwnerStmt,
+	.qualify = NULL,
+	.preprocess = PreprocessAlterDistributedObjectStmt,
+	.operationType = DIST_OPS_ALTER,
+	.postprocess = NULL,
+	.address = AlterSchemaOwnerStmtObjectAddress,
+	.markDistributed = false,
+};
 static DistributeObjectOps Schema_Drop = {
 	.deparse = DeparseDropSchemaStmt,
 	.qualify = NULL,
@@ -1457,6 +1466,11 @@ GetDistributeObjectOps(Node *node)
 					return &Routine_AlterOwner;
 				}
 
+				case OBJECT_SCHEMA:
+				{
+					return &Schema_AlterOwner;
+				}
+
 				case OBJECT_STATISTIC_EXT:
 				{
 					return &Statistics_AlterOwner;
@@ -1517,7 +1531,7 @@ GetDistributeObjectOps(Node *node)
 		case T_AlterTableStmt:
 		{
 			AlterTableStmt *stmt = castNode(AlterTableStmt, node);
-			switch (AlterTableStmtObjType_compat(stmt))
+			switch (stmt->objtype)
 			{
 				case OBJECT_TYPE:
 				{

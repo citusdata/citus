@@ -925,6 +925,10 @@ GetRouterPlanType(Query *query, Query *originalQuery, bool hasUnresolvedParams)
 	}
 	else if (IsMergeQuery(originalQuery))
 	{
+		if (hasUnresolvedParams)
+		{
+			return REPLAN_WITH_BOUND_PARAMETERS;
+		}
 		return MERGE_QUERY;
 	}
 	else
@@ -990,7 +994,8 @@ CreateDistributedPlan(uint64 planId, bool allowRecursivePlanning, Query *origina
 		case MERGE_QUERY:
 		{
 			distributedPlan =
-				CreateMergePlan(originalQuery, query, plannerRestrictionContext);
+				CreateMergePlan(planId, originalQuery, query, plannerRestrictionContext,
+								boundParams);
 			break;
 		}
 
@@ -1374,6 +1379,12 @@ FinalizePlan(PlannedStmt *localPlan, DistributedPlan *distributedPlan)
 		case MULTI_EXECUTOR_NON_PUSHABLE_INSERT_SELECT:
 		{
 			customScan->methods = &NonPushableInsertSelectCustomScanMethods;
+			break;
+		}
+
+		case MULTI_EXECUTOR_NON_PUSHABLE_MERGE_QUERY:
+		{
+			customScan->methods = &NonPushableMergeCommandCustomScanMethods;
 			break;
 		}
 
@@ -2463,6 +2474,18 @@ HasUnresolvedExternParamsWalker(Node *expression, ParamListInfo boundParams)
 
 
 /*
+ * ContainsSingleShardTable returns true if given query contains reference
+ * to a single-shard table.
+ */
+bool
+ContainsSingleShardTable(Query *query)
+{
+	RTEListProperties *rteListProperties = GetRTEListPropertiesForQuery(query);
+	return rteListProperties->hasSingleShardDistTable;
+}
+
+
+/*
  * GetRTEListPropertiesForQuery is a wrapper around GetRTEListProperties that
  * returns RTEListProperties for the rte list retrieved from query.
  */
@@ -2538,6 +2561,15 @@ GetRTEListProperties(List *rangeTableList)
 		else if (IsCitusTableTypeCacheEntry(cacheEntry, DISTRIBUTED_TABLE))
 		{
 			rteListProperties->hasDistributedTable = true;
+
+			if (!HasDistributionKeyCacheEntry(cacheEntry))
+			{
+				rteListProperties->hasSingleShardDistTable = true;
+			}
+			else
+			{
+				rteListProperties->hasDistTableWithShardKey = true;
+			}
 		}
 		else
 		{

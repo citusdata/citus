@@ -19,6 +19,7 @@
 #include "catalog/namespace.h"
 #include "catalog/pg_class.h"
 #include "catalog/pg_namespace.h"
+#include "distributed/colocation_utils.h"
 #include "distributed/commands.h"
 #include <distributed/connection_management.h>
 #include "distributed/commands/utility_hook.h"
@@ -33,6 +34,7 @@
 #include "distributed/resource_lock.h"
 #include <distributed/remote_commands.h>
 #include <distributed/remote_commands.h>
+#include "distributed/tenant_schema_metadata.h"
 #include "distributed/version_compat.h"
 #include "nodes/parsenodes.h"
 #include "utils/fmgroids.h"
@@ -45,16 +47,18 @@ static List * FilterDistributedSchemas(List *schemas);
 static bool SchemaHasDistributedTableWithFKey(char *schemaName);
 static bool ShouldPropagateCreateSchemaStmt(void);
 static List * GetGrantCommandsFromCreateSchemaStmt(Node *node);
+static bool CreateSchemaStmtCreatesTable(CreateSchemaStmt *stmt);
 
 
 /*
- * PreprocessCreateSchemaStmt is called during the planning phase for
+ * PostprocessCreateSchemaStmt is called during the planning phase for
  * CREATE SCHEMA ..
  */
 List *
-PreprocessCreateSchemaStmt(Node *node, const char *queryString,
-						   ProcessUtilityContext processUtilityContext)
+PostprocessCreateSchemaStmt(Node *node, const char *queryString)
 {
+	CreateSchemaStmt *createSchemaStmt = castNode(CreateSchemaStmt, node);
+
 	if (!ShouldPropagateCreateSchemaStmt())
 	{
 		return NIL;
@@ -63,6 +67,16 @@ PreprocessCreateSchemaStmt(Node *node, const char *queryString,
 	EnsureCoordinator();
 
 	EnsureSequentialMode(OBJECT_SCHEMA);
+
+	bool missingOk = createSchemaStmt->if_not_exists;
+	List *schemaAdressList = CreateSchemaStmtObjectAddress(node, missingOk, true);
+	Assert(list_length(schemaAdressList) == 1);
+	ObjectAddress *schemaAdress = linitial(schemaAdressList);
+	Oid schemaId = schemaAdress->objectId;
+	if (!OidIsValid(schemaId))
+	{
+		return NIL;
+	}
 
 	/* to prevent recursion with mx we disable ddl propagation */
 	List *commands = list_make1(DISABLE_DDL_PROPAGATION);
@@ -73,6 +87,37 @@ PreprocessCreateSchemaStmt(Node *node, const char *queryString,
 	commands = lappend(commands, (void *) sql);
 
 	commands = list_concat(commands, GetGrantCommandsFromCreateSchemaStmt(node));
+
+	char *schemaName = get_namespace_name(schemaId);
+	if (ShouldUseSchemaBasedSharding(schemaName))
+	{
+		/* for now, we don't allow creating tenant tables when creating the schema itself */
+		if (CreateSchemaStmtCreatesTable(createSchemaStmt))
+		{
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("cannot create distributed schema and table in a "
+								   "single statement"),
+							errhint("SET citus.enable_schema_based_sharding TO off, "
+									"or create the schema and table in separate "
+									"commands.")));
+		}
+
+		/*
+		 * Register the tenant schema on the coordinator and save the command
+		 * to register it on the workers.
+		 */
+		int shardCount = 1;
+		int replicationFactor = 1;
+		Oid distributionColumnType = InvalidOid;
+		Oid distributionColumnCollation = InvalidOid;
+		uint32 colocationId = CreateColocationGroup(
+			shardCount, replicationFactor, distributionColumnType,
+			distributionColumnCollation);
+
+		InsertTenantSchemaLocally(schemaId, colocationId);
+
+		commands = lappend(commands, TenantSchemaInsertCommand(schemaId, colocationId));
+	}
 
 	commands = lappend(commands, ENABLE_DDL_PROPAGATION);
 
@@ -211,6 +256,20 @@ CreateSchemaStmtObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
 	}
 
 	return GetObjectAddressBySchemaName(schemaName.data, missing_ok);
+}
+
+
+/*
+ * AlterSchemaOwnerStmtObjectAddress returns the ObjectAddress of the schema that is
+ * the object of the AlterOwnerStmt. Errors if missing_ok is false.
+ */
+List *
+AlterSchemaOwnerStmtObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
+{
+	AlterOwnerStmt *stmt = castNode(AlterOwnerStmt, node);
+	Assert(stmt->objectType == OBJECT_SCHEMA);
+
+	return GetObjectAddressBySchemaName(strVal(stmt->object), missing_ok);
 }
 
 
@@ -401,4 +460,28 @@ GetGrantCommandsFromCreateSchemaStmt(Node *node)
 	}
 
 	return commands;
+}
+
+
+/*
+ * CreateSchemaStmtCreatesTable returns true if given CreateSchemaStmt
+ * creates a table using "schema_element" list.
+ */
+static bool
+CreateSchemaStmtCreatesTable(CreateSchemaStmt *stmt)
+{
+	Node *element = NULL;
+	foreach_ptr(element, stmt->schemaElts)
+	{
+		/*
+		 * CREATE TABLE AS and CREATE FOREIGN TABLE commands cannot be
+		 * used as schema_elements anyway, so we don't need to check them.
+		 */
+		if (IsA(element, CreateStmt))
+		{
+			return true;
+		}
+	}
+
+	return false;
 }

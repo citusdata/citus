@@ -5,6 +5,14 @@
 SET citus.next_shard_id TO 433000;
 SET citus.propagate_session_settings_for_loopback_connection TO ON;
 
+-- Because of historic reasons this test was written in a way that assumes that
+-- by_shard_count is the default strategy.
+SELECT citus_set_default_rebalance_strategy('by_shard_count');
+-- Lower the minimum disk size that a shard group is considered as. Otherwise
+-- we need to create shards of more than 100MB.
+ALTER SYSTEM SET citus.rebalancer_by_disk_size_base_cost = 0;
+SELECT pg_reload_conf();
+
 CREATE TABLE ref_table_test(a int primary key);
 SELECT create_reference_table('ref_table_test');
 CREATE TABLE dist_table_test(a int primary key);
@@ -13,7 +21,9 @@ CREATE TABLE postgres_table_test(a int primary key);
 
 -- make sure that all rebalance operations works fine when
 -- reference tables are replicated to the coordinator
+SET client_min_messages TO ERROR;
 SELECT 1 FROM master_add_node('localhost', :master_port, groupId=>0);
+RESET client_min_messages;
 
 -- should just be noops even if we add the coordinator to the pg_dist_node
 SELECT rebalance_table_shards('dist_table_test');
@@ -1226,7 +1236,7 @@ DROP TABLE tab;
 
 -- we don't need the coordinator on pg_dist_node anymore
 SELECT 1 FROM master_remove_node('localhost', :master_port);
-SELECT public.wait_until_metadata_sync(30000);
+SELECT public.wait_until_metadata_sync(60000);
 
 --
 -- Make sure that rebalance_table_shards() and replicate_table_shards() replicate
@@ -1497,6 +1507,61 @@ SELECT sh.logicalrelid, pl.nodeport
 
 DROP TABLE single_shard_colocation_1a, single_shard_colocation_1b, single_shard_colocation_1c, single_shard_colocation_2a, single_shard_colocation_2b CASCADE;
 
+-- test the same with coordinator shouldhaveshards = false and shard_count = 2
+-- so that the shard allowed node count would be 2 when rebalancing
+-- for such cases, we only count the nodes that are allowed for shard placements
+UPDATE pg_dist_node SET shouldhaveshards=false WHERE nodeport = :master_port;
+
+create table two_shard_colocation_1a (a int primary key);
+create table two_shard_colocation_1b (a int primary key);
+SET citus.shard_replication_factor = 1;
+
+select create_distributed_table('two_shard_colocation_1a','a', colocate_with => 'none', shard_count => 2);
+select create_distributed_table('two_shard_colocation_1b','a',colocate_with=>'two_shard_colocation_1a');
+
+create table two_shard_colocation_2a (a int primary key);
+create table two_shard_colocation_2b (a int primary key);
+select create_distributed_table('two_shard_colocation_2a','a', colocate_with => 'none', shard_count => 2);
+select create_distributed_table('two_shard_colocation_2b','a',colocate_with=>'two_shard_colocation_2a');
+
+-- move shards of colocation group 1 to worker1
+SELECT citus_move_shard_placement(sh.shardid, 'localhost', :worker_2_port, 'localhost', :worker_1_port)
+    FROM pg_dist_shard sh JOIN pg_dist_shard_placement pl ON sh.shardid = pl.shardid
+    WHERE sh.logicalrelid = 'two_shard_colocation_1a'::regclass
+        AND pl.nodeport = :worker_2_port
+    LIMIT 1;
+-- move shards of colocation group 2 to worker2
+SELECT citus_move_shard_placement(sh.shardid, 'localhost', :worker_1_port, 'localhost', :worker_2_port)
+    FROM pg_dist_shard sh JOIN pg_dist_shard_placement pl ON sh.shardid = pl.shardid
+    WHERE sh.logicalrelid = 'two_shard_colocation_2a'::regclass
+        AND pl.nodeport = :worker_1_port
+    LIMIT 1;
+
+-- current state:
+-- coordinator: []
+-- worker 1: [1_1, 1_2]
+-- worker 2: [2_1, 2_2]
+SELECT sh.logicalrelid, pl.nodeport
+    FROM pg_dist_shard sh JOIN pg_dist_shard_placement pl ON sh.shardid = pl.shardid
+    WHERE sh.logicalrelid::text IN ('two_shard_colocation_1a', 'two_shard_colocation_1b', 'two_shard_colocation_2a', 'two_shard_colocation_2b')
+    ORDER BY sh.logicalrelid, pl.nodeport;
+
+-- If we take the coordinator into account, the rebalancer considers this as balanced and does nothing (shard_count < worker_count)
+-- but because the coordinator is not allowed for shards, rebalancer will distribute each colocation group to both workers
+select rebalance_table_shards(shard_transfer_mode:='block_writes');
+
+-- final state:
+-- coordinator: []
+-- worker 1: [1_1, 2_1]
+-- worker 2: [1_2, 2_2]
+SELECT sh.logicalrelid, pl.nodeport
+    FROM pg_dist_shard sh JOIN pg_dist_shard_placement pl ON sh.shardid = pl.shardid
+    WHERE sh.logicalrelid::text IN ('two_shard_colocation_1a', 'two_shard_colocation_1b', 'two_shard_colocation_2a', 'two_shard_colocation_2b')
+    ORDER BY sh.logicalrelid, pl.nodeport;
+
+-- cleanup
+DROP TABLE two_shard_colocation_1a, two_shard_colocation_1b, two_shard_colocation_2a, two_shard_colocation_2b CASCADE;
+
 -- verify we detect if one of the tables do not have a replica identity or primary key
 -- and error out in case of shard transfer mode = auto
 SELECT 1 FROM citus_remove_node('localhost', :worker_2_port);
@@ -1512,6 +1577,9 @@ select 1 from citus_add_node('localhost', :worker_2_port);
 select rebalance_table_shards();
 
 DROP TABLE table_with_primary_key, table_without_primary_key;
+SELECT citus_set_default_rebalance_strategy('by_disk_size');
+ALTER SYSTEM RESET citus.rebalancer_by_disk_size_base_cost;
+SELECT pg_reload_conf();
 \c - - - :worker_1_port
 SET citus.enable_ddl_propagation TO OFF;
 REVOKE ALL ON SCHEMA public FROM testrole;

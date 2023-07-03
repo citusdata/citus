@@ -495,14 +495,6 @@ SET search_path TO fix_idx_names, public;
 DROP TABLE dist_partitioned_table;
 SET citus.next_shard_id TO 910040;
 -- test with citus local table
-SET client_min_messages TO WARNING;
-SELECT 1 FROM citus_add_node('localhost', :master_port, groupid=>0);
- ?column?
----------------------------------------------------------------------
-        1
-(1 row)
-
-RESET client_min_messages;
 CREATE TABLE date_partitioned_citus_local_table(
  measureid integer,
  eventdate date,
@@ -650,7 +642,7 @@ NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off'
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing CREATE EXTENSION IF NOT EXISTS citus_columnar WITH SCHEMA  pg_catalog VERSION "11.2-1";
+NOTICE:  issuing CREATE EXTENSION IF NOT EXISTS citus_columnar WITH SCHEMA  pg_catalog VERSION  "x.y-z";
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing COMMIT
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
@@ -658,7 +650,7 @@ NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off'
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing CREATE EXTENSION IF NOT EXISTS citus_columnar WITH SCHEMA  pg_catalog VERSION "11.2-1";
+NOTICE:  issuing CREATE EXTENSION IF NOT EXISTS citus_columnar WITH SCHEMA  pg_catalog VERSION  "x.y-z";
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing COMMIT
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
@@ -750,9 +742,3 @@ ALTER TABLE parent_table DROP CONSTRAINT pkey_cst CASCADE;
 ALTER TABLE parent_table DROP CONSTRAINT unique_cst CASCADE;
 SET client_min_messages TO WARNING;
 DROP SCHEMA fix_idx_names CASCADE;
-SELECT citus_remove_node('localhost', :master_port);
- citus_remove_node
----------------------------------------------------------------------
-
-(1 row)
-

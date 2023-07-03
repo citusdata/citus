@@ -51,5 +51,5 @@ SELECT ref_table.* FROM ref_table WHERE EXISTS (SELECT * FROM recursive_defined_
 SELECT ref_table.* FROM ref_table WHERE EXISTS (SELECT * FROM recursive_defined_non_recursive_view l WHERE l.c = ref_table.a) AND false;
 SELECT ref_table.* FROM ref_table WHERE EXISTS (SELECT * FROM recursive_defined_non_recursive_view l WHERE l.c = ref_table.a AND false);
 
-
+SET client_min_messages TO WARNING;
 DROP SCHEMA postgres_local_table CASCADE;

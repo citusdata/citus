@@ -896,18 +896,11 @@ DeferErrorIfHasUnsupportedDependency(const ObjectAddress *objectAddress)
 		return NULL;
 	}
 
-	char *objectDescription = NULL;
-	char *dependencyDescription = NULL;
 	StringInfo errorInfo = makeStringInfo();
 	StringInfo detailInfo = makeStringInfo();
 
-	#if PG_VERSION_NUM >= PG_VERSION_14
-	objectDescription = getObjectDescription(objectAddress, false);
-	dependencyDescription = getObjectDescription(undistributableDependency, false);
-	#else
-	objectDescription = getObjectDescription(objectAddress);
-	dependencyDescription = getObjectDescription(undistributableDependency);
-	#endif
+	char *objectDescription = getObjectDescription(objectAddress, false);
+	char *dependencyDescription = getObjectDescription(undistributableDependency, false);
 
 	/*
 	 * We expect callers to interpret the error returned from this function
@@ -1189,6 +1182,47 @@ IsAnyObjectAddressOwnedByExtension(const List *targets,
 	}
 
 	return false;
+}
+
+
+/*
+ * FirstExtensionWithSchema returns the first extension address whose schema is the same
+ * as given schema. If no extension depends on the schema, it returns NULL.
+ * i.e. decide if given schema is an extension schema as in
+ *  `CREATE EXTENSION <ext> [WITH] SCHEMA <schema>;`
+ */
+ObjectAddress *
+FirstExtensionWithSchema(Oid schemaId)
+{
+	ObjectAddress *extensionAddress = NULL;
+
+	Relation relation = table_open(ExtensionRelationId, AccessShareLock);
+
+	ScanKeyData entry[1];
+	ScanKeyInit(&entry[0], Anum_pg_extension_extnamespace, BTEqualStrategyNumber,
+				F_INT4EQ, schemaId);
+
+	SysScanDesc scan = systable_beginscan(relation, InvalidOid, false, NULL, 1, entry);
+	HeapTuple extensionTuple = systable_getnext(scan);
+	if (HeapTupleIsValid(extensionTuple))
+	{
+		int extensionIdIndex = Anum_pg_extension_oid;
+		TupleDesc tupleDescriptor = RelationGetDescr(relation);
+		bool isNull = false;
+		Datum extensionIdDatum = heap_getattr(extensionTuple, extensionIdIndex,
+											  tupleDescriptor, &isNull);
+		Oid extensionId = DatumGetObjectId(extensionIdDatum);
+
+		extensionAddress = palloc0(sizeof(ObjectAddress));
+		extensionAddress->objectId = extensionId;
+		extensionAddress->classId = ExtensionRelationId;
+		extensionAddress->objectSubId = 0;
+	}
+
+	systable_endscan(scan);
+	table_close(relation, AccessShareLock);
+
+	return extensionAddress;
 }
 
 

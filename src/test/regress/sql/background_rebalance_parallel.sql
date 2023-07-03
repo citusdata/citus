@@ -204,11 +204,10 @@ SELECT citus_rebalance_start AS job_id from citus_rebalance_start() \gset
 -- see dependent tasks to understand which tasks remain runnable because of
 -- citus.max_background_task_executors_per_node
 -- and which tasks are actually blocked from colocation group dependencies
-SELECT D.task_id,
-       (SELECT T.command FROM pg_dist_background_task T WHERE T.task_id = D.task_id),
-       D.depends_on,
-       (SELECT T.command FROM pg_dist_background_task T WHERE T.task_id = D.depends_on)
-FROM pg_dist_background_task_depend D  WHERE job_id in (:job_id) ORDER BY D.task_id, D.depends_on ASC;
+SELECT task_id, depends_on
+FROM pg_dist_background_task_depend
+WHERE job_id in (:job_id)
+ORDER BY 1, 2 ASC;
 
 -- default citus.max_background_task_executors_per_node is 1
 -- show that first exactly one task per node is running
@@ -218,10 +217,12 @@ SELECT job_id, task_id, status, nodes_involved
 FROM pg_dist_background_task WHERE job_id in (:job_id) ORDER BY task_id;
 
 -- increase citus.max_background_task_executors_per_node
+SELECT citus_task_wait(1013, desired_status => 'done');
 ALTER SYSTEM SET citus.max_background_task_executors_per_node = 2;
 SELECT pg_reload_conf();
+
+SELECT citus_task_wait(1014, desired_status => 'running');
 SELECT citus_task_wait(1015, desired_status => 'running');
-SELECT citus_task_wait(1013, desired_status => 'done');
 
 -- show that at most 2 tasks per node are running
 -- among the tasks that are not blocked

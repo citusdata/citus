@@ -188,7 +188,6 @@ static Query * BuildReadIntermediateResultsQuery(List *targetEntryList,
 												 List *columnAliasList,
 												 Const *resultIdConst, Oid functionOid,
 												 bool useBinaryCopyFormat);
-static void UpdateVarNosInNode(Node *node, Index newVarNo);
 static Query * CreateOuterSubquery(RangeTblEntry *rangeTableEntry,
 								   List *outerSubqueryTargetList);
 static List * GenerateRequiredColNamesFromTargetList(List *targetList);
@@ -1891,7 +1890,7 @@ GenerateRequiredColNamesFromTargetList(List *targetList)
  * UpdateVarNosInNode iterates the Vars in the
  * given node and updates the varno's as the newVarNo.
  */
-static void
+void
 UpdateVarNosInNode(Node *node, Index newVarNo)
 {
 	List *varList = pull_var_clause(node, PVC_RECURSE_AGGREGATES |

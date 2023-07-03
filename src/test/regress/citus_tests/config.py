@@ -15,11 +15,14 @@ WORKER2 = "worker2"
 REGULAR_USER_NAME = "regularuser"
 SUPER_USER_NAME = "postgres"
 
+DATABASE_NAME = "postgres"
+
 ARBITRARY_SCHEDULE_NAMES = [
     "create_schedule",
     "sql_schedule",
     "sql_base_schedule",
     "postgres_schedule",
+    "single_shard_table_prep_schedule",
 ]
 
 BEFORE_PG_UPGRADE_SCHEDULE = "./before_pg_upgrade_schedule"
@@ -27,6 +30,7 @@ AFTER_PG_UPGRADE_SCHEDULE = "./after_pg_upgrade_schedule"
 
 CREATE_SCHEDULE = "./create_schedule"
 POSTGRES_SCHEDULE = "./postgres_schedule"
+SINGLE_SHARD_PREP_SCHEDULE = "./single_shard_table_prep_schedule"
 SQL_SCHEDULE = "./sql_schedule"
 SQL_BASE_SCHEDULE = "./sql_base_schedule"
 
@@ -96,8 +100,10 @@ class CitusBaseClusterConfig(object, metaclass=NewInitCaller):
         self.temp_dir = CITUS_ARBITRARY_TEST_DIR
         self.worker_amount = 2
         self.user = REGULAR_USER_NAME
+        self.dbname = DATABASE_NAME
         self.is_mx = True
         self.is_citus = True
+        self.all_null_dist_key = False
         self.name = type(self).__name__
         self.settings = {
             "shared_preload_libraries": "citus",
@@ -110,7 +116,6 @@ class CitusBaseClusterConfig(object, metaclass=NewInitCaller):
             "max_connections": 1200,
         }
         self.new_settings = {}
-        self.add_coordinator_to_metadata = False
         self.env_variables = {}
         self.skip_tests = []
 
@@ -166,7 +171,6 @@ class CitusDefaultClusterConfig(CitusBaseClusterConfig):
             "citus.use_citus_managed_tables": True,
         }
         self.settings.update(new_settings)
-        self.add_coordinator_to_metadata = True
         self.skip_tests = [
             # Alter Table statement cannot be run from an arbitrary node so this test will fail
             "arbitrary_configs_alter_table_add_constraint_without_name_create",
@@ -175,10 +179,10 @@ class CitusDefaultClusterConfig(CitusBaseClusterConfig):
 
 
 class CitusUpgradeConfig(CitusBaseClusterConfig):
-    def __init__(self, arguments):
+    def __init__(self, arguments, pre_tar, post_tar):
         super().__init__(arguments)
-        self.pre_tar_path = arguments["--citus-pre-tar"]
-        self.post_tar_path = arguments["--citus-post-tar"]
+        self.pre_tar_path = pre_tar
+        self.post_tar_path = post_tar
         self.temp_dir = "./tmp_citus_upgrade"
         self.new_settings = {"citus.enable_version_checks": "false"}
         self.user = SUPER_USER_NAME
@@ -199,6 +203,24 @@ class PostgresConfig(CitusDefaultClusterConfig):
             # Alter Table statement cannot be run from an arbitrary node so this test will fail
             "arbitrary_configs_alter_table_add_constraint_without_name_create",
             "arbitrary_configs_alter_table_add_constraint_without_name",
+        ]
+
+
+class AllSingleShardTableDefaultConfig(CitusDefaultClusterConfig):
+    def __init__(self, arguments):
+        super().__init__(arguments)
+        self.all_null_dist_key = True
+        self.skip_tests += [
+            # One of the distributed functions created in "function_create"
+            # requires setting a distribution column, which cannot be the
+            # case with single shard tables.
+            "function_create",
+            "functions",
+            # In "nested_execution", one of the tests that query
+            # "dist_query_single_shard" table  acts differently when the table
+            # has a single shard. This is explained with a comment in the test.
+            "nested_execution",
+            "merge_arbitrary",
         ]
 
 
@@ -380,4 +402,3 @@ class PGUpgradeConfig(CitusBaseClusterConfig):
         self.old_datadir = self.temp_dir + "/oldData"
         self.new_datadir = self.temp_dir + "/newData"
         self.user = SUPER_USER_NAME
-        self.add_coordinator_to_metadata = True

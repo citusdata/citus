@@ -28,6 +28,7 @@
 #include "access/xlog.h"
 #include "catalog/pg_aggregate.h"
 #include "catalog/pg_am.h"
+#include "catalog/pg_collation.h"
 #include "catalog/pg_operator.h"
 #include "catalog/pg_type.h"
 #include "commands/defrem.h"
@@ -69,6 +70,7 @@
 #include "optimizer/restrictinfo.h"
 #include "optimizer/tlist.h"
 #include "parser/parse_relation.h"
+#include "parser/parse_type.h"
 #include "parser/parsetree.h"
 #include "rewrite/rewriteManip.h"
 #include "utils/builtins.h"
@@ -79,10 +81,11 @@
 #include "utils/lsyscache.h"
 #include "utils/memutils.h"
 #include "utils/rel.h"
+#include "utils/syscache.h"
 #include "utils/typcache.h"
 
 /* RepartitionJoinBucketCountPerNode determines bucket amount during repartitions */
-int RepartitionJoinBucketCountPerNode = 8;
+int RepartitionJoinBucketCountPerNode = 4;
 
 /* Policy to use when assigning tasks to worker nodes */
 int TaskAssignmentPolicy = TASK_ASSIGNMENT_GREEDY;
@@ -231,6 +234,11 @@ static List * FetchEqualityAttrNumsForRTEBoolExpr(BoolExpr *boolExpr);
 static List * FetchEqualityAttrNumsForList(List *nodeList);
 static int PartitionColumnIndex(Var *targetVar, List *targetList);
 static List * GetColumnOriginalIndexes(Oid relationId);
+static bool QueryTreeHasImproperForDeparseNodes(Node *inputNode, void *context);
+static Node * AdjustImproperForDeparseNodes(Node *inputNode, void *context);
+static bool IsImproperForDeparseRelabelTypeNode(Node *inputNode);
+static bool IsImproperForDeparseCoerceViaIONode(Node *inputNode);
+static CollateExpr * RelabelTypeToCollateExpr(RelabelType *relabelType);
 
 
 /*
@@ -2171,8 +2179,9 @@ QueryPushdownSqlTaskList(Query *query, uint64 jobId,
 {
 	List *sqlTaskList = NIL;
 	uint32 taskIdIndex = 1; /* 0 is reserved for invalid taskId */
-	int shardCount = 0;
-	bool *taskRequiredForShardIndex = NULL;
+	int minShardOffset = INT_MAX;
+	int prevShardCount = 0;
+	Bitmapset *taskRequiredForShardIndex = NULL;
 
 	/* error if shards are not co-partitioned */
 	ErrorIfUnsupportedShardDistribution(query);
@@ -2185,10 +2194,6 @@ QueryPushdownSqlTaskList(Query *query, uint64 jobId,
 									   NULL, NULL);
 		return NIL;
 	}
-
-	/* defaults to be used if this is a reference table-only query */
-	int minShardOffset = 0;
-	int maxShardOffset = 0;
 
 	RelationRestriction *relationRestriction = NULL;
 	List *prunedShardList = NULL;
@@ -2205,7 +2210,7 @@ QueryPushdownSqlTaskList(Query *query, uint64 jobId,
 		}
 
 		/* we expect distributed tables to have the same shard count */
-		if (shardCount > 0 && shardCount != cacheEntry->shardIntervalArrayLength)
+		if (prevShardCount > 0 && prevShardCount != cacheEntry->shardIntervalArrayLength)
 		{
 			*planningError = DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
 										   "shard counts of co-located tables do not "
@@ -2213,16 +2218,7 @@ QueryPushdownSqlTaskList(Query *query, uint64 jobId,
 										   NULL, NULL);
 			return NIL;
 		}
-
-		if (taskRequiredForShardIndex == NULL)
-		{
-			shardCount = cacheEntry->shardIntervalArrayLength;
-			taskRequiredForShardIndex = (bool *) palloc0(shardCount);
-
-			/* there is a distributed table, find the shard range */
-			minShardOffset = shardCount;
-			maxShardOffset = -1;
-		}
+		prevShardCount = cacheEntry->shardIntervalArrayLength;
 
 		/*
 		 * For left joins we don't care about the shards pruned for the right hand side.
@@ -2244,32 +2240,26 @@ QueryPushdownSqlTaskList(Query *query, uint64 jobId,
 		{
 			int shardIndex = shardInterval->shardIndex;
 
-			taskRequiredForShardIndex[shardIndex] = true;
-
+			taskRequiredForShardIndex =
+				bms_add_member(taskRequiredForShardIndex, shardIndex);
 			minShardOffset = Min(minShardOffset, shardIndex);
-			maxShardOffset = Max(maxShardOffset, shardIndex);
 		}
 	}
 
 	/*
-	 * To avoid iterating through all shards indexes we keep the minimum and maximum
-	 * offsets of shards that were not pruned away. This optimisation is primarily
-	 * relevant for queries on range-distributed tables that, due to range filters,
-	 * prune to a small number of adjacent shards.
+	 * We keep track of minShardOffset to skip over a potentially big amount of pruned
+	 * shards. However, we need to start at minShardOffset - 1 to make sure we don't
+	 * miss to first/min shard recorder as bms_next_member will return the first member
+	 * added after shardOffset. Meaning minShardOffset would be the first member we
+	 * expect.
 	 *
-	 * In other cases, such as an OR condition on a hash-distributed table, we may
-	 * still visit most or all shards even if some of them were pruned away. However,
-	 * given that hash-distributed tables typically only have a few shards the
-	 * iteration is still very fast.
+	 * We don't have to keep track of maxShardOffset as the bitmapset will only have been
+	 * allocated till the last shard we have added. Therefore, the iterator will quickly
+	 * identify the end of the bitmapset.
 	 */
-	for (int shardOffset = minShardOffset; shardOffset <= maxShardOffset; shardOffset++)
+	int shardOffset = minShardOffset - 1;
+	while ((shardOffset = bms_next_member(taskRequiredForShardIndex, shardOffset)) >= 0)
 	{
-		if (taskRequiredForShardIndex != NULL && !taskRequiredForShardIndex[shardOffset])
-		{
-			/* this shard index is pruned away for all relations */
-			continue;
-		}
-
 		Task *subqueryTask = QueryPushdownTaskCreate(query, shardOffset,
 													 relationRestrictionContext,
 													 taskIdIndex,
@@ -2359,7 +2349,7 @@ ErrorIfUnsupportedShardDistribution(Query *query)
 	ListCell *relationIdCell = NULL;
 	uint32 relationIndex = 0;
 	uint32 rangeDistributedRelationCount = 0;
-	uint32 hashDistributedRelationCount = 0;
+	uint32 hashDistOrSingleShardRelCount = 0;
 	uint32 appendDistributedRelationCount = 0;
 
 	foreach(relationIdCell, relationIdList)
@@ -2371,9 +2361,10 @@ ErrorIfUnsupportedShardDistribution(Query *query)
 			nonReferenceRelations = lappend_oid(nonReferenceRelations,
 												relationId);
 		}
-		else if (IsCitusTableType(relationId, HASH_DISTRIBUTED))
+		else if (IsCitusTableType(relationId, HASH_DISTRIBUTED) ||
+				 IsCitusTableType(relationId, SINGLE_SHARD_DISTRIBUTED))
 		{
-			hashDistributedRelationCount++;
+			hashDistOrSingleShardRelCount++;
 			nonReferenceRelations = lappend_oid(nonReferenceRelations,
 												relationId);
 		}
@@ -2388,7 +2379,7 @@ ErrorIfUnsupportedShardDistribution(Query *query)
 		}
 	}
 
-	if ((rangeDistributedRelationCount > 0) && (hashDistributedRelationCount > 0))
+	if ((rangeDistributedRelationCount > 0) && (hashDistOrSingleShardRelCount > 0))
 	{
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 						errmsg("cannot push down this subquery"),
@@ -2402,7 +2393,7 @@ ErrorIfUnsupportedShardDistribution(Query *query)
 						errdetail("A query including both range and append "
 								  "partitioned relations are unsupported")));
 	}
-	else if ((appendDistributedRelationCount > 0) && (hashDistributedRelationCount > 0))
+	else if ((appendDistributedRelationCount > 0) && (hashDistOrSingleShardRelCount > 0))
 	{
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 						errmsg("cannot push down this subquery"),
@@ -2431,8 +2422,9 @@ ErrorIfUnsupportedShardDistribution(Query *query)
 		{
 			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 							errmsg("cannot push down this subquery"),
-							errdetail("Shards of relations in subquery need to "
-									  "have 1-to-1 shard partitioning")));
+							errdetail("%s and %s are not colocated",
+									  get_rel_name(firstTableRelationId),
+									  get_rel_name(currentRelationId))));
 		}
 	}
 }
@@ -2487,7 +2479,7 @@ QueryPushdownTaskCreate(Query *originalQuery, int shardIndex,
 			/* non-distributed tables have only one shard */
 			shardInterval = cacheEntry->sortedShardIntervalArray[0];
 
-			/* only use reference table as anchor shard if none exists yet */
+			/* use as anchor shard only if we couldn't find any yet */
 			if (anchorShardId == INVALID_SHARD_ID)
 			{
 				anchorShardId = shardInterval->shardId;
@@ -2683,6 +2675,18 @@ SqlTaskList(Job *job)
 	List *fragmentCombinationList = FragmentCombinationList(rangeTableFragmentsList,
 															jobQuery, dependentJobList);
 
+	/*
+	 * Adjust RelabelType and CoerceViaIO nodes that are improper for deparsing.
+	 * We first check if there are any such nodes by using a query tree walker.
+	 * The reason is that a query tree mutator will create a deep copy of all
+	 * the query sublinks, and we don't want to do that unless necessary, as it
+	 * would be inefficient.
+	 */
+	if (QueryTreeHasImproperForDeparseNodes((Node *) jobQuery, NULL))
+	{
+		jobQuery = (Query *) AdjustImproperForDeparseNodes((Node *) jobQuery, NULL);
+	}
+
 	ListCell *fragmentCombinationCell = NULL;
 	foreach(fragmentCombinationCell, fragmentCombinationList)
 	{
@@ -2733,7 +2737,7 @@ SqlTaskList(Job *job)
  * RelabelTypeToCollateExpr converts RelabelType's into CollationExpr's.
  * With that, we will be able to pushdown COLLATE's.
  */
-CollateExpr *
+static CollateExpr *
 RelabelTypeToCollateExpr(RelabelType *relabelType)
 {
 	Assert(OidIsValid(relabelType->resultcollid));
@@ -2793,15 +2797,15 @@ AnchorRangeTableId(List *rangeTableList)
 	 * have the most number of shards, we have a draw.
 	 */
 	List *baseTableIdList = BaseRangeTableIdList(rangeTableList);
-	List *anchorTableIdList = AnchorRangeTableIdList(rangeTableList, baseTableIdList);
+	List *anchorTableRTIList = AnchorRangeTableIdList(rangeTableList, baseTableIdList);
 	ListCell *anchorTableIdCell = NULL;
 
-	int anchorTableIdCount = list_length(anchorTableIdList);
+	int anchorTableIdCount = list_length(anchorTableRTIList);
 	Assert(anchorTableIdCount > 0);
 
 	if (anchorTableIdCount == 1)
 	{
-		anchorRangeTableId = (uint32) linitial_int(anchorTableIdList);
+		anchorRangeTableId = (uint32) linitial_int(anchorTableRTIList);
 		return anchorRangeTableId;
 	}
 
@@ -2809,7 +2813,7 @@ AnchorRangeTableId(List *rangeTableList)
 	 * If more than one table has the most number of shards, we break the draw
 	 * by comparing table sizes and picking the table with the largest size.
 	 */
-	foreach(anchorTableIdCell, anchorTableIdList)
+	foreach(anchorTableIdCell, anchorTableRTIList)
 	{
 		uint32 anchorTableId = (uint32) lfirst_int(anchorTableIdCell);
 		RangeTblEntry *tableEntry = rt_fetch(anchorTableId, rangeTableList);
@@ -2837,7 +2841,7 @@ AnchorRangeTableId(List *rangeTableList)
 	if (anchorRangeTableId == 0)
 	{
 		/* all tables have the same shard count and size 0, pick the first */
-		anchorRangeTableId = (uint32) linitial_int(anchorTableIdList);
+		anchorRangeTableId = (uint32) linitial_int(anchorTableRTIList);
 	}
 
 	return anchorRangeTableId;
@@ -2878,7 +2882,7 @@ BaseRangeTableIdList(List *rangeTableList)
 static List *
 AnchorRangeTableIdList(List *rangeTableList, List *baseRangeTableIdList)
 {
-	List *anchorTableIdList = NIL;
+	List *anchorTableRTIList = NIL;
 	uint32 maxShardCount = 0;
 	ListCell *baseRangeTableIdCell = NULL;
 
@@ -2888,25 +2892,46 @@ AnchorRangeTableIdList(List *rangeTableList, List *baseRangeTableIdList)
 		return baseRangeTableIdList;
 	}
 
+	uint32 referenceTableRTI = 0;
+
 	foreach(baseRangeTableIdCell, baseRangeTableIdList)
 	{
 		uint32 baseRangeTableId = (uint32) lfirst_int(baseRangeTableIdCell);
 		RangeTblEntry *tableEntry = rt_fetch(baseRangeTableId, rangeTableList);
-		List *shardList = LoadShardList(tableEntry->relid);
+
+		Oid citusTableId = tableEntry->relid;
+		if (IsCitusTableType(citusTableId, REFERENCE_TABLE))
+		{
+			referenceTableRTI = baseRangeTableId;
+			continue;
+		}
+
+		List *shardList = LoadShardList(citusTableId);
 
 		uint32 shardCount = (uint32) list_length(shardList);
 		if (shardCount > maxShardCount)
 		{
-			anchorTableIdList = list_make1_int(baseRangeTableId);
+			anchorTableRTIList = list_make1_int(baseRangeTableId);
 			maxShardCount = shardCount;
 		}
 		else if (shardCount == maxShardCount)
 		{
-			anchorTableIdList = lappend_int(anchorTableIdList, baseRangeTableId);
+			anchorTableRTIList = lappend_int(anchorTableRTIList, baseRangeTableId);
 		}
 	}
 
-	return anchorTableIdList;
+	/*
+	 * We favor distributed tables over reference tables as anchor tables. But
+	 * in case we cannot find any distributed tables, we let reference table to be
+	 * anchor table. For now, we cannot see a query that might require this, but we
+	 * want to be backward compatiable.
+	 */
+	if (list_length(anchorTableRTIList) == 0)
+	{
+		return referenceTableRTI > 0 ? list_make1_int(referenceTableRTI) : NIL;
+	}
+
+	return anchorTableRTIList;
 }
 
 
@@ -5592,4 +5617,127 @@ TaskListHighestTaskId(List *taskList)
 	}
 
 	return highestTaskId;
+}
+
+
+/*
+ * QueryTreeHasImproperForDeparseNodes walks over the node,
+ * and returns true if there are RelabelType or
+ * CoerceViaIONodes which are improper for deparse
+ */
+static bool
+QueryTreeHasImproperForDeparseNodes(Node *inputNode, void *context)
+{
+	if (inputNode == NULL)
+	{
+		return false;
+	}
+	else if (IsImproperForDeparseRelabelTypeNode(inputNode) ||
+			 IsImproperForDeparseCoerceViaIONode(inputNode))
+	{
+		return true;
+	}
+	else if (IsA(inputNode, Query))
+	{
+		return query_tree_walker((Query *) inputNode,
+								 QueryTreeHasImproperForDeparseNodes,
+								 NULL, 0);
+	}
+
+	return expression_tree_walker(inputNode,
+								  QueryTreeHasImproperForDeparseNodes,
+								  NULL);
+}
+
+
+/*
+ * AdjustImproperForDeparseNodes takes an input rewritten query and modifies
+ * nodes which, after going through our planner, pose a problem when
+ * deparsing. So far we have two such type of Nodes that may pose problems:
+ * RelabelType and CoerceIO nodes.
+ * Details will be written in comments in the corresponding if conditions.
+ */
+static Node *
+AdjustImproperForDeparseNodes(Node *inputNode, void *context)
+{
+	if (inputNode == NULL)
+	{
+		return NULL;
+	}
+
+	if (IsImproperForDeparseRelabelTypeNode(inputNode))
+	{
+		/*
+		 * The planner converts CollateExpr to RelabelType
+		 * and here we convert back.
+		 */
+		return (Node *) RelabelTypeToCollateExpr((RelabelType *) inputNode);
+	}
+	else if (IsImproperForDeparseCoerceViaIONode(inputNode))
+	{
+		/*
+		 * The planner converts some ::text/::varchar casts to ::cstring
+		 * and here we convert back to text because cstring is a pseudotype
+		 * and it cannot be casted to most resulttypes
+		 */
+
+		CoerceViaIO *iocoerce = (CoerceViaIO *) inputNode;
+		Node *arg = (Node *) iocoerce->arg;
+		Const *cstringToText = (Const *) arg;
+
+		cstringToText->consttype = TEXTOID;
+		cstringToText->constlen = -1;
+
+		Type textType = typeidType(TEXTOID);
+		char *constvalue = NULL;
+
+		if (!cstringToText->constisnull)
+		{
+			constvalue = DatumGetCString(cstringToText->constvalue);
+		}
+
+		cstringToText->constvalue = stringTypeDatum(textType,
+													constvalue,
+													cstringToText->consttypmod);
+		ReleaseSysCache(textType);
+		return inputNode;
+	}
+	else if (IsA(inputNode, Query))
+	{
+		return (Node *) query_tree_mutator((Query *) inputNode,
+										   AdjustImproperForDeparseNodes,
+										   NULL, QTW_DONT_COPY_QUERY);
+	}
+
+	return expression_tree_mutator(inputNode, AdjustImproperForDeparseNodes, NULL);
+}
+
+
+/*
+ * Checks if the given node is of Relabel type which is improper for deparsing
+ * The planner converts some CollateExpr to RelabelType nodes, and we need
+ * to find these nodes. They would be improperly deparsed without the
+ * "COLLATE" expression.
+ */
+static bool
+IsImproperForDeparseRelabelTypeNode(Node *inputNode)
+{
+	return (IsA(inputNode, RelabelType) &&
+			OidIsValid(((RelabelType *) inputNode)->resultcollid) &&
+			((RelabelType *) inputNode)->resultcollid != DEFAULT_COLLATION_OID);
+}
+
+
+/*
+ * Checks if the given node is of CoerceViaIO type which is improper for deparsing
+ * The planner converts some ::text/::varchar casts to ::cstring, and we need
+ * to find these nodes. They would be improperly deparsed with "cstring" which cannot
+ * be casted to most resulttypes.
+ */
+static bool
+IsImproperForDeparseCoerceViaIONode(Node *inputNode)
+{
+	return (IsA(inputNode, CoerceViaIO) &&
+			IsA(((CoerceViaIO *) inputNode)->arg, Const) &&
+			((Const *) ((CoerceViaIO *) inputNode)->arg)->consttype == CSTRINGOID);
 }

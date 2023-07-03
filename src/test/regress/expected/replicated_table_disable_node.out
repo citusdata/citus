@@ -38,7 +38,7 @@ SELECT count(*) FROM pg_dist_placement p JOIN pg_dist_node n USING(groupid)
 		  AND p.shardid IN (101500, 101501, 101502);
  count
 ---------------------------------------------------------------------
-     3
+     4
 (1 row)
 
 \c - - - :worker_1_port
@@ -47,7 +47,7 @@ SELECT count(*) FROM pg_dist_placement p JOIN pg_dist_node n USING(groupid)
 		  AND p.shardid IN (101500, 101501, 101502);
  count
 ---------------------------------------------------------------------
-     3
+     4
 (1 row)
 
 SET search_path TO disable_node_with_replicated_tables;

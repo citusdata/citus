@@ -31,12 +31,7 @@
 typedef enum CitusCopyDest
 {
 	COPY_FILE,                  /* to/from file (or a piped program) */
-#if PG_VERSION_NUM >= PG_VERSION_14
 	COPY_FRONTEND,              /* to frontend */
-#else
-	COPY_OLD_FE,                /* to/from frontend (2.0 protocol) */
-	COPY_NEW_FE,                /* to/from frontend (3.0 protocol) */
-#endif
 	COPY_CALLBACK               /* to/from callback function */
 } CitusCopyDest;
 
@@ -152,6 +147,12 @@ typedef struct CitusCopyDestReceiver
 	 * upfront.
 	 */
 	uint64 appendShardId;
+
+	/*
+	 * When copying to intermediate files, we can skip coercions and run them
+	 * when merging into the target tables.
+	 */
+	bool skipCoercions;
 } CitusCopyDestReceiver;
 
 

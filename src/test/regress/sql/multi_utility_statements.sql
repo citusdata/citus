@@ -137,6 +137,30 @@ FETCH FORWARD 3 FROM holdCursor;
 
 CLOSE holdCursor;
 
+-- Test DECLARE CURSOR .. WITH HOLD inside transaction block
+BEGIN;
+DECLARE holdCursor CURSOR WITH HOLD FOR
+		SELECT * FROM cursor_me WHERE x = 1 ORDER BY y;
+FETCH 3 FROM holdCursor;
+FETCH BACKWARD 3 FROM holdCursor;
+FETCH FORWARD 3 FROM holdCursor;
+COMMIT;
+
+FETCH 3 FROM holdCursor;
+CLOSE holdCursor;
+
+-- Test DECLARE NO SCROLL CURSOR .. WITH HOLD inside transaction block
+BEGIN;
+DECLARE holdCursor NO SCROLL CURSOR WITH HOLD FOR
+		SELECT * FROM cursor_me WHERE x = 1 ORDER BY y;
+FETCH 3 FROM holdCursor;
+FETCH FORWARD 3 FROM holdCursor;
+COMMIT;
+
+FETCH 3 FROM holdCursor;
+FETCH BACKWARD 3 FROM holdCursor;
+CLOSE holdCursor;
+
 -- Test DECLARE CURSOR .. WITH HOLD with parameter
 CREATE OR REPLACE FUNCTION declares_cursor(p int)
 RETURNS void AS $$
