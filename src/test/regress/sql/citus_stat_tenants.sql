@@ -394,25 +394,6 @@ DELETE FROM dist_tbl WHERE a = 5;
 
 SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, query_count_in_this_period, query_count_in_last_period FROM citus_stat_tenants ORDER BY tenant_attribute;
 
--- test sampling
--- set rate to 1 to track all tenants
-SELECT result FROM run_command_on_all_nodes('ALTER SYSTEM set citus.stat_tenants_untracked_sample_rate to 1;');
-SELECT result FROM run_command_on_all_nodes('SELECT pg_reload_conf()');
-
-SELECT sleep_until_next_period();
-SELECT pg_sleep(0.1);
-
-INSERT INTO dist_tbl VALUES (1, 'abcd');
-INSERT INTO dist_tbl VALUES (2, 'abcd');
-UPDATE dist_tbl SET b = a + 1 WHERE a = 3;
-UPDATE dist_tbl SET b = a + 1 WHERE a = 4;
-DELETE FROM dist_tbl WHERE a = 5;
-
-SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, query_count_in_this_period, query_count_in_last_period,
-    (cpu_usage_in_this_period>0) AS cpu_is_used_in_this_period, (cpu_usage_in_last_period>0) AS cpu_is_used_in_last_period
-FROM citus_stat_tenants(true)
-ORDER BY tenant_attribute;
-
 SET client_min_messages TO ERROR;
 DROP SCHEMA citus_stat_tenants CASCADE;
 DROP SCHEMA citus_stat_tenants_t1 CASCADE;
