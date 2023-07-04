@@ -120,7 +120,8 @@ static void SetInterShardDDLTaskRelationShardList(Task *task,
 static Oid get_attrdef_oid(Oid relationId, AttrNumber attnum);
 
 static char * GetAddColumnWithNextvalDefaultCmd(Oid sequenceOid, Oid relationId,
-												char *colname, TypeName *typeName);
+												char *colname, TypeName *typeName,
+												bool ifNotExists);
 static void ErrorIfAlterTableDropTableNameFromPostgresFdw(List *optionList, Oid
 														  relationId);
 
@@ -2650,7 +2651,9 @@ PostprocessAlterTableStmt(AlterTableStmt *alterTableStatement)
 																		  columnDefinition
 																		  ->colname,
 																		  columnDefinition
-																		  ->typeName);
+																		  ->typeName,
+																		  command->
+																		  missing_ok);
 								}
 							}
 						}
@@ -2915,7 +2918,7 @@ GetAlterColumnWithNextvalDefaultCmd(Oid sequenceOid, Oid relationId, char *colna
  */
 static char *
 GetAddColumnWithNextvalDefaultCmd(Oid sequenceOid, Oid relationId, char *colname,
-								  TypeName *typeName)
+								  TypeName *typeName, bool ifNotExists)
 {
 	char *qualifiedSequenceName = generate_qualified_relation_name(sequenceOid);
 	char *qualifiedRelationName = generate_qualified_relation_name(relationId);
@@ -2940,8 +2943,9 @@ GetAddColumnWithNextvalDefaultCmd(Oid sequenceOid, Oid relationId, char *colname
 	StringInfoData str = { 0 };
 	initStringInfo(&str);
 	appendStringInfo(&str,
-					 "ALTER TABLE %s ADD COLUMN %s %s "
-					 "DEFAULT %s(%s::regclass)", qualifiedRelationName, colname,
+					 "ALTER TABLE %s ADD COLUMN %s %s %s "
+					 "DEFAULT %s(%s::regclass)", qualifiedRelationName,
+					 ifNotExists ? "IF NOT EXISTS" : "", colname,
 					 format_type_extended(typeOid, typmod, formatFlags),
 					 quote_qualified_identifier("pg_catalog", nextvalFunctionName),
 					 quote_literal_cstr(qualifiedSequenceName));

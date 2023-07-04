@@ -475,6 +475,11 @@ AppendAlterTableCmdAddColumn(StringInfo buf, AlterTableCmd *alterTableCmd)
 
 	appendStringInfoString(buf, " ADD COLUMN ");
 
+	if (alterTableCmd->missing_ok)
+	{
+		appendStringInfoString(buf, "IF NOT EXISTS ");
+	}
+
 	ColumnDef *columnDefinition = (ColumnDef *) alterTableCmd->def;
 
 	/*
