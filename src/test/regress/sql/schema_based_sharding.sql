@@ -33,6 +33,7 @@ SELECT COUNT(*)=0 FROM pg_dist_schema WHERE schemaid::regnamespace::text = 'regu
 
 -- empty tenant
 CREATE SCHEMA "tenant\'_1";
+CREATE SCHEMA IF NOT EXISTS "tenant\'_1";
 
 -- non-empty tenant
 CREATE SCHEMA "tenant\'_2";
