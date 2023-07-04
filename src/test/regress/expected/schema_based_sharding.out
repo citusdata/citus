@@ -50,6 +50,8 @@ SELECT COUNT(*)=0 FROM pg_dist_schema WHERE schemaid::regnamespace::text = 'regu
 
 -- empty tenant
 CREATE SCHEMA "tenant\'_1";
+CREATE SCHEMA IF NOT EXISTS "tenant\'_1";
+NOTICE:  schema "tenant\'_1" already exists, skipping
 -- non-empty tenant
 CREATE SCHEMA "tenant\'_2";
 CREATE TABLE "tenant\'_2".test_table(a int, b text);
