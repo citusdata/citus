@@ -11,6 +11,7 @@
  */
 #include "postgres.h"
 
+#include "commands/defrem.h"
 #include "distributed/commands.h"
 #include "distributed/deparser.h"
 #include "distributed/version_compat.h"
@@ -204,6 +205,23 @@ AppendAlterTableCmdConstraint(StringInfo buf, Constraint *constraint,
 			appendStringInfoString(buf, " INCLUDE ");
 
 			AppendColumnNameList(buf, constraint->including);
+		}
+
+		if (constraint->options != NIL)
+		{
+			appendStringInfoString(buf, " WITH(");
+
+			ListCell *defListCell;
+			foreach(defListCell, constraint->options)
+			{
+				DefElem *def = (DefElem *) lfirst(defListCell);
+
+				bool first = (defListCell == list_head(constraint->options));
+				appendStringInfo(buf, "%s%s=%s", first ? "" : ",",
+								 def->defname, defGetString(def));
+			}
+
+			appendStringInfoChar(buf, ')');
 		}
 	}
 	else if (constraint->contype == CONSTR_EXCLUSION)
