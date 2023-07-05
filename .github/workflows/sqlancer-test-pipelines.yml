@@ -41,8 +41,8 @@ jobs:
       - name: Checkout Sqlancer
         uses: actions/checkout@v3
         with:
-          ref: v2.0.0
-          repository: sqlancer/sqlancer
+          ref: gokhangulbiz/citus_v12_support
+          repository: gokhangulbiz/sqlancer
 
       - name: Build SQLancer
         run: mvn -B package -DskipTests=true
