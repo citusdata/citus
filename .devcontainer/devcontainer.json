@@ -9,6 +9,7 @@
     "extensions": [
         "ms-vscode.cpptools",
         "ms-vsliveshare.vsliveshare",
+        "github.vscode-pull-request-github",
     ],
     "mounts": [
         "type=volume,target=/data",
