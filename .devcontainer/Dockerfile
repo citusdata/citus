@@ -52,11 +52,9 @@ USER citus
 
 # build postgres versions separately for effective parrallelism and caching of already built versions when changing only certain versions
 FROM base AS pg12
-RUN pgenv build 12.10
+RUN pgenv build 12.15
 RUN rm .pgenv/src/*.tar*
-# TODO remove excessive artifacts for smaller images
-RUN find .pgenv/src/ -name "*.o" | xargs rm
-#RUN #make -C .pgenv/src/postgresql-*/ clean
+RUN make -C .pgenv/src/postgresql-*/ clean
 
 # create a staging directory with all files we want to copy from our pgenv build
 # we will copy the contents of the staged folder into the final image at once
@@ -65,11 +63,9 @@ RUN cp -r .pgenv/src .pgenv/pgsql-* .pgenv/config .pgenv-staging/
 RUN rm .pgenv-staging/config/default.conf
 
 FROM base AS pg13
-RUN pgenv build 13.6
+RUN pgenv build 13.11
 RUN rm .pgenv/src/*.tar*
-# TODO remove excessive artifacts for smaller images
-RUN find .pgenv/src/ -name "*.o" | xargs rm
-#RUN make -C .pgenv/src/postgresql-*/ clean
+RUN make -C .pgenv/src/postgresql-*/ clean
 
 # create a staging directory with all files we want to copy from our pgenv build
 # we will copy the contents of the staged folder into the final image at once
@@ -78,11 +74,31 @@ RUN cp -r .pgenv/src .pgenv/pgsql-* .pgenv/config .pgenv-staging/
 RUN rm .pgenv-staging/config/default.conf
 
 FROM base AS pg14
-RUN pgenv build 14.2
+RUN pgenv build 14.8
 RUN rm .pgenv/src/*.tar*
-RUN find .pgenv/src/ -name "*.o" | xargs rm
-# TODO remove excessive artifacts for smaller images
-#RUN make -C .pgenv/src/postgresql-*/ clean
+RUN make -C .pgenv/src/postgresql-*/ clean
+
+# create a staging directory with all files we want to copy from our pgenv build
+# we will copy the contents of the staged folder into the final image at once
+RUN mkdir .pgenv-staging/
+RUN cp -r .pgenv/src .pgenv/pgsql-* .pgenv/config .pgenv-staging/
+RUN rm .pgenv-staging/config/default.conf
+
+FROM base AS pg15
+RUN pgenv build 15.3
+RUN rm .pgenv/src/*.tar*
+RUN make -C .pgenv/src/postgresql-*/ clean
+
+# create a staging directory with all files we want to copy from our pgenv build
+# we will copy the contents of the staged folder into the final image at once
+RUN mkdir .pgenv-staging/
+RUN cp -r .pgenv/src .pgenv/pgsql-* .pgenv/config .pgenv-staging/
+RUN rm .pgenv-staging/config/default.conf
+
+FROM base AS pg16
+RUN pgenv build 16beta2
+RUN rm .pgenv/src/*.tar*
+RUN make -C .pgenv/src/postgresql-*/ clean
 
 # create a staging directory with all files we want to copy from our pgenv build
 # we will copy the contents of the staged folder into the final image at once
@@ -112,7 +128,7 @@ RUN yes | sudo unminimize
 # install developer productivity tools
 RUN sudo apt update \
  && sudo apt install -y \
-    autoconf \
+    autoconf2.69 \
     bash-completion \
     gdb \
     htop \
@@ -120,12 +136,6 @@ RUN sudo apt update \
     pspg \
     vim \
  && sudo apt clean
-
-COPY --from=pg12 /home/citus/.pgenv-staging/ /home/citus/.pgenv/
-COPY --from=pg13 /home/citus/.pgenv-staging/ /home/citus/.pgenv/
-COPY --from=pg14 /home/citus/.pgenv-staging/ /home/citus/.pgenv/
-
-COPY --from=uncrustify-builder /uncrustify/usr/ /usr/
 
 # add some common tools to the final container
 # bin directory for user tools
@@ -144,6 +154,14 @@ RUN git clone https://github.com/so-fancy/diff-so-fancy.git \
  && git config --global core.pager "diff-so-fancy | less --tabs=4 -RFX" \
  && git config --global interactive.diffFilter "diff-so-fancy --patch"
 
+COPY --from=uncrustify-builder /uncrustify/usr/ /usr/
+
+COPY --from=pg12 /home/citus/.pgenv-staging/ /home/citus/.pgenv/
+COPY --from=pg13 /home/citus/.pgenv-staging/ /home/citus/.pgenv/
+COPY --from=pg14 /home/citus/.pgenv-staging/ /home/citus/.pgenv/
+COPY --from=pg15 /home/citus/.pgenv-staging/ /home/citus/.pgenv/
+COPY --from=pg16 /home/citus/.pgenv-staging/ /home/citus/.pgenv/
+
 # place to run your cluster with citus_dev
 VOLUME /data
 RUN sudo mkdir /data \
@@ -152,4 +170,4 @@ RUN sudo mkdir /data \
 COPY --chown=citus:citus .psqlrc .
 
 # sets default pg version
-RUN pgenv switch latest 14
+RUN pgenv switch latest 15

@@ -1,16 +1,55 @@
 {
-  "configurations": [
-    {
-      "name": "Citus Development Configuration",
-      "includePath": [
-        "/usr/local/include",
-        "${workspaceFolder}/**",
-        "/home/citus/.pgenv/src/postgresql-14.2/src/",
-        "/home/citus/.pgenv/src/postgresql-14.2/src/include/",
-        "/home/citus/.pgenv/src/postgresql-14.2/src/interfaces/libpq/",
-        "${workspaceFolder}/src/include/",
-      ]
-    }
-  ],
-  "version": 4
+    "configurations": [
+        {
+            "name": "Citus Development Configuration - Postgres 15.3",
+            "includePath": [
+                "/usr/local/include",
+                "/home/citus/.pgenv/src/postgresql-15.3/src/**",
+                "${workspaceFolder}/**",
+                "${workspaceFolder}/src/include/",
+            ],
+            "configurationProvider": "ms-vscode.makefile-tools"
+        },
+        {
+            "name": "Citus Development Configuration - Postgres 14.8",
+            "includePath": [
+                "/usr/local/include",
+                "/home/citus/.pgenv/src/postgresql-14.8/src/**",
+                "${workspaceFolder}/**",
+                "${workspaceFolder}/src/include/",
+            ],
+            "configurationProvider": "ms-vscode.makefile-tools"
+        },
+        {
+            "name": "Citus Development Configuration - Postgres 13.11",
+            "includePath": [
+                "/usr/local/include",
+                "/home/citus/.pgenv/src/postgresql-13.11/src/**",
+                "${workspaceFolder}/**",
+                "${workspaceFolder}/src/include/",
+            ],
+            "configurationProvider": "ms-vscode.makefile-tools"
+        },
+        {
+            "name": "Citus Development Configuration - Postgres 12.15",
+            "includePath": [
+                "/usr/local/include",
+                "/home/citus/.pgenv/src/postgresql-12.15/src/**",
+                "${workspaceFolder}/**",
+                "${workspaceFolder}/src/include/",
+            ],
+            "configurationProvider": "ms-vscode.makefile-tools"
+        },
+        {
+            "name": "Citus Development Configuration - Postgres 16beta2",
+            "includePath": [
+                "/usr/local/include",
+                "/home/citus/.pgenv/src/postgresql-16beta2/src/**",
+                "${workspaceFolder}/**",
+                "${workspaceFolder}/src/include/",
+            ],
+            "configurationProvider": "ms-vscode.makefile-tools"
+        },
+    ],
+    "version": 4
 }

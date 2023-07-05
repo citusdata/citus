@@ -1,5 +1,5 @@
 
-init: ../.vscode/c_cpp_properties.json ../.vscode/launch.json
+init: ../.vscode/c_cpp_properties.json ../.vscode/launch.json ../.vscode/settings.json
 
 ../.vscode:
 	mkdir ../.vscode
@@ -9,3 +9,6 @@ init: ../.vscode/c_cpp_properties.json ../.vscode/launch.json
 
 ../.vscode/c_cpp_properties.json: ../.vscode
 	cp .vscode/c_cpp_properties.json ../.vscode/c_cpp_properties.json
+
+../.vscode/settings.json: ../.vscode
+	cp .vscode/settings.json ../.vscode/settings.json
