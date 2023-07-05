@@ -51,28 +51,6 @@ ENV PATH="/home/citus/.pgenv/pgsql/bin:${PATH}"
 USER citus
 
 # build postgres versions separately for effective parrallelism and caching of already built versions when changing only certain versions
-FROM base AS pg12
-RUN pgenv build 12.15
-RUN rm .pgenv/src/*.tar*
-RUN make -C .pgenv/src/postgresql-*/ clean
-
-# create a staging directory with all files we want to copy from our pgenv build
-# we will copy the contents of the staged folder into the final image at once
-RUN mkdir .pgenv-staging/
-RUN cp -r .pgenv/src .pgenv/pgsql-* .pgenv/config .pgenv-staging/
-RUN rm .pgenv-staging/config/default.conf
-
-FROM base AS pg13
-RUN pgenv build 13.11
-RUN rm .pgenv/src/*.tar*
-RUN make -C .pgenv/src/postgresql-*/ clean
-
-# create a staging directory with all files we want to copy from our pgenv build
-# we will copy the contents of the staged folder into the final image at once
-RUN mkdir .pgenv-staging/
-RUN cp -r .pgenv/src .pgenv/pgsql-* .pgenv/config .pgenv-staging/
-RUN rm .pgenv-staging/config/default.conf
-
 FROM base AS pg14
 RUN pgenv build 14.8
 RUN rm .pgenv/src/*.tar*
@@ -156,11 +134,9 @@ RUN git clone https://github.com/so-fancy/diff-so-fancy.git \
 
 COPY --from=uncrustify-builder /uncrustify/usr/ /usr/
 
-COPY --from=pg12 /home/citus/.pgenv-staging/ /home/citus/.pgenv/
-COPY --from=pg13 /home/citus/.pgenv-staging/ /home/citus/.pgenv/
 COPY --from=pg14 /home/citus/.pgenv-staging/ /home/citus/.pgenv/
 COPY --from=pg15 /home/citus/.pgenv-staging/ /home/citus/.pgenv/
-COPY --from=pg16 /home/citus/.pgenv-staging/ /home/citus/.pgenv/
+# COPY --from=pg16 /home/citus/.pgenv-staging/ /home/citus/.pgenv/
 
 # place to run your cluster with citus_dev
 VOLUME /data
