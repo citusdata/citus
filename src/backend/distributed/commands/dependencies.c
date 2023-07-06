@@ -45,23 +45,38 @@ static char * DropTableIfExistsCommand(Oid relationId);
  * Memory context and hash map for the distributed objects created in the current
  * transaction.
  */
+
+/*
+ * Memory context and data structure for storing distributed objects created in the
+ * current transaction. We push stack for each subtransaction. We store hashmap of
+ * distributed objects created in the subtransaction in each stack.
+ */
 static MemoryContext TxDistObjectsContext = NULL;
-static HTAB *TxDistObjectsHash = NULL;
+static List *TxDistObjects = NIL;
 
 
 /*
- * InitTxDistObjectContextAndHash allocates memory context and hash map to track
- * distributed objects created in the current transaction.
+ * InitDistObjectContext allocates memory context to track distributed objects
+ * created in the current transaction.
  */
 void
-InitTxDistObjectContextAndHash(void)
+InitDistObjectContext(void)
 {
 	TxDistObjectsContext = AllocSetContextCreateInternal(TopMemoryContext,
 														 "Tx Dist Object Context",
 														 ALLOCSET_DEFAULT_MINSIZE,
 														 ALLOCSET_DEFAULT_INITSIZE,
 														 ALLOCSET_DEFAULT_MAXSIZE);
+}
 
+
+/*
+ * PushDistObjectHash pushes a new hashmap to track distributed objects
+ * created in the current subtransaction.
+ */
+void
+PushDistObjectHash(void)
+{
 	HASHCTL info;
 	memset(&info, 0, sizeof(info));
 	info.keysize = sizeof(ObjectAddress);
@@ -70,51 +85,77 @@ InitTxDistObjectContextAndHash(void)
 	info.hcxt = TxDistObjectsContext;
 	uint32 hashFlags = (HASH_ELEM | HASH_BLOBS | HASH_CONTEXT);
 
-	TxDistObjectsHash = hash_create("citus tx dist objects hash",
-									8, &info, hashFlags);
+	HTAB *distObjectsHash = hash_create("citus tx dist objects hash",
+										8, &info, hashFlags);
+
+	MemoryContext oldContext = MemoryContextSwitchTo(TxDistObjectsContext);
+	TxDistObjects = lappend(TxDistObjects, distObjectsHash);
+	MemoryContextSwitchTo(oldContext);
 }
 
 
 /*
- * AddToTxDistObjects adds given object into the distributed objects created in
- * the current transaction.
+ * PushDistObjectHash removes the hashmap to track distributed objects
+ * created in the current subtransaction.
  */
 void
-AddToTxDistObjects(const ObjectAddress *objectAddress)
+PopDistObjectHash(void)
 {
-	hash_search(TxDistObjectsHash, objectAddress, HASH_ENTER, NULL);
+	TxDistObjects = list_delete_last(TxDistObjects);
 }
 
 
 /*
- * ResetTxDistObjects resets hash map of the distributed objects created in the current
- * transaction.
+ * AddToCurrentDistObjects adds given object into the distributed objects created in
+ * the current subtransaction.
  */
 void
-ResetTxDistObjects(void)
+AddToCurrentDistObjects(const ObjectAddress *objectAddress)
 {
-	hash_delete_all(TxDistObjectsHash);
+	Assert(list_length(TxDistObjects) > 0);
+	HTAB *currentTxdistHash = (HTAB *) llast(TxDistObjects);
+	hash_search(currentTxdistHash, objectAddress, HASH_ENTER, NULL);
 }
 
 
 /*
- * HasDependencyToTxDistObject decides if given objects depends on any distributed
+ * ResetDistObjects resets all distributed objects created in the current transaction.
+ */
+void
+ResetDistObjects(void)
+{
+	HTAB *currentDistObjectHash = NULL;
+	foreach_ptr(currentDistObjectHash, TxDistObjects)
+	{
+		hash_destroy(currentDistObjectHash);
+	}
+	list_free(TxDistObjects);
+	TxDistObjects = NIL;
+}
+
+
+/*
+ * HasDependencyToDistObject decides if given objects depends on any distributed
  * object created  in the current transaction.
  */
 bool
-HasDependencyToTxDistObject(const ObjectAddress *objectAddress)
+HasDependencyToDistObject(const ObjectAddress *objectAddress)
 {
-	Assert(TxDistObjectsHash != NULL);
+	Assert(TxDistObjects != NIL);
 	List *dependencyList = GetAllSupportedDependenciesForObject(objectAddress);
 
 	ObjectAddress *dependency = NULL;
 	foreach_ptr(dependency, dependencyList)
 	{
-		bool found = false;
-		hash_search(TxDistObjectsHash, dependency, HASH_FIND, &found);
-		if (found)
+		HTAB *distObjectsHash = NULL;
+		foreach_ptr(distObjectsHash, TxDistObjects)
 		{
-			return true;
+			bool found = false;
+			hash_search(distObjectsHash, dependency, HASH_FIND, &found);
+			if (found)
+			{
+				return true;
+			}
 		}
 	}
 
@@ -201,7 +242,7 @@ EnsureDependenciesExistOnAllNodes(const ObjectAddress *target)
 	 * then, we should propagate target's all dependencies by using metadata connection
 	 * to ensure objects' visibility. Otherwise, it is safe to use outside connection.
 	 */
-	bool shouldUseMetadataConnection = HasDependencyToTxDistObject(target);
+	bool shouldUseMetadataConnection = HasDependencyToDistObject(target);
 	if (shouldUseMetadataConnection)
 	{
 		SendCommandListToWorkersWithMetadataViaSuperUser(ddlCommands);

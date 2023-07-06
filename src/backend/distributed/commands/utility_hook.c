@@ -326,6 +326,12 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		return;
 	}
 
+	/* push hash map to track distributed objects created in the current transaction */
+	if (UtilityHookLevel == 0)
+	{
+		PushDistObjectHash();
+	}
+
 	UtilityHookLevel++;
 
 	PG_TRY();
@@ -938,7 +944,7 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 			foreach_ptr(address, addresses)
 			{
 				MarkObjectDistributed(address);
-				AddToTxDistObjects(address);
+				AddToCurrentDistObjects(address);
 			}
 		}
 	}
