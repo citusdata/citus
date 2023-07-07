@@ -136,16 +136,16 @@ SendCommandToWorkersWithMetadataViaSuperUser(const char *command)
 
 
 /*
- * SendCommandListToWorkersWithMetadataViaSuperUser sends given commands to all workers
- * via superuser. See `SendCommandToWorkersWithMetadataViaSuperUser`for details.
+ * SendCommandListToWorkersWithMetadata sends all commands to all metadata workers
+ * with the current user. See `SendCommandToWorkersWithMetadata`for details.
  */
 void
-SendCommandListToWorkersWithMetadataViaSuperUser(List *commands)
+SendCommandListToWorkersWithMetadata(List *commands)
 {
 	char *command = NULL;
 	foreach_ptr(command, commands)
 	{
-		SendCommandToWorkersWithMetadataViaSuperUser(command);
+		SendCommandToWorkersWithMetadata(command);
 	}
 }
 

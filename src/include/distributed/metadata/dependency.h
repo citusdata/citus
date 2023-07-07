@@ -43,6 +43,8 @@ extern void PushDistObjectHash(void);
 extern void PopDistObjectHash(void);
 extern void AddToCurrentDistObjects(const ObjectAddress *objectAddress);
 extern void ResetDistObjects(void);
-extern bool HasDependencyToDistObject(const ObjectAddress *objectAddress);
+extern List * AllDepsInDistObjects(List *dependencyList);
+extern void RemoveDepsFromDistObjects(List *dependencyList);
+extern void PropagateDistObjects(void);
 
 #endif /* CITUS_DEPENDENCY_H */
