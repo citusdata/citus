@@ -995,6 +995,34 @@ BEGIN;
     ALTER SCHEMA bar RENAME TO foo;
 ROLLBACK;
 
+-- verify that Citus uses current user's metadata connection to propagate table deps since sc1, which is one of the deps of table s1, is created in the same transaction.
+BEGIN;
+    CREATE SCHEMA sc1;
+    CREATE SEQUENCE sc1.seq;
+    CREATE TABLE sc1.s1(id int default(nextval('sc1.seq')));
+    SELECT create_distributed_table('sc1.s1','id');
+COMMIT;
+DROP SCHEMA sc1 CASCADE;
+
+-- verify that Citus uses current user's metadata connection to propagate table deps since seq1, which is one of the deps of table s1, is created in the same transaction.
+CREATE SCHEMA sc1;
+BEGIN;
+    CREATE SEQUENCE sc1.seq1;
+    CREATE TABLE sc1.s1(id int default(nextval('sc1.seq1')));
+    SELECT create_distributed_table('sc1.s1','id');
+COMMIT;
+DROP SCHEMA sc1 CASCADE;
+
+-- verify that Citus uses superuser outside connection to propagate table deps since noneof the table's deps is created in the same transaction.
+SET citus.enable_metadata_sync TO off;
+CREATE SCHEMA sc1;
+SET citus.enable_metadata_sync TO on;
+BEGIN;
+    CREATE TABLE sc1.s1(id int);
+    SELECT create_distributed_table('sc1.s1','id');
+COMMIT;
+DROP SCHEMA sc1 CASCADE;
+
 -- Clean up the created schema
 SET client_min_messages TO WARNING;
 

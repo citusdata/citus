@@ -162,7 +162,7 @@ ResetDistObjects(void)
 
 
 /*
- * HasAnyDepInTxDistObjects decides if any distributed object is created in the current
+ * HasAnyDepInTxDistObjects decides if any object in given list is created in the current
  * transaction.
  */
 bool
@@ -309,6 +309,12 @@ EnsureDependenciesExistOnAllNodes(const ObjectAddress *target)
 		 * Metadata of the table itself must be propagated with the current user.
 		 */
 		MarkObjectDistributedViaSuperUser(dependency);
+	}
+
+	/* track the creation of the distributed table in the current transaction */
+	if (target->classId == RelationRelationId)
+	{
+		AddTableToCurrentDistObjects(target->objectId);
 	}
 }
 
