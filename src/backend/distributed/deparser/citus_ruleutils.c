@@ -1381,6 +1381,13 @@ contain_nextval_expression_walker(Node *node, void *context)
 			return true;
 		}
 	}
+
+	if (IsA(node, Query))
+	{
+		return query_tree_walker((Query *) node,
+								 contain_nextval_expression_walker, NULL, 0);
+	}
+
 	return expression_tree_walker(node, contain_nextval_expression_walker, context);
 }
 

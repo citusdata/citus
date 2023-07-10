@@ -999,7 +999,8 @@ SinglePartitionJoin(JoinOrderNode *currentJoinNode, TableEntry *candidateTable,
 	}
 
 	OpExpr *joinClause =
-		SinglePartitionJoinClause(currentPartitionColumnList, applicableJoinClauses);
+		SinglePartitionJoinClause(currentPartitionColumnList, applicableJoinClauses,
+								  true);
 	if (joinClause != NULL)
 	{
 		if (currentPartitionMethod == DISTRIBUTE_BY_HASH)
@@ -1037,7 +1038,8 @@ SinglePartitionJoin(JoinOrderNode *currentJoinNode, TableEntry *candidateTable,
 		 */
 		List *candidatePartitionColumnList = list_make1(candidatePartitionColumn);
 		joinClause = SinglePartitionJoinClause(candidatePartitionColumnList,
-											   applicableJoinClauses);
+											   applicableJoinClauses,
+											   true);
 		if (joinClause != NULL)
 		{
 			if (candidatePartitionMethod == DISTRIBUTE_BY_HASH)
@@ -1078,7 +1080,8 @@ SinglePartitionJoin(JoinOrderNode *currentJoinNode, TableEntry *candidateTable,
  * clause exists, the function returns NULL.
  */
 OpExpr *
-SinglePartitionJoinClause(List *partitionColumnList, List *applicableJoinClauses)
+SinglePartitionJoinClause(List *partitionColumnList, List *applicableJoinClauses, bool
+						  typeMismatchOk)
 {
 	if (list_length(partitionColumnList) == 0)
 	{
@@ -1086,6 +1089,7 @@ SinglePartitionJoinClause(List *partitionColumnList, List *applicableJoinClauses
 	}
 
 	Var *partitionColumn = NULL;
+	bool foundTypeMismatch = false;
 	foreach_ptr(partitionColumn, partitionColumnList)
 	{
 		Node *applicableJoinClause = NULL;
@@ -1121,9 +1125,20 @@ SinglePartitionJoinClause(List *partitionColumnList, List *applicableJoinClauses
 				{
 					ereport(DEBUG1, (errmsg("single partition column types do not "
 											"match")));
+					foundTypeMismatch = true;
 				}
 			}
 		}
+	}
+
+	if (foundTypeMismatch && !typeMismatchOk)
+	{
+		ereport(ERROR, (errmsg(
+							"There is a datatype mismatch between target's distribution "
+							"column and the expression originating from the source."),
+						errdetail("If the types are different, Citus uses different hash "
+								  "functions for the two column types, which might "
+								  "lead to incorrect repartitioning of the result data")));
 	}
 
 	return NULL;

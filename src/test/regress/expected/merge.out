@@ -2355,7 +2355,7 @@ USING source_serial sdn
 ON sda.id = sdn.id
 WHEN NOT matched THEN
        INSERT (id, z) VALUES (id, z);
-ERROR:  non-IMMUTABLE functions are not yet supported in MERGE sql with distributed tables
+ERROR:  functions used in MERGE actions on distributed tables must not be VOLATILE
 SELECT count(*) from source_serial;
  count
 ---------------------------------------------------------------------
@@ -3065,7 +3065,7 @@ WHEN MATCHED AND t.customer_id = 200 THEN
 	DELETE
 WHEN NOT MATCHED THEN
 	INSERT VALUES(s.customer_id, s.order_id, s.order_center, 1, s.order_time);
-ERROR:  The required join operation is missing between the target's distribution column and any expression originating from the source. The issue may arise from either a non-equi-join or a mismatch in the datatypes of the columns being joined.
+ERROR:  The required join operation is missing between the target's distribution column and any expression originating from the source. The issue may arise from a non-equi-join.
 DETAIL:  Without a equi-join condition on the target's distribution column, the source rows cannot be efficiently redistributed, and the NOT-MATCHED condition cannot be evaluated unambiguously. This can result in incorrect or unexpected results when attempting to merge tables in a distributed setting
 SELECT * FROM target_filter ORDER BY 1, 2;
  customer_id | last_order_id | order_center | order_count |        last_order
@@ -3131,9 +3131,106 @@ SELECT * FROM target_6785 ORDER BY 1;
   1 | 5 |
 (1 row)
 
+-- Get the result from Postgres tables
+CREATE TABLE dest_tab(tid int, val int, ser bigserial, tm timestamp);
+CREATE TABLE src_tab(sid int, val int);
+SELECT setval('dest_tab_ser_seq', 1, true);
+ setval
+---------------------------------------------------------------------
+      1
+(1 row)
+
+INSERT INTO src_tab SELECT i,i FROM generate_series(0,1000)i;
+CREATE OR REPLACE FUNCTION src_tab_result()
+RETURNS TABLE (id INT, val INT, bs bigint, tm timestamp) AS
+$$
+BEGIN
+    RETURN QUERY SELECT src_tab.*, nextval('dest_tab_ser_seq'::regclass), now()::timestamp FROM src_tab;
+END;
+$$
+LANGUAGE plpgsql;
+MERGE INTO dest_tab t
+USING (SELECT * FROM src_tab_result()) s
+ON (s.id = t.tid)
+    WHEN MATCHED THEN
+	UPDATE SET val = t.val + 1
+    WHEN NOT MATCHED THEN
+	INSERT VALUES(s.id, s.val, s.bs, s.tm);
+-- Save the postgres result
+CREATE TABLE postgres_serial AS SELECT MIN(ser), MAX(ser), AVG(ser) FROM dest_tab ;
+-- Cleanup the data and reset the sequence
+TRUNCATE dest_tab;
+TRUNCATE src_tab;
+SELECT setval('dest_tab_ser_seq', 1, true);
+ setval
+---------------------------------------------------------------------
+      1
+(1 row)
+
+INSERT INTO src_tab SELECT i,i FROM generate_series(0,1000)i;
+-- Now, make them Citus tables
+SELECT create_distributed_table('dest_tab', 'tid');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_distributed_table('src_tab', 'sid', colocate_with => 'dest_tab');
+NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$merge_schema.src_tab$$)
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+MERGE INTO dest_tab t
+USING (SELECT * FROM src_tab_result()) s
+ON (s.id = t.tid)
+    WHEN MATCHED THEN
+	UPDATE SET val = t.val + 1
+    WHEN NOT MATCHED THEN
+	INSERT VALUES(s.id, s.val, s.bs, s.tm);
+-- Compare the sequence value
+SELECT
+    ((SELECT MAX(max) FROM postgres_serial) = (SELECT MAX(ser) FROM dest_tab)
+    AND
+    (SELECT MIN(min) FROM postgres_serial) = (SELECT MIN(ser) FROM dest_tab)
+    AND
+    (SELECT AVG(avg) FROM postgres_serial) = (SELECT AVG(ser) FROM dest_tab)) AS all_equal;
+ all_equal
+---------------------------------------------------------------------
+ t
+(1 row)
+
+--
+-- Source without a table
+--
+MERGE INTO dest_tab t
+USING (VALUES (1, -1), (2, -1), (3, -1)) as s (sid, val)
+ON t.tid = s.sid
+WHEN MATCHED THEN
+        UPDATE SET val = s.val
+WHEN NOT MATCHED THEN
+        DO NOTHING;
+-- Three rows with 'val = -1'
+SELECT COUNT(*) FROM dest_tab where val = -1;
+ count
+---------------------------------------------------------------------
+     3
+(1 row)
+
 --
 -- Error and Unsupported scenarios
 --
+-- Test sequences
+MERGE INTO target_serial sda
+USING (select id, z, nextval('target_serial_d_seq'::regclass) as ser from source_serial) sdn
+ON sda.id = sdn.id
+WHEN NOT matched THEN
+       INSERT (id, z, d) VALUES (id, z, ser);
+ERROR:  Distributed MERGE doesn't support sequences yet
 -- Test explain analyze with repartition
 EXPLAIN ANALYZE
 MERGE INTO demo_distributed t
@@ -3144,15 +3241,6 @@ WHEN MATCHED THEN
 WHEN NOT MATCHED THEN
 	INSERT VALUES(id2, s3);
 ERROR:  EXPLAIN ANALYZE is currently not supported for MERGE INTO ... commands with repartitioning
--- Source without a table
-MERGE INTO target_cj t
-USING (VALUES (1, 1), (2, 1), (3, 3)) as s (sid, val)
-ON t.tid = s.sid AND t.tid = 2
-WHEN MATCHED THEN
-        UPDATE SET val = s.val
-WHEN NOT MATCHED THEN
-        DO NOTHING;
-ERROR:  To MERGE into a distributed table, source must be Citus table(s)
 -- Incomplete source
 MERGE INTO target_cj t
 USING (source_cj1 s1 INNER JOIN source_cj2 s2 ON sid1 = val2) s
@@ -3362,7 +3450,7 @@ MERGE INTO t1 USING (SELECT * FROM s1 WHERE true) s1 ON
   t1.id = s1.id AND s1.id = 2
    WHEN matched THEN
  UPDATE SET id = s1.id, val = random();
-ERROR:  non-IMMUTABLE functions are not yet supported in MERGE sql with distributed tables
+ERROR:  functions used in MERGE actions on distributed tables must not be VOLATILE
 -- Test STABLE function
 CREATE FUNCTION add_s(integer, integer) RETURNS integer
 AS 'select $1 + $2;'
@@ -3372,14 +3460,14 @@ MERGE INTO t1
 USING s1 ON t1.id = s1.id
 WHEN NOT MATCHED THEN
 	INSERT VALUES(s1.id, add_s(s1.val, 2));
-ERROR:  non-IMMUTABLE functions are not yet supported in MERGE sql with distributed tables
+ERROR:  STABLE functions used in MERGE queries cannot be called with column references
 -- Test preventing "ON" join condition from writing to the database
 BEGIN;
 MERGE INTO t1
 USING s1 ON t1.id = s1.id AND t1.id = 2 AND (merge_when_and_write())
 WHEN MATCHED THEN
         UPDATE SET val = t1.val + s1.val;
-ERROR:  non-IMMUTABLE functions are not yet supported in MERGE sql with distributed tables
+ERROR:  functions used in the ON clause of MERGE queries on distributed tables must not be VOLATILE
 ROLLBACK;
 -- Test preventing WHEN clause(s) from writing to the database
 BEGIN;
@@ -3387,7 +3475,7 @@ MERGE INTO t1
 USING s1 ON t1.id = s1.id AND t1.id = 2
 WHEN MATCHED AND (merge_when_and_write()) THEN
         UPDATE SET val = t1.val + s1.val;
-ERROR:  non-IMMUTABLE functions are not yet supported in MERGE sql with distributed tables
+ERROR:  functions used in the WHEN clause of MERGE queries on distributed tables must not be VOLATILE
 ROLLBACK;
 -- Joining on non-partition columns with CTE source, but INSERT incorrect column
 WITH s1_res AS (
@@ -3414,7 +3502,7 @@ MERGE INTO t1
 		UPDATE SET val = t1.val + 1
 	WHEN NOT MATCHED THEN
 		INSERT (id, val) VALUES (s1_res.id, s1_res.val);
-ERROR:  The required join operation is missing between the target's distribution column and any expression originating from the source. The issue may arise from either a non-equi-join or a mismatch in the datatypes of the columns being joined.
+ERROR:  The required join operation is missing between the target's distribution column and any expression originating from the source. The issue may arise from a non-equi-join.
 DETAIL:  Without a equi-join condition on the target's distribution column, the source rows cannot be efficiently redistributed, and the NOT-MATCHED condition cannot be evaluated unambiguously. This can result in incorrect or unexpected results when attempting to merge tables in a distributed setting
 -- Join condition without target distribution column
 WITH s1_res AS (
@@ -3424,7 +3512,7 @@ WITH s1_res AS (
  WHEN MATCHED THEN DELETE
 	WHEN NOT MATCHED THEN
 		INSERT (id, val) VALUES (s1_res.id, s1_res.val);
-ERROR:  The required join operation is missing between the target's distribution column and any expression originating from the source. The issue may arise from either a non-equi-join or a mismatch in the datatypes of the columns being joined.
+ERROR:  The required join operation is missing between the target's distribution column and any expression originating from the source. The issue may arise from a non-equi-join.
 DETAIL:  Without a equi-join condition on the target's distribution column, the source rows cannot be efficiently redistributed, and the NOT-MATCHED condition cannot be evaluated unambiguously. This can result in incorrect or unexpected results when attempting to merge tables in a distributed setting
 --
 -- Reference tables
@@ -3633,13 +3721,13 @@ SELECT create_distributed_table('dist_source', 'id', colocate_with => 'none');
 (1 row)
 
 MERGE INTO dist_target
-USING (SELECT 100 id) AS source
-ON dist_target.id = source.id AND dist_target.val = 'const'
+USING (SELECT 100 id, 101 val) AS source
+ON dist_target.id = source.val AND dist_target.val = 'const'
 WHEN MATCHED THEN
 UPDATE SET val = 'source'
 WHEN NOT MATCHED THEN
 INSERT VALUES(source.id, 'source');
-ERROR:  To MERGE into a distributed table, source must be Citus table(s)
+ERROR:  MERGE INSERT must use the source's joining column for target's distribution column
 -- Non-hash distributed tables (append/range).
 CREATE VIEW show_tables AS
 SELECT logicalrelid, partmethod
@@ -3883,21 +3971,21 @@ INSERT INTO postgres_local_table SELECT i, i FROM generate_series(5, 10) i;
 -- with a colocated table
 MERGE INTO nullkey_c1_t1 USING nullkey_c1_t2 ON (nullkey_c1_t1.a = nullkey_c1_t2.a)
 WHEN MATCHED THEN UPDATE SET b = nullkey_c1_t2.b;
-DEBUG:  <Deparsed MERGE query: MERGE INTO query_single_shard_table.nullkey_c1_t1_4000184 nullkey_c1_t1 USING query_single_shard_table.nullkey_c1_t2_4000185 nullkey_c1_t2 ON (nullkey_c1_t1.a OPERATOR(pg_catalog.=) nullkey_c1_t2.a) WHEN MATCHED THEN UPDATE SET b = nullkey_c1_t2.b>
+DEBUG:  <Deparsed MERGE query: MERGE INTO query_single_shard_table.nullkey_c1_t1_4000192 nullkey_c1_t1 USING query_single_shard_table.nullkey_c1_t2_4000193 nullkey_c1_t2 ON (nullkey_c1_t1.a OPERATOR(pg_catalog.=) nullkey_c1_t2.a) WHEN MATCHED THEN UPDATE SET b = nullkey_c1_t2.b>
 DEBUG:  Creating MERGE router plan
 MERGE INTO nullkey_c1_t1 USING nullkey_c1_t2 ON (nullkey_c1_t1.a = nullkey_c1_t2.a)
 WHEN MATCHED THEN DELETE;
-DEBUG:  <Deparsed MERGE query: MERGE INTO query_single_shard_table.nullkey_c1_t1_4000184 nullkey_c1_t1 USING query_single_shard_table.nullkey_c1_t2_4000185 nullkey_c1_t2 ON (nullkey_c1_t1.a OPERATOR(pg_catalog.=) nullkey_c1_t2.a) WHEN MATCHED THEN DELETE>
+DEBUG:  <Deparsed MERGE query: MERGE INTO query_single_shard_table.nullkey_c1_t1_4000192 nullkey_c1_t1 USING query_single_shard_table.nullkey_c1_t2_4000193 nullkey_c1_t2 ON (nullkey_c1_t1.a OPERATOR(pg_catalog.=) nullkey_c1_t2.a) WHEN MATCHED THEN DELETE>
 DEBUG:  Creating MERGE router plan
 MERGE INTO nullkey_c1_t1 USING nullkey_c1_t2 ON (nullkey_c1_t1.a = nullkey_c1_t2.a)
 WHEN MATCHED THEN UPDATE SET b = nullkey_c1_t2.b
 WHEN NOT MATCHED THEN INSERT VALUES (nullkey_c1_t2.a, nullkey_c1_t2.b);
-DEBUG:  <Deparsed MERGE query: MERGE INTO query_single_shard_table.nullkey_c1_t1_4000184 nullkey_c1_t1 USING query_single_shard_table.nullkey_c1_t2_4000185 nullkey_c1_t2 ON (nullkey_c1_t1.a OPERATOR(pg_catalog.=) nullkey_c1_t2.a) WHEN MATCHED THEN UPDATE SET b = nullkey_c1_t2.b WHEN NOT MATCHED THEN INSERT (a, b) VALUES (nullkey_c1_t2.a, nullkey_c1_t2.b)>
+DEBUG:  <Deparsed MERGE query: MERGE INTO query_single_shard_table.nullkey_c1_t1_4000192 nullkey_c1_t1 USING query_single_shard_table.nullkey_c1_t2_4000193 nullkey_c1_t2 ON (nullkey_c1_t1.a OPERATOR(pg_catalog.=) nullkey_c1_t2.a) WHEN MATCHED THEN UPDATE SET b = nullkey_c1_t2.b WHEN NOT MATCHED THEN INSERT (a, b) VALUES (nullkey_c1_t2.a, nullkey_c1_t2.b)>
 DEBUG:  Creating MERGE router plan
 MERGE INTO nullkey_c1_t1 USING nullkey_c1_t2 ON (nullkey_c1_t1.a = nullkey_c1_t2.a)
 WHEN MATCHED THEN DELETE
 WHEN NOT MATCHED THEN INSERT VALUES (nullkey_c1_t2.a, nullkey_c1_t2.b);
-DEBUG:  <Deparsed MERGE query: MERGE INTO query_single_shard_table.nullkey_c1_t1_4000184 nullkey_c1_t1 USING query_single_shard_table.nullkey_c1_t2_4000185 nullkey_c1_t2 ON (nullkey_c1_t1.a OPERATOR(pg_catalog.=) nullkey_c1_t2.a) WHEN MATCHED THEN DELETE WHEN NOT MATCHED THEN INSERT (a, b) VALUES (nullkey_c1_t2.a, nullkey_c1_t2.b)>
+DEBUG:  <Deparsed MERGE query: MERGE INTO query_single_shard_table.nullkey_c1_t1_4000192 nullkey_c1_t1 USING query_single_shard_table.nullkey_c1_t2_4000193 nullkey_c1_t2 ON (nullkey_c1_t1.a OPERATOR(pg_catalog.=) nullkey_c1_t2.a) WHEN MATCHED THEN DELETE WHEN NOT MATCHED THEN INSERT (a, b) VALUES (nullkey_c1_t2.a, nullkey_c1_t2.b)>
 DEBUG:  Creating MERGE router plan
 -- with non-colocated single-shard table
 MERGE INTO nullkey_c1_t1 USING nullkey_c2_t1 ON (nullkey_c1_t1.a = nullkey_c2_t1.a)
@@ -3932,14 +4020,14 @@ DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Collect source query results on coordinator
 DEBUG:  Create a MERGE task list that needs to be routed
-DEBUG:  <Deparsed MERGE query: MERGE INTO query_single_shard_table.distributed_table_4000189 citus_table_alias USING (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('merge_into_XXX_4000189'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) nullkey_c1_t1 ON (nullkey_c1_t1.a OPERATOR(pg_catalog.=) citus_table_alias.a) WHEN MATCHED THEN DELETE WHEN NOT MATCHED THEN INSERT (a, b) VALUES (nullkey_c1_t1.a, nullkey_c1_t1.b)>
-DEBUG:  distributed statement: MERGE INTO query_single_shard_table.distributed_table_4000189 citus_table_alias USING (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('merge_into_XXX_4000189'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) nullkey_c1_t1 ON (nullkey_c1_t1.a OPERATOR(pg_catalog.=) citus_table_alias.a) WHEN MATCHED THEN DELETE WHEN NOT MATCHED THEN INSERT (a, b) VALUES (nullkey_c1_t1.a, nullkey_c1_t1.b)
-DEBUG:  <Deparsed MERGE query: MERGE INTO query_single_shard_table.distributed_table_4000190 citus_table_alias USING (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('merge_into_XXX_4000190'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) nullkey_c1_t1 ON (nullkey_c1_t1.a OPERATOR(pg_catalog.=) citus_table_alias.a) WHEN MATCHED THEN DELETE WHEN NOT MATCHED THEN INSERT (a, b) VALUES (nullkey_c1_t1.a, nullkey_c1_t1.b)>
-DEBUG:  distributed statement: MERGE INTO query_single_shard_table.distributed_table_4000190 citus_table_alias USING (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('merge_into_XXX_4000190'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) nullkey_c1_t1 ON (nullkey_c1_t1.a OPERATOR(pg_catalog.=) citus_table_alias.a) WHEN MATCHED THEN DELETE WHEN NOT MATCHED THEN INSERT (a, b) VALUES (nullkey_c1_t1.a, nullkey_c1_t1.b)
-DEBUG:  <Deparsed MERGE query: MERGE INTO query_single_shard_table.distributed_table_4000191 citus_table_alias USING (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('merge_into_XXX_4000191'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) nullkey_c1_t1 ON (nullkey_c1_t1.a OPERATOR(pg_catalog.=) citus_table_alias.a) WHEN MATCHED THEN DELETE WHEN NOT MATCHED THEN INSERT (a, b) VALUES (nullkey_c1_t1.a, nullkey_c1_t1.b)>
-DEBUG:  distributed statement: MERGE INTO query_single_shard_table.distributed_table_4000191 citus_table_alias USING (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('merge_into_XXX_4000191'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) nullkey_c1_t1 ON (nullkey_c1_t1.a OPERATOR(pg_catalog.=) citus_table_alias.a) WHEN MATCHED THEN DELETE WHEN NOT MATCHED THEN INSERT (a, b) VALUES (nullkey_c1_t1.a, nullkey_c1_t1.b)
-DEBUG:  <Deparsed MERGE query: MERGE INTO query_single_shard_table.distributed_table_4000192 citus_table_alias USING (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('merge_into_XXX_4000192'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) nullkey_c1_t1 ON (nullkey_c1_t1.a OPERATOR(pg_catalog.=) citus_table_alias.a) WHEN MATCHED THEN DELETE WHEN NOT MATCHED THEN INSERT (a, b) VALUES (nullkey_c1_t1.a, nullkey_c1_t1.b)>
-DEBUG:  distributed statement: MERGE INTO query_single_shard_table.distributed_table_4000192 citus_table_alias USING (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('merge_into_XXX_4000192'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) nullkey_c1_t1 ON (nullkey_c1_t1.a OPERATOR(pg_catalog.=) citus_table_alias.a) WHEN MATCHED THEN DELETE WHEN NOT MATCHED THEN INSERT (a, b) VALUES (nullkey_c1_t1.a, nullkey_c1_t1.b)
+DEBUG:  <Deparsed MERGE query: MERGE INTO query_single_shard_table.distributed_table_4000197 citus_table_alias USING (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('merge_into_XXX_4000197'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) nullkey_c1_t1 ON (nullkey_c1_t1.a OPERATOR(pg_catalog.=) citus_table_alias.a) WHEN MATCHED THEN DELETE WHEN NOT MATCHED THEN INSERT (a, b) VALUES (nullkey_c1_t1.a, nullkey_c1_t1.b)>
+DEBUG:  distributed statement: MERGE INTO query_single_shard_table.distributed_table_4000197 citus_table_alias USING (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('merge_into_XXX_4000197'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) nullkey_c1_t1 ON (nullkey_c1_t1.a OPERATOR(pg_catalog.=) citus_table_alias.a) WHEN MATCHED THEN DELETE WHEN NOT MATCHED THEN INSERT (a, b) VALUES (nullkey_c1_t1.a, nullkey_c1_t1.b)
+DEBUG:  <Deparsed MERGE query: MERGE INTO query_single_shard_table.distributed_table_4000198 citus_table_alias USING (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('merge_into_XXX_4000198'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) nullkey_c1_t1 ON (nullkey_c1_t1.a OPERATOR(pg_catalog.=) citus_table_alias.a) WHEN MATCHED THEN DELETE WHEN NOT MATCHED THEN INSERT (a, b) VALUES (nullkey_c1_t1.a, nullkey_c1_t1.b)>
+DEBUG:  distributed statement: MERGE INTO query_single_shard_table.distributed_table_4000198 citus_table_alias USING (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('merge_into_XXX_4000198'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) nullkey_c1_t1 ON (nullkey_c1_t1.a OPERATOR(pg_catalog.=) citus_table_alias.a) WHEN MATCHED THEN DELETE WHEN NOT MATCHED THEN INSERT (a, b) VALUES (nullkey_c1_t1.a, nullkey_c1_t1.b)
+DEBUG:  <Deparsed MERGE query: MERGE INTO query_single_shard_table.distributed_table_4000199 citus_table_alias USING (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('merge_into_XXX_4000199'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) nullkey_c1_t1 ON (nullkey_c1_t1.a OPERATOR(pg_catalog.=) citus_table_alias.a) WHEN MATCHED THEN DELETE WHEN NOT MATCHED THEN INSERT (a, b) VALUES (nullkey_c1_t1.a, nullkey_c1_t1.b)>
+DEBUG:  distributed statement: MERGE INTO query_single_shard_table.distributed_table_4000199 citus_table_alias USING (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('merge_into_XXX_4000199'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) nullkey_c1_t1 ON (nullkey_c1_t1.a OPERATOR(pg_catalog.=) citus_table_alias.a) WHEN MATCHED THEN DELETE WHEN NOT MATCHED THEN INSERT (a, b) VALUES (nullkey_c1_t1.a, nullkey_c1_t1.b)
+DEBUG:  <Deparsed MERGE query: MERGE INTO query_single_shard_table.distributed_table_4000200 citus_table_alias USING (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('merge_into_XXX_4000200'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) nullkey_c1_t1 ON (nullkey_c1_t1.a OPERATOR(pg_catalog.=) citus_table_alias.a) WHEN MATCHED THEN DELETE WHEN NOT MATCHED THEN INSERT (a, b) VALUES (nullkey_c1_t1.a, nullkey_c1_t1.b)>
+DEBUG:  distributed statement: MERGE INTO query_single_shard_table.distributed_table_4000200 citus_table_alias USING (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('merge_into_XXX_4000200'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) nullkey_c1_t1 ON (nullkey_c1_t1.a OPERATOR(pg_catalog.=) citus_table_alias.a) WHEN MATCHED THEN DELETE WHEN NOT MATCHED THEN INSERT (a, b) VALUES (nullkey_c1_t1.a, nullkey_c1_t1.b)
 -- with a reference table
 MERGE INTO nullkey_c1_t1 USING reference_table ON (nullkey_c1_t1.a = reference_table.a)
 WHEN MATCHED THEN UPDATE SET b = reference_table.b;
@@ -3982,7 +4070,7 @@ WITH cte AS (
 )
 MERGE INTO nullkey_c1_t1 USING cte ON (nullkey_c1_t1.a = cte.a)
 WHEN MATCHED THEN UPDATE SET b = cte.b;
-DEBUG:  <Deparsed MERGE query: WITH cte AS (SELECT nullkey_c1_t1_1.a, nullkey_c1_t1_1.b FROM query_single_shard_table.nullkey_c1_t1_4000184 nullkey_c1_t1_1) MERGE INTO query_single_shard_table.nullkey_c1_t1_4000184 nullkey_c1_t1 USING cte ON (nullkey_c1_t1.a OPERATOR(pg_catalog.=) cte.a) WHEN MATCHED THEN UPDATE SET b = cte.b>
+DEBUG:  <Deparsed MERGE query: WITH cte AS (SELECT nullkey_c1_t1_1.a, nullkey_c1_t1_1.b FROM query_single_shard_table.nullkey_c1_t1_4000192 nullkey_c1_t1_1) MERGE INTO query_single_shard_table.nullkey_c1_t1_4000192 nullkey_c1_t1 USING cte ON (nullkey_c1_t1.a OPERATOR(pg_catalog.=) cte.a) WHEN MATCHED THEN UPDATE SET b = cte.b>
 DEBUG:  Creating MERGE router plan
 WITH cte AS (
     SELECT * FROM distributed_table
@@ -4031,7 +4119,7 @@ EXPLAIN MERGE INTO demo_distributed t
 USING demo_source_table s
 ON (s.id2 + 1 = t.id1)
 	WHEN MATCHED THEN UPDATE SET val1 = 15;
-ERROR:  The required join operation is missing between the target's distribution column and any expression originating from the source. The issue may arise from either a non-equi-join or a mismatch in the datatypes of the columns being joined.
+ERROR:  The required join operation is missing between the target's distribution column and any expression originating from the source. The issue may arise from a non-equi-join.
 DETAIL:  Without a equi-join condition on the target's distribution column, the source rows cannot be efficiently redistributed, and the NOT-MATCHED condition cannot be evaluated unambiguously. This can result in incorrect or unexpected results when attempting to merge tables in a distributed setting
 -- Sub-queries and CTEs are not allowed in actions and ON clause
 CREATE TABLE target_1 (a int, b int, c int);
@@ -4136,6 +4224,14 @@ WHEN MATCHED THEN
         DELETE;
 ERROR:  Sub-queries and CTEs are not allowed in ON clause for MERGE with repartitioning
 HINT:  Consider making the source and target colocated and joined on the distribution column to make it a routable query
+-- Datatype mismatch between target and source join column
+WITH src AS (SELECT FLOOR(val) AS a FROM src_tab)
+MERGE INTO dest_tab t
+USING src
+ON t.tid = src.a
+WHEN MATCHED THEN DELETE;
+ERROR:  There is a datatype mismatch between target's distribution column and the expression originating from the source.
+DETAIL:  If the types are different, Citus uses different hash functions for the two column types, which might lead to incorrect repartitioning of the result data
 RESET client_min_messages;
 DROP SERVER foreign_server CASCADE;
 NOTICE:  drop cascades to 3 other objects
@@ -4147,7 +4243,7 @@ CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_
 PL/pgSQL function citus_drop_trigger() line XX at PERFORM
 DROP FUNCTION merge_when_and_write();
 DROP SCHEMA merge_schema CASCADE;
-NOTICE:  drop cascades to 103 other objects
+NOTICE:  drop cascades to 107 other objects
 DETAIL:  drop cascades to function insert_data()
 drop cascades to table local_local
 drop cascades to table target
@@ -4239,13 +4335,13 @@ drop cascades to table target_filter
 drop cascades to function load_filter()
 drop cascades to table source_6785
 drop cascades to table target_6785
+drop cascades to table dest_tab
+drop cascades to table src_tab
+drop cascades to function src_tab_result()
+drop cascades to table postgres_serial
 drop cascades to function add_s(integer,integer)
 drop cascades to table pg
-drop cascades to table t1_4000174
-drop cascades to table s1_4000175
+drop cascades to table t1_4000182
+drop cascades to table s1_4000183
 drop cascades to table t1
-drop cascades to table s1
-drop cascades to table dist_target
-drop cascades to table dist_source
-drop cascades to view show_tables
-and 3 other objects (see server log for list)
+and 7 other objects (see server log for list)

@@ -21,6 +21,7 @@
 
 #include "distributed/citus_clauses.h"
 #include "distributed/citus_custom_scan.h"
+#include "distributed/citus_ruleutils.h"
 #include "distributed/insert_select_planner.h"
 #include "distributed/listutils.h"
 #include "distributed/local_distributed_join_planner.h"
@@ -701,13 +702,6 @@ ErrorIfRepartitionMergeNotSupported(Oid targetRelationId, Query *mergeQuery,
 							   "Postgres table is not yet supported")));
 	}
 
-	queryRteListProperties = GetRTEListPropertiesForQuery(sourceQuery);
-	if (!queryRteListProperties->hasCitusTable)
-	{
-		ereport(ERROR, (errmsg("To MERGE into a distributed table, source must "
-							   "be Citus table(s)")));
-	}
-
 	/*
 	 * Sub-queries and CTEs are not allowed in actions and ON clause
 	 */
@@ -720,6 +714,14 @@ ErrorIfRepartitionMergeNotSupported(Oid targetRelationId, Query *mergeQuery,
 				 errhint("Consider making the source and target colocated "
 						 "and joined on the distribution column to make it a "
 						 "routable query")));
+	}
+
+	/*
+	 * Sequences are not supported
+	 */
+	if (contain_nextval_expression_walker((Node *) mergeQuery, NULL))
+	{
+		ereport(ERROR, (errmsg("Distributed MERGE doesn't support sequences yet")));
 	}
 
 	MergeAction *action = NULL;
@@ -1076,6 +1078,17 @@ DeferErrorIfRoutableMergeNotSupported(Query *query, List *rangeTableList,
 								"repartitioning")));
 		return deferredError;
 	}
+
+	/*
+	 * Check for any volatile or stable functions
+	 */
+	if (contain_mutable_functions((Node *) query))
+	{
+		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+							 "non-IMMUTABLE functions are not routable, "
+							 "try repartitioning", NULL, NULL);
+	}
+
 	return NULL;
 }
 
@@ -1089,20 +1102,6 @@ DeferErrorIfRoutableMergeNotSupported(Query *query, List *rangeTableList,
 static void
 ErrorIfMergeQueryQualAndTargetListNotSupported(Oid targetRelationId, Query *originalQuery)
 {
-	/*
-	 * TODO: For now, we are adding an exception where any volatile or stable
-	 * functions are not allowed in the MERGE query, but this will become too
-	 * restrictive as this will prevent many useful and simple cases, such as,
-	 * INSERT VALUES(ts::timestamp), bigserial column inserts etc. But without
-	 * this restriction, we have a potential danger of some of the function(s)
-	 * getting executed at the worker which will result in incorrect behavior.
-	 */
-	if (contain_mutable_functions((Node *) originalQuery))
-	{
-		ereport(ERROR, (errmsg("non-IMMUTABLE functions are not yet "
-							   "supported in MERGE sql with distributed tables")));
-	}
-
 	DeferredErrorMessage *deferredError =
 		MergeQualAndTargetListFunctionsSupported(targetRelationId,
 												 originalQuery,
@@ -1195,15 +1194,14 @@ SourceResultPartitionColumnIndex(Query *mergeQuery, List *sourceTargetList,
 	Var *sourceRepartitionVar = NULL;
 
 	OpExpr *validJoinClause =
-		SinglePartitionJoinClause(list_make1(targetColumn), mergeJoinConditionList);
+		SinglePartitionJoinClause(list_make1(targetColumn), mergeJoinConditionList,
+								  false);
 	if (!validJoinClause)
 	{
 		ereport(ERROR, (errmsg("The required join operation is missing between "
 							   "the target's distribution column and any "
 							   "expression originating from the source. The "
-							   "issue may arise from either a non-equi-join or "
-							   "a mismatch in the datatypes of the columns being "
-							   "joined."),
+							   "issue may arise from a non-equi-join."),
 						errdetail("Without a equi-join condition on the target's "
 								  "distribution column, the source rows "
 								  "cannot be efficiently redistributed, and "
