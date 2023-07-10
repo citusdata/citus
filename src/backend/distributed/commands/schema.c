@@ -103,20 +103,29 @@ PostprocessCreateSchemaStmt(Node *node, const char *queryString)
 		}
 
 		/*
-		 * Register the tenant schema on the coordinator and save the command
-		 * to register it on the workers.
+		 * Skip if the schema is already inserted into pg_dist_schema.
+		 * This could occur when trying to create an already existing schema,
+		 * with IF NOT EXISTS clause.
 		 */
-		int shardCount = 1;
-		int replicationFactor = 1;
-		Oid distributionColumnType = InvalidOid;
-		Oid distributionColumnCollation = InvalidOid;
-		uint32 colocationId = CreateColocationGroup(
-			shardCount, replicationFactor, distributionColumnType,
-			distributionColumnCollation);
+		if (!IsTenantSchema(schemaId))
+		{
+			/*
+			 * Register the tenant schema on the coordinator and save the command
+			 * to register it on the workers.
+			 */
+			int shardCount = 1;
+			int replicationFactor = 1;
+			Oid distributionColumnType = InvalidOid;
+			Oid distributionColumnCollation = InvalidOid;
+			uint32 colocationId = CreateColocationGroup(
+				shardCount, replicationFactor, distributionColumnType,
+				distributionColumnCollation);
 
-		InsertTenantSchemaLocally(schemaId, colocationId);
+			InsertTenantSchemaLocally(schemaId, colocationId);
 
-		commands = lappend(commands, TenantSchemaInsertCommand(schemaId, colocationId));
+			commands = lappend(commands, TenantSchemaInsertCommand(schemaId,
+																   colocationId));
+		}
 	}
 
 	commands = lappend(commands, ENABLE_DDL_PROPAGATION);

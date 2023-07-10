@@ -50,6 +50,8 @@ SELECT COUNT(*)=0 FROM pg_dist_schema WHERE schemaid::regnamespace::text = 'regu
 
 -- empty tenant
 CREATE SCHEMA "tenant\'_1";
+CREATE SCHEMA IF NOT EXISTS "tenant\'_1";
+NOTICE:  schema "tenant\'_1" already exists, skipping
 -- non-empty tenant
 CREATE SCHEMA "tenant\'_2";
 CREATE TABLE "tenant\'_2".test_table(a int, b text);
@@ -1692,8 +1694,34 @@ $$);
  t
 (3 rows)
 
+-- mat view can be created under tenant schema
+SET citus.enable_schema_based_sharding TO ON;
+SET citus.shard_replication_factor TO 1;
+CREATE SCHEMA sc1;
+CREATE TABLE sc1.t1 (a int);
+CREATE MATERIALIZED VIEW sc1.v1 AS SELECT * FROM sc1.t1;
+SET citus.enable_schema_based_sharding TO OFF;
+-- on coordinator, verify that schema is distributed
+SELECT colocationid > 0 FROM pg_dist_schema
+WHERE schemaid::regnamespace::text = 'sc1';
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+-- on workers, verify that schema is distributed
+SELECT result FROM run_command_on_workers($$
+    SELECT array_agg(colocationid > 0) FROM pg_dist_schema
+    WHERE schemaid::regnamespace::text = 'sc1'
+$$);
+ result
+---------------------------------------------------------------------
+ {t}
+ {t}
+(2 rows)
+
 SET client_min_messages TO WARNING;
-DROP SCHEMA regular_schema, tenant_3, tenant_5, tenant_7, tenant_6, type_sch, citus_sch1, citus_sch2, citus_empty_sch1, citus_empty_sch2, authschema CASCADE;
+DROP SCHEMA regular_schema, tenant_3, tenant_5, tenant_7, tenant_6, type_sch, citus_sch1, citus_sch2, citus_empty_sch1, citus_empty_sch2, authschema, sc1 CASCADE;
 DROP ROLE citus_schema_role, citus_schema_nonpri, authschema;
 SELECT citus_remove_node('localhost', :master_port);
  citus_remove_node

@@ -4154,6 +4154,15 @@ ConvertNewTableIfNecessary(Node *createStmt)
 				return;
 			}
 
+			/*
+			 * We allow mat views in a distributed schema but do not make them a tenant
+			 * table. We should skip converting them.
+			 */
+			if (get_rel_relkind(createdRelationId) == RELKIND_MATVIEW)
+			{
+				return;
+			}
+
 			CreateTenantSchemaTable(createdRelationId);
 		}
 

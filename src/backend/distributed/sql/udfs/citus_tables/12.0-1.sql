@@ -14,7 +14,7 @@ citus_tables_create_query=$CTCQ$
         END AS citus_table_type,
         coalesce(column_to_column_name(logicalrelid, partkey), '<none>') AS distribution_column,
         colocationid AS colocation_id,
-        pg_size_pretty(citus_total_relation_size(logicalrelid, fail_on_error := false)) AS table_size,
+        pg_size_pretty(table_sizes.table_size) AS table_size,
         (select count(*) from pg_dist_shard where logicalrelid = p.logicalrelid) AS shard_count,
         pg_get_userbyid(relowner) AS table_owner,
         amname AS access_method
@@ -24,6 +24,13 @@ citus_tables_create_query=$CTCQ$
         pg_class c ON (p.logicalrelid = c.oid)
     LEFT JOIN
         pg_am a ON (a.oid = c.relam)
+    JOIN
+        (
+            SELECT ds.logicalrelid AS table_id, SUM(css.size) AS table_size
+            FROM citus_shard_sizes() css, pg_dist_shard ds
+            WHERE css.shard_id = ds.shardid
+            GROUP BY ds.logicalrelid
+        ) table_sizes ON (table_sizes.table_id = p.logicalrelid)
     WHERE
         -- filter out tables owned by extensions
         logicalrelid NOT IN (
