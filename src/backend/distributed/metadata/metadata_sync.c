@@ -4540,7 +4540,7 @@ SyncDistributedObjects(MetadataSyncContext *context)
 
 	EnsureSequentialModeMetadataOperations();
 
-	/*Assert(ShouldPropagate()); */
+	Assert(ShouldPropagate());
 
 	/* Send systemwide objects, only roles for now */
 	SendNodeWideObjectsSyncCommands(context);

@@ -166,15 +166,6 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		{
 			SaveBeginCommandProperties(transactionStmt);
 		}
-		else if (transactionStmt->kind == TRANS_STMT_COMMIT)
-		{
-			/*
-			 * We need to propagate deferred objects just before performing COMMIT.
-			 * NOTE: We cannot do that in transaction callback since portal is already
-			 * dropped at that point.
-			 */
-			PropagateDistObjects();
-		}
 	}
 
 	if (IsA(parsetree, TransactionStmt) ||
@@ -869,11 +860,8 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 		PostprocessCreateTableStmt(createTableStmt, queryString);
 	}
 
-	/* defer propagation of the objects when we are in transaction block */
-	bool shouldDeferPropagation = ops && ops->markDistributed && IsTransactionBlock();
-
 	/* after local command has completed, finish by executing worker DDLJobs, if any */
-	if (!shouldDeferPropagation && ddlJobs != NIL)
+	if (ddlJobs != NIL)
 	{
 		if (IsA(parsetree, AlterTableStmt))
 		{
@@ -959,30 +947,7 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 			foreach_ptr(address, addresses)
 			{
 				MarkObjectDistributed(address);
-			}
-		}
-	}
-
-	if (shouldDeferPropagation && ddlJobs != NIL)
-	{
-		List *addresses = GetObjectAddressListFromParseTree(parsetree, false, true);
-		ObjectAddress *address = NULL;
-		foreach_ptr(address, addresses)
-		{
-			AddToCurrentDistObjects(address);
-
-			/* tracks auto dependency sequences */
-			if (address->classId == RelationRelationId)
-			{
-				List *ownedSeqIdList = getOwnedSequences_internal(address->objectId, 0,
-																  DEPENDENCY_AUTO);
-				Oid ownedSeqId = InvalidOid;
-				foreach_oid(ownedSeqId, ownedSeqIdList)
-				{
-					ObjectAddress *seqAddress = palloc0(sizeof(ObjectAddress));
-					ObjectAddressSet(*seqAddress, RelationRelationId, ownedSeqId);
-					AddToCurrentDistObjects(seqAddress);
-				}
+				AddToCurrentDistObjects(address);
 			}
 		}
 	}

@@ -42,9 +42,8 @@ extern void InitDistObjectContext(void);
 extern void PushDistObjectHash(void);
 extern void PopDistObjectHash(void);
 extern void AddToCurrentDistObjects(const ObjectAddress *objectAddress);
+extern void AddTableToCurrentDistObjects(Oid relationId);
 extern void ResetDistObjects(void);
-extern List * AllDepsInDistObjects(List *dependencyList);
-extern void RemoveDepsFromDistObjects(List *dependencyList);
-extern void PropagateDistObjects(void);
+extern bool HasAnyDepInTxDistObjects(List *dependencyList);
 
 #endif /* CITUS_DEPENDENCY_H */

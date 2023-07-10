@@ -1354,6 +1354,9 @@ CreateCitusTable(Oid relationId, CitusTableType tableType,
 	bool skip_validation = true;
 	ExecuteForeignKeyCreateCommandList(originalForeignKeyRecreationCommands,
 									   skip_validation);
+
+	/* track the creation of the distributed table in the current transaction */
+	AddTableToCurrentDistObjects(relationId);
 }
 
 

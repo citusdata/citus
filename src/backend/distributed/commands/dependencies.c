@@ -71,7 +71,7 @@ InitDistObjectContext(void)
 
 
 /*
- * PushDistObjectHash pushes a new hashmap to track distributed objects
+ * PushDistObjectHash pushes a new hashmap to stack to track distributed objects
  * created in the current subtransaction.
  */
 void
@@ -95,8 +95,8 @@ PushDistObjectHash(void)
 
 
 /*
- * PushDistObjectHash removes the hashmap to track distributed objects
- * created in the current subtransaction.
+ * PopDistObjectHash removes the hashmap for the distributed objects created
+ * in the current subtransaction from the stack.
  */
 void
 PopDistObjectHash(void)
@@ -123,6 +123,29 @@ AddToCurrentDistObjects(const ObjectAddress *objectAddress)
 
 
 /*
+ * AddTableToCurrentDistObjects adds given table and its sequences to the distributed
+ * objects created in the current subtransaction.
+ */
+void
+AddTableToCurrentDistObjects(Oid relationId)
+{
+	ObjectAddress *tableAddress = palloc0(sizeof(ObjectAddress));
+	ObjectAddressSet(*tableAddress, RelationRelationId, relationId);
+	AddToCurrentDistObjects(tableAddress);
+
+	/* track its sequences as well */
+	List *ownedSeqIdList = getOwnedSequences(relationId);
+	Oid ownedSeqId = InvalidOid;
+	foreach_oid(ownedSeqId, ownedSeqIdList)
+	{
+		ObjectAddress *seqAddress = palloc0(sizeof(ObjectAddress));
+		ObjectAddressSet(*seqAddress, RelationRelationId, ownedSeqId);
+		AddToCurrentDistObjects(seqAddress);
+	}
+}
+
+
+/*
  * ResetDistObjects resets all distributed objects created in the current transaction.
  */
 void
@@ -139,13 +162,12 @@ ResetDistObjects(void)
 
 
 /*
- * AllDepsInDistObjects filters all dependencies which are created in the current
+ * HasAnyDepInTxDistObjects decides if any distributed object is created in the current
  * transaction.
  */
-List *
-AllDepsInDistObjects(List *dependencyList)
+bool
+HasAnyDepInTxDistObjects(List *dependencyList)
 {
-	List *currentTxDepList = NIL;
 	ObjectAddress *dependency = NULL;
 	foreach_ptr(dependency, dependencyList)
 	{
@@ -156,52 +178,12 @@ AllDepsInDistObjects(List *dependencyList)
 			hash_search(distObjectsHash, dependency, HASH_FIND, &found);
 			if (found)
 			{
-				currentTxDepList = lappend(currentTxDepList, dependency);
+				return true;
 			}
 		}
 	}
 
-	return currentTxDepList;
-}
-
-
-/*
- * RemoveDepsFromDistObjects removes given dependencies from TxDistObjects.
- */
-void
-RemoveDepsFromDistObjects(List *dependencyList)
-{
-	ObjectAddress *dependency = NULL;
-	foreach_ptr(dependency, dependencyList)
-	{
-		HTAB *distObjectsHash = NULL;
-		foreach_ptr(distObjectsHash, TxDistObjects)
-		{
-			hash_search(distObjectsHash, dependency, HASH_REMOVE, NULL);
-		}
-	}
-}
-
-
-/*
- * PropagateDistObjects propagated distributed objects created in the current transaction.
- */
-void
-PropagateDistObjects(void)
-{
-	HTAB *distObjectsHash = NULL;
-	foreach_ptr(distObjectsHash, TxDistObjects)
-	{
-		HASH_SEQ_STATUS status;
-		ObjectAddress *objectAddress = NULL;
-		hash_seq_init(&status, distObjectsHash);
-
-		while ((objectAddress = hash_seq_search(&status)) != NULL)
-		{
-			List *commands = GetDependencyCreateDDLCommands(objectAddress);
-			SendCommandListToWorkersWithMetadata(commands);
-		}
-	}
+	return false;
 }
 
 
@@ -223,6 +205,7 @@ static void
 EnsureDependenciesExistOnAllNodes(const ObjectAddress *target)
 {
 	List *dependenciesWithCommands = NIL;
+	List *ddlCommands = NULL;
 
 	/*
 	 * If there is any unsupported dependency or circular dependency exists, Citus can
@@ -232,11 +215,26 @@ EnsureDependenciesExistOnAllNodes(const ObjectAddress *target)
 
 	/* collect all dependencies in creation order and get their ddl commands */
 	List *dependencies = GetDependenciesForObject(target);
-	if (list_length(dependencies) <= 0)
+	ObjectAddress *dependency = NULL;
+	foreach_ptr(dependency, dependencies)
+	{
+		List *dependencyCommands = GetDependencyCreateDDLCommands(dependency);
+		ddlCommands = list_concat(ddlCommands, dependencyCommands);
+
+		/* create a new list with dependencies that actually created commands */
+		if (list_length(dependencyCommands) > 0)
+		{
+			dependenciesWithCommands = lappend(dependenciesWithCommands, dependency);
+		}
+	}
+	if (list_length(ddlCommands) <= 0)
 	{
 		/* no ddl commands to be executed */
 		return;
 	}
+
+	/* since we are executing ddl commands lets disable propagation, primarily for mx */
+	ddlCommands = list_concat(list_make1(DISABLE_DDL_PROPAGATION), ddlCommands);
 
 	/*
 	 * Make sure that no new nodes are added after this point until the end of the
@@ -257,64 +255,42 @@ EnsureDependenciesExistOnAllNodes(const ObjectAddress *target)
 	 */
 	List *addressSortedDependencies = SortList(dependenciesWithCommands,
 											   ObjectAddressComparator);
-	ObjectAddress *dependency = NULL;
 	foreach_ptr(dependency, addressSortedDependencies)
 	{
 		LockDatabaseObject(dependency->classId, dependency->objectId,
 						   dependency->objectSubId, ExclusiveLock);
 	}
 
+
 	/*
-	 * We use super user outside connection to make sure deps, which are created before
-	 * current transaction, can be propagated properly. Then, we use current user's
-	 * metadata connection for dependencies which are created in the current transaction.
-	 * We also remove current tx dependencies from `TxDistObjects` since they will be
-	 * propagated by dependency creation. Otherwise, deferred propagation at COMMIT would
-	 * try to recreate them.
+	 * We can propagate dependencies via the current user's metadata connection if
+	 * any dependency is created in the current transaction. Our assumption is that
+	 * if we can find a dependency created in the current transaction, then current
+	 * user, most probably, has permissions to create the target object as well. Note
+	 * that, user still may not be able to create the target due to no permissions for
+	 * any of the dependencies. But this is ok since it should be rare. If we opted to
+	 * use outside transaction, then there would be visibility issue on outside
+	 * transaction as we propagated objects via metadata connection and they are invisible
+	 * to outside transaction until we locally commit.
 	 */
-	List *depsCreatedInCurrentTx = AllDepsInDistObjects(addressSortedDependencies);
-	List *depsCreatedBeforeTx = list_difference(addressSortedDependencies,
-												depsCreatedInCurrentTx);
-	RemoveDepsFromDistObjects(depsCreatedInCurrentTx);
-
-	/* since we are executing ddl commands lets disable propagation, primarily for mx */
-	List *ddlTxCommands = list_make1(DISABLE_DDL_PROPAGATION);
-	List *ddlBeforeTxCommands = list_make1(DISABLE_DDL_PROPAGATION);
-
-	/* propagate deps created before current tx via superuser outside connection */
-	if (depsCreatedBeforeTx)
+	List *allSupportedDepsForTarget = GetAllSupportedDependenciesForObject(target);
+	bool anyDepCreatedInCurrentTx = HasAnyDepInTxDistObjects(allSupportedDepsForTarget);
+	if (anyDepCreatedInCurrentTx)
 	{
-		ObjectAddress *beforeTxDep = NULL;
-		foreach_ptr(beforeTxDep, depsCreatedBeforeTx)
-		{
-			List *dependencyCommands = GetDependencyCreateDDLCommands(dependency);
-			ddlBeforeTxCommands = list_concat(ddlBeforeTxCommands, dependencyCommands);
-		}
-
+		SendCommandListToWorkersWithMetadata(ddlCommands);
+	}
+	else
+	{
 		WorkerNode *workerNode = NULL;
 		foreach_ptr(workerNode, workerNodeList)
 		{
-			char *userName = CitusExtensionOwnerName();
 			const char *nodeName = workerNode->workerName;
 			uint32 nodePort = workerNode->workerPort;
+
 			SendCommandListToWorkerOutsideTransaction(nodeName, nodePort,
-													  userName, ddlBeforeTxCommands);
+													  CitusExtensionOwnerName(),
+													  ddlCommands);
 		}
-	}
-
-	/* propagate deps created in current tx via current user's metadata connection */
-	if (depsCreatedInCurrentTx)
-	{
-		ObjectAddress *txDep = NULL;
-		foreach_ptr(txDep, depsCreatedInCurrentTx)
-		{
-			List *dependencyCommands = GetDependencyCreateDDLCommands(dependency);
-			ddlTxCommands = list_concat(ddlTxCommands, dependencyCommands);
-		}
-
-		ObjectAddress *firstDep = (ObjectAddress *) list_nth(depsCreatedInCurrentTx, 0);
-		EnsureSequentialMode(get_object_type(firstDep->classId, firstDep->objectId));
-		SendCommandListToWorkersWithMetadata(ddlTxCommands);
 	}
 
 	/*
@@ -330,7 +306,7 @@ EnsureDependenciesExistOnAllNodes(const ObjectAddress *target)
 		 * propagate as we send objects itself with the superuser.
 		 *
 		 * Only dependent object's metadata should be propagated with super user.
-		 * Metadata of the table itself can be propagated with the current user.
+		 * Metadata of the table itself must be propagated with the current user.
 		 */
 		MarkObjectDistributedViaSuperUser(dependency);
 	}
