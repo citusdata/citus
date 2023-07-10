@@ -47,91 +47,91 @@ static char * DropTableIfExistsCommand(Oid relationId);
  */
 
 /*
- * Memory context and data structure for storing distributed objects created in the
- * current transaction. We push stack for each subtransaction. We store hashmap of
- * distributed objects created in the subtransaction in each stack.
+ * Memory context and data structure for storing the objects propagated in the
+ * current transaction. We push a new stack for tracking each subtransaction's objects.
+ * In each stack, we store the objects propagated in the subtransaction.
  */
-static MemoryContext TxDistObjectsContext = NULL;
-static List *TxDistObjects = NIL;
+static MemoryContext ObjectsPropagatedInTxContext = NULL;
+static List *TxObjectsPropagated = NIL;
 
 
 /*
- * InitDistObjectContext allocates memory context to track distributed objects
- * created in the current transaction.
+ * InitObjectsPropagatedContext allocates memory context to track propagated objects
+ * in the current transaction.
  */
 void
-InitDistObjectContext(void)
+InitObjectsPropagatedContext(void)
 {
-	TxDistObjectsContext = AllocSetContextCreateInternal(TopMemoryContext,
-														 "Tx Dist Object Context",
-														 ALLOCSET_DEFAULT_MINSIZE,
-														 ALLOCSET_DEFAULT_INITSIZE,
-														 ALLOCSET_DEFAULT_MAXSIZE);
+	ObjectsPropagatedInTxContext = AllocSetContextCreateInternal(TopMemoryContext,
+																 "Tx Propagated Object Context",
+																 ALLOCSET_DEFAULT_MINSIZE,
+																 ALLOCSET_DEFAULT_INITSIZE,
+																 ALLOCSET_DEFAULT_MAXSIZE);
 }
 
 
 /*
- * PushDistObjectHash pushes a new hashmap to stack to track distributed objects
- * created in the current subtransaction.
+ * PushObjectsPropagatedHash pushes a new hashmap to stack to track objects propagated
+ * in the current (sub)/transaction.
  */
 void
-PushDistObjectHash(void)
+PushObjectsPropagatedHash(void)
 {
 	HASHCTL info;
 	memset(&info, 0, sizeof(info));
 	info.keysize = sizeof(ObjectAddress);
 	info.entrysize = sizeof(ObjectAddress);
 	info.hash = tag_hash;
-	info.hcxt = TxDistObjectsContext;
+	info.hcxt = ObjectsPropagatedInTxContext;
 	uint32 hashFlags = (HASH_ELEM | HASH_BLOBS | HASH_CONTEXT);
 
-	HTAB *distObjectsHash = hash_create("citus tx dist objects hash",
-										8, &info, hashFlags);
+	HTAB *propagatedObjectsHash = hash_create("citus tx propagated objects hash",
+											  8, &info, hashFlags);
 
-	MemoryContext oldContext = MemoryContextSwitchTo(TxDistObjectsContext);
-	TxDistObjects = lappend(TxDistObjects, distObjectsHash);
+	MemoryContext oldContext = MemoryContextSwitchTo(ObjectsPropagatedInTxContext);
+	TxObjectsPropagated = lappend(TxObjectsPropagated, propagatedObjectsHash);
 	MemoryContextSwitchTo(oldContext);
 }
 
 
 /*
- * PopDistObjectHash removes the hashmap for the distributed objects created
+ * PopObjectsPropagatedHash removes the hashmap for the objects propagated
  * in the current subtransaction from the stack.
  */
 void
-PopDistObjectHash(void)
+PopObjectsPropagatedHash(void)
 {
-	TxDistObjects = list_delete_last(TxDistObjects);
+	TxObjectsPropagated = list_delete_last(TxObjectsPropagated);
 }
 
 
 /*
- * AddToCurrentDistObjects adds given object into the distributed objects created in
- * the current subtransaction.
+ * TrackPropagatedObject adds given object into the objects propagated in the current
+ * subtransaction.
  */
 void
-AddToCurrentDistObjects(const ObjectAddress *objectAddress)
+TrackPropagatedObject(const ObjectAddress *objectAddress)
 {
-	if (TxDistObjects == NIL)
+	if (TxObjectsPropagated == NIL)
 	{
 		return;
 	}
 
-	HTAB *currentTxdistHash = (HTAB *) llast(TxDistObjects);
-	hash_search(currentTxdistHash, objectAddress, HASH_ENTER, NULL);
+	HTAB *currentObjectsPropagatedHash = (HTAB *) llast(TxObjectsPropagated);
+	hash_search(currentObjectsPropagatedHash, objectAddress, HASH_ENTER, NULL);
 }
 
 
 /*
- * AddTableToCurrentDistObjects adds given table and its sequences to the distributed
- * objects created in the current subtransaction.
+ * TrackPropagatedTable adds given table and its sequences to the objects propagated
+ * in the current subtransaction.
  */
 void
-AddTableToCurrentDistObjects(Oid relationId)
+TrackPropagatedTable(Oid relationId)
 {
 	ObjectAddress *tableAddress = palloc0(sizeof(ObjectAddress));
 	ObjectAddressSet(*tableAddress, RelationRelationId, relationId);
-	AddToCurrentDistObjects(tableAddress);
+	TrackPropagatedObject(tableAddress);
 
 	/* track its sequences as well */
 	List *ownedSeqIdList = getOwnedSequences(relationId);
@@ -140,42 +140,42 @@ AddTableToCurrentDistObjects(Oid relationId)
 	{
 		ObjectAddress *seqAddress = palloc0(sizeof(ObjectAddress));
 		ObjectAddressSet(*seqAddress, RelationRelationId, ownedSeqId);
-		AddToCurrentDistObjects(seqAddress);
+		TrackPropagatedObject(seqAddress);
 	}
 }
 
 
 /*
- * ResetDistObjects resets all distributed objects created in the current transaction.
+ * ResetObjectsPropagated resets all objects propagated in the current transaction.
  */
 void
-ResetDistObjects(void)
+ResetObjectsPropagated(void)
 {
-	HTAB *currentDistObjectHash = NULL;
-	foreach_ptr(currentDistObjectHash, TxDistObjects)
+	HTAB *objectPropagatedHash = NULL;
+	foreach_ptr(objectPropagatedHash, TxObjectsPropagated)
 	{
-		hash_destroy(currentDistObjectHash);
+		hash_destroy(objectPropagatedHash);
 	}
-	list_free(TxDistObjects);
-	TxDistObjects = NIL;
+	list_free(TxObjectsPropagated);
+	TxObjectsPropagated = NIL;
 }
 
 
 /*
- * HasAnyDepInTxDistObjects decides if any object in given list is created in the current
- * transaction.
+ * HasAnyDepInObjectsPropagated decides if any object in given list is propagated in
+ * the current transaction.
  */
 bool
-HasAnyDepInTxDistObjects(List *dependencyList)
+HasAnyDepInObjectsPropagated(List *dependencyList)
 {
 	ObjectAddress *dependency = NULL;
 	foreach_ptr(dependency, dependencyList)
 	{
-		HTAB *distObjectsHash = NULL;
-		foreach_ptr(distObjectsHash, TxDistObjects)
+		HTAB *propagatedObjectsHash = NULL;
+		foreach_ptr(propagatedObjectsHash, TxObjectsPropagated)
 		{
 			bool found = false;
-			hash_search(distObjectsHash, dependency, HASH_FIND, &found);
+			hash_search(propagatedObjectsHash, dependency, HASH_FIND, &found);
 			if (found)
 			{
 				return true;
@@ -274,8 +274,9 @@ EnsureDependenciesExistOnAllNodes(const ObjectAddress *target)
 	 * to outside transaction until we locally commit.
 	 */
 	List *allSupportedDepsForTarget = GetAllSupportedDependenciesForObject(target);
-	bool anyDepCreatedInCurrentTx = HasAnyDepInTxDistObjects(allSupportedDepsForTarget);
-	if (anyDepCreatedInCurrentTx)
+	bool anyDepPropagatedInCurrentTx = HasAnyDepInObjectsPropagated(
+		allSupportedDepsForTarget);
+	if (anyDepPropagatedInCurrentTx)
 	{
 		SendCommandListToWorkersWithMetadata(ddlCommands);
 	}
@@ -311,10 +312,10 @@ EnsureDependenciesExistOnAllNodes(const ObjectAddress *target)
 		MarkObjectDistributedViaSuperUser(dependency);
 	}
 
-	/* track the creation of the distributed table in the current transaction */
+	/* track the propagation of the distributed table in the current transaction */
 	if (target->classId == RelationRelationId)
 	{
-		AddTableToCurrentDistObjects(target->objectId);
+		TrackPropagatedTable(target->objectId);
 	}
 }
 

@@ -331,10 +331,10 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 	if (context == PROCESS_UTILITY_TOPLEVEL && UtilityHookLevel == 1)
 	{
 		/*
-		 * Push a new stack item to track distributed objects created in current
+		 * Push a new hash map for tracking objects propagated in the current
 		 * transaction.
 		 */
-		PushDistObjectHash();
+		PushObjectsPropagatedHash();
 	}
 
 	PG_TRY();
@@ -947,7 +947,7 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 			foreach_ptr(address, addresses)
 			{
 				MarkObjectDistributed(address);
-				AddToCurrentDistObjects(address);
+				TrackPropagatedObject(address);
 			}
 		}
 	}
