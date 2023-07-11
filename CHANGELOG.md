@@ -2,7 +2,7 @@
 
 PR #6866 : Add support for schema-based-sharding via a GUC
 TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
-* Adds citus.enable_schema_based_sharding GUC that allows sharding the database based on schemas when enabled.
+* Adds citus.enable_schema_based_sharding GUC that allows sharding the database based on schemas when enabled
 
 * Adds `citus_schema_distribute` and `citus_schema_undistribute` UDFs for
   conversion between regular and distributed schemas (#6933)
@@ -13,13 +13,11 @@ TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHAR
 
 * Add citus_schemas view (#6979)
 
-* Enabling citus_stat_tenants to support schema-based tenants. (#6936)
+* Enabling citus_stat_tenants to support schema-based tenants (#6936)
 
 * Support CREATE TABLE .. AS SELECT .. commands for tenant tables (#6998)
 
 * Disallow single shard table creation if replication factor > 1 (#7006)
-
-PR #7027 : Improve error/hint messages related to schema-based sharding
 
 PR #6971 : Fix citus_table_type column in citus_tables and citus_shards views for single shard tables
 
@@ -43,7 +41,7 @@ PR #6974 : Random warning fixes
 
 PR #6957 : Fix some gucs' initial and boot values, and flag combinations
 
-* Support MERGE for non-colocated distributed tables and non-dist column joins. (#6927)
+* Support MERGE for non-colocated distributed tables and non-dist column joins (#6927)
 
 * Fixes shard size bug with too many shards (#7018)
 
@@ -55,9 +53,7 @@ PR #6957 : Fix some gucs' initial and boot values, and flag combinations
 
 * Optimize push-down planner on memory and cpu (#6945)
 
-PR #7024 : Improve error message for CREATE SCHEMA .. CREATE TABLE
-
-PR #7025 : Fix Reference Table Check for CDC
+* Fixes a bug related to reference tables for CDC (#7025)
 
 PR #7026 : Add locking mechanism for tenant monitoring probabilistic approach
 
@@ -65,17 +61,13 @@ PR #7026 : Add locking mechanism for tenant monitoring probabilistic approach
 
 * Change by_disk_size rebalance strategy to have a base size (#7035)
 
-PR #6930 : Run replicate_reference_tables background task as superuser.
-TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
-* Fixes a bug in background shard rebalancer where the replicate reference tables task fails if the current user is not a superuser. 
-
 * Ignore nodes not allowed for shards, when planning rebalance steps (#6887)
 
 * Changes citus_shard_sizes view's table_name column to shard_id (#7003)
 
 * Fixes a bug related to sequence idempotency at non-transactional sync (#6889)
 
-* Fixes incorrect results on fetching scrollable with hold cursors. (#7014)
+* Fixes incorrect results on fetching scrollable with hold cursors (#7014)
 
 * Fixes create schema authorization bug (#7015)
 
@@ -85,22 +77,21 @@ TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHAR
 
 PR #7008 : Allow using generated identity column based on int/smallint when creating a distributed table
 
-* Adds support for altering a table's schema to/from distributed schemas. (#7004)
+* Adds support for altering a table's schema to/from distributed schemas (#7004)
 
 * Propagate `ALTER SCHEMA .. OWNER TO ..` commands to worker (#6987)
 
 PR #6986 : When Creating a FOREIGN KEY without a name, schema qualify referenced table name in deparser.
 TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
-* Fixes a bug which causes an error when creating a FOREIGN KEY constraint without a name if the referenced table is schema qualified.
+* Fixes a bug which causes an error when creating a FOREIGN KEY constraint without a name if the referenced table is schema qualified
 
-* Fixes a bug related to non-existent objects in DDL commands. (#6984)
+* Fixes a bug related to non-existent objects in DDL commands (#6984)
 
 PR #6983 : Turn on GUC_REPORT flag for search_path to enable reporting back the parameter value upon change.
 TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
-* Turns on the GUC_REPORT flag for search_path. This results in postgres to report the parameter status back in addition to Command Complete packet.
+* Turns on the GUC_REPORT flag for search_path. This results in postgres to report the parameter status back in addition to Command Complete packet
 
-PR #6946 : This commit adds a safety-net to the issue seen in #6785. 
-* MERGE is unsupported with filters that prune down to zero shards
+* Disallow MERGE with filters that prune down to zero shards (#6946)
 
 PR #6943 : Fixes the bug#6785
 * Fixes the issue seen on #6785
