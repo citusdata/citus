@@ -65,10 +65,6 @@ PR #7026 : Add locking mechanism for tenant monitoring probabilistic approach
 
 * Changes citus_shard_sizes view's table_name column to shard_id (#7003)
 
-* Fixes a bug related to sequence idempotency at non-transactional sync (#6889)
-
-* Fixes incorrect results on fetching scrollable with hold cursors (#7014)
-
 * Fixes create schema authorization bug (#7015)
 
 * Support custom cast from / to timestamptz in time partition management UDFs (#6923)
@@ -84,8 +80,6 @@ PR #7008 : Allow using generated identity column based on int/smallint when crea
 PR #6986 : When Creating a FOREIGN KEY without a name, schema qualify referenced table name in deparser.
 TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
 * Fixes a bug which causes an error when creating a FOREIGN KEY constraint without a name if the referenced table is schema qualified
-
-* Fixes a bug related to non-existent objects in DDL commands (#6984)
 
 PR #6983 : Turn on GUC_REPORT flag for search_path to enable reporting back the parameter value upon change.
 TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
