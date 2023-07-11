@@ -1,3 +1,190 @@
+### citus v12.0.0 (July 11, 2023) ###
+
+PR #7044 : Skip distributed schema insertion into pg_dist_schema, if already exists
+PR #7043 : mat view should not be converted to tenant table
+PR #7035 : Change by_disk_size rebalance strategy to have a base size
+* Change by_disk_size rebalance strategy to have a base size
+
+PR #7033 : Change default rebalance strategy to by_disk_size
+* Change default rebalance strategy to by_disk_size
+
+PR #7027 : Improve error/hint messages related to schema-based sharding
+PR #7026 : Add locking mechanism for tenant monitoring probabilistic approach
+PR #7025 : Fix Reference Table Check for CDC
+PR #7024 : Improve error message for CREATE SCHEMA .. CREATE TABLE
+PR #7018 : Use citus_shard_sizes in citus_tables
+* Improves citus_tables view performance
+
+* Fixes shard size bug with too many shards
+
+PR #7015 : Fix create schema authorization bug
+PR #7014 : Rewind tuple store to fix scrollable with hold cursor fetches
+* Fixes incorrect results on fetching scrollable with hold cursors.
+
+PR #7012 : Fix DROP CONSTRAINT in command string with other commands
+* Allow DROP CONSTRAINT in command string with other commands
+
+PR #7011 : Add Publication Tests for Tenant Schema Tables
+PR #7008 : Allow using generated identity column based on int/smallint when creating a distributed table
+PR #7007 : Drop PG13 Support Phase 2 - Remove PG13 specific paths/tests
+* Drops PG13 Support
+
+PR #7006 : Error for single shard table creation if replication factor > 1
+PR #7004 : ALTER TABLE <tblname> SET SCHEMA <schemaname> for single shard tables
+* Adds support for altering a table's schema to/from distributed schemas.
+
+PR #7003 : Changes citus_shard_sizes view's Shard Name Column to Shard Id
+PR #7002 : Drop PG13 Support Phase 1 - Remove PG13 from CI and Configure
+* Drops PG13 Support
+
+PR #7001 : Rename pg_dist tenant_schema to pg_dist_schema
+PR #7000 : Move 2 functions to correct files
+PR #6998 : Support CREATE TABLE .. AS SELECT .. commands for tenant tables
+PR #6997 : Small fix to cherry-pick instructions
+PR #6995 : Add a section on backporting to CONTRIBUTING.md
+PR #6991 : Fix flaky multi_schema_support
+PR #6990 : Remove flaky rebalance plan from test
+PR #6987 : Propagate ALTER SCHEMA .. OWNER TO ..
+* Propagate `ALTER SCHEMA .. OWNER TO ..` commands to worker
+
+PR #6986 : When Creating a FOREIGN KEY without a name, schema qualify referenced table name in deparser.
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Fixes a bug which causes an error when creating a FOREIGN KEY constraint without a name if the referenced table is schema qualified.
+
+PR #6985 : Replace Slack heroku app with plain link in the Readme banner.
+PR #6984 : Properly handle error at owner check
+* Fixes a bug related to non-existent objects in DDL commands.
+
+PR #6983 : Turn on GUC_REPORT flag for search_path to enable reporting back the parameter value upon change.
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Turns on the GUC_REPORT flag for search_path. This results in postgres to report the parameter status back in addition to Command Complete packet.
+
+PR #6981 : Fix pg14-pg15 upgrade_distributed_triggers test
+PR #6979 : Add citus_schemas view
+* Adds citus_schemas view
+
+PR #6976 : Restore Test Coverage for Pushing Down Subqueries.
+PR #6975 : Citus Revise tree-walk APIs to include context
+PR #6974 : Random warning fixes
+PR #6973 : Disable ALTER TABLE .. SET SCHEMA for tenant tables
+PR #6971 : Fix citus_table_type column in citus_tables and citus_shards views for single shard tables
+PR #6970 : Remove AssertArg and AssertState
+PR #6969 : Bump PGversions for CI tests
+PR #6966 : Refactor repartitioning code into a more generic format.
+* PR description that will go into the change log, up to 78 characters
+
+PR #6965 : Disable some udfs for tenant tables
+PR #6964 : Single Shard Partition Column UDFs
+PR #6963 : Single Shard Misc UDFs 2
+PR #6960 : Add Single Shard Table Tests for Dependency UDFs
+PR #6959 : Adds Single Shard Table Tests for Foreign Key UDFs
+PR #6957 : Fix some gucs' initial and boot values, and flag combinations
+PR #6956 : Single shard misc udfs
+PR #6954 : Rename insert-select redistribute code base to generic purpose
+PR #6950 : Enable logical planner for single-shard tables
+PR #6949 : Add test for rebalancer with single shard tables
+PR #6946 : This commit adds a safety-net to the issue seen in #6785. 
+* MERGE is unsupported with filters that prune down to zero shards
+
+PR #6945 : Optimize QueryPushdownSqlTaskList on memory and cpu
+PR #6944 : Single Shard Table Tests for Shard Lock UDFs
+PR #6943 : Fixes the bug#6785
+* Fixes the issue seen on #6785
+
+PR #6941 : Single Shard Table Tests for Time Partitions
+PR #6939 : Change test files in multi and multi-1 schedules to accommodate coordinator in the metadata.
+PR #6938 : Citus Clock tests with Single Shard Tables
+PR #6937 : Single Shard Table Columnar UDFs Tests
+PR #6936 : Make citus_stat_tenants work with schema-based tenants.
+* Enabling citus_stat_tenants to support schema-based tenants.
+
+PR #6933 : Add citus_schema_distribute/undistribute udfs to convert a schema into a tenant schema / back to a regular schema
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Adds the udf `citus_schema_distribute` to convert a regular schema into a tenant schema.
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Adds the udf `citus_schema_undistribute` to convert a tenant schema back to a regular schema.
+
+PR #6931 : Add ORDER BY clauses to some flaky tests
+PR #6930 : Run replicate_reference_tables background task as superuser.
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Fixes a bug in background shard rebalancer where the replicate reference tables task fails if the current user is not a superuser. 
+
+PR #6927 : Merge with repartition strategy
+* Support MERGE for non-colocated distributed tables and non-dist column joins.
+
+PR #6924 : Add Support for Single Shard Tables in update_distributed_table_colocation
+PR #6923 : Support custom cast from / to timestamptz in time partition management UDFs
+PR #6919 : Skip flaky test job on release-11.3 branch 
+PR #6917 : Normalize columnar version in tests
+PR #6916 : Citus UDFs support for single shard tables
+PR #6913 : Fix flaky clolumnar_permissions test
+PR #6910 : Fixes flakiness in background_rebalance_parallel  test
+PR #6909 : Disable citus.enable_non_colocated_router_query_pushdown by default
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Disables citus.enable_non_colocated_router_query_pushdown GUC by default to ensure generating a consistent distributed plan for the queries that reference non-colocated distributed tables
+
+PR #6908 : Prevent downgrades when there is a single-shard table in the cluster
+PR #6907 : Update CHANGELOG.md
+PR #6906 : Move all pre-15-defined routines to the bottom of the file
+* PR description that will go into the change log, up to 78 characters
+
+PR #6903 : Update readme for 11.3
+PR #6902 : Disable master_create_empty_shard udf for single shard tables
+PR #6900 : Mark objects as distributed even when pg_dist_node is empty
+PR #6899 : Fix citus.tenant_stats_limit test by setting it to 2
+PR #6898 : Bump columnar to 11.3
+PR #6897 : Prepare release branch for 11.3.0
+PR #6893 : Fix flaky background rebalance parallel test
+PR #6892 : Disable local execution when Explain Analyze is requested for a query.
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Fixes a crash when explain analyze is requested for a query that is normally locally executed.
+
+PR #6891 : Add missing entry for 10.0.8
+PR #6890 : fix flaky test regex
+PR #6889 : break sequence dependency during table creation
+* Fixes a bug related to sequence idempotency at non-transactional sync.
+
+PR #6887 : Ignore nodes not allowed for shards, when planning rebalance steps
+PR #6886 : Prepare release branch for 9.5.12
+PR #6885 : Prepare release branch for 10.0.8
+PR #6884 : Prepare release branch for 10.1.6
+PR #6883 : Query Generator Seed
+PR #6882 : Skip some versions on changelog
+PR #6881 : Prepare release branch for 10.2.9
+PR #6880 : Prepare release branch for 11.0.8
+PR #6879 : Prepare release branch for 11.1.6
+PR #6878 : Prepare release branch for 11.2.1
+PR #6877 : Forward to existing emit_log_hook in our log hook
+* Forward to existing emit_log_hook in our log hoo
+
+PR #6869 : Add changelog entries for backport releases
+PR #6868 : Tenant monitoring performance improvements
+PR #6867 : Add support for creating distributed tables without shard key [merging the main devel branch]
+* Adds support for creating distributed tables without shard key
+
+PR #6866 : Add support for schema-based-sharding via a GUC
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Adds citus.enable_schema_based_sharding GUC that allows sharding the database based on schemas when enabled.
+
+PR #6862 : Backport to 11.3 - Ensure partitionKeyValue and colocationId are set for proper tenant stats gathering (#6834)
+PR #6859 : Add alter table tests for null shard key tables
+PR #6857 : skip restriction clause if it contains placeholdervar
+* Fixes a bug related to WHERE clause list which contains placeholder.
+
+PR #6856 : Changelog entries for 11.3.0
+PR #6847 : Make coordinator always in metadata by default in regression tests.
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Changes the regression test setups adding the coordinator to metadata by default.
+
+PR #6846 : fix 3 flaky tests in failure schedule
+PR #6845 : When creating a HTAB we need to use HASH_COMPARE  flag in order to set a user defined comparison function.
+* Fixes an uninitialized memory access in shard split API
+
+PR #6844 : Add CPU usage to citus_stat_tenants
+PR #6842 : Add build-cdc-* temporary directories to .gitignore
+PR #6841 : Add build-cdc-* temporary directories to .gitignore
+PR #6840 : Bump Citus to 12.0devel
 ### citus v11.3.0 (May 2, 2023) ###
 
 * Introduces CDC implementation for Citus using logical replication
