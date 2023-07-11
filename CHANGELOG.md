@@ -25,11 +25,7 @@ PR #6971 : Fix citus_table_type column in citus_tables and citus_shards views fo
 
 PR #6965 : Disable some udfs for tenant tables
 
-PR #6964 : Single Shard Partition Column UDFs
-
 PR #6963 : Single Shard Misc UDFs 2
-
-PR #6956 : Single shard misc udfs
 
 PR #6924 : Add Support for Single Shard Tables in update_distributed_table_colocation
 
