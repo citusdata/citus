@@ -41,7 +41,7 @@
 #define WORKER_PARTITIONED_RELATION_TOTAL_SIZE_FUNCTION \
 	"worker_partitioned_relation_total_size(%s)"
 
-#define SHARD_SIZES_COLUMN_COUNT (3)
+#define SHARD_SIZES_COLUMN_COUNT (2)
 
 /*
  * Flag to keep track of whether the process is currently in a function converting the

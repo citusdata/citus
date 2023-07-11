@@ -855,7 +855,7 @@ ProcessShardStatisticsRow(PGresult *result, int64 rowIndex, uint64 *shardId,
 		return false;
 	}
 
-	*shardSize = ParseIntField(result, rowIndex, 2);
+	*shardSize = ParseIntField(result, rowIndex, 1);
 	return true;
 }
 
