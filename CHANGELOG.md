@@ -1,19 +1,28 @@
 ### citus v12.0.0 (July 11, 2023) ###
 
-SECTION-BEGIN: Schema based sharding
-PR #7044 : Skip distributed schema insertion into pg_dist_schema, if already exists
+PR #6866 : Add support for schema-based-sharding via a GUC
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Adds citus.enable_schema_based_sharding GUC that allows sharding the database based on schemas when enabled.
 
-PR #7043 : mat view should not be converted to tenant table
+* Adds `citus_schema_distribute` and `citus_schema_undistribute` UDFs for
+  conversion between regular and distributed schemas (#6933)
 
-PR #7006 : Error for single shard table creation if replication factor > 1
+* Adds support for creating distributed tables without shard key (#6867)
 
-PR #7001 : Rename pg_dist tenant_schema to pg_dist_schema
+* Enable logical planner for single-shard tables (#6950)
 
-PR #6998 : Support CREATE TABLE .. AS SELECT .. commands for tenant tables
+* Add citus_schemas view (#6979)
+
+* Enabling citus_stat_tenants to support schema-based tenants. (#6936)
+
+* Support CREATE TABLE .. AS SELECT .. commands for tenant tables (#6998)
+
+* Disallow single shard table creation if replication factor > 1 (#7006)
 
 PR #7027 : Improve error/hint messages related to schema-based sharding
 
 PR #6971 : Fix citus_table_type column in citus_tables and citus_shards views for single shard tables
+
 PR #6965 : Disable some udfs for tenant tables
 
 PR #6964 : Single Shard Partition Column UDFs
@@ -22,55 +31,65 @@ PR #6963 : Single Shard Misc UDFs 2
 
 PR #6956 : Single shard misc udfs
 
-PR #6950 : Enable logical planner for single-shard tables
-
-PR #6933 : Add citus_schema_distribute/undistribute udfs to convert a schema into a tenant schema / back to a regular schema
-TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
-* Adds the udf `citus_schema_distribute` to convert a regular schema into a distributed schema
-TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
-* Adds the udf `citus_schema_undistribute` to convert a tenant schema back to a regular schema.
-
 PR #6924 : Add Support for Single Shard Tables in update_distributed_table_colocation
 
 PR #6916 : Citus UDFs support for single shard tables
 
-PR #6866 : Add support for schema-based-sharding via a GUC
-TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
-* Adds citus.enable_schema_based_sharding GUC that allows sharding the database based on schemas when enabled.
+PR #6908 : Prevent downgrades when there is a single-shard table in the cluster
 
-* Adds support for creating distributed tables without shard key (#6867)
+PR #6902 : Disable master_create_empty_shard udf for single shard tables
 
-PR #6979 : Add citus_schemas view
-* Adds citus_schemas view
-SECTION-END: Schema based sharding
+* Drops PG13 Support (#7002, #7007)
 
-* Change by_disk_size rebalance strategy to have a base size (#7035)
+PR #6975 : Citus Revise tree-walk APIs to include context
 
-* Change default rebalance strategy to by_disk_size (#7033)
+PR #6974 : Random warning fixes
 
-PR #7026 : Add locking mechanism for tenant monitoring probabilistic approach
+PR #6957 : Fix some gucs' initial and boot values, and flag combinations
 
-PR #7025 : Fix Reference Table Check for CDC
-
-PR #7024 : Improve error message for CREATE SCHEMA .. CREATE TABLE
-
-* Improves citus_tables view performance (#7018)
+* Support MERGE for non-colocated distributed tables and non-dist column joins. (#6927)
 
 * Fixes shard size bug with too many shards (#7018)
 
-* Fixes create schema authorization bug (#7015)
+* Improves citus_tables view performance (#7018)
+
+* Improve tenant monitoring performance (#6868)
+
+* Add CPU usage to citus_stat_tenants (#6844)
+
+* Optimize push-down planner on memory and cpu (#6945)
+
+PR #7024 : Improve error message for CREATE SCHEMA .. CREATE TABLE
+
+PR #7025 : Fix Reference Table Check for CDC
+
+PR #7026 : Add locking mechanism for tenant monitoring probabilistic approach
+
+* Change default rebalance strategy to by_disk_size (#7033)
+
+* Change by_disk_size rebalance strategy to have a base size (#7035)
+
+PR #6930 : Run replicate_reference_tables background task as superuser.
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Fixes a bug in background shard rebalancer where the replicate reference tables task fails if the current user is not a superuser. 
+
+* Ignore nodes not allowed for shards, when planning rebalance steps (#6887)
+
+* Changes citus_shard_sizes view's table_name column to shard_id (#7003)
+
+* Fixes a bug related to sequence idempotency at non-transactional sync (#6889)
 
 * Fixes incorrect results on fetching scrollable with hold cursors. (#7014)
+
+* Fixes create schema authorization bug (#7015)
+
+* Support custom cast from / to timestamptz in time partition management UDFs (#6923)
 
 * Allow DROP CONSTRAINT in command string with other commands (#7012)
 
 PR #7008 : Allow using generated identity column based on int/smallint when creating a distributed table
 
-* Drops PG13 Support (#7002, #7007)
-
 * Adds support for altering a table's schema to/from distributed schemas. (#7004)
-
-* Changes citus_shard_sizes view's table_name column to shard_id (#7003)
 
 * Propagate `ALTER SCHEMA .. OWNER TO ..` commands to worker (#6987)
 
@@ -84,52 +103,24 @@ PR #6983 : Turn on GUC_REPORT flag for search_path to enable reporting back the 
 TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
 * Turns on the GUC_REPORT flag for search_path. This results in postgres to report the parameter status back in addition to Command Complete packet.
 
-SECTION-BEGIN: PG16-beta support
-PR #6975 : Citus Revise tree-walk APIs to include context
-PR #6974 : Random warning fixes
-PR #6957 : Fix some gucs' initial and boot values, and flag combinations
-SECTION-END
-
 PR #6946 : This commit adds a safety-net to the issue seen in #6785. 
 * MERGE is unsupported with filters that prune down to zero shards
 
-* Optimize push-down planner on memory and cpu (#6945)
-
 PR #6943 : Fixes the bug#6785
 * Fixes the issue seen on #6785
-
-* Enabling citus_stat_tenants to support schema-based tenants. (#6936)
-
-PR #6930 : Run replicate_reference_tables background task as superuser.
-TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
-* Fixes a bug in background shard rebalancer where the replicate reference tables task fails if the current user is not a superuser. 
-
-* Support MERGE for non-colocated distributed tables and non-dist column joins. (#6927)
-
-* Support custom cast from / to timestamptz in time partition management UDFs (#6923)
 
 PR #6909 : Disable citus.enable_non_colocated_router_query_pushdown by default
 TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
 * Disables citus.enable_non_colocated_router_query_pushdown GUC by default to ensure generating a consistent distributed plan for the queries that reference non-colocated distributed tables
 
-PR #6908 : Prevent downgrades when there is a single-shard table in the cluster
-PR #6902 : Disable master_create_empty_shard udf for single shard tables
-
 PR #6900 : Mark objects as distributed even when pg_dist_node is empty
 
 * Fixes a crash when a query is locally executed with explain analyze (#6892)
 
-* Fixes a bug related to sequence idempotency at non-transactional sync (#6889)
-
-* Ignore nodes not allowed for shards, when planning rebalance steps (#6887)
-
 * Forward to existing emit_log_hook in our log hook (#6877)
-
-* Improve tenant monitoring performance (#6868)
 
 * Fixes a bug related to WHERE clause list which contains placeholder (#6857)
 
-PR #6844 : Add CPU usage to citus_stat_tenants
 ### citus v11.3.0 (May 2, 2023) ###
 
 * Introduces CDC implementation for Citus using logical replication
