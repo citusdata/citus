@@ -12,7 +12,12 @@ pyenv activate packaging_env
 
 git clone -b error_add --depth=1  https://github.com/citusdata/tools.git tools
 python3 -m pip install -r tools/packaging_automation/requirements.txt
-python3 -m pip install attr
+
+# if os is centos 8 then install attrs package with pip
+if [[ "${package_type}" == "rpm" ]]; then
+    python3 -m pip install attrs
+fi
+
 python3 -m tools.packaging_automation.validate_build_output --output_file output.log \
                                                             --ignore_file .github/packaging/packaging_ignore.yml \
                                                             --package_type ${package_type}
