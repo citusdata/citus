@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -e
+set -eo
 
 # Function to get the OS version
 get_os_version() {
@@ -27,6 +27,9 @@ pyenv activate packaging_env
 
 git clone -b error_add --depth=1  https://github.com/citusdata/tools.git tools
 python3 -m pip install -r tools/packaging_automation/requirements.txt
+
+echo "Package type: ${package_type}"
+echo "OS version: $(get_os_version)"
 
  # if os version is centos 7 or oracle linux 7, then remove urllib3 with pip uninstall and install urllib3<2.0.0 with pip install
 if [[ ${package_type} == "rpm" && $(get_os_version) == 7* ]]; then
