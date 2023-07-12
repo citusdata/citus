@@ -18,3 +18,6 @@ python3 -m tools.packaging_automation.validate_build_output --output_file output
 pyenv deactivate
 # Set $HOME back to /github/home
 export HOME=${GITHUB_HOME}
+
+# Print the output to the console
+cat output.log
