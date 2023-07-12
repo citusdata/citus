@@ -33,7 +33,7 @@ jobs:
     needs: get_postgres_versions_from_file
     runs-on: ubuntu-latest
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
         # While we use separate images for different Postgres versions in rpm
         # based distros
@@ -63,20 +63,24 @@ jobs:
 
       - name: Configure
         run: |
+          set -e
           echo "Current Shell:$0"
           echo "GCC Version: $(gcc --version)"
           ./configure 2>&1 | tee output.log
 
       - name: Make clean
         run: |
+          set -e
           make clean
 
       - name: Make
         run: |
+          set -e
           make CFLAGS="-Wno-missing-braces" -sj$(cat /proc/cpuinfo | grep "core id" | wc -l) 2>&1 | tee -a output.log
 
       - name: Make install
         run: |
+          set -e
           make CFLAGS="-Wno-missing-braces" install 2>&1 | tee -a output.log
 
       - name: Validate output
@@ -97,7 +101,7 @@ jobs:
     needs: get_postgres_versions_from_file
     runs-on: ubuntu-latest
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
         # On deb based distros, we use the same docker image for
         # builds based on different Postgres versions because deb
