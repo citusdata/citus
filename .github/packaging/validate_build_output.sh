@@ -2,6 +2,17 @@
 
 set -e
 
+# Function to get the OS version
+get_os_version() {
+    if [[ -f /etc/centos-release ]]; then
+        cat /etc/centos-release | awk '{print $4}'
+    elif [[ -f /etc/oracle-release ]]; then
+        cat /etc/oracle-release | awk '{print $4}'
+    else
+        echo "Unknown"
+    fi
+}
+
 package_type=${1}
 
 # Since $HOME is set in GH_Actions as /github/home, pyenv fails to create virtualenvs.
@@ -16,6 +27,12 @@ pyenv activate packaging_env
 
 git clone -b error_add --depth=1  https://github.com/citusdata/tools.git tools
 python3 -m pip install -r tools/packaging_automation/requirements.txt
+
+ # if os version is centos 7 or oracle linux 7, then remove urllib3 with pip uninstall and install urllib3<2.0.0 with pip install
+if [[ ${package_type} == "rpm" && $(get_os_version) == 7* ]]; then
+    python3 -m pip uninstall -y urllib3
+    python3 -m pip install urllib3<2.0.0
+fi
 
 python3 -m tools.packaging_automation.validate_build_output --output_file output.log \
                                                             --ignore_file .github/packaging/packaging_ignore.yml \
