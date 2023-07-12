@@ -78,7 +78,15 @@ jobs:
           set -ex
           git config --global --add safe.directory /__w/citus/citus
           make CFLAGS="-Wno-missing-braces" -sj$(cat /proc/cpuinfo | grep "core id" | wc -l) 2>&1 | tee -a output.log
-          exit 1
+
+          # Check the exit code of the make command
+          make_exit_code=${PIPESTATUS[0]}
+
+          # If the make command returned a non-zero exit code, exit with the same code
+          if [[ $make_exit_code -ne 0 ]]; then
+              echo "make command failed with exit code $make_exit_code"
+              exit $make_exit_code
+          fi
 
       - name: Make install
         run: |
