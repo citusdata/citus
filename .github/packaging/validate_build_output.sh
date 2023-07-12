@@ -1,3 +1,7 @@
+#!/bin/bash
+
+set -e
+
 package_type=${1}
 
 # Since $HOME is set in GH_Actions as /github/home, pyenv fails to create virtualenvs.
