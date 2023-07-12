@@ -250,13 +250,10 @@ SELECT create_distributed_table('referencing_table', 'ref_id');
 (1 row)
 
 ALTER TABLE referencing_table ADD COLUMN referencing int REFERENCES referenced_table(id) ON UPDATE CASCADE;
-ERROR:  cannot execute ADD COLUMN command with PRIMARY KEY, UNIQUE, FOREIGN and CHECK constraints
-DETAIL:  Adding a column with a constraint in one command is not supported because all constraints in Citus must have explicit names
-HINT:  You can issue each command separately such as ALTER TABLE referencing_table ADD COLUMN referencing data_type; ALTER TABLE referencing_table ADD CONSTRAINT constraint_name FOREIGN KEY (referencing) REFERENCES referenced_table(id) ON UPDATE CASCADE;
 SELECT COUNT(*) FROM table_fkeys_in_workers WHERE relid SIMILAR TO 'fkey_reference_table.%\d{2,}' AND refd_relid SIMILAR TO 'fkey_reference_table.%\d{2,}';
  count
 ---------------------------------------------------------------------
-     0
+     8
 (1 row)
 
 DROP TABLE referencing_table;

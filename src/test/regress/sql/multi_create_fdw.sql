@@ -7,7 +7,12 @@ SET citus.next_shard_id TO 390000;
 -- ===================================================================
 
 -- create fake fdw for use in tests
-CREATE FUNCTION fake_fdw_handler()
+SET client_min_messages TO WARNING;
+DROP SERVER IF EXISTS fake_fdw_server CASCADE;
+DROP FOREIGN DATA WRAPPER IF EXISTS fake_fdw CASCADE;
+RESET client_min_messages;
+
+CREATE OR REPLACE FUNCTION fake_fdw_handler()
 RETURNS fdw_handler
 AS 'citus'
 LANGUAGE C STRICT;

@@ -671,6 +671,27 @@ SELECT create_distributed_table('alter_add_unique', 'x');
 ALTER TABLE alter_add_unique ADD CONSTRAINT unique_constraint_test UNIQUE USING INDEX alter_unique_idx;
 NOTICE:  ALTER TABLE / ADD CONSTRAINT USING INDEX will rename index "alter_unique_idx" to "unique_constraint_test"
 ALTER TABLE alter_add_unique DROP CONSTRAINT unique_constraint_test;
+CREATE TABLE unique_test_table_single_shard(id int, name varchar(20));
+SELECT create_distributed_table('unique_test_table_single_shard', 'id', shard_count=>1);
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+ALTER TABLE unique_test_table_single_shard ADD UNIQUE(id, name) WITH (fillfactor=20);
+SELECT (groupid = 0) AS is_coordinator, result FROM run_command_on_all_nodes(
+  $$SELECT get_index_defs FROM get_index_defs('sc3', 'unique_test_table_single_shard')$$
+)
+JOIN pg_dist_node USING (nodeid)
+ORDER BY is_coordinator DESC, result;
+ is_coordinator |                                                                                                                                                                                                                              result
+---------------------------------------------------------------------
+ t              | [{"indexdefs": ["CREATE UNIQUE INDEX unique_test_table_single_shard_id_name_key ON sc3.unique_test_table_single_shard USING btree (id, name) WITH (fillfactor='20')"], "indexnames": ["unique_test_table_single_shard_id_name_key"]}]
+ f              | [{"indexdefs": ["CREATE UNIQUE INDEX unique_test_table_single_shard_id_name_key ON sc3.unique_test_table_single_shard USING btree (id, name) WITH (fillfactor='20')", "CREATE UNIQUE INDEX unique_test_table_single_shard_id_name_key_1450242 ON sc3.unique_test_table_single_shard_1450242 USING btree (id, name) WITH (fillfactor='20')"], "indexnames": ["unique_test_table_single_shard_id_name_key", "unique_test_table_single_shard_id_name_key_1450242"]}]
+ f              | [{"indexdefs": ["CREATE UNIQUE INDEX unique_test_table_single_shard_id_name_key ON sc3.unique_test_table_single_shard USING btree (id, name) WITH (fillfactor='20')", "CREATE UNIQUE INDEX unique_test_table_single_shard_id_name_key_1450242 ON sc3.unique_test_table_single_shard_1450242 USING btree (id, name) WITH (fillfactor='20')"], "indexnames": ["unique_test_table_single_shard_id_name_key", "unique_test_table_single_shard_id_name_key_1450242"]}]
+(3 rows)
+
+DROP TABLE unique_test_table_single_shard;
 SET search_path TO 'public';
 DROP SCHEMA sc1 CASCADE;
 NOTICE:  drop cascades to table sc1.alter_add_prim_key

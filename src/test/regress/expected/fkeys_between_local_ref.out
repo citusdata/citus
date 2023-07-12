@@ -123,10 +123,16 @@ BEGIN;
 (1 row)
 
 ROLLBACK;
--- this actually attempts to convert local tables to citus local tables but errors out
--- as citus doesn't support defining foreign keys via add column commands
-ALTER TABLE local_table_1 ADD COLUMN col_3 INT REFERENCES reference_table_1(col_1);
-ERROR:  cannot execute ADD COLUMN command with PRIMARY KEY, UNIQUE, FOREIGN and CHECK constraints
+BEGIN;
+  ALTER TABLE local_table_1 ADD COLUMN col_3 INT REFERENCES reference_table_1(col_1);
+  -- show that we converted all 4 local tables in this schema to citus local tables
+  SELECT COUNT(*)=4 FROM citus_local_tables_in_schema;
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+ROLLBACK;
 BEGIN;
   -- define a foreign key so that all 4 local tables become citus local tables
   ALTER TABLE local_table_1 ADD CONSTRAINT fkey_11 FOREIGN KEY (col_1) REFERENCES reference_table_1(col_1);

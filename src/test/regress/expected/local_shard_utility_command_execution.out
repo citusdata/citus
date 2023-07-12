@@ -509,7 +509,7 @@ NOTICE:  executing the command locally: DELETE FROM local_commands_test_schema.r
   -- add another column to dist_table
   -- note that we execute below DDL locally as well
   ALTER TABLE ref_table ADD b int;
-NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500035, 'local_commands_test_schema', 'ALTER TABLE ref_table ADD b int;')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500035, 'local_commands_test_schema', 'ALTER TABLE ref_table ADD COLUMN b integer;')
   -- define self reference
   ALTER TABLE ref_table ADD CONSTRAINT fkey2 FOREIGN KEY(b) REFERENCES ref_table(a);
 NOTICE:  executing the command locally: SELECT worker_apply_inter_shard_ddl_command (1500035, 'local_commands_test_schema', 1500035, 'local_commands_test_schema', 'ALTER TABLE ref_table ADD CONSTRAINT fkey2 FOREIGN KEY(b) REFERENCES ref_table(a);')
@@ -629,17 +629,17 @@ NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_comm
 
   -- execute bunch of DDL & DROP commands succesfully
   ALTER TABLE dist_table ADD column c int;
-NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500100, 'local_commands_test_schema', 'ALTER TABLE dist_table ADD column c int;')
-NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500103, 'local_commands_test_schema', 'ALTER TABLE dist_table ADD column c int;')
-NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500106, 'local_commands_test_schema', 'ALTER TABLE dist_table ADD column c int;')
-NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500109, 'local_commands_test_schema', 'ALTER TABLE dist_table ADD column c int;')
-NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500112, 'local_commands_test_schema', 'ALTER TABLE dist_table ADD column c int;')
-NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500115, 'local_commands_test_schema', 'ALTER TABLE dist_table ADD column c int;')
-NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500118, 'local_commands_test_schema', 'ALTER TABLE dist_table ADD column c int;')
-NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500121, 'local_commands_test_schema', 'ALTER TABLE dist_table ADD column c int;')
-NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500124, 'local_commands_test_schema', 'ALTER TABLE dist_table ADD column c int;')
-NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500127, 'local_commands_test_schema', 'ALTER TABLE dist_table ADD column c int;')
-NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500130, 'local_commands_test_schema', 'ALTER TABLE dist_table ADD column c int;')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500100, 'local_commands_test_schema', 'ALTER TABLE dist_table ADD COLUMN c integer;')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500103, 'local_commands_test_schema', 'ALTER TABLE dist_table ADD COLUMN c integer;')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500106, 'local_commands_test_schema', 'ALTER TABLE dist_table ADD COLUMN c integer;')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500109, 'local_commands_test_schema', 'ALTER TABLE dist_table ADD COLUMN c integer;')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500112, 'local_commands_test_schema', 'ALTER TABLE dist_table ADD COLUMN c integer;')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500115, 'local_commands_test_schema', 'ALTER TABLE dist_table ADD COLUMN c integer;')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500118, 'local_commands_test_schema', 'ALTER TABLE dist_table ADD COLUMN c integer;')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500121, 'local_commands_test_schema', 'ALTER TABLE dist_table ADD COLUMN c integer;')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500124, 'local_commands_test_schema', 'ALTER TABLE dist_table ADD COLUMN c integer;')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500127, 'local_commands_test_schema', 'ALTER TABLE dist_table ADD COLUMN c integer;')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500130, 'local_commands_test_schema', 'ALTER TABLE dist_table ADD COLUMN c integer;')
   ALTER TABLE dist_table ALTER COLUMN c SET NOT NULL;
 NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500100, 'local_commands_test_schema', 'ALTER TABLE dist_table ALTER COLUMN c SET NOT NULL;')
 NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500103, 'local_commands_test_schema', 'ALTER TABLE dist_table ALTER COLUMN c SET NOT NULL;')
@@ -758,17 +758,17 @@ NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_comm
 
   -- execute bunch of DDL & DROP commands succesfully
   ALTER TABLE partitioning_test ADD column c int;
-NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500165, 'local_commands_test_schema', 'ALTER TABLE partitioning_test ADD column c int;')
-NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500168, 'local_commands_test_schema', 'ALTER TABLE partitioning_test ADD column c int;')
-NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500171, 'local_commands_test_schema', 'ALTER TABLE partitioning_test ADD column c int;')
-NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500174, 'local_commands_test_schema', 'ALTER TABLE partitioning_test ADD column c int;')
-NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500177, 'local_commands_test_schema', 'ALTER TABLE partitioning_test ADD column c int;')
-NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500180, 'local_commands_test_schema', 'ALTER TABLE partitioning_test ADD column c int;')
-NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500183, 'local_commands_test_schema', 'ALTER TABLE partitioning_test ADD column c int;')
-NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500186, 'local_commands_test_schema', 'ALTER TABLE partitioning_test ADD column c int;')
-NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500189, 'local_commands_test_schema', 'ALTER TABLE partitioning_test ADD column c int;')
-NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500192, 'local_commands_test_schema', 'ALTER TABLE partitioning_test ADD column c int;')
-NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500195, 'local_commands_test_schema', 'ALTER TABLE partitioning_test ADD column c int;')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500165, 'local_commands_test_schema', 'ALTER TABLE partitioning_test ADD COLUMN c integer;')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500168, 'local_commands_test_schema', 'ALTER TABLE partitioning_test ADD COLUMN c integer;')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500171, 'local_commands_test_schema', 'ALTER TABLE partitioning_test ADD COLUMN c integer;')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500174, 'local_commands_test_schema', 'ALTER TABLE partitioning_test ADD COLUMN c integer;')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500177, 'local_commands_test_schema', 'ALTER TABLE partitioning_test ADD COLUMN c integer;')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500180, 'local_commands_test_schema', 'ALTER TABLE partitioning_test ADD COLUMN c integer;')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500183, 'local_commands_test_schema', 'ALTER TABLE partitioning_test ADD COLUMN c integer;')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500186, 'local_commands_test_schema', 'ALTER TABLE partitioning_test ADD COLUMN c integer;')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500189, 'local_commands_test_schema', 'ALTER TABLE partitioning_test ADD COLUMN c integer;')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500192, 'local_commands_test_schema', 'ALTER TABLE partitioning_test ADD COLUMN c integer;')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500195, 'local_commands_test_schema', 'ALTER TABLE partitioning_test ADD COLUMN c integer;')
   TRUNCATE partitioning_test;
 NOTICE:  executing the command locally: TRUNCATE TABLE local_commands_test_schema.partitioning_test_xxxxx CASCADE
 NOTICE:  executing the command locally: TRUNCATE TABLE local_commands_test_schema.partitioning_test_xxxxx CASCADE

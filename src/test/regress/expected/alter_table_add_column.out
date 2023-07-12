@@ -1,0 +1,101 @@
+CREATE SCHEMA alter_table_add_column;
+SET search_path TO alter_table_add_column;
+SET citus.next_shard_id TO 1830000;
+SET citus.shard_replication_factor TO 1;
+SET client_min_messages TO NOTICE;
+CREATE TABLE referenced (int_col integer PRIMARY KEY);
+CREATE TABLE referencing (text_col text);
+SELECT create_distributed_table('referenced', null);
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_distributed_table('referencing', null);
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE SCHEMA alter_table_add_column_other_schema;
+CREATE OR REPLACE FUNCTION alter_table_add_column_other_schema.my_random(numeric)
+  RETURNS numeric AS
+$$
+BEGIN
+  RETURN 7 * $1;
+END;
+$$
+LANGUAGE plpgsql IMMUTABLE;
+CREATE COLLATION caseinsensitive (
+	provider = icu,
+	locale = 'und-u-ks-level2'
+);
+CREATE TYPE "simple_!\'custom_type" AS (a integer, b integer);
+ALTER TABLE referencing ADD COLUMN test_1 integer DEFAULT (alter_table_add_column_other_schema.my_random(7) + random() + 5) NOT NULL CONSTRAINT fkey REFERENCES referenced(int_col) ON UPDATE SET DEFAULT ON DELETE CASCADE DEFERRABLE INITIALLY DEFERRED;
+ALTER TABLE referencing ADD COLUMN test_2 integer UNIQUE REFERENCES referenced(int_col) ON UPDATE CASCADE ON DELETE SET DEFAULT NOT DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE referencing ADD COLUMN test_3 integer GENERATED ALWAYS AS (test_1 * alter_table_add_column_other_schema.my_random(1)) STORED UNIQUE REFERENCES referenced(int_col) MATCH FULL;
+ALTER TABLE referencing ADD COLUMN test_4 integer PRIMARY KEY WITH (fillfactor=70) NOT NULL REFERENCES referenced(int_col) MATCH SIMPLE ON UPDATE CASCADE ON DELETE SET DEFAULT;
+ALTER TABLE referencing ADD COLUMN test_5 integer CONSTRAINT unique_c UNIQUE WITH (fillfactor=50);
+ALTER TABLE referencing ADD COLUMN test_6 text COMPRESSION pglz COLLATE caseinsensitive NOT NULL;
+ALTER TABLE referencing ADD COLUMN "test_\'!7" "simple_!\'custom_type";
+-- we give up deparsing ALTER TABLE command if it needs to create a check constraint, and we fallback to legacy behavior
+ALTER TABLE referencing ADD COLUMN test_8 integer CHECK (test_8 > 0);
+ERROR:  cannot execute ADD COLUMN command with PRIMARY KEY, UNIQUE, FOREIGN and CHECK constraints
+DETAIL:  Adding a column with a constraint in one command is not supported because all constraints in Citus must have explicit names
+HINT:  You can issue each command separately such as ALTER TABLE referencing ADD COLUMN test_8 data_type; ALTER TABLE referencing ADD CONSTRAINT constraint_name CHECK (check_expression);
+ALTER TABLE referencing ADD COLUMN test_8 integer CONSTRAINT check_test_8 CHECK (test_8 > 0);
+-- try to add test_6 again, but with IF NOT EXISTS
+ALTER TABLE referencing ADD COLUMN IF NOT EXISTS test_6 text;
+NOTICE:  column "test_6" of relation "referencing" already exists, skipping
+ALTER TABLE referencing ADD COLUMN IF NOT EXISTS test_6 integer;
+NOTICE:  column "test_6" of relation "referencing" already exists, skipping
+SELECT (groupid = 0) AS is_coordinator, result FROM run_command_on_all_nodes(
+  $$SELECT get_grouped_fkey_constraints FROM get_grouped_fkey_constraints('alter_table_add_column.referencing')$$
+)
+JOIN pg_dist_node USING (nodeid)
+ORDER BY is_coordinator DESC, result;
+ is_coordinator |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          result
+---------------------------------------------------------------------
+ t              | [{"deferred": true, "deferable": true, "on_delete": "c", "on_update": "d", "match_type": "s", "constraint_names": ["fkey"], "referenced_tables": ["alter_table_add_column.referenced"], "referenced_columns": ["int_col"], "referencing_tables": ["alter_table_add_column.referencing"], "referencing_columns": ["test_1"], "referencing_columns_set_null_or_default": null}, {"deferred": false, "deferable": false, "on_delete": "d", "on_update": "c", "match_type": "s", "constraint_names": ["referencing__fkey"], "referenced_tables": ["alter_table_add_column.referenced"], "referenced_columns": ["int_col"], "referencing_tables": ["alter_table_add_column.referencing"], "referencing_columns": ["test_2"], "referencing_columns_set_null_or_default": null}, {"deferred": false, "deferable": false, "on_delete": "a", "on_update": "a", "match_type": "f", "constraint_names": ["referencing__fkey1"], "referenced_tables": ["alter_table_add_column.referenced"], "referenced_columns": ["int_col"], "referencing_tables": ["alter_table_add_column.referencing"], "referencing_columns": ["test_3"], "referencing_columns_set_null_or_default": null}, {"deferred": false, "deferable": false, "on_delete": "d", "on_update": "c", "match_type": "s", "constraint_names": ["referencing__fkey2"], "referenced_tables": ["alter_table_add_column.referenced"], "referenced_columns": ["int_col"], "referencing_tables": ["alter_table_add_column.referencing"], "referencing_columns": ["test_4"], "referencing_columns_set_null_or_default": null}]
+ f              | [{"deferred": true, "deferable": true, "on_delete": "c", "on_update": "d", "match_type": "s", "constraint_names": ["fkey", "fkey_xxxxxxx"], "referenced_tables": ["alter_table_add_column.referenced", "alter_table_add_column.referenced_1830000"], "referenced_columns": ["int_col"], "referencing_tables": ["alter_table_add_column.referencing", "alter_table_add_column.referencing_1830001"], "referencing_columns": ["test_1"], "referencing_columns_set_null_or_default": null}, {"deferred": false, "deferable": false, "on_delete": "d", "on_update": "c", "match_type": "s", "constraint_names": ["referencing__fkey", "referencing__fkey_1830001"], "referenced_tables": ["alter_table_add_column.referenced", "alter_table_add_column.referenced_1830000"], "referenced_columns": ["int_col"], "referencing_tables": ["alter_table_add_column.referencing", "alter_table_add_column.referencing_1830001"], "referencing_columns": ["test_2"], "referencing_columns_set_null_or_default": null}, {"deferred": false, "deferable": false, "on_delete": "a", "on_update": "a", "match_type": "f", "constraint_names": ["referencing__fkey1", "referencing__fkey1_1830001"], "referenced_tables": ["alter_table_add_column.referenced", "alter_table_add_column.referenced_1830000"], "referenced_columns": ["int_col"], "referencing_tables": ["alter_table_add_column.referencing", "alter_table_add_column.referencing_1830001"], "referencing_columns": ["test_3"], "referencing_columns_set_null_or_default": null}, {"deferred": false, "deferable": false, "on_delete": "d", "on_update": "c", "match_type": "s", "constraint_names": ["referencing__fkey2", "referencing__fkey2_1830001"], "referenced_tables": ["alter_table_add_column.referenced", "alter_table_add_column.referenced_1830000"], "referenced_columns": ["int_col"], "referencing_tables": ["alter_table_add_column.referencing", "alter_table_add_column.referencing_1830001"], "referencing_columns": ["test_4"], "referencing_columns_set_null_or_default": null}]
+ f              | [{"deferred": true, "deferable": true, "on_delete": "c", "on_update": "d", "match_type": "s", "constraint_names": ["fkey"], "referenced_tables": ["alter_table_add_column.referenced"], "referenced_columns": ["int_col"], "referencing_tables": ["alter_table_add_column.referencing"], "referencing_columns": ["test_1"], "referencing_columns_set_null_or_default": null}, {"deferred": false, "deferable": false, "on_delete": "d", "on_update": "c", "match_type": "s", "constraint_names": ["referencing__fkey"], "referenced_tables": ["alter_table_add_column.referenced"], "referenced_columns": ["int_col"], "referencing_tables": ["alter_table_add_column.referencing"], "referencing_columns": ["test_2"], "referencing_columns_set_null_or_default": null}, {"deferred": false, "deferable": false, "on_delete": "a", "on_update": "a", "match_type": "f", "constraint_names": ["referencing__fkey1"], "referenced_tables": ["alter_table_add_column.referenced"], "referenced_columns": ["int_col"], "referencing_tables": ["alter_table_add_column.referencing"], "referencing_columns": ["test_3"], "referencing_columns_set_null_or_default": null}, {"deferred": false, "deferable": false, "on_delete": "d", "on_update": "c", "match_type": "s", "constraint_names": ["referencing__fkey2"], "referenced_tables": ["alter_table_add_column.referenced"], "referenced_columns": ["int_col"], "referencing_tables": ["alter_table_add_column.referencing"], "referencing_columns": ["test_4"], "referencing_columns_set_null_or_default": null}]
+(3 rows)
+
+SELECT (groupid = 0) AS is_coordinator, result FROM run_command_on_all_nodes(
+  $$SELECT get_index_defs FROM get_index_defs('alter_table_add_column', 'referencing')$$
+)
+JOIN pg_dist_node USING (nodeid)
+ORDER BY is_coordinator DESC, result;
+ is_coordinator |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            result
+---------------------------------------------------------------------
+ t              | [{"indexdefs": ["CREATE UNIQUE INDEX referencing__key ON alter_table_add_column.referencing USING btree (test_2)"], "indexnames": ["referencing__key"]}, {"indexdefs": ["CREATE UNIQUE INDEX referencing__key1 ON alter_table_add_column.referencing USING btree (test_3)"], "indexnames": ["referencing__key1"]}, {"indexdefs": ["CREATE UNIQUE INDEX referencing_pkey ON alter_table_add_column.referencing USING btree (test_4) WITH (fillfactor='70')"], "indexnames": ["referencing_pkey"]}, {"indexdefs": ["CREATE UNIQUE INDEX unique_c ON alter_table_add_column.referencing USING btree (test_5) WITH (fillfactor='50')"], "indexnames": ["unique_c"]}]
+ f              | [{"indexdefs": ["CREATE UNIQUE INDEX referencing__key ON alter_table_add_column.referencing USING btree (test_2)", "CREATE UNIQUE INDEX referencing__key_1830001 ON alter_table_add_column.referencing_1830001 USING btree (test_2)"], "indexnames": ["referencing__key", "referencing__key_1830001"]}, {"indexdefs": ["CREATE UNIQUE INDEX referencing__key1 ON alter_table_add_column.referencing USING btree (test_3)", "CREATE UNIQUE INDEX referencing__key1_1830001 ON alter_table_add_column.referencing_1830001 USING btree (test_3)"], "indexnames": ["referencing__key1", "referencing__key1_1830001"]}, {"indexdefs": ["CREATE UNIQUE INDEX referencing_pkey ON alter_table_add_column.referencing USING btree (test_4) WITH (fillfactor='70')", "CREATE UNIQUE INDEX referencing_pkey_1830001 ON alter_table_add_column.referencing_1830001 USING btree (test_4) WITH (fillfactor='70')"], "indexnames": ["referencing_pkey", "referencing_pkey_1830001"]}, {"indexdefs": ["CREATE UNIQUE INDEX unique_c ON alter_table_add_column.referencing USING btree (test_5) WITH (fillfactor='50')", "CREATE UNIQUE INDEX unique_c_1830001 ON alter_table_add_column.referencing_1830001 USING btree (test_5) WITH (fillfactor='50')"], "indexnames": ["unique_c", "unique_c_1830001"]}]
+ f              | [{"indexdefs": ["CREATE UNIQUE INDEX referencing__key ON alter_table_add_column.referencing USING btree (test_2)"], "indexnames": ["referencing__key"]}, {"indexdefs": ["CREATE UNIQUE INDEX referencing__key1 ON alter_table_add_column.referencing USING btree (test_3)"], "indexnames": ["referencing__key1"]}, {"indexdefs": ["CREATE UNIQUE INDEX referencing_pkey ON alter_table_add_column.referencing USING btree (test_4) WITH (fillfactor='70')"], "indexnames": ["referencing_pkey"]}, {"indexdefs": ["CREATE UNIQUE INDEX unique_c ON alter_table_add_column.referencing USING btree (test_5) WITH (fillfactor='50')"], "indexnames": ["unique_c"]}]
+(3 rows)
+
+SELECT (groupid = 0) AS is_coordinator, result FROM run_command_on_all_nodes(
+  $$SELECT get_column_defaults FROM get_column_defaults('alter_table_add_column', 'referencing')$$
+)
+JOIN pg_dist_node USING (nodeid)
+ORDER BY is_coordinator DESC, result;
+ is_coordinator |                                                                                                                                                                                                                                                                  result
+---------------------------------------------------------------------
+ t              | [{"column_name": "test_1", "column_default": "(((alter_table_add_column_other_schema.my_random((7)::numeric))::double precision + random()) + (5)::double precision)", "generation_expression": null}, {"column_name": "test_3", "column_default": null, "generation_expression": "((test_1)::numeric * alter_table_add_column_other_schema.my_random((1)::numeric))"}]
+ f              | [{"column_name": "test_1", "column_default": "(((alter_table_add_column_other_schema.my_random((7)::numeric))::double precision + random()) + (5)::double precision)", "generation_expression": null}, {"column_name": "test_3", "column_default": null, "generation_expression": "((test_1)::numeric * alter_table_add_column_other_schema.my_random((1)::numeric))"}, {"column_name": "test_3", "column_default": null, "generation_expression": "((test_1)::numeric * alter_table_add_column_other_schema.my_random((1)::numeric))"}]
+ f              | [{"column_name": "test_1", "column_default": "(((alter_table_add_column_other_schema.my_random((7)::numeric))::double precision + random()) + (5)::double precision)", "generation_expression": null}, {"column_name": "test_3", "column_default": null, "generation_expression": "((test_1)::numeric * alter_table_add_column_other_schema.my_random((1)::numeric))"}]
+(3 rows)
+
+SELECT (groupid = 0) AS is_coordinator, result FROM run_command_on_all_nodes(
+  $$SELECT get_column_attrs FROM get_column_attrs('alter_table_add_column.referencing')$$
+)
+JOIN pg_dist_node USING (nodeid)
+ORDER BY is_coordinator DESC, result;
+ is_coordinator |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          result
+---------------------------------------------------------------------
+ t              | {"relnames": ["alter_table_add_column.referencing"], "column_attrs": [{"not_null": true, "type_name": "int4", "column_name": "test_1", "collation_name": null, "compression_method": ""}, {"not_null": false, "type_name": "int4", "column_name": "test_2", "collation_name": null, "compression_method": ""}, {"not_null": false, "type_name": "int4", "column_name": "test_3", "collation_name": null, "compression_method": ""}, {"not_null": true, "type_name": "int4", "column_name": "test_4", "collation_name": null, "compression_method": ""}, {"not_null": false, "type_name": "int4", "column_name": "test_5", "collation_name": null, "compression_method": ""}, {"not_null": true, "type_name": "text", "column_name": "test_6", "collation_name": "caseinsensitive", "compression_method": "p"}, {"not_null": false, "type_name": "int4", "column_name": "test_8", "collation_name": null, "compression_method": ""}, {"not_null": false, "type_name": "simple_!\\'custom_type", "column_name": "test_\\'!7", "collation_name": null, "compression_method": ""}, {"not_null": false, "type_name": "text", "column_name": "text_col", "collation_name": "default", "compression_method": ""}]}
+ f              | {"relnames": ["alter_table_add_column.referencing"], "column_attrs": [{"not_null": true, "type_name": "int4", "column_name": "test_1", "collation_name": null, "compression_method": ""}, {"not_null": false, "type_name": "int4", "column_name": "test_2", "collation_name": null, "compression_method": ""}, {"not_null": false, "type_name": "int4", "column_name": "test_3", "collation_name": null, "compression_method": ""}, {"not_null": true, "type_name": "int4", "column_name": "test_4", "collation_name": null, "compression_method": ""}, {"not_null": false, "type_name": "int4", "column_name": "test_5", "collation_name": null, "compression_method": ""}, {"not_null": true, "type_name": "text", "column_name": "test_6", "collation_name": "caseinsensitive", "compression_method": "p"}, {"not_null": false, "type_name": "int4", "column_name": "test_8", "collation_name": null, "compression_method": ""}, {"not_null": false, "type_name": "simple_!\\'custom_type", "column_name": "test_\\'!7", "collation_name": null, "compression_method": ""}, {"not_null": false, "type_name": "text", "column_name": "text_col", "collation_name": "default", "compression_method": ""}]}
+ f              | {"relnames": ["alter_table_add_column.referencing_1830001", "alter_table_add_column.referencing"], "column_attrs": [{"not_null": true, "type_name": "int4", "column_name": "test_1", "collation_name": null, "compression_method": ""}, {"not_null": false, "type_name": "int4", "column_name": "test_2", "collation_name": null, "compression_method": ""}, {"not_null": false, "type_name": "int4", "column_name": "test_3", "collation_name": null, "compression_method": ""}, {"not_null": true, "type_name": "int4", "column_name": "test_4", "collation_name": null, "compression_method": ""}, {"not_null": false, "type_name": "int4", "column_name": "test_5", "collation_name": null, "compression_method": ""}, {"not_null": true, "type_name": "text", "column_name": "test_6", "collation_name": "caseinsensitive", "compression_method": "p"}, {"not_null": false, "type_name": "int4", "column_name": "test_8", "collation_name": null, "compression_method": ""}, {"not_null": false, "type_name": "simple_!\\'custom_type", "column_name": "test_\\'!7", "collation_name": null, "compression_method": ""}, {"not_null": false, "type_name": "text", "column_name": "text_col", "collation_name": "default", "compression_method": ""}]}
+(3 rows)
+
+SET client_min_messages TO WARNING;
+DROP SCHEMA alter_table_add_column, alter_table_add_column_other_schema CASCADE;
