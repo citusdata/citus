@@ -10,7 +10,7 @@ pyenv versions
 pyenv virtualenv ${PACKAGING_PYTHON_VERSION} packaging_env
 pyenv activate packaging_env
 
-git clone -b v0.8.24 --depth=1  https://github.com/citusdata/tools.git tools
+git clone -b error_add --depth=1  https://github.com/citusdata/tools.git tools
 python3 -m pip install -r tools/packaging_automation/requirements.txt
 python3 -m tools.packaging_automation.validate_build_output --output_file output.log \
                                                             --ignore_file .github/packaging/packaging_ignore.yml \
