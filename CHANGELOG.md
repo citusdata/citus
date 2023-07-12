@@ -1,29 +1,18 @@
 ### citus v12.0.0 (July 11, 2023) ###
 
-PR #6866 : Add support for schema-based-sharding via a GUC
-TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
-* Adds citus.enable_schema_based_sharding GUC that allows sharding the database based on schemas when enabled
-
-* Adds `citus_schema_distribute` and `citus_schema_undistribute` UDFs for
-  conversion between regular and distributed schemas (#6933)
+* Adds support for schema-based sharding.
+  While `citus.enable_schema_based_sharding` GUC allows sharding the database based on newly created
+  schemas, `citus_schema_distribute()` allows doing so for the existing schemas.
+  Distributed schemas used for sharding the datababase can be listed by using `citus_schemas` view,
+  monitored by using `citus_stat_schemas` view, and undistributed by using
+  `citus_schema_undistribute()` function.
+  (#6866, #6979, #6933, #6936 and many others).
 
 * Support MERGE for non-colocated distributed tables and non-dist column joins (#6927)
-
-* Adds support for creating distributed tables without shard key (#6867)
-
-* Add citus_schemas view (#6979)
-
-* Enabling citus_stat_tenants to support schema-based tenants (#6936)
 
 * Change default rebalance strategy to by_disk_size (#7033)
 
 * Change by_disk_size rebalance strategy to have a base size (#7035)
-
-PR #6971 : Fix citus_table_type column in citus_tables and citus_shards views for single shard tables
-
-PR #6924 : Add Support for Single Shard Tables in update_distributed_table_colocation
-
-PR #6908 : Prevent downgrades when there is a single-shard table in the cluster
 
 * Drops PG13 Support (#7002, #7007)
 
@@ -35,17 +24,17 @@ PR #6957 : Fix some gucs' initial and boot values, and flag combinations
 
 * Improves citus_tables view performance (#7018)
 
-* Improve tenant monitoring performance (#6868)
+* Improves tenant monitoring performance (#6868)
 
-* Add CPU usage to citus_stat_tenants (#6844)
+* Adds CPU usage to citus_stat_tenants (#6844)
 
-* Optimize push-down planner on memory and cpu (#6945)
+* Optimizes push-down planner on memory and cpu (#6945)
 
 * Fixes a bug related to reference tables for CDC (#7025)
 
 PR #7026 : Add locking mechanism for tenant monitoring probabilistic approach
 
-* Ignore nodes not allowed for shards, when planning rebalance steps (#6887)
+* Makes sure to take `shouldhaveshards` setting into account for a node when planning rebalance steps (#6887)
 
 * Changes citus_shard_sizes view's table_name column to shard_id (#7003)
 
@@ -55,9 +44,8 @@ PR #7026 : Add locking mechanism for tenant monitoring probabilistic approach
 
 * Allow DROP CONSTRAINT in command string with other commands (#7012)
 
-PR #7008 : Allow using generated identity column based on int/smallint when creating a distributed table
-
-* Adds support for altering a table's schema to/from distributed schemas (#7004)
+* #7008 Allows using generated identity column based on int/smallint when creating a distributed table
+  with the trade-off of not being able perform DMLs on identity columns from worker nodes
 
 * Propagate `ALTER SCHEMA .. OWNER TO ..` commands to worker (#6987)
 
@@ -74,15 +62,15 @@ TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHAR
 PR #6943 : Fixes the bug#6785
 * Fixes the issue seen on #6785
 
-PR #6909 : Disable citus.enable_non_colocated_router_query_pushdown by default
-TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
-* Disables citus.enable_non_colocated_router_query_pushdown GUC by default to ensure generating a consistent distributed plan for the queries that reference non-colocated distributed tables
+* #6909 Disables citus.enable_non_colocated_router_query_pushdown GUC by default to ensure
+  generating a consistent distributed plan for the queries that reference non-colocated
+  distributed tables
 
-PR #6900 : Mark objects as distributed even when pg_dist_node is empty
+PR #6900 : Fixes a bug related to propagation of schemas that happens when pg_dist_node is empty
 
 * Fixes a crash when a query is locally executed with explain analyze (#6892)
 
-* Forward to existing emit_log_hook in our log hook (#6877)
+* Improves the compatibility with other extension by forwarding to existing emit_log_hook in our log hook (#6877)
 
 * Fixes a bug related to WHERE clause list which contains placeholder (#6857)
 
