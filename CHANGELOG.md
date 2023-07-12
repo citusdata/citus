@@ -7,41 +7,29 @@ TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHAR
 * Adds `citus_schema_distribute` and `citus_schema_undistribute` UDFs for
   conversion between regular and distributed schemas (#6933)
 
-* Adds support for creating distributed tables without shard key (#6867)
+* Support MERGE for non-colocated distributed tables and non-dist column joins (#6927)
 
-* Enable logical planner for single-shard tables (#6950)
+* Adds support for creating distributed tables without shard key (#6867)
 
 * Add citus_schemas view (#6979)
 
 * Enabling citus_stat_tenants to support schema-based tenants (#6936)
 
-* Support CREATE TABLE .. AS SELECT .. commands for tenant tables (#6998)
+* Change default rebalance strategy to by_disk_size (#7033)
 
-* Disallow single shard table creation if replication factor > 1 (#7006)
+* Change by_disk_size rebalance strategy to have a base size (#7035)
 
 PR #6971 : Fix citus_table_type column in citus_tables and citus_shards views for single shard tables
 
-PR #6965 : Disable some udfs for tenant tables
-
-PR #6963 : Single Shard Misc UDFs 2
-
 PR #6924 : Add Support for Single Shard Tables in update_distributed_table_colocation
-
-PR #6916 : Citus UDFs support for single shard tables
 
 PR #6908 : Prevent downgrades when there is a single-shard table in the cluster
 
-PR #6902 : Disable master_create_empty_shard udf for single shard tables
-
 * Drops PG13 Support (#7002, #7007)
-
-PR #6975 : Citus Revise tree-walk APIs to include context
 
 PR #6974 : Random warning fixes
 
 PR #6957 : Fix some gucs' initial and boot values, and flag combinations
-
-* Support MERGE for non-colocated distributed tables and non-dist column joins (#6927)
 
 * Fixes shard size bug with too many shards (#7018)
 
@@ -56,10 +44,6 @@ PR #6957 : Fix some gucs' initial and boot values, and flag combinations
 * Fixes a bug related to reference tables for CDC (#7025)
 
 PR #7026 : Add locking mechanism for tenant monitoring probabilistic approach
-
-* Change default rebalance strategy to by_disk_size (#7033)
-
-* Change by_disk_size rebalance strategy to have a base size (#7035)
 
 * Ignore nodes not allowed for shards, when planning rebalance steps (#6887)
 
