@@ -3,7 +3,7 @@
 set -ex
 
 # Function to get the OS version
-get_os_version() {
+get_rpm_os_version() {
     if [[ -f /etc/centos-release ]]; then
         cat /etc/centos-release | awk '{print $4}'
     elif [[ -f /etc/oracle-release ]]; then
@@ -29,10 +29,10 @@ git clone -b error_add --depth=1  https://github.com/citusdata/tools.git tools
 python3 -m pip install -r tools/packaging_automation/requirements.txt
 
 echo "Package type: ${package_type}"
-echo "OS version: $(get_os_version)"
+echo "OS version: $(get_rpm_os_version)"
 
  # if os version is centos 7 or oracle linux 7, then remove urllib3 with pip uninstall and install urllib3<2.0.0 with pip install
-if [[ ${package_type} == "rpm" && $(get_os_version) == 7* ]]; then
+if [[ ${package_type} == "rpm" && $(get_rpm_os_version) == 7* ]]; then
     python3 -m pip uninstall -y urllib3
     python3 -m pip install 'urllib3<2'
 fi
