@@ -41,7 +41,7 @@ that are missing in earlier minor versions.
 
   cd citus
   ./configure
-  # If you have already installed the project previously, you need to clean it first
+  # If you have already installed the project, you need to clean it first
   make clean
   make
   make install
