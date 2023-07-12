@@ -76,7 +76,7 @@ jobs:
       - name: Make
         run: |
           set -ex
-          git config --global --add safe.directory /__w/citus/citus
+          git config --global --add safe.directory ${GITHUB_WORKSPACE}
           make CFLAGS="-Wno-missing-braces" -sj$(cat /proc/cpuinfo | grep "core id" | wc -l) 2>&1 | tee -a output.log
 
           # Check the exit code of the make command
@@ -159,7 +159,7 @@ jobs:
       - name: Make
         run: |
           set -ex
-          git config --global --add safe.directory /__w/citus/citus
+          git config --global --add safe.directory ${GITHUB_WORKSPACE}
           make -sj$(cat /proc/cpuinfo | grep "core id" | wc -l) 2>&1 | tee -a output.log
 
           # Check the exit code of the make command
