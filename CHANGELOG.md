@@ -6,10 +6,15 @@
   for the existing schemas. Distributed schemas used for sharding the database
   can be listed by using the view `citus_schemas`, monitored by using the view
   `citus_stat_schemas`, and undistributed by using the udf 
-  `citus_schema_undistribute()`.
-  (#6866, #6979, #6933, #6936 and many others).
+  `citus_schema_undistribute()`
+  (#6866, #6979, #6933, #6936 and many others)
 
-* Supports MERGE for non-colocated distributed tables and non-dist column joins (#6927)
+* Supports MERGE command across non-colocated distributed tables/subqueries,
+  reference tables and joins on non-distribution columns (#6927)
+
+* Fixes wrong result when using `NOT MATCHED` with MERGE command (#6943)
+
+* Disallows MERGE with filters that prune down to zero shards (#6946)
 
 * Drops PG13 Support (#7002, #7007)
 
@@ -25,13 +30,15 @@
 
 * Adds CPU usage to citus_stat_tenants (#6844)
 
-* Optimizes push-down planner on memory and cpu (#6945)
+* Optimizes pushdown planner on memory and cpu (#6945)
 
 * Fixes a bug related to reference tables for CDC (#7025)
 
-* Introduces the GUC `citus.stat_tenants_untracked_sample_rate` for sampling in tenant monitoring. (#7026)
+* Introduces the GUC `citus.stat_tenants_untracked_sample_rate` for sampling in
+  tenant monitoring (#7026)
 
-* Makes sure to take `shouldhaveshards` setting into account for a node when planning rebalance steps (#6887)
+* Makes sure to take `shouldhaveshards` setting into account for a node when
+  planning rebalance steps (#6887)
 
 * Changes citus_shard_sizes view's table_name column to shard_id (#7003)
 
@@ -54,11 +61,6 @@
 
 * The GUC search_path is now reported when it is updated (#6983)
 
-* Disallows MERGE with filters that prune down to zero shards (#6946)
-
-PR #6943 : Fixes the bug#6785
-* Fixes the issue seen on #6785
-
 * Disables citus.enable_non_colocated_router_query_pushdown GUC by default to
   ensure generating a consistent distributed plan for the queries that reference
   non-colocated distributed tables (#6909)
@@ -67,7 +69,8 @@ PR #6943 : Fixes the bug#6785
 
 * Fixes a crash when a query is locally executed with explain analyze (#6892)
 
-* Improves the compatibility with other extension by forwarding to existing emit_log_hook in our log hook (#6877)
+* Improves the compatibility with other extension by forwarding to existing
+  emit_log_hook in our log hook (#6877)
 
 * Fixes a bug related to WHERE clause list which contains placeholder (#6857)
 
