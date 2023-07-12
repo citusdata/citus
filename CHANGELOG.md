@@ -29,7 +29,7 @@
 
 * Fixes a bug related to reference tables for CDC (#7025)
 
-PR #7026 : Add locking mechanism for tenant monitoring probabilistic approach
+* Introduces the GUC `citus.stat_tenants_untracked_sample_rate` for sampling in tenant monitoring. (#7026)
 
 * Makes sure to take `shouldhaveshards` setting into account for a node when planning rebalance steps (#6887)
 
