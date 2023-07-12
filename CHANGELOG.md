@@ -1,24 +1,21 @@
 ### citus v12.0.0 (July 11, 2023) ###
 
 * Adds support for schema-based sharding.
-  While `citus.enable_schema_based_sharding` GUC allows sharding the database based on newly created
-  schemas, `citus_schema_distribute()` allows doing so for the existing schemas.
-  Distributed schemas used for sharding the datababase can be listed by using `citus_schemas` view,
-  monitored by using `citus_stat_schemas` view, and undistributed by using
-  `citus_schema_undistribute()` function.
+  While `citus.enable_schema_based_sharding` GUC allows sharding the database
+  based on newly created schemas, `citus_schema_distribute()` allows doing so
+  for the existing schemas. Distributed schemas used for sharding the database
+  can be listed by using the view `citus_schemas`, monitored by using the view
+  `citus_stat_schemas`, and undistributed by using the udf 
+  `citus_schema_undistribute()`.
   (#6866, #6979, #6933, #6936 and many others).
 
-* Support MERGE for non-colocated distributed tables and non-dist column joins (#6927)
-
-* Change default rebalance strategy to by_disk_size (#7033)
-
-* Change by_disk_size rebalance strategy to have a base size (#7035)
+* Supports MERGE for non-colocated distributed tables and non-dist column joins (#6927)
 
 * Drops PG13 Support (#7002, #7007)
 
-PR #6974 : Random warning fixes
+* Changes default rebalance strategy to by_disk_size (#7033)
 
-PR #6957 : Fix some gucs' initial and boot values, and flag combinations
+* Changes by_disk_size rebalance strategy to have a base size (#7035)
 
 * Fixes shard size bug with too many shards (#7018)
 
@@ -38,35 +35,35 @@ PR #7026 : Add locking mechanism for tenant monitoring probabilistic approach
 
 * Changes citus_shard_sizes view's table_name column to shard_id (#7003)
 
+* Fixes a bug related to type casts with text/varchar (#6391) 
+
 * Fixes create schema authorization bug (#7015)
 
-* Support custom cast from / to timestamptz in time partition management UDFs (#6923)
+* Supports custom cast from / to timestamptz in time partition management UDFs (#6923)
 
-* Allow DROP CONSTRAINT in command string with other commands (#7012)
+* Allows DROP CONSTRAINT in command string with other commands (#7012)
 
-* #7008 Allows using generated identity column based on int/smallint when creating a distributed table
-  with the trade-off of not being able perform DMLs on identity columns from worker nodes
+* Allows using generated identity column based on int/smallint when creating
+  a distributed table with the limitation of not being able perform DMLs on
+  identity columns from worker nodes (#7008)
 
 * Propagate `ALTER SCHEMA .. OWNER TO ..` commands to worker (#6987)
 
-PR #6986 : When Creating a FOREIGN KEY without a name, schema qualify referenced table name in deparser.
-TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
-* Fixes a bug which causes an error when creating a FOREIGN KEY constraint without a name if the referenced table is schema qualified
+* Fixes an error when creating a FOREIGN KEY without a name referencing a schema
+  qualified table (#6986)
 
-PR #6983 : Turn on GUC_REPORT flag for search_path to enable reporting back the parameter value upon change.
-TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
-* Turns on the GUC_REPORT flag for search_path. This results in postgres to report the parameter status back in addition to Command Complete packet
+* The GUC search_path is now reported when it is updated (#6983)
 
-* Disallow MERGE with filters that prune down to zero shards (#6946)
+* Disallows MERGE with filters that prune down to zero shards (#6946)
 
 PR #6943 : Fixes the bug#6785
 * Fixes the issue seen on #6785
 
-* #6909 Disables citus.enable_non_colocated_router_query_pushdown GUC by default to ensure
-  generating a consistent distributed plan for the queries that reference non-colocated
-  distributed tables
+* Disables citus.enable_non_colocated_router_query_pushdown GUC by default to
+  ensure generating a consistent distributed plan for the queries that reference
+  non-colocated distributed tables (#6909)
 
-PR #6900 : Fixes a bug related to propagation of schemas that happens when pg_dist_node is empty
+* Fixes a bug related to propagation of schemas when pg_dist_node is empty (#6900)
 
 * Fixes a crash when a query is locally executed with explain analyze (#6892)
 
