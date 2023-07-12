@@ -33,7 +33,7 @@ jobs:
     needs: get_postgres_versions_from_file
     runs-on: ubuntu-latest
     strategy:
-      fail-fast: false
+      fail-fast: true
       matrix:
         # While we use separate images for different Postgres versions in rpm
         # based distros
@@ -97,7 +97,7 @@ jobs:
     needs: get_postgres_versions_from_file
     runs-on: ubuntu-latest
     strategy:
-      fail-fast: false
+      fail-fast: true
       matrix:
         # On deb based distros, we use the same docker image for
         # builds based on different Postgres versions because deb
