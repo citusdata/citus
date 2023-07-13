@@ -1,3 +1,90 @@
+### citus v12.0.0 (July 11, 2023) ###
+
+* Adds support for schema-based sharding.
+  While `citus.enable_schema_based_sharding` GUC allows sharding the database
+  based on newly created schemas, `citus_schema_distribute()` allows doing so
+  for the existing schemas. Distributed schemas used for sharding the database
+  can be listed by using the view `citus_schemas`, monitored by using the view
+  `citus_stat_schemas`, and undistributed by using the udf
+  `citus_schema_undistribute()`
+  (#6866, #6979, #6933, #6936 and many others)
+
+* Supports MERGE command across non-colocated distributed tables/subqueries,
+  reference tables and joins on non-distribution columns (#6927)
+
+* Drops PG13 Support (#7002, #7007)
+
+* Changes default rebalance strategy to by_disk_size (#7033)
+
+* Changes by_disk_size rebalance strategy to have a base size (#7035)
+
+* Improves citus_tables view performance (#7018)
+
+* Improves tenant monitoring performance (#6868)
+
+* Introduces the GUC `citus.stat_tenants_untracked_sample_rate` for sampling in
+  tenant monitoring (#7026)
+
+* Adds CPU usage to citus_stat_tenants (#6844)
+
+* Propagates `ALTER SCHEMA .. OWNER TO ..` commands to worker (#6987)
+
+* Allows `ADD COLUMN` in command string with other commands (#7032)
+
+* Allows `DROP CONSTRAINT` in command string with other commands (#7012)
+
+* Makes sure to properly handle index storage options for `ADD CONSTRAINT
+  `/ COLUMN commands (#7032)
+
+* Makes sure to properly handle `IF NOT EXISTS` for `ADD COLUMN` commands
+  (#7032)
+
+* Allows using generated identity column based on int/smallint when creating
+  a distributed table with the limitation of not being able perform DMLs on
+  identity columns from worker nodes (#7008)
+
+* Supports custom cast from / to timestamptz in time partition management UDFs
+  (#6923)
+
+* Optimizes pushdown planner on memory and cpu (#6945)
+
+* Changes citus_shard_sizes view's table_name column to shard_id (#7003)
+
+* The GUC search_path is now reported when it is updated (#6983)
+
+* Disables citus.enable_non_colocated_router_query_pushdown GUC by default to
+  ensure generating a consistent distributed plan for the queries that
+  reference non-colocated distributed tables (#6909)
+
+* Disallows MERGE with filters that prune down to zero shards (#6946)
+
+* Makes sure to take `shouldhaveshards` setting into account for a node when
+  planning rebalance steps (#6887)
+
+* Improves the compatibility with other extension by forwarding to existing
+  emit_log_hook in our log hook (#6877)
+
+* Fixes wrong result when using `NOT MATCHED` with MERGE command (#6943)
+
+* Fixes querying the view `citus_shard_sizes` when there are too many shards
+  (#7018)
+
+* Fixes a bug related to type casts from other types to text/varchar (#6391)
+
+* Fixes propagating `CREATE SCHEMA AUTHORIZATION ..` with no schema name
+  (#7015)
+
+* Fixes an error when creating a FOREIGN KEY without a name referencing a schema
+  qualified table (#6986)
+
+* Fixes a rare bug which mostly happens with queries that contain both outer
+  join and where clauses  (#6857)
+
+* Fixes a bug related to propagation of schemas when pg_dist_node is empty
+  (#6900)
+
+* Fixes a crash when a query is locally executed with explain analyze (#6892)
+
 ### citus v11.3.0 (May 2, 2023) ###
 
 * Introduces CDC implementation for Citus using logical replication
