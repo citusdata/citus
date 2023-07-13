@@ -145,14 +145,11 @@ PG_FUNCTION_INFO_V1(citus_task_wait);
  * We apply the same policy checks as pg_cancel_backend to check if a user can cancel a
  * job.
  */
-Datum
-citus_job_cancel(PG_FUNCTION_ARGS)
-{
+
+void 
+CancelJob(int64 jobid){
 	CheckCitusVersion(ERROR);
 	EnsureCoordinator();
-
-	int64 jobid = PG_GETARG_INT64(0);
-
 	/* Cancel all tasks that were scheduled before */
 	List *pids = CancelTasksForJob(jobid);
 
@@ -170,10 +167,15 @@ citus_job_cancel(PG_FUNCTION_ARGS)
 	}
 
 	UpdateBackgroundJob(jobid);
-
-	PG_RETURN_VOID();
 }
 
+Datum
+citus_job_cancel(PG_FUNCTION_ARGS)
+{
+	int64 jobid = PG_GETARG_INT64(0);
+	CancelJob(jobid);
+	PG_RETURN_VOID();
+}
 
 /*
  * pg_catalog.citus_job_wait(jobid bigint,

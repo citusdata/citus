@@ -2328,6 +2328,26 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
+		"citus.split_shard_group_size_threshold",
+		gettext_noop("Sets the max colocation group size of a Shard"),
+		NULL,
+		&MaxShardSize,
+		102400, 100, INT32_MAX,
+		PGC_USERSET,
+		GUC_UNIT_KB | GUC_STANDARD,
+		NULL, NULL, NULL);
+
+	DefineCustomRealVariable(
+		"citus.tenant_isolation_frequency_threshold",
+		gettext_noop("Sets the threshold tenant frequency for a Shard"),
+		NULL,
+		&TenantFrequency,
+		0.3, 0, 1,
+		PGC_USERSET,
+		GUC_STANDARD,
+		NULL, NULL, NULL);
+
+	DefineCustomIntVariable(
 		"citus.shard_replication_factor",
 		gettext_noop("Sets the replication factor for shards."),
 		gettext_noop("Shards are replicated across nodes according to this "
