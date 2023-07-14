@@ -1359,24 +1359,40 @@ SELECT * FROM multi_extension.print_extension_changes();
 -- Snapshot of state at 12.0-1
 ALTER EXTENSION citus UPDATE TO '12.0-1';
 SELECT * FROM multi_extension.print_extension_changes();
- previous_object |                         current_object
+ previous_object |                              current_object
 ---------------------------------------------------------------------
                  | function citus_internal_add_tenant_schema(oid,integer) void
                  | function citus_internal_delete_tenant_schema(oid) void
                  | function citus_internal_unregister_tenant_schema_globally(oid,text) void
                  | function citus_schema_distribute(regnamespace) void
                  | function citus_schema_undistribute(regnamespace) void
-				 | function citus_stat_tenants_local_internal(boolean) SETOF record
+                 | function citus_stat_tenants_local_internal(boolean) SETOF record
                  | table pg_dist_schema
                  | view public.citus_schemas
 (8 rows)
+
+-- Test downgrade to 12.0-1 from 12.1-1
+ALTER EXTENSION citus UPDATE TO '12.1-1';
+ALTER EXTENSION citus UPDATE TO '12.0-1';
+-- Should be empty result since upgrade+downgrade should be a no-op
+SELECT * FROM multi_extension.print_extension_changes();
+ previous_object | current_object
+---------------------------------------------------------------------
+(0 rows)
+
+-- Snapshot of state at 12.1-1
+ALTER EXTENSION citus UPDATE TO '12.1-1';
+SELECT * FROM multi_extension.print_extension_changes();
+ previous_object | current_object
+---------------------------------------------------------------------
+(0 rows)
 
 DROP TABLE multi_extension.prev_objects, multi_extension.extension_diff;
 -- show running version
 SHOW citus.version;
  citus.version
 ---------------------------------------------------------------------
- 12.0devel
+ 12.1devel
 (1 row)
 
 -- ensure no unexpected objects were created outside pg_catalog
@@ -1410,7 +1426,7 @@ DROP EXTENSION citus;
 DROP EXTENSION citus_columnar;
 CREATE EXTENSION citus VERSION '8.0-1';
 ERROR:  specified version incompatible with loaded Citus library
-DETAIL:  Loaded library requires 12.0, but 8.0-1 was specified.
+DETAIL:  Loaded library requires 12.1, but 8.0-1 was specified.
 HINT:  If a newer library is present, restart the database and try the command again.
 -- Test non-distributed queries work even in version mismatch
 SET citus.enable_version_checks TO 'false';
@@ -1455,7 +1471,7 @@ ORDER BY 1;
 -- We should not distribute table in version mistmatch
 SELECT create_distributed_table('version_mismatch_table', 'column1');
 ERROR:  loaded Citus library version differs from installed extension version
-DETAIL:  Loaded library requires 12.0, but the installed extension version is 8.1-1.
+DETAIL:  Loaded library requires 12.1, but the installed extension version is 8.1-1.
 HINT:  Run ALTER EXTENSION citus UPDATE and try again.
 -- This function will cause fail in next ALTER EXTENSION
 CREATE OR REPLACE FUNCTION pg_catalog.relation_is_a_known_shard(regclass)
