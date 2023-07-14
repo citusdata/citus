@@ -84,3 +84,4 @@ DROP FUNCTION pg_catalog.execute_command_on_other_nodes(text);
 DROP FUNCTION pg_catalog.citus_internal_database_command(text);
 DROP FUNCTION pg_catalog.citus_internal_add_database_shard(text,int);
 DROP FUNCTION pg_catalog.citus_internal_start_migration_monitor(text,text);
+DROP FUNCTION pg_catalog.database_move(text,int);

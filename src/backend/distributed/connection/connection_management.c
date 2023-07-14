@@ -40,6 +40,7 @@
 #include "pg_config.h"
 #include "portability/instr_time.h"
 #include "storage/ipc.h"
+#include "utils/builtins.h"
 #include "utils/hsearch.h"
 #include "utils/memutils.h"
 
@@ -1676,4 +1677,28 @@ CitusModifyWaitEvent(WaitEventSet *set, int pos, uint32 events, Latch *latch)
 	PG_END_TRY();
 
 	return success;
+}
+
+
+/*
+ * GetConnectionString gets the connection string for a given connection.
+ */
+char *
+GetConnectionString(MultiConnection *conn)
+{
+	StringInfo connectionString = makeStringInfo();
+	PQconninfoOption *connOptions = PQconninfo(conn->pgConn);
+
+	for (int optionIndex = 0; connOptions[optionIndex].keyword != NULL; optionIndex++)
+	{
+		if (connOptions[optionIndex].val != NULL)
+		{
+			appendStringInfo(connectionString,
+							 "%s=%s ",
+							 connOptions[optionIndex].keyword,
+							 quote_literal_cstr(connOptions[optionIndex].val));
+		}
+	}
+
+	return connectionString->data;
 }

@@ -125,7 +125,6 @@ static bool DatabaseMigrationStart(DatabaseMigration *migration);
 static char * ReplicationSlotNameForMigration(char *migrationName);
 static char * PublicationNameForMigration(char *migrationName);
 static char * SubscriptionNameForMigration(char *migrationName);
-static char * GetConnectionString(MultiConnection *connection);
 static void MigrateSchema(char *sourceConnectionString,
 						  MultiConnection *destConn,
 						  char *snapshotName,
@@ -473,30 +472,6 @@ SubscriptionNameForMigration(char *migrationName)
 	StringInfo migrationSub = makeStringInfo();
 	appendStringInfo(migrationSub, "database_shard_move_%s_sub", migrationName);
 	return migrationSub->data;
-}
-
-
-/*
- * GetConnectionString gets the connection string for a given connection.
- */
-static char *
-GetConnectionString(MultiConnection *conn)
-{
-	StringInfo connectionString = makeStringInfo();
-	PQconninfoOption *connOptions = PQconninfo(conn->pgConn);
-
-	for (int optionIndex = 0; connOptions[optionIndex].keyword != NULL; optionIndex++)
-	{
-		if (connOptions[optionIndex].val != NULL)
-		{
-			appendStringInfo(connectionString,
-							 "%s=%s ",
-							 connOptions[optionIndex].keyword,
-							 quote_literal_cstr(connOptions[optionIndex].val));
-		}
-	}
-
-	return connectionString->data;
 }
 
 

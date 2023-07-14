@@ -129,6 +129,15 @@ COMMENT ON FUNCTION pg_catalog.citus_internal_delete_database_shard(text) IS
  'delete a database shard from the metadata';
 
 
+CREATE FUNCTION pg_catalog.database_move(
+	database_name text,
+	target_node_group_id int)
+RETURNS void
+LANGUAGE C STRICT
+AS 'MODULE_PATHNAME', $$pgcopydb_database_move$$;
+COMMENT ON FUNCTION pg_catalog.database_move(text, int)
+IS 'move a database shard';
+
 CREATE FUNCTION pg_catalog.database_shard_move(
 	database_name text,
 	target_node_group_id int)
