@@ -91,7 +91,8 @@ static bool DistributedTableSizeOnWorker(WorkerNode *workerNode, Oid relationId,
 										 SizeQueryType sizeQueryType, bool failOnError,
 										 uint64 *tableSize);
 static List * ShardIntervalsOnWorkerGroup(WorkerNode *workerNode, Oid relationId);
-static char * GenerateShardStatisticsQueryForShardList(List *shardIntervalList);
+static char * GenerateShardIdNameValuesForShardList(List *shardIntervalList,
+													bool firstValue);
 static char * GenerateSizeQueryForRelationNameList(List *quotedShardNames,
 												   char *sizeFunction);
 static char * GetWorkerPartitionedSizeUDFNameBySizeQueryType(SizeQueryType sizeQueryType);
@@ -101,10 +102,10 @@ static char * GenerateAllShardStatisticsQueryForNode(WorkerNode *workerNode,
 static List * GenerateShardStatisticsQueryList(List *workerNodeList, List *citusTableIds);
 static void ErrorIfNotSuitableToGetSize(Oid relationId);
 static List * OpenConnectionToNodes(List *workerNodeList);
-static void ReceiveShardNameAndSizeResults(List *connectionList,
-										   Tuplestorestate *tupleStore,
-										   TupleDesc tupleDescriptor);
-static void AppendShardSizeQuery(StringInfo selectQuery, ShardInterval *shardInterval);
+static void ReceiveShardIdAndSizeResults(List *connectionList,
+										 Tuplestorestate *tupleStore,
+										 TupleDesc tupleDescriptor);
+static void AppendShardIdNameValues(StringInfo selectQuery, ShardInterval *shardInterval);
 
 static HeapTuple CreateDiskSpaceTuple(TupleDesc tupleDesc, uint64 availableBytes,
 									  uint64 totalBytes);
@@ -253,7 +254,7 @@ GetNodeDiskSpaceStatsForConnection(MultiConnection *connection, uint64 *availabl
 
 
 /*
- * citus_shard_sizes returns all shard names and their sizes.
+ * citus_shard_sizes returns all shard ids and their sizes.
  */
 Datum
 citus_shard_sizes(PG_FUNCTION_ARGS)
@@ -271,7 +272,7 @@ citus_shard_sizes(PG_FUNCTION_ARGS)
 	TupleDesc tupleDescriptor = NULL;
 	Tuplestorestate *tupleStore = SetupTuplestore(fcinfo, &tupleDescriptor);
 
-	ReceiveShardNameAndSizeResults(connectionList, tupleStore, tupleDescriptor);
+	ReceiveShardIdAndSizeResults(connectionList, tupleStore, tupleDescriptor);
 
 	PG_RETURN_VOID();
 }
@@ -446,12 +447,12 @@ GenerateShardStatisticsQueryList(List *workerNodeList, List *citusTableIds)
 
 
 /*
- * ReceiveShardNameAndSizeResults receives shard name and size results from the given
+ * ReceiveShardIdAndSizeResults receives shard id and size results from the given
  * connection list.
  */
 static void
-ReceiveShardNameAndSizeResults(List *connectionList, Tuplestorestate *tupleStore,
-							   TupleDesc tupleDescriptor)
+ReceiveShardIdAndSizeResults(List *connectionList, Tuplestorestate *tupleStore,
+							 TupleDesc tupleDescriptor)
 {
 	MultiConnection *connection = NULL;
 	foreach_ptr(connection, connectionList)
@@ -488,13 +489,9 @@ ReceiveShardNameAndSizeResults(List *connectionList, Tuplestorestate *tupleStore
 			memset(values, 0, sizeof(values));
 			memset(isNulls, false, sizeof(isNulls));
 
-			/* format is [0] shard id, [1] shard name, [2] size */
-			char *tableName = PQgetvalue(result, rowIndex, 1);
-			Datum resultStringDatum = CStringGetDatum(tableName);
-			Datum textDatum = DirectFunctionCall1(textin, resultStringDatum);
-
-			values[0] = textDatum;
-			values[1] = ParseIntField(result, rowIndex, 2);
+			/* format is [0] shard id, [1] size */
+			values[0] = ParseIntField(result, rowIndex, 0);
+			values[1] = ParseIntField(result, rowIndex, 1);
 
 			tuplestore_putvalues(tupleStore, tupleDescriptor, values, isNulls);
 		}
@@ -920,6 +917,12 @@ static char *
 GenerateAllShardStatisticsQueryForNode(WorkerNode *workerNode, List *citusTableIds)
 {
 	StringInfo allShardStatisticsQuery = makeStringInfo();
+	bool insertedValues = false;
+
+	appendStringInfoString(allShardStatisticsQuery, "SELECT shard_id, ");
+	appendStringInfo(allShardStatisticsQuery, PG_TOTAL_RELATION_SIZE_FUNCTION,
+					 "table_name");
+	appendStringInfoString(allShardStatisticsQuery, " FROM (VALUES ");
 
 	Oid relationId = InvalidOid;
 	foreach_oid(relationId, citusTableIds)
@@ -934,34 +937,49 @@ GenerateAllShardStatisticsQueryForNode(WorkerNode *workerNode, List *citusTableI
 		{
 			List *shardIntervalsOnNode = ShardIntervalsOnWorkerGroup(workerNode,
 																	 relationId);
-			char *shardStatisticsQuery =
-				GenerateShardStatisticsQueryForShardList(shardIntervalsOnNode);
-			appendStringInfoString(allShardStatisticsQuery, shardStatisticsQuery);
+			if (list_length(shardIntervalsOnNode) == 0)
+			{
+				relation_close(relation, AccessShareLock);
+				continue;
+			}
+			char *shardIdNameValues =
+				GenerateShardIdNameValuesForShardList(shardIntervalsOnNode,
+													  !insertedValues);
+			insertedValues = true;
+			appendStringInfoString(allShardStatisticsQuery, shardIdNameValues);
 			relation_close(relation, AccessShareLock);
 		}
 	}
 
-	/* Add a dummy entry so that UNION ALL doesn't complain */
-	appendStringInfo(allShardStatisticsQuery, "SELECT 0::bigint, NULL::text, 0::bigint;");
+	if (!insertedValues)
+	{
+		return "SELECT 0 AS shard_id, '' AS table_name LIMIT 0";
+	}
 
+	appendStringInfoString(allShardStatisticsQuery, ") t(shard_id, table_name) "
+													"WHERE to_regclass(table_name) IS NOT NULL");
 	return allShardStatisticsQuery->data;
 }
 
 
 /*
- * GenerateShardStatisticsQueryForShardList generates a query that returns:
- * SELECT shard_id, shard_name, shard_size for all shards in the list
+ * GenerateShardIdNameValuesForShardList generates a list of (shard_id, shard_name) values
+ * for all shards in the list
  */
 static char *
-GenerateShardStatisticsQueryForShardList(List *shardIntervalList)
+GenerateShardIdNameValuesForShardList(List *shardIntervalList, bool firstValue)
 {
 	StringInfo selectQuery = makeStringInfo();
 
 	ShardInterval *shardInterval = NULL;
 	foreach_ptr(shardInterval, shardIntervalList)
 	{
-		AppendShardSizeQuery(selectQuery, shardInterval);
-		appendStringInfo(selectQuery, " UNION ALL ");
+		if (!firstValue)
+		{
+			appendStringInfoString(selectQuery, ", ");
+		}
+		firstValue = false;
+		AppendShardIdNameValues(selectQuery, shardInterval);
 	}
 
 	return selectQuery->data;
@@ -969,11 +987,10 @@ GenerateShardStatisticsQueryForShardList(List *shardIntervalList)
 
 
 /*
- * AppendShardSizeQuery appends a query in the following form to selectQuery
- * SELECT shard_id, shard_name, shard_size
+ * AppendShardIdNameValues appends (shard_id, shard_name) for shard
  */
 static void
-AppendShardSizeQuery(StringInfo selectQuery, ShardInterval *shardInterval)
+AppendShardIdNameValues(StringInfo selectQuery, ShardInterval *shardInterval)
 {
 	uint64 shardId = shardInterval->shardId;
 	Oid schemaId = get_rel_namespace(shardInterval->relationId);
@@ -985,9 +1002,7 @@ AppendShardSizeQuery(StringInfo selectQuery, ShardInterval *shardInterval)
 	char *shardQualifiedName = quote_qualified_identifier(schemaName, shardName);
 	char *quotedShardName = quote_literal_cstr(shardQualifiedName);
 
-	appendStringInfo(selectQuery, "SELECT " UINT64_FORMAT " AS shard_id, ", shardId);
-	appendStringInfo(selectQuery, "%s AS shard_name, ", quotedShardName);
-	appendStringInfo(selectQuery, PG_TOTAL_RELATION_SIZE_FUNCTION, quotedShardName);
+	appendStringInfo(selectQuery, "(" UINT64_FORMAT ", %s)", shardId, quotedShardName);
 }
 
 
