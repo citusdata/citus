@@ -14,9 +14,12 @@
 #include "access/htup_details.h"
 #include "access/xact.h"
 #include "catalog/objectaddress.h"
+#include "catalog/pg_collation.h"
 #include "catalog/pg_database.h"
 #include "commands/dbcommands.h"
+#include "commands/tablespace.h"
 #include "miscadmin.h"
+#include "nodes/makefuncs.h"
 #include "nodes/parsenodes.h"
 #include "utils/builtins.h"
 #include "utils/syscache.h"
@@ -35,6 +38,23 @@
 #include "distributed/relation_access_tracking.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/worker_transaction.h"
+
+
+/* macros to add DefElems to a list  */
+#define DEFELEM_ADD_STRING(options, key, value) { \
+		DefElem *elem = makeDefElem(key, (Node *) makeString(value), -1); \
+		options = lappend(options, elem); \
+}
+
+#define DEFELEM_ADD_BOOL(options, key, value) { \
+		DefElem *elem = makeDefElem(key, (Node *) makeBoolean(value), -1); \
+		options = lappend(options, elem); \
+}
+
+#define DEFELEM_ADD_INT(options, key, value) { \
+		DefElem *elem = makeDefElem(key, (Node *) makeInteger(value), -1); \
+		options = lappend(options, elem); \
+}
 
 
 static AlterOwnerStmt * RecreateAlterDatabaseOwnerStmt(Oid databaseOid);
@@ -143,6 +163,129 @@ AlterDatabaseOwnerObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
 	ObjectAddressSet(*address, DatabaseRelationId, databaseOid);
 
 	return list_make1(address);
+}
+
+
+/*
+ * CreateDatabaseDDLCommands returns a list of sql statements to idempotently
+ * create a database.
+ */
+List *
+CreateDatabaseDDLCommands(const ObjectAddress *address)
+{
+	Node *stmt = (Node *) RecreateCreatedbStmt(address->objectId);
+	char *createDatabaseCommand = DeparseTreeNode(stmt);
+
+	StringInfo internalCreateCommand = makeStringInfo();
+	appendStringInfo(internalCreateCommand,
+					 "SELECT pg_catalog.citus_internal_database_command(%s)",
+					 quote_literal_cstr(createDatabaseCommand));
+
+	return list_make1(internalCreateCommand->data);
+}
+
+
+/*
+ * RecreateCreatedbStmt creates a CreatedbStmt for recreating the given
+ * database.
+ */
+CreatedbStmt *
+RecreateCreatedbStmt(Oid databaseOid)
+{
+	HeapTuple dbTuple = SearchSysCache1(DATABASEOID, ObjectIdGetDatum(databaseOid));
+	if (!HeapTupleIsValid(dbTuple))
+	{
+		ereport(ERROR, (errcode(ERRCODE_UNDEFINED_OBJECT),
+						errmsg("database with OID %u does not exist", databaseOid)));
+	}
+
+	Form_pg_database dbRecord = (Form_pg_database) GETSTRUCT(dbTuple);
+
+	List *options = NIL;
+
+	/* OWNER */
+	char *ownerName = GetUserNameFromId(dbRecord->datdba, false);
+	DEFELEM_ADD_STRING(options, "owner", ownerName);
+
+	/* options below are following pg_database.h order */
+
+	/* ENCODING */
+	char *encodingName = (char *) pg_encoding_to_char(dbRecord->encoding);
+	DEFELEM_ADD_STRING(options, "encoding", encodingName);
+
+	/* LOCALE_PROVIDER */
+	char *localeProvider = dbRecord->datlocprovider == COLLPROVIDER_ICU ? "icu" : "libc";
+	DEFELEM_ADD_STRING(options, "locale_provider", localeProvider);
+
+	/* LOCALE_PROVIDER */
+	bool isTemplate = dbRecord->datistemplate;
+	DEFELEM_ADD_BOOL(options, "is_template", isTemplate);
+
+	/* ALLOW_CONNECTIONS */
+	bool allowConns = dbRecord->datallowconn;
+	DEFELEM_ADD_BOOL(options, "allow_connections", allowConns);
+
+	/* CONNECTION_LIMIT */
+	int connectionLimit = dbRecord->datconnlimit;
+	DEFELEM_ADD_INT(options, "connection_limit", connectionLimit);
+
+	/* TABLESPACE */
+	char *tablespaceName = get_tablespace_name(dbRecord->dattablespace);
+	DEFELEM_ADD_STRING(options, "tablespace", tablespaceName);
+
+	/* LC_COLLATE */
+	bool isNull = false;
+	Datum collateDatum = SysCacheGetAttr(DATABASEOID, dbTuple,
+										 Anum_pg_database_datcollate, &isNull);
+	if (!isNull)
+	{
+		char *collate = TextDatumGetCString(collateDatum);
+		DEFELEM_ADD_STRING(options, "lc_collate", collate);
+	}
+
+	/* LC_CTYPE */
+	Datum ctypeDatum = SysCacheGetAttr(DATABASEOID, dbTuple,
+									   Anum_pg_database_datctype, &isNull);
+	if (!isNull)
+	{
+		char *ctype = TextDatumGetCString(ctypeDatum);
+		DEFELEM_ADD_STRING(options, "lc_ctype", ctype);
+	}
+
+	/* ICU_LOCALE */
+	Datum icuLocaleDatum = SysCacheGetAttr(DATABASEOID, dbTuple,
+										   Anum_pg_database_daticulocale, &isNull);
+	if (!isNull)
+	{
+		char *icuLocale = TextDatumGetCString(icuLocaleDatum);
+		DEFELEM_ADD_STRING(options, "icu_locale", icuLocale);
+	}
+
+#if PG_VERSION_NUM >= PG_VERSION_15
+
+	/* COLLATION_VERSION */
+	Datum collationVersionDatum = SysCacheGetAttr(DATABASEOID, dbTuple,
+												  Anum_pg_database_datcollversion,
+												  &isNull);
+	if (!isNull)
+	{
+		char *collationVersion = TextDatumGetCString(collationVersionDatum);
+		DEFELEM_ADD_STRING(options, "collation_version", collationVersion);
+	}
+
+	/* TODO: decide whether we want OID */
+
+	/* as a general policy, we use WAL strategy on PG15+ */
+	DEFELEM_ADD_STRING(options, "strategy", "wal_log");
+#endif
+
+	CreatedbStmt *stmt = makeNode(CreatedbStmt);
+	stmt->dbname = NameStr(dbRecord->datname);
+	stmt->options = options;
+
+	ReleaseSysCache(dbTuple);
+
+	return stmt;
 }
 
 

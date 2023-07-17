@@ -439,6 +439,13 @@ GetDependencyCreateDDLCommands(const ObjectAddress *dependency)
 		{
 			List *databaseDDLCommands = NIL;
 
+			if (EnableCreateDatabasePropagation)
+			{
+				List *createDatabaseCommands = CreateDatabaseDDLCommands(dependency);
+				databaseDDLCommands = list_concat(databaseDDLCommands,
+												  createDatabaseCommands);
+			}
+
 			/* only propagate the ownership of the database when the feature is on */
 			if (EnableAlterDatabaseOwner)
 			{

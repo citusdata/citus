@@ -101,14 +101,14 @@ AppendCreatedbStmt(StringInfo buf, CreatedbStmt *stmt)
 			appendStringInfo(buf, " LC_CTYPE %s",
 							 quote_literal_cstr(lc_ctype));
 		}
-		else if (strcmp(option->defname, "icuLocale") == 0)
+		else if (strcmp(option->defname, "icu_locale") == 0)
 		{
 			char *icuLocale = defGetString(option);
 
 			appendStringInfo(buf, " ICU_LOCALE %s",
 							 quote_literal_cstr(icuLocale));
 		}
-		else if (strcmp(option->defname, "localeProvider") == 0)
+		else if (strcmp(option->defname, "locale_provider") == 0)
 		{
 			char *localeProvider = defGetString(option);
 
@@ -164,7 +164,7 @@ AppendCreatedbStmt(StringInfo buf, CreatedbStmt *stmt)
 		else
 		{
 			ereport(ERROR, (errcode(ERRCODE_SYNTAX_ERROR),
-							errmsg("unrecognized DROP DATABASE option \"%s\"",
+							errmsg("unrecognized CREATE DATABASE option \"%s\"",
 								   option->defname)));
 		}
 	}
