@@ -1184,9 +1184,9 @@ SourceResultPartitionColumnIndex(Query *mergeQuery, List *sourceTargetList,
 {
 	if (IsCitusTableType(targetRelation->relationId, SINGLE_SHARD_DISTRIBUTED))
 	{
-		ereport(ERROR, (errmsg("MERGE operation on non-colocated "
-							   "distributed table(s) without a shard "
-							   "key is  not yet supported")));
+		ereport(ERROR, (errmsg("MERGE operation across distributed schemas "
+							   "or with a row-based distributed table is "
+							   "not yet supported")));
 	}
 
 	/* Get all the Join conditions from the ON clause */
