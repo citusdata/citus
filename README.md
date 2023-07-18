@@ -354,7 +354,7 @@ Available since Citus 12.0, [schema-based sharding](https://docs.citusdata.com/e
 
 ### Creating distributed schemas
 
-You can turn an existing schema into a distriubuted schema by calling `citus_schema_distribute`:
+You can turn an existing schema into a distributed schema by calling `citus_schema_distribute`:
 
 ```sql
 SELECT citus_schema_distribute('user_service');
