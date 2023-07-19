@@ -28,6 +28,8 @@ pyenv activate packaging_env
 git clone -b v0.8.27 --depth=1  https://github.com/citusdata/tools.git tools
 python3 -m pip install -r tools/packaging_automation/requirements.txt
 
+python3 -m pip install attrs
+
 echo "Package type: ${package_type}"
 echo "OS version: $(get_rpm_os_version)"
 
