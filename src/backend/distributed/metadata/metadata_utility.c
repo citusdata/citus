@@ -1968,7 +1968,7 @@ DeleteShardRow(uint64 shardId)
 	Relation pgDistShard = table_open(DistShardRelationId(), RowExclusiveLock);
 
 	ScanKeyInit(&scanKey[0], Anum_pg_dist_shard_shardid,
-				BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(shardId));
+				BTEqualStrategyNumber, F_INT8EQ, UInt64GetDatum(shardId));
 
 	SysScanDesc scanDescriptor = systable_beginscan(pgDistShard,
 													DistShardShardidIndexId(), indexOK,
@@ -2012,7 +2012,7 @@ DeleteShardPlacementRow(uint64 placementId)
 	TupleDesc tupleDescriptor = RelationGetDescr(pgDistPlacement);
 
 	ScanKeyInit(&scanKey[0], Anum_pg_dist_placement_placementid,
-				BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(placementId));
+				BTEqualStrategyNumber, F_INT8EQ, UInt64GetDatum(placementId));
 
 	SysScanDesc scanDescriptor = systable_beginscan(pgDistPlacement,
 													DistPlacementPlacementidIndexId(),
@@ -2062,7 +2062,7 @@ UpdatePlacementGroupId(uint64 placementId, int groupId)
 	Relation pgDistPlacement = table_open(DistPlacementRelationId(), RowExclusiveLock);
 	TupleDesc tupleDescriptor = RelationGetDescr(pgDistPlacement);
 	ScanKeyInit(&scanKey[0], Anum_pg_dist_placement_placementid,
-				BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(placementId));
+				BTEqualStrategyNumber, F_INT8EQ, UInt64GetDatum(placementId));
 
 	SysScanDesc scanDescriptor = systable_beginscan(pgDistPlacement,
 													DistPlacementPlacementidIndexId(),
@@ -3286,11 +3286,11 @@ BackgroundTaskHasUmnetDependencies(int64 jobId, int64 taskId)
 
 	/* pg_catalog.pg_dist_background_task_depend.job_id = jobId */
 	ScanKeyInit(&scanKey[0], Anum_pg_dist_background_task_depend_job_id,
-				BTEqualStrategyNumber, F_INT8EQ, jobId);
+				BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(jobId));
 
 	/* pg_catalog.pg_dist_background_task_depend.task_id = $taskId */
 	ScanKeyInit(&scanKey[1], Anum_pg_dist_background_task_depend_task_id,
-				BTEqualStrategyNumber, F_INT8EQ, taskId);
+				BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(taskId));
 
 	SysScanDesc scanDescriptor =
 		systable_beginscan(pgDistBackgroundTasksDepend,

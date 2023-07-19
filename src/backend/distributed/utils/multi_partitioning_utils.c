@@ -411,9 +411,9 @@ CheckConstraintNameListForRelation(Oid relationId)
 	Relation pgConstraint = table_open(ConstraintRelationId, AccessShareLock);
 
 	ScanKeyInit(&scanKey[0], Anum_pg_constraint_conrelid,
-				BTEqualStrategyNumber, F_OIDEQ, relationId);
+				BTEqualStrategyNumber, F_OIDEQ, ObjectIdGetDatum(relationId));
 	ScanKeyInit(&scanKey[1], Anum_pg_constraint_contype,
-				BTEqualStrategyNumber, F_CHAREQ, CONSTRAINT_CHECK);
+				BTEqualStrategyNumber, F_CHAREQ, CharGetDatum(CONSTRAINT_CHECK));
 
 	bool useIndex = false;
 	SysScanDesc scanDescriptor = systable_beginscan(pgConstraint, InvalidOid, useIndex,

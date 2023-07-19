@@ -1227,7 +1227,7 @@ GetForeignKeyOids(Oid relationId, int flags)
 
 	Relation pgConstraint = table_open(ConstraintRelationId, AccessShareLock);
 	ScanKeyInit(&scanKey[0], pgConstraintTargetAttrNumber,
-				BTEqualStrategyNumber, F_OIDEQ, relationId);
+				BTEqualStrategyNumber, F_OIDEQ, ObjectIdGetDatum(relationId));
 	SysScanDesc scanDescriptor = systable_beginscan(pgConstraint, indexOid, useIndex,
 													NULL, scanKeyCount, scanKey);
 

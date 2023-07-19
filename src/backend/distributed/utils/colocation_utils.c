@@ -532,7 +532,7 @@ ColocationId(int shardCount, int replicationFactor, Oid distributionColumnType, 
 	ScanKeyInit(&scanKey[0], Anum_pg_dist_colocation_distributioncolumntype,
 				BTEqualStrategyNumber, F_OIDEQ, ObjectIdGetDatum(distributionColumnType));
 	ScanKeyInit(&scanKey[1], Anum_pg_dist_colocation_shardcount,
-				BTEqualStrategyNumber, F_INT4EQ, UInt32GetDatum(shardCount));
+				BTEqualStrategyNumber, F_INT4EQ, Int32GetDatum(shardCount));
 	ScanKeyInit(&scanKey[2], Anum_pg_dist_colocation_replicationfactor,
 				BTEqualStrategyNumber, F_INT4EQ, Int32GetDatum(replicationFactor));
 	ScanKeyInit(&scanKey[3], Anum_pg_dist_colocation_distributioncolumncollation,
@@ -1183,7 +1183,7 @@ ColocatedTableId(Oid colocationId)
 	}
 
 	ScanKeyInit(&scanKey[0], Anum_pg_dist_partition_colocationid,
-				BTEqualStrategyNumber, F_INT4EQ, ObjectIdGetDatum(colocationId));
+				BTEqualStrategyNumber, F_OIDEQ, ObjectIdGetDatum(colocationId));
 
 	Relation pgDistPartition = table_open(DistPartitionRelationId(), AccessShareLock);
 	TupleDesc tupleDescriptor = RelationGetDescr(pgDistPartition);

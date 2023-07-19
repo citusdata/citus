@@ -5610,8 +5610,8 @@ GetPoolinfoViaCatalog(int64 nodeId)
 	char *poolinfo = NULL;
 
 	/* set scan arguments */
-	ScanKeyInit(&scanKey[0], nodeIdIdx, BTEqualStrategyNumber, F_INT4EQ,
-				Int32GetDatum(nodeId));
+	ScanKeyInit(&scanKey[0], nodeIdIdx, BTEqualStrategyNumber, F_INT8EQ,
+				Int64GetDatum(nodeId));
 
 	SysScanDesc scanDescriptor = systable_beginscan(pgDistPoolinfo, DistPoolinfoIndexId(),
 													indexOK,

@@ -707,9 +707,9 @@ ReadStripeSkipList(RelFileNode relfilenode, uint64 stripe, TupleDesc tupleDescri
 	Relation columnarChunk = table_open(columnarChunkOid, AccessShareLock);
 
 	ScanKeyInit(&scanKey[0], Anum_columnar_chunk_storageid,
-				BTEqualStrategyNumber, F_OIDEQ, UInt64GetDatum(storageId));
+				BTEqualStrategyNumber, F_INT8EQ, UInt64GetDatum(storageId));
 	ScanKeyInit(&scanKey[1], Anum_columnar_chunk_stripe,
-				BTEqualStrategyNumber, F_OIDEQ, Int32GetDatum(stripe));
+				BTEqualStrategyNumber, F_INT8EQ, UInt64GetDatum(stripe));
 
 	Oid indexId = ColumnarChunkIndexRelationId();
 	bool indexOk = OidIsValid(indexId);
@@ -915,7 +915,7 @@ StripeMetadataLookupRowNumber(Relation relation, uint64 rowNumber, Snapshot snap
 	uint64 storageId = ColumnarStorageGetStorageId(relation, false);
 	ScanKeyData scanKey[2];
 	ScanKeyInit(&scanKey[0], Anum_columnar_stripe_storageid,
-				BTEqualStrategyNumber, F_OIDEQ, Int32GetDatum(storageId));
+				BTEqualStrategyNumber, F_INT8EQ, UInt64GetDatum(storageId));
 
 	StrategyNumber strategyNumber = InvalidStrategy;
 	RegProcedure procedure = InvalidOid;
@@ -1081,7 +1081,7 @@ FindStripeWithHighestRowNumber(Relation relation, Snapshot snapshot)
 	uint64 storageId = ColumnarStorageGetStorageId(relation, false);
 	ScanKeyData scanKey[1];
 	ScanKeyInit(&scanKey[0], Anum_columnar_stripe_storageid,
-				BTEqualStrategyNumber, F_OIDEQ, Int32GetDatum(storageId));
+				BTEqualStrategyNumber, F_INT8EQ, UInt64GetDatum(storageId));
 
 	Relation columnarStripes = table_open(ColumnarStripeRelationId(), AccessShareLock);
 
@@ -1143,9 +1143,9 @@ ReadChunkGroupRowCounts(uint64 storageId, uint64 stripe, uint32 chunkGroupCount,
 
 	ScanKeyData scanKey[2];
 	ScanKeyInit(&scanKey[0], Anum_columnar_chunkgroup_storageid,
-				BTEqualStrategyNumber, F_OIDEQ, UInt64GetDatum(storageId));
+				BTEqualStrategyNumber, F_INT8EQ, UInt64GetDatum(storageId));
 	ScanKeyInit(&scanKey[1], Anum_columnar_chunkgroup_stripe,
-				BTEqualStrategyNumber, F_OIDEQ, Int32GetDatum(stripe));
+				BTEqualStrategyNumber, F_INT8EQ, UInt64GetDatum(stripe));
 
 	Oid indexId = ColumnarChunkGroupIndexRelationId();
 	bool indexOk = OidIsValid(indexId);
@@ -1372,9 +1372,9 @@ UpdateStripeMetadataRow(uint64 storageId, uint64 stripeId, bool *update,
 
 	ScanKeyData scanKey[2];
 	ScanKeyInit(&scanKey[0], Anum_columnar_stripe_storageid,
-				BTEqualStrategyNumber, F_OIDEQ, Int32GetDatum(storageId));
+				BTEqualStrategyNumber, F_INT8EQ, UInt64GetDatum(storageId));
 	ScanKeyInit(&scanKey[1], Anum_columnar_stripe_stripe,
-				BTEqualStrategyNumber, F_OIDEQ, Int32GetDatum(stripeId));
+				BTEqualStrategyNumber, F_INT8EQ, UInt64GetDatum(stripeId));
 
 	Oid columnarStripesOid = ColumnarStripeRelationId();
 
@@ -1451,7 +1451,7 @@ ReadDataFileStripeList(uint64 storageId, Snapshot snapshot)
 	HeapTuple heapTuple;
 
 	ScanKeyInit(&scanKey[0], Anum_columnar_stripe_storageid,
-				BTEqualStrategyNumber, F_OIDEQ, Int32GetDatum(storageId));
+				BTEqualStrategyNumber, F_INT8EQ, UInt64GetDatum(storageId));
 
 	Oid columnarStripesOid = ColumnarStripeRelationId();
 
