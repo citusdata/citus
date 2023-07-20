@@ -4415,9 +4415,9 @@ RegisterCitusTableCacheEntryReleaseCallbacks(void)
 
 
 /*
- * GetLocalGroupId returns the group identifier of the local node. The function assumes
- * that pg_dist_local_node_group has exactly one row and has at least one column.
- * Otherwise, the function errors out.
+ * GetLocalGroupId returns the group identifier of the local node. The function
+ * assumes that pg_dist_local_group has exactly one row and has at least one
+ * column. Otherwise, the function errors out.
  */
 int32
 GetLocalGroupId(void)
