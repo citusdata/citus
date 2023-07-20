@@ -2796,7 +2796,15 @@ FindAllowedTargetFillState(RebalanceState *state, uint64 shardId)
 				targetFillState->node,
 				state->functions->context))
 		{
-			return targetFillState;
+			bool targetHasShard = PlacementsHashFind(state->placementsHash,
+													 shardId,
+													 targetFillState->node);
+
+			/* skip if the shard is already placed on the target node */
+			if (!targetHasShard)
+			{
+				return targetFillState;
+			}
 		}
 	}
 	return NULL;
