@@ -220,7 +220,7 @@ id_title AS (SELECT id, title from articles_hash WHERE author_id = 2)
 SELECT * FROM id_author, id_title WHERE id_author.id = id_title.id;
 DEBUG:  CTE id_author is going to be inlined via distributed planning
 DEBUG:  CTE id_title is going to be inlined via distributed planning
-DEBUG:  cannot run command which targets multiple shards
+DEBUG:  router planner does not support queries that reference non-colocated distributed tables
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  query has a single distribution column value: 2
