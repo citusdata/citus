@@ -768,7 +768,7 @@ SELECT * FROM author_articles_id_word_count(1);
 -- use fast-path queries
 PREPARE insert_sel(int, int) AS
 INSERT INTO articles_hash
-	SELECT * FROM articles_hash WHERE author_id = $2 AND word_count = $1 OFFSET 0;
+	SELECT max(id), max(author_id), title, word_count FROM articles_hash WHERE author_id = $2 AND word_count = $1 GROUP BY title, word_count;
 
 EXECUTE insert_sel(1,1);
 EXECUTE insert_sel(1,1);

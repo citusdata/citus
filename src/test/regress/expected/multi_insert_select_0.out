@@ -164,6 +164,7 @@ INSERT INTO raw_events_first (user_id, time) VALUES
 -- try a single shard query
 SET client_min_messages TO DEBUG2;
 INSERT INTO raw_events_second (user_id, time) SELECT user_id, time FROM raw_events_first WHERE user_id = 7;
+DEBUG:  Creating router plan
 DEBUG:  Skipping target shard interval 13300004 since SELECT query for it pruned away
 DEBUG:  distributed statement: INSERT INTO multi_insert_select.raw_events_second_13300005 AS citus_table_alias (user_id, "time") SELECT user_id, "time" FROM multi_insert_select.raw_events_first_13300001 raw_events_first WHERE ((user_id OPERATOR(pg_catalog.=) 7) AND (user_id IS NOT NULL))
 DEBUG:  Skipping target shard interval 13300006 since SELECT query for it pruned away
@@ -181,6 +182,7 @@ FROM
    raw_events_first
 WHERE
    user_id = 8;
+DEBUG:  Creating router plan
 DEBUG:  distributed statement: INSERT INTO multi_insert_select.raw_events_second_13300004 AS citus_table_alias (user_id, "time", value_1, value_2, value_3, value_4) SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM multi_insert_select.raw_events_first_13300000 raw_events_first WHERE ((user_id OPERATOR(pg_catalog.=) 8) AND (user_id IS NOT NULL))
 DEBUG:  Skipping target shard interval 13300005 since SELECT query for it pruned away
 DEBUG:  Skipping target shard interval 13300006 since SELECT query for it pruned away
@@ -193,6 +195,7 @@ FROM
    raw_events_first
 WHERE
    false;
+DEBUG:  Creating router plan
 DEBUG:  Skipping target shard interval 13300004 since SELECT query for it pruned away
 DEBUG:  Skipping target shard interval 13300005 since SELECT query for it pruned away
 DEBUG:  Skipping target shard interval 13300006 since SELECT query for it pruned away
@@ -205,6 +208,7 @@ FROM
    raw_events_first
 WHERE
    0 != 0;
+DEBUG:  Creating router plan
 DEBUG:  Skipping target shard interval 13300004 since SELECT query for it pruned away
 DEBUG:  Skipping target shard interval 13300005 since SELECT query for it pruned away
 DEBUG:  Skipping target shard interval 13300006 since SELECT query for it pruned away
@@ -381,6 +385,7 @@ FROM   raw_events_first
 WHERE  user_id IN (SELECT user_id
                    FROM   raw_events_second
                    WHERE  user_id = 2);
+DEBUG:  Creating router plan
 DEBUG:  Skipping target shard interval 13300004 since SELECT query for it pruned away
 DEBUG:  Skipping target shard interval 13300005 since SELECT query for it pruned away
 DEBUG:  Skipping target shard interval 13300006 since SELECT query for it pruned away
@@ -403,6 +408,7 @@ SELECT user_id
 FROM   raw_events_first
 WHERE  user_id IN (SELECT user_id
                    FROM  raw_events_second WHERE false);
+DEBUG:  Creating router plan
 DEBUG:  Skipping target shard interval 13300004 since SELECT query for it pruned away
 DEBUG:  Skipping target shard interval 13300005 since SELECT query for it pruned away
 DEBUG:  Skipping target shard interval 13300006 since SELECT query for it pruned away
@@ -786,6 +792,7 @@ DEBUG:  Collecting INSERT ... SELECT results on coordinator
  FROM
    raw_events_first LEFT JOIN raw_events_second ON raw_events_first.user_id = raw_events_second.user_id
    WHERE raw_events_first.user_id = 10;
+DEBUG:  Creating router plan
 DEBUG:  distributed statement: INSERT INTO multi_insert_select.agg_events_13300008 AS citus_table_alias (user_id) SELECT raw_events_first.user_id FROM (multi_insert_select.raw_events_first_13300000 raw_events_first LEFT JOIN multi_insert_select.raw_events_second_13300004 raw_events_second ON ((raw_events_first.user_id OPERATOR(pg_catalog.=) raw_events_second.user_id))) WHERE ((raw_events_first.user_id OPERATOR(pg_catalog.=) 10) AND (raw_events_first.user_id IS NOT NULL))
 DEBUG:  Skipping target shard interval 13300009 since SELECT query for it pruned away
 DEBUG:  Skipping target shard interval 13300010 since SELECT query for it pruned away
@@ -806,6 +813,7 @@ DEBUG:  distributed statement: INSERT INTO multi_insert_select.agg_events_133000
  FROM
    raw_events_first INNER JOIN raw_events_second ON raw_events_first.user_id = raw_events_second.user_id
    WHERE raw_events_first.user_id = 10 AND raw_events_first.user_id = 20;
+DEBUG:  Creating router plan
 DEBUG:  Skipping target shard interval 13300008 since SELECT query for it pruned away
 DEBUG:  Skipping target shard interval 13300009 since SELECT query for it pruned away
 DEBUG:  Skipping target shard interval 13300010 since SELECT query for it pruned away
@@ -816,6 +824,7 @@ DEBUG:  Skipping target shard interval 13300011 since SELECT query for it pruned
  FROM
    raw_events_first LEFT JOIN raw_events_second ON raw_events_first.user_id = raw_events_second.user_id
    WHERE raw_events_first.user_id = 10 AND raw_events_second.user_id = 20;
+DEBUG:  Creating router plan
 DEBUG:  Skipping target shard interval 13300008 since SELECT query for it pruned away
 DEBUG:  Skipping target shard interval 13300009 since SELECT query for it pruned away
 DEBUG:  Skipping target shard interval 13300010 since SELECT query for it pruned away
@@ -1265,6 +1274,7 @@ SELECT
   user_id
 FROM
   reference_table;
+DEBUG:  Creating router plan
 DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition columns in the source table and subquery do not match
 DETAIL:  The target table's partition column should correspond to a partition column in the subquery.
 DEBUG:  Distributed planning for a fast-path router query
@@ -1662,6 +1672,7 @@ FROM   raw_events_first
 WHERE  user_id IN (SELECT raw_events_second.user_id
                    FROM   raw_events_second, raw_events_first
                    WHERE  raw_events_second.user_id = raw_events_first.user_id AND raw_events_first.user_id = 200);
+DEBUG:  Creating router plan
 DEBUG:  distributed statement: INSERT INTO multi_insert_select.raw_events_second_13300004 AS citus_table_alias (user_id) SELECT user_id FROM multi_insert_select.raw_events_first_13300000 raw_events_first WHERE ((user_id OPERATOR(pg_catalog.=) ANY (SELECT raw_events_second.user_id FROM multi_insert_select.raw_events_second_13300004 raw_events_second, multi_insert_select.raw_events_first_13300000 raw_events_first_1 WHERE ((raw_events_second.user_id OPERATOR(pg_catalog.=) raw_events_first_1.user_id) AND (raw_events_first_1.user_id OPERATOR(pg_catalog.=) 200)))) AND (user_id IS NOT NULL))
 DEBUG:  Skipping target shard interval 13300005 since SELECT query for it pruned away
 DEBUG:  Skipping target shard interval 13300006 since SELECT query for it pruned away
@@ -2034,6 +2045,7 @@ truncate raw_events_first;
 SET client_min_messages TO DEBUG2;
 -- now show that it works for a single shard query as well
 INSERT INTO raw_events_first SELECT * FROM raw_events_second WHERE user_id = 5;
+DEBUG:  Creating router plan
 DEBUG:  distributed statement: INSERT INTO multi_insert_select.raw_events_first_13300000 AS citus_table_alias (user_id, "time", value_1, value_2, value_3, value_4) SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM multi_insert_select.raw_events_second_13300004 raw_events_second WHERE ((user_id OPERATOR(pg_catalog.=) 5) AND (user_id IS NOT NULL))
 DEBUG:  Skipping target shard interval 13300001 since SELECT query for it pruned away
 DEBUG:  Skipping target shard interval 13300002 since SELECT query for it pruned away
@@ -2384,6 +2396,7 @@ SELECT
   s, nextval('insert_select_test_seq'), (random()*10)::int
 FROM
   generate_series(1, 5) s;
+DEBUG:  Creating router plan
 DEBUG:  distributed INSERT ... SELECT can only select from distributed tables
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 SELECT user_id, value_1 FROM raw_events_first ORDER BY user_id, value_1;
@@ -2401,6 +2414,7 @@ DEBUG:  Router planner cannot handle multi-shard select queries
 INSERT INTO raw_events_first (user_id, value_1)
 SELECT s, nextval('insert_select_test_seq') FROM generate_series(1, 5) s
 ON CONFLICT DO NOTHING;
+DEBUG:  Creating router plan
 DEBUG:  distributed INSERT ... SELECT can only select from distributed tables
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 DEBUG:  distributed statement: INSERT INTO multi_insert_select.raw_events_first_13300000 AS citus_table_alias (user_id, value_1) SELECT user_id, value_1 FROM read_intermediate_result('insert_select_XXX_13300000'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, value_1 integer) ON CONFLICT DO NOTHING
@@ -2411,6 +2425,7 @@ DEBUG:  distributed statement: INSERT INTO multi_insert_select.raw_events_first_
 INSERT INTO raw_events_first (user_id, value_1)
 SELECT s, nextval('insert_select_test_seq') FROM generate_series(1, 5) s
 RETURNING *;
+DEBUG:  Creating router plan
 DEBUG:  distributed INSERT ... SELECT can only select from distributed tables
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 DEBUG:  distributed statement: INSERT INTO multi_insert_select.raw_events_first_13300000 AS citus_table_alias (user_id, value_1) SELECT user_id, value_1 FROM read_intermediate_result('insert_select_XXX_13300000'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, value_1 integer) RETURNING citus_table_alias.user_id, citus_table_alias."time", citus_table_alias.value_1, citus_table_alias.value_2, citus_table_alias.value_3, citus_table_alias.value_4
@@ -3461,17 +3476,20 @@ ERROR:  INSERT ... SELECT into an append-distributed table is not supported
 -- verify that CTEs at top level of INSERT SELECT, that can normally be inlined, would not be inlined by INSERT SELECT pushdown planner
 -- and handled by pull to coordinator.
 SELECT coordinator_plan($$
-  EXPLAIN (COSTS FALSE) WITH cte_1 AS (SELECT id FROM dist_table_5 WHERE id = 5)
+  EXPLAIN (COSTS FALSE) WITH cte_1 AS (SELECT id FROM dist_table_5 WHERE id > 5)
   INSERT INTO dist_table_5
-  SELECT id FROM dist_table_5 JOIN cte_1 USING(id);
+  SELECT id FROM dist_table_5 JOIN cte_1 USING(id) OFFSET 5;
 $$);
-              coordinator_plan
+                   coordinator_plan
 ---------------------------------------------------------------------
  Custom Scan (Citus INSERT ... SELECT)
    INSERT/SELECT method: pull to coordinator
    ->  Custom Scan (Citus Adaptive)
-         Task Count: 1
-(4 rows)
+         ->  Distributed Subplan XXX_1
+               ->  Limit
+                     ->  Custom Scan (Citus Adaptive)
+                           Task Count: 4
+(7 rows)
 
 -- verify that CTEs at top level of SELECT part, would be inlined by Postgres and pushed down by INSERT SELECT planner.
 SELECT coordinator_plan($$
