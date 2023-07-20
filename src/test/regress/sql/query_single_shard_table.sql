@@ -892,16 +892,6 @@ SELECT raw_events_first.user_id
 FROM raw_events_first INNER JOIN users_ref_table ON raw_events_first.user_id = users_ref_table.user_id
 WHERE raw_events_first.value_1 IN (10, 11,12) OR users_ref_table.user_id IN (1,2,3,4);
 
--- We could relax distributed insert .. select checks to allow pushing
--- down more clauses down to the worker nodes when inserting into a single
--- shard by selecting from a colocated one. We might want to do something
--- like https://github.com/citusdata/citus/pull/6772.
---
---  e.g., insert into null_shard_key_1/citus_local/reference
---        select * from null_shard_key_1/citus_local/reference limit 1
---
--- Below "limit / offset clause" test and some others are examples of this.
-
 -- limit / offset clause
 INSERT INTO agg_events (user_id) SELECT raw_events_first.user_id FROM raw_events_first LIMIT 1;
 INSERT INTO agg_events (user_id) SELECT raw_events_first.user_id FROM raw_events_first OFFSET 1;

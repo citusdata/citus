@@ -2445,9 +2445,9 @@ INSERT INTO append_table SELECT * FROM append_table;
 -- verify that CTEs at top level of INSERT SELECT, that can normally be inlined, would not be inlined by INSERT SELECT pushdown planner
 -- and handled by pull to coordinator.
 SELECT coordinator_plan($$
-  EXPLAIN (COSTS FALSE) WITH cte_1 AS (SELECT id FROM dist_table_5 WHERE id = 5)
+  EXPLAIN (COSTS FALSE) WITH cte_1 AS (SELECT id FROM dist_table_5 WHERE id > 5)
   INSERT INTO dist_table_5
-  SELECT id FROM dist_table_5 JOIN cte_1 USING(id);
+  SELECT id FROM dist_table_5 JOIN cte_1 USING(id) OFFSET 5;
 $$);
 
 -- verify that CTEs at top level of SELECT part, would be inlined by Postgres and pushed down by INSERT SELECT planner.

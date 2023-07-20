@@ -61,6 +61,8 @@ static DistributedPlan * CreateInsertSelectPlanInternal(uint64 planId,
 static DistributedPlan * CreateDistributedInsertSelectPlan(Query *originalQuery,
 														   PlannerRestrictionContext *
 														   plannerRestrictionContext);
+static bool InsertSelectRouter(Query *originalQuery,
+							   PlannerRestrictionContext *plannerRestrictionContext);
 static Task * RouterModifyTaskForShardInterval(Query *originalQuery,
 											   CitusTableCacheEntry *targetTableCacheEntry,
 											   ShardInterval *shardInterval,
@@ -75,6 +77,7 @@ static DeferredErrorMessage * DistributedInsertSelectSupported(Query *queryTree,
 															   RangeTblEntry *insertRte,
 															   RangeTblEntry *subqueryRte,
 															   bool allReferenceTables,
+															   bool routerSelect,
 															   PlannerRestrictionContext *
 															   plannerRestrictionContext);
 static DeferredErrorMessage * InsertPartitionColumnMatchesSelect(Query *query,
@@ -282,6 +285,8 @@ CreateDistributedInsertSelectPlan(Query *originalQuery,
 	RelationRestrictionContext *relationRestrictionContext =
 		plannerRestrictionContext->relationRestrictionContext;
 	bool allReferenceTables = relationRestrictionContext->allReferenceTables;
+	bool routerSelect =
+		InsertSelectRouter(copyObject(originalQuery), plannerRestrictionContext);
 
 	distributedPlan->modLevel = RowModifyLevelForQuery(originalQuery);
 
@@ -293,13 +298,27 @@ CreateDistributedInsertSelectPlan(Query *originalQuery,
 																	  insertRte,
 																	  subqueryRte,
 																	  allReferenceTables,
+																	  routerSelect,
 																	  plannerRestrictionContext);
 	if (distributedPlan->planningError)
 	{
 		return distributedPlan;
 	}
 
+
+	/*
+	 * if the query goes to a single node ("router" in Citus' parlance),
+	 * we don't need to go through AllDistributionKeysInQueryAreEqual checks.
+	 *
+	 * For PG16+, this is required as some of the outer JOINs are converted to
+	 * "ON(true)" and filters are pushed down to the table scans. As
+	 * AllDistributionKeysInQueryAreEqual rely on JOIN filters, it will fail to
+	 * detect the router case. However, we can still detect it by checking if
+	 * the query is a router query as the router query checks the filters on
+	 * the tables.
+	 */
 	bool allDistributionKeysInQueryAreEqual =
+		routerSelect ||
 		AllDistributionKeysInQueryAreEqual(originalQuery, plannerRestrictionContext);
 
 	/*
@@ -358,6 +377,23 @@ CreateDistributedInsertSelectPlan(Query *originalQuery,
 	distributedPlan->targetRelationId = targetRelationId;
 
 	return distributedPlan;
+}
+
+
+/*
+ * InsertSelectRouter is a helper function that returns true of the SELECT
+ * part of the INSERT .. SELECT query is a router query.
+ */
+static bool
+InsertSelectRouter(Query *originalQuery,
+				   PlannerRestrictionContext *plannerRestrictionContext)
+{
+	RangeTblEntry *subqueryRte = ExtractSelectRangeTableEntry(originalQuery);
+	DistributedPlan *distributedPlan = CreateRouterPlan(subqueryRte->subquery,
+														subqueryRte->subquery,
+														plannerRestrictionContext);
+
+	return distributedPlan->planningError == NULL;
 }
 
 
@@ -615,6 +651,7 @@ CreateTargetListForCombineQuery(List *targetList)
 static DeferredErrorMessage *
 DistributedInsertSelectSupported(Query *queryTree, RangeTblEntry *insertRte,
 								 RangeTblEntry *subqueryRte, bool allReferenceTables,
+								 bool routerSelect,
 								 PlannerRestrictionContext *plannerRestrictionContext)
 {
 	Oid selectPartitionColumnTableId = InvalidOid;
@@ -689,19 +726,28 @@ DistributedInsertSelectSupported(Query *queryTree, RangeTblEntry *insertRte,
 							 NULL, NULL);
 	}
 
-	/* first apply toplevel pushdown checks to SELECT query */
-	DeferredErrorMessage *error = DeferErrorIfUnsupportedSubqueryPushdown(subquery,
-																		  plannerRestrictionContext);
-	if (error)
-	{
-		return error;
-	}
+	DeferredErrorMessage *error = NULL;
 
-	/* then apply subquery pushdown checks to SELECT query */
-	error = DeferErrorIfCannotPushdownSubquery(subquery, false);
-	if (error)
+	/*
+	 * We can skip SQL support related checks for router queries as
+	 * they are safe to route with any SQL.
+	 */
+	if (!routerSelect)
 	{
-		return error;
+		/* first apply toplevel pushdown checks to SELECT query */
+		error =
+			DeferErrorIfUnsupportedSubqueryPushdown(subquery, plannerRestrictionContext);
+		if (error)
+		{
+			return error;
+		}
+
+		/* then apply subquery pushdown checks to SELECT query */
+		error = DeferErrorIfCannotPushdownSubquery(subquery, false);
+		if (error)
+		{
+			return error;
+		}
 	}
 
 	if (IsCitusTableType(targetRelationId, CITUS_LOCAL_TABLE))
