@@ -1427,7 +1427,13 @@ SELECT create_distributed_table('test_rebalance_with_disabled_worker', 'a', colo
 SELECT citus_disable_node('localhost', :worker_2_port);
 SELECT public.wait_until_metadata_sync(30000);
 
+-- errors out because shard replication factor > shard allowed node count
 SELECT rebalance_table_shards('test_rebalance_with_disabled_worker');
+
+-- set replication factor to one, and try again
+SET citus.shard_replication_factor TO 1;
+SELECT rebalance_table_shards('test_rebalance_with_disabled_worker');
+SET citus.shard_replication_factor TO 2;
 
 SELECT 1 FROM citus_activate_node('localhost', :worker_2_port);
 
