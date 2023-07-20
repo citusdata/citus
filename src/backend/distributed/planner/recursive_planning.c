@@ -1780,6 +1780,9 @@ ReplaceRTERelationWithRteSubquery(RangeTblEntry *rangeTableEntry,
 
 	/* replace the function with the constructed subquery */
 	rangeTableEntry->rtekind = RTE_SUBQUERY;
+#if PG_VERSION_NUM >= PG_VERSION_16
+	rangeTableEntry->perminfoindex = 0;
+#endif
 	rangeTableEntry->subquery = subquery;
 
 	/*
