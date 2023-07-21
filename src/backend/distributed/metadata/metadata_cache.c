@@ -83,7 +83,9 @@
 #include "utils/memutils.h"
 #include "utils/palloc.h"
 #include "utils/rel.h"
+#if PG_VERSION_NUM < PG_VERSION_16
 #include "utils/relfilenodemap.h"
+#endif
 #include "utils/relmapper.h"
 #include "utils/resowner.h"
 #include "utils/syscache.h"
