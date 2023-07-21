@@ -3286,11 +3286,11 @@ BackgroundTaskHasUmnetDependencies(int64 jobId, int64 taskId)
 
 	/* pg_catalog.pg_dist_background_task_depend.job_id = jobId */
 	ScanKeyInit(&scanKey[0], Anum_pg_dist_background_task_depend_job_id,
-				BTEqualStrategyNumber, F_INT8EQ, jobId);
+				BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(jobId));
 
 	/* pg_catalog.pg_dist_background_task_depend.task_id = $taskId */
 	ScanKeyInit(&scanKey[1], Anum_pg_dist_background_task_depend_task_id,
-				BTEqualStrategyNumber, F_INT8EQ, taskId);
+				BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(taskId));
 
 	SysScanDesc scanDescriptor =
 		systable_beginscan(pgDistBackgroundTasksDepend,

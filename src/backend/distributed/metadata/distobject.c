@@ -510,7 +510,7 @@ UpdateDistributedObjectColocationId(uint32 oldColocationId,
 	/* scan pg_dist_object for colocationId equal to old colocationId */
 	ScanKeyInit(&scanKey[0], Anum_pg_dist_object_colocationid,
 				BTEqualStrategyNumber,
-				F_INT4EQ, UInt32GetDatum(oldColocationId));
+				F_INT4EQ, Int32GetDatum(oldColocationId));
 
 	SysScanDesc scanDescriptor = systable_beginscan(pgDistObjectRel,
 													InvalidOid,

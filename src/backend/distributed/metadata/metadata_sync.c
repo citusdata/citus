@@ -1757,8 +1757,8 @@ GetFunctionDependenciesForObjects(ObjectAddress *objectAddress)
 				ObjectIdGetDatum(objectAddress->objectId));
 	ScanKeyInit(&key[2],
 				Anum_pg_depend_objsubid,
-				BTEqualStrategyNumber, F_OIDEQ,
-				ObjectIdGetDatum(objectAddress->objectSubId));
+				BTEqualStrategyNumber, F_INT4EQ,
+				Int32GetDatum(objectAddress->objectSubId));
 
 	SysScanDesc scan = systable_beginscan(depRel, DependDependerIndexId, true,
 										  NULL, 3, key);

@@ -1200,7 +1200,7 @@ FirstExtensionWithSchema(Oid schemaId)
 
 	ScanKeyData entry[1];
 	ScanKeyInit(&entry[0], Anum_pg_extension_extnamespace, BTEqualStrategyNumber,
-				F_INT4EQ, schemaId);
+				F_OIDEQ, ObjectIdGetDatum(schemaId));
 
 	SysScanDesc scan = systable_beginscan(relation, InvalidOid, false, NULL, 1, entry);
 	HeapTuple extensionTuple = systable_getnext(scan);

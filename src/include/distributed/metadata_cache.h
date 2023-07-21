@@ -320,6 +320,6 @@ extern const char * CurrentDatabaseName(void);
 
 /* connection-related functions */
 extern char * GetAuthinfoViaCatalog(const char *roleName, int64 nodeId);
-extern char * GetPoolinfoViaCatalog(int64 nodeId);
+extern char * GetPoolinfoViaCatalog(int32 nodeId);
 
 #endif /* METADATA_CACHE_H */

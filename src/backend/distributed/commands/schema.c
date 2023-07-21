@@ -369,7 +369,7 @@ SchemaHasDistributedTableWithFKey(char *schemaName)
 	Relation pgClass = table_open(RelationRelationId, AccessShareLock);
 
 	ScanKeyInit(&scanKey[0], Anum_pg_class_relnamespace, BTEqualStrategyNumber,
-				F_OIDEQ, namespaceOid);
+				F_OIDEQ, ObjectIdGetDatum(namespaceOid));
 	SysScanDesc scanDescriptor = systable_beginscan(pgClass, scanIndexId, useIndex, NULL,
 													scanKeyCount, scanKey);
 

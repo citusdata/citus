@@ -892,7 +892,7 @@ GetConstraintNameList(Oid relationId)
 	Relation pgConstraint = table_open(ConstraintRelationId, AccessShareLock);
 
 	ScanKeyInit(&scanKey[0], Anum_pg_constraint_conrelid,
-				BTEqualStrategyNumber, F_OIDEQ, relationId);
+				BTEqualStrategyNumber, F_OIDEQ, ObjectIdGetDatum(relationId));
 
 	bool useIndex = true;
 	SysScanDesc scanDescriptor = systable_beginscan(pgConstraint,

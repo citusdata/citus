@@ -5600,7 +5600,7 @@ role_exists(PG_FUNCTION_ARGS)
  * Otherwise, this function returns NULL.
  */
 char *
-GetPoolinfoViaCatalog(int64 nodeId)
+GetPoolinfoViaCatalog(int32 nodeId)
 {
 	ScanKeyData scanKey[1];
 	const int scanKeyCount = 1;
