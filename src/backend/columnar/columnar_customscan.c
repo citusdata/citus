@@ -1452,7 +1452,6 @@ static Bitmapset *
 fixup_inherited_columns(Oid parentId, Oid childId, Bitmapset *columns)
 {
 	Bitmapset *result = NULL;
-	int index;
 
 	/*
 	 * obviously, no need to do anything here
@@ -1462,12 +1461,11 @@ fixup_inherited_columns(Oid parentId, Oid childId, Bitmapset *columns)
 		return columns;
 	}
 
-	index = -1;
+	int index = -1;
 	while ((index = bms_next_member(columns, index)) >= 0)
 	{
 		/* bit numbers are offset by FirstLowInvalidHeapAttributeNumber */
 		AttrNumber attno = index + FirstLowInvalidHeapAttributeNumber;
-		char *attname;
 
 		/*
 		 * whole-row-reference shall be fixed-up later
@@ -1478,7 +1476,7 @@ fixup_inherited_columns(Oid parentId, Oid childId, Bitmapset *columns)
 			continue;
 		}
 
-		attname = get_attname(parentId, attno, false);
+		char *attname = get_attname(parentId, attno, false);
 		attno = get_attnum(childId, attname);
 		if (attno == InvalidAttrNumber)
 		{

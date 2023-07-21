@@ -38,7 +38,7 @@ RelationGetNamespaceName(Relation relation)
 /*
  * GetFilledPermissionInfo creates RTEPermissionInfo for a given RTE
  * and fills it with given data and returns this RTEPermissionInfo object.
- * Wrote this function since Postgres's addRTEPermissionInfo doesn't fill the data.
+ * Added this function since Postgres's addRTEPermissionInfo doesn't fill the data.
  *
  * Given data consists of relid, inh and requiredPerms
  * Took a quick look around Postgres, unless specified otherwise,

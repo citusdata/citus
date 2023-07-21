@@ -725,11 +725,17 @@ UnlockLockData(void)
  * which also contains entries for locks which have not been granted yet, but
  * it does not reflect the order of the wait queue. We therefore handle the
  * wait queue separately.
+ *
+ * We have separate blocks for PG16 and <PG16 because SHM_QUEUE is completely
+ * removed from PG16
  */
 
 /*
  * AddEdgesForWaitQueue adds an edge to the wait graph for processes in front of
  * waitingProc in the wait queue that are trying to acquire a conflicting lock.
+ *
+ * We have separate blocks for PG16 and <PG16 because SHM_QUEUE is completely
+ * removed from PG16
  */
 
 #if PG_VERSION_NUM >= PG_VERSION_16

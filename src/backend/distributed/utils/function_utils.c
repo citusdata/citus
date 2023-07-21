@@ -42,7 +42,7 @@ FunctionOidExtended(const char *schemaName, const char *functionName, int argume
 {
 	char *qualifiedFunctionName = quote_qualified_identifier(schemaName, functionName);
 	List *qualifiedFunctionNameList = stringToQualifiedNameList_compat(
-		qualifiedFunctionName, NULL);
+		qualifiedFunctionName);
 	List *argumentList = NIL;
 	const bool findVariadics = false;
 	const bool findDefaults = false;
