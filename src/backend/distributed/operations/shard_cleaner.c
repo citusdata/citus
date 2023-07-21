@@ -1005,7 +1005,7 @@ ListCleanupRecordsForCurrentOperation(void)
 
 	ScanKeyData scanKey[1];
 	ScanKeyInit(&scanKey[0], Anum_pg_dist_cleanup_operation_id, BTEqualStrategyNumber,
-				F_INT8EQ, UInt64GetDatum(CurrentOperationId));
+				F_INT8EQ, Int64GetDatum(CurrentOperationId));
 
 	int scanKeyCount = 1;
 	Oid scanIndexId = InvalidOid;
@@ -1119,7 +1119,7 @@ CleanupRecordExists(uint64 recordId)
 	bool indexOK = true;
 
 	ScanKeyInit(&scanKey[0], Anum_pg_dist_cleanup_record_id,
-				BTEqualStrategyNumber, F_INT8EQ, UInt64GetDatum(recordId));
+				BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(recordId));
 
 	SysScanDesc scanDescriptor = systable_beginscan(pgDistCleanup,
 													DistCleanupPrimaryKeyIndexId(),
@@ -1152,7 +1152,7 @@ DeleteCleanupRecordByRecordId(uint64 recordId)
 	bool indexOK = true;
 
 	ScanKeyInit(&scanKey[0], Anum_pg_dist_cleanup_record_id,
-				BTEqualStrategyNumber, F_INT8EQ, UInt64GetDatum(recordId));
+				BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(recordId));
 
 	SysScanDesc scanDescriptor = systable_beginscan(pgDistCleanup,
 													DistCleanupPrimaryKeyIndexId(),

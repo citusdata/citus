@@ -5600,7 +5600,7 @@ role_exists(PG_FUNCTION_ARGS)
  * Otherwise, this function returns NULL.
  */
 char *
-GetPoolinfoViaCatalog(int64 nodeId)
+GetPoolinfoViaCatalog(int32 nodeId)
 {
 	ScanKeyData scanKey[1];
 	const int scanKeyCount = 1;
@@ -5610,8 +5610,8 @@ GetPoolinfoViaCatalog(int64 nodeId)
 	char *poolinfo = NULL;
 
 	/* set scan arguments */
-	ScanKeyInit(&scanKey[0], nodeIdIdx, BTEqualStrategyNumber, F_INT8EQ,
-				Int64GetDatum(nodeId));
+	ScanKeyInit(&scanKey[0], nodeIdIdx, BTEqualStrategyNumber, F_INT4EQ,
+				Int32GetDatum(nodeId));
 
 	SysScanDesc scanDescriptor = systable_beginscan(pgDistPoolinfo, DistPoolinfoIndexId(),
 													indexOK,

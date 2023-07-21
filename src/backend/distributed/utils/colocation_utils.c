@@ -989,7 +989,7 @@ ColocationGroupTableList(uint32 colocationId, uint32 count)
 	}
 
 	ScanKeyInit(&scanKey[0], Anum_pg_dist_partition_colocationid,
-				BTEqualStrategyNumber, F_INT4EQ, UInt32GetDatum(colocationId));
+				BTEqualStrategyNumber, F_INT4EQ, Int32GetDatum(colocationId));
 
 	Relation pgDistPartition = table_open(DistPartitionRelationId(), AccessShareLock);
 	TupleDesc tupleDescriptor = RelationGetDescr(pgDistPartition);
@@ -1166,7 +1166,7 @@ ColocatedNonPartitionShardIntervalList(ShardInterval *shardInterval)
  * guarantee that the table isn't dropped for the remainder of the transaction.
  */
 Oid
-ColocatedTableId(Oid colocationId)
+ColocatedTableId(int32 colocationId)
 {
 	Oid colocatedTableId = InvalidOid;
 	bool indexOK = true;
@@ -1183,7 +1183,7 @@ ColocatedTableId(Oid colocationId)
 	}
 
 	ScanKeyInit(&scanKey[0], Anum_pg_dist_partition_colocationid,
-				BTEqualStrategyNumber, F_OIDEQ, ObjectIdGetDatum(colocationId));
+				BTEqualStrategyNumber, F_INT4EQ, Int32GetDatum(colocationId));
 
 	Relation pgDistPartition = table_open(DistPartitionRelationId(), AccessShareLock);
 	TupleDesc tupleDescriptor = RelationGetDescr(pgDistPartition);
@@ -1292,7 +1292,7 @@ DeleteColocationGroupLocally(uint32 colocationId)
 	Relation pgDistColocation = table_open(DistColocationRelationId(), RowExclusiveLock);
 
 	ScanKeyInit(&scanKey[0], Anum_pg_dist_colocation_colocationid,
-				BTEqualStrategyNumber, F_INT4EQ, UInt32GetDatum(colocationId));
+				BTEqualStrategyNumber, F_INT4EQ, Int32GetDatum(colocationId));
 
 	SysScanDesc scanDescriptor = systable_beginscan(pgDistColocation, InvalidOid, indexOK,
 													NULL, scanKeyCount, scanKey);
