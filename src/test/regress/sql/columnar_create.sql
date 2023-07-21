@@ -56,7 +56,7 @@ AS SELECT * FROM columnar_table_1;
 SELECT columnar.get_storage_id(oid) AS columnar_table_1_mv_storage_id
 FROM pg_class WHERE relname='columnar_table_1_mv' \gset
 
--- test columnar_relation_set_new_filenode
+-- test columnar_relation_set_new_filelocator
 REFRESH MATERIALIZED VIEW columnar_table_1_mv;
 SELECT columnar_test_helpers.columnar_metadata_has_storage_id(:columnar_table_1_mv_storage_id);
 

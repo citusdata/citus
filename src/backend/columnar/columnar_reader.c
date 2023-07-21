@@ -254,8 +254,9 @@ ColumnarReadFlushPendingWrites(ColumnarReadState *readState)
 {
 	Assert(!readState->snapshotRegisteredByUs);
 
-	Oid relfilenode = readState->relation->rd_node.relNode;
-	FlushWriteStateForRelfilenode(relfilenode, GetCurrentSubTransactionId());
+	RelFileNumber relfilenumber = RelationPhysicalIdentifierNumber_compat(
+		RelationPhysicalIdentifier_compat(readState->relation));
+	FlushWriteStateForRelfilenumber(relfilenumber, GetCurrentSubTransactionId());
 
 	if (readState->snapshot == InvalidSnapshot || !IsMVCCSnapshot(readState->snapshot))
 	{
@@ -984,7 +985,8 @@ ColumnarTableRowCount(Relation relation)
 {
 	ListCell *stripeMetadataCell = NULL;
 	uint64 totalRowCount = 0;
-	List *stripeList = StripesForRelfilenode(relation->rd_node);
+	List *stripeList = StripesForRelfilelocator(RelationPhysicalIdentifier_compat(
+													relation));
 
 	foreach(stripeMetadataCell, stripeList)
 	{
@@ -1012,7 +1014,8 @@ LoadFilteredStripeBuffers(Relation relation, StripeMetadata *stripeMetadata,
 
 	bool *projectedColumnMask = ProjectedColumnMask(columnCount, projectedColumnList);
 
-	StripeSkipList *stripeSkipList = ReadStripeSkipList(relation->rd_node,
+	StripeSkipList *stripeSkipList = ReadStripeSkipList(RelationPhysicalIdentifier_compat(
+															relation),
 														stripeMetadata->id,
 														tupleDescriptor,
 														stripeMetadata->chunkCount,

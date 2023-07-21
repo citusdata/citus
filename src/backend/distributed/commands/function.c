@@ -780,7 +780,7 @@ UpdateFunctionDistributionInfo(const ObjectAddress *distAddress,
 	ScanKeyInit(&scanKey[1], Anum_pg_dist_object_objid, BTEqualStrategyNumber, F_OIDEQ,
 				ObjectIdGetDatum(distAddress->objectId));
 	ScanKeyInit(&scanKey[2], Anum_pg_dist_object_objsubid, BTEqualStrategyNumber,
-				F_INT4EQ, ObjectIdGetDatum(distAddress->objectSubId));
+				F_INT4EQ, Int32GetDatum(distAddress->objectSubId));
 
 	SysScanDesc scanDescriptor = systable_beginscan(pgDistObjectRel,
 													DistObjectPrimaryKeyIndexId(),

@@ -18,9 +18,14 @@
 #include "lib/stringinfo.h"
 
 #include "columnar/columnar_compression.h"
+#include "distributed/pg_version_constants.h"
 
 #if HAVE_CITUS_LIBLZ4
 #include <lz4.h>
+#endif
+
+#if PG_VERSION_NUM >= PG_VERSION_16
+#include "varatt.h"
 #endif
 
 #if HAVE_LIBZSTD

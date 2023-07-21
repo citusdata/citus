@@ -182,7 +182,7 @@ extern void AppendCopyRowData(Datum *valueArray, bool *isNullArray,
 extern void AppendCopyBinaryHeaders(CopyOutState headerOutputState);
 extern void AppendCopyBinaryFooters(CopyOutState footerOutputState);
 extern void EndRemoteCopy(int64 shardId, List *connectionList);
-extern List * CreateRangeTable(Relation rel, AclMode requiredAccess);
+extern List * CreateRangeTable(Relation rel);
 extern Node * ProcessCopyStmt(CopyStmt *copyStatement,
 							  QueryCompletion *completionTag,
 							  const char *queryString);

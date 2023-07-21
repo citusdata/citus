@@ -16,9 +16,14 @@
 #include "fmgr.h"
 #include "lib/stringinfo.h"
 #include "nodes/parsenodes.h"
+#include "pg_version_compat.h"
 #include "storage/bufpage.h"
 #include "storage/lockdefs.h"
+#if PG_VERSION_NUM >= PG_VERSION_16
+#include "storage/relfilelocator.h"
+#else
 #include "storage/relfilenode.h"
+#endif
 #include "utils/relcache.h"
 #include "utils/snapmgr.h"
 
@@ -224,7 +229,7 @@ extern void columnar_init_gucs(void);
 extern CompressionType ParseCompressionType(const char *compressionTypeString);
 
 /* Function declarations for writing to a columnar table */
-extern ColumnarWriteState * ColumnarBeginWrite(RelFileNode relfilenode,
+extern ColumnarWriteState * ColumnarBeginWrite(RelFileLocator relfilelocator,
 											   ColumnarOptions options,
 											   TupleDesc tupleDescriptor);
 extern uint64 ColumnarWriteRow(ColumnarWriteState *state, Datum *columnValues,
@@ -279,21 +284,21 @@ extern bool ReadColumnarOptions(Oid regclass, ColumnarOptions *options);
 extern bool IsColumnarTableAmTable(Oid relationId);
 
 /* columnar_metadata_tables.c */
-extern void DeleteMetadataRows(RelFileNode relfilenode);
+extern void DeleteMetadataRows(RelFileLocator relfilelocator);
 extern uint64 ColumnarMetadataNewStorageId(void);
-extern uint64 GetHighestUsedAddress(RelFileNode relfilenode);
+extern uint64 GetHighestUsedAddress(RelFileLocator relfilelocator);
 extern EmptyStripeReservation * ReserveEmptyStripe(Relation rel, uint64 columnCount,
 												   uint64 chunkGroupRowCount,
 												   uint64 stripeRowCount);
 extern StripeMetadata * CompleteStripeReservation(Relation rel, uint64 stripeId,
 												  uint64 sizeBytes, uint64 rowCount,
 												  uint64 chunkCount);
-extern void SaveStripeSkipList(RelFileNode relfilenode, uint64 stripe,
+extern void SaveStripeSkipList(RelFileLocator relfilelocator, uint64 stripe,
 							   StripeSkipList *stripeSkipList,
 							   TupleDesc tupleDescriptor);
-extern void SaveChunkGroups(RelFileNode relfilenode, uint64 stripe,
+extern void SaveChunkGroups(RelFileLocator relfilelocator, uint64 stripe,
 							List *chunkGroupRowCounts);
-extern StripeSkipList * ReadStripeSkipList(RelFileNode relfilenode, uint64 stripe,
+extern StripeSkipList * ReadStripeSkipList(RelFileLocator relfilelocator, uint64 stripe,
 										   TupleDesc tupleDescriptor,
 										   uint32 chunkCount,
 										   Snapshot snapshot);
@@ -316,15 +321,16 @@ extern ColumnarWriteState * columnar_init_write_state(Relation relation, TupleDe
 													  tupdesc,
 													  Oid tupSlotRelationId,
 													  SubTransactionId currentSubXid);
-extern void FlushWriteStateForRelfilenode(Oid relfilenode, SubTransactionId
-										  currentSubXid);
+extern void FlushWriteStateForRelfilenumber(RelFileNumber relfilenumber,
+											SubTransactionId currentSubXid);
 extern void FlushWriteStateForAllRels(SubTransactionId currentSubXid, SubTransactionId
 									  parentSubXid);
 extern void DiscardWriteStateForAllRels(SubTransactionId currentSubXid, SubTransactionId
 										parentSubXid);
-extern void MarkRelfilenodeDropped(Oid relfilenode, SubTransactionId currentSubXid);
-extern void NonTransactionDropWriteState(Oid relfilenode);
-extern bool PendingWritesInUpperTransactions(Oid relfilenode,
+extern void MarkRelfilenumberDropped(RelFileNumber relfilenumber,
+									 SubTransactionId currentSubXid);
+extern void NonTransactionDropWriteState(RelFileNumber relfilenumber);
+extern bool PendingWritesInUpperTransactions(RelFileNumber relfilenumber,
 											 SubTransactionId currentSubXid);
 extern MemoryContext GetWriteContextForDebug(void);
 

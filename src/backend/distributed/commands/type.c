@@ -187,7 +187,7 @@ RecreateCompositeTypeStmt(Oid typeOid)
 	Assert(get_typtype(typeOid) == TYPTYPE_COMPOSITE);
 
 	CompositeTypeStmt *stmt = makeNode(CompositeTypeStmt);
-	List *names = stringToQualifiedNameList(format_type_be_qualified(typeOid));
+	List *names = stringToQualifiedNameList_compat(format_type_be_qualified(typeOid));
 	stmt->typevar = makeRangeVarFromNameList(names);
 	stmt->coldeflist = CompositeTypeColumnDefList(typeOid);
 
@@ -252,7 +252,7 @@ RecreateEnumStmt(Oid typeOid)
 	Assert(get_typtype(typeOid) == TYPTYPE_ENUM);
 
 	CreateEnumStmt *stmt = makeNode(CreateEnumStmt);
-	stmt->typeName = stringToQualifiedNameList(format_type_be_qualified(typeOid));
+	stmt->typeName = stringToQualifiedNameList_compat(format_type_be_qualified(typeOid));
 	stmt->vals = EnumValsList(typeOid);
 
 	return stmt;
@@ -565,7 +565,8 @@ CreateTypeDDLCommandsIdempotent(const ObjectAddress *typeAddress)
 char *
 GenerateBackupNameForTypeCollision(const ObjectAddress *address)
 {
-	List *names = stringToQualifiedNameList(format_type_be_qualified(address->objectId));
+	List *names = stringToQualifiedNameList_compat(format_type_be_qualified(
+													   address->objectId));
 	RangeVar *rel = makeRangeVarFromNameList(names);
 
 	char *newName = palloc0(NAMEDATALEN);
