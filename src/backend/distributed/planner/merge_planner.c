@@ -31,6 +31,7 @@
 #include "distributed/pg_version_constants.h"
 #include "distributed/query_pushdown_planning.h"
 #include "distributed/query_colocation_checker.h"
+#include "distributed/relation_utils.h"
 #include "distributed/repartition_executor.h"
 #include "distributed/shared_library_init.h"
 #include "distributed/shard_pruning.h"
@@ -823,6 +824,21 @@ ConvertRelationRTEIntoSubquery(Query *mergeQuery, RangeTblEntry *sourceRte,
 	/* we copy the input rteRelation to preserve the rteIdentity */
 	RangeTblEntry *newRangeTableEntry = copyObject(sourceRte);
 	sourceResultsQuery->rtable = list_make1(newRangeTableEntry);
+
+#if PG_VERSION_NUM >= PG_VERSION_16
+	sourceResultsQuery->rteperminfos = NIL;
+	if (newRangeTableEntry->perminfoindex != 0)
+	{
+		/* create permission info for newRangeTableEntry */
+		RTEPermissionInfo *perminfo = GetFilledPermissionInfo(newRangeTableEntry->relid,
+															  newRangeTableEntry->inh,
+															  CMD_SELECT);
+
+		/* update the subquery's rteperminfos accordingly */
+		newRangeTableEntry->perminfoindex = 1;
+		sourceResultsQuery->rteperminfos = list_make1(perminfo);
+	}
+#endif
 
 	/* set the FROM expression to the subquery */
 	newRangeTableRef->rtindex = SINGLE_RTE_INDEX;
