@@ -775,6 +775,9 @@ ConvertCteRTEIntoSubquery(Query *mergeQuery, RangeTblEntry *sourceRte)
 	Query *cteQuery = (Query *) copyObject(sourceCte->ctequery);
 
 	sourceRte->rtekind = RTE_SUBQUERY;
+#if PG_VERSION_NUM >= PG_VERSION_16
+	sourceRte->perminfoindex = 0;
+#endif
 
 	/*
 	 * As we are delinking the CTE from main query, we have to walk through the
@@ -865,6 +868,9 @@ ConvertRelationRTEIntoSubquery(Query *mergeQuery, RangeTblEntry *sourceRte,
 
 	/* replace the function with the constructed subquery */
 	sourceRte->rtekind = RTE_SUBQUERY;
+#if PG_VERSION_NUM >= PG_VERSION_16
+	sourceRte->perminfoindex = 0;
+#endif
 	sourceRte->subquery = sourceResultsQuery;
 	sourceRte->inh = false;
 }

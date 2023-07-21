@@ -2196,6 +2196,9 @@ TransformFunctionRTE(RangeTblEntry *rangeTblEntry)
 
 	/* replace the function with the constructed subquery */
 	rangeTblEntry->rtekind = RTE_SUBQUERY;
+#if PG_VERSION_NUM >= PG_VERSION_16
+	rangeTblEntry->perminfoindex = 0;
+#endif
 	rangeTblEntry->subquery = subquery;
 }
 
