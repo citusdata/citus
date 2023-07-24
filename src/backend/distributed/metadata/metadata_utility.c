@@ -29,6 +29,9 @@
 #include "catalog/pg_constraint.h"
 #include "catalog/pg_extension.h"
 #include "catalog/pg_namespace.h"
+#if PG_VERSION_NUM >= PG_VERSION_16
+#include "catalog/pg_proc_d.h"
+#endif
 #include "catalog/pg_type.h"
 #include "commands/extension.h"
 #include "commands/sequence.h"
@@ -2263,7 +2266,7 @@ EnsureTablePermissions(Oid relationId, AclMode mode)
 void
 EnsureTableOwner(Oid relationId)
 {
-	if (!pg_class_ownercheck(relationId, GetUserId()))
+	if (!object_ownercheck(RelationRelationId, relationId, GetUserId()))
 	{
 		aclcheck_error(ACLCHECK_NOT_OWNER, OBJECT_TABLE,
 					   get_rel_name(relationId));
@@ -2278,7 +2281,7 @@ EnsureTableOwner(Oid relationId)
 void
 EnsureSchemaOwner(Oid schemaId)
 {
-	if (!pg_namespace_ownercheck(schemaId, GetUserId()))
+	if (!object_ownercheck(NamespaceRelationId, schemaId, GetUserId()))
 	{
 		aclcheck_error(ACLCHECK_NOT_OWNER, OBJECT_SCHEMA,
 					   get_namespace_name(schemaId));
@@ -2294,7 +2297,7 @@ EnsureSchemaOwner(Oid schemaId)
 void
 EnsureFunctionOwner(Oid functionId)
 {
-	if (!pg_proc_ownercheck(functionId, GetUserId()))
+	if (!object_ownercheck(ProcedureRelationId, functionId, GetUserId()))
 	{
 		aclcheck_error(ACLCHECK_NOT_OWNER, OBJECT_FUNCTION,
 					   get_func_name(functionId));
@@ -3286,11 +3289,11 @@ BackgroundTaskHasUmnetDependencies(int64 jobId, int64 taskId)
 
 	/* pg_catalog.pg_dist_background_task_depend.job_id = jobId */
 	ScanKeyInit(&scanKey[0], Anum_pg_dist_background_task_depend_job_id,
-				BTEqualStrategyNumber, F_INT8EQ, jobId);
+				BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(jobId));
 
 	/* pg_catalog.pg_dist_background_task_depend.task_id = $taskId */
 	ScanKeyInit(&scanKey[1], Anum_pg_dist_background_task_depend_task_id,
-				BTEqualStrategyNumber, F_INT8EQ, taskId);
+				BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(taskId));
 
 	SysScanDesc scanDescriptor =
 		systable_beginscan(pgDistBackgroundTasksDepend,

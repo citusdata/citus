@@ -2650,8 +2650,8 @@ RegisterCitusConfigVariables(void)
 static void
 OverridePostgresConfigProperties(void)
 {
-	struct config_generic **guc_vars = get_guc_variables();
-	int gucCount = GetNumConfigOptions();
+	int gucCount = 0;
+	struct config_generic **guc_vars = get_guc_variables_compat(&gucCount);
 
 	for (int gucIndex = 0; gucIndex < gucCount; gucIndex++)
 	{
@@ -2810,7 +2810,7 @@ ShowShardsForAppNamePrefixesCheckHook(char **newval, void **extra, GucSource sou
 		}
 
 		char *prefixAscii = pstrdup(appNamePrefix);
-		pg_clean_ascii(prefixAscii);
+		pg_clean_ascii_compat(prefixAscii, 0);
 
 		if (strcmp(prefixAscii, appNamePrefix) != 0)
 		{

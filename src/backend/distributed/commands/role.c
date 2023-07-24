@@ -703,12 +703,13 @@ MakeSetStatementArguments(char *configurationName, char *configurationValue)
 	 * is no other way to determine allowed units, and value types other than
 	 * using this function
 	 */
-	struct config_generic **gucVariables = get_guc_variables();
-	int numOpts = GetNumConfigOptions();
+	int gucCount = 0;
+	struct config_generic **gucVariables = get_guc_variables_compat(&gucCount);
+
 	struct config_generic **matchingConfig =
 		(struct config_generic **) SafeBsearch((void *) &key,
 											   (void *) gucVariables,
-											   numOpts,
+											   gucCount,
 											   sizeof(struct config_generic *),
 											   ConfigGenericNameCompare);
 
@@ -818,10 +819,12 @@ GenerateGrantRoleStmtsFromOptions(RoleSpec *roleSpec, List *options)
 			grantRoleStmt->grantee_roles = list_make1(roleSpec);
 		}
 
+#if PG_VERSION_NUM < PG_VERSION_16
 		if (strcmp(option->defname, "adminmembers") == 0)
 		{
 			grantRoleStmt->admin_opt = true;
 		}
+#endif
 
 		stmts = lappend(stmts, grantRoleStmt);
 	}
@@ -868,7 +871,9 @@ GenerateGrantRoleStmtsOfRole(Oid roleid)
 
 		grantRoleStmt->grantor = NULL;
 
+#if PG_VERSION_NUM < PG_VERSION_16
 		grantRoleStmt->admin_opt = membership->admin_option;
+#endif
 
 		stmts = lappend(stmts, grantRoleStmt);
 	}

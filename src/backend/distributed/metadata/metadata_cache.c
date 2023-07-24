@@ -83,7 +83,9 @@
 #include "utils/memutils.h"
 #include "utils/palloc.h"
 #include "utils/rel.h"
+#if PG_VERSION_NUM < PG_VERSION_16
 #include "utils/relfilenodemap.h"
+#endif
 #include "utils/relmapper.h"
 #include "utils/resowner.h"
 #include "utils/syscache.h"
@@ -5600,7 +5602,7 @@ role_exists(PG_FUNCTION_ARGS)
  * Otherwise, this function returns NULL.
  */
 char *
-GetPoolinfoViaCatalog(int64 nodeId)
+GetPoolinfoViaCatalog(int32 nodeId)
 {
 	ScanKeyData scanKey[1];
 	const int scanKeyCount = 1;

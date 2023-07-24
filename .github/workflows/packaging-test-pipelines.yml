@@ -43,7 +43,7 @@ jobs:
           - oraclelinux-7
           - oraclelinux-8
           - centos-7
-          - centos-8
+          - almalinux-8
           - almalinux-9
         POSTGRES_VERSION: ${{ fromJson(needs.get_postgres_versions_from_file.outputs.pg_versions) }}
 
@@ -73,7 +73,17 @@ jobs:
 
       - name: Make
         run: |
+          git config --global --add safe.directory ${GITHUB_WORKSPACE}
           make CFLAGS="-Wno-missing-braces" -sj$(cat /proc/cpuinfo | grep "core id" | wc -l) 2>&1 | tee -a output.log
+
+          # Check the exit code of the make command
+          make_exit_code=${PIPESTATUS[0]}
+
+          # If the make command returned a non-zero exit code, exit with the same code
+          if [[ $make_exit_code -ne 0 ]]; then
+              echo "make command failed with exit code $make_exit_code"
+              exit $make_exit_code
+          fi
 
       - name: Make install
         run: |
@@ -141,8 +151,21 @@ jobs:
           make clean
 
       - name: Make
+        shell: bash
         run: |
+          set -e
+          git config --global --add safe.directory ${GITHUB_WORKSPACE}
           make -sj$(cat /proc/cpuinfo | grep "core id" | wc -l) 2>&1 | tee -a output.log
+
+          # Check the exit code of the make command
+          make_exit_code=${PIPESTATUS[0]}
+
+          # If the make command returned a non-zero exit code, exit with the same code
+          if [[ $make_exit_code -ne 0 ]]; then
+              echo "make command failed with exit code $make_exit_code"
+              exit $make_exit_code
+          fi
+
 
       - name: Make install
         run: |
