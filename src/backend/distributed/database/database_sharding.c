@@ -20,7 +20,6 @@
 #include "commands/dbcommands.h"
 #include "distributed/connection_management.h"
 #include "distributed/database/database_sharding.h"
-#include "distributed/database/ddl_replication.h"
 #include "distributed/deparser.h"
 #include "distributed/deparse_shard_query.h"
 #include "distributed/listutils.h"

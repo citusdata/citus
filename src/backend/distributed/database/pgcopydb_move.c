@@ -11,12 +11,14 @@
 #include "access/xlogdefs.h"
 #include "catalog/namespace.h"
 #include "catalog/pg_class.h"
+#include "catalog/pg_database.h"
 #include "catalog/pg_proc.h"
 #include "catalog/pg_subscription.h"
 #include "catalog/namespace.h"
 #include "commands/dbcommands.h"
 #include "commands/subscriptioncmds.h"
 #include "commands/trigger.h"
+#include "executor/spi.h"
 #include "lib/stringinfo.h"
 #include "distributed/commands.h"
 #include "distributed/connection_management.h"
@@ -26,6 +28,7 @@
 #include "distributed/listutils.h"
 #include "distributed/local_executor.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/metadata/distobject.h"
 #include "distributed/multi_logical_replication.h"
 #include "distributed/pooler/pgbouncer_manager.h"
 #include "distributed/remote_commands.h"
@@ -108,6 +111,7 @@ typedef struct DatabaseMove
 void _PG_init(void);
 
 static void MoveDatabase(DatabaseMove *moveDesc);
+static void ExecuteDatabaseCommand(char *command, MultiConnection *conn, bool isLocal);
 
 
 PG_FUNCTION_INFO_V1(pgcopydb_database_move);
@@ -192,6 +196,7 @@ MoveDatabase(DatabaseMove *moveDesc)
 	}
 
 	RegisterOperationNeedingCleanup();
+	UseCoordinatedTransaction();
 
 	char *migrationName = psprintf("pgcopydb_" UINT64_FORMAT, CurrentOperationId);
 	char *incomingDatabaseName = psprintf("_incoming_" UINT64_FORMAT, CurrentOperationId);
@@ -200,6 +205,9 @@ MoveDatabase(DatabaseMove *moveDesc)
 
 	WorkerNode *source = LookupNodeForGroup(dbShard->nodeGroupId);
 	WorkerNode *target = LookupNodeForGroup(targetNodeGroupId);
+
+	bool sourceIsLocal = source->groupId == GetLocalGroupId();
+	bool targetIsLocal = target->groupId == GetLocalGroupId();
 
 	/* admin connection for the source server */
 	int connectionFlags = 0;
@@ -396,12 +404,14 @@ MoveDatabase(DatabaseMove *moveDesc)
 	/* stop all database connections */
 	PauseDatabaseOnInboundPgBouncers(databaseName);
 
+	RemoteTransactionBegin(sourceConn);
+	RemoteTransactionBegin(targetConn);
+
 	/* rename the old database on the source */
 	char *renameCommand = psprintf("ALTER DATABASE %s RENAME TO %s",
 								   quote_identifier(databaseName),
 								   quote_identifier(oldDatabaseName));
-	RemoteTransactionBegin(sourceConn);
-	ExecuteCriticalRemoteCommand(sourceConn, renameCommand);
+	ExecuteDatabaseCommand(renameCommand, sourceConn, sourceIsLocal);
 
 	/* clean up the old database on success (data drop!) */
 	InsertCleanupRecordInCurrentTransaction(CLEANUP_OBJECT_DATABASE,
@@ -413,14 +423,13 @@ MoveDatabase(DatabaseMove *moveDesc)
 	renameCommand = psprintf("ALTER DATABASE %s RENAME TO %s",
 							 quote_identifier(replaceDatabaseName),
 							 quote_identifier(databaseName));
-	ExecuteCriticalRemoteCommand(sourceConn, renameCommand);
+	ExecuteDatabaseCommand(renameCommand, sourceConn, sourceIsLocal);
 
 	/* rename the old (empty) database on the target */
 	renameCommand = psprintf("ALTER DATABASE %s RENAME TO %s",
 							 quote_identifier(databaseName),
 							 quote_identifier(oldDatabaseName));
-	RemoteTransactionBegin(targetConn);
-	ExecuteCriticalRemoteCommand(targetConn, renameCommand);
+	ExecuteDatabaseCommand(renameCommand, targetConn, targetIsLocal);
 
 	/* clean up the old database on success (drop empty) */
 	InsertCleanupRecordInCurrentTransaction(CLEANUP_OBJECT_DATABASE,
@@ -432,10 +441,39 @@ MoveDatabase(DatabaseMove *moveDesc)
 	renameCommand = psprintf("ALTER DATABASE %s RENAME TO %s",
 							 quote_identifier(incomingDatabaseName),
 							 quote_identifier(databaseName));
-	ExecuteCriticalRemoteCommand(targetConn, renameCommand);
+	ExecuteDatabaseCommand(renameCommand, targetConn, targetIsLocal);
 
+	/* database OID might have changed if the current node was involved */
+	missingOk = false;
+	databaseOid = get_database_oid(databaseName, missingOk);
+
+	/* remark the database as distributed */
+	ObjectAddress dbAddress = { 0 };
+	ObjectAddressSet(dbAddress, DatabaseRelationId, databaseOid);
+	MarkObjectDistributed(&dbAddress);
+
+	/* do all operations on the database over a connection (even if local) */
 	UpdateDatabaseShard(databaseOid, targetNodeGroupId);
+
 	ResumeDatabaseOnInboundPgBouncers(databaseName);
 
 	FinalizeOperationNeedingCleanupOnSuccess("database move");
+}
+
+
+/*
+ * ExecuteDatabaseCommand executes a command on a database either over
+ * a connection or locally via SPI.
+ */
+static void
+ExecuteDatabaseCommand(char *command, MultiConnection *conn, bool isLocal)
+{
+	if (isLocal)
+	{
+		ExecuteQueryViaSPI(command, SPI_OK_UTILITY);
+	}
+	else
+	{
+		ExecuteCriticalRemoteCommand(conn, command);
+	}
 }

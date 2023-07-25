@@ -480,6 +480,18 @@ citus_internal_database_command(PG_FUNCTION_ARGS)
 		}
 		else
 		{
+			/* remove database from pg_dist_object */
+			ObjectAddress dbAddress = { 0 };
+			ObjectAddressSet(dbAddress, DatabaseRelationId, databaseOid);
+
+			if (IsObjectDistributed(&dbAddress))
+			{
+				UnmarkObjectDistributed(&dbAddress);
+			}
+
+			/* remove database from database shards */
+			DeleteDatabaseShardByDatabaseIdLocally(databaseOid);
+
 			DropDatabase(NULL, (DropdbStmt *) parseTree);
 		}
 	}
