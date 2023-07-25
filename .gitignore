@@ -55,3 +55,4 @@ lib*.pc
 # style related temporary outputs
 *.uncrustify
 .venv
+test-cluster/*
