@@ -226,13 +226,14 @@ WHEN NOT MATCHED THEN
 ERROR:  permission denied for table target2
 -- check if the target can be accessed from source relation subquery; we should
 -- not be able to do so
+\set VERBOSITY terse
 MERGE INTO target t
 USING (SELECT * FROM source WHERE t.tid > sid) s
 ON t.tid = s.sid
 WHEN NOT MATCHED THEN
 	INSERT DEFAULT VALUES;
-ERROR:  invalid reference to FROM-clause entry for table "t"
-HINT:  There is an entry for table "t", but it cannot be referenced from this part of the query.
+ERROR:  invalid reference to FROM-clause entry for table "t" at character 55
+\set VERBOSITY default
 --
 -- initial tests
 --
@@ -660,13 +661,13 @@ SELECT * FROM target ORDER BY tid;
 
 ROLLBACK;
 -- and again with a subtle error: referring to non-existent target row for NOT MATCHED
+\set VERBOSITY terse
 MERGE INTO target t
 USING source AS s
 ON t.tid = s.sid
 WHEN NOT MATCHED THEN
 	INSERT (tid, balance) VALUES (t.tid, s.delta);
-ERROR:  invalid reference to FROM-clause entry for table "t"
-HINT:  There is an entry for table "t", but it cannot be referenced from this part of the query.
+ERROR:  invalid reference to FROM-clause entry for table "t" at character 109
 -- and again with a constant ON clause
 BEGIN;
 MERGE INTO target t
@@ -674,8 +675,7 @@ USING source AS s
 ON (SELECT true)
 WHEN NOT MATCHED THEN
 	INSERT (tid, balance) VALUES (t.tid, s.delta);
-ERROR:  invalid reference to FROM-clause entry for table "t"
-HINT:  There is an entry for table "t", but it cannot be referenced from this part of the query.
+ERROR:  invalid reference to FROM-clause entry for table "t" at character 109
 SELECT * FROM target ORDER BY tid;
 ERROR:  current transaction is aborted, commands ignored until end of transaction block
 ROLLBACK;
@@ -779,11 +779,11 @@ MERGE INTO wq_target t
 USING wq_source s ON t.tid = s.sid
 WHEN NOT MATCHED AND t.balance = 100 THEN
 	INSERT (tid) VALUES (s.sid);
-ERROR:  invalid reference to FROM-clause entry for table "t"
-HINT:  There is an entry for table "t", but it cannot be referenced from this part of the query.
+ERROR:  invalid reference to FROM-clause entry for table "t" at character 80
 SELECT * FROM wq_target;
 ERROR:  current transaction is aborted, commands ignored until end of transaction block
 ROLLBACK;
+\set VERBOSITY default
 MERGE INTO wq_target t
 USING wq_source s ON t.tid = s.sid
 WHEN NOT MATCHED AND s.balance = 100 THEN
