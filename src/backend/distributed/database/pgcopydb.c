@@ -12,7 +12,7 @@
 #include "utils/memutils.h"
 
 
-//#define RUN_PROGRAM_IMPLEMENTATION
+/*#define RUN_PROGRAM_IMPLEMENTATION */
 #include "distributed/runprogram.h"
 
 
@@ -40,11 +40,12 @@ GetPgcopydbPath(void)
 
 
 /*
- * RunPgcopydb runs pgcopydb against the source and target connection strings
+ * RunPgcopydbClone runs pgcopydb clone against the source and target connection strings
  * and returns the output.
  */
 char *
-RunPgcopydb(char *sourceConnectionString, char *targetConnectionString)
+RunPgcopydbClone(char *sourceConnectionString, char *targetConnectionString,
+				 char *migrationName)
 {
 	char *pgcopydbPath = GetPgcopydbPath();
 
@@ -57,10 +58,15 @@ RunPgcopydb(char *sourceConnectionString, char *targetConnectionString)
 
 	argList = lappend(argList, pgcopydbPath);
 	argList = lappend(argList, "clone");
+	argList = lappend(argList, "--dir");
+	/* TODO: escaping? */
+	argList = lappend(argList, psprintf("/tmp/%s", migrationName));
 	argList = lappend(argList, "--source");
 	argList = lappend(argList, sourceConnectionString);
 	argList = lappend(argList, "--target");
 	argList = lappend(argList, targetConnectionString);
+	argList = lappend(argList, "--slot-name");
+	argList = lappend(argList, migrationName);
 	argList = lappend(argList, "--restart");
 	argList = lappend(argList, "--skip-extensions");
 

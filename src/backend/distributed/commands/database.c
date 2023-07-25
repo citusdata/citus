@@ -171,9 +171,9 @@ AlterDatabaseOwnerObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
  * create a database.
  */
 List *
-CreateDatabaseDDLCommands(const ObjectAddress *address)
+CreateDatabaseDDLCommands(Oid databaseId)
 {
-	Node *stmt = (Node *) RecreateCreatedbStmt(address->objectId);
+	Node *stmt = (Node *) RecreateCreatedbStmt(databaseId);
 	char *createDatabaseCommand = DeparseTreeNode(stmt);
 
 	StringInfo internalCreateCommand = makeStringInfo();
@@ -353,10 +353,20 @@ List *
 PreprocessDropdbStmt(Node *node, const char *queryString,
 					 ProcessUtilityContext processUtilityContext)
 {
+	if (!EnableCreateDatabasePropagation || !ShouldPropagate())
+	{
+		return NIL;
+	}
+
 	DropdbStmt *stmt = (DropdbStmt *) node;
 	char *databaseName = stmt->dbname;
-	bool missingOk = false;
+	bool missingOk = true;
 	Oid databaseOid = get_database_oid(databaseName, missingOk);
+	if (databaseOid == InvalidOid)
+	{
+		/* let regular ProcessUtility deal with IF NOT EXISTS */
+		return NIL;
+	}
 
 	ObjectAddress dbAddress = { 0 };
 	ObjectAddressSet(dbAddress, DatabaseRelationId, databaseOid);
@@ -432,6 +442,14 @@ citus_internal_database_command(PG_FUNCTION_ARGS)
 	text *commandText = PG_GETARG_TEXT_P(0);
 	char *command = text_to_cstring(commandText);
 	Node *parseTree = ParseTreeNode(command);
+
+	set_config_option("citus.enable_ddl_propagation", "off",
+					  (superuser() ? PGC_SUSET : PGC_USERSET), PGC_S_SESSION,
+					  GUC_ACTION_LOCAL, true, 0, false);
+
+	set_config_option("citus.enable_create_database_propagation", "off",
+					  (superuser() ? PGC_SUSET : PGC_USERSET), PGC_S_SESSION,
+					  GUC_ACTION_LOCAL, true, 0, false);
 
 	if (IsA(parseTree, CreatedbStmt))
 	{

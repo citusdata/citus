@@ -12,6 +12,7 @@
 #define PGCOPYDB_H
 
 char * GetPgcopydbPath(void);
-char * RunPgcopydb(char *sourceConnectionString, char *targetConnectionString);
+char * RunPgcopydbClone(char *sourceConnectionString, char *targetConnectionString,
+						char *migrationName);
 
 #endif

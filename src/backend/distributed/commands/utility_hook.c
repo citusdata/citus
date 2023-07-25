@@ -763,20 +763,22 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 	{
 		DropdbStmt *stmt = castNode(DropdbStmt, parsetree);
 		char *databaseName = stmt->dbname;
-		bool missingOk = false;
+		bool missingOk = true;
 		Oid databaseId = get_database_oid(databaseName, missingOk);
-
-		ObjectAddress dbAddress = { 0 };
-		ObjectAddressSet(dbAddress, DatabaseRelationId, databaseId);
-
-		if (IsObjectDistributed(&dbAddress))
+		if (databaseId != InvalidOid)
 		{
-			UnmarkObjectDistributed(&dbAddress);
+			ObjectAddress dbAddress = { 0 };
+			ObjectAddressSet(dbAddress, DatabaseRelationId, databaseId);
 
-			/* in case this was a shard, remove it (noop otherwise) */
-			DeleteDatabaseShardByDatabaseIdLocally(databaseId);
+			if (IsObjectDistributed(&dbAddress))
+			{
+				UnmarkObjectDistributed(&dbAddress);
 
-			ReconfigurePgBouncersOnCommit = true;
+				/* in case this was a shard, remove it (noop otherwise) */
+				DeleteDatabaseShardByDatabaseIdLocally(databaseId);
+
+				ReconfigurePgBouncersOnCommit = true;
+			}
 		}
 	}
 

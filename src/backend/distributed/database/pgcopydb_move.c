@@ -18,6 +18,7 @@
 #include "commands/subscriptioncmds.h"
 #include "commands/trigger.h"
 #include "lib/stringinfo.h"
+#include "distributed/commands.h"
 #include "distributed/connection_management.h"
 #include "distributed/database/database_sharding.h"
 #include "distributed/database/ddl_replication.h"
@@ -25,6 +26,7 @@
 #include "distributed/database/remote_publication.h"
 #include "distributed/database/remote_subscription.h"
 #include "distributed/database/source_database_info.h"
+#include "distributed/deparser.h"
 #include "distributed/listutils.h"
 #include "distributed/local_executor.h"
 #include "distributed/metadata_cache.h"
@@ -112,13 +114,13 @@ void _PG_init(void);
 static void MoveDatabase(DatabaseMove *moveDesc);
 
 
-
 PG_FUNCTION_INFO_V1(pgcopydb_database_move);
+PG_FUNCTION_INFO_V1(pgcopydb_clone);
 
 
 /*
- * pgcopydb_database_move does a full migration of a database using
- * pgcopydb.
+ * pgcopydb_database_move moves a database shard from one node
+ * to another.
  */
 Datum
 pgcopydb_database_move(PG_FUNCTION_ARGS)
@@ -134,6 +136,28 @@ pgcopydb_database_move(PG_FUNCTION_ARGS)
 	};
 
 	MoveDatabase(&moveDesc);
+
+	PG_RETURN_VOID();
+}
+
+
+/*
+ * pgcopydb_clone does a pgcopydb clone via a UDF.
+ */
+Datum
+pgcopydb_clone(PG_FUNCTION_ARGS)
+{
+	text *sourceText = PG_GETARG_TEXT_P(0);
+	char *sourceURL = text_to_cstring(sourceText);
+	text *targetText = PG_GETARG_TEXT_P(1);
+	char *targetURL = text_to_cstring(targetText);
+	text *migrationNameText = PG_GETARG_TEXT_P(2);
+	char *migrationName = text_to_cstring(migrationNameText);
+
+	char *output = RunPgcopydbClone(sourceURL, targetURL, migrationName);
+
+	elog(NOTICE, "%s", output);
+
 	PG_RETURN_VOID();
 }
 
@@ -171,47 +195,251 @@ MoveDatabase(DatabaseMove *moveDesc)
 		return;
 	}
 
-	WorkerNode *source = LookupNodeForGroup(dbShard->nodeGroupId);
-	WorkerNode *destination = LookupNodeForGroup(targetNodeGroupId);
+	RegisterOperationNeedingCleanup();
 
-	/* open a regular connection to inspect schema and set up publication */
+	char *migrationName = psprintf("pgcopydb_" UINT64_FORMAT, CurrentOperationId);
+	char *incomingDatabaseName = psprintf("_incoming_" UINT64_FORMAT, CurrentOperationId);
+	char *replaceDatabaseName = psprintf("_replace_" UINT64_FORMAT, CurrentOperationId);
+	char *oldDatabaseName = psprintf("_old_" UINT64_FORMAT, CurrentOperationId);
+
+	WorkerNode *source = LookupNodeForGroup(dbShard->nodeGroupId);
+	WorkerNode *target = LookupNodeForGroup(targetNodeGroupId);
+
+	/* admin connection for the source server */
 	int connectionFlags = 0;
 	MultiConnection *sourceConn = GetNodeUserDatabaseConnection(connectionFlags,
 																source->workerName,
 																source->workerPort,
 																CurrentUserName(),
-																databaseName);
+																CurrentDatabaseName());
 	if (PQstatus(sourceConn->pgConn) != CONNECTION_OK)
 	{
 		ReportConnectionError(sourceConn, ERROR);
 	}
 
-	/* open a regular connection to the target database */
-	connectionFlags = 0;
+	/* open a connection to run pgcopydb on the target node */
+	connectionFlags = OUTSIDE_TRANSACTION;
 	MultiConnection *targetConn = GetNodeUserDatabaseConnection(connectionFlags,
-																destination->workerName,
-																destination->workerPort,
+																target->workerName,
+																target->workerPort,
 																CurrentUserName(),
-																databaseName);
+																CurrentDatabaseName());
 	if (PQstatus(targetConn->pgConn) != CONNECTION_OK)
 	{
 		ReportConnectionError(targetConn, ERROR);
 	}
 
-	moveDesc->sourceConnectionInfo = GetConnectionString(sourceConn);
-	moveDesc->targetConnectionInfo = GetConnectionString(targetConn);
+	ForceConnectionCloseAtTransactionEnd(sourceConn);
+	ForceConnectionCloseAtTransactionEnd(targetConn);
 
-	/* TODO: read from stdout, and monitor the overall move */
-	char *output = RunPgcopydb(moveDesc->sourceConnectionInfo,
-							   moveDesc->targetConnectionInfo);
+	/* create the database with the desired properties, but a temporary name */
+	CreatedbStmt *createdbStmt = RecreateCreatedbStmt(databaseOid);
 
-	elog(NOTICE, "%s", output);
+	/* we do not want to propagate the CREATE/ALTER/DROP DATABASE */
+	char *setCommand = "SET citus.enable_ddl_propagation TO off";
+	ExecuteCriticalRemoteCommand(sourceConn, setCommand);
+	ExecuteCriticalRemoteCommand(targetConn, setCommand);
+
+	setCommand = "SET citus.enable_create_database_propagation TO off";
+	ExecuteCriticalRemoteCommand(sourceConn, setCommand);
+	ExecuteCriticalRemoteCommand(targetConn, setCommand);
+
+	/* create a replacement database on the source */
+	InsertCleanupRecordInSubtransaction(CLEANUP_OBJECT_DATABASE,
+										replaceDatabaseName,
+										source->groupId,
+										CLEANUP_ON_FAILURE);
+
+	CreatedbStmt *createReplaceDbStmt = copyObject(createdbStmt);
+	createReplaceDbStmt->dbname = replaceDatabaseName;
+	char *createReplaceDatabaseCommand = DeparseTreeNode((Node *) createReplaceDbStmt);
+	ExecuteCriticalRemoteCommand(sourceConn, createReplaceDatabaseCommand);
+
+	/* create the temporary target database */
+	InsertCleanupRecordInSubtransaction(CLEANUP_OBJECT_DATABASE,
+										incomingDatabaseName,
+										target->groupId,
+										CLEANUP_ON_FAILURE);
+
+	CreatedbStmt *createIncomingDbStmt = copyObject(createdbStmt);
+	createIncomingDbStmt->dbname = incomingDatabaseName;
+	char *createIncomingDatabaseCommand = DeparseTreeNode((Node *) createIncomingDbStmt);
+	ExecuteCriticalRemoteCommand(targetConn, createIncomingDatabaseCommand);
+
+	/* TODO: don't open a connection just to get the URL */
+	connectionFlags = 0;
+	MultiConnection *sourceURLConn = GetNodeUserDatabaseConnection(connectionFlags,
+																   source->workerName,
+																   source->workerPort,
+																   CurrentUserName(),
+																   databaseName);
+	if (PQstatus(sourceURLConn->pgConn) != CONNECTION_OK)
+	{
+		ReportConnectionError(sourceURLConn, ERROR);
+	}
+
+	moveDesc->sourceConnectionInfo = GetConnectionString(sourceURLConn);
+	CloseConnection(sourceURLConn);
+
+	connectionFlags = 0;
+	MultiConnection *targetURLConn = GetNodeUserDatabaseConnection(connectionFlags,
+																   target->workerName,
+																   target->workerPort,
+																   CurrentUserName(),
+																   incomingDatabaseName);
+	if (PQstatus(targetURLConn->pgConn) != CONNECTION_OK)
+	{
+		ReportConnectionError(targetURLConn, ERROR);
+	}
+
+	moveDesc->targetConnectionInfo = GetConnectionString(targetURLConn);
+	CloseConnection(targetURLConn);
+
+	/* if something fails, clean the slot created by pgcopydb */
+	InsertCleanupRecordInSubtransaction(CLEANUP_OBJECT_REPLICATION_SLOT,
+										migrationName,
+										source->groupId,
+										CLEANUP_ALWAYS);
+
+	/* TODO: cleanup record for replication origin */
+
+	/* kick off the pgcopydb clone */
+	StringInfo remoteCloneCommand = makeStringInfo();
+	appendStringInfo(remoteCloneCommand,
+					 "SELECT pg_catalog.pgcopydb_clone(%s,%s,%s)",
+					 quote_literal_cstr(moveDesc->sourceConnectionInfo),
+					 quote_literal_cstr(moveDesc->targetConnectionInfo),
+					 quote_literal_cstr(migrationName));
+
+	int querySent = SendRemoteCommand(targetConn, remoteCloneCommand->data);
+	if (querySent == 0)
+	{
+		ReportConnectionError(targetConn, ERROR);
+	}
+
+	int targetConnSocket = PQsocket(targetConn->pgConn);
+
+	/*
+	 * we handle I/O for the pgcopydb_clone() query inline to also
+	 * be able to do other things. This code is derived from
+	 * FinishConnectionIO.
+	 */
+	while (true)
+	{
+		int waitFlags = WL_POSTMASTER_DEATH | WL_LATCH_SET;
+
+		/* try to send all pending data */
+		int sendStatus = PQflush(targetConn->pgConn);
+
+		/* if sending failed, there's nothing more we can do */
+		if (sendStatus == -1)
+		{
+			ereport(ERROR, (errmsg("failed to send command to worker node")));
+		}
+		else if (sendStatus == 1)
+		{
+			waitFlags |= WL_SOCKET_WRITEABLE;
+		}
+
+		if (PQconsumeInput(targetConn->pgConn) == 0)
+		{
+			ereport(ERROR, (errmsg("lost connection to node %s:%d",
+								   target->workerName, target->workerPort)));
+		}
+
+		if (PQisBusy(targetConn->pgConn))
+		{
+			waitFlags |= WL_SOCKET_READABLE;
+		}
+
+		if ((waitFlags & (WL_SOCKET_READABLE | WL_SOCKET_WRITEABLE)) == 0)
+		{
+			break;
+		}
+
+		long timeout = 1000; /* ms */
+		int rc = WaitLatchOrSocket(MyLatch, waitFlags, targetConnSocket, timeout,
+								   PG_WAIT_EXTENSION);
+		if (rc & WL_POSTMASTER_DEATH)
+		{
+			ereport(ERROR, (errmsg("postmaster was shut down, exiting")));
+		}
+
+		if (rc & WL_LATCH_SET)
+		{
+			ResetLatch(MyLatch);
+			CHECK_FOR_INTERRUPTS();
+		}
+
+		elog(NOTICE, "waiting for database move to finish");
+
+		/* TODO: monitor the overall move */
+	}
+
+	if (PQstatus(targetConn->pgConn) == CONNECTION_BAD)
+	{
+		ereport(ERROR, (errmsg("lost connection to node %s:%d",
+							   target->workerName, target->workerPort)));
+	}
+
+	PGresult *result = PQgetResult(targetConn->pgConn);
+	if (!IsResponseOK(result))
+	{
+		ReportResultError(targetConn, result, ERROR);
+	}
+
+	PQclear(result);
+
+	bool raiseErrors = true;
+	ClearResults(targetConn, raiseErrors);
 
 	CHECK_FOR_INTERRUPTS();
 
+	/* TODO: unpause on failure */
+
+	/* stop all database connections */
 	PauseDatabaseOnInboundPgBouncers(databaseName);
 
-	UpdateDatabaseShard(databaseOid, targetNodeGroupId);
+	/* rename the old database on the source */
+	char *renameCommand = psprintf("ALTER DATABASE %s RENAME TO %s",
+								   quote_identifier(databaseName),
+								   quote_identifier(oldDatabaseName));
+	RemoteTransactionBegin(sourceConn);
+	ExecuteCriticalRemoteCommand(sourceConn, renameCommand);
 
+	/* clean up the old database on success (data drop!) */
+	InsertCleanupRecordInCurrentTransaction(CLEANUP_OBJECT_DATABASE,
+											oldDatabaseName,
+											source->groupId,
+											CLEANUP_DEFERRED_ON_SUCCESS);
+
+	/* replace with a newly created database */
+	renameCommand = psprintf("ALTER DATABASE %s RENAME TO %s",
+							 quote_identifier(replaceDatabaseName),
+							 quote_identifier(databaseName));
+	ExecuteCriticalRemoteCommand(sourceConn, renameCommand);
+
+	/* rename the old (empty) database on the target */
+	renameCommand = psprintf("ALTER DATABASE %s RENAME TO %s",
+							 quote_identifier(databaseName),
+							 quote_identifier(oldDatabaseName));
+	RemoteTransactionBegin(targetConn);
+	ExecuteCriticalRemoteCommand(targetConn, renameCommand);
+
+	/* clean up the old database on success (drop empty) */
+	InsertCleanupRecordInCurrentTransaction(CLEANUP_OBJECT_DATABASE,
+											oldDatabaseName,
+											target->groupId,
+											CLEANUP_DEFERRED_ON_SUCCESS);
+
+	/* rename the incoming database to be the new database */
+	renameCommand = psprintf("ALTER DATABASE %s RENAME TO %s",
+							 quote_identifier(incomingDatabaseName),
+							 quote_identifier(databaseName));
+	ExecuteCriticalRemoteCommand(targetConn, renameCommand);
+
+	UpdateDatabaseShard(databaseOid, targetNodeGroupId);
 	ResumeDatabaseOnInboundPgBouncers(databaseName);
+
+	FinalizeOperationNeedingCleanupOnSuccess("database move");
 }

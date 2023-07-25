@@ -219,7 +219,7 @@ extern List * DefineCollationStmtObjectAddress(Node *stmt, bool missing_ok, bool
 extern List * PostprocessCreatedbStmt(Node *node, const char *queryString);
 extern List * CreatedbStmtObjectAddress(Node *node, bool missing_ok, bool isPostprocess);
 extern CreatedbStmt * RecreateCreatedbStmt(Oid databaseOid);
-extern List * CreateDatabaseDDLCommands(const ObjectAddress *address);
+extern List * CreateDatabaseDDLCommands(Oid databaseOid);
 extern List * AlterDatabaseOwnerObjectAddress(Node *node, bool missing_ok, bool
 											  isPostprocess);
 extern List * PreprocessDropdbStmt(Node *node, const char *queryString,

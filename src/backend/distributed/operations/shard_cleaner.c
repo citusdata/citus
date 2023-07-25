@@ -90,6 +90,8 @@ static bool TryDropReplicationSlotOutsideTransaction(char *replicationSlotName,
 													 char *nodeName,
 													 int nodePort);
 static bool TryDropUserOutsideTransaction(char *username, char *nodeName, int nodePort);
+static bool TryDropDatabaseOutsideTransaction(char *databaseName, char *nodeName,
+											  int nodePort);
 
 static CleanupRecord * GetCleanupRecordByNameAndType(char *objectName,
 													 CleanupObject type);
@@ -601,6 +603,13 @@ TryDropResourceByCleanupRecordOutsideTransaction(CleanupRecord *record,
 			return TryDropUserOutsideTransaction(record->objectName, nodeName, nodePort);
 		}
 
+		case CLEANUP_OBJECT_DATABASE:
+		{
+			return TryDropDatabaseOutsideTransaction(record->objectName, nodeName,
+													 nodePort);
+		}
+
+
 		default:
 		{
 			ereport(WARNING, (errmsg(
@@ -876,6 +885,43 @@ TryDropUserOutsideTransaction(char *username,
 			"SET LOCAL citus.enable_ddl_propagation TO OFF;",
 			psprintf("DROP USER IF EXISTS %s;",
 					 quote_identifier(username))));
+
+	return success;
+}
+
+
+/*
+ * TryDropDatabaseOutsideTransaction drops the database with the given name if it exists.
+ */
+static bool
+TryDropDatabaseOutsideTransaction(char *databaseName, char *nodeName, int nodePort)
+{
+	int connectionFlags = OUTSIDE_TRANSACTION;
+	MultiConnection *connection = GetNodeUserDatabaseConnection(connectionFlags,
+																nodeName, nodePort,
+																CitusExtensionOwnerName(),
+																NULL);
+
+	char *dropDatabaseCommand =
+		psprintf("DROP DATABASE IF EXISTS %s",
+				 quote_identifier(databaseName));
+
+
+	char *wrappedCommand =
+		psprintf("SELECT pg_catalog.citus_internal_database_command(%s)",
+				 quote_literal_cstr(dropDatabaseCommand));
+
+
+	/*
+	 * The DROP DATABASE command should not propagate, so we temporarily disable
+	 * DDL propagation.
+	 */
+	bool success = SendOptionalCommandListToWorkerOutsideTransactionWithConnection(
+		connection,
+		list_make3(
+			"SET LOCAL lock_timeout TO '5s'",
+			"SET LOCAL citus.enable_ddl_propagation TO OFF;",
+			wrappedCommand));
 
 	return success;
 }

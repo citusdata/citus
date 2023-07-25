@@ -85,6 +85,16 @@ AS 'MODULE_PATHNAME', $$pgcopydb_database_move$$;
 COMMENT ON FUNCTION pg_catalog.database_move(text, int)
 IS 'move a database shard';
 
+CREATE FUNCTION pg_catalog.pgcopydb_clone(
+	source_url text,
+	destination_url text,
+    migration_name text DEFAULT 'pgcopydb')
+RETURNS void
+LANGUAGE C STRICT
+AS 'MODULE_PATHNAME', $$pgcopydb_clone$$;
+COMMENT ON FUNCTION pg_catalog.pgcopydb_clone(text, text, text)
+IS 'clone a database using pgcopydb';
+
 CREATE FUNCTION pg_catalog.database_shard_move(
 	database_name text,
 	target_node_group_id int)

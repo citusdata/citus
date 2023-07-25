@@ -112,7 +112,6 @@ PostProcessUtilityInDatabaseShard(Node *parseTree, const char *queryString,
 	{
 		return;
 	}
-
 }
 
 

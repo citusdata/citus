@@ -653,6 +653,7 @@ PostProcessDDLReplicationParseTrees(List *parseTreeList)
 			 * trigger because it opens and closes a replication connection,
 			 * which would break logical replication in spectacular fashion.
 			 */
+
 			/*TriggerSubscriptionRefresh(); */
 		}
 	}
@@ -710,7 +711,6 @@ ExecuteRawStmt(RawStmt *parsetree, char *queryString)
 	QueryCompletion qc;
 #endif
 
-	List *querytree_list;
 	List *plantree_list;
 	Portal portal;
 	DestReceiver *receiver;
@@ -733,7 +733,7 @@ ExecuteRawStmt(RawStmt *parsetree, char *queryString)
 
 	set_ps_display(GetCommandTagName(commandTag));
 
-	querytree_list = pg_analyze_and_rewrite_fixedparams(parsetree, queryString,
+	List *querytree_list = pg_analyze_and_rewrite_fixedparams(parsetree, queryString,
 														NULL, 0, NULL);
 	plantree_list = pg_plan_queries(querytree_list, queryString, 0, NULL);
 

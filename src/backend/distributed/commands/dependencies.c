@@ -441,7 +441,9 @@ GetDependencyCreateDDLCommands(const ObjectAddress *dependency)
 
 			if (EnableCreateDatabasePropagation)
 			{
-				List *createDatabaseCommands = CreateDatabaseDDLCommands(dependency);
+				List *createDatabaseCommands =
+					CreateDatabaseDDLCommands(dependency->objectId);
+
 				databaseDDLCommands = list_concat(databaseDDLCommands,
 												  createDatabaseCommands);
 			}
