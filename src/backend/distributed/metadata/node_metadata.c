@@ -152,6 +152,7 @@ PG_FUNCTION_INFO_V1(master_disable_node);
 PG_FUNCTION_INFO_V1(citus_activate_node);
 PG_FUNCTION_INFO_V1(master_activate_node);
 PG_FUNCTION_INFO_V1(citus_update_node);
+PG_FUNCTION_INFO_V1(citus_pause_node);
 PG_FUNCTION_INFO_V1(master_update_node);
 PG_FUNCTION_INFO_V1(get_shard_id_for_distribution_column);
 PG_FUNCTION_INFO_V1(citus_nodename_for_nodeid);
@@ -1327,6 +1328,32 @@ citus_update_node(PG_FUNCTION_ARGS)
 	TransactionModifiedNodeMetadata = true;
 
 	PG_RETURN_VOID();
+}
+
+Datum
+citus_pause_node(PG_FUNCTION_ARGS)
+{
+	CheckCitusVersion(ERROR);
+
+	int32 nodeId = PG_GETARG_INT32(0);
+	List *placementList = NIL;
+
+	WorkerNode *workerNode = FindNodeAnyClusterByNodeId(nodeId);
+	if (workerNode == NULL)
+	{
+		ereport(ERROR, (errcode(ERRCODE_NO_DATA_FOUND),
+						errmsg("node %u not found", nodeId)));
+	}
+
+
+	if (NodeIsPrimary(workerNode))
+	{
+		placementList = AllShardPlacementsOnNodeGroup(workerNode->groupId);
+		LockShardsInPlacementListMetadata(placementList, AccessExclusiveLock);
+	}
+
+	PG_RETURN_VOID();
+
 }
 
 

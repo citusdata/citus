@@ -376,6 +376,9 @@ SELECT citus_update_node(:worker_1_node, 'localhost', 9992);
 SELECT citus_nodename_for_nodeid(:worker_1_node);
 SELECT citus_nodeport_for_nodeid(:worker_1_node);
 
+--citus_pause_node allows pausing a node from the non-default cluster
+--TODO add test cases here
+
 
 SELECT nodeid AS worker_1_node FROM pg_dist_node WHERE nodeport=:worker_1_port \gset
 
