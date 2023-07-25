@@ -139,6 +139,7 @@ typedef enum
 
 extern List * AllCitusTableIds(void);
 extern bool IsCitusTableType(Oid relationId, CitusTableType tableType);
+extern CitusTableType GetCitusTableType(CitusTableCacheEntry *tableEntry);
 extern bool IsCitusTableTypeCacheEntry(CitusTableCacheEntry *tableEtnry,
 									   CitusTableType tableType);
 bool HasDistributionKey(Oid relationId);

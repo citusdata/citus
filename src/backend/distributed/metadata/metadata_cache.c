@@ -448,6 +448,52 @@ IsCitusTableType(Oid relationId, CitusTableType tableType)
 
 
 /*
+ * GetCitusTableType is a helper function that returns the CitusTableType
+ * for the given relationId.
+ * Note that a single table can be qualified as multiple CitusTableType, such
+ * as hash distributed tables are both HASH_DISTRIBUTED and DISTRIBUTED_TABLE.
+ * This function returns the base type for a given table.
+ *
+ * If the table is not a Citus table, ANY_CITUS_TABLE_TYPE is returned.
+ */
+CitusTableType
+GetCitusTableType(CitusTableCacheEntry *tableEntry)
+{
+	/* we do not expect local tables here */
+	Assert(tableEntry != NULL);
+
+	if (IsCitusTableTypeCacheEntry(tableEntry, HASH_DISTRIBUTED))
+	{
+		return HASH_DISTRIBUTED;
+	}
+	else if (IsCitusTableTypeCacheEntry(tableEntry, SINGLE_SHARD_DISTRIBUTED))
+	{
+		return SINGLE_SHARD_DISTRIBUTED;
+	}
+	else if (IsCitusTableTypeCacheEntry(tableEntry, REFERENCE_TABLE))
+	{
+		return REFERENCE_TABLE;
+	}
+	else if (IsCitusTableTypeCacheEntry(tableEntry, CITUS_LOCAL_TABLE))
+	{
+		return CITUS_LOCAL_TABLE;
+	}
+	else if (IsCitusTableTypeCacheEntry(tableEntry, APPEND_DISTRIBUTED))
+	{
+		return APPEND_DISTRIBUTED;
+	}
+	else if (IsCitusTableTypeCacheEntry(tableEntry, RANGE_DISTRIBUTED))
+	{
+		return RANGE_DISTRIBUTED;
+	}
+	else
+	{
+		return ANY_CITUS_TABLE_TYPE;
+	}
+}
+
+
+/*
  * IsCitusTableTypeCacheEntry returns true if the given table cache entry
  * belongs to a citus table that matches the given table type.
  */
