@@ -294,3 +294,12 @@ s/\/\*\{"cId":.*\*\///g
 
 # Notice message that contains current columnar version that makes it harder to bump versions
 s/(NOTICE:  issuing CREATE EXTENSION IF NOT EXISTS citus_columnar WITH SCHEMA  pg_catalog VERSION )"[0-9]+\.[0-9]+-[0-9]+"/\1 "x.y-z"/
+
+# pg16 changes
+# can be removed when dropping PG14&15 support
+#if PG_VERSION_NUM < PG_VERSION_16
+# (This is not preprocessor directive, but a reminder for the developer that will drop PG14&15 support )
+
+s/HINT:  There is an entry for table/DETAIL:  There is an entry for table/g
+
+#endif /* PG_VERSION_NUM < PG_VERSION_16 */
