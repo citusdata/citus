@@ -100,6 +100,9 @@ typedef struct ShardPlacement
 	char partitionMethod;
 	uint32 colocationGroupId;
 	uint32 representativeValue;
+
+	/* whether this is a virtual placement for a database shard */
+	bool isDatabase;
 } ShardPlacement;
 
 

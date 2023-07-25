@@ -31,6 +31,7 @@
 #include "distributed/citus_ruleutils.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/connection_management.h"
+#include "distributed/database/database_sharding.h"
 #include "distributed/enterprise.h"
 #include "distributed/hash_helpers.h"
 #include "distributed/listutils.h"
@@ -326,6 +327,7 @@ static const char *PlacementUpdateTypeNames[] = {
 	[PLACEMENT_UPDATE_INVALID_FIRST] = "unknown",
 	[PLACEMENT_UPDATE_MOVE] = "move",
 	[PLACEMENT_UPDATE_COPY] = "copy",
+	[PLACEMENT_UPDATE_DATABASE_MOVE] = "database move",
 };
 
 static const char *PlacementUpdateStatusNames[] = {
@@ -572,6 +574,41 @@ GetRebalanceSteps(RebalanceOptions *options)
 	{
 		activeShardPlacementListList = lappend(activeShardPlacementListList,
 											   unbalancedShards);
+	}
+
+	/*
+	 * Add database shards.
+	 *
+	 * TODO: Consider whether we should rebalance databases separately.
+	 *
+	 * We currently rely on shard IDs and database OIDs not colliding,
+	 * but nothing guarantees that.
+	 */
+	List *databaseShardList = ListDatabaseShards();
+	List *databaseShardPlacementList = NIL;
+
+	DatabaseShard *databaseShard = NULL;
+	foreach_ptr(databaseShard, databaseShardList)
+	{
+		WorkerNode *worker = LookupNodeForGroup(databaseShard->nodeGroupId);
+		ShardPlacement *placement = CitusMakeNode(ShardPlacement);
+
+		/* use the database OID for both the shard ID and placement ID */
+		placement->shardId = databaseShard->databaseOid;
+		placement->placementId = databaseShard->databaseOid;
+		placement->shardLength = 0L;
+		placement->nodeId = worker->nodeId;
+		placement->nodeName = pstrdup(worker->workerName);
+		placement->nodePort = worker->workerPort;
+		placement->isDatabase = true;
+
+		databaseShardPlacementList = lappend(databaseShardPlacementList, placement);
+	}
+
+	if (list_length(databaseShardPlacementList) > 0)
+	{
+		activeShardPlacementListList = lappend(activeShardPlacementListList,
+											   databaseShardPlacementList);
 	}
 
 	if (options->threshold < options->rebalanceStrategy->minimumThreshold)
@@ -2150,6 +2187,12 @@ RebalanceTableShardsBackground(RebalanceOptions *options, Oid shardReplicationMo
 		PlacementUpdateEvent *placementUpdate = NULL;
 		foreach_ptr(placementUpdate, placementUpdateList)
 		{
+			if (placementUpdate->updateType == PLACEMENT_UPDATE_DATABASE_MOVE)
+			{
+				/* we currently do not validate database shards */
+				continue;
+			}
+
 			relationId = RelationIdForShard(placementUpdate->shardId);
 			List *colocatedTables = ColocatedTableList(relationId);
 			VerifyTablesHaveReplicaIdentity(colocatedTables);
@@ -2203,16 +2246,30 @@ RebalanceTableShardsBackground(RebalanceOptions *options, Oid shardReplicationMo
 
 	foreach_ptr(move, placementUpdateList)
 	{
+		int64 colocationId = INVALID_COLOCATION_ID;
+
 		resetStringInfo(&buf);
 
-		appendStringInfo(&buf,
-						 "SELECT pg_catalog.citus_move_shard_placement(%ld,%u,%u,%s)",
-						 move->shardId,
-						 move->sourceNode->nodeId,
-						 move->targetNode->nodeId,
-						 quote_literal_cstr(shardTranferModeLabel));
+		if (move->updateType == PLACEMENT_UPDATE_DATABASE_MOVE)
+		{
+			/* TODO: add shard transfer mode to database_move? */
+			appendStringInfo(&buf,
+							 "SELECT pg_catalog.database_move(datname,%d) "
+							 "FROM pg_database WHERE oid = %ld",
+							 move->targetNode->groupId,
+							 move->shardId);
+		}
+		else
+		{
+			appendStringInfo(&buf,
+							 "SELECT pg_catalog.citus_move_shard_placement(%ld,%u,%u,%s)",
+							 move->shardId,
+							 move->sourceNode->nodeId,
+							 move->targetNode->nodeId,
+							 quote_literal_cstr(shardTranferModeLabel));
 
-		int64 colocationId = GetColocationId(move);
+			colocationId = GetColocationId(move);
+		}
 
 		int nDepends = 0;
 
@@ -2309,6 +2366,15 @@ UpdateShardPlacement(PlacementUpdateEvent *placementUpdateEvent,
 						 sourceNode->nodeId,
 						 targetNode->nodeId,
 						 quote_literal_cstr(shardTranferModeLabel));
+	}
+	else if (updateType == PLACEMENT_UPDATE_MOVE)
+	{
+		/* TODO: add shard transfer mode to database_move? */
+		appendStringInfo(placementUpdateCommand,
+						 "SELECT pg_catalog.database_move(datname, %d) "
+						 "FROM pg_catalog.pg_database WHERE oid = %ld",
+						 targetNode->groupId,
+						 shardId);
 	}
 	else
 	{
@@ -2561,6 +2627,9 @@ InitRebalanceState(List *workerNodeList, List *shardPlacementList,
 		Assert(fillState != NULL);
 
 		*shardCost = functions->shardCost(placement->shardId, functions->context);
+
+		/* TODO: not sure whether this is the right place */
+		shardCost->isDatabase = placement->isDatabase;
 
 		fillState->totalCost += shardCost->cost;
 		fillState->utilization = CalculateUtilization(fillState->totalCost,
@@ -2829,7 +2898,9 @@ MoveShardCost(NodeFillState *sourceFillState,
 
 	/* construct the placement update */
 	PlacementUpdateEvent *placementUpdateEvent = palloc0(sizeof(PlacementUpdateEvent));
-	placementUpdateEvent->updateType = PLACEMENT_UPDATE_MOVE;
+	placementUpdateEvent->updateType = shardCost->isDatabase ?
+									   PLACEMENT_UPDATE_DATABASE_MOVE :
+									   PLACEMENT_UPDATE_MOVE;
 	placementUpdateEvent->shardId = shardIdToMove;
 	placementUpdateEvent->sourceNode = sourceFillState->node;
 	placementUpdateEvent->targetNode = targetFillState->node;

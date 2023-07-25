@@ -435,6 +435,7 @@ OutShardPlacement(OUTFUNC_ARGS)
 	WRITE_INT_FIELD(partitionMethod);
 	WRITE_UINT_FIELD(colocationGroupId);
 	WRITE_UINT_FIELD(representativeValue);
+	WRITE_BOOL_FIELD(isDatabase);
 }
 
 

@@ -82,7 +82,8 @@ typedef enum
 {
 	PLACEMENT_UPDATE_INVALID_FIRST = 0,
 	PLACEMENT_UPDATE_MOVE = 1,
-	PLACEMENT_UPDATE_COPY = 2
+	PLACEMENT_UPDATE_COPY = 2,
+	PLACEMENT_UPDATE_DATABASE_MOVE = 3
 } PlacementUpdateType;
 
 typedef enum
@@ -162,6 +163,9 @@ typedef struct NodeFillState
 typedef struct ShardCost
 {
 	uint64 shardId;
+
+	/* isDatabase reflects whether the current shard is a database */
+	bool isDatabase;
 
 	/*
 	 * cost is the cost of the shard. This doesn't have a unit.

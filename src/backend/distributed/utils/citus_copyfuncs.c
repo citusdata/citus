@@ -228,6 +228,7 @@ CopyNodeShardPlacement(COPYFUNC_ARGS)
 	COPY_SCALAR_FIELD(partitionMethod);
 	COPY_SCALAR_FIELD(colocationGroupId);
 	COPY_SCALAR_FIELD(representativeValue);
+	COPY_SCALAR_FIELD(isDatabase);
 }
 
 
