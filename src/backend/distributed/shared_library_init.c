@@ -43,7 +43,6 @@
 #include "distributed/connection_management.h"
 #include "distributed/cte_inline.h"
 #include "distributed/database/database_sharding.h"
-#include "distributed/database/ddl_replication.h"
 #include "distributed/distributed_deadlock_detection.h"
 #include "distributed/errormessage.h"
 #include "distributed/repartition_executor.h"
@@ -1303,17 +1302,6 @@ RegisterCitusConfigVariables(void)
 		false,
 		PGC_POSTMASTER,
 		GUC_STANDARD,
-		NULL, NULL, NULL);
-
-	DefineCustomBoolVariable(
-		"citus.enable_database_shard_move_ddl_replication",
-		gettext_noop("If enabled, propagate DDL commands to destination during "
-					 "a database shard move."),
-		NULL,
-		&EnableDDLReplicationInDatabaseShardMove,
-		true,
-		PGC_USERSET,
-		0,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(

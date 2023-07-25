@@ -9,4 +9,4 @@ DROP FUNCTION pg_catalog.citus_internal_database_command(text);
 DROP FUNCTION pg_catalog.citus_internal_add_database_shard(text,int);
 DROP FUNCTION pg_catalog.citus_internal_start_migration_monitor(text,text);
 DROP FUNCTION pg_catalog.database_move(text,int);
-DROP FUNCTION pg_catalog.pgcopydb_move(text,text,text);
+DROP FUNCTION pg_catalog.pgcopydb_clone(text,text,text);

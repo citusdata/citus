@@ -12,7 +12,7 @@
 #include "utils/memutils.h"
 
 
-/*#define RUN_PROGRAM_IMPLEMENTATION */
+#define RUN_PROGRAM_IMPLEMENTATION 1
 #include "distributed/runprogram.h"
 
 

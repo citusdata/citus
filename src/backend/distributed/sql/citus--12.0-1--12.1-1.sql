@@ -94,39 +94,3 @@ LANGUAGE C STRICT
 AS 'MODULE_PATHNAME', $$pgcopydb_clone$$;
 COMMENT ON FUNCTION pg_catalog.pgcopydb_clone(text, text, text)
 IS 'clone a database using pgcopydb';
-
-CREATE FUNCTION pg_catalog.database_shard_move(
-	database_name text,
-	target_node_group_id int)
-RETURNS void
-LANGUAGE C STRICT
-AS 'MODULE_PATHNAME', $$database_shard_move$$;
-COMMENT ON FUNCTION pg_catalog.database_shard_move(text, int)
-IS 'start a database shard move';
-
-CREATE FUNCTION pg_catalog.database_shard_move_start(
-	database_name text,
-	target_node_group_id int)
-RETURNS void
-LANGUAGE C STRICT
-AS 'MODULE_PATHNAME', $$database_shard_move_start$$;
-COMMENT ON FUNCTION pg_catalog.database_shard_move_start(text, int)
-IS 'start a database shard move';
-
-CREATE FUNCTION pg_catalog.database_shard_move_finish(
-	database_name text,
-	target_node_group_id int)
- RETURNS void
- LANGUAGE C STRICT
- AS 'MODULE_PATHNAME', $$database_shard_move_finish$$;
-COMMENT ON FUNCTION pg_catalog.database_shard_move_finish(text,int)
-IS 'finish a database shard move';
-
-CREATE FUNCTION pg_catalog.citus_internal_start_migration_monitor(
-	database_name text,
-	subscription_name text)
- RETURNS void
- LANGUAGE C STRICT
- AS 'MODULE_PATHNAME', $$citus_internal_start_migration_monitor$$;
-COMMENT ON FUNCTION pg_catalog.citus_internal_start_migration_monitor(text,text)
-IS 'start a background worker that monitors an ongoing migration';
