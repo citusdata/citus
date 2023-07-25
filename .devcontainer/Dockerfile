@@ -98,6 +98,15 @@ RUN make -sj8
 
 RUN make install DESTDIR=/uncrustify
 
+FROM base AS pipenv
+
+RUN sudo pip3 install pipenv
+
+WORKDIR /workspaces/citus/
+COPY src/ src/
+RUN ls -al
+RUN ( cd src/test/regress && pipenv install )
+
 # assemble the final container by copying over the artifacts from separately build containers
 FROM base AS devcontainer
 
@@ -110,10 +119,14 @@ RUN sudo apt update \
     bash-completion \
     gdb \
     htop \
+    lsof \
     man \
+    net-tools \
     pspg \
     vim \
  && sudo apt clean
+
+RUN sudo pip3 install pipenv pipenv-shebang
 
 # add some common tools to the final container
 # bin directory for user tools
@@ -121,22 +134,22 @@ RUN mkdir .bin
 ENV PATH="/home/citus/.bin:${PATH}"
 
 # install citus-dev
-RUN git clone https://github.com/citusdata/tools.git citus-tools \
- && pip3 install -r citus-tools/citus_dev/requirements.txt \
+RUN git clone --branch feature/citus-dev-pipenv-shebang https://github.com/citusdata/tools.git citus-tools \
+ && ( cd citus-tools/citus_dev && pipenv install ) \
  && ln -s /home/citus/citus-tools/citus_dev/citus_dev .bin/ \
  && sudo make -C citus-tools/uncrustify install bindir=/usr/local/bin pkgsysconfdir=/usr/local/etc/
 
 # TODO some LC_ALL errors, possibly solved by locale-gen
 RUN git clone https://github.com/so-fancy/diff-so-fancy.git \
- && ln -s /home/citus/diff-so-fancy/diff-so-fancy .bin/ \
- && git config --global core.pager "diff-so-fancy | less --tabs=4 -RFX" \
- && git config --global interactive.diffFilter "diff-so-fancy --patch"
+ && ln -s /home/citus/diff-so-fancy/diff-so-fancy .bin/
 
 COPY --from=uncrustify-builder /uncrustify/usr/ /usr/
 
 COPY --from=pg14 /home/citus/.pgenv-staging/ /home/citus/.pgenv/
 COPY --from=pg15 /home/citus/.pgenv-staging/ /home/citus/.pgenv/
 # COPY --from=pg16 /home/citus/.pgenv-staging/ /home/citus/.pgenv/
+
+COPY --from=pipenv /home/citus/.local/share/virtualenvs/ /home/citus/.local/share/virtualenvs/
 
 # place to run your cluster with citus_dev
 VOLUME /data
