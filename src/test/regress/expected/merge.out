@@ -3065,7 +3065,7 @@ WHEN MATCHED AND t.customer_id = 200 THEN
 	DELETE
 WHEN NOT MATCHED THEN
 	INSERT VALUES(s.customer_id, s.order_id, s.order_center, 1, s.order_time);
-ERROR:  The required join operation is missing between the target's distribution column and any expression originating from the source. The issue may arise from either a non-equi-join or a mismatch in the datatypes of the columns being joined.
+ERROR:  The required join operation is missing between the target's distribution column and any expression originating from the source. The issue may arise from a non-equi-join.
 DETAIL:  Without a equi-join condition on the target's distribution column, the source rows cannot be efficiently redistributed, and the NOT-MATCHED condition cannot be evaluated unambiguously. This can result in incorrect or unexpected results when attempting to merge tables in a distributed setting
 SELECT * FROM target_filter ORDER BY 1, 2;
  customer_id | last_order_id | order_center | order_count |        last_order
@@ -3414,7 +3414,7 @@ MERGE INTO t1
 		UPDATE SET val = t1.val + 1
 	WHEN NOT MATCHED THEN
 		INSERT (id, val) VALUES (s1_res.id, s1_res.val);
-ERROR:  The required join operation is missing between the target's distribution column and any expression originating from the source. The issue may arise from either a non-equi-join or a mismatch in the datatypes of the columns being joined.
+ERROR:  The required join operation is missing between the target's distribution column and any expression originating from the source. The issue may arise from a non-equi-join.
 DETAIL:  Without a equi-join condition on the target's distribution column, the source rows cannot be efficiently redistributed, and the NOT-MATCHED condition cannot be evaluated unambiguously. This can result in incorrect or unexpected results when attempting to merge tables in a distributed setting
 -- Join condition without target distribution column
 WITH s1_res AS (
@@ -3424,7 +3424,7 @@ WITH s1_res AS (
  WHEN MATCHED THEN DELETE
 	WHEN NOT MATCHED THEN
 		INSERT (id, val) VALUES (s1_res.id, s1_res.val);
-ERROR:  The required join operation is missing between the target's distribution column and any expression originating from the source. The issue may arise from either a non-equi-join or a mismatch in the datatypes of the columns being joined.
+ERROR:  The required join operation is missing between the target's distribution column and any expression originating from the source. The issue may arise from a non-equi-join.
 DETAIL:  Without a equi-join condition on the target's distribution column, the source rows cannot be efficiently redistributed, and the NOT-MATCHED condition cannot be evaluated unambiguously. This can result in incorrect or unexpected results when attempting to merge tables in a distributed setting
 --
 -- Reference tables
@@ -3842,7 +3842,7 @@ EXPLAIN MERGE INTO demo_distributed t
 USING demo_source_table s
 ON (s.id2 + 1 = t.id1)
 	WHEN MATCHED THEN UPDATE SET val1 = 15;
-ERROR:  The required join operation is missing between the target's distribution column and any expression originating from the source. The issue may arise from either a non-equi-join or a mismatch in the datatypes of the columns being joined.
+ERROR:  The required join operation is missing between the target's distribution column and any expression originating from the source. The issue may arise from a non-equi-join.
 DETAIL:  Without a equi-join condition on the target's distribution column, the source rows cannot be efficiently redistributed, and the NOT-MATCHED condition cannot be evaluated unambiguously. This can result in incorrect or unexpected results when attempting to merge tables in a distributed setting
 -- Sub-queries and CTEs are not allowed in actions and ON clause
 CREATE TABLE target_1 (a int, b int, c int);
@@ -3947,6 +3947,14 @@ WHEN MATCHED THEN
         DELETE;
 ERROR:  Sub-queries and CTEs are not allowed in ON clause for MERGE with repartitioning
 HINT:  Consider making the source and target colocated and joined on the distribution column to make it a routable query
+-- Datatype mismatch between target and source join column
+WITH src AS (SELECT FLOOR(b) AS a FROM source_2)
+MERGE INTO target_1 t
+USING src
+ON t.a = src.a
+WHEN MATCHED THEN DELETE;
+ERROR:  In the MERGE ON clause, there is a datatype mismatch between target's distribution column and the expression originating from the source.
+DETAIL:  If the types are different, Citus uses different hash functions for the two column types, which might lead to incorrect repartitioning of the result data
 RESET client_min_messages;
 DROP SERVER foreign_server CASCADE;
 NOTICE:  drop cascades to 3 other objects

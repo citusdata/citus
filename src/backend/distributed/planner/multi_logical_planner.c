@@ -2140,7 +2140,8 @@ ApplySinglePartitionJoin(MultiNode *leftNode, MultiNode *rightNode,
 	 * we introduce a (re-)partition operator for the other column.
 	 */
 	OpExpr *joinClause = SinglePartitionJoinClause(partitionColumnList,
-												   applicableJoinClauses);
+												   applicableJoinClauses,
+												   NULL);
 	Assert(joinClause != NULL);
 
 	/* both are verified in SinglePartitionJoinClause to not be NULL, assert is to guard */

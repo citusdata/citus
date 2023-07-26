@@ -2474,6 +2474,13 @@ ON (t1.a = t2.a AND (SELECT max(a) > 55 FROM cte_2))
 WHEN MATCHED THEN
         DELETE;
 
+-- Datatype mismatch between target and source join column
+WITH src AS (SELECT FLOOR(b) AS a FROM source_2)
+MERGE INTO target_1 t
+USING src
+ON t.a = src.a
+WHEN MATCHED THEN DELETE;
+
 RESET client_min_messages;
 DROP SERVER foreign_server CASCADE;
 DROP FUNCTION merge_when_and_write();

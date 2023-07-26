@@ -999,7 +999,8 @@ SinglePartitionJoin(JoinOrderNode *currentJoinNode, TableEntry *candidateTable,
 	}
 
 	OpExpr *joinClause =
-		SinglePartitionJoinClause(currentPartitionColumnList, applicableJoinClauses);
+		SinglePartitionJoinClause(currentPartitionColumnList, applicableJoinClauses,
+								  NULL);
 	if (joinClause != NULL)
 	{
 		if (currentPartitionMethod == DISTRIBUTE_BY_HASH)
@@ -1037,7 +1038,8 @@ SinglePartitionJoin(JoinOrderNode *currentJoinNode, TableEntry *candidateTable,
 		 */
 		List *candidatePartitionColumnList = list_make1(candidatePartitionColumn);
 		joinClause = SinglePartitionJoinClause(candidatePartitionColumnList,
-											   applicableJoinClauses);
+											   applicableJoinClauses,
+											   NULL);
 		if (joinClause != NULL)
 		{
 			if (candidatePartitionMethod == DISTRIBUTE_BY_HASH)
@@ -1078,8 +1080,14 @@ SinglePartitionJoin(JoinOrderNode *currentJoinNode, TableEntry *candidateTable,
  * clause exists, the function returns NULL.
  */
 OpExpr *
-SinglePartitionJoinClause(List *partitionColumnList, List *applicableJoinClauses)
+SinglePartitionJoinClause(List *partitionColumnList, List *applicableJoinClauses, bool
+						  *foundTypeMismatch)
 {
+	if (foundTypeMismatch)
+	{
+		*foundTypeMismatch = false;
+	}
+
 	if (list_length(partitionColumnList) == 0)
 	{
 		return NULL;
@@ -1121,6 +1129,10 @@ SinglePartitionJoinClause(List *partitionColumnList, List *applicableJoinClauses
 				{
 					ereport(DEBUG1, (errmsg("single partition column types do not "
 											"match")));
+					if (foundTypeMismatch)
+					{
+						*foundTypeMismatch = true;
+					}
 				}
 			}
 		}
