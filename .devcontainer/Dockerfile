@@ -110,6 +110,10 @@ RUN ( cd src/test/regress && pipenv install )
 # assemble the final container by copying over the artifacts from separately build containers
 FROM base AS devcontainer
 
+LABEL org.opencontainers.image.source=https://github.com/citusdata/citus
+LABEL org.opencontainers.image.description="Development container for the Citus project"
+LABEL org.opencontainers.image.licenses=AGPL-3.0-only
+
 RUN yes | sudo unminimize
 
 # install developer productivity tools
