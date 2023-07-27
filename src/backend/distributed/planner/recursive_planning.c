@@ -72,7 +72,6 @@
 #include "distributed/query_pushdown_planning.h"
 #include "distributed/recursive_planning.h"
 #include "distributed/relation_restriction_equivalence.h"
-#include "distributed/relation_utils.h"
 #include "distributed/log_utils.h"
 #include "distributed/shard_pruning.h"
 #include "distributed/version_compat.h"
@@ -81,6 +80,7 @@
 #include "optimizer/optimizer.h"
 #include "optimizer/planner.h"
 #include "optimizer/prep.h"
+#include "parser/parse_relation.h"
 #include "parser/parsetree.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
@@ -89,7 +89,6 @@
 #include "nodes/pg_list.h"
 #include "nodes/primnodes.h"
 #include "nodes/pathnodes.h"
-#include "parser/parse_relation.h"
 #include "utils/builtins.h"
 #include "utils/guc.h"
 #include "utils/lsyscache.h"
@@ -888,8 +887,25 @@ RecursivelyPlanDistributedJoinNode(Node *node, Query *query,
 		List *requiredAttributes =
 			RequiredAttrNumbersForRelation(distributedRte, restrictionContext);
 
+#if PG_VERSION_NUM >= PG_VERSION_16
+		RTEPermissionInfo *perminfo = NULL;
+		if (distributedRte->perminfoindex)
+		{
+			perminfo = getRTEPermissionInfo(query->rteperminfos, distributedRte);
+		}
+
+		ReplaceRTERelationWithRteSubquery(distributedRte, requiredAttributes,
+										  recursivePlanningContext, perminfo);
+#else
 		ReplaceRTERelationWithRteSubquery(distributedRte, requiredAttributes,
 										  recursivePlanningContext);
+#endif
+
+		/*
+		 * Note: we don't need to remove replaced rtes from query->rteperminfos to avoid
+		 * crash of Assert(bms_num_members(indexset) == list_length(rteperminfos));
+		 * because query->rteperminfos has already gone through ExecCheckPermissions
+		 */
 	}
 	else if (distributedRte->rtekind == RTE_SUBQUERY)
 	{
@@ -1753,9 +1769,17 @@ NodeContainsSubqueryReferencingOuterQuery(Node *node)
 void
 ReplaceRTERelationWithRteSubquery(RangeTblEntry *rangeTableEntry,
 								  List *requiredAttrNumbers,
+#if PG_VERSION_NUM >= PG_VERSION_16
+								  RecursivePlanningContext *context,
+								  RTEPermissionInfo *perminfo)
+{
+	Query *subquery = WrapRteRelationIntoSubquery(rangeTableEntry, requiredAttrNumbers,
+												  perminfo);
+#else
 								  RecursivePlanningContext *context)
 {
 	Query *subquery = WrapRteRelationIntoSubquery(rangeTableEntry, requiredAttrNumbers);
+#endif
 	List *outerQueryTargetList = CreateAllTargetListForRelation(rangeTableEntry->relid,
 																requiredAttrNumbers);
 
@@ -1781,6 +1805,12 @@ ReplaceRTERelationWithRteSubquery(RangeTblEntry *rangeTableEntry,
 	/* replace the function with the constructed subquery */
 	rangeTableEntry->rtekind = RTE_SUBQUERY;
 #if PG_VERSION_NUM >= PG_VERSION_16
+
+	/*
+	 * subquery already contains a copy of this rangeTableEntry's permission info
+	 * Not we have replaced with the constructed subquery so we should
+	 * set perminfoindex to 0.
+	 */
 	rangeTableEntry->perminfoindex = 0;
 #endif
 	rangeTableEntry->subquery = subquery;
@@ -1856,20 +1886,11 @@ CreateOuterSubquery(RangeTblEntry *rangeTableEntry, List *outerSubqueryTargetLis
 	outerSubquery->rtable = list_make1(innerSubqueryRTE);
 
 #if PG_VERSION_NUM >= PG_VERSION_16
+
+	/* sanity check */
+	Assert(innerSubqueryRTE->rtekind == RTE_SUBQUERY &&
+		   innerSubqueryRTE->perminfoindex == 0);
 	outerSubquery->rteperminfos = NIL;
-	innerSubqueryRTE->perminfoindex = 0;
-
-	if (rangeTableEntry->perminfoindex != 0)
-	{
-		/* create permission info for innerSubqueryRTE */
-		RTEPermissionInfo *perminfo = GetFilledPermissionInfo(innerSubqueryRTE->relid,
-															  innerSubqueryRTE->inh,
-															  ACL_SELECT);
-
-		/* update the outerSubquery's rteperminfos accordingly */
-		innerSubqueryRTE->perminfoindex = 1;
-		outerSubquery->rteperminfos = list_make1(perminfo);
-	}
 #endif
 
 
@@ -2047,20 +2068,11 @@ TransformFunctionRTE(RangeTblEntry *rangeTblEntry)
 	subquery->rtable = list_make1(newRangeTableEntry);
 
 #if PG_VERSION_NUM >= PG_VERSION_16
+
+	/* sanity check */
+	Assert(newRangeTableEntry->rtekind == RTE_FUNCTION &&
+		   newRangeTableEntry->perminfoindex == 0);
 	subquery->rteperminfos = NIL;
-	newRangeTableEntry->perminfoindex = 0;
-
-	if (rangeTblEntry->perminfoindex != 0)
-	{
-		/* create permission info for newRangeTableEntry */
-		RTEPermissionInfo *perminfo = GetFilledPermissionInfo(newRangeTableEntry->relid,
-															  newRangeTableEntry->inh,
-															  CMD_SELECT);
-
-		/* update the subquery's rteperminfos accordingly */
-		newRangeTableEntry->perminfoindex = 1;
-		subquery->rteperminfos = list_make1(perminfo);
-	}
 #endif
 
 	newRangeTableRef->rtindex = 1;
@@ -2196,9 +2208,6 @@ TransformFunctionRTE(RangeTblEntry *rangeTblEntry)
 
 	/* replace the function with the constructed subquery */
 	rangeTblEntry->rtekind = RTE_SUBQUERY;
-#if PG_VERSION_NUM >= PG_VERSION_16
-	rangeTblEntry->perminfoindex = 0;
-#endif
 	rangeTblEntry->subquery = subquery;
 }
 
@@ -2436,22 +2445,9 @@ BuildReadIntermediateResultsQuery(List *targetEntryList, List *columnAliasList,
 	Query *resultQuery = makeNode(Query);
 	resultQuery->commandType = CMD_SELECT;
 	resultQuery->rtable = list_make1(rangeTableEntry);
-
 #if PG_VERSION_NUM >= PG_VERSION_16
 	resultQuery->rteperminfos = NIL;
-	if (rangeTableEntry->perminfoindex != 0)
-	{
-		/* create permission info for newRangeTableEntry */
-		RTEPermissionInfo *perminfo = GetFilledPermissionInfo(rangeTableEntry->relid,
-															  rangeTableEntry->inh,
-															  CMD_SELECT);
-
-		/* update the subquery's rteperminfos accordingly */
-		rangeTableEntry->perminfoindex = 1;
-		resultQuery->rteperminfos = list_make1(perminfo);
-	}
 #endif
-
 	resultQuery->jointree = joinTree;
 	resultQuery->targetList = targetList;
 

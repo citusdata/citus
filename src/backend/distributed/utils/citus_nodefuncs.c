@@ -148,9 +148,6 @@ SetRangeTblExtraData(RangeTblEntry *rte, CitusRTEKind rteKind, char *fragmentSch
 	fauxFunction->funccolcollations = funcCollations;
 
 	rte->rtekind = RTE_FUNCTION;
-#if PG_VERSION_NUM >= PG_VERSION_16
-	rte->perminfoindex = 0;
-#endif
 	rte->functions = list_make1(fauxFunction);
 }
 

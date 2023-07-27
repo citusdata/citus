@@ -28,7 +28,6 @@
 #include "distributed/query_colocation_checker.h"
 #include "distributed/pg_dist_partition.h"
 #include "distributed/relation_restriction_equivalence.h"
-#include "distributed/relation_utils.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_logical_planner.h" /* only to access utility functions */
 
@@ -84,7 +83,16 @@ CreateColocatedJoinChecker(Query *subquery, PlannerRestrictionContext *restricti
 		 * functions (i.e., FilterPlannerRestrictionForQuery()) rely on queries
 		 * not relations.
 		 */
+#if PG_VERSION_NUM >= PG_VERSION_16
+		RTEPermissionInfo *perminfo = NULL;
+		if (anchorRangeTblEntry->perminfoindex)
+		{
+			perminfo = getRTEPermissionInfo(subquery->rteperminfos, anchorRangeTblEntry);
+		}
+		anchorSubquery = WrapRteRelationIntoSubquery(anchorRangeTblEntry, NIL, perminfo);
+#else
 		anchorSubquery = WrapRteRelationIntoSubquery(anchorRangeTblEntry, NIL);
+#endif
 	}
 	else if (anchorRangeTblEntry->rtekind == RTE_SUBQUERY)
 	{
@@ -267,7 +275,13 @@ SubqueryColocated(Query *subquery, ColocatedJoinChecker *checker)
  * designed for generating a stub query.
  */
 Query *
-WrapRteRelationIntoSubquery(RangeTblEntry *rteRelation, List *requiredAttributes)
+WrapRteRelationIntoSubquery(RangeTblEntry *rteRelation,
+#if PG_VERSION_NUM >= PG_VERSION_16
+							List *requiredAttributes,
+							RTEPermissionInfo *perminfo)
+#else
+							List * requiredAttributes)
+#endif
 {
 	Query *subquery = makeNode(Query);
 	RangeTblRef *newRangeTableRef = makeNode(RangeTblRef);
@@ -279,16 +293,8 @@ WrapRteRelationIntoSubquery(RangeTblEntry *rteRelation, List *requiredAttributes
 	subquery->rtable = list_make1(newRangeTableEntry);
 
 #if PG_VERSION_NUM >= PG_VERSION_16
-	subquery->rteperminfos = NIL;
-	newRangeTableEntry->perminfoindex = 0;
-	if (rteRelation->perminfoindex != 0)
+	if (perminfo)
 	{
-		/* create permission info for newRangeTableEntry */
-		RTEPermissionInfo *perminfo = GetFilledPermissionInfo(newRangeTableEntry->relid,
-															  newRangeTableEntry->inh,
-															  ACL_SELECT);
-
-		/* update the subquery's rteperminfos accordingly */
 		newRangeTableEntry->perminfoindex = 1;
 		subquery->rteperminfos = list_make1(perminfo);
 	}

@@ -31,7 +31,6 @@
 #include "distributed/pg_dist_partition.h"
 #include "distributed/query_pushdown_planning.h"
 #include "distributed/recursive_planning.h"
-#include "distributed/relation_utils.h"
 #include "distributed/repartition_executor.h"
 #include "distributed/resource_lock.h"
 #include "distributed/version_compat.h"
@@ -605,18 +604,18 @@ CreateCombineQueryForRouterPlan(DistributedPlan *distPlan)
 	combineQuery->rtable = list_make1(rangeTableEntry);
 
 #if PG_VERSION_NUM >= PG_VERSION_16
-	combineQuery->rteperminfos = NIL;
-	if (rangeTableEntry->perminfoindex != 0)
-	{
-		/* create permission info for newRangeTableEntry */
-		RTEPermissionInfo *perminfo = GetFilledPermissionInfo(rangeTableEntry->relid,
-															  rangeTableEntry->inh,
-															  CMD_SELECT);
 
-		/* update the subquery's rteperminfos accordingly */
-		rangeTableEntry->perminfoindex = 1;
-		combineQuery->rteperminfos = list_make1(perminfo);
-	}
+	/*
+	 * This part of the code is more of a sanity check for readability,
+	 * it doesn't really do anything.
+	 * We know that Only relation RTEs and subquery RTEs that were once relation
+	 * RTEs (views) have their perminfoindex set. (see ExecCheckPermissions function)
+	 * DerivedRangeTableEntry sets the rtekind to RTE_FUNCTION
+	 * Hence we should have no perminfos here.
+	 */
+	Assert(rangeTableEntry->rtekind == RTE_FUNCTION &&
+		   rangeTableEntry->perminfoindex == 0);
+	combineQuery->rteperminfos = NIL;
 #endif
 
 	combineQuery->targetList = targetList;
@@ -1557,18 +1556,17 @@ WrapSubquery(Query *subquery)
 	outerQuery->rtable = list_make1(newRangeTableEntry);
 
 #if PG_VERSION_NUM >= PG_VERSION_16
-	outerQuery->rteperminfos = NIL;
-	if (newRangeTableEntry->perminfoindex != 0)
-	{
-		/* create permission info for newRangeTableEntry */
-		RTEPermissionInfo *perminfo = GetFilledPermissionInfo(newRangeTableEntry->relid,
-															  newRangeTableEntry->inh,
-															  CMD_SELECT);
 
-		/* update the subquery's rteperminfos accordingly */
-		newRangeTableEntry->perminfoindex = 1;
-		outerQuery->rteperminfos = list_make1(perminfo);
-	}
+	/*
+	 * This part of the code is more of a sanity check for readability,
+	 * it doesn't really do anything.
+	 * addRangeTableEntryForSubquery doesn't add permission info
+	 * because the range table is set to be RTE_SUBQUERY.
+	 * Hence we should also have no perminfos here.
+	 */
+	Assert(newRangeTableEntry->rtekind == RTE_SUBQUERY &&
+		   newRangeTableEntry->perminfoindex == 0);
+	outerQuery->rteperminfos = NIL;
 #endif
 
 	/* set the FROM expression to the subquery */

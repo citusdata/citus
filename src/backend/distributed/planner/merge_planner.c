@@ -15,6 +15,7 @@
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
 #include "optimizer/optimizer.h"
+#include "parser/parse_relation.h"
 #include "parser/parsetree.h"
 #include "tcop/tcopprot.h"
 #include "utils/lsyscache.h"
@@ -31,7 +32,6 @@
 #include "distributed/pg_version_constants.h"
 #include "distributed/query_pushdown_planning.h"
 #include "distributed/query_colocation_checker.h"
-#include "distributed/relation_utils.h"
 #include "distributed/repartition_executor.h"
 #include "distributed/shared_library_init.h"
 #include "distributed/shard_pruning.h"
@@ -776,7 +776,9 @@ ConvertCteRTEIntoSubquery(Query *mergeQuery, RangeTblEntry *sourceRte)
 
 	sourceRte->rtekind = RTE_SUBQUERY;
 #if PG_VERSION_NUM >= PG_VERSION_16
-	sourceRte->perminfoindex = 0;
+
+	/* sanity check - sourceRte was RTE_CTE previously so it should have no perminfo */
+	Assert(sourceRte->perminfoindex == 0);
 #endif
 
 	/*
@@ -830,12 +832,11 @@ ConvertRelationRTEIntoSubquery(Query *mergeQuery, RangeTblEntry *sourceRte,
 
 #if PG_VERSION_NUM >= PG_VERSION_16
 	sourceResultsQuery->rteperminfos = NIL;
-	if (newRangeTableEntry->perminfoindex != 0)
+	if (newRangeTableEntry->perminfoindex)
 	{
 		/* create permission info for newRangeTableEntry */
-		RTEPermissionInfo *perminfo = GetFilledPermissionInfo(newRangeTableEntry->relid,
-															  newRangeTableEntry->inh,
-															  CMD_SELECT);
+		RTEPermissionInfo *perminfo = getRTEPermissionInfo(mergeQuery->rteperminfos,
+														   newRangeTableEntry);
 
 		/* update the subquery's rteperminfos accordingly */
 		newRangeTableEntry->perminfoindex = 1;
@@ -870,6 +871,12 @@ ConvertRelationRTEIntoSubquery(Query *mergeQuery, RangeTblEntry *sourceRte,
 	sourceRte->rtekind = RTE_SUBQUERY;
 #if PG_VERSION_NUM >= PG_VERSION_16
 	sourceRte->perminfoindex = 0;
+
+	/*
+	 * Note: we don't need to remove replaced sourceRte from mergeQuery->rteperminfos to avoid
+	 * crash of Assert(bms_num_members(indexset) == list_length(rteperminfos));
+	 * because mergeQuery->rteperminfos has already gone through ExecCheckPermissions
+	 */
 #endif
 	sourceRte->subquery = sourceResultsQuery;
 	sourceRte->inh = false;

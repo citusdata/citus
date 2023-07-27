@@ -1474,7 +1474,7 @@ FinalizeNonRouterPlan(PlannedStmt *localPlan, DistributedPlan *distributedPlan,
 #if PG_VERSION_NUM >= PG_VERSION_16
 
 	/*
-	 * Original range table list is concatented to final plan's range table list
+	 * Original range table list is concatenated to final plan's range table list
 	 * therefore all the perminfoindexes should be updated to their value
 	 * PLUS the length of final plan's perminfos.
 	 */
