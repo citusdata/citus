@@ -1445,7 +1445,7 @@ DROP TABLE IF EXISTS test_with_all_shards_excluded;
 CREATE TABLE test_with_all_shards_excluded(a int PRIMARY KEY);
 SELECT create_distributed_table('test_with_all_shards_excluded', 'a', colocate_with:='none', shard_count:=4);
 
-SELECT shardid FROM pg_dist_shard;
+SELECT shardid FROM pg_dist_shard ORDER BY shardid ASC;
 
 SELECT rebalance_table_shards('test_with_all_shards_excluded', excluded_shard_list:='{102073, 102074, 102075, 102076}');
 
