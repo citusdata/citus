@@ -2139,12 +2139,6 @@ UpdateShardMoveDependencies(PlacementUpdateEvent *move, uint64 colocationId, int
 static int64
 RebalanceTableShardsBackground(RebalanceOptions *options, Oid shardReplicationModeOid)
 {
-	if (list_length(options->relationIdList) == 0)
-	{
-		ereport(NOTICE, (errmsg("No tables to rebalance")));
-		return 0;
-	}
-
 	char *operationName = "rebalance";
 	if (options->drainOnly)
 	{
