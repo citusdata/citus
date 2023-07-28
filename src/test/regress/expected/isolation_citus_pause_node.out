@@ -72,3 +72,23 @@ step s2-end:
 step s1-end:
     COMMIT;
 
+
+starting permutation: s1-begin s1-node-not-found s1-end
+step s1-begin:
+   BEGIN;
+
+s1: NOTICE:  Node not found.
+step s1-node-not-found:
+DO $$
+BEGIN
+ select citus_pause_node(25000);
+EXCEPTION
+ WHEN SQLSTATE 'P0002' THEN
+  RAISE NOTICE 'Node not found.';
+END;
+$$
+LANGUAGE plpgsql;
+
+step s1-end:
+   COMMIT;
+

@@ -42,6 +42,20 @@ step "s1-begin"
     BEGIN;
 }
 
+step "s1-node-not-found"
+{
+	DO $$
+	BEGIN
+		select citus_pause_node(25000);
+
+	EXCEPTION
+		WHEN  SQLSTATE 'P0002' THEN
+			RAISE NOTICE 'Node not found.';
+	END;
+	$$
+	LANGUAGE plpgsql;
+}
+
 step "s1-pause-node"
 {
 	SET client_min_messages = 'notice';
@@ -129,4 +143,5 @@ step "s2-end"
 	COMMIT;
 }
 
-permutation "s1-begin" "s1-pause-node" "s2-begin" "s2-insert" "s2-end" "s1-end"
+permutation "s1-begin"  "s1-pause-node" "s2-begin" "s2-insert" "s2-end" "s1-end"
+permutation "s1-begin"  "s1-node-not-found" "s1-end"
