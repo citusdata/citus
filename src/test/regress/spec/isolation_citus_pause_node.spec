@@ -40,10 +40,6 @@ session "s1"
 step "s1-begin"
 {
     BEGIN;
-	select * from pg_dist_node;
-	SELECT get_shard_id_for_distribution_column('employee', 3);
-
-
 }
 
 step "s1-pause-node"
@@ -57,10 +53,10 @@ step "s1-pause-node"
 		v_node_port int;
 	BEGIN
 			-- Get the shard id for the distribution column
-		SELECT get_shard_id_for_distribution_column('employee', 3) into shard_id;
+		SELECT get_shard_id_for_distribution_column('employee', 3) into v_shard_id;
 
 		--Get the node id for the shard id
-		SELECT nodename,nodeport into v_node_name,v_node_port FROM citus_shards WHERE shard_id = v_shard_id limit 1;
+		SELECT nodename,nodeport into v_node_name,v_node_port FROM citus_shards WHERE shardid = v_shard_id limit 1;
 		raise notice 'node name is %',v_node_name;
 		raise notice 'node port is %',v_node_port;
 
@@ -70,7 +66,7 @@ step "s1-pause-node"
 
 
 		-- Pause the node
-		SELECT pg_catalog.citus_pause_node(v_node_id);
+		perform pg_catalog.citus_pause_node(v_node_id) ;
 	END;
 	$$
 	LANGUAGE plpgsql;
