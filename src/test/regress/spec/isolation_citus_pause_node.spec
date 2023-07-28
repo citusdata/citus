@@ -52,7 +52,10 @@ step "s1-pause-node"
 		v_node_name text;
 		v_node_port int;
 	BEGIN
-			-- Get the shard id for the distribution column
+		--The first message in the block is being printed on the top of the code block. So adding a dummy message
+		--to make sure that the first message is printed in correct place.
+		raise notice '';
+		-- Get the shard id for the distribution column
 		SELECT get_shard_id_for_distribution_column('employee', 3) into v_shard_id;
 
 		--Get the node id for the shard id
@@ -62,7 +65,6 @@ step "s1-pause-node"
 
 		-- Get the node id for the shard id
 		SELECT nodeid into v_node_id FROM pg_dist_node WHERE nodename = v_node_name and nodeport = v_node_port limit 1;
-		raise notice 'node id is %',v_node_id;
 
 
 		-- Pause the node
