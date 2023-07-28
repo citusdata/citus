@@ -295,7 +295,7 @@ NonPushableMergeCommandExplainScan(CustomScanState *node, List *ancestors,
 	CitusScanState *scanState = (CitusScanState *) node;
 	DistributedPlan *distributedPlan = scanState->distributedPlan;
 	Query *mergeQuery = distributedPlan->modifyQueryViaCoordinatorOrRepartition;
-	RangeTblEntry *sourceRte = ExtractMergeSourceRangeTableEntry(mergeQuery);
+	RangeTblEntry *sourceRte = ExtractMergeSourceRangeTableEntry(mergeQuery, false);
 
 	/*
 	 * Create a copy because ExplainOneQuery can modify the query, and later

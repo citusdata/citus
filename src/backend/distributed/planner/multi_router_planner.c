@@ -396,7 +396,7 @@ ExtractSourceResultRangeTableEntry(Query *query)
 {
 	if (IsMergeQuery(query))
 	{
-		return ExtractMergeSourceRangeTableEntry(query);
+		return ExtractMergeSourceRangeTableEntry(query, false);
 	}
 	else if (CheckInsertSelectQuery(query))
 	{
