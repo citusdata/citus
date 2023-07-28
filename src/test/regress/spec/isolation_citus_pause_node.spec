@@ -48,7 +48,32 @@ step "s1-begin"
 
 step "s1-pause-node"
 {
-	SELECT pg_catalog.citus_pause_node(2);
+	SET client_min_messages = 'notice';
+	DO $$
+	DECLARE
+		v_shard_id int;
+		v_node_id int;
+		v_node_name text;
+		v_node_port int;
+	BEGIN
+			-- Get the shard id for the distribution column
+		SELECT get_shard_id_for_distribution_column('employee', 3) into shard_id;
+
+		--Get the node id for the shard id
+		SELECT nodename,nodeport into v_node_name,v_node_port FROM citus_shards WHERE shard_id = v_shard_id limit 1;
+		raise notice 'node name is %',v_node_name;
+		raise notice 'node port is %',v_node_port;
+
+		-- Get the node id for the shard id
+		SELECT nodeid into v_node_id FROM pg_dist_node WHERE nodename = v_node_name and nodeport = v_node_port limit 1;
+		raise notice 'node id is %',v_node_id;
+
+
+		-- Pause the node
+		SELECT pg_catalog.citus_pause_node(v_node_id);
+	END;
+	$$
+	LANGUAGE plpgsql;
 }
 
 step "s1-end"
@@ -73,15 +98,16 @@ step "s2-insert"
 	-- Variable to track if the INSERT statement was successful
 	DO $$
 	DECLARE
-		insert_successful BOOLEAN := FALSE;
+		v_insert_successful BOOLEAN := FALSE;
 	BEGIN
+
 		-- Execute the INSERT statement
 		insert into employee values(11,'e11',3);
 
 		-- If we reach this point, the INSERT statement was successful
-		insert_successful := TRUE;
+		v_insert_successful := TRUE;
 
-		IF insert_successful THEN
+		IF v_insert_successful THEN
 			RAISE NOTICE 'INSERT statement completed successfully. This means that citus_pause_node could not get the lock.';
 		END IF;
 
