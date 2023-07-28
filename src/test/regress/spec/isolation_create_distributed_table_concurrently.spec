@@ -140,7 +140,7 @@ step "s2-commit"
 session "s3"
 
 // this advisory lock with (almost) random values are only used
-// for testing purposes. For details, check Citus logical replication
+// for testing purposes. For details, check Citus' logical replication
 // source code
 step "s3-acquire-split-advisory-lock"
 {
