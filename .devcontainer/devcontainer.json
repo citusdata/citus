@@ -9,9 +9,10 @@
     "customizations": {
         "vscode": {
             "extensions": [
-                "ms-vscode.cpptools",
-                "ms-vsliveshare.vsliveshare",
+                "eamodio.gitlens",
                 "github.vscode-pull-request-github",
+                "ms-vscode.cpptools-extension-pack",
+                "ms-vsliveshare.vsliveshare",
             ],
             "settings": {
                 "files.exclude": {
