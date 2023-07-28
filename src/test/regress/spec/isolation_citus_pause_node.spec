@@ -46,9 +46,11 @@ step "s1-node-not-found"
 {
 	DO $$
 	DECLARE
-		v_node_id int;
+		v_node_id int := -1;
 		v_node_exists boolean := true;
-		v_count int :=-1;
+		v_count int := -1;
+		v_exception_message text;
+		v_expected_exception_message text := '';
 	BEGIN
 
 		-- Get a node-id that does not exist in the cluster
@@ -68,7 +70,11 @@ step "s1-node-not-found"
 
 	EXCEPTION
 		WHEN  SQLSTATE 'P0002' THEN
-			RAISE NOTICE 'Node not found.';
+			GET STACKED DIAGNOSTICS v_exception_message = MESSAGE_TEXT;
+			v_expected_exception_message := 'node ' || v_node_id || ' not found';
+			if v_exception_message = v_expected_exception_message then
+				RAISE NOTICE 'Node not found.';
+			end if;
 	END;
 	$$
 	LANGUAGE plpgsql;
