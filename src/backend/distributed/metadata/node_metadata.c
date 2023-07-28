@@ -1330,6 +1330,7 @@ citus_update_node(PG_FUNCTION_ARGS)
 	PG_RETURN_VOID();
 }
 
+
 Datum
 citus_pause_node(PG_FUNCTION_ARGS)
 {
@@ -1353,7 +1354,6 @@ citus_pause_node(PG_FUNCTION_ARGS)
 	}
 
 	PG_RETURN_VOID();
-
 }
 
 
