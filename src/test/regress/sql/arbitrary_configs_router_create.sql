@@ -1,5 +1,6 @@
 CREATE SCHEMA arbitrary_configs_router;
 SET search_path TO arbitrary_configs_router;
+GRANT ALL ON SCHEMA arbitrary_configs_router TO regularuser;
 
 CREATE TABLE articles_hash (
 	id bigint NOT NULL,
@@ -116,3 +117,4 @@ $$ LANGUAGE plpgsql;
 SET client_min_messages TO ERROR;
 CREATE VIEW test_view AS
 	SELECT * FROM articles_hash WHERE author_id = 1;
+GRANT ALL ON test_view TO regularuser;

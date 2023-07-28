@@ -52,16 +52,16 @@ CREATE TABLE local (id bigserial PRIMARY KEY,
                     title text);
 SET client_min_messages TO ERROR;
 CREATE VIEW "local regular view" AS SELECT * FROM local;
-GRANT ALL ON TABLE "local regular view" TO regularuser;
+GRANT ALL ON "local regular view" TO regularuser;
 CREATE VIEW dist_regular_view AS SELECT * FROM distributed;
-GRANT ALL ON TABLE dist_regular_view TO regularuser;
+GRANT ALL ON dist_regular_view TO regularuser;
 
 CREATE VIEW local_regular_view2 as SELECT count(*) FROM distributed JOIN "local regular view" USING (id);
-GRANT ALL ON TABLE local_regular_view2 TO regularuser;
+GRANT ALL ON local_regular_view2 TO regularuser;
 CREATE VIEW local_regular_view3 as SELECT count(*) FROM local JOIN dist_regular_view USING (id);
-GRANT ALL ON TABLE local_regular_view3 TO regularuser;
+GRANT ALL ON local_regular_view3 TO regularuser;
 CREATE VIEW "local regular view4" as SELECT count(*) as "my cny" FROM dist_regular_view JOIN "local regular view" USING (id);
-GRANT ALL ON TABLE "local regular view4" TO regularuser;
+GRANT ALL ON "local regular view4" TO regularuser;
 RESET client_min_messages;
 
 -- these above restrictions brought us to the following schema

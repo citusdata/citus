@@ -9,6 +9,7 @@ SELECT substring(:'server_version', '\d+')::int >= 15 AS server_version_ge_15
 DROP SCHEMA IF EXISTS merge_arbitrary_schema CASCADE;
 CREATE SCHEMA merge_arbitrary_schema;
 SET search_path TO merge_arbitrary_schema;
+GRANT ALL ON SCHEMA merge_arbitrary_schema TO regularuser;
 SET citus.shard_count TO 4;
 SET citus.next_shard_id TO 6000000;
 CREATE TABLE target_cj(tid int, src text, val int);
