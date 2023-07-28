@@ -1,6 +1,0 @@
-{
-    "files.exclude": {
-        "**/*.o": true,
-        "**/.deps/": true
-    }
-}

@@ -6,11 +6,21 @@
         "seccomp=unconfined",
     ],
     "forwardPorts": [9700],
-    "extensions": [
-        "ms-vscode.cpptools",
-        "ms-vsliveshare.vsliveshare",
-        "github.vscode-pull-request-github",
-    ],
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "ms-vscode.cpptools",
+                "ms-vsliveshare.vsliveshare",
+                "github.vscode-pull-request-github",
+            ],
+            "settings": {
+                "files.exclude": {
+                    "**/*.o": true,
+                    "**/.deps/": true,
+                }
+            },
+        }
+    },
     "mounts": [
         "type=volume,target=/data",
     ],
