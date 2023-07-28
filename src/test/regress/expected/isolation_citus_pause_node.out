@@ -80,8 +80,23 @@ step s1-begin:
 s1: NOTICE:  Node not found.
 step s1-node-not-found:
 DO $$
-BEGIN
- select citus_pause_node(25000);
+DECLARE
+ v_node_id int;
+ v_node_exists boolean := true;
+ v_count int :=-1;
+  BEGIN
+ -- Get a node-id that does not exist in the cluster
+ while v_node_exists loop
+  --get a random node id in the range of 1000 to 2000
+  v_node_id := FLOOR(RANDOM()*(2000- 1000 + 1)) + 1000;
+  begin
+   select count(0) into v_count from pg_dist_node where nodeid = v_node_id;
+   if v_count = 0 then
+    v_node_exists := false;
+   end if;
+  end;
+ end loop;
+ select citus_pause_node(v_node_id);
 EXCEPTION
  WHEN SQLSTATE 'P0002' THEN
   RAISE NOTICE 'Node not found.';
