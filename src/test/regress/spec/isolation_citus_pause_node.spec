@@ -40,6 +40,10 @@ session "s1"
 step "s1-begin"
 {
     BEGIN;
+	select * from pg_dist_node;
+	SELECT get_shard_id_for_distribution_column('employee', 3);
+
+
 }
 
 step "s1-pause-node"
