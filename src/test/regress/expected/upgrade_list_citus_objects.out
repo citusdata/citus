@@ -103,6 +103,7 @@ ORDER BY 1;
  function citus_nodeid_for_gpid(bigint)
  function citus_nodename_for_nodeid(integer)
  function citus_nodeport_for_nodeid(integer)
+ function citus_pause_node(integer)
  function citus_pid_for_gpid(bigint)
  function citus_prepare_pg_upgrade()
  function citus_query_stats()
