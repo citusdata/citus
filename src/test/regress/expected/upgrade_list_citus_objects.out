@@ -5,8 +5,6 @@ WHERE refclassid = 'pg_catalog.pg_extension'::pg_catalog.regclass
   AND refobjid = e.oid
   AND deptype = 'e'
   AND e.extname='citus'
-  AND pg_catalog.pg_describe_object(classid, objid, 0) != 'function any_value(anyelement)'
-  AND pg_catalog.pg_describe_object(classid, objid, 0) != 'function any_value_agg(anyelement,anyelement)'
 ORDER BY 1;
                                                        description
 ---------------------------------------------------------------------
@@ -15,6 +13,8 @@ ORDER BY 1;
  function alter_old_partitions_set_access_method(regclass,timestamp with time zone,name)
  function alter_role_if_exists(text,text)
  function alter_table_set_access_method(regclass,text)
+ function any_value(anyelement)
+ function any_value_agg(anyelement,anyelement)
  function array_cat_agg(anycompatiblearray)
  function assign_distributed_transaction_id(integer,bigint,timestamp with time zone)
  function authinfo_valid(text)
@@ -340,5 +340,3 @@ ORDER BY 1;
  view pg_dist_shard_placement
  view time_partitions
 (329 rows)
-
-
