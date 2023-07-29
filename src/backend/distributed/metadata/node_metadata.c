@@ -134,7 +134,7 @@ static void MarkNodesNotSyncedInLoopBackConnection(MetadataSyncContext *context,
 static void EnsureParentSessionHasExclusiveLockOnPgDistNode(pid_t parentSessionPid);
 static void SetNodeMetadata(MetadataSyncContext *context, bool localOnly);
 static void EnsureTransactionalMetadataSyncMode(void);
-static void lock_shards_in_worker_placement_list(WorkerNode *workerNode, LOCKMODE
+static void LockShardsInWorkerPlacementList(WorkerNode *workerNode, LOCKMODE
 												 lockMode);
 
 /* declarations for dynamic loading */
@@ -1167,11 +1167,10 @@ ActivateNodeList(MetadataSyncContext *context)
  * Adds locks into all shards placed into given workerNode.
  */
 void
-lock_shards_in_worker_placement_list(WorkerNode *workerNode, LOCKMODE lockMode)
+LockShardsInWorkerPlacementList(WorkerNode *workerNode, LOCKMODE lockMode)
 {
-	List *placementList = NIL;
 
-	placementList = AllShardPlacementsOnNodeGroup(workerNode->groupId);
+	List *placementList = AllShardPlacementsOnNodeGroup(workerNode->groupId);
 	LockShardsInPlacementListMetadata(placementList, lockMode);
 }
 
@@ -1296,7 +1295,7 @@ citus_update_node(PG_FUNCTION_ARGS)
 			}
 		}
 
-		lock_shards_in_worker_placement_list(workerNode, AccessExclusiveLock);
+		LockShardsInWorkerPlacementList(workerNode, AccessExclusiveLock);
 	}
 
 	/*
@@ -1360,7 +1359,7 @@ citus_pause_node_within_txn(PG_FUNCTION_ARGS)
 
 	if (NodeIsPrimary(workerNode))
 	{
-		lock_shards_in_worker_placement_list(workerNode, AccessExclusiveLock);
+		LockShardsInWorkerPlacementList(workerNode, AccessExclusiveLock);
 	}
 
 	PG_RETURN_VOID();
