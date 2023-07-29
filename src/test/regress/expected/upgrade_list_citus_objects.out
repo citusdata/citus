@@ -339,5 +339,5 @@ ORDER BY 1;
  view citus_stat_tenants_local
  view pg_dist_shard_placement
  view time_partitions
-(331 rows)
+(329 rows)
 

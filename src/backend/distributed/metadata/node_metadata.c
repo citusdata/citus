@@ -1342,6 +1342,9 @@ citus_update_node(PG_FUNCTION_ARGS)
 }
 
 
+/*
+ *
+ */
 Datum
 citus_pause_node_within_txn(PG_FUNCTION_ARGS)
 {
