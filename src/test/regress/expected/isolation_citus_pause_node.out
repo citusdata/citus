@@ -26,7 +26,7 @@ BEGIN
  -- Get the node id for the shard id
  SELECT nodeid into v_node_id FROM pg_dist_node WHERE nodename = v_node_name and nodeport = v_node_port limit 1;
  -- Pause the node
- perform pg_catalog.citus_pause_node(v_node_id) ;
+ perform pg_catalog.citus_pause_node_within_txn(v_node_id) ;
 END;
 $$
 LANGUAGE plpgsql;
@@ -50,13 +50,13 @@ step s2-insert-distributed:
   -- If we reach this point, the INSERT statement was successful
   v_insert_successful := TRUE;
   IF v_insert_successful THEN
-   RAISE NOTICE 'INSERT statement completed successfully. This means that citus_pause_node could not get the lock.';
+   RAISE NOTICE 'INSERT statement completed successfully. This means that citus_pause_node_within_txn could not get the lock.';
   END IF;
  -- You can add additional processing here if needed
  EXCEPTION
   WHEN query_canceled THEN
    -- The INSERT statement was canceled due to timeout
-   RAISE NOTICE 'query_canceled exception raised. This means that citus_pause_node was able to get the lock.';
+   RAISE NOTICE 'query_canceled exception raised. This means that citus_pause_node_within_txn was able to get the lock.';
   WHEN OTHERS THEN
    -- Any other exception raised during the INSERT statement
    RAISE;
@@ -65,7 +65,7 @@ step s2-insert-distributed:
  LANGUAGE plpgsql;
  <waiting ...>
 step s2-insert-distributed: <... completed>
-s2: NOTICE:  query_canceled exception raised. This means that citus_pause_node was able to get the lock.
+s2: NOTICE:  query_canceled exception raised. This means that citus_pause_node_within_txn was able to get the lock.
 step s2-end:
  COMMIT;
 
@@ -99,7 +99,7 @@ BEGIN
  -- Get the node id for the shard id
  SELECT nodeid into v_node_id FROM pg_dist_node WHERE nodename = v_node_name and nodeport = v_node_port limit 1;
  -- Pause the node
- perform pg_catalog.citus_pause_node(v_node_id) ;
+ perform pg_catalog.citus_pause_node_within_txn(v_node_id) ;
 END;
 $$
 LANGUAGE plpgsql;
@@ -123,13 +123,13 @@ BEGIN
  -- If we reach this point, the DELETE statement was successful
  v_delete_successful := TRUE;
  IF v_delete_successful THEN
-  RAISE NOTICE 'DELETE statement completed successfully. This means that citus_pause_node could not get the lock.';
+  RAISE NOTICE 'DELETE statement completed successfully. This means that citus_pause_node_within_txn could not get the lock.';
  END IF;
 -- You can add additional processing here if needed
 EXCEPTION
  WHEN query_canceled THEN
   -- The INSERT statement was canceled due to timeout
-  RAISE NOTICE 'query_canceled exception raised. This means that citus_pause_node was able to get the lock.';
+  RAISE NOTICE 'query_canceled exception raised. This means that citus_pause_node_within_txn was able to get the lock.';
  WHEN OTHERS THEN
   -- Any other exception raised during the INSERT statement
   RAISE;
@@ -138,7 +138,7 @@ $$
 LANGUAGE plpgsql;
 <waiting ...>
 step s2-delete-distributed: <... completed>
-s2: NOTICE:  query_canceled exception raised. This means that citus_pause_node was able to get the lock.
+s2: NOTICE:  query_canceled exception raised. This means that citus_pause_node_within_txn was able to get the lock.
 step s2-end:
 COMMIT;
 
@@ -172,7 +172,7 @@ BEGIN
  -- Get the node id for the shard id
  SELECT nodeid into v_node_id FROM pg_dist_node WHERE nodename = v_node_name and nodeport = v_node_port limit 1;
  -- Pause the node
- perform pg_catalog.citus_pause_node(v_node_id) ;
+ perform pg_catalog.citus_pause_node_within_txn(v_node_id) ;
 END;
 $$
 LANGUAGE plpgsql;
@@ -223,7 +223,7 @@ BEGIN
  -- Get the node id for the shard id
  SELECT nodeid into v_node_id FROM pg_dist_node WHERE nodename = v_node_name and nodeport = v_node_port limit 1;
  -- Pause the node
- perform pg_catalog.citus_pause_node(v_node_id) ;
+ perform pg_catalog.citus_pause_node_within_txn(v_node_id) ;
 END;
 $$
 LANGUAGE plpgsql;
@@ -247,11 +247,11 @@ BEGIN
  -- If we reach this point, the INSERT statement was successful
  v_insert_successful := TRUE;
  IF v_insert_successful THEN
-  RAISE NOTICE 'INSERT statement completed successfully. This means that citus_pause_node could not get the lock.';
+  RAISE NOTICE 'INSERT statement completed successfully. This means that citus_pause_node_within_txn could not get the lock.';
  END IF;
 EXCEPTION WHEN query_canceled THEN
  -- The INSERT statement was canceled due to timeout
- RAISE NOTICE 'query_canceled exception raised. This means that citus_pause_node was able to get the lock.';
+ RAISE NOTICE 'query_canceled exception raised. This means that citus_pause_node_within_txn was able to get the lock.';
  WHEN OTHERS THEN
   -- Any other exception raised during the INSERT statement
   RAISE;
@@ -260,7 +260,7 @@ $$
 LANGUAGE plpgsql;
 <waiting ...>
 step s2-insert-reference: <... completed>
-s2: NOTICE:  query_canceled exception raised. This means that citus_pause_node was able to get the lock.
+s2: NOTICE:  query_canceled exception raised. This means that citus_pause_node_within_txn was able to get the lock.
 step s2-end:
 COMMIT;
 
@@ -294,7 +294,7 @@ BEGIN
  -- Get the node id for the shard id
  SELECT nodeid into v_node_id FROM pg_dist_node WHERE nodename = v_node_name and nodeport = v_node_port limit 1;
  -- Pause the node
- perform pg_catalog.citus_pause_node(v_node_id) ;
+ perform pg_catalog.citus_pause_node_within_txn(v_node_id) ;
 END;
 $$
 LANGUAGE plpgsql;
@@ -323,7 +323,7 @@ BEGIN
  -- Get the node id for the shard id
  SELECT nodeid into v_node_id FROM pg_dist_node WHERE nodename = v_node_name and nodeport = v_node_port limit 1;
  -- Pause the node
- perform pg_catalog.citus_pause_node(v_node_id) ;
+ perform pg_catalog.citus_pause_node_within_txn(v_node_id) ;
 END;
 $$
 LANGUAGE plpgsql;
@@ -348,7 +348,7 @@ DECLARE
    v_expected_exception_message text := '';
   BEGIN
    select nextval('pg_dist_node_nodeid_seq')::int into v_node_id;
-   select citus_pause_node(v_node_id);
+   select citus_pause_node_within_txn(v_node_id);
 EXCEPTION
  WHEN SQLSTATE 'P0002' THEN
   GET STACKED DIAGNOSTICS v_exception_message = MESSAGE_TEXT;

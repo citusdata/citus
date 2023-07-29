@@ -59,7 +59,7 @@ step "s1-node-not-found"
 		v_expected_exception_message text := '';
 	BEGIN
 		select nextval('pg_dist_node_nodeid_seq')::int into v_node_id;
-		select citus_pause_node(v_node_id) ;
+		select citus_pause_node_within_txn(v_node_id) ;
 	EXCEPTION
 		WHEN  SQLSTATE 'P0002' THEN
 			GET STACKED DIAGNOSTICS v_exception_message = MESSAGE_TEXT;
@@ -98,7 +98,7 @@ step "s1-pause-node"
 
 
 		-- Pause the node
-		perform pg_catalog.citus_pause_node(v_node_id) ;
+		perform pg_catalog.citus_pause_node_within_txn(v_node_id) ;
 	END;
 	$$
 	LANGUAGE plpgsql;
@@ -136,7 +136,7 @@ step "s2-insert-distributed"
 		v_insert_successful := TRUE;
 
 		IF v_insert_successful THEN
-			RAISE NOTICE 'INSERT statement completed successfully. This means that citus_pause_node could not get the lock.';
+			RAISE NOTICE 'INSERT statement completed successfully. This means that citus_pause_node_within_txn could not get the lock.';
 		END IF;
 
 
@@ -144,7 +144,7 @@ step "s2-insert-distributed"
 	EXCEPTION
 		WHEN query_canceled THEN
 			-- The INSERT statement was canceled due to timeout
-			RAISE NOTICE 'query_canceled exception raised. This means that citus_pause_node was able to get the lock.';
+			RAISE NOTICE 'query_canceled exception raised. This means that citus_pause_node_within_txn was able to get the lock.';
 		WHEN OTHERS THEN
 			-- Any other exception raised during the INSERT statement
 			RAISE;
@@ -172,12 +172,12 @@ step "s2-insert-reference"{
 		v_insert_successful := TRUE;
 
 		IF v_insert_successful THEN
-			RAISE NOTICE 'INSERT statement completed successfully. This means that citus_pause_node could not get the lock.';
+			RAISE NOTICE 'INSERT statement completed successfully. This means that citus_pause_node_within_txn could not get the lock.';
 		END IF;
 
 	EXCEPTION WHEN query_canceled THEN
 		-- The INSERT statement was canceled due to timeout
-		RAISE NOTICE 'query_canceled exception raised. This means that citus_pause_node was able to get the lock.';
+		RAISE NOTICE 'query_canceled exception raised. This means that citus_pause_node_within_txn was able to get the lock.';
 		WHEN OTHERS THEN
 			-- Any other exception raised during the INSERT statement
 			RAISE;
@@ -209,13 +209,13 @@ step "s2-delete-distributed"{
 		v_delete_successful := TRUE;
 
 		IF v_delete_successful THEN
-			RAISE NOTICE 'DELETE statement completed successfully. This means that citus_pause_node could not get the lock.';
+			RAISE NOTICE 'DELETE statement completed successfully. This means that citus_pause_node_within_txn could not get the lock.';
 		END IF;
 	-- You can add additional processing here if needed
 	EXCEPTION
 		WHEN query_canceled THEN
 			-- The INSERT statement was canceled due to timeout
-			RAISE NOTICE 'query_canceled exception raised. This means that citus_pause_node was able to get the lock.';
+			RAISE NOTICE 'query_canceled exception raised. This means that citus_pause_node_within_txn was able to get the lock.';
 		WHEN OTHERS THEN
 			-- Any other exception raised during the INSERT statement
 			RAISE;

@@ -152,7 +152,7 @@ PG_FUNCTION_INFO_V1(master_disable_node);
 PG_FUNCTION_INFO_V1(citus_activate_node);
 PG_FUNCTION_INFO_V1(master_activate_node);
 PG_FUNCTION_INFO_V1(citus_update_node);
-PG_FUNCTION_INFO_V1(citus_pause_node);
+PG_FUNCTION_INFO_V1(citus_pause_node_within_txn);
 PG_FUNCTION_INFO_V1(master_update_node);
 PG_FUNCTION_INFO_V1(get_shard_id_for_distribution_column);
 PG_FUNCTION_INFO_V1(citus_nodename_for_nodeid);
@@ -1332,7 +1332,7 @@ citus_update_node(PG_FUNCTION_ARGS)
 
 
 Datum
-citus_pause_node(PG_FUNCTION_ARGS)
+citus_pause_node_within_txn(PG_FUNCTION_ARGS)
 {
 	CheckCitusVersion(ERROR);
 

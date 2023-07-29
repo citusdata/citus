@@ -1,6 +1,6 @@
 -- citus--12.0-1--12.1-1
 
-#include "udfs/citus_pause_node/12.1-1.sql"
+#include "udfs/citus_pause_node_within_txn/12.1-1.sql"
 
 
 
