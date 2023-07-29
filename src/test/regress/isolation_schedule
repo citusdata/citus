@@ -80,7 +80,6 @@ test: isolation_schema_based_sharding
 test: isolation_citus_pause_node
 test: isolation_citus_schema_distribute_undistribute
 
-
 # Rebalancer
 test: isolation_blocking_move_single_shard_commands
 test: isolation_blocking_move_multi_shard_commands
