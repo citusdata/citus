@@ -2,7 +2,10 @@ setup
 {
 	SET citus.shard_replication_factor to 1;
 
-    CREATE TABLE company(id int primary key, name text);
+	create table city	(id int , name text );
+	SELECT create_reference_table('city');
+
+    CREATE TABLE company(id int primary key, name text, city_id int);
 	select create_distributed_table('company', 'id');
 
 	create table employee(id int , name text, company_id int  );
@@ -10,9 +13,13 @@ setup
 
 	select create_distributed_table('employee', 'company_id');
 
-	insert into company values(1,'c1');
-	insert into company values(2,'c2');
-	insert into company values(3,'c3');
+	insert into city values(1,'city1');
+	insert into city values(2,'city2');
+
+
+	insert into company values(1,'c1', 1);
+	insert into company values(2,'c2',2);
+	insert into company values(3,'c3',1);
 
 	insert into employee values(1,'e1',1);
 	insert into employee values(2,'e2',1);
@@ -32,7 +39,7 @@ setup
 
 teardown
 {
-    DROP TABLE company,employee;
+    DROP TABLE employee,company,city;
 }
 
 session "s1"
@@ -46,28 +53,13 @@ step "s1-node-not-found"
 {
 	DO $$
 	DECLARE
-		v_node_id int := -1;
+		v_node_id int:= -1;
 		v_node_exists boolean := true;
-		v_count int := -1;
 		v_exception_message text;
 		v_expected_exception_message text := '';
 	BEGIN
-
-		-- Get a node-id that does not exist in the cluster
-
-		while v_node_exists loop
-			--get a random node id in the range of 1000 to 2000
-			v_node_id :=  FLOOR(RANDOM()*(2000- 1000 + 1)) + 1000;
-			begin
-				select count(0) into v_count from pg_dist_node where nodeid = v_node_id;
-				if v_count = 0 then
-					v_node_exists := false;
-				end if;
-			end;
-		end loop;
-		select citus_pause_node(v_node_id);
-
-
+		select nextval('pg_dist_node_nodeid_seq')::int into v_node_id;
+		select citus_pause_node(v_node_id) ;
 	EXCEPTION
 		WHEN  SQLSTATE 'P0002' THEN
 			GET STACKED DIAGNOSTICS v_exception_message = MESSAGE_TEXT;
@@ -125,7 +117,7 @@ step "s2-begin"
 	BEGIN;
 }
 
-step "s2-insert"
+step "s2-insert-distributed"
 {
 	-- Set statement_timeout for the session (in milliseconds)
 	SET statement_timeout = 1000; -- 1 seconds
@@ -162,10 +154,84 @@ step "s2-insert"
 	LANGUAGE plpgsql;
 }
 
+step "s2-insert-reference"{
+	-- Set statement_timeout for the session (in milliseconds)
+	SET statement_timeout = 1000; -- 1 seconds
+	SET client_min_messages = 'notice';
+
+	-- Variable to track if the INSERT statement was successful
+	DO $$
+	DECLARE
+		v_insert_successful BOOLEAN := FALSE;
+	BEGIN
+
+		-- Execute the INSERT statement
+		insert into city values(3,'city3');
+
+		-- If we reach this point, the INSERT statement was successful
+		v_insert_successful := TRUE;
+
+		IF v_insert_successful THEN
+			RAISE NOTICE 'INSERT statement completed successfully. This means that citus_pause_node could not get the lock.';
+		END IF;
+
+	EXCEPTION WHEN query_canceled THEN
+		-- The INSERT statement was canceled due to timeout
+		RAISE NOTICE 'query_canceled exception raised. This means that citus_pause_node was able to get the lock.';
+		WHEN OTHERS THEN
+			-- Any other exception raised during the INSERT statement
+			RAISE;
+	END;
+	$$
+	LANGUAGE plpgsql;
+}
+
+step "s2-select-distributed"{
+	select * from employee where id = 10;
+}
+
+
+step "s2-delete-distributed"{
+	-- Set statement_timeout for the session (in milliseconds)
+	SET statement_timeout = 1000; -- 1 seconds
+	SET client_min_messages = 'notice';
+
+	-- Variable to track if the DELETE statement was successful
+	DO $$
+	DECLARE
+		v_delete_successful BOOLEAN := FALSE;
+	BEGIN
+
+		-- Execute the DELETE statement
+		delete from employee where id = 9;
+
+		-- If we reach this point, the DELETE statement was successful
+		v_delete_successful := TRUE;
+
+		IF v_delete_successful THEN
+			RAISE NOTICE 'DELETE statement completed successfully. This means that citus_pause_node could not get the lock.';
+		END IF;
+	-- You can add additional processing here if needed
+	EXCEPTION
+		WHEN query_canceled THEN
+			-- The INSERT statement was canceled due to timeout
+			RAISE NOTICE 'query_canceled exception raised. This means that citus_pause_node was able to get the lock.';
+		WHEN OTHERS THEN
+			-- Any other exception raised during the INSERT statement
+			RAISE;
+	END;
+	$$
+	LANGUAGE plpgsql;
+}
+
 step "s2-end"
 {
 	COMMIT;
 }
 
-permutation "s1-begin"  "s1-pause-node" "s2-begin" "s2-insert" "s2-end" "s1-end"
+permutation "s1-begin"  "s1-pause-node" "s2-begin" "s2-insert-distributed" "s2-end" "s1-end"
+permutation "s1-begin"  "s1-pause-node" "s2-begin" "s2-delete-distributed" "s2-end" "s1-end"
+permutation "s1-begin"  "s1-pause-node" "s2-begin" "s2-select-distributed" "s2-end" "s1-end"
+permutation "s1-begin"  "s1-pause-node" "s2-begin" "s2-insert-reference" "s2-end" "s1-end"
+permutation "s1-begin"  "s1-pause-node" "s1-pause-node" "s1-end"
 permutation "s1-begin"  "s1-node-not-found" "s1-end"
