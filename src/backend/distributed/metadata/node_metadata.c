@@ -135,7 +135,7 @@ static void EnsureParentSessionHasExclusiveLockOnPgDistNode(pid_t parentSessionP
 static void SetNodeMetadata(MetadataSyncContext *context, bool localOnly);
 static void EnsureTransactionalMetadataSyncMode(void);
 static void LockShardsInWorkerPlacementList(WorkerNode *workerNode, LOCKMODE
-												 lockMode);
+											lockMode);
 
 /* declarations for dynamic loading */
 PG_FUNCTION_INFO_V1(citus_set_coordinator_host);
@@ -1169,7 +1169,6 @@ ActivateNodeList(MetadataSyncContext *context)
 void
 LockShardsInWorkerPlacementList(WorkerNode *workerNode, LOCKMODE lockMode)
 {
-
 	List *placementList = AllShardPlacementsOnNodeGroup(workerNode->groupId);
 	LockShardsInPlacementListMetadata(placementList, lockMode);
 }
