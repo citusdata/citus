@@ -134,7 +134,8 @@ static void MarkNodesNotSyncedInLoopBackConnection(MetadataSyncContext *context,
 static void EnsureParentSessionHasExclusiveLockOnPgDistNode(pid_t parentSessionPid);
 static void SetNodeMetadata(MetadataSyncContext *context, bool localOnly);
 static void EnsureTransactionalMetadataSyncMode(void);
-static void lock_shards_in_worker_placement_list(WorkerNode *workerNode, LOCKMODE lockMode);
+static void lock_shards_in_worker_placement_list(WorkerNode *workerNode, LOCKMODE
+												 lockMode);
 
 /* declarations for dynamic loading */
 PG_FUNCTION_INFO_V1(citus_set_coordinator_host);
@@ -1161,15 +1162,19 @@ ActivateNodeList(MetadataSyncContext *context)
 	SetNodeMetadata(context, localOnly);
 }
 
+
 /*
-* Adds locks into all shards placed into given workerNode.
-*/
-void lock_shards_in_worker_placement_list(WorkerNode *workerNode , LOCKMODE lockMode){
+ * Adds locks into all shards placed into given workerNode.
+ */
+void
+lock_shards_in_worker_placement_list(WorkerNode *workerNode, LOCKMODE lockMode)
+{
 	List *placementList = NIL;
 
 	placementList = AllShardPlacementsOnNodeGroup(workerNode->groupId);
 	LockShardsInPlacementListMetadata(placementList, lockMode);
 }
+
 
 /*
  * citus_update_node moves the requested node to a different nodename and nodeport. It
@@ -1337,8 +1342,6 @@ citus_update_node(PG_FUNCTION_ARGS)
 
 	PG_RETURN_VOID();
 }
-
-
 
 
 Datum
