@@ -1164,7 +1164,11 @@ ActivateNodeList(MetadataSyncContext *context)
 
 
 /*
- * Adds locks into all shards placed into given workerNode.
+ * Acquires shard metadata locks on all shards residing in the given worker node
+ *
+ * TODO: This function is not compatible with query from any node feature.
+ * To ensure proper behavior, it is essential to acquire locks on placements across all nodes
+ * rather than limiting it to just the coordinator (or the specific node from which this function is called)
  */
 void
 LockShardsInWorkerPlacementList(WorkerNode *workerNode, LOCKMODE lockMode)
@@ -1343,8 +1347,12 @@ citus_update_node(PG_FUNCTION_ARGS)
 
 
 /*
- *
- */
+This function is designed to obtain locks for all the shards in a worker placement list.
+Once the transaction is committed, the acquired locks will be automatically released.
+Therefore, it is essential to invoke this function within a transaction.
+This function proves beneficial when there is a need to temporarily disable writes to a specific node within a transaction.
+*/
+
 Datum
 citus_pause_node_within_txn(PG_FUNCTION_ARGS)
 {
