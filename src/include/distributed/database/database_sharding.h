@@ -46,6 +46,7 @@ void UpdateDatabaseShard(Oid databaseOid, int targetNodeGroupId);
 void DeleteDatabaseShardByDatabaseIdLocally(Oid databaseOid);
 DatabaseShard * GetDatabaseShardByOid(Oid databaseOid);
 List * ListDatabaseShards(void);
+int64 CitusDatabaseSize(Oid databaseId);
 
 
 #endif

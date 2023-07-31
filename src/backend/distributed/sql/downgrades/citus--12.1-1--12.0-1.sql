@@ -11,3 +11,8 @@ DROP FUNCTION pg_catalog.citus_internal_start_migration_monitor(text,text);
 DROP FUNCTION pg_catalog.database_move(text,int);
 DROP FUNCTION pg_catalog.pgcopydb_clone(text,text,bool,text);
 DROP FUNCTION pg_catalog.pgcopydb_list_progress(text,text);
+DROP FUNCTION pg_catalog.citus_shard_cost_by_disk_size(bigint,char);
+#include "udfs/citus_shard_cost_by_disk_size/9.2-1.sql"
+
+DROP FUNCTION pg_catalog.citus_database_size(oid);
+DROP FUNCTION pg_catalog.citus_database_size(name);

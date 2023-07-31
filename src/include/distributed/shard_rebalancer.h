@@ -26,6 +26,9 @@
 #define SHARD_REPLICATION_FACTOR_MINIMUM 1
 #define SHARD_REPLICATION_FACTOR_MAXIMUM 100
 
+#define SHARD_TYPE_TABLE 't'
+#define SHARD_TYPE_DATABASE 'd'
+
 /* Definitions for metadata update commands */
 #define INSERT_SHARD_PLACEMENT_COMMAND "INSERT INTO pg_dist_shard_placement VALUES(" \
 	UINT64_FORMAT ", %d, " UINT64_FORMAT ", '%s', %d)"
@@ -164,8 +167,8 @@ typedef struct ShardCost
 {
 	uint64 shardId;
 
-	/* isDatabase reflects whether the current shard is a database */
-	bool isDatabase;
+	/* reflects the type of shard (table or database) */
+	char shardType;
 
 	/*
 	 * cost is the cost of the shard. This doesn't have a unit.
@@ -186,7 +189,7 @@ typedef struct RebalancePlanFunctions
 {
 	bool (*shardAllowedOnNode)(uint64 shardId, WorkerNode *workerNode, void *context);
 	float4 (*nodeCapacity)(WorkerNode *workerNode, void *context);
-	ShardCost (*shardCost)(uint64 shardId, void *context);
+	ShardCost (*shardCost)(uint64 shardId, char shardType, void *context);
 	void *context;
 } RebalancePlanFunctions;
 

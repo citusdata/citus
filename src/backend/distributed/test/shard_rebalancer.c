@@ -46,7 +46,7 @@ static char * JsonFieldValueString(Datum jsonDocument, const char *key);
 static ArrayType * PlacementUpdateListToJsonArray(List *placementUpdateList);
 static bool ShardAllowedOnNode(uint64 shardId, WorkerNode *workerNode, void *context);
 static float NodeCapacity(WorkerNode *workerNode, void *context);
-static ShardCost GetShardCost(uint64 shardId, void *context);
+static ShardCost GetShardCost(uint64 shardId, char shardType, void *context);
 
 
 PG_FUNCTION_INFO_V1(shard_placement_rebalance_array);
@@ -240,9 +240,11 @@ NodeCapacity(WorkerNode *workerNode, void *voidContext)
 /*
  * GetShardCost is the function that gets the ShardCost of a shard when running
  * the shard rebalancer unit tests.
+ *
+ * We currently ignore the shard type.
  */
 static ShardCost
-GetShardCost(uint64 shardId, void *voidContext)
+GetShardCost(uint64 shardId, char shardType, void *voidContext)
 {
 	RebalancePlacementContext *context = voidContext;
 	ShardCost shardCost;

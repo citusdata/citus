@@ -265,7 +265,7 @@ static int CompareDisallowedPlacementAsc(const void *void1, const void *void2);
 static int CompareDisallowedPlacementDesc(const void *void1, const void *void2);
 static bool ShardAllowedOnNode(uint64 shardId, WorkerNode *workerNode, void *context);
 static float4 NodeCapacity(WorkerNode *workerNode, void *context);
-static ShardCost GetShardCost(uint64 shardId, void *context);
+static ShardCost GetShardCost(uint64 shardId, char shardType, void *context);
 static List * NonColocatedDistRelationIdList(void);
 static void RebalanceTableShards(RebalanceOptions *options, Oid shardReplicationModeOid);
 static int64 RebalanceTableShardsBackground(RebalanceOptions *options, Oid
@@ -680,13 +680,31 @@ NodeCapacity(WorkerNode *workerNode, void *voidContext)
  * to be.
  */
 static ShardCost
-GetShardCost(uint64 shardId, void *voidContext)
+GetShardCost(uint64 shardId, char shardType, void *voidContext)
 {
 	ShardCost shardCost = { 0 };
 	shardCost.shardId = shardId;
 	RebalanceContext *context = voidContext;
-	Datum shardCostDatum = FunctionCall1(&context->shardCostUDF, UInt64GetDatum(shardId));
+
+	Datum shardCostDatum = 0;
+
+	if (context->shardCostUDF.fn_nargs == 1)
+	{
+		/* legacy shard cost functions ignore shard type */
+		shardCostDatum = FunctionCall1(&context->shardCostUDF, UInt64GetDatum(shardId));
+	}
+	else if (context->shardCostUDF.fn_nargs == 2)
+	{
+		shardCostDatum = FunctionCall2(&context->shardCostUDF, UInt64GetDatum(shardId),
+									   CharGetDatum(shardType));
+	}
+	else
+	{
+		ereport(ERROR, (errmsg("invalid shard cost function in the rebalance strategy")));
+	}
+
 	shardCost.cost = DatumGetFloat4(shardCostDatum);
+	shardCost.shardType = shardType;
 	return shardCost;
 }
 
@@ -698,26 +716,49 @@ GetShardCost(uint64 shardId, void *voidContext)
  * size is calculated using pg_total_relation_size, so it includes indexes.
  *
  * SQL signature:
- * citus_shard_cost_by_disk_size(shardid bigint) returns float4
+ * citus_shard_cost_by_disk_size(shardid bigint, shard_type char) returns float4
  */
 Datum
 citus_shard_cost_by_disk_size(PG_FUNCTION_ARGS)
 {
 	CheckCitusVersion(ERROR);
 	uint64 shardId = PG_GETARG_INT64(0);
+	char shardType = PG_GETARG_CHAR(1);
+	uint64 colocationSizeInBytes = 0L;
 	bool missingOk = false;
-	ShardPlacement *shardPlacement = ActiveShardPlacement(shardId, missingOk);
 
 	MemoryContext localContext = AllocSetContextCreate(CurrentMemoryContext,
-													   "CostByDiscSizeContext",
+													   "CostByDiskSizeContext",
 													   ALLOCSET_DEFAULT_SIZES);
 	MemoryContext oldContext = MemoryContextSwitchTo(localContext);
-	ShardInterval *shardInterval = LoadShardInterval(shardId);
-	List *colocatedShardList = ColocatedNonPartitionShardIntervalList(shardInterval);
 
-	uint64 colocationSizeInBytes = ShardListSizeInBytes(colocatedShardList,
-														shardPlacement->nodeName,
-														shardPlacement->nodePort);
+	if (shardType == SHARD_TYPE_TABLE)
+	{
+		ShardPlacement *shardPlacement = ActiveShardPlacement(shardId, missingOk);
+		ShardInterval *shardInterval = LoadShardInterval(shardId);
+		List *colocatedShardList = ColocatedNonPartitionShardIntervalList(shardInterval);
+
+		colocationSizeInBytes = ShardListSizeInBytes(colocatedShardList,
+													 shardPlacement->nodeName,
+													 shardPlacement->nodePort);
+
+	}
+	else if (shardType == SHARD_TYPE_DATABASE)
+	{
+		if (shardId > OID_MAX)
+		{
+			ereport(ERROR, (errmsg("database OID " UINT64_FORMAT " out of range",
+								   shardId)));
+		}
+
+		Oid databaseId = (Oid) shardId;
+
+		colocationSizeInBytes = CitusDatabaseSize(databaseId);
+	}
+	else
+	{
+		ereport(ERROR, (errmsg("unrecognized shard type: %c", shardType)));
+	}
 
 	MemoryContextSwitchTo(oldContext);
 	MemoryContextReset(localContext);
@@ -2620,10 +2661,10 @@ InitRebalanceState(List *workerNodeList, List *shardPlacementList,
 
 		Assert(fillState != NULL);
 
-		*shardCost = functions->shardCost(placement->shardId, functions->context);
+		char shardType = placement->isDatabase ? SHARD_TYPE_DATABASE : SHARD_TYPE_TABLE;
 
-		/* TODO: not sure whether this is the right place */
-		shardCost->isDatabase = placement->isDatabase;
+		*shardCost = functions->shardCost(placement->shardId, shardType,
+										  functions->context);
 
 		fillState->totalCost += shardCost->cost;
 		fillState->utilization = CalculateUtilization(fillState->totalCost,
@@ -2892,7 +2933,7 @@ MoveShardCost(NodeFillState *sourceFillState,
 
 	/* construct the placement update */
 	PlacementUpdateEvent *placementUpdateEvent = palloc0(sizeof(PlacementUpdateEvent));
-	placementUpdateEvent->updateType = shardCost->isDatabase ?
+	placementUpdateEvent->updateType = shardCost->shardType == SHARD_TYPE_DATABASE ?
 									   PLACEMENT_UPDATE_DATABASE_MOVE :
 									   PLACEMENT_UPDATE_MOVE;
 	placementUpdateEvent->shardId = shardIdToMove;
@@ -3587,11 +3628,11 @@ EnsureShardCostUDF(Oid functionOid)
 	}
 	Form_pg_proc procForm = (Form_pg_proc) GETSTRUCT(proctup);
 	char *name = NameStr(procForm->proname);
-	if (procForm->pronargs != 1)
+	if (procForm->pronargs < 1 || procForm->pronargs > 2)
 	{
 		ereport(ERROR, (errmsg("signature for shard_cost_function is incorrect"),
 						errdetail(
-							"number of arguments of %s should be 1, not %i",
+							"number of arguments of %s should be 2, not %i",
 							name, procForm->pronargs)));
 	}
 	if (procForm->proargtypes.values[0] != INT8OID)

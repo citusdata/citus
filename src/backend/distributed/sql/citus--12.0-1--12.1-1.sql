@@ -104,3 +104,13 @@ LANGUAGE C STRICT
 AS 'MODULE_PATHNAME', $$pgcopydb_list_progress$$;
 COMMENT ON FUNCTION pg_catalog.pgcopydb_list_progress(text, text)
 IS 'list progress of a database clone using pgcopydb';
+
+#include "udfs/citus_shard_cost_by_disk_size/12.1-1.sql"
+
+UPDATE pg_catalog.pg_dist_rebalance_strategy 
+SET shard_cost_function = 'pg_catalog.citus_shard_cost_by_disk_size(bigint,char)'::regprocedure
+WHERE shard_cost_function = 'pg_catalog.citus_shard_cost_by_disk_size(bigint)'::regprocedure;
+
+DROP FUNCTION pg_catalog.citus_shard_cost_by_disk_size(bigint);
+
+#include "udfs/citus_database_size/12.1-1.sql"
