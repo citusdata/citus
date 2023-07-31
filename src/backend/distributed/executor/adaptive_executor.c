@@ -522,7 +522,9 @@ typedef enum TaskExecutionState
 /*
  * PlacementExecutionOrder indicates whether a command should be executed
  * on any replica, on all replicas sequentially (in order), or on all
- * replicas in parallel.
+ * replicas in parallel. In other words, EXECUTION_ORDER_ANY is used for
+ * SELECTs, EXECUTION_ORDER_SEQUENTIAL/EXECUTION_ORDER_PARALLEL is used for
+ * DML/DDL.
  */
 typedef enum PlacementExecutionOrder
 {
@@ -5507,6 +5509,10 @@ TaskExecutionStateMachine(ShardCommandExecution *shardCommandExecution)
 	}
 
 	if (failedPlacementCount == placementCount)
+	{
+		currentTaskExecutionState = TASK_EXECUTION_FAILED;
+	}
+	else if (executionOrder != EXECUTION_ORDER_ANY && failedPlacementCount > 0)
 	{
 		currentTaskExecutionState = TASK_EXECUTION_FAILED;
 	}
