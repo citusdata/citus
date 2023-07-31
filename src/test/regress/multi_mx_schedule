@@ -60,6 +60,8 @@ test: update_colocation_mx
 test: local_shard_execution_dropped_column
 test: metadata_sync_helpers
 
+test: executor_local_failure
+
 # test that no tests leaked intermediate results. This should always be last
 test: ensure_no_intermediate_data_leak
 
