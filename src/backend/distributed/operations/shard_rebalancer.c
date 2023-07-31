@@ -21,6 +21,7 @@
 
 #include "access/htup_details.h"
 #include "access/genam.h"
+#include "catalog/pg_database.h"
 #include "catalog/pg_type.h"
 #include "catalog/pg_proc.h"
 #include "commands/dbcommands.h"
@@ -787,6 +788,13 @@ GetColocatedRebalanceSteps(List *placementUpdateList)
 	foreach(placementUpdateCell, placementUpdateList)
 	{
 		PlacementUpdateEvent *placementUpdate = lfirst(placementUpdateCell);
+		if (placementUpdate->updateType == PLACEMENT_UPDATE_DATABASE_MOVE)
+		{
+			/* no co-located shards for databases */
+			colocatedUpdateList = lappend(colocatedUpdateList, placementUpdate);
+			continue;
+		}
+
 		ShardInterval *shardInterval = LoadShardInterval(placementUpdate->shardId);
 		List *colocatedShardList = ColocatedShardIntervalList(shardInterval);
 		ListCell *colocatedShardCell = NULL;
@@ -1374,9 +1382,21 @@ get_rebalance_table_shards_plan(PG_FUNCTION_ARGS)
 		memset(values, 0, sizeof(values));
 		memset(nulls, 0, sizeof(nulls));
 
-		values[0] = ObjectIdGetDatum(RelationIdForShard(colocatedUpdate->shardId));
-		values[1] = UInt64GetDatum(colocatedUpdate->shardId);
-		values[2] = UInt64GetDatum(ShardLength(colocatedUpdate->shardId));
+		/* TODO: consider a separate function for databases */
+		if (colocatedUpdate->updateType == PLACEMENT_UPDATE_DATABASE_MOVE)
+		{
+			/* use pg_database as the relation */
+			values[0] = ObjectIdGetDatum(DatabaseRelationId);
+			values[1] = UInt64GetDatum(colocatedUpdate->shardId);
+			values[2] = UInt64GetDatum(CitusDatabaseSize(colocatedUpdate->shardId));
+		}
+		else
+		{
+			values[0] = ObjectIdGetDatum(RelationIdForShard(colocatedUpdate->shardId));
+			values[1] = UInt64GetDatum(colocatedUpdate->shardId);
+			values[2] = UInt64GetDatum(ShardLength(colocatedUpdate->shardId));
+		}
+
 		values[3] = PointerGetDatum(cstring_to_text(
 										colocatedUpdate->sourceNode->workerName));
 		values[4] = UInt32GetDatum(colocatedUpdate->sourceNode->workerPort);
