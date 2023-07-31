@@ -277,9 +277,8 @@ INSERT INTO citus_local_table
 SELECT * from citus_local_table_2;
 
 INSERT INTO citus_local_table
-SELECT * from citus_local_table_2
-ORDER BY 1,2
-LIMIT 10;
+SELECT sum(a), b from citus_local_table_2
+GROUP BY b;
 
 INSERT INTO citus_local_table
 SELECT * from postgres_local_table;

@@ -1398,6 +1398,7 @@ INSERT INTO nullkey_c1_t1 SELECT * FROM nullkey_c1_t2;
 SET client_min_messages TO DEBUG2;
 --    between two non-colocated single-shard tables
 INSERT INTO nullkey_c1_t1 SELECT * FROM nullkey_c2_t1;
+DEBUG:  Creating router plan
 DEBUG:  INSERT target relation and all source relations of the SELECT must be colocated in distributed INSERT ... SELECT
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
@@ -1423,25 +1424,30 @@ DEBUG:  INSERT target relation and all source relations of the SELECT must be co
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 INSERT INTO nullkey_c1_t1 SELECT * FROM citus_local_table;
+DEBUG:  Creating router plan
 DEBUG:  distributed INSERT ... SELECT cannot select from a local relation when inserting into a distributed table
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 INSERT INTO nullkey_c1_t1 SELECT * FROM postgres_local_table;
+DEBUG:  Creating router plan
 DEBUG:  distributed INSERT ... SELECT can only select from distributed tables
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 INSERT INTO reference_table SELECT * FROM nullkey_c1_t1;
+DEBUG:  Creating router plan
 DEBUG:  only reference tables may be queried when targeting a reference table with distributed INSERT ... SELECT
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 INSERT INTO distributed_table SELECT * FROM nullkey_c1_t1;
+DEBUG:  Creating router plan
 DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition columns in the source table and subquery do not match
 DETAIL:  The target table's partition column should correspond to a partition column in the subquery.
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 INSERT INTO citus_local_table SELECT * FROM nullkey_c1_t1;
+DEBUG:  Creating router plan
 DEBUG:  distributed INSERT ... SELECT cannot insert into a local table that is added to metadata
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
@@ -1880,8 +1886,6 @@ SELECT COALESCE(raw_events_first.user_id, users_ref_table.user_id)
 FROM raw_events_first
      RIGHT JOIN (users_ref_table LEFT JOIN raw_events_second ON users_ref_table.user_id = raw_events_second.user_id)
      ON raw_events_first.user_id = users_ref_table.user_id;
-DEBUG:  cannot perform a lateral outer join when a distributed subquery references a reference table
-DEBUG:  Collecting INSERT ... SELECT results on coordinator
 -- using a full join
 INSERT INTO agg_events (user_id, value_1_agg)
 SELECT t1.user_id AS col1,
@@ -1912,8 +1916,6 @@ FROM   users_ref_table
 WHERE  NOT EXISTS (SELECT 1
                    FROM   raw_events_second
                    WHERE  raw_events_second.user_id = users_ref_table.user_id);
-DEBUG:  correlated subqueries are not supported when the FROM clause contains a reference table
-DEBUG:  Collecting INSERT ... SELECT results on coordinator
 -- using inner join
 INSERT INTO agg_events (user_id)
 SELECT raw_events_first.user_id
@@ -1923,28 +1925,10 @@ INSERT INTO agg_events (user_id)
 SELECT raw_events_first.user_id
 FROM raw_events_first INNER JOIN users_ref_table ON raw_events_first.user_id = users_ref_table.user_id
 WHERE raw_events_first.value_1 IN (10, 11,12) OR users_ref_table.user_id IN (1,2,3,4);
--- We could relax distributed insert .. select checks to allow pushing
--- down more clauses down to the worker nodes when inserting into a single
--- shard by selecting from a colocated one. We might want to do something
--- like https://github.com/citusdata/citus/pull/6772.
---
---  e.g., insert into null_shard_key_1/citus_local/reference
---        select * from null_shard_key_1/citus_local/reference limit 1
---
--- Below "limit / offset clause" test and some others are examples of this.
 -- limit / offset clause
 INSERT INTO agg_events (user_id) SELECT raw_events_first.user_id FROM raw_events_first LIMIT 1;
-DEBUG:  cannot push down this subquery
-DETAIL:  Limit clause is currently unsupported when a subquery references a column from another query
-DEBUG:  Collecting INSERT ... SELECT results on coordinator
 INSERT INTO agg_events (user_id) SELECT raw_events_first.user_id FROM raw_events_first OFFSET 1;
-DEBUG:  cannot push down this subquery
-DETAIL:  Offset clause is currently unsupported when a subquery references a column from another query
-DEBUG:  Collecting INSERT ... SELECT results on coordinator
 INSERT INTO agg_events (user_id) SELECT users_ref_table.user_id FROM users_ref_table LIMIT 1;
-DEBUG:  cannot push down this subquery
-DETAIL:  Limit clause is currently unsupported when a subquery references a column from another query
-DEBUG:  Collecting INSERT ... SELECT results on coordinator
 -- using a materialized cte
 WITH cte AS MATERIALIZED
   (SELECT max(value_1)+1 as v1_agg, user_id FROM raw_events_first GROUP BY user_id)
@@ -1955,15 +1939,9 @@ DEBUG:  Collecting INSERT ... SELECT results on coordinator
 INSERT INTO raw_events_second
   WITH cte AS MATERIALIZED (SELECT * FROM raw_events_first)
   SELECT user_id * 1000, time, value_1, value_2, value_3, value_4 FROM cte;
-DEBUG:  cannot push down this subquery
-DETAIL:  CTEs in subqueries are currently unsupported
-DEBUG:  Collecting INSERT ... SELECT results on coordinator
 INSERT INTO raw_events_second (user_id)
   WITH cte AS MATERIALIZED (SELECT * FROM users_ref_table)
   SELECT user_id FROM cte;
-DEBUG:  cannot push down this subquery
-DETAIL:  CTEs in subqueries are currently unsupported
-DEBUG:  Collecting INSERT ... SELECT results on coordinator
 -- using a regular cte
 WITH cte AS (SELECT * FROM raw_events_first)
 INSERT INTO raw_events_second
@@ -2017,16 +1995,10 @@ INSERT INTO
   raw_events_first(user_id)
   (SELECT user_id FROM raw_events_first) INTERSECT
   (SELECT user_id FROM raw_events_first);
-DEBUG:  cannot push down this subquery
-DETAIL:  Intersect and Except are currently unsupported
-DEBUG:  Collecting INSERT ... SELECT results on coordinator
 INSERT INTO
   raw_events_first(user_id)
   (SELECT user_id FROM users_ref_table) INTERSECT
   (SELECT user_id FROM raw_events_first);
-DEBUG:  cannot push down this subquery
-DETAIL:  Intersect and Except are currently unsupported
-DEBUG:  Collecting INSERT ... SELECT results on coordinator
 -- group by clause inside subquery
 INSERT INTO agg_events
             (user_id)

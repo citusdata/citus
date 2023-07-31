@@ -355,12 +355,10 @@ SET client_min_messages TO DEBUG1;
 
 INSERT INTO nullkey_c1_t1 SELECT DISTINCT ON (a) a, b FROM nullkey_c1_t2;
 
-SET client_min_messages TO DEBUG2;
-
--- Similarly, we could push down the following query as well. see
--- https://github.com/citusdata/citus/pull/6831.
+-- keep low verbosity as PG15 and PG14 produces slightly different outputs
 INSERT INTO nullkey_c1_t1 SELECT b, SUM(a) OVER (ORDER BY b) AS sum_val FROM nullkey_c1_t1;
 
+SET client_min_messages TO DEBUG2;
 INSERT INTO nullkey_c2_t1
 SELECT t2.a, t2.b
 FROM nullkey_c1_t1 AS t2

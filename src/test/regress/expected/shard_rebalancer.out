@@ -2581,7 +2581,7 @@ SELECT create_distributed_table('test_with_all_shards_excluded', 'a', colocate_w
 
 (1 row)
 
-SELECT shardid FROM pg_dist_shard;
+SELECT shardid FROM pg_dist_shard ORDER BY shardid ASC;
  shardid
 ---------------------------------------------------------------------
   433504

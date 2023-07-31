@@ -1193,17 +1193,28 @@ SourceResultPartitionColumnIndex(Query *mergeQuery, List *sourceTargetList,
 	List *mergeJoinConditionList = WhereClauseList(mergeQuery->jointree);
 	Var *targetColumn = targetRelation->partitionColumn;
 	Var *sourceRepartitionVar = NULL;
+	bool foundTypeMismatch = false;
 
 	OpExpr *validJoinClause =
-		SinglePartitionJoinClause(list_make1(targetColumn), mergeJoinConditionList);
+		SinglePartitionJoinClause(list_make1(targetColumn), mergeJoinConditionList,
+								  &foundTypeMismatch);
 	if (!validJoinClause)
 	{
+		if (foundTypeMismatch)
+		{
+			ereport(ERROR, (errmsg("In the MERGE ON clause, there is a datatype mismatch "
+								   "between target's distribution "
+								   "column and the expression originating from the source."),
+							errdetail(
+								"If the types are different, Citus uses different hash "
+								"functions for the two column types, which might "
+								"lead to incorrect repartitioning of the result data")));
+		}
+
 		ereport(ERROR, (errmsg("The required join operation is missing between "
 							   "the target's distribution column and any "
 							   "expression originating from the source. The "
-							   "issue may arise from either a non-equi-join or "
-							   "a mismatch in the datatypes of the columns being "
-							   "joined."),
+							   "issue may arise from a non-equi-join."),
 						errdetail("Without a equi-join condition on the target's "
 								  "distribution column, the source rows "
 								  "cannot be efficiently redistributed, and "

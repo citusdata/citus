@@ -956,8 +956,10 @@ WITH first_query AS (INSERT INTO modify_table (id) VALUES (10001)),
 SET client_min_messages TO debug2;
 -- pushed down without the insert
 WITH mb AS (UPDATE modify_table SET val = 3 WHERE id = 3 RETURNING NULL) INSERT INTO modify_table WITH ma AS (SELECT * FROM modify_table LIMIT 10) SELECT count(*) FROM mb;
-DEBUG:  cannot push down this subquery
-DETAIL:  Limit clause is currently unsupported when a subquery references a column from another query
+DEBUG:  Creating router plan
+DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition columns in the source table and subquery do not match
+DETAIL:  Subquery contains an aggregation in the same position as the target table's partition column.
+HINT:  Ensure the target table's partition column has a corresponding simple column reference to a distributed table's partition column in the subquery.
 DEBUG:  Creating router plan
 DEBUG:  query has a single distribution column value: 3
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
