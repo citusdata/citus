@@ -19,6 +19,7 @@
 #define BUFSIZE 1024
 
 
+static char * ExecuteProgram(List *argList);
 static char ** StringListToArray(List *stringList);
 
 
@@ -45,7 +46,7 @@ GetPgcopydbPath(void)
  */
 char *
 RunPgcopydbClone(char *sourceConnectionString, char *targetConnectionString,
-				 char *migrationName)
+				 char *migrationName, bool useFollow)
 {
 	char *pgcopydbPath = GetPgcopydbPath();
 
@@ -67,9 +68,29 @@ RunPgcopydbClone(char *sourceConnectionString, char *targetConnectionString,
 	argList = lappend(argList, targetConnectionString);
 	argList = lappend(argList, "--slot-name");
 	argList = lappend(argList, migrationName);
+	argList = lappend(argList, "--origin");
+	argList = lappend(argList, migrationName);
 	argList = lappend(argList, "--restart");
 	argList = lappend(argList, "--skip-extensions");
 
+	if (useFollow)
+	{
+		argList = lappend(argList, "--follow");
+	}
+
+	return ExecuteProgram(argList);
+}
+
+
+/*
+ * ExecuteProgram executes a program with the given arguments and returns
+ * the stdout.
+ *
+ * TODO: what to do with stderr?
+ */
+static char *
+ExecuteProgram(List *argList)
+{
 	char **args = StringListToArray(argList);
 
 	Program program = initialize_program(args, false);
@@ -109,12 +130,13 @@ RunPgcopydbClone(char *sourceConnectionString, char *targetConnectionString,
 	}
 
 	/* obtain the full pgcopydb output */
-	char *output = pstrdup(program.stdOut);
+	char *output = program.stdOut != NULL ? pstrdup(program.stdOut) : NULL;
 
 	free_program(&program);
 
 	return output;
 }
+
 
 
 /*
@@ -137,4 +159,34 @@ StringListToArray(List *stringList)
 	stringArray[stringIndex] = NULL;
 
 	return stringArray;
+}
+
+
+/*
+ * RunPgcopydbListProgress runs pgcopydb list progress against the source
+ * and target connection strings and returns the output.
+ */
+char *
+RunPgcopydbListProgress(char *sourceConnectionString, char *migrationName)
+{
+	char *pgcopydbPath = GetPgcopydbPath();
+
+	if (pgcopydbPath == NULL)
+	{
+		ereport(ERROR, (errmsg("could not locate pgcopydb")));
+	}
+
+	List *argList = NIL;
+
+	argList = lappend(argList, pgcopydbPath);
+	argList = lappend(argList, "list");
+	argList = lappend(argList, "progress");
+	argList = lappend(argList, "--dir");
+	/* TODO: escaping? */
+	argList = lappend(argList, psprintf("/tmp/%s", migrationName));
+	argList = lappend(argList, "--source");
+	argList = lappend(argList, sourceConnectionString);
+	argList = lappend(argList, "--json");
+
+	return ExecuteProgram(argList);
 }

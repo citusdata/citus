@@ -25,6 +25,7 @@
 #include "distributed/database/database_sharding.h"
 #include "distributed/database/pgcopydb.h"
 #include "distributed/deparser.h"
+#include "distributed/jsonbutils.h"
 #include "distributed/listutils.h"
 #include "distributed/local_executor.h"
 #include "distributed/metadata_cache.h"
@@ -33,6 +34,7 @@
 #include "distributed/pooler/pgbouncer_manager.h"
 #include "distributed/remote_commands.h"
 #include "distributed/worker_manager.h"
+#include "libpq/libpq.h"
 #include "nodes/makefuncs.h"
 #include "nodes/parsenodes.h"
 #include "nodes/pg_list.h"
@@ -47,6 +49,7 @@
 #include "utils/builtins.h"
 #include "utils/elog.h"
 #include "utils/inval.h"
+#include "utils/jsonb.h"
 #include "utils/lsyscache.h"
 #include "utils/memutils.h"
 #include "utils/pg_lsn.h"
@@ -111,11 +114,17 @@ typedef struct DatabaseMove
 void _PG_init(void);
 
 static void MoveDatabase(DatabaseMove *moveDesc);
+static void DoDatabaseClone(DatabaseMove *moveDesc, MultiConnection *targetConn,
+							MultiConnection *targetProgressConn, char *migrationName);
 static void ExecuteDatabaseCommand(char *command, MultiConnection *conn, bool isLocal);
+static bool CheckDataCopyProgress(MultiConnection *targetProgressConn,
+								  char *sourceConnInfo, char *migrationName);
+static bool GetRemoteJsonb(MultiConnection *connection, char *command, Datum *jsonDatum);
 
 
 PG_FUNCTION_INFO_V1(pgcopydb_database_move);
 PG_FUNCTION_INFO_V1(pgcopydb_clone);
+PG_FUNCTION_INFO_V1(pgcopydb_list_progress);
 
 
 /*
@@ -151,10 +160,12 @@ pgcopydb_clone(PG_FUNCTION_ARGS)
 	char *sourceURL = text_to_cstring(sourceText);
 	text *targetText = PG_GETARG_TEXT_P(1);
 	char *targetURL = text_to_cstring(targetText);
-	text *migrationNameText = PG_GETARG_TEXT_P(2);
+	bool useFollow = PG_GETARG_BOOL(2);
+	text *migrationNameText = PG_GETARG_TEXT_P(3);
 	char *migrationName = text_to_cstring(migrationNameText);
 
-	char *output = RunPgcopydbClone(sourceURL, targetURL, migrationName);
+	char *output = RunPgcopydbClone(sourceURL, targetURL, migrationName,
+									useFollow);
 
 	elog(NOTICE, "%s", output);
 
@@ -210,7 +221,7 @@ MoveDatabase(DatabaseMove *moveDesc)
 	bool targetIsLocal = target->groupId == GetLocalGroupId();
 
 	/* admin connection for the source server */
-	int connectionFlags = 0;
+	int connectionFlags = FORCE_NEW_CONNECTION;
 	MultiConnection *sourceConn = GetNodeUserDatabaseConnection(connectionFlags,
 																source->workerName,
 																source->workerPort,
@@ -222,7 +233,7 @@ MoveDatabase(DatabaseMove *moveDesc)
 	}
 
 	/* open a connection to run pgcopydb on the target node */
-	connectionFlags = OUTSIDE_TRANSACTION;
+	connectionFlags = 0;
 	MultiConnection *targetConn = GetNodeUserDatabaseConnection(connectionFlags,
 																target->workerName,
 																target->workerPort,
@@ -233,8 +244,26 @@ MoveDatabase(DatabaseMove *moveDesc)
 		ReportConnectionError(targetConn, ERROR);
 	}
 
+	/* open a connection to check progress on the target node */
+	connectionFlags = FORCE_NEW_CONNECTION;
+	MultiConnection *targetProgressConn =
+		GetNodeUserDatabaseConnection(connectionFlags,
+									  target->workerName,
+									  target->workerPort,
+									  CurrentUserName(),
+									  CurrentDatabaseName());
+	if (PQstatus(targetProgressConn->pgConn) != CONNECTION_OK)
+	{
+		ReportConnectionError(targetProgressConn, ERROR);
+	}
+
+	/* avoid reusing this connection for other operations */
+	ClaimConnectionExclusively(targetProgressConn);
+
+	/* make sure we do not leave behind session state */
 	ForceConnectionCloseAtTransactionEnd(sourceConn);
 	ForceConnectionCloseAtTransactionEnd(targetConn);
+	ForceConnectionCloseAtTransactionEnd(targetProgressConn);
 
 	/* create the database with the desired properties, but a temporary name */
 	CreatedbStmt *createdbStmt = RecreateCreatedbStmt(databaseOid);
@@ -307,95 +336,7 @@ MoveDatabase(DatabaseMove *moveDesc)
 
 	/* TODO: cleanup record for replication origin */
 
-	/* kick off the pgcopydb clone */
-	StringInfo remoteCloneCommand = makeStringInfo();
-	appendStringInfo(remoteCloneCommand,
-					 "SELECT pg_catalog.pgcopydb_clone(%s,%s,%s)",
-					 quote_literal_cstr(moveDesc->sourceConnectionInfo),
-					 quote_literal_cstr(moveDesc->targetConnectionInfo),
-					 quote_literal_cstr(migrationName));
-
-	int querySent = SendRemoteCommand(targetConn, remoteCloneCommand->data);
-	if (querySent == 0)
-	{
-		ReportConnectionError(targetConn, ERROR);
-	}
-
-	int targetConnSocket = PQsocket(targetConn->pgConn);
-
-	/*
-	 * we handle I/O for the pgcopydb_clone() query inline to also
-	 * be able to do other things. This code is derived from
-	 * FinishConnectionIO.
-	 */
-	while (true)
-	{
-		int waitFlags = WL_POSTMASTER_DEATH | WL_LATCH_SET;
-
-		/* try to send all pending data */
-		int sendStatus = PQflush(targetConn->pgConn);
-
-		/* if sending failed, there's nothing more we can do */
-		if (sendStatus == -1)
-		{
-			ereport(ERROR, (errmsg("failed to send command to worker node")));
-		}
-		else if (sendStatus == 1)
-		{
-			waitFlags |= WL_SOCKET_WRITEABLE;
-		}
-
-		if (PQconsumeInput(targetConn->pgConn) == 0)
-		{
-			ereport(ERROR, (errmsg("lost connection to node %s:%d",
-								   target->workerName, target->workerPort)));
-		}
-
-		if (PQisBusy(targetConn->pgConn))
-		{
-			waitFlags |= WL_SOCKET_READABLE;
-		}
-
-		if ((waitFlags & (WL_SOCKET_READABLE | WL_SOCKET_WRITEABLE)) == 0)
-		{
-			break;
-		}
-
-		long timeout = 1000; /* ms */
-		int rc = WaitLatchOrSocket(MyLatch, waitFlags, targetConnSocket, timeout,
-								   PG_WAIT_EXTENSION);
-		if (rc & WL_POSTMASTER_DEATH)
-		{
-			ereport(ERROR, (errmsg("postmaster was shut down, exiting")));
-		}
-
-		if (rc & WL_LATCH_SET)
-		{
-			ResetLatch(MyLatch);
-			CHECK_FOR_INTERRUPTS();
-		}
-
-		elog(NOTICE, "waiting for database move to finish");
-
-		/* TODO: monitor the overall move */
-	}
-
-	if (PQstatus(targetConn->pgConn) == CONNECTION_BAD)
-	{
-		ereport(ERROR, (errmsg("lost connection to node %s:%d",
-							   target->workerName, target->workerPort)));
-	}
-
-	PGresult *result = PQgetResult(targetConn->pgConn);
-	if (!IsResponseOK(result))
-	{
-		ReportResultError(targetConn, result, ERROR);
-	}
-
-	PQclear(result);
-
-	bool raiseErrors = true;
-	ClearResults(targetConn, raiseErrors);
+	DoDatabaseClone(moveDesc, targetConn, targetProgressConn, migrationName);
 
 	CHECK_FOR_INTERRUPTS();
 
@@ -458,6 +399,8 @@ MoveDatabase(DatabaseMove *moveDesc)
 	ResumeDatabaseOnInboundPgBouncers(databaseName);
 
 	FinalizeOperationNeedingCleanupOnSuccess("database move");
+
+	UnclaimConnection(targetProgressConn);
 }
 
 
@@ -476,4 +419,240 @@ ExecuteDatabaseCommand(char *command, MultiConnection *conn, bool isLocal)
 	{
 		ExecuteCriticalRemoteCommand(conn, command);
 	}
+}
+
+
+/*
+ * DoDatabaseClone performs a pgcopydb clone between two remote databases.
+ */
+static void
+DoDatabaseClone(DatabaseMove *moveDesc, MultiConnection *targetConn,
+				MultiConnection *targetProgressConn, char *migrationName)
+{
+	/* kick off the pgcopydb clone */
+	StringInfo remoteCloneCommand = makeStringInfo();
+	appendStringInfo(remoteCloneCommand,
+					 "SELECT pg_catalog.pgcopydb_clone(%s,%s,%s,%s)",
+					 quote_literal_cstr(moveDesc->sourceConnectionInfo),
+					 quote_literal_cstr(moveDesc->targetConnectionInfo),
+					 "false", /* follow */
+					 quote_literal_cstr(migrationName));
+
+	int querySent = SendRemoteCommand(targetConn, remoteCloneCommand->data);
+	if (querySent == 0)
+	{
+		ReportConnectionError(targetConn, ERROR);
+	}
+
+	TimestampTz lastProgressCheckTime = GetCurrentTimestamp();
+
+	int targetConnSocket = PQsocket(targetConn->pgConn);
+	bool isDataDone = false;
+
+	/*
+	 * we handle I/O for the pgcopydb_clone() query inline to also
+	 * be able to do other things. This code is derived from
+	 * FinishConnectionIO.
+	 */
+	while (true)
+	{
+		CHECK_FOR_INTERRUPTS();
+
+		int waitFlags = WL_POSTMASTER_DEATH | WL_LATCH_SET;
+
+		/* try to send all pending data */
+		int sendStatus = PQflush(targetConn->pgConn);
+
+		/* if sending failed, there's nothing more we can do */
+		if (sendStatus == -1)
+		{
+			ereport(ERROR, (errmsg("failed to send command to worker node")));
+		}
+		else if (sendStatus == 1)
+		{
+			waitFlags |= WL_SOCKET_WRITEABLE;
+		}
+
+		if (PQconsumeInput(targetConn->pgConn) == 0)
+		{
+			ereport(ERROR, (errmsg("lost connection to node %s:%d",
+								   targetConn->hostname, targetConn->port)));
+		}
+
+		if (PQisBusy(targetConn->pgConn))
+		{
+			waitFlags |= WL_SOCKET_READABLE;
+		}
+
+		if ((waitFlags & (WL_SOCKET_READABLE | WL_SOCKET_WRITEABLE)) == 0)
+		{
+			break;
+		}
+
+		long timeout = 1000; /* ms */
+		int rc = WaitLatchOrSocket(MyLatch, waitFlags, targetConnSocket, timeout,
+								   PG_WAIT_EXTENSION);
+		if (rc & WL_POSTMASTER_DEATH)
+		{
+			ereport(ERROR, (errmsg("postmaster was shut down, exiting")));
+		}
+
+		if (rc & WL_LATCH_SET)
+		{
+			ResetLatch(MyLatch);
+			CHECK_FOR_INTERRUPTS();
+		}
+
+		TimestampTz currentTime = GetCurrentTimestamp();
+
+		if (!isDataDone &&
+			TimestampDifferenceExceeds(lastProgressCheckTime, currentTime, 2000))
+		{
+			/* TODO: reset memory context */
+			isDataDone = CheckDataCopyProgress(targetProgressConn,
+											   moveDesc->sourceConnectionInfo,
+											   migrationName);
+
+			lastProgressCheckTime = currentTime;
+		}
+	}
+
+	if (PQstatus(targetConn->pgConn) == CONNECTION_BAD)
+	{
+		ereport(ERROR, (errmsg("lost connection to node %s:%d",
+							   targetConn->hostname, targetConn->port)));
+	}
+
+	PGresult *result = PQgetResult(targetConn->pgConn);
+	if (!IsResponseOK(result))
+	{
+		ReportResultError(targetConn, result, ERROR);
+	}
+
+	PQclear(result);
+
+	bool raiseErrors = true;
+	ClearResults(targetConn, raiseErrors);
+}
+
+
+/*
+ * pgcopydb_list_progress does a pgcopydb list progress via a UDF.
+ */
+Datum
+pgcopydb_list_progress(PG_FUNCTION_ARGS)
+{
+	text *sourceText = PG_GETARG_TEXT_P(0);
+	char *sourceURL = text_to_cstring(sourceText);
+	text *migrationNameText = PG_GETARG_TEXT_P(1);
+	char *migrationName = text_to_cstring(migrationNameText);
+
+	char *output = RunPgcopydbListProgress(sourceURL, migrationName);
+	if (output == NULL)
+	{
+		PG_RETURN_NULL();
+	}
+
+	PG_RETURN_TEXT_P(cstring_to_text(output));
+}
+
+
+/*
+ * CheckDataCopyProgress checks the progress of an ongoing pgcopydb clone
+ * over the given connection.
+ */
+static bool
+CheckDataCopyProgress(MultiConnection *targetProgressConn,
+					  char *sourceConnInfo, char *migrationName)
+{
+	bool isDataDone = false;
+
+	StringInfo remoteProgressCommand = makeStringInfo();
+	appendStringInfo(remoteProgressCommand,
+					 "SELECT pg_catalog.pgcopydb_list_progress(%s,%s)",
+					 quote_literal_cstr(sourceConnInfo),
+					 quote_literal_cstr(migrationName));
+
+	Datum progressJson = 0;
+	if (GetRemoteJsonb(targetProgressConn, remoteProgressCommand->data,
+					   &progressJson))
+	{
+		Datum tablesJson = 0;
+		Datum indexesJson = 0;
+
+		if (ExtractFieldJsonbDatum(progressJson, "tables", &tablesJson) &&
+			ExtractFieldJsonbDatum(progressJson, "indexes", &indexesJson))
+		{
+			int tablesTotal = ExtractFieldInt32(tablesJson, "total", -1);
+			int tablesDone = ExtractFieldInt32(tablesJson, "done", -1);
+			int indexesTotal = ExtractFieldInt32(indexesJson, "total", -1);
+			int indexesDone = ExtractFieldInt32(indexesJson, "done", -1);
+
+			if (tablesDone == tablesTotal && indexesDone == indexesTotal)
+			{
+				ereport(NOTICE, (errmsg("data copy and index rebuild completed")));
+				isDataDone = true;
+			}
+			else
+			{
+				ereport(NOTICE, (errmsg("%d table%s and %d index%s remaining",
+										tablesTotal - tablesDone,
+										tablesTotal - tablesDone != 1 ? "s":"",
+										indexesTotal - indexesDone,
+										indexesTotal - indexesDone != 1 ? "es":"")));
+			}
+		}
+	}
+
+	return isDataDone;
+}
+
+
+/*
+ * GetRemoteJsonb executes a command that returns a single JSON over the given connection.
+ */
+static bool
+GetRemoteJsonb(MultiConnection *connection, char *command, Datum *jsonDatum)
+{
+	bool raiseInterrupts = true;
+
+	int querySent = SendRemoteCommand(connection, command);
+	if (querySent == 0)
+	{
+		ReportConnectionError(connection, ERROR);
+	}
+
+	PGresult *result = GetRemoteCommandResult(connection, raiseInterrupts);
+	if (!IsResponseOK(result))
+	{
+		ReportResultError(connection, result, ERROR);
+	}
+
+	int rowCount = PQntuples(result);
+	if (rowCount != 1)
+	{
+		PQclear(result);
+		ForgetResults(connection);
+		return InvalidXLogRecPtr;
+	}
+
+	int colCount = PQnfields(result);
+	if (colCount != 1)
+	{
+		ereport(ERROR, (errmsg("unexpected number of columns returned by: %s",
+							   command)));
+	}
+
+	bool isNull = PQgetisnull(result, 0, 0);
+	if (!isNull)
+	{
+		char *resultString = PQgetvalue(result, 0, 0);
+		*jsonDatum = DirectFunctionCall1Coll(jsonb_in, InvalidOid,
+											 CStringGetDatum(resultString));
+	}
+
+	PQclear(result);
+	ClearResults(connection, raiseInterrupts);
+
+	return !isNull;
 }

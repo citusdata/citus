@@ -88,9 +88,19 @@ IS 'move a database shard';
 CREATE FUNCTION pg_catalog.pgcopydb_clone(
 	source_url text,
 	destination_url text,
+    follow bool DEFAULT false,
     migration_name text DEFAULT 'pgcopydb')
 RETURNS void
 LANGUAGE C STRICT
 AS 'MODULE_PATHNAME', $$pgcopydb_clone$$;
-COMMENT ON FUNCTION pg_catalog.pgcopydb_clone(text, text, text)
+COMMENT ON FUNCTION pg_catalog.pgcopydb_clone(text, text, bool, text)
 IS 'clone a database using pgcopydb';
+
+CREATE FUNCTION pg_catalog.pgcopydb_list_progress(
+	source_url text,
+    migration_name text DEFAULT 'pgcopydb')
+RETURNS json
+LANGUAGE C STRICT
+AS 'MODULE_PATHNAME', $$pgcopydb_list_progress$$;
+COMMENT ON FUNCTION pg_catalog.pgcopydb_list_progress(text, text)
+IS 'list progress of a database clone using pgcopydb';

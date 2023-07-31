@@ -13,6 +13,7 @@
 
 char * GetPgcopydbPath(void);
 char * RunPgcopydbClone(char *sourceConnectionString, char *targetConnectionString,
-						char *migrationName);
+						char *migrationName, bool useFollow);
+char * RunPgcopydbListProgress(char *sourceConnectionString, char *migrationName);
 
 #endif
