@@ -10,6 +10,7 @@
         "vscode": {
             "extensions": [
                 "eamodio.gitlens",
+                "GitHub.copilot-chat",
                 "GitHub.copilot",
                 "github.vscode-github-actions",
                 "github.vscode-pull-request-github",
