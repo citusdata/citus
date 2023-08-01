@@ -104,8 +104,9 @@ RUN sudo pip3 install pipenv
 
 WORKDIR /workspaces/citus/
 COPY src/ src/
-RUN ls -al
+COPY .vscode/Pipfile .vscode/Pipfile.lock .devcontainer/.vscode/
 RUN ( cd src/test/regress && pipenv install )
+RUN ( cd .devcontainer/.vscode && pipenv install )
 
 # assemble the final container by copying over the artifacts from separately build containers
 FROM base AS devcontainer

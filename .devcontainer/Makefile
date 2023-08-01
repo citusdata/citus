@@ -8,4 +8,4 @@ init: ../.vscode/c_cpp_properties.json ../.vscode/launch.json
 	cp .vscode/launch.json ../.vscode/launch.json
 
 ../.vscode/c_cpp_properties.json: ../.vscode
-	cp .vscode/c_cpp_properties.json ../.vscode/c_cpp_properties.json
+	./.vscode/generate_c_cpp_properties-json.py ../.vscode/c_cpp_properties.json
