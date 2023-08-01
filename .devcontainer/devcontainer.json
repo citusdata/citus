@@ -11,6 +11,7 @@
             "extensions": [
                 "eamodio.gitlens",
                 "GitHub.copilot",
+                "github.vscode-github-actions",
                 "github.vscode-pull-request-github",
                 "ms-vscode.cpptools-extension-pack",
                 "ms-vsliveshare.vsliveshare",
