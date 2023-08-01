@@ -627,6 +627,10 @@ AppendAlterTableCmdAddColumn(StringInfo buf, AlterTableCmd *alterTableCmd,
 		{
 			appendStringInfoString(buf, " NOT NULL");
 		}
+		else if (constraint->contype == CONSTR_NULL)
+		{
+			appendStringInfoString(buf, " NULL");
+		}
 		else if (constraint->contype == CONSTR_DEFAULT)
 		{
 			char attgenerated = '\0';
