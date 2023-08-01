@@ -1,6 +1,9 @@
 name: "Build devcontainer"
 
 on:
+  push:
+    branches:
+      - "dev/devcontainer"
   workflow_dispatch:
 
 jobs:
