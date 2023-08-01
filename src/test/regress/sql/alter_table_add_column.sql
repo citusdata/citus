@@ -33,7 +33,7 @@ ALTER TABLE referencing ADD COLUMN test_1 integer DEFAULT (alter_table_add_colum
 ALTER TABLE referencing ADD COLUMN test_2 integer UNIQUE REFERENCES referenced(int_col) ON UPDATE CASCADE ON DELETE SET DEFAULT NOT DEFERRABLE INITIALLY IMMEDIATE;
 ALTER TABLE referencing ADD COLUMN test_3 integer GENERATED ALWAYS AS (test_1 * alter_table_add_column_other_schema.my_random(1)) STORED UNIQUE REFERENCES referenced(int_col) MATCH FULL;
 ALTER TABLE referencing ADD COLUMN test_4 integer PRIMARY KEY WITH (fillfactor=70) NOT NULL REFERENCES referenced(int_col) MATCH SIMPLE ON UPDATE CASCADE ON DELETE SET DEFAULT;
-ALTER TABLE referencing ADD COLUMN test_5 integer CONSTRAINT unique_c UNIQUE WITH (fillfactor=50);
+ALTER TABLE referencing ADD COLUMN test_5 integer CONSTRAINT unique_c UNIQUE WITH (fillfactor=50) NULL;
 ALTER TABLE referencing ADD COLUMN test_6 text COMPRESSION pglz COLLATE caseinsensitive NOT NULL;
 ALTER TABLE referencing ADD COLUMN "test_\'!7" "simple_!\'custom_type";
 
