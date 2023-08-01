@@ -151,7 +151,7 @@ COPY --from=uncrustify-builder /uncrustify/usr/ /usr/
 
 COPY --from=pg14 /home/citus/.pgenv-staging/ /home/citus/.pgenv/
 COPY --from=pg15 /home/citus/.pgenv-staging/ /home/citus/.pgenv/
-# COPY --from=pg16 /home/citus/.pgenv-staging/ /home/citus/.pgenv/
+COPY --from=pg16 /home/citus/.pgenv-staging/ /home/citus/.pgenv/
 
 COPY --from=pipenv /home/citus/.local/share/virtualenvs/ /home/citus/.local/share/virtualenvs/
 
