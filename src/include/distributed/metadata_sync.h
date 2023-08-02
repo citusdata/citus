@@ -119,7 +119,7 @@ extern List * InterTableRelationshipOfRelationCommandList(Oid relationId);
 extern List * DetachPartitionCommandList(void);
 extern void SyncNodeMetadataToNodes(void);
 extern BackgroundWorkerHandle * SpawnSyncNodeMetadataToNodes(Oid database, Oid owner);
-extern void SyncNodeMetadataToNodesMain(Datum main_arg);
+extern PGDLLEXPORT void SyncNodeMetadataToNodesMain(Datum main_arg);
 extern void SignalMetadataSyncDaemon(Oid database, int sig);
 extern bool ShouldInitiateMetadataSync(bool *lockFailure);
 extern List * SequenceDependencyCommandList(Oid relationId);

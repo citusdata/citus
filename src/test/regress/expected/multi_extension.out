@@ -59,7 +59,9 @@ BEGIN
 	SELECT p.description previous_object, c.description current_object
 	FROM current_objects c FULL JOIN prev_objects p
 	ON p.description = c.description
-	WHERE p.description is null OR c.description is null;
+	WHERE (p.description is null OR c.description is null)
+		  AND c.description IS DISTINCT FROM 'function any_value(anyelement) anyelement'
+          AND c.description IS DISTINCT FROM 'function any_value_agg(anyelement,anyelement) anyelement';
 
 	DROP TABLE prev_objects;
 	ALTER TABLE current_objects RENAME TO prev_objects;
@@ -132,8 +134,6 @@ SELECT * FROM multi_extension.print_extension_changes();
 ---------------------------------------------------------------------
                  | event trigger citus_cascade_to_partition
                  | function alter_role_if_exists(text,text) boolean
-                 | function any_value(anyelement) anyelement
-                 | function any_value_agg(anyelement,anyelement) anyelement
                  | function array_cat_agg(anycompatiblearray) anycompatiblearray
                  | function assign_distributed_transaction_id(integer,bigint,timestamp with time zone) void
                  | function authinfo_valid(text) boolean
@@ -318,7 +318,7 @@ SELECT * FROM multi_extension.print_extension_changes();
                  | view citus_stat_statements
                  | view citus_worker_stat_activity
                  | view pg_dist_shard_placement
-(188 rows)
+(186 rows)
 
 -- Test downgrade to 9.2-2 from 9.2-4
 ALTER EXTENSION citus UPDATE TO '9.2-4';
