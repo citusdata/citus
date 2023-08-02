@@ -17,10 +17,10 @@
 #define MAX_SHARD_COUNT 64000
 #define MAX_SHARD_REPLICATION_FACTOR 100
 
-extern ColumnarSupportsIndexAM_type extern_ColumnarSupportsIndexAM;
-extern CompressionTypeStr_type extern_CompressionTypeStr;
-extern IsColumnarTableAmTable_type extern_IsColumnarTableAmTable;
-extern ReadColumnarOptions_type extern_ReadColumnarOptions;
+extern PGDLLEXPORT ColumnarSupportsIndexAM_type extern_ColumnarSupportsIndexAM;
+extern PGDLLEXPORT CompressionTypeStr_type extern_CompressionTypeStr;
+extern PGDLLEXPORT IsColumnarTableAmTable_type extern_IsColumnarTableAmTable;
+extern PGDLLEXPORT ReadColumnarOptions_type extern_ReadColumnarOptions;
 
 extern void StartupCitusBackend(void);
 extern const char * GetClientMinMessageLevelNameForValue(int minMessageLevel);

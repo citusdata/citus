@@ -63,7 +63,9 @@ BEGIN
 	SELECT p.description previous_object, c.description current_object
 	FROM current_objects c FULL JOIN prev_objects p
 	ON p.description = c.description
-	WHERE p.description is null OR c.description is null;
+	WHERE (p.description is null OR c.description is null)
+          AND c.description IS DISTINCT FROM 'function any_value(anyelement) anyelement'
+          AND c.description IS DISTINCT FROM 'function any_value_agg(anyelement,anyelement) anyelement';
 
 	DROP TABLE prev_objects;
 	ALTER TABLE current_objects RENAME TO prev_objects;

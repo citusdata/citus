@@ -56,7 +56,7 @@ extern TableScanDesc columnar_beginscan_extended(Relation relation, Snapshot sna
 												 uint32 flags, Bitmapset *attr_needed,
 												 List *scanQual);
 extern int64 ColumnarScanChunkGroupsFiltered(ColumnarScanDesc columnarScanDesc);
-extern bool ColumnarSupportsIndexAM(char *indexAMName);
+extern PGDLLEXPORT bool ColumnarSupportsIndexAM(char *indexAMName);
 extern bool IsColumnarTableAmTable(Oid relationId);
 extern void CheckCitusColumnarCreateExtensionStmt(Node *parseTree);
 extern void CheckCitusColumnarAlterExtensionStmt(Node *parseTree);
