@@ -302,5 +302,6 @@ s/(NOTICE:  issuing CREATE EXTENSION IF NOT EXISTS citus_columnar WITH SCHEMA  p
 
 s/, password_required=false//g
 s/provide the file or change sslmode/provide the file, use the system's trusted roots with sslrootcert=system, or change sslmode/g
+s/:varcollid 0 :varlevelsup 0/:varcollid 0 :varnullingrels (b) :varlevelsup 0/g
 
 #endif /* PG_VERSION_NUM < PG_VERSION_16 */

@@ -1284,8 +1284,17 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 	SET application_name to 'citus_internal gpid=10000000001';
 	-- with an ugly trick, update the vartype of table from int to bigint
 	-- so that making two tables colocated fails
-	UPDATE pg_dist_partition SET partkey = '{VAR :varno 1 :varattno 1 :vartype 20 :vartypmod -1 :varcollid 0 :varlevelsup 0 :varnoold 1 :varoattno 1 :location -1}'
+	-- include varnullingrels for PG16
+    SHOW server_version \gset
+    SELECT substring(:'server_version', '\d+')::int >= 16 AS server_version_ge_16
+    \gset
+    \if :server_version_ge_16
+    UPDATE pg_dist_partition SET partkey = '{VAR :varno 1 :varattno 1 :vartype 20 :vartypmod -1 :varcollid 1 :varnullingrels (b) :varlevelsup 0 :varnoold 1 :varoattno 1 :location -1}'
 	WHERE logicalrelid = 'test_2'::regclass;
+    \else
+	UPDATE pg_dist_partition SET partkey = '{VAR :varno 1 :varattno 1 :vartype 20 :vartypmod -1 :varcollid 1 :varlevelsup 0 :varnoold 1 :varoattno 1 :location -1}'
+	WHERE logicalrelid = 'test_2'::regclass;
+    \endif
 	SELECT citus_internal_update_relation_colocation('test_2'::regclass, 251);
 ERROR:  cannot colocate tables test_2 and test_3
 ROLLBACK;

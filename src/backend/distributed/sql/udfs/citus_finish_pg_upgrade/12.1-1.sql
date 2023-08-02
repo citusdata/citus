@@ -106,6 +106,19 @@ BEGIN
     -- restore citus catalog tables
     --
     INSERT INTO pg_catalog.pg_dist_partition SELECT * FROM public.pg_dist_partition;
+
+    -- if we are upgrading from PG14/PG15 to PG16+,
+    -- we need to add varnullingrels to partkey if it's not already there
+    IF substring(current_Setting('server_version'), '\d+')::int >= 16 THEN
+    EXECUTE $cmd$
+        UPDATE pg_catalog.pg_dist_partition
+        SET partkey = (split_part(partkey, 'varlevelsup', 1)
+                       || 'varnullingrels (b) :varlevelsup'
+                       || split_part(partkey, 'varlevelsup', 2))
+        WHERE partkey IS NOT NULL AND partkey NOT LIKE '%varnullingrels%';
+    $cmd$;
+    END IF;
+
     INSERT INTO pg_catalog.pg_dist_shard SELECT * FROM public.pg_dist_shard;
     INSERT INTO pg_catalog.pg_dist_placement SELECT * FROM public.pg_dist_placement;
     INSERT INTO pg_catalog.pg_dist_node_metadata SELECT * FROM public.pg_dist_node_metadata;
