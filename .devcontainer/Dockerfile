@@ -55,6 +55,7 @@ FROM base AS pg14
 RUN pgenv build 14.8
 RUN rm .pgenv/src/*.tar*
 RUN make -C .pgenv/src/postgresql-*/ clean
+RUN make -C .pgenv/src/postgresql-*/include install
 
 # create a staging directory with all files we want to copy from our pgenv build
 # we will copy the contents of the staged folder into the final image at once
@@ -66,6 +67,7 @@ FROM base AS pg15
 RUN pgenv build 15.3
 RUN rm .pgenv/src/*.tar*
 RUN make -C .pgenv/src/postgresql-*/ clean
+RUN make -C .pgenv/src/postgresql-*/include install
 
 # create a staging directory with all files we want to copy from our pgenv build
 # we will copy the contents of the staged folder into the final image at once
@@ -77,6 +79,7 @@ FROM base AS pg16
 RUN pgenv build 16beta2
 RUN rm .pgenv/src/*.tar*
 RUN make -C .pgenv/src/postgresql-*/ clean
+RUN make -C .pgenv/src/postgresql-*/include install
 
 # create a staging directory with all files we want to copy from our pgenv build
 # we will copy the contents of the staged folder into the final image at once
