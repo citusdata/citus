@@ -16,7 +16,6 @@
 #include <float.h>
 #include <limits.h>
 
-#include "access/genam.h"
 #include "access/htup_details.h"
 #include "access/xact.h"
 #include "catalog/pg_class.h"
@@ -2002,9 +2001,14 @@ multi_relation_restriction_hook(PlannerInfo *root, RelOptInfo *relOptInfo,
  * such queries.
  */
 void
-multi_partitioned_index_hook(PlannerInfo *root, Oid relationObjectId, bool inhparent,
+multi_get_relation_info_hook(PlannerInfo *root, Oid relationObjectId, bool inhparent,
 							 RelOptInfo *rel)
 {
+	if (!CitusHasBeenLoaded())
+	{
+		return;
+	}
+
 	Index varno = rel->relid;
 	RangeTblEntry *rangeTableEntry = planner_rt_fetch(varno, root);
 
@@ -2012,19 +2016,15 @@ multi_partitioned_index_hook(PlannerInfo *root, Oid relationObjectId, bool inhpa
 		PartitionedTable(rangeTableEntry->relid) &&
 		rangeTableEntry->inh == false)
 	{
-		LOCKMODE lmode = root->simple_rte_array[varno]->rellockmode;
-		List *indexinfos = NIL;
-		IndexOptInfo *indexOptInfo = NULL;
-		foreach_ptr(indexOptInfo, rel->indexlist)
+		ListCell *lc = NULL;
+		foreach(lc, rel->indexlist)
 		{
-			Relation indexRelation = index_open(indexOptInfo->indexoid, lmode);
-			if (indexRelation->rd_rel->relkind != RELKIND_PARTITIONED_INDEX)
+			IndexOptInfo *indexOptInfo = (IndexOptInfo *) lfirst(lc);
+			if (get_rel_relkind(indexOptInfo->indexoid) == RELKIND_PARTITIONED_INDEX)
 			{
-				indexinfos = lappend(indexinfos, indexOptInfo);
+				rel->indexlist = foreach_delete_current(rel->indexlist, lc);
 			}
-			index_close(indexRelation, lmode);
 		}
-		rel->indexlist = indexinfos;
 	}
 }
 

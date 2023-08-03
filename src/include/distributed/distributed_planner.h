@@ -234,7 +234,7 @@ extern List * TranslatedVarsForRteIdentity(int rteIdentity);
 extern struct DistributedPlan * GetDistributedPlan(CustomScan *node);
 extern void multi_relation_restriction_hook(PlannerInfo *root, RelOptInfo *relOptInfo,
 											Index restrictionIndex, RangeTblEntry *rte);
-extern void multi_partitioned_index_hook(PlannerInfo *root, Oid relationObjectId, bool
+extern void multi_get_relation_info_hook(PlannerInfo *root, Oid relationObjectId, bool
 										 inhparent, RelOptInfo *rel);
 extern void multi_join_restriction_hook(PlannerInfo *root,
 										RelOptInfo *joinrel,

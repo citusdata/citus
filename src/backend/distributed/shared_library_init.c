@@ -453,7 +453,7 @@ _PG_init(void)
 
 	/* register for planner hook */
 	set_rel_pathlist_hook = multi_relation_restriction_hook;
-	get_relation_info_hook = multi_partitioned_index_hook;
+	get_relation_info_hook = multi_get_relation_info_hook;
 	set_join_pathlist_hook = multi_join_restriction_hook;
 	ExecutorStart_hook = CitusExecutorStart;
 	ExecutorRun_hook = CitusExecutorRun;
