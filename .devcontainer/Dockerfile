@@ -55,7 +55,7 @@ FROM base AS pg14
 RUN pgenv build 14.8
 RUN rm .pgenv/src/*.tar*
 RUN make -C .pgenv/src/postgresql-*/ clean
-RUN make -C .pgenv/src/postgresql-*/include install
+RUN make -C .pgenv/src/postgresql-*/src/include install
 
 # create a staging directory with all files we want to copy from our pgenv build
 # we will copy the contents of the staged folder into the final image at once
@@ -67,7 +67,7 @@ FROM base AS pg15
 RUN pgenv build 15.3
 RUN rm .pgenv/src/*.tar*
 RUN make -C .pgenv/src/postgresql-*/ clean
-RUN make -C .pgenv/src/postgresql-*/include install
+RUN make -C .pgenv/src/postgresql-*/src/include install
 
 # create a staging directory with all files we want to copy from our pgenv build
 # we will copy the contents of the staged folder into the final image at once
@@ -79,7 +79,7 @@ FROM base AS pg16
 RUN pgenv build 16beta2
 RUN rm .pgenv/src/*.tar*
 RUN make -C .pgenv/src/postgresql-*/ clean
-RUN make -C .pgenv/src/postgresql-*/include install
+RUN make -C .pgenv/src/postgresql-*/src/include install
 
 # create a staging directory with all files we want to copy from our pgenv build
 # we will copy the contents of the staged folder into the final image at once
@@ -151,13 +151,13 @@ RUN git clone --branch feature/citus-dev-pipenv-shebang https://github.com/citus
 RUN git clone https://github.com/so-fancy/diff-so-fancy.git \
  && ln -s /home/citus/diff-so-fancy/diff-so-fancy .bin/
 
-COPY --from=uncrustify-builder /uncrustify/usr/ /usr/
+COPY --link --from=uncrustify-builder /uncrustify/usr/ /usr/
 
-COPY --from=pg14 /home/citus/.pgenv-staging/ /home/citus/.pgenv/
-COPY --from=pg15 /home/citus/.pgenv-staging/ /home/citus/.pgenv/
-COPY --from=pg16 /home/citus/.pgenv-staging/ /home/citus/.pgenv/
+COPY --link --from=pg14 /home/citus/.pgenv-staging/ /home/citus/.pgenv/
+COPY --link --from=pg15 /home/citus/.pgenv-staging/ /home/citus/.pgenv/
+COPY --link --from=pg16 /home/citus/.pgenv-staging/ /home/citus/.pgenv/
 
-COPY --from=pipenv /home/citus/.local/share/virtualenvs/ /home/citus/.local/share/virtualenvs/
+COPY --link --from=pipenv /home/citus/.local/share/virtualenvs/ /home/citus/.local/share/virtualenvs/
 
 # place to run your cluster with citus_dev
 VOLUME /data
