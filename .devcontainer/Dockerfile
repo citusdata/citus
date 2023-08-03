@@ -166,5 +166,9 @@ RUN sudo mkdir /data \
 
 COPY --chown=citus:citus .psqlrc .
 
+# with the copy linking of layers github actions seem to misbehave with the ownership of the
+# directories leading upto the link, hence a small patch layer to have to right ownerships set
+RUN sudo chown citus:citus ~/.pgenv ~/.local ~/.local/share ~/.local/share/virtualenvs
+
 # sets default pg version
-# RUN pgenv switch latest 15
+RUN pgenv switch latest 15
