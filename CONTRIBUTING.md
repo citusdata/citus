@@ -13,7 +13,7 @@ why we ask this as well as instructions for how to proceed, see the
 
 ### Devcontainer / Github Codespaces
 
-The easiest way to start contributing is via our devcontainer. This container works both locally in visual studio code with docker-desktop/docker-for-mac as well as [Github Codespaces](https://github.com/features/codespaces). To open the project in vscode you will need the [Dev Containers extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers). To start the project in Codespaces, please follow the guidance from Github
+The easiest way to start contributing is via our devcontainer. This container works both locally in visual studio code with docker-desktop/docker-for-mac as well as [Github Codespaces](https://github.com/features/codespaces). To open the project in vscode you will need the [Dev Containers extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers). For codespaces you will need to [create a new codespace](https://codespace.new/citusdata/citus).
 
 With the extension installed you can run the following from the command pallet to get started
 
@@ -31,7 +31,7 @@ This will create an isolated Workspace in vscode, complete with all tools requir
 
 To quickly start we suggest splitting your terminal once to have two shells. The left one in the `/workspaces/citus`, the second one changed to `/data`. The left terminal will be used to interact with the project, the right one with a testing cluster.
 
-To get citus installed from source we run `make install -sj8` in the first terminal, adjust `j8` to suite number of cores you have available. Once installed you can start a Citus cluster in the second terminal via `citus_dev make citus`. The cluster will run in the background, and can be interacted with via `citus_dev`. To get an overview of the available commands.
+To get citus installed from source we run `make install -sj8` in the first terminal, adjust `j8` to suite to the number of cores you have available. Once installed you can start a Citus cluster in the second terminal via `citus_dev make citus`. The cluster will run in the background, and can be interacted with via `citus_dev`. To get an overview of the available commands.
 
 With the Citus cluster running you can connect to the coordinator in the first terminal via `psql -p9700`. Because the coordinator is the most common entrypoint the `PGPORT` environment is set accordingly, so a simple `psql` will connect directly to the coordinator.
 

@@ -2,8 +2,6 @@ name: "Build devcontainer"
 
 on:
   push:
-    branches:
-      - "dev/devcontainer"
     paths:
       - ".devcontainer/**"
   workflow_dispatch:
