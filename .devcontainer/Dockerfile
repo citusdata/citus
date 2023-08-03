@@ -125,6 +125,7 @@ RUN sudo apt update \
  && sudo apt install -y \
     autoconf2.69 \
     bash-completion \
+    fswatch \
     gdb \
     htop \
     lsof \
@@ -172,3 +173,6 @@ RUN sudo chown --from=root:root citus:citus -R ~
 
 # sets default pg version
 RUN pgenv switch latest 15
+
+# make connecting to the coordinator easy
+ENV PGPORT=9700
