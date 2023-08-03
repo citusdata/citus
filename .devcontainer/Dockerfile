@@ -167,4 +167,4 @@ RUN sudo mkdir /data \
 COPY --chown=citus:citus .psqlrc .
 
 # sets default pg version
-RUN pgenv switch latest 15
+# RUN pgenv switch latest 15
