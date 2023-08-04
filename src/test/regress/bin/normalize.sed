@@ -301,5 +301,6 @@ s/(NOTICE:  issuing CREATE EXTENSION IF NOT EXISTS citus_columnar WITH SCHEMA  p
 # (This is not preprocessor directive, but a reminder for the developer that will drop PG14&15 support )
 
 s/, password_required=false//g
+s/provide the file or change sslmode/provide the file, use the system's trusted roots with sslrootcert=system, or change sslmode/g
 
 #endif /* PG_VERSION_NUM < PG_VERSION_16 */
