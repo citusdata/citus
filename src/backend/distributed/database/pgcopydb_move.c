@@ -337,7 +337,11 @@ MoveDatabase(DatabaseMove *moveDesc)
 										source->groupId,
 										CLEANUP_ALWAYS);
 
-	/* TODO: cleanup record for replication origin */
+	/* if something fails, clean the replication origin created by pgcopydb */
+	InsertCleanupRecordInSubtransaction(CLEANUP_OBJECT_REPLICATION_ORIGIN,
+										migrationName,
+										target->groupId,
+										CLEANUP_ALWAYS);
 
 	DoDatabaseClone(moveDesc, sourceDbConn, targetConn, targetProgressConn,
 					migrationName);

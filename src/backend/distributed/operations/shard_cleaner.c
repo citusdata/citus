@@ -32,7 +32,8 @@
 #include "distributed/worker_transaction.h"
 #include "distributed/pg_dist_cleanup.h"
 
-#define REPLICATION_SLOT_CATALOG_TABLE_NAME "pg_replication_slots"
+#define REPLICATION_SLOT_CATALOG_TABLE_NAME "pg_catalog.pg_replication_slots"
+#define REPLICATION_ORIGIN_CATALOG_TABLE_NAME "pg_catalog.pg_replication_origin"
 #define STR_ERRCODE_OBJECT_IN_USE "55006"
 #define STR_ERRCODE_UNDEFINED_OBJECT "42704"
 
@@ -89,6 +90,9 @@ static bool TryDropPublicationOutsideTransaction(char *publicationName,
 static bool TryDropReplicationSlotOutsideTransaction(char *replicationSlotName,
 													 char *nodeName,
 													 int nodePort);
+static bool TryDropReplicationOriginOutsideTransaction(char *replicationOrigin,
+													   char *nodeName,
+													   int nodePort);
 static bool TryDropUserOutsideTransaction(char *username, char *nodeName, int nodePort);
 static bool TryDropDatabaseOutsideTransaction(char *databaseName, char *nodeName,
 											  int nodePort);
@@ -609,6 +613,11 @@ TryDropResourceByCleanupRecordOutsideTransaction(CleanupRecord *record,
 													 nodePort);
 		}
 
+		case CLEANUP_OBJECT_REPLICATION_ORIGIN:
+		{
+			return TryDropReplicationOriginOutsideTransaction(record->objectName,
+															  nodeName, nodePort);
+		}
 
 		default:
 		{
@@ -922,6 +931,35 @@ TryDropDatabaseOutsideTransaction(char *databaseName, char *nodeName, int nodePo
 			"SET LOCAL lock_timeout TO '5s'",
 			"SET LOCAL citus.enable_ddl_propagation TO OFF;",
 			wrappedCommand));
+
+	return success;
+}
+
+
+/*
+ * TryDropReplicationOriginOutsideTransaction drops the replication origin with the given
+ * name if it exists.
+ */
+static bool
+TryDropReplicationOriginOutsideTransaction(char *replicationOriginName,
+										   char *nodeName,
+										   int nodePort)
+{
+	int connectionFlags = OUTSIDE_TRANSACTION;
+	MultiConnection *connection = GetNodeUserDatabaseConnection(connectionFlags,
+																nodeName, nodePort,
+																CitusExtensionOwnerName(),
+																NULL);
+
+	char *dropOriginCommand =
+			psprintf("SELECT pg_catalog.pg_replication_origin_drop(roname) FROM "
+					 REPLICATION_ORIGIN_CATALOG_TABLE_NAME
+					 " where roname = %s",
+					 quote_literal_cstr(replicationOriginName));
+
+	bool success = SendOptionalCommandListToWorkerOutsideTransactionWithConnection(
+		connection,
+		list_make2("SET LOCAL lock_timeout TO '1s'", dropOriginCommand));
 
 	return success;
 }
