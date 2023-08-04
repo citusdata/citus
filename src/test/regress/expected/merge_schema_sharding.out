@@ -71,20 +71,24 @@ SET search_path TO schema_shard_table1;
 SET client_min_messages TO DEBUG2;
 MERGE INTO nullkey_c1_t1 USING nullkey_c1_t2 ON (nullkey_c1_t1.a = nullkey_c1_t2.a)
 WHEN MATCHED THEN UPDATE SET b = nullkey_c1_t2.b;
+DEBUG:  Creating router plan
 DEBUG:  <Deparsed MERGE query: MERGE INTO schema_shard_table1.nullkey_c1_t1_4005006 nullkey_c1_t1 USING schema_shard_table1.nullkey_c1_t2_4005007 nullkey_c1_t2 ON (nullkey_c1_t1.a OPERATOR(pg_catalog.=) nullkey_c1_t2.a) WHEN MATCHED THEN UPDATE SET b = nullkey_c1_t2.b>
 DEBUG:  Creating MERGE router plan
 MERGE INTO nullkey_c1_t1 USING nullkey_c1_t2 ON (nullkey_c1_t1.a = nullkey_c1_t2.a)
 WHEN MATCHED THEN DELETE;
+DEBUG:  Creating router plan
 DEBUG:  <Deparsed MERGE query: MERGE INTO schema_shard_table1.nullkey_c1_t1_4005006 nullkey_c1_t1 USING schema_shard_table1.nullkey_c1_t2_4005007 nullkey_c1_t2 ON (nullkey_c1_t1.a OPERATOR(pg_catalog.=) nullkey_c1_t2.a) WHEN MATCHED THEN DELETE>
 DEBUG:  Creating MERGE router plan
 MERGE INTO nullkey_c1_t1 USING nullkey_c1_t2 ON (nullkey_c1_t1.a = nullkey_c1_t2.a)
 WHEN MATCHED THEN UPDATE SET b = nullkey_c1_t2.b
 WHEN NOT MATCHED THEN INSERT VALUES (nullkey_c1_t2.a, nullkey_c1_t2.b);
+DEBUG:  Creating router plan
 DEBUG:  <Deparsed MERGE query: MERGE INTO schema_shard_table1.nullkey_c1_t1_4005006 nullkey_c1_t1 USING schema_shard_table1.nullkey_c1_t2_4005007 nullkey_c1_t2 ON (nullkey_c1_t1.a OPERATOR(pg_catalog.=) nullkey_c1_t2.a) WHEN MATCHED THEN UPDATE SET b = nullkey_c1_t2.b WHEN NOT MATCHED THEN INSERT (a, b) VALUES (nullkey_c1_t2.a, nullkey_c1_t2.b)>
 DEBUG:  Creating MERGE router plan
 MERGE INTO nullkey_c1_t1 USING nullkey_c1_t2 ON (nullkey_c1_t1.a = nullkey_c1_t2.a)
 WHEN MATCHED THEN DELETE
 WHEN NOT MATCHED THEN INSERT VALUES (nullkey_c1_t2.a, nullkey_c1_t2.b);
+DEBUG:  Creating router plan
 DEBUG:  <Deparsed MERGE query: MERGE INTO schema_shard_table1.nullkey_c1_t1_4005006 nullkey_c1_t1 USING schema_shard_table1.nullkey_c1_t2_4005007 nullkey_c1_t2 ON (nullkey_c1_t1.a OPERATOR(pg_catalog.=) nullkey_c1_t2.a) WHEN MATCHED THEN DELETE WHEN NOT MATCHED THEN INSERT (a, b) VALUES (nullkey_c1_t2.a, nullkey_c1_t2.b)>
 DEBUG:  Creating MERGE router plan
 SET search_path TO schema_shard_table2;
@@ -195,6 +199,7 @@ WITH cte AS (
 )
 MERGE INTO nullkey_c1_t1 USING cte ON (nullkey_c1_t1.a = cte.a)
 WHEN MATCHED THEN UPDATE SET b = cte.b;
+DEBUG:  Creating router plan
 DEBUG:  <Deparsed MERGE query: WITH cte AS (SELECT nullkey_c1_t1_1.a, nullkey_c1_t1_1.b FROM schema_shard_table1.nullkey_c1_t1_4005006 nullkey_c1_t1_1) MERGE INTO schema_shard_table1.nullkey_c1_t1_4005006 nullkey_c1_t1 USING cte ON (nullkey_c1_t1.a OPERATOR(pg_catalog.=) cte.a) WHEN MATCHED THEN UPDATE SET b = cte.b>
 DEBUG:  Creating MERGE router plan
 WITH cte AS (

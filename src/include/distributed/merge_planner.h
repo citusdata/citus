@@ -30,7 +30,7 @@ extern bool IsLocalTableModification(Oid targetRelationId, Query *query,
 extern void NonPushableMergeCommandExplainScan(CustomScanState *node, List *ancestors,
 											   struct ExplainState *es);
 extern Var * FetchAndValidateInsertVarIfExists(Oid targetRelationId, Query *query);
-extern RangeTblEntry * ExtractMergeSourceRangeTableEntry(Query *query);
+extern RangeTblEntry * ExtractMergeSourceRangeTableEntry(Query *query, bool joinSourceOk);
 
 
 #endif /* MERGE_PLANNER_H */

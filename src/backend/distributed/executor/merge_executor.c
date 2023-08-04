@@ -100,7 +100,7 @@ ExecuteSourceAtWorkerAndRepartition(CitusScanState *scanState)
 	Query *mergeQuery =
 		copyObject(distributedPlan->modifyQueryViaCoordinatorOrRepartition);
 	RangeTblEntry *targetRte = ExtractResultRelationRTE(mergeQuery);
-	RangeTblEntry *sourceRte = ExtractMergeSourceRangeTableEntry(mergeQuery);
+	RangeTblEntry *sourceRte = ExtractMergeSourceRangeTableEntry(mergeQuery, false);
 	Oid targetRelationId = targetRte->relid;
 	bool hasReturning = distributedPlan->expectResults;
 	Query *sourceQuery = sourceRte->subquery;
@@ -211,7 +211,7 @@ ExecuteSourceAtCoordAndRedistribution(CitusScanState *scanState)
 	Query *mergeQuery =
 		copyObject(distributedPlan->modifyQueryViaCoordinatorOrRepartition);
 	RangeTblEntry *targetRte = ExtractResultRelationRTE(mergeQuery);
-	RangeTblEntry *sourceRte = ExtractMergeSourceRangeTableEntry(mergeQuery);
+	RangeTblEntry *sourceRte = ExtractMergeSourceRangeTableEntry(mergeQuery, false);
 	Query *sourceQuery = sourceRte->subquery;
 	Oid targetRelationId = targetRte->relid;
 	PlannedStmt *sourcePlan =
