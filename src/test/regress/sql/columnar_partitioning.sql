@@ -1,3 +1,6 @@
+--
+-- COLUMNAR_PARTITIONING
+--
 
 CREATE TABLE parent(ts timestamptz, i int, n numeric, s text)
   PARTITION BY RANGE (ts);
@@ -21,8 +24,16 @@ INSERT INTO parent SELECT '2020-03-15', 30, 300, 'three thousand'
 INSERT INTO parent SELECT '2020-04-15', 30, 300, 'three thousand'
   FROM generate_series(1,100000);
 
+SHOW server_version \gset
+SELECT substring(:'server_version', '\d+')::int >= 16 AS server_version_ge_16
+\gset
+
 -- run parallel plans
+\if :server_version_ge_16
+SET debug_parallel_query = regress;
+\else
 SET force_parallel_mode = regress;
+\endif
 SET min_parallel_table_scan_size = 1;
 SET parallel_tuple_cost = 0;
 SET max_parallel_workers = 4;
@@ -46,7 +57,11 @@ EXPLAIN (costs off) SELECT count(*), sum(i), min(i), max(i) FROM parent;
 SELECT count(*), sum(i), min(i), max(i) FROM parent;
 SET columnar.enable_custom_scan TO DEFAULT;
 
+\if :server_version_ge_16
+SET debug_parallel_query TO DEFAULT;
+\else
 SET force_parallel_mode TO DEFAULT;
+\endif
 SET min_parallel_table_scan_size TO DEFAULT;
 SET parallel_tuple_cost TO DEFAULT;
 SET max_parallel_workers TO DEFAULT;
