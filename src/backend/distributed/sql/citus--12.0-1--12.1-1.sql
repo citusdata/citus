@@ -114,3 +114,10 @@ WHERE shard_cost_function = 'pg_catalog.citus_shard_cost_by_disk_size(bigint)'::
 DROP FUNCTION pg_catalog.citus_shard_cost_by_disk_size(bigint);
 
 #include "udfs/citus_database_size/12.1-1.sql"
+
+CREATE FUNCTION pg_catalog.citus_database_lock(database_name name)
+RETURNS void
+LANGUAGE C STRICT
+AS 'MODULE_PATHNAME', $$citus_database_lock_by_name$$;
+COMMENT ON FUNCTION pg_catalog.citus_database_lock(name)
+IS 'lock a database for new connections';

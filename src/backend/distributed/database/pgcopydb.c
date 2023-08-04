@@ -78,6 +78,7 @@ RunPgcopydbClone(char *sourceConnectionString, char *targetConnectionString,
 		argList = lappend(argList, "--follow");
 	}
 
+	putenv(psprintf("PGCOPYDB_LOG_FILENAME=/tmp/%s.log", migrationName));
 	return ExecuteProgram(argList);
 }
 

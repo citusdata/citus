@@ -16,3 +16,4 @@ DROP FUNCTION pg_catalog.citus_shard_cost_by_disk_size(bigint,char);
 
 DROP FUNCTION pg_catalog.citus_database_size(oid);
 DROP FUNCTION pg_catalog.citus_database_size(name);
+DROP FUNCTION pg_catalog.citus_database_lock(name);

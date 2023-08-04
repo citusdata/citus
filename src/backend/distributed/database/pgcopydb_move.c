@@ -78,14 +78,12 @@ typedef enum DatabaseMoveState
 /*
  * DatabaseMoveMode represents different ways of doing a database
  * migration:
- * - schema only (pg_dump without data)
- * - dump only (pg_dump with data)
- * - full (pg_dump for schema, logical replication for data & changes)
+ * - source is in read-only
+ * - use logical replication during the move
  */
 typedef enum DatabaseMoveMode
 {
-	MIGRATION_MODE_SCHEMA_ONLY,
-	MIGRATION_MODE_DUMP_ONLY,
+	MIGRATION_MODE_READ_ONLY,
 	MIGRATION_MODE_LOGICAL_REPLICATION
 } DatabaseMoveMode;
 
@@ -114,12 +112,18 @@ typedef struct DatabaseMove
 void _PG_init(void);
 
 static void MoveDatabase(DatabaseMove *moveDesc);
-static void DoDatabaseClone(DatabaseMove *moveDesc, MultiConnection *targetConn,
-							MultiConnection *targetProgressConn, char *migrationName);
+static void DoDatabaseClone(DatabaseMove *moveDesc,
+							MultiConnection *sourceDbConn,
+							MultiConnection *targetCloneConn,
+							MultiConnection *targetProgressConn,
+							char *migrationName);
+static void LockDatabaseConnections(char *databaseName, MultiConnection *connection,
+									bool sourceIsLocal);
 static void ExecuteDatabaseCommand(char *command, MultiConnection *conn, bool isLocal);
 static bool CheckDataCopyProgress(MultiConnection *targetProgressConn,
 								  char *sourceConnInfo, char *migrationName);
 static bool GetRemoteJsonb(MultiConnection *connection, char *command, Datum *jsonDatum);
+static void SetEndPosOnSourceDatabase(MultiConnection *sourceDbConn);
 
 
 PG_FUNCTION_INFO_V1(pgcopydb_database_move);
@@ -301,18 +305,17 @@ MoveDatabase(DatabaseMove *moveDesc)
 
 	/* TODO: don't open a connection just to get the URL */
 	connectionFlags = 0;
-	MultiConnection *sourceURLConn = GetNodeUserDatabaseConnection(connectionFlags,
-																   source->workerName,
-																   source->workerPort,
-																   CurrentUserName(),
-																   databaseName);
-	if (PQstatus(sourceURLConn->pgConn) != CONNECTION_OK)
+	MultiConnection *sourceDbConn = GetNodeUserDatabaseConnection(connectionFlags,
+																  source->workerName,
+																  source->workerPort,
+																  CurrentUserName(),
+																  databaseName);
+	if (PQstatus(sourceDbConn->pgConn) != CONNECTION_OK)
 	{
-		ReportConnectionError(sourceURLConn, ERROR);
+		ReportConnectionError(sourceDbConn, ERROR);
 	}
 
-	moveDesc->sourceConnectionInfo = GetConnectionString(sourceURLConn);
-	CloseConnection(sourceURLConn);
+	moveDesc->sourceConnectionInfo = GetConnectionString(sourceDbConn);
 
 	connectionFlags = 0;
 	MultiConnection *targetURLConn = GetNodeUserDatabaseConnection(connectionFlags,
@@ -336,17 +339,34 @@ MoveDatabase(DatabaseMove *moveDesc)
 
 	/* TODO: cleanup record for replication origin */
 
-	DoDatabaseClone(moveDesc, targetConn, targetProgressConn, migrationName);
+	DoDatabaseClone(moveDesc, sourceDbConn, targetConn, targetProgressConn,
+					migrationName);
 
-	CHECK_FOR_INTERRUPTS();
+	/*
+	 * In read-only mode, we do not pause during the pgcopydb, so do it
+	 * now.
+	 */
+	if (moveDesc->mode == MIGRATION_MODE_READ_ONLY)
+	{
+		/* TODO: unpause on failure! */
+		PauseDatabaseOnInboundPgBouncers(databaseName);
+	}
 
-	/* TODO: unpause on failure */
-
-	/* stop all database connections */
-	PauseDatabaseOnInboundPgBouncers(databaseName);
+	/* close our database connection, since it would prevent rename */
+	CloseConnection(sourceDbConn);
 
 	RemoteTransactionBegin(sourceConn);
 	RemoteTransactionBegin(targetConn);
+
+	/* make sure we disallow new connections */
+	LockDatabaseConnections(databaseName, sourceConn, sourceIsLocal);
+
+	/*
+	 * We (idempotently) pause again, mainly to make sure that the pgbouncer
+	 * did not crash in between the first pause and us locking the database.
+	 * In that case pausing again would fail.
+	 */
+	PauseDatabaseOnInboundPgBouncers(databaseName);
 
 	/* rename the old database on the source */
 	char *renameCommand = psprintf("ALTER DATABASE %s RENAME TO %s",
@@ -426,27 +446,32 @@ ExecuteDatabaseCommand(char *command, MultiConnection *conn, bool isLocal)
  * DoDatabaseClone performs a pgcopydb clone between two remote databases.
  */
 static void
-DoDatabaseClone(DatabaseMove *moveDesc, MultiConnection *targetConn,
-				MultiConnection *targetProgressConn, char *migrationName)
+DoDatabaseClone(DatabaseMove *moveDesc,
+				MultiConnection *sourceDbConn,
+				MultiConnection *targetCloneConn,
+				MultiConnection *targetProgressConn,
+				char *migrationName)
 {
+	bool useFollow = moveDesc->mode == MIGRATION_MODE_LOGICAL_REPLICATION;
+
 	/* kick off the pgcopydb clone */
 	StringInfo remoteCloneCommand = makeStringInfo();
 	appendStringInfo(remoteCloneCommand,
 					 "SELECT pg_catalog.pgcopydb_clone(%s,%s,%s,%s)",
 					 quote_literal_cstr(moveDesc->sourceConnectionInfo),
 					 quote_literal_cstr(moveDesc->targetConnectionInfo),
-					 "false", /* follow */
+					 useFollow ? "true" : "false",
 					 quote_literal_cstr(migrationName));
 
-	int querySent = SendRemoteCommand(targetConn, remoteCloneCommand->data);
+	int querySent = SendRemoteCommand(targetCloneConn, remoteCloneCommand->data);
 	if (querySent == 0)
 	{
-		ReportConnectionError(targetConn, ERROR);
+		ReportConnectionError(targetCloneConn, ERROR);
 	}
 
 	TimestampTz lastProgressCheckTime = GetCurrentTimestamp();
 
-	int targetConnSocket = PQsocket(targetConn->pgConn);
+	int targetConnSocket = PQsocket(targetCloneConn->pgConn);
 	bool isDataDone = false;
 
 	/*
@@ -461,7 +486,7 @@ DoDatabaseClone(DatabaseMove *moveDesc, MultiConnection *targetConn,
 		int waitFlags = WL_POSTMASTER_DEATH | WL_LATCH_SET;
 
 		/* try to send all pending data */
-		int sendStatus = PQflush(targetConn->pgConn);
+		int sendStatus = PQflush(targetCloneConn->pgConn);
 
 		/* if sending failed, there's nothing more we can do */
 		if (sendStatus == -1)
@@ -473,13 +498,13 @@ DoDatabaseClone(DatabaseMove *moveDesc, MultiConnection *targetConn,
 			waitFlags |= WL_SOCKET_WRITEABLE;
 		}
 
-		if (PQconsumeInput(targetConn->pgConn) == 0)
+		if (PQconsumeInput(targetCloneConn->pgConn) == 0)
 		{
 			ereport(ERROR, (errmsg("lost connection to node %s:%d",
-								   targetConn->hostname, targetConn->port)));
+								   targetCloneConn->hostname, targetCloneConn->port)));
 		}
 
-		if (PQisBusy(targetConn->pgConn))
+		if (PQisBusy(targetCloneConn->pgConn))
 		{
 			waitFlags |= WL_SOCKET_READABLE;
 		}
@@ -489,7 +514,9 @@ DoDatabaseClone(DatabaseMove *moveDesc, MultiConnection *targetConn,
 			break;
 		}
 
-		long timeout = 1000; /* ms */
+		waitFlags |= WL_TIMEOUT;
+		long timeout = 2000; /* ms */
+
 		int rc = WaitLatchOrSocket(MyLatch, waitFlags, targetConnSocket, timeout,
 								   PG_WAIT_EXTENSION);
 		if (rc & WL_POSTMASTER_DEATH)
@@ -512,27 +539,66 @@ DoDatabaseClone(DatabaseMove *moveDesc, MultiConnection *targetConn,
 			isDataDone = CheckDataCopyProgress(targetProgressConn,
 											   moveDesc->sourceConnectionInfo,
 											   migrationName);
+			if (isDataDone && useFollow)
+			{
+				/*
+				 * Data copy is completed, now pause traffic.
+				 *
+				 * TODO: unpause on failure!
+				 * TODO: wait for catch up
+				 */
+				PauseDatabaseOnInboundPgBouncers(moveDesc->databaseName);
+
+				/*
+				 * Set the endpos to the current WAL LSN, once pgcopydb
+				 * reaches this LSN we will exit this loop.
+				 */
+				SetEndPosOnSourceDatabase(sourceDbConn);
+			}
 
 			lastProgressCheckTime = currentTime;
 		}
 	}
 
-	if (PQstatus(targetConn->pgConn) == CONNECTION_BAD)
+	if (PQstatus(targetCloneConn->pgConn) == CONNECTION_BAD)
 	{
 		ereport(ERROR, (errmsg("lost connection to node %s:%d",
-							   targetConn->hostname, targetConn->port)));
+							   targetCloneConn->hostname, targetCloneConn->port)));
 	}
 
-	PGresult *result = PQgetResult(targetConn->pgConn);
+	PGresult *result = PQgetResult(targetCloneConn->pgConn);
 	if (!IsResponseOK(result))
 	{
-		ReportResultError(targetConn, result, ERROR);
+		ReportResultError(targetCloneConn, result, ERROR);
 	}
 
 	PQclear(result);
 
 	bool raiseErrors = true;
-	ClearResults(targetConn, raiseErrors);
+	ClearResults(targetCloneConn, raiseErrors);
+}
+
+
+/*
+ * LockDatabaseConnections locks the given database.
+ */
+static void
+LockDatabaseConnections(char *databaseName, MultiConnection *connection,
+						bool sourceIsLocal)
+{
+	char *lockCommand =
+		psprintf("SELECT pg_catalog.citus_database_lock(%s)",
+				 quote_literal_cstr(databaseName));
+
+	if (sourceIsLocal)
+	{
+		ExecuteQueryViaSPI(lockCommand, SPI_OK_SELECT);
+	}
+	else
+	{
+		ExecuteCriticalRemoteCommand(connection, lockCommand);
+	}
+
 }
 
 
@@ -655,4 +721,18 @@ GetRemoteJsonb(MultiConnection *connection, char *command, Datum *jsonDatum)
 	ClearResults(connection, raiseInterrupts);
 
 	return !isNull;
+}
+
+
+/*
+ * SetEndPosOnSourceDatabase updates the endpos in the pgcopydb.sentinel
+ * table to finalize a pgcopydb clone --follow.
+ */
+static void
+SetEndPosOnSourceDatabase(MultiConnection *sourceDbConn)
+{
+	char *updateCommand =
+		psprintf("update pgcopydb.sentinel set endpos = pg_current_wal_flush_lsn()");
+
+	ExecuteCriticalRemoteCommand(sourceDbConn, updateCommand);
 }
