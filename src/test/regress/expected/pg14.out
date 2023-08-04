@@ -1089,9 +1089,10 @@ SELECT * FROM J1_TBL JOIN J2_TBL USING (i) AS x WHERE J1_TBL.t = 'one' ORDER BY 
  1 | 4 | one | -1
 (1 row)
 
+\set VERBOSITY terse
 SELECT * FROM (J1_TBL JOIN J2_TBL USING (i)) AS x WHERE J1_TBL.t = 'one' ORDER BY 1,2,3,4;  -- error
-ERROR:  invalid reference to FROM-clause entry for table "j1_tbl"
-HINT:  There is an entry for table "j1_tbl", but it cannot be referenced from this part of the query.
+ERROR:  invalid reference to FROM-clause entry for table "j1_tbl" at character 57
+\set VERBOSITY default
 SELECT * FROM J1_TBL JOIN J2_TBL USING (i) AS x WHERE x.i = 1 ORDER BY 1,2,3,4;  -- ok
  i | j |  t  | k
 ---------------------------------------------------------------------
