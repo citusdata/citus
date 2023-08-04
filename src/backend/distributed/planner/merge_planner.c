@@ -57,6 +57,9 @@ static DeferredErrorMessage * DeferErrorIfRoutableMergeNotSupported(Query *query
 																	*
 																	plannerRestrictionContext,
 																	Oid targetRelationId);
+static bool MergeSourceHasRouterSelect(Query *query,
+									   PlannerRestrictionContext *
+									   plannerRestrictionContext);
 static DeferredErrorMessage * MergeQualAndTargetListFunctionsSupported(Oid
 																	   resultRelationId,
 																	   Query *query,
@@ -234,7 +237,7 @@ CreateNonPushableMergePlan(Oid targetRelationId, uint64 planId, Query *originalQ
 						   ParamListInfo boundParams)
 {
 	Query *mergeQuery = copyObject(originalQuery);
-	RangeTblEntry *sourceRte = ExtractMergeSourceRangeTableEntry(mergeQuery);
+	RangeTblEntry *sourceRte = ExtractMergeSourceRangeTableEntry(mergeQuery, false);
 	DistributedPlan *distributedPlan = CitusMakeNode(DistributedPlan);
 
 	ereport(DEBUG1, (errmsg("Creating MERGE repartition plan")));
@@ -959,7 +962,8 @@ DeferErrorIfTargetHasFalseClause(Oid targetRelationId,
 
 		List *baseRestrictionList = relationRestriction->relOptInfo->baserestrictinfo;
 		List *restrictClauseList = get_all_actual_clauses(baseRestrictionList);
-		if (ContainsFalseClause(restrictClauseList))
+		if (ContainsFalseClause(restrictClauseList) ||
+			JoinConditionIsOnFalse(relationRestriction->relOptInfo->joininfo))
 		{
 			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
 								 "Routing query is not possible with "
@@ -1047,22 +1051,41 @@ DeferErrorIfRoutableMergeNotSupported(Query *query, List *rangeTableList,
 							 "must be colocated", NULL, NULL);
 	}
 
-	DeferredErrorMessage *deferredError =
-		DeferErrorIfUnsupportedSubqueryPushdown(query,
-												plannerRestrictionContext);
-	if (deferredError)
-	{
-		ereport(DEBUG1, (errmsg("Sub-query is not pushable, try repartitioning")));
-		return deferredError;
-	}
+	DeferredErrorMessage *deferredError = NULL;
 
-	if (HasDangerousJoinUsing(query->rtable, (Node *) query->jointree))
+
+	/*
+	 * if the query goes to a single node ("router" in Citus' parlance),
+	 * we don't need to go through certain SQL support and colocation checks.
+	 *
+	 * For PG16+, this is required as some of the outer JOINs are converted to
+	 * "ON(true)" and filters are pushed down to the table scans. As
+	 * DeferErrorIfUnsupportedSubqueryPushdown rely on JOIN filters, it will fail to
+	 * detect the router case. However, we can still detect it by checking if
+	 * the query is a router query as the router query checks the filters on
+	 * the tables.
+	 */
+
+
+	if (!MergeSourceHasRouterSelect(query, plannerRestrictionContext))
 	{
-		ereport(DEBUG1, (errmsg(
-							 "Query has ambigious joins, merge is not pushable, try repartitioning")));
-		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-							 "a join with USING causes an internal naming "
-							 "conflict, use ON instead", NULL, NULL);
+		deferredError =
+			DeferErrorIfUnsupportedSubqueryPushdown(query,
+													plannerRestrictionContext);
+		if (deferredError)
+		{
+			ereport(DEBUG1, (errmsg("Sub-query is not pushable, try repartitioning")));
+			return deferredError;
+		}
+
+		if (HasDangerousJoinUsing(query->rtable, (Node *) query->jointree))
+		{
+			ereport(DEBUG1, (errmsg(
+								 "Query has ambigious joins, merge is not pushable, try repartitioning")));
+			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+								 "a join with USING causes an internal naming "
+								 "conflict, use ON instead", NULL, NULL);
+		}
 	}
 
 	deferredError = DeferErrorIfTargetHasFalseClause(targetRelationId,
@@ -1077,6 +1100,36 @@ DeferErrorIfRoutableMergeNotSupported(Query *query, List *rangeTableList,
 		return deferredError;
 	}
 	return NULL;
+}
+
+
+/*
+ * MergeSourceHasRouterSelect is a helper function that returns true of the source
+ * part of the merge query is a router query.
+ */
+static bool
+MergeSourceHasRouterSelect(Query *query,
+						   PlannerRestrictionContext *plannerRestrictionContext)
+{
+	Query *copiedQuery = copyObject(query);
+	RangeTblEntry *mergeSourceRte = ExtractMergeSourceRangeTableEntry(copiedQuery, true);
+
+	if (mergeSourceRte == NULL)
+	{
+		/*
+		 * We might potentially support this case in the future, but for now,
+		 * we don't support MERGE with JOIN in the source.
+		 */
+		return false;
+	}
+
+	ConvertSourceRTEIntoSubquery(copiedQuery, mergeSourceRte, plannerRestrictionContext);
+	Query *sourceQuery = mergeSourceRte->subquery;
+
+	DistributedPlan *distributedPlan = CreateRouterPlan(sourceQuery, sourceQuery,
+														plannerRestrictionContext);
+
+	return distributedPlan->planningError == NULL;
 }
 
 
@@ -1288,7 +1341,7 @@ SourceResultPartitionColumnIndex(Query *mergeQuery, List *sourceTargetList,
  * table or source query in USING clause.
  */
 RangeTblEntry *
-ExtractMergeSourceRangeTableEntry(Query *query)
+ExtractMergeSourceRangeTableEntry(Query *query, bool joinSourceOk)
 {
 	/* function is void for pre-15 versions of Postgres */
 	#if PG_VERSION_NUM < PG_VERSION_15
@@ -1301,7 +1354,10 @@ ExtractMergeSourceRangeTableEntry(Query *query)
 
 	List *fromList = query->jointree->fromlist;
 
-	/* We should have only one RTE(MergeStmt->sourceRelation) in the from-list */
+	/*
+	 * We should have only one RTE(MergeStmt->sourceRelation) in the from-list
+	 * unless Postgres community changes the representation of merge.
+	 */
 	if (list_length(fromList) != 1)
 	{
 		ereport(ERROR, (errmsg("Unexpected source list in MERGE sql USING clause")));
@@ -1316,11 +1372,17 @@ ExtractMergeSourceRangeTableEntry(Query *query)
 	 */
 	if (reference->rtindex == 0)
 	{
-		ereport(ERROR, (errmsg("Source is not an explicit query"),
-						errhint("Source query is a Join expression, "
-								"try converting into a query as SELECT * "
-								"FROM (..Join..)")));
+		if (!joinSourceOk)
+		{
+			ereport(ERROR, (errmsg("Source is not an explicit query"),
+							errhint("Source query is a Join expression, "
+									"try converting into a query as SELECT * "
+									"FROM (..Join..)")));
+		}
+
+		return NULL;
 	}
+
 
 	Assert(reference->rtindex >= 1);
 	RangeTblEntry *subqueryRte = rt_fetch(reference->rtindex, query->rtable);
