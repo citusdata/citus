@@ -132,6 +132,19 @@ SELECT create_distributed_table('dist_type_table', 'a');
 SELECT undistribute_table('dist_type_table');
 
 -- test CREATE RULE with ON SELECT
+
+-- Note that PG16 removed logic for converting a table to a view
+-- That means it's not allowed in PG16 to do manual creation of
+-- an ON SELECT rule on a table to convert it into a view.
+-- Therefore, this test is only for PG version <= PG15
+-- Relevant PG commit:
+-- https://github.com/postgres/postgres/commit/b23cd185fd5410e5204683933f848d4583e34b35
+
+SHOW server_version \gset
+SELECT substring(:'server_version', '\d+')::int <= 15 AS server_version_le_15
+\gset
+\if :server_version_le_15
+
 CREATE TABLE rule_table_1 (a INT);
 CREATE TABLE rule_table_2 (a INT);
 SELECT create_distributed_table('rule_table_2', 'a');
@@ -142,6 +155,10 @@ CREATE RULE "_RETURN" AS ON SELECT TO rule_table_1 DO INSTEAD SELECT * FROM rule
 ALTER EXTENSION plpgsql ADD VIEW rule_table_1;
 
 SELECT undistribute_table('rule_table_2');
+
+ALTER EXTENSION plpgsql DROP VIEW rule_table_1;
+
+\endif
 
 -- test CREATE RULE without ON SELECT
 CREATE TABLE rule_table_3 (a INT);
@@ -155,7 +172,6 @@ ALTER EXTENSION plpgsql ADD TABLE rule_table_3;
 SELECT undistribute_table('rule_table_4');
 
 ALTER EXTENSION plpgsql DROP VIEW extension_view;
-ALTER EXTENSION plpgsql DROP VIEW rule_table_1;
 ALTER EXTENSION plpgsql DROP TABLE rule_table_3;
 
 DROP TABLE view_table CASCADE;
