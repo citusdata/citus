@@ -42,12 +42,8 @@ extern bool GeneratingSubplans(void);
 extern bool ContainsLocalTableDistributedTableJoin(List *rangeTableList);
 extern void ReplaceRTERelationWithRteSubquery(RangeTblEntry *rangeTableEntry,
 											  List *requiredAttrNumbers,
-#if PG_VERSION_NUM >= PG_VERSION_16
 											  RecursivePlanningContext *context,
 											  RTEPermissionInfo *perminfo);
-#else
-											  RecursivePlanningContext *context);
-#endif
 extern bool IsRecursivelyPlannableRelation(RangeTblEntry *rangeTableEntry);
 extern bool IsRelationLocalTableOrMatView(Oid relationId);
 extern bool ContainsReferencesToOuterQuery(Query *query);

@@ -898,14 +898,8 @@ RecursivelyPlanDistributedJoinNode(Node *node, Query *query,
 										  recursivePlanningContext, perminfo);
 #else
 		ReplaceRTERelationWithRteSubquery(distributedRte, requiredAttributes,
-										  recursivePlanningContext);
+										  recursivePlanningContext, NULL);
 #endif
-
-		/*
-		 * Note: we don't need to remove replaced rtes from query->rteperminfos to avoid
-		 * crash of Assert(bms_num_members(indexset) == list_length(rteperminfos));
-		 * because query->rteperminfos has already gone through ExecCheckPermissions
-		 */
 	}
 	else if (distributedRte->rtekind == RTE_SUBQUERY)
 	{
@@ -1769,17 +1763,11 @@ NodeContainsSubqueryReferencingOuterQuery(Node *node)
 void
 ReplaceRTERelationWithRteSubquery(RangeTblEntry *rangeTableEntry,
 								  List *requiredAttrNumbers,
-#if PG_VERSION_NUM >= PG_VERSION_16
 								  RecursivePlanningContext *context,
 								  RTEPermissionInfo *perminfo)
 {
 	Query *subquery = WrapRteRelationIntoSubquery(rangeTableEntry, requiredAttrNumbers,
 												  perminfo);
-#else
-								  RecursivePlanningContext *context)
-{
-	Query *subquery = WrapRteRelationIntoSubquery(rangeTableEntry, requiredAttrNumbers);
-#endif
 	List *outerQueryTargetList = CreateAllTargetListForRelation(rangeTableEntry->relid,
 																requiredAttrNumbers);
 
@@ -1805,12 +1793,6 @@ ReplaceRTERelationWithRteSubquery(RangeTblEntry *rangeTableEntry,
 	/* replace the function with the constructed subquery */
 	rangeTableEntry->rtekind = RTE_SUBQUERY;
 #if PG_VERSION_NUM >= PG_VERSION_16
-
-	/*
-	 * subquery already contains a copy of this rangeTableEntry's permission info
-	 * Not we have replaced with the constructed subquery so we should
-	 * set perminfoindex to 0.
-	 */
 	rangeTableEntry->perminfoindex = 0;
 #endif
 	rangeTableEntry->subquery = subquery;

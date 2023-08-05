@@ -91,7 +91,7 @@ CreateColocatedJoinChecker(Query *subquery, PlannerRestrictionContext *restricti
 		}
 		anchorSubquery = WrapRteRelationIntoSubquery(anchorRangeTblEntry, NIL, perminfo);
 #else
-		anchorSubquery = WrapRteRelationIntoSubquery(anchorRangeTblEntry, NIL);
+		anchorSubquery = WrapRteRelationIntoSubquery(anchorRangeTblEntry, NIL, NULL);
 #endif
 	}
 	else if (anchorRangeTblEntry->rtekind == RTE_SUBQUERY)
@@ -276,12 +276,8 @@ SubqueryColocated(Query *subquery, ColocatedJoinChecker *checker)
  */
 Query *
 WrapRteRelationIntoSubquery(RangeTblEntry *rteRelation,
-#if PG_VERSION_NUM >= PG_VERSION_16
 							List *requiredAttributes,
 							RTEPermissionInfo *perminfo)
-#else
-							List * requiredAttributes)
-#endif
 {
 	Query *subquery = makeNode(Query);
 	RangeTblRef *newRangeTableRef = makeNode(RangeTblRef);

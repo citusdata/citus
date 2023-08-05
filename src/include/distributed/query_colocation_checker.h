@@ -35,12 +35,8 @@ extern ColocatedJoinChecker CreateColocatedJoinChecker(Query *subquery,
 													   restrictionContext);
 extern bool SubqueryColocated(Query *subquery, ColocatedJoinChecker *context);
 extern Query * WrapRteRelationIntoSubquery(RangeTblEntry *rteRelation,
-#if PG_VERSION_NUM >= PG_VERSION_16
 										   List *requiredAttributes,
 										   RTEPermissionInfo *perminfo);
-#else
-										   List *requiredAttributes);
-#endif
 extern List * CreateAllTargetListForRelation(Oid relationId, List *requiredAttributes);
 
 #endif /* QUERY_COLOCATION_CHECKER_H */

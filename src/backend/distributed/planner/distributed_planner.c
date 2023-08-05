@@ -1490,9 +1490,10 @@ FinalizeNonRouterPlan(PlannedStmt *localPlan, DistributedPlan *distributedPlan,
 	/*
 	 * Original range table list is concatenated to final plan's range table list
 	 * therefore all the perminfoindexes should be updated to their value
-	 * PLUS the length of final plan's perminfos.
+	 * PLUS the highest perminfoindex in finalPlan's perminfos, which is exactly
+	 * the list length.
 	 */
-	int list_length_final_permInfos = list_length(finalPlan->permInfos);
+	int finalPlan_highest_perminfoindex = list_length(finalPlan->permInfos);
 
 	ListCell *lc;
 	foreach(lc, localPlan->rtable)
@@ -1500,7 +1501,7 @@ FinalizeNonRouterPlan(PlannedStmt *localPlan, DistributedPlan *distributedPlan,
 		RangeTblEntry *rte = (RangeTblEntry *) lfirst(lc);
 		if (rte->perminfoindex != 0)
 		{
-			rte->perminfoindex = rte->perminfoindex + list_length_final_permInfos;
+			rte->perminfoindex = rte->perminfoindex + finalPlan_highest_perminfoindex;
 		}
 	}
 

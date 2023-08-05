@@ -180,12 +180,8 @@ static bool HasConstantFilterOnUniqueColumn(RangeTblEntry *rangeTableEntry,
 static ConversionCandidates * CreateConversionCandidates(PlannerRestrictionContext *
 														 plannerRestrictionContext,
 														 List *rangeTableList,
-#if PG_VERSION_NUM >= PG_VERSION_16
 														 int resultRTEIdentity,
 														 List *rteperminfos);
-#else
-														 int resultRTEIdentity);
-#endif
 static void AppendUniqueIndexColumnsToList(Form_pg_index indexForm, List **uniqueIndexes,
 										   int flags);
 static ConversionChoice GetConversionChoice(ConversionCandidates *
@@ -223,7 +219,7 @@ RecursivelyPlanLocalTableJoins(Query *query,
 #if PG_VERSION_NUM >= PG_VERSION_16
 								   rangeTableList, resultRTEIdentity, rteperminfos);
 #else
-								   rangeTableList, resultRTEIdentity);
+								   rangeTableList, resultRTEIdentity, NIL);
 #endif
 
 	ConversionChoice conversionChoise =
@@ -232,12 +228,6 @@ RecursivelyPlanLocalTableJoins(Query *query,
 
 	List *rteListToConvert = RTEListToConvert(conversionCandidates, conversionChoise);
 	ConvertRTEsToSubquery(rteListToConvert, context);
-
-	/*
-	 * Note: we don't need to remove converted rtes from query->rteperminfos to avoid
-	 * crash of Assert(bms_num_members(indexset) == list_length(rteperminfos));
-	 * because query->rteperminfos has already gone through ExecCheckPermissions
-	 */
 }
 
 
@@ -349,7 +339,7 @@ ConvertRTEsToSubquery(List *rangeTableEntryDetailsList, RecursivePlanningContext
 										  requiredAttributeNumbers, context,
 										  rangeTableEntryDetails->perminfo);
 #else
-										  requiredAttributeNumbers, context);
+										  requiredAttributeNumbers, context, NULL);
 #endif
 	}
 }
@@ -558,12 +548,8 @@ RequiredAttrNumbersForRelationInternal(Query *queryToProcess, int rteIndex)
 static ConversionCandidates *
 CreateConversionCandidates(PlannerRestrictionContext *plannerRestrictionContext,
 						   List *rangeTableList,
-#if PG_VERSION_NUM >= PG_VERSION_16
 						   int resultRTEIdentity,
 						   List *rteperminfos)
-#else
-						   int resultRTEIdentity)
-#endif
 {
 	ConversionCandidates *conversionCandidates =
 		palloc0(sizeof(ConversionCandidates));

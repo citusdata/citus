@@ -144,6 +144,9 @@ object_aclcheck(Oid classid, Oid objectid, Oid roleid, AclMode mode)
 
 typedef bool TU_UpdateIndexes;
 
+/* dummy definition - variable never used but always passed as NULL/NIL */
+typedef RangeTblEntry RTEPermissionInfo;
+
 #endif
 
 #if PG_VERSION_NUM >= PG_VERSION_15

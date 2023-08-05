@@ -835,13 +835,13 @@ ConvertRelationRTEIntoSubquery(Query *mergeQuery, RangeTblEntry *sourceRte,
 
 #if PG_VERSION_NUM >= PG_VERSION_16
 	sourceResultsQuery->rteperminfos = NIL;
-	if (newRangeTableEntry->perminfoindex)
+	if (sourceRte->perminfoindex)
 	{
 		/* create permission info for newRangeTableEntry */
 		RTEPermissionInfo *perminfo = getRTEPermissionInfo(mergeQuery->rteperminfos,
-														   newRangeTableEntry);
+														   sourceRte);
 
-		/* update the subquery's rteperminfos accordingly */
+		/* update the sourceResultsQuery's rteperminfos accordingly */
 		newRangeTableEntry->perminfoindex = 1;
 		sourceResultsQuery->rteperminfos = list_make1(perminfo);
 	}
@@ -874,12 +874,6 @@ ConvertRelationRTEIntoSubquery(Query *mergeQuery, RangeTblEntry *sourceRte,
 	sourceRte->rtekind = RTE_SUBQUERY;
 #if PG_VERSION_NUM >= PG_VERSION_16
 	sourceRte->perminfoindex = 0;
-
-	/*
-	 * Note: we don't need to remove replaced sourceRte from mergeQuery->rteperminfos to avoid
-	 * crash of Assert(bms_num_members(indexset) == list_length(rteperminfos));
-	 * because mergeQuery->rteperminfos has already gone through ExecCheckPermissions
-	 */
 #endif
 	sourceRte->subquery = sourceResultsQuery;
 	sourceRte->inh = false;
