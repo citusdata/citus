@@ -23,10 +23,7 @@
 #include "commands/dbcommands.h"
 #include "utils/formatting.h"
 
-
-
-
-// define a constant for pg_class which has value 1259
+/* define a constant for pg_class which has value 1259 */
 #define PG_CLASS_ID_PG_CLASS 1259
 #define PG_CLASS_ID_PG_DATABASE 1262
 
@@ -35,14 +32,14 @@ static void DeparsePrivileges(GrantStmt *grantStmt, StringInfoData privsString);
 static void DeparseGrantees(GrantStmt *grantStmt, StringInfoData granteesString);
 static void BuildGrantStmt(StringInfoData ddlString, GrantStmt *grantStmt, StringInfoData targetString,
 						   StringInfoData privsString, StringInfoData granteesString);
-static void PrepareDDLJobsForTables(List *tableIdList, GrantStmt *grantStmt, List *ddlJobs, StringInfoData ddlString,
+static void PrepareDDLJobsForTables(List *tableIdList, GrantStmt *grantStmt,
+									List *ddlJobs, StringInfoData ddlString,
 									StringInfoData privsString, StringInfoData granteesString, StringInfoData targetString);
-static void PrepareDDLJobsForDatabases(List *databaseIdLists, GrantStmt *grantStmt, List *ddlJobs, StringInfoData ddlString,
+static void PrepareDDLJobsForDatabases(List *databaseIdLists, GrantStmt *grantStmt,
+									   List *ddlJobs, StringInfoData ddlString,
 									   StringInfoData privsString, StringInfoData granteesString, StringInfoData targetString);
 static List *CollectGrantDatabaseNameList(GrantStmt *grantStmt);
 static List *CollectGrantTableIdList(GrantStmt *grantStmt);
-
-
 
 enum SupportedGrantTemplates
 {
@@ -59,13 +56,13 @@ const char *SupportedGrantTemplates[] = {
 	"GRANT %1$s ON DATABASE %2$s TO %3$s %4$s",
 	"REVOKE %4$s %1$s ON DATABASE %2$s FROM %3$s"};
 
-static void DeparsePrivileges(GrantStmt *grantStmt, StringInfoData privsString)
+static void
+DeparsePrivileges(GrantStmt *grantStmt, StringInfoData privsString)
 {
-
 	bool isFirst = true;
+
 	/* deparse the privileges */
 	if (grantStmt->privileges == NIL)
-
 	{
 		appendStringInfo(&privsString, "ALL");
 	}
@@ -98,7 +95,8 @@ static void DeparsePrivileges(GrantStmt *grantStmt, StringInfoData privsString)
 	}
 }
 
-static void DeparseGrantees(GrantStmt *grantStmt, StringInfoData granteesString)
+static void
+DeparseGrantees(GrantStmt *grantStmt, StringInfoData granteesString)
 {
 	bool isFirst = true;
 	ListCell *granteeCell = NULL;
@@ -117,11 +115,10 @@ static void DeparseGrantees(GrantStmt *grantStmt, StringInfoData granteesString)
 	}
 }
 
-static void BuildGrantStmt(StringInfoData ddlString, GrantStmt *grantStmt, StringInfoData targetString, StringInfoData privsString,
-					StringInfoData granteesString)
+static void
+BuildGrantStmt(StringInfoData ddlString, GrantStmt *grantStmt, StringInfoData targetString, StringInfoData privsString,
+			   StringInfoData granteesString)
 {
-	initStringInfo(&ddlString);
-
 	const char *grantOption = "";
 
 	const char *template = "";
@@ -129,15 +126,22 @@ static void BuildGrantStmt(StringInfoData ddlString, GrantStmt *grantStmt, Strin
 	switch (grantStmt->objtype)
 	{
 	case OBJECT_DATABASE:
+	{
 		template = grantStmt->is_grant ? SupportedGrantTemplates[GRANT_DATABASE] : SupportedGrantTemplates[REVOKE_DATABASE];
 		break;
+	}
+
 	case OBJECT_TABLE:
+	{
 		template = grantStmt->is_grant ? SupportedGrantTemplates[GRANT_TABLE] : SupportedGrantTemplates[REVOKE_TABLE];
 		break;
+	}
+
 	default:
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("grant/revoke only supported for DATABASE and TABLE list is currently "
-							   "unsupported")));
+						errmsg(
+							"grant/revoke only supported for DATABASE and TABLE list is currently "
+							"unsupported")));
 	}
 
 	grantOption = grantStmt->grant_option ? (grantStmt->is_grant ? "WITH GRANT OPTION" : "GRANT OPTION FOR ") : "";
@@ -147,8 +151,11 @@ static void BuildGrantStmt(StringInfoData ddlString, GrantStmt *grantStmt, Strin
 					 grantOption);
 }
 
-static void PrepareDDLJobsForTables(List *tableIdList, GrantStmt *grantStmt, List *ddlJobs, StringInfoData ddlString,
-							 StringInfoData privsString, StringInfoData granteesString, StringInfoData targetString)
+static void
+PrepareDDLJobsForTables(List *tableIdList, GrantStmt *grantStmt, List *ddlJobs,
+						StringInfoData ddlString,
+						StringInfoData privsString, StringInfoData granteesString,
+						StringInfoData targetString)
 {
 	ListCell *tableListCell = NULL;
 	foreach (tableListCell, tableIdList)
@@ -179,10 +186,12 @@ static void PrepareDDLJobsForTables(List *tableIdList, GrantStmt *grantStmt, Lis
 	}
 }
 
-static void PrepareDDLJobsForDatabases(List *databaseIdLists, GrantStmt *grantStmt, List *ddlJobs, StringInfoData ddlString,
-								StringInfoData privsString, StringInfoData granteesString, StringInfoData targetString)
+static void
+PrepareDDLJobsForDatabases(List *databaseIdLists, GrantStmt *grantStmt, List *ddlJobs,
+						   StringInfoData ddlString,
+						   StringInfoData privsString, StringInfoData granteesString,
+						   StringInfoData targetString)
 {
-
 	ListCell *databaseListCell = NULL;
 	foreach (databaseListCell, databaseIdLists)
 	{
@@ -233,21 +242,27 @@ PreprocessGrantStmt(Node *node, const char *queryString,
 	initStringInfo(&targetString);
 	initStringInfo(&ddlString);
 
-
 	List *objectList = NIL;
 
 	switch (grantStmt->objtype)
 	{
 	case OBJECT_DATABASE:
+	{
 		objectList = CollectGrantDatabaseNameList(grantStmt);
 		break;
+	}
+
 	case OBJECT_TABLE:
+	{
 		objectList = CollectGrantTableIdList(grantStmt);
 		break;
+	}
+
 	default:
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("grant/revoke only supported for DATABASE and TABLE list is currently "
-							   "unsupported")));
+						errmsg(
+							"grant/revoke only supported for DATABASE and TABLE list is currently "
+							"unsupported")));
 	}
 
 	/* nothing to do if there is no distributed table in the grant list */
@@ -263,7 +278,7 @@ PreprocessGrantStmt(Node *node, const char *queryString,
 	/* deparse the grantees */
 	DeparseGrantees(grantStmt, granteesString);
 
-	BuildGrantStmt(ddlString, grantStmt, targetString, privsString, granteesString);
+
 
 	/*
 	 * Deparse the target objects, and issue the deparsed statements to
@@ -272,11 +287,13 @@ PreprocessGrantStmt(Node *node, const char *queryString,
 	 */
 	if (grantStmt->objtype == OBJECT_DATABASE)
 	{
-		PrepareDDLJobsForDatabases(objectList, grantStmt, ddlJobs, ddlString, privsString, granteesString, targetString);
+		PrepareDDLJobsForDatabases(objectList, grantStmt, ddlJobs, ddlString, privsString,
+								   granteesString, targetString);
 	}
 	else
 	{
-		PrepareDDLJobsForTables(objectList, grantStmt, ddlJobs, ddlString, privsString, granteesString, targetString);
+		PrepareDDLJobsForTables(objectList, grantStmt, ddlJobs, ddlString, privsString,
+								granteesString, targetString);
 	}
 
 	return ddlJobs;
@@ -304,7 +321,7 @@ CollectGrantDatabaseNameList(GrantStmt *grantStmt)
 					(errcode(ERRCODE_UNDEFINED_DATABASE),
 					 errmsg("database \"%s\" does not exist", databaseName)));
 		}
-		grantDatabaseList = lappend(grantDatabaseList, databaseName);
+		grantDatabaseList = lappend_oid(grantDatabaseList, databaseOid);
 	}
 
 	return grantDatabaseList;
