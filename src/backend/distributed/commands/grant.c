@@ -19,58 +19,53 @@
 #include "lib/stringinfo.h"
 #include "nodes/parsenodes.h"
 #include "utils/lsyscache.h"
+#include "access/heapam.h"
+#include "commands/dbcommands.h"
+#include "utils/formatting.h"
 
+
+
+
+// define a constant for pg_class which has value 1259
+#define PG_CLASS_ID_PG_CLASS 1259
+#define PG_CLASS_ID_PG_DATABASE 1262
 
 /* Local functions forward declarations for helper functions */
-static List * CollectGrantTableIdList(GrantStmt *grantStmt);
+static void DeparsePrivileges(GrantStmt *grantStmt, StringInfoData privsString);
+static void DeparseGrantees(GrantStmt *grantStmt, StringInfoData granteesString);
+static void BuildGrantStmt(StringInfoData ddlString, GrantStmt *grantStmt, StringInfoData targetString,
+						   StringInfoData privsString, StringInfoData granteesString);
+static void PrepareDDLJobsForTables(List *tableIdList, GrantStmt *grantStmt, List *ddlJobs, StringInfoData ddlString,
+									StringInfoData privsString, StringInfoData granteesString, StringInfoData targetString);
+static void PrepareDDLJobsForDatabases(List *databaseIdLists, GrantStmt *grantStmt, List *ddlJobs, StringInfoData ddlString,
+									   StringInfoData privsString, StringInfoData granteesString, StringInfoData targetString);
+static List *CollectGrantDatabaseNameList(GrantStmt *grantStmt);
+static List *CollectGrantTableIdList(GrantStmt *grantStmt);
 
 
-/*
- * PreprocessGrantStmt determines whether a given GRANT/REVOKE statement involves
- * a distributed table. If so, it creates DDLJobs to encapsulate information
- * needed during the worker node portion of DDL execution before returning the
- * DDLJobs in a List. If no distributed table is involved, this returns NIL.
- *
- * NB: So far column level privileges are not supported.
- */
-List *
-PreprocessGrantStmt(Node *node, const char *queryString,
-					ProcessUtilityContext processUtilityContext)
+
+enum SupportedGrantTemplates
 {
-	GrantStmt *grantStmt = castNode(GrantStmt, node);
-	StringInfoData privsString;
-	StringInfoData granteesString;
-	StringInfoData targetString;
-	StringInfoData ddlString;
-	ListCell *granteeCell = NULL;
-	ListCell *tableListCell = NULL;
+	GRANT_TABLE,
+	REVOKE_TABLE,
+	GRANT_DATABASE,
+	REVOKE_DATABASE,
+	NUM_SUPPORTED_GRANT_TEMPLATES
+};
+
+const char *SupportedGrantTemplates[] = {
+	"GRANT %1$s ON %2$s TO %3$s %4$s",
+	"REVOKE %4$s %1$s ON %2$s FROM %3$s",
+	"GRANT %1$s ON DATABASE %2$s TO %3$s %4$s",
+	"REVOKE %4$s %1$s ON DATABASE %2$s FROM %3$s"};
+
+static void DeparsePrivileges(GrantStmt *grantStmt, StringInfoData privsString)
+{
+
 	bool isFirst = true;
-	List *ddlJobs = NIL;
-
-	initStringInfo(&privsString);
-	initStringInfo(&granteesString);
-	initStringInfo(&targetString);
-	initStringInfo(&ddlString);
-
-	/*
-	 * So far only table level grants are supported. Most other types of
-	 * grants aren't interesting anyway.
-	 */
-	if (grantStmt->objtype != OBJECT_TABLE)
-	{
-		return NIL;
-	}
-
-	List *tableIdList = CollectGrantTableIdList(grantStmt);
-
-	/* nothing to do if there is no distributed table in the grant list */
-	if (tableIdList == NIL)
-	{
-		return NIL;
-	}
-
 	/* deparse the privileges */
 	if (grantStmt->privileges == NIL)
+
 	{
 		appendStringInfo(&privsString, "ALL");
 	}
@@ -79,7 +74,7 @@ PreprocessGrantStmt(Node *node, const char *queryString,
 		ListCell *privilegeCell = NULL;
 
 		isFirst = true;
-		foreach(privilegeCell, grantStmt->privileges)
+		foreach (privilegeCell, grantStmt->privileges)
 		{
 			AccessPriv *priv = lfirst(privilegeCell);
 
@@ -101,10 +96,14 @@ PreprocessGrantStmt(Node *node, const char *queryString,
 			appendStringInfo(&privsString, "%s", priv->priv_name);
 		}
 	}
+}
 
-	/* deparse the grantees */
-	isFirst = true;
-	foreach(granteeCell, grantStmt->grantees)
+static void DeparseGrantees(GrantStmt *grantStmt, StringInfoData granteesString)
+{
+	bool isFirst = true;
+	ListCell *granteeCell = NULL;
+
+	foreach (granteeCell, grantStmt->grantees)
 	{
 		RoleSpec *spec = lfirst(granteeCell);
 
@@ -116,46 +115,58 @@ PreprocessGrantStmt(Node *node, const char *queryString,
 
 		appendStringInfoString(&granteesString, RoleSpecString(spec, true));
 	}
+}
 
-	/*
-	 * Deparse the target objects, and issue the deparsed statements to
-	 * workers, if applicable. That's so we easily can replicate statements
-	 * only to distributed relations.
-	 */
-	isFirst = true;
-	foreach(tableListCell, tableIdList)
+static void BuildGrantStmt(StringInfoData ddlString, GrantStmt *grantStmt, StringInfoData targetString, StringInfoData privsString,
+					StringInfoData granteesString)
+{
+	initStringInfo(&ddlString);
+
+	const char *grantOption = "";
+
+	const char *template = "";
+
+	switch (grantStmt->objtype)
+	{
+	case OBJECT_DATABASE:
+		template = grantStmt->is_grant ? SupportedGrantTemplates[GRANT_DATABASE] : SupportedGrantTemplates[REVOKE_DATABASE];
+		break;
+	case OBJECT_TABLE:
+		template = grantStmt->is_grant ? SupportedGrantTemplates[GRANT_TABLE] : SupportedGrantTemplates[REVOKE_TABLE];
+		break;
+	default:
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("grant/revoke only supported for DATABASE and TABLE list is currently "
+							   "unsupported")));
+	}
+
+	grantOption = grantStmt->grant_option ? (grantStmt->is_grant ? "WITH GRANT OPTION" : "GRANT OPTION FOR ") : "";
+
+	appendStringInfo(&ddlString, template,
+					 privsString.data, targetString.data, granteesString.data,
+					 grantOption);
+}
+
+static void PrepareDDLJobsForTables(List *tableIdList, GrantStmt *grantStmt, List *ddlJobs, StringInfoData ddlString,
+							 StringInfoData privsString, StringInfoData granteesString, StringInfoData targetString)
+{
+	ListCell *tableListCell = NULL;
+	foreach (tableListCell, tableIdList)
 	{
 		Oid relationId = lfirst_oid(tableListCell);
-		const char *grantOption = "";
 
 		resetStringInfo(&targetString);
 		appendStringInfo(&targetString, "%s", generate_relation_name(relationId, NIL));
 
-		if (grantStmt->is_grant)
-		{
-			if (grantStmt->grant_option)
-			{
-				grantOption = " WITH GRANT OPTION";
-			}
-
-			appendStringInfo(&ddlString, "GRANT %s ON %s TO %s%s",
-							 privsString.data, targetString.data, granteesString.data,
-							 grantOption);
-		}
-		else
-		{
-			if (grantStmt->grant_option)
-			{
-				grantOption = "GRANT OPTION FOR ";
-			}
-
-			appendStringInfo(&ddlString, "REVOKE %s%s ON %s FROM %s",
-							 grantOption, privsString.data, targetString.data,
-							 granteesString.data);
-		}
+		BuildGrantStmt(ddlString, grantStmt, targetString, privsString, granteesString);
 
 		DDLJob *ddlJob = palloc0(sizeof(DDLJob));
-		ObjectAddressSet(ddlJob->targetObjectAddress, RelationRelationId, relationId);
+		do
+		{
+			(ddlJob->targetObjectAddress).classId = (PG_CLASS_ID_PG_CLASS);
+			(ddlJob->targetObjectAddress).objectId = (relationId);
+			(ddlJob->targetObjectAddress).objectSubId = (0);
+		} while (0);
 		ddlJob->metadataSyncCommand = pstrdup(ddlString.data);
 		ddlJob->taskList = NIL;
 		if (IsCitusTable(relationId))
@@ -166,10 +177,138 @@ PreprocessGrantStmt(Node *node, const char *queryString,
 
 		resetStringInfo(&ddlString);
 	}
+}
+
+static void PrepareDDLJobsForDatabases(List *databaseIdLists, GrantStmt *grantStmt, List *ddlJobs, StringInfoData ddlString,
+								StringInfoData privsString, StringInfoData granteesString, StringInfoData targetString)
+{
+
+	ListCell *databaseListCell = NULL;
+	foreach (databaseListCell, databaseIdLists)
+	{
+		Oid relationId = lfirst_oid(databaseListCell);
+
+		resetStringInfo(&targetString);
+		appendStringInfo(&targetString, "%s", get_database_name(relationId));
+
+		BuildGrantStmt(ddlString, grantStmt, targetString, privsString, granteesString);
+
+		DDLJob *ddlJob = palloc0(sizeof(DDLJob));
+		do
+		{
+			(ddlJob->targetObjectAddress).classId = (PG_CLASS_ID_PG_DATABASE);
+			(ddlJob->targetObjectAddress).objectId = (relationId);
+			(ddlJob->targetObjectAddress).objectSubId = (0);
+		} while (0);
+		ddlJob->metadataSyncCommand = pstrdup(ddlString.data);
+		ddlJob->taskList = NIL;
+
+		ddlJobs = lappend(ddlJobs, ddlJob);
+
+		resetStringInfo(&ddlString);
+	}
+}
+
+/*
+ * PreprocessGrantStmt determines whether a given GRANT/REVOKE statement involves
+ * a distributed table. If so, it creates DDLJobs to encapsulate information
+ * needed during the worker node portion of DDL execution before returning the
+ * DDLJobs in a List. If no distributed table is involved, this returns NIL.
+ *
+ * NB: So far column level privileges are not supported.
+ */
+List *
+PreprocessGrantStmt(Node *node, const char *queryString,
+					ProcessUtilityContext processUtilityContext)
+{
+	GrantStmt *grantStmt = castNode(GrantStmt, node);
+	StringInfoData privsString;
+	StringInfoData granteesString;
+	StringInfoData targetString;
+	StringInfoData ddlString;
+	List *ddlJobs = NIL;
+
+	initStringInfo(&privsString);
+	initStringInfo(&granteesString);
+	initStringInfo(&targetString);
+	initStringInfo(&ddlString);
+
+
+	List *objectList = NIL;
+
+	switch (grantStmt->objtype)
+	{
+	case OBJECT_DATABASE:
+		objectList = CollectGrantDatabaseNameList(grantStmt);
+		break;
+	case OBJECT_TABLE:
+		objectList = CollectGrantTableIdList(grantStmt);
+		break;
+	default:
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("grant/revoke only supported for DATABASE and TABLE list is currently "
+							   "unsupported")));
+	}
+
+	/* nothing to do if there is no distributed table in the grant list */
+	if (objectList == NIL)
+	{
+		ereport(ERROR, (errmsg("objectList == NIL")));
+		return NIL;
+	}
+
+	/* deparse the privileges */
+	DeparsePrivileges(grantStmt, privsString);
+
+	/* deparse the grantees */
+	DeparseGrantees(grantStmt, granteesString);
+
+	BuildGrantStmt(ddlString, grantStmt, targetString, privsString, granteesString);
+
+	/*
+	 * Deparse the target objects, and issue the deparsed statements to
+	 * workers, if applicable. That's so we easily can replicate statements
+	 * only to distributed relations.
+	 */
+	if (grantStmt->objtype == OBJECT_DATABASE)
+	{
+		PrepareDDLJobsForDatabases(objectList, grantStmt, ddlJobs, ddlString, privsString, granteesString, targetString);
+	}
+	else
+	{
+		PrepareDDLJobsForTables(objectList, grantStmt, ddlJobs, ddlString, privsString, granteesString, targetString);
+	}
 
 	return ddlJobs;
 }
 
+static List *
+CollectGrantDatabaseNameList(GrantStmt *grantStmt)
+{
+	List *grantDatabaseList = NIL;
+
+	if (grantStmt->objtype != OBJECT_DATABASE)
+	{
+		return NIL;
+	}
+
+	ListCell *objectCell = NULL;
+	foreach (objectCell, grantStmt->objects)
+	{
+		char *databaseName = strVal(lfirst(objectCell));
+		bool missing_ok = false;
+		Oid databaseOid = get_database_oid(databaseName, missing_ok);
+		if (databaseOid == InvalidOid)
+		{
+			ereport(ERROR,
+					(errcode(ERRCODE_UNDEFINED_DATABASE),
+					 errmsg("database \"%s\" does not exist", databaseName)));
+		}
+		grantDatabaseList = lappend(grantDatabaseList, databaseName);
+	}
+
+	return grantDatabaseList;
+}
 
 /*
  *  CollectGrantTableIdList determines and returns a list of distributed table
@@ -189,7 +328,7 @@ CollectGrantTableIdList(GrantStmt *grantStmt)
 	bool grantOnTableCommand = (grantStmt->targtype == ACL_TARGET_OBJECT &&
 								grantStmt->objtype == OBJECT_TABLE);
 	bool grantAllTablesOnSchemaCommand = (grantStmt->targtype ==
-										  ACL_TARGET_ALL_IN_SCHEMA &&
+											  ACL_TARGET_ALL_IN_SCHEMA &&
 										  grantStmt->objtype == OBJECT_TABLE);
 
 	/* we are only interested in table level grants */
@@ -205,7 +344,7 @@ CollectGrantTableIdList(GrantStmt *grantStmt)
 		List *namespaceOidList = NIL;
 
 		ListCell *objectCell = NULL;
-		foreach(objectCell, grantStmt->objects)
+		foreach (objectCell, grantStmt->objects)
 		{
 			char *nspname = strVal(lfirst(objectCell));
 			bool missing_ok = false;
@@ -214,7 +353,7 @@ CollectGrantTableIdList(GrantStmt *grantStmt)
 			namespaceOidList = list_append_unique_oid(namespaceOidList, namespaceOid);
 		}
 
-		foreach(citusTableIdCell, citusTableIdList)
+		foreach (citusTableIdCell, citusTableIdList)
 		{
 			Oid relationId = lfirst_oid(citusTableIdCell);
 			Oid namespaceOid = get_rel_namespace(relationId);
@@ -227,9 +366,9 @@ CollectGrantTableIdList(GrantStmt *grantStmt)
 	else
 	{
 		ListCell *objectCell = NULL;
-		foreach(objectCell, grantStmt->objects)
+		foreach (objectCell, grantStmt->objects)
 		{
-			RangeVar *relvar = (RangeVar *) lfirst(objectCell);
+			RangeVar *relvar = (RangeVar *)lfirst(objectCell);
 			Oid relationId = RangeVarGetRelid(relvar, NoLock, false);
 			if (IsCitusTable(relationId))
 			{
