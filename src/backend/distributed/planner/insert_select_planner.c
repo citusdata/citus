@@ -901,15 +901,7 @@ RouterModifyTaskForShardInterval(Query *originalQuery,
 			continue;
 		}
 
-
-		/*
-		 * passing NULL for plannerInfo will be problematic if we have placeholder
-		 * vars. However, it won't be the case here because we are building
-		 * the expression from shard intervals which don't have placeholder vars.
-		 * Note that this is only the case with PG14 as the parameter doesn't exist
-		 * prior to that.
-		 */
-		shardRestrictionList = make_simple_restrictinfo(NULL,
+		shardRestrictionList = make_simple_restrictinfo(restriction->plannerInfo,
 														(Expr *) shardOpExpressions);
 		extendedBaseRestrictInfo = lappend(extendedBaseRestrictInfo,
 										   shardRestrictionList);

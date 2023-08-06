@@ -1530,7 +1530,23 @@ CreateSubscriptions(MultiConnection *sourceConnection,
 		appendStringInfo(createSubscriptionCommand,
 						 "CREATE SUBSCRIPTION %s CONNECTION %s PUBLICATION %s "
 						 "WITH (citus_use_authinfo=true, create_slot=false, "
+#if PG_VERSION_NUM >= PG_VERSION_16
+
+		                 /*
+		                  * password_required specifies whether connections to the publisher
+		                  * made as a result of this subscription must use password authentication.
+		                  * However, this setting is ignored when the subscription is owned
+		                  * by a superuser.
+		                  * Given that this command is executed below with superuser
+		                  * ExecuteCriticalRemoteCommand(target->superuserConnection,
+		                  *                              createSubscriptionCommand->data);
+		                  * We are safe to pass password_required as false because
+		                  * it will be ignored anyway
+		                  */
+						 "copy_data=false, enabled=false, slot_name=%s, password_required=false",
+#else
 						 "copy_data=false, enabled=false, slot_name=%s",
+#endif
 						 quote_identifier(target->subscriptionName),
 						 quote_literal_cstr(conninfo->data),
 						 quote_identifier(target->publication->name),

@@ -171,6 +171,8 @@ static bool FindQueryContainingRTEIdentityInternal(Node *node,
 
 static int ParentCountPriorToAppendRel(List *appendRelList, AppendRelInfo *appendRelInfo);
 
+static bool IsVarRelOptOuterJoin(PlannerInfo *root, Var *varToBeAdded);
+
 
 /*
  * AllDistributionKeysInQueryAreEqual returns true if either
@@ -1238,6 +1240,12 @@ AddToAttributeEquivalenceClass(AttributeEquivalenceClass *attributeEquivalenceCl
 		return;
 	}
 
+	/* outer join checks in PG16 */
+	if (IsVarRelOptOuterJoin(root, varToBeAdded))
+	{
+		return;
+	}
+
 	RangeTblEntry *rangeTableEntry = root->simple_rte_array[varToBeAdded->varno];
 	if (rangeTableEntry->rtekind == RTE_RELATION)
 	{
@@ -1376,6 +1384,30 @@ GetTargetSubquery(PlannerInfo *root, RangeTblEntry *rangeTableEntry, Var *varToB
 	}
 
 	return targetSubquery;
+}
+
+
+/*
+ * IsVarRelOptOuterJoin returns true if the Var to be added
+ * is an outer join, false otherwise.
+ */
+static bool
+IsVarRelOptOuterJoin(PlannerInfo *root, Var *varToBeAdded)
+{
+#if PG_VERSION_NUM >= PG_VERSION_16
+	if (root->simple_rel_array_size <= varToBeAdded->varno)
+	{
+		return true;
+	}
+
+	RelOptInfo *rel = root->simple_rel_array[varToBeAdded->varno];
+	if (rel == NULL)
+	{
+		/* must be an outer join */
+		return true;
+	}
+#endif
+	return false;
 }
 
 
