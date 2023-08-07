@@ -676,7 +676,7 @@ EXPLAIN (COSTS OFF)
 SELECT count(*) FROM keyval1 GROUP BY key HAVING sum(value) > (SELECT sum(value) FROM keyval2 GROUP BY key ORDER BY 1 DESC LIMIT 1);
 
 EXPLAIN (COSTS OFF)
-SELECT count(*) FROM keyval1 k1 WHERE k1.key = 2 GROUP BY key HAVING sum(value) > (SELECT sum(value) FROM keyval2 k2 WHERE k2.key = 2 GROUP BY key ORDER BY 1 DESC LIMIT 1);
+SELECT count(*) FROM keyval1 k1 WHERE k1.key = 2 HAVING sum(value) > (SELECT sum(value) FROM keyval2 k2 WHERE k2.key = 2 ORDER BY 1 DESC LIMIT 1);
 
 -- Simple join subquery pushdown
 SELECT

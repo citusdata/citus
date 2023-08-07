@@ -611,7 +611,7 @@ SELECT c1, c2, c3, c4, -1::float AS c5,
        sum(cardinality),
        sum(sum)
 FROM source_table
-GROUP BY c1, c2, c3, c4, c5, c6
+GROUP BY c1, c2, c3, c4, c6
 ON CONFLICT(c1, c2, c3, c4, c5, c6)
 DO UPDATE SET
  cardinality = enriched.cardinality + excluded.cardinality,
@@ -625,7 +625,7 @@ SELECT c1, c2, c3, c4, -1::float AS c5,
        sum(cardinality),
        sum(sum)
 FROM source_table
-GROUP BY c1, c2, c3, c4, c5, c6
+GROUP BY c1, c2, c3, c4, c6
 ON CONFLICT(c1, c2, c3, c4, c5, c6)
 DO UPDATE SET
  cardinality = enriched.cardinality + excluded.cardinality,
