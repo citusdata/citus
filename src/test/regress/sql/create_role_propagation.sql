@@ -1,3 +1,8 @@
+-- this test file has an alternative output
+-- because grantor changed in PG16
+-- relevant PG commit:
+-- https://github.com/postgres/postgres/commit/ce6b672e4455820a0348214be0da1a024c3f619f
+
 SELECT rolname, rolsuper, rolinherit, rolcreaterole, rolcreatedb, rolcanlogin, rolreplication, rolbypassrls, rolconnlimit, rolpassword, rolvaliduntil FROM pg_authid WHERE rolname LIKE 'create\_%' ORDER BY rolname;
 SELECT roleid::regrole::text AS role, member::regrole::text, grantor::regrole::text, admin_option FROM pg_auth_members WHERE roleid::regrole::text LIKE 'create\_%' ORDER BY 1, 2;
 

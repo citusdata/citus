@@ -249,12 +249,12 @@ SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 (1 row)
 
 SELECT roleid::regrole::text AS role, member::regrole::text, grantor::regrole::text, admin_option FROM pg_auth_members WHERE roleid::regrole::text LIKE '%dist\_%' ORDER BY 1, 2;
-      role       |     member      | grantor  | admin_option
+      role       |     member      |     grantor     | admin_option
 ---------------------------------------------------------------------
- dist_role_1     | dist_role_2     | postgres | f
- dist_role_3     | non_dist_role_3 | postgres | f
- non_dist_role_1 | non_dist_role_2 | postgres | f
- non_dist_role_4 | dist_role_4     | postgres | f
+ dist_role_1     | dist_role_2     | non_dist_role_1 | f
+ dist_role_3     | non_dist_role_3 | postgres        | f
+ non_dist_role_1 | non_dist_role_2 | dist_role_1     | f
+ non_dist_role_4 | dist_role_4     | postgres        | f
 (4 rows)
 
 SELECT objid::regrole FROM pg_catalog.pg_dist_object WHERE classid='pg_authid'::regclass::oid AND objid::regrole::text LIKE '%dist\_%' ORDER BY 1;
