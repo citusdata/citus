@@ -1,0 +1,8 @@
+name: stack_trace
+runs:
+  using: composite
+  steps:
+  - name: Print stack traces
+    run: "./ci/print_stack_trace.sh"
+    if: failure()
+    shell: bash

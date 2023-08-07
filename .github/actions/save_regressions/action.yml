@@ -1,0 +1,15 @@
+name: save_regressions
+runs:
+  using: composite
+  steps:
+  - name: Regressions
+    run: |-
+      if [ -f "src/test/regress/regression.diffs" ]; then
+        cat src/test/regress/regression.diffs
+        exit 1
+      fi
+    if: failure()
+    shell: bash
+  - uses: actions/upload-artifact@v3.1.1
+    with:
+      path: src/test/regress/regression.diffs

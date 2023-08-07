@@ -1,0 +1,9 @@
+name: configure
+runs:
+  using: composite
+  steps:
+  - name: Configure
+    run: |-
+      chown -R circleci .
+      gosu circleci ./configure --without-pg-version-check
+    shell: bash

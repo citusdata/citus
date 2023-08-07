@@ -1,0 +1,19 @@
+name: save_logs_and_results
+runs:
+  using: composite
+  steps:
+  - uses: actions/upload-artifact@v3.1.1
+    with:
+      path: src/test/regress/proxy.output
+  - uses: actions/upload-artifact@v3.1.1
+    with:
+      path: src/test/regress/results/
+  - uses: actions/upload-artifact@v3.1.1
+    with:
+      path: src/test/regress/tmp_check/master/log
+  - uses: actions/upload-artifact@v3.1.1
+    with:
+      path: src/test/regress/tmp_check/worker.57637/log
+  - uses: actions/upload-artifact@v3.1.1
+    with:
+      path: src/test/regress/tmp_check/worker.57638/log

@@ -1,0 +1,23 @@
+name: coverage
+inputs:
+  flags:
+    required: false
+runs:
+  using: composite
+  steps:
+#   # This item has no matching transformer
+#   - codecov_codecov_upload:
+  - name: Create codeclimate coverage
+    run: |-
+      lcov --directory . --capture --output-file lcov.info
+      lcov --remove lcov.info -o lcov.info '/usr/*'
+      sed "s=^SF:$PWD/=SF:=g" -i lcov.info # relative pats are required by codeclimate
+      mkdir -p /tmp/codeclimate
+      # We started getting permissions error. This fixes them and since
+      # weqre not on a multi-user system so this is safe to do.
+      git config --global --add safe.directory /home/circleci/project
+      cc-test-reporter format-coverage -t lcov -o /tmp/codeclimate/${{ github.job }}.json lcov.info
+    shell: bash
+  - uses: actions/upload-artifact@v3.1.1
+    with:
+      path: "/tmp/codeclimate/*.json"

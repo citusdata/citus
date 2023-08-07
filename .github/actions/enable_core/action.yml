@@ -1,0 +1,7 @@
+name: enable_core
+runs:
+  using: composite
+  steps:
+  - name: Enable core dumps
+    run: ulimit -c unlimited
+    shell: bash

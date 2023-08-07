@@ -1,0 +1,10 @@
+name: install_extension
+inputs:
+  pg_major:
+    required: false
+runs:
+  using: composite
+  steps:
+  - name: Install Extension
+    run: tar xfv "${{ github.workspace }}/install-${{ inputs.pg_major }}.tar" --directory /
+    shell: bash
