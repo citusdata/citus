@@ -17,6 +17,7 @@
 
 #include "distributed/citus_ruleutils.h"
 #include "distributed/deparser.h"
+#include "distributed/listutils.h"
 #include "lib/stringinfo.h"
 #include "nodes/parsenodes.h"
 #include "utils/builtins.h"
@@ -349,7 +350,20 @@ AppendGrantRoleStmt(StringInfo buf, GrantRoleStmt *stmt)
 {
 	appendStringInfo(buf, "%s ", stmt->is_grant ? "GRANT" : "REVOKE");
 
-#if PG_VERSION_NUM < PG_VERSION_16
+#if PG_VERSION_NUM >= PG_VERSION_16
+	if (!stmt->is_grant)
+	{
+		DefElem *opt = NULL;
+		foreach_ptr(opt, stmt->opt)
+		{
+			if (strcmp(opt->defname, "admin") == 0)
+			{
+				appendStringInfo(buf, "ADMIN OPTION FOR ");
+				break;
+			}
+		}
+	}
+#else
 	if (!stmt->is_grant && stmt->admin_opt)
 	{
 		appendStringInfo(buf, "ADMIN OPTION FOR ");
@@ -364,7 +378,17 @@ AppendGrantRoleStmt(StringInfo buf, GrantRoleStmt *stmt)
 
 	if (stmt->is_grant)
 	{
-#if PG_VERSION_NUM < PG_VERSION_16
+#if PG_VERSION_NUM >= PG_VERSION_16
+		DefElem *opt = NULL;
+		foreach_ptr(opt, stmt->opt)
+		{
+			if (strcmp(opt->defname, "admin") == 0)
+			{
+				appendStringInfo(buf, " WITH ADMIN OPTION");
+				break;
+			}
+		}
+#else
 		if (stmt->admin_opt)
 		{
 			appendStringInfo(buf, " WITH ADMIN OPTION");
