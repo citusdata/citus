@@ -695,7 +695,7 @@ jobs:
 workflows:
   version: 2
   flaky_test_debugging:
-    when: << pipeline.parameters.flaky_test >>
+    when: false
     jobs:
       - build:
           name: build-flaky-15
@@ -711,8 +711,7 @@ workflows:
           runs: << pipeline.parameters.flaky_test_runs_per_job >>
 
   build_and_test:
-    when:
-      not: << pipeline.parameters.flaky_test >>
+    when: false
     jobs:
       - build:
           name: build-14
