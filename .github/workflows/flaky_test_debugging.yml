@@ -1,38 +1,49 @@
-name: citusdata/citus/flaky_test_debugging
+name: Flaky test detector
+run-name: Flaky test detector - ${{ inputs.flaky_test }} (${{ inputs.flaky_test_runs_per_job }}x${{ inputs.flaky_test_parallel_jobs }})
 on:
   workflow_dispatch:
     inputs:
       flaky_test:
         required: true
+        type: string
+        description: Test to run
       flaky_test_runs_per_job:
         required: false
-        default: 50
+        default: 8
         type: number
-      image_suffix:
+        description: Number of times to run the test
+      flaky_test_parallel_jobs:
         required: false
-        default: "-vbab548a"
-      pg14_version:
-        required: false
-        default: '14.8'
-      pg15_version:
-        required: false
-        default: '15.3'
-      upgrade_pg_versions:
-        required: false
-        default: 14.8-15.3
-      style_checker_tools_version:
-        required: false
-        default: 0.8.18
+        default: 32
+        type: number
+        description: Number of parallel jobs to run
+env:
+  pg_major: 15
+  image_suffix: -v1b94240
+  pg15_version: 15.4
+  build_image_name: citus/extbuilder
+  test_image_name: citus/failtester
 jobs:
-  build:
-    if: ${{ inputs.flaky_test }}
+  set_image_names:
+    name: Set CI image names
     runs-on: ubuntu-latest
+    outputs:
+      build_image: ${{ steps.set_build_image_name.outputs.image }}
+      test_image: ${{ steps.set_test_image_name.outputs.image }}
+    steps:
+    - id: set_build_image_name
+      run: |
+        echo "image=${{ env.build_image_name }}:${{ env.pg15_version  }}${{ env.image_suffix }}" >> "$GITHUB_OUTPUT"
+    - id: set_test_image_name
+      run: |
+        echo "image=${{ env.test_image_name }}:${{ env.pg15_version  }}${{ env.image_suffix }}" >> "$GITHUB_OUTPUT"
+  build:
+    name: Build Citus
+    runs-on: ubuntu-latest
+    needs: set_image_names
     container:
-      image: "${{ vars.image }}"
-    env:
-      pg_major: 15
-      image: citus/extbuilder
-      image_tag: "${{ inputs.pg15_version }}"
+      image: ${{ needs.set_image_names.outputs.build_image }}
+      options: --user root
     steps:
     - uses: actions/checkout@v3.5.0
     - name: Configure, Build, and Install
@@ -42,20 +53,33 @@ jobs:
         path: |-
           ./build-${{ env.pg_major }}/*
           ./install-${{ env.pg_major }}.tar
-  test-flakyness:
+  prepare_parallelization_matrix:
+    name: Prepare parallelization matrix
+    runs-on: ubuntu-latest
+    outputs:
+      json: ${{ steps.parallelization.outputs.json }}
+    steps:
+      - uses: actions/checkout@v3.5.0
+      - uses: "./.github/actions/parallelization"
+        id: parallelization
+        with:
+          count: ${{ inputs.flaky_test_parallel_jobs }}
+  test_flakyness:
+    name: Test flakyness
     if: ${{ inputs.flaky_test }}
     runs-on: ubuntu-latest
     container:
-      image: '${{ vars.image }}:${{ vars.image_tag }}${{ vars.image_suffix }}'
+      image: ${{ needs.set_image_names.outputs.test_image }}
+      options: --user root
     needs:
-    - build
+      [set_image_names,  build, prepare_parallelization_matrix]
     env:
-      pg_major: 15
-      image: citus/failtester
-      image_tag: "${{ inputs.pg15_version }}"
       test: "${{ inputs.flaky_test }}"
       runs: "${{ inputs.flaky_test_runs_per_job }}"
       skip: false
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.prepare_parallelization_matrix.outputs.json) }}
     steps:
     - uses: actions/checkout@v3.5.0
     - uses: actions/download-artifact@v3.0.1
@@ -73,7 +97,8 @@ jobs:
         fi
         if [ -z "$tests" ]; then
             echo "No test found."
-            circleci-agent step halt
+            gh run cancel ${{ github.run_id }}
+            gh run watch ${{ github.run_id }}
         else
           echo "Detected tests " $tests
         fi
@@ -91,6 +116,10 @@ jobs:
             test_name=$(echo "$test" | sed -r "s/.+\/(.+)\..+/\1/")
             gosu circleci src/test/regress/citus_tests/run_test.py $test_name --repeat ${{ env.runs }} --use-base-schedule --use-whole-schedule-line
         done
+      shell: bash
     - uses: "./.github/actions/save_logs_and_results"
+      if: always()
     - uses: "./.github/actions/save_regressions"
+      if: always()
     - uses: "./.github/actions/stack_trace"
+      if: always()

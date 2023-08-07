@@ -6,5 +6,5 @@ runs:
   using: composite
   steps:
   - name: Install Extension
-    run: tar xfv "${{ github.workspace }}/install-${{ inputs.pg_major }}.tar" --directory /
+    run: tar xfv "artifact/install-${{ inputs.pg_major }}.tar" --directory /
     shell: bash

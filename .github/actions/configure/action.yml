@@ -5,5 +5,6 @@ runs:
   - name: Configure
     run: |-
       chown -R circleci .
+      git config --global --add safe.directory ${GITHUB_WORKSPACE}
       gosu circleci ./configure --without-pg-version-check
     shell: bash

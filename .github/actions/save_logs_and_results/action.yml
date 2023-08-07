@@ -3,17 +3,52 @@ runs:
   using: composite
   steps:
   - uses: actions/upload-artifact@v3.1.1
+    if: ${{ matrix.id == '' }}
     with:
+      name: proxy.output
       path: src/test/regress/proxy.output
   - uses: actions/upload-artifact@v3.1.1
+    if: ${{ matrix.id == '' }}
     with:
+      name: regress
       path: src/test/regress/results/
   - uses: actions/upload-artifact@v3.1.1
+    if: ${{ matrix.id == '' }}
     with:
+      name: master.log
       path: src/test/regress/tmp_check/master/log
   - uses: actions/upload-artifact@v3.1.1
+    if: ${{ matrix.id == '' }}
     with:
+      name: worker.57637.log
       path: src/test/regress/tmp_check/worker.57637/log
   - uses: actions/upload-artifact@v3.1.1
+    if: ${{ matrix.id == '' }}
     with:
+      name: worker.57638.log
+      path: src/test/regress/tmp_check/worker.57638/log
+  - uses: actions/upload-artifact@v3.1.1
+    if: ${{ matrix.id != '' }}
+    with:
+      name: proxy_${{ matrix.id }}.output
+      path: src/test/regress/proxy.output
+  - uses: actions/upload-artifact@v3.1.1
+    if: ${{ matrix.id != '' }}
+    with:
+      name: regress_${{ matrix.id }}
+      path: src/test/regress/results/
+  - uses: actions/upload-artifact@v3.1.1
+    if: ${{ matrix.id != '' }}
+    with:
+      name: master_${{ matrix.id }}.log
+      path: src/test/regress/tmp_check/master/log
+  - uses: actions/upload-artifact@v3.1.1
+    if: ${{ matrix.id != '' }}
+    with:
+      name: worker_${{ matrix.id }}.57637.log
+      path: src/test/regress/tmp_check/worker.57637/log
+  - uses: actions/upload-artifact@v3.1.1
+    if: ${{ matrix.id != '' }}
+    with:
+      name: worker_${{ matrix.id }}.57638.log
       path: src/test/regress/tmp_check/worker.57638/log
