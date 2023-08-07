@@ -2,6 +2,12 @@ name: citusdata/citus/flaky_test_debugging
 on:
   workflow_dispatch:
     inputs:
+      flaky_test:
+        required: true
+      flaky_test_runs_per_job:
+        required: false
+        default: 50
+        type: number
       image_suffix:
         required: false
         default: "-vbab548a"
@@ -17,14 +23,6 @@ on:
       style_checker_tools_version:
         required: false
         default: 0.8.18
-      flaky_test:
-        required: true
-      flaky_test_runs_per_job:
-        required: false
-        default: 50
-        type: number
-      skip_flaky_tests:
-        required: true
 jobs:
   build:
     if: ${{ inputs.flaky_test }}
