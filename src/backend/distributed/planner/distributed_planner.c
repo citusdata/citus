@@ -1084,6 +1084,11 @@ CreateDistributedPlan(uint64 planId, bool allowRecursivePlanning, Query *origina
 	/*
 	 * Plan subqueries and CTEs that cannot be pushed down by recursively
 	 * calling the planner and return the resulting plans to subPlanList.
+	 * Note that GenerateSubplansForSubqueriesAndCTEs will reset perminfoindexes
+	 * for some RTEs in originalQuery->rtable list, while not changing
+	 * originalQuery->rteperminfos. That's fine because we will go through
+	 * standard planner again, which will adjust things accordingly in
+	 * add_rte_to_flat_rtable.
 	 */
 	List *subPlanList = GenerateSubplansForSubqueriesAndCTEs(planId, originalQuery,
 															 plannerRestrictionContext);
