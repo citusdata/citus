@@ -108,6 +108,7 @@ static int AssignRTEIdentities(List *rangeTableList, int rteIdCounter);
 static void AssignRTEIdentity(RangeTblEntry *rangeTableEntry, int rteIdentifier);
 static void AdjustPartitioningForDistributedPlanning(List *rangeTableList,
 													 bool setPartitionedTablesInherited);
+static bool RTEWentThroughAdjustPartitioning(RangeTblEntry *rangeTableEntry);
 static PlannedStmt * FinalizeNonRouterPlan(PlannedStmt *localPlan,
 										   DistributedPlan *distributedPlan,
 										   CustomScan *customScan);
@@ -491,6 +492,20 @@ AdjustPartitioningForDistributedPlanning(List *rangeTableList,
 			}
 		}
 	}
+}
+
+
+/*
+ * RTEWentThroughAdjustPartitioning returns true if the given rangetableentry
+ * has been modified through AdjustPartitioningForDistributedPlanning
+ * function, false otherwise.
+ */
+static bool
+RTEWentThroughAdjustPartitioning(RangeTblEntry *rangeTableEntry)
+{
+	return (rangeTableEntry->rtekind == RTE_RELATION &&
+			PartitionedTable(rangeTableEntry->relid) &&
+			rangeTableEntry->inh == false);
 }
 
 
@@ -1977,15 +1992,9 @@ multi_relation_restriction_hook(PlannerInfo *root, RelOptInfo *relOptInfo,
 
 
 /*
- * Normally, we should not need this. However, the combination of
- * Postgres commit 3c569049b7b502bb4952483d19ce622ff0af5fd6 and
- * Citus function AdjustPartitioningForDistributedPlanning()
- * forces us to do this. The commit expects partitioned indexes
- * to belong to relations with "inh" flag set properly. Whereas, the
- * function overrides "inh" flag. To avoid a crash,
- * we go over the list of indexinfos and remove all partitioned indexes.
- * Partitioned indexes were ignored pre PG16 anyway, we are essentially
- * not breaking any logic.
+ * multi_get_relation_info_hook modifies the relation's indexlist
+ * if necessary, to avoid a crash in PG16 caused by our
+ * Citus function AdjustPartitioningForDistributedPlanning().
  *
  * AdjustPartitioningForDistributedPlanning() is a hack that we use
  * to prevent Postgres' standard_planner() to expand all the partitions
@@ -1997,8 +2006,8 @@ multi_relation_restriction_hook(PlannerInfo *root, RelOptInfo *relOptInfo,
  * planning logic of Citus (such as router or query pushdown) relies
  * heavily on the relationRestrictionList. If
  * AdjustPartitioningForDistributedPlanning() is removed, all the
- * partitions show up in the, causing high planning times for
- * such queries.
+ * partitions show up in the relationRestrictionList, causing high
+ * planning times for such queries.
  */
 void
 multi_get_relation_info_hook(PlannerInfo *root, Oid relationObjectId, bool inhparent,
@@ -2012,9 +2021,7 @@ multi_get_relation_info_hook(PlannerInfo *root, Oid relationObjectId, bool inhpa
 	Index varno = rel->relid;
 	RangeTblEntry *rangeTableEntry = planner_rt_fetch(varno, root);
 
-	if (rangeTableEntry->rtekind == RTE_RELATION &&
-		PartitionedTable(rangeTableEntry->relid) &&
-		rangeTableEntry->inh == false)
+	if (RTEWentThroughAdjustPartitioning(rangeTableEntry))
 	{
 		ListCell *lc = NULL;
 		foreach(lc, rel->indexlist)
@@ -2022,6 +2029,17 @@ multi_get_relation_info_hook(PlannerInfo *root, Oid relationObjectId, bool inhpa
 			IndexOptInfo *indexOptInfo = (IndexOptInfo *) lfirst(lc);
 			if (get_rel_relkind(indexOptInfo->indexoid) == RELKIND_PARTITIONED_INDEX)
 			{
+				/*
+				 * Normally, we should not need this. However, the combination of
+				 * Postgres commit 3c569049b7b502bb4952483d19ce622ff0af5fd6 and
+				 * Citus function AdjustPartitioningForDistributedPlanning()
+				 * forces us to do this. The commit expects partitioned indexes
+				 * to belong to relations with "inh" flag set properly. Whereas, the
+				 * function overrides "inh" flag. To avoid a crash,
+				 * we go over the list of indexinfos and remove all partitioned indexes.
+				 * Partitioned indexes were ignored pre PG16 anyway, we are essentially
+				 * not breaking any logic.
+				 */
 				rel->indexlist = foreach_delete_current(rel->indexlist, lc);
 			}
 		}
