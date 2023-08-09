@@ -1232,5 +1232,20 @@ WHERE o_orderkey IN (1, 2)
                                  ->  Seq Scan on lineitem_hash_partitioned_630004 lineitem_hash_partitioned
 (13 rows)
 
+SELECT public.coordinator_plan($Q$
+EXPLAIN (COSTS OFF)
+SELECT count(*)
+FROM orders_hash_partitioned
+FULL OUTER JOIN lineitem_hash_partitioned ON (o_orderkey = l_orderkey)
+WHERE o_orderkey IN (1, 2)
+   AND l_orderkey IN (2, 3);
+$Q$);
+          coordinator_plan
+---------------------------------------------------------------------
+ Aggregate
+   ->  Custom Scan (Citus Adaptive)
+         Task Count: 3
+(3 rows)
+
 SET citus.task_executor_type TO DEFAULT;
 DROP TABLE lineitem_hash_partitioned;
