@@ -56,6 +56,9 @@
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
 #include "nodes/pg_list.h"
+#if PG_VERSION_NUM >= PG_VERSION_16
+#include "parser/parse_relation.h"
+#endif
 #include "parser/parsetree.h"
 #include "parser/parse_type.h"
 #include "optimizer/optimizer.h"
@@ -145,6 +148,8 @@ static void WarnIfListHasForeignDistributedTable(List *rangeTableList);
 static RouterPlanType GetRouterPlanType(Query *query,
 										Query *originalQuery,
 										bool hasUnresolvedParams);
+static void ConcatenateRTablesAndPerminfos(PlannedStmt *mainPlan,
+										   PlannedStmt *concatPlan);
 
 
 /* Distributed planner hook */
@@ -1081,6 +1086,11 @@ CreateDistributedPlan(uint64 planId, bool allowRecursivePlanning, Query *origina
 	/*
 	 * Plan subqueries and CTEs that cannot be pushed down by recursively
 	 * calling the planner and return the resulting plans to subPlanList.
+	 * Note that GenerateSubplansForSubqueriesAndCTEs will reset perminfoindexes
+	 * for some RTEs in originalQuery->rtable list, while not changing
+	 * originalQuery->rteperminfos. That's fine because we will go through
+	 * standard_planner again, which will adjust things accordingly in
+	 * set_plan_references>add_rtes_to_flat_rtable>add_rte_to_flat_rtable.
 	 */
 	List *subPlanList = GenerateSubplansForSubqueriesAndCTEs(planId, originalQuery,
 															 plannerRestrictionContext);
@@ -1480,9 +1490,39 @@ FinalizeNonRouterPlan(PlannedStmt *localPlan, DistributedPlan *distributedPlan,
 	finalPlan->utilityStmt = localPlan->utilityStmt;
 
 	/* add original range table list for access permission checks */
-	finalPlan->rtable = list_concat(finalPlan->rtable, localPlan->rtable);
+	ConcatenateRTablesAndPerminfos(finalPlan, localPlan);
 
 	return finalPlan;
+}
+
+
+static void
+ConcatenateRTablesAndPerminfos(PlannedStmt *mainPlan, PlannedStmt *concatPlan)
+{
+	mainPlan->rtable = list_concat(mainPlan->rtable, concatPlan->rtable);
+#if PG_VERSION_NUM >= PG_VERSION_16
+
+	/*
+	 * concatPlan's range table list is concatenated to mainPlan's range table list
+	 * therefore all the perminfoindexes should be updated to their value
+	 * PLUS the highest perminfoindex in mainPlan's perminfos, which is exactly
+	 * the list length.
+	 */
+	int mainPlan_highest_perminfoindex = list_length(mainPlan->permInfos);
+
+	ListCell *lc;
+	foreach(lc, concatPlan->rtable)
+	{
+		RangeTblEntry *rte = (RangeTblEntry *) lfirst(lc);
+		if (rte->perminfoindex != 0)
+		{
+			rte->perminfoindex = rte->perminfoindex + mainPlan_highest_perminfoindex;
+		}
+	}
+
+	/* finally, concatenate perminfos as well */
+	mainPlan->permInfos = list_concat(mainPlan->permInfos, concatPlan->permInfos);
+#endif
 }
 
 
@@ -1517,7 +1557,7 @@ FinalizeRouterPlan(PlannedStmt *localPlan, CustomScan *customScan)
 	routerPlan->rtable = list_make1(remoteScanRangeTableEntry);
 
 	/* add original range table list for access permission checks */
-	routerPlan->rtable = list_concat(routerPlan->rtable, localPlan->rtable);
+	ConcatenateRTablesAndPerminfos(routerPlan, localPlan);
 
 	routerPlan->canSetTag = true;
 	routerPlan->relationOids = NIL;
