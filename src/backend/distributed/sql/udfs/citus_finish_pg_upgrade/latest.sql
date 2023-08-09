@@ -115,7 +115,7 @@ BEGIN
         SET partkey = (split_part(partkey, 'varlevelsup', 1)
                        || 'varnullingrels (b) :varlevelsup'
                        || split_part(partkey, 'varlevelsup', 2))
-        WHERE partkey IS NOT NULL AND partkey NOT LIKE '%varnullingrels%';
+        WHERE partkey IS NOT NULL AND partkey NOT ILIKE '%varnullingrels%';
     $cmd$;
     END IF;
 
