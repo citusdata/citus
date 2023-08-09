@@ -1,6 +1,10 @@
 --
 -- Test chunk filtering in columnar using min/max values in stripe skip lists.
 --
+-- It has an alternative test output file
+-- because PG16 changed the order of some Filters in EXPLAIN
+-- Relevant PG commit:
+-- https://github.com/postgres/postgres/commit/2489d76c4906f4461a364ca8ad7e0751ead8aa0d
 
 
 --
