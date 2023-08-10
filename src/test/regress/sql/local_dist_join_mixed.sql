@@ -78,13 +78,12 @@ SELECT count(*) FROM distributed JOIN unlogged_local USING (id);
 CREATE MATERIALIZED VIEW mat_view AS SELECT * FROM local;
 SELECT count(*) FROM distributed JOIN mat_view USING (id);
 
-CREATE VIEW local_regular_view AS SELECT * FROM local;
+CREATE VIEW local_regular_view AS SELECT * FROM local table_name_for_view;
 CREATE VIEW dist_regular_view AS SELECT * FROM distributed;
 
 SELECT count(*) FROM distributed JOIN local_regular_view USING (id);
 SELECT count(*) FROM local JOIN dist_regular_view USING (id);
 SELECT count(*) FROM dist_regular_view JOIN local_regular_view USING (id);
-
 
 -- join alias/table alias
 SELECT COUNT(*) FROM (distributed JOIN local USING (id)) AS t(a,b,c,d) ORDER BY d,c,a,b LIMIT 3;
