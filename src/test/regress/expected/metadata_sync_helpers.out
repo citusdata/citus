@@ -1289,10 +1289,10 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
     SELECT substring(:'server_version', '\d+')::int >= 16 AS server_version_ge_16
     \gset
     \if :server_version_ge_16
-    UPDATE pg_dist_partition SET partkey = '{VAR :varno 1 :varattno 1 :vartype 20 :vartypmod -1 :varcollid 1 :varnullingrels (b) :varlevelsup 0 :varnoold 1 :varoattno 1 :location -1}'
+    UPDATE pg_dist_partition SET partkey = '{VAR :varno 1 :varattno 1 :vartype 20 :vartypmod -1 :varcollid 0 :varnullingrels (b) :varlevelsup 1 :varnoold 1 :varoattno 1 :location -1}'
 	WHERE logicalrelid = 'test_2'::regclass;
     \else
-	UPDATE pg_dist_partition SET partkey = '{VAR :varno 1 :varattno 1 :vartype 20 :vartypmod -1 :varcollid 1 :varlevelsup 0 :varnoold 1 :varoattno 1 :location -1}'
+	UPDATE pg_dist_partition SET partkey = '{VAR :varno 1 :varattno 1 :vartype 20 :vartypmod -1 :varcollid 0 :varlevelsup 1 :varnoold 1 :varoattno 1 :location -1}'
 	WHERE logicalrelid = 'test_2'::regclass;
     \endif
 	SELECT citus_internal_update_relation_colocation('test_2'::regclass, 251);

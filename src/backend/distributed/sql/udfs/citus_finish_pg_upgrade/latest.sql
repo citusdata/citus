@@ -108,16 +108,12 @@ BEGIN
     INSERT INTO pg_catalog.pg_dist_partition SELECT * FROM public.pg_dist_partition;
 
     -- if we are upgrading from PG14/PG15 to PG16+,
-    -- we need to add varnullingrels to partkey if it's not already there
-    IF substring(current_Setting('server_version'), '\d+')::int >= 16 THEN
-    EXECUTE $cmd$
-        UPDATE pg_catalog.pg_dist_partition
-        SET partkey = (split_part(partkey, 'varlevelsup', 1)
-                       || 'varnullingrels (b) :varlevelsup'
-                       || split_part(partkey, 'varlevelsup', 2))
-        WHERE partkey IS NOT NULL AND partkey NOT ILIKE '%varnullingrels%';
-    $cmd$;
-    END IF;
+    -- we need to regenerate the partkeys because they will include varnullingrels as well.
+    UPDATE pg_catalog.pg_dist_partition
+    SET partkey = column_name_to_column(pg_dist_partkeys_pre_upgrade.logicalrelid, col_name)
+    FROM public.pg_dist_partkeys_pre_upgrade
+    WHERE pg_dist_partkeys_pre_upgrade.logicalrelid = pg_dist_partition.logicalrelid;
+    DROP TABLE public.pg_dist_partkeys_pre_upgrade;
 
     INSERT INTO pg_catalog.pg_dist_shard SELECT * FROM public.pg_dist_shard;
     INSERT INTO pg_catalog.pg_dist_placement SELECT * FROM public.pg_dist_placement;
