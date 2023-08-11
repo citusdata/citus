@@ -35,6 +35,7 @@
 #include "access/htup_details.h"
 #include "catalog/catalog.h"
 #include "catalog/dependency.h"
+#include "catalog/pg_extension_d.h"
 #include "citus_version.h"
 #include "commands/dbcommands.h"
 #include "commands/defrem.h"
@@ -77,6 +78,7 @@
 #include "tcop/utility.h"
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
+#include "utils/inval.h"
 #include "utils/lsyscache.h"
 #include "utils/syscache.h"
 
@@ -193,6 +195,12 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 
 	bool isCreateAlterExtensionUpdateCitusStmt = IsCreateAlterExtensionUpdateCitusStmt(
 		parsetree);
+
+	if (isCreateAlterExtensionUpdateCitusStmt)
+	{
+	 	CacheInvalidateRelcacheByRelid(ExtensionRelationId);
+	}
+
 	if (EnableVersionChecks && isCreateAlterExtensionUpdateCitusStmt)
 	{
 		ErrorIfUnstableCreateOrAlterExtensionStmt(parsetree);

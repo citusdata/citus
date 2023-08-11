@@ -92,6 +92,9 @@
 #include "utils/typcache.h"
 
 
+void
+InvalidateCitusMetadataCacheCallback(Datum argument, Oid relationId);
+
 /* user configuration */
 int ReadFromSecondaries = USE_SECONDARY_NODES_NEVER;
 
@@ -288,7 +291,7 @@ static void CreateDistTableCache(void);
 static void CreateShardIdCache(void);
 static void CreateDistObjectCache(void);
 static void InvalidateForeignRelationGraphCacheCallback(Datum argument, Oid relationId);
-static void InvalidateDistRelationCacheCallback(Datum argument, Oid relationId);
+void InvalidateDistRelationCacheCallback(Datum argument, Oid relationId);
 static void InvalidateNodeRelationCacheCallback(Datum argument, Oid relationId);
 static void InvalidateLocalGroupIdRelationCacheCallback(Datum argument, Oid relationId);
 static void InvalidateConnParamsCacheCallback(Datum argument, Oid relationId);
@@ -4749,12 +4752,16 @@ InvalidateForeignKeyGraph(void)
 	CommandCounterIncrement();
 }
 
-
+void
+InvalidateCitusMetadataCacheCallback(Datum argument, Oid relationId)
+{
+       	InvalidateMetadataSystemCache();
+}
 /*
  * InvalidateDistRelationCacheCallback flushes cache entries when a relation
  * is updated (or flushes the entire cache).
  */
-static void
+void
 InvalidateDistRelationCacheCallback(Datum argument, Oid relationId)
 {
 	/* invalidate either entire cache or a specific entry */

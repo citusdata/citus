@@ -109,9 +109,10 @@
 #include "tcop/tcopprot.h"
 #include "utils/guc.h"
 #include "utils/guc_tables.h"
+#include "utils/inval.h"
+#include "utils/lsyscache.h"
 #include "utils/syscache.h"
 #include "utils/varlena.h"
-
 #include "columnar/columnar.h"
 
 /* marks shared object as one loadable by the postgres version compiled against */
@@ -121,6 +122,9 @@ ColumnarSupportsIndexAM_type extern_ColumnarSupportsIndexAM = NULL;
 CompressionTypeStr_type extern_CompressionTypeStr = NULL;
 IsColumnarTableAmTable_type extern_IsColumnarTableAmTable = NULL;
 ReadColumnarOptions_type extern_ReadColumnarOptions = NULL;
+
+void InvalidateDistRelationCacheCallback(Datum argument, Oid relationId);
+void InvalidateCitusMetadataCacheCallback(Datum argument, Oid relationId);
 
 /*
  * Define "pass-through" functions so that a SQL function defined as one of
@@ -554,6 +558,9 @@ _PG_init(void)
 															"ColumnarSupportsIndexAM",
 															true, &handle);
 
+	CacheRegisterRelcacheCallback(InvalidateCitusMetadataCacheCallback,
+								  (Datum) 0);
+
 	INIT_COLUMNAR_SYMBOL(CompressionTypeStr_type, CompressionTypeStr);
 	INIT_COLUMNAR_SYMBOL(IsColumnarTableAmTable_type, IsColumnarTableAmTable);
 	INIT_COLUMNAR_SYMBOL(ReadColumnarOptions_type, ReadColumnarOptions);
@@ -568,6 +575,7 @@ _PG_init(void)
 	INIT_COLUMNAR_SYMBOL(PGFunction, columnar_storage_info);
 	INIT_COLUMNAR_SYMBOL(PGFunction, columnar_store_memory_stats);
 	INIT_COLUMNAR_SYMBOL(PGFunction, test_columnar_storage_write_new_page);
+
 }
 
 
