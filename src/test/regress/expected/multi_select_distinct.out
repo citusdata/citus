@@ -813,7 +813,7 @@ SELECT DISTINCT count(DISTINCT l_partkey), count(DISTINCT l_shipmode)
 EXPLAIN (COSTS FALSE)
 	SELECT DISTINCT count(DISTINCT l_partkey), count(DISTINCT l_shipmode)
 		FROM lineitem_hash_part
-		GROUP BY l_orderkey
+		GROUP BY l_orderkey, l_partkey, l_shipmode
 		ORDER BY 1,2;
                                           QUERY PLAN
 ---------------------------------------------------------------------
@@ -827,9 +827,9 @@ EXPLAIN (COSTS FALSE)
                ->  Task
                      Node: host=localhost port=xxxxx dbname=regression
                      ->  GroupAggregate
-                           Group Key: l_orderkey
+                           Group Key: l_orderkey, l_partkey, l_shipmode
                            ->  Sort
-                                 Sort Key: l_orderkey
+                                 Sort Key: l_orderkey, l_partkey, l_shipmode
                                  ->  Seq Scan on lineitem_hash_part_360041 lineitem_hash_part
 (14 rows)
 
@@ -839,7 +839,7 @@ SET enable_hashagg TO off;
 EXPLAIN (COSTS FALSE)
 	SELECT DISTINCT count(DISTINCT l_partkey), count(DISTINCT l_shipmode)
 		FROM lineitem_hash_part
-		GROUP BY l_orderkey
+		GROUP BY l_orderkey, l_partkey, l_shipmode
 		ORDER BY 1,2;
                                           QUERY PLAN
 ---------------------------------------------------------------------
@@ -852,9 +852,9 @@ EXPLAIN (COSTS FALSE)
                ->  Task
                      Node: host=localhost port=xxxxx dbname=regression
                      ->  GroupAggregate
-                           Group Key: l_orderkey
+                           Group Key: l_orderkey, l_partkey, l_shipmode
                            ->  Sort
-                                 Sort Key: l_orderkey
+                                 Sort Key: l_orderkey, l_partkey, l_shipmode
                                  ->  Seq Scan on lineitem_hash_part_360041 lineitem_hash_part
 (13 rows)
 

@@ -374,17 +374,17 @@ LIMIT 2;
 (2 rows)
 
 EXPLAIN (COSTS OFF)
-SELECT ut.user_id, count(DISTINCT ut.value_2)
+SELECT ut.user_id, avg(ut.value_2)
 FROM users_table ut, events_table et
 WHERE ut.user_id = et.user_id and et.value_2 < 5
 GROUP BY ut.user_id
 ORDER BY 2, AVG(ut.value_1), 1 DESC
 LIMIT 5;
-                                                 QUERY PLAN
+                                           QUERY PLAN
 ---------------------------------------------------------------------
  Limit
    ->  Sort
-         Sort Key: remote_scan.count, remote_scan.worker_column_3, remote_scan.user_id DESC
+         Sort Key: remote_scan.avg, remote_scan.worker_column_3, remote_scan.user_id DESC
          ->  Custom Scan (Citus Adaptive)
                Task Count: 4
                Tasks Shown: One of 4
@@ -392,16 +392,14 @@ LIMIT 5;
                      Node: host=localhost port=xxxxx dbname=regression
                      ->  Limit
                            ->  Sort
-                                 Sort Key: (count(DISTINCT ut.value_2)), (avg(ut.value_1)), ut.user_id DESC
-                                 ->  GroupAggregate
+                                 Sort Key: (avg(ut.value_2)), (avg(ut.value_1)), ut.user_id DESC
+                                 ->  HashAggregate
                                        Group Key: ut.user_id
-                                       ->  Sort
-                                             Sort Key: ut.user_id DESC
-                                             ->  Hash Join
-                                                   Hash Cond: (ut.user_id = et.user_id)
-                                                   ->  Seq Scan on users_table_1400256 ut
-                                                   ->  Hash
-                                                         ->  Seq Scan on events_table_1400260 et
-                                                               Filter: (value_2 < 5)
-(21 rows)
+                                       ->  Hash Join
+                                             Hash Cond: (ut.user_id = et.user_id)
+                                             ->  Seq Scan on users_table_1400256 ut
+                                             ->  Hash
+                                                   ->  Seq Scan on events_table_1400260 et
+                                                         Filter: (value_2 < 5)
+(19 rows)
 

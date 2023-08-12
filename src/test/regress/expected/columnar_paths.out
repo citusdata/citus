@@ -326,7 +326,7 @@ WHERE w2.a = 123;
 
 EXPLAIN (COSTS OFF) SELECT sub_1.b, sub_2.a, sub_3.avg
 FROM
-  (SELECT b FROM full_correlated WHERE (a > 2) GROUP BY b HAVING count(DISTINCT a) > 0 ORDER BY 1 DESC LIMIT 5) AS sub_1,
+  (SELECT b FROM full_correlated WHERE (a > 2) GROUP BY b ORDER BY 1 DESC LIMIT 5) AS sub_1,
   (SELECT a FROM full_correlated WHERE (a > 10) GROUP BY a HAVING count(DISTINCT a) >= 1 ORDER BY 1 DESC LIMIT 3) AS sub_2,
   (SELECT avg(a) AS AVG FROM full_correlated WHERE (a > 2) GROUP BY a HAVING sum(a) > 10 ORDER BY (sum(d) - avg(a) - COALESCE(array_upper(ARRAY[max(a)],1) * 5, 0)) DESC LIMIT 3) AS sub_3
 WHERE sub_2.a < sub_1.b::integer
@@ -341,11 +341,10 @@ LIMIT 100;
                ->  Nested Loop
                      Join Filter: (full_correlated_1.a < (full_correlated.b)::integer)
                      ->  Limit
-                           ->  GroupAggregate
-                                 Group Key: full_correlated.b
-                                 Filter: (count(DISTINCT full_correlated.a) > 0)
-                                 ->  Sort
-                                       Sort Key: full_correlated.b DESC
+                           ->  Sort
+                                 Sort Key: full_correlated.b DESC
+                                 ->  HashAggregate
+                                       Group Key: full_correlated.b
                                        ->  Custom Scan (ColumnarScan) on full_correlated
                                              Filter: (a > 2)
                                              Columnar Projected Columns: a, b
@@ -366,7 +365,7 @@ LIMIT 100;
                                              Filter: (sum(full_correlated_2.a) > 10)
                                              ->  Index Scan using full_correlated_btree on full_correlated full_correlated_2
                                                    Index Cond: (a > 2)
-(32 rows)
+(31 rows)
 
 DROP INDEX full_correlated_btree;
 CREATE INDEX full_correlated_hash ON full_correlated USING hash(a);
