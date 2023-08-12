@@ -1022,13 +1022,14 @@ GetUndistributableDependency(const ObjectAddress *objectAddress)
 		if (!SupportedDependencyByCitus(dependency))
 		{
 			/*
-			 * Skip roles and text search templates.
+			 * Skip roles, access methods, and text search templates.
 			 *
-			 * Roles should be handled manually with Citus community whereas text search
-			 * templates should be handled manually in both community and enterprise
+			 * Roles and access methods should be handled manually with Citus community
+			 * whereas text search templates should be handled manually in both community and enterprise
 			 */
 			if (getObjectClass(dependency) != OCLASS_ROLE &&
-				getObjectClass(dependency) != OCLASS_TSTEMPLATE)
+				getObjectClass(dependency) != OCLASS_TSTEMPLATE &&
+				getObjectClass(dependency) != OCLASS_AM)
 			{
 				return dependency;
 			}
