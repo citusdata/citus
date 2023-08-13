@@ -905,7 +905,6 @@ CREATE ROLE test_non_super_user WITH LOGIN;
 ALTER ROLE test_non_super_user NOSUPERUSER;
 
 GRANT CREATE ON DATABASE regression TO test_non_super_user;
-SELECT result FROM run_command_on_workers($$GRANT CREATE ON DATABASE regression TO test_non_super_user$$);
 
 GRANT CREATE ON SCHEMA public TO test_non_super_user ;
 
