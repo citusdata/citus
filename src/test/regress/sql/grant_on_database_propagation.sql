@@ -17,6 +17,8 @@ set role myuser;
 
 select has_database_privilege('regression', 'CREATE');
 \c - - - :worker_1_port
+
+set role myuser;
 select has_database_privilege('regression', 'CREATE');
 \c - - - :master_port
 
