@@ -22,6 +22,7 @@ set role myuser;
 select has_database_privilege('regression', 'CREATE');
 \c - - - :master_port
 
+RESET ROLE;
 drop user myuser;
 
 
