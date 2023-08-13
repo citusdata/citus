@@ -22,7 +22,7 @@
 static void AppendCreateSchemaStmt(StringInfo buf, CreateSchemaStmt *stmt);
 static void AppendDropSchemaStmt(StringInfo buf, DropStmt *stmt);
 static void AppendGrantOnSchemaStmt(StringInfo buf, GrantStmt *stmt);
-static void AppendGrantDatabases(StringInfo buf, GrantStmt *stmt);
+static void AppendGrantOnSchemaSchemas(StringInfo buf, GrantStmt *stmt);
 static void AppendAlterSchemaRenameStmt(StringInfo buf, RenameStmt *stmt);
 static void AppendAlterSchemaOwnerStmt(StringInfo buf, AlterOwnerStmt *stmt);
 
@@ -187,7 +187,7 @@ AppendGrantOnSchemaStmt(StringInfo buf, GrantStmt *stmt)
 
 	AppendGrantPrivileges(buf, stmt);
 
-	AppendGrantDatabases(buf, stmt);
+	AppendGrantOnSchemaSchemas(buf, stmt);
 
 	AppendGrantGrantees(buf, stmt);
 
@@ -234,7 +234,7 @@ AppendGrantPrivileges(StringInfo buf, GrantStmt *stmt)
 
 
 static void
-AppendGrantDatabases(StringInfo buf, GrantStmt *stmt)
+AppendGrantOnSchemaSchemas(StringInfo buf, GrantStmt *stmt)
 {
 	ListCell *cell = NULL;
 	appendStringInfo(buf, " ON SCHEMA ");
