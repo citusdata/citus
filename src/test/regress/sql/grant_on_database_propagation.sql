@@ -13,6 +13,7 @@ select has_database_privilege('regression', 'CREATE');
 RESET ROLE;
 
 revoke create on database regression from myuser;
+set role myuser;
 
 select has_database_privilege('regression', 'CREATE');
 \c - - - :worker_1_port
