@@ -4,14 +4,14 @@ grant create on database regression to myuser;
 set role myuser;
 select has_database_privilege('regression', 'CREATE');
  has_database_privilege 
-------------------------
+---------------------------------------------------------------------
  t
 (1 row)
 
 \c - - - :worker_1_port
 select has_database_privilege('regression', 'CREATE');
  has_database_privilege 
-------------------------
+---------------------------------------------------------------------
  t
 (1 row)
 
@@ -21,7 +21,7 @@ revoke create on database regression from myuser;
 set role myuser;
 select has_database_privilege('regression', 'CREATE');
  has_database_privilege 
-------------------------
+---------------------------------------------------------------------
  f
 (1 row)
 
@@ -29,7 +29,7 @@ select has_database_privilege('regression', 'CREATE');
 set role myuser;
 select has_database_privilege('regression', 'CREATE');
  has_database_privilege 
-------------------------
+---------------------------------------------------------------------
  f
 (1 row)
 
