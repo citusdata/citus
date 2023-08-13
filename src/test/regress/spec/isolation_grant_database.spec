@@ -21,12 +21,14 @@ step "s1-begin"
 
 step "s1-grant-create-db"
 {
+	select current_user;
 	grant create on database postgres to myuser;
 }
 
 step "s1-change-user"
 {
 	set session authorization myuser;
+	select current_user;
 }
 
 
