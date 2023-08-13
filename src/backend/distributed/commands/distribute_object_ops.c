@@ -76,7 +76,7 @@ static DistributeObjectOps Aggregate_Rename = {
 	.address = RenameFunctionStmtObjectAddress,
 	.markDistributed = false,
 };
-static DistributeObjectOps Aggregate_Grant = { //Grant_candidate
+static DistributeObjectOps Aggregate_Grant = { /*Grant_candidate */
 	.deparse = DeparseGrantOnFunctionStmt,
 	.qualify = NULL,
 	.preprocess = PreprocessGrantOnFunctionStmt,

@@ -50,6 +50,7 @@ AppendAlterDatabaseOwnerStmt(StringInfo buf, AlterOwnerStmt *stmt)
 					 RoleSpecString(stmt->newowner, true));
 }
 
+
 static void
 AppendGrantDatabases(StringInfo buf, GrantStmt *stmt)
 {
@@ -66,6 +67,7 @@ AppendGrantDatabases(StringInfo buf, GrantStmt *stmt)
 		}
 	}
 }
+
 
 static void
 AppendGrantOnDatabaseStmt(StringInfo buf, GrantStmt *stmt)
@@ -102,6 +104,7 @@ AppendGrantOnDatabaseStmt(StringInfo buf, GrantStmt *stmt)
 	}
 	appendStringInfo(buf, ";");
 }
+
 
 char *
 DeparseGrantOnDatabaseStmt(Node *node)
