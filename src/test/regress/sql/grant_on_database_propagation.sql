@@ -187,6 +187,9 @@ select has_database_privilege('regression', 'TEMPORARY');
 drop user myuser;
 -----------------------------------------------------------------------
 
+-- rollbacks public role database privileges to original state
+grant connect,temp,temporary  on database regression to public;
+
 
 
 
