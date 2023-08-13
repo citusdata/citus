@@ -1,5 +1,6 @@
 setup
 {
+	SET citus.log_remote_commands TO on;
 	create user myuser;
 	create user myuser2;
 	create user myuser3;
