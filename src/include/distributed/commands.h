@@ -221,7 +221,7 @@ extern List * AlterDatabaseOwnerObjectAddress(Node *node, bool missing_ok, bool
 extern List * DatabaseOwnerDDLCommands(const ObjectAddress *address);
 
 extern List * PreprocessGrantOnDatabaseStmt(Node *node, const char *queryString,
-							ProcessUtilityContext processUtilityContext);
+											ProcessUtilityContext processUtilityContext);
 
 /* domain.c - forward declarations */
 extern List * CreateDomainStmtObjectAddress(Node *node, bool missing_ok, bool

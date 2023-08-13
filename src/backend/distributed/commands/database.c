@@ -31,8 +31,8 @@
 
 static AlterOwnerStmt * RecreateAlterDatabaseOwnerStmt(Oid databaseOid);
 static Oid get_database_owner(Oid db_oid);
-List *PreprocessGrantOnDatabaseStmt(Node *node, const char *queryString,
-							ProcessUtilityContext processUtilityContext);
+List * PreprocessGrantOnDatabaseStmt(Node *node, const char *queryString,
+									 ProcessUtilityContext processUtilityContext);
 
 /* controlled via GUC */
 bool EnableAlterDatabaseOwner = true;
@@ -110,6 +110,7 @@ get_database_owner(Oid db_oid)
 	return dba;
 }
 
+
 /*
  * PreprocessGrantOnDatabaseStmt is executed before the statement is applied to the local
  * postgres instance.
@@ -119,7 +120,7 @@ get_database_owner(Oid db_oid)
  */
 List *
 PreprocessGrantOnDatabaseStmt(Node *node, const char *queryString,
-							ProcessUtilityContext processUtilityContext)
+							  ProcessUtilityContext processUtilityContext)
 {
 	if (!ShouldPropagate())
 	{
