@@ -78,6 +78,7 @@ test: isolation_citus_locks
 test: isolation_reference_table
 test: isolation_schema_based_sharding
 test: isolation_citus_schema_distribute_undistribute
+test: isolation_grant_database
 
 # Rebalancer
 test: isolation_blocking_move_single_shard_commands
