@@ -76,7 +76,7 @@ static DistributeObjectOps Aggregate_Rename = {
 	.address = RenameFunctionStmtObjectAddress,
 	.markDistributed = false,
 };
-static DistributeObjectOps Aggregate_Grant = {
+static DistributeObjectOps Aggregate_Grant = { //Grant_candidate
 	.deparse = DeparseGrantOnFunctionStmt,
 	.qualify = NULL,
 	.preprocess = PreprocessGrantOnFunctionStmt,
@@ -432,6 +432,18 @@ static DistributeObjectOps Database_AlterOwner = {
 	.address = AlterDatabaseOwnerObjectAddress,
 	.markDistributed = false,
 };
+
+static DistributeObjectOps Database_Grant = {
+	.deparse = DeparseGrantOnDatabaseStmt,
+	.qualify = NULL,
+	.preprocess = PreprocessGrantOnDatabaseStmt,
+	.postprocess = NULL,
+	.objectType = OBJECT_DATABASE,
+	.operationType = DIST_OPS_ALTER,
+	.address = NULL,
+	.markDistributed = false,
+};
+
 static DistributeObjectOps Domain_Alter = {
 	.deparse = DeparseAlterDomainStmt,
 	.qualify = QualifyAlterDomainStmt,
@@ -1909,6 +1921,11 @@ GetDistributeObjectOps(Node *node)
 				case OBJECT_ROUTINE:
 				{
 					return &Routine_Grant;
+				}
+
+				case OBJECT_DATABASE:
+				{
+					return &Database_Grant;
 				}
 
 				default:

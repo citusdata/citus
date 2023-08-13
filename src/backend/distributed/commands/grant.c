@@ -22,6 +22,7 @@
 #include "access/heapam.h"
 #include "commands/dbcommands.h"
 #include "utils/formatting.h"
+#include "distributed/metadata_sync.h"
 
 /* define a constant for pg_class which has value 1259 */
 #define PG_CLASS_ID_PG_CLASS 1259
@@ -32,12 +33,12 @@ static void DeparsePrivileges(GrantStmt *grantStmt, StringInfoData privsString);
 static void DeparseGrantees(GrantStmt *grantStmt, StringInfoData granteesString);
 static void BuildGrantStmt(StringInfoData ddlString, GrantStmt *grantStmt, StringInfoData targetString,
 						   StringInfoData privsString, StringInfoData granteesString);
-static void PrepareDDLJobsForTables(List *tableIdList, GrantStmt *grantStmt,
-									List *ddlJobs, StringInfoData ddlString,
-									StringInfoData privsString, StringInfoData granteesString, StringInfoData targetString);
-static void PrepareDDLJobsForDatabases(List *databaseIdLists, GrantStmt *grantStmt,
-									   List *ddlJobs, StringInfoData ddlString,
-									   StringInfoData privsString, StringInfoData granteesString, StringInfoData targetString);
+static List *PrepareDDLJobsForTables(List *tableIdList, GrantStmt *grantStmt,
+									 StringInfoData ddlString,
+									 StringInfoData privsString, StringInfoData granteesString, StringInfoData targetString);
+static List *PrepareDDLJobsForDatabases(List *databaseIdLists, GrantStmt *grantStmt,
+										StringInfoData ddlString,
+										StringInfoData privsString, StringInfoData granteesString, StringInfoData targetString);
 static List *CollectGrantDatabaseNameList(GrantStmt *grantStmt);
 static List *CollectGrantTableIdList(GrantStmt *grantStmt);
 
@@ -151,13 +152,15 @@ BuildGrantStmt(StringInfoData ddlString, GrantStmt *grantStmt, StringInfoData ta
 					 grantOption);
 }
 
-static void
-PrepareDDLJobsForTables(List *tableIdList, GrantStmt *grantStmt, List *ddlJobs,
+static List *
+PrepareDDLJobsForTables(List *tableIdList, GrantStmt *grantStmt,
 						StringInfoData ddlString,
 						StringInfoData privsString, StringInfoData granteesString,
 						StringInfoData targetString)
 {
 	ListCell *tableListCell = NULL;
+	List *ddlJobs = NIL;
+
 	foreach (tableListCell, tableIdList)
 	{
 		Oid relationId = lfirst_oid(tableListCell);
@@ -184,15 +187,17 @@ PrepareDDLJobsForTables(List *tableIdList, GrantStmt *grantStmt, List *ddlJobs,
 
 		resetStringInfo(&ddlString);
 	}
+	return ddlJobs;
 }
 
-static void
-PrepareDDLJobsForDatabases(List *databaseIdLists, GrantStmt *grantStmt, List *ddlJobs,
+static List *
+PrepareDDLJobsForDatabases(List *databaseIdLists, GrantStmt *grantStmt,
 						   StringInfoData ddlString,
 						   StringInfoData privsString, StringInfoData granteesString,
 						   StringInfoData targetString)
 {
 	ListCell *databaseListCell = NULL;
+	List *ddlJobs = NIL;
 	foreach (databaseListCell, databaseIdLists)
 	{
 		Oid relationId = lfirst_oid(databaseListCell);
@@ -202,21 +207,20 @@ PrepareDDLJobsForDatabases(List *databaseIdLists, GrantStmt *grantStmt, List *dd
 
 		BuildGrantStmt(ddlString, grantStmt, targetString, privsString, granteesString);
 
-		DDLJob *ddlJob = palloc0(sizeof(DDLJob));
-		do
-		{
-			(ddlJob->targetObjectAddress).classId = (PG_CLASS_ID_PG_DATABASE);
-			(ddlJob->targetObjectAddress).objectId = (relationId);
-			(ddlJob->targetObjectAddress).objectSubId = (0);
-		} while (0);
-		ddlJob->metadataSyncCommand = pstrdup(ddlString.data);
-		ddlJob->taskList = NIL;
+		char *sql = ddlString.data;
 
-		ddlJobs = lappend(ddlJobs, ddlJob);
+		List *commands = list_make3(DISABLE_DDL_PROPAGATION,
+									(void *)sql ,
+									ENABLE_DDL_PROPAGATION);
 
-		resetStringInfo(&ddlString);
+		ddlJobs = list_concat(ddlJobs,
+							  NodeDDLTaskList(NON_COORDINATOR_NODES, commands));
+
 	}
+	return ddlJobs;
 }
+
+
 
 /*
  * PreprocessGrantStmt determines whether a given GRANT/REVOKE statement involves
@@ -278,8 +282,6 @@ PreprocessGrantStmt(Node *node, const char *queryString,
 	/* deparse the grantees */
 	DeparseGrantees(grantStmt, granteesString);
 
-
-
 	/*
 	 * Deparse the target objects, and issue the deparsed statements to
 	 * workers, if applicable. That's so we easily can replicate statements
@@ -287,13 +289,13 @@ PreprocessGrantStmt(Node *node, const char *queryString,
 	 */
 	if (grantStmt->objtype == OBJECT_DATABASE)
 	{
-		PrepareDDLJobsForDatabases(objectList, grantStmt, ddlJobs, ddlString, privsString,
-								   granteesString, targetString);
+		ddlJobs = PrepareDDLJobsForDatabases(objectList, grantStmt, ddlString, privsString,
+											 granteesString, targetString);
 	}
 	else
 	{
-		PrepareDDLJobsForTables(objectList, grantStmt, ddlJobs, ddlString, privsString,
-								granteesString, targetString);
+		ddlJobs = PrepareDDLJobsForTables(objectList, grantStmt, ddlString, privsString,
+										  granteesString, targetString);
 	}
 
 	return ddlJobs;
