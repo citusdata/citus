@@ -9,7 +9,7 @@ setup
 
 teardown
 {
-    DROP TABLE employee,company,city;
+    DROP user myuser, myuser2, myuser3;
 }
 
 session "s1"
@@ -17,11 +17,12 @@ session "s1"
 step "s1-begin"
 {
     BEGIN;
+	select current_user;
+	select current_database();
 }
 
 step "s1-grant-create-db"
 {
-	select current_user;
 	grant create on database postgres to myuser;
 }
 
