@@ -5,18 +5,18 @@ create user myuser;
 grant create on database regression to myuser;
 set role myuser;
 
-select has_database_privilege('gurkanindibay', 'CREATE');
+select has_database_privilege('regression', 'CREATE');
 \c - - - :worker_1_port
-select has_database_privilege('gurkanindibay', 'CREATE');
+select has_database_privilege('regression', 'CREATE');
 \c - - - :master_port
 
 RESET ROLE;
 
 revoke create on database regression from myuser;
 
-select has_database_privilege('gurkanindibay', 'CREATE');
+select has_database_privilege('regression', 'CREATE');
 \c - - - :worker_1_port
-select has_database_privilege('gurkanindibay', 'CREATE');
+select has_database_privilege('regression', 'CREATE');
 \c - - - :master_port
 
 drop user myuser;
