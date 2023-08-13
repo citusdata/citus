@@ -220,6 +220,9 @@ extern List * AlterDatabaseOwnerObjectAddress(Node *node, bool missing_ok, bool
 											  isPostprocess);
 extern List * DatabaseOwnerDDLCommands(const ObjectAddress *address);
 
+extern List * PreprocessGrantOnDatabaseStmt(Node *node, const char *queryString,
+							ProcessUtilityContext processUtilityContext);
+
 /* domain.c - forward declarations */
 extern List * CreateDomainStmtObjectAddress(Node *node, bool missing_ok, bool
 											isPostprocess);
@@ -234,6 +237,7 @@ extern List * RenameDomainStmtObjectAddress(Node *node, bool missing_ok, bool
 											isPostprocess);
 extern CreateDomainStmt * RecreateDomainStmt(Oid domainOid);
 extern Oid get_constraint_typid(Oid conoid);
+
 
 /* extension.c - forward declarations */
 extern bool IsDropCitusExtensionStmt(Node *parsetree);
