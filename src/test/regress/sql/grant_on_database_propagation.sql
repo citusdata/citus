@@ -3,6 +3,9 @@
 -- since public role privileges are inherited by new roles/users
 revoke connect,temp,temporary  on database regression from public;
 
+CREATE SCHEMA grant_on_database_propagation;
+SET search_path TO grant_on_database_propagation;
+
 -- test grant/revoke CREATE privilege propagation on database
 create user myuser;
 
@@ -230,6 +233,9 @@ drop user myuser;
 -- rollbacks public role database privileges to original state
 grant connect,temp,temporary  on database regression to public;
 
+
+SET client_min_messages TO ERROR;
+DROP SCHEMA grant_on_database_propagation CASCADE;
 
 
 
