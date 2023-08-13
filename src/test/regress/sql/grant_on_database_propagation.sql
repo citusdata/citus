@@ -187,6 +187,46 @@ select has_database_privilege('regression', 'TEMPORARY');
 drop user myuser;
 -----------------------------------------------------------------------
 
+-- test CREATE,CONNECT,TEMP,TEMPORARY privileges one by one on database with grant option
+create user myuser;
+create user myuser_1;
+
+grant CREATE,CONNECT,TEMP,TEMPORARY on database regression to myuser;
+set role myuser;
+
+grant CREATE,CONNECT,TEMP,TEMPORARY on database regression to myuser_1;
+
+set role myuser_1;
+select has_database_privilege('regression', 'CREATE');
+select has_database_privilege('regression', 'CONNECT');
+select has_database_privilege('regression', 'TEMP');
+select has_database_privilege('regression', 'TEMPORARY');
+
+RESET ROLE;
+
+grant CREATE,CONNECT,TEMP,TEMPORARY on database regression to myuser with grant option;
+set role myuser;
+
+grant CREATE,CONNECT,TEMP,TEMPORARY on database regression to myuser_1;
+
+set role myuser_1;
+select has_database_privilege('regression', 'CREATE');
+select has_database_privilege('regression', 'CONNECT');
+select has_database_privilege('regression', 'TEMP');
+select has_database_privilege('regression', 'TEMPORARY');
+
+RESET ROLE;
+
+revoke  CREATE,CONNECT,TEMP,TEMPORARY on database regression from myuser_1;
+revoke  CREATE,CONNECT,TEMP,TEMPORARY on database regression from myuser cascade;
+
+
+
+
+drop user myuser_1;
+drop user myuser;
+-----------------------------------------------------------------------
+
 -- rollbacks public role database privileges to original state
 grant connect,temp,temporary  on database regression to public;
 

@@ -376,5 +376,72 @@ select has_database_privilege('regression', 'TEMPORARY');
 \c - - - :master_port
 drop user myuser;
 ---------------------------------------------------------------------
+-- test CREATE,CONNECT,TEMP,TEMPORARY privileges one by one on database with grant option
+create user myuser;
+create user myuser_1;
+grant CREATE,CONNECT,TEMP,TEMPORARY on database regression to myuser;
+set role myuser;
+grant CREATE,CONNECT,TEMP,TEMPORARY on database regression to myuser_1;
+WARNING:  no privileges were granted for "regression"
+set role myuser_1;
+select has_database_privilege('regression', 'CREATE');
+ has_database_privilege
+---------------------------------------------------------------------
+ f
+(1 row)
+
+select has_database_privilege('regression', 'CONNECT');
+ has_database_privilege
+---------------------------------------------------------------------
+ f
+(1 row)
+
+select has_database_privilege('regression', 'TEMP');
+ has_database_privilege
+---------------------------------------------------------------------
+ f
+(1 row)
+
+select has_database_privilege('regression', 'TEMPORARY');
+ has_database_privilege
+---------------------------------------------------------------------
+ f
+(1 row)
+
+RESET ROLE;
+grant CREATE,CONNECT,TEMP,TEMPORARY on database regression to myuser with grant option;
+set role myuser;
+grant CREATE,CONNECT,TEMP,TEMPORARY on database regression to myuser_1;
+set role myuser_1;
+select has_database_privilege('regression', 'CREATE');
+ has_database_privilege
+---------------------------------------------------------------------
+ t
+(1 row)
+
+select has_database_privilege('regression', 'CONNECT');
+ has_database_privilege
+---------------------------------------------------------------------
+ t
+(1 row)
+
+select has_database_privilege('regression', 'TEMP');
+ has_database_privilege
+---------------------------------------------------------------------
+ t
+(1 row)
+
+select has_database_privilege('regression', 'TEMPORARY');
+ has_database_privilege
+---------------------------------------------------------------------
+ t
+(1 row)
+
+RESET ROLE;
+revoke  CREATE,CONNECT,TEMP,TEMPORARY on database regression from myuser_1;
+revoke  CREATE,CONNECT,TEMP,TEMPORARY on database regression from myuser cascade;
+drop user myuser_1;
+drop user myuser;
+---------------------------------------------------------------------
 -- rollbacks public role database privileges to original state
 grant connect,temp,temporary  on database regression to public;
