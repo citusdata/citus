@@ -24,18 +24,18 @@ step "s1-grant-create-db"
 	grant create on database postgres to myuser;
 }
 
-step "s1-grant-create-db"
+step "s1-change-user"
 {
 	set session authorization myuser;
 }
 
 
-step "s1-create schema"
+step "s1-create-schema"
 {
 	create schema myschema;
 }
 
-step "s1-drop schema"
+step "s1-drop-schema"
 {
 	drop schema myschema;
 }
@@ -47,5 +47,5 @@ step "s1-end"{
 
 
 
-permutation "s1-begin"  "s1-grant-create-db" "s1-grant-create-db" "s1-create schema" "s1-drop-schema" "s1-end"
+permutation "s1-begin"  "s1-grant-create-db" "s1-change-user" "s1-create-schema" "s1-drop-schema" "s1-end"
 
