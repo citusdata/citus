@@ -25,11 +25,9 @@ step "s1-begin"
 step "s1-grant-create-db"
 {
 	SET citus.log_remote_commands TO on;
+	create user myuser4;
 	grant create on database regression to myuser;
 }
-
-
-
 
 step "s1-create-schema"
 {
