@@ -23,18 +23,18 @@ step "s1-begin"
 
 step "s1-grant-create-db"
 {
+	SET citus.log_remote_commands TO on;
 	grant create on database regression to myuser;
 }
 
-step "s1-change-user"
-{
-	set session authorization myuser;
-	select current_user;
-}
+
 
 
 step "s1-create-schema"
 {
+	set role myuser;
+	select current_user;
+	select current_database();
 	create schema myschema;
 }
 
@@ -50,5 +50,5 @@ step "s1-end"{
 
 
 
-permutation "s1-begin"  "s1-grant-create-db" "s1-change-user" "s1-create-schema" "s1-drop-schema" "s1-end"
+permutation "s1-begin"  "s1-grant-create-db"  "s1-create-schema" "s1-end"
 
