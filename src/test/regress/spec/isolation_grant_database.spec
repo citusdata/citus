@@ -23,7 +23,7 @@ step "s1-begin"
 
 step "s1-grant-create-db"
 {
-	grant create on database postgres to myuser;
+	grant create on database regression to myuser;
 }
 
 step "s1-change-user"
