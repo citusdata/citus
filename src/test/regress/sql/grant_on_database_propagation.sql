@@ -27,7 +27,7 @@ select has_database_privilege('regression', 'CREATE');
 \c - - - :master_port
 
 drop user myuser;
-------------------------------------------------------------------------------------------------------------------------
+-----------------------------------------------------------------------
 
 -- test grant/revoke CONNECT privilege propagation on database
 create user myuser;
@@ -53,6 +53,8 @@ select has_database_privilege('regression', 'CONNECT');
 \c - - - :master_port
 
 drop user myuser;
+
+-----------------------------------------------------------------------
 
 -- test grant/revoke TEMP privilege propagation on database
 create user myuser;
@@ -80,6 +82,8 @@ select has_database_privilege('regression', 'TEMP');
 
 drop user myuser;
 
+-----------------------------------------------------------------------
+
 -- test temporary privilege on database
 create user myuser;
 
@@ -105,7 +109,7 @@ select has_database_privilege('regression', 'TEMPORARY');
 \c - - - :master_port
 
 drop user myuser;
-
+-----------------------------------------------------------------------
 
 -- test ALL privileges with ALL statement on database
 create user myuser;
@@ -143,7 +147,7 @@ select has_database_privilege('regression', 'TEMPORARY');
 \c - - - :master_port
 
 drop user myuser;
-
+-----------------------------------------------------------------------
 
 -- test CREATE,CONNECT,TEMP,TEMPORARY privileges one by one on database
 create user myuser;
@@ -181,7 +185,7 @@ select has_database_privilege('regression', 'TEMPORARY');
 \c - - - :master_port
 
 drop user myuser;
-
+-----------------------------------------------------------------------
 
 
 
