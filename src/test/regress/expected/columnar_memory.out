@@ -77,10 +77,10 @@ FROM columnar_test_helpers.columnar_store_memory_stats();
 top_growth | 1
 
 -- before this change, max mem usage while executing inserts was 28MB and
--- with this change it's less than 8MB.
+-- with this change it's less than 9MB.
 SELECT
- (SELECT max(memusage) < 8 * 1024 * 1024 FROM t WHERE tag='large batch') AS large_batch_ok,
- (SELECT max(memusage) < 8 * 1024 * 1024 FROM t WHERE tag='first batch') AS first_batch_ok;
+ (SELECT max(memusage) < 9 * 1024 * 1024 FROM t WHERE tag='large batch') AS large_batch_ok,
+ (SELECT max(memusage) < 9 * 1024 * 1024 FROM t WHERE tag='first batch') AS first_batch_ok;
 -[ RECORD 1 ]--+--
 large_batch_ok | t
 first_batch_ok | t

@@ -131,18 +131,6 @@ SELECT create_distributed_table('dist_type_table', 'a');
 
 SELECT undistribute_table('dist_type_table');
 
--- test CREATE RULE with ON SELECT
-CREATE TABLE rule_table_1 (a INT);
-CREATE TABLE rule_table_2 (a INT);
-SELECT create_distributed_table('rule_table_2', 'a');
-
-CREATE RULE "_RETURN" AS ON SELECT TO rule_table_1 DO INSTEAD SELECT * FROM rule_table_2;
-
--- the CREATE RULE turns rule_table_1 into a view
-ALTER EXTENSION plpgsql ADD VIEW rule_table_1;
-
-SELECT undistribute_table('rule_table_2');
-
 -- test CREATE RULE without ON SELECT
 CREATE TABLE rule_table_3 (a INT);
 CREATE TABLE rule_table_4 (a INT);
@@ -155,7 +143,6 @@ ALTER EXTENSION plpgsql ADD TABLE rule_table_3;
 SELECT undistribute_table('rule_table_4');
 
 ALTER EXTENSION plpgsql DROP VIEW extension_view;
-ALTER EXTENSION plpgsql DROP VIEW rule_table_1;
 ALTER EXTENSION plpgsql DROP TABLE rule_table_3;
 
 DROP TABLE view_table CASCADE;

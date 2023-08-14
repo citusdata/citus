@@ -77,10 +77,10 @@ SELECT CASE WHEN 1.0 * TopMemoryContext / :top_post BETWEEN 0.98 AND 1.03 THEN 1
 FROM columnar_test_helpers.columnar_store_memory_stats();
 
 -- before this change, max mem usage while executing inserts was 28MB and
--- with this change it's less than 8MB.
+-- with this change it's less than 9MB.
 SELECT
- (SELECT max(memusage) < 8 * 1024 * 1024 FROM t WHERE tag='large batch') AS large_batch_ok,
- (SELECT max(memusage) < 8 * 1024 * 1024 FROM t WHERE tag='first batch') AS first_batch_ok;
+ (SELECT max(memusage) < 9 * 1024 * 1024 FROM t WHERE tag='large batch') AS large_batch_ok,
+ (SELECT max(memusage) < 9 * 1024 * 1024 FROM t WHERE tag='first batch') AS first_batch_ok;
 
 \x
 

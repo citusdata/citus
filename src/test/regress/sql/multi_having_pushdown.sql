@@ -43,7 +43,7 @@ EXPLAIN (COSTS FALSE)
     SELECT sum(l_extendedprice * l_discount) as revenue
     FROM lineitem_hash, orders_hash
     WHERE o_orderkey = l_orderkey
-    GROUP BY l_orderkey, o_orderkey, l_shipmode HAVING sum(l_quantity) > 24
+    GROUP BY l_orderkey, l_shipmode HAVING sum(l_quantity) > 24
     ORDER BY 1 DESC LIMIT 3;
 
 EXPLAIN (COSTS FALSE)

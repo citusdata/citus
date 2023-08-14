@@ -1915,6 +1915,9 @@ SubqueryPushdownMultiNodeTree(Query *originalQuery)
 	pushedDownQuery->targetList = subqueryTargetEntryList;
 	pushedDownQuery->jointree = copyObject(queryTree->jointree);
 	pushedDownQuery->rtable = copyObject(queryTree->rtable);
+#if PG_VERSION_NUM >= PG_VERSION_16
+	pushedDownQuery->rteperminfos = copyObject(queryTree->rteperminfos);
+#endif
 	pushedDownQuery->setOperations = copyObject(queryTree->setOperations);
 	pushedDownQuery->querySource = queryTree->querySource;
 	pushedDownQuery->hasSubLinks = queryTree->hasSubLinks;

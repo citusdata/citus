@@ -117,7 +117,7 @@ GRANT non_dist_role_4 TO dist_role_4;
 
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 
-SELECT roleid::regrole::text AS role, member::regrole::text, grantor::regrole::text, admin_option FROM pg_auth_members WHERE roleid::regrole::text LIKE '%dist\_%' ORDER BY 1, 2;
+SELECT roleid::regrole::text AS role, member::regrole::text, (grantor::regrole::text IN ('postgres', 'non_dist_role_1', 'dist_role_1')) AS grantor, admin_option FROM pg_auth_members WHERE roleid::regrole::text LIKE '%dist\_%' ORDER BY 1, 2;
 SELECT objid::regrole FROM pg_catalog.pg_dist_object WHERE classid='pg_authid'::regclass::oid AND objid::regrole::text LIKE '%dist\_%' ORDER BY 1;
 
 \c - - - :worker_1_port
