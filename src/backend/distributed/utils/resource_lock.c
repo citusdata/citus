@@ -505,23 +505,26 @@ SetLocktagForShardDistributionMetadata(int64 shardId, LOCKTAG *tag)
 
 
 /*
- * LockReferencedReferenceShardDistributionMetadata acquires shard distribution
- * metadata locks with the given lock mode on the reference tables which has a
+ * LockReferencedShardDistributionMetadata acquires shard distribution
+ * metadata locks with the given lock mode on tables with given type which has a
  * foreign key from the given relation.
  *
  * It also gets metadata locks on worker nodes to prevent concurrent write
  * operations on reference tables from metadata nodes.
  */
 void
-LockReferencedReferenceShardDistributionMetadata(uint64 shardId, LOCKMODE lockMode)
+LockReferencedShardDistributionMetadata(uint64 shardId, CitusTableType tableType,
+										LOCKMODE lockMode)
 {
 	Oid relationId = RelationIdForShard(shardId);
 
 	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
 	List *referencedRelationList = cacheEntry->referencedRelationsViaForeignKey;
-	List *shardIntervalList = GetSortedReferenceShardIntervals(referencedRelationList);
+	List *shardIntervalList =
+		GetSortedReferenceShardIntervals(referencedRelationList, tableType);
 
-	if (list_length(shardIntervalList) > 0 && ClusterHasKnownMetadataWorkers())
+	if (tableType == REFERENCE_TABLE &&
+		list_length(shardIntervalList) > 0 && ClusterHasKnownMetadataWorkers())
 	{
 		LockShardListMetadataOnWorkers(lockMode, shardIntervalList);
 	}
@@ -555,7 +558,7 @@ LockReferencedReferenceShardResources(uint64 shardId, LOCKMODE lockMode)
 	 */
 	List *referencedRelationList = cacheEntry->referencedRelationsViaForeignKey;
 	List *referencedShardIntervalList =
-		GetSortedReferenceShardIntervals(referencedRelationList);
+		GetSortedReferenceShardIntervals(referencedRelationList, REFERENCE_TABLE);
 
 	if (list_length(referencedShardIntervalList) > 0 &&
 		ClusterHasKnownMetadataWorkers() &&
@@ -580,17 +583,18 @@ LockReferencedReferenceShardResources(uint64 shardId, LOCKMODE lockMode)
 
 /*
  * GetSortedReferenceShardIntervals iterates through the given relation list,
- * lists the shards of reference tables, and returns the list after sorting.
+ * lists the shards of tables that are classified as the given table type and
+ * returns the list after sorting.
  */
 List *
-GetSortedReferenceShardIntervals(List *relationList)
+GetSortedReferenceShardIntervals(List *relationList, CitusTableType tableType)
 {
 	List *shardIntervalList = NIL;
 
 	Oid relationId = InvalidOid;
 	foreach_oid(relationId, relationList)
 	{
-		if (!IsCitusTableType(relationId, REFERENCE_TABLE))
+		if (!IsCitusTableType(relationId, tableType))
 		{
 			continue;
 		}

@@ -82,6 +82,7 @@ ORDER BY 1;
  function citus_internal_start_replication_origin_tracking()
  function citus_internal_stop_replication_origin_tracking()
  function citus_internal_unregister_tenant_schema_globally(oid,text)
+ function citus_internal_update_none_dist_table_metadata(oid,"char",bigint,boolean)
  function citus_internal_update_placement_metadata(bigint,integer,integer)
  function citus_internal_update_relation_colocation(oid,integer)
  function citus_is_clock_after(cluster_clock,cluster_clock)
@@ -252,6 +253,7 @@ ORDER BY 1;
  function worker_apply_shard_ddl_command(bigint,text,text)
  function worker_change_sequence_dependency(regclass,regclass,regclass)
  function worker_copy_table_to_node(regclass,integer)
+ function worker_copy_table_to_node(regclass,integer,boolean)
  function worker_create_or_alter_role(text,text,text)
  function worker_create_or_replace_object(text)
  function worker_create_or_replace_object(text[])
@@ -338,5 +340,5 @@ ORDER BY 1;
  view citus_stat_tenants_local
  view pg_dist_shard_placement
  view time_partitions
-(328 rows)
+(330 rows)
 

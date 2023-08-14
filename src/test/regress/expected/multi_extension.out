@@ -1399,9 +1399,11 @@ SELECT * FROM multi_extension.print_extension_changes();
 -- Snapshot of state at 12.1-1
 ALTER EXTENSION citus UPDATE TO '12.1-1';
 SELECT * FROM multi_extension.print_extension_changes();
- previous_object | current_object
+ previous_object |                                     current_object
 ---------------------------------------------------------------------
-(0 rows)
+                 | function citus_internal_update_none_dist_table_metadata(oid,"char",bigint,boolean) void
+                 | function worker_copy_table_to_node(regclass,integer,boolean) void
+(2 rows)
 
 DROP TABLE multi_extension.prev_objects, multi_extension.extension_diff;
 -- show running version

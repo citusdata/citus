@@ -240,7 +240,8 @@ LogicallyReplicateShards(List *shardList, char *sourceNodeName, int sourceNodePo
 		sourceNodePort,
 		PLACEMENT_UPDATE_STATUS_COPYING_DATA);
 
-	CopyShardsToNode(sourceNode, targetNode, shardList, snapshot);
+	bool transactional = false;
+	CopyShardsToNode(sourceNode, targetNode, shardList, snapshot, transactional);
 
 	/*
 	 * We can close this connection now, because we're done copying the

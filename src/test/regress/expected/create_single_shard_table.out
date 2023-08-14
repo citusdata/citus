@@ -614,11 +614,11 @@ INSERT INTO "Table?!.1Table" VALUES (10, 15, (150, row_to_json(row(4,8)))::int_j
 INSERT INTO "Table?!.1Table" VALUES (5, 5, (5, row_to_json(row(5,5)))::int_jsonb_type, row_to_json(row(5,5), true));
 -- tuples that are supposed to violate different data type / check constraints
 INSERT INTO "Table?!.1Table"(id, jsondata, name) VALUES (101, '{"a": 1}', 'text_1');
-ERROR:  conflicting key value violates exclusion constraint "Table?!.1Table_name_excl_1730043"
+ERROR:  conflicting key value violates exclusion constraint "Table?!.1Table_name_excl_1730042"
 DETAIL:  Key (name)=(text_1) conflicts with existing key (name)=(text_1).
 CONTEXT:  while executing command on localhost:xxxxx
 INSERT INTO "Table?!.1Table"(id, jsondata, price) VALUES (101, '{"a": 1}', -1);
-ERROR:  new row for relation "Table?!.1Table_1730043" violates check constraint "Table?!.1Table_price_check"
+ERROR:  new row for relation "Table?!.1Table_1730042" violates check constraint "Table?!.1Table_price_check"
 DETAIL:  Failing row contains (101, null, null, {"a": 1}, null, -1, 0, null, 5, 14, 74).
 CONTEXT:  while executing command on localhost:xxxxx
 INSERT INTO "Table?!.1Table"(id, jsondata, age_with_default_col) VALUES (101, '{"a": 1}', -1);
@@ -863,7 +863,7 @@ CREATE INDEX "my!Index2New" ON "NULL_!_dist_key"."nullKeyTable.1!?!9012345678901
 CREATE UNIQUE INDEX uniqueIndex2New ON "NULL_!_dist_key"."nullKeyTable.1!?!9012345678901234567890123456789012345678901234567890123456789"(id);
 -- error out for already existing, because of the unique index
 INSERT INTO "NULL_!_dist_key"."nullKeyTable.1!?!9012345678901234567890123456789012345678901234567890123456789" VALUES (1, 1, row_to_json(row(1,1), true));
-ERROR:  duplicate key value violates unique constraint "partition1_nullKeyTable.1!?!901234567890123456_bf4a8ac1_1730056"
+ERROR:  duplicate key value violates unique constraint "partition1_nullKeyTable.1!?!901234567890123456_bf4a8ac1_1730054"
 DETAIL:  Key (id)=(X) already exists.
 CONTEXT:  while executing command on localhost:xxxxx
 -- verify all 4 shard indexes are created on the same node
@@ -895,8 +895,8 @@ DETAIL:  Reference tables and local tables can only have foreign keys to referen
 ROLLBACK;
 -- errors out because of foreign key violation
 INSERT INTO "NULL_!_dist_key"."nullKeyTable.1!?!9012345678901234567890123456789012345678901234567890123456789" VALUES (100, 1, row_to_json(row(1,1), true));
-ERROR:  insert or update on table "partition100_nullKeyTable.1!?!9012345678901234_0aba0bf3_1730058" violates foreign key constraint "fkey_to_dummy_ref_1730055"
-DETAIL:  Key (id)=(X) is not present in table "dummy_reference_table_1730059".
+ERROR:  insert or update on table "partition100_nullKeyTable.1!?!9012345678901234_0aba0bf3_1730056" violates foreign key constraint "fkey_to_dummy_ref_1730053"
+DETAIL:  Key (id)=(X) is not present in table "dummy_reference_table_1730057".
 CONTEXT:  while executing command on localhost:xxxxx
 -- now inserts successfully
 INSERT INTO dummy_reference_table VALUES (100);
@@ -1163,7 +1163,7 @@ BEGIN;
   INSERT INTO referencing_table VALUES (1, 2);
   -- fails
   INSERT INTO referencing_table VALUES (2, 2);
-ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_fkey_1730100"
+ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_fkey_1730098"
 DETAIL:  Key (a)=(2) is not present in table "referenced_table_xxxxxxx".
 CONTEXT:  while executing command on localhost:xxxxx
 ROLLBACK;
@@ -1209,7 +1209,7 @@ BEGIN;
   INSERT INTO referencing_table VALUES (1, 2);
   -- fails
   INSERT INTO referencing_table VALUES (2, 2);
-ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_fkey_1730136"
+ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_fkey_1730133"
 DETAIL:  Key (a)=(2) is not present in table "referenced_table_xxxxxxx".
 CONTEXT:  while executing command on localhost:xxxxx
 ROLLBACK;
@@ -1327,8 +1327,8 @@ SELECT result, success FROM run_command_on_workers($$
 $$);
                                                               result                                                              | success
 ---------------------------------------------------------------------
- ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_fkey_1730153" | f
- ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_fkey_1730153" | f
+ ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_fkey_1730146" | f
+ ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_fkey_1730146" | f
 (2 rows)
 
 DROP TABLE referencing_table, referenced_table;
@@ -1343,8 +1343,8 @@ SELECT create_distributed_table('self_fkey_test', NULL, distribution_type=>null)
 
 INSERT INTO self_fkey_test VALUES (1, 1); -- ok
 INSERT INTO self_fkey_test VALUES (2, 3); -- fails
-ERROR:  insert or update on table "self_fkey_test_1730154" violates foreign key constraint "self_fkey_test_b_fkey_1730154"
-DETAIL:  Key (b)=(3) is not present in table "self_fkey_test_1730154".
+ERROR:  insert or update on table "self_fkey_test_1730147" violates foreign key constraint "self_fkey_test_b_fkey_1730147"
+DETAIL:  Key (b)=(3) is not present in table "self_fkey_test_1730147".
 CONTEXT:  while executing command on localhost:xxxxx
 -- similar foreign key tests but this time create the referencing table later on
 -- referencing table is a single-shard table
@@ -1368,7 +1368,7 @@ BEGIN;
   INSERT INTO referencing_table VALUES (1, 2);
   -- fails
   INSERT INTO referencing_table VALUES (2, 2);
-ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_fkey_1730156"
+ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_fkey_1730149"
 DETAIL:  Key (a)=(2) is not present in table "referenced_table_xxxxxxx".
 CONTEXT:  while executing command on localhost:xxxxx
 ROLLBACK;
@@ -1391,7 +1391,7 @@ BEGIN;
   INSERT INTO referencing_table VALUES (2, 1);
   -- fails
   INSERT INTO referencing_table VALUES (1, 2);
-ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_b_fkey_1730158"
+ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_b_fkey_1730151"
 DETAIL:  Key (a, b)=(1, 2) is not present in table "referenced_table_xxxxxxx".
 CONTEXT:  while executing command on localhost:xxxxx
 ROLLBACK;
@@ -1498,7 +1498,7 @@ BEGIN;
   INSERT INTO referencing_table VALUES (1, 2);
   -- fails
   INSERT INTO referencing_table VALUES (2, 2);
-ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_fkey_1730199"
+ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_a_fkey_1730191"
 DETAIL:  Key (a)=(2) is not present in table "referenced_table_xxxxxxx".
 CONTEXT:  while executing command on localhost:xxxxx
 ROLLBACK;

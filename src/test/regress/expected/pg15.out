@@ -868,7 +868,7 @@ SELECT create_reference_table('FKTABLE');
 (1 row)
 
 -- show that the definition is expected
-SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conrelid = 'fktable'::regclass::oid ORDER BY oid;
+SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conrelid = 'fktable'::regclass::oid ORDER BY 1;
                                                 pg_get_constraintdef
 ---------------------------------------------------------------------
  FOREIGN KEY (tid, fk_id_del_set_default) REFERENCES pktable(tid, id) ON DELETE SET DEFAULT (fk_id_del_set_default)
@@ -881,8 +881,8 @@ SET search_path TO pg15;
 SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conrelid = 'fktable'::regclass::oid ORDER BY oid;
                                                 pg_get_constraintdef
 ---------------------------------------------------------------------
- FOREIGN KEY (tid, fk_id_del_set_default) REFERENCES pktable(tid, id) ON DELETE SET DEFAULT (fk_id_del_set_default)
  FOREIGN KEY (tid, fk_id_del_set_null) REFERENCES pktable(tid, id) ON DELETE SET NULL (fk_id_del_set_null)
+ FOREIGN KEY (tid, fk_id_del_set_default) REFERENCES pktable(tid, id) ON DELETE SET DEFAULT (fk_id_del_set_default)
 (2 rows)
 
 -- also, make sure that it works as expected

@@ -23,11 +23,16 @@ extern void TransferShards(int64 shardId,
 						   char *sourceNodeName, int32 sourceNodePort,
 						   char *targetNodeName, int32 targetNodePort,
 						   char shardReplicationMode, ShardTransferType transferType);
+extern void TransferCitusLocalTableShardInXact(int64 shardId,
+											   char *sourceNodeName, int32 sourceNodePort,
+											   char *targetNodeName, int32 targetNodePort,
+											   ShardTransferType transferType);
 extern uint64 ShardListSizeInBytes(List *colocatedShardList,
 								   char *workerNodeName, uint32 workerNodePort);
 extern void ErrorIfMoveUnsupportedTableType(Oid relationId);
 extern void CopyShardsToNode(WorkerNode *sourceNode, WorkerNode *targetNode,
-							 List *shardIntervalList, char *snapshotName);
+							 List *shardIntervalList, char *snapshotName,
+							 bool transactional);
 extern void VerifyTablesHaveReplicaIdentity(List *colocatedTableList);
 extern bool RelationCanPublishAllModifications(Oid relationId);
 extern void UpdatePlacementUpdateStatusForShardIntervalList(List *shardIntervalList,

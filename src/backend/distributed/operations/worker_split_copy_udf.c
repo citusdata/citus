@@ -274,10 +274,12 @@ CreateShardCopyDestReceivers(EState *estate, ShardInterval *shardIntervalToSplit
 		char *destinationShardNameCopy = pstrdup(sourceShardNamePrefix);
 		AppendShardIdToName(&destinationShardNameCopy, splitCopyInfo->destinationShardId);
 
+		bool exclusiveConnection = true;
 		DestReceiver *shardCopyDest = CreateShardCopyDestReceiver(
 			estate,
 			list_make2(destinationShardSchemaName, destinationShardNameCopy),
-			splitCopyInfo->destinationShardNodeId);
+			splitCopyInfo->destinationShardNodeId,
+			exclusiveConnection);
 
 		shardCopyDests[index] = shardCopyDest;
 		index++;

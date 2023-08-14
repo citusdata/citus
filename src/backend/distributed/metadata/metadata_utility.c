@@ -2244,6 +2244,93 @@ UpdateDistributionColumn(Oid relationId, char distributionMethod, Var *distribut
 
 
 /*
+ * UpdateNoneDistTableMetadataGlobally globally updates pg_dist_partition for
+ * given none-distributed table.
+ */
+void
+UpdateNoneDistTableMetadataGlobally(Oid relationId, char replicationModel,
+									uint32 colocationId, bool autoConverted)
+{
+	UpdateNoneDistTableMetadata(relationId, replicationModel,
+								colocationId, autoConverted);
+
+	if (ShouldSyncTableMetadata(relationId))
+	{
+		char *metadataCommand =
+			UpdateNoneDistTableMetadataCommand(relationId,
+											   replicationModel,
+											   colocationId,
+											   autoConverted);
+		SendCommandToWorkersWithMetadata(metadataCommand);
+	}
+}
+
+
+/*
+ * UpdateNoneDistTableMetadata locally updates pg_dist_partition for given
+ * none-distributed table.
+ */
+void
+UpdateNoneDistTableMetadata(Oid relationId, char replicationModel, uint32 colocationId,
+							bool autoConverted)
+{
+	if (HasDistributionKey(relationId))
+	{
+		ereport(ERROR, (errmsg("cannot update metadata for a distributed "
+							   "table that has a distribution column")));
+	}
+
+	ScanKeyData scanKey[1];
+	int scanKeyCount = 1;
+	bool indexOK = true;
+	Datum values[Natts_pg_dist_partition];
+	bool isnull[Natts_pg_dist_partition];
+	bool replace[Natts_pg_dist_partition];
+
+	Relation pgDistPartition = table_open(DistPartitionRelationId(), RowExclusiveLock);
+	TupleDesc tupleDescriptor = RelationGetDescr(pgDistPartition);
+	ScanKeyInit(&scanKey[0], Anum_pg_dist_partition_logicalrelid,
+				BTEqualStrategyNumber, F_OIDEQ, ObjectIdGetDatum(relationId));
+
+	SysScanDesc scanDescriptor = systable_beginscan(pgDistPartition,
+													DistPartitionLogicalRelidIndexId(),
+													indexOK,
+													NULL, scanKeyCount, scanKey);
+
+	HeapTuple heapTuple = systable_getnext(scanDescriptor);
+	if (!HeapTupleIsValid(heapTuple))
+	{
+		ereport(ERROR, (errmsg("could not find valid entry for Citus table with oid: %u",
+							   relationId)));
+	}
+
+	memset(replace, 0, sizeof(replace));
+
+	values[Anum_pg_dist_partition_colocationid - 1] = UInt32GetDatum(colocationId);
+	isnull[Anum_pg_dist_partition_colocationid - 1] = false;
+	replace[Anum_pg_dist_partition_colocationid - 1] = true;
+
+	values[Anum_pg_dist_partition_repmodel - 1] = CharGetDatum(replicationModel);
+	isnull[Anum_pg_dist_partition_repmodel - 1] = false;
+	replace[Anum_pg_dist_partition_repmodel - 1] = true;
+
+	values[Anum_pg_dist_partition_autoconverted - 1] = BoolGetDatum(autoConverted);
+	isnull[Anum_pg_dist_partition_autoconverted - 1] = false;
+	replace[Anum_pg_dist_partition_autoconverted - 1] = true;
+
+	heapTuple = heap_modify_tuple(heapTuple, tupleDescriptor, values, isnull, replace);
+
+	CatalogTupleUpdate(pgDistPartition, &heapTuple->t_self, heapTuple);
+
+	CitusInvalidateRelcacheByRelid(relationId);
+	CommandCounterIncrement();
+
+	systable_endscan(scanDescriptor);
+	table_close(pgDistPartition, NoLock);
+}
+
+
+/*
  * Check that the current user has `mode` permissions on relationId, error out
  * if not. Superusers always have such permissions.
  */

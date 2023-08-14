@@ -360,6 +360,10 @@ extern void UpdateDistributionColumnGlobally(Oid relationId, char distributionMe
 extern void UpdateDistributionColumn(Oid relationId, char distributionMethod,
 									 Var *distributionColumn, int colocationId);
 extern void DeletePartitionRow(Oid distributedRelationId);
+extern void UpdateNoneDistTableMetadataGlobally(Oid relationId, char replicationModel,
+												uint32 colocationId, bool autoConverted);
+extern void UpdateNoneDistTableMetadata(Oid relationId, char replicationModel,
+										uint32 colocationId, bool autoConverted);
 extern void DeleteShardRow(uint64 shardId);
 extern void UpdatePlacementGroupId(uint64 placementId, int groupId);
 extern void DeleteShardPlacementRow(uint64 placementId);

@@ -139,6 +139,13 @@ static CitusTableParams DecideCitusTableParams(CitusTableType tableType,
 											   distributedTableParams);
 static void CreateCitusTable(Oid relationId, CitusTableType tableType,
 							 DistributedTableParams *distributedTableParams);
+static void ConvertCitusLocalTableToTableType(Oid relationId,
+											  CitusTableType tableType,
+											  DistributedTableParams *
+											  distributedTableParams);
+static uint32 SingleShardTableColocationNodeId(uint32 colocationId);
+static uint32 SingleShardTableGetNodeId(Oid relationId);
+static int64 NoneDistTableGetShardId(Oid relationId);
 static void CreateHashDistributedTableShards(Oid relationId, int shardCount,
 											 Oid colocatedTableId, bool localTableEmpty);
 static void CreateSingleShardTableShard(Oid relationId, Oid colocatedTableId,
@@ -1095,23 +1102,36 @@ CreateCitusTable(Oid relationId, CitusTableType tableType,
 	}
 
 	/*
-	 * EnsureTableNotDistributed errors out when relation is a citus table but
-	 * we don't want to ask user to first undistribute their citus local tables
-	 * when creating reference or distributed tables from them.
-	 * For this reason, here we undistribute citus local tables beforehand.
-	 * But since UndistributeTable does not support undistributing relations
-	 * involved in foreign key relationships, we first drop foreign keys that
-	 * given relation is involved, then we undistribute the relation and finally
-	 * we re-create dropped foreign keys at the end of this function.
+	 * EnsureTableNotDistributed() errors out when relation is a Citus table.
+	 *
+	 * For this reason, we either undistribute the Citus Local table first
+	 * and then follow the usual code-path to create distributed table; or
+	 * we simply move / replicate its shard to create a single-shard table /
+	 * reference table, and then we update the metadata accordingly.
+	 *
+	 * If we're about it to undistribute it (because we will create a distributed
+	 * table soon), then we first drop foreign keys that given relation is
+	 * involved because UndistributeTable() does not support undistributing
+	 * relations involved in foreign key relationships. At the end of this
+	 * function, we then re-create the dropped foreign keys.
 	 */
 	List *originalForeignKeyRecreationCommands = NIL;
 	if (IsCitusTableType(relationId, CITUS_LOCAL_TABLE))
 	{
-		/* store foreign key creation commands that relation is involved */
-		originalForeignKeyRecreationCommands =
-			GetFKeyCreationCommandsRelationInvolvedWithTableType(relationId,
-																 INCLUDE_ALL_TABLE_TYPES);
-		relationId = DropFKeysAndUndistributeTable(relationId);
+		if (tableType == REFERENCE_TABLE || tableType == SINGLE_SHARD_DISTRIBUTED)
+		{
+			ConvertCitusLocalTableToTableType(relationId, tableType,
+											  distributedTableParams);
+			return;
+		}
+		else
+		{
+			/* store foreign key creation commands that relation is involved */
+			originalForeignKeyRecreationCommands =
+				GetFKeyCreationCommandsRelationInvolvedWithTableType(relationId,
+																	 INCLUDE_ALL_TABLE_TYPES);
+			relationId = DropFKeysAndUndistributeTable(relationId);
+		}
 	}
 	/*
 	 * To support foreign keys between reference tables and local tables,
@@ -1316,6 +1336,215 @@ CreateCitusTable(Oid relationId, CitusTableType tableType,
 	bool skip_validation = true;
 	ExecuteForeignKeyCreateCommandList(originalForeignKeyRecreationCommands,
 									   skip_validation);
+}
+
+
+/*
+ * ConvertCitusLocalTableToTableType converts given Citus local table to
+ * given table type.
+ *
+ * This only supports converting Citus local tables to reference tables
+ * (by replicating the shard to workers) and single-shard distributed
+ * tables (by moving the shard to appropriate worker).
+ */
+static void
+ConvertCitusLocalTableToTableType(Oid relationId, CitusTableType tableType,
+								  DistributedTableParams *distributedTableParams)
+{
+	if (!IsCitusTableType(relationId, CITUS_LOCAL_TABLE))
+	{
+		ereport(ERROR, (errmsg("table is not a local table added to metadata")));
+	}
+
+	if (tableType != REFERENCE_TABLE && tableType != SINGLE_SHARD_DISTRIBUTED)
+	{
+		ereport(ERROR, (errmsg("table type is not supported for conversion")));
+	}
+
+	LockRelationOid(relationId, ExclusiveLock);
+
+	Var *distributionColumn = NULL;
+	CitusTableParams citusTableParams = DecideCitusTableParams(tableType,
+															   distributedTableParams);
+
+	uint32 colocationId = INVALID_COLOCATION_ID;
+	if (distributedTableParams &&
+		distributedTableParams->colocationParam.colocationParamType ==
+		COLOCATE_WITH_COLOCATION_ID)
+	{
+		colocationId = distributedTableParams->colocationParam.colocationId;
+	}
+	else
+	{
+		colocationId = ColocationIdForNewTable(relationId, tableType,
+											   distributedTableParams,
+											   distributionColumn);
+	}
+
+	/* check constraints etc. on table based on new distribution params */
+	EnsureRelationCanBeDistributed(relationId, distributionColumn,
+								   citusTableParams.distributionMethod,
+								   colocationId, citusTableParams.replicationModel);
+
+	/*
+	 * Regarding the foreign key relationships that given relation is involved,
+	 * EnsureRelationCanBeDistributed() only checks the ones where the relation is
+	 * the referencing table.
+	 *
+	 * And given that the table at hand is a Citus local table, right now it may
+	 * only be referenced by a reference table or a Citus local table.
+	 *
+	 * However, given that neither of those two cases are not applicable for a
+	 * distributed table, here we throw an error assuming that the referencing
+	 * relation is a reference table or a Citus local table.
+	 *
+	 * While doing so, we use the same error message used in
+	 * ErrorIfUnsupportedForeignConstraintExists(), which is eventually called
+	 * by EnsureRelationCanBeDistributed().
+	 *
+	 * Note that we don't need to check the same if we're creating a reference
+	 * table from a Citus local table because all the foreign keys referencing
+	 * Citus local tables are supported by reference tables.
+	 */
+	if (tableType == SINGLE_SHARD_DISTRIBUTED)
+	{
+		int fkeyFlags = (INCLUDE_REFERENCED_CONSTRAINTS | EXCLUDE_SELF_REFERENCES |
+						 INCLUDE_ALL_TABLE_TYPES);
+		List *externalReferencedFkeyIds = GetForeignKeyOids(relationId, fkeyFlags);
+		if (list_length(externalReferencedFkeyIds) != 0)
+		{
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("cannot create foreign key constraint "
+								   "since foreign keys from reference tables "
+								   "and local tables to distributed tables "
+								   "are not supported"),
+							errdetail("Reference tables and local tables "
+									  "can only have foreign keys to reference "
+									  "tables and local tables")));
+		}
+	}
+
+	EnsureReferenceTablesExistOnAllNodes();
+
+	LockColocationId(colocationId, ShareLock);
+
+	int64 shardId = NoneDistTableGetShardId(relationId);
+	WorkerNode *sourceNode = CoordinatorNodeIfAddedAsWorkerOrError();
+
+	if (tableType == SINGLE_SHARD_DISTRIBUTED)
+	{
+		uint32 targetNodeId = SingleShardTableColocationNodeId(colocationId);
+		if (targetNodeId != sourceNode->nodeId)
+		{
+			bool missingOk = false;
+			WorkerNode *targetNode = FindNodeWithNodeId(targetNodeId, missingOk);
+
+			TransferCitusLocalTableShardInXact(shardId, sourceNode->workerName,
+											   sourceNode->workerPort,
+											   targetNode->workerName,
+											   targetNode->workerPort,
+											   SHARD_TRANSFER_MOVE);
+		}
+	}
+	else if (tableType == REFERENCE_TABLE)
+	{
+		List *nodeList = ActivePrimaryNonCoordinatorNodeList(ShareLock);
+		nodeList = SortList(nodeList, CompareWorkerNodes);
+
+		WorkerNode *targetNode = NULL;
+		foreach_ptr(targetNode, nodeList)
+		{
+			TransferCitusLocalTableShardInXact(shardId, sourceNode->workerName,
+											   sourceNode->workerPort,
+											   targetNode->workerName,
+											   targetNode->workerPort,
+											   SHARD_TRANSFER_COPY);
+		}
+	}
+
+	bool autoConverted = false;
+	UpdateNoneDistTableMetadataGlobally(
+		relationId, citusTableParams.replicationModel,
+		colocationId, autoConverted);
+
+	/*
+	 * TransferCitusLocalTableShardInXact() moves / copies partition shards
+	 * to the target node too, but we still need to update the metadata
+	 * for them.
+	 */
+	if (PartitionedTable(relationId))
+	{
+		Oid partitionRelationId = InvalidOid;
+		List *partitionList = PartitionList(relationId);
+		foreach_oid(partitionRelationId, partitionList)
+		{
+			UpdateNoneDistTableMetadataGlobally(
+				partitionRelationId, citusTableParams.replicationModel,
+				colocationId, autoConverted);
+		}
+	}
+}
+
+
+/*
+ * SingleShardTableColocationNodeId takes a colocation id that is known to be
+ * used / going be used to colocate a set of single-shard tables and returns
+ * id of the node that should store the shards of those tables.
+ */
+static uint32
+SingleShardTableColocationNodeId(uint32 colocationId)
+{
+	List *tablesInColocationGroup = ColocationGroupTableList(colocationId, 1);
+	if (list_length(tablesInColocationGroup) == 0)
+	{
+		int workerNodeIndex =
+			EmptySingleShardTableColocationDecideNodeId(colocationId);
+		List *workerNodeList = DistributedTablePlacementNodeList(RowShareLock);
+		WorkerNode *workerNode = (WorkerNode *) list_nth(workerNodeList, workerNodeIndex);
+
+		return workerNode->nodeId;
+	}
+	else
+	{
+		Oid colocatedTableId = linitial_oid(tablesInColocationGroup);
+		return SingleShardTableGetNodeId(colocatedTableId);
+	}
+}
+
+
+/*
+ * SingleShardTableGetNodeId returns id of the node that stores shard of
+ * given single-shard table.
+ */
+static uint32
+SingleShardTableGetNodeId(Oid relationId)
+{
+	int64 shardId = NoneDistTableGetShardId(relationId);
+
+	List *shardPlacementList = ShardPlacementList(shardId);
+	if (list_length(shardPlacementList) != 1)
+	{
+		ereport(ERROR, (errmsg("table shard does not have a single shard placement")));
+	}
+
+	return ((ShardPlacement *) linitial(shardPlacementList))->nodeId;
+}
+
+
+/*
+ * NoneDistTableGetShardId returns shard id of given table that is known
+ * to be a none-distriubted table.
+ */
+static int64
+NoneDistTableGetShardId(Oid relationId)
+{
+	if (HasDistributionKey(relationId))
+	{
+		ereport(ERROR, (errmsg("table is not a none-distributed table")));
+	}
+
+	List *shardIntervalList = LoadShardIntervalList(relationId);
+	return ((ShardInterval *) linitial(shardIntervalList))->shardId;
 }
 
 

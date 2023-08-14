@@ -264,6 +264,7 @@ extern void CreateColocatedShards(Oid targetRelationId, Oid sourceRelationId,
 extern void CreateReferenceTableShard(Oid distributedTableId);
 extern void CreateSingleShardTableShardWithRoundRobinPolicy(Oid relationId,
 															uint32 colocationId);
+extern int EmptySingleShardTableColocationDecideNodeId(uint32 colocationId);
 extern List * WorkerCreateShardCommandList(Oid relationId, int shardIndex, uint64 shardId,
 										   List *ddlCommandList,
 										   List *foreignConstraintCommandList);

@@ -1201,9 +1201,9 @@ ALTER TABLE reference_table_1 OWNER TO another_user;
 SELECT run_command_on_placements('reference_table_1', 'ALTER TABLE %s OWNER TO another_user');
          run_command_on_placements
 ---------------------------------------------------------------------
- (localhost,57636,1810093,t,"ALTER TABLE")
- (localhost,57637,1810093,t,"ALTER TABLE")
- (localhost,57638,1810093,t,"ALTER TABLE")
+ (localhost,57636,1810092,t,"ALTER TABLE")
+ (localhost,57637,1810092,t,"ALTER TABLE")
+ (localhost,57638,1810092,t,"ALTER TABLE")
 (3 rows)
 
 BEGIN;

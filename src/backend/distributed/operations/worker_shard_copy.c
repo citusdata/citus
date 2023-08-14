@@ -64,6 +64,20 @@ typedef struct ShardCopyDestReceiver
 	 * Connection for destination shard (NULL if useLocalCopy is true)
 	 */
 	MultiConnection *connection;
+
+	/*
+	 * Should use an exclusive connection?
+	 *
+	 * When set to true, the connection is claimed exclusively for the COPY
+	 * operation and cannot be used for any other purpose. At the end of
+	 * the COPY operation, the connection is closed. Moreover, COPY command
+	 * is executed outside of current transaction.
+	 *
+	 * Otherwise; connection is not forced to be exclusive, it can be used
+	 * for other purposes and is not closed at the end of the COPY operation.
+	 * Also, COPY command is executed inside of current transaction.
+	 */
+	bool exclusiveConnection;
 } ShardCopyDestReceiver;
 
 static bool ShardCopyDestReceiverReceive(TupleTableSlot *slot, DestReceiver *dest);
@@ -94,7 +108,7 @@ CanUseLocalCopy(uint32_t destinationNodeId)
 static void
 ConnectToRemoteAndStartCopy(ShardCopyDestReceiver *copyDest)
 {
-	int connectionFlags = OUTSIDE_TRANSACTION;
+	int connectionFlags = copyDest->exclusiveConnection ? OUTSIDE_TRANSACTION : 0;
 	char *currentUser = CurrentUserName();
 	WorkerNode *workerNode = FindNodeWithNodeId(copyDest->destinationNodeId,
 												false /* missingOk */);
@@ -103,8 +117,10 @@ ConnectToRemoteAndStartCopy(ShardCopyDestReceiver *copyDest)
 														 workerNode->workerPort,
 														 currentUser,
 														 NULL /* database (current) */);
-	ClaimConnectionExclusively(copyDest->connection);
-
+	if (copyDest->exclusiveConnection)
+	{
+		ClaimConnectionExclusively(copyDest->connection);
+	}
 
 	RemoteTransactionBeginIfNecessary(copyDest->connection);
 
@@ -139,7 +155,8 @@ ConnectToRemoteAndStartCopy(ShardCopyDestReceiver *copyDest)
 DestReceiver *
 CreateShardCopyDestReceiver(EState *executorState,
 							List *destinationShardFullyQualifiedName,
-							uint32_t destinationNodeId)
+							uint32_t destinationNodeId,
+							bool exclusiveConnection)
 {
 	ShardCopyDestReceiver *copyDest = (ShardCopyDestReceiver *) palloc0(
 		sizeof(ShardCopyDestReceiver));
@@ -157,6 +174,7 @@ CreateShardCopyDestReceiver(EState *executorState,
 	copyDest->tuplesSent = 0;
 	copyDest->connection = NULL;
 	copyDest->useLocalCopy = CanUseLocalCopy(destinationNodeId);
+	copyDest->exclusiveConnection = exclusiveConnection;
 
 	return (DestReceiver *) copyDest;
 }
@@ -336,7 +354,10 @@ ShardCopyDestReceiverShutdown(DestReceiver *dest)
 
 		ResetReplicationOriginRemoteSession(copyDest->connection);
 
-		CloseConnection(copyDest->connection);
+		if (copyDest->exclusiveConnection)
+		{
+			CloseConnection(copyDest->connection);
+		}
 	}
 }
 
