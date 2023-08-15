@@ -1187,17 +1187,16 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS c
 
 -- same test using a view, can be recursively planned
 CREATE VIEW my_view_1 AS
-SELECT * FROM dist_1 t2 WHERE EXISTS (
+SELECT * FROM dist_1 table_name_for_view WHERE EXISTS (
     SELECT * FROM dist_1 t4
-    WHERE t4.a = t2.a
-);
+    WHERE t4.a = table_name_for_view.a);
 SELECT COUNT(*) FROM ref_1 t1
 LEFT JOIN
 my_view_1 t3
 USING (a);
 DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
 DEBUG:  recursively planning the distributed subquery since it is part of a distributed join node that is outer joined with a recurring rel
-DEBUG:  generating subplan XXX_1 for subquery SELECT t2.a, t2.b FROM recurring_outer_join.dist_1 t2 WHERE (EXISTS (SELECT t4.a, t4.b FROM recurring_outer_join.dist_1 t4 WHERE (t4.a OPERATOR(pg_catalog.=) t2.a)))
+DEBUG:  generating subplan XXX_1 for subquery SELECT a, b FROM recurring_outer_join.dist_1 table_name_for_view WHERE (EXISTS (SELECT t4.a, t4.b FROM recurring_outer_join.dist_1 t4 WHERE (t4.a OPERATOR(pg_catalog.=) table_name_for_view.a)))
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (recurring_outer_join.ref_1 t1 LEFT JOIN (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) t3 USING (a))
  count
 ---------------------------------------------------------------------

@@ -612,10 +612,9 @@ USING (a);
 
 -- same test using a view, can be recursively planned
 CREATE VIEW my_view_1 AS
-SELECT * FROM dist_1 t2 WHERE EXISTS (
+SELECT * FROM dist_1 table_name_for_view WHERE EXISTS (
     SELECT * FROM dist_1 t4
-    WHERE t4.a = t2.a
-);
+    WHERE t4.a = table_name_for_view.a);
 
 SELECT COUNT(*) FROM ref_1 t1
 LEFT JOIN

@@ -177,7 +177,7 @@ ORDER BY 2, AVG(ut.value_1), 1 DESC
 LIMIT 2;
 
 EXPLAIN (COSTS OFF)
-SELECT ut.user_id, count(DISTINCT ut.value_2)
+SELECT ut.user_id, avg(ut.value_2)
 FROM users_table ut, events_table et
 WHERE ut.user_id = et.user_id and et.value_2 < 5
 GROUP BY ut.user_id

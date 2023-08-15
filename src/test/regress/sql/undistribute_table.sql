@@ -105,8 +105,8 @@ INSERT INTO view_table VALUES (1, 2, 3), (2, 4, 6), (3, 6, 9);
 
 CREATE SCHEMA another_schema;
 
-CREATE VIEW undis_view1 AS SELECT a, b FROM view_table;
-CREATE VIEW undis_view2 AS SELECT a, c FROM view_table;
+CREATE VIEW undis_view1 AS SELECT a, b FROM view_table table_name_for_view;
+CREATE VIEW undis_view2 AS SELECT a, c FROM view_table table_name_for_view;
 CREATE VIEW another_schema.undis_view3 AS SELECT b, c FROM undis_view1 JOIN undis_view2 ON undis_view1.a = undis_view2.a;
 
 SELECT schemaname, viewname, viewowner, definition FROM pg_views WHERE viewname LIKE 'undis\_view%' ORDER BY viewname;

@@ -67,12 +67,12 @@ SELECT pg_typeof(:maintenance_daemon_gpid);
  bigint
 (1 row)
 
+\set VERBOSITY terse
 SELECT pg_cancel_backend(:maintenance_daemon_gpid);
 ERROR:  must be a superuser to cancel superuser query
-CONTEXT:  while executing command on localhost:xxxxx
 SELECT pg_terminate_backend(:maintenance_daemon_gpid);
 ERROR:  must be a superuser to terminate superuser process
-CONTEXT:  while executing command on localhost:xxxxx
+\set VERBOSITY default
 -- we can cancel our own backend
 SELECT pg_cancel_backend(citus_backend_gpid());
 ERROR:  canceling statement due to user request

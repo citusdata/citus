@@ -357,13 +357,13 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS c
    101
 (1 row)
 
-CREATE VIEW local_regular_view AS SELECT * FROM local;
+CREATE VIEW local_regular_view AS SELECT * FROM local table_name_for_view;
 WARNING:  "view local_regular_view" has dependency to "table local" that is not in Citus' metadata
 DETAIL:  "view local_regular_view" will be created only locally
 HINT:  Distribute "table local" first to distribute "view local_regular_view"
 CREATE VIEW dist_regular_view AS SELECT * FROM distributed;
 SELECT count(*) FROM distributed JOIN local_regular_view USING (id);
-DEBUG:  generating subplan XXX_1 for subquery SELECT local.id, local.title FROM local_dist_join_mixed.local
+DEBUG:  generating subplan XXX_1 for subquery SELECT id, title FROM local_dist_join_mixed.local table_name_for_view
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (local_dist_join_mixed.distributed JOIN (SELECT intermediate_result.id, intermediate_result.title FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, title text)) local_regular_view USING (id))
  count
 ---------------------------------------------------------------------
@@ -380,7 +380,7 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS c
 (1 row)
 
 SELECT count(*) FROM dist_regular_view JOIN local_regular_view USING (id);
-DEBUG:  generating subplan XXX_1 for subquery SELECT local.id, local.title FROM local_dist_join_mixed.local
+DEBUG:  generating subplan XXX_1 for subquery SELECT id, title FROM local_dist_join_mixed.local table_name_for_view
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT distributed.id, distributed.name, distributed.created_at FROM local_dist_join_mixed.distributed) dist_regular_view JOIN (SELECT intermediate_result.id, intermediate_result.title FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, title text)) local_regular_view USING (id))
  count
 ---------------------------------------------------------------------
