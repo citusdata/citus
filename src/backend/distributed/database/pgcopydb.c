@@ -20,6 +20,8 @@
 
 
 static char * ExecuteProgram(List *argList);
+static void ProcessBufferCallback(const char *buffer, bool error);
+static int SplitLines(char *buffer, char **linesArray, int size);
 static char ** StringListToArray(List *stringList);
 
 
@@ -95,6 +97,7 @@ ExecuteProgram(List *argList)
 	char **args = StringListToArray(argList);
 
 	Program program = initialize_program(args, false);
+	program.processBuffer = &ProcessBufferCallback;
 
 	char command[BUFSIZE];
 	int commandSize = snprintf_program_command_line(&program, command, BUFSIZE);
@@ -138,6 +141,74 @@ ExecuteProgram(List *argList)
 	return output;
 }
 
+
+/*
+* ProcessBufferCallback is a function callback to use with the subcommands.c
+* library when we want to output a command's output as it's running.
+*/
+static void
+ProcessBufferCallback(const char *buffer, bool error)
+{
+	char *outLines[BUFSIZE] = { 0 };
+	int lineCount = SplitLines((char *) buffer, outLines, BUFSIZE);
+	int lineNumber = 0;
+
+	for (lineNumber = 0; lineNumber < lineCount; lineNumber++)
+	{
+		if (strcmp(outLines[lineNumber], "") != 0)
+		{
+			ereport(DEBUG1, (errmsg("%s", outLines[lineNumber])));
+		}
+	}
+}
+
+
+/*
+ * SplitLines prepares a multi-line error message in a way that calling code
+ * can loop around one line at a time and call log_error() or log_warn() on
+ * individual lines.
+ */
+static int
+SplitLines(char *buffer, char **linesArray, int size)
+{
+	int lineNumber = 0;
+	char *currentLine = buffer;
+
+	if (buffer == NULL)
+	{
+		return 0;
+	}
+
+	if (linesArray == NULL)
+	{
+		return -1;
+	}
+
+	do {
+		char *newLinePtr = strchr(currentLine, '\n');
+
+		if (newLinePtr == NULL)
+		{
+			/* strlen(currentLine) > 0 */
+			if (*currentLine != '\0')
+			{
+				linesArray[lineNumber++] = currentLine;
+			}
+
+			currentLine = NULL;
+		}
+		else
+		{
+			*newLinePtr = '\0';
+
+			linesArray[lineNumber++] = currentLine;
+
+			currentLine = ++newLinePtr;
+		}
+	} while (currentLine != NULL && *currentLine != '\0' && lineNumber < size);
+
+	return lineNumber;
+}
 
 
 /*
@@ -188,6 +259,35 @@ RunPgcopydbListProgress(char *sourceConnectionString, char *migrationName)
 	argList = lappend(argList, "--source");
 	argList = lappend(argList, sourceConnectionString);
 	argList = lappend(argList, "--json");
+
+	return ExecuteProgram(argList);
+}
+
+
+/*
+ * RunPgcopydbStreamSentinelSetEndpos runs pgcopydb stream sentinel set endpos
+ * against the source and target connection strings and returns the output.
+ */
+char *
+RunPgcopydbStreamSentinelSetEndpos(char *sourceConnectionString, char *migrationName)
+{
+	char *pgcopydbPath = GetPgcopydbPath();
+
+	if (pgcopydbPath == NULL)
+	{
+		ereport(ERROR, (errmsg("could not locate pgcopydb")));
+	}
+
+	List *argList = NIL;
+
+	argList = lappend(argList, pgcopydbPath);
+	argList = lappend(argList, "stream");
+	argList = lappend(argList, "sentinel");
+	argList = lappend(argList, "set");
+	argList = lappend(argList, "endpos");
+	argList = lappend(argList, "--source");
+	argList = lappend(argList, sourceConnectionString);
+	argList = lappend(argList, "--current");
 
 	return ExecuteProgram(argList);
 }

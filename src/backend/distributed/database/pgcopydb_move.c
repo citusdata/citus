@@ -123,12 +123,14 @@ static void ExecuteDatabaseCommand(char *command, MultiConnection *conn, bool is
 static bool CheckDataCopyProgress(MultiConnection *targetProgressConn,
 								  char *sourceConnInfo, char *migrationName);
 static bool GetRemoteJsonb(MultiConnection *connection, char *command, Datum *jsonDatum);
-static void SetEndPosOnSourceDatabase(MultiConnection *sourceDbConn);
+static void SetEndPosOnSourceDatabase(MultiConnection *targetConn,
+									  char *sourceConnInfo, char *migrationName);
 
 
 PG_FUNCTION_INFO_V1(pgcopydb_database_move);
 PG_FUNCTION_INFO_V1(pgcopydb_clone);
 PG_FUNCTION_INFO_V1(pgcopydb_list_progress);
+PG_FUNCTION_INFO_V1(pgcopydb_end_follow);
 
 
 /*
@@ -225,7 +227,7 @@ MoveDatabase(DatabaseMove *moveDesc)
 	bool targetIsLocal = target->groupId == GetLocalGroupId();
 
 	/* admin connection for the source server */
-	int connectionFlags = FORCE_NEW_CONNECTION;
+	int connectionFlags = REQUIRE_METADATA_CONNECTION;
 	MultiConnection *sourceConn = GetNodeUserDatabaseConnection(connectionFlags,
 																source->workerName,
 																source->workerPort,
@@ -237,7 +239,7 @@ MoveDatabase(DatabaseMove *moveDesc)
 	}
 
 	/* open a connection to run pgcopydb on the target node */
-	connectionFlags = 0;
+	connectionFlags = REQUIRE_METADATA_CONNECTION;
 	MultiConnection *targetConn = GetNodeUserDatabaseConnection(connectionFlags,
 																target->workerName,
 																target->workerPort,
@@ -420,6 +422,7 @@ MoveDatabase(DatabaseMove *moveDesc)
 	/* do all operations on the database over a connection (even if local) */
 	UpdateDatabaseShard(databaseOid, targetNodeGroupId);
 
+	/* TODO: resume after commit */
 	ResumeDatabaseOnInboundPgBouncers(databaseName);
 
 	FinalizeOperationNeedingCleanupOnSuccess("database move");
@@ -557,7 +560,9 @@ DoDatabaseClone(DatabaseMove *moveDesc,
 				 * Set the endpos to the current WAL LSN, once pgcopydb
 				 * reaches this LSN we will exit this loop.
 				 */
-				SetEndPosOnSourceDatabase(sourceDbConn);
+				SetEndPosOnSourceDatabase(targetProgressConn,
+										  moveDesc->sourceConnectionInfo,
+										  migrationName);
 			}
 
 			lastProgressCheckTime = currentTime;
@@ -729,14 +734,42 @@ GetRemoteJsonb(MultiConnection *connection, char *command, Datum *jsonDatum)
 
 
 /*
+ * pgcopydb_end_follow does a pgcopydb stream sentinel set endpos via a UDF
+ * to finalize a pgcopydb clone --follow.
+ */
+Datum
+pgcopydb_end_follow(PG_FUNCTION_ARGS)
+{
+	text *sourceText = PG_GETARG_TEXT_P(0);
+	char *sourceURL = text_to_cstring(sourceText);
+	text *migrationNameText = PG_GETARG_TEXT_P(1);
+	char *migrationName = text_to_cstring(migrationNameText);
+
+	char *output = RunPgcopydbStreamSentinelSetEndpos(sourceURL, migrationName);
+	if (output == NULL)
+	{
+		PG_RETURN_NULL();
+	}
+
+	PG_RETURN_TEXT_P(cstring_to_text(output));
+}
+
+
+
+/*
  * SetEndPosOnSourceDatabase updates the endpos in the pgcopydb.sentinel
  * table to finalize a pgcopydb clone --follow.
  */
 static void
-SetEndPosOnSourceDatabase(MultiConnection *sourceDbConn)
+SetEndPosOnSourceDatabase(MultiConnection *targetConn,
+						  char *sourceConnInfo, char *migrationName)
 {
-	char *updateCommand =
-		psprintf("update pgcopydb.sentinel set endpos = pg_current_wal_flush_lsn()");
+	StringInfo setEndposCommand = makeStringInfo();
 
-	ExecuteCriticalRemoteCommand(sourceDbConn, updateCommand);
+	appendStringInfo(setEndposCommand,
+					 "SELECT pg_catalog.pgcopydb_end_follow(%s, %s)",
+					 quote_literal_cstr(sourceConnInfo),
+					 quote_literal_cstr(migrationName));
+
+	ExecuteCriticalRemoteCommand(targetConn, setEndposCommand->data);
 }

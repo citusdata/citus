@@ -15,5 +15,7 @@ char * GetPgcopydbPath(void);
 char * RunPgcopydbClone(char *sourceConnectionString, char *targetConnectionString,
 						char *migrationName, bool useFollow);
 char * RunPgcopydbListProgress(char *sourceConnectionString, char *migrationName);
+char * RunPgcopydbStreamSentinelSetEndpos(char *sourceConnectionString,
+										  char *migrationName);
 
 #endif

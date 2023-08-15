@@ -105,6 +105,15 @@ AS 'MODULE_PATHNAME', $$pgcopydb_list_progress$$;
 COMMENT ON FUNCTION pg_catalog.pgcopydb_list_progress(text, text)
 IS 'list progress of a database clone using pgcopydb';
 
+CREATE FUNCTION pg_catalog.pgcopydb_end_follow(
+	source_url text,
+    migration_name text DEFAULT 'pgcopydb')
+RETURNS void
+LANGUAGE C STRICT
+AS 'MODULE_PATHNAME', $$pgcopydb_end_follow$$;
+COMMENT ON FUNCTION pg_catalog.pgcopydb_end_follow(text, text)
+IS 'set the end position of a migration on the source URL';
+
 #include "udfs/citus_shard_cost_by_disk_size/12.1-1.sql"
 
 UPDATE pg_catalog.pg_dist_rebalance_strategy 
