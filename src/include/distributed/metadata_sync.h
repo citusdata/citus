@@ -166,6 +166,7 @@ extern void SendShellTableDeletionCommands(MetadataSyncContext *context);
 extern void SendMetadataDeletionCommands(MetadataSyncContext *context);
 extern void SendColocationMetadataCommands(MetadataSyncContext *context);
 extern void SendTenantSchemaMetadataCommands(MetadataSyncContext *context);
+extern void SendDatabaseShardMetadataCommands(MetadataSyncContext *context);
 extern void SendDependencyCreationCommands(MetadataSyncContext *context);
 extern void SendDistTableMetadataCommands(MetadataSyncContext *context);
 extern void SendDistObjectCommands(MetadataSyncContext *context);
@@ -178,6 +179,7 @@ extern void SendInterTableRelationshipCommands(MetadataSyncContext *context);
 #define DELETE_ALL_PARTITIONS "DELETE FROM pg_dist_partition"
 #define DELETE_ALL_COLOCATION "DELETE FROM pg_catalog.pg_dist_colocation"
 #define DELETE_ALL_TENANT_SCHEMAS "DELETE FROM pg_catalog.pg_dist_schema"
+#define DELETE_ALL_DATABASE_SHARDS "DELETE FROM citus_catalog.database_shard"
 #define WORKER_DROP_ALL_SHELL_TABLES \
 	"CALL pg_catalog.worker_drop_all_shell_tables(%s)"
 #define CITUS_INTERNAL_MARK_NODE_NOT_SYNCED \

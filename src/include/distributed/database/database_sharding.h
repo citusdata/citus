@@ -47,6 +47,7 @@ void DeleteDatabaseShardByDatabaseIdLocally(Oid databaseOid);
 DatabaseShard * GetDatabaseShardByOid(Oid databaseOid);
 List * ListDatabaseShards(void);
 int64 CitusDatabaseSize(Oid databaseId);
+char * InsertDatabaseShardAssignmentCommand(Oid databaseOid, int nodeGroupId);
 
 
 #endif

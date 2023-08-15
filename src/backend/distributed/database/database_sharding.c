@@ -46,7 +46,6 @@ static void DeleteDatabaseShardByDatabaseId(Oid databaseOid);
 static void DeleteDatabaseShardByDatabaseIdOnOtherNodes(Oid databaseOid);
 static DatabaseShard * TupleToDatabaseShard(HeapTuple heapTuple,
 											TupleDesc tupleDescriptor);
-static char * InsertDatabaseShardAssignmentCommand(Oid databaseOid, int nodeGroupId);
 static char * DeleteDatabaseShardByDatabaseIdCommand(Oid databaseOid);
 
 
@@ -491,7 +490,7 @@ citus_internal_add_database_shard(PG_FUNCTION_ARGS)
  * InsertDatabaseShardAssignmentCommand returns a command to insert a database shard
  * assignment into the metadata on a remote node.
  */
-static char *
+char *
 InsertDatabaseShardAssignmentCommand(Oid databaseOid, int nodeGroupId)
 {
 	StringInfo command = makeStringInfo();

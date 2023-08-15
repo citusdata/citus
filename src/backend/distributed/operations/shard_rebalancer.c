@@ -244,8 +244,9 @@ static int PlacementsHashCompare(const void *lhsKey, const void *rhsKey, Size ke
 static uint32 PlacementsHashHashCode(const void *key, Size keySize);
 static bool WorkerNodeListContains(List *workerNodeList, const char *workerName,
 								   uint32 workerPort);
-static void UpdateColocatedShardPlacementProgress(uint64 shardId, char *sourceName,
-												  int sourcePort, uint64 progress);
+static void UpdateColocatedShardPlacementProgress(uint64 shardId, bool isDatabaseMove,
+												  char *sourceName, int sourcePort,
+												  uint64 progress);
 static NodeFillState * FindFillStateForPlacement(RebalanceState *state,
 												 ShardPlacement *placement);
 static RebalanceState * InitRebalanceState(List *workerNodeList, List *shardPlacementList,
@@ -2422,7 +2423,7 @@ UpdateShardPlacement(PlacementUpdateEvent *placementUpdateEvent,
 						 targetNode->nodeId,
 						 quote_literal_cstr(shardTranferModeLabel));
 	}
-	else if (updateType == PLACEMENT_UPDATE_MOVE)
+	else if (updateType == PLACEMENT_UPDATE_DATABASE_MOVE)
 	{
 		/* TODO: add shard transfer mode to database_move? */
 		appendStringInfo(placementUpdateCommand,
@@ -2437,7 +2438,10 @@ UpdateShardPlacement(PlacementUpdateEvent *placementUpdateEvent,
 						errmsg("only moving or copying shards is supported")));
 	}
 
+	bool isDatabaseMove = updateType == PLACEMENT_UPDATE_DATABASE_MOVE;
+
 	UpdateColocatedShardPlacementProgress(shardId,
+										  isDatabaseMove,
 										  sourceNode->workerName,
 										  sourceNode->workerPort,
 										  REBALANCE_PROGRESS_MOVING);
@@ -2449,6 +2453,7 @@ UpdateShardPlacement(PlacementUpdateEvent *placementUpdateEvent,
 	ExecuteRebalancerCommandInSeparateTransaction(placementUpdateCommand->data);
 
 	UpdateColocatedShardPlacementProgress(shardId,
+										  isDatabaseMove,
 										  sourceNode->workerName,
 										  sourceNode->workerPort,
 										  REBALANCE_PROGRESS_MOVED);
@@ -3557,7 +3562,8 @@ WorkerNodeListContains(List *workerNodeList, const char *workerName, uint32 work
  * along with its colocated placements, to the given state.
  */
 static void
-UpdateColocatedShardPlacementProgress(uint64 shardId, char *sourceName, int sourcePort,
+UpdateColocatedShardPlacementProgress(uint64 shardId, bool isDatabaseMove,
+									  char *sourceName, int sourcePort,
 									  uint64 progress)
 {
 	ProgressMonitorData *header = GetCurrentProgressMonitor();
@@ -3567,8 +3573,12 @@ UpdateColocatedShardPlacementProgress(uint64 shardId, char *sourceName, int sour
 		PlacementUpdateEventProgress *steps = ProgressMonitorSteps(header);
 		ListCell *colocatedShardIntervalCell = NULL;
 
-		ShardInterval *shardInterval = LoadShardInterval(shardId);
-		List *colocatedShardIntervalList = ColocatedShardIntervalList(shardInterval);
+		List *colocatedShardIntervalList = NIL;
+		if (!isDatabaseMove)
+		{
+			ShardInterval *shardInterval = LoadShardInterval(shardId);
+			colocatedShardIntervalList = ColocatedShardIntervalList(shardInterval);
+		}
 
 		for (int moveIndex = 0; moveIndex < header->stepCount; moveIndex++)
 		{

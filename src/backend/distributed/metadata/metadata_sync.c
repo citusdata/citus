@@ -36,10 +36,12 @@
 #include "catalog/pg_proc.h"
 #include "catalog/pg_type.h"
 #include "commands/async.h"
+#include "commands/dbcommands.h"
 #include "distributed/argutils.h"
 #include "distributed/backend_data.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/colocation_utils.h"
+#include "distributed/database/database_sharding.h"
 #include "distributed/tenant_schema_metadata.h"
 #include "distributed/commands.h"
 #include "distributed/deparser.h"
@@ -4453,6 +4455,12 @@ SyncDistributedObjects(MetadataSyncContext *context)
 	SendTenantSchemaMetadataCommands(context);
 
 	/*
+	 * Send database shard metadata commands after creating the databases.
+	 */
+	SendDatabaseShardMetadataCommands(context);
+
+
+	/*
 	 * After creating each table, handle the inter table relationship between
 	 * those tables.
 	 */
@@ -4528,6 +4536,9 @@ SendMetadataDeletionCommands(MetadataSyncContext *context)
 	/* remove pg_dist_schema entries */
 	SendOrCollectCommandListToActivatedNodes(context,
 											 list_make1(DELETE_ALL_TENANT_SCHEMAS));
+	/* remove database shards */
+	SendOrCollectCommandListToActivatedNodes(context,
+											 list_make1(DELETE_ALL_DATABASE_SHARDS));
 }
 
 
@@ -4671,6 +4682,43 @@ SendTenantSchemaMetadataCommands(MetadataSyncContext *context)
 
 	systable_endscan(scanDesc);
 	table_close(pgDistTenantSchema, AccessShareLock);
+}
+
+
+/*
+ * SendDatabaseShardMetadataCommands sends commands to wirte the database
+ * shard metadata to other nodes.
+ */
+void
+SendDatabaseShardMetadataCommands(MetadataSyncContext *context)
+{
+	List *databaseShards = ListDatabaseShards();
+
+	MemoryContext oldContext = MemoryContextSwitchTo(context->context);
+
+	DatabaseShard *databaseShard = NULL;
+	foreach_ptr (databaseShard, databaseShards)
+	{
+		char *databaseName = get_database_name(databaseShard->databaseOid);
+		if (databaseName == NULL)
+		{
+			/* skip non-existent databases (stale/corrupted metadata) */
+			continue;
+		}
+
+		StringInfo insertDatabaseShardCommand = makeStringInfo();
+		appendStringInfo(insertDatabaseShardCommand,
+						 "SELECT pg_catalog.citus_internal_add_database_shard(%s, %d)",
+						 quote_literal_cstr(databaseName),
+						 databaseShard->nodeGroupId);
+
+		List *commandList = list_make1(insertDatabaseShardCommand->data);
+		SendOrCollectCommandListToActivatedNodes(context, commandList);
+
+		ResetMetadataSyncMemoryContext(context);
+	}
+
+	MemoryContextSwitchTo(oldContext);
 }
 
 
