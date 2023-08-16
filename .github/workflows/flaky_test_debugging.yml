@@ -49,6 +49,7 @@ jobs:
     - name: Configure, Build, and Install
       run: "./ci/build-citus.sh"
     - uses: actions/upload-artifact@v3.1.1
+      name: build-${{ env.pg_major }}
       with:
         path: |-
           ./build-${{ env.pg_major }}/*
