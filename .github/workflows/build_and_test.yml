@@ -4,7 +4,7 @@ on:
     inputs:
       image_suffix:
         required: false
-        default: "-vbab548a"
+        default: "-v1b94240"
       pg14_version:
         required: false
         default: '14.9'
