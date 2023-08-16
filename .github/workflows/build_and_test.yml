@@ -1,4 +1,4 @@
-name: citusdata/citus/build_and_test
+name: Build & Test
 on:
   workflow_dispatch:
     inputs:
@@ -60,6 +60,7 @@ jobs:
       run: "./ci/build-citus.sh"
     - uses: actions/upload-artifact@v3.1.1
       with:
+        name: build-${{ matrix.pg_major }}
         path: |-
           ./build-${{ matrix.pg_major  }}/*
           ./install-${{ matrix.pg_major  }}.tar
@@ -112,9 +113,8 @@ jobs:
     steps:
     - uses: actions/checkout@v3.5.0
     - uses: actions/download-artifact@v3.0.1
-      with: |-
-        build-${{ matrix.pg_major }}
-        install-${{ matrix.pg_major }}.tar
+      with:
+        name: build-${{ matrix.pg_major }}
     - uses: "./.github/actions/install_extension"
       with:
         pg_major: "${{ matrix.pg_major }}"
