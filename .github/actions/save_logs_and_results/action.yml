@@ -2,57 +2,17 @@ name: save_logs_and_results
 inputs:
   folder:
     required: false
-    default: ""
+    default: "log"
 runs:
   using: composite
   steps:
   - uses: actions/upload-artifact@v3.1.1
-    if: ${{ inputs.folder == '' }}
-    with:
-      name: proxy.output
-      path: src/test/regress/proxy.output
-  - uses: actions/upload-artifact@v3.1.1
-    if: ${{ inputs.folder == '' }}
-    with:
-      name: regress
-      path: src/test/regress/results/
-  - uses: actions/upload-artifact@v3.1.1
-    if: ${{ inputs.folder == '' }}
-    with:
-      name: master.log
-      path: src/test/regress/tmp_check/master/log
-  - uses: actions/upload-artifact@v3.1.1
-    if: ${{ inputs.folder == '' }}
-    with:
-      name: worker.57637.log
-      path: src/test/regress/tmp_check/worker.57637/log
-  - uses: actions/upload-artifact@v3.1.1
-    if: ${{ inputs.folder == '' }}
-    with:
-      name: worker.57638.log
-      path: src/test/regress/tmp_check/worker.57638/log
-  - uses: actions/upload-artifact@v3.1.1
-    if: ${{ inputs.folder != '' }}
+    if-no-files-found: ignore
     with:
       name: ${{ inputs.folder }}
-      path: src/test/regress/proxy.output
-  - uses: actions/upload-artifact@v3.1.1
-    if: ${{ inputs.folder != '' }}
-    with:
-      name: ${{ inputs.folder }}
-      path: src/test/regress/results/
-  - uses: actions/upload-artifact@v3.1.1
-    if: ${{ inputs.folder != '' }}
-    with:
-      name: ${{ inputs.folder }}
-      path: src/test/regress/tmp_check/master/log
-  - uses: actions/upload-artifact@v3.1.1
-    if: ${{ inputs.folder != '' }}
-    with:
-      name: ${{ inputs.folder }}
-      path: src/test/regress/tmp_check/worker.57637/log
-  - uses: actions/upload-artifact@v3.1.1
-    if: ${{ inputs.folder != '' }}
-    with:
-      name: ${{ inputs.folder }}
-      path: src/test/regress/tmp_check/worker.57638/log
+      path: |
+        src/test/regress/proxy.output
+        src/test/regress/results/
+        src/test/regress/tmp_check/master/log
+        src/test/regress/tmp_check/worker.57638/log
+        src/test/regress/tmp_check/worker.57637/log
