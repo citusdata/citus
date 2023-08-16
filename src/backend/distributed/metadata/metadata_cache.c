@@ -92,9 +92,6 @@
 #include "utils/typcache.h"
 
 
-void
-InvalidateCitusMetadataCacheCallback(Datum argument, Oid relationId);
-
 /* user configuration */
 int ReadFromSecondaries = USE_SECONDARY_NODES_NEVER;
 
@@ -144,6 +141,7 @@ typedef struct ShardIdCacheEntry
 typedef struct MetadataCacheData
 {
 	bool extensionLoaded;
+	bool extensionNotLoaded;
 	Oid distShardRelationId;
 	Oid distPlacementRelationId;
 	Oid distBackgroundJobRelationId;
@@ -2190,7 +2188,19 @@ HasOverlappingShardInterval(ShardInterval **shardIntervalArray,
 bool
 CitusHasBeenLoaded(void)
 {
-	if (!MetadataCache.extensionLoaded || creating_extension)
+	/*
+	 * MetadataCache.extensionLoaded and MetadataCache.extensionNotLoaded
+	 * cannot be true at the same time.
+	 */
+	Assert(!(MetadataCache.extensionLoaded && MetadataCache.extensionNotLoaded));
+
+	/*
+	 *  MetadataCache.extensionLoaded = false
+	 *  MetadataCache.extensionNotLoaded = false
+	 * means that the cache is invalid. Reevaluate the flags.
+	 */
+	if ((!MetadataCache.extensionLoaded && !MetadataCache.extensionNotLoaded) ||
+		creating_extension)
 	{
 		/*
 		 * Refresh if we have not determined whether the extension has been
@@ -2212,19 +2222,6 @@ CitusHasBeenLoaded(void)
 			StartupCitusBackend();
 
 			/*
-			 * InvalidateDistRelationCacheCallback resets state such as extensionLoaded
-			 * when it notices changes to pg_dist_partition (which usually indicate
-			 * `DROP EXTENSION citus;` has been run)
-			 *
-			 * Ensure InvalidateDistRelationCacheCallback will notice those changes
-			 * by caching pg_dist_partition's oid.
-			 *
-			 * We skip these checks during upgrade since pg_dist_partition is not
-			 * present during early stages of upgrade operation.
-			 */
-			DistPartitionRelationId();
-
-			/*
 			 * This needs to be initialized so we can receive foreign relation graph
 			 * invalidation messages in InvalidateForeignRelationGraphCacheCallback().
 			 * See the comments of InvalidateForeignKeyGraph for more context.
@@ -2233,6 +2230,7 @@ CitusHasBeenLoaded(void)
 		}
 
 		MetadataCache.extensionLoaded = extensionLoaded;
+		MetadataCache.extensionNotLoaded = !extensionLoaded;
 	}
 
 	return MetadataCache.extensionLoaded;
@@ -4204,10 +4202,6 @@ InitializeDistCache(void)
 	CreateShardIdCache();
 
 	InitializeDistObjectCache();
-
-	/* Watch for invalidation events. */
-	CacheRegisterRelcacheCallback(InvalidateDistRelationCacheCallback,
-								  (Datum) 0);
 }
 
 
@@ -4752,11 +4746,7 @@ InvalidateForeignKeyGraph(void)
 	CommandCounterIncrement();
 }
 
-void
-InvalidateCitusMetadataCacheCallback(Datum argument, Oid relationId)
-{
-       	InvalidateMetadataSystemCache();
-}
+
 /*
  * InvalidateDistRelationCacheCallback flushes cache entries when a relation
  * is updated (or flushes the entire cache).
@@ -4769,11 +4759,17 @@ InvalidateDistRelationCacheCallback(Datum argument, Oid relationId)
 	{
 		InvalidateDistTableCache();
 		InvalidateDistObjectCache();
+		InvalidateMetadataSystemCache();
 	}
 	else
 	{
 		void *hashKey = (void *) &relationId;
 		bool foundInCache = false;
+
+		if (DistTableCacheHash == NULL)
+		{
+			return;
+		}
 
 		CitusTableCacheEntrySlot *cacheSlot =
 			hash_search(DistTableCacheHash, hashKey, HASH_FIND, &foundInCache);
@@ -4837,6 +4833,11 @@ InvalidateDistTableCache(void)
 	CitusTableCacheEntrySlot *cacheSlot = NULL;
 	HASH_SEQ_STATUS status;
 
+	if (DistTableCacheHash == NULL)
+	{
+		return;
+	}
+
 	hash_seq_init(&status, DistTableCacheHash);
 
 	while ((cacheSlot = (CitusTableCacheEntrySlot *) hash_seq_search(&status)) != NULL)
@@ -4854,6 +4855,11 @@ InvalidateDistObjectCache(void)
 {
 	DistObjectCacheEntry *cacheEntry = NULL;
 	HASH_SEQ_STATUS status;
+
+	if (DistObjectCacheHash == NULL)
+	{
+		return;
+	}
 
 	hash_seq_init(&status, DistObjectCacheHash);
 

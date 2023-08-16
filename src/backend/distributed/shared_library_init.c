@@ -113,6 +113,7 @@
 #include "utils/lsyscache.h"
 #include "utils/syscache.h"
 #include "utils/varlena.h"
+
 #include "columnar/columnar.h"
 
 /* marks shared object as one loadable by the postgres version compiled against */
@@ -124,7 +125,6 @@ IsColumnarTableAmTable_type extern_IsColumnarTableAmTable = NULL;
 ReadColumnarOptions_type extern_ReadColumnarOptions = NULL;
 
 void InvalidateDistRelationCacheCallback(Datum argument, Oid relationId);
-void InvalidateCitusMetadataCacheCallback(Datum argument, Oid relationId);
 
 /*
  * Define "pass-through" functions so that a SQL function defined as one of
@@ -558,7 +558,7 @@ _PG_init(void)
 															"ColumnarSupportsIndexAM",
 															true, &handle);
 
-	CacheRegisterRelcacheCallback(InvalidateCitusMetadataCacheCallback,
+	CacheRegisterRelcacheCallback(InvalidateDistRelationCacheCallback,
 								  (Datum) 0);
 
 	INIT_COLUMNAR_SYMBOL(CompressionTypeStr_type, CompressionTypeStr);
@@ -575,7 +575,6 @@ _PG_init(void)
 	INIT_COLUMNAR_SYMBOL(PGFunction, columnar_storage_info);
 	INIT_COLUMNAR_SYMBOL(PGFunction, columnar_store_memory_stats);
 	INIT_COLUMNAR_SYMBOL(PGFunction, test_columnar_storage_write_new_page);
-
 }
 
 

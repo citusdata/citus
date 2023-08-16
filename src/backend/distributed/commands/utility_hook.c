@@ -35,7 +35,6 @@
 #include "access/htup_details.h"
 #include "catalog/catalog.h"
 #include "catalog/dependency.h"
-#include "catalog/pg_extension_d.h"
 #include "citus_version.h"
 #include "commands/dbcommands.h"
 #include "commands/defrem.h"
@@ -198,7 +197,14 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 
 	if (isCreateAlterExtensionUpdateCitusStmt)
 	{
-	 	CacheInvalidateRelcacheByRelid(ExtensionRelationId);
+		/*
+		 * Citus maintains a higher level cache. We use the cache invalidation mechanism
+		 * of Postgres to achieve cache coherency between backends. Any change to citus
+		 * extension should be made known to other backends. We do this by invalidating the
+		 * relcache and therefore invoking the citus registered callback that invalidates
+		 * the citus cache in other backends.
+		 */
+		CacheInvalidateRelcacheAll();
 	}
 
 	if (EnableVersionChecks && isCreateAlterExtensionUpdateCitusStmt)
