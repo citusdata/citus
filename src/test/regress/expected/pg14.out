@@ -18,21 +18,21 @@ DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing VACUUM (FULL) pg14.t1_980001
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 VACUUM (FULL, PROCESS_TOAST) t1;
-NOTICE:  issuing VACUUM (FULL,PROCESS_TOAST) pg14.t1_980000
+NOTICE:  issuing VACUUM (FULL) pg14.t1_980000
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing VACUUM (FULL,PROCESS_TOAST) pg14.t1_980001
+NOTICE:  issuing VACUUM (FULL) pg14.t1_980001
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 VACUUM (FULL, PROCESS_TOAST true) t1;
-NOTICE:  issuing VACUUM (FULL,PROCESS_TOAST) pg14.t1_980000
+NOTICE:  issuing VACUUM (FULL) pg14.t1_980000
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing VACUUM (FULL,PROCESS_TOAST) pg14.t1_980001
+NOTICE:  issuing VACUUM (FULL) pg14.t1_980001
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 VACUUM (FULL, PROCESS_TOAST false) t1;
 ERROR:  PROCESS_TOAST required with VACUUM FULL
 VACUUM (PROCESS_TOAST false) t1;
-NOTICE:  issuing VACUUM pg14.t1_980000
+NOTICE:  issuing VACUUM (PROCESS_TOAST FALSE) pg14.t1_980000
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing VACUUM pg14.t1_980001
+NOTICE:  issuing VACUUM (PROCESS_TOAST FALSE) pg14.t1_980001
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 VACUUM (INDEX_CLEANUP AUTO) t1;
 NOTICE:  issuing VACUUM (INDEX_CLEANUP auto) pg14.t1_980000
@@ -62,14 +62,14 @@ DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 VACUUM (INDEX_CLEANUP "AUTOX") t1;
 ERROR:  index_cleanup requires a Boolean value
 VACUUM (FULL, FREEZE, VERBOSE false, ANALYZE, SKIP_LOCKED, INDEX_CLEANUP, PROCESS_TOAST, TRUNCATE) t1;
-NOTICE:  issuing VACUUM (ANALYZE,FREEZE,FULL,SKIP_LOCKED,PROCESS_TOAST,TRUNCATE,INDEX_CLEANUP auto) pg14.t1_980000
+NOTICE:  issuing VACUUM (ANALYZE,FREEZE,FULL,SKIP_LOCKED,TRUNCATE,INDEX_CLEANUP auto) pg14.t1_980000
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing VACUUM (ANALYZE,FREEZE,FULL,SKIP_LOCKED,PROCESS_TOAST,TRUNCATE,INDEX_CLEANUP auto) pg14.t1_980001
+NOTICE:  issuing VACUUM (ANALYZE,FREEZE,FULL,SKIP_LOCKED,TRUNCATE,INDEX_CLEANUP auto) pg14.t1_980001
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 VACUUM (FULL, FREEZE false, VERBOSE false, ANALYZE false, SKIP_LOCKED false, INDEX_CLEANUP "Auto", PROCESS_TOAST true, TRUNCATE false) t1;
-NOTICE:  issuing VACUUM (FULL,PROCESS_TOAST,TRUNCATE false,INDEX_CLEANUP auto) pg14.t1_980000
+NOTICE:  issuing VACUUM (FULL,TRUNCATE false,INDEX_CLEANUP auto) pg14.t1_980000
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing VACUUM (FULL,PROCESS_TOAST,TRUNCATE false,INDEX_CLEANUP auto) pg14.t1_980001
+NOTICE:  issuing VACUUM (FULL,TRUNCATE false,INDEX_CLEANUP auto) pg14.t1_980001
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 -- vacuum (process_toast true) should be vacuuming toast tables (default is true)
 CREATE TABLE local_vacuum_table(name text);
