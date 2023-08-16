@@ -1,4 +1,8 @@
 name: save_regressions
+inputs:
+  folder:
+    required: false
+    default: ""
 runs:
   using: composite
   steps:
@@ -11,12 +15,12 @@ runs:
     if: failure()
     shell: bash
   - uses: actions/upload-artifact@v3.1.1
-    if: ${{ matrix.id == '' }}
+    if: ${{ inputs.folder == '' }}
     with:
       name: regression.diffs
       path: src/test/regress/regression.diffs
   - uses: actions/upload-artifact@v3.1.1
-    if: ${{ matrix.id != '' }}
+    if: ${{ inputs.folder != '' }}
     with:
       path: src/test/regress/regression.diffs
-      name: regression_${{ matrix.id }}.diffs
+      name: ${{ inputs.folder }}/regression.diffs

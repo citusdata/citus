@@ -119,7 +119,11 @@ jobs:
       shell: bash
     - uses: "./.github/actions/save_logs_and_results"
       if: always()
+      with:
+          folder: ${{ matrix.id }}
     - uses: "./.github/actions/save_regressions"
       if: always()
+      with:
+          folder: ${{ matrix.id }}
     - uses: "./.github/actions/stack_trace"
       if: always()
