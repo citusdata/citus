@@ -30,7 +30,7 @@ VACUUM (PROCESS_MAIN FALSE) t1;
 NOTICE:  issuing VACUUM (PROCESS_MAIN FALSE) pg16.t1_950000
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 VACUUM (PROCESS_MAIN FALSE, PROCESS_TOAST FALSE) t1;
-NOTICE:  issuing VACUUM (PROCESS_TOAST FALSE, PROCESS_MAIN FALSE) pg16.t1_950000
+NOTICE:  issuing VACUUM (PROCESS_TOAST FALSE,PROCESS_MAIN FALSE) pg16.t1_950000
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 VACUUM (PROCESS_MAIN TRUE) t1;
 NOTICE:  issuing VACUUM pg16.t1_950000
@@ -40,19 +40,6 @@ NOTICE:  issuing VACUUM (FULL,PROCESS_MAIN FALSE) pg16.t1_950000
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 VACUUM (SKIP_DATABASE_STATS) t1;
 NOTICE:  issuing VACUUM (SKIP_DATABASE_STATS) pg16.t1_950000
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-VACUUM (ONLY_DATABASE_STATS);
-NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off'
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off'
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing VACUUM (ONLY_DATABASE_STATS)
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing VACUUM (ONLY_DATABASE_STATS)
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SET citus.enable_ddl_propagation TO 'on'
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SET citus.enable_ddl_propagation TO 'on'
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 VACUUM (ONLY_DATABASE_STATS) t1;
 ERROR:  ONLY_DATABASE_STATS cannot be specified with a list of tables
@@ -64,6 +51,10 @@ NOTICE:  issuing VACUUM (BUFFER_USAGE_LIMIT 0) pg16.t1_950000
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 VACUUM (BUFFER_USAGE_LIMIT 16777220) t1;
 ERROR:  BUFFER_USAGE_LIMIT option must be 0 or between 128 kB and 16777216 kB
+VACUUM (BUFFER_USAGE_LIMIT -1) t1;
+ERROR:  BUFFER_USAGE_LIMIT option must be 0 or between 128 kB and 16777216 kB
+VACUUM (BUFFER_USAGE_LIMIT 'test') t1;
+ERROR:  BUFFER_USAGE_LIMIT option must be 0 or between 128 kB and 16777216 kB
 ANALYZE (BUFFER_USAGE_LIMIT '512 kB') t1;
 NOTICE:  issuing ANALYZE (BUFFER_USAGE_LIMIT 512) pg16.t1_950000
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
@@ -71,6 +62,9 @@ ANALYZE (BUFFER_USAGE_LIMIT 0) t1;
 NOTICE:  issuing ANALYZE (BUFFER_USAGE_LIMIT 0) pg16.t1_950000
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 SET citus.log_remote_commands TO OFF;
+-- only verifying it works and not printing log
+-- remote commands because it can be flaky
+VACUUM (ONLY_DATABASE_STATS);
 \set VERBOSITY terse
 SET client_min_messages TO ERROR;
 DROP SCHEMA pg16 CASCADE;
