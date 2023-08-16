@@ -1416,6 +1416,14 @@ RelationInfoContainsOnlyRecurringTuples(PlannerInfo *plannerInfo, Relids relids)
 	{
 		RangeTblEntry *rangeTableEntry = plannerInfo->simple_rte_array[relationId];
 
+		if (IsRelOptOuterJoin(plannerInfo, relationId))
+		{
+			/*
+			* TODO: add comment
+			*/
+			continue;
+		}
+
 		if (FindNodeMatchingCheckFunctionInRangeTableList(list_make1(rangeTableEntry),
 														  IsDistributedTableRTE))
 		{
