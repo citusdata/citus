@@ -88,7 +88,7 @@ jobs:
           - check-split
           - check-multi
           - check-multi-1
-          - check-mx
+          - check-multi-mx
           - check-vanilla
           - check-isolation
           - check-operations
@@ -123,10 +123,13 @@ jobs:
     - name: Run Test
       run: gosu circleci make -C src/test/regress ${{ matrix.make }}
     - uses: "./.github/actions/save_logs_and_results"
+      if: always()
+      with:
+        folder: ${{ matrix.pg_version }}_${{ matrix.make }}
     - uses: "./.github/actions/save_regressions"
       if: always()
       with:
-          folder: ${{ matrix.pg_version }}/${{ matrix.make }}
+          folder: ${{ matrix.pg_version }}_${{ matrix.make }}
     - uses: "./.github/actions/stack_trace"
     - uses: "./.github/actions/upload_coverage"
       with:
