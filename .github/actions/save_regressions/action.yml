@@ -23,4 +23,4 @@ runs:
     if: ${{ inputs.folder != '' }}
     with:
       path: src/test/regress/regression.diffs
-      name: ${{ inputs.folder }}/regression.diffs
+      name: ${{ inputs.folder }}

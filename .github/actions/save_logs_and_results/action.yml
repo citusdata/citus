@@ -34,25 +34,25 @@ runs:
   - uses: actions/upload-artifact@v3.1.1
     if: ${{ inputs.folder != '' }}
     with:
-      name: ${{ inputs.folder }}/proxy.output
+      name: ${{ inputs.folder }}
       path: src/test/regress/proxy.output
   - uses: actions/upload-artifact@v3.1.1
     if: ${{ inputs.folder != '' }}
     with:
-      name: ${{ inputs.folder }}/regress
+      name: ${{ inputs.folder }}
       path: src/test/regress/results/
   - uses: actions/upload-artifact@v3.1.1
     if: ${{ inputs.folder != '' }}
     with:
-      name: ${{ inputs.folder }}/master.log
+      name: ${{ inputs.folder }}
       path: src/test/regress/tmp_check/master/log
   - uses: actions/upload-artifact@v3.1.1
     if: ${{ inputs.folder != '' }}
     with:
-      name: ${{ inputs.folder }}/worker.57637.log
+      name: ${{ inputs.folder }}
       path: src/test/regress/tmp_check/worker.57637/log
   - uses: actions/upload-artifact@v3.1.1
     if: ${{ inputs.folder != '' }}
     with:
-      name: ${{ inputs.folder }}/worker.57638.log
+      name: ${{ inputs.folder }}
       path: src/test/regress/tmp_check/worker.57638/log
