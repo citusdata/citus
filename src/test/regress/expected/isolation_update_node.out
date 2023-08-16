@@ -3,8 +3,8 @@ Parsed test spec with 3 sessions
 starting permutation: s1-begin s1-update-node-1 s2-update-node-2 s1-commit s1-show-nodes s3-update-node-1-back s3-update-node-2-back s3-manually-fix-metadata
 nodeid|nodename |nodeport
 ---------------------------------------------------------------------
-    22|localhost|   57638
-    21|localhost|   57637
+    23|localhost|   57638
+    22|localhost|   57637
 (2 rows)
 
 step s1-begin:
@@ -43,8 +43,8 @@ step s1-show-nodes:
 
 nodeid|nodename |nodeport|isactive
 ---------------------------------------------------------------------
-    21|localhost|   58637|t
-    22|localhost|   58638|t
+    22|localhost|   58637|t
+    23|localhost|   58638|t
 (2 rows)
 
 step s3-update-node-1-back:
@@ -93,8 +93,8 @@ nodeid|nodename|nodeport
 starting permutation: s1-begin s1-update-node-1 s2-begin s2-update-node-1 s1-commit s2-abort s1-show-nodes s3-update-node-1-back s3-manually-fix-metadata
 nodeid|nodename |nodeport
 ---------------------------------------------------------------------
-    24|localhost|   57638
-    23|localhost|   57637
+    25|localhost|   57638
+    24|localhost|   57637
 (2 rows)
 
 step s1-begin:
@@ -139,8 +139,8 @@ step s1-show-nodes:
 
 nodeid|nodename |nodeport|isactive
 ---------------------------------------------------------------------
-    24|localhost|   57638|t
-    23|localhost|   58637|t
+    25|localhost|   57638|t
+    24|localhost|   58637|t
 (2 rows)
 
 step s3-update-node-1-back:
@@ -178,8 +178,8 @@ nodeid|nodename|nodeport
 starting permutation: s2-create-table s1-begin s1-update-node-nonexistent s1-prepare-transaction s2-cache-prepared-statement s1-commit-prepared s2-execute-prepared s1-update-node-existent s3-manually-fix-metadata
 nodeid|nodename |nodeport
 ---------------------------------------------------------------------
-    26|localhost|   57638
-    25|localhost|   57637
+    27|localhost|   57638
+    26|localhost|   57637
 (2 rows)
 
 step s2-create-table:
