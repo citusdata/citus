@@ -71,7 +71,7 @@ jobs:
         image_name:
           - "citus/exttester"
         image_suffix:
-          - "-vbab548a"
+          - ${{ inputs.image_suffix}}
         pg_major:
           - 14
           - 15
