@@ -7,9 +7,9 @@ runs:
   using: composite
   steps:
   - uses: actions/upload-artifact@v3.1.1
-    if-no-files-found: ignore
     with:
       name: ${{ inputs.folder }}
+      if-no-files-found: ignore
       path: |
         src/test/regress/proxy.output
         src/test/regress/results/
