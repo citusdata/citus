@@ -318,13 +318,17 @@ DeparseVacuumStmtPrefix(CitusVacuumParams vacuumParams)
 	}
 
 	/* if no flags remain, exit early */
-	if (vacuumFlags == 0 &&
-		vacuumParams.truncate == VACOPTVALUE_UNSPECIFIED &&
-		vacuumParams.index_cleanup == VACOPTVALUE_UNSPECIFIED &&
-		vacuumParams.nworkers == VACUUM_PARALLEL_NOTSET
-		)
+	if (vacuumFlags & VACOPT_PROCESS_TOAST)
 	{
-		return vacuumPrefix->data;
+		/* process toast is true by default */
+		if ((vacuumFlags & ~VACOPT_PROCESS_TOAST) == 0 &&
+			vacuumParams.truncate == VACOPTVALUE_UNSPECIFIED &&
+			vacuumParams.index_cleanup == VACOPTVALUE_UNSPECIFIED &&
+			vacuumParams.nworkers == VACUUM_PARALLEL_NOTSET
+			)
+		{
+			return vacuumPrefix->data;
+		}
 	}
 
 	/* otherwise, handle options */
@@ -360,9 +364,9 @@ DeparseVacuumStmtPrefix(CitusVacuumParams vacuumParams)
 		appendStringInfoString(vacuumPrefix, "SKIP_LOCKED,");
 	}
 
-	if (vacuumFlags & VACOPT_PROCESS_TOAST)
+	if (!(vacuumFlags & VACOPT_PROCESS_TOAST))
 	{
-		appendStringInfoString(vacuumPrefix, "PROCESS_TOAST,");
+		appendStringInfoString(vacuumPrefix, "PROCESS_TOAST FALSE,");
 	}
 
 	if (vacuumParams.truncate != VACOPTVALUE_UNSPECIFIED)
@@ -499,7 +503,7 @@ VacuumStmtParams(VacuumStmt *vacstmt)
 	bool freeze = false;
 	bool full = false;
 	bool disable_page_skipping = false;
-	bool process_toast = false;
+	bool process_toast = true;
 
 	/* Set default value */
 	params.index_cleanup = VACOPTVALUE_UNSPECIFIED;
