@@ -38,7 +38,7 @@ jobs:
         image_name:
           - "citus/extbuilder"
         image_suffix:
-          - "-vbab548a"
+          - ${{ inputs.image_suffix}}
         pg_major:
           - 14
           - 15
