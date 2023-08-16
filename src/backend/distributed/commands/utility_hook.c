@@ -195,7 +195,7 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 	bool isCreateAlterExtensionUpdateCitusStmt = IsCreateAlterExtensionUpdateCitusStmt(
 		parsetree);
 
-	if (isCreateAlterExtensionUpdateCitusStmt)
+	if (isCreateAlterExtensionUpdateCitusStmt || IsDropCitusExtensionStmt(parsetree))
 	{
 		/*
 		 * Citus maintains a higher level cache. We use the cache invalidation mechanism
