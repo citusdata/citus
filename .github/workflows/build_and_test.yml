@@ -53,6 +53,7 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: "${{ matrix.image_name }}:${{ matrix.pg_version  }}${{ matrix.image_suffix }}"
+      options: --user root
     steps:
     - uses: actions/checkout@v3.5.0
     - name: Configure, Build, and Install
@@ -105,6 +106,7 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: "${{ matrix.image_name }}:${{ matrix.pg_version  }}${{ matrix.image_suffix }}"
+      options: --user root
     needs:
     - build
     steps:
