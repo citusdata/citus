@@ -31,7 +31,7 @@ on:
 #   GIT_USERNAME: xxxx
 jobs:
   build:
-    name: Build Citus for PostgreSQL ${{ matrix.pg_version}}
+    name: Build for PG ${{ matrix.pg_version}}
     strategy:
       fail-fast: false
       matrix:
@@ -64,7 +64,7 @@ jobs:
           ./build-${{ matrix.pg_major  }}/*
           ./install-${{ matrix.pg_major  }}.tar
   test-citus:
-    name: Test Citus ${{ matrix.make }} on PostgreSQL ${{ matrix.pg_version }}
+    name: Test ${{ matrix.make }} PG${{ matrix.pg_version }}
     strategy:
       fail-fast: false
       matrix:
