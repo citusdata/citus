@@ -1,0 +1,750 @@
+name: citusdata/citus/build_and_test
+on:
+  workflow_dispatch:
+    inputs:
+      image_suffix:
+        required: false
+        default: "-vbab548a"
+      pg14_version:
+        required: false
+        default: '14.9'
+      pg15_version:
+        required: false
+        default: '15.4'
+      upgrade_pg_versions:
+        required: false
+        default: 14.9-15.4
+      style_checker_tools_version:
+        required: false
+        default: 0.8.18
+      build_image_name:
+        required: false
+        default: "citus/extbuilder"
+# env:
+#   AZURE_SP: xxxx
+#   AZURE_SP_PASSWORD: xxxx
+#   AZURE_SP_TENANT: xxxx
+#   CC_TEST_REPORTER_ID: xxx
+#   CODECOV_TOKEN: xxxx
+#   GIT_ADMIN_PAT: xxxx
+#   GIT_TOKEN: xxxx
+#   GIT_USERNAME: xxxx
+jobs:
+  build:
+    name: Build Citus for PostgreSQL ${{ matrix.pg_version}}
+    strategy:
+      fail-fast: false
+      matrix:
+        image_name:
+          - "citus/extbuilder"
+        image_suffix:
+          - "-vbab548a"
+        pg_major:
+          - 14
+          - 15
+        pg_version:
+          - ${{ inputs.pg14_version }}
+          - ${{ inputs.pg15_version }}
+        exclude:
+          - pg_major: 14
+            pg_version: ${{ inputs.pg15_version }}
+          - pg_major: 15
+            pg_version: ${{ inputs.pg14_version }}
+    runs-on: ubuntu-latest
+    container:
+      image: "${{ matrix.image_name }}:${{ matrix.pg_version  }}${{ matrix.image_suffix }}"
+    steps:
+    - uses: actions/checkout@v3.5.0
+    - name: Configure, Build, and Install
+      run: "./ci/build-citus.sh"
+    - uses: actions/upload-artifact@v3.1.1
+      with:
+        path: |-
+          ./build-${{ matrix.pg_major  }}/*
+          ./install-${{ matrix.pg_major  }}.tar
+  test-citus:
+    name: Test Citus ${{ matrix.make }} on PostgreSQL ${{ matrix.pg_version }}
+    strategy:
+      fail-fast: false
+      matrix:
+        image_name:
+          - "citus/exttester"
+        image_suffix:
+          - "-vbab548a"
+        pg_major:
+          - 14
+          - 15
+        pg_version:
+          - ${{ inputs.pg14_version }}
+          - ${{ inputs.pg15_version }}
+        exclude:
+          - pg_major: 14
+            pg_version: ${{ inputs.pg15_version }}
+          - pg_major: 15
+            pg_version: ${{ inputs.pg14_version }}
+        make:
+          - check-split
+          - check-multi
+          - check-multi-1
+          - check-mx
+          - check-vanilla
+          - check-isolation
+          - check-operations
+          - check-follower-cluster
+          - check-columnar
+          - check-columnar-isolation
+          - check-failure
+          - check-enterprise
+          - check-enterprise-isolation
+          - check-enterprise-isolation-logicalrep-1
+          - check-enterprise-isolation-logicalrep-2
+          - check-enterprise-isolation-logicalrep-3
+          - check-enterprise-failure
+          - check-arbitrary-configs
+          - check-query-generator
+    runs-on: ubuntu-latest
+    container:
+      image: "${{ matrix.image_name }}:${{ matrix.pg_version  }}${{ matrix.image_suffix }}"
+    needs:
+    - build
+    steps:
+    - uses: actions/checkout@v3.5.0
+    - uses: actions/download-artifact@v3.0.1
+      with: |-
+        ./build-${{ matrix.pg_major }}
+        ./install-${{ matrix.pg_major }}.tar
+    - uses: "./.github/actions/install_extension"
+      with:
+        pg_major: "${{ matrix.pg_major }}"
+    - uses: "./.github/actions/configure"
+    - uses: "./.github/actions/enable_core"
+    - name: Run Test
+      run: gosu circleci make -C src/test/regress ${{ matrix.make }}
+    - uses: "./.github/actions/save_logs_and_results"
+    - uses: "./.github/actions/save_regressions"
+      if: always()
+      with:
+          folder: ${{ matrix.pg_version }}/${{ matrix.make }}
+    - uses: "./.github/actions/stack_trace"
+    - uses: "./.github/actions/upload_coverage"
+      with:
+        flags: test_${{ matrix.pg_major }},${{ matrix.make }}
+
+  # check-style:
+  #   runs-on: ubuntu-latest
+  #   container:
+  #     image: citus/stylechecker:${{ inputs.style_checker_tools_version }}${{ inputs.image_suffix }}
+  #   steps:
+  #   - uses: actions/checkout@v3.5.0
+  #   - name: Check C Style
+  #     run: citus_indent --check
+  #   - name: Check Python style
+  #     run: black --check .
+  #   - name: Check Python import order
+  #     run: isort --check .
+  #   - name: Check Python lints
+  #     run: flake8 .
+  #   - name: Fix whitespace
+  #     run: ci/editorconfig.sh && git diff --exit-code
+  #   - name: Remove useless declarations
+  #     run: ci/remove_useless_declarations.sh && git diff --cached --exit-code
+  #   - name: Normalize test output
+  #     run: ci/normalize_expected.sh && git diff --exit-code
+  #   - name: Check for C-style comments in migration files
+  #     run: ci/disallow_c_comments_in_migrations.sh && git diff --exit-code
+  #   - name: 'Check for comment--cached ns that start with # character in spec files'
+  #     run: ci/disallow_hash_comments_in_spec_files.sh && git diff --exit-code
+  #   - name: Check for gitignore entries .for source files
+  #     run: ci/fix_gitignore.sh && git diff --exit-code
+  #   - name: Check for lengths of changelog entries
+  #     run: ci/disallow_long_changelog_entries.sh
+  #   - name: Check for banned C API usage
+  #     run: ci/banned.h.sh
+  #   - name: Check for tests missing in schedules
+  #     run: ci/check_all_tests_are_run.sh
+  #   - name: Check if all CI scripts are actually run
+  #     run: ci/check_all_ci_scripts_are_run.sh
+  #   - name: Check if all GUCs are sorted alphabetically
+  #     run: ci/check_gucs_are_alphabetically_sorted.sh
+  #   - name: Check for missing downgrade scripts
+  #     run: ci/check_migration_files.sh
+  # check-sql-snapshots:
+  #   runs-on: ubuntu-latest
+  #   container:
+  #     image: citus/extbuilder:latest
+  #   steps:
+  #   - uses: actions/checkout@v3.5.0
+  #   - name: Check Snapshots
+  #     run: ci/check_sql_snapshots.sh
+  # test-pytest:
+  #   defaults:
+  #     run:
+  #       working-directory: "/home/circleci/project"
+  #   runs-on: ubuntu-latest
+  #   container:
+  #     image: "${{ env.image }}"
+  #   needs:
+  #   - build-14
+  #   env:
+  #     pg_major: 14
+  #     image: citus/failtester
+  #     image_tag: "${{ inputs.pg14_version }}"
+  #   steps:
+  #   - uses: actions/checkout@v3.5.0
+  #   - uses: actions/download-artifact@v3.0.1
+  #     with:
+  #       path: "."
+  #   - uses: "./.github/actions/install_extension"
+  #     with:
+  #       pg_major: "${{ env.pg_major }}"
+  #   - uses: "./.github/actions/configure"
+  #   - uses: "./.github/actions/enable_core"
+  #   - name: Run pytest
+  #     run: |-
+  #       gosu circleci \
+  #         make -C src/test/regress check-pytest
+  #   - uses: "./.github/actions/stack_trace"
+  #   - uses: "./.github/actions/upload_coverage"
+  #     with:
+  #       flags: test_${{ env.pg_major }},pytest
+  # test-pytest_1:
+
+  #   defaults:
+  #     run:
+  #       working-directory: "/home/circleci/project"
+  #   runs-on: ubuntu-latest
+  #   container:
+  #     image: "${{ env.image }}"
+  #   needs:
+  #   - build-15
+  #   env:
+  #     pg_major: 15
+  #     image: citus/failtester
+  #     image_tag: "${{ inputs.pg15_version }}"
+  #   steps:
+  #   - uses: actions/checkout@v3.5.0
+  #   - uses: actions/download-artifact@v3.0.1
+  #     with:
+  #       path: "."
+  #   - uses: "./.github/actions/install_extension"
+  #     with:
+  #       pg_major: "${{ env.pg_major }}"
+  #   - uses: "./.github/actions/configure"
+  #   - uses: "./.github/actions/enable_core"
+  #   - name: Run pytest
+  #     run: |-
+  #       gosu circleci \
+  #         make -C src/test/regress check-pytest
+  #   - uses: "./.github/actions/stack_trace"
+  #   - uses: "./.github/actions/upload_coverage"
+  #     with:
+  #       flags: test_${{ env.pg_major }},pytest
+  # tap-test-citus:
+
+  #   defaults:
+  #     run:
+  #       working-directory: "/home/circleci/project"
+  #   runs-on: ubuntu-latest
+  #   container:
+  #     image: "${{ env.image }}"
+  #   needs:
+  #   - build-15
+  #   env:
+  #     pg_major: 15
+  #     image: citus/exttester
+  #     image_tag: "${{ inputs.pg15_version }}"
+  #     suite: cdc
+  #     make: installcheck
+  #   steps:
+  #   - uses: actions/checkout@v3.5.0
+  #   - uses: actions/download-artifact@v3.0.1
+  #     with:
+  #       path: "."
+  #   - uses: "./.github/actions/install_extension"
+  #     with:
+  #       pg_major: "${{ env.pg_major }}"
+  #   - uses: "./.github/actions/configure"
+  #   - uses: "./.github/actions/enable_core"
+  #   - name: Run Test
+  #     run: gosu circleci make -C src/test/${{ env.suite }} ${{ env.make }}
+  #   - uses: actions/upload-artifact@v3.1.1
+  #     with:
+  #       path: "/home/circleci/project/src/test/${{ env.suite }}/tmp_check/log"
+  #   - uses: "./.github/actions/save_logs_and_results"
+  #   - uses: "./.github/actions/stack_trace"
+  #   - uses: "./.github/actions/upload_coverage"
+  #     with:
+  #       flags: test_${{ env.pg_major }},tap_${{ env.suite }}_${{ env.make }}
+  # test-arbitrary-configs:
+
+  #   defaults:
+  #     run:
+  #       working-directory: "/home/circleci/project"
+  #   runs-on: ubuntu-latest
+  #   container:
+  #     image: "${{ env.image }}"
+  #   needs:
+  #   - build-14
+  #   env:
+  #     pg_major: 14
+  #     image: citus/failtester
+  #     image_tag: "${{ inputs.pg14_version }}"
+  #   steps:
+  #   - uses: actions/checkout@v3.5.0
+  #   - uses: actions/download-artifact@v3.0.1
+  #     with:
+  #       path: "."
+  #   - uses: "./.github/actions/install_extension"
+  #     with:
+  #       pg_major: "${{ env.pg_major }}"
+  #   - uses: "./.github/actions/configure"
+  #   - uses: "./.github/actions/enable_core"
+  #   - name: Test arbitrary configs
+  #     run: |-
+  #       TESTS=$(src/test/regress/citus_tests/print_test_names.py | circleci tests split)
+  #       # Our test suite expects comma separated values
+  #       TESTS=$(echo $TESTS | tr ' ' ',')
+  #       # TESTS will contain subset of configs that will be run on a container and we use multiple containers
+  #       # to run the test suite
+  #       gosu circleci \
+  #         make -C src/test/regress \
+  #           check-arbitrary-configs parallel=4 CONFIGS=$TESTS
+  #   - name: Show regressions
+  #     run: |-
+  #       find src/test/regress/tmp_citus_test/ -name "regression*.diffs" -exec cat {} +
+  #       lines=$(find src/test/regress/tmp_citus_test/ -name "regression*.diffs" | wc -l)
+  #       if [ $lines -ne 0 ]; then
+  #          exit 1
+  #       fi
+  #     if: failure()
+  #   - name: Copy logfiles
+  #     run: |-
+  #       mkdir src/test/regress/tmp_citus_test/logfiles
+  #       find src/test/regress/tmp_citus_test/ -name "logfile_*" -exec cp -t src/test/regress/tmp_citus_test/logfiles/ {} +
+  #     if: failure()
+  #   - uses: actions/upload-artifact@v3.1.1
+  #     with:
+  #       path: src/test/regress/tmp_citus_test/logfiles
+  #   - uses: "./.github/actions/save_logs_and_results"
+  #   - uses: "./.github/actions/stack_trace"
+  #   - uses: "./.github/actions/upload_coverage"
+  #     with:
+  #       flags: test_${{ env.pg_major }},upgrade
+  # test-arbitrary-configs_1:
+
+  #   defaults:
+  #     run:
+  #       working-directory: "/home/circleci/project"
+  #   runs-on: ubuntu-latest
+  #   container:
+  #     image: "${{ env.image }}"
+  #   needs:
+  #   - build-15
+  #   env:
+  #     pg_major: 15
+  #     image: citus/failtester
+  #     image_tag: "${{ inputs.pg15_version }}"
+  #   steps:
+  #   - uses: actions/checkout@v3.5.0
+  #   - uses: actions/download-artifact@v3.0.1
+  #     with:
+  #       path: "."
+  #   - uses: "./.github/actions/install_extension"
+  #     with:
+  #       pg_major: "${{ env.pg_major }}"
+  #   - uses: "./.github/actions/configure"
+  #   - uses: "./.github/actions/enable_core"
+  #   - name: Test arbitrary configs
+  #     run: |-
+  #       TESTS=$(src/test/regress/citus_tests/print_test_names.py | circleci tests split)
+  #       # Our test suite expects comma separated values
+  #       TESTS=$(echo $TESTS | tr ' ' ',')
+  #       # TESTS will contain subset of configs that will be run on a container and we use multiple containers
+  #       # to run the test suite
+  #       gosu circleci \
+  #         make -C src/test/regress \
+  #           check-arbitrary-configs parallel=4 CONFIGS=$TESTS
+  #   - name: Show regressions
+  #     run: |-
+  #       find src/test/regress/tmp_citus_test/ -name "regression*.diffs" -exec cat {} +
+  #       lines=$(find src/test/regress/tmp_citus_test/ -name "regression*.diffs" | wc -l)
+  #       if [ $lines -ne 0 ]; then
+  #          exit 1
+  #       fi
+  #     if: failure()
+  #   - name: Copy logfiles
+  #     run: |-
+  #       mkdir src/test/regress/tmp_citus_test/logfiles
+  #       find src/test/regress/tmp_citus_test/ -name "logfile_*" -exec cp -t src/test/regress/tmp_citus_test/logfiles/ {} +
+  #     if: failure()
+  #   - uses: actions/upload-artifact@v3.1.1
+  #     with:
+  #       path: src/test/regress/tmp_citus_test/logfiles
+  #   - uses: "./.github/actions/save_logs_and_results"
+  #   - uses: "./.github/actions/stack_trace"
+  #   - uses: "./.github/actions/upload_coverage"
+  #     with:
+  #       flags: test_${{ env.pg_major }},upgrade
+  # test-query-generator:
+
+  #   defaults:
+  #     run:
+  #       working-directory: "/home/circleci/project"
+  #   runs-on: ubuntu-latest
+  #   container:
+  #     image: "${{ env.image }}"
+  #   needs:
+  #   - build-14
+  #   env:
+  #     pg_major: 14
+  #     image: citus/failtester
+  #     image_tag: "${{ inputs.pg14_version }}"
+  #   steps:
+  #   - uses: actions/checkout@v3.5.0
+  #   - uses: actions/download-artifact@v3.0.1
+  #     with:
+  #       path: "."
+  #   - uses: "./.github/actions/install_extension"
+  #     with:
+  #       pg_major: "${{ env.pg_major }}"
+  #   - uses: "./.github/actions/configure"
+  #   - uses: "./.github/actions/enable_core"
+  #   - name: Run Test
+  #     run: gosu circleci make -C src/test/regress check-query-generator
+  #   - name: Show regressions
+  #     run: |-
+  #       find src/test/regress/citus_tests/query_generator/out/ -name "local_dist.diffs" -exec cat {} +
+  #       lines=$(find src/test/regress/citus_tests/query_generator/out/ -name "local_dist.diffs" | wc -l)
+  #       if [ $lines -ne 0 ]; then
+  #          exit 1
+  #       fi
+  #     if: failure()
+  #   - name: Copy logfiles
+  #     run: |-
+  #       mkdir src/test/regress/tmp_citus_test/logfiles
+  #       find src/test/regress/tmp_citus_test/ -name "logfile_*" -exec cp -t src/test/regress/tmp_citus_test/logfiles/ {} +
+  #     if: failure()
+  #   - uses: actions/upload-artifact@v3.1.1
+  #     with:
+  #       path: src/test/regress/tmp_citus_test/logfiles
+  #   - uses: actions/upload-artifact@v3.1.1
+  #     with:
+  #       path: src/test/regress/citus_tests/query_generator/out/ddls.sql
+  #   - uses: actions/upload-artifact@v3.1.1
+  #     with:
+  #       path: src/test/regress/citus_tests/query_generator/out/queries.sql
+  #   - uses: actions/upload-artifact@v3.1.1
+  #     with:
+  #       path: src/test/regress/citus_tests/query_generator/out/local_dist.diffs
+  #   - uses: "./.github/actions/stack_trace"
+  #   - uses: "./.github/actions/upload_coverage"
+  #     with:
+  #       flags: test_${{ env.pg_major }},querygen
+  # test-query-generator_1:
+
+  #   defaults:
+  #     run:
+  #       working-directory: "/home/circleci/project"
+  #   runs-on: ubuntu-latest
+  #   container:
+  #     image: "${{ env.image }}"
+  #   needs:
+  #   - build-15
+  #   env:
+  #     pg_major: 15
+  #     image: citus/failtester
+  #     image_tag: "${{ inputs.pg15_version }}"
+  #   steps:
+  #   - uses: actions/checkout@v3.5.0
+  #   - uses: actions/download-artifact@v3.0.1
+  #     with:
+  #       path: "."
+  #   - uses: "./.github/actions/install_extension"
+  #     with:
+  #       pg_major: "${{ env.pg_major }}"
+  #   - uses: "./.github/actions/configure"
+  #   - uses: "./.github/actions/enable_core"
+  #   - name: Run Test
+  #     run: gosu circleci make -C src/test/regress check-query-generator
+  #   - name: Show regressions
+  #     run: |-
+  #       find src/test/regress/citus_tests/query_generator/out/ -name "local_dist.diffs" -exec cat {} +
+  #       lines=$(find src/test/regress/citus_tests/query_generator/out/ -name "local_dist.diffs" | wc -l)
+  #       if [ $lines -ne 0 ]; then
+  #          exit 1
+  #       fi
+  #     if: failure()
+  #   - name: Copy logfiles
+  #     run: |-
+  #       mkdir src/test/regress/tmp_citus_test/logfiles
+  #       find src/test/regress/tmp_citus_test/ -name "logfile_*" -exec cp -t src/test/regress/tmp_citus_test/logfiles/ {} +
+  #     if: failure()
+  #   - uses: actions/upload-artifact@v3.1.1
+  #     with:
+  #       path: src/test/regress/tmp_citus_test/logfiles
+  #   - uses: actions/upload-artifact@v3.1.1
+  #     with:
+  #       path: src/test/regress/citus_tests/query_generator/out/ddls.sql
+  #   - uses: actions/upload-artifact@v3.1.1
+  #     with:
+  #       path: src/test/regress/citus_tests/query_generator/out/queries.sql
+  #   - uses: actions/upload-artifact@v3.1.1
+  #     with:
+  #       path: src/test/regress/citus_tests/query_generator/out/local_dist.diffs
+  #   - uses: "./.github/actions/stack_trace"
+  #   - uses: "./.github/actions/upload_coverage"
+  #     with:
+  #       flags: test_${{ env.pg_major }},querygen
+  # test-pg-upgrade:
+
+  #   defaults:
+  #     run:
+  #       working-directory: "/home/circleci/project"
+  #   runs-on: ubuntu-latest
+  #   container:
+  #     image: "${{ env.image }}"
+  #   needs:
+  #   - build-14
+  #   - build-15
+  #   env:
+  #     old_pg_major: 14
+  #     new_pg_major: 15
+  #     image: citus/pgupgradetester
+  #     image_tag: "${{ inputs.upgrade_pg_versions }}"
+  #   steps:
+  #   - uses: actions/checkout@v3.5.0
+  #   - uses: actions/download-artifact@v3.0.1
+  #     with:
+  #       path: "."
+  #   - uses: "./.github/actions/install_extension"
+  #     with:
+  #       pg_major: "${{ env.old_pg_major }}"
+  #   - uses: "./.github/actions/install_extension"
+  #     with:
+  #       pg_major: "${{ env.new_pg_major }}"
+  #   - uses: "./.github/actions/configure"
+  #   - uses: "./.github/actions/enable_core"
+  #   - name: Install and test postgres upgrade
+  #     run: |-
+  #       gosu circleci \
+  #         make -C src/test/regress \
+  #           check-pg-upgrade \
+  #           old-bindir=/usr/lib/postgresql/${{ env.old_pg_major }}/bin \
+  #           new-bindir=/usr/lib/postgresql/${{ env.new_pg_major }}/bin
+  #   - name: Copy pg_upgrade logs for newData dir
+  #     run: |-
+  #       mkdir -p /tmp/pg_upgrade_newData_logs
+  #       if ls src/test/regress/tmp_upgrade/newData/*.log 1> /dev/null 2>&1; then
+  #           cp src/test/regress/tmp_upgrade/newData/*.log /tmp/pg_upgrade_newData_logs
+  #       fi
+  #     if: failure()
+  #   - uses: actions/upload-artifact@v3.1.1
+  #     with:
+  #       path: "/tmp/pg_upgrade_newData_logs"
+  #   - uses: "./.github/actions/save_logs_and_results"
+  #   - uses: "./.github/actions/save_regressions"
+  #   - uses: "./.github/actions/stack_trace"
+  #   - uses: "./.github/actions/upload_coverage"
+  #     with:
+  #       flags: test_${{ env.old_pg_major }}_${{ env.new_pg_major }},upgrade
+  # test-citus-upgrade:
+
+  #   defaults:
+  #     run:
+  #       working-directory: "/home/circleci/project"
+  #   runs-on: ubuntu-latest
+  #   container:
+  #     image: "${{ env.image }}"
+  #   needs:
+  #   - build-14
+  #   env:
+  #     pg_major: 14
+  #     image: citus/citusupgradetester
+  #     image_tag: "${{ inputs.pg14_version }}"
+  #   steps:
+  #   - uses: actions/checkout@v3.5.0
+  #   - uses: actions/download-artifact@v3.0.1
+  #     with:
+  #       path: "."
+  #   - uses: "./.github/actions/configure"
+  #   - uses: "./.github/actions/enable_core"
+  #   - name: Install and test citus upgrade
+  #     run: |-
+  #       # run make check-citus-upgrade for all citus versions
+  #       # the image has ${CITUS_VERSIONS} set with all verions it contains the binaries of
+  #       for citus_version in ${CITUS_VERSIONS}; do \
+  #         gosu circleci \
+  #           make -C src/test/regress \
+  #             check-citus-upgrade \
+  #             bindir=/usr/lib/postgresql/${PG_MAJOR}/bin \
+  #             citus-old-version=${citus_version} \
+  #             citus-pre-tar=/install-pg${PG_MAJOR}-citus${citus_version}.tar \
+  #             citus-post-tar=/home/circleci/project/install-$PG_MAJOR.tar; \
+  #       done;
+  #       # run make check-citus-upgrade-mixed for all citus versions
+  #       # the image has ${CITUS_VERSIONS} set with all verions it contains the binaries of
+  #       for citus_version in ${CITUS_VERSIONS}; do \
+  #         gosu circleci \
+  #           make -C src/test/regress \
+  #             check-citus-upgrade-mixed \
+  #             citus-old-version=${citus_version} \
+  #             bindir=/usr/lib/postgresql/${PG_MAJOR}/bin \
+  #             citus-pre-tar=/install-pg${PG_MAJOR}-citus${citus_version}.tar \
+  #             citus-post-tar=/home/circleci/project/install-$PG_MAJOR.tar; \
+  #       done;
+  #   - uses: "./.github/actions/save_logs_and_results"
+  #   - uses: "./.github/actions/save_regressions"
+  #   - uses: "./.github/actions/stack_trace"
+  #   - uses: "./.github/actions/upload_coverage"
+  #     with:
+  #       flags: test_${{ env.pg_major }},upgrade
+  # upload-coverage:
+  #   defaults:
+  #     run:
+  #       working-directory: "/home/circleci/project"
+  #   runs-on: ubuntu-latest
+  #   container:
+  #     image: citus/exttester:${{ inputs.pg15_version }}${{ inputs.image_suffix }}
+  #   needs:
+  #   - test-14_check-multi
+  #   - test-14_check-multi-1
+  #   - test-14_check-mx
+  #   - test-14_check-vanilla
+  #   - test-14_check-isolation
+  #   - test-14_check-operations
+  #   - test-14_check-follower-cluster
+  #   - test-14_check-columnar
+  #   - test-14_check-columnar-isolation
+  #   - test-14_check-failure
+  #   - test-14_check-enterprise
+  #   - test-14_check-enterprise-isolation
+  #   - test-14_check-enterprise-isolation-logicalrep-1
+  #   - test-14_check-enterprise-isolation-logicalrep-2
+  #   - test-14_check-enterprise-isolation-logicalrep-3
+  #   - test-14_check-enterprise-failure
+  #   - test-14_check-split
+  #   - test-14_check-arbitrary-configs
+  #   - test-14_check-query-generator
+  #   - test-15_check-multi
+  #   - test-15_check-multi-1
+  #   - test-15_check-mx
+  #   - test-15_check-vanilla
+  #   - test-15_check-isolation
+  #   - test-15_check-operations
+  #   - test-15_check-follower-cluster
+  #   - test-15_check-columnar
+  #   - test-15_check-columnar-isolation
+  #   - test-15_check-failure
+  #   - test-15_check-enterprise
+  #   - test-15_check-enterprise-isolation
+  #   - test-15_check-enterprise-isolation-logicalrep-1
+  #   - test-15_check-enterprise-isolation-logicalrep-2
+  #   - test-15_check-enterprise-isolation-logicalrep-3
+  #   - test-15_check-enterprise-failure
+  #   - test-15_check-split
+  #   - test-15_check-arbitrary-configs
+  #   - test-15_check-query-generator
+  #   - test-14-15_check-pg-upgrade
+  #   - test-14_check-citus-upgrade
+  #   steps:
+  #   - uses: actions/download-artifact@v3.0.1
+  #     with:
+  #       path: "."
+  #   - name: Upload coverage results to Code Climate
+  #     run: |-
+  #       cc-test-reporter sum-coverage codeclimate/*.json -o total.json
+  #       cc-test-reporter upload-coverage -i total.json
+  # ch_benchmark:
+  #   if: startsWith(github.ref, 'refs/heads/ch_benchmark/')
+  #   defaults:
+  #     run:
+  #       working-directory: "/home/circleci/project"
+  #   runs-on: ubuntu-latest
+  #   container:
+  #     image: buildpack-deps:stretch
+  #   needs:
+  #   - build-14
+  #   steps:
+  #   - uses: actions/checkout@v3.5.0
+  #   - uses: azure/login@v1
+  #     with:
+  #       creds: ${{ secrets.AZURE_CREDENTIALS }}
+  #   - name: install dependencies and run ch_benchmark tests
+  #     uses: azure/CLI@v1
+  #     with:
+  #       inlineScript: |
+  #         cd ./src/test/hammerdb
+  #         chmod +x run_hammerdb.sh
+  #         run_hammerdb.sh citusbot_ch_benchmark_rg
+  # tpcc_benchmark:
+  #   if: startsWith(github.ref, 'refs/heads/tpcc_benchmark/')
+  #   defaults:
+  #     run:
+  #       working-directory: "/home/circleci/project"
+  #   runs-on: ubuntu-latest
+  #   container:
+  #     image: buildpack-deps:stretch
+  #   needs:
+  #   - build-14
+  #   steps:
+  #   - uses: actions/checkout@v3.5.0
+  #   - uses: azure/login@v1
+  #     with:
+  #       creds: ${{ secrets.AZURE_CREDENTIALS }}
+  #   - name: install dependencies and run tpcc_benchmark tests
+  #     uses: azure/CLI@v1
+  #     with:
+  #       inlineScript: |
+  #         cd ./src/test/hammerdb
+  #         chmod +x run_hammerdb.sh
+  #         run_hammerdb.sh citusbot_tpcc_benchmark_rg
+  # test-flakyness:
+  #   if: ${{ inputs.skip_flaky_tests }}
+  #   defaults:
+  #     run:
+  #       working-directory: "/home/circleci/project"
+  #   runs-on: ubuntu-latest
+  #   container:
+  #     image: "${{ env.image }}"
+  #   needs:
+  #   - build-15
+  #   env:
+  #     pg_major: 15
+  #     image: citus/failtester
+  #     image_tag: "${{ inputs.pg15_version }}"
+  #     test: ''
+  #     runs: 8
+  #   steps:
+  #   - uses: actions/checkout@v3.5.0
+  #   - uses: actions/download-artifact@v3.0.1
+  #     with:
+  #       path: "."
+  #   - name: Detect regression tests need to be ran
+  #     run: |-
+  #       detected_changes=$(git diff origin/main... --name-only --diff-filter=AM | (grep 'src/test/regress/sql/.*\.sql\|src/test/regress/spec/.*\.spec\|src/test/regress/citus_tests/test/test_.*\.py' || true))
+  #       tests=${detected_changes}
+  #       if [ -z "$tests" ]; then
+  #           echo "No test found."
+  #           gh run cancel ${{ github.run_id }}
+  #           gh run watch ${{ github.run_id }}
+  #       else
+  #         echo "Detected tests " $tests
+  #       fi
+  #       echo export tests=\""$tests"\" >> "$BASH_ENV"
+  #       source "$BASH_ENV"
+  #   - uses: "./.github/actions/install_extension"
+  #     with:
+  #       pg_major: "${{ env.pg_major }}"
+  #   - uses: "./.github/actions/configure"
+  #   - uses: "./.github/actions/enable_core"
+  #   - name: Run minimal tests
+  #     run: |-
+  #       tests_array=($tests)
+  #       for test in "${tests_array[@]}"
+  #       do
+  #           test_name=$(echo "$test" | sed -r "s/.+\/(.+)\..+/\1/")
+  #           gosu circleci src/test/regress/citus_tests/run_test.py $test_name --repeat ${{ env.runs }} --use-base-schedule --use-whole-schedule-line
+  #       done
+  #   - uses: "./.github/actions/save_logs_and_results"
+  #   - uses: "./.github/actions/save_regressions"
+  #   - uses: "./.github/actions/stack_trace"
