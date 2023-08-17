@@ -1184,8 +1184,7 @@ LockShardsInWorkerPlacementList(WorkerNode *workerNode, LOCKMODE lockMode)
 BackgroundWorkerHandle *
 CheckBackgroundWorkerToObtainLocks(int32 lock_cooldown)
 {
-	BackgroundWorkerHandle *handle = NULL;
-	handle = StartLockAcquireHelperBackgroundWorker(MyProcPid, lock_cooldown);
+	BackgroundWorkerHandle *handle  = StartLockAcquireHelperBackgroundWorker(MyProcPid, lock_cooldown);
 	if (!handle)
 	{
 		/*
@@ -1284,7 +1283,6 @@ citus_update_node(PG_FUNCTION_ARGS)
 	int32 lock_cooldown = PG_GETARG_INT32(4);
 
 	char *newNodeNameString = text_to_cstring(newNodeName);
-	BackgroundWorkerHandle *handle = NULL;
 
 	WorkerNode *workerNodeWithSameAddress = FindWorkerNodeAnyCluster(newNodeNameString,
 																	 newNodePort);
@@ -1321,7 +1319,7 @@ citus_update_node(PG_FUNCTION_ARGS)
 		EnsureTransactionalMetadataSyncMode();
 	}
 
-	handle = LockPlacementsWithBackgroundWorkersInPrimaryNode(workerNode, force,
+	BackgroundWorkerHandle *handle = LockPlacementsWithBackgroundWorkersInPrimaryNode(workerNode, force,
 															  lock_cooldown);
 
 	/*
