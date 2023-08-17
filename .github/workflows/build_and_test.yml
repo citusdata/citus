@@ -115,15 +115,15 @@ jobs:
         path: |-
           ./build-${{ env.PG_MAJOR }}/*
           ./install-${{ env.PG_MAJOR }}.tar
-  test-citus-exttester:
-    name: Test ${{ matrix.make }} PG${{ matrix.pg_version }}
+  test-citus:
+    name: PG${{ matrix.pg_version }} - ${{ matrix.suite }} ${{ matrix.make }}
     strategy:
       fail-fast: false
       matrix:
+        suite:
+          - regress
         image_name:
           - "citus/exttester"
-        image_suffix:
-          - ${{ inputs.image_suffix}}
         pg_version:
           - ${{ inputs.pg14_version }}
           - ${{ inputs.pg15_version }}
@@ -145,18 +145,36 @@ jobs:
           - check-enterprise-isolation-logicalrep-3
         include:
           - make: check-failure
-            image_name: "citus/failtester"
-            pg_version:
-              - ${{ inputs.pg14_version }}
-              - ${{ inputs.pg15_version }}
-          - make: check-enterprise-failure
-            image_name: "citus/failtester"
             pg_version: ${{ inputs.pg14_version }}
-          - make: check-pytest
+            suite: regress
             image_name: "citus/failtester"
+          - make: check-failure
+            pg_version: ${{ inputs.pg15_version }}
+            suite: regress
+            image_name: "citus/failtester"
+          - make: check-enterprise-failure
+            pg_version: ${{ inputs.pg14_version }}
+            suite: regress
+            image_name: "citus/failtester"
+          - make: check-enterprise-failure
+            pg_version: ${{ inputs.pg15_version }}
+            suite: regress
+            image_name: "citus/failtester"
+          - make: check-pytest
+            pg_version: ${{ inputs.pg14_version }}
+            suite: regress
+            image_name: "citus/failtester"
+          - make: check-pytest
+            pg_version: ${{ inputs.pg15_version }}
+            suite: regress
+            image_name: "citus/failtester"
+          - make: installcheck
+            suite: cdc
+            image_name: "citus/exttester"
+            pg_version: ${{ inputs.pg15_version }}
     runs-on: ubuntu-latest
     container:
-      image: "${{ matrix.image_name }}:${{ matrix.pg_version }}${{ matrix.image_suffix }}"
+      image: "${{ matrix.image_name }}:${{ matrix.pg_version }}${{ inputs.image_suffix }}"
       options: --user root
     needs:
     - build
@@ -172,7 +190,7 @@ jobs:
     - uses: "./.github/actions/configure"
     - uses: "./.github/actions/enable_core"
     - name: Run Test
-      run: gosu circleci make -C src/test/regress ${{ matrix.make }}
+      run: gosu circleci make -C src/test/${{ matrix.suite }} ${{ matrix.make }}
     - uses: "./.github/actions/save_logs_and_results"
       if: always()
       with:
@@ -186,51 +204,8 @@ jobs:
     - uses: "./.github/actions/upload_coverage"
       if: always()
       with:
-        flags: test_${{ env.PG_MAJOR }},${{ matrix.make }}
+        flags: test_${{ env.PG_MAJOR }},${{ matrix.suite }}_${{ matrix.make }}
 
-  # - check-failure
-  # - check-arbitrary-configs
-  # - check-query-generator
-
-
-
-
-  # tap-test-citus:
-
-  #   defaults:
-  #     run:
-  #       working-directory: "/home/circleci/project"
-  #   runs-on: ubuntu-latest
-  #   container:
-  #     image: "${{ env.image }}"
-  #   needs:
-  #   - build-15
-  #   env:
-  #     pg_major: 15
-  #     image: citus/exttester
-  #     image_tag: "${{ inputs.pg15_version }}"
-  #     suite: cdc
-  #     make: installcheck
-  #   steps:
-  #   - uses: actions/checkout@v3.5.0
-  #   - uses: actions/download-artifact@v3.0.1
-  #     with:
-  #       path: "."
-  #   - uses: "./.github/actions/install_extension"
-  #     with:
-  #       pg_major: "${{ env.pg_major }}"
-  #   - uses: "./.github/actions/configure"
-  #   - uses: "./.github/actions/enable_core"
-  #   - name: Run Test
-  #     run: gosu circleci make -C src/test/${{ env.suite }} ${{ env.make }}
-  #   - uses: actions/upload-artifact@v3.1.1
-  #     with:
-  #       path: "/home/circleci/project/src/test/${{ env.suite }}/tmp_check/log"
-  #   - uses: "./.github/actions/save_logs_and_results"
-  #   - uses: "./.github/actions/stack_trace"
-  #   - uses: "./.github/actions/upload_coverage"
-  #     with:
-  #       flags: test_${{ env.pg_major }},tap_${{ env.suite }}_${{ env.make }}
   # test-arbitrary-configs:
 
   #   defaults:
@@ -655,10 +630,6 @@ jobs:
   #         chmod +x run_hammerdb.sh
   #         run_hammerdb.sh citusbot_tpcc_benchmark_rg
   # test-flakyness:
-  #   if: ${{ inputs.skip_flaky_tests }}
-  #   defaults:
-  #     run:
-  #       working-directory: "/home/circleci/project"
   #   runs-on: ubuntu-latest
   #   container:
   #     image: "${{ env.image }}"
