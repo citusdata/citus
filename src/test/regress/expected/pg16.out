@@ -65,6 +65,69 @@ SET citus.log_remote_commands TO OFF;
 -- only verifying it works and not printing log
 -- remote commands because it can be flaky
 VACUUM (ONLY_DATABASE_STATS);
+-- New feature supported on Citus - test statistics without a name
+-- Relevant PG commit:
+-- https://github.com/postgres/postgres/commit/624aa2a13bd02dd584bb0995c883b5b93b2152df
+CREATE TABLE test_stats (
+    a   int,
+    b   int
+);
+SELECT create_distributed_table('test_stats', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE STATISTICS (dependencies) ON a, b FROM test_stats;
+CREATE STATISTICS (ndistinct, dependencies) on a, b from test_stats;
+CREATE STATISTICS (ndistinct, dependencies, mcv) on a, b from test_stats;
+-- test for distributing an already existing statistics
+CREATE TABLE test_stats2 (
+    a   int,
+    b   int
+);
+CREATE STATISTICS test_stats_a_b_stat (dependencies) ON a, b FROM test_stats2;
+ERROR:  statistics object "test_stats_a_b_stat" already exists
+SELECT create_distributed_table('test_stats2', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- test when stats is on a different schema
+CREATE SCHEMA sc1;
+CREATE TABLE tbl (a int, b int);
+SELECT create_distributed_table ('tbl', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SET search_path TO sc1;
+CREATE STATISTICS ON a, b FROM pg16.tbl;
+\c - - - :worker_1_port
+-- check all statistics have been correctly created at shards
+SELECT stxnamespace, stxname
+FROM pg_statistic_ext
+WHERE stxnamespace IN (
+	SELECT oid
+	FROM pg_namespace
+	WHERE nspname IN ('pg16', 'sc1')
+) ORDER BY stxname ASC;
+ stxnamespace |           stxname
+---------------------------------------------------------------------
+        19232 | tbl_a_b_stat
+        19232 | tbl_a_b_stat_950003
+        19204 | test_stats_a_b_stat
+        19204 | test_stats_a_b_stat1
+        19204 | test_stats_a_b_stat1_950001
+        19204 | test_stats_a_b_stat2
+        19204 | test_stats_a_b_stat2_950001
+        19204 | test_stats_a_b_stat_950001
+(8 rows)
+
+\c - - - :master_port
+SET search_path TO pg16;
 \set VERBOSITY terse
 SET client_min_messages TO ERROR;
 DROP SCHEMA pg16 CASCADE;
