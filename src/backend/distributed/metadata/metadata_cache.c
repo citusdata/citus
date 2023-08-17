@@ -4987,8 +4987,8 @@ CitusTableTypeIdList(CitusTableType citusTableType)
 		Datum replicationModelDatum = datumArray[Anum_pg_dist_partition_repmodel - 1];
 		Datum colocationIdDatum = datumArray[Anum_pg_dist_partition_colocationid - 1];
 
-		Oid partitionMethod = DatumGetChar(partMethodDatum);
-		Oid replicationModel = DatumGetChar(replicationModelDatum);
+		char partitionMethod = DatumGetChar(partMethodDatum);
+		char replicationModel = DatumGetChar(replicationModelDatum);
 		uint32 colocationId = DatumGetUInt32(colocationIdDatum);
 
 		if (IsCitusTableTypeInternal(partitionMethod, replicationModel, colocationId,

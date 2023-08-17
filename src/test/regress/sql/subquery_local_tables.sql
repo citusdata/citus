@@ -95,37 +95,6 @@ FROM
 	LIMIT 3;
 
 
--- subquery in FROM -> FROM -> WHERE -> WHERE should be replaced if
--- it contains onle local tables
--- Later the upper level query is also recursively planned due to LIMIT
-SELECT user_id, array_length(events_table, 1)
-FROM (
-  SELECT user_id, array_agg(event ORDER BY time) AS events_table
-  FROM (
-    SELECT
-    	u.user_id, e.event_type::text AS event, e.time
-    FROM
-    	users_table AS u,
-        events_table AS e
-    WHERE u.user_id = e.user_id AND
-    		u.user_id IN
-    		(
-    			SELECT
-    				user_id
-    			FROM
-    				users_table
-    			WHERE value_2 >= 5
-			    AND  EXISTS (SELECT user_id FROM events_table_local WHERE event_type > 1 AND event_type <= 3 AND value_3 > 1)
-				AND  NOT EXISTS (SELECT user_id FROM events_table WHERE event_type > 3 AND event_type <= 4  AND value_3 > 1 AND user_id = users_table.user_id)
-				LIMIT 5
-    		)
-  ) t
-  GROUP BY user_id
-) q
-ORDER BY 2 DESC, 1;
-
-
-
 -- subquery (i.e., subquery_2) in WHERE->FROM should be replaced due to local tables
 SELECT
 	user_id
