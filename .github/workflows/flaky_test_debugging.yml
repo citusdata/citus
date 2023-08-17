@@ -49,10 +49,10 @@ jobs:
       run: "./ci/build-citus.sh"
     - uses: actions/upload-artifact@v3.1.1
       with:
-        name: build-${{ env.pg_major }}
+        name: build-${{ env.PG_MAJOR }}
         path: |-
-          ./build-${{ env.pg_major }}/*
-          ./install-${{ env.pg_major }}.tar
+          ./build-${{ env.PG_MAJOR }}/*
+          ./install-${{ env.PG_MAJOR }}.tar
   prepare_parallelization_matrix:
     name: Prepare parallelization matrix
     runs-on: ubuntu-latest
@@ -84,7 +84,7 @@ jobs:
     - uses: actions/checkout@v3.5.0
     - uses: actions/download-artifact@v3.0.1
       with:
-        name: build-${{ env.pg_major }}
+        name: build-${{ env.PG_MAJOR }}
     - name: Detect regression tests need to be ran
       id: detect-regression-tests
       run: |-
@@ -104,8 +104,6 @@ jobs:
         fi
         echo "tests=$tests" >> "$GITHUB_OUTPUT"
     - uses: "./.github/actions/install_extension"
-      with:
-        pg_major: "${{ env.pg_major }}"
     - uses: "./.github/actions/configure"
     - uses: "./.github/actions/enable_core"
     - name: Run minimal tests
