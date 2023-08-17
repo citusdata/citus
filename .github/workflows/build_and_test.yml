@@ -34,20 +34,18 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: citus/extbuilder:latest
-      options: --user root
+      options: --user circleci
     steps:
     - uses: actions/checkout@v3.5.0
-    - uses: "./.github/actions/configure"
     - name: Check Snapshots
       run: ci/check_sql_snapshots.sh
   check-style:
     runs-on: ubuntu-latest
     container:
       image: citus/stylechecker:${{ inputs.style_checker_tools_version }}${{ inputs.image_suffix }}
-      options: --user root
+      options: --user circleci
     steps:
     - uses: actions/checkout@v3.5.0
-    - uses: "./.github/actions/configure"
     - name: Check C Style
       run: citus_indent --check
     - name: Check Python style
