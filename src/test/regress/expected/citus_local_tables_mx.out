@@ -769,8 +769,8 @@ SELECT logicalrelid, partmethod, partkey FROM pg_dist_partition
         ORDER BY logicalrelid;
      logicalrelid     | partmethod |                                                          partkey
 ---------------------------------------------------------------------
- parent_dropped_col   | h          | {VAR :varno 1 :varattno 1 :vartype 1082 :vartypmod -1 :varcollid 0 :varlevelsup 0 :varnosyn 1 :varattnosyn 1 :location -1}
- parent_dropped_col_2 | h          | {VAR :varno 1 :varattno 5 :vartype 23 :vartypmod -1 :varcollid 0 :varlevelsup 0 :varnosyn 1 :varattnosyn 5 :location -1}
+ parent_dropped_col   | h          | {VAR :varno 1 :varattno 1 :vartype 1082 :vartypmod -1 :varcollid 0 :varnullingrels (b) :varlevelsup 0 :varnosyn 1 :varattnosyn 1 :location -1}
+ parent_dropped_col_2 | h          | {VAR :varno 1 :varattno 5 :vartype 23 :vartypmod -1 :varcollid 0 :varnullingrels (b) :varlevelsup 0 :varnosyn 1 :varattnosyn 5 :location -1}
 (2 rows)
 
 -- some tests for view propagation on citus local tables
@@ -912,12 +912,12 @@ select run_command_on_workers($$SELECT count(*)=0 from citus_local_tables_mx.v10
 (2 rows)
 
 CREATE TABLE loc_tb_2 (a int);
-CREATE VIEW v104 AS SELECT * from loc_tb_2;
+CREATE VIEW v104 AS SELECT * from loc_tb_2 table_name_for_view;
 SET client_min_messages TO DEBUG1;
 -- verify the CREATE command for the view is generated correctly
 ALTER TABLE loc_tb_2 ADD CONSTRAINT fkey_2 FOREIGN KEY (a) references ref_tb(a);
-DEBUG:  executing "CREATE OR REPLACE VIEW citus_local_tables_mx.v104 (a) AS  SELECT loc_tb_2.a
-   FROM citus_local_tables_mx.loc_tb_2; ALTER VIEW citus_local_tables_mx.v104 OWNER TO postgres"
+DEBUG:  executing "CREATE OR REPLACE VIEW citus_local_tables_mx.v104 (a) AS  SELECT a
+   FROM citus_local_tables_mx.loc_tb_2 table_name_for_view; ALTER VIEW citus_local_tables_mx.v104 OWNER TO postgres"
 DEBUG:  "view v104" has dependency to "table loc_tb_2" that is not in Citus' metadata
 DEBUG:  validating foreign key constraint "fkey_2_1330083"
 SET client_min_messages TO WARNING;

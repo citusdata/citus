@@ -792,7 +792,7 @@ SET citus.shard_replication_factor TO 1;
 SELECT create_distributed_table('table2','tenant_id');
 SELECT create_distributed_table('table1','tenant_id');
 
-CREATE VIEW table1_view AS SELECT * from table1 where id < 100;
+CREATE VIEW table1_view AS SELECT * from table1 table_name_for_view where id < 100;
 
 -- all of the above queries are non-colocated subquery joins
 -- because the views are replaced with subqueries
