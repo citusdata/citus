@@ -11,7 +11,6 @@ runs:
       if [ -f "src/test/regress/regression.diffs" ]; then
         echo "### ${{ inputs.folder }}" >> $GITHUB_STEP_SUMMARY
         cat src/test/regress/regression.diffs >> $GITHUB_STEP_SUMMARY
-        exit 1
       fi
     shell: bash
   - uses: actions/upload-artifact@v3.1.1

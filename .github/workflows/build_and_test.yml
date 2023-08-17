@@ -191,7 +191,7 @@ jobs:
     - uses: "./.github/actions/enable_core"
     - name: Run Test
       run: gosu circleci make -C src/test/${{ matrix.suite }} ${{ matrix.make }}
-      timeout-minutes: 2
+      timeout-minutes: 20
     - uses: "./.github/actions/save_logs_and_results"
       if: always()
       with:
