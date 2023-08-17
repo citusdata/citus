@@ -940,7 +940,6 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 			}
 		}
 	}
-
 }
 
 
