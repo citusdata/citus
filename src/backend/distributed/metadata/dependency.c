@@ -1022,11 +1022,12 @@ GetUndistributableDependency(const ObjectAddress *objectAddress)
 		if (!SupportedDependencyByCitus(dependency))
 		{
 			/*
-			 * Since we do not yet support distributed TS TEMPLATE objects, we skip
+			 * Since we do not yet support distributed TS TEMPLATE and AM objects, we skip
 			 * dependency checks for text search templates. The user is expected to
-			 * manually create the TS TEMPLATE objects.
+			 * manually create the TS TEMPLATE and AM objects.
 			 */
-			if (getObjectClass(dependency) != OCLASS_TSTEMPLATE)
+			if (getObjectClass(dependency) != OCLASS_TSTEMPLATE &&
+				getObjectClass(dependency) != OCLASS_AM)
 			{
 				return dependency;
 			}
