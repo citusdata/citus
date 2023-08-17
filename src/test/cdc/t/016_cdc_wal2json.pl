@@ -9,6 +9,13 @@ use cdctestlib;
 
 use threads;
 
+my $pg_major_version =  int($ENV{'pg_major_version'});
+print("working with PG major version : $pg_major_version\n");
+if ($pg_major_version >= 16) {
+	plan skip_all => 'wal2json is not available for PG16 yet';
+    exit 0;
+}
+
 # Initialize co-ordinator node
 my $select_stmt = qq(SELECT * FROM data_100008 ORDER BY id;);
 my $result = 0;

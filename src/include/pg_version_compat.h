@@ -27,8 +27,6 @@
 
 #define float_abs(a) fabs(a)
 
-#define RANGE_VAR_TABLE_CALLBACK RangeVarCallbackMaintainsTable
-
 #define tuplesort_getdatum_compat(a, b, c, d, e, f) tuplesort_getdatum(a, b, c, d, e, f)
 
 static inline struct config_generic **
@@ -56,8 +54,6 @@ get_guc_variables_compat(int *gucCount)
 #include "storage/relfilenode.h"
 #include "utils/guc.h"
 #include "utils/guc_tables.h"
-
-#define RANGE_VAR_TABLE_CALLBACK RangeVarCallbackOwnsTable
 
 #define pg_clean_ascii_compat(a, b) pg_clean_ascii(a)
 

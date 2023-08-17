@@ -698,9 +698,17 @@ master_remove_node
 (1 row)
 
 
-starting permutation: s1-add-node-1 s1-begin s1-disable-node-1 s2-disable-node-1 s1-abort s1-show-nodes
+starting permutation: s1-add-node-1 s1-add-node-2 s1-begin s1-disable-node-2 s2-disable-node-2 s1-abort s2-wait-metadata-sync s1-show-nodes
 step s1-add-node-1:
-	SELECT 1 FROM master_add_node('localhost', 57637);
+ SELECT 1 FROM master_add_node('localhost', 57637);
+
+?column?
+---------------------------------------------------------------------
+       1
+(1 row)
+
+step s1-add-node-2:
+ SELECT 1 FROM master_add_node('localhost', 57638);
 
 ?column?
 ---------------------------------------------------------------------
@@ -708,11 +716,11 @@ step s1-add-node-1:
 (1 row)
 
 step s1-begin:
-	BEGIN;
+ BEGIN;
 
-step s1-disable-node-1:
-	SELECT 1 FROM master_disable_node('localhost', 57637);
-	SELECT public.wait_until_metadata_sync();
+step s1-disable-node-2:
+ SELECT 1 FROM master_disable_node('localhost', 57638);
+ SELECT public.wait_until_metadata_sync();
 
 ?column?
 ---------------------------------------------------------------------
@@ -724,18 +732,20 @@ wait_until_metadata_sync
 
 (1 row)
 
-step s2-disable-node-1:
-	SELECT 1 FROM master_disable_node('localhost', 57637);
-	SELECT public.wait_until_metadata_sync();
+step s2-disable-node-2:
+ SELECT 1 FROM master_disable_node('localhost', 57638);
  <waiting ...>
 step s1-abort: 
-	ABORT;
+ ABORT;
 
-step s2-disable-node-1: <... completed>
+step s2-disable-node-2: <... completed>
 ?column?
 ---------------------------------------------------------------------
        1
 (1 row)
+
+step s2-wait-metadata-sync:
+ SELECT public.wait_until_metadata_sync();
 
 wait_until_metadata_sync
 ---------------------------------------------------------------------
@@ -743,15 +753,17 @@ wait_until_metadata_sync
 (1 row)
 
 step s1-show-nodes:
-	SELECT nodename, nodeport, isactive FROM pg_dist_node ORDER BY nodename, nodeport;
+ SELECT nodename, nodeport, isactive FROM pg_dist_node ORDER BY nodename, nodeport;
 
 nodename |nodeport|isactive
 ---------------------------------------------------------------------
-localhost|   57637|f
-(1 row)
+localhost|   57637|t
+localhost|   57638|f
+(2 rows)
 
 master_remove_node
 ---------------------------------------------------------------------
 
-(1 row)
+
+(2 rows)
 

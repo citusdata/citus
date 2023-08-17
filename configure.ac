@@ -80,7 +80,7 @@ AC_SUBST(with_pg_version_check)
 
 if test "$with_pg_version_check" = no; then
     AC_MSG_NOTICE([building against PostgreSQL $version_num (skipped compatibility check)])
-elif test "$version_num" != '14' -a "$version_num" != '15'; then
+elif test "$version_num" != '14' -a "$version_num" != '15' -a  "$version_num" != '16'; then
    AC_MSG_ERROR([Citus is not compatible with the detected PostgreSQL version ${version_num}.])
 else
    AC_MSG_NOTICE([building against PostgreSQL $version_num])
