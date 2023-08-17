@@ -135,6 +135,10 @@ static void SetNodeMetadata(MetadataSyncContext *context, bool localOnly);
 static void EnsureTransactionalMetadataSyncMode(void);
 static void LockShardsInWorkerPlacementList(WorkerNode *workerNode, LOCKMODE
 											lockMode);
+static BackgroundWorkerHandle * CheckBackgroundWorkerToObtainLocks(int32 lock_cooldown);
+static BackgroundWorkerHandle * LockPlacementsWithBackgroundWorkersInPrimaryNode(WorkerNode *workerNode, bool force, int32 lock_cooldown);
+
+/* Function definitions go here */
 
 /* declarations for dynamic loading */
 PG_FUNCTION_INFO_V1(citus_set_coordinator_host);
