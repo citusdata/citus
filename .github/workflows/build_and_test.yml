@@ -103,7 +103,7 @@ jobs:
       options: --user root
     steps:
     - uses: actions/checkout@v3.5.0
-    - name: Expose PG_MAJOR to Github Env
+    - name: Expose $PG_MAJOR to Github Env
       run: echo "PG_MAJOR=${PG_MAJOR}" >> $GITHUB_ENV
       shell: bash
     - name: Build
@@ -167,7 +167,7 @@ jobs:
     - build
     steps:
     - uses: actions/checkout@v3.5.0
-    - name: Expose PG_MAJOR to Github Env
+    - name: Expose $PG_MAJOR to Github Env
       run: echo "PG_MAJOR=${PG_MAJOR}" >> $GITHUB_ENV
       shell: bash
     - uses: actions/download-artifact@v3.0.1
