@@ -11,8 +11,8 @@ runs:
       name: ${{ inputs.folder }}
       if-no-files-found: ignore
       path: |
-        src/test/regress/proxy.output
-        src/test/regress/results/
-        src/test/regress/tmp_check/master/log
-        src/test/regress/tmp_check/worker.57638/log
-        src/test/regress/tmp_check/worker.57637/log
+        **/proxy.output
+        **/results/
+        **/tmp_check/master/log
+        **/tmp_check/worker.57638/log
+        **/tmp_check/worker.57637/log

@@ -9,14 +9,14 @@ runs:
   - name: Regressions
     run: |-
       if [ -f "src/test/regress/regression.diffs" ]; then
-        cat src/test/regress/regression.diffs
+        echo "### ${{ inputs.folder }}" >> $GITHUB_STEP_SUMMARY
+        cat src/test/regress/regression.diffs >> ${{ $GITHUB_STEP_SUMMARY }}
         exit 1
       fi
-    if: failure()
     shell: bash
   - uses: actions/upload-artifact@v3.1.1
     with:
-      path: src/test/regress/regression.diffs
+      path: **/regression.diffs
       name: ${{ inputs.folder }}
       if-no-files-found: ignore
 
