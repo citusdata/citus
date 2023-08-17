@@ -1410,7 +1410,6 @@ PostStandardProcessUtility(Node *parsetree)
 	 * local flag and do the invalidation after multi_ProcessUtility,
 	 * before ExecuteDistributedDDLJob().
 	 */
-
 	InvalidateForeignKeyGraphForDDL();
 }
 
