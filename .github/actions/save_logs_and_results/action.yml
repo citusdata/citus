@@ -11,8 +11,8 @@ runs:
       name: ${{ inputs.folder }}
       if-no-files-found: ignore
       path: |
-        **/proxy.output
-        **/results/
-        **/tmp_check/master/log
-        **/tmp_check/worker.57638/log
-        **/tmp_check/worker.57637/log
+        ${GITHUB_WORKSPACE}/**/proxy.output
+        ${GITHUB_WORKSPACE}/**/results/
+        ${GITHUB_WORKSPACE}/**/tmp_check/master/log
+        ${GITHUB_WORKSPACE}/**/tmp_check/worker.57638/log
+        ${GITHUB_WORKSPACE}/**/tmp_check/worker.57637/log
