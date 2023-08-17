@@ -30,12 +30,22 @@ on:
 #   GIT_TOKEN: xxxx
 #   GIT_USERNAME: xxxx
 jobs:
+  check-sql-snapshots:
+    runs-on: ubuntu-latest
+    container:
+      image: citus/extbuilder:latest
+    steps:
+    - uses: actions/checkout@v3.5.0
+    - uses: "./.github/actions/configure"
+    - name: Check Snapshots
+      run: ci/check_sql_snapshots.sh
   check-style:
     runs-on: ubuntu-latest
     container:
       image: citus/stylechecker:${{ inputs.style_checker_tools_version }}${{ inputs.image_suffix }}
     steps:
     - uses: actions/checkout@v3.5.0
+    - uses: "./.github/actions/configure"
     - name: Check C Style
       run: citus_indent --check
     - name: Check Python style
@@ -70,7 +80,7 @@ jobs:
       run: ci/check_migration_files.sh
   build:
     name: Build for PG ${{ matrix.pg_version}}
-    needs: check-style
+    needs: [check-style, check-sql-snapshots]
     strategy:
       fail-fast: false
       matrix:
@@ -184,14 +194,7 @@ jobs:
   # - check-query-generator
 
 
-  check-sql-snapshots:
-    runs-on: ubuntu-latest
-    container:
-      image: citus/extbuilder:latest
-    steps:
-    - uses: actions/checkout@v3.5.0
-    - name: Check Snapshots
-      run: ci/check_sql_snapshots.sh
+
 
   # tap-test-citus:
 
