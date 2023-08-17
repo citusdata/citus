@@ -30,8 +30,47 @@ on:
 #   GIT_TOKEN: xxxx
 #   GIT_USERNAME: xxxx
 jobs:
+  check-style:
+    runs-on: ubuntu-latest
+    container:
+      image: citus/stylechecker:${{ inputs.style_checker_tools_version }}${{ inputs.image_suffix }}
+    steps:
+    - uses: actions/checkout@v3.5.0
+    - name: Check C Style
+      run: citus_indent --check
+    - name: Check Python style
+      run: black --check .
+    - name: Check Python import order
+      run: isort --check .
+    - name: Check Python lints
+      run: flake8 .
+    - name: Fix whitespace
+      run: ci/editorconfig.sh && git diff --exit-code
+    - name: Remove useless declarations
+      run: ci/remove_useless_declarations.sh && git diff --cached --exit-code
+    - name: Normalize test output
+      run: ci/normalize_expected.sh && git diff --exit-code
+    - name: Check for C-style comments in migration files
+      run: ci/disallow_c_comments_in_migrations.sh && git diff --exit-code
+    - name: 'Check for comment--cached ns that start with # character in spec files'
+      run: ci/disallow_hash_comments_in_spec_files.sh && git diff --exit-code
+    - name: Check for gitignore entries .for source files
+      run: ci/fix_gitignore.sh && git diff --exit-code
+    - name: Check for lengths of changelog entries
+      run: ci/disallow_long_changelog_entries.sh
+    - name: Check for banned C API usage
+      run: ci/banned.h.sh
+    - name: Check for tests missing in schedules
+      run: ci/check_all_tests_are_run.sh
+    - name: Check if all CI scripts are actually run
+      run: ci/check_all_ci_scripts_are_run.sh
+    - name: Check if all GUCs are sorted alphabetically
+      run: ci/check_gucs_are_alphabetically_sorted.sh
+    - name: Check for missing downgrade scripts
+      run: ci/check_migration_files.sh
   build:
     name: Build for PG ${{ matrix.pg_version}}
+    needs: check-style
     strategy:
       fail-fast: false
       matrix:
@@ -64,7 +103,7 @@ jobs:
         path: |-
           ./build-${{ matrix.pg_major  }}/*
           ./install-${{ matrix.pg_major  }}.tar
-  test-citus:
+  test-citus-exttester:
     name: Test ${{ matrix.make }} PG${{ matrix.pg_version }}
     strategy:
       fail-fast: false
@@ -79,11 +118,6 @@ jobs:
         pg_version:
           - ${{ inputs.pg14_version }}
           - ${{ inputs.pg15_version }}
-        exclude:
-          - pg_major: 14
-            pg_version: ${{ inputs.pg15_version }}
-          - pg_major: 15
-            pg_version: ${{ inputs.pg14_version }}
         make:
           - check-split
           - check-multi
@@ -95,15 +129,23 @@ jobs:
           - check-follower-cluster
           - check-columnar
           - check-columnar-isolation
-          - check-failure
           - check-enterprise
           - check-enterprise-isolation
           - check-enterprise-isolation-logicalrep-1
           - check-enterprise-isolation-logicalrep-2
           - check-enterprise-isolation-logicalrep-3
-          - check-enterprise-failure
-          - check-arbitrary-configs
-          - check-query-generator
+        exclude:
+          - pg_major: 14
+            pg_version: ${{ inputs.pg15_version }}
+          - pg_major: 15
+            pg_version: ${{ inputs.pg14_version }}
+        include:
+          - make: check-failure
+            image_name: "citus/failtester"
+          - make: check-enterprise-failure
+            image_name: "citus/failtester"
+          - make: check-pytest
+            image_name: "citus/failtester"
     runs-on: ubuntu-latest
     container:
       image: "${{ matrix.image_name }}:${{ matrix.pg_version  }}${{ matrix.image_suffix }}"
@@ -135,115 +177,20 @@ jobs:
       with:
         flags: test_${{ matrix.pg_major }},${{ matrix.make }}
 
-  # check-style:
-  #   runs-on: ubuntu-latest
-  #   container:
-  #     image: citus/stylechecker:${{ inputs.style_checker_tools_version }}${{ inputs.image_suffix }}
-  #   steps:
-  #   - uses: actions/checkout@v3.5.0
-  #   - name: Check C Style
-  #     run: citus_indent --check
-  #   - name: Check Python style
-  #     run: black --check .
-  #   - name: Check Python import order
-  #     run: isort --check .
-  #   - name: Check Python lints
-  #     run: flake8 .
-  #   - name: Fix whitespace
-  #     run: ci/editorconfig.sh && git diff --exit-code
-  #   - name: Remove useless declarations
-  #     run: ci/remove_useless_declarations.sh && git diff --cached --exit-code
-  #   - name: Normalize test output
-  #     run: ci/normalize_expected.sh && git diff --exit-code
-  #   - name: Check for C-style comments in migration files
-  #     run: ci/disallow_c_comments_in_migrations.sh && git diff --exit-code
-  #   - name: 'Check for comment--cached ns that start with # character in spec files'
-  #     run: ci/disallow_hash_comments_in_spec_files.sh && git diff --exit-code
-  #   - name: Check for gitignore entries .for source files
-  #     run: ci/fix_gitignore.sh && git diff --exit-code
-  #   - name: Check for lengths of changelog entries
-  #     run: ci/disallow_long_changelog_entries.sh
-  #   - name: Check for banned C API usage
-  #     run: ci/banned.h.sh
-  #   - name: Check for tests missing in schedules
-  #     run: ci/check_all_tests_are_run.sh
-  #   - name: Check if all CI scripts are actually run
-  #     run: ci/check_all_ci_scripts_are_run.sh
-  #   - name: Check if all GUCs are sorted alphabetically
-  #     run: ci/check_gucs_are_alphabetically_sorted.sh
-  #   - name: Check for missing downgrade scripts
-  #     run: ci/check_migration_files.sh
-  # check-sql-snapshots:
-  #   runs-on: ubuntu-latest
-  #   container:
-  #     image: citus/extbuilder:latest
-  #   steps:
-  #   - uses: actions/checkout@v3.5.0
-  #   - name: Check Snapshots
-  #     run: ci/check_sql_snapshots.sh
-  # test-pytest:
-  #   defaults:
-  #     run:
-  #       working-directory: "/home/circleci/project"
-  #   runs-on: ubuntu-latest
-  #   container:
-  #     image: "${{ env.image }}"
-  #   needs:
-  #   - build-14
-  #   env:
-  #     pg_major: 14
-  #     image: citus/failtester
-  #     image_tag: "${{ inputs.pg14_version }}"
-  #   steps:
-  #   - uses: actions/checkout@v3.5.0
-  #   - uses: actions/download-artifact@v3.0.1
-  #     with:
-  #       path: "."
-  #   - uses: "./.github/actions/install_extension"
-  #     with:
-  #       pg_major: "${{ env.pg_major }}"
-  #   - uses: "./.github/actions/configure"
-  #   - uses: "./.github/actions/enable_core"
-  #   - name: Run pytest
-  #     run: |-
-  #       gosu circleci \
-  #         make -C src/test/regress check-pytest
-  #   - uses: "./.github/actions/stack_trace"
-  #   - uses: "./.github/actions/upload_coverage"
-  #     with:
-  #       flags: test_${{ env.pg_major }},pytest
-  # test-pytest_1:
+  # - check-failure
+  # - check-arbitrary-configs
+  # - check-query-generator
 
-  #   defaults:
-  #     run:
-  #       working-directory: "/home/circleci/project"
-  #   runs-on: ubuntu-latest
-  #   container:
-  #     image: "${{ env.image }}"
-  #   needs:
-  #   - build-15
-  #   env:
-  #     pg_major: 15
-  #     image: citus/failtester
-  #     image_tag: "${{ inputs.pg15_version }}"
-  #   steps:
-  #   - uses: actions/checkout@v3.5.0
-  #   - uses: actions/download-artifact@v3.0.1
-  #     with:
-  #       path: "."
-  #   - uses: "./.github/actions/install_extension"
-  #     with:
-  #       pg_major: "${{ env.pg_major }}"
-  #   - uses: "./.github/actions/configure"
-  #   - uses: "./.github/actions/enable_core"
-  #   - name: Run pytest
-  #     run: |-
-  #       gosu circleci \
-  #         make -C src/test/regress check-pytest
-  #   - uses: "./.github/actions/stack_trace"
-  #   - uses: "./.github/actions/upload_coverage"
-  #     with:
-  #       flags: test_${{ env.pg_major }},pytest
+
+  check-sql-snapshots:
+    runs-on: ubuntu-latest
+    container:
+      image: citus/extbuilder:latest
+    steps:
+    - uses: actions/checkout@v3.5.0
+    - name: Check Snapshots
+      run: ci/check_sql_snapshots.sh
+
   # tap-test-citus:
 
   #   defaults:
