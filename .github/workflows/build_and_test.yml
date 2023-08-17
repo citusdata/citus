@@ -111,10 +111,10 @@ jobs:
       shell: bash
     - uses: actions/upload-artifact@v3.1.1
       with:
-        name: build-${PG_MAJOR}
+        name: build-${{ env.PG_MAJOR }}
         path: |-
-          ./build-${PG_MAJOR}/*
-          ./install-${PG_MAJOR}.tar
+          ./build-${{ env.PG_MAJOR }}/*
+          ./install-${{ env.PG_MAJOR }}.tar
   test-citus-exttester:
     name: Test ${{ matrix.make }} PG${{ matrix.pg_version }}
     strategy:
@@ -191,7 +191,7 @@ jobs:
     - uses: "./.github/actions/upload_coverage"
       if: always()
       with:
-        flags: test_${{ env.pg_major }},${{ matrix.make }}
+        flags: test_${{ env.PG_MAJOR }},${{ matrix.make }}
 
   # - check-failure
   # - check-arbitrary-configs
