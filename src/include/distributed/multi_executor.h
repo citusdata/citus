@@ -72,6 +72,9 @@ extern int ExecutorSlowStartInterval;
 extern bool SortReturning;
 extern int ExecutorLevel;
 
+/* citus.distributed_data_dump GUC */
+extern bool IsDistributedDataDump;
+
 
 extern void CitusExecutorStart(QueryDesc *queryDesc, int eflags);
 extern void CitusExecutorRun(QueryDesc *queryDesc, ScanDirection direction, uint64 count,

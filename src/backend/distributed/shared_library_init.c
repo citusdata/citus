@@ -1166,6 +1166,22 @@ RegisterCitusConfigVariables(void)
 		GUC_STANDARD,
 		NULL, NULL, NULL);
 
+	DefineCustomBoolVariable(
+		"citus.distributed_data_dump",
+		gettext_noop("When enabled, queries only return data from local shards"),
+		gettext_noop("When you need a full copy of a set of Citus tables, it can be "
+					 "useful to only return data from local shards, or from the first "
+					 "replica of replicated shards (incl. reference tables). That way, "
+					 "you can pull from all nodes concurrently and construct a complete "
+					 "snapshot. This is also necessary for logical replications "
+					 "scenarios, since the snapshot of the data on each node needs to "
+					 "be aligned with the replication slot on that node."),
+		&IsDistributedDataDump,
+		false,
+		PGC_USERSET,
+		GUC_STANDARD,
+		NULL, NULL, NULL);
+
 	DefineCustomRealVariable(
 		"citus.distributed_deadlock_detection_factor",
 		gettext_noop("Sets the time to wait before checking for distributed "
