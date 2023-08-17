@@ -192,7 +192,7 @@ DROP VIEW numbers_v, local_table_v;
 -- Joins between reference tables and materialized views are allowed to
 -- be planned to be executed locally.
 --
-CREATE MATERIALIZED VIEW numbers_v AS SELECT * FROM numbers WHERE a BETWEEN 1 AND 10;
+CREATE MATERIALIZED VIEW numbers_v AS SELECT * FROM numbers table_name_for_view WHERE a BETWEEN 1 AND 10;
 REFRESH MATERIALIZED VIEW numbers_v;
 
 SELECT * FROM squares JOIN numbers_v ON squares.a = numbers_v.a ORDER BY 1;

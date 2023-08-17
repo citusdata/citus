@@ -604,6 +604,22 @@ CreateCombineQueryForRouterPlan(DistributedPlan *distPlan)
 	combineQuery->querySource = QSRC_ORIGINAL;
 	combineQuery->canSetTag = true;
 	combineQuery->rtable = list_make1(rangeTableEntry);
+
+#if PG_VERSION_NUM >= PG_VERSION_16
+
+	/*
+	 * This part of the code is more of a sanity check for readability,
+	 * it doesn't really do anything.
+	 * We know that Only relation RTEs and subquery RTEs that were once relation
+	 * RTEs (views) have their perminfoindex set. (see ExecCheckPermissions function)
+	 * DerivedRangeTableEntry sets the rtekind to RTE_FUNCTION
+	 * Hence we should have no perminfos here.
+	 */
+	Assert(rangeTableEntry->rtekind == RTE_FUNCTION &&
+		   rangeTableEntry->perminfoindex == 0);
+	combineQuery->rteperminfos = NIL;
+#endif
+
 	combineQuery->targetList = targetList;
 	combineQuery->jointree = joinTree;
 	return combineQuery;
@@ -1532,6 +1548,20 @@ WrapSubquery(Query *subquery)
 			pstate, subquery,
 			selectAlias, false, true));
 	outerQuery->rtable = list_make1(newRangeTableEntry);
+
+#if PG_VERSION_NUM >= PG_VERSION_16
+
+	/*
+	 * This part of the code is more of a sanity check for readability,
+	 * it doesn't really do anything.
+	 * addRangeTableEntryForSubquery doesn't add permission info
+	 * because the range table is set to be RTE_SUBQUERY.
+	 * Hence we should also have no perminfos here.
+	 */
+	Assert(newRangeTableEntry->rtekind == RTE_SUBQUERY &&
+		   newRangeTableEntry->perminfoindex == 0);
+	outerQuery->rteperminfos = NIL;
+#endif
 
 	/* set the FROM expression to the subquery */
 	RangeTblRef *newRangeTableRef = makeNode(RangeTblRef);

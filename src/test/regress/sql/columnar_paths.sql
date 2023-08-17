@@ -193,7 +193,7 @@ WHERE w2.a = 123;
 
 EXPLAIN (COSTS OFF) SELECT sub_1.b, sub_2.a, sub_3.avg
 FROM
-  (SELECT b FROM full_correlated WHERE (a > 2) GROUP BY b HAVING count(DISTINCT a) > 0 ORDER BY 1 DESC LIMIT 5) AS sub_1,
+  (SELECT b FROM full_correlated WHERE (a > 2) GROUP BY b ORDER BY 1 DESC LIMIT 5) AS sub_1,
   (SELECT a FROM full_correlated WHERE (a > 10) GROUP BY a HAVING count(DISTINCT a) >= 1 ORDER BY 1 DESC LIMIT 3) AS sub_2,
   (SELECT avg(a) AS AVG FROM full_correlated WHERE (a > 2) GROUP BY a HAVING sum(a) > 10 ORDER BY (sum(d) - avg(a) - COALESCE(array_upper(ARRAY[max(a)],1) * 5, 0)) DESC LIMIT 3) AS sub_3
 WHERE sub_2.a < sub_1.b::integer

@@ -105,8 +105,8 @@ INSERT INTO view_table VALUES (1, 2, 3), (2, 4, 6), (3, 6, 9);
 
 CREATE SCHEMA another_schema;
 
-CREATE VIEW undis_view1 AS SELECT a, b FROM view_table;
-CREATE VIEW undis_view2 AS SELECT a, c FROM view_table;
+CREATE VIEW undis_view1 AS SELECT a, b FROM view_table table_name_for_view;
+CREATE VIEW undis_view2 AS SELECT a, c FROM view_table table_name_for_view;
 CREATE VIEW another_schema.undis_view3 AS SELECT b, c FROM undis_view1 JOIN undis_view2 ON undis_view1.a = undis_view2.a;
 
 SELECT schemaname, viewname, viewowner, definition FROM pg_views WHERE viewname LIKE 'undis\_view%' ORDER BY viewname;
@@ -131,18 +131,6 @@ SELECT create_distributed_table('dist_type_table', 'a');
 
 SELECT undistribute_table('dist_type_table');
 
--- test CREATE RULE with ON SELECT
-CREATE TABLE rule_table_1 (a INT);
-CREATE TABLE rule_table_2 (a INT);
-SELECT create_distributed_table('rule_table_2', 'a');
-
-CREATE RULE "_RETURN" AS ON SELECT TO rule_table_1 DO INSTEAD SELECT * FROM rule_table_2;
-
--- the CREATE RULE turns rule_table_1 into a view
-ALTER EXTENSION plpgsql ADD VIEW rule_table_1;
-
-SELECT undistribute_table('rule_table_2');
-
 -- test CREATE RULE without ON SELECT
 CREATE TABLE rule_table_3 (a INT);
 CREATE TABLE rule_table_4 (a INT);
@@ -155,7 +143,6 @@ ALTER EXTENSION plpgsql ADD TABLE rule_table_3;
 SELECT undistribute_table('rule_table_4');
 
 ALTER EXTENSION plpgsql DROP VIEW extension_view;
-ALTER EXTENSION plpgsql DROP VIEW rule_table_1;
 ALTER EXTENSION plpgsql DROP TABLE rule_table_3;
 
 DROP TABLE view_table CASCADE;

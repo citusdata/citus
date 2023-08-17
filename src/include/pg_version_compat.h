@@ -144,6 +144,13 @@ object_aclcheck(Oid classid, Oid objectid, Oid roleid, AclMode mode)
 
 typedef bool TU_UpdateIndexes;
 
+/*
+ * we define RTEPermissionInfo for PG16 compatibility
+ * There are some functions that need to include RTEPermissionInfo in their signature
+ * for PG14/PG15 we pass a NULL argument in these functions
+ */
+typedef RangeTblEntry RTEPermissionInfo;
+
 #endif
 
 #if PG_VERSION_NUM >= PG_VERSION_15

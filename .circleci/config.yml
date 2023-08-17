@@ -6,16 +6,16 @@ orbs:
 parameters:
   image_suffix:
     type: string
-    default: '-vbab548a'
+    default: '-v1b94240'
   pg14_version:
     type: string
-    default: '14.8'
+    default: '14.9'
   pg15_version:
     type: string
-    default: '15.3'
+    default: '15.4'
   upgrade_pg_versions:
     type: string
-    default: '14.8-15.3'
+    default: '14.9-15.4'
   style_checker_tools_version:
     type: string
     default: '0.8.18'

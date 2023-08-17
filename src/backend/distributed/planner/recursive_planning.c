@@ -80,6 +80,7 @@
 #include "optimizer/optimizer.h"
 #include "optimizer/planner.h"
 #include "optimizer/prep.h"
+#include "parser/parse_relation.h"
 #include "parser/parsetree.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
@@ -886,8 +887,19 @@ RecursivelyPlanDistributedJoinNode(Node *node, Query *query,
 		List *requiredAttributes =
 			RequiredAttrNumbersForRelation(distributedRte, restrictionContext);
 
+#if PG_VERSION_NUM >= PG_VERSION_16
+		RTEPermissionInfo *perminfo = NULL;
+		if (distributedRte->perminfoindex)
+		{
+			perminfo = getRTEPermissionInfo(query->rteperminfos, distributedRte);
+		}
+
 		ReplaceRTERelationWithRteSubquery(distributedRte, requiredAttributes,
-										  recursivePlanningContext);
+										  recursivePlanningContext, perminfo);
+#else
+		ReplaceRTERelationWithRteSubquery(distributedRte, requiredAttributes,
+										  recursivePlanningContext, NULL);
+#endif
 	}
 	else if (distributedRte->rtekind == RTE_SUBQUERY)
 	{
@@ -1751,9 +1763,11 @@ NodeContainsSubqueryReferencingOuterQuery(Node *node)
 void
 ReplaceRTERelationWithRteSubquery(RangeTblEntry *rangeTableEntry,
 								  List *requiredAttrNumbers,
-								  RecursivePlanningContext *context)
+								  RecursivePlanningContext *context,
+								  RTEPermissionInfo *perminfo)
 {
-	Query *subquery = WrapRteRelationIntoSubquery(rangeTableEntry, requiredAttrNumbers);
+	Query *subquery = WrapRteRelationIntoSubquery(rangeTableEntry, requiredAttrNumbers,
+												  perminfo);
 	List *outerQueryTargetList = CreateAllTargetListForRelation(rangeTableEntry->relid,
 																requiredAttrNumbers);
 
@@ -1778,6 +1792,9 @@ ReplaceRTERelationWithRteSubquery(RangeTblEntry *rangeTableEntry,
 
 	/* replace the function with the constructed subquery */
 	rangeTableEntry->rtekind = RTE_SUBQUERY;
+#if PG_VERSION_NUM >= PG_VERSION_16
+	rangeTableEntry->perminfoindex = 0;
+#endif
 	rangeTableEntry->subquery = subquery;
 
 	/*
@@ -1849,6 +1866,15 @@ CreateOuterSubquery(RangeTblEntry *rangeTableEntry, List *outerSubqueryTargetLis
 
 	innerSubqueryRTE->eref->colnames = innerSubqueryColNames;
 	outerSubquery->rtable = list_make1(innerSubqueryRTE);
+
+#if PG_VERSION_NUM >= PG_VERSION_16
+
+	/* sanity check */
+	Assert(innerSubqueryRTE->rtekind == RTE_SUBQUERY &&
+		   innerSubqueryRTE->perminfoindex == 0);
+	outerSubquery->rteperminfos = NIL;
+#endif
+
 
 	/* set the FROM expression to the subquery */
 	RangeTblRef *newRangeTableRef = makeNode(RangeTblRef);
@@ -2022,6 +2048,15 @@ TransformFunctionRTE(RangeTblEntry *rangeTblEntry)
 
 	/* set the FROM expression to the subquery */
 	subquery->rtable = list_make1(newRangeTableEntry);
+
+#if PG_VERSION_NUM >= PG_VERSION_16
+
+	/* sanity check */
+	Assert(newRangeTableEntry->rtekind == RTE_FUNCTION &&
+		   newRangeTableEntry->perminfoindex == 0);
+	subquery->rteperminfos = NIL;
+#endif
+
 	newRangeTableRef->rtindex = 1;
 	subquery->jointree = makeFromExpr(list_make1(newRangeTableRef), NULL);
 
@@ -2392,6 +2427,9 @@ BuildReadIntermediateResultsQuery(List *targetEntryList, List *columnAliasList,
 	Query *resultQuery = makeNode(Query);
 	resultQuery->commandType = CMD_SELECT;
 	resultQuery->rtable = list_make1(rangeTableEntry);
+#if PG_VERSION_NUM >= PG_VERSION_16
+	resultQuery->rteperminfos = NIL;
+#endif
 	resultQuery->jointree = joinTree;
 	resultQuery->targetList = targetList;
 

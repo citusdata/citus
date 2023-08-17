@@ -136,6 +136,9 @@ GeneratePlaceHolderPlannedStmt(Query *parse)
 	result->stmt_len = parse->stmt_len;
 
 	result->rtable = copyObject(parse->rtable);
+#if PG_VERSION_NUM >= PG_VERSION_16
+	result->permInfos = copyObject(parse->rteperminfos);
+#endif
 	result->planTree = (Plan *) plan;
 	result->hasReturning = (parse->returningList != NIL);
 
