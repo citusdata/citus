@@ -104,6 +104,39 @@ step "s1-pause-node"
 	LANGUAGE plpgsql;
 }
 
+step "s1-pause-node-force"
+{
+	SET client_min_messages = 'notice';
+	DO $$
+	DECLARE
+		v_shard_id int;
+		v_node_id int;
+		v_node_name text;
+		v_node_port int;
+		v_force boolean := true;
+	BEGIN
+		--The first message in the block is being printed on the top of the code block. So adding a dummy message
+		--to make sure that the first message is printed in correct place.
+		raise notice '';
+		-- Get the shard id for the distribution column
+		SELECT get_shard_id_for_distribution_column('employee', 3) into v_shard_id;
+
+		--Get the node id for the shard id
+		SELECT nodename,nodeport into v_node_name,v_node_port FROM citus_shards WHERE shardid = v_shard_id limit 1;
+		raise notice 'node name is %',v_node_name;
+		raise notice 'node port is %',v_node_port;
+
+		-- Get the node id for the shard id
+		SELECT nodeid into v_node_id FROM pg_dist_node WHERE nodename = v_node_name and nodeport = v_node_port limit 1;
+
+
+		-- Pause the node with force true
+		perform pg_catalog.citus_pause_node_within_txn(v_node_id,v_force) ;
+	END;
+	$$
+	LANGUAGE plpgsql;
+}
+
 step "s1-end"
 {
     COMMIT;
@@ -230,6 +263,7 @@ step "s2-end"
 }
 
 permutation "s1-begin"  "s1-pause-node" "s2-begin" "s2-insert-distributed" "s2-end" "s1-end"
+permutation "s1-begin"  "s1-pause-node-force" "s2-begin" "s2-insert-distributed" "s2-end" "s1-end"
 permutation "s1-begin"  "s1-pause-node" "s2-begin" "s2-delete-distributed" "s2-end" "s1-end"
 permutation "s1-begin"  "s1-pause-node" "s2-begin" "s2-select-distributed" "s2-end" "s1-end"
 permutation "s1-begin"  "s1-pause-node" "s2-begin" "s2-insert-reference" "s2-end" "s1-end"
