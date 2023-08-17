@@ -173,7 +173,9 @@ jobs:
       with:
           folder: ${{ matrix.pg_version }}_${{ matrix.make }}
     - uses: "./.github/actions/stack_trace"
+      if: always()
     - uses: "./.github/actions/upload_coverage"
+      if: always()
       with:
         flags: test_${{ matrix.pg_major }},${{ matrix.make }}
 
