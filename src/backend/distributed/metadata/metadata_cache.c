@@ -2199,8 +2199,15 @@ CitusHasBeenLoaded(void)
 	 *  MetadataCache.extensionNotLoaded = false
 	 * means that the cache is invalid. Reevaluate the flags.
 	 */
-	if ((!MetadataCache.extensionLoaded && !MetadataCache.extensionNotLoaded) ||
-		creating_extension)
+
+	Oid citusExtensionOid = get_extension_oid("citus", true);
+
+	if (creating_extension && (CurrentExtensionObject == citusExtensionOid))
+	{
+		return false;
+	}
+
+	if (!MetadataCache.extensionLoaded && !MetadataCache.extensionNotLoaded)
 	{
 		/*
 		 * Refresh if we have not determined whether the extension has been
@@ -2255,15 +2262,6 @@ CitusHasBeenLoadedInternal(void)
 	if (citusExtensionOid == InvalidOid)
 	{
 		/* Citus extension does not exist yet */
-		return false;
-	}
-
-	if (creating_extension && CurrentExtensionObject == citusExtensionOid)
-	{
-		/*
-		 * We do not use Citus hooks during CREATE/ALTER EXTENSION citus
-		 * since the objects used by the C code might be not be there yet.
-		 */
 		return false;
 	}
 

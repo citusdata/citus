@@ -195,18 +195,6 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 	bool isCreateAlterExtensionUpdateCitusStmt = IsCreateAlterExtensionUpdateCitusStmt(
 		parsetree);
 
-	if (isCreateAlterExtensionUpdateCitusStmt || IsDropCitusExtensionStmt(parsetree))
-	{
-		/*
-		 * Citus maintains a higher level cache. We use the cache invalidation mechanism
-		 * of Postgres to achieve cache coherency between backends. Any change to citus
-		 * extension should be made known to other backends. We do this by invalidating the
-		 * relcache and therefore invoking the citus registered callback that invalidates
-		 * the citus cache in other backends.
-		 */
-		CacheInvalidateRelcacheAll();
-	}
-
 	if (EnableVersionChecks && isCreateAlterExtensionUpdateCitusStmt)
 	{
 		ErrorIfUnstableCreateOrAlterExtensionStmt(parsetree);
@@ -219,6 +207,18 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		 * This preprocess check whether citus_columnar should be installed first before citus
 		 */
 		PreprocessCreateExtensionStmtForCitusColumnar(parsetree);
+	}
+
+	if (isCreateAlterExtensionUpdateCitusStmt || IsDropCitusExtensionStmt(parsetree))
+	{
+		/*
+		 * Citus maintains a higher level cache. We use the cache invalidation mechanism
+		 * of Postgres to achieve cache coherency between backends. Any change to citus
+		 * extension should be made known to other backends. We do this by invalidating the
+		 * relcache and therefore invoking the citus registered callback that invalidates
+		 * the citus cache in other backends.
+		 */
+		CacheInvalidateRelcacheAll();
 	}
 
 	/*
@@ -1410,6 +1410,8 @@ PostStandardProcessUtility(Node *parsetree)
 	 * local flag and do the invalidation after multi_ProcessUtility,
 	 * before ExecuteDistributedDDLJob().
 	 */
+
+	CacheInvalidateRelcacheAll();
 	InvalidateForeignKeyGraphForDDL();
 }
 
