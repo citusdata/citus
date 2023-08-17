@@ -941,14 +941,6 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 		}
 	}
 
-	if (!IsDropCitusExtensionStmt(parsetree) && !IsA(parsetree, DropdbStmt))
-	{
-		/*
-		 * Ensure value is valid, we can't do some checks during CREATE
-		 * EXTENSION. This is important to register some invalidation callbacks.
-		 */
-		CitusHasBeenLoaded(); /* lgtm[cpp/return-value-ignored] */
-	}
 }
 
 
