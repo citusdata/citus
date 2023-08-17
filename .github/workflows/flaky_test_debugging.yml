@@ -86,6 +86,8 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJson(needs.prepare_parallelization_matrix.outputs.json) }}
     steps:
+    - run: echo "PG_MAJOR=${PG_MAJOR}" >> $GITHUB_ENV
+      shell: bash
     - uses: actions/checkout@v3.5.0
     - uses: actions/download-artifact@v3.0.1
       with:
