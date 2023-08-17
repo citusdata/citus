@@ -33,9 +33,11 @@ jobs:
     - id: set_build_image_name
       run: |
         echo "image=${{ env.build_image_name }}:${{ env.pg15_version  }}${{ env.image_suffix }}" >> "$GITHUB_OUTPUT"
+      shell: bash
     - id: set_test_image_name
       run: |
         echo "image=${{ env.test_image_name }}:${{ env.pg15_version  }}${{ env.image_suffix }}" >> "$GITHUB_OUTPUT"
+      shell: bash
   build:
     name: Build Citus
     runs-on: ubuntu-latest
@@ -46,7 +48,10 @@ jobs:
     steps:
     - uses: actions/checkout@v3.5.0
     - name: Configure, Build, and Install
-      run: "./ci/build-citus.sh"
+      run: |
+        echo $PG_MAJOR
+        ./ci/build-citus.sh
+      shell: bash
     - uses: actions/upload-artifact@v3.1.1
       with:
         name: build-${{ env.PG_MAJOR }}
