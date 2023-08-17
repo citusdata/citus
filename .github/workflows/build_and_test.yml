@@ -158,13 +158,25 @@ jobs:
         include:
           - make: check-failure
             image_name: "citus/failtester"
+            pg_major: [14, 15]
+            pg_version:
+              - ${{ inputs.pg15_version }}
+              - ${{ inputs.pg14_version }}
           - make: check-enterprise-failure
             image_name: "citus/failtester"
+            pg_major: [14, 15]
+            pg_version:
+              - ${{ inputs.pg15_version }}
+              - ${{ inputs.pg14_version }}
           - make: check-pytest
             image_name: "citus/failtester"
+            pg_major: [14, 15]
+            pg_version:
+              - ${{ inputs.pg15_version }}
+              - ${{ inputs.pg14_version }}
     runs-on: ubuntu-latest
     container:
-      image: "${{ matrix.image_name }}:${{ matrix.pg_version  }}${{ matrix.image_suffix }}"
+      image: "${{ matrix.image_name }}:${{ matrix.pg_version }}${{ inputs.image_suffix }}"
       options: --user root
     needs:
     - build
