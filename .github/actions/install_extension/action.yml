@@ -1,10 +1,7 @@
 name: install_extension
-inputs:
-  pg_major:
-    required: false
 runs:
   using: composite
   steps:
   - name: Install Extension
-    run: tar xfv "install-${{ inputs.pg_major }}.tar" --directory /
+    run: tar xfv "install-$PG_MAJOR.tar" --directory /
     shell: bash

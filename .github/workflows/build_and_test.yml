@@ -103,14 +103,15 @@ jobs:
       options: --user root
     steps:
     - uses: actions/checkout@v3.5.0
-    - name: Configure, Build, and Install
+    - name: Build
       run: "./ci/build-citus.sh"
+      shell: bash
     - uses: actions/upload-artifact@v3.1.1
       with:
-        name: build-${{ matrix.pg_version }}
+        name: build-${PG_MAJOR}
         path: |-
-          ./build-${{ matrix.pg_version  }}/*
-          ./install-${{ matrix.pg_version  }}.tar
+          ./build-${PG_MAJOR}/*
+          ./install-${PG_MAJOR}.tar
   test-citus-exttester:
     name: Test ${{ matrix.make }} PG${{ matrix.pg_version }}
     strategy:
@@ -143,18 +144,18 @@ jobs:
           - make: check-failure
             image_name: "citus/failtester"
             pg_version:
-              - ${{ inputs.pg15_version }}
-              - ${{ inputs.pg14_version }}
+              ${{ inputs.pg15_version }}
+              ${{ inputs.pg14_version }}
           - make: check-enterprise-failure
             image_name: "citus/failtester"
             pg_version:
-              - ${{ inputs.pg15_version }}
-              - ${{ inputs.pg14_version }}
+              ${{ inputs.pg15_version }}
+              ${{ inputs.pg14_version }}
           - make: check-pytest
             image_name: "citus/failtester"
             pg_version:
-              - ${{ inputs.pg15_version }}
-              - ${{ inputs.pg14_version }}
+              ${{ inputs.pg15_version }}
+              ${{ inputs.pg14_version }}
     runs-on: ubuntu-latest
     container:
       image: "${{ matrix.image_name }}:${{ matrix.pg_version }}${{ matrix.image_suffix }}"
@@ -165,10 +166,8 @@ jobs:
     - uses: actions/checkout@v3.5.0
     - uses: actions/download-artifact@v3.0.1
       with:
-        name: build-${{ matrix.pg_version }}
+        name: build-${{ env.PG_MAJOR }}
     - uses: "./.github/actions/install_extension"
-      with:
-        pg_major: "${{ matrix.pg_version }}"
     - uses: "./.github/actions/configure"
     - uses: "./.github/actions/enable_core"
     - name: Run Test
