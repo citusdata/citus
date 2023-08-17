@@ -18,7 +18,6 @@ on:
         type: number
         description: Number of parallel jobs to run
 env:
-  pg_major: 15
   image_suffix: -v1b94240
   pg15_version: 15.4
   build_image_name: citus/extbuilder
