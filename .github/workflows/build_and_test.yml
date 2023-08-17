@@ -146,8 +146,12 @@ jobs:
         include:
           - make: check-failure
             image_name: "citus/failtester"
+            pg_version:
+              - ${{ inputs.pg14_version }}
+              - ${{ inputs.pg15_version }}
           - make: check-enterprise-failure
             image_name: "citus/failtester"
+            pg_version: ${{ inputs.pg14_version }}
           - make: check-pytest
             image_name: "citus/failtester"
     runs-on: ubuntu-latest
