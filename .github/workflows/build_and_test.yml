@@ -34,6 +34,7 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: citus/extbuilder:latest
+      options: --user root
     steps:
     - uses: actions/checkout@v3.5.0
     - name: Check Snapshots
