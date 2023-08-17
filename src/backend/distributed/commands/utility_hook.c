@@ -1411,7 +1411,6 @@ PostStandardProcessUtility(Node *parsetree)
 	 * before ExecuteDistributedDDLJob().
 	 */
 
-	CacheInvalidateRelcacheAll();
 	InvalidateForeignKeyGraphForDDL();
 }
 
