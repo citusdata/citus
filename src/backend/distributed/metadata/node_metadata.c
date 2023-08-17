@@ -136,7 +136,8 @@ static void EnsureTransactionalMetadataSyncMode(void);
 static void LockShardsInWorkerPlacementList(WorkerNode *workerNode, LOCKMODE
 											lockMode);
 static BackgroundWorkerHandle * CheckBackgroundWorkerToObtainLocks(int32 lock_cooldown);
-static BackgroundWorkerHandle * LockPlacementsWithBackgroundWorkersInPrimaryNode(WorkerNode *workerNode, bool force, int32 lock_cooldown);
+static BackgroundWorkerHandle * LockPlacementsWithBackgroundWorkersInPrimaryNode(
+	WorkerNode *workerNode, bool force, int32 lock_cooldown);
 
 /* Function definitions go here */
 
@@ -1022,7 +1023,6 @@ SetNodeMetadata(MetadataSyncContext *context, bool localOnly)
 											BoolGetDatum(true));
 
 			updatedActivatedNodeList = lappend(updatedActivatedNodeList, node);
-
 		}
 
 		/* reset activated nodes inside metadataSyncContext afer local update */
