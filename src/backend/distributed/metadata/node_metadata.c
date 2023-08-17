@@ -1184,7 +1184,8 @@ LockShardsInWorkerPlacementList(WorkerNode *workerNode, LOCKMODE lockMode)
 BackgroundWorkerHandle *
 CheckBackgroundWorkerToObtainLocks(int32 lock_cooldown)
 {
-	BackgroundWorkerHandle *handle  = StartLockAcquireHelperBackgroundWorker(MyProcPid, lock_cooldown);
+	BackgroundWorkerHandle *handle = StartLockAcquireHelperBackgroundWorker(MyProcPid,
+																			lock_cooldown);
 	if (!handle)
 	{
 		/*
@@ -1319,8 +1320,9 @@ citus_update_node(PG_FUNCTION_ARGS)
 		EnsureTransactionalMetadataSyncMode();
 	}
 
-	BackgroundWorkerHandle *handle = LockPlacementsWithBackgroundWorkersInPrimaryNode(workerNode, force,
-															  lock_cooldown);
+	BackgroundWorkerHandle *handle = LockPlacementsWithBackgroundWorkersInPrimaryNode(
+		workerNode, force,
+		lock_cooldown);
 
 	/*
 	 * if we have planned statements such as prepared statements, we should clear the cache so that
