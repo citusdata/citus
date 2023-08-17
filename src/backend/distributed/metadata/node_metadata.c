@@ -1018,6 +1018,7 @@ SetNodeMetadata(MetadataSyncContext *context, bool localOnly)
 											BoolGetDatum(true));
 
 			updatedActivatedNodeList = lappend(updatedActivatedNodeList, node);
+
 		}
 
 		/* reset activated nodes inside metadataSyncContext afer local update */
