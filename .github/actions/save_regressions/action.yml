@@ -16,7 +16,7 @@ runs:
     shell: bash
   - uses: actions/upload-artifact@v3.1.1
     with:
-      path: **/regression.diffs
+      path: ${GITHUB_WORKSPACE}/**/regression.diffs
       name: ${{ inputs.folder }}
       if-no-files-found: ignore
 
