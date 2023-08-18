@@ -20,6 +20,12 @@ on:
       build_image_name:
         required: false
         default: "citus/extbuilder"
+      test_image_name:
+        required: false
+        default: "citus/exttester"
+      fail_test_image_name:
+        required: false
+        default: "citus/failtester"
 # env:
 #   AZURE_SP: xxxx
 #   AZURE_SP_PASSWORD: xxxx
@@ -91,7 +97,7 @@ jobs:
       fail-fast: false
       matrix:
         image_name:
-          - "citus/extbuilder"
+          - ${{ inputs.build_image_name }}
         image_suffix:
           - ${{ inputs.image_suffix}}
         pg_version:
@@ -123,7 +129,7 @@ jobs:
         suite:
           - regress
         image_name:
-          - "citus/exttester"
+          - ${{ inputs.test_image_name }}
         pg_version:
           - ${{ inputs.pg14_version }}
           - ${{ inputs.pg15_version }}
@@ -147,27 +153,27 @@ jobs:
           - make: check-failure
             pg_version: ${{ inputs.pg14_version }}
             suite: regress
-            image_name: "citus/failtester"
+            image_name: ${{ inputs.fail_test_image_name }}
           - make: check-failure
             pg_version: ${{ inputs.pg15_version }}
             suite: regress
-            image_name: "citus/failtester"
+            image_name: ${{ inputs.fail_test_image_name }}
           - make: check-enterprise-failure
             pg_version: ${{ inputs.pg14_version }}
             suite: regress
-            image_name: "citus/failtester"
+            image_name: ${{ inputs.fail_test_image_name }}
           - make: check-enterprise-failure
             pg_version: ${{ inputs.pg15_version }}
             suite: regress
-            image_name: "citus/failtester"
+            image_name: ${{ inputs.fail_test_image_name }}
           - make: check-pytest
             pg_version: ${{ inputs.pg14_version }}
             suite: regress
-            image_name: "citus/failtester"
+            image_name: ${{ inputs.fail_test_image_name }}
           - make: check-pytest
             pg_version: ${{ inputs.pg15_version }}
             suite: regress
-            image_name: "citus/failtester"
+            image_name: ${{ inputs.fail_test_image_name }}
           - make: installcheck
             suite: cdc
             image_name: "citus/exttester"
