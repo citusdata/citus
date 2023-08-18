@@ -186,12 +186,6 @@ jobs:
     - build
     steps:
     - uses: actions/checkout@v3.5.0
-    - name: Expose $PG_MAJOR to Github Env
-      run: echo "PG_MAJOR=${PG_MAJOR}" >> $GITHUB_ENV
-      shell: bash
-    - uses: actions/download-artifact@v3.0.1
-      with:
-        name: build-${{ env.PG_MAJOR }}
     - uses: "./.github/actions/install_extension"
     - name: Run Test
       run: gosu circleci make -C src/test/${{ matrix.suite }} ${{ matrix.make }}
