@@ -76,7 +76,7 @@ RUN cp -r .pgenv/src .pgenv/pgsql-* .pgenv/config .pgenv-staging/
 RUN rm .pgenv-staging/config/default.conf
 
 FROM base AS pg16
-RUN pgenv build 16beta2
+RUN pgenv build 16beta3
 RUN rm .pgenv/src/*.tar*
 RUN make -C .pgenv/src/postgresql-*/ clean
 RUN make -C .pgenv/src/postgresql-*/src/include install
@@ -172,7 +172,7 @@ COPY --chown=citus:citus .psqlrc .
 RUN sudo chown --from=root:root citus:citus -R ~
 
 # sets default pg version
-RUN pgenv switch latest 15
+RUN pgenv switch latest 16
 
 # make connecting to the coordinator easy
 ENV PGPORT=9700
