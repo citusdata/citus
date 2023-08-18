@@ -85,6 +85,7 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJson(needs.prepare_parallelization_matrix.outputs.json) }}
     steps:
+    - uses: actions/checkout@v3.5.0
     - uses: "./.github/actions/install_extension"
     - name: Run minimal tests
       run: |-

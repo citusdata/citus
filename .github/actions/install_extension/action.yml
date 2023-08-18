@@ -2,7 +2,6 @@ name: install_extension
 runs:
   using: composite
   steps:
-  - uses: actions/checkout@v3.5.0
   - name: Expose $PG_MAJOR to Github Env
     run: echo "PG_MAJOR=${PG_MAJOR}" >> $GITHUB_ENV
     shell: bash
