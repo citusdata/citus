@@ -238,7 +238,7 @@ jobs:
         pg_version:
           - ${{ inputs.pg14_version }}
           - ${{ inputs.pg15_version }}
-        parallel: ${{ fromJson(needs.prepare_parallelization_matrix_6.outputs.json) }}
+        parallel: ${{ fromJson('{1,2,3,4,5,6}') }}
     steps:
     - uses: "./.github/actions/install_extension"
     - name: Test arbitrary configs
