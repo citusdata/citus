@@ -250,8 +250,7 @@ extern void CreateAppendDistributedShardPlacements(Oid relationId, int64 shardId
 												   List *workerNodeList, int
 												   replicationFactor);
 extern void CreateShardsOnWorkers(Oid distributedRelationId, List *shardPlacements,
-								  bool useExclusiveConnection,
-								  bool colocatedShard);
+								  bool useExclusiveConnection);
 extern List * InsertShardPlacementRows(Oid relationId, int64 shardId,
 									   List *workerNodeList, int workerStartIndex,
 									   int replicationFactor);
@@ -264,9 +263,8 @@ extern void CreateColocatedShards(Oid targetRelationId, Oid sourceRelationId,
 extern void CreateReferenceTableShard(Oid distributedTableId);
 extern void CreateSingleShardTableShardWithRoundRobinPolicy(Oid relationId,
 															uint32 colocationId);
-extern List * WorkerCreateShardCommandList(Oid relationId, int shardIndex, uint64 shardId,
-										   List *ddlCommandList,
-										   List *foreignConstraintCommandList);
+extern List * WorkerCreateShardCommandList(Oid relationId, uint64 shardId,
+										   List *ddlCommandList);
 extern Oid ForeignConstraintGetReferencedTableId(const char *queryString);
 extern void CheckHashPartitionedTable(Oid distributedTableId);
 extern void CheckTableSchemaNameForDrop(Oid relationId, char **schemaName,
