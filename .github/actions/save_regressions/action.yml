@@ -9,8 +9,9 @@ runs:
   - name: Regressions
     run: |-
       if [ -f "src/test/regress/regression.diffs" ]; then
-        echo "### ${{ inputs.folder }}" >> $GITHUB_STEP_SUMMARY
+        echo "```diff" >> $GITHUB_STEP_SUMMARY
         cat src/test/regress/regression.diffs >> $GITHUB_STEP_SUMMARY
+        echo "```" >> $GITHUB_STEP_SUMMARY
       fi
     shell: bash
   - uses: actions/upload-artifact@v3.1.1
