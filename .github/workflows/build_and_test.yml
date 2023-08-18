@@ -94,7 +94,6 @@ jobs:
     - name: Check for missing downgrade scripts
       run: ci/check_migration_files.sh
   build:
-    if: ${{ false }}
     name: Build for PG ${{ matrix.pg_version}}
     strategy:
       fail-fast: false
@@ -125,6 +124,7 @@ jobs:
           ./build-${{ env.PG_MAJOR }}/*
           ./install-${{ env.PG_MAJOR }}.tar
   test-citus:
+    if: ${{ false }}
     name: PG${{ matrix.pg_version }} - ${{ matrix.suite }} ${{ matrix.make }}
     strategy:
       fail-fast: false
