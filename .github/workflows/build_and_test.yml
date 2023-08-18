@@ -198,117 +198,51 @@ jobs:
       if: always()
       with:
         flags: test_${{ env.PG_MAJOR }},${{ matrix.suite }}_${{ matrix.make }}
+  prepare_parallelization_matrix_6:
+    name: Prepare parallelization matrix
+    runs-on: ubuntu-latest
+    outputs:
+      json: ${{ steps.parallelization.outputs.json }}
+    steps:
+      - uses: actions/checkout@v3.5.0
+      - uses: "./.github/actions/parallelization"
+        id: parallelization
+        with:
+          count: 6
+  test-arbitrary-configs:
+    name: PG${{ matrix.pg_version }} - regress - check-arbitrary-configs
+    runs-on: ubuntu-latest
+    container:
+      image: "${{ matrix.image_name }}:${{ matrix.pg_version }}${{ inputs.image_suffix }}"
+      options: --user root
+    needs:
+    - build
+    strategy:
+      fail-fast: false
+      matrix:
+        image_name:
+          - ${{ inputs.fail_test_image_name }}
+        pg_version:
+          - ${{ inputs.pg14_version }}
+          - ${{ inputs.pg15_version }}
+        parallel: ${{ fromJson(needs.prepare_parallelization_matrix.outputs.json) }}
+    steps:
+    - uses: "./.github/actions/install_extension"
+    - name: Test arbitrary configs
+      run: |-
+        TESTS=$(src/test/regress/citus_tests/print_test_names.py | circleci tests split)
+        # Our test suite expects comma separated values
+        TESTS=$(echo $TESTS | tr ' ' ',')
+        # TESTS will contain subset of configs that will be run on a container and we use multiple containers
+        # to run the test suite
+        gosu circleci \
+          make -C src/test/regress \
+            check-arbitrary-configs parallel=4 CONFIGS=$TESTS
+    - uses: "./.github/actions/save_logs_and_results"
+    - uses: "./.github/actions/upload_coverage"
+      with:
+        flags: test_${{ env.pg_major }},upgrade
 
-  # test-arbitrary-configs:
-
-  #   defaults:
-  #     run:
-  #       working-directory: "/home/circleci/project"
-  #   runs-on: ubuntu-latest
-  #   container:
-  #     image: "${{ env.image }}"
-  #   needs:
-  #   - build-14
-  #   env:
-  #     pg_major: 14
-  #     image: citus/failtester
-  #     image_tag: "${{ inputs.pg14_version }}"
-  #   steps:
-  #   - uses: actions/checkout@v3.5.0
-  #   - uses: actions/download-artifact@v3.0.1
-  #     with:
-  #       path: "."
-  #   - uses: "./.github/actions/install_extension"
-  #     with:
-  #       pg_major: "${{ env.pg_major }}"
-  #   - uses: "./.github/actions/configure"
-  #   - uses: "./.github/actions/enable_core"
-  #   - name: Test arbitrary configs
-  #     run: |-
-  #       TESTS=$(src/test/regress/citus_tests/print_test_names.py | circleci tests split)
-  #       # Our test suite expects comma separated values
-  #       TESTS=$(echo $TESTS | tr ' ' ',')
-  #       # TESTS will contain subset of configs that will be run on a container and we use multiple containers
-  #       # to run the test suite
-  #       gosu circleci \
-  #         make -C src/test/regress \
-  #           check-arbitrary-configs parallel=4 CONFIGS=$TESTS
-  #   - name: Show regressions
-  #     run: |-
-  #       find src/test/regress/tmp_citus_test/ -name "regression*.diffs" -exec cat {} +
-  #       lines=$(find src/test/regress/tmp_citus_test/ -name "regression*.diffs" | wc -l)
-  #       if [ $lines -ne 0 ]; then
-  #          exit 1
-  #       fi
-  #     if: failure()
-  #   - name: Copy logfiles
-  #     run: |-
-  #       mkdir src/test/regress/tmp_citus_test/logfiles
-  #       find src/test/regress/tmp_citus_test/ -name "logfile_*" -exec cp -t src/test/regress/tmp_citus_test/logfiles/ {} +
-  #     if: failure()
-  #   - uses: actions/upload-artifact@v3.1.1
-  #     with:
-  #       path: src/test/regress/tmp_citus_test/logfiles
-  #   - uses: "./.github/actions/save_logs_and_results"
-  #   - uses: "./.github/actions/stack_trace"
-  #   - uses: "./.github/actions/upload_coverage"
-  #     with:
-  #       flags: test_${{ env.pg_major }},upgrade
-  # test-arbitrary-configs_1:
-
-  #   defaults:
-  #     run:
-  #       working-directory: "/home/circleci/project"
-  #   runs-on: ubuntu-latest
-  #   container:
-  #     image: "${{ env.image }}"
-  #   needs:
-  #   - build-15
-  #   env:
-  #     pg_major: 15
-  #     image: citus/failtester
-  #     image_tag: "${{ inputs.pg15_version }}"
-  #   steps:
-  #   - uses: actions/checkout@v3.5.0
-  #   - uses: actions/download-artifact@v3.0.1
-  #     with:
-  #       path: "."
-  #   - uses: "./.github/actions/install_extension"
-  #     with:
-  #       pg_major: "${{ env.pg_major }}"
-  #   - uses: "./.github/actions/configure"
-  #   - uses: "./.github/actions/enable_core"
-  #   - name: Test arbitrary configs
-  #     run: |-
-  #       TESTS=$(src/test/regress/citus_tests/print_test_names.py | circleci tests split)
-  #       # Our test suite expects comma separated values
-  #       TESTS=$(echo $TESTS | tr ' ' ',')
-  #       # TESTS will contain subset of configs that will be run on a container and we use multiple containers
-  #       # to run the test suite
-  #       gosu circleci \
-  #         make -C src/test/regress \
-  #           check-arbitrary-configs parallel=4 CONFIGS=$TESTS
-  #   - name: Show regressions
-  #     run: |-
-  #       find src/test/regress/tmp_citus_test/ -name "regression*.diffs" -exec cat {} +
-  #       lines=$(find src/test/regress/tmp_citus_test/ -name "regression*.diffs" | wc -l)
-  #       if [ $lines -ne 0 ]; then
-  #          exit 1
-  #       fi
-  #     if: failure()
-  #   - name: Copy logfiles
-  #     run: |-
-  #       mkdir src/test/regress/tmp_citus_test/logfiles
-  #       find src/test/regress/tmp_citus_test/ -name "logfile_*" -exec cp -t src/test/regress/tmp_citus_test/logfiles/ {} +
-  #     if: failure()
-  #   - uses: actions/upload-artifact@v3.1.1
-  #     with:
-  #       path: src/test/regress/tmp_citus_test/logfiles
-  #   - uses: "./.github/actions/save_logs_and_results"
-  #   - uses: "./.github/actions/stack_trace"
-  #   - uses: "./.github/actions/upload_coverage"
-  #     with:
-  #       flags: test_${{ env.pg_major }},upgrade
   # test-query-generator:
 
   #   defaults:
