@@ -7,6 +7,7 @@ RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 # install build tools
 RUN apt update && apt install -y \
     bzip2 \
+    cpanminus \
     curl \
     flex \
     gcc \
@@ -14,7 +15,6 @@ RUN apt update && apt install -y \
     libcurl4-gnutls-dev \
     libicu-dev \
     libkrb5-dev \
-    liblz4-dev \
     liblz4-dev \
     libpam0g-dev \
     libreadline-dev \
@@ -25,13 +25,17 @@ RUN apt update && apt install -y \
     libzstd-dev \
     locales \
     make \
+    perl \
     pkg-config \
     python3 \
     python3-pip \
     sudo \
     uuid-dev \
+    valgrind \
     zlib1g-dev \
  && apt clean
+
+RUN cpanm install IPC::Run
 
 RUN locale-gen en_US.UTF-8
 
@@ -43,7 +47,7 @@ RUN useradd -ms /bin/bash citus \
 WORKDIR /home/citus
 USER citus
 
-RUN git clone --branch feature/switch https://github.com/thanodnl/pgenv.git .pgenv
+RUN git clone https://github.com/theory/pgenv.git .pgenv
 COPY --chown=citus:citus pgenv/config/ .pgenv/config/
 ENV PATH="/home/citus/.pgenv/bin:${PATH}"
 ENV PATH="/home/citus/.pgenv/pgsql/bin:${PATH}"
@@ -128,6 +132,8 @@ RUN sudo apt update \
     fswatch \
     gdb \
     htop \
+    libdbd-pg-perl \
+    libdbi-perl \
     lsof \
     man \
     net-tools \
@@ -172,7 +178,7 @@ COPY --chown=citus:citus .psqlrc .
 RUN sudo chown --from=root:root citus:citus -R ~
 
 # sets default pg version
-RUN pgenv switch latest 16
+RUN pgenv switch 16beta3
 
 # make connecting to the coordinator easy
 ENV PGPORT=9700
