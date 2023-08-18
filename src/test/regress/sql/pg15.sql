@@ -530,7 +530,7 @@ SELECT create_distributed_table('FKTABLE', 'tid');
 SELECT create_reference_table('FKTABLE');
 
 -- show that the definition is expected
-SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conrelid = 'fktable'::regclass::oid ORDER BY oid;
+SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conrelid = 'fktable'::regclass::oid ORDER BY 1;
 
 \c - - - :worker_1_port
 

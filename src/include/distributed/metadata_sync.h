@@ -139,6 +139,11 @@ extern void SyncNewColocationGroupToNodes(uint32 colocationId, int shardCount,
 extern void SyncDeleteColocationGroupToNodes(uint32 colocationId);
 extern char * TenantSchemaInsertCommand(Oid schemaId, uint32 colocationId);
 extern char * TenantSchemaDeleteCommand(char *schemaName);
+extern char * UpdateNoneDistTableMetadataCommand(Oid relationId, char replicationModel,
+												 uint32 colocationId, bool autoConverted);
+extern char * AddPlacementMetadataCommand(uint64 shardId, uint64 placementId,
+										  uint64 shardLength, int32 groupId);
+extern char * DeletePlacementMetadataCommand(uint64 placementId);
 
 extern MetadataSyncContext * CreateMetadataSyncContext(List *nodeList,
 													   bool collectCommands,

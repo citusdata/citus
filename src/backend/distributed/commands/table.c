@@ -103,8 +103,6 @@ static List * GetRelationIdListFromRangeVarList(List *rangeVarList, LOCKMODE loc
 static bool AlterTableCommandTypeIsTrigger(AlterTableType alterTableType);
 static bool AlterTableDropsForeignKey(AlterTableStmt *alterTableStatement);
 static void ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement);
-static List * InterShardDDLTaskList(Oid leftRelationId, Oid rightRelationId,
-									const char *commandString);
 static bool AlterInvolvesPartitionColumn(AlterTableStmt *alterTableStatement,
 										 AlterTableCmd *command);
 static bool AlterColumnInvolvesIdentityColumn(AlterTableStmt *alterTableStatement,
@@ -3858,7 +3856,7 @@ SetupExecutionModeForAlterTable(Oid relationId, AlterTableCmd *command)
  * applied. rightRelationId is the relation id of either index or distributed table which
  * given command refers to.
  */
-static List *
+List *
 InterShardDDLTaskList(Oid leftRelationId, Oid rightRelationId,
 					  const char *commandString)
 {
