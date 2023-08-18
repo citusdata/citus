@@ -180,5 +180,10 @@ RUN sudo chown --from=root:root citus:citus -R ~
 # sets default pg version
 RUN pgenv switch 16beta3
 
+USER root
+RUN curl -o /root/gdbpg.py https://raw.githubusercontent.com/tvesely/gdbpg/master/gdbpg.py
+COPY .gdbinit /root/
+USER citus
+
 # make connecting to the coordinator easy
 ENV PGPORT=9700
