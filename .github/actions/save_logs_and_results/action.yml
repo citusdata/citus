@@ -18,12 +18,15 @@ runs:
         src/test/**/tmp_check/worker.57638/log
         src/test/**/tmp_check/worker.57637/log
         src/test/**/*.diffs
+        src/test/**/out/ddls.sql
+        src/test/**/out/queries.sql
         src/test/**/logfile_*
+        /tmp/pg_upgrade_newData_logs
   - name: Publish regression.diffs
     run: |-
-      if [ -f "src/test/regress/regression.diffs" ]; then
+      if find src/test/regress -name "*.diffs" -type f -print -quit | grep -q .; then
         echo '```diff' >> $GITHUB_STEP_SUMMARY
-        cat src/test/regress/regression.diffs >> $GITHUB_STEP_SUMMARY
+        find src/test/regress -name "*.diffs" -exec cat {} + >> $GITHUB_STEP_SUMMARY
         echo '```' >> $GITHUB_STEP_SUMMARY
       fi
     shell: bash

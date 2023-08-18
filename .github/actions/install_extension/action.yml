@@ -1,9 +1,12 @@
 name: install_extension
+inputs:
+  pg_major:
+    required: false
 runs:
   using: composite
   steps:
   - name: Expose $PG_MAJOR to Github Env
-    run: echo "PG_MAJOR=${PG_MAJOR}" >> $GITHUB_ENV
+    run: echo "PG_MAJOR=${{ inputs.pg_major || env.PG_MAJOR }}" >> $GITHUB_ENV
     shell: bash
   - uses: actions/download-artifact@v3.0.1
     with:

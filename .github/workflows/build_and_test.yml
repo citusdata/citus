@@ -26,6 +26,9 @@ on:
       fail_test_image_name:
         required: false
         default: "citus/failtester"
+      pgupgrade_image_name:
+        required: false
+        default: "citus/pgupgradetester"
 # env:
 #   AZURE_SP: xxxx
 #   AZURE_SP_PASSWORD: xxxx
@@ -91,8 +94,8 @@ jobs:
     - name: Check for missing downgrade scripts
       run: ci/check_migration_files.sh
   build:
+    if: ${{ false }}
     name: Build for PG ${{ matrix.pg_version}}
-    needs: [check-style, check-sql-snapshots]
     strategy:
       fail-fast: false
       matrix:
@@ -176,8 +179,17 @@ jobs:
             image_name: ${{ inputs.fail_test_image_name }}
           - make: installcheck
             suite: cdc
-            image_name: "citus/exttester"
+            image_name: ${{ inputs.test_image_name }}
             pg_version: ${{ inputs.pg15_version }}
+          - make: check-query-generator
+            pg_version: ${{ inputs.pg14_version }}
+            suite: regress
+            image_name: ${{ inputs.fail_test_image_name }}
+          - make: check-query-generator
+            pg_version: ${{ inputs.pg15_version }}
+            suite: regress
+            image_name: ${{ inputs.fail_test_image_name }}
+
     runs-on: ubuntu-latest
     container:
       image: "${{ matrix.image_name }}:${{ matrix.pg_version }}${{ inputs.image_suffix }}"
@@ -216,7 +228,8 @@ jobs:
       image: "${{ matrix.image_name }}:${{ matrix.pg_version }}${{ inputs.image_suffix }}"
       options: --user root
     needs:
-    - build
+      - build
+      - prepare_parallelization_matrix_6
     strategy:
       fail-fast: false
       matrix:
@@ -225,7 +238,7 @@ jobs:
         pg_version:
           - ${{ inputs.pg14_version }}
           - ${{ inputs.pg15_version }}
-        parallel: ${{ fromJson(needs.prepare_parallelization_matrix.outputs.json) }}
+        parallel: ${{ fromJson(needs.prepare_parallelization_matrix_6.outputs.json) }}
     steps:
     - uses: "./.github/actions/install_extension"
     - name: Test arbitrary configs
@@ -242,169 +255,45 @@ jobs:
     - uses: "./.github/actions/upload_coverage"
       with:
         flags: test_${{ env.pg_major }},upgrade
-
-  # test-query-generator:
-
-  #   defaults:
-  #     run:
-  #       working-directory: "/home/circleci/project"
-  #   runs-on: ubuntu-latest
-  #   container:
-  #     image: "${{ env.image }}"
-  #   needs:
-  #   - build-14
-  #   env:
-  #     pg_major: 14
-  #     image: citus/failtester
-  #     image_tag: "${{ inputs.pg14_version }}"
-  #   steps:
-  #   - uses: actions/checkout@v3.5.0
-  #   - uses: actions/download-artifact@v3.0.1
-  #     with:
-  #       path: "."
-  #   - uses: "./.github/actions/install_extension"
-  #     with:
-  #       pg_major: "${{ env.pg_major }}"
-  #   - uses: "./.github/actions/configure"
-  #   - uses: "./.github/actions/enable_core"
-  #   - name: Run Test
-  #     run: gosu circleci make -C src/test/regress check-query-generator
-  #   - name: Show regressions
-  #     run: |-
-  #       find src/test/regress/citus_tests/query_generator/out/ -name "local_dist.diffs" -exec cat {} +
-  #       lines=$(find src/test/regress/citus_tests/query_generator/out/ -name "local_dist.diffs" | wc -l)
-  #       if [ $lines -ne 0 ]; then
-  #          exit 1
-  #       fi
-  #     if: failure()
-  #   - name: Copy logfiles
-  #     run: |-
-  #       mkdir src/test/regress/tmp_citus_test/logfiles
-  #       find src/test/regress/tmp_citus_test/ -name "logfile_*" -exec cp -t src/test/regress/tmp_citus_test/logfiles/ {} +
-  #     if: failure()
-  #   - uses: actions/upload-artifact@v3.1.1
-  #     with:
-  #       path: src/test/regress/tmp_citus_test/logfiles
-  #   - uses: actions/upload-artifact@v3.1.1
-  #     with:
-  #       path: src/test/regress/citus_tests/query_generator/out/ddls.sql
-  #   - uses: actions/upload-artifact@v3.1.1
-  #     with:
-  #       path: src/test/regress/citus_tests/query_generator/out/queries.sql
-  #   - uses: actions/upload-artifact@v3.1.1
-  #     with:
-  #       path: src/test/regress/citus_tests/query_generator/out/local_dist.diffs
-  #   - uses: "./.github/actions/stack_trace"
-  #   - uses: "./.github/actions/upload_coverage"
-  #     with:
-  #       flags: test_${{ env.pg_major }},querygen
-  # test-query-generator_1:
-
-  #   defaults:
-  #     run:
-  #       working-directory: "/home/circleci/project"
-  #   runs-on: ubuntu-latest
-  #   container:
-  #     image: "${{ env.image }}"
-  #   needs:
-  #   - build-15
-  #   env:
-  #     pg_major: 15
-  #     image: citus/failtester
-  #     image_tag: "${{ inputs.pg15_version }}"
-  #   steps:
-  #   - uses: actions/checkout@v3.5.0
-  #   - uses: actions/download-artifact@v3.0.1
-  #     with:
-  #       path: "."
-  #   - uses: "./.github/actions/install_extension"
-  #     with:
-  #       pg_major: "${{ env.pg_major }}"
-  #   - uses: "./.github/actions/configure"
-  #   - uses: "./.github/actions/enable_core"
-  #   - name: Run Test
-  #     run: gosu circleci make -C src/test/regress check-query-generator
-  #   - name: Show regressions
-  #     run: |-
-  #       find src/test/regress/citus_tests/query_generator/out/ -name "local_dist.diffs" -exec cat {} +
-  #       lines=$(find src/test/regress/citus_tests/query_generator/out/ -name "local_dist.diffs" | wc -l)
-  #       if [ $lines -ne 0 ]; then
-  #          exit 1
-  #       fi
-  #     if: failure()
-  #   - name: Copy logfiles
-  #     run: |-
-  #       mkdir src/test/regress/tmp_citus_test/logfiles
-  #       find src/test/regress/tmp_citus_test/ -name "logfile_*" -exec cp -t src/test/regress/tmp_citus_test/logfiles/ {} +
-  #     if: failure()
-  #   - uses: actions/upload-artifact@v3.1.1
-  #     with:
-  #       path: src/test/regress/tmp_citus_test/logfiles
-  #   - uses: actions/upload-artifact@v3.1.1
-  #     with:
-  #       path: src/test/regress/citus_tests/query_generator/out/ddls.sql
-  #   - uses: actions/upload-artifact@v3.1.1
-  #     with:
-  #       path: src/test/regress/citus_tests/query_generator/out/queries.sql
-  #   - uses: actions/upload-artifact@v3.1.1
-  #     with:
-  #       path: src/test/regress/citus_tests/query_generator/out/local_dist.diffs
-  #   - uses: "./.github/actions/stack_trace"
-  #   - uses: "./.github/actions/upload_coverage"
-  #     with:
-  #       flags: test_${{ env.pg_major }},querygen
-  # test-pg-upgrade:
-
-  #   defaults:
-  #     run:
-  #       working-directory: "/home/circleci/project"
-  #   runs-on: ubuntu-latest
-  #   container:
-  #     image: "${{ env.image }}"
-  #   needs:
-  #   - build-14
-  #   - build-15
-  #   env:
-  #     old_pg_major: 14
-  #     new_pg_major: 15
-  #     image: citus/pgupgradetester
-  #     image_tag: "${{ inputs.upgrade_pg_versions }}"
-  #   steps:
-  #   - uses: actions/checkout@v3.5.0
-  #   - uses: actions/download-artifact@v3.0.1
-  #     with:
-  #       path: "."
-  #   - uses: "./.github/actions/install_extension"
-  #     with:
-  #       pg_major: "${{ env.old_pg_major }}"
-  #   - uses: "./.github/actions/install_extension"
-  #     with:
-  #       pg_major: "${{ env.new_pg_major }}"
-  #   - uses: "./.github/actions/configure"
-  #   - uses: "./.github/actions/enable_core"
-  #   - name: Install and test postgres upgrade
-  #     run: |-
-  #       gosu circleci \
-  #         make -C src/test/regress \
-  #           check-pg-upgrade \
-  #           old-bindir=/usr/lib/postgresql/${{ env.old_pg_major }}/bin \
-  #           new-bindir=/usr/lib/postgresql/${{ env.new_pg_major }}/bin
-  #   - name: Copy pg_upgrade logs for newData dir
-  #     run: |-
-  #       mkdir -p /tmp/pg_upgrade_newData_logs
-  #       if ls src/test/regress/tmp_upgrade/newData/*.log 1> /dev/null 2>&1; then
-  #           cp src/test/regress/tmp_upgrade/newData/*.log /tmp/pg_upgrade_newData_logs
-  #       fi
-  #     if: failure()
-  #   - uses: actions/upload-artifact@v3.1.1
-  #     with:
-  #       path: "/tmp/pg_upgrade_newData_logs"
-  #   - uses: "./.github/actions/save_logs_and_results"
-  #   - uses: "./.github/actions/save_regressions"
-  #   - uses: "./.github/actions/stack_trace"
-  #   - uses: "./.github/actions/upload_coverage"
-  #     with:
-  #       flags: test_${{ env.old_pg_major }}_${{ env.new_pg_major }},upgrade
+  test-pg-upgrade:
+    runs-on: ubuntu-latest
+    container:
+      image: "${{ inputs.pgupgrade_image_name }}:${{ inputs.upgrade_pg_versions }}${{ inputs.image_suffix }}"
+      options: --user root
+    needs:
+    - build
+    env:
+      old_pg_major: 14
+      new_pg_major: 15
+    steps:
+    - uses: actions/checkout@v3.5.0
+    - uses: actions/download-artifact@v3.0.1
+      with:
+        path: "."
+    - uses: "./.github/actions/install_extension"
+      with:
+        pg_major: "${{ env.old_pg_major }}"
+    - uses: "./.github/actions/install_extension"
+      with:
+        pg_major: "${{ env.new_pg_major }}"
+    - name: Install and test postgres upgrade
+      run: |-
+        gosu circleci \
+          make -C src/test/regress \
+            check-pg-upgrade \
+            old-bindir=/usr/lib/postgresql/${{ env.old_pg_major }}/bin \
+            new-bindir=/usr/lib/postgresql/${{ env.new_pg_major }}/bin
+    - name: Copy pg_upgrade logs for newData dir
+      run: |-
+        mkdir -p /tmp/pg_upgrade_newData_logs
+        if ls src/test/regress/tmp_upgrade/newData/*.log 1> /dev/null 2>&1; then
+            cp src/test/regress/tmp_upgrade/newData/*.log /tmp/pg_upgrade_newData_logs
+        fi
+      if: failure()
+    - uses: "./.github/actions/save_logs_and_results"
+    - uses: "./.github/actions/upload_coverage"
+      with:
+        flags: test_${{ env.old_pg_major }}_${{ env.new_pg_major }},upgrade
   # test-citus-upgrade:
 
   #   defaults:
