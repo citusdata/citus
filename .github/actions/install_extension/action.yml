@@ -5,3 +5,12 @@ runs:
   - name: Install Extension
     run: tar xfv "install-$PG_MAJOR.tar" --directory /
     shell: bash
+  - name: Configure
+    run: |-
+      chown -R circleci .
+      git config --global --add safe.directory ${GITHUB_WORKSPACE}
+      gosu circleci ./configure --without-pg-version-check
+    shell: bash
+  - name: Enable core dumps
+    run: ulimit -c unlimited
+    shell: bash

@@ -112,8 +112,6 @@ jobs:
         fi
         echo "tests=$tests" >> "$GITHUB_OUTPUT"
     - uses: "./.github/actions/install_extension"
-    - uses: "./.github/actions/configure"
-    - uses: "./.github/actions/enable_core"
     - name: Run minimal tests
       run: |-
         tests_array=(${{ steps.detect-regression-tests.outputs.tests }})

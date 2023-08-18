@@ -187,8 +187,6 @@ jobs:
       with:
         name: build-${{ env.PG_MAJOR }}
     - uses: "./.github/actions/install_extension"
-    - uses: "./.github/actions/configure"
-    - uses: "./.github/actions/enable_core"
     - name: Run Test
       run: gosu circleci make -C src/test/${{ matrix.suite }} ${{ matrix.make }}
       timeout-minutes: 20
@@ -196,12 +194,6 @@ jobs:
       if: always()
       with:
         folder: ${{ matrix.pg_version }}_${{ matrix.make }}
-    - uses: "./.github/actions/save_regressions"
-      if: always()
-      with:
-          folder: ${{ matrix.pg_version }}_${{ matrix.make }}
-    - uses: "./.github/actions/stack_trace"
-      if: always()
     - uses: "./.github/actions/upload_coverage"
       if: always()
       with:

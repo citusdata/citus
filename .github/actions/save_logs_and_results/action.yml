@@ -7,6 +7,7 @@ runs:
   using: composite
   steps:
   - uses: actions/upload-artifact@v3.1.1
+    name: Upload logs
     with:
       name: ${{ inputs.folder }}
       if-no-files-found: ignore
@@ -16,3 +17,16 @@ runs:
         src/test/**/tmp_check/master/log
         src/test/**/tmp_check/worker.57638/log
         src/test/**/tmp_check/worker.57637/log
+        src/test/**/regression.diffs
+  - name: Publish regression.diffs
+    run: |-
+      if [ -f "src/test/regress/regression.diffs" ]; then
+        echo "```diff" >> $GITHUB_STEP_SUMMARY
+        cat src/test/regress/regression.diffs >> $GITHUB_STEP_SUMMARY
+        echo "```" >> $GITHUB_STEP_SUMMARY
+      fi
+    shell: bash
+  - name: Print stack traces
+    run: "./ci/print_stack_trace.sh"
+    if: failure()
+    shell: bash
