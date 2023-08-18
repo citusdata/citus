@@ -17,7 +17,8 @@ runs:
         src/test/**/tmp_check/master/log
         src/test/**/tmp_check/worker.57638/log
         src/test/**/tmp_check/worker.57637/log
-        src/test/**/regression.diffs
+        src/test/**/*.diffs
+        src/test/**/logfile_*
   - name: Publish regression.diffs
     run: |-
       if [ -f "src/test/regress/regression.diffs" ]; then

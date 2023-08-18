@@ -2,6 +2,13 @@ name: install_extension
 runs:
   using: composite
   steps:
+  - uses: actions/checkout@v3.5.0
+  - name: Expose $PG_MAJOR to Github Env
+    run: echo "PG_MAJOR=${PG_MAJOR}" >> $GITHUB_ENV
+    shell: bash
+  - uses: actions/download-artifact@v3.0.1
+    with:
+      name: build-${{ env.PG_MAJOR }}
   - name: Install Extension
     run: tar xfv "install-$PG_MAJOR.tar" --directory /
     shell: bash
