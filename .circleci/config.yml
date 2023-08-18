@@ -6,16 +6,19 @@ orbs:
 parameters:
   image_suffix:
     type: string
-    default: '-v1b94240'
+    default: '-v0c8d80c'
   pg14_version:
     type: string
     default: '14.9'
   pg15_version:
     type: string
     default: '15.4'
+  pg16_version:
+    type: string
+    default: '16beta3'
   upgrade_pg_versions:
     type: string
-    default: '14.9-15.4'
+    default: '14.9-15.4-16beta3'
   style_checker_tools_version:
     type: string
     default: '0.8.18'
@@ -722,6 +725,10 @@ workflows:
           name: build-15
           pg_major: 15
           image_tag: '<< pipeline.parameters.pg15_version >>'
+      - build:
+          name: build-16
+          pg_major: 16
+          image_tag: '<< pipeline.parameters.pg16_version >>'
 
       - check-style
       - check-sql-snapshots
@@ -872,6 +879,79 @@ workflows:
           image: citus/failtester
           make: check-failure
 
+      - test-citus: &test-citus-16
+          name: 'test-16_check-split'
+          make: check-split
+          pg_major: 16
+          image_tag: '<< pipeline.parameters.pg16_version >>'
+          requires: [build-16]
+      - test-citus:
+          <<:  *test-citus-16
+          name: 'test-16_check-enterprise'
+          make: check-enterprise
+      - test-citus:
+          <<:  *test-citus-16
+          name: 'test-16_check-enterprise-isolation'
+          make: check-enterprise-isolation
+      - test-citus:
+          <<:  *test-citus-16
+          name: 'test-16_check-enterprise-isolation-logicalrep-1'
+          make: check-enterprise-isolation-logicalrep-1
+      - test-citus:
+          <<:  *test-citus-16
+          name: 'test-16_check-enterprise-isolation-logicalrep-2'
+          make: check-enterprise-isolation-logicalrep-2
+      - test-citus:
+          <<:  *test-citus-16
+          name: 'test-16_check-enterprise-isolation-logicalrep-3'
+          make: check-enterprise-isolation-logicalrep-3
+      - test-citus:
+          <<:  *test-citus-16
+          name: 'test-16_check-enterprise-failure'
+          image: citus/failtester
+          make: check-enterprise-failure
+      - test-citus:
+          <<:  *test-citus-16
+          name: 'test-16_check-multi'
+          make: check-multi
+      - test-citus:
+          <<:  *test-citus-16
+          name: 'test-16_check-multi-1'
+          make: check-multi-1
+      - test-citus:
+          <<:  *test-citus-16
+          name: 'test-16_check-mx'
+          make: check-multi-mx
+      - test-citus:
+          <<:  *test-citus-16
+          name: 'test-16_check-vanilla'
+          make: check-vanilla
+      - test-citus:
+          <<:  *test-citus-16
+          name: 'test-16_check-isolation'
+          make: check-isolation
+      - test-citus:
+          <<:  *test-citus-16
+          name: 'test-16_check-operations'
+          make: check-operations
+      - test-citus:
+          <<:  *test-citus-16
+          name: 'test-16_check-follower-cluster'
+          make: check-follower-cluster
+      - test-citus:
+          <<:  *test-citus-16
+          name: 'test-16_check-columnar'
+          make: check-columnar
+      - test-citus:
+          <<:  *test-citus-16
+          name: 'test-16_check-columnar-isolation'
+          make: check-columnar-isolation
+      - test-citus:
+          <<:  *test-citus-16
+          name: 'test-16_check-failure'
+          image: citus/failtester
+          make: check-failure
+
       - test-pytest:
           name: 'test-14_pytest'
           pg_major: 14
@@ -884,12 +964,25 @@ workflows:
           image_tag: '<< pipeline.parameters.pg15_version >>'
           requires: [build-15]
 
+      - test-pytest:
+          name: 'test-16_pytest'
+          pg_major: 16
+          image_tag: '<< pipeline.parameters.pg16_version >>'
+          requires: [build-16]
+
       - tap-test-citus:
           name: 'test-15_tap-cdc'
           suite: cdc
           pg_major: 15
           image_tag: '<< pipeline.parameters.pg15_version >>'
           requires: [build-15]
+
+      - tap-test-citus:
+          name: 'test-16_tap-cdc'
+          suite: cdc
+          pg_major: 16
+          image_tag: '<< pipeline.parameters.pg16_version >>'
+          requires: [build-16]
 
       - test-arbitrary-configs:
           name: 'test-14_check-arbitrary-configs'
@@ -903,6 +996,12 @@ workflows:
           image_tag: '<< pipeline.parameters.pg15_version >>'
           requires: [build-15]
 
+      - test-arbitrary-configs:
+          name: 'test-16_check-arbitrary-configs'
+          pg_major: 16
+          image_tag: '<< pipeline.parameters.pg16_version >>'
+          requires: [build-16]
+
       - test-query-generator:
           name: 'test-14_check-query-generator'
           pg_major: 14
@@ -915,12 +1014,32 @@ workflows:
           image_tag: '<< pipeline.parameters.pg15_version >>'
           requires: [build-15]
 
+      - test-query-generator:
+          name: 'test-16_check-query-generator'
+          pg_major: 16
+          image_tag: '<< pipeline.parameters.pg16_version >>'
+          requires: [build-16]
+
       - test-pg-upgrade:
           name: 'test-14-15_check-pg-upgrade'
           old_pg_major: 14
           new_pg_major: 15
           image_tag: '<< pipeline.parameters.upgrade_pg_versions >>'
           requires: [build-14, build-15]
+
+      - test-pg-upgrade:
+          name: 'test-15-16_check-pg-upgrade'
+          old_pg_major: 15
+          new_pg_major: 16
+          image_tag: '<< pipeline.parameters.upgrade_pg_versions >>'
+          requires: [build-15, build-16]
+
+      - test-pg-upgrade:
+          name: 'test-14-16_check-pg-upgrade'
+          old_pg_major: 14
+          new_pg_major: 16
+          image_tag: '<< pipeline.parameters.upgrade_pg_versions >>'
+          requires: [build-14, build-16]
 
       - test-citus-upgrade:
           name: test-14_check-citus-upgrade
@@ -968,7 +1087,28 @@ workflows:
             - test-15_check-split
             - test-15_check-arbitrary-configs
             - test-15_check-query-generator
+            - test-16_check-multi
+            - test-16_check-multi-1
+            - test-16_check-mx
+            - test-16_check-vanilla
+            - test-16_check-isolation
+            - test-16_check-operations
+            - test-16_check-follower-cluster
+            - test-16_check-columnar
+            - test-16_check-columnar-isolation
+            - test-16_check-failure
+            - test-16_check-enterprise
+            - test-16_check-enterprise-isolation
+            - test-16_check-enterprise-isolation-logicalrep-1
+            - test-16_check-enterprise-isolation-logicalrep-2
+            - test-16_check-enterprise-isolation-logicalrep-3
+            - test-16_check-enterprise-failure
+            - test-16_check-split
+            - test-16_check-arbitrary-configs
+            - test-16_check-query-generator
             - test-14-15_check-pg-upgrade
+            - test-15-16_check-pg-upgrade
+            - test-14-16_check-pg-upgrade
             - test-14_check-citus-upgrade
 
       - ch_benchmark:
