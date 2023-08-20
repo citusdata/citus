@@ -212,7 +212,7 @@ RESET ROLE;
 grant CREATE,CONNECT,TEMP,TEMPORARY on database regression to myuser with grant option;
 set role myuser;
 
-grant CREATE,CONNECT,TEMP,TEMPORARY on database regression to myuser_1;
+grant CREATE,CONNECT,TEMP,TEMPORARY on database regression to myuser_1 granted by myuser;
 
 set role myuser_1;
 select has_database_privilege('regression', 'CREATE');
