@@ -255,6 +255,7 @@ create user myuser;
 create user myuser_1;
 
 create database test_db;
+SELECT result FROM run_command_on_workers($$create database test_db$$);
 revoke connect,temp,temporary  on database test_db from public;
 
 grant CREATE,CONNECT,TEMP,TEMPORARY on database regression,test_db to myuser,myuser_1;
@@ -316,6 +317,7 @@ drop user myuser_1;
 drop user myuser;
 
 drop database test_db;
+SELECT result FROM run_command_on_workers($$drop database test_db$$);
 ---------------------------------------------------------------------------
 -- rollbacks public role database privileges to original state
 grant connect,temp,temporary  on database regression to public;

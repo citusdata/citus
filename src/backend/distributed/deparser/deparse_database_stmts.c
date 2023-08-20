@@ -102,6 +102,12 @@ AppendGrantOnDatabaseStmt(StringInfo buf, GrantStmt *stmt)
 			appendStringInfo(buf, " CASCADE");
 		}
 	}
+
+	if (stmt->grantor)
+	{
+		appendStringInfo(buf, " GRANTED BY %s", RoleSpecString(stmt->grantor, true));
+	}
+
 	appendStringInfo(buf, ";");
 }
 

@@ -74,7 +74,7 @@ set role myuser;
 select has_database_privilege('regression', 'CONNECT');
  has_database_privilege
 ---------------------------------------------------------------------
- t
+ f
 (1 row)
 
 \c - - - :master_port
@@ -113,7 +113,7 @@ set role myuser;
 select has_database_privilege('regression', 'TEMP');
  has_database_privilege
 ---------------------------------------------------------------------
- t
+ f
 (1 row)
 
 \c - - - :master_port
@@ -152,7 +152,7 @@ set role myuser;
 select has_database_privilege('regression', 'TEMPORARY');
  has_database_privilege
 ---------------------------------------------------------------------
- t
+ f
 (1 row)
 
 \c - - - :master_port
@@ -250,19 +250,19 @@ select has_database_privilege('regression', 'CREATE');
 select has_database_privilege('regression', 'CONNECT');
  has_database_privilege
 ---------------------------------------------------------------------
- t
+ f
 (1 row)
 
 select has_database_privilege('regression', 'TEMP');
  has_database_privilege
 ---------------------------------------------------------------------
- t
+ f
 (1 row)
 
 select has_database_privilege('regression', 'TEMPORARY');
  has_database_privilege
 ---------------------------------------------------------------------
- t
+ f
 (1 row)
 
 \c - - - :master_port
@@ -360,19 +360,19 @@ select has_database_privilege('regression', 'CREATE');
 select has_database_privilege('regression', 'CONNECT');
  has_database_privilege
 ---------------------------------------------------------------------
- t
+ f
 (1 row)
 
 select has_database_privilege('regression', 'TEMP');
  has_database_privilege
 ---------------------------------------------------------------------
- t
+ f
 (1 row)
 
 select has_database_privilege('regression', 'TEMPORARY');
  has_database_privilege
 ---------------------------------------------------------------------
- t
+ f
 (1 row)
 
 \c - - - :master_port
@@ -485,6 +485,13 @@ create database test_db;
 NOTICE:  Citus partially supports CREATE DATABASE for distributed databases
 DETAIL:  Citus does not propagate CREATE DATABASE command to workers
 HINT:  You can manually create a database and its extensions on workers.
+SELECT result FROM run_command_on_workers($$create database test_db$$);
+     result
+---------------------------------------------------------------------
+ CREATE DATABASE
+ CREATE DATABASE
+(2 rows)
+
 revoke connect,temp,temporary  on database test_db from public;
 grant CREATE,CONNECT,TEMP,TEMPORARY on database regression,test_db to myuser,myuser_1;
 set role myuser;
@@ -690,6 +697,13 @@ reset role;
 drop user myuser_1;
 drop user myuser;
 drop database test_db;
+SELECT result FROM run_command_on_workers($$drop database test_db$$);
+    result
+---------------------------------------------------------------------
+ DROP DATABASE
+ DROP DATABASE
+(2 rows)
+
 ---------------------------------------------------------------------
 -- rollbacks public role database privileges to original state
 grant connect,temp,temporary  on database regression to public;
