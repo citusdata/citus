@@ -235,8 +235,6 @@ jobs:
     steps:
     - uses: actions/checkout@v3.5.0
     - uses: "./.github/actions/install_extension"
-      with:
-        pg_major: "${{ matrix.pg_version }}"
     - name: Test arbitrary configs
       run: |-
         TESTS=$(src/test/regress/citus_tests/print_test_names.py | circleci tests split)
@@ -298,9 +296,7 @@ jobs:
     - build
     steps:
     - uses: actions/checkout@v3.5.0
-    - uses: actions/download-artifact@v3.0.1
-      with:
-        name: build-${{ inputs.pg14_version }}
+    - uses: "./.github/actions/install_extension"
     - name: Install and test citus upgrade
       run: |-
         chown -R circleci .
