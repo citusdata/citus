@@ -328,149 +328,23 @@ jobs:
     - uses: "./.github/actions/upload_coverage"
       with:
         flags: test_${{ env.pg_major }},upgrade
-  # upload-coverage:
-  #   defaults:
-  #     run:
-  #       working-directory: "/home/circleci/project"
-  #   runs-on: ubuntu-latest
-  #   container:
-  #     image: citus/exttester:${{ inputs.pg15_version }}${{ inputs.image_suffix }}
-  #   needs:
-  #   - test-14_check-multi
-  #   - test-14_check-multi-1
-  #   - test-14_check-mx
-  #   - test-14_check-vanilla
-  #   - test-14_check-isolation
-  #   - test-14_check-operations
-  #   - test-14_check-follower-cluster
-  #   - test-14_check-columnar
-  #   - test-14_check-columnar-isolation
-  #   - test-14_check-failure
-  #   - test-14_check-enterprise
-  #   - test-14_check-enterprise-isolation
-  #   - test-14_check-enterprise-isolation-logicalrep-1
-  #   - test-14_check-enterprise-isolation-logicalrep-2
-  #   - test-14_check-enterprise-isolation-logicalrep-3
-  #   - test-14_check-enterprise-failure
-  #   - test-14_check-split
-  #   - test-14_check-arbitrary-configs
-  #   - test-14_check-query-generator
-  #   - test-15_check-multi
-  #   - test-15_check-multi-1
-  #   - test-15_check-mx
-  #   - test-15_check-vanilla
-  #   - test-15_check-isolation
-  #   - test-15_check-operations
-  #   - test-15_check-follower-cluster
-  #   - test-15_check-columnar
-  #   - test-15_check-columnar-isolation
-  #   - test-15_check-failure
-  #   - test-15_check-enterprise
-  #   - test-15_check-enterprise-isolation
-  #   - test-15_check-enterprise-isolation-logicalrep-1
-  #   - test-15_check-enterprise-isolation-logicalrep-2
-  #   - test-15_check-enterprise-isolation-logicalrep-3
-  #   - test-15_check-enterprise-failure
-  #   - test-15_check-split
-  #   - test-15_check-arbitrary-configs
-  #   - test-15_check-query-generator
-  #   - test-14-15_check-pg-upgrade
-  #   - test-14_check-citus-upgrade
-  #   steps:
-  #   - uses: actions/download-artifact@v3.0.1
-  #     with:
-  #       path: "."
-  #   - name: Upload coverage results to Code Climate
-  #     run: |-
-  #       cc-test-reporter sum-coverage codeclimate/*.json -o total.json
-  #       cc-test-reporter upload-coverage -i total.json
-  # ch_benchmark:
-  #   if: startsWith(github.ref, 'refs/heads/ch_benchmark/')
-  #   defaults:
-  #     run:
-  #       working-directory: "/home/circleci/project"
-  #   runs-on: ubuntu-latest
-  #   container:
-  #     image: buildpack-deps:stretch
-  #   needs:
-  #   - build-14
-  #   steps:
-  #   - uses: actions/checkout@v3.5.0
-  #   - uses: azure/login@v1
-  #     with:
-  #       creds: ${{ secrets.AZURE_CREDENTIALS }}
-  #   - name: install dependencies and run ch_benchmark tests
-  #     uses: azure/CLI@v1
-  #     with:
-  #       inlineScript: |
-  #         cd ./src/test/hammerdb
-  #         chmod +x run_hammerdb.sh
-  #         run_hammerdb.sh citusbot_ch_benchmark_rg
-  # tpcc_benchmark:
-  #   if: startsWith(github.ref, 'refs/heads/tpcc_benchmark/')
-  #   defaults:
-  #     run:
-  #       working-directory: "/home/circleci/project"
-  #   runs-on: ubuntu-latest
-  #   container:
-  #     image: buildpack-deps:stretch
-  #   needs:
-  #   - build-14
-  #   steps:
-  #   - uses: actions/checkout@v3.5.0
-  #   - uses: azure/login@v1
-  #     with:
-  #       creds: ${{ secrets.AZURE_CREDENTIALS }}
-  #   - name: install dependencies and run tpcc_benchmark tests
-  #     uses: azure/CLI@v1
-  #     with:
-  #       inlineScript: |
-  #         cd ./src/test/hammerdb
-  #         chmod +x run_hammerdb.sh
-  #         run_hammerdb.sh citusbot_tpcc_benchmark_rg
-  # test-flakyness:
-  #   runs-on: ubuntu-latest
-  #   container:
-  #     image: "${{ env.image }}"
-  #   needs:
-  #   - build-15
-  #   env:
-  #     pg_major: 15
-  #     image: citus/failtester
-  #     image_tag: "${{ inputs.pg15_version }}"
-  #     test: ''
-  #     runs: 8
-  #   steps:
-  #   - uses: actions/checkout@v3.5.0
-  #   - uses: actions/download-artifact@v3.0.1
-  #     with:
-  #       path: "."
-  #   - name: Detect regression tests need to be ran
-  #     run: |-
-  #       detected_changes=$(git diff origin/main... --name-only --diff-filter=AM | (grep 'src/test/regress/sql/.*\.sql\|src/test/regress/spec/.*\.spec\|src/test/regress/citus_tests/test/test_.*\.py' || true))
-  #       tests=${detected_changes}
-  #       if [ -z "$tests" ]; then
-  #           echo "No test found."
-  #           gh run cancel ${{ github.run_id }}
-  #           gh run watch ${{ github.run_id }}
-  #       else
-  #         echo "Detected tests " $tests
-  #       fi
-  #       echo export tests=\""$tests"\" >> "$BASH_ENV"
-  #       source "$BASH_ENV"
-  #   - uses: "./.github/actions/install_extension"
-  #     with:
-  #       pg_major: "${{ env.pg_major }}"
-  #   - uses: "./.github/actions/configure"
-  #   - uses: "./.github/actions/enable_core"
-  #   - name: Run minimal tests
-  #     run: |-
-  #       tests_array=($tests)
-  #       for test in "${tests_array[@]}"
-  #       do
-  #           test_name=$(echo "$test" | sed -r "s/.+\/(.+)\..+/\1/")
-  #           gosu circleci src/test/regress/citus_tests/run_test.py $test_name --repeat ${{ env.runs }} --use-base-schedule --use-whole-schedule-line
-  #       done
-  #   - uses: "./.github/actions/save_logs_and_results"
-  #   - uses: "./.github/actions/save_regressions"
-  #   - uses: "./.github/actions/stack_trace"
+  upload-coverage:
+    defaults:
+      run:
+        working-directory: "/home/circleci/project"
+    runs-on: ubuntu-latest
+    container:
+      image: citus/exttester:${{ inputs.pg15_version }}${{ inputs.image_suffix }}
+    needs:
+      - test-citus
+      - test-arbitrary-configs
+      - test-citus-upgrade
+      - test-pg-upgrade
+    steps:
+    - uses: actions/download-artifact@v3.0.1
+      with:
+        path: "."
+    - name: Upload coverage results to Code Climate
+      run: |-
+        cc-test-reporter sum-coverage codeclimate/*.json -o total.json
+        cc-test-reporter upload-coverage -i total.json
