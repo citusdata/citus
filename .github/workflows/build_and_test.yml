@@ -397,7 +397,6 @@ jobs:
   test-flakyness-pre:
     name: Detect regression tests need to be ran
     runs-on: ubuntu-latest
-    needs: build
     outputs:
       tests: ${{ steps.detect-regression-tests.outputs.tests }}
     steps:

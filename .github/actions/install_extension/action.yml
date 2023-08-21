@@ -6,7 +6,14 @@ runs:
   using: composite
   steps:
   - name: Expose $PG_MAJOR to Github Env
-    run: echo "PG_MAJOR=${{ inputs.pg_major || env.PG_MAJOR }}" >> $GITHUB_ENV
+    run: |-
+      if [ -z "${{ inputs.pg_major }}"]; then
+        echo "PG_MAJOR=${{ inputs.pg_major}}" >> $GITHUB_ENV
+      else
+        echo "PG_MAJOR=${{ env.PG_MAJOR }}" >> $GITHUB_ENV
+      fi
+      echo "inputs.pg_major : ${{ inputs.pg_major }}"
+      echo "env.pg_major : ${{ env.PG_MAJOR }}"
     shell: bash
   - uses: actions/download-artifact@v3.0.1
     with:
