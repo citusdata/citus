@@ -9,9 +9,6 @@ runs:
   using: composite
   steps:
   - name: Expose $PG_MAJOR to Github Env
-  #       echo "PG_MAJOR=${PG_MAJOR}" >> $GITHUB_ENV
-  #       echo "inputs.pg_major : ${{ inputs.pg_major }}"
-  #       echo "env.PG_MAJOR : ${{ env.PG_MAJOR }}"
     run: |-
         if [ -z "${{ inputs.pg_major }}" ]; then
           echo "PG_MAJOR=${PG_MAJOR}" >> $GITHUB_ENV
