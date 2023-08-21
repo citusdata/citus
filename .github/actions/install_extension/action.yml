@@ -5,6 +5,7 @@ inputs:
   skip_installation:
     required: false
     default: false
+    type: boolean
 runs:
   using: composite
   steps:
@@ -20,7 +21,7 @@ runs:
     with:
       name: build-${{ env.PG_MAJOR }}
   - name: Install Extension
-    if: ${{ !inputs.skip_installation }}
+    if: ${{ inputs.skip_installation == 'false' }}
     run: tar xfv "install-$PG_MAJOR.tar" --directory /
     shell: bash
   - name: Configure
