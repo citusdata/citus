@@ -370,3 +370,25 @@ jobs:
           cd ./src/test/hammerdb
           chmod +x run_hammerdb.sh
           run_hammerdb.sh citusbot_ch_benchmark_rg
+  tpcc_benchmark:
+    if: startsWith(github.ref, 'refs/heads/tpcc_benchmark/')
+    defaults:
+      run:
+        working-directory: "/home/circleci/project"
+    runs-on: ubuntu-latest
+    container:
+      image: buildpack-deps:stretch
+    needs:
+    - build
+    steps:
+    - uses: actions/checkout@v3.5.0
+    - uses: azure/login@v1
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+    - name: install dependencies and run tpcc_benchmark tests
+      uses: azure/CLI@v1
+      with:
+        inlineScript: |
+          cd ./src/test/hammerdb
+          chmod +x run_hammerdb.sh
+          run_hammerdb.sh citusbot_tpcc_benchmark_rg
