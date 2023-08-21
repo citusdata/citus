@@ -302,8 +302,6 @@ jobs:
         skip_installation: true
     - name: Install and test citus upgrade
       run: |-
-        chown -R circleci .
-        gosu circleci ./configure --without-pg-version-check
         # run make check-citus-upgrade for all citus versions
         # the image has ${CITUS_VERSIONS} set with all verions it contains the binaries of
         for citus_version in ${CITUS_VERSIONS}; do \

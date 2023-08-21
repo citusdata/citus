@@ -9,21 +9,21 @@ runs:
   using: composite
   steps:
   - name: Expose $PG_MAJOR to Github Env
+  #       echo "PG_MAJOR=${PG_MAJOR}" >> $GITHUB_ENV
+  #       echo "inputs.pg_major : ${{ inputs.pg_major }}"
+  #       echo "env.PG_MAJOR : ${{ env.PG_MAJOR }}"
     run: |-
-        echo "PG_MAJOR=${PG_MAJOR}" >> $GITHUB_ENV
         if [ -z "${{ inputs.pg_major }}" ]; then
           echo "PG_MAJOR=${PG_MAJOR}" >> $GITHUB_ENV
         else
           echo "PG_MAJOR=${{ inputs.pg_major }}" >> $GITHUB_ENV
         fi
-        echo "inputs.pg_major : ${{ inputs.pg_major }}"
-        echo "env.PG_MAJOR : ${{ env.PG_MAJOR }}"
     shell: bash
   - uses: actions/download-artifact@v3.0.1
     with:
       name: build-${{ env.PG_MAJOR }}
   - name: Install Extension
-    if: ${{ inputs.skip_installation != false }}
+    if: ${{ !inputs.skip_installation }}
     run: tar xfv "install-$PG_MAJOR.tar" --directory /
     shell: bash
   - name: Configure
