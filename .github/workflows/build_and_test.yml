@@ -237,7 +237,7 @@ jobs:
     - uses: "./.github/actions/install_extension"
     - name: Test arbitrary configs
       run: |-
-        TESTS=$(src/test/regress/citus_tests/print_test_names.py | circleci tests split)
+        TESTS=$(src/test/regress/citus_tests/print_test_names.py)
         # Our test suite expects comma separated values
         TESTS=$(echo $TESTS | tr ' ' ',')
         # TESTS will contain subset of configs that will be run on a container and we use multiple containers
@@ -329,9 +329,6 @@ jobs:
       with:
         flags: test_${{ env.pg_major }},upgrade
   upload-coverage:
-    defaults:
-      run:
-        working-directory: "/home/circleci/project"
     runs-on: ubuntu-latest
     container:
       image: citus/exttester:${{ inputs.pg15_version }}${{ inputs.image_suffix }}
@@ -350,9 +347,6 @@ jobs:
         cc-test-reporter upload-coverage -i total.json
   ch_benchmark:
     if: startsWith(github.ref, 'refs/heads/ch_benchmark/')
-    defaults:
-      run:
-        working-directory: "/home/circleci/project"
     runs-on: ubuntu-latest
     container:
       image: buildpack-deps:stretch
@@ -372,9 +366,6 @@ jobs:
           run_hammerdb.sh citusbot_ch_benchmark_rg
   tpcc_benchmark:
     if: startsWith(github.ref, 'refs/heads/tpcc_benchmark/')
-    defaults:
-      run:
-        working-directory: "/home/circleci/project"
     runs-on: ubuntu-latest
     container:
       image: buildpack-deps:stretch
