@@ -2195,6 +2195,10 @@ CitusHasBeenLoaded(void)
 	Assert(!(MetadataCache.extensionLoaded && MetadataCache.extensionNotLoaded));
 
 
+	/*
+	 * We do not use Citus hooks during CREATE/ALTER EXTENSION citus
+	 * since the objects used by the C code might be not be there yet.
+	 */
 	if (creating_extension)
 	{
 		Oid citusExtensionOid = get_extension_oid("citus", true);
@@ -2210,8 +2214,6 @@ CitusHasBeenLoaded(void)
 	 *  MetadataCache.extensionNotLoaded = false
 	 * means that the cache is invalid. Reevaluate the flags.
 	 */
-
-
 	if (!MetadataCache.extensionLoaded && !MetadataCache.extensionNotLoaded)
 	{
 		/*
