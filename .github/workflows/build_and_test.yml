@@ -29,6 +29,9 @@ on:
       pgupgrade_image_name:
         required: false
         default: "citus/pgupgradetester"
+      citusupgrade_image_name:
+        required: false
+        default: "citus/citusupgradetester"
 # env:
 #   AZURE_SP: xxxx
 #   AZURE_SP_PASSWORD: xxxx
@@ -238,7 +241,7 @@ jobs:
         pg_version:
           - ${{ inputs.pg14_version }}
           - ${{ inputs.pg15_version }}
-        parallel: ${{ fromJson('{1,2,3,4,5,6}') }}
+        parallel: [1,2,3,4,5,6]
     steps:
     - uses: "./.github/actions/install_extension"
     - name: Test arbitrary configs
@@ -294,57 +297,49 @@ jobs:
     - uses: "./.github/actions/upload_coverage"
       with:
         flags: test_${{ env.old_pg_major }}_${{ env.new_pg_major }},upgrade
-  # test-citus-upgrade:
-
-  #   defaults:
-  #     run:
-  #       working-directory: "/home/circleci/project"
-  #   runs-on: ubuntu-latest
-  #   container:
-  #     image: "${{ env.image }}"
-  #   needs:
-  #   - build-14
-  #   env:
-  #     pg_major: 14
-  #     image: citus/citusupgradetester
-  #     image_tag: "${{ inputs.pg14_version }}"
-  #   steps:
-  #   - uses: actions/checkout@v3.5.0
-  #   - uses: actions/download-artifact@v3.0.1
-  #     with:
-  #       path: "."
-  #   - uses: "./.github/actions/configure"
-  #   - uses: "./.github/actions/enable_core"
-  #   - name: Install and test citus upgrade
-  #     run: |-
-  #       # run make check-citus-upgrade for all citus versions
-  #       # the image has ${CITUS_VERSIONS} set with all verions it contains the binaries of
-  #       for citus_version in ${CITUS_VERSIONS}; do \
-  #         gosu circleci \
-  #           make -C src/test/regress \
-  #             check-citus-upgrade \
-  #             bindir=/usr/lib/postgresql/${PG_MAJOR}/bin \
-  #             citus-old-version=${citus_version} \
-  #             citus-pre-tar=/install-pg${PG_MAJOR}-citus${citus_version}.tar \
-  #             citus-post-tar=/home/circleci/project/install-$PG_MAJOR.tar; \
-  #       done;
-  #       # run make check-citus-upgrade-mixed for all citus versions
-  #       # the image has ${CITUS_VERSIONS} set with all verions it contains the binaries of
-  #       for citus_version in ${CITUS_VERSIONS}; do \
-  #         gosu circleci \
-  #           make -C src/test/regress \
-  #             check-citus-upgrade-mixed \
-  #             citus-old-version=${citus_version} \
-  #             bindir=/usr/lib/postgresql/${PG_MAJOR}/bin \
-  #             citus-pre-tar=/install-pg${PG_MAJOR}-citus${citus_version}.tar \
-  #             citus-post-tar=/home/circleci/project/install-$PG_MAJOR.tar; \
-  #       done;
-  #   - uses: "./.github/actions/save_logs_and_results"
-  #   - uses: "./.github/actions/save_regressions"
-  #   - uses: "./.github/actions/stack_trace"
-  #   - uses: "./.github/actions/upload_coverage"
-  #     with:
-  #       flags: test_${{ env.pg_major }},upgrade
+  test-citus-upgrade:
+    runs-on: ubuntu-latest
+    container:
+      image: "${{ inputs.citusupgrade_image_name }}:${{ inputs.pg14_version }}${{ inputs.image_suffix }}"
+    needs:
+    - build
+    steps:
+    - uses: actions/checkout@v3.5.0
+    - uses: actions/download-artifact@v3.0.1
+      with:
+        path: "."
+    - uses: "./.github/actions/configure"
+    - uses: "./.github/actions/enable_core"
+    - name: Install and test citus upgrade
+      run: |-
+        # run make check-citus-upgrade for all citus versions
+        # the image has ${CITUS_VERSIONS} set with all verions it contains the binaries of
+        for citus_version in ${CITUS_VERSIONS}; do \
+          gosu circleci \
+            make -C src/test/regress \
+              check-citus-upgrade \
+              bindir=/usr/lib/postgresql/${PG_MAJOR}/bin \
+              citus-old-version=${citus_version} \
+              citus-pre-tar=/install-pg${PG_MAJOR}-citus${citus_version}.tar \
+              citus-post-tar=/home/circleci/project/install-$PG_MAJOR.tar; \
+        done;
+        # run make check-citus-upgrade-mixed for all citus versions
+        # the image has ${CITUS_VERSIONS} set with all verions it contains the binaries of
+        for citus_version in ${CITUS_VERSIONS}; do \
+          gosu circleci \
+            make -C src/test/regress \
+              check-citus-upgrade-mixed \
+              citus-old-version=${citus_version} \
+              bindir=/usr/lib/postgresql/${PG_MAJOR}/bin \
+              citus-pre-tar=/install-pg${PG_MAJOR}-citus${citus_version}.tar \
+              citus-post-tar=/home/circleci/project/install-$PG_MAJOR.tar; \
+        done;
+    - uses: "./.github/actions/save_logs_and_results"
+    - uses: "./.github/actions/save_regressions"
+    - uses: "./.github/actions/stack_trace"
+    - uses: "./.github/actions/upload_coverage"
+      with:
+        flags: test_${{ env.pg_major }},upgrade
   # upload-coverage:
   #   defaults:
   #     run:
