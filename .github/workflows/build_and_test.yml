@@ -296,12 +296,10 @@ jobs:
     steps:
     - uses: actions/checkout@v3.5.0
     - uses: actions/download-artifact@v3.0.1
-      with:
-        path: "."
-    - uses: "./.github/actions/configure"
-    - uses: "./.github/actions/enable_core"
     - name: Install and test citus upgrade
       run: |-
+        chown -R circleci .
+        gosu circleci ./configure --without-pg-version-check
         # run make check-citus-upgrade for all citus versions
         # the image has ${CITUS_VERSIONS} set with all verions it contains the binaries of
         for citus_version in ${CITUS_VERSIONS}; do \
