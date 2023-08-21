@@ -292,6 +292,7 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: "${{ inputs.citusupgrade_image_name }}:${{ inputs.pg14_version }}${{ inputs.image_suffix }}"
+      options: --user root
     needs:
     - build
     steps:
@@ -310,7 +311,7 @@ jobs:
               bindir=/usr/lib/postgresql/${PG_MAJOR}/bin \
               citus-old-version=${citus_version} \
               citus-pre-tar=/install-pg${PG_MAJOR}-citus${citus_version}.tar \
-              citus-post-tar=../../../install-$PG_MAJOR.tar; \
+              citus-post-tar=${GITHUB_WORKSPACE}/install-$PG_MAJOR.tar; \
         done;
         # run make check-citus-upgrade-mixed for all citus versions
         # the image has ${CITUS_VERSIONS} set with all verions it contains the binaries of
@@ -321,7 +322,7 @@ jobs:
               citus-old-version=${citus_version} \
               bindir=/usr/lib/postgresql/${PG_MAJOR}/bin \
               citus-pre-tar=/install-pg${PG_MAJOR}-citus${citus_version}.tar \
-              citus-post-tar=../../../install-$PG_MAJOR.tar; \
+              citus-post-tar=${GITHUB_WORKSPACE}/install-$PG_MAJOR.tar; \
         done;
     - uses: "./.github/actions/save_logs_and_results"
     - uses: "./.github/actions/upload_coverage"
