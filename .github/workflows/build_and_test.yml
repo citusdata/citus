@@ -309,7 +309,7 @@ jobs:
               check-citus-upgrade \
               bindir=/usr/lib/postgresql/${PG_MAJOR}/bin \
               citus-old-version=${citus_version} \
-              citus-pre-tar=../../../install-pg${PG_MAJOR}-citus${citus_version}.tar \
+              citus-pre-tar=/install-pg${PG_MAJOR}-citus${citus_version}.tar \
               citus-post-tar=../../../install-$PG_MAJOR.tar; \
         done;
         # run make check-citus-upgrade-mixed for all citus versions
@@ -320,7 +320,7 @@ jobs:
               check-citus-upgrade-mixed \
               citus-old-version=${citus_version} \
               bindir=/usr/lib/postgresql/${PG_MAJOR}/bin \
-              citus-pre-tar=../../../install-pg${PG_MAJOR}-citus${citus_version}.tar \
+              citus-pre-tar=/install-pg${PG_MAJOR}-citus${citus_version}.tar \
               citus-post-tar=../../../install-$PG_MAJOR.tar; \
         done;
     - uses: "./.github/actions/save_logs_and_results"
