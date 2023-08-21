@@ -321,7 +321,7 @@ jobs:
               citus-old-version=${citus_version} \
               bindir=/usr/lib/postgresql/${PG_MAJOR}/bin \
               citus-pre-tar=/install-pg${PG_MAJOR}-citus${citus_version}.tar \
-              citus-post-tar=/home/circleci/project/install-$PG_MAJOR.tar; \
+              citus-post-tar=/install-$PG_MAJOR.tar; \
         done;
     - uses: "./.github/actions/save_logs_and_results"
     - uses: "./.github/actions/save_regressions"
