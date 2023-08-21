@@ -183,7 +183,6 @@ jobs:
             pg_version: ${{ inputs.pg15_version }}
             suite: regress
             image_name: ${{ inputs.fail_test_image_name }}
-
     runs-on: ubuntu-latest
     container:
       image: "${{ matrix.image_name }}:${{ matrix.pg_version }}${{ inputs.image_suffix }}"
