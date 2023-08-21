@@ -348,3 +348,25 @@ jobs:
       run: |-
         cc-test-reporter sum-coverage codeclimate/*.json -o total.json
         cc-test-reporter upload-coverage -i total.json
+  ch_benchmark:
+    if: startsWith(github.ref, 'refs/heads/ch_benchmark/')
+    defaults:
+      run:
+        working-directory: "/home/circleci/project"
+    runs-on: ubuntu-latest
+    container:
+      image: buildpack-deps:stretch
+    needs:
+    - build
+    steps:
+    - uses: actions/checkout@v3.5.0
+    - uses: azure/login@v1
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+    - name: install dependencies and run ch_benchmark tests
+      uses: azure/CLI@v1
+      with:
+        inlineScript: |
+          cd ./src/test/hammerdb
+          chmod +x run_hammerdb.sh
+          run_hammerdb.sh citusbot_ch_benchmark_rg
