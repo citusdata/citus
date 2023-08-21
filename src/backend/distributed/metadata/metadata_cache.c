@@ -2194,18 +2194,23 @@ CitusHasBeenLoaded(void)
 	 */
 	Assert(!(MetadataCache.extensionLoaded && MetadataCache.extensionNotLoaded));
 
+
+	if (creating_extension)
+	{
+		Oid citusExtensionOid = get_extension_oid("citus", true);
+
+		if (CurrentExtensionObject == citusExtensionOid)
+		{
+			return false;
+		}
+	}
+
 	/*
 	 *  MetadataCache.extensionLoaded = false
 	 *  MetadataCache.extensionNotLoaded = false
 	 * means that the cache is invalid. Reevaluate the flags.
 	 */
 
-	Oid citusExtensionOid = get_extension_oid("citus", true);
-
-	if (creating_extension && (CurrentExtensionObject == citusExtensionOid))
-	{
-		return false;
-	}
 
 	if (!MetadataCache.extensionLoaded && !MetadataCache.extensionNotLoaded)
 	{
