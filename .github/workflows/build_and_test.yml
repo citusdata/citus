@@ -289,7 +289,7 @@ jobs:
       with:
         flags: test_${{ env.old_pg_major }}_${{ env.new_pg_major }},upgrade
   test-citus-upgrade:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest-16core
     container:
       image: "${{ inputs.citusupgrade_image_name }}:${{ inputs.pg14_version }}${{ inputs.image_suffix }}"
       options: --user root
