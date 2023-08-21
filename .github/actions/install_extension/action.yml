@@ -9,7 +9,7 @@ runs:
     run: |-
       [ -z "${{ inputs.pg_major }}"] &&
         echo "PG_MAJOR=${PG_MAJOR}" ||
-        echo "PG_MAJOR=${{ inputs.pg_major }}
+        echo "PG_MAJOR=${{ inputs.pg_major }}"
         >> $GITHUB_ENV
       echo "inputs.pg_major : ${{ inputs.pg_major }}"
       echo "env.PG_MAJOR : ${{ env.PG_MAJOR }}"
