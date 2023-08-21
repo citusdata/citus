@@ -99,7 +99,7 @@ jobs:
         pg_version:
           - ${{ inputs.pg14_version }}
           - ${{ inputs.pg15_version }}
-    runs-on: ubuntu-latest-32core
+    runs-on: ubuntu-latest-16core
     container:
       image: "${{ matrix.image_name }}:${{ matrix.pg_version  }}${{ matrix.image_suffix }}"
       options: --user root
@@ -182,7 +182,7 @@ jobs:
             pg_version: ${{ inputs.pg15_version }}
             suite: regress
             image_name: ${{ inputs.fail_test_image_name }}
-    runs-on: ubuntu-latest-32core
+    runs-on: ubuntu-latest-16core
     container:
       image: "${{ matrix.image_name }}:${{ matrix.pg_version }}${{ inputs.image_suffix }}"
       options: --user root
@@ -216,7 +216,7 @@ jobs:
           count: 6
   test-arbitrary-configs:
     name: PG${{ matrix.pg_version }} - regress - check-arbitrary-configs
-    runs-on: ubuntu-latest-32core
+    runs-on: ubuntu-latest-16core
     container:
       image: "${{ matrix.image_name }}:${{ matrix.pg_version }}${{ inputs.image_suffix }}"
       options: --user root
