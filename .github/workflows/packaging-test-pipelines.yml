@@ -119,7 +119,8 @@ jobs:
           - debian-buster-all
           - debian-bookworm-all
           - debian-bullseye-all
-          - ubuntu-bionic-all
+          # temporarily disabled since postgres 16 is not available for ubuntu/bionic
+          # - ubuntu-bionic-all
           - ubuntu-focal-all
           - ubuntu-jammy-all
           - ubuntu-kinetic-all
