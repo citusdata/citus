@@ -298,6 +298,8 @@ jobs:
     steps:
     - uses: actions/checkout@v3.5.0
     - uses: "./.github/actions/install_extension"
+      with:
+        skip_installation: true
     - name: Install and test citus upgrade
       run: |-
         chown -R circleci .
