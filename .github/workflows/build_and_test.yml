@@ -396,10 +396,13 @@ jobs:
   test-flakyness-pre:
     name: Detect regression tests need to be ran
     runs-on: ubuntu-latest
+    needs: build
     outputs:
       tests: ${{ steps.detect-regression-tests.outputs.tests }}
     steps:
     - uses: actions/checkout@v3.5.0
+      with:
+        fetch-depth: 0
     - name: Detect regression tests need to be ran
       id: detect-regression-tests
       run: |-
@@ -426,10 +429,10 @@ jobs:
           count: 32
   test-flakyness:
     if: ${{ needs.test-flakyness-pre.outputs.tests != ''}}
-    name: Runs a test multiple times to see if it's flaky
+    name: Test flakyness
     runs-on: ubuntu-latest
     container:
-      image: ${{ inputs.fail_test_image_name }}
+      image: ${{ inputs.fail_test_image_name }}-${{ inputs.pg15_version }}${{ inputs.image_suffix }}
       options: --user root
     env:
       runs: 8
