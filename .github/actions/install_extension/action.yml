@@ -7,7 +7,7 @@ runs:
   steps:
   - name: Expose $PG_MAJOR to Github Env
     run: |-
-      [ -z "${{ inputs.pg_major }}"] &&
+      [ -z "${{ inputs.pg_major }}" ] &&
         echo "PG_MAJOR=${PG_MAJOR}" ||
         echo "PG_MAJOR=${{ inputs.pg_major }}"
         >> $GITHUB_ENV
