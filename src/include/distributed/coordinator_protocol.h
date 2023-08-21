@@ -156,7 +156,7 @@ struct TableDDLCommand
 
 	/*
 	 * This union contains one (1) typed field for every implementation for
-	 * TableDDLCommand. A union enforces no overloading of fields but instead requiers at
+	 * TableDDLCommand. A union enforces no overloading of fields but instead requires at
 	 * most one of the fields to be used at any time.
 	 */
 	union

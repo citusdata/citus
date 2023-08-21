@@ -20,6 +20,7 @@
 extern bool AllDistributionKeysInQueryAreEqual(Query *originalQuery,
 											   PlannerRestrictionContext *
 											   plannerRestrictionContext);
+extern bool IsRelOptOuterJoin(PlannerInfo *root, int varNo);
 extern bool SafeToPushdownUnionSubquery(Query *originalQuery, PlannerRestrictionContext *
 										plannerRestrictionContext);
 extern bool ContainsUnionSubquery(Query *queryTree);

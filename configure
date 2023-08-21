@@ -2588,7 +2588,7 @@ fi
 if test "$with_pg_version_check" = no; then
     { $as_echo "$as_me:${as_lineno-$LINENO}: building against PostgreSQL $version_num (skipped compatibility check)" >&5
 $as_echo "$as_me: building against PostgreSQL $version_num (skipped compatibility check)" >&6;}
-elif test "$version_num" != '14' -a "$version_num" != '15'; then
+elif test "$version_num" != '14' -a "$version_num" != '15' -a  "$version_num" != '16'; then
    as_fn_error $? "Citus is not compatible with the detected PostgreSQL version ${version_num}." "$LINENO" 5
 else
    { $as_echo "$as_me:${as_lineno-$LINENO}: building against PostgreSQL $version_num" >&5

@@ -1414,6 +1414,12 @@ RelationInfoContainsOnlyRecurringTuples(PlannerInfo *plannerInfo, Relids relids)
 
 	while ((relationId = bms_next_member(relids, relationId)) >= 0)
 	{
+		/* outer join RTE check in PG16 */
+		if (IsRelOptOuterJoin(plannerInfo, relationId))
+		{
+			continue;
+		}
+
 		RangeTblEntry *rangeTableEntry = plannerInfo->simple_rte_array[relationId];
 
 		if (FindNodeMatchingCheckFunctionInRangeTableList(list_make1(rangeTableEntry),
