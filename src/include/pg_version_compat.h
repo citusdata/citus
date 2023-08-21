@@ -27,8 +27,6 @@
 
 #define float_abs(a) fabs(a)
 
-#define RANGE_VAR_TABLE_CALLBACK RangeVarCallbackMaintainsTable
-
 #define tuplesort_getdatum_compat(a, b, c, d, e, f) tuplesort_getdatum(a, b, c, d, e, f)
 
 static inline struct config_generic **
@@ -56,8 +54,6 @@ get_guc_variables_compat(int *gucCount)
 #include "storage/relfilenode.h"
 #include "utils/guc.h"
 #include "utils/guc_tables.h"
-
-#define RANGE_VAR_TABLE_CALLBACK RangeVarCallbackOwnsTable
 
 #define pg_clean_ascii_compat(a, b) pg_clean_ascii(a)
 
@@ -143,6 +139,13 @@ object_aclcheck(Oid classid, Oid objectid, Oid roleid, AclMode mode)
 
 
 typedef bool TU_UpdateIndexes;
+
+/*
+ * we define RTEPermissionInfo for PG16 compatibility
+ * There are some functions that need to include RTEPermissionInfo in their signature
+ * for PG14/PG15 we pass a NULL argument in these functions
+ */
+typedef RangeTblEntry RTEPermissionInfo;
 
 #endif
 

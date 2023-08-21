@@ -304,18 +304,18 @@ SELECT create_distributed_table('view_table', 'a');
 
 INSERT INTO view_table VALUES (1, 2, 3), (2, 4, 6), (3, 6, 9);
 CREATE SCHEMA another_schema;
-CREATE VIEW undis_view1 AS SELECT a, b FROM view_table;
-CREATE VIEW undis_view2 AS SELECT a, c FROM view_table;
+CREATE VIEW undis_view1 AS SELECT a, b FROM view_table table_name_for_view;
+CREATE VIEW undis_view2 AS SELECT a, c FROM view_table table_name_for_view;
 CREATE VIEW another_schema.undis_view3 AS SELECT b, c FROM undis_view1 JOIN undis_view2 ON undis_view1.a = undis_view2.a;
 SELECT schemaname, viewname, viewowner, definition FROM pg_views WHERE viewname LIKE 'undis\_view%' ORDER BY viewname;
      schemaname     |  viewname   | viewowner |                          definition
 ---------------------------------------------------------------------
- undistribute_table | undis_view1 | postgres  |  SELECT view_table.a,                                       +
-                    |             |           |     view_table.b                                            +
-                    |             |           |    FROM view_table;
- undistribute_table | undis_view2 | postgres  |  SELECT view_table.a,                                       +
-                    |             |           |     view_table.c                                            +
-                    |             |           |    FROM view_table;
+ undistribute_table | undis_view1 | postgres  |  SELECT a,                              +
+                    |             |           |     b                                   +
+                    |             |           |    FROM view_table table_name_for_view;
+ undistribute_table | undis_view2 | postgres  |  SELECT a,                              +
+                    |             |           |     c                                   +
+                    |             |           |    FROM view_table table_name_for_view;
  another_schema     | undis_view3 | postgres  |  SELECT undis_view1.b,                                      +
                     |             |           |     undis_view2.c                                           +
                     |             |           |    FROM (undis_view1                                        +
@@ -348,12 +348,12 @@ NOTICE:  renaming the new table to undistribute_table.view_table
 SELECT schemaname, viewname, viewowner, definition FROM pg_views WHERE viewname LIKE 'undis\_view%' ORDER BY viewname;
      schemaname     |  viewname   | viewowner |                          definition
 ---------------------------------------------------------------------
- undistribute_table | undis_view1 | postgres  |  SELECT view_table.a,                                       +
-                    |             |           |     view_table.b                                            +
-                    |             |           |    FROM view_table;
- undistribute_table | undis_view2 | postgres  |  SELECT view_table.a,                                       +
-                    |             |           |     view_table.c                                            +
-                    |             |           |    FROM view_table;
+ undistribute_table | undis_view1 | postgres  |  SELECT a,                              +
+                    |             |           |     b                                   +
+                    |             |           |    FROM view_table table_name_for_view;
+ undistribute_table | undis_view2 | postgres  |  SELECT a,                              +
+                    |             |           |     c                                   +
+                    |             |           |    FROM view_table table_name_for_view;
  another_schema     | undis_view3 | postgres  |  SELECT undis_view1.b,                                      +
                     |             |           |     undis_view2.c                                           +
                     |             |           |    FROM (undis_view1                                        +
@@ -400,22 +400,6 @@ NOTICE:  renaming the new table to undistribute_table.dist_type_table
 
 (1 row)
 
--- test CREATE RULE with ON SELECT
-CREATE TABLE rule_table_1 (a INT);
-CREATE TABLE rule_table_2 (a INT);
-SELECT create_distributed_table('rule_table_2', 'a');
- create_distributed_table
----------------------------------------------------------------------
-
-(1 row)
-
-CREATE RULE "_RETURN" AS ON SELECT TO rule_table_1 DO INSTEAD SELECT * FROM rule_table_2;
--- the CREATE RULE turns rule_table_1 into a view
-ALTER EXTENSION plpgsql ADD VIEW rule_table_1;
-NOTICE:  Citus does not propagate adding/dropping member objects
-HINT:  You can add/drop the member objects on the workers as well.
-SELECT undistribute_table('rule_table_2');
-ERROR:  cannot alter table because an extension depends on it
 -- test CREATE RULE without ON SELECT
 CREATE TABLE rule_table_3 (a INT);
 CREATE TABLE rule_table_4 (a INT);
@@ -444,9 +428,6 @@ NOTICE:  renaming the new table to undistribute_table.rule_table_4
 ALTER EXTENSION plpgsql DROP VIEW extension_view;
 NOTICE:  Citus does not propagate adding/dropping member objects
 HINT:  You can add/drop the member objects on the workers as well.
-ALTER EXTENSION plpgsql DROP VIEW rule_table_1;
-NOTICE:  Citus does not propagate adding/dropping member objects
-HINT:  You can add/drop the member objects on the workers as well.
 ALTER EXTENSION plpgsql DROP TABLE rule_table_3;
 NOTICE:  Citus does not propagate adding/dropping member objects
 HINT:  You can add/drop the member objects on the workers as well.
@@ -456,11 +437,9 @@ DETAIL:  drop cascades to view undis_view1
 drop cascades to view undis_view2
 drop cascades to view another_schema.undis_view3
 DROP SCHEMA undistribute_table, another_schema CASCADE;
-NOTICE:  drop cascades to 7 other objects
+NOTICE:  drop cascades to 5 other objects
 DETAIL:  drop cascades to table extension_table
 drop cascades to view extension_view
 drop cascades to table dist_type_table
-drop cascades to table rule_table_2
-drop cascades to view rule_table_1
 drop cascades to table rule_table_3
 drop cascades to table rule_table_4

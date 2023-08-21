@@ -106,6 +106,15 @@ BEGIN
     -- restore citus catalog tables
     --
     INSERT INTO pg_catalog.pg_dist_partition SELECT * FROM public.pg_dist_partition;
+
+    -- if we are upgrading from PG14/PG15 to PG16+,
+    -- we need to regenerate the partkeys because they will include varnullingrels as well.
+    UPDATE pg_catalog.pg_dist_partition
+    SET partkey = column_name_to_column(pg_dist_partkeys_pre_16_upgrade.logicalrelid, col_name)
+    FROM public.pg_dist_partkeys_pre_16_upgrade
+    WHERE pg_dist_partkeys_pre_16_upgrade.logicalrelid = pg_dist_partition.logicalrelid;
+    DROP TABLE public.pg_dist_partkeys_pre_16_upgrade;
+
     INSERT INTO pg_catalog.pg_dist_shard SELECT * FROM public.pg_dist_shard;
     INSERT INTO pg_catalog.pg_dist_placement SELECT * FROM public.pg_dist_placement;
     INSERT INTO pg_catalog.pg_dist_node_metadata SELECT * FROM public.pg_dist_node_metadata;

@@ -1079,19 +1079,19 @@ SELECT create_distributed_table('table1','tenant_id');
 
 (1 row)
 
-CREATE VIEW table1_view AS SELECT * from table1 where id < 100;
+CREATE VIEW table1_view AS SELECT * from table1 table_name_for_view where id < 100;
 -- all of the above queries are non-colocated subquery joins
 -- because the views are replaced with subqueries
 UPDATE table2 SET id=20 FROM table1_view WHERE table1_view.id=table2.id;
 DEBUG:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
 DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  generating subplan XXX_1 for subquery SELECT table1.id, table1.tenant_id FROM non_colocated_subquery.table1 WHERE (table1.id OPERATOR(pg_catalog.<) 100)
+DEBUG:  generating subplan XXX_1 for subquery SELECT id, tenant_id FROM non_colocated_subquery.table1 table_name_for_view WHERE (id OPERATOR(pg_catalog.<) 100)
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: UPDATE non_colocated_subquery.table2 SET id = 20 FROM (SELECT intermediate_result.id, intermediate_result.tenant_id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id integer, tenant_id integer)) table1_view WHERE (table1_view.id OPERATOR(pg_catalog.=) table2.id)
 DEBUG:  Creating router plan
 UPDATE table2_p1 SET id=20 FROM table1_view WHERE table1_view.id=table2_p1.id;
 DEBUG:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
 DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  generating subplan XXX_1 for subquery SELECT table1.id, table1.tenant_id FROM non_colocated_subquery.table1 WHERE (table1.id OPERATOR(pg_catalog.<) 100)
+DEBUG:  generating subplan XXX_1 for subquery SELECT id, tenant_id FROM non_colocated_subquery.table1 table_name_for_view WHERE (id OPERATOR(pg_catalog.<) 100)
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: UPDATE non_colocated_subquery.table2_p1 SET id = 20 FROM (SELECT intermediate_result.id, intermediate_result.tenant_id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id integer, tenant_id integer)) table1_view WHERE (table1_view.id OPERATOR(pg_catalog.=) table2_p1.id)
 DEBUG:  Creating router plan
 RESET client_min_messages;

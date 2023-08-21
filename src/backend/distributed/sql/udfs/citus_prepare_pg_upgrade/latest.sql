@@ -84,6 +84,13 @@ BEGIN
        objects.colocationid
     FROM pg_catalog.pg_dist_object objects,
          pg_catalog.pg_identify_object_as_address(objects.classid, objects.objid, objects.objsubid) address;
+
+    -- if we are upgrading from PG14/PG15 to PG16+,
+    -- we will need to regenerate the partkeys because they will include varnullingrels as well.
+    -- so we save the partkeys as column names here
+    CREATE TABLE IF NOT EXISTS public.pg_dist_partkeys_pre_16_upgrade AS
+    SELECT logicalrelid, column_to_column_name(logicalrelid, partkey) as col_name
+    FROM pg_catalog.pg_dist_partition WHERE partkey IS NOT NULL AND partkey NOT ILIKE '%varnullingrels%';
 END;
 $cppu$;
 

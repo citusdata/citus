@@ -362,9 +362,6 @@ select typdefault from (
         select a from tbl
         where typdefault > 'a'
         limit 1) as subq_0
-    where (
-      select true as bool from pg_catalog.pg_am limit 1
-    )
   ) as subq_1
 ) as subq_2;
 
@@ -379,9 +376,6 @@ select typdefault from (
         select a from tbl
         where typdefault > 'a'
         limit 1) as subq_0
-    where (
-      select true as bool from pg_catalog.pg_am limit 1
-    )
   ) as subq_1
 ) as subq_2;
 

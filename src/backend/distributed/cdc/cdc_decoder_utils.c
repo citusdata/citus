@@ -72,7 +72,7 @@ DistShardRelationId(void)
 
 
 /*
- * DistShardRelationId returns the relation id of the pg_dist_shard
+ * DistShardShardidIndexId returns the relation id of the pg_dist_shard_shardid_index
  */
 static Oid
 DistShardShardidIndexId(void)
@@ -87,7 +87,7 @@ DistShardShardidIndexId(void)
 
 
 /*
- * DistShardRelationId returns the relation id of the pg_dist_shard
+ * DistPartitionRelationId returns the relation id of the pg_dist_partition
  */
 static Oid
 DistPartitionRelationId(void)
@@ -376,7 +376,8 @@ CdcIsReferenceTableViaCatalog(Oid relationId)
 	 * A table is a reference table when its partition method is 'none'
 	 * and replication model is 'two phase commit'
 	 */
-	return partitionMethodChar == 'n' && replicationModelChar == 't';
+	return partitionMethodChar == DISTRIBUTE_BY_NONE &&
+		   replicationModelChar == REPLICATION_MODEL_2PC;
 }
 
 

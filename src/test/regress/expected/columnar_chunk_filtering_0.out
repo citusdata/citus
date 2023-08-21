@@ -374,10 +374,10 @@ SELECT * FROM r1, coltest WHERE
          Filter: ((n1 % 10) = 0)
          Rows Removed by Filter: 1
    ->  Custom Scan (ColumnarScan) on coltest (actual rows=1 loops=4)
-         Filter: ((x1 > 15000) AND (id = r1.id1) AND ((x1)::text > '000000'::text))
+         Filter: ((x1 > 15000) AND (r1.id1 = id) AND ((x1)::text > '000000'::text))
          Rows Removed by Filter: 999
          Columnar Projected Columns: id, x1, x2, x3
-         Columnar Chunk Group Filters: ((x1 > 15000) AND (id = r1.id1))
+         Columnar Chunk Group Filters: ((x1 > 15000) AND (r1.id1 = id))
          Columnar Chunk Groups Removed by Filter: 19
 (10 rows)
 
@@ -417,10 +417,10 @@ SELECT * FROM r1, r2, r3, r4, r5, r6, r7, coltest WHERE
                                        ->  Seq Scan on r2 (actual rows=5 loops=5)
                                  ->  Seq Scan on r3 (actual rows=5 loops=5)
                            ->  Custom Scan (ColumnarScan) on coltest (actual rows=1 loops=5)
-                                 Filter: (id = r1.id1)
+                                 Filter: (r1.id1 = id)
                                  Rows Removed by Filter: 999
                                  Columnar Projected Columns: id, x1, x2, x3
-                                 Columnar Chunk Group Filters: (id = r1.id1)
+                                 Columnar Chunk Group Filters: (r1.id1 = id)
                                  Columnar Chunk Groups Removed by Filter: 19
                      ->  Seq Scan on r4 (actual rows=1 loops=5)
                ->  Seq Scan on r5 (actual rows=1 loops=1)
@@ -592,10 +592,10 @@ DETAIL:  parameterized by rels {r3}; 2 clauses pushed down
          ->  Nested Loop (actual rows=3 loops=1)
                ->  Seq Scan on r1 (actual rows=5 loops=1)
                ->  Custom Scan (ColumnarScan) on coltest (actual rows=1 loops=5)
-                     Filter: ((r1.n1 > x1) AND (id = r1.id1))
+                     Filter: ((r1.n1 > x1) AND (r1.id1 = id))
                      Rows Removed by Filter: 799
                      Columnar Projected Columns: id, x1, x2, x3
-                     Columnar Chunk Group Filters: ((r1.n1 > x1) AND (id = r1.id1))
+                     Columnar Chunk Group Filters: ((r1.n1 > x1) AND (r1.id1 = id))
                      Columnar Chunk Groups Removed by Filter: 19
          ->  Seq Scan on r2 (actual rows=5 loops=3)
    ->  Seq Scan on r3 (actual rows=5 loops=3)
@@ -622,10 +622,10 @@ SELECT * FROM r1, coltest_part WHERE
    ->  Seq Scan on r1 (actual rows=5 loops=1)
    ->  Append (actual rows=1 loops=5)
          ->  Custom Scan (ColumnarScan) on coltest_part0 coltest_part_1 (actual rows=1 loops=3)
-               Filter: ((r1.n1 > x1) AND (id = r1.id1))
+               Filter: ((r1.n1 > x1) AND (r1.id1 = id))
                Rows Removed by Filter: 999
                Columnar Projected Columns: id, x1, x2, x3
-               Columnar Chunk Group Filters: ((r1.n1 > x1) AND (id = r1.id1))
+               Columnar Chunk Group Filters: ((r1.n1 > x1) AND (r1.id1 = id))
                Columnar Chunk Groups Removed by Filter: 9
          ->  Seq Scan on coltest_part1 coltest_part_2 (actual rows=0 loops=2)
                Filter: ((r1.n1 > x1) AND (r1.id1 = id))

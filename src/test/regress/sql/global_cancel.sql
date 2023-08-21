@@ -47,9 +47,12 @@ RESET client_min_messages;
 
 SELECT pg_typeof(:maintenance_daemon_gpid);
 
+\set VERBOSITY terse
+
 SELECT pg_cancel_backend(:maintenance_daemon_gpid);
 SELECT pg_terminate_backend(:maintenance_daemon_gpid);
 
+\set VERBOSITY default
 -- we can cancel our own backend
 SELECT pg_cancel_backend(citus_backend_gpid());
 
