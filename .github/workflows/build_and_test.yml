@@ -99,7 +99,7 @@ jobs:
         pg_version:
           - ${{ inputs.pg14_version }}
           - ${{ inputs.pg15_version }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest-32core
     container:
       image: "${{ matrix.image_name }}:${{ matrix.pg_version  }}${{ matrix.image_suffix }}"
       options: --user root
