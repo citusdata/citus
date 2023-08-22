@@ -215,8 +215,10 @@ jobs:
         with:
           count: 6
   test-arbitrary-configs:
+    if: ${{ false }}
+    # disable this job till we have 16core VMs
     name: PG${{ matrix.pg_version }} - regress - check-arbitrary-configs
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest #-16core
     container:
       image: "${{ matrix.image_name }}:${{ matrix.pg_version }}${{ inputs.image_suffix }}"
       options: --user root
