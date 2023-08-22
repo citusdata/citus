@@ -153,6 +153,26 @@ SELECT
 FROM
 	(SELECT js::jsonb FROM test_is_json WHERE js IS JSON) foo(js);
 
+-- SYSTEM_USER
+-- Relevant PG commit:
+-- https://github.com/postgres/postgres/commit/0823d061
+
+CREATE TABLE table_name_for_view(id int, val_1 text);
+SELECT create_distributed_table('table_name_for_view', 'id');
+INSERT INTO table_name_for_view VALUES (1, 'test');
+
+-- define a view that uses SYSTEM_USER keyword
+CREATE VIEW prop_view_1 AS
+    SELECT *, SYSTEM_USER AS su FROM table_name_for_view;
+SELECT * FROM prop_view_1;
+
+-- check definition with SYSTEM_USER is correctly propagated to workers
+\c - - - :worker_1_port
+SELECT pg_get_viewdef('pg16.prop_view_1', true);
+
+\c - - - :master_port
+SET search_path TO pg16;
+
 \set VERBOSITY terse
 SET client_min_messages TO ERROR;
 DROP SCHEMA pg16 CASCADE;

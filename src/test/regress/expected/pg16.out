@@ -262,6 +262,39 @@ FROM
  {"a": 1, "b": [{"a": 2, "b": 0}]}   | t       | f           | t        | t         | f        | f         | t              | t
 (11 rows)
 
+-- SYSTEM_USER
+-- Relevant PG commit:
+-- https://github.com/postgres/postgres/commit/0823d061
+CREATE TABLE table_name_for_view(id int, val_1 text);
+SELECT create_distributed_table('table_name_for_view', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO table_name_for_view VALUES (1, 'test');
+-- define a view that uses SYSTEM_USER keyword
+CREATE VIEW prop_view_1 AS
+    SELECT *, SYSTEM_USER AS su FROM table_name_for_view;
+SELECT * FROM prop_view_1;
+ id | val_1 | su
+---------------------------------------------------------------------
+  1 | test  |
+(1 row)
+
+-- check definition with SYSTEM_USER is correctly propagated to workers
+\c - - - :worker_1_port
+SELECT pg_get_viewdef('pg16.prop_view_1', true);
+          pg_get_viewdef
+---------------------------------------------------------------------
+  SELECT id,                      +
+     val_1,                       +
+     SYSTEM_USER AS su            +
+    FROM pg16.table_name_for_view;
+(1 row)
+
+\c - - - :master_port
+SET search_path TO pg16;
 \set VERBOSITY terse
 SET client_min_messages TO ERROR;
 DROP SCHEMA pg16 CASCADE;
