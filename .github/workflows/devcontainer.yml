@@ -1,5 +1,8 @@
 name: "Build devcontainer"
 
+# Since building of containers can be quite time consuming, and take up some storage,
+# there is no need to finish a build for a tag if new changes are concurrently being made.
+# This cancels any previous builds for the same tag, and only the latest one will be kept.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
