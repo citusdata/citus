@@ -24,7 +24,7 @@ runs:
         /tmp/pg_upgrade_newData_logs
   - name: Publish regression.diffs
     run: |-
-      diffs = "$(find src/test/regress -name "*.diffs" -exec cat {} +)"
+      diffs="$(find src/test/regress -name "*.diffs" -exec cat {} +)"
       if [ -z "$diffs" ]; then
         echo '```diff' >> $GITHUB_STEP_SUMMARY
         echo $diffs >> $GITHUB_STEP_SUMMARY
