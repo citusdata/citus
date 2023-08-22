@@ -45,6 +45,21 @@ SET citus.log_remote_commands TO OFF;
 -- remote commands because it can be flaky
 VACUUM (ONLY_DATABASE_STATS);
 
+-- Proper error when creating statistics without a name on a Citus table
+-- Relevant PG commit:
+-- https://github.com/postgres/postgres/commit/624aa2a13bd02dd584bb0995c883b5b93b2152df
+
+CREATE TABLE test_stats (
+    a   int,
+    b   int
+);
+
+SELECT create_distributed_table('test_stats', 'a');
+
+CREATE STATISTICS (dependencies) ON a, b FROM test_stats;
+CREATE STATISTICS (ndistinct, dependencies) on a, b from test_stats;
+CREATE STATISTICS (ndistinct, dependencies, mcv) on a, b from test_stats;
+
 \set VERBOSITY terse
 SET client_min_messages TO ERROR;
 DROP SCHEMA pg16 CASCADE;
