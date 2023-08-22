@@ -56,6 +56,9 @@ SELECT nodename, nodeport, COUNT(*)
  WHERE placement.groupid = node.groupid
    AND node.noderole = 'primary' GROUP BY nodename, nodeport ORDER BY 1,2;
 
+-- flakyness test
+SELECT floor(random() * 2) + 1;
+
 RESET search_path;
 
 SET client_min_messages TO WARNING;

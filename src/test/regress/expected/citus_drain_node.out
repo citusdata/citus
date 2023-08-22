@@ -115,6 +115,13 @@ SELECT nodename, nodeport, COUNT(*)
  localhost |    57638 |     2
 (2 rows)
 
+-- flakyness test
+SELECT floor(random() * 2) + 1;
+ ?column?
+---------------------------------------------------------------------
+        2
+(1 row)
+
 RESET search_path;
 SET client_min_messages TO WARNING;
 DROP SCHEMA citus_drain_node CASCADE;
