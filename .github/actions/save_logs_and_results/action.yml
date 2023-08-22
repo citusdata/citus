@@ -25,9 +25,13 @@ runs:
   - name: Publish regression.diffs
     run: |-
       if find src/test/regress -name "*.diffs" -type f -print -quit | grep -q .; then
-        echo '```diff' >> $GITHUB_STEP_SUMMARY
-        find src/test/regress -name "*.diffs" -exec cat {} + >> $GITHUB_STEP_SUMMARY
-        echo '```' >> $GITHUB_STEP_SUMMARY
+        diff=find src/test/regress -name "*.diffs" -exec cat {} +
+        if [ -z diff ]; then
+          echo '```diff' >> $GITHUB_STEP_SUMMARY
+          echo $diff >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo $diff
+        fi
       fi
     shell: bash
   - name: Print stack traces
