@@ -26,6 +26,7 @@
 #include "catalog/pg_namespace.h"
 #include "catalog/pg_statistic_ext.h"
 #include "catalog/pg_type.h"
+#include "commands/defrem.h"
 #include "distributed/commands/utility_hook.h"
 #include "distributed/commands.h"
 #include "distributed/deparse_shard_query.h"
@@ -42,6 +43,7 @@
 #include "utils/fmgroids.h"
 #include "utils/fmgrprotos.h"
 #include "utils/lsyscache.h"
+#include "utils/regproc.h"
 #include "utils/relcache.h"
 #include "utils/ruleutils.h"
 #include "utils/syscache.h"
@@ -56,6 +58,11 @@ static char * GenerateAlterIndexColumnSetStatsCommand(char *indexNameWithSchema,
 static Oid GetRelIdByStatsOid(Oid statsOid);
 static char * CreateAlterCommandIfOwnerNotDefault(Oid statsOid);
 static char * CreateAlterCommandIfTargetNotDefault(Oid statsOid);
+#if PG_VERSION_NUM >= PG_VERSION_16
+static char * ChooseExtendedStatisticName(const char *name1, const char *name2,
+										  const char *label, Oid namespaceid);
+static char * ChooseExtendedStatisticNameAddition(List *exprs);
+#endif
 
 /*
  * PreprocessCreateStatisticsStmt is called during the planning phase for
@@ -76,6 +83,22 @@ PreprocessCreateStatisticsStmt(Node *node, const char *queryString,
 	}
 
 	EnsureCoordinator();
+
+#if PG_VERSION_NUM >= PG_VERSION_16
+	if (!(stmt->defnames))
+	{
+		Relation rel = relation_openrv((RangeVar *) relation, ShareUpdateExclusiveLock);
+
+		Oid namespaceId = RelationGetNamespace(rel);
+		char *namestr = ChooseExtendedStatisticName(RelationGetRelationName(rel),
+													ChooseExtendedStatisticNameAddition(
+														stmt->exprs),
+													"stat",
+													namespaceId);
+		stmt->defnames = stringToQualifiedNameList(namestr, NULL);
+		relation_close(rel, ShareUpdateExclusiveLock);
+	}
+#endif
 
 	QualifyTreeNode((Node *) stmt);
 
@@ -780,3 +803,125 @@ CreateAlterCommandIfTargetNotDefault(Oid statsOid)
 
 	return DeparseAlterStatisticsStmt((Node *) alterStatsStmt);
 }
+
+
+#if PG_VERSION_NUM >= PG_VERSION_16
+
+/*
+ * ChooseExtendedStatisticName - copied from PG source
+ *
+ * Select a nonconflicting name for a new statistics object.
+ *
+ * name1, name2, and label are used the same way as for makeObjectName(),
+ * except that the label can't be NULL; digits will be appended to the label
+ * if needed to create a name that is unique within the specified namespace.
+ *
+ * Returns a palloc'd string.
+ *
+ * Note: it is theoretically possible to get a collision anyway, if someone
+ * else chooses the same name concurrently.  This is fairly unlikely to be
+ * a problem in practice, especially if one is holding a share update
+ * exclusive lock on the relation identified by name1.  However, if choosing
+ * multiple names within a single command, you'd better create the new object
+ * and do CommandCounterIncrement before choosing the next one!
+ */
+static char *
+ChooseExtendedStatisticName(const char *name1, const char *name2,
+							const char *label, Oid namespaceid)
+{
+	int pass = 0;
+	char *stxname = NULL;
+	char modlabel[NAMEDATALEN];
+
+	/* try the unmodified label first */
+	strlcpy(modlabel, label, sizeof(modlabel));
+
+	for (;;)
+	{
+		Oid existingstats;
+
+		stxname = makeObjectName(name1, name2, modlabel);
+
+		existingstats = GetSysCacheOid2(STATEXTNAMENSP, Anum_pg_statistic_ext_oid,
+										PointerGetDatum(stxname),
+										ObjectIdGetDatum(namespaceid));
+		if (!OidIsValid(existingstats))
+		{
+			break;
+		}
+
+		/* found a conflict, so try a new name component */
+		pfree(stxname);
+		snprintf(modlabel, sizeof(modlabel), "%s%d", label, ++pass);
+	}
+
+	return stxname;
+}
+
+
+/*
+ * ChooseExtendedStatisticNameAddition - copied from PG source
+ *
+ * Generate "name2" for a new statistics object given the list of column
+ * names for it.  This will be passed to ChooseExtendedStatisticName along
+ * with the parent table name and a suitable label.
+ *
+ * We know that less than NAMEDATALEN characters will actually be used,
+ * so we can truncate the result once we've generated that many.
+ *
+ * XXX see also ChooseForeignKeyConstraintNameAddition and
+ * ChooseIndexNameAddition.
+ */
+static char *
+ChooseExtendedStatisticNameAddition(List *exprs)
+{
+	char buf[NAMEDATALEN * 2];
+	int buflen = 0;
+	ListCell *lc;
+
+	buf[0] = '\0';
+	foreach(lc, exprs)
+	{
+		StatsElem *selem = (StatsElem *) lfirst(lc);
+		const char *name;
+
+		/* It should be one of these, but just skip if it happens not to be */
+		if (!IsA(selem, StatsElem))
+		{
+			continue;
+		}
+
+		name = selem->name;
+
+		if (buflen > 0)
+		{
+			buf[buflen++] = '_';    /* insert _ between names */
+		}
+
+		/*
+		 * We use fixed 'expr' for expressions, which have empty column names.
+		 * For indexes this is handled in ChooseIndexColumnNames, but we have
+		 * no such function for stats and it does not seem worth adding. If a
+		 * better name is needed, the user can specify it explicitly.
+		 */
+		if (!name)
+		{
+			name = "expr";
+		}
+
+		/*
+		 * At this point we have buflen <= NAMEDATALEN.  name should be less
+		 * than NAMEDATALEN already, but use strlcpy for paranoia.
+		 */
+		strlcpy(buf + buflen, name, NAMEDATALEN);
+		buflen += strlen(buf + buflen);
+		if (buflen >= NAMEDATALEN)
+		{
+			break;
+		}
+	}
+	return pstrdup(buf);
+}
+
+
+#endif
