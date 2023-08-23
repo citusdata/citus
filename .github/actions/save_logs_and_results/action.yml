@@ -25,7 +25,7 @@ runs:
   - name: Publish regression.diffs
     run: |-
       diffs="$(find src/test/regress -name "*.diffs" -exec cat {} +)"
-      if [ -z "$diffs" ]; then
+      if ! [ -z "$diffs" ]; then
         echo '```diff' >> $GITHUB_STEP_SUMMARY
         echo $diffs >> $GITHUB_STEP_SUMMARY
         echo '```' >> $GITHUB_STEP_SUMMARY
