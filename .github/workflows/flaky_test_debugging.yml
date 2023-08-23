@@ -52,7 +52,7 @@ jobs:
     name: Test flakyness
     runs-on: ubuntu-latest
     container:
-      image: ${{ vars.test_image_name }}:${{ vars.pg15_version  }}${{ vars.image_suffix }}
+      image: ${{ vars.fail_test_image_name }}:${{ vars.pg15_version  }}${{ vars.image_suffix }}
       options: --user root
     needs:
       [build, prepare_parallelization_matrix]
