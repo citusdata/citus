@@ -17,33 +17,12 @@ on:
         default: 32
         type: number
         description: Number of parallel jobs to run
-env:
-  image_suffix: -v1b94240
-  pg15_version: 15.4
-  build_image_name: citus/extbuilder
-  test_image_name: citus/failtester
 jobs:
-  set_image_names:
-    name: Set CI image names
-    runs-on: ubuntu-latest
-    outputs:
-      build_image: ${{ steps.set_build_image_name.outputs.image }}
-      test_image: ${{ steps.set_test_image_name.outputs.image }}
-    steps:
-    - id: set_build_image_name
-      run: |
-        echo "image=${{ env.build_image_name }}:${{ env.pg15_version  }}${{ env.image_suffix }}" >> "$GITHUB_OUTPUT"
-      shell: bash
-    - id: set_test_image_name
-      run: |
-        echo "image=${{ env.test_image_name }}:${{ env.pg15_version  }}${{ env.image_suffix }}" >> "$GITHUB_OUTPUT"
-      shell: bash
   build:
     name: Build Citus
     runs-on: ubuntu-latest
-    needs: set_image_names
     container:
-      image: ${{ needs.set_image_names.outputs.build_image }}
+      image: ${{ vars.build_image_name }}:${{ vars.pg15_version  }}${{ vars.image_suffix }}
       options: --user root
     steps:
     - uses: actions/checkout@v3.5.0
@@ -73,10 +52,10 @@ jobs:
     name: Test flakyness
     runs-on: ubuntu-latest
     container:
-      image: ${{ needs.set_image_names.outputs.test_image }}
+      image: ${{ vars.test_image_name }}:${{ vars.pg15_version  }}${{ vars.image_suffix }}
       options: --user root
     needs:
-      [set_image_names,  build, prepare_parallelization_matrix]
+      [build, prepare_parallelization_matrix]
     env:
       test: "${{ inputs.flaky_test }}"
       runs: "${{ inputs.flaky_test_runs_per_job }}"
