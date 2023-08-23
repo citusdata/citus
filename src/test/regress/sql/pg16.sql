@@ -100,7 +100,7 @@ FROM
 	test_is_json ORDER BY js;
 
 -- pull the data, and run IS JSON predicate in the coordinator
-WITH pulled_data as (SELECT js FROM test_is_json)
+WITH pulled_data as (SELECT js FROM test_is_json OFFSET 0)
 SELECT
 	js,
 	js IS JSON "IS JSON",
