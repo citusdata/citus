@@ -5,36 +5,6 @@ concurrency:
 on:
   workflow_dispatch:
     inputs:
-      image_suffix:
-        required: false
-        default: "-v1b94240"
-      pg14_version:
-        required: false
-        default: '14.9'
-      pg15_version:
-        required: false
-        default: '15.4'
-      upgrade_pg_versions:
-        required: false
-        default: 14.9-15.4
-      style_checker_tools_version:
-        required: false
-        default: 0.8.18
-      build_image_name:
-        required: false
-        default: "citus/extbuilder"
-      test_image_name:
-        required: false
-        default: "citus/exttester"
-      fail_test_image_name:
-        required: false
-        default: "citus/failtester"
-      pgupgrade_image_name:
-        required: false
-        default: "citus/pgupgradetester"
-      citusupgrade_image_name:
-        required: false
-        default: "citus/citusupgradetester"
       skip_test_flakyness:
         required: false
         default: false
@@ -43,7 +13,7 @@ jobs:
   check-sql-snapshots:
     runs-on: ubuntu-latest
     container:
-      image: citus/extbuilder:latest
+      image: ${{ vars.build_image_name }}:latest
       options: --user root
     steps:
     - uses: actions/checkout@v3.5.0
@@ -54,7 +24,7 @@ jobs:
   check-style:
     runs-on: ubuntu-latest
     container:
-      image: citus/stylechecker:${{ inputs.style_checker_tools_version }}${{ inputs.image_suffix }}
+      image: ${{ vars.style_checker_image_name }}:${{ vars.style_checker_tools_version }}${{ vars.image_suffix }}
     steps:
     - name: Check Snapshots
       run: |
@@ -100,12 +70,12 @@ jobs:
       fail-fast: false
       matrix:
         image_name:
-          - ${{ inputs.build_image_name }}
+          - ${{ vars.build_image_name }}
         image_suffix:
-          - ${{ inputs.image_suffix}}
+          - ${{ vars.image_suffix}}
         pg_version:
-          - ${{ inputs.pg14_version }}
-          - ${{ inputs.pg15_version }}
+          - ${{ vars.pg14_version }}
+          - ${{ vars.pg15_version }}
     runs-on: ubuntu-latest
     container:
       image: "${{ matrix.image_name }}:${{ matrix.pg_version  }}${{ matrix.image_suffix }}"
@@ -132,10 +102,10 @@ jobs:
         suite:
           - regress
         image_name:
-          - ${{ inputs.test_image_name }}
+          - ${{ vars.test_image_name }}
         pg_version:
-          - ${{ inputs.pg14_version }}
-          - ${{ inputs.pg15_version }}
+          - ${{ vars.pg14_version }}
+          - ${{ vars.pg15_version }}
         make:
           - check-split
           - check-multi
@@ -154,44 +124,44 @@ jobs:
           - check-enterprise-isolation-logicalrep-3
         include:
           - make: check-failure
-            pg_version: ${{ inputs.pg14_version }}
+            pg_version: ${{ vars.pg14_version }}
             suite: regress
-            image_name: ${{ inputs.fail_test_image_name }}
+            image_name: ${{ vars.fail_test_image_name }}
           - make: check-failure
-            pg_version: ${{ inputs.pg15_version }}
+            pg_version: ${{ vars.pg15_version }}
             suite: regress
-            image_name: ${{ inputs.fail_test_image_name }}
+            image_name: ${{ vars.fail_test_image_name }}
           - make: check-enterprise-failure
-            pg_version: ${{ inputs.pg14_version }}
+            pg_version: ${{ vars.pg14_version }}
             suite: regress
-            image_name: ${{ inputs.fail_test_image_name }}
+            image_name: ${{ vars.fail_test_image_name }}
           - make: check-enterprise-failure
-            pg_version: ${{ inputs.pg15_version }}
+            pg_version: ${{ vars.pg15_version }}
             suite: regress
-            image_name: ${{ inputs.fail_test_image_name }}
+            image_name: ${{ vars.fail_test_image_name }}
           - make: check-pytest
-            pg_version: ${{ inputs.pg14_version }}
+            pg_version: ${{ vars.pg14_version }}
             suite: regress
-            image_name: ${{ inputs.fail_test_image_name }}
+            image_name: ${{ vars.fail_test_image_name }}
           - make: check-pytest
-            pg_version: ${{ inputs.pg15_version }}
+            pg_version: ${{ vars.pg15_version }}
             suite: regress
-            image_name: ${{ inputs.fail_test_image_name }}
+            image_name: ${{ vars.fail_test_image_name }}
           - make: installcheck
             suite: cdc
-            image_name: ${{ inputs.test_image_name }}
-            pg_version: ${{ inputs.pg15_version }}
+            image_name: ${{ vars.test_image_name }}
+            pg_version: ${{ vars.pg15_version }}
           - make: check-query-generator
-            pg_version: ${{ inputs.pg14_version }}
+            pg_version: ${{ vars.pg14_version }}
             suite: regress
-            image_name: ${{ inputs.fail_test_image_name }}
+            image_name: ${{ vars.fail_test_image_name }}
           - make: check-query-generator
-            pg_version: ${{ inputs.pg15_version }}
+            pg_version: ${{ vars.pg15_version }}
             suite: regress
-            image_name: ${{ inputs.fail_test_image_name }}
+            image_name: ${{ vars.fail_test_image_name }}
     runs-on: ubuntu-latest
     container:
-      image: "${{ matrix.image_name }}:${{ matrix.pg_version }}${{ inputs.image_suffix }}"
+      image: "${{ matrix.image_name }}:${{ matrix.pg_version }}${{ vars.image_suffix }}"
       options: --user root
     needs:
     - build
@@ -227,7 +197,7 @@ jobs:
     name: PG${{ matrix.pg_version }} - regress - check-arbitrary-configs
     runs-on: ubuntu-latest #-16core
     container:
-      image: "${{ matrix.image_name }}:${{ matrix.pg_version }}${{ inputs.image_suffix }}"
+      image: "${{ matrix.image_name }}:${{ matrix.pg_version }}${{ vars.image_suffix }}"
       options: --user root
     needs:
       - build
@@ -236,10 +206,10 @@ jobs:
       fail-fast: false
       matrix:
         image_name:
-          - ${{ inputs.fail_test_image_name }}
+          - ${{ vars.fail_test_image_name }}
         pg_version:
-          - ${{ inputs.pg14_version }}
-          - ${{ inputs.pg15_version }}
+          - ${{ vars.pg14_version }}
+          - ${{ vars.pg15_version }}
         parallel: [1,2,3,4,5,6]
     steps:
     - uses: actions/checkout@v3.5.0
@@ -261,7 +231,7 @@ jobs:
   test-pg-upgrade:
     runs-on: ubuntu-latest
     container:
-      image: "${{ inputs.pgupgrade_image_name }}:${{ inputs.upgrade_pg_versions }}${{ inputs.image_suffix }}"
+      image: "${{ vars.pgupgrade_image_name }}:${{ vars.upgrade_pg_versions }}${{ vars.image_suffix }}"
       options: --user root
     needs:
     - build
@@ -300,7 +270,7 @@ jobs:
   test-citus-upgrade:
     runs-on: ubuntu-latest
     container:
-      image: "${{ inputs.citusupgrade_image_name }}:${{ inputs.pg14_version }}${{ inputs.image_suffix }}"
+      image: "${{ vars.citusupgrade_image_name }}:${{ vars.pg14_version }}${{ vars.image_suffix }}"
       options: --user root
     needs:
     - build
@@ -340,7 +310,7 @@ jobs:
   upload-coverage:
     runs-on: ubuntu-latest
     container:
-      image: citus/exttester:${{ inputs.pg15_version }}${{ inputs.image_suffix }}
+      image: ${{ vars.test_image_name }}:${{ vars.pg15_version }}${{ vars.image_suffix }}
     needs:
       - test-citus
       - test-arbitrary-configs
@@ -432,7 +402,7 @@ jobs:
     name: Test flakyness
     runs-on: ubuntu-latest
     container:
-      image: ${{ inputs.fail_test_image_name }}:${{ inputs.pg15_version }}${{ inputs.image_suffix }}
+      image: ${{ vars.fail_test_image_name }}:${{ vars.pg15_version }}${{ vars.image_suffix }}
       options: --user root
     env:
       runs: 8
