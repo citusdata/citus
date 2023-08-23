@@ -225,7 +225,9 @@ jobs:
           make -C src/test/regress \
             check-arbitrary-configs parallel=4 CONFIGS=$TESTS
     - uses: "./.github/actions/save_logs_and_results"
+      if: always()
     - uses: "./.github/actions/upload_coverage"
+      if: always()
       with:
         flags: test_${{ env.pg_major }},upgrade
   test-pg-upgrade:
@@ -264,7 +266,9 @@ jobs:
         fi
       if: failure()
     - uses: "./.github/actions/save_logs_and_results"
+      if: always()
     - uses: "./.github/actions/upload_coverage"
+      if: always()
       with:
         flags: test_${{ env.old_pg_major }}_${{ env.new_pg_major }},upgrade
   test-citus-upgrade:
@@ -304,7 +308,9 @@ jobs:
               citus-post-tar=${GITHUB_WORKSPACE}/install-$PG_MAJOR.tar; \
         done;
     - uses: "./.github/actions/save_logs_and_results"
+      if: always()
     - uses: "./.github/actions/upload_coverage"
+      if: always()
       with:
         flags: test_${{ env.pg_major }},upgrade
   upload-coverage:
@@ -428,3 +434,4 @@ jobs:
         done
       shell: bash
     - uses: "./.github/actions/save_logs_and_results"
+      if: always()
