@@ -45,6 +45,22 @@ SET citus.log_remote_commands TO OFF;
 -- remote commands because it can be flaky
 VACUUM (ONLY_DATABASE_STATS);
 
+-- New GENERIC_PLAN option in EXPLAIN
+-- Relevant PG commit:
+-- https://github.com/postgres/postgres/commit/3c05284
+
+CREATE TABLE tenk1 (
+	unique1 int4,
+	unique2 int4,
+    thousand int4
+);
+SELECT create_distributed_table('tenk1', 'unique1');
+
+SET citus.log_remote_commands TO on;
+EXPLAIN (GENERIC_PLAN) SELECT unique1 FROM tenk1 WHERE thousand = 1000;
+EXPLAIN (GENERIC_PLAN, ANALYZE) SELECT unique1 FROM tenk1 WHERE thousand = 1000;
+SET citus.log_remote_commands TO off;
+
 -- Proper error when creating statistics without a name on a Citus table
 -- Relevant PG commit:
 -- https://github.com/postgres/postgres/commit/624aa2a13bd02dd584bb0995c883b5b93b2152df
