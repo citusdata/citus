@@ -35,6 +35,10 @@ on:
       citusupgrade_image_name:
         required: false
         default: "citus/citusupgradetester"
+      skip_test_flakyness:
+        required: false
+        default: false
+        type: boolean
 jobs:
   check-sql-snapshots:
     runs-on: ubuntu-latest
@@ -403,6 +407,7 @@ jobs:
           count: 32
   test-flakyness-pre:
     name: Detect regression tests need to be ran
+    if: ${{ inputs.skip_test_flakyness == 'false' }}}
     runs-on: ubuntu-latest
     needs: build
     outputs:
@@ -444,7 +449,7 @@ jobs:
     - uses: "./.github/actions/install_extension"
     - name: Run minimal tests
       run: |-
-        tests=${{ needs.test-flakyness-pre.outputs.tests }}
+        tests="${{ needs.test-flakyness-pre.outputs.tests }}"
         tests_array=($tests)
         for test in "${tests_array[@]}"
         do
