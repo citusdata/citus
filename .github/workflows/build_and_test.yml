@@ -384,7 +384,7 @@ jobs:
           count: 32
   test-flakyness-pre:
     name: Detect regression tests need to be ran
-    if: ${{ inputs.skip_test_flakyness == 'false' }}}
+    if: ${{ !inputs.skip_test_flakyness }}}
     runs-on: ubuntu-latest
     needs: build
     outputs:
