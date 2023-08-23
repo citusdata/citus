@@ -1,4 +1,5 @@
 name: Build & Test
+run-name: Build & Test - ${{ github.event.pull_request.number || github.ref }} - ${{ github.sha }}
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
