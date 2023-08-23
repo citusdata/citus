@@ -427,7 +427,7 @@ jobs:
     name: Test flakyness
     runs-on: ubuntu-latest
     container:
-      image: ${{ inputs.fail_test_image_name }}:${{ inputs.pg15_version }}-${{ inputs.image_suffix }}
+      image: ${{ inputs.fail_test_image_name }}:${{ inputs.pg15_version }}${{ inputs.image_suffix }}
       options: --user root
     env:
       runs: 8
