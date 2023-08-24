@@ -153,34 +153,15 @@ step "s2-begin"
 step "s2-insert-distributed"
 {
 	-- Set statement_timeout for the session (in milliseconds)
-	SET statement_timeout = 1000; -- 1 seconds
 	SET client_min_messages = 'notice';
 
 	-- Variable to track if the INSERT statement was successful
 	DO $$
-	DECLARE
-		v_insert_successful BOOLEAN := FALSE;
 	BEGIN
 
 		-- Execute the INSERT statement
 		insert into employee values(11,'e11',3);
 
-		-- If we reach this point, the INSERT statement was successful
-		v_insert_successful := TRUE;
-
-		IF v_insert_successful THEN
-			RAISE NOTICE 'INSERT statement completed successfully. This means that citus_pause_node_within_txn could not get the lock.';
-		END IF;
-
-
-	-- You can add additional processing here if needed
-	EXCEPTION
-		WHEN query_canceled THEN
-			-- The INSERT statement was canceled due to timeout
-			RAISE NOTICE 'query_canceled exception raised. This means that citus_pause_node_within_txn was able to get the lock.';
-		WHEN OTHERS THEN
-			-- Any other exception raised during the INSERT statement
-			RAISE;
 	END;
 
 	$$
@@ -194,26 +175,11 @@ step "s2-insert-reference"{
 
 	-- Variable to track if the INSERT statement was successful
 	DO $$
-	DECLARE
-		v_insert_successful BOOLEAN := FALSE;
 	BEGIN
 
 		-- Execute the INSERT statement
 		insert into city values(3,'city3');
 
-		-- If we reach this point, the INSERT statement was successful
-		v_insert_successful := TRUE;
-
-		IF v_insert_successful THEN
-			RAISE NOTICE 'INSERT statement completed successfully. This means that citus_pause_node_within_txn could not get the lock.';
-		END IF;
-
-	EXCEPTION WHEN query_canceled THEN
-		-- The INSERT statement was canceled due to timeout
-		RAISE NOTICE 'query_canceled exception raised. This means that citus_pause_node_within_txn was able to get the lock.';
-		WHEN OTHERS THEN
-			-- Any other exception raised during the INSERT statement
-			RAISE;
 	END;
 	$$
 	LANGUAGE plpgsql;
@@ -226,32 +192,14 @@ step "s2-select-distributed"{
 
 step "s2-delete-distributed"{
 	-- Set statement_timeout for the session (in milliseconds)
-	SET statement_timeout = 1000; -- 1 seconds
 	SET client_min_messages = 'notice';
 
 	-- Variable to track if the DELETE statement was successful
 	DO $$
-	DECLARE
-		v_delete_successful BOOLEAN := FALSE;
 	BEGIN
 
 		-- Execute the DELETE statement
 		delete from employee where id = 9;
-
-		-- If we reach this point, the DELETE statement was successful
-		v_delete_successful := TRUE;
-
-		IF v_delete_successful THEN
-			RAISE NOTICE 'DELETE statement completed successfully. This means that citus_pause_node_within_txn could not get the lock.';
-		END IF;
-	-- You can add additional processing here if needed
-	EXCEPTION
-		WHEN query_canceled THEN
-			-- The INSERT statement was canceled due to timeout
-			RAISE NOTICE 'query_canceled exception raised. This means that citus_pause_node_within_txn was able to get the lock.';
-		WHEN OTHERS THEN
-			-- Any other exception raised during the INSERT statement
-			RAISE;
 	END;
 	$$
 	LANGUAGE plpgsql;
@@ -262,10 +210,10 @@ step "s2-end"
 	COMMIT;
 }
 
-permutation "s1-begin"  "s1-pause-node" "s2-begin" "s2-insert-distributed" "s2-end" "s1-end"
-permutation "s1-begin"  "s1-pause-node-force" "s2-begin" "s2-insert-distributed" "s2-end" "s1-end"
-permutation "s1-begin"  "s1-pause-node" "s2-begin" "s2-delete-distributed" "s2-end" "s1-end"
-permutation "s1-begin"  "s1-pause-node" "s2-begin" "s2-select-distributed" "s2-end" "s1-end"
-permutation "s1-begin"  "s1-pause-node" "s2-begin" "s2-insert-reference" "s2-end" "s1-end"
+permutation "s1-begin" "s2-begin" "s1-pause-node" "s2-insert-distributed" "s1-end" "s2-end"
+permutation "s1-begin" "s2-begin" "s1-pause-node" "s2-delete-distributed" "s1-end" "s2-end"
+permutation "s1-begin"  "s1-pause-node" "s2-begin" "s2-select-distributed" "s1-end" "s2-end"
+permutation "s1-begin"  "s2-begin" "s1-pause-node"  "s2-insert-reference" "s1-end" "s2-end"
 permutation "s1-begin"  "s1-pause-node" "s1-pause-node" "s1-end"
 permutation "s1-begin"  "s1-node-not-found" "s1-end"
+permutation "s1-begin"  "s2-begin" "s2-insert-distributed" "s1-pause-node-force" "s2-end" "s1-end"
