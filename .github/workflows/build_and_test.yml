@@ -316,6 +316,7 @@ jobs:
       with:
         flags: test_${{ env.pg_major }},upgrade
   upload-coverage:
+    if: always()
     runs-on: ubuntu-latest
     container:
       image: ${{ vars.test_image_name }}:${{ vars.pg15_version }}${{ vars.image_suffix }}
@@ -327,7 +328,7 @@ jobs:
     steps:
     - uses: actions/download-artifact@v3.0.1
       with:
-        path: "."
+        path: "codeclimate"
     - name: Upload coverage results to Code Climate
       run: |-
         cc-test-reporter sum-coverage codeclimate/*.json -o total.json
