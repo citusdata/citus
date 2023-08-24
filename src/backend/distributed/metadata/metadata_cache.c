@@ -4820,9 +4820,9 @@ InvalidateDistRelationCacheCallback(Datum argument, Oid relationId)
 			MetadataCache.distColocationConfigurationIndexId = InvalidOid;
 		}
 
-		if (relationId == Metadata.distTenantSchemaRelationId)
+		if (relationId == MetadataCache.distTenantSchemaRelationId)
 		{
-			Metadata.distTenantSchemaRelationId = InvalidOid;
+			MetadataCache.distTenantSchemaRelationId = InvalidOid;
 		}
 
 		if (relationId == MetadataCache.distShardLogicalRelidIndexId)
