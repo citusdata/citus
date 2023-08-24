@@ -1,5 +1,5 @@
 name: Build & Test
-run-name: Build & Test - ${{ github.event.pull_request.number || github.ref_name }} - ${{ github.sha }}
+run-name: Build & Test - ${{ github.event_name }} ${{ github.event.pull_request.number || github.ref_name }}
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
@@ -195,10 +195,8 @@ jobs:
         with:
           count: 6
   test-arbitrary-configs:
-    if: ${{ false }}
-    # disable this job till we have 16core VMs
     name: PG${{ matrix.pg_version }} - regress - check-arbitrary-configs
-    runs-on: ubuntu-latest #-16core
+    runs-on: ubuntu-latest #-16core - we need 16 cores VMs to run this job successfully
     container:
       image: "${{ matrix.image_name }}:${{ matrix.pg_version }}${{ vars.image_suffix }}"
       options: --user root
