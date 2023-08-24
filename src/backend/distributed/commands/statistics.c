@@ -77,6 +77,14 @@ PreprocessCreateStatisticsStmt(Node *node, const char *queryString,
 
 	EnsureCoordinator();
 
+	if (!(stmt->defnames))
+	{
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("cannot create statistics without a name on a "
+							   "Citus table"),
+						errhint("Consider specifying a name for the statistics")));
+	}
+
 	QualifyTreeNode((Node *) stmt);
 
 	Oid statsOid = get_statistics_object_oid(stmt->defnames, true);
