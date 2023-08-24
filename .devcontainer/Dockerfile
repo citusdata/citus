@@ -141,7 +141,7 @@ RUN sudo apt update \
     vim \
  && sudo apt clean
 
-RUN sudo pip3 install pipenv pipenv-shebang
+RUN sudo pip3 install pipenv
 
 # add some common tools to the final container
 # bin directory for user tools
@@ -151,7 +151,7 @@ ENV PATH="/home/citus/.bin:${PATH}"
 # install citus-dev
 RUN git clone --branch feature/citus-dev-pipenv-shebang https://github.com/citusdata/tools.git citus-tools \
  && ( cd citus-tools/citus_dev && pipenv install ) \
- && ln -s /home/citus/citus-tools/citus_dev/citus_dev .bin/ \
+ && ln -s /home/citus/citus-tools/citus_dev/citus_dev-pipenv .bin/citus_dev \
  && sudo make -C citus-tools/uncrustify install bindir=/usr/local/bin pkgsysconfdir=/usr/local/etc/
 
 # TODO some LC_ALL errors, possibly solved by locale-gen
