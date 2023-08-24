@@ -10,6 +10,8 @@ on:
         required: false
         default: false
         type: boolean
+  pull_request:
+    types: [opened, reopened,synchronize]
 jobs:
   check-sql-snapshots:
     runs-on: ubuntu-latest
