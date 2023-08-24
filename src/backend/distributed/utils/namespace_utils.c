@@ -11,22 +11,33 @@
 
 #include "postgres.h"
 
-#include "catalog/namespace.h"
-#include "distributed/citus_ruleutils.h"
 #include "distributed/namespace_utils.h"
+#include "utils/guc.h"
 #include "utils/regproc.h"
 
 /*
- * PushOverrideEmptySearchPath pushes search_path to be NIL and sets addCatalog to
- * true so that all objects outside of pg_catalog will be schema-prefixed.
- * Afterwards, PopOverrideSearchPath can be used to revert the search_path back.
+ * We use the equivalent of a function SET option to allow the setting to
+ * persist for the exact duration of the transaction, guc.c takes care of
+ * undoing the setting on error.
+ *
+ * We set search_path to "pg_catalog" instead of "" to expose useful utilities.
+ */
+int
+PushEmptySearchPath()
+{
+	int saveNestLevel = NewGUCNestLevel();
+	(void) set_config_option("search_path", "pg_catalog",
+							 PGC_USERSET, PGC_S_SESSION,
+							 GUC_ACTION_SAVE, true, 0, false);
+	return saveNestLevel;
+}
+
+
+/*
+ * Restore the GUC variable search_path we set in PushEmptySearchPath
  */
 void
-PushOverrideEmptySearchPath(MemoryContext memoryContext)
+PopEmptySearchPath(int saveNestLevel)
 {
-	OverrideSearchPath *overridePath = GetOverrideSearchPath(memoryContext);
-	overridePath->schemas = NIL;
-	overridePath->addCatalog = true;
-
-	PushOverrideSearchPath(overridePath);
+	AtEOXact_GUC(true, saveNestLevel);
 }

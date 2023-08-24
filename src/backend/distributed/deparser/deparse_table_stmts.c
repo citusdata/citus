@@ -562,9 +562,9 @@ DeparseRawExprForColumnDefault(Oid relationId, Oid columnTypeId, int32 columnTyp
 
 	List *deparseContext = deparse_context_for(get_rel_name(relationId), relationId);
 
-	PushOverrideEmptySearchPath(CurrentMemoryContext);
+	int saveNestLevel = PushEmptySearchPath();
 	char *defaultExprStr = deparse_expression(defaultExpr, deparseContext, false, false);
-	PopOverrideSearchPath();
+	PopEmptySearchPath(saveNestLevel);
 
 	RelationClose(relation);
 

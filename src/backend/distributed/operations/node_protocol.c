@@ -612,7 +612,7 @@ GetPreLoadTableCreationCommands(Oid relationId,
 {
 	List *tableDDLEventList = NIL;
 
-	PushOverrideEmptySearchPath(CurrentMemoryContext);
+	int saveNestLevel = PushEmptySearchPath();
 
 	/* fetch table schema and column option definitions */
 	char *tableSchemaDef = pg_get_tableschemadef_string(relationId,
@@ -665,7 +665,7 @@ GetPreLoadTableCreationCommands(Oid relationId,
 	tableDDLEventList = list_concat(tableDDLEventList, policyCommands);
 
 	/* revert back to original search_path */
-	PopOverrideSearchPath();
+	PopEmptySearchPath(saveNestLevel);
 
 	return tableDDLEventList;
 }
@@ -754,7 +754,7 @@ GatherIndexAndConstraintDefinitionList(Form_pg_index indexForm, List **indexDDLE
 									   int indexFlags)
 {
 	/* generate fully-qualified names */
-	PushOverrideEmptySearchPath(CurrentMemoryContext);
+	int saveNestLevel = PushEmptySearchPath();
 
 	Oid indexId = indexForm->indexrelid;
 	bool indexImpliedByConstraint = IndexImpliedByAConstraint(indexForm);
@@ -805,7 +805,7 @@ GatherIndexAndConstraintDefinitionList(Form_pg_index indexForm, List **indexDDLE
 	}
 
 	/* revert back to original search_path */
-	PopOverrideSearchPath();
+	PopEmptySearchPath(saveNestLevel);
 }
 
 

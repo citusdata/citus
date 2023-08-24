@@ -479,10 +479,7 @@ AppendViewDefinitionToCreateViewCommand(StringInfo buf, Oid viewOid)
 	 * Set search_path to NIL so that all objects outside of pg_catalog will be
 	 * schema-prefixed.
 	 */
-	OverrideSearchPath *overridePath = GetOverrideSearchPath(CurrentMemoryContext);
-	overridePath->schemas = NIL;
-	overridePath->addCatalog = true;
-	PushOverrideSearchPath(overridePath);
+	int saveNestLevel = PushEmptySearchPath();
 
 	/*
 	 * Push the transaction snapshot to be able to get vief definition with pg_get_viewdef
@@ -494,7 +491,7 @@ AppendViewDefinitionToCreateViewCommand(StringInfo buf, Oid viewOid)
 	char *viewDefinition = TextDatumGetCString(viewDefinitionDatum);
 
 	PopActiveSnapshot();
-	PopOverrideSearchPath();
+	PopEmptySearchPath(saveNestLevel);
 
 	appendStringInfo(buf, "AS %s ", viewDefinition);
 }
