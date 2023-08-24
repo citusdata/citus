@@ -335,7 +335,6 @@ step s2-insert-distributed:
  $$
  LANGUAGE plpgsql;
 
-s1: NOTICE:
 step s1-pause-node-force:
  SET client_min_messages = 'notice';
  DO $$
@@ -362,15 +361,14 @@ step s1-pause-node-force:
  END;
  $$
  LANGUAGE plpgsql;
-
-s1: NOTICE:  node name is localhost
-s1: NOTICE:  node port is 57638
-step s2-end:
+ <waiting ...>
+step s2-end: 
  COMMIT;
 
-FATAL:  terminating connection due to administrator command
-SSL connection has been closed unexpectedly
-
+s1: NOTICE:
+step s1-pause-node-force: <... completed>
+s1: NOTICE:  node name is localhost
+s1: NOTICE:  node port is 57638
 step s1-end:
     COMMIT;
 

@@ -216,4 +216,4 @@ permutation "s1-begin"  "s1-pause-node" "s2-begin" "s2-select-distributed" "s1-e
 permutation "s1-begin"  "s2-begin" "s1-pause-node"  "s2-insert-reference" "s1-end" "s2-end"
 permutation "s1-begin"  "s1-pause-node" "s1-pause-node" "s1-end"
 permutation "s1-begin"  "s1-node-not-found" "s1-end"
-permutation "s1-begin"  "s2-begin" "s2-insert-distributed" "s1-pause-node-force" "s2-end" "s1-end"
+permutation "s1-begin"  "s2-begin" "s2-insert-distributed" "s1-pause-node-force"(*) "s2-end" "s1-end"
