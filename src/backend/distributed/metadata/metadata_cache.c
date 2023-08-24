@@ -4786,96 +4786,35 @@ InvalidateDistRelationCacheCallback(Datum argument, Oid relationId)
 		/*
 		 * if pg_dist_* table relcache entries got invalidated due to direct operations on
 		 * them, invalidate the cached oids.
-		 * TODO: We should probably invalidate the other cached oids when related tables
-		 * got invalidated.
 		 */
 
-		if (relationId == MetadataCache.distPartitionRelationId)
+		if (relationId == MetadataCache.distPartitionRelationId ||
+			relationId == MetadataCache.distNodeRelationId ||
+
+			relationId == MetadataCache.distLocalGroupRelationId ||
+
+			relationId == MetadataCache.distCleanupRelationId ||
+			relationId == MetadataCache.distColocationRelationId ||
+
+			relationId == MetadataCache.distTenantSchemaRelationId ||
+
+			relationId == MetadataCache.distShardLogicalRelidIndexId ||
+
+			relationId == MetadataCache.distPlacementShardidIndexId ||
+
+			relationId == MetadataCache.distTransactionRelationIda ||
+			relationId == MetadataCache.distTenantSchemaPrimaryKeyIndexId ||
+			relationId == MetadataCache.distAuthinfoRelationId ||
+			relationId == MetadataCache.distPoolinfoRelationId ||
+			relationId == MetadataCache.distClockLogicalSequenceId)
 		{
-			MetadataCache.distPartitionRelationId = InvalidOid;
-			MetadataCache.distPartitionLogicalRelidIndexId = InvalidOid;
-			MetadataCache.distPartitionColocationidIndexId = InvalidOid;
+			InvalidateMetadataSystemCache();
 		}
 
-		if (relationId == MetadataCache.distNodeRelationId)
-		{
-			MetadataCache.distNodeRelationId = InvalidOid;
-			MetadataCache.distNodeNodeIdIndexId = InvalidOid;
-		}
-
-		if (relationId == MetadataCache.distLocalGroupRelationId)
-		{
-			MetadataCache.distLocalGroupRelationId = InvalidOid;
-		}
-
-		if (relationId == MetadataCache.distCleanupRelationId)
-		{
-			MetadataCache.distCleanupRelationId = InvalidOid;
-			MetadataCache.distCleanupPrimaryKeyIndexId = InvalidOid;
-		}
-
-		if (relationId == MetadataCache.distColocationRelationId)
-		{
-			MetadataCache.distColocationRelationId = InvalidOid;
-			MetadataCache.distColocationConfigurationIndexId = InvalidOid;
-		}
-
-		if (relationId == MetadataCache.distTenantSchemaRelationId)
-		{
-			MetadataCache.distTenantSchemaRelationId = InvalidOid;
-		}
-
-		if (relationId == MetadataCache.distShardLogicalRelidIndexId)
-		{
-			MetadataCache.distShardLogicalRelidIndexId = InvalidOid;
-			MetadataCache.distShardShardidIndexId = InvalidOid;
-		}
-
-		if (relationId == MetadataCache.distPlacementShardidIndexId)
-		{
-			MetadataCache.distPlacementShardidIndexId = InvalidOid;
-			MetadataCache.distPlacementPlacementidIndexId = InvalidOid;
-			MetadataCache.distPlacementGroupidIndexId = InvalidOid;
-		}
-
-		if (relationId == MetadataCache.distColocationidIndexId)
-		{
-			MetadataCache.distColocationidIndexId = InvalidOid;
-		}
-
-		if (relationId == MetadataCache.distTransactionRelationId)
-		{
-			MetadataCache.distTransactionRelationId = InvalidOid;
-			MetadataCache.distTransactionGroupIndexId = InvalidOid;
-		}
-
-		if (relationId == MetadataCache.distTenantSchemaPrimaryKeyIndexId)
-		{
-			MetadataCache.distTenantSchemaPrimaryKeyIndexId = InvalidOid;
-			MetadataCache.distTenantSchemaUniqueColocationIdIndexId = InvalidOid;
-		}
-		if (relationId == MetadataCache.distAuthinfoRelationId)
-		{
-			MetadataCache.distAuthinfoRelationId = InvalidOid;
-			MetadataCache.distAuthinfoIndexId = InvalidOid;
-		}
-
-		if (relationId == MetadataCache.distPoolinfoRelationId)
-		{
-			MetadataCache.distPoolinfoRelationId = InvalidOid;
-			MetadataCache.distPoolinfoIndexId = InvalidOid;
-		}
-
-		if (relationId == MetadataCache.distClockLogicalSequenceId)
-		{
-			MetadataCache.distClockLogicalSequenceId = InvalidOid;
-		}
 
 		if (relationId == MetadataCache.distObjectRelationId)
 		{
 			InvalidateDistObjectCache();
-			MetadataCache.distObjectRelationId = InvalidOid;
-			MetadataCache.distObjectPrimaryKeyIndexId = InvalidOid;
 		}
 	}
 }
