@@ -107,7 +107,7 @@ RUN make install DESTDIR=/uncrustify
 
 FROM base AS pipenv
 
-RUN sudo pip3 install pipenv
+RUN sudo pip3 install pipenv pipenv-shebang
 
 WORKDIR /workspaces/citus/
 COPY src/ src/
@@ -147,6 +147,8 @@ RUN sudo pip3 install pipenv pipenv-shebang
 # bin directory for user tools
 RUN mkdir .bin
 ENV PATH="/home/citus/.bin:${PATH}"
+
+RUN echo "cache buster 1"
 
 # install citus-dev
 RUN git clone --branch feature/citus-dev-pipenv-shebang https://github.com/citusdata/tools.git citus-tools \
