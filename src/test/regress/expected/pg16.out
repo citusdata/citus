@@ -65,6 +65,276 @@ SET citus.log_remote_commands TO OFF;
 -- only verifying it works and not printing log
 -- remote commands because it can be flaky
 VACUUM (ONLY_DATABASE_STATS);
+-- New GENERIC_PLAN option in EXPLAIN
+-- Relevant PG commit:
+-- https://github.com/postgres/postgres/commit/3c05284
+CREATE TABLE tenk1 (
+	unique1 int4,
+	unique2 int4,
+    thousand int4
+);
+SELECT create_distributed_table('tenk1', 'unique1');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SET citus.log_remote_commands TO on;
+EXPLAIN (GENERIC_PLAN) SELECT unique1 FROM tenk1 WHERE thousand = 1000;
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SAVEPOINT citus_explain_savepoint
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing EXPLAIN (ANALYZE FALSE, VERBOSE FALSE, COSTS TRUE, BUFFERS FALSE, WAL FALSE, GENERIC_PLAN TRUE, TIMING FALSE, SUMMARY FALSE, FORMAT TEXT) SELECT unique1 FROM pg16.tenk1_950001 tenk1 WHERE (thousand OPERATOR(pg_catalog.=) 1000)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ROLLBACK TO SAVEPOINT citus_explain_savepoint
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+                                   QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0)
+   Task Count: 1
+   Tasks Shown: All
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  Seq Scan on tenk1_950001 tenk1  (cost=0.00..35.50 rows=10 width=4)
+               Filter: (thousand = 1000)
+(7 rows)
+
+EXPLAIN (GENERIC_PLAN, ANALYZE) SELECT unique1 FROM tenk1 WHERE thousand = 1000;
+ERROR:  EXPLAIN options ANALYZE and GENERIC_PLAN cannot be used together
+SET citus.log_remote_commands TO off;
+-- Proper error when creating statistics without a name on a Citus table
+-- Relevant PG commit:
+-- https://github.com/postgres/postgres/commit/624aa2a13bd02dd584bb0995c883b5b93b2152df
+CREATE TABLE test_stats (
+    a   int,
+    b   int
+);
+SELECT create_distributed_table('test_stats', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE STATISTICS (dependencies) ON a, b FROM test_stats;
+ERROR:  cannot create statistics without a name on a Citus table
+HINT:  Consider specifying a name for the statistics
+CREATE STATISTICS (ndistinct, dependencies) on a, b from test_stats;
+ERROR:  cannot create statistics without a name on a Citus table
+HINT:  Consider specifying a name for the statistics
+CREATE STATISTICS (ndistinct, dependencies, mcv) on a, b from test_stats;
+ERROR:  cannot create statistics without a name on a Citus table
+HINT:  Consider specifying a name for the statistics
+-- Tests for SQL/JSON: support the IS JSON predicate
+-- Relevant PG commit:
+-- https://github.com/postgres/postgres/commit/6ee30209
+CREATE TABLE test_is_json (id bigserial, js text);
+SELECT create_distributed_table('test_is_json', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO test_is_json(js) VALUES
+ (NULL),
+ (''),
+ ('123'),
+ ('"aaa "'),
+ ('true'),
+ ('null'),
+ ('[]'),
+ ('[1, "2", {}]'),
+ ('{}'),
+ ('{ "a": 1, "b": null }'),
+ ('{ "a": 1, "a": null }'),
+ ('{ "a": 1, "b": [{ "a": 1 }, { "a": 2 }] }'),
+ ('{ "a": 1, "b": [{ "a": 1, "b": 0, "a": 2 }] }'),
+ ('aaa'),
+ ('{a:1}'),
+ ('["a",]');
+-- run IS JSON predicate in the worker nodes
+SELECT
+	js,
+	js IS JSON "JSON",
+	js IS NOT JSON "NOT JSON",
+	js IS JSON VALUE "VALUE",
+	js IS JSON OBJECT "OBJECT",
+	js IS JSON ARRAY "ARRAY",
+	js IS JSON SCALAR "SCALAR",
+	js IS JSON WITHOUT UNIQUE KEYS "WITHOUT UNIQUE",
+	js IS JSON WITH UNIQUE KEYS "WITH UNIQUE"
+FROM
+	test_is_json ORDER BY js;
+                      js                       | JSON | NOT JSON | VALUE | OBJECT | ARRAY | SCALAR | WITHOUT UNIQUE | WITH UNIQUE
+---------------------------------------------------------------------
+                                               | f    | t        | f     | f      | f     | f      | f              | f
+ "aaa "                                        | t    | f        | t     | f      | f     | t      | t              | t
+ 123                                           | t    | f        | t     | f      | f     | t      | t              | t
+ ["a",]                                        | f    | t        | f     | f      | f     | f      | f              | f
+ [1, "2", {}]                                  | t    | f        | t     | f      | t     | f      | t              | t
+ []                                            | t    | f        | t     | f      | t     | f      | t              | t
+ aaa                                           | f    | t        | f     | f      | f     | f      | f              | f
+ null                                          | t    | f        | t     | f      | f     | t      | t              | t
+ true                                          | t    | f        | t     | f      | f     | t      | t              | t
+ { "a": 1, "a": null }                         | t    | f        | t     | t      | f     | f      | t              | f
+ { "a": 1, "b": [{ "a": 1 }, { "a": 2 }] }     | t    | f        | t     | t      | f     | f      | t              | t
+ { "a": 1, "b": [{ "a": 1, "b": 0, "a": 2 }] } | t    | f        | t     | t      | f     | f      | t              | f
+ { "a": 1, "b": null }                         | t    | f        | t     | t      | f     | f      | t              | t
+ {a:1}                                         | f    | t        | f     | f      | f     | f      | f              | f
+ {}                                            | t    | f        | t     | t      | f     | f      | t              | t
+                                               |      |          |       |        |       |        |                |
+(16 rows)
+
+-- pull the data, and run IS JSON predicate in the coordinator
+WITH pulled_data as (SELECT js FROM test_is_json OFFSET 0)
+SELECT
+	js,
+	js IS JSON "IS JSON",
+	js IS NOT JSON "IS NOT JSON",
+	js IS JSON VALUE "IS VALUE",
+	js IS JSON OBJECT "IS OBJECT",
+	js IS JSON ARRAY "IS ARRAY",
+	js IS JSON SCALAR "IS SCALAR",
+	js IS JSON WITHOUT UNIQUE KEYS "WITHOUT UNIQUE",
+	js IS JSON WITH UNIQUE KEYS "WITH UNIQUE"
+FROM
+    pulled_data ORDER BY js;
+                      js                       | IS JSON | IS NOT JSON | IS VALUE | IS OBJECT | IS ARRAY | IS SCALAR | WITHOUT UNIQUE | WITH UNIQUE
+---------------------------------------------------------------------
+                                               | f       | t           | f        | f         | f        | f         | f              | f
+ "aaa "                                        | t       | f           | t        | f         | f        | t         | t              | t
+ 123                                           | t       | f           | t        | f         | f        | t         | t              | t
+ ["a",]                                        | f       | t           | f        | f         | f        | f         | f              | f
+ [1, "2", {}]                                  | t       | f           | t        | f         | t        | f         | t              | t
+ []                                            | t       | f           | t        | f         | t        | f         | t              | t
+ aaa                                           | f       | t           | f        | f         | f        | f         | f              | f
+ null                                          | t       | f           | t        | f         | f        | t         | t              | t
+ true                                          | t       | f           | t        | f         | f        | t         | t              | t
+ { "a": 1, "a": null }                         | t       | f           | t        | t         | f        | f         | t              | f
+ { "a": 1, "b": [{ "a": 1 }, { "a": 2 }] }     | t       | f           | t        | t         | f        | f         | t              | t
+ { "a": 1, "b": [{ "a": 1, "b": 0, "a": 2 }] } | t       | f           | t        | t         | f        | f         | t              | f
+ { "a": 1, "b": null }                         | t       | f           | t        | t         | f        | f         | t              | t
+ {a:1}                                         | f       | t           | f        | f         | f        | f         | f              | f
+ {}                                            | t       | f           | t        | t         | f        | f         | t              | t
+                                               |         |             |          |           |          |           |                |
+(16 rows)
+
+SELECT
+	js,
+	js IS JSON "IS JSON",
+	js IS NOT JSON "IS NOT JSON",
+	js IS JSON VALUE "IS VALUE",
+	js IS JSON OBJECT "IS OBJECT",
+	js IS JSON ARRAY "IS ARRAY",
+	js IS JSON SCALAR "IS SCALAR",
+	js IS JSON WITHOUT UNIQUE KEYS "WITHOUT UNIQUE",
+	js IS JSON WITH UNIQUE KEYS "WITH UNIQUE"
+FROM
+	(SELECT js::json FROM test_is_json WHERE js IS JSON) foo(js);
+                      js                       | IS JSON | IS NOT JSON | IS VALUE | IS OBJECT | IS ARRAY | IS SCALAR | WITHOUT UNIQUE | WITH UNIQUE
+---------------------------------------------------------------------
+ 123                                           | t       | f           | t        | f         | f        | t         | t              | t
+ "aaa "                                        | t       | f           | t        | f         | f        | t         | t              | t
+ true                                          | t       | f           | t        | f         | f        | t         | t              | t
+ null                                          | t       | f           | t        | f         | f        | t         | t              | t
+ []                                            | t       | f           | t        | f         | t        | f         | t              | t
+ [1, "2", {}]                                  | t       | f           | t        | f         | t        | f         | t              | t
+ {}                                            | t       | f           | t        | t         | f        | f         | t              | t
+ { "a": 1, "b": null }                         | t       | f           | t        | t         | f        | f         | t              | t
+ { "a": 1, "a": null }                         | t       | f           | t        | t         | f        | f         | t              | f
+ { "a": 1, "b": [{ "a": 1 }, { "a": 2 }] }     | t       | f           | t        | t         | f        | f         | t              | t
+ { "a": 1, "b": [{ "a": 1, "b": 0, "a": 2 }] } | t       | f           | t        | t         | f        | f         | t              | f
+(11 rows)
+
+SELECT
+	js0,
+	js IS JSON "IS JSON",
+	js IS NOT JSON "IS NOT JSON",
+	js IS JSON VALUE "IS VALUE",
+	js IS JSON OBJECT "IS OBJECT",
+	js IS JSON ARRAY "IS ARRAY",
+	js IS JSON SCALAR "IS SCALAR",
+	js IS JSON WITHOUT UNIQUE KEYS "WITHOUT UNIQUE",
+	js IS JSON WITH UNIQUE KEYS "WITH UNIQUE"
+FROM
+	(SELECT js, js::bytea FROM test_is_json WHERE js IS JSON) foo(js0, js);
+                      js0                      | IS JSON | IS NOT JSON | IS VALUE | IS OBJECT | IS ARRAY | IS SCALAR | WITHOUT UNIQUE | WITH UNIQUE
+---------------------------------------------------------------------
+ 123                                           | t       | f           | t        | f         | f        | t         | t              | t
+ "aaa "                                        | t       | f           | t        | f         | f        | t         | t              | t
+ true                                          | t       | f           | t        | f         | f        | t         | t              | t
+ null                                          | t       | f           | t        | f         | f        | t         | t              | t
+ []                                            | t       | f           | t        | f         | t        | f         | t              | t
+ [1, "2", {}]                                  | t       | f           | t        | f         | t        | f         | t              | t
+ {}                                            | t       | f           | t        | t         | f        | f         | t              | t
+ { "a": 1, "b": null }                         | t       | f           | t        | t         | f        | f         | t              | t
+ { "a": 1, "a": null }                         | t       | f           | t        | t         | f        | f         | t              | f
+ { "a": 1, "b": [{ "a": 1 }, { "a": 2 }] }     | t       | f           | t        | t         | f        | f         | t              | t
+ { "a": 1, "b": [{ "a": 1, "b": 0, "a": 2 }] } | t       | f           | t        | t         | f        | f         | t              | f
+(11 rows)
+
+SELECT
+	js,
+	js IS JSON "IS JSON",
+	js IS NOT JSON "IS NOT JSON",
+	js IS JSON VALUE "IS VALUE",
+	js IS JSON OBJECT "IS OBJECT",
+	js IS JSON ARRAY "IS ARRAY",
+	js IS JSON SCALAR "IS SCALAR",
+	js IS JSON WITHOUT UNIQUE KEYS "WITHOUT UNIQUE",
+	js IS JSON WITH UNIQUE KEYS "WITH UNIQUE"
+FROM
+	(SELECT js::jsonb FROM test_is_json WHERE js IS JSON) foo(js);
+                 js                  | IS JSON | IS NOT JSON | IS VALUE | IS OBJECT | IS ARRAY | IS SCALAR | WITHOUT UNIQUE | WITH UNIQUE
+---------------------------------------------------------------------
+ 123                                 | t       | f           | t        | f         | f        | t         | t              | t
+ "aaa "                              | t       | f           | t        | f         | f        | t         | t              | t
+ true                                | t       | f           | t        | f         | f        | t         | t              | t
+ null                                | t       | f           | t        | f         | f        | t         | t              | t
+ []                                  | t       | f           | t        | f         | t        | f         | t              | t
+ [1, "2", {}]                        | t       | f           | t        | f         | t        | f         | t              | t
+ {}                                  | t       | f           | t        | t         | f        | f         | t              | t
+ {"a": 1, "b": null}                 | t       | f           | t        | t         | f        | f         | t              | t
+ {"a": null}                         | t       | f           | t        | t         | f        | f         | t              | t
+ {"a": 1, "b": [{"a": 1}, {"a": 2}]} | t       | f           | t        | t         | f        | f         | t              | t
+ {"a": 1, "b": [{"a": 2, "b": 0}]}   | t       | f           | t        | t         | f        | f         | t              | t
+(11 rows)
+
+-- SYSTEM_USER
+-- Relevant PG commit:
+-- https://github.com/postgres/postgres/commit/0823d061
+CREATE TABLE table_name_for_view(id int, val_1 text);
+SELECT create_distributed_table('table_name_for_view', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO table_name_for_view VALUES (1, 'test');
+-- define a view that uses SYSTEM_USER keyword
+CREATE VIEW prop_view_1 AS
+    SELECT *, SYSTEM_USER AS su FROM table_name_for_view;
+SELECT * FROM prop_view_1;
+ id | val_1 | su
+---------------------------------------------------------------------
+  1 | test  |
+(1 row)
+
+-- check definition with SYSTEM_USER is correctly propagated to workers
+\c - - - :worker_1_port
+SELECT pg_get_viewdef('pg16.prop_view_1', true);
+          pg_get_viewdef
+---------------------------------------------------------------------
+  SELECT id,                      +
+     val_1,                       +
+     SYSTEM_USER AS su            +
+    FROM pg16.table_name_for_view;
+(1 row)
+
+\c - - - :master_port
+SET search_path TO pg16;
 \set VERBOSITY terse
 SET client_min_messages TO ERROR;
 DROP SCHEMA pg16 CASCADE;
