@@ -180,7 +180,7 @@ jobs:
     - uses: "./.github/actions/upload_coverage"
       if: always()
       with:
-        flags: test_${{ env.PG_MAJOR }},${{ matrix.suite }}_${{ matrix.make }}
+        flags: ${{ env.PG_MAJOR }}_${{ matrix.suite }}_${{ matrix.make }}
   prepare_parallelization_matrix_6:
     name: Parallel 6
     runs-on: ubuntu-latest
@@ -231,7 +231,7 @@ jobs:
     - uses: "./.github/actions/upload_coverage"
       if: always()
       with:
-        flags: test_${{ env.pg_major }},upgrade
+        flags: ${{ env.pg_major }}_upgrade
   test-pg-upgrade:
     runs-on: ubuntu-latest
     container:
@@ -272,7 +272,7 @@ jobs:
     - uses: "./.github/actions/upload_coverage"
       if: always()
       with:
-        flags: test_${{ env.old_pg_major }}_${{ env.new_pg_major }},upgrade
+        flags: ${{ env.old_pg_major }}_${{ env.new_pg_major }}_upgrade
   test-citus-upgrade:
     runs-on: ubuntu-latest
     container:
@@ -314,9 +314,11 @@ jobs:
     - uses: "./.github/actions/upload_coverage"
       if: always()
       with:
-        flags: test_${{ env.pg_major }},upgrade
+        flags: ${{ env.pg_major }}_upgrade
   upload-coverage:
     if: always()
+    env:
+      CC_TEST_REPORTER_ID: ${{ secrets.CC_TEST_REPORTER_ID }}
     runs-on: ubuntu-latest
     container:
       image: ${{ vars.test_image_name }}:${{ vars.pg15_version }}${{ vars.image_suffix }}
@@ -326,14 +328,14 @@ jobs:
       - test-citus-upgrade
       - test-pg-upgrade
     steps:
-    - uses: actions/download-artifact@v3.0.1
-      with:
-        name: "codeclimate"
-        path: "codeclimate"
-    - name: Upload coverage results to Code Climate
-      run: |-
-        cc-test-reporter sum-coverage codeclimate/*.json -o total.json
-        cc-test-reporter upload-coverage -i total.json
+      - uses: actions/download-artifact@v3.0.1
+        with:
+          name: "codeclimate"
+          path: "codeclimate"
+      - name: Upload coverage results to Code Climate
+        run: |-
+          cc-test-reporter sum-coverage codeclimate/*.json -o total.json
+          cc-test-reporter upload-coverage -i total.json
   ch_benchmark:
     if: startsWith(github.ref, 'refs/heads/ch_benchmark/')
     runs-on: ubuntu-latest
