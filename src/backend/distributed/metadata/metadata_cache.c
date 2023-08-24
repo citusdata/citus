@@ -4783,6 +4783,20 @@ InvalidateDistRelationCacheCallback(Datum argument, Oid relationId)
 			InvalidateCitusTableCacheEntrySlot(cacheSlot);
 		}
 
+		/*
+		 * if pg_dist_* table relcache entries got invalidated due to direct operations on
+		 * them, invalidate the cached oids.
+		 * TODO: We should probably invalidate the other cached oids when related tables
+		 * got invalidated.
+		 */
+
+		if (relationId == MetadataCache.distPartitionRelationId)
+		{
+			MetadataCache.distPartitionRelationId = InvalidOid;
+			MetadataCache.distPartitionLogicalRelidIndexId = InvalidOid;
+			MetadataCache.distPartitionColocationidIndexId = InvalidOid;
+		}
+
 		if (relationId == MetadataCache.distObjectRelationId)
 		{
 			InvalidateDistObjectCache();
