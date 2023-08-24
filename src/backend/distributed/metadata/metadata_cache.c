@@ -4752,6 +4752,29 @@ InvalidateForeignKeyGraph(void)
 }
 
 
+static bool
+IsAPgDistTableInMetadataCache(Oid relationId)
+{
+	if (relationId == MetadataCache.distPartitionRelationId ||
+		relationId == MetadataCache.distShardRelationId ||
+		relationId == MetadataCache.distPlacementRelationId ||
+		relationId == MetadataCache.distBackgroundJobRelationId ||
+		relationId == MetadataCache.distBackgroundJobJobIdSequenceId ||
+		relationId == MetadataCache.distBackgroundTaskRelationId ||
+		relationId == MetadataCache.distBackgroundTaskTaskIdSequenceId ||
+		relationId == MetadataCache.distBackgroundTaskDependRelationId ||
+		relationId == MetadataCache.distRebalanceStrategyRelationId ||
+		relationId == MetadataCache.distCleanupRelationId ||
+		relationId == MetadataCache.distTenantSchemaRelationId ||
+		relationId == MetadataCache.distTransactionRelationId)
+	{
+		return true;
+	}
+
+	return false;
+}
+
+
 /*
  * InvalidateDistRelationCacheCallback flushes cache entries when a relation
  * is updated (or flushes the entire cache).
@@ -4788,8 +4811,7 @@ InvalidateDistRelationCacheCallback(Datum argument, Oid relationId)
 		 * them, invalidate the cached oids.
 		 */
 
-		if (relationId == MetadataCache.distPartitionRelationId ||
-			relationId == MetadataCache.distShardRelationId)
+		if (IsAPgDistTableInMetadataCache(relationId))
 		{
 			InvalidateMetadataSystemCache();
 		}
