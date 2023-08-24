@@ -6,6 +6,10 @@ on:
 
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
 
   get_postgres_versions_from_file:
@@ -109,7 +113,6 @@ jobs:
           - debian-buster-all
           - debian-bookworm-all
           - debian-bullseye-all
-          - ubuntu-bionic-all
           - ubuntu-focal-all
           - ubuntu-jammy-all
 
