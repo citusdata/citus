@@ -192,6 +192,30 @@ COPY copy_default FROM stdin WITH (format csv, default '\D');
 SELECT * FROM copy_default ORDER BY id;
 TRUNCATE copy_default;
 
+\c - - - :worker_1_port
+COPY pg16.copy_default FROM stdin WITH (format csv, default '\D');
+1,value,2022-07-04
+2,\D,2022-07-03
+3,\D,\D
+\.
+SELECT * FROM pg16.copy_default ORDER BY id;
+
+\c - - - :master_port
+TRUNCATE pg16.copy_default;
+
+\c - - - :worker_2_port
+COPY pg16.copy_default FROM stdin WITH (format csv, default '\D');
+1,value,2022-07-04
+2,\D,2022-07-03
+3,\D,\D
+\.
+SELECT * FROM pg16.copy_default ORDER BY id;
+
+\c - - - :master_port
+SET search_path TO pg16;
+SET citus.shard_count TO 1;
+SET citus.shard_replication_factor TO 1;
+
 -- DEFAULT cannot be used in COPY TO
 COPY (select 1 as test) TO stdout WITH (default '\D');
 
