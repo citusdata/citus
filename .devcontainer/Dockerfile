@@ -141,7 +141,7 @@ RUN sudo apt update \
     vim \
  && sudo apt clean
 
-RUN sudo pip3 install pipenv
+RUN sudo pip3 install pipenv pipenv-shebang
 
 # add some common tools to the final container
 # bin directory for user tools
