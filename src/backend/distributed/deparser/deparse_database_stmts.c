@@ -49,3 +49,79 @@ AppendAlterDatabaseOwnerStmt(StringInfo buf, AlterOwnerStmt *stmt)
 					 quote_identifier(strVal((String *) stmt->object)),
 					 RoleSpecString(stmt->newowner, true));
 }
+
+
+static void
+AppendGrantDatabases(StringInfo buf, GrantStmt *stmt)
+{
+	ListCell *cell = NULL;
+	appendStringInfo(buf, " ON DATABASE ");
+
+	foreach(cell, stmt->objects)
+	{
+		char *database = strVal(lfirst(cell));
+		appendStringInfoString(buf, quote_identifier(database));
+		if (cell != list_tail(stmt->objects))
+		{
+			appendStringInfo(buf, ", ");
+		}
+	}
+}
+
+
+static void
+AppendGrantOnDatabaseStmt(StringInfo buf, GrantStmt *stmt)
+{
+	Assert(stmt->objtype == OBJECT_DATABASE);
+
+	appendStringInfo(buf, "%s ", stmt->is_grant ? "GRANT" : "REVOKE");
+
+	if (!stmt->is_grant && stmt->grant_option)
+	{
+		appendStringInfo(buf, "GRANT OPTION FOR ");
+	}
+
+	AppendGrantPrivileges(buf, stmt);
+
+	AppendGrantDatabases(buf, stmt);
+
+	AppendGrantGrantees(buf, stmt);
+
+	if (stmt->is_grant && stmt->grant_option)
+	{
+		appendStringInfo(buf, " WITH GRANT OPTION");
+	}
+	if (!stmt->is_grant)
+	{
+		if (stmt->behavior == DROP_RESTRICT)
+		{
+			appendStringInfo(buf, " RESTRICT");
+		}
+		else if (stmt->behavior == DROP_CASCADE)
+		{
+			appendStringInfo(buf, " CASCADE");
+		}
+	}
+
+	if (stmt->grantor)
+	{
+		appendStringInfo(buf, " GRANTED BY %s", RoleSpecString(stmt->grantor, true));
+	}
+
+	appendStringInfo(buf, ";");
+}
+
+
+char *
+DeparseGrantOnDatabaseStmt(Node *node)
+{
+	GrantStmt *stmt = castNode(GrantStmt, node);
+	Assert(stmt->objtype == OBJECT_DATABASE);
+
+	StringInfoData str = { 0 };
+	initStringInfo(&str);
+
+	AppendGrantOnDatabaseStmt(&str, stmt);
+
+	return str.data;
+}
