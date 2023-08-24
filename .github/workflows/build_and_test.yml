@@ -96,7 +96,6 @@ jobs:
           ./build-${{ env.PG_MAJOR }}/*
           ./install-${{ env.PG_MAJOR }}.tar
   test-citus:
-    if: ${{ false }}
     name: PG${{ matrix.pg_version }} - ${{ matrix.suite }} ${{ matrix.make }}
     strategy:
       fail-fast: false
