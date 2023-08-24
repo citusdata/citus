@@ -104,6 +104,121 @@ SELECT result FROM run_command_on_all_nodes
 SELECT create_distributed_table('test_storage', 'a');
 ALTER TABLE test_storage ALTER a SET STORAGE default;
 
+--
+-- COPY FROM ... DEFAULT
+-- Already supported in Citus, adding all PG tests with a distributed table
+-- Relevant PG commit:
+-- https://github.com/postgres/postgres/commit/9f8377f
+CREATE TABLE copy_default (
+	id integer PRIMARY KEY,
+	text_value text NOT NULL DEFAULT 'test',
+	ts_value timestamp without time zone NOT NULL DEFAULT '2022-07-05'
+);
+SELECT create_distributed_table('copy_default', 'id');
+
+-- if DEFAULT is not specified, then the marker will be regular data
+COPY copy_default FROM stdin;
+1	value	'2022-07-04'
+2	\D	'2022-07-05'
+\.
+SELECT * FROM copy_default ORDER BY id;
+TRUNCATE copy_default;
+
+COPY copy_default FROM stdin WITH (format csv);
+1,value,2022-07-04
+2,\D,2022-07-05
+\.
+SELECT * FROM copy_default ORDER BY id;
+TRUNCATE copy_default;
+
+-- DEFAULT cannot be used in binary mode
+COPY copy_default FROM stdin WITH (format binary, default '\D');
+
+-- DEFAULT cannot be new line nor carriage return
+COPY copy_default FROM stdin WITH (default E'\n');
+COPY copy_default FROM stdin WITH (default E'\r');
+
+-- DELIMITER cannot appear in DEFAULT spec
+COPY copy_default FROM stdin WITH (delimiter ';', default 'test;test');
+
+-- CSV quote cannot appear in DEFAULT spec
+COPY copy_default FROM stdin WITH (format csv, quote '"', default 'test"test');
+
+-- NULL and DEFAULT spec must be different
+COPY copy_default FROM stdin WITH (default '\N');
+
+-- cannot use DEFAULT marker in column that has no DEFAULT value
+COPY copy_default FROM stdin WITH (default '\D');
+\D	value	'2022-07-04'
+2	\D	'2022-07-05'
+\.
+
+COPY copy_default FROM stdin WITH (format csv, default '\D');
+\D,value,2022-07-04
+2,\D,2022-07-05
+\.
+
+-- The DEFAULT marker must be unquoted and unescaped or it's not recognized
+COPY copy_default FROM stdin WITH (default '\D');
+1	\D	'2022-07-04'
+2	\\D	'2022-07-04'
+3	"\D"	'2022-07-04'
+\.
+SELECT * FROM copy_default ORDER BY id;
+TRUNCATE copy_default;
+
+COPY copy_default FROM stdin WITH (format csv, default '\D');
+1,\D,2022-07-04
+2,\\D,2022-07-04
+3,"\D",2022-07-04
+\.
+SELECT * FROM copy_default ORDER BY id;
+TRUNCATE copy_default;
+
+-- successful usage of DEFAULT option in COPY
+COPY copy_default FROM stdin WITH (default '\D');
+1	value	'2022-07-04'
+2	\D	'2022-07-03'
+3	\D	\D
+\.
+SELECT * FROM copy_default ORDER BY id;
+TRUNCATE copy_default;
+
+COPY copy_default FROM stdin WITH (format csv, default '\D');
+1,value,2022-07-04
+2,\D,2022-07-03
+3,\D,\D
+\.
+SELECT * FROM copy_default ORDER BY id;
+TRUNCATE copy_default;
+
+\c - - - :worker_1_port
+COPY pg16.copy_default FROM stdin WITH (format csv, default '\D');
+1,value,2022-07-04
+2,\D,2022-07-03
+3,\D,\D
+\.
+SELECT * FROM pg16.copy_default ORDER BY id;
+
+\c - - - :master_port
+TRUNCATE pg16.copy_default;
+
+\c - - - :worker_2_port
+COPY pg16.copy_default FROM stdin WITH (format csv, default '\D');
+1,value,2022-07-04
+2,\D,2022-07-03
+3,\D,\D
+\.
+SELECT * FROM pg16.copy_default ORDER BY id;
+
+\c - - - :master_port
+SET search_path TO pg16;
+SET citus.shard_count TO 1;
+SET citus.shard_replication_factor TO 1;
+
+-- DEFAULT cannot be used in COPY TO
+COPY (select 1 as test) TO stdout WITH (default '\D');
+
 -- Tests for SQL/JSON: support the IS JSON predicate
 -- Relevant PG commit:
 -- https://github.com/postgres/postgres/commit/6ee30209
