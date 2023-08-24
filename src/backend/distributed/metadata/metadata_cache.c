@@ -4797,9 +4797,85 @@ InvalidateDistRelationCacheCallback(Datum argument, Oid relationId)
 			MetadataCache.distPartitionColocationidIndexId = InvalidOid;
 		}
 
+		if (relationId == MetadataCache.distNodeRelationId)
+		{
+			MetadataCache.distNodeRelationId = InvalidOid;
+			MetadataCache.distNodeNodeIdIndexId = InvalidOid;
+		}
+
+		if (relationId == MetadataCache.distLocalGroupRelationId)
+		{
+			MetadataCache.distLocalGroupRelationId = InvalidOid;
+		}
+
+		if (relationId == MetadataCache.distCleanupRelationId)
+		{
+			MetadataCache.distCleanupRelationId = InvalidOid;
+			MetadataCache.distCleanupPrimaryKeyIndexId = InvalidOid;
+		}
+
+		if (relationId == MetadataCache.distColocationRelationId)
+		{
+			MetadataCache.distColocationRelationId = InvalidOid;
+			MetadataCache.distColocationConfigurationIndexId = InvalidOid;
+		}
+
+		if (relationId == Metadata.distTenantSchemaRelationId)
+		{
+			Metadata.distTenantSchemaRelationId = InvalidOid;
+		}
+
+		if (relationId == MetadataCache.distShardLogicalRelidIndexId)
+		{
+			MetadataCache.distShardLogicalRelidIndexId = InvalidOid;
+			MetadataCache.distShardShardidIndexId = InvalidOid;
+		}
+
+		if (relationId == MetadataCache.distPlacementShardidIndexId)
+		{
+			MetadataCache.distPlacementShardidIndexId = InvalidOid;
+			MetadataCache.distPlacementPlacementidIndexId = InvalidOid;
+			MetadataCache.distPlacementGroupidIndexId = InvalidOid;
+		}
+
+		if (relationId == MetadataCache.distColocationidIndexId)
+		{
+			MetadataCache.distColocationidIndexId = InvalidOid;
+		}
+
+		if (relationId == MetadataCache.distTransactionRelationId)
+		{
+			MetadataCache.distTransactionRelationId = InvalidOid;
+			MetadataCache.distTransactionGroupIndexId = InvalidOid;
+		}
+
+		if (relationId == MetadataCache.distTenantSchemaPrimaryKeyIndexId)
+		{
+			MetadataCache.distTenantSchemaPrimaryKeyIndexId = InvalidOid;
+			MetadataCache.distTenantSchemaUniqueColocationIdIndexId = InvalidOid;
+		}
+		if (relationId == MetadataCache.distAuthinfoRelationId)
+		{
+			MetadataCache.distAuthinfoRelationId = InvalidOid;
+			MetadataCache.distAuthinfoIndexId = InvalidOid;
+		}
+
+		if (relationId == MetadataCache.distPoolinfoRelationId)
+		{
+			MetadataCache.distPoolinfoRelationId = InvalidOid;
+			MetadataCache.distPoolinfoIndexId = InvalidOid;
+		}
+
+		if (relationId == MetadataCache.distClockLogicalSequenceId)
+		{
+			MetadataCache.distClockLogicalSequenceId = InvalidOid;
+		}
+
 		if (relationId == MetadataCache.distObjectRelationId)
 		{
 			InvalidateDistObjectCache();
+			MetadataCache.distObjectRelationId = InvalidOid;
+			MetadataCache.distObjectPrimaryKeyIndexId = InvalidOid;
 		}
 	}
 }
