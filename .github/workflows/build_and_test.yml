@@ -329,6 +329,7 @@ jobs:
     - uses: actions/download-artifact@v3.0.1
       with:
         name: "codeclimate"
+        path: "codeclimate"
     - name: Upload coverage results to Code Climate
       run: |-
         cc-test-reporter sum-coverage codeclimate/*.json -o total.json
