@@ -12,6 +12,7 @@ SELECT substring(:'server_version', '\d+')::int >= 16 AS server_version_ge_16
 CREATE SCHEMA pg16;
 SET search_path TO pg16;
 SET citus.next_shard_id TO 950000;
+ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 1400000;
 SET citus.shard_count TO 1;
 SET citus.shard_replication_factor TO 1;
 
@@ -75,6 +76,33 @@ SELECT create_distributed_table('test_stats', 'a');
 CREATE STATISTICS (dependencies) ON a, b FROM test_stats;
 CREATE STATISTICS (ndistinct, dependencies) on a, b from test_stats;
 CREATE STATISTICS (ndistinct, dependencies, mcv) on a, b from test_stats;
+
+-- STORAGE option in CREATE is already propagated by Citus
+-- Relevant PG commit:
+-- https://github.com/postgres/postgres/commit/784cedd
+CREATE TABLE test_storage (a text, c text STORAGE plain);
+SELECT create_distributed_table('test_storage', 'a', shard_count := 2);
+SELECT result FROM run_command_on_all_nodes
+($$ SELECT array_agg(DISTINCT (attname, attstorage)) FROM pg_attribute
+    WHERE attrelid::regclass::text ILIKE 'pg16.test_storage%' AND attnum > 0;$$) ORDER BY 1;
+
+SELECT alter_distributed_table('test_storage', shard_count := 4);
+SELECT result FROM run_command_on_all_nodes
+($$ SELECT array_agg(DISTINCT (attname, attstorage)) FROM pg_attribute
+    WHERE attrelid::regclass::text ILIKE 'pg16.test_storage%' AND attnum > 0;$$) ORDER BY 1;
+
+SELECT undistribute_table('test_storage');
+SELECT result FROM run_command_on_all_nodes
+($$ SELECT array_agg(DISTINCT (attname, attstorage)) FROM pg_attribute
+    WHERE attrelid::regclass::text ILIKE 'pg16.test_storage%' AND attnum > 0;$$) ORDER BY 1;
+
+-- New option to change storage to DEFAULT in PG16
+-- ALTER TABLE .. ALTER COLUMN .. SET STORAGE is already
+-- not supported by Citus, so this is also not supported
+-- Relevant PG commit:
+-- https://github.com/postgres/postgres/commit/b9424d0
+SELECT create_distributed_table('test_storage', 'a');
+ALTER TABLE test_storage ALTER a SET STORAGE default;
 
 -- Tests for SQL/JSON: support the IS JSON predicate
 -- Relevant PG commit:

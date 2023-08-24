@@ -11,6 +11,7 @@ SELECT substring(:'server_version', '\d+')::int >= 16 AS server_version_ge_16
 CREATE SCHEMA pg16;
 SET search_path TO pg16;
 SET citus.next_shard_id TO 950000;
+ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 1400000;
 SET citus.shard_count TO 1;
 SET citus.shard_replication_factor TO 1;
 -- test the new vacuum and analyze options
@@ -127,6 +128,80 @@ HINT:  Consider specifying a name for the statistics
 CREATE STATISTICS (ndistinct, dependencies, mcv) on a, b from test_stats;
 ERROR:  cannot create statistics without a name on a Citus table
 HINT:  Consider specifying a name for the statistics
+-- STORAGE option in CREATE is already propagated by Citus
+-- Relevant PG commit:
+-- https://github.com/postgres/postgres/commit/784cedd
+CREATE TABLE test_storage (a text, c text STORAGE plain);
+SELECT create_distributed_table('test_storage', 'a', shard_count := 2);
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT result FROM run_command_on_all_nodes
+($$ SELECT array_agg(DISTINCT (attname, attstorage)) FROM pg_attribute
+    WHERE attrelid::regclass::text ILIKE 'pg16.test_storage%' AND attnum > 0;$$) ORDER BY 1;
+      result
+---------------------------------------------------------------------
+ {"(a,x)","(c,p)"}
+ {"(a,x)","(c,p)"}
+ {"(a,x)","(c,p)"}
+(3 rows)
+
+SELECT alter_distributed_table('test_storage', shard_count := 4);
+NOTICE:  creating a new table for pg16.test_storage
+NOTICE:  moving the data of pg16.test_storage
+NOTICE:  dropping the old pg16.test_storage
+NOTICE:  renaming the new table to pg16.test_storage
+ alter_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT result FROM run_command_on_all_nodes
+($$ SELECT array_agg(DISTINCT (attname, attstorage)) FROM pg_attribute
+    WHERE attrelid::regclass::text ILIKE 'pg16.test_storage%' AND attnum > 0;$$) ORDER BY 1;
+      result
+---------------------------------------------------------------------
+ {"(a,x)","(c,p)"}
+ {"(a,x)","(c,p)"}
+ {"(a,x)","(c,p)"}
+(3 rows)
+
+SELECT undistribute_table('test_storage');
+NOTICE:  creating a new table for pg16.test_storage
+NOTICE:  moving the data of pg16.test_storage
+NOTICE:  dropping the old pg16.test_storage
+NOTICE:  renaming the new table to pg16.test_storage
+ undistribute_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT result FROM run_command_on_all_nodes
+($$ SELECT array_agg(DISTINCT (attname, attstorage)) FROM pg_attribute
+    WHERE attrelid::regclass::text ILIKE 'pg16.test_storage%' AND attnum > 0;$$) ORDER BY 1;
+      result
+---------------------------------------------------------------------
+
+
+ {"(a,x)","(c,p)"}
+(3 rows)
+
+-- New option to change storage to DEFAULT in PG16
+-- ALTER TABLE .. ALTER COLUMN .. SET STORAGE is already
+-- not supported by Citus, so this is also not supported
+-- Relevant PG commit:
+-- https://github.com/postgres/postgres/commit/b9424d0
+SELECT create_distributed_table('test_storage', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+ALTER TABLE test_storage ALTER a SET STORAGE default;
+ERROR:  alter table command is currently unsupported
+DETAIL:  Only ADD|DROP COLUMN, SET|DROP NOT NULL, SET|DROP DEFAULT, ADD|DROP|VALIDATE CONSTRAINT, SET (), RESET (), ENABLE|DISABLE|NO FORCE|FORCE ROW LEVEL SECURITY, ATTACH|DETACH PARTITION and TYPE subcommands are supported.
 -- Tests for SQL/JSON: support the IS JSON predicate
 -- Relevant PG commit:
 -- https://github.com/postgres/postgres/commit/6ee30209
