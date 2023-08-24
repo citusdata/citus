@@ -4789,24 +4789,7 @@ InvalidateDistRelationCacheCallback(Datum argument, Oid relationId)
 		 */
 
 		if (relationId == MetadataCache.distPartitionRelationId ||
-			relationId == MetadataCache.distNodeRelationId ||
-
-			relationId == MetadataCache.distLocalGroupRelationId ||
-
-			relationId == MetadataCache.distCleanupRelationId ||
-			relationId == MetadataCache.distColocationRelationId ||
-
-			relationId == MetadataCache.distTenantSchemaRelationId ||
-
-			relationId == MetadataCache.distShardLogicalRelidIndexId ||
-
-			relationId == MetadataCache.distPlacementShardidIndexId ||
-
-			relationId == MetadataCache.distTransactionRelationIda ||
-			relationId == MetadataCache.distTenantSchemaPrimaryKeyIndexId ||
-			relationId == MetadataCache.distAuthinfoRelationId ||
-			relationId == MetadataCache.distPoolinfoRelationId ||
-			relationId == MetadataCache.distClockLogicalSequenceId)
+			relationId == MetadataCache.distShardRelationId)
 		{
 			InvalidateMetadataSystemCache();
 		}
