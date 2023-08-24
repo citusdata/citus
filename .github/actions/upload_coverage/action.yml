@@ -5,8 +5,6 @@ inputs:
 runs:
   using: composite
   steps:
-#   # This item has no matching transformer
-#   - codecov_codecov_upload:
   - name: Create codeclimate coverage
     run: |-
       lcov --directory . --capture --output-file lcov.info
@@ -18,3 +16,4 @@ runs:
   - uses: actions/upload-artifact@v3.1.1
     with:
       path: "/tmp/codeclimate/*.json"
+      name: codeclimate
