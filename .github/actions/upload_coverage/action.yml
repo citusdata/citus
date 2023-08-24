@@ -8,6 +8,8 @@ runs:
   - uses: codecov/codecov-action@v3
     with:
       flags: ${{ inputs.flags }}
+      token: ${{ secrets.CODECOV_TOKEN }}
+      verbose: true
   - name: Create codeclimate coverage
     run: |-
       lcov --directory . --capture --output-file lcov.info
