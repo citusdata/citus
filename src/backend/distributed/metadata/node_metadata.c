@@ -1180,7 +1180,10 @@ LockShardsInWorkerPlacementList(WorkerNode *workerNode, LOCKMODE lockMode)
 	LockShardsInPlacementListMetadata(placementList, lockMode);
 }
 
-
+/*
+* This function is used to start a background worker to kill backends holding conflicting
+* locks with this backend. It returns NULL if the background worker could not be started.
+*/
 BackgroundWorkerHandle *
 CheckBackgroundWorkerToObtainLocks(int32 lock_cooldown)
 {
