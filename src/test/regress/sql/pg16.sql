@@ -80,16 +80,28 @@ CREATE STATISTICS (ndistinct, dependencies, mcv) on a, b from test_stats;
 -- STORAGE option in CREATE is already propagated by Citus
 -- Relevant PG commit:
 -- https://github.com/postgres/postgres/commit/784cedd
-SET citus.log_remote_commands TO on;
 CREATE TABLE test_storage (a text, c text STORAGE plain);
-SELECT create_distributed_table('test_storage', 'a');
-SET citus.log_remote_commands TO off;
+SELECT create_distributed_table('test_storage', 'a', shard_count := 2);
+SELECT result FROM run_command_on_all_nodes
+($$ SELECT array_agg(DISTINCT (attname, attstorage)) FROM pg_attribute
+    WHERE attrelid::regclass::text ILIKE 'pg16.test_storage%' AND attnum > 0;$$) ORDER BY 1;
+
+SELECT alter_distributed_table('test_storage', shard_count := 4);
+SELECT result FROM run_command_on_all_nodes
+($$ SELECT array_agg(DISTINCT (attname, attstorage)) FROM pg_attribute
+    WHERE attrelid::regclass::text ILIKE 'pg16.test_storage%' AND attnum > 0;$$) ORDER BY 1;
+
+SELECT undistribute_table('test_storage');
+SELECT result FROM run_command_on_all_nodes
+($$ SELECT array_agg(DISTINCT (attname, attstorage)) FROM pg_attribute
+    WHERE attrelid::regclass::text ILIKE 'pg16.test_storage%' AND attnum > 0;$$) ORDER BY 1;
 
 -- New option to change storage to DEFAULT in PG16
 -- ALTER TABLE .. ALTER COLUMN .. SET STORAGE is already
 -- not supported by Citus, so this is also not supported
 -- Relevant PG commit:
 -- https://github.com/postgres/postgres/commit/b9424d0
+SELECT create_distributed_table('test_storage', 'a');
 ALTER TABLE test_storage ALTER a SET STORAGE default;
 
 -- Tests for SQL/JSON: support the IS JSON predicate

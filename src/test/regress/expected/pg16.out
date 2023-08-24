@@ -131,86 +131,74 @@ HINT:  Consider specifying a name for the statistics
 -- STORAGE option in CREATE is already propagated by Citus
 -- Relevant PG commit:
 -- https://github.com/postgres/postgres/commit/784cedd
-SET citus.log_remote_commands TO on;
 CREATE TABLE test_storage (a text, c text STORAGE plain);
-SELECT create_distributed_table('test_storage', 'a');
-NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SELECT pg_catalog.citus_internal_add_colocation_metadata(1400001, 1, 1, 'pg_catalog.text'::regtype, 'pg_catalog."default"'::regcollation)
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SELECT pg_catalog.citus_internal_add_colocation_metadata(1400001, 1, 1, 'pg_catalog.text'::regtype, 'pg_catalog."default"'::regcollation)
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SELECT worker_apply_shard_ddl_command (950002, 'pg16', 'CREATE TABLE pg16.test_storage (a text, c text) USING heap')
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SELECT worker_apply_shard_ddl_command (950002, 'pg16', 'ALTER TABLE ONLY pg16.test_storage ALTER COLUMN c SET STORAGE PLAIN')
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SELECT worker_apply_shard_ddl_command (950002, 'pg16', 'ALTER TABLE pg16.test_storage OWNER TO postgres')
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off'
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off'
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing CREATE TABLE pg16.test_storage (a text, c text) USING heap
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing CREATE TABLE pg16.test_storage (a text, c text) USING heap
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing ALTER TABLE ONLY pg16.test_storage ALTER COLUMN c SET STORAGE PLAIN
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing ALTER TABLE ONLY pg16.test_storage ALTER COLUMN c SET STORAGE PLAIN
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing ALTER TABLE pg16.test_storage OWNER TO postgres
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing ALTER TABLE pg16.test_storage OWNER TO postgres
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SELECT worker_create_truncate_trigger('pg16.test_storage')
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SELECT worker_create_truncate_trigger('pg16.test_storage')
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off'
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off'
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SELECT citus_internal_add_partition_metadata ('pg16.test_storage'::regclass, 'h', 'a', 1400001, 's')
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SELECT citus_internal_add_partition_metadata ('pg16.test_storage'::regclass, 'h', 'a', 1400001, 's')
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing WITH shard_data(relationname, shardid, storagetype, shardminvalue, shardmaxvalue)  AS (VALUES ('pg16.test_storage'::regclass, 950002, 't'::"char", '-2147483648', '2147483647')) SELECT citus_internal_add_shard_metadata(relationname, shardid, storagetype, shardminvalue, shardmaxvalue) FROM shard_data;
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing WITH shard_data(relationname, shardid, storagetype, shardminvalue, shardmaxvalue)  AS (VALUES ('pg16.test_storage'::regclass, 950002, 't'::"char", '-2147483648', '2147483647')) SELECT citus_internal_add_shard_metadata(relationname, shardid, storagetype, shardminvalue, shardmaxvalue) FROM shard_data;
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing WITH placement_data(shardid, shardlength, groupid, placementid)  AS (VALUES (xxxxxx, xxxxxx, xxxxxx, xxxxxx)) SELECT citus_internal_add_placement_metadata(shardid, shardlength, groupid, placementid) FROM placement_data;
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing WITH placement_data(shardid, shardlength, groupid, placementid)  AS (VALUES (xxxxxx, xxxxxx, xxxxxx, xxxxxx)) SELECT citus_internal_add_placement_metadata(shardid, shardlength, groupid, placementid) FROM placement_data;
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off'
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off'
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing WITH distributed_object_data(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation)  AS (VALUES ('table', ARRAY['pg16', 'test_storage']::text[], ARRAY[]::text[], -1, 0, false)) SELECT citus_internal_add_object_metadata(typetext, objnames, objargs, distargumentindex::int, colocationid::int, force_delegation::bool) FROM distributed_object_data;
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing WITH distributed_object_data(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation)  AS (VALUES ('table', ARRAY['pg16', 'test_storage']::text[], ARRAY[]::text[], -1, 0, false)) SELECT citus_internal_add_object_metadata(typetext, objnames, objargs, distargumentindex::int, colocationid::int, force_delegation::bool) FROM distributed_object_data;
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing PREPARE TRANSACTION 'citus_xx_xx_xx_xx'
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing PREPARE TRANSACTION 'citus_xx_xx_xx_xx'
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing COMMIT PREPARED 'citus_xx_xx_xx_xx'
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing COMMIT PREPARED 'citus_xx_xx_xx_xx'
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+SELECT create_distributed_table('test_storage', 'a', shard_count := 2);
  create_distributed_table
 ---------------------------------------------------------------------
 
 (1 row)
 
-SET citus.log_remote_commands TO off;
+SELECT result FROM run_command_on_all_nodes
+($$ SELECT array_agg(DISTINCT (attname, attstorage)) FROM pg_attribute
+    WHERE attrelid::regclass::text ILIKE 'pg16.test_storage%' AND attnum > 0;$$) ORDER BY 1;
+      result
+---------------------------------------------------------------------
+ {"(a,x)","(c,p)"}
+ {"(a,x)","(c,p)"}
+ {"(a,x)","(c,p)"}
+(3 rows)
+
+SELECT alter_distributed_table('test_storage', shard_count := 4);
+NOTICE:  creating a new table for pg16.test_storage
+NOTICE:  moving the data of pg16.test_storage
+NOTICE:  dropping the old pg16.test_storage
+NOTICE:  renaming the new table to pg16.test_storage
+ alter_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT result FROM run_command_on_all_nodes
+($$ SELECT array_agg(DISTINCT (attname, attstorage)) FROM pg_attribute
+    WHERE attrelid::regclass::text ILIKE 'pg16.test_storage%' AND attnum > 0;$$) ORDER BY 1;
+      result
+---------------------------------------------------------------------
+ {"(a,x)","(c,p)"}
+ {"(a,x)","(c,p)"}
+ {"(a,x)","(c,p)"}
+(3 rows)
+
+SELECT undistribute_table('test_storage');
+NOTICE:  creating a new table for pg16.test_storage
+NOTICE:  moving the data of pg16.test_storage
+NOTICE:  dropping the old pg16.test_storage
+NOTICE:  renaming the new table to pg16.test_storage
+ undistribute_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT result FROM run_command_on_all_nodes
+($$ SELECT array_agg(DISTINCT (attname, attstorage)) FROM pg_attribute
+    WHERE attrelid::regclass::text ILIKE 'pg16.test_storage%' AND attnum > 0;$$) ORDER BY 1;
+      result
+---------------------------------------------------------------------
+
+
+ {"(a,x)","(c,p)"}
+(3 rows)
+
 -- New option to change storage to DEFAULT in PG16
 -- ALTER TABLE .. ALTER COLUMN .. SET STORAGE is already
 -- not supported by Citus, so this is also not supported
 -- Relevant PG commit:
 -- https://github.com/postgres/postgres/commit/b9424d0
+SELECT create_distributed_table('test_storage', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
 ALTER TABLE test_storage ALTER a SET STORAGE default;
 ERROR:  alter table command is currently unsupported
 DETAIL:  Only ADD|DROP COLUMN, SET|DROP NOT NULL, SET|DROP DEFAULT, ADD|DROP|VALIDATE CONSTRAINT, SET (), RESET (), ENABLE|DISABLE|NO FORCE|FORCE ROW LEVEL SECURITY, ATTACH|DETACH PARTITION and TYPE subcommands are supported.
