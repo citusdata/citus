@@ -2,13 +2,15 @@ name: coverage
 inputs:
   flags:
     required: false
+  codecov_token:
+    required: true
 runs:
   using: composite
   steps:
   - uses: codecov/codecov-action@v3
     with:
       flags: ${{ inputs.flags }}
-      token: ${{ secrets.CODECOV_TOKEN }}
+      token: ${{ inputs.codecov_token }}
       verbose: true
   - name: Create codeclimate coverage
     run: |-
