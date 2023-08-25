@@ -334,7 +334,7 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		 * Push a new hash map for tracking objects propagated in the current
 		 * transaction.
 		 */
-		PushObjectsPropagatedHash();
+		PushPropagatedObjectsHash();
 	}
 
 	PG_TRY();

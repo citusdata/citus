@@ -679,6 +679,7 @@ SELECT * FROM run_command_on_workers($$SELECT pg_identify_object_as_address(clas
 
 -- Adding a column with constraint should propagate the function
 BEGIN;
+	SET LOCAL citus.multi_shard_modify_mode TO sequential;
     CREATE TABLE table_to_prop_func_8(id int, col_1 int);
     SELECT create_distributed_table('table_to_prop_func_8', 'id');
  create_distributed_table
@@ -694,17 +695,29 @@ BEGIN;
         return param_1 > 5;
     END;
     $$;
-ERROR:  cannot run function command because there was a parallel operation on a distributed table in the transaction
-DETAIL:  When running command on/for a distributed function, Citus needs to perform all operations over a single connection per node to ensure consistency.
-HINT:  Try re-running the transaction with "SET LOCAL citus.multi_shard_modify_mode TO 'sequential';"
     SELECT pg_identify_object_as_address(classid, objid, objsubid) from pg_catalog.pg_dist_object where objid = 'function_propagation_schema.func_in_transaction_10'::regproc::oid;
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
+                        pg_identify_object_as_address
+---------------------------------------------------------------------
+ (function,"{function_propagation_schema,func_in_transaction_10}",{integer})
+(1 row)
+
     ALTER TABLE table_to_prop_func_8 ADD CONSTRAINT col1_check CHECK (function_propagation_schema.func_in_transaction_10(col_1));
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
     -- Function should be marked as distributed after adding the constraint
     SELECT pg_identify_object_as_address(classid, objid, objsubid) from pg_catalog.pg_dist_object where objid = 'function_propagation_schema.func_in_transaction_10'::regproc::oid;
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ROLLBACK;
+                        pg_identify_object_as_address
+---------------------------------------------------------------------
+ (function,"{function_propagation_schema,func_in_transaction_10}",{integer})
+(1 row)
+
+COMMIT;
+-- Function should be marked as distributed on the worker after committing changes
+SELECT * FROM run_command_on_workers($$SELECT pg_identify_object_as_address(classid, objid, objsubid) from pg_catalog.pg_dist_object where objid = 'function_propagation_schema.func_in_transaction_10'::regproc::oid;$$) ORDER BY 1,2;
+ nodename  | nodeport | success |                                   result
+---------------------------------------------------------------------
+ localhost |    57637 | t       | (function,"{function_propagation_schema,func_in_transaction_10}",{integer})
+ localhost |    57638 | t       | (function,"{function_propagation_schema,func_in_transaction_10}",{integer})
+(2 rows)
+
 -- If constraint depends on a non-distributed table it should error out
 BEGIN;
     CREATE TABLE local_table_for_const(id int);
@@ -769,7 +782,6 @@ BEGIN;
         return 4;
     END;
     $$;
-    RESET citus.create_object_propagation;
     SELECT pg_identify_object_as_address(classid, objid, objsubid) from pg_catalog.pg_dist_object where objid = 'function_propagation_schema.func_for_rule'::regproc::oid;
                 pg_identify_object_as_address
 ---------------------------------------------------------------------

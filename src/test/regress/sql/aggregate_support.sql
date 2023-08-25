@@ -554,6 +554,38 @@ SELECT create_distributed_table('dummy_tbl','a');
 create function dummy_fnc(a dummy_tbl, d double precision) RETURNS dummy_tbl
     AS $$SELECT 1;$$ LANGUAGE sql;
 
+-- test in tx block
+-- shouldn't distribute, as we disable propagation
+BEGIN;
+SET LOCAL citus.enable_ddl_propagation TO off;
+create aggregate dependent_agg (float8) (stype=dummy_tbl, sfunc=dummy_fnc);
+COMMIT;
+-- verify not distributed
+SELECT run_command_on_workers($$select aggfnoid from pg_aggregate where aggfnoid::text like '%dependent_agg%';$$);
+
+drop aggregate dependent_agg ( double precision);
+
+-- now try again with enabled propagation
+-- should distribute, as citus.enable_ddl_propagation is set to on
+-- will switch to sequential mode
+BEGIN;
+create aggregate dependent_agg (float8) (stype=dummy_tbl, sfunc=dummy_fnc);
+COMMIT;
+
+-- verify distributed
+SELECT run_command_on_workers($$select aggfnoid from pg_aggregate where aggfnoid::text like '%dependent_agg%';$$);
+
+-- verify that the aggregate is added into pg_dist_object, on each worker
+SELECT run_command_on_workers($$SELECT count(*) from pg_catalog.pg_dist_object where objid = 'aggregate_support.dependent_agg'::regproc;$$);
+
+-- drop and test outside of tx block
+drop aggregate dependent_agg (float8);
+-- verify that the aggregate is removed from pg_dist_object, on each worker
+SELECT run_command_on_workers($$SELECT count(*) from pg_catalog.pg_dist_object where objid = 'aggregate_support.dependent_agg'::regproc;$$);
+create aggregate dependent_agg (float8) (stype=dummy_tbl, sfunc=dummy_fnc);
+--verify
+SELECT run_command_on_workers($$select aggfnoid from pg_aggregate where aggfnoid::text like '%dependent_agg%';$$);
+
 DROP TABLE dummy_tbl CASCADE;
 
 -- Show that polymorphic aggregates with zero-argument works
@@ -580,6 +612,14 @@ FROM pg_catalog.pg_dist_object
     EXCEPT
 SELECT unnest(result::text[]) AS unnested_result
 FROM run_command_on_workers($$SELECT array_agg(pg_identify_object_as_address(classid, objid, objsubid)) from pg_catalog.pg_dist_object$$);
+
+begin;
+    create type typ1 as (a int);
+    create or replace function fnagg(a typ1, d double precision) RETURNS typ1 AS $$SELECT 1;$$LANGUAGE sql;
+    create aggregate dependent_agg (float8) (stype=typ1, sfunc=fnagg);
+commit;
+
+SELECT run_command_on_workers($$select aggfnoid from pg_aggregate where aggfnoid::text like '%dependent_agg%';$$);
 
 CREATE AGGREGATE newavg (
    sfunc = int4_avg_accum, basetype = int4, stype = _int8,

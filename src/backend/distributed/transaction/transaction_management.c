@@ -322,7 +322,7 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 
 			ResetGlobalVariables();
 			ResetRelationAccessHash();
-			ResetObjectsPropagated();
+			ResetPropagatedObjects();
 
 			/*
 			 * Make sure that we give the shared connections back to the shared
@@ -393,7 +393,7 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 
 			ResetGlobalVariables();
 			ResetRelationAccessHash();
-			ResetObjectsPropagated();
+			ResetPropagatedObjects();
 
 			/* Reset any local replication origin session since transaction has been aborted.*/
 			ResetReplicationOriginLocalSession();
@@ -665,7 +665,7 @@ CoordinatedSubTransactionCallback(SubXactEvent event, SubTransactionId subId,
 			 * Push a new hash map for tracking objects propagated in the current
 			 * subtransaction.
 			 */
-			PushObjectsPropagatedHash();
+			PushPropagatedObjectsHash();
 
 			MemoryContextSwitchTo(previousContext);
 
@@ -729,7 +729,7 @@ CoordinatedSubTransactionCallback(SubXactEvent event, SubTransactionId subId,
 			}
 
 			/* remove the last hashmap from propagated objects stack */
-			PopObjectsPropagatedHash();
+			PopPropagatedObjectsHash();
 
 			/* Reset any local replication origin session since subtransaction has been aborted.*/
 			ResetReplicationOriginLocalSession();

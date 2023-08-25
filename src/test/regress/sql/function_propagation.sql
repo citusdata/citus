@@ -415,6 +415,7 @@ SELECT * FROM run_command_on_workers($$SELECT pg_identify_object_as_address(clas
 
 -- Adding a column with constraint should propagate the function
 BEGIN;
+	SET LOCAL citus.multi_shard_modify_mode TO sequential;
     CREATE TABLE table_to_prop_func_8(id int, col_1 int);
     SELECT create_distributed_table('table_to_prop_func_8', 'id');
 
@@ -433,7 +434,10 @@ BEGIN;
 
     -- Function should be marked as distributed after adding the constraint
     SELECT pg_identify_object_as_address(classid, objid, objsubid) from pg_catalog.pg_dist_object where objid = 'function_propagation_schema.func_in_transaction_10'::regproc::oid;
-ROLLBACK;
+COMMIT;
+
+-- Function should be marked as distributed on the worker after committing changes
+SELECT * FROM run_command_on_workers($$SELECT pg_identify_object_as_address(classid, objid, objsubid) from pg_catalog.pg_dist_object where objid = 'function_propagation_schema.func_in_transaction_10'::regproc::oid;$$) ORDER BY 1,2;
 
 
 -- If constraint depends on a non-distributed table it should error out
@@ -491,7 +495,6 @@ BEGIN;
         return 4;
     END;
     $$;
-    RESET citus.create_object_propagation;
 
     SELECT pg_identify_object_as_address(classid, objid, objsubid) from pg_catalog.pg_dist_object where objid = 'function_propagation_schema.func_for_rule'::regproc::oid;
 

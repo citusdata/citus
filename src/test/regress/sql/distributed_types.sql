@@ -274,6 +274,31 @@ UPDATE field_indirection_test_2 SET (ct2_col, ct1_col) = ('(10, "text10", 20)', 
 
 SELECT * FROM field_indirection_test_2 ORDER BY 1,2,3;
 
+-- fails due to force_max_query_parallelization enabled
+BEGIN;
+-- force parallel execution by preceding with a analytical query
+SET LOCAL citus.force_max_query_parallelization TO on;
+SELECT count(*) FROM domain_indirection_test;
+
+CREATE TYPE max_par_type AS (a int);
+SHOW citus.multi_shard_modify_mode;
+CREATE TABLE max_par_table(a int,b max_par_type);
+SELECT create_distributed_table('max_par_table', 'a');
+SHOW citus.multi_shard_modify_mode;
+COMMIT;
+
+-- not it should succeed with sequential mode
+BEGIN;
+SET LOCAL citus.multi_shard_modify_mode TO sequential;
+SELECT count(*) FROM domain_indirection_test;
+
+CREATE TYPE max_par_type AS (a int);
+SHOW citus.multi_shard_modify_mode;
+CREATE TABLE max_par_table(a int,b max_par_type);
+SELECT create_distributed_table('max_par_table', 'a');
+SHOW citus.multi_shard_modify_mode;
+COMMIT;
+
 -- Show that PG does not allow adding a circular dependency btw types
 -- We added here to make sure we can catch it if PG changes its behaviour
 CREATE TYPE circ_type1 AS (a int);

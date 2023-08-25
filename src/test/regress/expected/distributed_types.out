@@ -433,6 +433,59 @@ SELECT * FROM field_indirection_test_2 ORDER BY 1,2,3;
        8 | (10," text10",20) | (40,50)
 (2 rows)
 
+-- fails due to force_max_query_parallelization enabled
+BEGIN;
+-- force parallel execution by preceding with a analytical query
+SET LOCAL citus.force_max_query_parallelization TO on;
+SELECT count(*) FROM domain_indirection_test;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+CREATE TYPE max_par_type AS (a int);
+ERROR:  cannot run type command because there was a parallel operation on a distributed table in the transaction
+DETAIL:  When running command on/for a distributed type, Citus needs to perform all operations over a single connection per node to ensure consistency.
+HINT:  Try re-running the transaction with "SET LOCAL citus.multi_shard_modify_mode TO 'sequential';"
+SHOW citus.multi_shard_modify_mode;
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+CREATE TABLE max_par_table(a int,b max_par_type);
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+SELECT create_distributed_table('max_par_table', 'a');
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+SHOW citus.multi_shard_modify_mode;
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+COMMIT;
+-- not it should succeed with sequential mode
+BEGIN;
+SET LOCAL citus.multi_shard_modify_mode TO sequential;
+SELECT count(*) FROM domain_indirection_test;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+CREATE TYPE max_par_type AS (a int);
+SHOW citus.multi_shard_modify_mode;
+ citus.multi_shard_modify_mode
+---------------------------------------------------------------------
+ sequential
+(1 row)
+
+CREATE TABLE max_par_table(a int,b max_par_type);
+SELECT create_distributed_table('max_par_table', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SHOW citus.multi_shard_modify_mode;
+ citus.multi_shard_modify_mode
+---------------------------------------------------------------------
+ sequential
+(1 row)
+
+COMMIT;
 -- Show that PG does not allow adding a circular dependency btw types
 -- We added here to make sure we can catch it if PG changes its behaviour
 CREATE TYPE circ_type1 AS (a int);
