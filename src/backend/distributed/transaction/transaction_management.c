@@ -19,6 +19,8 @@
 
 #include "access/twophase.h"
 #include "access/xact.h"
+#include "catalog/dependency.h"
+#include "common/hashfn.h"
 #include "distributed/backend_data.h"
 #include "distributed/citus_safe_lib.h"
 #include "distributed/connection_management.h"
@@ -98,6 +100,9 @@ StringInfo activeSetStmts;
  */
 static List *activeSubXactContexts = NIL;
 
+/* objects propagated in the current transaction */
+static HTAB *PropagatedObjectsInTx = NULL;
+
 /* some pre-allocated memory so we don't need to call malloc() during callbacks */
 MemoryContext CitusXactCallbackContext = NULL;
 
@@ -143,11 +148,13 @@ static void CoordinatedSubTransactionCallback(SubXactEvent event, SubTransaction
 /* remaining functions */
 static void AdjustMaxPreparedTransactions(void);
 static void PushSubXact(SubTransactionId subId);
-static void PopSubXact(SubTransactionId subId);
+static void PopSubXact(SubTransactionId subId, bool commit);
 static void ResetGlobalVariables(void);
 static bool SwallowErrors(void (*func)(void));
 static void ForceAllInProgressConnectionsToClose(void);
 static void EnsurePrepareTransactionIsAllowed(void);
+static void InitTransactionPropagatedObjectsHash(void);
+static HTAB * CreateSubtransactionPropagatedObjectsHash(void);
 
 
 /*
@@ -262,6 +269,7 @@ InitializeTransactionManagement(void)
 															 8 * 1024,
 															 8 * 1024,
 															 8 * 1024);
+	InitTransactionPropagatedObjectsHash();
 }
 
 
@@ -661,12 +669,6 @@ CoordinatedSubTransactionCallback(SubXactEvent event, SubTransactionId subId,
 				CoordinatedRemoteTransactionsSavepointBegin(subId);
 			}
 
-			/*
-			 * Push a new hash map for tracking objects propagated in the current
-			 * subtransaction.
-			 */
-			PushPropagatedObjectsHash();
-
 			MemoryContextSwitchTo(previousContext);
 
 			break;
@@ -681,7 +683,7 @@ CoordinatedSubTransactionCallback(SubXactEvent event, SubTransactionId subId,
 			{
 				CoordinatedRemoteTransactionsSavepointRelease(subId);
 			}
-			PopSubXact(subId);
+			PopSubXact(subId, true);
 
 			/* Set CachedDuringCitusCreation to one level lower to represent citus creation is done */
 
@@ -715,7 +717,7 @@ CoordinatedSubTransactionCallback(SubXactEvent event, SubTransactionId subId,
 			{
 				CoordinatedRemoteTransactionsSavepointRollback(subId);
 			}
-			PopSubXact(subId);
+			PopSubXact(subId, false);
 
 			/*
 			 * Clear MetadataCache table if we're aborting from a CREATE EXTENSION Citus
@@ -727,9 +729,6 @@ CoordinatedSubTransactionCallback(SubXactEvent event, SubTransactionId subId,
 				InvalidateMetadataSystemCache();
 				SetCreateCitusTransactionLevel(0);
 			}
-
-			/* remove the last hashmap from propagated objects stack */
-			PopPropagatedObjectsHash();
 
 			/* Reset any local replication origin session since subtransaction has been aborted.*/
 			ResetReplicationOriginLocalSession();
@@ -786,6 +785,7 @@ PushSubXact(SubTransactionId subId)
 	SubXactContext *state = palloc(sizeof(SubXactContext));
 	state->subId = subId;
 	state->setLocalCmds = activeSetStmts;
+	state->propagatedObjects = CreateSubtransactionPropagatedObjectsHash();
 
 	/* append to list and reset active set stmts for upcoming sub-xact */
 	activeSubXactContexts = lappend(activeSubXactContexts, state);
@@ -795,7 +795,7 @@ PushSubXact(SubTransactionId subId)
 
 /* PopSubXact pops subId from the stack of active sub-transactions. */
 static void
-PopSubXact(SubTransactionId subId)
+PopSubXact(SubTransactionId subId, bool commit)
 {
 	SubXactContext *state = llast(activeSubXactContexts);
 
@@ -817,6 +817,22 @@ PopSubXact(SubTransactionId subId)
 	 * ones we had in the upper commit.
 	 */
 	activeSetStmts = state->setLocalCmds;
+
+	/*
+	 * keep subtransaction's propagated objects at toplevel transaction
+	 * if subtransaction committed.
+	 */
+	if (commit)
+	{
+		HASH_SEQ_STATUS propagatedObjectsSeq;
+		hash_seq_init(&propagatedObjectsSeq, state->propagatedObjects);
+		ObjectAddress *objectAddress = NULL;
+		while ((objectAddress = hash_seq_search(&propagatedObjectsSeq)) != NULL)
+		{
+			hash_search(PropagatedObjectsInTx, objectAddress, HASH_ENTER, NULL);
+		}
+		hash_delete_all(state->propagatedObjects);
+	}
 
 	/*
 	 * Free state to avoid memory leaks when we create subxacts for each row,
@@ -924,4 +940,140 @@ EnsurePrepareTransactionIsAllowed(void)
 	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 					errmsg("cannot use 2PC in transactions involving "
 						   "multiple servers")));
+}
+
+
+/*
+ * InitTransactionPropagatedObjectsHash initiates a hash table used to keep
+ * track of the objects propagated in the current transaction.
+ */
+static void
+InitTransactionPropagatedObjectsHash(void)
+{
+	HASHCTL info;
+	memset(&info, 0, sizeof(info));
+	info.keysize = sizeof(ObjectAddress);
+	info.entrysize = sizeof(ObjectAddress);
+	info.hash = tag_hash;
+	info.hcxt = TopMemoryContext;
+
+	int hashFlags = (HASH_ELEM | HASH_CONTEXT | HASH_FUNCTION);
+	PropagatedObjectsInTx = hash_create("Tx Propagated Objects", 1024,
+										&info, hashFlags);
+}
+
+
+/*
+ * CreateSubtransactionPropagatedObjectsHash creates a hash table used to keep
+ * track of the objects propagated in the current subtransaction.
+ */
+static HTAB *
+CreateSubtransactionPropagatedObjectsHash(void)
+{
+	HASHCTL info;
+	memset(&info, 0, sizeof(info));
+	info.keysize = sizeof(ObjectAddress);
+	info.entrysize = sizeof(ObjectAddress);
+	info.hash = tag_hash;
+	info.hcxt = CitusXactCallbackContext;
+
+	int hashFlags = (HASH_ELEM | HASH_CONTEXT | HASH_FUNCTION);
+	return hash_create("Subtx-%d Propagated Objects", 1024,
+					   &info, hashFlags);
+}
+
+
+/*
+ * TrackPropagatedObject adds given object into the objects propagated in the current
+ * subtransaction.
+ */
+void
+TrackPropagatedObject(const ObjectAddress *objectAddress)
+{
+	if (activeSubXactContexts == NIL)
+	{
+		MemoryContext oldContext = MemoryContextSwitchTo(CitusXactCallbackContext);
+		ObjectAddress *copiedObjectAddress = palloc0(sizeof(ObjectAddress));
+		*copiedObjectAddress = *objectAddress;
+		hash_search(PropagatedObjectsInTx, objectAddress, HASH_ENTER, NULL);
+		MemoryContextSwitchTo(oldContext);
+		return;
+	}
+
+	SubXactContext *state = llast(activeSubXactContexts);
+	hash_search(state->propagatedObjects, objectAddress, HASH_ENTER, NULL);
+}
+
+
+/*
+ * TrackPropagatedTable adds given table and its sequences to the objects propagated
+ * in the current subtransaction.
+ */
+void
+TrackPropagatedTable(Oid relationId)
+{
+	/* track table */
+	ObjectAddress *tableAddress = palloc0(sizeof(ObjectAddress));
+	ObjectAddressSet(*tableAddress, RelationRelationId, relationId);
+	TrackPropagatedObject(tableAddress);
+
+	/* track its sequences */
+	List *ownedSeqIdList = getOwnedSequences(relationId);
+	Oid ownedSeqId = InvalidOid;
+	foreach_oid(ownedSeqId, ownedSeqIdList)
+	{
+		ObjectAddress *seqAddress = palloc0(sizeof(ObjectAddress));
+		ObjectAddressSet(*seqAddress, RelationRelationId, ownedSeqId);
+		TrackPropagatedObject(seqAddress);
+	}
+}
+
+
+/*
+ * ResetPropagatedObjects resets all objects propagated in the current
+ * transaction from hash.
+ */
+void
+ResetPropagatedObjects(void)
+{
+	hash_delete_all(PropagatedObjectsInTx);
+}
+
+
+/*
+ * HasAnyDepInPropagatedObjects decides if any dependency of given object is
+ * propagated in the current transaction.
+ */
+bool
+HasAnyDepInPropagatedObjects(const ObjectAddress *objectAddress)
+{
+	List *dependencyList = GetAllSupportedDependenciesForObject(objectAddress);
+	ObjectAddress *dependency = NULL;
+	foreach_ptr(dependency, dependencyList)
+	{
+		/* first search in top transaction level */
+		bool found = false;
+		hash_search(PropagatedObjectsInTx, dependency, HASH_FIND, &found);
+		if (found)
+		{
+			return true;
+		}
+
+		/* then search in subtransaction level if any exists */
+		if (activeSubXactContexts == NIL)
+		{
+			continue;
+		}
+		SubXactContext *state = NULL;
+		foreach_ptr(state, activeSubXactContexts)
+		{
+			hash_search(state->propagatedObjects, dependency, HASH_FIND, &found);
+			if (found)
+			{
+				return true;
+			}
+		}
+	}
+
+	return false;
 }

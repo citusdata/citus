@@ -55,7 +55,6 @@
 #include "distributed/listutils.h"
 #include "distributed/local_executor.h"
 #include "distributed/maintenanced.h"
-#include "distributed/metadata/dependency.h"
 #include "distributed/multi_logical_replication.h"
 #include "distributed/multi_partitioning_utils.h"
 #include "distributed/metadata_sync.h"
@@ -327,15 +326,6 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 	}
 
 	UtilityHookLevel++;
-
-	if (context == PROCESS_UTILITY_TOPLEVEL && UtilityHookLevel == 1)
-	{
-		/*
-		 * Push a new hash map for tracking objects propagated in the current
-		 * transaction.
-		 */
-		PushPropagatedObjectsHash();
-	}
 
 	PG_TRY();
 	{

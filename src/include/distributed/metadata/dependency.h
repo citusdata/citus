@@ -38,13 +38,4 @@ extern Oid GetDependingView(Form_pg_depend pg_depend);
 extern List * FilterObjectAddressListByPredicate(List *objectAddressList,
 												 AddressPredicate predicate);
 
-/* api for tracking the objects propagated in current transaction */
-extern void InitPropagatedObjectsContext(void);
-extern void PushPropagatedObjectsHash(void);
-extern void PopPropagatedObjectsHash(void);
-extern void ResetPropagatedObjects(void);
-extern void TrackPropagatedObject(const ObjectAddress *objectAddress);
-extern void TrackPropagatedTable(Oid relationId);
-extern bool HasAnyDepInPropagatedObjects(const ObjectAddress *objectAddress);
-
 #endif /* CITUS_DEPENDENCY_H */

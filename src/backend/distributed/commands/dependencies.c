@@ -13,11 +13,9 @@
 #include "catalog/dependency.h"
 #include "catalog/objectaddress.h"
 #include "commands/extension.h"
-#include "common/hashfn.h"
 #include "distributed/commands.h"
 #include "distributed/commands/utility_hook.h"
 #include "distributed/connection_management.h"
-#include "distributed/hash_helpers.h"
 #include "distributed/listutils.h"
 #include "distributed/metadata/dependency.h"
 #include "distributed/metadata/distobject.h"
@@ -39,155 +37,6 @@ static void EnsureDependenciesExistOnAllNodes(const ObjectAddress *target);
 static List * GetDependencyCreateDDLCommands(const ObjectAddress *dependency);
 static bool ShouldPropagateObject(const ObjectAddress *address);
 static char * DropTableIfExistsCommand(Oid relationId);
-
-
-/*
- * Memory context and data structure for storing the objects propagated in the
- * current transaction. We push a new stack for tracking each subtransaction's objects.
- * In each stack, we store the objects propagated in the subtransaction.
- */
-static MemoryContext PropagatedObjectsInTxContext = NULL;
-static List *PropagatedObjectsInTx = NIL;
-
-
-/*
- * InitPropagatedObjectsContext allocates memory context to track propagated objects
- * in the current transaction.
- */
-void
-InitPropagatedObjectsContext(void)
-{
-	PropagatedObjectsInTxContext = AllocSetContextCreateInternal(TopMemoryContext,
-																 "Tx Propagated Object Context",
-																 ALLOCSET_DEFAULT_MINSIZE,
-																 ALLOCSET_DEFAULT_INITSIZE,
-																 ALLOCSET_DEFAULT_MAXSIZE);
-}
-
-
-/*
- * PushPropagatedObjectsHash pushes a new hashmap to stack to track objects propagated
- * in the current (sub)/transaction.
- */
-void
-PushPropagatedObjectsHash(void)
-{
-	HASHCTL info;
-	memset(&info, 0, sizeof(info));
-	info.keysize = sizeof(ObjectAddress);
-	info.entrysize = sizeof(ObjectAddress);
-	info.hash = tag_hash;
-	info.hcxt = PropagatedObjectsInTxContext;
-	uint32 hashFlags = (HASH_ELEM | HASH_BLOBS | HASH_CONTEXT);
-
-	HTAB *propagatedObjectsHash = hash_create("citus tx propagated objects hash",
-											  8, &info, hashFlags);
-
-	MemoryContext oldContext = MemoryContextSwitchTo(PropagatedObjectsInTxContext);
-	PropagatedObjectsInTx = lappend(PropagatedObjectsInTx, propagatedObjectsHash);
-	MemoryContextSwitchTo(oldContext);
-}
-
-
-/*
- * PopPropagatedObjectsHash removes the hashmap for the objects propagated
- * in the current subtransaction from the stack.
- */
-void
-PopPropagatedObjectsHash(void)
-{
-	PropagatedObjectsInTx = list_delete_last(PropagatedObjectsInTx);
-}
-
-
-/*
- * ResetPropagatedObjects resets all objects propagated in the current transaction.
- */
-void
-ResetPropagatedObjects(void)
-{
-	HTAB *objectPropagatedHash = NULL;
-	foreach_ptr(objectPropagatedHash, PropagatedObjectsInTx)
-	{
-		hash_destroy(objectPropagatedHash);
-	}
-	list_free(PropagatedObjectsInTx);
-	PropagatedObjectsInTx = NIL;
-}
-
-
-/*
- * TrackPropagatedObject adds given object into the objects propagated in the current
- * subtransaction.
- */
-void
-TrackPropagatedObject(const ObjectAddress *objectAddress)
-{
-	if (PropagatedObjectsInTx == NIL)
-	{
-		return;
-	}
-
-	HTAB *currentObjectsPropagatedHash = (HTAB *) llast(PropagatedObjectsInTx);
-	hash_search(currentObjectsPropagatedHash, objectAddress, HASH_ENTER, NULL);
-}
-
-
-/*
- * TrackPropagatedTable adds given table and its sequences to the objects propagated
- * in the current subtransaction.
- */
-void
-TrackPropagatedTable(Oid relationId)
-{
-	/* track table */
-	ObjectAddress *tableAddress = palloc0(sizeof(ObjectAddress));
-	ObjectAddressSet(*tableAddress, RelationRelationId, relationId);
-	TrackPropagatedObject(tableAddress);
-
-	/* track its sequences */
-	List *ownedSeqIdList = getOwnedSequences(relationId);
-	Oid ownedSeqId = InvalidOid;
-	foreach_oid(ownedSeqId, ownedSeqIdList)
-	{
-		ObjectAddress *seqAddress = palloc0(sizeof(ObjectAddress));
-		ObjectAddressSet(*seqAddress, RelationRelationId, ownedSeqId);
-		TrackPropagatedObject(seqAddress);
-	}
-}
-
-
-/*
- * HasAnyDepInPropagatedObjects decides if any dependency of given object is
- * propagated in the current transaction.
- */
-bool
-HasAnyDepInPropagatedObjects(const ObjectAddress *objectAddress)
-{
-	if (list_length(PropagatedObjectsInTx) == 0)
-	{
-		return false;
-	}
-
-	List *dependencyList = GetAllSupportedDependenciesForObject(objectAddress);
-	ObjectAddress *dependency = NULL;
-	foreach_ptr(dependency, dependencyList)
-	{
-		HTAB *propagatedObjectsHash = NULL;
-		foreach_ptr(propagatedObjectsHash, PropagatedObjectsInTx)
-		{
-			bool found = false;
-			hash_search(propagatedObjectsHash, dependency, HASH_FIND, &found);
-			if (found)
-			{
-				return true;
-			}
-		}
-	}
-
-	return false;
-}
-
 
 /*
  * EnsureDependenciesExistOnAllNodes finds all the dependencies that we support and makes

@@ -624,6 +624,8 @@ objid = (SELECT oid FROM pg_proc WHERE prosrc = 'cube_a_f8_f8');
 (1 row)
 
 ROLLBACK;
+-- drop objects under public schema
+DROP FUNCTION public.dintdict_init, public.dintdict_lexize CASCADE;
 -- Postgres already doesn't allow creating extensions in temp schema but
 -- let's have a test for that to track any furher changes in postgres.
 DROP EXTENSION isn CASCADE;

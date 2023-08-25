@@ -55,7 +55,6 @@
 #include "distributed/shard_cleaner.h"
 #include "distributed/metadata_utility.h"
 #include "distributed/coordinator_protocol.h"
-#include "distributed/metadata/dependency.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata_sync.h"
 #include "distributed/multi_physical_planner.h"
@@ -489,7 +488,6 @@ _PG_init(void)
 	InitializeConnectionManagement();
 	InitPlacementConnectionManagement();
 	InitRelationAccessHash();
-	InitPropagatedObjectsContext();
 	InitializeCitusQueryStats();
 	InitializeSharedConnectionStats();
 	InitializeLocallyReservedSharedConnections();
