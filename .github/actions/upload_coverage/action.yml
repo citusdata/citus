@@ -12,6 +12,7 @@ runs:
       flags: ${{ inputs.flags }}
       token: ${{ inputs.codecov_token }}
       verbose: true
+      gcov: true
   - name: Create codeclimate coverage
     run: |-
       lcov --directory . --capture --output-file lcov.info
