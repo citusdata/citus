@@ -11,6 +11,7 @@ SELECT substring(:'server_version', '\d+')::int >= 16 AS server_version_ge_16
 CREATE SCHEMA pg16;
 SET search_path TO pg16;
 SET citus.next_shard_id TO 950000;
+ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 1400000;
 SET citus.shard_count TO 1;
 SET citus.shard_replication_factor TO 1;
 -- test the new vacuum and analyze options
@@ -65,6 +66,482 @@ SET citus.log_remote_commands TO OFF;
 -- only verifying it works and not printing log
 -- remote commands because it can be flaky
 VACUUM (ONLY_DATABASE_STATS);
+-- New GENERIC_PLAN option in EXPLAIN
+-- Relevant PG commit:
+-- https://github.com/postgres/postgres/commit/3c05284
+CREATE TABLE tenk1 (
+	unique1 int4,
+	unique2 int4,
+    thousand int4
+);
+SELECT create_distributed_table('tenk1', 'unique1');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SET citus.log_remote_commands TO on;
+EXPLAIN (GENERIC_PLAN) SELECT unique1 FROM tenk1 WHERE thousand = 1000;
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SAVEPOINT citus_explain_savepoint
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing EXPLAIN (ANALYZE FALSE, VERBOSE FALSE, COSTS TRUE, BUFFERS FALSE, WAL FALSE, GENERIC_PLAN TRUE, TIMING FALSE, SUMMARY FALSE, FORMAT TEXT) SELECT unique1 FROM pg16.tenk1_950001 tenk1 WHERE (thousand OPERATOR(pg_catalog.=) 1000)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ROLLBACK TO SAVEPOINT citus_explain_savepoint
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+                                   QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0)
+   Task Count: 1
+   Tasks Shown: All
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  Seq Scan on tenk1_950001 tenk1  (cost=0.00..35.50 rows=10 width=4)
+               Filter: (thousand = 1000)
+(7 rows)
+
+EXPLAIN (GENERIC_PLAN, ANALYZE) SELECT unique1 FROM tenk1 WHERE thousand = 1000;
+ERROR:  EXPLAIN options ANALYZE and GENERIC_PLAN cannot be used together
+SET citus.log_remote_commands TO off;
+-- Proper error when creating statistics without a name on a Citus table
+-- Relevant PG commit:
+-- https://github.com/postgres/postgres/commit/624aa2a13bd02dd584bb0995c883b5b93b2152df
+CREATE TABLE test_stats (
+    a   int,
+    b   int
+);
+SELECT create_distributed_table('test_stats', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE STATISTICS (dependencies) ON a, b FROM test_stats;
+ERROR:  cannot create statistics without a name on a Citus table
+HINT:  Consider specifying a name for the statistics
+CREATE STATISTICS (ndistinct, dependencies) on a, b from test_stats;
+ERROR:  cannot create statistics without a name on a Citus table
+HINT:  Consider specifying a name for the statistics
+CREATE STATISTICS (ndistinct, dependencies, mcv) on a, b from test_stats;
+ERROR:  cannot create statistics without a name on a Citus table
+HINT:  Consider specifying a name for the statistics
+-- STORAGE option in CREATE is already propagated by Citus
+-- Relevant PG commit:
+-- https://github.com/postgres/postgres/commit/784cedd
+CREATE TABLE test_storage (a text, c text STORAGE plain);
+SELECT create_distributed_table('test_storage', 'a', shard_count := 2);
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT result FROM run_command_on_all_nodes
+($$ SELECT array_agg(DISTINCT (attname, attstorage)) FROM pg_attribute
+    WHERE attrelid::regclass::text ILIKE 'pg16.test_storage%' AND attnum > 0;$$) ORDER BY 1;
+      result
+---------------------------------------------------------------------
+ {"(a,x)","(c,p)"}
+ {"(a,x)","(c,p)"}
+ {"(a,x)","(c,p)"}
+(3 rows)
+
+SELECT alter_distributed_table('test_storage', shard_count := 4);
+NOTICE:  creating a new table for pg16.test_storage
+NOTICE:  moving the data of pg16.test_storage
+NOTICE:  dropping the old pg16.test_storage
+NOTICE:  renaming the new table to pg16.test_storage
+ alter_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT result FROM run_command_on_all_nodes
+($$ SELECT array_agg(DISTINCT (attname, attstorage)) FROM pg_attribute
+    WHERE attrelid::regclass::text ILIKE 'pg16.test_storage%' AND attnum > 0;$$) ORDER BY 1;
+      result
+---------------------------------------------------------------------
+ {"(a,x)","(c,p)"}
+ {"(a,x)","(c,p)"}
+ {"(a,x)","(c,p)"}
+(3 rows)
+
+SELECT undistribute_table('test_storage');
+NOTICE:  creating a new table for pg16.test_storage
+NOTICE:  moving the data of pg16.test_storage
+NOTICE:  dropping the old pg16.test_storage
+NOTICE:  renaming the new table to pg16.test_storage
+ undistribute_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT result FROM run_command_on_all_nodes
+($$ SELECT array_agg(DISTINCT (attname, attstorage)) FROM pg_attribute
+    WHERE attrelid::regclass::text ILIKE 'pg16.test_storage%' AND attnum > 0;$$) ORDER BY 1;
+      result
+---------------------------------------------------------------------
+
+
+ {"(a,x)","(c,p)"}
+(3 rows)
+
+-- New option to change storage to DEFAULT in PG16
+-- ALTER TABLE .. ALTER COLUMN .. SET STORAGE is already
+-- not supported by Citus, so this is also not supported
+-- Relevant PG commit:
+-- https://github.com/postgres/postgres/commit/b9424d0
+SELECT create_distributed_table('test_storage', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+ALTER TABLE test_storage ALTER a SET STORAGE default;
+ERROR:  alter table command is currently unsupported
+DETAIL:  Only ADD|DROP COLUMN, SET|DROP NOT NULL, SET|DROP DEFAULT, ADD|DROP|VALIDATE CONSTRAINT, SET (), RESET (), ENABLE|DISABLE|NO FORCE|FORCE ROW LEVEL SECURITY, ATTACH|DETACH PARTITION and TYPE subcommands are supported.
+--
+-- COPY FROM ... DEFAULT
+-- Already supported in Citus, adding all PG tests with a distributed table
+-- Relevant PG commit:
+-- https://github.com/postgres/postgres/commit/9f8377f
+CREATE TABLE copy_default (
+	id integer PRIMARY KEY,
+	text_value text NOT NULL DEFAULT 'test',
+	ts_value timestamp without time zone NOT NULL DEFAULT '2022-07-05'
+);
+SELECT create_distributed_table('copy_default', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- if DEFAULT is not specified, then the marker will be regular data
+COPY copy_default FROM stdin;
+SELECT * FROM copy_default ORDER BY id;
+ id | text_value |         ts_value
+---------------------------------------------------------------------
+  1 | value      | Mon Jul 04 00:00:00 2022
+  2 | D          | Tue Jul 05 00:00:00 2022
+(2 rows)
+
+TRUNCATE copy_default;
+COPY copy_default FROM stdin WITH (format csv);
+SELECT * FROM copy_default ORDER BY id;
+ id | text_value |         ts_value
+---------------------------------------------------------------------
+  1 | value      | Mon Jul 04 00:00:00 2022
+  2 | \D         | Tue Jul 05 00:00:00 2022
+(2 rows)
+
+TRUNCATE copy_default;
+-- DEFAULT cannot be used in binary mode
+COPY copy_default FROM stdin WITH (format binary, default '\D');
+ERROR:  cannot specify DEFAULT in BINARY mode
+-- DEFAULT cannot be new line nor carriage return
+COPY copy_default FROM stdin WITH (default E'\n');
+ERROR:  COPY default representation cannot use newline or carriage return
+COPY copy_default FROM stdin WITH (default E'\r');
+ERROR:  COPY default representation cannot use newline or carriage return
+-- DELIMITER cannot appear in DEFAULT spec
+COPY copy_default FROM stdin WITH (delimiter ';', default 'test;test');
+ERROR:  COPY delimiter must not appear in the DEFAULT specification
+-- CSV quote cannot appear in DEFAULT spec
+COPY copy_default FROM stdin WITH (format csv, quote '"', default 'test"test');
+ERROR:  CSV quote character must not appear in the DEFAULT specification
+-- NULL and DEFAULT spec must be different
+COPY copy_default FROM stdin WITH (default '\N');
+ERROR:  NULL specification and DEFAULT specification cannot be the same
+-- cannot use DEFAULT marker in column that has no DEFAULT value
+COPY copy_default FROM stdin WITH (default '\D');
+ERROR:  unexpected default marker in COPY data
+DETAIL:  Column "id" has no default value.
+CONTEXT:  COPY copy_default, line 1: "\D	value	'2022-07-04'"
+COPY copy_default FROM stdin WITH (format csv, default '\D');
+ERROR:  unexpected default marker in COPY data
+DETAIL:  Column "id" has no default value.
+CONTEXT:  COPY copy_default, line 1: "\D,value,2022-07-04"
+-- The DEFAULT marker must be unquoted and unescaped or it's not recognized
+COPY copy_default FROM stdin WITH (default '\D');
+SELECT * FROM copy_default ORDER BY id;
+ id | text_value |         ts_value
+---------------------------------------------------------------------
+  1 | test       | Mon Jul 04 00:00:00 2022
+  2 | \D         | Mon Jul 04 00:00:00 2022
+  3 | "D"        | Mon Jul 04 00:00:00 2022
+(3 rows)
+
+TRUNCATE copy_default;
+COPY copy_default FROM stdin WITH (format csv, default '\D');
+SELECT * FROM copy_default ORDER BY id;
+ id | text_value |         ts_value
+---------------------------------------------------------------------
+  1 | test       | Mon Jul 04 00:00:00 2022
+  2 | \\D        | Mon Jul 04 00:00:00 2022
+  3 | \D         | Mon Jul 04 00:00:00 2022
+(3 rows)
+
+TRUNCATE copy_default;
+-- successful usage of DEFAULT option in COPY
+COPY copy_default FROM stdin WITH (default '\D');
+SELECT * FROM copy_default ORDER BY id;
+ id | text_value |         ts_value
+---------------------------------------------------------------------
+  1 | value      | Mon Jul 04 00:00:00 2022
+  2 | test       | Sun Jul 03 00:00:00 2022
+  3 | test       | Tue Jul 05 00:00:00 2022
+(3 rows)
+
+TRUNCATE copy_default;
+COPY copy_default FROM stdin WITH (format csv, default '\D');
+SELECT * FROM copy_default ORDER BY id;
+ id | text_value |         ts_value
+---------------------------------------------------------------------
+  1 | value      | Mon Jul 04 00:00:00 2022
+  2 | test       | Sun Jul 03 00:00:00 2022
+  3 | test       | Tue Jul 05 00:00:00 2022
+(3 rows)
+
+TRUNCATE copy_default;
+\c - - - :worker_1_port
+COPY pg16.copy_default FROM stdin WITH (format csv, default '\D');
+SELECT * FROM pg16.copy_default ORDER BY id;
+ id | text_value |         ts_value
+---------------------------------------------------------------------
+  1 | value      | Mon Jul 04 00:00:00 2022
+  2 | test       | Sun Jul 03 00:00:00 2022
+  3 | test       | Tue Jul 05 00:00:00 2022
+(3 rows)
+
+\c - - - :master_port
+TRUNCATE pg16.copy_default;
+\c - - - :worker_2_port
+COPY pg16.copy_default FROM stdin WITH (format csv, default '\D');
+SELECT * FROM pg16.copy_default ORDER BY id;
+ id | text_value |         ts_value
+---------------------------------------------------------------------
+  1 | value      | Mon Jul 04 00:00:00 2022
+  2 | test       | Sun Jul 03 00:00:00 2022
+  3 | test       | Tue Jul 05 00:00:00 2022
+(3 rows)
+
+\c - - - :master_port
+SET search_path TO pg16;
+SET citus.shard_count TO 1;
+SET citus.shard_replication_factor TO 1;
+-- DEFAULT cannot be used in COPY TO
+COPY (select 1 as test) TO stdout WITH (default '\D');
+ERROR:  COPY DEFAULT only available using COPY FROM
+-- Tests for SQL/JSON: support the IS JSON predicate
+-- Relevant PG commit:
+-- https://github.com/postgres/postgres/commit/6ee30209
+CREATE TABLE test_is_json (id bigserial, js text);
+SELECT create_distributed_table('test_is_json', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO test_is_json(js) VALUES
+ (NULL),
+ (''),
+ ('123'),
+ ('"aaa "'),
+ ('true'),
+ ('null'),
+ ('[]'),
+ ('[1, "2", {}]'),
+ ('{}'),
+ ('{ "a": 1, "b": null }'),
+ ('{ "a": 1, "a": null }'),
+ ('{ "a": 1, "b": [{ "a": 1 }, { "a": 2 }] }'),
+ ('{ "a": 1, "b": [{ "a": 1, "b": 0, "a": 2 }] }'),
+ ('aaa'),
+ ('{a:1}'),
+ ('["a",]');
+-- run IS JSON predicate in the worker nodes
+SELECT
+	js,
+	js IS JSON "JSON",
+	js IS NOT JSON "NOT JSON",
+	js IS JSON VALUE "VALUE",
+	js IS JSON OBJECT "OBJECT",
+	js IS JSON ARRAY "ARRAY",
+	js IS JSON SCALAR "SCALAR",
+	js IS JSON WITHOUT UNIQUE KEYS "WITHOUT UNIQUE",
+	js IS JSON WITH UNIQUE KEYS "WITH UNIQUE"
+FROM
+	test_is_json ORDER BY js;
+                      js                       | JSON | NOT JSON | VALUE | OBJECT | ARRAY | SCALAR | WITHOUT UNIQUE | WITH UNIQUE
+---------------------------------------------------------------------
+                                               | f    | t        | f     | f      | f     | f      | f              | f
+ "aaa "                                        | t    | f        | t     | f      | f     | t      | t              | t
+ 123                                           | t    | f        | t     | f      | f     | t      | t              | t
+ ["a",]                                        | f    | t        | f     | f      | f     | f      | f              | f
+ [1, "2", {}]                                  | t    | f        | t     | f      | t     | f      | t              | t
+ []                                            | t    | f        | t     | f      | t     | f      | t              | t
+ aaa                                           | f    | t        | f     | f      | f     | f      | f              | f
+ null                                          | t    | f        | t     | f      | f     | t      | t              | t
+ true                                          | t    | f        | t     | f      | f     | t      | t              | t
+ { "a": 1, "a": null }                         | t    | f        | t     | t      | f     | f      | t              | f
+ { "a": 1, "b": [{ "a": 1 }, { "a": 2 }] }     | t    | f        | t     | t      | f     | f      | t              | t
+ { "a": 1, "b": [{ "a": 1, "b": 0, "a": 2 }] } | t    | f        | t     | t      | f     | f      | t              | f
+ { "a": 1, "b": null }                         | t    | f        | t     | t      | f     | f      | t              | t
+ {a:1}                                         | f    | t        | f     | f      | f     | f      | f              | f
+ {}                                            | t    | f        | t     | t      | f     | f      | t              | t
+                                               |      |          |       |        |       |        |                |
+(16 rows)
+
+-- pull the data, and run IS JSON predicate in the coordinator
+WITH pulled_data as (SELECT js FROM test_is_json OFFSET 0)
+SELECT
+	js,
+	js IS JSON "IS JSON",
+	js IS NOT JSON "IS NOT JSON",
+	js IS JSON VALUE "IS VALUE",
+	js IS JSON OBJECT "IS OBJECT",
+	js IS JSON ARRAY "IS ARRAY",
+	js IS JSON SCALAR "IS SCALAR",
+	js IS JSON WITHOUT UNIQUE KEYS "WITHOUT UNIQUE",
+	js IS JSON WITH UNIQUE KEYS "WITH UNIQUE"
+FROM
+    pulled_data ORDER BY js;
+                      js                       | IS JSON | IS NOT JSON | IS VALUE | IS OBJECT | IS ARRAY | IS SCALAR | WITHOUT UNIQUE | WITH UNIQUE
+---------------------------------------------------------------------
+                                               | f       | t           | f        | f         | f        | f         | f              | f
+ "aaa "                                        | t       | f           | t        | f         | f        | t         | t              | t
+ 123                                           | t       | f           | t        | f         | f        | t         | t              | t
+ ["a",]                                        | f       | t           | f        | f         | f        | f         | f              | f
+ [1, "2", {}]                                  | t       | f           | t        | f         | t        | f         | t              | t
+ []                                            | t       | f           | t        | f         | t        | f         | t              | t
+ aaa                                           | f       | t           | f        | f         | f        | f         | f              | f
+ null                                          | t       | f           | t        | f         | f        | t         | t              | t
+ true                                          | t       | f           | t        | f         | f        | t         | t              | t
+ { "a": 1, "a": null }                         | t       | f           | t        | t         | f        | f         | t              | f
+ { "a": 1, "b": [{ "a": 1 }, { "a": 2 }] }     | t       | f           | t        | t         | f        | f         | t              | t
+ { "a": 1, "b": [{ "a": 1, "b": 0, "a": 2 }] } | t       | f           | t        | t         | f        | f         | t              | f
+ { "a": 1, "b": null }                         | t       | f           | t        | t         | f        | f         | t              | t
+ {a:1}                                         | f       | t           | f        | f         | f        | f         | f              | f
+ {}                                            | t       | f           | t        | t         | f        | f         | t              | t
+                                               |         |             |          |           |          |           |                |
+(16 rows)
+
+SELECT
+	js,
+	js IS JSON "IS JSON",
+	js IS NOT JSON "IS NOT JSON",
+	js IS JSON VALUE "IS VALUE",
+	js IS JSON OBJECT "IS OBJECT",
+	js IS JSON ARRAY "IS ARRAY",
+	js IS JSON SCALAR "IS SCALAR",
+	js IS JSON WITHOUT UNIQUE KEYS "WITHOUT UNIQUE",
+	js IS JSON WITH UNIQUE KEYS "WITH UNIQUE"
+FROM
+	(SELECT js::json FROM test_is_json WHERE js IS JSON) foo(js);
+                      js                       | IS JSON | IS NOT JSON | IS VALUE | IS OBJECT | IS ARRAY | IS SCALAR | WITHOUT UNIQUE | WITH UNIQUE
+---------------------------------------------------------------------
+ 123                                           | t       | f           | t        | f         | f        | t         | t              | t
+ "aaa "                                        | t       | f           | t        | f         | f        | t         | t              | t
+ true                                          | t       | f           | t        | f         | f        | t         | t              | t
+ null                                          | t       | f           | t        | f         | f        | t         | t              | t
+ []                                            | t       | f           | t        | f         | t        | f         | t              | t
+ [1, "2", {}]                                  | t       | f           | t        | f         | t        | f         | t              | t
+ {}                                            | t       | f           | t        | t         | f        | f         | t              | t
+ { "a": 1, "b": null }                         | t       | f           | t        | t         | f        | f         | t              | t
+ { "a": 1, "a": null }                         | t       | f           | t        | t         | f        | f         | t              | f
+ { "a": 1, "b": [{ "a": 1 }, { "a": 2 }] }     | t       | f           | t        | t         | f        | f         | t              | t
+ { "a": 1, "b": [{ "a": 1, "b": 0, "a": 2 }] } | t       | f           | t        | t         | f        | f         | t              | f
+(11 rows)
+
+SELECT
+	js0,
+	js IS JSON "IS JSON",
+	js IS NOT JSON "IS NOT JSON",
+	js IS JSON VALUE "IS VALUE",
+	js IS JSON OBJECT "IS OBJECT",
+	js IS JSON ARRAY "IS ARRAY",
+	js IS JSON SCALAR "IS SCALAR",
+	js IS JSON WITHOUT UNIQUE KEYS "WITHOUT UNIQUE",
+	js IS JSON WITH UNIQUE KEYS "WITH UNIQUE"
+FROM
+	(SELECT js, js::bytea FROM test_is_json WHERE js IS JSON) foo(js0, js);
+                      js0                      | IS JSON | IS NOT JSON | IS VALUE | IS OBJECT | IS ARRAY | IS SCALAR | WITHOUT UNIQUE | WITH UNIQUE
+---------------------------------------------------------------------
+ 123                                           | t       | f           | t        | f         | f        | t         | t              | t
+ "aaa "                                        | t       | f           | t        | f         | f        | t         | t              | t
+ true                                          | t       | f           | t        | f         | f        | t         | t              | t
+ null                                          | t       | f           | t        | f         | f        | t         | t              | t
+ []                                            | t       | f           | t        | f         | t        | f         | t              | t
+ [1, "2", {}]                                  | t       | f           | t        | f         | t        | f         | t              | t
+ {}                                            | t       | f           | t        | t         | f        | f         | t              | t
+ { "a": 1, "b": null }                         | t       | f           | t        | t         | f        | f         | t              | t
+ { "a": 1, "a": null }                         | t       | f           | t        | t         | f        | f         | t              | f
+ { "a": 1, "b": [{ "a": 1 }, { "a": 2 }] }     | t       | f           | t        | t         | f        | f         | t              | t
+ { "a": 1, "b": [{ "a": 1, "b": 0, "a": 2 }] } | t       | f           | t        | t         | f        | f         | t              | f
+(11 rows)
+
+SELECT
+	js,
+	js IS JSON "IS JSON",
+	js IS NOT JSON "IS NOT JSON",
+	js IS JSON VALUE "IS VALUE",
+	js IS JSON OBJECT "IS OBJECT",
+	js IS JSON ARRAY "IS ARRAY",
+	js IS JSON SCALAR "IS SCALAR",
+	js IS JSON WITHOUT UNIQUE KEYS "WITHOUT UNIQUE",
+	js IS JSON WITH UNIQUE KEYS "WITH UNIQUE"
+FROM
+	(SELECT js::jsonb FROM test_is_json WHERE js IS JSON) foo(js);
+                 js                  | IS JSON | IS NOT JSON | IS VALUE | IS OBJECT | IS ARRAY | IS SCALAR | WITHOUT UNIQUE | WITH UNIQUE
+---------------------------------------------------------------------
+ 123                                 | t       | f           | t        | f         | f        | t         | t              | t
+ "aaa "                              | t       | f           | t        | f         | f        | t         | t              | t
+ true                                | t       | f           | t        | f         | f        | t         | t              | t
+ null                                | t       | f           | t        | f         | f        | t         | t              | t
+ []                                  | t       | f           | t        | f         | t        | f         | t              | t
+ [1, "2", {}]                        | t       | f           | t        | f         | t        | f         | t              | t
+ {}                                  | t       | f           | t        | t         | f        | f         | t              | t
+ {"a": 1, "b": null}                 | t       | f           | t        | t         | f        | f         | t              | t
+ {"a": null}                         | t       | f           | t        | t         | f        | f         | t              | t
+ {"a": 1, "b": [{"a": 1}, {"a": 2}]} | t       | f           | t        | t         | f        | f         | t              | t
+ {"a": 1, "b": [{"a": 2, "b": 0}]}   | t       | f           | t        | t         | f        | f         | t              | t
+(11 rows)
+
+-- SYSTEM_USER
+-- Relevant PG commit:
+-- https://github.com/postgres/postgres/commit/0823d061
+CREATE TABLE table_name_for_view(id int, val_1 text);
+SELECT create_distributed_table('table_name_for_view', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO table_name_for_view VALUES (1, 'test');
+-- define a view that uses SYSTEM_USER keyword
+CREATE VIEW prop_view_1 AS
+    SELECT *, SYSTEM_USER AS su FROM table_name_for_view;
+SELECT * FROM prop_view_1;
+ id | val_1 | su
+---------------------------------------------------------------------
+  1 | test  |
+(1 row)
+
+-- check definition with SYSTEM_USER is correctly propagated to workers
+\c - - - :worker_1_port
+SELECT pg_get_viewdef('pg16.prop_view_1', true);
+          pg_get_viewdef
+---------------------------------------------------------------------
+  SELECT id,                      +
+     val_1,                       +
+     SYSTEM_USER AS su            +
+    FROM pg16.table_name_for_view;
+(1 row)
+
+\c - - - :master_port
+SET search_path TO pg16;
 \set VERBOSITY terse
 SET client_min_messages TO ERROR;
 DROP SCHEMA pg16 CASCADE;

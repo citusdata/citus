@@ -905,7 +905,6 @@ CREATE ROLE test_non_super_user WITH LOGIN;
 ALTER ROLE test_non_super_user NOSUPERUSER;
 
 GRANT CREATE ON DATABASE regression TO test_non_super_user;
-SELECT result FROM run_command_on_workers($$GRANT CREATE ON DATABASE regression TO test_non_super_user$$);
 
 GRANT CREATE ON SCHEMA public TO test_non_super_user ;
 
@@ -997,7 +996,6 @@ $$);
 \c - postgres
 
 REVOKE CREATE ON DATABASE regression FROM test_non_super_user;
-SELECT result FROM run_command_on_workers($$REVOKE CREATE ON DATABASE regression FROM test_non_super_user$$);
 
 REVOKE CREATE ON SCHEMA public FROM test_non_super_user;
 
