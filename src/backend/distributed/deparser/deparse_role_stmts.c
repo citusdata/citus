@@ -29,6 +29,8 @@ static void AppendRoleOption(StringInfo buf, ListCell *optionCell);
 static void AppendRoleList(StringInfo buf, List *roleList);
 static void AppendDropRoleStmt(StringInfo buf, DropRoleStmt *stmt);
 static void AppendGrantRoleStmt(StringInfo buf, GrantRoleStmt *stmt);
+static void AppendRevokeAdminOptionFor(StringInfo buf, GrantRoleStmt *stmt);
+static void AppendGrantWithAdminOption(StringInfo buf, GrantRoleStmt *stmt);
 
 
 /*
@@ -340,16 +342,9 @@ DeparseGrantRoleStmt(Node *node)
 	return buf.data;
 }
 
-
-/*
- * AppendGrantRoleStmt generates the string representation of the
- * GrantRoleStmt and appends it to the buffer.
- */
 static void
-AppendGrantRoleStmt(StringInfo buf, GrantRoleStmt *stmt)
+AppendRevokeAdminOptionFor(StringInfo buf, GrantRoleStmt *stmt)
 {
-	appendStringInfo(buf, "%s ", stmt->is_grant ? "GRANT" : "REVOKE");
-
 #if PG_VERSION_NUM >= PG_VERSION_16
 	if (!stmt->is_grant)
 	{
@@ -369,13 +364,10 @@ AppendGrantRoleStmt(StringInfo buf, GrantRoleStmt *stmt)
 		appendStringInfo(buf, "ADMIN OPTION FOR ");
 	}
 #endif
+}
 
-	AppendRoleList(buf, stmt->granted_roles);
-
-	appendStringInfo(buf, "%s ", stmt->is_grant ? " TO " : " FROM ");
-
-	AppendRoleList(buf, stmt->grantee_roles);
-
+static void AppendGrantWithAdminOption(StringInfo buf, GrantRoleStmt *stmt)
+{
 	if (stmt->is_grant)
 	{
 #if PG_VERSION_NUM >= PG_VERSION_16
@@ -395,6 +387,28 @@ AppendGrantRoleStmt(StringInfo buf, GrantRoleStmt *stmt)
 		}
 #endif
 	}
+}
+
+
+/*
+ * AppendGrantRoleStmt generates the string representation of the
+ * GrantRoleStmt and appends it to the buffer.
+ */
+static void
+AppendGrantRoleStmt(StringInfo buf, GrantRoleStmt *stmt)
+{
+	appendStringInfo(buf, "%s ", stmt->is_grant ? "GRANT" : "REVOKE");
+
+	AppendRevokeAdminOptionFor(buf, stmt);
+
+	AppendRoleList(buf, stmt->granted_roles);
+
+	appendStringInfo(buf, "%s ", stmt->is_grant ? " TO " : " FROM ");
+
+	AppendRoleList(buf, stmt->grantee_roles);
+
+	AppendGrantWithAdminOption(buf, stmt);
+
 	AppendGrantedByInGrantForRoleSpec(buf, stmt->grantor, stmt->is_grant);
 
 	AppendGrantRestrictAndCascadeForRoleSpec(buf, stmt->behavior, stmt->is_grant);
