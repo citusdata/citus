@@ -10,6 +10,8 @@ SELECT roleid::regrole::text AS role, member::regrole::text, grantor::regrole::t
 
 CREATE ROLE create_role;
 CREATE ROLE create_role_2;
+CREATE ROLE create_role_3;
+CREATE ROLE create_role_4;
 CREATE USER create_user;
 CREATE USER create_user_2;
 CREATE GROUP create_group;
@@ -44,6 +46,8 @@ CREATE ROLE "create_role""edge";
 -- test grant role
 GRANT create_group TO create_role;
 GRANT create_group TO create_role_2 WITH ADMIN OPTION;
+GRANT create_group TO create_role_3 WITH INHERIT;
+GRANT create_group TO create_role_4 WITH SET; 
 
 SELECT rolname, rolsuper, rolinherit, rolcreaterole, rolcreatedb, rolcanlogin, rolreplication, rolbypassrls, rolconnlimit, (rolpassword != '') as pass_not_empty, rolvaliduntil FROM pg_authid WHERE rolname LIKE 'create\_%' ORDER BY rolname;
 SELECT roleid::regrole::text AS role, member::regrole::text, grantor::regrole::text, admin_option FROM pg_auth_members WHERE roleid::regrole::text LIKE 'create\_%' ORDER BY 1, 2;
