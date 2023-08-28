@@ -395,10 +395,22 @@ AppendGrantRoleStmt(StringInfo buf, GrantRoleStmt *stmt)
 		}
 #endif
 
-		AppendGrantedByInGrant(buf, (GrantStmt *) stmt);
+		if (stmt->grantor)
+		{
+			appendStringInfo(buf, " GRANTED BY %s", RoleSpecString(stmt->grantor, true));
+		}
 	}
-
-	AppendGrantRestrictAndCascade(buf, (GrantStmt *) stmt);
+	else
+	{
+		if (stmt->behavior == DROP_RESTRICT)
+		{
+			appendStringInfo(buf, " RESTRICT");
+		}
+		else if (stmt->behavior == DROP_CASCADE)
+		{
+			appendStringInfo(buf, " CASCADE");
+		}
+	}
 
 }
 
