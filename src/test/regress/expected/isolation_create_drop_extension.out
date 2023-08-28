@@ -1,19 +1,8 @@
 Parsed test spec with 2 sessions
 
 starting permutation: s1-create s2-check
-?column?
----------------------------------------------------------------------
-       1
-(1 row)
-
 step s1-create:
  CREATE EXTENSION citus;
- SELECT 1;
-
-?column?
----------------------------------------------------------------------
-       1
-(1 row)
 
 step s2-check:
   SELECT 1 FROM citus_version();
