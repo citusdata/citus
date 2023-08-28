@@ -354,7 +354,8 @@ EnsureModificationsCanRun(void)
 {
 	if (RecoveryInProgress() && !WritableStandbyCoordinator)
 	{
-		ereport(ERROR, (errmsg("writing to worker nodes is not currently allowed"),
+		ereport(ERROR, (errcode(ERRCODE_READ_ONLY_SQL_TRANSACTION),
+						errmsg("writing to worker nodes is not currently allowed"),
 						errdetail("the database is read-only")));
 	}
 
@@ -415,7 +416,8 @@ EnsureModificationsCanRunOnRelation(Oid relationId)
 
 	if (modifiedTableReplicated)
 	{
-		ereport(ERROR, (errmsg("writing to worker nodes is not currently "
+		ereport(ERROR, (errcode(ERRCODE_READ_ONLY_SQL_TRANSACTION),
+						errmsg("writing to worker nodes is not currently "
 							   "allowed for replicated tables such as reference "
 							   "tables or hash distributed tables with replication "
 							   "factor greater than 1."),

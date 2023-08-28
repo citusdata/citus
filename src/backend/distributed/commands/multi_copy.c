@@ -425,7 +425,8 @@ EnsureCopyCanRunOnRelation(Oid relationId)
 	 */
 	if (RecoveryInProgress() && WritableStandbyCoordinator)
 	{
-		ereport(ERROR, (errmsg("COPY command to Citus tables is not allowed in "
+		ereport(ERROR, (errcode(ERRCODE_READ_ONLY_SQL_TRANSACTION),
+						errmsg("COPY command to Citus tables is not allowed in "
 							   "read-only mode"),
 						errhint("All COPY commands to citus tables happen via 2PC, "
 								"and 2PC requires the database to be in a writable state."),
