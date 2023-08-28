@@ -342,6 +342,7 @@ DeparseGrantRoleStmt(Node *node)
 	return buf.data;
 }
 
+
 static void
 AppendRevokeAdminOptionFor(StringInfo buf, GrantRoleStmt *stmt)
 {
@@ -366,7 +367,9 @@ AppendRevokeAdminOptionFor(StringInfo buf, GrantRoleStmt *stmt)
 #endif
 }
 
-static void AppendGrantWithAdminOption(StringInfo buf, GrantRoleStmt *stmt)
+
+static void
+AppendGrantWithAdminOption(StringInfo buf, GrantRoleStmt *stmt)
 {
 	if (stmt->is_grant)
 	{
