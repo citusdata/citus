@@ -411,7 +411,6 @@ AppendGrantRoleStmt(StringInfo buf, GrantRoleStmt *stmt)
 			appendStringInfo(buf, " CASCADE");
 		}
 	}
-
 }
 
 

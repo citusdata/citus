@@ -5,7 +5,6 @@
 #include "distributed/citus_ruleutils.h"
 
 
-
 void
 AppendWithGrantOption(StringInfo buf, GrantStmt *stmt)
 {
@@ -14,6 +13,7 @@ AppendWithGrantOption(StringInfo buf, GrantStmt *stmt)
 		appendStringInfo(buf, " WITH GRANT OPTION");
 	}
 }
+
 
 void
 AppendGrantOptionFor(StringInfo buf, GrantStmt *stmt)

@@ -191,7 +191,7 @@ AppendGrantOnSchemaStmt(StringInfo buf, GrantStmt *stmt)
 	AppendWithGrantOption(buf, stmt);
 
 	AppendGrantRestrictAndCascade(buf, stmt);
-	
+
 	appendStringInfo(buf, ";");
 }
 
