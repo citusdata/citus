@@ -180,10 +180,7 @@ AppendGrantOnSchemaStmt(StringInfo buf, GrantStmt *stmt)
 
 	appendStringInfo(buf, "%s ", stmt->is_grant ? "GRANT" : "REVOKE");
 
-	if (!stmt->is_grant && stmt->grant_option)
-	{
-		appendStringInfo(buf, "GRANT OPTION FOR ");
-	}
+	AppendGrantOptionFor(buf, stmt);
 
 	AppendGrantPrivileges(buf, stmt);
 
@@ -191,21 +188,10 @@ AppendGrantOnSchemaStmt(StringInfo buf, GrantStmt *stmt)
 
 	AppendGrantGrantees(buf, stmt);
 
-	if (stmt->is_grant && stmt->grant_option)
-	{
-		appendStringInfo(buf, " WITH GRANT OPTION");
-	}
-	if (!stmt->is_grant)
-	{
-		if (stmt->behavior == DROP_RESTRICT)
-		{
-			appendStringInfo(buf, " RESTRICT");
-		}
-		else if (stmt->behavior == DROP_CASCADE)
-		{
-			appendStringInfo(buf, " CASCADE");
-		}
-	}
+	AppendWithGrantOption(buf, stmt);
+
+	AppendGrantRestrictAndCascade(buf, stmt);
+	
 	appendStringInfo(buf, ";");
 }
 

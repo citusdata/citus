@@ -109,6 +109,10 @@ extern char * DeparseAlterSchemaOwnerStmt(Node *node);
 
 extern void AppendGrantPrivileges(StringInfo buf, GrantStmt *stmt);
 extern void AppendGrantGrantees(StringInfo buf, GrantStmt *stmt);
+extern void AppendWithGrantOption(StringInfo buf, GrantStmt *stmt);
+extern void AppendGrantOptionFor(StringInfo buf, GrantStmt *stmt);
+extern void AppendGrantRestrictAndCascade(StringInfo buf, GrantStmt *stmt);
+extern void AppendGrantedByInGrant(StringInfo buf, GrantStmt *stmt);
 
 /* forward declarations for deparse_statistics_stmts.c */
 extern char * DeparseCreateStatisticsStmt(Node *node);
