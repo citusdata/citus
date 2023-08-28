@@ -133,6 +133,18 @@ typedef struct ShardIdCacheEntry
 	int shardIndex;
 } ShardIdCacheEntry;
 
+/*
+ * ExtensionLoadedState is used to indicate whether MetadataCache.isExtensionLoaded
+ * is valid or not. We invalidate MetadataCache by zero-outing all the values. Therefore,
+ * MetadataCache.isExtensionLoaded = 0 is only meaningful if the MetadataCache is valid.
+ *   UNKNOWN : MetadataCacheData.isExtensionLoaded should be evaluated.
+ *   KNOWN   : MetadataCacheData.isExtensionLoaded is valid.
+ */
+typedef enum ExtensionLoadedState
+{
+	UNKNOWN = 0,
+	KNOWN = 1
+} ExtensionLoadedState;
 
 /*
  * State which should be cleared upon DROP EXTENSION. When the configuration
@@ -140,8 +152,8 @@ typedef struct ShardIdCacheEntry
  */
 typedef struct MetadataCacheData
 {
-	bool extensionLoaded;
-	bool extensionNotLoaded;
+	ExtensionLoadedState extensionLoadedState;
+	bool isExtensionLoaded;
 	Oid distShardRelationId;
 	Oid distPlacementRelationId;
 	Oid distBackgroundJobRelationId;
@@ -2189,13 +2201,6 @@ bool
 CitusHasBeenLoaded(void)
 {
 	/*
-	 * MetadataCache.extensionLoaded and MetadataCache.extensionNotLoaded
-	 * cannot be true at the same time.
-	 */
-	Assert(!(MetadataCache.extensionLoaded && MetadataCache.extensionNotLoaded));
-
-
-	/*
 	 * We do not use Citus hooks during CREATE/ALTER EXTENSION citus
 	 * since the objects used by the C code might be not be there yet.
 	 */
@@ -2210,20 +2215,16 @@ CitusHasBeenLoaded(void)
 	}
 
 	/*
-	 *  MetadataCache.extensionLoaded = false
-	 *  MetadataCache.extensionNotLoaded = false
-	 * means that the cache is invalid. Reevaluate the flags.
+	 * MetadataCache.extensionLoadedState indicates that MetadataCache is
+	 * in a valid state or not. MetadataCache might have been invalidated
+	 * as a result of various relcache invalidations. If the state is invalid,
+	 * evaluate and cache the values we need here.
 	 */
-	if (!MetadataCache.extensionLoaded && !MetadataCache.extensionNotLoaded)
+	if (MetadataCache.extensionLoadedState == UNKNOWN)
 	{
-		/*
-		 * Refresh if we have not determined whether the extension has been
-		 * loaded yet, or in case of ALTER EXTENSION since we want to treat
-		 * Citus as "not loaded" during ALTER EXTENSION citus.
-		 */
 		bool extensionLoaded = CitusHasBeenLoadedInternal();
 
-		if (extensionLoaded && !MetadataCache.extensionLoaded)
+		if (extensionLoaded)
 		{
 			/*
 			 * Loaded Citus for the first time in this session, or first time after
@@ -2243,11 +2244,11 @@ CitusHasBeenLoaded(void)
 			DistColocationRelationId();
 		}
 
-		MetadataCache.extensionLoaded = extensionLoaded;
-		MetadataCache.extensionNotLoaded = !extensionLoaded;
+		MetadataCache.extensionLoadedState == KNOWN;
+		MetadataCache.isExtensionLoaded = extensionLoaded;
 	}
 
-	return MetadataCache.extensionLoaded;
+	return MetadataCache.isExtensionLoaded;
 }
 
 
@@ -4752,8 +4753,15 @@ InvalidateForeignKeyGraph(void)
 }
 
 
+/*
+ * NeedsMetadataCacheInvalidation returns true if a given oid is cached in MetadataCache.
+ * This list does not include the Oids for which there are seperate invalidation
+ * functions. E.g. distColocationRelationId is handled in
+ * InvalidateForeignRelationGraphCacheCallback(Datum argument, Oid relationId).
+ * So we do not include it here.
+ */
 static bool
-IsAPgDistTableInMetadataCache(Oid relationId)
+NeedsMetadataCacheInvalidation(Oid relationId)
 {
 	if (relationId == MetadataCache.distPartitionRelationId ||
 		relationId == MetadataCache.distShardRelationId ||
@@ -4766,7 +4774,8 @@ IsAPgDistTableInMetadataCache(Oid relationId)
 		relationId == MetadataCache.distRebalanceStrategyRelationId ||
 		relationId == MetadataCache.distCleanupRelationId ||
 		relationId == MetadataCache.distTenantSchemaRelationId ||
-		relationId == MetadataCache.distTransactionRelationId)
+		relationId == MetadataCache.distTransactionRelationId ||
+		relationId == MetadataCache.distClockLogicalSequenceId)
 	{
 		return true;
 	}
@@ -4807,11 +4816,12 @@ InvalidateDistRelationCacheCallback(Datum argument, Oid relationId)
 		}
 
 		/*
-		 * if pg_dist_* table relcache entries got invalidated due to direct operations on
-		 * them, invalidate the cached oids.
+		 * if the relcache entries for pg_dist_* tables, whose oids are in MetadataCache,
+		 * got invalidated due to direct operations on them, we need to invalidate the
+		 * cached oids.E.g. a REINDEX TABLE operation invalidates the relcache.
 		 */
 
-		if (IsAPgDistTableInMetadataCache(relationId))
+		if (NeedsMetadataCacheInvalidation(relationId))
 		{
 			InvalidateMetadataSystemCache();
 		}
