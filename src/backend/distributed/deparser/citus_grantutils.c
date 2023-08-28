@@ -4,6 +4,11 @@
 #include "distributed/deparser.h"
 #include "distributed/citus_ruleutils.h"
 
+/*
+* Append the 'WITH GRANT OPTION' clause to the given buffer if the given
+* statement is a 'GRANT' statement and the grant option is specified.
+*/
+
 void
 AppendWithGrantOption(StringInfo buf, GrantStmt *stmt)
 {
@@ -13,6 +18,10 @@ AppendWithGrantOption(StringInfo buf, GrantStmt *stmt)
 	}
 }
 
+/*
+* Append the 'GRANT OPTION FOR' clause to the given buffer if the given
+* statement is a 'REVOKE' statement and the grant option is specified.
+*/
 
 void
 AppendGrantOptionFor(StringInfo buf, GrantStmt *stmt)
@@ -23,6 +32,11 @@ AppendGrantOptionFor(StringInfo buf, GrantStmt *stmt)
 	}
 }
 
+
+/*
+* Append the 'RESTRICT' or 'CASCADE' clause to the given buffer if the given
+* statement is a 'REVOKE' statement and the behavior is specified.
+*/
 
 void
 AppendGrantRestrictAndCascadeForRoleSpec(StringInfo buf, DropBehavior behavior, bool
@@ -41,6 +55,10 @@ AppendGrantRestrictAndCascadeForRoleSpec(StringInfo buf, DropBehavior behavior, 
 	}
 }
 
+/*
+* Append the 'RESTRICT' or 'CASCADE' clause to the given buffer using 'GrantStmt',
+* if the given statement is a 'REVOKE' statement and the behavior is specified.
+*/
 
 void
 AppendGrantRestrictAndCascade(StringInfo buf, GrantStmt *stmt)
@@ -48,6 +66,10 @@ AppendGrantRestrictAndCascade(StringInfo buf, GrantStmt *stmt)
 	AppendGrantRestrictAndCascadeForRoleSpec(buf, stmt->behavior, stmt->is_grant);
 }
 
+/*
+* Append the 'GRANTED BY' clause to the given buffer if the given statement is a
+* 'GRANT' statement and the grantor is specified.
+*/
 
 void
 AppendGrantedByInGrantForRoleSpec(StringInfo buf, RoleSpec *grantor, bool isGrant)
@@ -58,6 +80,10 @@ AppendGrantedByInGrantForRoleSpec(StringInfo buf, RoleSpec *grantor, bool isGran
 	}
 }
 
+/*
+* Append the 'GRANTED BY' clause to the given buffer using 'GrantStmt',
+* if the given statement is a 'GRANT' statement and the grantor is specified.
+*/
 
 void
 AppendGrantedByInGrant(StringInfo buf, GrantStmt *stmt)
