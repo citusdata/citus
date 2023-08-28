@@ -342,13 +342,14 @@ DeparseGrantRoleStmt(Node *node)
 	return buf.data;
 }
 
+
 /*
-* Append the 'RESTRICT' or 'CASCADE' clause to the given buffer if the given
-* statement is a 'REVOKE' statement and the behavior is specified.
-* After PostgreSQL 16, the behavior is specified in the 'opt' field of
-* GrantRoleStmt and may have multiple values.
-* Here, compile time version is checked to support both versions.
-*/
+ * Append the 'RESTRICT' or 'CASCADE' clause to the given buffer if the given
+ * statement is a 'REVOKE' statement and the behavior is specified.
+ * After PostgreSQL 16, the behavior is specified in the 'opt' field of
+ * GrantRoleStmt and may have multiple values.
+ * Here, compile time version is checked to support both versions.
+ */
 static void
 AppendRevokeAdminOptionFor(StringInfo buf, GrantRoleStmt *stmt)
 {
