@@ -2244,7 +2244,7 @@ CitusHasBeenLoaded(void)
 			DistColocationRelationId();
 		}
 
-		MetadataCache.extensionLoadedState == KNOWN;
+		MetadataCache.extensionLoadedState = KNOWN;
 		MetadataCache.isExtensionLoaded = extensionLoaded;
 	}
 
