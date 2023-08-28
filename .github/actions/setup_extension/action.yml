@@ -1,4 +1,4 @@
-name: install_extension
+name: setup_extension
 inputs:
   pg_major:
     required: false
