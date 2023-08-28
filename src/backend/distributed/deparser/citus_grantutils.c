@@ -1,23 +1,21 @@
+#include "postgres.h"
 #include "lib/stringinfo.h"
 #include "nodes/parsenodes.h"
-#include "postgres.h"
+#include "distributed/deparser.h"
+#include "distributed/citus_ruleutils.h"
 
-static void AppendWithGrantOption(StringInfo buf, GrantStmt *stmt);
-static void AppendGrantOptionFor(StringInfo buf, GrantStmt *stmt);
-static void AppendGrantRestrictAndCascade(StringInfo buf, GrantStmt *stmt);
-static void AppendGrantedByInGrant(StringInfo buf, GrantStmt *stmt);
 
-static void
+
+void
 AppendWithGrantOption(StringInfo buf, GrantStmt *stmt)
 {
-	if (stmt->grant_option)
+	if (stmt->is_grant && stmt->grant_option)
 	{
 		appendStringInfo(buf, " WITH GRANT OPTION");
 	}
 }
 
-
-static void
+void
 AppendGrantOptionFor(StringInfo buf, GrantStmt *stmt)
 {
 	if (!stmt->is_grant && stmt->grant_option)
@@ -27,7 +25,7 @@ AppendGrantOptionFor(StringInfo buf, GrantStmt *stmt)
 }
 
 
-static void
+void
 AppendGrantRestrictAndCascade(StringInfo buf, GrantStmt *stmt)
 {
 	if (!stmt->is_grant)
@@ -44,7 +42,7 @@ AppendGrantRestrictAndCascade(StringInfo buf, GrantStmt *stmt)
 }
 
 
-static void
+void
 AppendGrantedByInGrant(StringInfo buf, GrantStmt *stmt)
 {
 	if (stmt->grantor)
