@@ -111,8 +111,13 @@ extern void AppendGrantPrivileges(StringInfo buf, GrantStmt *stmt);
 extern void AppendGrantGrantees(StringInfo buf, GrantStmt *stmt);
 extern void AppendWithGrantOption(StringInfo buf, GrantStmt *stmt);
 extern void AppendGrantOptionFor(StringInfo buf, GrantStmt *stmt);
+extern void AppendGrantRestrictAndCascadeForRoleSpec(StringInfo buf, DropBehavior
+													 behavior, bool isGrant);
 extern void AppendGrantRestrictAndCascade(StringInfo buf, GrantStmt *stmt);
+extern void AppendGrantedByInGrantForRoleSpec(StringInfo buf, RoleSpec *grantor, bool
+											  isGrant);
 extern void AppendGrantedByInGrant(StringInfo buf, GrantStmt *stmt);
+
 
 /* forward declarations for deparse_statistics_stmts.c */
 extern char * DeparseCreateStatisticsStmt(Node *node);

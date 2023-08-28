@@ -394,23 +394,10 @@ AppendGrantRoleStmt(StringInfo buf, GrantRoleStmt *stmt)
 			appendStringInfo(buf, " WITH ADMIN OPTION");
 		}
 #endif
+	}
+	AppendGrantedByInGrantForRoleSpec(buf, stmt->grantor, stmt->is_grant);
 
-		if (stmt->grantor)
-		{
-			appendStringInfo(buf, " GRANTED BY %s", RoleSpecString(stmt->grantor, true));
-		}
-	}
-	else
-	{
-		if (stmt->behavior == DROP_RESTRICT)
-		{
-			appendStringInfo(buf, " RESTRICT");
-		}
-		else if (stmt->behavior == DROP_CASCADE)
-		{
-			appendStringInfo(buf, " CASCADE");
-		}
-	}
+	AppendGrantRestrictAndCascadeForRoleSpec(buf, stmt->behavior, stmt->is_grant);
 }
 
 

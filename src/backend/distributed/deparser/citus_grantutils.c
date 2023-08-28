@@ -4,7 +4,6 @@
 #include "distributed/deparser.h"
 #include "distributed/citus_ruleutils.h"
 
-
 void
 AppendWithGrantOption(StringInfo buf, GrantStmt *stmt)
 {
@@ -26,15 +25,16 @@ AppendGrantOptionFor(StringInfo buf, GrantStmt *stmt)
 
 
 void
-AppendGrantRestrictAndCascade(StringInfo buf, GrantStmt *stmt)
+AppendGrantRestrictAndCascadeForRoleSpec(StringInfo buf, DropBehavior behavior, bool
+										 isGrant)
 {
-	if (!stmt->is_grant)
+	if (!isGrant)
 	{
-		if (stmt->behavior == DROP_RESTRICT)
+		if (behavior == DROP_RESTRICT)
 		{
 			appendStringInfo(buf, " RESTRICT");
 		}
-		else if (stmt->behavior == DROP_CASCADE)
+		else if (behavior == DROP_CASCADE)
 		{
 			appendStringInfo(buf, " CASCADE");
 		}
@@ -43,10 +43,24 @@ AppendGrantRestrictAndCascade(StringInfo buf, GrantStmt *stmt)
 
 
 void
+AppendGrantRestrictAndCascade(StringInfo buf, GrantStmt *stmt)
+{
+	AppendGrantRestrictAndCascadeForRoleSpec(buf, stmt->behavior, stmt->is_grant);
+}
+
+
+void
+AppendGrantedByInGrantForRoleSpec(StringInfo buf, RoleSpec *grantor, bool isGrant)
+{
+	if (isGrant && grantor)
+	{
+		appendStringInfo(buf, " GRANTED BY %s", RoleSpecString(grantor, true));
+	}
+}
+
+
+void
 AppendGrantedByInGrant(StringInfo buf, GrantStmt *stmt)
 {
-	if (stmt->grantor)
-	{
-		appendStringInfo(buf, " GRANTED BY %s", RoleSpecString(stmt->grantor, true));
-	}
+	AppendGrantedByInGrantForRoleSpec(buf, stmt->grantor, stmt->is_grant);
 }
