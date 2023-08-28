@@ -68,7 +68,7 @@ jobs:
       matrix: ${{ fromJson(needs.prepare_parallelization_matrix.outputs.json) }}
     steps:
     - uses: actions/checkout@v3.5.0
-    - uses: "./.github/actions/install_extension"
+    - uses: "./.github/actions/setup_extension"
     - name: Run minimal tests
       run: |-
           gosu circleci src/test/regress/citus_tests/run_test.py ${{ env.test }} --repeat ${{ env.runs }} --use-base-schedule --use-whole-schedule-line
