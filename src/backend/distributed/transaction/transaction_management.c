@@ -92,15 +92,23 @@ StringInfo activeSetStmts;
  * Though a list, we treat this as a stack, pushing on subxact contexts whenever
  * e.g. a SAVEPOINT is executed (though this is actually performed by providing
  * PostgreSQL with a sub-xact callback). At present, the context of a subxact
- * includes a subxact identifier as well as any SET LOCAL statements propagated
- * to workers during the sub-transaction.
+ * includes
+ *  - a subxact identifier,
+ *  - any SET LOCAL statements propagated to workers during the sub-transaction,
+ *  - all objects propagated to workers during the sub-transaction.
  *
  * To be clear, last item of activeSubXactContexts list corresponds to top of
  * stack.
  */
 static List *activeSubXactContexts = NIL;
 
-/* objects propagated in the current transaction */
+/*
+ * PropagatedObjectsInTx is a set of objects propagated in the root transaction.
+ * We also keep track of objects propagated in sub-transactions in activeSubXactContexts.
+ * Any committed sub-transaction would cause the objects, which are propagated during
+ * the sub-transaction, to be moved to upper transaction's set. Objects are discarded
+ * when the sub-transaction is aborted.
+ */
 static HTAB *PropagatedObjectsInTx = NULL;
 
 /* some pre-allocated memory so we don't need to call malloc() during callbacks */
@@ -153,7 +161,9 @@ static void ResetGlobalVariables(void);
 static bool SwallowErrors(void (*func)(void));
 static void ForceAllInProgressConnectionsToClose(void);
 static void EnsurePrepareTransactionIsAllowed(void);
-static void InitTransactionPropagatedObjectsHash(void);
+static HTAB * CurrentTransactionPropagatedObjects(void);
+static HTAB * ParentTransactionPropagatedObjects(void);
+static void MovePropagatedObjectsToParentTransaction(void);
 static HTAB * CreateSubtransactionPropagatedObjectsHash(void);
 
 
@@ -269,7 +279,6 @@ InitializeTransactionManagement(void)
 															 8 * 1024,
 															 8 * 1024,
 															 8 * 1024);
-	InitTransactionPropagatedObjectsHash();
 }
 
 
@@ -649,7 +658,7 @@ CoordinatedSubTransactionCallback(SubXactEvent event, SubTransactionId subId,
 	switch (event)
 	{
 		/*
-		 * Our subtransaction stack should be consistent with postgres' internal
+		 * Our sub-transaction stack should be consistent with postgres' internal
 		 * transaction stack. In case of subxact begin, postgres calls our
 		 * callback after it has pushed the transaction into stack, so we have to
 		 * do the same even if worker commands fail, so we PushSubXact() first.
@@ -785,7 +794,9 @@ PushSubXact(SubTransactionId subId)
 	SubXactContext *state = palloc(sizeof(SubXactContext));
 	state->subId = subId;
 	state->setLocalCmds = activeSetStmts;
-	state->propagatedObjects = CreateSubtransactionPropagatedObjectsHash();
+
+	/* we lazily create hashset when any object is propagated during sub-transaction */
+	state->propagatedObjects = NULL;
 
 	/* append to list and reset active set stmts for upcoming sub-xact */
 	activeSubXactContexts = lappend(activeSubXactContexts, state);
@@ -819,20 +830,14 @@ PopSubXact(SubTransactionId subId, bool commit)
 	activeSetStmts = state->setLocalCmds;
 
 	/*
-	 * keep subtransaction's propagated objects at toplevel transaction
-	 * if subtransaction committed.
+	 * Keep subtransaction's propagated objects at parent transaction
+	 * if subtransaction committed. Otherwise, discard them.
 	 */
 	if (commit)
 	{
-		HASH_SEQ_STATUS propagatedObjectsSeq;
-		hash_seq_init(&propagatedObjectsSeq, state->propagatedObjects);
-		ObjectAddress *objectAddress = NULL;
-		while ((objectAddress = hash_seq_search(&propagatedObjectsSeq)) != NULL)
-		{
-			hash_search(PropagatedObjectsInTx, objectAddress, HASH_ENTER, NULL);
-		}
-		hash_delete_all(state->propagatedObjects);
+		MovePropagatedObjectsToParentTransaction();
 	}
+	hash_destroy(state->propagatedObjects);
 
 	/*
 	 * Free state to avoid memory leaks when we create subxacts for each row,
@@ -944,22 +949,80 @@ EnsurePrepareTransactionIsAllowed(void)
 
 
 /*
- * InitTransactionPropagatedObjectsHash initiates a hash table used to keep
- * track of the objects propagated in the current transaction.
+ * CurrentTransactionPropagatedObjects returns the objects propagated in current
+ * sub-transaction or the root transaction if no sub-transaction exists.
+ */
+static HTAB *
+CurrentTransactionPropagatedObjects(void)
+{
+	if (activeSubXactContexts == NIL)
+	{
+		/* hashset in the root transaction if there is no sub-transaction */
+		return PropagatedObjectsInTx;
+	}
+
+	/* hashset in top level sub-transaction */
+	SubXactContext *state = llast(activeSubXactContexts);
+	if (state->propagatedObjects == NULL)
+	{
+		/* lazily create hashset for sub-transaction */
+		state->propagatedObjects = CreateSubtransactionPropagatedObjectsHash();
+	}
+	return state->propagatedObjects;
+}
+
+
+/*
+ * ParentTransactionPropagatedObjects returns the objects propagated in parent
+ * transaction of active sub-transaction. It returns the root transaction if
+ * no sub-transaction exists.
+ */
+static HTAB *
+ParentTransactionPropagatedObjects(void)
+{
+	if (activeSubXactContexts == NIL)
+	{
+		return PropagatedObjectsInTx;
+	}
+
+	int nestingLevel = list_length(activeSubXactContexts);
+	if (nestingLevel == 1)
+	{
+		/* the parent is the root transaction, when there is single level sub-transaction */
+		return PropagatedObjectsInTx;
+	}
+
+	/* parent is upper sub-transaction */
+	Assert(nestingLevel >= 2);
+	SubXactContext *state = list_nth(activeSubXactContexts, nestingLevel - 2);
+	if (state->propagatedObjects == NULL)
+	{
+		/* lazily create hashset for parent sub-transaction */
+		state->propagatedObjects = CreateSubtransactionPropagatedObjectsHash();
+	}
+	return state->propagatedObjects;
+}
+
+
+/*
+ * MovePropagatedObjectsToParentTransaction moves all objects propagated in the current
+ * sub-transaction to the parent transaction. This should only be called when there is
+ * active sub-transaction.
  */
 static void
-InitTransactionPropagatedObjectsHash(void)
+MovePropagatedObjectsToParentTransaction(void)
 {
-	HASHCTL info;
-	memset(&info, 0, sizeof(info));
-	info.keysize = sizeof(ObjectAddress);
-	info.entrysize = sizeof(ObjectAddress);
-	info.hash = tag_hash;
-	info.hcxt = TopMemoryContext;
+	Assert(llast(activeSubXactContexts) != NULL);
+	HTAB *currentPropagatedObjects = CurrentTransactionPropagatedObjects();
+	HTAB *parentPropagatedObjects = ParentTransactionPropagatedObjects();
 
-	int hashFlags = (HASH_ELEM | HASH_CONTEXT | HASH_FUNCTION);
-	PropagatedObjectsInTx = hash_create("Tx Propagated Objects", 1024,
-										&info, hashFlags);
+	HASH_SEQ_STATUS propagatedObjectsSeq;
+	hash_seq_init(&propagatedObjectsSeq, currentPropagatedObjects);
+	ObjectAddress *objectAddress = NULL;
+	while ((objectAddress = hash_seq_search(&propagatedObjectsSeq)) != NULL)
+	{
+		hash_search(parentPropagatedObjects, objectAddress, HASH_ENTER, NULL);
+	}
 }
 
 
@@ -978,39 +1041,49 @@ CreateSubtransactionPropagatedObjectsHash(void)
 	info.hcxt = CitusXactCallbackContext;
 
 	int hashFlags = (HASH_ELEM | HASH_CONTEXT | HASH_FUNCTION);
-	return hash_create("Subtx-%d Propagated Objects", 1024,
+	return hash_create("Subtx-%d Propagated Objects", 16,
 					   &info, hashFlags);
 }
 
 
 /*
- * TrackPropagatedObject adds given object into the objects propagated in the current
- * subtransaction.
+ * InitTransactionPropagatedObjectsHash initiates a hash table used to keep
+ * track of the objects propagated in the root transaction.
  */
 void
-TrackPropagatedObject(const ObjectAddress *objectAddress)
+InitTransactionPropagatedObjectsHash(void)
 {
-	if (activeSubXactContexts == NIL)
-	{
-		MemoryContext oldContext = MemoryContextSwitchTo(CitusXactCallbackContext);
-		ObjectAddress *copiedObjectAddress = palloc0(sizeof(ObjectAddress));
-		*copiedObjectAddress = *objectAddress;
-		hash_search(PropagatedObjectsInTx, objectAddress, HASH_ENTER, NULL);
-		MemoryContextSwitchTo(oldContext);
-		return;
-	}
+	HASHCTL info;
+	memset(&info, 0, sizeof(info));
+	info.keysize = sizeof(ObjectAddress);
+	info.entrysize = sizeof(ObjectAddress);
+	info.hash = tag_hash;
+	info.hcxt = TopMemoryContext;
 
-	SubXactContext *state = llast(activeSubXactContexts);
-	hash_search(state->propagatedObjects, objectAddress, HASH_ENTER, NULL);
+	int hashFlags = (HASH_ELEM | HASH_CONTEXT | HASH_FUNCTION);
+	PropagatedObjectsInTx = hash_create("Tx Propagated Objects", 16,
+										&info, hashFlags);
 }
 
 
 /*
- * TrackPropagatedTable adds given table and its sequences to the objects propagated
- * in the current subtransaction.
+ * TrackPropagatedObject adds given object into the objects propagated in the current
+ * sub-transaction.
  */
 void
-TrackPropagatedTable(Oid relationId)
+TrackPropagatedObject(const ObjectAddress *objectAddress)
+{
+	HTAB *currentPropagatedObjects = CurrentTransactionPropagatedObjects();
+	hash_search(currentPropagatedObjects, objectAddress, HASH_ENTER, NULL);
+}
+
+
+/*
+ * TrackPropagatedTableAndSequences adds given table and its sequences to the objects
+ * propagated in the current sub-transaction.
+ */
+void
+TrackPropagatedTableAndSequences(Oid relationId)
 {
 	/* track table */
 	ObjectAddress *tableAddress = palloc0(sizeof(ObjectAddress));
@@ -1041,11 +1114,11 @@ ResetPropagatedObjects(void)
 
 
 /*
- * HasAnyDepInPropagatedObjects decides if any dependency of given object is
+ * HasAnyDependencyInPropagatedObjects decides if any dependency of given object is
  * propagated in the current transaction.
  */
 bool
-HasAnyDepInPropagatedObjects(const ObjectAddress *objectAddress)
+HasAnyDependencyInPropagatedObjects(const ObjectAddress *objectAddress)
 {
 	List *dependencyList = GetAllSupportedDependenciesForObject(objectAddress);
 	ObjectAddress *dependency = NULL;
@@ -1059,7 +1132,7 @@ HasAnyDepInPropagatedObjects(const ObjectAddress *objectAddress)
 			return true;
 		}
 
-		/* then search in subtransaction level if any exists */
+		/* then depth search in all nested subtransactions */
 		if (activeSubXactContexts == NIL)
 		{
 			continue;
@@ -1067,6 +1140,11 @@ HasAnyDepInPropagatedObjects(const ObjectAddress *objectAddress)
 		SubXactContext *state = NULL;
 		foreach_ptr(state, activeSubXactContexts)
 		{
+			if (state->propagatedObjects == NULL)
+			{
+				continue;
+			}
+
 			hash_search(state->propagatedObjects, dependency, HASH_FIND, &found);
 			if (found)
 			{

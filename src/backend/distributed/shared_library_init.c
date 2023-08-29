@@ -484,6 +484,7 @@ _PG_init(void)
 
 	/* initialize coordinated transaction management */
 	InitializeTransactionManagement();
+	InitTransactionPropagatedObjectsHash();
 	InitializeBackendManagement();
 	InitializeConnectionManagement();
 	InitPlacementConnectionManagement();

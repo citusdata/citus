@@ -114,17 +114,18 @@ EnsureDependenciesExistOnAllNodes(const ObjectAddress *target)
 
 
 	/*
-	 * We can propagate dependencies via the current user's metadata connection if
+	 * We need to propagate dependencies via the current user's metadata connection if
 	 * any dependency for the target is created in the current transaction. Our assumption
-	 * is that if we can find a dependency created in the current transaction, then current
-	 * user, most probably, has permissions to create the target object as well. Note
-	 * that, user still may not be able to create the target due to no permissions for
-	 * any of the dependencies. But this is ok since it should be rare. If we opted to
-	 * use outside transaction, then there would be visibility issue on outside
-	 * transaction as we propagated objects via metadata connection and they are invisible
-	 * to outside transaction until we locally commit.
+	 * is that if we rely on a dependency created in the current transaction, then the
+	 * current user, most probably, has permissions to create the target object as well.
+	 * Note that, user still may not be able to create the target due to no permissions
+	 * for any of its dependencies. But this is ok since it should be rare.
+	 *
+	 * If we opted to use a separate superuser connection for the target, then we would
+	 * have visibility issues since propagated dependencies would be invisible to
+	 * the separate connection until we locally commit.
 	 */
-	if (HasAnyDepInPropagatedObjects(target))
+	if (HasAnyDependencyInPropagatedObjects(target))
 	{
 		SendCommandListToWorkersWithMetadata(ddlCommands);
 	}

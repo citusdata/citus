@@ -161,10 +161,11 @@ extern void EnsureDistributedTransactionId(void);
 extern bool MaybeExecutingUDF(void);
 
 /* functions for tracking the objects propagated in current transaction */
+extern void InitTransactionPropagatedObjectsHash(void);
 extern void TrackPropagatedObject(const ObjectAddress *objectAddress);
-extern void TrackPropagatedTable(Oid relationId);
+extern void TrackPropagatedTableAndSequences(Oid relationId);
 extern void ResetPropagatedObjects(void);
-extern bool HasAnyDepInPropagatedObjects(const ObjectAddress *objectAddress);
+extern bool HasAnyDependencyInPropagatedObjects(const ObjectAddress *objectAddress);
 
 /* initialization function(s) */
 extern void InitializeTransactionManagement(void);

@@ -1023,6 +1023,156 @@ BEGIN;
 COMMIT;
 DROP SCHEMA sc1 CASCADE;
 
+-- verify dependency propagation with sub-transactions
+BEGIN;
+	-- schema should not be tracked as propagated since sub-transaction is rollbacked
+	SAVEPOINT sp1;
+	  CREATE SCHEMA sc1;
+	ROLLBACK TO SAVEPOINT sp1;
+
+	-- locally create the schema so that it can be propagated by next command as dependency
+	SET LOCAL citus.enable_metadata_sync TO off;
+	CREATE SCHEMA sc1;
+	SET LOCAL citus.enable_metadata_sync TO on;
+
+	-- this should use superuser outside connection to propagate table deps
+    CREATE TABLE sc1.s1(id int);
+    SELECT create_distributed_table('sc1.s1','id');
+COMMIT;
+DROP SCHEMA sc1 CASCADE;
+
+BEGIN;
+	-- schema should be tracked as propagated since sub-transaction is committed
+	SAVEPOINT sp1;
+	  CREATE SCHEMA sc1;
+	RELEASE SAVEPOINT sp1;
+
+	-- this should use current user's metadata connection to propagate table deps
+    CREATE TABLE sc1.s1(id int);
+    SELECT create_distributed_table('sc1.s1','id');
+COMMIT;
+DROP SCHEMA sc1 CASCADE;
+
+BEGIN;
+	-- schema should not be tracked as propagated since inner nested sub-transaction is rollbacked
+	SAVEPOINT sp1;
+       SAVEPOINT sp2;
+		CREATE SCHEMA sc1;
+	   ROLLBACK TO SAVEPOINT sp2;
+	RELEASE SAVEPOINT sp1;
+
+	-- locally create the schema so that it can be propagated by next command as dependency
+	SET LOCAL citus.enable_metadata_sync TO off;
+	CREATE SCHEMA sc1;
+	SET LOCAL citus.enable_metadata_sync TO on;
+
+	-- this should use superuser outside connection to propagate table deps
+    CREATE TABLE sc1.s1(id int);
+    SELECT create_distributed_table('sc1.s1','id');
+COMMIT;
+DROP SCHEMA sc1 CASCADE;
+
+BEGIN;
+	-- schema should be tracked as propagated since nested sub-transactions are committed
+	SAVEPOINT sp1;
+       SAVEPOINT sp2;
+		CREATE SCHEMA sc1;
+	   RELEASE SAVEPOINT sp2;
+	RELEASE SAVEPOINT sp1;
+
+	-- this should use current user's metadata connection to propagate table deps
+    CREATE TABLE sc1.s1(id int);
+    SELECT create_distributed_table('sc1.s1','id');
+COMMIT;
+DROP SCHEMA sc1 CASCADE;
+
+BEGIN;
+	-- schema should not be tracked as propagated since outer nested sub-transaction is rollbacked
+	SAVEPOINT sp1;
+       SAVEPOINT sp2;
+		CREATE SCHEMA sc1;
+	   RELEASE SAVEPOINT sp2;
+	ROLLBACK TO SAVEPOINT sp1;
+
+	-- locally create the schema so that it can be propagated by next command as dependency
+	SET LOCAL citus.enable_metadata_sync TO off;
+	CREATE SCHEMA sc1;
+	SET LOCAL citus.enable_metadata_sync TO on;
+
+	-- this should use superuser outside connection to propagate table deps
+    CREATE TABLE sc1.s1(id int);
+    SELECT create_distributed_table('sc1.s1','id');
+COMMIT;
+DROP SCHEMA sc1 CASCADE;
+
+BEGIN;
+	-- schema should be tracked as propagated since outer nested sub-transaction is committed
+	-- even if nonrelated inner subtransaction is rollbacked
+	SAVEPOINT sp1;
+       SAVEPOINT sp2;
+		CREATE SCHEMA sc2;
+	   ROLLBACK TO SAVEPOINT sp2;
+
+	   SAVEPOINT sp3;
+		CREATE SCHEMA sc1;
+	   RELEASE SAVEPOINT sp3;
+	RELEASE SAVEPOINT sp1;
+
+	-- this should use current user's metadata connection to propagate table deps
+    CREATE TABLE sc1.s1(id int);
+    SELECT create_distributed_table('sc1.s1','id');
+COMMIT;
+DROP SCHEMA sc1 CASCADE;
+
+BEGIN;
+	-- try with more nesting and rollbacked schema sc1 sub-transaction
+	SAVEPOINT sp1;
+       SAVEPOINT sp2;
+		CREATE SCHEMA sc2;
+	   RELEASE SAVEPOINT sp2;
+	   SAVEPOINT sp3;
+	   	CREATE SCHEMA sc3;
+		SAVEPOINT sp4;
+		 CREATE SCHEMA sc1;
+		ROLLBACK TO SAVEPOINT sp4;
+	   RELEASE SAVEPOINT sp3;
+	RELEASE SAVEPOINT sp1;
+
+	-- locally create the schema so that it can be propagated by next command as dependency
+	SET LOCAL citus.enable_metadata_sync TO off;
+	CREATE SCHEMA sc1;
+	SET LOCAL citus.enable_metadata_sync TO on;
+
+	-- this should use superuser outside connection to propagate table deps
+    CREATE TABLE sc1.s1(id int);
+    SELECT create_distributed_table('sc1.s1','id');
+COMMIT;
+DROP SCHEMA sc1 CASCADE;
+DROP SCHEMA sc2 CASCADE;
+DROP SCHEMA sc3 CASCADE;
+
+BEGIN;
+	-- try with more nesting and committed schema sc1 sub-transaction
+	SAVEPOINT sp1;
+       SAVEPOINT sp2;
+		CREATE SCHEMA sc2;
+	   RELEASE SAVEPOINT sp2;
+	   SAVEPOINT sp3;
+	   	CREATE SCHEMA sc3;
+		SAVEPOINT sp4;
+		 CREATE SCHEMA sc1;
+		RELEASE SAVEPOINT sp4;
+	   RELEASE SAVEPOINT sp3;
+	RELEASE SAVEPOINT sp1;
+
+	-- this should use current user's metadata connection to propagate table deps
+    CREATE TABLE sc1.s1(id int);
+    SELECT create_distributed_table('sc1.s1','id');
+COMMIT;
+DROP SCHEMA sc1 CASCADE;
+DROP SCHEMA sc2 CASCADE;
+DROP SCHEMA sc3 CASCADE;
+
 -- Clean up the created schema
 SET client_min_messages TO WARNING;
 
