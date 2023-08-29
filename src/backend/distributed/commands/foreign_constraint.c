@@ -840,6 +840,22 @@ GetForeignConstraintToReferenceTablesCommands(Oid relationId)
 
 
 /*
+ * GetForeignConstraintToReferenceTablesCommands takes in a relationId, and
+ * returns the list of foreign constraint commands needed to reconstruct
+ * foreign key constraints that the table is involved in as the "referenced"
+ * one and the "referencing" table is a reference table.
+ */
+List *
+GetForeignConstraintFromOtherReferenceTablesCommands(Oid relationId)
+{
+	int flags = INCLUDE_REFERENCED_CONSTRAINTS |
+				EXCLUDE_SELF_REFERENCES |
+				INCLUDE_REFERENCE_TABLES;
+	return GetForeignConstraintCommandsInternal(relationId, flags);
+}
+
+
+/*
  * GetForeignConstraintToDistributedTablesCommands takes in a relationId, and
  * returns the list of foreign constraint commands needed to reconstruct
  * foreign key constraints that the table is involved in as the "referencing"

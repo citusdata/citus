@@ -856,7 +856,7 @@ SELECT create_reference_table('reference_table_second');
 CREATE TABLE referenced_local_table(id int PRIMARY KEY, other_column int);
 DROP TABLE reference_table CASCADE;
 NOTICE:  drop cascades to constraint reference_table_second_referencing_column_fkey on table reference_table_second
-NOTICE:  drop cascades to constraint reference_table_second_referencing_column_fkey_1350654 on table public.reference_table_second_1350654
+NOTICE:  drop cascades to constraint reference_table_second_referencing_column_fkey_1350653 on table public.reference_table_second_1350653
 CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
 PL/pgSQL function citus_drop_trigger() line XX at PERFORM
 CREATE TABLE reference_table(id int, referencing_column int REFERENCES referenced_local_table(id));
@@ -917,7 +917,7 @@ DROP TABLE reference_table CASCADE;
 NOTICE:  drop cascades to 2 other objects
 DETAIL:  drop cascades to constraint fk on table references_to_reference_table
 drop cascades to constraint fk on table reference_table_second
-NOTICE:  drop cascades to constraint fk_1350663 on table public.reference_table_second_1350663
+NOTICE:  drop cascades to constraint fk_1350662 on table public.reference_table_second_1350662
 CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
 PL/pgSQL function citus_drop_trigger() line XX at PERFORM
 CREATE TABLE reference_table(id int PRIMARY KEY, referencing_column int);
@@ -1277,6 +1277,6 @@ ERROR:  cannot create foreign key constraint since Citus does not support ON DEL
 -- we no longer need those tables
 DROP TABLE referenced_by_reference_table, references_to_reference_table, reference_table, reference_table_second, referenced_local_table, self_referencing_reference_table, dropfkeytest2,
            set_on_default_test_referenced, set_on_default_test_referencing;
-NOTICE:  drop cascades to constraint fk_1350664 on table public.reference_table_1350664
+NOTICE:  drop cascades to constraint fk_1350663 on table public.reference_table_1350663
 CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
 PL/pgSQL function citus_drop_trigger() line XX at PERFORM

@@ -53,6 +53,7 @@ static int CompareShardPlacementsByNode(const void *leftElement,
 										const void *rightElement);
 static uint32 CreateColocationGroupForRelation(Oid sourceRelationId);
 static void BreakColocation(Oid sourceRelationId);
+static uint32 SingleShardTableGetNodeId(Oid relationId);
 
 
 /* exports for SQL callable functions */
@@ -1228,6 +1229,56 @@ ColocatedTableId(int32 colocationId)
 	table_close(pgDistPartition, AccessShareLock);
 
 	return colocatedTableId;
+}
+
+
+/*
+ * SingleShardTableColocationNodeId takes a colocation id that presumably
+ * belongs to colocation group used to colocate a set of single-shard
+ * tables and returns id of the node that stores / is expected to store
+ * the shards within the colocation group.
+ */
+uint32
+SingleShardTableColocationNodeId(uint32 colocationId)
+{
+	List *tablesInColocationGroup = ColocationGroupTableList(colocationId, 0);
+	if (list_length(tablesInColocationGroup) == 0)
+	{
+		int workerNodeIndex =
+			EmptySingleShardTableColocationDecideNodeId(colocationId);
+		List *workerNodeList = DistributedTablePlacementNodeList(RowShareLock);
+		WorkerNode *workerNode = (WorkerNode *) list_nth(workerNodeList, workerNodeIndex);
+
+		return workerNode->nodeId;
+	}
+	else
+	{
+		Oid colocatedTableId = ColocatedTableId(colocationId);
+		return SingleShardTableGetNodeId(colocatedTableId);
+	}
+}
+
+
+/*
+ * SingleShardTableGetNodeId returns id of the node that stores shard of
+ * given single-shard table.
+ */
+static uint32
+SingleShardTableGetNodeId(Oid relationId)
+{
+	if (!IsCitusTableType(relationId, SINGLE_SHARD_DISTRIBUTED))
+	{
+		ereport(ERROR, (errmsg("table is not a single-shard distributed table")));
+	}
+
+	int64 shardId = GetFirstShardId(relationId);
+	List *shardPlacementList = ShardPlacementList(shardId);
+	if (list_length(shardPlacementList) != 1)
+	{
+		ereport(ERROR, (errmsg("table shard does not have a single shard placement")));
+	}
+
+	return ((ShardPlacement *) linitial(shardPlacementList))->nodeId;
 }
 
 
