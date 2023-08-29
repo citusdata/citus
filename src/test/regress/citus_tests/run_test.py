@@ -110,7 +110,7 @@ DEPS = {
     ),
     "create_role_propagation": TestDeps(None, ["multi_cluster_management"]),
     "single_node_enterprise": TestDeps(None),
-    "single_node": TestDeps(None),
+    "single_node": TestDeps(None, ["multi_test_helpers"]),
     "single_node_truncate": TestDeps(None),
     "multi_explain": TestDeps(
         "base_schedule", ["multi_insert_select_non_pushable_queries"]
