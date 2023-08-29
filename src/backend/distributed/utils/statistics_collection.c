@@ -14,7 +14,11 @@
 #include "fmgr.h"
 #include "utils/uuid.h"
 
+#if defined(HAVE_LIBCURL) && defined(ENABLE_CITUS_STATISTICS_COLLECTION)
 bool EnableStatisticsCollection = true; /* send basic usage statistics to Citus */
+#else
+bool EnableStatisticsCollection = false;
+#endif
 
 PG_FUNCTION_INFO_V1(citus_server_id);
 
