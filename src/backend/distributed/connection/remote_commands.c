@@ -637,14 +637,14 @@ PutRemoteCopyData(MultiConnection *connection, const char *buffer, int nbytes)
 	Assert(PQisnonblocking(pgConn));
 
 	int copyState = PQputCopyData(pgConn, buffer, nbytes);
-	if (copyState == -1)
+	if (copyState <= 0)
 	{
 		return false;
 	}
 
 	/*
 	 * PQputCopyData may have queued up part of the data even if it managed
-	 * to send some of it succesfully. We provide back pressure by waiting
+	 * to send some of it successfully. We provide back pressure by waiting
 	 * until the socket is writable to prevent the internal libpq buffers
 	 * from growing excessively.
 	 *
