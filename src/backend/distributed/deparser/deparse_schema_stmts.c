@@ -178,21 +178,11 @@ AppendGrantOnSchemaStmt(StringInfo buf, GrantStmt *stmt)
 {
 	Assert(stmt->objtype == OBJECT_SCHEMA);
 
-	appendStringInfo(buf, "%s ", stmt->is_grant ? "GRANT" : "REVOKE");
-
-	AppendGrantOptionFor(buf, stmt);
-
-	AppendGrantPrivileges(buf, stmt);
+	AppendGrantSharedPrefix(buf, stmt);
 
 	AppendGrantOnSchemaSchemas(buf, stmt);
 
-	AppendGrantGrantees(buf, stmt);
-
-	AppendWithGrantOption(buf, stmt);
-
-	AppendGrantRestrictAndCascade(buf, stmt);
-
-	appendStringInfo(buf, ";");
+	AppendGrantSharedSuffix(buf, stmt);
 }
 
 

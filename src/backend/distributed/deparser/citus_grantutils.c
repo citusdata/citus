@@ -88,3 +88,23 @@ AppendGrantedByInGrant(StringInfo buf, GrantStmt *stmt)
 {
 	AppendGrantedByInGrantForRoleSpec(buf, stmt->grantor, stmt->is_grant);
 }
+
+
+void
+AppendGrantSharedPrefix(StringInfo buf, GrantStmt *stmt)
+{
+	appendStringInfo(buf, "%s ", stmt->is_grant ? "GRANT" : "REVOKE");
+	AppendGrantOptionFor(buf, stmt);
+	AppendGrantPrivileges(buf, stmt);
+}
+
+
+void
+AppendGrantSharedSuffix(StringInfo buf, GrantStmt *stmt)
+{
+	AppendGrantGrantees(buf, stmt);
+	AppendWithGrantOption(buf, stmt);
+	AppendGrantRestrictAndCascade(buf, stmt);
+	AppendGrantedByInGrant(buf, stmt);
+	appendStringInfo(buf, ";");
+}

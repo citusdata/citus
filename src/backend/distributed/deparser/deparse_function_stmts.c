@@ -749,21 +749,11 @@ AppendGrantOnFunctionStmt(StringInfo buf, GrantStmt *stmt)
 			 "GRANT .. ALL FUNCTIONS/PROCEDURES IN SCHEMA is not supported for formatting.");
 	}
 
-	appendStringInfoString(buf, stmt->is_grant ? "GRANT " : "REVOKE ");
-
-	AppendGrantOptionFor(buf, stmt);
-
-	AppendGrantPrivileges(buf, stmt);
+	AppendGrantSharedPrefix(buf, stmt);
 
 	AppendGrantOnFunctionFunctions(buf, stmt);
 
-	AppendGrantGrantees(buf, stmt);
-
-	AppendWithGrantOption(buf, stmt);
-
-	AppendGrantRestrictAndCascade(buf, stmt);
-
-	appendStringInfoString(buf, ";");
+	AppendGrantSharedSuffix(buf, stmt);
 }
 
 

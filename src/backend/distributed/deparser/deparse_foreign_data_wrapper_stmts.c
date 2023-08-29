@@ -21,7 +21,6 @@
 static void AppendGrantOnFDWStmt(StringInfo buf, GrantStmt *stmt);
 static void AppendGrantOnFDWNames(StringInfo buf, GrantStmt *stmt);
 
-
 char *
 DeparseGrantOnFDWStmt(Node *node)
 {
@@ -41,22 +40,9 @@ static void
 AppendGrantOnFDWStmt(StringInfo buf, GrantStmt *stmt)
 {
 	Assert(stmt->objtype == OBJECT_FDW);
-
-	appendStringInfo(buf, "%s ", stmt->is_grant ? "GRANT" : "REVOKE");
-
-	AppendGrantOptionFor(buf, stmt);
-
-	AppendGrantPrivileges(buf, stmt);
-
+	AppendGrantSharedPrefix(buf, stmt);
 	AppendGrantOnFDWNames(buf, stmt);
-
-	AppendGrantGrantees(buf, stmt);
-
-	AppendWithGrantOption(buf, stmt);
-
-	AppendGrantRestrictAndCascade(buf, stmt);
-
-	appendStringInfo(buf, ";");
+	AppendGrantSharedSuffix(buf, stmt);
 }
 
 

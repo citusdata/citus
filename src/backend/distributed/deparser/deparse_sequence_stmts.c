@@ -389,21 +389,11 @@ AppendGrantOnSequenceStmt(StringInfo buf, GrantStmt *stmt)
 			 "GRANT .. ALL SEQUENCES IN SCHEMA is not supported for formatting.");
 	}
 
-	appendStringInfoString(buf, stmt->is_grant ? "GRANT " : "REVOKE ");
-
-	AppendGrantOptionFor(buf, stmt);
-
-	AppendGrantPrivileges(buf, stmt);
+	AppendGrantSharedPrefix(buf, stmt);
 
 	AppendGrantOnSequenceSequences(buf, stmt);
 
-	AppendGrantGrantees(buf, stmt);
-
-	AppendWithGrantOption(buf, stmt);
-
-	AppendGrantRestrictAndCascade(buf, stmt);
-
-	appendStringInfoString(buf, ";");
+	AppendGrantSharedSuffix(buf, stmt);
 }
 
 

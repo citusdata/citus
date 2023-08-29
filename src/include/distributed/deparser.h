@@ -118,6 +118,9 @@ extern void AppendGrantedByInGrantForRoleSpec(StringInfo buf, RoleSpec *grantor,
 											  isGrant);
 extern void AppendGrantedByInGrant(StringInfo buf, GrantStmt *stmt);
 
+extern void AppendGrantSharedPrefix(StringInfo buf, GrantStmt *stmt);
+extern void AppendGrantSharedSuffix(StringInfo buf, GrantStmt *stmt);
+
 
 /* forward declarations for deparse_statistics_stmts.c */
 extern char * DeparseCreateStatisticsStmt(Node *node);
