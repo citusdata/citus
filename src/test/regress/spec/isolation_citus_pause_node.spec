@@ -60,13 +60,6 @@ step "s1-node-not-found"
 	BEGIN
 		select nextval('pg_dist_node_nodeid_seq')::int into v_node_id;
 		select citus_pause_node_within_txn(v_node_id) ;
-	EXCEPTION
-		WHEN  SQLSTATE 'P0002' THEN
-			GET STACKED DIAGNOSTICS v_exception_message = MESSAGE_TEXT;
-			v_expected_exception_message := 'node ' || v_node_id || ' not found';
-			if v_exception_message = v_expected_exception_message then
-				RAISE NOTICE 'Node not found.';
-			end if;
 	END;
 	$$
 	LANGUAGE plpgsql;
@@ -90,8 +83,6 @@ step "s1-pause-node"
 
 		--Get the node id for the shard id
 		SELECT nodename,nodeport into v_node_name,v_node_port FROM citus_shards WHERE shardid = v_shard_id limit 1;
-		raise notice 'node name is %',v_node_name;
-		raise notice 'node port is %',v_node_port;
 
 		-- Get the node id for the shard id
 		SELECT nodeid into v_node_id FROM pg_dist_node WHERE nodename = v_node_name and nodeport = v_node_port limit 1;
