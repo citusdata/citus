@@ -540,6 +540,11 @@ ShouldPropagateCreatePublication(CreatePublicationStmt *stmt)
 		return false;
 	}
 
+	if (!ShouldPropagateCreateInCoordinatedTransction())
+	{
+		return false;
+	}
+
 	return true;
 }
 

@@ -274,28 +274,44 @@ UPDATE field_indirection_test_2 SET (ct2_col, ct1_col) = ('(10, "text10", 20)', 
 
 SELECT * FROM field_indirection_test_2 ORDER BY 1,2,3;
 
--- fails due to force_max_query_parallelization enabled
+-- test different ddl propagation modes
+SET citus.create_object_propagation TO deferred;
 BEGIN;
--- force parallel execution by preceding with a analytical query
-SET LOCAL citus.force_max_query_parallelization TO on;
-SELECT count(*) FROM domain_indirection_test;
-
-CREATE TYPE max_par_type AS (a int);
+CREATE TYPE deferred_type AS (a int);
 SHOW citus.multi_shard_modify_mode;
-CREATE TABLE max_par_table(a int,b max_par_type);
-SELECT create_distributed_table('max_par_table', 'a');
+CREATE TABLE deferred_table(a int,b deferred_type);
+SELECT create_distributed_table('deferred_table', 'a');
 SHOW citus.multi_shard_modify_mode;
 COMMIT;
 
--- not it should succeed with sequential mode
+SET citus.create_object_propagation TO automatic;
 BEGIN;
-SET LOCAL citus.multi_shard_modify_mode TO sequential;
-SELECT count(*) FROM domain_indirection_test;
-
-CREATE TYPE max_par_type AS (a int);
+CREATE TYPE automatic_type AS (a int);
 SHOW citus.multi_shard_modify_mode;
-CREATE TABLE max_par_table(a int,b max_par_type);
-SELECT create_distributed_table('max_par_table', 'a');
+CREATE TABLE automatic_table(a int,b automatic_type);
+SELECT create_distributed_table('automatic_table', 'a');
+SHOW citus.multi_shard_modify_mode;
+COMMIT;
+
+SET citus.create_object_propagation TO automatic;
+BEGIN;
+-- force parallel execution by preceding with a analytical query
+SET LOCAL citus.force_max_query_parallelization TO on;
+SELECT count(*) FROM automatic_table;
+
+CREATE TYPE automatic2_type AS (a int);
+SHOW citus.multi_shard_modify_mode;
+CREATE TABLE automatic2_table(a int,b automatic2_type);
+SELECT create_distributed_table('automatic2_table', 'a');
+SHOW citus.multi_shard_modify_mode;
+COMMIT;
+
+SET citus.create_object_propagation TO immediate;
+BEGIN;
+CREATE TYPE immediate_type AS (a int);
+SHOW citus.multi_shard_modify_mode;
+CREATE TABLE immediate_table(a int,b immediate_type);
+SELECT create_distributed_table('immediate_table', 'a');
 SHOW citus.multi_shard_modify_mode;
 COMMIT;
 

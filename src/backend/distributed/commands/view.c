@@ -93,6 +93,12 @@ PreprocessViewStmt(Node *node, const char *queryString,
 		return NIL;
 	}
 
+	/* check creation against multi-statement transaction policy */
+	if (!ShouldPropagateCreateInCoordinatedTransction())
+	{
+		return NIL;
+	}
+
 	EnsureCoordinator();
 
 	return NIL;
@@ -117,6 +123,12 @@ PostprocessViewStmt(Node *node, const char *queryString)
 	ViewStmt *stmt = castNode(ViewStmt, node);
 
 	if (!ShouldPropagate())
+	{
+		return NIL;
+	}
+
+	/* check creation against multi-statement transaction policy */
+	if (!ShouldPropagateCreateInCoordinatedTransction())
 	{
 		return NIL;
 	}

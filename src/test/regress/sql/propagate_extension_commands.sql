@@ -203,7 +203,7 @@ SET search_path TO "extension'test";
 -- enable it and see that create command errors but continues its execution by changing citus.multi_shard_modify_mode TO 'off
 
 BEGIN;
-	SET citus.multi_shard_modify_mode TO sequential;
+    SET LOCAL citus.create_object_propagation TO deferred;
 	CREATE TABLE some_random_table (a int);
 	SELECT create_distributed_table('some_random_table', 'a');
 	CREATE EXTENSION seg;
@@ -366,9 +366,6 @@ SELECT create_distributed_function('cube(float8[], float8[])', '$2', 'test_exten
 SELECT distribution_argument_index FROM pg_catalog.pg_dist_object WHERE classid = 'pg_catalog.pg_proc'::pg_catalog.regclass AND
 objid = (SELECT oid FROM pg_proc WHERE prosrc = 'cube_a_f8_f8');
 ROLLBACK;
-
--- drop objects under public schema
-DROP FUNCTION public.dintdict_init, public.dintdict_lexize CASCADE;
 
 -- Postgres already doesn't allow creating extensions in temp schema but
 -- let's have a test for that to track any furher changes in postgres.

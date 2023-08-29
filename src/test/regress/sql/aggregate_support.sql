@@ -555,9 +555,9 @@ create function dummy_fnc(a dummy_tbl, d double precision) RETURNS dummy_tbl
     AS $$SELECT 1;$$ LANGUAGE sql;
 
 -- test in tx block
--- shouldn't distribute, as we disable propagation
+-- shouldn't distribute, as citus.create_object_propagation is set to deferred
 BEGIN;
-SET LOCAL citus.enable_ddl_propagation TO off;
+SET LOCAL citus.create_object_propagation TO deferred;
 create aggregate dependent_agg (float8) (stype=dummy_tbl, sfunc=dummy_fnc);
 COMMIT;
 -- verify not distributed
@@ -565,8 +565,22 @@ SELECT run_command_on_workers($$select aggfnoid from pg_aggregate where aggfnoid
 
 drop aggregate dependent_agg ( double precision);
 
--- now try again with enabled propagation
--- should distribute, as citus.enable_ddl_propagation is set to on
+-- now try with create_object_propagation = immediate
+SET citus.create_object_propagation TO immediate;
+-- should distribute, as citus.create_object_propagation is set to immediate
+-- will switch to sequential mode
+BEGIN;
+create aggregate dependent_agg (float8) (stype=dummy_tbl, sfunc=dummy_fnc);
+COMMIT;
+
+-- verify distributed
+SELECT run_command_on_workers($$select aggfnoid from pg_aggregate where aggfnoid::text like '%dependent_agg%';$$);
+
+drop aggregate dependent_agg ( double precision);
+
+-- now try with create_object_propagation = automatic
+SET citus.create_object_propagation TO automatic;
+-- should distribute, as citus.create_object_propagation is set to automatic
 -- will switch to sequential mode
 BEGIN;
 create aggregate dependent_agg (float8) (stype=dummy_tbl, sfunc=dummy_fnc);
@@ -577,6 +591,8 @@ SELECT run_command_on_workers($$select aggfnoid from pg_aggregate where aggfnoid
 
 -- verify that the aggregate is added into pg_dist_object, on each worker
 SELECT run_command_on_workers($$SELECT count(*) from pg_catalog.pg_dist_object where objid = 'aggregate_support.dependent_agg'::regproc;$$);
+
+RESET citus.create_object_propagation;
 
 -- drop and test outside of tx block
 drop aggregate dependent_agg (float8);
@@ -613,11 +629,13 @@ FROM pg_catalog.pg_dist_object
 SELECT unnest(result::text[]) AS unnested_result
 FROM run_command_on_workers($$SELECT array_agg(pg_identify_object_as_address(classid, objid, objsubid)) from pg_catalog.pg_dist_object$$);
 
+SET citus.create_object_propagation TO automatic;
 begin;
     create type typ1 as (a int);
     create or replace function fnagg(a typ1, d double precision) RETURNS typ1 AS $$SELECT 1;$$LANGUAGE sql;
     create aggregate dependent_agg (float8) (stype=typ1, sfunc=fnagg);
 commit;
+RESET citus.create_object_propagation;
 
 SELECT run_command_on_workers($$select aggfnoid from pg_aggregate where aggfnoid::text like '%dependent_agg%';$$);
 

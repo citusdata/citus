@@ -1106,8 +1106,16 @@ RegisterCitusConfigVariables(void)
 
 	DefineCustomEnumVariable(
 		"citus.create_object_propagation",
-		gettext_noop("Deprecated, Citus always propagates immediately"),
-		NULL,
+		gettext_noop("Controls the behavior of CREATE statements in transactions for "
+					 "supported objects"),
+		gettext_noop("When creating new objects in transactions this setting is used to "
+					 "determine the behavior for propagating. When objects are created "
+					 "in a multi-statement transaction block Citus needs to switch to "
+					 "sequential mode (if not already) to make sure the objects are "
+					 "visible to later statements on shards. The switch to sequential is "
+					 "not always desired. By changing this behavior the user can trade "
+					 "off performance for full transactional consistency on the creation "
+					 "of new objects."),
 		&CreateObjectPropagationMode,
 		CREATE_OBJECT_PROPAGATION_IMMEDIATE, create_object_propagation_options,
 		PGC_USERSET,
