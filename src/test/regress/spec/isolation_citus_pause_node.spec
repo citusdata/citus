@@ -152,37 +152,13 @@ step "s2-begin"
 
 step "s2-insert-distributed"
 {
-	-- Set statement_timeout for the session (in milliseconds)
-	SET client_min_messages = 'notice';
-
-	-- Variable to track if the INSERT statement was successful
-	DO $$
-	BEGIN
-
-		-- Execute the INSERT statement
-		insert into employee values(11,'e11',3);
-
-	END;
-
-	$$
-	LANGUAGE plpgsql;
+	-- Execute the INSERT statement
+	insert into employee values(11,'e11',3);
 }
 
 step "s2-insert-reference"{
-	-- Set statement_timeout for the session (in milliseconds)
-	SET statement_timeout = 1000; -- 1 seconds
-	SET client_min_messages = 'notice';
-
-	-- Variable to track if the INSERT statement was successful
-	DO $$
-	BEGIN
-
-		-- Execute the INSERT statement
-		insert into city values(3,'city3');
-
-	END;
-	$$
-	LANGUAGE plpgsql;
+	-- Execute the INSERT statement
+	insert into city values(3,'city3');
 }
 
 step "s2-select-distributed"{
@@ -191,18 +167,8 @@ step "s2-select-distributed"{
 
 
 step "s2-delete-distributed"{
-	-- Set statement_timeout for the session (in milliseconds)
-	SET client_min_messages = 'notice';
-
-	-- Variable to track if the DELETE statement was successful
-	DO $$
-	BEGIN
-
-		-- Execute the DELETE statement
-		delete from employee where id = 9;
-	END;
-	$$
-	LANGUAGE plpgsql;
+	-- Execute the DELETE statement
+	delete from employee where id = 9;
 }
 
 step "s2-end"
