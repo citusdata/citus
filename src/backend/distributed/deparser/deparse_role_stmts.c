@@ -408,20 +408,15 @@ static void
 AppendGrantRoleStmt(StringInfo buf, GrantRoleStmt *stmt)
 {
 	appendStringInfo(buf, "%s ", stmt->is_grant ? "GRANT" : "REVOKE");
-
 	AppendRevokeAdminOptionFor(buf, stmt);
-
 	AppendRoleList(buf, stmt->granted_roles);
-
 	appendStringInfo(buf, "%s ", stmt->is_grant ? " TO " : " FROM ");
-
 	AppendRoleList(buf, stmt->grantee_roles);
-
 	AppendGrantWithAdminOption(buf, stmt);
-
 	AppendGrantedByInGrantForRoleSpec(buf, stmt->grantor, stmt->is_grant);
-
 	AppendGrantRestrictAndCascadeForRoleSpec(buf, stmt->behavior, stmt->is_grant);
+	AppendGrantedByInGrantForRoleSpec(buf, stmt->grantor, stmt->is_grant);
+	appendStringInfo(buf, ";");
 }
 
 
