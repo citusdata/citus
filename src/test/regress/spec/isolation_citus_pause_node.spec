@@ -117,6 +117,10 @@ step "s1-pause-node-force"
 	BEGIN
 		--The first message in the block is being printed on the top of the code block. So adding a dummy message
 		--to make sure that the first message is printed in correct place.
+
+		-- set timeout to 100 ms
+		set statement_timeout = 100;
+
 		raise notice '';
 		-- Get the shard id for the distribution column
 		SELECT get_shard_id_for_distribution_column('employee', 3) into v_shard_id;
@@ -148,12 +152,14 @@ session "s2"
 step "s2-begin"
 {
 	BEGIN;
+	set statement_timeout = 100;
 }
 
 step "s2-insert-distributed"
 {
 	-- Execute the INSERT statement
 	insert into employee values(11,'e11',3);
+
 }
 
 step "s2-insert-reference"{
@@ -162,6 +168,7 @@ step "s2-insert-reference"{
 }
 
 step "s2-select-distributed"{
+
 	select * from employee where id = 10;
 }
 
@@ -182,4 +189,4 @@ permutation "s1-begin"  "s1-pause-node" "s2-begin" "s2-select-distributed" "s1-e
 permutation "s1-begin"  "s2-begin" "s1-pause-node"  "s2-insert-reference" "s1-end" "s2-end"
 permutation "s1-begin"  "s1-pause-node" "s1-pause-node" "s1-end"
 permutation "s1-begin"  "s1-node-not-found" "s1-end"
-permutation "s1-begin"  "s2-begin" "s2-insert-distributed" "s1-pause-node-force"(*) "s2-end" "s1-end"
+permutation "s1-begin"  "s2-begin" "s2-insert-distributed" "s1-pause-node-force"(*) "s1-end" "s2-end"
