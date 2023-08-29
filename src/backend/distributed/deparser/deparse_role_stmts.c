@@ -380,30 +380,27 @@ AppendGrantRoleStmt(StringInfo buf, GrantRoleStmt *stmt)
 	{
 #if PG_VERSION_NUM >= PG_VERSION_16
 		DefElem *opt = NULL;
-		 bool appended_option = false; // To track if any option has been appended
 		foreach_ptr(opt, stmt->opt)
 		{
 			if (strcmp(opt->defname, "admin") == 0)
 			{
-				appendStringInfo(buf, " WITH ADMIN OPTION");
-				appended_option = true;
-				// break; // exits after finding "admin" (is this needed?) 
+				appendStringInfo(buf, "WITH ADMIN OPTION");
+				// break; // exits after finding "admin" 
 			}
-			else if (strcmp(opt->defname,"inherit")==0)
+			else if (strcmp(opt->defnamc  e,"inherit")== 0)
 			{
-				if (appended_option) appendStringInfo(buf, " ");
-            appendStringInfo(buf, "WITH INHERIT TRUE");
-            appended_option = true;
+            appendStringInfo(buf, "INHERIT TRUE")
+			 appendStringInfo(buf, "GRANT x TO y WITH INHERIT TRUE, SET TRUE;");
 			}
-			else if((strcmp(opt->defname, "set") == 0)){
-				if (appended_option) appendStringInfo(buf, " ");
-            appendStringInfo(buf, "WITH SET TRUE");
-            appended_option = true;
+			else if((strcmp(opt->defname, "set") == 0))
+			{
+            appendStringInfo(buf, "SET TRUE")
 			}	
 		}
-		if (appended_option)
+#else
+		if (stmt->admin_opt)
 		{
-			appendStringInfo(buf, " ");
+			appendStringInfo(buf, " WITH ADMIN OPTION");
 		}
 #endif
 
