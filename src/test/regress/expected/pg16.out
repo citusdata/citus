@@ -202,6 +202,114 @@ SELECT create_distributed_table('test_storage', 'a');
 ALTER TABLE test_storage ALTER a SET STORAGE default;
 ERROR:  alter table command is currently unsupported
 DETAIL:  Only ADD|DROP COLUMN, SET|DROP NOT NULL, SET|DROP DEFAULT, ADD|DROP|VALIDATE CONSTRAINT, SET (), RESET (), ENABLE|DISABLE|NO FORCE|FORCE ROW LEVEL SECURITY, ATTACH|DETACH PARTITION and TYPE subcommands are supported.
+-- New ICU_RULES option added to CREATE DATABASE
+-- Relevant PG commit:
+-- https://github.com/postgres/postgres/commit/30a53b7
+CREATE DATABASE test_db WITH LOCALE_PROVIDER = 'icu' LOCALE = '' ICU_RULES = '&a < g' TEMPLATE = 'template0';
+NOTICE:  Citus partially supports CREATE DATABASE for distributed databases
+DETAIL:  Citus does not propagate CREATE DATABASE command to workers
+HINT:  You can manually create a database and its extensions on workers.
+NOTICE:  using standard form "und" for ICU locale ""
+SELECT result FROM run_command_on_workers
+($$CREATE DATABASE test_db WITH LOCALE_PROVIDER = 'icu' LOCALE = '' ICU_RULES = '&a < g' TEMPLATE = 'template0'$$);
+     result
+---------------------------------------------------------------------
+ CREATE DATABASE
+ CREATE DATABASE
+(2 rows)
+
+CREATE TABLE test_db_table (a text);
+SELECT create_distributed_table('test_db_table', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO test_db_table VALUES ('Abernathy'), ('apple'), ('bird'), ('Boston'), ('Graham'), ('green');
+-- icu default rules order
+SELECT * FROM test_db_table ORDER BY a COLLATE "en-x-icu";
+     a
+---------------------------------------------------------------------
+ Abernathy
+ apple
+ bird
+ Boston
+ Graham
+ green
+(6 rows)
+
+-- regression database's default order
+SELECT * FROM test_db_table ORDER BY a;
+     a
+---------------------------------------------------------------------
+ Abernathy
+ Boston
+ Graham
+ apple
+ bird
+ green
+(6 rows)
+
+-- now see the order in the new database
+\c test_db
+CREATE EXTENSION citus;
+\c - - - :worker_1_port
+CREATE EXTENSION citus;
+\c - - - :worker_2_port
+CREATE EXTENSION citus;
+\c - - - :master_port
+SELECT FROM master_add_node('localhost', :worker_1_port);
+--
+(1 row)
+
+SELECT FROM master_add_node('localhost', :worker_2_port);
+--
+(1 row)
+
+CREATE TABLE test_db_table (a text);
+SELECT create_distributed_table('test_db_table', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO test_db_table VALUES ('Abernathy'), ('apple'), ('bird'), ('Boston'), ('Graham'), ('green');
+-- icu default rules order
+SELECT * FROM test_db_table ORDER BY a COLLATE "en-x-icu";
+     a
+---------------------------------------------------------------------
+ Abernathy
+ apple
+ bird
+ Boston
+ Graham
+ green
+(6 rows)
+
+-- test_db database's default order with ICU_RULES = '&a < g'
+SELECT * FROM test_db_table ORDER BY a;
+     a
+---------------------------------------------------------------------
+ Abernathy
+ apple
+ green
+ bird
+ Boston
+ Graham
+(6 rows)
+
+\c regression
+\c - - - :master_port
+DROP DATABASE test_db;
+SELECT result FROM run_command_on_workers
+($$DROP DATABASE test_db$$);
+    result
+---------------------------------------------------------------------
+ DROP DATABASE
+ DROP DATABASE
+(2 rows)
+
+SET search_path TO pg16;
 --
 -- COPY FROM ... DEFAULT
 -- Already supported in Citus, adding all PG tests with a distributed table
