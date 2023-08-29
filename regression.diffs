@@ -1,0 +1,26 @@
+diff -dU10 -w /home/circleci/project/src/test/regress/expected/isolation_citus_pause_node.out /home/circleci/project/src/test/regress/results/isolation_citus_pause_node.out
+--- /home/circleci/project/src/test/regress/expected/isolation_citus_pause_node.out.modified	2023-08-30 12:38:19.753315948 +0000
++++ /home/circleci/project/src/test/regress/results/isolation_citus_pause_node.out.modified	2023-08-30 12:38:19.765315985 +0000
+@@ -252,21 +252,21 @@
+   v_node_exists boolean := true;
+   v_exception_message text;
+   v_expected_exception_message text := '';
+  BEGIN
+   select nextval('pg_dist_node_nodeid_seq')::int into v_node_id;
+   select citus_pause_node_within_txn(v_node_id) ;
+  END;
+  $$
+  LANGUAGE plpgsql;
+ 
+-ERROR:  node 3 not found
++ERROR:  node 123034 not found
+ step s1-end: 
+     COMMIT;
+ 
+ 
+ starting permutation: s1-begin s2-begin s2-insert-distributed s1-pause-node-force s1-end s2-end
+ step s1-begin: 
+     BEGIN;
+ 
+ step s2-begin: 
+  BEGIN;

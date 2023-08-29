@@ -60,6 +60,13 @@ step "s1-node-not-found"
 	BEGIN
 		select nextval('pg_dist_node_nodeid_seq')::int into v_node_id;
 		select citus_pause_node_within_txn(v_node_id) ;
+	EXCEPTION
+		WHEN  SQLSTATE 'P0002' THEN
+			GET STACKED DIAGNOSTICS v_exception_message = MESSAGE_TEXT;
+			v_expected_exception_message := 'node ' || v_node_id || ' not found';
+			if v_exception_message = v_expected_exception_message then
+				RAISE NOTICE 'Node not found.';
+			end if;
 	END;
 	$$
 	LANGUAGE plpgsql;
