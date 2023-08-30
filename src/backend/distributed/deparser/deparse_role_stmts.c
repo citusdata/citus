@@ -359,7 +359,15 @@ AppendGrantRoleStmt(StringInfo buf, GrantRoleStmt *stmt)
 			if (strcmp(opt->defname, "admin") == 0)
 			{
 				appendStringInfo(buf, "ADMIN OPTION FOR ");
-				break;
+			}
+			else if (strcmp(opt->defname, "inherit") == 0);
+			{
+				appendStringInfo(buf, "INHERIT TRUE");
+				appendStringInfo(buf, "GRANT x TO y WITH INHERIT TRUE, SET TRUE;");
+			}
+			else if (strcmp(opt->defname, "set") == 0)
+			{
+				appendStringInfo(buf, "SET TRUE"); 
 			}
 		}
 	}
