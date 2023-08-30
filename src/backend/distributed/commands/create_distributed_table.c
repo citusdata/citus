@@ -1262,19 +1262,21 @@ CreateCitusTable(Oid relationId, CitusTableType tableType,
 		CreateTruncateTrigger(relationId);
 	}
 
-	/* create shards for hash distributed and reference tables */
 	if (tableType == HASH_DISTRIBUTED)
 	{
+		/* create shards for hash distributed table */
 		CreateHashDistributedTableShards(relationId, distributedTableParams->shardCount,
 										 colocatedTableId,
 										 localTableEmpty);
 	}
 	else if (tableType == REFERENCE_TABLE)
 	{
+		/* create shards for reference table */
 		CreateReferenceTableShard(relationId);
 	}
 	else if (tableType == SINGLE_SHARD_DISTRIBUTED)
 	{
+		/* create the shard of given single-shard distributed table */
 		CreateSingleShardTableShard(relationId, colocatedTableId,
 									colocationId);
 	}
@@ -1900,7 +1902,7 @@ CreateHashDistributedTableShards(Oid relationId, int shardCount,
 
 
 /*
- * CreateHashDistributedTableShards creates the shard of given single-shard
+ * CreateSingleShardTableShard creates the shard of given single-shard
  * distributed table.
  */
 static void

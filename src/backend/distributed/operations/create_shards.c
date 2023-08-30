@@ -83,6 +83,7 @@ CreateShardsWithRoundRobinPolicy(Oid distributedTableId, int32 shardCount,
 {
 	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(distributedTableId);
 	List *insertedShardPlacements = NIL;
+	List *insertedShardIds = NIL;
 
 	/* make sure table is hash partitioned */
 	CheckHashPartitionedTable(distributedTableId);
@@ -174,7 +175,9 @@ CreateShardsWithRoundRobinPolicy(Oid distributedTableId, int32 shardCount,
 		/* initialize the hash token space for this shard */
 		int32 shardMinHashToken = PG_INT32_MIN + (shardIndex * hashTokenIncrement);
 		int32 shardMaxHashToken = shardMinHashToken + (hashTokenIncrement - 1);
-		uint64 shardId = GetNextShardId();
+		uint64 *shardIdPtr = (uint64 *) palloc0(sizeof(uint64));
+		*shardIdPtr = GetNextShardId();
+		insertedShardIds = lappend(insertedShardIds, shardIdPtr);
 
 		/* if we are at the last shard, make sure the max token value is INT_MAX */
 		if (shardIndex == (shardCount - 1))
@@ -186,17 +189,27 @@ CreateShardsWithRoundRobinPolicy(Oid distributedTableId, int32 shardCount,
 		text *minHashTokenText = IntegerToText(shardMinHashToken);
 		text *maxHashTokenText = IntegerToText(shardMaxHashToken);
 
-		InsertShardRow(distributedTableId, shardId, shardStorageType,
+		InsertShardRow(distributedTableId, *shardIdPtr, shardStorageType,
 					   minHashTokenText, maxHashTokenText);
 
-		List *currentInsertedShardPlacements = InsertShardPlacementRows(
-			distributedTableId,
-			shardId,
-			workerNodeList,
-			roundRobinNodeIndex,
-			replicationFactor);
+		InsertShardPlacementRows(distributedTableId,
+								 *shardIdPtr,
+								 workerNodeList,
+								 roundRobinNodeIndex,
+								 replicationFactor);
+	}
+
+	/*
+	 * load shard placements for the shard at once after all placement insertions
+	 * finished. This prevents MetadataCache from rebuilding unnecessarily after
+	 * each placement insertion.
+	 */
+	uint64 *shardIdPtr;
+	foreach_ptr(shardIdPtr, insertedShardIds)
+	{
+		List *placementsForShard = ShardPlacementList(*shardIdPtr);
 		insertedShardPlacements = list_concat(insertedShardPlacements,
-											  currentInsertedShardPlacements);
+											  placementsForShard);
 	}
 
 	CreateShardsOnWorkers(distributedTableId, insertedShardPlacements,
@@ -292,7 +305,7 @@ CreateColocatedShards(Oid targetRelationId, Oid sourceRelationId, bool
 
 	/*
 	 * load shard placements for the shard at once after all placement insertions
-	 * finished. That prevents MetadataCache from rebuilding unnecessarily after
+	 * finished. This prevents MetadataCache from rebuilding unnecessarily after
 	 * each placement insertion.
 	 */
 	uint64 *shardIdPtr;
@@ -360,9 +373,18 @@ CreateReferenceTableShard(Oid distributedTableId)
 	InsertShardRow(distributedTableId, shardId, shardStorageType, shardMinValue,
 				   shardMaxValue);
 
-	List *insertedShardPlacements = InsertShardPlacementRows(distributedTableId, shardId,
-															 nodeList, workerStartIndex,
-															 replicationFactor);
+	InsertShardPlacementRows(distributedTableId,
+							 shardId,
+							 nodeList,
+							 workerStartIndex,
+							 replicationFactor);
+
+	/*
+	 * load shard placements for the shard at once after all placement insertions
+	 * finished. This prevents MetadataCache from rebuilding unnecessarily after
+	 * each placement insertion.
+	 */
+	List *insertedShardPlacements = ShardPlacementList(shardId);
 
 	CreateShardsOnWorkers(distributedTableId, insertedShardPlacements,
 						  useExclusiveConnection);
@@ -408,12 +430,18 @@ CreateSingleShardTableShardWithRoundRobinPolicy(Oid relationId, uint32 colocatio
 				   minHashTokenText, maxHashTokenText);
 
 	int replicationFactor = 1;
-	List *insertedShardPlacements = InsertShardPlacementRows(
-		relationId,
-		shardId,
-		workerNodeList,
-		roundRobinNodeIdx,
-		replicationFactor);
+	InsertShardPlacementRows(relationId,
+							 shardId,
+							 workerNodeList,
+							 roundRobinNodeIdx,
+							 replicationFactor);
+
+	/*
+	 * load shard placements for the shard at once after all placement insertions
+	 * finished. This prevents MetadataCache from rebuilding unnecessarily after
+	 * each placement insertion.
+	 */
+	List *insertedShardPlacements = ShardPlacementList(shardId);
 
 	/*
 	 * We don't need to force using exclusive connections because we're anyway
