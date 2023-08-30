@@ -658,4 +658,3 @@ DROP ROLE role3, role4, role5;
 SET client_min_messages TO ERROR;
 DROP EXTENSION postgres_fdw CASCADE;
 DROP SCHEMA pg16 CASCADE;
-

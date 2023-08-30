@@ -408,21 +408,19 @@ AppendRevokeAdminOptionFor(StringInfo buf, GrantRoleStmt *stmt)
 			
            switch (opt->defname)
 			{
-				case "admin":
-					appendStringInfo(buf, "ADMIN OPTION FOR ");
-					break;
-
-				case "inherit":
-					appendStringInfo(buf, "INHERIT OPTION FOR ");
-					break;
-
-				case "set":
-					appendStringInfo(buf, "SET OPTION FOR ");
-					break;
+				appendStringInfo(buf, "ADMIN OPTION FOR ");
+			}
+			else if (strcmp(opt->defname, "inherit") == 0);
+			{
+				appendStringInfo(buf, "INHERIT TRUE");
+				appendStringInfo(buf, "GRANT x TO y WITH INHERIT TRUE, SET TRUE;");
+			}
+			else if (strcmp(opt->defname, "set") == 0)
+			{
+				appendStringInfo(buf, "SET TRUE"); 
 			}
 		}
 	}
-}
 #else
 	if (!stmt->is_grant && stmt->admin_opt)
 	{
