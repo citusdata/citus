@@ -390,12 +390,11 @@ InsertShardPlacementRows(Oid relationId, int64 shardId, List *workerNodeList,
 						 int workerStartIndex, int replicationFactor)
 {
 	int workerNodeCount = list_length(workerNodeList);
-	int placementsInserted = 0;
 	List *insertedShardPlacements = NIL;
 
-	for (int attemptNumber = 0; attemptNumber < replicationFactor; attemptNumber++)
+	for (int placementIndex = 0; placementIndex < replicationFactor; placementIndex++)
 	{
-		int workerNodeIndex = (workerStartIndex + attemptNumber) % workerNodeCount;
+		int workerNodeIndex = (workerStartIndex + placementIndex) % workerNodeCount;
 		WorkerNode *workerNode = (WorkerNode *) list_nth(workerNodeList, workerNodeIndex);
 		uint32 nodeGroupId = workerNode->groupId;
 		const uint64 shardSize = 0;
@@ -404,12 +403,6 @@ InsertShardPlacementRows(Oid relationId, int64 shardId, List *workerNodeList,
 														  shardSize, nodeGroupId);
 		ShardPlacement *shardPlacement = LoadShardPlacement(shardId, shardPlacementId);
 		insertedShardPlacements = lappend(insertedShardPlacements, shardPlacement);
-
-		placementsInserted++;
-		if (placementsInserted >= replicationFactor)
-		{
-			break;
-		}
 	}
 
 	return insertedShardPlacements;
