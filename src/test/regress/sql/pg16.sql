@@ -594,4 +594,3 @@ RESET citus.grep_remote_commands;
 \set VERBOSITY terse
 SET client_min_messages TO ERROR;
 DROP SCHEMA pg16 CASCADE;
-
