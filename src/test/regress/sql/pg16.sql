@@ -375,6 +375,19 @@ SELECT pg_get_viewdef('pg16.prop_view_1', true);
 \c - - - :master_port
 SET search_path TO pg16;
 
+-- REINDEX DATABASE/SYSTEM name is optional
+-- We already don't propagate these commands automatically
+-- Testing here with run_command_on_workers
+-- Relevant PG commit: https://github.com/postgres/postgres/commit/2cbc3c1
+
+REINDEX DATABASE;
+SELECT result FROM run_command_on_workers
+($$REINDEX DATABASE$$);
+
+REINDEX SYSTEM;
+SELECT result FROM run_command_on_workers
+($$REINDEX SYSTEM$$);
+
 \set VERBOSITY terse
 SET client_min_messages TO ERROR;
 DROP SCHEMA pg16 CASCADE;
