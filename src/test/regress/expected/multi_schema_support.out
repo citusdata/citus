@@ -1658,12 +1658,12 @@ SELECT create_schema_test();
 
 (1 row)
 
-SELECT run_command_on_all_nodes($$ SELECT COUNT(*) = 1 FROM pg_dist_partition WHERE logicalrelid = 'test_1.test'::regclass $$);
- run_command_on_all_nodes
+SELECT result FROM run_command_on_all_nodes($$ SELECT COUNT(*) = 1 FROM pg_dist_partition WHERE logicalrelid = 'test_1.test'::regclass $$);
+ result
 ---------------------------------------------------------------------
- (16,t,t)
- (17,t,t)
- (19,t,t)
+ t
+ t
+ t
 (3 rows)
 
 DROP FUNCTION create_schema_test;

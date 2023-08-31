@@ -1204,7 +1204,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 SELECT create_schema_test();
-SELECT run_command_on_all_nodes($$ SELECT COUNT(*) = 1 FROM pg_dist_partition WHERE logicalrelid = 'test_1.test'::regclass $$);
+SELECT result FROM run_command_on_all_nodes($$ SELECT COUNT(*) = 1 FROM pg_dist_partition WHERE logicalrelid = 'test_1.test'::regclass $$);
 DROP FUNCTION create_schema_test;
 DROP SCHEMA test_1 CASCADE;
 
