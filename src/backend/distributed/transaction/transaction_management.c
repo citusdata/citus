@@ -161,8 +161,8 @@ static void ResetGlobalVariables(void);
 static bool SwallowErrors(void (*func)(void));
 static void ForceAllInProgressConnectionsToClose(void);
 static void EnsurePrepareTransactionIsAllowed(void);
-static HTAB * CurrentTransactionPropagatedObjects(void);
-static HTAB * ParentTransactionPropagatedObjects(void);
+static HTAB * CurrentTransactionPropagatedObjects(bool readonly);
+static HTAB * ParentTransactionPropagatedObjects(bool readonly);
 static void MovePropagatedObjectsToParentTransaction(void);
 static HTAB * CreateSubtransactionPropagatedObjectsHash(void);
 
@@ -951,9 +951,12 @@ EnsurePrepareTransactionIsAllowed(void)
 /*
  * CurrentTransactionPropagatedObjects returns the objects propagated in current
  * sub-transaction or the root transaction if no sub-transaction exists.
+ * 
+ * If the propagated objects are readonly it will not create the hashmap if it does not
+ * already exist in the current sub-transaction.
  */
 static HTAB *
-CurrentTransactionPropagatedObjects(void)
+CurrentTransactionPropagatedObjects(bool readonly)
 {
 	if (activeSubXactContexts == NIL)
 	{
@@ -963,9 +966,9 @@ CurrentTransactionPropagatedObjects(void)
 
 	/* hashset in top level sub-transaction */
 	SubXactContext *state = llast(activeSubXactContexts);
-	if (state->propagatedObjects == NULL)
+	if (state->propagatedObjects == NULL && !readonly)
 	{
-		/* lazily create hashset for sub-transaction */
+		/* lazily create hashset for sub-transaction, for mutating uses */
 		state->propagatedObjects = CreateSubtransactionPropagatedObjectsHash();
 	}
 	return state->propagatedObjects;
@@ -976,9 +979,12 @@ CurrentTransactionPropagatedObjects(void)
  * ParentTransactionPropagatedObjects returns the objects propagated in parent
  * transaction of active sub-transaction. It returns the root transaction if
  * no sub-transaction exists.
+ * 
+ * If the propagated objects are readonly it will not create the hashmap if it does not
+ * already exist in the target sub-transaction.
  */
 static HTAB *
-ParentTransactionPropagatedObjects(void)
+ParentTransactionPropagatedObjects(bool readonly)
 {
 	if (activeSubXactContexts == NIL)
 	{
@@ -995,7 +1001,7 @@ ParentTransactionPropagatedObjects(void)
 	/* parent is upper sub-transaction */
 	Assert(nestingLevel >= 2);
 	SubXactContext *state = list_nth(activeSubXactContexts, nestingLevel - 2);
-	if (state->propagatedObjects == NULL)
+	if (state->propagatedObjects == NULL && !readonly)
 	{
 		/* lazily create hashset for parent sub-transaction */
 		state->propagatedObjects = CreateSubtransactionPropagatedObjectsHash();
@@ -1013,8 +1019,19 @@ static void
 MovePropagatedObjectsToParentTransaction(void)
 {
 	Assert(llast(activeSubXactContexts) != NULL);
-	HTAB *currentPropagatedObjects = CurrentTransactionPropagatedObjects();
-	HTAB *parentPropagatedObjects = ParentTransactionPropagatedObjects();
+	HTAB *currentPropagatedObjects = CurrentTransactionPropagatedObjects(true);
+	if (currentPropagatedObjects == NULL)
+	{
+		/* nothing to move */
+		return;
+	}
+
+	/* 
+	 * Only after we know we have objects to move into the parent do we get a handle on
+	 * a guaranteed existing parent hash table. This makes sure that the parents only
+	 * get populated once there are objects to be tracked.
+	 */
+	HTAB *parentPropagatedObjects = ParentTransactionPropagatedObjects(false);
 
 	HASH_SEQ_STATUS propagatedObjectsSeq;
 	hash_seq_init(&propagatedObjectsSeq, currentPropagatedObjects);
@@ -1073,7 +1090,7 @@ InitTransactionPropagatedObjectsHash(void)
 void
 TrackPropagatedObject(const ObjectAddress *objectAddress)
 {
-	HTAB *currentPropagatedObjects = CurrentTransactionPropagatedObjects();
+	HTAB *currentPropagatedObjects = CurrentTransactionPropagatedObjects(false);
 	hash_search(currentPropagatedObjects, objectAddress, HASH_ENTER, NULL);
 }
 
