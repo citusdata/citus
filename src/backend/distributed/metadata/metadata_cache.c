@@ -136,7 +136,7 @@ typedef struct ShardIdCacheEntry
 /*
  * ExtensionCreateState is used to track if citus extension has been created
  * using CREATE EXTENSION command.
- *  UNKNOWN     : MetadataCache hence isExtensionCreated flag in the cache is invalidated.
+ *  UNKNOWN     : MetadataCache hence extensionCreated value is invalid.
  *  CREATED     : Citus is created.
  *  NOTCREATED	: Citus is either not created or dropped.
  */
@@ -153,7 +153,7 @@ typedef enum ExtensionCreateState
  */
 typedef struct MetadataCacheData
 {
-	ExtensionCreateState isExtensionCreated;
+	ExtensionCreateState extensionCreated;
 	Oid distShardRelationId;
 	Oid distPlacementRelationId;
 	Oid distBackgroundJobRelationId;
@@ -2215,12 +2215,11 @@ CitusHasBeenLoaded(void)
 	}
 
 	/*
-	 * MetadataCache.extensionCreateState indicates whether MetadataCache is
-	 * in a valid state or not. MetadataCache might have been invalidated
-	 * as a result of various relcache invalidations. If the state is invalid,
-	 * evaluate and cache the values we need here.
+	 * If extensionCreated is UNKNOWN, query pg_extension for Citus
+	 * and cache the result.
+	 * Otherwise return the value extensionCreated indicates.
 	 */
-	if (MetadataCache.isExtensionCreated == UNKNOWN)
+	if (MetadataCache.extensionCreated == UNKNOWN)
 	{
 		bool extensionCreated = CitusHasBeenLoadedInternal();
 
@@ -2243,15 +2242,15 @@ CitusHasBeenLoaded(void)
 			 */
 			DistColocationRelationId();
 
-			MetadataCache.isExtensionCreated = CREATED;
+			MetadataCache.extensionCreated = CREATED;
 		}
 		else
 		{
-			MetadataCache.isExtensionCreated = NOTCREATED;
+			MetadataCache.extensionCreated = NOTCREATED;
 		}
 	}
 
-	return (MetadataCache.isExtensionCreated == CREATED) ? true : false;
+	return (MetadataCache.extensionCreated == CREATED) ? true : false;
 }
 
 
@@ -4757,37 +4756,6 @@ InvalidateForeignKeyGraph(void)
 
 
 /*
- * NeedsMetadataCacheInvalidation returns true if a given oid is cached in MetadataCache.
- * This list does not include the Oids for which there are seperate invalidation
- * functions. E.g. distColocationRelationId is handled in
- * InvalidateForeignRelationGraphCacheCallback(Datum argument, Oid relationId).
- * So we do not include it here.
- */
-static bool
-NeedsMetadataCacheInvalidation(Oid relationId)
-{
-	if (relationId == MetadataCache.distPartitionRelationId ||
-		relationId == MetadataCache.distShardRelationId ||
-		relationId == MetadataCache.distPlacementRelationId ||
-		relationId == MetadataCache.distBackgroundJobRelationId ||
-		relationId == MetadataCache.distBackgroundJobJobIdSequenceId ||
-		relationId == MetadataCache.distBackgroundTaskRelationId ||
-		relationId == MetadataCache.distBackgroundTaskTaskIdSequenceId ||
-		relationId == MetadataCache.distBackgroundTaskDependRelationId ||
-		relationId == MetadataCache.distRebalanceStrategyRelationId ||
-		relationId == MetadataCache.distCleanupRelationId ||
-		relationId == MetadataCache.distTenantSchemaRelationId ||
-		relationId == MetadataCache.distTransactionRelationId ||
-		relationId == MetadataCache.distClockLogicalSequenceId)
-	{
-		return true;
-	}
-
-	return false;
-}
-
-
-/*
  * InvalidateDistRelationCacheCallback flushes cache entries when a relation
  * is updated (or flushes the entire cache).
  */
@@ -4819,12 +4787,14 @@ InvalidateDistRelationCacheCallback(Datum argument, Oid relationId)
 		}
 
 		/*
-		 * if the relcache entries for pg_dist_* tables, whose oids are in MetadataCache,
-		 * got invalidated due to direct operations on them, we need to invalidate the
-		 * cached oids.E.g. a REINDEX TABLE operation invalidates the relcache.
+		 * if pg_dist_partition relcache is invalidated for some reason,
+		 * invalidate the MetadataCache. It is likely an overkill to invalidate
+		 * the entire cache here. But until a better fix, we keep it this way
+		 * for postgres regression tests that includes
+		 *   REINDEX SCHEMA CONCURRENTLY pg_catalog
+		 * command.
 		 */
-
-		if (NeedsMetadataCacheInvalidation(relationId))
+		if (relationId == MetadataCache.distPartitionRelationId)
 		{
 			InvalidateMetadataSystemCache();
 		}
