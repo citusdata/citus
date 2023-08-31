@@ -134,17 +134,18 @@ typedef struct ShardIdCacheEntry
 } ShardIdCacheEntry;
 
 /*
- * ExtensionLoadedState is used to indicate whether MetadataCache.isExtensionLoaded
- * is valid or not. We invalidate MetadataCache by zero-outing all the values. Therefore,
- * MetadataCache.isExtensionLoaded = 0 is only meaningful if the MetadataCache is valid.
- *   UNKNOWN : MetadataCacheData.isExtensionLoaded should be evaluated.
- *   KNOWN   : MetadataCacheData.isExtensionLoaded is valid.
+ * ExtensionCreateState is used to track if citus extension has been created
+ * using CREATE EXTENSION command.
+ *  UNKNOWN     : MetadataCache hence isExtensionCreated flag in the cache is invalidated.
+ *  CREATED     : Citus is created.
+ *  NOTCREATED	: Citus is either not created or dropped.
  */
-typedef enum ExtensionLoadedState
+typedef enum ExtensionCreateState
 {
 	UNKNOWN = 0,
-	KNOWN = 1
-} ExtensionLoadedState;
+	CREATED = 1,
+	NOTCREATED = 2,
+} ExtensionCreateState;
 
 /*
  * State which should be cleared upon DROP EXTENSION. When the configuration
@@ -152,8 +153,7 @@ typedef enum ExtensionLoadedState
  */
 typedef struct MetadataCacheData
 {
-	ExtensionLoadedState extensionLoadedState;
-	bool isExtensionLoaded;
+	ExtensionCreateState isExtensionCreated;
 	Oid distShardRelationId;
 	Oid distPlacementRelationId;
 	Oid distBackgroundJobRelationId;
@@ -2215,16 +2215,16 @@ CitusHasBeenLoaded(void)
 	}
 
 	/*
-	 * MetadataCache.extensionLoadedState indicates that MetadataCache is
+	 * MetadataCache.extensionCreateState indicates whether MetadataCache is
 	 * in a valid state or not. MetadataCache might have been invalidated
 	 * as a result of various relcache invalidations. If the state is invalid,
 	 * evaluate and cache the values we need here.
 	 */
-	if (MetadataCache.extensionLoadedState == UNKNOWN)
+	if (MetadataCache.isExtensionCreated == UNKNOWN)
 	{
-		bool extensionLoaded = CitusHasBeenLoadedInternal();
+		bool extensionCreated = CitusHasBeenLoadedInternal();
 
-		if (extensionLoaded)
+		if (extensionCreated)
 		{
 			/*
 			 * Loaded Citus for the first time in this session, or first time after
@@ -2242,13 +2242,16 @@ CitusHasBeenLoaded(void)
 			 * See the comments of InvalidateForeignKeyGraph for more context.
 			 */
 			DistColocationRelationId();
-		}
 
-		MetadataCache.extensionLoadedState = KNOWN;
-		MetadataCache.isExtensionLoaded = extensionLoaded;
+			MetadataCache.isExtensionCreated = CREATED;
+		}
+		else
+		{
+			MetadataCache.isExtensionCreated = NOTCREATED;
+		}
 	}
 
-	return MetadataCache.isExtensionLoaded;
+	return (MetadataCache.isExtensionCreated == CREATED) ? true : false;
 }
 
 
@@ -4976,7 +4979,7 @@ CreateDistObjectCache(void)
 
 
 /*
- * InvalidateMetadataSystemCache resets all the cached OIDs and the extensionLoaded flag,
+ * InvalidateMetadataSystemCache resets all the cached OIDs and the isExtensionCreated flag,
  * and invalidates the worker node, ConnParams, and local group ID caches.
  */
 void
