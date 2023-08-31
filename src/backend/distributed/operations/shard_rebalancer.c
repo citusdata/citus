@@ -882,7 +882,7 @@ ExecutePlacementUpdates(List *placementUpdateList, Oid shardReplicationModeOid,
  * ones) and the relation id of the target table. The dynamic shared memory
  * portion consists of a RebalanceMonitorHeader and multiple
  * PlacementUpdateEventProgress, one for each planned shard placement move. The
- * dsm_handle of the created segment is savedin the progress of the current backend so
+ * dsm_handle of the created segment is saved in the progress of the current backend so
  * that it can be read by external agents such as get_rebalance_progress function by
  * calling pg_stat_get_progress_info UDF. Since currently only VACUUM commands are
  * officially allowed as the command type, we describe ourselves as a VACUUM command and
