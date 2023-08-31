@@ -164,7 +164,9 @@ static void EnsurePrepareTransactionIsAllowed(void);
 static HTAB * CurrentTransactionPropagatedObjects(bool readonly);
 static HTAB * ParentTransactionPropagatedObjects(bool readonly);
 static void MovePropagatedObjectsToParentTransaction(void);
-static HTAB * CreateSubtransactionPropagatedObjectsHash(void);
+static bool DependencyInPropagatedObjectsHash(HTAB *propagatedObjects,
+											  const ObjectAddress *dependency);
+static HTAB * CreateTxPropagatedObjectsHash(void);
 
 
 /*
@@ -961,6 +963,11 @@ CurrentTransactionPropagatedObjects(bool readonly)
 	if (activeSubXactContexts == NIL)
 	{
 		/* hashset in the root transaction if there is no sub-transaction */
+		if (PropagatedObjectsInTx == NULL && !readonly)
+		{
+			/* lazily create hashset for root transaction, for mutating uses */
+			PropagatedObjectsInTx = CreateTxPropagatedObjectsHash();
+		}
 		return PropagatedObjectsInTx;
 	}
 
@@ -969,7 +976,7 @@ CurrentTransactionPropagatedObjects(bool readonly)
 	if (state->propagatedObjects == NULL && !readonly)
 	{
 		/* lazily create hashset for sub-transaction, for mutating uses */
-		state->propagatedObjects = CreateSubtransactionPropagatedObjectsHash();
+		state->propagatedObjects = CreateTxPropagatedObjectsHash();
 	}
 	return state->propagatedObjects;
 }
@@ -993,6 +1000,11 @@ ParentTransactionPropagatedObjects(bool readonly)
 		 * The parent is the root transaction, when there is single level sub-transaction
 		 * or no sub-transaction.
 		 */
+		if (PropagatedObjectsInTx == NULL && !readonly)
+		{
+			/* lazily create hashset for root transaction, for mutating uses */
+			PropagatedObjectsInTx = CreateTxPropagatedObjectsHash();
+		}
 		return PropagatedObjectsInTx;
 	}
 
@@ -1002,7 +1014,7 @@ ParentTransactionPropagatedObjects(bool readonly)
 	if (state->propagatedObjects == NULL && !readonly)
 	{
 		/* lazily create hashset for parent sub-transaction */
-		state->propagatedObjects = CreateSubtransactionPropagatedObjectsHash();
+		state->propagatedObjects = CreateTxPropagatedObjectsHash();
 	}
 	return state->propagatedObjects;
 }
@@ -1042,11 +1054,30 @@ MovePropagatedObjectsToParentTransaction(void)
 
 
 /*
- * CreateSubtransactionPropagatedObjectsHash creates a hash table used to keep
- * track of the objects propagated in the current subtransaction.
+ * DependencyInPropagatedObjectsHash checks if dependency is in given hashset
+ * of propagated objects.
+ */
+static bool
+DependencyInPropagatedObjectsHash(HTAB *propagatedObjects, const
+								  ObjectAddress *dependency)
+{
+	if (propagatedObjects == NULL)
+	{
+		return false;
+	}
+
+	bool found = false;
+	hash_search(propagatedObjects, dependency, HASH_FIND, &found);
+	return found;
+}
+
+
+/*
+ * CreateTxPropagatedObjectsHash creates a hashset to keep track of the objects
+ * propagated in the current root transaction or sub-transaction.
  */
 static HTAB *
-CreateSubtransactionPropagatedObjectsHash(void)
+CreateTxPropagatedObjectsHash(void)
 {
 	HASHCTL info;
 	memset(&info, 0, sizeof(info));
@@ -1056,28 +1087,7 @@ CreateSubtransactionPropagatedObjectsHash(void)
 	info.hcxt = CitusXactCallbackContext;
 
 	int hashFlags = (HASH_ELEM | HASH_CONTEXT | HASH_FUNCTION);
-	return hash_create("Subtx-%d Propagated Objects", 16,
-					   &info, hashFlags);
-}
-
-
-/*
- * InitTransactionPropagatedObjectsHash initiates a hash table used to keep
- * track of the objects propagated in the root transaction.
- */
-void
-InitTransactionPropagatedObjectsHash(void)
-{
-	HASHCTL info;
-	memset(&info, 0, sizeof(info));
-	info.keysize = sizeof(ObjectAddress);
-	info.entrysize = sizeof(ObjectAddress);
-	info.hash = tag_hash;
-	info.hcxt = TopMemoryContext;
-
-	int hashFlags = (HASH_ELEM | HASH_CONTEXT | HASH_FUNCTION);
-	PropagatedObjectsInTx = hash_create("Tx Propagated Objects", 16,
-										&info, hashFlags);
+	return hash_create("Tx Propagated Objects", 16, &info, hashFlags);
 }
 
 
@@ -1118,13 +1128,13 @@ TrackPropagatedTableAndSequences(Oid relationId)
 
 
 /*
- * ResetPropagatedObjects resets all objects propagated in the current
- * transaction from hash.
+ * ResetPropagatedObjects destroys hashset of propagated objects in the root transaction.
  */
 void
 ResetPropagatedObjects(void)
 {
-	hash_delete_all(PropagatedObjectsInTx);
+	hash_destroy(PropagatedObjectsInTx);
+	PropagatedObjectsInTx = NULL;
 }
 
 
@@ -1139,15 +1149,13 @@ HasAnyDependencyInPropagatedObjects(const ObjectAddress *objectAddress)
 	ObjectAddress *dependency = NULL;
 	foreach_ptr(dependency, dependencyList)
 	{
-		/* first search in top transaction level */
-		bool found = false;
-		hash_search(PropagatedObjectsInTx, dependency, HASH_FIND, &found);
-		if (found)
+		/* first search in root transaction */
+		if (DependencyInPropagatedObjectsHash(PropagatedObjectsInTx, dependency))
 		{
 			return true;
 		}
 
-		/* then depth search in all nested subtransactions */
+		/* search in all nested sub-transactions */
 		if (activeSubXactContexts == NIL)
 		{
 			continue;
@@ -1155,13 +1163,7 @@ HasAnyDependencyInPropagatedObjects(const ObjectAddress *objectAddress)
 		SubXactContext *state = NULL;
 		foreach_ptr(state, activeSubXactContexts)
 		{
-			if (state->propagatedObjects == NULL)
-			{
-				continue;
-			}
-
-			hash_search(state->propagatedObjects, dependency, HASH_FIND, &found);
-			if (found)
+			if (DependencyInPropagatedObjectsHash(state->propagatedObjects, dependency))
 			{
 				return true;
 			}
