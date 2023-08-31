@@ -995,7 +995,8 @@ BEGIN;
     ALTER SCHEMA bar RENAME TO foo;
 ROLLBACK;
 
--- verify that Citus uses current user's metadata connection to propagate table deps since sc1, which is one of the deps of table s1, is propagated in the same transaction.
+-- below tests are to verify dependency propagation with nested sub-transactions
+-- TEST1
 BEGIN;
     CREATE SCHEMA sc1;
     CREATE SEQUENCE sc1.seq;
@@ -1004,7 +1005,7 @@ BEGIN;
 COMMIT;
 DROP SCHEMA sc1 CASCADE;
 
--- verify that Citus uses superuser outside connection to propagate table deps since none of the table's deps is propagated in the same transaction.
+-- TEST2
 CREATE SCHEMA sc1;
 BEGIN;
     CREATE SEQUENCE sc1.seq1;
@@ -1013,7 +1014,7 @@ BEGIN;
 COMMIT;
 DROP SCHEMA sc1 CASCADE;
 
--- verify that Citus uses superuser outside connection to propagate table deps since none of the table's deps is propagated in the same transaction.
+-- TEST3
 SET citus.enable_metadata_sync TO off;
 CREATE SCHEMA sc1;
 SET citus.enable_metadata_sync TO on;
@@ -1023,155 +1024,189 @@ BEGIN;
 COMMIT;
 DROP SCHEMA sc1 CASCADE;
 
--- verify dependency propagation with sub-transactions
+-- TEST4
 BEGIN;
-	-- schema should not be tracked as propagated since sub-transaction is rollbacked
-	SAVEPOINT sp1;
-	  CREATE SCHEMA sc1;
-	ROLLBACK TO SAVEPOINT sp1;
+  SAVEPOINT sp1;
+    CREATE SCHEMA sc1;
+  ROLLBACK TO SAVEPOINT sp1;
 
-	-- locally create the schema so that it can be propagated by next command as dependency
-	SET LOCAL citus.enable_metadata_sync TO off;
-	CREATE SCHEMA sc1;
-	SET LOCAL citus.enable_metadata_sync TO on;
+  SET LOCAL citus.enable_metadata_sync TO off;
+  CREATE SCHEMA sc1;
+  SET LOCAL citus.enable_metadata_sync TO on;
 
-	-- this should use superuser outside connection to propagate table deps
-    CREATE TABLE sc1.s1(id int);
-    SELECT create_distributed_table('sc1.s1','id');
+  CREATE TABLE sc1.s1(id int);
+  SELECT create_distributed_table('sc1.s1','id');
 COMMIT;
 DROP SCHEMA sc1 CASCADE;
 
+-- TEST5
 BEGIN;
-	-- schema should be tracked as propagated since sub-transaction is committed
-	SAVEPOINT sp1;
-	  CREATE SCHEMA sc1;
-	RELEASE SAVEPOINT sp1;
+  SAVEPOINT sp1;
+    CREATE SCHEMA sc1;
+  RELEASE SAVEPOINT sp1;
 
-	-- this should use current user's metadata connection to propagate table deps
-    CREATE TABLE sc1.s1(id int);
-    SELECT create_distributed_table('sc1.s1','id');
+  CREATE SEQUENCE seq1;
+  CREATE TABLE sc1.s1(id int default(nextval('seq1')));
+  SELECT create_distributed_table('sc1.s1','id');
+COMMIT;
+DROP SCHEMA sc1 CASCADE;
+DROP SEQUENCE seq1;
+
+-- TEST6
+BEGIN;
+  SAVEPOINT sp1;
+    SAVEPOINT sp2;
+      CREATE SCHEMA sc1;
+    ROLLBACK TO SAVEPOINT sp2;
+  RELEASE SAVEPOINT sp1;
+
+  SET LOCAL citus.enable_metadata_sync TO off;
+  CREATE SCHEMA sc1;
+  SET LOCAL citus.enable_metadata_sync TO on;
+
+  CREATE TABLE sc1.s1(id int);
+  SELECT create_distributed_table('sc1.s1','id');
 COMMIT;
 DROP SCHEMA sc1 CASCADE;
 
+-- TEST7
 BEGIN;
-	-- schema should not be tracked as propagated since inner nested sub-transaction is rollbacked
-	SAVEPOINT sp1;
-       SAVEPOINT sp2;
-		CREATE SCHEMA sc1;
-	   ROLLBACK TO SAVEPOINT sp2;
-	RELEASE SAVEPOINT sp1;
+  SAVEPOINT sp1;
+    SAVEPOINT sp2;
+      CREATE SCHEMA sc1;
+    RELEASE SAVEPOINT sp2;
+  RELEASE SAVEPOINT sp1;
 
-	-- locally create the schema so that it can be propagated by next command as dependency
-	SET LOCAL citus.enable_metadata_sync TO off;
-	CREATE SCHEMA sc1;
-	SET LOCAL citus.enable_metadata_sync TO on;
+  CREATE SEQUENCE seq1;
+  CREATE TABLE sc1.s1(id int default(nextval('seq1')));
+  SELECT create_distributed_table('sc1.s1','id');
+COMMIT;
+DROP SCHEMA sc1 CASCADE;
+DROP SEQUENCE seq1;
 
-	-- this should use superuser outside connection to propagate table deps
-    CREATE TABLE sc1.s1(id int);
-    SELECT create_distributed_table('sc1.s1','id');
+-- TEST8
+BEGIN;
+  SAVEPOINT sp1;
+    SAVEPOINT sp2;
+      CREATE SCHEMA sc1;
+    RELEASE SAVEPOINT sp2;
+  ROLLBACK TO SAVEPOINT sp1;
+
+  SET LOCAL citus.enable_metadata_sync TO off;
+  CREATE SCHEMA sc1;
+  SET LOCAL citus.enable_metadata_sync TO on;
+
+  CREATE TABLE sc1.s1(id int);
+  SELECT create_distributed_table('sc1.s1','id');
 COMMIT;
 DROP SCHEMA sc1 CASCADE;
 
+-- TEST9
 BEGIN;
-	-- schema should be tracked as propagated since nested sub-transactions are committed
-	SAVEPOINT sp1;
-       SAVEPOINT sp2;
-		CREATE SCHEMA sc1;
-	   RELEASE SAVEPOINT sp2;
-	RELEASE SAVEPOINT sp1;
+  SAVEPOINT sp1;
+    SAVEPOINT sp2;
+      CREATE SCHEMA sc2;
+    ROLLBACK TO SAVEPOINT sp2;
 
-	-- this should use current user's metadata connection to propagate table deps
-    CREATE TABLE sc1.s1(id int);
-    SELECT create_distributed_table('sc1.s1','id');
+    SAVEPOINT sp3;
+      CREATE SCHEMA sc1;
+    RELEASE SAVEPOINT sp3;
+  RELEASE SAVEPOINT sp1;
+
+  CREATE SEQUENCE seq1;
+  CREATE TABLE sc1.s1(id int default(nextval('seq1')));
+  SELECT create_distributed_table('sc1.s1','id');
 COMMIT;
 DROP SCHEMA sc1 CASCADE;
+DROP SEQUENCE seq1;
 
+-- TEST10
 BEGIN;
-	-- schema should not be tracked as propagated since outer nested sub-transaction is rollbacked
-	SAVEPOINT sp1;
-       SAVEPOINT sp2;
-		CREATE SCHEMA sc1;
-	   RELEASE SAVEPOINT sp2;
-	ROLLBACK TO SAVEPOINT sp1;
+  SAVEPOINT sp1;
+    SAVEPOINT sp2;
+      CREATE SCHEMA sc2;
+    RELEASE SAVEPOINT sp2;
+    SAVEPOINT sp3;
+      CREATE SCHEMA sc3;
+      SAVEPOINT sp4;
+        CREATE SCHEMA sc1;
+      ROLLBACK TO SAVEPOINT sp4;
+    RELEASE SAVEPOINT sp3;
+  RELEASE SAVEPOINT sp1;
 
-	-- locally create the schema so that it can be propagated by next command as dependency
-	SET LOCAL citus.enable_metadata_sync TO off;
-	CREATE SCHEMA sc1;
-	SET LOCAL citus.enable_metadata_sync TO on;
+  SET LOCAL citus.enable_metadata_sync TO off;
+  CREATE SCHEMA sc1;
+  SET LOCAL citus.enable_metadata_sync TO on;
 
-	-- this should use superuser outside connection to propagate table deps
-    CREATE TABLE sc1.s1(id int);
-    SELECT create_distributed_table('sc1.s1','id');
-COMMIT;
-DROP SCHEMA sc1 CASCADE;
-
-BEGIN;
-	-- schema should be tracked as propagated since outer nested sub-transaction is committed
-	-- even if nonrelated inner subtransaction is rollbacked
-	SAVEPOINT sp1;
-       SAVEPOINT sp2;
-		CREATE SCHEMA sc2;
-	   ROLLBACK TO SAVEPOINT sp2;
-
-	   SAVEPOINT sp3;
-		CREATE SCHEMA sc1;
-	   RELEASE SAVEPOINT sp3;
-	RELEASE SAVEPOINT sp1;
-
-	-- this should use current user's metadata connection to propagate table deps
-    CREATE TABLE sc1.s1(id int);
-    SELECT create_distributed_table('sc1.s1','id');
-COMMIT;
-DROP SCHEMA sc1 CASCADE;
-
-BEGIN;
-	-- try with more nesting and rollbacked schema sc1 sub-transaction
-	SAVEPOINT sp1;
-       SAVEPOINT sp2;
-		CREATE SCHEMA sc2;
-	   RELEASE SAVEPOINT sp2;
-	   SAVEPOINT sp3;
-	   	CREATE SCHEMA sc3;
-		SAVEPOINT sp4;
-		 CREATE SCHEMA sc1;
-		ROLLBACK TO SAVEPOINT sp4;
-	   RELEASE SAVEPOINT sp3;
-	RELEASE SAVEPOINT sp1;
-
-	-- locally create the schema so that it can be propagated by next command as dependency
-	SET LOCAL citus.enable_metadata_sync TO off;
-	CREATE SCHEMA sc1;
-	SET LOCAL citus.enable_metadata_sync TO on;
-
-	-- this should use superuser outside connection to propagate table deps
-    CREATE TABLE sc1.s1(id int);
-    SELECT create_distributed_table('sc1.s1','id');
+  CREATE TABLE sc1.s1(id int);
+  SELECT create_distributed_table('sc1.s1','id');
 COMMIT;
 DROP SCHEMA sc1 CASCADE;
 DROP SCHEMA sc2 CASCADE;
 DROP SCHEMA sc3 CASCADE;
 
+-- TEST11
 BEGIN;
-	-- try with more nesting and committed schema sc1 sub-transaction
-	SAVEPOINT sp1;
-       SAVEPOINT sp2;
-		CREATE SCHEMA sc2;
-	   RELEASE SAVEPOINT sp2;
-	   SAVEPOINT sp3;
-	   	CREATE SCHEMA sc3;
-		SAVEPOINT sp4;
-		 CREATE SCHEMA sc1;
-		RELEASE SAVEPOINT sp4;
-	   RELEASE SAVEPOINT sp3;
-	RELEASE SAVEPOINT sp1;
+  SAVEPOINT sp1;
+    SAVEPOINT sp2;
+      CREATE SCHEMA sc2;
+    RELEASE SAVEPOINT sp2;
+    SAVEPOINT sp3;
+      CREATE SCHEMA sc3;
+      SAVEPOINT sp4;
+        CREATE SCHEMA sc1;
+      RELEASE SAVEPOINT sp4;
+    RELEASE SAVEPOINT sp3;
+  RELEASE SAVEPOINT sp1;
 
-	-- this should use current user's metadata connection to propagate table deps
-    CREATE TABLE sc1.s1(id int);
-    SELECT create_distributed_table('sc1.s1','id');
+  CREATE SEQUENCE seq1;
+  CREATE TABLE sc1.s1(id int default(nextval('seq1')));
+  SELECT create_distributed_table('sc1.s1','id');
 COMMIT;
 DROP SCHEMA sc1 CASCADE;
 DROP SCHEMA sc2 CASCADE;
 DROP SCHEMA sc3 CASCADE;
+DROP SEQUENCE seq1;
+
+-- TEST12
+BEGIN;
+  SAVEPOINT sp1;
+    SAVEPOINT sp2;
+      CREATE SCHEMA sc2;
+    RELEASE SAVEPOINT sp2;
+    SAVEPOINT sp3;
+      CREATE SCHEMA sc3;
+      SAVEPOINT sp4;
+        CREATE SEQUENCE seq1;
+        CREATE SCHEMA sc1;
+        CREATE TABLE sc1.s1(id int default(nextval('seq1')));
+        SELECT create_distributed_table('sc1.s1','id');
+      RELEASE SAVEPOINT sp4;
+    RELEASE SAVEPOINT sp3;
+  RELEASE SAVEPOINT sp1;
+COMMIT;
+DROP SCHEMA sc1 CASCADE;
+DROP SCHEMA sc2 CASCADE;
+DROP SCHEMA sc3 CASCADE;
+DROP SEQUENCE seq1;
+
+-- issue-6614
+CREATE FUNCTION create_schema_test() RETURNS void AS $$
+BEGIN
+    SET citus.create_object_propagation = 'deferred';
+    CREATE SCHEMA test_1;
+    CREATE TABLE test_1.test (
+        id bigserial constraint test_pk primary key,
+        creation_date timestamp constraint test_creation_date_df default timezone('UTC'::text, CURRENT_TIMESTAMP)  not null
+    );
+    PERFORM create_reference_table('test_1.test');
+	RETURN;
+END;
+$$ LANGUAGE plpgsql;
+SELECT create_schema_test();
+SELECT run_command_on_all_nodes($$ SELECT COUNT(*) = 1 FROM pg_dist_partition WHERE logicalrelid = 'test_1.test'::regclass $$);
+DROP FUNCTION create_schema_test;
+DROP SCHEMA test_1 CASCADE;
 
 -- Clean up the created schema
 SET client_min_messages TO WARNING;

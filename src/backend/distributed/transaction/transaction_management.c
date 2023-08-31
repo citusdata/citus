@@ -951,7 +951,7 @@ EnsurePrepareTransactionIsAllowed(void)
 /*
  * CurrentTransactionPropagatedObjects returns the objects propagated in current
  * sub-transaction or the root transaction if no sub-transaction exists.
- * 
+ *
  * If the propagated objects are readonly it will not create the hashmap if it does not
  * already exist in the current sub-transaction.
  */
@@ -979,22 +979,20 @@ CurrentTransactionPropagatedObjects(bool readonly)
  * ParentTransactionPropagatedObjects returns the objects propagated in parent
  * transaction of active sub-transaction. It returns the root transaction if
  * no sub-transaction exists.
- * 
+ *
  * If the propagated objects are readonly it will not create the hashmap if it does not
  * already exist in the target sub-transaction.
  */
 static HTAB *
 ParentTransactionPropagatedObjects(bool readonly)
 {
-	if (activeSubXactContexts == NIL)
-	{
-		return PropagatedObjectsInTx;
-	}
-
 	int nestingLevel = list_length(activeSubXactContexts);
-	if (nestingLevel == 1)
+	if (nestingLevel <= 1)
 	{
-		/* the parent is the root transaction, when there is single level sub-transaction */
+		/*
+		 * The parent is the root transaction, when there is single level sub-transaction
+		 * or no sub-transaction.
+		 */
 		return PropagatedObjectsInTx;
 	}
 
@@ -1026,7 +1024,7 @@ MovePropagatedObjectsToParentTransaction(void)
 		return;
 	}
 
-	/* 
+	/*
 	 * Only after we know we have objects to move into the parent do we get a handle on
 	 * a guaranteed existing parent hash table. This makes sure that the parents only
 	 * get populated once there are objects to be tracked.
