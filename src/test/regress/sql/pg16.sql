@@ -147,6 +147,50 @@ SELECT result FROM run_command_on_workers
 ($$DROP DATABASE test_db$$);
 SET search_path TO pg16;
 
+-- Foreign table TRUNCATE trigger
+-- Relevant PG commit:
+-- https://github.com/postgres/postgres/commit/3b00a94
+SET citus.use_citus_managed_tables TO ON;
+CREATE TABLE foreign_table_test (id integer NOT NULL, data text, a bigserial);
+INSERT INTO foreign_table_test VALUES (1, 'text_test');
+CREATE EXTENSION postgres_fdw;
+CREATE SERVER foreign_server
+        FOREIGN DATA WRAPPER postgres_fdw
+        OPTIONS (host 'localhost', port :'master_port', dbname 'regression');
+CREATE USER MAPPING FOR CURRENT_USER
+        SERVER foreign_server
+        OPTIONS (user 'postgres');
+CREATE FOREIGN TABLE foreign_table (
+        id integer NOT NULL,
+        data text,
+        a bigserial
+)
+        SERVER foreign_server
+        OPTIONS (schema_name 'pg16', table_name 'foreign_table_test');
+
+-- verify it's a Citus foreign table
+SELECT partmethod, repmodel FROM pg_dist_partition
+WHERE logicalrelid = 'foreign_table'::regclass ORDER BY logicalrelid;
+
+INSERT INTO foreign_table VALUES (2, 'test_2');
+INSERT INTO foreign_table_test VALUES (3, 'test_3');
+
+CREATE FUNCTION trigger_func() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+	RAISE NOTICE 'trigger_func(%) called: action = %, when = %, level = %',
+		TG_ARGV[0], TG_OP, TG_WHEN, TG_LEVEL;
+	RETURN NULL;
+END;$$;
+
+CREATE TRIGGER trig_stmt_before BEFORE TRUNCATE ON foreign_table
+	FOR EACH STATEMENT EXECUTE PROCEDURE trigger_func();
+
+SELECT * FROM foreign_table ORDER BY 1;
+TRUNCATE foreign_table;
+SELECT * FROM foreign_table ORDER BY 1;
+
+RESET citus.use_citus_managed_tables;
+
 --
 -- COPY FROM ... DEFAULT
 -- Already supported in Citus, adding all PG tests with a distributed table
@@ -390,4 +434,5 @@ SELECT result FROM run_command_on_workers
 
 \set VERBOSITY terse
 SET client_min_messages TO ERROR;
+DROP EXTENSION postgres_fdw CASCADE;
 DROP SCHEMA pg16 CASCADE;
