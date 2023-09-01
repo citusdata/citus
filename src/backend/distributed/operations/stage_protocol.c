@@ -411,7 +411,7 @@ InsertShardPlacementRows(Oid relationId, int64 shardId, List *workerNodeList,
 
 /*
  * CreateShardsOnWorkers creates shards on worker nodes given the shard placements
- * as a parameter The function creates the shards via the executor. This means
+ * as a parameter. The function creates the shards via the executor. This means
  * that it can adopt the number of connections required to create the shards.
  */
 void

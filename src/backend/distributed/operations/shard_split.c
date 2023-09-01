@@ -216,7 +216,7 @@ ErrorIfCannotSplitShard(SplitOperation splitOperation, ShardInterval *sourceShar
 
 
 /*
- * Exteded checks before we decide to split the shard.
+ * Extended checks before we decide to split the shard.
  * When all consumers (Example : ISOLATE_TENANT_TO_NEW_SHARD) directly call 'SplitShard' API,
  * this method will be merged with 'ErrorIfCannotSplitShard' above.
  */
@@ -425,7 +425,7 @@ GetWorkerNodesFromWorkerIds(List *nodeIdsForPlacementList)
  * 'shardInterval'              : Source shard interval to be split.
  * 'shardSplitPointsList'		: Split Points list for the source 'shardInterval'.
  * 'nodeIdsForPlacementList'	: Placement list corresponding to split children.
- * 'distributionColumnList'     : Maps relation IDs to distribution columns.
+ * 'distributionColumnOverrides': Maps relation IDs to distribution columns.
  *                                If not specified, the distribution column is read
  *                                from the metadata.
  * 'colocatedShardIntervalList' : Shard interval list for colocation group. (only used for

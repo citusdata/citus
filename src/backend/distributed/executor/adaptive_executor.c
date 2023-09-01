@@ -2045,7 +2045,7 @@ ProcessSessionsWithFailedWaitEventSetOperations(DistributedExecution *execution)
 
 /*
  * HasIncompleteConnectionEstablishment returns true if any of the connections
- * that has been initiated by the executor is in initilization stage.
+ * that has been initiated by the executor is in initialization stage.
  */
 static bool
 HasIncompleteConnectionEstablishment(DistributedExecution *execution)
@@ -2658,7 +2658,7 @@ OpenNewConnections(WorkerPool *workerPool, int newConnectionCount,
 		{
 			/*
 			 * The worker pool has just started to establish connections. We need to
-			 * defer this initilization after StartNodeUserDatabaseConnection()
+			 * defer this initialization after StartNodeUserDatabaseConnection()
 			 * because for non-optional connections, we have some logic to wait
 			 * until a connection is allowed to be established.
 			 */

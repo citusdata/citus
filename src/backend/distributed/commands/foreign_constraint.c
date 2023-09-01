@@ -132,7 +132,7 @@ EnsureNoFKeyFromTableType(Oid relationId, int tableTypeFlag)
 
 
 /*
- * EnsureNoFKeyToTableType ensures that given relation is not referencing by any table specified
+ * EnsureNoFKeyToTableType ensures that given relation is not referencing any table specified
  * by table type flag.
  */
 void

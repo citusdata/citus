@@ -124,7 +124,7 @@ SendCommandToWorkersWithMetadata(const char *command)
  * owner to ensure write access to the Citus metadata tables.
  *
  * Since we prevent to open superuser connections for metadata tables, it is
- * discourated to use it. Consider using it only for propagating pg_dist_object
+ * discouraged to use it. Consider using it only for propagating pg_dist_object
  * tuples for dependent objects.
  */
 void
