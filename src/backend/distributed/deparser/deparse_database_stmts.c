@@ -18,8 +18,8 @@
 #include "nodes/parsenodes.h"
 #include "utils/builtins.h"
 
-#include "distributed/citus_ruleutils.h"
 #include "distributed/deparser.h"
+#include "distributed/citus_ruleutils.h"
 
 static void AppendAlterDatabaseOwnerStmt(StringInfo buf, AlterOwnerStmt *stmt);
 
@@ -74,41 +74,11 @@ AppendGrantOnDatabaseStmt(StringInfo buf, GrantStmt *stmt)
 {
 	Assert(stmt->objtype == OBJECT_DATABASE);
 
-	appendStringInfo(buf, "%s ", stmt->is_grant ? "GRANT" : "REVOKE");
-
-	if (!stmt->is_grant && stmt->grant_option)
-	{
-		appendStringInfo(buf, "GRANT OPTION FOR ");
-	}
-
-	AppendGrantPrivileges(buf, stmt);
+	AppendGrantSharedPrefix(buf, stmt);
 
 	AppendGrantDatabases(buf, stmt);
 
-	AppendGrantGrantees(buf, stmt);
-
-	if (stmt->is_grant && stmt->grant_option)
-	{
-		appendStringInfo(buf, " WITH GRANT OPTION");
-	}
-	if (!stmt->is_grant)
-	{
-		if (stmt->behavior == DROP_RESTRICT)
-		{
-			appendStringInfo(buf, " RESTRICT");
-		}
-		else if (stmt->behavior == DROP_CASCADE)
-		{
-			appendStringInfo(buf, " CASCADE");
-		}
-	}
-
-	if (stmt->grantor)
-	{
-		appendStringInfo(buf, " GRANTED BY %s", RoleSpecString(stmt->grantor, true));
-	}
-
-	appendStringInfo(buf, ";");
+	AppendGrantSharedSuffix(buf, stmt);
 }
 
 
