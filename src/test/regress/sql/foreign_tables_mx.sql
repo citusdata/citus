@@ -37,6 +37,11 @@ CREATE FOREIGN TABLE foreign_table (
 --verify
 SELECT partmethod, repmodel FROM pg_dist_partition WHERE logicalrelid = 'foreign_table'::regclass ORDER BY logicalrelid;
 
+-- COPY FROM doesn't work for Citus foreign tables
+COPY foreign_table FROM stdin;
+1	1foo	2
+\.
+
 CREATE TABLE parent_for_foreign_tables (
     project_id integer
 ) PARTITION BY HASH (project_id);
