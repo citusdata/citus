@@ -19,7 +19,7 @@ step s1-rebalance-c1-block-writes:
  <waiting ...>
 step s7-get-progress: 
  set LOCAL client_min_messages=NOTICE;
- WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (200000), (400000))
+ WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (100000), (280000), (400000))
  SELECT
   table_name,
   shardid,
@@ -42,7 +42,7 @@ table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname
 ---------------------------------------------------------------------
 colocated1|1500001|     50000|localhost |     57637|            50000|localhost |     57638|             8000|       1|move          |t               |t                   |f                   |Copying Data
 colocated2|1500005|    400000|localhost |     57637|           400000|localhost |     57638|             8000|       1|move          |t               |t                   |f                   |Copying Data
-colocated1|1500002|    200000|localhost |     57637|           200000|localhost |     57638|                0|       0|move          |t               |t                   |f                   |Not Started Yet
+colocated1|1500002|    280000|localhost |     57637|           280000|localhost |     57638|                0|       0|move          |t               |t                   |f                   |Not Started Yet
 colocated2|1500006|      8000|localhost |     57637|             8000|localhost |     57638|                0|       0|move          |t               |t                   |f                   |Not Started Yet
 (4 rows)
 
@@ -63,7 +63,7 @@ rebalance_table_shards
 step s1-wait:
 step s7-get-progress:
  set LOCAL client_min_messages=NOTICE;
- WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (200000), (400000))
+ WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (100000), (280000), (400000))
  SELECT
   table_name,
   shardid,
@@ -102,7 +102,7 @@ step s1-rebalance-c1-block-writes:
  <waiting ...>
 step s7-get-progress: 
  set LOCAL client_min_messages=NOTICE;
- WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (200000), (400000))
+ WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (100000), (280000), (400000))
  SELECT
   table_name,
   shardid,
@@ -125,7 +125,7 @@ table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname
 ---------------------------------------------------------------------
 colocated1|1500001|     50000|localhost |     57637|            50000|localhost |     57638|            50000|       2|move          |t               |t                   |f                   |Completed
 colocated2|1500005|    400000|localhost |     57637|           400000|localhost |     57638|           400000|       2|move          |t               |t                   |f                   |Completed
-colocated1|1500002|    200000|localhost |     57637|           200000|localhost |     57638|                0|       1|move          |t               |t                   |f                   |Setting Up
+colocated1|1500002|    280000|localhost |     57637|           280000|localhost |     57638|                0|       1|move          |t               |t                   |f                   |Setting Up
 colocated2|1500006|      8000|localhost |     57637|             8000|localhost |     57638|                0|       1|move          |t               |t                   |f                   |Setting Up
 (4 rows)
 
@@ -141,7 +141,7 @@ rebalance_table_shards
 step s1-wait:
 step s7-get-progress:
  set LOCAL client_min_messages=NOTICE;
- WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (200000), (400000))
+ WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (100000), (280000), (400000))
  SELECT
   table_name,
   shardid,
@@ -184,7 +184,7 @@ step s1-rebalance-c1-block-writes:
  <waiting ...>
 step s7-get-progress: 
  set LOCAL client_min_messages=NOTICE;
- WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (200000), (400000))
+ WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (100000), (280000), (400000))
  SELECT
   table_name,
   shardid,
@@ -207,7 +207,7 @@ table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname
 ---------------------------------------------------------------------
 colocated1|1500001|     50000|localhost |     57637|            50000|localhost |     57638|            50000|       1|move          |t               |t                   |f                   |Copying Data
 colocated2|1500005|    400000|localhost |     57637|           400000|localhost |     57638|           400000|       1|move          |t               |t                   |f                   |Copying Data
-colocated1|1500002|    200000|localhost |     57637|           200000|localhost |     57638|                0|       0|move          |t               |t                   |f                   |Not Started Yet
+colocated1|1500002|    280000|localhost |     57637|           280000|localhost |     57638|                0|       0|move          |t               |t                   |f                   |Not Started Yet
 colocated2|1500006|      8000|localhost |     57637|             8000|localhost |     57638|                0|       0|move          |t               |t                   |f                   |Not Started Yet
 (4 rows)
 
@@ -228,7 +228,7 @@ rebalance_table_shards
 step s1-wait:
 step s7-get-progress:
  set LOCAL client_min_messages=NOTICE;
- WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (200000), (400000))
+ WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (100000), (280000), (400000))
  SELECT
   table_name,
   shardid,
@@ -271,7 +271,7 @@ step s1-rebalance-c1-online:
  <waiting ...>
 step s7-get-progress: 
  set LOCAL client_min_messages=NOTICE;
- WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (200000), (400000))
+ WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (100000), (280000), (400000))
  SELECT
   table_name,
   shardid,
@@ -294,7 +294,7 @@ table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname
 ---------------------------------------------------------------------
 colocated1|1500001|     50000|localhost |     57637|            50000|localhost |     57638|             8000|       1|move          |t               |t                   |f                   |Setting Up
 colocated2|1500005|    400000|localhost |     57637|           400000|localhost |     57638|             8000|       1|move          |t               |t                   |f                   |Setting Up
-colocated1|1500002|    200000|localhost |     57637|           200000|localhost |     57638|                0|       0|move          |t               |t                   |f                   |Not Started Yet
+colocated1|1500002|    280000|localhost |     57637|           280000|localhost |     57638|                0|       0|move          |t               |t                   |f                   |Not Started Yet
 colocated2|1500006|      8000|localhost |     57637|             8000|localhost |     57638|                0|       0|move          |t               |t                   |f                   |Not Started Yet
 (4 rows)
 
@@ -315,7 +315,7 @@ rebalance_table_shards
 step s1-wait:
 step s7-get-progress:
  set LOCAL client_min_messages=NOTICE;
- WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (200000), (400000))
+ WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (100000), (280000), (400000))
  SELECT
   table_name,
   shardid,
@@ -358,7 +358,7 @@ step s1-rebalance-c1-online:
  <waiting ...>
 step s7-get-progress: 
  set LOCAL client_min_messages=NOTICE;
- WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (200000), (400000))
+ WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (100000), (280000), (400000))
  SELECT
   table_name,
   shardid,
@@ -381,7 +381,7 @@ table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname
 ---------------------------------------------------------------------
 colocated1|1500001|     50000|localhost |     57637|            50000|localhost |     57638|            50000|       1|move          |t               |t                   |t                   |Final Catchup
 colocated2|1500005|    400000|localhost |     57637|           400000|localhost |     57638|           400000|       1|move          |t               |t                   |t                   |Final Catchup
-colocated1|1500002|    200000|localhost |     57637|           200000|localhost |     57638|                0|       0|move          |t               |t                   |f                   |Not Started Yet
+colocated1|1500002|    280000|localhost |     57637|           280000|localhost |     57638|                0|       0|move          |t               |t                   |f                   |Not Started Yet
 colocated2|1500006|      8000|localhost |     57637|             8000|localhost |     57638|                0|       0|move          |t               |t                   |f                   |Not Started Yet
 (4 rows)
 
@@ -402,7 +402,7 @@ rebalance_table_shards
 step s1-wait:
 step s7-get-progress:
  set LOCAL client_min_messages=NOTICE;
- WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (200000), (400000))
+ WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (100000), (280000), (400000))
  SELECT
   table_name,
   shardid,
@@ -445,7 +445,7 @@ step s1-shard-move-c1-block-writes:
  <waiting ...>
 step s7-get-progress: 
  set LOCAL client_min_messages=NOTICE;
- WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (200000), (400000))
+ WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (100000), (280000), (400000))
  SELECT
   table_name,
   shardid,
@@ -487,7 +487,7 @@ citus_move_shard_placement
 step s1-wait:
 step s7-get-progress:
  set LOCAL client_min_messages=NOTICE;
- WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (200000), (400000))
+ WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (100000), (280000), (400000))
  SELECT
   table_name,
   shardid,
@@ -530,7 +530,7 @@ step s1-shard-move-c1-block-writes:
  <waiting ...>
 step s7-get-progress: 
  set LOCAL client_min_messages=NOTICE;
- WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (200000), (400000))
+ WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (100000), (280000), (400000))
  SELECT
   table_name,
   shardid,
@@ -572,7 +572,7 @@ citus_move_shard_placement
 step s1-wait:
 step s7-get-progress:
  set LOCAL client_min_messages=NOTICE;
- WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (200000), (400000))
+ WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (100000), (280000), (400000))
  SELECT
   table_name,
   shardid,
@@ -616,7 +616,7 @@ step s1-shard-copy-c1-block-writes:
  <waiting ...>
 step s7-get-progress: 
  set LOCAL client_min_messages=NOTICE;
- WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (200000), (400000))
+ WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (100000), (280000), (400000))
  SELECT
   table_name,
   shardid,
@@ -658,7 +658,7 @@ citus_copy_shard_placement
 step s1-wait:
 step s7-get-progress:
  set LOCAL client_min_messages=NOTICE;
- WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (200000), (400000))
+ WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (100000), (280000), (400000))
  SELECT
   table_name,
   shardid,
@@ -702,7 +702,7 @@ step s1-shard-copy-c1-block-writes:
  <waiting ...>
 step s7-get-progress: 
  set LOCAL client_min_messages=NOTICE;
- WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (200000), (400000))
+ WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (100000), (280000), (400000))
  SELECT
   table_name,
   shardid,
@@ -744,7 +744,7 @@ citus_copy_shard_placement
 step s1-wait:
 step s7-get-progress:
  set LOCAL client_min_messages=NOTICE;
- WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (200000), (400000))
+ WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (100000), (280000), (400000))
  SELECT
   table_name,
   shardid,
@@ -787,7 +787,7 @@ step s1-shard-move-c1-online:
  <waiting ...>
 step s7-get-progress: 
  set LOCAL client_min_messages=NOTICE;
- WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (200000), (400000))
+ WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (100000), (280000), (400000))
  SELECT
   table_name,
   shardid,
@@ -829,7 +829,7 @@ citus_move_shard_placement
 step s1-wait:
 step s7-get-progress:
  set LOCAL client_min_messages=NOTICE;
- WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (200000), (400000))
+ WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (100000), (280000), (400000))
  SELECT
   table_name,
   shardid,
@@ -872,7 +872,7 @@ step s1-shard-move-c1-online:
  <waiting ...>
 step s7-get-progress: 
  set LOCAL client_min_messages=NOTICE;
- WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (200000), (400000))
+ WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (100000), (280000), (400000))
  SELECT
   table_name,
   shardid,
@@ -914,7 +914,7 @@ citus_move_shard_placement
 step s1-wait:
 step s7-get-progress:
  set LOCAL client_min_messages=NOTICE;
- WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (200000), (400000))
+ WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (100000), (280000), (400000))
  SELECT
   table_name,
   shardid,
@@ -958,7 +958,7 @@ step s1-shard-copy-c1-online:
  <waiting ...>
 step s7-get-progress: 
  set LOCAL client_min_messages=NOTICE;
- WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (200000), (400000))
+ WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (100000), (280000), (400000))
  SELECT
   table_name,
   shardid,
@@ -1000,7 +1000,7 @@ citus_copy_shard_placement
 step s1-wait:
 step s7-get-progress:
  set LOCAL client_min_messages=NOTICE;
- WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (200000), (400000))
+ WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (100000), (280000), (400000))
  SELECT
   table_name,
   shardid,
@@ -1044,7 +1044,7 @@ step s1-shard-copy-c1-online:
  <waiting ...>
 step s7-get-progress: 
  set LOCAL client_min_messages=NOTICE;
- WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (200000), (400000))
+ WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (100000), (280000), (400000))
  SELECT
   table_name,
   shardid,
@@ -1086,7 +1086,7 @@ citus_copy_shard_placement
 step s1-wait:
 step s7-get-progress:
  set LOCAL client_min_messages=NOTICE;
- WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (200000), (400000))
+ WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (100000), (280000), (400000))
  SELECT
   table_name,
   shardid,
@@ -1132,7 +1132,7 @@ step s4-shard-move-sep-block-writes:
  <waiting ...>
 step s7-get-progress-ordered: 
  set LOCAL client_min_messages=NOTICE;
- WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (200000), (400000))
+ WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (100000), (280000), (400000))
  SELECT
   table_name,
   shardid,
@@ -1155,7 +1155,7 @@ table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname
 ---------------------------------------------------------------------
 colocated1|1500001|     50000|localhost |     57637|            50000|localhost |     57638|             8000|       1|move          |t               |t                   |f
 colocated2|1500005|    400000|localhost |     57637|           400000|localhost |     57638|             8000|       1|move          |t               |t                   |f
-separate  |1500009|     50000|localhost |     57637|            50000|localhost |     57638|             8000|       1|move          |t               |t                   |f
+separate  |1500009|    100000|localhost |     57637|           100000|localhost |     57638|             8000|       1|move          |t               |t                   |f
 (3 rows)
 
 step s5-release-advisory-lock:
@@ -1182,103 +1182,7 @@ step s1-wait:
 step s4-wait:
 step s7-get-progress-ordered:
  set LOCAL client_min_messages=NOTICE;
- WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (200000), (400000))
- SELECT
-  table_name,
-  shardid,
-  ( SELECT size FROM possible_sizes WHERE ABS(size - shard_size) = (SELECT MIN(ABS(size - shard_size)) FROM possible_sizes )) shard_size,
-  sourcename,
-  sourceport,
-  ( SELECT size FROM possible_sizes WHERE ABS(size - source_shard_size) = (SELECT MIN(ABS(size - source_shard_size)) FROM possible_sizes )) source_shard_size,
-  targetname,
-  targetport,
-  ( SELECT size FROM possible_sizes WHERE ABS(size - target_shard_size) = (SELECT MIN(ABS(size - target_shard_size)) FROM possible_sizes )) target_shard_size,
-  progress,
-  operation_type,
-  target_lsn IS NULL OR source_lsn >= target_lsn AS lsn_sanity_check,
-  source_lsn IS NOT NULL AS source_lsn_available,
-  target_lsn IS NOT NULL AS target_lsn_available
- FROM get_rebalance_progress()
- ORDER BY 1, 2, 3, 4, 5;
-
-table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress|operation_type|lsn_sanity_check|source_lsn_available|target_lsn_available
----------------------------------------------------------------------
-(0 rows)
-
-
-starting permutation: s6-acquire-advisory-lock-after-copy s1-shard-move-c1-block-writes s4-shard-move-sep-block-writes s7-get-progress-ordered s6-release-advisory-lock s1-wait s4-wait s7-get-progress-ordered
-master_set_node_property
----------------------------------------------------------------------
-
-(1 row)
-
-step s6-acquire-advisory-lock-after-copy:
-    SELECT pg_advisory_lock(44000, 55152);
-
-pg_advisory_lock
----------------------------------------------------------------------
-
-(1 row)
-
-step s1-shard-move-c1-block-writes:
- SELECT citus_move_shard_placement(1500001, 'localhost', 57637, 'localhost', 57638, shard_transfer_mode:='block_writes');
- <waiting ...>
-step s4-shard-move-sep-block-writes: 
- SELECT citus_move_shard_placement(1500009, 'localhost', 57637, 'localhost', 57638, shard_transfer_mode:='block_writes');
- <waiting ...>
-step s7-get-progress-ordered: 
- set LOCAL client_min_messages=NOTICE;
- WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (200000), (400000))
- SELECT
-  table_name,
-  shardid,
-  ( SELECT size FROM possible_sizes WHERE ABS(size - shard_size) = (SELECT MIN(ABS(size - shard_size)) FROM possible_sizes )) shard_size,
-  sourcename,
-  sourceport,
-  ( SELECT size FROM possible_sizes WHERE ABS(size - source_shard_size) = (SELECT MIN(ABS(size - source_shard_size)) FROM possible_sizes )) source_shard_size,
-  targetname,
-  targetport,
-  ( SELECT size FROM possible_sizes WHERE ABS(size - target_shard_size) = (SELECT MIN(ABS(size - target_shard_size)) FROM possible_sizes )) target_shard_size,
-  progress,
-  operation_type,
-  target_lsn IS NULL OR source_lsn >= target_lsn AS lsn_sanity_check,
-  source_lsn IS NOT NULL AS source_lsn_available,
-  target_lsn IS NOT NULL AS target_lsn_available
- FROM get_rebalance_progress()
- ORDER BY 1, 2, 3, 4, 5;
-
-table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress|operation_type|lsn_sanity_check|source_lsn_available|target_lsn_available
----------------------------------------------------------------------
-colocated1|1500001|     50000|localhost |     57637|            50000|localhost |     57638|            50000|       1|move          |t               |t                   |f
-colocated2|1500005|    400000|localhost |     57637|           400000|localhost |     57638|           400000|       1|move          |t               |t                   |f
-separate  |1500009|     50000|localhost |     57637|            50000|localhost |     57638|           200000|       1|move          |t               |t                   |f
-(3 rows)
-
-step s6-release-advisory-lock:
-    SELECT pg_advisory_unlock(44000, 55152);
-
-pg_advisory_unlock
----------------------------------------------------------------------
-t
-(1 row)
-
-step s1-shard-move-c1-block-writes: <... completed>
-citus_move_shard_placement
----------------------------------------------------------------------
-
-(1 row)
-
-step s4-shard-move-sep-block-writes: <... completed>
-citus_move_shard_placement
----------------------------------------------------------------------
-
-(1 row)
-
-step s1-wait:
-step s4-wait:
-step s7-get-progress-ordered:
- set LOCAL client_min_messages=NOTICE;
- WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (200000), (400000))
+ WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (100000), (280000), (400000))
  SELECT
   table_name,
   shardid,
