@@ -371,7 +371,7 @@ StartNodeUserDatabaseConnection(uint32 flags, const char *hostname, int32 port,
 	 */
 	MultiConnection *connection = MemoryContextAllocZero(ConnectionContext,
 														 sizeof(MultiConnection));
-	connection->initilizationState = POOL_STATE_NOT_INITIALIZED;
+	connection->initializationState = POOL_STATE_NOT_INITIALIZED;
 	dlist_push_tail(entry->connections, &connection->connectionNode);
 
 	/* these two flags are by nature cannot happen at the same time */
@@ -417,7 +417,7 @@ StartNodeUserDatabaseConnection(uint32 flags, const char *hostname, int32 port,
 	 * We've already incremented the counter above, so we should decrement
 	 * when we're done with the connection.
 	 */
-	connection->initilizationState = POOL_STATE_COUNTER_INCREMENTED;
+	connection->initializationState = POOL_STATE_COUNTER_INCREMENTED;
 
 	StartConnectionEstablishment(connection, &key);
 
@@ -430,7 +430,7 @@ StartNodeUserDatabaseConnection(uint32 flags, const char *hostname, int32 port,
 	}
 
 	/* fully initialized the connection, record it */
-	connection->initilizationState = POOL_STATE_INITIALIZED;
+	connection->initializationState = POOL_STATE_INITIALIZED;
 
 	return connection;
 }
@@ -486,7 +486,7 @@ FindAvailableConnection(dlist_head *connections, uint32 flags)
 			continue;
 		}
 
-		if (connection->initilizationState != POOL_STATE_INITIALIZED)
+		if (connection->initializationState != POOL_STATE_INITIALIZED)
 		{
 			/*
 			 * If the connection has not been initialized, it should not be
@@ -780,7 +780,7 @@ ShutdownConnection(MultiConnection *connection)
 
 
 /*
- * MultiConnectionStatePoll executes a PQconnectPoll on the connection to progres the
+ * MultiConnectionStatePoll executes a PQconnectPoll on the connection to progress the
  * connection establishment. The return value of this function indicates if the
  * MultiConnectionPollState has been changed, which could require a change to the WaitEventSet
  */
@@ -1182,10 +1182,10 @@ CitusPQFinish(MultiConnection *connection)
 	}
 
 	/* behave idempotently, there is no gurantee that CitusPQFinish() is called once */
-	if (connection->initilizationState >= POOL_STATE_COUNTER_INCREMENTED)
+	if (connection->initializationState >= POOL_STATE_COUNTER_INCREMENTED)
 	{
 		DecrementSharedConnectionCounter(connection->hostname, connection->port);
-		connection->initilizationState = POOL_STATE_NOT_INITIALIZED;
+		connection->initializationState = POOL_STATE_NOT_INITIALIZED;
 	}
 }
 
@@ -1482,7 +1482,7 @@ ShouldShutdownConnection(MultiConnection *connection, const int cachedConnection
 	 * from their application name.
 	 */
 	return (IsCitusInternalBackend() || IsRebalancerInternalBackend()) ||
-		   connection->initilizationState != POOL_STATE_INITIALIZED ||
+		   connection->initializationState != POOL_STATE_INITIALIZED ||
 		   cachedConnectionCount >= MaxCachedConnectionsPerWorker ||
 		   connection->forceCloseAtTransactionEnd ||
 		   PQstatus(connection->pgConn) != CONNECTION_OK ||
@@ -1541,7 +1541,7 @@ RestartConnection(MultiConnection *connection)
 	 * Not that we have to do this because ShutdownConnection() sets the
 	 * state to not initialized.
 	 */
-	connection->initilizationState = POOL_STATE_INITIALIZED;
+	connection->initializationState = POOL_STATE_INITIALIZED;
 	connection->connectionState = MULTI_CONNECTION_CONNECTING;
 }
 

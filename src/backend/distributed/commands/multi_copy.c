@@ -1548,7 +1548,7 @@ CoerceColumnValue(Datum inputValue, CopyCoercionData *coercionPath)
 {
 	switch (coercionPath->coercionType)
 	{
-		case 0:
+		case COERCION_PATH_NONE:
 		{
 			return inputValue; /* this was a dropped column */
 		}

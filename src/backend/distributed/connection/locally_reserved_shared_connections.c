@@ -14,7 +14,7 @@
  *               (b) Reserving connections, the logic that this
  *                   file implements.
  *
- *   Finally, as the name already implies, once a node has reserved a  shared
+ *   Finally, as the name already implies, once a node has reserved a shared
  *   connection, it is guaranteed to have the right to establish a connection
  *   to the given remote node when needed.
  *
@@ -505,7 +505,7 @@ IsReservationPossible(void)
 
 
 /*
- * AllocateReservedConectionEntry allocates the required entry in the hash
+ * AllocateOrGetReservedConnectionEntry allocates the required entry in the hash
  * map by HASH_ENTER. The function throws an error if it cannot allocate
  * the entry.
  */
