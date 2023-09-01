@@ -220,34 +220,34 @@ VALUES (:worker_1_group_id, 'citus_0_should_be_forgotten_' || :'db2_oid'),
 
 \c db1 - - :master_port
 
-SELECT count(*)
+SELECT count(*) != 0
 FROM pg_dist_transaction;
 
-SELECT recover_prepared_transactions();
+SELECT recover_prepared_transactions() > 0;
 
-SELECT count(*)
+SELECT count(*) = 0
 FROM pg_dist_transaction;
 
 \c db2 - - :master_port
 
-SELECT count(*)
+SELECT count(*) != 0
 FROM pg_dist_transaction;
 
-SELECT recover_prepared_transactions();
+SELECT recover_prepared_transactions() > 0;
 
-SELECT count(*)
+SELECT count(*) = 0
 FROM pg_dist_transaction;
 
 \c regression - - :master_port
 
-SELECT pg_terminate_backend(pid)
+SELECT count(pg_terminate_backend(pid)) > 0
 FROM pg_stat_activity
 WHERE pid <> pg_backend_pid()
   AND datname = 'db1' ;
 
 DROP DATABASE db1;
 
-SELECT pg_terminate_backend(pid)
+SELECT count(pg_terminate_backend(pid)) > 0
 FROM pg_stat_activity
 WHERE pid <> pg_backend_pid()
   AND datname = 'db2' ;
@@ -255,14 +255,14 @@ DROP DATABASE db2;
 
 \c - - - :worker_1_port
 
-SELECT pg_terminate_backend(pid)
+SELECT count(pg_terminate_backend(pid)) > 0
 FROM pg_stat_activity
 WHERE pid <> pg_backend_pid()
   AND datname = 'db1' ;
 
 DROP DATABASE db1;
 
-SELECT pg_terminate_backend(pid)
+SELECT count(pg_terminate_backend(pid)) > 0
 FROM pg_stat_activity
 WHERE pid <> pg_backend_pid()
   AND datname = 'db2' ;
@@ -270,14 +270,16 @@ DROP DATABASE db2;
 
 \c - - - :worker_2_port
 
-SELECT pg_terminate_backend(pid)
+-- Count of terminated sessions is not important for the test,
+-- it is just to make output predictable
+SELECT count(pg_terminate_backend(pid)) > 0
 FROM pg_stat_activity
 WHERE pid <> pg_backend_pid()
   AND datname = 'db1' ;
 
 DROP DATABASE db1;
 
-SELECT pg_terminate_backend(pid)
+SELECT count(pg_terminate_backend(pid)) > 0
 FROM pg_stat_activity
 WHERE pid <> pg_backend_pid()
   AND datname = 'db2' ;

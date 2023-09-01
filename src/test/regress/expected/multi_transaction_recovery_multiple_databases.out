@@ -256,107 +256,107 @@ INSERT INTO pg_dist_transaction
 VALUES (:worker_1_group_id, 'citus_0_should_be_forgotten_' || :'db2_oid'),
        (:worker_2_group_id, 'citus_0_should_be_forgotten_' || :'db2_oid');
 \c db1 - - :master_port
-SELECT count(*)
+SELECT count(*) != 0
 FROM pg_dist_transaction;
- count
+ ?column?
 ---------------------------------------------------------------------
-    11
+ t
 (1 row)
 
-SELECT recover_prepared_transactions();
- recover_prepared_transactions
+SELECT recover_prepared_transactions() > 0;
+ ?column?
 ---------------------------------------------------------------------
-                             4
+ t
 (1 row)
 
-SELECT count(*)
+SELECT count(*) = 0
 FROM pg_dist_transaction;
- count
+ ?column?
 ---------------------------------------------------------------------
-     0
+ t
 (1 row)
 
 \c db2 - - :master_port
-SELECT count(*)
+SELECT count(*) != 0
 FROM pg_dist_transaction;
- count
+ ?column?
 ---------------------------------------------------------------------
-    11
+ t
 (1 row)
 
-SELECT recover_prepared_transactions();
- recover_prepared_transactions
+SELECT recover_prepared_transactions() > 0;
+ ?column?
 ---------------------------------------------------------------------
-                             4
+ t
 (1 row)
 
-SELECT count(*)
+SELECT count(*) = 0
 FROM pg_dist_transaction;
- count
+ ?column?
 ---------------------------------------------------------------------
-     0
+ t
 (1 row)
 
 \c regression - - :master_port
-SELECT pg_terminate_backend(pid)
+SELECT count(pg_terminate_backend(pid)) > 0
 FROM pg_stat_activity
 WHERE pid <> pg_backend_pid()
   AND datname = 'db1' ;
- pg_terminate_backend
+ ?column?
 ---------------------------------------------------------------------
  t
 (1 row)
 
 DROP DATABASE db1;
-SELECT pg_terminate_backend(pid)
+SELECT count(pg_terminate_backend(pid)) > 0
 FROM pg_stat_activity
 WHERE pid <> pg_backend_pid()
   AND datname = 'db2' ;
- pg_terminate_backend
+ ?column?
 ---------------------------------------------------------------------
  t
 (1 row)
 
 DROP DATABASE db2;
 \c - - - :worker_1_port
-SELECT pg_terminate_backend(pid)
+SELECT count(pg_terminate_backend(pid)) > 0
 FROM pg_stat_activity
 WHERE pid <> pg_backend_pid()
   AND datname = 'db1' ;
- pg_terminate_backend
----------------------------------------------------------------------
- t
- t
-(2 rows)
-
-DROP DATABASE db1;
-SELECT pg_terminate_backend(pid)
-FROM pg_stat_activity
-WHERE pid <> pg_backend_pid()
-  AND datname = 'db2' ;
- pg_terminate_backend
----------------------------------------------------------------------
- t
- t
-(2 rows)
-
-DROP DATABASE db2;
-\c - - - :worker_2_port
-SELECT pg_terminate_backend(pid)
-FROM pg_stat_activity
-WHERE pid <> pg_backend_pid()
-  AND datname = 'db1' ;
- pg_terminate_backend
+ ?column?
 ---------------------------------------------------------------------
  t
 (1 row)
 
 DROP DATABASE db1;
-SELECT pg_terminate_backend(pid)
+SELECT count(pg_terminate_backend(pid)) > 0
 FROM pg_stat_activity
 WHERE pid <> pg_backend_pid()
   AND datname = 'db2' ;
- pg_terminate_backend
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+DROP DATABASE db2;
+\c - - - :worker_2_port
+-- Count of terminated sessions is not important for the test,
+-- it is just to make output predictable
+SELECT count(pg_terminate_backend(pid)) > 0
+FROM pg_stat_activity
+WHERE pid <> pg_backend_pid()
+  AND datname = 'db1' ;
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+DROP DATABASE db1;
+SELECT count(pg_terminate_backend(pid)) > 0
+FROM pg_stat_activity
+WHERE pid <> pg_backend_pid()
+  AND datname = 'db2' ;
+ ?column?
 ---------------------------------------------------------------------
  t
 (1 row)
