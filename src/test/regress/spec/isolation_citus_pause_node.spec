@@ -112,12 +112,10 @@ step "s1-pause-node-force"
 		v_node_name text;
 		v_node_port int;
 		v_force boolean := true;
+		v_lock_cooldown int := 100;
 	BEGIN
 		--The first message in the block is being printed on the top of the code block. So adding a dummy message
 		--to make sure that the first message is printed in correct place.
-
-		-- set timeout to 1000 ms
-		set statement_timeout = 1000;
 
 		raise notice '';
 		-- Get the shard id for the distribution column
@@ -131,7 +129,7 @@ step "s1-pause-node-force"
 
 
 		-- Pause the node with force true
-		perform pg_catalog.citus_pause_node_within_txn(v_node_id,v_force) ;
+		perform pg_catalog.citus_pause_node_within_txn(v_node_id,v_force,v_lock_cooldown) ;
 	END;
 	$$
 	LANGUAGE plpgsql;
@@ -148,7 +146,6 @@ session "s2"
 step "s2-begin"
 {
 	BEGIN;
-	set statement_timeout = 1000;
 }
 
 step "s2-insert-distributed"

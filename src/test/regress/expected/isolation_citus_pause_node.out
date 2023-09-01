@@ -6,7 +6,6 @@ step s1-begin:
 
 step s2-begin:
  BEGIN;
- set statement_timeout = 1000;
 
 s1: NOTICE:
 step s1-pause-node:
@@ -51,7 +50,6 @@ step s1-begin:
 
 step s2-begin:
  BEGIN;
- set statement_timeout = 1000;
 
 s1: NOTICE:
 step s1-pause-node:
@@ -121,7 +119,6 @@ step s1-pause-node:
 
 step s2-begin:
  BEGIN;
- set statement_timeout = 1000;
 
 step s2-select-distributed:
  select * from employee where id = 10;
@@ -144,7 +141,6 @@ step s1-begin:
 
 step s2-begin:
  BEGIN;
- set statement_timeout = 1000;
 
 s1: NOTICE:
 step s1-pause-node:
@@ -277,7 +273,6 @@ step s1-begin:
 
 step s2-begin:
  BEGIN;
- set statement_timeout = 1000;
 
 step s2-insert-distributed:
  -- Execute the INSERT statement
@@ -292,11 +287,10 @@ step s1-pause-node-force:
   v_node_name text;
   v_node_port int;
   v_force boolean := true;
+  v_lock_cooldown int := 100;
  BEGIN
   --The first message in the block is being printed on the top of the code block. So adding a dummy message
   --to make sure that the first message is printed in correct place.
-  -- set timeout to 1000 ms
-  set statement_timeout = 1000;
   raise notice '';
   -- Get the shard id for the distribution column
   SELECT get_shard_id_for_distribution_column('employee', 3) into v_shard_id;
@@ -305,7 +299,7 @@ step s1-pause-node-force:
   -- Get the node id for the shard id
   SELECT nodeid into v_node_id FROM pg_dist_node WHERE nodename = v_node_name and nodeport = v_node_port limit 1;
   -- Pause the node with force true
-  perform pg_catalog.citus_pause_node_within_txn(v_node_id,v_force) ;
+  perform pg_catalog.citus_pause_node_within_txn(v_node_id,v_force,v_lock_cooldown) ;
  END;
  $$
  LANGUAGE plpgsql;
