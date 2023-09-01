@@ -1,6 +1,33 @@
 ALTER SYSTEM SET citus.recover_2pc_interval TO -1;
 SELECT pg_reload_conf();
 
+SELECT $definition$
+CREATE OR REPLACE FUNCTION test.maintenance_worker()
+    RETURNS pg_stat_activity
+    LANGUAGE plpgsql
+AS $$
+DECLARE
+   activity record;
+BEGIN
+    DO 'BEGIN END'; -- Force maintenance daemon to start
+    -- we don't want to wait forever; loop will exit after 20 seconds
+    FOR i IN 1 .. 200 LOOP
+        PERFORM pg_stat_clear_snapshot();
+        SELECT * INTO activity FROM pg_stat_activity
+        WHERE application_name = 'Citus Maintenance Daemon' AND datname = current_database();
+        IF activity.pid IS NOT NULL THEN
+            RETURN activity;
+        ELSE
+            PERFORM pg_sleep(0.1);
+        END IF ;
+    END LOOP;
+    -- fail if we reach the end of this loop
+    raise 'Waited too long for maintenance daemon to start';
+END;
+$$;
+$definition$ create_function_test_maintenance_worker
+\gset
+
 CREATE DATABASE db1;
 
 SELECT oid AS db1_oid
@@ -34,7 +61,13 @@ SELECT citus_add_node('localhost', :worker_2_port);
 
 SELECT current_database();
 
-SELECT pg_sleep_for('5 SECONDS');
+CREATE SCHEMA test;
+:create_function_test_maintenance_worker
+
+-- check maintenance daemon is started
+SELECT datname, current_database(),
+       usename, (SELECT extowner::regrole::text FROM pg_extension WHERE extname = 'citus')
+FROM test.maintenance_worker();
 
 SELECT *
 FROM pg_dist_node;
@@ -64,7 +97,13 @@ SELECT citus_add_node('localhost', :worker_2_port);
 
 SELECT current_database();
 
-SELECT pg_sleep_for('5 SECONDS');
+CREATE SCHEMA test;
+:create_function_test_maintenance_worker
+
+-- check maintenance daemon is started
+SELECT datname, current_database(),
+       usename, (SELECT extowner::regrole::text FROM pg_extension WHERE extname = 'citus')
+FROM test.maintenance_worker();
 
 SELECT *
 FROM pg_dist_node;
@@ -100,15 +139,6 @@ SELECT 'citus_0_1234_1_0_' || :'db1_oid' AS transaction_2_worker_1_db_1_name
 \gset
 PREPARE TRANSACTION :'transaction_2_worker_1_db_1_name';
 
-BEGIN;
-CREATE TABLE should_be_sorted_into_middle
-(
-    value int
-);
-SELECT 'citus_0_1234_2_0_' || :'db1_oid' AS transaction_3_worker_1_db_1_name
-\gset
-PREPARE TRANSACTION :'transaction_3_worker_1_db_1_name';
-
 \c db1 - - :worker_2_port
 
 BEGIN;
@@ -128,15 +158,6 @@ CREATE TABLE should_commit
 SELECT 'citus_0_1234_1_0_' || :'db1_oid' AS transaction_2_worker_2_db_1_name
 \gset
 PREPARE TRANSACTION :'transaction_2_worker_2_db_1_name';
-
-BEGIN;
-CREATE TABLE should_be_sorted_into_middle
-(
-    value int
-);
-SELECT 'citus_0_1234_2_0_' || :'db1_oid' AS transaction_3_worker_2_db_1_name
-\gset
-PREPARE TRANSACTION :'transaction_3_worker_2_db_1_name';
 
 -- Prepare transactions on second database
 \c db2 - - :worker_1_port
@@ -159,15 +180,6 @@ SELECT 'citus_0_1234_4_0_' || :'db2_oid' AS transaction_2_worker_1_db_2_name
 \gset
 PREPARE TRANSACTION :'transaction_2_worker_1_db_2_name';
 
-BEGIN;
-CREATE TABLE should_be_sorted_into_middle
-(
-    value int
-);
-SELECT 'citus_0_1234_5_0_' || :'db2_oid' AS transaction_3_worker_1_db_2_name
-\gset
-PREPARE TRANSACTION :'transaction_3_worker_1_db_2_name';
-
 \c db2 - - :worker_2_port
 
 BEGIN;
@@ -187,15 +199,6 @@ CREATE TABLE should_commit
 SELECT 'citus_0_1234_4_0_' || :'db2_oid' AS transaction_2_worker_2_db_2_name
 \gset
 PREPARE TRANSACTION :'transaction_2_worker_2_db_2_name';
-
-BEGIN;
-CREATE TABLE should_be_sorted_into_middle
-(
-    value int
-);
-SELECT 'citus_0_1234_5_0_' || :'db2_oid' AS transaction_3_worker_2_db_2_name
-\gset
-PREPARE TRANSACTION :'transaction_3_worker_2_db_2_name';
 
 \c db1 - - :master_port
 

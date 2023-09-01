@@ -5,6 +5,32 @@ SELECT pg_reload_conf();
  t
 (1 row)
 
+SELECT $definition$
+CREATE OR REPLACE FUNCTION test.maintenance_worker()
+    RETURNS pg_stat_activity
+    LANGUAGE plpgsql
+AS $$
+DECLARE
+   activity record;
+BEGIN
+    DO 'BEGIN END'; -- Force maintenance daemon to start
+    -- we don't want to wait forever; loop will exit after 20 seconds
+    FOR i IN 1 .. 200 LOOP
+        PERFORM pg_stat_clear_snapshot();
+        SELECT * INTO activity FROM pg_stat_activity
+        WHERE application_name = 'Citus Maintenance Daemon' AND datname = current_database();
+        IF activity.pid IS NOT NULL THEN
+            RETURN activity;
+        ELSE
+            PERFORM pg_sleep(0.1);
+        END IF ;
+    END LOOP;
+    -- fail if we reach the end of this loop
+    raise 'Waited too long for maintenance daemon to start';
+END;
+$$;
+$definition$ create_function_test_maintenance_worker
+\gset
 CREATE DATABASE db1;
 NOTICE:  Citus partially supports CREATE DATABASE for distributed databases
 DETAIL:  Citus does not propagate CREATE DATABASE command to workers
@@ -47,10 +73,15 @@ SELECT current_database();
  db1
 (1 row)
 
-SELECT pg_sleep_for('5 SECONDS');
- pg_sleep_for
+CREATE SCHEMA test;
+:create_function_test_maintenance_worker
+-- check maintenance daemon is started
+SELECT datname, current_database(),
+       usename, (SELECT extowner::regrole::text FROM pg_extension WHERE extname = 'citus')
+FROM test.maintenance_worker();
+ datname | current_database | usename  | extowner
 ---------------------------------------------------------------------
-
+ db1     | db1              | postgres | postgres
 (1 row)
 
 SELECT *
@@ -103,10 +134,15 @@ SELECT current_database();
  db2
 (1 row)
 
-SELECT pg_sleep_for('5 SECONDS');
- pg_sleep_for
+CREATE SCHEMA test;
+:create_function_test_maintenance_worker
+-- check maintenance daemon is started
+SELECT datname, current_database(),
+       usename, (SELECT extowner::regrole::text FROM pg_extension WHERE extname = 'citus')
+FROM test.maintenance_worker();
+ datname | current_database | usename  | extowner
 ---------------------------------------------------------------------
-
+ db2     | db2              | postgres | postgres
 (1 row)
 
 SELECT *
@@ -153,14 +189,6 @@ CREATE TABLE should_commit
 SELECT 'citus_0_1234_1_0_' || :'db1_oid' AS transaction_2_worker_1_db_1_name
 \gset
 PREPARE TRANSACTION :'transaction_2_worker_1_db_1_name';
-BEGIN;
-CREATE TABLE should_be_sorted_into_middle
-(
-    value int
-);
-SELECT 'citus_0_1234_2_0_' || :'db1_oid' AS transaction_3_worker_1_db_1_name
-\gset
-PREPARE TRANSACTION :'transaction_3_worker_1_db_1_name';
 \c db1 - - :worker_2_port
 BEGIN;
 CREATE TABLE should_abort
@@ -178,14 +206,6 @@ CREATE TABLE should_commit
 SELECT 'citus_0_1234_1_0_' || :'db1_oid' AS transaction_2_worker_2_db_1_name
 \gset
 PREPARE TRANSACTION :'transaction_2_worker_2_db_1_name';
-BEGIN;
-CREATE TABLE should_be_sorted_into_middle
-(
-    value int
-);
-SELECT 'citus_0_1234_2_0_' || :'db1_oid' AS transaction_3_worker_2_db_1_name
-\gset
-PREPARE TRANSACTION :'transaction_3_worker_2_db_1_name';
 -- Prepare transactions on second database
 \c db2 - - :worker_1_port
 BEGIN;
@@ -204,14 +224,6 @@ CREATE TABLE should_commit
 SELECT 'citus_0_1234_4_0_' || :'db2_oid' AS transaction_2_worker_1_db_2_name
 \gset
 PREPARE TRANSACTION :'transaction_2_worker_1_db_2_name';
-BEGIN;
-CREATE TABLE should_be_sorted_into_middle
-(
-    value int
-);
-SELECT 'citus_0_1234_5_0_' || :'db2_oid' AS transaction_3_worker_1_db_2_name
-\gset
-PREPARE TRANSACTION :'transaction_3_worker_1_db_2_name';
 \c db2 - - :worker_2_port
 BEGIN;
 CREATE TABLE should_abort
@@ -229,14 +241,6 @@ CREATE TABLE should_commit
 SELECT 'citus_0_1234_4_0_' || :'db2_oid' AS transaction_2_worker_2_db_2_name
 \gset
 PREPARE TRANSACTION :'transaction_2_worker_2_db_2_name';
-BEGIN;
-CREATE TABLE should_be_sorted_into_middle
-(
-    value int
-);
-SELECT 'citus_0_1234_5_0_' || :'db2_oid' AS transaction_3_worker_2_db_2_name
-\gset
-PREPARE TRANSACTION :'transaction_3_worker_2_db_2_name';
 \c db1 - - :master_port
 INSERT INTO pg_dist_transaction
 VALUES (:worker_1_group_id, :'transaction_2_worker_1_db_1_name'),
@@ -256,13 +260,13 @@ SELECT count(*)
 FROM pg_dist_transaction;
  count
 ---------------------------------------------------------------------
-     7
+    11
 (1 row)
 
 SELECT recover_prepared_transactions();
  recover_prepared_transactions
 ---------------------------------------------------------------------
-                             6
+                             4
 (1 row)
 
 SELECT count(*)
@@ -277,13 +281,13 @@ SELECT count(*)
 FROM pg_dist_transaction;
  count
 ---------------------------------------------------------------------
-     7
+    11
 (1 row)
 
 SELECT recover_prepared_transactions();
  recover_prepared_transactions
 ---------------------------------------------------------------------
-                             6
+                             4
 (1 row)
 
 SELECT count(*)
