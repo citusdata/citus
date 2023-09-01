@@ -389,35 +389,11 @@ AppendGrantOnSequenceStmt(StringInfo buf, GrantStmt *stmt)
 			 "GRANT .. ALL SEQUENCES IN SCHEMA is not supported for formatting.");
 	}
 
-	appendStringInfoString(buf, stmt->is_grant ? "GRANT " : "REVOKE ");
-
-	if (!stmt->is_grant && stmt->grant_option)
-	{
-		appendStringInfoString(buf, "GRANT OPTION FOR ");
-	}
-
-	AppendGrantPrivileges(buf, stmt);
+	AppendGrantSharedPrefix(buf, stmt);
 
 	AppendGrantOnSequenceSequences(buf, stmt);
 
-	AppendGrantGrantees(buf, stmt);
-
-	if (stmt->is_grant && stmt->grant_option)
-	{
-		appendStringInfoString(buf, " WITH GRANT OPTION");
-	}
-	if (!stmt->is_grant)
-	{
-		if (stmt->behavior == DROP_RESTRICT)
-		{
-			appendStringInfoString(buf, " RESTRICT");
-		}
-		else if (stmt->behavior == DROP_CASCADE)
-		{
-			appendStringInfoString(buf, " CASCADE");
-		}
-	}
-	appendStringInfoString(buf, ";");
+	AppendGrantSharedSuffix(buf, stmt);
 }
 
 
