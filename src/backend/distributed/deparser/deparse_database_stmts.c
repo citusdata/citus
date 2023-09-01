@@ -23,9 +23,11 @@
 #include "commands/defrem.h"
 #include "distributed/deparser.h"
 #include "distributed/log_utils.h"
+#include "distributed/log_utils.h"
 
 static void AppendAlterDatabaseOwnerStmt(StringInfo buf, AlterOwnerStmt *stmt);
 static void AppendAlterDatabaseStmt(StringInfo buf, AlterDatabaseStmt *stmt);
+static void AppendAlterDatabaseSetStmt(StringInfo buf, AlterDatabaseSetStmt *stmt);
 
 char *
 DeparseAlterDatabaseOwnerStmt(Node *node)
@@ -136,6 +138,120 @@ AppendAlterDatabaseStmt(StringInfo buf, AlterDatabaseStmt *stmt)
 }
 
 
+static void
+AppendAlterDatabaseStmt(StringInfo buf, AlterDatabaseStmt *stmt)
+{
+	appendStringInfo(buf, "ALTER DATABASE %s ", quote_identifier(stmt->dbname));
+
+	if (stmt->options)
+	{
+		ListCell *cell = NULL;
+		appendStringInfo(buf, "WITH OPTION ");
+		foreach(cell, stmt->options)
+		{
+			DefElem *def = castNode(DefElem, lfirst(cell));
+			appendStringInfo(buf, "%s  %s", quote_identifier(def->defname),
+							 quote_literal_cstr(strVal(def->arg)));
+			if (cell != list_tail(stmt->options))
+			{
+				appendStringInfo(buf, ", ");
+			}
+		}
+	}
+
+	appendStringInfo(buf, ";");
+}
+
+
+static void
+AppendAlterDatabaseSetStmt(StringInfo buf, AlterDatabaseSetStmt *stmt)
+{
+	appendStringInfo(buf, "ALTER DATABASE %s SET ", quote_identifier(stmt->dbname));
+
+	VariableSetStmt *varSetStmt = castNode(VariableSetStmt, stmt->setstmt);
+
+
+	if (varSetStmt->kind == VAR_SET_VALUE)
+	{
+		appendStringInfo(buf, "%s = %s", quote_identifier(varSetStmt->name),
+						 quote_literal_cstr(strVal(varSetStmt->args)));
+	}
+	else if (varSetStmt->kind == VAR_RESET_ALL)
+	{
+		appendStringInfo(buf, "RESET ALL");
+	}
+	else if (varSetStmt->kind == VAR_RESET)
+	{
+		appendStringInfo(buf, "RESET %s", quote_identifier(varSetStmt->name));
+	}
+	else
+	{
+		ereport(ERROR,
+				errmsg("unrecognized AlterDatabaseSetStmt kind: %d",
+					   varSetStmt->kind));
+	}
+
+	appendStringInfo(buf, ";");
+}
+
+
+static void
+AppendAlterDatabaseStmt(StringInfo buf, AlterDatabaseStmt *stmt)
+{
+	appendStringInfo(buf, "ALTER DATABASE %s ", quote_identifier(stmt->dbname));
+
+	if (stmt->options)
+	{
+		ListCell *cell = NULL;
+		appendStringInfo(buf, "WITH OPTION ");
+		foreach(cell, stmt->options)
+		{
+			DefElem *def = castNode(DefElem, lfirst(cell));
+			appendStringInfo(buf, "%s  %s", quote_identifier(def->defname),
+							 quote_literal_cstr(strVal(def->arg)));
+			if (cell != list_tail(stmt->options))
+			{
+				appendStringInfo(buf, ", ");
+			}
+		}
+	}
+
+	appendStringInfo(buf, ";");
+}
+
+
+static void
+AppendAlterDatabaseSetStmt(StringInfo buf, AlterDatabaseSetStmt *stmt)
+{
+	appendStringInfo(buf, "ALTER DATABASE %s SET ", quote_identifier(stmt->dbname));
+
+	VariableSetStmt *varSetStmt = castNode(VariableSetStmt, stmt->setstmt);
+
+
+	if (varSetStmt->kind == VAR_SET_VALUE)
+	{
+		appendStringInfo(buf, "%s = %s", quote_identifier(varSetStmt->name),
+						 quote_literal_cstr(strVal(varSetStmt->args)));
+	}
+	else if (varSetStmt->kind == VAR_RESET_ALL)
+	{
+		appendStringInfo(buf, "RESET ALL");
+	}
+	else if (varSetStmt->kind == VAR_RESET)
+	{
+		appendStringInfo(buf, "RESET %s", quote_identifier(varSetStmt->name));
+	}
+	else
+	{
+		ereport(ERROR,
+				errmsg("unrecognized AlterDatabaseSetStmt kind: %d",
+					   varSetStmt->kind));
+	}
+
+	appendStringInfo(buf, ";");
+}
+
+
 char *
 DeparseGrantOnDatabaseStmt(Node *node)
 {
@@ -183,3 +299,61 @@ DeparseAlterDatabaseRefreshCollStmt(Node *node)
 
 
 #endif
+
+
+char *
+DeparseAlterDatabaseStmt(Node *node)
+{
+	AlterDatabaseStmt *stmt = castNode(AlterDatabaseStmt, node);
+
+	StringInfoData str = { 0 };
+	initStringInfo(&str);
+
+	AppendAlterDatabaseStmt(&str, stmt);
+
+	return str.data;
+}
+
+
+char *
+DeparseAlterDatabaseSetStmt(Node *node)
+{
+	AlterDatabaseSetStmt *stmt = castNode(AlterDatabaseSetStmt, node);
+
+	StringInfoData str = { 0 };
+	initStringInfo(&str);
+
+	AppendAlterDatabaseSetStmt(&str, stmt);
+
+	return str.data;
+}
+
+
+char *
+DeparseAlterDatabaseRenameStmt(Node *node)
+{
+	RenameStmt *stmt = (RenameStmt *) node;
+
+	StringInfoData str;
+	initStringInfo(&str);
+
+	appendStringInfo(&str, "ALTER DATABASE %s RENAME TO %s;", quote_identifier(
+						 stmt->subname), quote_identifier(stmt->newname));
+
+	return str.data;
+}
+
+
+char *
+DeparseAlterDatabaseRefreshCollStmt(Node *node)
+{
+	AlterDatabaseRefreshCollStmt *stmt = (AlterDatabaseRefreshCollStmt *) node;
+
+	StringInfoData str;
+	initStringInfo(&str);
+
+	appendStringInfo(&str, "ALTER DATABASE %s REFRESH COLLATION;", quote_identifier(
+						 stmt->dbname));
+
+	return str.data;
+}

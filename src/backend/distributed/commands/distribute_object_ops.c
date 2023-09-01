@@ -468,6 +468,40 @@ static DistributeObjectOps Database_RefreshColl = {
 };
 #endif
 
+static DistributeObjectOps Database_Alter = {
+	.deparse = DeparseAlterDatabaseStmt,
+	.qualify = NULL,
+	.preprocess = PreprocessAlterDatabaseStmt,
+	.postprocess = PostprocessAlterDistributedObjectStmt,
+	.objectType = OBJECT_DATABASE,
+	.operationType = DIST_OPS_ALTER,
+	.address = NULL,
+	.markDistributed = false,
+};
+
+static DistributeObjectOps Database_Set = {
+	.deparse = DeparseAlterDatabaseSetStmt,
+	.qualify = NULL,
+	.preprocess = PreprocessAlterDatabaseSetStmt,
+	.postprocess = PostprocessAlterDistributedObjectStmt,
+	.objectType = OBJECT_DATABASE,
+	.operationType = DIST_OPS_ALTER,
+	.address = NULL,
+	.markDistributed = false,
+};
+static DistributeObjectOps Database_Rename = {
+	.deparse = DeparseAlterDatabaseRenameStmt,
+	.qualify = NULL,
+	.preprocess = PreprocessAlterDatabaseRenameStmt,
+	.postprocess = NULL,
+	.objectType = OBJECT_DATABASE,
+	.operationType = DIST_OPS_ALTER,
+	.address = NULL, /* TODO: RenameDatabaseStmtObjectAddress, */
+	.markDistributed = false,
+};
+
+
+
 static DistributeObjectOps Domain_Alter = {
 	.deparse = DeparseAlterDomainStmt,
 	.qualify = QualifyAlterDomainStmt,
@@ -1318,6 +1352,13 @@ GetDistributeObjectOps(Node *node)
 		}
 
 #endif
+
+
+		case T_AlterDatabaseSetStmt:
+		{
+			return &Database_Set;
+		}
+
 		case T_AlterDomainStmt:
 		{
 			return &Domain_Alter;
@@ -2008,6 +2049,11 @@ GetDistributeObjectOps(Node *node)
 				case OBJECT_COLLATION:
 				{
 					return &Collation_Rename;
+				}
+
+				case OBJECT_DATABASE:
+				{
+					return &Database_Rename;
 				}
 
 				case OBJECT_DOMAIN:
