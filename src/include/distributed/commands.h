@@ -223,6 +223,21 @@ extern List * DatabaseOwnerDDLCommands(const ObjectAddress *address);
 extern List * PreprocessGrantOnDatabaseStmt(Node *node, const char *queryString,
 											ProcessUtilityContext processUtilityContext);
 
+extern List * PreprocessAlterDatabaseStmt(Node *node, const char *queryString,
+										  ProcessUtilityContext processUtilityContext);
+
+extern List * PreprocessAlterDatabaseSetStmt(Node *node, const char *queryString,
+											 ProcessUtilityContext processUtilityContext);
+
+extern List * PreprocessAlterDatabaseRenameStmt(Node *node, const char *queryString,
+												ProcessUtilityContext
+												processUtilityContext);
+
+extern List * PreprocessAlterDatabaseRefreshCollStmt(Node *node, const char *queryString,
+													 ProcessUtilityContext
+													 processUtilityContext);
+
+
 /* domain.c - forward declarations */
 extern List * CreateDomainStmtObjectAddress(Node *node, bool missing_ok, bool
 											isPostprocess);
