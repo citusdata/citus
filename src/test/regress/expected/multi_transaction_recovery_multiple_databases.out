@@ -342,7 +342,7 @@ DROP DATABASE db2;
 \c - - - :worker_2_port
 -- Count of terminated sessions is not important for the test,
 -- it is just to make output predictable
-SELECT count(pg_terminate_backend(pid)) > 0
+SELECT count(pg_terminate_backend(pid)) >= 0
 FROM pg_stat_activity
 WHERE pid <> pg_backend_pid()
   AND datname = 'db1' ;
@@ -352,7 +352,7 @@ WHERE pid <> pg_backend_pid()
 (1 row)
 
 DROP DATABASE db1;
-SELECT count(pg_terminate_backend(pid)) > 0
+SELECT count(pg_terminate_backend(pid)) >= 0
 FROM pg_stat_activity
 WHERE pid <> pg_backend_pid()
   AND datname = 'db2' ;
