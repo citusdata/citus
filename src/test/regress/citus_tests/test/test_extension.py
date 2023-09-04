@@ -1,5 +1,4 @@
 import psycopg
-import pytest
 
 
 def test_create_drop_citus(coord):
