@@ -329,18 +329,6 @@ DeparseAlterDatabaseStmt(Node *node)
 	return str.data;
 }
 
-char *
-DeparseAlterDatabaseSetStmt(Node *node)
-{
-	AlterDatabaseSetStmt *stmt = castNode(AlterDatabaseSetStmt, node);
-
-	StringInfoData str = {0};
-	initStringInfo(&str);
-
-	AppendAlterDatabaseSetStmt(&str, stmt);
-
-	return str.data;
-}
 
 char *
 DeparseAlterDatabaseRenameStmt(Node *node)

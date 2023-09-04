@@ -455,16 +455,6 @@ static DistributeObjectOps Database_Alter = {
 	.markDistributed = false,
 };
 
-static DistributeObjectOps Database_Set = {
-	.deparse = DeparseAlterDatabaseSetStmt,
-	.qualify = NULL,
-	.preprocess = PreprocessAlterDatabaseSetStmt,
-	.postprocess = NULL,
-	.objectType = OBJECT_DATABASE,
-	.operationType = DIST_OPS_ALTER,
-	.address = NULL,
-	.markDistributed = false,
-};
 static DistributeObjectOps Database_Rename = {
 	.deparse = DeparseAlterDatabaseRenameStmt,
 	.qualify = NULL,
@@ -1333,11 +1323,6 @@ GetDistributeObjectOps(Node *node)
 		case T_AlterDatabaseRefreshCollStmt:
 		{
 			return &Database_RefreshColl;
-		}
-
-		case T_AlterDatabaseSetStmt:
-		{
-			return &Database_Set;
 		}
 
 		case T_AlterDomainStmt:
