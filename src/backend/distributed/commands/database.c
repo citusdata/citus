@@ -209,4 +209,6 @@ PreprocessAlterDatabaseRefreshCollStmt(Node *node, const char *queryString,
 
 	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
 }
+
+
 #endif
