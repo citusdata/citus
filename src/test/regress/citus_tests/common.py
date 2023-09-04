@@ -590,7 +590,7 @@ class QueryRunner(ABC):
             if allow_empty_result and len(result) == 0:
                 return None
 
-            assert len(result) == 1
+            assert len(result) == 1, "sql_row returns more than one row"
             return result[0]
 
     def sql_value(self, query, params=None, allow_empty_result=False, **kwargs):
