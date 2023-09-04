@@ -383,14 +383,13 @@ CreateAppendDistributedShardPlacements(Oid relationId, int64 shardId,
 
 /*
  * InsertShardPlacementRows inserts shard placements to the metadata table on
- * the coordinator node. Then, returns the list of added shard placements.
+ * the coordinator node.
  */
-List *
+void
 InsertShardPlacementRows(Oid relationId, int64 shardId, List *workerNodeList,
 						 int workerStartIndex, int replicationFactor)
 {
 	int workerNodeCount = list_length(workerNodeList);
-	List *insertedShardPlacements = NIL;
 
 	for (int placementIndex = 0; placementIndex < replicationFactor; placementIndex++)
 	{
@@ -399,13 +398,11 @@ InsertShardPlacementRows(Oid relationId, int64 shardId, List *workerNodeList,
 		uint32 nodeGroupId = workerNode->groupId;
 		const uint64 shardSize = 0;
 
-		uint64 shardPlacementId = InsertShardPlacementRow(shardId, INVALID_PLACEMENT_ID,
-														  shardSize, nodeGroupId);
-		ShardPlacement *shardPlacement = LoadShardPlacement(shardId, shardPlacementId);
-		insertedShardPlacements = lappend(insertedShardPlacements, shardPlacement);
+		InsertShardPlacementRow(shardId,
+								INVALID_PLACEMENT_ID,
+								shardSize,
+								nodeGroupId);
 	}
-
-	return insertedShardPlacements;
 }
 
 
