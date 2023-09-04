@@ -32,7 +32,7 @@ char *
 DeparseAlterDatabaseOwnerStmt(Node *node)
 {
 	AlterOwnerStmt *stmt = castNode(AlterOwnerStmt, node);
-	StringInfoData str = {0};
+	StringInfoData str = { 0 };
 	initStringInfo(&str);
 
 	Assert(stmt->objectType == OBJECT_DATABASE);
@@ -42,6 +42,7 @@ DeparseAlterDatabaseOwnerStmt(Node *node)
 	return str.data;
 }
 
+
 static void
 AppendAlterDatabaseOwnerStmt(StringInfo buf, AlterOwnerStmt *stmt)
 {
@@ -49,9 +50,10 @@ AppendAlterDatabaseOwnerStmt(StringInfo buf, AlterOwnerStmt *stmt)
 
 	appendStringInfo(buf,
 					 "ALTER DATABASE %s OWNER TO %s;",
-					 quote_identifier(strVal((String *)stmt->object)),
+					 quote_identifier(strVal((String *) stmt->object)),
 					 RoleSpecString(stmt->newowner, true));
 }
+
 
 static void
 AppendGrantDatabases(StringInfo buf, GrantStmt *stmt)
@@ -59,7 +61,7 @@ AppendGrantDatabases(StringInfo buf, GrantStmt *stmt)
 	ListCell *cell = NULL;
 	appendStringInfo(buf, " ON DATABASE ");
 
-	foreach (cell, stmt->objects)
+	foreach(cell, stmt->objects)
 	{
 		char *database = strVal(lfirst(cell));
 		appendStringInfoString(buf, quote_identifier(database));
@@ -69,6 +71,7 @@ AppendGrantDatabases(StringInfo buf, GrantStmt *stmt)
 		}
 	}
 }
+
 
 static void
 AppendGrantOnDatabaseStmt(StringInfo buf, GrantStmt *stmt)
@@ -223,8 +226,9 @@ AppendAlterDatabaseSetStmt(StringInfo buf, AlterDatabaseSetStmt *stmt)
 static void
 AppendDefElemConnLimit(StringInfo buf, DefElem *def)
 {
-	appendStringInfo(buf, " CONNECTION LIMIT %ld",(long int) defGetNumeric(def));
+	appendStringInfo(buf, " CONNECTION LIMIT %ld", (long int) defGetNumeric(def));
 }
+
 
 static void
 AppendAlterDatabaseStmt(StringInfo buf, AlterDatabaseStmt *stmt)
@@ -253,7 +257,8 @@ AppendAlterDatabaseStmt(StringInfo buf, AlterDatabaseStmt *stmt)
 				ereport(ERROR,
 						errmsg("ALLOW_CONNECTIONS is not supported"));
 			}
-			else{
+			else
+			{
 				ereport(ERROR,
 						errmsg("unrecognized AlterDatabaseStmt option: %s",
 							   def->defname));
@@ -308,7 +313,7 @@ DeparseGrantOnDatabaseStmt(Node *node)
 	GrantStmt *stmt = castNode(GrantStmt, node);
 	Assert(stmt->objtype == OBJECT_DATABASE);
 
-	StringInfoData str = {0};
+	StringInfoData str = { 0 };
 	initStringInfo(&str);
 
 	AppendGrantOnDatabaseStmt(&str, stmt);
@@ -316,12 +321,13 @@ DeparseGrantOnDatabaseStmt(Node *node)
 	return str.data;
 }
 
+
 char *
 DeparseAlterDatabaseStmt(Node *node)
 {
 	AlterDatabaseStmt *stmt = castNode(AlterDatabaseStmt, node);
 
-	StringInfoData str = {0};
+	StringInfoData str = { 0 };
 	initStringInfo(&str);
 
 	AppendAlterDatabaseStmt(&str, stmt);
@@ -333,25 +339,28 @@ DeparseAlterDatabaseStmt(Node *node)
 char *
 DeparseAlterDatabaseRenameStmt(Node *node)
 {
-	RenameStmt *stmt = (RenameStmt *)node;
+	RenameStmt *stmt = (RenameStmt *) node;
 
 	StringInfoData str;
 	initStringInfo(&str);
 
-	appendStringInfo(&str, "ALTER DATABASE %s RENAME TO %s;", quote_identifier(stmt->subname), quote_identifier(stmt->newname));
+	appendStringInfo(&str, "ALTER DATABASE %s RENAME TO %s;", quote_identifier(
+						 stmt->subname), quote_identifier(stmt->newname));
 
 	return str.data;
 }
 
+
 char *
 DeparseAlterDatabaseRefreshCollStmt(Node *node)
 {
-	AlterDatabaseRefreshCollStmt *stmt = (AlterDatabaseRefreshCollStmt *)node;
+	AlterDatabaseRefreshCollStmt *stmt = (AlterDatabaseRefreshCollStmt *) node;
 
 	StringInfoData str;
 	initStringInfo(&str);
 
-	appendStringInfo(&str, "ALTER DATABASE %s REFRESH COLLATION;", quote_identifier(stmt->dbname));
+	appendStringInfo(&str, "ALTER DATABASE %s REFRESH COLLATION;", quote_identifier(
+						 stmt->dbname));
 
 	return str.data;
 }

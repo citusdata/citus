@@ -7,10 +7,8 @@
 #include "utils/guc.h"
 
 
-static void
-AppendVarSetValue2(StringInfo buf, VariableSetStmt *setStmt);
-static void
-AppendVariableSet2(StringInfo buf, VariableSetStmt *setStmt);
+static void AppendVarSetValue2(StringInfo buf, VariableSetStmt *setStmt);
+static void AppendVariableSet2(StringInfo buf, VariableSetStmt *setStmt);
 
 
 static void
@@ -114,6 +112,7 @@ AppendVarSetValue2(StringInfo buf, VariableSetStmt *setStmt)
 		}
 	}
 }
+
 
 /*
  * AppendVariableSet appends a string representing the VariableSetStmt to a buffer
