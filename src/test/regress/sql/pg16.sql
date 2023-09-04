@@ -659,35 +659,160 @@ SET client_min_messages TO ERROR;
 DROP EXTENSION postgres_fdw CASCADE;
 DROP SCHEMA pg16 CASCADE;
 
+-- REINDEX DATABASE/SYSTEM name is optional
+-- We already don't propagate these commands automatically
+-- Testing here with run_command_on_workers
+-- Relevant PG commit: https://github.com/postgres/postgres/commit/2cbc3c1
+
+REINDEX DATABASE;
+SELECT result FROM run_command_on_workers
+($$REINDEX DATABASE$$);
+
+REINDEX SYSTEM;
+SELECT result FROM run_command_on_workers
+($$REINDEX SYSTEM$$);
+
 --
--- PG16 allows GRANT WITH ADMIN | INHERIT | SET
+-- random_normal() to provide normally-distributed random numbers
+-- adding here the same tests as the ones with random() in aggregate_support.sql
+-- Relevant PG commit: https://github.com/postgres/postgres/commit/38d8176
 --
--- GRANT privileges to a role or roles  
+
+CREATE TABLE dist_table (dist_col int, agg_col numeric);
+SELECT create_distributed_table('dist_table', 'dist_col');
+
+CREATE TABLE ref_table (int_col int);
+SELECT create_reference_table('ref_table');
+
+-- Test the cases where the worker agg exec. returns no tuples.
+
+SELECT PERCENTILE_DISC(.25) WITHIN GROUP (ORDER BY agg_col)
+FROM (SELECT *, random_normal() FROM dist_table) a;
+
+SELECT PERCENTILE_DISC((2 > random_normal(stddev => 1, mean => 0))::int::numeric / 10)
+       WITHIN GROUP (ORDER BY agg_col)
+FROM dist_table
+LEFT JOIN ref_table ON TRUE;
+
+-- run the same queries after loading some data
+
+INSERT INTO dist_table VALUES (2, 11.2), (3, NULL), (6, 3.22), (3, 4.23), (5, 5.25),
+                              (4, 63.4), (75, NULL), (80, NULL), (96, NULL), (8, 1078), (0, 1.19);
+
+SELECT PERCENTILE_DISC(.25) WITHIN GROUP (ORDER BY agg_col)
+FROM (SELECT *, random_normal() FROM dist_table) a;
+
+SELECT PERCENTILE_DISC((2 > random_normal(stddev => 1, mean => 0))::int::numeric / 10)
+       WITHIN GROUP (ORDER BY agg_col)
+FROM dist_table
+LEFT JOIN ref_table ON TRUE;
+
+--
+-- PG16 added WITH ADMIN FALSE option to GRANT ROLE
+-- WITH ADMIN FALSE is the default, make sure we propagate correctly in Citus
+-- Relevant PG commit: https://github.com/postgres/postgres/commit/e3ce2de
+--
+
+CREATE ROLE role1;
+CREATE ROLE role2;
+
+SET citus.log_remote_commands TO on;
+SET citus.grep_remote_commands = '%GRANT%';
+-- default admin option is false
+GRANT role1 TO role2;
+REVOKE role1 FROM role2;
+-- should behave same as default
+GRANT role1 TO role2 WITH ADMIN FALSE;
+REVOKE role1 FROM role2;
+-- with admin option and with admin true are the same
+GRANT role1 TO role2 WITH ADMIN OPTION;
+REVOKE role1 FROM role2;
+GRANT role1 TO role2 WITH ADMIN TRUE;
+REVOKE role1 FROM role2;
+
+RESET citus.log_remote_commands;
+RESET citus.grep_remote_commands;
+
+--
+-- PG16 added new options to GRANT ROLE
+-- inherit: https://github.com/postgres/postgres/commit/e3ce2de
+-- set: https://github.com/postgres/postgres/commit/3d14e17
+-- We don't propagate for now in Citus
+--
+GRANT role1 TO role2 WITH INHERIT FALSE;
+REVOKE role1 FROM role2;
+GRANT role1 TO role2 WITH INHERIT TRUE;
+REVOKE role1 FROM role2;
+GRANT role1 TO role2 WITH INHERIT OPTION;
+REVOKE role1 FROM role2;
+GRANT role1 TO role2 WITH SET FALSE;
+REVOKE role1 FROM role2;
+GRANT role1 TO role2 WITH SET TRUE;
+REVOKE role1 FROM role2;
+GRANT role1 TO role2 WITH SET OPTION;
+REVOKE role1 FROM role2;
+
+-- connect to worker node
+GRANT role1 TO role2 WITH ADMIN OPTION, INHERIT FALSE, SET FALSE;
+
+SELECT roleid::regrole::text AS role, member::regrole::text,
+admin_option, inherit_option, set_option FROM pg_auth_members
+WHERE roleid::regrole::text = 'role1' ORDER BY 1, 2;
+
+\c - - - :worker_1_port
+
+SELECT roleid::regrole::text AS role, member::regrole::text,
+admin_option, inherit_option, set_option FROM pg_auth_members
+WHERE roleid::regrole::text = 'role1' ORDER BY 1, 2;
+
+SET citus.enable_ddl_propagation TO off;
+GRANT role1 TO role2 WITH ADMIN OPTION, INHERIT FALSE, SET FALSE;
+RESET citus.enable_ddl_propagation;
+
+SELECT roleid::regrole::text AS role, member::regrole::text,
+admin_option, inherit_option, set_option FROM pg_auth_members
+WHERE roleid::regrole::text = 'role1' ORDER BY 1, 2;
+
 \c - - - :master_port
-CREATE ROLE create_role;
-CREATE ROLE create_role_2;
-CREATE ROLE create_role_3;
-CREATE ROLE create_role_4;
-CREATE USER create_user;
-CREATE USER create_user_2;
-CREATE GROUP create_group;
-CREATE GROUP create_group_2;
+REVOKE role1 FROM role2;
 
---test grant role
-GRANT create_group TO create_role;
-GRANT create_group TO create_role_2 WITH ADMIN OPTION;
-GRANT create_group TO create_role_3 WITH INHERIT;
-GRANT create_group TO create_role_4 WITH SET; 
+-- test REVOKES as well
+GRANT role1 TO role2;
+REVOKE SET OPTION FOR role1 FROM role2;
+REVOKE INHERIT OPTION FOR role1 FROM role2;
 
--- ADMIN role can perfom administrative tasks 
--- role can now access the data and permissions of the table (owner of table)
--- role can change current user to any other user/role that has access 
-GRANT ADMIN TO joe;
-GRANT INHERIT ON ROLE joe TO james;
+DROP ROLE role1, role2;
 
-GRANT SELECT ON companies TO joe WITH GRANT OPTION;
-GRANT SET (SELECT) ON companies TO james;
+-- test that everything works fine for roles that are not propagated
+SET citus.enable_ddl_propagation TO off;
+CREATE ROLE role3;
+CREATE ROLE role4;
+CREATE ROLE role5;
+RESET citus.enable_ddl_propagation;
+-- by default, admin option is false, inherit is true, set is true
+GRANT role3 TO role4;
+GRANT role3 TO role5 WITH ADMIN TRUE, INHERIT FALSE, SET FALSE;
+SELECT roleid::regrole::text AS role, member::regrole::text, admin_option, inherit_option, set_option FROM pg_auth_members WHERE roleid::regrole::text = 'role3' ORDER BY 1, 2;
 
+DROP ROLE role3, role4, role5;
+
+\set VERBOSITY terse
+SET client_min_messages TO ERROR;
+DROP EXTENSION postgres_fdw CASCADE;
+DROP SCHEMA pg16 CASCADE;
+
+-- REINDEX DATABASE/SYSTEM name is optional
+-- We already don't propagate these commands automatically
+-- Testing here with run_command_on_workers
+-- Relevant PG commit: https://github.com/postgres/postgres/commit/2cbc3c1
+
+REINDEX DATABASE;
+SELECT result FROM run_command_on_workers
+($$REINDEX DATABASE$$);
+
+REINDEX SYSTEM;
+SELECT result FROM run_command_on_workers
+($$REINDEX SYSTEM$$);
 
 \set VERBOSITY terse
 SET client_min_messages TO ERROR;
