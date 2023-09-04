@@ -2,8 +2,7 @@
 -- and since we don't have a multiple database support for now,
 -- this statement will get error
 alter database regression ALLOW_CONNECTIONS false;
-
-
+ERROR:  ALLOW_CONNECTIONS is not supported
 DO $$
 declare
     v_connlimit numeric;
@@ -19,14 +18,23 @@ begin
 end;
 $$
 language plpgsql;
-
-
+NOTICE:  v_connlimit: -1, v_connlimit_fetched: 100
+CONTEXT:  PL/pgSQL function inline_code_block line XX at RAISE
+NOTICE:  v_connlimit: -1, v_connlimit_fetched: -1
+CONTEXT:  PL/pgSQL function inline_code_block line XX at RAISE
 alter database regression with IS_TEMPLATE true;
 select datistemplate from pg_database where datname = 'regression';
+ datistemplate
+---------------------------------------------------------------------
+ t
+(1 row)
 
 alter database regression with IS_TEMPLATE false;
 select datistemplate from pg_database where datname = 'regression';
-
+ datistemplate
+---------------------------------------------------------------------
+ f
+(1 row)
 
 DO $$
 DECLARE
@@ -43,10 +51,4 @@ BEGIN
     END IF;
 END;
 $$;
-
-
-
-
-
-
-
+Skipping alter database .. REFRESH COLLATION VERSION for PostgreSQL 14
