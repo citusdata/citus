@@ -1,4 +1,5 @@
 import psycopg
+import pytest
 
 
 def test_create_drop_citus(coord):
@@ -8,13 +9,11 @@ def test_create_drop_citus(coord):
             # and Conn2 cannot use it.
             cur1.execute("DROP EXTENSION citus")
 
-            try:
-                cur2.execute("SELECT citus_version();")
+            with pytest.raises(psycopg.errors.UndefinedFunction):
                 # Conn1 dropped the extension. citus_version udf
                 # cannot be found.sycopg.errors.UndefinedFunction
                 # is expected here.
-            except psycopg.errors.UndefinedFunction:
-                cur2.execute("SELECT 1;")
+                cur2.execute("SELECT citus_version();")
 
             # Conn2 creates the extension,
             # Conn1 is able to use it immediadtely.

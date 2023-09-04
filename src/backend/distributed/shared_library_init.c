@@ -124,8 +124,6 @@ CompressionTypeStr_type extern_CompressionTypeStr = NULL;
 IsColumnarTableAmTable_type extern_IsColumnarTableAmTable = NULL;
 ReadColumnarOptions_type extern_ReadColumnarOptions = NULL;
 
-void InvalidateDistRelationCacheCallback(Datum argument, Oid relationId);
-
 /*
  * Define "pass-through" functions so that a SQL function defined as one of
  * these symbols in the citus module can use the definition in the columnar
