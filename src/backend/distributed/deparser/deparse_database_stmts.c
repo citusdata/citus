@@ -292,6 +292,35 @@ AppendAlterDatabaseSetStmt(StringInfo buf, AlterDatabaseSetStmt *stmt)
 	appendStringInfo(buf, ";");
 }
 
+static void
+AppendAlterDatabaseSetStmt(StringInfo buf, AlterDatabaseSetStmt *stmt)
+{
+	appendStringInfo(buf, "ALTER DATABASE %s SET ", quote_identifier(stmt->dbname));
+
+	VariableSetStmt *varSetStmt = castNode(VariableSetStmt, stmt->setstmt);
+
+	if (varSetStmt->kind == VAR_SET_VALUE)
+	{
+		appendStringInfo(buf, "%s = %s", quote_identifier(varSetStmt->name),
+						 quote_literal_cstr(strVal(varSetStmt->args)));
+	}
+	else if (varSetStmt->kind == VAR_RESET_ALL)
+	{
+		appendStringInfo(buf, "RESET ALL");
+	}
+	else if (varSetStmt->kind == VAR_RESET)
+	{
+		appendStringInfo(buf, "RESET %s", quote_identifier(varSetStmt->name));
+	}
+	else
+	{
+		ereport(ERROR,
+				errmsg("unrecognized AlterDatabaseSetStmt kind: %d",
+					   varSetStmt->kind));
+	}
+
+	appendStringInfo(buf, ";");
+}
 
 char *
 DeparseGrantOnDatabaseStmt(Node *node)
