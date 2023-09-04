@@ -455,21 +455,11 @@ static DistributeObjectOps Database_Alter = {
 	.markDistributed = false,
 };
 
-static DistributeObjectOps Database_Rename = {
-	.deparse = DeparseAlterDatabaseRenameStmt,
-	.qualify = NULL,
-	.preprocess = NULL,
-	.postprocess = NULL,
-	.objectType = OBJECT_DATABASE,
-	.operationType = DIST_OPS_ALTER,
-	.address = NULL, /* TODO: RenameDatabaseStmtObjectAddress, */
-	.markDistributed = false,
-};
 
 static DistributeObjectOps Database_RefreshColl = {
 	.deparse = DeparseAlterDatabaseRefreshCollStmt,
 	.qualify = NULL,
-	.preprocess = NULL,/*TODO: Add PostprocessAfter adding addresses */
+	.preprocess = PreprocessAlterDatabaseRefreshCollStmt,
 	.postprocess = NULL,
 	.objectType = OBJECT_DATABASE,
 	.operationType = DIST_OPS_ALTER,
@@ -2015,11 +2005,6 @@ GetDistributeObjectOps(Node *node)
 				case OBJECT_COLLATION:
 				{
 					return &Collation_Rename;
-				}
-
-				case OBJECT_DATABASE:
-				{
-					return &Database_Rename;
 				}
 
 				case OBJECT_DOMAIN:
