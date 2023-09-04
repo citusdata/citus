@@ -455,7 +455,7 @@ static DistributeObjectOps Database_Alter = {
 	.markDistributed = false,
 };
 
-
+#if PG_VERSION_NUM >= PG_VERSION_15
 static DistributeObjectOps Database_RefreshColl = {
 	.deparse = DeparseAlterDatabaseRefreshCollStmt,
 	.qualify = NULL,
@@ -466,6 +466,7 @@ static DistributeObjectOps Database_RefreshColl = {
 	.address = NULL,
 	.markDistributed = false,
 };
+#endif
 
 static DistributeObjectOps Domain_Alter = {
 	.deparse = DeparseAlterDomainStmt,
@@ -1309,12 +1310,12 @@ GetDistributeObjectOps(Node *node)
 		{
 			return &Database_Alter;
 		}
-
+#if PG_VERSION_NUM >= PG_VERSION_15
 		case T_AlterDatabaseRefreshCollStmt:
 		{
 			return &Database_RefreshColl;
 		}
-
+#endif
 		case T_AlterDomainStmt:
 		{
 			return &Domain_Alter;

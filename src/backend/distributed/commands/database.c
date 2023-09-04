@@ -179,6 +179,8 @@ PreprocessAlterDatabaseStmt(Node *node, const char *queryString,
 }
 
 
+#if PG_VERSION_NUM >= PG_VERSION_15
+
 /*
  * PreprocessAlterDatabaseSetStmt is executed before the statement is applied to the local
  * postgres instance.
@@ -207,3 +209,4 @@ PreprocessAlterDatabaseRefreshCollStmt(Node *node, const char *queryString,
 
 	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
 }
+#endif
