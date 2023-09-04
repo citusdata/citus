@@ -77,6 +77,7 @@ test: isolation_global_pid
 test: isolation_citus_locks
 test: isolation_reference_table
 test: isolation_schema_based_sharding
+test: isolation_citus_pause_node
 test: isolation_citus_schema_distribute_undistribute
 
 # Rebalancer

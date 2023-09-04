@@ -292,6 +292,7 @@ extern bool ColumnAppearsInForeignKeyToReferenceTable(char *columnName, Oid
 													  relationId);
 extern List * GetReferencingForeignConstaintCommands(Oid relationOid);
 extern List * GetForeignConstraintToReferenceTablesCommands(Oid relationId);
+extern List * GetForeignConstraintFromOtherReferenceTablesCommands(Oid relationId);
 extern List * GetForeignConstraintToDistributedTablesCommands(Oid relationId);
 extern List * GetForeignConstraintFromDistributedTablesCommands(Oid relationId);
 extern List * GetForeignConstraintCommandsInternal(Oid relationId, int flags);
@@ -605,6 +606,8 @@ extern void ErrorUnsupportedAlterTableAddColumn(Oid relationId, AlterTableCmd *c
 extern void ErrorIfUnsupportedConstraint(Relation relation, char distributionMethod,
 										 char referencingReplicationModel,
 										 Var *distributionColumn, uint32 colocationId);
+extern List * InterShardDDLTaskList(Oid leftRelationId, Oid rightRelationId,
+									const char *commandString);
 extern List * AlterTableSchemaStmtObjectAddress(Node *stmt,
 												bool missing_ok, bool isPostprocess);
 extern List * MakeNameListFromRangeVar(const RangeVar *rel);

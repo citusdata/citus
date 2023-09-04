@@ -391,8 +391,8 @@ SELECT EXISTS(
 (1 row)
 
 INSERT INTO tenant_4.another_partitioned_table VALUES (1, 'a');
-ERROR:  insert or update on table "another_partitioned_table_child_1920090" violates foreign key constraint "another_partitioned_table_a_fkey_1920089"
-DETAIL:  Key (a)=(1) is not present in table "partitioned_table_1920087".
+ERROR:  insert or update on table "another_partitioned_table_child_1920088" violates foreign key constraint "another_partitioned_table_a_fkey_1920087"
+DETAIL:  Key (a)=(1) is not present in table "partitioned_table_1920085".
 CONTEXT:  while executing command on localhost:xxxxx
 INSERT INTO tenant_4.partitioned_table VALUES (1, 'a');
 INSERT INTO tenant_4.another_partitioned_table VALUES (1, 'a');

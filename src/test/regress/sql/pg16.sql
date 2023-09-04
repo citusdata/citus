@@ -104,6 +104,49 @@ SELECT result FROM run_command_on_all_nodes
 SELECT create_distributed_table('test_storage', 'a');
 ALTER TABLE test_storage ALTER a SET STORAGE default;
 
+-- New ICU_RULES option added to CREATE DATABASE
+-- Relevant PG commit:
+-- https://github.com/postgres/postgres/commit/30a53b7
+
+CREATE DATABASE test_db WITH LOCALE_PROVIDER = 'icu' LOCALE = '' ICU_RULES = '&a < g' TEMPLATE = 'template0';
+SELECT result FROM run_command_on_workers
+($$CREATE DATABASE test_db WITH LOCALE_PROVIDER = 'icu' LOCALE = '' ICU_RULES = '&a < g' TEMPLATE = 'template0'$$);
+
+CREATE TABLE test_db_table (a text);
+SELECT create_distributed_table('test_db_table', 'a');
+INSERT INTO test_db_table VALUES ('Abernathy'), ('apple'), ('bird'), ('Boston'), ('Graham'), ('green');
+-- icu default rules order
+SELECT * FROM test_db_table ORDER BY a COLLATE "en-x-icu";
+-- regression database's default order
+SELECT * FROM test_db_table ORDER BY a;
+
+-- now see the order in the new database
+\c test_db
+CREATE EXTENSION citus;
+\c - - - :worker_1_port
+CREATE EXTENSION citus;
+\c - - - :worker_2_port
+CREATE EXTENSION citus;
+\c - - - :master_port
+
+SELECT 1 FROM citus_add_node('localhost', :worker_1_port);
+SELECT 1 FROM citus_add_node('localhost', :worker_2_port);
+
+CREATE TABLE test_db_table (a text);
+SELECT create_distributed_table('test_db_table', 'a');
+INSERT INTO test_db_table VALUES ('Abernathy'), ('apple'), ('bird'), ('Boston'), ('Graham'), ('green');
+-- icu default rules order
+SELECT * FROM test_db_table ORDER BY a COLLATE "en-x-icu";
+-- test_db database's default order with ICU_RULES = '&a < g'
+SELECT * FROM test_db_table ORDER BY a;
+
+\c regression
+\c - - - :master_port
+DROP DATABASE test_db;
+SELECT result FROM run_command_on_workers
+($$DROP DATABASE test_db$$);
+SET search_path TO pg16;
+
 --
 -- COPY FROM ... DEFAULT
 -- Already supported in Citus, adding all PG tests with a distributed table
@@ -331,6 +374,19 @@ SELECT pg_get_viewdef('pg16.prop_view_1', true);
 
 \c - - - :master_port
 SET search_path TO pg16;
+
+-- REINDEX DATABASE/SYSTEM name is optional
+-- We already don't propagate these commands automatically
+-- Testing here with run_command_on_workers
+-- Relevant PG commit: https://github.com/postgres/postgres/commit/2cbc3c1
+
+REINDEX DATABASE;
+SELECT result FROM run_command_on_workers
+($$REINDEX DATABASE$$);
+
+REINDEX SYSTEM;
+SELECT result FROM run_command_on_workers
+($$REINDEX SYSTEM$$);
 
 \set VERBOSITY terse
 SET client_min_messages TO ERROR;

@@ -277,7 +277,7 @@ master_get_new_placementid(PG_FUNCTION_ARGS)
 /*
  * GetNextPlacementId allocates and returns a unique placementId for
  * the placement to be created. This allocation occurs both in shared memory
- * and in write ahead logs; writing to logs avoids the risk of having shardId
+ * and in write ahead logs; writing to logs avoids the risk of having placementId
  * collisions.
  *
  * NB: This can be called by any user; for now we have decided that that's
