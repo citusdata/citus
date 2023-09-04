@@ -258,12 +258,16 @@ CREATE EXTENSION citus;
 \c - - - :worker_2_port
 CREATE EXTENSION citus;
 \c - - - :master_port
-SELECT FROM master_add_node('localhost', :worker_1_port);
---
+SELECT 1 FROM citus_add_node('localhost', :worker_1_port);
+ ?column?
+---------------------------------------------------------------------
+        1
 (1 row)
 
-SELECT FROM master_add_node('localhost', :worker_2_port);
---
+SELECT 1 FROM citus_add_node('localhost', :worker_2_port);
+ ?column?
+---------------------------------------------------------------------
+        1
 (1 row)
 
 CREATE TABLE test_db_table (a text);

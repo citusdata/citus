@@ -129,8 +129,8 @@ CREATE EXTENSION citus;
 CREATE EXTENSION citus;
 \c - - - :master_port
 
-SELECT FROM master_add_node('localhost', :worker_1_port);
-SELECT FROM master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM citus_add_node('localhost', :worker_1_port);
+SELECT 1 FROM citus_add_node('localhost', :worker_2_port);
 
 CREATE TABLE test_db_table (a text);
 SELECT create_distributed_table('test_db_table', 'a');
