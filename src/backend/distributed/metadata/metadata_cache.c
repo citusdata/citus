@@ -134,18 +134,18 @@ typedef struct ShardIdCacheEntry
 } ShardIdCacheEntry;
 
 /*
- * ExtensionCreateState is used to track if citus extension has been created
+ * ExtensionCreatedState is used to track if citus extension has been created
  * using CREATE EXTENSION command.
- *  UNKNOWN     : MetadataCache hence extensionCreated value is invalid.
+ *  UNKNOWN     : MetadataCache is invalid. State is UNKNOWN.
  *  CREATED     : Citus is created.
- *  NOTCREATED	: Citus is either not created or dropped.
+ *  NOTCREATED	: Citus is not created.
  */
-typedef enum ExtensionCreateState
+typedef enum ExtensionCreatedState
 {
 	UNKNOWN = 0,
 	CREATED = 1,
 	NOTCREATED = 2,
-} ExtensionCreateState;
+} ExtensionCreatedState;
 
 /*
  * State which should be cleared upon DROP EXTENSION. When the configuration
@@ -153,7 +153,7 @@ typedef enum ExtensionCreateState
  */
 typedef struct MetadataCacheData
 {
-	ExtensionCreateState extensionCreated;
+	ExtensionCreatedState extensionCreatedState;
 	Oid distShardRelationId;
 	Oid distPlacementRelationId;
 	Oid distBackgroundJobRelationId;
@@ -2215,11 +2215,11 @@ CitusHasBeenLoaded(void)
 	}
 
 	/*
-	 * If extensionCreated is UNKNOWN, query pg_extension for Citus
-	 * and cache the result.
-	 * Otherwise return the value extensionCreated indicates.
+	 * If extensionCreatedState is UNKNOWN, query pg_extension for Citus
+	 * and cache the result. Otherwise return the value extensionCreatedState
+	 * indicates.
 	 */
-	if (MetadataCache.extensionCreated == UNKNOWN)
+	if (MetadataCache.extensionCreatedState == UNKNOWN)
 	{
 		bool extensionCreated = CitusHasBeenLoadedInternal();
 
@@ -2242,15 +2242,15 @@ CitusHasBeenLoaded(void)
 			 */
 			DistColocationRelationId();
 
-			MetadataCache.extensionCreated = CREATED;
+			MetadataCache.extensionCreatedState = CREATED;
 		}
 		else
 		{
-			MetadataCache.extensionCreated = NOTCREATED;
+			MetadataCache.extensionCreatedState = NOTCREATED;
 		}
 	}
 
-	return (MetadataCache.extensionCreated == CREATED) ? true : false;
+	return (MetadataCache.extensionCreatedState == CREATED) ? true : false;
 }
 
 
@@ -4949,8 +4949,8 @@ CreateDistObjectCache(void)
 
 
 /*
- * InvalidateMetadataSystemCache resets all the cached OIDs and the isExtensionCreated flag,
- * and invalidates the worker node, ConnParams, and local group ID caches.
+ * InvalidateMetadataSystemCache resets all the cached OIDs and the extensionCreatedState
+ * flag and invalidates the worker node, ConnParams, and local group ID caches.
  */
 void
 InvalidateMetadataSystemCache(void)
