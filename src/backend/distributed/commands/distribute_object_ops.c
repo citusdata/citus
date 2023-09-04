@@ -472,7 +472,31 @@ static DistributeObjectOps Database_Alter = {
 	.deparse = DeparseAlterDatabaseStmt,
 	.qualify = NULL,
 	.preprocess = PreprocessAlterDatabaseStmt,
-	.postprocess = PostprocessAlterDistributedObjectStmt,
+	.postprocess = NULL,
+	.objectType = OBJECT_DATABASE,
+	.operationType = DIST_OPS_ALTER,
+	.address = NULL,
+	.markDistributed = false,
+};
+
+#if PG_VERSION_NUM >= PG_VERSION_15
+static DistributeObjectOps Database_RefreshColl = {
+	.deparse = DeparseAlterDatabaseRefreshCollStmt,
+	.qualify = NULL,
+	.preprocess = PreprocessAlterDatabaseRefreshCollStmt,
+	.postprocess = NULL,
+	.objectType = OBJECT_DATABASE,
+	.operationType = DIST_OPS_ALTER,
+	.address = NULL,
+	.markDistributed = false,
+};
+#endif
+
+static DistributeObjectOps Database_Alter = {
+	.deparse = DeparseAlterDatabaseStmt,
+	.qualify = NULL,
+	.preprocess = PreprocessAlterDatabaseStmt,
+	.postprocess = NULL,
 	.objectType = OBJECT_DATABASE,
 	.operationType = DIST_OPS_ALTER,
 	.address = NULL,
@@ -483,7 +507,7 @@ static DistributeObjectOps Database_Set = {
 	.deparse = DeparseAlterDatabaseSetStmt,
 	.qualify = NULL,
 	.preprocess = PreprocessAlterDatabaseSetStmt,
-	.postprocess = PostprocessAlterDistributedObjectStmt,
+	.postprocess = NULL,
 	.objectType = OBJECT_DATABASE,
 	.operationType = DIST_OPS_ALTER,
 	.address = NULL,
@@ -492,7 +516,7 @@ static DistributeObjectOps Database_Set = {
 static DistributeObjectOps Database_Rename = {
 	.deparse = DeparseAlterDatabaseRenameStmt,
 	.qualify = NULL,
-	.preprocess = PreprocessAlterDatabaseRenameStmt,
+	.preprocess = NULL,
 	.postprocess = NULL,
 	.objectType = OBJECT_DATABASE,
 	.operationType = DIST_OPS_ALTER,
@@ -500,7 +524,16 @@ static DistributeObjectOps Database_Rename = {
 	.markDistributed = false,
 };
 
-
+static DistributeObjectOps Database_RefreshColl = {
+	.deparse = DeparseAlterDatabaseRefreshCollStmt,
+	.qualify = NULL,
+	.preprocess = NULL,//TODO: Add PostprocessAfter adding addresses
+	.postprocess = NULL,
+	.objectType = OBJECT_DATABASE,
+	.operationType = DIST_OPS_ALTER,
+	.address = NULL,
+	.markDistributed = false,
+};
 
 static DistributeObjectOps Domain_Alter = {
 	.deparse = DeparseAlterDomainStmt,

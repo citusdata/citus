@@ -33,7 +33,7 @@ char *
 DeparseAlterDatabaseOwnerStmt(Node *node)
 {
 	AlterOwnerStmt *stmt = castNode(AlterOwnerStmt, node);
-	StringInfoData str = { 0 };
+	StringInfoData str = {0};
 	initStringInfo(&str);
 
 	Assert(stmt->objectType == OBJECT_DATABASE);
@@ -43,7 +43,6 @@ DeparseAlterDatabaseOwnerStmt(Node *node)
 	return str.data;
 }
 
-
 static void
 AppendAlterDatabaseOwnerStmt(StringInfo buf, AlterOwnerStmt *stmt)
 {
@@ -51,10 +50,9 @@ AppendAlterDatabaseOwnerStmt(StringInfo buf, AlterOwnerStmt *stmt)
 
 	appendStringInfo(buf,
 					 "ALTER DATABASE %s OWNER TO %s;",
-					 quote_identifier(strVal((String *) stmt->object)),
+					 quote_identifier(strVal((String *)stmt->object)),
 					 RoleSpecString(stmt->newowner, true));
 }
-
 
 static void
 AppendGrantDatabases(StringInfo buf, GrantStmt *stmt)
@@ -62,7 +60,7 @@ AppendGrantDatabases(StringInfo buf, GrantStmt *stmt)
 	ListCell *cell = NULL;
 	appendStringInfo(buf, " ON DATABASE ");
 
-	foreach(cell, stmt->objects)
+	foreach (cell, stmt->objects)
 	{
 		char *database = strVal(lfirst(cell));
 		appendStringInfoString(buf, quote_identifier(database));
@@ -72,7 +70,6 @@ AppendGrantDatabases(StringInfo buf, GrantStmt *stmt)
 		}
 	}
 }
-
 
 static void
 AppendGrantOnDatabaseStmt(StringInfo buf, GrantStmt *stmt)
@@ -85,6 +82,7 @@ AppendGrantOnDatabaseStmt(StringInfo buf, GrantStmt *stmt)
 
 	AppendGrantSharedSuffix(buf, stmt);
 }
+
 
 
 static void
@@ -146,12 +144,31 @@ AppendAlterDatabaseStmt(StringInfo buf, AlterDatabaseStmt *stmt)
 	if (stmt->options)
 	{
 		ListCell *cell = NULL;
-		appendStringInfo(buf, "WITH OPTION ");
+		appendStringInfo(buf, "WITH ");
 		foreach(cell, stmt->options)
 		{
 			DefElem *def = castNode(DefElem, lfirst(cell));
-			appendStringInfo(buf, "%s  %s", quote_identifier(def->defname),
-							 quote_literal_cstr(strVal(def->arg)));
+			printf("test");
+			if (strcmp(def->defname, "is_template") == 0)
+			{
+				appendStringInfo(buf, "%s  %s", quote_identifier(def->defname),
+								 quote_literal_cstr(strVal(def->arg)));
+			}
+			else if (strcmp(def->defname, "connection_limit") == 0)
+			{
+				AppendDefElemConnLimit(buf, def);
+			}
+			else if (strcmp(def->defname, "allow_connections") == 0)
+			{
+				ereport(ERROR,
+						errmsg("ALLOW_CONNECTIONS is not supported"));
+			}
+			else{
+				ereport(ERROR,
+						errmsg("unrecognized AlterDatabaseStmt option: %s",
+							   def->defname));
+			}
+
 			if (cell != list_tail(stmt->options))
 			{
 				appendStringInfo(buf, ", ");
@@ -194,6 +211,11 @@ AppendAlterDatabaseSetStmt(StringInfo buf, AlterDatabaseSetStmt *stmt)
 	appendStringInfo(buf, ";");
 }
 
+static void
+AppendDefElemConnLimit(StringInfo buf, DefElem *def)
+{
+	appendStringInfo(buf, " CONNECTION LIMIT %ld",(long int) defGetNumeric(def));
+}
 
 static void
 AppendAlterDatabaseStmt(StringInfo buf, AlterDatabaseStmt *stmt)
@@ -203,12 +225,31 @@ AppendAlterDatabaseStmt(StringInfo buf, AlterDatabaseStmt *stmt)
 	if (stmt->options)
 	{
 		ListCell *cell = NULL;
-		appendStringInfo(buf, "WITH OPTION ");
+		appendStringInfo(buf, "WITH ");
 		foreach(cell, stmt->options)
 		{
 			DefElem *def = castNode(DefElem, lfirst(cell));
-			appendStringInfo(buf, "%s  %s", quote_identifier(def->defname),
-							 quote_literal_cstr(strVal(def->arg)));
+			printf("test");
+			if (strcmp(def->defname, "is_template") == 0)
+			{
+				appendStringInfo(buf, "%s  %s", quote_identifier(def->defname),
+								 quote_literal_cstr(strVal(def->arg)));
+			}
+			else if (strcmp(def->defname, "connection_limit") == 0)
+			{
+				AppendDefElemConnLimit(buf, def);
+			}
+			else if (strcmp(def->defname, "allow_connections") == 0)
+			{
+				ereport(ERROR,
+						errmsg("ALLOW_CONNECTIONS is not supported"));
+			}
+			else{
+				ereport(ERROR,
+						errmsg("unrecognized AlterDatabaseStmt option: %s",
+							   def->defname));
+			}
+
 			if (cell != list_tail(stmt->options))
 			{
 				appendStringInfo(buf, ", ");
@@ -258,7 +299,7 @@ DeparseGrantOnDatabaseStmt(Node *node)
 	GrantStmt *stmt = castNode(GrantStmt, node);
 	Assert(stmt->objtype == OBJECT_DATABASE);
 
-	StringInfoData str = { 0 };
+	StringInfoData str = {0};
 	initStringInfo(&str);
 
 	AppendGrantOnDatabaseStmt(&str, stmt);
@@ -306,7 +347,7 @@ DeparseAlterDatabaseStmt(Node *node)
 {
 	AlterDatabaseStmt *stmt = castNode(AlterDatabaseStmt, node);
 
-	StringInfoData str = { 0 };
+	StringInfoData str = {0};
 	initStringInfo(&str);
 
 	AppendAlterDatabaseStmt(&str, stmt);
@@ -314,13 +355,12 @@ DeparseAlterDatabaseStmt(Node *node)
 	return str.data;
 }
 
-
 char *
 DeparseAlterDatabaseSetStmt(Node *node)
 {
 	AlterDatabaseSetStmt *stmt = castNode(AlterDatabaseSetStmt, node);
 
-	StringInfoData str = { 0 };
+	StringInfoData str = {0};
 	initStringInfo(&str);
 
 	AppendAlterDatabaseSetStmt(&str, stmt);
@@ -328,32 +368,28 @@ DeparseAlterDatabaseSetStmt(Node *node)
 	return str.data;
 }
 
-
 char *
 DeparseAlterDatabaseRenameStmt(Node *node)
 {
-	RenameStmt *stmt = (RenameStmt *) node;
+	RenameStmt *stmt = (RenameStmt *)node;
 
 	StringInfoData str;
 	initStringInfo(&str);
 
-	appendStringInfo(&str, "ALTER DATABASE %s RENAME TO %s;", quote_identifier(
-						 stmt->subname), quote_identifier(stmt->newname));
+	appendStringInfo(&str, "ALTER DATABASE %s RENAME TO %s;", quote_identifier(stmt->subname), quote_identifier(stmt->newname));
 
 	return str.data;
 }
 
-
 char *
 DeparseAlterDatabaseRefreshCollStmt(Node *node)
 {
-	AlterDatabaseRefreshCollStmt *stmt = (AlterDatabaseRefreshCollStmt *) node;
+	AlterDatabaseRefreshCollStmt *stmt = (AlterDatabaseRefreshCollStmt *)node;
 
 	StringInfoData str;
 	initStringInfo(&str);
 
-	appendStringInfo(&str, "ALTER DATABASE %s REFRESH COLLATION;", quote_identifier(
-						 stmt->dbname));
+	appendStringInfo(&str, "ALTER DATABASE %s REFRESH COLLATION;", quote_identifier(stmt->dbname));
 
 	return str.data;
 }
