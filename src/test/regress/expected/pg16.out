@@ -314,9 +314,16 @@ SELECT result FROM run_command_on_workers
 (2 rows)
 
 SET search_path TO pg16;
+SET citus.next_shard_id TO 951000;
 -- Foreign table TRUNCATE trigger
 -- Relevant PG commit:
 -- https://github.com/postgres/postgres/commit/3b00a94
+SELECT 1 FROM citus_add_node('localhost', :master_port, groupid => 0);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
 SET citus.use_citus_managed_tables TO ON;
 CREATE TABLE foreign_table_test (id integer NOT NULL, data text, a bigserial);
 INSERT INTO foreign_table_test VALUES (1, 'text_test');
@@ -350,8 +357,18 @@ BEGIN
 		TG_ARGV[0], TG_OP, TG_WHEN, TG_LEVEL;
 	RETURN NULL;
 END;$$;
+CREATE FUNCTION trigger_func_on_shard() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+	RAISE NOTICE 'trigger_func_on_shard(%) called: action = %, when = %, level = %',
+		TG_ARGV[0], TG_OP, TG_WHEN, TG_LEVEL;
+	RETURN NULL;
+END;$$;
 CREATE TRIGGER trig_stmt_before BEFORE TRUNCATE ON foreign_table
 	FOR EACH STATEMENT EXECUTE PROCEDURE trigger_func();
+SET citus.override_table_visibility TO off;
+CREATE TRIGGER trig_stmt_shard_before BEFORE TRUNCATE ON foreign_table_951001
+	FOR EACH STATEMENT EXECUTE PROCEDURE trigger_func_on_shard();
+RESET citus.override_table_visibility;
 SELECT * FROM foreign_table ORDER BY 1;
  id |   data    | a
 ---------------------------------------------------------------------
@@ -363,6 +380,8 @@ SELECT * FROM foreign_table ORDER BY 1;
 TRUNCATE foreign_table;
 NOTICE:  trigger_func(<NULL>) called: action = TRUNCATE, when = BEFORE, level = STATEMENT
 CONTEXT:  PL/pgSQL function trigger_func() line XX at RAISE
+NOTICE:  trigger_func_on_shard(<NULL>) called: action = TRUNCATE, when = BEFORE, level = STATEMENT
+CONTEXT:  PL/pgSQL function trigger_func_on_shard() line XX at RAISE
 SELECT * FROM foreign_table ORDER BY 1;
  id | data | a
 ---------------------------------------------------------------------
