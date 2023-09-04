@@ -38,17 +38,19 @@ select datistemplate from pg_database where datname = 'regression';
 
 DO $$
 DECLARE
-    v_version_num numeric;
+    v_version_num int;
 BEGIN
     SELECT current_setting('server_version_num')::numeric INTO v_version_num;
     IF v_version_num >= 150000 THEN
         set citus.log_remote_commands = true;
         set citus.grep_remote_commands = '%ALTER DATABASE%';
-        alter database regression REFRESH COLLATION VERSION;
+        execute 'alter database regression REFRESH COLLATION VERSION';
         set citus.log_remote_commands = false;
     ELSE
-        RAISE NOTICE 'Skipping alter database .. REFRESH COLLATION VERSION for PostgreSQL 14';
+        RAISE NOTICE 'Skipping alter database .. REFRESH COLLATION VERSION for PostgreSQL version < 15.';
     END IF;
 END;
-$$;
-Skipping alter database .. REFRESH COLLATION VERSION for PostgreSQL 14
+$$
+language plpgsql;
+NOTICE:  Skipping alter database .. REFRESH COLLATION VERSION for PostgreSQL version < 15.
+

@@ -38,27 +38,28 @@ select datistemplate from pg_database where datname = 'regression';
 
 DO $$
 DECLARE
-    v_version_num numeric;
+    v_version_num int;
 BEGIN
     SELECT current_setting('server_version_num')::numeric INTO v_version_num;
     IF v_version_num >= 150000 THEN
         set citus.log_remote_commands = true;
         set citus.grep_remote_commands = '%ALTER DATABASE%';
-        alter database regression REFRESH COLLATION VERSION;
+        execute 'alter database regression REFRESH COLLATION VERSION';
         set citus.log_remote_commands = false;
     ELSE
-        RAISE NOTICE 'Skipping alter database .. REFRESH COLLATION VERSION for PostgreSQL 14';
+        RAISE NOTICE 'Skipping alter database .. REFRESH COLLATION VERSION for PostgreSQL version < 15.';
     END IF;
 END;
-$$;
+$$
+language plpgsql;
 NOTICE:  version has not changed
 CONTEXT:  SQL statement "alter database regression REFRESH COLLATION VERSION"
-PL/pgSQL function inline_code_block line XX at SQL statement
+PL/pgSQL function inline_code_block line XX at EXECUTE
 NOTICE:  issuing ALTER DATABASE regression REFRESH COLLATION VERSION;
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 CONTEXT:  SQL statement "alter database regression REFRESH COLLATION VERSION"
-PL/pgSQL function inline_code_block line XX at SQL statement
+PL/pgSQL function inline_code_block line XX at EXECUTE
 NOTICE:  issuing ALTER DATABASE regression REFRESH COLLATION VERSION;
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 CONTEXT:  SQL statement "alter database regression REFRESH COLLATION VERSION"
-PL/pgSQL function inline_code_block line XX at SQL statement
+PL/pgSQL function inline_code_block line XX at EXECUTE
