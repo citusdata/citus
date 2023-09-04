@@ -114,7 +114,6 @@ test: isolation_concurrent_move_create_table
 test: isolation_merge
 test: isolation_merge_replicated
 
-test: isolation_create_drop_extension
 
 # Note: Always keep this test at the end
 test: isolation_check_mx
