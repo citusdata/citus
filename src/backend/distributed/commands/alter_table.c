@@ -58,6 +58,7 @@
 #include "distributed/replication_origin_session_utils.h"
 #include "distributed/shared_library_init.h"
 #include "distributed/shard_utils.h"
+#include "distributed/tenant_schema_metadata.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/worker_transaction.h"
 #include "executor/spi.h"

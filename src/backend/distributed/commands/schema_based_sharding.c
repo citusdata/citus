@@ -21,12 +21,23 @@
 #include "distributed/metadata_sync.h"
 #include "distributed/metadata/distobject.h"
 #include "distributed/multi_partitioning_utils.h"
+#include "distributed/shard_transfer.h"
 #include "distributed/tenant_schema_metadata.h"
 #include "distributed/worker_shard_visibility.h"
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
 #include "utils/lsyscache.h"
 #include "utils/syscache.h"
+
+
+/* return value of CreateCitusMoveSchemaParams() */
+typedef struct
+{
+	uint64 anchorShardId;
+	uint32 sourceNodeId;
+	char *sourceNodeName;
+	uint32 sourceNodePort;
+} CitusMoveSchemaParams;
 
 
 static void UnregisterTenantSchemaGlobally(Oid schemaId, char *schemaName);
@@ -36,9 +47,13 @@ static void EnsureTenantSchemaNameAllowed(Oid schemaId);
 static void EnsureTableKindSupportedForTenantSchema(Oid relationId);
 static void EnsureFKeysForTenantTable(Oid relationId);
 static void EnsureSchemaExist(Oid schemaId);
+static CitusMoveSchemaParams * CreateCitusMoveSchemaParams(Oid schemaId);
+static uint64 TenantSchemaPickAnchorShardId(Oid schemaId);
+
 
 /* controlled via citus.enable_schema_based_sharding GUC */
 bool EnableSchemaBasedSharding = false;
+
 
 const char *TenantOperationNames[TOTAL_TENANT_OPERATION] = {
 	"undistribute_table",
@@ -52,6 +67,8 @@ const char *TenantOperationNames[TOTAL_TENANT_OPERATION] = {
 PG_FUNCTION_INFO_V1(citus_internal_unregister_tenant_schema_globally);
 PG_FUNCTION_INFO_V1(citus_schema_distribute);
 PG_FUNCTION_INFO_V1(citus_schema_undistribute);
+PG_FUNCTION_INFO_V1(citus_move_distributed_schema);
+PG_FUNCTION_INFO_V1(citus_move_distributed_schema_with_nodeid);
 
 /*
  * ShouldUseSchemaBasedSharding returns true if schema given name should be
@@ -754,6 +771,140 @@ citus_schema_undistribute(PG_FUNCTION_ARGS)
 	UndistributeTables(tableIdListToConvert);
 
 	PG_RETURN_VOID();
+}
+
+
+/*
+ * citus_move_distributed_schema moves the shards that belong to given
+ * distributed tenant schema from one node to the other node by using
+ * citus_move_shard_placement().
+ */
+Datum
+citus_move_distributed_schema(PG_FUNCTION_ARGS)
+{
+	CheckCitusVersion(ERROR);
+	EnsureCoordinator();
+
+	Oid schemaId = PG_GETARG_OID(0);
+	CitusMoveSchemaParams *params = CreateCitusMoveSchemaParams(schemaId);
+
+	DirectFunctionCall6(citus_move_shard_placement,
+						UInt64GetDatum(params->anchorShardId),
+						CStringGetTextDatum(params->sourceNodeName),
+						UInt32GetDatum(params->sourceNodePort),
+						PG_GETARG_DATUM(1),
+						PG_GETARG_DATUM(2),
+						PG_GETARG_DATUM(3));
+	PG_RETURN_VOID();
+}
+
+
+/*
+ * citus_move_distributed_schema_with_nodeid does the same as
+ * citus_move_distributed_schema(), but accepts node id as parameter instead
+ * of hostname and port, hence uses citus_move_shard_placement_with_nodeid().
+ */
+Datum
+citus_move_distributed_schema_with_nodeid(PG_FUNCTION_ARGS)
+{
+	CheckCitusVersion(ERROR);
+	EnsureCoordinator();
+
+	Oid schemaId = PG_GETARG_OID(0);
+	CitusMoveSchemaParams *params = CreateCitusMoveSchemaParams(schemaId);
+
+	DirectFunctionCall4(citus_move_shard_placement_with_nodeid,
+						UInt64GetDatum(params->anchorShardId),
+						UInt32GetDatum(params->sourceNodeId),
+						PG_GETARG_DATUM(1),
+						PG_GETARG_DATUM(2));
+	PG_RETURN_VOID();
+}
+
+
+/*
+ * CreateCitusMoveSchemaParams is a helper function for
+ * citus_move_distributed_schema() and citus_move_distributed_schema_with_nodeid()
+ * that validates input schema and returns the parameters to be used in underlying
+ * shard transfer functions.
+ */
+static CitusMoveSchemaParams *
+CreateCitusMoveSchemaParams(Oid schemaId)
+{
+	EnsureSchemaExist(schemaId);
+	EnsureSchemaOwner(schemaId);
+
+	if (!IsTenantSchema(schemaId))
+	{
+		ereport(ERROR, (errmsg("schema %s is not a distributed schema",
+							   get_namespace_name(schemaId))));
+	}
+
+	uint64 anchorShardId = TenantSchemaPickAnchorShardId(schemaId);
+	if (anchorShardId == INVALID_SHARD_ID)
+	{
+		ereport(ERROR, (errmsg("cannot move distributed schema %s because it is empty",
+							   get_namespace_name(schemaId))));
+	}
+
+	uint32 colocationId = SchemaIdGetTenantColocationId(schemaId);
+	uint32 sourceNodeId = SingleShardTableColocationNodeId(colocationId);
+
+	bool missingOk = false;
+	WorkerNode *sourceNode = FindNodeWithNodeId(sourceNodeId, missingOk);
+
+	CitusMoveSchemaParams *params = palloc0(sizeof(CitusMoveSchemaParams));
+	params->anchorShardId = anchorShardId;
+	params->sourceNodeId = sourceNodeId;
+	params->sourceNodeName = sourceNode->workerName;
+	params->sourceNodePort = sourceNode->workerPort;
+	return params;
+}
+
+
+/*
+ * TenantSchemaPickAnchorShardId returns the id of one of the shards
+ * created in given tenant schema.
+ *
+ * Returns INVALID_SHARD_ID if the schema was initially empty or if it's not
+ * a tenant schema.
+ *
+ * Throws an error if all the tables in the schema are concurrently dropped.
+ */
+static uint64
+TenantSchemaPickAnchorShardId(Oid schemaId)
+{
+	uint32 colocationId = SchemaIdGetTenantColocationId(schemaId);
+	List *tablesInSchema = ColocationGroupTableList(colocationId, 0);
+	if (list_length(tablesInSchema) == 0)
+	{
+		return INVALID_SHARD_ID;
+	}
+
+	Oid relationId = InvalidOid;
+	foreach_oid(relationId, tablesInSchema)
+	{
+		/*
+		 * Make sure the relation isn't dropped for the remainder of
+		 * the transaction.
+		 */
+		LockRelationOid(relationId, AccessShareLock);
+
+		/*
+		 * The relation might have been dropped just before we locked it.
+		 * Let's look it up.
+		 */
+		Relation relation = RelationIdGetRelation(relationId);
+		if (RelationIsValid(relation))
+		{
+			/* relation still exists, we can use it */
+			RelationClose(relation);
+			return GetFirstShardId(relationId);
+		}
+	}
+
+	ereport(ERROR, (errmsg("tables in schema %s are concurrently dropped",
+						   get_namespace_name(schemaId))));
 }
 
 
