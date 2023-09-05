@@ -212,3 +212,32 @@ PreprocessAlterDatabaseRefreshCollStmt(Node *node, const char *queryString,
 
 
 #endif
+
+/*
+ * PreprocessAlterDatabaseSetStmt is executed before the statement is applied to the local
+ * postgres instance.
+ *
+ * In this stage we can prepare the commands that need to be run on all workers to grant
+ * on databases.
+ */
+List *
+PreprocessAlterDatabaseSetStmt(Node *node, const char *queryString,
+							   ProcessUtilityContext processUtilityContext)
+{
+	if (!ShouldPropagate())
+	{
+		return NIL;
+	}
+
+	AlterDatabaseSetStmt *stmt = castNode(AlterDatabaseSetStmt, node);
+
+	EnsureCoordinator();
+
+	char *sql = DeparseTreeNode((Node *) stmt);
+
+	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
+								(void *) sql,
+								ENABLE_DDL_PROPAGATION);
+
+	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
+}

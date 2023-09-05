@@ -468,6 +468,17 @@ static DistributeObjectOps Database_RefreshColl = {
 };
 #endif
 
+static DistributeObjectOps Database_Set = {
+	.deparse = DeparseAlterDatabaseSetStmt,
+	.qualify = NULL,
+	.preprocess = PreprocessAlterDatabaseSetStmt,
+	.postprocess = NULL,
+	.objectType = OBJECT_DATABASE,
+	.operationType = DIST_OPS_ALTER,
+	.address = NULL,
+	.markDistributed = false,
+};
+
 static DistributeObjectOps Domain_Alter = {
 	.deparse = DeparseAlterDomainStmt,
 	.qualify = QualifyAlterDomainStmt,
@@ -1318,6 +1329,12 @@ GetDistributeObjectOps(Node *node)
 		}
 
 #endif
+
+		case T_AlterDatabaseSetStmt:
+		{
+			return &Database_Set;
+		}
+
 		case T_AlterDomainStmt:
 		{
 			return &Domain_Alter;
