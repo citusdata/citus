@@ -1659,6 +1659,7 @@ PropagatePrerequisiteObjectsForDistributedTable(Oid relationId)
 	ObjectAddress *tableAddress = palloc0(sizeof(ObjectAddress));
 	ObjectAddressSet(*tableAddress, RelationRelationId, relationId);
 	EnsureAllObjectDependenciesExistOnAllNodes(list_make1(tableAddress));
+	TrackPropagatedTableAndSequences(relationId);
 }
 
 
