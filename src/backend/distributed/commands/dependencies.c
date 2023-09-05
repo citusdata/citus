@@ -112,15 +112,35 @@ EnsureDependenciesExistOnAllNodes(const ObjectAddress *target)
 						   dependency->objectSubId, ExclusiveLock);
 	}
 
-	WorkerNode *workerNode = NULL;
-	foreach_ptr(workerNode, workerNodeList)
-	{
-		const char *nodeName = workerNode->workerName;
-		uint32 nodePort = workerNode->workerPort;
 
-		SendCommandListToWorkerOutsideTransaction(nodeName, nodePort,
-												  CitusExtensionOwnerName(),
-												  ddlCommands);
+	/*
+	 * We need to propagate dependencies via the current user's metadata connection if
+	 * any dependency for the target is created in the current transaction. Our assumption
+	 * is that if we rely on a dependency created in the current transaction, then the
+	 * current user, most probably, has permissions to create the target object as well.
+	 * Note that, user still may not be able to create the target due to no permissions
+	 * for any of its dependencies. But this is ok since it should be rare.
+	 *
+	 * If we opted to use a separate superuser connection for the target, then we would
+	 * have visibility issues since propagated dependencies would be invisible to
+	 * the separate connection until we locally commit.
+	 */
+	if (HasAnyDependencyInPropagatedObjects(target))
+	{
+		SendCommandListToWorkersWithMetadata(ddlCommands);
+	}
+	else
+	{
+		WorkerNode *workerNode = NULL;
+		foreach_ptr(workerNode, workerNodeList)
+		{
+			const char *nodeName = workerNode->workerName;
+			uint32 nodePort = workerNode->workerPort;
+
+			SendCommandListToWorkerOutsideTransaction(nodeName, nodePort,
+													  CitusExtensionOwnerName(),
+													  ddlCommands);
+		}
 	}
 
 	/*
