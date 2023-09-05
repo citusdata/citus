@@ -131,7 +131,7 @@ session "s7"
 step "s7-get-progress"
 {
 	set LOCAL client_min_messages=NOTICE;
-	WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (200000), (400000))
+	WITH possible_sizes(size) as (VALUES (0), (8000), (40000), (200000), (480000))
 	SELECT
 		table_name,
 		shardid,
@@ -157,7 +157,7 @@ step "s7-get-progress"
 step "s7-get-progress-ordered"
 {
 	set LOCAL client_min_messages=NOTICE;
-	WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (200000), (400000))
+	WITH possible_sizes(size) as (VALUES (0), (8000), (40000), (200000), (480000))
 	SELECT
 		table_name,
 		shardid,
