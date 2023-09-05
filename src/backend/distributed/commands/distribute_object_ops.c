@@ -444,29 +444,6 @@ static DistributeObjectOps Database_Grant = {
 	.markDistributed = false,
 };
 
-static DistributeObjectOps Database_Alter = {
-	.deparse = DeparseAlterDatabaseStmt,
-	.qualify = NULL,
-	.preprocess = PreprocessAlterDatabaseStmt,
-	.postprocess = NULL,
-	.objectType = OBJECT_DATABASE,
-	.operationType = DIST_OPS_ALTER,
-	.address = NULL,
-	.markDistributed = false,
-};
-
-#if PG_VERSION_NUM >= PG_VERSION_15
-static DistributeObjectOps Database_RefreshColl = {
-	.deparse = DeparseAlterDatabaseRefreshCollStmt,
-	.qualify = NULL,
-	.preprocess = PreprocessAlterDatabaseRefreshCollStmt,
-	.postprocess = NULL,
-	.objectType = OBJECT_DATABASE,
-	.operationType = DIST_OPS_ALTER,
-	.address = NULL,
-	.markDistributed = false,
-};
-#endif
 
 static DistributeObjectOps Database_Alter = {
 	.deparse = DeparseAlterDatabaseStmt,
@@ -492,42 +469,11 @@ static DistributeObjectOps Database_RefreshColl = {
 };
 #endif
 
-static DistributeObjectOps Database_Alter = {
-	.deparse = DeparseAlterDatabaseStmt,
-	.qualify = NULL,
-	.preprocess = PreprocessAlterDatabaseStmt,
-	.postprocess = NULL,
-	.objectType = OBJECT_DATABASE,
-	.operationType = DIST_OPS_ALTER,
-	.address = NULL,
-	.markDistributed = false,
-};
 
 static DistributeObjectOps Database_Set = {
 	.deparse = DeparseAlterDatabaseSetStmt,
 	.qualify = NULL,
 	.preprocess = PreprocessAlterDatabaseSetStmt,
-	.postprocess = NULL,
-	.objectType = OBJECT_DATABASE,
-	.operationType = DIST_OPS_ALTER,
-	.address = NULL,
-	.markDistributed = false,
-};
-static DistributeObjectOps Database_Rename = {
-	.deparse = DeparseAlterDatabaseRenameStmt,
-	.qualify = NULL,
-	.preprocess = NULL,
-	.postprocess = NULL,
-	.objectType = OBJECT_DATABASE,
-	.operationType = DIST_OPS_ALTER,
-	.address = NULL, /* TODO: RenameDatabaseStmtObjectAddress, */
-	.markDistributed = false,
-};
-
-static DistributeObjectOps Database_RefreshColl = {
-	.deparse = DeparseAlterDatabaseRefreshCollStmt,
-	.qualify = NULL,
-	.preprocess = NULL,//TODO: Add PostprocessAfter adding addresses
 	.postprocess = NULL,
 	.objectType = OBJECT_DATABASE,
 	.operationType = DIST_OPS_ALTER,
@@ -2082,11 +2028,6 @@ GetDistributeObjectOps(Node *node)
 				case OBJECT_COLLATION:
 				{
 					return &Collation_Rename;
-				}
-
-				case OBJECT_DATABASE:
-				{
-					return &Database_Rename;
 				}
 
 				case OBJECT_DOMAIN:

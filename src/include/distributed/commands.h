@@ -229,10 +229,6 @@ extern List * PreprocessAlterDatabaseStmt(Node *node, const char *queryString,
 extern List * PreprocessAlterDatabaseSetStmt(Node *node, const char *queryString,
 											 ProcessUtilityContext processUtilityContext);
 
-extern List * PreprocessAlterDatabaseRenameStmt(Node *node, const char *queryString,
-												ProcessUtilityContext
-												processUtilityContext);
-
 extern List * PreprocessAlterDatabaseRefreshCollStmt(Node *node, const char *queryString,
 													 ProcessUtilityContext
 													 processUtilityContext);

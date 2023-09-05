@@ -136,48 +136,6 @@ AppendAlterDatabaseStmt(StringInfo buf, AlterDatabaseStmt *stmt)
 }
 
 
-static void
-AppendAlterDatabaseStmt(StringInfo buf, AlterDatabaseStmt *stmt)
-{
-	appendStringInfo(buf, "ALTER DATABASE %s ", quote_identifier(stmt->dbname));
-
-	if (stmt->options)
-	{
-		ListCell *cell = NULL;
-		appendStringInfo(buf, "WITH ");
-		foreach(cell, stmt->options)
-		{
-			DefElem *def = castNode(DefElem, lfirst(cell));
-			printf("test");
-			if (strcmp(def->defname, "is_template") == 0)
-			{
-				appendStringInfo(buf, "%s  %s", quote_identifier(def->defname),
-								 quote_literal_cstr(strVal(def->arg)));
-			}
-			else if (strcmp(def->defname, "connection_limit") == 0)
-			{
-				AppendDefElemConnLimit(buf, def);
-			}
-			else if (strcmp(def->defname, "allow_connections") == 0)
-			{
-				ereport(ERROR,
-						errmsg("ALLOW_CONNECTIONS is not supported"));
-			}
-			else{
-				ereport(ERROR,
-						errmsg("unrecognized AlterDatabaseStmt option: %s",
-							   def->defname));
-			}
-
-			if (cell != list_tail(stmt->options))
-			{
-				appendStringInfo(buf, ", ");
-			}
-		}
-	}
-
-	appendStringInfo(buf, ";");
-}
 
 
 static void
@@ -211,116 +169,6 @@ AppendAlterDatabaseSetStmt(StringInfo buf, AlterDatabaseSetStmt *stmt)
 	appendStringInfo(buf, ";");
 }
 
-static void
-AppendDefElemConnLimit(StringInfo buf, DefElem *def)
-{
-	appendStringInfo(buf, " CONNECTION LIMIT %ld",(long int) defGetNumeric(def));
-}
-
-static void
-AppendAlterDatabaseStmt(StringInfo buf, AlterDatabaseStmt *stmt)
-{
-	appendStringInfo(buf, "ALTER DATABASE %s ", quote_identifier(stmt->dbname));
-
-	if (stmt->options)
-	{
-		ListCell *cell = NULL;
-		appendStringInfo(buf, "WITH ");
-		foreach(cell, stmt->options)
-		{
-			DefElem *def = castNode(DefElem, lfirst(cell));
-			printf("test");
-			if (strcmp(def->defname, "is_template") == 0)
-			{
-				appendStringInfo(buf, "%s  %s", quote_identifier(def->defname),
-								 quote_literal_cstr(strVal(def->arg)));
-			}
-			else if (strcmp(def->defname, "connection_limit") == 0)
-			{
-				AppendDefElemConnLimit(buf, def);
-			}
-			else if (strcmp(def->defname, "allow_connections") == 0)
-			{
-				ereport(ERROR,
-						errmsg("ALLOW_CONNECTIONS is not supported"));
-			}
-			else{
-				ereport(ERROR,
-						errmsg("unrecognized AlterDatabaseStmt option: %s",
-							   def->defname));
-			}
-
-			if (cell != list_tail(stmt->options))
-			{
-				appendStringInfo(buf, ", ");
-			}
-		}
-	}
-
-	appendStringInfo(buf, ";");
-}
-
-
-static void
-AppendAlterDatabaseSetStmt(StringInfo buf, AlterDatabaseSetStmt *stmt)
-{
-	appendStringInfo(buf, "ALTER DATABASE %s SET ", quote_identifier(stmt->dbname));
-
-	VariableSetStmt *varSetStmt = castNode(VariableSetStmt, stmt->setstmt);
-
-
-	if (varSetStmt->kind == VAR_SET_VALUE)
-	{
-		appendStringInfo(buf, "%s = %s", quote_identifier(varSetStmt->name),
-						 quote_literal_cstr(strVal(varSetStmt->args)));
-	}
-	else if (varSetStmt->kind == VAR_RESET_ALL)
-	{
-		appendStringInfo(buf, "RESET ALL");
-	}
-	else if (varSetStmt->kind == VAR_RESET)
-	{
-		appendStringInfo(buf, "RESET %s", quote_identifier(varSetStmt->name));
-	}
-	else
-	{
-		ereport(ERROR,
-				errmsg("unrecognized AlterDatabaseSetStmt kind: %d",
-					   varSetStmt->kind));
-	}
-
-	appendStringInfo(buf, ";");
-}
-
-static void
-AppendAlterDatabaseSetStmt(StringInfo buf, AlterDatabaseSetStmt *stmt)
-{
-	appendStringInfo(buf, "ALTER DATABASE %s SET ", quote_identifier(stmt->dbname));
-
-	VariableSetStmt *varSetStmt = castNode(VariableSetStmt, stmt->setstmt);
-
-	if (varSetStmt->kind == VAR_SET_VALUE)
-	{
-		appendStringInfo(buf, "%s = %s", quote_identifier(varSetStmt->name),
-						 quote_literal_cstr(strVal(varSetStmt->args)));
-	}
-	else if (varSetStmt->kind == VAR_RESET_ALL)
-	{
-		appendStringInfo(buf, "RESET ALL");
-	}
-	else if (varSetStmt->kind == VAR_RESET)
-	{
-		appendStringInfo(buf, "RESET %s", quote_identifier(varSetStmt->name));
-	}
-	else
-	{
-		ereport(ERROR,
-				errmsg("unrecognized AlterDatabaseSetStmt kind: %d",
-					   varSetStmt->kind));
-	}
-
-	appendStringInfo(buf, ";");
-}
 
 char *
 DeparseGrantOnDatabaseStmt(Node *node)
@@ -371,18 +219,6 @@ DeparseAlterDatabaseRefreshCollStmt(Node *node)
 #endif
 
 
-char *
-DeparseAlterDatabaseStmt(Node *node)
-{
-	AlterDatabaseStmt *stmt = castNode(AlterDatabaseStmt, node);
-
-	StringInfoData str = {0};
-	initStringInfo(&str);
-
-	AppendAlterDatabaseStmt(&str, stmt);
-
-	return str.data;
-}
 
 char *
 DeparseAlterDatabaseSetStmt(Node *node)
@@ -393,32 +229,6 @@ DeparseAlterDatabaseSetStmt(Node *node)
 	initStringInfo(&str);
 
 	AppendAlterDatabaseSetStmt(&str, stmt);
-
-	return str.data;
-}
-
-char *
-DeparseAlterDatabaseRenameStmt(Node *node)
-{
-	RenameStmt *stmt = (RenameStmt *)node;
-
-	StringInfoData str;
-	initStringInfo(&str);
-
-	appendStringInfo(&str, "ALTER DATABASE %s RENAME TO %s;", quote_identifier(stmt->subname), quote_identifier(stmt->newname));
-
-	return str.data;
-}
-
-char *
-DeparseAlterDatabaseRefreshCollStmt(Node *node)
-{
-	AlterDatabaseRefreshCollStmt *stmt = (AlterDatabaseRefreshCollStmt *)node;
-
-	StringInfoData str;
-	initStringInfo(&str);
-
-	appendStringInfo(&str, "ALTER DATABASE %s REFRESH COLLATION;", quote_identifier(stmt->dbname));
 
 	return str.data;
 }
