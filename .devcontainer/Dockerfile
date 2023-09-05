@@ -56,7 +56,7 @@ USER citus
 
 # build postgres versions separately for effective parrallelism and caching of already built versions when changing only certain versions
 FROM base AS pg14
-RUN pgenv build 14.8
+RUN pgenv build 14.9
 RUN rm .pgenv/src/*.tar*
 RUN make -C .pgenv/src/postgresql-*/ clean
 RUN make -C .pgenv/src/postgresql-*/src/include install
@@ -68,7 +68,7 @@ RUN cp -r .pgenv/src .pgenv/pgsql-* .pgenv/config .pgenv-staging/
 RUN rm .pgenv-staging/config/default.conf
 
 FROM base AS pg15
-RUN pgenv build 15.3
+RUN pgenv build 15.4
 RUN rm .pgenv/src/*.tar*
 RUN make -C .pgenv/src/postgresql-*/ clean
 RUN make -C .pgenv/src/postgresql-*/src/include install
@@ -147,8 +147,6 @@ RUN sudo pip3 install pipenv pipenv-shebang
 # bin directory for user tools
 RUN mkdir .bin
 ENV PATH="/home/citus/.bin:${PATH}"
-
-RUN echo "cache buster 1"
 
 # install citus-dev
 RUN git clone --branch feature/citus-dev-pipenv-shebang https://github.com/citusdata/tools.git citus-tools \
