@@ -27,9 +27,6 @@
 
 static void AppendAlterDatabaseOwnerStmt(StringInfo buf, AlterOwnerStmt *stmt);
 static void AppendAlterDatabaseStmt(StringInfo buf, AlterDatabaseStmt *stmt);
-static void AppendVarSetValueDb(StringInfo buf, VariableSetStmt *setStmt);
-
-void AppendVariableSetDb(StringInfo buf, VariableSetStmt *setStmt);
 
 char *
 DeparseAlterDatabaseOwnerStmt(Node *node)
