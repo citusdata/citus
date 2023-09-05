@@ -118,7 +118,7 @@ EnsureDependenciesExistOnAllNodes(const ObjectAddress *target)
 		const char *nodeName = workerNode->workerName;
 		uint32 nodePort = workerNode->workerPort;
 
-		SendCommandListToWorkerOutsideTransaction(nodeName, nodePort,
+		SendMetadataCommandListToWorkerListInCoordinatedTransaction(nodeName, nodePort,
 												  CitusExtensionOwnerName(),
 												  ddlCommands);
 	}
