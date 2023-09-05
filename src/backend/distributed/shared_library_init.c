@@ -109,6 +109,8 @@
 #include "tcop/tcopprot.h"
 #include "utils/guc.h"
 #include "utils/guc_tables.h"
+#include "utils/inval.h"
+#include "utils/lsyscache.h"
 #include "utils/syscache.h"
 #include "utils/varlena.h"
 
@@ -553,6 +555,9 @@ _PG_init(void)
 									 load_external_function(COLUMNAR_MODULE_NAME,
 															"ColumnarSupportsIndexAM",
 															true, &handle);
+
+	CacheRegisterRelcacheCallback(InvalidateDistRelationCacheCallback,
+								  (Datum) 0);
 
 	INIT_COLUMNAR_SYMBOL(CompressionTypeStr_type, CompressionTypeStr);
 	INIT_COLUMNAR_SYMBOL(IsColumnarTableAmTable_type, IsColumnarTableAmTable);
