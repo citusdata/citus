@@ -1256,8 +1256,17 @@ CreateCitusTable(Oid relationId, CitusTableType tableType,
 							  colocationId, citusTableParams.replicationModel,
 							  autoConverted);
 
+#if PG_VERSION_NUM >= PG_VERSION_16
+
+	/*
+	 * PG16+ supports truncate triggers on foreign tables
+	 */
+	if (RegularTable(relationId) || IsForeignTable(relationId))
+#else
+
 	/* foreign tables do not support TRUNCATE trigger */
 	if (RegularTable(relationId))
+#endif
 	{
 		CreateTruncateTrigger(relationId);
 	}
