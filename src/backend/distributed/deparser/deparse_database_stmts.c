@@ -35,7 +35,7 @@ char *
 DeparseAlterDatabaseOwnerStmt(Node *node)
 {
 	AlterOwnerStmt *stmt = castNode(AlterOwnerStmt, node);
-	StringInfoData str = {0};
+	StringInfoData str = { 0 };
 	initStringInfo(&str);
 
 	Assert(stmt->objectType == OBJECT_DATABASE);
@@ -45,6 +45,7 @@ DeparseAlterDatabaseOwnerStmt(Node *node)
 	return str.data;
 }
 
+
 static void
 AppendAlterDatabaseOwnerStmt(StringInfo buf, AlterOwnerStmt *stmt)
 {
@@ -52,9 +53,10 @@ AppendAlterDatabaseOwnerStmt(StringInfo buf, AlterOwnerStmt *stmt)
 
 	appendStringInfo(buf,
 					 "ALTER DATABASE %s OWNER TO %s;",
-					 quote_identifier(strVal((String *)stmt->object)),
+					 quote_identifier(strVal((String *) stmt->object)),
 					 RoleSpecString(stmt->newowner, true));
 }
+
 
 static void
 AppendGrantDatabases(StringInfo buf, GrantStmt *stmt)
@@ -62,7 +64,7 @@ AppendGrantDatabases(StringInfo buf, GrantStmt *stmt)
 	ListCell *cell = NULL;
 	appendStringInfo(buf, " ON DATABASE ");
 
-	foreach (cell, stmt->objects)
+	foreach(cell, stmt->objects)
 	{
 		char *database = strVal(lfirst(cell));
 		appendStringInfoString(buf, quote_identifier(database));
@@ -72,6 +74,7 @@ AppendGrantDatabases(StringInfo buf, GrantStmt *stmt)
 		}
 	}
 }
+
 
 static void
 AppendGrantOnDatabaseStmt(StringInfo buf, GrantStmt *stmt)
@@ -85,17 +88,19 @@ AppendGrantOnDatabaseStmt(StringInfo buf, GrantStmt *stmt)
 	AppendGrantSharedSuffix(buf, stmt);
 }
 
+
 static void
 AppendDefElemIsTemplate(StringInfo buf, DefElem *def)
 {
 	appendStringInfo(buf, "WITH %s  %s", quote_identifier(def->defname),
-								 quote_literal_cstr(strVal(def->arg)));
+					 quote_literal_cstr(strVal(def->arg)));
 }
+
 
 static void
 AppendDefElemConnLimit(StringInfo buf, DefElem *def)
 {
-	appendStringInfo(buf, "WITH CONNECTION LIMIT %ld", (long int)defGetNumeric(def));
+	appendStringInfo(buf, "WITH CONNECTION LIMIT %ld", (long int) defGetNumeric(def));
 }
 
 
@@ -108,7 +113,7 @@ AppendAlterDatabaseStmt(StringInfo buf, AlterDatabaseStmt *stmt)
 	{
 		ListCell *cell = NULL;
 		appendStringInfo(buf, "WITH ");
-		foreach (cell, stmt->options)
+		foreach(cell, stmt->options)
 		{
 			DefElem *def = castNode(DefElem, lfirst(cell));
 			if (strcmp(def->defname, "is_template") == 0)
@@ -121,7 +126,6 @@ AppendAlterDatabaseStmt(StringInfo buf, AlterDatabaseStmt *stmt)
 			}
 			else if (strcmp(def->defname, "tablespace") == 0)
 			{
-
 				ereport(ERROR,
 						errmsg("SET tablespace is not supported"));
 			}
@@ -142,13 +146,14 @@ AppendAlterDatabaseStmt(StringInfo buf, AlterDatabaseStmt *stmt)
 	appendStringInfo(buf, ";");
 }
 
+
 char *
 DeparseGrantOnDatabaseStmt(Node *node)
 {
 	GrantStmt *stmt = castNode(GrantStmt, node);
 	Assert(stmt->objtype == OBJECT_DATABASE);
 
-	StringInfoData str = {0};
+	StringInfoData str = { 0 };
 	initStringInfo(&str);
 
 	AppendGrantOnDatabaseStmt(&str, stmt);
@@ -156,12 +161,13 @@ DeparseGrantOnDatabaseStmt(Node *node)
 	return str.data;
 }
 
+
 char *
 DeparseAlterDatabaseStmt(Node *node)
 {
 	AlterDatabaseStmt *stmt = castNode(AlterDatabaseStmt, node);
 
-	StringInfoData str = {0};
+	StringInfoData str = { 0 };
 	initStringInfo(&str);
 
 	AppendAlterDatabaseStmt(&str, stmt);
@@ -169,11 +175,12 @@ DeparseAlterDatabaseStmt(Node *node)
 	return str.data;
 }
 
+
 #if PG_VERSION_NUM >= PG_VERSION_15
 char *
 DeparseAlterDatabaseRefreshCollStmt(Node *node)
 {
-	AlterDatabaseRefreshCollStmt *stmt = (AlterDatabaseRefreshCollStmt *)node;
+	AlterDatabaseRefreshCollStmt *stmt = (AlterDatabaseRefreshCollStmt *) node;
 
 	StringInfoData str;
 	initStringInfo(&str);
@@ -185,8 +192,8 @@ DeparseAlterDatabaseRefreshCollStmt(Node *node)
 	return str.data;
 }
 
-#endif
 
+#endif
 
 
 static void
@@ -199,12 +206,13 @@ AppendAlterDatabaseSetStmt(StringInfo buf, AlterDatabaseSetStmt *stmt)
 	AppendVariableSet(buf, varSetStmt);
 }
 
+
 char *
 DeparseAlterDatabaseSetStmt(Node *node)
 {
 	AlterDatabaseSetStmt *stmt = castNode(AlterDatabaseSetStmt, node);
 
-	StringInfoData str = {0};
+	StringInfoData str = { 0 };
 	initStringInfo(&str);
 
 	AppendAlterDatabaseSetStmt(&str, stmt);

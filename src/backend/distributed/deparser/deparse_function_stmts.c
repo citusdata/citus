@@ -299,7 +299,6 @@ AppendDefElemSupport(StringInfo buf, DefElem *def)
 }
 
 
-
 /*
  * DeparseRenameFunctionStmt builds and returns a string representing the RenameStmt
  */
