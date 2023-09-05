@@ -312,8 +312,6 @@ CreateAppendDistributedShardPlacements(Oid relationId, int64 shardId,
 	int attemptCount = replicationFactor;
 	int workerNodeCount = list_length(workerNodeList);
 	int placementsCreated = 0;
-	List *foreignConstraintCommandList =
-		GetReferencingForeignConstaintCommands(relationId);
 	IncludeSequenceDefaults includeSequenceDefaults = NO_SEQUENCE_DEFAULTS;
 	IncludeIdentities includeIdentityDefaults = NO_IDENTITY;
 
@@ -346,7 +344,6 @@ CreateAppendDistributedShardPlacements(Oid relationId, int64 shardId,
 		uint32 nodeGroupId = workerNode->groupId;
 		char *nodeName = workerNode->workerName;
 		uint32 nodePort = workerNode->workerPort;
-		int shardIndex = -1; /* not used in this code path */
 		const uint64 shardSize = 0;
 		MultiConnection *connection =
 			GetNodeUserDatabaseConnection(connectionFlag, nodeName, nodePort,
@@ -360,9 +357,8 @@ CreateAppendDistributedShardPlacements(Oid relationId, int64 shardId,
 			continue;
 		}
 
-		List *commandList = WorkerCreateShardCommandList(relationId, shardIndex, shardId,
-														 ddlCommandList,
-														 foreignConstraintCommandList);
+		List *commandList = WorkerCreateShardCommandList(relationId, shardId,
+														 ddlCommandList);
 
 		ExecuteCriticalRemoteCommandList(connection, commandList);
 
@@ -387,47 +383,37 @@ CreateAppendDistributedShardPlacements(Oid relationId, int64 shardId,
 
 /*
  * InsertShardPlacementRows inserts shard placements to the metadata table on
- * the coordinator node. Then, returns the list of added shard placements.
+ * the coordinator node.
  */
-List *
+void
 InsertShardPlacementRows(Oid relationId, int64 shardId, List *workerNodeList,
 						 int workerStartIndex, int replicationFactor)
 {
 	int workerNodeCount = list_length(workerNodeList);
-	int placementsInserted = 0;
-	List *insertedShardPlacements = NIL;
 
-	for (int attemptNumber = 0; attemptNumber < replicationFactor; attemptNumber++)
+	for (int placementIndex = 0; placementIndex < replicationFactor; placementIndex++)
 	{
-		int workerNodeIndex = (workerStartIndex + attemptNumber) % workerNodeCount;
+		int workerNodeIndex = (workerStartIndex + placementIndex) % workerNodeCount;
 		WorkerNode *workerNode = (WorkerNode *) list_nth(workerNodeList, workerNodeIndex);
 		uint32 nodeGroupId = workerNode->groupId;
 		const uint64 shardSize = 0;
 
-		uint64 shardPlacementId = InsertShardPlacementRow(shardId, INVALID_PLACEMENT_ID,
-														  shardSize, nodeGroupId);
-		ShardPlacement *shardPlacement = LoadShardPlacement(shardId, shardPlacementId);
-		insertedShardPlacements = lappend(insertedShardPlacements, shardPlacement);
-
-		placementsInserted++;
-		if (placementsInserted >= replicationFactor)
-		{
-			break;
-		}
+		InsertShardPlacementRow(shardId,
+								INVALID_PLACEMENT_ID,
+								shardSize,
+								nodeGroupId);
 	}
-
-	return insertedShardPlacements;
 }
 
 
 /*
  * CreateShardsOnWorkers creates shards on worker nodes given the shard placements
- * as a parameter The function creates the shards via the executor. This means
+ * as a parameter. The function creates the shards via the executor. This means
  * that it can adopt the number of connections required to create the shards.
  */
 void
 CreateShardsOnWorkers(Oid distributedRelationId, List *shardPlacements,
-					  bool useExclusiveConnection, bool colocatedShard)
+					  bool useExclusiveConnection)
 {
 	IncludeSequenceDefaults includeSequenceDefaults = NO_SEQUENCE_DEFAULTS;
 	IncludeIdentities includeIdentityDefaults = NO_IDENTITY;
@@ -437,8 +423,6 @@ CreateShardsOnWorkers(Oid distributedRelationId, List *shardPlacements,
 														includeSequenceDefaults,
 														includeIdentityDefaults,
 														creatingShellTableOnRemoteNode);
-	List *foreignConstraintCommandList =
-		GetReferencingForeignConstaintCommands(distributedRelationId);
 
 	int taskId = 1;
 	List *taskList = NIL;
@@ -449,18 +433,10 @@ CreateShardsOnWorkers(Oid distributedRelationId, List *shardPlacements,
 	{
 		uint64 shardId = shardPlacement->shardId;
 		ShardInterval *shardInterval = LoadShardInterval(shardId);
-		int shardIndex = -1;
 		List *relationShardList = RelationShardListForShardCreate(shardInterval);
 
-		if (colocatedShard)
-		{
-			shardIndex = ShardIndex(shardInterval);
-		}
-
 		List *commandList = WorkerCreateShardCommandList(distributedRelationId,
-														 shardIndex,
-														 shardId, ddlCommandList,
-														 foreignConstraintCommandList);
+														 shardId, ddlCommandList);
 
 		Task *task = CitusMakeNode(Task);
 		task->jobId = INVALID_JOB_ID;
@@ -604,14 +580,12 @@ RelationShardListForShardCreate(ShardInterval *shardInterval)
  * shardId to create the shard on the worker node.
  */
 List *
-WorkerCreateShardCommandList(Oid relationId, int shardIndex, uint64 shardId,
-							 List *ddlCommandList,
-							 List *foreignConstraintCommandList)
+WorkerCreateShardCommandList(Oid relationId, uint64 shardId,
+							 List *ddlCommandList)
 {
 	List *commandList = NIL;
 	Oid schemaId = get_rel_namespace(relationId);
 	char *schemaName = get_namespace_name(schemaId);
-	char *escapedSchemaName = quote_literal_cstr(schemaName);
 
 	TableDDLCommand *ddlCommand = NULL;
 	foreach_ptr(ddlCommand, ddlCommandList)
@@ -622,57 +596,12 @@ WorkerCreateShardCommandList(Oid relationId, int shardIndex, uint64 shardId,
 		commandList = lappend(commandList, applyDDLCommand);
 	}
 
-	const char *command = NULL;
-	foreach_ptr(command, foreignConstraintCommandList)
-	{
-		char *escapedCommand = quote_literal_cstr(command);
+	ShardInterval *shardInterval = LoadShardInterval(shardId);
 
-		uint64 referencedShardId = INVALID_SHARD_ID;
-
-		StringInfo applyForeignConstraintCommand = makeStringInfo();
-
-		/* we need to parse the foreign constraint command to get referencing table id */
-		Oid referencedRelationId = ForeignConstraintGetReferencedTableId(command);
-		if (referencedRelationId == InvalidOid)
-		{
-			ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-							errmsg("cannot create foreign key constraint"),
-							errdetail("Referenced relation cannot be found.")));
-		}
-
-		Oid referencedSchemaId = get_rel_namespace(referencedRelationId);
-		char *referencedSchemaName = get_namespace_name(referencedSchemaId);
-		char *escapedReferencedSchemaName = quote_literal_cstr(referencedSchemaName);
-
-		/*
-		 * In case of self referencing shards, relation itself might not be distributed
-		 * already. Therefore we cannot use ColocatedShardIdInRelation which assumes
-		 * given relation is distributed. Besides, since we know foreign key references
-		 * itself, referencedShardId is actual shardId anyway. Also, if the referenced
-		 * relation is a reference table, we cannot use ColocatedShardIdInRelation since
-		 * reference tables only have one shard. Instead, we fetch the one and only shard
-		 * from shardlist and use it.
-		 */
-		if (relationId == referencedRelationId)
-		{
-			referencedShardId = shardId;
-		}
-		else if (IsCitusTableType(referencedRelationId, REFERENCE_TABLE))
-		{
-			referencedShardId = GetFirstShardId(referencedRelationId);
-		}
-		else
-		{
-			referencedShardId = ColocatedShardIdInRelation(referencedRelationId,
-														   shardIndex);
-		}
-
-		appendStringInfo(applyForeignConstraintCommand,
-						 WORKER_APPLY_INTER_SHARD_DDL_COMMAND, shardId, escapedSchemaName,
-						 referencedShardId, escapedReferencedSchemaName, escapedCommand);
-
-		commandList = lappend(commandList, applyForeignConstraintCommand->data);
-	}
+	commandList = list_concat(
+		commandList,
+		CopyShardForeignConstraintCommandList(shardInterval)
+		);
 
 	/*
 	 * If the shard is created for a partition, send the command to create the
@@ -680,7 +609,6 @@ WorkerCreateShardCommandList(Oid relationId, int shardIndex, uint64 shardId,
 	 */
 	if (PartitionTable(relationId))
 	{
-		ShardInterval *shardInterval = LoadShardInterval(shardId);
 		char *attachPartitionCommand = GenerateAttachShardPartitionCommand(shardInterval);
 
 		commandList = lappend(commandList, attachPartitionCommand);

@@ -103,8 +103,6 @@ static List * GetRelationIdListFromRangeVarList(List *rangeVarList, LOCKMODE loc
 static bool AlterTableCommandTypeIsTrigger(AlterTableType alterTableType);
 static bool AlterTableDropsForeignKey(AlterTableStmt *alterTableStatement);
 static void ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement);
-static List * InterShardDDLTaskList(Oid leftRelationId, Oid rightRelationId,
-									const char *commandString);
 static bool AlterInvolvesPartitionColumn(AlterTableStmt *alterTableStatement,
 										 AlterTableCmd *command);
 static bool AlterColumnInvolvesIdentityColumn(AlterTableStmt *alterTableStatement,
@@ -3858,7 +3856,7 @@ SetupExecutionModeForAlterTable(Oid relationId, AlterTableCmd *command)
  * applied. rightRelationId is the relation id of either index or distributed table which
  * given command refers to.
  */
-static List *
+List *
 InterShardDDLTaskList(Oid leftRelationId, Oid rightRelationId,
 					  const char *commandString)
 {
@@ -3956,25 +3954,29 @@ static void
 SetInterShardDDLTaskPlacementList(Task *task, ShardInterval *leftShardInterval,
 								  ShardInterval *rightShardInterval)
 {
-	Oid leftRelationId = leftShardInterval->relationId;
-	Oid rightRelationId = rightShardInterval->relationId;
-	if (IsCitusTableType(leftRelationId, REFERENCE_TABLE) &&
-		IsCitusTableType(rightRelationId, CITUS_LOCAL_TABLE))
+	uint64 leftShardId = leftShardInterval->shardId;
+	List *leftShardPlacementList = ActiveShardPlacementList(leftShardId);
+
+	uint64 rightShardId = rightShardInterval->shardId;
+	List *rightShardPlacementList = ActiveShardPlacementList(rightShardId);
+
+	List *intersectedPlacementList = NIL;
+
+	ShardPlacement *leftShardPlacement = NULL;
+	foreach_ptr(leftShardPlacement, leftShardPlacementList)
 	{
-		/*
-		 * If we are defining/dropping a foreign key from a reference table
-		 * to a citus local table, then we will execute ADD/DROP constraint
-		 * command only for coordinator placement of reference table.
-		 */
-		uint64 leftShardId = leftShardInterval->shardId;
-		task->taskPlacementList = ActiveShardPlacementListOnGroup(leftShardId,
-																  COORDINATOR_GROUP_ID);
+		ShardPlacement *rightShardPlacement = NULL;
+		foreach_ptr(rightShardPlacement, rightShardPlacementList)
+		{
+			if (leftShardPlacement->nodeId == rightShardPlacement->nodeId)
+			{
+				intersectedPlacementList = lappend(intersectedPlacementList,
+												   leftShardPlacement);
+			}
+		}
 	}
-	else
-	{
-		uint64 leftShardId = leftShardInterval->shardId;
-		task->taskPlacementList = ActiveShardPlacementList(leftShardId);
-	}
+
+	task->taskPlacementList = intersectedPlacementList;
 }
 
 

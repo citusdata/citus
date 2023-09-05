@@ -450,7 +450,7 @@ CompareCleanupRecordsByObjectType(const void *leftElement, const void *rightElem
 
 
 /*
- * InsertCleanupRecordInCurrentTransaction inserts a new pg_dist_cleanup_record entry
+ * InsertCleanupRecordInCurrentTransaction inserts a new pg_dist_cleanup entry
  * as part of the current transaction. This is primarily useful for deferred drop scenarios,
  * since these records would roll back in case of operation failure.
  */
@@ -497,8 +497,8 @@ InsertCleanupRecordInCurrentTransaction(CleanupObject objectType,
 
 
 /*
- * InsertCleanupRecordInSubtransaction inserts a new pg_dist_cleanup_record entry
- * in a separate transaction to ensure the record persists after rollback. We should
+ * InsertCleanupRecordInSubtransaction inserts a new pg_dist_cleanup entry in a
+ * separate transaction to ensure the record persists after rollback. We should
  * delete these records if the operation completes successfully.
  *
  * For failure scenarios, use a subtransaction (direct insert via localhost).
@@ -541,7 +541,7 @@ InsertCleanupRecordInSubtransaction(CleanupObject objectType,
 
 
 /*
- * DeleteCleanupRecordByRecordId deletes a cleanup record by record id.
+ * DeleteCleanupRecordByRecordIdOutsideTransaction deletes a cleanup record by record id.
  */
 static void
 DeleteCleanupRecordByRecordIdOutsideTransaction(uint64 recordId)
@@ -1106,7 +1106,7 @@ TupleToCleanupRecord(HeapTuple heapTuple, TupleDesc tupleDescriptor)
 
 /*
  * CleanupRecordExists returns whether a cleanup record with the given
- * record ID exists in pg_dist_cleanup_record.
+ * record ID exists in pg_dist_cleanup.
  */
 static bool
 CleanupRecordExists(uint64 recordId)
@@ -1139,7 +1139,7 @@ CleanupRecordExists(uint64 recordId)
 
 
 /*
- * DeleteCleanupRecordByRecordId deletes a single pg_dist_cleanup_record entry.
+ * DeleteCleanupRecordByRecordId deletes a single pg_dist_cleanup entry.
  */
 static void
 DeleteCleanupRecordByRecordId(uint64 recordId)

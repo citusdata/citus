@@ -77,6 +77,7 @@
 #include "tcop/utility.h"
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
+#include "utils/inval.h"
 #include "utils/lsyscache.h"
 #include "utils/syscache.h"
 
@@ -193,6 +194,7 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 
 	bool isCreateAlterExtensionUpdateCitusStmt = IsCreateAlterExtensionUpdateCitusStmt(
 		parsetree);
+
 	if (EnableVersionChecks && isCreateAlterExtensionUpdateCitusStmt)
 	{
 		ErrorIfUnstableCreateOrAlterExtensionStmt(parsetree);
@@ -205,6 +207,18 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		 * This preprocess check whether citus_columnar should be installed first before citus
 		 */
 		PreprocessCreateExtensionStmtForCitusColumnar(parsetree);
+	}
+
+	if (isCreateAlterExtensionUpdateCitusStmt || IsDropCitusExtensionStmt(parsetree))
+	{
+		/*
+		 * Citus maintains a higher level cache. We use the cache invalidation mechanism
+		 * of Postgres to achieve cache coherency between backends. Any change to citus
+		 * extension should be made known to other backends. We do this by invalidating the
+		 * relcache and therefore invoking the citus registered callback that invalidates
+		 * the citus cache in other backends.
+		 */
+		CacheInvalidateRelcacheAll();
 	}
 
 	/*
@@ -925,15 +939,6 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 				MarkObjectDistributed(address);
 			}
 		}
-	}
-
-	if (!IsDropCitusExtensionStmt(parsetree) && !IsA(parsetree, DropdbStmt))
-	{
-		/*
-		 * Ensure value is valid, we can't do some checks during CREATE
-		 * EXTENSION. This is important to register some invalidation callbacks.
-		 */
-		CitusHasBeenLoaded(); /* lgtm[cpp/return-value-ignored] */
 	}
 }
 

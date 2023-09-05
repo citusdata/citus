@@ -132,7 +132,7 @@ EnsureNoFKeyFromTableType(Oid relationId, int tableTypeFlag)
 
 
 /*
- * EnsureNoFKeyToTableType ensures that given relation is not referencing by any table specified
+ * EnsureNoFKeyToTableType ensures that given relation is not referencing any table specified
  * by table type flag.
  */
 void
@@ -835,6 +835,22 @@ List *
 GetForeignConstraintToReferenceTablesCommands(Oid relationId)
 {
 	int flags = INCLUDE_REFERENCING_CONSTRAINTS | INCLUDE_REFERENCE_TABLES;
+	return GetForeignConstraintCommandsInternal(relationId, flags);
+}
+
+
+/*
+ * GetForeignConstraintToReferenceTablesCommands takes in a relationId, and
+ * returns the list of foreign constraint commands needed to reconstruct
+ * foreign key constraints that the table is involved in as the "referenced"
+ * one and the "referencing" table is a reference table.
+ */
+List *
+GetForeignConstraintFromOtherReferenceTablesCommands(Oid relationId)
+{
+	int flags = INCLUDE_REFERENCED_CONSTRAINTS |
+				EXCLUDE_SELF_REFERENCES |
+				INCLUDE_REFERENCE_TABLES;
 	return GetForeignConstraintCommandsInternal(relationId, flags);
 }
 

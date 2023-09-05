@@ -16,10 +16,10 @@
 # Tests around schema changes, these are run first, so there's no preexisting objects.
 # ---
 test: multi_extension
+test: multi_test_helpers multi_test_helpers_superuser multi_create_fdw
 test: single_node
 test: relation_access_tracking_single_node
 test: single_node_truncate
-test: multi_test_helpers multi_test_helpers_superuser multi_create_fdw
 test: multi_cluster_management
 
 # below tests are placed right after multi_cluster_management as we do
@@ -205,6 +205,7 @@ test: multi_modifying_xacts
 test: multi_generate_ddl_commands
 test: multi_create_shards
 test: multi_transaction_recovery
+test: multi_transaction_recovery_multiple_databases
 
 test: local_dist_join_modifications
 test: local_table_join

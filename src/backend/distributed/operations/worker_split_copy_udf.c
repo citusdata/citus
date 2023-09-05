@@ -52,7 +52,7 @@ static char * TraceWorkerSplitCopyUdf(char *sourceShardToCopySchemaName,
  * worker_split_copy(source_shard_id bigint, splitCopyInfo pg_catalog.split_copy_info[])
  * UDF to split copy shard to list of destination shards.
  * 'source_shard_id' : Source ShardId to split copy.
- * 'splitCopyInfos'   : Array of Split Copy Info (destination_shard's id, min/max ranges and node_id)
+ * 'splitCopyInfos'  : Array of Split Copy Info (destination_shard's id, min/max ranges and node_id)
  */
 Datum
 worker_split_copy(PG_FUNCTION_ARGS)
@@ -139,7 +139,7 @@ TraceWorkerSplitCopyUdf(char *sourceShardToCopySchemaName,
 	appendStringInfo(splitCopyTrace, "performing copy from shard %s to [",
 					 sourceShardToCopyQualifiedName);
 
-	/* split copy always has atleast two destinations */
+	/* split copy always has at least two destinations */
 	int index = 1;
 	int splitWayCount = list_length(splitCopyInfoList);
 	SplitCopyInfo *splitCopyInfo = NULL;

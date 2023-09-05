@@ -133,6 +133,19 @@ typedef struct ShardIdCacheEntry
 	int shardIndex;
 } ShardIdCacheEntry;
 
+/*
+ * ExtensionCreatedState is used to track if citus extension has been created
+ * using CREATE EXTENSION command.
+ *  UNKNOWN     : MetadataCache is invalid. State is UNKNOWN.
+ *  CREATED     : Citus is created.
+ *  NOTCREATED	: Citus is not created.
+ */
+typedef enum ExtensionCreatedState
+{
+	UNKNOWN = 0,
+	CREATED = 1,
+	NOTCREATED = 2,
+} ExtensionCreatedState;
 
 /*
  * State which should be cleared upon DROP EXTENSION. When the configuration
@@ -140,7 +153,7 @@ typedef struct ShardIdCacheEntry
  */
 typedef struct MetadataCacheData
 {
-	bool extensionLoaded;
+	ExtensionCreatedState extensionCreatedState;
 	Oid distShardRelationId;
 	Oid distPlacementRelationId;
 	Oid distBackgroundJobRelationId;
@@ -288,7 +301,6 @@ static void CreateDistTableCache(void);
 static void CreateShardIdCache(void);
 static void CreateDistObjectCache(void);
 static void InvalidateForeignRelationGraphCacheCallback(Datum argument, Oid relationId);
-static void InvalidateDistRelationCacheCallback(Datum argument, Oid relationId);
 static void InvalidateNodeRelationCacheCallback(Datum argument, Oid relationId);
 static void InvalidateLocalGroupIdRelationCacheCallback(Datum argument, Oid relationId);
 static void InvalidateConnParamsCacheCallback(Datum argument, Oid relationId);
@@ -2187,16 +2199,30 @@ HasOverlappingShardInterval(ShardInterval **shardIntervalArray,
 bool
 CitusHasBeenLoaded(void)
 {
-	if (!MetadataCache.extensionLoaded || creating_extension)
+	/*
+	 * We do not use Citus hooks during CREATE/ALTER EXTENSION citus
+	 * since the objects used by the C code might be not be there yet.
+	 */
+	if (creating_extension)
 	{
-		/*
-		 * Refresh if we have not determined whether the extension has been
-		 * loaded yet, or in case of ALTER EXTENSION since we want to treat
-		 * Citus as "not loaded" during ALTER EXTENSION citus.
-		 */
-		bool extensionLoaded = CitusHasBeenLoadedInternal();
+		Oid citusExtensionOid = get_extension_oid("citus", true);
 
-		if (extensionLoaded && !MetadataCache.extensionLoaded)
+		if (CurrentExtensionObject == citusExtensionOid)
+		{
+			return false;
+		}
+	}
+
+	/*
+	 * If extensionCreatedState is UNKNOWN, query pg_extension for Citus
+	 * and cache the result. Otherwise return the value extensionCreatedState
+	 * indicates.
+	 */
+	if (MetadataCache.extensionCreatedState == UNKNOWN)
+	{
+		bool extensionCreated = CitusHasBeenLoadedInternal();
+
+		if (extensionCreated)
 		{
 			/*
 			 * Loaded Citus for the first time in this session, or first time after
@@ -2209,30 +2235,21 @@ CitusHasBeenLoaded(void)
 			StartupCitusBackend();
 
 			/*
-			 * InvalidateDistRelationCacheCallback resets state such as extensionLoaded
-			 * when it notices changes to pg_dist_partition (which usually indicate
-			 * `DROP EXTENSION citus;` has been run)
-			 *
-			 * Ensure InvalidateDistRelationCacheCallback will notice those changes
-			 * by caching pg_dist_partition's oid.
-			 *
-			 * We skip these checks during upgrade since pg_dist_partition is not
-			 * present during early stages of upgrade operation.
-			 */
-			DistPartitionRelationId();
-
-			/*
 			 * This needs to be initialized so we can receive foreign relation graph
 			 * invalidation messages in InvalidateForeignRelationGraphCacheCallback().
 			 * See the comments of InvalidateForeignKeyGraph for more context.
 			 */
 			DistColocationRelationId();
-		}
 
-		MetadataCache.extensionLoaded = extensionLoaded;
+			MetadataCache.extensionCreatedState = CREATED;
+		}
+		else
+		{
+			MetadataCache.extensionCreatedState = NOTCREATED;
+		}
 	}
 
-	return MetadataCache.extensionLoaded;
+	return (MetadataCache.extensionCreatedState == CREATED) ? true : false;
 }
 
 
@@ -2254,15 +2271,6 @@ CitusHasBeenLoadedInternal(void)
 	if (citusExtensionOid == InvalidOid)
 	{
 		/* Citus extension does not exist yet */
-		return false;
-	}
-
-	if (creating_extension && CurrentExtensionObject == citusExtensionOid)
-	{
-		/*
-		 * We do not use Citus hooks during CREATE/ALTER EXTENSION citus
-		 * since the objects used by the C code might be not be there yet.
-		 */
 		return false;
 	}
 
@@ -4201,10 +4209,6 @@ InitializeDistCache(void)
 	CreateShardIdCache();
 
 	InitializeDistObjectCache();
-
-	/* Watch for invalidation events. */
-	CacheRegisterRelcacheCallback(InvalidateDistRelationCacheCallback,
-								  (Datum) 0);
 }
 
 
@@ -4754,7 +4758,7 @@ InvalidateForeignKeyGraph(void)
  * InvalidateDistRelationCacheCallback flushes cache entries when a relation
  * is updated (or flushes the entire cache).
  */
-static void
+void
 InvalidateDistRelationCacheCallback(Datum argument, Oid relationId)
 {
 	/* invalidate either entire cache or a specific entry */
@@ -4762,11 +4766,17 @@ InvalidateDistRelationCacheCallback(Datum argument, Oid relationId)
 	{
 		InvalidateDistTableCache();
 		InvalidateDistObjectCache();
+		InvalidateMetadataSystemCache();
 	}
 	else
 	{
 		void *hashKey = (void *) &relationId;
 		bool foundInCache = false;
+
+		if (DistTableCacheHash == NULL)
+		{
+			return;
+		}
 
 		CitusTableCacheEntrySlot *cacheSlot =
 			hash_search(DistTableCacheHash, hashKey, HASH_FIND, &foundInCache);
@@ -4776,20 +4786,18 @@ InvalidateDistRelationCacheCallback(Datum argument, Oid relationId)
 		}
 
 		/*
-		 * If pg_dist_partition is being invalidated drop all state
-		 * This happens pretty rarely, but most importantly happens during
-		 * DROP EXTENSION citus; This isn't the only time when this happens
-		 * though, it can happen for multiple other reasons, such as an
-		 * autovacuum running ANALYZE on pg_dist_partition. Such an ANALYZE
-		 * wouldn't really need a full Metadata cache invalidation, but we
-		 * don't know how to differentiate between DROP EXTENSION and ANALYZE.
-		 * So for now we simply drop it in both cases and take the slight
-		 * temporary performance hit.
+		 * if pg_dist_partition relcache is invalidated for some reason,
+		 * invalidate the MetadataCache. It is likely an overkill to invalidate
+		 * the entire cache here. But until a better fix, we keep it this way
+		 * for postgres regression tests that includes
+		 *   REINDEX SCHEMA CONCURRENTLY pg_catalog
+		 * command.
 		 */
 		if (relationId == MetadataCache.distPartitionRelationId)
 		{
 			InvalidateMetadataSystemCache();
 		}
+
 
 		if (relationId == MetadataCache.distObjectRelationId)
 		{
@@ -4830,6 +4838,11 @@ InvalidateDistTableCache(void)
 	CitusTableCacheEntrySlot *cacheSlot = NULL;
 	HASH_SEQ_STATUS status;
 
+	if (DistTableCacheHash == NULL)
+	{
+		return;
+	}
+
 	hash_seq_init(&status, DistTableCacheHash);
 
 	while ((cacheSlot = (CitusTableCacheEntrySlot *) hash_seq_search(&status)) != NULL)
@@ -4847,6 +4860,11 @@ InvalidateDistObjectCache(void)
 {
 	DistObjectCacheEntry *cacheEntry = NULL;
 	HASH_SEQ_STATUS status;
+
+	if (DistObjectCacheHash == NULL)
+	{
+		return;
+	}
 
 	hash_seq_init(&status, DistObjectCacheHash);
 
@@ -4930,8 +4948,8 @@ CreateDistObjectCache(void)
 
 
 /*
- * InvalidateMetadataSystemCache resets all the cached OIDs and the extensionLoaded flag,
- * and invalidates the worker node, ConnParams, and local group ID caches.
+ * InvalidateMetadataSystemCache resets all the cached OIDs and the extensionCreatedState
+ * flag and invalidates the worker node, ConnParams, and local group ID caches.
  */
 void
 InvalidateMetadataSystemCache(void)

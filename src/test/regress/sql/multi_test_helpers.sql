@@ -316,3 +316,237 @@ RETURNS jsonb AS $func$
     RETURN result;
   END;
 $func$ LANGUAGE plpgsql;
+
+-- Returns true if all shard placements of given table have given number of indexes.
+CREATE OR REPLACE FUNCTION verify_index_count_on_shard_placements(
+    qualified_table_name text,
+    n_expected_indexes int)
+RETURNS BOOLEAN
+AS $func$
+DECLARE
+    v_result boolean;
+BEGIN
+    SELECT n_expected_indexes = ALL(
+        SELECT result::int INTO v_result
+        FROM run_command_on_placements(
+            qualified_table_name,
+            $$SELECT COUNT(*) FROM pg_index WHERE indrelid::regclass = '%s'::regclass$$
+        )
+    );
+    RETURN v_result;
+END;
+$func$ LANGUAGE plpgsql;
+
+-- Returns names of the foreign keys that shards of given table are involved in
+-- (as referencing or referenced one).
+CREATE OR REPLACE FUNCTION get_fkey_names_on_placements(
+    qualified_table_name text)
+RETURNS TABLE (
+    on_node text,
+    shard_id bigint,
+    fkey_names text[]
+)
+AS $func$
+BEGIN
+    RETURN QUERY SELECT
+        CASE WHEN groupid = 0 THEN 'on_coordinator' ELSE 'on_worker' END AS on_node_col,
+        shardid,
+        (CASE WHEN result = '' THEN '{}' ELSE result END)::text[] AS fkey_names_col
+    FROM run_command_on_placements(
+        qualified_table_name,
+        $$SELECT array_agg(conname ORDER BY conname) FROM pg_constraint WHERE '%s'::regclass IN (conrelid, confrelid) AND contype = 'f'$$
+    )
+    JOIN pg_dist_node USING (nodename, nodeport);
+END;
+$func$ LANGUAGE plpgsql;
+
+-- Returns true if all shard placements of given table have given number of partitions.
+CREATE OR REPLACE FUNCTION verify_partition_count_on_placements(
+    qualified_table_name text,
+    n_expected_partitions int)
+RETURNS BOOLEAN
+AS $func$
+DECLARE
+    v_result boolean;
+BEGIN
+    SELECT n_expected_partitions = ALL(
+        SELECT result::int INTO v_result
+        FROM run_command_on_placements(
+            qualified_table_name,
+            $$SELECT COUNT(*) FROM pg_inherits WHERE inhparent = '%s'::regclass;$$
+        )
+    );
+    RETURN v_result;
+END;
+$func$ LANGUAGE plpgsql;
+
+-- This function checks pg_dist_placement on all nodes and returns true if the following holds:
+--   Whether shard is on the coordinator or on a primary worker node, and if this is expected.
+--   Given shardid is used for shard placement of the table.
+--   Placement metadata is correct on all nodes.
+CREATE OR REPLACE FUNCTION verify_shard_placement_for_single_shard_table(
+    qualified_table_name text,
+    expected_shard_id bigint,
+    expect_placement_on_coord boolean)
+RETURNS BOOLEAN
+AS $func$
+DECLARE
+    verify_workers_query text;
+    nodename_nodeport_groupid record;
+    result boolean;
+BEGIN
+    SELECT nodename, nodeport, groupid INTO nodename_nodeport_groupid
+    FROM pg_dist_shard
+    JOIN pg_dist_placement USING (shardid)
+    JOIN pg_dist_node USING (groupid)
+    WHERE noderole = 'primary' AND shouldhaveshards AND isactive AND
+          logicalrelid = qualified_table_name::regclass AND shardid = expected_shard_id;
+
+    IF nodename_nodeport_groupid IS NULL
+    THEN
+        RAISE NOTICE 'Shard placement is not on a primary worker node';
+        RETURN false;
+    END IF;
+
+    IF (nodename_nodeport_groupid.groupid = 0) != expect_placement_on_coord
+    THEN
+        RAISE NOTICE 'Shard placement is on an unexpected node';
+        RETURN false;
+    END IF;
+
+    -- verify that metadata on workers is correct too
+    SELECT format(
+        'SELECT true = ALL(
+            SELECT result::boolean FROM run_command_on_workers($$
+                SELECT COUNT(*) = 1
+                FROM pg_dist_shard
+                JOIN pg_dist_placement USING (shardid)
+                JOIN pg_dist_node USING (groupid)
+                WHERE logicalrelid = ''%s''::regclass AND
+                      shardid = %s AND
+                      nodename = ''%s'' AND
+                      nodeport = %s AND
+                      groupid = %s
+            $$)
+        );',
+        qualified_table_name, expected_shard_id,
+        nodename_nodeport_groupid.nodename,
+        nodename_nodeport_groupid.nodeport,
+        nodename_nodeport_groupid.groupid
+    )
+    INTO verify_workers_query;
+
+    EXECUTE verify_workers_query INTO result;
+    RETURN result;
+END;
+$func$ LANGUAGE plpgsql;
+
+-- This function checks pg_dist_placement on all nodes and returns true if the following holds:
+--   Shard placement exist on coordinator and on all primary worker nodes.
+--   Given shardid is used for shard placements of the table.
+--   Given placementid is used for the coordinator shard placement.
+--   Placement metadata is correct on all nodes.
+CREATE OR REPLACE FUNCTION verify_shard_placements_for_reference_table(
+    qualified_table_name text,
+    expected_shard_id bigint,
+    expected_coord_placement_id bigint)
+RETURNS BOOLEAN
+AS $func$
+DECLARE
+    verify_workers_query text;
+    result boolean;
+BEGIN
+    SELECT format(
+        'SELECT true = ALL(
+            SELECT result::boolean FROM run_command_on_all_nodes($$
+                SELECT
+                        (SELECT COUNT(*) FROM pg_dist_node WHERE noderole = ''primary'' AND isactive) =
+                        (SELECT COUNT(*)
+                         FROM pg_dist_shard
+                         JOIN pg_dist_placement USING (shardid)
+                         JOIN pg_dist_node USING (groupid)
+                         WHERE noderole = ''primary'' AND isactive AND
+                               logicalrelid = ''%s''::regclass AND shardid = %s)
+                    AND
+                        (SELECT COUNT(*) = 1
+                         FROM pg_dist_shard
+                         JOIN pg_dist_placement USING (shardid)
+                         JOIN pg_dist_node USING (groupid)
+                         WHERE noderole = ''primary'' AND isactive AND
+                               logicalrelid = ''%s''::regclass AND shardid = %s AND
+                               placementid = %s AND groupid = 0)
+
+            $$)
+        );',
+        qualified_table_name, expected_shard_id,
+        qualified_table_name, expected_shard_id,
+        expected_coord_placement_id
+    )
+    INTO verify_workers_query;
+
+    EXECUTE verify_workers_query INTO result;
+    RETURN result;
+END;
+$func$ LANGUAGE plpgsql;
+
+-- This function checks pg_dist_partition on all nodes and returns true if the metadata
+-- record for given single-shard table is correct.
+CREATE OR REPLACE FUNCTION verify_pg_dist_partition_for_single_shard_table(
+    qualified_table_name text)
+RETURNS BOOLEAN
+AS $func$
+DECLARE
+    verify_workers_query text;
+    result boolean;
+BEGIN
+    SELECT format(
+        'SELECT true = ALL(
+            SELECT result::boolean FROM run_command_on_all_nodes($$
+                SELECT COUNT(*) = 1
+                FROM pg_dist_partition
+                WHERE logicalrelid = ''%s''::regclass AND
+                      partmethod = ''n'' AND
+                      partkey IS NULL AND
+                      colocationid > 0 AND
+                      repmodel = ''s'' AND
+                      autoconverted = false
+            $$)
+        );',
+    qualified_table_name)
+    INTO verify_workers_query;
+
+    EXECUTE verify_workers_query INTO result;
+    RETURN result;
+END;
+$func$ LANGUAGE plpgsql;
+
+-- This function checks pg_dist_partition on all nodes and returns true if the metadata
+-- record for given reference table is correct.
+CREATE OR REPLACE FUNCTION verify_pg_dist_partition_for_reference_table(
+    qualified_table_name text)
+RETURNS BOOLEAN
+AS $func$
+DECLARE
+    verify_workers_query text;
+    result boolean;
+BEGIN
+    SELECT format(
+        'SELECT true = ALL(
+            SELECT result::boolean FROM run_command_on_all_nodes($$
+                SELECT COUNT(*) = 1
+                FROM pg_dist_partition
+                WHERE logicalrelid = ''%s''::regclass AND
+                      partmethod = ''n'' AND
+                      partkey IS NULL AND
+                      colocationid > 0 AND
+                      repmodel = ''t'' AND
+                      autoconverted = false
+            $$)
+        );',
+    qualified_table_name)
+    INTO verify_workers_query;
+
+    EXECUTE verify_workers_query INTO result;
+    RETURN result;
+END;
+$func$ LANGUAGE plpgsql;
