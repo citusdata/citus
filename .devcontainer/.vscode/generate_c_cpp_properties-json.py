@@ -50,7 +50,8 @@ def main(args):
     # write the c_cpp_properties.json file
     with open(target_path, 'w') as f:
         json.dump(c_cpp_properties, f, indent=4)
-    
+
+
 def generate_configuration(version):
     """Returns a configuration for the given postgres version.
 
@@ -76,6 +77,7 @@ def generate_configuration(version):
         ],
         "configurationProvider": "ms-vscode.makefile-tools"
     }
+
 
 if __name__ == '__main__':
     arguments = docopt(__doc__, version='0.1.0')
