@@ -47,7 +47,7 @@ RUN useradd -ms /bin/bash citus \
 WORKDIR /home/citus
 USER citus
 
-RUN git clone https://github.com/theory/pgenv.git .pgenv
+RUN git clone --branch v1.3.2 --depth 1 https://github.com/theory/pgenv.git .pgenv
 COPY --chown=citus:citus pgenv/config/ .pgenv/config/
 ENV PATH="/home/citus/.pgenv/bin:${PATH}"
 ENV PATH="/home/citus/.pgenv/pgsql/bin:${PATH}"
