@@ -131,7 +131,7 @@ session "s7"
 step "s7-get-progress"
 {
 	set LOCAL client_min_messages=NOTICE;
-	WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (100000), (280000), (400000))
+	WITH possible_sizes(size) as (VALUES (0), (8000), (40000), (200000), (480000))
 	SELECT
 		table_name,
 		shardid,
@@ -157,7 +157,7 @@ step "s7-get-progress"
 step "s7-get-progress-ordered"
 {
 	set LOCAL client_min_messages=NOTICE;
-	WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (100000), (280000), (400000))
+	WITH possible_sizes(size) as (VALUES (0), (8000), (40000), (200000), (480000))
 	SELECT
 		table_name,
 		shardid,
@@ -204,5 +204,4 @@ permutation "s6-acquire-advisory-lock-after-copy" "s1-shard-copy-c1-online" "s7-
 
 // parallel blocking shard move
 permutation "s5-acquire-advisory-lock-before-copy" "s1-shard-move-c1-block-writes" "s4-shard-move-sep-block-writes"("s1-shard-move-c1-block-writes") "s7-get-progress-ordered" "s5-release-advisory-lock" "s1-wait" "s4-wait" "s7-get-progress-ordered"
-// Commented out due to flakyness
-// permutation "s6-acquire-advisory-lock-after-copy" "s1-shard-move-c1-block-writes" "s4-shard-move-sep-block-writes"("s1-shard-move-c1-block-writes") "s7-get-progress-ordered" "s6-release-advisory-lock"  "s1-wait" "s4-wait" "s7-get-progress-ordered"
+permutation "s6-acquire-advisory-lock-after-copy" "s1-shard-move-c1-block-writes" "s4-shard-move-sep-block-writes"("s1-shard-move-c1-block-writes") "s7-get-progress-ordered" "s6-release-advisory-lock"  "s1-wait" "s4-wait" "s7-get-progress-ordered"
