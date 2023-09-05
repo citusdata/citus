@@ -15,9 +15,11 @@ Options:
   --version     Show version.
 
 """
-from docopt import docopt
-import subprocess
 import json
+import subprocess
+
+from docopt import docopt
+
 
 def main(args):
     target_path = args['<target_path>']
