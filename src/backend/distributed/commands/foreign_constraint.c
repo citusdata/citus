@@ -895,7 +895,7 @@ GetForeignConstraintCommandsInternal(Oid relationId, int flags)
 
 	List *foreignKeyCommands = NIL;
 
-	PushOverrideEmptySearchPath(CurrentMemoryContext);
+	int saveNestLevel = PushEmptySearchPath();
 
 	Oid foreignKeyOid = InvalidOid;
 	foreach_oid(foreignKeyOid, foreignKeyOids)
@@ -906,7 +906,7 @@ GetForeignConstraintCommandsInternal(Oid relationId, int flags)
 	}
 
 	/* revert back to original search_path */
-	PopOverrideSearchPath();
+	PopEmptySearchPath(saveNestLevel);
 
 	return foreignKeyCommands;
 }

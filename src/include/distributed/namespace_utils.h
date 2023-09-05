@@ -10,6 +10,7 @@
 #ifndef NAMESPACE_UTILS_H
 #define NAMESPACE_UTILS_H
 
-extern void PushOverrideEmptySearchPath(MemoryContext memoryContext);
+extern int PushEmptySearchPath(void);
+extern void PopEmptySearchPath(int saveNestLevel);
 
 #endif /* NAMESPACE_UTILS_H */

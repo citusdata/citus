@@ -158,7 +158,7 @@ NoneDistTableDropCoordinatorPlacementTable(Oid noneDistTableId)
 	 * local session because changes made to shards are allowed for Citus internal
 	 * backends anyway.
 	 */
-	int save_nestlevel = NewGUCNestLevel();
+	int saveNestLevel = NewGUCNestLevel();
 
 	SetLocalEnableLocalReferenceForeignKeys(false);
 	SetLocalEnableManualChangesToShard(true);
@@ -184,7 +184,7 @@ NoneDistTableDropCoordinatorPlacementTable(Oid noneDistTableId)
 	bool localExecutionSupported = true;
 	ExecuteUtilityTaskList(list_make1(task), localExecutionSupported);
 
-	AtEOXact_GUC(true, save_nestlevel);
+	AtEOXact_GUC(true, saveNestLevel);
 }
 
 
