@@ -375,6 +375,158 @@ END;
 CREATE PUBLICATION pubdep FOR TABLES IN SCHEMA deptest;
 RESET citus.create_object_propagation;
 DROP SCHEMA deptest CASCADE;
+--
+-- PG16 allows publications with schema and table of the same schema.
+-- backpatched to PG15
+-- Relevant PG commit: https://github.com/postgres/postgres/commit/13a185f
+--
+CREATE SCHEMA publication2;
+CREATE TABLE publication2.test1 (id int);
+SELECT create_distributed_table('publication2.test1', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- should be able to create publication with schema and table of the same
+-- schema
+CREATE PUBLICATION testpub_for_tbl_schema FOR TABLES IN SCHEMA publication2, TABLE publication2.test1;
+SELECT DISTINCT c FROM (
+  SELECT unnest(result::text[]) c
+  FROM run_command_on_workers($$
+    SELECT array_agg(c) FROM (SELECT c FROM unnest(activate_node_snapshot()) c WHERE c LIKE '%CREATE PUBLICATION%' AND c LIKE '%testpub_for_tbl_schema%' ORDER BY 1) s$$)
+  ORDER BY c) s;
+                                                                                                                       c
+---------------------------------------------------------------------
+ SELECT worker_create_or_replace_object('CREATE PUBLICATION testpub_for_tbl_schema FOR TABLES IN SCHEMA publication2, TABLE publication2.test1 WITH (publish_via_partition_root = ''false'', publish = ''insert, update, delete, truncate'')');
+(1 row)
+
+CREATE TABLE publication.test2 (id int);
+SELECT create_distributed_table('publication.test2', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+ALTER PUBLICATION testpub_for_tbl_schema ADD TABLE publication.test2;
+SELECT DISTINCT c FROM (
+  SELECT unnest(result::text[]) c
+  FROM run_command_on_workers($$
+    SELECT array_agg(c) FROM (SELECT c FROM unnest(activate_node_snapshot()) c WHERE c LIKE '%CREATE PUBLICATION%' AND c LIKE '%testpub_for_tbl_schema%' ORDER BY 1) s$$)
+  ORDER BY c) s;
+                                                                                                                                    c
+---------------------------------------------------------------------
+ SELECT worker_create_or_replace_object('CREATE PUBLICATION testpub_for_tbl_schema FOR TABLES IN SCHEMA publication2, TABLE publication2.test1, TABLE publication.test2 WITH (publish_via_partition_root = ''false'', publish = ''insert, update, delete, truncate'')');
+(1 row)
+
+-- should be able to have publication2 schema and its new table test2 in testpub_for_tbl_schema publication
+ALTER TABLE test2 SET SCHEMA publication2;
+-- should be able to add a table of the same schema to the schema publication
+CREATE TABLE publication2.test3 (x int primary key, y int, "column-1" int);
+SELECT create_distributed_table('publication2.test3', 'x');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+ALTER PUBLICATION testpub_for_tbl_schema ADD TABLE publication2.test3;
+SELECT DISTINCT c FROM (
+  SELECT unnest(result::text[]) c
+  FROM run_command_on_workers($$
+    SELECT array_agg(c) FROM (SELECT c FROM unnest(activate_node_snapshot()) c WHERE c LIKE '%CREATE PUBLICATION%' AND c LIKE '%testpub_for_tbl_schema%' ORDER BY 1) s$$)
+  ORDER BY c) s;
+                                                                                                                                                 c
+---------------------------------------------------------------------
+ SELECT worker_create_or_replace_object('CREATE PUBLICATION testpub_for_tbl_schema FOR TABLES IN SCHEMA publication2, TABLE publication2.test1, TABLE publication2.test2, TABLE publication2.test3 WITH (publish_via_partition_root = ''false'', publish = ''insert, update, delete, truncate'')');
+(1 row)
+
+-- should be able to drop the table
+ALTER PUBLICATION testpub_for_tbl_schema DROP TABLE publication2.test3;
+SELECT DISTINCT c FROM (
+  SELECT unnest(result::text[]) c
+  FROM run_command_on_workers($$
+    SELECT array_agg(c) FROM (SELECT c FROM unnest(activate_node_snapshot()) c WHERE c LIKE '%CREATE PUBLICATION%' AND c LIKE '%testpub_for_tbl_schema%' ORDER BY 1) s$$)
+  ORDER BY c) s;
+                                                                                                                                    c
+---------------------------------------------------------------------
+ SELECT worker_create_or_replace_object('CREATE PUBLICATION testpub_for_tbl_schema FOR TABLES IN SCHEMA publication2, TABLE publication2.test1, TABLE publication2.test2 WITH (publish_via_partition_root = ''false'', publish = ''insert, update, delete, truncate'')');
+(1 row)
+
+DROP PUBLICATION testpub_for_tbl_schema;
+CREATE PUBLICATION testpub_for_tbl_schema FOR TABLES IN SCHEMA publication2;
+-- should be able to set publication with schema and table of the same schema
+ALTER PUBLICATION testpub_for_tbl_schema SET TABLES IN SCHEMA publication2, TABLE publication2.test1 WHERE (id < 99);
+SELECT DISTINCT c FROM (
+  SELECT unnest(result::text[]) c
+  FROM run_command_on_workers($$
+    SELECT array_agg(c) FROM (SELECT c FROM unnest(activate_node_snapshot()) c WHERE c LIKE '%CREATE PUBLICATION%' AND c LIKE '%testpub_for_tbl_schema%' ORDER BY 1) s$$)
+  ORDER BY c) s;
+                                                                                                                                   c
+---------------------------------------------------------------------
+ SELECT worker_create_or_replace_object('CREATE PUBLICATION testpub_for_tbl_schema FOR TABLES IN SCHEMA publication2, TABLE publication2.test1 WHERE ((test1.id < 99)) WITH (publish_via_partition_root = ''false'', publish = ''insert, update, delete, truncate'')');
+(1 row)
+
+-- test that using column list for table is disallowed if any schemas are
+-- part of the publication
+DROP PUBLICATION testpub_for_tbl_schema;
+-- failure - cannot use column list and schema together
+CREATE PUBLICATION testpub_for_tbl_schema FOR TABLES IN SCHEMA publication2, TABLE publication2.test3(y);
+ERROR:  cannot use column list for relation "publication2.test3" in publication "testpub_for_tbl_schema"
+DETAIL:  Column lists cannot be specified in publications containing FOR TABLES IN SCHEMA elements.
+-- ok - only publish schema
+CREATE PUBLICATION testpub_for_tbl_schema FOR TABLES IN SCHEMA publication2;
+SELECT DISTINCT c FROM (
+  SELECT unnest(result::text[]) c
+  FROM run_command_on_workers($$
+    SELECT array_agg(c) FROM (SELECT c FROM unnest(activate_node_snapshot()) c WHERE c LIKE '%CREATE PUBLICATION%' AND c LIKE '%testpub_for_tbl_schema%' ORDER BY 1) s$$)
+  ORDER BY c) s;
+                                                                                                          c
+---------------------------------------------------------------------
+ SELECT worker_create_or_replace_object('CREATE PUBLICATION testpub_for_tbl_schema FOR TABLES IN SCHEMA publication2 WITH (publish_via_partition_root = ''false'', publish = ''insert, update, delete, truncate'')');
+(1 row)
+
+-- failure - add a table with column list when there is already a schema in the
+-- publication
+ALTER PUBLICATION testpub_for_tbl_schema ADD TABLE publication2.test3(y);
+ERROR:  cannot use column list for relation "publication2.test3" in publication "testpub_for_tbl_schema"
+DETAIL:  Column lists cannot be specified in publications containing FOR TABLES IN SCHEMA elements.
+-- ok - only publish table with column list
+ALTER PUBLICATION testpub_for_tbl_schema SET TABLE publication2.test3(y);
+SELECT DISTINCT c FROM (
+  SELECT unnest(result::text[]) c
+  FROM run_command_on_workers($$
+    SELECT array_agg(c) FROM (SELECT c FROM unnest(activate_node_snapshot()) c WHERE c LIKE '%CREATE PUBLICATION%' AND c LIKE '%testpub_for_tbl_schema%' ORDER BY 1) s$$)
+  ORDER BY c) s;
+                                                                                                          c
+---------------------------------------------------------------------
+ SELECT worker_create_or_replace_object('CREATE PUBLICATION testpub_for_tbl_schema FOR TABLE publication2.test3 (y) WITH (publish_via_partition_root = ''false'', publish = ''insert, update, delete, truncate'')');
+(1 row)
+
+-- failure - specify a schema when there is already a column list in the
+-- publication
+ALTER PUBLICATION testpub_for_tbl_schema ADD TABLES IN SCHEMA publication2;
+ERROR:  cannot add schema to publication "testpub_for_tbl_schema"
+DETAIL:  Schemas cannot be added if any tables that specify a column list are already part of the publication.
+-- failure - cannot SET column list and schema together
+ALTER PUBLICATION testpub_for_tbl_schema SET TABLES IN SCHEMA publication2, TABLE publication2.test3(y);
+ERROR:  cannot use column list for relation "publication2.test3" in publication "testpub_for_tbl_schema"
+DETAIL:  Column lists cannot be specified in publications containing FOR TABLES IN SCHEMA elements.
+-- ok - drop table
+ALTER PUBLICATION testpub_for_tbl_schema DROP TABLE publication2.test3;
+SELECT DISTINCT c FROM (
+  SELECT unnest(result::text[]) c
+  FROM run_command_on_workers($$
+    SELECT array_agg(c) FROM (SELECT c FROM unnest(activate_node_snapshot()) c WHERE c LIKE '%CREATE PUBLICATION%' AND c LIKE '%testpub_for_tbl_schema%' ORDER BY 1) s$$)
+  ORDER BY c) s;
+                                                                                         c
+---------------------------------------------------------------------
+ SELECT worker_create_or_replace_object('CREATE PUBLICATION testpub_for_tbl_schema WITH (publish_via_partition_root = ''false'', publish = ''insert, update, delete, truncate'')');
+(1 row)
+
+-- failure - cannot ADD column list and schema together
+ALTER PUBLICATION testpub_for_tbl_schema ADD TABLES IN SCHEMA publication2, TABLE publication2.test3(y);
+ERROR:  cannot use column list for relation "publication2.test3" in publication "testpub_for_tbl_schema"
+DETAIL:  Column lists cannot be specified in publications containing FOR TABLES IN SCHEMA elements.
 -- make sure we can sync all the publication metadata
 SELECT start_metadata_sync_to_all_nodes();
  start_metadata_sync_to_all_nodes
@@ -386,7 +538,9 @@ DROP PUBLICATION pubdep;
 DROP PUBLICATION "pub-mix";
 DROP PUBLICATION pubtables;
 DROP PUBLICATION pubpartitioned;
+DROP PUBLICATION testpub_for_tbl_schema;
 SET client_min_messages TO ERROR;
 DROP SCHEMA publication CASCADE;
 DROP SCHEMA "publication-1" CASCADE;
 DROP SCHEMA citus_schema_1 CASCADE;
+DROP SCHEMA publication2 CASCADE;
