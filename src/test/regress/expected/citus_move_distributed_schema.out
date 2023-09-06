@@ -16,6 +16,13 @@ SELECT master_set_node_property('localhost', :master_port, 'shouldhaveshards', t
 
 (1 row)
 
+-- Due to a race condition that happens in TransferShards() when the same shard id
+-- is used to create the same shard on a different worker node, need to call
+-- citus_cleanup_orphaned_resources() to clean up any orphaned resources before
+-- running the tests.
+--
+-- See https://github.com/citusdata/citus/pull/7180#issuecomment-1706786615.
+CALL citus_cleanup_orphaned_resources();
 SET client_min_messages TO NOTICE;
 -- test null input, should be no-op
 SELECT citus_move_distributed_schema(schema_id=>null, target_node_name=>null, target_node_port=>null, shard_transfer_mode=>null);
