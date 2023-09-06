@@ -909,15 +909,14 @@ GetFunctionDDLCommand(const RegProcedure funcOid, bool useCreateOrReplace)
 	else
 	{
 		Datum sqlTextDatum = (Datum) 0;
-
-		PushOverrideEmptySearchPath(CurrentMemoryContext);
+		int saveNestLevel = PushEmptySearchPath();
 
 		sqlTextDatum = DirectFunctionCall1(pg_get_functiondef,
 										   ObjectIdGetDatum(funcOid));
 		createFunctionSQL = TextDatumGetCString(sqlTextDatum);
 
 		/* revert back to original search_path */
-		PopOverrideSearchPath();
+		PopEmptySearchPath(saveNestLevel);
 	}
 
 	return createFunctionSQL;

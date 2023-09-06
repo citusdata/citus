@@ -146,6 +146,63 @@ DROP DATABASE test_db;
 SELECT result FROM run_command_on_workers
 ($$DROP DATABASE test_db$$);
 SET search_path TO pg16;
+SET citus.next_shard_id TO 951000;
+
+-- Foreign table TRUNCATE trigger
+-- Relevant PG commit:
+-- https://github.com/postgres/postgres/commit/3b00a94
+SELECT 1 FROM citus_add_node('localhost', :master_port, groupid => 0);
+SET citus.use_citus_managed_tables TO ON;
+CREATE TABLE foreign_table_test (id integer NOT NULL, data text, a bigserial);
+INSERT INTO foreign_table_test VALUES (1, 'text_test');
+CREATE EXTENSION postgres_fdw;
+CREATE SERVER foreign_server
+        FOREIGN DATA WRAPPER postgres_fdw
+        OPTIONS (host 'localhost', port :'master_port', dbname 'regression');
+CREATE USER MAPPING FOR CURRENT_USER
+        SERVER foreign_server
+        OPTIONS (user 'postgres');
+CREATE FOREIGN TABLE foreign_table (
+        id integer NOT NULL,
+        data text,
+        a bigserial
+)
+        SERVER foreign_server
+        OPTIONS (schema_name 'pg16', table_name 'foreign_table_test');
+
+-- verify it's a Citus foreign table
+SELECT partmethod, repmodel FROM pg_dist_partition
+WHERE logicalrelid = 'foreign_table'::regclass ORDER BY logicalrelid;
+
+INSERT INTO foreign_table VALUES (2, 'test_2');
+INSERT INTO foreign_table_test VALUES (3, 'test_3');
+
+CREATE FUNCTION trigger_func() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+	RAISE NOTICE 'trigger_func(%) called: action = %, when = %, level = %',
+		TG_ARGV[0], TG_OP, TG_WHEN, TG_LEVEL;
+	RETURN NULL;
+END;$$;
+
+CREATE FUNCTION trigger_func_on_shard() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+	RAISE NOTICE 'trigger_func_on_shard(%) called: action = %, when = %, level = %',
+		TG_ARGV[0], TG_OP, TG_WHEN, TG_LEVEL;
+	RETURN NULL;
+END;$$;
+
+CREATE TRIGGER trig_stmt_before BEFORE TRUNCATE ON foreign_table
+	FOR EACH STATEMENT EXECUTE PROCEDURE trigger_func();
+SET citus.override_table_visibility TO off;
+CREATE TRIGGER trig_stmt_shard_before BEFORE TRUNCATE ON foreign_table_951001
+	FOR EACH STATEMENT EXECUTE PROCEDURE trigger_func_on_shard();
+RESET citus.override_table_visibility;
+
+SELECT * FROM foreign_table ORDER BY 1;
+TRUNCATE foreign_table;
+SELECT * FROM foreign_table ORDER BY 1;
+
+RESET citus.use_citus_managed_tables;
 
 --
 -- COPY FROM ... DEFAULT
@@ -388,6 +445,42 @@ REINDEX SYSTEM;
 SELECT result FROM run_command_on_workers
 ($$REINDEX SYSTEM$$);
 
+--
+-- random_normal() to provide normally-distributed random numbers
+-- adding here the same tests as the ones with random() in aggregate_support.sql
+-- Relevant PG commit: https://github.com/postgres/postgres/commit/38d8176
+--
+
+CREATE TABLE dist_table (dist_col int, agg_col numeric);
+SELECT create_distributed_table('dist_table', 'dist_col');
+
+CREATE TABLE ref_table (int_col int);
+SELECT create_reference_table('ref_table');
+
+-- Test the cases where the worker agg exec. returns no tuples.
+
+SELECT PERCENTILE_DISC(.25) WITHIN GROUP (ORDER BY agg_col)
+FROM (SELECT *, random_normal() FROM dist_table) a;
+
+SELECT PERCENTILE_DISC((2 > random_normal(stddev => 1, mean => 0))::int::numeric / 10)
+       WITHIN GROUP (ORDER BY agg_col)
+FROM dist_table
+LEFT JOIN ref_table ON TRUE;
+
+-- run the same queries after loading some data
+
+INSERT INTO dist_table VALUES (2, 11.2), (3, NULL), (6, 3.22), (3, 4.23), (5, 5.25),
+                              (4, 63.4), (75, NULL), (80, NULL), (96, NULL), (8, 1078), (0, 1.19);
+
+SELECT PERCENTILE_DISC(.25) WITHIN GROUP (ORDER BY agg_col)
+FROM (SELECT *, random_normal() FROM dist_table) a;
+
+SELECT PERCENTILE_DISC((2 > random_normal(stddev => 1, mean => 0))::int::numeric / 10)
+       WITHIN GROUP (ORDER BY agg_col)
+FROM dist_table
+LEFT JOIN ref_table ON TRUE;
+
 \set VERBOSITY terse
 SET client_min_messages TO ERROR;
+DROP EXTENSION postgres_fdw CASCADE;
 DROP SCHEMA pg16 CASCADE;

@@ -168,6 +168,7 @@ DEPS = {
         ],
     ),
     "grant_on_schema_propagation": TestDeps("minimal_schedule"),
+    "propagate_extension_commands": TestDeps("minimal_schedule"),
 }
 
 

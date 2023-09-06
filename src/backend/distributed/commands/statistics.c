@@ -530,7 +530,7 @@ GetExplicitStatisticsCommandList(Oid relationId)
 	RelationClose(relation);
 
 	/* generate fully-qualified names */
-	PushOverrideEmptySearchPath(CurrentMemoryContext);
+	int saveNestLevel = PushEmptySearchPath();
 
 	Oid statisticsId = InvalidOid;
 	foreach_oid(statisticsId, statisticsIdList)
@@ -579,7 +579,7 @@ GetExplicitStatisticsCommandList(Oid relationId)
 	}
 
 	/* revert back to original search_path */
-	PopOverrideSearchPath();
+	PopEmptySearchPath(saveNestLevel);
 
 	return explicitStatisticsCommandList;
 }

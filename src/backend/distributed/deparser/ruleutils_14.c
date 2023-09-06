@@ -53,6 +53,7 @@
 #include "common/keywords.h"
 #include "distributed/citus_nodefuncs.h"
 #include "distributed/citus_ruleutils.h"
+#include "distributed/namespace_utils.h"
 #include "executor/spi.h"
 #include "foreign/foreign.h"
 #include "funcapi.h"
@@ -610,18 +611,14 @@ pg_get_rule_expr(Node *expression)
 {
 	bool showImplicitCasts = true;
 	deparse_context context;
-	OverrideSearchPath *overridePath = NULL;
 	StringInfo buffer = makeStringInfo();
 
 	/*
 	 * Set search_path to NIL so that all objects outside of pg_catalog will be
 	 * schema-prefixed. pg_catalog will be added automatically when we call
-	 * PushOverrideSearchPath(), since we set addCatalog to true;
+	 * PushEmptySearchPath().
 	 */
-	overridePath = GetOverrideSearchPath(CurrentMemoryContext);
-	overridePath->schemas = NIL;
-	overridePath->addCatalog = true;
-	PushOverrideSearchPath(overridePath);
+	int saveNestLevel = PushEmptySearchPath();
 
 	context.buf = buffer;
 	context.namespaces = NIL;
@@ -638,7 +635,7 @@ pg_get_rule_expr(Node *expression)
 	get_rule_expr(expression, &context, showImplicitCasts);
 
 	/* revert back to original search_path */
-	PopOverrideSearchPath();
+	PopEmptySearchPath(saveNestLevel);
 
 	return buffer->data;
 }
@@ -1955,8 +1952,6 @@ get_query_def_extended(Query *query, StringInfo buf, List *parentnamespace,
 	deparse_context context;
 	deparse_namespace dpns;
 
-	OverrideSearchPath *overridePath = NULL;
-
 	/* Guard against excessively long or deeply-nested queries */
 	CHECK_FOR_INTERRUPTS();
 	check_stack_depth();
@@ -1975,12 +1970,9 @@ get_query_def_extended(Query *query, StringInfo buf, List *parentnamespace,
 	/*
 	 * Set search_path to NIL so that all objects outside of pg_catalog will be
 	 * schema-prefixed. pg_catalog will be added automatically when we call
-	 * PushOverrideSearchPath(), since we set addCatalog to true;
+	 * PushEmptySearchPath().
 	 */
-	overridePath = GetOverrideSearchPath(CurrentMemoryContext);
-	overridePath->schemas = NIL;
-	overridePath->addCatalog = true;
-	PushOverrideSearchPath(overridePath);
+	int saveNestLevel = PushEmptySearchPath();
 
 	context.buf = buf;
 	context.namespaces = lcons(&dpns, list_copy(parentnamespace));
@@ -2031,7 +2023,7 @@ get_query_def_extended(Query *query, StringInfo buf, List *parentnamespace,
 	}
 
 	/* revert back to original search_path */
-	PopOverrideSearchPath();
+	PopEmptySearchPath(saveNestLevel);
 }
 
 /* ----------
