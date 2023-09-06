@@ -61,7 +61,6 @@ ERROR:  cannot move distributed schema s1 because it is empty
 SELECT citus_move_distributed_schema_with_nodeid('s1', 1234);
 ERROR:  cannot move distributed schema s1 because it is empty
 CREATE TABLE s1.t1 (a int);
-CREATE TABLE s1.t2 (a int);
 -- test invalid node name / port / id
 SELECT citus_move_distributed_schema('s1', 'dummy_node_name', 1234);
 ERROR:  Moving shards to a non-existing node is not supported
@@ -120,6 +119,7 @@ BEGIN
     RETURN QUERY SELECT * FROM nodeid_nodename_nodeport LIMIT 1;
 END;
 $func$ LANGUAGE plpgsql;
+CREATE TABLE s1.t2 (a int);
 -- move the schema to a different node
 SELECT nodeid AS s1_new_nodeid, quote_literal(nodename) AS s1_new_nodename, nodeport AS s1_new_nodeport
 FROM get_non_coord_candidate_node_for_schema_move('s1') \gset

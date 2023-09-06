@@ -43,7 +43,6 @@ SELECT citus_move_distributed_schema('s1', 'dummy_node_name', 1234);
 SELECT citus_move_distributed_schema_with_nodeid('s1', 1234);
 
 CREATE TABLE s1.t1 (a int);
-CREATE TABLE s1.t2 (a int);
 
 -- test invalid node name / port / id
 SELECT citus_move_distributed_schema('s1', 'dummy_node_name', 1234);
@@ -99,6 +98,8 @@ BEGIN
     RETURN QUERY SELECT * FROM nodeid_nodename_nodeport LIMIT 1;
 END;
 $func$ LANGUAGE plpgsql;
+
+CREATE TABLE s1.t2 (a int);
 
 -- move the schema to a different node
 
