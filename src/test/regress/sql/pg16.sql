@@ -445,6 +445,41 @@ REINDEX SYSTEM;
 SELECT result FROM run_command_on_workers
 ($$REINDEX SYSTEM$$);
 
+--
+-- random_normal() to provide normally-distributed random numbers
+-- adding here the same tests as the ones with random() in aggregate_support.sql
+-- Relevant PG commit: https://github.com/postgres/postgres/commit/38d8176
+--
+
+CREATE TABLE dist_table (dist_col int, agg_col numeric);
+SELECT create_distributed_table('dist_table', 'dist_col');
+
+CREATE TABLE ref_table (int_col int);
+SELECT create_reference_table('ref_table');
+
+-- Test the cases where the worker agg exec. returns no tuples.
+
+SELECT PERCENTILE_DISC(.25) WITHIN GROUP (ORDER BY agg_col)
+FROM (SELECT *, random_normal() FROM dist_table) a;
+
+SELECT PERCENTILE_DISC((2 > random_normal(stddev => 1, mean => 0))::int::numeric / 10)
+       WITHIN GROUP (ORDER BY agg_col)
+FROM dist_table
+LEFT JOIN ref_table ON TRUE;
+
+-- run the same queries after loading some data
+
+INSERT INTO dist_table VALUES (2, 11.2), (3, NULL), (6, 3.22), (3, 4.23), (5, 5.25),
+                              (4, 63.4), (75, NULL), (80, NULL), (96, NULL), (8, 1078), (0, 1.19);
+
+SELECT PERCENTILE_DISC(.25) WITHIN GROUP (ORDER BY agg_col)
+FROM (SELECT *, random_normal() FROM dist_table) a;
+
+SELECT PERCENTILE_DISC((2 > random_normal(stddev => 1, mean => 0))::int::numeric / 10)
+       WITHIN GROUP (ORDER BY agg_col)
+FROM dist_table
+LEFT JOIN ref_table ON TRUE;
+
 \set VERBOSITY terse
 SET client_min_messages TO ERROR;
 DROP EXTENSION postgres_fdw CASCADE;
