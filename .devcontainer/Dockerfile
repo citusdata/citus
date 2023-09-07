@@ -138,6 +138,7 @@ RUN sudo apt update \
     man \
     net-tools \
     pspg \
+    tree \
     vim \
  && sudo apt clean
 
