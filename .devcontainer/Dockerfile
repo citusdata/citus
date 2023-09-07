@@ -110,8 +110,8 @@ FROM base AS pipenv
 RUN sudo pip3 install pipenv pipenv-shebang
 
 WORKDIR /workspaces/citus/
-COPY src/ src/
-COPY .vscode/Pipfile .vscode/Pipfile.lock .devcontainer/.vscode/
+COPY --chown=citus:citus src/ src/
+COPY --chown=citus:citus .vscode/Pipfile .vscode/Pipfile.lock .devcontainer/.vscode/
 RUN ( cd src/test/regress && pipenv install )
 RUN ( cd .devcontainer/.vscode && pipenv install )
 
@@ -143,6 +143,14 @@ RUN sudo apt update \
 
 RUN sudo pip3 install pipenv pipenv-shebang
 
+# Since gdb will run in the context of the root user when debugging citus we will need to both
+# download the gdbpg.py script as the root user, into their home directory, as well as add .gdbinit
+# as a file owned by root
+# This will make that as soon as the debugger attaches to a postgres backend (or frankly any other process)
+# the gdbpg.py script will be sourced and the developer can direcly use it.
+RUN sudo curl -o /root/gdbpg.py https://raw.githubusercontent.com/tvesely/gdbpg/master/gdbpg.py
+COPY --chown=root:root .gdbinit /root/
+
 # add some common tools to the final container
 # bin directory for user tools
 RUN mkdir .bin
@@ -160,11 +168,11 @@ RUN git clone https://github.com/so-fancy/diff-so-fancy.git \
 
 COPY --link --from=uncrustify-builder /uncrustify/usr/ /usr/
 
-COPY --link --from=pg14 /home/citus/.pgenv-staging/ /home/citus/.pgenv/
-COPY --link --from=pg15 /home/citus/.pgenv-staging/ /home/citus/.pgenv/
-COPY --link --from=pg16 /home/citus/.pgenv-staging/ /home/citus/.pgenv/
+COPY --link --from=pg14 --chown=citus:citus /home/citus/.pgenv-staging/ /home/citus/.pgenv/
+COPY --link --from=pg15 --chown=citus:citus /home/citus/.pgenv-staging/ /home/citus/.pgenv/
+COPY --link --from=pg16 --chown=citus:citus /home/citus/.pgenv-staging/ /home/citus/.pgenv/
 
-COPY --link --from=pipenv /home/citus/.local/share/virtualenvs/ /home/citus/.local/share/virtualenvs/
+COPY --link --from=pipenv --chown=citus:citus /home/citus/.local/share/virtualenvs/ /home/citus/.local/share/virtualenvs/
 
 # place to run your cluster with citus_dev
 VOLUME /data
@@ -175,15 +183,10 @@ COPY --chown=citus:citus .psqlrc .
 
 # with the copy linking of layers github actions seem to misbehave with the ownership of the
 # directories leading upto the link, hence a small patch layer to have to right ownerships set
-RUN sudo chown --from=root:root citus:citus -R ~
+# RUN sudo chown --from=root:root citus:citus -R ~
 
 # sets default pg version
 RUN pgenv switch 16rc1
-
-USER root
-RUN curl -o /root/gdbpg.py https://raw.githubusercontent.com/tvesely/gdbpg/master/gdbpg.py
-COPY .gdbinit /root/
-USER citus
 
 # make connecting to the coordinator easy
 ENV PGPORT=9700
