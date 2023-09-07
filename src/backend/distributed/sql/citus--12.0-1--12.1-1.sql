@@ -9,5 +9,4 @@
 #include "udfs/citus_internal_update_none_dist_table_metadata/12.1-1.sql"
 #include "udfs/citus_internal_delete_placement_metadata/12.1-1.sql"
 
-#include "udfs/citus_move_distributed_schema/12.1-1.sql"
-#include "udfs/citus_move_distributed_schema_with_nodeid/12.1-1.sql"
+#include "udfs/citus_schema_move/12.1-1.sql"

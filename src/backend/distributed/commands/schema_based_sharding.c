@@ -67,8 +67,8 @@ const char *TenantOperationNames[TOTAL_TENANT_OPERATION] = {
 PG_FUNCTION_INFO_V1(citus_internal_unregister_tenant_schema_globally);
 PG_FUNCTION_INFO_V1(citus_schema_distribute);
 PG_FUNCTION_INFO_V1(citus_schema_undistribute);
-PG_FUNCTION_INFO_V1(citus_move_distributed_schema);
-PG_FUNCTION_INFO_V1(citus_move_distributed_schema_with_nodeid);
+PG_FUNCTION_INFO_V1(citus_schema_move);
+PG_FUNCTION_INFO_V1(citus_schema_move_with_nodeid);
 
 /*
  * ShouldUseSchemaBasedSharding returns true if schema given name should be
@@ -775,12 +775,11 @@ citus_schema_undistribute(PG_FUNCTION_ARGS)
 
 
 /*
- * citus_move_distributed_schema moves the shards that belong to given
- * distributed tenant schema from one node to the other node by using
- * citus_move_shard_placement().
+ * citus_schema_move moves the shards that belong to given distributed tenant
+ * schema from one node to the other node by using citus_move_shard_placement().
  */
 Datum
-citus_move_distributed_schema(PG_FUNCTION_ARGS)
+citus_schema_move(PG_FUNCTION_ARGS)
 {
 	CheckCitusVersion(ERROR);
 	EnsureCoordinator();
@@ -800,12 +799,12 @@ citus_move_distributed_schema(PG_FUNCTION_ARGS)
 
 
 /*
- * citus_move_distributed_schema_with_nodeid does the same as
- * citus_move_distributed_schema(), but accepts node id as parameter instead
- * of hostname and port, hence uses citus_move_shard_placement_with_nodeid().
+ * citus_schema_move_with_nodeid does the same as citus_schema_move(), but
+ * accepts node id as parameter instead of hostname and port, hence uses
+ * citus_move_shard_placement_with_nodeid().
  */
 Datum
-citus_move_distributed_schema_with_nodeid(PG_FUNCTION_ARGS)
+citus_schema_move_with_nodeid(PG_FUNCTION_ARGS)
 {
 	CheckCitusVersion(ERROR);
 	EnsureCoordinator();
@@ -824,7 +823,7 @@ citus_move_distributed_schema_with_nodeid(PG_FUNCTION_ARGS)
 
 /*
  * CreateCitusMoveSchemaParams is a helper function for
- * citus_move_distributed_schema() and citus_move_distributed_schema_with_nodeid()
+ * citus_schema_move() and citus_schema_move_with_nodeid()
  * that validates input schema and returns the parameters to be used in underlying
  * shard transfer functions.
  */

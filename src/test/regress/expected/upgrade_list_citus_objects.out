@@ -99,9 +99,6 @@ ORDER BY 1;
  function citus_jsonb_concatenate_final(jsonb)
  function citus_local_disk_space_stats()
  function citus_locks()
- function citus_move_distributed_schema(regnamespace,integer,citus.shard_transfer_mode)
- function citus_move_distributed_schema(regnamespace,text,integer,citus.shard_transfer_mode)
- function citus_move_distributed_schema_with_nodeid(regnamespace,integer,citus.shard_transfer_mode)
  function citus_move_shard_placement(bigint,integer,integer,citus.shard_transfer_mode)
  function citus_move_shard_placement(bigint,text,integer,text,integer,citus.shard_transfer_mode)
  function citus_node_capacity_1(integer)
@@ -121,6 +118,8 @@ ORDER BY 1;
  function citus_remove_node(text,integer)
  function citus_run_local_command(text)
  function citus_schema_distribute(regnamespace)
+ function citus_schema_move(regnamespace,integer,citus.shard_transfer_mode)
+ function citus_schema_move(regnamespace,text,integer,citus.shard_transfer_mode)
  function citus_schema_undistribute(regnamespace)
  function citus_server_id()
  function citus_set_coordinator_host(text,integer,noderole,name)
@@ -344,5 +343,5 @@ ORDER BY 1;
  view citus_stat_tenants_local
  view pg_dist_shard_placement
  view time_partitions
-(334 rows)
+(333 rows)
 
