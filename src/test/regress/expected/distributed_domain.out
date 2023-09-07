@@ -947,3 +947,4 @@ DROP DOMAIN IF EXISTS domain_does_not_exist;
 NOTICE:  type "domain_does_not_exist" does not exist, skipping
 SET client_min_messages TO warning;
 DROP SCHEMA distributed_domain, distributed_domain_moved CASCADE;
+DROP ROLE domain_owner;

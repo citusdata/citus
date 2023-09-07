@@ -137,6 +137,8 @@ typedef enum
 	ANY_CITUS_TABLE_TYPE
 } CitusTableType;
 
+void InvalidateDistRelationCacheCallback(Datum argument, Oid relationId);
+
 extern List * AllCitusTableIds(void);
 extern bool IsCitusTableType(Oid relationId, CitusTableType tableType);
 extern CitusTableType GetCitusTableType(CitusTableCacheEntry *tableEntry);
