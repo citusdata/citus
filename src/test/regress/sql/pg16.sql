@@ -319,6 +319,57 @@ SET citus.shard_replication_factor TO 1;
 -- DEFAULT cannot be used in COPY TO
 COPY (select 1 as test) TO stdout WITH (default '\D');
 
+-- Tests for SQL/JSON: JSON_ARRAYAGG and JSON_OBJECTAGG aggregates
+-- Relevant PG commit:
+-- https://github.com/postgres/postgres/commit/7081ac4
+SET citus.next_shard_id TO 952000;
+
+CREATE TABLE agg_test(a int, b serial);
+SELECT create_distributed_table('agg_test', 'a');
+INSERT INTO agg_test SELECT i FROM generate_series(1, 5) i;
+
+-- JSON_ARRAYAGG with distribution key
+SELECT JSON_ARRAYAGG(a ORDER BY a),
+JSON_ARRAYAGG(a ORDER BY a RETURNING jsonb)
+FROM agg_test;
+
+-- JSON_ARRAYAGG with other column
+SELECT JSON_ARRAYAGG(b ORDER BY b),
+JSON_ARRAYAGG(b ORDER BY b RETURNING jsonb)
+FROM agg_test;
+
+-- JSON_ARRAYAGG with router query
+SET citus.log_remote_commands TO on;
+SELECT JSON_ARRAYAGG(a ORDER BY a),
+JSON_ARRAYAGG(a ORDER BY a RETURNING jsonb)
+FROM agg_test WHERE a = 2;
+RESET citus.log_remote_commands;
+
+-- JSON_OBJECTAGG with distribution key
+SELECT
+	JSON_OBJECTAGG(a: a),
+    JSON_ARRAYAGG(a ORDER BY a), -- for order
+	JSON_OBJECTAGG(a: a RETURNING jsonb)
+FROM
+	agg_test;
+
+-- JSON_OBJECTAGG with other column
+SELECT
+	JSON_OBJECTAGG(b: b),
+    JSON_ARRAYAGG(b ORDER BY b), -- for order
+	JSON_OBJECTAGG(b: b RETURNING jsonb)
+FROM
+	agg_test;
+
+-- JSON_OBJECTAGG with router query
+SET citus.log_remote_commands TO on;
+SELECT
+	JSON_OBJECTAGG(a: a),
+	JSON_OBJECTAGG(a: a RETURNING jsonb)
+FROM
+	agg_test WHERE a = 3;
+RESET citus.log_remote_commands;
+
 -- Tests for SQL/JSON: support the IS JSON predicate
 -- Relevant PG commit:
 -- https://github.com/postgres/postgres/commit/6ee30209
