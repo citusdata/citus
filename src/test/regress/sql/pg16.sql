@@ -658,3 +658,38 @@ DROP ROLE role3, role4, role5;
 SET client_min_messages TO ERROR;
 DROP EXTENSION postgres_fdw CASCADE;
 DROP SCHEMA pg16 CASCADE;
+
+--
+-- PG16 allows GRANT WITH ADMIN | INHERIT | SET
+--
+-- GRANT privileges to a role or roles  
+\c - - - :master_port
+CREATE ROLE create_role;
+CREATE ROLE create_role_2;
+CREATE ROLE create_role_3;
+CREATE ROLE create_role_4;
+CREATE USER create_user;
+CREATE USER create_user_2;
+CREATE GROUP create_group;
+CREATE GROUP create_group_2;
+
+--test grant role
+GRANT create_group TO create_role;
+GRANT create_group TO create_role_2 WITH ADMIN OPTION;
+GRANT create_group TO create_role_3 WITH INHERIT;
+GRANT create_group TO create_role_4 WITH SET; 
+
+-- ADMIN role can perfom administrative tasks 
+-- role can now access the data and permissions of the table (owner of table)
+-- role can change current user to any other user/role that has access 
+GRANT ADMIN TO joe;
+GRANT INHERIT ON ROLE joe TO james;
+
+GRANT SELECT ON companies TO joe WITH GRANT OPTION;
+GRANT SET (SELECT) ON companies TO james;
+
+
+\set VERBOSITY terse
+SET client_min_messages TO ERROR;
+DROP SCHEMA pg16 CASCADE;
+

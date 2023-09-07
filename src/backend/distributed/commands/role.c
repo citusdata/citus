@@ -878,8 +878,10 @@ GenerateGrantRoleStmtsOfRole(Oid roleid)
 #if PG_VERSION_NUM >= PG_VERSION_16
 		if (membership->admin_option)
 		{
-		DefElem *opt = makeDefElem("admin", (Node *) makeBoolean(true), -1);
-        	grantRoleStmt->opt = list_make1(opt);
+			DefElem *opt = makeDefElem("admin", (Node *) makeBoolean(true), -1);
+			DefElem *inherit_opt = makeDefElem("inherit", (Node *) makeBoolean(true), -1);
+       		DefElem *set_opt = makeDefElem("set", (Node *) makeBoolean(true), -1);
+        	grantRoleStmt->opt = list_make3(opt, inherit_opt, set_opt);
 		}
 
 		if (membership->inherit_option)
