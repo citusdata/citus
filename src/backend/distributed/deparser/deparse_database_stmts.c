@@ -112,7 +112,6 @@ AppendAlterDatabaseStmt(StringInfo buf, AlterDatabaseStmt *stmt)
 		appendStringInfo(buf, "WITH");
 		foreach(cell, stmt->options)
 		{
-
 			DefElem *def = castNode(DefElem, lfirst(cell));
 			if (strcmp(def->defname, "is_template") == 0)
 			{
