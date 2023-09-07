@@ -12,6 +12,7 @@
 #include "commands/defrem.h"
 #include "distributed/log_utils.h"
 #include "parser/parse_type.h"
+#include "nodes/print.h"
 
 
 void AppendVarSetValue(StringInfo buf, VariableSetStmt *setStmt);
@@ -76,7 +77,7 @@ AppendVarSetValue(StringInfo buf, VariableSetStmt *setStmt)
 
 			case T_Float:
 			{
-				appendStringInfo(buf, " %s", strVal(value));
+				appendStringInfo(buf, " %s", nodeToString(value));
 				break;
 			}
 

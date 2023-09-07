@@ -89,7 +89,7 @@ AppendGrantOnDatabaseStmt(StringInfo buf, GrantStmt *stmt)
 static void
 AppendDefElemIsTemplate(StringInfo buf, DefElem *def)
 {
-	appendStringInfo(buf, "WITH %s  %s", quote_identifier(def->defname),
+	appendStringInfo(buf, " %s  %s", quote_identifier(def->defname),
 					 quote_literal_cstr(strVal(def->arg)));
 }
 
@@ -97,7 +97,7 @@ AppendDefElemIsTemplate(StringInfo buf, DefElem *def)
 static void
 AppendDefElemConnLimit(StringInfo buf, DefElem *def)
 {
-	appendStringInfo(buf, "WITH CONNECTION LIMIT %ld", (long int) defGetNumeric(def));
+	appendStringInfo(buf, " CONNECTION LIMIT %ld", (long int) defGetNumeric(def));
 }
 
 
@@ -109,9 +109,10 @@ AppendAlterDatabaseStmt(StringInfo buf, AlterDatabaseStmt *stmt)
 	if (stmt->options)
 	{
 		ListCell *cell = NULL;
-		appendStringInfo(buf, "WITH ");
+		appendStringInfo(buf, "WITH");
 		foreach(cell, stmt->options)
 		{
+
 			DefElem *def = castNode(DefElem, lfirst(cell));
 			if (strcmp(def->defname, "is_template") == 0)
 			{
@@ -120,11 +121,6 @@ AppendAlterDatabaseStmt(StringInfo buf, AlterDatabaseStmt *stmt)
 			else if (strcmp(def->defname, "connection_limit") == 0)
 			{
 				AppendDefElemConnLimit(buf, def);
-			}
-			else if (strcmp(def->defname, "tablespace") == 0)
-			{
-				ereport(ERROR,
-						errmsg("SET tablespace is not supported"));
 			}
 			else if (strcmp(def->defname, "allow_connections") == 0)
 			{
