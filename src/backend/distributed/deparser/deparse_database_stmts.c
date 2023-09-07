@@ -106,7 +106,7 @@ AppendAlterDatabaseStmt(StringInfo buf, AlterDatabaseStmt *stmt)
 			DefElem *def = castNode(DefElem, lfirst(cell));
 			if (strcmp(def->defname, "is_template") == 0)
 			{
-				appendStringInfo(buf, "%s  %s", quote_identifier(def->defname),
+				appendStringInfo(buf, "%s %s", quote_identifier(def->defname),
 								 quote_literal_cstr(strVal(def->arg)));
 			}
 			else if (strcmp(def->defname, "connection_limit") == 0)
@@ -121,13 +121,8 @@ AppendAlterDatabaseStmt(StringInfo buf, AlterDatabaseStmt *stmt)
 			else
 			{
 				ereport(ERROR,
-						errmsg("unrecognized AlterDatabaseStmt option: %s",
+						errmsg("unrecognized ALTER DATABASE option: %s",
 							   def->defname));
-			}
-
-			if (cell != list_tail(stmt->options))
-			{
-				appendStringInfo(buf, ", ");
 			}
 		}
 	}
