@@ -409,16 +409,28 @@ AppendRevokeAdminOptionFor(StringInfo buf, GrantRoleStmt *stmt)
 		{
 			switch (opt->defname)
 			{
-				appendStringInfo(buf, "ADMIN OPTION FOR ");
-			}
-			else if (strcmp(opt->defname, "inherit") == 0);
-			{
-				appendStringInfo(buf, "INHERIT TRUE");
-				appendStringInfo(buf, "GRANT x TO y WITH INHERIT TRUE, SET TRUE;");
-			}
-			else if (strcmp(opt->defname, "set") == 0)
-			{
-				appendStringInfo(buf, "SET TRUE"); 
+				case "admin":
+					appendStringInfo(buf, "ADMIN OPTION FOR ");
+					opt_count++;
+					break;
+
+				case "inherit":
+					if (opt_count > 0)
+					{
+						appendStringInfo(buf, ", ");
+					}
+					appendStringInfo(buf, "INHERIT OPTION FOR ");
+					opt_count++;
+					break;
+
+				case "set":
+					if (opt_count > 0)
+					{
+						appendStringInfo(buf, ", ");
+					}
+					appendStringInfo(buf, "SET OPTION FOR ");
+					opt_count++;
+					break;
 			}
 		}
 	}
@@ -438,14 +450,23 @@ AppendGrantWithAdminOption(StringInfo buf, GrantRoleStmt *stmt)
 	{
 #if PG_VERSION_NUM >= PG_VERSION_16
 		DefElem *opt = NULL;
+		 int opt_count = 0;
 		foreach_ptr(opt, stmt->opt)
 		{
-			bool admin_option = false;
-			char *optval = defGetString(opt);
-			if (strcmp(opt->defname, "admin") == 0 &&
-				parse_bool(optval, &admin_option) && admin_option)
-			{
-				appendStringInfo(buf, " WITH ADMIN OPTION");
+			switch (opt->defname)
+        {
+            case "admin":
+                appendStringInfo(buf, " WITH ADMIN OPTION");
+                opt_count++;
+                break;
+
+			case "inherit":
+				if (opt_count > 0)
+				{
+					appendStringInfo(buf, ", ");
+				}
+				appendStringInfo(buf, "INHERIT OPTION ");
+				opt_count++;
 				break;
 
 				
