@@ -146,6 +146,40 @@ DROP DATABASE test_db;
 SELECT result FROM run_command_on_workers
 ($$DROP DATABASE test_db$$);
 SET search_path TO pg16;
+
+-- New rules option added to CREATE COLLATION
+-- Similar to above test with CREATE DATABASE
+-- Relevant PG commit:
+-- https://github.com/postgres/postgres/commit/30a53b7
+
+CREATE COLLATION default_rule (provider = icu, locale = '');
+CREATE COLLATION special_rule (provider = icu, locale = '', rules = '&a < g');
+
+CREATE TABLE test_collation_rules (a text);
+SELECT create_distributed_table('test_collation_rules', 'a');
+INSERT INTO test_collation_rules VALUES ('Abernathy'), ('apple'), ('bird'), ('Boston'), ('Graham'), ('green');
+
+SELECT collname, collprovider, colliculocale, collicurules
+FROM pg_collation
+WHERE collname like '%_rule%'
+ORDER BY 1;
+
+SELECT * FROM test_collation_rules ORDER BY a COLLATE default_rule;
+SELECT * FROM test_collation_rules ORDER BY a COLLATE special_rule;
+
+\c - - - :worker_1_port
+SET search_path TO pg16;
+
+SELECT collname, collprovider, colliculocale, collicurules
+FROM pg_collation
+WHERE collname like '%_rule%'
+ORDER BY 1;
+
+SELECT * FROM test_collation_rules ORDER BY a COLLATE default_rule;
+SELECT * FROM test_collation_rules ORDER BY a COLLATE special_rule;
+
+\c - - - :master_port
+SET search_path TO pg16;
 SET citus.next_shard_id TO 951000;
 
 -- Foreign table TRUNCATE trigger
