@@ -168,11 +168,11 @@ RUN git clone https://github.com/so-fancy/diff-so-fancy.git \
 
 COPY --link --from=uncrustify-builder /uncrustify/usr/ /usr/
 
-COPY --link --from=pg14 --chown=citus:citus /home/citus/.pgenv-staging/ /home/citus/.pgenv/
-COPY --link --from=pg15 --chown=citus:citus /home/citus/.pgenv-staging/ /home/citus/.pgenv/
-COPY --link --from=pg16 --chown=citus:citus /home/citus/.pgenv-staging/ /home/citus/.pgenv/
+COPY --link --from=pg14 /home/citus/.pgenv-staging/ /home/citus/.pgenv/
+COPY --link --from=pg15 /home/citus/.pgenv-staging/ /home/citus/.pgenv/
+COPY --link --from=pg16 /home/citus/.pgenv-staging/ /home/citus/.pgenv/
 
-COPY --link --from=pipenv --chown=citus:citus /home/citus/.local/share/virtualenvs/ /home/citus/.local/share/virtualenvs/
+COPY --link --from=pipenv /home/citus/.local/share/virtualenvs/ /home/citus/.local/share/virtualenvs/
 
 # place to run your cluster with citus_dev
 VOLUME /data
@@ -183,7 +183,7 @@ COPY --chown=citus:citus .psqlrc .
 
 # with the copy linking of layers github actions seem to misbehave with the ownership of the
 # directories leading upto the link, hence a small patch layer to have to right ownerships set
-# RUN sudo chown --from=root:root citus:citus -R ~
+RUN sudo chown --from=root:root citus:citus -R ~
 
 # sets default pg version
 RUN pgenv switch 16rc1
