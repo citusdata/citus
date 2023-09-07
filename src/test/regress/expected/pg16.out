@@ -545,3 +545,16 @@ SET search_path TO pg16;
 \set VERBOSITY terse
 SET client_min_messages TO ERROR;
 DROP SCHEMA pg16 CASCADE;
+
+
+-- Grant role 
+GRANT ADMIN TO joe;
+GRANT INHERIT ON ROLE joe TO james;
+
+GRANT SELECT ON companies TO joe WITH GRANT OPTION;
+GRANT SET (SELECT) ON companies TO james;
+---------------------------------------------------------------------
+GRANT ROLE
+GRANT ROLE
+GRANT
+GRANT

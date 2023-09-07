@@ -332,10 +332,6 @@ SELECT pg_get_viewdef('pg16.prop_view_1', true);
 \c - - - :master_port
 SET search_path TO pg16;
 
-\set VERBOSITY terse
-SET client_min_messages TO ERROR;
-DROP SCHEMA pg16 CASCADE;
-
 --
 -- PG16 allows GRANT WITH ADMIN | INHERIT | SET
 --
@@ -359,10 +355,14 @@ GRANT create_group TO create_role_4 WITH SET;
 -- ADMIN role can perfom administrative tasks 
 -- role can now access the data and permissions of the table (owner of table)
 -- role can change current user to any other user/role that has access 
-GRANT ADMIN ON DATABASE db_name TO role_name;
-GRANT INHERIT ON TABLE table_name TO role_name;
-GRANT SET SESSION AUTHORIZATION TO role_name;
+GRANT ADMIN TO joe;
+GRANT INHERIT ON ROLE joe TO james;
 
-SELECT * FROM table_name WHERE column_name = 'value';
+GRANT SELECT ON companies TO joe WITH GRANT OPTION;
+GRANT SET (SELECT) ON companies TO james;
 
-SELECT COUNT(*) FROM table_name WHERE column_name = 'value';
+
+\set VERBOSITY terse
+SET client_min_messages TO ERROR;
+DROP SCHEMA pg16 CASCADE;
+

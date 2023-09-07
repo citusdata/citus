@@ -878,7 +878,9 @@ GenerateGrantRoleStmtsOfRole(Oid roleid)
 		if (membership->admin_option)
 		{
 			DefElem *opt = makeDefElem("admin", (Node *) makeBoolean(true), -1);
-			grantRoleStmt->opt = list_make1(opt);
+			DefElem *inherit_opt = makeDefElem("inherit", (Node *) makeBoolean(true), -1);
+       		DefElem *set_opt = makeDefElem("set", (Node *) makeBoolean(true), -1);
+        	grantRoleStmt->opt = list_make3(opt, inherit_opt, set_opt);
 		}
 #else
 		grantRoleStmt->admin_opt = membership->admin_option;
