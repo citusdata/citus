@@ -149,7 +149,7 @@ RUN mkdir .bin
 ENV PATH="/home/citus/.bin:${PATH}"
 
 # install citus-dev
-RUN git clone --branch feature/citus-dev-pipenv-shebang https://github.com/citusdata/tools.git citus-tools \
+RUN git clone --branch develop https://github.com/citusdata/tools.git citus-tools \
  && ( cd citus-tools/citus_dev && pipenv install ) \
  && ln -s /home/citus/citus-tools/citus_dev/citus_dev-pipenv .bin/citus_dev \
  && sudo make -C citus-tools/uncrustify install bindir=/usr/local/bin pkgsysconfdir=/usr/local/etc/
