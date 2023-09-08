@@ -818,7 +818,6 @@ extern void UpdateAutoConvertedForConnectedRelations(List *relationId, bool
 /* schema_based_sharding.c */
 extern bool ShouldUseSchemaBasedSharding(char *schemaName);
 extern bool ShouldCreateTenantSchemaTable(Oid relationId);
-extern bool IsTenantSchema(Oid schemaId);
 extern void EnsureTenantTable(Oid relationId, char *operationName);
 extern void ErrorIfIllegalPartitioningInTenantSchema(Oid parentRelationId,
 													 Oid partitionRelationId);
