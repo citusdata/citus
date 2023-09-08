@@ -60,7 +60,7 @@ BEGIN
 	FROM current_objects c FULL JOIN prev_objects p
 	ON p.description = c.description
 	WHERE (p.description is null OR c.description is null)
-		  AND c.description IS DISTINCT FROM 'function any_value(anyelement) anyelement'
+          AND c.description IS DISTINCT FROM 'function any_value(anyelement) anyelement'
           AND c.description IS DISTINCT FROM 'function any_value_agg(anyelement,anyelement) anyelement';
 
 	DROP TABLE prev_objects;
@@ -1420,9 +1420,14 @@ SELECT * FROM multi_extension.print_extension_changes();
 -- Snapshot of state at 12.2-1
 ALTER EXTENSION citus UPDATE TO '12.2-1';
 SELECT * FROM multi_extension.print_extension_changes();
- previous_object | current_object
+                                      previous_object                                      |                                      current_object
 ---------------------------------------------------------------------
-(0 rows)
+ function citus_internal_add_placement_metadata(bigint,integer,bigint,integer,bigint) void |
+                                                                                           | function citus_internal_add_placement_metadata(bigint,bigint,integer,bigint,boolean) void
+                                                                                           | function citus_internal_shard_group_set_needsisolatednode(bigint,boolean) void
+                                                                                           | function citus_shard_set_isolated(bigint) void
+                                                                                           | function citus_shard_unset_isolated(bigint) void
+(5 rows)
 
 DROP TABLE multi_extension.prev_objects, multi_extension.extension_diff;
 -- show running version

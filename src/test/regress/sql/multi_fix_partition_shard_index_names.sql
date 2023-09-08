@@ -5,6 +5,7 @@
 -- https://github.com/citusdata/citus/issues/5138
 ----------------------------------------------------
 SET citus.next_shard_id TO 910000;
+SET citus.next_placement_id TO 910000;
 SET citus.shard_replication_factor TO 1;
 CREATE SCHEMA fix_idx_names;
 SET search_path TO fix_idx_names, public;
@@ -240,6 +241,7 @@ SET ROLE user1;
 SELECT fix_partition_shard_index_names('fix_idx_names.dist_partitioned_table'::regclass);
 
 RESET ROLE;
+DROP ROLE user1;
 SET search_path TO fix_idx_names, public;
 DROP TABLE dist_partitioned_table;
 
@@ -273,6 +275,7 @@ DROP INDEX p_another_col_partition_col_idx;
 SELECT tablename, indexname FROM pg_indexes WHERE schemaname = 'fix_idx_names' AND tablename SIMILAR TO '%\_\d*' ORDER BY 1, 2;
 
 \c - - - :master_port
+SET citus.next_placement_id TO 920000;
 SET search_path TO fix_idx_names, public;
 DROP TABLE dist_partitioned_table;
 SET citus.next_shard_id TO 910040;
@@ -328,6 +331,11 @@ ALTER INDEX p1_dist_col_idx3 RENAME TO p1_dist_col_idx3_renamed;
 ALTER INDEX p1_pkey RENAME TO p1_pkey_renamed;
 ALTER INDEX p1_dist_col_partition_col_key RENAME TO p1_dist_col_partition_col_key_renamed;
 ALTER INDEX p1_dist_col_idx RENAME TO p1_dist_col_idx_renamed;
+
+-- create columnar extension idempotently
+SET client_min_messages TO WARNING;
+CREATE EXTENSION IF NOT EXISTS citus_columnar;
+RESET client_min_messages;
 
 -- should be able to create a new partition that is columnar
 SET citus.log_remote_commands TO ON;

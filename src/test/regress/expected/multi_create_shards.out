@@ -1,3 +1,5 @@
+CREATE SCHEMA multi_create_shards;
+SET search_path TO multi_create_shards;
 SET citus.next_shard_id TO 370000;
 -- ===================================================================
 -- create test functions and types needed for tests
@@ -68,7 +70,7 @@ ERROR:  0 is outside the valid range for parameter "citus.shard_replication_fact
 -- use a replication factor higher than shard count
 SET citus.shard_replication_factor TO 3;
 SELECT create_distributed_table('table_to_distribute', 'name', 'hash');
-ERROR:  replication_factor (3) exceeds number of worker nodes (2)
+ERROR:  replication_factor (3) exceeds number of available worker nodes (2)
 HINT:  Add more worker nodes or try again with a lower replication factor.
 RESET citus.shard_replication_factor;
 -- finally, create shards and inspect metadata
@@ -163,3 +165,5 @@ SELECT shardmaxvalue::integer - shardminvalue::integer AS shard_size
   613566759
 (7 rows)
 
+SET client_min_messages TO WARNING;
+DROP SCHEMA multi_create_shards CASCADE;

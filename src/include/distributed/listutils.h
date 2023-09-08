@@ -172,6 +172,8 @@ extern List * ListTake(List *pointerList, int size);
 extern void * safe_list_nth(const List *list, int index);
 extern List * GeneratePositiveIntSequenceList(int upTo);
 extern List * GenerateListFromElement(void *listElement, int listLength);
+extern List * GenerateListFromIntElement(int listElement, int listLength);
 extern List * list_filter_oid(List *list, bool (*keepElement)(Oid element));
+extern List * FlattenNestedList(List *nestedList);
 
 #endif /* CITUS_LISTUTILS_H */

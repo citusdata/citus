@@ -28,6 +28,7 @@ typedef struct FormData_pg_dist_placement
 	int32 shardstate;           /* shard state on remote node; see ShardState */
 	int64 shardlength;          /* shard length on remote node; stored as bigint */
 	int32 groupid;              /* the group the shard is placed on */
+	bool needsisolatednode;        /* whether the placement group needs to be isolated from others */
 } FormData_pg_dist_placement;
 
 /* ----------------
@@ -41,12 +42,13 @@ typedef FormData_pg_dist_placement *Form_pg_dist_placement;
  *		compiler constants for pg_dist_placement
  * ----------------
  */
-#define Natts_pg_dist_placement 5
+#define Natts_pg_dist_placement 6
 #define Anum_pg_dist_placement_placementid 1
 #define Anum_pg_dist_placement_shardid 2
 #define Anum_pg_dist_placement_shardstate 3
 #define Anum_pg_dist_placement_shardlength 4
 #define Anum_pg_dist_placement_groupid 5
+#define Anum_pg_dist_placement_needsisolatednode 6
 
 
 #endif   /* PG_DIST_PLACEMENT_H */

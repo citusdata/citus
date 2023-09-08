@@ -4,6 +4,11 @@
  *	  Routines to replicate shard of none-distributed table to
  *    a remote node.
  *
+ *    Procedures defined in this file assume that given none-distributed
+ *    table was a Citus local table, caller updated the metadata to convert
+ *    it to another none-distributed table type, and now wants to replicate
+ *    the shard of the table to a remote node as part of the conversion.
+ *
  * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
@@ -58,14 +63,25 @@ NoneDistTableReplicateCoordinatorPlacement(Oid noneDistTableId,
 
 	uint64 shardLength = ShardLength(shardId);
 
+	/* we've already verified that table has a coordinator placement */
+	ShardPlacement *coordinatorPlacement =
+		linitial(ActiveShardPlacementListOnGroup(shardId, COORDINATOR_GROUP_ID));
+
 	/* insert new placements to pg_dist_placement */
 	List *insertedPlacementList = NIL;
 	WorkerNode *targetNode = NULL;
 	foreach_ptr(targetNode, targetNodeList)
 	{
+		/*
+		 * needsIsolatedNode cannot be true because the input table was
+		 * originally a Citus local table.
+		 */
+		Assert(!coordinatorPlacement->needsIsolatedNode);
+
 		ShardPlacement *shardPlacement =
 			InsertShardPlacementRowGlobally(shardId, GetNextPlacementId(),
-											shardLength, targetNode->groupId);
+											shardLength, targetNode->groupId,
+											coordinatorPlacement->needsIsolatedNode);
 
 		/* and save the placement for shard creation on workers */
 		insertedPlacementList = lappend(insertedPlacementList, shardPlacement);
@@ -78,8 +94,6 @@ NoneDistTableReplicateCoordinatorPlacement(Oid noneDistTableId,
 
 	/* fetch coordinator placement before deleting it */
 	Oid localPlacementTableId = GetTableLocalShardOid(noneDistTableId, shardId);
-	ShardPlacement *coordinatorPlacement =
-		linitial(ActiveShardPlacementListOnGroup(shardId, COORDINATOR_GROUP_ID));
 
 	/*
 	 * CreateForeignKeysFromReferenceTablesOnShards and CopyFromLocalTableIntoDistTable
@@ -106,9 +120,16 @@ NoneDistTableReplicateCoordinatorPlacement(Oid noneDistTableId,
 	 */
 	CreateForeignKeysFromReferenceTablesOnShards(noneDistTableId);
 
-	/* using the same placement id, re-insert the deleted placement */
+	/*
+	 * Using the same placement id, re-insert the deleted placement.
+	 *
+	 * needsIsolatedNode cannot be true because the input table was originally
+	 * a Citus local table.
+	 */
+	Assert(!coordinatorPlacement->needsIsolatedNode);
 	InsertShardPlacementRowGlobally(shardId, coordinatorPlacement->placementId,
-									shardLength, COORDINATOR_GROUP_ID);
+									shardLength, COORDINATOR_GROUP_ID,
+									coordinatorPlacement->needsIsolatedNode);
 }
 
 

@@ -550,3 +550,117 @@ BEGIN
     RETURN result;
 END;
 $func$ LANGUAGE plpgsql;
+
+
+-- Takes a table name and returns an array of colocated shards
+-- --by enumerating them based on shardminvalue-- for each shard
+-- of given distributed table (including colocated shards).
+CREATE OR REPLACE FUNCTION get_enumerated_shard_groups(
+    qualified_table_name text)
+RETURNS TABLE (
+    shardids bigint[],
+    shardgroupindex bigint
+)
+AS $func$
+  BEGIN
+    RETURN QUERY
+    SELECT array_agg(shardid ORDER BY shardid) AS shardids,
+           ROW_NUMBER() OVER (ORDER BY shardminvalue) AS shardgroupindex
+    FROM pg_dist_shard
+    JOIN pg_dist_partition USING(logicalrelid)
+    WHERE colocationid = (SELECT colocationid FROM pg_dist_partition WHERE logicalrelid = qualified_table_name::regclass)
+    GROUP BY shardminvalue;
+  END;
+$func$ LANGUAGE plpgsql;
+
+
+-- Takes a table name and returns a json object for each shard group that
+-- contains a shard placement that needs an isolated node.
+--
+-- This does not only return the placements of input relation but also considers
+-- all colocated relations.
+--
+-- An example output is as follows:
+--
+-- [
+--    {"10": [{"dist_1": [true,true]},{"dist_2": [false,false]}]},
+--    {"15": [{"dist_1": [false,false]},{"dist_3": [true,false]}]}
+-- ]
+--
+-- It only returned shard groups 10 and 15 because they are the only shard groups
+-- that contain at least one shard placement that needs an isolated node.
+--
+-- (Innermost) Boolean arrays represent needsisolatednode values for different
+-- placements of given shard. For example,
+--
+-- {"15": [{"dist_1": [false,false]},{"dist_3": [true,false]}]}
+--
+-- means that the first shard placement of dist_3 within shard group 15 needs
+-- to be isolated but the other placement doesn't. Also, the first placement
+-- is on the node that has a lower groupid than the second one because we order
+-- them by groupid.
+CREATE OR REPLACE FUNCTION get_colocated_placements_needisolatednode(
+    qualified_table_name text)
+RETURNS SETOF jsonb AS $func$
+  BEGIN
+    RETURN QUERY
+    SELECT
+        COALESCE(
+            jsonb_agg(jsonb_build_object(shardgroupindex, needsisolatednodejson) ORDER BY shardgroupindex),
+            '{}'::jsonb
+        ) AS result
+    FROM (
+        SELECT shardgroupindex,
+               jsonb_agg(jsonb_build_object(logicalrelid, needsisolatednodearr) ORDER BY logicalrelid::text) AS needsisolatednodejson
+        FROM (
+            SELECT logicalrelid,
+                   shardgroupindex,
+                   array_agg(needsisolatednode ORDER BY shardgroupnodegroupid) AS needsisolatednodearr
+            FROM (
+                SELECT shardgroupindex,
+                       groupid AS shardgroupnodegroupid,
+                       logicalrelid,
+                       needsisolatednode
+                FROM public.get_enumerated_shard_groups(qualified_table_name) AS shardgroups
+                JOIN pg_dist_placement
+                ON shardid = ANY(shardids)
+                JOIN pg_dist_shard USING(shardid)
+            ) q1
+            GROUP BY logicalrelid, shardgroupindex
+        ) q2
+        GROUP BY shardgroupindex
+    ) q3
+    WHERE needsisolatednodejson::text LIKE '%true%';
+  END;
+$func$ LANGUAGE plpgsql;
+
+-- Returns true if all placement groups within given shard group are isolated.
+CREATE OR REPLACE FUNCTION verify_placements_in_shard_group_isolated(
+    qualified_table_name text,
+    shard_group_index bigint)
+RETURNS boolean
+AS $func$
+DECLARE
+    v_result boolean;
+  BEGIN
+    SELECT bool_and(ok_for_nodegroup) INTO v_result FROM (
+        SELECT array_agg(shardid ORDER BY shardid) =
+               (SELECT shardids FROM public.get_enumerated_shard_groups(qualified_table_name) WHERE shardgroupindex = shard_group_index)
+               AS ok_for_nodegroup -- check whether each of those nodes only contain placements of given shard group
+        FROM citus_shards
+        JOIN pg_dist_node USING (nodename, nodeport)
+        WHERE citus_table_type = 'distributed' AND -- only interested in distributed table shards on the nodes we're interested in
+              groupid IN ( -- only interested in the nodes that contain placements of given shard group
+                SELECT DISTINCT(pdn.groupid)
+                FROM citus_shards cs
+                JOIN pg_dist_node pdn USING (nodename, nodeport)
+                WHERE cs.shardid IN (
+                    SELECT unnest(shardids) FROM public.get_enumerated_shard_groups(qualified_table_name) WHERE shardgroupindex = shard_group_index
+                )
+              )
+        GROUP BY groupid
+    ) q;
+
+    RETURN v_result;
+  END;
+$func$ LANGUAGE plpgsql;

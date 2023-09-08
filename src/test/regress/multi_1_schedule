@@ -36,6 +36,7 @@ test: create_single_shard_table
 # don't parallelize single_shard_table_udfs to make sure colocation ids are sequential
 test: single_shard_table_udfs
 test: schema_based_sharding
+test: isolate_placement
 test: citus_schema_distribute_undistribute
 
 test: multi_test_catalog_views

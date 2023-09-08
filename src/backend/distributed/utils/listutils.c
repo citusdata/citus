@@ -269,6 +269,23 @@ GenerateListFromElement(void *listElement, int listLength)
 
 
 /*
+ * GenerateListFromIntElement returns a new list with length of listLength
+ * such that all the elements are identical with input listElement integer.
+ */
+List *
+GenerateListFromIntElement(int listElement, int listLength)
+{
+	List *list = NIL;
+	for (int i = 0; i < listLength; i++)
+	{
+		list = lappend_int(list, listElement);
+	}
+
+	return list;
+}
+
+
+/*
  * list_filter_oid filters a list of oid-s based on a keepElement
  * function
  */
@@ -286,4 +303,22 @@ list_filter_oid(List *list, bool (*keepElement)(Oid element))
 	}
 
 	return result;
+}
+
+
+/*
+ * FlattenNestedList takes a list of lists and returns a flattened list.
+ */
+List *
+FlattenNestedList(List *nestedList)
+{
+	List *flattenedList = NIL;
+
+	List *subList = NULL;
+	foreach_ptr(subList, nestedList)
+	{
+		flattenedList = list_concat(flattenedList, subList);
+	}
+
+	return flattenedList;
 }

@@ -164,6 +164,7 @@ DEPS = {
         None, ["isolation_setup", "isolation_add_remove_node"]
     ),
     "schema_based_sharding": TestDeps("minimal_schedule"),
+    "isolate_placement": TestDeps("minimal_schedule"),
     "multi_sequence_default": TestDeps(
         None,
         [
@@ -174,6 +175,13 @@ DEPS = {
     ),
     "grant_on_schema_propagation": TestDeps("minimal_schedule"),
     "propagate_extension_commands": TestDeps("minimal_schedule"),
+    "metadata_sync_helpers": TestDeps(
+        None,
+        [
+            "multi_test_helpers",
+            "multi_cluster_management",
+        ],
+    ),
 }
 
 

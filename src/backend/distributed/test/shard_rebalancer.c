@@ -44,9 +44,10 @@ static uint64 JsonFieldValueUInt64Default(Datum jsonDocument, const char *key,
 										  uint64 defaultValue);
 static char * JsonFieldValueString(Datum jsonDocument, const char *key);
 static ArrayType * PlacementUpdateListToJsonArray(List *placementUpdateList);
-static bool ShardAllowedOnNode(uint64 shardId, WorkerNode *workerNode, void *context);
+static bool ShardAllowedOnNode(uint64 shardId, uint64 placementId, WorkerNode *workerNode,
+							   void *context);
 static float NodeCapacity(WorkerNode *workerNode, void *context);
-static ShardCost GetShardCost(uint64 shardId, void *context);
+static ShardCost GetShardCost(uint64 shardId, uint64 placementId, void *context);
 
 
 PG_FUNCTION_INFO_V1(shard_placement_rebalance_array);
@@ -191,7 +192,8 @@ shard_placement_rebalance_array(PG_FUNCTION_ARGS)
  * a worker when running the shard rebalancer unit tests.
  */
 static bool
-ShardAllowedOnNode(uint64 shardId, WorkerNode *workerNode, void *voidContext)
+ShardAllowedOnNode(uint64 shardId, uint64 placementId, WorkerNode *workerNode,
+				   void *voidContext)
 {
 	RebalancePlacementContext *context = voidContext;
 	WorkerTestInfo *workerTestInfo = NULL;
@@ -242,12 +244,13 @@ NodeCapacity(WorkerNode *workerNode, void *voidContext)
  * the shard rebalancer unit tests.
  */
 static ShardCost
-GetShardCost(uint64 shardId, void *voidContext)
+GetShardCost(uint64 shardId, uint64 placementId, void *voidContext)
 {
 	RebalancePlacementContext *context = voidContext;
 	ShardCost shardCost;
 	memset_struct_0(shardCost);
 	shardCost.shardId = shardId;
+	shardCost.placementId = placementId;
 
 	ShardPlacementTestInfo *shardPlacementTestInfo = NULL;
 	foreach_ptr(shardPlacementTestInfo, context->shardPlacementTestInfoList)

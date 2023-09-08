@@ -1,5 +1,9 @@
 test: upgrade_basic_after upgrade_ref2ref_after upgrade_type_after upgrade_distributed_function_after upgrade_rebalance_strategy_after upgrade_list_citus_objects upgrade_autoconverted_after upgrade_citus_stat_activity upgrade_citus_locks upgrade_single_shard_table_after upgrade_schema_based_sharding_after upgrade_basic_after_non_mixed
 
+# This test temporarily renames citus_schema back to public schema,
+# hence cannot be run in parallel with any other tests.
+test: upgrade_isolate_placement_after
+
 # This test cannot be run with run_test.py currently due to its dependence on
 # the specific PG versions that we use to run upgrade tests. For now we leave
 # it out of the parallel line, so that flaky test detection can at least work

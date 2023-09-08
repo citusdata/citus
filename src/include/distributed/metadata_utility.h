@@ -78,6 +78,7 @@ typedef struct GroupShardPlacement
 	uint64 shardId;
 	uint64 shardLength;
 	int32 groupId;
+	bool needsIsolatedNode;
 } GroupShardPlacement;
 
 
@@ -92,6 +93,7 @@ typedef struct ShardPlacement
 	uint64 shardId;
 	uint64 shardLength;
 	int32 groupId;
+	bool needsIsolatedNode;
 
 	/* the rest of the fields aren't from pg_dist_placement */
 	char *nodeName;
@@ -101,6 +103,14 @@ typedef struct ShardPlacement
 	uint32 colocationGroupId;
 	uint32 representativeValue;
 } ShardPlacement;
+
+
+typedef struct
+{
+	uint32 colocatationId;
+	int shardIntervalIndex;
+	int32 nodeGroupId;
+} ShardPlacementGroup;
 
 
 typedef enum CascadeToColocatedOption
@@ -322,7 +332,12 @@ extern int ShardIntervalCount(Oid relationId);
 extern List * LoadShardList(Oid relationId);
 extern ShardInterval * CopyShardInterval(ShardInterval *srcInterval);
 extern uint64 ShardLength(uint64 shardId);
+extern ShardPlacementGroup * NodeGroupGetIsolatedShardPlacementGroup(int32 groupId);
+extern bool ShardPlacementGroupsSame(const ShardPlacementGroup *leftGroup,
+									 const ShardPlacementGroup *rightGroup);
 extern bool NodeGroupHasShardPlacements(int32 groupId);
+extern ShardPlacementGroup * GetShardPlacementGroupForPlacement(uint64 shardId,
+																uint64 placementId);
 extern bool IsActiveShardPlacement(ShardPlacement *ShardPlacement);
 extern bool IsRemoteShardPlacement(ShardPlacement *shardPlacement);
 extern bool IsPlacementOnWorkerNode(ShardPlacement *placement, WorkerNode *workerNode);
@@ -353,9 +368,11 @@ extern void DeleteShardRow(uint64 shardId);
 extern ShardPlacement * InsertShardPlacementRowGlobally(uint64 shardId,
 														uint64 placementId,
 														uint64 shardLength,
-														int32 groupId);
+														int32 groupId,
+														bool needsIsolatedNode);
 extern uint64 InsertShardPlacementRow(uint64 shardId, uint64 placementId,
-									  uint64 shardLength, int32 groupId);
+									  uint64 shardLength, int32 groupId,
+									  bool needsIsolatedNode);
 extern void InsertIntoPgDistPartition(Oid relationId, char distributionMethod,
 									  Var *distributionColumn, uint32 colocationId,
 									  char replicationModel, bool autoConverted);
@@ -431,6 +448,7 @@ extern List * SendShardStatisticsQueriesInParallel(List *citusTableIds,
 extern bool GetNodeDiskSpaceStatsForConnection(MultiConnection *connection,
 											   uint64 *availableBytes,
 											   uint64 *totalBytes);
+extern void ShardGroupSetNeedsIsolatedNode(uint64 shardId, bool enabled);
 extern void ExecuteQueryViaSPI(char *query, int SPIOK);
 extern void ExecuteAndLogQueryViaSPI(char *query, int SPIOK, int logLevel);
 extern void EnsureSequenceTypeSupported(Oid seqOid, Oid attributeTypeId, Oid

@@ -1245,7 +1245,7 @@ SingleShardTableColocationNodeId(uint32 colocationId)
 	{
 		int workerNodeIndex =
 			EmptySingleShardTableColocationDecideNodeId(colocationId);
-		List *workerNodeList = DistributedTablePlacementNodeList(RowShareLock);
+		List *workerNodeList = NewDistributedTablePlacementNodeList(RowShareLock);
 		WorkerNode *workerNode = (WorkerNode *) list_nth(workerNodeList, workerNodeIndex);
 
 		return workerNode->nodeId;

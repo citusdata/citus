@@ -271,30 +271,36 @@ ErrorIfCoordinatorNotAddedAsWorkerNode()
 
 
 /*
- * DistributedTablePlacementNodeList returns a list of all active, primary
+ * NewDistributedTablePlacementNodeList returns a list of all active, primary
  * worker nodes that can store new data, i.e shouldstoreshards is 'true'
+ * and that is not used to isolate a shard placement group.
  */
 List *
-DistributedTablePlacementNodeList(LOCKMODE lockMode)
+NewDistributedTablePlacementNodeList(LOCKMODE lockMode)
 {
 	EnsureModificationsCanRun();
-	return FilterActiveNodeListFunc(lockMode, NodeCanHaveDistTablePlacements);
+	return FilterActiveNodeListFunc(lockMode, NodeCanBeUsedForNonIsolatedPlacements);
 }
 
 
 /*
- * NodeCanHaveDistTablePlacements returns true if the given node can have
- * shards of a distributed table.
+ * NodeCanBeUsedForNonIsolatedPlacements returns true if given node can be
+ * used to store shard placements that don't need isolation.
  */
 bool
-NodeCanHaveDistTablePlacements(WorkerNode *node)
+NodeCanBeUsedForNonIsolatedPlacements(WorkerNode *node)
 {
 	if (!NodeIsPrimary(node))
 	{
 		return false;
 	}
 
-	return node->shouldHaveShards;
+	if (!node->shouldHaveShards)
+	{
+		return false;
+	}
+
+	return NodeGroupGetIsolatedShardPlacementGroup(node->groupId) == NULL;
 }
 
 
