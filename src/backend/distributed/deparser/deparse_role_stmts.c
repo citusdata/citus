@@ -15,6 +15,7 @@
 
 #include "pg_version_compat.h"
 
+#include "commands/defrem.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/deparser.h"
 #include "distributed/listutils.h"
@@ -396,47 +397,15 @@ AppendGrantWithAdminOption(StringInfo buf, GrantRoleStmt *stmt)
 		 int opt_count = 0;
 		foreach_ptr(opt, stmt->opt)
 		{
-			switch (opt->defname)
-        {
-            case "admin":
-                appendStringInfo(buf, " WITH ADMIN OPTION");
-                opt_count++;
-                break;
-
-			case "inherit":
-				  if (opt->arg && IsA(opt->arg, A_Const) && !((A_Const *) opt->arg)->val.val.ival)
-				{
-					appendStringInfo(buf, " INHERIT FALSE");
-                }
-                else
-                {
-                    if (opt_count > 0)
-                    {
-                        appendStringInfo(buf, ", ");
-                    }
-                    appendStringInfo(buf, " INHERIT OPTION");
-                    opt_count++;
-                }
-                break;
-				
-        	case "set":
-  				if (opt->arg && IsA(opt->arg, A_Const) && !(( *) opt->arg)->val.val.ival)
-                {
-                    appendStringInfo(buf, " SET FALSE");
-                }
-                else
-                {
-                    if (opt_count > 0)
-                    {
-                        appendStringInfo(buf, ", ");
-                    }
-                    appendStringInfo(buf, " SET OPTION");
-                    opt_count++;
-                }
-                break;
-        }
+			bool admin_option = false;
+			char *optval = defGetString(opt);
+			if (strcmp(opt->defname, "admin") == 0 &&
+				parse_bool(optval, &admin_option) && admin_option)
+			{
+				appendStringInfo(buf, " WITH ADMIN OPTION");
+				break;
+			}
 		}
-	}
 #else
 		if (stmt->admin_opt)
 		{
