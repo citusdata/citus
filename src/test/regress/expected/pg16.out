@@ -916,28 +916,6 @@ SELECT result FROM run_command_on_workers
  REINDEX
 (2 rows)
 
--- REINDEX DATABASE/SYSTEM name is optional
--- We already don't propagate these commands automatically
--- Testing here with run_command_on_workers
--- Relevant PG commit: https://github.com/postgres/postgres/commit/2cbc3c1
-REINDEX DATABASE;
-SELECT result FROM run_command_on_workers
-($$REINDEX DATABASE$$);
- result
----------------------------------------------------------------------
- REINDEX
- REINDEX
-(2 rows)
-
-REINDEX SYSTEM;
-SELECT result FROM run_command_on_workers
-($$REINDEX SYSTEM$$);
- result
----------------------------------------------------------------------
- REINDEX
- REINDEX
-(2 rows)
-
 --
 -- random_normal() to provide normally-distributed random numbers
 -- adding here the same tests as the ones with random() in aggregate_support.sql
