@@ -796,6 +796,32 @@ SELECT roleid::regrole::text AS role, member::regrole::text, admin_option, inher
 
 DROP ROLE role3, role4, role5;
 
+--
+-- PG16 added WITH ADMIN FALSE option to GRANT ROLE
+-- WITH ADMIN FALSE is the default, make sure we propagate correctly in Citus
+-- Relevant PG commit: https://github.com/postgres/postgres/commit/e3ce2de
+--
+
+CREATE ROLE role1;
+CREATE ROLE role2;
+
+SET citus.log_remote_commands TO on;
+SET citus.grep_remote_commands = '%GRANT%';
+-- default admin option is false
+GRANT role1 TO role2;
+REVOKE role1 FROM role2;
+-- should behave same as default
+GRANT role1 TO role2 WITH ADMIN FALSE;
+REVOKE role1 FROM role2;
+-- with admin option and with admin true are the same
+GRANT role1 TO role2 WITH ADMIN OPTION;
+REVOKE role1 FROM role2;
+GRANT role1 TO role2 WITH ADMIN TRUE;
+REVOKE role1 FROM role2;
+
+RESET citus.log_remote_commands;
+RESET citus.grep_remote_commands;
+
 \set VERBOSITY terse
 SET client_min_messages TO ERROR;
 DROP EXTENSION postgres_fdw CASCADE;
