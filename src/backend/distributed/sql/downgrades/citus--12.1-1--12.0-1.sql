@@ -13,3 +13,12 @@ DROP FUNCTION pg_catalog.citus_internal_delete_placement_metadata(
     placement_id bigint
 );
 
+DROP FUNCTION pg_catalog.citus_schema_move(
+    schema_id regnamespace, target_node_name text, target_node_port integer,
+    shard_transfer_mode citus.shard_transfer_mode
+);
+
+DROP FUNCTION pg_catalog.citus_schema_move(
+    schema_id regnamespace, target_node_id integer,
+    shard_transfer_mode citus.shard_transfer_mode
+);

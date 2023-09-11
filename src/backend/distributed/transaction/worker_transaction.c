@@ -136,6 +136,21 @@ SendCommandToWorkersWithMetadataViaSuperUser(const char *command)
 
 
 /*
+ * SendCommandListToWorkersWithMetadata sends all commands to all metadata workers
+ * with the current user. See `SendCommandToWorkersWithMetadata`for details.
+ */
+void
+SendCommandListToWorkersWithMetadata(List *commands)
+{
+	char *command = NULL;
+	foreach_ptr(command, commands)
+	{
+		SendCommandToWorkersWithMetadata(command);
+	}
+}
+
+
+/*
  * TargetWorkerSetNodeList returns a list of WorkerNode's that satisfies the
  * TargetWorkerSet.
  */

@@ -10,11 +10,13 @@
 #define TRANSACTION_MANAGMENT_H
 
 #include "access/xact.h"
+#include "catalog/objectaddress.h"
 #include "lib/ilist.h"
 #include "lib/stringinfo.h"
 #include "nodes/pg_list.h"
 #include "lib/stringinfo.h"
 #include "nodes/primnodes.h"
+#include "utils/hsearch.h"
 
 /* forward declare, to avoid recursive includes */
 struct DistObjectCacheEntry;
@@ -58,6 +60,7 @@ typedef struct SubXactContext
 {
 	SubTransactionId subId;
 	StringInfo setLocalCmds;
+	HTAB *propagatedObjects;
 } SubXactContext;
 
 /*
@@ -157,6 +160,11 @@ extern bool IsMultiStatementTransaction(void);
 extern void EnsureDistributedTransactionId(void);
 extern bool MaybeExecutingUDF(void);
 
+/* functions for tracking the objects propagated in current transaction */
+extern void TrackPropagatedObject(const ObjectAddress *objectAddress);
+extern void TrackPropagatedTableAndSequences(Oid relationId);
+extern void ResetPropagatedObjects(void);
+extern bool HasAnyDependencyInPropagatedObjects(const ObjectAddress *objectAddress);
 
 /* initialization function(s) */
 extern void InitializeTransactionManagement(void);

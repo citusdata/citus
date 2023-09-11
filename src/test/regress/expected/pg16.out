@@ -314,6 +314,164 @@ SELECT result FROM run_command_on_workers
 (2 rows)
 
 SET search_path TO pg16;
+-- New rules option added to CREATE COLLATION
+-- Similar to above test with CREATE DATABASE
+-- Relevant PG commit:
+-- https://github.com/postgres/postgres/commit/30a53b7
+CREATE COLLATION default_rule (provider = icu, locale = '');
+NOTICE:  using standard form "und" for ICU locale ""
+CREATE COLLATION special_rule (provider = icu, locale = '', rules = '&a < g');
+NOTICE:  using standard form "und" for ICU locale ""
+CREATE TABLE test_collation_rules (a text);
+SELECT create_distributed_table('test_collation_rules', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO test_collation_rules VALUES ('Abernathy'), ('apple'), ('bird'), ('Boston'), ('Graham'), ('green');
+SELECT collname, collprovider, colliculocale, collicurules
+FROM pg_collation
+WHERE collname like '%_rule%'
+ORDER BY 1;
+   collname   | collprovider | colliculocale | collicurules
+---------------------------------------------------------------------
+ default_rule | i            | und           |
+ special_rule | i            | und           | &a < g
+(2 rows)
+
+SELECT * FROM test_collation_rules ORDER BY a COLLATE default_rule;
+     a
+---------------------------------------------------------------------
+ Abernathy
+ apple
+ bird
+ Boston
+ Graham
+ green
+(6 rows)
+
+SELECT * FROM test_collation_rules ORDER BY a COLLATE special_rule;
+     a
+---------------------------------------------------------------------
+ Abernathy
+ apple
+ green
+ bird
+ Boston
+ Graham
+(6 rows)
+
+\c - - - :worker_1_port
+SET search_path TO pg16;
+SELECT collname, collprovider, colliculocale, collicurules
+FROM pg_collation
+WHERE collname like '%_rule%'
+ORDER BY 1;
+   collname   | collprovider | colliculocale | collicurules
+---------------------------------------------------------------------
+ default_rule | i            | und           |
+ special_rule | i            | und           | &a < g
+(2 rows)
+
+SELECT * FROM test_collation_rules ORDER BY a COLLATE default_rule;
+     a
+---------------------------------------------------------------------
+ Abernathy
+ apple
+ bird
+ Boston
+ Graham
+ green
+(6 rows)
+
+SELECT * FROM test_collation_rules ORDER BY a COLLATE special_rule;
+     a
+---------------------------------------------------------------------
+ Abernathy
+ apple
+ green
+ bird
+ Boston
+ Graham
+(6 rows)
+
+\c - - - :master_port
+SET search_path TO pg16;
+SET citus.next_shard_id TO 951000;
+-- Foreign table TRUNCATE trigger
+-- Relevant PG commit:
+-- https://github.com/postgres/postgres/commit/3b00a94
+SELECT 1 FROM citus_add_node('localhost', :master_port, groupid => 0);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+SET citus.use_citus_managed_tables TO ON;
+CREATE TABLE foreign_table_test (id integer NOT NULL, data text, a bigserial);
+INSERT INTO foreign_table_test VALUES (1, 'text_test');
+CREATE EXTENSION postgres_fdw;
+CREATE SERVER foreign_server
+        FOREIGN DATA WRAPPER postgres_fdw
+        OPTIONS (host 'localhost', port :'master_port', dbname 'regression');
+CREATE USER MAPPING FOR CURRENT_USER
+        SERVER foreign_server
+        OPTIONS (user 'postgres');
+CREATE FOREIGN TABLE foreign_table (
+        id integer NOT NULL,
+        data text,
+        a bigserial
+)
+        SERVER foreign_server
+        OPTIONS (schema_name 'pg16', table_name 'foreign_table_test');
+-- verify it's a Citus foreign table
+SELECT partmethod, repmodel FROM pg_dist_partition
+WHERE logicalrelid = 'foreign_table'::regclass ORDER BY logicalrelid;
+ partmethod | repmodel
+---------------------------------------------------------------------
+ n          | s
+(1 row)
+
+INSERT INTO foreign_table VALUES (2, 'test_2');
+INSERT INTO foreign_table_test VALUES (3, 'test_3');
+CREATE FUNCTION trigger_func() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+	RAISE NOTICE 'trigger_func(%) called: action = %, when = %, level = %',
+		TG_ARGV[0], TG_OP, TG_WHEN, TG_LEVEL;
+	RETURN NULL;
+END;$$;
+CREATE FUNCTION trigger_func_on_shard() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+	RAISE NOTICE 'trigger_func_on_shard(%) called: action = %, when = %, level = %',
+		TG_ARGV[0], TG_OP, TG_WHEN, TG_LEVEL;
+	RETURN NULL;
+END;$$;
+CREATE TRIGGER trig_stmt_before BEFORE TRUNCATE ON foreign_table
+	FOR EACH STATEMENT EXECUTE PROCEDURE trigger_func();
+SET citus.override_table_visibility TO off;
+CREATE TRIGGER trig_stmt_shard_before BEFORE TRUNCATE ON foreign_table_951001
+	FOR EACH STATEMENT EXECUTE PROCEDURE trigger_func_on_shard();
+RESET citus.override_table_visibility;
+SELECT * FROM foreign_table ORDER BY 1;
+ id |   data    | a
+---------------------------------------------------------------------
+  1 | text_test | 1
+  2 | test_2    | 1
+  3 | test_3    | 2
+(3 rows)
+
+TRUNCATE foreign_table;
+NOTICE:  trigger_func(<NULL>) called: action = TRUNCATE, when = BEFORE, level = STATEMENT
+CONTEXT:  PL/pgSQL function trigger_func() line XX at RAISE
+NOTICE:  trigger_func_on_shard(<NULL>) called: action = TRUNCATE, when = BEFORE, level = STATEMENT
+CONTEXT:  PL/pgSQL function trigger_func_on_shard() line XX at RAISE
+SELECT * FROM foreign_table ORDER BY 1;
+ id | data | a
+---------------------------------------------------------------------
+(0 rows)
+
+RESET citus.use_citus_managed_tables;
 --
 -- COPY FROM ... DEFAULT
 -- Already supported in Citus, adding all PG tests with a distributed table
@@ -446,6 +604,88 @@ SET citus.shard_replication_factor TO 1;
 -- DEFAULT cannot be used in COPY TO
 COPY (select 1 as test) TO stdout WITH (default '\D');
 ERROR:  COPY DEFAULT only available using COPY FROM
+-- Tests for SQL/JSON: JSON_ARRAYAGG and JSON_OBJECTAGG aggregates
+-- Relevant PG commit:
+-- https://github.com/postgres/postgres/commit/7081ac4
+SET citus.next_shard_id TO 952000;
+CREATE TABLE agg_test(a int, b serial);
+SELECT create_distributed_table('agg_test', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO agg_test SELECT i FROM generate_series(1, 5) i;
+-- JSON_ARRAYAGG with distribution key
+SELECT JSON_ARRAYAGG(a ORDER BY a),
+JSON_ARRAYAGG(a ORDER BY a RETURNING jsonb)
+FROM agg_test;
+  json_arrayagg  |  json_arrayagg
+---------------------------------------------------------------------
+ [1, 2, 3, 4, 5] | [1, 2, 3, 4, 5]
+(1 row)
+
+-- JSON_ARRAYAGG with other column
+SELECT JSON_ARRAYAGG(b ORDER BY b),
+JSON_ARRAYAGG(b ORDER BY b RETURNING jsonb)
+FROM agg_test;
+  json_arrayagg  |  json_arrayagg
+---------------------------------------------------------------------
+ [1, 2, 3, 4, 5] | [1, 2, 3, 4, 5]
+(1 row)
+
+-- JSON_ARRAYAGG with router query
+SET citus.log_remote_commands TO on;
+SELECT JSON_ARRAYAGG(a ORDER BY a),
+JSON_ARRAYAGG(a ORDER BY a RETURNING jsonb)
+FROM agg_test WHERE a = 2;
+NOTICE:  issuing SELECT JSON_ARRAYAGG(a ORDER BY a RETURNING json) AS "json_arrayagg", JSON_ARRAYAGG(a ORDER BY a RETURNING jsonb) AS "json_arrayagg" FROM pg16.agg_test_952000 agg_test WHERE (a OPERATOR(pg_catalog.=) 2)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+ json_arrayagg | json_arrayagg
+---------------------------------------------------------------------
+ [2]           | [2]
+(1 row)
+
+RESET citus.log_remote_commands;
+-- JSON_OBJECTAGG with distribution key
+SELECT
+	JSON_OBJECTAGG(a: a),
+    JSON_ARRAYAGG(a ORDER BY a), -- for order
+	JSON_OBJECTAGG(a: a RETURNING jsonb)
+FROM
+	agg_test;
+                 json_objectagg                  |  json_arrayagg  |              json_objectagg
+---------------------------------------------------------------------
+ { "1" : 1, "2" : 2, "3" : 3, "4" : 4, "5" : 5 } | [1, 2, 3, 4, 5] | {"1": 1, "2": 2, "3": 3, "4": 4, "5": 5}
+(1 row)
+
+-- JSON_OBJECTAGG with other column
+SELECT
+	JSON_OBJECTAGG(b: b),
+    JSON_ARRAYAGG(b ORDER BY b), -- for order
+	JSON_OBJECTAGG(b: b RETURNING jsonb)
+FROM
+	agg_test;
+                 json_objectagg                  |  json_arrayagg  |              json_objectagg
+---------------------------------------------------------------------
+ { "1" : 1, "2" : 2, "3" : 3, "4" : 4, "5" : 5 } | [1, 2, 3, 4, 5] | {"1": 1, "2": 2, "3": 3, "4": 4, "5": 5}
+(1 row)
+
+-- JSON_OBJECTAGG with router query
+SET citus.log_remote_commands TO on;
+SELECT
+	JSON_OBJECTAGG(a: a),
+	JSON_OBJECTAGG(a: a RETURNING jsonb)
+FROM
+	agg_test WHERE a = 3;
+NOTICE:  issuing SELECT JSON_OBJECTAGG(a : a RETURNING json) AS "json_objectagg", JSON_OBJECTAGG(a : a RETURNING jsonb) AS "json_objectagg" FROM pg16.agg_test_952000 agg_test WHERE (a OPERATOR(pg_catalog.=) 3)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+ json_objectagg | json_objectagg
+---------------------------------------------------------------------
+ { "3" : 3 }    | {"3": 3}
+(1 row)
+
+RESET citus.log_remote_commands;
 -- Tests for SQL/JSON: support the IS JSON predicate
 -- Relevant PG commit:
 -- https://github.com/postgres/postgres/commit/6ee30209
@@ -676,6 +916,62 @@ SELECT result FROM run_command_on_workers
  REINDEX
 (2 rows)
 
+--
+-- random_normal() to provide normally-distributed random numbers
+-- adding here the same tests as the ones with random() in aggregate_support.sql
+-- Relevant PG commit: https://github.com/postgres/postgres/commit/38d8176
+--
+CREATE TABLE dist_table (dist_col int, agg_col numeric);
+SELECT create_distributed_table('dist_table', 'dist_col');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE ref_table (int_col int);
+SELECT create_reference_table('ref_table');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- Test the cases where the worker agg exec. returns no tuples.
+SELECT PERCENTILE_DISC(.25) WITHIN GROUP (ORDER BY agg_col)
+FROM (SELECT *, random_normal() FROM dist_table) a;
+ percentile_disc
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT PERCENTILE_DISC((2 > random_normal(stddev => 1, mean => 0))::int::numeric / 10)
+       WITHIN GROUP (ORDER BY agg_col)
+FROM dist_table
+LEFT JOIN ref_table ON TRUE;
+ percentile_disc
+---------------------------------------------------------------------
+
+(1 row)
+
+-- run the same queries after loading some data
+INSERT INTO dist_table VALUES (2, 11.2), (3, NULL), (6, 3.22), (3, 4.23), (5, 5.25),
+                              (4, 63.4), (75, NULL), (80, NULL), (96, NULL), (8, 1078), (0, 1.19);
+SELECT PERCENTILE_DISC(.25) WITHIN GROUP (ORDER BY agg_col)
+FROM (SELECT *, random_normal() FROM dist_table) a;
+ percentile_disc
+---------------------------------------------------------------------
+            3.22
+(1 row)
+
+SELECT PERCENTILE_DISC((2 > random_normal(stddev => 1, mean => 0))::int::numeric / 10)
+       WITHIN GROUP (ORDER BY agg_col)
+FROM dist_table
+LEFT JOIN ref_table ON TRUE;
+ percentile_disc
+---------------------------------------------------------------------
+            1.19
+(1 row)
+
 \set VERBOSITY terse
 SET client_min_messages TO ERROR;
+DROP EXTENSION postgres_fdw CASCADE;
 DROP SCHEMA pg16 CASCADE;

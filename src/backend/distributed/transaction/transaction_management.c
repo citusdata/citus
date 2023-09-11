@@ -19,6 +19,8 @@
 
 #include "access/twophase.h"
 #include "access/xact.h"
+#include "catalog/dependency.h"
+#include "common/hashfn.h"
 #include "distributed/backend_data.h"
 #include "distributed/citus_safe_lib.h"
 #include "distributed/connection_management.h"
@@ -30,6 +32,7 @@
 #include "distributed/local_executor.h"
 #include "distributed/locally_reserved_shared_connections.h"
 #include "distributed/maintenanced.h"
+#include "distributed/metadata/dependency.h"
 #include "distributed/multi_executor.h"
 #include "distributed/multi_logical_replication.h"
 #include "distributed/multi_explain.h"
@@ -89,13 +92,24 @@ StringInfo activeSetStmts;
  * Though a list, we treat this as a stack, pushing on subxact contexts whenever
  * e.g. a SAVEPOINT is executed (though this is actually performed by providing
  * PostgreSQL with a sub-xact callback). At present, the context of a subxact
- * includes a subxact identifier as well as any SET LOCAL statements propagated
- * to workers during the sub-transaction.
+ * includes
+ *  - a subxact identifier,
+ *  - any SET LOCAL statements propagated to workers during the sub-transaction,
+ *  - all objects propagated to workers during the sub-transaction.
  *
  * To be clear, last item of activeSubXactContexts list corresponds to top of
  * stack.
  */
 static List *activeSubXactContexts = NIL;
+
+/*
+ * PropagatedObjectsInTx is a set of objects propagated in the root transaction.
+ * We also keep track of objects propagated in sub-transactions in activeSubXactContexts.
+ * Any committed sub-transaction would cause the objects, which are propagated during
+ * the sub-transaction, to be moved to upper transaction's set. Objects are discarded
+ * when the sub-transaction is aborted.
+ */
+static HTAB *PropagatedObjectsInTx = NULL;
 
 /* some pre-allocated memory so we don't need to call malloc() during callbacks */
 MemoryContext CitusXactCallbackContext = NULL;
@@ -142,11 +156,17 @@ static void CoordinatedSubTransactionCallback(SubXactEvent event, SubTransaction
 /* remaining functions */
 static void AdjustMaxPreparedTransactions(void);
 static void PushSubXact(SubTransactionId subId);
-static void PopSubXact(SubTransactionId subId);
+static void PopSubXact(SubTransactionId subId, bool commit);
 static void ResetGlobalVariables(void);
 static bool SwallowErrors(void (*func)(void));
 static void ForceAllInProgressConnectionsToClose(void);
 static void EnsurePrepareTransactionIsAllowed(void);
+static HTAB * CurrentTransactionPropagatedObjects(bool readonly);
+static HTAB * ParentTransactionPropagatedObjects(bool readonly);
+static void MovePropagatedObjectsToParentTransaction(void);
+static bool DependencyInPropagatedObjectsHash(HTAB *propagatedObjects,
+											  const ObjectAddress *dependency);
+static HTAB * CreateTxPropagatedObjectsHash(void);
 
 
 /*
@@ -321,6 +341,7 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 
 			ResetGlobalVariables();
 			ResetRelationAccessHash();
+			ResetPropagatedObjects();
 
 			/*
 			 * Make sure that we give the shared connections back to the shared
@@ -391,6 +412,7 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 
 			ResetGlobalVariables();
 			ResetRelationAccessHash();
+			ResetPropagatedObjects();
 
 			/* Reset any local replication origin session since transaction has been aborted.*/
 			ResetReplicationOriginLocalSession();
@@ -638,7 +660,7 @@ CoordinatedSubTransactionCallback(SubXactEvent event, SubTransactionId subId,
 	switch (event)
 	{
 		/*
-		 * Our subtransaction stack should be consistent with postgres' internal
+		 * Our sub-transaction stack should be consistent with postgres' internal
 		 * transaction stack. In case of subxact begin, postgres calls our
 		 * callback after it has pushed the transaction into stack, so we have to
 		 * do the same even if worker commands fail, so we PushSubXact() first.
@@ -672,7 +694,7 @@ CoordinatedSubTransactionCallback(SubXactEvent event, SubTransactionId subId,
 			{
 				CoordinatedRemoteTransactionsSavepointRelease(subId);
 			}
-			PopSubXact(subId);
+			PopSubXact(subId, true);
 
 			/* Set CachedDuringCitusCreation to one level lower to represent citus creation is done */
 
@@ -706,7 +728,7 @@ CoordinatedSubTransactionCallback(SubXactEvent event, SubTransactionId subId,
 			{
 				CoordinatedRemoteTransactionsSavepointRollback(subId);
 			}
-			PopSubXact(subId);
+			PopSubXact(subId, false);
 
 			/*
 			 * Clear MetadataCache table if we're aborting from a CREATE EXTENSION Citus
@@ -775,6 +797,9 @@ PushSubXact(SubTransactionId subId)
 	state->subId = subId;
 	state->setLocalCmds = activeSetStmts;
 
+	/* we lazily create hashset when any object is propagated during sub-transaction */
+	state->propagatedObjects = NULL;
+
 	/* append to list and reset active set stmts for upcoming sub-xact */
 	activeSubXactContexts = lappend(activeSubXactContexts, state);
 	activeSetStmts = makeStringInfo();
@@ -783,7 +808,7 @@ PushSubXact(SubTransactionId subId)
 
 /* PopSubXact pops subId from the stack of active sub-transactions. */
 static void
-PopSubXact(SubTransactionId subId)
+PopSubXact(SubTransactionId subId, bool commit)
 {
 	SubXactContext *state = llast(activeSubXactContexts);
 
@@ -805,6 +830,16 @@ PopSubXact(SubTransactionId subId)
 	 * ones we had in the upper commit.
 	 */
 	activeSetStmts = state->setLocalCmds;
+
+	/*
+	 * Keep subtransaction's propagated objects at parent transaction
+	 * if subtransaction committed. Otherwise, discard them.
+	 */
+	if (commit)
+	{
+		MovePropagatedObjectsToParentTransaction();
+	}
+	hash_destroy(state->propagatedObjects);
 
 	/*
 	 * Free state to avoid memory leaks when we create subxacts for each row,
@@ -912,4 +947,228 @@ EnsurePrepareTransactionIsAllowed(void)
 	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 					errmsg("cannot use 2PC in transactions involving "
 						   "multiple servers")));
+}
+
+
+/*
+ * CurrentTransactionPropagatedObjects returns the objects propagated in current
+ * sub-transaction or the root transaction if no sub-transaction exists.
+ *
+ * If the propagated objects are readonly it will not create the hashmap if it does not
+ * already exist in the current sub-transaction.
+ */
+static HTAB *
+CurrentTransactionPropagatedObjects(bool readonly)
+{
+	if (activeSubXactContexts == NIL)
+	{
+		/* hashset in the root transaction if there is no sub-transaction */
+		if (PropagatedObjectsInTx == NULL && !readonly)
+		{
+			/* lazily create hashset for root transaction, for mutating uses */
+			PropagatedObjectsInTx = CreateTxPropagatedObjectsHash();
+		}
+		return PropagatedObjectsInTx;
+	}
+
+	/* hashset in top level sub-transaction */
+	SubXactContext *state = llast(activeSubXactContexts);
+	if (state->propagatedObjects == NULL && !readonly)
+	{
+		/* lazily create hashset for sub-transaction, for mutating uses */
+		state->propagatedObjects = CreateTxPropagatedObjectsHash();
+	}
+	return state->propagatedObjects;
+}
+
+
+/*
+ * ParentTransactionPropagatedObjects returns the objects propagated in parent
+ * transaction of active sub-transaction. It returns the root transaction if
+ * no sub-transaction exists.
+ *
+ * If the propagated objects are readonly it will not create the hashmap if it does not
+ * already exist in the target sub-transaction.
+ */
+static HTAB *
+ParentTransactionPropagatedObjects(bool readonly)
+{
+	int nestingLevel = list_length(activeSubXactContexts);
+	if (nestingLevel <= 1)
+	{
+		/*
+		 * The parent is the root transaction, when there is single level sub-transaction
+		 * or no sub-transaction.
+		 */
+		if (PropagatedObjectsInTx == NULL && !readonly)
+		{
+			/* lazily create hashset for root transaction, for mutating uses */
+			PropagatedObjectsInTx = CreateTxPropagatedObjectsHash();
+		}
+		return PropagatedObjectsInTx;
+	}
+
+	/* parent is upper sub-transaction */
+	Assert(nestingLevel >= 2);
+	SubXactContext *state = list_nth(activeSubXactContexts, nestingLevel - 2);
+	if (state->propagatedObjects == NULL && !readonly)
+	{
+		/* lazily create hashset for parent sub-transaction */
+		state->propagatedObjects = CreateTxPropagatedObjectsHash();
+	}
+	return state->propagatedObjects;
+}
+
+
+/*
+ * MovePropagatedObjectsToParentTransaction moves all objects propagated in the current
+ * sub-transaction to the parent transaction. This should only be called when there is
+ * active sub-transaction.
+ */
+static void
+MovePropagatedObjectsToParentTransaction(void)
+{
+	Assert(llast(activeSubXactContexts) != NULL);
+	HTAB *currentPropagatedObjects = CurrentTransactionPropagatedObjects(true);
+	if (currentPropagatedObjects == NULL)
+	{
+		/* nothing to move */
+		return;
+	}
+
+	/*
+	 * Only after we know we have objects to move into the parent do we get a handle on
+	 * a guaranteed existing parent hash table. This makes sure that the parents only
+	 * get populated once there are objects to be tracked.
+	 */
+	HTAB *parentPropagatedObjects = ParentTransactionPropagatedObjects(false);
+
+	HASH_SEQ_STATUS propagatedObjectsSeq;
+	hash_seq_init(&propagatedObjectsSeq, currentPropagatedObjects);
+	ObjectAddress *objectAddress = NULL;
+	while ((objectAddress = hash_seq_search(&propagatedObjectsSeq)) != NULL)
+	{
+		hash_search(parentPropagatedObjects, objectAddress, HASH_ENTER, NULL);
+	}
+}
+
+
+/*
+ * DependencyInPropagatedObjectsHash checks if dependency is in given hashset
+ * of propagated objects.
+ */
+static bool
+DependencyInPropagatedObjectsHash(HTAB *propagatedObjects, const
+								  ObjectAddress *dependency)
+{
+	if (propagatedObjects == NULL)
+	{
+		return false;
+	}
+
+	bool found = false;
+	hash_search(propagatedObjects, dependency, HASH_FIND, &found);
+	return found;
+}
+
+
+/*
+ * CreateTxPropagatedObjectsHash creates a hashset to keep track of the objects
+ * propagated in the current root transaction or sub-transaction.
+ */
+static HTAB *
+CreateTxPropagatedObjectsHash(void)
+{
+	HASHCTL info;
+	memset(&info, 0, sizeof(info));
+	info.keysize = sizeof(ObjectAddress);
+	info.entrysize = sizeof(ObjectAddress);
+	info.hash = tag_hash;
+	info.hcxt = CitusXactCallbackContext;
+
+	int hashFlags = (HASH_ELEM | HASH_CONTEXT | HASH_FUNCTION);
+	return hash_create("Tx Propagated Objects", 16, &info, hashFlags);
+}
+
+
+/*
+ * TrackPropagatedObject adds given object into the objects propagated in the current
+ * sub-transaction.
+ */
+void
+TrackPropagatedObject(const ObjectAddress *objectAddress)
+{
+	HTAB *currentPropagatedObjects = CurrentTransactionPropagatedObjects(false);
+	hash_search(currentPropagatedObjects, objectAddress, HASH_ENTER, NULL);
+}
+
+
+/*
+ * TrackPropagatedTableAndSequences adds given table and its sequences to the objects
+ * propagated in the current sub-transaction.
+ */
+void
+TrackPropagatedTableAndSequences(Oid relationId)
+{
+	/* track table */
+	ObjectAddress *tableAddress = palloc0(sizeof(ObjectAddress));
+	ObjectAddressSet(*tableAddress, RelationRelationId, relationId);
+	TrackPropagatedObject(tableAddress);
+
+	/* track its sequences */
+	List *ownedSeqIdList = getOwnedSequences(relationId);
+	Oid ownedSeqId = InvalidOid;
+	foreach_oid(ownedSeqId, ownedSeqIdList)
+	{
+		ObjectAddress *seqAddress = palloc0(sizeof(ObjectAddress));
+		ObjectAddressSet(*seqAddress, RelationRelationId, ownedSeqId);
+		TrackPropagatedObject(seqAddress);
+	}
+}
+
+
+/*
+ * ResetPropagatedObjects destroys hashset of propagated objects in the root transaction.
+ */
+void
+ResetPropagatedObjects(void)
+{
+	hash_destroy(PropagatedObjectsInTx);
+	PropagatedObjectsInTx = NULL;
+}
+
+
+/*
+ * HasAnyDependencyInPropagatedObjects decides if any dependency of given object is
+ * propagated in the current transaction.
+ */
+bool
+HasAnyDependencyInPropagatedObjects(const ObjectAddress *objectAddress)
+{
+	List *dependencyList = GetAllSupportedDependenciesForObject(objectAddress);
+	ObjectAddress *dependency = NULL;
+	foreach_ptr(dependency, dependencyList)
+	{
+		/* first search in root transaction */
+		if (DependencyInPropagatedObjectsHash(PropagatedObjectsInTx, dependency))
+		{
+			return true;
+		}
+
+		/* search in all nested sub-transactions */
+		if (activeSubXactContexts == NIL)
+		{
+			continue;
+		}
+		SubXactContext *state = NULL;
+		foreach_ptr(state, activeSubXactContexts)
+		{
+			if (DependencyInPropagatedObjectsHash(state->propagatedObjects, dependency))
+			{
+				return true;
+			}
+		}
+	}
+
+	return false;
 }

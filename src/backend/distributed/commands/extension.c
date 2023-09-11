@@ -50,7 +50,7 @@ static List * GetAllViews(void);
 static bool ShouldPropagateExtensionCommand(Node *parseTree);
 static bool IsAlterExtensionSetSchemaCitus(Node *parseTree);
 static Node * RecreateExtensionStmt(Oid extensionOid);
-static List * GenerateGrantCommandsOnExtesionDependentFDWs(Oid extensionId);
+static List * GenerateGrantCommandsOnExtensionDependentFDWs(Oid extensionId);
 
 
 /*
@@ -985,7 +985,7 @@ CreateExtensionDDLCommand(const ObjectAddress *extensionAddress)
 
 	/* any privilege granted on FDWs that belong to the extension should be included */
 	List *FDWGrants =
-		GenerateGrantCommandsOnExtesionDependentFDWs(extensionAddress->objectId);
+		GenerateGrantCommandsOnExtensionDependentFDWs(extensionAddress->objectId);
 
 	ddlCommands = list_concat(ddlCommands, FDWGrants);
 
@@ -1048,11 +1048,11 @@ RecreateExtensionStmt(Oid extensionOid)
 
 
 /*
- * GenerateGrantCommandsOnExtesionDependentFDWs returns a list of commands that GRANTs
+ * GenerateGrantCommandsOnExtensionDependentFDWs returns a list of commands that GRANTs
  * the privileges on FDWs that are depending on the given extension.
  */
 static List *
-GenerateGrantCommandsOnExtesionDependentFDWs(Oid extensionId)
+GenerateGrantCommandsOnExtensionDependentFDWs(Oid extensionId)
 {
 	List *commands = NIL;
 	List *FDWOids = GetDependentFDWsToExtension(extensionId);

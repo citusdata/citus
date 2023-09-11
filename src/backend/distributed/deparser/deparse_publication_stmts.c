@@ -307,11 +307,11 @@ AppendWhereClauseExpression(StringInfo buf, RangeVar *tableName,
 
 	List *relationContext = deparse_context_for(tableName->relname, relation->rd_id);
 
-	PushOverrideEmptySearchPath(CurrentMemoryContext);
+	int saveNestLevel = PushEmptySearchPath();
 	char *whereClauseString = deparse_expression(whereClause,
 												 relationContext,
 												 true, true);
-	PopOverrideSearchPath();
+	PopEmptySearchPath(saveNestLevel);
 
 	appendStringInfoString(buf, whereClauseString);
 
