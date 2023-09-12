@@ -28,7 +28,7 @@
 
 static void AppendAlterDatabaseOwnerStmt(StringInfo buf, AlterOwnerStmt *stmt);
 static void AppendAlterDatabaseStmt(StringInfo buf, AlterDatabaseStmt *stmt);
-static void AppendDefElemConnLimit(StringInfo buf, DefElem * def);
+static void AppendDefElemConnLimit(StringInfo buf, DefElem *def);
 
 char *
 DeparseAlterDatabaseOwnerStmt(Node *node)
@@ -87,8 +87,9 @@ AppendGrantOnDatabaseStmt(StringInfo buf, GrantStmt *stmt)
 	AppendGrantSharedSuffix(buf, stmt);
 }
 
+
 static void
-AppendDefElemConnLimit(StringInfo buf, DefElem * def)
+AppendDefElemConnLimit(StringInfo buf, DefElem *def)
 {
 	appendStringInfo(buf, " CONNECTION LIMIT %ld", (long int) defGetNumeric(def));
 }
