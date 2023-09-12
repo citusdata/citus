@@ -112,7 +112,6 @@ jobs:
           - ubuntu-bionic-all
           - ubuntu-focal-all
           - ubuntu-jammy-all
-          - ubuntu-kinetic-all
 
         POSTGRES_VERSION: ${{ fromJson(needs.get_postgres_versions_from_file.outputs.pg_versions) }}
 
