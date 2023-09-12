@@ -147,3 +147,68 @@ PreprocessGrantOnDatabaseStmt(Node *node, const char *queryString,
 
 	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
 }
+
+
+/*
+ * PreprocessAlterDatabaseStmt is executed before the statement is applied to the local
+ * postgres instance.
+ *
+ * In this stage we can prepare the commands that need to be run on all workers to grant
+ * on databases.
+ */
+List *
+PreprocessAlterDatabaseStmt(Node *node, const char *queryString,
+							ProcessUtilityContext processUtilityContext)
+{
+	if (!ShouldPropagate())
+	{
+		return NIL;
+	}
+
+	AlterDatabaseStmt *stmt = castNode(AlterDatabaseStmt, node);
+
+	EnsureCoordinator();
+
+	char *sql = DeparseTreeNode((Node *) stmt);
+
+	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
+								(void *) sql,
+								ENABLE_DDL_PROPAGATION);
+
+	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
+}
+
+
+#if PG_VERSION_NUM >= PG_VERSION_15
+
+/*
+ * PreprocessAlterDatabaseSetStmt is executed before the statement is applied to the local
+ * postgres instance.
+ *
+ * In this stage we can prepare the commands that need to be run on all workers to grant
+ * on databases.
+ */
+List *
+PreprocessAlterDatabaseRefreshCollStmt(Node *node, const char *queryString,
+									   ProcessUtilityContext processUtilityContext)
+{
+	if (!ShouldPropagate())
+	{
+		return NIL;
+	}
+
+	AlterDatabaseRefreshCollStmt *stmt = castNode(AlterDatabaseRefreshCollStmt, node);
+
+	EnsureCoordinator();
+
+	char *sql = DeparseTreeNode((Node *) stmt);
+
+	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
+								(void *) sql,
+								ENABLE_DDL_PROPAGATION);
+
+	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
+}
+
+
+#endif

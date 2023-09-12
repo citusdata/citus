@@ -1523,6 +1523,13 @@ ORDER BY is_coordinator DESC, result;
  f              | [{"indexdefs": ["CREATE UNIQUE INDEX referencing__key ON pg15.referencing USING btree (test_2)"], "indexnames": ["referencing__key"]}, {"indexdefs": ["CREATE UNIQUE INDEX referencing__key1 ON pg15.referencing USING btree (test_3) NULLS NOT DISTINCT"], "indexnames": ["referencing__key1"]}]
 (3 rows)
 
+set citus.log_remote_commands = true;
+set citus.grep_remote_commands = '%ALTER DATABASE%';
+alter database regression REFRESH COLLATION VERSION;
+NOTICE:  version has not changed
+NOTICE:  issuing ALTER DATABASE regression REFRESH COLLATION VERSION;
+NOTICE:  issuing ALTER DATABASE regression REFRESH COLLATION VERSION;
+set citus.log_remote_commands = false;
 -- Clean up
 \set VERBOSITY terse
 SET client_min_messages TO ERROR;
