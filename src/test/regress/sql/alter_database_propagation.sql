@@ -1,7 +1,7 @@
 set citus.log_remote_commands = true;
 set citus.grep_remote_commands = '%ALTER DATABASE%';
 
---since ALLOW_CONNECTIONS alter option should be executed in a different database
+-- since ALLOW_CONNECTIONS alter option should be executed in a different database
 -- and since we don't have a multiple database support for now,
 -- this statement will get error
 alter database regression ALLOW_CONNECTIONS false;
