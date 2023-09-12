@@ -1,3 +1,108 @@
+### citus v12.1.0 (September 12, 2023) ###
+
+PR #7191 : Fix WITH ADMIN FALSE propagation
+PR #7186 : Add tests with JSON_ARRAYAGG and JSON_OBJECTAGG aggregates
+PR #7185 : PG16 - Add rules option to CREATE COLLATION
+PR #7184 : Add tests with publications with schema and table of the same schema
+PR #7183 : PG16 - Add tests with random_normal
+PR #7180 : Add citus_schema_move() function
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Add citus_schema_move() function that can be used to move tenant tables within a distributed schema to another node.
+
+PR #7174 : #6548 2PC recovery is extremely ineffective on a cluster with multiple DATABASEs fix
+PR #7173 : Adds PostgreSQL 16 RC1 support
+* Adds PostgreSQL 16 RC1 support
+
+PR #7170 : PG16 - Add citus_truncate_trigger for Citus foreign tables
+PR #7167 : PG16 - Add reindex database/system tests
+PR #7166 : polish the codebase by fixing dozens of typos
+PR #7163 : avoid rebuilding MetadataCache for each placement insertion
+PR #7162 : Disable statistics collection
+PR #7161 : PG16 - Add tests for createdb with ICU_RULES option
+PR #7160 : Adds test for COPY FROM failure in Citus foreign tables
+PR #7159 : Add some small improvements to python testing framework
+PR #7158 : remove useless code block
+PR #7153 : Refactors grant statements
+* Refactors all grant statements to use common code blocks to deparse
+
+PR #7152 : PQputCopyData's return value 0 should be considered fail
+* Fixes a bug that could cause COPY logic to skip data in case of OO
+
+PR #7146 : Use correct errorCode for the errors thrown during recovery
+PR #7145 : get rid of {Push/Pop}OverrideSearchPath
+PR #7143 : PG16 - Add COPY FROM default tests
+PR #7142 : Removes ubuntu/bionic from packaging pipelines
+* Removes ubuntu/bionic from packaging pipeline
+
+PR #7141 : PG16 - Add GENERIC_PLAN option to EXPLAIN
+PR #7140 : Add tests for CREATE/ALTER TABLE .. STORAGE in PG16
+PR #7139 : Rename planner_readme.md to README.md
+PR #7137 : PG16 - IS JSON predicate and SYSTEM_USER tests
+PR #7136 : PG16 - Throw meaningful error for stats without a name on Citus tables
+PR #7135 : Removes pg_send_cancellation
+* Removes pg_send_cancellation and all reference
+
+PR #7131 : Not undistribute Citus local table when converting it to a reference table / single-shard table
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Allow creating reference / distributed-schema tables from local tables added to metadata and that use identity columns
+
+PR #7130 : fix some obvious typo and reduce usage of magic number
+PR #7126 : PG16 compatibility - one more outer join check
+PR #7124 : Fix GetUndistributableDependency
+PR #7123 : Improve the performance of CitusHasBeenLoaded function for a database that does not do CREATE EXTENSION citus but load citus.so.
+PR #7122 : Changes PROCESS_TOAST default value to true
+PR #7116 : fix wrong type convertion
+PR #7114 : PG16 compatibility - new options to vacuum and analyze
+PR #7113 : PG16 compatibility - fix AM dependency and grant's admin option
+PR #7112 : PG16 compatibility - more test output fixes
+PR #7111 : Bump PG14 and PG15 versions for CI tests
+PR #7109 : Adds grant/revoke privileges on database propagation
+* Adds grant/revoke propagation support for database privileges
+
+PR #7108 : PG16 compatibility - more test output fixes
+PR #7107 : PG16 compatibility - varnullingrels additions
+PR #7100 : PG16 compatibility - some test outputs
+PR #7099 : PG16 compatibility - Add get_relation_info hook to avoid crash from adjusted partitioning
+PR #7098 : PG16 compatibility - Rework PlannedStmt and Query's Permission Info
+PR #7097 : PG16 compatibility - outer join checks, subscription password, crash fixes
+PR #7093 : Makes sure to handle NULL constraints for ADD COLUMN commands
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Fixes a bug that causes an unexpected error when adding a column with a NULL constraint
+
+PR #7090 : Improve failure handling of distributed execution
+PR #7089 : Adds citus_pause_node udf
+* Presenting citus_pause_node UDF enabling pausing by node_id.
+
+PR #7088 : Add single-shard router Merge command support
+PR #7087 : PG16 compatibility: ruleutils and successful CREATE EXTENSION
+PR #7083 : fix flappyness of shard_rebalancer operations test
+PR #7081 : Improvise MERGE ON clause datatype mismatch error for brevity.
+* Provide better error messaging for MERGE ON clause, datatype mismatc
+
+PR #7077 : Add support for router INSERT .. SELECT commands
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Prevents unnecessarily pulling the data into coordinator for some INSERT .. SELECT queries that target a single-shard group
+
+PR #7076 : Expand EnableNonColocatedRouterQueryPushdown to cover shard colocation (e.g., shard index)
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Enforce shard level colocation with citus.enable_non_colocated_router_query_pushdown
+
+PR #7075 : Update README.md - slack badge
+PR #7074 : Rebalancer improvements
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Error out when rebalancing if replication factor is greater than the shard allowed node count
+
+* Do not move a shard to a node that it already exists on
+
+PR #7073 : [typo] fix typo in comments
+PR #7072 : Fix ScanKeyInit RegProcedure and Datum arguments
+PR #7070 : Isolate Schema Sharding/MERGE tests into a new file
+PR #7069 : Fix typo in distributed
+* PR description that will go into the change log, up to 78 characters
+
+PR #7068 : readme update for 12.0
+PR #7062 : Add 11.3-2 backporting changes
+PR #7061 : Bump Citus version into 12.1devel
 ### citus v12.0.0 (July 11, 2023) ###
 
 * Adds support for schema-based sharding.
