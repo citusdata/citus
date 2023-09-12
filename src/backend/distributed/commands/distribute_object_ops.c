@@ -479,6 +479,7 @@ static DistributeObjectOps Database_Set = {
 	.markDistributed = false,
 };
 
+
 static DistributeObjectOps Domain_Alter = {
 	.deparse = DeparseAlterDomainStmt,
 	.qualify = QualifyAlterDomainStmt,
@@ -1334,6 +1335,7 @@ GetDistributeObjectOps(Node *node)
 		{
 			return &Database_Set;
 		}
+
 
 		case T_AlterDomainStmt:
 		{

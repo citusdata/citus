@@ -25,6 +25,7 @@
 #include "distributed/log_utils.h"
 #include "parser/parse_type.h"
 
+
 static void AppendAlterDatabaseOwnerStmt(StringInfo buf, AlterOwnerStmt *stmt);
 static void AppendAlterDatabaseStmt(StringInfo buf, AlterDatabaseStmt *stmt);
 
@@ -85,16 +86,6 @@ AppendGrantOnDatabaseStmt(StringInfo buf, GrantStmt *stmt)
 	AppendGrantSharedSuffix(buf, stmt);
 }
 
-
-static void
-AppendDefElemIsTemplate(StringInfo buf, DefElem *def)
-{
-	appendStringInfo(buf, " %s  %s", quote_identifier(def->defname),
-					 quote_literal_cstr(strVal(def->arg)));
-}
-
-
-static void
 AppendDefElemConnLimit(StringInfo buf, DefElem *def)
 {
 	appendStringInfo(buf, " CONNECTION LIMIT %ld", (long int) defGetNumeric(def));
@@ -109,13 +100,14 @@ AppendAlterDatabaseStmt(StringInfo buf, AlterDatabaseStmt *stmt)
 	if (stmt->options)
 	{
 		ListCell *cell = NULL;
-		appendStringInfo(buf, "WITH");
+		appendStringInfo(buf, "WITH ");
 		foreach(cell, stmt->options)
 		{
 			DefElem *def = castNode(DefElem, lfirst(cell));
 			if (strcmp(def->defname, "is_template") == 0)
 			{
-				AppendDefElemIsTemplate(buf, def);
+				appendStringInfo(buf, "IS_TEMPLATE %s",
+								 quote_literal_cstr(strVal(def->arg)));
 			}
 			else if (strcmp(def->defname, "connection_limit") == 0)
 			{
@@ -187,7 +179,6 @@ DeparseAlterDatabaseRefreshCollStmt(Node *node)
 
 #endif
 
-
 static void
 AppendAlterDatabaseSetStmt(StringInfo buf, AlterDatabaseSetStmt *stmt)
 {
@@ -211,3 +202,4 @@ DeparseAlterDatabaseSetStmt(Node *node)
 
 	return str.data;
 }
+

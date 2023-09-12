@@ -78,6 +78,7 @@ static const char * WrapQueryInAlterRoleIfExistsCall(const char *query, RoleSpec
 static VariableSetStmt * MakeVariableSetStmt(const char *config);
 static int ConfigGenericNameCompare(const void *lhs, const void *rhs);
 static List * RoleSpecToObjectAddress(RoleSpec *role, bool missing_ok);
+static bool IsGrantRoleWithInheritOrSetOption(GrantRoleStmt *stmt);
 
 /* controlled via GUC */
 bool EnableCreateRolePropagation = true;
@@ -1141,6 +1142,19 @@ PreprocessGrantRoleStmt(Node *node, const char *queryString,
 		return NIL;
 	}
 
+	if (IsGrantRoleWithInheritOrSetOption(stmt))
+	{
+		if (EnableUnsupportedFeatureMessages)
+		{
+			ereport(NOTICE, (errmsg("not propagating GRANT/REVOKE commands with specified"
+									" INHERIT/SET options to worker nodes"),
+							 errhint(
+								 "Connect to worker nodes directly to manually run the same"
+								 " GRANT/REVOKE command after disabling DDL propagation.")));
+		}
+		return NIL;
+	}
+
 	/*
 	 * Postgres don't seem to use the grantor. Even dropping the grantor doesn't
 	 * seem to affect the membership. If this changes, we might need to add grantors
@@ -1187,6 +1201,27 @@ PostprocessGrantRoleStmt(Node *node, const char *queryString)
 		}
 	}
 	return NIL;
+}
+
+
+/*
+ * IsGrantRoleWithInheritOrSetOption returns true if the given
+ * GrantRoleStmt has inherit or set option specified in its options
+ */
+static bool
+IsGrantRoleWithInheritOrSetOption(GrantRoleStmt *stmt)
+{
+#if PG_VERSION_NUM >= PG_VERSION_16
+	DefElem *opt = NULL;
+	foreach_ptr(opt, stmt->opt)
+	{
+		if (strcmp(opt->defname, "inherit") == 0 || strcmp(opt->defname, "set") == 0)
+		{
+			return true;
+		}
+	}
+#endif
+	return false;
 }
 
 

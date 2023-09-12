@@ -213,6 +213,7 @@ PreprocessAlterDatabaseRefreshCollStmt(Node *node, const char *queryString,
 
 #endif
 
+
 /*
  * PreprocessAlterDatabaseSetStmt is executed before the statement is applied to the local
  * postgres instance.
@@ -241,3 +242,4 @@ PreprocessAlterDatabaseSetStmt(Node *node, const char *queryString,
 
 	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
 }
+
