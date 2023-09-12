@@ -1,6 +1,16 @@
 ### citus v12.1.0 (September 12, 2023) ###
 
-* Adds PG16.rc support (todo: Naisila)
+* Adds PostgreSQL 16 RC1 support (#7173)
+
+* Propagates BUFFER_USAGE_LIMIT option in VACUUM and ANALYZE (#7114)
+
+* Propagates PROCESS_MAIN, SKIP_DATABASE_STATS, ONLY_DATABASE_STATS options in VACUUM (#7114)
+
+* Propagates GENERIC_PLAN option in EXPLAIN (#7141)
+
+* Adds citus_truncate_trigger to Citus foreign tables (#7170)
+
+* Propagates "rules" option in CREATE COLLATION (#7185)
 
 * Add citus_schema_move() function which moves tenant tables within
   a distributed schema to another node (#7180)
