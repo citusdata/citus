@@ -86,7 +86,8 @@ AppendGrantOnDatabaseStmt(StringInfo buf, GrantStmt *stmt)
 	AppendGrantSharedSuffix(buf, stmt);
 }
 
-AppendDefElemConnLimit(StringInfo buf, DefElem *def)
+
+AppendDefElemConnLimit(StringInfo buf, DefElem * def)
 {
 	appendStringInfo(buf, " CONNECTION LIMIT %ld", (long int) defGetNumeric(def));
 }
@@ -202,4 +203,3 @@ DeparseAlterDatabaseSetStmt(Node *node)
 
 	return str.data;
 }
-
