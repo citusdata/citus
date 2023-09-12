@@ -19,6 +19,7 @@
 #include "distributed/coordinator_protocol.h"
 #include "distributed/metadata_sync.h"
 #include "distributed/multi_partitioning_utils.h"
+#include "distributed/tenant_schema_metadata.h"
 #include "distributed/worker_transaction.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"

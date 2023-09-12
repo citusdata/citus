@@ -146,6 +146,40 @@ DROP DATABASE test_db;
 SELECT result FROM run_command_on_workers
 ($$DROP DATABASE test_db$$);
 SET search_path TO pg16;
+
+-- New rules option added to CREATE COLLATION
+-- Similar to above test with CREATE DATABASE
+-- Relevant PG commit:
+-- https://github.com/postgres/postgres/commit/30a53b7
+
+CREATE COLLATION default_rule (provider = icu, locale = '');
+CREATE COLLATION special_rule (provider = icu, locale = '', rules = '&a < g');
+
+CREATE TABLE test_collation_rules (a text);
+SELECT create_distributed_table('test_collation_rules', 'a');
+INSERT INTO test_collation_rules VALUES ('Abernathy'), ('apple'), ('bird'), ('Boston'), ('Graham'), ('green');
+
+SELECT collname, collprovider, colliculocale, collicurules
+FROM pg_collation
+WHERE collname like '%_rule%'
+ORDER BY 1;
+
+SELECT * FROM test_collation_rules ORDER BY a COLLATE default_rule;
+SELECT * FROM test_collation_rules ORDER BY a COLLATE special_rule;
+
+\c - - - :worker_1_port
+SET search_path TO pg16;
+
+SELECT collname, collprovider, colliculocale, collicurules
+FROM pg_collation
+WHERE collname like '%_rule%'
+ORDER BY 1;
+
+SELECT * FROM test_collation_rules ORDER BY a COLLATE default_rule;
+SELECT * FROM test_collation_rules ORDER BY a COLLATE special_rule;
+
+\c - - - :master_port
+SET search_path TO pg16;
 SET citus.next_shard_id TO 951000;
 
 -- Foreign table TRUNCATE trigger
@@ -319,6 +353,57 @@ SET citus.shard_replication_factor TO 1;
 -- DEFAULT cannot be used in COPY TO
 COPY (select 1 as test) TO stdout WITH (default '\D');
 
+-- Tests for SQL/JSON: JSON_ARRAYAGG and JSON_OBJECTAGG aggregates
+-- Relevant PG commit:
+-- https://github.com/postgres/postgres/commit/7081ac4
+SET citus.next_shard_id TO 952000;
+
+CREATE TABLE agg_test(a int, b serial);
+SELECT create_distributed_table('agg_test', 'a');
+INSERT INTO agg_test SELECT i FROM generate_series(1, 5) i;
+
+-- JSON_ARRAYAGG with distribution key
+SELECT JSON_ARRAYAGG(a ORDER BY a),
+JSON_ARRAYAGG(a ORDER BY a RETURNING jsonb)
+FROM agg_test;
+
+-- JSON_ARRAYAGG with other column
+SELECT JSON_ARRAYAGG(b ORDER BY b),
+JSON_ARRAYAGG(b ORDER BY b RETURNING jsonb)
+FROM agg_test;
+
+-- JSON_ARRAYAGG with router query
+SET citus.log_remote_commands TO on;
+SELECT JSON_ARRAYAGG(a ORDER BY a),
+JSON_ARRAYAGG(a ORDER BY a RETURNING jsonb)
+FROM agg_test WHERE a = 2;
+RESET citus.log_remote_commands;
+
+-- JSON_OBJECTAGG with distribution key
+SELECT
+	JSON_OBJECTAGG(a: a),
+    JSON_ARRAYAGG(a ORDER BY a), -- for order
+	JSON_OBJECTAGG(a: a RETURNING jsonb)
+FROM
+	agg_test;
+
+-- JSON_OBJECTAGG with other column
+SELECT
+	JSON_OBJECTAGG(b: b),
+    JSON_ARRAYAGG(b ORDER BY b), -- for order
+	JSON_OBJECTAGG(b: b RETURNING jsonb)
+FROM
+	agg_test;
+
+-- JSON_OBJECTAGG with router query
+SET citus.log_remote_commands TO on;
+SELECT
+	JSON_OBJECTAGG(a: a),
+	JSON_OBJECTAGG(a: a RETURNING jsonb)
+FROM
+	agg_test WHERE a = 3;
+RESET citus.log_remote_commands;
+
 -- Tests for SQL/JSON: support the IS JSON predicate
 -- Relevant PG commit:
 -- https://github.com/postgres/postgres/commit/6ee30209
@@ -479,6 +564,32 @@ SELECT PERCENTILE_DISC((2 > random_normal(stddev => 1, mean => 0))::int::numeric
        WITHIN GROUP (ORDER BY agg_col)
 FROM dist_table
 LEFT JOIN ref_table ON TRUE;
+
+--
+-- PG16 added WITH ADMIN FALSE option to GRANT ROLE
+-- WITH ADMIN FALSE is the default, make sure we propagate correctly in Citus
+-- Relevant PG commit: https://github.com/postgres/postgres/commit/e3ce2de
+--
+
+CREATE ROLE role1;
+CREATE ROLE role2;
+
+SET citus.log_remote_commands TO on;
+SET citus.grep_remote_commands = '%GRANT%';
+-- default admin option is false
+GRANT role1 TO role2;
+REVOKE role1 FROM role2;
+-- should behave same as default
+GRANT role1 TO role2 WITH ADMIN FALSE;
+REVOKE role1 FROM role2;
+-- with admin option and with admin true are the same
+GRANT role1 TO role2 WITH ADMIN OPTION;
+REVOKE role1 FROM role2;
+GRANT role1 TO role2 WITH ADMIN TRUE;
+REVOKE role1 FROM role2;
+
+RESET citus.log_remote_commands;
+RESET citus.grep_remote_commands;
 
 \set VERBOSITY terse
 SET client_min_messages TO ERROR;

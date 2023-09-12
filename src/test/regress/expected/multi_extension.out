@@ -1403,8 +1403,10 @@ SELECT * FROM multi_extension.print_extension_changes();
 ---------------------------------------------------------------------
                  | function citus_internal_delete_placement_metadata(bigint) void
                  | function citus_internal_update_none_dist_table_metadata(oid,"char",bigint,boolean) void
-				 | function citus_pause_node_within_txn(integer,boolean,integer) void
-(3 rows)
+                 | function citus_pause_node_within_txn(integer,boolean,integer) void
+                 | function citus_schema_move(regnamespace,integer,citus.shard_transfer_mode) void
+                 | function citus_schema_move(regnamespace,text,integer,citus.shard_transfer_mode) void
+(5 rows)
 
 DROP TABLE multi_extension.prev_objects, multi_extension.extension_diff;
 -- show running version
