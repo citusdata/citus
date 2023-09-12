@@ -129,6 +129,7 @@ split_change_cb(LogicalDecodingContext *ctx, ReorderBufferTXN *txn,
 	/* Current replication slot is not responsible for handling the change */
 	if (targetRelationOid == InvalidOid)
 	{
+		pgoutputChangeCB(ctx, txn, relation, change);
 		return;
 	}
 
