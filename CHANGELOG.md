@@ -41,8 +41,7 @@
 
 * Fixes PROCESS_TOAST default value to true (#7122)
 
-PR #7081 : Improvise MERGE ON clause datatype mismatch error for brevity.
-* Provide better error messaging for MERGE ON clause, datatype mismatc (todo: Teja)
+* Provide better error messaging for MERGE ON clause, datatype mismatch (#7081)
 
 * Enforce shard level colocation with citus.enable_non_colocated_router_query_pushdown (#7076)
 
