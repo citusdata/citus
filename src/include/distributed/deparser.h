@@ -223,6 +223,8 @@ extern char * DeparseAlterExtensionStmt(Node *stmt);
 /* forward declarations for deparse_database_stmts.c */
 extern char * DeparseAlterDatabaseOwnerStmt(Node *node);
 extern char * DeparseGrantOnDatabaseStmt(Node *node);
+extern char * DeparseAlterDatabaseStmt(Node *node);
+extern char * DeparseAlterDatabaseRefreshCollStmt(Node *node);
 
 /* forward declaration for deparse_publication_stmts.c */
 extern char * DeparseCreatePublicationStmt(Node *stmt);
