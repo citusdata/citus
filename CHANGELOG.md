@@ -2,8 +2,8 @@
 
 * Adds PostgreSQL 16 RC1 support (#7173)
 
-* Add `citus_schema_move()` function which moves tenant tables within
-  a distributed schema to another node (#7180)
+* Add `citus_schema_move()` function which moves tables within a
+  distributed schema to another node (#7180)
 
 * Adds `citus_pause_node()` UDF that allows pausing the node with given id
   (#7089)
