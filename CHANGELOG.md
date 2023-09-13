@@ -25,7 +25,7 @@
 
 * Propagates `GRANT`/ `REVOKE` for database privileges (#7109)
 
-* Adds citus_truncate_trigger to Citus foreign tables (#7170)
+* Adds TRUNCATE trigger support on Citus foreign tables (#7170)
 
 * Removes `pg_send_cancellation` (#7135)
 
