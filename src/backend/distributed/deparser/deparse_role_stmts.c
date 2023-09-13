@@ -341,6 +341,22 @@ AppendRoleList(StringInfo buf, List *roleList)
 }
 
 
+char *
+DeparseRenameRoleStmt(Node *node)
+{
+	RenameStmt *stmt = castNode(RenameStmt, node);
+	StringInfoData str = { 0 };
+	initStringInfo(&str);
+
+	Assert(stmt->renameType == OBJECT_ROLE);
+
+	appendStringInfo(&str, "ALTER ROLE %s RENAME TO %s;",
+					 quote_identifier(stmt->subname), quote_identifier(stmt->newname));
+
+	return str.data;
+}
+
+
 /*
  * DeparseGrantRoleStmt builds and returns a string representing of the
  * GrantRoleStmt for application on a remote server.

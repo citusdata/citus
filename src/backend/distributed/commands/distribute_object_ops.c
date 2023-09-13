@@ -152,12 +152,12 @@ static DistributeObjectOps Any_AlterRole = {
 };
 
 static DistributeObjectOps Any_AlterRoleRename = {
-	.deparse = DeparseAlterRoleStmt,
+	.deparse = DeparseRenameRoleStmt,
 	.qualify = NULL,
-	.preprocess = NULL,
-	.postprocess = PostprocessAlterRoleStmt,
+	.preprocess = PreprocessAlterRoleRenameStmt,
+	.postprocess = NULL,
 	.operationType = DIST_OPS_ALTER,
-	.address = AlterRoleStmtObjectAddress,
+	.address = RenameRoleStmtObjectAddress,
 	.markDistributed = false,
 };
 
@@ -2072,7 +2072,7 @@ GetDistributeObjectOps(Node *node)
 
 				case OBJECT_ROLE:
 				{
-					return &Role_Rename;
+					return &Any_AlterRoleRename;
 				}
 
 				case OBJECT_ROUTINE:

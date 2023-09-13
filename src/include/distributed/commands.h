@@ -479,6 +479,10 @@ extern List * PreprocessRenameAttributeStmt(Node *stmt, const char *queryString,
 extern List * PostprocessAlterRoleStmt(Node *stmt, const char *queryString);
 extern List * PreprocessAlterRoleSetStmt(Node *stmt, const char *queryString,
 										 ProcessUtilityContext processUtilityContext);
+
+extern List * PreprocessAlterRoleRenameStmt(Node *stmt, const char *queryString,
+										 ProcessUtilityContext processUtilityContext);
+
 extern List * GenerateAlterRoleSetCommandForRole(Oid roleid);
 extern List * AlterRoleStmtObjectAddress(Node *node,
 										 bool missing_ok, bool isPostprocess);
@@ -494,6 +498,10 @@ extern List * PostprocessGrantRoleStmt(Node *stmt, const char *queryString);
 extern List * GenerateCreateOrAlterRoleCommand(Oid roleOid);
 extern List * CreateRoleStmtObjectAddress(Node *stmt, bool missing_ok, bool
 										  isPostprocess);
+
+extern List * RenameRoleStmtObjectAddress(Node *stmt, bool missing_ok, bool
+										  isPostprocess);
+
 extern void UnmarkRolesDistributed(List *roles);
 extern List * FilterDistributedRoles(List *roles);
 

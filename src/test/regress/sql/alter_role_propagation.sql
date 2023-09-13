@@ -79,6 +79,7 @@ SELECT run_command_on_workers('SHOW enable_hashagg');
 -- check that ALTER ROLE SET is not propagated when scoped to a different database
 -- also test case sensitivity
 CREATE DATABASE "REGRESSION";
+
 ALTER ROLE CURRENT_USER IN DATABASE "REGRESSION" SET public.myguc TO "Hello from coordinator only";
 SELECT d.datname, r.setconfig FROM pg_db_role_setting r LEFT JOIN pg_database d ON r.setdatabase=d.oid WHERE r.setconfig::text LIKE '%Hello from coordinator only%';
 SELECT run_command_on_workers($$SELECT json_agg((d.datname, r.setconfig)) FROM pg_db_role_setting r LEFT JOIN pg_database d ON r.setdatabase=d.oid WHERE r.setconfig::text LIKE '%Hello from coordinator only%'$$);
@@ -133,40 +134,21 @@ SELECT run_command_on_workers($$SELECT row(rolname, rolsuper, rolinherit,  rolcr
 alter user test1 with password NULL superuser inherit createrole createdb login replication bypassrls connection limit 10 valid until '2019-01-01';
 SELECT run_command_on_workers($$SELECT row(rolname, rolsuper, rolinherit,  rolcreaterole, rolcreatedb, rolcanlogin, rolreplication, rolbypassrls, rolconnlimit, EXTRACT (year FROM rolvaliduntil)) FROM pg_authid WHERE rolname = 'test1'$$);
 
-
+SET citus.enable_alter_role_set_propagation TO on;
 SET citus.log_remote_commands = true;
--- Set a custom value for the search_path parameter
-ALTER USER test1 SET search_path TO public, schema2;
+set citus.grep_remote_commands = '%ALTER ROLE%';
 
--- Reset the search_path parameter to its default value
-ALTER USER test1 SET search_path TO DEFAULT;
-
--- Set a custom value for the timezone parameter
 ALTER USER test1 SET timezone TO 'America/New_York';
-
--- Reset the timezone parameter to its default value
-ALTER USER test1 SET timezone TO DEFAULT;
-
--- Set a custom value for the work_mem parameter
 ALTER USER test1 SET work_mem TO '64MB';
-
--- Reset the work_mem parameter to its default value
-ALTER USER test1 SET work_mem TO DEFAULT;
-
--- Set a custom value for the max_connections parameter
-ALTER USER test1 SET max_connections TO 100;
-
--- Reset the max_connections parameter to its default value
-ALTER USER test1 SET max_connections TO DEFAULT;
-
--- Set a custom float value for the random_page_cost parameter
 ALTER USER test1 SET random_page_cost TO 1.5;
+
+
 
 alter user test1 rename to test2;
 
 drop user if exists test2;
 
-drop user test1;
+SET citus.log_remote_commands = false;
 
 DROP TABLE test_search_path;
 DROP SCHEMA alter_role, ",CitUs,.TeeN!?", test_sp CASCADE;
