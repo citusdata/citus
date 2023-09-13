@@ -164,6 +164,10 @@ AppendRoleOption(StringInfo buf, ListCell *optionCell)
 	{
 		appendStringInfo(buf, " CONNECTION LIMIT %d", intVal(option->arg));
 	}
+	else if (strcmp(option->defname, "sysid") == 0)
+	{
+		appendStringInfo(buf, " SYSID %d", intVal(option->arg));
+	}
 	else if (strcmp(option->defname, "password") == 0)
 	{
 		if (option->arg != NULL)
@@ -201,17 +205,34 @@ DeparseCreateRoleStmt(Node *node)
 }
 
 
+
 /*
- * AppendCreateRoleStmt generates the string representation of the
- * CreateRoleStmt and appends it to the buffer.
- */
+	* AppendRoleOption generates the string representation of the DefElem option
+	* and appends it to the buffer.
+	*/
 static void
-AppendCreateRoleStmt(StringInfo buf, CreateRoleStmt *stmt)
+AppendInlinePriviliges(StringInfo buf, ListCell *optionCell)
 {
-	ListCell *optionCell = NULL;
+	DefElem *option = (DefElem *) lfirst(optionCell);
 
-	appendStringInfo(buf, "CREATE ");
+	if (strcmp(option->defname, "adminmembers") == 0)
+	{
+		appendStringInfo(buf, " ADMIN ");
+		AppendRoleList(buf, (List *) option->arg);
+	}
+	else if (strcmp(option->defname, "rolemembers") == 0)
+	{
+		appendStringInfo(buf, " ROLE ");
+		AppendRoleList(buf, (List *) option->arg);
+	}
+	else if (strcmp(option->defname, "addroleto") == 0)
+	{
+		appendStringInfo(buf, " IN ROLE ");
+		AppendRoleList(buf, (List *) option->arg);
+	}
+}
 
+static void AppendStatementType(StringInfo buf, CreateRoleStmt *stmt){
 	switch (stmt->stmt_type)
 	{
 		case ROLESTMT_ROLE:
@@ -232,34 +253,28 @@ AppendCreateRoleStmt(StringInfo buf, CreateRoleStmt *stmt)
 			break;
 		}
 	}
+}
+
+
+/*
+ * AppendCreateRoleStmt generates the string representation of the
+ * CreateRoleStmt and appends it to the buffer.
+ */
+static void
+AppendCreateRoleStmt(StringInfo buf, CreateRoleStmt *stmt)
+{
+	ListCell *optionCell = NULL;
+
+	appendStringInfo(buf, "CREATE ");
+
+	AppendStatementType(buf, stmt);
 
 	appendStringInfo(buf, "%s", quote_identifier(stmt->role));
 
 	foreach(optionCell, stmt->options)
 	{
 		AppendRoleOption(buf, optionCell);
-
-		DefElem *option = (DefElem *) lfirst(optionCell);
-
-		if (strcmp(option->defname, "sysid") == 0)
-		{
-			appendStringInfo(buf, " SYSID %d", intVal(option->arg));
-		}
-		else if (strcmp(option->defname, "adminmembers") == 0)
-		{
-			appendStringInfo(buf, " ADMIN ");
-			AppendRoleList(buf, (List *) option->arg);
-		}
-		else if (strcmp(option->defname, "rolemembers") == 0)
-		{
-			appendStringInfo(buf, " ROLE ");
-			AppendRoleList(buf, (List *) option->arg);
-		}
-		else if (strcmp(option->defname, "addroleto") == 0)
-		{
-			appendStringInfo(buf, " IN ROLE ");
-			AppendRoleList(buf, (List *) option->arg);
-		}
+		AppendInlinePriviliges(buf, optionCell);
 	}
 }
 

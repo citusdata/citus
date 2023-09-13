@@ -356,5 +356,53 @@ SELECT workers.result AS worker_password, pg_authid.rolpassword AS coord_passwor
 
 RESET password_encryption;
 DROP ROLE new_role;
+drop user if exists test1 ;
+NOTICE:  role "test1" does not exist, skipping
+create user test1;
+SELECT run_command_on_workers($$SELECT row() FROM pg_roles WHERE rolname = 'test1'$$);
+  run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,"()")
+ (localhost,57638,t,"()")
+(2 rows)
+
+alter user test1 with encrypted password 'test1' nosuperuser noinherit nocreaterole nocreatedb nologin noreplication nobypassrls connection limit -1 valid until 'infinity';
+SELECT run_command_on_workers($$SELECT row(rolname, rolsuper, rolinherit,  rolcreaterole, rolcreatedb, rolcanlogin, rolreplication, rolbypassrls, rolconnlimit, EXTRACT (year FROM rolvaliduntil)) FROM pg_authid WHERE rolname = 'test1'$$);
+                 run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,"(test1,f,f,f,f,f,f,f,-1,Infinity)")
+ (localhost,57638,t,"(test1,f,f,f,f,f,f,f,-1,Infinity)")
+(2 rows)
+
+alter user test1 with password NULL superuser inherit createrole createdb login replication bypassrls connection limit 10 valid until '2019-01-01';
+SELECT run_command_on_workers($$SELECT row(rolname, rolsuper, rolinherit,  rolcreaterole, rolcreatedb, rolcanlogin, rolreplication, rolbypassrls, rolconnlimit, EXTRACT (year FROM rolvaliduntil)) FROM pg_authid WHERE rolname = 'test1'$$);
+               run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,"(test1,t,t,t,t,t,t,t,10,2019)")
+ (localhost,57638,t,"(test1,t,t,t,t,t,t,t,10,2019)")
+(2 rows)
+
+alter user test1 rename to test2;
+NOTICE:  not propagating ALTER ROLE ... RENAME TO commands to worker nodes
+HINT:  Connect to worker nodes directly to manually rename the role
+drop user if exists test2;
+create user test1 with password NULL superuser inherit createrole createdb login replication bypassrls connection limit 10 valid until '2019-01-01';
+SELECT run_command_on_workers($$SELECT row(rolname, rolsuper, rolinherit,  rolcreaterole, rolcreatedb, rolcanlogin, rolreplication, rolbypassrls, rolconnlimit, EXTRACT (year FROM rolvaliduntil)) FROM pg_authid WHERE rolname = 'test1'$$);
+               run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,"(test1,t,t,t,t,t,t,t,10,2019)")
+ (localhost,57638,t,"(test1,t,t,t,t,t,t,t,10,2019)")
+(2 rows)
+
+drop user if exists test1;
+create user test1 with encrypted password 'test1' nosuperuser noinherit nocreaterole nocreatedb nologin noreplication nobypassrls connection limit -1 valid until 'infinity';
+SELECT run_command_on_workers($$SELECT row(rolname, rolsuper, rolinherit,  rolcreaterole, rolcreatedb, rolcanlogin, rolreplication, rolbypassrls, rolconnlimit, EXTRACT (year FROM rolvaliduntil)) FROM pg_authid WHERE rolname = 'test1'$$);
+                 run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,"(test1,f,f,f,f,f,f,f,-1,Infinity)")
+ (localhost,57638,t,"(test1,f,f,f,f,f,f,f,-1,Infinity)")
+(2 rows)
+
+drop user test1;
 DROP TABLE test_search_path;
 DROP SCHEMA alter_role, ",CitUs,.TeeN!?", test_sp CASCADE;

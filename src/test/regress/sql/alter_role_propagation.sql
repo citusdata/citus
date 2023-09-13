@@ -119,5 +119,54 @@ SELECT workers.result AS worker_password, pg_authid.rolpassword AS coord_passwor
 
 RESET password_encryption;
 DROP ROLE new_role;
+
+
+drop user if exists test1 ;
+
+create user test1;
+
+SELECT run_command_on_workers($$SELECT row() FROM pg_roles WHERE rolname = 'test1'$$);
+
+
+alter user test1 with encrypted password 'test1' nosuperuser noinherit nocreaterole nocreatedb nologin noreplication nobypassrls connection limit -1 valid until 'infinity';
+SELECT run_command_on_workers($$SELECT row(rolname, rolsuper, rolinherit,  rolcreaterole, rolcreatedb, rolcanlogin, rolreplication, rolbypassrls, rolconnlimit, EXTRACT (year FROM rolvaliduntil)) FROM pg_authid WHERE rolname = 'test1'$$);
+alter user test1 with password NULL superuser inherit createrole createdb login replication bypassrls connection limit 10 valid until '2019-01-01';
+SELECT run_command_on_workers($$SELECT row(rolname, rolsuper, rolinherit,  rolcreaterole, rolcreatedb, rolcanlogin, rolreplication, rolbypassrls, rolconnlimit, EXTRACT (year FROM rolvaliduntil)) FROM pg_authid WHERE rolname = 'test1'$$);
+
+
+SET citus.log_remote_commands = true;
+-- Set a custom value for the search_path parameter
+ALTER USER test1 SET search_path TO public, schema2;
+
+-- Reset the search_path parameter to its default value
+ALTER USER test1 SET search_path TO DEFAULT;
+
+-- Set a custom value for the timezone parameter
+ALTER USER test1 SET timezone TO 'America/New_York';
+
+-- Reset the timezone parameter to its default value
+ALTER USER test1 SET timezone TO DEFAULT;
+
+-- Set a custom value for the work_mem parameter
+ALTER USER test1 SET work_mem TO '64MB';
+
+-- Reset the work_mem parameter to its default value
+ALTER USER test1 SET work_mem TO DEFAULT;
+
+-- Set a custom value for the max_connections parameter
+ALTER USER test1 SET max_connections TO 100;
+
+-- Reset the max_connections parameter to its default value
+ALTER USER test1 SET max_connections TO DEFAULT;
+
+-- Set a custom float value for the random_page_cost parameter
+ALTER USER test1 SET random_page_cost TO 1.5;
+
+alter user test1 rename to test2;
+
+drop user if exists test2;
+
+drop user test1;
+
 DROP TABLE test_search_path;
 DROP SCHEMA alter_role, ",CitUs,.TeeN!?", test_sp CASCADE;
