@@ -1307,6 +1307,7 @@ EnsureSequentialModeForRoleDDL(void)
 	SetLocalMultiShardModifyModeToSequential();
 }
 
+
 /*
  * PreprocessAlterDatabaseSetStmt is executed before the statement is applied to the local
  * postgres instance.
@@ -1316,7 +1317,7 @@ EnsureSequentialModeForRoleDDL(void)
  */
 List *
 PreprocessAlterRoleRenameStmt(Node *node, const char *queryString,
-							   ProcessUtilityContext processUtilityContext)
+							  ProcessUtilityContext processUtilityContext)
 {
 	if (!ShouldPropagate())
 	{

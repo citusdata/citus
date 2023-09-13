@@ -817,7 +817,6 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 				ddlJobs = processJobs;
 			}
 		}
-
 	}
 
 	if (IsA(parsetree, CreateStmt))

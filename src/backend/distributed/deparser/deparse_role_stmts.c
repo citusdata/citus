@@ -205,11 +205,10 @@ DeparseCreateRoleStmt(Node *node)
 }
 
 
-
 /*
-	* AppendRoleOption generates the string representation of the DefElem option
-	* and appends it to the buffer.
-	*/
+ * AppendRoleOption generates the string representation of the DefElem option
+ * and appends it to the buffer.
+ */
 static void
 AppendInlinePriviliges(StringInfo buf, ListCell *optionCell)
 {
@@ -232,7 +231,10 @@ AppendInlinePriviliges(StringInfo buf, ListCell *optionCell)
 	}
 }
 
-static void AppendStatementType(StringInfo buf, CreateRoleStmt *stmt){
+
+static void
+AppendStatementType(StringInfo buf, CreateRoleStmt *stmt)
+{
 	switch (stmt->stmt_type)
 	{
 		case ROLESTMT_ROLE:

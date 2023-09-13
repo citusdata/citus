@@ -481,7 +481,7 @@ extern List * PreprocessAlterRoleSetStmt(Node *stmt, const char *queryString,
 										 ProcessUtilityContext processUtilityContext);
 
 extern List * PreprocessAlterRoleRenameStmt(Node *stmt, const char *queryString,
-										 ProcessUtilityContext processUtilityContext);
+											ProcessUtilityContext processUtilityContext);
 
 extern List * GenerateAlterRoleSetCommandForRole(Oid roleid);
 extern List * AlterRoleStmtObjectAddress(Node *node,
