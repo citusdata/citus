@@ -354,36 +354,26 @@ AppendGrantRoleStmt(StringInfo buf, GrantRoleStmt *stmt)
 	if (!stmt->is_grant)
 	{
 		DefElem *opt = NULL;
-		int opt_count = 0 ;
 		foreach_ptr(opt, stmt->opt)
 		{
-			switch (opt->defname)
+			
+           switch (opt->defname)
 			{
 				case "admin":
 					appendStringInfo(buf, "ADMIN OPTION FOR ");
-					opt_count++;
 					break;
 
 				case "inherit":
-					if (opt_count > 0)
-					{
-						appendStringInfo(buf, ", ");
-					}
 					appendStringInfo(buf, "INHERIT OPTION FOR ");
-					opt_count++;
 					break;
 
 				case "set":
-					if (opt_count > 0)
-					{
-						appendStringInfo(buf, ", ");
-					}
 					appendStringInfo(buf, "SET OPTION FOR ");
-					opt_count++;
 					break;
 			}
 		}
 	}
+}
 #else
 	if (!stmt->is_grant && stmt->admin_opt)
 	{
@@ -412,26 +402,39 @@ AppendGrantRoleStmt(StringInfo buf, GrantRoleStmt *stmt)
                 break;
 
 			case "inherit":
-				if (opt_count > 0)
+				  if (opt->arg && IsA(opt->arg, A_Const) && !((A_Const *) opt->arg)->val.val.ival)
 				{
-					appendStringInfo(buf, ", ");
-				}
-				appendStringInfo(buf, "INHERIT OPTION ");
-				opt_count++;
-				break;
-
+					appendStringInfo(buf, " INHERIT FALSE");
+                }
+                else
+                {
+                    if (opt_count > 0)
+                    {
+                        appendStringInfo(buf, ", ");
+                    }
+                    appendStringInfo(buf, " INHERIT OPTION");
+                    opt_count++;
+                }
+                break;
 				
         	case "set":
-  				if (opt_count > 0)
-				{
-					appendStringInfo(buf, ", ");
-				}
-				appendStringInfo(buf, "SET OPTION ");
-				opt_count++;
-				break;
+  				if (opt->arg && IsA(opt->arg, A_Const) && !(( *) opt->arg)->val.val.ival)
+                {
+                    appendStringInfo(buf, " SET FALSE");
+                }
+                else
+                {
+                    if (opt_count > 0)
+                    {
+                        appendStringInfo(buf, ", ");
+                    }
+                    appendStringInfo(buf, " SET OPTION");
+                    opt_count++;
+                }
+                break;
         }
-			}
 		}
+	}
 #else
 		if (stmt->admin_opt)
 		{
