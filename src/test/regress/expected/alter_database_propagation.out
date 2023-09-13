@@ -1,0 +1,36 @@
+set citus.log_remote_commands = true;
+set citus.grep_remote_commands = '%ALTER DATABASE%';
+-- since ALLOW_CONNECTIONS alter option should be executed in a different database
+-- and since we don't have a multiple database support for now,
+-- this statement will get error
+alter database regression ALLOW_CONNECTIONS false;
+ERROR:  ALLOW_CONNECTIONS is not supported
+alter database regression with CONNECTION LIMIT 100;
+NOTICE:  issuing ALTER DATABASE regression WITH  CONNECTION LIMIT 100;
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE regression WITH  CONNECTION LIMIT 100;
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+alter database regression with IS_TEMPLATE true CONNECTION LIMIT 50;
+NOTICE:  issuing ALTER DATABASE regression WITH IS_TEMPLATE 'true' CONNECTION LIMIT 50;
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE regression WITH IS_TEMPLATE 'true' CONNECTION LIMIT 50;
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+alter database regression with CONNECTION LIMIT -1;
+NOTICE:  issuing ALTER DATABASE regression WITH  CONNECTION LIMIT -1;
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE regression WITH  CONNECTION LIMIT -1;
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+alter database regression with IS_TEMPLATE true;
+NOTICE:  issuing ALTER DATABASE regression WITH IS_TEMPLATE 'true';
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE regression WITH IS_TEMPLATE 'true';
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+alter database regression with IS_TEMPLATE false;
+NOTICE:  issuing ALTER DATABASE regression WITH IS_TEMPLATE 'false';
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE regression WITH IS_TEMPLATE 'false';
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+-- this statement will get error since we don't have a multiple database support for now
+alter database regression rename to regression2;
+ERROR:  current database cannot be renamed
+set citus.log_remote_commands = false;

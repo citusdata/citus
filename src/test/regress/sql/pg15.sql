@@ -965,6 +965,11 @@ SELECT (groupid = 0) AS is_coordinator, result FROM run_command_on_all_nodes(
 JOIN pg_dist_node USING (nodeid)
 ORDER BY is_coordinator DESC, result;
 
+set citus.log_remote_commands = true;
+set citus.grep_remote_commands = '%ALTER DATABASE%';
+alter database regression REFRESH COLLATION VERSION;
+set citus.log_remote_commands = false;
+
 -- Clean up
 \set VERBOSITY terse
 SET client_min_messages TO ERROR;
