@@ -34,117 +34,117 @@ DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 alter database regression rename to regression2;
 ERROR:  current database cannot be renamed
 alter database regression set default_transaction_read_only = true;
-NOTICE:  issuing ALTER DATABASE regression  SET default_transaction_read_only = 'true'
+NOTICE:  issuing ALTER DATABASE regression SET default_transaction_read_only = 'true'
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing ALTER DATABASE regression  SET default_transaction_read_only = 'true'
+NOTICE:  issuing ALTER DATABASE regression SET default_transaction_read_only = 'true'
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 set default_transaction_read_only = false;
 alter database regression set default_transaction_read_only from current;
-NOTICE:  issuing ALTER DATABASE regression  SET default_transaction_read_only FROM CURRENT
+NOTICE:  issuing ALTER DATABASE regression SET default_transaction_read_only FROM CURRENT
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing ALTER DATABASE regression  SET default_transaction_read_only FROM CURRENT
+NOTICE:  issuing ALTER DATABASE regression SET default_transaction_read_only FROM CURRENT
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 alter database regression set default_transaction_read_only to DEFAULT;
-NOTICE:  issuing ALTER DATABASE regression  SET default_transaction_read_only TO DEFAULT
+NOTICE:  issuing ALTER DATABASE regression SET default_transaction_read_only TO DEFAULT
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing ALTER DATABASE regression  SET default_transaction_read_only TO DEFAULT
+NOTICE:  issuing ALTER DATABASE regression SET default_transaction_read_only TO DEFAULT
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 alter database regression RESET default_transaction_read_only;
-NOTICE:  issuing ALTER DATABASE regression  RESET default_transaction_read_only
+NOTICE:  issuing ALTER DATABASE regression RESET default_transaction_read_only
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing ALTER DATABASE regression  RESET default_transaction_read_only
+NOTICE:  issuing ALTER DATABASE regression RESET default_transaction_read_only
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 alter database regression SET TIME ZONE '-7';
-NOTICE:  issuing ALTER DATABASE regression  SET timezone = '-7'
+NOTICE:  issuing ALTER DATABASE regression SET timezone = '-7'
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing ALTER DATABASE regression  SET timezone = '-7'
+NOTICE:  issuing ALTER DATABASE regression SET timezone = '-7'
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 alter database regression set TIME ZONE LOCAL;
-NOTICE:  issuing ALTER DATABASE regression  SET timezone TO DEFAULT
+NOTICE:  issuing ALTER DATABASE regression SET timezone TO DEFAULT
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing ALTER DATABASE regression  SET timezone TO DEFAULT
+NOTICE:  issuing ALTER DATABASE regression SET timezone TO DEFAULT
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 alter database regression set TIME ZONE DEFAULT;
-NOTICE:  issuing ALTER DATABASE regression  SET timezone TO DEFAULT
+NOTICE:  issuing ALTER DATABASE regression SET timezone TO DEFAULT
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing ALTER DATABASE regression  SET timezone TO DEFAULT
+NOTICE:  issuing ALTER DATABASE regression SET timezone TO DEFAULT
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 alter database regression RESET TIME ZONE;
-NOTICE:  issuing ALTER DATABASE regression  RESET timezone
+NOTICE:  issuing ALTER DATABASE regression RESET timezone
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing ALTER DATABASE regression  RESET timezone
+NOTICE:  issuing ALTER DATABASE regression RESET timezone
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 alter database regression SET TIME ZONE INTERVAL '-08:00' HOUR TO MINUTE;
-NOTICE:  issuing ALTER DATABASE regression  SET TIME ZONE INTERVAL '@ 8 hours ago'
+NOTICE:  issuing ALTER DATABASE regression SET TIME ZONE INTERVAL '@ 8 hours ago'
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing ALTER DATABASE regression  SET TIME ZONE INTERVAL '@ 8 hours ago'
+NOTICE:  issuing ALTER DATABASE regression SET TIME ZONE INTERVAL '@ 8 hours ago'
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 alter database regression RESET TIME ZONE;
-NOTICE:  issuing ALTER DATABASE regression  RESET timezone
+NOTICE:  issuing ALTER DATABASE regression RESET timezone
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing ALTER DATABASE regression  RESET timezone
+NOTICE:  issuing ALTER DATABASE regression RESET timezone
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 alter database regression set default_transaction_isolation = 'serializable';
-NOTICE:  issuing ALTER DATABASE regression  SET default_transaction_isolation = 'serializable'
+NOTICE:  issuing ALTER DATABASE regression SET default_transaction_isolation = 'serializable'
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing ALTER DATABASE regression  SET default_transaction_isolation = 'serializable'
+NOTICE:  issuing ALTER DATABASE regression SET default_transaction_isolation = 'serializable'
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 set default_transaction_isolation = 'read committed';
 alter database regression set default_transaction_isolation from current;
-NOTICE:  issuing ALTER DATABASE regression  SET default_transaction_isolation FROM CURRENT
+NOTICE:  issuing ALTER DATABASE regression SET default_transaction_isolation FROM CURRENT
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing ALTER DATABASE regression  SET default_transaction_isolation FROM CURRENT
+NOTICE:  issuing ALTER DATABASE regression SET default_transaction_isolation FROM CURRENT
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 alter database regression set default_transaction_isolation to DEFAULT;
-NOTICE:  issuing ALTER DATABASE regression  SET default_transaction_isolation TO DEFAULT
+NOTICE:  issuing ALTER DATABASE regression SET default_transaction_isolation TO DEFAULT
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing ALTER DATABASE regression  SET default_transaction_isolation TO DEFAULT
+NOTICE:  issuing ALTER DATABASE regression SET default_transaction_isolation TO DEFAULT
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 alter database regression RESET default_transaction_isolation;
-NOTICE:  issuing ALTER DATABASE regression  RESET default_transaction_isolation
+NOTICE:  issuing ALTER DATABASE regression RESET default_transaction_isolation
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing ALTER DATABASE regression  RESET default_transaction_isolation
+NOTICE:  issuing ALTER DATABASE regression RESET default_transaction_isolation
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 alter database regression set statement_timeout = 1000;
-NOTICE:  issuing ALTER DATABASE regression  SET statement_timeout = 1000
+NOTICE:  issuing ALTER DATABASE regression SET statement_timeout = 1000
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing ALTER DATABASE regression  SET statement_timeout = 1000
+NOTICE:  issuing ALTER DATABASE regression SET statement_timeout = 1000
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 set statement_timeout = 2000;
 alter database regression set statement_timeout from current;
-NOTICE:  issuing ALTER DATABASE regression  SET statement_timeout FROM CURRENT
+NOTICE:  issuing ALTER DATABASE regression SET statement_timeout FROM CURRENT
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing ALTER DATABASE regression  SET statement_timeout FROM CURRENT
+NOTICE:  issuing ALTER DATABASE regression SET statement_timeout FROM CURRENT
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 alter database regression set statement_timeout to DEFAULT;
-NOTICE:  issuing ALTER DATABASE regression  SET statement_timeout TO DEFAULT
+NOTICE:  issuing ALTER DATABASE regression SET statement_timeout TO DEFAULT
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing ALTER DATABASE regression  SET statement_timeout TO DEFAULT
+NOTICE:  issuing ALTER DATABASE regression SET statement_timeout TO DEFAULT
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 alter database regression RESET statement_timeout;
-NOTICE:  issuing ALTER DATABASE regression  RESET statement_timeout
+NOTICE:  issuing ALTER DATABASE regression RESET statement_timeout
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing ALTER DATABASE regression  RESET statement_timeout
+NOTICE:  issuing ALTER DATABASE regression RESET statement_timeout
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 alter database regression set lock_timeout = 1201.5;
-NOTICE:  issuing ALTER DATABASE regression  SET lock_timeout = 1201.5
+NOTICE:  issuing ALTER DATABASE regression SET lock_timeout = 1201.5
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing ALTER DATABASE regression  SET lock_timeout = 1201.5
+NOTICE:  issuing ALTER DATABASE regression SET lock_timeout = 1201.5
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 set lock_timeout = 1202.5;
 alter database regression set lock_timeout from current;
-NOTICE:  issuing ALTER DATABASE regression  SET lock_timeout FROM CURRENT
+NOTICE:  issuing ALTER DATABASE regression SET lock_timeout FROM CURRENT
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing ALTER DATABASE regression  SET lock_timeout FROM CURRENT
+NOTICE:  issuing ALTER DATABASE regression SET lock_timeout FROM CURRENT
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 alter database regression set lock_timeout to DEFAULT;
-NOTICE:  issuing ALTER DATABASE regression  SET lock_timeout TO DEFAULT
+NOTICE:  issuing ALTER DATABASE regression SET lock_timeout TO DEFAULT
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing ALTER DATABASE regression  SET lock_timeout TO DEFAULT
+NOTICE:  issuing ALTER DATABASE regression SET lock_timeout TO DEFAULT
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 alter database regression RESET lock_timeout;
-NOTICE:  issuing ALTER DATABASE regression  RESET lock_timeout
+NOTICE:  issuing ALTER DATABASE regression RESET lock_timeout
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing ALTER DATABASE regression  RESET lock_timeout
+NOTICE:  issuing ALTER DATABASE regression RESET lock_timeout
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 set citus.log_remote_commands = false;

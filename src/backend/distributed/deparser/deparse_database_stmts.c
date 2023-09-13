@@ -185,7 +185,7 @@ DeparseAlterDatabaseRefreshCollStmt(Node *node)
 static void
 AppendAlterDatabaseSetStmt(StringInfo buf, AlterDatabaseSetStmt *stmt)
 {
-	appendStringInfo(buf, "ALTER DATABASE %s ", quote_identifier(stmt->dbname));
+	appendStringInfo(buf, "ALTER DATABASE %s", quote_identifier(stmt->dbname));
 
 	VariableSetStmt *varSetStmt = castNode(VariableSetStmt, stmt->setstmt);
 
