@@ -34,7 +34,7 @@
 
 * Makes sure that rebalancer throws an error if replication factor is greater
   than the shard allowed node count. Also makes sure to avoid moving a shard
-  to a node that it already exists on (#7074)
+  to a node that it already exists on. (#7074)
 
 * Fixes a bug that may appear during 2PC recovery when there are multiple
   databases (#7174)
