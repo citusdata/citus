@@ -2,50 +2,53 @@
 
 * Adds PostgreSQL 16 RC1 support (#7173)
 
-* Propagates BUFFER_USAGE_LIMIT option in VACUUM and ANALYZE (#7114)
-
-* Propagates PROCESS_MAIN, SKIP_DATABASE_STATS, ONLY_DATABASE_STATS options
-  in VACUUM (#7114)
-
-* Propagates GENERIC_PLAN option in EXPLAIN (#7141)
-
-* Adds citus_truncate_trigger to Citus foreign tables (#7170)
-
-* Propagates "rules" option in CREATE COLLATION (#7185)
-
-* Add citus_schema_move() function which moves tenant tables within
+* Add `citus_schema_move()` function which moves tenant tables within
   a distributed schema to another node (#7180)
+
+* Adds `citus_pause_node()` UDF that allows pausing the node with given id
+  (#7089)
+
+* Makes sure to enforce shard level colocation with the GUC
+  `citus.enable_non_colocated_router_query_pushdown` (#7076)
 
 * Allows creating reference / distributed-schema tables from local tables added
   to metadata and that use identity columns (#7131)
 
-* Adds grant/revoke propagation support for database privileges (#7109)
+* Propagates `BUFFER_USAGE_LIMIT` option in `VACUUM` and `ANALYZE` (#7114)
 
-* Presenting citus_pause_node UDF enabling pausing by node_id (#7089)
+* Propagates `PROCESS_MAIN`, `SKIP_DATABASE_STATS`, `ONLY_DATABASE_STATS`
+  options in `VACUUM` (#7114)
 
-* Removes pg_send_cancellation (#7135)
+* Propagates `GENERIC_PLAN` option in `EXPLAIN` (#7141)
+
+* Propagates "rules" option in `CREATE COLLATION` (#7185)
+
+* Propagates `GRANT`/ `REVOKE` for database privileges (#7109)
+
+* Adds citus_truncate_trigger to Citus foreign tables (#7170)
+
+* Removes `pg_send_cancellation` (#7135)
 
 * Prevents unnecessarily pulling the data into coordinator for some
-  INSERT .. SELECT queries that target a single-shard group (#7077)
+  `INSERT .. SELECT` queries that target a single-shard group (#7077)
 
-* Error out when rebalancing if replication factor is greater than the shard
-  allowed node count. Do not move a shard to a node that it already exists on
-  (#7074)
+* Makes sure that rebalancer throws an error if replication factor is greater
+  than the shard allowed node count. Also makes sure to avoid moving a shard
+  to a node that it already exists on (#7074)
 
 * Fixes a bug that may appear during 2PC recovery when there are multiple
   databases (#7174)
 
-* Fixes a bug that could cause COPY logic to skip data in case of OO (#7152)
+* Fixes a bug that could cause `COPY` logic to skip data in case of
+  out-of-memory (#7152)
 
 * Fixes a bug that causes an unexpected error when adding a column with
-  a NULL constraint (#7093)
+  a `NULL` constraint (#7093)
 
-* Fixes PROCESS_TOAST default value to true (#7122)
+* Fixes `PROCESS_TOAST` default value to `true` (#7122)
 
-* Provide better error messaging for MERGE ON clause, datatype mismatch (#7081)
-
-* Enforce shard level colocation with the GUC
-  citus.enable_non_colocated_router_query_pushdown (#7076)
+* Improves the error thrown when there is datatype mismatch in `MERGE ON`
+  (#7081)
 
 ### citus v12.0.0 (July 11, 2023) ###
 
