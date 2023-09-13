@@ -382,27 +382,30 @@ SELECT run_command_on_workers($$SELECT row(rolname, rolsuper, rolinherit,  rolcr
  (localhost,57638,t,"(test1,t,t,t,t,t,t,t,10,2019)")
 (2 rows)
 
+SET citus.enable_alter_role_set_propagation TO on;
+SET citus.log_remote_commands = true;
+set citus.grep_remote_commands = '%ALTER ROLE%';
+ALTER USER test1 SET timezone TO 'America/New_York';
+NOTICE:  issuing ALTER ROLE test1 SET timezone = 'America/New_York'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER ROLE test1 SET timezone = 'America/New_York'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+ALTER USER test1 SET work_mem TO '64MB';
+NOTICE:  issuing ALTER ROLE test1 SET work_mem = '64MB'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER ROLE test1 SET work_mem = '64MB'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+ALTER USER test1 SET random_page_cost TO 1.5;
+NOTICE:  issuing ALTER ROLE test1 SET random_page_cost = 1.5
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER ROLE test1 SET random_page_cost = 1.5
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 alter user test1 rename to test2;
-NOTICE:  not propagating ALTER ROLE ... RENAME TO commands to worker nodes
-HINT:  Connect to worker nodes directly to manually rename the role
+NOTICE:  issuing ALTER ROLE test1 RENAME TO test2;
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER ROLE test1 RENAME TO test2;
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 drop user if exists test2;
-create user test1 with password NULL superuser inherit createrole createdb login replication bypassrls connection limit 10 valid until '2019-01-01';
-SELECT run_command_on_workers($$SELECT row(rolname, rolsuper, rolinherit,  rolcreaterole, rolcreatedb, rolcanlogin, rolreplication, rolbypassrls, rolconnlimit, EXTRACT (year FROM rolvaliduntil)) FROM pg_authid WHERE rolname = 'test1'$$);
-               run_command_on_workers
----------------------------------------------------------------------
- (localhost,57637,t,"(test1,t,t,t,t,t,t,t,10,2019)")
- (localhost,57638,t,"(test1,t,t,t,t,t,t,t,10,2019)")
-(2 rows)
-
-drop user if exists test1;
-create user test1 with encrypted password 'test1' nosuperuser noinherit nocreaterole nocreatedb nologin noreplication nobypassrls connection limit -1 valid until 'infinity';
-SELECT run_command_on_workers($$SELECT row(rolname, rolsuper, rolinherit,  rolcreaterole, rolcreatedb, rolcanlogin, rolreplication, rolbypassrls, rolconnlimit, EXTRACT (year FROM rolvaliduntil)) FROM pg_authid WHERE rolname = 'test1'$$);
-                 run_command_on_workers
----------------------------------------------------------------------
- (localhost,57637,t,"(test1,f,f,f,f,f,f,f,-1,Infinity)")
- (localhost,57638,t,"(test1,f,f,f,f,f,f,f,-1,Infinity)")
-(2 rows)
-
-drop user test1;
+SET citus.log_remote_commands = false;
 DROP TABLE test_search_path;
 DROP SCHEMA alter_role, ",CitUs,.TeeN!?", test_sp CASCADE;
