@@ -1,6 +1,6 @@
 ### citus v12.1.0 (September 12, 2023) ###
 
-* Adds support for PostgreSQL 16.0 (#7173)
+* Adds support for PostgreSQL 16 RC1 (#7173)
 
 * Add `citus_schema_move()` function which moves tables within a
   distributed schema to another node (#7180)
