@@ -4,7 +4,8 @@
 
 * Propagates BUFFER_USAGE_LIMIT option in VACUUM and ANALYZE (#7114)
 
-* Propagates PROCESS_MAIN, SKIP_DATABASE_STATS, ONLY_DATABASE_STATS options in VACUUM (#7114)
+* Propagates PROCESS_MAIN, SKIP_DATABASE_STATS, ONLY_DATABASE_STATS options
+  in VACUUM (#7114)
 
 * Propagates GENERIC_PLAN option in EXPLAIN (#7141)
 
@@ -43,7 +44,8 @@
 
 * Provide better error messaging for MERGE ON clause, datatype mismatch (#7081)
 
-* Enforce shard level colocation with citus.enable_non_colocated_router_query_pushdown (#7076)
+* Enforce shard level colocation with the GUC
+  citus.enable_non_colocated_router_query_pushdown (#7076)
 
 ### citus v12.0.0 (July 11, 2023) ###
 
