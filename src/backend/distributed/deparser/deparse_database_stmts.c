@@ -23,9 +23,12 @@
 #include "commands/defrem.h"
 #include "distributed/deparser.h"
 #include "distributed/log_utils.h"
+#include "parser/parse_type.h"
+
 
 static void AppendAlterDatabaseOwnerStmt(StringInfo buf, AlterOwnerStmt *stmt);
 static void AppendAlterDatabaseStmt(StringInfo buf, AlterDatabaseStmt *stmt);
+static void AppendDefElemConnLimit(StringInfo buf, DefElem *def);
 
 char *
 DeparseAlterDatabaseOwnerStmt(Node *node)
@@ -178,3 +181,27 @@ DeparseAlterDatabaseRefreshCollStmt(Node *node)
 
 
 #endif
+
+static void
+AppendAlterDatabaseSetStmt(StringInfo buf, AlterDatabaseSetStmt *stmt)
+{
+	appendStringInfo(buf, "ALTER DATABASE %s", quote_identifier(stmt->dbname));
+
+	VariableSetStmt *varSetStmt = castNode(VariableSetStmt, stmt->setstmt);
+
+	AppendVariableSet(buf, varSetStmt);
+}
+
+
+char *
+DeparseAlterDatabaseSetStmt(Node *node)
+{
+	AlterDatabaseSetStmt *stmt = castNode(AlterDatabaseSetStmt, node);
+
+	StringInfoData str = { 0 };
+	initStringInfo(&str);
+
+	AppendAlterDatabaseSetStmt(&str, stmt);
+
+	return str.data;
+}

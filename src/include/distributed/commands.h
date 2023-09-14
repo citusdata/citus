@@ -231,6 +231,10 @@ extern List * PreprocessAlterDatabaseRefreshCollStmt(Node *node, const char *que
 													 processUtilityContext);
 
 
+extern List * PreprocessAlterDatabaseSetStmt(Node *node, const char *queryString,
+											 ProcessUtilityContext processUtilityContext);
+
+
 /* domain.c - forward declarations */
 extern List * CreateDomainStmtObjectAddress(Node *node, bool missing_ok, bool
 											isPostprocess);
