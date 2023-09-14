@@ -144,4 +144,13 @@ extern void CoordinatedRemoteTransactionsSavepointBegin(SubTransactionId subId);
 extern void CoordinatedRemoteTransactionsSavepointRelease(SubTransactionId subId);
 extern void CoordinatedRemoteTransactionsSavepointRollback(SubTransactionId subId);
 
+extern void RunCitusMainDBQuery(char *query);
+extern void CleanCitusMainDBConnection(void);
+
+extern bool IsMainDBCommand;
+extern bool IsMainDB;
+extern char *SuperuserRole;
+extern char *MainDb;
+extern struct MultiConnection *MainDBConnection;
+
 #endif /* REMOTE_TRANSACTION_H */

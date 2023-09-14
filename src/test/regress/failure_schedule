@@ -20,6 +20,7 @@ test: failure_create_distributed_table_non_empty
 test: failure_create_table
 test: failure_create_distributed_table_concurrently
 test: failure_single_select
+test: failure_non_main_db_2pc
 
 test: failure_multi_shard_update_delete
 test: failure_cte_subquery
