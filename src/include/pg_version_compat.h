@@ -46,6 +46,8 @@ get_guc_variables_compat(int *gucCount)
 #define object_ownercheck(a, b, c) object_ownercheck(a, b, c)
 #define object_aclcheck(a, b, c, d) object_aclcheck(a, b, c, d)
 
+#define pgstat_fetch_stat_local_beentry(a) pgstat_get_local_beentry_by_index(a)
+
 #else
 
 #include "catalog/pg_class_d.h"
