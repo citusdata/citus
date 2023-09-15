@@ -51,7 +51,7 @@ jobs:
         POSTGRES_VERSION: ${{ fromJson(needs.get_postgres_versions_from_file.outputs.pg_versions) }}
         # Postgres removed support for CentOS 7 in PG 16. Below block is needed to
         # keep the build for CentOS 7 working for PG 14 and PG 15.
-        # Once Marlin drop support for Centos 7, we can remove this block.
+        # Once dependent systems drop support for Centos 7, we can remove this block.
         include:
           - packaging_docker_image: centos-7
             POSTGRES_VERSION: 14
