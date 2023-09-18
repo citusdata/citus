@@ -1524,9 +1524,11 @@ We also use top-level executor hooks, but primarily to capture some execution ti
 
 We use a separate custom scans for insert..select and merge commands due to the specialized nature of these commands (multiple phases). 
 
+![Diagram of CustomScan APIs](https://wiki.postgresql.org/images/0/05/CustomScan_Fig01.png)
+
 ## Function evaluation 
 
-It is often necessary to evaluate function calls on the coordinator, rather than pushing them down to the worker node. One example is evaluating nextval(..) in an insert, or stable functions that should return the same value for the duration of the query. This is especially true for writes to replicated (reference) tables, since we cannot afford to push down function calls that might return different values on different nodes. We do this on the “job query” of the distributed plan in ExecuteCoordinatorEvaluableExpressions, before deparsing the query. 
+It is often necessary to evaluate function calls on the coordinator, rather than pushing them down to the worker node. One example is evaluating the `nextval('my_sequence')` in an insert, or stable functions like `now()` that should return the same value for the duration of the query. This is especially true for writes to replicated (reference) tables, since we cannot afford to push down function calls that might return different values on different nodes. We perform function evaluation on the “job query” of the distributed plan in `ExecuteCoordinatorEvaluableExpressions`, before deparsing the query. 
 
 Whether a function call should be evaluated once on the coordinator, or many times (e.g. for every row) depends on the context in which the function call appears. For instance, a function call in a WHERE or SELECT clause might be evaluated many times, while a function call in a VALUES clause will only be evaluated once. On the other hand, stable & immutable functions are expected to return the same result for the same input for the whole query execution, so they should be evaluated once, unless their input can change (e.g. parameter is a column). 
 
@@ -1663,9 +1665,8 @@ Re-partitioning happens when joining distributed tables on columns other than th
 
 Two stages are executed to resolve the dependent jobs: 
 
-Run a query on all shards using the worker_partition_query_result function, which writes the result of the query to a set of intermediate results based on a partition column and set of hash ranges 
-
-Fetch the intermediate results to the target node using fetch_intermediate_result, for each source shard group & target hash range pair. 
+- Run a query on all shards using the worker_partition_query_result function, which writes the result of the query to a set of intermediate results based on a partition column and set of hash ranges 
+- Fetch the intermediate results to the target node using fetch_intermediate_result, for each source shard group & target hash range pair. 
 
 Note that these stages are run in parallel for all dependent jobs (read: all tables in a join) by building a combined task list and passing it to the adaptive executor. This logic primarily lives in ExecuteTasksInDependencyOrder.  
 
@@ -1701,7 +1702,7 @@ For local shards, COPY can also use local execution. We use local execution by d
 
 The COPY .. TO command is used to dump the data from a table, or to get the output of a query in CSV format. The COPY (SELECT ..) TO syntax does not use any special logic. PostgreSQL’s implementation will plan and execute the query in the usual way, and Citus will intercept queries on distributed tables. That means these commands do not use COPY internally to query the shards. Instead, the results of the query are buffered in a tuple store and then converted to CSV. 
 
-The COPY distributed_table TO .. syntax will typically return a lot of data and buffering it all in a tuplestore would cause issues. Therefore, Citus uses the process utility hook to propagate the COPY distributed_table TO .. command to each shard one by one. If the user asked for a header, it is only requested from the first shard. 
+The COPY distributed_table TO .. syntax will typically return a lot of data and buffering it all in a tuplestore would cause issues. Therefore, Citus uses the process utility hook to propagate the COPY distributed_table TO .. command to each shard one by one. The output is forwarded directly to the client. If the user asked for a header, it is only requested from the first shard to avoid repeating it for each shard. 
 
 ## INSERT..SELECT 
 
