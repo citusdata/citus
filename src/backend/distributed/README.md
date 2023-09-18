@@ -1,6 +1,6 @@
 # Citus Technical Documentation 
 
-The purpose of this document is to provide comprehensive technical documentation for Citus. We plan to move it into READMEs. 
+The purpose of this document is to provide comprehensive technical documentation for Citus.
 
 
 # Citus Concepts 
@@ -1853,6 +1853,10 @@ An update across shards
 UPDATE test SET value = 3 WHERE value = 2; 
 ```
 
+An update across shards 
+```sql
+UPDATE test SET value = 3 WHERE value = 2; 
+```
 If Citus provided serializability, there could only be 2 outcomes (a happens first or b happens first). However, it can have at least 4 outcomes, because the update depends on the inserts, and it might see only one of the insert as committed. 
 
 This can happen because the inserts commit using a 2PC if the shards are on different nodes, and therefore they might not become visible at exactly the same time. Since the commits happen in parallel, there are no guarantees w.r.t. which insert becomes visible first. The update could see either insert as committed, or none, or both, depending on exact timings. Hence, there is no well-defined order between a and b, theye are intertwined. 
