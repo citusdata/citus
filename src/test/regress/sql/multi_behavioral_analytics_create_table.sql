@@ -116,5 +116,3 @@ INSERT INTO events_reference_table SELECT * FROM events_table;
 CREATE TABLE users_reference_table (like users_table including all);
 SELECT create_reference_table('users_reference_table');
 INSERT INTO users_reference_table SELECT * FROM users_table;
-
-
