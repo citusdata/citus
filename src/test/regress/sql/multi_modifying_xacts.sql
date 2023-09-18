@@ -1065,8 +1065,7 @@ INSERT INTO numbers_hash_failure_test VALUES (2,2);
 -- connect back to the master with the proper user to continue the tests
 \c - :default_user - :master_port
 SET search_path TO multi_modifying_xacts;
-SET citus.next_shard_id TO 1200020;
-SET citus.next_placement_id TO 1200033;
+
 -- unbreak both nodes by renaming the user back to the original name
 \c - :default_user - :worker_2_port
 SET search_path TO multi_modifying_xacts;
@@ -1082,6 +1081,9 @@ set citus.enable_alter_role_propagation=true;
 
 \c - :default_user - :master_port
 SET search_path TO multi_modifying_xacts;
+
+SET citus.next_shard_id TO 1200020;
+SET citus.next_placement_id TO 1200033;
 
 DROP TABLE reference_modifying_xacts, hash_modifying_xacts, hash_modifying_xacts_second,
 	reference_failure_test, numbers_hash_failure_test;
