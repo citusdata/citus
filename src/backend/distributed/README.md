@@ -1672,11 +1672,7 @@ Note that these stages are run in parallel for all dependent jobs (read: all tab
 
 Once all dependent jobs are finished, the main Job is executed via the regular adaptive executor code path. The main job will include calls to read_intermediate_result that concatenate all the intermediate results for a particular hash range. 
 
-A diagram of a machine
-
-Description automatically generated 
-
-repartitioning.pptx 
+![Example of single hash repartition join](../../../images/single-repartition-join.png)
 
 Dependent jobs have similarities with subplans. A Job can only be distributed query without a merge step, which is what allows the results to be repartitioned, while a subplan can be any type of plan, and is always broadcast. One could imagine a subplan also being repartitioned if it is subsequently used in a join with a distributed table. The difference between subplans and jobs in the distributed query plans are one of the most significant technical debts. 
 
