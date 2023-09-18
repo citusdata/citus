@@ -1409,18 +1409,18 @@ JOIN
 USING (shardid)
 ORDER BY
   id;
- id |             shard_name             | nodename  | nodeport
+ id |             shard_name              | nodename  | nodeport
 ---------------------------------------------------------------------
-  1 | multi_modifying_xacts.users_102014 | localhost |    57637
-  2 | multi_modifying_xacts.users_102017 | localhost |    57638
-  3 | multi_modifying_xacts.users_102015 | localhost |    57638
-  4 | multi_modifying_xacts.users_102015 | localhost |    57638
-  5 | multi_modifying_xacts.users_102014 | localhost |    57637
-  6 | multi_modifying_xacts.users_102016 | localhost |    57637
-  7 | multi_modifying_xacts.users_102015 | localhost |    57638
-  8 | multi_modifying_xacts.users_102014 | localhost |    57637
-  9 | multi_modifying_xacts.users_102017 | localhost |    57638
- 10 | multi_modifying_xacts.users_102014 | localhost |    57637
+  1 | multi_modifying_xacts.users_1190016 | localhost |    57637
+  2 | multi_modifying_xacts.users_1190019 | localhost |    57638
+  3 | multi_modifying_xacts.users_1190017 | localhost |    57638
+  4 | multi_modifying_xacts.users_1190017 | localhost |    57638
+  5 | multi_modifying_xacts.users_1190016 | localhost |    57637
+  6 | multi_modifying_xacts.users_1190018 | localhost |    57637
+  7 | multi_modifying_xacts.users_1190017 | localhost |    57638
+  8 | multi_modifying_xacts.users_1190016 | localhost |    57637
+  9 | multi_modifying_xacts.users_1190019 | localhost |    57638
+ 10 | multi_modifying_xacts.users_1190016 | localhost |    57637
 (10 rows)
 
 END;
