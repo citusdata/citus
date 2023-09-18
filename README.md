@@ -429,6 +429,8 @@ When you send a query in which all (co-located) distributed tables have the same
 
 The schema and metadata of distributed tables and reference tables are automatically synchronized to all the nodes in the cluster. That way, you can connect to any node to run distributed queries. Schema changes and cluster administration still need to go through the coordinator.
 
+Detailed descriptions of the implementation for Citus developers are provided in the [Citus Technical Documentation](src/backend/distributed/README.md).
+
 ## When to use Citus
 
 Citus is uniquely capable of scaling both analytical and transactional workloads with up to petabytes of data. Use cases in which Citus is commonly used:
