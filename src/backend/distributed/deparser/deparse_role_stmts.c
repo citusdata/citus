@@ -164,10 +164,6 @@ AppendRoleOption(StringInfo buf, ListCell *optionCell)
 	{
 		appendStringInfo(buf, " CONNECTION LIMIT %d", intVal(option->arg));
 	}
-	else if (strcmp(option->defname, "sysid") == 0)
-	{
-		appendStringInfo(buf, " SYSID %d", intVal(option->arg));
-	}
 	else if (strcmp(option->defname, "password") == 0)
 	{
 		if (option->arg != NULL)
@@ -204,10 +200,20 @@ DeparseCreateRoleStmt(Node *node)
 	return buf.data;
 }
 
+static void
+AppendSysIdStatement(StringInfo buf, ListCell *optionCell)
+{
+	DefElem *option = (DefElem *) lfirst(optionCell);
+	if (strcmp(option->defname, "sysid") == 0)
+	{
+		appendStringInfo(buf, " SYSID %d", intVal(option->arg));
+	}
+}
+
 
 /*
- * AppendRoleOption generates the string representation of the DefElem option
- * and appends it to the buffer.
+ * AppendInlinePriviliges generates the string representation for the inline
+ * privileges of the role in create statement and appends it to the buffer.
  */
 static void
 AppendInlinePriviliges(StringInfo buf, ListCell *optionCell)
@@ -277,6 +283,7 @@ AppendCreateRoleStmt(StringInfo buf, CreateRoleStmt *stmt)
 	{
 		AppendRoleOption(buf, optionCell);
 		AppendInlinePriviliges(buf, optionCell);
+		AppendSysIdStatement(buf, optionCell);
 	}
 }
 

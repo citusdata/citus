@@ -405,7 +405,7 @@ NOTICE:  issuing ALTER ROLE test1 RENAME TO test2;
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing ALTER ROLE test1 RENAME TO test2;
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-drop user if exists test2;
+drop user test2;
 SET citus.log_remote_commands = false;
 DROP TABLE test_search_path;
 DROP SCHEMA alter_role, ",CitUs,.TeeN!?", test_sp CASCADE;

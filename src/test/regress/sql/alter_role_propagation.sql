@@ -146,7 +146,7 @@ ALTER USER test1 SET random_page_cost TO 1.5;
 
 alter user test1 rename to test2;
 
-drop user if exists test2;
+drop user test2;
 
 SET citus.log_remote_commands = false;
 
