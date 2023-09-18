@@ -1324,6 +1324,11 @@ PreprocessAlterRoleRenameStmt(Node *node, const char *queryString,
 		return NIL;
 	}
 
+	if(!EnableAlterRolePropagation)
+	{
+		return NIL;
+	}
+
 	RenameStmt *stmt = castNode(RenameStmt, node);
 	Assert(stmt->renameType == OBJECT_ROLE);
 
@@ -1352,3 +1357,4 @@ RenameRoleStmtObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
 
 	return list_make1(address);
 }
+

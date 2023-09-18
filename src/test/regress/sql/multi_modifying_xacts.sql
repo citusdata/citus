@@ -981,7 +981,9 @@ SET citus.override_table_visibility TO false;
 -- and rename the existing user
 \c - :default_user - :worker_1_port
 SET search_path TO multi_modifying_xacts;
+set citus.enable_alter_role_propagation=false;
 ALTER USER test_user RENAME TO test_user_new;
+set citus.enable_alter_role_propagation=true;
 
 -- connect back to master and query the reference table
  \c - test_user - :master_port
@@ -1050,7 +1052,9 @@ SELECT count(*) FROM numbers_hash_failure_test;
 -- break the other node as well
 \c - :default_user - :worker_2_port
 SET search_path TO multi_modifying_xacts;
+set citus.enable_alter_role_propagation=false;
 ALTER USER test_user RENAME TO test_user_new;
+set citus.enable_alter_role_propagation=true;
 
 \c - test_user - :master_port
 SET search_path TO multi_modifying_xacts;
@@ -1064,7 +1068,20 @@ SET search_path TO multi_modifying_xacts;
 SET citus.next_shard_id TO 1200020;
 SET citus.next_placement_id TO 1200033;
 -- unbreak both nodes by renaming the user back to the original name
-SELECT * FROM run_command_on_workers('ALTER USER test_user_new RENAME TO test_user');
+\c - :default_user - :worker_2_port
+SET search_path TO multi_modifying_xacts;
+set citus.enable_alter_role_propagation=false;
+ALTER USER test_user_new RENAME TO test_user;
+set citus.enable_alter_role_propagation=true;
+
+\c - :default_user - :worker_1_port
+SET search_path TO multi_modifying_xacts;
+set citus.enable_alter_role_propagation=false;
+ALTER USER test_user_new RENAME TO test_user;
+set citus.enable_alter_role_propagation=true;
+
+\c - :default_user - :master_port
+SET search_path TO multi_modifying_xacts;
 
 DROP TABLE reference_modifying_xacts, hash_modifying_xacts, hash_modifying_xacts_second,
 	reference_failure_test, numbers_hash_failure_test;
