@@ -1885,27 +1885,27 @@ Multi-node transactions provide atomicity, consistency, and durability guarantee
 An example anomaly that can occur is two distributed transactions: 
 
 Two inserts in a transaction block into two different shards 
-
+```sql
 BEGIN;  
 INSERT INTO test (key, value) VALUES (1,2);  
 INSERT INTO test (key, value) VALUES (2,2); 
 END; 
-
+```
 An update across shards 
-
+```sql
 UPDATE test SET value = 3 WHERE value = 2; 
-
+```
 If Citus provided serializability, there could only be 2 outcomes (a happens first or b happens first). However, it can have at least 4 outcomes, because the update depends on the inserts, and it might see only one of the insert as committed. 
 
 This can happen because the inserts commit using a 2PC if the shards are on different nodes, and therefore they might not become visible at exactly the same time. Since the commits happen in parallel, there are no guarantees w.r.t. which insert becomes visible first. The update could see either insert as committed, or none, or both, depending on exact timings. Hence, there is no well-defined order between a and b, theye are intertwined. 
 
 If the inserts depend on the update, there may be even more possible outcomes. For instance, if there is a unique constraint on (key, value), and we do upserts concurrently with the multi-shard update: 
-
+```sql
 BEGIN;  
 INSERT INTO test (key, value) VALUES (1,2) ON CONFLICT DO NOTHING;  
 INSERT INTO test (key, value) VALUES (2,2) ON CONFLICT DO NOTHING; 
 END; 
-
+```
 Now, whether the insert proceeds or does nothing depends on whether the update is already committed or not. Hence, this scenario has 6 possible outcomes.  
 
 It is hard for users to understand these semantics and their implications. Therefore, many database researchers and engineers have a strong preference for serializability. Having fewer possible outcomes means less potential for bugs and unintended situations. On the other hand, the performance impacts of snapshot isolation are generally significant, and we have not seen a lot of problems due to the lack of snapshot isolation in practice. The types of transactional workloads that scale well and therefore benefit from Citus are the types of workloads that scope their transactions to a single node and therefore get all the usual PostgreSQL guarantees. 
