@@ -44,7 +44,6 @@ jobs:
         # For this reason, we need to use a "matrix" to generate names of
         # rpm images, e.g. citus/packaging:centos-7-pg12
         packaging_docker_image:
-          - oraclelinux-7
           - oraclelinux-8
           - almalinux-8
           - almalinux-9
@@ -56,6 +55,10 @@ jobs:
           - packaging_docker_image: centos-7
             POSTGRES_VERSION: 14
           - packaging_docker_image: centos-7
+            POSTGRES_VERSION: 15
+          - packaging_docker_image: oraclelinux-7
+            POSTGRES_VERSION: 14
+          - packaging_docker_image: oraclelinux-7
             POSTGRES_VERSION: 15
 
     container:
