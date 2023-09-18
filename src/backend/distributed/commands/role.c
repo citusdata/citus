@@ -1324,7 +1324,7 @@ PreprocessAlterRoleRenameStmt(Node *node, const char *queryString,
 		return NIL;
 	}
 
-	if(!EnableAlterRolePropagation)
+	if (!EnableAlterRolePropagation)
 	{
 		return NIL;
 	}
@@ -1357,4 +1357,3 @@ RenameRoleStmtObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
 
 	return list_make1(address);
 }
-
