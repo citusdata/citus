@@ -2,7 +2,7 @@ CREATE SCHEMA alter_role;
 CREATE SCHEMA ",CitUs,.TeeN!?";
 
 -- test if the passowrd of the extension owner can be upgraded
-ALTER ROLE CURRENT_USER PASSWORD 'password123' VALID UNTIL 'infinity';
+ALTER ROLE CURRENT_USER CONNECTION LIMIT -1 PASSWORD 'password123' VALID UNTIL 'infinity';
 SELECT run_command_on_workers($$SELECT row(rolname, rolsuper, rolinherit,  rolcreaterole, rolcreatedb, rolcanlogin, rolreplication, rolbypassrls, rolconnlimit, EXTRACT (year FROM rolvaliduntil)) FROM pg_authid WHERE rolname = current_user$$);
 SELECT workers.result = pg_authid.rolpassword AS password_is_same FROM run_command_on_workers($$SELECT rolpassword FROM pg_authid WHERE rolname = current_user$$) workers, pg_authid WHERE pg_authid.rolname = current_user;
 
