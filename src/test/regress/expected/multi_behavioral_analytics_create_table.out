@@ -166,7 +166,3 @@ SELECT create_reference_table('users_reference_table');
 (1 row)
 
 INSERT INTO users_reference_table SELECT * FROM users_table;
-DROP SCHEMA IF EXISTS with_basics CASCADE;
-NOTICE:  drop cascades to 2 other objects
-DETAIL:  drop cascades to table with_basics.users_table
-drop cascades to table with_basics.events_table
