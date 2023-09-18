@@ -1718,8 +1718,6 @@ INSERT..SELECT via the coordinator logic uses the COPY code path to write result
 
 Merge command the same principles as INSERT .. SELECT processing. However, due to the nature of distributed systems, there are few more additional limitations on top of the INSERT .. SELECT processing. The [MERGE blog post](https://www.citusdata.com/blog/2023/07/27/how-citus-12-supports-postgres-merge/) dives deep on this topic.  
 
- 
-
 # DDL 
 
 DDL commands are primarily handled via the ProcessUtility hook, which gets the parse tree of the DDL command. For supported DDL commands, we always follow the same sequence of steps:
@@ -1767,12 +1765,8 @@ Each client session makes “internal” connections to other nodes in the clust
 - Multi-statement transactions have locks and uncommitted state that is only visible over a particular connection. We therefore need to make sure that: 
   - After a write to a shard, any access to that shard group should use the same connection as the write. We need to cover the whole shard group because writes and locks can cascade to other shards in the shard group via foreign keys, and they might be used together in a join.  
   - After a write to a reference tables, any subsequent read of a reference table, including joins between distributed table shards and reference tables, should use the same connection as the write. 
-
-The key function that deals with this logic is GetConnectionIfPlacementAccessedInXact() 
-
-Metadata and global object changes should always use the same connection. 
-
-We should not overload worker nodes with parallel connections. 
+- Metadata and global object changes should always use the same connection. 
+- We should not overload worker nodes with parallel connections. 
 
 In some cases, these goals conflict. For instance, if a multi-statement transaction performs a parallel delete on a distributed table, and then inserts into a reference table, and then attempts to join the distributed table with the reference table, then there is no way to complete that transaction correctly, since there is no single connection that can see both the reference table update and all the updates to distributed table shards. The command that reaches the conflict will error out: 
 
@@ -1824,6 +1818,8 @@ The placement connection tracking logic stores which shard group placements were
 - SELECT after SELECT - can use different connection 
 - DML after SELECT – can use different connection 
 - All other cases – must use same connection 
+
+The key function that deals with this logic is `FindPlacementListConnection` in [placement_connection.c](/src/backend/distributed/connection/placement_connection.c), which is called via `GetConnectionIfPlacementAccessedInXact` by the adaptive executor.
 
 We sometimes allow the same shard group placement to be accessed from different connections (first two cases). Consider a transaction that does a query on a reference table followed by a join between a distributed table and a reference table. Currently Citus would parallelize the second query, but that implicitly causes the reference table to be accessed from multiple connections. After that, we can still perform writes on the reference table (second case), because they do not conflict with the reads. However, we cannot perform most DDL commands involving the reference table because the locks would conflict with the reads, such that it would self-deadlock (blocked waiting for itself). We throw an error to prevent the self-deadlock and suggest set citus.multi_shard_modify_mode is ‘sequential’. Probably some DDL commands that take weaker locks would still be permissible, but we currently treat them all the same way. 
 
