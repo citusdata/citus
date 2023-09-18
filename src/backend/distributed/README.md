@@ -1668,11 +1668,11 @@ Two stages are executed to resolve the dependent jobs:
 - Run a query on all shards using the worker_partition_query_result function, which writes the result of the query to a set of intermediate results based on a partition column and set of hash ranges 
 - Fetch the intermediate results to the target node using fetch_intermediate_result, for each source shard group & target hash range pair. 
 
-Note that these stages are run in parallel for all dependent jobs (read: all tables in a join) by building a combined task list and passing it to the adaptive executor. This logic primarily lives in ExecuteTasksInDependencyOrder.  
+These stages are run in parallel for all dependent jobs (read: all tables in a join) by building a combined task list and passing it to the adaptive executor. This logic primarily lives in ExecuteTasksInDependencyOrder.  
 
 Once all dependent jobs are finished, the main Job is executed via the regular adaptive executor code path. The main job will include calls to read_intermediate_result that concatenate all the intermediate results for a particular hash range. 
 
-![Example of single hash repartition join](../../../images/single-repartition-join.png)
+<img src="../../../images/single-repartition-join.png" width="700">
 
 Dependent jobs have similarities with subplans. A Job can only be distributed query without a merge step, which is what allows the results to be repartitioned, while a subplan can be any type of plan, and is always broadcast. One could imagine a subplan also being repartitioned if it is subsequently used in a join with a distributed table. The difference between subplans and jobs in the distributed query plans are one of the most significant technical debts. 
 
