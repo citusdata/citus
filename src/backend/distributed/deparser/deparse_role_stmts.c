@@ -237,6 +237,10 @@ AppendInlinePriviliges(StringInfo buf, ListCell *optionCell)
 	}
 }
 
+/*
+* AppendStatementType generates the string representation for the statement
+* type (role, user or group) in alter/create statement and appends it to the buffer.
+*/
 
 static void
 AppendStatementType(StringInfo buf, CreateRoleStmt *stmt)
