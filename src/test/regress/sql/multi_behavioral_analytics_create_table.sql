@@ -118,3 +118,5 @@ SELECT create_reference_table('users_reference_table');
 INSERT INTO users_reference_table SELECT * FROM users_table;
 
 DROP SCHEMA IF EXISTS with_basics CASCADE;
+DROP SCHEMA IF EXISTS subquery_and_ctes CASCADE;
+
