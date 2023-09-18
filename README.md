@@ -4,7 +4,7 @@
 
 
 
-![Citus Banner](/citus-readme-banner.png)
+![Citus Banner](images/citus-readme-banner.png)
 
 [![Latest Docs](https://img.shields.io/badge/docs-latest-brightgreen.svg)](https://docs.citusdata.com/)
 [![Stack Overflow](https://img.shields.io/badge/Stack%20Overflow-%20-545353?logo=Stack%20Overflow)](https://stackoverflow.com/questions/tagged/citus)
@@ -31,7 +31,7 @@ You can use these Citus superpowers to make your Postgres database scale-out rea
 
 Our [SIGMOD '21](https://2021.sigmod.org/) paper [Citus: Distributed PostgreSQL for Data-Intensive Applications](https://doi.org/10.1145/3448016.3457551) gives a more detailed look into what Citus is, how it works, and why it works that way.
 
-![Citus scales out from a single node](/citus-scale-out.png)
+![Citus scales out from a single node](images/citus-scale-out.png)
 
 Since Citus is an extension to Postgres, you can use Citus with the latest Postgres versions. And Citus works seamlessly with the PostgreSQL tools and extensions you are already familiar with.
 
@@ -423,7 +423,7 @@ A Citus database cluster grows from a single PostgreSQL node into a cluster by a
 
 Data in distributed tables is stored in “shards”, which are actually just regular PostgreSQL tables on the worker nodes. When querying a distributed table on the coordinator node, Citus will send regular SQL queries to the worker nodes. That way, all the usual PostgreSQL optimizations and extensions can automatically be used with Citus.
 
-![Citus architecture](/citus-architecture.png)
+![Citus architecture](images/citus-architecture.png)
 
 When you send a query in which all (co-located) distributed tables have the same filter on the distribution column, Citus will automatically detect that and send the whole query to the worker node that stores the data. That way, arbitrarily complex queries are supported with minimal routing overhead, which is especially useful for scaling transactional workloads. If queries do not have a specific filter, each shard is queried in parallel, which is especially useful in analytical workloads. The Citus distributed executor is adaptive and is designed to handle both query types at the same time on the same system under high concurrency, which enables large-scale mixed workloads.
 
