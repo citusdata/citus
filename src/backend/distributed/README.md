@@ -1625,11 +1625,7 @@ When a connection is ready, we first send BEGIN if needed, and then take tasks f
 
 **The pool expands via “slow start”, which grows the pool every ~10ms as long as tasks remain in the pool-level queue**. The name slow start is derived from the process in TCP which expands the window size (the amount of data TCP sends at once). As in the case of TCP, the name slow is a misnomer. While it starts very conservatively, namely with 1 connection, the _rate_ at which new connections increases by 1 every 10ms, starting at 1. That means after 50ms, the executor is allowed to open 6 additional connections. In a very typical scenario of 16 shards per node, the executor would reach maximum parallelism after ~60ms. It will open at most as many additional connections as there are tasks in the ready queue.  
 
-A screenshot of a computer
-
-Description automatically generated 
-
-citus-paper/sigmod2021/submission/citus-slow-start.pdf at main · citusdata/citus-paper (github.com) 
+<img alt="Adaptive executor slow start example" src="../../../images/executor-slow-start.png" width="700">
 
 The 10ms was chosen to be higher than a typical connection-establishment time, but low enough to quickly expand the pool when the runtime of the tasks is long enough to benefit from parallelism. The 10ms has mostly proven effective, but we have seen cases in which slow connection establishment due to Azure network latencies would justify a higher value. In addition, we found that workloads with many queries in the 20-60ms range would see a relatively high number of redundant connection attempts. To reduce that, we introduced “cost-based connection establishment”, which factors in the average task execution time compared to the average connection establishment time and thereby significantly reduced the number of redundant connections. 
 
