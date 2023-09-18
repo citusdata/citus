@@ -1672,7 +1672,7 @@ These stages are run in parallel for all dependent jobs (read: all tables in a j
 
 Once all dependent jobs are finished, the main Job is executed via the regular adaptive executor code path. The main job will include calls to read_intermediate_result that concatenate all the intermediate results for a particular hash range. 
 
-<img src="../../../images/single-repartition-join.png" width="700">
+<img alt="Single hash re-partition join example" src="../../../images/single-repartition-join.png" width="700">
 
 Dependent jobs have similarities with subplans. A Job can only be distributed query without a merge step, which is what allows the results to be repartitioned, while a subplan can be any type of plan, and is always broadcast. One could imagine a subplan also being repartitioned if it is subsequently used in a join with a distributed table. The difference between subplans and jobs in the distributed query plans are one of the most significant technical debts. 
 
@@ -1704,11 +1704,7 @@ The COPY distributed_table TO .. syntax will typically return a lot of data and 
 
 The INSERT.. SELECT command inserts the result of a SELECT query into a target table. In real-time analytics use cases, INSERT..SELECT enables transformation of an incoming stream of data inside the database. A typical example is maintaining a rollup table or converting raw data into a more structured form and adding indexes. 
 
-A diagram of a network
-
-Description automatically generated 
-
-Source: citus-paper/sigmod2021/submission/citus-insert-select.pdf at main · citusdata/citus-paper (github.com)  
+<img alt="INSERT..SELECT modes" src="../../../images/insert-select-modes.png" width="700">
 
 Citus has three different methods of handling INSERT..SELECT commands that insert into a distributed table as shown in the figure above. We identify these methods as: (1) co-located, where shards for the source and destination tables are co-located; (2) repartitioning, where the source and destination tables are not co-located and the operation requires a distributed reshuffle; and (3) pull to coordinator, where neither of the previous two methods can be applied. These three approaches can process around 100M, 10M, and 1M rows per second, respectively, in a single command. 
 
