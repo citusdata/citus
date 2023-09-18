@@ -1,6 +1,6 @@
 Citus Technical Documentation 
 
-The purpose of this document is to provide comprehensive technical documentation for Citus. We plan to move it into READMEs. 
+The purpose of this document is to provide comprehensive technical documentation for Citus.
 
  
 
