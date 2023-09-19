@@ -317,6 +317,7 @@ SELECT run_command_on_workers($$SELECT count(*) FROM pg_subscription$$);
 
 ALTER SYSTEM RESET citus.defer_shard_delete_interval;
 SELECT pg_reload_conf();
+SET client_min_messages TO ERROR;
 DROP SCHEMA "citus_split_test_schema" CASCADE;
 DROP ROLE test_shard_split_role;
 --END : Cleanup
