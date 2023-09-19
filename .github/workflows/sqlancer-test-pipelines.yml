@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       citus_release:
-        default: release-11.1
+        default: main
         description: 'Branch, tag or SHA to run tests against'
         required: true
 
@@ -13,7 +13,7 @@ jobs:
   run-sqlancer-test-on-citus:
     runs-on: ubuntu-latest
     container:
-      image: 'citus/exttester:15.1-dev-895be1f'
+      image: 'citus/exttester:15.4-dev-c5dad6b'
 
     steps:
       - name: Checkout citus release
