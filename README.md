@@ -95,14 +95,14 @@ Install packages on Ubuntu / Debian:
 ```bash
 curl https://install.citusdata.com/community/deb.sh > add-citus-repo.sh
 sudo bash add-citus-repo.sh
-sudo apt-get -y install postgresql-15-citus-12.0
+sudo apt-get -y install postgresql-16-citus-12.1
 ```
 
 Install packages on CentOS / Red Hat:
 ```bash
 curl https://install.citusdata.com/community/rpm.sh > add-citus-repo.sh
 sudo bash add-citus-repo.sh
-sudo yum install -y citus120_15
+sudo yum install -y citus121_16
 ```
 
 To add Citus to your local PostgreSQL database, add the following to `postgresql.conf`:
