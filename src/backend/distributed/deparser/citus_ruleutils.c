@@ -818,7 +818,7 @@ deparse_shard_index_statement(IndexStmt *origStmt, Oid distrelid, int64 shardid,
 	 * Switch to empty search_path to deparse_index_columns to produce fully-
 	 * qualified names in expressions.
 	 */
-	PushOverrideEmptySearchPath(CurrentMemoryContext);
+	int saveNestLevel = PushEmptySearchPath();
 
 	/* index column or expression list begins here */
 	appendStringInfoChar(buffer, '(');
@@ -855,7 +855,7 @@ deparse_shard_index_statement(IndexStmt *origStmt, Oid distrelid, int64 shardid,
 	}
 
 	/* revert back to original search_path */
-	PopOverrideSearchPath();
+	PopEmptySearchPath(saveNestLevel);
 }
 
 

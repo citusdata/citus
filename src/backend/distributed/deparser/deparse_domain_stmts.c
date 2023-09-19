@@ -345,9 +345,9 @@ AppendAlterDomainStmtSetDefault(StringInfo buf, AlterDomainStmt *stmt)
 	expr = TransformDefaultExpr(expr, stmt->typeName, baseTypeName);
 
 	/* deparse while the searchpath is cleared to force qualification of identifiers */
-	PushOverrideEmptySearchPath(CurrentMemoryContext);
+	int saveNestLevel = PushEmptySearchPath();
 	char *exprSql = deparse_expression(expr, NIL, true, true);
-	PopOverrideSearchPath();
+	PopEmptySearchPath(saveNestLevel);
 
 	appendStringInfo(buf, "SET DEFAULT %s", exprSql);
 }
@@ -443,9 +443,9 @@ AppendConstraint(StringInfo buf, Constraint *constraint, List *domainName,
 				elog(ERROR, "missing expression for domain constraint");
 			}
 
-			PushOverrideEmptySearchPath(CurrentMemoryContext);
+			int saveNestLevel = PushEmptySearchPath();
 			char *exprSql = deparse_expression(expr, NIL, true, true);
-			PopOverrideSearchPath();
+			PopEmptySearchPath(saveNestLevel);
 
 			appendStringInfo(buf, " CHECK (%s)", exprSql);
 			return;
@@ -469,9 +469,9 @@ AppendConstraint(StringInfo buf, Constraint *constraint, List *domainName,
 				elog(ERROR, "missing expression for domain default");
 			}
 
-			PushOverrideEmptySearchPath(CurrentMemoryContext);
+			int saveNestLevel = PushEmptySearchPath();
 			char *exprSql = deparse_expression(expr, NIL, true, true);
-			PopOverrideSearchPath();
+			PopEmptySearchPath(saveNestLevel);
 
 			appendStringInfo(buf, " DEFAULT %s", exprSql);
 			return;

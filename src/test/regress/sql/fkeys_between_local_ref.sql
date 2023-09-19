@@ -100,9 +100,12 @@ BEGIN;
   SELECT COUNT(*)=0 FROM citus_local_tables_in_schema;
 ROLLBACK;
 
--- this actually attempts to convert local tables to citus local tables but errors out
--- as citus doesn't support defining foreign keys via add column commands
-ALTER TABLE local_table_1 ADD COLUMN col_3 INT REFERENCES reference_table_1(col_1);
+BEGIN;
+  ALTER TABLE local_table_1 ADD COLUMN col_3 INT REFERENCES reference_table_1(col_1);
+
+  -- show that we converted all 4 local tables in this schema to citus local tables
+  SELECT COUNT(*)=4 FROM citus_local_tables_in_schema;
+ROLLBACK;
 
 BEGIN;
   -- define a foreign key so that all 4 local tables become citus local tables

@@ -134,7 +134,7 @@ ColocationIdGetTenantSchemaId(uint32 colocationId)
 											 AccessShareLock);
 	ScanKeyData scanKey[1];
 	ScanKeyInit(&scanKey[0], Anum_pg_dist_schema_colocationid,
-				BTEqualStrategyNumber, F_INT4EQ, UInt32GetDatum(colocationId));
+				BTEqualStrategyNumber, F_INT4EQ, Int32GetDatum(colocationId));
 
 	bool indexOk = true;
 	SysScanDesc scanDescriptor = systable_beginscan(pgDistTenantSchema,

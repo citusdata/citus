@@ -104,10 +104,13 @@
 #include "replication/walsender.h"
 #include "storage/ipc.h"
 #include "optimizer/planner.h"
+#include "optimizer/plancat.h"
 #include "optimizer/paths.h"
 #include "tcop/tcopprot.h"
 #include "utils/guc.h"
 #include "utils/guc_tables.h"
+#include "utils/inval.h"
+#include "utils/lsyscache.h"
 #include "utils/syscache.h"
 #include "utils/varlena.h"
 
@@ -452,6 +455,7 @@ _PG_init(void)
 
 	/* register for planner hook */
 	set_rel_pathlist_hook = multi_relation_restriction_hook;
+	get_relation_info_hook = multi_get_relation_info_hook;
 	set_join_pathlist_hook = multi_join_restriction_hook;
 	ExecutorStart_hook = CitusExecutorStart;
 	ExecutorRun_hook = CitusExecutorRun;
@@ -551,6 +555,9 @@ _PG_init(void)
 									 load_external_function(COLUMNAR_MODULE_NAME,
 															"ColumnarSupportsIndexAM",
 															true, &handle);
+
+	CacheRegisterRelcacheCallback(InvalidateDistRelationCacheCallback,
+								  (Datum) 0);
 
 	INIT_COLUMNAR_SYMBOL(CompressionTypeStr_type, CompressionTypeStr);
 	INIT_COLUMNAR_SYMBOL(IsColumnarTableAmTable_type, IsColumnarTableAmTable);
@@ -1449,7 +1456,7 @@ RegisterCitusConfigVariables(void)
 					 "and operating system name. This configuration value controls "
 					 "whether these reports are sent."),
 		&EnableStatisticsCollection,
-#if defined(HAVE_LIBCURL)
+#if defined(HAVE_LIBCURL) && defined(ENABLE_CITUS_STATISTICS_COLLECTION)
 		true,
 #else
 		false,
@@ -2650,8 +2657,8 @@ RegisterCitusConfigVariables(void)
 static void
 OverridePostgresConfigProperties(void)
 {
-	struct config_generic **guc_vars = get_guc_variables();
-	int gucCount = GetNumConfigOptions();
+	int gucCount = 0;
+	struct config_generic **guc_vars = get_guc_variables_compat(&gucCount);
 
 	for (int gucIndex = 0; gucIndex < gucCount; gucIndex++)
 	{
@@ -2810,7 +2817,7 @@ ShowShardsForAppNamePrefixesCheckHook(char **newval, void **extra, GucSource sou
 		}
 
 		char *prefixAscii = pstrdup(appNamePrefix);
-		pg_clean_ascii(prefixAscii);
+		pg_clean_ascii_compat(prefixAscii, 0);
 
 		if (strcmp(prefixAscii, appNamePrefix) != 0)
 		{

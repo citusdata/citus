@@ -211,7 +211,7 @@ RETURNING *;
 -- INSERT..SELECT via coordinator consists of two steps, select + COPY
 -- that's why it is disallowed to use local execution even if the SELECT
 -- can be executed locally
-INSERT INTO distributed_table SELECT * FROM distributed_table WHERE key = 1 OFFSET 0 ON CONFLICT DO NOTHING;
+INSERT INTO distributed_table SELECT sum(key), value FROM distributed_table WHERE key = 1 GROUP BY value ON CONFLICT DO NOTHING;
 INSERT INTO distributed_table SELECT 1, '1',15 FROM distributed_table WHERE key = 2 LIMIT 1 ON CONFLICT DO NOTHING;
 
 -- sanity check: multi-shard INSERT..SELECT pushdown goes through distributed execution

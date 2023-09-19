@@ -180,3 +180,373 @@ BEGIN
       EXECUTE 'SELECT COUNT(*) FROM pg_catalog.pg_dist_cleanup' INTO record_count;
     END LOOP;
 END$$ LANGUAGE plpgsql;
+
+-- Returns the foreign keys where the referencing relation's name starts with
+-- given prefix.
+--
+-- Foreign keys are groupped by their configurations and then the constraint name,
+-- referencing table, and referenced table for each distinct configuration are
+-- aggregated into arrays.
+CREATE OR REPLACE FUNCTION get_grouped_fkey_constraints(referencing_relname_prefix text)
+RETURNS jsonb AS $func$
+  DECLARE
+    confdelsetcols_column_ref text;
+    get_grouped_fkey_constraints_query text;
+    result jsonb;
+  BEGIN
+    -- Read confdelsetcols as null if no such column exists.
+    -- This can only be the case for PG versions < 15.
+    IF EXISTS (SELECT 1 FROM pg_attribute WHERE attrelid = 'pg_constraint'::regclass AND attname='confdelsetcols')
+    THEN
+      confdelsetcols_column_ref := '(SELECT array_agg(attname ORDER BY attnum) FROM pg_attribute WHERE attrelid = conrelid AND attnum = ANY(confdelsetcols))';
+    ELSE
+      confdelsetcols_column_ref := '(SELECT null::smallint[])';
+    END IF;
+
+    EXECUTE format(
+      $$
+      SELECT jsonb_agg(to_jsonb(q1.*) ORDER BY q1.constraint_names) AS fkeys_with_different_config FROM (
+        SELECT array_agg(constraint_name ORDER BY constraint_oid) AS constraint_names,
+               array_agg(referencing_table::regclass::text ORDER BY constraint_oid) AS referencing_tables,
+               array_agg(referenced_table::regclass::text ORDER BY constraint_oid) AS referenced_tables,
+               referencing_columns, referenced_columns, deferable, deferred, on_update, on_delete, match_type, referencing_columns_set_null_or_default
+        FROM (
+          SELECT
+            oid AS constraint_oid,
+            conname AS constraint_name,
+            conrelid AS referencing_table,
+            (SELECT array_agg(attname ORDER BY attnum) FROM pg_attribute WHERE attrelid = conrelid AND attnum = ANY(conkey)) AS referencing_columns,
+            confrelid AS referenced_table,
+            (SELECT array_agg(attname ORDER BY attnum) FROM pg_attribute WHERE attrelid = confrelid AND attnum = ANY(confkey)) AS referenced_columns,
+            condeferrable AS deferable,
+            condeferred AS deferred,
+            confupdtype AS on_update,
+            confdeltype AS on_delete,
+            confmatchtype AS match_type,
+            %2$s AS referencing_columns_set_null_or_default
+          FROM pg_constraint WHERE starts_with(conrelid::regclass::text, '%1$s') AND contype = 'f'
+        ) q2
+        GROUP BY referencing_columns, referenced_columns, deferable, deferred, on_update, on_delete, match_type, referencing_columns_set_null_or_default
+      ) q1
+      $$,
+      referencing_relname_prefix,
+      confdelsetcols_column_ref
+    ) INTO result;
+    RETURN result;
+  END;
+$func$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION get_index_defs(schemaname text, tablename text)
+RETURNS jsonb AS $func$
+  DECLARE
+    result jsonb;
+    indnullsnotdistinct_column_ref text;
+  BEGIN
+    -- Not use indnullsnotdistinct in group by clause if no such column exists.
+    -- This can only be the case for PG versions < 15.
+    IF EXISTS (SELECT 1 FROM pg_attribute WHERE attrelid = 'pg_index'::regclass AND attname='indnullsnotdistinct')
+    THEN
+      indnullsnotdistinct_column_ref := ',indnullsnotdistinct';
+    ELSE
+      indnullsnotdistinct_column_ref := '';
+    END IF;
+
+    EXECUTE format(
+      $$
+      SELECT jsonb_agg(to_jsonb(q1.*) ORDER BY q1.indexnames) AS index_defs FROM (
+        SELECT array_agg(indexname ORDER BY indexrelid) AS indexnames,
+               array_agg(indexdef ORDER BY indexrelid) AS indexdefs
+        FROM pg_indexes
+        JOIN pg_index
+        ON (indexrelid = (schemaname || '.' || indexname)::regclass)
+        WHERE schemaname = '%1$s' AND starts_with(tablename, '%2$s')
+        GROUP BY indnatts, indnkeyatts, indisunique, indisprimary, indisexclusion,
+                 indimmediate, indisclustered, indisvalid, indisready, indislive,
+                 indisreplident, indkey, indcollation, indclass, indoption, indexprs,
+                 indpred %3$s
+      ) q1
+      $$,
+      schemaname, tablename, indnullsnotdistinct_column_ref) INTO result;
+    RETURN result;
+  END;
+$func$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION get_column_defaults(schemaname text, tablename text)
+RETURNS jsonb AS $func$
+  DECLARE
+    result jsonb;
+  BEGIN
+    EXECUTE format(
+      $$
+      SELECT jsonb_agg(to_jsonb(q1.*) ORDER BY q1.column_name) AS column_defs FROM (
+        SELECT column_name, column_default::text, generation_expression::text
+        FROM information_schema.columns
+        WHERE table_schema = '%1$s' AND table_name = '%2$s' AND
+              column_default IS NOT NULL OR generation_expression IS NOT NULL
+      ) q1
+      $$,
+      schemaname, tablename) INTO result;
+    RETURN result;
+  END;
+$func$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION get_column_attrs(relname_prefix text)
+RETURNS jsonb AS $func$
+  DECLARE
+    result jsonb;
+  BEGIN
+    EXECUTE format(
+      $$
+      SELECT to_jsonb(q2.*) FROM (
+        SELECT relnames, jsonb_agg(to_jsonb(q1.*) - 'relnames' ORDER BY q1.column_name) AS column_attrs FROM (
+          SELECT array_agg(attrelid::regclass::text ORDER BY attrelid) AS relnames,
+                 attname AS column_name, typname AS type_name, collname AS collation_name, attcompression AS compression_method, attnotnull AS not_null
+          FROM pg_attribute pa
+          LEFT JOIN pg_type pt ON (pa.atttypid = pt.oid)
+          LEFT JOIN pg_collation pc1 ON (pa.attcollation = pc1.oid)
+          JOIN pg_class pc2 ON (pa.attrelid = pc2.oid)
+          WHERE starts_with(attrelid::regclass::text, '%1$s') AND
+                attnum > 0 AND NOT attisdropped AND relkind = 'r'
+          GROUP BY column_name, type_name, collation_name, compression_method, not_null
+        ) q1
+        GROUP BY relnames
+      ) q2
+      $$,
+      relname_prefix) INTO result;
+    RETURN result;
+  END;
+$func$ LANGUAGE plpgsql;
+
+-- Returns true if all shard placements of given table have given number of indexes.
+CREATE OR REPLACE FUNCTION verify_index_count_on_shard_placements(
+    qualified_table_name text,
+    n_expected_indexes int)
+RETURNS BOOLEAN
+AS $func$
+DECLARE
+    v_result boolean;
+BEGIN
+    SELECT n_expected_indexes = ALL(
+        SELECT result::int INTO v_result
+        FROM run_command_on_placements(
+            qualified_table_name,
+            $$SELECT COUNT(*) FROM pg_index WHERE indrelid::regclass = '%s'::regclass$$
+        )
+    );
+    RETURN v_result;
+END;
+$func$ LANGUAGE plpgsql;
+
+-- Returns names of the foreign keys that shards of given table are involved in
+-- (as referencing or referenced one).
+CREATE OR REPLACE FUNCTION get_fkey_names_on_placements(
+    qualified_table_name text)
+RETURNS TABLE (
+    on_node text,
+    shard_id bigint,
+    fkey_names text[]
+)
+AS $func$
+BEGIN
+    RETURN QUERY SELECT
+        CASE WHEN groupid = 0 THEN 'on_coordinator' ELSE 'on_worker' END AS on_node_col,
+        shardid,
+        (CASE WHEN result = '' THEN '{}' ELSE result END)::text[] AS fkey_names_col
+    FROM run_command_on_placements(
+        qualified_table_name,
+        $$SELECT array_agg(conname ORDER BY conname) FROM pg_constraint WHERE '%s'::regclass IN (conrelid, confrelid) AND contype = 'f'$$
+    )
+    JOIN pg_dist_node USING (nodename, nodeport);
+END;
+$func$ LANGUAGE plpgsql;
+
+-- Returns true if all shard placements of given table have given number of partitions.
+CREATE OR REPLACE FUNCTION verify_partition_count_on_placements(
+    qualified_table_name text,
+    n_expected_partitions int)
+RETURNS BOOLEAN
+AS $func$
+DECLARE
+    v_result boolean;
+BEGIN
+    SELECT n_expected_partitions = ALL(
+        SELECT result::int INTO v_result
+        FROM run_command_on_placements(
+            qualified_table_name,
+            $$SELECT COUNT(*) FROM pg_inherits WHERE inhparent = '%s'::regclass;$$
+        )
+    );
+    RETURN v_result;
+END;
+$func$ LANGUAGE plpgsql;
+
+-- This function checks pg_dist_placement on all nodes and returns true if the following holds:
+--   Whether shard is on the coordinator or on a primary worker node, and if this is expected.
+--   Given shardid is used for shard placement of the table.
+--   Placement metadata is correct on all nodes.
+CREATE OR REPLACE FUNCTION verify_shard_placement_for_single_shard_table(
+    qualified_table_name text,
+    expected_shard_id bigint,
+    expect_placement_on_coord boolean)
+RETURNS BOOLEAN
+AS $func$
+DECLARE
+    verify_workers_query text;
+    nodename_nodeport_groupid record;
+    result boolean;
+BEGIN
+    SELECT nodename, nodeport, groupid INTO nodename_nodeport_groupid
+    FROM pg_dist_shard
+    JOIN pg_dist_placement USING (shardid)
+    JOIN pg_dist_node USING (groupid)
+    WHERE noderole = 'primary' AND shouldhaveshards AND isactive AND
+          logicalrelid = qualified_table_name::regclass AND shardid = expected_shard_id;
+
+    IF nodename_nodeport_groupid IS NULL
+    THEN
+        RAISE NOTICE 'Shard placement is not on a primary worker node';
+        RETURN false;
+    END IF;
+
+    IF (nodename_nodeport_groupid.groupid = 0) != expect_placement_on_coord
+    THEN
+        RAISE NOTICE 'Shard placement is on an unexpected node';
+        RETURN false;
+    END IF;
+
+    -- verify that metadata on workers is correct too
+    SELECT format(
+        'SELECT true = ALL(
+            SELECT result::boolean FROM run_command_on_workers($$
+                SELECT COUNT(*) = 1
+                FROM pg_dist_shard
+                JOIN pg_dist_placement USING (shardid)
+                JOIN pg_dist_node USING (groupid)
+                WHERE logicalrelid = ''%s''::regclass AND
+                      shardid = %s AND
+                      nodename = ''%s'' AND
+                      nodeport = %s AND
+                      groupid = %s
+            $$)
+        );',
+        qualified_table_name, expected_shard_id,
+        nodename_nodeport_groupid.nodename,
+        nodename_nodeport_groupid.nodeport,
+        nodename_nodeport_groupid.groupid
+    )
+    INTO verify_workers_query;
+
+    EXECUTE verify_workers_query INTO result;
+    RETURN result;
+END;
+$func$ LANGUAGE plpgsql;
+
+-- This function checks pg_dist_placement on all nodes and returns true if the following holds:
+--   Shard placement exist on coordinator and on all primary worker nodes.
+--   Given shardid is used for shard placements of the table.
+--   Given placementid is used for the coordinator shard placement.
+--   Placement metadata is correct on all nodes.
+CREATE OR REPLACE FUNCTION verify_shard_placements_for_reference_table(
+    qualified_table_name text,
+    expected_shard_id bigint,
+    expected_coord_placement_id bigint)
+RETURNS BOOLEAN
+AS $func$
+DECLARE
+    verify_workers_query text;
+    result boolean;
+BEGIN
+    SELECT format(
+        'SELECT true = ALL(
+            SELECT result::boolean FROM run_command_on_all_nodes($$
+                SELECT
+                        (SELECT COUNT(*) FROM pg_dist_node WHERE noderole = ''primary'' AND isactive) =
+                        (SELECT COUNT(*)
+                         FROM pg_dist_shard
+                         JOIN pg_dist_placement USING (shardid)
+                         JOIN pg_dist_node USING (groupid)
+                         WHERE noderole = ''primary'' AND isactive AND
+                               logicalrelid = ''%s''::regclass AND shardid = %s)
+                    AND
+                        (SELECT COUNT(*) = 1
+                         FROM pg_dist_shard
+                         JOIN pg_dist_placement USING (shardid)
+                         JOIN pg_dist_node USING (groupid)
+                         WHERE noderole = ''primary'' AND isactive AND
+                               logicalrelid = ''%s''::regclass AND shardid = %s AND
+                               placementid = %s AND groupid = 0)
+
+            $$)
+        );',
+        qualified_table_name, expected_shard_id,
+        qualified_table_name, expected_shard_id,
+        expected_coord_placement_id
+    )
+    INTO verify_workers_query;
+
+    EXECUTE verify_workers_query INTO result;
+    RETURN result;
+END;
+$func$ LANGUAGE plpgsql;
+
+-- This function checks pg_dist_partition on all nodes and returns true if the metadata
+-- record for given single-shard table is correct.
+CREATE OR REPLACE FUNCTION verify_pg_dist_partition_for_single_shard_table(
+    qualified_table_name text)
+RETURNS BOOLEAN
+AS $func$
+DECLARE
+    verify_workers_query text;
+    result boolean;
+BEGIN
+    SELECT format(
+        'SELECT true = ALL(
+            SELECT result::boolean FROM run_command_on_all_nodes($$
+                SELECT COUNT(*) = 1
+                FROM pg_dist_partition
+                WHERE logicalrelid = ''%s''::regclass AND
+                      partmethod = ''n'' AND
+                      partkey IS NULL AND
+                      colocationid > 0 AND
+                      repmodel = ''s'' AND
+                      autoconverted = false
+            $$)
+        );',
+    qualified_table_name)
+    INTO verify_workers_query;
+
+    EXECUTE verify_workers_query INTO result;
+    RETURN result;
+END;
+$func$ LANGUAGE plpgsql;
+
+-- This function checks pg_dist_partition on all nodes and returns true if the metadata
+-- record for given reference table is correct.
+CREATE OR REPLACE FUNCTION verify_pg_dist_partition_for_reference_table(
+    qualified_table_name text)
+RETURNS BOOLEAN
+AS $func$
+DECLARE
+    verify_workers_query text;
+    result boolean;
+BEGIN
+    SELECT format(
+        'SELECT true = ALL(
+            SELECT result::boolean FROM run_command_on_all_nodes($$
+                SELECT COUNT(*) = 1
+                FROM pg_dist_partition
+                WHERE logicalrelid = ''%s''::regclass AND
+                      partmethod = ''n'' AND
+                      partkey IS NULL AND
+                      colocationid > 0 AND
+                      repmodel = ''t'' AND
+                      autoconverted = false
+            $$)
+        );',
+    qualified_table_name)
+    INTO verify_workers_query;
+
+    EXECUTE verify_workers_query INTO result;
+    RETURN result;
+END;
+$func$ LANGUAGE plpgsql;

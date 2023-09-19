@@ -1238,6 +1238,12 @@ AddToAttributeEquivalenceClass(AttributeEquivalenceClass *attributeEquivalenceCl
 		return;
 	}
 
+	/* outer join checks in PG16 */
+	if (IsRelOptOuterJoin(root, varToBeAdded->varno))
+	{
+		return;
+	}
+
 	RangeTblEntry *rangeTableEntry = root->simple_rte_array[varToBeAdded->varno];
 	if (rangeTableEntry->rtekind == RTE_RELATION)
 	{
@@ -1376,6 +1382,30 @@ GetTargetSubquery(PlannerInfo *root, RangeTblEntry *rangeTableEntry, Var *varToB
 	}
 
 	return targetSubquery;
+}
+
+
+/*
+ * IsRelOptOuterJoin returns true if the RelOpt referenced
+ * by varNo is an outer join, false otherwise.
+ */
+bool
+IsRelOptOuterJoin(PlannerInfo *root, int varNo)
+{
+#if PG_VERSION_NUM >= PG_VERSION_16
+	if (root->simple_rel_array_size <= varNo)
+	{
+		return true;
+	}
+
+	RelOptInfo *rel = root->simple_rel_array[varNo];
+	if (rel == NULL)
+	{
+		/* must be an outer join */
+		return true;
+	}
+#endif
+	return false;
 }
 
 

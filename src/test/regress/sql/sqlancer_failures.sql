@@ -237,18 +237,18 @@ ON (true);
 SELECT
  COUNT(unsupported_join.*)
 FROM
-   (distributed_table a
+   ((distributed_table a
    LEFT JOIN reference_table b ON (true)
-   RIGHT JOIN reference_table c ON (false)) as unsupported_join
+   RIGHT JOIN reference_table c ON (false))
 RIGHT JOIN
-   (reference_table d JOIN reference_table e ON(true)) ON (true);
+   (reference_table d JOIN reference_table e ON(true)) ON (true)) as unsupported_join;
 
 SELECT
  COUNT(unsupported_join.*)
 FROM
-   (distributed_table a
+   ((distributed_table a
    LEFT JOIN (SELECT * FROM reference_table OFFSET 0) b ON (true)
-   RIGHT JOIN (SELECT * FROM reference_table OFFSET 0) c ON (false)) as unsupported_join
+   RIGHT JOIN (SELECT * FROM reference_table OFFSET 0) c ON (false))
 RIGHT JOIN
    (
     (SELECT * FROM reference_table OFFSET 0) d
@@ -256,7 +256,7 @@ RIGHT JOIN
     (SELECT * FROM reference_table OFFSET 0) e
     ON(true)
    )
-ON (true);
+ON (true)) as unsupported_join;
 
 EXPLAIN (COSTS OFF) SELECT
   unsupported_join.*

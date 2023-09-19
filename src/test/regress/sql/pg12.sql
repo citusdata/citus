@@ -242,11 +242,13 @@ COMMIT;
 SELECT DISTINCT y FROM test;
 
 -- non deterministic collations
+SET client_min_messages TO WARNING;
 CREATE COLLATION test_pg12.case_insensitive (
 	provider = icu,
 	locale = '@colStrength=secondary',
 	deterministic = false
 );
+RESET client_min_messages;
 
 CREATE TABLE col_test (
 	id int,

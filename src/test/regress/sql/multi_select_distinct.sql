@@ -303,7 +303,7 @@ SELECT DISTINCT count(DISTINCT l_partkey), count(DISTINCT l_shipmode)
 EXPLAIN (COSTS FALSE)
 	SELECT DISTINCT count(DISTINCT l_partkey), count(DISTINCT l_shipmode)
 		FROM lineitem_hash_part
-		GROUP BY l_orderkey
+		GROUP BY l_orderkey, l_partkey, l_shipmode
 		ORDER BY 1,2;
 
 -- check the plan if the hash aggreate is disabled. We expect to see sort + unique
@@ -312,7 +312,7 @@ SET enable_hashagg TO off;
 EXPLAIN (COSTS FALSE)
 	SELECT DISTINCT count(DISTINCT l_partkey), count(DISTINCT l_shipmode)
 		FROM lineitem_hash_part
-		GROUP BY l_orderkey
+		GROUP BY l_orderkey, l_partkey, l_shipmode
 		ORDER BY 1,2;
 
 SET enable_hashagg TO on;

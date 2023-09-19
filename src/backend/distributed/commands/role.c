@@ -78,6 +78,7 @@ static const char * WrapQueryInAlterRoleIfExistsCall(const char *query, RoleSpec
 static VariableSetStmt * MakeVariableSetStmt(const char *config);
 static int ConfigGenericNameCompare(const void *lhs, const void *rhs);
 static List * RoleSpecToObjectAddress(RoleSpec *role, bool missing_ok);
+static bool IsGrantRoleWithInheritOrSetOption(GrantRoleStmt *stmt);
 
 /* controlled via GUC */
 bool EnableCreateRolePropagation = true;
@@ -703,12 +704,13 @@ MakeSetStatementArguments(char *configurationName, char *configurationValue)
 	 * is no other way to determine allowed units, and value types other than
 	 * using this function
 	 */
-	struct config_generic **gucVariables = get_guc_variables();
-	int numOpts = GetNumConfigOptions();
+	int gucCount = 0;
+	struct config_generic **gucVariables = get_guc_variables_compat(&gucCount);
+
 	struct config_generic **matchingConfig =
 		(struct config_generic **) SafeBsearch((void *) &key,
 											   (void *) gucVariables,
-											   numOpts,
+											   gucCount,
 											   sizeof(struct config_generic *),
 											   ConfigGenericNameCompare);
 
@@ -820,7 +822,12 @@ GenerateGrantRoleStmtsFromOptions(RoleSpec *roleSpec, List *options)
 
 		if (strcmp(option->defname, "adminmembers") == 0)
 		{
+#if PG_VERSION_NUM >= PG_VERSION_16
+			DefElem *opt = makeDefElem("admin", (Node *) makeBoolean(true), -1);
+			grantRoleStmt->opt = list_make1(opt);
+#else
 			grantRoleStmt->admin_opt = true;
+#endif
 		}
 
 		stmts = lappend(stmts, grantRoleStmt);
@@ -868,7 +875,15 @@ GenerateGrantRoleStmtsOfRole(Oid roleid)
 
 		grantRoleStmt->grantor = NULL;
 
+#if PG_VERSION_NUM >= PG_VERSION_16
+		if (membership->admin_option)
+		{
+			DefElem *opt = makeDefElem("admin", (Node *) makeBoolean(true), -1);
+			grantRoleStmt->opt = list_make1(opt);
+		}
+#else
 		grantRoleStmt->admin_opt = membership->admin_option;
+#endif
 
 		stmts = lappend(stmts, grantRoleStmt);
 	}
@@ -1127,6 +1142,19 @@ PreprocessGrantRoleStmt(Node *node, const char *queryString,
 		return NIL;
 	}
 
+	if (IsGrantRoleWithInheritOrSetOption(stmt))
+	{
+		if (EnableUnsupportedFeatureMessages)
+		{
+			ereport(NOTICE, (errmsg("not propagating GRANT/REVOKE commands with specified"
+									" INHERIT/SET options to worker nodes"),
+							 errhint(
+								 "Connect to worker nodes directly to manually run the same"
+								 " GRANT/REVOKE command after disabling DDL propagation.")));
+		}
+		return NIL;
+	}
+
 	/*
 	 * Postgres don't seem to use the grantor. Even dropping the grantor doesn't
 	 * seem to affect the membership. If this changes, we might need to add grantors
@@ -1173,6 +1201,27 @@ PostprocessGrantRoleStmt(Node *node, const char *queryString)
 		}
 	}
 	return NIL;
+}
+
+
+/*
+ * IsGrantRoleWithInheritOrSetOption returns true if the given
+ * GrantRoleStmt has inherit or set option specified in its options
+ */
+static bool
+IsGrantRoleWithInheritOrSetOption(GrantRoleStmt *stmt)
+{
+#if PG_VERSION_NUM >= PG_VERSION_16
+	DefElem *opt = NULL;
+	foreach_ptr(opt, stmt->opt)
+	{
+		if (strcmp(opt->defname, "inherit") == 0 || strcmp(opt->defname, "set") == 0)
+		{
+			return true;
+		}
+	}
+#endif
+	return false;
 }
 
 

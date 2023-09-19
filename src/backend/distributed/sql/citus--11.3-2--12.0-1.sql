@@ -24,13 +24,8 @@ GRANT SELECT ON pg_catalog.pg_dist_schema TO public;
 #include "udfs/citus_internal_unregister_tenant_schema_globally/12.0-1.sql"
 #include "udfs/citus_drop_trigger/12.0-1.sql"
 
-DROP VIEW citus_shards;
-DROP VIEW IF EXISTS pg_catalog.citus_tables;
-DROP VIEW IF EXISTS public.citus_tables;
-DROP FUNCTION citus_shard_sizes;
-#include "udfs/citus_shard_sizes/12.0-1.sql"
-
 #include "udfs/citus_tables/12.0-1.sql"
+DROP VIEW citus_shards;
 #include "udfs/citus_shards/12.0-1.sql"
 
 #include "udfs/citus_schemas/12.0-1.sql"

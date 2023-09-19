@@ -99,7 +99,8 @@ extern bool NodeIsEqualsOpExpr(Node *node);
 extern bool IsSupportedReferenceJoin(JoinType joinType, bool leftIsReferenceTable,
 									 bool rightIsReferenceTable);
 extern OpExpr * SinglePartitionJoinClause(List *partitionColumnList,
-										  List *applicableJoinClauses);
+										  List *applicableJoinClauses,
+										  bool *foundTypeMismatch);
 extern OpExpr * DualPartitionJoinClause(List *applicableJoinClauses);
 extern Var * LeftColumnOrNULL(OpExpr *joinClause);
 extern Var * RightColumnOrNULL(OpExpr *joinClause);

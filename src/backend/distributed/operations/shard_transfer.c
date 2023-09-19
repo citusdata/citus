@@ -1841,7 +1841,11 @@ CopyShardForeignConstraintCommandListGrouped(ShardInterval *shardInterval,
 		char *referencedSchemaName = get_namespace_name(referencedSchemaId);
 		char *escapedReferencedSchemaName = quote_literal_cstr(referencedSchemaName);
 
-		if (IsCitusTableType(referencedRelationId, REFERENCE_TABLE))
+		if (relationId == referencedRelationId)
+		{
+			referencedShardId = shardInterval->shardId;
+		}
+		else if (IsCitusTableType(referencedRelationId, REFERENCE_TABLE))
 		{
 			referencedShardId = GetFirstShardId(referencedRelationId);
 		}

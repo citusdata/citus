@@ -293,7 +293,7 @@ DEBUG:  Creating router plan
 -- cartesian product with different table types
 --    with other table types
 SELECT COUNT(*) FROM distributed_table d1, nullkey_c1_t1;
-DEBUG:  router planner does not support queries that reference non-colocated distributed tables
+DEBUG:  Router planner cannot handle multi-shard select queries
 ERROR:  cannot perform distributed planning on this query
 DETAIL:  Cartesian products are currently unsupported
 SELECT COUNT(*) FROM reference_table d1, nullkey_c1_t1;
@@ -552,14 +552,14 @@ SELECT COUNT(*) FROM nullkey_c1_t1 t1
 WHERE t1.b IN (
     SELECT b+1 FROM nullkey_c2_t2 t2 WHERE t2.b = t1.a
 );
-DEBUG:  found no worker with all shard placements
+DEBUG:  router planner does not support queries that reference non-colocated distributed tables
 ERROR:  cannot push down this subquery
 DETAIL:  nullkey_c2_t2 and nullkey_c1_t1 are not colocated
 SELECT COUNT(*) FROM nullkey_c1_t1 t1
 WHERE t1.b NOT IN (
     SELECT a FROM nullkey_c2_t2 t2 WHERE t2.b > t1.a
 );
-DEBUG:  found no worker with all shard placements
+DEBUG:  router planner does not support queries that reference non-colocated distributed tables
 ERROR:  cannot push down this subquery
 DETAIL:  nullkey_c2_t2 and nullkey_c1_t1 are not colocated
 -- join with a reference table
@@ -1101,21 +1101,21 @@ SELECT COUNT(*) FROM nullkey_c1_t1 t1
 LEFT JOIN LATERAL (
     SELECT * FROM distributed_table t2 WHERE t2.b > t1.a
 ) q USING(a);
-DEBUG:  router planner does not support queries that reference non-colocated distributed tables
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  skipping recursive planning for the subquery since it contains references to outer queries
 ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
 SELECT COUNT(*) FROM nullkey_c1_t1 t1
 WHERE EXISTS (
     SELECT * FROM distributed_table t2 WHERE t2.b > t1.a
 );
-DEBUG:  router planner does not support queries that reference non-colocated distributed tables
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  skipping recursive planning for the subquery since it contains references to outer queries
 ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
 SELECT COUNT(*) FROM nullkey_c1_t1 t1
 WHERE NOT EXISTS (
     SELECT * FROM distributed_table t2 WHERE t2.b > t1.a
 );
-DEBUG:  router planner does not support queries that reference non-colocated distributed tables
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  skipping recursive planning for the subquery since it contains references to outer queries
 ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
 SELECT COUNT(*) FROM nullkey_c1_t1 t1
@@ -1136,14 +1136,14 @@ SELECT COUNT(*) FROM distributed_table t1
 LEFT JOIN LATERAL (
     SELECT * FROM nullkey_c1_t1 t2 WHERE t2.b > t1.a
 ) q USING(a);
-DEBUG:  router planner does not support queries that reference non-colocated distributed tables
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  skipping recursive planning for the subquery since it contains references to outer queries
 ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
 SELECT COUNT(*) FROM distributed_table t1
 WHERE EXISTS (
     SELECT * FROM nullkey_c1_t1 t2 WHERE t2.b > t1.a
 );
-DEBUG:  router planner does not support queries that reference non-colocated distributed tables
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  skipping recursive planning for the subquery since it contains references to outer queries
 ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
 SELECT COUNT(*) FROM distributed_table t1
@@ -1186,14 +1186,14 @@ SELECT COUNT(*) FROM nullkey_c1_t1 t1
 WHERE t1.b IN (
     SELECT b+1 FROM citus_local_table t2 WHERE t2.b = t1.a
 );
-DEBUG:  found no worker with all shard placements
+DEBUG:  router planner does not support queries that reference non-colocated distributed tables
 DEBUG:  skipping recursive planning for the subquery since it contains references to outer queries
 ERROR:  direct joins between distributed and local tables are not supported
 SELECT COUNT(*) FROM nullkey_c1_t1 t1
 WHERE t1.b NOT IN (
     SELECT a FROM citus_local_table t2 WHERE t2.b > t1.a
 );
-DEBUG:  found no worker with all shard placements
+DEBUG:  router planner does not support queries that reference non-colocated distributed tables
 DEBUG:  skipping recursive planning for the subquery since it contains references to outer queries
 ERROR:  direct joins between distributed and local tables are not supported
 SELECT COUNT(*) FROM nullkey_c1_t1 t1
@@ -1261,14 +1261,14 @@ SELECT COUNT(*) FROM citus_local_table t1
 WHERE t1.b IN (
     SELECT b+1 FROM nullkey_c1_t1 t2 WHERE t2.b = t1.a
 );
-DEBUG:  found no worker with all shard placements
+DEBUG:  router planner does not support queries that reference non-colocated distributed tables
 DEBUG:  skipping recursive planning for the subquery since it contains references to outer queries
 ERROR:  direct joins between distributed and local tables are not supported
 SELECT COUNT(*) FROM citus_local_table t1
 WHERE t1.b NOT IN (
     SELECT a FROM nullkey_c1_t1 t2 WHERE t2.b > t1.a
 );
-DEBUG:  found no worker with all shard placements
+DEBUG:  router planner does not support queries that reference non-colocated distributed tables
 DEBUG:  skipping recursive planning for the subquery since it contains references to outer queries
 ERROR:  direct joins between distributed and local tables are not supported
 SELECT COUNT(*) FROM citus_local_table t1
@@ -1398,6 +1398,7 @@ INSERT INTO nullkey_c1_t1 SELECT * FROM nullkey_c1_t2;
 SET client_min_messages TO DEBUG2;
 --    between two non-colocated single-shard tables
 INSERT INTO nullkey_c1_t1 SELECT * FROM nullkey_c2_t1;
+DEBUG:  Creating router plan
 DEBUG:  INSERT target relation and all source relations of the SELECT must be colocated in distributed INSERT ... SELECT
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
@@ -1423,25 +1424,30 @@ DEBUG:  INSERT target relation and all source relations of the SELECT must be co
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 INSERT INTO nullkey_c1_t1 SELECT * FROM citus_local_table;
+DEBUG:  Creating router plan
 DEBUG:  distributed INSERT ... SELECT cannot select from a local relation when inserting into a distributed table
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 INSERT INTO nullkey_c1_t1 SELECT * FROM postgres_local_table;
+DEBUG:  Creating router plan
 DEBUG:  distributed INSERT ... SELECT can only select from distributed tables
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 INSERT INTO reference_table SELECT * FROM nullkey_c1_t1;
+DEBUG:  Creating router plan
 DEBUG:  only reference tables may be queried when targeting a reference table with distributed INSERT ... SELECT
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 INSERT INTO distributed_table SELECT * FROM nullkey_c1_t1;
+DEBUG:  Creating router plan
 DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition columns in the source table and subquery do not match
 DETAIL:  The target table's partition column should correspond to a partition column in the subquery.
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 INSERT INTO citus_local_table SELECT * FROM nullkey_c1_t1;
+DEBUG:  Creating router plan
 DEBUG:  distributed INSERT ... SELECT cannot insert into a local table that is added to metadata
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
@@ -1515,14 +1521,14 @@ WITH level_0 AS (
 SELECT COUNT(*) FROM level_0;
 DEBUG:  CTE level_0 is going to be inlined via distributed planning
 DEBUG:  CTE level_1 is going to be inlined via distributed planning
-DEBUG:  router planner does not support queries that reference non-colocated distributed tables
-DEBUG:  router planner does not support queries that reference non-colocated distributed tables
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  generating subplan XXX_1 for CTE level_0: WITH level_1 AS (WITH RECURSIVE level_2_recursive(x) AS (VALUES (1) UNION ALL SELECT (nullkey_c1_t1.a OPERATOR(pg_catalog.+) 1) FROM (query_single_shard_table.nullkey_c1_t1 JOIN level_2_recursive level_2_recursive_1 ON ((nullkey_c1_t1.a OPERATOR(pg_catalog.=) level_2_recursive_1.x))) WHERE (nullkey_c1_t1.a OPERATOR(pg_catalog.<) 100)) SELECT level_2_recursive.x, distributed_table.a, distributed_table.b FROM (level_2_recursive JOIN query_single_shard_table.distributed_table ON ((level_2_recursive.x OPERATOR(pg_catalog.=) distributed_table.a)))) SELECT x, a, b FROM level_1
 DEBUG:  CTE level_1 is going to be inlined via distributed planning
-DEBUG:  router planner does not support queries that reference non-colocated distributed tables
-DEBUG:  router planner does not support queries that reference non-colocated distributed tables
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  generating subplan XXX_1 for CTE level_1: WITH RECURSIVE level_2_recursive(x) AS (VALUES (1) UNION ALL SELECT (nullkey_c1_t1.a OPERATOR(pg_catalog.+) 1) FROM (query_single_shard_table.nullkey_c1_t1 JOIN level_2_recursive level_2_recursive_1 ON ((nullkey_c1_t1.a OPERATOR(pg_catalog.=) level_2_recursive_1.x))) WHERE (nullkey_c1_t1.a OPERATOR(pg_catalog.<) 100)) SELECT level_2_recursive.x, distributed_table.a, distributed_table.b FROM (level_2_recursive JOIN query_single_shard_table.distributed_table ON ((level_2_recursive.x OPERATOR(pg_catalog.=) distributed_table.a)))
-DEBUG:  router planner does not support queries that reference non-colocated distributed tables
+DEBUG:  Router planner cannot handle multi-shard select queries
 ERROR:  recursive CTEs are not supported in distributed queries
 -- grouping set
 SELECT
@@ -1583,7 +1589,7 @@ DEBUG:  Creating router plan
 SELECT COUNT(*), b FROM nullkey_c1_t1 GROUP BY 2
 HAVING (SELECT COUNT(*) FROM nullkey_c2_t1) > 0
 ORDER BY 1,2;
-DEBUG:  found no worker with all shard placements
+DEBUG:  router planner does not support queries that reference non-colocated distributed tables
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  generating subplan XXX_1 for subquery SELECT count(*) AS count FROM query_single_shard_table.nullkey_c2_t1
@@ -1880,8 +1886,6 @@ SELECT COALESCE(raw_events_first.user_id, users_ref_table.user_id)
 FROM raw_events_first
      RIGHT JOIN (users_ref_table LEFT JOIN raw_events_second ON users_ref_table.user_id = raw_events_second.user_id)
      ON raw_events_first.user_id = users_ref_table.user_id;
-DEBUG:  cannot perform a lateral outer join when a distributed subquery references a reference table
-DEBUG:  Collecting INSERT ... SELECT results on coordinator
 -- using a full join
 INSERT INTO agg_events (user_id, value_1_agg)
 SELECT t1.user_id AS col1,
@@ -1912,8 +1916,6 @@ FROM   users_ref_table
 WHERE  NOT EXISTS (SELECT 1
                    FROM   raw_events_second
                    WHERE  raw_events_second.user_id = users_ref_table.user_id);
-DEBUG:  correlated subqueries are not supported when the FROM clause contains a reference table
-DEBUG:  Collecting INSERT ... SELECT results on coordinator
 -- using inner join
 INSERT INTO agg_events (user_id)
 SELECT raw_events_first.user_id
@@ -1923,28 +1925,10 @@ INSERT INTO agg_events (user_id)
 SELECT raw_events_first.user_id
 FROM raw_events_first INNER JOIN users_ref_table ON raw_events_first.user_id = users_ref_table.user_id
 WHERE raw_events_first.value_1 IN (10, 11,12) OR users_ref_table.user_id IN (1,2,3,4);
--- We could relax distributed insert .. select checks to allow pushing
--- down more clauses down to the worker nodes when inserting into a single
--- shard by selecting from a colocated one. We might want to do something
--- like https://github.com/citusdata/citus/pull/6772.
---
---  e.g., insert into null_shard_key_1/citus_local/reference
---        select * from null_shard_key_1/citus_local/reference limit 1
---
--- Below "limit / offset clause" test and some others are examples of this.
 -- limit / offset clause
 INSERT INTO agg_events (user_id) SELECT raw_events_first.user_id FROM raw_events_first LIMIT 1;
-DEBUG:  cannot push down this subquery
-DETAIL:  Limit clause is currently unsupported when a subquery references a column from another query
-DEBUG:  Collecting INSERT ... SELECT results on coordinator
 INSERT INTO agg_events (user_id) SELECT raw_events_first.user_id FROM raw_events_first OFFSET 1;
-DEBUG:  cannot push down this subquery
-DETAIL:  Offset clause is currently unsupported when a subquery references a column from another query
-DEBUG:  Collecting INSERT ... SELECT results on coordinator
 INSERT INTO agg_events (user_id) SELECT users_ref_table.user_id FROM users_ref_table LIMIT 1;
-DEBUG:  cannot push down this subquery
-DETAIL:  Limit clause is currently unsupported when a subquery references a column from another query
-DEBUG:  Collecting INSERT ... SELECT results on coordinator
 -- using a materialized cte
 WITH cte AS MATERIALIZED
   (SELECT max(value_1)+1 as v1_agg, user_id FROM raw_events_first GROUP BY user_id)
@@ -1955,15 +1939,9 @@ DEBUG:  Collecting INSERT ... SELECT results on coordinator
 INSERT INTO raw_events_second
   WITH cte AS MATERIALIZED (SELECT * FROM raw_events_first)
   SELECT user_id * 1000, time, value_1, value_2, value_3, value_4 FROM cte;
-DEBUG:  cannot push down this subquery
-DETAIL:  CTEs in subqueries are currently unsupported
-DEBUG:  Collecting INSERT ... SELECT results on coordinator
 INSERT INTO raw_events_second (user_id)
   WITH cte AS MATERIALIZED (SELECT * FROM users_ref_table)
   SELECT user_id FROM cte;
-DEBUG:  cannot push down this subquery
-DETAIL:  CTEs in subqueries are currently unsupported
-DEBUG:  Collecting INSERT ... SELECT results on coordinator
 -- using a regular cte
 WITH cte AS (SELECT * FROM raw_events_first)
 INSERT INTO raw_events_second
@@ -2017,16 +1995,10 @@ INSERT INTO
   raw_events_first(user_id)
   (SELECT user_id FROM raw_events_first) INTERSECT
   (SELECT user_id FROM raw_events_first);
-DEBUG:  cannot push down this subquery
-DETAIL:  Intersect and Except are currently unsupported
-DEBUG:  Collecting INSERT ... SELECT results on coordinator
 INSERT INTO
   raw_events_first(user_id)
   (SELECT user_id FROM users_ref_table) INTERSECT
   (SELECT user_id FROM raw_events_first);
-DEBUG:  cannot push down this subquery
-DETAIL:  Intersect and Except are currently unsupported
-DEBUG:  Collecting INSERT ... SELECT results on coordinator
 -- group by clause inside subquery
 INSERT INTO agg_events
             (user_id)
@@ -2125,8 +2097,8 @@ ERROR:  functions used in the WHERE/ON/WHEN clause of modification queries on di
 UPDATE nullkey_c1_t1 SET b = 5 FROM nullkey_c1_t2 WHERE nullkey_c1_t1.b = nullkey_c1_t2.b;
 DEBUG:  Creating router plan
 UPDATE nullkey_c1_t1 SET b = 5 FROM nullkey_c2_t1 WHERE nullkey_c1_t1.b = nullkey_c2_t1.b;
-DEBUG:  found no worker with all shard placements
-ERROR:  found no worker with all shard placements
+DEBUG:  router planner does not support queries that reference non-colocated distributed tables
+ERROR:  router planner does not support queries that reference non-colocated distributed tables
 UPDATE nullkey_c1_t1 SET b = 5 FROM reference_table WHERE nullkey_c1_t1.b = reference_table.b;
 DEBUG:  Creating router plan
 UPDATE nullkey_c1_t1 SET b = 5 FROM distributed_table WHERE nullkey_c1_t1.b = distributed_table.b;
@@ -2177,8 +2149,8 @@ DEBUG:  Creating router plan
 DELETE FROM nullkey_c1_t1 USING nullkey_c1_t2 WHERE nullkey_c1_t1.b = nullkey_c1_t2.b;
 DEBUG:  Creating router plan
 DELETE FROM nullkey_c1_t1 USING nullkey_c2_t1 WHERE nullkey_c1_t1.b = nullkey_c2_t1.b;
-DEBUG:  found no worker with all shard placements
-ERROR:  found no worker with all shard placements
+DEBUG:  router planner does not support queries that reference non-colocated distributed tables
+ERROR:  router planner does not support queries that reference non-colocated distributed tables
 DELETE FROM nullkey_c1_t1 USING reference_table WHERE nullkey_c1_t1.b = reference_table.b;
 DEBUG:  Creating router plan
 DELETE FROM nullkey_c1_t1 USING distributed_table WHERE nullkey_c1_t1.b = distributed_table.b;
@@ -2506,7 +2478,7 @@ WITH cte AS (
     DELETE FROM nullkey_c1_t1 WHERE a = 1 RETURNING *
 )
 SELECT * FROM distributed_table WHERE a IN (SELECT a FROM cte);
-DEBUG:  router planner does not support queries that reference non-colocated distributed tables
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  generating subplan XXX_1 for CTE cte: DELETE FROM query_single_shard_table.nullkey_c1_t1 WHERE (a OPERATOR(pg_catalog.=) 1) RETURNING a, b
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
@@ -2770,7 +2742,7 @@ WITH cte1 AS (
 )
 UPDATE non_colocated_users_table dt SET value = cte1.value_1
 FROM cte1 WHERE cte1.user_id = dt.id AND dt.id = 1;
-DEBUG:  found no worker with all shard placements
+DEBUG:  router planner does not support queries that reference non-colocated distributed tables
 DEBUG:  generating subplan XXX_1 for CTE cte1: SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM query_single_shard_table.users_table WHERE (user_id OPERATOR(pg_catalog.=) 1)
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
@@ -2784,7 +2756,7 @@ WITH cte1 AS MATERIALIZED (
 )
 UPDATE non_colocated_users_table dt SET value = cte1.value_1 + cte2.event_type
 FROM cte1, cte2 WHERE cte1.user_id = dt.id AND dt.id = 1;
-DEBUG:  found no worker with all shard placements
+DEBUG:  router planner does not support queries that reference non-colocated distributed tables
 DEBUG:  generating subplan XXX_1 for CTE cte1: SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM query_single_shard_table.users_table WHERE (user_id OPERATOR(pg_catalog.=) 1)
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
@@ -3034,21 +3006,21 @@ DEBUG:  Creating router plan
 SELECT event_type, (SELECT time FROM users_table WHERE user_id = e.user_id ORDER BY time LIMIT 1)
 FROM non_colocated_events_table e
 ORDER BY 1,2 LIMIT 1;
-DEBUG:  found no worker with all shard placements
+DEBUG:  router planner does not support queries that reference non-colocated distributed tables
 DEBUG:  push down of limit count: 1
 ERROR:  cannot push down this subquery
 DETAIL:  users_table and non_colocated_events_table are not colocated
 SELECT event_type, (SELECT max(time) FROM users_table WHERE user_id = e.value_2)
 FROM non_colocated_events_table e
 ORDER BY 1,2 LIMIT 1;
-DEBUG:  found no worker with all shard placements
+DEBUG:  router planner does not support queries that reference non-colocated distributed tables
 DEBUG:  push down of limit count: 1
 ERROR:  cannot push down this subquery
 DETAIL:  users_table and non_colocated_events_table are not colocated
 SELECT event_type, (SELECT max(time) FROM users_table)
 FROM non_colocated_events_table e
 ORDER BY 1,2 LIMIT 1;
-DEBUG:  found no worker with all shard placements
+DEBUG:  router planner does not support queries that reference non-colocated distributed tables
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  generating subplan XXX_1 for subquery SELECT max("time") AS max FROM query_single_shard_table.users_table
@@ -3125,7 +3097,7 @@ SELECT sum(e.user_id) + (SELECT max(value_3) FROM users_table WHERE user_id = e.
 FROM non_colocated_events_table e
 GROUP BY e.user_id
 ORDER BY 1 LIMIT 3;
-DEBUG:  found no worker with all shard placements
+DEBUG:  router planner does not support queries that reference non-colocated distributed tables
 ERROR:  cannot push down subquery on the target list
 DETAIL:  Subqueries in the SELECT part of the query can only be pushed down if they happen before aggregates and window functions
 SELECT e.user_id, sum((SELECT any_value(value_3) FROM users_reference_table WHERE user_id = e.user_id GROUP BY user_id)) OVER (PARTITION BY e.user_id)
@@ -3143,7 +3115,7 @@ SELECT (SELECT (SELECT e.user_id + user_id) FROM users_table WHERE user_id = e.u
 FROM non_colocated_events_table e
 GROUP BY 1
 ORDER BY 1 LIMIT 3;
-DEBUG:  found no worker with all shard placements
+DEBUG:  router planner does not support queries that reference non-colocated distributed tables
 DEBUG:  push down of limit count: 3
 ERROR:  cannot push down this subquery
 DETAIL:  users_table and non_colocated_events_table are not colocated
@@ -3194,7 +3166,7 @@ SELECT (SELECT value_2 FROM view_1 WHERE user_id = e.user_id GROUP BY value_2)
 FROM non_colocated_events_table e
 GROUP BY 1
 ORDER BY 1 LIMIT 3;
-DEBUG:  found no worker with all shard placements
+DEBUG:  router planner does not support queries that reference non-colocated distributed tables
 DEBUG:  push down of limit count: 3
 ERROR:  cannot push down this subquery
 DETAIL:  users_table and non_colocated_events_table are not colocated
@@ -3208,7 +3180,7 @@ GROUP BY user_id
 					  (SELECT sum(user_id)  FROM users_table WHERE user_id = u1.user_id GROUP BY user_id)
 					FROM users_table u1
 					GROUP BY user_id) as foo) ORDER BY 1 DESC;
-DEBUG:  found no worker with all shard placements
+DEBUG:  router planner does not support queries that reference non-colocated distributed tables
 DEBUG:  Creating router plan
 DEBUG:  generating subplan XXX_1 for subquery SELECT count(*) AS count FROM (SELECT (SELECT sum(users_table.user_id) AS sum FROM query_single_shard_table.users_table WHERE (users_table.user_id OPERATOR(pg_catalog.=) u1.user_id) GROUP BY users_table.user_id) AS sum FROM query_single_shard_table.users_table u1 GROUP BY u1.user_id) foo
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT user_id, count(*) AS count FROM query_single_shard_table.non_colocated_events_table e1 GROUP BY user_id HAVING (count(*) OPERATOR(pg_catalog.>) (SELECT intermediate_result.count FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(count bigint))) ORDER BY user_id DESC

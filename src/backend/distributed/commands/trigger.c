@@ -74,7 +74,7 @@ GetExplicitTriggerCommandList(Oid relationId)
 {
 	List *createTriggerCommandList = NIL;
 
-	PushOverrideEmptySearchPath(CurrentMemoryContext);
+	int saveNestLevel = PushEmptySearchPath();
 
 	List *triggerIdList = GetExplicitTriggerIdList(relationId);
 
@@ -116,7 +116,7 @@ GetExplicitTriggerCommandList(Oid relationId)
 	}
 
 	/* revert back to original search_path */
-	PopOverrideSearchPath();
+	PopEmptySearchPath(saveNestLevel);
 
 	return createTriggerCommandList;
 }
@@ -249,7 +249,7 @@ GetExplicitTriggerIdList(Oid relationId)
 	ScanKeyData scanKey[1];
 
 	ScanKeyInit(&scanKey[0], Anum_pg_trigger_tgrelid,
-				BTEqualStrategyNumber, F_OIDEQ, relationId);
+				BTEqualStrategyNumber, F_OIDEQ, ObjectIdGetDatum(relationId));
 
 	bool useIndex = true;
 	SysScanDesc scanDescriptor = systable_beginscan(pgTrigger, TriggerRelidNameIndexId,

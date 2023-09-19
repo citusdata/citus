@@ -180,11 +180,13 @@ WHEN NOT MATCHED THEN
 
 -- check if the target can be accessed from source relation subquery; we should
 -- not be able to do so
+\set VERBOSITY terse
 MERGE INTO target t
 USING (SELECT * FROM source WHERE t.tid > sid) s
 ON t.tid = s.sid
 WHEN NOT MATCHED THEN
 	INSERT DEFAULT VALUES;
+\set VERBOSITY default
 --
 -- initial tests
 --
@@ -431,6 +433,7 @@ SELECT * FROM target ORDER BY tid;
 ROLLBACK;
 
 -- and again with a subtle error: referring to non-existent target row for NOT MATCHED
+\set VERBOSITY terse
 MERGE INTO target t
 USING source AS s
 ON t.tid = s.sid
@@ -520,6 +523,7 @@ WHEN NOT MATCHED AND t.balance = 100 THEN
 	INSERT (tid) VALUES (s.sid);
 SELECT * FROM wq_target;
 ROLLBACK;
+\set VERBOSITY default
 
 MERGE INTO wq_target t
 USING wq_source s ON t.tid = s.sid

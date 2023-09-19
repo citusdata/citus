@@ -54,6 +54,9 @@
 #include "utils/relcache.h"
 
 /* Local functions forward declarations */
+static void RelayEventExtendConstraintAndIndexNames(AlterTableStmt *alterTableStmt,
+													Constraint *constraint,
+													uint64 shardId);
 static bool UpdateWholeRowColumnReferencesWalker(Node *node, uint64 *shardId);
 
 /* exports for SQL callable functions */
@@ -150,43 +153,17 @@ RelayEventExtendNames(Node *parseTree, char *schemaName, uint64 shardId)
 				if (command->subtype == AT_AddConstraint)
 				{
 					Constraint *constraint = (Constraint *) command->def;
-					char **constraintName = &(constraint->conname);
-					const bool missingOk = false;
-					relationId = RangeVarGetRelid(alterTableStmt->relation,
-												  AccessShareLock,
-												  missingOk);
-
-					if (constraint->indexname)
+					RelayEventExtendConstraintAndIndexNames(alterTableStmt, constraint,
+															shardId);
+				}
+				else if (command->subtype == AT_AddColumn)
+				{
+					ColumnDef *columnDefinition = (ColumnDef *) command->def;
+					Constraint *constraint = NULL;
+					foreach_ptr(constraint, columnDefinition->constraints)
 					{
-						char **indexName = &(constraint->indexname);
-						AppendShardIdToName(indexName, shardId);
-					}
-
-					/*
-					 * Append shardId to constraint names if
-					 *  - table is not partitioned or
-					 *  - constraint is not a CHECK constraint
-					 *
-					 * We do not want to append shardId to partitioned table shards because
-					 * the names of constraints will be inherited, and the shardId will no
-					 * longer be valid for the child table.
-					 *
-					 * See MergeConstraintsIntoExisting function in Postgres that requires
-					 * inherited check constraints in child tables to have the same name
-					 * with those in parent tables.
-					 */
-					if (!PartitionedTable(relationId) ||
-						constraint->contype != CONSTR_CHECK)
-					{
-						/*
-						 * constraint->conname could be empty in the case of
-						 * ADD {PRIMARY KEY, UNIQUE} USING INDEX.
-						 * In this case, already extended index name will be used by postgres.
-						 */
-						if (constraint->conname != NULL)
-						{
-							AppendShardIdToName(constraintName, shardId);
-						}
+						RelayEventExtendConstraintAndIndexNames(alterTableStmt,
+																constraint, shardId);
 					}
 				}
 				else if (command->subtype == AT_DropConstraint ||
@@ -623,6 +600,56 @@ RelayEventExtendNames(Node *parseTree, char *schemaName, uint64 shardId)
 
 
 /*
+ * RelayEventExtendConstraintAndIndexNames extends the names of constraints
+ * and indexes in given constraint with the shardId.
+ */
+static void
+RelayEventExtendConstraintAndIndexNames(AlterTableStmt *alterTableStmt,
+										Constraint *constraint,
+										uint64 shardId)
+{
+	char **constraintName = &(constraint->conname);
+	const bool missingOk = false;
+	Oid relationId = RangeVarGetRelid(alterTableStmt->relation,
+									  AccessShareLock,
+									  missingOk);
+
+	if (constraint->indexname)
+	{
+		char **indexName = &(constraint->indexname);
+		AppendShardIdToName(indexName, shardId);
+	}
+
+	/*
+	 * Append shardId to constraint names if
+	 *  - table is not partitioned or
+	 *  - constraint is not a CHECK constraint
+	 *
+	 * We do not want to append shardId to partitioned table shards because
+	 * the names of constraints will be inherited, and the shardId will no
+	 * longer be valid for the child table.
+	 *
+	 * See MergeConstraintsIntoExisting function in Postgres that requires
+	 * inherited check constraints in child tables to have the same name
+	 * with those in parent tables.
+	 */
+	if (!PartitionedTable(relationId) ||
+		constraint->contype != CONSTR_CHECK)
+	{
+		/*
+		 * constraint->conname could be empty in the case of
+		 * ADD {PRIMARY KEY, UNIQUE} USING INDEX.
+		 * In this case, already extended index name will be used by postgres.
+		 */
+		if (constraint->conname != NULL)
+		{
+			AppendShardIdToName(constraintName, shardId);
+		}
+	}
+}
+
+
+/*
  * RelayEventExtendNamesForInterShardCommands extends relation names in the given parse
  * tree for certain utility commands. The function more specifically extends table, index
  * and constraint names in the parse tree by appending the given shardId; thereby
@@ -660,13 +687,6 @@ RelayEventExtendNamesForInterShardCommands(Node *parseTree, uint64 leftShardId,
 				}
 				else if (command->subtype == AT_AddColumn)
 				{
-					/*
-					 * TODO: This code path will never be executed since we do not
-					 * support foreign constraint creation via
-					 * ALTER TABLE %s ADD COLUMN %s [constraint]. However, the code
-					 * is kept in case we fix the constraint creation without a name
-					 * and allow foreign key creation with the mentioned command.
-					 */
 					ColumnDef *columnDefinition = (ColumnDef *) command->def;
 					List *columnConstraints = columnDefinition->constraints;
 

@@ -604,11 +604,9 @@ INSERT INTO citus_local_table
 SELECT * from citus_local_table_2;
 NOTICE:  executing the command locally: INSERT INTO citus_local_table_queries.citus_local_table_1509001 AS citus_table_alias (a, b) SELECT a, b FROM citus_local_table_queries.citus_local_table_2_1509002 citus_local_table_2
 INSERT INTO citus_local_table
-SELECT * from citus_local_table_2
-ORDER BY 1,2
-LIMIT 10;
-NOTICE:  executing the command locally: SELECT a, b FROM citus_local_table_queries.citus_local_table_2_1509002 citus_local_table_2 ORDER BY a, b LIMIT 10
-NOTICE:  executing the copy locally for shard xxxxx
+SELECT sum(a), b from citus_local_table_2
+GROUP BY b;
+NOTICE:  executing the command locally: INSERT INTO citus_local_table_queries.citus_local_table_1509001 AS citus_table_alias (a, b) SELECT sum(a) AS sum, b FROM citus_local_table_queries.citus_local_table_2_1509002 citus_local_table_2 GROUP BY b
 INSERT INTO citus_local_table
 SELECT * from postgres_local_table;
 NOTICE:  executing the copy locally for shard xxxxx

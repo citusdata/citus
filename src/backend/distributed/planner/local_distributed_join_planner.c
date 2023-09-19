@@ -107,6 +107,7 @@
 #include "optimizer/optimizer.h"
 #include "optimizer/planner.h"
 #include "optimizer/prep.h"
+#include "parser/parse_relation.h"
 #include "parser/parsetree.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
@@ -136,6 +137,9 @@ typedef struct RangeTableEntryDetails
 	RangeTblEntry *rangeTableEntry;
 	List *requiredAttributeNumbers;
 	bool hasConstantFilterOnUniqueColumn;
+#if PG_VERSION_NUM >= PG_VERSION_16
+	RTEPermissionInfo *perminfo;
+#endif
 } RangeTableEntryDetails;
 
 /*
@@ -176,7 +180,8 @@ static bool HasConstantFilterOnUniqueColumn(RangeTblEntry *rangeTableEntry,
 static ConversionCandidates * CreateConversionCandidates(PlannerRestrictionContext *
 														 plannerRestrictionContext,
 														 List *rangeTableList,
-														 int resultRTEIdentity);
+														 int resultRTEIdentity,
+														 List *rteperminfos);
 static void AppendUniqueIndexColumnsToList(Form_pg_index indexForm, List **uniqueIndexes,
 										   int flags);
 static ConversionChoice GetConversionChoice(ConversionCandidates *
@@ -205,10 +210,17 @@ RecursivelyPlanLocalTableJoins(Query *query,
 		GetPlannerRestrictionContext(context);
 
 	List *rangeTableList = query->rtable;
+#if PG_VERSION_NUM >= PG_VERSION_16
+	List *rteperminfos = query->rteperminfos;
+#endif
 	int resultRTEIdentity = ResultRTEIdentity(query);
 	ConversionCandidates *conversionCandidates =
 		CreateConversionCandidates(plannerRestrictionContext,
-								   rangeTableList, resultRTEIdentity);
+#if PG_VERSION_NUM >= PG_VERSION_16
+								   rangeTableList, resultRTEIdentity, rteperminfos);
+#else
+								   rangeTableList, resultRTEIdentity, NIL);
+#endif
 
 	ConversionChoice conversionChoise =
 		GetConversionChoice(conversionCandidates, plannerRestrictionContext);
@@ -323,7 +335,12 @@ ConvertRTEsToSubquery(List *rangeTableEntryDetailsList, RecursivePlanningContext
 		RangeTblEntry *rangeTableEntry = rangeTableEntryDetails->rangeTableEntry;
 		List *requiredAttributeNumbers = rangeTableEntryDetails->requiredAttributeNumbers;
 		ReplaceRTERelationWithRteSubquery(rangeTableEntry,
-										  requiredAttributeNumbers, context);
+#if PG_VERSION_NUM >= PG_VERSION_16
+										  requiredAttributeNumbers, context,
+										  rangeTableEntryDetails->perminfo);
+#else
+										  requiredAttributeNumbers, context, NULL);
+#endif
 	}
 }
 
@@ -530,7 +547,9 @@ RequiredAttrNumbersForRelationInternal(Query *queryToProcess, int rteIndex)
  */
 static ConversionCandidates *
 CreateConversionCandidates(PlannerRestrictionContext *plannerRestrictionContext,
-						   List *rangeTableList, int resultRTEIdentity)
+						   List *rangeTableList,
+						   int resultRTEIdentity,
+						   List *rteperminfos)
 {
 	ConversionCandidates *conversionCandidates =
 		palloc0(sizeof(ConversionCandidates));
@@ -564,6 +583,14 @@ CreateConversionCandidates(PlannerRestrictionContext *plannerRestrictionContext,
 			RequiredAttrNumbersForRelation(rangeTableEntry, plannerRestrictionContext);
 		rangeTableEntryDetails->hasConstantFilterOnUniqueColumn =
 			HasConstantFilterOnUniqueColumn(rangeTableEntry, relationRestriction);
+#if PG_VERSION_NUM >= PG_VERSION_16
+		rangeTableEntryDetails->perminfo = NULL;
+		if (rangeTableEntry->perminfoindex)
+		{
+			rangeTableEntryDetails->perminfo = getRTEPermissionInfo(rteperminfos,
+																	rangeTableEntry);
+		}
+#endif
 
 		bool referenceOrDistributedTable =
 			IsCitusTableType(rangeTableEntry->relid, REFERENCE_TABLE) ||

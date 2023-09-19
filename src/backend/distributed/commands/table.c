@@ -76,6 +76,8 @@ static void DistributePartitionUsingParent(Oid parentRelationId,
 static void ErrorIfMultiLevelPartitioning(Oid parentRelationId, Oid partitionRelationId);
 static void ErrorIfAttachCitusTableToPgLocalTable(Oid parentRelationId,
 												  Oid partitionRelationId);
+static bool DeparserSupportsAlterTableAddColumn(AlterTableStmt *alterTableStatement,
+												AlterTableCmd *addColumnSubCommand);
 static bool ATDefinesFKeyBetweenPostgresAndCitusLocalOrRef(
 	AlterTableStmt *alterTableStatement);
 static bool ShouldMarkConnectedRelationsNotAutoConverted(Oid leftRelationId,
@@ -101,8 +103,6 @@ static List * GetRelationIdListFromRangeVarList(List *rangeVarList, LOCKMODE loc
 static bool AlterTableCommandTypeIsTrigger(AlterTableType alterTableType);
 static bool AlterTableDropsForeignKey(AlterTableStmt *alterTableStatement);
 static void ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement);
-static List * InterShardDDLTaskList(Oid leftRelationId, Oid rightRelationId,
-									const char *commandString);
 static bool AlterInvolvesPartitionColumn(AlterTableStmt *alterTableStatement,
 										 AlterTableCmd *command);
 static bool AlterColumnInvolvesIdentityColumn(AlterTableStmt *alterTableStatement,
@@ -120,7 +120,8 @@ static void SetInterShardDDLTaskRelationShardList(Task *task,
 static Oid get_attrdef_oid(Oid relationId, AttrNumber attnum);
 
 static char * GetAddColumnWithNextvalDefaultCmd(Oid sequenceOid, Oid relationId,
-												char *colname, TypeName *typeName);
+												char *colname, TypeName *typeName,
+												bool ifNotExists);
 static void ErrorIfAlterTableDropTableNameFromPostgresFdw(List *optionList, Oid
 														  relationId);
 
@@ -1028,30 +1029,7 @@ PreprocessAlterTableAddConstraint(AlterTableStmt *alterTableStatement, Oid
 								  relationId,
 								  Constraint *constraint)
 {
-	/*
-	 * We should only preprocess an ADD CONSTRAINT command if we have empty conname
-	 * This only happens when we have to create a constraint name in citus since the client does
-	 * not specify a name.
-	 * indexname should also be NULL to make sure this is not an
-	 * ADD {PRIMARY KEY, UNIQUE} USING INDEX command
-	 * which doesn't need a conname since the indexname will be used
-	 */
-	Assert(constraint->conname == NULL && constraint->indexname == NULL);
-
-	Relation rel = RelationIdGetRelation(relationId);
-
-	/*
-	 * Change the alterTableCommand so that the standard utility
-	 * hook runs it with the name we created.
-	 */
-
-	constraint->conname = GenerateConstraintName(RelationGetRelationName(rel),
-												 RelationGetNamespace(rel),
-												 constraint);
-
-	RelationClose(rel);
-
-	SwitchToSequentialAndLocalExecutionIfConstraintNameTooLong(relationId, constraint);
+	PrepareAlterTableStmtForConstraint(alterTableStatement, relationId, constraint);
 
 	char *ddlCommand = DeparseTreeNode((Node *) alterTableStatement);
 
@@ -1066,11 +1044,6 @@ PreprocessAlterTableAddConstraint(AlterTableStmt *alterTableStatement, Oid
 	{
 		Oid rightRelationId = RangeVarGetRelid(constraint->pktable, NoLock,
 											   false);
-
-		if (IsCitusTableType(rightRelationId, REFERENCE_TABLE))
-		{
-			EnsureSequentialModeForAlterTableOperation();
-		}
 
 		/*
 		 * If one of the relations involved in the FOREIGN KEY constraint is not a distributed table, citus errors out eventually.
@@ -1096,6 +1069,47 @@ PreprocessAlterTableAddConstraint(AlterTableStmt *alterTableStatement, Oid
 	}
 
 	return list_make1(ddlJob);
+}
+
+
+/*
+ * PrepareAlterTableStmtForConstraint assigns a name to the constraint if it
+ * does not have one and switches to sequential and local execution if the
+ * constraint name is too long.
+ */
+void
+PrepareAlterTableStmtForConstraint(AlterTableStmt *alterTableStatement,
+								   Oid relationId,
+								   Constraint *constraint)
+{
+	if (constraint->conname == NULL && constraint->indexname == NULL)
+	{
+		Relation rel = RelationIdGetRelation(relationId);
+
+		/*
+		 * Change the alterTableCommand so that the standard utility
+		 * hook runs it with the name we created.
+		 */
+
+		constraint->conname = GenerateConstraintName(RelationGetRelationName(rel),
+													 RelationGetNamespace(rel),
+													 constraint);
+
+		RelationClose(rel);
+	}
+
+	SwitchToSequentialAndLocalExecutionIfConstraintNameTooLong(relationId, constraint);
+
+	if (constraint->contype == CONSTR_FOREIGN)
+	{
+		Oid rightRelationId = RangeVarGetRelid(constraint->pktable, NoLock,
+											   false);
+
+		if (IsCitusTableType(rightRelationId, REFERENCE_TABLE))
+		{
+			EnsureSequentialModeForAlterTableOperation();
+		}
+	}
 }
 
 
@@ -1267,6 +1281,7 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 	 *    we also set skip_validation to true to prevent PostgreSQL to verify validity
 	 *    of the foreign constraint in master. Validity will be checked in workers
 	 *    anyway.
+	 *  - an ADD COLUMN .. that is the only subcommand in the list OR
 	 *  - an ADD COLUMN .. DEFAULT nextval('..') OR
 	 *    an ADD COLUMN .. SERIAL pseudo-type OR
 	 *    an ALTER COLUMN .. SET DEFAULT nextval('..'). If there is we set
@@ -1396,13 +1411,6 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 		}
 		else if (alterTableType == AT_AddColumn)
 		{
-			/*
-			 * TODO: This code path is nothing beneficial since we do not
-			 * support ALTER TABLE %s ADD COLUMN %s [constraint] for foreign keys.
-			 * However, the code is kept in case we fix the constraint
-			 * creation without a name and allow foreign key creation with the mentioned
-			 * command.
-			 */
 			ColumnDef *columnDefinition = (ColumnDef *) command->def;
 			List *columnConstraints = columnDefinition->constraints;
 
@@ -1426,12 +1434,36 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 				}
 			}
 
+			if (DeparserSupportsAlterTableAddColumn(alterTableStatement, command))
+			{
+				deparseAT = true;
+
+				constraint = NULL;
+				foreach_ptr(constraint, columnConstraints)
+				{
+					if (ConstrTypeCitusCanDefaultName(constraint->contype))
+					{
+						PrepareAlterTableStmtForConstraint(alterTableStatement,
+														   leftRelationId,
+														   constraint);
+					}
+				}
+
+				/*
+				 * Copy the constraints to the new subcommand because now we
+				 * might have assigned names to some of them.
+				 */
+				ColumnDef *newColumnDef = (ColumnDef *) newCmd->def;
+				newColumnDef->constraints = copyObject(columnConstraints);
+			}
+
 			/*
 			 * We check for ADD COLUMN .. DEFAULT expr
 			 * if expr contains nextval('user_defined_seq')
 			 * we should deparse the statement
 			 */
 			constraint = NULL;
+			int constraintIdx = 0;
 			foreach_ptr(constraint, columnConstraints)
 			{
 				if (constraint->contype == CONSTR_DEFAULT)
@@ -1447,14 +1479,19 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 							deparseAT = true;
 							useInitialDDLCommandString = false;
 
-							/* the new column definition will have no constraint */
-							ColumnDef *newColDef = copyObject(columnDefinition);
-							newColDef->constraints = NULL;
-
-							newCmd->def = (Node *) newColDef;
+							/* drop the default expression from new subcomand */
+							ColumnDef *newColumnDef = (ColumnDef *) newCmd->def;
+							newColumnDef->constraints =
+								list_delete_nth_cell(newColumnDef->constraints,
+													 constraintIdx);
 						}
 					}
+
+					/* there can only be one DEFAULT constraint that can be used per column */
+					break;
 				}
+
+				constraintIdx++;
 			}
 
 
@@ -1635,6 +1672,49 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 	List *ddlJobs = list_make1(ddlJob);
 
 	return ddlJobs;
+}
+
+
+/*
+ * DeparserSupportsAlterTableAddColumn returns true if it's safe to deparse
+ * the given ALTER TABLE statement that is known to contain given ADD COLUMN
+ * subcommand.
+ */
+static bool
+DeparserSupportsAlterTableAddColumn(AlterTableStmt *alterTableStatement,
+									AlterTableCmd *addColumnSubCommand)
+{
+	/*
+	 * We support deparsing for ADD COLUMN only of it's the only
+	 * subcommand.
+	 */
+	if (list_length(alterTableStatement->cmds) == 1 &&
+		alterTableStatement->objtype == OBJECT_TABLE)
+	{
+		ColumnDef *columnDefinition = (ColumnDef *) addColumnSubCommand->def;
+		Constraint *constraint = NULL;
+		foreach_ptr(constraint, columnDefinition->constraints)
+		{
+			if (constraint->contype == CONSTR_CHECK)
+			{
+				/*
+				 * Given that we're in the preprocess, any reference to the
+				 * column that we're adding would break the deparser. This
+				 * can only be the case with CHECK constraints. For this
+				 * reason, we skip deparsing the command and fall back to
+				 * legacy behavior that we follow for ADD COLUMN subcommands.
+				 *
+				 * For other constraint types, we prepare the constraint to
+				 * make sure that we can deparse it.
+				 */
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	return false;
 }
 
 
@@ -2637,7 +2717,9 @@ PostprocessAlterTableStmt(AlterTableStmt *alterTableStatement)
 																		  columnDefinition
 																		  ->colname,
 																		  columnDefinition
-																		  ->typeName);
+																		  ->typeName,
+																		  command->
+																		  missing_ok);
 								}
 							}
 						}
@@ -2902,7 +2984,7 @@ GetAlterColumnWithNextvalDefaultCmd(Oid sequenceOid, Oid relationId, char *colna
  */
 static char *
 GetAddColumnWithNextvalDefaultCmd(Oid sequenceOid, Oid relationId, char *colname,
-								  TypeName *typeName)
+								  TypeName *typeName, bool ifNotExists)
 {
 	char *qualifiedSequenceName = generate_qualified_relation_name(sequenceOid);
 	char *qualifiedRelationName = generate_qualified_relation_name(relationId);
@@ -2927,8 +3009,9 @@ GetAddColumnWithNextvalDefaultCmd(Oid sequenceOid, Oid relationId, char *colname
 	StringInfoData str = { 0 };
 	initStringInfo(&str);
 	appendStringInfo(&str,
-					 "ALTER TABLE %s ADD COLUMN %s %s "
-					 "DEFAULT %s(%s::regclass)", qualifiedRelationName, colname,
+					 "ALTER TABLE %s ADD COLUMN %s %s %s "
+					 "DEFAULT %s(%s::regclass)", qualifiedRelationName,
+					 ifNotExists ? "IF NOT EXISTS" : "", colname,
 					 format_type_extended(typeOid, typmod, formatFlags),
 					 quote_qualified_identifier("pg_catalog", nextvalFunctionName),
 					 quote_literal_cstr(qualifiedSequenceName));
@@ -3676,13 +3759,6 @@ SetupExecutionModeForAlterTable(Oid relationId, AlterTableCmd *command)
 	}
 	else if (alterTableType == AT_AddColumn)
 	{
-		/*
-		 * TODO: This code path will never be executed since we do not
-		 * support foreign constraint creation via
-		 * ALTER TABLE %s ADD COLUMN %s [constraint]. However, the code
-		 * is kept in case we fix the constraint creation without a name
-		 * and allow foreign key creation with the mentioned command.
-		 */
 		ColumnDef *columnDefinition = (ColumnDef *) command->def;
 		List *columnConstraints = columnDefinition->constraints;
 
@@ -3780,7 +3856,7 @@ SetupExecutionModeForAlterTable(Oid relationId, AlterTableCmd *command)
  * applied. rightRelationId is the relation id of either index or distributed table which
  * given command refers to.
  */
-static List *
+List *
 InterShardDDLTaskList(Oid leftRelationId, Oid rightRelationId,
 					  const char *commandString)
 {
@@ -3878,25 +3954,29 @@ static void
 SetInterShardDDLTaskPlacementList(Task *task, ShardInterval *leftShardInterval,
 								  ShardInterval *rightShardInterval)
 {
-	Oid leftRelationId = leftShardInterval->relationId;
-	Oid rightRelationId = rightShardInterval->relationId;
-	if (IsCitusTableType(leftRelationId, REFERENCE_TABLE) &&
-		IsCitusTableType(rightRelationId, CITUS_LOCAL_TABLE))
+	uint64 leftShardId = leftShardInterval->shardId;
+	List *leftShardPlacementList = ActiveShardPlacementList(leftShardId);
+
+	uint64 rightShardId = rightShardInterval->shardId;
+	List *rightShardPlacementList = ActiveShardPlacementList(rightShardId);
+
+	List *intersectedPlacementList = NIL;
+
+	ShardPlacement *leftShardPlacement = NULL;
+	foreach_ptr(leftShardPlacement, leftShardPlacementList)
 	{
-		/*
-		 * If we are defining/dropping a foreign key from a reference table
-		 * to a citus local table, then we will execute ADD/DROP constraint
-		 * command only for coordinator placement of reference table.
-		 */
-		uint64 leftShardId = leftShardInterval->shardId;
-		task->taskPlacementList = ActiveShardPlacementListOnGroup(leftShardId,
-																  COORDINATOR_GROUP_ID);
+		ShardPlacement *rightShardPlacement = NULL;
+		foreach_ptr(rightShardPlacement, rightShardPlacementList)
+		{
+			if (leftShardPlacement->nodeId == rightShardPlacement->nodeId)
+			{
+				intersectedPlacementList = lappend(intersectedPlacementList,
+												   leftShardPlacement);
+			}
+		}
 	}
-	else
-	{
-		uint64 leftShardId = leftShardInterval->shardId;
-		task->taskPlacementList = ActiveShardPlacementList(leftShardId);
-	}
+
+	task->taskPlacementList = intersectedPlacementList;
 }
 
 

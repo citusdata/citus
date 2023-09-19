@@ -16,10 +16,10 @@
 # Tests around schema changes, these are run first, so there's no preexisting objects.
 # ---
 test: multi_extension
+test: multi_test_helpers multi_test_helpers_superuser multi_create_fdw
 test: single_node
 test: relation_access_tracking_single_node
 test: single_node_truncate
-test: multi_test_helpers multi_test_helpers_superuser multi_create_fdw
 test: multi_cluster_management
 
 # below tests are placed right after multi_cluster_management as we do
@@ -49,6 +49,9 @@ test: multi_metadata_access
 test: multi_metadata_attributes
 
 test: multi_read_from_secondaries
+
+test: grant_on_database_propagation
+test: alter_database_propagation
 
 # ----------
 # multi_citus_tools tests utility functions written for citus tools
@@ -157,7 +160,7 @@ test: with_executors with_join with_partitioning with_transactions with_dml
 # Tests around DDL statements run on distributed tables
 # ----------
 test: multi_index_statements
-test: multi_alter_table_statements
+test: multi_alter_table_statements alter_table_add_column
 test: multi_alter_table_add_constraints
 test: multi_alter_table_add_constraints_without_name
 test: multi_alter_table_add_foreign_key_without_name
@@ -203,6 +206,7 @@ test: multi_modifying_xacts
 test: multi_generate_ddl_commands
 test: multi_create_shards
 test: multi_transaction_recovery
+test: multi_transaction_recovery_multiple_databases
 
 test: local_dist_join_modifications
 test: local_table_join
@@ -304,6 +308,7 @@ test: mx_regular_user
 test: citus_locks
 test: global_cancel
 test: sequences_owned_by
+test: citus_schema_move
 test: remove_coordinator
 
 # ----------

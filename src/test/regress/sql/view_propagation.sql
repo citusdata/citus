@@ -207,15 +207,15 @@ UNION ALL
 	INNER JOIN reporting_line rl ON e.manager_id = rl.employee_id;
 
 -- Aliases are supported
-CREATE VIEW aliased_opt_prop_view(alias_1, alias_2) AS SELECT * FROM view_table_6;
+CREATE VIEW aliased_opt_prop_view(alias_1, alias_2) AS SELECT * FROM view_table_6 table_name_for_view;
 
 -- View options are supported
 CREATE VIEW opt_prop_view
     WITH(check_option=CASCADED, security_barrier=true)
-    AS SELECT * FROM view_table_6;
+    AS SELECT * FROM view_table_6 table_name_for_view;
 
 CREATE VIEW sep_opt_prop_view
-    AS SELECT * FROM view_table_6
+    AS SELECT * FROM view_table_6 table_name_for_view
     WITH LOCAL CHECK OPTION;
 
 SELECT * FROM (SELECT pg_identify_object_as_address(classid, objid, objsubid) as obj_identifier from pg_catalog.pg_dist_object) as obj_identifiers where obj_identifier::text like '%opt_prop_view%' ORDER BY 1;
@@ -273,7 +273,7 @@ CREATE OR REPLACE VIEW view_for_unsup_commands AS SELECT id FROM table_to_test_u
 CREATE TABLE alter_view_table(id int, val1 text);
 SELECT create_distributed_table('alter_view_table','id');
 
-CREATE VIEW alter_view_1 AS SELECT * FROM alter_view_table;
+CREATE VIEW alter_view_1 AS SELECT * FROM alter_view_table table_name_for_view;
 
 -- Set/drop default value is not supported by Citus
 ALTER VIEW alter_view_1 ALTER COLUMN val1 SET DEFAULT random()::text;

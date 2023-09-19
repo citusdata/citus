@@ -53,6 +53,7 @@ static int CompareShardPlacementsByNode(const void *leftElement,
 										const void *rightElement);
 static uint32 CreateColocationGroupForRelation(Oid sourceRelationId);
 static void BreakColocation(Oid sourceRelationId);
+static uint32 SingleShardTableGetNodeId(Oid relationId);
 
 
 /* exports for SQL callable functions */
@@ -174,12 +175,11 @@ BreakColocation(Oid sourceRelationId)
 	 */
 	Relation pgDistColocation = table_open(DistColocationRelationId(), ExclusiveLock);
 
-	uint32 newColocationId = GetNextColocationId();
-	bool localOnly = false;
-	UpdateRelationColocationGroup(sourceRelationId, newColocationId, localOnly);
+	uint32 oldColocationId = TableColocationId(sourceRelationId);
+	CreateColocationGroupForRelation(sourceRelationId);
 
-	/* if there is not any remaining table in the colocation group, delete it */
-	DeleteColocationGroupIfNoTablesBelong(sourceRelationId);
+	/* if there is not any remaining table in the old colocation group, delete it */
+	DeleteColocationGroupIfNoTablesBelong(oldColocationId);
 
 	table_close(pgDistColocation, NoLock);
 }
@@ -532,7 +532,7 @@ ColocationId(int shardCount, int replicationFactor, Oid distributionColumnType, 
 	ScanKeyInit(&scanKey[0], Anum_pg_dist_colocation_distributioncolumntype,
 				BTEqualStrategyNumber, F_OIDEQ, ObjectIdGetDatum(distributionColumnType));
 	ScanKeyInit(&scanKey[1], Anum_pg_dist_colocation_shardcount,
-				BTEqualStrategyNumber, F_INT4EQ, UInt32GetDatum(shardCount));
+				BTEqualStrategyNumber, F_INT4EQ, Int32GetDatum(shardCount));
 	ScanKeyInit(&scanKey[2], Anum_pg_dist_colocation_replicationfactor,
 				BTEqualStrategyNumber, F_INT4EQ, Int32GetDatum(replicationFactor));
 	ScanKeyInit(&scanKey[3], Anum_pg_dist_colocation_distributioncolumncollation,
@@ -989,7 +989,7 @@ ColocationGroupTableList(uint32 colocationId, uint32 count)
 	}
 
 	ScanKeyInit(&scanKey[0], Anum_pg_dist_partition_colocationid,
-				BTEqualStrategyNumber, F_INT4EQ, UInt32GetDatum(colocationId));
+				BTEqualStrategyNumber, F_INT4EQ, Int32GetDatum(colocationId));
 
 	Relation pgDistPartition = table_open(DistPartitionRelationId(), AccessShareLock);
 	TupleDesc tupleDescriptor = RelationGetDescr(pgDistPartition);
@@ -1166,7 +1166,7 @@ ColocatedNonPartitionShardIntervalList(ShardInterval *shardInterval)
  * guarantee that the table isn't dropped for the remainder of the transaction.
  */
 Oid
-ColocatedTableId(Oid colocationId)
+ColocatedTableId(int32 colocationId)
 {
 	Oid colocatedTableId = InvalidOid;
 	bool indexOK = true;
@@ -1183,7 +1183,7 @@ ColocatedTableId(Oid colocationId)
 	}
 
 	ScanKeyInit(&scanKey[0], Anum_pg_dist_partition_colocationid,
-				BTEqualStrategyNumber, F_INT4EQ, ObjectIdGetDatum(colocationId));
+				BTEqualStrategyNumber, F_INT4EQ, Int32GetDatum(colocationId));
 
 	Relation pgDistPartition = table_open(DistPartitionRelationId(), AccessShareLock);
 	TupleDesc tupleDescriptor = RelationGetDescr(pgDistPartition);
@@ -1228,6 +1228,56 @@ ColocatedTableId(Oid colocationId)
 	table_close(pgDistPartition, AccessShareLock);
 
 	return colocatedTableId;
+}
+
+
+/*
+ * SingleShardTableColocationNodeId takes a colocation id that presumably
+ * belongs to colocation group used to colocate a set of single-shard
+ * tables and returns id of the node that stores / is expected to store
+ * the shards within the colocation group.
+ */
+uint32
+SingleShardTableColocationNodeId(uint32 colocationId)
+{
+	List *tablesInColocationGroup = ColocationGroupTableList(colocationId, 0);
+	if (list_length(tablesInColocationGroup) == 0)
+	{
+		int workerNodeIndex =
+			EmptySingleShardTableColocationDecideNodeId(colocationId);
+		List *workerNodeList = DistributedTablePlacementNodeList(RowShareLock);
+		WorkerNode *workerNode = (WorkerNode *) list_nth(workerNodeList, workerNodeIndex);
+
+		return workerNode->nodeId;
+	}
+	else
+	{
+		Oid colocatedTableId = ColocatedTableId(colocationId);
+		return SingleShardTableGetNodeId(colocatedTableId);
+	}
+}
+
+
+/*
+ * SingleShardTableGetNodeId returns id of the node that stores shard of
+ * given single-shard table.
+ */
+static uint32
+SingleShardTableGetNodeId(Oid relationId)
+{
+	if (!IsCitusTableType(relationId, SINGLE_SHARD_DISTRIBUTED))
+	{
+		ereport(ERROR, (errmsg("table is not a single-shard distributed table")));
+	}
+
+	int64 shardId = GetFirstShardId(relationId);
+	List *shardPlacementList = ShardPlacementList(shardId);
+	if (list_length(shardPlacementList) != 1)
+	{
+		ereport(ERROR, (errmsg("table shard does not have a single shard placement")));
+	}
+
+	return ((ShardPlacement *) linitial(shardPlacementList))->nodeId;
 }
 
 
@@ -1292,7 +1342,7 @@ DeleteColocationGroupLocally(uint32 colocationId)
 	Relation pgDistColocation = table_open(DistColocationRelationId(), RowExclusiveLock);
 
 	ScanKeyInit(&scanKey[0], Anum_pg_dist_colocation_colocationid,
-				BTEqualStrategyNumber, F_INT4EQ, UInt32GetDatum(colocationId));
+				BTEqualStrategyNumber, F_INT4EQ, Int32GetDatum(colocationId));
 
 	SysScanDesc scanDescriptor = systable_beginscan(pgDistColocation, InvalidOid, indexOK,
 													NULL, scanKeyCount, scanKey);

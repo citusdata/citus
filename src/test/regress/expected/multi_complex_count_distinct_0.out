@@ -1,0 +1,1139 @@
+--
+-- COMPLEX_COUNT_DISTINCT
+--
+-- This test file has an alternative output because of the following in PG16:
+-- https://github.com/postgres/postgres/commit/1349d2790bf48a4de072931c722f39337e72055e
+-- https://github.com/postgres/postgres/commit/f4c7c410ee4a7baa06f51ebb8d5333c169691dd3
+-- The alternative output can be deleted when we drop support for PG15
+--
+SHOW server_version \gset
+SELECT substring(:'server_version', '\d+')::int >= 16 AS server_version_ge_16;
+ server_version_ge_16
+---------------------------------------------------------------------
+ f
+(1 row)
+
+SET citus.next_shard_id TO 240000;
+SET citus.shard_count TO 8;
+SET citus.shard_replication_factor TO 1;
+SET citus.coordinator_aggregation_strategy TO 'disabled';
+CREATE TABLE lineitem_hash (
+	l_orderkey bigint not null,
+	l_partkey integer not null,
+	l_suppkey integer not null,
+	l_linenumber integer not null,
+	l_quantity decimal(15, 2) not null,
+	l_extendedprice decimal(15, 2) not null,
+	l_discount decimal(15, 2) not null,
+	l_tax decimal(15, 2) not null,
+	l_returnflag char(1) not null,
+	l_linestatus char(1) not null,
+	l_shipdate date not null,
+	l_commitdate date not null,
+	l_receiptdate date not null,
+	l_shipinstruct char(25) not null,
+	l_shipmode char(10) not null,
+	l_comment varchar(44) not null,
+	PRIMARY KEY(l_orderkey, l_linenumber) );
+SELECT create_distributed_table('lineitem_hash', 'l_orderkey', 'hash');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+\set lineitem_1_data_file :abs_srcdir '/data/lineitem.1.data'
+\set lineitem_2_data_file :abs_srcdir '/data/lineitem.2.data'
+\set client_side_copy_command '\\copy lineitem_hash FROM ' :'lineitem_1_data_file' ' with delimiter '''|''';'
+:client_side_copy_command
+\set client_side_copy_command '\\copy lineitem_hash FROM ' :'lineitem_2_data_file' ' with delimiter '''|''';'
+:client_side_copy_command
+ANALYZE lineitem_hash;
+-- count(distinct) is supported on top level query if there
+-- is a grouping on the partition key
+SELECT
+	l_orderkey, count(DISTINCT l_partkey)
+	FROM lineitem_hash
+	GROUP BY l_orderkey
+	ORDER BY 2 DESC, 1 DESC
+	LIMIT 10;
+ l_orderkey | count
+---------------------------------------------------------------------
+      14885 |     7
+      14884 |     7
+      14821 |     7
+      14790 |     7
+      14785 |     7
+      14755 |     7
+      14725 |     7
+      14694 |     7
+      14627 |     7
+      14624 |     7
+(10 rows)
+
+EXPLAIN (COSTS false, VERBOSE true)
+SELECT
+	l_orderkey, count(DISTINCT l_partkey)
+	FROM lineitem_hash
+	GROUP BY l_orderkey
+	ORDER BY 2 DESC, 1 DESC
+	LIMIT 10;
+                                                                                                                           QUERY PLAN
+---------------------------------------------------------------------
+ Limit
+   Output: remote_scan.l_orderkey, remote_scan.count
+   ->  Sort
+         Output: remote_scan.l_orderkey, remote_scan.count
+         Sort Key: remote_scan.count DESC, remote_scan.l_orderkey DESC
+         ->  Custom Scan (Citus Adaptive)
+               Output: remote_scan.l_orderkey, remote_scan.count
+               Task Count: 8
+               Tasks Shown: One of 8
+               ->  Task
+                     Query: SELECT l_orderkey, count(DISTINCT l_partkey) AS count FROM public.lineitem_hash_240000 lineitem_hash WHERE true GROUP BY l_orderkey ORDER BY (count(DISTINCT l_partkey)) DESC, l_orderkey DESC LIMIT '10'::bigint
+                     Node: host=localhost port=xxxxx dbname=regression
+                     ->  Limit
+                           Output: l_orderkey, (count(DISTINCT l_partkey))
+                           ->  Sort
+                                 Output: l_orderkey, (count(DISTINCT l_partkey))
+                                 Sort Key: (count(DISTINCT lineitem_hash.l_partkey)) DESC, lineitem_hash.l_orderkey DESC
+                                 ->  GroupAggregate
+                                       Output: l_orderkey, count(DISTINCT l_partkey)
+                                       Group Key: lineitem_hash.l_orderkey
+                                       ->  Index Scan Backward using lineitem_hash_pkey_240000 on public.lineitem_hash_240000 lineitem_hash
+                                             Output: l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment
+(22 rows)
+
+-- it is also supported if there is no grouping or grouping is on non-partition field
+SELECT
+	count(DISTINCT l_partkey)
+	FROM lineitem_hash
+	ORDER BY 1 DESC
+	LIMIT 10;
+ count
+---------------------------------------------------------------------
+ 11661
+(1 row)
+
+EXPLAIN (COSTS false, VERBOSE true)
+SELECT
+	count(DISTINCT l_partkey)
+	FROM lineitem_hash
+	ORDER BY 1 DESC
+	LIMIT 10;
+                                                                                                                        QUERY PLAN
+---------------------------------------------------------------------
+ Limit
+   Output: (count(DISTINCT remote_scan.count))
+   ->  Sort
+         Output: (count(DISTINCT remote_scan.count))
+         Sort Key: (count(DISTINCT remote_scan.count)) DESC
+         ->  Aggregate
+               Output: count(DISTINCT remote_scan.count)
+               ->  Custom Scan (Citus Adaptive)
+                     Output: remote_scan.count
+                     Task Count: 8
+                     Tasks Shown: One of 8
+                     ->  Task
+                           Query: SELECT l_partkey AS count FROM public.lineitem_hash_240000 lineitem_hash WHERE true GROUP BY l_partkey
+                           Node: host=localhost port=xxxxx dbname=regression
+                           ->  HashAggregate
+                                 Output: l_partkey
+                                 Group Key: lineitem_hash.l_partkey
+                                 ->  Seq Scan on public.lineitem_hash_240000 lineitem_hash
+                                       Output: l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment
+(19 rows)
+
+SELECT
+	l_shipmode, count(DISTINCT l_partkey)
+	FROM lineitem_hash
+	GROUP BY l_shipmode
+	ORDER BY 2 DESC, 1 DESC
+	LIMIT 10;
+ l_shipmode | count
+---------------------------------------------------------------------
+ TRUCK      |  1757
+ MAIL       |  1730
+ AIR        |  1702
+ FOB        |  1700
+ RAIL       |  1696
+ SHIP       |  1684
+ REG AIR    |  1676
+(7 rows)
+
+EXPLAIN (COSTS false, VERBOSE true)
+SELECT
+	l_shipmode, count(DISTINCT l_partkey)
+	FROM lineitem_hash
+	GROUP BY l_shipmode
+	ORDER BY 2 DESC, 1 DESC
+	LIMIT 10;
+                                                                                                                           QUERY PLAN
+---------------------------------------------------------------------
+ Limit
+   Output: remote_scan.l_shipmode, (count(DISTINCT remote_scan.count))
+   ->  Sort
+         Output: remote_scan.l_shipmode, (count(DISTINCT remote_scan.count))
+         Sort Key: (count(DISTINCT remote_scan.count)) DESC, remote_scan.l_shipmode DESC
+         ->  GroupAggregate
+               Output: remote_scan.l_shipmode, count(DISTINCT remote_scan.count)
+               Group Key: remote_scan.l_shipmode
+               ->  Sort
+                     Output: remote_scan.l_shipmode, remote_scan.count
+                     Sort Key: remote_scan.l_shipmode DESC
+                     ->  Custom Scan (Citus Adaptive)
+                           Output: remote_scan.l_shipmode, remote_scan.count
+                           Task Count: 8
+                           Tasks Shown: One of 8
+                           ->  Task
+                                 Query: SELECT l_shipmode, l_partkey AS count FROM public.lineitem_hash_240000 lineitem_hash WHERE true GROUP BY l_shipmode, l_partkey
+                                 Node: host=localhost port=xxxxx dbname=regression
+                                 ->  HashAggregate
+                                       Output: l_shipmode, l_partkey
+                                       Group Key: lineitem_hash.l_shipmode, lineitem_hash.l_partkey
+                                       ->  Seq Scan on public.lineitem_hash_240000 lineitem_hash
+                                             Output: l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment
+(23 rows)
+
+-- mixed mode count distinct, grouped by partition column
+SELECT
+	l_orderkey, count(distinct l_partkey), count(distinct l_shipmode)
+	FROM lineitem_hash
+	GROUP BY l_orderkey
+	ORDER BY 3 DESC, 2 DESC, 1
+	LIMIT 10;
+ l_orderkey | count | count
+---------------------------------------------------------------------
+        226 |     7 |     7
+       1316 |     7 |     7
+       1477 |     7 |     7
+       3555 |     7 |     7
+      12258 |     7 |     7
+      12835 |     7 |     7
+        768 |     7 |     6
+       1121 |     7 |     6
+       1153 |     7 |     6
+       1281 |     7 |     6
+(10 rows)
+
+EXPLAIN (COSTS false, VERBOSE true)
+SELECT
+	l_orderkey, count(distinct l_partkey), count(distinct l_shipmode)
+	FROM lineitem_hash
+	GROUP BY l_orderkey
+	ORDER BY 3 DESC, 2 DESC, 1
+	LIMIT 10;
+                                                                                                                                                QUERY PLAN
+---------------------------------------------------------------------
+ Limit
+   Output: remote_scan.l_orderkey, remote_scan.count, remote_scan.count_1
+   ->  Sort
+         Output: remote_scan.l_orderkey, remote_scan.count, remote_scan.count_1
+         Sort Key: remote_scan.count_1 DESC, remote_scan.count DESC, remote_scan.l_orderkey
+         ->  Custom Scan (Citus Adaptive)
+               Output: remote_scan.l_orderkey, remote_scan.count, remote_scan.count_1
+               Task Count: 8
+               Tasks Shown: One of 8
+               ->  Task
+                     Query: SELECT l_orderkey, count(DISTINCT l_partkey) AS count, count(DISTINCT l_shipmode) AS count FROM public.lineitem_hash_240000 lineitem_hash WHERE true GROUP BY l_orderkey ORDER BY (count(DISTINCT l_shipmode)) DESC, (count(DISTINCT l_partkey)) DESC, l_orderkey LIMIT '10'::bigint
+                     Node: host=localhost port=xxxxx dbname=regression
+                     ->  Limit
+                           Output: l_orderkey, (count(DISTINCT l_partkey)), (count(DISTINCT l_shipmode))
+                           ->  Sort
+                                 Output: l_orderkey, (count(DISTINCT l_partkey)), (count(DISTINCT l_shipmode))
+                                 Sort Key: (count(DISTINCT lineitem_hash.l_shipmode)) DESC, (count(DISTINCT lineitem_hash.l_partkey)) DESC, lineitem_hash.l_orderkey
+                                 ->  GroupAggregate
+                                       Output: l_orderkey, count(DISTINCT l_partkey), count(DISTINCT l_shipmode)
+                                       Group Key: lineitem_hash.l_orderkey
+                                       ->  Index Scan using lineitem_hash_pkey_240000 on public.lineitem_hash_240000 lineitem_hash
+                                             Output: l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment
+(22 rows)
+
+-- partition/non-partition column count distinct no grouping
+SELECT
+	count(distinct l_orderkey), count(distinct l_partkey), count(distinct l_shipmode)
+	FROM lineitem_hash;
+ count | count | count
+---------------------------------------------------------------------
+  2985 | 11661 |     7
+(1 row)
+
+EXPLAIN (COSTS false, VERBOSE true)
+SELECT
+	count(distinct l_orderkey), count(distinct l_partkey), count(distinct l_shipmode)
+	FROM lineitem_hash;
+                                                                                                                  QUERY PLAN
+---------------------------------------------------------------------
+ Aggregate
+   Output: count(DISTINCT remote_scan.count), count(DISTINCT remote_scan.count_1), count(DISTINCT remote_scan.count_2)
+   ->  Custom Scan (Citus Adaptive)
+         Output: remote_scan.count, remote_scan.count_1, remote_scan.count_2
+         Task Count: 8
+         Tasks Shown: One of 8
+         ->  Task
+               Query: SELECT l_orderkey AS count, l_partkey AS count, l_shipmode AS count FROM public.lineitem_hash_240000 lineitem_hash WHERE true GROUP BY l_orderkey, l_partkey, l_shipmode
+               Node: host=localhost port=xxxxx dbname=regression
+               ->  HashAggregate
+                     Output: l_orderkey, l_partkey, l_shipmode
+                     Group Key: lineitem_hash.l_orderkey, lineitem_hash.l_partkey, lineitem_hash.l_shipmode
+                     ->  Seq Scan on public.lineitem_hash_240000 lineitem_hash
+                           Output: l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment
+(14 rows)
+
+-- distinct/non-distinct on partition and non-partition columns
+SELECT
+	count(distinct l_orderkey), count(l_orderkey),
+	count(distinct l_partkey), count(l_partkey),
+	count(distinct l_shipmode), count(l_shipmode)
+	FROM lineitem_hash;
+ count | count | count | count | count | count
+---------------------------------------------------------------------
+  2985 | 12000 | 11661 | 12000 |     7 | 12000
+(1 row)
+
+-- mixed mode count distinct, grouped by non-partition column
+SELECT
+	l_shipmode, count(distinct l_partkey), count(distinct l_orderkey)
+	FROM lineitem_hash
+	GROUP BY l_shipmode
+	ORDER BY 1, 2 DESC, 3 DESC;
+ l_shipmode | count | count
+---------------------------------------------------------------------
+ AIR        |  1702 |  1327
+ FOB        |  1700 |  1276
+ MAIL       |  1730 |  1299
+ RAIL       |  1696 |  1265
+ REG AIR    |  1676 |  1275
+ SHIP       |  1684 |  1289
+ TRUCK      |  1757 |  1333
+(7 rows)
+
+-- mixed mode count distinct, grouped by non-partition column
+-- having on partition column
+SELECT
+	l_shipmode, count(distinct l_partkey), count(distinct l_orderkey)
+	FROM lineitem_hash
+	GROUP BY l_shipmode
+	HAVING count(distinct l_orderkey) > 1300
+	ORDER BY 1, 2 DESC;
+ l_shipmode | count | count
+---------------------------------------------------------------------
+ AIR        |  1702 |  1327
+ TRUCK      |  1757 |  1333
+(2 rows)
+
+-- same but having clause is not on target list
+SELECT
+	l_shipmode, count(distinct l_partkey)
+	FROM lineitem_hash
+	GROUP BY l_shipmode
+	HAVING count(distinct l_orderkey) > 1300
+	ORDER BY 1, 2 DESC;
+ l_shipmode | count
+---------------------------------------------------------------------
+ AIR        |  1702
+ TRUCK      |  1757
+(2 rows)
+
+-- mixed mode count distinct, grouped by non-partition column
+-- having on non-partition column
+SELECT
+	l_shipmode, count(distinct l_partkey), count(distinct l_suppkey)
+	FROM lineitem_hash
+	GROUP BY l_shipmode
+	HAVING count(distinct l_suppkey) > 1550
+	ORDER BY 1, 2 DESC;
+ l_shipmode | count | count
+---------------------------------------------------------------------
+ AIR        |  1702 |  1564
+ FOB        |  1700 |  1571
+ MAIL       |  1730 |  1573
+ RAIL       |  1696 |  1581
+ REG AIR    |  1676 |  1557
+ SHIP       |  1684 |  1554
+ TRUCK      |  1757 |  1602
+(7 rows)
+
+-- same but having clause is not on target list
+SELECT
+	l_shipmode, count(distinct l_partkey)
+	FROM lineitem_hash
+	GROUP BY l_shipmode
+	HAVING count(distinct l_suppkey) > 1550
+	ORDER BY 1, 2 DESC;
+ l_shipmode | count
+---------------------------------------------------------------------
+ AIR        |  1702
+ FOB        |  1700
+ MAIL       |  1730
+ RAIL       |  1696
+ REG AIR    |  1676
+ SHIP       |  1684
+ TRUCK      |  1757
+(7 rows)
+
+-- count distinct is supported on single table subqueries
+SELECT *
+	FROM (
+		SELECT
+			l_orderkey, count(DISTINCT l_partkey)
+			FROM lineitem_hash
+			GROUP BY l_orderkey) sub
+	ORDER BY 2 DESC, 1 DESC
+	LIMIT 10;
+ l_orderkey | count
+---------------------------------------------------------------------
+      14885 |     7
+      14884 |     7
+      14821 |     7
+      14790 |     7
+      14785 |     7
+      14755 |     7
+      14725 |     7
+      14694 |     7
+      14627 |     7
+      14624 |     7
+(10 rows)
+
+SELECT *
+	FROM (
+		SELECT
+			l_partkey, count(DISTINCT l_orderkey)
+			FROM lineitem_hash
+			GROUP BY l_partkey) sub
+	ORDER BY 2 DESC, 1 DESC
+	LIMIT 10;
+ l_partkey | count
+---------------------------------------------------------------------
+    199146 |     3
+    188804 |     3
+    177771 |     3
+    160895 |     3
+    149926 |     3
+    136884 |     3
+     87761 |     3
+     15283 |     3
+      6983 |     3
+      1927 |     3
+(10 rows)
+
+EXPLAIN (COSTS false, VERBOSE true)
+SELECT *
+	FROM (
+		SELECT
+			l_partkey, count(DISTINCT l_orderkey)
+			FROM lineitem_hash
+			GROUP BY l_partkey) sub
+	ORDER BY 2 DESC, 1 DESC
+	LIMIT 10;
+                                                                                                                                          QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (Citus Adaptive)
+   Output: remote_scan.l_partkey, remote_scan.count
+   ->  Distributed Subplan XXX_1
+         ->  HashAggregate
+               Output: remote_scan.l_partkey, COALESCE((pg_catalog.sum(remote_scan.count))::bigint, '0'::bigint)
+               Group Key: remote_scan.l_partkey
+               ->  Custom Scan (Citus Adaptive)
+                     Output: remote_scan.l_partkey, remote_scan.count
+                     Task Count: 8
+                     Tasks Shown: One of 8
+                     ->  Task
+                           Query: SELECT l_partkey, count(DISTINCT l_orderkey) AS count FROM public.lineitem_hash_240000 lineitem_hash WHERE true GROUP BY l_partkey
+                           Node: host=localhost port=xxxxx dbname=regression
+                           ->  GroupAggregate
+                                 Output: l_partkey, count(DISTINCT l_orderkey)
+                                 Group Key: lineitem_hash.l_partkey
+                                 ->  Sort
+                                       Output: l_partkey, l_orderkey
+                                       Sort Key: lineitem_hash.l_partkey
+                                       ->  Seq Scan on public.lineitem_hash_240000 lineitem_hash
+                                             Output: l_partkey, l_orderkey
+   Task Count: 1
+   Tasks Shown: All
+   ->  Task
+         Query: SELECT l_partkey, count FROM (SELECT intermediate_result.l_partkey, intermediate_result.count FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(l_partkey integer, count bigint)) sub ORDER BY count DESC, l_partkey DESC LIMIT 10
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  Limit
+               Output: intermediate_result.l_partkey, intermediate_result.count
+               ->  Sort
+                     Output: intermediate_result.l_partkey, intermediate_result.count
+                     Sort Key: intermediate_result.count DESC, intermediate_result.l_partkey DESC
+                     ->  Function Scan on pg_catalog.read_intermediate_result intermediate_result
+                           Output: intermediate_result.l_partkey, intermediate_result.count
+                           Function Call: read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format)
+(34 rows)
+
+-- count distinct with filters
+SELECT
+	l_orderkey,
+	count(DISTINCT l_suppkey) FILTER (WHERE l_shipmode = 'AIR'),
+	count(DISTINCT l_suppkey)
+	FROM lineitem_hash
+	GROUP BY l_orderkey
+	ORDER BY 2 DESC, 3 DESC, 1
+	LIMIT 10;
+ l_orderkey | count | count
+---------------------------------------------------------------------
+       4964 |     4 |     7
+      12005 |     4 |     7
+       5409 |     4 |     6
+        164 |     3 |     7
+        322 |     3 |     7
+        871 |     3 |     7
+       1156 |     3 |     7
+       1574 |     3 |     7
+       2054 |     3 |     7
+       2309 |     3 |     7
+(10 rows)
+
+EXPLAIN (COSTS false, VERBOSE true)
+SELECT
+	l_orderkey,
+	count(DISTINCT l_suppkey) FILTER (WHERE l_shipmode = 'AIR'),
+	count(DISTINCT l_suppkey)
+	FROM lineitem_hash
+	GROUP BY l_orderkey
+	ORDER BY 2 DESC, 3 DESC, 1
+	LIMIT 10;
+                                                                                                                                                                                                                QUERY PLAN
+---------------------------------------------------------------------
+ Limit
+   Output: remote_scan.l_orderkey, remote_scan.count, remote_scan.count_1
+   ->  Sort
+         Output: remote_scan.l_orderkey, remote_scan.count, remote_scan.count_1
+         Sort Key: remote_scan.count DESC, remote_scan.count_1 DESC, remote_scan.l_orderkey
+         ->  Custom Scan (Citus Adaptive)
+               Output: remote_scan.l_orderkey, remote_scan.count, remote_scan.count_1
+               Task Count: 8
+               Tasks Shown: One of 8
+               ->  Task
+                     Query: SELECT l_orderkey, count(DISTINCT l_suppkey) FILTER (WHERE (l_shipmode OPERATOR(pg_catalog.=) 'AIR'::bpchar)) AS count, count(DISTINCT l_suppkey) AS count FROM public.lineitem_hash_240000 lineitem_hash WHERE true GROUP BY l_orderkey ORDER BY (count(DISTINCT l_suppkey) FILTER (WHERE (l_shipmode OPERATOR(pg_catalog.=) 'AIR'::bpchar))) DESC, (count(DISTINCT l_suppkey)) DESC, l_orderkey LIMIT '10'::bigint
+                     Node: host=localhost port=xxxxx dbname=regression
+                     ->  Limit
+                           Output: l_orderkey, (count(DISTINCT l_suppkey) FILTER (WHERE (l_shipmode = 'AIR'::bpchar))), (count(DISTINCT l_suppkey))
+                           ->  Sort
+                                 Output: l_orderkey, (count(DISTINCT l_suppkey) FILTER (WHERE (l_shipmode = 'AIR'::bpchar))), (count(DISTINCT l_suppkey))
+                                 Sort Key: (count(DISTINCT lineitem_hash.l_suppkey) FILTER (WHERE (lineitem_hash.l_shipmode = 'AIR'::bpchar))) DESC, (count(DISTINCT lineitem_hash.l_suppkey)) DESC, lineitem_hash.l_orderkey
+                                 ->  GroupAggregate
+                                       Output: l_orderkey, count(DISTINCT l_suppkey) FILTER (WHERE (l_shipmode = 'AIR'::bpchar)), count(DISTINCT l_suppkey)
+                                       Group Key: lineitem_hash.l_orderkey
+                                       ->  Index Scan using lineitem_hash_pkey_240000 on public.lineitem_hash_240000 lineitem_hash
+                                             Output: l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment
+(22 rows)
+
+-- group by on non-partition column
+SELECT
+	l_suppkey, count(DISTINCT l_partkey) FILTER (WHERE l_shipmode = 'AIR')
+	FROM lineitem_hash
+	GROUP BY l_suppkey
+	ORDER BY 2 DESC, 1 DESC
+	LIMIT 10;
+ l_suppkey | count
+---------------------------------------------------------------------
+      7680 |     4
+      7703 |     3
+      7542 |     3
+      7072 |     3
+      6335 |     3
+      5873 |     3
+      1318 |     3
+      1042 |     3
+       160 |     3
+      9872 |     2
+(10 rows)
+
+-- explaining the same query fails
+EXPLAIN (COSTS false, VERBOSE true)
+SELECT
+	l_suppkey, count(DISTINCT l_partkey) FILTER (WHERE l_shipmode = 'AIR')
+	FROM lineitem_hash
+	GROUP BY l_suppkey
+	ORDER BY 2 DESC, 1 DESC
+	LIMIT 10;
+                                                                                                                           QUERY PLAN
+---------------------------------------------------------------------
+ Limit
+   Output: remote_scan.l_suppkey, (count(DISTINCT remote_scan.count) FILTER (WHERE (remote_scan.count_1 = 'AIR'::bpchar)))
+   ->  Sort
+         Output: remote_scan.l_suppkey, (count(DISTINCT remote_scan.count) FILTER (WHERE (remote_scan.count_1 = 'AIR'::bpchar)))
+         Sort Key: (count(DISTINCT remote_scan.count) FILTER (WHERE (remote_scan.count_1 = 'AIR'::bpchar))) DESC, remote_scan.l_suppkey DESC
+         ->  GroupAggregate
+               Output: remote_scan.l_suppkey, count(DISTINCT remote_scan.count) FILTER (WHERE (remote_scan.count_1 = 'AIR'::bpchar))
+               Group Key: remote_scan.l_suppkey
+               ->  Sort
+                     Output: remote_scan.l_suppkey, remote_scan.count, remote_scan.count_1
+                     Sort Key: remote_scan.l_suppkey DESC
+                     ->  Custom Scan (Citus Adaptive)
+                           Output: remote_scan.l_suppkey, remote_scan.count, remote_scan.count_1
+                           Task Count: 8
+                           Tasks Shown: One of 8
+                           ->  Task
+                                 Query: SELECT l_suppkey, l_partkey AS count, l_shipmode AS count FROM public.lineitem_hash_240000 lineitem_hash WHERE true GROUP BY l_suppkey, l_partkey, l_shipmode
+                                 Node: host=localhost port=xxxxx dbname=regression
+                                 ->  HashAggregate
+                                       Output: l_suppkey, l_partkey, l_shipmode
+                                       Group Key: lineitem_hash.l_suppkey, lineitem_hash.l_partkey, lineitem_hash.l_shipmode
+                                       ->  Seq Scan on public.lineitem_hash_240000 lineitem_hash
+                                             Output: l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment
+(23 rows)
+
+-- without group by, on partition column
+SELECT
+	count(DISTINCT l_orderkey) FILTER (WHERE l_shipmode = 'AIR')
+	FROM lineitem_hash;
+ count
+---------------------------------------------------------------------
+  1327
+(1 row)
+
+-- without group by, on non-partition column
+SELECT
+	count(DISTINCT l_partkey) FILTER (WHERE l_shipmode = 'AIR')
+	FROM lineitem_hash;
+ count
+---------------------------------------------------------------------
+  1702
+(1 row)
+
+SELECT
+	count(DISTINCT l_partkey) FILTER (WHERE l_shipmode = 'AIR'),
+	count(DISTINCT l_partkey),
+	count(DISTINCT l_shipdate)
+	FROM lineitem_hash;
+ count | count | count
+---------------------------------------------------------------------
+  1702 | 11661 |  2470
+(1 row)
+
+-- filter column already exists in target list
+SELECT *
+	FROM (
+		SELECT
+			l_orderkey, count(DISTINCT l_partkey) FILTER (WHERE l_orderkey > 100)
+			FROM lineitem_hash
+			GROUP BY l_orderkey) sub
+	ORDER BY 2 DESC, 1 DESC
+	LIMIT 10;
+ l_orderkey | count
+---------------------------------------------------------------------
+      14885 |     7
+      14884 |     7
+      14821 |     7
+      14790 |     7
+      14785 |     7
+      14755 |     7
+      14725 |     7
+      14694 |     7
+      14627 |     7
+      14624 |     7
+(10 rows)
+
+-- filter column does not exist in target list
+SELECT *
+	FROM (
+		SELECT
+			l_orderkey, count(DISTINCT l_partkey) FILTER (WHERE l_shipmode = 'AIR')
+			FROM lineitem_hash
+			GROUP BY l_orderkey) sub
+	ORDER BY 2 DESC, 1 DESC
+	LIMIT 10;
+ l_orderkey | count
+---------------------------------------------------------------------
+      12005 |     4
+       5409 |     4
+       4964 |     4
+      14848 |     3
+      14496 |     3
+      13473 |     3
+      13122 |     3
+      12929 |     3
+      12645 |     3
+      12417 |     3
+(10 rows)
+
+-- case expr in count distinct is supported.
+-- count orders partkeys if l_shipmode is air
+SELECT *
+	FROM (
+		SELECT
+			l_orderkey, count(DISTINCT CASE WHEN l_shipmode = 'AIR' THEN l_partkey ELSE NULL END) as count
+			FROM lineitem_hash
+			GROUP BY l_orderkey) sub
+	WHERE count > 0
+	ORDER BY 2 DESC, 1 DESC
+	LIMIT 10;
+ l_orderkey | count
+---------------------------------------------------------------------
+      12005 |     4
+       5409 |     4
+       4964 |     4
+      14848 |     3
+      14496 |     3
+      13473 |     3
+      13122 |     3
+      12929 |     3
+      12645 |     3
+      12417 |     3
+(10 rows)
+
+-- text like operator is also supported
+SELECT *
+	FROM (
+		SELECT
+			l_orderkey, count(DISTINCT CASE WHEN l_shipmode like '%A%' THEN l_partkey ELSE NULL END) as count
+			FROM lineitem_hash
+			GROUP BY l_orderkey) sub
+	WHERE count > 0
+	ORDER BY 2 DESC, 1 DESC
+	LIMIT 10;
+ l_orderkey | count
+---------------------------------------------------------------------
+      14275 |     7
+      14181 |     7
+      13605 |     7
+      12707 |     7
+      12384 |     7
+      11746 |     7
+      10727 |     7
+      10467 |     7
+       5636 |     7
+       4614 |     7
+(10 rows)
+
+-- count distinct is rejected if it does not reference any columns
+SELECT *
+	FROM (
+		SELECT
+			l_linenumber, count(DISTINCT 1)
+			FROM lineitem_hash
+			GROUP BY l_linenumber) sub
+	ORDER BY 2 DESC, 1 DESC
+	LIMIT 10;
+ERROR:  cannot compute aggregate (distinct)
+DETAIL:  aggregate (distinct) with no columns is unsupported
+HINT:  You can load the hll extension from contrib packages and enable distinct approximations.
+-- count distinct is rejected if it does not reference any columns
+SELECT *
+	FROM (
+		SELECT
+			l_linenumber, count(DISTINCT (random() * 5)::int)
+			FROM lineitem_hash
+			GROUP BY l_linenumber) sub
+	ORDER BY 2 DESC, 1 DESC
+	LIMIT 10;
+ERROR:  cannot compute aggregate (distinct)
+DETAIL:  aggregate (distinct) with no columns is unsupported
+HINT:  You can load the hll extension from contrib packages and enable distinct approximations.
+-- even non-const function calls are supported within count distinct
+SELECT *
+	FROM (
+		SELECT
+			l_orderkey, count(DISTINCT (random() * 5)::int = l_linenumber)
+			FROM lineitem_hash
+			GROUP BY l_orderkey) sub
+	ORDER BY 2 DESC, 1 DESC
+	LIMIT 0;
+ l_orderkey | count
+---------------------------------------------------------------------
+(0 rows)
+
+-- multiple nested subquery
+SELECT
+    total,
+    avg(avg_count) as total_avg_count
+	FROM (
+		SELECT
+	        number_sum,
+	        count(DISTINCT l_suppkey) as total,
+	        avg(total_count) avg_count
+    		FROM (
+    			SELECT
+    				l_suppkey,
+					sum(l_linenumber) as number_sum,
+					count(DISTINCT l_shipmode) as total_count
+					FROM
+						lineitem_hash
+					WHERE
+						l_partkey > 100 and
+						l_quantity > 2 and
+						l_orderkey < 10000
+					GROUP BY
+						l_suppkey) as distributed_table
+			WHERE
+				number_sum >= 10
+			GROUP BY
+				number_sum) as distributed_table_2
+	GROUP BY
+		total
+	ORDER BY
+		total_avg_count DESC;
+ total |  total_avg_count
+---------------------------------------------------------------------
+     1 | 3.6000000000000000
+     6 | 2.8333333333333333
+    10 | 2.6000000000000000
+    27 | 2.5555555555555556
+    32 | 2.4687500000000000
+    77 | 2.1948051948051948
+    57 | 2.1754385964912281
+(7 rows)
+
+-- multiple cases query
+SELECT *
+	FROM (
+		SELECT
+			count(DISTINCT
+				CASE
+					WHEN l_shipmode = 'TRUCK' THEN l_partkey
+					WHEN l_shipmode = 'AIR' THEN l_quantity
+					WHEN l_shipmode = 'SHIP' THEN l_discount
+					ELSE l_suppkey
+				END) as count,
+			l_shipdate
+		FROM
+			lineitem_hash
+		GROUP BY
+			l_shipdate) sub
+	WHERE
+		count > 0
+	ORDER BY
+		1 DESC, 2 DESC
+	LIMIT 10;
+ count | l_shipdate
+---------------------------------------------------------------------
+    14 | 07-30-1997
+    13 | 05-26-1998
+    13 | 08-08-1997
+    13 | 11-17-1995
+    13 | 01-09-1993
+    12 | 01-15-1998
+    12 | 10-15-1997
+    12 | 09-07-1997
+    12 | 06-02-1997
+    12 | 03-14-1997
+(10 rows)
+
+-- count DISTINCT expression
+SELECT *
+	FROM (
+		SELECT
+			l_quantity, count(DISTINCT ((l_orderkey / 1000)  * 1000 ))  as count
+			FROM
+				lineitem_hash
+			GROUP BY
+				l_quantity) sub
+	WHERE
+		count > 0
+	ORDER BY
+		2 DESC, 1 DESC
+	LIMIT 10;
+ l_quantity | count
+---------------------------------------------------------------------
+      48.00 |    13
+      47.00 |    13
+      37.00 |    13
+      33.00 |    13
+      26.00 |    13
+      25.00 |    13
+      23.00 |    13
+      21.00 |    13
+      15.00 |    13
+      12.00 |    13
+(10 rows)
+
+-- count DISTINCT is part of an expression which includes another aggregate
+SELECT *
+	FROM (
+		SELECT
+			sum(((l_partkey * l_tax) / 100)) /
+				count(DISTINCT
+					CASE
+						WHEN l_shipmode = 'TRUCK' THEN l_partkey
+						ELSE l_suppkey
+					END) as avg,
+			l_shipmode
+			FROM
+				lineitem_hash
+			GROUP BY
+				l_shipmode) sub
+	ORDER BY
+		1 DESC, 2 DESC
+	LIMIT 10;
+           avg           | l_shipmode
+---------------------------------------------------------------------
+ 44.82904609027336300064 | MAIL
+ 44.80704536679536679537 | SHIP
+ 44.68891732736572890026 | AIR
+ 44.34106724470134874759 | REG AIR
+ 43.12739987269255251432 | FOB
+ 43.07299253636938646426 | RAIL
+ 40.50298377916903813318 | TRUCK
+(7 rows)
+
+-- count DISTINCT CASE WHEN expression
+SELECT *
+	FROM (
+		SELECT
+			count(DISTINCT
+				CASE
+					WHEN l_shipmode = 'TRUCK' THEN l_linenumber
+					WHEN l_shipmode = 'AIR' THEN l_linenumber + 10
+					ELSE 2
+				END) as avg
+			FROM
+				lineitem_hash
+			GROUP BY  l_shipdate) sub
+	ORDER BY 1 DESC
+	LIMIT 10;
+ avg
+---------------------------------------------------------------------
+   7
+   6
+   6
+   6
+   6
+   6
+   6
+   6
+   5
+   5
+(10 rows)
+
+-- COUNT DISTINCT (c1, c2)
+SELECT *
+	FROM
+		(SELECT
+			l_shipmode,
+			count(DISTINCT (l_shipdate, l_tax))
+			FROM
+				lineitem_hash
+			GROUP BY
+				l_shipmode) t
+	ORDER BY
+		2 DESC,1 DESC
+	LIMIT 10;
+ l_shipmode | count
+---------------------------------------------------------------------
+ TRUCK      |  1689
+ MAIL       |  1683
+ FOB        |  1655
+ AIR        |  1650
+ SHIP       |  1644
+ RAIL       |  1636
+ REG AIR    |  1607
+(7 rows)
+
+-- distinct on non-var (type cast/field select) columns are also
+-- supported if grouped on distribution column
+-- random is added to prevent flattening by postgresql
+SELECT
+	l_orderkey, count(a::int), count(distinct a::int)
+	FROM (
+		SELECT l_orderkey, l_orderkey * 1.5 a, random() b
+			FROM lineitem_hash) sub
+	GROUP BY 1
+	ORDER BY 1 DESC
+	LIMIT 5;
+ l_orderkey | count | count
+---------------------------------------------------------------------
+      14947 |     2 |     1
+      14946 |     2 |     1
+      14945 |     6 |     1
+      14944 |     2 |     1
+      14919 |     1 |     1
+(5 rows)
+
+SELECT user_id,
+       count(sub.a::int),
+       count(DISTINCT sub.a::int),
+       count(DISTINCT (sub).a)
+FROM
+  (SELECT user_id,
+          unnest(ARRAY[user_id * 1.5])a,
+          random() b
+   FROM users_table
+   ) sub
+GROUP BY 1
+ORDER BY 1 DESC
+LIMIT 5;
+ user_id | count | count | count
+---------------------------------------------------------------------
+       6 |    11 |     1 |     1
+       5 |    27 |     1 |     1
+       4 |    24 |     1 |     1
+       3 |    18 |     1 |     1
+       2 |    19 |     1 |     1
+(5 rows)
+
+CREATE TYPE test_item AS
+(
+  id       INTEGER,
+  duration INTEGER
+);
+CREATE TABLE test_count_distinct_array (key int, value int ,  value_arr test_item[]);
+SELECT create_distributed_table('test_count_distinct_array', 'key');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO test_count_distinct_array SELECT i, i, ARRAY[(i,i)::test_item] FROM generate_Series(0, 1000) i;
+SELECT
+	key,
+	count(DISTINCT value),
+	count(DISTINCT (item)."id"),
+	count(DISTINCT (item)."id" * 3)
+FROM
+	(
+		SELECT key, unnest(value_arr) as item, value FROM test_count_distinct_array
+	) as sub
+GROUP BY 1
+ORDER BY 1 DESC
+LIMIT 5;
+ key  | count | count | count
+---------------------------------------------------------------------
+ 1000 |     1 |     1 |     1
+  999 |     1 |     1 |     1
+  998 |     1 |     1 |     1
+  997 |     1 |     1 |     1
+  996 |     1 |     1 |     1
+(5 rows)
+
+DROP TABLE test_count_distinct_array;
+DROP TYPE test_item;
+-- other distinct aggregate are not supported
+SELECT *
+	FROM (
+		SELECT
+			l_linenumber, sum(DISTINCT l_partkey)
+			FROM lineitem_hash
+			GROUP BY l_linenumber) sub
+	ORDER BY 2 DESC, 1 DESC
+	LIMIT 10;
+ERROR:  cannot compute aggregate (distinct)
+DETAIL:  table partitioning is unsuitable for aggregate (distinct)
+SELECT *
+	FROM (
+		SELECT
+			l_linenumber, avg(DISTINCT l_partkey)
+			FROM lineitem_hash
+			GROUP BY l_linenumber) sub
+	ORDER BY 2 DESC, 1 DESC
+	LIMIT 10;
+ERROR:  cannot compute aggregate (distinct)
+DETAIL:  table partitioning is unsuitable for aggregate (distinct)
+-- whole row references, oid, and ctid are not supported in count distinct
+-- test table does not have oid or ctid enabled, so tests for them are skipped
+SELECT *
+	FROM (
+		SELECT
+			l_linenumber, count(DISTINCT lineitem_hash)
+			FROM lineitem_hash
+			GROUP BY l_linenumber) sub
+	ORDER BY 2 DESC, 1 DESC
+	LIMIT 10;
+ERROR:  cannot compute count (distinct)
+DETAIL:  Non-column references are not supported yet
+SELECT *
+	FROM (
+		SELECT
+			l_linenumber, count(DISTINCT lineitem_hash.*)
+			FROM lineitem_hash
+			GROUP BY l_linenumber) sub
+	ORDER BY 2 DESC, 1 DESC
+	LIMIT 10;
+ERROR:  cannot compute count (distinct)
+DETAIL:  Non-column references are not supported yet
+-- count distinct pushdown is enabled
+SELECT *
+   FROM (
+       SELECT
+           l_shipdate,
+           count(DISTINCT
+               CASE
+                   WHEN l_shipmode = 'TRUCK' THEN l_partkey
+                   ELSE NULL
+               END) as distinct_part,
+           extract(year from l_shipdate) as year
+           FROM
+               lineitem_hash
+           GROUP BY  l_shipdate, year) sub
+   WHERE year = 1995
+   ORDER BY 2 DESC, 1
+   LIMIT 10;
+ l_shipdate | distinct_part | year
+---------------------------------------------------------------------
+ 11-29-1995 |             5 | 1995
+ 03-24-1995 |             4 | 1995
+ 09-18-1995 |             4 | 1995
+ 01-17-1995 |             3 | 1995
+ 04-02-1995 |             3 | 1995
+ 05-23-1995 |             3 | 1995
+ 08-11-1995 |             3 | 1995
+ 09-27-1995 |             3 | 1995
+ 10-27-1995 |             3 | 1995
+ 10-30-1995 |             3 | 1995
+(10 rows)
+
+-- count distinct pushdown is enabled
+SELECT *
+   FROM (
+       SELECT
+           l_shipdate,
+           count(DISTINCT
+               CASE
+                   WHEN l_shipmode = 'TRUCK' THEN l_partkey
+                   ELSE NULL
+               END) as distinct_part,
+           extract(year from l_shipdate) as year
+           FROM
+               lineitem_hash
+           GROUP BY  l_shipdate, year) sub
+   WHERE year = 1995
+   ORDER BY 2 DESC, 1
+   LIMIT 10;
+ l_shipdate | distinct_part | year
+---------------------------------------------------------------------
+ 11-29-1995 |             5 | 1995
+ 03-24-1995 |             4 | 1995
+ 09-18-1995 |             4 | 1995
+ 01-17-1995 |             3 | 1995
+ 04-02-1995 |             3 | 1995
+ 05-23-1995 |             3 | 1995
+ 08-11-1995 |             3 | 1995
+ 09-27-1995 |             3 | 1995
+ 10-27-1995 |             3 | 1995
+ 10-30-1995 |             3 | 1995
+(10 rows)
+
+SELECT *
+   FROM (
+       SELECT
+           l_shipdate,
+           count(DISTINCT
+               CASE
+                   WHEN l_shipmode = 'TRUCK' THEN l_partkey
+                   ELSE NULL
+               END) as distinct_part,
+           extract(year from l_shipdate) as year
+           FROM
+               lineitem_hash
+           GROUP BY  l_shipdate) sub
+   WHERE year = 1995
+   ORDER BY 2 DESC, 1
+   LIMIT 10;
+ l_shipdate | distinct_part | year
+---------------------------------------------------------------------
+ 11-29-1995 |             5 | 1995
+ 03-24-1995 |             4 | 1995
+ 09-18-1995 |             4 | 1995
+ 01-17-1995 |             3 | 1995
+ 04-02-1995 |             3 | 1995
+ 05-23-1995 |             3 | 1995
+ 08-11-1995 |             3 | 1995
+ 09-27-1995 |             3 | 1995
+ 10-27-1995 |             3 | 1995
+ 10-30-1995 |             3 | 1995
+(10 rows)
+
+DROP TABLE lineitem_hash;

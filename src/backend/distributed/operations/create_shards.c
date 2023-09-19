@@ -82,8 +82,8 @@ CreateShardsWithRoundRobinPolicy(Oid distributedTableId, int32 shardCount,
 								 int32 replicationFactor, bool useExclusiveConnections)
 {
 	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(distributedTableId);
-	bool colocatedShard = false;
 	List *insertedShardPlacements = NIL;
+	List *insertedShardIds = NIL;
 
 	/* make sure table is hash partitioned */
 	CheckHashPartitionedTable(distributedTableId);
@@ -175,7 +175,9 @@ CreateShardsWithRoundRobinPolicy(Oid distributedTableId, int32 shardCount,
 		/* initialize the hash token space for this shard */
 		int32 shardMinHashToken = PG_INT32_MIN + (shardIndex * hashTokenIncrement);
 		int32 shardMaxHashToken = shardMinHashToken + (hashTokenIncrement - 1);
-		uint64 shardId = GetNextShardId();
+		uint64 *shardIdPtr = (uint64 *) palloc0(sizeof(uint64));
+		*shardIdPtr = GetNextShardId();
+		insertedShardIds = lappend(insertedShardIds, shardIdPtr);
 
 		/* if we are at the last shard, make sure the max token value is INT_MAX */
 		if (shardIndex == (shardCount - 1))
@@ -187,21 +189,31 @@ CreateShardsWithRoundRobinPolicy(Oid distributedTableId, int32 shardCount,
 		text *minHashTokenText = IntegerToText(shardMinHashToken);
 		text *maxHashTokenText = IntegerToText(shardMaxHashToken);
 
-		InsertShardRow(distributedTableId, shardId, shardStorageType,
+		InsertShardRow(distributedTableId, *shardIdPtr, shardStorageType,
 					   minHashTokenText, maxHashTokenText);
 
-		List *currentInsertedShardPlacements = InsertShardPlacementRows(
-			distributedTableId,
-			shardId,
-			workerNodeList,
-			roundRobinNodeIndex,
-			replicationFactor);
+		InsertShardPlacementRows(distributedTableId,
+								 *shardIdPtr,
+								 workerNodeList,
+								 roundRobinNodeIndex,
+								 replicationFactor);
+	}
+
+	/*
+	 * load shard placements for the shard at once after all placement insertions
+	 * finished. This prevents MetadataCache from rebuilding unnecessarily after
+	 * each placement insertion.
+	 */
+	uint64 *shardIdPtr;
+	foreach_ptr(shardIdPtr, insertedShardIds)
+	{
+		List *placementsForShard = ShardPlacementList(*shardIdPtr);
 		insertedShardPlacements = list_concat(insertedShardPlacements,
-											  currentInsertedShardPlacements);
+											  placementsForShard);
 	}
 
 	CreateShardsOnWorkers(distributedTableId, insertedShardPlacements,
-						  useExclusiveConnections, colocatedShard);
+						  useExclusiveConnections);
 }
 
 
@@ -213,7 +225,6 @@ void
 CreateColocatedShards(Oid targetRelationId, Oid sourceRelationId, bool
 					  useExclusiveConnections)
 {
-	bool colocatedShard = true;
 	List *insertedShardPlacements = NIL;
 	List *insertedShardIds = NIL;
 
@@ -294,7 +305,7 @@ CreateColocatedShards(Oid targetRelationId, Oid sourceRelationId, bool
 
 	/*
 	 * load shard placements for the shard at once after all placement insertions
-	 * finished. That prevents MetadataCache from rebuilding unnecessarily after
+	 * finished. This prevents MetadataCache from rebuilding unnecessarily after
 	 * each placement insertion.
 	 */
 	uint64 *shardIdPtr;
@@ -306,7 +317,7 @@ CreateColocatedShards(Oid targetRelationId, Oid sourceRelationId, bool
 	}
 
 	CreateShardsOnWorkers(targetRelationId, insertedShardPlacements,
-						  useExclusiveConnections, colocatedShard);
+						  useExclusiveConnections);
 }
 
 
@@ -322,7 +333,6 @@ CreateReferenceTableShard(Oid distributedTableId)
 	text *shardMinValue = NULL;
 	text *shardMaxValue = NULL;
 	bool useExclusiveConnection = false;
-	bool colocatedShard = false;
 
 	/*
 	 * In contrast to append/range partitioned tables it makes more sense to
@@ -363,12 +373,21 @@ CreateReferenceTableShard(Oid distributedTableId)
 	InsertShardRow(distributedTableId, shardId, shardStorageType, shardMinValue,
 				   shardMaxValue);
 
-	List *insertedShardPlacements = InsertShardPlacementRows(distributedTableId, shardId,
-															 nodeList, workerStartIndex,
-															 replicationFactor);
+	InsertShardPlacementRows(distributedTableId,
+							 shardId,
+							 nodeList,
+							 workerStartIndex,
+							 replicationFactor);
+
+	/*
+	 * load shard placements for the shard at once after all placement insertions
+	 * finished. This prevents MetadataCache from rebuilding unnecessarily after
+	 * each placement insertion.
+	 */
+	List *insertedShardPlacements = ShardPlacementList(shardId);
 
 	CreateShardsOnWorkers(distributedTableId, insertedShardPlacements,
-						  useExclusiveConnection, colocatedShard);
+						  useExclusiveConnection);
 }
 
 
@@ -400,13 +419,8 @@ CreateSingleShardTableShardWithRoundRobinPolicy(Oid relationId, uint32 colocatio
 	List *workerNodeList = DistributedTablePlacementNodeList(RowShareLock);
 	workerNodeList = SortList(workerNodeList, CompareWorkerNodes);
 
-	int32 workerNodeCount = list_length(workerNodeList);
-	if (workerNodeCount == 0)
-	{
-		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-						errmsg("couldn't find any worker nodes"),
-						errhint("Add more worker nodes")));
-	}
+	int roundRobinNodeIdx =
+		EmptySingleShardTableColocationDecideNodeId(colocationId);
 
 	char shardStorageType = ShardStorageType(relationId);
 	text *minHashTokenText = NULL;
@@ -415,26 +429,51 @@ CreateSingleShardTableShardWithRoundRobinPolicy(Oid relationId, uint32 colocatio
 	InsertShardRow(relationId, shardId, shardStorageType,
 				   minHashTokenText, maxHashTokenText);
 
-	/* determine the node index based on colocation id */
-	int roundRobinNodeIdx = colocationId % workerNodeCount;
-
 	int replicationFactor = 1;
-	List *insertedShardPlacements = InsertShardPlacementRows(
-		relationId,
-		shardId,
-		workerNodeList,
-		roundRobinNodeIdx,
-		replicationFactor);
+	InsertShardPlacementRows(relationId,
+							 shardId,
+							 workerNodeList,
+							 roundRobinNodeIdx,
+							 replicationFactor);
+
+	/*
+	 * load shard placements for the shard at once after all placement insertions
+	 * finished. This prevents MetadataCache from rebuilding unnecessarily after
+	 * each placement insertion.
+	 */
+	List *insertedShardPlacements = ShardPlacementList(shardId);
 
 	/*
 	 * We don't need to force using exclusive connections because we're anyway
 	 * creating a single shard.
 	 */
 	bool useExclusiveConnection = false;
-
-	bool colocatedShard = false;
 	CreateShardsOnWorkers(relationId, insertedShardPlacements,
-						  useExclusiveConnection, colocatedShard);
+						  useExclusiveConnection);
+}
+
+
+/*
+ * EmptySingleShardTableColocationDecideNodeId returns index of the node
+ * that first shard to be created in given "single-shard table colocation
+ * group" should be placed on.
+ *
+ * This is determined by modulo of the colocation id by the length of the
+ * list returned by DistributedTablePlacementNodeList().
+ */
+int
+EmptySingleShardTableColocationDecideNodeId(uint32 colocationId)
+{
+	List *workerNodeList = DistributedTablePlacementNodeList(RowShareLock);
+	int32 workerNodeCount = list_length(workerNodeList);
+	if (workerNodeCount == 0)
+	{
+		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+						errmsg("couldn't find any worker nodes"),
+						errhint("Add more worker nodes")));
+	}
+
+	return colocationId % workerNodeCount;
 }
 
 

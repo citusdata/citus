@@ -29,6 +29,9 @@
 #include "catalog/pg_constraint.h"
 #include "catalog/pg_extension.h"
 #include "catalog/pg_namespace.h"
+#if PG_VERSION_NUM >= PG_VERSION_16
+#include "catalog/pg_proc_d.h"
+#endif
 #include "catalog/pg_type.h"
 #include "commands/extension.h"
 #include "commands/sequence.h"
@@ -1396,6 +1399,17 @@ IsActiveShardPlacement(ShardPlacement *shardPlacement)
 
 
 /*
+ * IsRemoteShardPlacement returns true if the shard placement is on a remote
+ * node.
+ */
+bool
+IsRemoteShardPlacement(ShardPlacement *shardPlacement)
+{
+	return shardPlacement->groupId != GetLocalGroupId();
+}
+
+
+/*
  * IsPlacementOnWorkerNode checks if the shard placement is for to the given
  * workenode.
  */
@@ -1781,6 +1795,24 @@ InsertShardRow(Oid relationId, uint64 shardId, char storageType,
 
 
 /*
+ * InsertShardPlacementRowGlobally inserts shard placement that has given
+ * parameters into pg_dist_placement globally.
+ */
+ShardPlacement *
+InsertShardPlacementRowGlobally(uint64 shardId, uint64 placementId,
+								uint64 shardLength, int32 groupId)
+{
+	InsertShardPlacementRow(shardId, placementId, shardLength, groupId);
+
+	char *insertPlacementCommand =
+		AddPlacementMetadataCommand(shardId, placementId, shardLength, groupId);
+	SendCommandToWorkersWithMetadata(insertPlacementCommand);
+
+	return LoadShardPlacement(shardId, placementId);
+}
+
+
+/*
  * InsertShardPlacementRow opens the shard placement system catalog, and inserts
  * a new row with the given values into that system catalog. If placementId is
  * INVALID_PLACEMENT_ID, a new placement id will be assigned.Then, returns the
@@ -1993,6 +2025,21 @@ DeleteShardRow(uint64 shardId)
 
 	CommandCounterIncrement();
 	table_close(pgDistShard, NoLock);
+}
+
+
+/*
+ * DeleteShardPlacementRowGlobally deletes shard placement that has given
+ * parameters from pg_dist_placement globally.
+ */
+void
+DeleteShardPlacementRowGlobally(uint64 placementId)
+{
+	DeleteShardPlacementRow(placementId);
+
+	char *deletePlacementCommand =
+		DeletePlacementMetadataCommand(placementId);
+	SendCommandToWorkersWithMetadata(deletePlacementCommand);
 }
 
 
@@ -2241,6 +2288,93 @@ UpdateDistributionColumn(Oid relationId, char distributionMethod, Var *distribut
 
 
 /*
+ * UpdateNoneDistTableMetadataGlobally globally updates pg_dist_partition for
+ * given none-distributed table.
+ */
+void
+UpdateNoneDistTableMetadataGlobally(Oid relationId, char replicationModel,
+									uint32 colocationId, bool autoConverted)
+{
+	UpdateNoneDistTableMetadata(relationId, replicationModel,
+								colocationId, autoConverted);
+
+	if (ShouldSyncTableMetadata(relationId))
+	{
+		char *metadataCommand =
+			UpdateNoneDistTableMetadataCommand(relationId,
+											   replicationModel,
+											   colocationId,
+											   autoConverted);
+		SendCommandToWorkersWithMetadata(metadataCommand);
+	}
+}
+
+
+/*
+ * UpdateNoneDistTableMetadata locally updates pg_dist_partition for given
+ * none-distributed table.
+ */
+void
+UpdateNoneDistTableMetadata(Oid relationId, char replicationModel, uint32 colocationId,
+							bool autoConverted)
+{
+	if (HasDistributionKey(relationId))
+	{
+		ereport(ERROR, (errmsg("cannot update metadata for a distributed "
+							   "table that has a distribution column")));
+	}
+
+	ScanKeyData scanKey[1];
+	int scanKeyCount = 1;
+	bool indexOK = true;
+	Datum values[Natts_pg_dist_partition];
+	bool isnull[Natts_pg_dist_partition];
+	bool replace[Natts_pg_dist_partition];
+
+	Relation pgDistPartition = table_open(DistPartitionRelationId(), RowExclusiveLock);
+	TupleDesc tupleDescriptor = RelationGetDescr(pgDistPartition);
+	ScanKeyInit(&scanKey[0], Anum_pg_dist_partition_logicalrelid,
+				BTEqualStrategyNumber, F_OIDEQ, ObjectIdGetDatum(relationId));
+
+	SysScanDesc scanDescriptor = systable_beginscan(pgDistPartition,
+													DistPartitionLogicalRelidIndexId(),
+													indexOK,
+													NULL, scanKeyCount, scanKey);
+
+	HeapTuple heapTuple = systable_getnext(scanDescriptor);
+	if (!HeapTupleIsValid(heapTuple))
+	{
+		ereport(ERROR, (errmsg("could not find valid entry for Citus table with oid: %u",
+							   relationId)));
+	}
+
+	memset(replace, 0, sizeof(replace));
+
+	values[Anum_pg_dist_partition_colocationid - 1] = UInt32GetDatum(colocationId);
+	isnull[Anum_pg_dist_partition_colocationid - 1] = false;
+	replace[Anum_pg_dist_partition_colocationid - 1] = true;
+
+	values[Anum_pg_dist_partition_repmodel - 1] = CharGetDatum(replicationModel);
+	isnull[Anum_pg_dist_partition_repmodel - 1] = false;
+	replace[Anum_pg_dist_partition_repmodel - 1] = true;
+
+	values[Anum_pg_dist_partition_autoconverted - 1] = BoolGetDatum(autoConverted);
+	isnull[Anum_pg_dist_partition_autoconverted - 1] = false;
+	replace[Anum_pg_dist_partition_autoconverted - 1] = true;
+
+	heapTuple = heap_modify_tuple(heapTuple, tupleDescriptor, values, isnull, replace);
+
+	CatalogTupleUpdate(pgDistPartition, &heapTuple->t_self, heapTuple);
+
+	CitusInvalidateRelcacheByRelid(relationId);
+	CommandCounterIncrement();
+
+	systable_endscan(scanDescriptor);
+	table_close(pgDistPartition, NoLock);
+}
+
+
+/*
  * Check that the current user has `mode` permissions on relationId, error out
  * if not. Superusers always have such permissions.
  */
@@ -2263,7 +2397,7 @@ EnsureTablePermissions(Oid relationId, AclMode mode)
 void
 EnsureTableOwner(Oid relationId)
 {
-	if (!pg_class_ownercheck(relationId, GetUserId()))
+	if (!object_ownercheck(RelationRelationId, relationId, GetUserId()))
 	{
 		aclcheck_error(ACLCHECK_NOT_OWNER, OBJECT_TABLE,
 					   get_rel_name(relationId));
@@ -2278,7 +2412,7 @@ EnsureTableOwner(Oid relationId)
 void
 EnsureSchemaOwner(Oid schemaId)
 {
-	if (!pg_namespace_ownercheck(schemaId, GetUserId()))
+	if (!object_ownercheck(NamespaceRelationId, schemaId, GetUserId()))
 	{
 		aclcheck_error(ACLCHECK_NOT_OWNER, OBJECT_SCHEMA,
 					   get_namespace_name(schemaId));
@@ -2294,7 +2428,7 @@ EnsureSchemaOwner(Oid schemaId)
 void
 EnsureFunctionOwner(Oid functionId)
 {
-	if (!pg_proc_ownercheck(functionId, GetUserId()))
+	if (!object_ownercheck(ProcedureRelationId, functionId, GetUserId()))
 	{
 		aclcheck_error(ACLCHECK_NOT_OWNER, OBJECT_FUNCTION,
 					   get_func_name(functionId));
@@ -3286,11 +3420,11 @@ BackgroundTaskHasUmnetDependencies(int64 jobId, int64 taskId)
 
 	/* pg_catalog.pg_dist_background_task_depend.job_id = jobId */
 	ScanKeyInit(&scanKey[0], Anum_pg_dist_background_task_depend_job_id,
-				BTEqualStrategyNumber, F_INT8EQ, jobId);
+				BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(jobId));
 
 	/* pg_catalog.pg_dist_background_task_depend.task_id = $taskId */
 	ScanKeyInit(&scanKey[1], Anum_pg_dist_background_task_depend_task_id,
-				BTEqualStrategyNumber, F_INT8EQ, taskId);
+				BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(taskId));
 
 	SysScanDesc scanDescriptor =
 		systable_beginscan(pgDistBackgroundTasksDepend,

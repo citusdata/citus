@@ -892,7 +892,7 @@ GetConstraintNameList(Oid relationId)
 	Relation pgConstraint = table_open(ConstraintRelationId, AccessShareLock);
 
 	ScanKeyInit(&scanKey[0], Anum_pg_constraint_conrelid,
-				BTEqualStrategyNumber, F_OIDEQ, relationId);
+				BTEqualStrategyNumber, F_OIDEQ, ObjectIdGetDatum(relationId));
 
 	bool useIndex = true;
 	SysScanDesc scanDescriptor = systable_beginscan(pgConstraint,
@@ -1478,11 +1478,20 @@ InsertMetadataForCitusLocalTable(Oid citusLocalTableId, uint64 shardId,
 static void
 FinalizeCitusLocalTableCreation(Oid relationId)
 {
+#if PG_VERSION_NUM >= PG_VERSION_16
+
+	/*
+	 * PG16+ supports truncate triggers on foreign tables
+	 */
+	if (RegularTable(relationId) || IsForeignTable(relationId))
+#else
+
 	/*
 	 * If it is a foreign table, then skip creating citus truncate trigger
 	 * as foreign tables do not support truncate triggers.
 	 */
 	if (RegularTable(relationId))
+#endif
 	{
 		CreateTruncateTrigger(relationId);
 	}

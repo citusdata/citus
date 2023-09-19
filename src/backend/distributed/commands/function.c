@@ -780,7 +780,7 @@ UpdateFunctionDistributionInfo(const ObjectAddress *distAddress,
 	ScanKeyInit(&scanKey[1], Anum_pg_dist_object_objid, BTEqualStrategyNumber, F_OIDEQ,
 				ObjectIdGetDatum(distAddress->objectId));
 	ScanKeyInit(&scanKey[2], Anum_pg_dist_object_objsubid, BTEqualStrategyNumber,
-				F_INT4EQ, ObjectIdGetDatum(distAddress->objectSubId));
+				F_INT4EQ, Int32GetDatum(distAddress->objectSubId));
 
 	SysScanDesc scanDescriptor = systable_beginscan(pgDistObjectRel,
 													DistObjectPrimaryKeyIndexId(),
@@ -909,15 +909,14 @@ GetFunctionDDLCommand(const RegProcedure funcOid, bool useCreateOrReplace)
 	else
 	{
 		Datum sqlTextDatum = (Datum) 0;
-
-		PushOverrideEmptySearchPath(CurrentMemoryContext);
+		int saveNestLevel = PushEmptySearchPath();
 
 		sqlTextDatum = DirectFunctionCall1(pg_get_functiondef,
 										   ObjectIdGetDatum(funcOid));
 		createFunctionSQL = TextDatumGetCString(sqlTextDatum);
 
 		/* revert back to original search_path */
-		PopOverrideSearchPath();
+		PopEmptySearchPath(saveNestLevel);
 	}
 
 	return createFunctionSQL;

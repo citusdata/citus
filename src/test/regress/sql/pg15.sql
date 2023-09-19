@@ -530,7 +530,7 @@ SELECT create_distributed_table('FKTABLE', 'tid');
 SELECT create_reference_table('FKTABLE');
 
 -- show that the definition is expected
-SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conrelid = 'fktable'::regclass::oid ORDER BY oid;
+SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conrelid = 'fktable'::regclass::oid ORDER BY 1;
 
 \c - - - :worker_1_port
 
@@ -932,6 +932,43 @@ ALTER TABLE mx_ddl_table2 SET ACCESS METHOD heap2;
 DROP TABLE mx_ddl_table2;
 DROP ACCESS METHOD heap2;
 SELECT run_command_on_workers($$DROP ACCESS METHOD heap2$$);
+
+CREATE TABLE referenced (int_col integer PRIMARY KEY);
+CREATE TABLE referencing (text_col text);
+
+SET citus.shard_replication_factor TO 1;
+SELECT create_distributed_table('referenced', null);
+SELECT create_distributed_table('referencing', null);
+RESET citus.shard_replication_factor;
+
+CREATE OR REPLACE FUNCTION my_random(numeric)
+  RETURNS numeric AS
+$$
+BEGIN
+  RETURN 7 * $1;
+END;
+$$
+LANGUAGE plpgsql IMMUTABLE;
+
+ALTER TABLE referencing ADD COLUMN test_2 integer UNIQUE NULLS DISTINCT REFERENCES referenced(int_col);
+ALTER TABLE referencing ADD COLUMN test_3 integer GENERATED ALWAYS AS (text_col::int * my_random(1)) STORED UNIQUE NULLS NOT DISTINCT;
+
+SELECT (groupid = 0) AS is_coordinator, result FROM run_command_on_all_nodes(
+  $$SELECT get_grouped_fkey_constraints FROM get_grouped_fkey_constraints('pg15.referencing')$$
+)
+JOIN pg_dist_node USING (nodeid)
+ORDER BY is_coordinator DESC, result;
+
+SELECT (groupid = 0) AS is_coordinator, result FROM run_command_on_all_nodes(
+  $$SELECT get_index_defs FROM get_index_defs('pg15', 'referencing')$$
+)
+JOIN pg_dist_node USING (nodeid)
+ORDER BY is_coordinator DESC, result;
+
+set citus.log_remote_commands = true;
+set citus.grep_remote_commands = '%ALTER DATABASE%';
+alter database regression REFRESH COLLATION VERSION;
+set citus.log_remote_commands = false;
 
 -- Clean up
 \set VERBOSITY terse

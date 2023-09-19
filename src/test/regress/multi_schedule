@@ -65,6 +65,7 @@ test: pg13 pg12
 test: pg14
 test: pg15
 test: pg15_jsonpath detect_conn_close
+test: pg16
 test: drop_column_partitioned_table
 test: tableam
 
@@ -112,7 +113,7 @@ test: clock
 
 # MERGE tests
 test: merge pgmerge merge_repartition2
-test: merge_repartition1
+test: merge_repartition1 merge_schema_sharding
 test: merge_partition_tables
 
 # ---------

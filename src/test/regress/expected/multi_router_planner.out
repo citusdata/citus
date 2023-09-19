@@ -357,7 +357,7 @@ DEBUG:  Creating router plan
 WITH id_author AS MATERIALIZED ( SELECT id, author_id FROM articles_hash WHERE author_id = 1),
 id_title AS MATERIALIZED (SELECT id, title from articles_hash WHERE author_id = 2)
 SELECT * FROM id_author, id_title WHERE id_author.id = id_title.id;
-DEBUG:  cannot run command which targets multiple shards
+DEBUG:  router planner does not support queries that reference non-colocated distributed tables
 DEBUG:  generating subplan XXX_1 for CTE id_author: SELECT id, author_id FROM multi_router_planner.articles_hash WHERE (author_id OPERATOR(pg_catalog.=) 1)
 DEBUG:  Creating router plan
 DEBUG:  query has a single distribution column value: 1
@@ -450,7 +450,7 @@ WITH RECURSIVE hierarchy as MATERIALIZED (
 				h.company_id = ce.company_id AND
 				ce.company_id = 2))
 SELECT * FROM hierarchy WHERE LEVEL <= 2;
-DEBUG:  cannot run command which targets multiple shards
+DEBUG:  router planner does not support queries that reference non-colocated distributed tables
 ERROR:  recursive CTEs are not supported in distributed queries
 -- Test router modifying CTEs
 WITH new_article AS MATERIALIZED(
@@ -1505,7 +1505,7 @@ SET citus.enable_non_colocated_router_query_pushdown TO OFF;
 SELECT a.author_id as first_author, b.word_count as second_word_count
 	FROM articles_hash a, articles_single_shard_hash b
 	WHERE a.author_id = 10 and a.author_id = b.author_id and false;
-DEBUG:  router planner does not support queries that reference non-colocated distributed tables
+DEBUG:  Creating router plan
  first_author | second_word_count
 ---------------------------------------------------------------------
 (0 rows)
@@ -1599,7 +1599,7 @@ HINT:  Set citus.enable_repartition_joins to on to enable repartitioning
 SELECT a.author_id as first_author, b.word_count as second_word_count
 	FROM articles_hash a, articles_single_shard_hash b
 	WHERE a.author_id = 10 and a.author_id = b.author_id and int4eq(1, 2);
-DEBUG:  router planner does not support queries that reference non-colocated distributed tables
+DEBUG:  Creating router plan
  first_author | second_word_count
 ---------------------------------------------------------------------
 (0 rows)
@@ -1637,7 +1637,7 @@ SELECT a.author_id as first_author, b.word_count as second_word_count
 	FROM articles_hash a, articles_single_shard_hash b
 	WHERE a.author_id = 10 and a.author_id = b.author_id and
 		date_ne_timestamp('1954-04-11', '1954-04-11'::timestamp);
-DEBUG:  router planner does not support queries that reference non-colocated distributed tables
+DEBUG:  Creating router plan
  first_author | second_word_count
 ---------------------------------------------------------------------
 (0 rows)

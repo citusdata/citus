@@ -473,7 +473,7 @@ select run_command_on_workers($$SELECT count(*)=0 from citus_local_tables_mx.v10
 select run_command_on_workers($$SELECT count(*)=0 from citus_local_tables_mx.v102$$);
 
 CREATE TABLE loc_tb_2 (a int);
-CREATE VIEW v104 AS SELECT * from loc_tb_2;
+CREATE VIEW v104 AS SELECT * from loc_tb_2 table_name_for_view;
 
 SET client_min_messages TO DEBUG1;
 -- verify the CREATE command for the view is generated correctly

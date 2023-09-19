@@ -143,6 +143,8 @@ SELECT create_distributed_table('seq_test_4','x');
 
 CREATE SEQUENCE seq_4;
 ALTER TABLE seq_test_4 ADD COLUMN a bigint DEFAULT nextval('seq_4');
+ALTER TABLE seq_test_4 ADD COLUMN IF NOT EXISTS a bigint DEFAULT nextval('seq_4');
+NOTICE:  column "a" of relation "seq_test_4" already exists, skipping
 DROP SEQUENCE seq_4 CASCADE;
 NOTICE:  drop cascades to default value for column a of table seq_test_4
 TRUNCATE seq_test_4;
@@ -879,7 +881,7 @@ ROLLBACK;
 -- Show that existing sequence has been renamed and a new sequence with the same name
 -- created for another type
 \c - - - :worker_1_port
-SELECT seqrelid::regclass, seqtypid::regtype, seqmax, seqmin FROM pg_sequence WHERE seqrelid::regclass::text like '%sequence_rollback%' ORDER BY 1,2;
+SELECT seqrelid::regclass, seqtypid::regtype, seqmax, seqmin FROM pg_sequence WHERE seqrelid::regclass::text in ('sequence_rollback', '"sequence_rollback(citus_backup_0)"') ORDER BY 1,2;
               seqrelid               | seqtypid |     seqmax      |     seqmin
 ---------------------------------------------------------------------
  "sequence_rollback(citus_backup_0)" | integer  |      2147483647 |               1

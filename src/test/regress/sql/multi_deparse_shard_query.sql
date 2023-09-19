@@ -8,6 +8,9 @@
 SHOW server_version \gset
 SELECT substring(:'server_version', '\d+')::int >= 15 AS server_version_ge_15;
 
+CREATE SCHEMA multi_deparse_shard_query;
+SET search_path TO multi_deparse_shard_query;
+
 SET citus.next_shard_id TO 13100000;
 SET citus.shard_replication_factor TO 1;
 
@@ -304,3 +307,6 @@ SELECT
 FROM
 	raw_events_1;
 ');
+
+SET client_min_messages TO ERROR;
+DROP SCHEMA multi_deparse_shard_query CASCADE;

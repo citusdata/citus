@@ -1,3 +1,7 @@
+SET client_min_messages TO WARNING;
+DROP SCHEMA IF EXISTS columnar_test_helpers CASCADE;
+RESET client_min_messages;
+
 CREATE SCHEMA columnar_test_helpers;
 SET search_path TO columnar_test_helpers;
 

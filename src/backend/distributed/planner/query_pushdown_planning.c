@@ -1414,6 +1414,12 @@ RelationInfoContainsOnlyRecurringTuples(PlannerInfo *plannerInfo, Relids relids)
 
 	while ((relationId = bms_next_member(relids, relationId)) >= 0)
 	{
+		/* outer join RTE check in PG16 */
+		if (IsRelOptOuterJoin(plannerInfo, relationId))
+		{
+			continue;
+		}
+
 		RangeTblEntry *rangeTableEntry = plannerInfo->simple_rte_array[relationId];
 
 		if (FindNodeMatchingCheckFunctionInRangeTableList(list_make1(rangeTableEntry),
@@ -1915,6 +1921,9 @@ SubqueryPushdownMultiNodeTree(Query *originalQuery)
 	pushedDownQuery->targetList = subqueryTargetEntryList;
 	pushedDownQuery->jointree = copyObject(queryTree->jointree);
 	pushedDownQuery->rtable = copyObject(queryTree->rtable);
+#if PG_VERSION_NUM >= PG_VERSION_16
+	pushedDownQuery->rteperminfos = copyObject(queryTree->rteperminfos);
+#endif
 	pushedDownQuery->setOperations = copyObject(queryTree->setOperations);
 	pushedDownQuery->querySource = queryTree->querySource;
 	pushedDownQuery->hasSubLinks = queryTree->hasSubLinks;
