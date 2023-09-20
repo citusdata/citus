@@ -299,7 +299,7 @@ jobs:
   test-citus-upgrade:
     runs-on: ubuntu-latest
     container:
-      image: "${{ vars.citusupgrade_image_name }}:${{ vars.pg16_version }}${{ vars.image_suffix }}"
+      image: "${{ vars.citusupgrade_image_name }}:${{ vars.pg14_version }}${{ vars.image_suffix }}"
       options: --user root
     needs:
     - build
@@ -363,8 +363,6 @@ jobs:
   ch_benchmark:
     if: startsWith(github.ref, 'refs/heads/ch_benchmark/')
     runs-on: ubuntu-latest
-    container:
-      image: buildpack-deps:stretch
     needs:
     - build
     steps:
@@ -382,8 +380,6 @@ jobs:
   tpcc_benchmark:
     if: startsWith(github.ref, 'refs/heads/tpcc_benchmark/')
     runs-on: ubuntu-latest
-    container:
-      image: buildpack-deps:stretch
     needs:
     - build
     steps:
