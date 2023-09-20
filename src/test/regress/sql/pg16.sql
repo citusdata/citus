@@ -565,6 +565,95 @@ SELECT PERCENTILE_DISC((2 > random_normal(stddev => 1, mean => 0))::int::numeric
 FROM dist_table
 LEFT JOIN ref_table ON TRUE;
 
+--
+-- PG16 added WITH ADMIN FALSE option to GRANT ROLE
+-- WITH ADMIN FALSE is the default, make sure we propagate correctly in Citus
+-- Relevant PG commit: https://github.com/postgres/postgres/commit/e3ce2de
+--
+
+CREATE ROLE role1;
+CREATE ROLE role2;
+
+SET citus.log_remote_commands TO on;
+SET citus.grep_remote_commands = '%GRANT%';
+-- default admin option is false
+GRANT role1 TO role2;
+REVOKE role1 FROM role2;
+-- should behave same as default
+GRANT role1 TO role2 WITH ADMIN FALSE;
+REVOKE role1 FROM role2;
+-- with admin option and with admin true are the same
+GRANT role1 TO role2 WITH ADMIN OPTION;
+REVOKE role1 FROM role2;
+GRANT role1 TO role2 WITH ADMIN TRUE;
+REVOKE role1 FROM role2;
+
+RESET citus.log_remote_commands;
+RESET citus.grep_remote_commands;
+
+--
+-- PG16 added new options to GRANT ROLE
+-- inherit: https://github.com/postgres/postgres/commit/e3ce2de
+-- set: https://github.com/postgres/postgres/commit/3d14e17
+-- We don't propagate for now in Citus
+--
+GRANT role1 TO role2 WITH INHERIT FALSE;
+REVOKE role1 FROM role2;
+GRANT role1 TO role2 WITH INHERIT TRUE;
+REVOKE role1 FROM role2;
+GRANT role1 TO role2 WITH INHERIT OPTION;
+REVOKE role1 FROM role2;
+GRANT role1 TO role2 WITH SET FALSE;
+REVOKE role1 FROM role2;
+GRANT role1 TO role2 WITH SET TRUE;
+REVOKE role1 FROM role2;
+GRANT role1 TO role2 WITH SET OPTION;
+REVOKE role1 FROM role2;
+
+-- connect to worker node
+GRANT role1 TO role2 WITH ADMIN OPTION, INHERIT FALSE, SET FALSE;
+
+SELECT roleid::regrole::text AS role, member::regrole::text,
+admin_option, inherit_option, set_option FROM pg_auth_members
+WHERE roleid::regrole::text = 'role1' ORDER BY 1, 2;
+
+\c - - - :worker_1_port
+
+SELECT roleid::regrole::text AS role, member::regrole::text,
+admin_option, inherit_option, set_option FROM pg_auth_members
+WHERE roleid::regrole::text = 'role1' ORDER BY 1, 2;
+
+SET citus.enable_ddl_propagation TO off;
+GRANT role1 TO role2 WITH ADMIN OPTION, INHERIT FALSE, SET FALSE;
+RESET citus.enable_ddl_propagation;
+
+SELECT roleid::regrole::text AS role, member::regrole::text,
+admin_option, inherit_option, set_option FROM pg_auth_members
+WHERE roleid::regrole::text = 'role1' ORDER BY 1, 2;
+
+\c - - - :master_port
+REVOKE role1 FROM role2;
+
+-- test REVOKES as well
+GRANT role1 TO role2;
+REVOKE SET OPTION FOR role1 FROM role2;
+REVOKE INHERIT OPTION FOR role1 FROM role2;
+
+DROP ROLE role1, role2;
+
+-- test that everything works fine for roles that are not propagated
+SET citus.enable_ddl_propagation TO off;
+CREATE ROLE role3;
+CREATE ROLE role4;
+CREATE ROLE role5;
+RESET citus.enable_ddl_propagation;
+-- by default, admin option is false, inherit is true, set is true
+GRANT role3 TO role4;
+GRANT role3 TO role5 WITH ADMIN TRUE, INHERIT FALSE, SET FALSE;
+SELECT roleid::regrole::text AS role, member::regrole::text, admin_option, inherit_option, set_option FROM pg_auth_members WHERE roleid::regrole::text = 'role3' ORDER BY 1, 2;
+
+DROP ROLE role3, role4, role5;
+
 \set VERBOSITY terse
 SET client_min_messages TO ERROR;
 DROP EXTENSION postgres_fdw CASCADE;

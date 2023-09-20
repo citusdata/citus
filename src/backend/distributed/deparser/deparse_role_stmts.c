@@ -15,6 +15,7 @@
 
 #include "pg_version_compat.h"
 
+#include "commands/defrem.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/deparser.h"
 #include "distributed/listutils.h"
@@ -384,7 +385,10 @@ AppendGrantWithAdminOption(StringInfo buf, GrantRoleStmt *stmt)
 		DefElem *opt = NULL;
 		foreach_ptr(opt, stmt->opt)
 		{
-			if (strcmp(opt->defname, "admin") == 0)
+			bool admin_option = false;
+			char *optval = defGetString(opt);
+			if (strcmp(opt->defname, "admin") == 0 &&
+				parse_bool(optval, &admin_option) && admin_option)
 			{
 				appendStringInfo(buf, " WITH ADMIN OPTION");
 				break;

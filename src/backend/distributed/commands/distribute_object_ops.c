@@ -444,6 +444,42 @@ static DistributeObjectOps Database_Grant = {
 	.markDistributed = false,
 };
 
+static DistributeObjectOps Database_Alter = {
+	.deparse = DeparseAlterDatabaseStmt,
+	.qualify = NULL,
+	.preprocess = PreprocessAlterDatabaseStmt,
+	.postprocess = NULL,
+	.objectType = OBJECT_DATABASE,
+	.operationType = DIST_OPS_ALTER,
+	.address = NULL,
+	.markDistributed = false,
+};
+
+#if PG_VERSION_NUM >= PG_VERSION_15
+static DistributeObjectOps Database_RefreshColl = {
+	.deparse = DeparseAlterDatabaseRefreshCollStmt,
+	.qualify = NULL,
+	.preprocess = PreprocessAlterDatabaseRefreshCollStmt,
+	.postprocess = NULL,
+	.objectType = OBJECT_DATABASE,
+	.operationType = DIST_OPS_ALTER,
+	.address = NULL,
+	.markDistributed = false,
+};
+#endif
+
+static DistributeObjectOps Database_Set = {
+	.deparse = DeparseAlterDatabaseSetStmt,
+	.qualify = NULL,
+	.preprocess = PreprocessAlterDatabaseSetStmt,
+	.postprocess = NULL,
+	.objectType = OBJECT_DATABASE,
+	.operationType = DIST_OPS_ALTER,
+	.address = NULL,
+	.markDistributed = false,
+};
+
+
 static DistributeObjectOps Domain_Alter = {
 	.deparse = DeparseAlterDomainStmt,
 	.qualify = QualifyAlterDomainStmt,
@@ -1272,7 +1308,6 @@ static DistributeObjectOps Trigger_Rename = {
 	.markDistributed = false,
 };
 
-
 /*
  * GetDistributeObjectOps looks up the DistributeObjectOps which handles the node.
  *
@@ -1283,6 +1318,25 @@ GetDistributeObjectOps(Node *node)
 {
 	switch (nodeTag(node))
 	{
+		case T_AlterDatabaseStmt:
+		{
+			return &Database_Alter;
+		}
+
+#if PG_VERSION_NUM >= PG_VERSION_15
+		case T_AlterDatabaseRefreshCollStmt:
+		{
+			return &Database_RefreshColl;
+		}
+
+#endif
+
+		case T_AlterDatabaseSetStmt:
+		{
+			return &Database_Set;
+		}
+
+
 		case T_AlterDomainStmt:
 		{
 			return &Domain_Alter;
