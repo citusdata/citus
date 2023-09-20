@@ -75,7 +75,7 @@ In the query planner, we use the following terminology:
 Use cases: 
 
 - Multi-tenant apps are the primary use case for Citus, which we can scale through distributing and co-locating by tenant ID, or through schema-based sharding. Citus is reasonably complete for this use case, but there are still SQL and operational improvements that can be made.
-- Real-time analytics is another popular use case due the combination of parallel distributed queries with indexes & in-database materialization (ETL). Improvement areas are automated time partitioning, better columnar storage (perf and update/delete, and incremental materialized views. 
+- Real-time analytics is another popular use case due the combination of parallel distributed queries with indexes & in-database materialization (ETL). Improvement areas are automated time partitioning, better columnar storage (perf and update/delete, and incremental materialized views). 
 - Citus works well for CRUD use cases, but would be far easier to use if we introduced a load balancer, DDL from any node (no explicit coordinator), and more performant by better use of connection pooling (e.g. outbound pgbouncers). 
 - Marketplace use cases could work well if we made it easier to distribute tables twice by different dimensions or made it easier to keep paired tables in sync. 
 
