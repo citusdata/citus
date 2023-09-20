@@ -54,6 +54,8 @@ All Citus table types have the notion of a “shard”, though in many cases the
 
 **Cluster**: The combination of worker nodes and coordinator is a cluster. When the cluster has a read replica, the nodes in the read replica are listed in pg_dist_node with a different nodecluster value, and the servers have a corresponding citus.cluster_name in their postgresql.conf. That way, nodes know which other nodes in pg_dist_node belong to their cluster, and they will ignore others. 
 
+**Read replica cluster**: In a read replica cluster, every node is a physical replica of a node in a primary Citus cluster. The read replica has a distinct citus.cluster_name value and the nodes in the read replica cluster should be added to pg_dist_node on the primary coordinator with the corresponding cluster name.
+
 **Client connections**: Connections made by the client to any of the nodes in the cluster. Each client connection is backed by a postgres process/backend, which we sometimes refer to as a client session. 
 
 **Internal connections**: Connections to other nodes made by a client session. Each internal connection is backed by a process, which we sometimes refer to as an internal session. In the code, you can use IsCitusInternalBackend() 
@@ -97,14 +99,14 @@ Transactional semantics:
 
 Replication model: 
 
-- High availability is achieved through hot standby nodes. 
-- Read replicas are Citus cluster in which each node is a physical replica of a node in another Citus cluster. Since the read replica cannot have its own metadata. 
+- High availability is achieved through hot standby nodes managed by a control plane or PostgreSQL HA solution like Patroni or pg_auto_failover.
+- Read replicas are Citus cluster in which each node is a physical replica of a node in another Citus cluster.
 - Hot standby nodes are, at the time of writing, not in the metadata. Instead, the hostname/IP is replaced or rerouted at failover time. 
 - The deprecated “statement based” replication is (as of Citus 11.0+) only useful for providing read scalability, not for HA as all modifications are done via 2PC. Reference tables do use statement-based replication. 
 
 # Use of hooks 
 
-A PostgreSQL extension consists of two parts: a set of SQL objects (e.g. metadata tables, functions, types) and a shared library that is loaded into PostgreSQL and can alter the behavior of PostgreSQL by setting certain hooks. You can find a high-level description of these concepts in this talk. 
+A PostgreSQL extension consists of two parts: a set of SQL objects (e.g. metadata tables, functions, types) and a shared library that is loaded into PostgreSQL and can alter the behavior of PostgreSQL by setting certain hooks. You can find a high-level description of these concepts in [this talk](https://learn.microsoft.com/en-us/events/azure-cosmos-db-liftoff/foundations-of-distributed-postgresql-with-citus). 
 
 Citus uses the following hooks: 
 
@@ -124,11 +126,11 @@ Through these hooks, Citus can intercept any interaction between the client and 
 
 # Query planner 
 
-Citus’ planner layered planner accommodates different workloads. There are several useful presentations/papers that are relevant to Citus’ distributed planner, below we try to categorize them: 
+Citus has a layered planner architecture that accommodates different workloads. There are several useful presentations/papers that are relevant to Citus’ distributed planner, below we try to categorize them: 
 
 ## High-level design/flow: 
 
-- Distributing Queries the Citus Way: Marco’s PG Con presentation is almost up to date and can provide a good introduction. https://postgresconf.org/system/events/document/000/000/233/Distributing_Queries_the_Citus_Way.pdf
+- Distributing Queries the Citus Way: Marco’s PG Con presentation provides a good introduction: https://postgresconf.org/system/events/document/000/000/233/Distributing_Queries_the_Citus_Way.pdf
 
 - Another useful content on this topic is the Planner README.md: https://github.com/citusdata/citus/blob/main/src/backend/distributed/planner/README.md
 
