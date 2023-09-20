@@ -5,8 +5,8 @@
 * Add `citus_schema_move()` function which moves tables within a
   distributed schema to another node (#7180)
 
-* Adds `citus_pause_node()` UDF that allows pausing the node with given id
-  (#7089)
+* Adds `citus_pause_node_within_txn()` UDF that allows pausing the node with
+  given id (#7089)
 
 * Makes sure to enforce shard level colocation with the GUC
   `citus.enable_non_colocated_router_query_pushdown` (#7076)
