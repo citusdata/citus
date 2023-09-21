@@ -1924,30 +1924,29 @@ NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_
 
 Then, Citus periodically (default 2 seconds), pulls all the “lock graphs” from all the nodes and combines them. If it finds a cycle in the combined graph, Citus concludes that there is a deadlock and kills one of the (distributed) processes involved in the graph. To give an example, assume we have the following case: 
 
-Transaction 1 waits Transaction 2 on Node-1 
++ Transaction 1 waits Transaction 2 on Node-1 
++ Transaction 2 waits Transaction 1 on Node-2 
 
-Transaction 2 waits Transaction 1 on Node-2 
-
-In this case, none of the transactions can continue. This is a distributed deadlock as neither Node-1 or Node-2 can detect the deadlock as there is no local deadlocks. To find distributed deadlocks, we pull the “lock graph”s from each node and combine. 
+In this case, none of the transactions can continue. This is a distributed deadlock as neither `Node-1` nor `Node-2` can detect the deadlock as there is no local deadlocks. To find distributed deadlocks, we pull the `lock graph`s from each node and combine. 
 
 Let’s dive a little deeper. A node-lock lock graph is created in C function ` BuildLocalWaitGraph ()`. The lock graph includes only distributed transactions that are assigned via `assign_distributed_transaction` UDF. As noted, Citus heavily relies on Postgres on which backends are waiting for others, for details see ` AddEdgesForLockWaits ()` and  ` AddEdgesForWaitQueue ()` C functions. 
 
 Once each local lock graph is created, then the results are combined in on the coordinator. Then, for each node in the graph, we do a DFS (depth-first search) to check if there is a cycle involving that node. If there is a cycle, we conculde that there is a distributed deadlock.  
 
-While doing the DFS, we also keep track of the other backends that are involved in the cycle. Citus picks the “youngest” transaction as the candidate to cancel (e.g., sends SIGINT). The idea is that let’s allow longer running transactions to continue. 
+While doing the DFS, we also keep track of the other backends that are involved in the cycle. Citus picks the `youngest` transaction as the candidate to cancel (e.g., sends SIGINT). The idea is that let’s allow longer running transactions to continue, such as a long running DDL. 
 
-If there is a cycle in the local graph, typically Postgres’ deadlock detection kicks in before Citus’ deadlock detection, hence breaks the cycle. There is a safe race condition between Citus’ deadlock detection and Postgres’ deadlock detection. Even if the race happens, the worst-case scenario is that the multiple backends from the same cycle is cancelled. In practice, we do not see much, because Citus deadlock detection runs 2x slower (e.g., citus. distributed_deadlock_detection_factor) than Postgres deadlock detection. 
+If there is a cycle in the local graph, typically Postgres’ deadlock detection kicks in before Citus’ deadlock detection, hence breaks the cycle. There is a safe race condition between Citus’ deadlock detection and Postgres’ deadlock detection. Even if the race happens, the worst-case scenario is that the multiple backends from the same cycle is cancelled. In practice, we do not see much, because Citus deadlock detection runs `2x` slower (e.g., `citus.distributed_deadlock_detection_factor`) than Postgres deadlock detection. 
 
-For debugging purposes, you can enable logging with distributed deadlock detection: citus.log_distributed_deadlock_detection 
+For debugging purposes, you can enable logging with distributed deadlock detection: `citus.log_distributed_deadlock_detection`
 
 With query from any node, we run the deadlock detection from all nodes. However, each node would only try to find deadlocks on the backends that are initiated on them. This helps to scale deadlock detection workload across all nodes. 
 
-When there are too many active backends(>1000), creating lots of “waiting activity” (e.g., blocked on the same locks), then the deadlock detection process might become a bottleneck. There are probably some opportunities to optimize the code for these kinds of workloads. As a workaround, we suggest increase citus. distributed_deadlock_detection_factor. 
+When there are too many active backends(>1000), creating lots of `waiting activity` (e.g., blocked on the same locks not necessarily deadlocks involved), then the deadlock detection process might become a bottleneck. There are probably some opportunities to optimize the code for these kinds of workloads. As a workaround, we suggest increase `citus.distributed_deadlock_detection_factor`. 
 
-The distributed transactionId and backend/PID mapping is done via BackendData structure. For every Postgres backend, Citus keeps a BackendData structure. Each backends state is preserved in MyBackendData C structure. Assigning (and removing) distributed transaction id to a backend means to update this structure. 
+The distributed transactionId and backend/PID mapping is done via BackendData structure. For every Postgres backend, Citus keeps a `BackendData` structure. Each backends state is preserved in `MyBackendData` C structure. Assigning (and removing) distributed transaction id to a backend means to update this structure. 
 
+If we were to implement distributed deadlock detection today, we would probably try to build it on top of `Global PID` concept instead of `distributed transaction id`. But, before changing that, we should make sure the `Global PID` is robust enough. `Global PID` today mostly used for observation of the cluster. We should slowly put more emphasis on the `Global PID` and once we feel confortable with it, we can consider using it for distributed deadlock detection as well.
  
-
 # Locking 
 Locks in a database like Postgres (and Citus) make sure that only one user can change a piece of data at a time. This helps to keep the data correct and safe. If two users try to change the same data at the same time, it could create problems or errors.  
 
