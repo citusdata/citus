@@ -1949,12 +1949,169 @@ The distributed transactionId and backend/PID mapping is done via BackendData st
  
 
 # Locking 
+Locks in a database like Postgres (and Citus) make sure that only one user can change a piece of data at a time. This helps to keep the data correct and safe. If two users try to change the same data at the same time, it could create problems or errors.  
 
-TODO: Onder is writing 
+Citus, a distributed database, needs extra locks because it stores data across multiple servers. These extra locks help make sure that even when many servers are involved, the data stays correct and safe during changes made by multiple users. 
+
+In PostgreSQL and Citus, there are several types of locks that serve different purposes. In this section, we’d like to go over these different types of locks and explain when/how they are useful. 
+
+## Lock Levels 
+
+In database management, locking mechanisms are crucial for maintaining data integrity during concurrent operations. However, not all locks are created equal. As a building block, PostgreSQL allows different levels/modes of locks. So, this is probably different than what you have learned in your college, where if a lock is held, others have to wait. No, in PostgreSQL, some locks do not conflict with each other, whereas some do. This flexibility allows Postgres (and Citus) to implement sophisticated concurrency scenarios. 
+
+For details of lock levels, please refer to PostgreSQL docs: https://www.postgresql.org/docs/current/explicit-locking.html 
+
+Understanding these lock types and their levels of restrictiveness can help you better manage concurrent operations and ensure data integrity. 
+
+## Lock Monitoring 
+
+Both PostgreSQL and Citus provide comprehensive views for monitoring the locks held (or waiting on) for each backend. `pg_locks`: https://www.postgresql.org/docs/current/view-pg-locks.html. 
+
+In Citus, we have the same view, but they are collected from all nodes in the cluster: `citus_locks` 
+
+You can find lots of examples of how `pg_locks` (and `citus_locks`) can be used in debugging systems. One of the good one is from PostgreSQL’s wiki, ` Сombination of blocked and blocking activity`: https://wiki.postgresql.org/wiki/Lock_Monitoring The same query is also implemented within Citus for the distributed cluster, with the name: citus_lock_waits: https://github.com/citusdata/citus/blob/4e46708789478d6deccd3d121f2b4da7f631ebe3/src/backend/distributed/sql/udfs/citus_lock_waits/11.0-1.sql#L4 
+
+These simple monitoring tools are essential to understanding the concurrency in PostgreSQL and Citus. 
+
+## Lock Types 
+
+1. **Table-level Locks**: 
+
+Table-level locks in PostgreSQL range from less restrictive to more restrictive, allowing various levels of concurrent access. They can lock an entire table to ensure data integrity during operations like adding columns. You can also acquire any of these locks explicitly with the command LOCK. Two transactions cannot hold locks of conflicting modes on the same table at the same time. (However, a transaction never conflicts with itself. For example, it might acquire `ACCESS EXCLUSIVE` lock and later acquire `ACCESS SHARE` lock on the same table.) 
+
+Marco’s blog post on locks could provide a nice read on this topic: https://www.citusdata.com/blog/2018/02/15/when-postgresql-blocks/ 
+
+As a rule, in most cases, Citus relies on PostgreSQL to acquire the table-level locks. For example, 
+
++ When a DDL is executed on a Citus table, Citus first executes Postgres’ `standardProcess_Utility()` function. One of the key reasons behind that is Postgres acquires the table-level lock, and Citus provides similar concurrency behavior with Postgres on Citus tables. If an `ALTER TABLE .. ADD COLUMN` is running on a distributed table, no `SELECT` command could run concurrently due to the table-level locks. 
+
++ When regular commands like `INSERT`/`UPDATE`/`DELETE`/`SELECT` is executed, Citus again relies on Postgres to acquire the table-level locks. PostgreSQL acquires the table-level locks during the parsing of the statements, which makes life simple for Citus, as parsing happens even before any Citus logic kicks in. If the command doesn’t require parsing, such as prepared statements, then Postgres still acquires the same locks before using the cached plan. So, from Citus’ perspective, there mostly is nothing to do for acquiring the table-level locks. 
+ + + There is only a one expection to this rule, Citus' _local plan caching_. When Citus caches the queries by itself, Citus acquires the relevant table-level locks. See `ExecuteLocalTaskListExtended()` as the relevant C function.
+
+ 
+Citus additionally use table-level locks for certain table management operations on tables. With all these operations, Citus aims to fit into the same concurrency behaviors as Postgres. For example, when `create_distributed_table()` is executed, Citus acquires an `ExclusiveLock` on the table. We do that because we want to block `write`s on the tables – which acquire RowExclusiveLock  -- but let `read-only` queries to continue – which acquire AccessShareLock. An additional benefit of this approach is that no two concurrent `create_distributed_table` on the same table can run. 
+
+
+One another use case for table-level locks on Citus is the table-level locks acquired on the Citus metadata tables. Citus uses table-level locks on the metadata tables to define the concurrency behavior of certain operations. For example, while creating a new table or moving shards, it is common to acquire `ShareLock` on `pg_dist_node` table, and `citus_add_node` function to acquire `ExclusiveLock` on the same metadata table. The latter signals the rest of the backends that the node metadata is about to change, so it is not allowed to rely on the current state of `pg_dist_node` (or vice-versa `citus_add_node` should wait until rebalance finishes).  
+
+The main C function involved in table-level locking is ` LockRelationOid ()`. So, you can put a break-point to this function and see when/how Citus and Postgres acquires table-level locks. 
+
+ 
+2. **Row-level Locks**: 
+
+Row-level locks are more granular and lock only specific rows within a table. This allows multiple users to read and update different rows simultaneously, which can improve performance for multi-user scenarios. 
+
+ Citus does NOT involve in the row-level locks, fully relies on Postgres to acquire the locks on the shards. Marco’s blog-post gives a nice overview of row-level locks: https://www.citusdata.com/blog/2018/02/15/when-postgresql-blocks/ 
+
+ 
+
+3. **Advisory Locks:** 
+
+Advisory locks are a special type of lock in PostgreSQL that give you more control over database operations. Unlike standard table or row-level locks that automatically lock database objects, advisory locks serve as flexible markers or flags. Developers can implement these custom locks to define their own rules for managing concurrency, making them particularly useful for extensions and custom workflows.
+
+#### Importance of Advisory locks for Citus
+
+In a distributed system like Citus, advisory locks take on an even more critical role. Because Citus spreads data across multiple nodes, managing concurrent operations becomes a complex task. Citus heavily relies on advisory locks for a variety of essential operations. Whether it's handling queries from any node, moving/splitting shards, preventing deadlocks, or managing colocation of related data, advisory locks serve as a powerful tool for ensuring smooth operation and data integrity.
+
+By employing advisory locks, Citus effectively deals with the complexities that come with distributed databases. They allow the system to implement sophisticated concurrency scenarios, ensuring that data remains consistent and operations are efficient across all nodes in the cluster.
+
+Below, we list some of the crucial advisory locks that Citus relies on:
+
+#### Citus Advisory Locks 1: Distributed Execution locks
+
+The C code is for a function called `AcquireExecutorShardLocksForExecution()`. The function has an extensive comment for the specific rules. The function's main goal is to get advisory locks on shard IDs to make sure data stays safe and consistent across different operations. These locks are sometimes referred as `ShardResourceLock`s in the code. 
+
+In the context of distributed databases like Citus, "safe" generally means avoiding situations where different nodes in the cluster are trying to modify the same data at the same time in a way that could lead to errors, inconsistencies, or even deadlocks. This is critical when data is replicated across nodes (e.g., multiple copies of the same shard like reference tables) or when a single operation affects multiple shards (e.g., multi-shard update).
+
+The "consistency" here primarily refers to two things:
+
+1. **Order of Operations on Replicated Tables**: In a replicated table setup, the same data exists on multiple nodes. The function aims to make sure that any updates, deletes, or inserts happen in the same order on all copies of the data (replicas). This way, all the replicas stay in sync.
+
+2. **Preventing Distributed Deadlocks**: When you're running multi-shard operations that update the data, you can run into distributed deadlocks if operations on different nodes lock shards in a different order. This function ensures that the locks are acquired in a specific, consistent order, thus minimizing the risk of deadlocks.
+
+There are also options (`GUCs`) to relax these locking mechanisms based on the user's needs, but they come with the trade-off of potentially reduced consistency or increased risk of deadlocks.
+
+So, in summary, this function is about acquiring the right kind of lock based on what the operation is doing and what kind of table it's affecting, all to ensure that the data stays consistent and that operations are executed safely.
+
+
+#### Citus Advisory Locks 2: Metadata locks
+
+The second class of advisory locks referred as `metadata locks` in the code. See `AcquireMetadataLocks()` and `LockShardDistributionMetadata()` functions.
+
+The main goal is to prevent concurrent placement changes and query executions. Essentially ensure that the query execution always works on the accurate placement metadata (e.g., shard placements).
+
+Citus always acquire `Metadata Lock`s for shard moves and shard splits, irrespetive of blocking vs non-blocking operations. For blocking operations, the locks are held from the start of the operation whereas for non-blocking operations the locks are held briefly at the end right before metadata is updated.
+
+Citus always acquires `Metadata Lock`s for modification queries, at the `CitusBeginModifyScan` such that it serializes query modification with placement metadata changes. A modification query would always see up-to date metadata for the placements involved. Otherwise, the modification might get lost.
+
+Citus does not acquire Metadata Locks for SELECT queries. The main reason is that SELECTs are often long-running and would hold up the move. Instead, we allow SELECT commands to operate on the old placements in case of a concurrent shard move. The SELECT commands would already see the snapshot of the shard(s) when the SELECT started. So, there is no difference in terms of query correctness. We then later drop the old placements via "deferred drop" (see Resource cleanup).
+
+#### Citus Advisory Locks 3: Query from any node
+  
+When users are allowed to run queries from any node, then in certain cases, we need to form a synchronization that involes multiple nodes. Advisory locks is a convinent tool for achieving these types of goals.
+
+ Citus exposes few UDFs like `lock_shard_resources()` and `lock_shard_metadata()` which are simple wrappers around the metadata and executor locks we discussed above. 
+
+ When there are nodes with metadata, then Citus acquires some of the advisory locks on all nodes, like:
+
+ ```sql
+  select citus_move_shard_placement(102008, 'localhost', 9701, 'localhost', 9702, shard_transfer_mode:='force_logical');
+  ....
+
+  DETAIL:  on server onderkalaci@localhost:9702 connectionId: 2
+NOTICE:  issuing SELECT lock_shard_metadata(7, ARRAY[102008])
+DETAIL:  on server onderkalaci@localhost:9701 connectionId: 1
+NOTICE:  issuing SELECT lock_shard_metadata(7, ARRAY[102008])
+DETAIL:  on server onderkalaci@localhost:9702 connectionId: 2
+...
+```
+
+Another useful application of advisory locks in query from any node is modifications to reference tables. Reference tables (or in general replicated tables) have multiple placements for a given shard. So, modifications to the placements of the same shard should be serialized. We cannot allow multiple modification commands to modify the placements in different orders. It could cause diverging the contents of the data.
+
+The coordinator already serializes the modifications to reference tables (or in general all replicated tables) via `LockShardResource()` C function. When there are other nodes in the cluster, Citus sends the similar command, to the first worker node in the cluster. In general, Citus aims to serialize operations on the reference tables via acquiring advisory locks on the first worker node, see `SerializeNonCommutativeWrites()` and `LockShardListResourcesOnFirstWorker()` C functions. We use the `first worker node` as an optimization. Instead of acquiring the locks in all the nodes, each node sorts the worker nodes deterministically, and acquires the lock on the first node. Whichever distributed transaction acquires the lock, it has the autority to continue to the transaction. If there are any other transactions, they are blocked until the first distributed transaction finishes, as it would be in coordinator-only configuration. We used the first worker node as opposed to the coordinator for two reasons. First, the coordinator might already be getting lots of client queries, and we don't want to create additional load to the coordinator. Second, in some Citus deployments, the coordinator may **not** be in the metadata. Hence, the other nodes might not know about the coordinator.
+
+Getting back to the basic flow, the outcome of modifying the reference tables (or replicated tables) is the following where `lock_shard_resources` is acquired on the first node:
+
+```sql
+ BEGIN;
+-- 9701 is the first worker node in the metadata
+insert into reference_table VALUES (1);
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(0, 8, '2023-09-18 16:30:18.715259+03');
+DETAIL:  on server onderkalaci@localhost:9701 connectionId: 1
+NOTICE:  issuing SELECT lock_shard_resources(3, ARRAY[102040])
+DETAIL:  on server onderkalaci@localhost:9701 connectionId: 1
+NOTICE:  issuing INSERT INTO public.reference_table_102040 (a) VALUES (1)
+
+``` 
+
+
+#### Citus Advisory Locks 4: Colocation locks
+
+Although not ideal, there are currently multiple advisory locks that deal with colocation: `AcquireRebalanceColocationLock()` and `AcquirePlacementColocationLock()`.
+
+The former has a simple logic. It is to prevent concurrent shard moves of the same shards with the same table colocation. So, basically, prevent user running `citus_move_shard_placement()` for the same colocated shards.
+
+The latter is a bit more interesting. It aims to ensure the placements of the same colocation group never diverges regarding where the placements reside. This might sound a given feature of Citus.  However, with concurrent `create_distributed_table` and `shard move/split`s there are might be some race conditions. The former operation might use the view of the placements before the `shard move/split`, whereas the latter changes this. As a result, the new table might have a placement that is not colocated with the other placements anymore.
+
+To prevent that, Citus acquires `AcquirePlacementColocationLock()` while the metadata of placements changed/read. This lock introduced to fix a user reported bug: https://github.com/citusdata/citus/issues/6050
+
+
+4. **Low-level Locks (SpinLocks and LWLocks)**: 
+
+SpinLocks and LWLocks are low-level locking mechanisms often used internally by the database system. 
+Citus uses `LwLocks` and `SpinLocks` as described in Postgres' source code: https://github.com/postgres/postgres/tree/master/src/backend/storage/lmgr
+
++ **Spinlocks:** Spinlocks are used for very short-term locking and are meant to be held only for a few instructions. They don't have features like deadlock detection or automatic release, and waiting processes keep checking ("busy-loop") until they can acquire the lock.
+
+The lack of "automatic release" could be very critical. For other lock types, when the transaction finishes, the locks are released by Postgres automatically. It means that, say a `palloc` fails due to lack of enough memory, we rely on Postgres to release all the locks. However, this is **NOT** true for spin locks. So, do not even allocate any memory while holding spinlock, only do very simple assignments etc. Otherwise, the lock might be held until a restart of the server.
+
+In the past we had some bugs where we had a `palloc` failure while holding `SpinLock` and which prevented the lock to be released. So, be extra careful when using `SpinLock`. See the bugfix as a reference: https://github.com/citusdata/citus/pull/2568/files
+
++ **Lightweight Locks (LWLocks):** These locks are mainly used for controlling access to shared memory data structures and support both exclusive and shared lock modes. While they also lack deadlock detection, they do automatically release when errors are raised, and waiting processes block on a SysV semaphore, conserving CPU time.
+
 
 # Rebalancing 
 
- 
 
 ## Shard moves 
 
