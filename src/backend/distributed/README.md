@@ -1864,11 +1864,11 @@ If Citus encounters a dependency it can't support, it will throw an error instea
 
 During the DFS, Citus might need to extend its search, especially for complex dependencies like array types that don't have a straightforward dependency on their element types. Citus expands the traversal to account for such cases. The main function responsible for this is `ExpandCitusSupportedTypes()`, which has extensive comments explaining the specific rules.
 
-### `current_user` vs `superuser` for Object Propagation:
+### Current User vs `superuser` for Object Propagation:
 
-The difference between `MarkObjectDistributed()` and `MarkObjectDistributedViaSuperuser()` is important here. Generally, Citus tries to minimize the use of `superuser` operations for security reasons. However, there are cases where it's necessary. We employ `superuser` permissions primarily when marking the dependencies of an object we are working on. This is because creating dependencies might require higher-level privileges that the `current_user` might not have. For example, if a schema depends on a role, and the `current_user` doesn't have the privilege to create roles, an error will be thrown. To avoid this, we use `superuser` for creating dependencies.
+The difference between `MarkObjectDistributed()` and `MarkObjectDistributedViaSuperuser()` is important here. Generally, Citus tries to minimize the use of `superuser` operations for security reasons. However, there are cases where it's necessary. We employ `superuser` permissions primarily when marking the dependencies of an object we are working on. This is because creating dependencies might require higher-level privileges that the current user might not have. For example, if a schema depends on a role, and the current user doesn't have the privilege to create roles, an error will be thrown. To avoid this, we use `superuser` for creating dependencies.
 
-However, there's an exception. If the dependency is created within the same transaction, we use the `current_user`. This prevents visibility issues and is mainly relevant for `serial` columns. More details can be found in [Citus GitHub PR 7028](https://github.com/citusdata/citus/pull/7028).
+However, there's an exception. If the dependency is created within the same transaction, we use the current user. This prevents visibility issues and is mainly relevant for `serial` columns. More details can be found in [Citus GitHub PR 7028](https://github.com/citusdata/citus/pull/7028).
 
 ### When Are the Objects in `pg_dist_object` Used?
 
