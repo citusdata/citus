@@ -1747,7 +1747,7 @@ Not all table DDL is currently deparsed. In that case, the original command sent
 
 ## Object & dependency propagation
 
-These two topics are closely related, so we'll discuss them together.
+These two topics are closely related, so we'll discuss them together. You can start the topic by reading [Nils' blog](https://www.citusdata.com/blog/2020/06/25/using-custom-types-with-citus-and-postgres/) on the topic.
 
 ### The concept of "Dependency" for Postgres/Citus
 
