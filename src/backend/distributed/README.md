@@ -2214,16 +2214,6 @@ Another future improvement is to allow running DDLs from any node. Currently, DD
 
 Some distributed databases distinguish the Query Nodes and Data Nodes. As the names imply, Query Nodes would only do the query processing, whereas Data Nodes would only hold the data. In Citus, we decided not to follow that route, mostly because our initial benchmarks showed that combined nodes performed better in terms of price/performance. Still, some people argued that it might be better to have different classes of nodes such that they can be tuned /scaled-up-out differently based on the load for a given application. 
 
-If this discussion comes up again, we suggest running some more benchmarks and ensuring the performance characteristics do not change dramatically. We do not foresee any architectural problems with that. It mostly comes down to price, performance, and product discussions. Note that you can quickly test this by disallowing certain nodes to have shards on them. 
+<img alt="Dedicated query nodes benchmarks" src="../../../images/mx-dedicated-query-nodes.png" width="500">
 
- 
-
-  
-
-  
-
- 
-
- 
-
- 
+If this discussion comes up again, we suggest running some more benchmarks and ensuring the performance characteristics do not change dramatically. We do not foresee any architectural problems with that. It mostly comes down to price, performance, and product discussions. Note that you can quickly test this by disallowing certain nodes to have shards on them. Some important considerations is whether reference tables should still be present on query nodes, and whether there are any behavioural differences between query nodes and the coordinator.
