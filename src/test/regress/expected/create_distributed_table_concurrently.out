@@ -36,6 +36,18 @@ set citus.shard_replication_factor to 2;
 select create_distributed_table_concurrently('test','key', 'hash');
 ERROR:  cannot distribute a table concurrently when citus.shard_replication_factor > 1
 set citus.shard_replication_factor to 1;
+set citus.shard_replication_factor to 2;
+create table dist_1(a int);
+select create_distributed_table('dist_1', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+set citus.shard_replication_factor to 1;
+create table dist_2(a int);
+select create_distributed_table_concurrently('dist_2', 'a', colocate_with=>'dist_1');
+ERROR:  cannot create a replicated distributed a table concurrently
 begin;
 select create_distributed_table_concurrently('test','key');
 ERROR:  create_distributed_table_concurrently cannot run inside a transaction block
@@ -138,27 +150,8 @@ select count(*) from test;
 rollback;
 -- verify that we can undistribute the table
 begin;
+set local client_min_messages to warning;
 select undistribute_table('test', cascade_via_foreign_keys := true);
-NOTICE:  converting the partitions of create_distributed_table_concurrently.test
-NOTICE:  creating a new table for create_distributed_table_concurrently.test
-NOTICE:  dropping the old create_distributed_table_concurrently.test
-NOTICE:  renaming the new table to create_distributed_table_concurrently.test
-NOTICE:  creating a new table for create_distributed_table_concurrently.ref
-NOTICE:  moving the data of create_distributed_table_concurrently.ref
-NOTICE:  dropping the old create_distributed_table_concurrently.ref
-NOTICE:  drop cascades to constraint test_id_fkey_1190041 on table create_distributed_table_concurrently.test_1190041
-CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
-PL/pgSQL function citus_drop_trigger() line XX at PERFORM
-SQL statement "DROP TABLE create_distributed_table_concurrently.ref CASCADE"
-NOTICE:  renaming the new table to create_distributed_table_concurrently.ref
-NOTICE:  creating a new table for create_distributed_table_concurrently.test_1
-NOTICE:  moving the data of create_distributed_table_concurrently.test_1
-NOTICE:  dropping the old create_distributed_table_concurrently.test_1
-NOTICE:  renaming the new table to create_distributed_table_concurrently.test_1
-NOTICE:  creating a new table for create_distributed_table_concurrently.test_2
-NOTICE:  moving the data of create_distributed_table_concurrently.test_2
-NOTICE:  dropping the old create_distributed_table_concurrently.test_2
-NOTICE:  renaming the new table to create_distributed_table_concurrently.test_2
  undistribute_table
 ---------------------------------------------------------------------
 
@@ -245,7 +238,7 @@ insert into dist_table4 select s from generate_series(1,100) s;
 select count(*) as total from dist_table4;
  total
 ---------------------------------------------------------------------
-       100
+   100
 (1 row)
 
 -- verify we do not allow foreign keys from distributed table to citus local table concurrently
@@ -295,13 +288,13 @@ select count(*) from test_columnar;
 select id from test_columnar where id = 1;
  id
 ---------------------------------------------------------------------
-   1
+  1
 (1 row)
 
 select id from test_columnar where id = 51;
  id
 ---------------------------------------------------------------------
-   51
+ 51
 (1 row)
 
 select count(*) from test_columnar_1;
