@@ -24,7 +24,7 @@
 #include "distributed/deparser.h"
 #include "distributed/log_utils.h"
 #include "parser/parse_type.h"
-
+#include "distributed/listutils.h"
 
 static void AppendAlterDatabaseOwnerStmt(StringInfo buf, AlterOwnerStmt *stmt);
 static void AppendAlterDatabaseStmt(StringInfo buf, AlterDatabaseStmt *stmt);
@@ -34,7 +34,7 @@ char *
 DeparseAlterDatabaseOwnerStmt(Node *node)
 {
 	AlterOwnerStmt *stmt = castNode(AlterOwnerStmt, node);
-	StringInfoData str = { 0 };
+	StringInfoData str = {0};
 	initStringInfo(&str);
 
 	Assert(stmt->objectType == OBJECT_DATABASE);
@@ -44,7 +44,6 @@ DeparseAlterDatabaseOwnerStmt(Node *node)
 	return str.data;
 }
 
-
 static void
 AppendAlterDatabaseOwnerStmt(StringInfo buf, AlterOwnerStmt *stmt)
 {
@@ -52,10 +51,9 @@ AppendAlterDatabaseOwnerStmt(StringInfo buf, AlterOwnerStmt *stmt)
 
 	appendStringInfo(buf,
 					 "ALTER DATABASE %s OWNER TO %s;",
-					 quote_identifier(strVal((String *) stmt->object)),
+					 quote_identifier(strVal((String *)stmt->object)),
 					 RoleSpecString(stmt->newowner, true));
 }
-
 
 static void
 AppendGrantDatabases(StringInfo buf, GrantStmt *stmt)
@@ -63,7 +61,7 @@ AppendGrantDatabases(StringInfo buf, GrantStmt *stmt)
 	ListCell *cell = NULL;
 	appendStringInfo(buf, " ON DATABASE ");
 
-	foreach(cell, stmt->objects)
+	foreach (cell, stmt->objects)
 	{
 		char *database = strVal(lfirst(cell));
 		appendStringInfoString(buf, quote_identifier(database));
@@ -73,7 +71,6 @@ AppendGrantDatabases(StringInfo buf, GrantStmt *stmt)
 		}
 	}
 }
-
 
 static void
 AppendGrantOnDatabaseStmt(StringInfo buf, GrantStmt *stmt)
@@ -87,13 +84,11 @@ AppendGrantOnDatabaseStmt(StringInfo buf, GrantStmt *stmt)
 	AppendGrantSharedSuffix(buf, stmt);
 }
 
-
 static void
 AppendDefElemConnLimit(StringInfo buf, DefElem *def)
 {
-	appendStringInfo(buf, " CONNECTION LIMIT %ld", (long int) defGetNumeric(def));
+	appendStringInfo(buf, " CONNECTION LIMIT %ld", (long int)defGetNumeric(def));
 }
-
 
 static void
 AppendAlterDatabaseStmt(StringInfo buf, AlterDatabaseStmt *stmt)
@@ -104,7 +99,7 @@ AppendAlterDatabaseStmt(StringInfo buf, AlterDatabaseStmt *stmt)
 	{
 		ListCell *cell = NULL;
 		appendStringInfo(buf, "WITH ");
-		foreach(cell, stmt->options)
+		foreach (cell, stmt->options)
 		{
 			DefElem *def = castNode(DefElem, lfirst(cell));
 			if (strcmp(def->defname, "is_template") == 0)
@@ -133,14 +128,13 @@ AppendAlterDatabaseStmt(StringInfo buf, AlterDatabaseStmt *stmt)
 	appendStringInfo(buf, ";");
 }
 
-
 char *
 DeparseGrantOnDatabaseStmt(Node *node)
 {
 	GrantStmt *stmt = castNode(GrantStmt, node);
 	Assert(stmt->objtype == OBJECT_DATABASE);
 
-	StringInfoData str = { 0 };
+	StringInfoData str = {0};
 	initStringInfo(&str);
 
 	AppendGrantOnDatabaseStmt(&str, stmt);
@@ -148,13 +142,12 @@ DeparseGrantOnDatabaseStmt(Node *node)
 	return str.data;
 }
 
-
 char *
 DeparseAlterDatabaseStmt(Node *node)
 {
 	AlterDatabaseStmt *stmt = castNode(AlterDatabaseStmt, node);
 
-	StringInfoData str = { 0 };
+	StringInfoData str = {0};
 	initStringInfo(&str);
 
 	AppendAlterDatabaseStmt(&str, stmt);
@@ -162,12 +155,11 @@ DeparseAlterDatabaseStmt(Node *node)
 	return str.data;
 }
 
-
 #if PG_VERSION_NUM >= PG_VERSION_15
 char *
 DeparseAlterDatabaseRefreshCollStmt(Node *node)
 {
-	AlterDatabaseRefreshCollStmt *stmt = (AlterDatabaseRefreshCollStmt *) node;
+	AlterDatabaseRefreshCollStmt *stmt = (AlterDatabaseRefreshCollStmt *)node;
 
 	StringInfoData str;
 	initStringInfo(&str);
@@ -178,7 +170,6 @@ DeparseAlterDatabaseRefreshCollStmt(Node *node)
 
 	return str.data;
 }
-
 
 #endif
 
@@ -192,16 +183,193 @@ AppendAlterDatabaseSetStmt(StringInfo buf, AlterDatabaseSetStmt *stmt)
 	AppendVariableSet(buf, varSetStmt);
 }
 
-
 char *
 DeparseAlterDatabaseSetStmt(Node *node)
 {
 	AlterDatabaseSetStmt *stmt = castNode(AlterDatabaseSetStmt, node);
 
-	StringInfoData str = { 0 };
+	StringInfoData str = {0};
 	initStringInfo(&str);
 
 	AppendAlterDatabaseSetStmt(&str, stmt);
 
 	return str.data;
+}
+
+char *
+DeparseCreateDatabaseSetStmt(Node *node)
+{
+	CreatedbStmt *stmt = castNode(CreatedbStmt, node);
+	StringInfoData str = {0};
+	initStringInfo(&str);
+
+	AppendCreatedbStmt(&str, stmt);
+
+	return str.data;
+}
+
+static void
+AppendCreatedbStmt(StringInfo buf, CreatedbStmt *stmt)
+{
+	appendStringInfo(buf,
+					 "CREATE DATABASE %s",
+					 quote_identifier(stmt->dbname));
+
+	DefElem *option = NULL;
+
+	foreach_ptr(option, stmt->options)
+	{
+		if (strcmp(option->defname, "tablespace") == 0)
+		{
+			char *tablespaceName = defGetString(option);
+
+			appendStringInfo(buf, " TABLESPACE %s",
+							 quote_identifier(tablespaceName));
+		}
+		else if (strcmp(option->defname, "owner") == 0)
+		{
+			char *owner = defGetString(option);
+
+			appendStringInfo(buf, " OWNER %s",
+							 quote_identifier(owner));
+		}
+		else if (strcmp(option->defname, "template") == 0)
+		{
+			char *template = defGetString(option);
+
+			appendStringInfo(buf, " TEMPLATE %s",
+							 quote_identifier(template));
+		}
+		else if (strcmp(option->defname, "encoding") == 0)
+		{
+			char *encoding = defGetString(option);
+
+			appendStringInfo(buf, " ENCODING %s",
+							 quote_literal_cstr(encoding));
+		}
+		else if (strcmp(option->defname, "locale") == 0)
+		{
+			char *locale = defGetString(option);
+
+			appendStringInfo(buf, " LOCALE %s",
+							 quote_literal_cstr(locale));
+		}
+		else if (strcmp(option->defname, "lc_collate") == 0)
+		{
+			char *lc_collate = defGetString(option);
+
+			appendStringInfo(buf, " LC_COLLATE %s",
+							 quote_literal_cstr(lc_collate));
+		}
+		else if (strcmp(option->defname, "lc_ctype") == 0)
+		{
+			char *lc_ctype = defGetString(option);
+
+			appendStringInfo(buf, " LC_CTYPE %s",
+							 quote_literal_cstr(lc_ctype));
+		}
+		else if (strcmp(option->defname, "icu_locale") == 0)
+		{
+			char *icuLocale = defGetString(option);
+
+			appendStringInfo(buf, " ICU_LOCALE %s",
+							 quote_literal_cstr(icuLocale));
+		}
+		else if (strcmp(option->defname, "locale_provider") == 0)
+		{
+			char *localeProvider = defGetString(option);
+
+			appendStringInfo(buf, " LOCALE_PROVIDER %s",
+							 quote_literal_cstr(localeProvider));
+		}
+		else if (strcmp(option->defname, "is_template") == 0)
+		{
+			bool isTemplate = defGetBoolean(option);
+
+			appendStringInfo(buf, " IS_TEMPLATE %s",
+							 isTemplate ? "true" : "false");
+		}
+		else if (strcmp(option->defname, "allow_connections") == 0)
+		{
+			bool allowConnections = defGetBoolean(option);
+
+			appendStringInfo(buf, " ALLOW_CONNECTIONS %s",
+							 allowConnections ? "true" : "false");
+		}
+		else if (strcmp(option->defname, "connection_limit") == 0)
+		{
+			int connectionLimit = defGetInt32(option);
+
+			appendStringInfo(buf, " CONNECTION_LIMIT %d", connectionLimit);
+		}
+#if PG_VERSION_NUM >= PG_VERSION_15
+		else if (strcmp(option->defname, "collation_version") == 0)
+		{
+			char *collationVersion = defGetString(option);
+
+			appendStringInfo(buf, " COLLATION_VERSION %s",
+							 quote_literal_cstr(collationVersion));
+		}
+		else if (strcmp(option->defname, "oid") == 0)
+		{
+			Oid objectId = defGetObjectId(option);
+
+			appendStringInfo(buf, " OID %d", objectId);
+		}
+		else if (strcmp(option->defname, "strategy") == 0)
+		{
+			char *strategy = defGetString(option);
+
+			appendStringInfo(buf, " STRATEGY %s",
+							 quote_literal_cstr(strategy));
+		}
+#endif
+		else if (strcmp(option->defname, "location") == 0)
+		{
+			/* deprecated option */
+		}
+		else
+		{
+			ereport(ERROR, (errcode(ERRCODE_SYNTAX_ERROR),
+							errmsg("unrecognized CREATE DATABASE option \"%s\"",
+								   option->defname)));
+		}
+	}
+}
+
+char *
+DeparseDropDatabaseStmt(Node *node)
+{
+	DropdbStmt *stmt = castNode(DropdbStmt, node);
+	StringInfoData str = { 0 };
+	initStringInfo(&str);
+
+	AppendDropDatabaseStmt(&str, stmt);
+
+	return str.data;
+}
+
+
+static void
+AppendDropDatabaseStmt(StringInfo buf, DropdbStmt *stmt)
+{
+	appendStringInfo(buf,
+					 "DROP DATABASE %s",
+					 quote_identifier(stmt->dbname));
+
+	DefElem *option = NULL;
+
+	foreach_ptr(option, stmt->options)
+	{
+		if (strcmp(option->defname, "force") == 0)
+		{
+			appendStringInfo(buf, " FORCE");
+		}
+		else
+		{
+			ereport(ERROR, (errcode(ERRCODE_SYNTAX_ERROR),
+							errmsg("unrecognized DROP DATABASE option \"%s\"",
+								   option->defname)));
+		}
+	}
 }

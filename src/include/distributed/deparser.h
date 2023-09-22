@@ -227,6 +227,9 @@ extern char * DeparseGrantOnDatabaseStmt(Node *node);
 extern char * DeparseAlterDatabaseStmt(Node *node);
 extern char * DeparseAlterDatabaseRefreshCollStmt(Node *node);
 extern char * DeparseAlterDatabaseSetStmt(Node *node);
+extern char * DeparseCreateDatabaseStmt(Node *node);
+extern char * DeparseDropDatabaseStmt(Node *node);
+
 
 
 /* forward declaration for deparse_publication_stmts.c */
