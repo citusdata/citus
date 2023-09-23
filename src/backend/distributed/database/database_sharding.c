@@ -35,6 +35,7 @@
 #include "tcop/utility.h"
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
+#include "catalog/pg_database.h"
 
 
 static void ExecuteCommandInControlDatabase(char *command);
