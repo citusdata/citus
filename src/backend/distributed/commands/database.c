@@ -34,6 +34,8 @@
 #include "distributed/metadata/distobject.h"
 #include "distributed/database/database_sharding.h"
 #include "distributed/deparse_shard_query.h"
+#include "distributed/listutils.h"
+#include "distributed/adaptive_executor.h"
 
 
 
