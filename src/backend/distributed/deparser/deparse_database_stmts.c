@@ -196,18 +196,6 @@ DeparseAlterDatabaseSetStmt(Node *node)
 	return str.data;
 }
 
-char *
-DeparseCreateDatabaseSetStmt(Node *node)
-{
-	CreatedbStmt *stmt = castNode(CreatedbStmt, node);
-	StringInfoData str = {0};
-	initStringInfo(&str);
-
-	AppendCreatedbStmt(&str, stmt);
-
-	return str.data;
-}
-
 static void
 AppendCreatedbStmt(StringInfo buf, CreatedbStmt *stmt)
 {
@@ -338,17 +326,16 @@ AppendCreatedbStmt(StringInfo buf, CreatedbStmt *stmt)
 }
 
 char *
-DeparseDropDatabaseStmt(Node *node)
+DeparseCreateDatabaseStmt(Node *node)
 {
-	DropdbStmt *stmt = castNode(DropdbStmt, node);
-	StringInfoData str = { 0 };
+	CreatedbStmt *stmt = castNode(CreatedbStmt, node);
+	StringInfoData str = {0};
 	initStringInfo(&str);
 
-	AppendDropDatabaseStmt(&str, stmt);
+	AppendCreatedbStmt(&str, stmt);
 
 	return str.data;
 }
-
 
 static void
 AppendDropDatabaseStmt(StringInfo buf, DropdbStmt *stmt)
@@ -373,3 +360,18 @@ AppendDropDatabaseStmt(StringInfo buf, DropdbStmt *stmt)
 		}
 	}
 }
+
+char *
+DeparseDropDatabaseStmt(Node *node)
+{
+	DropdbStmt *stmt = castNode(DropdbStmt, node);
+	StringInfoData str = { 0 };
+	initStringInfo(&str);
+
+	AppendDropDatabaseStmt(&str, stmt);
+
+	return str.data;
+}
+
+
+

@@ -24,6 +24,7 @@
 #include "distributed/deparse_shard_query.h"
 #include "distributed/listutils.h"
 #include "distributed/metadata_sync.h"
+#include "distributed/pooler/pgbouncer_manager.h"
 #include "distributed/remote_commands.h"
 #include "distributed/shared_library_init.h"
 #include "distributed/worker_transaction.h"
@@ -80,7 +81,7 @@ PreProcessUtilityInDatabaseShard(Node *parseTree, const char *queryString,
 	{
 		if (IsA(parseTree, CreatedbStmt))
 		{
-			char *command = DeparseCreatedbStmt(parseTree);
+			char *command = DeparseCreateDatabaseStmt(parseTree);
 			ExecuteCommandInControlDatabase(command);
 
 			/* command is fully delegated to control database */
@@ -88,7 +89,7 @@ PreProcessUtilityInDatabaseShard(Node *parseTree, const char *queryString,
 		}
 		else if (IsA(parseTree, DropdbStmt))
 		{
-			char *command = DeparseDropdbStmt(parseTree);
+			char *command = DeparseDropDatabaseStmt(parseTree);
 			ExecuteCommandInControlDatabase(command);
 
 			/* command is fully delegated to control database */
