@@ -47,7 +47,7 @@ select create_distributed_table('dist_1', 'a');
 set citus.shard_replication_factor to 1;
 create table dist_2(a int);
 select create_distributed_table_concurrently('dist_2', 'a', colocate_with=>'dist_1');
-ERROR:  cannot create a replicated distributed a table concurrently
+ERROR:  cannot create a replicated distributed table concurrently
 begin;
 select create_distributed_table_concurrently('test','key');
 ERROR:  create_distributed_table_concurrently cannot run inside a transaction block
