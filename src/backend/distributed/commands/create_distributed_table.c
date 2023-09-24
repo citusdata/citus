@@ -438,7 +438,7 @@ CreateDistributedTableConcurrently(Oid relationId, char *distributionColumnName,
 															colocateWithTableName);
 	if (replicationModel == REPLICATION_MODEL_COORDINATOR)
 	{
-		ereport(ERROR, (errmsg("cannot create a replicated distributed a "
+		ereport(ERROR, (errmsg("cannot create a replicated distributed "
 							   "table concurrently")));
 	}
 
