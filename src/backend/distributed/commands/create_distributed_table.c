@@ -436,7 +436,7 @@ CreateDistributedTableConcurrently(Oid relationId, char *distributionColumnName,
 
 	char replicationModel = DecideDistTableReplicationModel(distributionMethod,
 															colocateWithTableName);
-	if (replicationModel == REPLICATION_MODEL_COORDINATOR)
+	if (replicationModel != REPLICATION_MODEL_STREAMING)
 	{
 		ereport(ERROR, (errmsg("cannot create a replicated distributed "
 							   "table concurrently")));
