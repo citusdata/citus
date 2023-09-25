@@ -6,7 +6,7 @@ ALTER SCHEMA public RENAME TO old_public;
 ALTER SCHEMA citus_schema RENAME TO public;
 
 SELECT result FROM run_command_on_all_nodes($$
-    SELECT * FROM public.get_colocated_placements_needisolatednode('upgrade_isolate_placement_before.table_with_isolated_placements')
+    SELECT * FROM public.get_colocated_shards_needisolatednode('upgrade_isolate_placement_before.table_with_isolated_placements')
 $$)
 ORDER BY nodeid;
 

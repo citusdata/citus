@@ -59,7 +59,7 @@ SET citus.shard_replication_factor TO 1;
 
 -- none of the placements have been marked as needsisolatednode yet
 SELECT result FROM run_command_on_all_nodes($$
-    SELECT * FROM public.get_colocated_placements_needisolatednode('isolate_placement.dist_1')
+    SELECT * FROM public.get_colocated_shards_needisolatednode('isolate_placement.dist_1')
 $$)
 ORDER BY nodeid;
 
@@ -76,7 +76,7 @@ WHERE shardgroupindex = 10 \gset
 SELECT citus_shard_set_isolated(:shardgroup_10_shardid);
 
 SELECT result FROM run_command_on_all_nodes($$
-    SELECT * FROM public.get_colocated_placements_needisolatednode('isolate_placement.dist_1')
+    SELECT * FROM public.get_colocated_shards_needisolatednode('isolate_placement.dist_1')
 $$)
 ORDER BY nodeid;
 
@@ -87,7 +87,7 @@ WHERE shardgroupindex = 3 \gset
 SELECT citus_shard_unset_isolated(:shardgroup_3_shardid);
 
 SELECT result FROM run_command_on_all_nodes($$
-    SELECT * FROM public.get_colocated_placements_needisolatednode('isolate_placement.dist_1')
+    SELECT * FROM public.get_colocated_shards_needisolatednode('isolate_placement.dist_1')
 $$)
 ORDER BY nodeid;
 
@@ -98,7 +98,7 @@ WHERE shardgroupindex = 10 \gset
 SELECT citus_shard_unset_isolated(:shardgroup_10_shardid);
 
 SELECT result FROM run_command_on_all_nodes($$
-    SELECT * FROM public.get_colocated_placements_needisolatednode('isolate_placement.dist_1')
+    SELECT * FROM public.get_colocated_shards_needisolatednode('isolate_placement.dist_1')
 $$)
 ORDER BY nodeid;
 
@@ -109,7 +109,7 @@ WHERE shardgroupindex = 5 \gset
 SELECT citus_shard_set_isolated(:shardgroup_5_shardid);
 
 SELECT result FROM run_command_on_all_nodes($$
-    SELECT * FROM public.get_colocated_placements_needisolatednode('isolate_placement.dist_1')
+    SELECT * FROM public.get_colocated_shards_needisolatednode('isolate_placement.dist_1')
 $$)
 ORDER BY nodeid;
 
@@ -137,7 +137,7 @@ WHERE shardgroupindex = 5 \gset
 SELECT citus_shard_set_isolated(:shardgroup_5_shardid);
 
 SELECT result FROM run_command_on_all_nodes($$
-    SELECT * FROM public.get_colocated_placements_needisolatednode('isolate_placement.dist_1')
+    SELECT * FROM public.get_colocated_shards_needisolatednode('isolate_placement.dist_1')
 $$)
 ORDER BY nodeid;
 
@@ -150,7 +150,7 @@ SELECT create_distributed_table_concurrently('dist_4_concurrently', 'a', colocat
 -- Placements of a new distributed table created within the same colocated
 -- group inherit needsisolatednode from the colocated placements too.
 SELECT result FROM run_command_on_all_nodes($$
-    SELECT * FROM public.get_colocated_placements_needisolatednode('isolate_placement.dist_1')
+    SELECT * FROM public.get_colocated_shards_needisolatednode('isolate_placement.dist_1')
 $$)
 ORDER BY nodeid;
 
@@ -213,7 +213,7 @@ SELECT citus_copy_shard_placement(:shardgroup_15_shardid, source_nodeid, target_
 FROM get_candidate_node_for_shard_transfer(:shardgroup_15_shardid);
 
 SELECT result FROM run_command_on_all_nodes($$
-    SELECT * FROM public.get_colocated_placements_needisolatednode('isolate_placement.dist_1')
+    SELECT * FROM public.get_colocated_shards_needisolatednode('isolate_placement.dist_1')
 $$)
 ORDER BY nodeid;
 
@@ -231,7 +231,7 @@ WHERE shardgroupindex = 3 \gset
 SELECT citus_shard_set_isolated(:shardgroup_3_shardid);
 
 SELECT result FROM run_command_on_all_nodes($$
-    SELECT * FROM public.get_colocated_placements_needisolatednode('isolate_placement.dist_1')
+    SELECT * FROM public.get_colocated_shards_needisolatednode('isolate_placement.dist_1')
 $$)
 ORDER BY nodeid;
 
@@ -243,7 +243,7 @@ SELECT replicate_table_shards('isolate_placement.dist_1', shard_replication_fact
 SET client_min_messages TO NOTICE;
 
 SELECT result FROM run_command_on_all_nodes($$
-    SELECT * FROM public.get_colocated_placements_needisolatednode('isolate_placement.dist_1')
+    SELECT * FROM public.get_colocated_shards_needisolatednode('isolate_placement.dist_1')
 $$)
 ORDER BY nodeid;
 
@@ -261,7 +261,7 @@ WHERE shardgroupindex = 9 \gset
 SELECT citus_shard_set_isolated(:shardgroup_9_shardid);
 
 SELECT result FROM run_command_on_all_nodes($$
-    SELECT * FROM public.get_colocated_placements_needisolatednode('isolate_placement.dist_1')
+    SELECT * FROM public.get_colocated_shards_needisolatednode('isolate_placement.dist_1')
 $$)
 ORDER BY nodeid;
 
@@ -279,7 +279,7 @@ WHERE shardid = :shardgroup_9_shardid;
 -- We shouldn't see shard group 9 because shard-split operation doesn't
 -- preserve needsisolatednode flag when splitting the shard.
 SELECT result FROM run_command_on_all_nodes($$
-    SELECT * FROM public.get_colocated_placements_needisolatednode('isolate_placement.dist_1')
+    SELECT * FROM public.get_colocated_shards_needisolatednode('isolate_placement.dist_1')
 $$)
 ORDER BY nodeid;
 
@@ -290,7 +290,7 @@ WHERE shardgroupindex = 12 \gset
 SELECT citus_shard_set_isolated(:shardgroup_12_shardid);
 
 SELECT result FROM run_command_on_all_nodes($$
-    SELECT * FROM public.get_colocated_placements_needisolatednode('isolate_placement.dist_1')
+    SELECT * FROM public.get_colocated_shards_needisolatednode('isolate_placement.dist_1')
 $$)
 ORDER BY nodeid;
 
@@ -309,7 +309,7 @@ WHERE shardid = :shardgroup_10_shardid;
 -- We should see old shard group 12 (now as 13 due to split
 -- of a prior shard) because it's not the one we splitted.
 SELECT result FROM run_command_on_all_nodes($$
-    SELECT * FROM public.get_colocated_placements_needisolatednode('isolate_placement.dist_1')
+    SELECT * FROM public.get_colocated_shards_needisolatednode('isolate_placement.dist_1')
 $$)
 ORDER BY nodeid;
 
@@ -323,7 +323,7 @@ WHERE shardgroupindex = 17 \gset
 SELECT citus_shard_set_isolated(:shardgroup_17_shardid);
 
 SELECT result FROM run_command_on_all_nodes($$
-    SELECT * FROM public.get_colocated_placements_needisolatednode('isolate_placement.dist_3')
+    SELECT * FROM public.get_colocated_shards_needisolatednode('isolate_placement.dist_3')
 $$)
 ORDER BY nodeid;
 
@@ -335,7 +335,7 @@ SELECT 1 FROM isolate_tenant_to_new_shard('dist_3', 100, shard_transfer_mode => 
 -- We shouldn't see shard group 17 because isolate_tenant_to_new_shard doesn't
 -- preserve needsisolatednode flag when splitting the shard.
 SELECT result FROM run_command_on_all_nodes($$
-    SELECT * FROM public.get_colocated_placements_needisolatednode('isolate_placement.dist_3')
+    SELECT * FROM public.get_colocated_shards_needisolatednode('isolate_placement.dist_3')
 $$)
 ORDER BY nodeid;
 
@@ -346,7 +346,7 @@ WHERE shardgroupindex = 18 \gset
 SELECT citus_shard_set_isolated(:shardgroup_18_shardid);
 
 SELECT result FROM run_command_on_all_nodes($$
-    SELECT * FROM public.get_colocated_placements_needisolatednode('isolate_placement.dist_3')
+    SELECT * FROM public.get_colocated_shards_needisolatednode('isolate_placement.dist_3')
 $$)
 ORDER BY nodeid;
 
@@ -358,7 +358,7 @@ SELECT 1 FROM isolate_tenant_to_new_shard('dist_3', 1000, shard_transfer_mode =>
 -- We should see shard group 18 (now as 20 due to split of a prior shard)
 -- because it's not the one we splitted.
 SELECT result FROM run_command_on_all_nodes($$
-    SELECT * FROM public.get_colocated_placements_needisolatednode('isolate_placement.dist_3')
+    SELECT * FROM public.get_colocated_shards_needisolatednode('isolate_placement.dist_3')
 $$)
 ORDER BY nodeid;
 
@@ -376,7 +376,7 @@ CREATE TABLE single_shard_2(a int);
 SELECT create_distributed_table('single_shard_2', null, colocate_with=>'single_shard_1');
 
 SELECT result FROM run_command_on_all_nodes($$
-    SELECT * FROM public.get_colocated_placements_needisolatednode('isolate_placement.single_shard_1')
+    SELECT * FROM public.get_colocated_shards_needisolatednode('isolate_placement.single_shard_1')
 $$)
 ORDER BY nodeid;
 
@@ -499,7 +499,7 @@ SELECT create_distributed_table('range_table_post', 'a', 'range');
 CALL public.create_range_partitioned_shards('range_table_post', '{"0","25"}','{"26","50"}');
 
 SELECT result FROM run_command_on_all_nodes($$
-    SELECT * FROM public.get_colocated_placements_needisolatednode('isolate_placement.dist_1')
+    SELECT * FROM public.get_colocated_shards_needisolatednode('isolate_placement.dist_1')
 $$)
 ORDER BY nodeid;
 

@@ -122,9 +122,7 @@ static void EnsureShardCanBeCopied(int64 shardId, const char *sourceNodeName,
 static List * RecreateTableDDLCommandList(Oid relationId);
 static void EnsureTableListOwner(List *tableIdList);
 static void ErrorIfReplicatingDistributedTableWithFKeys(List *tableIdList);
-static bool NewPlacementNeedsIsolatedNode(uint64 shardId,
-										  char *sourceNodeName,
-										  int32 sourceNodePort);
+
 static void DropShardPlacementsFromMetadata(List *shardList,
 											char *nodeName,
 											int32 nodePort);
@@ -526,34 +524,15 @@ TransferShards(int64 shardId, char *sourceNodeName,
 		uint32 groupId = GroupForNode(targetNodeName, targetNodePort);
 		uint64 placementId = GetNextPlacementId();
 
-		/*
-		 * Decide whether the new placement needs isolated node or not.
-		 *
-		 * Note that even if the new placement needs isolated node, we don't
-		 * enforce it here because we assume that user is aware of what they're
-		 * doing if this shard transfer operation is initiated by the user.
-		 * Consequence of this assumption is that if user is transferring a
-		 * placement that needs isolated node to a node that has some other
-		 * placements, then the next call made to rebalancer would overwrite
-		 * this operation (by moving the placement to an appropriate node).
-		 *
-		 * Otherwise, i.e., if this is initiated by the rebalancer, rebalancer
-		 * anyway enforces isolation by choosing an appropriate node.
-		 */
-		bool newPlacementNeedsIsolatedNode = NewPlacementNeedsIsolatedNode(
-			colocatedShardId,
-			sourceNodeName,
-			sourceNodePort);
 		InsertShardPlacementRow(colocatedShardId, placementId,
 								ShardLength(colocatedShardId),
-								groupId, newPlacementNeedsIsolatedNode);
+								groupId);
 
 		if (transferType == SHARD_TRANSFER_COPY &&
 			ShouldSyncTableMetadata(colocatedShard->relationId))
 		{
 			char *placementCommand = PlacementUpsertCommand(colocatedShardId, placementId,
-															0, groupId,
-															newPlacementNeedsIsolatedNode);
+															0, groupId);
 
 			SendCommandToWorkersWithMetadata(placementCommand);
 		}
@@ -1997,24 +1976,6 @@ RecreateTableDDLCommandList(Oid relationId)
 	List *recreateCommandList = list_concat(dropCommandList, createCommandList);
 
 	return recreateCommandList;
-}
-
-
-/*
- * NewPlacementNeedsIsolatedNode if the placement we're creating based on the
- * placement we're replicating from sourceNodeName/sourceNodePort needs
- * isolation.
- */
-static bool
-NewPlacementNeedsIsolatedNode(uint64 shardId, char *sourceNodeName, int32 sourceNodePort)
-{
-	/* assume we're transferring the first placement */
-	uint32 groupId = GroupForNode(sourceNodeName, sourceNodePort);
-
-	List *activeShardPlacementListOnGroup = ActiveShardPlacementListOnGroup(shardId,
-																			groupId);
-	ShardPlacement *firstPlacementOnGroup = linitial(activeShardPlacementListOnGroup);
-	return firstPlacementOnGroup->needsIsolatedNode;
 }
 
 

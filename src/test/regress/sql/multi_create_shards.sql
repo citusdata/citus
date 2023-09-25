@@ -1,5 +1,3 @@
-CREATE SCHEMA multi_create_shards;
-SET search_path TO multi_create_shards;
 
 SET citus.next_shard_id TO 370000;
 
@@ -117,6 +115,3 @@ SELECT shardmaxvalue::integer - shardminvalue::integer AS shard_size
 	FROM pg_dist_shard
 	WHERE logicalrelid = 'weird_shard_count'::regclass
 	ORDER BY shardminvalue::integer ASC;
-
-SET client_min_messages TO WARNING;
-DROP SCHEMA multi_create_shards CASCADE;

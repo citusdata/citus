@@ -166,9 +166,9 @@ isolate_tenant_to_new_shard(PG_FUNCTION_ARGS)
 		nodeIdsForPlacementList = lappend_int(nodeIdsForPlacementList, sourceNodeId);
 	}
 
-    /* we don't inherit needsisolatednode for new placements */
-    List *needsIsolatedNodeForPlacementList =
-        GenerateListFromIntElement(false, list_length(nodeIdsForPlacementList));
+	/* we don't inherit needsisolatednode for new shards */
+	List *needsIsolatedNodeForPlacementList =
+		GenerateListFromIntElement(false, list_length(nodeIdsForPlacementList));
 
 	DistributionColumnMap *distributionColumnOverrides = NULL;
 	List *sourceColocatedShardIntervalList = NIL;
@@ -178,7 +178,7 @@ isolate_tenant_to_new_shard(PG_FUNCTION_ARGS)
 			   sourceShard->shardId,
 			   shardSplitPointsList,
 			   nodeIdsForPlacementList,
-               needsIsolatedNodeForPlacementList,
+			   needsIsolatedNodeForPlacementList,
 			   distributionColumnOverrides,
 			   sourceColocatedShardIntervalList,
 			   INVALID_COLOCATION_ID);

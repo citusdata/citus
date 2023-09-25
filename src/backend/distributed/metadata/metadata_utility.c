@@ -116,7 +116,7 @@ static HeapTuple CreateDiskSpaceTuple(TupleDesc tupleDesc, uint64 availableBytes
 static bool GetLocalDiskSpaceStats(uint64 *availableBytes, uint64 *totalBytes);
 static void ErrorIfShardIsolationNotPossible(uint64 shardId);
 static void ShardGroupSetNeedsIsolatedNodeGlobally(uint64 shardId, bool enabled);
-static void ShardPlacementSetNeedsIsolatedNode(uint64 placementId, bool enabled);
+static void ShardSetNeedsIsolatedNode(uint64 shardId, bool enabled);
 static BackgroundTask * DeformBackgroundTaskHeapTuple(TupleDesc tupleDescriptor,
 													  HeapTuple taskTuple);
 
@@ -362,7 +362,7 @@ citus_relation_size(PG_FUNCTION_ARGS)
 
 /*
  * citus_shard_set_isolated sets the needsisolatednode flag to true for all
- * the placements within the shard group that given shard belongs to.
+ * the shards within the shard group that given shard belongs to.
  */
 Datum
 citus_shard_set_isolated(PG_FUNCTION_ARGS)
@@ -384,7 +384,7 @@ citus_shard_set_isolated(PG_FUNCTION_ARGS)
 
 /*
  * citus_shard_unset_isolated sets the needsisolatednode flag to false for all
- * the placements within the shard group that given shard belongs to.
+ * the shards within the shard group that given shard belongs to.
  */
 Datum
 citus_shard_unset_isolated(PG_FUNCTION_ARGS)
@@ -440,7 +440,7 @@ ShardGroupSetNeedsIsolatedNodeGlobally(uint64 shardId, bool enabled)
 
 /*
  * ShardGroupSetNeedsIsolatedNode sets the needsisolatednode flag to desired
- * value for all the placements within the shard group that given shard belongs
+ * value for all the shards within the shard group that given shard belongs
  * to.
  */
 void
@@ -452,75 +452,63 @@ ShardGroupSetNeedsIsolatedNode(uint64 shardId, bool enabled)
 	ShardInterval *colocatedShardInterval = NULL;
 	foreach_ptr(colocatedShardInterval, colocatedShardIntervalList)
 	{
-		List *activeShardPlacementList = ActiveShardPlacementList(
-			colocatedShardInterval->shardId);
-		ShardPlacement *activeShardPlacement = NULL;
-		foreach_ptr(activeShardPlacement, activeShardPlacementList)
-		{
-			ShardPlacementSetNeedsIsolatedNode(activeShardPlacement->placementId,
-											   enabled);
-		}
+		ShardSetNeedsIsolatedNode(colocatedShardInterval->shardId,
+								  enabled);
 	}
 }
 
 
 /*
- * ShardPlacementSetNeedsIsolatedNode sets the needsisolatednode flag to desired
- * value for the given placement.
+ * ShardSetNeedsIsolatedNode sets the needsisolatednode flag to desired
+ * value for the given shard.
  */
 static void
-ShardPlacementSetNeedsIsolatedNode(uint64 placementId, bool enabled)
+ShardSetNeedsIsolatedNode(uint64 shardId, bool enabled)
 {
-	Relation pgDistPlacement = table_open(DistPlacementRelationId(), RowExclusiveLock);
+	Relation pgDistShard = table_open(DistShardRelationId(), RowExclusiveLock);
 
 	ScanKeyData scanKey[1];
 	int scanKeyCount = 1;
-	ScanKeyInit(&scanKey[0], Anum_pg_dist_placement_placementid,
-				BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(placementId));
+	ScanKeyInit(&scanKey[0], Anum_pg_dist_shard_shardid,
+				BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(shardId));
 
 	bool indexOK = true;
-	Oid indexId = DistPlacementPlacementidIndexId();
-	SysScanDesc scanDescriptor = systable_beginscan(pgDistPlacement,
+	Oid indexId = DistShardShardidIndexId();
+	SysScanDesc scanDescriptor = systable_beginscan(pgDistShard,
 													indexId, indexOK, NULL,
 													scanKeyCount, scanKey);
 
 	HeapTuple heapTuple = systable_getnext(scanDescriptor);
 	if (!HeapTupleIsValid(heapTuple))
 	{
-		ereport(ERROR, (errmsg("could not find valid entry for shard placement "
+		ereport(ERROR, (errmsg("could not find valid entry for shard "
 							   UINT64_FORMAT,
-							   placementId)));
+							   shardId)));
 	}
 
-	Datum values[Natts_pg_dist_placement];
-	bool isnull[Natts_pg_dist_placement];
-	bool replace[Natts_pg_dist_placement];
+	Datum values[Natts_pg_dist_shard];
+	bool isnull[Natts_pg_dist_shard];
+	bool replace[Natts_pg_dist_shard];
 
 	memset(values, 0, sizeof(values));
 	memset(isnull, false, sizeof(isnull));
 	memset(replace, false, sizeof(replace));
 
-	values[Anum_pg_dist_placement_needsisolatednode - 1] = BoolGetDatum(enabled);
-	isnull[Anum_pg_dist_placement_needsisolatednode - 1] = false;
-	replace[Anum_pg_dist_placement_needsisolatednode - 1] = true;
+	values[Anum_pg_dist_shard_needsisolatednode - 1] = BoolGetDatum(enabled);
+	isnull[Anum_pg_dist_shard_needsisolatednode - 1] = false;
+	replace[Anum_pg_dist_shard_needsisolatednode - 1] = true;
 
-	TupleDesc tupleDescriptor = RelationGetDescr(pgDistPlacement);
+	TupleDesc tupleDescriptor = RelationGetDescr(pgDistShard);
 	heapTuple = heap_modify_tuple(heapTuple, tupleDescriptor, values, isnull, replace);
 
-	CatalogTupleUpdate(pgDistPlacement, &heapTuple->t_self, heapTuple);
-
-	bool shardIdIsNull = false;
-	uint64 shardId = DatumGetInt64(heap_getattr(heapTuple,
-												Anum_pg_dist_placement_shardid,
-												tupleDescriptor, &shardIdIsNull));
-	Assert(!shardIdIsNull);
+	CatalogTupleUpdate(pgDistShard, &heapTuple->t_self, heapTuple);
 
 	CitusInvalidateRelcacheByShardId(shardId);
 
 	CommandCounterIncrement();
 
 	systable_endscan(scanDescriptor);
-	table_close(pgDistPlacement, NoLock);
+	table_close(pgDistShard, NoLock);
 }
 
 
@@ -1467,6 +1455,7 @@ CopyShardInterval(ShardInterval *srcInterval)
 	destInterval->maxValueExists = srcInterval->maxValueExists;
 	destInterval->shardId = srcInterval->shardId;
 	destInterval->shardIndex = srcInterval->shardIndex;
+	destInterval->needsIsolatedNode = srcInterval->needsIsolatedNode;
 
 	destInterval->minValue = 0;
 	if (destInterval->minValueExists)
@@ -1568,7 +1557,7 @@ NodeGroupGetIsolatedShardPlacementGroup(int32 groupId)
 		}
 
 		nodeShardPlacementGroup = shardPlacementGroup;
-		shardPlacementGroupNeedsIsolatedNode = placement->needsIsolatedNode;
+		shardPlacementGroupNeedsIsolatedNode = shardInterval->needsIsolatedNode;
 
 		heapTuple = systable_getnext(scanDescriptor);
 	}
@@ -1947,10 +1936,9 @@ TupleToGroupShardPlacement(TupleDesc tupleDescriptor, HeapTuple heapTuple)
 {
 	bool isNullArray[Natts_pg_dist_placement];
 	Datum datumArray[Natts_pg_dist_placement];
-	memset(datumArray, 0, sizeof(datumArray));
-	memset(isNullArray, false, sizeof(isNullArray));
 
-	if (HeapTupleHasNulls(heapTuple))
+	if (HeapTupleHeaderGetNatts(heapTuple->t_data) != Natts_pg_dist_placement ||
+		HeapTupleHasNulls(heapTuple))
 	{
 		ereport(ERROR, (errmsg("unexpected null in pg_dist_placement tuple")));
 	}
@@ -1970,8 +1958,6 @@ TupleToGroupShardPlacement(TupleDesc tupleDescriptor, HeapTuple heapTuple)
 		datumArray[Anum_pg_dist_placement_shardlength - 1]);
 	shardPlacement->groupId = DatumGetInt32(
 		datumArray[Anum_pg_dist_placement_groupid - 1]);
-	shardPlacement->needsIsolatedNode = DatumGetBool(
-		datumArray[Anum_pg_dist_placement_needsisolatednode - 1]);
 
 	return shardPlacement;
 }
@@ -2026,7 +2012,8 @@ IsDummyPlacement(ShardPlacement *taskPlacement)
  */
 void
 InsertShardRow(Oid relationId, uint64 shardId, char storageType,
-			   text *shardMinValue, text *shardMaxValue)
+			   text *shardMinValue, text *shardMaxValue,
+			   bool needsIsolatedNode)
 {
 	Datum values[Natts_pg_dist_shard];
 	bool isNulls[Natts_pg_dist_shard];
@@ -2038,6 +2025,7 @@ InsertShardRow(Oid relationId, uint64 shardId, char storageType,
 	values[Anum_pg_dist_shard_logicalrelid - 1] = ObjectIdGetDatum(relationId);
 	values[Anum_pg_dist_shard_shardid - 1] = Int64GetDatum(shardId);
 	values[Anum_pg_dist_shard_shardstorage - 1] = CharGetDatum(storageType);
+	values[Anum_pg_dist_shard_needsisolatednode - 1] = BoolGetDatum(needsIsolatedNode);
 
 	/* dropped shardalias column must also be set; it is still part of the tuple */
 	isNulls[Anum_pg_dist_shard_shardalias_DROPPED - 1] = true;
@@ -2076,15 +2064,12 @@ InsertShardRow(Oid relationId, uint64 shardId, char storageType,
  */
 ShardPlacement *
 InsertShardPlacementRowGlobally(uint64 shardId, uint64 placementId,
-								uint64 shardLength, int32 groupId,
-								bool needsIsolatedNode)
+								uint64 shardLength, int32 groupId)
 {
-	InsertShardPlacementRow(shardId, placementId, shardLength, groupId,
-							needsIsolatedNode);
+	InsertShardPlacementRow(shardId, placementId, shardLength, groupId);
 
 	char *insertPlacementCommand =
-		AddPlacementMetadataCommand(shardId, placementId, shardLength, groupId,
-									needsIsolatedNode);
+		AddPlacementMetadataCommand(shardId, placementId, shardLength, groupId);
 	SendCommandToWorkersWithMetadata(insertPlacementCommand);
 
 	return LoadShardPlacement(shardId, placementId);
@@ -2099,8 +2084,7 @@ InsertShardPlacementRowGlobally(uint64 shardId, uint64 placementId,
  */
 uint64
 InsertShardPlacementRow(uint64 shardId, uint64 placementId,
-						uint64 shardLength, int32 groupId,
-						bool needsIsolatedNode)
+						uint64 shardLength, int32 groupId)
 {
 	Datum values[Natts_pg_dist_placement];
 	bool isNulls[Natts_pg_dist_placement];
@@ -2118,8 +2102,6 @@ InsertShardPlacementRow(uint64 shardId, uint64 placementId,
 	values[Anum_pg_dist_placement_shardstate - 1] = Int32GetDatum(1);
 	values[Anum_pg_dist_placement_shardlength - 1] = Int64GetDatum(shardLength);
 	values[Anum_pg_dist_placement_groupid - 1] = Int32GetDatum(groupId);
-	values[Anum_pg_dist_placement_needsisolatednode - 1] =
-		BoolGetDatum(needsIsolatedNode);
 
 	/* open shard placement relation and insert new tuple */
 	Relation pgDistPlacement = table_open(DistPlacementRelationId(), RowExclusiveLock);
@@ -2357,7 +2339,8 @@ DeleteShardPlacementRow(uint64 placementId)
 
 	uint64 shardId = heap_getattr(heapTuple, Anum_pg_dist_placement_shardid,
 								  tupleDescriptor, &isNull);
-	if (HeapTupleHasNulls(heapTuple))
+	if (HeapTupleHeaderGetNatts(heapTuple->t_data) != Natts_pg_dist_placement ||
+		HeapTupleHasNulls(heapTuple))
 	{
 		ereport(ERROR, (errmsg("unexpected null in pg_dist_placement tuple")));
 	}

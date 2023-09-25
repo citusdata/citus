@@ -95,6 +95,8 @@ char *EnableManualMetadataChangesForUser = "";
 int MetadataSyncTransMode = METADATA_SYNC_TRANSACTIONAL;
 
 
+static Datum citus_internal_add_shard_metadata_internal(PG_FUNCTION_ARGS,
+														bool expectNeedsIsolatedNode);
 static void EnsureObjectMetadataIsSane(int distributionArgumentIndex,
 									   int colocationId);
 static List * GetFunctionDependenciesForObjects(ObjectAddress *objectAddress);
@@ -167,6 +169,7 @@ PG_FUNCTION_INFO_V1(worker_record_sequence_dependency);
 PG_FUNCTION_INFO_V1(citus_internal_add_partition_metadata);
 PG_FUNCTION_INFO_V1(citus_internal_delete_partition_metadata);
 PG_FUNCTION_INFO_V1(citus_internal_add_shard_metadata);
+PG_FUNCTION_INFO_V1(citus_internal_add_shard_metadata_legacy);
 PG_FUNCTION_INFO_V1(citus_internal_add_placement_metadata);
 PG_FUNCTION_INFO_V1(citus_internal_delete_placement_metadata);
 PG_FUNCTION_INFO_V1(citus_internal_add_placement_metadata_legacy);
@@ -1203,7 +1206,7 @@ ShardListInsertCommand(List *shardIntervalList)
 	StringInfo insertPlacementCommand = makeStringInfo();
 	appendStringInfo(insertPlacementCommand,
 					 "WITH placement_data(shardid, "
-					 "shardlength, groupid, placementid, needsisolatednode)  AS (VALUES ");
+					 "shardlength, groupid, placementid)  AS (VALUES ");
 
 	ShardInterval *shardInterval = NULL;
 	bool firstPlacementProcessed = false;
@@ -1226,12 +1229,11 @@ ShardListInsertCommand(List *shardIntervalList)
 			firstPlacementProcessed = true;
 
 			appendStringInfo(insertPlacementCommand,
-							 "(%ld, %ld, %d, %ld, %s)",
+							 "(%ld, %ld, %d, %ld)",
 							 shardId,
 							 placement->shardLength,
 							 placement->groupId,
-							 placement->placementId,
-							 placement->needsIsolatedNode ? "true" : "false");
+							 placement->placementId);
 		}
 	}
 
@@ -1239,14 +1241,14 @@ ShardListInsertCommand(List *shardIntervalList)
 
 	appendStringInfo(insertPlacementCommand,
 					 "SELECT citus_internal_add_placement_metadata("
-					 "shardid, shardlength, groupid, placementid, needsisolatednode) "
+					 "shardid, shardlength, groupid, placementid) "
 					 "FROM placement_data;");
 
 	/* now add shards to insertShardCommand */
 	StringInfo insertShardCommand = makeStringInfo();
 	appendStringInfo(insertShardCommand,
 					 "WITH shard_data(relationname, shardid, storagetype, "
-					 "shardminvalue, shardmaxvalue)  AS (VALUES ");
+					 "shardminvalue, shardmaxvalue, needsisolatednode)  AS (VALUES ");
 
 	foreach_ptr(shardInterval, shardIntervalList)
 	{
@@ -1278,12 +1280,13 @@ ShardListInsertCommand(List *shardIntervalList)
 		}
 
 		appendStringInfo(insertShardCommand,
-						 "(%s::regclass, %ld, '%c'::\"char\", %s, %s)",
+						 "(%s::regclass, %ld, '%c'::\"char\", %s, %s, %s)",
 						 quote_literal_cstr(qualifiedRelationName),
 						 shardId,
 						 shardInterval->storageType,
 						 minHashToken->data,
-						 maxHashToken->data);
+						 maxHashToken->data,
+						 shardInterval->needsIsolatedNode ? "true" : "false");
 
 		if (llast(shardIntervalList) != shardInterval)
 		{
@@ -1295,7 +1298,7 @@ ShardListInsertCommand(List *shardIntervalList)
 
 	appendStringInfo(insertShardCommand,
 					 "SELECT citus_internal_add_shard_metadata(relationname, shardid, "
-					 "storagetype, shardminvalue, shardmaxvalue) "
+					 "storagetype, shardminvalue, shardmaxvalue, needsisolatednode) "
 					 "FROM shard_data;");
 
 	/*
@@ -1417,13 +1420,12 @@ ColocationIdUpdateCommand(Oid relationId, uint32 colocationId)
  */
 char *
 PlacementUpsertCommand(uint64 shardId, uint64 placementId,
-					   uint64 shardLength, int32 groupId,
-					   bool needsIsolatedNode)
+					   uint64 shardLength, int32 groupId)
 {
 	StringInfo command = makeStringInfo();
 
 	appendStringInfo(command, UPSERT_PLACEMENT, shardId, shardLength,
-					 groupId, placementId, needsIsolatedNode ? "true" : "false");
+					 groupId, placementId);
 
 	return command->data;
 }
@@ -3225,6 +3227,33 @@ citus_internal_delete_partition_metadata(PG_FUNCTION_ARGS)
 Datum
 citus_internal_add_shard_metadata(PG_FUNCTION_ARGS)
 {
+	bool expectNeedsIsolatedNode = true;
+	return citus_internal_add_shard_metadata_internal(fcinfo, expectNeedsIsolatedNode);
+}
+
+
+/*
+ * citus_internal_add_shard_metadata is an internal UDF to
+ * add a row to pg_dist_shard, but without the needs_isolated_node
+ * parameter.
+ */
+Datum
+citus_internal_add_shard_metadata_legacy(PG_FUNCTION_ARGS)
+{
+	bool expectNeedsIsolatedNode = false;
+	return citus_internal_add_shard_metadata_internal(fcinfo, expectNeedsIsolatedNode);
+}
+
+
+/*
+ * citus_internal_add_shard_metadata_internal is a helper function for
+ * citus_internal_add_shard_metadata and citus_internal_add_shard_metadata_legacy
+ * functions.
+ */
+static Datum
+citus_internal_add_shard_metadata_internal(PG_FUNCTION_ARGS,
+										   bool expectNeedsIsolatedNode)
+{
 	CheckCitusVersion(ERROR);
 
 	PG_ENSURE_ARGNOTNULL(0, "relation");
@@ -3248,6 +3277,13 @@ citus_internal_add_shard_metadata(PG_FUNCTION_ARGS)
 		shardMaxValue = PG_GETARG_TEXT_P(4);
 	}
 
+	bool needsIsolatedNode = false;
+	if (expectNeedsIsolatedNode)
+	{
+		PG_ENSURE_ARGNOTNULL(5, "needs isolated node");
+		needsIsolatedNode = PG_GETARG_BOOL(5);
+	}
+
 	/* only owner of the table (or superuser) is allowed to add the Citus metadata */
 	EnsureTableOwner(relationId);
 
@@ -3268,7 +3304,8 @@ citus_internal_add_shard_metadata(PG_FUNCTION_ARGS)
 								  shardMaxValue);
 	}
 
-	InsertShardRow(relationId, shardId, storageType, shardMinValue, shardMaxValue);
+	InsertShardRow(relationId, shardId, storageType, shardMinValue, shardMaxValue,
+				   needsIsolatedNode);
 
 	PG_RETURN_VOID();
 }
@@ -3447,18 +3484,16 @@ citus_internal_add_placement_metadata(PG_FUNCTION_ARGS)
 	int64 shardLength = PG_GETARG_INT64(1);
 	int32 groupId = PG_GETARG_INT32(2);
 	int64 placementId = PG_GETARG_INT64(3);
-	bool needsIsolatedNode = PG_GETARG_BOOL(4);
 
 	citus_internal_add_placement_metadata_internal(shardId, shardLength,
-												   groupId, placementId,
-												   needsIsolatedNode);
+												   groupId, placementId);
 
 	PG_RETURN_VOID();
 }
 
 
 /*
- * citus_internal_delete_placement_metadata is an internal UDF to
+ * citus_internal_add_placement_metadata is an internal UDF to
  * delete a row from pg_dist_placement.
  */
 Datum
@@ -3488,15 +3523,12 @@ citus_internal_add_placement_metadata_legacy(PG_FUNCTION_ARGS)
 	CheckCitusVersion(ERROR);
 
 	int64 shardId = PG_GETARG_INT64(0);
-	int64 shardLength = PG_GETARG_INT64(1);
-	int32 groupId = PG_GETARG_INT32(2);
-	int64 placementId = PG_GETARG_INT64(3);
+	int64 shardLength = PG_GETARG_INT64(2);
+	int32 groupId = PG_GETARG_INT32(3);
+	int64 placementId = PG_GETARG_INT64(4);
 
-	bool needsIsolatedNode = false;
 	citus_internal_add_placement_metadata_internal(shardId, shardLength,
-												   groupId, placementId,
-												   needsIsolatedNode);
-
+												   groupId, placementId);
 	PG_RETURN_VOID();
 }
 
@@ -3507,8 +3539,7 @@ citus_internal_add_placement_metadata_legacy(PG_FUNCTION_ARGS)
  */
 void
 citus_internal_add_placement_metadata_internal(int64 shardId, int64 shardLength,
-											   int32 groupId, int64 placementId,
-											   bool needsIsolatedNode)
+											   int32 groupId, int64 placementId)
 {
 	bool missingOk = false;
 	Oid relationId = LookupShardRelationFromCatalog(shardId, missingOk);
@@ -3533,8 +3564,7 @@ citus_internal_add_placement_metadata_internal(int64 shardId, int64 shardLength,
 										   shardLength, groupId);
 	}
 
-	InsertShardPlacementRow(shardId, placementId, shardLength, groupId,
-							needsIsolatedNode);
+	InsertShardPlacementRow(shardId, placementId, shardLength, groupId);
 }
 
 
@@ -3907,7 +3937,7 @@ citus_internal_update_none_dist_table_metadata(PG_FUNCTION_ARGS)
 
 /*
  * citus_internal_shard_group_set_needsisolatednode is an internal UDF to
- * set needsisolatednode flag for all the placements within the shard group
+ * set needsisolatednode flag for all the shards within the shard group
  * that given shard belongs to.
  */
 Datum
@@ -4153,14 +4183,12 @@ ShardGroupSetNeedsIsolatedNodeCommand(uint64 shardId, bool enabled)
  */
 char *
 AddPlacementMetadataCommand(uint64 shardId, uint64 placementId,
-							uint64 shardLength, int32 groupId,
-							bool needsIsolatedNode)
+							uint64 shardLength, int32 groupId)
 {
 	StringInfo command = makeStringInfo();
 	appendStringInfo(command,
-					 "SELECT citus_internal_add_placement_metadata(%ld, %ld, %d, %ld, %s)",
-					 shardId, shardLength, groupId, placementId,
-					 needsIsolatedNode ? "true" : "false");
+					 "SELECT citus_internal_add_placement_metadata(%ld, %ld, %d, %ld)",
+					 shardId, shardLength, groupId, placementId);
 	return command->data;
 }
 

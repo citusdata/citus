@@ -54,9 +54,9 @@ citus_split_shard_by_split_points(PG_FUNCTION_ARGS)
 	Oid shardTransferModeOid = PG_GETARG_OID(3);
 	SplitMode shardSplitMode = LookupSplitMode(shardTransferModeOid);
 
-    /* we don't inherit needsisolatednode for new placements */
-    List *needsIsolatedNodeForPlacementList =
-        GenerateListFromIntElement(false, list_length(nodeIdsForPlacementList));
+	/* we don't inherit needsisolatednode for new shards */
+	List *needsIsolatedNodeForPlacementList =
+		GenerateListFromIntElement(false, list_length(nodeIdsForPlacementList));
 
 	DistributionColumnMap *distributionColumnOverrides = NULL;
 	List *sourceColocatedShardIntervalList = NIL;
@@ -66,7 +66,7 @@ citus_split_shard_by_split_points(PG_FUNCTION_ARGS)
 		shardIdToSplit,
 		shardSplitPointsList,
 		nodeIdsForPlacementList,
-        needsIsolatedNodeForPlacementList,
+		needsIsolatedNodeForPlacementList,
 		distributionColumnOverrides,
 		sourceColocatedShardIntervalList,
 		INVALID_COLOCATION_ID);

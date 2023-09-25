@@ -227,7 +227,8 @@ NodePlacementGroupHashAssignNodes(HTAB *nodePlacementGroupHash,
 	ShardPlacement *shardPlacement = NULL;
 	foreach_ptr(shardPlacement, shardPlacementList)
 	{
-		if (!shardPlacement->needsIsolatedNode)
+		ShardInterval *shardInterval = LoadShardInterval(shardPlacement->shardId);
+		if (!shardInterval->needsIsolatedNode)
 		{
 			continue;
 		}
@@ -258,8 +259,6 @@ NodePlacementGroupHashAssignNodes(HTAB *nodePlacementGroupHash,
 	ShardPlacement *unassignedShardPlacement = NULL;
 	foreach_ptr(unassignedShardPlacement, unassignedShardPlacementList)
 	{
-		Assert(unassignedShardPlacement->needsIsolatedNode);
-
 		bool isolated = false;
 		while (!isolated && availableNodeIdx < list_length(availableWorkerList))
 		{
@@ -351,8 +350,8 @@ RebalancerPlacementIsolationContextPlacementIsAllowedOnWorker(
 		NodePlacementGroupHashGetNodeWithGroupId(nodePlacementGroupHash,
 												 workerNode->groupId);
 
-	ShardPlacement *shardPlacement = LoadShardPlacement(shardId, placementId);
-	if (!shardPlacement->needsIsolatedNode)
+	ShardInterval *shardInterval = LoadShardInterval(shardId);
+	if (!shardInterval->needsIsolatedNode)
 	{
 		/*
 		 * It doesn't need an isolated node, but is the node used to isolate

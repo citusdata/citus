@@ -198,7 +198,9 @@ master_create_empty_shard(PG_FUNCTION_ARGS)
 		candidateNodeIndex++;
 	}
 
-	InsertShardRow(relationId, shardId, storageType, nullMinValue, nullMaxValue);
+	bool needsIsolatedNode = false;
+	InsertShardRow(relationId, shardId, storageType, nullMinValue, nullMaxValue,
+				   needsIsolatedNode);
 
 	CreateAppendDistributedShardPlacements(relationId, shardId, candidateNodeList,
 										   ShardReplicationFactor);
@@ -369,9 +371,8 @@ CreateAppendDistributedShardPlacements(Oid relationId, int64 shardId,
 
 		ExecuteCriticalRemoteCommandList(connection, commandList);
 
-		bool needsIsolatedNode = false;
 		InsertShardPlacementRow(shardId, INVALID_PLACEMENT_ID, shardSize,
-								nodeGroupId, needsIsolatedNode);
+								nodeGroupId);
 		placementsCreated++;
 
 		if (placementsCreated >= replicationFactor)
@@ -392,9 +393,6 @@ CreateAppendDistributedShardPlacements(Oid relationId, int64 shardId,
 /*
  * InsertShardPlacementRows inserts shard placements to the metadata table on
  * the coordinator node.
- *
- * This function assumes that the caller is inserting the placements for a
- * newly created shard. As a result, always sets needsisolatednode to false.
  */
 void
 InsertShardPlacementRows(Oid relationId, int64 shardId, List *workerNodeList,
@@ -409,12 +407,10 @@ InsertShardPlacementRows(Oid relationId, int64 shardId, List *workerNodeList,
 		uint32 nodeGroupId = workerNode->groupId;
 		const uint64 shardSize = 0;
 
-		bool needsIsolatedNode = false;
 		InsertShardPlacementRow(shardId,
 								INVALID_PLACEMENT_ID,
 								shardSize,
-								nodeGroupId,
-								needsIsolatedNode);
+								nodeGroupId);
 	}
 }
 
@@ -824,11 +820,9 @@ UpdateShardSize(uint64 shardId, ShardInterval *shardInterval, Oid relationId,
 	{
 		uint64 placementId = placement->placementId;
 		int32 groupId = placement->groupId;
-		bool needsIsolatedNode = placement->needsIsolatedNode;
 
 		DeleteShardPlacementRow(placementId);
-		InsertShardPlacementRow(shardId, placementId, shardSize, groupId,
-								needsIsolatedNode);
+		InsertShardPlacementRow(shardId, placementId, shardSize, groupId);
 	}
 }
 

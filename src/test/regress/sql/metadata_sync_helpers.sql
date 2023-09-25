@@ -277,7 +277,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 	\set VERBOSITY terse
 	WITH shard_data(relationname, shardid, storagetype, shardminvalue, shardmaxvalue)
 		AS (VALUES ('super_user_table'::regclass, 1420000::bigint, 't'::"char", '-2147483648'::text, '-1610612737'::text))
-	SELECT citus_internal_add_shard_metadata(relationname, shardid, storagetype, shardminvalue, shardmaxvalue) FROM shard_data;
+	SELECT citus_internal_add_shard_metadata(relationname, shardid, storagetype, shardminvalue, shardmaxvalue, false) FROM shard_data;
 ROLLBACK;
 
 -- the user is only allowed to add a shard for add a table which is in pg_dist_partition
@@ -287,7 +287,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 	\set VERBOSITY terse
 	WITH shard_data(relationname, shardid, storagetype, shardminvalue, shardmaxvalue)
 		AS (VALUES ('test_2'::regclass, 1420000::bigint, 't'::"char", '-2147483648'::text, '-1610612737'::text))
-	SELECT citus_internal_add_shard_metadata(relationname, shardid, storagetype, shardminvalue, shardmaxvalue) FROM shard_data;
+	SELECT citus_internal_add_shard_metadata(relationname, shardid, storagetype, shardminvalue, shardmaxvalue, false) FROM shard_data;
 ROLLBACK;
 
 -- ok, now add the table to the pg_dist_partition
@@ -313,7 +313,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 	\set VERBOSITY terse
 	WITH shard_data(relationname, shardid, storagetype, shardminvalue, shardmaxvalue)
 		AS (VALUES ('test_2'::regclass, -1, 't'::"char", '-2147483648'::text, '-1610612737'::text))
-	SELECT citus_internal_add_shard_metadata(relationname, shardid, storagetype, shardminvalue, shardmaxvalue) FROM shard_data;
+	SELECT citus_internal_add_shard_metadata(relationname, shardid, storagetype, shardminvalue, shardmaxvalue, false) FROM shard_data;
 ROLLBACK;
 
 -- invalid storage types are not allowed
@@ -323,7 +323,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 	\set VERBOSITY terse
 	WITH shard_data(relationname, shardid, storagetype, shardminvalue, shardmaxvalue)
 		AS (VALUES ('test_2'::regclass, 1420000, 'X'::"char", '-2147483648'::text, '-1610612737'::text))
-	SELECT citus_internal_add_shard_metadata(relationname, shardid, storagetype, shardminvalue, shardmaxvalue) FROM shard_data;
+	SELECT citus_internal_add_shard_metadata(relationname, shardid, storagetype, shardminvalue, shardmaxvalue, false) FROM shard_data;
 ROLLBACK;
 
 -- NULL shard ranges are not allowed for hash distributed tables
@@ -333,7 +333,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 	\set VERBOSITY terse
 	WITH shard_data(relationname, shardid, storagetype, shardminvalue, shardmaxvalue)
 		AS (VALUES ('test_2'::regclass, 1420000, 't'::"char", NULL, '-1610612737'::text))
-	SELECT citus_internal_add_shard_metadata(relationname, shardid, storagetype, shardminvalue, shardmaxvalue) FROM shard_data;
+	SELECT citus_internal_add_shard_metadata(relationname, shardid, storagetype, shardminvalue, shardmaxvalue, false) FROM shard_data;
 ROLLBACK;
 
 -- non-integer shard ranges are not allowed
@@ -343,7 +343,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 	\set VERBOSITY terse
 	WITH shard_data(relationname, shardid, storagetype, shardminvalue, shardmaxvalue)
 		AS (VALUES ('test_2'::regclass, 1420000::bigint, 't'::"char", 'non-int'::text, '-1610612737'::text))
-	SELECT citus_internal_add_shard_metadata(relationname, shardid, storagetype, shardminvalue, shardmaxvalue) FROM shard_data;
+	SELECT citus_internal_add_shard_metadata(relationname, shardid, storagetype, shardminvalue, shardmaxvalue, false) FROM shard_data;
 ROLLBACK;
 
 -- shardMinValue should be smaller than shardMaxValue
@@ -353,7 +353,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 	\set VERBOSITY terse
 	WITH shard_data(relationname, shardid, storagetype, shardminvalue, shardmaxvalue)
 		AS (VALUES ('test_2'::regclass, 1420000::bigint, 't'::"char", '-1610612737'::text, '-2147483648'::text))
-	SELECT citus_internal_add_shard_metadata(relationname, shardid, storagetype, shardminvalue, shardmaxvalue) FROM shard_data;
+	SELECT citus_internal_add_shard_metadata(relationname, shardid, storagetype, shardminvalue, shardmaxvalue, false) FROM shard_data;
 ROLLBACK;
 
 -- we do not allow overlapping shards for the same table
@@ -365,7 +365,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 		AS (VALUES ('test_2'::regclass, 1420000::bigint, 't'::"char", '10'::text, '20'::text),
 				   ('test_2'::regclass, 1420001::bigint, 't'::"char", '20'::text, '30'::text),
 				   ('test_2'::regclass, 1420002::bigint, 't'::"char", '10'::text, '50'::text))
-	SELECT citus_internal_add_shard_metadata(relationname, shardid, storagetype, shardminvalue, shardmaxvalue) FROM shard_data;
+	SELECT citus_internal_add_shard_metadata(relationname, shardid, storagetype, shardminvalue, shardmaxvalue, false) FROM shard_data;
 ROLLBACK;
 
 -- Now let's check valid pg_dist_object updates
@@ -483,7 +483,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 	WITH shard_data(relationname, shardid, storagetype, shardminvalue, shardmaxvalue)
 		AS (VALUES ('test_2'::regclass, 1420000::bigint, 't'::"char", '10'::text, '20'::text),
 				   ('test_2'::regclass, 1420001::bigint, 't'::"char", '20'::text, '30'::text))
-	SELECT citus_internal_add_shard_metadata(relationname, shardid, storagetype, shardminvalue, shardmaxvalue) FROM shard_data;
+	SELECT citus_internal_add_shard_metadata(relationname, shardid, storagetype, shardminvalue, shardmaxvalue, false) FROM shard_data;
 ROLLBACK;
 
 -- we do not allow NULL shardMinMax values
@@ -495,12 +495,12 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 	\set VERBOSITY terse
 	WITH shard_data(relationname, shardid, storagetype, shardminvalue, shardmaxvalue)
 		AS (VALUES ('test_2'::regclass, 1420000::bigint, 't'::"char", '10'::text, '20'::text))
-	SELECT citus_internal_add_shard_metadata(relationname, shardid, storagetype, shardminvalue, shardmaxvalue) FROM shard_data;
+	SELECT citus_internal_add_shard_metadata(relationname, shardid, storagetype, shardminvalue, shardmaxvalue, false) FROM shard_data;
 	-- manually ingest NULL values, otherwise not likely unless metadata is corrupted
 	UPDATE pg_dist_shard SET shardminvalue = NULL WHERE shardid = 1420000;
 	WITH shard_data(relationname, shardid, storagetype, shardminvalue, shardmaxvalue)
 		AS (VALUES ('test_2'::regclass, 1420001::bigint, 't'::"char", '20'::text, '30'::text))
-	SELECT citus_internal_add_shard_metadata(relationname, shardid, storagetype, shardminvalue, shardmaxvalue) FROM shard_data;
+	SELECT citus_internal_add_shard_metadata(relationname, shardid, storagetype, shardminvalue, shardmaxvalue, false) FROM shard_data;
 ROLLBACK;
 
 \c - metadata_sync_helper_role - :worker_1_port
@@ -519,7 +519,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 				   ('test_2'::regclass, 1420004::bigint, 't'::"char", '51'::text, '60'::text),
 				   ('test_2'::regclass, 1420005::bigint, 't'::"char", '61'::text, '70'::text),
 				   ('test_3'::regclass, 1420008::bigint, 't'::"char", '11'::text, '20'::text))
-	SELECT citus_internal_add_shard_metadata(relationname, shardid, storagetype, shardminvalue, shardmaxvalue) FROM shard_data;
+	SELECT citus_internal_add_shard_metadata(relationname, shardid, storagetype, shardminvalue, shardmaxvalue, false) FROM shard_data;
 COMMIT;
 
 -- we cannot mark these two tables colocated because they are not colocated
@@ -540,7 +540,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 				   ('test_3'::regclass, 1420011::bigint, 't'::"char", '41'::text, '50'::text),
 				   ('test_3'::regclass, 1420012::bigint, 't'::"char", '51'::text, '60'::text),
 				   ('test_3'::regclass, 1420013::bigint, 't'::"char", '61'::text, '70'::text))
-	SELECT citus_internal_add_shard_metadata(relationname, shardid, storagetype, shardminvalue, shardmaxvalue) FROM shard_data;
+	SELECT citus_internal_add_shard_metadata(relationname, shardid, storagetype, shardminvalue, shardmaxvalue, false) FROM shard_data;
 COMMIT;
 
 -- shardMin/MaxValues should be NULL for reference tables
@@ -550,7 +550,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 	\set VERBOSITY terse
 	WITH shard_data(relationname, shardid, storagetype, shardminvalue, shardmaxvalue)
 		AS (VALUES ('test_ref'::regclass, 1420003::bigint, 't'::"char", '-1610612737'::text, NULL))
-	SELECT citus_internal_add_shard_metadata(relationname, shardid, storagetype, shardminvalue, shardmaxvalue) FROM shard_data;
+	SELECT citus_internal_add_shard_metadata(relationname, shardid, storagetype, shardminvalue, shardmaxvalue, false) FROM shard_data;
 ROLLBACK;
 
 -- reference tables cannot have multiple shards
@@ -561,7 +561,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 	WITH shard_data(relationname, shardid, storagetype, shardminvalue, shardmaxvalue)
 		AS (VALUES ('test_ref'::regclass, 1420006::bigint, 't'::"char", NULL, NULL),
 				   ('test_ref'::regclass, 1420007::bigint, 't'::"char", NULL, NULL))
-	SELECT citus_internal_add_shard_metadata(relationname, shardid, storagetype, shardminvalue, shardmaxvalue) FROM shard_data;
+	SELECT citus_internal_add_shard_metadata(relationname, shardid, storagetype, shardminvalue, shardmaxvalue, false) FROM shard_data;
 ROLLBACK;
 
 -- finally, add a shard for reference tables
@@ -571,7 +571,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 	\set VERBOSITY terse
 	WITH shard_data(relationname, shardid, storagetype, shardminvalue, shardmaxvalue)
 		AS (VALUES ('test_ref'::regclass, 1420006::bigint, 't'::"char", NULL, NULL))
-	SELECT citus_internal_add_shard_metadata(relationname, shardid, storagetype, shardminvalue, shardmaxvalue) FROM shard_data;
+	SELECT citus_internal_add_shard_metadata(relationname, shardid, storagetype, shardminvalue, shardmaxvalue, false) FROM shard_data;
 COMMIT;
 
 \c - postgres - :worker_1_port
@@ -584,7 +584,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 	\set VERBOSITY terse
 	WITH shard_data(relationname, shardid, storagetype, shardminvalue, shardmaxvalue)
 		AS (VALUES ('super_user_table'::regclass, 1420007::bigint, 't'::"char", '11'::text, '20'::text))
-	SELECT citus_internal_add_shard_metadata(relationname, shardid, storagetype, shardminvalue, shardmaxvalue) FROM shard_data;
+	SELECT citus_internal_add_shard_metadata(relationname, shardid, storagetype, shardminvalue, shardmaxvalue, false) FROM shard_data;
 COMMIT;
 
 \c - metadata_sync_helper_role - :worker_1_port
@@ -597,9 +597,9 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 	SELECT assign_distributed_transaction_id(0, 8, '2021-07-09 15:41:55.542377+02');
 	SET application_name to 'citus_internal gpid=10000000001';
 	\set VERBOSITY terse
-	WITH placement_data(shardid, shardlength, groupid, placementid) AS
-		(VALUES (-10, 0::bigint, 1::int, 1500000::bigint))
-	SELECT citus_internal_add_placement_metadata(shardid, shardlength, groupid, placementid) FROM placement_data;
+	WITH placement_data(shardid, shardstate, shardlength, groupid, placementid) AS
+		(VALUES (-10, 1, 0::bigint, 1::int, 1500000::bigint))
+	SELECT citus_internal_add_placement_metadata(shardid, shardstate, shardlength, groupid, placementid) FROM placement_data;
 ROLLBACK;
 
 -- invalid placementid
@@ -609,7 +609,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 	\set VERBOSITY terse
 	WITH placement_data(shardid, shardlength, groupid, placementid) AS
 		(VALUES (1420000, 0::bigint, 1::int, -10))
-	SELECT citus_internal_add_placement_metadata(shardid, shardlength, groupid, placementid, false) FROM placement_data;
+	SELECT citus_internal_add_placement_metadata(shardid, shardlength, groupid, placementid) FROM placement_data;
 ROLLBACK;
 
 -- non-existing shard
@@ -619,7 +619,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 	\set VERBOSITY terse
 	WITH placement_data(shardid, shardlength, groupid, placementid) AS
 		(VALUES (1430100, 0::bigint, 1::int, 10))
-	SELECT citus_internal_add_placement_metadata(shardid, shardlength, groupid, placementid, false) FROM placement_data;
+	SELECT citus_internal_add_placement_metadata(shardid, shardlength, groupid, placementid) FROM placement_data;
 ROLLBACK;
 
 -- non-existing node with non-existing node-id 123123123
@@ -629,7 +629,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 	\set VERBOSITY terse
 	WITH placement_data(shardid, shardlength, groupid, placementid) AS
 		(VALUES ( 1420000, 0::bigint, 123123123::int, 1500000))
-	SELECT citus_internal_add_placement_metadata(shardid, shardlength, groupid, placementid, false) FROM placement_data;
+	SELECT citus_internal_add_placement_metadata(shardid, shardlength, groupid, placementid) FROM placement_data;
 ROLLBACK;
 
 -- create a volatile function that returns the local node id
@@ -656,7 +656,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 	WITH placement_data(shardid, shardlength, groupid, placementid) AS
 		(VALUES (1420000, 0::bigint, get_node_id(), 1500000),
 				(1420000, 0::bigint, get_node_id(), 1500001))
-	SELECT citus_internal_add_placement_metadata(shardid, shardlength, groupid, placementid, false) FROM placement_data;
+	SELECT citus_internal_add_placement_metadata(shardid, shardlength, groupid, placementid) FROM placement_data;
 ROLLBACK;
 
 -- shard is not owned by us
@@ -666,7 +666,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 	\set VERBOSITY terse
 	WITH placement_data(shardid, shardlength, groupid, placementid) AS
 		(VALUES (1420007, 0::bigint, get_node_id(), 1500000))
-	SELECT citus_internal_add_placement_metadata(shardid, shardlength, groupid, placementid, false) FROM placement_data;
+	SELECT citus_internal_add_placement_metadata(shardid, shardlength, groupid, placementid) FROM placement_data;
 ROLLBACK;
 
 -- sucessfully add placements
@@ -687,7 +687,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 				(1420011, 0::bigint, get_node_id(), 1500009),
 				(1420012, 0::bigint, get_node_id(), 1500010),
 				(1420013, 0::bigint, get_node_id(), 1500011))
-	SELECT citus_internal_add_placement_metadata(shardid, shardlength, groupid, placementid, false) FROM placement_data;
+	SELECT citus_internal_add_placement_metadata(shardid, shardlength, groupid, placementid) FROM placement_data;
 COMMIT;
 
 -- we should be able to colocate both tables now

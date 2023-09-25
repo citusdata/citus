@@ -67,6 +67,7 @@ typedef struct ShardInterval
 	Datum maxValue;     /* a shard's typed max value datum */
 	uint64 shardId;
 	int shardIndex;
+	bool needsIsolatedNode;
 } ShardInterval;
 
 
@@ -78,7 +79,6 @@ typedef struct GroupShardPlacement
 	uint64 shardId;
 	uint64 shardLength;
 	int32 groupId;
-	bool needsIsolatedNode;
 } GroupShardPlacement;
 
 
@@ -93,7 +93,6 @@ typedef struct ShardPlacement
 	uint64 shardId;
 	uint64 shardLength;
 	int32 groupId;
-	bool needsIsolatedNode;
 
 	/* the rest of the fields aren't from pg_dist_placement */
 	char *nodeName;
@@ -363,16 +362,15 @@ extern List * RemoveCoordinatorPlacementIfNotSingleNode(List *placementList);
 
 /* Function declarations to modify shard and shard placement data */
 extern void InsertShardRow(Oid relationId, uint64 shardId, char storageType,
-						   text *shardMinValue, text *shardMaxValue);
+						   text *shardMinValue, text *shardMaxValue,
+						   bool needsIsolatedNode);
 extern void DeleteShardRow(uint64 shardId);
 extern ShardPlacement * InsertShardPlacementRowGlobally(uint64 shardId,
 														uint64 placementId,
 														uint64 shardLength,
-														int32 groupId,
-														bool needsIsolatedNode);
+														int32 groupId);
 extern uint64 InsertShardPlacementRow(uint64 shardId, uint64 placementId,
-									  uint64 shardLength, int32 groupId,
-									  bool needsIsolatedNode);
+									  uint64 shardLength, int32 groupId);
 extern void InsertIntoPgDistPartition(Oid relationId, char distributionMethod,
 									  Var *distributionColumn, uint32 colocationId,
 									  char replicationModel, bool autoConverted);

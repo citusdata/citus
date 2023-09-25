@@ -16,6 +16,6 @@ WHERE shardgroupindex = 5 \gset
 SELECT citus_shard_set_isolated(:shardgroup_5_shardid);
 
 SELECT result FROM run_command_on_all_nodes($$
-    SELECT * FROM public.get_colocated_placements_needisolatednode('upgrade_isolate_placement_before.table_with_isolated_placements')
+    SELECT * FROM public.get_colocated_shards_needisolatednode('upgrade_isolate_placement_before.table_with_isolated_placements')
 $$)
 ORDER BY nodeid;

@@ -190,8 +190,9 @@ CreateShardsWithRoundRobinPolicy(Oid distributedTableId, int32 shardCount,
 		text *minHashTokenText = IntegerToText(shardMinHashToken);
 		text *maxHashTokenText = IntegerToText(shardMaxHashToken);
 
+		bool needsIsolatedNode = false;
 		InsertShardRow(distributedTableId, *shardIdPtr, shardStorageType,
-					   minHashTokenText, maxHashTokenText);
+					   minHashTokenText, maxHashTokenText, needsIsolatedNode);
 
 		InsertShardPlacementRows(distributedTableId,
 								 *shardIdPtr,
@@ -288,8 +289,10 @@ CreateColocatedShards(Oid targetRelationId, Oid sourceRelationId, bool
 		List *sourceShardPlacementList = ShardPlacementListSortedByWorker(
 			sourceShardId);
 
+		/* inherit from the colocated shard */
+		bool needsIsolatedNode = sourceShardInterval->needsIsolatedNode;
 		InsertShardRow(targetRelationId, *newShardIdPtr, targetShardStorageType,
-					   shardMinValueText, shardMaxValueText);
+					   shardMinValueText, shardMaxValueText, needsIsolatedNode);
 
 		ShardPlacement *sourcePlacement = NULL;
 		foreach_ptr(sourcePlacement, sourceShardPlacementList)
@@ -300,8 +303,7 @@ CreateColocatedShards(Oid targetRelationId, Oid sourceRelationId, bool
 			InsertShardPlacementRow(*newShardIdPtr,
 									INVALID_PLACEMENT_ID,
 									shardSize,
-									groupId,
-									sourcePlacement->needsIsolatedNode);
+									groupId);
 		}
 	}
 
@@ -372,8 +374,9 @@ CreateReferenceTableShard(Oid distributedTableId)
 	/* get the next shard id */
 	uint64 shardId = GetNextShardId();
 
+	bool needsIsolatedNode = false;
 	InsertShardRow(distributedTableId, shardId, shardStorageType, shardMinValue,
-				   shardMaxValue);
+				   shardMaxValue, needsIsolatedNode);
 
 	InsertShardPlacementRows(distributedTableId,
 							 shardId,
@@ -428,8 +431,9 @@ CreateSingleShardTableShardWithRoundRobinPolicy(Oid relationId, uint32 colocatio
 	text *minHashTokenText = NULL;
 	text *maxHashTokenText = NULL;
 	uint64 shardId = GetNextShardId();
+	bool needsIsolatedNode = false;
 	InsertShardRow(relationId, shardId, shardStorageType,
-				   minHashTokenText, maxHashTokenText);
+				   minHashTokenText, maxHashTokenText, needsIsolatedNode);
 
 	int replicationFactor = 1;
 	InsertShardPlacementRows(relationId,

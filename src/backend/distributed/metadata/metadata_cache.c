@@ -5379,6 +5379,8 @@ DeformedDistShardTupleToShardInterval(Datum *datumArray, bool *isNullArray,
 	char storageType = DatumGetChar(datumArray[Anum_pg_dist_shard_shardstorage - 1]);
 	Datum minValueTextDatum = datumArray[Anum_pg_dist_shard_shardminvalue - 1];
 	Datum maxValueTextDatum = datumArray[Anum_pg_dist_shard_shardmaxvalue - 1];
+	bool needsIsolatedNode = DatumGetBool(
+		datumArray[Anum_pg_dist_shard_needsisolatednode - 1]);
 
 	bool minValueNull = isNullArray[Anum_pg_dist_shard_shardminvalue - 1];
 	bool maxValueNull = isNullArray[Anum_pg_dist_shard_shardmaxvalue - 1];
@@ -5415,6 +5417,7 @@ DeformedDistShardTupleToShardInterval(Datum *datumArray, bool *isNullArray,
 	shardInterval->minValue = minValue;
 	shardInterval->maxValue = maxValue;
 	shardInterval->shardId = shardId;
+	shardInterval->needsIsolatedNode = needsIsolatedNode;
 
 	return shardInterval;
 }

@@ -43,7 +43,7 @@ extern void SplitShard(SplitMode splitMode,
 					   uint64 shardIdToSplit,
 					   List *shardSplitPointsList,
 					   List *nodeIdsForPlacementList,
-                       List *needsIsolatedNodeForPlacementList,
+					   List *needsIsolatedNodeForPlacementList,
 					   DistributionColumnMap *distributionColumnOverrides,
 					   List *colocatedShardIntervalList,
 					   uint32 targetColocationId);

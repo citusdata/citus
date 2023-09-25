@@ -582,7 +582,7 @@ CreateDistributedTableConcurrently(Oid relationId, char *distributionColumnName,
 
 	List *workersForPlacementList;
 	List *shardSplitPointsList;
-    List *needsIsolatedNodeForPlacementList;
+	List *needsIsolatedNodeForPlacementList;
 
 
 	if (colocatedTableId != InvalidOid)
@@ -599,10 +599,11 @@ CreateDistributedTableConcurrently(Oid relationId, char *distributionColumnName,
 		 */
 		workersForPlacementList = WorkerNodesForShardList(colocatedShardList);
 
-        /*
-         * Inherit needsisolatednode from the colocated shard placements.
-         */
-        needsIsolatedNodeForPlacementList = NeedsIsolatedNodeForShardList(colocatedShardList);
+		/*
+		 * Inherit needsisolatednode from the colocated shards.
+		 */
+		needsIsolatedNodeForPlacementList =
+			NeedsIsolatedNodeForShardList(colocatedShardList);
 	}
 	else
 	{
@@ -616,11 +617,11 @@ CreateDistributedTableConcurrently(Oid relationId, char *distributionColumnName,
 		 */
 		workersForPlacementList = RoundRobinWorkerNodeList(workerNodeList, shardCount);
 
-        /*
-         * For a new colocation group, needsisolatednode is set to false for
-         * all shard placements.
-         */
-        needsIsolatedNodeForPlacementList = GenerateListFromIntElement(false, shardCount);
+		/*
+		 * For a new colocation group, needsisolatednode is set to false for
+		 * all shards.
+		 */
+		needsIsolatedNodeForPlacementList = GenerateListFromIntElement(false, shardCount);
 	}
 
 	/*
@@ -659,7 +660,7 @@ CreateDistributedTableConcurrently(Oid relationId, char *distributionColumnName,
 		shardToSplit->shardId,
 		shardSplitPointsList,
 		workersForPlacementList,
-        needsIsolatedNodeForPlacementList,
+		needsIsolatedNodeForPlacementList,
 		distributionColumnOverrides,
 		sourceColocatedShardIntervalList,
 		colocationId
@@ -915,8 +916,6 @@ WorkerNodesForShardList(List *shardList)
 /*
  * NeedsIsolatedNodeForShardList returns a list of node booleans reflecting whether
  * each shard in the given list needs an isolated node.
- *
- * Each shard within given list is assumed to have a single placement.
  */
 static List *
 NeedsIsolatedNodeForShardList(List *shardList)
@@ -926,9 +925,8 @@ NeedsIsolatedNodeForShardList(List *shardList)
 	ShardInterval *shardInterval = NULL;
 	foreach_ptr(shardInterval, shardList)
 	{
-        bool missingOk = false;
-		ShardPlacement *shardPlacement = ActiveShardPlacement(shardInterval->shardId, missingOk);
-		needsIsolatedNodeList = lappend_int(needsIsolatedNodeList, shardPlacement->needsIsolatedNode);
+		needsIsolatedNodeList = lappend_int(needsIsolatedNodeList,
+											shardInterval->needsIsolatedNode);
 	}
 
 	return needsIsolatedNodeList;

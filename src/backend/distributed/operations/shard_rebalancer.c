@@ -472,7 +472,6 @@ FullShardPlacementList(Oid relationId, ArrayType *excludedShardArray)
 			placement->shardLength = groupPlacement->shardLength;
 			placement->groupId = groupPlacement->groupId;
 			placement->nodeId = worker->nodeId;
-			placement->needsIsolatedNode = groupPlacement->needsIsolatedNode;
 			placement->nodeName = pstrdup(worker->workerName);
 			placement->nodePort = worker->workerPort;
 			placement->placementId = groupPlacement->placementId;

@@ -73,8 +73,7 @@ typedef struct SequenceInfo
 extern void citus_internal_add_placement_metadata_internal(int64 shardId,
 														   int64 shardLength,
 														   int32 groupId,
-														   int64 placementId,
-														   bool needsIsolatedNode);
+														   int64 placementId);
 extern void SyncCitusTableMetadata(Oid relationId);
 extern void EnsureSequentialModeMetadataOperations(void);
 extern bool ClusterHasKnownMetadataWorkers(void);
@@ -113,8 +112,7 @@ extern List * GenerateGrantOnForeignServerQueriesFromAclItem(Oid serverId,
 															 AclItem *aclItem);
 extern List * GenerateGrantOnFDWQueriesFromAclItem(Oid serverId, AclItem *aclItem);
 extern char * PlacementUpsertCommand(uint64 shardId, uint64 placementId,
-									 uint64 shardLength, int32 groupId,
-									 bool needsIsolatedNode);
+									 uint64 shardLength, int32 groupId);
 extern TableDDLCommand * TruncateTriggerCreateCommand(Oid relationId);
 extern void CreateInterTableRelationshipOfRelationOnWorkers(Oid relationId);
 extern List * InterTableRelationshipOfRelationCommandList(Oid relationId);
@@ -145,8 +143,7 @@ extern char * UpdateNoneDistTableMetadataCommand(Oid relationId, char replicatio
 												 uint32 colocationId, bool autoConverted);
 extern char * ShardGroupSetNeedsIsolatedNodeCommand(uint64 shardId, bool enabled);
 extern char * AddPlacementMetadataCommand(uint64 shardId, uint64 placementId,
-										  uint64 shardLength, int32 groupId,
-										  bool needsIsolatedNode);
+										  uint64 shardLength, int32 groupId);
 extern char * DeletePlacementMetadataCommand(uint64 placementId);
 
 extern MetadataSyncContext * CreateMetadataSyncContext(List *nodeList,
@@ -207,10 +204,10 @@ extern void SendInterTableRelationshipCommands(MetadataSyncContext *context);
 #define UPSERT_PLACEMENT \
 	"INSERT INTO pg_dist_placement " \
 	"(shardid, shardstate, shardlength, " \
-	"groupid, placementid, needsisolatednode) " \
+	"groupid, placementid) " \
 	"VALUES (" UINT64_FORMAT ", 1, " UINT64_FORMAT \
 	", %d, " UINT64_FORMAT \
-	", %s) " \
+	") " \
 	"ON CONFLICT (shardid, groupid) DO UPDATE SET " \
 	"shardstate = EXCLUDED.shardstate, " \
 	"shardlength = EXCLUDED.shardlength, " \

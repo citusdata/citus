@@ -89,7 +89,7 @@ SELECT create_distributed_table('dist_3', 'a', colocate_with=>'dist_1');
 SET citus.shard_replication_factor TO 1;
 -- none of the placements have been marked as needsisolatednode yet
 SELECT result FROM run_command_on_all_nodes($$
-    SELECT * FROM public.get_colocated_placements_needisolatednode('isolate_placement.dist_1')
+    SELECT * FROM public.get_colocated_shards_needisolatednode('isolate_placement.dist_1')
 $$)
 ORDER BY nodeid;
  result
@@ -118,14 +118,14 @@ SELECT citus_shard_set_isolated(:shardgroup_10_shardid);
 (1 row)
 
 SELECT result FROM run_command_on_all_nodes($$
-    SELECT * FROM public.get_colocated_placements_needisolatednode('isolate_placement.dist_1')
+    SELECT * FROM public.get_colocated_shards_needisolatednode('isolate_placement.dist_1')
 $$)
 ORDER BY nodeid;
-                                                                                                                                           result
+                                                                                                                   result
 ---------------------------------------------------------------------
- [{"5": [{"isolate_placement.dist_1": [true, true]}, {"isolate_placement.dist_2": [true, true]}, {"isolate_placement.dist_3": [true, true]}]}, {"10": [{"isolate_placement.dist_1": [true, true]}, {"isolate_placement.dist_2": [true, true]}, {"isolate_placement.dist_3": [true, true]}]}]
- [{"5": [{"isolate_placement.dist_1": [true, true]}, {"isolate_placement.dist_2": [true, true]}, {"isolate_placement.dist_3": [true, true]}]}, {"10": [{"isolate_placement.dist_1": [true, true]}, {"isolate_placement.dist_2": [true, true]}, {"isolate_placement.dist_3": [true, true]}]}]
- [{"5": [{"isolate_placement.dist_1": [true, true]}, {"isolate_placement.dist_2": [true, true]}, {"isolate_placement.dist_3": [true, true]}]}, {"10": [{"isolate_placement.dist_1": [true, true]}, {"isolate_placement.dist_2": [true, true]}, {"isolate_placement.dist_3": [true, true]}]}]
+ [{"5": [{"isolate_placement.dist_1": true}, {"isolate_placement.dist_2": true}, {"isolate_placement.dist_3": true}]}, {"10": [{"isolate_placement.dist_1": true}, {"isolate_placement.dist_2": true}, {"isolate_placement.dist_3": true}]}]
+ [{"5": [{"isolate_placement.dist_1": true}, {"isolate_placement.dist_2": true}, {"isolate_placement.dist_3": true}]}, {"10": [{"isolate_placement.dist_1": true}, {"isolate_placement.dist_2": true}, {"isolate_placement.dist_3": true}]}]
+ [{"5": [{"isolate_placement.dist_1": true}, {"isolate_placement.dist_2": true}, {"isolate_placement.dist_3": true}]}, {"10": [{"isolate_placement.dist_1": true}, {"isolate_placement.dist_2": true}, {"isolate_placement.dist_3": true}]}]
 (3 rows)
 
 SELECT shardids[1] AS shardgroup_3_shardid
@@ -138,14 +138,14 @@ SELECT citus_shard_unset_isolated(:shardgroup_3_shardid);
 (1 row)
 
 SELECT result FROM run_command_on_all_nodes($$
-    SELECT * FROM public.get_colocated_placements_needisolatednode('isolate_placement.dist_1')
+    SELECT * FROM public.get_colocated_shards_needisolatednode('isolate_placement.dist_1')
 $$)
 ORDER BY nodeid;
-                                                                                                                                           result
+                                                                                                                   result
 ---------------------------------------------------------------------
- [{"5": [{"isolate_placement.dist_1": [true, true]}, {"isolate_placement.dist_2": [true, true]}, {"isolate_placement.dist_3": [true, true]}]}, {"10": [{"isolate_placement.dist_1": [true, true]}, {"isolate_placement.dist_2": [true, true]}, {"isolate_placement.dist_3": [true, true]}]}]
- [{"5": [{"isolate_placement.dist_1": [true, true]}, {"isolate_placement.dist_2": [true, true]}, {"isolate_placement.dist_3": [true, true]}]}, {"10": [{"isolate_placement.dist_1": [true, true]}, {"isolate_placement.dist_2": [true, true]}, {"isolate_placement.dist_3": [true, true]}]}]
- [{"5": [{"isolate_placement.dist_1": [true, true]}, {"isolate_placement.dist_2": [true, true]}, {"isolate_placement.dist_3": [true, true]}]}, {"10": [{"isolate_placement.dist_1": [true, true]}, {"isolate_placement.dist_2": [true, true]}, {"isolate_placement.dist_3": [true, true]}]}]
+ [{"5": [{"isolate_placement.dist_1": true}, {"isolate_placement.dist_2": true}, {"isolate_placement.dist_3": true}]}, {"10": [{"isolate_placement.dist_1": true}, {"isolate_placement.dist_2": true}, {"isolate_placement.dist_3": true}]}]
+ [{"5": [{"isolate_placement.dist_1": true}, {"isolate_placement.dist_2": true}, {"isolate_placement.dist_3": true}]}, {"10": [{"isolate_placement.dist_1": true}, {"isolate_placement.dist_2": true}, {"isolate_placement.dist_3": true}]}]
+ [{"5": [{"isolate_placement.dist_1": true}, {"isolate_placement.dist_2": true}, {"isolate_placement.dist_3": true}]}, {"10": [{"isolate_placement.dist_1": true}, {"isolate_placement.dist_2": true}, {"isolate_placement.dist_3": true}]}]
 (3 rows)
 
 SELECT shardids[1] AS shardgroup_10_shardid
@@ -158,14 +158,14 @@ SELECT citus_shard_unset_isolated(:shardgroup_10_shardid);
 (1 row)
 
 SELECT result FROM run_command_on_all_nodes($$
-    SELECT * FROM public.get_colocated_placements_needisolatednode('isolate_placement.dist_1')
+    SELECT * FROM public.get_colocated_shards_needisolatednode('isolate_placement.dist_1')
 $$)
 ORDER BY nodeid;
-                                                                    result
+                                                        result
 ---------------------------------------------------------------------
- [{"5": [{"isolate_placement.dist_1": [true, true]}, {"isolate_placement.dist_2": [true, true]}, {"isolate_placement.dist_3": [true, true]}]}]
- [{"5": [{"isolate_placement.dist_1": [true, true]}, {"isolate_placement.dist_2": [true, true]}, {"isolate_placement.dist_3": [true, true]}]}]
- [{"5": [{"isolate_placement.dist_1": [true, true]}, {"isolate_placement.dist_2": [true, true]}, {"isolate_placement.dist_3": [true, true]}]}]
+ [{"5": [{"isolate_placement.dist_1": true}, {"isolate_placement.dist_2": true}, {"isolate_placement.dist_3": true}]}]
+ [{"5": [{"isolate_placement.dist_1": true}, {"isolate_placement.dist_2": true}, {"isolate_placement.dist_3": true}]}]
+ [{"5": [{"isolate_placement.dist_1": true}, {"isolate_placement.dist_2": true}, {"isolate_placement.dist_3": true}]}]
 (3 rows)
 
 SELECT shardids[1] AS shardgroup_5_shardid
@@ -178,14 +178,14 @@ SELECT citus_shard_set_isolated(:shardgroup_5_shardid);
 (1 row)
 
 SELECT result FROM run_command_on_all_nodes($$
-    SELECT * FROM public.get_colocated_placements_needisolatednode('isolate_placement.dist_1')
+    SELECT * FROM public.get_colocated_shards_needisolatednode('isolate_placement.dist_1')
 $$)
 ORDER BY nodeid;
-                                                                    result
+                                                        result
 ---------------------------------------------------------------------
- [{"5": [{"isolate_placement.dist_1": [true, true]}, {"isolate_placement.dist_2": [true, true]}, {"isolate_placement.dist_3": [true, true]}]}]
- [{"5": [{"isolate_placement.dist_1": [true, true]}, {"isolate_placement.dist_2": [true, true]}, {"isolate_placement.dist_3": [true, true]}]}]
- [{"5": [{"isolate_placement.dist_1": [true, true]}, {"isolate_placement.dist_2": [true, true]}, {"isolate_placement.dist_3": [true, true]}]}]
+ [{"5": [{"isolate_placement.dist_1": true}, {"isolate_placement.dist_2": true}, {"isolate_placement.dist_3": true}]}]
+ [{"5": [{"isolate_placement.dist_1": true}, {"isolate_placement.dist_2": true}, {"isolate_placement.dist_3": true}]}]
+ [{"5": [{"isolate_placement.dist_1": true}, {"isolate_placement.dist_2": true}, {"isolate_placement.dist_3": true}]}]
 (3 rows)
 
 -- test metadata sync
@@ -234,14 +234,14 @@ SELECT citus_shard_set_isolated(:shardgroup_5_shardid);
 (1 row)
 
 SELECT result FROM run_command_on_all_nodes($$
-    SELECT * FROM public.get_colocated_placements_needisolatednode('isolate_placement.dist_1')
+    SELECT * FROM public.get_colocated_shards_needisolatednode('isolate_placement.dist_1')
 $$)
 ORDER BY nodeid;
-                                                           result
+                                                        result
 ---------------------------------------------------------------------
- [{"5": [{"isolate_placement.dist_1": [true]}, {"isolate_placement.dist_2": [true]}, {"isolate_placement.dist_3": [true]}]}]
- [{"5": [{"isolate_placement.dist_1": [true]}, {"isolate_placement.dist_2": [true]}, {"isolate_placement.dist_3": [true]}]}]
- [{"5": [{"isolate_placement.dist_1": [true]}, {"isolate_placement.dist_2": [true]}, {"isolate_placement.dist_3": [true]}]}]
+ [{"5": [{"isolate_placement.dist_1": true}, {"isolate_placement.dist_2": true}, {"isolate_placement.dist_3": true}]}]
+ [{"5": [{"isolate_placement.dist_1": true}, {"isolate_placement.dist_2": true}, {"isolate_placement.dist_3": true}]}]
+ [{"5": [{"isolate_placement.dist_1": true}, {"isolate_placement.dist_2": true}, {"isolate_placement.dist_3": true}]}]
 (3 rows)
 
 CREATE TABLE dist_4(a int);
@@ -263,14 +263,14 @@ DETAIL:  UPDATE and DELETE commands on the relation will error out during create
 -- Placements of a new distributed table created within the same colocated
 -- group inherit needsisolatednode from the colocated placements too.
 SELECT result FROM run_command_on_all_nodes($$
-    SELECT * FROM public.get_colocated_placements_needisolatednode('isolate_placement.dist_1')
+    SELECT * FROM public.get_colocated_shards_needisolatednode('isolate_placement.dist_1')
 $$)
 ORDER BY nodeid;
-                                                                                                        result
+                                                                                                   result
 ---------------------------------------------------------------------
- [{"5": [{"isolate_placement.dist_1": [true]}, {"isolate_placement.dist_2": [true]}, {"isolate_placement.dist_3": [true]}, {"isolate_placement.dist_4": [true]}, {"isolate_placement.dist_4_concurrently": [true]}]}]
- [{"5": [{"isolate_placement.dist_1": [true]}, {"isolate_placement.dist_2": [true]}, {"isolate_placement.dist_3": [true]}, {"isolate_placement.dist_4": [true]}, {"isolate_placement.dist_4_concurrently": [true]}]}]
- [{"5": [{"isolate_placement.dist_1": [true]}, {"isolate_placement.dist_2": [true]}, {"isolate_placement.dist_3": [true]}, {"isolate_placement.dist_4": [true]}, {"isolate_placement.dist_4_concurrently": [true]}]}]
+ [{"5": [{"isolate_placement.dist_1": true}, {"isolate_placement.dist_2": true}, {"isolate_placement.dist_3": true}, {"isolate_placement.dist_4": true}, {"isolate_placement.dist_4_concurrently": true}]}]
+ [{"5": [{"isolate_placement.dist_1": true}, {"isolate_placement.dist_2": true}, {"isolate_placement.dist_3": true}, {"isolate_placement.dist_4": true}, {"isolate_placement.dist_4_concurrently": true}]}]
+ [{"5": [{"isolate_placement.dist_1": true}, {"isolate_placement.dist_2": true}, {"isolate_placement.dist_3": true}, {"isolate_placement.dist_4": true}, {"isolate_placement.dist_4_concurrently": true}]}]
 (3 rows)
 
 DROP TABLE dist_4, dist_4_concurrently;
@@ -344,14 +344,14 @@ FROM get_candidate_node_for_shard_transfer(:shardgroup_15_shardid);
 (1 row)
 
 SELECT result FROM run_command_on_all_nodes($$
-    SELECT * FROM public.get_colocated_placements_needisolatednode('isolate_placement.dist_1')
+    SELECT * FROM public.get_colocated_shards_needisolatednode('isolate_placement.dist_1')
 $$)
 ORDER BY nodeid;
-                                                                    result
+                                                        result
 ---------------------------------------------------------------------
- [{"5": [{"isolate_placement.dist_1": [true, true]}, {"isolate_placement.dist_2": [true, true]}, {"isolate_placement.dist_3": [true, true]}]}]
- [{"5": [{"isolate_placement.dist_1": [true, true]}, {"isolate_placement.dist_2": [true, true]}, {"isolate_placement.dist_3": [true, true]}]}]
- [{"5": [{"isolate_placement.dist_1": [true, true]}, {"isolate_placement.dist_2": [true, true]}, {"isolate_placement.dist_3": [true, true]}]}]
+ [{"5": [{"isolate_placement.dist_1": true}, {"isolate_placement.dist_2": true}, {"isolate_placement.dist_3": true}]}]
+ [{"5": [{"isolate_placement.dist_1": true}, {"isolate_placement.dist_2": true}, {"isolate_placement.dist_3": true}]}]
+ [{"5": [{"isolate_placement.dist_1": true}, {"isolate_placement.dist_2": true}, {"isolate_placement.dist_3": true}]}]
 (3 rows)
 
 DROP TABLE dist_1, dist_2, dist_3;
@@ -379,14 +379,14 @@ SELECT citus_shard_set_isolated(:shardgroup_3_shardid);
 (1 row)
 
 SELECT result FROM run_command_on_all_nodes($$
-    SELECT * FROM public.get_colocated_placements_needisolatednode('isolate_placement.dist_1')
+    SELECT * FROM public.get_colocated_shards_needisolatednode('isolate_placement.dist_1')
 $$)
 ORDER BY nodeid;
-                                        result
+                                      result
 ---------------------------------------------------------------------
- [{"3": [{"isolate_placement.dist_1": [true]}, {"isolate_placement.dist_2": [true]}]}]
- [{"3": [{"isolate_placement.dist_1": [true]}, {"isolate_placement.dist_2": [true]}]}]
- [{"3": [{"isolate_placement.dist_1": [true]}, {"isolate_placement.dist_2": [true]}]}]
+ [{"3": [{"isolate_placement.dist_1": true}, {"isolate_placement.dist_2": true}]}]
+ [{"3": [{"isolate_placement.dist_1": true}, {"isolate_placement.dist_2": true}]}]
+ [{"3": [{"isolate_placement.dist_1": true}, {"isolate_placement.dist_2": true}]}]
 (3 rows)
 
 -- so that replicate_table_shards works
@@ -400,14 +400,14 @@ SELECT replicate_table_shards('isolate_placement.dist_1', shard_replication_fact
 
 SET client_min_messages TO NOTICE;
 SELECT result FROM run_command_on_all_nodes($$
-    SELECT * FROM public.get_colocated_placements_needisolatednode('isolate_placement.dist_1')
+    SELECT * FROM public.get_colocated_shards_needisolatednode('isolate_placement.dist_1')
 $$)
 ORDER BY nodeid;
-                                              result
+                                      result
 ---------------------------------------------------------------------
- [{"3": [{"isolate_placement.dist_1": [true, true]}, {"isolate_placement.dist_2": [true, true]}]}]
- [{"3": [{"isolate_placement.dist_1": [true, true]}, {"isolate_placement.dist_2": [true, true]}]}]
- [{"3": [{"isolate_placement.dist_1": [true, true]}, {"isolate_placement.dist_2": [true, true]}]}]
+ [{"3": [{"isolate_placement.dist_1": true}, {"isolate_placement.dist_2": true}]}]
+ [{"3": [{"isolate_placement.dist_1": true}, {"isolate_placement.dist_2": true}]}]
+ [{"3": [{"isolate_placement.dist_1": true}, {"isolate_placement.dist_2": true}]}]
 (3 rows)
 
 DROP TABLE dist_1, dist_2;
@@ -435,14 +435,14 @@ SELECT citus_shard_set_isolated(:shardgroup_9_shardid);
 (1 row)
 
 SELECT result FROM run_command_on_all_nodes($$
-    SELECT * FROM public.get_colocated_placements_needisolatednode('isolate_placement.dist_1')
+    SELECT * FROM public.get_colocated_shards_needisolatednode('isolate_placement.dist_1')
 $$)
 ORDER BY nodeid;
-                                        result
+                                      result
 ---------------------------------------------------------------------
- [{"9": [{"isolate_placement.dist_1": [true]}, {"isolate_placement.dist_2": [true]}]}]
- [{"9": [{"isolate_placement.dist_1": [true]}, {"isolate_placement.dist_2": [true]}]}]
- [{"9": [{"isolate_placement.dist_1": [true]}, {"isolate_placement.dist_2": [true]}]}]
+ [{"9": [{"isolate_placement.dist_1": true}, {"isolate_placement.dist_2": true}]}]
+ [{"9": [{"isolate_placement.dist_1": true}, {"isolate_placement.dist_2": true}]}]
+ [{"9": [{"isolate_placement.dist_1": true}, {"isolate_placement.dist_2": true}]}]
 (3 rows)
 
 SELECT nodeid AS worker_1_node FROM pg_dist_node WHERE nodeport=:worker_1_port \gset
@@ -462,7 +462,7 @@ WHERE shardid = :shardgroup_9_shardid;
 -- We shouldn't see shard group 9 because shard-split operation doesn't
 -- preserve needsisolatednode flag when splitting the shard.
 SELECT result FROM run_command_on_all_nodes($$
-    SELECT * FROM public.get_colocated_placements_needisolatednode('isolate_placement.dist_1')
+    SELECT * FROM public.get_colocated_shards_needisolatednode('isolate_placement.dist_1')
 $$)
 ORDER BY nodeid;
  result
@@ -482,14 +482,14 @@ SELECT citus_shard_set_isolated(:shardgroup_12_shardid);
 (1 row)
 
 SELECT result FROM run_command_on_all_nodes($$
-    SELECT * FROM public.get_colocated_placements_needisolatednode('isolate_placement.dist_1')
+    SELECT * FROM public.get_colocated_shards_needisolatednode('isolate_placement.dist_1')
 $$)
 ORDER BY nodeid;
-                                         result
+                                       result
 ---------------------------------------------------------------------
- [{"12": [{"isolate_placement.dist_1": [true]}, {"isolate_placement.dist_2": [true]}]}]
- [{"12": [{"isolate_placement.dist_1": [true]}, {"isolate_placement.dist_2": [true]}]}]
- [{"12": [{"isolate_placement.dist_1": [true]}, {"isolate_placement.dist_2": [true]}]}]
+ [{"12": [{"isolate_placement.dist_1": true}, {"isolate_placement.dist_2": true}]}]
+ [{"12": [{"isolate_placement.dist_1": true}, {"isolate_placement.dist_2": true}]}]
+ [{"12": [{"isolate_placement.dist_1": true}, {"isolate_placement.dist_2": true}]}]
 (3 rows)
 
 SELECT shardids[1] AS shardgroup_10_shardid
@@ -510,14 +510,14 @@ WHERE shardid = :shardgroup_10_shardid;
 -- We should see old shard group 12 (now as 13 due to split
 -- of a prior shard) because it's not the one we splitted.
 SELECT result FROM run_command_on_all_nodes($$
-    SELECT * FROM public.get_colocated_placements_needisolatednode('isolate_placement.dist_1')
+    SELECT * FROM public.get_colocated_shards_needisolatednode('isolate_placement.dist_1')
 $$)
 ORDER BY nodeid;
-                                         result
+                                       result
 ---------------------------------------------------------------------
- [{"13": [{"isolate_placement.dist_1": [true]}, {"isolate_placement.dist_2": [true]}]}]
- [{"13": [{"isolate_placement.dist_1": [true]}, {"isolate_placement.dist_2": [true]}]}]
- [{"13": [{"isolate_placement.dist_1": [true]}, {"isolate_placement.dist_2": [true]}]}]
+ [{"13": [{"isolate_placement.dist_1": true}, {"isolate_placement.dist_2": true}]}]
+ [{"13": [{"isolate_placement.dist_1": true}, {"isolate_placement.dist_2": true}]}]
+ [{"13": [{"isolate_placement.dist_1": true}, {"isolate_placement.dist_2": true}]}]
 (3 rows)
 
 CREATE TABLE dist_3(a int);
@@ -537,14 +537,14 @@ SELECT citus_shard_set_isolated(:shardgroup_17_shardid);
 (1 row)
 
 SELECT result FROM run_command_on_all_nodes($$
-    SELECT * FROM public.get_colocated_placements_needisolatednode('isolate_placement.dist_3')
+    SELECT * FROM public.get_colocated_shards_needisolatednode('isolate_placement.dist_3')
 $$)
 ORDER BY nodeid;
-                      result
+                     result
 ---------------------------------------------------------------------
- [{"17": [{"isolate_placement.dist_3": [true]}]}]
- [{"17": [{"isolate_placement.dist_3": [true]}]}]
- [{"17": [{"isolate_placement.dist_3": [true]}]}]
+ [{"17": [{"isolate_placement.dist_3": true}]}]
+ [{"17": [{"isolate_placement.dist_3": true}]}]
+ [{"17": [{"isolate_placement.dist_3": true}]}]
 (3 rows)
 
 -- verify that shard key value 100 is stored on shard group 17
@@ -563,7 +563,7 @@ SELECT 1 FROM isolate_tenant_to_new_shard('dist_3', 100, shard_transfer_mode => 
 -- We shouldn't see shard group 17 because isolate_tenant_to_new_shard doesn't
 -- preserve needsisolatednode flag when splitting the shard.
 SELECT result FROM run_command_on_all_nodes($$
-    SELECT * FROM public.get_colocated_placements_needisolatednode('isolate_placement.dist_3')
+    SELECT * FROM public.get_colocated_shards_needisolatednode('isolate_placement.dist_3')
 $$)
 ORDER BY nodeid;
  result
@@ -583,14 +583,14 @@ SELECT citus_shard_set_isolated(:shardgroup_18_shardid);
 (1 row)
 
 SELECT result FROM run_command_on_all_nodes($$
-    SELECT * FROM public.get_colocated_placements_needisolatednode('isolate_placement.dist_3')
+    SELECT * FROM public.get_colocated_shards_needisolatednode('isolate_placement.dist_3')
 $$)
 ORDER BY nodeid;
-                      result
+                     result
 ---------------------------------------------------------------------
- [{"18": [{"isolate_placement.dist_3": [true]}]}]
- [{"18": [{"isolate_placement.dist_3": [true]}]}]
- [{"18": [{"isolate_placement.dist_3": [true]}]}]
+ [{"18": [{"isolate_placement.dist_3": true}]}]
+ [{"18": [{"isolate_placement.dist_3": true}]}]
+ [{"18": [{"isolate_placement.dist_3": true}]}]
 (3 rows)
 
 -- verify that shard key value 1000 is _not_ stored on shard group 18
@@ -609,14 +609,14 @@ SELECT 1 FROM isolate_tenant_to_new_shard('dist_3', 1000, shard_transfer_mode =>
 -- We should see shard group 18 (now as 20 due to split of a prior shard)
 -- because it's not the one we splitted.
 SELECT result FROM run_command_on_all_nodes($$
-    SELECT * FROM public.get_colocated_placements_needisolatednode('isolate_placement.dist_3')
+    SELECT * FROM public.get_colocated_shards_needisolatednode('isolate_placement.dist_3')
 $$)
 ORDER BY nodeid;
-                      result
+                     result
 ---------------------------------------------------------------------
- [{"20": [{"isolate_placement.dist_3": [true]}]}]
- [{"20": [{"isolate_placement.dist_3": [true]}]}]
- [{"20": [{"isolate_placement.dist_3": [true]}]}]
+ [{"20": [{"isolate_placement.dist_3": true}]}]
+ [{"20": [{"isolate_placement.dist_3": true}]}]
+ [{"20": [{"isolate_placement.dist_3": true}]}]
 (3 rows)
 
 CREATE TABLE single_shard_1(a int);
@@ -643,14 +643,14 @@ SELECT create_distributed_table('single_shard_2', null, colocate_with=>'single_s
 (1 row)
 
 SELECT result FROM run_command_on_all_nodes($$
-    SELECT * FROM public.get_colocated_placements_needisolatednode('isolate_placement.single_shard_1')
+    SELECT * FROM public.get_colocated_shards_needisolatednode('isolate_placement.single_shard_1')
 $$)
 ORDER BY nodeid;
-                                                result
+                                              result
 ---------------------------------------------------------------------
- [{"1": [{"isolate_placement.single_shard_1": [true]}, {"isolate_placement.single_shard_2": [true]}]}]
- [{"1": [{"isolate_placement.single_shard_1": [true]}, {"isolate_placement.single_shard_2": [true]}]}]
- [{"1": [{"isolate_placement.single_shard_1": [true]}, {"isolate_placement.single_shard_2": [true]}]}]
+ [{"1": [{"isolate_placement.single_shard_1": true}, {"isolate_placement.single_shard_2": true}]}]
+ [{"1": [{"isolate_placement.single_shard_1": true}, {"isolate_placement.single_shard_2": true}]}]
+ [{"1": [{"isolate_placement.single_shard_1": true}, {"isolate_placement.single_shard_2": true}]}]
 (3 rows)
 
 -- test invalid input
@@ -910,14 +910,14 @@ SELECT create_distributed_table('range_table_post', 'a', 'range');
 
 CALL public.create_range_partitioned_shards('range_table_post', '{"0","25"}','{"26","50"}');
 SELECT result FROM run_command_on_all_nodes($$
-    SELECT * FROM public.get_colocated_placements_needisolatednode('isolate_placement.dist_1')
+    SELECT * FROM public.get_colocated_shards_needisolatednode('isolate_placement.dist_1')
 $$)
 ORDER BY nodeid;
-                                                                                                  result
+                                                                                              result
 ---------------------------------------------------------------------
- [{"1": [{"isolate_placement.dist_1": [true]}, {"isolate_placement.dist_2": [true]}, {"isolate_placement.dist_post_colocated": [true]}, {"isolate_placement.dist_post_concurrently_colocated": [true]}]}]
- [{"1": [{"isolate_placement.dist_1": [true]}, {"isolate_placement.dist_2": [true]}, {"isolate_placement.dist_post_colocated": [true]}, {"isolate_placement.dist_post_concurrently_colocated": [true]}]}]
- [{"1": [{"isolate_placement.dist_1": [true]}, {"isolate_placement.dist_2": [true]}, {"isolate_placement.dist_post_colocated": [true]}, {"isolate_placement.dist_post_concurrently_colocated": [true]}]}]
+ [{"1": [{"isolate_placement.dist_1": true}, {"isolate_placement.dist_2": true}, {"isolate_placement.dist_post_colocated": true}, {"isolate_placement.dist_post_concurrently_colocated": true}]}]
+ [{"1": [{"isolate_placement.dist_1": true}, {"isolate_placement.dist_2": true}, {"isolate_placement.dist_post_colocated": true}, {"isolate_placement.dist_post_concurrently_colocated": true}]}]
+ [{"1": [{"isolate_placement.dist_1": true}, {"isolate_placement.dist_2": true}, {"isolate_placement.dist_post_colocated": true}, {"isolate_placement.dist_post_concurrently_colocated": true}]}]
 (3 rows)
 
 -- Make sure that the node that contains shard-group 1 of isolate_placement.dist_1
