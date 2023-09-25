@@ -1983,7 +1983,9 @@ Most multi-tenant and high-performance CRUD workloads only involve transactions 
 
 For transactions that write to multiple nodes, Citus uses the built-in two-phase commit (2PC) machinery in PostgreSQL. In the pre-commit callback, a “prepare transaction” command is sent over all connections to worker nodes with open transaction blocks, then a commit record is stored on the coordinator. In the post-commit callback, “commit prepared” commands are sent to commit on the worker nodes. The maintenance daemon takes care of recovering failed 2PC transactions by comparing the commit records on the coordinator to the list of pending prepared transactions on the worker. The presence of a record implies the transaction was committed, while the absence implies it was aborted. Pending prepared transactions are moved forward accordingly. 
 
-Nice animation at: How Citus Executes Distributed Transactions on Postgres (citusdata.com)  
+<img alt="2PC recovery" src="../../../images/2pc-recovery.png" width="600">
+
+Nice animation at: [How Citus Executes Distributed Transactions on Postgres](https://www.citusdata.com/blog/2017/11/22/how-citus-executes-distributed-transactions/)
 
 ## No distributed snapshot isolation 
 
@@ -2070,6 +2072,8 @@ Once each local lock graph is created, then the results are combined in on the c
 While doing the DFS, we also keep track of the other backends that are involved in the cycle. Citus picks the `youngest` transaction as the candidate to cancel (e.g., sends SIGINT). The idea is that let’s allow longer running transactions to continue, such as a long running DDL. 
 
 If there is a cycle in the local graph, typically Postgres’ deadlock detection kicks in before Citus’ deadlock detection, hence breaks the cycle. There is a safe race condition between Citus’ deadlock detection and Postgres’ deadlock detection. Even if the race happens, the worst-case scenario is that the multiple backends from the same cycle is cancelled. In practice, we do not see much, because Citus deadlock detection runs `2x` slower (e.g., `citus.distributed_deadlock_detection_factor`) than Postgres deadlock detection. 
+
+<img alt="Deadlock detection" src="../../../images/deadlock-detection.png" width="600">
 
 For debugging purposes, you can enable logging with distributed deadlock detection: `citus.log_distributed_deadlock_detection`
 
