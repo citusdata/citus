@@ -1744,9 +1744,141 @@ The reason for handling dependencies and deparsing in post-process step is that 
 
 Not all table DDL is currently deparsed. In that case, the original command sent by the client is used. That is a shortcoming in our DDL logic that causes user-facing issues and should be addressed. We do not directly construct a separate DDL command for each shard. Instead, we call the `worker_apply_shard_ddl_command(shardid bigint, ddl_command text)` function which parses the DDL command, replaces the table names with shard names in the parse tree according to the shard ID, and then executes the command. That also has some shortcomings, because we cannot support more complex DDL commands in this manner (e.g. adding multiple foreign keys). Ideally, all DDL would be deparsed, and for table DDL the deparsed query string would have shard names, similar to regular queries.
 
+
 ## Object & dependency propagation
 
-TODO
+These two topics are closely related, so we'll discuss them together. You can start the topic by reading [Nils' blog](https://www.citusdata.com/blog/2020/06/25/using-custom-types-with-citus-and-postgres/) on the topic.
+
+### The concept of "Dependency" for Postgres/Citus
+
+Starting with the basics, Postgres already understands object dependencies. For instance, it won't allow you to execute `DROP SCHEMA` without the `CASCADE` option if tables exist within the schema. In this case, the table is a `dependent object`, and the schema serves as the `referenced object`.
+
+```sql
+CREATE SCHEMA sc1;
+CREATE TABLE sc1.test(a int);
+DROP SCHEMA sc1;
+ERROR:  cannot drop schema sc1 because other objects depend on it
+DETAIL:  table sc1.test depends on schema sc1
+HINT:  Use DROP ... CASCADE to drop the dependent objects too.
+```
+
+The information about these dependencies is stored in a specific Postgres catalog table, known as [`pg_depend`](https://www.postgresql.org/docs/current/catalog-pg-depend.html). You can inspect the aforementioned dependency within this catalog using the following query:
+
+```sql
+SELECT
+    pg_identify_object_as_address(classid, objid, objsubid) as dependent_object,
+    pg_identify_object_as_address(refclassid, refobjid, refobjsubid) as referenced_object
+FROM
+    pg_depend
+WHERE
+    (classid, objid, objsubid) 
+        IN 
+    (SELECT classid, objid, objsubid FROM pg_get_object_address('table', '{sc1,test}', '{}'));
+
+┌─────────────────────────┬───────────────────┐
+│    dependent_object     │ referenced_object │
+├─────────────────────────┼───────────────────┤
+│ (table,"{sc1,test}",{}) │ (schema,{sc1},{}) │
+└─────────────────────────┴───────────────────┘
+(1 row)
+```
+
+### Citus' Approach to Object Creation and Dependency Tracking: `pg_dist_object`
+
+Citus employs its own catalog table called `pg_dist_object`. This table keeps records of all objects that need to be created on every node in the cluster. These objects are commonly referred to as `Distributed Objects`.
+
+When adding a new node to the cluster using `citus_add_node()`, Citus must ensure the creation of all dependent objects even before moving data to the new node. For instance, if a table relies on a custom type or an extension, these objects need to be created before any table is set up. In short, Citus is responsible for setting up all the dependent objects related to the tables.
+
+Similarly, when creating a new Citus table, Citus must confirm that all dependent objects, such as custom types, already exist before the shell table or shards are set up on the worker nodes. Note that this applies not just to tables; all distributed objects follow the same pattern.
+
+Here is a brief overview of `pg_dist_object`, which has a similar structure to `pg_depend` in terms of overlapping columns like `classid, objid, objsubid`:
+
+```sql
+CREATE SCHEMA sc1;
+CREATE TABLE sc1.test(a int);
+SELECT create_distributed_table('sc1.test', 'a');
+
+SELECT
+    pg_identify_object_as_address(classid, objid, objsubid) as distributed_object
+FROM
+    pg_dist_object;
+┌─────────────────────────────┐
+│     distributed_object      │
+├─────────────────────────────┤
+│ (role,{onderkalaci},{})     │
+│ (database,{onderkalaci},{}) │
+│ (schema,{sc1},{})           │
+│ (table,"{sc1,test}",{})     │
+└─────────────────────────────┘
+(4 rows)
+```
+
+
+### When Is `pg_dist_object` Populated?
+
+Generally, the process is straightforward: When a new object is created, Citus adds a record to `pg_dist_object`. The C functions responsible for this are `MarkObjectDistributed()` and `MarkObjectDistributedViaSuperuser()`. We'll discuss the difference between them in the next section.
+
+Citus employs a universal strategy for dealing with objects. Every object creation, alteration, or deletion event (like custom types, tables, or extensions) is represented by the C struct `DistributeObjectOps`. You can find a list of all supported object types in [`distribute_object_ops.c`](https://github.com/citusdata/citus/blob/2c190d068918d1c457894adf97f550e5b3739184/src/backend/distributed/commands/distribute_object_ops.c#L4). As of Citus 12.1, most Postgres objects are supported, although there are a few exceptions.
+
+Whenever `DistributeObjectOps->markDistributed` is set to true—usually during `CREATE` operations—Citus calls `MarkObjectDistributed()`. Citus also labels the same objects as distributed across all nodes via the `citus_internal_add_object_metadata()` UDF.
+
+Here's a simple example:
+
+```sql
+-- Citus automatically creates the object on all nodes
+CREATE TYPE type_test AS (a int, b int);
+...
+NOTICE:  issuing SELECT worker_create_or_replace_object('CREATE TYPE public.type_test AS (a integer, b integer);');
+....
+ WITH distributed_object_data(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation)  AS (VALUES ('schema', ARRAY['public']::text[], ARRAY[]::text[], -1, 0, false)) SELECT citus_internal_add_object_metadata(typetext, objnames, objargs, distargumentindex::int, colocationid::int, force_delegation::bool) FROM distributed_object_data;
+ ...
+
+-- Then, check pg_dist_object. This should be consistent across all nodes.
+SELECT
+    pg_identify_object_as_address(classid, objid, objsubid) as distributed_object
+FROM
+    pg_dist_object
+WHERE
+    (classid, objid, objsubid) 
+        IN 
+    (SELECT classid, objid, objsubid FROM pg_get_object_address('type', '{type_test}', '{}'));
+┌──────────────────────────────┐
+│      distributed_object      │
+├──────────────────────────────┤
+│ (type,{public.type_test},{}) │
+└──────────────────────────────┘
+(1 row)
+```
+
+In rare cases, `pg_dist_object` is updated during Citus version upgrades. If you upgrade Citus from `version X` to `version Y`, and a certain object becomes a supported distributed object in `version Y` but wasn't in `version X`, Citus marks it as such during the `ALTER EXTENSION citus` command. The details can be found in the C function `PostprocessAlterExtensionCitusUpdateStmt()`.
+
+### How Are `pg_dist_object` and `pg_depend` Related?
+
+In the prior sections, we focused on standalone objects, but in reality, most objects have dependencies. That's where `pg_depend` and also `pg_shdepend` become crucial. Any mention of `pg_depend` in this section also applies to `pg_shdepend`.
+
+When Citus creates an object, it scans the `pg_depend` table to identify all dependencies and then automatically generates these dependencies as distributed objects. 
+
+The core C function in this process is `EnsureDependenciesExistOnAllNodes()`. This function takes the object as an argument and conducts a depth-first search (DFS) on `pg_depend` and `pg_shdepend` tables. The DFS sequence is crucial because dependencies must be established in a specific order. For instance, if a table depends on a type `t1`, and `t1` relies on another type `t2`, then `t2` must be created before `t1`. The DFS ensures that this order is maintained.
+
+If Citus encounters a dependency it can't support, it will throw an error instead of silently allowing it. The rationale behind this approach is to avoid subtle issues later, especially when adding new nodes. For instance, Citus currently throws an error for circular dependencies. The main function performing these checks is `EnsureDependenciesCanBeDistributed()`.
+
+During the DFS, Citus might need to extend its search, especially for complex dependencies like array types that don't have a straightforward dependency on their element types. Citus expands the traversal to account for such cases. The main function responsible for this is `ExpandCitusSupportedTypes()`, which has extensive comments explaining the specific rules.
+
+### Current User vs `superuser` for Object Propagation:
+
+The difference between `MarkObjectDistributed()` and `MarkObjectDistributedViaSuperuser()` is important here. Generally, Citus tries to minimize the use of `superuser` operations for security reasons. However, there are cases where it's necessary. We employ `superuser` permissions primarily when marking the dependencies of an object we are working on. This is because creating dependencies might require higher-level privileges that the current user might not have. For example, if a schema depends on a role, and the current user doesn't have the privilege to create roles, an error will be thrown. To avoid this, we use `superuser` for creating dependencies.
+
+However, there's an exception. If the dependency is created within the same transaction, we use the current user. This prevents visibility issues and is mainly relevant for `serial` columns. More details can be found in [Citus GitHub PR 7028](https://github.com/citusdata/citus/pull/7028).
+
+### When Are the Objects in `pg_dist_object` Used?
+
+There are three main scenarios:
+
++ When adding a new node—or more precisely, activating it—Citus reads all objects listed in `pg_dist_object`, sorts them by dependency, and then creates those objects on the new node. The core C function for this is `SendDependencyCreationCommands()`, and the sorting is done by `OrderObjectAddressListInDependencyOrder()`.
+
++ When Citus creates a new object and processes its dependencies, any dependencies already marked as distributed are skipped. This is handled in `FollowNewSupportedDependencies()`, where dependencies are bypassed if `IsAnyObjectDistributed()` returns true.
+
++ When user modifies an object, Citus acts only when the object is distributed. For non-distributed object, Citus gives the control back to Postgres.
 
 ## Foreign keys 
 
