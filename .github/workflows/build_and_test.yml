@@ -14,7 +14,7 @@ on:
     types: [opened, reopened,synchronize]
 jobs:
   check-sql-snapshots:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     container:
       image: ${{ vars.build_image_name }}:latest
       options: --user root
@@ -25,7 +25,7 @@ jobs:
         git config --global --add safe.directory ${GITHUB_WORKSPACE}
         ci/check_sql_snapshots.sh
   check-style:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     container:
       image: ${{ vars.style_checker_image_name }}:${{ vars.style_checker_tools_version }}${{ vars.image_suffix }}
     steps:
@@ -80,7 +80,7 @@ jobs:
           - ${{ vars.pg14_version }}
           - ${{ vars.pg15_version }}
           - ${{ vars.pg16_version }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     container:
       image: "${{ matrix.image_name }}:${{ matrix.pg_version  }}${{ matrix.image_suffix }}"
       options: --user root
@@ -184,7 +184,7 @@ jobs:
             pg_version: ${{ vars.pg16_version }}
             suite: regress
             image_name: ${{ vars.fail_test_image_name }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     container:
       image: "${{ matrix.image_name }}:${{ matrix.pg_version }}${{ vars.image_suffix }}"
       options: --user root
@@ -207,7 +207,7 @@ jobs:
         codecov_token: ${{ secrets.CODECOV_TOKEN }}
   test-arbitrary-configs:
     name: PG${{ matrix.pg_version }} - regress - check-arbitrary-configs
-    runs-on: ubuntu-latest #-16core - we need 16 cores VMs to run this job successfully
+    runs-on: ubuntu-20.04 #-16core - we need 16 cores VMs to run this job successfully
     container:
       image: "${{ matrix.image_name }}:${{ matrix.pg_version }}${{ vars.image_suffix }}"
       options: --user root
@@ -245,7 +245,7 @@ jobs:
         codecov_token: ${{ secrets.CODECOV_TOKEN }}
   test-pg-upgrade:
     name: PG${{ matrix.old_pg_major }}-PG${{ matrix.new_pg_major }} - regress - check-pg-upgrade
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     container:
       image: "${{ vars.pgupgrade_image_name }}:${{ vars.upgrade_pg_versions }}${{ vars.image_suffix }}"
       options: --user root
@@ -294,7 +294,7 @@ jobs:
         flags: ${{ env.old_pg_major }}_${{ env.new_pg_major }}_upgrade
         codecov_token: ${{ secrets.CODECOV_TOKEN }}
   test-citus-upgrade:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     container:
       image: "${{ vars.citusupgrade_image_name }}:${{ vars.pg14_version }}${{ vars.image_suffix }}"
       options: --user root
@@ -340,7 +340,7 @@ jobs:
     if: always()
     env:
       CC_TEST_REPORTER_ID: ${{ secrets.CC_TEST_REPORTER_ID }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     container:
       image: ${{ vars.test_image_name }}:${{ vars.pg16_version }}${{ vars.image_suffix }}
     needs:
@@ -359,7 +359,7 @@ jobs:
           cc-test-reporter upload-coverage -i total.json
   ch_benchmark:
     if: startsWith(github.ref, 'refs/heads/ch_benchmark/')
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     needs:
     - build
     steps:
@@ -376,7 +376,7 @@ jobs:
           run_hammerdb.sh citusbot_ch_benchmark_rg
   tpcc_benchmark:
     if: startsWith(github.ref, 'refs/heads/tpcc_benchmark/')
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     needs:
     - build
     steps:
@@ -395,7 +395,7 @@ jobs:
     name: Parallel 32
     if: ${{ needs.test-flakyness-pre.outputs.tests != ''}}
     needs: test-flakyness-pre
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     outputs:
       json: ${{ steps.parallelization.outputs.json }}
     steps:
@@ -407,7 +407,7 @@ jobs:
   test-flakyness-pre:
     name: Detect regression tests need to be ran
     if: ${{ !inputs.skip_test_flakyness }}}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     needs: build
     outputs:
       tests: ${{ steps.detect-regression-tests.outputs.tests }}
@@ -429,7 +429,7 @@ jobs:
   test-flakyness:
     if: ${{ needs.test-flakyness-pre.outputs.tests != ''}}
     name: Test flakyness
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     container:
       image: ${{ vars.fail_test_image_name }}:${{ vars.pg16_version }}${{ vars.image_suffix }}
       options: --user root
