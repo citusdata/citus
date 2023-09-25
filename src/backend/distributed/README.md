@@ -1617,7 +1617,7 @@ Historically, Citus executed single shard queries via a single connection per wo
 
 To fulfill the first two requirements, the adaptive executor uses a (process-local) **pool of connections per node**, which typically starts at 1 connection, but can grow based on the runtime of the query. Queries on shard groups that were already modified are assigned to the connection that performed the modification(s), while remaining queries are assigned to the pool (to be parallelized at will). 
 
-<img alt="Adaptive executor pools" src="../../../executor-connections.png" width="500">
+<img alt="Adaptive executor pools" src="../../../images/executor-connections.png" width="500">
 
 **Both the pool and the session have a “pending queue” and a “ready queue”**. The pending queue is mainly used in case of replication (e.g. reference tables). In the case of reads, whether a (pending) task on placement 2 needs to run depends on whether the (ready) task on placement 1 succeeds. In case of inserts, we write to the placements in order, so the task on placement 2 runs only once placement 1 is done. 
 
