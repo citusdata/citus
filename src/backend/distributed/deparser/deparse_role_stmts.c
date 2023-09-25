@@ -15,8 +15,10 @@
 
 #include "pg_version_compat.h"
 
+#include "commands/defrem.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/deparser.h"
+#include "distributed/listutils.h"
 #include "lib/stringinfo.h"
 #include "nodes/parsenodes.h"
 #include "utils/builtins.h"
@@ -28,6 +30,8 @@ static void AppendRoleOption(StringInfo buf, ListCell *optionCell);
 static void AppendRoleList(StringInfo buf, List *roleList);
 static void AppendDropRoleStmt(StringInfo buf, DropRoleStmt *stmt);
 static void AppendGrantRoleStmt(StringInfo buf, GrantRoleStmt *stmt);
+static void AppendRevokeAdminOptionFor(StringInfo buf, GrantRoleStmt *stmt);
+static void AppendGrantWithAdminOption(StringInfo buf, GrantRoleStmt *stmt);
 
 
 /*
@@ -341,6 +345,66 @@ DeparseGrantRoleStmt(Node *node)
 
 
 /*
+ * Append the 'RESTRICT' or 'CASCADE' clause to the given buffer if the given
+ * statement is a 'REVOKE' statement and the behavior is specified.
+ * After PostgreSQL 16, the behavior is specified in the 'opt' field of
+ * GrantRoleStmt and may have multiple values.
+ * Here, compile time version is checked to support both versions.
+ */
+static void
+AppendRevokeAdminOptionFor(StringInfo buf, GrantRoleStmt *stmt)
+{
+#if PG_VERSION_NUM >= PG_VERSION_16
+	if (!stmt->is_grant)
+	{
+		DefElem *opt = NULL;
+		foreach_ptr(opt, stmt->opt)
+		{
+			if (strcmp(opt->defname, "admin") == 0)
+			{
+				appendStringInfo(buf, "ADMIN OPTION FOR ");
+				break;
+			}
+		}
+	}
+#else
+	if (!stmt->is_grant && stmt->admin_opt)
+	{
+		appendStringInfo(buf, "ADMIN OPTION FOR ");
+	}
+#endif
+}
+
+
+static void
+AppendGrantWithAdminOption(StringInfo buf, GrantRoleStmt *stmt)
+{
+	if (stmt->is_grant)
+	{
+#if PG_VERSION_NUM >= PG_VERSION_16
+		DefElem *opt = NULL;
+		foreach_ptr(opt, stmt->opt)
+		{
+			bool admin_option = false;
+			char *optval = defGetString(opt);
+			if (strcmp(opt->defname, "admin") == 0 &&
+				parse_bool(optval, &admin_option) && admin_option)
+			{
+				appendStringInfo(buf, " WITH ADMIN OPTION");
+				break;
+			}
+		}
+#else
+		if (stmt->admin_opt)
+		{
+			appendStringInfo(buf, " WITH ADMIN OPTION");
+		}
+#endif
+	}
+}
+
+
+/*
  * AppendGrantRoleStmt generates the string representation of the
  * GrantRoleStmt and appends it to the buffer.
  */
@@ -348,41 +412,15 @@ static void
 AppendGrantRoleStmt(StringInfo buf, GrantRoleStmt *stmt)
 {
 	appendStringInfo(buf, "%s ", stmt->is_grant ? "GRANT" : "REVOKE");
-
-	if (!stmt->is_grant && stmt->admin_opt)
-	{
-		appendStringInfo(buf, "ADMIN OPTION FOR ");
-	}
-
+	AppendRevokeAdminOptionFor(buf, stmt);
 	AppendRoleList(buf, stmt->granted_roles);
-
 	appendStringInfo(buf, "%s ", stmt->is_grant ? " TO " : " FROM ");
-
 	AppendRoleList(buf, stmt->grantee_roles);
-
-	if (stmt->is_grant)
-	{
-		if (stmt->admin_opt)
-		{
-			appendStringInfo(buf, " WITH ADMIN OPTION");
-		}
-
-		if (stmt->grantor)
-		{
-			appendStringInfo(buf, " GRANTED BY %s", RoleSpecString(stmt->grantor, true));
-		}
-	}
-	else
-	{
-		if (stmt->behavior == DROP_RESTRICT)
-		{
-			appendStringInfo(buf, " RESTRICT");
-		}
-		else if (stmt->behavior == DROP_CASCADE)
-		{
-			appendStringInfo(buf, " CASCADE");
-		}
-	}
+	AppendGrantWithAdminOption(buf, stmt);
+	AppendGrantedByInGrantForRoleSpec(buf, stmt->grantor, stmt->is_grant);
+	AppendGrantRestrictAndCascadeForRoleSpec(buf, stmt->behavior, stmt->is_grant);
+	AppendGrantedByInGrantForRoleSpec(buf, stmt->grantor, stmt->is_grant);
+	appendStringInfo(buf, ";");
 }
 
 

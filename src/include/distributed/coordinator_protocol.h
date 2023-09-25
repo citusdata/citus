@@ -156,7 +156,7 @@ struct TableDDLCommand
 
 	/*
 	 * This union contains one (1) typed field for every implementation for
-	 * TableDDLCommand. A union enforces no overloading of fields but instead requiers at
+	 * TableDDLCommand. A union enforces no overloading of fields but instead requires at
 	 * most one of the fields to be used at any time.
 	 */
 	union
@@ -250,11 +250,10 @@ extern void CreateAppendDistributedShardPlacements(Oid relationId, int64 shardId
 												   List *workerNodeList, int
 												   replicationFactor);
 extern void CreateShardsOnWorkers(Oid distributedRelationId, List *shardPlacements,
-								  bool useExclusiveConnection,
-								  bool colocatedShard);
-extern List * InsertShardPlacementRows(Oid relationId, int64 shardId,
-									   List *workerNodeList, int workerStartIndex,
-									   int replicationFactor);
+								  bool useExclusiveConnection);
+extern void InsertShardPlacementRows(Oid relationId, int64 shardId,
+									 List *workerNodeList, int workerStartIndex,
+									 int replicationFactor);
 extern uint64 UpdateShardStatistics(int64 shardId);
 extern void CreateShardsWithRoundRobinPolicy(Oid distributedTableId, int32 shardCount,
 											 int32 replicationFactor,
@@ -264,9 +263,9 @@ extern void CreateColocatedShards(Oid targetRelationId, Oid sourceRelationId,
 extern void CreateReferenceTableShard(Oid distributedTableId);
 extern void CreateSingleShardTableShardWithRoundRobinPolicy(Oid relationId,
 															uint32 colocationId);
-extern List * WorkerCreateShardCommandList(Oid relationId, int shardIndex, uint64 shardId,
-										   List *ddlCommandList,
-										   List *foreignConstraintCommandList);
+extern int EmptySingleShardTableColocationDecideNodeId(uint32 colocationId);
+extern List * WorkerCreateShardCommandList(Oid relationId, uint64 shardId,
+										   List *ddlCommandList);
 extern Oid ForeignConstraintGetReferencedTableId(const char *queryString);
 extern void CheckHashPartitionedTable(Oid distributedTableId);
 extern void CheckTableSchemaNameForDrop(Oid relationId, char **schemaName,

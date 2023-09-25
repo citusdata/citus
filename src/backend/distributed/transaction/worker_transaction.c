@@ -124,7 +124,7 @@ SendCommandToWorkersWithMetadata(const char *command)
  * owner to ensure write access to the Citus metadata tables.
  *
  * Since we prevent to open superuser connections for metadata tables, it is
- * discourated to use it. Consider using it only for propagating pg_dist_object
+ * discouraged to use it. Consider using it only for propagating pg_dist_object
  * tuples for dependent objects.
  */
 void
@@ -132,6 +132,21 @@ SendCommandToWorkersWithMetadataViaSuperUser(const char *command)
 {
 	SendCommandToMetadataWorkersParams(command, CitusExtensionOwnerName(),
 									   0, NULL, NULL);
+}
+
+
+/*
+ * SendCommandListToWorkersWithMetadata sends all commands to all metadata workers
+ * with the current user. See `SendCommandToWorkersWithMetadata`for details.
+ */
+void
+SendCommandListToWorkersWithMetadata(List *commands)
+{
+	char *command = NULL;
+	foreach_ptr(command, commands)
+	{
+		SendCommandToWorkersWithMetadata(command);
+	}
 }
 
 

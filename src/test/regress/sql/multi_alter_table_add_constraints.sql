@@ -563,6 +563,19 @@ SELECT create_distributed_table('alter_add_unique', 'x');
 ALTER TABLE alter_add_unique ADD CONSTRAINT unique_constraint_test UNIQUE USING INDEX alter_unique_idx;
 ALTER TABLE alter_add_unique DROP CONSTRAINT unique_constraint_test;
 
+CREATE TABLE unique_test_table_single_shard(id int, name varchar(20));
+SELECT create_distributed_table('unique_test_table_single_shard', 'id', shard_count=>1);
+
+ALTER TABLE unique_test_table_single_shard ADD UNIQUE(id, name) WITH (fillfactor=20);
+
+SELECT (groupid = 0) AS is_coordinator, result FROM run_command_on_all_nodes(
+  $$SELECT get_index_defs FROM get_index_defs('sc3', 'unique_test_table_single_shard')$$
+)
+JOIN pg_dist_node USING (nodeid)
+ORDER BY is_coordinator DESC, result;
+
+DROP TABLE unique_test_table_single_shard;
+
 SET search_path TO 'public';
 
 DROP SCHEMA sc1 CASCADE;

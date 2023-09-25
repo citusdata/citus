@@ -109,6 +109,18 @@ extern char * DeparseAlterSchemaOwnerStmt(Node *node);
 
 extern void AppendGrantPrivileges(StringInfo buf, GrantStmt *stmt);
 extern void AppendGrantGrantees(StringInfo buf, GrantStmt *stmt);
+extern void AppendWithGrantOption(StringInfo buf, GrantStmt *stmt);
+extern void AppendGrantOptionFor(StringInfo buf, GrantStmt *stmt);
+extern void AppendGrantRestrictAndCascadeForRoleSpec(StringInfo buf, DropBehavior
+													 behavior, bool isGrant);
+extern void AppendGrantRestrictAndCascade(StringInfo buf, GrantStmt *stmt);
+extern void AppendGrantedByInGrantForRoleSpec(StringInfo buf, RoleSpec *grantor, bool
+											  isGrant);
+extern void AppendGrantedByInGrant(StringInfo buf, GrantStmt *stmt);
+
+extern void AppendGrantSharedPrefix(StringInfo buf, GrantStmt *stmt);
+extern void AppendGrantSharedSuffix(StringInfo buf, GrantStmt *stmt);
+
 
 /* forward declarations for deparse_statistics_stmts.c */
 extern char * DeparseCreateStatisticsStmt(Node *node);
@@ -210,6 +222,11 @@ extern char * DeparseAlterExtensionStmt(Node *stmt);
 
 /* forward declarations for deparse_database_stmts.c */
 extern char * DeparseAlterDatabaseOwnerStmt(Node *node);
+extern char * DeparseGrantOnDatabaseStmt(Node *node);
+extern char * DeparseAlterDatabaseStmt(Node *node);
+extern char * DeparseAlterDatabaseRefreshCollStmt(Node *node);
+extern char * DeparseAlterDatabaseSetStmt(Node *node);
+
 
 /* forward declaration for deparse_publication_stmts.c */
 extern char * DeparseCreatePublicationStmt(Node *stmt);

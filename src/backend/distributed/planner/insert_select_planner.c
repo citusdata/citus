@@ -61,6 +61,9 @@ static DistributedPlan * CreateInsertSelectPlanInternal(uint64 planId,
 static DistributedPlan * CreateDistributedInsertSelectPlan(Query *originalQuery,
 														   PlannerRestrictionContext *
 														   plannerRestrictionContext);
+static bool InsertSelectHasRouterSelect(Query *originalQuery,
+										PlannerRestrictionContext *
+										plannerRestrictionContext);
 static Task * RouterModifyTaskForShardInterval(Query *originalQuery,
 											   CitusTableCacheEntry *targetTableCacheEntry,
 											   ShardInterval *shardInterval,
@@ -75,6 +78,7 @@ static DeferredErrorMessage * DistributedInsertSelectSupported(Query *queryTree,
 															   RangeTblEntry *insertRte,
 															   RangeTblEntry *subqueryRte,
 															   bool allReferenceTables,
+															   bool routerSelect,
 															   PlannerRestrictionContext *
 															   plannerRestrictionContext);
 static DeferredErrorMessage * InsertPartitionColumnMatchesSelect(Query *query,
@@ -282,6 +286,9 @@ CreateDistributedInsertSelectPlan(Query *originalQuery,
 	RelationRestrictionContext *relationRestrictionContext =
 		plannerRestrictionContext->relationRestrictionContext;
 	bool allReferenceTables = relationRestrictionContext->allReferenceTables;
+	bool routerSelect =
+		InsertSelectHasRouterSelect(copyObject(originalQuery),
+									plannerRestrictionContext);
 
 	distributedPlan->modLevel = RowModifyLevelForQuery(originalQuery);
 
@@ -293,13 +300,27 @@ CreateDistributedInsertSelectPlan(Query *originalQuery,
 																	  insertRte,
 																	  subqueryRte,
 																	  allReferenceTables,
+																	  routerSelect,
 																	  plannerRestrictionContext);
 	if (distributedPlan->planningError)
 	{
 		return distributedPlan;
 	}
 
+
+	/*
+	 * if the query goes to a single node ("router" in Citus' parlance),
+	 * we don't need to go through AllDistributionKeysInQueryAreEqual checks.
+	 *
+	 * For PG16+, this is required as some of the outer JOINs are converted to
+	 * "ON(true)" and filters are pushed down to the table scans. As
+	 * AllDistributionKeysInQueryAreEqual rely on JOIN filters, it will fail to
+	 * detect the router case. However, we can still detect it by checking if
+	 * the query is a router query as the router query checks the filters on
+	 * the tables.
+	 */
 	bool allDistributionKeysInQueryAreEqual =
+		routerSelect ||
 		AllDistributionKeysInQueryAreEqual(originalQuery, plannerRestrictionContext);
 
 	/*
@@ -358,6 +379,23 @@ CreateDistributedInsertSelectPlan(Query *originalQuery,
 	distributedPlan->targetRelationId = targetRelationId;
 
 	return distributedPlan;
+}
+
+
+/*
+ * InsertSelectHasRouterSelect is a helper function that returns true of the SELECT
+ * part of the INSERT .. SELECT query is a router query.
+ */
+static bool
+InsertSelectHasRouterSelect(Query *originalQuery,
+							PlannerRestrictionContext *plannerRestrictionContext)
+{
+	RangeTblEntry *subqueryRte = ExtractSelectRangeTableEntry(originalQuery);
+	DistributedPlan *distributedPlan = CreateRouterPlan(subqueryRte->subquery,
+														subqueryRte->subquery,
+														plannerRestrictionContext);
+
+	return distributedPlan->planningError == NULL;
 }
 
 
@@ -566,6 +604,22 @@ CreateCombineQueryForRouterPlan(DistributedPlan *distPlan)
 	combineQuery->querySource = QSRC_ORIGINAL;
 	combineQuery->canSetTag = true;
 	combineQuery->rtable = list_make1(rangeTableEntry);
+
+#if PG_VERSION_NUM >= PG_VERSION_16
+
+	/*
+	 * This part of the code is more of a sanity check for readability,
+	 * it doesn't really do anything.
+	 * We know that Only relation RTEs and subquery RTEs that were once relation
+	 * RTEs (views) have their perminfoindex set. (see ExecCheckPermissions function)
+	 * DerivedRangeTableEntry sets the rtekind to RTE_FUNCTION
+	 * Hence we should have no perminfos here.
+	 */
+	Assert(rangeTableEntry->rtekind == RTE_FUNCTION &&
+		   rangeTableEntry->perminfoindex == 0);
+	combineQuery->rteperminfos = NIL;
+#endif
+
 	combineQuery->targetList = targetList;
 	combineQuery->jointree = joinTree;
 	return combineQuery;
@@ -615,6 +669,7 @@ CreateTargetListForCombineQuery(List *targetList)
 static DeferredErrorMessage *
 DistributedInsertSelectSupported(Query *queryTree, RangeTblEntry *insertRte,
 								 RangeTblEntry *subqueryRte, bool allReferenceTables,
+								 bool routerSelect,
 								 PlannerRestrictionContext *plannerRestrictionContext)
 {
 	Oid selectPartitionColumnTableId = InvalidOid;
@@ -689,19 +744,28 @@ DistributedInsertSelectSupported(Query *queryTree, RangeTblEntry *insertRte,
 							 NULL, NULL);
 	}
 
-	/* first apply toplevel pushdown checks to SELECT query */
-	DeferredErrorMessage *error = DeferErrorIfUnsupportedSubqueryPushdown(subquery,
-																		  plannerRestrictionContext);
-	if (error)
-	{
-		return error;
-	}
+	DeferredErrorMessage *error = NULL;
 
-	/* then apply subquery pushdown checks to SELECT query */
-	error = DeferErrorIfCannotPushdownSubquery(subquery, false);
-	if (error)
+	/*
+	 * We can skip SQL support related checks for router queries as
+	 * they are safe to route with any SQL.
+	 */
+	if (!routerSelect)
 	{
-		return error;
+		/* first apply toplevel pushdown checks to SELECT query */
+		error =
+			DeferErrorIfUnsupportedSubqueryPushdown(subquery, plannerRestrictionContext);
+		if (error)
+		{
+			return error;
+		}
+
+		/* then apply subquery pushdown checks to SELECT query */
+		error = DeferErrorIfCannotPushdownSubquery(subquery, false);
+		if (error)
+		{
+			return error;
+		}
 	}
 
 	if (IsCitusTableType(targetRelationId, CITUS_LOCAL_TABLE))
@@ -853,15 +917,7 @@ RouterModifyTaskForShardInterval(Query *originalQuery,
 			continue;
 		}
 
-
-		/*
-		 * passing NULL for plannerInfo will be problematic if we have placeholder
-		 * vars. However, it won't be the case here because we are building
-		 * the expression from shard intervals which don't have placeholder vars.
-		 * Note that this is only the case with PG14 as the parameter doesn't exist
-		 * prior to that.
-		 */
-		shardRestrictionList = make_simple_restrictinfo(NULL,
+		shardRestrictionList = make_simple_restrictinfo(restriction->plannerInfo,
 														(Expr *) shardOpExpressions);
 		extendedBaseRestrictInfo = lappend(extendedBaseRestrictInfo,
 										   shardRestrictionList);
@@ -1492,6 +1548,20 @@ WrapSubquery(Query *subquery)
 			pstate, subquery,
 			selectAlias, false, true));
 	outerQuery->rtable = list_make1(newRangeTableEntry);
+
+#if PG_VERSION_NUM >= PG_VERSION_16
+
+	/*
+	 * This part of the code is more of a sanity check for readability,
+	 * it doesn't really do anything.
+	 * addRangeTableEntryForSubquery doesn't add permission info
+	 * because the range table is set to be RTE_SUBQUERY.
+	 * Hence we should also have no perminfos here.
+	 */
+	Assert(newRangeTableEntry->rtekind == RTE_SUBQUERY &&
+		   newRangeTableEntry->perminfoindex == 0);
+	outerQuery->rteperminfos = NIL;
+#endif
 
 	/* set the FROM expression to the subquery */
 	RangeTblRef *newRangeTableRef = makeNode(RangeTblRef);

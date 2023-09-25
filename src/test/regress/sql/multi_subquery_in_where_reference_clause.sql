@@ -132,7 +132,7 @@ SELECT
 FROM
   users_table RIGHT JOIN users_reference_table USING (user_id)
 WHERE
-  users_table.value_2 IN
+  users_reference_table.value_2 IN
       (SELECT
           value_2
        FROM

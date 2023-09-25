@@ -134,7 +134,7 @@ enum MultiConnectionMode
 
 
 /*
- * This state is used for keeping track of the initilization
+ * This state is used for keeping track of the initialization
  * of the underlying pg_conn struct.
  */
 typedef enum MultiConnectionState
@@ -149,7 +149,7 @@ typedef enum MultiConnectionState
 
 
 /*
- * This state is used for keeping track of the initilization
+ * This state is used for keeping track of the initialization
  * of MultiConnection struct, not specifically the underlying
  * pg_conn. The state is useful to determine the action during
  * clean-up of connections.
@@ -207,7 +207,7 @@ typedef struct MultiConnection
 	instr_time connectionEstablishmentStart;
 	instr_time connectionEstablishmentEnd;
 
-	/* membership in list of list of connections in ConnectionHashEntry */
+	/* membership in list of connections in ConnectionHashEntry */
 	dlist_node connectionNode;
 
 	/* information about the associated remote transaction */
@@ -229,7 +229,7 @@ typedef struct MultiConnection
 	/* replication option */
 	bool requiresReplication;
 
-	MultiConnectionStructInitializationState initilizationState;
+	MultiConnectionStructInitializationState initializationState;
 } MultiConnection;
 
 

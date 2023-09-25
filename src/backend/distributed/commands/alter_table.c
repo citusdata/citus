@@ -53,11 +53,13 @@
 #include "distributed/multi_executor.h"
 #include "distributed/multi_logical_planner.h"
 #include "distributed/multi_partitioning_utils.h"
+#include "distributed/namespace_utils.h"
 #include "distributed/reference_table_utils.h"
 #include "distributed/relation_access_tracking.h"
 #include "distributed/replication_origin_session_utils.h"
 #include "distributed/shared_library_init.h"
 #include "distributed/shard_utils.h"
+#include "distributed/tenant_schema_metadata.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/worker_transaction.h"
 #include "executor/spi.h"
@@ -1764,10 +1766,7 @@ CreateMaterializedViewDDLCommand(Oid matViewOid)
 	 * Set search_path to NIL so that all objects outside of pg_catalog will be
 	 * schema-prefixed.
 	 */
-	OverrideSearchPath *overridePath = GetOverrideSearchPath(CurrentMemoryContext);
-	overridePath->schemas = NIL;
-	overridePath->addCatalog = true;
-	PushOverrideSearchPath(overridePath);
+	int saveNestLevel = PushEmptySearchPath();
 
 	/*
 	 * Push the transaction snapshot to be able to get vief definition with pg_get_viewdef
@@ -1779,7 +1778,7 @@ CreateMaterializedViewDDLCommand(Oid matViewOid)
 	char *viewDefinition = TextDatumGetCString(viewDefinitionDatum);
 
 	PopActiveSnapshot();
-	PopOverrideSearchPath();
+	PopEmptySearchPath(saveNestLevel);
 
 	appendStringInfo(query, "AS %s", viewDefinition);
 

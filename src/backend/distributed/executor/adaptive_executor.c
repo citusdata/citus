@@ -519,7 +519,9 @@ typedef enum TaskExecutionState
 /*
  * PlacementExecutionOrder indicates whether a command should be executed
  * on any replica, on all replicas sequentially (in order), or on all
- * replicas in parallel.
+ * replicas in parallel. In other words, EXECUTION_ORDER_ANY is used for
+ * SELECTs, EXECUTION_ORDER_SEQUENTIAL/EXECUTION_ORDER_PARALLEL is used for
+ * DML/DDL.
  */
 typedef enum PlacementExecutionOrder
 {
@@ -2043,7 +2045,7 @@ ProcessSessionsWithFailedWaitEventSetOperations(DistributedExecution *execution)
 
 /*
  * HasIncompleteConnectionEstablishment returns true if any of the connections
- * that has been initiated by the executor is in initilization stage.
+ * that has been initiated by the executor is in initialization stage.
  */
 static bool
 HasIncompleteConnectionEstablishment(DistributedExecution *execution)
@@ -2656,7 +2658,7 @@ OpenNewConnections(WorkerPool *workerPool, int newConnectionCount,
 		{
 			/*
 			 * The worker pool has just started to establish connections. We need to
-			 * defer this initilization after StartNodeUserDatabaseConnection()
+			 * defer this initialization after StartNodeUserDatabaseConnection()
 			 * because for non-optional connections, we have some logic to wait
 			 * until a connection is allowed to be established.
 			 */
@@ -4684,6 +4686,10 @@ TaskExecutionStateMachine(ShardCommandExecution *shardCommandExecution)
 	}
 
 	if (failedPlacementCount == placementCount)
+	{
+		currentTaskExecutionState = TASK_EXECUTION_FAILED;
+	}
+	else if (executionOrder != EXECUTION_ORDER_ANY && failedPlacementCount > 0)
 	{
 		currentTaskExecutionState = TASK_EXECUTION_FAILED;
 	}

@@ -60,6 +60,7 @@
 #include "distributed/reference_table_utils.h"
 #include "distributed/relation_access_tracking.h"
 #include "distributed/remote_commands.h"
+#include "distributed/replicate_none_dist_table_shard.h"
 #include "distributed/resource_lock.h"
 #include "distributed/shard_cleaner.h"
 #include "distributed/shard_rebalancer.h"
@@ -139,6 +140,10 @@ static CitusTableParams DecideCitusTableParams(CitusTableType tableType,
 											   distributedTableParams);
 static void CreateCitusTable(Oid relationId, CitusTableType tableType,
 							 DistributedTableParams *distributedTableParams);
+static void ConvertCitusLocalTableToTableType(Oid relationId,
+											  CitusTableType tableType,
+											  DistributedTableParams *
+											  distributedTableParams);
 static void CreateHashDistributedTableShards(Oid relationId, int shardCount,
 											 Oid colocatedTableId, bool localTableEmpty);
 static void CreateSingleShardTableShard(Oid relationId, Oid colocatedTableId,
@@ -159,7 +164,7 @@ static void EnsureCitusTableCanBeCreated(Oid relationOid);
 static void PropagatePrerequisiteObjectsForDistributedTable(Oid relationId);
 static void EnsureDistributedSequencesHaveOneType(Oid relationId,
 												  List *seqInfoList);
-static void CopyLocalDataIntoShards(Oid relationId);
+static void CopyLocalDataIntoShards(Oid distributedTableId);
 static List * TupleDescColumnNameList(TupleDesc tupleDescriptor);
 
 #if (PG_VERSION_NUM >= PG_VERSION_15)
@@ -172,10 +177,10 @@ static bool is_valid_numeric_typmod(int32 typmod);
 static bool DistributionColumnUsesGeneratedStoredColumn(TupleDesc relationDesc,
 														Var *distributionColumn);
 static bool CanUseExclusiveConnections(Oid relationId, bool localTableEmpty);
-static void DoCopyFromLocalTableIntoShards(Relation distributedRelation,
-										   DestReceiver *copyDest,
-										   TupleTableSlot *slot,
-										   EState *estate);
+static uint64 DoCopyFromLocalTableIntoShards(Relation distributedRelation,
+											 DestReceiver *copyDest,
+											 TupleTableSlot *slot,
+											 EState *estate);
 static void ErrorIfTemporaryTable(Oid relationId);
 static void ErrorIfForeignTable(Oid relationOid);
 static void SendAddLocalTableToMetadataCommandOutsideTransaction(Oid relationId);
@@ -440,6 +445,19 @@ CreateDistributedTableConcurrently(Oid relationId, char *distributionColumnName,
 	if (!IsColocateWithDefault(colocateWithTableName) && !IsColocateWithNone(
 			colocateWithTableName))
 	{
+		if (replicationModel != REPLICATION_MODEL_STREAMING)
+		{
+			ereport(ERROR, (errmsg("cannot create distributed table "
+								   "concurrently because Citus allows "
+								   "concurrent table distribution only when "
+								   "citus.shard_replication_factor = 1"),
+							errhint("table %s is requested to be colocated "
+									"with %s which has "
+									"citus.shard_replication_factor > 1",
+									get_rel_name(relationId),
+									colocateWithTableName)));
+		}
+
 		EnsureColocateWithTableIsValid(relationId, distributionMethod,
 									   distributionColumnName,
 									   colocateWithTableName);
@@ -1019,19 +1037,29 @@ CreateDistributedTable(Oid relationId, char *distributionColumnName,
 
 
 /*
- * CreateReferenceTable is a wrapper around CreateCitusTable that creates a
- * reference table.
+ * CreateReferenceTable creates a reference table.
  */
 void
 CreateReferenceTable(Oid relationId)
 {
-	CreateCitusTable(relationId, REFERENCE_TABLE, NULL);
+	if (IsCitusTableType(relationId, CITUS_LOCAL_TABLE))
+	{
+		/*
+		 * Create the shard of given Citus local table on workers to convert
+		 * it into a reference table.
+		 */
+		ConvertCitusLocalTableToTableType(relationId, REFERENCE_TABLE, NULL);
+	}
+	else
+	{
+		CreateCitusTable(relationId, REFERENCE_TABLE, NULL);
+	}
 }
 
 
 /*
- * CreateSingleShardTable is a wrapper around CreateCitusTable that creates a
- * single shard distributed table that doesn't have a shard key.
+ * CreateSingleShardTable creates a single shard distributed table that
+ * doesn't have a shard key.
  */
 void
 CreateSingleShardTable(Oid relationId, ColocationParam colocationParam)
@@ -1042,7 +1070,21 @@ CreateSingleShardTable(Oid relationId, ColocationParam colocationParam)
 		.shardCountIsStrict = true,
 		.distributionColumnName = NULL
 	};
-	CreateCitusTable(relationId, SINGLE_SHARD_DISTRIBUTED, &distributedTableParams);
+
+	if (IsCitusTableType(relationId, CITUS_LOCAL_TABLE))
+	{
+		/*
+		 * Create the shard of given Citus local table on appropriate node
+		 * and drop the local one to convert it into a single-shard distributed
+		 * table.
+		 */
+		ConvertCitusLocalTableToTableType(relationId, SINGLE_SHARD_DISTRIBUTED,
+										  &distributedTableParams);
+	}
+	else
+	{
+		CreateCitusTable(relationId, SINGLE_SHARD_DISTRIBUTED, &distributedTableParams);
+	}
 }
 
 
@@ -1097,7 +1139,7 @@ CreateCitusTable(Oid relationId, CitusTableType tableType,
 	/*
 	 * EnsureTableNotDistributed errors out when relation is a citus table but
 	 * we don't want to ask user to first undistribute their citus local tables
-	 * when creating reference or distributed tables from them.
+	 * when creating distributed tables from them.
 	 * For this reason, here we undistribute citus local tables beforehand.
 	 * But since UndistributeTable does not support undistributing relations
 	 * involved in foreign key relationships, we first drop foreign keys that
@@ -1107,6 +1149,13 @@ CreateCitusTable(Oid relationId, CitusTableType tableType,
 	List *originalForeignKeyRecreationCommands = NIL;
 	if (IsCitusTableType(relationId, CITUS_LOCAL_TABLE))
 	{
+		/*
+		 * We use ConvertCitusLocalTableToTableType instead of CreateCitusTable
+		 * to create a reference table or a single-shard table from a Citus
+		 * local table.
+		 */
+		Assert(tableType != REFERENCE_TABLE && tableType != SINGLE_SHARD_DISTRIBUTED);
+
 		/* store foreign key creation commands that relation is involved */
 		originalForeignKeyRecreationCommands =
 			GetFKeyCreationCommandsRelationInvolvedWithTableType(relationId,
@@ -1220,25 +1269,36 @@ CreateCitusTable(Oid relationId, CitusTableType tableType,
 							  colocationId, citusTableParams.replicationModel,
 							  autoConverted);
 
+#if PG_VERSION_NUM >= PG_VERSION_16
+
+	/*
+	 * PG16+ supports truncate triggers on foreign tables
+	 */
+	if (RegularTable(relationId) || IsForeignTable(relationId))
+#else
+
 	/* foreign tables do not support TRUNCATE trigger */
 	if (RegularTable(relationId))
+#endif
 	{
 		CreateTruncateTrigger(relationId);
 	}
 
-	/* create shards for hash distributed and reference tables */
 	if (tableType == HASH_DISTRIBUTED)
 	{
+		/* create shards for hash distributed table */
 		CreateHashDistributedTableShards(relationId, distributedTableParams->shardCount,
 										 colocatedTableId,
 										 localTableEmpty);
 	}
 	else if (tableType == REFERENCE_TABLE)
 	{
+		/* create shards for reference table */
 		CreateReferenceTableShard(relationId);
 	}
 	else if (tableType == SINGLE_SHARD_DISTRIBUTED)
 	{
+		/* create the shard of given single-shard distributed table */
 		CreateSingleShardTableShard(relationId, colocatedTableId,
 									colocationId);
 	}
@@ -1316,6 +1376,206 @@ CreateCitusTable(Oid relationId, CitusTableType tableType,
 	bool skip_validation = true;
 	ExecuteForeignKeyCreateCommandList(originalForeignKeyRecreationCommands,
 									   skip_validation);
+}
+
+
+/*
+ * ConvertCitusLocalTableToTableType converts given Citus local table to
+ * given table type.
+ *
+ * This only supports converting Citus local tables to reference tables
+ * (by replicating the shard to workers) and single-shard distributed
+ * tables (by replicating the shard to the appropriate worker and dropping
+ * the local one).
+ */
+static void
+ConvertCitusLocalTableToTableType(Oid relationId, CitusTableType tableType,
+								  DistributedTableParams *distributedTableParams)
+{
+	if (!IsCitusTableType(relationId, CITUS_LOCAL_TABLE))
+	{
+		ereport(ERROR, (errmsg("table is not a local table added to metadata")));
+	}
+
+	if (tableType != REFERENCE_TABLE && tableType != SINGLE_SHARD_DISTRIBUTED)
+	{
+		ereport(ERROR, (errmsg("table type is not supported for conversion")));
+	}
+
+	if ((tableType == SINGLE_SHARD_DISTRIBUTED) != (distributedTableParams != NULL))
+	{
+		ereport(ERROR, (errmsg("distributed table params must be provided "
+							   "when creating a distributed table and must "
+							   "not be otherwise")));
+	}
+
+	EnsureCitusTableCanBeCreated(relationId);
+
+	Relation relation = try_relation_open(relationId, ExclusiveLock);
+	if (relation == NULL)
+	{
+		ereport(ERROR, (errmsg("could not create Citus table: "
+							   "relation does not exist")));
+	}
+
+	relation_close(relation, NoLock);
+
+	if (tableType == SINGLE_SHARD_DISTRIBUTED && ShardReplicationFactor > 1)
+	{
+		ereport(ERROR, (errmsg("could not create single shard table: "
+							   "citus.shard_replication_factor is greater than 1"),
+						errhint("Consider setting citus.shard_replication_factor to 1 "
+								"and try again")));
+	}
+
+	LockRelationOid(relationId, ExclusiveLock);
+
+	Var *distributionColumn = NULL;
+	CitusTableParams citusTableParams = DecideCitusTableParams(tableType,
+															   distributedTableParams);
+
+	uint32 colocationId = INVALID_COLOCATION_ID;
+	if (distributedTableParams &&
+		distributedTableParams->colocationParam.colocationParamType ==
+		COLOCATE_WITH_COLOCATION_ID)
+	{
+		colocationId = distributedTableParams->colocationParam.colocationId;
+	}
+	else
+	{
+		colocationId = ColocationIdForNewTable(relationId, tableType,
+											   distributedTableParams,
+											   distributionColumn);
+	}
+
+	/* check constraints etc. on table based on new distribution params */
+	EnsureRelationCanBeDistributed(relationId, distributionColumn,
+								   citusTableParams.distributionMethod,
+								   colocationId, citusTableParams.replicationModel);
+
+	/*
+	 * Regarding the foreign key relationships that given relation is involved,
+	 * EnsureRelationCanBeDistributed() only checks the ones where the relation
+	 * is the referencing table. And given that the table at hand is a Citus
+	 * local table, right now it may only be referenced by a reference table
+	 * or a Citus local table. However, given that neither of those two cases
+	 * are not applicable for a distributed table, here we throw an error if
+	 * that's the case.
+	 *
+	 * Note that we don't need to check the same if we're creating a reference
+	 * table from a Citus local table because all the foreign keys referencing
+	 * Citus local tables are supported by reference tables.
+	 */
+	if (tableType == SINGLE_SHARD_DISTRIBUTED)
+	{
+		EnsureNoFKeyFromTableType(relationId, INCLUDE_CITUS_LOCAL_TABLES |
+								  INCLUDE_REFERENCE_TABLES);
+	}
+
+	EnsureReferenceTablesExistOnAllNodes();
+
+	LockColocationId(colocationId, ShareLock);
+
+	/*
+	 * When converting to a single shard table, we want to drop the placement
+	 * on the coordinator, but only if transferring to a different node. In that
+	 * case, shouldDropLocalPlacement is true. When converting to a reference
+	 * table, we always keep the placement on the coordinator, so for reference
+	 * tables shouldDropLocalPlacement is always false.
+	 */
+	bool shouldDropLocalPlacement = false;
+
+	List *targetNodeList = NIL;
+	if (tableType == SINGLE_SHARD_DISTRIBUTED)
+	{
+		uint32 targetNodeId = SingleShardTableColocationNodeId(colocationId);
+		if (targetNodeId != CoordinatorNodeIfAddedAsWorkerOrError()->nodeId)
+		{
+			bool missingOk = false;
+			WorkerNode *targetNode = FindNodeWithNodeId(targetNodeId, missingOk);
+			targetNodeList = list_make1(targetNode);
+
+			shouldDropLocalPlacement = true;
+		}
+	}
+	else if (tableType == REFERENCE_TABLE)
+	{
+		targetNodeList = ActivePrimaryNonCoordinatorNodeList(ShareLock);
+		targetNodeList = SortList(targetNodeList, CompareWorkerNodes);
+	}
+
+	bool autoConverted = false;
+	UpdateNoneDistTableMetadataGlobally(
+		relationId, citusTableParams.replicationModel,
+		colocationId, autoConverted);
+
+	/* create the shard placement on workers and insert into pg_dist_placement globally */
+	if (list_length(targetNodeList) > 0)
+	{
+		NoneDistTableReplicateCoordinatorPlacement(relationId, targetNodeList);
+	}
+
+	if (shouldDropLocalPlacement)
+	{
+		/*
+		 * We don't yet drop the local placement before handling partitions.
+		 * Otherewise, local shard placements of the partitions will be gone
+		 * before we create them on workers.
+		 *
+		 * However, we need to delete the related entry from pg_dist_placement
+		 * before distributing partitions (if any) because we need a sane metadata
+		 * state before doing so.
+		 */
+		NoneDistTableDeleteCoordinatorPlacement(relationId);
+	}
+
+	/* if this table is partitioned table, distribute its partitions too */
+	if (PartitionedTable(relationId))
+	{
+		/* right now we don't allow partitioned reference tables */
+		Assert(tableType == SINGLE_SHARD_DISTRIBUTED);
+
+		List *partitionList = PartitionList(relationId);
+
+		char *parentRelationName = generate_qualified_relation_name(relationId);
+
+		/*
+		 * When there are many partitions, each call to
+		 * ConvertCitusLocalTableToTableType accumulates used memory.
+		 * Create and free citus_per_partition_context for each call.
+		 */
+		MemoryContext citusPartitionContext =
+			AllocSetContextCreate(CurrentMemoryContext,
+								  "citus_per_partition_context",
+								  ALLOCSET_DEFAULT_SIZES);
+		MemoryContext oldContext = MemoryContextSwitchTo(citusPartitionContext);
+
+		Oid partitionRelationId = InvalidOid;
+		foreach_oid(partitionRelationId, partitionList)
+		{
+			MemoryContextReset(citusPartitionContext);
+
+			DistributedTableParams childDistributedTableParams = {
+				.colocationParam = {
+					.colocationParamType = COLOCATE_WITH_TABLE_LIKE_OPT,
+					.colocateWithTableName = parentRelationName,
+				},
+				.shardCount = distributedTableParams->shardCount,
+				.shardCountIsStrict = false,
+				.distributionColumnName = distributedTableParams->distributionColumnName,
+			};
+			ConvertCitusLocalTableToTableType(partitionRelationId, tableType,
+											  &childDistributedTableParams);
+		}
+
+		MemoryContextSwitchTo(oldContext);
+		MemoryContextDelete(citusPartitionContext);
+	}
+
+	if (shouldDropLocalPlacement)
+	{
+		NoneDistTableDropCoordinatorPlacementTable(relationId);
+	}
 }
 
 
@@ -1421,6 +1681,7 @@ PropagatePrerequisiteObjectsForDistributedTable(Oid relationId)
 	ObjectAddress *tableAddress = palloc0(sizeof(ObjectAddress));
 	ObjectAddressSet(*tableAddress, RelationRelationId, relationId);
 	EnsureAllObjectDependenciesExistOnAllNodes(list_make1(tableAddress));
+	TrackPropagatedTableAndSequences(relationId);
 }
 
 
@@ -1664,7 +1925,7 @@ CreateHashDistributedTableShards(Oid relationId, int shardCount,
 
 
 /*
- * CreateHashDistributedTableShards creates the shard of given single-shard
+ * CreateSingleShardTableShard creates the shard of given single-shard
  * distributed table.
  */
 static void
@@ -2381,9 +2642,37 @@ RegularTable(Oid relationId)
 
 
 /*
- * CopyLocalDataIntoShards copies data from the local table, which is hidden
- * after converting it to a distributed table, into the shards of the distributed
- * table. For partitioned tables, this functions returns without copying the data
+ * CopyLocalDataIntoShards is a wrapper around CopyFromLocalTableIntoDistTable
+ * to copy data from the local table, which is hidden after converting it to a
+ * distributed table, into the shards of the distributed table.
+ *
+ * After copying local data into the distributed table, the local data remains
+ * in place and should be truncated at a later time.
+ */
+static void
+CopyLocalDataIntoShards(Oid distributedTableId)
+{
+	uint64 rowsCopied = CopyFromLocalTableIntoDistTable(distributedTableId,
+														distributedTableId);
+	if (rowsCopied > 0)
+	{
+		char *qualifiedRelationName =
+			generate_qualified_relation_name(distributedTableId);
+		ereport(NOTICE, (errmsg("copying the data has completed"),
+						 errdetail("The local data in the table is no longer visible, "
+								   "but is still on disk."),
+						 errhint("To remove the local data, run: SELECT "
+								 "truncate_local_data_after_distributing_table($$%s$$)",
+								 qualifiedRelationName)));
+	}
+}
+
+
+/*
+ * CopyFromLocalTableIntoDistTable copies data from given local table into
+ * the shards of given distributed table.
+ *
+ * For partitioned tables, this functions returns without copying the data
  * because we call this function for both partitioned tables and its partitions.
  * Returning early saves us from copying data to workers twice.
  *
@@ -2393,35 +2682,30 @@ RegularTable(Oid relationId)
  * opens a connection and starts a COPY for each shard placement that will have
  * data.
  *
- * We could call the planner and executor here and send the output to the
- * DestReceiver, but we are in a tricky spot here since Citus is already
- * intercepting queries on this table in the planner and executor hooks and we
- * want to read from the local table. To keep it simple, we perform a heap scan
- * directly on the table.
+ * We assume that the local table might indeed be a distributed table and the
+ * caller would want to read the local data from the shell table in that case.
+ * For this reason, to keep it simple, we perform a heap scan directly on the
+ * table instead of using SELECT.
  *
- * Any writes on the table that are started during this operation will be handled
- * as distributed queries once the current transaction commits. SELECTs will
- * continue to read from the local table until the current transaction commits,
- * after which new SELECTs will be handled as distributed queries.
- *
- * After copying local data into the distributed table, the local data remains
- * in place and should be truncated at a later time.
+ * We read from the table and pass each tuple to the CitusCopyDestReceiver which
+ * opens a connection and starts a COPY for each shard placement that will have
+ * data.
  */
-static void
-CopyLocalDataIntoShards(Oid distributedRelationId)
+uint64
+CopyFromLocalTableIntoDistTable(Oid localTableId, Oid distributedTableId)
 {
 	/* take an ExclusiveLock to block all operations except SELECT */
-	Relation distributedRelation = table_open(distributedRelationId, ExclusiveLock);
+	Relation localRelation = table_open(localTableId, ExclusiveLock);
 
 	/*
 	 * Skip copying from partitioned tables, we will copy the data from
 	 * partition to partition's shards.
 	 */
-	if (PartitionedTable(distributedRelationId))
+	if (PartitionedTable(distributedTableId))
 	{
-		table_close(distributedRelation, NoLock);
+		table_close(localRelation, NoLock);
 
-		return;
+		return 0;
 	}
 
 	/*
@@ -2435,19 +2719,26 @@ CopyLocalDataIntoShards(Oid distributedRelationId)
 	 */
 	PushActiveSnapshot(GetLatestSnapshot());
 
-	/* get the table columns */
-	TupleDesc tupleDescriptor = RelationGetDescr(distributedRelation);
-	TupleTableSlot *slot = table_slot_create(distributedRelation, NULL);
-	List *columnNameList = TupleDescColumnNameList(tupleDescriptor);
+	Relation distributedRelation = RelationIdGetRelation(distributedTableId);
+
+	/* get the table columns for distributed table */
+	TupleDesc destTupleDescriptor = RelationGetDescr(distributedRelation);
+	List *columnNameList = TupleDescColumnNameList(destTupleDescriptor);
+
+	RelationClose(distributedRelation);
 
 	int partitionColumnIndex = INVALID_PARTITION_COLUMN_INDEX;
 
 	/* determine the partition column in the tuple descriptor */
-	Var *partitionColumn = PartitionColumn(distributedRelationId, 0);
+	Var *partitionColumn = PartitionColumn(distributedTableId, 0);
 	if (partitionColumn != NULL)
 	{
 		partitionColumnIndex = partitionColumn->varattno - 1;
 	}
+
+	/* create tuple slot for local relation */
+	TupleDesc sourceTupleDescriptor = RelationGetDescr(localRelation);
+	TupleTableSlot *slot = table_slot_create(localRelation, NULL);
 
 	/* initialise per-tuple memory context */
 	EState *estate = CreateExecutorState();
@@ -2455,15 +2746,16 @@ CopyLocalDataIntoShards(Oid distributedRelationId)
 	econtext->ecxt_scantuple = slot;
 	const bool nonPublishableData = false;
 	DestReceiver *copyDest =
-		(DestReceiver *) CreateCitusCopyDestReceiver(distributedRelationId,
+		(DestReceiver *) CreateCitusCopyDestReceiver(distributedTableId,
 													 columnNameList,
 													 partitionColumnIndex,
 													 estate, NULL, nonPublishableData);
 
 	/* initialise state for writing to shards, we'll open connections on demand */
-	copyDest->rStartup(copyDest, 0, tupleDescriptor);
+	copyDest->rStartup(copyDest, 0, sourceTupleDescriptor);
 
-	DoCopyFromLocalTableIntoShards(distributedRelation, copyDest, slot, estate);
+	uint64 rowsCopied = DoCopyFromLocalTableIntoShards(localRelation, copyDest, slot,
+													   estate);
 
 	/* finish writing into the shards */
 	copyDest->rShutdown(copyDest);
@@ -2472,24 +2764,28 @@ CopyLocalDataIntoShards(Oid distributedRelationId)
 	/* free memory and close the relation */
 	ExecDropSingleTupleTableSlot(slot);
 	FreeExecutorState(estate);
-	table_close(distributedRelation, NoLock);
+	table_close(localRelation, NoLock);
 
 	PopActiveSnapshot();
+
+	return rowsCopied;
 }
 
 
 /*
  * DoCopyFromLocalTableIntoShards performs a copy operation
  * from local tables into shards.
+ *
+ * Returns the number of rows copied.
  */
-static void
-DoCopyFromLocalTableIntoShards(Relation distributedRelation,
+static uint64
+DoCopyFromLocalTableIntoShards(Relation localRelation,
 							   DestReceiver *copyDest,
 							   TupleTableSlot *slot,
 							   EState *estate)
 {
 	/* begin reading from local table */
-	TableScanDesc scan = table_beginscan(distributedRelation, GetActiveSnapshot(), 0,
+	TableScanDesc scan = table_beginscan(localRelation, GetActiveSnapshot(), 0,
 										 NULL);
 
 	MemoryContext oldContext = MemoryContextSwitchTo(GetPerTupleMemoryContext(estate));
@@ -2524,22 +2820,12 @@ DoCopyFromLocalTableIntoShards(Relation distributedRelation,
 		ereport(DEBUG1, (errmsg("Copied " UINT64_FORMAT " rows", rowsCopied)));
 	}
 
-	if (rowsCopied > 0)
-	{
-		char *qualifiedRelationName =
-			generate_qualified_relation_name(RelationGetRelid(distributedRelation));
-		ereport(NOTICE, (errmsg("copying the data has completed"),
-						 errdetail("The local data in the table is no longer visible, "
-								   "but is still on disk."),
-						 errhint("To remove the local data, run: SELECT "
-								 "truncate_local_data_after_distributing_table($$%s$$)",
-								 qualifiedRelationName)));
-	}
-
 	MemoryContextSwitchTo(oldContext);
 
 	/* finish reading from the local table */
 	table_endscan(scan);
+
+	return rowsCopied;
 }
 
 

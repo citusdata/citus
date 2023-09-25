@@ -29,6 +29,6 @@ extern void MaintenanceDaemonShmemInit(void);
 extern void InitializeMaintenanceDaemonBackend(void);
 extern bool LockCitusExtension(void);
 
-extern void CitusMaintenanceDaemonMain(Datum main_arg);
+extern PGDLLEXPORT void CitusMaintenanceDaemonMain(Datum main_arg);
 
 #endif /* MAINTENANCED_H */

@@ -29,6 +29,7 @@
 #include "executor/executor.h"
 #include "nodes/makefuncs.h"
 #include "optimizer/plancat.h"
+#include "pg_version_compat.h"
 #include "pgstat.h"
 #include "storage/bufmgr.h"
 #include "storage/bufpage.h"
@@ -77,7 +78,7 @@ typedef struct SubXidWriteState
 typedef struct WriteStateMapEntry
 {
 	/* key of the entry */
-	Oid relfilenode;
+	RelFileNumber relfilenumber;
 
 	/*
 	 * If a table is dropped, we set dropped to true and set dropSubXid to the
@@ -132,7 +133,7 @@ columnar_init_write_state(Relation relation, TupleDesc tupdesc,
 		HASHCTL info;
 		uint32 hashFlags = (HASH_ELEM | HASH_FUNCTION | HASH_CONTEXT);
 		memset(&info, 0, sizeof(info));
-		info.keysize = sizeof(Oid);
+		info.keysize = sizeof(RelFileNumber);
 		info.hash = oid_hash;
 		info.entrysize = sizeof(WriteStateMapEntry);
 		info.hcxt = WriteStateContext;
@@ -146,7 +147,10 @@ columnar_init_write_state(Relation relation, TupleDesc tupdesc,
 		MemoryContextRegisterResetCallback(WriteStateContext, &cleanupCallback);
 	}
 
-	WriteStateMapEntry *hashEntry = hash_search(WriteStateMap, &relation->rd_node.relNode,
+	WriteStateMapEntry *hashEntry = hash_search(WriteStateMap,
+												&RelationPhysicalIdentifierNumber_compat(
+													RelationPhysicalIdentifier_compat(
+														relation)),
 												HASH_ENTER, &found);
 	if (!found)
 	{
@@ -189,7 +193,8 @@ columnar_init_write_state(Relation relation, TupleDesc tupdesc,
 	ReadColumnarOptions(tupSlotRelationId, &columnarOptions);
 
 	SubXidWriteState *stackEntry = palloc0(sizeof(SubXidWriteState));
-	stackEntry->writeState = ColumnarBeginWrite(relation->rd_node,
+	stackEntry->writeState = ColumnarBeginWrite(RelationPhysicalIdentifier_compat(
+													relation),
 												columnarOptions,
 												tupdesc);
 	stackEntry->subXid = currentSubXid;
@@ -206,14 +211,16 @@ columnar_init_write_state(Relation relation, TupleDesc tupdesc,
  * Flushes pending writes for given relfilenode in the given subtransaction.
  */
 void
-FlushWriteStateForRelfilenode(Oid relfilenode, SubTransactionId currentSubXid)
+FlushWriteStateForRelfilenumber(RelFileNumber relfilenumber,
+								SubTransactionId currentSubXid)
 {
 	if (WriteStateMap == NULL)
 	{
 		return;
 	}
 
-	WriteStateMapEntry *entry = hash_search(WriteStateMap, &relfilenode, HASH_FIND, NULL);
+	WriteStateMapEntry *entry = hash_search(WriteStateMap, &relfilenumber, HASH_FIND,
+											NULL);
 
 	Assert(!entry || !entry->dropped);
 
@@ -320,14 +327,14 @@ DiscardWriteStateForAllRels(SubTransactionId currentSubXid, SubTransactionId par
  * Called when the given relfilenode is dropped.
  */
 void
-MarkRelfilenodeDropped(Oid relfilenode, SubTransactionId currentSubXid)
+MarkRelfilenumberDropped(RelFileNumber relfilenumber, SubTransactionId currentSubXid)
 {
 	if (WriteStateMap == NULL)
 	{
 		return;
 	}
 
-	WriteStateMapEntry *entry = hash_search(WriteStateMap, &relfilenode, HASH_FIND,
+	WriteStateMapEntry *entry = hash_search(WriteStateMap, &relfilenumber, HASH_FIND,
 											NULL);
 	if (!entry || entry->dropped)
 	{
@@ -343,11 +350,11 @@ MarkRelfilenodeDropped(Oid relfilenode, SubTransactionId currentSubXid)
  * Called when the given relfilenode is dropped in non-transactional TRUNCATE.
  */
 void
-NonTransactionDropWriteState(Oid relfilenode)
+NonTransactionDropWriteState(RelFileNumber relfilenumber)
 {
 	if (WriteStateMap)
 	{
-		hash_search(WriteStateMap, &relfilenode, HASH_REMOVE, false);
+		hash_search(WriteStateMap, &relfilenumber, HASH_REMOVE, false);
 	}
 }
 
@@ -356,14 +363,16 @@ NonTransactionDropWriteState(Oid relfilenode)
  * Returns true if there are any pending writes in upper transactions.
  */
 bool
-PendingWritesInUpperTransactions(Oid relfilenode, SubTransactionId currentSubXid)
+PendingWritesInUpperTransactions(RelFileNumber relfilenumber,
+								 SubTransactionId currentSubXid)
 {
 	if (WriteStateMap == NULL)
 	{
 		return false;
 	}
 
-	WriteStateMapEntry *entry = hash_search(WriteStateMap, &relfilenode, HASH_FIND, NULL);
+	WriteStateMapEntry *entry = hash_search(WriteStateMap, &relfilenumber, HASH_FIND,
+											NULL);
 
 	if (entry && entry->writeStateStack != NULL)
 	{

@@ -56,6 +56,9 @@
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
 #include "nodes/pg_list.h"
+#if PG_VERSION_NUM >= PG_VERSION_16
+#include "parser/parse_relation.h"
+#endif
 #include "parser/parsetree.h"
 #include "parser/parse_type.h"
 #include "optimizer/optimizer.h"
@@ -108,6 +111,7 @@ static int AssignRTEIdentities(List *rangeTableList, int rteIdCounter);
 static void AssignRTEIdentity(RangeTblEntry *rangeTableEntry, int rteIdentifier);
 static void AdjustPartitioningForDistributedPlanning(List *rangeTableList,
 													 bool setPartitionedTablesInherited);
+static bool RTEWentThroughAdjustPartitioning(RangeTblEntry *rangeTableEntry);
 static PlannedStmt * FinalizeNonRouterPlan(PlannedStmt *localPlan,
 										   DistributedPlan *distributedPlan,
 										   CustomScan *customScan);
@@ -144,6 +148,8 @@ static void WarnIfListHasForeignDistributedTable(List *rangeTableList);
 static RouterPlanType GetRouterPlanType(Query *query,
 										Query *originalQuery,
 										bool hasUnresolvedParams);
+static void ConcatenateRTablesAndPerminfos(PlannedStmt *mainPlan,
+										   PlannedStmt *concatPlan);
 
 
 /* Distributed planner hook */
@@ -491,6 +497,20 @@ AdjustPartitioningForDistributedPlanning(List *rangeTableList,
 			}
 		}
 	}
+}
+
+
+/*
+ * RTEWentThroughAdjustPartitioning returns true if the given rangetableentry
+ * has been modified through AdjustPartitioningForDistributedPlanning
+ * function, false otherwise.
+ */
+static bool
+RTEWentThroughAdjustPartitioning(RangeTblEntry *rangeTableEntry)
+{
+	return (rangeTableEntry->rtekind == RTE_RELATION &&
+			PartitionedTable(rangeTableEntry->relid) &&
+			rangeTableEntry->inh == false);
 }
 
 
@@ -1066,6 +1086,11 @@ CreateDistributedPlan(uint64 planId, bool allowRecursivePlanning, Query *origina
 	/*
 	 * Plan subqueries and CTEs that cannot be pushed down by recursively
 	 * calling the planner and return the resulting plans to subPlanList.
+	 * Note that GenerateSubplansForSubqueriesAndCTEs will reset perminfoindexes
+	 * for some RTEs in originalQuery->rtable list, while not changing
+	 * originalQuery->rteperminfos. That's fine because we will go through
+	 * standard_planner again, which will adjust things accordingly in
+	 * set_plan_references>add_rtes_to_flat_rtable>add_rte_to_flat_rtable.
 	 */
 	List *subPlanList = GenerateSubplansForSubqueriesAndCTEs(planId, originalQuery,
 															 plannerRestrictionContext);
@@ -1465,9 +1490,39 @@ FinalizeNonRouterPlan(PlannedStmt *localPlan, DistributedPlan *distributedPlan,
 	finalPlan->utilityStmt = localPlan->utilityStmt;
 
 	/* add original range table list for access permission checks */
-	finalPlan->rtable = list_concat(finalPlan->rtable, localPlan->rtable);
+	ConcatenateRTablesAndPerminfos(finalPlan, localPlan);
 
 	return finalPlan;
+}
+
+
+static void
+ConcatenateRTablesAndPerminfos(PlannedStmt *mainPlan, PlannedStmt *concatPlan)
+{
+	mainPlan->rtable = list_concat(mainPlan->rtable, concatPlan->rtable);
+#if PG_VERSION_NUM >= PG_VERSION_16
+
+	/*
+	 * concatPlan's range table list is concatenated to mainPlan's range table list
+	 * therefore all the perminfoindexes should be updated to their value
+	 * PLUS the highest perminfoindex in mainPlan's perminfos, which is exactly
+	 * the list length.
+	 */
+	int mainPlan_highest_perminfoindex = list_length(mainPlan->permInfos);
+
+	ListCell *lc;
+	foreach(lc, concatPlan->rtable)
+	{
+		RangeTblEntry *rte = (RangeTblEntry *) lfirst(lc);
+		if (rte->perminfoindex != 0)
+		{
+			rte->perminfoindex = rte->perminfoindex + mainPlan_highest_perminfoindex;
+		}
+	}
+
+	/* finally, concatenate perminfos as well */
+	mainPlan->permInfos = list_concat(mainPlan->permInfos, concatPlan->permInfos);
+#endif
 }
 
 
@@ -1502,7 +1557,7 @@ FinalizeRouterPlan(PlannedStmt *localPlan, CustomScan *customScan)
 	routerPlan->rtable = list_make1(remoteScanRangeTableEntry);
 
 	/* add original range table list for access permission checks */
-	routerPlan->rtable = list_concat(routerPlan->rtable, localPlan->rtable);
+	ConcatenateRTablesAndPerminfos(routerPlan, localPlan);
 
 	routerPlan->canSetTag = true;
 	routerPlan->relationOids = NIL;
@@ -1973,6 +2028,62 @@ multi_relation_restriction_hook(PlannerInfo *root, RelOptInfo *relOptInfo,
 		lappend(relationRestrictionContext->relationRestrictionList, relationRestriction);
 
 	MemoryContextSwitchTo(oldMemoryContext);
+}
+
+
+/*
+ * multi_get_relation_info_hook modifies the relation's indexlist
+ * if necessary, to avoid a crash in PG16 caused by our
+ * Citus function AdjustPartitioningForDistributedPlanning().
+ *
+ * AdjustPartitioningForDistributedPlanning() is a hack that we use
+ * to prevent Postgres' standard_planner() to expand all the partitions
+ * for the distributed planning when a distributed partitioned table
+ * is queried. It is required for both correctness and performance
+ * reasons. Although we can eliminate the use of the function for
+ * the correctness (e.g., make sure that rest of the planner can handle
+ * partitions), it's performance implication is hard to avoid. Certain
+ * planning logic of Citus (such as router or query pushdown) relies
+ * heavily on the relationRestrictionList. If
+ * AdjustPartitioningForDistributedPlanning() is removed, all the
+ * partitions show up in the relationRestrictionList, causing high
+ * planning times for such queries.
+ */
+void
+multi_get_relation_info_hook(PlannerInfo *root, Oid relationObjectId, bool inhparent,
+							 RelOptInfo *rel)
+{
+	if (!CitusHasBeenLoaded())
+	{
+		return;
+	}
+
+	Index varno = rel->relid;
+	RangeTblEntry *rangeTableEntry = planner_rt_fetch(varno, root);
+
+	if (RTEWentThroughAdjustPartitioning(rangeTableEntry))
+	{
+		ListCell *lc = NULL;
+		foreach(lc, rel->indexlist)
+		{
+			IndexOptInfo *indexOptInfo = (IndexOptInfo *) lfirst(lc);
+			if (get_rel_relkind(indexOptInfo->indexoid) == RELKIND_PARTITIONED_INDEX)
+			{
+				/*
+				 * Normally, we should not need this. However, the combination of
+				 * Postgres commit 3c569049b7b502bb4952483d19ce622ff0af5fd6 and
+				 * Citus function AdjustPartitioningForDistributedPlanning()
+				 * forces us to do this. The commit expects partitioned indexes
+				 * to belong to relations with "inh" flag set properly. Whereas, the
+				 * function overrides "inh" flag. To avoid a crash,
+				 * we go over the list of indexinfos and remove all partitioned indexes.
+				 * Partitioned indexes were ignored pre PG16 anyway, we are essentially
+				 * not breaking any logic.
+				 */
+				rel->indexlist = foreach_delete_current(rel->indexlist, lc);
+			}
+		}
+	}
 }
 
 

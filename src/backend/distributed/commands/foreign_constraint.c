@@ -132,7 +132,7 @@ EnsureNoFKeyFromTableType(Oid relationId, int tableTypeFlag)
 
 
 /*
- * EnsureNoFKeyToTableType ensures that given relation is not referencing by any table specified
+ * EnsureNoFKeyToTableType ensures that given relation is not referencing any table specified
  * by table type flag.
  */
 void
@@ -840,6 +840,22 @@ GetForeignConstraintToReferenceTablesCommands(Oid relationId)
 
 
 /*
+ * GetForeignConstraintToReferenceTablesCommands takes in a relationId, and
+ * returns the list of foreign constraint commands needed to reconstruct
+ * foreign key constraints that the table is involved in as the "referenced"
+ * one and the "referencing" table is a reference table.
+ */
+List *
+GetForeignConstraintFromOtherReferenceTablesCommands(Oid relationId)
+{
+	int flags = INCLUDE_REFERENCED_CONSTRAINTS |
+				EXCLUDE_SELF_REFERENCES |
+				INCLUDE_REFERENCE_TABLES;
+	return GetForeignConstraintCommandsInternal(relationId, flags);
+}
+
+
+/*
  * GetForeignConstraintToDistributedTablesCommands takes in a relationId, and
  * returns the list of foreign constraint commands needed to reconstruct
  * foreign key constraints that the table is involved in as the "referencing"
@@ -879,7 +895,7 @@ GetForeignConstraintCommandsInternal(Oid relationId, int flags)
 
 	List *foreignKeyCommands = NIL;
 
-	PushOverrideEmptySearchPath(CurrentMemoryContext);
+	int saveNestLevel = PushEmptySearchPath();
 
 	Oid foreignKeyOid = InvalidOid;
 	foreach_oid(foreignKeyOid, foreignKeyOids)
@@ -890,7 +906,7 @@ GetForeignConstraintCommandsInternal(Oid relationId, int flags)
 	}
 
 	/* revert back to original search_path */
-	PopOverrideSearchPath();
+	PopEmptySearchPath(saveNestLevel);
 
 	return foreignKeyCommands;
 }
@@ -1227,7 +1243,7 @@ GetForeignKeyOids(Oid relationId, int flags)
 
 	Relation pgConstraint = table_open(ConstraintRelationId, AccessShareLock);
 	ScanKeyInit(&scanKey[0], pgConstraintTargetAttrNumber,
-				BTEqualStrategyNumber, F_OIDEQ, relationId);
+				BTEqualStrategyNumber, F_OIDEQ, ObjectIdGetDatum(relationId));
 	SysScanDesc scanDescriptor = systable_beginscan(pgConstraint, indexOid, useIndex,
 													NULL, scanKeyCount, scanKey);
 

@@ -169,7 +169,11 @@ ColumnarStorageInit(SMgrRelation srel, uint64 storageId)
 	}
 
 	/* create two pages */
+#if PG_VERSION_NUM >= PG_VERSION_16
+	PGIOAlignedBlock block;
+#else
 	PGAlignedBlock block;
+#endif
 	Page page = block.data;
 
 	/* write metapage */
@@ -188,7 +192,7 @@ ColumnarStorageInit(SMgrRelation srel, uint64 storageId)
 			 (char *) &metapage, sizeof(ColumnarMetapage));
 	phdr->pd_lower += sizeof(ColumnarMetapage);
 
-	log_newpage(&srel->smgr_rnode.node, MAIN_FORKNUM,
+	log_newpage(RelationPhysicalIdentifierBackend_compat(&srel), MAIN_FORKNUM,
 				COLUMNAR_METAPAGE_BLOCKNO, page, true);
 	PageSetChecksumInplace(page, COLUMNAR_METAPAGE_BLOCKNO);
 	smgrextend(srel, MAIN_FORKNUM, COLUMNAR_METAPAGE_BLOCKNO, page, true);
@@ -196,7 +200,7 @@ ColumnarStorageInit(SMgrRelation srel, uint64 storageId)
 	/* write empty page */
 	PageInit(page, BLCKSZ, 0);
 
-	log_newpage(&srel->smgr_rnode.node, MAIN_FORKNUM,
+	log_newpage(RelationPhysicalIdentifierBackend_compat(&srel), MAIN_FORKNUM,
 				COLUMNAR_EMPTY_BLOCKNO, page, true);
 	PageSetChecksumInplace(page, COLUMNAR_EMPTY_BLOCKNO);
 	smgrextend(srel, MAIN_FORKNUM, COLUMNAR_EMPTY_BLOCKNO, page, true);

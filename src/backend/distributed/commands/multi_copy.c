@@ -83,6 +83,9 @@
 #include "distributed/locally_reserved_shared_connections.h"
 #include "distributed/placement_connection.h"
 #include "distributed/relation_access_tracking.h"
+#if PG_VERSION_NUM >= PG_VERSION_16
+#include "distributed/relation_utils.h"
+#endif
 #include "distributed/remote_commands.h"
 #include "distributed/remote_transaction.h"
 #include "distributed/replication_origin_session_utils.h"
@@ -422,7 +425,8 @@ EnsureCopyCanRunOnRelation(Oid relationId)
 	 */
 	if (RecoveryInProgress() && WritableStandbyCoordinator)
 	{
-		ereport(ERROR, (errmsg("COPY command to Citus tables is not allowed in "
+		ereport(ERROR, (errcode(ERRCODE_READ_ONLY_SQL_TRANSACTION),
+						errmsg("COPY command to Citus tables is not allowed in "
 							   "read-only mode"),
 						errhint("All COPY commands to citus tables happen via 2PC, "
 								"and 2PC requires the database to be in a writable state."),
@@ -1544,7 +1548,7 @@ CoerceColumnValue(Datum inputValue, CopyCoercionData *coercionPath)
 {
 	switch (coercionPath->coercionType)
 	{
-		case 0:
+		case COERCION_PATH_NONE:
 		{
 			return inputValue; /* this was a dropped column */
 		}
@@ -3149,9 +3153,16 @@ CheckCopyPermissions(CopyStmt *copyStatement)
 	rel = table_openrv(copyStatement->relation,
 	                  is_from ? RowExclusiveLock : AccessShareLock);
 
-	range_table = CreateRangeTable(rel, required_access);
+	range_table = CreateRangeTable(rel);
 	RangeTblEntry *rte = (RangeTblEntry*) linitial(range_table);
 	tupDesc = RelationGetDescr(rel);
+
+#if PG_VERSION_NUM >= PG_VERSION_16
+	/* create permission info for rte */
+	RTEPermissionInfo *perminfo = GetFilledPermissionInfo(rel->rd_id, rte->inh, required_access);
+#else
+	rte->requiredPerms = required_access;
+#endif
 
 	attnums = CopyGetAttnums(tupDesc, rel, copyStatement->attlist);
 	foreach(cur, attnums)
@@ -3160,15 +3171,29 @@ CheckCopyPermissions(CopyStmt *copyStatement)
 
 		if (is_from)
 		{
+#if PG_VERSION_NUM >= PG_VERSION_16
+			perminfo->insertedCols = bms_add_member(perminfo->insertedCols, attno);
+#else
 			rte->insertedCols = bms_add_member(rte->insertedCols, attno);
+#endif
 		}
 		else
 		{
+#if PG_VERSION_NUM >= PG_VERSION_16
+			perminfo->selectedCols = bms_add_member(perminfo->selectedCols, attno);
+#else
 			rte->selectedCols = bms_add_member(rte->selectedCols, attno);
+#endif
 		}
 	}
 
+#if PG_VERSION_NUM >= PG_VERSION_16
+	/* link rte to its permission info then check permissions */
+	rte->perminfoindex = 1;
+	ExecCheckPermissions(list_make1(rte), list_make1(perminfo), true);
+#else
 	ExecCheckRTPerms(range_table, true);
+#endif
 
 	/* TODO: Perform RLS checks once supported */
 
@@ -3181,13 +3206,12 @@ CheckCopyPermissions(CopyStmt *copyStatement)
  * CreateRangeTable creates a range table with the given relation.
  */
 List *
-CreateRangeTable(Relation rel, AclMode requiredAccess)
+CreateRangeTable(Relation rel)
 {
 	RangeTblEntry *rte = makeNode(RangeTblEntry);
 	rte->rtekind = RTE_RELATION;
 	rte->relid = rel->rd_id;
 	rte->relkind = rel->rd_rel->relkind;
-	rte->requiredPerms = requiredAccess;
 	return list_make1(rte);
 }
 

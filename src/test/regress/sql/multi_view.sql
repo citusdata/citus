@@ -37,7 +37,7 @@ CREATE VIEW priority_lineitem AS SELECT li.* FROM lineitem_hash_part li JOIN pri
 
 SELECT l_orderkey, count(*) FROM priority_lineitem GROUP BY 1 ORDER BY 2 DESC, 1 LIMIT 5;
 
-CREATE VIEW air_shipped_lineitems AS SELECT * FROM lineitem_hash_part WHERE l_shipmode = 'AIR';
+CREATE VIEW air_shipped_lineitems AS SELECT * FROM lineitem_hash_part table_name_for_view WHERE l_shipmode = 'AIR';
 
 -- join between view and table
 SELECT count(*) FROM orders_hash_part join air_shipped_lineitems ON (o_orderkey = l_orderkey);

@@ -89,9 +89,9 @@ NOTICE:  executing the command locally: INSERT INTO multi_row_router_insert.citu
 INSERT INTO citus_local_table (a) VALUES (12), (13);
 NOTICE:  executing the command locally: INSERT INTO multi_row_router_insert.citus_local_table_1511001 AS citus_table_alias (a, b) VALUES (12,100), (13,100)
 ALTER TABLE citus_local_table ADD COLUMN c INT DEFAULT to_number('5', '91');
-NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1511001, 'multi_row_router_insert', 'ALTER TABLE citus_local_table ADD COLUMN c INT DEFAULT to_number(''5'', ''91'');')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1511001, 'multi_row_router_insert', 'ALTER TABLE citus_local_table ADD COLUMN c integer DEFAULT to_number(''5''::text, ''91''::text);')
 ALTER TABLE citus_local_table ADD COLUMN d INT;
-NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1511001, 'multi_row_router_insert', 'ALTER TABLE citus_local_table ADD COLUMN d INT;')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1511001, 'multi_row_router_insert', 'ALTER TABLE citus_local_table ADD COLUMN d integer;')
 INSERT INTO citus_local_table (d, a, b) VALUES (13, 14, 15), (16, 17, 18), (19, 20, 21);
 NOTICE:  executing the command locally: INSERT INTO multi_row_router_insert.citus_local_table_1511001 AS citus_table_alias (a, b, c, d) VALUES (14,15,5,13), (17,18,5,16), (20,21,5,19)
 SELECT * FROM citus_local_table ORDER BY 1,2,3,4;

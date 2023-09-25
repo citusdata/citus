@@ -188,7 +188,16 @@ CreateCollationDDLInternal(Oid collationId, Oid *collowner, char **quotedCollati
 	pfree(collcollate);
 	pfree(collctype);
 #endif
-
+#if PG_VERSION_NUM >= PG_VERSION_16
+	char *collicurules = NULL;
+	datum = SysCacheGetAttr(COLLOID, heapTuple, Anum_pg_collation_collicurules, &isnull);
+	if (!isnull)
+	{
+		collicurules = TextDatumGetCString(datum);
+		appendStringInfo(&collationNameDef, ", rules = %s",
+						 quote_literal_cstr(collicurules));
+	}
+#endif
 	if (!collisdeterministic)
 	{
 		appendStringInfoString(&collationNameDef, ", deterministic = false");

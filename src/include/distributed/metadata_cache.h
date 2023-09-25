@@ -137,8 +137,11 @@ typedef enum
 	ANY_CITUS_TABLE_TYPE
 } CitusTableType;
 
+void InvalidateDistRelationCacheCallback(Datum argument, Oid relationId);
+
 extern List * AllCitusTableIds(void);
 extern bool IsCitusTableType(Oid relationId, CitusTableType tableType);
+extern CitusTableType GetCitusTableType(CitusTableCacheEntry *tableEntry);
 extern bool IsCitusTableTypeCacheEntry(CitusTableCacheEntry *tableEtnry,
 									   CitusTableType tableType);
 bool HasDistributionKey(Oid relationId);
@@ -320,6 +323,6 @@ extern const char * CurrentDatabaseName(void);
 
 /* connection-related functions */
 extern char * GetAuthinfoViaCatalog(const char *roleName, int64 nodeId);
-extern char * GetPoolinfoViaCatalog(int64 nodeId);
+extern char * GetPoolinfoViaCatalog(int32 nodeId);
 
 #endif /* METADATA_CACHE_H */

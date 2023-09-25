@@ -272,6 +272,8 @@ BEGIN;
 	SELECT count(*) FROM test;
 ROLLBACK;
 
+SET citus.shard_replication_factor TO 1;
+
 -- now, lets move all the shards of distributed tables out of the coordinator
 -- block writes is much faster for the sake of the test timings we prefer it
 SELECT master_drain_node('localhost', :master_port, shard_transfer_mode:='block_writes');

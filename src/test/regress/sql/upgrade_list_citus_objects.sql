@@ -5,4 +5,6 @@ WHERE refclassid = 'pg_catalog.pg_extension'::pg_catalog.regclass
   AND refobjid = e.oid
   AND deptype = 'e'
   AND e.extname='citus'
+  AND pg_catalog.pg_describe_object(classid, objid, 0) != 'function any_value(anyelement)'
+  AND pg_catalog.pg_describe_object(classid, objid, 0) != 'function any_value_agg(anyelement,anyelement)'
 ORDER BY 1;

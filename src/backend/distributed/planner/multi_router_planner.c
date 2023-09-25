@@ -155,6 +155,7 @@ static DeferredErrorMessage * ErrorIfQueryHasUnroutableModifyingCTE(Query *query
 static DeferredErrorMessage * ErrorIfQueryHasCTEWithSearchClause(Query *queryTree);
 static bool ContainsSearchClauseWalker(Node *node, void *context);
 static bool SelectsFromDistributedTable(List *rangeTableList, Query *query);
+static bool AllShardsColocated(List *relationShardList);
 static ShardPlacement * CreateDummyPlacement(bool hasLocalRelation);
 static ShardPlacement * CreateLocalDummyPlacement();
 static int CompareInsertValuesByShardId(const void *leftElement,
@@ -395,7 +396,7 @@ ExtractSourceResultRangeTableEntry(Query *query)
 {
 	if (IsMergeQuery(query))
 	{
-		return ExtractMergeSourceRangeTableEntry(query);
+		return ExtractMergeSourceRangeTableEntry(query, false);
 	}
 	else if (CheckInsertSelectQuery(query))
 	{
@@ -2392,6 +2393,15 @@ PlanRouterQuery(Query *originalQuery,
 		RelationShardListForShardIntervalList(*prunedShardIntervalListList,
 											  &shardsPresent);
 
+	if (!EnableNonColocatedRouterQueryPushdown &&
+		!AllShardsColocated(*relationShardList))
+	{
+		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+							 "router planner does not support queries that "
+							 "reference non-colocated distributed tables",
+							 NULL, NULL);
+	}
+
 	if (!shardsPresent && !replacePrunedQueryWithDummy)
 	{
 		/*
@@ -2457,6 +2467,92 @@ PlanRouterQuery(Query *originalQuery,
 	*anchorShardId = shardId;
 
 	return planningError;
+}
+
+
+/*
+ * AllShardsColocated returns true if all the shards in the given relationShardList
+ * have colocated tables and are on the same shard index.
+ */
+static bool
+AllShardsColocated(List *relationShardList)
+{
+	RelationShard *relationShard = NULL;
+	int shardIndex = -1;
+	int colocationId = -1;
+	CitusTableType tableType = ANY_CITUS_TABLE_TYPE;
+
+	foreach_ptr(relationShard, relationShardList)
+	{
+		Oid relationId = relationShard->relationId;
+		uint64 shardId = relationShard->shardId;
+		if (shardId == INVALID_SHARD_ID)
+		{
+			/* intermediate results are always colocated, so ignore */
+			continue;
+		}
+
+		CitusTableCacheEntry *tableEntry = LookupCitusTableCacheEntry(relationId);
+		if (tableEntry == NULL)
+		{
+			/* local tables never colocated */
+			return false;
+		}
+
+		CitusTableType currentTableType = GetCitusTableType(tableEntry);
+		if (currentTableType == REFERENCE_TABLE)
+		{
+			/*
+			 * Reference tables are always colocated so it is
+			 * safe to skip them.
+			 */
+			continue;
+		}
+		else if (IsCitusTableTypeCacheEntry(tableEntry, DISTRIBUTED_TABLE))
+		{
+			if (tableType == ANY_CITUS_TABLE_TYPE)
+			{
+				tableType = currentTableType;
+			}
+			else if (tableType != currentTableType)
+			{
+				/*
+				 * We cannot qualify different types of distributed tables
+				 * as colocated.
+				 */
+				return false;
+			}
+
+			if (currentTableType == RANGE_DISTRIBUTED ||
+				currentTableType == APPEND_DISTRIBUTED)
+			{
+				/* we do not have further strict colocation chceks */
+				continue;
+			}
+		}
+
+		int currentColocationId = TableColocationId(relationId);
+		if (colocationId == -1)
+		{
+			colocationId = currentColocationId;
+		}
+		else if (colocationId != currentColocationId)
+		{
+			return false;
+		}
+
+		int currentIndex = ShardIndex(LoadShardInterval(shardId));
+		if (shardIndex == -1)
+		{
+			shardIndex = currentIndex;
+		}
+		else if (shardIndex != currentIndex)
+		{
+			return false;
+		}
+	}
+
+	return true;
 }
 
 
@@ -3742,15 +3838,6 @@ DeferErrorIfUnsupportedRouterPlannableSelectQuery(Query *query)
 	{
 		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
 							 "Local tables cannot be used in distributed queries.",
-							 NULL, NULL);
-	}
-
-	if (!EnableNonColocatedRouterQueryPushdown &&
-		!AllDistributedRelationsInListColocated(distributedRelationList))
-	{
-		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-							 "router planner does not support queries that "
-							 "reference non-colocated distributed tables",
 							 NULL, NULL);
 	}
 

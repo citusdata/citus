@@ -28,9 +28,11 @@ SELECT create_distributed_table('distributed_table','key');
 (1 row)
 
 INSERT INTO distributed_table SELECT *,* FROM generate_series(20, 40);
+DEBUG:  Creating router plan
 DEBUG:  distributed INSERT ... SELECT can only select from distributed tables
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 INSERT INTO reference_table SELECT * FROM generate_series(1, 10);
+DEBUG:  Creating router plan
 DEBUG:  distributed INSERT ... SELECT can only select from distributed tables
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 CREATE TABLE local_table (key int PRIMARY KEY);

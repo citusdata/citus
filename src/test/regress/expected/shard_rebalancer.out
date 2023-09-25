@@ -2553,12 +2553,18 @@ SELECT public.wait_until_metadata_sync(30000);
 
 (1 row)
 
+-- errors out because shard replication factor > shard allowed node count
+SELECT rebalance_table_shards('test_rebalance_with_disabled_worker');
+ERROR:  Shard replication factor (2) cannot be greater than number of nodes with should_have_shards=true (1).
+-- set replication factor to one, and try again
+SET citus.shard_replication_factor TO 1;
 SELECT rebalance_table_shards('test_rebalance_with_disabled_worker');
  rebalance_table_shards
 ---------------------------------------------------------------------
 
 (1 row)
 
+SET citus.shard_replication_factor TO 2;
 SELECT 1 FROM citus_activate_node('localhost', :worker_2_port);
  ?column?
 ---------------------------------------------------------------------
@@ -2575,7 +2581,7 @@ SELECT create_distributed_table('test_with_all_shards_excluded', 'a', colocate_w
 
 (1 row)
 
-SELECT shardid FROM pg_dist_shard;
+SELECT shardid FROM pg_dist_shard ORDER BY shardid ASC;
  shardid
 ---------------------------------------------------------------------
   433504

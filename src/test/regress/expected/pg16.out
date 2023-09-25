@@ -1,0 +1,1104 @@
+--
+-- PG16
+--
+SHOW server_version \gset
+SELECT substring(:'server_version', '\d+')::int >= 16 AS server_version_ge_16
+\gset
+\if :server_version_ge_16
+\else
+\q
+\endif
+CREATE SCHEMA pg16;
+SET search_path TO pg16;
+SET citus.next_shard_id TO 950000;
+ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 1400000;
+SET citus.shard_count TO 1;
+SET citus.shard_replication_factor TO 1;
+-- test the new vacuum and analyze options
+-- Relevant PG commits:
+-- https://github.com/postgres/postgres/commit/1cbbee03385763b066ae3961fc61f2cd01a0d0d7
+-- https://github.com/postgres/postgres/commit/4211fbd8413b26e0abedbe4338aa7cda2cd469b4
+-- https://github.com/postgres/postgres/commit/a46a7011b27188af526047a111969f257aaf4db8
+CREATE TABLE t1 (a int);
+SELECT create_distributed_table('t1','a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SET citus.log_remote_commands TO ON;
+VACUUM (PROCESS_MAIN FALSE) t1;
+NOTICE:  issuing VACUUM (PROCESS_MAIN FALSE) pg16.t1_950000
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+VACUUM (PROCESS_MAIN FALSE, PROCESS_TOAST FALSE) t1;
+NOTICE:  issuing VACUUM (PROCESS_TOAST FALSE,PROCESS_MAIN FALSE) pg16.t1_950000
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+VACUUM (PROCESS_MAIN TRUE) t1;
+NOTICE:  issuing VACUUM pg16.t1_950000
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+VACUUM (PROCESS_MAIN FALSE, FULL) t1;
+NOTICE:  issuing VACUUM (FULL,PROCESS_MAIN FALSE) pg16.t1_950000
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+VACUUM (SKIP_DATABASE_STATS) t1;
+NOTICE:  issuing VACUUM (SKIP_DATABASE_STATS) pg16.t1_950000
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+VACUUM (ONLY_DATABASE_STATS) t1;
+ERROR:  ONLY_DATABASE_STATS cannot be specified with a list of tables
+VACUUM (BUFFER_USAGE_LIMIT '512 kB') t1;
+NOTICE:  issuing VACUUM (BUFFER_USAGE_LIMIT 512) pg16.t1_950000
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+VACUUM (BUFFER_USAGE_LIMIT 0) t1;
+NOTICE:  issuing VACUUM (BUFFER_USAGE_LIMIT 0) pg16.t1_950000
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+VACUUM (BUFFER_USAGE_LIMIT 16777220) t1;
+ERROR:  BUFFER_USAGE_LIMIT option must be 0 or between 128 kB and 16777216 kB
+VACUUM (BUFFER_USAGE_LIMIT -1) t1;
+ERROR:  BUFFER_USAGE_LIMIT option must be 0 or between 128 kB and 16777216 kB
+VACUUM (BUFFER_USAGE_LIMIT 'test') t1;
+ERROR:  BUFFER_USAGE_LIMIT option must be 0 or between 128 kB and 16777216 kB
+ANALYZE (BUFFER_USAGE_LIMIT '512 kB') t1;
+NOTICE:  issuing ANALYZE (BUFFER_USAGE_LIMIT 512) pg16.t1_950000
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+ANALYZE (BUFFER_USAGE_LIMIT 0) t1;
+NOTICE:  issuing ANALYZE (BUFFER_USAGE_LIMIT 0) pg16.t1_950000
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+SET citus.log_remote_commands TO OFF;
+-- only verifying it works and not printing log
+-- remote commands because it can be flaky
+VACUUM (ONLY_DATABASE_STATS);
+-- New GENERIC_PLAN option in EXPLAIN
+-- Relevant PG commit:
+-- https://github.com/postgres/postgres/commit/3c05284
+CREATE TABLE tenk1 (
+	unique1 int4,
+	unique2 int4,
+    thousand int4
+);
+SELECT create_distributed_table('tenk1', 'unique1');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SET citus.log_remote_commands TO on;
+EXPLAIN (GENERIC_PLAN) SELECT unique1 FROM tenk1 WHERE thousand = 1000;
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SAVEPOINT citus_explain_savepoint
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing EXPLAIN (ANALYZE FALSE, VERBOSE FALSE, COSTS TRUE, BUFFERS FALSE, WAL FALSE, GENERIC_PLAN TRUE, TIMING FALSE, SUMMARY FALSE, FORMAT TEXT) SELECT unique1 FROM pg16.tenk1_950001 tenk1 WHERE (thousand OPERATOR(pg_catalog.=) 1000)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ROLLBACK TO SAVEPOINT citus_explain_savepoint
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+                                   QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0)
+   Task Count: 1
+   Tasks Shown: All
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  Seq Scan on tenk1_950001 tenk1  (cost=0.00..35.50 rows=10 width=4)
+               Filter: (thousand = 1000)
+(7 rows)
+
+EXPLAIN (GENERIC_PLAN, ANALYZE) SELECT unique1 FROM tenk1 WHERE thousand = 1000;
+ERROR:  EXPLAIN options ANALYZE and GENERIC_PLAN cannot be used together
+SET citus.log_remote_commands TO off;
+-- Proper error when creating statistics without a name on a Citus table
+-- Relevant PG commit:
+-- https://github.com/postgres/postgres/commit/624aa2a13bd02dd584bb0995c883b5b93b2152df
+CREATE TABLE test_stats (
+    a   int,
+    b   int
+);
+SELECT create_distributed_table('test_stats', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE STATISTICS (dependencies) ON a, b FROM test_stats;
+ERROR:  cannot create statistics without a name on a Citus table
+HINT:  Consider specifying a name for the statistics
+CREATE STATISTICS (ndistinct, dependencies) on a, b from test_stats;
+ERROR:  cannot create statistics without a name on a Citus table
+HINT:  Consider specifying a name for the statistics
+CREATE STATISTICS (ndistinct, dependencies, mcv) on a, b from test_stats;
+ERROR:  cannot create statistics without a name on a Citus table
+HINT:  Consider specifying a name for the statistics
+-- STORAGE option in CREATE is already propagated by Citus
+-- Relevant PG commit:
+-- https://github.com/postgres/postgres/commit/784cedd
+CREATE TABLE test_storage (a text, c text STORAGE plain);
+SELECT create_distributed_table('test_storage', 'a', shard_count := 2);
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT result FROM run_command_on_all_nodes
+($$ SELECT array_agg(DISTINCT (attname, attstorage)) FROM pg_attribute
+    WHERE attrelid::regclass::text ILIKE 'pg16.test_storage%' AND attnum > 0;$$) ORDER BY 1;
+      result
+---------------------------------------------------------------------
+ {"(a,x)","(c,p)"}
+ {"(a,x)","(c,p)"}
+ {"(a,x)","(c,p)"}
+(3 rows)
+
+SELECT alter_distributed_table('test_storage', shard_count := 4);
+NOTICE:  creating a new table for pg16.test_storage
+NOTICE:  moving the data of pg16.test_storage
+NOTICE:  dropping the old pg16.test_storage
+NOTICE:  renaming the new table to pg16.test_storage
+ alter_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT result FROM run_command_on_all_nodes
+($$ SELECT array_agg(DISTINCT (attname, attstorage)) FROM pg_attribute
+    WHERE attrelid::regclass::text ILIKE 'pg16.test_storage%' AND attnum > 0;$$) ORDER BY 1;
+      result
+---------------------------------------------------------------------
+ {"(a,x)","(c,p)"}
+ {"(a,x)","(c,p)"}
+ {"(a,x)","(c,p)"}
+(3 rows)
+
+SELECT undistribute_table('test_storage');
+NOTICE:  creating a new table for pg16.test_storage
+NOTICE:  moving the data of pg16.test_storage
+NOTICE:  dropping the old pg16.test_storage
+NOTICE:  renaming the new table to pg16.test_storage
+ undistribute_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT result FROM run_command_on_all_nodes
+($$ SELECT array_agg(DISTINCT (attname, attstorage)) FROM pg_attribute
+    WHERE attrelid::regclass::text ILIKE 'pg16.test_storage%' AND attnum > 0;$$) ORDER BY 1;
+      result
+---------------------------------------------------------------------
+
+
+ {"(a,x)","(c,p)"}
+(3 rows)
+
+-- New option to change storage to DEFAULT in PG16
+-- ALTER TABLE .. ALTER COLUMN .. SET STORAGE is already
+-- not supported by Citus, so this is also not supported
+-- Relevant PG commit:
+-- https://github.com/postgres/postgres/commit/b9424d0
+SELECT create_distributed_table('test_storage', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+ALTER TABLE test_storage ALTER a SET STORAGE default;
+ERROR:  alter table command is currently unsupported
+DETAIL:  Only ADD|DROP COLUMN, SET|DROP NOT NULL, SET|DROP DEFAULT, ADD|DROP|VALIDATE CONSTRAINT, SET (), RESET (), ENABLE|DISABLE|NO FORCE|FORCE ROW LEVEL SECURITY, ATTACH|DETACH PARTITION and TYPE subcommands are supported.
+-- New ICU_RULES option added to CREATE DATABASE
+-- Relevant PG commit:
+-- https://github.com/postgres/postgres/commit/30a53b7
+CREATE DATABASE test_db WITH LOCALE_PROVIDER = 'icu' LOCALE = '' ICU_RULES = '&a < g' TEMPLATE = 'template0';
+NOTICE:  Citus partially supports CREATE DATABASE for distributed databases
+DETAIL:  Citus does not propagate CREATE DATABASE command to workers
+HINT:  You can manually create a database and its extensions on workers.
+NOTICE:  using standard form "und" for ICU locale ""
+SELECT result FROM run_command_on_workers
+($$CREATE DATABASE test_db WITH LOCALE_PROVIDER = 'icu' LOCALE = '' ICU_RULES = '&a < g' TEMPLATE = 'template0'$$);
+     result
+---------------------------------------------------------------------
+ CREATE DATABASE
+ CREATE DATABASE
+(2 rows)
+
+CREATE TABLE test_db_table (a text);
+SELECT create_distributed_table('test_db_table', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO test_db_table VALUES ('Abernathy'), ('apple'), ('bird'), ('Boston'), ('Graham'), ('green');
+-- icu default rules order
+SELECT * FROM test_db_table ORDER BY a COLLATE "en-x-icu";
+     a
+---------------------------------------------------------------------
+ Abernathy
+ apple
+ bird
+ Boston
+ Graham
+ green
+(6 rows)
+
+-- regression database's default order
+SELECT * FROM test_db_table ORDER BY a;
+     a
+---------------------------------------------------------------------
+ Abernathy
+ Boston
+ Graham
+ apple
+ bird
+ green
+(6 rows)
+
+-- now see the order in the new database
+\c test_db
+CREATE EXTENSION citus;
+\c - - - :worker_1_port
+CREATE EXTENSION citus;
+\c - - - :worker_2_port
+CREATE EXTENSION citus;
+\c - - - :master_port
+SELECT 1 FROM citus_add_node('localhost', :worker_1_port);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+SELECT 1 FROM citus_add_node('localhost', :worker_2_port);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+CREATE TABLE test_db_table (a text);
+SELECT create_distributed_table('test_db_table', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO test_db_table VALUES ('Abernathy'), ('apple'), ('bird'), ('Boston'), ('Graham'), ('green');
+-- icu default rules order
+SELECT * FROM test_db_table ORDER BY a COLLATE "en-x-icu";
+     a
+---------------------------------------------------------------------
+ Abernathy
+ apple
+ bird
+ Boston
+ Graham
+ green
+(6 rows)
+
+-- test_db database's default order with ICU_RULES = '&a < g'
+SELECT * FROM test_db_table ORDER BY a;
+     a
+---------------------------------------------------------------------
+ Abernathy
+ apple
+ green
+ bird
+ Boston
+ Graham
+(6 rows)
+
+\c regression
+\c - - - :master_port
+DROP DATABASE test_db;
+SELECT result FROM run_command_on_workers
+($$DROP DATABASE test_db$$);
+    result
+---------------------------------------------------------------------
+ DROP DATABASE
+ DROP DATABASE
+(2 rows)
+
+SET search_path TO pg16;
+-- New rules option added to CREATE COLLATION
+-- Similar to above test with CREATE DATABASE
+-- Relevant PG commit:
+-- https://github.com/postgres/postgres/commit/30a53b7
+CREATE COLLATION default_rule (provider = icu, locale = '');
+NOTICE:  using standard form "und" for ICU locale ""
+CREATE COLLATION special_rule (provider = icu, locale = '', rules = '&a < g');
+NOTICE:  using standard form "und" for ICU locale ""
+CREATE TABLE test_collation_rules (a text);
+SELECT create_distributed_table('test_collation_rules', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO test_collation_rules VALUES ('Abernathy'), ('apple'), ('bird'), ('Boston'), ('Graham'), ('green');
+SELECT collname, collprovider, colliculocale, collicurules
+FROM pg_collation
+WHERE collname like '%_rule%'
+ORDER BY 1;
+   collname   | collprovider | colliculocale | collicurules
+---------------------------------------------------------------------
+ default_rule | i            | und           |
+ special_rule | i            | und           | &a < g
+(2 rows)
+
+SELECT * FROM test_collation_rules ORDER BY a COLLATE default_rule;
+     a
+---------------------------------------------------------------------
+ Abernathy
+ apple
+ bird
+ Boston
+ Graham
+ green
+(6 rows)
+
+SELECT * FROM test_collation_rules ORDER BY a COLLATE special_rule;
+     a
+---------------------------------------------------------------------
+ Abernathy
+ apple
+ green
+ bird
+ Boston
+ Graham
+(6 rows)
+
+\c - - - :worker_1_port
+SET search_path TO pg16;
+SELECT collname, collprovider, colliculocale, collicurules
+FROM pg_collation
+WHERE collname like '%_rule%'
+ORDER BY 1;
+   collname   | collprovider | colliculocale | collicurules
+---------------------------------------------------------------------
+ default_rule | i            | und           |
+ special_rule | i            | und           | &a < g
+(2 rows)
+
+SELECT * FROM test_collation_rules ORDER BY a COLLATE default_rule;
+     a
+---------------------------------------------------------------------
+ Abernathy
+ apple
+ bird
+ Boston
+ Graham
+ green
+(6 rows)
+
+SELECT * FROM test_collation_rules ORDER BY a COLLATE special_rule;
+     a
+---------------------------------------------------------------------
+ Abernathy
+ apple
+ green
+ bird
+ Boston
+ Graham
+(6 rows)
+
+\c - - - :master_port
+SET search_path TO pg16;
+SET citus.next_shard_id TO 951000;
+-- Foreign table TRUNCATE trigger
+-- Relevant PG commit:
+-- https://github.com/postgres/postgres/commit/3b00a94
+SELECT 1 FROM citus_add_node('localhost', :master_port, groupid => 0);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+SET citus.use_citus_managed_tables TO ON;
+CREATE TABLE foreign_table_test (id integer NOT NULL, data text, a bigserial);
+INSERT INTO foreign_table_test VALUES (1, 'text_test');
+CREATE EXTENSION postgres_fdw;
+CREATE SERVER foreign_server
+        FOREIGN DATA WRAPPER postgres_fdw
+        OPTIONS (host 'localhost', port :'master_port', dbname 'regression');
+CREATE USER MAPPING FOR CURRENT_USER
+        SERVER foreign_server
+        OPTIONS (user 'postgres');
+CREATE FOREIGN TABLE foreign_table (
+        id integer NOT NULL,
+        data text,
+        a bigserial
+)
+        SERVER foreign_server
+        OPTIONS (schema_name 'pg16', table_name 'foreign_table_test');
+-- verify it's a Citus foreign table
+SELECT partmethod, repmodel FROM pg_dist_partition
+WHERE logicalrelid = 'foreign_table'::regclass ORDER BY logicalrelid;
+ partmethod | repmodel
+---------------------------------------------------------------------
+ n          | s
+(1 row)
+
+INSERT INTO foreign_table VALUES (2, 'test_2');
+INSERT INTO foreign_table_test VALUES (3, 'test_3');
+CREATE FUNCTION trigger_func() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+	RAISE NOTICE 'trigger_func(%) called: action = %, when = %, level = %',
+		TG_ARGV[0], TG_OP, TG_WHEN, TG_LEVEL;
+	RETURN NULL;
+END;$$;
+CREATE FUNCTION trigger_func_on_shard() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+	RAISE NOTICE 'trigger_func_on_shard(%) called: action = %, when = %, level = %',
+		TG_ARGV[0], TG_OP, TG_WHEN, TG_LEVEL;
+	RETURN NULL;
+END;$$;
+CREATE TRIGGER trig_stmt_before BEFORE TRUNCATE ON foreign_table
+	FOR EACH STATEMENT EXECUTE PROCEDURE trigger_func();
+SET citus.override_table_visibility TO off;
+CREATE TRIGGER trig_stmt_shard_before BEFORE TRUNCATE ON foreign_table_951001
+	FOR EACH STATEMENT EXECUTE PROCEDURE trigger_func_on_shard();
+RESET citus.override_table_visibility;
+SELECT * FROM foreign_table ORDER BY 1;
+ id |   data    | a
+---------------------------------------------------------------------
+  1 | text_test | 1
+  2 | test_2    | 1
+  3 | test_3    | 2
+(3 rows)
+
+TRUNCATE foreign_table;
+NOTICE:  trigger_func(<NULL>) called: action = TRUNCATE, when = BEFORE, level = STATEMENT
+CONTEXT:  PL/pgSQL function trigger_func() line XX at RAISE
+NOTICE:  trigger_func_on_shard(<NULL>) called: action = TRUNCATE, when = BEFORE, level = STATEMENT
+CONTEXT:  PL/pgSQL function trigger_func_on_shard() line XX at RAISE
+SELECT * FROM foreign_table ORDER BY 1;
+ id | data | a
+---------------------------------------------------------------------
+(0 rows)
+
+RESET citus.use_citus_managed_tables;
+--
+-- COPY FROM ... DEFAULT
+-- Already supported in Citus, adding all PG tests with a distributed table
+-- Relevant PG commit:
+-- https://github.com/postgres/postgres/commit/9f8377f
+CREATE TABLE copy_default (
+	id integer PRIMARY KEY,
+	text_value text NOT NULL DEFAULT 'test',
+	ts_value timestamp without time zone NOT NULL DEFAULT '2022-07-05'
+);
+SELECT create_distributed_table('copy_default', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- if DEFAULT is not specified, then the marker will be regular data
+COPY copy_default FROM stdin;
+SELECT * FROM copy_default ORDER BY id;
+ id | text_value |         ts_value
+---------------------------------------------------------------------
+  1 | value      | Mon Jul 04 00:00:00 2022
+  2 | D          | Tue Jul 05 00:00:00 2022
+(2 rows)
+
+TRUNCATE copy_default;
+COPY copy_default FROM stdin WITH (format csv);
+SELECT * FROM copy_default ORDER BY id;
+ id | text_value |         ts_value
+---------------------------------------------------------------------
+  1 | value      | Mon Jul 04 00:00:00 2022
+  2 | \D         | Tue Jul 05 00:00:00 2022
+(2 rows)
+
+TRUNCATE copy_default;
+-- DEFAULT cannot be used in binary mode
+COPY copy_default FROM stdin WITH (format binary, default '\D');
+ERROR:  cannot specify DEFAULT in BINARY mode
+-- DEFAULT cannot be new line nor carriage return
+COPY copy_default FROM stdin WITH (default E'\n');
+ERROR:  COPY default representation cannot use newline or carriage return
+COPY copy_default FROM stdin WITH (default E'\r');
+ERROR:  COPY default representation cannot use newline or carriage return
+-- DELIMITER cannot appear in DEFAULT spec
+COPY copy_default FROM stdin WITH (delimiter ';', default 'test;test');
+ERROR:  COPY delimiter must not appear in the DEFAULT specification
+-- CSV quote cannot appear in DEFAULT spec
+COPY copy_default FROM stdin WITH (format csv, quote '"', default 'test"test');
+ERROR:  CSV quote character must not appear in the DEFAULT specification
+-- NULL and DEFAULT spec must be different
+COPY copy_default FROM stdin WITH (default '\N');
+ERROR:  NULL specification and DEFAULT specification cannot be the same
+-- cannot use DEFAULT marker in column that has no DEFAULT value
+COPY copy_default FROM stdin WITH (default '\D');
+ERROR:  unexpected default marker in COPY data
+DETAIL:  Column "id" has no default value.
+CONTEXT:  COPY copy_default, line 1: "\D	value	'2022-07-04'"
+COPY copy_default FROM stdin WITH (format csv, default '\D');
+ERROR:  unexpected default marker in COPY data
+DETAIL:  Column "id" has no default value.
+CONTEXT:  COPY copy_default, line 1: "\D,value,2022-07-04"
+-- The DEFAULT marker must be unquoted and unescaped or it's not recognized
+COPY copy_default FROM stdin WITH (default '\D');
+SELECT * FROM copy_default ORDER BY id;
+ id | text_value |         ts_value
+---------------------------------------------------------------------
+  1 | test       | Mon Jul 04 00:00:00 2022
+  2 | \D         | Mon Jul 04 00:00:00 2022
+  3 | "D"        | Mon Jul 04 00:00:00 2022
+(3 rows)
+
+TRUNCATE copy_default;
+COPY copy_default FROM stdin WITH (format csv, default '\D');
+SELECT * FROM copy_default ORDER BY id;
+ id | text_value |         ts_value
+---------------------------------------------------------------------
+  1 | test       | Mon Jul 04 00:00:00 2022
+  2 | \\D        | Mon Jul 04 00:00:00 2022
+  3 | \D         | Mon Jul 04 00:00:00 2022
+(3 rows)
+
+TRUNCATE copy_default;
+-- successful usage of DEFAULT option in COPY
+COPY copy_default FROM stdin WITH (default '\D');
+SELECT * FROM copy_default ORDER BY id;
+ id | text_value |         ts_value
+---------------------------------------------------------------------
+  1 | value      | Mon Jul 04 00:00:00 2022
+  2 | test       | Sun Jul 03 00:00:00 2022
+  3 | test       | Tue Jul 05 00:00:00 2022
+(3 rows)
+
+TRUNCATE copy_default;
+COPY copy_default FROM stdin WITH (format csv, default '\D');
+SELECT * FROM copy_default ORDER BY id;
+ id | text_value |         ts_value
+---------------------------------------------------------------------
+  1 | value      | Mon Jul 04 00:00:00 2022
+  2 | test       | Sun Jul 03 00:00:00 2022
+  3 | test       | Tue Jul 05 00:00:00 2022
+(3 rows)
+
+TRUNCATE copy_default;
+\c - - - :worker_1_port
+COPY pg16.copy_default FROM stdin WITH (format csv, default '\D');
+SELECT * FROM pg16.copy_default ORDER BY id;
+ id | text_value |         ts_value
+---------------------------------------------------------------------
+  1 | value      | Mon Jul 04 00:00:00 2022
+  2 | test       | Sun Jul 03 00:00:00 2022
+  3 | test       | Tue Jul 05 00:00:00 2022
+(3 rows)
+
+\c - - - :master_port
+TRUNCATE pg16.copy_default;
+\c - - - :worker_2_port
+COPY pg16.copy_default FROM stdin WITH (format csv, default '\D');
+SELECT * FROM pg16.copy_default ORDER BY id;
+ id | text_value |         ts_value
+---------------------------------------------------------------------
+  1 | value      | Mon Jul 04 00:00:00 2022
+  2 | test       | Sun Jul 03 00:00:00 2022
+  3 | test       | Tue Jul 05 00:00:00 2022
+(3 rows)
+
+\c - - - :master_port
+SET search_path TO pg16;
+SET citus.shard_count TO 1;
+SET citus.shard_replication_factor TO 1;
+-- DEFAULT cannot be used in COPY TO
+COPY (select 1 as test) TO stdout WITH (default '\D');
+ERROR:  COPY DEFAULT only available using COPY FROM
+-- Tests for SQL/JSON: JSON_ARRAYAGG and JSON_OBJECTAGG aggregates
+-- Relevant PG commit:
+-- https://github.com/postgres/postgres/commit/7081ac4
+SET citus.next_shard_id TO 952000;
+CREATE TABLE agg_test(a int, b serial);
+SELECT create_distributed_table('agg_test', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO agg_test SELECT i FROM generate_series(1, 5) i;
+-- JSON_ARRAYAGG with distribution key
+SELECT JSON_ARRAYAGG(a ORDER BY a),
+JSON_ARRAYAGG(a ORDER BY a RETURNING jsonb)
+FROM agg_test;
+  json_arrayagg  |  json_arrayagg
+---------------------------------------------------------------------
+ [1, 2, 3, 4, 5] | [1, 2, 3, 4, 5]
+(1 row)
+
+-- JSON_ARRAYAGG with other column
+SELECT JSON_ARRAYAGG(b ORDER BY b),
+JSON_ARRAYAGG(b ORDER BY b RETURNING jsonb)
+FROM agg_test;
+  json_arrayagg  |  json_arrayagg
+---------------------------------------------------------------------
+ [1, 2, 3, 4, 5] | [1, 2, 3, 4, 5]
+(1 row)
+
+-- JSON_ARRAYAGG with router query
+SET citus.log_remote_commands TO on;
+SELECT JSON_ARRAYAGG(a ORDER BY a),
+JSON_ARRAYAGG(a ORDER BY a RETURNING jsonb)
+FROM agg_test WHERE a = 2;
+NOTICE:  issuing SELECT JSON_ARRAYAGG(a ORDER BY a RETURNING json) AS "json_arrayagg", JSON_ARRAYAGG(a ORDER BY a RETURNING jsonb) AS "json_arrayagg" FROM pg16.agg_test_952000 agg_test WHERE (a OPERATOR(pg_catalog.=) 2)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+ json_arrayagg | json_arrayagg
+---------------------------------------------------------------------
+ [2]           | [2]
+(1 row)
+
+RESET citus.log_remote_commands;
+-- JSON_OBJECTAGG with distribution key
+SELECT
+	JSON_OBJECTAGG(a: a),
+    JSON_ARRAYAGG(a ORDER BY a), -- for order
+	JSON_OBJECTAGG(a: a RETURNING jsonb)
+FROM
+	agg_test;
+                 json_objectagg                  |  json_arrayagg  |              json_objectagg
+---------------------------------------------------------------------
+ { "1" : 1, "2" : 2, "3" : 3, "4" : 4, "5" : 5 } | [1, 2, 3, 4, 5] | {"1": 1, "2": 2, "3": 3, "4": 4, "5": 5}
+(1 row)
+
+-- JSON_OBJECTAGG with other column
+SELECT
+	JSON_OBJECTAGG(b: b),
+    JSON_ARRAYAGG(b ORDER BY b), -- for order
+	JSON_OBJECTAGG(b: b RETURNING jsonb)
+FROM
+	agg_test;
+                 json_objectagg                  |  json_arrayagg  |              json_objectagg
+---------------------------------------------------------------------
+ { "1" : 1, "2" : 2, "3" : 3, "4" : 4, "5" : 5 } | [1, 2, 3, 4, 5] | {"1": 1, "2": 2, "3": 3, "4": 4, "5": 5}
+(1 row)
+
+-- JSON_OBJECTAGG with router query
+SET citus.log_remote_commands TO on;
+SELECT
+	JSON_OBJECTAGG(a: a),
+	JSON_OBJECTAGG(a: a RETURNING jsonb)
+FROM
+	agg_test WHERE a = 3;
+NOTICE:  issuing SELECT JSON_OBJECTAGG(a : a RETURNING json) AS "json_objectagg", JSON_OBJECTAGG(a : a RETURNING jsonb) AS "json_objectagg" FROM pg16.agg_test_952000 agg_test WHERE (a OPERATOR(pg_catalog.=) 3)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+ json_objectagg | json_objectagg
+---------------------------------------------------------------------
+ { "3" : 3 }    | {"3": 3}
+(1 row)
+
+RESET citus.log_remote_commands;
+-- Tests for SQL/JSON: support the IS JSON predicate
+-- Relevant PG commit:
+-- https://github.com/postgres/postgres/commit/6ee30209
+CREATE TABLE test_is_json (id bigserial, js text);
+SELECT create_distributed_table('test_is_json', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO test_is_json(js) VALUES
+ (NULL),
+ (''),
+ ('123'),
+ ('"aaa "'),
+ ('true'),
+ ('null'),
+ ('[]'),
+ ('[1, "2", {}]'),
+ ('{}'),
+ ('{ "a": 1, "b": null }'),
+ ('{ "a": 1, "a": null }'),
+ ('{ "a": 1, "b": [{ "a": 1 }, { "a": 2 }] }'),
+ ('{ "a": 1, "b": [{ "a": 1, "b": 0, "a": 2 }] }'),
+ ('aaa'),
+ ('{a:1}'),
+ ('["a",]');
+-- run IS JSON predicate in the worker nodes
+SELECT
+	js,
+	js IS JSON "JSON",
+	js IS NOT JSON "NOT JSON",
+	js IS JSON VALUE "VALUE",
+	js IS JSON OBJECT "OBJECT",
+	js IS JSON ARRAY "ARRAY",
+	js IS JSON SCALAR "SCALAR",
+	js IS JSON WITHOUT UNIQUE KEYS "WITHOUT UNIQUE",
+	js IS JSON WITH UNIQUE KEYS "WITH UNIQUE"
+FROM
+	test_is_json ORDER BY js;
+                      js                       | JSON | NOT JSON | VALUE | OBJECT | ARRAY | SCALAR | WITHOUT UNIQUE | WITH UNIQUE
+---------------------------------------------------------------------
+                                               | f    | t        | f     | f      | f     | f      | f              | f
+ "aaa "                                        | t    | f        | t     | f      | f     | t      | t              | t
+ 123                                           | t    | f        | t     | f      | f     | t      | t              | t
+ ["a",]                                        | f    | t        | f     | f      | f     | f      | f              | f
+ [1, "2", {}]                                  | t    | f        | t     | f      | t     | f      | t              | t
+ []                                            | t    | f        | t     | f      | t     | f      | t              | t
+ aaa                                           | f    | t        | f     | f      | f     | f      | f              | f
+ null                                          | t    | f        | t     | f      | f     | t      | t              | t
+ true                                          | t    | f        | t     | f      | f     | t      | t              | t
+ { "a": 1, "a": null }                         | t    | f        | t     | t      | f     | f      | t              | f
+ { "a": 1, "b": [{ "a": 1 }, { "a": 2 }] }     | t    | f        | t     | t      | f     | f      | t              | t
+ { "a": 1, "b": [{ "a": 1, "b": 0, "a": 2 }] } | t    | f        | t     | t      | f     | f      | t              | f
+ { "a": 1, "b": null }                         | t    | f        | t     | t      | f     | f      | t              | t
+ {a:1}                                         | f    | t        | f     | f      | f     | f      | f              | f
+ {}                                            | t    | f        | t     | t      | f     | f      | t              | t
+                                               |      |          |       |        |       |        |                |
+(16 rows)
+
+-- pull the data, and run IS JSON predicate in the coordinator
+WITH pulled_data as (SELECT js FROM test_is_json OFFSET 0)
+SELECT
+	js,
+	js IS JSON "IS JSON",
+	js IS NOT JSON "IS NOT JSON",
+	js IS JSON VALUE "IS VALUE",
+	js IS JSON OBJECT "IS OBJECT",
+	js IS JSON ARRAY "IS ARRAY",
+	js IS JSON SCALAR "IS SCALAR",
+	js IS JSON WITHOUT UNIQUE KEYS "WITHOUT UNIQUE",
+	js IS JSON WITH UNIQUE KEYS "WITH UNIQUE"
+FROM
+    pulled_data ORDER BY js;
+                      js                       | IS JSON | IS NOT JSON | IS VALUE | IS OBJECT | IS ARRAY | IS SCALAR | WITHOUT UNIQUE | WITH UNIQUE
+---------------------------------------------------------------------
+                                               | f       | t           | f        | f         | f        | f         | f              | f
+ "aaa "                                        | t       | f           | t        | f         | f        | t         | t              | t
+ 123                                           | t       | f           | t        | f         | f        | t         | t              | t
+ ["a",]                                        | f       | t           | f        | f         | f        | f         | f              | f
+ [1, "2", {}]                                  | t       | f           | t        | f         | t        | f         | t              | t
+ []                                            | t       | f           | t        | f         | t        | f         | t              | t
+ aaa                                           | f       | t           | f        | f         | f        | f         | f              | f
+ null                                          | t       | f           | t        | f         | f        | t         | t              | t
+ true                                          | t       | f           | t        | f         | f        | t         | t              | t
+ { "a": 1, "a": null }                         | t       | f           | t        | t         | f        | f         | t              | f
+ { "a": 1, "b": [{ "a": 1 }, { "a": 2 }] }     | t       | f           | t        | t         | f        | f         | t              | t
+ { "a": 1, "b": [{ "a": 1, "b": 0, "a": 2 }] } | t       | f           | t        | t         | f        | f         | t              | f
+ { "a": 1, "b": null }                         | t       | f           | t        | t         | f        | f         | t              | t
+ {a:1}                                         | f       | t           | f        | f         | f        | f         | f              | f
+ {}                                            | t       | f           | t        | t         | f        | f         | t              | t
+                                               |         |             |          |           |          |           |                |
+(16 rows)
+
+SELECT
+	js,
+	js IS JSON "IS JSON",
+	js IS NOT JSON "IS NOT JSON",
+	js IS JSON VALUE "IS VALUE",
+	js IS JSON OBJECT "IS OBJECT",
+	js IS JSON ARRAY "IS ARRAY",
+	js IS JSON SCALAR "IS SCALAR",
+	js IS JSON WITHOUT UNIQUE KEYS "WITHOUT UNIQUE",
+	js IS JSON WITH UNIQUE KEYS "WITH UNIQUE"
+FROM
+	(SELECT js::json FROM test_is_json WHERE js IS JSON) foo(js);
+                      js                       | IS JSON | IS NOT JSON | IS VALUE | IS OBJECT | IS ARRAY | IS SCALAR | WITHOUT UNIQUE | WITH UNIQUE
+---------------------------------------------------------------------
+ 123                                           | t       | f           | t        | f         | f        | t         | t              | t
+ "aaa "                                        | t       | f           | t        | f         | f        | t         | t              | t
+ true                                          | t       | f           | t        | f         | f        | t         | t              | t
+ null                                          | t       | f           | t        | f         | f        | t         | t              | t
+ []                                            | t       | f           | t        | f         | t        | f         | t              | t
+ [1, "2", {}]                                  | t       | f           | t        | f         | t        | f         | t              | t
+ {}                                            | t       | f           | t        | t         | f        | f         | t              | t
+ { "a": 1, "b": null }                         | t       | f           | t        | t         | f        | f         | t              | t
+ { "a": 1, "a": null }                         | t       | f           | t        | t         | f        | f         | t              | f
+ { "a": 1, "b": [{ "a": 1 }, { "a": 2 }] }     | t       | f           | t        | t         | f        | f         | t              | t
+ { "a": 1, "b": [{ "a": 1, "b": 0, "a": 2 }] } | t       | f           | t        | t         | f        | f         | t              | f
+(11 rows)
+
+SELECT
+	js0,
+	js IS JSON "IS JSON",
+	js IS NOT JSON "IS NOT JSON",
+	js IS JSON VALUE "IS VALUE",
+	js IS JSON OBJECT "IS OBJECT",
+	js IS JSON ARRAY "IS ARRAY",
+	js IS JSON SCALAR "IS SCALAR",
+	js IS JSON WITHOUT UNIQUE KEYS "WITHOUT UNIQUE",
+	js IS JSON WITH UNIQUE KEYS "WITH UNIQUE"
+FROM
+	(SELECT js, js::bytea FROM test_is_json WHERE js IS JSON) foo(js0, js);
+                      js0                      | IS JSON | IS NOT JSON | IS VALUE | IS OBJECT | IS ARRAY | IS SCALAR | WITHOUT UNIQUE | WITH UNIQUE
+---------------------------------------------------------------------
+ 123                                           | t       | f           | t        | f         | f        | t         | t              | t
+ "aaa "                                        | t       | f           | t        | f         | f        | t         | t              | t
+ true                                          | t       | f           | t        | f         | f        | t         | t              | t
+ null                                          | t       | f           | t        | f         | f        | t         | t              | t
+ []                                            | t       | f           | t        | f         | t        | f         | t              | t
+ [1, "2", {}]                                  | t       | f           | t        | f         | t        | f         | t              | t
+ {}                                            | t       | f           | t        | t         | f        | f         | t              | t
+ { "a": 1, "b": null }                         | t       | f           | t        | t         | f        | f         | t              | t
+ { "a": 1, "a": null }                         | t       | f           | t        | t         | f        | f         | t              | f
+ { "a": 1, "b": [{ "a": 1 }, { "a": 2 }] }     | t       | f           | t        | t         | f        | f         | t              | t
+ { "a": 1, "b": [{ "a": 1, "b": 0, "a": 2 }] } | t       | f           | t        | t         | f        | f         | t              | f
+(11 rows)
+
+SELECT
+	js,
+	js IS JSON "IS JSON",
+	js IS NOT JSON "IS NOT JSON",
+	js IS JSON VALUE "IS VALUE",
+	js IS JSON OBJECT "IS OBJECT",
+	js IS JSON ARRAY "IS ARRAY",
+	js IS JSON SCALAR "IS SCALAR",
+	js IS JSON WITHOUT UNIQUE KEYS "WITHOUT UNIQUE",
+	js IS JSON WITH UNIQUE KEYS "WITH UNIQUE"
+FROM
+	(SELECT js::jsonb FROM test_is_json WHERE js IS JSON) foo(js);
+                 js                  | IS JSON | IS NOT JSON | IS VALUE | IS OBJECT | IS ARRAY | IS SCALAR | WITHOUT UNIQUE | WITH UNIQUE
+---------------------------------------------------------------------
+ 123                                 | t       | f           | t        | f         | f        | t         | t              | t
+ "aaa "                              | t       | f           | t        | f         | f        | t         | t              | t
+ true                                | t       | f           | t        | f         | f        | t         | t              | t
+ null                                | t       | f           | t        | f         | f        | t         | t              | t
+ []                                  | t       | f           | t        | f         | t        | f         | t              | t
+ [1, "2", {}]                        | t       | f           | t        | f         | t        | f         | t              | t
+ {}                                  | t       | f           | t        | t         | f        | f         | t              | t
+ {"a": 1, "b": null}                 | t       | f           | t        | t         | f        | f         | t              | t
+ {"a": null}                         | t       | f           | t        | t         | f        | f         | t              | t
+ {"a": 1, "b": [{"a": 1}, {"a": 2}]} | t       | f           | t        | t         | f        | f         | t              | t
+ {"a": 1, "b": [{"a": 2, "b": 0}]}   | t       | f           | t        | t         | f        | f         | t              | t
+(11 rows)
+
+-- SYSTEM_USER
+-- Relevant PG commit:
+-- https://github.com/postgres/postgres/commit/0823d061
+CREATE TABLE table_name_for_view(id int, val_1 text);
+SELECT create_distributed_table('table_name_for_view', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO table_name_for_view VALUES (1, 'test');
+-- define a view that uses SYSTEM_USER keyword
+CREATE VIEW prop_view_1 AS
+    SELECT *, SYSTEM_USER AS su FROM table_name_for_view;
+SELECT * FROM prop_view_1;
+ id | val_1 | su
+---------------------------------------------------------------------
+  1 | test  |
+(1 row)
+
+-- check definition with SYSTEM_USER is correctly propagated to workers
+\c - - - :worker_1_port
+SELECT pg_get_viewdef('pg16.prop_view_1', true);
+          pg_get_viewdef
+---------------------------------------------------------------------
+  SELECT id,                      +
+     val_1,                       +
+     SYSTEM_USER AS su            +
+    FROM pg16.table_name_for_view;
+(1 row)
+
+\c - - - :master_port
+SET search_path TO pg16;
+-- REINDEX DATABASE/SYSTEM name is optional
+-- We already don't propagate these commands automatically
+-- Testing here with run_command_on_workers
+-- Relevant PG commit: https://github.com/postgres/postgres/commit/2cbc3c1
+REINDEX DATABASE;
+SELECT result FROM run_command_on_workers
+($$REINDEX DATABASE$$);
+ result
+---------------------------------------------------------------------
+ REINDEX
+ REINDEX
+(2 rows)
+
+REINDEX SYSTEM;
+SELECT result FROM run_command_on_workers
+($$REINDEX SYSTEM$$);
+ result
+---------------------------------------------------------------------
+ REINDEX
+ REINDEX
+(2 rows)
+
+--
+-- random_normal() to provide normally-distributed random numbers
+-- adding here the same tests as the ones with random() in aggregate_support.sql
+-- Relevant PG commit: https://github.com/postgres/postgres/commit/38d8176
+--
+CREATE TABLE dist_table (dist_col int, agg_col numeric);
+SELECT create_distributed_table('dist_table', 'dist_col');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE ref_table (int_col int);
+SELECT create_reference_table('ref_table');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- Test the cases where the worker agg exec. returns no tuples.
+SELECT PERCENTILE_DISC(.25) WITHIN GROUP (ORDER BY agg_col)
+FROM (SELECT *, random_normal() FROM dist_table) a;
+ percentile_disc
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT PERCENTILE_DISC((2 > random_normal(stddev => 1, mean => 0))::int::numeric / 10)
+       WITHIN GROUP (ORDER BY agg_col)
+FROM dist_table
+LEFT JOIN ref_table ON TRUE;
+ percentile_disc
+---------------------------------------------------------------------
+
+(1 row)
+
+-- run the same queries after loading some data
+INSERT INTO dist_table VALUES (2, 11.2), (3, NULL), (6, 3.22), (3, 4.23), (5, 5.25),
+                              (4, 63.4), (75, NULL), (80, NULL), (96, NULL), (8, 1078), (0, 1.19);
+SELECT PERCENTILE_DISC(.25) WITHIN GROUP (ORDER BY agg_col)
+FROM (SELECT *, random_normal() FROM dist_table) a;
+ percentile_disc
+---------------------------------------------------------------------
+            3.22
+(1 row)
+
+SELECT PERCENTILE_DISC((2 > random_normal(stddev => 1, mean => 0))::int::numeric / 10)
+       WITHIN GROUP (ORDER BY agg_col)
+FROM dist_table
+LEFT JOIN ref_table ON TRUE;
+ percentile_disc
+---------------------------------------------------------------------
+            1.19
+(1 row)
+
+--
+-- PG16 added WITH ADMIN FALSE option to GRANT ROLE
+-- WITH ADMIN FALSE is the default, make sure we propagate correctly in Citus
+-- Relevant PG commit: https://github.com/postgres/postgres/commit/e3ce2de
+--
+CREATE ROLE role1;
+CREATE ROLE role2;
+SET citus.log_remote_commands TO on;
+SET citus.grep_remote_commands = '%GRANT%';
+-- default admin option is false
+GRANT role1 TO role2;
+NOTICE:  issuing GRANT role1 TO  role2;
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing GRANT role1 TO  role2;
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+REVOKE role1 FROM role2;
+-- should behave same as default
+GRANT role1 TO role2 WITH ADMIN FALSE;
+NOTICE:  issuing GRANT role1 TO  role2;
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing GRANT role1 TO  role2;
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+REVOKE role1 FROM role2;
+-- with admin option and with admin true are the same
+GRANT role1 TO role2 WITH ADMIN OPTION;
+NOTICE:  issuing GRANT role1 TO  role2 WITH ADMIN OPTION;
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing GRANT role1 TO  role2 WITH ADMIN OPTION;
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+REVOKE role1 FROM role2;
+GRANT role1 TO role2 WITH ADMIN TRUE;
+NOTICE:  issuing GRANT role1 TO  role2 WITH ADMIN OPTION;
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing GRANT role1 TO  role2 WITH ADMIN OPTION;
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+REVOKE role1 FROM role2;
+RESET citus.log_remote_commands;
+RESET citus.grep_remote_commands;
+--
+-- PG16 added new options to GRANT ROLE
+-- inherit: https://github.com/postgres/postgres/commit/e3ce2de
+-- set: https://github.com/postgres/postgres/commit/3d14e17
+-- We don't propagate for now in Citus
+--
+GRANT role1 TO role2 WITH INHERIT FALSE;
+NOTICE:  not propagating GRANT/REVOKE commands with specified INHERIT/SET options to worker nodes
+HINT:  Connect to worker nodes directly to manually run the same GRANT/REVOKE command after disabling DDL propagation.
+REVOKE role1 FROM role2;
+GRANT role1 TO role2 WITH INHERIT TRUE;
+NOTICE:  not propagating GRANT/REVOKE commands with specified INHERIT/SET options to worker nodes
+HINT:  Connect to worker nodes directly to manually run the same GRANT/REVOKE command after disabling DDL propagation.
+REVOKE role1 FROM role2;
+GRANT role1 TO role2 WITH INHERIT OPTION;
+NOTICE:  not propagating GRANT/REVOKE commands with specified INHERIT/SET options to worker nodes
+HINT:  Connect to worker nodes directly to manually run the same GRANT/REVOKE command after disabling DDL propagation.
+REVOKE role1 FROM role2;
+GRANT role1 TO role2 WITH SET FALSE;
+NOTICE:  not propagating GRANT/REVOKE commands with specified INHERIT/SET options to worker nodes
+HINT:  Connect to worker nodes directly to manually run the same GRANT/REVOKE command after disabling DDL propagation.
+REVOKE role1 FROM role2;
+GRANT role1 TO role2 WITH SET TRUE;
+NOTICE:  not propagating GRANT/REVOKE commands with specified INHERIT/SET options to worker nodes
+HINT:  Connect to worker nodes directly to manually run the same GRANT/REVOKE command after disabling DDL propagation.
+REVOKE role1 FROM role2;
+GRANT role1 TO role2 WITH SET OPTION;
+NOTICE:  not propagating GRANT/REVOKE commands with specified INHERIT/SET options to worker nodes
+HINT:  Connect to worker nodes directly to manually run the same GRANT/REVOKE command after disabling DDL propagation.
+REVOKE role1 FROM role2;
+-- connect to worker node
+GRANT role1 TO role2 WITH ADMIN OPTION, INHERIT FALSE, SET FALSE;
+NOTICE:  not propagating GRANT/REVOKE commands with specified INHERIT/SET options to worker nodes
+HINT:  Connect to worker nodes directly to manually run the same GRANT/REVOKE command after disabling DDL propagation.
+SELECT roleid::regrole::text AS role, member::regrole::text,
+admin_option, inherit_option, set_option FROM pg_auth_members
+WHERE roleid::regrole::text = 'role1' ORDER BY 1, 2;
+ role  | member | admin_option | inherit_option | set_option
+---------------------------------------------------------------------
+ role1 | role2  | t            | f              | f
+(1 row)
+
+\c - - - :worker_1_port
+SELECT roleid::regrole::text AS role, member::regrole::text,
+admin_option, inherit_option, set_option FROM pg_auth_members
+WHERE roleid::regrole::text = 'role1' ORDER BY 1, 2;
+ role | member | admin_option | inherit_option | set_option
+---------------------------------------------------------------------
+(0 rows)
+
+SET citus.enable_ddl_propagation TO off;
+GRANT role1 TO role2 WITH ADMIN OPTION, INHERIT FALSE, SET FALSE;
+RESET citus.enable_ddl_propagation;
+SELECT roleid::regrole::text AS role, member::regrole::text,
+admin_option, inherit_option, set_option FROM pg_auth_members
+WHERE roleid::regrole::text = 'role1' ORDER BY 1, 2;
+ role  | member | admin_option | inherit_option | set_option
+---------------------------------------------------------------------
+ role1 | role2  | t            | f              | f
+(1 row)
+
+\c - - - :master_port
+REVOKE role1 FROM role2;
+-- test REVOKES as well
+GRANT role1 TO role2;
+REVOKE SET OPTION FOR role1 FROM role2;
+NOTICE:  not propagating GRANT/REVOKE commands with specified INHERIT/SET options to worker nodes
+HINT:  Connect to worker nodes directly to manually run the same GRANT/REVOKE command after disabling DDL propagation.
+REVOKE INHERIT OPTION FOR role1 FROM role2;
+NOTICE:  not propagating GRANT/REVOKE commands with specified INHERIT/SET options to worker nodes
+HINT:  Connect to worker nodes directly to manually run the same GRANT/REVOKE command after disabling DDL propagation.
+DROP ROLE role1, role2;
+-- test that everything works fine for roles that are not propagated
+SET citus.enable_ddl_propagation TO off;
+CREATE ROLE role3;
+CREATE ROLE role4;
+CREATE ROLE role5;
+RESET citus.enable_ddl_propagation;
+-- by default, admin option is false, inherit is true, set is true
+GRANT role3 TO role4;
+GRANT role3 TO role5 WITH ADMIN TRUE, INHERIT FALSE, SET FALSE;
+SELECT roleid::regrole::text AS role, member::regrole::text, admin_option, inherit_option, set_option FROM pg_auth_members WHERE roleid::regrole::text = 'role3' ORDER BY 1, 2;
+ role  | member | admin_option | inherit_option | set_option
+---------------------------------------------------------------------
+ role3 | role4  | f            | t              | t
+ role3 | role5  | t            | f              | f
+(2 rows)
+
+DROP ROLE role3, role4, role5;
+\set VERBOSITY terse
+SET client_min_messages TO ERROR;
+DROP EXTENSION postgres_fdw CASCADE;
+DROP SCHEMA pg16 CASCADE;

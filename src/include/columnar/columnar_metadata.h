@@ -12,6 +12,8 @@
 #ifndef COLUMNAR_METADATA_H
 #define COLUMNAR_METADATA_H
 
+#include "pg_version_compat.h"
+
 /*
  * StripeMetadata represents information about a stripe. This information is
  * stored in the metadata table "columnar.stripe".
@@ -49,7 +51,7 @@ typedef struct EmptyStripeReservation
 	uint64 stripeFirstRowNumber;
 } EmptyStripeReservation;
 
-extern List * StripesForRelfilenode(RelFileNode relfilenode);
+extern List * StripesForRelfilelocator(RelFileLocator relfilelocator);
 extern void ColumnarStorageUpdateIfNeeded(Relation rel, bool isUpgrade);
 extern List * ExtractColumnarRelOptions(List *inOptions, List **outColumnarOptions);
 extern void SetColumnarRelOptions(RangeVar *rv, List *reloptions);

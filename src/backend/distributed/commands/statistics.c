@@ -77,6 +77,14 @@ PreprocessCreateStatisticsStmt(Node *node, const char *queryString,
 
 	EnsureCoordinator();
 
+	if (!(stmt->defnames))
+	{
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("cannot create statistics without a name on a "
+							   "Citus table"),
+						errhint("Consider specifying a name for the statistics")));
+	}
+
 	QualifyTreeNode((Node *) stmt);
 
 	Oid statsOid = get_statistics_object_oid(stmt->defnames, true);
@@ -522,7 +530,7 @@ GetExplicitStatisticsCommandList(Oid relationId)
 	RelationClose(relation);
 
 	/* generate fully-qualified names */
-	PushOverrideEmptySearchPath(CurrentMemoryContext);
+	int saveNestLevel = PushEmptySearchPath();
 
 	Oid statisticsId = InvalidOid;
 	foreach_oid(statisticsId, statisticsIdList)
@@ -571,7 +579,7 @@ GetExplicitStatisticsCommandList(Oid relationId)
 	}
 
 	/* revert back to original search_path */
-	PopOverrideSearchPath();
+	PopEmptySearchPath(saveNestLevel);
 
 	return explicitStatisticsCommandList;
 }

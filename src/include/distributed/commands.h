@@ -220,6 +220,21 @@ extern List * AlterDatabaseOwnerObjectAddress(Node *node, bool missing_ok, bool
 											  isPostprocess);
 extern List * DatabaseOwnerDDLCommands(const ObjectAddress *address);
 
+extern List * PreprocessGrantOnDatabaseStmt(Node *node, const char *queryString,
+											ProcessUtilityContext processUtilityContext);
+
+extern List * PreprocessAlterDatabaseStmt(Node *node, const char *queryString,
+										  ProcessUtilityContext processUtilityContext);
+
+extern List * PreprocessAlterDatabaseRefreshCollStmt(Node *node, const char *queryString,
+													 ProcessUtilityContext
+													 processUtilityContext);
+
+
+extern List * PreprocessAlterDatabaseSetStmt(Node *node, const char *queryString,
+											 ProcessUtilityContext processUtilityContext);
+
+
 /* domain.c - forward declarations */
 extern List * CreateDomainStmtObjectAddress(Node *node, bool missing_ok, bool
 											isPostprocess);
@@ -234,6 +249,7 @@ extern List * RenameDomainStmtObjectAddress(Node *node, bool missing_ok, bool
 											isPostprocess);
 extern CreateDomainStmt * RecreateDomainStmt(Oid domainOid);
 extern Oid get_constraint_typid(Oid conoid);
+
 
 /* extension.c - forward declarations */
 extern bool IsDropCitusExtensionStmt(Node *parsetree);
@@ -288,6 +304,7 @@ extern bool ColumnAppearsInForeignKeyToReferenceTable(char *columnName, Oid
 													  relationId);
 extern List * GetReferencingForeignConstaintCommands(Oid relationOid);
 extern List * GetForeignConstraintToReferenceTablesCommands(Oid relationId);
+extern List * GetForeignConstraintFromOtherReferenceTablesCommands(Oid relationId);
 extern List * GetForeignConstraintToDistributedTablesCommands(Oid relationId);
 extern List * GetForeignConstraintFromDistributedTablesCommands(Oid relationId);
 extern List * GetForeignConstraintCommandsInternal(Oid relationId, int flags);
@@ -582,6 +599,8 @@ extern bool ShouldEnableLocalReferenceForeignKeys(void);
 extern List * PreprocessAlterTableStmtAttachPartition(AlterTableStmt *alterTableStatement,
 													  const char *queryString);
 extern List * PostprocessAlterTableSchemaStmt(Node *node, const char *queryString);
+extern void PrepareAlterTableStmtForConstraint(AlterTableStmt *alterTableStatement,
+											   Oid relationId, Constraint *constraint);
 extern List * PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 									   ProcessUtilityContext processUtilityContext);
 extern List * PreprocessAlterTableMoveAllStmt(Node *node, const char *queryString,
@@ -599,6 +618,8 @@ extern void ErrorUnsupportedAlterTableAddColumn(Oid relationId, AlterTableCmd *c
 extern void ErrorIfUnsupportedConstraint(Relation relation, char distributionMethod,
 										 char referencingReplicationModel,
 										 Var *distributionColumn, uint32 colocationId);
+extern List * InterShardDDLTaskList(Oid leftRelationId, Oid rightRelationId,
+									const char *commandString);
 extern List * AlterTableSchemaStmtObjectAddress(Node *stmt,
 												bool missing_ok, bool isPostprocess);
 extern List * MakeNameListFromRangeVar(const RangeVar *rel);
@@ -809,7 +830,6 @@ extern void UpdateAutoConvertedForConnectedRelations(List *relationId, bool
 /* schema_based_sharding.c */
 extern bool ShouldUseSchemaBasedSharding(char *schemaName);
 extern bool ShouldCreateTenantSchemaTable(Oid relationId);
-extern bool IsTenantSchema(Oid schemaId);
 extern void EnsureTenantTable(Oid relationId, char *operationName);
 extern void ErrorIfIllegalPartitioningInTenantSchema(Oid parentRelationId,
 													 Oid partitionRelationId);

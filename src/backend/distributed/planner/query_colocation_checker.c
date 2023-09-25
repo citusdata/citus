@@ -83,7 +83,16 @@ CreateColocatedJoinChecker(Query *subquery, PlannerRestrictionContext *restricti
 		 * functions (i.e., FilterPlannerRestrictionForQuery()) rely on queries
 		 * not relations.
 		 */
-		anchorSubquery = WrapRteRelationIntoSubquery(anchorRangeTblEntry, NIL);
+#if PG_VERSION_NUM >= PG_VERSION_16
+		RTEPermissionInfo *perminfo = NULL;
+		if (anchorRangeTblEntry->perminfoindex)
+		{
+			perminfo = getRTEPermissionInfo(subquery->rteperminfos, anchorRangeTblEntry);
+		}
+		anchorSubquery = WrapRteRelationIntoSubquery(anchorRangeTblEntry, NIL, perminfo);
+#else
+		anchorSubquery = WrapRteRelationIntoSubquery(anchorRangeTblEntry, NIL, NULL);
+#endif
 	}
 	else if (anchorRangeTblEntry->rtekind == RTE_SUBQUERY)
 	{
@@ -126,7 +135,7 @@ static RangeTblEntry *
 AnchorRte(Query *subquery)
 {
 	FromExpr *joinTree = subquery->jointree;
-	Relids joinRelIds = get_relids_in_jointree((Node *) joinTree, false);
+	Relids joinRelIds = get_relids_in_jointree_compat((Node *) joinTree, false, false);
 	int currentRTEIndex = -1;
 	RangeTblEntry *anchorRangeTblEntry = NULL;
 
@@ -266,7 +275,9 @@ SubqueryColocated(Query *subquery, ColocatedJoinChecker *checker)
  * designed for generating a stub query.
  */
 Query *
-WrapRteRelationIntoSubquery(RangeTblEntry *rteRelation, List *requiredAttributes)
+WrapRteRelationIntoSubquery(RangeTblEntry *rteRelation,
+							List *requiredAttributes,
+							RTEPermissionInfo *perminfo)
 {
 	Query *subquery = makeNode(Query);
 	RangeTblRef *newRangeTableRef = makeNode(RangeTblRef);
@@ -276,6 +287,14 @@ WrapRteRelationIntoSubquery(RangeTblEntry *rteRelation, List *requiredAttributes
 	/* we copy the input rteRelation to preserve the rteIdentity */
 	RangeTblEntry *newRangeTableEntry = copyObject(rteRelation);
 	subquery->rtable = list_make1(newRangeTableEntry);
+
+#if PG_VERSION_NUM >= PG_VERSION_16
+	if (perminfo)
+	{
+		newRangeTableEntry->perminfoindex = 1;
+		subquery->rteperminfos = list_make1(perminfo);
+	}
+#endif
 
 	/* set the FROM expression to the subquery */
 	newRangeTableRef = makeNode(RangeTblRef);

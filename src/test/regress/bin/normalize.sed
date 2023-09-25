@@ -294,3 +294,17 @@ s/\/\*\{"cId":.*\*\///g
 
 # Notice message that contains current columnar version that makes it harder to bump versions
 s/(NOTICE:  issuing CREATE EXTENSION IF NOT EXISTS citus_columnar WITH SCHEMA  pg_catalog VERSION )"[0-9]+\.[0-9]+-[0-9]+"/\1 "x.y-z"/
+
+# pg16 changes
+# can be removed when dropping PG14&15 support
+#if PG_VERSION_NUM < PG_VERSION_16
+# (This is not preprocessor directive, but a reminder for the developer that will drop PG14&15 support )
+
+s/, password_required=false//g
+s/provide the file or change sslmode/provide the file, use the system's trusted roots with sslrootcert=system, or change sslmode/g
+s/(:varcollid [0-9]+) :varlevelsup 0/\1 :varnullingrels (b) :varlevelsup 0/g
+s/table_name_for_view\.([_a-z0-9]+)(,| |$)/\1\2/g
+s/permission denied to terminate process/must be a superuser to terminate superuser process/g
+s/permission denied to cancel query/must be a superuser to cancel superuser query/g
+
+#endif /* PG_VERSION_NUM < PG_VERSION_16 */

@@ -1022,13 +1022,12 @@ GetUndistributableDependency(const ObjectAddress *objectAddress)
 		if (!SupportedDependencyByCitus(dependency))
 		{
 			/*
-			 * Skip roles and text search templates.
-			 *
-			 * Roles should be handled manually with Citus community whereas text search
-			 * templates should be handled manually in both community and enterprise
+			 * Since we do not yet support distributed TS TEMPLATE and AM objects, we skip
+			 * dependency checks for text search templates. The user is expected to
+			 * manually create the TS TEMPLATE and AM objects.
 			 */
-			if (getObjectClass(dependency) != OCLASS_ROLE &&
-				getObjectClass(dependency) != OCLASS_TSTEMPLATE)
+			if (getObjectClass(dependency) != OCLASS_TSTEMPLATE &&
+				getObjectClass(dependency) != OCLASS_AM)
 			{
 				return dependency;
 			}
@@ -1200,7 +1199,7 @@ FirstExtensionWithSchema(Oid schemaId)
 
 	ScanKeyData entry[1];
 	ScanKeyInit(&entry[0], Anum_pg_extension_extnamespace, BTEqualStrategyNumber,
-				F_INT4EQ, schemaId);
+				F_OIDEQ, ObjectIdGetDatum(schemaId));
 
 	SysScanDesc scan = systable_beginscan(relation, InvalidOid, false, NULL, 1, entry);
 	HeapTuple extensionTuple = systable_getnext(scan);

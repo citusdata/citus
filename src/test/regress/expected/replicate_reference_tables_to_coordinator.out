@@ -396,10 +396,10 @@ DROP VIEW numbers_v, local_table_v;
 -- Joins between reference tables and materialized views are allowed to
 -- be planned to be executed locally.
 --
-CREATE MATERIALIZED VIEW numbers_v AS SELECT * FROM numbers WHERE a BETWEEN 1 AND 10;
-NOTICE:  executing the command locally: SELECT a FROM replicate_ref_to_coordinator.numbers_8000001 numbers WHERE ((a OPERATOR(pg_catalog.>=) 1) AND (a OPERATOR(pg_catalog.<=) 10))
+CREATE MATERIALIZED VIEW numbers_v AS SELECT * FROM numbers table_name_for_view WHERE a BETWEEN 1 AND 10;
+NOTICE:  executing the command locally: SELECT a FROM replicate_ref_to_coordinator.numbers_8000001 table_name_for_view WHERE ((a OPERATOR(pg_catalog.>=) 1) AND (a OPERATOR(pg_catalog.<=) 10))
 REFRESH MATERIALIZED VIEW numbers_v;
-NOTICE:  executing the command locally: SELECT numbers.a FROM replicate_ref_to_coordinator.numbers_8000001 numbers WHERE ((numbers.a OPERATOR(pg_catalog.>=) 1) AND (numbers.a OPERATOR(pg_catalog.<=) 10))
+NOTICE:  executing the command locally: SELECT a FROM replicate_ref_to_coordinator.numbers_8000001 table_name_for_view WHERE ((a OPERATOR(pg_catalog.>=) 1) AND (a OPERATOR(pg_catalog.<=) 10))
 SELECT * FROM squares JOIN numbers_v ON squares.a = numbers_v.a ORDER BY 1;
 NOTICE:  executing the command locally: SELECT squares.a, squares.b, numbers_v.a FROM (replicate_ref_to_coordinator.squares_8000000 squares JOIN replicate_ref_to_coordinator.numbers_v ON ((squares.a OPERATOR(pg_catalog.=) numbers_v.a))) ORDER BY squares.a
  a | b | a
@@ -446,7 +446,7 @@ INSERT INTO local_table VALUES (1), (2), (3), (4);
 INSERT INTO numbers VALUES (1), (2), (3), (4);
 NOTICE:  executing the command locally: INSERT INTO replicate_ref_to_coordinator.numbers_8000001 AS citus_table_alias (a) VALUES (1), (2), (3), (4)
 ALTER TABLE numbers ADD COLUMN d int;
-NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (8000001, 'replicate_ref_to_coordinator', 'ALTER TABLE numbers ADD COLUMN d int;')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (8000001, 'replicate_ref_to_coordinator', 'ALTER TABLE numbers ADD COLUMN d integer;')
 SELECT * FROM local_table JOIN numbers USING(a) ORDER BY a;
 NOTICE:  executing the command locally: SELECT local_table.a, numbers.d FROM (replicate_ref_to_coordinator.local_table JOIN replicate_ref_to_coordinator.numbers_8000001 numbers(a, d) USING (a)) ORDER BY local_table.a
  a | d

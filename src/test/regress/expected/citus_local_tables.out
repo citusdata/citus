@@ -494,7 +494,7 @@ CREATE TABLE local_table_4 (
   b int references local_table_4(a));
 NOTICE:  executing the command locally: SELECT worker_apply_inter_shard_ddl_command (xxxxx, 'citus_local_tables_test_schema', xxxxx, 'citus_local_tables_test_schema', 'ALTER TABLE citus_local_tables_test_schema.local_table_4 ADD CONSTRAINT local_table_4_a_fkey FOREIGN KEY (a) REFERENCES citus_local_tables_test_schema.citus_local_table_1(a)')
 ALTER TABLE citus_local_table_1 ADD COLUMN b int NOT NULL;
-NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1504014, 'citus_local_tables_test_schema', 'ALTER TABLE citus_local_table_1 ADD COLUMN b int NOT NULL;')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1504014, 'citus_local_tables_test_schema', 'ALTER TABLE citus_local_table_1 ADD COLUMN b integer NOT NULL;')
 -- show that we added column with NOT NULL
 SELECT table_name, column_name, is_nullable
 FROM INFORMATION_SCHEMA.COLUMNS
@@ -635,7 +635,7 @@ FROM pg_dist_partition WHERE logicalrelid = 'citus_local_table_4'::regclass;
 SELECT column_name_to_column('citus_local_table_4', 'a');
                                                   column_name_to_column
 ---------------------------------------------------------------------
- {VAR :varno 1 :varattno 1 :vartype 23 :vartypmod -1 :varcollid 0 :varlevelsup 0 :varnosyn 1 :varattnosyn 1 :location -1}
+ {VAR :varno 1 :varattno 1 :vartype 23 :vartypmod -1 :varcollid 0 :varnullingrels (b) :varlevelsup 0 :varnosyn 1 :varattnosyn 1 :location -1}
 (1 row)
 
 SELECT master_update_shard_statistics(shardid)

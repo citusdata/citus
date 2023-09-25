@@ -266,28 +266,28 @@ SELECT count(*) FROM test t1, test t2 WHERE t1.x = t2.y;
 BEGIN;
 SET citus.enable_unique_job_ids TO off;
 SELECT count(*) FROM test t1, test t2 WHERE t1.x = t2.y;
-NOTICE:  executing the command locally: SELECT partition_index, 'repartition_25_1' || '_' || partition_index::text , rows_written FROM pg_catalog.worker_partition_query_result('repartition_25_1','SELECT x AS column1 FROM coordinator_shouldhaveshards.test_1503000 t1 WHERE true',0,'hash','{-2147483648,-1431655766,-715827884,-2,715827880,1431655762}'::text[],'{-1431655767,-715827885,-3,715827879,1431655761,2147483647}'::text[],true,true,true) WHERE rows_written > 0
-NOTICE:  executing the command locally: SELECT partition_index, 'repartition_25_4' || '_' || partition_index::text , rows_written FROM pg_catalog.worker_partition_query_result('repartition_25_4','SELECT x AS column1 FROM coordinator_shouldhaveshards.test_1503003 t1 WHERE true',0,'hash','{-2147483648,-1431655766,-715827884,-2,715827880,1431655762}'::text[],'{-1431655767,-715827885,-3,715827879,1431655761,2147483647}'::text[],true,true,true) WHERE rows_written > 0
-NOTICE:  executing the command locally: SELECT partition_index, 'repartition_26_1' || '_' || partition_index::text , rows_written FROM pg_catalog.worker_partition_query_result('repartition_26_1','SELECT y AS column1 FROM coordinator_shouldhaveshards.test_1503000 t2 WHERE true',0,'hash','{-2147483648,-1431655766,-715827884,-2,715827880,1431655762}'::text[],'{-1431655767,-715827885,-3,715827879,1431655761,2147483647}'::text[],true,true,true) WHERE rows_written > 0
-NOTICE:  executing the command locally: SELECT partition_index, 'repartition_26_4' || '_' || partition_index::text , rows_written FROM pg_catalog.worker_partition_query_result('repartition_26_4','SELECT y AS column1 FROM coordinator_shouldhaveshards.test_1503003 t2 WHERE true',0,'hash','{-2147483648,-1431655766,-715827884,-2,715827880,1431655762}'::text[],'{-1431655767,-715827885,-3,715827879,1431655761,2147483647}'::text[],true,true,true) WHERE rows_written > 0
-NOTICE:  executing the command locally: SELECT bytes FROM fetch_intermediate_results(ARRAY['repartition_25_1_0']::text[],'localhost',57636) bytes
-NOTICE:  executing the command locally: SELECT bytes FROM fetch_intermediate_results(ARRAY['repartition_25_2_0']::text[],'localhost',57637) bytes
-NOTICE:  executing the command locally: SELECT bytes FROM fetch_intermediate_results(ARRAY['repartition_25_3_0']::text[],'localhost',57638) bytes
-NOTICE:  executing the command locally: SELECT bytes FROM fetch_intermediate_results(ARRAY['repartition_25_4_0']::text[],'localhost',57636) bytes
-NOTICE:  executing the command locally: SELECT bytes FROM fetch_intermediate_results(ARRAY['repartition_26_1_0']::text[],'localhost',57636) bytes
-NOTICE:  executing the command locally: SELECT bytes FROM fetch_intermediate_results(ARRAY['repartition_26_2_0']::text[],'localhost',57637) bytes
-NOTICE:  executing the command locally: SELECT bytes FROM fetch_intermediate_results(ARRAY['repartition_26_3_0']::text[],'localhost',57638) bytes
-NOTICE:  executing the command locally: SELECT bytes FROM fetch_intermediate_results(ARRAY['repartition_26_4_0']::text[],'localhost',57636) bytes
-NOTICE:  executing the command locally: SELECT bytes FROM fetch_intermediate_results(ARRAY['repartition_25_1_3']::text[],'localhost',57636) bytes
-NOTICE:  executing the command locally: SELECT bytes FROM fetch_intermediate_results(ARRAY['repartition_25_2_3']::text[],'localhost',57637) bytes
-NOTICE:  executing the command locally: SELECT bytes FROM fetch_intermediate_results(ARRAY['repartition_25_3_3']::text[],'localhost',57638) bytes
-NOTICE:  executing the command locally: SELECT bytes FROM fetch_intermediate_results(ARRAY['repartition_25_4_3']::text[],'localhost',57636) bytes
-NOTICE:  executing the command locally: SELECT bytes FROM fetch_intermediate_results(ARRAY['repartition_26_1_3']::text[],'localhost',57636) bytes
-NOTICE:  executing the command locally: SELECT bytes FROM fetch_intermediate_results(ARRAY['repartition_26_2_3']::text[],'localhost',57637) bytes
-NOTICE:  executing the command locally: SELECT bytes FROM fetch_intermediate_results(ARRAY['repartition_26_3_3']::text[],'localhost',57638) bytes
-NOTICE:  executing the command locally: SELECT bytes FROM fetch_intermediate_results(ARRAY['repartition_26_4_3']::text[],'localhost',57636) bytes
-NOTICE:  executing the command locally: SELECT count(*) AS count FROM (read_intermediate_results('{repartition_25_1_0,repartition_25_2_0,repartition_25_3_0,repartition_25_4_0}'::text[], 'binary'::citus_copy_format) intermediate_result(column1 integer) JOIN read_intermediate_results('{repartition_26_1_0,repartition_26_2_0,repartition_26_3_0,repartition_26_4_0}'::text[], 'binary'::citus_copy_format) intermediate_result_1(column1 integer) ON ((intermediate_result.column1 OPERATOR(pg_catalog.=) intermediate_result_1.column1))) WHERE true
-NOTICE:  executing the command locally: SELECT count(*) AS count FROM (read_intermediate_results('{repartition_25_1_3,repartition_25_2_3,repartition_25_3_3,repartition_25_4_3}'::text[], 'binary'::citus_copy_format) intermediate_result(column1 integer) JOIN read_intermediate_results('{repartition_26_1_3,repartition_26_2_3,repartition_26_3_3,repartition_26_4_3}'::text[], 'binary'::citus_copy_format) intermediate_result_1(column1 integer) ON ((intermediate_result.column1 OPERATOR(pg_catalog.=) intermediate_result_1.column1))) WHERE true
+NOTICE:  executing the command locally: SELECT partition_index, 'repartition_26_1' || '_' || partition_index::text , rows_written FROM pg_catalog.worker_partition_query_result('repartition_26_1','SELECT x AS column1 FROM coordinator_shouldhaveshards.test_1503000 t1 WHERE true',0,'hash','{-2147483648,-1431655766,-715827884,-2,715827880,1431655762}'::text[],'{-1431655767,-715827885,-3,715827879,1431655761,2147483647}'::text[],true,true,true) WHERE rows_written > 0
+NOTICE:  executing the command locally: SELECT partition_index, 'repartition_26_4' || '_' || partition_index::text , rows_written FROM pg_catalog.worker_partition_query_result('repartition_26_4','SELECT x AS column1 FROM coordinator_shouldhaveshards.test_1503003 t1 WHERE true',0,'hash','{-2147483648,-1431655766,-715827884,-2,715827880,1431655762}'::text[],'{-1431655767,-715827885,-3,715827879,1431655761,2147483647}'::text[],true,true,true) WHERE rows_written > 0
+NOTICE:  executing the command locally: SELECT partition_index, 'repartition_27_1' || '_' || partition_index::text , rows_written FROM pg_catalog.worker_partition_query_result('repartition_27_1','SELECT y AS column1 FROM coordinator_shouldhaveshards.test_1503000 t2 WHERE true',0,'hash','{-2147483648,-1431655766,-715827884,-2,715827880,1431655762}'::text[],'{-1431655767,-715827885,-3,715827879,1431655761,2147483647}'::text[],true,true,true) WHERE rows_written > 0
+NOTICE:  executing the command locally: SELECT partition_index, 'repartition_27_4' || '_' || partition_index::text , rows_written FROM pg_catalog.worker_partition_query_result('repartition_27_4','SELECT y AS column1 FROM coordinator_shouldhaveshards.test_1503003 t2 WHERE true',0,'hash','{-2147483648,-1431655766,-715827884,-2,715827880,1431655762}'::text[],'{-1431655767,-715827885,-3,715827879,1431655761,2147483647}'::text[],true,true,true) WHERE rows_written > 0
+NOTICE:  executing the command locally: SELECT bytes FROM fetch_intermediate_results(ARRAY['repartition_26_1_2']::text[],'localhost',57636) bytes
+NOTICE:  executing the command locally: SELECT bytes FROM fetch_intermediate_results(ARRAY['repartition_26_2_2']::text[],'localhost',57637) bytes
+NOTICE:  executing the command locally: SELECT bytes FROM fetch_intermediate_results(ARRAY['repartition_26_3_2']::text[],'localhost',57638) bytes
+NOTICE:  executing the command locally: SELECT bytes FROM fetch_intermediate_results(ARRAY['repartition_26_4_2']::text[],'localhost',57636) bytes
+NOTICE:  executing the command locally: SELECT bytes FROM fetch_intermediate_results(ARRAY['repartition_27_1_2']::text[],'localhost',57636) bytes
+NOTICE:  executing the command locally: SELECT bytes FROM fetch_intermediate_results(ARRAY['repartition_27_2_2']::text[],'localhost',57637) bytes
+NOTICE:  executing the command locally: SELECT bytes FROM fetch_intermediate_results(ARRAY['repartition_27_3_2']::text[],'localhost',57638) bytes
+NOTICE:  executing the command locally: SELECT bytes FROM fetch_intermediate_results(ARRAY['repartition_27_4_2']::text[],'localhost',57636) bytes
+NOTICE:  executing the command locally: SELECT bytes FROM fetch_intermediate_results(ARRAY['repartition_26_1_5']::text[],'localhost',57636) bytes
+NOTICE:  executing the command locally: SELECT bytes FROM fetch_intermediate_results(ARRAY['repartition_26_2_5']::text[],'localhost',57637) bytes
+NOTICE:  executing the command locally: SELECT bytes FROM fetch_intermediate_results(ARRAY['repartition_26_3_5']::text[],'localhost',57638) bytes
+NOTICE:  executing the command locally: SELECT bytes FROM fetch_intermediate_results(ARRAY['repartition_26_4_5']::text[],'localhost',57636) bytes
+NOTICE:  executing the command locally: SELECT bytes FROM fetch_intermediate_results(ARRAY['repartition_27_1_5']::text[],'localhost',57636) bytes
+NOTICE:  executing the command locally: SELECT bytes FROM fetch_intermediate_results(ARRAY['repartition_27_2_5']::text[],'localhost',57637) bytes
+NOTICE:  executing the command locally: SELECT bytes FROM fetch_intermediate_results(ARRAY['repartition_27_3_5']::text[],'localhost',57638) bytes
+NOTICE:  executing the command locally: SELECT bytes FROM fetch_intermediate_results(ARRAY['repartition_27_4_5']::text[],'localhost',57636) bytes
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM (read_intermediate_results('{repartition_26_1_2,repartition_26_2_2,repartition_26_3_2,repartition_26_4_2}'::text[], 'binary'::citus_copy_format) intermediate_result(column1 integer) JOIN read_intermediate_results('{repartition_27_1_2,repartition_27_2_2,repartition_27_3_2,repartition_27_4_2}'::text[], 'binary'::citus_copy_format) intermediate_result_1(column1 integer) ON ((intermediate_result.column1 OPERATOR(pg_catalog.=) intermediate_result_1.column1))) WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM (read_intermediate_results('{repartition_26_1_5,repartition_26_2_5,repartition_26_3_5,repartition_26_4_5}'::text[], 'binary'::citus_copy_format) intermediate_result(column1 integer) JOIN read_intermediate_results('{repartition_27_1_5,repartition_27_2_5,repartition_27_3_5,repartition_27_4_5}'::text[], 'binary'::citus_copy_format) intermediate_result_1(column1 integer) ON ((intermediate_result.column1 OPERATOR(pg_catalog.=) intermediate_result_1.column1))) WHERE true
  count
 ---------------------------------------------------------------------
    100
@@ -305,28 +305,28 @@ NOTICE:  executing the command locally: SELECT y FROM coordinator_shouldhaveshar
 (1 row)
 
 SELECT count(*) FROM test t1, test t2 WHERE t1.x = t2.y;
-NOTICE:  executing the command locally: SELECT partition_index, 'repartition_29_1' || '_' || partition_index::text , rows_written FROM pg_catalog.worker_partition_query_result('repartition_29_1','SELECT x AS column1 FROM coordinator_shouldhaveshards.test_1503000 t1 WHERE true',0,'hash','{-2147483648,-1431655766,-715827884,-2,715827880,1431655762}'::text[],'{-1431655767,-715827885,-3,715827879,1431655761,2147483647}'::text[],true,true,true) WHERE rows_written > 0
-NOTICE:  executing the command locally: SELECT partition_index, 'repartition_29_4' || '_' || partition_index::text , rows_written FROM pg_catalog.worker_partition_query_result('repartition_29_4','SELECT x AS column1 FROM coordinator_shouldhaveshards.test_1503003 t1 WHERE true',0,'hash','{-2147483648,-1431655766,-715827884,-2,715827880,1431655762}'::text[],'{-1431655767,-715827885,-3,715827879,1431655761,2147483647}'::text[],true,true,true) WHERE rows_written > 0
-NOTICE:  executing the command locally: SELECT partition_index, 'repartition_30_1' || '_' || partition_index::text , rows_written FROM pg_catalog.worker_partition_query_result('repartition_30_1','SELECT y AS column1 FROM coordinator_shouldhaveshards.test_1503000 t2 WHERE true',0,'hash','{-2147483648,-1431655766,-715827884,-2,715827880,1431655762}'::text[],'{-1431655767,-715827885,-3,715827879,1431655761,2147483647}'::text[],true,true,true) WHERE rows_written > 0
-NOTICE:  executing the command locally: SELECT partition_index, 'repartition_30_4' || '_' || partition_index::text , rows_written FROM pg_catalog.worker_partition_query_result('repartition_30_4','SELECT y AS column1 FROM coordinator_shouldhaveshards.test_1503003 t2 WHERE true',0,'hash','{-2147483648,-1431655766,-715827884,-2,715827880,1431655762}'::text[],'{-1431655767,-715827885,-3,715827879,1431655761,2147483647}'::text[],true,true,true) WHERE rows_written > 0
-NOTICE:  executing the command locally: SELECT bytes FROM fetch_intermediate_results(ARRAY['repartition_29_1_2']::text[],'localhost',57636) bytes
-NOTICE:  executing the command locally: SELECT bytes FROM fetch_intermediate_results(ARRAY['repartition_29_2_2']::text[],'localhost',57637) bytes
-NOTICE:  executing the command locally: SELECT bytes FROM fetch_intermediate_results(ARRAY['repartition_29_3_2']::text[],'localhost',57638) bytes
-NOTICE:  executing the command locally: SELECT bytes FROM fetch_intermediate_results(ARRAY['repartition_29_4_2']::text[],'localhost',57636) bytes
-NOTICE:  executing the command locally: SELECT bytes FROM fetch_intermediate_results(ARRAY['repartition_30_1_2']::text[],'localhost',57636) bytes
-NOTICE:  executing the command locally: SELECT bytes FROM fetch_intermediate_results(ARRAY['repartition_30_2_2']::text[],'localhost',57637) bytes
-NOTICE:  executing the command locally: SELECT bytes FROM fetch_intermediate_results(ARRAY['repartition_30_3_2']::text[],'localhost',57638) bytes
-NOTICE:  executing the command locally: SELECT bytes FROM fetch_intermediate_results(ARRAY['repartition_30_4_2']::text[],'localhost',57636) bytes
-NOTICE:  executing the command locally: SELECT bytes FROM fetch_intermediate_results(ARRAY['repartition_29_1_5']::text[],'localhost',57636) bytes
-NOTICE:  executing the command locally: SELECT bytes FROM fetch_intermediate_results(ARRAY['repartition_29_2_5']::text[],'localhost',57637) bytes
-NOTICE:  executing the command locally: SELECT bytes FROM fetch_intermediate_results(ARRAY['repartition_29_3_5']::text[],'localhost',57638) bytes
-NOTICE:  executing the command locally: SELECT bytes FROM fetch_intermediate_results(ARRAY['repartition_29_4_5']::text[],'localhost',57636) bytes
-NOTICE:  executing the command locally: SELECT bytes FROM fetch_intermediate_results(ARRAY['repartition_30_1_5']::text[],'localhost',57636) bytes
-NOTICE:  executing the command locally: SELECT bytes FROM fetch_intermediate_results(ARRAY['repartition_30_2_5']::text[],'localhost',57637) bytes
-NOTICE:  executing the command locally: SELECT bytes FROM fetch_intermediate_results(ARRAY['repartition_30_3_5']::text[],'localhost',57638) bytes
-NOTICE:  executing the command locally: SELECT bytes FROM fetch_intermediate_results(ARRAY['repartition_30_4_5']::text[],'localhost',57636) bytes
-NOTICE:  executing the command locally: SELECT count(*) AS count FROM (read_intermediate_results('{repartition_29_1_2,repartition_29_2_2,repartition_29_3_2,repartition_29_4_2}'::text[], 'binary'::citus_copy_format) intermediate_result(column1 integer) JOIN read_intermediate_results('{repartition_30_1_2,repartition_30_2_2,repartition_30_3_2,repartition_30_4_2}'::text[], 'binary'::citus_copy_format) intermediate_result_1(column1 integer) ON ((intermediate_result.column1 OPERATOR(pg_catalog.=) intermediate_result_1.column1))) WHERE true
-NOTICE:  executing the command locally: SELECT count(*) AS count FROM (read_intermediate_results('{repartition_29_1_5,repartition_29_2_5,repartition_29_3_5,repartition_29_4_5}'::text[], 'binary'::citus_copy_format) intermediate_result(column1 integer) JOIN read_intermediate_results('{repartition_30_1_5,repartition_30_2_5,repartition_30_3_5,repartition_30_4_5}'::text[], 'binary'::citus_copy_format) intermediate_result_1(column1 integer) ON ((intermediate_result.column1 OPERATOR(pg_catalog.=) intermediate_result_1.column1))) WHERE true
+NOTICE:  executing the command locally: SELECT partition_index, 'repartition_30_1' || '_' || partition_index::text , rows_written FROM pg_catalog.worker_partition_query_result('repartition_30_1','SELECT x AS column1 FROM coordinator_shouldhaveshards.test_1503000 t1 WHERE true',0,'hash','{-2147483648,-1431655766,-715827884,-2,715827880,1431655762}'::text[],'{-1431655767,-715827885,-3,715827879,1431655761,2147483647}'::text[],true,true,true) WHERE rows_written > 0
+NOTICE:  executing the command locally: SELECT partition_index, 'repartition_30_4' || '_' || partition_index::text , rows_written FROM pg_catalog.worker_partition_query_result('repartition_30_4','SELECT x AS column1 FROM coordinator_shouldhaveshards.test_1503003 t1 WHERE true',0,'hash','{-2147483648,-1431655766,-715827884,-2,715827880,1431655762}'::text[],'{-1431655767,-715827885,-3,715827879,1431655761,2147483647}'::text[],true,true,true) WHERE rows_written > 0
+NOTICE:  executing the command locally: SELECT partition_index, 'repartition_31_1' || '_' || partition_index::text , rows_written FROM pg_catalog.worker_partition_query_result('repartition_31_1','SELECT y AS column1 FROM coordinator_shouldhaveshards.test_1503000 t2 WHERE true',0,'hash','{-2147483648,-1431655766,-715827884,-2,715827880,1431655762}'::text[],'{-1431655767,-715827885,-3,715827879,1431655761,2147483647}'::text[],true,true,true) WHERE rows_written > 0
+NOTICE:  executing the command locally: SELECT partition_index, 'repartition_31_4' || '_' || partition_index::text , rows_written FROM pg_catalog.worker_partition_query_result('repartition_31_4','SELECT y AS column1 FROM coordinator_shouldhaveshards.test_1503003 t2 WHERE true',0,'hash','{-2147483648,-1431655766,-715827884,-2,715827880,1431655762}'::text[],'{-1431655767,-715827885,-3,715827879,1431655761,2147483647}'::text[],true,true,true) WHERE rows_written > 0
+NOTICE:  executing the command locally: SELECT bytes FROM fetch_intermediate_results(ARRAY['repartition_30_1_1']::text[],'localhost',57636) bytes
+NOTICE:  executing the command locally: SELECT bytes FROM fetch_intermediate_results(ARRAY['repartition_30_2_1']::text[],'localhost',57637) bytes
+NOTICE:  executing the command locally: SELECT bytes FROM fetch_intermediate_results(ARRAY['repartition_30_3_1']::text[],'localhost',57638) bytes
+NOTICE:  executing the command locally: SELECT bytes FROM fetch_intermediate_results(ARRAY['repartition_30_4_1']::text[],'localhost',57636) bytes
+NOTICE:  executing the command locally: SELECT bytes FROM fetch_intermediate_results(ARRAY['repartition_31_1_1']::text[],'localhost',57636) bytes
+NOTICE:  executing the command locally: SELECT bytes FROM fetch_intermediate_results(ARRAY['repartition_31_2_1']::text[],'localhost',57637) bytes
+NOTICE:  executing the command locally: SELECT bytes FROM fetch_intermediate_results(ARRAY['repartition_31_3_1']::text[],'localhost',57638) bytes
+NOTICE:  executing the command locally: SELECT bytes FROM fetch_intermediate_results(ARRAY['repartition_31_4_1']::text[],'localhost',57636) bytes
+NOTICE:  executing the command locally: SELECT bytes FROM fetch_intermediate_results(ARRAY['repartition_30_1_4']::text[],'localhost',57636) bytes
+NOTICE:  executing the command locally: SELECT bytes FROM fetch_intermediate_results(ARRAY['repartition_30_2_4']::text[],'localhost',57637) bytes
+NOTICE:  executing the command locally: SELECT bytes FROM fetch_intermediate_results(ARRAY['repartition_30_3_4']::text[],'localhost',57638) bytes
+NOTICE:  executing the command locally: SELECT bytes FROM fetch_intermediate_results(ARRAY['repartition_30_4_4']::text[],'localhost',57636) bytes
+NOTICE:  executing the command locally: SELECT bytes FROM fetch_intermediate_results(ARRAY['repartition_31_1_4']::text[],'localhost',57636) bytes
+NOTICE:  executing the command locally: SELECT bytes FROM fetch_intermediate_results(ARRAY['repartition_31_2_4']::text[],'localhost',57637) bytes
+NOTICE:  executing the command locally: SELECT bytes FROM fetch_intermediate_results(ARRAY['repartition_31_3_4']::text[],'localhost',57638) bytes
+NOTICE:  executing the command locally: SELECT bytes FROM fetch_intermediate_results(ARRAY['repartition_31_4_4']::text[],'localhost',57636) bytes
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM (read_intermediate_results('{repartition_30_1_1,repartition_30_2_1,repartition_30_3_1,repartition_30_4_1}'::text[], 'binary'::citus_copy_format) intermediate_result(column1 integer) JOIN read_intermediate_results('{repartition_31_1_1,repartition_31_2_1,repartition_31_3_1,repartition_31_4_1}'::text[], 'binary'::citus_copy_format) intermediate_result_1(column1 integer) ON ((intermediate_result.column1 OPERATOR(pg_catalog.=) intermediate_result_1.column1))) WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM (read_intermediate_results('{repartition_30_1_4,repartition_30_2_4,repartition_30_3_4,repartition_30_4_4}'::text[], 'binary'::citus_copy_format) intermediate_result(column1 integer) JOIN read_intermediate_results('{repartition_31_1_4,repartition_31_2_4,repartition_31_3_4,repartition_31_4_4}'::text[], 'binary'::citus_copy_format) intermediate_result_1(column1 integer) ON ((intermediate_result.column1 OPERATOR(pg_catalog.=) intermediate_result_1.column1))) WHERE true
  count
 ---------------------------------------------------------------------
    100
@@ -592,7 +592,7 @@ NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1
 (1 row)
 
 ROLLBACK;
-CREATE table ref_table(x int PRIMARY KEY, y int);
+CREATE table ref_table(x int, y int);
 -- this will be replicated to the coordinator because of add_coordinator test
 SELECT create_reference_table('ref_table');
  create_reference_table
@@ -620,18 +620,19 @@ ROLLBACK;
 -- at the same time
 INSERT INTO ref_table SELECT *, * FROM generate_series(1, 100);
 NOTICE:  executing the copy locally for shard xxxxx
+CREATE UNIQUE INDEX test_x_unique ON test(x);
 WITH cte_1 AS (
-INSERT INTO ref_table SELECT * FROM ref_table LIMIT 10000 ON CONFLICT (x) DO UPDATE SET y = EXCLUDED.y + 1 RETURNING *)
+INSERT INTO test SELECT sum(x), y FROM test GROUP BY y ON CONFLICT (x) DO UPDATE SET y = EXCLUDED.y + 1 RETURNING *)
 SELECT count(*) FROM cte_1;
-NOTICE:  executing the command locally: SELECT x, y FROM coordinator_shouldhaveshards.ref_table_1503039 ref_table LIMIT 10000
-NOTICE:  executing the copy locally for colocated file with shard xxxxx
-NOTICE:  executing the command locally: INSERT INTO coordinator_shouldhaveshards.ref_table_1503039 AS citus_table_alias (x, y) SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('insert_select_XXX_1503039'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer) ON CONFLICT(x) DO UPDATE SET y = (excluded.y OPERATOR(pg_catalog.+) 1) RETURNING citus_table_alias.x, citus_table_alias.y
+NOTICE:  executing the command locally: SELECT sum(x) AS x, y FROM coordinator_shouldhaveshards.test_1503000 test WHERE true GROUP BY y
+NOTICE:  executing the command locally: SELECT sum(x) AS x, y FROM coordinator_shouldhaveshards.test_1503003 test WHERE true GROUP BY y
 NOTICE:  executing the command locally: SELECT count(*) AS count FROM (SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer)) cte_1
  count
 ---------------------------------------------------------------------
-   100
+     0
 (1 row)
 
+DROP INDEX test_x_unique;
 -- issue #4237: preventing empty placement creation on coordinator
 CREATE TABLE test_append_table(a int);
 SELECT create_distributed_table('test_append_table', 'a', 'append');

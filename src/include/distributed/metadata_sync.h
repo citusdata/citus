@@ -119,7 +119,7 @@ extern List * InterTableRelationshipOfRelationCommandList(Oid relationId);
 extern List * DetachPartitionCommandList(void);
 extern void SyncNodeMetadataToNodes(void);
 extern BackgroundWorkerHandle * SpawnSyncNodeMetadataToNodes(Oid database, Oid owner);
-extern void SyncNodeMetadataToNodesMain(Datum main_arg);
+extern PGDLLEXPORT void SyncNodeMetadataToNodesMain(Datum main_arg);
 extern void SignalMetadataSyncDaemon(Oid database, int sig);
 extern bool ShouldInitiateMetadataSync(bool *lockFailure);
 extern List * SequenceDependencyCommandList(Oid relationId);
@@ -139,6 +139,11 @@ extern void SyncNewColocationGroupToNodes(uint32 colocationId, int shardCount,
 extern void SyncDeleteColocationGroupToNodes(uint32 colocationId);
 extern char * TenantSchemaInsertCommand(Oid schemaId, uint32 colocationId);
 extern char * TenantSchemaDeleteCommand(char *schemaName);
+extern char * UpdateNoneDistTableMetadataCommand(Oid relationId, char replicationModel,
+												 uint32 colocationId, bool autoConverted);
+extern char * AddPlacementMetadataCommand(uint64 shardId, uint64 placementId,
+										  uint64 shardLength, int32 groupId);
+extern char * DeletePlacementMetadataCommand(uint64 placementId);
 
 extern MetadataSyncContext * CreateMetadataSyncContext(List *nodeList,
 													   bool collectCommands,

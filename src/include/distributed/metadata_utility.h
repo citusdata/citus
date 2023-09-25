@@ -324,6 +324,7 @@ extern ShardInterval * CopyShardInterval(ShardInterval *srcInterval);
 extern uint64 ShardLength(uint64 shardId);
 extern bool NodeGroupHasShardPlacements(int32 groupId);
 extern bool IsActiveShardPlacement(ShardPlacement *ShardPlacement);
+extern bool IsRemoteShardPlacement(ShardPlacement *shardPlacement);
 extern bool IsPlacementOnWorkerNode(ShardPlacement *placement, WorkerNode *workerNode);
 extern List * FilterShardPlacementList(List *shardPlacementList, bool (*filter)(
 										   ShardPlacement *));
@@ -349,6 +350,10 @@ extern List * RemoveCoordinatorPlacementIfNotSingleNode(List *placementList);
 extern void InsertShardRow(Oid relationId, uint64 shardId, char storageType,
 						   text *shardMinValue, text *shardMaxValue);
 extern void DeleteShardRow(uint64 shardId);
+extern ShardPlacement * InsertShardPlacementRowGlobally(uint64 shardId,
+														uint64 placementId,
+														uint64 shardLength,
+														int32 groupId);
 extern uint64 InsertShardPlacementRow(uint64 shardId, uint64 placementId,
 									  uint64 shardLength, int32 groupId);
 extern void InsertIntoPgDistPartition(Oid relationId, char distributionMethod,
@@ -360,8 +365,13 @@ extern void UpdateDistributionColumnGlobally(Oid relationId, char distributionMe
 extern void UpdateDistributionColumn(Oid relationId, char distributionMethod,
 									 Var *distributionColumn, int colocationId);
 extern void DeletePartitionRow(Oid distributedRelationId);
+extern void UpdateNoneDistTableMetadataGlobally(Oid relationId, char replicationModel,
+												uint32 colocationId, bool autoConverted);
+extern void UpdateNoneDistTableMetadata(Oid relationId, char replicationModel,
+										uint32 colocationId, bool autoConverted);
 extern void DeleteShardRow(uint64 shardId);
 extern void UpdatePlacementGroupId(uint64 placementId, int groupId);
+extern void DeleteShardPlacementRowGlobally(uint64 placementId);
 extern void DeleteShardPlacementRow(uint64 placementId);
 extern void CreateSingleShardTable(Oid relationId, ColocationParam colocationParam);
 extern void CreateDistributedTable(Oid relationId, char *distributionColumnName,
@@ -369,6 +379,7 @@ extern void CreateDistributedTable(Oid relationId, char *distributionColumnName,
 								   bool shardCountIsStrict, char *colocateWithTableName);
 extern void CreateReferenceTable(Oid relationId);
 extern void CreateTruncateTrigger(Oid relationId);
+extern uint64 CopyFromLocalTableIntoDistTable(Oid localTableId, Oid distributedTableId);
 extern void EnsureUndistributeTenantTableSafe(Oid relationId, const char *operationName);
 extern TableConversionReturn * UndistributeTable(TableConversionParameters *params);
 extern void UndistributeTables(List *relationIdList);

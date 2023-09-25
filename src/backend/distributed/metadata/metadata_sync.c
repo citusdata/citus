@@ -150,6 +150,7 @@ static char * RemoteSchemaIdExpressionById(Oid schemaId);
 static char * RemoteSchemaIdExpressionByName(char *schemaName);
 static char * RemoteTypeIdExpression(Oid typeId);
 static char * RemoteCollationIdExpression(Oid colocationId);
+static char * RemoteTableIdExpression(Oid relationId);
 
 
 PG_FUNCTION_INFO_V1(start_metadata_sync_to_all_nodes);
@@ -167,6 +168,7 @@ PG_FUNCTION_INFO_V1(citus_internal_add_partition_metadata);
 PG_FUNCTION_INFO_V1(citus_internal_delete_partition_metadata);
 PG_FUNCTION_INFO_V1(citus_internal_add_shard_metadata);
 PG_FUNCTION_INFO_V1(citus_internal_add_placement_metadata);
+PG_FUNCTION_INFO_V1(citus_internal_delete_placement_metadata);
 PG_FUNCTION_INFO_V1(citus_internal_add_placement_metadata_legacy);
 PG_FUNCTION_INFO_V1(citus_internal_update_placement_metadata);
 PG_FUNCTION_INFO_V1(citus_internal_delete_shard_metadata);
@@ -176,6 +178,7 @@ PG_FUNCTION_INFO_V1(citus_internal_add_colocation_metadata);
 PG_FUNCTION_INFO_V1(citus_internal_delete_colocation_metadata);
 PG_FUNCTION_INFO_V1(citus_internal_add_tenant_schema);
 PG_FUNCTION_INFO_V1(citus_internal_delete_tenant_schema);
+PG_FUNCTION_INFO_V1(citus_internal_update_none_dist_table_metadata);
 
 
 static bool got_SIGTERM = false;
@@ -1757,8 +1760,8 @@ GetFunctionDependenciesForObjects(ObjectAddress *objectAddress)
 				ObjectIdGetDatum(objectAddress->objectId));
 	ScanKeyInit(&key[2],
 				Anum_pg_depend_objsubid,
-				BTEqualStrategyNumber, F_OIDEQ,
-				ObjectIdGetDatum(objectAddress->objectSubId));
+				BTEqualStrategyNumber, F_INT4EQ,
+				Int32GetDatum(objectAddress->objectSubId));
 
 	SysScanDesc scan = systable_beginscan(depRel, DependDependerIndexId, true,
 										  NULL, 3, key);
@@ -3450,6 +3453,28 @@ citus_internal_add_placement_metadata(PG_FUNCTION_ARGS)
 
 
 /*
+ * citus_internal_add_placement_metadata is an internal UDF to
+ * delete a row from pg_dist_placement.
+ */
+Datum
+citus_internal_delete_placement_metadata(PG_FUNCTION_ARGS)
+{
+	PG_ENSURE_ARGNOTNULL(0, "placement_id");
+	int64 placementId = PG_GETARG_INT64(0);
+
+	if (!ShouldSkipMetadataChecks())
+	{
+		/* this UDF is not allowed allowed for executing as a separate command */
+		EnsureCoordinatorInitiatedOperation();
+	}
+
+	DeleteShardPlacementRow(placementId);
+
+	PG_RETURN_VOID();
+}
+
+
+/*
  * citus_internal_add_placement_metadata_legacy is the old function that will be dropped.
  */
 Datum
@@ -3837,6 +3862,40 @@ citus_internal_delete_tenant_schema(PG_FUNCTION_ARGS)
 
 
 /*
+ * citus_internal_update_none_dist_table_metadata is an internal UDF to
+ * update a row in pg_dist_partition that belongs to given none-distributed
+ * table.
+ */
+Datum
+citus_internal_update_none_dist_table_metadata(PG_FUNCTION_ARGS)
+{
+	CheckCitusVersion(ERROR);
+
+	PG_ENSURE_ARGNOTNULL(0, "relation_id");
+	Oid relationId = PG_GETARG_OID(0);
+
+	PG_ENSURE_ARGNOTNULL(1, "replication_model");
+	char replicationModel = PG_GETARG_CHAR(1);
+
+	PG_ENSURE_ARGNOTNULL(2, "colocation_id");
+	uint32 colocationId = PG_GETARG_INT32(2);
+
+	PG_ENSURE_ARGNOTNULL(3, "auto_converted");
+	bool autoConverted = PG_GETARG_BOOL(3);
+
+	if (!ShouldSkipMetadataChecks())
+	{
+		EnsureCoordinatorInitiatedOperation();
+	}
+
+	UpdateNoneDistTableMetadata(relationId, replicationModel,
+								colocationId, autoConverted);
+
+	PG_RETURN_VOID();
+}
+
+
+/*
  * SyncNewColocationGroup synchronizes a new pg_dist_colocation entry to a worker.
  */
 void
@@ -4018,6 +4077,55 @@ TenantSchemaDeleteCommand(char *schemaName)
 
 
 /*
+ * UpdateNoneDistTableMetadataCommand returns a command to call
+ * citus_internal_update_none_dist_table_metadata().
+ */
+char *
+UpdateNoneDistTableMetadataCommand(Oid relationId, char replicationModel,
+								   uint32 colocationId, bool autoConverted)
+{
+	StringInfo command = makeStringInfo();
+	appendStringInfo(command,
+					 "SELECT pg_catalog.citus_internal_update_none_dist_table_metadata(%s, '%c', %u, %s)",
+					 RemoteTableIdExpression(relationId), replicationModel, colocationId,
+					 autoConverted ? "true" : "false");
+
+	return command->data;
+}
+
+
+/*
+ * AddPlacementMetadataCommand returns a command to call
+ * citus_internal_add_placement_metadata().
+ */
+char *
+AddPlacementMetadataCommand(uint64 shardId, uint64 placementId,
+							uint64 shardLength, int32 groupId)
+{
+	StringInfo command = makeStringInfo();
+	appendStringInfo(command,
+					 "SELECT citus_internal_add_placement_metadata(%ld, %ld, %d, %ld)",
+					 shardId, shardLength, groupId, placementId);
+	return command->data;
+}
+
+
+/*
+ * DeletePlacementMetadataCommand returns a command to call
+ * citus_internal_delete_placement_metadata().
+ */
+char *
+DeletePlacementMetadataCommand(uint64 placementId)
+{
+	StringInfo command = makeStringInfo();
+	appendStringInfo(command,
+					 "SELECT pg_catalog.citus_internal_delete_placement_metadata(%ld)",
+					 placementId);
+	return command->data;
+}
+
+
+/*
  * RemoteSchemaIdExpressionById returns an expression in text form that
  * can be used to obtain the OID of the schema with given schema id on a
  * different node when included in a query string.
@@ -4048,6 +4156,22 @@ RemoteSchemaIdExpressionByName(char *schemaName)
 					 quote_literal_cstr(quote_identifier(schemaName)));
 
 	return regnamespaceExpr->data;
+}
+
+
+/*
+ * RemoteTableIdExpression returns an expression in text form that
+ * can be used to obtain the OID of given table on a different node
+ * when included in a query string.
+ */
+static char *
+RemoteTableIdExpression(Oid relationId)
+{
+	StringInfo regclassExpr = makeStringInfo();
+	appendStringInfo(regclassExpr, "%s::regclass",
+					 quote_literal_cstr(generate_qualified_relation_name(relationId)));
+
+	return regclassExpr->data;
 }
 
 

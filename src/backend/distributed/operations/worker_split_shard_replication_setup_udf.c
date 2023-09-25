@@ -243,7 +243,7 @@ CreateShardSplitInfo(uint64 sourceShardIdToSplit,
 
 
 /*
- * AddShardSplitInfoEntryForNodeInMap function add's ShardSplitInfo entry
+ * AddShardSplitInfoEntryForNodeInMap function adds ShardSplitInfo entry
  * to the hash map. The key is nodeId on which the new shard is to be placed.
  */
 static void

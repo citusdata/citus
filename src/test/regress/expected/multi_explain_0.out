@@ -1,0 +1,3219 @@
+--
+-- MULTI_EXPLAIN
+--
+-- This test file has an alternative output because of the following in PG16:
+-- https://github.com/postgres/postgres/commit/1349d2790bf48a4de072931c722f39337e72055e
+-- https://github.com/postgres/postgres/commit/f4c7c410ee4a7baa06f51ebb8d5333c169691dd3
+-- The alternative output can be deleted when we drop support for PG15
+--
+SHOW server_version \gset
+SELECT substring(:'server_version', '\d+')::int >= 16 AS server_version_ge_16;
+ server_version_ge_16
+---------------------------------------------------------------------
+ f
+(1 row)
+
+SET citus.next_shard_id TO 570000;
+\a\t
+SET citus.explain_distributed_queries TO on;
+SET citus.enable_repartition_joins to ON;
+-- Ensure tuple data in explain analyze output is the same on all PG versions
+SET citus.enable_binary_protocol = TRUE;
+-- Function that parses explain output as JSON
+CREATE OR REPLACE FUNCTION explain_json(query text)
+RETURNS jsonb
+AS $BODY$
+DECLARE
+  result jsonb;
+BEGIN
+  EXECUTE format('EXPLAIN (FORMAT JSON) %s', query) INTO result;
+  RETURN result;
+END;
+$BODY$ LANGUAGE plpgsql;
+CREATE OR REPLACE FUNCTION explain_analyze_json(query text)
+RETURNS jsonb
+AS $BODY$
+DECLARE
+  result jsonb;
+BEGIN
+  EXECUTE format('EXPLAIN (ANALYZE TRUE, FORMAT JSON) %s', query) INTO result;
+  RETURN result;
+END;
+$BODY$ LANGUAGE plpgsql;
+-- Function that parses explain output as XML
+CREATE OR REPLACE FUNCTION explain_xml(query text)
+RETURNS xml
+AS $BODY$
+DECLARE
+  result xml;
+BEGIN
+  EXECUTE format('EXPLAIN (FORMAT XML) %s', query) INTO result;
+  RETURN result;
+END;
+$BODY$ LANGUAGE plpgsql;
+-- Function that parses explain output as XML
+CREATE OR REPLACE FUNCTION explain_analyze_xml(query text)
+RETURNS xml
+AS $BODY$
+DECLARE
+  result xml;
+BEGIN
+  EXECUTE format('EXPLAIN (ANALYZE true, FORMAT XML) %s', query) INTO result;
+  RETURN result;
+END;
+$BODY$ LANGUAGE plpgsql;
+-- VACUMM related tables to ensure test outputs are stable
+VACUUM ANALYZE lineitem;
+VACUUM ANALYZE orders;
+-- Test Text format
+EXPLAIN (COSTS FALSE, FORMAT TEXT)
+	SELECT l_quantity, count(*) count_quantity FROM lineitem
+	GROUP BY l_quantity ORDER BY count_quantity, l_quantity;
+Sort
+  Sort Key: (COALESCE((pg_catalog.sum(remote_scan.count_quantity))::bigint, '0'::bigint)), remote_scan.l_quantity
+  ->  HashAggregate
+        Group Key: remote_scan.l_quantity
+        ->  Custom Scan (Citus Adaptive)
+              Task Count: 2
+              Tasks Shown: One of 2
+              ->  Task
+                    Node: host=localhost port=xxxxx dbname=regression
+                    ->  HashAggregate
+                          Group Key: l_quantity
+                          ->  Seq Scan on lineitem_360000 lineitem
+-- Test disable hash aggregate
+SET enable_hashagg TO off;
+EXPLAIN (COSTS FALSE, FORMAT TEXT)
+	SELECT l_quantity, count(*) count_quantity FROM lineitem
+	GROUP BY l_quantity ORDER BY count_quantity, l_quantity;
+Sort
+  Sort Key: (COALESCE((pg_catalog.sum(remote_scan.count_quantity))::bigint, '0'::bigint)), remote_scan.l_quantity
+  ->  GroupAggregate
+        Group Key: remote_scan.l_quantity
+        ->  Sort
+              Sort Key: remote_scan.l_quantity
+              ->  Custom Scan (Citus Adaptive)
+                    Task Count: 2
+                    Tasks Shown: One of 2
+                    ->  Task
+                          Node: host=localhost port=xxxxx dbname=regression
+                          ->  HashAggregate
+                                Group Key: l_quantity
+                                ->  Seq Scan on lineitem_360000 lineitem
+SET enable_hashagg TO on;
+-- Test JSON format
+EXPLAIN (COSTS FALSE, FORMAT JSON)
+	SELECT l_quantity, count(*) count_quantity FROM lineitem
+	GROUP BY l_quantity ORDER BY count_quantity, l_quantity;
+[
+  {
+    "Plan": {
+      "Node Type": "Sort",
+      "Parallel Aware": false,
+      "Async Capable": false,
+      "Sort Key": ["(COALESCE((pg_catalog.sum(remote_scan.count_quantity))::bigint, '0'::bigint))", "remote_scan.l_quantity"],
+      "Plans": [
+        {
+          "Node Type": "Aggregate",
+          "Strategy": "Hashed",
+          "Partial Mode": "Simple",
+          "Parent Relationship": "Outer",
+          "Parallel Aware": false,
+          "Async Capable": false,
+          "Group Key": ["remote_scan.l_quantity"],
+          "Plans": [
+            {
+              "Node Type": "Custom Scan",
+              "Parent Relationship": "Outer",
+              "Custom Plan Provider": "Citus Adaptive",
+              "Parallel Aware": false,
+              "Async Capable": false,
+              "Distributed Query": {
+                "Job": {
+                  "Task Count": 2,
+                  "Tasks Shown": "One of 2",
+                  "Tasks": [
+                    {
+                      "Node": "host=localhost port=xxxxx dbname=regression",
+                      "Remote Plan": [
+                        [
+                          {
+                            "Plan": {
+                              "Node Type": "Aggregate",
+                              "Strategy": "Hashed",
+                              "Partial Mode": "Simple",
+                              "Parallel Aware": false,
+                              "Async Capable": false,
+                              "Group Key": ["l_quantity"],
+                              "Plans": [
+                                {
+                                  "Node Type": "Seq Scan",
+                                  "Parent Relationship": "Outer",
+                                  "Parallel Aware": false,
+                                  "Async Capable": false,
+                                  "Relation Name": "lineitem_360000",
+                                  "Alias": "lineitem"
+                                }
+                              ]
+                            }
+                          }
+                        ]
+
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+]
+-- Validate JSON format
+SELECT true AS valid FROM explain_json($$
+	SELECT l_quantity, count(*) count_quantity FROM lineitem
+	GROUP BY l_quantity ORDER BY count_quantity, l_quantity$$);
+t
+SELECT true AS valid FROM explain_analyze_json($$
+	WITH a AS (
+		SELECT l_quantity, count(*) count_quantity FROM lineitem
+		GROUP BY l_quantity ORDER BY count_quantity, l_quantity LIMIT 10)
+	SELECT count(*) FROM a
+$$);
+t
+-- Test XML format
+EXPLAIN (COSTS FALSE, FORMAT XML)
+	SELECT l_quantity, count(*) count_quantity FROM lineitem
+	GROUP BY l_quantity ORDER BY count_quantity, l_quantity;
+<explain xmlns="http://www.postgresql.org/2009/explain">
+  <Query>
+    <Plan>
+      <Node-Type>Sort</Node-Type>
+      <Parallel-Aware>false</Parallel-Aware>
+      <Async-Capable>false</Async-Capable>
+      <Sort-Key>
+        <Item>(COALESCE((pg_catalog.sum(remote_scan.count_quantity))::bigint, '0'::bigint))</Item>
+        <Item>remote_scan.l_quantity</Item>
+      </Sort-Key>
+      <Plans>
+        <Plan>
+          <Node-Type>Aggregate</Node-Type>
+          <Strategy>Hashed</Strategy>
+          <Partial-Mode>Simple</Partial-Mode>
+          <Parent-Relationship>Outer</Parent-Relationship>
+          <Parallel-Aware>false</Parallel-Aware>
+          <Async-Capable>false</Async-Capable>
+          <Group-Key>
+            <Item>remote_scan.l_quantity</Item>
+          </Group-Key>
+          <Plans>
+            <Plan>
+              <Node-Type>Custom Scan</Node-Type>
+              <Parent-Relationship>Outer</Parent-Relationship>
+              <Custom-Plan-Provider>Citus Adaptive</Custom-Plan-Provider>
+              <Parallel-Aware>false</Parallel-Aware>
+              <Async-Capable>false</Async-Capable>
+              <Distributed-Query>
+                <Job>
+                  <Task-Count>2</Task-Count>
+                  <Tasks-Shown>One of 2</Tasks-Shown>
+                  <Tasks>
+                    <Task>
+                      <Node>host=localhost port=xxxxx dbname=regression</Node>
+                      <Remote-Plan>
+                        <explain xmlns="http://www.postgresql.org/2009/explain">
+                          <Query>
+                            <Plan>
+                              <Node-Type>Aggregate</Node-Type>
+                              <Strategy>Hashed</Strategy>
+                              <Partial-Mode>Simple</Partial-Mode>
+                              <Parallel-Aware>false</Parallel-Aware>
+                              <Async-Capable>false</Async-Capable>
+                              <Group-Key>
+                                <Item>l_quantity</Item>
+                              </Group-Key>
+                              <Plans>
+                                <Plan>
+                                  <Node-Type>Seq Scan</Node-Type>
+                                  <Parent-Relationship>Outer</Parent-Relationship>
+                                  <Parallel-Aware>false</Parallel-Aware>
+                                  <Async-Capable>false</Async-Capable>
+                                  <Relation-Name>lineitem_360000</Relation-Name>
+                                  <Alias>lineitem</Alias>
+                                </Plan>
+                              </Plans>
+                            </Plan>
+                          </Query>
+                        </explain>
+                      </Remote-Plan>
+                    </Task>
+                  </Tasks>
+                </Job>
+              </Distributed-Query>
+            </Plan>
+          </Plans>
+        </Plan>
+      </Plans>
+    </Plan>
+  </Query>
+</explain>
+-- Validate XML format
+SELECT true AS valid FROM explain_xml($$
+	SELECT l_quantity, count(*) count_quantity FROM lineitem
+	GROUP BY l_quantity ORDER BY count_quantity, l_quantity$$);
+t
+SELECT true AS valid FROM explain_analyze_xml($$
+	WITH a AS (
+		SELECT l_quantity, count(*) count_quantity FROM lineitem
+		GROUP BY l_quantity ORDER BY count_quantity, l_quantity LIMIT 10)
+	SELECT count(*) FROM a
+$$);
+t
+-- Test YAML format
+EXPLAIN (COSTS FALSE, FORMAT YAML)
+	SELECT l_quantity, count(*) count_quantity FROM lineitem
+	GROUP BY l_quantity ORDER BY count_quantity, l_quantity;
+- Plan:
+    Node Type: "Sort"
+    Parallel Aware: false
+    Async Capable: false
+    Sort Key:
+      - "(COALESCE((pg_catalog.sum(remote_scan.count_quantity))::bigint, '0'::bigint))"
+      - "remote_scan.l_quantity"
+    Plans:
+      - Node Type: "Aggregate"
+        Strategy: "Hashed"
+        Partial Mode: "Simple"
+        Parent Relationship: "Outer"
+        Parallel Aware: false
+        Async Capable: false
+        Group Key:
+          - "remote_scan.l_quantity"
+        Plans:
+          - Node Type: "Custom Scan"
+            Parent Relationship: "Outer"
+            Custom Plan Provider: "Citus Adaptive"
+            Parallel Aware: false
+            Async Capable: false
+            Distributed Query:
+              Job:
+                Task Count: 2
+                Tasks Shown: "One of 2"
+                Tasks:
+                  - Node: "host=localhost port=xxxxx dbname=regression"
+                    Remote Plan:
+                      - Plan:
+                          Node Type: "Aggregate"
+                          Strategy: "Hashed"
+                          Partial Mode: "Simple"
+                          Parallel Aware: false
+                          Async Capable: false
+                          Group Key:
+                            - "l_quantity"
+                          Plans:
+                            - Node Type: "Seq Scan"
+                              Parent Relationship: "Outer"
+                              Parallel Aware: false
+                              Async Capable: false
+                              Relation Name: "lineitem_360000"
+                              Alias: "lineitem"
+
+-- Test Text format
+EXPLAIN (COSTS FALSE, FORMAT TEXT)
+	SELECT l_quantity, count(*) count_quantity FROM lineitem
+	GROUP BY l_quantity ORDER BY count_quantity, l_quantity;
+Sort
+  Sort Key: (COALESCE((pg_catalog.sum(remote_scan.count_quantity))::bigint, '0'::bigint)), remote_scan.l_quantity
+  ->  HashAggregate
+        Group Key: remote_scan.l_quantity
+        ->  Custom Scan (Citus Adaptive)
+              Task Count: 2
+              Tasks Shown: One of 2
+              ->  Task
+                    Node: host=localhost port=xxxxx dbname=regression
+                    ->  HashAggregate
+                          Group Key: l_quantity
+                          ->  Seq Scan on lineitem_360000 lineitem
+-- Test analyze (with TIMING FALSE and SUMMARY FALSE for consistent output)
+SELECT public.plan_normalize_memory($Q$
+EXPLAIN (COSTS FALSE, ANALYZE TRUE, TIMING FALSE, SUMMARY FALSE)
+	SELECT l_quantity, count(*) count_quantity FROM lineitem
+	GROUP BY l_quantity ORDER BY count_quantity, l_quantity;
+$Q$);
+Sort (actual rows=50 loops=1)
+  Sort Key: (COALESCE((pg_catalog.sum(remote_scan.count_quantity))::bigint, '0'::bigint)), remote_scan.l_quantity
+  Sort Method: quicksort  Memory: xxx
+  ->  HashAggregate (actual rows=50 loops=1)
+        Group Key: remote_scan.l_quantity
+        ->  Custom Scan (Citus Adaptive) (actual rows=100 loops=1)
+              Task Count: 2
+              Tuple data received from nodes: 1800 bytes
+              Tasks Shown: One of 2
+              ->  Task
+                    Tuple data received from node: 900 bytes
+                    Node: host=localhost port=xxxxx dbname=regression
+                    ->  HashAggregate (actual rows=50 loops=1)
+                          Group Key: l_quantity
+                          ->  Seq Scan on lineitem_360000 lineitem (actual rows=5894 loops=1)
+-- EXPLAIN ANALYZE doesn't show worker tasks for repartition joins yet
+SET citus.shard_count TO 3;
+CREATE TABLE t1(a int, b int);
+CREATE TABLE t2(a int, b int);
+SELECT create_distributed_table('t1', 'a'), create_distributed_table('t2', 'a');
+|
+BEGIN;
+SET LOCAL citus.enable_repartition_joins TO true;
+EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off) SELECT count(*) FROM t1, t2 WHERE t1.a=t2.b;
+Aggregate (actual rows=1 loops=1)
+  ->  Custom Scan (Citus Adaptive) (actual rows=6 loops=1)
+        Task Count: 6
+        Tuple data received from nodes: 48 bytes
+        Tasks Shown: None, not supported for re-partition queries
+        ->  MapMergeJob
+              Map Task Count: 3
+              Merge Task Count: 6
+        ->  MapMergeJob
+              Map Task Count: 3
+              Merge Task Count: 6
+-- Confirm repartiton join in distributed subplan works
+EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off)
+WITH repartition AS (SELECT count(*) FROM t1, t2 WHERE t1.a=t2.b)
+SELECT count(*) from repartition;
+Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
+  ->  Distributed Subplan XXX_1
+        Intermediate Data Size: 14 bytes
+        Result destination: Write locally
+        ->  Aggregate (actual rows=1 loops=1)
+              ->  Custom Scan (Citus Adaptive) (actual rows=6 loops=1)
+                    Task Count: 6
+                    Tuple data received from nodes: 48 bytes
+                    Tasks Shown: None, not supported for re-partition queries
+                    ->  MapMergeJob
+                          Map Task Count: 3
+                          Merge Task Count: 6
+                    ->  MapMergeJob
+                          Map Task Count: 3
+                          Merge Task Count: 6
+  Task Count: 1
+  Tuple data received from nodes: 8 bytes
+  Tasks Shown: All
+  ->  Task
+        Tuple data received from node: 8 bytes
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Aggregate (actual rows=1 loops=1)
+              ->  Function Scan on read_intermediate_result intermediate_result (actual rows=1 loops=1)
+END;
+DROP TABLE t1, t2;
+-- Test query text output, with ANALYZE ON
+SELECT public.plan_normalize_memory($Q$
+EXPLAIN (COSTS FALSE, ANALYZE TRUE, TIMING FALSE, SUMMARY FALSE, VERBOSE TRUE)
+	SELECT l_quantity, count(*) count_quantity FROM lineitem
+	GROUP BY l_quantity ORDER BY count_quantity, l_quantity;
+$Q$);
+Sort (actual rows=50 loops=1)
+  Output: remote_scan.l_quantity, (COALESCE((pg_catalog.sum(remote_scan.count_quantity))::bigint, '0'::bigint))
+  Sort Key: (COALESCE((pg_catalog.sum(remote_scan.count_quantity))::bigint, '0'::bigint)), remote_scan.l_quantity
+  Sort Method: quicksort  Memory: xxx
+  ->  HashAggregate (actual rows=50 loops=1)
+        Output: remote_scan.l_quantity, COALESCE((pg_catalog.sum(remote_scan.count_quantity))::bigint, '0'::bigint)
+        Group Key: remote_scan.l_quantity
+        ->  Custom Scan (Citus Adaptive) (actual rows=100 loops=1)
+              Output: remote_scan.l_quantity, remote_scan.count_quantity
+              Task Count: 2
+              Tuple data received from nodes: 1800 bytes
+              Tasks Shown: One of 2
+              ->  Task
+                    Query: SELECT l_quantity, count(*) AS count_quantity FROM public.lineitem_360000 lineitem WHERE true GROUP BY l_quantity
+                    Tuple data received from node: 900 bytes
+                    Node: host=localhost port=xxxxx dbname=regression
+                    ->  HashAggregate (actual rows=50 loops=1)
+                          Output: l_quantity, count(*)
+                          Group Key: lineitem.l_quantity
+                          ->  Seq Scan on public.lineitem_360000 lineitem (actual rows=5894 loops=1)
+                                Output: l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment
+-- Test query text output, with ANALYZE OFF
+EXPLAIN (COSTS FALSE, ANALYZE FALSE, TIMING FALSE, SUMMARY FALSE, VERBOSE TRUE)
+	SELECT l_quantity, count(*) count_quantity FROM lineitem
+	GROUP BY l_quantity ORDER BY count_quantity, l_quantity;
+Sort
+  Output: remote_scan.l_quantity, (COALESCE((pg_catalog.sum(remote_scan.count_quantity))::bigint, '0'::bigint))
+  Sort Key: (COALESCE((pg_catalog.sum(remote_scan.count_quantity))::bigint, '0'::bigint)), remote_scan.l_quantity
+  ->  HashAggregate
+        Output: remote_scan.l_quantity, COALESCE((pg_catalog.sum(remote_scan.count_quantity))::bigint, '0'::bigint)
+        Group Key: remote_scan.l_quantity
+        ->  Custom Scan (Citus Adaptive)
+              Output: remote_scan.l_quantity, remote_scan.count_quantity
+              Task Count: 2
+              Tasks Shown: One of 2
+              ->  Task
+                    Query: SELECT l_quantity, count(*) AS count_quantity FROM public.lineitem_360000 lineitem WHERE true GROUP BY l_quantity
+                    Node: host=localhost port=xxxxx dbname=regression
+                    ->  HashAggregate
+                          Output: l_quantity, count(*)
+                          Group Key: lineitem.l_quantity
+                          ->  Seq Scan on public.lineitem_360000 lineitem
+                                Output: l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment
+-- Test verbose
+EXPLAIN (COSTS FALSE, VERBOSE TRUE)
+	SELECT sum(l_quantity) / avg(l_quantity) FROM lineitem;
+Aggregate
+  Output: (sum(remote_scan."?column?") / (sum(remote_scan."?column?_1") / pg_catalog.sum(remote_scan."?column?_2")))
+  ->  Custom Scan (Citus Adaptive)
+        Output: remote_scan."?column?", remote_scan."?column?_1", remote_scan."?column?_2"
+        Task Count: 2
+        Tasks Shown: One of 2
+        ->  Task
+              Query: SELECT sum(l_quantity), sum(l_quantity), count(l_quantity) FROM public.lineitem_360000 lineitem WHERE true
+              Node: host=localhost port=xxxxx dbname=regression
+              ->  Aggregate
+                    Output: sum(l_quantity), sum(l_quantity), count(l_quantity)
+                    ->  Seq Scan on public.lineitem_360000 lineitem
+                          Output: l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment
+-- Test join
+EXPLAIN (COSTS FALSE)
+	SELECT * FROM lineitem
+	JOIN orders ON l_orderkey = o_orderkey AND l_quantity < 5.0
+	ORDER BY l_quantity LIMIT 10;
+Limit
+  ->  Sort
+        Sort Key: remote_scan.l_quantity
+        ->  Custom Scan (Citus Adaptive)
+              Task Count: 2
+              Tasks Shown: One of 2
+              ->  Task
+                    Node: host=localhost port=xxxxx dbname=regression
+                    ->  Limit
+                          ->  Sort
+                                Sort Key: lineitem.l_quantity
+                                ->  Hash Join
+                                      Hash Cond: (lineitem.l_orderkey = orders.o_orderkey)
+                                      ->  Seq Scan on lineitem_360000 lineitem
+                                            Filter: (l_quantity < 5.0)
+                                      ->  Hash
+                                            ->  Seq Scan on orders_360002 orders
+-- Test insert
+EXPLAIN (COSTS FALSE)
+	INSERT INTO lineitem VALUES (1,0), (2, 0), (3, 0), (4, 0);
+Custom Scan (Citus Adaptive)
+  Task Count: 2
+  Tasks Shown: One of 2
+  ->  Task
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Insert on lineitem_360000 citus_table_alias
+              ->  Values Scan on "*VALUES*"
+-- Test update
+EXPLAIN (COSTS FALSE)
+	UPDATE lineitem
+	SET l_suppkey = 12
+	WHERE l_orderkey = 1 AND l_partkey = 0;
+Custom Scan (Citus Adaptive)
+  Task Count: 1
+  Tasks Shown: All
+  ->  Task
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Update on lineitem_360000 lineitem
+              ->  Index Scan using lineitem_pkey_360000 on lineitem_360000 lineitem
+                    Index Cond: (l_orderkey = 1)
+                    Filter: (l_partkey = 0)
+-- Test analyze (with TIMING FALSE and SUMMARY FALSE for consistent output)
+BEGIN;
+EXPLAIN (COSTS FALSE, ANALYZE TRUE, TIMING FALSE, SUMMARY FALSE)
+	UPDATE lineitem
+	SET l_suppkey = 12
+	WHERE l_orderkey = 1 AND l_partkey = 0;
+Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
+  Task Count: 1
+  Tasks Shown: All
+  ->  Task
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Update on lineitem_360000 lineitem (actual rows=0 loops=1)
+              ->  Index Scan using lineitem_pkey_360000 on lineitem_360000 lineitem (actual rows=0 loops=1)
+                    Index Cond: (l_orderkey = 1)
+                    Filter: (l_partkey = 0)
+                    Rows Removed by Filter: 6
+ROLLBACk;
+-- Test delete
+EXPLAIN (COSTS FALSE)
+	DELETE FROM lineitem
+	WHERE l_orderkey = 1 AND l_partkey = 0;
+Custom Scan (Citus Adaptive)
+  Task Count: 1
+  Tasks Shown: All
+  ->  Task
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Delete on lineitem_360000 lineitem
+              ->  Index Scan using lineitem_pkey_360000 on lineitem_360000 lineitem
+                    Index Cond: (l_orderkey = 1)
+                    Filter: (l_partkey = 0)
+-- Test zero-shard update
+EXPLAIN (COSTS FALSE)
+	UPDATE lineitem
+	SET l_suppkey = 12
+	WHERE l_orderkey = 1 AND l_orderkey = 0;
+Custom Scan (Citus Adaptive)
+  Task Count: 0
+  Tasks Shown: All
+-- Test zero-shard delete
+EXPLAIN (COSTS FALSE)
+	DELETE FROM lineitem
+	WHERE l_orderkey = 1 AND l_orderkey = 0;
+Custom Scan (Citus Adaptive)
+  Task Count: 0
+  Tasks Shown: All
+-- Test single-shard SELECT
+EXPLAIN (COSTS FALSE)
+	SELECT l_quantity FROM lineitem WHERE l_orderkey = 5;
+Custom Scan (Citus Adaptive)
+  Task Count: 1
+  Tasks Shown: All
+  ->  Task
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Index Scan using lineitem_pkey_360000 on lineitem_360000 lineitem
+              Index Cond: (l_orderkey = 5)
+SELECT true AS valid FROM explain_xml($$
+	SELECT l_quantity FROM lineitem WHERE l_orderkey = 5$$);
+t
+SELECT true AS valid FROM explain_json($$
+	SELECT l_quantity FROM lineitem WHERE l_orderkey = 5$$);
+t
+-- Test CREATE TABLE ... AS
+EXPLAIN (COSTS FALSE)
+	CREATE TABLE explain_result AS
+	SELECT * FROM lineitem;
+Custom Scan (Citus Adaptive)
+  Task Count: 2
+  Tasks Shown: One of 2
+  ->  Task
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Seq Scan on lineitem_360000 lineitem
+-- Test having
+EXPLAIN (COSTS FALSE, VERBOSE TRUE)
+	SELECT sum(l_quantity) / avg(l_quantity) FROM lineitem
+	HAVING sum(l_quantity) > 100;
+Aggregate
+  Output: (sum(remote_scan."?column?") / (sum(remote_scan."?column?_1") / pg_catalog.sum(remote_scan."?column?_2")))
+  Filter: (sum(remote_scan.worker_column_4) > '100'::numeric)
+  ->  Custom Scan (Citus Adaptive)
+        Output: remote_scan."?column?", remote_scan."?column?_1", remote_scan."?column?_2", remote_scan.worker_column_4
+        Task Count: 2
+        Tasks Shown: One of 2
+        ->  Task
+              Query: SELECT sum(l_quantity), sum(l_quantity), count(l_quantity), sum(l_quantity) AS worker_column_4 FROM public.lineitem_360000 lineitem WHERE true
+              Node: host=localhost port=xxxxx dbname=regression
+              ->  Aggregate
+                    Output: sum(l_quantity), sum(l_quantity), count(l_quantity), sum(l_quantity)
+                    ->  Seq Scan on public.lineitem_360000 lineitem
+                          Output: l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment
+-- Test having without aggregate
+EXPLAIN (COSTS FALSE, VERBOSE TRUE)
+	SELECT l_quantity FROM lineitem
+	GROUP BY l_quantity
+	HAVING l_quantity > (100 * random());
+HashAggregate
+  Output: remote_scan.l_quantity
+  Group Key: remote_scan.l_quantity
+  Filter: ((remote_scan.worker_column_2)::double precision > ('100'::double precision * random()))
+  ->  Custom Scan (Citus Adaptive)
+        Output: remote_scan.l_quantity, remote_scan.worker_column_2
+        Task Count: 2
+        Tasks Shown: One of 2
+        ->  Task
+              Query: SELECT l_quantity, l_quantity AS worker_column_2 FROM public.lineitem_360000 lineitem WHERE true GROUP BY l_quantity
+              Node: host=localhost port=xxxxx dbname=regression
+              ->  HashAggregate
+                    Output: l_quantity, l_quantity
+                    Group Key: lineitem.l_quantity
+                    ->  Seq Scan on public.lineitem_360000 lineitem
+                          Output: l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment
+-- Subquery pushdown tests with explain
+EXPLAIN (COSTS OFF)
+SELECT
+	avg(array_length(events, 1)) AS event_average
+FROM
+	(SELECT
+		tenant_id,
+		user_id,
+		array_agg(event_type ORDER BY event_time) AS events
+	FROM
+		(SELECT
+			(users.composite_id).tenant_id,
+			(users.composite_id).user_id,
+			event_type,
+			events.event_time
+		FROM
+			users,
+			events
+		WHERE
+			(users.composite_id) = (events.composite_id) AND
+			users.composite_id >= '(1, -9223372036854775808)'::user_composite_type AND
+			users.composite_id <= '(1, 9223372036854775807)'::user_composite_type AND
+			event_type IN ('click', 'submit', 'pay')) AS subquery
+	GROUP BY
+		tenant_id,
+		user_id) AS subquery;
+Aggregate
+  ->  Custom Scan (Citus Adaptive)
+        Task Count: 4
+        Tasks Shown: One of 4
+        ->  Task
+              Node: host=localhost port=xxxxx dbname=regression
+              ->  Aggregate
+                    ->  GroupAggregate
+                          Group Key: ((users.composite_id).tenant_id), ((users.composite_id).user_id)
+                          ->  Sort
+                                Sort Key: ((users.composite_id).tenant_id), ((users.composite_id).user_id)
+                                ->  Hash Join
+                                      Hash Cond: (users.composite_id = events.composite_id)
+                                      ->  Seq Scan on users_1400289 users
+                                            Filter: ((composite_id >= '(1,-9223372036854775808)'::user_composite_type) AND (composite_id <= '(1,9223372036854775807)'::user_composite_type))
+                                      ->  Hash
+                                            ->  Seq Scan on events_1400285 events
+                                                  Filter: ((event_type)::text = ANY ('{click,submit,pay}'::text[]))
+-- Union and left join subquery pushdown
+EXPLAIN (COSTS OFF)
+SELECT
+	avg(array_length(events, 1)) AS event_average,
+	hasdone
+FROM
+	(SELECT
+		subquery_1.tenant_id,
+		subquery_1.user_id,
+		array_agg(event ORDER BY event_time) AS events,
+		COALESCE(hasdone, 'Has not done paying') AS hasdone
+	FROM
+	(
+		(SELECT
+			(users.composite_id).tenant_id,
+			(users.composite_id).user_id,
+			(users.composite_id) as composite_id,
+			'action=>1'AS event,
+			events.event_time
+		FROM
+			users,
+			events
+		WHERE
+			(users.composite_id) = (events.composite_id) AND
+			users.composite_id >= '(1, -9223372036854775808)'::user_composite_type AND
+			users.composite_id <= '(1, 9223372036854775807)'::user_composite_type AND
+			event_type = 'click')
+		UNION
+		(SELECT
+			(users.composite_id).tenant_id,
+			(users.composite_id).user_id,
+			(users.composite_id) as composite_id,
+			'action=>2'AS event,
+			events.event_time
+		FROM
+			users,
+			events
+		WHERE
+			(users.composite_id) = (events.composite_id) AND
+			users.composite_id >= '(1, -9223372036854775808)'::user_composite_type AND
+			users.composite_id <= '(1, 9223372036854775807)'::user_composite_type AND
+			event_type = 'submit')
+	) AS subquery_1
+	LEFT JOIN
+	(SELECT
+		DISTINCT ON ((composite_id).tenant_id, (composite_id).user_id) composite_id,
+		(composite_id).tenant_id,
+		(composite_id).user_id,
+		'Has done paying'::TEXT AS hasdone
+	FROM
+		events
+	WHERE
+		events.composite_id >= '(1, -9223372036854775808)'::user_composite_type AND
+		events.composite_id <= '(1, 9223372036854775807)'::user_composite_type AND
+		event_type = 'pay') AS subquery_2
+	ON
+		subquery_1.composite_id = subquery_2.composite_id
+	GROUP BY
+		subquery_1.tenant_id,
+		subquery_1.user_id,
+		hasdone) AS subquery_top
+GROUP BY
+	hasdone;
+HashAggregate
+  Group Key: remote_scan.hasdone
+  ->  Custom Scan (Citus Adaptive)
+        Task Count: 4
+        Tasks Shown: One of 4
+        ->  Task
+              Node: host=localhost port=xxxxx dbname=regression
+              ->  GroupAggregate
+                    Group Key: subquery_top.hasdone
+                    ->  Sort
+                          Sort Key: subquery_top.hasdone
+                          ->  Subquery Scan on subquery_top
+                                ->  GroupAggregate
+                                      Group Key: ((users.composite_id).tenant_id), ((users.composite_id).user_id), subquery_2.hasdone
+                                      ->  Sort
+                                            Sort Key: ((users.composite_id).tenant_id), ((users.composite_id).user_id), subquery_2.hasdone
+                                            ->  Hash Left Join
+                                                  Hash Cond: (users.composite_id = subquery_2.composite_id)
+                                                  ->  HashAggregate
+                                                        Group Key: ((users.composite_id).tenant_id), ((users.composite_id).user_id), users.composite_id, ('action=>1'::text), events.event_time
+                                                        ->  Append
+                                                              ->  Hash Join
+                                                                    Hash Cond: (users.composite_id = events.composite_id)
+                                                                    ->  Seq Scan on users_1400289 users
+                                                                          Filter: ((composite_id >= '(1,-9223372036854775808)'::user_composite_type) AND (composite_id <= '(1,9223372036854775807)'::user_composite_type))
+                                                                    ->  Hash
+                                                                          ->  Seq Scan on events_1400285 events
+                                                                                Filter: ((event_type)::text = 'click'::text)
+                                                              ->  Hash Join
+                                                                    Hash Cond: (users_1.composite_id = events_1.composite_id)
+                                                                    ->  Seq Scan on users_1400289 users_1
+                                                                          Filter: ((composite_id >= '(1,-9223372036854775808)'::user_composite_type) AND (composite_id <= '(1,9223372036854775807)'::user_composite_type))
+                                                                    ->  Hash
+                                                                          ->  Seq Scan on events_1400285 events_1
+                                                                                Filter: ((event_type)::text = 'submit'::text)
+                                                  ->  Hash
+                                                        ->  Subquery Scan on subquery_2
+                                                              ->  Unique
+                                                                    ->  Sort
+                                                                          Sort Key: ((events_2.composite_id).tenant_id), ((events_2.composite_id).user_id)
+                                                                          ->  Seq Scan on events_1400285 events_2
+                                                                                Filter: ((composite_id >= '(1,-9223372036854775808)'::user_composite_type) AND (composite_id <= '(1,9223372036854775807)'::user_composite_type) AND ((event_type)::text = 'pay'::text))
+-- Union, left join and having subquery pushdown
+EXPLAIN (COSTS OFF)
+  SELECT
+	avg(array_length(events, 1)) AS event_average,
+	count_pay
+	FROM (
+  SELECT
+	subquery_1.tenant_id,
+	subquery_1.user_id,
+	array_agg(event ORDER BY event_time) AS events,
+	COALESCE(count_pay, 0) AS count_pay
+  FROM
+	(
+		(SELECT
+			(users.composite_id).tenant_id,
+			(users.composite_id).user_id,
+			(users.composite_id),
+			'action=>1'AS event,
+			events.event_time
+		FROM
+			users,
+			events
+		WHERE
+			(users.composite_id) = (events.composite_id) AND
+			users.composite_id >= '(1, -9223372036854775808)'::user_composite_type AND
+			users.composite_id <= '(1, 9223372036854775807)'::user_composite_type AND
+			event_type = 'click')
+		UNION
+		(SELECT
+			(users.composite_id).tenant_id,
+			(users.composite_id).user_id,
+			(users.composite_id),
+			'action=>2'AS event,
+			events.event_time
+		FROM
+			users,
+			events
+		WHERE
+			(users.composite_id) = (events.composite_id) AND
+			users.composite_id >= '(1, -9223372036854775808)'::user_composite_type AND
+			users.composite_id <= '(1, 9223372036854775807)'::user_composite_type AND
+			event_type = 'submit')
+	) AS subquery_1
+	LEFT JOIN
+		(SELECT
+			(composite_id).tenant_id,
+			(composite_id).user_id,
+			composite_id,
+			COUNT(*) AS count_pay
+		FROM
+			events
+		WHERE
+			events.composite_id >= '(1, -9223372036854775808)'::user_composite_type AND
+			events.composite_id <= '(1, 9223372036854775807)'::user_composite_type AND
+			event_type = 'pay'
+		GROUP BY
+			composite_id
+		HAVING
+			COUNT(*) > 2) AS subquery_2
+	ON
+		subquery_1.composite_id = subquery_2.composite_id
+	GROUP BY
+		subquery_1.tenant_id,
+		subquery_1.user_id,
+		count_pay) AS subquery_top
+WHERE
+	array_ndims(events) > 0
+GROUP BY
+	count_pay
+ORDER BY
+	count_pay;
+Sort
+  Sort Key: remote_scan.count_pay
+  ->  HashAggregate
+        Group Key: remote_scan.count_pay
+        ->  Custom Scan (Citus Adaptive)
+              Task Count: 4
+              Tasks Shown: One of 4
+              ->  Task
+                    Node: host=localhost port=xxxxx dbname=regression
+                    ->  GroupAggregate
+                          Group Key: subquery_top.count_pay
+                          ->  Sort
+                                Sort Key: subquery_top.count_pay
+                                ->  Subquery Scan on subquery_top
+                                      ->  GroupAggregate
+                                            Group Key: ((users.composite_id).tenant_id), ((users.composite_id).user_id), subquery_2.count_pay
+                                            Filter: (array_ndims(array_agg(('action=>1'::text) ORDER BY events.event_time)) > 0)
+                                            ->  Sort
+                                                  Sort Key: ((users.composite_id).tenant_id), ((users.composite_id).user_id), subquery_2.count_pay
+                                                  ->  Hash Left Join
+                                                        Hash Cond: (users.composite_id = subquery_2.composite_id)
+                                                        ->  HashAggregate
+                                                              Group Key: ((users.composite_id).tenant_id), ((users.composite_id).user_id), users.composite_id, ('action=>1'::text), events.event_time
+                                                              ->  Append
+                                                                    ->  Hash Join
+                                                                          Hash Cond: (users.composite_id = events.composite_id)
+                                                                          ->  Seq Scan on users_1400289 users
+                                                                                Filter: ((composite_id >= '(1,-9223372036854775808)'::user_composite_type) AND (composite_id <= '(1,9223372036854775807)'::user_composite_type))
+                                                                          ->  Hash
+                                                                                ->  Seq Scan on events_1400285 events
+                                                                                      Filter: ((event_type)::text = 'click'::text)
+                                                                    ->  Hash Join
+                                                                          Hash Cond: (users_1.composite_id = events_1.composite_id)
+                                                                          ->  Seq Scan on users_1400289 users_1
+                                                                                Filter: ((composite_id >= '(1,-9223372036854775808)'::user_composite_type) AND (composite_id <= '(1,9223372036854775807)'::user_composite_type))
+                                                                          ->  Hash
+                                                                                ->  Seq Scan on events_1400285 events_1
+                                                                                      Filter: ((event_type)::text = 'submit'::text)
+                                                        ->  Hash
+                                                              ->  Subquery Scan on subquery_2
+                                                                    ->  GroupAggregate
+                                                                          Group Key: events_2.composite_id
+                                                                          Filter: (count(*) > 2)
+                                                                          ->  Sort
+                                                                                Sort Key: events_2.composite_id
+                                                                                ->  Seq Scan on events_1400285 events_2
+                                                                                      Filter: ((composite_id >= '(1,-9223372036854775808)'::user_composite_type) AND (composite_id <= '(1,9223372036854775807)'::user_composite_type) AND ((event_type)::text = 'pay'::text))
+-- Lateral join subquery pushdown
+-- set subquery_pushdown due to limit in the query
+SET citus.subquery_pushdown to ON;
+NOTICE:  Setting citus.subquery_pushdown flag is discouraged becuase it forces the planner to pushdown certain queries, skipping relevant correctness checks.
+DETAIL:  When enabled, the planner skips many correctness checks for subqueries and pushes down the queries to shards as-is. It means that the queries are likely to return wrong results unless the user is absolutely sure that pushing down the subquery is safe. This GUC is maintained only for backward compatibility, no new users are supposed to use it. The planner is capable of pushing down as much computation as possible to the shards depending on the query.
+EXPLAIN (COSTS OFF)
+SELECT
+	tenant_id,
+	user_id,
+	user_lastseen,
+	event_array
+FROM
+	(SELECT
+		tenant_id,
+		user_id,
+		max(lastseen) as user_lastseen,
+		array_agg(event_type ORDER BY event_time) AS event_array
+	FROM
+		(SELECT
+			(composite_id).tenant_id,
+			(composite_id).user_id,
+			composite_id,
+			lastseen
+		FROM
+			users
+		WHERE
+			composite_id >= '(1, -9223372036854775808)'::user_composite_type AND
+			composite_id <= '(1, 9223372036854775807)'::user_composite_type
+		ORDER BY
+			lastseen DESC
+		LIMIT
+			10
+		) AS subquery_top
+		LEFT JOIN LATERAL
+			(SELECT
+				event_type,
+				event_time
+			FROM
+				events
+			WHERE
+				(composite_id) = subquery_top.composite_id
+			ORDER BY
+				event_time DESC
+			LIMIT
+				99) AS subquery_lateral
+		ON
+			true
+		GROUP BY
+			tenant_id,
+			user_id
+	) AS shard_union
+ORDER BY
+	user_lastseen DESC
+LIMIT
+	10;
+Limit
+  ->  Sort
+        Sort Key: remote_scan.user_lastseen DESC
+        ->  Custom Scan (Citus Adaptive)
+              Task Count: 4
+              Tasks Shown: One of 4
+              ->  Task
+                    Node: host=localhost port=xxxxx dbname=regression
+                    ->  Limit
+                          ->  Sort
+                                Sort Key: (max(users.lastseen)) DESC
+                                ->  GroupAggregate
+                                      Group Key: ((users.composite_id).tenant_id), ((users.composite_id).user_id)
+                                      ->  Sort
+                                            Sort Key: ((users.composite_id).tenant_id), ((users.composite_id).user_id)
+                                            ->  Nested Loop Left Join
+                                                  ->  Limit
+                                                        ->  Sort
+                                                              Sort Key: users.lastseen DESC
+                                                              ->  Seq Scan on users_1400289 users
+                                                                    Filter: ((composite_id >= '(1,-9223372036854775808)'::user_composite_type) AND (composite_id <= '(1,9223372036854775807)'::user_composite_type))
+                                                  ->  Limit
+                                                        ->  Sort
+                                                              Sort Key: events.event_time DESC
+                                                              ->  Seq Scan on events_1400285 events
+                                                                    Filter: (composite_id = users.composite_id)
+RESET citus.subquery_pushdown;
+-- Test all tasks output
+SET citus.explain_all_tasks TO on;
+EXPLAIN (COSTS FALSE)
+	SELECT avg(l_linenumber) FROM lineitem WHERE l_orderkey > 9030;
+Aggregate
+  ->  Custom Scan (Citus Adaptive)
+        Task Count: 2
+        Tasks Shown: All
+        ->  Task
+              Node: host=localhost port=xxxxx dbname=regression
+              ->  Aggregate
+                    ->  Index Only Scan using lineitem_pkey_360000 on lineitem_360000 lineitem
+                          Index Cond: (l_orderkey > 9030)
+        ->  Task
+              Node: host=localhost port=xxxxx dbname=regression
+              ->  Aggregate
+                    ->  Index Only Scan using lineitem_pkey_360001 on lineitem_360001 lineitem
+                          Index Cond: (l_orderkey > 9030)
+SELECT true AS valid FROM explain_xml($$
+	SELECT avg(l_linenumber) FROM lineitem WHERE l_orderkey > 9030$$);
+t
+SELECT true AS valid FROM explain_json($$
+	SELECT avg(l_linenumber) FROM lineitem WHERE l_orderkey > 9030$$);
+t
+-- Test multi shard update
+EXPLAIN (COSTS FALSE)
+	UPDATE lineitem_hash_part
+	SET l_suppkey = 12;
+Custom Scan (Citus Adaptive)
+  Task Count: 4
+  Tasks Shown: All
+  ->  Task
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Update on lineitem_hash_part_360041 lineitem_hash_part
+              ->  Seq Scan on lineitem_hash_part_360041 lineitem_hash_part
+  ->  Task
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Update on lineitem_hash_part_360042 lineitem_hash_part
+              ->  Seq Scan on lineitem_hash_part_360042 lineitem_hash_part
+  ->  Task
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Update on lineitem_hash_part_360043 lineitem_hash_part
+              ->  Seq Scan on lineitem_hash_part_360043 lineitem_hash_part
+  ->  Task
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Update on lineitem_hash_part_360044 lineitem_hash_part
+              ->  Seq Scan on lineitem_hash_part_360044 lineitem_hash_part
+EXPLAIN (COSTS FALSE)
+	UPDATE lineitem_hash_part
+	SET l_suppkey = 12
+	WHERE l_orderkey = 1 OR l_orderkey = 3;
+Custom Scan (Citus Adaptive)
+  Task Count: 2
+  Tasks Shown: All
+  ->  Task
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Update on lineitem_hash_part_360041 lineitem_hash_part
+              ->  Seq Scan on lineitem_hash_part_360041 lineitem_hash_part
+                    Filter: ((l_orderkey = 1) OR (l_orderkey = 3))
+  ->  Task
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Update on lineitem_hash_part_360042 lineitem_hash_part
+              ->  Seq Scan on lineitem_hash_part_360042 lineitem_hash_part
+                    Filter: ((l_orderkey = 1) OR (l_orderkey = 3))
+-- Test multi shard delete
+EXPLAIN (COSTS FALSE)
+	DELETE FROM lineitem_hash_part;
+Custom Scan (Citus Adaptive)
+  Task Count: 4
+  Tasks Shown: All
+  ->  Task
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Delete on lineitem_hash_part_360041 lineitem_hash_part
+              ->  Seq Scan on lineitem_hash_part_360041 lineitem_hash_part
+  ->  Task
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Delete on lineitem_hash_part_360042 lineitem_hash_part
+              ->  Seq Scan on lineitem_hash_part_360042 lineitem_hash_part
+  ->  Task
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Delete on lineitem_hash_part_360043 lineitem_hash_part
+              ->  Seq Scan on lineitem_hash_part_360043 lineitem_hash_part
+  ->  Task
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Delete on lineitem_hash_part_360044 lineitem_hash_part
+              ->  Seq Scan on lineitem_hash_part_360044 lineitem_hash_part
+-- Test analyze (with TIMING FALSE and SUMMARY FALSE for consistent output)
+SELECT public.plan_normalize_memory($Q$
+EXPLAIN (COSTS FALSE, ANALYZE TRUE, TIMING FALSE, SUMMARY FALSE)
+	SELECT l_quantity, count(*) count_quantity FROM lineitem
+	GROUP BY l_quantity ORDER BY count_quantity, l_quantity;
+$Q$);
+Sort (actual rows=50 loops=1)
+  Sort Key: (COALESCE((pg_catalog.sum(remote_scan.count_quantity))::bigint, '0'::bigint)), remote_scan.l_quantity
+  Sort Method: quicksort  Memory: xxx
+  ->  HashAggregate (actual rows=50 loops=1)
+        Group Key: remote_scan.l_quantity
+        ->  Custom Scan (Citus Adaptive) (actual rows=100 loops=1)
+              Task Count: 2
+              Tuple data received from nodes: 1800 bytes
+              Tasks Shown: All
+              ->  Task
+                    Tuple data received from node: 900 bytes
+                    Node: host=localhost port=xxxxx dbname=regression
+                    ->  HashAggregate (actual rows=50 loops=1)
+                          Group Key: l_quantity
+                          ->  Seq Scan on lineitem_360000 lineitem (actual rows=5894 loops=1)
+              ->  Task
+                    Tuple data received from node: 900 bytes
+                    Node: host=localhost port=xxxxx dbname=regression
+                    ->  HashAggregate (actual rows=50 loops=1)
+                          Group Key: l_quantity
+                          ->  Seq Scan on lineitem_360001 lineitem (actual rows=6106 loops=1)
+SET citus.explain_all_tasks TO off;
+-- Test update with subquery
+EXPLAIN (COSTS FALSE)
+	UPDATE lineitem_hash_part
+	SET l_suppkey = 12
+	FROM orders_hash_part
+	WHERE orders_hash_part.o_orderkey = lineitem_hash_part.l_orderkey;
+Custom Scan (Citus Adaptive)
+  Task Count: 4
+  Tasks Shown: One of 4
+  ->  Task
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Update on lineitem_hash_part_360041 lineitem_hash_part
+              ->  Hash Join
+                    Hash Cond: (lineitem_hash_part.l_orderkey = orders_hash_part.o_orderkey)
+                    ->  Seq Scan on lineitem_hash_part_360041 lineitem_hash_part
+                    ->  Hash
+                          ->  Seq Scan on orders_hash_part_360045 orders_hash_part
+-- Test delete with subquery
+EXPLAIN (COSTS FALSE)
+	DELETE FROM lineitem_hash_part
+	USING orders_hash_part
+	WHERE orders_hash_part.o_orderkey = lineitem_hash_part.l_orderkey;
+Custom Scan (Citus Adaptive)
+  Task Count: 4
+  Tasks Shown: One of 4
+  ->  Task
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Delete on lineitem_hash_part_360041 lineitem_hash_part
+              ->  Hash Join
+                    Hash Cond: (lineitem_hash_part.l_orderkey = orders_hash_part.o_orderkey)
+                    ->  Seq Scan on lineitem_hash_part_360041 lineitem_hash_part
+                    ->  Hash
+                          ->  Seq Scan on orders_hash_part_360045 orders_hash_part
+-- Test track tracker
+EXPLAIN (COSTS FALSE)
+	SELECT avg(l_linenumber) FROM lineitem WHERE l_orderkey > 9030;
+Aggregate
+  ->  Custom Scan (Citus Adaptive)
+        Task Count: 2
+        Tasks Shown: One of 2
+        ->  Task
+              Node: host=localhost port=xxxxx dbname=regression
+              ->  Aggregate
+                    ->  Index Only Scan using lineitem_pkey_360000 on lineitem_360000 lineitem
+                          Index Cond: (l_orderkey > 9030)
+-- Test re-partition join
+EXPLAIN (COSTS FALSE)
+	SELECT count(*)
+	FROM lineitem, orders, customer_append, supplier_single_shard
+	WHERE l_orderkey = o_orderkey
+	AND o_custkey = c_custkey
+	AND l_suppkey = s_suppkey;
+Aggregate
+  ->  Custom Scan (Citus Adaptive)
+        Task Count: 6
+        Tasks Shown: None, not supported for re-partition queries
+        ->  MapMergeJob
+              Map Task Count: 6
+              Merge Task Count: 6
+              ->  MapMergeJob
+                    Map Task Count: 2
+                    Merge Task Count: 6
+              ->  MapMergeJob
+                    Map Task Count: 1
+                    Merge Task Count: 6
+        ->  MapMergeJob
+              Map Task Count: 1
+              Merge Task Count: 6
+EXPLAIN (COSTS FALSE, FORMAT JSON)
+	SELECT count(*)
+	FROM lineitem, orders, customer_append, supplier_single_shard
+	WHERE l_orderkey = o_orderkey
+	AND o_custkey = c_custkey
+	AND l_suppkey = s_suppkey;
+[
+  {
+    "Plan": {
+      "Node Type": "Aggregate",
+      "Strategy": "Plain",
+      "Partial Mode": "Simple",
+      "Parallel Aware": false,
+      "Async Capable": false,
+      "Plans": [
+        {
+          "Node Type": "Custom Scan",
+          "Parent Relationship": "Outer",
+          "Custom Plan Provider": "Citus Adaptive",
+          "Parallel Aware": false,
+          "Async Capable": false,
+          "Distributed Query": {
+            "Job": {
+              "Task Count": 6,
+              "Tasks Shown": "None, not supported for re-partition queries",
+              "Dependent Jobs": [
+                {
+                  "Map Task Count": 6,
+                  "Merge Task Count": 6,
+                  "Dependent Jobs": [
+                    {
+                      "Map Task Count": 2,
+                      "Merge Task Count": 6
+                    },
+                    {
+                      "Map Task Count": 1,
+                      "Merge Task Count": 6
+                    }
+                  ]
+                },
+                {
+                  "Map Task Count": 1,
+                  "Merge Task Count": 6
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+]
+SELECT true AS valid FROM explain_json($$
+	SELECT count(*)
+	FROM lineitem, orders, customer_append, supplier_single_shard
+	WHERE l_orderkey = o_orderkey
+	AND o_custkey = c_custkey
+	AND l_suppkey = s_suppkey$$);
+t
+EXPLAIN (COSTS FALSE, FORMAT XML)
+	SELECT count(*)
+	FROM lineitem, orders, customer_append, supplier_single_shard
+	WHERE l_orderkey = o_orderkey
+	AND o_custkey = c_custkey
+	AND l_suppkey = s_suppkey;
+<explain xmlns="http://www.postgresql.org/2009/explain">
+  <Query>
+    <Plan>
+      <Node-Type>Aggregate</Node-Type>
+      <Strategy>Plain</Strategy>
+      <Partial-Mode>Simple</Partial-Mode>
+      <Parallel-Aware>false</Parallel-Aware>
+      <Async-Capable>false</Async-Capable>
+      <Plans>
+        <Plan>
+          <Node-Type>Custom Scan</Node-Type>
+          <Parent-Relationship>Outer</Parent-Relationship>
+          <Custom-Plan-Provider>Citus Adaptive</Custom-Plan-Provider>
+          <Parallel-Aware>false</Parallel-Aware>
+          <Async-Capable>false</Async-Capable>
+          <Distributed-Query>
+            <Job>
+              <Task-Count>6</Task-Count>
+              <Tasks-Shown>None, not supported for re-partition queries</Tasks-Shown>
+              <Dependent-Jobs>
+                <MapMergeJob>
+                  <Map-Task-Count>6</Map-Task-Count>
+                  <Merge-Task-Count>6</Merge-Task-Count>
+                  <Dependent-Jobs>
+                    <MapMergeJob>
+                      <Map-Task-Count>2</Map-Task-Count>
+                      <Merge-Task-Count>6</Merge-Task-Count>
+                    </MapMergeJob>
+                    <MapMergeJob>
+                      <Map-Task-Count>1</Map-Task-Count>
+                      <Merge-Task-Count>6</Merge-Task-Count>
+                    </MapMergeJob>
+                  </Dependent-Jobs>
+                </MapMergeJob>
+                <MapMergeJob>
+                  <Map-Task-Count>1</Map-Task-Count>
+                  <Merge-Task-Count>6</Merge-Task-Count>
+                </MapMergeJob>
+              </Dependent-Jobs>
+            </Job>
+          </Distributed-Query>
+        </Plan>
+      </Plans>
+    </Plan>
+  </Query>
+</explain>
+SELECT true AS valid FROM explain_xml($$
+	SELECT count(*)
+	FROM lineitem, orders, customer_append, supplier
+	WHERE l_orderkey = o_orderkey
+	AND o_custkey = c_custkey
+	AND l_suppkey = s_suppkey$$);
+t
+-- make sure that EXPLAIN works without
+-- problems for queries that inlvolves only
+-- reference tables
+SELECT true AS valid FROM explain_xml($$
+	SELECT count(*)
+	FROM nation
+	WHERE n_name = 'CHINA'$$);
+t
+SELECT true AS valid FROM explain_xml($$
+	SELECT count(*)
+	FROM nation, supplier
+	WHERE nation.n_nationkey = supplier.s_nationkey$$);
+t
+EXPLAIN (COSTS FALSE, FORMAT YAML)
+	SELECT count(*)
+	FROM lineitem, orders, customer, supplier_single_shard
+	WHERE l_orderkey = o_orderkey
+	AND o_custkey = c_custkey
+	AND l_suppkey = s_suppkey;
+- Plan:
+    Node Type: "Aggregate"
+    Strategy: "Plain"
+    Partial Mode: "Simple"
+    Parallel Aware: false
+    Async Capable: false
+    Plans:
+      - Node Type: "Custom Scan"
+        Parent Relationship: "Outer"
+        Custom Plan Provider: "Citus Adaptive"
+        Parallel Aware: false
+        Async Capable: false
+        Distributed Query:
+          Job:
+            Task Count: 6
+            Tasks Shown: "None, not supported for re-partition queries"
+            Dependent Jobs:
+              - Map Task Count: 2
+                Merge Task Count: 6
+              - Map Task Count: 1
+                Merge Task Count: 6
+-- ensure local plans display correctly
+CREATE TABLE lineitem_clone (LIKE lineitem);
+EXPLAIN (COSTS FALSE) SELECT avg(l_linenumber) FROM lineitem_clone;
+Aggregate
+  ->  Seq Scan on lineitem_clone
+DROP TABLE lineitem_clone;
+-- ensure distributed plans don't break
+EXPLAIN (COSTS FALSE) SELECT avg(l_linenumber) FROM lineitem;
+Aggregate
+  ->  Custom Scan (Citus Adaptive)
+        Task Count: 2
+        Tasks Shown: One of 2
+        ->  Task
+              Node: host=localhost port=xxxxx dbname=regression
+              ->  Aggregate
+                    ->  Seq Scan on lineitem_360000 lineitem
+-- ensure EXPLAIN EXECUTE doesn't crash
+PREPARE task_tracker_query AS
+	SELECT avg(l_linenumber) FROM lineitem WHERE l_orderkey > 9030;
+EXPLAIN (COSTS FALSE) EXECUTE task_tracker_query;
+Aggregate
+  ->  Custom Scan (Citus Adaptive)
+        Task Count: 2
+        Tasks Shown: One of 2
+        ->  Task
+              Node: host=localhost port=xxxxx dbname=regression
+              ->  Aggregate
+                    ->  Index Only Scan using lineitem_pkey_360000 on lineitem_360000 lineitem
+                          Index Cond: (l_orderkey > 9030)
+PREPARE router_executor_query AS SELECT l_quantity FROM lineitem WHERE l_orderkey = 5;
+EXPLAIN EXECUTE router_executor_query;
+Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0)
+  Task Count: 1
+  Tasks Shown: All
+  ->  Task
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Index Scan using lineitem_pkey_360000 on lineitem_360000 lineitem  (cost=0.28..13.60 rows=4 width=5)
+              Index Cond: (l_orderkey = 5)
+PREPARE real_time_executor_query AS
+	SELECT avg(l_linenumber) FROM lineitem WHERE l_orderkey > 9030;
+EXPLAIN (COSTS FALSE) EXECUTE real_time_executor_query;
+Aggregate
+  ->  Custom Scan (Citus Adaptive)
+        Task Count: 2
+        Tasks Shown: One of 2
+        ->  Task
+              Node: host=localhost port=xxxxx dbname=regression
+              ->  Aggregate
+                    ->  Index Only Scan using lineitem_pkey_360000 on lineitem_360000 lineitem
+                          Index Cond: (l_orderkey > 9030)
+-- EXPLAIN EXECUTE of parametrized prepared statements is broken, but
+-- at least make sure to fail without crashing
+PREPARE router_executor_query_param(int) AS SELECT l_quantity FROM lineitem WHERE l_orderkey = $1;
+EXPLAIN EXECUTE router_executor_query_param(5);
+Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0)
+  Task Count: 1
+  Tasks Shown: All
+  ->  Task
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Index Scan using lineitem_pkey_360000 on lineitem_360000 lineitem  (cost=0.28..13.60 rows=4 width=5)
+              Index Cond: (l_orderkey = 5)
+EXPLAIN (ANALYZE ON, COSTS OFF, TIMING OFF, SUMMARY OFF) EXECUTE router_executor_query_param(5);
+Custom Scan (Citus Adaptive) (actual rows=3 loops=1)
+  Task Count: 1
+  Tuple data received from nodes: 30 bytes
+  Tasks Shown: All
+  ->  Task
+        Tuple data received from node: 30 bytes
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Index Scan using lineitem_pkey_360000 on lineitem_360000 lineitem (actual rows=3 loops=1)
+              Index Cond: (l_orderkey = 5)
+\set VERBOSITY TERSE
+PREPARE multi_shard_query_param(int) AS UPDATE lineitem SET l_quantity = $1;
+BEGIN;
+EXPLAIN (COSTS OFF) EXECUTE multi_shard_query_param(5);
+Custom Scan (Citus Adaptive)
+  Task Count: 2
+  Tasks Shown: One of 2
+  ->  Task
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Update on lineitem_360000 lineitem
+              ->  Seq Scan on lineitem_360000 lineitem
+ROLLBACK;
+BEGIN;
+EXPLAIN (ANALYZE ON, COSTS OFF, TIMING OFF, SUMMARY OFF) EXECUTE multi_shard_query_param(5);
+Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
+  Task Count: 2
+  Tasks Shown: One of 2
+  ->  Task
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Update on lineitem_360000 lineitem (actual rows=0 loops=1)
+              ->  Seq Scan on lineitem_360000 lineitem (actual rows=5894 loops=1)
+ROLLBACK;
+\set VERBOSITY DEFAULT
+-- test explain in a transaction with alter table to test we use right connections
+BEGIN;
+CREATE TABLE explain_table(id int);
+SELECT create_distributed_table('explain_table', 'id');
+
+ALTER TABLE explain_table ADD COLUMN value int;
+ROLLBACK;
+-- test explain with local INSERT ... SELECT
+EXPLAIN (COSTS OFF)
+INSERT INTO lineitem_hash_part
+SELECT o_orderkey FROM orders_hash_part LIMIT 3;
+Custom Scan (Citus INSERT ... SELECT)
+  INSERT/SELECT method: pull to coordinator
+  ->  Limit
+        ->  Custom Scan (Citus Adaptive)
+              Task Count: 4
+              Tasks Shown: One of 4
+              ->  Task
+                    Node: host=localhost port=xxxxx dbname=regression
+                    ->  Limit
+                          ->  Seq Scan on orders_hash_part_360045 orders_hash_part
+SELECT true AS valid FROM explain_json($$
+  INSERT INTO lineitem_hash_part (l_orderkey)
+  SELECT o_orderkey FROM orders_hash_part LIMIT 3;
+$$);
+t
+EXPLAIN (COSTS OFF)
+INSERT INTO lineitem_hash_part (l_orderkey, l_quantity)
+SELECT o_orderkey, 5 FROM orders_hash_part LIMIT 3;
+Custom Scan (Citus INSERT ... SELECT)
+  INSERT/SELECT method: pull to coordinator
+  ->  Limit
+        ->  Custom Scan (Citus Adaptive)
+              Task Count: 4
+              Tasks Shown: One of 4
+              ->  Task
+                    Node: host=localhost port=xxxxx dbname=regression
+                    ->  Limit
+                          ->  Seq Scan on orders_hash_part_360045 orders_hash_part
+EXPLAIN (COSTS OFF)
+INSERT INTO lineitem_hash_part (l_orderkey)
+SELECT s FROM generate_series(1,5) s;
+Custom Scan (Citus INSERT ... SELECT)
+  INSERT/SELECT method: pull to coordinator
+  ->  Function Scan on generate_series s
+-- WHERE EXISTS forces pg12 to materialize cte
+EXPLAIN (COSTS OFF)
+WITH cte1 AS (SELECT s FROM generate_series(1,10) s)
+INSERT INTO lineitem_hash_part
+WITH cte1 AS (SELECT * FROM cte1 WHERE EXISTS (SELECT * FROM cte1) LIMIT 5)
+SELECT s FROM cte1 WHERE EXISTS (SELECT * FROM cte1);
+Custom Scan (Citus INSERT ... SELECT)
+  INSERT/SELECT method: pull to coordinator
+  ->  Result
+        One-Time Filter: $3
+        CTE cte1
+          ->  Function Scan on generate_series s
+        CTE cte1
+          ->  Limit
+                InitPlan 2 (returns $1)
+                  ->  CTE Scan on cte1 cte1_1
+                ->  Result
+                      One-Time Filter: $1
+                      ->  CTE Scan on cte1 cte1_2
+        InitPlan 4 (returns $3)
+          ->  CTE Scan on cte1 cte1_3
+        ->  CTE Scan on cte1
+EXPLAIN (COSTS OFF)
+INSERT INTO lineitem_hash_part
+( SELECT s FROM generate_series(1,5) s) UNION
+( SELECT s FROM generate_series(5,10) s);
+Custom Scan (Citus INSERT ... SELECT)
+  INSERT/SELECT method: pull to coordinator
+  ->  Subquery Scan on citus_insert_select_subquery
+        ->  HashAggregate
+              Group Key: s.s
+              ->  Append
+                    ->  Function Scan on generate_series s
+                    ->  Function Scan on generate_series s_1
+-- explain with recursive planning
+EXPLAIN (COSTS OFF, VERBOSE true)
+WITH keys AS MATERIALIZED (
+  SELECT DISTINCT l_orderkey FROM lineitem_hash_part
+),
+series AS  MATERIALIZED (
+  SELECT s FROM generate_series(1,10) s
+)
+SELECT l_orderkey FROM series JOIN keys ON (s = l_orderkey)
+ORDER BY s;
+Custom Scan (Citus Adaptive)
+  Output: remote_scan.l_orderkey
+  ->  Distributed Subplan XXX_1
+        ->  HashAggregate
+              Output: remote_scan.l_orderkey
+              Group Key: remote_scan.l_orderkey
+              ->  Custom Scan (Citus Adaptive)
+                    Output: remote_scan.l_orderkey
+                    Task Count: 4
+                    Tasks Shown: One of 4
+                    ->  Task
+                          Query: SELECT DISTINCT l_orderkey FROM public.lineitem_hash_part_360041 lineitem_hash_part WHERE true
+                          Node: host=localhost port=xxxxx dbname=regression
+                          ->  HashAggregate
+                                Output: l_orderkey
+                                Group Key: lineitem_hash_part.l_orderkey
+                                ->  Seq Scan on public.lineitem_hash_part_360041 lineitem_hash_part
+                                      Output: l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment
+  ->  Distributed Subplan XXX_2
+        ->  Function Scan on pg_catalog.generate_series s
+              Output: s
+              Function Call: generate_series(1, 10)
+  Task Count: 1
+  Tasks Shown: All
+  ->  Task
+        Query: SELECT keys.l_orderkey FROM ((SELECT intermediate_result.s FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(s integer)) series JOIN (SELECT intermediate_result.l_orderkey FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(l_orderkey bigint)) keys ON ((series.s OPERATOR(pg_catalog.=) keys.l_orderkey))) ORDER BY series.s
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Merge Join
+              Output: intermediate_result_1.l_orderkey, intermediate_result.s
+              Merge Cond: (intermediate_result.s = intermediate_result_1.l_orderkey)
+              ->  Sort
+                    Output: intermediate_result.s
+                    Sort Key: intermediate_result.s
+                    ->  Function Scan on pg_catalog.read_intermediate_result intermediate_result
+                          Output: intermediate_result.s
+                          Function Call: read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format)
+              ->  Sort
+                    Output: intermediate_result_1.l_orderkey
+                    Sort Key: intermediate_result_1.l_orderkey
+                    ->  Function Scan on pg_catalog.read_intermediate_result intermediate_result_1
+                          Output: intermediate_result_1.l_orderkey
+                          Function Call: read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format)
+SELECT true AS valid FROM explain_json($$
+  WITH result AS (
+    SELECT l_quantity, count(*) count_quantity FROM lineitem
+	GROUP BY l_quantity ORDER BY count_quantity, l_quantity
+  ),
+  series AS (
+    SELECT s FROM generate_series(1,10) s
+  )
+  SELECT * FROM result JOIN series ON (s = count_quantity) JOIN orders_hash_part ON (s = o_orderkey)
+$$);
+t
+SELECT true AS valid FROM explain_xml($$
+  WITH result AS (
+    SELECT l_quantity, count(*) count_quantity FROM lineitem
+	GROUP BY l_quantity ORDER BY count_quantity, l_quantity
+  ),
+  series AS (
+    SELECT s FROM generate_series(1,10) s
+  )
+  SELECT * FROM result JOIN series ON (s = l_quantity) JOIN orders_hash_part ON (s = o_orderkey)
+$$);
+t
+--
+-- Test EXPLAIN ANALYZE udfs
+--
+\a\t
+\set default_opts '''{"costs": false, "timing": false, "summary": false}'''::jsonb
+CREATE TABLE explain_analyze_test(a int, b text);
+INSERT INTO explain_analyze_test VALUES (1, 'value 1'), (2, 'value 2'), (3, 'value 3'), (4, 'value 4');
+-- simple select
+BEGIN;
+SELECT * FROM worker_save_query_explain_analyze('SELECT 1', :default_opts) as (a int);
+ a
+---------------------------------------------------------------------
+ 1
+(1 row)
+
+SELECT explain_analyze_output FROM worker_last_saved_explain_analyze();
+     explain_analyze_output
+---------------------------------------------------------------------
+ Result (actual rows=1 loops=1)+
+
+(1 row)
+
+END;
+-- insert into select
+BEGIN;
+SELECT * FROM worker_save_query_explain_analyze($Q$
+       INSERT INTO explain_analyze_test SELECT i, i::text FROM generate_series(1, 5) i $Q$,
+	   :default_opts) as (a int);
+ a
+---------------------------------------------------------------------
+(0 rows)
+
+SELECT explain_analyze_output FROM worker_last_saved_explain_analyze();
+                      explain_analyze_output
+---------------------------------------------------------------------
+ Insert on explain_analyze_test (actual rows=0 loops=1)          +
+   ->  Function Scan on generate_series i (actual rows=5 loops=1)+
+
+(1 row)
+
+ROLLBACK;
+-- select from table
+BEGIN;
+SELECT * FROM worker_save_query_explain_analyze($Q$SELECT * FROM explain_analyze_test$Q$,
+	   											:default_opts) as (a int, b text);
+ a |    b
+---------------------------------------------------------------------
+ 1 | value 1
+ 2 | value 2
+ 3 | value 3
+ 4 | value 4
+(4 rows)
+
+SELECT explain_analyze_output FROM worker_last_saved_explain_analyze();
+                  explain_analyze_output
+---------------------------------------------------------------------
+ Seq Scan on explain_analyze_test (actual rows=4 loops=1)+
+
+(1 row)
+
+ROLLBACK;
+-- insert into with returning
+BEGIN;
+SELECT * FROM worker_save_query_explain_analyze($Q$
+       INSERT INTO explain_analyze_test SELECT i, i::text FROM generate_series(1, 5) i
+	   RETURNING a, b$Q$,
+	   :default_opts) as (a int, b text);
+ a | b
+---------------------------------------------------------------------
+ 1 | 1
+ 2 | 2
+ 3 | 3
+ 4 | 4
+ 5 | 5
+(5 rows)
+
+SELECT explain_analyze_output FROM worker_last_saved_explain_analyze();
+                      explain_analyze_output
+---------------------------------------------------------------------
+ Insert on explain_analyze_test (actual rows=5 loops=1)          +
+   ->  Function Scan on generate_series i (actual rows=5 loops=1)+
+
+(1 row)
+
+ROLLBACK;
+-- delete with returning
+BEGIN;
+SELECT * FROM worker_save_query_explain_analyze($Q$
+       DELETE FROM explain_analyze_test WHERE a % 2 = 0
+	   RETURNING a, b$Q$,
+	   :default_opts) as (a int, b text);
+ a |    b
+---------------------------------------------------------------------
+ 2 | value 2
+ 4 | value 4
+(2 rows)
+
+SELECT explain_analyze_output FROM worker_last_saved_explain_analyze();
+                     explain_analyze_output
+---------------------------------------------------------------------
+ Delete on explain_analyze_test (actual rows=2 loops=1)        +
+   ->  Seq Scan on explain_analyze_test (actual rows=2 loops=1)+
+         Filter: ((a % 2) = 0)                                 +
+         Rows Removed by Filter: 2                             +
+
+(1 row)
+
+ROLLBACK;
+-- delete without returning
+BEGIN;
+SELECT * FROM worker_save_query_explain_analyze($Q$
+       DELETE FROM explain_analyze_test WHERE a % 2 = 0$Q$,
+	   :default_opts) as (a int);
+ a
+---------------------------------------------------------------------
+(0 rows)
+
+SELECT explain_analyze_output FROM worker_last_saved_explain_analyze();
+                     explain_analyze_output
+---------------------------------------------------------------------
+ Delete on explain_analyze_test (actual rows=0 loops=1)        +
+   ->  Seq Scan on explain_analyze_test (actual rows=2 loops=1)+
+         Filter: ((a % 2) = 0)                                 +
+         Rows Removed by Filter: 2                             +
+
+(1 row)
+
+ROLLBACK;
+-- multiple queries (should ERROR)
+SELECT * FROM worker_save_query_explain_analyze('SELECT 1; SELECT 2', :default_opts) as (a int);
+ERROR:  cannot EXPLAIN ANALYZE multiple queries
+-- error in query
+SELECT * FROM worker_save_query_explain_analyze('SELECT x', :default_opts) as (a int);
+ERROR:  column "x" does not exist
+-- error in format string
+SELECT * FROM worker_save_query_explain_analyze('SELECT 1', '{"format": "invlaid_format"}') as (a int);
+ERROR:  Invalid explain analyze format: "invlaid_format"
+-- test formats
+BEGIN;
+SELECT * FROM worker_save_query_explain_analyze('SELECT 1', '{"format": "text", "costs": false}') as (a int);
+ a
+---------------------------------------------------------------------
+ 1
+(1 row)
+
+SELECT explain_analyze_output FROM worker_last_saved_explain_analyze();
+     explain_analyze_output
+---------------------------------------------------------------------
+ Result (actual rows=1 loops=1)+
+
+(1 row)
+
+SELECT * FROM worker_save_query_explain_analyze('SELECT 1', '{"format": "json", "costs": false}') as (a int);
+ a
+---------------------------------------------------------------------
+ 1
+(1 row)
+
+SELECT explain_analyze_output FROM worker_last_saved_explain_analyze();
+     explain_analyze_output
+---------------------------------------------------------------------
+ [                             +
+   {                           +
+     "Plan": {                 +
+       "Node Type": "Result",  +
+       "Parallel Aware": false,+
+       "Async Capable": false, +
+       "Actual Rows": 1,       +
+       "Actual Loops": 1       +
+     },                        +
+     "Triggers": [             +
+     ]                         +
+   }                           +
+ ]
+(1 row)
+
+SELECT * FROM worker_save_query_explain_analyze('SELECT 1', '{"format": "xml", "costs": false}') as (a int);
+ a
+---------------------------------------------------------------------
+ 1
+(1 row)
+
+SELECT explain_analyze_output FROM worker_last_saved_explain_analyze();
+                  explain_analyze_output
+---------------------------------------------------------------------
+ <explain xmlns="http://www.postgresql.org/2009/explain">+
+   <Query>                                               +
+     <Plan>                                              +
+       <Node-Type>Result</Node-Type>                     +
+       <Parallel-Aware>false</Parallel-Aware>            +
+       <Async-Capable>false</Async-Capable>              +
+       <Actual-Rows>1</Actual-Rows>                      +
+       <Actual-Loops>1</Actual-Loops>                    +
+     </Plan>                                             +
+     <Triggers>                                          +
+     </Triggers>                                         +
+   </Query>                                              +
+ </explain>
+(1 row)
+
+SELECT * FROM worker_save_query_explain_analyze('SELECT 1', '{"format": "yaml", "costs": false}') as (a int);
+ a
+---------------------------------------------------------------------
+ 1
+(1 row)
+
+SELECT explain_analyze_output FROM worker_last_saved_explain_analyze();
+  explain_analyze_output
+---------------------------------------------------------------------
+ - Plan:                  +
+     Node Type: "Result"  +
+     Parallel Aware: false+
+     Async Capable: false +
+     Actual Rows: 1       +
+     Actual Loops: 1      +
+   Triggers:
+(1 row)
+
+END;
+-- costs on, timing off
+BEGIN;
+SELECT * FROM worker_save_query_explain_analyze('SELECT * FROM explain_analyze_test', '{"timing": false, "costs": true}') as (a int);
+ a
+---------------------------------------------------------------------
+ 1
+ 2
+ 3
+ 4
+(4 rows)
+
+SELECT explain_analyze_output ~ 'Seq Scan.*\(cost=0.00.*\) \(actual rows.*\)' FROM worker_last_saved_explain_analyze();
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+END;
+-- costs off, timing on
+BEGIN;
+SELECT * FROM worker_save_query_explain_analyze('SELECT * FROM explain_analyze_test', '{"timing": true, "costs": false}') as (a int);
+ a
+---------------------------------------------------------------------
+ 1
+ 2
+ 3
+ 4
+(4 rows)
+
+SELECT explain_analyze_output ~ 'Seq Scan on explain_analyze_test \(actual time=.* rows=.* loops=1\)' FROM worker_last_saved_explain_analyze();
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+END;
+-- summary on
+BEGIN;
+SELECT * FROM worker_save_query_explain_analyze('SELECT 1', '{"timing": false, "costs": false, "summary": true}') as (a int);
+ a
+---------------------------------------------------------------------
+ 1
+(1 row)
+
+SELECT explain_analyze_output ~ 'Planning Time:.*Execution Time:.*' FROM worker_last_saved_explain_analyze();
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+END;
+-- buffers on
+BEGIN;
+SELECT * FROM worker_save_query_explain_analyze('SELECT * FROM explain_analyze_test', '{"timing": false, "costs": false, "buffers": true}') as (a int);
+ a
+---------------------------------------------------------------------
+ 1
+ 2
+ 3
+ 4
+(4 rows)
+
+SELECT explain_analyze_output ~ 'Buffers:' FROM worker_last_saved_explain_analyze();
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+END;
+-- verbose on
+BEGIN;
+SELECT * FROM worker_save_query_explain_analyze('SELECT * FROM explain_analyze_test', '{"timing": false, "costs": false, "verbose": true}') as (a int);
+ a
+---------------------------------------------------------------------
+ 1
+ 2
+ 3
+ 4
+(4 rows)
+
+SELECT explain_analyze_output ~ 'Output: a, b' FROM worker_last_saved_explain_analyze();
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+END;
+-- make sure deleted at transaction end
+SELECT * FROM worker_save_query_explain_analyze('SELECT 1', '{}') as (a int);
+ a
+---------------------------------------------------------------------
+ 1
+(1 row)
+
+SELECT count(*) FROM worker_last_saved_explain_analyze();
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+-- should be deleted at the end of prepare commit
+BEGIN;
+SELECT * FROM worker_save_query_explain_analyze('UPDATE explain_analyze_test SET a=6 WHERE a=4', '{}') as (a int);
+ a
+---------------------------------------------------------------------
+(0 rows)
+
+SELECT count(*) FROM worker_last_saved_explain_analyze();
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+PREPARE TRANSACTION 'citus_0_1496350_7_0';
+SELECT count(*) FROM worker_last_saved_explain_analyze();
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+COMMIT PREPARED 'citus_0_1496350_7_0';
+-- verify execution time makes sense
+BEGIN;
+SELECT count(*) FROM worker_save_query_explain_analyze('SELECT pg_sleep(0.05)', :default_opts) as (a int);
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+SELECT execution_duration BETWEEN 30 AND 200 FROM worker_last_saved_explain_analyze();
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+END;
+--
+-- verify we handle parametrized queries properly
+--
+CREATE TABLE t(a int);
+INSERT INTO t VALUES (1), (2), (3);
+-- simple case
+PREPARE save_explain AS
+SELECT $1, * FROM worker_save_query_explain_analyze('SELECT $1::int', :default_opts) as (a int);
+EXECUTE save_explain(1);
+ ?column? | a
+---------------------------------------------------------------------
+ 1        | 1
+(1 row)
+
+deallocate save_explain;
+-- Call a UDF first to make sure that we handle stacks of executorBoundParams properly.
+--
+-- The prepared statement will first call f() which will force new executor run with new
+-- set of parameters. Then it will call worker_save_query_explain_analyze with a
+-- parametrized query. If we don't have the correct set of parameters here, it will fail.
+CREATE FUNCTION f() RETURNS INT
+AS $$
+PREPARE pp1 AS SELECT $1 WHERE $2 = $3;
+EXECUTE pp1(4, 5, 5);
+deallocate pp1;
+SELECT 1$$ LANGUAGE sql volatile;
+PREPARE save_explain AS
+ SELECT $1, CASE WHEN i < 2 THEN
+             f() = 1
+		    ELSE
+			 EXISTS(SELECT * FROM worker_save_query_explain_analyze('SELECT $1::int', :default_opts) as (a int)
+			        WHERE a = 1)
+			END
+ FROM generate_series(1, 4) i;
+EXECUTE save_explain(1);
+ ?column? | exists
+---------------------------------------------------------------------
+ 1        | t
+ 1        | t
+ 1        | t
+ 1        | t
+(4 rows)
+
+deallocate save_explain;
+DROP FUNCTION f();
+DROP TABLE t;
+SELECT * FROM explain_analyze_test ORDER BY a;
+ a |    b
+---------------------------------------------------------------------
+ 1 | value 1
+ 2 | value 2
+ 3 | value 3
+ 6 | value 4
+(4 rows)
+
+\a\t
+--
+-- Test different cases of EXPLAIN ANALYZE
+--
+SET citus.shard_count TO 4;
+SET client_min_messages TO WARNING;
+SELECT create_distributed_table('explain_analyze_test', 'a');
+
+\set default_analyze_flags '(ANALYZE on, COSTS off, TIMING off, SUMMARY off)'
+\set default_explain_flags '(ANALYZE off, COSTS off, TIMING off, SUMMARY off)'
+-- router SELECT
+EXPLAIN :default_analyze_flags SELECT * FROM explain_analyze_test WHERE a = 1;
+Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
+  Task Count: 1
+  Tuple data received from nodes: 11 bytes
+  Tasks Shown: All
+  ->  Task
+        Tuple data received from node: 11 bytes
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Seq Scan on explain_analyze_test_570009 explain_analyze_test (actual rows=1 loops=1)
+              Filter: (a = 1)
+-- multi-shard SELECT
+EXPLAIN :default_analyze_flags SELECT count(*) FROM explain_analyze_test;
+Aggregate (actual rows=1 loops=1)
+  ->  Custom Scan (Citus Adaptive) (actual rows=4 loops=1)
+        Task Count: 4
+        Tuple data received from nodes: 32 bytes
+        Tasks Shown: One of 4
+        ->  Task
+              Tuple data received from node: 8 bytes
+              Node: host=localhost port=xxxxx dbname=regression
+              ->  Aggregate (actual rows=1 loops=1)
+                    ->  Seq Scan on explain_analyze_test_570009 explain_analyze_test (actual rows=1 loops=1)
+-- empty router SELECT
+EXPLAIN :default_analyze_flags SELECT * FROM explain_analyze_test WHERE a = 10000;
+Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
+  Task Count: 1
+  Tuple data received from nodes: 0 bytes
+  Tasks Shown: All
+  ->  Task
+        Tuple data received from node: 0 bytes
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Seq Scan on explain_analyze_test_570012 explain_analyze_test (actual rows=0 loops=1)
+              Filter: (a = 10000)
+              Rows Removed by Filter: 1
+-- empty multi-shard SELECT
+EXPLAIN :default_analyze_flags SELECT * FROM explain_analyze_test WHERE b = 'does not exist';
+Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
+  Task Count: 4
+  Tuple data received from nodes: 0 bytes
+  Tasks Shown: One of 4
+  ->  Task
+        Tuple data received from node: 0 bytes
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Seq Scan on explain_analyze_test_570009 explain_analyze_test (actual rows=0 loops=1)
+              Filter: (b = 'does not exist'::text)
+              Rows Removed by Filter: 1
+-- router DML
+BEGIN;
+EXPLAIN :default_analyze_flags DELETE FROM explain_analyze_test WHERE a = 1;
+Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
+  Task Count: 1
+  Tasks Shown: All
+  ->  Task
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Delete on explain_analyze_test_570009 explain_analyze_test (actual rows=0 loops=1)
+              ->  Seq Scan on explain_analyze_test_570009 explain_analyze_test (actual rows=1 loops=1)
+                    Filter: (a = 1)
+EXPLAIN :default_analyze_flags UPDATE explain_analyze_test SET b = 'b' WHERE a = 2;
+Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
+  Task Count: 1
+  Tasks Shown: All
+  ->  Task
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Update on explain_analyze_test_570012 explain_analyze_test (actual rows=0 loops=1)
+              ->  Seq Scan on explain_analyze_test_570012 explain_analyze_test (actual rows=1 loops=1)
+                    Filter: (a = 2)
+SELECT * FROM explain_analyze_test ORDER BY a;
+2|b
+3|value 3
+6|value 4
+ROLLBACK;
+-- multi-shard DML
+BEGIN;
+EXPLAIN :default_analyze_flags UPDATE explain_analyze_test SET b = 'b' WHERE a IN (1, 2);
+Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
+  Task Count: 2
+  Tasks Shown: One of 2
+  ->  Task
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Update on explain_analyze_test_570009 explain_analyze_test (actual rows=0 loops=1)
+              ->  Seq Scan on explain_analyze_test_570009 explain_analyze_test (actual rows=1 loops=1)
+                    Filter: (a = ANY ('{1,2}'::integer[]))
+EXPLAIN :default_analyze_flags DELETE FROM explain_analyze_test;
+Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
+  Task Count: 4
+  Tasks Shown: One of 4
+  ->  Task
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Delete on explain_analyze_test_570009 explain_analyze_test (actual rows=0 loops=1)
+              ->  Seq Scan on explain_analyze_test_570009 explain_analyze_test (actual rows=1 loops=1)
+SELECT * FROM explain_analyze_test ORDER BY a;
+ROLLBACK;
+-- router DML with RETURNING with empty result
+EXPLAIN :default_analyze_flags UPDATE explain_analyze_test SET b = 'something' WHERE a = 10000 RETURNING *;
+Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
+  Task Count: 1
+  Tuple data received from nodes: 0 bytes
+  Tasks Shown: All
+  ->  Task
+        Tuple data received from node: 0 bytes
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Update on explain_analyze_test_570012 explain_analyze_test (actual rows=0 loops=1)
+              ->  Seq Scan on explain_analyze_test_570012 explain_analyze_test (actual rows=0 loops=1)
+                    Filter: (a = 10000)
+                    Rows Removed by Filter: 1
+-- multi-shard DML with RETURNING with empty result
+EXPLAIN :default_analyze_flags UPDATE explain_analyze_test SET b = 'something' WHERE b = 'does not exist' RETURNING *;
+Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
+  Task Count: 4
+  Tuple data received from nodes: 0 bytes
+  Tasks Shown: One of 4
+  ->  Task
+        Tuple data received from node: 0 bytes
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Update on explain_analyze_test_570009 explain_analyze_test (actual rows=0 loops=1)
+              ->  Seq Scan on explain_analyze_test_570009 explain_analyze_test (actual rows=0 loops=1)
+                    Filter: (b = 'does not exist'::text)
+                    Rows Removed by Filter: 1
+-- single-row insert
+BEGIN;
+EXPLAIN :default_analyze_flags INSERT INTO explain_analyze_test VALUES (5, 'value 5');
+Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
+  Task Count: 1
+  Tasks Shown: All
+  ->  Task
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Insert on explain_analyze_test_570009 (actual rows=0 loops=1)
+              ->  Result (actual rows=1 loops=1)
+ROLLBACK;
+-- multi-row insert
+BEGIN;
+EXPLAIN :default_analyze_flags INSERT INTO explain_analyze_test VALUES (5, 'value 5'), (6, 'value 6');
+Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
+  Task Count: 2
+  Tasks Shown: One of 2
+  ->  Task
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Insert on explain_analyze_test_570009 citus_table_alias (actual rows=0 loops=1)
+              ->  Result (actual rows=1 loops=1)
+ROLLBACK;
+-- distributed insert/select
+BEGIN;
+EXPLAIN :default_analyze_flags INSERT INTO explain_analyze_test SELECT * FROM explain_analyze_test;
+Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
+  Task Count: 4
+  Tasks Shown: One of 4
+  ->  Task
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Insert on explain_analyze_test_570009 citus_table_alias (actual rows=0 loops=1)
+              ->  Seq Scan on explain_analyze_test_570009 explain_analyze_test (actual rows=1 loops=1)
+                    Filter: (a IS NOT NULL)
+ROLLBACK;
+DROP TABLE explain_analyze_test;
+-- test EXPLAIN ANALYZE works fine with primary keys
+CREATE TABLE explain_pk(a int primary key, b int);
+SELECT create_distributed_table('explain_pk', 'a');
+
+BEGIN;
+EXPLAIN :default_analyze_flags INSERT INTO explain_pk VALUES (1, 2), (2, 3);
+Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
+  Task Count: 2
+  Tasks Shown: One of 2
+  ->  Task
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Insert on explain_pk_570013 citus_table_alias (actual rows=0 loops=1)
+              ->  Result (actual rows=1 loops=1)
+SELECT * FROM explain_pk ORDER BY 1;
+1|2
+2|3
+ROLLBACK;
+-- test EXPLAIN ANALYZE with non-text output formats
+BEGIN;
+EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT JSON) INSERT INTO explain_pk VALUES (1, 2), (2, 3);
+[
+  {
+    "Plan": {
+      "Node Type": "Custom Scan",
+      "Custom Plan Provider": "Citus Adaptive",
+      "Parallel Aware": false,
+      "Async Capable": false,
+      "Actual Rows": 0,
+      "Actual Loops": 1,
+      "Distributed Query": {
+        "Job": {
+          "Task Count": 2,
+          "Tasks Shown": "One of 2",
+          "Tasks": [
+            {
+              "Node": "host=localhost port=xxxxx dbname=regression",
+              "Remote Plan": [
+                [
+                  {
+                    "Plan": {
+                      "Node Type": "ModifyTable",
+                      "Operation": "Insert",
+                      "Parallel Aware": false,
+                      "Async Capable": false,
+                      "Relation Name": "explain_pk_570013",
+                      "Alias": "citus_table_alias",
+                      "Actual Rows": 0,
+                      "Actual Loops": 1,
+                      "Plans": [
+                        {
+                          "Node Type": "Result",
+                          "Parent Relationship": "Outer",
+                          "Parallel Aware": false,
+                          "Async Capable": false,
+                          "Actual Rows": 1,
+                          "Actual Loops": 1
+                        }
+                      ]
+                    },
+                    "Triggers": [
+                    ]
+                  }
+                ]
+
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "Triggers": [
+    ]
+  }
+]
+ROLLBACK;
+EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT JSON) SELECT * FROM explain_pk;
+[
+  {
+    "Plan": {
+      "Node Type": "Custom Scan",
+      "Custom Plan Provider": "Citus Adaptive",
+      "Parallel Aware": false,
+      "Async Capable": false,
+      "Actual Rows": 0,
+      "Actual Loops": 1,
+      "Distributed Query": {
+        "Job": {
+          "Task Count": 4,
+          "Tuple data received from nodes": "0 bytes",
+          "Tasks Shown": "One of 4",
+          "Tasks": [
+            {
+              "Tuple data received from node": "0 bytes",
+              "Node": "host=localhost port=xxxxx dbname=regression",
+              "Remote Plan": [
+                [
+                  {
+                    "Plan": {
+                      "Node Type": "Seq Scan",
+                      "Parallel Aware": false,
+                      "Async Capable": false,
+                      "Relation Name": "explain_pk_570013",
+                      "Alias": "explain_pk",
+                      "Actual Rows": 0,
+                      "Actual Loops": 1
+                    },
+                    "Triggers": [
+                    ]
+                  }
+                ]
+
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "Triggers": [
+    ]
+  }
+]
+BEGIN;
+EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT XML) INSERT INTO explain_pk VALUES (1, 2), (2, 3);
+<explain xmlns="http://www.postgresql.org/2009/explain">
+  <Query>
+    <Plan>
+      <Node-Type>Custom Scan</Node-Type>
+      <Custom-Plan-Provider>Citus Adaptive</Custom-Plan-Provider>
+      <Parallel-Aware>false</Parallel-Aware>
+      <Async-Capable>false</Async-Capable>
+      <Actual-Rows>0</Actual-Rows>
+      <Actual-Loops>1</Actual-Loops>
+      <Distributed-Query>
+        <Job>
+          <Task-Count>2</Task-Count>
+          <Tasks-Shown>One of 2</Tasks-Shown>
+          <Tasks>
+            <Task>
+              <Node>host=localhost port=xxxxx dbname=regression</Node>
+              <Remote-Plan>
+                <explain xmlns="http://www.postgresql.org/2009/explain">
+                  <Query>
+                    <Plan>
+                      <Node-Type>ModifyTable</Node-Type>
+                      <Operation>Insert</Operation>
+                      <Parallel-Aware>false</Parallel-Aware>
+                      <Async-Capable>false</Async-Capable>
+                      <Relation-Name>explain_pk_570013</Relation-Name>
+                      <Alias>citus_table_alias</Alias>
+                      <Actual-Rows>0</Actual-Rows>
+                      <Actual-Loops>1</Actual-Loops>
+                      <Plans>
+                        <Plan>
+                          <Node-Type>Result</Node-Type>
+                          <Parent-Relationship>Outer</Parent-Relationship>
+                          <Parallel-Aware>false</Parallel-Aware>
+                          <Async-Capable>false</Async-Capable>
+                          <Actual-Rows>1</Actual-Rows>
+                          <Actual-Loops>1</Actual-Loops>
+                        </Plan>
+                      </Plans>
+                    </Plan>
+                    <Triggers>
+                    </Triggers>
+                  </Query>
+                </explain>
+              </Remote-Plan>
+            </Task>
+          </Tasks>
+        </Job>
+      </Distributed-Query>
+    </Plan>
+    <Triggers>
+    </Triggers>
+  </Query>
+</explain>
+ROLLBACK;
+EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT XML) SELECT * FROM explain_pk;
+<explain xmlns="http://www.postgresql.org/2009/explain">
+  <Query>
+    <Plan>
+      <Node-Type>Custom Scan</Node-Type>
+      <Custom-Plan-Provider>Citus Adaptive</Custom-Plan-Provider>
+      <Parallel-Aware>false</Parallel-Aware>
+      <Async-Capable>false</Async-Capable>
+      <Actual-Rows>0</Actual-Rows>
+      <Actual-Loops>1</Actual-Loops>
+      <Distributed-Query>
+        <Job>
+          <Task-Count>4</Task-Count>
+          <Tuple-data-received-from-nodes>0 bytes</Tuple-data-received-from-nodes>
+          <Tasks-Shown>One of 4</Tasks-Shown>
+          <Tasks>
+            <Task>
+              <Tuple-data-received-from-node>0 bytes</Tuple-data-received-from-node>
+              <Node>host=localhost port=xxxxx dbname=regression</Node>
+              <Remote-Plan>
+                <explain xmlns="http://www.postgresql.org/2009/explain">
+                  <Query>
+                    <Plan>
+                      <Node-Type>Seq Scan</Node-Type>
+                      <Parallel-Aware>false</Parallel-Aware>
+                      <Async-Capable>false</Async-Capable>
+                      <Relation-Name>explain_pk_570013</Relation-Name>
+                      <Alias>explain_pk</Alias>
+                      <Actual-Rows>0</Actual-Rows>
+                      <Actual-Loops>1</Actual-Loops>
+                    </Plan>
+                    <Triggers>
+                    </Triggers>
+                  </Query>
+                </explain>
+              </Remote-Plan>
+            </Task>
+          </Tasks>
+        </Job>
+      </Distributed-Query>
+    </Plan>
+    <Triggers>
+    </Triggers>
+  </Query>
+</explain>
+DROP TABLE explain_pk;
+-- test EXPLAIN ANALYZE with CTEs and subqueries
+CREATE TABLE dist_table(a int, b int);
+SELECT create_distributed_table('dist_table', 'a');
+
+CREATE TABLE ref_table(a int);
+SELECT create_reference_table('ref_table');
+
+INSERT INTO dist_table SELECT i, i*i FROM generate_series(1, 10) i;
+INSERT INTO ref_table SELECT i FROM generate_series(1, 10) i;
+EXPLAIN :default_analyze_flags
+WITH r AS (
+	SELECT GREATEST(random(), 2) r, a FROM dist_table
+)
+SELECT count(distinct a) from r NATURAL JOIN ref_table;
+Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
+  ->  Distributed Subplan XXX_1
+        Intermediate Data Size: 220 bytes
+        Result destination: Send to 3 nodes
+        ->  Custom Scan (Citus Adaptive) (actual rows=10 loops=1)
+              Task Count: 4
+              Tuple data received from nodes: 120 bytes
+              Tasks Shown: One of 4
+              ->  Task
+                    Tuple data received from node: 48 bytes
+                    Node: host=localhost port=xxxxx dbname=regression
+                    ->  Seq Scan on dist_table_570017 dist_table (actual rows=4 loops=1)
+  Task Count: 1
+  Tuple data received from nodes: 8 bytes
+  Tasks Shown: All
+  ->  Task
+        Tuple data received from node: 8 bytes
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Aggregate (actual rows=1 loops=1)
+              ->  Hash Join (actual rows=10 loops=1)
+                    Hash Cond: (ref_table.a = intermediate_result.a)
+                    ->  Seq Scan on ref_table_570021 ref_table (actual rows=10 loops=1)
+                    ->  Hash (actual rows=10 loops=1)
+                          ->  Function Scan on read_intermediate_result intermediate_result (actual rows=10 loops=1)
+EXPLAIN :default_analyze_flags
+SELECT count(distinct a) FROM (SELECT GREATEST(random(), 2) r, a FROM dist_table) t NATURAL JOIN ref_table;
+Aggregate (actual rows=1 loops=1)
+  ->  Custom Scan (Citus Adaptive) (actual rows=4 loops=1)
+        Task Count: 4
+        Tuple data received from nodes: 32 bytes
+        Tasks Shown: One of 4
+        ->  Task
+              Tuple data received from node: 8 bytes
+              Node: host=localhost port=xxxxx dbname=regression
+              ->  Aggregate (actual rows=1 loops=1)
+                    ->  Merge Join (actual rows=4 loops=1)
+                          Merge Cond: (t.a = ref_table.a)
+                          ->  Sort (actual rows=4 loops=1)
+                                Sort Key: t.a
+                                Sort Method: quicksort  Memory: 25kB
+                                ->  Subquery Scan on t (actual rows=4 loops=1)
+                                      ->  Seq Scan on dist_table_570017 dist_table (actual rows=4 loops=1)
+                          ->  Sort (actual rows=10 loops=1)
+                                Sort Key: ref_table.a
+                                Sort Method: quicksort  Memory: 25kB
+                                ->  Seq Scan on ref_table_570021 ref_table (actual rows=10 loops=1)
+EXPLAIN :default_analyze_flags
+SELECT count(distinct a) FROM dist_table
+WHERE EXISTS(SELECT random() < 2 FROM dist_table NATURAL JOIN ref_table);
+Aggregate (actual rows=1 loops=1)
+  ->  Custom Scan (Citus Adaptive) (actual rows=4 loops=1)
+        ->  Distributed Subplan XXX_1
+              Intermediate Data Size: 70 bytes
+              Result destination: Send to 2 nodes
+              ->  Custom Scan (Citus Adaptive) (actual rows=10 loops=1)
+                    Task Count: 4
+                    Tuple data received from nodes: 10 bytes
+                    Tasks Shown: One of 4
+                    ->  Task
+                          Tuple data received from node: 4 bytes
+                          Node: host=localhost port=xxxxx dbname=regression
+                          ->  Merge Join (actual rows=4 loops=1)
+                                Merge Cond: (dist_table.a = ref_table.a)
+                                ->  Sort (actual rows=4 loops=1)
+                                      Sort Key: dist_table.a
+                                      Sort Method: quicksort  Memory: 25kB
+                                      ->  Seq Scan on dist_table_570017 dist_table (actual rows=4 loops=1)
+                                ->  Sort (actual rows=10 loops=1)
+                                      Sort Key: ref_table.a
+                                      Sort Method: quicksort  Memory: 25kB
+                                      ->  Seq Scan on ref_table_570021 ref_table (actual rows=10 loops=1)
+        Task Count: 4
+        Tuple data received from nodes: 32 bytes
+        Tasks Shown: One of 4
+        ->  Task
+              Tuple data received from node: 8 bytes
+              Node: host=localhost port=xxxxx dbname=regression
+              ->  Aggregate (actual rows=1 loops=1)
+                    InitPlan 1 (returns $0)
+                      ->  Function Scan on read_intermediate_result intermediate_result (actual rows=1 loops=1)
+                    ->  Result (actual rows=4 loops=1)
+                          One-Time Filter: $0
+                          ->  Seq Scan on dist_table_570017 dist_table (actual rows=4 loops=1)
+BEGIN;
+EXPLAIN :default_analyze_flags
+WITH r AS (
+	INSERT INTO dist_table SELECT a, a * a FROM dist_table
+	RETURNING a
+), s AS (
+	SELECT random() < 2, a * a a2 FROM r
+)
+SELECT count(distinct a2) FROM s;
+Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
+  ->  Distributed Subplan XXX_1
+        Intermediate Data Size: 100 bytes
+        Result destination: Write locally
+        ->  Custom Scan (Citus Adaptive) (actual rows=20 loops=1)
+              Task Count: 4
+              Tuple data received from nodes: 160 bytes
+              Tasks Shown: One of 4
+              ->  Task
+                    Tuple data received from node: 64 bytes
+                    Node: host=localhost port=xxxxx dbname=regression
+                    ->  Insert on dist_table_570017 citus_table_alias (actual rows=8 loops=1)
+                          ->  Seq Scan on dist_table_570017 dist_table (actual rows=8 loops=1)
+                                Filter: (a IS NOT NULL)
+  ->  Distributed Subplan XXX_2
+        Intermediate Data Size: 150 bytes
+        Result destination: Write locally
+        ->  Custom Scan (Citus Adaptive) (actual rows=10 loops=1)
+              Task Count: 1
+              Tuple data received from nodes: 50 bytes
+              Tasks Shown: All
+              ->  Task
+                    Tuple data received from node: 50 bytes
+                    Node: host=localhost port=xxxxx dbname=regression
+                    ->  Function Scan on read_intermediate_result intermediate_result (actual rows=10 loops=1)
+  Task Count: 1
+  Tuple data received from nodes: 8 bytes
+  Tasks Shown: All
+  ->  Task
+        Tuple data received from node: 8 bytes
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Aggregate (actual rows=1 loops=1)
+              ->  Function Scan on read_intermediate_result intermediate_result (actual rows=10 loops=1)
+ROLLBACK;
+-- https://github.com/citusdata/citus/issues/4074
+prepare ref_select(int) AS select * from ref_table where 1 = $1;
+explain :default_analyze_flags execute ref_select(1);
+Custom Scan (Citus Adaptive) (actual rows=10 loops=1)
+  Task Count: 1
+  Tuple data received from nodes: 40 bytes
+  Tasks Shown: All
+  ->  Task
+        Tuple data received from node: 40 bytes
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Result (actual rows=10 loops=1)
+              One-Time Filter: (1 = $1)
+              ->  Seq Scan on ref_table_570021 ref_table (actual rows=10 loops=1)
+deallocate ref_select;
+DROP TABLE ref_table, dist_table;
+-- test EXPLAIN ANALYZE with different replication factors
+SET citus.shard_count = 2;
+SET citus.shard_replication_factor = 1;
+CREATE TABLE dist_table_rep1(a int);
+SELECT create_distributed_table('dist_table_rep1', 'a');
+
+SET citus.shard_replication_factor = 2;
+CREATE TABLE dist_table_rep2(a int);
+SELECT create_distributed_table('dist_table_rep2', 'a');
+
+EXPLAIN :default_analyze_flags INSERT INTO dist_table_rep1 VALUES(1), (2), (3), (4), (10), (100) RETURNING *;
+Custom Scan (Citus Adaptive) (actual rows=6 loops=1)
+  Task Count: 2
+  Tuple data received from nodes: 24 bytes
+  Tasks Shown: One of 2
+  ->  Task
+        Tuple data received from node: 16 bytes
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Insert on dist_table_rep1_570022 citus_table_alias (actual rows=4 loops=1)
+              ->  Values Scan on "*VALUES*" (actual rows=4 loops=1)
+EXPLAIN :default_analyze_flags SELECT * from dist_table_rep1;
+Custom Scan (Citus Adaptive) (actual rows=6 loops=1)
+  Task Count: 2
+  Tuple data received from nodes: 24 bytes
+  Tasks Shown: One of 2
+  ->  Task
+        Tuple data received from node: 16 bytes
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Seq Scan on dist_table_rep1_570022 dist_table_rep1 (actual rows=4 loops=1)
+EXPLAIN :default_analyze_flags INSERT INTO dist_table_rep2 VALUES(1), (2), (3), (4), (10), (100) RETURNING *;
+Custom Scan (Citus Adaptive) (actual rows=6 loops=1)
+  Task Count: 2
+  Tuple data received from nodes: 48 bytes
+  Tasks Shown: One of 2
+  ->  Task
+        Tuple data received from node: 32 bytes
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Insert on dist_table_rep2_570024 citus_table_alias (actual rows=4 loops=1)
+              ->  Values Scan on "*VALUES*" (actual rows=4 loops=1)
+EXPLAIN :default_analyze_flags SELECT * from dist_table_rep2;
+Custom Scan (Citus Adaptive) (actual rows=6 loops=1)
+  Task Count: 2
+  Tuple data received from nodes: 24 bytes
+  Tasks Shown: One of 2
+  ->  Task
+        Tuple data received from node: 16 bytes
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Seq Scan on dist_table_rep2_570024 dist_table_rep2 (actual rows=4 loops=1)
+prepare p1 as SELECT * FROM dist_table_rep1;
+EXPLAIN :default_analyze_flags EXECUTE p1;
+Custom Scan (Citus Adaptive) (actual rows=6 loops=1)
+  Task Count: 2
+  Tuple data received from nodes: 24 bytes
+  Tasks Shown: One of 2
+  ->  Task
+        Tuple data received from node: 16 bytes
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Seq Scan on dist_table_rep1_570022 dist_table_rep1 (actual rows=4 loops=1)
+EXPLAIN :default_analyze_flags EXECUTE p1;
+Custom Scan (Citus Adaptive) (actual rows=6 loops=1)
+  Task Count: 2
+  Tuple data received from nodes: 24 bytes
+  Tasks Shown: One of 2
+  ->  Task
+        Tuple data received from node: 16 bytes
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Seq Scan on dist_table_rep1_570022 dist_table_rep1 (actual rows=4 loops=1)
+EXPLAIN :default_analyze_flags EXECUTE p1;
+Custom Scan (Citus Adaptive) (actual rows=6 loops=1)
+  Task Count: 2
+  Tuple data received from nodes: 24 bytes
+  Tasks Shown: One of 2
+  ->  Task
+        Tuple data received from node: 16 bytes
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Seq Scan on dist_table_rep1_570022 dist_table_rep1 (actual rows=4 loops=1)
+EXPLAIN :default_analyze_flags EXECUTE p1;
+Custom Scan (Citus Adaptive) (actual rows=6 loops=1)
+  Task Count: 2
+  Tuple data received from nodes: 24 bytes
+  Tasks Shown: One of 2
+  ->  Task
+        Tuple data received from node: 16 bytes
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Seq Scan on dist_table_rep1_570022 dist_table_rep1 (actual rows=4 loops=1)
+EXPLAIN :default_analyze_flags EXECUTE p1;
+Custom Scan (Citus Adaptive) (actual rows=6 loops=1)
+  Task Count: 2
+  Tuple data received from nodes: 24 bytes
+  Tasks Shown: One of 2
+  ->  Task
+        Tuple data received from node: 16 bytes
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Seq Scan on dist_table_rep1_570022 dist_table_rep1 (actual rows=4 loops=1)
+EXPLAIN :default_analyze_flags EXECUTE p1;
+Custom Scan (Citus Adaptive) (actual rows=6 loops=1)
+  Task Count: 2
+  Tuple data received from nodes: 24 bytes
+  Tasks Shown: One of 2
+  ->  Task
+        Tuple data received from node: 16 bytes
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Seq Scan on dist_table_rep1_570022 dist_table_rep1 (actual rows=4 loops=1)
+prepare p2 AS SELECT * FROM dist_table_rep1 WHERE a = $1;
+EXPLAIN :default_analyze_flags EXECUTE p2(1);
+Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
+  Task Count: 1
+  Tuple data received from nodes: 4 bytes
+  Tasks Shown: All
+  ->  Task
+        Tuple data received from node: 4 bytes
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Seq Scan on dist_table_rep1_570022 dist_table_rep1 (actual rows=1 loops=1)
+              Filter: (a = 1)
+              Rows Removed by Filter: 3
+EXPLAIN :default_analyze_flags EXECUTE p2(1);
+Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
+  Task Count: 1
+  Tuple data received from nodes: 4 bytes
+  Tasks Shown: All
+  ->  Task
+        Tuple data received from node: 4 bytes
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Seq Scan on dist_table_rep1_570022 dist_table_rep1 (actual rows=1 loops=1)
+              Filter: (a = 1)
+              Rows Removed by Filter: 3
+EXPLAIN :default_analyze_flags EXECUTE p2(1);
+Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
+  Task Count: 1
+  Tuple data received from nodes: 4 bytes
+  Tasks Shown: All
+  ->  Task
+        Tuple data received from node: 4 bytes
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Seq Scan on dist_table_rep1_570022 dist_table_rep1 (actual rows=1 loops=1)
+              Filter: (a = 1)
+              Rows Removed by Filter: 3
+EXPLAIN :default_analyze_flags EXECUTE p2(1);
+Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
+  Task Count: 1
+  Tuple data received from nodes: 4 bytes
+  Tasks Shown: All
+  ->  Task
+        Tuple data received from node: 4 bytes
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Seq Scan on dist_table_rep1_570022 dist_table_rep1 (actual rows=1 loops=1)
+              Filter: (a = 1)
+              Rows Removed by Filter: 3
+EXPLAIN :default_analyze_flags EXECUTE p2(1);
+Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
+  Task Count: 1
+  Tuple data received from nodes: 4 bytes
+  Tasks Shown: All
+  ->  Task
+        Tuple data received from node: 4 bytes
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Seq Scan on dist_table_rep1_570022 dist_table_rep1 (actual rows=1 loops=1)
+              Filter: (a = 1)
+              Rows Removed by Filter: 3
+EXPLAIN :default_analyze_flags EXECUTE p2(1);
+Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
+  Task Count: 1
+  Tuple data received from nodes: 4 bytes
+  Tasks Shown: All
+  ->  Task
+        Tuple data received from node: 4 bytes
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Seq Scan on dist_table_rep1_570022 dist_table_rep1 (actual rows=1 loops=1)
+              Filter: (a = 1)
+              Rows Removed by Filter: 3
+EXPLAIN :default_analyze_flags EXECUTE p2(10);
+Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
+  Task Count: 1
+  Tuple data received from nodes: 4 bytes
+  Tasks Shown: All
+  ->  Task
+        Tuple data received from node: 4 bytes
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Seq Scan on dist_table_rep1_570022 dist_table_rep1 (actual rows=1 loops=1)
+              Filter: (a = 10)
+              Rows Removed by Filter: 3
+EXPLAIN :default_analyze_flags EXECUTE p2(100);
+Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
+  Task Count: 1
+  Tuple data received from nodes: 4 bytes
+  Tasks Shown: All
+  ->  Task
+        Tuple data received from node: 4 bytes
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Seq Scan on dist_table_rep1_570023 dist_table_rep1 (actual rows=1 loops=1)
+              Filter: (a = 100)
+              Rows Removed by Filter: 1
+prepare p3 AS SELECT * FROM dist_table_rep1 WHERE a = 1;
+EXPLAIN :default_analyze_flags EXECUTE p3;
+Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
+  Task Count: 1
+  Tuple data received from nodes: 4 bytes
+  Tasks Shown: All
+  ->  Task
+        Tuple data received from node: 4 bytes
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Seq Scan on dist_table_rep1_570022 dist_table_rep1 (actual rows=1 loops=1)
+              Filter: (a = 1)
+              Rows Removed by Filter: 3
+EXPLAIN :default_analyze_flags EXECUTE p3;
+Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
+  Task Count: 1
+  Tuple data received from nodes: 4 bytes
+  Tasks Shown: All
+  ->  Task
+        Tuple data received from node: 4 bytes
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Seq Scan on dist_table_rep1_570022 dist_table_rep1 (actual rows=1 loops=1)
+              Filter: (a = 1)
+              Rows Removed by Filter: 3
+EXPLAIN :default_analyze_flags EXECUTE p3;
+Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
+  Task Count: 1
+  Tuple data received from nodes: 4 bytes
+  Tasks Shown: All
+  ->  Task
+        Tuple data received from node: 4 bytes
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Seq Scan on dist_table_rep1_570022 dist_table_rep1 (actual rows=1 loops=1)
+              Filter: (a = 1)
+              Rows Removed by Filter: 3
+EXPLAIN :default_analyze_flags EXECUTE p3;
+Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
+  Task Count: 1
+  Tuple data received from nodes: 4 bytes
+  Tasks Shown: All
+  ->  Task
+        Tuple data received from node: 4 bytes
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Seq Scan on dist_table_rep1_570022 dist_table_rep1 (actual rows=1 loops=1)
+              Filter: (a = 1)
+              Rows Removed by Filter: 3
+EXPLAIN :default_analyze_flags EXECUTE p3;
+Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
+  Task Count: 1
+  Tuple data received from nodes: 4 bytes
+  Tasks Shown: All
+  ->  Task
+        Tuple data received from node: 4 bytes
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Seq Scan on dist_table_rep1_570022 dist_table_rep1 (actual rows=1 loops=1)
+              Filter: (a = 1)
+              Rows Removed by Filter: 3
+EXPLAIN :default_analyze_flags EXECUTE p3;
+Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
+  Task Count: 1
+  Tuple data received from nodes: 4 bytes
+  Tasks Shown: All
+  ->  Task
+        Tuple data received from node: 4 bytes
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Seq Scan on dist_table_rep1_570022 dist_table_rep1 (actual rows=1 loops=1)
+              Filter: (a = 1)
+              Rows Removed by Filter: 3
+DROP TABLE dist_table_rep1, dist_table_rep2;
+-- https://github.com/citusdata/citus/issues/2009
+CREATE TABLE simple (id integer, name text);
+SELECT create_distributed_table('simple', 'id');
+
+PREPARE simple_router AS SELECT *, $1 FROM simple WHERE id = 1;
+EXPLAIN :default_explain_flags EXECUTE simple_router(1);
+Custom Scan (Citus Adaptive)
+  Task Count: 1
+  Tasks Shown: All
+  ->  Task
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Seq Scan on simple_570026 simple
+              Filter: (id = 1)
+EXPLAIN :default_analyze_flags EXECUTE simple_router(1);
+Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
+  Task Count: 1
+  Tuple data received from nodes: 0 bytes
+  Tasks Shown: All
+  ->  Task
+        Tuple data received from node: 0 bytes
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Seq Scan on simple_570026 simple (actual rows=0 loops=1)
+              Filter: (id = 1)
+EXPLAIN :default_analyze_flags EXECUTE simple_router(1);
+Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
+  Task Count: 1
+  Tuple data received from nodes: 0 bytes
+  Tasks Shown: All
+  ->  Task
+        Tuple data received from node: 0 bytes
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Seq Scan on simple_570026 simple (actual rows=0 loops=1)
+              Filter: (id = 1)
+EXPLAIN :default_analyze_flags EXECUTE simple_router(1);
+Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
+  Task Count: 1
+  Tuple data received from nodes: 0 bytes
+  Tasks Shown: All
+  ->  Task
+        Tuple data received from node: 0 bytes
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Seq Scan on simple_570026 simple (actual rows=0 loops=1)
+              Filter: (id = 1)
+EXPLAIN :default_analyze_flags EXECUTE simple_router(1);
+Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
+  Task Count: 1
+  Tuple data received from nodes: 0 bytes
+  Tasks Shown: All
+  ->  Task
+        Tuple data received from node: 0 bytes
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Seq Scan on simple_570026 simple (actual rows=0 loops=1)
+              Filter: (id = 1)
+EXPLAIN :default_analyze_flags EXECUTE simple_router(1);
+Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
+  Task Count: 1
+  Tuple data received from nodes: 0 bytes
+  Tasks Shown: All
+  ->  Task
+        Tuple data received from node: 0 bytes
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Seq Scan on simple_570026 simple (actual rows=0 loops=1)
+              Filter: (id = 1)
+EXPLAIN :default_analyze_flags EXECUTE simple_router(1);
+Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
+  Task Count: 1
+  Tuple data received from nodes: 0 bytes
+  Tasks Shown: All
+  ->  Task
+        Tuple data received from node: 0 bytes
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Seq Scan on simple_570026 simple (actual rows=0 loops=1)
+              Filter: (id = 1)
+EXPLAIN :default_analyze_flags EXECUTE simple_router(1);
+Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
+  Task Count: 1
+  Tuple data received from nodes: 0 bytes
+  Tasks Shown: All
+  ->  Task
+        Tuple data received from node: 0 bytes
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Seq Scan on simple_570026 simple (actual rows=0 loops=1)
+              Filter: (id = 1)
+deallocate simple_router;
+-- prepared multi-row insert
+PREPARE insert_query AS INSERT INTO simple VALUES ($1, 2), (2, $2);
+EXPLAIN :default_explain_flags EXECUTE insert_query(3, 4);
+Custom Scan (Citus Adaptive)
+  Task Count: 2
+  Tasks Shown: One of 2
+  ->  Task
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Insert on simple_570026 citus_table_alias
+              ->  Result
+EXPLAIN :default_analyze_flags EXECUTE insert_query(3, 4);
+Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
+  Task Count: 2
+  Tasks Shown: One of 2
+  ->  Task
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Insert on simple_570026 citus_table_alias (actual rows=0 loops=1)
+              ->  Result (actual rows=1 loops=1)
+deallocate insert_query;
+-- prepared updates
+PREPARE update_query AS UPDATE simple SET name=$1 WHERE name=$2;
+EXPLAIN :default_explain_flags EXECUTE update_query('x', 'y');
+Custom Scan (Citus Adaptive)
+  Task Count: 2
+  Tasks Shown: One of 2
+  ->  Task
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Update on simple_570026 simple
+              ->  Seq Scan on simple_570026 simple
+                    Filter: (name = 'y'::text)
+EXPLAIN :default_analyze_flags EXECUTE update_query('x', 'y');
+Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
+  Task Count: 2
+  Tasks Shown: One of 2
+  ->  Task
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Update on simple_570026 simple (actual rows=0 loops=1)
+              ->  Seq Scan on simple_570026 simple (actual rows=0 loops=1)
+                    Filter: (name = $2)
+                    Rows Removed by Filter: 1
+deallocate update_query;
+-- prepared deletes
+PREPARE delete_query AS DELETE FROM simple WHERE name=$1 OR name=$2;
+EXPLAIN (COSTS OFF) EXECUTE delete_query('x', 'y');
+Custom Scan (Citus Adaptive)
+  Task Count: 2
+  Tasks Shown: One of 2
+  ->  Task
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Delete on simple_570026 simple
+              ->  Seq Scan on simple_570026 simple
+                    Filter: ((name = 'x'::text) OR (name = 'y'::text))
+EXPLAIN :default_analyze_flags EXECUTE delete_query('x', 'y');
+Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
+  Task Count: 2
+  Tasks Shown: One of 2
+  ->  Task
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Delete on simple_570026 simple (actual rows=0 loops=1)
+              ->  Seq Scan on simple_570026 simple (actual rows=0 loops=1)
+                    Filter: ((name = $1) OR (name = $2))
+                    Rows Removed by Filter: 1
+deallocate delete_query;
+-- prepared distributed insert/select
+-- we don't support EXPLAIN for prepared insert/selects of other types.
+PREPARE distributed_insert_select AS INSERT INTO simple SELECT * FROM simple WHERE name IN ($1, $2);
+EXPLAIN :default_explain_flags EXECUTE distributed_insert_select('x', 'y');
+Custom Scan (Citus Adaptive)
+  Task Count: 2
+  Tasks Shown: One of 2
+  ->  Task
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Insert on simple_570026 citus_table_alias
+              ->  Seq Scan on simple_570026 simple
+                    Filter: ((id IS NOT NULL) AND (name = ANY ('{x,y}'::text[])))
+EXPLAIN :default_analyze_flags EXECUTE distributed_insert_select('x', 'y');
+Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
+  Task Count: 2
+  Tasks Shown: One of 2
+  ->  Task
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Insert on simple_570026 citus_table_alias (actual rows=0 loops=1)
+              ->  Seq Scan on simple_570026 simple (actual rows=0 loops=1)
+                    Filter: ((id IS NOT NULL) AND (name = ANY (ARRAY[$1, $2])))
+                    Rows Removed by Filter: 1
+deallocate distributed_insert_select;
+DROP TABLE simple;
+-- prepared cte
+BEGIN;
+PREPARE cte_query AS
+WITH keys AS (
+  SELECT count(*) FROM
+   (SELECT DISTINCT l_orderkey, GREATEST(random(), 2) FROM lineitem_hash_part WHERE l_quantity > $1) t
+),
+series AS (
+  SELECT s FROM generate_series(1, $2) s
+),
+delete_result AS (
+  DELETE FROM lineitem_hash_part WHERE l_quantity < $3 RETURNING *
+)
+SELECT s FROM series;
+EXPLAIN :default_explain_flags EXECUTE cte_query(2, 10, -1);
+Custom Scan (Citus Adaptive)
+  ->  Distributed Subplan XXX_1
+        ->  Custom Scan (Citus Adaptive)
+              Task Count: 4
+              Tasks Shown: One of 4
+              ->  Task
+                    Node: host=localhost port=xxxxx dbname=regression
+                    ->  Delete on lineitem_hash_part_360041 lineitem_hash_part
+                          ->  Seq Scan on lineitem_hash_part_360041 lineitem_hash_part
+                                Filter: (l_quantity < '-1'::numeric)
+  Task Count: 1
+  Tasks Shown: All
+  ->  Task
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Function Scan on generate_series s
+EXPLAIN :default_analyze_flags EXECUTE cte_query(2, 10, -1);
+Custom Scan (Citus Adaptive) (actual rows=10 loops=1)
+  ->  Distributed Subplan XXX_1
+        Intermediate Data Size: 0 bytes
+        Result destination: Send to 0 nodes
+        ->  Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
+              Task Count: 4
+              Tuple data received from nodes: 0 bytes
+              Tasks Shown: One of 4
+              ->  Task
+                    Tuple data received from node: 0 bytes
+                    Node: host=localhost port=xxxxx dbname=regression
+                    ->  Delete on lineitem_hash_part_360041 lineitem_hash_part (actual rows=0 loops=1)
+                          ->  Seq Scan on lineitem_hash_part_360041 lineitem_hash_part (actual rows=0 loops=1)
+                                Filter: (l_quantity < '-1'::numeric)
+                                Rows Removed by Filter: 2885
+  Task Count: 1
+  Tuple data received from nodes: 40 bytes
+  Tasks Shown: All
+  ->  Task
+        Tuple data received from node: 40 bytes
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Function Scan on generate_series s (actual rows=10 loops=1)
+ROLLBACK;
+-- https://github.com/citusdata/citus/issues/2009#issuecomment-653036502
+CREATE TABLE users_table_2 (user_id int primary key, time timestamp, value_1 int, value_2 int, value_3 float, value_4 bigint);
+SELECT create_reference_table('users_table_2');
+
+PREPARE p4 (int, int) AS insert into users_table_2 ( value_1, user_id) select value_1, user_id + $2  FROM users_table_2 ON CONFLICT (user_id) DO UPDATE SET value_2 = EXCLUDED.value_1 + $1;
+EXPLAIN :default_explain_flags execute p4(20,20);
+Custom Scan (Citus Adaptive)
+  Task Count: 1
+  Tasks Shown: All
+  ->  Task
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Insert on users_table_2_570028 citus_table_alias
+              Conflict Resolution: UPDATE
+              Conflict Arbiter Indexes: users_table_2_pkey_570028
+              ->  Seq Scan on users_table_2_570028 users_table_2
+EXPLAIN :default_analyze_flags execute p4(20,20);
+Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
+  Task Count: 1
+  Tasks Shown: All
+  ->  Task
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Insert on users_table_2_570028 citus_table_alias (actual rows=0 loops=1)
+              Conflict Resolution: UPDATE
+              Conflict Arbiter Indexes: users_table_2_pkey_570028
+              Tuples Inserted: 0
+              Conflicting Tuples: 0
+              ->  Seq Scan on users_table_2_570028 users_table_2 (actual rows=0 loops=1)
+-- simple test to confirm we can fetch long (>4KB) plans
+EXPLAIN (ANALYZE, COSTS OFF, TIMING OFF, SUMMARY OFF) SELECT * FROM users_table_2 WHERE value_1::text = '00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000X';
+Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
+  Task Count: 1
+  Tuple data received from nodes: 0 bytes
+  Tasks Shown: All
+  ->  Task
+        Tuple data received from node: 0 bytes
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Seq Scan on users_table_2_570028 users_table_2 (actual rows=0 loops=1)
+              Filter: ((value_1)::text = '00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000X'::text)
+DROP TABLE users_table_2;
+-- sorted explain analyze output
+CREATE TABLE explain_analyze_execution_time (a int);
+INSERT INTO explain_analyze_execution_time VALUES (2);
+SELECT create_distributed_table('explain_analyze_execution_time', 'a');
+
+-- show that we can sort the output wrt execution time
+-- we do the following hack to make the test outputs
+-- be consistent. First, ingest a single row then add
+-- pg_sleep() call on the query. Postgres will only
+-- sleep for the shard that has the single row, so that
+-- will definitely be slower
+set citus.explain_analyze_sort_method to "taskId";
+EXPLAIN (COSTS FALSE, ANALYZE TRUE, TIMING FALSE, SUMMARY FALSE) select a, CASE WHEN pg_sleep(0.4) IS NULL THEN  'x' END from explain_analyze_execution_time;
+Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
+  Task Count: 2
+  Tuple data received from nodes: 4 bytes
+  Tasks Shown: One of 2
+  ->  Task
+        Tuple data received from node: 0 bytes
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Seq Scan on explain_analyze_execution_time_570029 explain_analyze_execution_time (actual rows=0 loops=1)
+set citus.explain_analyze_sort_method to "execution-time";
+EXPLAIN (COSTS FALSE, ANALYZE TRUE, TIMING FALSE, SUMMARY FALSE) select a, CASE WHEN pg_sleep(0.4) IS NULL THEN  'x' END from explain_analyze_execution_time;
+Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
+  Task Count: 2
+  Tuple data received from nodes: 4 bytes
+  Tasks Shown: One of 2
+  ->  Task
+        Tuple data received from node: 4 bytes
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Seq Scan on explain_analyze_execution_time_570030 explain_analyze_execution_time (actual rows=1 loops=1)
+-- reset back
+reset citus.explain_analyze_sort_method;
+DROP TABLE explain_analyze_execution_time;
+CREATE SCHEMA multi_explain;
+SET search_path TO multi_explain;
+-- test EXPLAIN ANALYZE when original query returns no columns
+CREATE TABLE reference_table(a int);
+SELECT create_reference_table('reference_table');
+
+INSERT INTO reference_table VALUES (1);
+EXPLAIN :default_analyze_flags SELECT FROM reference_table;
+Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
+  Task Count: 1
+  Tasks Shown: All
+  ->  Task
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Seq Scan on reference_table_570031 reference_table (actual rows=1 loops=1)
+CREATE TABLE distributed_table_1(a int, b int);
+SELECT create_distributed_table('distributed_table_1','a');
+
+INSERT INTO distributed_table_1 values (1,1);
+EXPLAIN :default_analyze_flags SELECT row_number() OVER() AS r FROM distributed_table_1;
+WindowAgg (actual rows=1 loops=1)
+  ->  Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
+        Task Count: 2
+        Tasks Shown: One of 2
+        ->  Task
+              Node: host=localhost port=xxxxx dbname=regression
+              ->  Seq Scan on distributed_table_1_570032 distributed_table_1 (actual rows=1 loops=1)
+CREATE TABLE distributed_table_2(a int, b int);
+SELECT create_distributed_table('distributed_table_2','a');
+
+INSERT INTO distributed_table_2 VALUES (1,1);
+EXPLAIN :default_analyze_flags
+WITH r AS (SELECT row_number() OVER () AS r FROM distributed_table_1)
+SELECT * FROM distributed_table_2
+JOIN r ON (r = distributed_table_2.b)
+LIMIT 3;
+Limit (actual rows=1 loops=1)
+  ->  Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
+        ->  Distributed Subplan XXX_1
+              Intermediate Data Size: 14 bytes
+              Result destination: Send to 2 nodes
+              ->  WindowAgg (actual rows=1 loops=1)
+                    ->  Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
+                          Task Count: 2
+                          Tasks Shown: One of 2
+                          ->  Task
+                                Node: host=localhost port=xxxxx dbname=regression
+                                ->  Seq Scan on distributed_table_1_570032 distributed_table_1 (actual rows=1 loops=1)
+        Task Count: 2
+        Tuple data received from nodes: 16 bytes
+        Tasks Shown: One of 2
+        ->  Task
+              Tuple data received from node: 16 bytes
+              Node: host=localhost port=xxxxx dbname=regression
+              ->  Limit (actual rows=1 loops=1)
+                    ->  Nested Loop (actual rows=1 loops=1)
+                          Join Filter: (distributed_table_2.b = intermediate_result.r)
+                          ->  Function Scan on read_intermediate_result intermediate_result (actual rows=1 loops=1)
+                          ->  Seq Scan on distributed_table_2_570034 distributed_table_2 (actual rows=1 loops=1)
+EXPLAIN :default_analyze_flags SELECT FROM (SELECT * FROM reference_table) subquery;
+Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
+  Task Count: 1
+  Tasks Shown: All
+  ->  Task
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Seq Scan on reference_table_570031 reference_table (actual rows=1 loops=1)
+PREPARE dummy_prep_stmt(int) AS SELECT FROM distributed_table_1;
+EXPLAIN :default_analyze_flags EXECUTE dummy_prep_stmt(50);
+Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
+  Task Count: 2
+  Tasks Shown: One of 2
+  ->  Task
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Seq Scan on distributed_table_1_570032 distributed_table_1 (actual rows=1 loops=1)
+CREATE TYPE multi_explain.int_wrapper_type AS (int_field int);
+CREATE TABLE tbl (a int, b multi_explain.int_wrapper_type);
+SELECT create_distributed_table('tbl', 'a');
+
+EXPLAIN :default_analyze_flags SELECT * FROM tbl;
+Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
+  Task Count: 2
+  Tuple data received from nodes: 0 bytes
+  Tasks Shown: One of 2
+  ->  Task
+        Tuple data received from node: 0 bytes
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Seq Scan on tbl_570036 tbl (actual rows=0 loops=1)
+PREPARE q1(int_wrapper_type) AS WITH a AS (SELECT * FROM tbl WHERE b = $1 AND a = 1 OFFSET 0) SELECT * FROM a;
+EXPLAIN (COSTS false) EXECUTE q1('(1)');
+Custom Scan (Citus Adaptive)
+  Task Count: 1
+  Tasks Shown: All
+  ->  Task
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Seq Scan on tbl_570036 tbl
+              Filter: ((b = '(1)'::multi_explain.int_wrapper_type) AND (a = 1))
+EXPLAIN :default_analyze_flags EXECUTE q1('(1)');
+Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
+  Task Count: 1
+  Tuple data received from nodes: 0 bytes
+  Tasks Shown: All
+  ->  Task
+        Tuple data received from node: 0 bytes
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Seq Scan on tbl_570036 tbl (actual rows=0 loops=1)
+              Filter: ((b = $1) AND (a = 1))
+PREPARE q2(int_wrapper_type) AS WITH a AS (UPDATE tbl SET b = $1 WHERE a = 1 RETURNING *) SELECT * FROM a;
+EXPLAIN (COSTS false) EXECUTE q2('(1)');
+Custom Scan (Citus Adaptive)
+  Task Count: 1
+  Tasks Shown: All
+  ->  Task
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  CTE Scan on a
+              CTE a
+                ->  Update on tbl_570036 tbl
+                      ->  Seq Scan on tbl_570036 tbl
+                            Filter: (a = 1)
+EXPLAIN :default_analyze_flags EXECUTE q2('(1)');
+Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
+  Task Count: 1
+  Tuple data received from nodes: 0 bytes
+  Tasks Shown: All
+  ->  Task
+        Tuple data received from node: 0 bytes
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  CTE Scan on a (actual rows=0 loops=1)
+              CTE a
+                ->  Update on tbl_570036 tbl (actual rows=0 loops=1)
+                      ->  Seq Scan on tbl_570036 tbl (actual rows=0 loops=1)
+                            Filter: (a = 1)
+-- check when auto explain + analyze is enabled, we do not allow local execution.
+CREATE SCHEMA test_auto_explain;
+SET search_path TO 'test_auto_explain';
+CREATE TABLE test_ref_table (key int PRIMARY KEY);
+SELECT create_reference_table('test_ref_table');
+
+LOAD 'auto_explain';
+SET auto_explain.log_min_duration = 0;
+set auto_explain.log_analyze to true;
+-- the following should not be locally executed since explain analyze is on
+select * from test_ref_table;
+DROP SCHEMA test_auto_explain CASCADE;
+SET client_min_messages TO ERROR;
+DROP SCHEMA multi_explain CASCADE;

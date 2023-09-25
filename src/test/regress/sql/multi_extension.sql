@@ -63,7 +63,9 @@ BEGIN
 	SELECT p.description previous_object, c.description current_object
 	FROM current_objects c FULL JOIN prev_objects p
 	ON p.description = c.description
-	WHERE p.description is null OR c.description is null;
+	WHERE (p.description is null OR c.description is null)
+          AND c.description IS DISTINCT FROM 'function any_value(anyelement) anyelement'
+          AND c.description IS DISTINCT FROM 'function any_value_agg(anyelement,anyelement) anyelement';
 
 	DROP TABLE prev_objects;
 	ALTER TABLE current_objects RENAME TO prev_objects;
@@ -456,7 +458,7 @@ DELETE FROM pg_dist_shard WHERE shardid = 1;
 CREATE TABLE e_transactions(order_id varchar(255) NULL, transaction_id int) PARTITION BY LIST(transaction_id);
 CREATE TABLE orders_2020_07_01
 PARTITION OF e_transactions FOR VALUES IN (1,2,3);
-INSERT INTO pg_dist_partition VALUES ('e_transactions'::regclass,'h', '{VAR :varno 1 :varattno 1 :vartype 1043 :vartypmod 259 :varcollid 100 :varlevelsup 0 :varnosyn 1 :varattnosyn 1 :location -1}', 7, 's');
+INSERT INTO pg_dist_partition VALUES ('e_transactions'::regclass,'h', '{VAR :varno 1 :varattno 1 :vartype 1043 :vartypmod 259 :varcollid 100 :varnullingrels (b) :varlevelsup 0 :varnosyn 1 :varattnosyn 1 :location -1}', 7, 's');
 
 SELECT
 	(metadata->>'partitioned_citus_table_exists_pre_11')::boolean as partitioned_citus_table_exists_pre_11,
@@ -591,25 +593,55 @@ SELECT * FROM multi_extension.print_extension_changes();
 ALTER EXTENSION citus UPDATE TO '11.3-1';
 SELECT * FROM multi_extension.print_extension_changes();
 
--- Test downgrade to 11.3-1 from 12.0-1
+-- Test downgrade to 11.3-1 from 11.3-2
+ALTER EXTENSION citus UPDATE TO '11.3-2';
+ALTER EXTENSION citus UPDATE TO '11.3-1';
+-- Should be empty result since upgrade+downgrade should be a no-op
+SELECT * FROM multi_extension.print_extension_changes();
+
+-- Snapshot of state at 11.3-2
+ALTER EXTENSION citus UPDATE TO '11.3-2';
+SELECT * FROM multi_extension.print_extension_changes();
+
+-- Test downgrade to 11.3-2 from 12.0-1
 ALTER EXTENSION citus UPDATE TO '12.0-1';
 
 CREATE TABLE null_shard_key (x int, y int);
 SET citus.shard_replication_factor TO 1;
 SELECT create_distributed_table('null_shard_key', null);
 
--- Show that we cannot downgrade to 11.3-1 becuase the cluster has a
+-- Show that we cannot downgrade to 11.3-2 becuase the cluster has a
 -- distributed table with single-shard.
-ALTER EXTENSION citus UPDATE TO '11.3-1';
+ALTER EXTENSION citus UPDATE TO '11.3-2';
 
 DROP TABLE null_shard_key;
 
-ALTER EXTENSION citus UPDATE TO '11.3-1';
+ALTER EXTENSION citus UPDATE TO '11.3-2';
 -- Should be empty result since upgrade+downgrade should be a no-op
 SELECT * FROM multi_extension.print_extension_changes();
 
 -- Snapshot of state at 12.0-1
 ALTER EXTENSION citus UPDATE TO '12.0-1';
+SELECT * FROM multi_extension.print_extension_changes();
+
+-- Test downgrade to 12.0-1 from 12.1-1
+ALTER EXTENSION citus UPDATE TO '12.1-1';
+ALTER EXTENSION citus UPDATE TO '12.0-1';
+-- Should be empty result since upgrade+downgrade should be a no-op
+SELECT * FROM multi_extension.print_extension_changes();
+
+-- Snapshot of state at 12.1-1
+ALTER EXTENSION citus UPDATE TO '12.1-1';
+SELECT * FROM multi_extension.print_extension_changes();
+
+-- Test downgrade to 12.1-1 from 12.2-1
+ALTER EXTENSION citus UPDATE TO '12.2-1';
+ALTER EXTENSION citus UPDATE TO '12.1-1';
+-- Should be empty result since upgrade+downgrade should be a no-op
+SELECT * FROM multi_extension.print_extension_changes();
+
+-- Snapshot of state at 12.2-1
+ALTER EXTENSION citus UPDATE TO '12.2-1';
 SELECT * FROM multi_extension.print_extension_changes();
 
 DROP TABLE multi_extension.prev_objects, multi_extension.extension_diff;

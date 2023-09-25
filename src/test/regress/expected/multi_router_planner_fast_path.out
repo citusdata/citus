@@ -220,7 +220,7 @@ id_title AS (SELECT id, title from articles_hash WHERE author_id = 2)
 SELECT * FROM id_author, id_title WHERE id_author.id = id_title.id;
 DEBUG:  CTE id_author is going to be inlined via distributed planning
 DEBUG:  CTE id_title is going to be inlined via distributed planning
-DEBUG:  cannot run command which targets multiple shards
+DEBUG:  router planner does not support queries that reference non-colocated distributed tables
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  query has a single distribution column value: 2
@@ -1874,40 +1874,52 @@ DEBUG:  Creating router plan
 -- use fast-path queries
 PREPARE insert_sel(int, int) AS
 INSERT INTO articles_hash
-	SELECT * FROM articles_hash WHERE author_id = $2 AND word_count = $1 OFFSET 0;
+	SELECT max(id), max(author_id), title, word_count FROM articles_hash WHERE author_id = $2 AND word_count = $1 GROUP BY title, word_count;
 EXECUTE insert_sel(1,1);
-DEBUG:  cannot push down this subquery
-DETAIL:  Offset clause is currently unsupported when a subquery references a column from another query
+DEBUG:  Creating router plan
+DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition columns in the source table and subquery do not match
+DETAIL:  Subquery contains an aggregation in the same position as the target table's partition column.
+HINT:  Ensure the target table's partition column has a corresponding simple column reference to a distributed table's partition column in the subquery.
 DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 EXECUTE insert_sel(1,1);
-DEBUG:  cannot push down this subquery
-DETAIL:  Offset clause is currently unsupported when a subquery references a column from another query
+DEBUG:  Creating router plan
+DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition columns in the source table and subquery do not match
+DETAIL:  Subquery contains an aggregation in the same position as the target table's partition column.
+HINT:  Ensure the target table's partition column has a corresponding simple column reference to a distributed table's partition column in the subquery.
 DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 EXECUTE insert_sel(1,1);
-DEBUG:  cannot push down this subquery
-DETAIL:  Offset clause is currently unsupported when a subquery references a column from another query
+DEBUG:  Creating router plan
+DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition columns in the source table and subquery do not match
+DETAIL:  Subquery contains an aggregation in the same position as the target table's partition column.
+HINT:  Ensure the target table's partition column has a corresponding simple column reference to a distributed table's partition column in the subquery.
 DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 EXECUTE insert_sel(1,1);
-DEBUG:  cannot push down this subquery
-DETAIL:  Offset clause is currently unsupported when a subquery references a column from another query
+DEBUG:  Creating router plan
+DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition columns in the source table and subquery do not match
+DETAIL:  Subquery contains an aggregation in the same position as the target table's partition column.
+HINT:  Ensure the target table's partition column has a corresponding simple column reference to a distributed table's partition column in the subquery.
 DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 EXECUTE insert_sel(1,1);
-DEBUG:  cannot push down this subquery
-DETAIL:  Offset clause is currently unsupported when a subquery references a column from another query
+DEBUG:  Creating router plan
+DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition columns in the source table and subquery do not match
+DETAIL:  Subquery contains an aggregation in the same position as the target table's partition column.
+HINT:  Ensure the target table's partition column has a corresponding simple column reference to a distributed table's partition column in the subquery.
 DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 EXECUTE insert_sel(1,1);
-DEBUG:  cannot push down this subquery
-DETAIL:  Offset clause is currently unsupported when a subquery references a column from another query
+DEBUG:  Creating router plan
+DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition columns in the source table and subquery do not match
+DETAIL:  Subquery contains an aggregation in the same position as the target table's partition column.
+HINT:  Ensure the target table's partition column has a corresponding simple column reference to a distributed table's partition column in the subquery.
 DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Collecting INSERT ... SELECT results on coordinator

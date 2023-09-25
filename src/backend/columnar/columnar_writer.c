@@ -22,12 +22,18 @@
 #include "access/nbtree.h"
 #include "catalog/pg_am.h"
 #include "miscadmin.h"
+#include "pg_version_compat.h"
 #include "storage/fd.h"
 #include "storage/smgr.h"
 #include "utils/guc.h"
 #include "utils/memutils.h"
 #include "utils/rel.h"
+#if PG_VERSION_NUM >= PG_VERSION_16
+#include "storage/relfilelocator.h"
+#include "utils/relfilenumbermap.h"
+#else
 #include "utils/relfilenodemap.h"
+#endif
 
 #include "columnar/columnar.h"
 #include "columnar/columnar_storage.h"
@@ -37,7 +43,7 @@ struct ColumnarWriteState
 {
 	TupleDesc tupleDescriptor;
 	FmgrInfo **comparisonFunctionArray;
-	RelFileNode relfilenode;
+	RelFileLocator relfilelocator;
 
 	MemoryContext stripeWriteContext;
 	MemoryContext perTupleContext;
@@ -84,7 +90,7 @@ static StringInfo CopyStringInfo(StringInfo sourceString);
  * data load operation.
  */
 ColumnarWriteState *
-ColumnarBeginWrite(RelFileNode relfilenode,
+ColumnarBeginWrite(RelFileLocator relfilelocator,
 				   ColumnarOptions options,
 				   TupleDesc tupleDescriptor)
 {
@@ -124,7 +130,7 @@ ColumnarBeginWrite(RelFileNode relfilenode,
 												options.chunkRowCount);
 
 	ColumnarWriteState *writeState = palloc0(sizeof(ColumnarWriteState));
-	writeState->relfilenode = relfilenode;
+	writeState->relfilelocator = relfilelocator;
 	writeState->options = options;
 	writeState->tupleDescriptor = CreateTupleDescCopy(tupleDescriptor);
 	writeState->comparisonFunctionArray = comparisonFunctionArray;
@@ -174,8 +180,10 @@ ColumnarWriteRow(ColumnarWriteState *writeState, Datum *columnValues, bool *colu
 		writeState->stripeSkipList = stripeSkipList;
 		writeState->compressionBuffer = makeStringInfo();
 
-		Oid relationId = RelidByRelfilenode(writeState->relfilenode.spcNode,
-											writeState->relfilenode.relNode);
+		Oid relationId = RelidByRelfilenumber(RelationTablespace_compat(
+												  writeState->relfilelocator),
+											  RelationPhysicalIdentifierNumber_compat(
+												  writeState->relfilelocator));
 		Relation relation = relation_open(relationId, NoLock);
 		writeState->emptyStripeReservation =
 			ReserveEmptyStripe(relation, columnCount, chunkRowCount,
@@ -393,8 +401,10 @@ FlushStripe(ColumnarWriteState *writeState)
 
 	elog(DEBUG1, "Flushing Stripe of size %d", stripeBuffers->rowCount);
 
-	Oid relationId = RelidByRelfilenode(writeState->relfilenode.spcNode,
-										writeState->relfilenode.relNode);
+	Oid relationId = RelidByRelfilenumber(RelationTablespace_compat(
+											  writeState->relfilelocator),
+										  RelationPhysicalIdentifierNumber_compat(
+											  writeState->relfilelocator));
 	Relation relation = relation_open(relationId, NoLock);
 
 	/*
@@ -486,10 +496,10 @@ FlushStripe(ColumnarWriteState *writeState)
 		}
 	}
 
-	SaveChunkGroups(writeState->relfilenode,
+	SaveChunkGroups(writeState->relfilelocator,
 					stripeMetadata->id,
 					writeState->chunkGroupRowCounts);
-	SaveStripeSkipList(writeState->relfilenode,
+	SaveStripeSkipList(writeState->relfilelocator,
 					   stripeMetadata->id,
 					   stripeSkipList, tupleDescriptor);
 

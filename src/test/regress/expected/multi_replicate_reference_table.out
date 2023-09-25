@@ -793,7 +793,7 @@ WHERE
 ORDER BY 1,4,5;
  shardid | shardstate | shardlength | nodename  | nodeport
 ---------------------------------------------------------------------
- 1370021 |          1 |           0 | localhost |    57637
+ 1370019 |          1 |           0 | localhost |    57637
 (1 row)
 
 -- we should see the two shard placements after activation
@@ -818,7 +818,7 @@ WHERE
 ORDER BY 1,4,5;
  shardid | shardstate | shardlength | nodename  | nodeport
 ---------------------------------------------------------------------
- 1370021 |          1 |           0 | localhost |    57637
+ 1370019 |          1 |           0 | localhost |    57637
 (1 row)
 
 SELECT 1 FROM master_remove_node('localhost', :worker_2_port);

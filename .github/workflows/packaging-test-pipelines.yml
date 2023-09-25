@@ -6,6 +6,10 @@ on:
 
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
 
   get_postgres_versions_from_file:
@@ -40,12 +44,22 @@ jobs:
         # For this reason, we need to use a "matrix" to generate names of
         # rpm images, e.g. citus/packaging:centos-7-pg12
         packaging_docker_image:
-          - oraclelinux-7
           - oraclelinux-8
-          - centos-7
-          - centos-8
+          - almalinux-8
           - almalinux-9
         POSTGRES_VERSION: ${{ fromJson(needs.get_postgres_versions_from_file.outputs.pg_versions) }}
+        # Postgres removed support for CentOS 7 in PG 16. Below block is needed to
+        # keep the build for CentOS 7 working for PG 14 and PG 15.
+        # Once dependent systems drop support for Centos 7, we can remove this block.
+        include:
+          - packaging_docker_image: centos-7
+            POSTGRES_VERSION: 14
+          - packaging_docker_image: centos-7
+            POSTGRES_VERSION: 15
+          - packaging_docker_image: oraclelinux-7
+            POSTGRES_VERSION: 14
+          - packaging_docker_image: oraclelinux-7
+            POSTGRES_VERSION: 15
 
     container:
       image: citus/packaging:${{ matrix.packaging_docker_image }}-pg${{ matrix.POSTGRES_VERSION }}
@@ -73,7 +87,17 @@ jobs:
 
       - name: Make
         run: |
+          git config --global --add safe.directory ${GITHUB_WORKSPACE}
           make CFLAGS="-Wno-missing-braces" -sj$(cat /proc/cpuinfo | grep "core id" | wc -l) 2>&1 | tee -a output.log
+
+          # Check the exit code of the make command
+          make_exit_code=${PIPESTATUS[0]}
+
+          # If the make command returned a non-zero exit code, exit with the same code
+          if [[ $make_exit_code -ne 0 ]]; then
+              echo "make command failed with exit code $make_exit_code"
+              exit $make_exit_code
+          fi
 
       - name: Make install
         run: |
@@ -109,10 +133,8 @@ jobs:
           - debian-buster-all
           - debian-bookworm-all
           - debian-bullseye-all
-          - ubuntu-bionic-all
           - ubuntu-focal-all
           - ubuntu-jammy-all
-          - ubuntu-kinetic-all
 
         POSTGRES_VERSION: ${{ fromJson(needs.get_postgres_versions_from_file.outputs.pg_versions) }}
 
@@ -141,8 +163,21 @@ jobs:
           make clean
 
       - name: Make
+        shell: bash
         run: |
+          set -e
+          git config --global --add safe.directory ${GITHUB_WORKSPACE}
           make -sj$(cat /proc/cpuinfo | grep "core id" | wc -l) 2>&1 | tee -a output.log
+
+          # Check the exit code of the make command
+          make_exit_code=${PIPESTATUS[0]}
+
+          # If the make command returned a non-zero exit code, exit with the same code
+          if [[ $make_exit_code -ne 0 ]]; then
+              echo "make command failed with exit code $make_exit_code"
+              exit $make_exit_code
+          fi
+
 
       - name: Make install
         run: |

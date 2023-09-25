@@ -1,4 +1,4 @@
-| **<br/>The Citus database is 100% open source.<br/><img width=1000/><br/>Learn what's new in the [Citus 11.3 release blog](https://www.citusdata.com/blog/2023/05/05/whats-new-in-citus-11-3-multi-tenant-saas/) and the [Citus Updates page](https://www.citusdata.com/updates/).<br/><br/>**|
+| **<br/>The Citus database is 100% open source.<br/><img width=1000/><br/>Learn what's new in the [Citus 12.1 release blog](https://www.citusdata.com/blog/2023/09/22/adding-postgres-16-support-to-citus-12-1/) and the [Citus Updates page](https://www.citusdata.com/updates/).<br/><br/>**|
 |---|
 <br/>
 
@@ -8,7 +8,7 @@
 
 [![Latest Docs](https://img.shields.io/badge/docs-latest-brightgreen.svg)](https://docs.citusdata.com/)
 [![Stack Overflow](https://img.shields.io/badge/Stack%20Overflow-%20-545353?logo=Stack%20Overflow)](https://stackoverflow.com/questions/tagged/citus)
-[Slack](https://citus-public.slack.com/)
+[![Slack](https://cituscdn.azureedge.net/images/social/slack-badge.svg)](https://slack.citusdata.com/)
 [![Code Coverage](https://codecov.io/gh/citusdata/citus/branch/master/graph/badge.svg)](https://app.codecov.io/gh/citusdata/citus)
 [![Twitter](https://img.shields.io/twitter/follow/citusdata.svg?label=Follow%20@citusdata)](https://twitter.com/intent/follow?screen_name=citusdata)
 
@@ -38,6 +38,7 @@ Since Citus is an extension to Postgres, you can use Citus with the latest Postg
 - [Why Citus?](#why-citus)
 - [Getting Started](#getting-started)
 - [Using Citus](#using-citus)
+- [Schema-based sharding](#schema-based-sharding)
 - [Setting up with High Availability](#setting-up-with-high-availability)
 - [Documentation](#documentation)
 - [Architecture](#architecture)
@@ -94,14 +95,14 @@ Install packages on Ubuntu / Debian:
 ```bash
 curl https://install.citusdata.com/community/deb.sh > add-citus-repo.sh
 sudo bash add-citus-repo.sh
-sudo apt-get -y install postgresql-15-citus-11.3
+sudo apt-get -y install postgresql-16-citus-12.1
 ```
 
 Install packages on CentOS / Red Hat:
 ```bash
 curl https://install.citusdata.com/community/rpm.sh > add-citus-repo.sh
 sudo bash add-citus-repo.sh
-sudo yum install -y citus113_15
+sudo yum install -y citus121_16
 ```
 
 To add Citus to your local PostgreSQL database, add the following to `postgresql.conf`:
@@ -347,6 +348,45 @@ When using columnar storage, you should only load data in batch using `COPY` or 
 
 To learn more about columnar storage, check out the [columnar storage README](https://github.com/citusdata/citus/blob/master/src/backend/columnar/README.md).
 
+## Schema-based sharding
+
+Available since Citus 12.0, [schema-based sharding](https://docs.citusdata.com/en/stable/get_started/concepts.html#schema-based-sharding) is the shared database, separate schema model, the schema becomes the logical shard within the database. Multi-tenant apps can a use a schema per tenant to easily shard along the tenant dimension. Query changes are not required and the application usually only needs a small modification to set the proper search_path when switching tenants. Schema-based sharding is an ideal solution for microservices, and for ISVs deploying applications that cannot undergo the changes required to onboard row-based sharding.
+
+### Creating distributed schemas
+
+You can turn an existing schema into a distributed schema by calling `citus_schema_distribute`:
+
+```sql
+SELECT citus_schema_distribute('user_service');
+```
+
+Alternatively, you can set `citus.enable_schema_based_sharding` to have all newly created schemas be automatically converted into distributed schemas:
+
+```sql
+SET citus.enable_schema_based_sharding TO ON;
+
+CREATE SCHEMA AUTHORIZATION user_service;
+CREATE SCHEMA AUTHORIZATION time_service;
+CREATE SCHEMA AUTHORIZATION ping_service;
+```
+
+### Running queries
+
+Queries will be properly routed to schemas based on `search_path` or by explicitly using the schema name in the query.
+
+For [microservices](https://docs.citusdata.com/en/stable/get_started/tutorial_microservices.html) you would create a USER per service matching the schema name, hence the default `search_path` would contain the schema name. When connected the user queries would be automatically routed and no changes to the microservice would be required.
+
+```sql
+CREATE USER user_service;
+CREATE SCHEMA AUTHORIZATION user_service;
+```
+
+For typical multi-tenant applications, you would set the search path to the tenant schema name in your application:
+
+```sql
+SET search_path = tenant_name, public;
+```
+
 ## Setting up with High Availability
 
 One of the most popular high availability solutions for PostgreSQL, [Patroni 3.0](https://github.com/zalando/patroni), has [first class support for Citus 10.0 and above](https://patroni.readthedocs.io/en/latest/citus.html#citus), additionally since Citus 11.2 ships with improvements for smoother node switchover in Patroni.
@@ -398,21 +438,23 @@ Citus is uniquely capable of scaling both analytical and transactional workloads
 
   The advanced parallel, distributed query engine in Citus combined with PostgreSQL features such as [array types](https://www.postgresql.org/docs/current/arrays.html), [JSONB](https://www.postgresql.org/docs/current/datatype-json.html), [lateral joins](https://heap.io/blog/engineering/postgresqls-powerful-new-join-type-lateral), and extensions like [HyperLogLog](https://github.com/citusdata/postgresql-hll) and [TopN](https://github.com/citusdata/postgresql-topn) allow you to build responsive analytics dashboards no matter how many customers or how much data you have.
 
-  Example real-time analytics users: [Algolia](https://www.citusdata.com/customers/algolia), [Heap](https://www.citusdata.com/customers/heap)
+  Example real-time analytics users: [Algolia](https://www.citusdata.com/customers/algolia)
 
 - **[Time series data](http://docs.citusdata.com/en/stable/use_cases/timeseries.html)**:
   Citus enables you to process and analyze very large amounts of time series data. The biggest Citus clusters store well over a petabyte of time series data and ingest terabytes per day.
 
   Citus integrates seamlessly with [Postgres table partitioning](https://www.postgresql.org/docs/current/ddl-partitioning.html) and has [built-in functions for partitioning by time](https://www.citusdata.com/blog/2021/10/22/how-to-scale-postgres-for-time-series-data-with-citus/), which can speed up queries and writes on time series tables. You can take advantage of Citus’s parallel, distributed query engine for fast analytical queries, and use the built-in *columnar storage* to compress old partitions.
 
-  Example users: [MixRank](https://www.citusdata.com/customers/mixrank), [Windows team](https://techcommunity.microsoft.com/t5/azure-database-for-postgresql/architecting-petabyte-scale-analytics-by-scaling-out-postgres-on/ba-p/969685)
+  Example users: [MixRank](https://www.citusdata.com/customers/mixrank)
 
 - **[Software-as-a-service (SaaS) applications](http://docs.citusdata.com/en/stable/use_cases/multi_tenant.html)**:
   SaaS and other multi-tenant applications need to be able to scale their database as the number of tenants/customers grows. Citus enables you to transparently shard a complex data model by the tenant dimension, so your database can grow along with your business.
 
   By distributing tables along a tenant ID column and co-locating data for the same tenant, Citus can horizontally scale complex (tenant-scoped) queries, transactions, and foreign key graphs. Reference tables and distributed DDL commands make database management a breeze compared to manual sharding. On top of that, you have a built-in distributed query engine for doing cross-tenant analytics inside the database.
 
-  Example multi-tenant SaaS users: [Copper](https://www.citusdata.com/customers/copper), [Salesloft](https://fivetran.com/case-studies/replicating-sharded-databases-a-case-study-of-salesloft-citus-data-and-fivetran), [ConvertFlow](https://www.citusdata.com/customers/convertflow)
+  Example multi-tenant SaaS users: [Salesloft](https://fivetran.com/case-studies/replicating-sharded-databases-a-case-study-of-salesloft-citus-data-and-fivetran), [ConvertFlow](https://www.citusdata.com/customers/convertflow)
+
+- **[Microservices](https://docs.citusdata.com/en/stable/get_started/tutorial_microservices.html)**: Citus supports schema based sharding, which allows distributing regular database schemas across many machines. This sharding methodology fits nicely with typical Microservices architecture, where storage is fully owned by the service hence can’t share the same schema definition with other tenants. Citus allows distributing horizontally scalable state across services, solving one of the [main problems](https://stackoverflow.blog/2020/11/23/the-macro-problem-with-microservices/) of microservices.
 
 - **Geospatial**:
   Because of the powerful [PostGIS](https://postgis.net/) extension to Postgres that adds support for geographic objects into Postgres, many people run spatial/GIS applications on top of Postgres. And since spatial location information has become part of our daily life, well, there are more geospatial applications than ever. When your Postgres database needs to scale out to handle an increased workload, Citus is a good fit.
@@ -430,6 +472,12 @@ Citus is uniquely capable of scaling both analytical and transactional workloads
 ## Contributing
 
 Citus is built on and of open source, and we welcome your contributions. The [CONTRIBUTING.md](CONTRIBUTING.md) file explains how to get started developing the Citus extension itself and our code quality guidelines.
+
+## Code of Conduct
+
+This project has adopted the [Microsoft Open Source Code of Conduct](https://opensource.microsoft.com/codeofconduct/).
+For more information see the [Code of Conduct FAQ](https://opensource.microsoft.com/codeofconduct/faq/) or
+contact [opencode@microsoft.com](mailto:opencode@microsoft.com) with any additional questions or comments.
 
 ## Stay Connected
 
