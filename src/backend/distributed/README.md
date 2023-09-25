@@ -832,10 +832,24 @@ If you find the paper hard to read, Marco provides a good introduction to the sa
  
 We assume you have either watched the video or read the paper. The core C functions involved are `MultiLogicalPlanCreate()`, `MultiNodeTree()`, and `MultiLogicalPlanOptimize()`. 
  
-The core function `MultiLogicalPlanCreate()` maps the SQL query to a C structure (e.g., `MultiNode`). Then `MultiLogicalPlanOptimize()` applies available optimizations to the `MultiNode`. 
+Citus has a rules-based optimizer. The core function `MultiLogicalPlanCreate()` maps the SQL query to a C structure (e.g., `MultiNode`). Then `MultiLogicalPlanOptimize()` applies available optimizations to the `MultiNode`. 
  
 For instance, one simple optimization pushes the "filter" operation below the "MultiCollect." Such rules are defined in the function `Commutative()` in `multi_logical_optimizer.c`. 
- 
+
+The most interesting part of the optimizer is usually in the final stage, when handling the more complex operators (GROUP BY, DISTINCT window functions, ORDER BY, aggregates). These operators are conjoined in a `MultiExtendedOpNode`. In many cases, they can only partially be pushed down into the worker nodes, which results in one `MultiExtendedOpNode` above the `MultiCollection` (which will run on the coordinator and aggregates across worker nodes), and another `MultiExtendedOpNode` below the `MultiCollect` (which will be pushed down to worker nodes). The bulk of the logic for generating the two nodes lives in `MasterExtendedOpNode()` and `WorkerExtendedOpNode()`, respectively.
+
+##### Aggregate functions
+
+[Aggregate functions](https://www.postgresql.org/docs/current/sql-createaggregate.html) can appear in the SELECT (target list) or HAVING clause of a query, often in the context of a `GROUP BY`. The aggregate primarily specify a state function (`sfunc`), which is called for every row in the group, and an `stype` which defines the data format in which intermediate state is held as a type, which maybe be `internal`. Many aggregates also have a `finalfunc`, which converts the last `stype` value to the final result of the aggregate function.
+
+Citus support distributing aggregate functions in several ways:
+- **Aggregate functions in queries that group by distribution column can be fully pushed down, since no cross-shard aggregation is needed**. This is mostly handled by the rules in `CanPushDownExpression`.
+- **Built-in, or well-known aggregate functions (based on their name) are distributed using custom rules**. An almost-complete list of aggregates that are handled in this way can be found in the  `AggregateNames` variable. Here the optimizer implements rules such as injecting a `sum` and `count` aggregate in the worker target list, and doing a `sum(sum)/sum(count)` on the master target list. 
+- **Aggregates that specify a `combinefunc` and have an non-internal `stype` are distributed using Citus-provided `worker_partial_agg` and `coord_combine_agg` aggregate functions**. 
+- **Other aggregates will be fully above the `MultiCollect` node, meaning the source data is pulled to the coordinator.**
+
+TODO
+
 ##### Final Notes 
  
 Overall, the algorithm aims to move as much computation as possible closer to the data. This code path has not been updated for a while, so readers should debug the code themselves. 
