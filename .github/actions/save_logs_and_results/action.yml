@@ -27,7 +27,7 @@ runs:
       diffs="$(find src/test/regress -name "*.diffs" -exec cat {} \;)"
       if ! [ -z "$diffs" ]; then
         echo '```diff' >> $GITHUB_STEP_SUMMARY
-        echo -e "$diffs" >> $GITHUB_STEP_SUMMARY
+        echo -E "$diffs" >> $GITHUB_STEP_SUMMARY
         echo '```' >> $GITHUB_STEP_SUMMARY
         echo $diffs
       fi
