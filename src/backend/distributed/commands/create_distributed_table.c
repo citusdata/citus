@@ -415,6 +415,19 @@ CreateDistributedTableConcurrently(Oid relationId, char *distributionColumnName,
 	if (!IsColocateWithDefault(colocateWithTableName) && !IsColocateWithNone(
 			colocateWithTableName))
 	{
+		if (replicationModel != REPLICATION_MODEL_STREAMING)
+		{
+			ereport(ERROR, (errmsg("cannot create distributed table "
+								   "concurrently because Citus allows "
+								   "concurrent table distribution only when "
+								   "citus.shard_replication_factor = 1"),
+							errhint("table %s is requested to be colocated "
+									"with %s which has "
+									"citus.shard_replication_factor > 1",
+									get_rel_name(relationId),
+									colocateWithTableName)));
+		}
+
 		EnsureColocateWithTableIsValid(relationId, distributionMethod,
 									   distributionColumnName,
 									   colocateWithTableName);
