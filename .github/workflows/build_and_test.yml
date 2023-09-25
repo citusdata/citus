@@ -266,9 +266,6 @@ jobs:
       new_pg_major: ${{ matrix.new_pg_major }}
     steps:
     - uses: actions/checkout@v3.5.0
-    - uses: actions/download-artifact@v3.0.1
-      with:
-        path: "."
     - uses: "./.github/actions/setup_extension"
       with:
         pg_major: "${{ env.old_pg_major }}"
