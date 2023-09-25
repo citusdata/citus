@@ -28,6 +28,14 @@ set citus.shard_replication_factor to 2;
 select create_distributed_table_concurrently('test','key', 'hash');
 set citus.shard_replication_factor to 1;
 
+set citus.shard_replication_factor to 2;
+create table dist_1(a int);
+select create_distributed_table('dist_1', 'a');
+set citus.shard_replication_factor to 1;
+
+create table dist_2(a int);
+select create_distributed_table_concurrently('dist_2', 'a', colocate_with=>'dist_1');
+
 begin;
 select create_distributed_table_concurrently('test','key');
 rollback;
@@ -63,6 +71,7 @@ rollback;
 
 -- verify that we can undistribute the table
 begin;
+set local client_min_messages to warning;
 select undistribute_table('test', cascade_via_foreign_keys := true);
 rollback;
 

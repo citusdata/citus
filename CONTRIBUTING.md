@@ -41,6 +41,8 @@ that are missing in earlier minor versions.
 
   cd citus
   ./configure
+  # If you have already installed the project, you need to clean it first
+  make clean
   make
   make install
   # Optionally, you might instead want to use `make install-all`
@@ -79,6 +81,8 @@ that are missing in earlier minor versions.
   git clone https://github.com/citusdata/citus.git
   cd citus
   ./configure
+  # If you have already installed the project previously, you need to clean it first
+  make clean
   make
   sudo make install
   # Optionally, you might instead want to use `sudo make install-all`
@@ -129,6 +133,8 @@ that are missing in earlier minor versions.
   git clone https://github.com/citusdata/citus.git
   cd citus
   PG_CONFIG=/usr/pgsql-14/bin/pg_config ./configure
+  # If you have already installed the project previously, you need to clean it first
+  make clean
   make
   sudo make install
   # Optionally, you might instead want to use `sudo make install-all`
