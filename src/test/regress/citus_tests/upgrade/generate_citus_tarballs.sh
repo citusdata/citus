@@ -22,17 +22,26 @@ git clone --branch "$citus_version" https://github.com/citusdata/citus.git --dep
 builddir="${basedir}/build"
 
 # do everything in a subdirectory to avoid clutter in current directory
-mkdir -p "${builddir}" && cd "${builddir}"
+mkdir -p "${builddir}"
+cd "${builddir}"
 
 "${citus_dir}/configure" --without-libcurl
 
 installdir="${builddir}/install"
-make "-j$(nproc)" && mkdir -p "${installdir}" && make DESTDIR="${installdir}" install
+make "-j$(nproc)"
+mkdir -p "${installdir}"
+make DESTDIR="${installdir}" install
 
-cd "${installdir}" && find . -type f -print >"${builddir}/files.lst"
+cd "${installdir}"
+
+find . -type f -print >"${builddir}/files.lst"
+
+cd "${builddir}"
 
 tar cvf "${basedir}/install-pg${pg_version}-citus${citus_version}.tar" $(cat "${builddir}"/files.lst)
 mv "${basedir}/install-pg${pg_version}-citus${citus_version}.tar" "${base}/install-pg${pg_version}-citus${citus_version}.tar"
 
-cd "${builddir}" && rm -rf install files.lst && make clean
+cd "${builddir}"
+rm -rf install files.lst
+make clean
 
