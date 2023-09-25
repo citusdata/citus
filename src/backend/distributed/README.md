@@ -1983,7 +1983,7 @@ Most multi-tenant and high-performance CRUD workloads only involve transactions 
 
 For transactions that write to multiple nodes, Citus uses the built-in two-phase commit (2PC) machinery in PostgreSQL. In the pre-commit callback, a “prepare transaction” command is sent over all connections to worker nodes with open transaction blocks, then a commit record is stored on the coordinator. In the post-commit callback, “commit prepared” commands are sent to commit on the worker nodes. The maintenance daemon takes care of recovering failed 2PC transactions by comparing the commit records on the coordinator to the list of pending prepared transactions on the worker. The presence of a record implies the transaction was committed, while the absence implies it was aborted. Pending prepared transactions are moved forward accordingly. 
 
-<img alt="2PC recovery" src="../../../images/2pc-recovery.png" width="600">
+<img alt="2PC recovery" src="../../../images/2pc-recovery.png" width="700">
 
 Nice animation at: [How Citus Executes Distributed Transactions on Postgres](https://www.citusdata.com/blog/2017/11/22/how-citus-executes-distributed-transactions/)
 
@@ -2073,7 +2073,7 @@ While doing the DFS, we also keep track of the other backends that are involved 
 
 If there is a cycle in the local graph, typically Postgres’ deadlock detection kicks in before Citus’ deadlock detection, hence breaks the cycle. There is a safe race condition between Citus’ deadlock detection and Postgres’ deadlock detection. Even if the race happens, the worst-case scenario is that the multiple backends from the same cycle is cancelled. In practice, we do not see much, because Citus deadlock detection runs `2x` slower (e.g., `citus.distributed_deadlock_detection_factor`) than Postgres deadlock detection. 
 
-<img alt="Deadlock detection" src="../../../images/deadlock-detection.png" width="600">
+<img alt="Deadlock detection" src="../../../images/deadlock-detection.png" width="700">
 
 For debugging purposes, you can enable logging with distributed deadlock detection: `citus.log_distributed_deadlock_detection`
 
@@ -2388,7 +2388,7 @@ On the target node, the function is executed as usual using the distributed tabl
 
  
 
-## Query from any node 
+# Query from any node
 
 Some Citus users have remarkably high query throughputs (>500k/s). A single-coordinator architecture could sometimes become a bottleneck for scaling such applications. To avoid that, Citus supports querying the database from any node in the cluster. 
 
@@ -2406,12 +2406,19 @@ Another important piece of query from any node is that the managed service shoul
 
 Another future improvement is to allow running DDLs from any node. Currently, DDLs (including ALTER TABLE, create_distributed_table etc) all should go through the coordinator. 
 
- 
-
-### Why didn’t we have dedicated Query Nodes and Data Nodes? 
+## Why didn’t we have dedicated Query Nodes and Data Nodes?
 
 Some distributed databases distinguish the Query Nodes and Data Nodes. As the names imply, Query Nodes would only do the query processing, whereas Data Nodes would only hold the data. In Citus, we decided not to follow that route, mostly because our initial benchmarks showed that combined nodes performed better in terms of price/performance. Still, some people argued that it might be better to have different classes of nodes such that they can be tuned /scaled-up-out differently based on the load for a given application. 
 
 <img alt="Dedicated query nodes benchmarks" src="../../../images/mx-dedicated-query-nodes.png" width="500">
 
 If this discussion comes up again, we suggest running some more benchmarks and ensuring the performance characteristics do not change dramatically. We do not foresee any architectural problems with that. It mostly comes down to price, performance, and product discussions. Note that you can quickly test this by disallowing certain nodes to have shards on them. You should also consider whether reference tables should still be present on query nodes, and whether there are any behavioural differences between query nodes and the coordinator.
+
+## Shard visibility
+
+Shards live in the same schema as the distributed table they belong to, so you might expect to see them when connecting to a worker node and running `\d`. While this was previously the case, it caused confusion among users and also breaks tools like `pg_dump`. Therefore, we now aggressively hide the shards by default from any query on `pg_class`. We do this by injecting a `relation_is_a_known_shard(oid)` filter in the query tree via the planner hook when we encounter a RangeTblEntry for `pg_class`. The fact that shards are hidden from `pg_class` does not affect queries on the shards, since PostgreSQL internals will not go through the query planner when accessing `pg_class`.
+
+Shards can be revealed via two settings:
+
+- `citus.override_shard_visibility = off` disables shard hiding entirely
+- `citus.show_shards_for_app_name_prefixes`= 'pgAdmin,psql'` disables shard hiding only for specific application_name values, by prefix
