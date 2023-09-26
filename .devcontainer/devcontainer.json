@@ -25,6 +25,7 @@
     },
     "mounts": [
         "type=volume,target=/data",
+        "source=citus-bashhistory,target=/commandhistory,type=volume",
     ],
     "updateContentCommand": "./configure",
     "postCreateCommand": "make -C .devcontainer/",

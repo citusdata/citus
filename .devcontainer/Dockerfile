@@ -156,6 +156,14 @@ COPY --chown=root:root .gdbinit /root/
 RUN mkdir .bin
 ENV PATH="/home/citus/.bin:${PATH}"
 
+# for persistent bash history across devcontainers we need to have
+# a) a directory to store the history in
+# b) a prompt command to append the history to the file
+# c) specify the history file to store the history in
+# b and c are done in the .bashrc to make it persistent across shells only
+RUN sudo install -d -o citus -g citus /commandhistory \
+    && echo "export PROMPT_COMMAND='history -a' && export HISTFILE=/commandhistory/.bash_history" >> "/home/citus/.bashrc"
+
 # install citus-dev
 RUN git clone --branch develop https://github.com/citusdata/tools.git citus-tools \
  && ( cd citus-tools/citus_dev && pipenv install ) \
