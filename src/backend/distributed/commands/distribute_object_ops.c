@@ -150,6 +150,17 @@ static DistributeObjectOps Any_AlterRole = {
 	.address = AlterRoleStmtObjectAddress,
 	.markDistributed = false,
 };
+
+static DistributeObjectOps Any_AlterRoleRename = {
+	.deparse = DeparseRenameRoleStmt,
+	.qualify = NULL,
+	.preprocess = PreprocessAlterRoleRenameStmt,
+	.postprocess = NULL,
+	.operationType = DIST_OPS_ALTER,
+	.address = RenameRoleStmtObjectAddress,
+	.markDistributed = false,
+};
+
 static DistributeObjectOps Any_AlterRoleSet = {
 	.deparse = DeparseAlterRoleSetStmt,
 	.qualify = QualifyAlterRoleSetStmt,
@@ -2057,6 +2068,11 @@ GetDistributeObjectOps(Node *node)
 				case OBJECT_PUBLICATION:
 				{
 					return &Publication_Rename;
+				}
+
+				case OBJECT_ROLE:
+				{
+					return &Any_AlterRoleRename;
 				}
 
 				case OBJECT_ROUTINE:

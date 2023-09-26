@@ -201,17 +201,51 @@ DeparseCreateRoleStmt(Node *node)
 }
 
 
+static void
+AppendSysIdStatement(StringInfo buf, ListCell *optionCell)
+{
+	DefElem *option = (DefElem *) lfirst(optionCell);
+	if (strcmp(option->defname, "sysid") == 0)
+	{
+		appendStringInfo(buf, " SYSID %d", intVal(option->arg));
+	}
+}
+
+
 /*
- * AppendCreateRoleStmt generates the string representation of the
- * CreateRoleStmt and appends it to the buffer.
+ * AppendInlinePriviliges generates the string representation for the inline
+ * privileges of the role in create statement and appends it to the buffer.
  */
 static void
-AppendCreateRoleStmt(StringInfo buf, CreateRoleStmt *stmt)
+AppendInlinePriviliges(StringInfo buf, ListCell *optionCell)
 {
-	ListCell *optionCell = NULL;
+	DefElem *option = (DefElem *) lfirst(optionCell);
 
-	appendStringInfo(buf, "CREATE ");
+	if (strcmp(option->defname, "adminmembers") == 0)
+	{
+		appendStringInfo(buf, " ADMIN ");
+		AppendRoleList(buf, (List *) option->arg);
+	}
+	else if (strcmp(option->defname, "rolemembers") == 0)
+	{
+		appendStringInfo(buf, " ROLE ");
+		AppendRoleList(buf, (List *) option->arg);
+	}
+	else if (strcmp(option->defname, "addroleto") == 0)
+	{
+		appendStringInfo(buf, " IN ROLE ");
+		AppendRoleList(buf, (List *) option->arg);
+	}
+}
 
+
+/*
+ * AppendStatementType generates the string representation for the statement
+ * type (role, user or group) in alter/create statement and appends it to the buffer.
+ */
+static void
+AppendStatementType(StringInfo buf, CreateRoleStmt *stmt)
+{
 	switch (stmt->stmt_type)
 	{
 		case ROLESTMT_ROLE:
@@ -232,34 +266,29 @@ AppendCreateRoleStmt(StringInfo buf, CreateRoleStmt *stmt)
 			break;
 		}
 	}
+}
+
+
+/*
+ * AppendCreateRoleStmt generates the string representation of the
+ * CreateRoleStmt and appends it to the buffer.
+ */
+static void
+AppendCreateRoleStmt(StringInfo buf, CreateRoleStmt *stmt)
+{
+	ListCell *optionCell = NULL;
+
+	appendStringInfo(buf, "CREATE ");
+
+	AppendStatementType(buf, stmt);
 
 	appendStringInfo(buf, "%s", quote_identifier(stmt->role));
 
 	foreach(optionCell, stmt->options)
 	{
 		AppendRoleOption(buf, optionCell);
-
-		DefElem *option = (DefElem *) lfirst(optionCell);
-
-		if (strcmp(option->defname, "sysid") == 0)
-		{
-			appendStringInfo(buf, " SYSID %d", intVal(option->arg));
-		}
-		else if (strcmp(option->defname, "adminmembers") == 0)
-		{
-			appendStringInfo(buf, " ADMIN ");
-			AppendRoleList(buf, (List *) option->arg);
-		}
-		else if (strcmp(option->defname, "rolemembers") == 0)
-		{
-			appendStringInfo(buf, " ROLE ");
-			AppendRoleList(buf, (List *) option->arg);
-		}
-		else if (strcmp(option->defname, "addroleto") == 0)
-		{
-			appendStringInfo(buf, " IN ROLE ");
-			AppendRoleList(buf, (List *) option->arg);
-		}
+		AppendInlinePriviliges(buf, optionCell);
+		AppendSysIdStatement(buf, optionCell);
 	}
 }
 
@@ -323,6 +352,22 @@ AppendRoleList(StringInfo buf, List *roleList)
 			appendStringInfo(buf, ", ");
 		}
 	}
+}
+
+
+char *
+DeparseRenameRoleStmt(Node *node)
+{
+	RenameStmt *stmt = castNode(RenameStmt, node);
+	StringInfoData str = { 0 };
+	initStringInfo(&str);
+
+	Assert(stmt->renameType == OBJECT_ROLE);
+
+	appendStringInfo(&str, "ALTER ROLE %s RENAME TO %s;",
+					 quote_identifier(stmt->subname), quote_identifier(stmt->newname));
+
+	return str.data;
 }
 
 
