@@ -1306,3 +1306,54 @@ EnsureSequentialModeForRoleDDL(void)
 							   "use only one connection for all future commands")));
 	SetLocalMultiShardModifyModeToSequential();
 }
+
+
+/*
+ * PreprocessAlterDatabaseSetStmt is executed before the statement is applied to the local
+ * postgres instance.
+ *
+ * In this stage we can prepare the commands that need to be run on all workers to grant
+ * on databases.
+ */
+List *
+PreprocessAlterRoleRenameStmt(Node *node, const char *queryString,
+							  ProcessUtilityContext processUtilityContext)
+{
+	if (!ShouldPropagate())
+	{
+		return NIL;
+	}
+
+	if (!EnableAlterRolePropagation)
+	{
+		return NIL;
+	}
+
+	RenameStmt *stmt = castNode(RenameStmt, node);
+	Assert(stmt->renameType == OBJECT_ROLE);
+
+
+	EnsureCoordinator();
+
+	char *sql = DeparseTreeNode((Node *) stmt);
+
+	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
+								(void *) sql,
+								ENABLE_DDL_PROPAGATION);
+
+	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
+}
+
+
+List *
+RenameRoleStmtObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
+{
+	RenameStmt *stmt = castNode(RenameStmt, node);
+	Assert(stmt->renameType == OBJECT_ROLE);
+
+	Oid roleOid = get_role_oid(stmt->subname, missing_ok);
+	ObjectAddress *address = palloc0(sizeof(ObjectAddress));
+	ObjectAddressSet(*address, AuthIdRelationId, roleOid);
+
+	return list_make1(address);
+}
