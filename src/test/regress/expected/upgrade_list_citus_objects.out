@@ -131,9 +131,8 @@ ORDER BY 1;
  function citus_shard_cost_1(bigint)
  function citus_shard_cost_by_disk_size(bigint)
  function citus_shard_indexes_on_worker()
- function citus_shard_set_isolated(bigint)
+ function citus_shard_property_set(bigint,boolean)
  function citus_shard_sizes()
- function citus_shard_unset_isolated(bigint)
  function citus_shards_on_worker()
  function citus_split_shard_by_split_points(bigint,text[],integer[],citus.shard_transfer_mode)
  function citus_stat_activity()
@@ -347,5 +346,5 @@ ORDER BY 1;
  view citus_stat_tenants_local
  view pg_dist_shard_placement
  view time_partitions
-(337 rows)
+(336 rows)
 

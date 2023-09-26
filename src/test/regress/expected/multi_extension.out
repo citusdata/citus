@@ -1424,9 +1424,8 @@ SELECT * FROM multi_extension.print_extension_changes();
 ---------------------------------------------------------------------
                  | function citus_internal_add_shard_metadata(regclass,bigint,"char",text,text,boolean) void
                  | function citus_internal_shard_group_set_needsisolatednode(bigint,boolean) void
-                 | function citus_shard_set_isolated(bigint) void
-                 | function citus_shard_unset_isolated(bigint) void
-(4 rows)
+                 | function citus_shard_property_set(bigint,boolean) void
+(3 rows)
 
 DROP TABLE multi_extension.prev_objects, multi_extension.extension_diff;
 -- show running version

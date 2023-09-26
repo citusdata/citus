@@ -10,5 +10,4 @@ ALTER TABLE pg_dist_shard ADD COLUMN needsisolatednode boolean NOT NULL DEFAULT 
 
 #include "udfs/citus_internal_shard_group_set_needsisolatednode/12.2-1.sql"
 
-#include "udfs/citus_shard_set_isolated/12.2-1.sql"
-#include "udfs/citus_shard_unset_isolated/12.2-1.sql"
+#include "udfs/citus_shard_property_set/12.2-1.sql"

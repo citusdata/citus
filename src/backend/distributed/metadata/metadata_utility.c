@@ -139,8 +139,7 @@ PG_FUNCTION_INFO_V1(citus_table_size);
 PG_FUNCTION_INFO_V1(citus_total_relation_size);
 PG_FUNCTION_INFO_V1(citus_relation_size);
 PG_FUNCTION_INFO_V1(citus_shard_sizes);
-PG_FUNCTION_INFO_V1(citus_shard_set_isolated);
-PG_FUNCTION_INFO_V1(citus_shard_unset_isolated);
+PG_FUNCTION_INFO_V1(citus_shard_property_set);
 
 
 /*
@@ -361,11 +360,11 @@ citus_relation_size(PG_FUNCTION_ARGS)
 
 
 /*
- * citus_shard_set_isolated sets the needsisolatednode flag to true for all
+ * citus_shard_property_set allows setting shard properties for all
  * the shards within the shard group that given shard belongs to.
  */
 Datum
-citus_shard_set_isolated(PG_FUNCTION_ARGS)
+citus_shard_property_set(PG_FUNCTION_ARGS)
 {
 	CheckCitusVersion(ERROR);
 	EnsureCoordinator();
@@ -373,29 +372,13 @@ citus_shard_set_isolated(PG_FUNCTION_ARGS)
 	PG_ENSURE_ARGNOTNULL(0, "shard_id");
 	uint64 shardId = PG_GETARG_INT64(0);
 
-	ErrorIfShardIsolationNotPossible(shardId);
+	if (!PG_ARGISNULL(1))
+	{
+		ErrorIfShardIsolationNotPossible(shardId);
 
-	bool enabled = true;
-	ShardGroupSetNeedsIsolatedNodeGlobally(shardId, enabled);
-
-	PG_RETURN_VOID();
-}
-
-
-/*
- * citus_shard_unset_isolated sets the needsisolatednode flag to false for all
- * the shards within the shard group that given shard belongs to.
- */
-Datum
-citus_shard_unset_isolated(PG_FUNCTION_ARGS)
-{
-	PG_ENSURE_ARGNOTNULL(0, "shard_id");
-	uint64 shardId = PG_GETARG_INT64(0);
-
-	ErrorIfShardIsolationNotPossible(shardId);
-
-	bool enabled = false;
-	ShardGroupSetNeedsIsolatedNodeGlobally(shardId, enabled);
+		bool enabled = PG_GETARG_BOOL(1);
+		ShardGroupSetNeedsIsolatedNodeGlobally(shardId, enabled);
+	}
 
 	PG_RETURN_VOID();
 }

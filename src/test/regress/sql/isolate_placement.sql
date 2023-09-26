@@ -67,13 +67,13 @@ SELECT shardids[2] AS shardgroup_5_shardid
 FROM public.get_enumerated_shard_groups('isolate_placement.dist_1')
 WHERE shardgroupindex = 5 \gset
 
-SELECT citus_shard_set_isolated(:shardgroup_5_shardid);
+SELECT citus_shard_property_set(:shardgroup_5_shardid, anti_affinity=>true);
 
 SELECT shardids[3] AS shardgroup_10_shardid
 FROM public.get_enumerated_shard_groups('isolate_placement.dist_1')
 WHERE shardgroupindex = 10 \gset
 
-SELECT citus_shard_set_isolated(:shardgroup_10_shardid);
+SELECT citus_shard_property_set(:shardgroup_10_shardid, anti_affinity=>true);
 
 SELECT result FROM run_command_on_all_nodes($$
     SELECT * FROM public.get_colocated_shards_needisolatednode('isolate_placement.dist_1')
@@ -84,7 +84,7 @@ SELECT shardids[1] AS shardgroup_3_shardid
 FROM public.get_enumerated_shard_groups('isolate_placement.dist_1')
 WHERE shardgroupindex = 3 \gset
 
-SELECT citus_shard_unset_isolated(:shardgroup_3_shardid);
+SELECT citus_shard_property_set(:shardgroup_3_shardid, anti_affinity=>false);
 
 SELECT result FROM run_command_on_all_nodes($$
     SELECT * FROM public.get_colocated_shards_needisolatednode('isolate_placement.dist_1')
@@ -95,7 +95,7 @@ SELECT shardids[1] AS shardgroup_10_shardid
 FROM public.get_enumerated_shard_groups('isolate_placement.dist_1')
 WHERE shardgroupindex = 10 \gset
 
-SELECT citus_shard_unset_isolated(:shardgroup_10_shardid);
+SELECT citus_shard_property_set(:shardgroup_10_shardid, anti_affinity=>false);
 
 SELECT result FROM run_command_on_all_nodes($$
     SELECT * FROM public.get_colocated_shards_needisolatednode('isolate_placement.dist_1')
@@ -106,7 +106,7 @@ SELECT shardids[1] AS shardgroup_5_shardid
 FROM public.get_enumerated_shard_groups('isolate_placement.dist_1')
 WHERE shardgroupindex = 5 \gset
 
-SELECT citus_shard_set_isolated(:shardgroup_5_shardid);
+SELECT citus_shard_property_set(:shardgroup_5_shardid, anti_affinity=>true);
 
 SELECT result FROM run_command_on_all_nodes($$
     SELECT * FROM public.get_colocated_shards_needisolatednode('isolate_placement.dist_1')
@@ -134,7 +134,7 @@ SELECT shardids[1] AS shardgroup_5_shardid
 FROM public.get_enumerated_shard_groups('isolate_placement.dist_1')
 WHERE shardgroupindex = 5 \gset
 
-SELECT citus_shard_set_isolated(:shardgroup_5_shardid);
+SELECT citus_shard_property_set(:shardgroup_5_shardid, anti_affinity=>true);
 
 SELECT result FROM run_command_on_all_nodes($$
     SELECT * FROM public.get_colocated_shards_needisolatednode('isolate_placement.dist_1')
@@ -228,7 +228,7 @@ SELECT shardids[1] AS shardgroup_3_shardid
 FROM public.get_enumerated_shard_groups('isolate_placement.dist_1')
 WHERE shardgroupindex = 3 \gset
 
-SELECT citus_shard_set_isolated(:shardgroup_3_shardid);
+SELECT citus_shard_property_set(:shardgroup_3_shardid, anti_affinity=>true);
 
 SELECT result FROM run_command_on_all_nodes($$
     SELECT * FROM public.get_colocated_shards_needisolatednode('isolate_placement.dist_1')
@@ -258,7 +258,7 @@ SELECT shardids[1] AS shardgroup_9_shardid
 FROM public.get_enumerated_shard_groups('isolate_placement.dist_1')
 WHERE shardgroupindex = 9 \gset
 
-SELECT citus_shard_set_isolated(:shardgroup_9_shardid);
+SELECT citus_shard_property_set(:shardgroup_9_shardid, anti_affinity=>true);
 
 SELECT result FROM run_command_on_all_nodes($$
     SELECT * FROM public.get_colocated_shards_needisolatednode('isolate_placement.dist_1')
@@ -287,7 +287,7 @@ SELECT shardids[1] AS shardgroup_12_shardid
 FROM public.get_enumerated_shard_groups('isolate_placement.dist_1')
 WHERE shardgroupindex = 12 \gset
 
-SELECT citus_shard_set_isolated(:shardgroup_12_shardid);
+SELECT citus_shard_property_set(:shardgroup_12_shardid, anti_affinity=>true);
 
 SELECT result FROM run_command_on_all_nodes($$
     SELECT * FROM public.get_colocated_shards_needisolatednode('isolate_placement.dist_1')
@@ -320,7 +320,7 @@ SELECT shardids[1] AS shardgroup_17_shardid
 FROM public.get_enumerated_shard_groups('isolate_placement.dist_3')
 WHERE shardgroupindex = 17 \gset
 
-SELECT citus_shard_set_isolated(:shardgroup_17_shardid);
+SELECT citus_shard_property_set(:shardgroup_17_shardid, anti_affinity=>true);
 
 SELECT result FROM run_command_on_all_nodes($$
     SELECT * FROM public.get_colocated_shards_needisolatednode('isolate_placement.dist_3')
@@ -343,7 +343,7 @@ SELECT shardids[1] AS shardgroup_18_shardid
 FROM public.get_enumerated_shard_groups('isolate_placement.dist_3')
 WHERE shardgroupindex = 18 \gset
 
-SELECT citus_shard_set_isolated(:shardgroup_18_shardid);
+SELECT citus_shard_property_set(:shardgroup_18_shardid, anti_affinity=>true);
 
 SELECT result FROM run_command_on_all_nodes($$
     SELECT * FROM public.get_colocated_shards_needisolatednode('isolate_placement.dist_3')
@@ -370,7 +370,11 @@ SELECT shardids[1] AS shardgroup_1_shardid
 FROM public.get_enumerated_shard_groups('isolate_placement.single_shard_1')
 WHERE shardgroupindex = 1 \gset
 
-SELECT citus_shard_set_isolated(:shardgroup_1_shardid);
+SELECT citus_shard_property_set(:shardgroup_1_shardid, anti_affinity=>true);
+
+-- noop
+SELECT citus_shard_property_set(:shardgroup_1_shardid, NULL);
+SELECT citus_shard_property_set(:shardgroup_1_shardid);
 
 CREATE TABLE single_shard_2(a int);
 SELECT create_distributed_table('single_shard_2', null, colocate_with=>'single_shard_1');
@@ -381,10 +385,10 @@ $$)
 ORDER BY nodeid;
 
 -- test invalid input
-SELECT citus_shard_set_isolated(NULL);
-SELECT citus_shard_set_isolated(0);
-SELECT citus_shard_unset_isolated(NULL);
-SELECT citus_shard_unset_isolated(0);
+SELECT citus_shard_property_set(NULL, anti_affinity=>true);
+SELECT citus_shard_property_set(0, anti_affinity=>true);
+SELECT citus_shard_property_set(NULL, anti_affinity=>false);
+SELECT citus_shard_property_set(0, anti_affinity=>false);
 
 CREATE TABLE append_table (a int, b int);
 SELECT create_distributed_table('append_table', 'a', 'append');
@@ -402,15 +406,15 @@ CREATE TABLE local_table(a int);
 SELECT citus_add_local_table_to_metadata('local_table');
 
 -- all should fail
-SELECT citus_shard_set_isolated(shardid) FROM pg_dist_shard WHERE logicalrelid = 'append_table'::regclass LIMIT 1;
-SELECT citus_shard_set_isolated(shardid) FROM pg_dist_shard WHERE logicalrelid = 'range_table'::regclass LIMIT 1;
-SELECT citus_shard_set_isolated(shardid) FROM pg_dist_shard WHERE logicalrelid = 'ref_table'::regclass LIMIT 1;
-SELECT citus_shard_set_isolated(shardid) FROM pg_dist_shard WHERE logicalrelid = 'local_table'::regclass LIMIT 1;
+SELECT citus_shard_property_set(shardid, anti_affinity=>true) FROM pg_dist_shard WHERE logicalrelid = 'append_table'::regclass LIMIT 1;
+SELECT citus_shard_property_set(shardid, anti_affinity=>true) FROM pg_dist_shard WHERE logicalrelid = 'range_table'::regclass LIMIT 1;
+SELECT citus_shard_property_set(shardid, anti_affinity=>true) FROM pg_dist_shard WHERE logicalrelid = 'ref_table'::regclass LIMIT 1;
+SELECT citus_shard_property_set(shardid, anti_affinity=>true) FROM pg_dist_shard WHERE logicalrelid = 'local_table'::regclass LIMIT 1;
 
-SELECT citus_shard_unset_isolated(shardid) FROM pg_dist_shard WHERE logicalrelid = 'append_table'::regclass LIMIT 1;
-SELECT citus_shard_unset_isolated(shardid) FROM pg_dist_shard WHERE logicalrelid = 'range_table'::regclass LIMIT 1;
-SELECT citus_shard_unset_isolated(shardid) FROM pg_dist_shard WHERE logicalrelid = 'ref_table'::regclass LIMIT 1;
-SELECT citus_shard_unset_isolated(shardid) FROM pg_dist_shard WHERE logicalrelid = 'local_table'::regclass LIMIT 1;
+SELECT citus_shard_property_set(shardid, anti_affinity=>false) FROM pg_dist_shard WHERE logicalrelid = 'append_table'::regclass LIMIT 1;
+SELECT citus_shard_property_set(shardid, anti_affinity=>false) FROM pg_dist_shard WHERE logicalrelid = 'range_table'::regclass LIMIT 1;
+SELECT citus_shard_property_set(shardid, anti_affinity=>false) FROM pg_dist_shard WHERE logicalrelid = 'ref_table'::regclass LIMIT 1;
+SELECT citus_shard_property_set(shardid, anti_affinity=>false) FROM pg_dist_shard WHERE logicalrelid = 'local_table'::regclass LIMIT 1;
 
 DROP TABLE range_table;
 DROP TYPE composite_key_type;
@@ -455,7 +459,7 @@ SELECT shardids[1] AS shardgroup_1_shardid
 FROM public.get_enumerated_shard_groups('isolate_placement.dist_1')
 WHERE shardgroupindex = 1 \gset
 
-SELECT citus_shard_set_isolated(:shardgroup_1_shardid);
+SELECT citus_shard_property_set(:shardgroup_1_shardid, anti_affinity=>true);
 
 SET client_min_messages TO WARNING;
 SELECT rebalance_table_shards(shard_transfer_mode=>'block_writes');
@@ -578,7 +582,7 @@ SELECT create_distributed_table('single_shard_1', null, colocate_with=>'none');
 CREATE TABLE single_shard_2(a int);
 SELECT create_distributed_table('single_shard_2', null, colocate_with=>'none');
 
-SELECT citus_shard_set_isolated(shardid) FROM pg_dist_shard WHERE logicalrelid IN ('single_shard_1'::regclass, 'single_shard_2'::regclass);
+SELECT citus_shard_property_set(shardid, anti_affinity=>true) FROM pg_dist_shard WHERE logicalrelid IN ('single_shard_1'::regclass, 'single_shard_2'::regclass);
 
 SET client_min_messages TO WARNING;
 SELECT rebalance_table_shards(shard_transfer_mode=>'block_writes');
@@ -650,7 +654,7 @@ SELECT create_distributed_table('dist_1', 'a', shard_count=>1);
 SELECT create_distributed_table('dist_2', 'a', shard_count=>1, colocate_with=>'none');
 SELECT create_distributed_table('dist_3', 'a', shard_count=>1, colocate_with=>'none');
 
-SELECT citus_shard_set_isolated(shardid) FROM pg_dist_shard WHERE logicalrelid IN ('dist_1'::regclass, 'dist_2'::regclass);
+SELECT citus_shard_property_set(shardid, anti_affinity=>true) FROM pg_dist_shard WHERE logicalrelid IN ('dist_1'::regclass, 'dist_2'::regclass);
 
 SET client_min_messages TO WARNING;
 SELECT rebalance_table_shards(shard_transfer_mode=>'block_writes');
@@ -681,7 +685,7 @@ SELECT create_distributed_table('single_shard_2', null, colocate_with=>'none');
 CREATE TABLE dist_1(a int);
 SELECT create_distributed_table('dist_1', 'a', shard_count=>4);
 
-SELECT citus_shard_set_isolated(shardid) FROM pg_dist_shard WHERE logicalrelid IN ('single_shard_1'::regclass);
+SELECT citus_shard_property_set(shardid, anti_affinity=>true) FROM pg_dist_shard WHERE logicalrelid IN ('single_shard_1'::regclass);
 
 SELECT groupid AS single_shard_1_group_id FROM pg_dist_shard JOIN pg_dist_placement USING (shardid) WHERE logicalrelid = 'isolate_placement.single_shard_1'::regclass \gset
 
@@ -712,7 +716,7 @@ SELECT shardids[1] AS shardgroup_1_shardid
 FROM public.get_enumerated_shard_groups('isolate_placement.dist_2')
 WHERE shardgroupindex = 1 \gset
 
-SELECT citus_shard_set_isolated(:shardgroup_1_shardid);
+SELECT citus_shard_property_set(:shardgroup_1_shardid, anti_affinity=>true);
 
 SET client_min_messages TO WARNING;
 SELECT rebalance_table_shards(shard_transfer_mode=>'block_writes');
@@ -736,7 +740,7 @@ SELECT create_distributed_table('single_shard_3', null, colocate_with=>'none');
 CREATE TABLE single_shard_4(a int);
 SELECT create_distributed_table('single_shard_4', null, colocate_with=>'none');
 
-SELECT citus_shard_set_isolated(shardid) FROM pg_dist_shard WHERE logicalrelid IN ('single_shard_1'::regclass);
+SELECT citus_shard_property_set(shardid, anti_affinity=>true) FROM pg_dist_shard WHERE logicalrelid IN ('single_shard_1'::regclass);
 
 SET client_min_messages TO WARNING;
 SELECT rebalance_table_shards(shard_transfer_mode=>'block_writes');
@@ -744,8 +748,8 @@ SET client_min_messages TO NOTICE;
 
 SELECT public.verify_placements_in_shard_group_isolated('isolate_placement.single_shard_1', 1);
 
-SELECT citus_shard_set_isolated(shardid) FROM pg_dist_shard WHERE logicalrelid IN ('single_shard_2'::regclass);
-SELECT citus_shard_unset_isolated(shardid) FROM pg_dist_shard WHERE logicalrelid IN ('single_shard_1'::regclass);
+SELECT citus_shard_property_set(shardid, anti_affinity=>true) FROM pg_dist_shard WHERE logicalrelid IN ('single_shard_2'::regclass);
+SELECT citus_shard_property_set(shardid, anti_affinity=>false) FROM pg_dist_shard WHERE logicalrelid IN ('single_shard_1'::regclass);
 
 SET client_min_messages TO WARNING;
 SELECT rebalance_table_shards(shard_transfer_mode=>'block_writes');
@@ -772,8 +776,8 @@ SELECT shardid, nodeid INTO single_shard_3_shardid_nodeid
 FROM pg_dist_shard JOIN pg_dist_placement USING (shardid) JOIN pg_dist_node USING (groupid)
 WHERE logicalrelid = 'isolate_placement.single_shard_3'::regclass AND noderole = 'primary';
 
-SELECT citus_shard_set_isolated(shardid) FROM pg_dist_shard WHERE logicalrelid IN ('single_shard_1'::regclass);
-SELECT citus_shard_set_isolated(shardid) FROM pg_dist_shard WHERE logicalrelid IN ('single_shard_3'::regclass);
+SELECT citus_shard_property_set(shardid, anti_affinity=>true) FROM pg_dist_shard WHERE logicalrelid IN ('single_shard_1'::regclass);
+SELECT citus_shard_property_set(shardid, anti_affinity=>true) FROM pg_dist_shard WHERE logicalrelid IN ('single_shard_3'::regclass);
 
 -- tell rebalancer that single_shard_3 cannot be placed on the node where it is currently placed
 CREATE OR REPLACE FUNCTION test_shard_allowed_on_node(p_shardid bigint, p_nodeid int)
@@ -844,8 +848,8 @@ SELECT shardid, nodeid INTO single_shard_3_shardid_nodeid
 FROM pg_dist_shard JOIN pg_dist_placement USING (shardid) JOIN pg_dist_node USING (groupid)
 WHERE logicalrelid = 'isolate_placement.single_shard_3'::regclass AND noderole = 'primary';
 
-SELECT citus_shard_set_isolated(shardid) FROM pg_dist_shard WHERE logicalrelid IN ('single_shard_1'::regclass);
-SELECT citus_shard_set_isolated(shardid) FROM pg_dist_shard WHERE logicalrelid IN ('single_shard_3'::regclass);
+SELECT citus_shard_property_set(shardid, anti_affinity=>true) FROM pg_dist_shard WHERE logicalrelid IN ('single_shard_1'::regclass);
+SELECT citus_shard_property_set(shardid, anti_affinity=>true) FROM pg_dist_shard WHERE logicalrelid IN ('single_shard_3'::regclass);
 
 -- Same test above but this time we tell rebalancer that single_shard_3 cannot be placed
 -- on any node except the one where it is currently placed.

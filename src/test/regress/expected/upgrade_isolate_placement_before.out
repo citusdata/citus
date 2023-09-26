@@ -13,8 +13,8 @@ SELECT create_distributed_table('table_with_isolated_placements', 'a', colocate_
 SELECT shardids[1] AS shardgroup_5_shardid
 FROM public.get_enumerated_shard_groups('upgrade_isolate_placement_before.table_with_isolated_placements')
 WHERE shardgroupindex = 5 \gset
-SELECT citus_shard_set_isolated(:shardgroup_5_shardid);
- citus_shard_set_isolated
+SELECT citus_shard_property_set(:shardgroup_5_shardid, anti_affinity=>true);
+ citus_shard_property_set
 ---------------------------------------------------------------------
 
 (1 row)
