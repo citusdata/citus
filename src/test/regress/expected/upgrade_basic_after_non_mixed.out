@@ -91,3 +91,4 @@ SELECT sequence_name FROM information_schema.sequences
  sequence_name
 ---------------------------------------------------------------------
 (0 rows)
+

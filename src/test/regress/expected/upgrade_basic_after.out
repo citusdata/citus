@@ -314,3 +314,4 @@ FROM pg_dist_partition WHERE partkey IS NOT NULL ORDER BY 1 LIMIT 1;
 ---------------------------------------------------------------------
  a
 (1 row)
+
