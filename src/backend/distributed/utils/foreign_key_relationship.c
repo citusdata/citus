@@ -339,7 +339,7 @@ CreateForeignConstraintRelationshipGraph()
 			ALLOCSET_DEFAULT_INITSIZE,
 			ALLOCSET_DEFAULT_MAXSIZE);
 	}
-	else 
+	else
 	{
 		MemoryContextReset(ForeignConstraintRelationshipMemoryContext);
 	}
