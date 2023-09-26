@@ -572,14 +572,6 @@ CreateDistributedTableConcurrently(Oid relationId, char *distributionColumnName,
 		colocatedTableId = ColocatedTableId(colocationId);
 	}
 
-	List *workerNodeList = NewDistributedTablePlacementNodeList(NoLock);
-	if (workerNodeList == NIL)
-	{
-		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-						errmsg("no worker nodes are available for placing shards"),
-						errhint("Add more worker nodes.")));
-	}
-
 	List *workersForPlacementList;
 	List *shardSplitPointsList;
 	List *needsIsolatedNodeForPlacementList;
@@ -615,6 +607,14 @@ CreateDistributedTableConcurrently(Oid relationId, char *distributionColumnName,
 		/*
 		 * Place shards in a round-robin fashion across all data nodes.
 		 */
+		List *workerNodeList = NewDistributedTablePlacementNodeList(NoLock);
+		if (workerNodeList == NIL)
+		{
+			ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+							errmsg("no worker nodes are available for placing shards"),
+							errhint("Add more worker nodes.")));
+		}
+
 		workersForPlacementList = RoundRobinWorkerNodeList(workerNodeList, shardCount);
 
 		/*

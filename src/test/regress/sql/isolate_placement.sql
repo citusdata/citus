@@ -29,6 +29,15 @@ SET ROLE test_user_isolate_placement;
 -- test invalid shard id
 SELECT citus_internal_shard_group_set_needsisolatednode(0, true);
 
+-- test null needs_isolated_node
+SELECT citus_internal_add_shard_metadata(
+    relation_id=>0,
+    shard_id=>0,
+    storage_type=>'0',
+    shard_min_value=>'0',
+    shard_max_value=>'0',
+    needs_isolated_node=>null);
+
 RESET ROLE;
 REVOKE ALL ON SCHEMA isolate_placement FROM test_user_isolate_placement;
 DROP USER test_user_isolate_placement;
