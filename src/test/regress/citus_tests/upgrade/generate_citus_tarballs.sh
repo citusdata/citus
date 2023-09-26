@@ -3,36 +3,44 @@
 set -euxo pipefail
 
 pg_version=$1
-citus_version=$2
+citus_old_version=$2
 
 base="$(pwd)"
 
-# If tarball already exsists we're good
-if [ -f "${base}/install-pg${pg_version}-citus${citus_version}.tar" ]; then
-    exit 0
-fi
+install_citus_and_tar() {
+    # do everything in a subdirectory to avoid clutter in current directory
+    mkdir -p "${builddir}" && cd "${builddir}"
 
-basedir="${base}/${citus_version}"
+    "${citus_dir}/configure" --without-libcurl
 
-rm -rf "${basedir}"
-mkdir -p "${basedir}"
-cd "${basedir}"
-citus_dir=${basedir}/citus_$citus_version
-git clone --branch "$citus_version" https://github.com/citusdata/citus.git --depth 1 citus_"$citus_version"
-builddir="${basedir}/build"
+    installdir="${builddir}/install"
+    make "-j$(nproc)" && mkdir -p "${installdir}" && make DESTDIR="${installdir}" install
 
-# do everything in a subdirectory to avoid clutter in current directory
-mkdir -p "${builddir}" && cd "${builddir}"
+    cd "${installdir}" && find . -type f -print >"${builddir}/files.lst"
 
-"${citus_dir}/configure" --without-libcurl
+    tar cvf "${basedir}/install-pg${pg_version}-citus${citus_version}.tar" $(cat "${builddir}"/files.lst)
+    mv "${basedir}/install-pg${pg_version}-citus${citus_version}.tar" "${base}/install-pg${pg_version}-citus${citus_version}.tar"
 
-installdir="${builddir}/install"
-make "-j$(nproc)" && mkdir -p "${installdir}" && make DESTDIR="${installdir}" install
+    cd "${builddir}" && rm -rf install files.lst && make clean
+}
 
-cd "${installdir}" && find . -type f -print >"${builddir}/files.lst"
+build_ext() {
+    citus_version="$1"
+    # If tarball already exsists we're good
+    if [ -f "${base}/install-pg${pg_version}-citus${citus_version}.tar" ]; then
+        return
+    fi
 
-tar cvf "${basedir}/install-pg${pg_version}-citus${citus_version}.tar" $(cat "${builddir}"/files.lst)
-mv "${basedir}/install-pg${pg_version}-citus${citus_version}.tar" "${base}/install-pg${pg_version}-citus${citus_version}.tar"
+    basedir="${base}/${citus_version}"
 
-cd "${builddir}" && rm -rf install files.lst && make clean
+    rm -rf "${basedir}"
+    mkdir -p "${basedir}"
+    cd "${basedir}"
+    citus_dir=${basedir}/citus_$citus_version
+    git clone --branch "$citus_version" https://github.com/citusdata/citus.git --depth 1 citus_"$citus_version"
+    builddir="${basedir}/build"
 
+    install_citus_and_tar
+}
+
+build_ext "${citus_old_version}"
