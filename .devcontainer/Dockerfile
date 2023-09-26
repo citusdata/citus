@@ -18,7 +18,6 @@ RUN apt update && apt install -y \
     liblz4-dev \
     libpam0g-dev \
     libreadline-dev \
-    libreadline-dev \
     libselinux1-dev \
     libssl-dev \
     libxslt-dev \
