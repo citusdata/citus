@@ -817,19 +817,6 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 				ddlJobs = processJobs;
 			}
 		}
-
-		if (IsA(parsetree, RenameStmt) && ((RenameStmt *) parsetree)->renameType ==
-			OBJECT_ROLE && EnableAlterRolePropagation)
-		{
-			if (EnableUnsupportedFeatureMessages)
-			{
-				ereport(NOTICE, (errmsg(
-									 "not propagating ALTER ROLE ... RENAME TO commands "
-									 "to worker nodes"),
-								 errhint("Connect to worker nodes directly to manually "
-										 "rename the role")));
-			}
-		}
 	}
 
 	if (IsA(parsetree, CreateStmt))
