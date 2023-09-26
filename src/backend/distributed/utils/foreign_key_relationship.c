@@ -96,6 +96,8 @@ static List * GetConnectedListHelper(ForeignConstraintRelationshipNode *node,
 									 bool isReferencing);
 static List * GetForeignConstraintRelationshipHelper(Oid relationId, bool isReferencing);
 
+MemoryContext ForeignConstraintRelationshipMemoryContext = NULL;
+
 
 /*
  * GetForeignKeyConnectedRelationIdList returns a list of relation id's for
@@ -323,15 +325,27 @@ CreateForeignConstraintRelationshipGraph()
 
 	ClearForeignConstraintRelationshipGraphContext();
 
-	MemoryContext fConstraintRelationshipMemoryContext = AllocSetContextCreateInternal(
-		CacheMemoryContext,
-		"Forign Constraint Relationship Graph Context",
-		ALLOCSET_DEFAULT_MINSIZE,
-		ALLOCSET_DEFAULT_INITSIZE,
-		ALLOCSET_DEFAULT_MAXSIZE);
+	/*
+	 * Lazily create our memory context once and reset on every reuse.
+	 * Since we have cleared and invalidated the fConstraintRelationshipGraph, right
+	 * before we can simply reset the context if it was already existing.
+	 */
+	if (ForeignConstraintRelationshipMemoryContext == NULL)
+	{
+		ForeignConstraintRelationshipMemoryContext = AllocSetContextCreate(
+			CacheMemoryContext,
+			"Foreign Constraint Relationship Graph Context",
+			ALLOCSET_DEFAULT_MINSIZE,
+			ALLOCSET_DEFAULT_INITSIZE,
+			ALLOCSET_DEFAULT_MAXSIZE);
+	}
+	else 
+	{
+		MemoryContextReset(ForeignConstraintRelationshipMemoryContext);
+	}
 
 	MemoryContext oldContext = MemoryContextSwitchTo(
-		fConstraintRelationshipMemoryContext);
+		ForeignConstraintRelationshipMemoryContext);
 
 	fConstraintRelationshipGraph = (ForeignConstraintRelationshipGraph *) palloc(
 		sizeof(ForeignConstraintRelationshipGraph));
@@ -648,5 +662,6 @@ ClearForeignConstraintRelationshipGraphContext()
 	}
 
 	hash_destroy(fConstraintRelationshipGraph->nodeMap);
+	pfree(fConstraintRelationshipGraph);
 	fConstraintRelationshipGraph = NULL;
 }
