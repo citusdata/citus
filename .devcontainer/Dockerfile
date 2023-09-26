@@ -160,7 +160,9 @@ ENV PATH="/home/citus/.bin:${PATH}"
 RUN git clone --branch develop https://github.com/citusdata/tools.git citus-tools \
  && ( cd citus-tools/citus_dev && pipenv install ) \
  && ln -s /home/citus/citus-tools/citus_dev/citus_dev-pipenv .bin/citus_dev \
- && sudo make -C citus-tools/uncrustify install bindir=/usr/local/bin pkgsysconfdir=/usr/local/etc/
+ && sudo make -C citus-tools/uncrustify install bindir=/usr/local/bin pkgsysconfdir=/usr/local/etc/ \
+ && mkdir -p ~/.local/share/bash-completion/completions/ \
+ && ln -s ~/citus-tools/citus_dev/bash_completion ~/.local/share/bash-completion/completions/citus_dev
 
 # TODO some LC_ALL errors, possibly solved by locale-gen
 RUN git clone https://github.com/so-fancy/diff-so-fancy.git \
