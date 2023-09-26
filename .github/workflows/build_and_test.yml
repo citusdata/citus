@@ -80,7 +80,7 @@ jobs:
           - ${{ vars.pg14_version }}
           - ${{ vars.pg15_version }}
           - ${{ vars.pg16_version }}
-    runs-on: ubuntu-20.04
+    runs-on: ["self-hosted", "1ES.Pool=1es-gha-citusdata-pool"]
     container:
       image: "${{ matrix.image_name }}:${{ matrix.pg_version  }}${{ matrix.image_suffix }}"
       options: --user root
@@ -207,7 +207,7 @@ jobs:
         codecov_token: ${{ secrets.CODECOV_TOKEN }}
   test-arbitrary-configs:
     name: PG${{ matrix.pg_version }} - regress - check-arbitrary-configs
-    runs-on: ubuntu-20.04 #-16core - we need 16 cores VMs to run this job successfully
+    runs-on: ["self-hosted", "1ES.Pool=1es-gha-citusdata-pool"]
     container:
       image: "${{ matrix.image_name }}:${{ matrix.pg_version }}${{ vars.image_suffix }}"
       options: --user root
