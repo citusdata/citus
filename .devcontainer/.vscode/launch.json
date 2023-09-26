@@ -8,6 +8,13 @@
             "processId": "${command:pickProcess}",
             "program": "/home/citus/.pgenv/pgsql/bin/postgres",
             "additionalSOLibSearchPath": "/home/citus/.pgenv/pgsql/lib",
+            "setupCommands": [
+                {
+                    "text": "handle SIGUSR1 noprint nostop pass",
+                    "description": "let gdb not stop when SIGUSR1 is sent to process",
+                    "ignoreFailures": true
+                }
+            ],
         },
     ]
 }
