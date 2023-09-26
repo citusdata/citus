@@ -1,3 +1,9 @@
+SELECT nextval('pg_dist_shardid_seq') > MAX(shardid) FROM pg_dist_shard;
+SELECT nextval('pg_dist_placement_placementid_seq') > MAX(placementid) FROM pg_dist_placement;
+SELECT nextval('pg_dist_groupid_seq') > MAX(groupid) FROM pg_dist_node;
+SELECT nextval('pg_dist_node_nodeid_seq') > MAX(nodeid) FROM pg_dist_node;
+SELECT nextval('pg_dist_colocationid_seq') > MAX(colocationid) FROM pg_dist_colocation;
+
 -- while testing sequences on pg_dist_cleanup, they return null in pg upgrade schedule
 -- but return a valid value in citus upgrade schedule
 -- that's why we accept both NULL and MAX()+1 here

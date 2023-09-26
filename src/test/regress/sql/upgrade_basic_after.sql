@@ -3,12 +3,6 @@ BEGIN;
 -- We have the tablename filter to avoid adding an alternative output for when the coordinator is in metadata vs when not
 SELECT * FROM pg_indexes WHERE schemaname = 'upgrade_basic' and tablename NOT LIKE 'r_%' ORDER BY tablename;
 
-SELECT nextval('pg_dist_shardid_seq') > MAX(shardid) FROM pg_dist_shard;
-SELECT nextval('pg_dist_placement_placementid_seq') > MAX(placementid) FROM pg_dist_placement;
-SELECT nextval('pg_dist_groupid_seq') > MAX(groupid) FROM pg_dist_node;
-SELECT nextval('pg_dist_node_nodeid_seq') > MAX(nodeid) FROM pg_dist_node;
-SELECT nextval('pg_dist_colocationid_seq') > MAX(colocationid) FROM pg_dist_colocation;
-
 SELECT logicalrelid FROM pg_dist_partition
   JOIN pg_depend ON logicalrelid=objid
   JOIN pg_catalog.pg_class ON logicalrelid=oid
