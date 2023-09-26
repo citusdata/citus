@@ -1,3 +1,58 @@
+ <!--- we use Github's href convention in Table of Content --->
+# Table of Contents
+- [Citus Concepts](#citus-concepts)
+  - [Principles](#principles)
+- [Use of hooks](#use-of-hooks)
+- [Query planner](#query-planner)
+  - [High-level design/flow:](#high-level-designflow)
+  - [Distributed Query Planning with Examples in Citus (as of Citus 12.1)](#distributed-query-planning-with-examples-in-citus-as-of-citus-121)
+  - [Logical Planner & Optimizer](#logical-planner--optimizer)
+  - [Combine query planner](#combine-query-planner)
+  - [Restriction Equivalence](#restriction-equivalence)
+  - [Recurring Tuples](#recurring-tuples)
+- [Executor](#executor)
+  - [Custom scan](#custom-scan)
+  - [Function evaluation](#function-evaluation)
+  - [Prepared statements](#prepared-statements)
+  - [Adaptive executor](#adaptive-executor)
+  - [Local execution](#local-execution)
+  - [Subplans](#subplans)
+  - [Re-partitioning](#re-partitioning)
+  - [COPY .. FROM command](#copy--from-command)
+  - [COPY .. TO command](#copy--to-command)
+  - [INSERT..SELECT](#insertselect)
+  - [Merge command](#merge-command)
+- [DDL](#ddl)
+  - [Object & dependency propagation](#object--dependency-propagation)
+  - [Foreign keys](#foreign-keys)
+- [Connection management](#connection-management)
+  - [Connection management](#connection-management-1)
+  - [Placement connection tracking](#placement-connection-tracking)
+  - [citus.max_cached_connections_per_worker](#citusmax_cached_connections_per_worker)
+  - [citus.max_shared_pool_size](#citusmax_shared_pool_size)
+- [Transactions (2PC)](#transactions-2pc)
+  - [Single-node transactions](#single-node-transactions)
+  - [Multi-node transactions](#multi-node-transactions)
+  - [No distributed snapshot isolation](#no-distributed-snapshot-isolation)
+  - [Distributed Deadlocks](#distributed-deadlocks)
+- [Locking](#locking)
+  - [Lock Levels](#lock-levels)
+  - [Lock Monitoring](#lock-monitoring)
+  - [Lock Types](#lock-types)
+- [Rebalancing](#rebalancing)
+  - [Rebalancing algorithm](#rebalancing-algorithm)
+  - [Shard moves](#shard-moves)
+  - [Shard splits](#shard-splits)
+  - [Background tasks](#background-tasks)
+  - [Resource cleanup](#resource-cleanup)
+- [Logical decoding / CDC](#logical-decoding--cdc)
+  - [CDC ordering](#cdc-ordering)
+- [Global PID](#global-pid)
+- [Function call delegation](#function-call-delegation)
+- [Query from any node](#query-from-any-node)
+  - [Why didn’t we have dedicated Query Nodes and Data Nodes?](#why-didnt-we-have-dedicated-query-nodes-and-data-nodes)
+  - [Shard visibility](#shard-visibility)
+
 # Citus Technical Documentation 
 
 The purpose of this document is to provide comprehensive technical documentation for Citus, in particular the distributed database implementation. 
@@ -807,11 +862,11 @@ FROM country_codes;
  
 In both examples, since the main query's `FROM` clause is recurring and involves subqueries on distributed tables in `WHERE` or `SELECT`, Citus uses `RecursivelyPlanAllSubqueries` to manage these subqueries. 
  
-#### Logical Planner & Optimizer 
+### Logical Planner & Optimizer
  
 At the high level, all multi-task queries go through the logical planner. However, when it comes to query pushdown or the recursive planner, the logical planner does very little. Most of its complexity deals with multi-shard queries that don't fall into these categories. Below, we are going to discuss those details. 
  
-##### Simple Example 
+#### Simple Example
  
 The simplest example of a query processed by the logical planner would be: 
  
@@ -819,7 +874,7 @@ The simplest example of a query processed by the logical planner would be:
 SELECT * FROM users_table; 
 ``` 
  
-##### Academic Background 
+#### Academic Background
  
 The logical planner implements the concepts from the paper: "Correctness of query execution strategies in distributed databases." The paper is available [here](https://dl.acm.org/doi/pdf/10.1145/319996.320009). 
  
@@ -828,7 +883,7 @@ If you find the paper hard to read, Marco provides a good introduction to the sa
 - [YouTube Video](https://www.youtube.com/watch?v=xJghcPs0ibQ) 
 - [Speaker Deck](https://speakerdeck.com/marcocitus/scaling-out-postgre-sql) 
  
-##### Core Functions 
+#### Core Functions
  
 We assume you have either watched the video or read the paper. The core C functions involved are `MultiLogicalPlanCreate()`, `MultiNodeTree()`, and `MultiLogicalPlanOptimize()`. 
  
@@ -888,8 +943,7 @@ NOTICE:  issuing SELECT geo AS st_union FROM public.test_102041 test WHERE true
 NOTICE:  issuing SELECT geo AS st_union FROM public.test_102042 test WHERE true
 ```
 
- 
-#### Multi Join Order 
+### Multi Join Order
  
 **Context and Use Case**:   
 This query planning mechanism is primarily geared towards data warehouse type of query planning. It's worth noting that the Citus team has not actively pursued optimizations in this direction, resulting in some non-optimized code paths. 
@@ -910,7 +964,7 @@ Two GUCs control the behavior of repartitioning in Citus: `citus.enable_single_h
   This setting defines the level of parallelism during repartitioning. The reason for the "off" default is tied to this GUC. Opting for a fixed bucket count, rather than dynamically adjusting based on shard count, provides more stability and safety. If you ever consider changing these defaults, be cautious of the potential performance implications. 
  
  
-#### Combine Query 
+### Combine Query
  
 - **Overview**:   
   The multi-task SELECT queries pull results to the coordinator, and the tuples returned always go through the "combine query". 
