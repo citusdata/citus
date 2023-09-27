@@ -28,6 +28,7 @@
 #include "distributed/version_compat.h"
 #include "nodes/pg_list.h"
 #include "storage/lockdefs.h"
+#include "utils/catcache.h"
 #include "utils/fmgroids.h"
 #include "utils/hsearch.h"
 #include "common/hashfn.h"
@@ -332,6 +333,12 @@ CreateForeignConstraintRelationshipGraph()
 	 */
 	if (ForeignConstraintRelationshipMemoryContext == NULL)
 	{
+		/* make sure we've initialized CacheMemoryContext */
+		if (CacheMemoryContext == NULL)
+		{
+			CreateCacheMemoryContext();
+		}
+
 		ForeignConstraintRelationshipMemoryContext = AllocSetContextCreate(
 			CacheMemoryContext,
 			"Foreign Constraint Relationship Graph Context",
