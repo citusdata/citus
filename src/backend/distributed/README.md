@@ -201,12 +201,10 @@ Citus has a layered planner architecture that accommodates different workloads. 
 ##  Distributed Query Planning with Examples in Citus (as of Citus 12.1) 
    
 This part of the documentation aims to provide a comprehensive understanding of how Citus handles distributed query planning with examples. We will use a set of realistic tables to demonstrate various queries. Through these examples, we hope to offer a step-by-step guide on how Citus chooses to plan queries. 
- 
-**Non-Goal:** 
-This section does not aim to provide the high level design of the distributed planner, but instead the lowest levels of details possible. For high-level flow, go to https://postgresconf.org/system/events/document/000/000/233/Distributing_Queries_the_Citus_Way.pdf 
-   
- 
- 
+
+Citus hooks into to the PostgreSQL planner using the top-level planner_hook function pointer, which sees the query tree after parsing and analysis. If the query tree contains a Citus table, we go through several planner stages: fast path planner, router planner, recursive planning, logical planner & optimizer. Each stage can handle more complex queries than the previous, but also comes with more overhead. That way, we can handle a mixture if high throughput transactional workloads (without adding significant planning overhead), as well as more complex analytical queries (with more sophisticated distributed query execution). For specific types of queries (e.g. insert..select), we have separate planner code paths. 
+
+For a more comprhensive high-level overview of the planner, go to https://postgresconf.org/system/events/document/000/000/233/Distributing_Queries_the_Citus_Way.pdf
  
 ### Table definitions used in this section 
  
@@ -2360,6 +2358,8 @@ A high-level overview of the rebalancer is given in [this rebalancer blog post](
 Shard moves move a shard group placement to a different node (group). Moves are orchestrated by the `citus_move_shard_placement` UDF, which is also the function that the rebalancer runs to move a shard.
 
 We implement blocking and non-blocking shard splits. Non-blocking shard moves use logical replication, which has an important limitation. If the (distributed) table does not have a replica identity (usually the primary key), then update/delete commands will error out once we create a publication. That means using a non-blocking move without a replica identity does incur some downtime. Since a blocking move is generally faster (in part because it forces out regular work), it may be less invasive. We therefore force the user to choose when trying to move a shard group that includes a table without a replica identity by supplying `shard_transfer_mode := 'force_logical'` or `shard_transfer_mode := 'block_writes'`.
+
+The blocking-move is mostly a simplified variant of the non-blocking move (with locks taken upfront). A non-blocking move involves the following steps:
 
 - **Create the new shard group placement on the target node**. We also create constraints that do not involve an index and set up ownership and access control.
 - **Create publication(s) on the source node**. We create publications containing the shards in the source shard group placement. We create one publications per table owner, mainly because we need one subscription per table owner to prevent privilege escalation issues on older versions of PostgreSQL (15 and below).
