@@ -1,4 +1,8 @@
  <!--- we use Github's href convention in Table of Content --->
+# Citus Technical Documentation 
+
+The purpose of this document is to provide comprehensive technical documentation for Citus, in particular the distributed database implementation. 
+
 # Table of Contents
 - [Citus Concepts](#citus-concepts)
   - [Principles](#principles)
@@ -52,10 +56,6 @@
 - [Query from any node](#query-from-any-node)
   - [Why didn’t we have dedicated Query Nodes and Data Nodes?](#why-didnt-we-have-dedicated-query-nodes-and-data-nodes)
   - [Shard visibility](#shard-visibility)
-
-# Citus Technical Documentation 
-
-The purpose of this document is to provide comprehensive technical documentation for Citus, in particular the distributed database implementation. 
 
 # Citus Concepts 
 
@@ -1378,72 +1378,39 @@ ERROR:  complex joins are only supported when all distributed tables are joined 
 
   
 
-#### Examples of Compatibility and Incompatibility 
-
- 
+#### Examples of Compatibility and Incompatibility  
 
 ##### Recursive and Pushdown Planning 
 
-  
-
 ```sql 
-
 -- Example 1: Recursive and Pushdown Planning Interleaved 
-
 -- subquery is recursively planned multi-shard command 
-
 WITH recent_orders AS ( 
-
   SELECT * FROM orders_table ORDER BY order_date LIMIT 10 
-
 ) 
-
 SELECT * FROM users_table WHERE user_id IN (SELECT user_id FROM recent_orders); 
-
-``` 
-
-  
+```
 
 ##### Router Queries in Recursive Planning 
 
-  
-
 ```sql 
-
 -- Example 2: Subquery as Fast-Path Router Query is recursively planned 
-
 -- the rest is pushdown 
-
 WITH user_info AS ( 
-
   SELECT * FROM users_table WHERE user_id = 5 ORDER BY date_of_birth LIMIT 1 
-
 ) 
-
 SELECT * FROM orders_table WHERE user_id IN (SELECT user_id FROM user_info); 
-
-``` 
-
-  
+```
 
 ##### UPDATE Pushdown and Recursive Planning 
 
-  
-
 ```sql 
-
 -- Example 3: UPDATE command with Pushdown, Router and Recursive Planning 
-
 -- recursively planned router query and the rest is pushdown 
-
 WITH high_value_users AS ( 
-
   SELECT user_id FROM orders_table WHERE user_id = 15 AND status = 'done' ORDER BY order_date LIMIT 50 
-
-) 
-
+)
 UPDATE users_table SET username = 'High Value' WHERE user_id IN (SELECT user_id FROM high_value_users); 
-
 ``` 
 
   
@@ -1451,34 +1418,18 @@ UPDATE users_table SET username = 'High Value' WHERE user_id IN (SELECT user_id 
 #### Incompatibility with Repartition Joins 
 
 ```sql 
-
 -- Example 4: Incompatible Query involving Recursive Planning and Repartition Joins 
-
 -- This query will fail because it tries to use recursive planning for recent_orders 
-
 -- and trying to repartition joins between o2 and recent_orders 
-
 WITH recent_orders AS ( 
-
   SELECT * FROM orders_table WHERE order_date > '2023-01-01' LIMIT 10 
-
 ) 
-
 SELECT u.*  
-
 FROM users_table u  
-
 JOIN recent_orders o ON u.user_id = o.product_id; 
-
 JOIN orders_table o2 ON o2.product_id = o.product_id; 
-
 ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns 
-
 ``` 
-
- 
-
- 
 
 ## Combine query planner 
 
@@ -1495,10 +1446,6 @@ The reason we use a special function call is simply that it lets us put custom i
 
 In the combine query planner, we run the combine query through standard_planner and use the set_rel_pathlist_hook to inject a CustomPath plan for the function call. The CustomPath translates into the Citus Custom Scan that runs a Job. 
 
- 
-
- 
-
 ## Restriction Equivalence 
 
 In the PostgreSQL source code, an `EquivalenceClass` is a data structure used in query optimization. It is a way to represent a set of expressions in a query that are all equal. The PostgreSQL query planner uses this information to choose the most efficient execution plan for a query. 
@@ -1506,21 +1453,15 @@ In the PostgreSQL source code, an `EquivalenceClass` is a data structure used in
 For example, let's say you have a query like this: 
 
 ```sql 
-
 SELECT * FROM table1, table2 WHERE table1.a = table2.b AND table1.a = 5; 
-
 ``` 
 
 Here, `table1.a`, `table2.b`, and `5` can all be considered to belong to the same equivalence class because they are equal. Knowing this, the query optimizer might choose to use an index on `table1.a` or `table2.b` to speed up the query, among other optimizations. 
 
- 
-
 One level beyond that, Postgres can also apply transitivity rules for joins: 
 
 ```sql 
-
 SELECT * FROM table1, table2,table3 WHERE table1.a = table2.a AND table1.a = table3.a; 
-
 ``` 
 
 Here, `table1.a`, `table2.a`, and `table3.a` can all be considered to belong to the same equivalence class because they are (transitively) equal.  
@@ -1532,13 +1473,8 @@ Citus finds this information important. But Citus and Postgres have different st
 In Postgres, each subquery has its own Equivalence Classes. But Citus needs Equivalence Classes for the whole big query. For example: 
 
 ```sql 
-
 SELECT count(*) FROM (SELECT a FROM t1 JOIN t2 USING(a)) as foo, 
-
-(SELECT a FROM t3 JOIN t4 USING (a)) as bar 
-
-USING (a); 
-
+(SELECT a FROM t3 JOIN t4 USING (a)) as bar USING (a); 
 ``` 
 
 For Postgres, it's enough to make Equivalence Classes for the subqueries `foo` and `bar`. Then make another one for the top-level query where `foo` and `bar` join. Postgres can plan joins this way. 
@@ -1555,45 +1491,28 @@ Citus also introduces a new idea: RTEIdentity. Each table in the query gets a un
 
 The Recurring Tuples concept in Citus helps manage expressions that give the same set of results across multiple shards. This is mainly useful for JOIN operations. The idea is to understand and handle how some tables or functions behave the same way across different shards of a distributed table. This concept helps to provide accurate error messages if such recurring tuples are used in a way that might give wrong results. 
 
- 
-
 The `RecurringTuplesType` enum in the code helps categorize these recurring tuples into different types. The types include: 
 
 - Reference Table 
-
 - Function 
-
 - Empty Join Tree 
-
 - Result Function 
-
 - Values 
 
-  
-
 The main point is that recurring tuples "recur" for each shard in a multi-shard query.  
-
-  
 
 For example, consider a JOIN between a distributed table and a reference table. The query on each shard would look something like this: 
 
 ```sql 
-
 SELECT ... FROM dist_table_shard_1 JOIN ref_table_shard_1; 
-
 SELECT ... FROM dist_table_shard_2 JOIN ref_table_shard_1; 
-
 ... 
-
 SELECT ... FROM dist_table_shard_n JOIN ref_table_shard_1; 
-
 ``` 
 
 Here, `ref_table_shard_1` is a recurring tuple because it appears in each shard query of the distributed table (`dist_table_shard_X`). It "recurs" for each shard, making it a recurring tuple. 
 
 In summary, the Recurring Tuples concept in Citus helps in managing and identifying expressions that behave the same way across different shards, mainly to ensure accurate query results and error handling. 
-
- 
 
 # Executor 
 
