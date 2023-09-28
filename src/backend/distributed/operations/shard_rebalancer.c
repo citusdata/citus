@@ -816,7 +816,7 @@ AcquirePlacementColocationLock(Oid relationId, int lockMode,
 							   generate_qualified_relation_name(relationId)),
 						errdetail("It means that either a concurrent shard move, "
 								  "colocated distributed table creation or "
-                                  "shard property change is happening."),
+								  "shard property change is happening."),
 						errhint("Make sure that the concurrent operation has "
 								"finished and re-run the command")));
 	}
