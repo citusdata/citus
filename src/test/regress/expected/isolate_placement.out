@@ -14,9 +14,19 @@ SELECT citus_internal_shard_group_set_needsisolatednode(0, NULL);
 ERROR:  enabled cannot be NULL
 SELECT citus_internal_shard_group_set_needsisolatednode(NULL, false);
 ERROR:  shard_id cannot be NULL
+SET citus.shard_replication_factor TO 1;
+SET citus.next_shard_id TO 2000000;
+CREATE TABLE single_shard_1(a int);
+SELECT create_distributed_table('single_shard_1', null, colocate_with=>'none');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
 -- test with user that doesn't have permission to execute the function
-SELECT citus_internal_shard_group_set_needsisolatednode(0, true);
+SELECT citus_internal_shard_group_set_needsisolatednode(shardid, true) FROM pg_dist_shard WHERE logicalrelid = 'isolate_placement.single_shard_1'::regclass;
 ERROR:  This is an internal Citus function can only be used in a distributed transaction
+DROP TABLE single_shard_1;
 CREATE ROLE test_user_isolate_placement WITH LOGIN;
 GRANT ALL ON SCHEMA isolate_placement TO test_user_isolate_placement;
 ALTER SYSTEM SET citus.enable_manual_metadata_changes_for_user TO 'test_user_isolate_placement';
@@ -62,7 +72,110 @@ SELECT pg_sleep(0.1);
 (1 row)
 
 SET search_path TO isolate_placement;
-SET citus.next_shard_id TO 2000000;
+SET citus.shard_replication_factor TO 1;
+SET citus.next_shard_id TO 2001000;
+CREATE USER mysuperuser superuser;
+SET ROLE mysuperuser;
+CREATE TABLE single_shard_1(a int);
+SELECT create_distributed_table('single_shard_1', null, colocate_with=>'none');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE USER regularuser;
+GRANT USAGE ON SCHEMA isolate_placement TO regularuser;
+ALTER SYSTEM SET citus.enable_manual_metadata_changes_for_user TO 'regularuser';
+SELECT pg_reload_conf();
+ pg_reload_conf
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT pg_sleep(0.1);
+ pg_sleep
+---------------------------------------------------------------------
+
+(1 row)
+
+SET ROLE regularuser;
+-- throws an error as the user is not the owner of the table
+SELECT citus_shard_property_set(shardid) FROM pg_dist_shard WHERE logicalrelid = 'isolate_placement.single_shard_1'::regclass;
+ERROR:  must be owner of table single_shard_1
+SELECT citus_shard_property_set(shardid, anti_affinity=>true) FROM pg_dist_shard WHERE logicalrelid = 'isolate_placement.single_shard_1'::regclass;
+ERROR:  must be owner of table single_shard_1
+SELECT citus_internal_shard_group_set_needsisolatednode(shardid, true) FROM pg_dist_shard WHERE logicalrelid = 'isolate_placement.single_shard_1'::regclass;
+ERROR:  must be owner of table single_shard_1
+-- assign all tables to regularuser
+RESET ROLE;
+SELECT result FROM run_command_on_all_nodes($$ REASSIGN OWNED BY mysuperuser TO regularuser; $$);
+     result
+---------------------------------------------------------------------
+ REASSIGN OWNED
+ REASSIGN OWNED
+ REASSIGN OWNED
+(3 rows)
+
+SET ROLE regularuser;
+SELECT citus_shard_property_set(shardid, anti_affinity=>true) FROM pg_dist_shard WHERE logicalrelid = 'isolate_placement.single_shard_1'::regclass;
+ citus_shard_property_set
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT result FROM run_command_on_all_nodes($$
+    SELECT * FROM public.get_colocated_shards_needisolatednode('isolate_placement.single_shard_1')
+$$)
+ORDER BY result;
+                        result
+---------------------------------------------------------------------
+ [{"1": [{"isolate_placement.single_shard_1": true}]}]
+ [{"1": [{"isolate_placement.single_shard_1": true}]}]
+ [{"1": [{"isolate_placement.single_shard_1": true}]}]
+(3 rows)
+
+SELECT citus_internal_shard_group_set_needsisolatednode(shardid, false) FROM pg_dist_shard WHERE logicalrelid = 'isolate_placement.single_shard_1'::regclass;
+ citus_internal_shard_group_set_needsisolatednode
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT result FROM run_command_on_all_nodes($$
+    SELECT * FROM public.get_colocated_shards_needisolatednode('isolate_placement.single_shard_1')
+$$)
+ORDER BY result;
+                        result
+---------------------------------------------------------------------
+ [{"1": [{"isolate_placement.single_shard_1": true}]}]
+ [{"1": [{"isolate_placement.single_shard_1": true}]}]
+ {}
+(3 rows)
+
+SELECT citus_internal_shard_group_set_needsisolatednode(shardid, true) FROM pg_dist_shard WHERE logicalrelid = 'isolate_placement.single_shard_1'::regclass;
+ citus_internal_shard_group_set_needsisolatednode
+---------------------------------------------------------------------
+
+(1 row)
+
+DROP TABLE single_shard_1;
+RESET ROLE;
+REVOKE USAGE ON SCHEMA isolate_placement FROM regularuser;
+ALTER SYSTEM RESET citus.enable_manual_metadata_changes_for_user;
+SELECT pg_reload_conf();
+ pg_reload_conf
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT pg_sleep(0.1);
+ pg_sleep
+---------------------------------------------------------------------
+
+(1 row)
+
+DROP ROLE regularuser, mysuperuser;
+SET search_path TO isolate_placement;
+SET citus.next_shard_id TO 2002000;
 SET citus.shard_count TO 32;
 SET citus.shard_replication_factor TO 1;
 SET client_min_messages TO WARNING;
@@ -100,7 +213,7 @@ SET citus.shard_replication_factor TO 1;
 SELECT result FROM run_command_on_all_nodes($$
     SELECT * FROM public.get_colocated_shards_needisolatednode('isolate_placement.dist_1')
 $$)
-ORDER BY nodeid;
+ORDER BY result;
  result
 ---------------------------------------------------------------------
  {}
@@ -129,7 +242,7 @@ SELECT citus_shard_property_set(:shardgroup_10_shardid, anti_affinity=>true);
 SELECT result FROM run_command_on_all_nodes($$
     SELECT * FROM public.get_colocated_shards_needisolatednode('isolate_placement.dist_1')
 $$)
-ORDER BY nodeid;
+ORDER BY result;
                                                                                                                    result
 ---------------------------------------------------------------------
  [{"5": [{"isolate_placement.dist_1": true}, {"isolate_placement.dist_2": true}, {"isolate_placement.dist_3": true}]}, {"10": [{"isolate_placement.dist_1": true}, {"isolate_placement.dist_2": true}, {"isolate_placement.dist_3": true}]}]
@@ -149,7 +262,7 @@ SELECT citus_shard_property_set(:shardgroup_3_shardid, anti_affinity=>false);
 SELECT result FROM run_command_on_all_nodes($$
     SELECT * FROM public.get_colocated_shards_needisolatednode('isolate_placement.dist_1')
 $$)
-ORDER BY nodeid;
+ORDER BY result;
                                                                                                                    result
 ---------------------------------------------------------------------
  [{"5": [{"isolate_placement.dist_1": true}, {"isolate_placement.dist_2": true}, {"isolate_placement.dist_3": true}]}, {"10": [{"isolate_placement.dist_1": true}, {"isolate_placement.dist_2": true}, {"isolate_placement.dist_3": true}]}]
@@ -169,7 +282,7 @@ SELECT citus_shard_property_set(:shardgroup_10_shardid, anti_affinity=>false);
 SELECT result FROM run_command_on_all_nodes($$
     SELECT * FROM public.get_colocated_shards_needisolatednode('isolate_placement.dist_1')
 $$)
-ORDER BY nodeid;
+ORDER BY result;
                                                         result
 ---------------------------------------------------------------------
  [{"5": [{"isolate_placement.dist_1": true}, {"isolate_placement.dist_2": true}, {"isolate_placement.dist_3": true}]}]
@@ -189,7 +302,7 @@ SELECT citus_shard_property_set(:shardgroup_5_shardid, anti_affinity=>true);
 SELECT result FROM run_command_on_all_nodes($$
     SELECT * FROM public.get_colocated_shards_needisolatednode('isolate_placement.dist_1')
 $$)
-ORDER BY nodeid;
+ORDER BY result;
                                                         result
 ---------------------------------------------------------------------
  [{"5": [{"isolate_placement.dist_1": true}, {"isolate_placement.dist_2": true}, {"isolate_placement.dist_3": true}]}]
@@ -245,7 +358,7 @@ SELECT citus_shard_property_set(:shardgroup_5_shardid, anti_affinity=>true);
 SELECT result FROM run_command_on_all_nodes($$
     SELECT * FROM public.get_colocated_shards_needisolatednode('isolate_placement.dist_1')
 $$)
-ORDER BY nodeid;
+ORDER BY result;
                                                         result
 ---------------------------------------------------------------------
  [{"5": [{"isolate_placement.dist_1": true}, {"isolate_placement.dist_2": true}, {"isolate_placement.dist_3": true}]}]
@@ -274,7 +387,7 @@ DETAIL:  UPDATE and DELETE commands on the relation will error out during create
 SELECT result FROM run_command_on_all_nodes($$
     SELECT * FROM public.get_colocated_shards_needisolatednode('isolate_placement.dist_1')
 $$)
-ORDER BY nodeid;
+ORDER BY result;
                                                                                                    result
 ---------------------------------------------------------------------
  [{"5": [{"isolate_placement.dist_1": true}, {"isolate_placement.dist_2": true}, {"isolate_placement.dist_3": true}, {"isolate_placement.dist_4": true}, {"isolate_placement.dist_4_concurrently": true}]}]
@@ -355,7 +468,7 @@ FROM get_candidate_node_for_shard_transfer(:shardgroup_15_shardid);
 SELECT result FROM run_command_on_all_nodes($$
     SELECT * FROM public.get_colocated_shards_needisolatednode('isolate_placement.dist_1')
 $$)
-ORDER BY nodeid;
+ORDER BY result;
                                                         result
 ---------------------------------------------------------------------
  [{"5": [{"isolate_placement.dist_1": true}, {"isolate_placement.dist_2": true}, {"isolate_placement.dist_3": true}]}]
@@ -390,7 +503,7 @@ SELECT citus_shard_property_set(:shardgroup_3_shardid, anti_affinity=>true);
 SELECT result FROM run_command_on_all_nodes($$
     SELECT * FROM public.get_colocated_shards_needisolatednode('isolate_placement.dist_1')
 $$)
-ORDER BY nodeid;
+ORDER BY result;
                                       result
 ---------------------------------------------------------------------
  [{"3": [{"isolate_placement.dist_1": true}, {"isolate_placement.dist_2": true}]}]
@@ -411,7 +524,7 @@ SET client_min_messages TO NOTICE;
 SELECT result FROM run_command_on_all_nodes($$
     SELECT * FROM public.get_colocated_shards_needisolatednode('isolate_placement.dist_1')
 $$)
-ORDER BY nodeid;
+ORDER BY result;
                                       result
 ---------------------------------------------------------------------
  [{"3": [{"isolate_placement.dist_1": true}, {"isolate_placement.dist_2": true}]}]
@@ -446,7 +559,7 @@ SELECT citus_shard_property_set(:shardgroup_9_shardid, anti_affinity=>true);
 SELECT result FROM run_command_on_all_nodes($$
     SELECT * FROM public.get_colocated_shards_needisolatednode('isolate_placement.dist_1')
 $$)
-ORDER BY nodeid;
+ORDER BY result;
                                       result
 ---------------------------------------------------------------------
  [{"9": [{"isolate_placement.dist_1": true}, {"isolate_placement.dist_2": true}]}]
@@ -473,7 +586,7 @@ WHERE shardid = :shardgroup_9_shardid;
 SELECT result FROM run_command_on_all_nodes($$
     SELECT * FROM public.get_colocated_shards_needisolatednode('isolate_placement.dist_1')
 $$)
-ORDER BY nodeid;
+ORDER BY result;
  result
 ---------------------------------------------------------------------
  {}
@@ -493,7 +606,7 @@ SELECT citus_shard_property_set(:shardgroup_12_shardid, anti_affinity=>true);
 SELECT result FROM run_command_on_all_nodes($$
     SELECT * FROM public.get_colocated_shards_needisolatednode('isolate_placement.dist_1')
 $$)
-ORDER BY nodeid;
+ORDER BY result;
                                        result
 ---------------------------------------------------------------------
  [{"12": [{"isolate_placement.dist_1": true}, {"isolate_placement.dist_2": true}]}]
@@ -521,7 +634,7 @@ WHERE shardid = :shardgroup_10_shardid;
 SELECT result FROM run_command_on_all_nodes($$
     SELECT * FROM public.get_colocated_shards_needisolatednode('isolate_placement.dist_1')
 $$)
-ORDER BY nodeid;
+ORDER BY result;
                                        result
 ---------------------------------------------------------------------
  [{"13": [{"isolate_placement.dist_1": true}, {"isolate_placement.dist_2": true}]}]
@@ -548,7 +661,7 @@ SELECT citus_shard_property_set(:shardgroup_17_shardid, anti_affinity=>true);
 SELECT result FROM run_command_on_all_nodes($$
     SELECT * FROM public.get_colocated_shards_needisolatednode('isolate_placement.dist_3')
 $$)
-ORDER BY nodeid;
+ORDER BY result;
                      result
 ---------------------------------------------------------------------
  [{"17": [{"isolate_placement.dist_3": true}]}]
@@ -574,7 +687,7 @@ SELECT 1 FROM isolate_tenant_to_new_shard('dist_3', 100, shard_transfer_mode => 
 SELECT result FROM run_command_on_all_nodes($$
     SELECT * FROM public.get_colocated_shards_needisolatednode('isolate_placement.dist_3')
 $$)
-ORDER BY nodeid;
+ORDER BY result;
  result
 ---------------------------------------------------------------------
  {}
@@ -594,7 +707,7 @@ SELECT citus_shard_property_set(:shardgroup_18_shardid, anti_affinity=>true);
 SELECT result FROM run_command_on_all_nodes($$
     SELECT * FROM public.get_colocated_shards_needisolatednode('isolate_placement.dist_3')
 $$)
-ORDER BY nodeid;
+ORDER BY result;
                      result
 ---------------------------------------------------------------------
  [{"18": [{"isolate_placement.dist_3": true}]}]
@@ -620,7 +733,7 @@ SELECT 1 FROM isolate_tenant_to_new_shard('dist_3', 1000, shard_transfer_mode =>
 SELECT result FROM run_command_on_all_nodes($$
     SELECT * FROM public.get_colocated_shards_needisolatednode('isolate_placement.dist_3')
 $$)
-ORDER BY nodeid;
+ORDER BY result;
                      result
 ---------------------------------------------------------------------
  [{"20": [{"isolate_placement.dist_3": true}]}]
@@ -667,7 +780,7 @@ SELECT create_distributed_table('single_shard_2', null, colocate_with=>'single_s
 SELECT result FROM run_command_on_all_nodes($$
     SELECT * FROM public.get_colocated_shards_needisolatednode('isolate_placement.single_shard_1')
 $$)
-ORDER BY nodeid;
+ORDER BY result;
                                               result
 ---------------------------------------------------------------------
  [{"1": [{"isolate_placement.single_shard_1": true}, {"isolate_placement.single_shard_2": true}]}]
@@ -683,6 +796,9 @@ ERROR:  shard xxxxx does not exist
 SELECT citus_shard_property_set(NULL, anti_affinity=>false);
 ERROR:  shard_id cannot be NULL
 SELECT citus_shard_property_set(0, anti_affinity=>false);
+ERROR:  shard xxxxx does not exist
+-- we verify whether shard exists even if anti_affinity is not provided
+SELECT citus_shard_property_set(0, anti_affinity=>NULL);
 ERROR:  shard xxxxx does not exist
 CREATE TABLE append_table (a int, b int);
 SELECT create_distributed_table('append_table', 'a', 'append');
@@ -934,7 +1050,7 @@ CALL public.create_range_partitioned_shards('range_table_post', '{"0","25"}','{"
 SELECT result FROM run_command_on_all_nodes($$
     SELECT * FROM public.get_colocated_shards_needisolatednode('isolate_placement.dist_1')
 $$)
-ORDER BY nodeid;
+ORDER BY result;
                                                                                               result
 ---------------------------------------------------------------------
  [{"1": [{"isolate_placement.dist_1": true}, {"isolate_placement.dist_2": true}, {"isolate_placement.dist_post_colocated": true}, {"isolate_placement.dist_post_concurrently_colocated": true}]}]

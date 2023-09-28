@@ -3951,6 +3951,13 @@ citus_internal_shard_group_set_needsisolatednode(PG_FUNCTION_ARGS)
 	PG_ENSURE_ARGNOTNULL(1, "enabled");
 	bool enabled = PG_GETARG_BOOL(1);
 
+	/* only owner of the table (or superuser) is allowed to modify the Citus metadata */
+	Oid distributedRelationId = RelationIdForShard(shardId);
+	EnsureTableOwner(distributedRelationId);
+
+	/* we want to serialize all the metadata changes to this table */
+	LockRelationOid(distributedRelationId, ShareUpdateExclusiveLock);
+
 	if (!ShouldSkipMetadataChecks())
 	{
 		EnsureCoordinatorInitiatedOperation();

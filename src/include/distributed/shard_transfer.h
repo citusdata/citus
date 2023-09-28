@@ -29,6 +29,7 @@ extern void TransferShards(int64 shardId,
 extern uint64 ShardListSizeInBytes(List *colocatedShardList,
 								   char *workerNodeName, uint32 workerNodePort);
 extern void ErrorIfMoveUnsupportedTableType(Oid relationId);
+extern void EnsureTableListOwner(List *tableIdList);
 extern void CopyShardsToNode(WorkerNode *sourceNode, WorkerNode *targetNode,
 							 List *shardIntervalList, char *snapshotName);
 extern void VerifyTablesHaveReplicaIdentity(List *colocatedTableList);
@@ -40,3 +41,4 @@ extern void UpdatePlacementUpdateStatusForShardIntervalList(List *shardIntervalL
 extern void InsertDeferredDropCleanupRecordsForShards(List *shardIntervalList);
 extern void InsertCleanupRecordsForShardPlacementsOnNode(List *shardIntervalList,
 														 int32 groupId);
+extern void LockColocatedRelationsForMove(List *colocatedTableList);

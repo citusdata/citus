@@ -63,6 +63,7 @@
 #include "distributed/resource_lock.h"
 #include "distributed/remote_commands.h"
 #include "distributed/shard_rebalancer.h"
+#include "distributed/shard_transfer.h"
 #include "distributed/tuplestore.h"
 #include "distributed/utils/array_type.h"
 #include "distributed/worker_manager.h"
@@ -114,7 +115,7 @@ static void AppendShardIdNameValues(StringInfo selectQuery, ShardInterval *shard
 static HeapTuple CreateDiskSpaceTuple(TupleDesc tupleDesc, uint64 availableBytes,
 									  uint64 totalBytes);
 static bool GetLocalDiskSpaceStats(uint64 *availableBytes, uint64 *totalBytes);
-static void ErrorIfShardIsolationNotPossible(uint64 shardId);
+static void citus_shard_property_set_anti_affinity(uint64 shardId, bool enabled);
 static void ShardGroupSetNeedsIsolatedNodeGlobally(uint64 shardId, bool enabled);
 static void ShardSetNeedsIsolatedNode(uint64 shardId, bool enabled);
 static BackgroundTask * DeformBackgroundTaskHeapTuple(TupleDesc tupleDescriptor,
@@ -372,12 +373,28 @@ citus_shard_property_set(PG_FUNCTION_ARGS)
 	PG_ENSURE_ARGNOTNULL(0, "shard_id");
 	uint64 shardId = PG_GETARG_INT64(0);
 
+	if (!ShardExists(shardId))
+	{
+		ereport(ERROR, (errmsg("shard %lu does not exist", shardId)));
+	}
+
+	Oid distributedRelationId = RelationIdForShard(shardId);
+	List *colocatedTableList = ColocatedTableList(distributedRelationId);
+	EnsureTableListOwner(colocatedTableList);
+
+	AcquirePlacementColocationLock(distributedRelationId, ExclusiveLock,
+								   "set anti affinity property for a shard of");
+
+	Oid colocatedTableId = InvalidOid;
+	foreach_oid(colocatedTableId, colocatedTableList)
+	{
+		LockRelationOid(colocatedTableId, ShareUpdateExclusiveLock);
+	}
+
 	if (!PG_ARGISNULL(1))
 	{
-		ErrorIfShardIsolationNotPossible(shardId);
-
-		bool enabled = PG_GETARG_BOOL(1);
-		ShardGroupSetNeedsIsolatedNodeGlobally(shardId, enabled);
+		bool antiAffinity = PG_GETARG_BOOL(1);
+		citus_shard_property_set_anti_affinity(shardId, antiAffinity);
 	}
 
 	PG_RETURN_VOID();
@@ -385,17 +402,13 @@ citus_shard_property_set(PG_FUNCTION_ARGS)
 
 
 /*
- * ErrorIfShardIsolationNotPossible throws an error if shard isolation is not
- * possible for the given shard.
+ * citus_shard_property_set_anti_affinity is an helper function for
+ * citus_shard_property_set UDF to set anti_affinity property for given
+ * shard.
  */
 static void
-ErrorIfShardIsolationNotPossible(uint64 shardId)
+citus_shard_property_set_anti_affinity(uint64 shardId, bool enabled)
 {
-	if (!ShardExists(shardId))
-	{
-		ereport(ERROR, (errmsg("shard %lu does not exist", shardId)));
-	}
-
 	Oid distributedRelationId = RelationIdForShard(shardId);
 	if (!IsCitusTableType(distributedRelationId, HASH_DISTRIBUTED) &&
 		!IsCitusTableType(distributedRelationId, SINGLE_SHARD_DISTRIBUTED))
@@ -403,6 +416,8 @@ ErrorIfShardIsolationNotPossible(uint64 shardId)
 		ereport(ERROR, (errmsg("shard isolation is only supported for hash "
 							   "distributed tables")));
 	}
+
+	ShardGroupSetNeedsIsolatedNodeGlobally(shardId, enabled);
 }
 
 
