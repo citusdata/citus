@@ -24,4 +24,4 @@ flake8 = "*"
 flake8-bugbear = "*"
 
 [requires]
-python_version = "3"
+python_version = "3.9"

@@ -1,7 +1,7 @@
 FROM ubuntu:22.04 AS base
 
 # environment is to make python pass an interactive shell, probably not the best timezone given a wide variety of colleagues
-ENV TZ=Europe/Amsterdam
+ENV TZ=UTC
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
 # install build tools
@@ -28,11 +28,17 @@ RUN apt update && apt install -y \
     pkg-config \
     python3 \
     python3-pip \
+    software-properties-common \
     sudo \
     uuid-dev \
     valgrind \
     zlib1g-dev \
+ && add-apt-repository ppa:deadsnakes/ppa -y \
+ && apt install -y \
+    python3.9-full \
  && apt clean
+
+RUN sudo pip3 install pipenv pipenv-shebang
 
 RUN cpanm install IPC::Run
 
@@ -104,15 +110,18 @@ RUN make -sj8
 
 RUN make install DESTDIR=/uncrustify
 
+# builder for all pipenv's to get them contained in a single layer
 FROM base AS pipenv
 
-RUN sudo pip3 install pipenv pipenv-shebang
-
 WORKDIR /workspaces/citus/
-COPY --chown=citus:citus src/ src/
+
+# tools to sync pgenv with vscode
 COPY --chown=citus:citus .vscode/Pipfile .vscode/Pipfile.lock .devcontainer/.vscode/
-RUN ( cd src/test/regress && pipenv install )
 RUN ( cd .devcontainer/.vscode && pipenv install )
+
+# environment to run our failure tests
+COPY --chown=citus:citus src/ src/
+RUN ( cd src/test/regress && pipenv install )
 
 # assemble the final container by copying over the artifacts from separately build containers
 FROM base AS devcontainer
@@ -141,14 +150,12 @@ RUN sudo apt update \
     vim \
  && sudo apt clean
 
-RUN sudo pip3 install pipenv pipenv-shebang
-
 # Since gdb will run in the context of the root user when debugging citus we will need to both
 # download the gdbpg.py script as the root user, into their home directory, as well as add .gdbinit
 # as a file owned by root
 # This will make that as soon as the debugger attaches to a postgres backend (or frankly any other process)
 # the gdbpg.py script will be sourced and the developer can direcly use it.
-RUN sudo curl -o /root/gdbpg.py https://raw.githubusercontent.com/tvesely/gdbpg/master/gdbpg.py
+RUN sudo curl -o /root/gdbpg.py https://raw.githubusercontent.com/tvesely/gdbpg/6065eee7872457785f830925eac665aa535caf62/gdbpg.py
 COPY --chown=root:root .gdbinit /root/
 
 # add some common tools to the final container
@@ -162,7 +169,7 @@ ENV PATH="/home/citus/.bin:${PATH}"
 # c) specify the history file to store the history in
 # b and c are done in the .bashrc to make it persistent across shells only
 RUN sudo install -d -o citus -g citus /commandhistory \
-    && echo "export PROMPT_COMMAND='history -a' && export HISTFILE=/commandhistory/.bash_history" >> "/home/citus/.bashrc"
+ && echo "export PROMPT_COMMAND='history -a' && export HISTFILE=/commandhistory/.bash_history" >> "/home/citus/.bashrc"
 
 # install citus-dev
 RUN git clone --branch develop https://github.com/citusdata/tools.git citus-tools \
