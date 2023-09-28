@@ -12,6 +12,13 @@ BEGIN;
 	CALL citus_finish_citus_upgrade();
 ROLLBACK;
 
+-- we should be able to upgrade with nontransactional metadata sync as well
+SET citus.metadata_sync_mode TO 'nontransactional';
+BEGIN;
+	CALL citus_finish_citus_upgrade();
+ROLLBACK;
+RESET citus.metadata_sync_mode;
+
 -- do the actual job
 CALL citus_finish_citus_upgrade();
 
