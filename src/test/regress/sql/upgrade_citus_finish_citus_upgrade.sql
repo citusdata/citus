@@ -12,6 +12,8 @@ BEGIN;
 	CALL citus_finish_citus_upgrade();
 ROLLBACK;
 
+-- debug
+\df+ pg_catalog.citus_finalize_upgrade_to_citus11;
 -- we should be able to upgrade with nontransactional metadata sync as well
 SET citus.metadata_sync_mode TO 'nontransactional';
 BEGIN;
