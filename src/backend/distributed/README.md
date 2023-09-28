@@ -29,6 +29,7 @@ The purpose of this document is to provide comprehensive technical documentation
 - [DDL](#ddl)
   - [Object & dependency propagation](#object--dependency-propagation)
   - [Foreign keys](#foreign-keys)
+  - [DROP Table](#drop-table)
 - [Connection management](#connection-management)
   - [Connection management](#connection-management-1)
   - [Placement connection tracking](#placement-connection-tracking)
@@ -1906,6 +1907,29 @@ There are three main scenarios:
 Citus relies fully on Postgres to enforce foreign keys. To provide that, Citus requires the relevant shards to be colocated. That’s also why the foreign keys between distributed tables should always include the distribution key. When reference tables / citus local tables involved, Citus can relax some of the restrictions. [Onder’s talk Demystifying Postgres Foreign Key Constraints on Citus](https://www.youtube.com/watch?v=xReWGcSg7sc) at CitusCon discusses all the supported foreign key combinations within Citus.
 
 There is one tricky behavior regarding transactions when there is a foreign key from a distributed table to a reference table. If a statement in a transaction modifies the reference table, then Postgres acquires row locks on the referencing tables (e.g., shards of the distributed table) within the internal connection that modified the reference table. After that point, Citus cannot access the shards of the distributed table in parallel anymore. Otherwise, the multiple internal connections that would be opened via parallel command might compete to acquire the same locks, leading to a (self) distributed deadlock. To prevent these scenarios, Citus switches to sequential execution. The relevant function is `RecordParallelRelationAccessForTaskList()`, which documents the possible scenarios. The regression test file [foreign_key_restriction_enforcement](https://github.com/citusdata/citus/blob/2c190d068918d1c457894adf97f550e5b3739184/src/test/regress/sql/foreign_key_restriction_enforcement.sql) has lots of nice examples of this behavior.
+
+
+## DROP TABLE
+
+Citus' handling of `DROP TABLE` is slightly different than other DDL operations. In this section, we aim to highlight the key differences and their reasoning.
+
+Citus implements an event trigger, [`citus_drop_trigger()`](https://github.com/citusdata/citus/blob/main/src/backend/distributed/sql/udfs/citus_drop_trigger/latest.sql). The trigger is defined as:
+```sql
+ select * from pg_event_trigger ;
+┌───────┬────────────────────────────┬──────────┬──────────┬─────────┬────────────┬─────────┐
+│  oid  │          evtname           │ evtevent │ evtowner │ evtfoid │ evtenabled │ evttags │
+├───────┼────────────────────────────┼──────────┼──────────┼─────────┼────────────┼─────────┤
+│ 16676 │ citus_cascade_to_partition │ sql_drop │       10 │   16675 │ O          │         │
+└───────┴────────────────────────────┴──────────┴──────────┴─────────┴────────────┴─────────┘
+(1 row)
+```
+One of the primary reasons for utilizing a trigger for `DROP` processing is that after executing `standardProcess_Utility`, the `oid` of the table being dropped is eliminated from Postgres' catalog tables. This makes it more challenging to manage a dropped table in `PostProcessUtility`, as is customary for many `DDL` commands. Instead, we depend on the event trigger to supply the `oid` of the table that has been dropped. This allows us to delete all related metadata, such as entries in `pg_dist_partition` or `pg_dist_shard` from Citus' catalog tables. Additionally, we eliminate all relevant metadata from every node in the cluster. Ultimately, this enables us to remove the shard placements linked to the dropped Citus table.
+
+The drop trigger proves useful for capturing all tables affected by the `CASCADE` operation. For instance, if you delete a parent table, Postgres will automatically execute a `DROP TABLE` command for its partitions. Citus can then seamlessly apply the same operation to all cascaded tables, eliminating the need for manual identification of tables that would be affected by the cascade.
+
+Generally speaking, there isn't a compelling reason to avoid using `PostProcessUtility` for managing `DROP TABLE` commands. Theoretically, one could implement all the same logic within `PostProcessUtility`. However, the drop trigger offers a convenient approach.
+
+ Additional functionalities are present in [`PreprocessDropTableStmt()`](https://github.com/citusdata/citus/blob/c323f49e8378b5e8ce95457c845659b5fc14ccb1/src/backend/distributed/commands/table.c#L146), particularly concerning the handling of partitioned tables and colocation locking. These aspects are well-documented in the code, so for further details, please refer to the documentation there.
 
 # Connection management
 
