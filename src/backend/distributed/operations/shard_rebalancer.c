@@ -814,9 +814,9 @@ AcquirePlacementColocationLock(Oid relationId, int lockMode,
 		ereport(ERROR, (errmsg("could not acquire the lock required to %s %s",
 							   operationName,
 							   generate_qualified_relation_name(relationId)),
-						errdetail("It means that either a concurrent shard move "
-								  "or colocated distributed table creation is "
-								  "happening."),
+						errdetail("It means that either a concurrent shard move, "
+								  "colocated distributed table creation or "
+                                  "shard property change is happening."),
 						errhint("Make sure that the concurrent operation has "
 								"finished and re-run the command")));
 	}
