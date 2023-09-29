@@ -240,3 +240,9 @@ Any other SQL you can put directly in the main sql file, e.g.
 ### Running tests
 
 See [`src/test/regress/README.md`](https://github.com/citusdata/citus/blob/master/src/test/regress/README.md)
+
+### Documentation
+
+User-facing documentation is published on [docs.citusdata.com](https://docs.citusdata.com/). When adding a new feature, function, or setting, you can open a pull request or issue against the [Citus docs repo](https://github.com/citusdata/citus_docs/).
+
+Detailed descriptions of the implementation for Citus developers are provided in the [Citus Technical Documentation](src/backend/distributed/README.md). It is currently a single file for ease of searching. Please update the documentation if you make any changes that affect the design or add major new features.
