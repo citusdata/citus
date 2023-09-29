@@ -116,8 +116,8 @@ static HeapTuple CreateDiskSpaceTuple(TupleDesc tupleDesc, uint64 availableBytes
 									  uint64 totalBytes);
 static bool GetLocalDiskSpaceStats(uint64 *availableBytes, uint64 *totalBytes);
 static void citus_shard_property_set_anti_affinity(uint64 shardId, bool enabled);
-static void ShardGroupSetNeedsIsolatedNodeGlobally(uint64 shardId, bool enabled);
-static void ShardSetNeedsIsolatedNode(uint64 shardId, bool enabled);
+static void ShardGroupSetNeedsSeparateNodeGlobally(uint64 shardId, bool enabled);
+static void ShardSetNeedsSeparateNode(uint64 shardId, bool enabled);
 static BackgroundTask * DeformBackgroundTaskHeapTuple(TupleDesc tupleDescriptor,
 													  HeapTuple taskTuple);
 
@@ -417,32 +417,32 @@ citus_shard_property_set_anti_affinity(uint64 shardId, bool enabled)
 							   "distributed tables")));
 	}
 
-	ShardGroupSetNeedsIsolatedNodeGlobally(shardId, enabled);
+	ShardGroupSetNeedsSeparateNodeGlobally(shardId, enabled);
 }
 
 
 /*
- * ShardGroupSetNeedsIsolatedNodeGlobally calls ShardGroupSetNeedsIsolatedNode
+ * ShardGroupSetNeedsSeparateNodeGlobally calls ShardGroupSetNeedsSeparateNode
  * on all nodes.
  */
 static void
-ShardGroupSetNeedsIsolatedNodeGlobally(uint64 shardId, bool enabled)
+ShardGroupSetNeedsSeparateNodeGlobally(uint64 shardId, bool enabled)
 {
-	ShardGroupSetNeedsIsolatedNode(shardId, enabled);
+	ShardGroupSetNeedsSeparateNode(shardId, enabled);
 
 	char *metadataCommand =
-		ShardGroupSetNeedsIsolatedNodeCommand(shardId, enabled);
+		ShardGroupSetNeedsSeparateNodeCommand(shardId, enabled);
 	SendCommandToWorkersWithMetadata(metadataCommand);
 }
 
 
 /*
- * ShardGroupSetNeedsIsolatedNode sets the needsisolatednode flag to desired
+ * ShardGroupSetNeedsSeparateNode sets the needsseparatenode flag to desired
  * value for all the shards within the shard group that given shard belongs
  * to.
  */
 void
-ShardGroupSetNeedsIsolatedNode(uint64 shardId, bool enabled)
+ShardGroupSetNeedsSeparateNode(uint64 shardId, bool enabled)
 {
 	ShardInterval *shardInterval = LoadShardInterval(shardId);
 	List *colocatedShardIntervalList = ColocatedShardIntervalList(shardInterval);
@@ -450,18 +450,18 @@ ShardGroupSetNeedsIsolatedNode(uint64 shardId, bool enabled)
 	ShardInterval *colocatedShardInterval = NULL;
 	foreach_ptr(colocatedShardInterval, colocatedShardIntervalList)
 	{
-		ShardSetNeedsIsolatedNode(colocatedShardInterval->shardId,
+		ShardSetNeedsSeparateNode(colocatedShardInterval->shardId,
 								  enabled);
 	}
 }
 
 
 /*
- * ShardSetNeedsIsolatedNode sets the needsisolatednode flag to desired
+ * ShardSetNeedsSeparateNode sets the needsseparatenode flag to desired
  * value for the given shard.
  */
 static void
-ShardSetNeedsIsolatedNode(uint64 shardId, bool enabled)
+ShardSetNeedsSeparateNode(uint64 shardId, bool enabled)
 {
 	Relation pgDistShard = table_open(DistShardRelationId(), RowExclusiveLock);
 
@@ -492,9 +492,9 @@ ShardSetNeedsIsolatedNode(uint64 shardId, bool enabled)
 	memset(isnull, false, sizeof(isnull));
 	memset(replace, false, sizeof(replace));
 
-	values[Anum_pg_dist_shard_needsisolatednode - 1] = BoolGetDatum(enabled);
-	isnull[Anum_pg_dist_shard_needsisolatednode - 1] = false;
-	replace[Anum_pg_dist_shard_needsisolatednode - 1] = true;
+	values[Anum_pg_dist_shard_needsseparatenode - 1] = BoolGetDatum(enabled);
+	isnull[Anum_pg_dist_shard_needsseparatenode - 1] = false;
+	replace[Anum_pg_dist_shard_needsseparatenode - 1] = true;
 
 	TupleDesc tupleDescriptor = RelationGetDescr(pgDistShard);
 	heapTuple = heap_modify_tuple(heapTuple, tupleDescriptor, values, isnull, replace);
@@ -1453,7 +1453,7 @@ CopyShardInterval(ShardInterval *srcInterval)
 	destInterval->maxValueExists = srcInterval->maxValueExists;
 	destInterval->shardId = srcInterval->shardId;
 	destInterval->shardIndex = srcInterval->shardIndex;
-	destInterval->needsIsolatedNode = srcInterval->needsIsolatedNode;
+	destInterval->needsSeparateNode = srcInterval->needsSeparateNode;
 
 	destInterval->minValue = 0;
 	if (destInterval->minValueExists)
@@ -1502,15 +1502,15 @@ ShardLength(uint64 shardId)
 
 
 /*
- * NodeGroupGetIsolatedShardPlacementGroup returns the shard placement group
- * that given node group is used to isolate, if any. Returns NULL if this
- * node is not used to a shard placement group.
+ * NodeGroupGetSeparatedShardPlacementGroup returns the shard placement group
+ * that given node group is used to separate from others. Returns NULL if this
+ * node is not used to separate a shard placement group.
  */
 ShardPlacementGroup *
-NodeGroupGetIsolatedShardPlacementGroup(int32 groupId)
+NodeGroupGetSeparatedShardPlacementGroup(int32 groupId)
 {
 	ShardPlacementGroup *nodeShardPlacementGroup = NULL;
-	bool shardPlacementGroupNeedsIsolatedNode = false;
+	bool shardPlacementGroupNeedsSeparateNode = false;
 
 	bool indexOK = false;
 	int scanKeyCount = 1;
@@ -1555,7 +1555,7 @@ NodeGroupGetIsolatedShardPlacementGroup(int32 groupId)
 		}
 
 		nodeShardPlacementGroup = shardPlacementGroup;
-		shardPlacementGroupNeedsIsolatedNode = shardInterval->needsIsolatedNode;
+		shardPlacementGroupNeedsSeparateNode = shardInterval->needsSeparateNode;
 
 		heapTuple = systable_getnext(scanDescriptor);
 	}
@@ -1563,7 +1563,7 @@ NodeGroupGetIsolatedShardPlacementGroup(int32 groupId)
 	systable_endscan(scanDescriptor);
 	table_close(pgDistPlacement, NoLock);
 
-	if (!shardPlacementGroupNeedsIsolatedNode)
+	if (!shardPlacementGroupNeedsSeparateNode)
 	{
 		return NULL;
 	}
@@ -2011,7 +2011,7 @@ IsDummyPlacement(ShardPlacement *taskPlacement)
 void
 InsertShardRow(Oid relationId, uint64 shardId, char storageType,
 			   text *shardMinValue, text *shardMaxValue,
-			   bool needsIsolatedNode)
+			   bool needsSeparateNode)
 {
 	Datum values[Natts_pg_dist_shard];
 	bool isNulls[Natts_pg_dist_shard];
@@ -2023,7 +2023,7 @@ InsertShardRow(Oid relationId, uint64 shardId, char storageType,
 	values[Anum_pg_dist_shard_logicalrelid - 1] = ObjectIdGetDatum(relationId);
 	values[Anum_pg_dist_shard_shardid - 1] = Int64GetDatum(shardId);
 	values[Anum_pg_dist_shard_shardstorage - 1] = CharGetDatum(storageType);
-	values[Anum_pg_dist_shard_needsisolatednode - 1] = BoolGetDatum(needsIsolatedNode);
+	values[Anum_pg_dist_shard_needsseparatenode - 1] = BoolGetDatum(needsSeparateNode);
 
 	/* dropped shardalias column must also be set; it is still part of the tuple */
 	isNulls[Anum_pg_dist_shard_shardalias_DROPPED - 1] = true;

@@ -168,7 +168,7 @@ SELECT count(*) FROM orders_streaming WHERE o_orderkey = 103;
 SELECT * FROM pg_dist_shard
 	WHERE logicalrelid = 'lineitem_streaming'::regclass OR logicalrelid = 'orders_streaming'::regclass
 	ORDER BY shardminvalue::BIGINT, logicalrelid;
-    logicalrelid    | shardid | shardstorage | shardminvalue | shardmaxvalue | needsisolatednode
+    logicalrelid    | shardid | shardstorage | shardminvalue | shardmaxvalue | needsseparatenode
 ---------------------------------------------------------------------
  lineitem_streaming | 1230000 | t            | -2147483648   | -1            | f
  orders_streaming   | 1230002 | t            | -2147483648   | -1            | f
@@ -399,7 +399,7 @@ SELECT count(*) FROM orders_streaming WHERE o_orderkey = 103;
 SELECT * FROM pg_dist_shard
 	WHERE logicalrelid = 'lineitem_streaming'::regclass OR logicalrelid = 'orders_streaming'::regclass
 	ORDER BY shardminvalue::BIGINT, logicalrelid;
-    logicalrelid    | shardid | shardstorage | shardminvalue | shardmaxvalue | needsisolatednode
+    logicalrelid    | shardid | shardstorage | shardminvalue | shardmaxvalue | needsseparatenode
 ---------------------------------------------------------------------
  lineitem_streaming | 1230040 | t            | -2147483648   | -2147483648   | f
  orders_streaming   | 1230042 | t            | -2147483648   | -2147483648   | f
@@ -553,7 +553,7 @@ SET search_path to "Tenant Isolation";
 SELECT * FROM pg_dist_shard
 	WHERE logicalrelid = 'lineitem_streaming'::regclass OR logicalrelid = 'orders_streaming'::regclass
 	ORDER BY shardminvalue::BIGINT, logicalrelid;
-    logicalrelid    | shardid | shardstorage | shardminvalue | shardmaxvalue | needsisolatednode
+    logicalrelid    | shardid | shardstorage | shardminvalue | shardmaxvalue | needsseparatenode
 ---------------------------------------------------------------------
  lineitem_streaming | 1230040 | t            | -2147483648   | -2147483648   | f
  orders_streaming   | 1230042 | t            | -2147483648   | -2147483648   | f
@@ -728,7 +728,7 @@ ERROR:  cannot isolate tenant because tenant isolation is only support for hash 
 SELECT * FROM pg_dist_shard
 	WHERE logicalrelid = 'lineitem_streaming'::regclass OR logicalrelid = 'orders_streaming'::regclass
 	ORDER BY shardminvalue::BIGINT, logicalrelid;
-    logicalrelid    | shardid | shardstorage | shardminvalue | shardmaxvalue | needsisolatednode
+    logicalrelid    | shardid | shardstorage | shardminvalue | shardmaxvalue | needsseparatenode
 ---------------------------------------------------------------------
  lineitem_streaming | 1230040 | t            | -2147483648   | -2147483648   | f
  orders_streaming   | 1230042 | t            | -2147483648   | -2147483648   | f

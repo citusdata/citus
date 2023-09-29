@@ -285,7 +285,7 @@ NewDistributedTablePlacementNodeList(LOCKMODE lockMode)
 
 /*
  * NodeCanBeUsedForNonIsolatedPlacements returns true if given node can be
- * used to store shard placements that don't need isolation.
+ * used to store shard placements that don't need separate nodes.
  */
 bool
 NodeCanBeUsedForNonIsolatedPlacements(WorkerNode *node)
@@ -300,7 +300,7 @@ NodeCanBeUsedForNonIsolatedPlacements(WorkerNode *node)
 		return false;
 	}
 
-	return NodeGroupGetIsolatedShardPlacementGroup(node->groupId) == NULL;
+	return NodeGroupGetSeparatedShardPlacementGroup(node->groupId) == NULL;
 }
 
 

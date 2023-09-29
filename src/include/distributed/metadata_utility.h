@@ -67,7 +67,7 @@ typedef struct ShardInterval
 	Datum maxValue;     /* a shard's typed max value datum */
 	uint64 shardId;
 	int shardIndex;
-	bool needsIsolatedNode;
+	bool needsSeparateNode;
 } ShardInterval;
 
 
@@ -331,7 +331,7 @@ extern int ShardIntervalCount(Oid relationId);
 extern List * LoadShardList(Oid relationId);
 extern ShardInterval * CopyShardInterval(ShardInterval *srcInterval);
 extern uint64 ShardLength(uint64 shardId);
-extern ShardPlacementGroup * NodeGroupGetIsolatedShardPlacementGroup(int32 groupId);
+extern ShardPlacementGroup * NodeGroupGetSeparatedShardPlacementGroup(int32 groupId);
 extern bool ShardPlacementGroupsSame(const ShardPlacementGroup *leftGroup,
 									 const ShardPlacementGroup *rightGroup);
 extern bool NodeGroupHasShardPlacements(int32 groupId);
@@ -363,7 +363,7 @@ extern List * RemoveCoordinatorPlacementIfNotSingleNode(List *placementList);
 /* Function declarations to modify shard and shard placement data */
 extern void InsertShardRow(Oid relationId, uint64 shardId, char storageType,
 						   text *shardMinValue, text *shardMaxValue,
-						   bool needsIsolatedNode);
+						   bool needsSeparateNode);
 extern void DeleteShardRow(uint64 shardId);
 extern ShardPlacement * InsertShardPlacementRowGlobally(uint64 shardId,
 														uint64 placementId,
@@ -446,7 +446,7 @@ extern List * SendShardStatisticsQueriesInParallel(List *citusTableIds,
 extern bool GetNodeDiskSpaceStatsForConnection(MultiConnection *connection,
 											   uint64 *availableBytes,
 											   uint64 *totalBytes);
-extern void ShardGroupSetNeedsIsolatedNode(uint64 shardId, bool enabled);
+extern void ShardGroupSetNeedsSeparateNode(uint64 shardId, bool enabled);
 extern void ExecuteQueryViaSPI(char *query, int SPIOK);
 extern void ExecuteAndLogQueryViaSPI(char *query, int SPIOK, int logLevel);
 extern void EnsureSequenceTypeSupported(Oid seqOid, Oid attributeTypeId, Oid

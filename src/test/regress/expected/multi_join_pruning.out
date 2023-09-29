@@ -45,7 +45,7 @@ select * from pg_dist_shard
 where logicalrelid='lineitem'::regclass or
 	  logicalrelid='orders'::regclass
 order by shardid;
- logicalrelid | shardid | shardstorage | shardminvalue | shardmaxvalue | needsisolatednode
+ logicalrelid | shardid | shardstorage | shardminvalue | shardmaxvalue | needsseparatenode
 ---------------------------------------------------------------------
  lineitem     |  360000 | t            | -2147483648   | -1            | f
  lineitem     |  360001 | t            | 0             | 2147483647    | f

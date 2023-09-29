@@ -30,9 +30,9 @@ $func$ LANGUAGE plpgsql;
 CREATE SCHEMA isolate_placement;
 SET search_path TO isolate_placement;
 -- test null input
-SELECT citus_internal_shard_group_set_needsisolatednode(0, NULL);
+SELECT citus_internal_shard_group_set_needsseparatenode(0, NULL);
 ERROR:  enabled cannot be NULL
-SELECT citus_internal_shard_group_set_needsisolatednode(NULL, false);
+SELECT citus_internal_shard_group_set_needsseparatenode(NULL, false);
 ERROR:  shard_id cannot be NULL
 SET citus.shard_replication_factor TO 1;
 SET citus.next_shard_id TO 2000000;
@@ -44,7 +44,7 @@ SELECT create_distributed_table('single_shard_1', null, colocate_with=>'none');
 (1 row)
 
 -- test with user that doesn't have permission to execute the function
-SELECT citus_internal_shard_group_set_needsisolatednode(shardid, true) FROM pg_dist_shard WHERE logicalrelid = 'isolate_placement.single_shard_1'::regclass;
+SELECT citus_internal_shard_group_set_needsseparatenode(shardid, true) FROM pg_dist_shard WHERE logicalrelid = 'isolate_placement.single_shard_1'::regclass;
 ERROR:  This is an internal Citus function can only be used in a distributed transaction
 DROP TABLE single_shard_1;
 CREATE ROLE test_user_isolate_placement WITH LOGIN;
@@ -64,17 +64,17 @@ SELECT pg_sleep(0.1);
 
 SET ROLE test_user_isolate_placement;
 -- test invalid shard id
-SELECT citus_internal_shard_group_set_needsisolatednode(0, true);
+SELECT citus_internal_shard_group_set_needsseparatenode(0, true);
 ERROR:  could not find valid entry for shard xxxxx
--- test null needs_isolated_node
+-- test null needs_separate_node
 SELECT citus_internal_add_shard_metadata(
     relation_id=>0,
     shard_id=>0,
     storage_type=>'0',
     shard_min_value=>'0',
     shard_max_value=>'0',
-    needs_isolated_node=>null);
-ERROR:  needs isolated node cannot be NULL
+    needs_separate_node=>null);
+ERROR:  needs separate node cannot be NULL
 RESET ROLE;
 REVOKE ALL ON SCHEMA isolate_placement FROM test_user_isolate_placement;
 DROP USER test_user_isolate_placement;
@@ -124,7 +124,7 @@ SELECT citus_shard_property_set(shardid) FROM pg_dist_shard WHERE logicalrelid =
 ERROR:  must be owner of table single_shard_1
 SELECT citus_shard_property_set(shardid, anti_affinity=>true) FROM pg_dist_shard WHERE logicalrelid = 'isolate_placement.single_shard_1'::regclass;
 ERROR:  must be owner of table single_shard_1
-SELECT citus_internal_shard_group_set_needsisolatednode(shardid, true) FROM pg_dist_shard WHERE logicalrelid = 'isolate_placement.single_shard_1'::regclass;
+SELECT citus_internal_shard_group_set_needsseparatenode(shardid, true) FROM pg_dist_shard WHERE logicalrelid = 'isolate_placement.single_shard_1'::regclass;
 ERROR:  must be owner of table single_shard_1
 -- assign all tables to regularuser
 RESET ROLE;
@@ -154,8 +154,8 @@ ORDER BY result;
  [{"1": [{"isolate_placement.single_shard_1": true}]}]
 (3 rows)
 
-SELECT citus_internal_shard_group_set_needsisolatednode(shardid, false) FROM pg_dist_shard WHERE logicalrelid = 'isolate_placement.single_shard_1'::regclass;
- citus_internal_shard_group_set_needsisolatednode
+SELECT citus_internal_shard_group_set_needsseparatenode(shardid, false) FROM pg_dist_shard WHERE logicalrelid = 'isolate_placement.single_shard_1'::regclass;
+ citus_internal_shard_group_set_needsseparatenode
 ---------------------------------------------------------------------
 
 (1 row)
@@ -171,8 +171,8 @@ ORDER BY result;
  {}
 (3 rows)
 
-SELECT citus_internal_shard_group_set_needsisolatednode(shardid, true) FROM pg_dist_shard WHERE logicalrelid = 'isolate_placement.single_shard_1'::regclass;
- citus_internal_shard_group_set_needsisolatednode
+SELECT citus_internal_shard_group_set_needsseparatenode(shardid, true) FROM pg_dist_shard WHERE logicalrelid = 'isolate_placement.single_shard_1'::regclass;
+ citus_internal_shard_group_set_needsseparatenode
 ---------------------------------------------------------------------
 
 (1 row)
@@ -229,7 +229,7 @@ SELECT create_distributed_table('dist_3', 'a', colocate_with=>'dist_1');
 (1 row)
 
 SET citus.shard_replication_factor TO 1;
--- none of the placements have been marked as needsisolatednode yet
+-- none of the placements have been marked as needsseparatenode yet
 SELECT result FROM run_command_on_all_nodes($$
     SELECT * FROM public.get_colocated_shards_needisolatednode('isolate_placement.dist_1')
 $$)
@@ -403,7 +403,7 @@ DETAIL:  UPDATE and DELETE commands on the relation will error out during create
 (1 row)
 
 -- Placements of a new distributed table created within the same colocated
--- group inherit needsisolatednode from the colocated placements too.
+-- group inherit needsseparatenode from the colocated placements too.
 SELECT result FROM run_command_on_all_nodes($$
     SELECT * FROM public.get_colocated_shards_needisolatednode('isolate_placement.dist_1')
 $$)
@@ -602,7 +602,7 @@ WHERE shardid = :shardgroup_9_shardid;
 (1 row)
 
 -- We shouldn't see shard group 9 because shard-split operation doesn't
--- preserve needsisolatednode flag when splitting the shard.
+-- preserve needsseparatenode flag when splitting the shard.
 SELECT result FROM run_command_on_all_nodes($$
     SELECT * FROM public.get_colocated_shards_needisolatednode('isolate_placement.dist_1')
 $$)
@@ -703,7 +703,7 @@ SELECT 1 FROM isolate_tenant_to_new_shard('dist_3', 100, shard_transfer_mode => 
 (1 row)
 
 -- We shouldn't see shard group 17 because isolate_tenant_to_new_shard doesn't
--- preserve needsisolatednode flag when splitting the shard.
+-- preserve needsseparatenode flag when splitting the shard.
 SELECT result FROM run_command_on_all_nodes($$
     SELECT * FROM public.get_colocated_shards_needisolatednode('isolate_placement.dist_3')
 $$)

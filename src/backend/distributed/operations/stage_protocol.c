@@ -198,9 +198,9 @@ master_create_empty_shard(PG_FUNCTION_ARGS)
 		candidateNodeIndex++;
 	}
 
-	bool needsIsolatedNode = false;
+	bool needsSeparateNode = false;
 	InsertShardRow(relationId, shardId, storageType, nullMinValue, nullMaxValue,
-				   needsIsolatedNode);
+				   needsSeparateNode);
 
 	CreateAppendDistributedShardPlacements(relationId, shardId, candidateNodeList,
 										   ShardReplicationFactor);

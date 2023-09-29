@@ -10,8 +10,8 @@ DROP FUNCTION pg_catalog.citus_internal_add_shard_metadata(regclass, bigint, "ch
 
 DROP FUNCTION pg_catalog.citus_shard_property_set(shard_id bigint, anti_affinity boolean);
 
-DROP FUNCTION pg_catalog.citus_internal_shard_group_set_needsisolatednode(
+DROP FUNCTION pg_catalog.citus_internal_shard_group_set_needsseparatenode(
                             shard_id bigint,
                             enabled boolean);
 
-ALTER TABLE pg_dist_shard DROP COLUMN needsisolatednode;
+ALTER TABLE pg_dist_shard DROP COLUMN needsseparatenode;

@@ -4521,7 +4521,7 @@ GenerateSyntheticShardIntervalArray(int partitionCount)
 		shardInterval->shardId = INVALID_SHARD_ID;
 		shardInterval->valueTypeId = INT4OID;
 
-		shardInterval->needsIsolatedNode = false;
+		shardInterval->needsSeparateNode = false;
 
 		shardIntervalArray[shardIndex] = shardInterval;
 	}

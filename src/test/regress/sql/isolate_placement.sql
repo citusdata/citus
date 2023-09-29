@@ -34,8 +34,8 @@ CREATE SCHEMA isolate_placement;
 SET search_path TO isolate_placement;
 
 -- test null input
-SELECT citus_internal_shard_group_set_needsisolatednode(0, NULL);
-SELECT citus_internal_shard_group_set_needsisolatednode(NULL, false);
+SELECT citus_internal_shard_group_set_needsseparatenode(0, NULL);
+SELECT citus_internal_shard_group_set_needsseparatenode(NULL, false);
 
 SET citus.shard_replication_factor TO 1;
 SET citus.next_shard_id TO 2000000;
@@ -44,7 +44,7 @@ CREATE TABLE single_shard_1(a int);
 SELECT create_distributed_table('single_shard_1', null, colocate_with=>'none');
 
 -- test with user that doesn't have permission to execute the function
-SELECT citus_internal_shard_group_set_needsisolatednode(shardid, true) FROM pg_dist_shard WHERE logicalrelid = 'isolate_placement.single_shard_1'::regclass;
+SELECT citus_internal_shard_group_set_needsseparatenode(shardid, true) FROM pg_dist_shard WHERE logicalrelid = 'isolate_placement.single_shard_1'::regclass;
 
 DROP TABLE single_shard_1;
 
@@ -56,16 +56,16 @@ SELECT pg_sleep(0.1);
 SET ROLE test_user_isolate_placement;
 
 -- test invalid shard id
-SELECT citus_internal_shard_group_set_needsisolatednode(0, true);
+SELECT citus_internal_shard_group_set_needsseparatenode(0, true);
 
--- test null needs_isolated_node
+-- test null needs_separate_node
 SELECT citus_internal_add_shard_metadata(
     relation_id=>0,
     shard_id=>0,
     storage_type=>'0',
     shard_min_value=>'0',
     shard_max_value=>'0',
-    needs_isolated_node=>null);
+    needs_separate_node=>null);
 
 RESET ROLE;
 REVOKE ALL ON SCHEMA isolate_placement FROM test_user_isolate_placement;
@@ -95,7 +95,7 @@ SET ROLE regularuser;
 -- throws an error as the user is not the owner of the table
 SELECT citus_shard_property_set(shardid) FROM pg_dist_shard WHERE logicalrelid = 'isolate_placement.single_shard_1'::regclass;
 SELECT citus_shard_property_set(shardid, anti_affinity=>true) FROM pg_dist_shard WHERE logicalrelid = 'isolate_placement.single_shard_1'::regclass;
-SELECT citus_internal_shard_group_set_needsisolatednode(shardid, true) FROM pg_dist_shard WHERE logicalrelid = 'isolate_placement.single_shard_1'::regclass;
+SELECT citus_internal_shard_group_set_needsseparatenode(shardid, true) FROM pg_dist_shard WHERE logicalrelid = 'isolate_placement.single_shard_1'::regclass;
 
 -- assign all tables to regularuser
 RESET ROLE;
@@ -110,14 +110,14 @@ SELECT result FROM run_command_on_all_nodes($$
 $$)
 ORDER BY result;
 
-SELECT citus_internal_shard_group_set_needsisolatednode(shardid, false) FROM pg_dist_shard WHERE logicalrelid = 'isolate_placement.single_shard_1'::regclass;
+SELECT citus_internal_shard_group_set_needsseparatenode(shardid, false) FROM pg_dist_shard WHERE logicalrelid = 'isolate_placement.single_shard_1'::regclass;
 
 SELECT result FROM run_command_on_all_nodes($$
     SELECT * FROM public.get_colocated_shards_needisolatednode('isolate_placement.single_shard_1')
 $$)
 ORDER BY result;
 
-SELECT citus_internal_shard_group_set_needsisolatednode(shardid, true) FROM pg_dist_shard WHERE logicalrelid = 'isolate_placement.single_shard_1'::regclass;
+SELECT citus_internal_shard_group_set_needsseparatenode(shardid, true) FROM pg_dist_shard WHERE logicalrelid = 'isolate_placement.single_shard_1'::regclass;
 
 DROP TABLE single_shard_1;
 RESET ROLE;
@@ -148,7 +148,7 @@ SELECT create_distributed_table('dist_3', 'a', colocate_with=>'dist_1');
 
 SET citus.shard_replication_factor TO 1;
 
--- none of the placements have been marked as needsisolatednode yet
+-- none of the placements have been marked as needsseparatenode yet
 SELECT result FROM run_command_on_all_nodes($$
     SELECT * FROM public.get_colocated_shards_needisolatednode('isolate_placement.dist_1')
 $$)
@@ -239,7 +239,7 @@ CREATE TABLE dist_4_concurrently(a int);
 SELECT create_distributed_table_concurrently('dist_4_concurrently', 'a', colocate_with=>'dist_1');
 
 -- Placements of a new distributed table created within the same colocated
--- group inherit needsisolatednode from the colocated placements too.
+-- group inherit needsseparatenode from the colocated placements too.
 SELECT result FROM run_command_on_all_nodes($$
     SELECT * FROM public.get_colocated_shards_needisolatednode('isolate_placement.dist_1')
 $$)
@@ -368,7 +368,7 @@ FROM pg_dist_shard
 WHERE shardid = :shardgroup_9_shardid;
 
 -- We shouldn't see shard group 9 because shard-split operation doesn't
--- preserve needsisolatednode flag when splitting the shard.
+-- preserve needsseparatenode flag when splitting the shard.
 SELECT result FROM run_command_on_all_nodes($$
     SELECT * FROM public.get_colocated_shards_needisolatednode('isolate_placement.dist_1')
 $$)
@@ -424,7 +424,7 @@ select get_shard_id_for_distribution_column('dist_3', 100) = :shardgroup_17_shar
 SELECT 1 FROM isolate_tenant_to_new_shard('dist_3', 100, shard_transfer_mode => 'block_writes');
 
 -- We shouldn't see shard group 17 because isolate_tenant_to_new_shard doesn't
--- preserve needsisolatednode flag when splitting the shard.
+-- preserve needsseparatenode flag when splitting the shard.
 SELECT result FROM run_command_on_all_nodes($$
     SELECT * FROM public.get_colocated_shards_needisolatednode('isolate_placement.dist_3')
 $$)

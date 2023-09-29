@@ -13,7 +13,7 @@ SELECT
      pg_dist_node.nodeport,
      size as shard_size,
      CASE
-      WHEN NOT pg_dist_shard.needsisolatednode THEN false
+      WHEN NOT pg_dist_shard.needsseparatenode THEN false
       ELSE
         -- has_separate_node = true if the node doesn't have any other shards except the ones that are colocated with this shard
         NOT EXISTS (

@@ -547,7 +547,7 @@ AS $func$
   END;
 $func$ LANGUAGE plpgsql;
 -- Takes a table name and returns a json object for each shard group that
--- contains a shard whose placements need isolation.
+-- contains a shard whose placements need separate nodes.
 --
 -- This does not only return the shards of input relation but also considers
 -- all colocated relations.
@@ -562,7 +562,7 @@ $func$ LANGUAGE plpgsql;
 -- It only returned shard groups 10 and 15 because they are the only shard groups
 -- that contain at least one shard whose placements need an isolation.
 --
--- (Innermost) Boolean values represent needsisolatednode value for given
+-- (Innermost) Boolean values represent needsseparatenode value for given
 -- shard. For example,
 --
 -- {"15": [{"dist_1": false},{"dist_3": true}]}
@@ -576,22 +576,22 @@ RETURNS SETOF jsonb AS $func$
     RETURN QUERY
     SELECT
         COALESCE(
-            jsonb_agg(jsonb_build_object(shardgroupindex, needsisolatednodejson) ORDER BY shardgroupindex),
+            jsonb_agg(jsonb_build_object(shardgroupindex, needsseparatenodejson) ORDER BY shardgroupindex),
             '{}'::jsonb
         ) AS result
     FROM (
         SELECT shardgroupindex,
-               jsonb_agg(jsonb_build_object(logicalrelid, needsisolatednode) ORDER BY logicalrelid::text) AS needsisolatednodejson
+               jsonb_agg(jsonb_build_object(logicalrelid, needsseparatenode) ORDER BY logicalrelid::text) AS needsseparatenodejson
         FROM (
             SELECT shardgroupindex,
                    logicalrelid,
-                   needsisolatednode
+                   needsseparatenode
             FROM public.get_enumerated_shard_groups(qualified_table_name) AS shardgroups
             JOIN pg_dist_shard
             ON shardid = ANY(shardids)
         ) q1
         GROUP BY shardgroupindex
     ) q2
-    WHERE needsisolatednodejson::text LIKE '%true%';
+    WHERE needsseparatenodejson::text LIKE '%true%';
   END;
 $func$ LANGUAGE plpgsql;

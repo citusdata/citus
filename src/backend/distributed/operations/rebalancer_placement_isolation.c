@@ -1,8 +1,8 @@
 /*-------------------------------------------------------------------------
  *
  * rebalancer_placement_isolation.c
- *	  Routines to determine which worker node should be used to isolate
- *	  a colocated set of shard placements that needs isolation.
+ *	  Routines to determine which worker node should be used to separate
+ *	  a colocated set of shard placements that need separate nodes.
  *
  * Copyright (c) Citus Data, Inc.
  *
@@ -32,7 +32,8 @@ struct RebalancerPlacementIsolationContext
 
 /*
  * Entry of the hash table that maps each primary worker node to a shard
- * placement group that is determined to be isolated on that node.
+ * placement group that is determined to be separated from other shards in
+ * the cluster via that node.
  */
 typedef struct
 {
@@ -48,20 +49,21 @@ typedef struct
 	bool shouldHaveShards;
 
 	/*
-	 * Whether given node is allowed to isolate any shard placement groups.
+	 * Whether given node is allowed to separate any shard placement groups.
 	 *
 	 * This is set only if we're draining a single node because otherwise
-	 * we have the control to isolate shard placement groups on any node.
+	 * we have the control to separate shard placement groups on any node.
 	 *
-	 * However if we're draining a single node, we cannot isolate shard
+	 * However if we're draining a single node, we cannot separate shard
 	 * placement groups on the node that already has some placements because
 	 * we cannot move the existing placements from a node that we're not
 	 * draining to another node when we're draining a single node.
 	 */
-	bool allowedToIsolateAnyPlacementGroup;
+	bool allowedToSeparateAnyPlacementGroup;
 
 	/*
-	 * Shard placement group that is assigned to this node to be isolated.
+	 * Shard placement group that is assigned to this node to be separated
+	 * from others in the cluster.
 	 *
 	 * NULL if no shard placement group is assigned yet.
 	 */
@@ -93,8 +95,8 @@ static int WorkerNodeListGetNodeWithGroupId(List *workerNodeList, int32 nodeGrou
 
 /*
  * PrepareRebalancerPlacementIsolationContext creates RebalancerPlacementIsolationContext
- * that keeps track of which worker nodes are used to isolate which shard placement groups
- * that need an isolated node.
+ * that keeps track of which worker nodes are used to separate which shard placement groups
+ * that need separate nodes.
  */
 RebalancerPlacementIsolationContext *
 PrepareRebalancerPlacementIsolationContext(List *activeWorkerNodeList,
@@ -151,25 +153,26 @@ NodePlacementGroupHashInit(HTAB *nodePlacementGroupHash, List *workerNodeList,
 		}
 
 		nodePlacementGroupHashEntry->shouldHaveShards = shouldHaveShards;
-		nodePlacementGroupHashEntry->allowedToIsolateAnyPlacementGroup = shouldHaveShards;
+		nodePlacementGroupHashEntry->allowedToSeparateAnyPlacementGroup =
+			shouldHaveShards;
 		nodePlacementGroupHashEntry->assignedPlacementGroup = NULL;
 
 		/*
 		 * For the rest of the comment, assume that:
 		 *   Node D: the node we're draining
 		 *   Node I: a node that is not D and that has a shard placement group
-		 *           that needs an isolated node
+		 *           that needs a separate node
 		 *   Node R: a node that is not D and that has some regular shard
 		 *           placements
 		 *
 		 * If we're draining a single node, then we don't know whether other
-		 * nodes have any regular shard placements or any that need an isolated
+		 * nodes have any regular shard placements or any that need a separate
 		 * node because in that case GetRebalanceSteps() would provide a list of
 		 * shard placements that are stored on D, not a list that contains all
 		 * the placements accross the cluster (because we want to limit node
 		 * draining to that node in that case). Note that when all shard
 		 * placements in the cluster are provided, NodePlacementGroupHashAssignNodes()
-		 * would already be aware of which node is used to isolate which shard
+		 * would already be aware of which node is used to separate which shard
 		 * placement group or which node is used to store some regular shard
 		 * placements. That is why we skip below code if we're not draining a
 		 * single node. It's not only inefficient to run below code when we're
@@ -181,9 +184,9 @@ NodePlacementGroupHashInit(HTAB *nodePlacementGroupHash, List *workerNodeList,
 		 *
 		 * Below we find out the assigned placement groups for nodes of type
 		 * I because we want to avoid from moving the placements (if any) from
-		 * node D to node I. We also set allowedToIsolateAnyPlacementGroup to
+		 * node D to node I. We also set allowedToSeparateAnyPlacementGroup to
 		 * false for the nodes that already have some shard placements because
-		 * we want to avoid from moving the placements that need an isolated node
+		 * we want to avoid from moving the placements that need a separate node
 		 * (if any) from node D to node R.
 		 */
 		if (!(shouldHaveShards && drainSingleNode))
@@ -191,17 +194,17 @@ NodePlacementGroupHashInit(HTAB *nodePlacementGroupHash, List *workerNodeList,
 			continue;
 		}
 
-		ShardPlacementGroup *isolatedShardPlacementGroup =
-			NodeGroupGetIsolatedShardPlacementGroup(
+		ShardPlacementGroup *separatedShardPlacementGroup =
+			NodeGroupGetSeparatedShardPlacementGroup(
 				nodePlacementGroupHashEntry->nodeGroupId);
-		if (isolatedShardPlacementGroup)
+		if (separatedShardPlacementGroup)
 		{
 			nodePlacementGroupHashEntry->assignedPlacementGroup =
-				isolatedShardPlacementGroup;
+				separatedShardPlacementGroup;
 		}
 		else
 		{
-			nodePlacementGroupHashEntry->allowedToIsolateAnyPlacementGroup =
+			nodePlacementGroupHashEntry->allowedToSeparateAnyPlacementGroup =
 				!NodeGroupHasShardPlacements(nodePlacementGroupHashEntry->nodeGroupId);
 		}
 	}
@@ -210,7 +213,7 @@ NodePlacementGroupHashInit(HTAB *nodePlacementGroupHash, List *workerNodeList,
 
 /*
  * NodePlacementGroupHashAssignNodes assigns all active shard placements in
- * the cluster that need to be isolated to individual worker nodes.
+ * the cluster that need separate nodes to individual worker nodes.
  */
 static void
 NodePlacementGroupHashAssignNodes(HTAB *nodePlacementGroupHash,
@@ -228,7 +231,7 @@ NodePlacementGroupHashAssignNodes(HTAB *nodePlacementGroupHash,
 	foreach_ptr(shardPlacement, shardPlacementList)
 	{
 		ShardInterval *shardInterval = LoadShardInterval(shardPlacement->shardId);
-		if (!shardInterval->needsIsolatedNode)
+		if (!shardInterval->needsSeparateNode)
 		{
 			continue;
 		}
@@ -259,8 +262,8 @@ NodePlacementGroupHashAssignNodes(HTAB *nodePlacementGroupHash,
 	ShardPlacement *unassignedShardPlacement = NULL;
 	foreach_ptr(unassignedShardPlacement, unassignedShardPlacementList)
 	{
-		bool isolated = false;
-		while (!isolated && availableNodeIdx < list_length(availableWorkerList))
+		bool separated = false;
+		while (!separated && availableNodeIdx < list_length(availableWorkerList))
 		{
 			WorkerNode *availableWorkerNode =
 				(WorkerNode *) list_nth(availableWorkerList, availableNodeIdx);
@@ -270,15 +273,15 @@ NodePlacementGroupHashAssignNodes(HTAB *nodePlacementGroupHash,
 												 availableWorkerNode->groupId,
 												 unassignedShardPlacement))
 			{
-				isolated = true;
+				separated = true;
 				break;
 			}
 		}
 
-		if (!isolated)
+		if (!separated)
 		{
-			ereport(WARNING, (errmsg("could not isolate all shard placements "
-									 "that need an isolated node")));
+			ereport(WARNING, (errmsg("could not separate all shard placements "
+									 "that need a separate node")));
 			return;
 		}
 	}
@@ -317,7 +320,7 @@ NodePlacementGroupHashAssignNode(HTAB *nodePlacementGroupHash,
 		return false;
 	}
 
-	if (!nodePlacementGroupHashEntry->allowedToIsolateAnyPlacementGroup)
+	if (!nodePlacementGroupHashEntry->allowedToSeparateAnyPlacementGroup)
 	{
 		return false;
 	}
@@ -351,10 +354,10 @@ RebalancerPlacementIsolationContextPlacementIsAllowedOnWorker(
 												 workerNode->groupId);
 
 	ShardInterval *shardInterval = LoadShardInterval(shardId);
-	if (!shardInterval->needsIsolatedNode)
+	if (!shardInterval->needsSeparateNode)
 	{
 		/*
-		 * It doesn't need an isolated node, but is the node used to isolate
+		 * It doesn't need a separate node, but is the node used to separate
 		 * a shard placement group? If so, we cannot store it on this node.
 		 */
 		return nodePlacementGroupHashEntry->shouldHaveShards &&
@@ -362,8 +365,8 @@ RebalancerPlacementIsolationContextPlacementIsAllowedOnWorker(
 	}
 
 	/*
-	 * Given shard placement needs an isolated node.
-	 * Check if given worker node is the one that is assigned to isolate it.
+	 * Given shard placement needs a separate node.
+	 * Check if given worker node is the one that is assigned to separate it.
 	 */
 	ShardPlacementGroup *placementGroup =
 		GetShardPlacementGroupForPlacement(shardId, placementId);

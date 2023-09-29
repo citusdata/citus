@@ -1,8 +1,8 @@
 /*-------------------------------------------------------------------------
  *
  * rebalancer_placement_isolation.h
- *	  Routines to determine which worker node should be used to isolate
- *	  a colocated set of shard placements that need isolation.
+ *	  Routines to determine which worker node should be used to separate
+ *	  a colocated set of shard placements that need separate nodes.
  *
  * Copyright (c) Citus Data, Inc.
  *
