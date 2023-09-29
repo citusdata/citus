@@ -2416,7 +2416,8 @@ SELECT create_distributed_function('delivery(int,int)', '$1');
 
 When a distributed function is called, the argument is treated as a distribution column filter on a co-located distributed table and delegated to the worker node that stores the corresponding shards. Ideally, every statement in the function uses the distribution argument as a distribution column filter and only accesses co-located tables, such that the transaction remains local to the worker node. Otherwise, the worker assumes the role of coordinator and performs a distributed transaction. Function call delegation is especially useful in multi-tenant applications that involve complex transactions, as those transactions can be handled in a single network round-trip and with almost no overhead on the coordinator.
 
-diagram of how Citus coordinator delegates stored procedure call to worker nodes
+
+<img alt="Citus coordinator delegates stored procedure call to worker nodes" src="../../../images/coordinator_delegates_stored_procedure.png" width="700">
 
 We’ve implemented function call delegation through early-stage checks in the planner hook and the utility hook (for CALL, in case of procedures). If the query matches the simple form shown in the figure above, and the function is marked as distributed, then the function call will be propagated to the right node based on the sharding metadata of a co-located table.
 
