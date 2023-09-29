@@ -9,6 +9,27 @@ SET client_min_messages TO WARNING;
 CALL citus_cleanup_orphaned_resources();
 RESET client_min_messages;
 
+-- Returns true if all placement groups within given shard group are isolated.
+--
+-- Not created in isolate_placement schema because it's dropped a few times during the test.
+CREATE OR REPLACE FUNCTION verify_placements_in_shard_group_isolated(
+    qualified_table_name text,
+    shard_group_index bigint)
+RETURNS boolean
+AS $func$
+DECLARE
+    v_result boolean;
+  BEGIN
+    SELECT bool_and(own_node) INTO v_result
+    FROM citus_shards
+    JOIN (
+        SELECT shardids FROM public.get_enumerated_shard_groups(qualified_table_name) WHERE shardgroupindex = shard_group_index
+    ) q
+    ON (shardid = ANY(q.shardids));
+    RETURN v_result;
+  END;
+$func$ LANGUAGE plpgsql;
+
 CREATE SCHEMA isolate_placement;
 SET search_path TO isolate_placement;
 
@@ -634,6 +655,20 @@ SET client_min_messages TO NOTICE;
 
 SELECT public.verify_placements_in_shard_group_isolated('isolate_placement.dist_1', 1);
 
+SELECT DISTINCT(table_name::regclass::text)
+FROM citus_shards
+JOIN pg_class ON (oid = table_name)
+WHERE relnamespace = 'isolate_placement'::regnamespace AND own_node
+ORDER BY 1;
+
+SELECT bool_or(own_node) = false
+FROM citus_shards
+JOIN (
+    SELECT unnest(shardids) shardid
+    FROM public.get_enumerated_shard_groups('isolate_placement.dist_1')
+    WHERE shardgroupindex != 1
+) shards_except_group_1 USING (shardid);
+
 DROP TABLE dist_to_be_replicated;
 
 SELECT citus_drain_node('localhost', :master_port, shard_transfer_mode=>'block_writes');
@@ -980,5 +1015,6 @@ DROP TABLE single_shard_1, single_shard_3;
 
 SET client_min_messages TO WARNING;
 DROP SCHEMA isolate_placement CASCADE;
+DROP FUNCTION public.verify_placements_in_shard_group_isolated(text, bigint);
 
 SELECT citus_remove_node('localhost', :master_port);

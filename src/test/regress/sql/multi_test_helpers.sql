@@ -623,34 +623,3 @@ RETURNS SETOF jsonb AS $func$
     WHERE needsisolatednodejson::text LIKE '%true%';
   END;
 $func$ LANGUAGE plpgsql;
-
--- Returns true if all placement groups within given shard group are isolated.
-CREATE OR REPLACE FUNCTION verify_placements_in_shard_group_isolated(
-    qualified_table_name text,
-    shard_group_index bigint)
-RETURNS boolean
-AS $func$
-DECLARE
-    v_result boolean;
-  BEGIN
-    SELECT bool_and(ok_for_nodegroup) INTO v_result FROM (
-        SELECT array_agg(shardid ORDER BY shardid) =
-               (SELECT shardids FROM public.get_enumerated_shard_groups(qualified_table_name) WHERE shardgroupindex = shard_group_index)
-               AS ok_for_nodegroup -- check whether each of those nodes only contain placements of given shard group
-        FROM citus_shards
-        JOIN pg_dist_node USING (nodename, nodeport)
-        WHERE citus_table_type = 'distributed' AND -- only interested in distributed table shards on the nodes we're interested in
-              groupid IN ( -- only interested in the nodes that contain placements of given shard group
-                SELECT DISTINCT(pdn.groupid)
-                FROM citus_shards cs
-                JOIN pg_dist_node pdn USING (nodename, nodeport)
-                WHERE cs.shardid IN (
-                    SELECT unnest(shardids) FROM public.get_enumerated_shard_groups(qualified_table_name) WHERE shardgroupindex = shard_group_index
-                )
-              )
-        GROUP BY groupid
-    ) q;
-
-    RETURN v_result;
-  END;
-$func$ LANGUAGE plpgsql;
