@@ -1923,9 +1923,12 @@ Citus implements an event trigger, [`citus_drop_trigger()`](https://github.com/c
 └───────┴────────────────────────────┴──────────┴──────────┴─────────┴────────────┴─────────┘
 (1 row)
 ```
-One of the primary reasons for utilizing a trigger for `DROP` processing is that after executing `standardProcess_Utility`, the `oid` of the table being dropped is eliminated from Postgres' catalog tables. This makes it more challenging to manage a dropped table in `PostProcessUtility`, as is customary for many `DDL` commands. Instead, we depend on the event trigger to supply the `oid` of the table that has been dropped. This allows us to delete all related metadata, such as entries in `pg_dist_partition` or `pg_dist_shard` from Citus' catalog tables. Additionally, we eliminate all relevant metadata from every node in the cluster. Ultimately, this enables us to remove the shard placements linked to the dropped Citus table.
 
 The drop trigger proves useful for capturing all tables affected by the `CASCADE` operation. For instance, if you delete a parent table, Postgres will automatically execute a `DROP TABLE` command for its partitions. Citus can then seamlessly apply the same operation to all cascaded tables, eliminating the need for manual identification of tables that would be affected by the cascade.
+
+Another reason for utilizing a trigger for `DROP` processing is that after executing `standardProcess_Utility`, the `oid` of the table being dropped is eliminated from Postgres' catalog tables. This makes it more challenging to manage a dropped table in `PostProcessUtility`, as is customary for many `DDL` commands. Instead, we depend on the event trigger to supply the `oid` of the table that has been dropped. This allows us to delete all related metadata, such as entries in `pg_dist_partition` or `pg_dist_shard` from Citus' catalog tables. Additionally, we eliminate all relevant metadata from every node in the cluster. Ultimately, this enables us to remove the shard placements linked to the dropped Citus table.
+
+Also, if we were to rely on `standardProcess_Utility`, we'd need to handle all sorts of `DROP` commands that could cascade into `DROP TABLE`. With drop trigger, Postgres handles that and calls Citus' drop trigger.
 
 Generally speaking, there isn't a compelling reason to avoid using `PostProcessUtility` for managing `DROP TABLE` commands. Theoretically, one could implement all the same logic within `PostProcessUtility`. However, the drop trigger offers a convenient approach.
 
