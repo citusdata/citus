@@ -15,7 +15,7 @@ SELECT
      CASE
       WHEN NOT pg_dist_shard.needsisolatednode THEN false
       ELSE
-        -- own_node = true if the node doesn't have any other shards except the ones that are colocated with this shard
+        -- has_separate_node = true if the node doesn't have any other shards except the ones that are colocated with this shard
         NOT EXISTS (
             -- get all the distributed table shards that are placed on the same node as this shard
             SELECT pds1.shardid
@@ -32,7 +32,7 @@ SELECT
             WHERE pdp1.colocationid = pg_dist_partition.colocationid AND
                   ((pds1.shardminvalue IS NULL AND pg_dist_shard.shardminvalue IS NULL) OR (pds1.shardminvalue = pg_dist_shard.shardminvalue))
         )
-     END AS own_node
+     END AS has_separate_node
 FROM
    pg_dist_shard
 JOIN

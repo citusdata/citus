@@ -20,7 +20,7 @@ AS $func$
 DECLARE
     v_result boolean;
   BEGIN
-    SELECT bool_and(own_node) INTO v_result
+    SELECT bool_and(has_separate_node) INTO v_result
     FROM citus_shards
     JOIN (
         SELECT shardids FROM public.get_enumerated_shard_groups(qualified_table_name) WHERE shardgroupindex = shard_group_index
@@ -658,10 +658,10 @@ SELECT public.verify_placements_in_shard_group_isolated('isolate_placement.dist_
 SELECT DISTINCT(table_name::regclass::text)
 FROM citus_shards
 JOIN pg_class ON (oid = table_name)
-WHERE relnamespace = 'isolate_placement'::regnamespace AND own_node
+WHERE relnamespace = 'isolate_placement'::regnamespace AND has_separate_node
 ORDER BY 1;
 
-SELECT bool_or(own_node) = false
+SELECT bool_or(has_separate_node) = false
 FROM citus_shards
 JOIN (
     SELECT unnest(shardids) shardid
