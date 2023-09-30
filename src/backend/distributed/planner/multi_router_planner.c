@@ -2860,6 +2860,7 @@ TargetShardIntervalForFastPathQuery(Query *query, bool *isMultiShardQuery,
 	/* we're only expecting single shard from a single table */
 	if (list_length(prunedShardIntervalList) > 1)
 	{
+		elog(ERROR,"error prunedShardIntervalList");
 		*isMultiShardQuery = true;
 	}
 	else if (list_length(prunedShardIntervalList) == 1 &&
