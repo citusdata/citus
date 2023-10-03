@@ -18,6 +18,7 @@
 #include "distributed/coordinator_protocol.h"
 #include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/namespace_utils.h"
 #include "miscadmin.h"
 #include "nodes/makefuncs.h"
 #include "parser/parse_clause.h"
@@ -146,15 +147,21 @@ CreatePolicyCommandForPolicy(Oid relationId, RowSecurityPolicy *policy)
 
 	if (policy->qual)
 	{
+		int saveNestLevel = PushEmptySearchPath();
 		char *qualString = deparse_expression((Node *) (policy->qual),
 											  relationContext, false, false);
+		PopEmptySearchPath(saveNestLevel);
+
 		appendStringInfo(createPolicyCommand, " USING (%s)", qualString);
 	}
 
 	if (policy->with_check_qual)
 	{
+		int saveNestLevel = PushEmptySearchPath();
 		char *withCheckQualString = deparse_expression(
 			(Node *) (policy->with_check_qual), relationContext, false, false);
+		PopEmptySearchPath(saveNestLevel);
+
 		appendStringInfo(createPolicyCommand, " WITH CHECK (%s)",
 						 withCheckQualString);
 	}
@@ -380,7 +387,10 @@ PreprocessAlterPolicyStmt(Node *node, const char *queryString,
 	{
 		ErrorIfUnsupportedPolicyExpr(qual);
 
+		int saveNestLevel = PushEmptySearchPath();
 		char *qualString = deparse_expression(qual, relationContext, false, false);
+		PopEmptySearchPath(saveNestLevel);
+
 		appendStringInfo(&ddlString, " USING (%s)", qualString);
 	}
 
@@ -394,9 +404,12 @@ PreprocessAlterPolicyStmt(Node *node, const char *queryString,
 	{
 		ErrorIfUnsupportedPolicyExpr(with_check_qual);
 
+		int saveNestLevel = PushEmptySearchPath();
 		char *withCheckString = deparse_expression(with_check_qual, relationContext,
 												   false,
 												   false);
+		PopEmptySearchPath(saveNestLevel);
+
 		appendStringInfo(&ddlString, " WITH CHECK (%s)", withCheckString);
 	}
 
