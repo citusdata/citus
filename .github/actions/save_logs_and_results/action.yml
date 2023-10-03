@@ -29,7 +29,7 @@ runs:
         echo '```diff' >> $GITHUB_STEP_SUMMARY
         echo -E "$diffs" >> $GITHUB_STEP_SUMMARY
         echo '```' >> $GITHUB_STEP_SUMMARY
-        echo $diffs
+        echo -E $diffs
       fi
     shell: bash
   - name: Print stack traces
