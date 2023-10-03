@@ -188,6 +188,9 @@ jobs:
     container:
       image: "${{ matrix.image_name }}:${{ matrix.pg_version }}${{ vars.image_suffix }}"
       options: --user root --dns=8.8.8.8
+      # Due to Github creates a default network for each job, we need to use
+      # --dns= to have similar DNS settings as our other CI systems or local
+      # machines. Otherwise, we may see different results.
     needs:
     - build
     steps:
