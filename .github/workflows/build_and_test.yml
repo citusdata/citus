@@ -187,7 +187,7 @@ jobs:
     runs-on: ubuntu-20.04
     container:
       image: "${{ matrix.image_name }}:${{ matrix.pg_version }}${{ vars.image_suffix }}"
-      options: --user root
+      options: --user root -p 57637:57637
     needs:
     - build
     steps:
