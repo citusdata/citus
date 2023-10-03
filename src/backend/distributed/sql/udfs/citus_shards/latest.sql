@@ -15,22 +15,22 @@ SELECT
      CASE
       WHEN NOT pg_dist_shard.needsseparatenode THEN false
       ELSE
-        -- has_separate_node = true if the node doesn't have any other shards except the ones that are colocated with this shard
+        -- has_separate_node = true if the node doesn't have any other shard
+        -- placements except the ones that belong to the same shard group.
         NOT EXISTS (
-            -- get all the distributed table shards that are placed on the same node as this shard
-            SELECT pds1.shardid
+            SELECT 1
             FROM pg_dist_shard pds1
             JOIN pg_dist_placement pdp1 USING (shardid)
             JOIN pg_dist_partition pdp2 USING (logicalrelid)
-            WHERE pdp1.groupid = pg_dist_placement.groupid AND
-                  (pdp2.partkey IS NOT NULL OR (pdp2.repmodel != 't' AND pdp2.colocationid != 0))
-            EXCEPT
-            -- get all the shards that are colocated with this shard
-            SELECT pds1.shardid
-            FROM pg_dist_shard pds1
-            JOIN pg_dist_partition pdp1 USING (logicalrelid)
-            WHERE pdp1.colocationid = pg_dist_partition.colocationid AND
-                  ((pds1.shardminvalue IS NULL AND pg_dist_shard.shardminvalue IS NULL) OR (pds1.shardminvalue = pg_dist_shard.shardminvalue))
+            WHERE
+                  -- get the distributed table placements that are placed on the same node as this placement
+                  pdp1.groupid = pg_dist_placement.groupid AND
+                  (pdp2.partkey IS NOT NULL OR (pdp2.repmodel != 't' AND pdp2.colocationid != 0)) AND
+                  -- filter out all the placements that belong to the same shard group
+                  NOT (
+                    pdp2.colocationid = pg_dist_partition.colocationid AND
+                    ((pds1.shardminvalue IS NULL AND pg_dist_shard.shardminvalue IS NULL) OR (pds1.shardminvalue = pg_dist_shard.shardminvalue))
+                  )
         )
      END AS has_separate_node
 FROM
