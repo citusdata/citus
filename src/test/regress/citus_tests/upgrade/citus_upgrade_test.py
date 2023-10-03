@@ -115,9 +115,9 @@ def remove_tar_files(tar_path):
 
 def restart_databases(pg_path, rel_data_path, mixed_mode, config):
     for node_name in config.node_name_to_ports.keys():
-        if (
-            mixed_mode
-            and config.node_name_to_ports[node_name] == config.chosen_random_worker_port
+        if mixed_mode and config.node_name_to_ports[node_name] in (
+            config.chosen_random_worker_port,
+            config.coordinator_port(),
         ):
             continue
         abs_data_path = os.path.abspath(os.path.join(rel_data_path, node_name))
@@ -148,7 +148,10 @@ def restart_database(pg_path, abs_data_path, node_name, node_ports, logfile_pref
 
 def run_alter_citus(pg_path, mixed_mode, config):
     for port in config.node_name_to_ports.values():
-        if mixed_mode and port == config.chosen_random_worker_port:
+        if mixed_mode and port in (
+            config.chosen_random_worker_port,
+            config.coordinator_port(),
+        ):
             continue
         utils.psql(pg_path, port, "ALTER EXTENSION citus UPDATE;")
 
@@ -158,7 +161,8 @@ def verify_upgrade(config, mixed_mode, node_ports):
         actual_citus_version = get_actual_citus_version(config.bindir, port)
         expected_citus_version = MASTER_VERSION
         if expected_citus_version != actual_citus_version and not (
-            mixed_mode and port == config.chosen_random_worker_port
+            mixed_mode
+            and port in (config.chosen_random_worker_port, config.coordinator_port())
         ):
             print(
                 "port: {} citus version {} expected {}".format(
