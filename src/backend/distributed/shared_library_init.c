@@ -172,8 +172,6 @@ static GucStringAssignHook OldApplicationNameAssignHook = NULL;
  */
 static bool FinishedStartupCitusBackend = false;
 
-char *CitusMainDatabase = "postgres";
-
 static object_access_hook_type PrevObjectAccessHook = NULL;
 
 #if PG_VERSION_NUM >= PG_VERSION_15
