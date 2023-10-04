@@ -598,7 +598,8 @@ GetRebalanceSteps(RebalanceOptions *options)
 		PrepareRebalancerPlacementIsolationContext(
 			activeWorkerList,
 			FlattenNestedList(activeShardPlacementListList),
-			options->workerNode);
+			options->workerNode,
+			&context.shardAllowedOnNodeUDF);
 
 	return RebalancePlacementUpdates(activeWorkerList,
 									 activeShardPlacementListList,

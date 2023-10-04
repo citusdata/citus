@@ -28,7 +28,10 @@ extern RebalancerPlacementIsolationContext * PrepareRebalancerPlacementIsolation
 	activeShardPlacementList,
 	WorkerNode
 	*
-	drainWorkerNode);
+	drainWorkerNode,
+	FmgrInfo
+	*
+	shardAllowedOnNodeUDF);
 extern bool RebalancerPlacementIsolationContextPlacementIsAllowedOnWorker(
 	RebalancerPlacementIsolationContext *context,
 	uint64 shardId,

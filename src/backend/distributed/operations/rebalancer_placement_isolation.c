@@ -79,10 +79,12 @@ static void NodePlacementGroupHashInit(HTAB *nodePlacementGroupHash,
 									   WorkerNode *drainWorkerNode);
 static void NodePlacementGroupHashAssignNodes(HTAB *nodePlacementGroupHash,
 											  List *workerNodeList,
-											  List *shardPlacementList);
+											  List *shardPlacementList,
+											  FmgrInfo *shardAllowedOnNodeUDF);
 static bool NodePlacementGroupHashAssignNode(HTAB *nodePlacementGroupHash,
 											 int32 nodeGroupId,
-											 ShardPlacement *shardPlacement);
+											 ShardPlacement *shardPlacement,
+											 FmgrInfo *shardAllowedOnNodeUDF);
 static NodePlacementGroupHashEntry * NodePlacementGroupHashGetNodeWithGroupId(
 	HTAB *nodePlacementGroupHash,
 	int32
@@ -101,7 +103,8 @@ static int WorkerNodeListGetNodeWithGroupId(List *workerNodeList, int32 nodeGrou
 RebalancerPlacementIsolationContext *
 PrepareRebalancerPlacementIsolationContext(List *activeWorkerNodeList,
 										   List *activeShardPlacementList,
-										   WorkerNode *drainWorkerNode)
+										   WorkerNode *drainWorkerNode,
+										   FmgrInfo *shardAllowedOnNodeUDF)
 {
 	HTAB *nodePlacementGroupHash =
 		CreateSimpleHashWithNameAndSize(uint32, NodePlacementGroupHashEntry,
@@ -116,7 +119,8 @@ PrepareRebalancerPlacementIsolationContext(List *activeWorkerNodeList,
 
 	NodePlacementGroupHashAssignNodes(nodePlacementGroupHash,
 									  activeWorkerNodeList,
-									  activeShardPlacementList);
+									  activeShardPlacementList,
+									  shardAllowedOnNodeUDF);
 
 	RebalancerPlacementIsolationContext *context =
 		palloc(sizeof(RebalancerPlacementIsolationContext));
@@ -218,7 +222,8 @@ NodePlacementGroupHashInit(HTAB *nodePlacementGroupHash, List *workerNodeList,
 static void
 NodePlacementGroupHashAssignNodes(HTAB *nodePlacementGroupHash,
 								  List *workerNodeList,
-								  List *shardPlacementList)
+								  List *shardPlacementList,
+								  FmgrInfo *shardAllowedOnNodeUDF)
 {
 	List *availableWorkerList = list_copy(workerNodeList);
 	List *unassignedShardPlacementList = NIL;
@@ -239,7 +244,8 @@ NodePlacementGroupHashAssignNodes(HTAB *nodePlacementGroupHash,
 		int32 assignGroupId = shardPlacement->groupId;
 		if (NodePlacementGroupHashAssignNode(nodePlacementGroupHash,
 											 assignGroupId,
-											 shardPlacement))
+											 shardPlacement,
+											 shardAllowedOnNodeUDF))
 		{
 			int currentPlacementNodeIdx =
 				WorkerNodeListGetNodeWithGroupId(availableWorkerList,
@@ -271,7 +277,8 @@ NodePlacementGroupHashAssignNodes(HTAB *nodePlacementGroupHash,
 
 			if (NodePlacementGroupHashAssignNode(nodePlacementGroupHash,
 												 availableWorkerNode->groupId,
-												 unassignedShardPlacement))
+												 unassignedShardPlacement,
+												 shardAllowedOnNodeUDF))
 			{
 				separated = true;
 				break;
@@ -296,7 +303,8 @@ NodePlacementGroupHashAssignNodes(HTAB *nodePlacementGroupHash,
 static bool
 NodePlacementGroupHashAssignNode(HTAB *nodePlacementGroupHash,
 								 int32 nodeGroupId,
-								 ShardPlacement *shardPlacement)
+								 ShardPlacement *shardPlacement,
+								 FmgrInfo *shardAllowedOnNodeUDF)
 {
 	NodePlacementGroupHashEntry *nodePlacementGroupHashEntry =
 		NodePlacementGroupHashGetNodeWithGroupId(nodePlacementGroupHash, nodeGroupId);
@@ -326,6 +334,14 @@ NodePlacementGroupHashAssignNode(HTAB *nodePlacementGroupHash,
 	}
 
 	if (!nodePlacementGroupHashEntry->shouldHaveShards)
+	{
+		return false;
+	}
+
+	WorkerNode *workerNode = PrimaryNodeForGroup(nodeGroupId, NULL);
+	Datum allowed = FunctionCall2(shardAllowedOnNodeUDF, shardPlacement->shardId,
+								  workerNode->nodeId);
+	if (!DatumGetBool(allowed))
 	{
 		return false;
 	}
