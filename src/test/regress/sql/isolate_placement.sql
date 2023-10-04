@@ -1029,19 +1029,35 @@ SELECT shardid, nodeid INTO single_shard_1_shardid_nodeid
 FROM pg_dist_shard JOIN pg_dist_placement USING (shardid) JOIN pg_dist_node USING (groupid)
 WHERE logicalrelid = 'isolate_placement.single_shard_1'::regclass AND noderole = 'primary';
 
+SELECT shardid, nodeid INTO single_shard_3_shardid_nodeid
+FROM pg_dist_shard JOIN pg_dist_placement USING (shardid) JOIN pg_dist_node USING (groupid)
+WHERE logicalrelid = 'isolate_placement.single_shard_3'::regclass AND noderole = 'primary';
+
 SELECT citus_shard_property_set(shardid, anti_affinity=>true) FROM pg_dist_shard WHERE logicalrelid IN ('single_shard_1'::regclass);
 SELECT citus_shard_property_set(shardid, anti_affinity=>true) FROM pg_dist_shard WHERE logicalrelid IN ('single_shard_3'::regclass);
 
--- tell rebalancer that single_shard_1 cannot be placed on the node where it is currently placed
+-- Tell rebalancer that single_shard_1 cannot be placed on the node where it is currently placed
+-- and that single_shard_3 cannot be placed on any node except the one where it is currently placed.
 CREATE OR REPLACE FUNCTION test_shard_allowed_on_node(p_shardid bigint, p_nodeid int)
     RETURNS boolean AS
 $$
     SELECT
-        CASE
-            WHEN (p_shardid = shardid and p_nodeid = nodeid) THEN false
-            ELSE true
-        END
-    FROM single_shard_1_shardid_nodeid;
+    (
+        SELECT
+            CASE
+                WHEN (p_shardid = shardid and p_nodeid = nodeid) THEN false
+                ELSE true
+            END
+        FROM single_shard_1_shardid_nodeid
+    ) AND
+    (
+        SELECT
+            CASE
+                WHEN (p_shardid = shardid and p_nodeid != nodeid) THEN false
+                ELSE true
+            END
+        FROM single_shard_3_shardid_nodeid
+    )
 $$ LANGUAGE sql;
 
 INSERT INTO pg_catalog.pg_dist_rebalance_strategy(
@@ -1070,7 +1086,7 @@ SELECT rebalance_table_shards(rebalance_strategy := 'test_isolate_placement', sh
 SET client_min_messages TO NOTICE;
 
 -- This time, test_shard_allowed_on_node() didn't cause rebalance_table_shards() to
--- emit a warning.
+-- fail.
 --
 -- Right now single_shard_1 & single_shard_3 are placed on the same node. And
 -- due to order we follow when assigning nodes to placement groups that need an
@@ -1083,7 +1099,7 @@ SET client_min_messages TO NOTICE;
 SELECT public.verify_placements_in_shard_group_isolated('isolate_placement.single_shard_1', 1) = true;
 SELECT public.verify_placements_in_shard_group_isolated('isolate_placement.single_shard_3', 1) = true;
 
-DROP TABLE single_shard_1_shardid_nodeid;
+DROP TABLE single_shard_1_shardid_nodeid, single_shard_3_shardid_nodeid;
 DELETE FROM pg_catalog.pg_dist_rebalance_strategy WHERE name='test_isolate_placement';
 
 DROP TABLE single_shard_1, single_shard_3;
