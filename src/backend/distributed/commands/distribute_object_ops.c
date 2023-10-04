@@ -1355,6 +1355,7 @@ GetDistributeObjectOps(Node *node)
 		{
 			return &Database_Alter;
 		}
+
 		case T_CreatedbStmt:
 		{
 			return &Database_Create;

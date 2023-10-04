@@ -37,33 +37,33 @@
 #include "distributed/adaptive_executor.h"
 
 /* macros to add DefElems to a list  */
-#define DEFELEM_ADD_STRING(options, key, value)                          \
-	{                                                                    \
-		DefElem *elem = makeDefElem(key, (Node *)makeString(value), -1); \
-		options = lappend(options, elem);                                \
+#define DEFELEM_ADD_STRING(options, key, value) \
+	{ \
+		DefElem *elem = makeDefElem(key, (Node *) makeString(value), -1); \
+		options = lappend(options, elem); \
 	}
 
-#define DEFELEM_ADD_BOOL(options, key, value)                             \
-	{                                                                     \
-		DefElem *elem = makeDefElem(key, (Node *)makeBoolean(value), -1); \
-		options = lappend(options, elem);                                 \
+#define DEFELEM_ADD_BOOL(options, key, value) \
+	{ \
+		DefElem *elem = makeDefElem(key, (Node *) makeBoolean(value), -1); \
+		options = lappend(options, elem); \
 	}
 
-#define DEFELEM_ADD_INT(options, key, value)                              \
-	{                                                                     \
-		DefElem *elem = makeDefElem(key, (Node *)makeInteger(value), -1); \
-		options = lappend(options, elem);                                 \
+#define DEFELEM_ADD_INT(options, key, value) \
+	{ \
+		DefElem *elem = makeDefElem(key, (Node *) makeInteger(value), -1); \
+		options = lappend(options, elem); \
 	}
 
-static AlterOwnerStmt *RecreateAlterDatabaseOwnerStmt(Oid databaseOid);
+static AlterOwnerStmt * RecreateAlterDatabaseOwnerStmt(Oid databaseOid);
 
-static List *CreateDDLTaskList(char *command, List *workerNodeList,
-							   bool outsideTransaction);
+static List * CreateDDLTaskList(char *command, List *workerNodeList,
+								bool outsideTransaction);
 
 PG_FUNCTION_INFO_V1(citus_internal_database_command);
 static Oid get_database_owner(Oid db_oid);
-List *PreprocessGrantOnDatabaseStmt(Node *node, const char *queryString,
-									ProcessUtilityContext processUtilityContext);
+List * PreprocessGrantOnDatabaseStmt(Node *node, const char *queryString,
+									 ProcessUtilityContext processUtilityContext);
 
 /* controlled via GUC */
 bool EnableCreateDatabasePropagation = true;
@@ -79,12 +79,13 @@ AlterDatabaseOwnerObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
 	AlterOwnerStmt *stmt = castNode(AlterOwnerStmt, node);
 	Assert(stmt->objectType == OBJECT_DATABASE);
 
-	Oid databaseOid = get_database_oid(strVal((String *)stmt->object), missing_ok);
+	Oid databaseOid = get_database_oid(strVal((String *) stmt->object), missing_ok);
 	ObjectAddress *address = palloc0(sizeof(ObjectAddress));
 	ObjectAddressSet(*address, DatabaseRelationId, databaseOid);
 
 	return list_make1(address);
 }
+
 
 /*
  * DatabaseOwnerDDLCommands returns a list of sql statements to idempotently apply a
@@ -94,9 +95,10 @@ AlterDatabaseOwnerObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
 List *
 DatabaseOwnerDDLCommands(const ObjectAddress *address)
 {
-	Node *stmt = (Node *)RecreateAlterDatabaseOwnerStmt(address->objectId);
+	Node *stmt = (Node *) RecreateAlterDatabaseOwnerStmt(address->objectId);
 	return list_make1(DeparseTreeNode(stmt));
 }
+
 
 /*
  * RecreateAlterDatabaseOwnerStmt creates an AlterOwnerStmt that represents the operation
@@ -108,7 +110,7 @@ RecreateAlterDatabaseOwnerStmt(Oid databaseOid)
 	AlterOwnerStmt *stmt = makeNode(AlterOwnerStmt);
 
 	stmt->objectType = OBJECT_DATABASE;
-	stmt->object = (Node *)makeString(get_database_name(databaseOid));
+	stmt->object = (Node *) makeString(get_database_name(databaseOid));
 
 	Oid ownerOid = get_database_owner(databaseOid);
 	stmt->newowner = makeNode(RoleSpec);
@@ -117,6 +119,7 @@ RecreateAlterDatabaseOwnerStmt(Oid databaseOid)
 
 	return stmt;
 }
+
 
 /*
  * get_database_owner returns the Oid of the role owning the database
@@ -131,12 +134,13 @@ get_database_owner(Oid db_oid)
 						errmsg("database with OID %u does not exist", db_oid)));
 	}
 
-	Oid dba = ((Form_pg_database)GETSTRUCT(tuple))->datdba;
+	Oid dba = ((Form_pg_database) GETSTRUCT(tuple))->datdba;
 
 	ReleaseSysCache(tuple);
 
 	return dba;
 }
+
 
 /*
  * PreprocessGrantOnDatabaseStmt is executed before the statement is applied to the local
@@ -166,14 +170,15 @@ PreprocessGrantOnDatabaseStmt(Node *node, const char *queryString,
 
 	EnsureCoordinator();
 
-	char *sql = DeparseTreeNode((Node *)stmt);
+	char *sql = DeparseTreeNode((Node *) stmt);
 
 	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
-								(void *)sql,
+								(void *) sql,
 								ENABLE_DDL_PROPAGATION);
 
 	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
 }
+
 
 /*
  * PreprocessAlterDatabaseStmt is executed before the statement is applied to the local
@@ -195,14 +200,15 @@ PreprocessAlterDatabaseStmt(Node *node, const char *queryString,
 
 	EnsureCoordinator();
 
-	char *sql = DeparseTreeNode((Node *)stmt);
+	char *sql = DeparseTreeNode((Node *) stmt);
 
 	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
-								(void *)sql,
+								(void *) sql,
 								ENABLE_DDL_PROPAGATION);
 
 	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
 }
+
 
 #if PG_VERSION_NUM >= PG_VERSION_15
 
@@ -226,14 +232,15 @@ PreprocessAlterDatabaseRefreshCollStmt(Node *node, const char *queryString,
 
 	EnsureCoordinator();
 
-	char *sql = DeparseTreeNode((Node *)stmt);
+	char *sql = DeparseTreeNode((Node *) stmt);
 
 	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
-								(void *)sql,
+								(void *) sql,
 								ENABLE_DDL_PROPAGATION);
 
 	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
 }
+
 
 #endif
 
@@ -320,7 +327,8 @@ PostprocessCreateDatabaseStmt(Node *node, const char *queryString)
 	 *
 	 * We do not do this right now because of the AssignDatabaseToShard at the end.
 	 */
-	List *workerNodes = TargetWorkerSetNodeList(NON_COORDINATOR_METADATA_NODES, RowShareLock);
+	List *workerNodes = TargetWorkerSetNodeList(NON_COORDINATOR_METADATA_NODES,
+												RowShareLock);
 	if (list_length(workerNodes) > 0)
 	{
 		char *createDatabaseCommand = DeparseTreeNode(node);
@@ -345,21 +353,22 @@ PostprocessCreateDatabaseStmt(Node *node, const char *queryString)
 	}
 
 	/* synchronize pg_dist_object records */
-	ObjectAddress dbAddress = {0};
+	ObjectAddress dbAddress = { 0 };
 	ObjectAddressSet(dbAddress, DatabaseRelationId, databaseOid);
 	MarkObjectDistributed(&dbAddress);
 
 
-
 	return NIL;
 }
+
 
 /*
  * citus_internal_database_command is an internal UDF to
  * create/drop a database in an idempotent maner without
  * transaction block restrictions.
  */
-Datum citus_internal_database_command(PG_FUNCTION_ARGS)
+Datum
+citus_internal_database_command(PG_FUNCTION_ARGS)
 {
 	int saveNestLevel = NewGUCNestLevel();
 	text *commandText = PG_GETARG_TEXT_P(0);
@@ -367,7 +376,7 @@ Datum citus_internal_database_command(PG_FUNCTION_ARGS)
 	Node *parseTree = ParseTreeNode(command);
 
 	ereport(NOTICE, (errmsg("test internal pre"),
-						 errhint("test pre hint")));
+					 errhint("test pre hint")));
 
 	set_config_option("citus.enable_ddl_propagation", "off",
 					  (superuser() ? PGC_SUSET : PGC_USERSET), PGC_S_SESSION,
@@ -386,7 +395,7 @@ Datum citus_internal_database_command(PG_FUNCTION_ARGS)
 
 		if (!OidIsValid(databaseOid))
 		{
-			createdb(NULL, (CreatedbStmt *)parseTree);
+			createdb(NULL, (CreatedbStmt *) parseTree);
 		}
 		else
 		{
@@ -407,7 +416,7 @@ Datum citus_internal_database_command(PG_FUNCTION_ARGS)
 		else
 		{
 			/* remove database from pg_dist_object */
-			ObjectAddress dbAddress = {0};
+			ObjectAddress dbAddress = { 0 };
 			ObjectAddressSet(dbAddress, DatabaseRelationId, databaseOid);
 
 			if (IsObjectDistributed(&dbAddress))
@@ -415,10 +424,10 @@ Datum citus_internal_database_command(PG_FUNCTION_ARGS)
 				UnmarkObjectDistributed(&dbAddress);
 			}
 
-			// /* remove database from database shards */
-			// DeleteDatabaseShardByDatabaseIdLocally(databaseOid);
+			/* / * remove database from database shards * / */
+			/* DeleteDatabaseShardByDatabaseIdLocally(databaseOid); */
 
-			DropDatabase(NULL, (DropdbStmt *)parseTree);
+			DropDatabase(NULL, (DropdbStmt *) parseTree);
 		}
 	}
 	else
@@ -431,6 +440,7 @@ Datum citus_internal_database_command(PG_FUNCTION_ARGS)
 	PG_RETURN_VOID();
 }
 
+
 List *
 PreprocessDropDatabaseStmt(Node *node, const char *queryString,
 						   ProcessUtilityContext processUtilityContext)
@@ -440,7 +450,7 @@ PreprocessDropDatabaseStmt(Node *node, const char *queryString,
 		return NIL;
 	}
 
-	DropdbStmt *stmt = (DropdbStmt *)node;
+	DropdbStmt *stmt = (DropdbStmt *) node;
 	char *databaseName = stmt->dbname;
 	bool missingOk = true;
 	Oid databaseOid = get_database_oid(databaseName, missingOk);
@@ -450,14 +460,15 @@ PreprocessDropDatabaseStmt(Node *node, const char *queryString,
 		return NIL;
 	}
 
-	ObjectAddress dbAddress = {0};
+	ObjectAddress dbAddress = { 0 };
 	ObjectAddressSet(dbAddress, DatabaseRelationId, databaseOid);
 	if (!IsObjectDistributed(&dbAddress))
 	{
 		return NIL;
 	}
 
-	List *workerNodes = TargetWorkerSetNodeList(NON_COORDINATOR_METADATA_NODES, RowShareLock);
+	List *workerNodes = TargetWorkerSetNodeList(NON_COORDINATOR_METADATA_NODES,
+												RowShareLock);
 	if (list_length(workerNodes) == 0)
 	{
 		return NIL;

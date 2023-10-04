@@ -231,7 +231,6 @@ extern char * DeparseCreateDatabaseStmt(Node *node);
 extern char * DeparseDropDatabaseStmt(Node *node);
 
 
-
 /* forward declaration for deparse_publication_stmts.c */
 extern char * DeparseCreatePublicationStmt(Node *stmt);
 extern char * DeparseCreatePublicationStmtExtended(Node *node,
