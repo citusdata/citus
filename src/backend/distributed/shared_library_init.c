@@ -1265,6 +1265,17 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
+		"citus.enable_create_database_propagation",
+		gettext_noop("Enables propagating CREATE DATABASE "
+					 "and DROP DATABASE statements to workers"),
+		NULL,
+		&EnableCreateDatabasePropagation,
+		true,
+		PGC_USERSET,
+		GUC_STANDARD,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
 		"citus.enable_create_role_propagation",
 		gettext_noop("Enables propagating CREATE ROLE "
 					 "and DROP ROLE statements to workers"),

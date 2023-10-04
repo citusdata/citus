@@ -694,7 +694,7 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 	}
 
 	/* inform the user about potential caveats */
-	if (IsA(parsetree, CreatedbStmt))
+	if (IsA(parsetree, CreatedbStmt) &&!EnableCreateDatabasePropagation)
 	{
 		if (EnableUnsupportedFeatureMessages)
 		{
