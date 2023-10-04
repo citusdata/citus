@@ -206,6 +206,7 @@ typedef struct MetadataCacheData
 	Oid distTransactionGroupIndexId;
 	Oid distTenantSchemaPrimaryKeyIndexId;
 	Oid distTenantSchemaUniqueColocationIdIndexId;
+	Oid citusCatalogNamespaceId;
 	Oid copyFormatTypeId;
 	Oid readIntermediateResultFuncId;
 	Oid readIntermediateResultArrayFuncId;
