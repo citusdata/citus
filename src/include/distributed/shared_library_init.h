@@ -17,8 +17,6 @@
 #define MAX_SHARD_COUNT 64000
 #define MAX_SHARD_REPLICATION_FACTOR 100
 
-extern char *CitusMainDatabase;
-
 extern PGDLLEXPORT ColumnarSupportsIndexAM_type extern_ColumnarSupportsIndexAM;
 extern PGDLLEXPORT CompressionTypeStr_type extern_CompressionTypeStr;
 extern PGDLLEXPORT IsColumnarTableAmTable_type extern_IsColumnarTableAmTable;
