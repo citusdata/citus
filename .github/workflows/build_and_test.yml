@@ -80,7 +80,7 @@ jobs:
           - ${{ vars.pg14_version }}
           - ${{ vars.pg15_version }}
           - ${{ vars.pg16_version }}
-    runs-on: ["self-hosted", "1ES.Pool=1es-gha-citusdata-pool"]
+    runs-on: ubuntu-20.04
     container:
       image: "${{ matrix.image_name }}:${{ matrix.pg_version  }}${{ matrix.image_suffix }}"
       options: --user root
