@@ -34,7 +34,7 @@ char *
 DeparseAlterDatabaseOwnerStmt(Node *node)
 {
 	AlterOwnerStmt *stmt = castNode(AlterOwnerStmt, node);
-	StringInfoData str = {0};
+	StringInfoData str = { 0 };
 	initStringInfo(&str);
 
 	Assert(stmt->objectType == OBJECT_DATABASE);
@@ -44,6 +44,7 @@ DeparseAlterDatabaseOwnerStmt(Node *node)
 	return str.data;
 }
 
+
 static void
 AppendAlterDatabaseOwnerStmt(StringInfo buf, AlterOwnerStmt *stmt)
 {
@@ -51,9 +52,10 @@ AppendAlterDatabaseOwnerStmt(StringInfo buf, AlterOwnerStmt *stmt)
 
 	appendStringInfo(buf,
 					 "ALTER DATABASE %s OWNER TO %s;",
-					 quote_identifier(strVal((String *)stmt->object)),
+					 quote_identifier(strVal((String *) stmt->object)),
 					 RoleSpecString(stmt->newowner, true));
 }
+
 
 static void
 AppendGrantDatabases(StringInfo buf, GrantStmt *stmt)
@@ -61,7 +63,7 @@ AppendGrantDatabases(StringInfo buf, GrantStmt *stmt)
 	ListCell *cell = NULL;
 	appendStringInfo(buf, " ON DATABASE ");
 
-	foreach (cell, stmt->objects)
+	foreach(cell, stmt->objects)
 	{
 		char *database = strVal(lfirst(cell));
 		appendStringInfoString(buf, quote_identifier(database));
@@ -71,6 +73,7 @@ AppendGrantDatabases(StringInfo buf, GrantStmt *stmt)
 		}
 	}
 }
+
 
 static void
 AppendGrantOnDatabaseStmt(StringInfo buf, GrantStmt *stmt)
@@ -84,11 +87,13 @@ AppendGrantOnDatabaseStmt(StringInfo buf, GrantStmt *stmt)
 	AppendGrantSharedSuffix(buf, stmt);
 }
 
+
 static void
 AppendDefElemConnLimit(StringInfo buf, DefElem *def)
 {
-	appendStringInfo(buf, " CONNECTION LIMIT %ld", (long int)defGetNumeric(def));
+	appendStringInfo(buf, " CONNECTION LIMIT %ld", (long int) defGetNumeric(def));
 }
+
 
 static void
 AppendAlterDatabaseStmt(StringInfo buf, AlterDatabaseStmt *stmt)
@@ -99,7 +104,7 @@ AppendAlterDatabaseStmt(StringInfo buf, AlterDatabaseStmt *stmt)
 	{
 		ListCell *cell = NULL;
 		appendStringInfo(buf, "WITH ");
-		foreach (cell, stmt->options)
+		foreach(cell, stmt->options)
 		{
 			DefElem *def = castNode(DefElem, lfirst(cell));
 			if (strcmp(def->defname, "is_template") == 0)
@@ -128,13 +133,14 @@ AppendAlterDatabaseStmt(StringInfo buf, AlterDatabaseStmt *stmt)
 	appendStringInfo(buf, ";");
 }
 
+
 char *
 DeparseGrantOnDatabaseStmt(Node *node)
 {
 	GrantStmt *stmt = castNode(GrantStmt, node);
 	Assert(stmt->objtype == OBJECT_DATABASE);
 
-	StringInfoData str = {0};
+	StringInfoData str = { 0 };
 	initStringInfo(&str);
 
 	AppendGrantOnDatabaseStmt(&str, stmt);
@@ -142,12 +148,13 @@ DeparseGrantOnDatabaseStmt(Node *node)
 	return str.data;
 }
 
+
 char *
 DeparseAlterDatabaseStmt(Node *node)
 {
 	AlterDatabaseStmt *stmt = castNode(AlterDatabaseStmt, node);
 
-	StringInfoData str = {0};
+	StringInfoData str = { 0 };
 	initStringInfo(&str);
 
 	AppendAlterDatabaseStmt(&str, stmt);
@@ -155,11 +162,12 @@ DeparseAlterDatabaseStmt(Node *node)
 	return str.data;
 }
 
+
 #if PG_VERSION_NUM >= PG_VERSION_15
 char *
 DeparseAlterDatabaseRefreshCollStmt(Node *node)
 {
-	AlterDatabaseRefreshCollStmt *stmt = (AlterDatabaseRefreshCollStmt *)node;
+	AlterDatabaseRefreshCollStmt *stmt = (AlterDatabaseRefreshCollStmt *) node;
 
 	StringInfoData str;
 	initStringInfo(&str);
@@ -170,6 +178,7 @@ DeparseAlterDatabaseRefreshCollStmt(Node *node)
 
 	return str.data;
 }
+
 
 #endif
 
@@ -183,18 +192,20 @@ AppendAlterDatabaseSetStmt(StringInfo buf, AlterDatabaseSetStmt *stmt)
 	AppendVariableSet(buf, varSetStmt);
 }
 
+
 char *
 DeparseAlterDatabaseSetStmt(Node *node)
 {
 	AlterDatabaseSetStmt *stmt = castNode(AlterDatabaseSetStmt, node);
 
-	StringInfoData str = {0};
+	StringInfoData str = { 0 };
 	initStringInfo(&str);
 
 	AppendAlterDatabaseSetStmt(&str, stmt);
 
 	return str.data;
 }
+
 
 static void
 AppendCreatedbStmt(StringInfo buf, CreatedbStmt *stmt)
@@ -325,17 +336,19 @@ AppendCreatedbStmt(StringInfo buf, CreatedbStmt *stmt)
 	}
 }
 
+
 char *
 DeparseCreateDatabaseStmt(Node *node)
 {
 	CreatedbStmt *stmt = castNode(CreatedbStmt, node);
-	StringInfoData str = {0};
+	StringInfoData str = { 0 };
 	initStringInfo(&str);
 
 	AppendCreatedbStmt(&str, stmt);
 
 	return str.data;
 }
+
 
 static void
 AppendDropDatabaseStmt(StringInfo buf, DropdbStmt *stmt)
@@ -361,6 +374,7 @@ AppendDropDatabaseStmt(StringInfo buf, DropdbStmt *stmt)
 	}
 }
 
+
 char *
 DeparseDropDatabaseStmt(Node *node)
 {
@@ -372,6 +386,3 @@ DeparseDropDatabaseStmt(Node *node)
 
 	return str.data;
 }
-
-
-

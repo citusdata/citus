@@ -2769,8 +2769,6 @@ DistRebalanceStrategyRelationId(void)
 }
 
 
-
-
 /* return oid of pg_dist_object relation */
 Oid
 DistObjectRelationId(void)
@@ -5401,8 +5399,6 @@ DeformedDistShardTupleToShardInterval(Datum *datumArray, bool *isNullArray,
 
 	return shardInterval;
 }
-
-
 
 
 /*
