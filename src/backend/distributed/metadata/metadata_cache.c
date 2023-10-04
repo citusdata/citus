@@ -182,8 +182,6 @@ typedef struct MetadataCacheData
 	Oid citusTaskStatusUnscheduledId;
 	Oid citusTaskStatusCancelledId;
 	Oid citusTaskStatusCancellingId;
-	Oid databaseShardRelationId;
-	Oid databaseShardPKeyIndexId;
 	Oid distRebalanceStrategyRelationId;
 	Oid distNodeRelationId;
 	Oid distNodeNodeIdIndexId;
