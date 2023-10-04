@@ -312,6 +312,11 @@ PreprocessAlterDatabaseSetStmt(Node *node, const char *queryString,
 List *
 PostprocessCreateDatabaseStmt(Node *node, const char *queryString)
 {
+	if (EnableCreateDatabasePropagation)
+	{
+		EnsureCoordinator();
+	}
+
 	if (!EnableCreateDatabasePropagation || !ShouldPropagate())
 	{
 		return NIL;

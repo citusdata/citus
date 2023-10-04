@@ -52,6 +52,7 @@ test: multi_read_from_secondaries
 
 test: grant_on_database_propagation
 test: alter_database_propagation
+test: create_drop_database_propagation
 
 # ----------
 # multi_citus_tools tests utility functions written for citus tools
