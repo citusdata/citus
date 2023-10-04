@@ -1,8 +1,8 @@
 -- citus--12.1-1--12.2-1
 
-/*
- * citus_internal_database_command creates a database according to the given command.
- */
+--
+-- citus_internal_database_command creates a database according to the given command.
+
 CREATE OR REPLACE FUNCTION pg_catalog.citus_internal_database_command(command text)
  RETURNS void
  LANGUAGE C
