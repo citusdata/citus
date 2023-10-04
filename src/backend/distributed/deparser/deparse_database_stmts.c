@@ -274,6 +274,13 @@ AppendCreatedbStmt(StringInfo buf, CreatedbStmt *stmt)
 			appendStringInfo(buf, " ICU_LOCALE %s",
 							 quote_literal_cstr(icuLocale));
 		}
+		else if (strcmp(option->defname, "icu_rules") == 0)
+		{
+			char *icuLocale = defGetString(option);
+
+			appendStringInfo(buf, " ICU_RULES %s",
+							 quote_literal_cstr(icuLocale));
+		}
 		else if (strcmp(option->defname, "locale_provider") == 0)
 		{
 			char *localeProvider = defGetString(option);
@@ -323,10 +330,6 @@ AppendCreatedbStmt(StringInfo buf, CreatedbStmt *stmt)
 							 quote_literal_cstr(strategy));
 		}
 #endif
-		else if (strcmp(option->defname, "location") == 0)
-		{
-			/* deprecated option */
-		}
 		else
 		{
 			ereport(ERROR, (errcode(ERRCODE_SYNTAX_ERROR),
