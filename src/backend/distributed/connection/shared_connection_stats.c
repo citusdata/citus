@@ -68,18 +68,13 @@ typedef struct SharedConnStatsHashKey
 	 */
 	char hostname[MAX_NODE_LENGTH];
 	int32 port;
-
-	/*
-	 * Given that citus.shared_max_pool_size can be defined per database, we
-	 * should keep track of shared connections per database.
-	 */
-	Oid databaseOid;
 } SharedConnStatsHashKey;
 
 /* hash entry for per worker stats */
 typedef struct SharedConnStatsHashEntry
 {
 	SharedConnStatsHashKey key;
+    Oid databaseOid;
 
 	int connectionCount;
 } SharedConnStatsHashEntry;
@@ -169,7 +164,7 @@ StoreAllRemoteConnectionStats(Tuplestorestate *tupleStore, TupleDesc tupleDescri
 		memset(values, 0, sizeof(values));
 		memset(isNulls, false, sizeof(isNulls));
 
-		char *databaseName = get_database_name(connectionEntry->key.databaseOid);
+		char *databaseName = get_database_name(connectionEntry->databaseOid);
 		if (databaseName == NULL)
 		{
 			/* database might have been dropped */
@@ -308,7 +303,6 @@ TryToIncrementSharedConnectionCounter(const char *hostname, int port)
 	}
 
 	connKey.port = port;
-	connKey.databaseOid = MyDatabaseId;
 
 	/*
 	 * Handle adaptive connection management for the local node slightly different
@@ -363,6 +357,7 @@ TryToIncrementSharedConnectionCounter(const char *hostname, int port)
 	{
 		/* we successfully allocated the entry for the first time, so initialize it */
 		connectionEntry->connectionCount = 1;
+        connectionEntry->databaseOid = MyDatabaseId;
 
 		counterIncremented = true;
 	}
@@ -435,7 +430,6 @@ IncrementSharedConnectionCounter(const char *hostname, int port)
 	}
 
 	connKey.port = port;
-	connKey.databaseOid = MyDatabaseId;
 
 	LockConnectionSharedMemory(LW_EXCLUSIVE);
 
@@ -467,6 +461,7 @@ IncrementSharedConnectionCounter(const char *hostname, int port)
 	{
 		/* we successfully allocated the entry for the first time, so initialize it */
 		connectionEntry->connectionCount = 0;
+        connectionEntry->databaseOid = MyDatabaseId;
 	}
 
 	connectionEntry->connectionCount += 1;
@@ -503,7 +498,6 @@ DecrementSharedConnectionCounter(const char *hostname, int port)
 	}
 
 	connKey.port = port;
-	connKey.databaseOid = MyDatabaseId;
 
 	LockConnectionSharedMemory(LW_EXCLUSIVE);
 
@@ -807,7 +801,6 @@ SharedConnectionHashHash(const void *key, Size keysize)
 
 	uint32 hash = string_hash(entry->hostname, NAMEDATALEN);
 	hash = hash_combine(hash, hash_uint32(entry->port));
-	hash = hash_combine(hash, hash_uint32(entry->databaseOid));
 
 	return hash;
 }
@@ -820,8 +813,7 @@ SharedConnectionHashCompare(const void *a, const void *b, Size keysize)
 	SharedConnStatsHashKey *cb = (SharedConnStatsHashKey *) b;
 
 	if (strncmp(ca->hostname, cb->hostname, MAX_NODE_LENGTH) != 0 ||
-		ca->port != cb->port ||
-		ca->databaseOid != cb->databaseOid)
+		ca->port != cb->port)
 	{
 		return 1;
 	}
