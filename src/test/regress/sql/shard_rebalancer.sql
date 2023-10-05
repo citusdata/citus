@@ -1241,6 +1241,8 @@ SELECT citus_add_rebalance_strategy(
 
 SELECT * FROM pg_dist_rebalance_strategy WHERE name='test_improvement_threshold';
 
+DELETE FROM pg_catalog.pg_dist_rebalance_strategy WHERE name='test_improvement_threshold';
+
 -- Make it a data node again
 SELECT * from master_set_node_property('localhost', :worker_2_port, 'shouldhaveshards', true);
 DROP TABLE tab;

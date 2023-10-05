@@ -2204,6 +2204,7 @@ SELECT * FROM pg_dist_rebalance_strategy WHERE name='test_improvement_threshold'
  test_improvement_threshold | f                | citus_shard_cost_1  | capacity_high_worker_2 | citus_shard_allowed_on_node_true |               0.2 |               0.1 |                   0.3
 (1 row)
 
+DELETE FROM pg_catalog.pg_dist_rebalance_strategy WHERE name='test_improvement_threshold';
 -- Make it a data node again
 SELECT * from master_set_node_property('localhost', :worker_2_port, 'shouldhaveshards', true);
  master_set_node_property
