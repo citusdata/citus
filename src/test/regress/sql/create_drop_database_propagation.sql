@@ -23,7 +23,7 @@ CREATE DATABASE mydatabase
             ENCODING = 'UTF8'
             LC_COLLATE = 'C'
             LC_CTYPE = 'C'
-            TABLESPACE = test_tablespace
+            TABLESPACE = create_drop_db_tablespace
             ALLOW_CONNECTIONS = true
             IS_TEMPLATE = false;
 
