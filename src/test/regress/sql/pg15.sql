@@ -1012,7 +1012,7 @@ CREATE DATABASE mydatabase
             IS_TEMPLATE = false
             OID = 966345;
 
-SELECT pd.datname  , pd.datdba, pd.encoding, pd.datlocprovider,
+SELECT pd.datname, pd.encoding, pd.datlocprovider,
 pd.datistemplate, pd.datallowconn, pd.datconnlimit,
 pd.datcollate , pd. datctype  , pd.daticulocale, pd.datcollversion,
 pd.datacl, rolname AS database_owner, pa.rolname AS database_owner, pt.spcname AS tablespace
@@ -1022,7 +1022,7 @@ join pg_tablespace pt on pd.dattablespace = pt.oid
 WHERE datname = 'mydatabase';
 
 \c - - - :worker_1_port
-SELECT pd.datname  , pd.datdba, pd.encoding, pd.datlocprovider,
+SELECT pd.datname, pd.encoding, pd.datlocprovider,
 pd.datistemplate, pd.datallowconn, pd.datconnlimit,
 pd.datcollate , pd. datctype  , pd.daticulocale, pd.datcollversion,
 pd.datacl, rolname AS database_owner, pa.rolname AS database_owner, pt.spcname AS tablespace
@@ -1033,7 +1033,7 @@ WHERE datname = 'mydatabase';
 
 
 \c - - - :worker_2_port
-SELECT pd.datname  , pd.datdba, pd.encoding, pd.datlocprovider,
+SELECT pd.datname, pd.encoding, pd.datlocprovider,
 pd.datistemplate, pd.datallowconn, pd.datconnlimit,
 pd.datcollate , pd. datctype  , pd.daticulocale, pd.datcollversion,
 pd.datacl, rolname AS database_owner, pa.rolname AS database_owner, pt.spcname AS tablespace
@@ -1046,7 +1046,7 @@ WHERE datname = 'mydatabase';
 \c - - - :master_port
 set citus.enable_create_database_propagation=on;
 drop database mydatabase;
-SELECT pd.datname  , pd.datdba, pd.encoding, pd.datlocprovider,
+SELECT pd.datname, pd.encoding, pd.datlocprovider,
 pd.datistemplate, pd.datallowconn, pd.datconnlimit,
 pd.datcollate , pd. datctype  , pd.daticulocale, pd.datcollversion,
 pd.datacl, rolname AS database_owner, pa.rolname AS database_owner, pt.spcname AS tablespace
@@ -1057,7 +1057,7 @@ WHERE datname = 'mydatabase';
 
 
 \c - - - :worker_1_port
-SELECT pd.datname  , pd.datdba, pd.encoding, pd.datlocprovider,
+SELECT pd.datname, pd.encoding, pd.datlocprovider,
 pd.datistemplate, pd.datallowconn, pd.datconnlimit,
 pd.datcollate , pd. datctype  , pd.daticulocale, pd.datcollversion,
 pd.datacl, rolname AS database_owner, pa.rolname AS database_owner, pt.spcname AS tablespace
@@ -1068,7 +1068,7 @@ WHERE datname = 'mydatabase';
 
 \c - - - :worker_2_port
 
-SELECT pd.datname  , pd.datdba, pd.encoding, pd.datlocprovider,
+SELECT pd.datname, pd.encoding, pd.datlocprovider,
 pd.datistemplate, pd.datallowconn, pd.datconnlimit,
 pd.datcollate , pd. datctype  , pd.daticulocale, pd.datcollversion,
 pd.datacl, rolname AS database_owner, pa.rolname AS database_owner, pt.spcname AS tablespace

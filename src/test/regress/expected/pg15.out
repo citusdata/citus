@@ -1524,7 +1524,7 @@ CREATE DATABASE mydatabase
             ALLOW_CONNECTIONS = true
             IS_TEMPLATE = false
             OID = 966345;
-SELECT pd.datname  , pd.datdba, pd.encoding, pd.datlocprovider,
+SELECT pd.datname, pd.encoding, pd.datlocprovider,
 pd.datistemplate, pd.datallowconn, pd.datconnlimit,
 pd.datcollate , pd. datctype  , pd.daticulocale, pd.datcollversion,
 pd.datacl, rolname AS database_owner, pa.rolname AS database_owner, pt.spcname AS tablespace
@@ -1532,13 +1532,13 @@ FROM pg_database pd
 JOIN pg_authid pa ON pd.datdba = pa.oid
 join pg_tablespace pt on pd.dattablespace = pt.oid
 WHERE datname = 'mydatabase';
-  datname   | datdba | encoding | datlocprovider | datistemplate | datallowconn | datconnlimit | datcollate | datctype | daticulocale | datcollversion | datacl |      database_owner      |      database_owner      |        tablespace
+  datname   | encoding | datlocprovider | datistemplate | datallowconn | datconnlimit | datcollate | datctype | daticulocale | datcollversion | datacl |      database_owner      |      database_owner      |        tablespace
 ---------------------------------------------------------------------
- mydatabase |  17851 |        6 | i              | f             | t            |           10 | C          | C        | C            | 1.0            |        | create_drop_db_test_user | create_drop_db_test_user | create_drop_db_tablespace
+ mydatabase |        6 | i              | f             | t            |           10 | C          | C        | C            | 1.0            |        | create_drop_db_test_user | create_drop_db_test_user | create_drop_db_tablespace
 (1 row)
 
 \c - - - :worker_1_port
-SELECT pd.datname  , pd.datdba, pd.encoding, pd.datlocprovider,
+SELECT pd.datname, pd.encoding, pd.datlocprovider,
 pd.datistemplate, pd.datallowconn, pd.datconnlimit,
 pd.datcollate , pd. datctype  , pd.daticulocale, pd.datcollversion,
 pd.datacl, rolname AS database_owner, pa.rolname AS database_owner, pt.spcname AS tablespace
@@ -1546,13 +1546,13 @@ FROM pg_database pd
 JOIN pg_authid pa ON pd.datdba = pa.oid
 join pg_tablespace pt on pd.dattablespace = pt.oid
 WHERE datname = 'mydatabase';
-  datname   | datdba | encoding | datlocprovider | datistemplate | datallowconn | datconnlimit | datcollate | datctype | daticulocale | datcollversion | datacl |      database_owner      |      database_owner      |        tablespace
+  datname   | encoding | datlocprovider | datistemplate | datallowconn | datconnlimit | datcollate | datctype | daticulocale | datcollversion | datacl |      database_owner      |      database_owner      |        tablespace
 ---------------------------------------------------------------------
- mydatabase |  18201 |        6 | i              | f             | t            |           10 | C          | C        | C            | 1.0            |        | create_drop_db_test_user | create_drop_db_test_user | create_drop_db_tablespace
+ mydatabase |        6 | i              | f             | t            |           10 | C          | C        | C            | 1.0            |        | create_drop_db_test_user | create_drop_db_test_user | create_drop_db_tablespace
 (1 row)
 
 \c - - - :worker_2_port
-SELECT pd.datname  , pd.datdba, pd.encoding, pd.datlocprovider,
+SELECT pd.datname, pd.encoding, pd.datlocprovider,
 pd.datistemplate, pd.datallowconn, pd.datconnlimit,
 pd.datcollate , pd. datctype  , pd.daticulocale, pd.datcollversion,
 pd.datacl, rolname AS database_owner, pa.rolname AS database_owner, pt.spcname AS tablespace
@@ -1560,15 +1560,15 @@ FROM pg_database pd
 JOIN pg_authid pa ON pd.datdba = pa.oid
 join pg_tablespace pt on pd.dattablespace = pt.oid
 WHERE datname = 'mydatabase';
-  datname   | datdba | encoding | datlocprovider | datistemplate | datallowconn | datconnlimit | datcollate | datctype | daticulocale | datcollversion | datacl |      database_owner      |      database_owner      |        tablespace
+  datname   | encoding | datlocprovider | datistemplate | datallowconn | datconnlimit | datcollate | datctype | daticulocale | datcollversion | datacl |      database_owner      |      database_owner      |        tablespace
 ---------------------------------------------------------------------
- mydatabase |  18174 |        6 | i              | f             | t            |           10 | C          | C        | C            | 1.0            |        | create_drop_db_test_user | create_drop_db_test_user | create_drop_db_tablespace
+ mydatabase |        6 | i              | f             | t            |           10 | C          | C        | C            | 1.0            |        | create_drop_db_test_user | create_drop_db_test_user | create_drop_db_tablespace
 (1 row)
 
 \c - - - :master_port
 set citus.enable_create_database_propagation=on;
 drop database mydatabase;
-SELECT pd.datname  , pd.datdba, pd.encoding, pd.datlocprovider,
+SELECT pd.datname, pd.encoding, pd.datlocprovider,
 pd.datistemplate, pd.datallowconn, pd.datconnlimit,
 pd.datcollate , pd. datctype  , pd.daticulocale, pd.datcollversion,
 pd.datacl, rolname AS database_owner, pa.rolname AS database_owner, pt.spcname AS tablespace
@@ -1576,12 +1576,12 @@ FROM pg_database pd
 JOIN pg_authid pa ON pd.datdba = pa.oid
 join pg_tablespace pt on pd.dattablespace = pt.oid
 WHERE datname = 'mydatabase';
- datname | datdba | encoding | datlocprovider | datistemplate | datallowconn | datconnlimit | datcollate | datctype | daticulocale | datcollversion | datacl | database_owner | database_owner | tablespace
+ datname | encoding | datlocprovider | datistemplate | datallowconn | datconnlimit | datcollate | datctype | daticulocale | datcollversion | datacl | database_owner | database_owner | tablespace
 ---------------------------------------------------------------------
 (0 rows)
 
 \c - - - :worker_1_port
-SELECT pd.datname  , pd.datdba, pd.encoding, pd.datlocprovider,
+SELECT pd.datname, pd.encoding, pd.datlocprovider,
 pd.datistemplate, pd.datallowconn, pd.datconnlimit,
 pd.datcollate , pd. datctype  , pd.daticulocale, pd.datcollversion,
 pd.datacl, rolname AS database_owner, pa.rolname AS database_owner, pt.spcname AS tablespace
@@ -1589,12 +1589,12 @@ FROM pg_database pd
 JOIN pg_authid pa ON pd.datdba = pa.oid
 join pg_tablespace pt on pd.dattablespace = pt.oid
 WHERE datname = 'mydatabase';
- datname | datdba | encoding | datlocprovider | datistemplate | datallowconn | datconnlimit | datcollate | datctype | daticulocale | datcollversion | datacl | database_owner | database_owner | tablespace
+ datname | encoding | datlocprovider | datistemplate | datallowconn | datconnlimit | datcollate | datctype | daticulocale | datcollversion | datacl | database_owner | database_owner | tablespace
 ---------------------------------------------------------------------
 (0 rows)
 
 \c - - - :worker_2_port
-SELECT pd.datname  , pd.datdba, pd.encoding, pd.datlocprovider,
+SELECT pd.datname, pd.encoding, pd.datlocprovider,
 pd.datistemplate, pd.datallowconn, pd.datconnlimit,
 pd.datcollate , pd. datctype  , pd.daticulocale, pd.datcollversion,
 pd.datacl, rolname AS database_owner, pa.rolname AS database_owner, pt.spcname AS tablespace
@@ -1602,7 +1602,7 @@ FROM pg_database pd
 JOIN pg_authid pa ON pd.datdba = pa.oid
 join pg_tablespace pt on pd.dattablespace = pt.oid
 WHERE datname = 'mydatabase';
- datname | datdba | encoding | datlocprovider | datistemplate | datallowconn | datconnlimit | datcollate | datctype | daticulocale | datcollversion | datacl | database_owner | database_owner | tablespace
+ datname | encoding | datlocprovider | datistemplate | datallowconn | datconnlimit | datcollate | datctype | daticulocale | datcollversion | datacl | database_owner | database_owner | tablespace
 ---------------------------------------------------------------------
 (0 rows)
 
