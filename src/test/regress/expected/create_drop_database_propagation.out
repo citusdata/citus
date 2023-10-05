@@ -27,9 +27,9 @@ FROM pg_database pd
 JOIN pg_authid pa ON pd.datdba = pa.oid
 join pg_tablespace pt on pd.dattablespace = pt.oid
 WHERE datname = 'mydatabase';
-  datname   | encoding | datistemplate | datallowconn | datconnlimit | datcollate | datctype | datacl |      database_owner      |      database_owner      |   tablespace
+  datname   | encoding | datistemplate | datallowconn | datconnlimit | datcollate | datctype | datacl |      database_owner      |      database_owner      |        tablespace
 ---------------------------------------------------------------------
- mydatabase |        6 | f             | t            |           10 | C          | C        |        | create_drop_db_test_user | create_drop_db_test_user | test_tablespace
+ mydatabase |        6 | f             | t            |           10 | C          | C        |        | create_drop_db_test_user | create_drop_db_test_user | create_drop_db_tablespace
 (1 row)
 
 \c - - - :worker_1_port
@@ -41,9 +41,9 @@ FROM pg_database pd
 JOIN pg_authid pa ON pd.datdba = pa.oid
 join pg_tablespace pt on pd.dattablespace = pt.oid
 WHERE datname = 'mydatabase';
-  datname   | encoding | datistemplate | datallowconn | datconnlimit | datcollate | datctype | datacl |      database_owner      |      database_owner      |   tablespace
+  datname   | encoding | datistemplate | datallowconn | datconnlimit | datcollate | datctype | datacl |      database_owner      |      database_owner      |        tablespace
 ---------------------------------------------------------------------
- mydatabase |        6 | f             | t            |           10 | C          | C        |        | create_drop_db_test_user | create_drop_db_test_user | test_tablespace
+ mydatabase |        6 | f             | t            |           10 | C          | C        |        | create_drop_db_test_user | create_drop_db_test_user | create_drop_db_tablespace
 (1 row)
 
 \c - - - :worker_2_port
@@ -55,9 +55,9 @@ FROM pg_database pd
 JOIN pg_authid pa ON pd.datdba = pa.oid
 join pg_tablespace pt on pd.dattablespace = pt.oid
 WHERE datname = 'mydatabase';
-  datname   | encoding | datistemplate | datallowconn | datconnlimit | datcollate | datctype | datacl |      database_owner      |      database_owner      |   tablespace
+  datname   | encoding | datistemplate | datallowconn | datconnlimit | datcollate | datctype | datacl |      database_owner      |      database_owner      |        tablespace
 ---------------------------------------------------------------------
- mydatabase |        6 | f             | t            |           10 | C          | C        |        | create_drop_db_test_user | create_drop_db_test_user | test_tablespace
+ mydatabase |        6 | f             | t            |           10 | C          | C        |        | create_drop_db_test_user | create_drop_db_test_user | create_drop_db_tablespace
 (1 row)
 
 \c - - - :master_port
