@@ -1229,6 +1229,18 @@ SELECT citus_add_rebalance_strategy(
         0.1
     );
 
+SELECT citus_add_rebalance_strategy(
+        'test_improvement_threshold',
+        'citus_shard_cost_1',
+        'capacity_high_worker_2',
+        'citus_shard_allowed_on_node_true',
+        0.2,
+        0.1,
+        0.3
+    );
+
+SELECT * FROM pg_dist_rebalance_strategy WHERE name='test_improvement_threshold';
+
 -- Make it a data node again
 SELECT * from master_set_node_property('localhost', :worker_2_port, 'shouldhaveshards', true);
 DROP TABLE tab;
