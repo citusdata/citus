@@ -13,7 +13,7 @@ CREATE DATABASE mydatabase
             ALLOW_CONNECTIONS = true
             IS_TEMPLATE = false;
 
-SELECT pd.datname, pd.encoding,
+SELECT pd.oid,pd.datname, pd.encoding,
 pd.datistemplate, pd.datallowconn, pd.datconnlimit,
 pd.datcollate , pd. datctype  ,  pd.datacl, rolname AS database_owner,
 pa.rolname AS database_owner, pt.spcname AS tablespace
