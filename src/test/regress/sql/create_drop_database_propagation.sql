@@ -27,7 +27,7 @@ CREATE DATABASE mydatabase
             ALLOW_CONNECTIONS = true
             IS_TEMPLATE = false;
 
-SELECT pd.datname  , pd.datdba, pd.encoding,
+SELECT pd.datname, pd.encoding,
 pd.datistemplate, pd.datallowconn, pd.datconnlimit,
 pd.datcollate , pd. datctype  ,  pd.datacl, rolname AS database_owner,
 pa.rolname AS database_owner, pt.spcname AS tablespace
@@ -38,7 +38,7 @@ WHERE datname = 'mydatabase';
 
 \c - - - :worker_1_port
 
-SELECT pd.datname  , pd.datdba, pd.encoding,
+SELECT pd.datname, pd.encoding,
 pd.datistemplate, pd.datallowconn, pd.datconnlimit,
 pd.datcollate , pd. datctype  ,  pd.datacl, rolname AS database_owner,
 pa.rolname AS database_owner, pt.spcname AS tablespace
@@ -48,7 +48,7 @@ join pg_tablespace pt on pd.dattablespace = pt.oid
 WHERE datname = 'mydatabase';
 \c - - - :worker_2_port
 
-SELECT pd.datname  , pd.datdba, pd.encoding,
+SELECT pd.datname, pd.encoding,
 pd.datistemplate, pd.datallowconn, pd.datconnlimit,
 pd.datcollate , pd. datctype  ,  pd.datacl, rolname AS database_owner,
 pa.rolname AS database_owner, pt.spcname AS tablespace
@@ -61,7 +61,7 @@ WHERE datname = 'mydatabase';
 set citus.enable_create_database_propagation=on;
 drop database mydatabase;
 
-SELECT pd.datname  , pd.datdba, pd.encoding,
+SELECT pd.datname, pd.encoding,
 pd.datistemplate, pd.datallowconn, pd.datconnlimit,
 pd.datcollate , pd. datctype  ,  pd.datacl, rolname AS database_owner,
 pa.rolname AS database_owner, pt.spcname AS tablespace
@@ -72,7 +72,7 @@ WHERE datname = 'mydatabase';
 
 \c - - - :worker_1_port
 
-SELECT pd.datname  , pd.datdba, pd.encoding,
+SELECT pd.datname, pd.encoding,
 pd.datistemplate, pd.datallowconn, pd.datconnlimit,
 pd.datcollate , pd. datctype  ,  pd.datacl, rolname AS database_owner,
 pa.rolname AS database_owner, pt.spcname AS tablespace
@@ -83,7 +83,7 @@ WHERE datname = 'mydatabase';
 
 \c - - - :worker_2_port
 
-SELECT pd.datname  , pd.datdba, pd.encoding,
+SELECT pd.datname, pd.encoding,
 pd.datistemplate, pd.datallowconn, pd.datconnlimit,
 pd.datcollate , pd. datctype  ,  pd.datacl, rolname AS database_owner,
 pa.rolname AS database_owner, pt.spcname AS tablespace
