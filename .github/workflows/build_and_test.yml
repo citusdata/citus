@@ -231,11 +231,19 @@ jobs:
     - uses: "./.github/actions/setup_extension"
     - name: Test arbitrary configs
       run: |-
-        TESTS=$(src/test/regress/citus_tests/print_test_names.py)
-        # Our test suite expects comma separated values
-        TESTS=$(echo $TESTS | tr ' ' ',')
-        # TESTS will contain subset of configs that will be run on a container and we use multiple containers
-        # to run the test suite
+        # we use parallel jobs to split the tests into 6 parts and run them in parallel
+        # the script below extracts the tests for the current job
+        N=6  # Total number of jobs (see matrix.parallel)
+        X=${{ matrix.parallel }}  # Current job number
+        TESTS=$(src/test/regress/citus_tests/print_test_names.py |
+          tr '\n' ',' | awk -v N="$N" -v X="$X" -F, '{
+            split("", parts)
+            for (i = 1; i <= NF; i++) {
+                parts[i % N] = parts[i % N] $i ","
+            }
+            print substr(parts[X], 1, length(parts[X])-1)
+        }')
+        echo $TESTS
         gosu circleci \
           make -C src/test/regress \
             check-arbitrary-configs parallel=4 CONFIGS=$TESTS
