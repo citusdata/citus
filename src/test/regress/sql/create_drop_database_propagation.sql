@@ -1,3 +1,16 @@
+
+
+\set create_drop_db_tablespace :abs_srcdir '/tmp_check/ts3'
+CREATE TABLESPACE create_drop_db_tablespace LOCATION :'create_drop_db_tablespace';
+
+\c - - - :worker_1_port
+\set create_drop_db_tablespace :abs_srcdir '/tmp_check/ts4'
+CREATE TABLESPACE create_drop_db_tablespace LOCATION :'create_drop_db_tablespace';
+
+\c - - - :worker_2_port
+\set create_drop_db_tablespace :abs_srcdir '/tmp_check/ts5'
+CREATE TABLESPACE create_drop_db_tablespace LOCATION :'create_drop_db_tablespace';
+
 \c - - - :master_port
 create user create_drop_db_test_user;
 
@@ -10,6 +23,7 @@ CREATE DATABASE mydatabase
             ENCODING = 'UTF8'
             LC_COLLATE = 'C'
             LC_CTYPE = 'C'
+            TABLESPACE = create_drop_db_tablespace
             ALLOW_CONNECTIONS = true
             IS_TEMPLATE = false;
 
@@ -78,9 +92,18 @@ JOIN pg_authid pa ON pd.datdba = pa.oid
 join pg_tablespace pt on pd.dattablespace = pt.oid
 WHERE datname = 'mydatabase';
 
+\c - - - :master_port
+
+drop tablespace create_drop_db_tablespace;
+
+\c - - - :worker_1_port
+
+drop tablespace create_drop_db_tablespace;
+
+\c - - - :worker_2_port
+
+drop tablespace create_drop_db_tablespace;
 
 \c - - - :master_port
 
 drop user create_drop_db_test_user;
-
-

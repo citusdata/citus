@@ -630,7 +630,7 @@ for my $port (@followerWorkerPorts)
 	}
 }
 
-for my $tablespace ("ts0", "ts1", "ts2")
+for my $tablespace ("ts0", "ts1", "ts2", "ts3", "ts4", "ts5")
 {
 	if (-e catfile($TMP_CHECKDIR, $tablespace))
 	{
