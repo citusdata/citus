@@ -1004,7 +1004,7 @@ CREATE DATABASE mydatabase
             LOCALE = ''
             LC_COLLATE = 'en_US.utf8'
             LC_CTYPE = 'en_US.utf8'
-            ICU_LOCALE = 'en_US.utf8'
+            ICU_LOCALE = ''
             LOCALE_PROVIDER = 'icu'
             COLLATION_VERSION = '1.0'
             TABLESPACE = create_drop_db_tablespace
