@@ -1001,10 +1001,10 @@ CREATE DATABASE mydatabase
             CONNECTION LIMIT = 10
             ENCODING = 'UTF8'
             STRATEGY = 'wal_log'
-            LOCALE = 'en_US.utf-8'
-            LC_COLLATE = 'en_US.utf-8'
-            LC_CTYPE = 'en_US.utf-8'
-            ICU_LOCALE = 'en_US.utf-8'
+            LOCALE = 'en_US.utf8'
+            LC_COLLATE = 'en_US.utf8'
+            LC_CTYPE = 'en_US.utf8'
+            ICU_LOCALE = 'en_US.utf8'
             LOCALE_PROVIDER = 'icu'
             COLLATION_VERSION = '1.0'
             TABLESPACE = create_drop_db_tablespace
