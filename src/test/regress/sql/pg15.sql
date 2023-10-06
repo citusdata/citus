@@ -1004,7 +1004,7 @@ CREATE DATABASE mydatabase
             LOCALE = ''
             LC_COLLATE = 'POSIX'
             LC_CTYPE = 'POSIX'
-            ICU_LOCALE = ''
+            ICU_LOCALE = 'und'
             LOCALE_PROVIDER = 'icu'
             COLLATION_VERSION = '1.0'
             TABLESPACE = create_drop_db_tablespace
