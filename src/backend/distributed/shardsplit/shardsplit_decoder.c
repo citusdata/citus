@@ -94,10 +94,14 @@ replication_origin_filter_cb(LogicalDecodingContext *ctx, RepOriginId origin_id)
  * update_replication_progress is copied from Postgres 15. We use it to send keepalive
  * messages when we are filtering out the wal changes resulting from the initial copy.
  * If we do not send out messages long enough, wal reciever will time out.
+ * Postgres 16 has refactored this code such that keepalive messages are sent during
+ * reordering phase which is above change_cb. So we do not need to send keepalive in
+ * change_cb.
  */
 static void
 update_replication_progress(LogicalDecodingContext *ctx, bool skipped_xact)
 {
+#if (PG_VERSION_NUM <= PG_VERSION_15)
 	static int changes_count = 0;
 
 	/*
@@ -121,6 +125,7 @@ update_replication_progress(LogicalDecodingContext *ctx, bool skipped_xact)
 #endif
 		changes_count = 0;
 	}
+#endif
 }
 
 
@@ -142,11 +147,7 @@ shard_split_change_cb(LogicalDecodingContext *ctx, ReorderBufferTXN *txn,
 		return;
 	}
 
-	/*
-	 * Send replication keepalive. Keepalive is needed to prevent logical replication
-	 * worker from timing out when decoder spends a long time filtering out
-	 * change records without communicating with the wal receiver.
-	 */
+	/* Send replication keepalive. */
 	update_replication_progress(ctx, false);
 
 	/* check if the relation is publishable.*/
