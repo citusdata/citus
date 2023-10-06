@@ -324,8 +324,6 @@ CreateForeignConstraintRelationshipGraph()
 		return;
 	}
 
-	ClearForeignConstraintRelationshipGraphContext();
-
 	/*
 	 * Lazily create our memory context once and reset on every reuse.
 	 * Since we have cleared and invalidated the fConstraintRelationshipGraph, right
@@ -348,8 +346,11 @@ CreateForeignConstraintRelationshipGraph()
 	}
 	else
 	{
+		fConstraintRelationshipGraph = NULL;
 		MemoryContextReset(ForeignConstraintRelationshipMemoryContext);
 	}
+
+	Assert(fConstraintRelationshipGraph == NULL);
 
 	MemoryContext oldContext = MemoryContextSwitchTo(
 		ForeignConstraintRelationshipMemoryContext);
@@ -651,24 +652,4 @@ CreateOrFindNode(HTAB *adjacencyLists, Oid relid)
 	}
 
 	return node;
-}
-
-
-/*
- * ClearForeignConstraintRelationshipGraphContext clear all the allocated memory obtained
- * for foreign constraint relationship graph. Since all the variables of relationship
- * graph was obtained within the same context, destroying hash map is enough as
- * it deletes the context.
- */
-void
-ClearForeignConstraintRelationshipGraphContext()
-{
-	if (fConstraintRelationshipGraph == NULL)
-	{
-		return;
-	}
-
-	hash_destroy(fConstraintRelationshipGraph->nodeMap);
-	pfree(fConstraintRelationshipGraph);
-	fConstraintRelationshipGraph = NULL;
 }
