@@ -380,9 +380,6 @@ citus_internal_database_command(PG_FUNCTION_ARGS)
 	char *command = text_to_cstring(commandText);
 	Node *parseTree = ParseTreeNode(command);
 
-	ereport(NOTICE, (errmsg("test internal pre"),
-					 errhint("test pre hint")));
-
 	set_config_option("citus.enable_ddl_propagation", "off",
 					  (superuser() ? PGC_SUSET : PGC_USERSET), PGC_S_SESSION,
 					  GUC_ACTION_LOCAL, true, 0, false);
@@ -411,7 +408,7 @@ citus_internal_database_command(PG_FUNCTION_ARGS)
 	{
 		DropdbStmt *stmt = castNode(DropdbStmt, parseTree);
 
-		bool missingOk = true;
+		bool missingOk = false;
 		Oid databaseOid = get_database_oid(stmt->dbname, missingOk);
 
 		if (!OidIsValid(databaseOid))
@@ -420,14 +417,6 @@ citus_internal_database_command(PG_FUNCTION_ARGS)
 		}
 		else
 		{
-			/* remove database from pg_dist_object */
-			ObjectAddress dbAddress = { 0 };
-			ObjectAddressSet(dbAddress, DatabaseRelationId, databaseOid);
-
-			if (IsObjectDistributed(&dbAddress))
-			{
-				UnmarkObjectDistributed(&dbAddress);
-			}
 
 			/* / * remove database from database shards * / */
 			/* DeleteDatabaseShardByDatabaseIdLocally(databaseOid); */
@@ -486,7 +475,15 @@ PreprocessDropDatabaseStmt(Node *node, const char *queryString,
 					 "SELECT pg_catalog.citus_internal_database_command(%s)",
 					 quote_literal_cstr(dropDatabaseCommand));
 
+	/* Delete from pg_dist_object */
+
+	if (IsObjectDistributed(&dbAddress))
+	{
+		UnmarkObjectDistributed(&dbAddress);
+	}
+
 	/* we execute here to avoid EnsureCoordinator check in ExecuteDistributedDDLJob */
+
 	bool outsideTransaction = false;
 	List *taskList = CreateDDLTaskList(internalDropCommand->data, workerNodes,
 									   outsideTransaction);
