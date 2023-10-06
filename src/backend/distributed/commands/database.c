@@ -417,7 +417,6 @@ citus_internal_database_command(PG_FUNCTION_ARGS)
 		}
 		else
 		{
-
 			/* / * remove database from database shards * / */
 			/* DeleteDatabaseShardByDatabaseIdLocally(databaseOid); */
 
