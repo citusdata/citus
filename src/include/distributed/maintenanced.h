@@ -26,7 +26,7 @@ extern void TriggerNodeMetadataSync(Oid databaseId);
 extern void InitializeMaintenanceDaemon(void);
 extern size_t MaintenanceDaemonShmemSize(void);
 extern void MaintenanceDaemonShmemInit(void);
-extern void InitializeMaintenanceDaemonBackend(void);
+extern void InitializeMaintenanceDaemonBackend(const char* databaseName, Oid userOid);
 extern bool LockCitusExtension(void);
 
 extern PGDLLEXPORT void CitusMaintenanceDaemonMain(Datum main_arg);

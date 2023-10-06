@@ -27,6 +27,7 @@
 #include "catalog/objectaccess.h"
 #include "catalog/pg_extension.h"
 #include "citus_version.h"
+#include "commands/dbcommands.h"
 #include "commands/explain.h"
 #include "commands/extension.h"
 #include "common/string.h"
@@ -767,7 +768,9 @@ IsSequenceOverflowError(ErrorData *edata)
 void
 StartupCitusBackend(void)
 {
-	InitializeMaintenanceDaemonBackend();
+	Oid superUser = CitusExtensionOwner();
+
+	InitializeMaintenanceDaemonBackend(get_database_name(MyDatabaseId), superUser);
 
 	/*
 	 * For query backends this will be a no-op, because InitializeBackendData
