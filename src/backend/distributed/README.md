@@ -447,7 +447,7 @@ WHERE orders_table.user_id = distinct_user_id;
 #### Subquery in Target List
 
 ```sql
--- retrieves the most recent order date for each user 
+-- retrieves the most recent order date for each user
 SELECT   (SELECT MAX(order_date) FROM orders_table o WHERE o.user_id = u.user_id) FROM users_table u;
 ```
 
