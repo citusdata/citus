@@ -447,14 +447,8 @@ WHERE orders_table.user_id = distinct_user_id;
 #### Subquery in Target List
 
 ```sql
--- Sum of max price per product category, filtered by a subquery in the target list
-SELECT
-  (SELECT MAX(price) FROM products_table p WHERE p.category = o.category),
-  COUNT(DISTINCT o.product_id)
-FROM orders_table o, users_table u
-WHERE o.user_id = u.user_id AND u.user_id IN
-(SELECT user_id FROM special_users_table)
-GROUP BY o.category;
+-- retrieves the most recent order date for each user 
+SELECT   (SELECT MAX(order_date) FROM orders_table o WHERE o.user_id = u.user_id) FROM users_table u;
 ```
 
 #### Subquery in WHERE Clause
