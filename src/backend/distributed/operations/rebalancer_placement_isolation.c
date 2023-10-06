@@ -75,11 +75,12 @@ typedef struct
  * NodeToPlacementGroupHashEntry.
  */
 static void NodeToPlacementGroupHashInit(HTAB *nodePlacementGroupHash,
-										 List *workerNodeList,
+										 List *activeWorkerNodeList,
+										 List *rebalancePlacementList,
 										 WorkerNode *drainWorkerNode);
 static void NodeToPlacementGroupHashAssignNodes(HTAB *nodePlacementGroupHash,
-												List *workerNodeList,
-												List *shardPlacementList,
+												List *activeWorkerNodeList,
+												List *rebalancePlacementList,
 												FmgrInfo *shardAllowedOnNodeUDF);
 static bool NodeToPlacementGroupHashAssignNode(HTAB *nodePlacementGroupHash,
 											   int32 nodeGroupId,
@@ -92,6 +93,7 @@ static NodeToPlacementGroupHashEntry * NodeToPlacementGroupHashGetNodeWithGroupI
 
 
 /* other helpers */
+static List * PlacementListGetUniqueNodeGroupIds(List *placementList);
 static int WorkerNodeListGetNodeWithGroupId(List *workerNodeList, int32 nodeGroupId);
 
 
@@ -102,7 +104,7 @@ static int WorkerNodeListGetNodeWithGroupId(List *workerNodeList, int32 nodeGrou
  */
 RebalancerPlacementIsolationContext *
 PrepareRebalancerPlacementIsolationContext(List *activeWorkerNodeList,
-										   List *activeShardPlacementList,
+										   List *rebalancePlacementList,
 										   WorkerNode *drainWorkerNode,
 										   FmgrInfo *shardAllowedOnNodeUDF)
 {
@@ -112,14 +114,14 @@ PrepareRebalancerPlacementIsolationContext(List *activeWorkerNodeList,
 										list_length(activeWorkerNodeList));
 
 	activeWorkerNodeList = SortList(activeWorkerNodeList, CompareWorkerNodes);
-	activeShardPlacementList = SortList(activeShardPlacementList, CompareShardPlacements);
+	rebalancePlacementList = SortList(rebalancePlacementList, CompareShardPlacements);
 
 	NodeToPlacementGroupHashInit(nodePlacementGroupHash, activeWorkerNodeList,
-								 drainWorkerNode);
+								 rebalancePlacementList, drainWorkerNode);
 
 	NodeToPlacementGroupHashAssignNodes(nodePlacementGroupHash,
 										activeWorkerNodeList,
-										activeShardPlacementList,
+										rebalancePlacementList,
 										shardAllowedOnNodeUDF);
 
 	RebalancerPlacementIsolationContext *context =
@@ -136,13 +138,14 @@ PrepareRebalancerPlacementIsolationContext(List *activeWorkerNodeList,
  * of worker nodes and the worker node that is being drained, if specified.
  */
 static void
-NodeToPlacementGroupHashInit(HTAB *nodePlacementGroupHash, List *workerNodeList,
-							 WorkerNode *drainWorkerNode)
+NodeToPlacementGroupHashInit(HTAB *nodePlacementGroupHash, List *activeWorkerNodeList,
+							 List *rebalancePlacementList, WorkerNode *drainWorkerNode)
 {
-	bool drainSingleNode = drainWorkerNode != NULL;
+	List *placementListUniqueNodeGroupIds =
+		PlacementListGetUniqueNodeGroupIds(rebalancePlacementList);
 
 	WorkerNode *workerNode = NULL;
-	foreach_ptr(workerNode, workerNodeList)
+	foreach_ptr(workerNode, activeWorkerNodeList)
 	{
 		NodeToPlacementGroupHashEntry *nodePlacementGroupHashEntry =
 			hash_search(nodePlacementGroupHash, &workerNode->groupId, HASH_ENTER,
@@ -162,39 +165,49 @@ NodeToPlacementGroupHashInit(HTAB *nodePlacementGroupHash, List *workerNodeList,
 		nodePlacementGroupHashEntry->assignedPlacementGroup = NULL;
 
 		/*
-		 * For the rest of the comment, assume that:
-		 *   Node D: the node we're draining
-		 *   Node I: a node that is not D and that has a shard placement group
-		 *           that needs a separate node
-		 *   Node R: a node that is not D and that has some regular shard
-		 *           placements
+		 * Lets call set of the nodes that placements in rebalancePlacementList
+		 * are stored on as D and the others as S. In other words, D is the set
+		 * of the nodes that we're allowed to move the placements "from" or
+		 * "to (*)" (* = if we're not draining it) and S is the set of the nodes
+		 * that we're only allowed to move the placements "to" but not "from".
 		 *
-		 * If we're draining a single node, then we don't know whether other
-		 * nodes have any regular shard placements or any that need a separate
-		 * node because in that case GetRebalanceSteps() would provide a list of
-		 * shard placements that are stored on D, not a list that contains all
-		 * the placements accross the cluster (because we want to limit node
-		 * draining to that node in that case). Note that when all shard
-		 * placements in the cluster are provided, NodeToPlacementGroupHashAssignNodes()
-		 * would already be aware of which node is used to separate which shard
-		 * placement group or which node is used to store some regular shard
-		 * placements. That is why we skip below code if we're not draining a
-		 * single node. It's not only inefficient to run below code when we're
-		 * not draining a single node, but also it's not correct because otherwise
-		 * rebalancer might decide to move some shard placements between any
-		 * nodes in the cluster and it would be incorrect to assume that current
-		 * placement distribution would be the same after the rebalancer plans the
-		 * moves.
+		 * This means that, for a node of type S, the fact that whether the node
+		 * is used to separate a placement group or not cannot be changed in the
+		 * runtime.
 		 *
-		 * Below we find out the assigned placement groups for nodes of type
-		 * I because we want to avoid from moving the placements (if any) from
-		 * node D to node I. We also set allowedToSeparateAnyPlacementGroup to
-		 * false for the nodes that already have some shard placements because
-		 * we want to avoid from moving the placements that need a separate node
-		 * (if any) from node D to node R.
+		 * For this reason, below we find out the assigned placement groups for
+		 * nodes of type S because we want to avoid from moving the placements
+		 * (if any) from a node of type D to S. We also set
+		 * allowedToSeparateAnyPlacementGroup to false for the nodes that already
+		 * have some shard placements within S because we want to avoid from moving
+		 * the placements that need a separate node (if any) from node D to node S.
+		 *
+		 * We skip below code for nodes of type D not because optimization purposes
+		 * but because it would be "incorrect" to assume that "current placement
+		 * distribution for a node of type D would be the same" after the rebalancer
+		 * plans the moves.
 		 */
-		if (!(shouldHaveShards && drainSingleNode))
+
+		if (!shouldHaveShards)
 		{
+			/* we can't assing any shard placement groups to the node anyway */
+			continue;
+		}
+
+		if (list_length(placementListUniqueNodeGroupIds) == list_length(
+				activeWorkerNodeList))
+		{
+			/*
+			 * list_member_oid() check would return true for all placements then.
+			 * This means that all the nodes are of type D.
+			 */
+			Assert(list_member_oid(placementListUniqueNodeGroupIds, workerNode->groupId));
+			continue;
+		}
+
+		if (list_member_oid(placementListUniqueNodeGroupIds, workerNode->groupId))
+		{
+			/* node is of type D */
 			continue;
 		}
 
@@ -221,19 +234,19 @@ NodeToPlacementGroupHashInit(HTAB *nodePlacementGroupHash, List *workerNodeList,
  */
 static void
 NodeToPlacementGroupHashAssignNodes(HTAB *nodePlacementGroupHash,
-									List *workerNodeList,
-									List *shardPlacementList,
+									List *activeWorkerNodeList,
+									List *rebalancePlacementList,
 									FmgrInfo *shardAllowedOnNodeUDF)
 {
-	List *availableWorkerList = list_copy(workerNodeList);
-	List *unassignedShardPlacementList = NIL;
+	List *availableWorkerList = list_copy(activeWorkerNodeList);
+	List *unassignedPlacementList = NIL;
 
 	/*
 	 * Assign as much as possible shard placement groups to worker nodes where
 	 * they are stored already.
 	 */
 	ShardPlacement *shardPlacement = NULL;
-	foreach_ptr(shardPlacement, shardPlacementList)
+	foreach_ptr(shardPlacement, rebalancePlacementList)
 	{
 		ShardInterval *shardInterval = LoadShardInterval(shardPlacement->shardId);
 		if (!shardInterval->needsSeparateNode)
@@ -260,8 +273,8 @@ NodeToPlacementGroupHashAssignNodes(HTAB *nodePlacementGroupHash,
 		}
 		else
 		{
-			unassignedShardPlacementList =
-				lappend(unassignedShardPlacementList, shardPlacement);
+			unassignedPlacementList =
+				lappend(unassignedPlacementList, shardPlacement);
 		}
 	}
 
@@ -271,7 +284,7 @@ NodeToPlacementGroupHashAssignNodes(HTAB *nodePlacementGroupHash,
 	 */
 	int availableNodeIdx = 0;
 	ShardPlacement *unassignedShardPlacement = NULL;
-	foreach_ptr(unassignedShardPlacement, unassignedShardPlacementList)
+	foreach_ptr(unassignedShardPlacement, unassignedPlacementList)
 	{
 		bool separated = false;
 		while (!separated && availableNodeIdx < list_length(availableWorkerList))
@@ -416,6 +429,27 @@ NodeToPlacementGroupHashGetNodeWithGroupId(HTAB *nodePlacementGroupHash,
 	}
 
 	return nodePlacementGroupHashEntry;
+}
+
+
+/*
+ * PlacementListGetUniqueNodeGroupIds returns a list of unique node group ids
+ * that are used by given list of shard placements.
+ */
+static List *
+PlacementListGetUniqueNodeGroupIds(List *placementList)
+{
+	List *placementListUniqueNodeGroupIds = NIL;
+
+	ShardPlacement *shardPlacement = NULL;
+	foreach_ptr(shardPlacement, placementList)
+	{
+		placementListUniqueNodeGroupIds =
+			list_append_unique_oid(placementListUniqueNodeGroupIds,
+								   shardPlacement->groupId);
+	}
+
+	return placementListUniqueNodeGroupIds;
 }
 
 

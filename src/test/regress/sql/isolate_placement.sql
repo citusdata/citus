@@ -1104,6 +1104,41 @@ DELETE FROM pg_catalog.pg_dist_rebalance_strategy WHERE name='test_isolate_place
 
 DROP TABLE single_shard_1, single_shard_3;
 
+SELECT citus_set_node_property('localhost', :master_port, 'shouldhaveshards', true);
+
+CREATE TABLE dist_1(a int);
+SELECT create_distributed_table('dist_1', 'a', shard_count=>4);
+
+SELECT shardids[1] AS shardgroup_1_shardid
+FROM public.get_enumerated_shard_groups('isolate_placement.dist_1')
+WHERE shardgroupindex = 1 \gset
+
+SELECT citus_shard_property_set(:shardgroup_1_shardid, anti_affinity=>true);
+
+CREATE TABLE single_shard_1(a int);
+SELECT create_distributed_table('single_shard_1', null, colocate_with=>'none');
+
+SELECT citus_shard_property_set(shardid, anti_affinity=>true) FROM pg_dist_shard WHERE logicalrelid IN ('single_shard_1'::regclass);
+
+SET client_min_messages TO WARNING;
+SELECT rebalance_table_shards(shard_transfer_mode=>'block_writes');
+SET client_min_messages TO NOTICE;
+
+SELECT public.verify_placements_in_shard_group_isolated('isolate_placement.single_shard_1', 1) = true;
+SELECT public.verify_placements_in_shard_group_isolated('isolate_placement.dist_1', 1) = true;
+
+SET client_min_messages TO WARNING;
+SELECT rebalance_table_shards('isolate_placement.dist_1', shard_transfer_mode=>'block_writes');
+SET client_min_messages TO NOTICE;
+
+-- Make sure that calling the rebalancer specifically for dist_1 doesn't
+-- break the placement separation rules.
+SELECT public.verify_placements_in_shard_group_isolated('isolate_placement.single_shard_1', 1) = true;
+SELECT public.verify_placements_in_shard_group_isolated('isolate_placement.dist_1', 1) = true;
+
+DROP TABLE dist_1, single_shard_1;
+SELECT citus_set_node_property('localhost', :master_port, 'shouldhaveshards', false);
+
 SET client_min_messages TO WARNING;
 DROP SCHEMA isolate_placement CASCADE;
 DROP FUNCTION public.verify_placements_in_shard_group_isolated(text, bigint);
