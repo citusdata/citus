@@ -1557,7 +1557,7 @@ CREATE DATABASE mydatabase
             LOCALE = ''
             LC_COLLATE = 'POSIX'
             LC_CTYPE = 'POSIX'
-            ICU_LOCALE = ''
+            ICU_LOCALE = 'und'
             LOCALE_PROVIDER = 'icu'
             COLLATION_VERSION = '1.0'
             TABLESPACE = create_drop_db_tablespace
@@ -1574,7 +1574,7 @@ join pg_tablespace pt on pd.dattablespace = pt.oid
 WHERE datname = 'mydatabase';
   datname   | encoding | datlocprovider | datistemplate | datallowconn | datconnlimit | datcollate |  datctype  | daticulocale | datcollversion | datacl |      database_owner      |      database_owner      |        tablespace
 ---------------------------------------------------------------------
- mydatabase |        6 | i              | f             | t            |           10 | en_US.utf8 | en_US.utf8 |              | 1.0            |        | create_drop_db_test_user | create_drop_db_test_user | create_drop_db_tablespace
+ mydatabase |        6 | i              | f             | t            |           10 | C          | C          |              | 1.0            |        | create_drop_db_test_user | create_drop_db_test_user | create_drop_db_tablespace
 (1 row)
 
 \c - - - :worker_1_port
@@ -1588,7 +1588,7 @@ join pg_tablespace pt on pd.dattablespace = pt.oid
 WHERE datname = 'mydatabase';
   datname   | encoding | datlocprovider | datistemplate | datallowconn | datconnlimit | datcollate |  datctype  | daticulocale | datcollversion | datacl |      database_owner      |      database_owner      |        tablespace
 ---------------------------------------------------------------------
- mydatabase |        6 | i              | f             | t            |           10 | en_US.utf8 | en_US.utf8 | en_US.utf8   | 1.0            |        | create_drop_db_test_user | create_drop_db_test_user | create_drop_db_tablespace
+ mydatabase |        6 | i              | f             | t            |           10 | C          | C          |              | 1.0            |        | create_drop_db_test_user | create_drop_db_test_user | create_drop_db_tablespace
 (1 row)
 
 \c - - - :worker_2_port
@@ -1602,7 +1602,7 @@ join pg_tablespace pt on pd.dattablespace = pt.oid
 WHERE datname = 'mydatabase';
   datname   | encoding | datlocprovider | datistemplate | datallowconn | datconnlimit | datcollate |  datctype  | daticulocale | datcollversion | datacl |      database_owner      |      database_owner      |        tablespace
 ---------------------------------------------------------------------
- mydatabase |        6 | i              | f             | t            |           10 | en_US.utf8 | en_US.utf8 | en_US.utf8   | 1.0            |        | create_drop_db_test_user | create_drop_db_test_user | create_drop_db_tablespace
+ mydatabase |        6 | i              | f             | t            |           10 | C          | C          |              | 1.0            |        | create_drop_db_test_user | create_drop_db_test_user | create_drop_db_tablespace
 (1 row)
 
 \c - - - :master_port
