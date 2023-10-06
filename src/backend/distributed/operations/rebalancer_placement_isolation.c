@@ -177,10 +177,11 @@ NodeToPlacementGroupHashInit(HTAB *nodePlacementGroupHash, List *activeWorkerNod
 		 *
 		 * For this reason, below we find out the assigned placement groups for
 		 * nodes of type S because we want to avoid from moving the placements
-		 * (if any) from a node of type D to S. We also set
-		 * allowedToSeparateAnyPlacementGroup to false for the nodes that already
-		 * have some shard placements within S because we want to avoid from moving
-		 * the placements that need a separate node (if any) from node D to node S.
+		 * (if any) from a node of type D to a node that is used to separate a
+		 * placement group within S. We also set allowedToSeparateAnyPlacementGroup
+		 * to false for the nodes that already have some shard placements within S
+		 * because we want to avoid from moving the placements that need a separate
+		 * node (if any) from node D to node S.
 		 *
 		 * We skip below code for nodes of type D not because optimization purposes
 		 * but because it would be "incorrect" to assume that "current placement
