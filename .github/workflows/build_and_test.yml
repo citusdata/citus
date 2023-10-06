@@ -99,7 +99,7 @@ jobs:
           ./build-${{ env.PG_MAJOR }}/*
           ./install-${{ env.PG_MAJOR }}.tar
   test-citus:
-    name: PG${{ matrix.pg_version }} - ${{ matrix.suite }} ${{ matrix.make }}
+    name: PG${{ matrix.pg_version }} - ${{ matrix.make }}
     strategy:
       fail-fast: false
       matrix:
@@ -209,7 +209,7 @@ jobs:
         flags: ${{ env.PG_MAJOR }}_${{ matrix.suite }}_${{ matrix.make }}
         codecov_token: ${{ secrets.CODECOV_TOKEN }}
   test-arbitrary-configs:
-    name: PG${{ matrix.pg_version }} - regress - check-arbitrary-configs
+    name: PG${{ matrix.pg_version }} - check-arbitrary-configs-${{ matrix.parallel }}
     runs-on: ["self-hosted", "1ES.Pool=1es-gha-citusdata-pool"]
     container:
       image: "${{ matrix.image_name }}:${{ matrix.pg_version }}${{ vars.image_suffix }}"
@@ -225,7 +225,7 @@ jobs:
           - ${{ vars.pg14_version }}
           - ${{ vars.pg15_version }}
           - ${{ vars.pg16_version }}
-        parallel: [1,2,3,4,5,6] # workaround for running 6 parallel jobs
+        parallel: [0,1,2,3,4,5] # workaround for running 6 parallel jobs
     steps:
     - uses: actions/checkout@v3.5.0
     - uses: "./.github/actions/setup_extension"
@@ -255,7 +255,7 @@ jobs:
         flags: ${{ env.pg_major }}_upgrade
         codecov_token: ${{ secrets.CODECOV_TOKEN }}
   test-pg-upgrade:
-    name: PG${{ matrix.old_pg_major }}-PG${{ matrix.new_pg_major }} - regress - check-pg-upgrade
+    name: PG${{ matrix.old_pg_major }}-PG${{ matrix.new_pg_major }} - check-pg-upgrade
     runs-on: ubuntu-20.04
     container:
       image: "${{ vars.pgupgrade_image_name }}:${{ vars.upgrade_pg_versions }}${{ vars.image_suffix }}"
@@ -305,6 +305,7 @@ jobs:
         flags: ${{ env.old_pg_major }}_${{ env.new_pg_major }}_upgrade
         codecov_token: ${{ secrets.CODECOV_TOKEN }}
   test-citus-upgrade:
+    name: PG${{ vars.pg14_version }} - check-citus-upgrade
     runs-on: ubuntu-20.04
     container:
       image: "${{ vars.citusupgrade_image_name }}:${{ vars.pg14_version }}${{ vars.image_suffix }}"
@@ -369,6 +370,7 @@ jobs:
           cc-test-reporter sum-coverage codeclimate/*.json -o total.json
           cc-test-reporter upload-coverage -i total.json
   ch_benchmark:
+    name: CH Benchmark
     if: startsWith(github.ref, 'refs/heads/ch_benchmark/')
     runs-on: ubuntu-20.04
     needs:
@@ -386,6 +388,7 @@ jobs:
           chmod +x run_hammerdb.sh
           run_hammerdb.sh citusbot_ch_benchmark_rg
   tpcc_benchmark:
+    name: TPCC Benchmark
     if: startsWith(github.ref, 'refs/heads/tpcc_benchmark/')
     runs-on: ubuntu-20.04
     needs:
