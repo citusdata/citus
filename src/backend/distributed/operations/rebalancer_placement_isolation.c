@@ -279,21 +279,20 @@ NodeToPlacementGroupHashAssignNodes(HTAB *nodePlacementGroupHash,
 		}
 	}
 
+	bool emitWarning = false;
+
 	/*
 	 * For the shard placement groups that could not be assigned to their
 	 * current node, assign them to any other node that is available.
 	 */
-	int availableNodeIdx = 0;
 	ShardPlacement *unassignedShardPlacement = NULL;
 	foreach_ptr(unassignedShardPlacement, unassignedPlacementList)
 	{
 		bool separated = false;
-		while (!separated && availableNodeIdx < list_length(availableWorkerList))
-		{
-			WorkerNode *availableWorkerNode =
-				(WorkerNode *) list_nth(availableWorkerList, availableNodeIdx);
-			availableNodeIdx++;
 
+		WorkerNode *availableWorkerNode = NULL;
+		foreach_ptr(availableWorkerNode, availableWorkerList)
+		{
 			if (NodeToPlacementGroupHashAssignNode(nodePlacementGroupHash,
 												   availableWorkerNode->groupId,
 												   unassignedShardPlacement,
@@ -306,10 +305,14 @@ NodeToPlacementGroupHashAssignNodes(HTAB *nodePlacementGroupHash,
 
 		if (!separated)
 		{
-			ereport(WARNING, (errmsg("could not separate all shard placements "
-									 "that need a separate node")));
-			return;
+			emitWarning = true;
 		}
+	}
+
+	if (emitWarning)
+	{
+		ereport(WARNING, (errmsg("could not separate all shard placements "
+								 "that need a separate node")));
 	}
 }
 
