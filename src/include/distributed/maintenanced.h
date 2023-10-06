@@ -27,6 +27,7 @@ extern void InitializeMaintenanceDaemon(void);
 extern size_t MaintenanceDaemonShmemSize(void);
 extern void MaintenanceDaemonShmemInit(void);
 extern void InitializeMaintenanceDaemonBackend(void);
+extern void InitializeMaintenanceDaemonForAdminDB(void);
 extern bool LockCitusExtension(void);
 
 extern PGDLLEXPORT void CitusMaintenanceDaemonMain(Datum main_arg);
