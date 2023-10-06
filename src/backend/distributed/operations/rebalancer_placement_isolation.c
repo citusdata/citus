@@ -50,14 +50,6 @@ typedef struct
 
 	/*
 	 * Whether given node is allowed to separate any shard placement groups.
-	 *
-	 * This is set only if we're draining a single node because otherwise
-	 * we have the control to separate shard placement groups on any node.
-	 *
-	 * However if we're draining a single node, we cannot separate shard
-	 * placement groups on the node that already has some placements because
-	 * we cannot move the existing placements from a node that we're not
-	 * draining to another node when we're draining a single node.
 	 */
 	bool allowedToSeparateAnyPlacementGroup;
 
