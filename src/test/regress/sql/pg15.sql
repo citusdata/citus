@@ -1001,7 +1001,7 @@ CREATE DATABASE mydatabase
             CONNECTION LIMIT = 10
             ENCODING = 'UTF8'
             STRATEGY = 'wal_log'
-            LOCALE = 'en_US.utf8'
+            LOCALE = ''
             LC_COLLATE = 'en_US.utf8'
             LC_CTYPE = 'en_US.utf8'
             ICU_LOCALE = 'en_US.utf8'
