@@ -976,3 +976,115 @@ SET client_min_messages TO ERROR;
 DROP SCHEMA pg15 CASCADE;
 DROP ROLE rls_tenant_1;
 DROP ROLE rls_tenant_2;
+
+
+-- create/drop database for pg > 15
+
+
+\set create_drop_db_tablespace :abs_srcdir '/tmp_check/ts3'
+CREATE TABLESPACE create_drop_db_tablespace LOCATION :'create_drop_db_tablespace';
+
+\c - - - :worker_1_port
+\set create_drop_db_tablespace :abs_srcdir '/tmp_check/ts4'
+CREATE TABLESPACE create_drop_db_tablespace LOCATION :'create_drop_db_tablespace';
+
+\c - - - :worker_2_port
+\set create_drop_db_tablespace :abs_srcdir '/tmp_check/ts5'
+CREATE TABLESPACE create_drop_db_tablespace LOCATION :'create_drop_db_tablespace';
+
+\c - - - :master_port
+create user create_drop_db_test_user;
+set citus.enable_create_database_propagation=on;
+CREATE DATABASE mydatabase
+    WITH TEMPLATE = 'template0'
+            OWNER = create_drop_db_test_user
+            CONNECTION LIMIT = 10
+            ENCODING = 'UTF8'
+            STRATEGY = 'wal_log'
+            LOCALE = 'C'
+            LC_COLLATE = 'C'
+            LC_CTYPE = 'C'
+            ICU_LOCALE = 'C'
+            LOCALE_PROVIDER = 'icu'
+            COLLATION_VERSION = '1.0'
+            TABLESPACE = create_drop_db_tablespace
+            ALLOW_CONNECTIONS = true
+            IS_TEMPLATE = false
+            OID = 966345;
+
+SELECT pd.datname, pd.encoding, pd.datlocprovider,
+pd.datistemplate, pd.datallowconn, pd.datconnlimit,
+pd.datcollate , pd. datctype  , pd.daticulocale, pd.datcollversion,
+pd.datacl, rolname AS database_owner, pa.rolname AS database_owner, pt.spcname AS tablespace
+FROM pg_database pd
+JOIN pg_authid pa ON pd.datdba = pa.oid
+join pg_tablespace pt on pd.dattablespace = pt.oid
+WHERE datname = 'mydatabase';
+
+\c - - - :worker_1_port
+SELECT pd.datname, pd.encoding, pd.datlocprovider,
+pd.datistemplate, pd.datallowconn, pd.datconnlimit,
+pd.datcollate , pd. datctype  , pd.daticulocale, pd.datcollversion,
+pd.datacl, rolname AS database_owner, pa.rolname AS database_owner, pt.spcname AS tablespace
+FROM pg_database pd
+JOIN pg_authid pa ON pd.datdba = pa.oid
+join pg_tablespace pt on pd.dattablespace = pt.oid
+WHERE datname = 'mydatabase';
+
+
+\c - - - :worker_2_port
+SELECT pd.datname, pd.encoding, pd.datlocprovider,
+pd.datistemplate, pd.datallowconn, pd.datconnlimit,
+pd.datcollate , pd. datctype  , pd.daticulocale, pd.datcollversion,
+pd.datacl, rolname AS database_owner, pa.rolname AS database_owner, pt.spcname AS tablespace
+FROM pg_database pd
+JOIN pg_authid pa ON pd.datdba = pa.oid
+join pg_tablespace pt on pd.dattablespace = pt.oid
+WHERE datname = 'mydatabase';
+
+
+\c - - - :master_port
+set citus.enable_create_database_propagation=on;
+drop database mydatabase;
+SELECT pd.datname, pd.encoding, pd.datlocprovider,
+pd.datistemplate, pd.datallowconn, pd.datconnlimit,
+pd.datcollate , pd. datctype  , pd.daticulocale, pd.datcollversion,
+pd.datacl, rolname AS database_owner, pa.rolname AS database_owner, pt.spcname AS tablespace
+FROM pg_database pd
+JOIN pg_authid pa ON pd.datdba = pa.oid
+join pg_tablespace pt on pd.dattablespace = pt.oid
+WHERE datname = 'mydatabase';
+
+
+\c - - - :worker_1_port
+SELECT pd.datname, pd.encoding, pd.datlocprovider,
+pd.datistemplate, pd.datallowconn, pd.datconnlimit,
+pd.datcollate , pd. datctype  , pd.daticulocale, pd.datcollversion,
+pd.datacl, rolname AS database_owner, pa.rolname AS database_owner, pt.spcname AS tablespace
+FROM pg_database pd
+JOIN pg_authid pa ON pd.datdba = pa.oid
+join pg_tablespace pt on pd.dattablespace = pt.oid
+WHERE datname = 'mydatabase';
+
+\c - - - :worker_2_port
+
+SELECT pd.datname, pd.encoding, pd.datlocprovider,
+pd.datistemplate, pd.datallowconn, pd.datconnlimit,
+pd.datcollate , pd. datctype  , pd.daticulocale, pd.datcollversion,
+pd.datacl, rolname AS database_owner, pa.rolname AS database_owner, pt.spcname AS tablespace
+FROM pg_database pd
+JOIN pg_authid pa ON pd.datdba = pa.oid
+join pg_tablespace pt on pd.dattablespace = pt.oid
+WHERE datname = 'mydatabase';
+
+\c - - - :master_port
+drop tablespace create_drop_db_tablespace;
+
+\c - - - :worker_1_port
+drop tablespace create_drop_db_tablespace;
+
+\c - - - :worker_2_port
+drop tablespace create_drop_db_tablespace;
+
+\c - - - :master_port
+drop user create_drop_db_test_user;
