@@ -207,8 +207,24 @@ DeparseAlterDatabaseSetStmt(Node *node)
 }
 
 
+const struct option_format option_formats[] = {
+	{ "template", " TEMPLATE %s", T_String },
+	{ "owner", " OWNER %s", T_String },
+	{ "tablespace", " TABLESPACE %s", T_String },
+	{ "connection_limit", " CONNECTION LIMIT %d", T_Integer },
+	{ "encoding", " ENCODING %s", T_String },
+	{ "lc_collate", " LC_COLLATE %s", T_String },
+	{ "lc_ctype", " LC_CTYPE %s", T_String },
+	{ "icu_locale", " ICU_LOCALE %s", T_String },
+	{ "icu_rules", " ICU_RULES %s", T_String },
+	{ "locale_provider", " LOCALE_PROVIDER %s", T_String },
+	{ "is_template", " IS_TEMPLATE %s", T_Boolean },
+	{ "allow_connections", " ALLOW_CONNECTIONS %s", T_Boolean },
+};
+
+
 static void
-AppendCreatedbStmt(StringInfo buf, CreatedbStmt *stmt)
+AppendCreateDatabaseStmt(StringInfo buf, CreatedbStmt *stmt)
 {
 	appendStringInfo(buf,
 					 "CREATE DATABASE %s",
@@ -218,124 +234,7 @@ AppendCreatedbStmt(StringInfo buf, CreatedbStmt *stmt)
 
 	foreach_ptr(option, stmt->options)
 	{
-		if (strcmp(option->defname, "tablespace") == 0)
-		{
-			char *tablespaceName = defGetString(option);
-
-			appendStringInfo(buf, " TABLESPACE %s",
-							 quote_identifier(tablespaceName));
-		}
-		else if (strcmp(option->defname, "owner") == 0)
-		{
-			char *owner = defGetString(option);
-
-			appendStringInfo(buf, " OWNER %s",
-							 quote_identifier(owner));
-		}
-		else if (strcmp(option->defname, "template") == 0)
-		{
-			char *template = defGetString(option);
-
-			appendStringInfo(buf, " TEMPLATE %s",
-							 quote_identifier(template));
-		}
-		else if (strcmp(option->defname, "encoding") == 0)
-		{
-			char *encoding = defGetString(option);
-
-			appendStringInfo(buf, " ENCODING %s",
-							 quote_literal_cstr(encoding));
-		}
-		else if (strcmp(option->defname, "locale") == 0)
-		{
-			char *locale = defGetString(option);
-
-			appendStringInfo(buf, " LOCALE %s",
-							 quote_literal_cstr(locale));
-		}
-		else if (strcmp(option->defname, "lc_collate") == 0)
-		{
-			char *lc_collate = defGetString(option);
-
-			appendStringInfo(buf, " LC_COLLATE %s",
-							 quote_literal_cstr(lc_collate));
-		}
-		else if (strcmp(option->defname, "lc_ctype") == 0)
-		{
-			char *lc_ctype = defGetString(option);
-
-			appendStringInfo(buf, " LC_CTYPE %s",
-							 quote_literal_cstr(lc_ctype));
-		}
-		else if (strcmp(option->defname, "icu_locale") == 0)
-		{
-			char *icuLocale = defGetString(option);
-
-			appendStringInfo(buf, " ICU_LOCALE %s",
-							 quote_literal_cstr(icuLocale));
-		}
-		else if (strcmp(option->defname, "icu_rules") == 0)
-		{
-			char *icuLocale = defGetString(option);
-
-			appendStringInfo(buf, " ICU_RULES %s",
-							 quote_literal_cstr(icuLocale));
-		}
-		else if (strcmp(option->defname, "locale_provider") == 0)
-		{
-			char *localeProvider = defGetString(option);
-
-			appendStringInfo(buf, " LOCALE_PROVIDER %s",
-							 quote_literal_cstr(localeProvider));
-		}
-		else if (strcmp(option->defname, "is_template") == 0)
-		{
-			bool isTemplate = defGetBoolean(option);
-
-			appendStringInfo(buf, " IS_TEMPLATE %s",
-							 isTemplate ? "true" : "false");
-		}
-		else if (strcmp(option->defname, "allow_connections") == 0)
-		{
-			bool allowConnections = defGetBoolean(option);
-
-			appendStringInfo(buf, " ALLOW_CONNECTIONS %s",
-							 allowConnections ? "true" : "false");
-		}
-		else if (strcmp(option->defname, "connection_limit") == 0)
-		{
-			int connectionLimit = defGetInt32(option);
-
-			appendStringInfo(buf, " CONNECTION_LIMIT %d", connectionLimit);
-		}
-#if PG_VERSION_NUM >= PG_VERSION_15
-		else if (strcmp(option->defname, "collation_version") == 0)
-		{
-			char *collationVersion = defGetString(option);
-
-			appendStringInfo(buf, " COLLATION_VERSION %s",
-							 quote_literal_cstr(collationVersion));
-		}
-		else if (strcmp(option->defname, "oid") == 0)
-		{
-			Oid objectId = defGetObjectId(option);
-
-			appendStringInfo(buf, " OID %d", objectId);
-		}
-		else if (strcmp(option->defname, "strategy") == 0)
-		{
-			char *strategy = defGetString(option);
-
-			appendStringInfo(buf, " STRATEGY %s",
-							 quote_literal_cstr(strategy));
-		}
-#endif
-		else
-		{
-			ereport(ERROR, (errcode(ERRCODE_SYNTAX_ERROR),
-							errmsg("unrecognized CREATE DATABASE option \"%s\"",
-								   option->defname)));
-		}
+		handleOption(buf, option, option_formats, lengthof(option_formats));
 	}
 }
 
@@ -347,7 +246,7 @@ DeparseCreateDatabaseStmt(Node *node)
 	StringInfoData str = { 0 };
 	initStringInfo(&str);
 
-	AppendCreatedbStmt(&str, stmt);
+	AppendCreateDatabaseStmt(&str, stmt);
 
 	return str.data;
 }
