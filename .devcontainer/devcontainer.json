@@ -1,5 +1,5 @@
 {
-    "image": "ghcr.io/citusdata/citus-devcontainer:dev-devcontainer",
+    "image": "ghcr.io/citusdata/citus-devcontainer:main",
     "runArgs": [
         "--cap-add=SYS_PTRACE",
     ],
