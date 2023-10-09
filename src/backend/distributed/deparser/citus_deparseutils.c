@@ -35,7 +35,7 @@ handleOption(StringInfo buf, DefElem *option, const struct option_format *opt_fo
 				bool value = defGetBoolean(option);
 				appendStringInfo(buf, opt_formats[i].format, value ? "true" : "false");
 			}
-#if PG_VERSION_NUM >= PG_VERSION_15
+#if PG_VERSION_NUM >= 150000
 			else if (strcmp(opt_formats[i].type, "object_id") == 0)
 			{
 				Oid value = defGetObjectId(option);
