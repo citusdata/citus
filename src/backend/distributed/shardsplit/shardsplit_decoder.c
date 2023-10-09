@@ -98,10 +98,10 @@ replication_origin_filter_cb(LogicalDecodingContext *ctx, RepOriginId origin_id)
  * reordering phase which is above change_cb. So we do not need to send keepalive in
  * change_cb.
  */
+#if (PG_VERSION_NUM <= PG_VERSION_15)
 static void
 update_replication_progress(LogicalDecodingContext *ctx, bool skipped_xact)
 {
-#if (PG_VERSION_NUM <= PG_VERSION_15)
 	static int changes_count = 0;
 
 	/*
@@ -118,16 +118,17 @@ update_replication_progress(LogicalDecodingContext *ctx, bool skipped_xact)
 	 */
 	if (ctx->end_xact || ++changes_count >= CHANGES_THRESHOLD)
 	{
-#if (PG_VERSION_NUM >= PG_VERSION_15)
+#if (PG_VERSION_NUM == PG_VERSION_15)
 		OutputPluginUpdateProgress(ctx, skipped_xact);
 #else
 		OutputPluginUpdateProgress(ctx);
 #endif
 		changes_count = 0;
 	}
-#endif
 }
 
+
+#endif
 
 /*
  * shard_split_change_cb function emits the incoming tuple change
@@ -147,8 +148,11 @@ shard_split_change_cb(LogicalDecodingContext *ctx, ReorderBufferTXN *txn,
 		return;
 	}
 
+#if (PG_VERSION_NUM <= PG_VERSION_15)
+
 	/* Send replication keepalive. */
 	update_replication_progress(ctx, false);
+#endif
 
 	/* check if the relation is publishable.*/
 	if (!is_publishable_relation(relation))
