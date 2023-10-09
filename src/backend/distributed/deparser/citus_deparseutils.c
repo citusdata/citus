@@ -7,6 +7,7 @@
 #include "utils/syscache.h"
 #include "utils/typcache.h"
 #include "distributed/deparser.h"
+#include "distributed/pg_version_constants.h"
 
 
 void
@@ -35,7 +36,7 @@ handleOption(StringInfo buf, DefElem *option, const struct option_format *opt_fo
 				bool value = defGetBoolean(option);
 				appendStringInfo(buf, opt_formats[i].format, value ? "true" : "false");
 			}
-#if PG_VERSION_NUM >= 150000
+#if PG_VERSION_NUM >= PG_VERSION_15
 			else if (strcmp(opt_formats[i].type, "object_id") == 0)
 			{
 				Oid value = defGetObjectId(option);
