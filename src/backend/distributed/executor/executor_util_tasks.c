@@ -61,7 +61,7 @@ TaskListRequiresRollback(List *taskList)
 	}
 
 	Task *task = (Task *) linitial(taskList);
-	if (task->cannotBeExecutedInTransction)
+	if (task->cannotBeExecutedInTransaction)
 	{
 		/* vacuum, create index concurrently etc. */
 		return false;
@@ -164,7 +164,7 @@ TaskListCannotBeExecutedInTransaction(List *taskList)
 	Task *task = NULL;
 	foreach_ptr(task, taskList)
 	{
-		if (task->cannotBeExecutedInTransction)
+		if (task->cannotBeExecutedInTransaction)
 		{
 			return true;
 		}
