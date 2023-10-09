@@ -481,7 +481,9 @@ PreprocessDropDatabaseStmt(Node *node, const char *queryString,
 		UnmarkObjectDistributed(&dbAddress);
 	}
 
-	/* we execute here to avoid EnsureCoordinator check in ExecuteDistributedDDLJob */
+	/* ExecuteDistributedDDLJob could not be used since it depends on namespace and
+	 * database does not have namespace.
+	 */
 
 	bool outsideTransaction = false;
 	List *taskList = CreateDDLTaskList(internalDropCommand->data, workerNodes,
