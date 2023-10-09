@@ -9,7 +9,6 @@
 #include "distributed/deparser.h"
 
 
-
 void
 handleOption(StringInfo buf, DefElem *option, const struct option_format *opt_formats, int
 			 opt_formats_len)
