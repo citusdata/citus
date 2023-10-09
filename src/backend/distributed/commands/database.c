@@ -36,24 +36,6 @@
 #include "distributed/listutils.h"
 #include "distributed/adaptive_executor.h"
 
-/* macros to add DefElems to a list  */
-#define DEFELEM_ADD_STRING(options, key, value) \
-	{ \
-		DefElem *elem = makeDefElem(key, (Node *) makeString(value), -1); \
-		options = lappend(options, elem); \
-	}
-
-#define DEFELEM_ADD_BOOL(options, key, value) \
-	{ \
-		DefElem *elem = makeDefElem(key, (Node *) makeBoolean(value), -1); \
-		options = lappend(options, elem); \
-	}
-
-#define DEFELEM_ADD_INT(options, key, value) \
-	{ \
-		DefElem *elem = makeDefElem(key, (Node *) makeInteger(value), -1); \
-		options = lappend(options, elem); \
-	}
 
 static AlterOwnerStmt * RecreateAlterDatabaseOwnerStmt(Oid databaseOid);
 
@@ -257,7 +239,7 @@ CreateDDLTaskList(char *command, List *workerNodeList, bool outsideTransaction)
 	Task *task = CitusMakeNode(Task);
 	task->taskType = DDL_TASK;
 	SetTaskQueryStringList(task, commandList);
-	task->cannotBeExecutedInTransction = outsideTransaction;
+	task->cannotBeExecutedInTransaction = outsideTransaction;
 
 	WorkerNode *workerNode = NULL;
 	foreach_ptr(workerNode, workerNodeList)
@@ -306,7 +288,7 @@ PreprocessAlterDatabaseSetStmt(Node *node, const char *queryString,
 
 /*
  * PostprocessCreatedbStmt creates the plan to synchronize CREATE DATABASE
- * across nodes. We use the cannotBeExecutedInTransction option to avoid
+ * across nodes. We use the cannotBeExecutedInTransaction option to avoid
  * sending transaction blocks.
  */
 List *
