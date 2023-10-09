@@ -20,36 +20,26 @@ handleOption(StringInfo buf, DefElem *option, const struct option_format *opt_fo
 	{
 		if (strcmp(name, opt_formats[i].name) == 0)
 		{
-			switch (opt_formats[i].type)
+			if (strcmp(opt_formats[i].type, "string") == 0)
 			{
-				case T_String:
-				{
-					char *value = defGetString(option);
-					appendStringInfo(buf, opt_formats[i].format, quote_identifier(value));
-					break;
-				}
-
-				case T_Integer:
-				{
-					int32 value = defGetInt32(option);
-					appendStringInfo(buf, opt_formats[i].format, value);
-					break;
-				}
-
-				case T_Boolean:
-				{
-					bool value = defGetBoolean(option);
-					appendStringInfo(buf, opt_formats[i].format, value ? "true" :
-									 "false");
-					break;
-				}
-
-				default:
-
-					/* Should not happen */
-					elog(ERROR, "unrecognized option type: %d", opt_formats[i].type);
+				char *value = defGetString(option);
+				appendStringInfo(buf, opt_formats[i].format, quote_identifier(value));
 			}
-			return;
+			else if (strcmp(opt_formats[i].type, "integer") == 0)
+			{
+				int32 value = defGetInt32(option);
+				appendStringInfo(buf, opt_formats[i].format, value);
+			}
+			else if (strcmp(opt_formats[i].type, "boolean") == 0)
+			{
+				bool value = defGetBoolean(option);
+				appendStringInfo(buf, opt_formats[i].format, value ? "true" : "false");
+			}
+			else
+			{
+				elog(ERROR, "unrecognized option type: %s", opt_formats[i].type);
+			}
+			break;
 		}
 	}
 }
