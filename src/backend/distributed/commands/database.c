@@ -393,8 +393,6 @@ citus_internal_database_command(PG_FUNCTION_ARGS)
 
 		if (OidIsValid(databaseOid))
 		{
-			/* / * remove database from database shards * / */
-
 			DropDatabase(NULL, (DropdbStmt *) parseTree);
 		}
 	}
