@@ -30,6 +30,25 @@ static void AppendAlterDatabaseOwnerStmt(StringInfo buf, AlterOwnerStmt *stmt);
 static void AppendAlterDatabaseStmt(StringInfo buf, AlterDatabaseStmt *stmt);
 static void AppendDefElemConnLimit(StringInfo buf, DefElem *def);
 
+const struct option_format create_database_option_formats[] = {
+	{ "template", " TEMPLATE %s", "string" },
+	{ "owner", " OWNER %s", "string" },
+	{ "tablespace", " TABLESPACE %s", "string" },
+	{ "connection_limit", " CONNECTION LIMIT %d", "integer" },
+	{ "encoding", " ENCODING %s", "literal_cstr" },
+	{ "locale", " LOCALE %s", "literal_cstr" },
+	{ "lc_collate", " LC_COLLATE %s", "literal_cstr" },
+	{ "lc_ctype", " LC_CTYPE %s", "literal_cstr" },
+	{ "icu_locale", " ICU_LOCALE %s", "literal_cstr" },
+	{ "icu_rules", " ICU_RULES %s", "literal_cstr" },
+	{ "locale_provider", " LOCALE_PROVIDER %s", "literal_cstr" },
+	{ "is_template", " IS_TEMPLATE %s", "boolean" },
+	{ "allow_connections", " ALLOW_CONNECTIONS %s", "boolean" },
+	{ "collation_version", " COLLATION_VERSION %s", "literal_cstr" },
+	{ "strategy", " STRATEGY %s", "literal_cstr" },
+	{ "oid", " OID %d", "object_id" },
+};
+
 char *
 DeparseAlterDatabaseOwnerStmt(Node *node)
 {
@@ -207,22 +226,6 @@ DeparseAlterDatabaseSetStmt(Node *node)
 }
 
 
-const struct option_format option_formats[] = {
-	{ "template", " TEMPLATE %s", "string" },
-	{ "owner", " OWNER %s", "string" },
-	{ "tablespace", " TABLESPACE %s", "string" },
-	{ "connection_limit", " CONNECTION LIMIT %d", "integer" },
-	{ "encoding", " ENCODING %s", "string" },
-	{ "lc_collate", " LC_COLLATE %s", "string" },
-	{ "lc_ctype", " LC_CTYPE %s", "string" },
-	{ "icu_locale", " ICU_LOCALE %s", "string" },
-	{ "icu_rules", " ICU_RULES %s", "string" },
-	{ "locale_provider", " LOCALE_PROVIDER %s", "string" },
-	{ "is_template", " IS_TEMPLATE %s", "boolean" },
-	{ "allow_connections", " ALLOW_CONNECTIONS %s", "boolean" },
-};
-
-
 static void
 AppendCreateDatabaseStmt(StringInfo buf, CreatedbStmt *stmt)
 {
@@ -234,7 +237,8 @@ AppendCreateDatabaseStmt(StringInfo buf, CreatedbStmt *stmt)
 
 	foreach_ptr(option, stmt->options)
 	{
-		handleOption(buf, option, option_formats, lengthof(option_formats));
+		handleOption(buf, option, create_database_option_formats, lengthof(
+						 create_database_option_formats));
 	}
 }
 

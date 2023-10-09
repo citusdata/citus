@@ -35,6 +35,16 @@ handleOption(StringInfo buf, DefElem *option, const struct option_format *opt_fo
 				bool value = defGetBoolean(option);
 				appendStringInfo(buf, opt_formats[i].format, value ? "true" : "false");
 			}
+			else if (strcmp(opt_formats[i].type, "object_id") == 0)
+			{
+				Oid value = defGetObjectId(option);
+				appendStringInfo(buf, opt_formats[i].format, value );
+			}
+			else if (strcmp(opt_formats[i].type, "literal_cstr") == 0)
+			{
+				char *value = defGetString(option);
+				appendStringInfo(buf, opt_formats[i].format, quote_literal_cstr(value) );
+			}
 			else
 			{
 				elog(ERROR, "unrecognized option type: %s", opt_formats[i].type);
