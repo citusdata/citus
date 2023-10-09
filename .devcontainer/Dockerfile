@@ -64,7 +64,7 @@ USER citus
 
 # build postgres versions separately for effective parrallelism and caching of already built versions when changing only certain versions
 FROM base AS pg14
-RUN pgenv build 14.9
+RUN MAKEFLAGS="-j $(nproc)" pgenv build 14.9
 RUN rm .pgenv/src/*.tar*
 RUN make -C .pgenv/src/postgresql-*/ clean
 RUN make -C .pgenv/src/postgresql-*/src/include install
@@ -76,7 +76,7 @@ RUN cp -r .pgenv/src .pgenv/pgsql-* .pgenv/config .pgenv-staging/
 RUN rm .pgenv-staging/config/default.conf
 
 FROM base AS pg15
-RUN pgenv build 15.4
+RUN MAKEFLAGS="-j $(nproc)" pgenv build 15.4
 RUN rm .pgenv/src/*.tar*
 RUN make -C .pgenv/src/postgresql-*/ clean
 RUN make -C .pgenv/src/postgresql-*/src/include install
@@ -88,7 +88,7 @@ RUN cp -r .pgenv/src .pgenv/pgsql-* .pgenv/config .pgenv-staging/
 RUN rm .pgenv-staging/config/default.conf
 
 FROM base AS pg16
-RUN pgenv build 16.0
+RUN MAKEFLAGS="-j $(nproc)" pgenv build 16.0
 RUN rm .pgenv/src/*.tar*
 RUN make -C .pgenv/src/postgresql-*/ clean
 RUN make -C .pgenv/src/postgresql-*/src/include install
