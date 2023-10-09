@@ -132,8 +132,8 @@ struct option_format
 
 
 extern void optionToStatement(StringInfo buf, DefElem *option, const struct
-						 option_format *opt_formats, int
-						 opt_formats_len);
+							  option_format *opt_formats, int
+							  opt_formats_len);
 
 
 /* forward declarations for deparse_statistics_stmts.c */
