@@ -98,7 +98,7 @@ replication_origin_filter_cb(LogicalDecodingContext *ctx, RepOriginId origin_id)
  * reordering phase which is above change_cb. So we do not need to send keepalive in
  * change_cb.
  */
-#if (PG_VERSION_NUM <= PG_VERSION_15)
+#if (PG_VERSION_NUM < PG_VERSION_16)
 static void
 update_replication_progress(LogicalDecodingContext *ctx, bool skipped_xact)
 {
@@ -118,7 +118,7 @@ update_replication_progress(LogicalDecodingContext *ctx, bool skipped_xact)
 	 */
 	if (ctx->end_xact || ++changes_count >= CHANGES_THRESHOLD)
 	{
-#if (PG_VERSION_NUM == PG_VERSION_15)
+#if (PG_VERSION_NUM >= PG_VERSION_15)
 		OutputPluginUpdateProgress(ctx, skipped_xact);
 #else
 		OutputPluginUpdateProgress(ctx);
@@ -148,7 +148,7 @@ shard_split_change_cb(LogicalDecodingContext *ctx, ReorderBufferTXN *txn,
 		return;
 	}
 
-#if (PG_VERSION_NUM <= PG_VERSION_15)
+#if (PG_VERSION_NUM < PG_VERSION_16)
 
 	/* Send replication keepalive. */
 	update_replication_progress(ctx, false);
