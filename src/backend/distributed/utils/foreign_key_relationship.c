@@ -27,6 +27,7 @@
 #include "distributed/version_compat.h"
 #include "nodes/pg_list.h"
 #include "storage/lockdefs.h"
+#include "utils/catcache.h"
 #include "utils/fmgroids.h"
 #include "utils/hsearch.h"
 #if PG_VERSION_NUM >= PG_VERSION_13
@@ -96,6 +97,8 @@ static ForeignConstraintRelationshipNode * CreateOrFindNode(HTAB *adjacencyLists
 static List * GetConnectedListHelper(ForeignConstraintRelationshipNode *node,
 									 bool isReferencing);
 static List * GetForeignConstraintRelationshipHelper(Oid relationId, bool isReferencing);
+
+MemoryContext ForeignConstraintRelationshipMemoryContext = NULL;
 
 
 /*
@@ -324,17 +327,36 @@ CreateForeignConstraintRelationshipGraph()
 		return;
 	}
 
-	ClearForeignConstraintRelationshipGraphContext();
+	/*
+	 * Lazily create our memory context once and reset on every reuse.
+	 * Since we have cleared and invalidated the fConstraintRelationshipGraph, right
+	 * before we can simply reset the context if it was already existing.
+	 */
+	if (ForeignConstraintRelationshipMemoryContext == NULL)
+	{
+		/* make sure we've initialized CacheMemoryContext */
+		if (CacheMemoryContext == NULL)
+		{
+			CreateCacheMemoryContext();
+		}
 
-	MemoryContext fConstraintRelationshipMemoryContext = AllocSetContextCreateExtended(
-		CacheMemoryContext,
-		"Forign Constraint Relationship Graph Context",
-		ALLOCSET_DEFAULT_MINSIZE,
-		ALLOCSET_DEFAULT_INITSIZE,
-		ALLOCSET_DEFAULT_MAXSIZE);
+		ForeignConstraintRelationshipMemoryContext = AllocSetContextCreate(
+			CacheMemoryContext,
+			"Foreign Constraint Relationship Graph Context",
+			ALLOCSET_DEFAULT_MINSIZE,
+			ALLOCSET_DEFAULT_INITSIZE,
+			ALLOCSET_DEFAULT_MAXSIZE);
+	}
+	else
+	{
+		fConstraintRelationshipGraph = NULL;
+		MemoryContextReset(ForeignConstraintRelationshipMemoryContext);
+	}
+
+	Assert(fConstraintRelationshipGraph == NULL);
 
 	MemoryContext oldContext = MemoryContextSwitchTo(
-		fConstraintRelationshipMemoryContext);
+		ForeignConstraintRelationshipMemoryContext);
 
 	fConstraintRelationshipGraph = (ForeignConstraintRelationshipGraph *) palloc(
 		sizeof(ForeignConstraintRelationshipGraph));
@@ -667,23 +689,4 @@ CreateOrFindNode(HTAB *adjacencyLists, Oid relid)
 	}
 
 	return node;
-}
-
-
-/*
- * ClearForeignConstraintRelationshipGraphContext clear all the allocated memory obtained
- * for foreign constraint relationship graph. Since all the variables of relationship
- * graph was obtained within the same context, destroying hash map is enough as
- * it deletes the context.
- */
-void
-ClearForeignConstraintRelationshipGraphContext()
-{
-	if (fConstraintRelationshipGraph == NULL)
-	{
-		return;
-	}
-
-	hash_destroy(fConstraintRelationshipGraph->nodeMap);
-	fConstraintRelationshipGraph = NULL;
 }
