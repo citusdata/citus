@@ -35,11 +35,13 @@ handleOption(StringInfo buf, DefElem *option, const struct option_format *opt_fo
 				bool value = defGetBoolean(option);
 				appendStringInfo(buf, opt_formats[i].format, value ? "true" : "false");
 			}
+#if PG_VERSION_NUM >= PG_VERSION_15
 			else if (strcmp(opt_formats[i].type, "object_id") == 0)
 			{
 				Oid value = defGetObjectId(option);
 				appendStringInfo(buf, opt_formats[i].format, value );
 			}
+#endif
 			else if (strcmp(opt_formats[i].type, "literal_cstr") == 0)
 			{
 				char *value = defGetString(option);
