@@ -382,7 +382,6 @@ citus_internal_database_command(PG_FUNCTION_ARGS)
 		{
 			createdb(NULL, (CreatedbStmt *) parseTree);
 		}
-
 	}
 	else if (IsA(parseTree, DropdbStmt))
 	{
@@ -391,8 +390,8 @@ citus_internal_database_command(PG_FUNCTION_ARGS)
 		bool missingOk = false;
 		Oid databaseOid = get_database_oid(stmt->dbname, missingOk);
 
-		
-		if(OidIsValid(databaseOid))
+
+		if (OidIsValid(databaseOid))
 		{
 			/* / * remove database from database shards * / */
 
@@ -403,6 +402,7 @@ citus_internal_database_command(PG_FUNCTION_ARGS)
 	{
 		ereport(ERROR, (errmsg("unsupported command type %d", nodeTag(parseTree))));
 	}
+
 	/* Below command rollbacks flags to the state before this session*/
 	AtEOXact_GUC(true, saveNestLevel);
 
