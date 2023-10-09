@@ -52,6 +52,9 @@ RUN useradd -ms /bin/bash citus \
 WORKDIR /home/citus
 USER citus
 
+# run all make commands with the number of cores available
+RUN echo "export MAKEFLAGS=\"-j \$(nproc)\"" >> "/home/citus/.bashrc"
+
 RUN git clone --branch v1.3.2 --depth 1 https://github.com/theory/pgenv.git .pgenv
 COPY --chown=citus:citus pgenv/config/ .pgenv/config/
 ENV PATH="/home/citus/.pgenv/bin:${PATH}"
