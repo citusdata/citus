@@ -121,6 +121,20 @@ extern void AppendGrantedByInGrant(StringInfo buf, GrantStmt *stmt);
 extern void AppendGrantSharedPrefix(StringInfo buf, GrantStmt *stmt);
 extern void AppendGrantSharedSuffix(StringInfo buf, GrantStmt *stmt);
 
+/* Common deparser utils */
+
+struct option_format
+{
+	const char *name;
+	const char *format;
+	int type;
+};
+
+
+extern void handleOption(StringInfo buf, DefElem *option, const struct
+						 option_format *opt_formats, int
+						 opt_formats_len);
+
 
 /* forward declarations for deparse_statistics_stmts.c */
 extern char * DeparseCreateStatisticsStmt(Node *node);
