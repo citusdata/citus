@@ -1,2 +1,3 @@
 -- citus--12.2-1--12.1-1
--- this is an empty downgrade path since citus--12.2-1--12.1-1.sql is empty for now
+
+#include "../udfs/citus_add_rebalance_strategy/10.1-1.sql"
