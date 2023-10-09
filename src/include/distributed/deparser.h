@@ -131,7 +131,7 @@ struct option_format
 };
 
 
-extern void handleOption(StringInfo buf, DefElem *option, const struct
+extern void optionToStatement(StringInfo buf, DefElem *option, const struct
 						 option_format *opt_formats, int
 						 opt_formats_len);
 

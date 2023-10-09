@@ -237,7 +237,7 @@ AppendCreateDatabaseStmt(StringInfo buf, CreatedbStmt *stmt)
 
 	foreach_ptr(option, stmt->options)
 	{
-		handleOption(buf, option, create_database_option_formats, lengthof(
+		optionToStatement(buf, option, create_database_option_formats, lengthof(
 						 create_database_option_formats));
 	}
 }

@@ -1,3 +1,4 @@
+
 #include "postgres.h"
 #include "utils/builtins.h"
 #include "commands/defrem.h"
@@ -10,9 +11,18 @@
 #include "distributed/pg_version_constants.h"
 
 
+/**
+ * Convert a DefElem option to a SQL statement and append it to the given StringInfo buffer.
+ *
+ * @param buf The StringInfo buffer to append the SQL statement to.
+ * @param option The DefElem option to convert to a SQL statement.
+ * @param opt_formats The option format specification to use for the conversion.
+ * @param num_opt_formats The number of option formats in the opt_formats array.
+ */
 void
-handleOption(StringInfo buf, DefElem *option, const struct option_format *opt_formats, int
-			 opt_formats_len)
+optionToStatement(StringInfo buf, DefElem *option, const struct
+				  option_format *opt_formats, int
+				  opt_formats_len)
 {
 	const char *name = option->defname;
 	int i;
