@@ -208,18 +208,18 @@ DeparseAlterDatabaseSetStmt(Node *node)
 
 
 const struct option_format option_formats[] = {
-	{ "template", " TEMPLATE %s", T_String },
-	{ "owner", " OWNER %s", T_String },
-	{ "tablespace", " TABLESPACE %s", T_String },
-	{ "connection_limit", " CONNECTION LIMIT %d", T_Integer },
-	{ "encoding", " ENCODING %s", T_String },
-	{ "lc_collate", " LC_COLLATE %s", T_String },
-	{ "lc_ctype", " LC_CTYPE %s", T_String },
-	{ "icu_locale", " ICU_LOCALE %s", T_String },
-	{ "icu_rules", " ICU_RULES %s", T_String },
-	{ "locale_provider", " LOCALE_PROVIDER %s", T_String },
-	{ "is_template", " IS_TEMPLATE %s", T_Boolean },
-	{ "allow_connections", " ALLOW_CONNECTIONS %s", T_Boolean },
+	{ "template", " TEMPLATE %s", "string" },
+	{ "owner", " OWNER %s", "string" },
+	{ "tablespace", " TABLESPACE %s", "string" },
+	{ "connection_limit", " CONNECTION LIMIT %d", "integer" },
+	{ "encoding", " ENCODING %s", "string" },
+	{ "lc_collate", " LC_COLLATE %s", "string" },
+	{ "lc_ctype", " LC_CTYPE %s", "string" },
+	{ "icu_locale", " ICU_LOCALE %s", "string" },
+	{ "icu_rules", " ICU_RULES %s", "string" },
+	{ "locale_provider", " LOCALE_PROVIDER %s", "string" },
+	{ "is_template", " IS_TEMPLATE %s", "boolean" },
+	{ "allow_connections", " ALLOW_CONNECTIONS %s", "boolean" },
 };
 
 

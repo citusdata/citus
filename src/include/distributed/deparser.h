@@ -127,7 +127,7 @@ struct option_format
 {
 	const char *name;
 	const char *format;
-	int type;
+	const char *type;
 };
 
 
