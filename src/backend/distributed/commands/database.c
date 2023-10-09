@@ -287,9 +287,10 @@ PreprocessAlterDatabaseSetStmt(Node *node, const char *queryString,
 
 
 /*
- * PostprocessCreatedbStmt creates the plan to synchronize CREATE DATABASE
- * across nodes. We use the cannotBeExecutedInTransaction option to avoid
- * sending transaction blocks.
+ * PostprocessCreatedbStmt is executed after the statement is applied to the local
+ * postgres instance. In this stage we can prepare the commands that need to be run on
+ * all workers to create the database.
+ *
  */
 List *
 PostprocessCreateDatabaseStmt(Node *node, const char *queryString)
@@ -381,10 +382,7 @@ citus_internal_database_command(PG_FUNCTION_ARGS)
 		{
 			createdb(NULL, (CreatedbStmt *) parseTree);
 		}
-		else
-		{
-			/* TODO: check database properties */
-		}
+
 	}
 	else if (IsA(parseTree, DropdbStmt))
 	{
@@ -393,14 +391,10 @@ citus_internal_database_command(PG_FUNCTION_ARGS)
 		bool missingOk = false;
 		Oid databaseOid = get_database_oid(stmt->dbname, missingOk);
 
-		if (!OidIsValid(databaseOid))
-		{
-			/* already dropped? */
-		}
-		else
+		
+		if(OidIsValid(databaseOid))
 		{
 			/* / * remove database from database shards * / */
-			/* DeleteDatabaseShardByDatabaseIdLocally(databaseOid); */
 
 			DropDatabase(NULL, (DropdbStmt *) parseTree);
 		}
@@ -409,7 +403,7 @@ citus_internal_database_command(PG_FUNCTION_ARGS)
 	{
 		ereport(ERROR, (errmsg("unsupported command type %d", nodeTag(parseTree))));
 	}
-
+	/* Below command rollbacks flags to the state before this session*/
 	AtEOXact_GUC(true, saveNestLevel);
 
 	PG_RETURN_VOID();
