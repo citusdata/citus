@@ -12,3 +12,5 @@ COMMENT ON FUNCTION pg_catalog.citus_internal_database_command(text) IS
  'run a database command without transaction block restrictions';
 
 -- bump version to 12.2-1
+
+#include "udfs/citus_add_rebalance_strategy/12.2-1.sql"
