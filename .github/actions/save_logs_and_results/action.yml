@@ -1,0 +1,38 @@
+name: save_logs_and_results
+inputs:
+  folder:
+    required: false
+    default: "log"
+runs:
+  using: composite
+  steps:
+  - uses: actions/upload-artifact@v3.1.1
+    name: Upload logs
+    with:
+      name: ${{ inputs.folder }}
+      if-no-files-found: ignore
+      path: |
+        src/test/**/proxy.output
+        src/test/**/results/
+        src/test/**/tmp_check/master/log
+        src/test/**/tmp_check/worker.57638/log
+        src/test/**/tmp_check/worker.57637/log
+        src/test/**/*.diffs
+        src/test/**/out/ddls.sql
+        src/test/**/out/queries.sql
+        src/test/**/logfile_*
+        /tmp/pg_upgrade_newData_logs
+  - name: Publish regression.diffs
+    run: |-
+      diffs="$(find src/test/regress -name "*.diffs" -exec cat {} \;)"
+      if ! [ -z "$diffs" ]; then
+        echo '```diff' >> $GITHUB_STEP_SUMMARY
+        echo -E "$diffs" >> $GITHUB_STEP_SUMMARY
+        echo '```' >> $GITHUB_STEP_SUMMARY
+        echo -E $diffs
+      fi
+    shell: bash
+  - name: Print stack traces
+    run: "./ci/print_stack_trace.sh"
+    if: failure()
+    shell: bash
