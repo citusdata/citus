@@ -1,0 +1,27 @@
+name: coverage
+inputs:
+  flags:
+    required: false
+  codecov_token:
+    required: true
+runs:
+  using: composite
+  steps:
+  - uses: codecov/codecov-action@v3
+    with:
+      flags: ${{ inputs.flags }}
+      token: ${{ inputs.codecov_token }}
+      verbose: true
+      gcov: true
+  - name: Create codeclimate coverage
+    run: |-
+      lcov --directory . --capture --output-file lcov.info
+      lcov --remove lcov.info -o lcov.info '/usr/*'
+      sed "s=^SF:$PWD/=SF:=g" -i lcov.info # relative pats are required by codeclimate
+      mkdir -p /tmp/codeclimate
+      cc-test-reporter format-coverage -t lcov -o /tmp/codeclimate/${{ inputs.flags }}.json lcov.info
+    shell: bash
+  - uses: actions/upload-artifact@v3.1.1
+    with:
+      path: "/tmp/codeclimate/*.json"
+      name: codeclimate
