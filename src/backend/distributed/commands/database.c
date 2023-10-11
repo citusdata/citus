@@ -184,11 +184,29 @@ PreprocessAlterDatabaseStmt(Node *node, const char *queryString,
 
 	char *sql = DeparseTreeNode((Node *) stmt);
 
-	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
+	if (strstr(sql, "SELECT pg_catalog.citus_internal_database_command") != NULL) {
+		List *workerNodes = TargetWorkerSetNodeList(NON_COORDINATOR_METADATA_NODES,
+												RowShareLock);
+		if (list_length(workerNodes) > 0)
+		{
+			bool outsideTransaction = false;
+
+			List *taskList = CreateDDLTaskList(sql, workerNodes,
+											outsideTransaction);
+
+			bool localExecutionSupported = false;
+			ExecuteUtilityTaskList(taskList, localExecutionSupported);
+			return NIL;
+		}
+	}else{
+		List *commands = list_make3(DISABLE_DDL_PROPAGATION,
 								(void *) sql,
 								ENABLE_DDL_PROPAGATION);
 
-	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
+		return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
+	}
+	return NIL;
+
 }
 
 
@@ -371,6 +389,10 @@ citus_internal_database_command(PG_FUNCTION_ARGS)
 					  (superuser() ? PGC_SUSET : PGC_USERSET), PGC_S_SESSION,
 					  GUC_ACTION_LOCAL, true, 0, false);
 
+	set_config_option("synchronous_commit", "off",
+					  (superuser() ? PGC_SUSET : PGC_USERSET), PGC_S_SESSION,
+					  GUC_ACTION_LOCAL, true, 0, false);
+
 	if (IsA(parseTree, CreatedbStmt))
 	{
 		CreatedbStmt *stmt = castNode(CreatedbStmt, parseTree);
@@ -394,6 +416,20 @@ citus_internal_database_command(PG_FUNCTION_ARGS)
 		if (OidIsValid(databaseOid))
 		{
 			DropDatabase(NULL, (DropdbStmt *) parseTree);
+		}
+	}
+	else if (IsA(parseTree, AlterDatabaseStmt))
+	{
+		elog(DEBUG1, "Altering DB");
+		AlterDatabaseStmt *stmt = castNode(AlterDatabaseStmt, parseTree);
+
+		bool missingOk = false;
+		Oid databaseOid = get_database_oid(stmt->dbname, missingOk);
+
+
+		if (OidIsValid(databaseOid))
+		{
+			AlterDatabase(NULL, (AlterDatabaseStmt *) parseTree,true);
 		}
 	}
 	else

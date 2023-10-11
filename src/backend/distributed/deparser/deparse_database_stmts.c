@@ -28,7 +28,6 @@
 
 static void AppendAlterDatabaseOwnerStmt(StringInfo buf, AlterOwnerStmt *stmt);
 static void AppendAlterDatabaseStmt(StringInfo buf, AlterDatabaseStmt *stmt);
-static void AppendDefElemConnLimit(StringInfo buf, DefElem *def);
 
 const struct option_format create_database_option_formats[] = {
 	{ "template", " TEMPLATE %s", "string" },
@@ -47,6 +46,13 @@ const struct option_format create_database_option_formats[] = {
 	{ "collation_version", " COLLATION_VERSION %s", "literal_cstr" },
 	{ "strategy", " STRATEGY %s", "literal_cstr" },
 	{ "oid", " OID %d", "object_id" },
+};
+
+
+const struct option_format alter_database_option_formats[] = {
+	{ "is_template", " IS_TEMPLATE %s", "boolean" },
+	{ "allow_connections", " ALLOW_CONNECTIONS %s", "boolean" },
+	{ "connection_limit", " CONNECTION_LIMIT %d", "integer" },
 };
 
 char *
@@ -106,45 +112,40 @@ AppendGrantOnDatabaseStmt(StringInfo buf, GrantStmt *stmt)
 	AppendGrantSharedSuffix(buf, stmt);
 }
 
-
 static void
-AppendDefElemConnLimit(StringInfo buf, DefElem *def)
-{
-	appendStringInfo(buf, " CONNECTION LIMIT %ld", (long int) defGetNumeric(def));
+AppendBasicAlterDatabaseOptions(StringInfo buf,DefElem *def, bool prefix_appended_for_basic_options, char *dbname ){
+	if(!prefix_appended_for_basic_options){
+		appendStringInfo(buf, "ALTER DATABASE %s WITH ", quote_identifier(dbname));
+		prefix_appended_for_basic_options = true;
+	}
+	optionToStatement(buf, def, alter_database_option_formats, lengthof(
+		alter_database_option_formats));
 }
 
+static void
+AppendAlterDatabaseSetTablespace(StringInfo buf,DefElem *def, char *dbname ){
+	appendStringInfo(buf,
+		"SELECT pg_catalog.citus_internal_database_command('ALTER DATABASE %s SET TABLESPACE %s')",
+		quote_identifier(dbname),quote_identifier(defGetString(def)));
+}
 
 static void
 AppendAlterDatabaseStmt(StringInfo buf, AlterDatabaseStmt *stmt)
 {
-	appendStringInfo(buf, "ALTER DATABASE %s ", quote_identifier(stmt->dbname));
-
 	if (stmt->options)
 	{
 		ListCell *cell = NULL;
-		appendStringInfo(buf, "WITH ");
+		bool prefix_appended_for_basic_options = false;
 		foreach(cell, stmt->options)
 		{
 			DefElem *def = castNode(DefElem, lfirst(cell));
-			if (strcmp(def->defname, "is_template") == 0)
+			if (strcmp(def->defname,"tablespace") == 0)
 			{
-				appendStringInfo(buf, "IS_TEMPLATE %s",
-								 quote_literal_cstr(strVal(def->arg)));
+				AppendAlterDatabaseSetTablespace(buf,def,stmt->dbname);
+				break;
 			}
-			else if (strcmp(def->defname, "connection_limit") == 0)
-			{
-				AppendDefElemConnLimit(buf, def);
-			}
-			else if (strcmp(def->defname, "allow_connections") == 0)
-			{
-				ereport(ERROR,
-						errmsg("ALLOW_CONNECTIONS is not supported"));
-			}
-			else
-			{
-				ereport(ERROR,
-						errmsg("unrecognized ALTER DATABASE option: %s",
-							   def->defname));
+			else{
+				AppendBasicAlterDatabaseOptions(buf,def,prefix_appended_for_basic_options,stmt->dbname);
 			}
 		}
 	}
