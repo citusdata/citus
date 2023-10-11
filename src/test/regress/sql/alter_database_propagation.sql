@@ -66,6 +66,7 @@ alter database regression2 set TABLESPACE pg_default;
 
 \c - - - :master_port
 
+set citus.enable_create_database_propagation=on;
 alter database regression2 rename to regression3;
 
 drop database regression3;
