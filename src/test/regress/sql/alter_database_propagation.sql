@@ -54,6 +54,18 @@ alter database regression2 with CONNECTION LIMIT 100;
 alter database regression2 with IS_TEMPLATE true CONNECTION LIMIT 50;
 alter database regression2 with IS_TEMPLATE false;
 
+alter database regression2 set TABLESPACE pg_default;
+
+\c - - - :worker_1_port
+
+alter database regression2 set TABLESPACE pg_default;
+
+\c - - - :worker_2_port
+
+alter database regression2 set TABLESPACE pg_default;
+
+\c - - - :master_port
+
 alter database regression2 rename to regression3;
 
 drop database regression3;

@@ -156,11 +156,16 @@ NOTICE:  issuing ALTER DATABASE regression2 WITH  IS_TEMPLATE false;
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing ALTER DATABASE regression2 WITH  IS_TEMPLATE false;
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+alter database regression2 set TABLESPACE pg_default;
+NOTICE:  Citus partially supports ALTER DATABASE SET TABLESPACE for distributed databases
+DETAIL:  Citus does not propagate ALTER DATABASE SET TABLESPACE command to workers
+HINT:  You can manually alter a tablespace for a database and its extensions on workers.
+\c - - - :worker_1_port
+alter database regression2 set TABLESPACE pg_default;
+\c - - - :worker_2_port
+alter database regression2 set TABLESPACE pg_default;
+\c - - - :master_port
 alter database regression2 rename to regression3;
-NOTICE:  issuing ALTER DATABASE regression2 RENAME TO regression3
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing ALTER DATABASE regression2 RENAME TO regression3
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 drop database regression3;
 set citus.log_remote_commands = false;
 set citus.enable_create_database_propagation=off;
