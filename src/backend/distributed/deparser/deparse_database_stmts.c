@@ -124,8 +124,7 @@ AppendBasicAlterDatabaseOptions(StringInfo buf,DefElem *def, bool prefix_appende
 
 static void
 AppendAlterDatabaseSetTablespace(StringInfo buf,DefElem *def, char *dbname ){
-	appendStringInfo(buf,
-		"SELECT pg_catalog.citus_internal_database_command('ALTER DATABASE %s SET TABLESPACE %s')",
+	appendStringInfo(buf,"ALTER DATABASE %s SET TABLESPACE %s",
 		quote_identifier(dbname),quote_identifier(defGetString(def)));
 }
 

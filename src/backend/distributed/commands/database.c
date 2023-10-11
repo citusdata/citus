@@ -180,23 +180,16 @@ PreprocessAlterDatabaseStmt(Node *node, const char *queryString,
 
 	AlterDatabaseStmt *stmt = castNode(AlterDatabaseStmt, node);
 
-	EnsureCoordinator();
-
 	char *sql = DeparseTreeNode((Node *) stmt);
 
-	if (strstr(sql, "SELECT pg_catalog.citus_internal_database_command") != NULL) {
-		List *workerNodes = TargetWorkerSetNodeList(NON_COORDINATOR_METADATA_NODES,
-												RowShareLock);
-		if (list_length(workerNodes) > 0)
-		{
-			bool outsideTransaction = false;
-
-			List *taskList = CreateDDLTaskList(sql, workerNodes,
-											outsideTransaction);
-
-			bool localExecutionSupported = false;
-			ExecuteUtilityTaskList(taskList, localExecutionSupported);
-			return NIL;
+	if (strstr(sql, "SET TABLESPACE") != NULL) {
+		if (IsCoordinatorNode()){
+			ereport(NOTICE, (errmsg("Citus partially supports ALTER DATABASE SET TABLESPACE for "
+										"distributed databases"),
+								errdetail("Citus does not propagate ALTER DATABASE SET TABLESPACE "
+										"command to workers"),
+								errhint("You can manually alter a tablespace for a database and its "
+										"extensions on workers.")));
 		}
 	}else{
 		List *commands = list_make3(DISABLE_DDL_PROPAGATION,
