@@ -240,12 +240,13 @@ PreprocessAlterDatabaseRefreshCollStmt(Node *node, const char *queryString,
 	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
 }
 
+
 #endif
 
 
 List *
 PreprocessAlterDatabaseRenameStmt(Node *node, const char *queryString,
-									   ProcessUtilityContext processUtilityContext)
+								  ProcessUtilityContext processUtilityContext)
 {
 	if (!ShouldPropagate())
 	{
@@ -264,6 +265,7 @@ PreprocessAlterDatabaseRenameStmt(Node *node, const char *queryString,
 
 	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
 }
+
 
 /*
  * CreateDDLTaskList creates a task list for running a single DDL command.

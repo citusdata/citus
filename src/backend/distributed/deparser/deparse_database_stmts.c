@@ -208,6 +208,7 @@ DeparseAlterDatabaseRefreshCollStmt(Node *node)
 	return str.data;
 }
 
+
 #endif
 
 char *
@@ -224,6 +225,7 @@ DeparseAlterDatabaseRenameStmt(Node *node)
 
 	return str.data;
 }
+
 
 static void
 AppendAlterDatabaseSetStmt(StringInfo buf, AlterDatabaseSetStmt *stmt)
