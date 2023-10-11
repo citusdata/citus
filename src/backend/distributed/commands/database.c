@@ -184,7 +184,7 @@ PreprocessAlterDatabaseStmt(Node *node, const char *queryString,
 
 	if (strstr(sql, "SET TABLESPACE") != NULL)
 	{
-		if (IsCoordinatorNode())
+		if (IsCoordinator())
 		{
 			ereport(NOTICE, (errmsg(
 								 "Citus partially supports ALTER DATABASE SET TABLESPACE for "
@@ -240,8 +240,30 @@ PreprocessAlterDatabaseRefreshCollStmt(Node *node, const char *queryString,
 	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
 }
 
-
 #endif
+
+
+List *
+PreprocessAlterDatabaseRenameStmt(Node *node, const char *queryString,
+									   ProcessUtilityContext processUtilityContext)
+{
+	if (!ShouldPropagate())
+	{
+		return NIL;
+	}
+
+	RenameStmt *stmt = castNode(RenameStmt, node);
+
+	EnsureCoordinator();
+
+	char *sql = DeparseTreeNode((Node *) stmt);
+
+	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
+								(void *) sql,
+								ENABLE_DDL_PROPAGATION);
+
+	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
+}
 
 /*
  * CreateDDLTaskList creates a task list for running a single DDL command.

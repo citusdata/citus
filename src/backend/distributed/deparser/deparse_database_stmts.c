@@ -208,8 +208,22 @@ DeparseAlterDatabaseRefreshCollStmt(Node *node)
 	return str.data;
 }
 
-
 #endif
+
+char *
+DeparseAlterDatabaseRenameStmt(Node *node)
+{
+	RenameStmt *stmt = (RenameStmt *) node;
+
+	StringInfoData str;
+	initStringInfo(&str);
+
+	appendStringInfo(&str, "ALTER DATABASE %s RENAME TO %s",
+					 quote_identifier(stmt->subname),
+					 quote_identifier(stmt->newname));
+
+	return str.data;
+}
 
 static void
 AppendAlterDatabaseSetStmt(StringInfo buf, AlterDatabaseSetStmt *stmt)

@@ -231,6 +231,9 @@ extern List * PostprocessCreateDatabaseStmt(Node *node, const char *queryString)
 extern List * PreprocessDropDatabaseStmt(Node *node, const char *queryString,
 										 ProcessUtilityContext processUtilityContext);
 
+extern List * PreprocessAlterDatabaseRenameStmt(Node *node, const char *queryString,
+										 ProcessUtilityContext processUtilityContext);
+
 /* domain.c - forward declarations */
 extern List * CreateDomainStmtObjectAddress(Node *node, bool missing_ok, bool
 											isPostprocess);
