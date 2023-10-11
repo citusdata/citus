@@ -113,7 +113,7 @@ AppendGrantOnDatabaseStmt(StringInfo buf, GrantStmt *stmt)
 }
 
 
-static void
+static bool
 AppendBasicAlterDatabaseOptions(StringInfo buf, DefElem *def, bool
 								prefix_appended_for_basic_options, char *dbname)
 {
@@ -124,6 +124,7 @@ AppendBasicAlterDatabaseOptions(StringInfo buf, DefElem *def, bool
 	}
 	optionToStatement(buf, def, alter_database_option_formats, lengthof(
 						  alter_database_option_formats));
+	return prefix_appended_for_basic_options;
 }
 
 
@@ -152,9 +153,11 @@ AppendAlterDatabaseStmt(StringInfo buf, AlterDatabaseStmt *stmt)
 			}
 			else
 			{
-				AppendBasicAlterDatabaseOptions(buf, def,
-												prefix_appended_for_basic_options,
-												stmt->dbname);
+				prefix_appended_for_basic_options = AppendBasicAlterDatabaseOptions(buf,
+																					def,
+																					prefix_appended_for_basic_options,
+																					stmt->
+																					dbname);
 			}
 		}
 	}

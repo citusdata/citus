@@ -1,38 +1,30 @@
 set citus.log_remote_commands = true;
 set citus.grep_remote_commands = '%ALTER DATABASE%';
--- since ALLOW_CONNECTIONS alter option should be executed in a different database
--- and since we don't have a multiple database support for now,
--- this statement will get error
-alter database regression ALLOW_CONNECTIONS false;
-ERROR:  ALLOW_CONNECTIONS is not supported
 alter database regression with CONNECTION LIMIT 100;
-NOTICE:  issuing ALTER DATABASE regression WITH  CONNECTION LIMIT 100;
+NOTICE:  issuing ALTER DATABASE regression WITH  CONNECTION_LIMIT 100;
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing ALTER DATABASE regression WITH  CONNECTION LIMIT 100;
+NOTICE:  issuing ALTER DATABASE regression WITH  CONNECTION_LIMIT 100;
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 alter database regression with IS_TEMPLATE true CONNECTION LIMIT 50;
-NOTICE:  issuing ALTER DATABASE regression WITH IS_TEMPLATE 'true' CONNECTION LIMIT 50;
+NOTICE:  issuing ALTER DATABASE regression WITH  IS_TEMPLATE true CONNECTION_LIMIT 50;
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing ALTER DATABASE regression WITH IS_TEMPLATE 'true' CONNECTION LIMIT 50;
+NOTICE:  issuing ALTER DATABASE regression WITH  IS_TEMPLATE true CONNECTION_LIMIT 50;
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 alter database regression with CONNECTION LIMIT -1;
-NOTICE:  issuing ALTER DATABASE regression WITH  CONNECTION LIMIT -1;
+NOTICE:  issuing ALTER DATABASE regression WITH  CONNECTION_LIMIT -1;
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing ALTER DATABASE regression WITH  CONNECTION LIMIT -1;
+NOTICE:  issuing ALTER DATABASE regression WITH  CONNECTION_LIMIT -1;
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 alter database regression with IS_TEMPLATE true;
-NOTICE:  issuing ALTER DATABASE regression WITH IS_TEMPLATE 'true';
+NOTICE:  issuing ALTER DATABASE regression WITH  IS_TEMPLATE true;
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing ALTER DATABASE regression WITH IS_TEMPLATE 'true';
+NOTICE:  issuing ALTER DATABASE regression WITH  IS_TEMPLATE true;
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 alter database regression with IS_TEMPLATE false;
-NOTICE:  issuing ALTER DATABASE regression WITH IS_TEMPLATE 'false';
+NOTICE:  issuing ALTER DATABASE regression WITH  IS_TEMPLATE false;
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing ALTER DATABASE regression WITH IS_TEMPLATE 'false';
+NOTICE:  issuing ALTER DATABASE regression WITH  IS_TEMPLATE false;
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
--- this statement will get error since we don't have a multiple database support for now
-alter database regression rename to regression2;
-ERROR:  current database cannot be renamed
 alter database regression set default_transaction_read_only = true;
 NOTICE:  issuing ALTER DATABASE regression SET default_transaction_read_only = 'true'
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
@@ -147,4 +139,28 @@ NOTICE:  issuing ALTER DATABASE regression RESET lock_timeout
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing ALTER DATABASE regression RESET lock_timeout
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+set citus.enable_create_database_propagation=on;
+create database regression2;
+alter database regression2 with CONNECTION LIMIT 100;
+NOTICE:  issuing ALTER DATABASE regression2 WITH  CONNECTION_LIMIT 100;
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE regression2 WITH  CONNECTION_LIMIT 100;
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+alter database regression2 with IS_TEMPLATE true CONNECTION LIMIT 50;
+NOTICE:  issuing ALTER DATABASE regression2 WITH  IS_TEMPLATE true CONNECTION_LIMIT 50;
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE regression2 WITH  IS_TEMPLATE true CONNECTION_LIMIT 50;
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+alter database regression2 with IS_TEMPLATE false;
+NOTICE:  issuing ALTER DATABASE regression2 WITH  IS_TEMPLATE false;
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE regression2 WITH  IS_TEMPLATE false;
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+alter database regression2 rename to regression3;
+NOTICE:  issuing ALTER DATABASE regression2 RENAME TO regression3
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE regression2 RENAME TO regression3
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+drop database regression3;
 set citus.log_remote_commands = false;
+set citus.enable_create_database_propagation=off;
