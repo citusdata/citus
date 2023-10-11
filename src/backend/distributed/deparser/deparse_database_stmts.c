@@ -112,21 +112,28 @@ AppendGrantOnDatabaseStmt(StringInfo buf, GrantStmt *stmt)
 	AppendGrantSharedSuffix(buf, stmt);
 }
 
+
 static void
-AppendBasicAlterDatabaseOptions(StringInfo buf,DefElem *def, bool prefix_appended_for_basic_options, char *dbname ){
-	if(!prefix_appended_for_basic_options){
+AppendBasicAlterDatabaseOptions(StringInfo buf, DefElem *def, bool
+								prefix_appended_for_basic_options, char *dbname)
+{
+	if (!prefix_appended_for_basic_options)
+	{
 		appendStringInfo(buf, "ALTER DATABASE %s WITH ", quote_identifier(dbname));
 		prefix_appended_for_basic_options = true;
 	}
 	optionToStatement(buf, def, alter_database_option_formats, lengthof(
-		alter_database_option_formats));
+						  alter_database_option_formats));
 }
 
+
 static void
-AppendAlterDatabaseSetTablespace(StringInfo buf,DefElem *def, char *dbname ){
-	appendStringInfo(buf,"ALTER DATABASE %s SET TABLESPACE %s",
-		quote_identifier(dbname),quote_identifier(defGetString(def)));
+AppendAlterDatabaseSetTablespace(StringInfo buf, DefElem *def, char *dbname)
+{
+	appendStringInfo(buf, "ALTER DATABASE %s SET TABLESPACE %s",
+					 quote_identifier(dbname), quote_identifier(defGetString(def)));
 }
+
 
 static void
 AppendAlterDatabaseStmt(StringInfo buf, AlterDatabaseStmt *stmt)
@@ -138,13 +145,16 @@ AppendAlterDatabaseStmt(StringInfo buf, AlterDatabaseStmt *stmt)
 		foreach(cell, stmt->options)
 		{
 			DefElem *def = castNode(DefElem, lfirst(cell));
-			if (strcmp(def->defname,"tablespace") == 0)
+			if (strcmp(def->defname, "tablespace") == 0)
 			{
-				AppendAlterDatabaseSetTablespace(buf,def,stmt->dbname);
+				AppendAlterDatabaseSetTablespace(buf, def, stmt->dbname);
 				break;
 			}
-			else{
-				AppendBasicAlterDatabaseOptions(buf,def,prefix_appended_for_basic_options,stmt->dbname);
+			else
+			{
+				AppendBasicAlterDatabaseOptions(buf, def,
+												prefix_appended_for_basic_options,
+												stmt->dbname);
 			}
 		}
 	}

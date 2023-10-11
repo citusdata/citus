@@ -182,24 +182,30 @@ PreprocessAlterDatabaseStmt(Node *node, const char *queryString,
 
 	char *sql = DeparseTreeNode((Node *) stmt);
 
-	if (strstr(sql, "SET TABLESPACE") != NULL) {
-		if (IsCoordinatorNode()){
-			ereport(NOTICE, (errmsg("Citus partially supports ALTER DATABASE SET TABLESPACE for "
-										"distributed databases"),
-								errdetail("Citus does not propagate ALTER DATABASE SET TABLESPACE "
-										"command to workers"),
-								errhint("You can manually alter a tablespace for a database and its "
-										"extensions on workers.")));
+	if (strstr(sql, "SET TABLESPACE") != NULL)
+	{
+		if (IsCoordinatorNode())
+		{
+			ereport(NOTICE, (errmsg(
+								 "Citus partially supports ALTER DATABASE SET TABLESPACE for "
+								 "distributed databases"),
+							 errdetail(
+								 "Citus does not propagate ALTER DATABASE SET TABLESPACE "
+								 "command to workers"),
+							 errhint(
+								 "You can manually alter a tablespace for a database and its "
+								 "extensions on workers.")));
 		}
-	}else{
+	}
+	else
+	{
 		List *commands = list_make3(DISABLE_DDL_PROPAGATION,
-								(void *) sql,
-								ENABLE_DDL_PROPAGATION);
+									(void *) sql,
+									ENABLE_DDL_PROPAGATION);
 
 		return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
 	}
 	return NIL;
-
 }
 
 
@@ -422,7 +428,7 @@ citus_internal_database_command(PG_FUNCTION_ARGS)
 
 		if (OidIsValid(databaseOid))
 		{
-			AlterDatabase(NULL, (AlterDatabaseStmt *) parseTree,true);
+			AlterDatabase(NULL, (AlterDatabaseStmt *) parseTree, true);
 		}
 	}
 	else
