@@ -53,7 +53,6 @@
 static char * CreatePgDistObjectEntryCommand(const ObjectAddress *objectAddress);
 static int ExecuteCommandAsSuperuser(char *query, int paramCount, Oid *paramTypes,
 									 Datum *paramValues);
-bool IsObjectDistributed(const ObjectAddress *address);
 
 PG_FUNCTION_INFO_V1(citus_unmark_object_distributed);
 PG_FUNCTION_INFO_V1(master_unmark_object_distributed);

@@ -295,15 +295,12 @@ PreprocessAlterDatabaseSetStmt(Node *node, const char *queryString,
 List *
 PostprocessCreateDatabaseStmt(Node *node, const char *queryString)
 {
-	if (EnableCreateDatabasePropagation)
-	{
-		EnsureCoordinator();
-	}
-
 	if (!EnableCreateDatabasePropagation || !ShouldPropagate())
 	{
 		return NIL;
 	}
+
+	EnsureCoordinator();
 
 	CreatedbStmt *stmt = castNode(CreatedbStmt, node);
 	char *databaseName = stmt->dbname;
@@ -371,6 +368,15 @@ citus_internal_database_command(PG_FUNCTION_ARGS)
 					  (superuser() ? PGC_SUSET : PGC_USERSET), PGC_S_SESSION,
 					  GUC_ACTION_LOCAL, true, 0, false);
 
+	/*
+	 * createdb() / DropDatabase() uses ParseState to report the error position for the
+	 * input command and the position is reported to be 0 when it's provided as NULL.
+	 * We're okay with that because we don't expect this UDF to be called with an incorrect
+	 * DDL command.
+	 *
+	 */
+	ParseState *pstate = NULL;
+
 	if (IsA(parseTree, CreatedbStmt))
 	{
 		CreatedbStmt *stmt = castNode(CreatedbStmt, parseTree);
@@ -380,7 +386,7 @@ citus_internal_database_command(PG_FUNCTION_ARGS)
 
 		if (!OidIsValid(databaseOid))
 		{
-			createdb(NULL, (CreatedbStmt *) parseTree);
+			createdb(pstate, (CreatedbStmt *) parseTree);
 		}
 	}
 	else if (IsA(parseTree, DropdbStmt))
@@ -393,7 +399,7 @@ citus_internal_database_command(PG_FUNCTION_ARGS)
 
 		if (OidIsValid(databaseOid))
 		{
-			DropDatabase(NULL, (DropdbStmt *) parseTree);
+			DropDatabase(pstate, (DropdbStmt *) parseTree);
 		}
 	}
 	else
@@ -416,6 +422,8 @@ PreprocessDropDatabaseStmt(Node *node, const char *queryString,
 	{
 		return NIL;
 	}
+
+	EnsureCoordinator();
 
 	DropdbStmt *stmt = (DropdbStmt *) node;
 	char *databaseName = stmt->dbname;
@@ -450,10 +458,7 @@ PreprocessDropDatabaseStmt(Node *node, const char *queryString,
 
 	/* Delete from pg_dist_object */
 
-	if (IsObjectDistributed(&dbAddress))
-	{
-		UnmarkObjectDistributed(&dbAddress);
-	}
+	UnmarkObjectDistributed(&dbAddress);
 
 	/* ExecuteDistributedDDLJob could not be used since it depends on namespace and
 	 * database does not have namespace.
