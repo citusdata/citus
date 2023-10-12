@@ -186,6 +186,9 @@ PreprocessAlterDatabaseStmt(Node *node, const char *queryString,
 
 	if (strstr(sql, "SET TABLESPACE") != NULL)
 	{
+		/*Set tablespace does not work inside a transaction.Therefore, we close the transaction before set tablespace
+		 * and open it again after set tablespace.
+		 */
 		commands = list_make5(DISABLE_DDL_PROPAGATION,
 							  COMMIT_TRANSACTION,
 							  sql,
