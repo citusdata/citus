@@ -481,6 +481,7 @@ _PG_init(void)
 #endif
 
 	InitializeMaintenanceDaemon();
+	InitializeMaintenanceDaemonForAdminDB();
 
 	/* initialize coordinated transaction management */
 	InitializeTransactionManagement();
