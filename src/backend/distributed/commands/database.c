@@ -182,30 +182,24 @@ PreprocessAlterDatabaseStmt(Node *node, const char *queryString,
 
 	char *sql = DeparseTreeNode((Node *) stmt);
 
+	List *commands = NULL;
+
 	if (strstr(sql, "SET TABLESPACE") != NULL)
 	{
-		if (IsCoordinator())
-		{
-			ereport(NOTICE, (errmsg(
-								 "Citus partially supports ALTER DATABASE SET TABLESPACE for "
-								 "distributed databases"),
-							 errdetail(
-								 "Citus does not propagate ALTER DATABASE SET TABLESPACE "
-								 "command to workers"),
-							 errhint(
-								 "You can manually alter a tablespace for a database and its "
-								 "extensions on workers.")));
-		}
+		commands = list_make5(DISABLE_DDL_PROPAGATION,
+							  COMMIT_TRANSACTION,
+							  sql,
+							  BEGIN_TRANSACTION,
+							  ENABLE_DDL_PROPAGATION);
 	}
 	else
 	{
-		List *commands = list_make3(DISABLE_DDL_PROPAGATION,
-									(void *) sql,
-									ENABLE_DDL_PROPAGATION);
-
-		return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
+		commands = list_make3(DISABLE_DDL_PROPAGATION,
+							  (void *) sql,
+							  ENABLE_DDL_PROPAGATION);
 	}
-	return NIL;
+
+	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
 }
 
 

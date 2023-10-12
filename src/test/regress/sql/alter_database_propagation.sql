@@ -54,17 +54,24 @@ alter database regression2 with CONNECTION LIMIT 100;
 alter database regression2 with IS_TEMPLATE true CONNECTION LIMIT 50;
 alter database regression2 with IS_TEMPLATE false;
 
-alter database regression2 set TABLESPACE pg_default;
+
+\set alter_db_tablespace :abs_srcdir '/tmp_check/ts3'
+CREATE TABLESPACE alter_db_tablespace LOCATION :'alter_db_tablespace';
 
 \c - - - :worker_1_port
-
-alter database regression2 set TABLESPACE pg_default;
+\set alter_db_tablespace :abs_srcdir '/tmp_check/ts4'
+CREATE TABLESPACE alter_db_tablespace LOCATION :'alter_db_tablespace';
 
 \c - - - :worker_2_port
-
-alter database regression2 set TABLESPACE pg_default;
+\set alter_db_tablespace :abs_srcdir '/tmp_check/ts5'
+CREATE TABLESPACE alter_db_tablespace LOCATION :'alter_db_tablespace';
 
 \c - - - :master_port
+
+set citus.log_remote_commands = true;
+set citus.grep_remote_commands = '%ALTER DATABASE%';
+
+alter database regression2 set TABLESPACE alter_db_tablespace;
 
 set citus.enable_create_database_propagation=on;
 alter database regression2 rename to regression3;
@@ -73,3 +80,17 @@ drop database regression3;
 
 set citus.log_remote_commands = false;
 set citus.enable_create_database_propagation=off;
+
+drop tablespace alter_db_tablespace;
+
+\c - - - :worker_1_port
+
+drop tablespace alter_db_tablespace;
+
+\c - - - :worker_2_port
+
+drop tablespace alter_db_tablespace;
+
+\c - - - :master_port
+
+
