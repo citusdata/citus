@@ -112,10 +112,10 @@ DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing SELECT pg_catalog.citus_internal_database_command('CREATE DATABASE "mydatabase#1''2"')
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 set citus.grep_remote_commands = '%DROP DATABASE%';
-drop database "mydatabase#1'2";
-NOTICE:  issuing SELECT pg_catalog.citus_internal_database_command('DROP DATABASE "mydatabase#1''2"')
+drop database if exists "mydatabase#1'2";
+NOTICE:  issuing SELECT pg_catalog.citus_internal_database_command('DROP DATABASE IF EXISTS "mydatabase#1''2"')
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SELECT pg_catalog.citus_internal_database_command('DROP DATABASE "mydatabase#1''2"')
+NOTICE:  issuing SELECT pg_catalog.citus_internal_database_command('DROP DATABASE IF EXISTS "mydatabase#1''2"')
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 --clean up resources created by this test
 drop tablespace create_drop_db_tablespace;

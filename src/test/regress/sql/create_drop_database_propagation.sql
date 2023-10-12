@@ -102,7 +102,7 @@ set citus.grep_remote_commands = '%CREATE DATABASE%';
 create database "mydatabase#1'2";
 
 set citus.grep_remote_commands = '%DROP DATABASE%';
-drop database "mydatabase#1'2";
+drop database if exists "mydatabase#1'2";
 
 --clean up resources created by this test
 

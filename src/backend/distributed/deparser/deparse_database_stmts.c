@@ -259,8 +259,10 @@ DeparseCreateDatabaseStmt(Node *node)
 static void
 AppendDropDatabaseStmt(StringInfo buf, DropdbStmt *stmt)
 {
+	char *if_exists_statement = stmt->missing_ok ? "IF EXISTS" : "";
 	appendStringInfo(buf,
-					 "DROP DATABASE %s",
+					 "DROP DATABASE %s %s",
+					 if_exists_statement,
 					 quote_identifier(stmt->dbname));
 
 	DefElem *option = NULL;
