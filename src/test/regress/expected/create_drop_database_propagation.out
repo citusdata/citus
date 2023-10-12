@@ -102,6 +102,22 @@ WHERE datname = 'mydatabase';
 (0 rows)
 
 \c - - - :master_port
+--tests for special characters in database name
+set citus.enable_create_database_propagation=on;
+SET citus.log_remote_commands = true;
+set citus.grep_remote_commands = '%CREATE DATABASE%';
+create database "mydatabase#1'2";
+NOTICE:  issuing SELECT pg_catalog.citus_internal_database_command('CREATE DATABASE "mydatabase#1''2"')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT pg_catalog.citus_internal_database_command('CREATE DATABASE "mydatabase#1''2"')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+set citus.grep_remote_commands = '%DROP DATABASE%';
+drop database "mydatabase#1'2";
+NOTICE:  issuing SELECT pg_catalog.citus_internal_database_command('DROP DATABASE "mydatabase#1''2"')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT pg_catalog.citus_internal_database_command('DROP DATABASE "mydatabase#1''2"')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+--clean up resources created by this test
 drop tablespace create_drop_db_tablespace;
 \c - - - :worker_1_port
 drop tablespace create_drop_db_tablespace;

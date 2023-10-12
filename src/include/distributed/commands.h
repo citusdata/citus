@@ -22,6 +22,7 @@
 #include "tcop/utility.h"
 #include "utils/acl.h"
 
+
 extern bool AddAllLocalTablesToMetadata;
 extern bool EnableSchemaBasedSharding;
 
@@ -57,6 +58,7 @@ typedef enum DistOpsOperationType
 	DIST_OPS_DROP,
 } DistOpsOperationType;
 
+
 /*
  * DistributeObjectOps specifies handlers for node/object type pairs.
  * Instances of this type should all be declared in deparse.c.
@@ -77,11 +79,11 @@ typedef enum DistOpsOperationType
  */
 typedef struct DistributeObjectOps
 {
-	char *(*deparse)(Node *);
+	char * (*deparse)(Node *);
 	void (*qualify)(Node *);
-	List *(*preprocess)(Node *, const char *, ProcessUtilityContext);
-	List *(*postprocess)(Node *, const char *);
-	List *(*address)(Node *, bool, bool);
+	List * (*preprocess)(Node *, const char *, ProcessUtilityContext);
+	List * (*postprocess)(Node *, const char *);
+	List * (*address)(Node *, bool, bool);
 	bool markDistributed;
 
 	/* fields used by common implementations, omitted for specialized implementations */
@@ -138,6 +140,7 @@ typedef enum ExtractForeignKeyConstraintsMode
 							  INCLUDE_SINGLE_SHARD_TABLES
 } ExtractForeignKeyConstraintMode;
 
+
 /*
  * Flags that can be passed to GetForeignKeyIdsForColumn to
  * indicate whether relationId argument should match:
@@ -155,6 +158,7 @@ typedef enum SearchForeignKeyColumnFlags
 
 	/* callers can also pass union of above flags */
 } SearchForeignKeyColumnFlags;
+
 
 typedef enum TenantOperation
 {
@@ -193,8 +197,10 @@ extern List * DropTextSearchDictObjectAddress(Node *node, bool missing_ok, bool
 /* index.c */
 typedef void (*PGIndexProcessor)(Form_pg_index, List **, int);
 
+
 /* call.c */
 extern bool CallDistributedProcedureRemotely(CallStmt *callStmt, DestReceiver *dest);
+
 
 /* collation.c - forward declarations */
 extern char * CreateCollationDDL(Oid collationId);
@@ -224,6 +230,7 @@ extern List * PreprocessAlterDatabaseRefreshCollStmt(Node *node, const char *que
 													 ProcessUtilityContext
 													 processUtilityContext);
 
+
 extern List * PreprocessAlterDatabaseSetStmt(Node *node, const char *queryString,
 											 ProcessUtilityContext processUtilityContext);
 
@@ -245,6 +252,7 @@ extern List * RenameDomainStmtObjectAddress(Node *node, bool missing_ok, bool
 											isPostprocess);
 extern CreateDomainStmt * RecreateDomainStmt(Oid domainOid);
 extern Oid get_constraint_typid(Oid conoid);
+
 
 /* extension.c - forward declarations */
 extern bool IsDropCitusExtensionStmt(Node *parsetree);
@@ -324,10 +332,12 @@ extern Oid GetReferencedTableId(Oid foreignKeyId);
 extern Oid GetReferencingTableId(Oid foreignKeyId);
 extern bool RelationInvolvedInAnyNonInheritedForeignKeys(Oid relationId);
 
+
 /* foreign_data_wrapper.c - forward declarations */
 extern List * PreprocessGrantOnFDWStmt(Node *node, const char *queryString,
 									   ProcessUtilityContext processUtilityContext);
 extern Acl * GetPrivilegesForFDW(Oid FDWOid);
+
 
 /* foreign_server.c - forward declarations */
 extern List * PreprocessGrantOnForeignServerStmt(Node *node, const char *queryString,
@@ -339,14 +349,16 @@ extern List * AlterForeignServerStmtObjectAddress(Node *node, bool missing_ok, b
 												  isPostprocess);
 extern List * RenameForeignServerStmtObjectAddress(Node *node, bool missing_ok, bool
 												   isPostprocess);
-extern List * AlterForeignServerOwnerStmtObjectAddress(Node *node, bool missing_ok, bool
-													   isPostprocess);
+extern List * AlterForeignServerOwnerStmtObjectAddress(Node *node, bool
+													   missing_ok, bool isPostprocess);
 extern List * GetForeignServerCreateDDLCommand(Oid serverId);
+
 
 /* foreign_table.c - forward declarations */
 extern List * PreprocessAlterForeignTableSchemaStmt(Node *node, const char *queryString,
 													ProcessUtilityContext
 													processUtilityContext);
+
 
 /* function.c - forward declarations */
 extern List * PreprocessCreateFunctionStmt(Node *stmt, const char *queryString,
@@ -377,11 +389,13 @@ extern List * PreprocessGrantOnFunctionStmt(Node *node, const char *queryString,
 											ProcessUtilityContext processUtilityContext);
 extern List * PostprocessGrantOnFunctionStmt(Node *node, const char *queryString);
 
+
 /* grant.c - forward declarations */
 extern List * PreprocessGrantStmt(Node *node, const char *queryString,
 								  ProcessUtilityContext processUtilityContext);
 extern void deparsePrivileges(StringInfo privsString, GrantStmt *grantStmt);
 extern void deparseGrantees(StringInfo granteesString, GrantStmt *grantStmt);
+
 
 /* index.c - forward declarations */
 extern bool IsIndexRenameStmt(RenameStmt *renameStmt);
@@ -462,6 +476,7 @@ extern List * PreprocessRenameStmt(Node *renameStmt, const char *renameCommand,
 extern void ErrorIfUnsupportedRenameStmt(RenameStmt *renameStmt);
 extern List * PreprocessRenameAttributeStmt(Node *stmt, const char *queryString,
 											ProcessUtilityContext processUtilityContext);
+
 
 /* role.c - forward declarations*/
 extern List * PostprocessAlterRoleStmt(Node *stmt, const char *queryString);
@@ -584,6 +599,7 @@ extern List * GetAlterIndexStatisticsCommands(Oid indexOid);
 
 /* subscription.c - forward declarations */
 extern Node * ProcessCreateSubscriptionStmt(CreateSubscriptionStmt *createSubStmt);
+
 
 /* table.c - forward declarations */
 extern List * PreprocessDropTableStmt(Node *stmt, const char *queryString,

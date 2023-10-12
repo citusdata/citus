@@ -94,6 +94,18 @@ WHERE datname = 'mydatabase';
 
 \c - - - :master_port
 
+--tests for special characters in database name
+set citus.enable_create_database_propagation=on;
+SET citus.log_remote_commands = true;
+set citus.grep_remote_commands = '%CREATE DATABASE%';
+
+create database "mydatabase#1'2";
+
+set citus.grep_remote_commands = '%DROP DATABASE%';
+drop database "mydatabase#1'2";
+
+--clean up resources created by this test
+
 drop tablespace create_drop_db_tablespace;
 
 \c - - - :worker_1_port
