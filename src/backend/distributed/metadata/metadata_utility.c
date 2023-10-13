@@ -1512,7 +1512,7 @@ NodeGroupGetSeparatedShardPlacementGroup(int32 groupId)
 	ShardPlacementGroup *nodeShardPlacementGroup = NULL;
 	bool shardPlacementGroupNeedsSeparateNode = false;
 
-	bool indexOK = false;
+	bool indexOK = true;
 	int scanKeyCount = 1;
 	ScanKeyData scanKey[1];
 
