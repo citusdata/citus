@@ -87,7 +87,7 @@ jobs:
     steps:
     - uses: actions/checkout@v3.5.0
     - name: Expose $PG_MAJOR to Github Env
-      run: echo "PG_MAJOR=${PG_MAJOR}" >> $GITHUB_ENV
+      run: echo "PG_MAJOR=${PG_MAJOR}" >> ${GITHUB_ENV}
       shell: bash
     - name: Build
       run: "./ci/build-citus.sh"
@@ -236,10 +236,10 @@ jobs:
         N=6  # Total number of jobs (see matrix.parallel)
         X=${{ matrix.parallel }}  # Current job number
         TESTS=$(src/test/regress/citus_tests/print_test_names.py |
-          tr '\n' ',' | awk -v N="$N" -v X="$X" -F, '{
+          tr '\n' ',' | awk -v N="${N}" -v X="${X}" -F, '{
             split("", parts)
             for (i = 1; i <= NF; i++) {
-                parts[i % N] = parts[i % N] $i ","
+                parts[i % N] = parts[i % N] ${i} ","
             }
             print substr(parts[X], 1, length(parts[X])-1)
         }')
@@ -328,7 +328,7 @@ jobs:
               bindir=/usr/lib/postgresql/${PG_MAJOR}/bin \
               citus-old-version=${citus_version} \
               citus-pre-tar=/install-pg${PG_MAJOR}-citus${citus_version}.tar \
-              citus-post-tar=${GITHUB_WORKSPACE}/install-$PG_MAJOR.tar; \
+              citus-post-tar=${GITHUB_WORKSPACE}/install-${PG_MAJOR}.tar; \
         done;
         # run make check-citus-upgrade-mixed for all citus versions
         # the image has ${CITUS_VERSIONS} set with all verions it contains the binaries of
@@ -339,7 +339,7 @@ jobs:
               citus-old-version=${citus_version} \
               bindir=/usr/lib/postgresql/${PG_MAJOR}/bin \
               citus-pre-tar=/install-pg${PG_MAJOR}-citus${citus_version}.tar \
-              citus-post-tar=${GITHUB_WORKSPACE}/install-$PG_MAJOR.tar; \
+              citus-post-tar=${GITHUB_WORKSPACE}/install-${PG_MAJOR}.tar; \
         done;
     - uses: "./.github/actions/save_logs_and_results"
       if: always()
@@ -439,7 +439,7 @@ jobs:
         else
           echo "Detected tests " ${tests}
         fi
-        echo tests="${tests}" >> "$GITHUB_OUTPUT"
+        echo tests="${tests}" >> "${GITHUB_OUTPUT}"
   test-flakyness:
     if: ${{ needs.test-flakyness-pre.outputs.tests != ''}}
     name: Test flakyness
@@ -466,8 +466,8 @@ jobs:
         tests_array=(${tests})
         for test in "${tests_array[@]}"
         do
-            test_name=$(echo "$test" | sed -r "s/.+\/(.+)\..+/\1/")
-            gosu circleci src/test/regress/citus_tests/run_test.py $test_name --repeat ${{ env.runs }} --use-base-schedule --use-whole-schedule-line
+            test_name=$(echo "${test}" | sed -r "s/.+\/(.+)\..+/\1/")
+            gosu circleci src/test/regress/citus_tests/run_test.py ${test_name} --repeat ${{ env.runs }} --use-base-schedule --use-whole-schedule-line
         done
       shell: bash
     - uses: "./.github/actions/save_logs_and_results"
