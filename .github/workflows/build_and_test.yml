@@ -439,7 +439,7 @@ jobs:
         else
           echo "Detected tests " $tests
         fi
-        echo tests="$tests" >> "$GITHUB_OUTPUT"
+        echo tests="'$tests'" >> "$GITHUB_OUTPUT"
   test-flakyness:
     if: ${{ needs.test-flakyness-pre.outputs.tests != ''}}
     name: Test flakyness
