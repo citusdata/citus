@@ -95,13 +95,13 @@ int UtilityHookLevel = 0;
 
 
 /* Local functions forward declarations for helper functions */
-static void ProcessUtilityInternal(PlannedStmt *pstmt,
-								   const char *queryString,
-								   ProcessUtilityContext context,
-								   ParamListInfo params,
-								   struct QueryEnvironment *queryEnv,
-								   DestReceiver *dest,
-								   QueryCompletion *completionTag);
+static void citus_ProcessUtilityInternal(PlannedStmt *pstmt,
+										 const char *queryString,
+										 ProcessUtilityContext context,
+										 ParamListInfo params,
+										 struct QueryEnvironment *queryEnv,
+										 DestReceiver *dest,
+										 QueryCompletion *completionTag);
 static void set_indexsafe_procflags(void);
 static char * CurrentSearchPath(void);
 static void IncrementUtilityHookCountersIfNecessary(Node *parsetree);
@@ -329,8 +329,8 @@ citus_ProcessUtility(PlannedStmt *pstmt,
 
 	PG_TRY();
 	{
-		ProcessUtilityInternal(pstmt, queryString, context, params, queryEnv, dest,
-							   completionTag);
+		citus_ProcessUtilityInternal(pstmt, queryString, context, params, queryEnv, dest,
+									 completionTag);
 
 		if (UtilityHookLevel == 1)
 		{
@@ -404,7 +404,7 @@ citus_ProcessUtility(PlannedStmt *pstmt,
 
 
 /*
- * ProcessUtilityInternal is a helper function for citus_ProcessUtility where majority
+ * citus_ProcessUtilityInternal is a helper function for citus_ProcessUtility where majority
  * of the Citus specific utility statements are handled here. The distinction between
  * both functions is that Citus_ProcessUtility does not handle CALL and DO statements.
  * The reason for the distinction is implemented to be able to find the "top-level" DDL
@@ -412,13 +412,13 @@ citus_ProcessUtility(PlannedStmt *pstmt,
  * this goal.
  */
 static void
-ProcessUtilityInternal(PlannedStmt *pstmt,
-					   const char *queryString,
-					   ProcessUtilityContext context,
-					   ParamListInfo params,
-					   struct QueryEnvironment *queryEnv,
-					   DestReceiver *dest,
-					   QueryCompletion *completionTag)
+citus_ProcessUtilityInternal(PlannedStmt *pstmt,
+							 const char *queryString,
+							 ProcessUtilityContext context,
+							 ParamListInfo params,
+							 struct QueryEnvironment *queryEnv,
+							 DestReceiver *dest,
+							 QueryCompletion *completionTag)
 {
 	Node *parsetree = pstmt->utilityStmt;
 	List *ddlJobs = NIL;
