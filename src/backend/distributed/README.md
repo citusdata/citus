@@ -1722,16 +1722,18 @@ Merge command the same principles as INSERT .. SELECT processing. However, due t
 
 # DDL
 
-DDL commands are primarily handled via the ProcessUtility hook, which gets the parse tree of the DDL command. For supported DDL commands, we always follow the same sequence of steps:
+DDL commands are primarily handled via the citus_ProcessUtility hook, which gets the parse tree of the DDL command. For supported DDL commands, we always follow the same sequence of steps:
 
 1. Qualify the table names in the parse tree (simplifies deparsing, avoids sensitivity to search_path changes)
 2. Pre-process logic
-3. Call original ProcessUtility to execute the command on the local shell table
+3. Call original Postgres ProcessUtility to execute the command on the local shell table
 4. Post-process logic
 5. Execute command on all other nodes
 6. Execute command on shards (in case of table DDL)
 
 Either the pre-process or post-process step generates a "Distributed DDL Job", which contains a task list to run in steps 4 & 5 (via adaptive executor).
+[!IMPORTANT]
+If both pre-process and post-process generate a job, then only the post-process job is executed. The pre-process job is ignored.
 
 In general pre-process should:
 
@@ -1748,6 +1750,50 @@ The reason for handling dependencies and deparsing in post-process step is that 
 
 Not all table DDL is currently deparsed. In that case, the original command sent by the client is used. That is a shortcoming in our DDL logic that causes user-facing issues and should be addressed. We do not directly construct a separate DDL command for each shard. Instead, we call the `worker_apply_shard_ddl_command(shardid bigint, ddl_command text)` function which parses the DDL command, replaces the table names with shard names in the parse tree according to the shard ID, and then executes the command. That also has some shortcomings, because we cannot support more complex DDL commands in this manner (e.g. adding multiple foreign keys). Ideally, all DDL would be deparsed, and for table DDL the deparsed query string would have shard names, similar to regular queries.
 
+``markDistributed`` is a flag that we use to indicate whether we add a record to ``pg_dist_object``.
+
+## Defining a new DDL command
+
+All commands that are propagated by Citus should be defined in DistributeObjectOps struct. Below is a sample DistributeObjectOps for ALTER DATABASE command that is define in [src/backend/distributed/commands/distribute_object_ops.c](distribute_object_ops.c) file.
+
+```c
+static DistributeObjectOps Database_Alter = {
+	.deparse = DeparseAlterDatabaseStmt,
+	.qualify = NULL,
+	.preprocess = PreprocessAlterDatabaseStmt,
+	.postprocess = NULL,
+	.objectType = OBJECT_DATABASE,
+	.operationType = DIST_OPS_ALTER,
+	.address = NULL,
+	.markDistributed = false,
+};
+```
+Details about each field in the struct is defined in DistributeObjectOps comments. When defining a new DDL command, you should be careful about below rules:
+* Either `preprocess` or `postprocess` should be defined. If both are defined, only `postprocess` will be executed.
+* `deparse` should be defined if we want to propagate the command to worker nodes since we need to generate a query string for each worker node.
+* `markDistributed` should be set to true if we want to add a record to `pg_dist_object` table. It is viable to set this command especially for CREATE statements since the object is newly introduced to the system.
+* If ``markDistriubted`` is set to true, ``address`` should be defined. Otherwise, there will be a runtime error.Address is required to identify the fileds that will be stored in ``pg_dist_object`` table.
+* For ``DROP`` statements, ``markDistributed`` does not work. Therefore, below block should be called manually.Otherwise, stale records will be kept in ``pg_dist_object`` table, which will cause issues such as in citus_add_node UDF call in the future.
+
+```c
+UnmarkObjectDistributed(&objectAddress);
+```
+* ``qualify`` is used to qualify the table names in the parse tree. It is used to avoid sensitivity to search_path changes. It is not required to define this function for all DDL commands. It is only required for commands that have table names in the parse tree.
+* After defining the DistributeObjectOps structure, this structure should be defined in ``GetDistributeObjectOps`` function as below:
+
+```c
+const DistributeObjectOps *
+GetDistributeObjectOps(Node *node)
+{
+	switch (nodeTag(node))
+	{
+		case T_AlterDatabaseStmt:
+		{
+			return &Database_Alter;
+		}
+...
+.
+```
 
 ## Object & dependency propagation
 
