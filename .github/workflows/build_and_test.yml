@@ -236,10 +236,10 @@ jobs:
         N=6  # Total number of jobs (see matrix.parallel)
         X=${{ matrix.parallel }}  # Current job number
         TESTS=$(src/test/regress/citus_tests/print_test_names.py |
-          tr '\n' ',' | awk -v N="${N}" -v X="${X}" -F, '{
+          tr '\n' ',' | awk -v N="$N" -v X="$X" -F, '{
             split("", parts)
             for (i = 1; i <= NF; i++) {
-                parts[i % N] = parts[i % N] ${i} ","
+                parts[i % N] = parts[i % N] $i ","
             }
             print substr(parts[X], 1, length(parts[X])-1)
         }')
