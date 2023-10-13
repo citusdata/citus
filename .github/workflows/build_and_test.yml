@@ -243,10 +243,10 @@ jobs:
             }
             print substr(parts[X], 1, length(parts[X])-1)
         }')
-        echo $TESTS
+        echo ${tests}
         gosu circleci \
           make -C src/test/regress \
-            check-arbitrary-configs parallel=4 CONFIGS=$TESTS
+            check-arbitrary-configs parallel=4 CONFIGS=${tests}
     - uses: "./.github/actions/save_logs_and_results"
       if: always()
     - uses: "./.github/actions/upload_coverage"
@@ -434,12 +434,12 @@ jobs:
       run: |-
         detected_changes=$(git diff origin/main... --name-only --diff-filter=AM | (grep 'src/test/regress/sql/.*\.sql\|src/test/regress/spec/.*\.spec\|src/test/regress/citus_tests/test/test_.*\.py' || true))
         tests=${detected_changes}
-        if [ -z "$tests" ]; then
+        if [ -z "${tests}" ]; then
             echo "No test found."
         else
-          echo "Detected tests " $tests
+          echo "Detected tests " ${tests}
         fi
-        echo tests="'$tests'" >> "$GITHUB_OUTPUT"
+        echo tests="${tests}" >> "$GITHUB_OUTPUT"
   test-flakyness:
     if: ${{ needs.test-flakyness-pre.outputs.tests != ''}}
     name: Test flakyness
@@ -463,7 +463,7 @@ jobs:
     - name: Run minimal tests
       run: |-
         tests="${{ needs.test-flakyness-pre.outputs.tests }}"
-        tests_array=($tests)
+        tests_array=(${tests})
         for test in "${tests_array[@]}"
         do
             test_name=$(echo "$test" | sed -r "s/.+\/(.+)\..+/\1/")
