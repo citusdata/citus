@@ -938,7 +938,7 @@ CreateIndexTaskList(IndexStmt *indexStmt)
 		task->dependentTaskList = NULL;
 		task->anchorShardId = shardId;
 		task->taskPlacementList = ActiveShardPlacementList(shardId);
-		task->cannotBeExecutedInTransaction = indexStmt->concurrent;
+		task->cannotBeExecutedInTransction = indexStmt->concurrent;
 
 		taskList = lappend(taskList, task);
 
@@ -983,7 +983,7 @@ CreateReindexTaskList(Oid relationId, ReindexStmt *reindexStmt)
 		task->dependentTaskList = NULL;
 		task->anchorShardId = shardId;
 		task->taskPlacementList = ActiveShardPlacementList(shardId);
-		task->cannotBeExecutedInTransaction =
+		task->cannotBeExecutedInTransction =
 			IsReindexWithParam_compat(reindexStmt, "concurrently");
 
 		taskList = lappend(taskList, task);
@@ -1309,7 +1309,7 @@ DropIndexTaskList(Oid relationId, Oid indexId, DropStmt *dropStmt)
 		task->dependentTaskList = NULL;
 		task->anchorShardId = shardId;
 		task->taskPlacementList = ActiveShardPlacementList(shardId);
-		task->cannotBeExecutedInTransaction = dropStmt->concurrent;
+		task->cannotBeExecutedInTransction = dropStmt->concurrent;
 
 		taskList = lappend(taskList, task);
 

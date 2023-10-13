@@ -535,7 +535,7 @@ OutTask(OUTFUNC_ARGS)
 	WRITE_STRING_FIELD(fetchedExplainAnalyzePlan);
 	WRITE_FLOAT_FIELD(fetchedExplainAnalyzeExecutionDuration, "%.2f");
 	WRITE_BOOL_FIELD(isLocalTableModification);
-	WRITE_BOOL_FIELD(cannotBeExecutedInTransaction);
+	WRITE_BOOL_FIELD(cannotBeExecutedInTransction);
 }
 
 

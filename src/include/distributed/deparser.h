@@ -127,8 +127,17 @@ struct option_format
 {
 	const char *name;
 	const char *format;
-	const char *type;
+	const int type;
 };
+
+typedef enum OptionFormatType
+{
+	OPTION_FORMAT_STRING,
+	OPTION_FORMAT_LITERAL_CSTR,
+	OPTION_FORMAT_BOOLEAN,
+	OPTION_FORMAT_INTEGER,
+	OPTION_FORMAT_OBJECT_ID
+} OptionFormatType;
 
 
 extern void optionToStatement(StringInfo buf, DefElem *option, const struct
