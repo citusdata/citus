@@ -36,6 +36,10 @@ RUN apt update && apt install -y \
  && add-apt-repository ppa:deadsnakes/ppa -y \
  && apt install -y \
     python3.9-full \
+ # software properties pulls in pkexec, which makes the debugger unusable in vscode
+ && apt purge -y \
+    software-properties-common \
+ && apt autoremove -y \
  && apt clean
 
 RUN sudo pip3 install pipenv pipenv-shebang
@@ -109,7 +113,7 @@ WORKDIR /uncrustify/uncrustify-uncrustify-0.68.1/
 RUN mkdir build
 WORKDIR /uncrustify/uncrustify-uncrustify-0.68.1/build/
 RUN cmake ..
-RUN make -sj8
+RUN MAKEFLAGS="-j $(nproc)" make -s
 
 RUN make install DESTDIR=/uncrustify
 
