@@ -230,6 +230,9 @@ extern List * PreprocessAlterDatabaseRefreshCollStmt(Node *node, const char *que
 													 ProcessUtilityContext
 													 processUtilityContext);
 
+extern List * CreateDatabaseStmtObjectAddress(Node *node, bool missing_ok, bool
+											  isPostprocess);
+
 
 extern List * PreprocessAlterDatabaseSetStmt(Node *node, const char *queryString,
 											 ProcessUtilityContext processUtilityContext);

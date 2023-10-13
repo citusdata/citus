@@ -473,8 +473,8 @@ static DistributeObjectOps Database_Create = {
 	.postprocess = PostprocessCreateDatabaseStmt,
 	.objectType = OBJECT_DATABASE,
 	.operationType = DIST_OPS_CREATE,
-	.address = NULL,
-	.markDistributed = false,
+	.address = CreateDatabaseStmtObjectAddress,
+	.markDistributed = true,
 };
 
 static DistributeObjectOps Database_Drop = {
