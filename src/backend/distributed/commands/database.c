@@ -159,7 +159,9 @@ PreprocessGrantOnDatabaseStmt(Node *node, const char *queryString,
 	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
 }
 
-static bool isSetTablespaceStatement(AlterDatabaseStmt *stmt)
+
+static bool
+isSetTablespaceStatement(AlterDatabaseStmt *stmt)
 {
 	ListCell *lc = NULL;
 	foreach(lc, stmt->options)
@@ -190,10 +192,9 @@ PreprocessAlterDatabaseStmt(Node *node, const char *queryString,
 		return NIL;
 	}
 
+	EnsureCoordinator();
+
 	AlterDatabaseStmt *stmt = castNode(AlterDatabaseStmt, node);
-
-
-
 
 	char *sql = DeparseTreeNode((Node *) stmt);
 
