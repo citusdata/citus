@@ -463,7 +463,7 @@ jobs:
     - name: Run minimal tests
       run: |-
         tests="${{ needs.test-flakyness-pre.outputs.tests }}"
-        IFS=',' read -ra tests_array <<< "$tests"
+        IFS=',' read -ra tests_array <<< "${tests}"
         for test in "${tests_array[@]}"
         do
             test_name=$(echo "${test}" | sed -r "s/.+\/(.+)\..+/\1/")
