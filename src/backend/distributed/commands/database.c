@@ -356,7 +356,7 @@ List *
 PreprocessDropDatabaseStmt(Node *node, const char *queryString,
 						   ProcessUtilityContext processUtilityContext)
 {
-	if (!ShouldPropagate())
+	if (!EnableCreateDatabasePropagation || !ShouldPropagate())
 	{
 		return NIL;
 	}
