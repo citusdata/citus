@@ -246,7 +246,7 @@ jobs:
         echo ${TESTS}
         gosu circleci \
           make -C src/test/regress \
-            check-arbitrary-configs parallel=4 CONFIGS=${tests}
+            check-arbitrary-configs parallel=4 CONFIGS=${TESTS}
     - uses: "./.github/actions/save_logs_and_results"
       if: always()
     - uses: "./.github/actions/upload_coverage"
