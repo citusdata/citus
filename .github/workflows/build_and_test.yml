@@ -433,7 +433,7 @@ jobs:
       id: detect-regression-tests
       run: |-
         detected_changes=$(git diff origin/main... --name-only --diff-filter=AM | (grep 'src/test/regress/sql/.*\.sql\|src/test/regress/spec/.*\.spec\|src/test/regress/citus_tests/test/test_.*\.py' || true))
-        tests=${detected_changes}
+        tests=${detected_changes// /,}
         if [ -z "${tests}" ]; then
             echo "No test found."
         else
@@ -463,7 +463,7 @@ jobs:
     - name: Run minimal tests
       run: |-
         tests="${{ needs.test-flakyness-pre.outputs.tests }}"
-        tests_array=(${tests})
+        IFS=',' read -ra tests_array <<< "${tests}"
         for test in "${tests_array[@]}"
         do
             test_name=$(echo "${test}" | sed -r "s/.+\/(.+)\..+/\1/")
