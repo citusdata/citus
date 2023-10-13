@@ -1,0 +1,46 @@
+diff --git a/.github/workflows/build_and_test.yml b/.github/workflows/build_and_test.yml
+index 90a4b1432..5a24dc02d 100644
+--- a/.github/workflows/build_and_test.yml
++++ b/.github/workflows/build_and_test.yml
+@@ -90 +90 @@ jobs:
+-      run: echo "PG_MAJOR=${PG_MAJOR}" >> $GITHUB_ENV
++      run: echo "PG_MAJOR=${PG_MAJOR}" >> ${GITHUB_ENV}
+@@ -239 +239 @@ jobs:
+-          tr '\n' ',' | awk -v N="$N" -v X="$X" -F, '{
++          tr '\n' ',' | awk -v N="${N}" -v X="${X}" -F, '{
+@@ -242 +242 @@ jobs:
+-                parts[i % N] = parts[i % N] $i ","
++                parts[i % N] = parts[i % N] ${i} ","
+@@ -246 +246 @@ jobs:
+-        echo $TESTS
++        echo ${tests}
+@@ -249 +249 @@ jobs:
+-            check-arbitrary-configs parallel=4 CONFIGS=$TESTS
++            check-arbitrary-configs parallel=4 CONFIGS=${tests}
+@@ -331 +331 @@ jobs:
+-              citus-post-tar=${GITHUB_WORKSPACE}/install-$PG_MAJOR.tar; \
++              citus-post-tar=${GITHUB_WORKSPACE}/install-${PG_MAJOR}.tar; \
+@@ -342 +342 @@ jobs:
+-              citus-post-tar=${GITHUB_WORKSPACE}/install-$PG_MAJOR.tar; \
++              citus-post-tar=${GITHUB_WORKSPACE}/install-${PG_MAJOR}.tar; \
+@@ -435,3 +435,3 @@ jobs:
+-        detected_changes=$(git diff origin/main... --name-only --diff-filter=AM | (grep 'src/test/regress/sql/.*\.sql\|src/test/regress/spec/.*\.spec\|src/test/regress/citus_tests/test/test_.*\.py' || true))
+-        tests=${detected_changes}
+-        if [ -z "$tests" ]; then
++        detected_changes=$(git diff origin/main... --name-only --diff-filter=AM | grep 'src/test/regress/sql/.*\.sql\|src/test/regress/spec/.*\.spec\|src/test/regress/citus_tests/test/test_.*\.py' | tr '\n' ',')
++        tests=$(echo "${detected_changes}" | sed 's/,$//')
++        if [ -z "${tests}" ]; then
+@@ -440 +440 @@ jobs:
+-          echo "Detected tests " $tests
++          echo "Detected tests " ${tests}
+@@ -442 +442 @@ jobs:
+-        echo tests="$tests" >> "$GITHUB_OUTPUT"
++        echo tests="${tests}" >> "${GITHUB_OUTPUT}"
+@@ -466 +466 @@ jobs:
+-        tests_array=($tests)
++        IFS=',' read -ra tests_array <<< "$tests"
+@@ -469,2 +469,2 @@ jobs:
+-            test_name=$(echo "$test" | sed -r "s/.+\/(.+)\..+/\1/")
+-            gosu circleci src/test/regress/citus_tests/run_test.py $test_name --repeat ${{ env.runs }} --use-base-schedule --use-whole-schedule-line
++            test_name=$(echo "${test}" | sed -r "s/.+\/(.+)\..+/\1/")
++            gosu circleci src/test/regress/citus_tests/run_test.py ${test_name} --repeat ${{ env.runs }} --use-base-schedule --use-whole-schedule-line
