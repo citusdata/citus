@@ -526,8 +526,6 @@ DecrementSharedConnectionCounter(const char *hostname, int port)
 static void
 DecrementSharedConnectionCounterInternal(const char *hostname, int port)
 {
-
-
     bool workerNodeEntryFound = false;
     SharedWorkerNodeConnStatsHashKey workerNodeKey = PrepareWorkerNodeHashKey(hostname, port);
     SharedWorkerNodeConnStatsHashEntry *workerNodeEntry =
