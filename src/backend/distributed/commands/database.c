@@ -363,6 +363,25 @@ PreprocessDropDatabaseStmt(Node *node, const char *queryString,
 
 	EnsureCoordinator();
 
+	DropdbStmt *stmt = (DropdbStmt *) node;
+
+	Oid databaseOid = get_database_oid(stmt->dbname, stmt->missing_ok);
+
+	if (databaseOid == InvalidOid)
+	{
+		/* let regular ProcessUtility deal with IF NOT EXISTS */
+		return NIL;
+	}
+
+	ObjectAddress dbAddress = { 0 };
+	ObjectAddressSet(dbAddress, DatabaseRelationId, databaseOid);
+	if (!IsObjectDistributed(&dbAddress))
+	{
+		return NIL;
+	}
+
+	UnmarkObjectDistributed(&dbAddress);
+
 	char *dropDatabaseCommand = DeparseTreeNode(node);
 
 	StringInfo internalDropCommand = makeStringInfo();
@@ -370,9 +389,22 @@ PreprocessDropDatabaseStmt(Node *node, const char *queryString,
 					 "SELECT pg_catalog.citus_internal_database_command(%s)",
 					 quote_literal_cstr(dropDatabaseCommand));
 
+
 	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
 								(void *) internalDropCommand->data,
 								ENABLE_DDL_PROPAGATION);
 
 	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
+}
+
+
+List *
+CreateDatabaseStmtObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
+{
+	CreatedbStmt *stmt = castNode(CreatedbStmt, node);
+	Oid databaseOid = get_database_oid(stmt->dbname, missing_ok);
+	ObjectAddress *dbAddress = palloc0(sizeof(ObjectAddress));
+	ObjectAddressSet(*dbAddress, DatabaseRelationId, databaseOid);
+
+	return list_make1(dbAddress);
 }
