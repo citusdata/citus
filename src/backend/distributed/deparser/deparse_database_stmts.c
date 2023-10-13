@@ -31,22 +31,22 @@ static void AppendAlterDatabaseStmt(StringInfo buf, AlterDatabaseStmt *stmt);
 static void AppendDefElemConnLimit(StringInfo buf, DefElem *def);
 
 const struct option_format create_database_option_formats[] = {
-	{ "template", " TEMPLATE %s", "string" },
-	{ "owner", " OWNER %s", "string" },
-	{ "tablespace", " TABLESPACE %s", "string" },
-	{ "connection_limit", " CONNECTION LIMIT %d", "integer" },
-	{ "encoding", " ENCODING %s", "literal_cstr" },
-	{ "locale", " LOCALE %s", "literal_cstr" },
-	{ "lc_collate", " LC_COLLATE %s", "literal_cstr" },
-	{ "lc_ctype", " LC_CTYPE %s", "literal_cstr" },
-	{ "icu_locale", " ICU_LOCALE %s", "literal_cstr" },
-	{ "icu_rules", " ICU_RULES %s", "literal_cstr" },
-	{ "locale_provider", " LOCALE_PROVIDER %s", "literal_cstr" },
-	{ "is_template", " IS_TEMPLATE %s", "boolean" },
-	{ "allow_connections", " ALLOW_CONNECTIONS %s", "boolean" },
-	{ "collation_version", " COLLATION_VERSION %s", "literal_cstr" },
-	{ "strategy", " STRATEGY %s", "literal_cstr" },
-	{ "oid", " OID %d", "object_id" },
+	{ "owner", " OWNER %s", OPTION_FORMAT_STRING },
+	{ "template", " TEMPLATE %s", OPTION_FORMAT_STRING },
+	{ "encoding", " ENCODING %s", OPTION_FORMAT_LITERAL_CSTR },
+	{ "strategy", " STRATEGY %s", OPTION_FORMAT_LITERAL_CSTR },
+	{ "locale", " LOCALE %s", OPTION_FORMAT_LITERAL_CSTR },
+	{ "lc_collate", " LC_COLLATE %s", OPTION_FORMAT_LITERAL_CSTR },
+	{ "lc_ctype", " LC_CTYPE %s", OPTION_FORMAT_LITERAL_CSTR },
+	{ "icu_locale", " ICU_LOCALE %s", OPTION_FORMAT_LITERAL_CSTR },
+	{ "icu_rules", " ICU_RULES %s", OPTION_FORMAT_LITERAL_CSTR },
+	{ "locale_provider", " LOCALE_PROVIDER %s", OPTION_FORMAT_LITERAL_CSTR },
+	{ "collation_version", " COLLATION_VERSION %s", OPTION_FORMAT_LITERAL_CSTR },
+	{ "tablespace", " TABLESPACE %s", OPTION_FORMAT_STRING },
+	{ "allow_connections", " ALLOW_CONNECTIONS %s", OPTION_FORMAT_BOOLEAN },
+	{ "connection_limit", " CONNECTION LIMIT %d", OPTION_FORMAT_INTEGER },
+	{ "is_template", " IS_TEMPLATE %s", OPTION_FORMAT_BOOLEAN },
+	{ "oid", " OID %d", OPTION_FORMAT_OBJECT_ID }
 };
 
 char *

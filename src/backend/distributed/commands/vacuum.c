@@ -279,7 +279,7 @@ VacuumTaskList(Oid relationId, CitusVacuumParams vacuumParams, List *vacuumColum
 		task->replicationModel = REPLICATION_MODEL_INVALID;
 		task->anchorShardId = shardId;
 		task->taskPlacementList = ActiveShardPlacementList(shardId);
-		task->cannotBeExecutedInTransaction = ((vacuumParams.options) & VACOPT_VACUUM);
+		task->cannotBeExecutedInTransction = ((vacuumParams.options) & VACOPT_VACUUM);
 
 		taskList = lappend(taskList, task);
 	}
@@ -719,7 +719,7 @@ ExecuteUnqualifiedVacuumTasks(VacuumStmt *vacuumStmt, CitusVacuumParams vacuumPa
 	SetTaskQueryStringList(task, unqualifiedVacuumCommands);
 	task->dependentTaskList = NULL;
 	task->replicationModel = REPLICATION_MODEL_INVALID;
-	task->cannotBeExecutedInTransaction = ((vacuumParams.options) & VACOPT_VACUUM);
+	task->cannotBeExecutedInTransction = ((vacuumParams.options) & VACOPT_VACUUM);
 
 
 	bool hasPeerWorker = false;
