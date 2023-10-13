@@ -125,6 +125,11 @@ enum MultiConnectionMode
 	 */
 	REQUIRE_REPLICATION_CONNECTION_PARAM = 1 << 8,
 
+    /*
+     * This flag specifies that connection is required for maintenance operations, e.g.
+     * transaction recovery, distributed deadlock detection. Such connections may have
+     * special treatment, like dedicated share of pool, etc.
+     */
     REQUIRE_MAINTENANCE_CONNECTION = 1 << 9
 };
 

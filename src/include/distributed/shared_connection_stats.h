@@ -18,7 +18,10 @@
 
 enum SharedPoolCounterMode
 {
-    MAINTENANCE_CONNECTION_POOL = 1 << 0
+    /*
+     * Use this flag to reserve a connection from a maintenance quota
+     */
+    MAINTENANCE_CONNECTION = 1 << 0
 };
 
 extern int MaxSharedPoolSize;
@@ -34,6 +37,7 @@ extern size_t SharedConnectionStatsShmemSize(void);
 extern void SharedConnectionStatsShmemInit(void);
 extern int GetMaxClientConnections(void);
 extern int GetMaxSharedPoolSize(void);
+extern double GetSharedPoolSizeMaintenanceQuota(void);
 extern int GetLocalSharedPoolSize(void);
 extern bool TryToIncrementSharedConnectionCounter(uint32 flags, const char *hostname, int port);
 extern void WaitLoopForSharedConnection(uint32 flags, const char *hostname, int port);

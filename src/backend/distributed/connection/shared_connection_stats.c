@@ -35,7 +35,7 @@
 #include "distributed/worker_manager.h"
 #include "distributed/tuplestore.h"
 #include "distributed/worker_manager.h"
-
+#include "math.h"
 
 #define REMOTE_CONNECTION_STATS_COLUMNS 4
 
@@ -104,9 +104,11 @@ typedef struct SharedWorkerNodeDatabaseConnStatsHashEntry
 int MaxSharedPoolSize = 0;
 
 /*
- *
+ * Controlled via a GUC, never access directly, use GetSharedPoolSizeMaintenanceQuota().
+ * Percent of MaxSharedPoolSize reserved for maintenance operations.
+ * "0" effectively means that regular and maintenance connection will compete over the common pool
  */
-float SharedPoolSizeMaintenancePercent = 10.0f;
+double SharedPoolSizeMaintenanceQuota = 0.1;
 
 /*
  * Controlled via a GUC, never access directly, use GetLocalSharedPoolSize().
@@ -140,7 +142,7 @@ static int SharedConnectionHashCompare(const void *a, const void *b, Size keysiz
 static uint32 SharedWorkerNodeDatabaseHashHash(const void *key, Size keysize);
 static int SharedWorkerNodeDatabaseHashCompare(const void *a, const void *b, Size keysize);
 static bool IsConnectionToLocalNode(SharedWorkerNodeConnStatsHashKey *connKey);
-static bool isConnectionSlotAvailable(SharedWorkerNodeConnStatsHashKey *connKey,
+static bool isConnectionSlotAvailable(uint32 flags, SharedWorkerNodeConnStatsHashKey *connKey,
                                       const SharedWorkerNodeConnStatsHashEntry *connectionEntry);
 static bool
 IncrementSharedConnectionCounterInternal(uint32 externalFlags, bool checkLimits, const char *hostname, int port,
@@ -256,10 +258,10 @@ GetMaxSharedPoolSize(void)
 	return MaxSharedPoolSize;
 }
 
-float
-GetSharedPoolSizeMaintenancePercent(void)
+double
+GetSharedPoolSizeMaintenanceQuota(void)
 {
-    return SharedPoolSizeMaintenancePercent;
+    return SharedPoolSizeMaintenanceQuota;
 }
 
 
@@ -352,29 +354,6 @@ IncrementSharedConnectionCounter(uint32 flags, const char *hostname, int port)
     IncrementSharedConnectionCounterInternal(flags, false, hostname, port, MyDatabaseId);
 }
 
-static SharedWorkerNodeConnStatsHashKey PrepareWorkerNodeHashKey(const char *hostname, int port)
-{
-    SharedWorkerNodeConnStatsHashKey key;
-    strlcpy(key.hostname, hostname, MAX_NODE_LENGTH);
-    if (strlen(hostname) > MAX_NODE_LENGTH)
-    {
-        ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-                errmsg("hostname exceeds the maximum length of %d",
-                       MAX_NODE_LENGTH)));
-    }
-    key.port = port;
-    return key;
-}
-
-static SharedWorkerNodeDatabaseConnStatsHashKey PrepareWorkerNodeDatabaseHashKey(const char *hostname,
-                                                                                 int port,
-                                                                                 Oid database)
-{
-    SharedWorkerNodeDatabaseConnStatsHashKey workerNodeDatabaseKey;
-    workerNodeDatabaseKey.workerNodeKey = PrepareWorkerNodeHashKey(hostname, port);
-    workerNodeDatabaseKey.database = database;
-    return workerNodeDatabaseKey;
-}
 
 static bool
 IncrementSharedConnectionCounterInternal(uint32 externalFlags,
@@ -437,10 +416,13 @@ IncrementSharedConnectionCounterInternal(uint32 externalFlags,
         workerNodeDatabaseEntry->count = 0;
     }
 
-    /* Increment counter if possible */
+    /* Increment counter if a slot available */
     bool connectionSlotAvailable = true;
-    connectionSlotAvailable = !checkLimits ||
-                              isConnectionSlotAvailable(&workerNodeKey, workerNodeConnectionEntry);
+    connectionSlotAvailable =
+            !checkLimits ||
+            isConnectionSlotAvailable(externalFlags,
+                                      &workerNodeKey,
+                                      workerNodeConnectionEntry);
 
     if (connectionSlotAvailable)
     {
@@ -460,11 +442,19 @@ static bool IsConnectionToLocalNode(SharedWorkerNodeConnStatsHashKey *connKey)
 }
 
 
-static bool isConnectionSlotAvailable(SharedWorkerNodeConnStatsHashKey *connKey,
+static bool isConnectionSlotAvailable(uint32 flags,
+                                      SharedWorkerNodeConnStatsHashKey *connKey,
                                       const SharedWorkerNodeConnStatsHashEntry *connectionEntry)
 {
     bool connectionSlotAvailable = true;
     bool connectionToLocalNode = IsConnectionToLocalNode(connKey);
+    /*
+     * Use full capacity for maintenance connections,
+     */
+    int maintenanceConnectionsQuota =
+            (flags & MAINTENANCE_CONNECTION)
+            ? 0
+            : (int) floor((double) GetMaxSharedPoolSize() * GetSharedPoolSizeMaintenanceQuota());
     if (connectionToLocalNode)
     {
         bool remoteConnectionsForLocalQueriesDisabled =
@@ -489,7 +479,7 @@ static bool isConnectionSlotAvailable(SharedWorkerNodeConnStatsHashKey *connKey,
             connectionSlotAvailable = false;
         }
     }
-    else if (connectionEntry->count + 1 > GetMaxSharedPoolSize())
+    else if (connectionEntry->count + 1 > (GetMaxSharedPoolSize() - maintenanceConnectionsQuota))
     {
         connectionSlotAvailable = false;
     }
@@ -860,6 +850,30 @@ ShouldWaitForConnection(int currentConnectionCount)
 	}
 
 	return false;
+}
+
+static SharedWorkerNodeConnStatsHashKey PrepareWorkerNodeHashKey(const char *hostname, int port)
+{
+    SharedWorkerNodeConnStatsHashKey key;
+    strlcpy(key.hostname, hostname, MAX_NODE_LENGTH);
+    if (strlen(hostname) > MAX_NODE_LENGTH)
+    {
+        ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+                errmsg("hostname exceeds the maximum length of %d",
+                       MAX_NODE_LENGTH)));
+    }
+    key.port = port;
+    return key;
+}
+
+static SharedWorkerNodeDatabaseConnStatsHashKey PrepareWorkerNodeDatabaseHashKey(const char *hostname,
+                                                                                 int port,
+                                                                                 Oid database)
+{
+    SharedWorkerNodeDatabaseConnStatsHashKey workerNodeDatabaseKey;
+    workerNodeDatabaseKey.workerNodeKey = PrepareWorkerNodeHashKey(hostname, port);
+    workerNodeDatabaseKey.database = database;
+    return workerNodeDatabaseKey;
 }
 
 

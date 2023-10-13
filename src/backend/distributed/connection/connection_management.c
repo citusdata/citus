@@ -327,7 +327,7 @@ StartNodeUserDatabaseConnection(uint32 flags, const char *hostname, int32 port,
 	 */
 
 	ConnectionHashEntry *entry = hash_search(ConnectionHash, &key, HASH_ENTER, &found);
-	if (!found || !entry->isValid)
+	if (!(found && entry->isValid))
 	{
 		/*
 		 * We are just building hash entry or previously it was left in an
@@ -377,11 +377,11 @@ StartNodeUserDatabaseConnection(uint32 flags, const char *hostname, int32 port,
 	/* these two flags are by nature cannot happen at the same time */
 	Assert(!((flags & WAIT_FOR_CONNECTION) && (flags & OPTIONAL_CONNECTION)));
 
+    int sharedCounterFlags = (flags & REQUIRE_MAINTENANCE_CONNECTION)
+                             ? MAINTENANCE_CONNECTION
+                             : 0;
 	if (flags & WAIT_FOR_CONNECTION)
 	{
-        int sharedCounterFlags = (flags & REQUIRE_MAINTENANCE_CONNECTION)
-                                 ? MAINTENANCE_CONNECTION_POOL
-                                 : 0;
         WaitLoopForSharedConnection(sharedCounterFlags, hostname, port);
 	}
 	else if (flags & OPTIONAL_CONNECTION)
@@ -392,7 +392,6 @@ StartNodeUserDatabaseConnection(uint32 flags, const char *hostname, int32 port,
 		 * cannot reserve the right to establish a connection, we prefer to
 		 * error out.
 		 */
-        int sharedCounterFlags = 0;
         if (!TryToIncrementSharedConnectionCounter(sharedCounterFlags, hostname, port))
 		{
 			/* do not track the connection anymore */
@@ -413,7 +412,6 @@ StartNodeUserDatabaseConnection(uint32 flags, const char *hostname, int32 port,
 		 *
 		 * Still, we keep track of the connection counter.
 		 */
-        int sharedCounterFlags = 0;
         IncrementSharedConnectionCounter(sharedCounterFlags, hostname, port);
 	}
 
