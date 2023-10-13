@@ -159,6 +159,20 @@ PreprocessGrantOnDatabaseStmt(Node *node, const char *queryString,
 	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
 }
 
+static bool isSetTablespaceStatement(AlterDatabaseStmt *stmt)
+{
+	ListCell *lc = NULL;
+	foreach(lc, stmt->options)
+	{
+		DefElem *def = (DefElem *) lfirst(lc);
+		if (strcmp(def->defname, "tablespace") == 0)
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
 
 /*
  * PreprocessAlterDatabaseStmt is executed before the statement is applied to the local
@@ -178,11 +192,14 @@ PreprocessAlterDatabaseStmt(Node *node, const char *queryString,
 
 	AlterDatabaseStmt *stmt = castNode(AlterDatabaseStmt, node);
 
+
+
+
 	char *sql = DeparseTreeNode((Node *) stmt);
 
 	List *commands = NULL;
 
-	if (strstr(sql, "SET TABLESPACE") != NULL)
+	if (isSetTablespaceStatement(stmt))
 	{
 		/*Set tablespace does not work inside a transaction.Therefore, we close the transaction before set tablespace
 		 * and open it again after set tablespace.
@@ -248,9 +265,9 @@ PreprocessAlterDatabaseRenameStmt(Node *node, const char *queryString,
 		return NIL;
 	}
 
-	RenameStmt *stmt = castNode(RenameStmt, node);
-
 	EnsureCoordinator();
+
+	RenameStmt *stmt = castNode(RenameStmt, node);
 
 	char *sql = DeparseTreeNode((Node *) stmt);
 
