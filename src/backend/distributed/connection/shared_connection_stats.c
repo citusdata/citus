@@ -416,7 +416,7 @@ IncrementSharedConnectionCounterInternal(uint32 externalFlags,
         workerNodeConnectionEntry->count = 0;
     }
 
-    /* Initialized SharedWorkerNodeDatabaseConnStatsHash the same way  */
+    /* Initialize SharedWorkerNodeDatabaseConnStatsHash the same way  */
     SharedWorkerNodeDatabaseConnStatsHashKey workerNodeDatabaseKey =
             PrepareWorkerNodeDatabaseHashKey(hostname, port, database);
     bool workerNodeDatabaseEntryFound = false;
@@ -505,15 +505,6 @@ static bool isConnectionSlotAvailable(SharedWorkerNodeConnStatsHashKey *connKey,
 void
 DecrementSharedConnectionCounter(const char *hostname, int port)
 {
-
-    DecrementSharedConnectionCounterInternal(hostname, port);
-    UnLockConnectionSharedMemory();
-    WakeupWaiterBackendsForSharedConnection();
-}
-
-static void
-DecrementSharedConnectionCounterInternal(const char *hostname, int port)
-{
     /*
      * Do not call GetMaxSharedPoolSize() here, since it may read from
      * the catalog and we may be in the process exit handler.
@@ -525,6 +516,17 @@ DecrementSharedConnectionCounterInternal(const char *hostname, int port)
     }
 
     LockConnectionSharedMemory(LW_EXCLUSIVE);
+
+    DecrementSharedConnectionCounterInternal(hostname, port);
+
+    UnLockConnectionSharedMemory();
+    WakeupWaiterBackendsForSharedConnection();
+}
+
+static void
+DecrementSharedConnectionCounterInternal(const char *hostname, int port)
+{
+
 
     bool workerNodeEntryFound = false;
     SharedWorkerNodeConnStatsHashKey workerNodeKey = PrepareWorkerNodeHashKey(hostname, port);
