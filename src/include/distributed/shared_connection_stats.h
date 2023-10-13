@@ -16,8 +16,13 @@
 #define DISABLE_REMOTE_CONNECTIONS_FOR_LOCAL_QUERIES -1
 #define ALLOW_ALL_EXTERNAL_CONNECTIONS -1
 
+enum SharedPoolCounterMode
+{
+    MAINTENANCE_CONNECTION_POOL = 1 << 0
+};
 
 extern int MaxSharedPoolSize;
+extern float MaintenanceSharedPoolSizePercent;
 extern int LocalSharedPoolSize;
 extern int MaxClientConnections;
 
@@ -30,10 +35,10 @@ extern void SharedConnectionStatsShmemInit(void);
 extern int GetMaxClientConnections(void);
 extern int GetMaxSharedPoolSize(void);
 extern int GetLocalSharedPoolSize(void);
-extern bool TryToIncrementSharedConnectionCounter(const char *hostname, int port);
-extern void WaitLoopForSharedConnection(const char *hostname, int port);
+extern bool TryToIncrementSharedConnectionCounter(uint32 flags, const char *hostname, int port);
+extern void WaitLoopForSharedConnection(uint32 flags, const char *hostname, int port);
 extern void DecrementSharedConnectionCounter(const char *hostname, int port);
-extern void IncrementSharedConnectionCounter(const char *hostname, int port);
+extern void IncrementSharedConnectionCounter(uint32 flags, const char *hostname, int port);
 extern int AdaptiveConnectionManagementFlag(bool connectToLocalNode, int
 											activeConnectionCount);
 

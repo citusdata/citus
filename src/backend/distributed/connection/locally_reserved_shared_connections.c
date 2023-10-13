@@ -439,13 +439,16 @@ EnsureConnectionPossibilityForNode(WorkerNode *workerNode, bool waitForConnectio
 		 * Increment the shared counter, we may need to wait if there are
 		 * no space left.
 		 */
-		WaitLoopForSharedConnection(workerNode->workerName, workerNode->workerPort);
+        int sharedCounterFlags = 0;
+        WaitLoopForSharedConnection(sharedCounterFlags, workerNode->workerName, workerNode->workerPort);
 	}
 	else
 	{
-		bool incremented =
-			TryToIncrementSharedConnectionCounter(workerNode->workerName,
-												  workerNode->workerPort);
+        int sharedCounterFlags = 0;
+        bool incremented = TryToIncrementSharedConnectionCounter(
+                sharedCounterFlags,
+                workerNode->workerName,
+                workerNode->workerPort);
 		if (!incremented)
 		{
 			/*

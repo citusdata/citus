@@ -123,7 +123,9 @@ enum MultiConnectionMode
 	 *
 	 * This is need to run 'CREATE_REPLICATION_SLOT' command.
 	 */
-	REQUIRE_REPLICATION_CONNECTION_PARAM = 1 << 8
+	REQUIRE_REPLICATION_CONNECTION_PARAM = 1 << 8,
+
+    REQUIRE_MAINTENANCE_CONNECTION = 1 << 9
 };
 
 

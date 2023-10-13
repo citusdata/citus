@@ -379,7 +379,10 @@ StartNodeUserDatabaseConnection(uint32 flags, const char *hostname, int32 port,
 
 	if (flags & WAIT_FOR_CONNECTION)
 	{
-		WaitLoopForSharedConnection(hostname, port);
+        int sharedCounterFlags = (flags & REQUIRE_MAINTENANCE_CONNECTION)
+                                 ? MAINTENANCE_CONNECTION_POOL
+                                 : 0;
+        WaitLoopForSharedConnection(sharedCounterFlags, hostname, port);
 	}
 	else if (flags & OPTIONAL_CONNECTION)
 	{
@@ -389,7 +392,8 @@ StartNodeUserDatabaseConnection(uint32 flags, const char *hostname, int32 port,
 		 * cannot reserve the right to establish a connection, we prefer to
 		 * error out.
 		 */
-		if (!TryToIncrementSharedConnectionCounter(hostname, port))
+        int sharedCounterFlags = 0;
+        if (!TryToIncrementSharedConnectionCounter(sharedCounterFlags, hostname, port))
 		{
 			/* do not track the connection anymore */
 			dlist_delete(&connection->connectionNode);
@@ -409,7 +413,8 @@ StartNodeUserDatabaseConnection(uint32 flags, const char *hostname, int32 port,
 		 *
 		 * Still, we keep track of the connection counter.
 		 */
-		IncrementSharedConnectionCounter(hostname, port);
+        int sharedCounterFlags = 0;
+        IncrementSharedConnectionCounter(sharedCounterFlags, hostname, port);
 	}
 
 
