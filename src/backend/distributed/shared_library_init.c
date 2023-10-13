@@ -1023,6 +1023,16 @@ RegisterCitusConfigVariables(void)
 		GUC_STANDARD,
 		NULL, NULL, NULL);
 
+	DefineCustomStringVariable(
+		"citus.controldb_name",
+		gettext_noop("Which database is designated as the controldb"),
+		NULL,
+		&ControlDbName,
+		"",
+		PGC_SU_BACKEND,
+		GUC_STANDARD,
+		NULL, NULL, NULL);
+
 	DefineCustomEnumVariable(
 		"citus.coordinator_aggregation_strategy",
 		gettext_noop("Sets the strategy for when an aggregate cannot be pushed down. "

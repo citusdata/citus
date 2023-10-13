@@ -99,6 +99,7 @@ int Recover2PCInterval = 60000;
 int DeferShardDeleteInterval = 15000;
 int BackgroundTaskQueueCheckInterval = 5000;
 int MaxBackgroundTaskExecutors = 4;
+char *ControlDbName = "";
 
 /* config variables for metadata sync timeout */
 int MetadataSyncInterval = 60000;
@@ -146,6 +147,12 @@ InitializeMaintenanceDaemon(void)
 void
 InitializeMaintenanceDaemonForAdminDB(void)
 {
+	if (strcmp(ControlDbName, "") == 0)
+	{
+		elog(LOG, "There is no designated control database.");
+		return;
+	}
+
 	BackgroundWorker worker;
 
 	memset(&worker, 0, sizeof(worker));
@@ -335,7 +342,7 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 	if (databaseOid == 0)
 	{
 		/* TODO : Get the admin database name from GUC contro_db*/
-		char *databaseName = "postgres";
+		char *databaseName = ControlDbName;
 
 		BackgroundWorkerInitializeConnection(databaseName, NULL, 0);
 

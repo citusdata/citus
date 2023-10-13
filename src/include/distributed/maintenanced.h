@@ -20,6 +20,7 @@
 
 /* config variable for */
 extern double DistributedDeadlockDetectionTimeoutFactor;
+extern char *ControlDbName;
 
 extern void StopMaintenanceDaemon(Oid databaseId);
 extern void TriggerNodeMetadataSync(Oid databaseId);
