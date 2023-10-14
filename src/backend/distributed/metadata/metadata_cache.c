@@ -310,6 +310,7 @@ static HeapTuple LookupDistPartitionTuple(Relation pgDistPartition, Oid relation
 static void GetPartitionTypeInputInfo(char *partitionKeyString, char partitionMethod,
 									  Oid *columnTypeId, int32 *columnTypeMod,
 									  Oid *intervalTypeId, int32 *intervalTypeMod);
+static void CachedNamespaceLookup(const char *nspname, Oid *cachedOid);
 static void CachedRelationLookup(const char *relationName, Oid *cachedOid);
 static void CachedRelationLookupExtended(const char *relationName, Oid *cachedOid,
 										 bool missing_ok);
@@ -2769,6 +2770,15 @@ DistRebalanceStrategyRelationId(void)
 }
 
 
+/* return the oid of citus namespace */
+Oid
+CitusCatalogNamespaceId(void)
+{
+	CachedNamespaceLookup("citus", &MetadataCache.citusCatalogNamespaceId);
+	return MetadataCache.citusCatalogNamespaceId;
+}
+
+
 /* return oid of pg_dist_object relation */
 Oid
 DistObjectRelationId(void)
@@ -2795,14 +2805,12 @@ DistObjectRelationId(void)
 								 true);
 	if (!OidIsValid(MetadataCache.distObjectRelationId))
 	{
-		Oid citusNamespaceId = get_namespace_oid("citus", false);
-
 		/*
 		 * We can only ever reach here while we are creating/altering our extension before
 		 * the table is moved to pg_catalog.
 		 */
 		CachedRelationNamespaceLookupExtended("pg_dist_object",
-											  citusNamespaceId,
+											  CitusCatalogNamespaceId(),
 											  &MetadataCache.distObjectRelationId,
 											  false);
 	}
@@ -2836,6 +2844,17 @@ DistObjectPrimaryKeyIndexId(void)
 								 &MetadataCache.distObjectPrimaryKeyIndexId,
 								 true);
 
+	if (!OidIsValid(MetadataCache.distObjectPrimaryKeyIndexId))
+	{
+		/*
+		 * We can only ever reach here while we are creating/altering our extension before
+		 * the table is moved to pg_catalog.
+		 */
+		CachedRelationNamespaceLookupExtended("pg_dist_object_pkey",
+											  CitusCatalogNamespaceId(),
+											  &MetadataCache.distObjectPrimaryKeyIndexId,
+											  false);
+	}
 
 	return MetadataCache.distObjectPrimaryKeyIndexId;
 }
@@ -5398,6 +5417,30 @@ DeformedDistShardTupleToShardInterval(Datum *datumArray, bool *isNullArray,
 	shardInterval->shardId = shardId;
 
 	return shardInterval;
+}
+
+
+/*
+ * CachedNamespaceLookup performs a cached lookup for the namespace (schema), with the
+ * result cached in cachedOid.
+ */
+static void
+CachedNamespaceLookup(const char *nspname, Oid *cachedOid)
+{
+	/* force callbacks to be registered, so we always get notified upon changes */
+	InitializeCaches();
+
+	if (*cachedOid == InvalidOid)
+	{
+		*cachedOid = get_namespace_oid(nspname, true);
+
+		if (*cachedOid == InvalidOid)
+		{
+			ereport(ERROR, (errmsg(
+								"cache lookup failed for namespace %s, called too early?",
+								nspname)));
+		}
+	}
 }
 
 

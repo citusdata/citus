@@ -39,8 +39,6 @@
 
 static AlterOwnerStmt * RecreateAlterDatabaseOwnerStmt(Oid databaseOid);
 
-static List * CreateDDLTaskList(char *command, List *workerNodeList,
-								bool outsideTransaction);
 
 PG_FUNCTION_INFO_V1(citus_internal_database_command);
 static Oid get_database_owner(Oid db_oid);
@@ -265,36 +263,6 @@ PreprocessAlterDatabaseRenameStmt(Node *node, const char *queryString,
 
 
 /*
- * CreateDDLTaskList creates a task list for running a single DDL command.
- */
-static List *
-CreateDDLTaskList(char *command, List *workerNodeList, bool outsideTransaction)
-{
-	List *commandList = list_make3(DISABLE_DDL_PROPAGATION,
-								   command,
-								   ENABLE_DDL_PROPAGATION);
-
-	Task *task = CitusMakeNode(Task);
-	task->taskType = DDL_TASK;
-	SetTaskQueryStringList(task, commandList);
-	task->cannotBeExecutedInTransaction = outsideTransaction;
-
-	WorkerNode *workerNode = NULL;
-	foreach_ptr(workerNode, workerNodeList)
-	{
-		ShardPlacement *targetPlacement = CitusMakeNode(ShardPlacement);
-		targetPlacement->nodeName = workerNode->workerName;
-		targetPlacement->nodePort = workerNode->workerPort;
-		targetPlacement->groupId = workerNode->groupId;
-		task->taskPlacementList = lappend(task->taskPlacementList,
-										  targetPlacement);
-	}
-
-	return list_make1(task);
-}
-
-
-/*
  * PreprocessAlterDatabaseSetStmt is executed before the statement is applied to the local
  * postgres instance.
  *
@@ -333,58 +301,25 @@ PreprocessAlterDatabaseSetStmt(Node *node, const char *queryString,
 List *
 PostprocessCreateDatabaseStmt(Node *node, const char *queryString)
 {
-	if (EnableCreateDatabasePropagation)
-	{
-		EnsureCoordinator();
-	}
-
 	if (!EnableCreateDatabasePropagation || !ShouldPropagate())
 	{
 		return NIL;
 	}
 
-	CreatedbStmt *stmt = castNode(CreatedbStmt, node);
-	char *databaseName = stmt->dbname;
-	bool missingOk = false;
-	Oid databaseOid = get_database_oid(databaseName, missingOk);
+	EnsureCoordinator();
 
-	/*
-	 * TODO: try to reuse regular DDL infrastructure
-	 *
-	 * We do not do this right now because of the AssignDatabaseToShard at the end.
-	 */
-	List *workerNodes = TargetWorkerSetNodeList(NON_COORDINATOR_METADATA_NODES,
-												RowShareLock);
-	if (list_length(workerNodes) > 0)
-	{
-		char *createDatabaseCommand = DeparseTreeNode(node);
+	char *createDatabaseCommand = DeparseTreeNode(node);
 
-		StringInfo internalCreateCommand = makeStringInfo();
-		appendStringInfo(internalCreateCommand,
-						 "SELECT pg_catalog.citus_internal_database_command(%s)",
-						 quote_literal_cstr(createDatabaseCommand));
+	StringInfo internalCreateCommand = makeStringInfo();
+	appendStringInfo(internalCreateCommand,
+					 "SELECT pg_catalog.citus_internal_database_command(%s)",
+					 quote_literal_cstr(createDatabaseCommand));
 
-		/*
-		 * For the moment, we run CREATE DATABASE in 2PC, though that prevents
-		 * us from immediately doing a pg_dump | pg_restore when dealing with
-		 * a remote template database.
-		 */
-		bool outsideTransaction = false;
+	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
+								(void *) internalCreateCommand->data,
+								ENABLE_DDL_PROPAGATION);
 
-		List *taskList = CreateDDLTaskList(internalCreateCommand->data, workerNodes,
-										   outsideTransaction);
-
-		bool localExecutionSupported = false;
-		ExecuteUtilityTaskList(taskList, localExecutionSupported);
-	}
-
-	/* synchronize pg_dist_object records */
-	ObjectAddress dbAddress = { 0 };
-	ObjectAddressSet(dbAddress, DatabaseRelationId, databaseOid);
-	MarkObjectDistributed(&dbAddress);
-
-
-	return NIL;
+	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
 }
 
 
@@ -409,9 +344,15 @@ citus_internal_database_command(PG_FUNCTION_ARGS)
 					  (superuser() ? PGC_SUSET : PGC_USERSET), PGC_S_SESSION,
 					  GUC_ACTION_LOCAL, true, 0, false);
 
-	set_config_option("synchronous_commit", "off",
-					  (superuser() ? PGC_SUSET : PGC_USERSET), PGC_S_SESSION,
-					  GUC_ACTION_LOCAL, true, 0, false);
+
+	/*
+	 * createdb() / DropDatabase() uses ParseState to report the error position for the
+	 * input command and the position is reported to be 0 when it's provided as NULL.
+	 * We're okay with that because we don't expect this UDF to be called with an incorrect
+	 * DDL command.
+	 *
+	 */
+	ParseState *pstate = NULL;
 
 	if (IsA(parseTree, CreatedbStmt))
 	{
@@ -422,7 +363,7 @@ citus_internal_database_command(PG_FUNCTION_ARGS)
 
 		if (!OidIsValid(databaseOid))
 		{
-			createdb(NULL, (CreatedbStmt *) parseTree);
+			createdb(pstate, (CreatedbStmt *) parseTree);
 		}
 	}
 	else if (IsA(parseTree, DropdbStmt))
@@ -435,7 +376,7 @@ citus_internal_database_command(PG_FUNCTION_ARGS)
 
 		if (OidIsValid(databaseOid))
 		{
-			DropDatabase(NULL, (DropdbStmt *) parseTree);
+			DropDatabase(pstate, (DropdbStmt *) parseTree);
 		}
 	}
 	else if (IsA(parseTree, AlterDatabaseStmt))
@@ -473,10 +414,12 @@ PreprocessDropDatabaseStmt(Node *node, const char *queryString,
 		return NIL;
 	}
 
+	EnsureCoordinator();
+
 	DropdbStmt *stmt = (DropdbStmt *) node;
-	char *databaseName = stmt->dbname;
-	bool missingOk = true;
-	Oid databaseOid = get_database_oid(databaseName, missingOk);
+
+	Oid databaseOid = get_database_oid(stmt->dbname, stmt->missing_ok);
+
 	if (databaseOid == InvalidOid)
 	{
 		/* let regular ProcessUtility deal with IF NOT EXISTS */
@@ -490,12 +433,7 @@ PreprocessDropDatabaseStmt(Node *node, const char *queryString,
 		return NIL;
 	}
 
-	List *workerNodes = TargetWorkerSetNodeList(NON_COORDINATOR_METADATA_NODES,
-												RowShareLock);
-	if (list_length(workerNodes) == 0)
-	{
-		return NIL;
-	}
+	UnmarkObjectDistributed(&dbAddress);
 
 	char *dropDatabaseCommand = DeparseTreeNode(node);
 
@@ -504,23 +442,22 @@ PreprocessDropDatabaseStmt(Node *node, const char *queryString,
 					 "SELECT pg_catalog.citus_internal_database_command(%s)",
 					 quote_literal_cstr(dropDatabaseCommand));
 
-	/* Delete from pg_dist_object */
 
-	if (IsObjectDistributed(&dbAddress))
-	{
-		UnmarkObjectDistributed(&dbAddress);
-	}
+	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
+								(void *) internalDropCommand->data,
+								ENABLE_DDL_PROPAGATION);
 
-	/* ExecuteDistributedDDLJob could not be used since it depends on namespace and
-	 * database does not have namespace.
-	 */
+	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
+}
 
-	bool outsideTransaction = false;
-	List *taskList = CreateDDLTaskList(internalDropCommand->data, workerNodes,
-									   outsideTransaction);
 
-	bool localExecutionSupported = false;
-	ExecuteUtilityTaskList(taskList, localExecutionSupported);
+List *
+CreateDatabaseStmtObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
+{
+	CreatedbStmt *stmt = castNode(CreatedbStmt, node);
+	Oid databaseOid = get_database_oid(stmt->dbname, missing_ok);
+	ObjectAddress *dbAddress = palloc0(sizeof(ObjectAddress));
+	ObjectAddressSet(*dbAddress, DatabaseRelationId, databaseOid);
 
-	return NIL;
+	return list_make1(dbAddress);
 }
