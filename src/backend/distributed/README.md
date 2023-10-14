@@ -1732,8 +1732,9 @@ DDL commands are primarily handled via the citus_ProcessUtility hook, which gets
 6. Execute command on shards (in case of table DDL)
 
 Either the pre-process or post-process step generates a "Distributed DDL Job", which contains a task list to run in steps 4 & 5 (via adaptive executor).
-[!IMPORTANT]
-If both pre-process and post-process generate a job, then only the post-process job is executed. The pre-process job is ignored.
+
+
+> :warning: If both pre-process and post-process generate a job, then only the post-process job is executed. The pre-process job is ignored.
 
 In general pre-process should:
 
@@ -1772,6 +1773,8 @@ static DistributeObjectOps Database_Alter = {
 Each field in the struct is documented in the comments within the `DistributeObjectOps`. When defining a new Data Definition Language (DDL) command, follow these guidelines:
 
 - **Returning tasks for `preprocess` and `postprocess`**: Ensure that either `preprocess` or `postprocess` returns a `NodeDDLTask`. If both are defined, only the tasks returned in the `postprocess` will be executed.
+
+- **Generic `preprocess` and `postprocess` methods**: ``PreprocessAlterDistributedObjectStmt`` and ``PostprocessAlterDistributedObjectStmt`` are generic post and pre methods that is being used for some statements. Before defining a new `preprocess` or `postprocess` method, check if the generic methods can be used.
 
 - **`deparse`**: When propagating the command to worker nodes, make sure to define `deparse`. This is necessary because it generates a query string for each worker node.
 
