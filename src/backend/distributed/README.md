@@ -1773,6 +1773,7 @@ static DistributeObjectOps Database_Alter = {
 Each field in the struct is documented in the comments within the `DistributeObjectOps`. When defining a new Data Definition Language (DDL) command, follow these guidelines:
 
 - **Returning tasks for `preprocess` and `postprocess`**: Ensure that either `preprocess` or `postprocess` returns a list of "DDLJob"s. If both are defined, then you would get an assertion failure.
+
 - **Generic `preprocess` and `postprocess` methods**: ``PreprocessAlterDistributedObjectStmt`` and ``PostprocessAlterDistributedObjectStmt`` are generic post and pre methods that is being used for some statements. Before defining a new `preprocess` or `postprocess` method, check if the generic methods can be used.
 
 - **`deparse`**: When propagating the command to worker nodes, make sure to define `deparse`. This is necessary because it generates a query string for each worker node.
@@ -1781,7 +1782,7 @@ Each field in the struct is documented in the comments within the `DistributeObj
 
 - **`address`**: If `markDistributed` is set to true, you must define the `address`. Failure to do so will result in a runtime error. The `address` is required to identify the fields that will be stored in the `pg_dist_object` table.
 
-- **`markDistributed` usage in `DROP` Statements**: Please note that `markDistributed` does not apply to `DROP` statements. For `DROP` statements, instead you need to call `UnmarkObjectDistributed()` for the object either in `preprocess` or `postprocess`. Otherwise, state records in ``pg_dist_object`` table will cause errors in UDF calls such as ``citus_add_node``, which will try to copy the non-existent db object. 
+- **`markDistributed` usage in `DROP` Statements**: Please note that `markDistributed` does not apply to `DROP` statements. For `DROP` statements, instead you need to call `UnmarkObjectDistributed()` for the object either in `preprocess` or `postprocess`. Otherwise, state records in ``pg_dist_object`` table will cause errors in UDF calls such as ``citus_add_node()``, which will try to copy the non-existent db object.
 
 - **`qualify`**: The `qualify` function is used to qualify the objects based on their schemas in the parse tree. It is employed to prevent sensitivity to changes in the `search_path` on worker nodes. Note that it is not mandatory to define this function for all DDL commands. It is only required for commands that involve objects that are bound to schemas, such as; tables, types, functions and so on.
 
