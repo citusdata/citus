@@ -1268,7 +1268,7 @@ RegisterCitusConfigVariables(void)
 					 "and DROP DATABASE statements to workers"),
 		NULL,
 		&EnableCreateDatabasePropagation,
-		false,
+		true,
 		PGC_USERSET,
 		GUC_STANDARD,
 		NULL, NULL, NULL);
