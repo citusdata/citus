@@ -29,7 +29,7 @@ CREATE DATABASE mydatabase
 
 SELECT pd.datname, pd.encoding,
 pd.datistemplate, pd.datallowconn, pd.datconnlimit,
-pd.datcollate , pd. datctype  ,  pd.datacl, rolname AS database_owner,
+pd.datcollate , pd. datctype  ,  pd.datacl,
 pa.rolname AS database_owner, pt.spcname AS tablespace
 FROM pg_database pd
 JOIN pg_authid pa ON pd.datdba = pa.oid
