@@ -363,9 +363,6 @@ ExecuteCommandAsSuperuser(char *query, int paramCount, Oid *paramTypes,
 void
 UnmarkObjectDistributedLocally(const ObjectAddress *address)
 {
-	elog(WARNING,
-		 "Test UnmarkObjectDistributedLocally %d %d %d", address->classId,
-		 address->objectId, address->objectSubId);
 	int paramCount = 3;
 	Oid paramTypes[3] = {
 		OIDOID,
