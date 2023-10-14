@@ -95,6 +95,18 @@ PostprocessCreateDistributedObjectFromCatalogStmt(Node *stmt, const char *queryS
 }
 
 
+void
+UnmarkDistObjectsOnAllNodes(Node *parseTree)
+{
+	List *addresses = GetObjectAddressListFromParseTree(parseTree, false, true);
+	ObjectAddress *address = NULL;
+	foreach_ptr(address, addresses)
+	{
+		UnmarkObjectDistributed(address);
+	}
+}
+
+
 /*
  * PreprocessAlterDistributedObjectStmt handles any updates to distributed objects by
  * creating the fully qualified sql to apply to all workers after checking all
@@ -266,11 +278,11 @@ PreprocessDropDistributedObjectStmt(Node *node, const char *queryString,
 	/*
 	 * remove the entries for the distributed objects on dropping
 	 */
-	ObjectAddress *address = NULL;
-	foreach_ptr(address, distributedObjectAddresses)
-	{
-		UnmarkObjectDistributed(address);
-	}
+	/* ObjectAddress *address = NULL; */
+	/* foreach_ptr(address, distributedObjectAddresses) */
+	/* { */
+	/* 	UnmarkObjectDistributedLocally(address); */
+	/* } */
 
 	/*
 	 * temporary swap the lists of objects to delete with the distributed objects and

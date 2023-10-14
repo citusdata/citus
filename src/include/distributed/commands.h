@@ -193,6 +193,7 @@ extern List * DropTextSearchConfigObjectAddress(Node *node, bool missing_ok, boo
 												isPostprocess);
 extern List * DropTextSearchDictObjectAddress(Node *node, bool missing_ok, bool
 											  isPostprocess);
+extern void UnmarkDistObjectsOnAllNodes(Node *parseTree);
 
 /* index.c */
 typedef void (*PGIndexProcessor)(Form_pg_index, List **, int);
@@ -233,6 +234,8 @@ extern List * PreprocessAlterDatabaseRefreshCollStmt(Node *node, const char *que
 extern List * CreateDatabaseStmtObjectAddress(Node *node, bool missing_ok, bool
 											  isPostprocess);
 
+extern List * DropDatabaseStmtObjectAddress(Node *node, bool missing_ok, bool
+											isPostprocess);
 
 extern List * PreprocessAlterDatabaseSetStmt(Node *node, const char *queryString,
 											 ProcessUtilityContext processUtilityContext);

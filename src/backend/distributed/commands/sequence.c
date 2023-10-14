@@ -322,7 +322,7 @@ PreprocessDropSequenceStmt(Node *node, const char *queryString,
 	ObjectAddress *address = NULL;
 	foreach_ptr(address, distributedSequenceAddresses)
 	{
-		UnmarkObjectDistributed(address);
+		UnmarkObjectDistributedLocally(address);
 	}
 
 	/*

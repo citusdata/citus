@@ -131,10 +131,10 @@ WorkerDropDistributedTable(Oid relationId)
 	{
 		ObjectAddress ownedSequenceAddress = { 0 };
 		ObjectAddressSet(ownedSequenceAddress, RelationRelationId, ownedSequenceOid);
-		UnmarkObjectDistributed(&ownedSequenceAddress);
+		UnmarkObjectDistributedLocally(&ownedSequenceAddress);
 	}
 
-	UnmarkObjectDistributed(distributedTableObject);
+	UnmarkObjectDistributedLocally(distributedTableObject);
 
 	/*
 	 * Remove metadata before object's itself to make functions no-op within
@@ -243,7 +243,7 @@ worker_drop_shell_table(PG_FUNCTION_ARGS)
 	{
 		ObjectAddress ownedSequenceAddress = { 0 };
 		ObjectAddressSet(ownedSequenceAddress, RelationRelationId, ownedSequenceOid);
-		UnmarkObjectDistributed(&ownedSequenceAddress);
+		UnmarkObjectDistributedLocally(&ownedSequenceAddress);
 	}
 
 	/*

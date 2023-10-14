@@ -1080,7 +1080,7 @@ UnmarkRolesDistributed(List *roles)
 		}
 
 		ObjectAddressSet(roleAddress, AuthIdRelationId, roleOid);
-		UnmarkObjectDistributed(&roleAddress);
+		UnmarkObjectDistributedLocally(&roleAddress);
 	}
 }
 

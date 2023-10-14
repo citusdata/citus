@@ -93,7 +93,7 @@ citus_unmark_object_distributed(PG_FUNCTION_ARGS)
 						errhint("drop the object via a DROP command")));
 	}
 
-	UnmarkObjectDistributed(&address);
+	UnmarkObjectDistributedLocally(&address);
 
 	PG_RETURN_VOID();
 }
@@ -361,8 +361,11 @@ ExecuteCommandAsSuperuser(char *query, int paramCount, Oid *paramTypes,
  * distributed. This will prevent updates to that object to be propagated to the worker.
  */
 void
-UnmarkObjectDistributed(const ObjectAddress *address)
+UnmarkObjectDistributedLocally(const ObjectAddress *address)
 {
+	elog(WARNING,
+		 "Test UnmarkObjectDistributedLocally %d %d %d", address->classId,
+		 address->objectId, address->objectSubId);
 	int paramCount = 3;
 	Oid paramTypes[3] = {
 		OIDOID,
@@ -384,6 +387,26 @@ UnmarkObjectDistributed(const ObjectAddress *address)
 	{
 		ereport(ERROR, (errmsg("failed to delete object from citus.pg_dist_object")));
 	}
+}
+
+
+void
+UnmarkObjectDistributed(const ObjectAddress *address)
+{
+	UnmarkObjectDistributedLocally(address);
+
+	/* TODO Some post operations are needed in my opinion like MarkObjectDistributed
+	 * Below is the code from MarkObjectDistributed
+	 *
+	 * if (EnableMetadataSync)
+	 * {
+	 *  //I need to change below command IMO but I'm not sure
+	 *  char *workerPgDistObjectUpdateCommand =
+	 *      CreatePgDistObjectEntryCommand(distAddress);
+	 *  SendCommandToWorkersWithMetadata(workerPgDistObjectUpdateCommand);
+	 * }
+	 *
+	 */
 }
 
 

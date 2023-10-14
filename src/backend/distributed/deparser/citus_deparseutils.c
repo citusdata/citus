@@ -31,35 +31,49 @@ optionToStatement(StringInfo buf, DefElem *option, const struct
 	{
 		if (strcmp(name, opt_formats[i].name) == 0)
 		{
-			switch (opt_formats[i].type) {
-				case OPTION_FORMAT_STRING: {
+			switch (opt_formats[i].type)
+			{
+				case OPTION_FORMAT_STRING:
+				{
 					char *value = defGetString(option);
 					appendStringInfo(buf, opt_formats[i].format, quote_identifier(value));
 					break;
 				}
-				case OPTION_FORMAT_INTEGER: {
+
+				case OPTION_FORMAT_INTEGER:
+				{
 					int32 value = defGetInt32(option);
 					appendStringInfo(buf, opt_formats[i].format, value);
 					break;
 				}
-				case OPTION_FORMAT_BOOLEAN: {
+
+				case OPTION_FORMAT_BOOLEAN:
+				{
 					bool value = defGetBoolean(option);
-					appendStringInfo(buf, opt_formats[i].format, value ? "true" : "false");
+					appendStringInfo(buf, opt_formats[i].format, value ? "true" :
+									 "false");
 					break;
 				}
+
 			#if PG_VERSION_NUM >= PG_VERSION_15
-				case OPTION_FORMAT_OBJECT_ID: {
+				case OPTION_FORMAT_OBJECT_ID:
+				{
 					Oid value = defGetObjectId(option);
 					appendStringInfo(buf, opt_formats[i].format, value);
 					break;
 				}
+
 			#endif
-				case OPTION_FORMAT_LITERAL_CSTR: {
+				case OPTION_FORMAT_LITERAL_CSTR:
+				{
 					char *value = defGetString(option);
-					appendStringInfo(buf, opt_formats[i].format, quote_literal_cstr(value));
+					appendStringInfo(buf, opt_formats[i].format, quote_literal_cstr(
+										 value));
 					break;
 				}
-				default: {
+
+				default:
+				{
 					elog(ERROR, "unrecognized option type: %d", opt_formats[i].type);
 					break;
 				}

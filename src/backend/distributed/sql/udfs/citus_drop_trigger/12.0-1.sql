@@ -49,6 +49,10 @@ BEGIN
 
         -- remove entries from citus.pg_dist_object for all dropped root (objsubid = 0) objects
         PERFORM master_unmark_object_distributed(v_obj.classid, v_obj.objid, v_obj.objsubid);
+
+        --add a test log
+        RAISE WARNING 'Dropped object for test: %', v_obj.object_name;
+
     END LOOP;
 
     SELECT COUNT(*) INTO constraint_event_count

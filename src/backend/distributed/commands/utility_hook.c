@@ -225,18 +225,18 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 	 * Make sure that on DROP DATABASE we terminate the background daemon
 	 * associated with it.
 	 */
-	if (IsA(parsetree, DropdbStmt))
-	{
-		const bool missingOK = true;
-		DropdbStmt *dropDbStatement = (DropdbStmt *) parsetree;
-		char *dbname = dropDbStatement->dbname;
-		Oid databaseOid = get_database_oid(dbname, missingOK);
+	/* if (IsA(parsetree, DropdbStmt)) */
+	/* { */
+	/* 	const bool missingOK = true; */
+	/* 	DropdbStmt *dropDbStatement = (DropdbStmt *) parsetree; */
+	/* 	char *dbname = dropDbStatement->dbname; */
+	/* 	Oid databaseOid = get_database_oid(dbname, missingOK); */
 
-		if (OidIsValid(databaseOid))
-		{
-			StopMaintenanceDaemon(databaseOid);
-		}
-	}
+	/* 	if (OidIsValid(databaseOid)) */
+	/* 	{ */
+	/* 		StopMaintenanceDaemon(databaseOid); */
+	/* 	} */
+	/* } */
 
 	if (!CitusHasBeenLoaded())
 	{
@@ -740,6 +740,7 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 			UnmarkRolesDistributed(distributedDropRoles);
 		}
 	}
+
 
 	pstmt->utilityStmt = parsetree;
 
