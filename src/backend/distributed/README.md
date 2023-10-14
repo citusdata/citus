@@ -1734,7 +1734,7 @@ DDL commands are primarily handled via the citus_ProcessUtility hook, which gets
 Either the pre-process or post-process step generates a "Distributed DDL Job", which contains a task list to run in steps 4 & 5 (via adaptive executor).
 
 
-> :warning: If both pre-process and post-process generate a job, then only the post-process job is executed. The pre-process job is ignored.
+> :warning: If both pre-process and post-process returns a task list, only the post-process job is executed. The pre-process job is ignored.
 
 In general pre-process should:
 
