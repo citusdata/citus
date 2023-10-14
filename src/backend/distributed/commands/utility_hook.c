@@ -225,6 +225,7 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 	 * Make sure that on DROP DATABASE we terminate the background daemon
 	 * associated with it.
 	 */
+
 	/* if (IsA(parsetree, DropdbStmt)) */
 	/* { */
 	/* 	const bool missingOK = true; */

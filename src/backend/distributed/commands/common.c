@@ -278,6 +278,7 @@ PreprocessDropDistributedObjectStmt(Node *node, const char *queryString,
 	/*
 	 * remove the entries for the distributed objects on dropping
 	 */
+
 	/* ObjectAddress *address = NULL; */
 	/* foreach_ptr(address, distributedObjectAddresses) */
 	/* { */
