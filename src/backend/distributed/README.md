@@ -1768,20 +1768,25 @@ static DistributeObjectOps Database_Alter = {
 	.markDistributed = false,
 };
 ```
-Details about each field in the struct is defined in DistributeObjectOps comments. When defining a new DDL command, you should be careful about below rules:
-* Either `preprocess` or `postprocess` should be defined. If both are defined, only `postprocess` will be executed.
-* `deparse` should be defined if we want to propagate the command to worker nodes since we need to generate a query string for each worker node.
-* `markDistributed` should be set to true if we want to add a record to `pg_dist_object` table. It is viable to set this command especially for CREATE statements since the object is newly introduced to the system.
-* If ``markDistriubted`` is set to true, ``address`` should be defined. Otherwise, there will be a runtime error.Address is required to identify the fileds that will be stored in ``pg_dist_object`` table.
-* For ``DROP`` statements, ``markDistributed`` does not work. Therefore, below block should be called manually.Otherwise, stale records will be kept in ``pg_dist_object`` table, which will cause issues such as in citus_add_node UDF call in the future.
+
+Each field in the struct is documented in the comments within the `DistributeObjectOps`. When defining a new Data Definition Language (DDL) command, follow these guidelines:
+
+- **Returning tasks for `preprocess` and `postprocess`**: Ensure that either `preprocess` or `postprocess` returns a `NodeDDLTask`. If both are defined, only the tasks returned in the `postprocess` will be executed.
+
+- **`deparse`**: When propagating the command to worker nodes, make sure to define `deparse`. This is necessary because it generates a query string for each worker node.
+
+- **`markDistributed`**: Set this flag to true if you want to add a record to the `pg_dist_object` table. This is particularly important for `CREATE` statements when introducing a new object to the system.
+
+- **`address`**: If `markDistributed` is set to true, you must define the `address`. Failure to do so will result in a runtime error. The `address` is required to identify the fields that will be stored in the `pg_dist_object` table.
+
+- **`markDistributed` usage in `DROP` Statements**: Please note that `markDistributed` does not apply to `DROP` statements. In such cases, the following block should be called manually. Neglecting this step can lead to stale records in the `pg_dist_object` table, potentially causing issues, such as with the `citus_add_node` User-Defined Function (UDF) call in the future.
+
+- **`qualify`**: The `qualify` function is used to qualify the table names in the parse tree. It is employed to prevent sensitivity to changes in the search_path. Note that it is not mandatory to define this function for all DDL commands. It is only required for commands that involve table names in the parse tree.
+
+After defining the `DistributeObjectOps` structure, this structure should be implemented in the `GetDistributeObjectOps` function as shown below:
 
 ```c
-UnmarkObjectDistributed(&objectAddress);
-```
-* ``qualify`` is used to qualify the table names in the parse tree. It is used to avoid sensitivity to search_path changes. It is not required to define this function for all DDL commands. It is only required for commands that have table names in the parse tree.
-* After defining the DistributeObjectOps structure, this structure should be defined in ``GetDistributeObjectOps`` function as below:
-
-```c
+// Example implementation in C code
 const DistributeObjectOps *
 GetDistributeObjectOps(Node *node)
 {
@@ -1793,6 +1798,7 @@ GetDistributeObjectOps(Node *node)
 		}
 ...
 .
+
 ```
 
 ## Object & dependency propagation
