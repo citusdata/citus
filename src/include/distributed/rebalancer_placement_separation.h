@@ -26,9 +26,6 @@ extern RebalancerPlacementSeparationContext * PrepareRebalancerPlacementSeparati
 	List
 	*
 	activeShardPlacementList,
-	WorkerNode
-	*
-	drainWorkerNode,
 	FmgrInfo
 	*
 	shardAllowedOnNodeUDF);

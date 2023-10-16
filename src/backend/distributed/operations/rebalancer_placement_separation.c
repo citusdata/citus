@@ -99,7 +99,6 @@ static int WorkerNodeListGetNodeWithGroupId(List *workerNodeList, int32 nodeGrou
 RebalancerPlacementSeparationContext *
 PrepareRebalancerPlacementSeparationContext(List *activeWorkerNodeList,
 											List *rebalancePlacementList,
-											WorkerNode *drainWorkerNode,
 											FmgrInfo *shardAllowedOnNodeUDF)
 {
 	HTAB *nodePlacementGroupHash =
@@ -115,7 +114,7 @@ PrepareRebalancerPlacementSeparationContext(List *activeWorkerNodeList,
 	rebalancePlacementList = SortList(rebalancePlacementList, CompareShardPlacements);
 
 	InitRebalancerPlacementSeparationContext(context, activeWorkerNodeList,
-											 rebalancePlacementList, drainWorkerNode);
+											 rebalancePlacementList);
 
 	TryAssignPlacementGroupsToNodeGroups(context,
 										 activeWorkerNodeList,
