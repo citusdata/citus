@@ -54,9 +54,20 @@ typedef struct NodeToPlacementGroupHashEntry
 	bool shouldHaveShards;
 
 	/*
-	 * Whether given node is allowed to separate any shardgroup placements.
+	 * Whether given node has some shard placements that cannot be moved away.
+	 *
+	 * For the nodes that this rebalancer-run is not allowed to move the
+	 * placements away from, InitRebalancerPlacementSeparationContext() sets
+	 * this to true if the node has some shard placements already. And if the
+	 * node has a single shard placement group that needs a separate node, it
+	 * also sets assignedPlacementGroup.
+	 *
+	 * We do so to prevent TryAssignPlacementGroupsToNodeGroups() making
+	 * incorrect assignments later on.
+	 *
+	 * See InitRebalancerPlacementSeparationContext() for more details.
 	 */
-	bool allowedToSeparateAnyPlacementGroup;
+	bool hasPlacementsThatCannotBeMovedAway;
 
 	/*
 	 * Shardgroup placement that is assigned to this node to be separated
@@ -150,8 +161,7 @@ InitRebalancerPlacementSeparationContext(RebalancerPlacementSeparationContext *c
 
 		nodePlacementGroupHashEntry->shouldHaveShards =
 			workerNode->shouldHaveShards;
-		nodePlacementGroupHashEntry->allowedToSeparateAnyPlacementGroup =
-			workerNode->shouldHaveShards;
+		nodePlacementGroupHashEntry->hasPlacementsThatCannotBeMovedAway = false;
 		nodePlacementGroupHashEntry->assignedPlacementGroup = NULL;
 
 		/*
@@ -168,8 +178,8 @@ InitRebalancerPlacementSeparationContext(RebalancerPlacementSeparationContext *c
 		 * For this reason, below we find out the assigned placement groups for
 		 * nodes of type S because we want to avoid from moving the placements
 		 * (if any) from a node of type D to a node that is used to separate a
-		 * placement group within S. We also set allowedToSeparateAnyPlacementGroup
-		 * to false for the nodes that already have some shard placements within S
+		 * placement group within S. We also set hasPlacementsThatCannotBeMovedAway
+		 * to true for the nodes that already have some shard placements within S
 		 * because we want to avoid from moving the placements that need a separate
 		 * node (if any) from node D to node S.
 		 *
@@ -191,20 +201,12 @@ InitRebalancerPlacementSeparationContext(RebalancerPlacementSeparationContext *c
 			continue;
 		}
 
-		ShardgroupPlacement *separatedShardgroupPlacement =
+		nodePlacementGroupHashEntry->hasPlacementsThatCannotBeMovedAway =
+			NodeGroupHasDistributedTableShardPlacements(
+				nodePlacementGroupHashEntry->nodeGroupId);
+		nodePlacementGroupHashEntry->assignedPlacementGroup =
 			NodeGroupGetSeparatedShardgroupPlacement(
 				nodePlacementGroupHashEntry->nodeGroupId);
-		if (separatedShardgroupPlacement)
-		{
-			nodePlacementGroupHashEntry->assignedPlacementGroup =
-				separatedShardgroupPlacement;
-		}
-		else
-		{
-			nodePlacementGroupHashEntry->allowedToSeparateAnyPlacementGroup =
-				!NodeGroupHasDistributedTableShardPlacements(
-					nodePlacementGroupHashEntry->nodeGroupId);
-		}
 	}
 }
 
@@ -331,7 +333,7 @@ TryAssignPlacementGroupToNodeGroup(RebalancerPlacementSeparationContext *context
 		return false;
 	}
 
-	if (!nodePlacementGroupHashEntry->allowedToSeparateAnyPlacementGroup)
+	if (nodePlacementGroupHashEntry->hasPlacementsThatCannotBeMovedAway)
 	{
 		return false;
 	}
