@@ -201,6 +201,7 @@ InitRebalancerPlacementSeparationContext(RebalancerPlacementSeparationContext *c
 			continue;
 		}
 
+		/* node is of type S */
 		nodePlacementGroupHashEntry->hasPlacementsThatCannotBeMovedAway =
 			NodeGroupHasDistributedTableShardPlacements(
 				nodePlacementGroupHashEntry->nodeGroupId);
