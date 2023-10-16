@@ -341,7 +341,6 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 
 	if (databaseOid == 0)
 	{
-		/* TODO : Get the admin database name from GUC contro_db*/
 		char *databaseName = ControlDbName;
 
 		BackgroundWorkerInitializeConnection(databaseName, NULL, 0);

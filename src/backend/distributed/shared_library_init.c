@@ -1029,7 +1029,7 @@ RegisterCitusConfigVariables(void)
 		NULL,
 		&ControlDbName,
 		"",
-		PGC_SU_BACKEND,
+		PGC_POSTMASTER,
 		GUC_STANDARD,
 		NULL, NULL, NULL);
 
