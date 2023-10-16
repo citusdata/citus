@@ -1,6 +1,6 @@
 /*-------------------------------------------------------------------------
  *
- * rebalancer_placement_isolation.c
+ * rebalancer_placement_separation.c
  *	  Routines to determine which worker node should be used to separate
  *	  a colocated set of shard placements that need separate nodes.
  *
@@ -10,6 +10,7 @@
  */
 
 #include "postgres.h"
+
 #include "nodes/pg_list.h"
 #include "utils/hsearch.h"
 #include "utils/lsyscache.h"
@@ -20,12 +21,17 @@
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata_utility.h"
 #include "distributed/multi_physical_planner.h"
-#include "distributed/rebalancer_placement_isolation.h"
+#include "distributed/rebalancer_placement_separation.h"
 #include "distributed/shard_rebalancer.h"
 
 
-struct RebalancerPlacementIsolationContext
+struct RebalancerPlacementSeparationContext
 {
+	/*
+	 * Hash table where each entry is of the form NodeToPlacementGroupHashEntry,
+	 * meaning that each entry maps the node with nodeGroupId to
+	 * a NodeToPlacementGroupHashEntry.
+	 */
 	HTAB *nodePlacementGroupHash;
 };
 
@@ -35,7 +41,7 @@ struct RebalancerPlacementIsolationContext
  * placement group that is determined to be separated from other shards in
  * the cluster via that node.
  */
-typedef struct
+typedef struct NodeToPlacementGroupHashEntry
 {
 	/* hash key -- group id of the node */
 	int32 nodeGroupId;
@@ -49,39 +55,37 @@ typedef struct
 	bool shouldHaveShards;
 
 	/*
-	 * Whether given node is allowed to separate any shard placement groups.
+	 * Whether given node is allowed to separate any shardgroup placements.
 	 */
 	bool allowedToSeparateAnyPlacementGroup;
 
 	/*
-	 * Shard placement group that is assigned to this node to be separated
+	 * Shardgroup placement that is assigned to this node to be separated
 	 * from others in the cluster.
 	 *
-	 * NULL if no shard placement group is assigned yet.
+	 * NULL if no shardgroup placement is assigned yet.
 	 */
-	ShardPlacementGroup *assignedPlacementGroup;
+	ShardgroupPlacement *assignedPlacementGroup;
 } NodeToPlacementGroupHashEntry;
 
 /*
- * Routines to prepare a hash table where each entry is of type
- * NodeToPlacementGroupHashEntry.
+ * Routines to prepare RebalancerPlacementSeparationContext.
  */
-static void NodeToPlacementGroupHashInit(HTAB *nodePlacementGroupHash,
-										 List *activeWorkerNodeList,
-										 List *rebalancePlacementList,
-										 WorkerNode *drainWorkerNode);
-static void NodeToPlacementGroupHashAssignNodes(HTAB *nodePlacementGroupHash,
-												List *activeWorkerNodeList,
-												List *rebalancePlacementList,
-												FmgrInfo *shardAllowedOnNodeUDF);
-static bool NodeToPlacementGroupHashAssignNode(HTAB *nodePlacementGroupHash,
-											   int32 nodeGroupId,
-											   ShardPlacement *shardPlacement,
-											   FmgrInfo *shardAllowedOnNodeUDF);
-static NodeToPlacementGroupHashEntry * NodeToPlacementGroupHashGetNodeWithGroupId(
-	HTAB *nodePlacementGroupHash,
-	int32
-	nodeGroupId);
+static void InitRebalancerPlacementSeparationContext(
+	RebalancerPlacementSeparationContext *context,
+	List *activeWorkerNodeList,
+	List *rebalancePlacementList,
+	WorkerNode *drainWorkerNode);
+static void TryAssignPlacementGroupsToNodeGroups(
+	RebalancerPlacementSeparationContext *context,
+	List *activeWorkerNodeList,
+	List *rebalancePlacementList,
+	FmgrInfo *shardAllowedOnNodeUDF);
+static bool TryAssignPlacementGroupToNodeGroup(
+	RebalancerPlacementSeparationContext *context,
+	int32 candidateNodeGroupId,
+	ShardPlacement *shardPlacement,
+	FmgrInfo *shardAllowedOnNodeUDF);
 
 
 /* other helpers */
@@ -90,49 +94,54 @@ static int WorkerNodeListGetNodeWithGroupId(List *workerNodeList, int32 nodeGrou
 
 
 /*
- * PrepareRebalancerPlacementIsolationContext creates RebalancerPlacementIsolationContext
- * that keeps track of which worker nodes are used to separate which shard placement groups
+ * PrepareRebalancerPlacementSeparationContext creates RebalancerPlacementSeparationContext
+ * that keeps track of which worker nodes are used to separate which shardgroup placements
  * that need separate nodes.
  */
-RebalancerPlacementIsolationContext *
-PrepareRebalancerPlacementIsolationContext(List *activeWorkerNodeList,
-										   List *rebalancePlacementList,
-										   WorkerNode *drainWorkerNode,
-										   FmgrInfo *shardAllowedOnNodeUDF)
+RebalancerPlacementSeparationContext *
+PrepareRebalancerPlacementSeparationContext(List *activeWorkerNodeList,
+											List *rebalancePlacementList,
+											WorkerNode *drainWorkerNode,
+											FmgrInfo *shardAllowedOnNodeUDF)
 {
 	HTAB *nodePlacementGroupHash =
 		CreateSimpleHashWithNameAndSize(uint32, NodeToPlacementGroupHashEntry,
 										"NodeToPlacementGroupHash",
 										list_length(activeWorkerNodeList));
 
+	RebalancerPlacementSeparationContext *context =
+		palloc(sizeof(RebalancerPlacementSeparationContext));
+	context->nodePlacementGroupHash = nodePlacementGroupHash;
+
 	activeWorkerNodeList = SortList(activeWorkerNodeList, CompareWorkerNodes);
 	rebalancePlacementList = SortList(rebalancePlacementList, CompareShardPlacements);
 
-	NodeToPlacementGroupHashInit(nodePlacementGroupHash, activeWorkerNodeList,
-								 rebalancePlacementList, drainWorkerNode);
+	InitRebalancerPlacementSeparationContext(context, activeWorkerNodeList,
+											 rebalancePlacementList, drainWorkerNode);
 
-	NodeToPlacementGroupHashAssignNodes(nodePlacementGroupHash,
-										activeWorkerNodeList,
-										rebalancePlacementList,
-										shardAllowedOnNodeUDF);
-
-	RebalancerPlacementIsolationContext *context =
-		palloc(sizeof(RebalancerPlacementIsolationContext));
-	context->nodePlacementGroupHash = nodePlacementGroupHash;
+	TryAssignPlacementGroupsToNodeGroups(context,
+										 activeWorkerNodeList,
+										 rebalancePlacementList,
+										 shardAllowedOnNodeUDF);
 
 	return context;
 }
 
 
 /*
- * NodeToPlacementGroupHashInit initializes given hash table where each
- * entry is of type NodeToPlacementGroupHashEntry by using given list
- * of worker nodes and the worker node that is being drained, if specified.
+ * InitRebalancerPlacementSeparationContext initializes given
+ * RebalancerPlacementSeparationContext by using given list
+ * of worker nodes and the worker node that is being drained,
+ * if specified.
  */
 static void
-NodeToPlacementGroupHashInit(HTAB *nodePlacementGroupHash, List *activeWorkerNodeList,
-							 List *rebalancePlacementList, WorkerNode *drainWorkerNode)
+InitRebalancerPlacementSeparationContext(RebalancerPlacementSeparationContext *context,
+										 List *activeWorkerNodeList,
+										 List *rebalancePlacementList,
+										 WorkerNode *drainWorkerNode)
 {
+	HTAB *nodePlacementGroupHash = context->nodePlacementGroupHash;
+
 	List *placementListUniqueNodeGroupIds =
 		PlacementListGetUniqueNodeGroupIds(rebalancePlacementList);
 
@@ -142,8 +151,6 @@ NodeToPlacementGroupHashInit(HTAB *nodePlacementGroupHash, List *activeWorkerNod
 		NodeToPlacementGroupHashEntry *nodePlacementGroupHashEntry =
 			hash_search(nodePlacementGroupHash, &workerNode->groupId, HASH_ENTER,
 						NULL);
-
-		nodePlacementGroupHashEntry->nodeGroupId = workerNode->groupId;
 
 		bool shouldHaveShards = workerNode->shouldHaveShards;
 		if (drainWorkerNode && drainWorkerNode->groupId == workerNode->groupId)
@@ -183,59 +190,49 @@ NodeToPlacementGroupHashInit(HTAB *nodePlacementGroupHash, List *activeWorkerNod
 
 		if (!shouldHaveShards)
 		{
-			/* we can't assing any shard placement groups to the node anyway */
+			/* we can't assing any shardgroup placements to the node anyway */
 			continue;
 		}
 
-		if (list_length(placementListUniqueNodeGroupIds) == list_length(
-				activeWorkerNodeList))
-		{
-			/*
-			 * list_member_oid() check would return true for all placements then.
-			 * This means that all the nodes are of type D.
-			 */
-			Assert(list_member_oid(placementListUniqueNodeGroupIds, workerNode->groupId));
-			continue;
-		}
-
-		if (list_member_oid(placementListUniqueNodeGroupIds, workerNode->groupId))
+		if (list_member_int(placementListUniqueNodeGroupIds, workerNode->groupId))
 		{
 			/* node is of type D */
 			continue;
 		}
 
-		ShardPlacementGroup *separatedShardPlacementGroup =
-			NodeGroupGetSeparatedShardPlacementGroup(
+		ShardgroupPlacement *separatedShardgroupPlacement =
+			NodeGroupGetSeparatedShardgroupPlacement(
 				nodePlacementGroupHashEntry->nodeGroupId);
-		if (separatedShardPlacementGroup)
+		if (separatedShardgroupPlacement)
 		{
 			nodePlacementGroupHashEntry->assignedPlacementGroup =
-				separatedShardPlacementGroup;
+				separatedShardgroupPlacement;
 		}
 		else
 		{
 			nodePlacementGroupHashEntry->allowedToSeparateAnyPlacementGroup =
-				!NodeGroupHasShardPlacements(nodePlacementGroupHashEntry->nodeGroupId);
+				!NodeGroupHasDistributedTableShardPlacements(
+					nodePlacementGroupHashEntry->nodeGroupId);
 		}
 	}
 }
 
 
 /*
- * NodeToPlacementGroupHashAssignNodes assigns all active shard placements in
- * the cluster that need separate nodes to individual worker nodes.
+ * TryAssignPlacementGroupsToNodeGroups tries to assign placements that need
+ * separate nodes within given placement list to individual worker nodes.
  */
 static void
-NodeToPlacementGroupHashAssignNodes(HTAB *nodePlacementGroupHash,
-									List *activeWorkerNodeList,
-									List *rebalancePlacementList,
-									FmgrInfo *shardAllowedOnNodeUDF)
+TryAssignPlacementGroupsToNodeGroups(RebalancerPlacementSeparationContext *context,
+									 List *activeWorkerNodeList,
+									 List *rebalancePlacementList,
+									 FmgrInfo *shardAllowedOnNodeUDF)
 {
 	List *availableWorkerList = list_copy(activeWorkerNodeList);
 	List *unassignedPlacementList = NIL;
 
 	/*
-	 * Assign as much as possible shard placement groups to worker nodes where
+	 * Assign as much as possible shardgroup placements to worker nodes where
 	 * they are stored already.
 	 */
 	ShardPlacement *shardPlacement = NULL;
@@ -247,20 +244,20 @@ NodeToPlacementGroupHashAssignNodes(HTAB *nodePlacementGroupHash,
 			continue;
 		}
 
-		int32 shardPlacementGroupId = shardPlacement->groupId;
-		if (NodeToPlacementGroupHashAssignNode(nodePlacementGroupHash,
-											   shardPlacementGroupId,
+		int32 currentNodeGroupId = shardPlacement->groupId;
+		if (TryAssignPlacementGroupToNodeGroup(context,
+											   currentNodeGroupId,
 											   shardPlacement,
 											   shardAllowedOnNodeUDF))
 		{
 			/*
-			 * NodeToPlacementGroupHashAssignNode() succeeds for each worker node
+			 * TryAssignPlacementGroupToNodeGroup() succeeds for each worker node
 			 * once, hence we must not have removed the worker node from the list
 			 * yet, and WorkerNodeListGetNodeWithGroupId() ensures that already.
 			 */
 			int currentPlacementNodeIdx =
 				WorkerNodeListGetNodeWithGroupId(availableWorkerList,
-												 shardPlacementGroupId);
+												 currentNodeGroupId);
 			availableWorkerList = list_delete_nth_cell(availableWorkerList,
 													   currentPlacementNodeIdx);
 		}
@@ -274,7 +271,7 @@ NodeToPlacementGroupHashAssignNodes(HTAB *nodePlacementGroupHash,
 	bool emitWarning = false;
 
 	/*
-	 * For the shard placement groups that could not be assigned to their
+	 * For the shardgroup placements that could not be assigned to their
 	 * current node, assign them to any other node that is available.
 	 */
 	ShardPlacement *unassignedShardPlacement = NULL;
@@ -285,7 +282,7 @@ NodeToPlacementGroupHashAssignNodes(HTAB *nodePlacementGroupHash,
 		WorkerNode *availableWorkerNode = NULL;
 		foreach_ptr(availableWorkerNode, availableWorkerList)
 		{
-			if (NodeToPlacementGroupHashAssignNode(nodePlacementGroupHash,
+			if (TryAssignPlacementGroupToNodeGroup(context,
 												   availableWorkerNode->groupId,
 												   unassignedShardPlacement,
 												   shardAllowedOnNodeUDF))
@@ -310,24 +307,32 @@ NodeToPlacementGroupHashAssignNodes(HTAB *nodePlacementGroupHash,
 
 
 /*
- * NodeToPlacementGroupHashAssignNode is an helper to
- * NodeToPlacementGroupHashAssignNodes that tries to assign given
+ * TryAssignPlacementGroupToNodeGroup is an helper to
+ * TryAssignPlacementGroupsToNodeGroups that tries to assign given
  * shard placement to given node and returns true if it succeeds.
  */
 static bool
-NodeToPlacementGroupHashAssignNode(HTAB *nodePlacementGroupHash,
-								   int32 nodeGroupId,
+TryAssignPlacementGroupToNodeGroup(RebalancerPlacementSeparationContext *context,
+								   int32 candidateNodeGroupId,
 								   ShardPlacement *shardPlacement,
 								   FmgrInfo *shardAllowedOnNodeUDF)
 {
+	HTAB *nodePlacementGroupHash = context->nodePlacementGroupHash;
+
+	bool found = false;
 	NodeToPlacementGroupHashEntry *nodePlacementGroupHashEntry =
-		NodeToPlacementGroupHashGetNodeWithGroupId(nodePlacementGroupHash, nodeGroupId);
+		hash_search(nodePlacementGroupHash, &candidateNodeGroupId, HASH_FIND, &found);
+
+	if (!found)
+	{
+		ereport(ERROR, (errmsg("no such node is found")));
+	}
 
 	if (nodePlacementGroupHashEntry->assignedPlacementGroup)
 	{
 		/*
 		 * Right now callers of this function call it once for each distinct
-		 * shard placement group, hence we assume that shard placement group
+		 * shardgroup placement, hence we assume that shardgroup placement
 		 * that given shard placement belongs to and
 		 * nodePlacementGroupHashEntry->assignedPlacementGroup cannot be the
 		 * same, without checking.
@@ -345,7 +350,7 @@ NodeToPlacementGroupHashAssignNode(HTAB *nodePlacementGroupHash,
 		return false;
 	}
 
-	WorkerNode *workerNode = PrimaryNodeForGroup(nodeGroupId, NULL);
+	WorkerNode *workerNode = PrimaryNodeForGroup(candidateNodeGroupId, NULL);
 	Datum allowed = FunctionCall2(shardAllowedOnNodeUDF, shardPlacement->shardId,
 								  workerNode->nodeId);
 	if (!DatumGetBool(allowed))
@@ -354,7 +359,7 @@ NodeToPlacementGroupHashAssignNode(HTAB *nodePlacementGroupHash,
 	}
 
 	nodePlacementGroupHashEntry->assignedPlacementGroup =
-		GetShardPlacementGroupForPlacement(shardPlacement->shardId,
+		GetShardgroupPlacementForPlacement(shardPlacement->shardId,
 										   shardPlacement->placementId);
 
 	return true;
@@ -362,28 +367,34 @@ NodeToPlacementGroupHashAssignNode(HTAB *nodePlacementGroupHash,
 
 
 /*
- * RebalancerPlacementIsolationContextPlacementIsAllowedOnWorker returns true
+ * RebalancerPlacementSeparationContextPlacementIsAllowedOnWorker returns true
  * if shard placement with given shardId & placementId is allowed to be stored
  * on given worker node.
  */
 bool
-RebalancerPlacementIsolationContextPlacementIsAllowedOnWorker(
-	RebalancerPlacementIsolationContext *context,
+RebalancerPlacementSeparationContextPlacementIsAllowedOnWorker(
+	RebalancerPlacementSeparationContext *context,
 	uint64 shardId,
 	uint64 placementId,
 	WorkerNode *workerNode)
 {
 	HTAB *nodePlacementGroupHash = context->nodePlacementGroupHash;
+
+	bool found = false;
 	NodeToPlacementGroupHashEntry *nodePlacementGroupHashEntry =
-		NodeToPlacementGroupHashGetNodeWithGroupId(nodePlacementGroupHash,
-												   workerNode->groupId);
+		hash_search(nodePlacementGroupHash, &(workerNode->groupId), HASH_FIND, &found);
+
+	if (!found)
+	{
+		ereport(ERROR, (errmsg("no such node is found")));
+	}
 
 	ShardInterval *shardInterval = LoadShardInterval(shardId);
 	if (!shardInterval->needsSeparateNode)
 	{
 		/*
 		 * It doesn't need a separate node, but is the node used to separate
-		 * a shard placement group? If so, we cannot store it on this node.
+		 * a shardgroup placement? If so, we cannot store it on this node.
 		 */
 		return nodePlacementGroupHashEntry->shouldHaveShards &&
 			   nodePlacementGroupHashEntry->assignedPlacementGroup == NULL;
@@ -399,32 +410,10 @@ RebalancerPlacementIsolationContextPlacementIsAllowedOnWorker(
 		return false;
 	}
 
-	ShardPlacementGroup *placementGroup =
-		GetShardPlacementGroupForPlacement(shardId, placementId);
-	return ShardPlacementGroupsSame(nodePlacementGroupHashEntry->assignedPlacementGroup,
+	ShardgroupPlacement *placementGroup =
+		GetShardgroupPlacementForPlacement(shardId, placementId);
+	return ShardgroupPlacementsSame(nodePlacementGroupHashEntry->assignedPlacementGroup,
 									placementGroup);
-}
-
-
-/*
- * NodeToPlacementGroupHashGetNodeWithGroupId searches given hash table for
- * NodeToPlacementGroupHashEntry with given node id and returns it.
- *
- * Throws an error if no such entry is found.
- */
-static NodeToPlacementGroupHashEntry *
-NodeToPlacementGroupHashGetNodeWithGroupId(HTAB *nodePlacementGroupHash,
-										   int32 nodeGroupId)
-{
-	NodeToPlacementGroupHashEntry *nodePlacementGroupHashEntry =
-		hash_search(nodePlacementGroupHash, &nodeGroupId, HASH_FIND, NULL);
-
-	if (nodePlacementGroupHashEntry == NULL)
-	{
-		ereport(ERROR, (errmsg("no such node is found")));
-	}
-
-	return nodePlacementGroupHashEntry;
 }
 
 
@@ -441,7 +430,7 @@ PlacementListGetUniqueNodeGroupIds(List *placementList)
 	foreach_ptr(shardPlacement, placementList)
 	{
 		placementListUniqueNodeGroupIds =
-			list_append_unique_oid(placementListUniqueNodeGroupIds,
+			list_append_unique_int(placementListUniqueNodeGroupIds,
 								   shardPlacement->groupId);
 	}
 

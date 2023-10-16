@@ -78,7 +78,7 @@ extern List * ReferenceTablePlacementNodeList(LOCKMODE lockMode);
 extern WorkerNode * CoordinatorNodeIfAddedAsWorkerOrError(void);
 extern void ErrorIfCoordinatorNotAddedAsWorkerNode(void);
 extern List * NewDistributedTablePlacementNodeList(LOCKMODE lockMode);
-extern bool NodeCanBeUsedForNonIsolatedPlacements(WorkerNode *node);
+extern bool NodeCanBeUsedForNonSeparatedPlacements(WorkerNode *node);
 extern List * ActiveReadableNonCoordinatorNodeList(void);
 extern List * ActiveReadableNodeList(void);
 extern WorkerNode * FindWorkerNode(const char *nodeName, int32 nodePort);

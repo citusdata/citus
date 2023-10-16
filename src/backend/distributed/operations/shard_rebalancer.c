@@ -44,7 +44,7 @@
 #include "distributed/pg_dist_rebalance_strategy.h"
 #include "distributed/reference_table_utils.h"
 #include "distributed/remote_commands.h"
-#include "distributed/rebalancer_placement_isolation.h"
+#include "distributed/rebalancer_placement_separation.h"
 #include "distributed/resource_lock.h"
 #include "distributed/shard_rebalancer.h"
 #include "distributed/shard_cleaner.h"
@@ -147,7 +147,7 @@ typedef struct RebalanceContext
 	FmgrInfo nodeCapacityUDF;
 	FmgrInfo shardAllowedOnNodeUDF;
 
-	RebalancerPlacementIsolationContext *rebalancerPlacementGroupIsolationContext;
+	RebalancerPlacementSeparationContext *shardgroupPlacementSeparationContext;
 } RebalanceContext;
 
 /* WorkerHashKey contains hostname and port to be used as a key in a hash */
@@ -594,8 +594,8 @@ GetRebalanceSteps(RebalanceOptions *options)
 		options->threshold = options->rebalanceStrategy->minimumThreshold;
 	}
 
-	context.rebalancerPlacementGroupIsolationContext =
-		PrepareRebalancerPlacementIsolationContext(
+	context.shardgroupPlacementSeparationContext =
+		PrepareRebalancerPlacementSeparationContext(
 			activeWorkerList,
 			FlattenNestedList(activeShardPlacementListList),
 			options->workerNode,
@@ -625,8 +625,8 @@ ShardAllowedOnNode(uint64 shardId, uint64 placementId, WorkerNode *workerNode,
 
 	RebalanceContext *context = voidContext;
 
-	if (!RebalancerPlacementIsolationContextPlacementIsAllowedOnWorker(
-			context->rebalancerPlacementGroupIsolationContext,
+	if (!RebalancerPlacementSeparationContextPlacementIsAllowedOnWorker(
+			context->shardgroupPlacementSeparationContext,
 			shardId, placementId, workerNode))
 	{
 		return false;
@@ -3190,7 +3190,7 @@ ReplicationPlacementUpdates(List *workerNodeList, List *activeShardPlacementList
 		{
 			WorkerNode *workerNode = list_nth(workerNodeList, workerNodeIndex);
 
-			if (!NodeCanBeUsedForNonIsolatedPlacements(workerNode))
+			if (!NodeCanBeUsedForNonSeparatedPlacements(workerNode))
 			{
 				/* never replicate placements to nodes that should not have placements */
 				continue;

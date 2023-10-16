@@ -1,6 +1,6 @@
 /*-------------------------------------------------------------------------
  *
- * rebalancer_placement_isolation.h
+ * rebalancer_placement_separation.h
  *	  Routines to determine which worker node should be used to separate
  *	  a colocated set of shard placements that need separate nodes.
  *
@@ -18,10 +18,10 @@
 
 #include "distributed/metadata_utility.h"
 
-struct RebalancerPlacementIsolationContext;
-typedef struct RebalancerPlacementIsolationContext RebalancerPlacementIsolationContext;
+struct RebalancerPlacementSeparationContext;
+typedef struct RebalancerPlacementSeparationContext RebalancerPlacementSeparationContext;
 
-extern RebalancerPlacementIsolationContext * PrepareRebalancerPlacementIsolationContext(
+extern RebalancerPlacementSeparationContext * PrepareRebalancerPlacementSeparationContext(
 	List *activeWorkerNodeList,
 	List
 	*
@@ -32,8 +32,8 @@ extern RebalancerPlacementIsolationContext * PrepareRebalancerPlacementIsolation
 	FmgrInfo
 	*
 	shardAllowedOnNodeUDF);
-extern bool RebalancerPlacementIsolationContextPlacementIsAllowedOnWorker(
-	RebalancerPlacementIsolationContext *context,
+extern bool RebalancerPlacementSeparationContextPlacementIsAllowedOnWorker(
+	RebalancerPlacementSeparationContext *context,
 	uint64 shardId,
 	uint64
 	placementId,

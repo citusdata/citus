@@ -173,7 +173,7 @@ step s1_set-shard-property:
     FROM pg_dist_shard WHERE logicalrelid = 'table_to_distribute'::regclass
     ORDER BY shardid LIMIT 1;
 
-ERROR:  could not acquire the lock required to set anti affinity property for a shard of public.table_to_distribute
+ERROR:  could not acquire the lock required to set a property for a shard of public.table_to_distribute
 step s1-rollback:
     ROLLBACK;
 

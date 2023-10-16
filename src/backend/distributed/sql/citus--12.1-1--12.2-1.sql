@@ -6,7 +6,9 @@
 
 ALTER TABLE pg_dist_shard ADD COLUMN needsseparatenode boolean NOT NULL DEFAULT false;
 
+DROP FUNCTION pg_catalog.citus_internal_add_shard_metadata(regclass, bigint, "char", text, text);
 #include "udfs/citus_internal_add_shard_metadata/12.2-1.sql"
+
 #include "udfs/citus_internal_shard_group_set_needsseparatenode/12.2-1.sql"
 #include "udfs/citus_shard_property_set/12.2-1.sql"
 

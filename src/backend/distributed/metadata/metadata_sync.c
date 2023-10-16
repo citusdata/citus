@@ -95,8 +95,6 @@ char *EnableManualMetadataChangesForUser = "";
 int MetadataSyncTransMode = METADATA_SYNC_TRANSACTIONAL;
 
 
-static Datum citus_internal_add_shard_metadata_internal(PG_FUNCTION_ARGS,
-														bool expectNeedsSeparateNode);
 static void EnsureObjectMetadataIsSane(int distributionArgumentIndex,
 									   int colocationId);
 static List * GetFunctionDependenciesForObjects(ObjectAddress *objectAddress);
@@ -169,7 +167,6 @@ PG_FUNCTION_INFO_V1(worker_record_sequence_dependency);
 PG_FUNCTION_INFO_V1(citus_internal_add_partition_metadata);
 PG_FUNCTION_INFO_V1(citus_internal_delete_partition_metadata);
 PG_FUNCTION_INFO_V1(citus_internal_add_shard_metadata);
-PG_FUNCTION_INFO_V1(citus_internal_add_shard_metadata_legacy);
 PG_FUNCTION_INFO_V1(citus_internal_add_placement_metadata);
 PG_FUNCTION_INFO_V1(citus_internal_delete_placement_metadata);
 PG_FUNCTION_INFO_V1(citus_internal_add_placement_metadata_legacy);
@@ -3227,33 +3224,6 @@ citus_internal_delete_partition_metadata(PG_FUNCTION_ARGS)
 Datum
 citus_internal_add_shard_metadata(PG_FUNCTION_ARGS)
 {
-	bool expectNeedsSeparateNode = true;
-	return citus_internal_add_shard_metadata_internal(fcinfo, expectNeedsSeparateNode);
-}
-
-
-/*
- * citus_internal_add_shard_metadata is an internal UDF to
- * add a row to pg_dist_shard, but without the needs_separate_node
- * parameter.
- */
-Datum
-citus_internal_add_shard_metadata_legacy(PG_FUNCTION_ARGS)
-{
-	bool expectNeedsSeparateNode = false;
-	return citus_internal_add_shard_metadata_internal(fcinfo, expectNeedsSeparateNode);
-}
-
-
-/*
- * citus_internal_add_shard_metadata_internal is a helper function for
- * citus_internal_add_shard_metadata and citus_internal_add_shard_metadata_legacy
- * functions.
- */
-static Datum
-citus_internal_add_shard_metadata_internal(PG_FUNCTION_ARGS,
-										   bool expectNeedsSeparateNode)
-{
 	CheckCitusVersion(ERROR);
 
 	PG_ENSURE_ARGNOTNULL(0, "relation");
@@ -3277,12 +3247,8 @@ citus_internal_add_shard_metadata_internal(PG_FUNCTION_ARGS,
 		shardMaxValue = PG_GETARG_TEXT_P(4);
 	}
 
-	bool needsSeparateNode = false;
-	if (expectNeedsSeparateNode)
-	{
-		PG_ENSURE_ARGNOTNULL(5, "needs separate node");
-		needsSeparateNode = PG_GETARG_BOOL(5);
-	}
+	PG_ENSURE_ARGNOTNULL(5, "needs separate node");
+	bool needsSeparateNode = PG_GETARG_BOOL(5);
 
 	/* only owner of the table (or superuser) is allowed to add the Citus metadata */
 	EnsureTableOwner(relationId);

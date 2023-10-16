@@ -109,7 +109,7 @@ typedef struct
 	uint32 colocatationId;
 	int shardIntervalIndex;
 	int32 nodeGroupId;
-} ShardPlacementGroup;
+} ShardgroupPlacement;
 
 
 typedef enum CascadeToColocatedOption
@@ -331,11 +331,12 @@ extern int ShardIntervalCount(Oid relationId);
 extern List * LoadShardList(Oid relationId);
 extern ShardInterval * CopyShardInterval(ShardInterval *srcInterval);
 extern uint64 ShardLength(uint64 shardId);
-extern ShardPlacementGroup * NodeGroupGetSeparatedShardPlacementGroup(int32 groupId);
-extern bool ShardPlacementGroupsSame(const ShardPlacementGroup *leftGroup,
-									 const ShardPlacementGroup *rightGroup);
+extern ShardgroupPlacement * NodeGroupGetSeparatedShardgroupPlacement(int32 groupId);
+extern bool ShardgroupPlacementsSame(const ShardgroupPlacement *leftGroup,
+									 const ShardgroupPlacement *rightGroup);
 extern bool NodeGroupHasShardPlacements(int32 groupId);
-extern ShardPlacementGroup * GetShardPlacementGroupForPlacement(uint64 shardId,
+extern bool NodeGroupHasDistributedTableShardPlacements(int32 groupId);
+extern ShardgroupPlacement * GetShardgroupPlacementForPlacement(uint64 shardId,
 																uint64 placementId);
 extern bool IsActiveShardPlacement(ShardPlacement *ShardPlacement);
 extern bool IsRemoteShardPlacement(ShardPlacement *shardPlacement);

@@ -273,22 +273,22 @@ ErrorIfCoordinatorNotAddedAsWorkerNode()
 /*
  * NewDistributedTablePlacementNodeList returns a list of all active, primary
  * worker nodes that can store new data, i.e shouldstoreshards is 'true'
- * and that is not used to isolate a shard placement group.
+ * and that is not used to isolate a shardgroup placement.
  */
 List *
 NewDistributedTablePlacementNodeList(LOCKMODE lockMode)
 {
 	EnsureModificationsCanRun();
-	return FilterActiveNodeListFunc(lockMode, NodeCanBeUsedForNonIsolatedPlacements);
+	return FilterActiveNodeListFunc(lockMode, NodeCanBeUsedForNonSeparatedPlacements);
 }
 
 
 /*
- * NodeCanBeUsedForNonIsolatedPlacements returns true if given node can be
+ * NodeCanBeUsedForNonSeparatedPlacements returns true if given node can be
  * used to store shard placements that don't need separate nodes.
  */
 bool
-NodeCanBeUsedForNonIsolatedPlacements(WorkerNode *node)
+NodeCanBeUsedForNonSeparatedPlacements(WorkerNode *node)
 {
 	if (!NodeIsPrimary(node))
 	{
@@ -300,7 +300,7 @@ NodeCanBeUsedForNonIsolatedPlacements(WorkerNode *node)
 		return false;
 	}
 
-	return NodeGroupGetSeparatedShardPlacementGroup(node->groupId) == NULL;
+	return NodeGroupGetSeparatedShardgroupPlacement(node->groupId) == NULL;
 }
 
 

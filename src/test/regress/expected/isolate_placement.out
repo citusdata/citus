@@ -812,14 +812,14 @@ ORDER BY result;
 SELECT citus_shard_property_set(NULL, anti_affinity=>true);
 ERROR:  shard_id cannot be NULL
 SELECT citus_shard_property_set(0, anti_affinity=>true);
-ERROR:  shard xxxxx does not exist
+ERROR:  could not find valid entry for shard xxxxx
 SELECT citus_shard_property_set(NULL, anti_affinity=>false);
 ERROR:  shard_id cannot be NULL
 SELECT citus_shard_property_set(0, anti_affinity=>false);
-ERROR:  shard xxxxx does not exist
+ERROR:  could not find valid entry for shard xxxxx
 -- we verify whether shard exists even if anti_affinity is not provided
 SELECT citus_shard_property_set(0, anti_affinity=>NULL);
-ERROR:  shard xxxxx does not exist
+ERROR:  could not find valid entry for shard xxxxx
 CREATE TABLE append_table (a int, b int);
 SELECT create_distributed_table('append_table', 'a', 'append');
  create_distributed_table
@@ -858,21 +858,21 @@ SELECT citus_add_local_table_to_metadata('local_table');
 
 -- all should fail
 SELECT citus_shard_property_set(shardid, anti_affinity=>true) FROM pg_dist_shard WHERE logicalrelid = 'append_table'::regclass LIMIT 1;
-ERROR:  shard isolation is only supported for hash distributed tables
+ERROR:  setting anti-affinity property is only supported for hash distributed tables
 SELECT citus_shard_property_set(shardid, anti_affinity=>true) FROM pg_dist_shard WHERE logicalrelid = 'range_table'::regclass LIMIT 1;
-ERROR:  shard isolation is only supported for hash distributed tables
+ERROR:  setting anti-affinity property is only supported for hash distributed tables
 SELECT citus_shard_property_set(shardid, anti_affinity=>true) FROM pg_dist_shard WHERE logicalrelid = 'ref_table'::regclass LIMIT 1;
-ERROR:  shard isolation is only supported for hash distributed tables
+ERROR:  setting anti-affinity property is only supported for hash distributed tables
 SELECT citus_shard_property_set(shardid, anti_affinity=>true) FROM pg_dist_shard WHERE logicalrelid = 'local_table'::regclass LIMIT 1;
-ERROR:  shard isolation is only supported for hash distributed tables
+ERROR:  setting anti-affinity property is only supported for hash distributed tables
 SELECT citus_shard_property_set(shardid, anti_affinity=>false) FROM pg_dist_shard WHERE logicalrelid = 'append_table'::regclass LIMIT 1;
-ERROR:  shard isolation is only supported for hash distributed tables
+ERROR:  setting anti-affinity property is only supported for hash distributed tables
 SELECT citus_shard_property_set(shardid, anti_affinity=>false) FROM pg_dist_shard WHERE logicalrelid = 'range_table'::regclass LIMIT 1;
-ERROR:  shard isolation is only supported for hash distributed tables
+ERROR:  setting anti-affinity property is only supported for hash distributed tables
 SELECT citus_shard_property_set(shardid, anti_affinity=>false) FROM pg_dist_shard WHERE logicalrelid = 'ref_table'::regclass LIMIT 1;
-ERROR:  shard isolation is only supported for hash distributed tables
+ERROR:  setting anti-affinity property is only supported for hash distributed tables
 SELECT citus_shard_property_set(shardid, anti_affinity=>false) FROM pg_dist_shard WHERE logicalrelid = 'local_table'::regclass LIMIT 1;
-ERROR:  shard isolation is only supported for hash distributed tables
+ERROR:  setting anti-affinity property is only supported for hash distributed tables
 DROP TABLE range_table;
 DROP TYPE composite_key_type;
 SET client_min_messages TO WARNING;
