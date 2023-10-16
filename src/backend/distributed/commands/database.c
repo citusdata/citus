@@ -344,7 +344,6 @@ citus_internal_database_command(PG_FUNCTION_ARGS)
 					  (superuser() ? PGC_SUSET : PGC_USERSET), PGC_S_SESSION,
 					  GUC_ACTION_LOCAL, true, 0, false);
 
-
 	/*
 	 * createdb() / DropDatabase() uses ParseState to report the error position for the
 	 * input command and the position is reported to be 0 when it's provided as NULL.
@@ -377,20 +376,6 @@ citus_internal_database_command(PG_FUNCTION_ARGS)
 		if (OidIsValid(databaseOid))
 		{
 			DropDatabase(pstate, (DropdbStmt *) parseTree);
-		}
-	}
-	else if (IsA(parseTree, AlterDatabaseStmt))
-	{
-		elog(DEBUG1, "Altering DB");
-		AlterDatabaseStmt *stmt = castNode(AlterDatabaseStmt, parseTree);
-
-		bool missingOk = false;
-		Oid databaseOid = get_database_oid(stmt->dbname, missingOk);
-
-
-		if (OidIsValid(databaseOid))
-		{
-			AlterDatabase(NULL, (AlterDatabaseStmt *) parseTree, true);
 		}
 	}
 	else

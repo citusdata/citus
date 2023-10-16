@@ -245,6 +245,7 @@ extern List * PreprocessAlterDatabaseRenameStmt(Node *node, const char *queryStr
 												ProcessUtilityContext
 												processUtilityContext);
 
+
 /* domain.c - forward declarations */
 extern List * CreateDomainStmtObjectAddress(Node *node, bool missing_ok, bool
 											isPostprocess);
