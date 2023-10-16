@@ -49,8 +49,7 @@ typedef struct NodeToPlacementGroupHashEntry
 	/*
 	 * Whether given node is allowed to have any shards.
 	 *
-	 * This is not just WorkerNode->shouldHaveShards but also takes into account
-	 * whether the node is being drained.
+	 * Inherited from WorkerNode->shouldHaveShards.
 	 */
 	bool shouldHaveShards;
 
@@ -74,8 +73,7 @@ typedef struct NodeToPlacementGroupHashEntry
 static void InitRebalancerPlacementSeparationContext(
 	RebalancerPlacementSeparationContext *context,
 	List *activeWorkerNodeList,
-	List *rebalancePlacementList,
-	WorkerNode *drainWorkerNode);
+	List *rebalancePlacementList);
 static void TryAssignPlacementGroupsToNodeGroups(
 	RebalancerPlacementSeparationContext *context,
 	List *activeWorkerNodeList,
@@ -137,8 +135,7 @@ PrepareRebalancerPlacementSeparationContext(List *activeWorkerNodeList,
 static void
 InitRebalancerPlacementSeparationContext(RebalancerPlacementSeparationContext *context,
 										 List *activeWorkerNodeList,
-										 List *rebalancePlacementList,
-										 WorkerNode *drainWorkerNode)
+										 List *rebalancePlacementList)
 {
 	HTAB *nodePlacementGroupHash = context->nodePlacementGroupHash;
 
@@ -152,15 +149,10 @@ InitRebalancerPlacementSeparationContext(RebalancerPlacementSeparationContext *c
 			hash_search(nodePlacementGroupHash, &workerNode->groupId, HASH_ENTER,
 						NULL);
 
-		bool shouldHaveShards = workerNode->shouldHaveShards;
-		if (drainWorkerNode && drainWorkerNode->groupId == workerNode->groupId)
-		{
-			shouldHaveShards = false;
-		}
-
-		nodePlacementGroupHashEntry->shouldHaveShards = shouldHaveShards;
+		nodePlacementGroupHashEntry->shouldHaveShards =
+			workerNode->shouldHaveShards;
 		nodePlacementGroupHashEntry->allowedToSeparateAnyPlacementGroup =
-			shouldHaveShards;
+			workerNode->shouldHaveShards;
 		nodePlacementGroupHashEntry->assignedPlacementGroup = NULL;
 
 		/*
@@ -188,7 +180,7 @@ InitRebalancerPlacementSeparationContext(RebalancerPlacementSeparationContext *c
 		 * plans the moves.
 		 */
 
-		if (!shouldHaveShards)
+		if (!workerNode->shouldHaveShards)
 		{
 			/* we can't assing any shardgroup placements to the node anyway */
 			continue;
