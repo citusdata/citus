@@ -361,10 +361,17 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 		{
 			/*
 			 * When the database crashes, background workers are restarted, but
-			 * the state in shared memory is lost. In that case, we exit and
-			 * wait for a session to call InitializeMaintenanceDaemonBackend
-			 * to properly add it to the hash.
+			 * the state in shared memory is lost. In that case, we exit and wait
+			 * for Postmaster calling __PG_Init which in turn calls
+			 * InitializeMaintenanceDaemonForAdminDB.
 			 */
+
+			proc_exit(0);
+		}
+
+		if (found && myDbData->workerPid != 0)
+		{
+			/* Another maintenance daemon is running.*/
 
 			proc_exit(0);
 		}
