@@ -1673,6 +1673,8 @@ RouterInsertJob(Query *originalQuery)
 	Job *job = CreateJob(originalQuery);
 	job->requiresCoordinatorEvaluation = RequiresCoordinatorEvaluation(originalQuery);
 	job->deferredPruning = true;
+	ereport(DEBUG2, (errmsg("Deferred pruning for a fast-path router "
+							"query")));
 	job->partitionKeyValue = ExtractInsertPartitionKeyValue(originalQuery);
 
 	return job;
