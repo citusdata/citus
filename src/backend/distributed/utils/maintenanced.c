@@ -359,8 +359,14 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 
 		if (!myDbData)
 		{
-			LWLockRelease(&MaintenanceDaemonControl->lock);
-			return;
+			/*
+			 * When the database crashes, background workers are restarted, but
+			 * the state in shared memory is lost. In that case, we exit and
+			 * wait for a session to call InitializeMaintenanceDaemonBackend
+			 * to properly add it to the hash.
+			 */
+
+			proc_exit(0);
 		}
 
 		if (!found)
@@ -371,6 +377,7 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 		}
 
 		before_shmem_exit(MaintenanceDaemonShmemExit, ObjectIdGetDatum(MyDatabaseId));
+
 		databaseOid = MyDatabaseId;
 		myDbData->userOid = GetSessionUserId();
 	}
@@ -381,7 +388,8 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 		myDbData = (MaintenanceDaemonDBData *)
 				   hash_search(MaintenanceDaemonDBHash, &databaseOid,
 							   HASH_FIND, NULL);
-		if (!myDbData || myDbData->workerPid != 0)
+
+		if (!myDbData)
 		{
 			/*
 			 * When the database crashes, background workers are restarted, but
@@ -390,9 +398,21 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 			 * to properly add it to the hash.
 			 */
 
-			LWLockRelease(&MaintenanceDaemonControl->lock);
 			proc_exit(0);
 		}
+
+		if (myDbData->workerPid != 0)
+		{
+			/*
+			 * Another maintenance daemon is running. This usually happens because
+			 * postgres restarts the daemon after an non-zero exit, and
+			 * InitializeMaintenanceDaemonBackend started one before postgres did.
+			 * In that case, the first one stays and the last one exits.
+			 */
+
+			proc_exit(0);
+		}
+
 		before_shmem_exit(MaintenanceDaemonShmemExit, main_arg);
 
 		BackgroundWorkerInitializeConnectionByOid(databaseOid, myDbData->userOid, 0);
