@@ -99,7 +99,7 @@ int Recover2PCInterval = 60000;
 int DeferShardDeleteInterval = 15000;
 int BackgroundTaskQueueCheckInterval = 5000;
 int MaxBackgroundTaskExecutors = 4;
-char *ControlDbName = "";
+char *MainDb = "";
 
 /* config variables for metadata sync timeout */
 int MetadataSyncInterval = 60000;
@@ -141,15 +141,15 @@ InitializeMaintenanceDaemon(void)
 
 
 /*
- * InitializeMaintenanceDaemonForAdminDB is called in _PG_Init
+ * InitializeMaintenanceDaemonForMainDb is called in _PG_Init
  * at which stage we are not in a transaction or have databaseOid
  */
 void
-InitializeMaintenanceDaemonForAdminDB(void)
+InitializeMaintenanceDaemonForMainDb(void)
 {
-	if (strcmp(ControlDbName, "") == 0)
+	if (strcmp(MainDb, "") == 0)
 	{
-		elog(LOG, "There is no designated control database.");
+		elog(LOG, "There is no designated main database.");
 		return;
 	}
 
@@ -341,7 +341,7 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 
 	if (databaseOid == 0)
 	{
-		char *databaseName = ControlDbName;
+		char *databaseName = MainDb;
 
 		BackgroundWorkerInitializeConnection(databaseName, NULL, 0);
 

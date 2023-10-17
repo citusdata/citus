@@ -20,7 +20,7 @@
 
 /* config variable for */
 extern double DistributedDeadlockDetectionTimeoutFactor;
-extern char *ControlDbName;
+extern char *MainDb;
 
 extern void StopMaintenanceDaemon(Oid databaseId);
 extern void TriggerNodeMetadataSync(Oid databaseId);
@@ -28,7 +28,7 @@ extern void InitializeMaintenanceDaemon(void);
 extern size_t MaintenanceDaemonShmemSize(void);
 extern void MaintenanceDaemonShmemInit(void);
 extern void InitializeMaintenanceDaemonBackend(void);
-extern void InitializeMaintenanceDaemonForAdminDB(void);
+extern void InitializeMaintenanceDaemonForMainDb(void);
 extern bool LockCitusExtension(void);
 
 extern PGDLLEXPORT void CitusMaintenanceDaemonMain(Datum main_arg);

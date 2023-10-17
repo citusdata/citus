@@ -481,7 +481,7 @@ _PG_init(void)
 #endif
 
 	InitializeMaintenanceDaemon();
-	InitializeMaintenanceDaemonForAdminDB();
+	InitializeMaintenanceDaemonForMainDb();
 
 	/* initialize coordinated transaction management */
 	InitializeTransactionManagement();
@@ -1024,10 +1024,10 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomStringVariable(
-		"citus.controldb_name",
+		"citus.main_db",
 		gettext_noop("Which database is designated as the controldb"),
 		NULL,
-		&ControlDbName,
+		&MainDb,
 		"",
 		PGC_POSTMASTER,
 		GUC_STANDARD,
