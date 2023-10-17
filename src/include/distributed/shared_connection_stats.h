@@ -41,7 +41,7 @@ extern double GetSharedPoolSizeMaintenanceQuota(void);
 extern int GetLocalSharedPoolSize(void);
 extern bool TryToIncrementSharedConnectionCounter(uint32 flags, const char *hostname, int port);
 extern void WaitLoopForSharedConnection(uint32 flags, const char *hostname, int port);
-extern void DecrementSharedConnectionCounter(const char *hostname, int port);
+extern void DecrementSharedConnectionCounter(uint32 externalFlags, const char *hostname, int port);
 extern void IncrementSharedConnectionCounter(uint32 flags, const char *hostname, int port);
 extern int AdaptiveConnectionManagementFlag(bool connectToLocalNode, int
 											activeConnectionCount);

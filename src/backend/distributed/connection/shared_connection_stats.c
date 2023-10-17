@@ -84,7 +84,8 @@ typedef struct SharedWorkerNodeConnStatsHashEntry
 {
     SharedWorkerNodeConnStatsHashKey key;
 
-    int count;
+    int regularConnectionsCount;
+    int maintenanceConnectionsCount;
 } SharedWorkerNodeConnStatsHashEntry;
 
 /* hash entry for per database on worker stats */
@@ -141,9 +142,7 @@ static uint32 SharedConnectionHashHash(const void *key, Size keysize);
 static int SharedConnectionHashCompare(const void *a, const void *b, Size keysize);
 static uint32 SharedWorkerNodeDatabaseHashHash(const void *key, Size keysize);
 static int SharedWorkerNodeDatabaseHashCompare(const void *a, const void *b, Size keysize);
-static bool IsConnectionToLocalNode(SharedWorkerNodeConnStatsHashKey *connKey);
-static bool isConnectionSlotAvailable(uint32 flags, SharedWorkerNodeConnStatsHashKey *connKey,
-                                      const SharedWorkerNodeConnStatsHashEntry *connectionEntry);
+static bool isConnectionThrottlingDisabled();
 static bool
 IncrementSharedConnectionCounterInternal(uint32 externalFlags, bool checkLimits, const char *hostname, int port,
                                          Oid database);
@@ -152,7 +151,7 @@ static SharedWorkerNodeDatabaseConnStatsHashKey PrepareWorkerNodeDatabaseHashKey
                                                                                  int port,
                                                                                  Oid database);
 static void
-DecrementSharedConnectionCounterInternal(const char *hostname, int port);
+DecrementSharedConnectionCounterInternal(uint32 externalFlags, const char *hostname, int port);
 
 
 PG_FUNCTION_INFO_V1(citus_remote_connection_stats);
@@ -316,11 +315,10 @@ WaitLoopForSharedConnection(uint32 flags, const char *hostname, int port)
 bool
 TryToIncrementSharedConnectionCounter(uint32 flags, const char *hostname, int port)
 {
-    if (GetMaxSharedPoolSize() == DISABLE_CONNECTION_THROTTLING)
-	{
-		/* connection throttling disabled */
-		return true;
-	}
+    if (isConnectionThrottlingDisabled())
+    {
+        return true;
+    }
 
     /*
 	 * The local session might already have some reserved connections to the given
@@ -334,7 +332,11 @@ TryToIncrementSharedConnectionCounter(uint32 flags, const char *hostname, int po
         return true;
     }
 
-    return IncrementSharedConnectionCounterInternal(flags, true, hostname, port, MyDatabaseId);
+    return IncrementSharedConnectionCounterInternal(flags,
+                                                    true,
+                                                    hostname,
+                                                    port,
+                                                    MyDatabaseId);
 }
 
 
@@ -345,13 +347,16 @@ TryToIncrementSharedConnectionCounter(uint32 flags, const char *hostname, int po
 void
 IncrementSharedConnectionCounter(uint32 flags, const char *hostname, int port)
 {
-    if (MaxSharedPoolSize == DISABLE_CONNECTION_THROTTLING)
+    if (isConnectionThrottlingDisabled())
     {
-        /* connection throttling disabled */
         return;
     }
 
-    IncrementSharedConnectionCounterInternal(flags, false, hostname, port, MyDatabaseId);
+    IncrementSharedConnectionCounterInternal(flags,
+                                             false,
+                                             hostname,
+                                             port,
+                                             MyDatabaseId);
 }
 
 
@@ -392,7 +397,8 @@ IncrementSharedConnectionCounterInternal(uint32 externalFlags,
     if (!workerNodeEntryFound)
     {
         /* we successfully allocated the entry for the first time, so initialize it */
-        workerNodeConnectionEntry->count = 0;
+        workerNodeConnectionEntry->regularConnectionsCount = 0;
+        workerNodeConnectionEntry->maintenanceConnectionsCount = 0;
     }
 
     /* Initialize SharedWorkerNodeDatabaseConnStatsHash the same way  */
@@ -418,15 +424,57 @@ IncrementSharedConnectionCounterInternal(uint32 externalFlags,
 
     /* Increment counter if a slot available */
     bool connectionSlotAvailable = true;
-    connectionSlotAvailable =
-            !checkLimits ||
-            isConnectionSlotAvailable(externalFlags,
-                                      &workerNodeKey,
-                                      workerNodeConnectionEntry);
+
+    /* When GetSharedPoolSizeMaintenanceQuota() == 0, treat maintenance connections as regular */
+    bool maintenanceConnection = (GetSharedPoolSizeMaintenanceQuota() > 0 && (externalFlags & MAINTENANCE_CONNECTION));
+    if (checkLimits)
+    {
+        WorkerNode *workerNode = FindWorkerNode(hostname, port);
+        bool connectionToLocalNode = workerNode && (workerNode->groupId == GetLocalGroupId());
+        int currentConnectionsLimit = connectionToLocalNode
+                                      ? GetLocalSharedPoolSize()
+                                      : GetMaxSharedPoolSize();
+        int maintenanceQuota = (int) ceil((double) currentConnectionsLimit * GetSharedPoolSizeMaintenanceQuota());
+        /* Connections limit should never go below 1 */
+        currentConnectionsLimit = Max(maintenanceConnection
+                                      ? maintenanceQuota
+                                      : currentConnectionsLimit - maintenanceQuota, 1);
+        int currentConnectionsCount = maintenanceConnection
+                                      ? workerNodeConnectionEntry->maintenanceConnectionsCount
+                                      : workerNodeConnectionEntry->regularConnectionsCount;
+        bool remoteNodeLimitExceeded = currentConnectionsCount + 1 > currentConnectionsLimit;
+        /*
+          * For local nodes, solely relying on citus.max_shared_pool_size or
+          * max_connections might not be sufficient. The former gives us
+          * a preview of the future (e.g., we let the new connections to establish,
+          * but they are not established yet). The latter gives us the close to
+          * precise view of the past (e.g., the active number of client backends).
+          *
+          * Overall, we want to limit both of the metrics. The former limit typically
+          * kicks in under regular loads, where the load of the database increases in
+          * a reasonable pace. The latter limit typically kicks in when the database
+          * is issued lots of concurrent sessions at the same time, such as benchmarks.
+          */
+        bool localNodeLimitExceeded =
+                connectionToLocalNode &&
+                (GetLocalSharedPoolSize() == DISABLE_REMOTE_CONNECTIONS_FOR_LOCAL_QUERIES ||
+                 GetExternalClientBackendCount() + 1 > currentConnectionsLimit);
+        if (remoteNodeLimitExceeded || localNodeLimitExceeded)
+        {
+            connectionSlotAvailable = false;
+        }
+    }
 
     if (connectionSlotAvailable)
     {
-        workerNodeConnectionEntry->count += 1;
+        if (maintenanceConnection)
+        {
+            workerNodeConnectionEntry->maintenanceConnectionsCount += 1;
+        }
+        else
+        {
+            workerNodeConnectionEntry->regularConnectionsCount += 1;
+        }
         workerNodeDatabaseEntry->count += 1;
     }
 
@@ -435,86 +483,29 @@ IncrementSharedConnectionCounterInternal(uint32 externalFlags,
     return connectionSlotAvailable;
 }
 
-static bool IsConnectionToLocalNode(SharedWorkerNodeConnStatsHashKey *connKey)
-{
-    WorkerNode *workerNode = FindWorkerNode(connKey->hostname, connKey->port);
-    return workerNode && (workerNode->groupId == GetLocalGroupId());
-}
-
-
-static bool isConnectionSlotAvailable(uint32 flags,
-                                      SharedWorkerNodeConnStatsHashKey *connKey,
-                                      const SharedWorkerNodeConnStatsHashEntry *connectionEntry)
-{
-    bool connectionSlotAvailable = true;
-    bool connectionToLocalNode = IsConnectionToLocalNode(connKey);
-    /*
-     * Use full capacity for maintenance connections,
-     */
-    int maintenanceConnectionsQuota =
-            (flags & MAINTENANCE_CONNECTION)
-            ? 0
-            : (int) floor((double) GetMaxSharedPoolSize() * GetSharedPoolSizeMaintenanceQuota());
-    if (connectionToLocalNode)
-    {
-        bool remoteConnectionsForLocalQueriesDisabled =
-                GetLocalSharedPoolSize() == DISABLE_REMOTE_CONNECTIONS_FOR_LOCAL_QUERIES;
-        /*
-         * For local nodes, solely relying on citus.max_shared_pool_size or
-         * max_connections might not be sufficient. The former gives us
-         * a preview of the future (e.g., we let the new connections to establish,
-         * but they are not established yet). The latter gives us the close to
-         * precise view of the past (e.g., the active number of client backends).
-         *
-         * Overall, we want to limit both of the metrics. The former limit typically
-         * kicks in under regular loads, where the load of the database increases in
-         * a reasonable pace. The latter limit typically kicks in when the database
-         * is issued lots of concurrent sessions at the same time, such as benchmarks.
-         */
-        bool localConnectionLimitExceeded =
-                GetExternalClientBackendCount() + 1 > GetLocalSharedPoolSize() ||
-                connectionEntry->count + 1 > GetLocalSharedPoolSize();
-        if (remoteConnectionsForLocalQueriesDisabled || localConnectionLimitExceeded)
-        {
-            connectionSlotAvailable = false;
-        }
-    }
-    else if (connectionEntry->count + 1 > (GetMaxSharedPoolSize() - maintenanceConnectionsQuota))
-    {
-        connectionSlotAvailable = false;
-    }
-    return connectionSlotAvailable;
-}
-
-
 
 /*
  * DecrementSharedConnectionCounter decrements the shared counter
  * for the given hostname and port for the given count.
  */
 void
-DecrementSharedConnectionCounter(const char *hostname, int port)
+DecrementSharedConnectionCounter(uint32 externalFlags, const char *hostname, int port)
 {
-    /*
-     * Do not call GetMaxSharedPoolSize() here, since it may read from
-     * the catalog and we may be in the process exit handler.
-     */
-    if (MaxSharedPoolSize == DISABLE_CONNECTION_THROTTLING)
+    if (isConnectionThrottlingDisabled())
     {
-        /* connection throttling disabled */
         return;
     }
 
     LockConnectionSharedMemory(LW_EXCLUSIVE);
 
-    DecrementSharedConnectionCounterInternal(hostname, port);
+    DecrementSharedConnectionCounterInternal(externalFlags, hostname, port);
 
     UnLockConnectionSharedMemory();
     WakeupWaiterBackendsForSharedConnection();
 }
 
 static void
-DecrementSharedConnectionCounterInternal(const char *hostname, int port)
+DecrementSharedConnectionCounterInternal(uint32 externalFlags, const char *hostname, int port)
 {
     bool workerNodeEntryFound = false;
     SharedWorkerNodeConnStatsHashKey workerNodeKey = PrepareWorkerNodeHashKey(hostname, port);
@@ -530,10 +521,17 @@ DecrementSharedConnectionCounterInternal(const char *hostname, int port)
     }
 
     /* we should never go below 0 */
-    Assert(workerNodeEntry->count > 0);
+    Assert(workerNodeEntry->regularConnectionsCount > 0 || workerNodeEntry->maintenanceConnectionsCount > 0);
 
-
-    workerNodeEntry->count -= 1;
+    /* When GetSharedPoolSizeMaintenanceQuota() == 0, treat maintenance connections as regular */
+    if ((GetSharedPoolSizeMaintenanceQuota() > 0 && (externalFlags & MAINTENANCE_CONNECTION)))
+    {
+        workerNodeEntry->maintenanceConnectionsCount -= 1;
+    }
+    else
+    {
+        workerNodeEntry->regularConnectionsCount -= 1;
+    }
 
 
     /*
@@ -543,7 +541,7 @@ DecrementSharedConnectionCounterInternal(const char *hostname, int port)
      * not busy, and given the default value of MaxCachedConnectionsPerWorker = 1,
      * we're unlikely to trigger this often.
      */
-    if (workerNodeEntry->count == 0)
+    if (workerNodeEntry->regularConnectionsCount == 0 && workerNodeEntry->maintenanceConnectionsCount == 0)
     {
         hash_search(SharedWorkerNodeConnStatsHash, &workerNodeKey, HASH_REMOVE, NULL);
     }
@@ -919,4 +917,13 @@ SharedWorkerNodeDatabaseHashCompare(const void *a, const void *b, Size keysize)
     return strncmp(ca->workerNodeKey.hostname, cb->workerNodeKey.hostname, MAX_NODE_LENGTH) != 0 ||
            ca->workerNodeKey.port != cb->workerNodeKey.port ||
            ca->database != cb->database;
+}
+
+static bool isConnectionThrottlingDisabled()
+{
+    /*
+   * Do not call Get*PoolSize() functions here, since it may read from
+   * the catalog and we may be in the process exit handler.
+   */
+    return MaxSharedPoolSize == DISABLE_CONNECTION_THROTTLING;
 }

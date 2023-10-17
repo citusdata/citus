@@ -61,8 +61,8 @@ static MultiConnection * FindAvailableConnection(dlist_head *connections, uint32
 static void ErrorIfMultipleMetadataConnectionExists(dlist_head *connections);
 static void FreeConnParamsHashEntryFields(ConnParamsHashEntry *entry);
 static void AfterXactHostConnectionHandling(ConnectionHashEntry *entry, bool isCommit);
-static bool ShouldShutdownConnection(MultiConnection *connection, const int
-									 cachedConnectionCount);
+static bool ShouldShutdownConnection(MultiConnection *connection,
+                                     const int cachedConnectionCount);
 static bool RemoteTransactionIdle(MultiConnection *connection);
 static int EventSetSizeForConnectionList(List *connections);
 
@@ -427,10 +427,14 @@ StartNodeUserDatabaseConnection(uint32 flags, const char *hostname, int32 port,
 	ResetShardPlacementAssociation(connection);
 
 
-	if ((flags & REQUIRE_METADATA_CONNECTION))
+    if (flags & REQUIRE_METADATA_CONNECTION)
 	{
 		connection->useForMetadataOperations = true;
-	}
+    }
+    else if (flags & REQUIRE_MAINTENANCE_CONNECTION)
+    {
+        connection->useForMaintenanceOperations = true;
+    }
 
 	/* fully initialized the connection, record it */
 	connection->initializationState = POOL_STATE_INITIALIZED;
@@ -1194,7 +1198,10 @@ CitusPQFinish(MultiConnection *connection)
 	/* behave idempotently, there is no gurantee that CitusPQFinish() is called once */
 	if (connection->initializationState >= POOL_STATE_COUNTER_INCREMENTED)
 	{
-		DecrementSharedConnectionCounter(connection->hostname, connection->port);
+        int sharedCounterFlags = (connection->useForMaintenanceOperations)
+                                 ? MAINTENANCE_CONNECTION
+                                 : 0;
+        DecrementSharedConnectionCounter(sharedCounterFlags, connection->hostname, connection->port);
 		connection->initializationState = POOL_STATE_NOT_INITIALIZED;
 	}
 }

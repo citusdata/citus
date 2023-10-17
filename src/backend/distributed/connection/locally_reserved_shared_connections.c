@@ -240,7 +240,8 @@ DeallocateReservedConnections(void)
 			 * We have not used this reservation, make sure to clean-up from
 			 * the shared memory as well.
 			 */
-			DecrementSharedConnectionCounter(entry->key.hostname, entry->key.port);
+            int sharedCounterFlags = 0;
+            DecrementSharedConnectionCounter(sharedCounterFlags, entry->key.hostname, entry->key.port);
 
 			/* for completeness, set it to true */
 			entry->usedReservation = true;

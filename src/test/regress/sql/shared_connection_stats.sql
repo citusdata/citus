@@ -146,7 +146,7 @@ COMMIT;
 
 -- pg_sleep forces almost 1 connection per placement
 -- now, some of the optional connections would be skipped,
--- and only 5 connections are used per node
+-- and only 4 connections (5 minus the maintenance quota) are used per node
 BEGIN;
 	SET LOCAL citus.max_adaptive_executor_pool_size TO 16;
 	with cte_1 as (select pg_sleep(0.1) is null, a from test) SELECT a from cte_1 ORDER By 1 LIMIT 1;
