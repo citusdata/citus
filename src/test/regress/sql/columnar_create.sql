@@ -212,3 +212,6 @@ LOAD 'citus_columnar';
 
 SET client_min_messages TO WARNING;
 DROP SCHEMA columnar_create CASCADE;
+
+-- debug line for flakyness test
+SELECT 1;
