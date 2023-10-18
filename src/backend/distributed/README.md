@@ -1726,7 +1726,7 @@ DDL commands are primarily handled via the citus_ProcessUtility hook, which gets
 
 1. Qualify the table names in the parse tree (simplifies deparsing, avoids sensitivity to search_path changes)
 2. Pre-process logic
-3. Call original Postgres ProcessUtility to execute the command on the local shell table
+3. Call original previous ProcessUtility to execute the command on the local shell table
 4. Post-process logic
 5. Execute command on all other nodes
 6. Execute command on shards (in case of table DDL)
@@ -1751,7 +1751,7 @@ The reason for handling dependencies and deparsing in post-process step is that 
 
 Not all table DDL is currently deparsed. In that case, the original command sent by the client is used. That is a shortcoming in our DDL logic that causes user-facing issues and should be addressed. We do not directly construct a separate DDL command for each shard. Instead, we call the `worker_apply_shard_ddl_command(shardid bigint, ddl_command text)` function which parses the DDL command, replaces the table names with shard names in the parse tree according to the shard ID, and then executes the command. That also has some shortcomings, because we cannot support more complex DDL commands in this manner (e.g. adding multiple foreign keys). Ideally, all DDL would be deparsed, and for table DDL the deparsed query string would have shard names, similar to regular queries.
 
-``markDistributed`` is a flag that we use to indicate whether we add a record to ``pg_dist_object``.
+`markDistributed` is used to indicate whether we add a record to `pg_dist_object` to mark the object as "distributed".
 
 ## Defining a new DDL command
 
@@ -1772,8 +1772,7 @@ static DistributeObjectOps Database_Alter = {
 
 Each field in the struct is documented in the comments within the `DistributeObjectOps`. When defining a new Data Definition Language (DDL) command, follow these guidelines:
 
-- **Returning tasks for `preprocess` and `postprocess`**: Ensure that either `preprocess` or `postprocess` returns a `NodeDDLTask`. If both are defined, only the tasks returned in the `postprocess` will be executed.
-
+- **Returning tasks for `preprocess` and `postprocess`**: Ensure that either `preprocess` or `postprocess` returns a list of "DDLJob"s. If both are defined, then you would get an assertion failure.
 - **Generic `preprocess` and `postprocess` methods**: ``PreprocessAlterDistributedObjectStmt`` and ``PostprocessAlterDistributedObjectStmt`` are generic post and pre methods that is being used for some statements. Before defining a new `preprocess` or `postprocess` method, check if the generic methods can be used.
 
 - **`deparse`**: When propagating the command to worker nodes, make sure to define `deparse`. This is necessary because it generates a query string for each worker node.
@@ -1784,9 +1783,9 @@ Each field in the struct is documented in the comments within the `DistributeObj
 
 - **`markDistributed` usage in `DROP` Statements**: Please note that `markDistributed` does not apply to `DROP` statements. In such cases, the following block should be called manually. Neglecting this step can lead to stale records in the `pg_dist_object` table, potentially causing issues, such as with the `citus_add_node` User-Defined Function (UDF) call in the future.
 
-- **`qualify`**: The `qualify` function is used to qualify the table names in the parse tree. It is employed to prevent sensitivity to changes in the search_path. Note that it is not mandatory to define this function for all DDL commands. It is only required for commands that involve table names in the parse tree.
+- **`qualify`**: The `qualify` function is used to qualify the objects based on their schemas in the parse tree. It is employed to prevent sensitivity to changes in the `search_path` on worker nodes. Note that it is not mandatory to define this function for all DDL commands. It is only required for commands that involve objects that are bound to schemas, such as; tables, types, functions and so on.
 
-After defining the `DistributeObjectOps` structure, this structure should be implemented in the `GetDistributeObjectOps` function as shown below:
+After defining the `DistributeObjectOps` structure, this structure should be implemented in the `GetDistributeObjectOps()` function as shown below:
 
 ```c
 // Example implementation in C code
@@ -1800,8 +1799,6 @@ GetDistributeObjectOps(Node *node)
 			return &Database_Alter;
 		}
 ...
-.
-
 ```
 
 ## Object & dependency propagation
