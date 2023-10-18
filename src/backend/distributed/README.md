@@ -1770,9 +1770,9 @@ static DistributeObjectOps Database_Alter = {
 };
 ```
 
-Each field in the struct is documented in the comments within the `DistributeObjectOps`. When defining a new Data Definition Language (DDL) command, follow these guidelines:
+Each field in the struct is documented in the comments within the `DistributeObjectOps`. When defining a new DDL command, follow these guidelines:
 
-- **Returning tasks for `preprocess` and `postprocess`**: Ensure that either `preprocess` or `postprocess` returns a list of "DDLJob"s. If both are defined, then you would get an assertion failure.
+- **Returning tasks for `preprocess` and `postprocess`**: Ensure that either `preprocess` or `postprocess` returns a list of "DDLJob"s. If both functions return non-empty lists, then you would get an assertion failure.
 
 - **Generic `preprocess` and `postprocess` methods**: ``PreprocessAlterDistributedObjectStmt`` and ``PostprocessAlterDistributedObjectStmt`` are generic post and pre methods that is being used for some statements. Before defining a new `preprocess` or `postprocess` method, check if the generic methods can be used.
 
