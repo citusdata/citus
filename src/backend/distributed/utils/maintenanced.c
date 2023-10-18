@@ -424,7 +424,6 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 		}
 
 		before_shmem_exit(MaintenanceDaemonShmemExit, main_arg);
-
 	}
 
 	/*
@@ -474,7 +473,8 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 	elog(LOG, "starting maintenance daemon on database %u user %u",
 		 databaseOid, myDbData->userOid);
 
-	if (!isMainDb) {
+	if (!isMainDb)
+	{
 		BackgroundWorkerInitializeConnectionByOid(databaseOid, myDbData->userOid, 0);
 	}
 
