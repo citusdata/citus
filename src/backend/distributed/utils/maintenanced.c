@@ -60,6 +60,7 @@
 #include "distributed/statistics_collection.h"
 #include "distributed/transaction_recovery.h"
 #include "distributed/version_compat.h"
+#include "distributed/connection_management.h"
 
 /*
  * Shared memory data for all maintenance workers.
@@ -506,7 +507,7 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 	MaintenanceDaemonDBData *myDbData = ConnectToDatabase(databaseOid);
 
 	/* make worker recognizable in pg_stat_activity */
-	pgstat_report_appname("Citus Maintenance Daemon");
+	pgstat_report_appname(CITUS_MAINTENANCE_DAEMON_APPLICATION_NAME_PREFIX);
 
 	/*
 	 * Terminate orphaned metadata sync daemons spawned from previously terminated

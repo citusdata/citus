@@ -502,6 +502,12 @@ FindAvailableConnection(dlist_head *connections, uint32 flags)
 			continue;
 		}
 
+        if ((flags & REQUIRE_MAINTENANCE_CONNECTION) &&
+            !connection->useForMaintenanceOperations)
+        {
+            continue;
+        }
+
 		if ((flags & REQUIRE_METADATA_CONNECTION) &&
 			!connection->useForMetadataOperations)
 		{
@@ -1498,7 +1504,7 @@ ShouldShutdownConnection(MultiConnection *connection, const int cachedConnection
 	 * escalating the number of cached connections. We can recognize such backends
 	 * from their application name.
 	 */
-	return (IsCitusInternalBackend() || IsRebalancerInternalBackend()) ||
+    return (isCitusMaintenanceDaemonBackend() || IsCitusInternalBackend() || IsRebalancerInternalBackend()) ||
 		   connection->initializationState != POOL_STATE_INITIALIZED ||
 		   cachedConnectionCount >= MaxCachedConnectionsPerWorker ||
 		   connection->forceCloseAtTransactionEnd ||
@@ -1506,9 +1512,8 @@ ShouldShutdownConnection(MultiConnection *connection, const int cachedConnection
 		   !RemoteTransactionIdle(connection) ||
 		   connection->requiresReplication ||
 		   connection->isReplicationOriginSessionSetup ||
-		   (MaxCachedConnectionLifetime >= 0 &&
-			MillisecondsToTimeout(connection->connectionEstablishmentStart,
-								  MaxCachedConnectionLifetime) <= 0);
+           (MaxCachedConnectionLifetime >= 0
+            && MillisecondsToTimeout(connection->connectionEstablishmentStart, MaxCachedConnectionLifetime) <= 0);
 }
 
 
