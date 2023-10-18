@@ -1023,16 +1023,6 @@ RegisterCitusConfigVariables(void)
 		GUC_STANDARD,
 		NULL, NULL, NULL);
 
-	DefineCustomStringVariable(
-		"citus.main_db",
-		gettext_noop("Which database is designated as the controldb"),
-		NULL,
-		&MainDb,
-		"",
-		PGC_POSTMASTER,
-		GUC_STANDARD,
-		NULL, NULL, NULL);
-
 	DefineCustomEnumVariable(
 		"citus.coordinator_aggregation_strategy",
 		gettext_noop("Sets the strategy for when an aggregate cannot be pushed down. "
@@ -1830,6 +1820,16 @@ RegisterCitusConfigVariables(void)
 		PGC_SIGHUP,
 		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE | GUC_UNIT_MS,
 		NULL, NULL, NULL);
+
+      DefineCustomStringVariable(
+                "citus.main_db",
+                gettext_noop("Which database is designated as the controldb"),
+                NULL,
+                &MainDb,
+                "",
+                PGC_POSTMASTER,
+                GUC_STANDARD,
+                NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
 		"citus.max_adaptive_executor_pool_size",
