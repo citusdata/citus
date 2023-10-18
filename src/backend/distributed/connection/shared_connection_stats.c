@@ -672,7 +672,7 @@ SharedConnectionStatsShmemSize(void)
 
     size = add_size(size, workerNodeConnHashSize);
 
-    Size workerNodeDatabaseConnSize = hash_estimate_size(DatabasesPerWorker,
+    Size workerNodeDatabaseConnSize = hash_estimate_size(MaxWorkerNodesTracked * MaxDatabasesPerWorkerNodesTracked,
                                                          sizeof(SharedWorkerNodeDatabaseConnStatsHashEntry));
 
     size = add_size(size, workerNodeDatabaseConnSize);
@@ -741,7 +741,7 @@ SharedConnectionStatsShmemInit(void)
     sharedWorkerNodeDatabaseConnStatsHashInfo.hash = SharedWorkerNodeDatabaseHashHash;
     sharedWorkerNodeDatabaseConnStatsHashInfo.match = SharedWorkerNodeDatabaseHashCompare;
 
-    int sharedWorkerNodeDatabaseConnStatsHashSize = MaxWorkerNodesTracked * DatabasesPerWorker;
+    int sharedWorkerNodeDatabaseConnStatsHashSize = MaxWorkerNodesTracked * MaxDatabasesPerWorkerNodesTracked;
     SharedWorkerNodeDatabaseConnStatsHash =
             ShmemInitHash("Shared Conn Per Database. Stats Hash",
                           sharedWorkerNodeDatabaseConnStatsHashSize,

@@ -1993,6 +1993,20 @@ RegisterCitusConfigVariables(void)
 		GUC_SUPERUSER_ONLY,
 		NULL, NULL, MaxSharedPoolSizeGucShowHook);
 
+    DefineCustomRealVariable(
+            "citus.shared_pool_size_maintenance_quota",
+            gettext_noop("Sets the maximum number of connections allowed per worker node "
+                         "across all the backends from this node. Setting to -1 disables "
+                         "connections throttling. Setting to 0 makes it auto-adjust, meaning "
+                         "equal to max_connections on the coordinator."),
+            gettext_noop("As a rule of thumb, the value should be at most equal to the "
+                         "max_connections on the remote nodes."),
+            &SharedPoolSizeMaintenanceQuota,
+            0.1, 0, 1,
+            PGC_SIGHUP,
+            GUC_SUPERUSER_ONLY,
+            NULL, NULL, MaxSharedPoolSizeGucShowHook);
+
 	DefineCustomIntVariable(
 		"citus.max_worker_nodes_tracked",
 		gettext_noop("Sets the maximum number of worker nodes that are tracked."),
@@ -2011,6 +2025,20 @@ RegisterCitusConfigVariables(void)
 		PGC_POSTMASTER,
 		GUC_STANDARD,
 		NULL, NULL, NULL);
+
+    DefineCustomIntVariable(
+            "citus.max_databases_per_worker_tracked",
+            gettext_noop("Sets the amount of databases per worker tracked."),
+            gettext_noop(
+                    "This configuration value compliments the citus.max_worker_nodes_tracked."
+                    "It should be used when there are more then one database with Citus in cluster,"
+                    "and, effectively, limits the size of the hash table with connections per worker + database."
+                    "Currently, it does not affect the connection management logic and serves only statistical purposes."),
+            &MaxDatabasesPerWorkerNodesTracked,
+            1, 1, INT_MAX,
+            PGC_POSTMASTER,
+            GUC_STANDARD,
+            NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
 		"citus.metadata_sync_interval",

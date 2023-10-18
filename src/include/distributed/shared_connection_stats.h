@@ -25,7 +25,7 @@ enum SharedPoolCounterMode
 };
 
 extern int MaxSharedPoolSize;
-extern float MaintenanceSharedPoolSizePercent;
+extern double SharedPoolSizeMaintenanceQuota;
 extern int LocalSharedPoolSize;
 extern int MaxClientConnections;
 
