@@ -339,9 +339,12 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 
 	MaintenanceDaemonDBData *myDbData = NULL;
 
+	bool isMainDb = false;
+
 	if (databaseOid == 0)
 	{
 		char *databaseName = MainDb;
+		isMainDb = true;
 
 		BackgroundWorkerInitializeConnection(databaseName, NULL, 0);
 
@@ -422,7 +425,6 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 
 		before_shmem_exit(MaintenanceDaemonShmemExit, main_arg);
 
-		BackgroundWorkerInitializeConnectionByOid(databaseOid, myDbData->userOid, 0);
 	}
 
 	/*
@@ -471,6 +473,10 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 
 	elog(LOG, "starting maintenance daemon on database %u user %u",
 		 databaseOid, myDbData->userOid);
+
+	if (!isMainDb) {
+		BackgroundWorkerInitializeConnectionByOid(databaseOid, myDbData->userOid, 0);
+	}
 
 	/* make worker recognizable in pg_stat_activity */
 	pgstat_report_appname("Citus Maintenance Daemon");
