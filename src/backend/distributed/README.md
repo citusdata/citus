@@ -1755,7 +1755,7 @@ Not all table DDL is currently deparsed. In that case, the original command sent
 
 ## Defining a new DDL command
 
-All commands that are propagated by Citus should be defined in DistributeObjectOps struct. Below is a sample DistributeObjectOps for ALTER DATABASE command that is define in [distribute_object_ops.c](commands/distribute_object_ops.c) file.
+All commands that are propagated by Citus should be defined in DistributeObjectOps struct. Below is a sample DistributeObjectOps for ALTER DATABASE command that is defined in [distribute_object_ops.c](commands/distribute_object_ops.c) file.
 
 ```c
 static DistributeObjectOps Database_Alter = {
