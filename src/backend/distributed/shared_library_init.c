@@ -1823,7 +1823,7 @@ RegisterCitusConfigVariables(void)
 
 	DefineCustomStringVariable(
 		"citus.main_db",
-		gettext_noop("Which database is designated as the controldb"),
+		gettext_noop("Which database is designated as the main_db"),
 		NULL,
 		&MainDb,
 		"",
