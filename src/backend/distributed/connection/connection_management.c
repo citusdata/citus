@@ -1520,8 +1520,8 @@ ShouldShutdownConnection(MultiConnection *connection, const int cachedConnection
            !RemoteTransactionIdle(connection) ||
            connection->requiresReplication ||
            connection->isReplicationOriginSessionSetup ||
-           (MaxCachedConnectionLifetime >= 0
-            && MillisecondsToTimeout(connection->connectionEstablishmentStart, MaxCachedConnectionLifetime) <= 0);
+           (MaxCachedConnectionLifetime >= 0 &&
+            MillisecondsToTimeout(connection->connectionEstablishmentStart, MaxCachedConnectionLifetime) <= 0);
 }
 
 
