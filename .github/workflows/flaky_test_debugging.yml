@@ -38,7 +38,6 @@ jobs:
       with:
         name: build-${{ env.PG_MAJOR }}
         path: |-
-          ./build-${{ env.PG_MAJOR }}/*
           ./install-${{ env.PG_MAJOR }}.tar
   prepare_parallelization_matrix:
     name: Prepare parallelization matrix

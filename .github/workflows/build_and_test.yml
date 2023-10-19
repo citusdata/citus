@@ -96,7 +96,6 @@ jobs:
       with:
         name: build-${{ env.PG_MAJOR }}
         path: |-
-          ./build-${{ env.PG_MAJOR }}/*
           ./install-${{ env.PG_MAJOR }}.tar
   test-citus:
     name: PG${{ matrix.pg_version }} - ${{ matrix.make }}
