@@ -1,7 +1,7 @@
 name: Flaky test debugging
 run-name: Flaky test debugging - ${{ inputs.flaky_test }} (${{ inputs.flaky_test_runs_per_job }}x${{ inputs.flaky_test_parallel_jobs }})
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ inputs.flaky_test }}
   cancel-in-progress: true
 on:
   workflow_dispatch:
