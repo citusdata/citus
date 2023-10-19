@@ -1446,7 +1446,8 @@ IsCitusShardTransferBackend(void)
 				   prefixLength) == 0;
 }
 
-bool isCitusMaintenanceDaemonBackend(void)
+bool
+IsCitusMaintenanceDaemonBackend(void)
 {
     if (CurrentBackendType == CITUS_BACKEND_NOT_ASSIGNED)
     {

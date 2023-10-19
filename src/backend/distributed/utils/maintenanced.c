@@ -96,6 +96,7 @@ typedef struct MaintenanceDaemonDBData
 
 /* config variable for distributed deadlock detection timeout */
 double DistributedDeadlockDetectionTimeoutFactor = 2.0;
+char *MaintenanceManagementDatabase = "";
 int Recover2PCInterval = 60000;
 int DeferShardDeleteInterval = 15000;
 int BackgroundTaskQueueCheckInterval = 5000;
@@ -705,32 +706,39 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 			timeout = Min(timeout, Recover2PCInterval);
 		}
 
-		/* the config value -1 disables the distributed deadlock detection  */
-		if (DistributedDeadlockDetectionTimeoutFactor != -1.0)
+        /*
+         * Execute only on the maintenance database, if it configured, otherwise run from every daemon.
+         * The config value -1 disables the distributed deadlock detection
+         */
+        if (DistributedDeadlockDetectionTimeoutFactor != -1.0)
 		{
-			double deadlockTimeout =
-				DistributedDeadlockDetectionTimeoutFactor * (double) DeadlockTimeout;
+            double deadlockTimeout =
+                    DistributedDeadlockDetectionTimeoutFactor * (double) DeadlockTimeout;
 
-			InvalidateMetadataSystemCache();
-			StartTransactionCommand();
+            InvalidateMetadataSystemCache();
+            StartTransactionCommand();
 
-			/*
-			 * We skip the deadlock detection if citus extension
-			 * is not accessible.
-			 *
-			 * Similarly, we skip to run the deadlock checks if
-			 * there exists any version mismatch or the extension
-			 * is not fully created yet.
-			 */
-			if (!LockCitusExtension())
-			{
-				ereport(DEBUG1, (errmsg("could not lock the citus extension, "
-										"skipping deadlock detection")));
-			}
-			else if (CheckCitusVersion(DEBUG1) && CitusHasBeenLoaded())
-			{
-				foundDeadlock = CheckForDistributedDeadlocks();
-			}
+
+            if ((strcmp(GetMaintenanceManagementDatabase(), "") == 0 || IsMaintenanceManagementDatabase(databaseOid)))
+            {
+                /*
+                 * We skip the deadlock detection if citus extension
+                 * is not accessible.
+                 *
+                 * Similarly, we skip to run the deadlock checks if
+                 * there exists any version mismatch or the extension
+                 * is not fully created yet.
+                 */
+                if (!LockCitusExtension())
+                {
+                    ereport(DEBUG1, (errmsg("could not lock the citus extension, "
+                                            "skipping deadlock detection")));
+                }
+                else if (CheckCitusVersion(DEBUG1) && CitusHasBeenLoaded())
+                {
+                    foundDeadlock = CheckForDistributedDeadlocks();
+                }
+            }
 
 			CommitTransactionCommand();
 
@@ -1228,3 +1236,35 @@ MetadataSyncTriggeredCheckAndReset(MaintenanceDaemonDBData *dbData)
 
 	return metadataSyncTriggered;
 }
+
+char
+*GetMaintenanceManagementDatabase(void)
+{
+    char *result = MaintenanceManagementDatabase;
+    /* If MaintenanceManagementDatabase is not set, all maintenance daemons are considered independent */
+    if (strcmp(MaintenanceManagementDatabase, "") != 0)
+    {
+        Oid maintenanceDatabaseOid = get_database_oid(MaintenanceManagementDatabase, true);
+        if (!maintenanceDatabaseOid)
+        {
+            ereport(WARNING, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+                    errmsg("Database %s doesn't exists, please check the citus.maintenance_management_database parameter.",
+                           MaintenanceManagementDatabase)));
+            result = "";
+        }
+    }
+    return result;
+}
+
+bool
+IsMaintenanceManagementDatabase(Oid databaseOid)
+{
+    if (strcmp(GetMaintenanceManagementDatabase(), "") == 0)
+    {
+        /* If MaintenanceManagementDatabase is not set, all maintenance daemons are considered independent */
+        return false;
+    }
+    Oid maintenanceDatabaseOid = get_database_oid(MaintenanceManagementDatabase, true);
+    return maintenanceDatabaseOid == databaseOid;
+}
+

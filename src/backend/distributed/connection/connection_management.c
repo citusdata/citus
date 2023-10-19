@@ -42,6 +42,12 @@
 #include "distributed/time_constants.h"
 #include "distributed/version_compat.h"
 #include "distributed/worker_log_messages.h"
+#include "mb/pg_wchar.h"
+#include "pg_config.h"
+#include "portability/instr_time.h"
+#include "storage/ipc.h"
+#include "utils/hsearch.h"
+#include "utils/memutils.h"
 
 
 int NodeConnectionTimeout = 30000;
@@ -1504,14 +1510,16 @@ ShouldShutdownConnection(MultiConnection *connection, const int cachedConnection
 	 * escalating the number of cached connections. We can recognize such backends
 	 * from their application name.
 	 */
-    return (isCitusMaintenanceDaemonBackend() || IsCitusInternalBackend() || IsRebalancerInternalBackend()) ||
+    return ((IsCitusMaintenanceDaemonBackend() && !IsMaintenanceManagementDatabase(MyDatabaseId)) ||
+            IsCitusInternalBackend() ||
+            IsRebalancerInternalBackend()) ||
 		   connection->initializationState != POOL_STATE_INITIALIZED ||
 		   cachedConnectionCount >= MaxCachedConnectionsPerWorker ||
-		   connection->forceCloseAtTransactionEnd ||
+           connection->forceCloseAtTransactionEnd ||
 		   PQstatus(connection->pgConn) != CONNECTION_OK ||
-		   !RemoteTransactionIdle(connection) ||
-		   connection->requiresReplication ||
-		   connection->isReplicationOriginSessionSetup ||
+           !RemoteTransactionIdle(connection) ||
+           connection->requiresReplication ||
+           connection->isReplicationOriginSessionSetup ||
            (MaxCachedConnectionLifetime >= 0
             && MillisecondsToTimeout(connection->connectionEstablishmentStart, MaxCachedConnectionLifetime) <= 0);
 }

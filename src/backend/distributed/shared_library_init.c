@@ -2706,6 +2706,16 @@ RegisterCitusConfigVariables(void)
 		GUC_STANDARD,
 		NULL, NULL, NULL);
 
+    DefineCustomStringVariable(
+            "citus.maintenance_management_database",
+            gettext_noop("Database for cluster-wide maintenance operations across all databases"),
+            NULL,
+            &MaintenanceManagementDatabase,
+            "",
+            PGC_SIGHUP,
+            GUC_STANDARD,
+            NULL, NULL, NULL);
+
 	/* warn about config items in the citus namespace that are not registered above */
 	EmitWarningsOnPlaceholders("citus");
 
