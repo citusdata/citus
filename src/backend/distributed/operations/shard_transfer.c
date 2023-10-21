@@ -793,6 +793,7 @@ ShardListSizeInBytes(List *shardList, char *workerNodeName, uint32
 	/* we skip child tables of a partitioned table if this boolean variable is true */
 	bool optimizePartitionCalculations = true;
 	StringInfo tableSizeQuery = GenerateSizeQueryOnMultiplePlacements(shardList,
+																	  InvalidOid,
 																	  TOTAL_RELATION_SIZE,
 																	  optimizePartitionCalculations);
 

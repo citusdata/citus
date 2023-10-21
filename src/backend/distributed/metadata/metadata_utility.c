@@ -24,6 +24,7 @@
 #include "access/sysattr.h"
 #include "access/xact.h"
 #include "catalog/dependency.h"
+#include "catalog/index.h"
 #include "catalog/indexing.h"
 #include "catalog/pg_authid.h"
 #include "catalog/pg_constraint.h"
@@ -91,7 +92,7 @@ static GroupShardPlacement * TupleToGroupShardPlacement(TupleDesc tupleDesc,
 static bool DistributedRelationSize(Oid relationId, SizeQueryType sizeQueryType,
 									bool failOnError, uint64 *relationSize);
 static bool DistributedRelationSizeOnWorker(WorkerNode *workerNode,
-											Oid relationId,
+											Oid relationId, Oid indexId,
 											SizeQueryType sizeQueryType,
 											bool failOnError,
 											uint64 *relationSize);
@@ -521,6 +522,11 @@ DistributedRelationSize(Oid relationId, SizeQueryType sizeQueryType,
 {
 	int logLevel = WARNING;
 
+	/*
+	 * By default we suppose we examine a table, not an index.
+	 */
+	Oid tableId = relationId;
+
 	if (failOnError)
 	{
 		logLevel = ERROR;
@@ -548,7 +554,16 @@ DistributedRelationSize(Oid relationId, SizeQueryType sizeQueryType,
 		return false;
 	}
 
-	ErrorIfNotSuitableToGetSize(relationId);
+	/*
+	 * If the relation is an index, update tableId and define indexId
+	 */
+	if (relation->rd_rel->relkind == RELKIND_INDEX)
+	{
+		indexId = relationId;
+		tableId = IndexGetRelation(relation->rd_id, false);
+	}
+
+	ErrorIfNotSuitableToGetSize(tableId);
 
 	table_close(relation, AccessShareLock);
 
@@ -558,8 +573,8 @@ DistributedRelationSize(Oid relationId, SizeQueryType sizeQueryType,
 	{
 		uint64 relationSizeOnNode = 0;
 
-		bool gotSize = DistributedRelationSizeOnWorker(workerNode, relationId,
-													   sizeQueryType,
+		bool gotSize = DistributedRelationSizeOnWorker(workerNode, tableId,
+													   indexId, sizeQueryType,
 													   failOnError, &relationSizeOnNode);
 		if (!gotSize)
 		{
@@ -578,11 +593,11 @@ DistributedRelationSize(Oid relationId, SizeQueryType sizeQueryType,
 /*
  * DistributedRelationSizeOnWorker gets the workerNode and relationId to calculate
  * size of that relation on the given workerNode by summing up the size of each
- * shard placement.
+ * shard placement. If indexId is defined then the relation is an index.
  */
 static bool
 DistributedRelationSizeOnWorker(WorkerNode *workerNode, Oid relationId,
-								SizeQueryType sizeQueryType,
+								Oid indexId, SizeQueryType sizeQueryType,
 								bool failOnError, uint64 *relationSize)
 {
 	int logLevel = WARNING;
@@ -606,6 +621,7 @@ DistributedRelationSizeOnWorker(WorkerNode *workerNode, Oid relationId,
 	bool optimizePartitionCalculations = false;
 	StringInfo relationSizeQuery = GenerateSizeQueryOnMultiplePlacements(
 		shardIntervalsOnNode,
+		indexId,
 		sizeQueryType,
 		optimizePartitionCalculations);
 
@@ -613,6 +629,15 @@ DistributedRelationSizeOnWorker(WorkerNode *workerNode, Oid relationId,
 													workerNodePort);
 	int queryResult = ExecuteOptionalRemoteCommand(connection, relationSizeQuery->data,
 												   &result);
+
+	/*
+	 * After this point, we don't need to keep relationId pointing to the table.
+	 * So we swap with indexId if relevant, only for error log...
+	 */
+	if (indexId != InvalidOid)
+	{
+		relationId = indexId;
+	}
 
 	if (queryResult != 0)
 	{
@@ -749,6 +774,7 @@ ShardIntervalsOnWorkerGroup(WorkerNode *workerNode, Oid relationId)
  */
 StringInfo
 GenerateSizeQueryOnMultiplePlacements(List *shardIntervalList,
+									  Oid indexId,
 									  SizeQueryType sizeQueryType,
 									  bool optimizePartitionCalculations)
 {
@@ -772,10 +798,20 @@ GenerateSizeQueryOnMultiplePlacements(List *shardIntervalList,
 			 */
 			continue;
 		}
+
+		/*
+		 * We need to build the shard relation name, being an index or table ...
+		 */
+		Oid objectId = shardInterval->relationId;
+		if (indexId != InvalidOid)
+		{
+			objectId = indexId;
+		}
+
 		uint64 shardId = shardInterval->shardId;
-		Oid schemaId = get_rel_namespace(shardInterval->relationId);
+		Oid schemaId = get_rel_namespace(objectId);
 		char *schemaName = get_namespace_name(schemaId);
-		char *shardName = get_rel_name(shardInterval->relationId);
+		char *shardName = get_rel_name(objectId);
 		AppendShardIdToName(&shardName, shardId);
 
 		char *shardQualifiedName = quote_qualified_identifier(schemaName, shardName);
