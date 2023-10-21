@@ -13,10 +13,13 @@ SELECT citus_relation_size(1);
 SELECT citus_total_relation_size(1);
 
 -- Tests with non-distributed table
-CREATE TABLE non_distributed_table (x int);
+CREATE TABLE non_distributed_table (x int primary key);
 SELECT citus_table_size('non_distributed_table');
 SELECT citus_relation_size('non_distributed_table');
 SELECT citus_total_relation_size('non_distributed_table');
+SELECT citus_table_size('non_distributed_table_pkey');
+SELECT citus_relation_size('non_distributed_table_pkey');
+SELECT citus_total_relation_size('non_distributed_table_pkey');
 DROP TABLE non_distributed_table;
 
 -- fix broken placements via disabling the node
@@ -37,6 +40,8 @@ SELECT citus_table_size('customer_copy_hash');
 SELECT citus_relation_size('customer_copy_hash');
 SELECT citus_total_relation_size('customer_copy_hash');
 
+VACUUM (FULL) supplier;
+
 -- Make sure we can get multiple sizes in a single query
 SELECT citus_table_size('customer_copy_hash'),
        citus_table_size('customer_copy_hash'),
@@ -49,6 +54,11 @@ VACUUM (FULL) customer_copy_hash;
 SELECT citus_table_size('customer_copy_hash');
 SELECT citus_relation_size('customer_copy_hash');
 SELECT citus_total_relation_size('customer_copy_hash');
+
+-- Tests on index on distributed table.
+SELECT citus_table_size('customer_copy_hash_pkey');
+SELECT citus_relation_size('customer_copy_hash_pkey');
+SELECT citus_total_relation_size('customer_copy_hash_pkey');
 
 -- Tests on reference table
 VACUUM (FULL) supplier;
