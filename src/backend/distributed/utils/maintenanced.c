@@ -157,9 +157,9 @@ InitializeMaintenanceDaemonForMainDb(void)
 
 	memset(&worker, 0, sizeof(worker));
 
-	SafeSnprintf(worker.bgw_name, sizeof(worker.bgw_name),
-				 "Citus Maintenance Daemon: %u/%u",
-				 0, 0);
+
+	strcpy_s(worker.bgw_name, sizeof(worker.bgw_name),
+			 "Citus Maintenance Daemon for Main DB");
 
 	/* request ability to connect to target database */
 	worker.bgw_flags = BGWORKER_SHMEM_ACCESS | BGWORKER_BACKEND_DATABASE_CONNECTION;
