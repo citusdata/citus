@@ -240,6 +240,8 @@ PreprocessAlterDatabaseSetStmt(Node *node, const char *queryString,
 		return NIL;
 	}
 
+
+
 	AlterDatabaseSetStmt *stmt = castNode(AlterDatabaseSetStmt, node);
 
 	EnsureCoordinator();
@@ -351,6 +353,13 @@ citus_internal_database_command(PG_FUNCTION_ARGS)
 	PG_RETURN_VOID();
 }
 
+static char * GetUnmarkDatabaseDistributedSql(char* dbName){
+	StringInfoData pg_dist_object_delete = { 0 };
+	initStringInfo(&pg_dist_object_delete);
+	appendStringInfo(&pg_dist_object_delete, "delete from pg_dist_object where "
+								  "object_id in (select oid from pg_database where datname = '%s')",dbName);
+	return pg_dist_object_delete.data;
+}
 
 List *
 PreprocessDropDatabaseStmt(Node *node, const char *queryString,
@@ -373,6 +382,8 @@ PreprocessDropDatabaseStmt(Node *node, const char *queryString,
 		return NIL;
 	}
 
+
+
 	ObjectAddress dbAddress = { 0 };
 	ObjectAddressSet(dbAddress, DatabaseRelationId, databaseOid);
 	if (!IsObjectDistributed(&dbAddress))
@@ -381,6 +392,7 @@ PreprocessDropDatabaseStmt(Node *node, const char *queryString,
 	}
 
 	UnmarkObjectDistributed(&dbAddress);
+	char *unmarkDatabaseDistributedSql = GetUnmarkDatabaseDistributedSql(stmt->dbname);
 
 	char *dropDatabaseCommand = DeparseTreeNode(node);
 
@@ -390,7 +402,8 @@ PreprocessDropDatabaseStmt(Node *node, const char *queryString,
 					 quote_literal_cstr(dropDatabaseCommand));
 
 
-	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
+	List *commands = list_make4(DISABLE_DDL_PROPAGATION,
+								unmarkDatabaseDistributedSql,
 								(void *) internalDropCommand->data,
 								ENABLE_DDL_PROPAGATION);
 
