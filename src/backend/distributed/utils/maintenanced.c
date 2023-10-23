@@ -126,6 +126,8 @@ static void MaintenanceDaemonShmemExit(int code, Datum arg);
 static void MaintenanceDaemonErrorContext(void *arg);
 static bool MetadataSyncTriggeredCheckAndReset(MaintenanceDaemonDBData *dbData);
 static void WarnMaintenanceDaemonNotStarted(void);
+static MaintenanceDaemonDBData * GetMaintenanceDaemonDBHashEntry(Oid databaseId,
+																 bool *found);
 
 /*
  * InitializeMaintenanceDaemon, called at server start, is responsible for
@@ -141,6 +143,39 @@ InitializeMaintenanceDaemon(void)
 
 
 /*
+ * GetMaintenanceDaemonDBHashEntry searches the MaintenanceDaemonDBHash for the
+ * databaseId. It returns the entry if found or creates a new entry and initializes
+ * the value with zeroes.
+ */
+MaintenanceDaemonDBData *
+GetMaintenanceDaemonDBHashEntry(Oid databaseId, bool *found)
+{
+	MaintenanceDaemonDBData *dbData = (MaintenanceDaemonDBData *) hash_search(
+		MaintenanceDaemonDBHash,
+		&MyDatabaseId,
+		HASH_ENTER_NULL,
+		found);
+
+	if (!dbData)
+	{
+		elog(LOG,
+			 "cannot create or find the maintenance deamon hash entry for database %u",
+			 databaseId);
+		return NULL;
+	}
+
+	if (!*found)
+	{
+		/* ensure the values in MaintenanceDaemonDBData are zero */
+		memset(((char *) dbData) + sizeof(Oid), 0,
+			   sizeof(MaintenanceDaemonDBData) - sizeof(Oid));
+	}
+
+	return dbData;
+}
+
+
+/*
  * InitializeMaintenanceDaemonForMainDb is called in _PG_Init
  * at which stage we are not in a transaction or have databaseOid
  */
@@ -149,7 +184,7 @@ InitializeMaintenanceDaemonForMainDb(void)
 {
 	if (strcmp(MainDb, "") == 0)
 	{
-		elog(LOG, "There is no designated main database.");
+		elog(LOG, "There is no designated Main database.");
 		return;
 	}
 
@@ -192,29 +227,18 @@ void
 InitializeMaintenanceDaemonBackend(void)
 {
 	Oid extensionOwner = CitusExtensionOwner();
-	bool found;
+	bool found = false;
 
 	LWLockAcquire(&MaintenanceDaemonControl->lock, LW_EXCLUSIVE);
 
-	MaintenanceDaemonDBData *dbData = (MaintenanceDaemonDBData *) hash_search(
-		MaintenanceDaemonDBHash,
-		&MyDatabaseId,
-		HASH_ENTER_NULL,
-		&found);
+	MaintenanceDaemonDBData *dbData = GetMaintenanceDaemonDBHashEntry(MyDatabaseId,
+																	  &found);
 
 	if (dbData == NULL)
 	{
 		WarnMaintenanceDaemonNotStarted();
 		LWLockRelease(&MaintenanceDaemonControl->lock);
-
 		return;
-	}
-
-	if (!found)
-	{
-		/* ensure the values in MaintenanceDaemonDBData are zero */
-		memset(((char *) dbData) + sizeof(Oid), 0,
-			   sizeof(MaintenanceDaemonDBData) - sizeof(Oid));
 	}
 
 	if (IsMaintenanceDaemon)
@@ -350,25 +374,14 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 
 		/* Now we have a valid MyDatabaseId. */
 		/* Insert the daemon instance to the hash table. */
-		bool found;
+		bool found = false;
 
 		LWLockAcquire(&MaintenanceDaemonControl->lock, LW_EXCLUSIVE);
 
-		myDbData = (MaintenanceDaemonDBData *) hash_search(
-			MaintenanceDaemonDBHash,
-			&MyDatabaseId,
-			HASH_ENTER_NULL,
-			&found);
+		myDbData = GetMaintenanceDaemonDBHashEntry(MyDatabaseId, &found);
 
 		if (!myDbData)
 		{
-			/*
-			 * When the database crashes, background workers are restarted, but
-			 * the state in shared memory is lost. In that case, we exit and wait
-			 * for Postmaster calling __PG_Init which in turn calls
-			 * InitializeMaintenanceDaemonForAdminDB.
-			 */
-
 			proc_exit(0);
 		}
 
@@ -377,13 +390,6 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 			/* Another maintenance daemon is running.*/
 
 			proc_exit(0);
-		}
-
-		if (!found)
-		{
-			/* ensure the values in MaintenanceDaemonDBData are zero */
-			memset(((char *) myDbData) + sizeof(Oid), 0,
-				   sizeof(MaintenanceDaemonDBData) - sizeof(Oid));
 		}
 
 		before_shmem_exit(MaintenanceDaemonShmemExit, ObjectIdGetDatum(MyDatabaseId));
