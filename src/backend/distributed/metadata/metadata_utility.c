@@ -91,10 +91,8 @@ static GroupShardPlacement * TupleToGroupShardPlacement(TupleDesc tupleDesc,
 														HeapTuple heapTuple);
 static bool DistributedRelationSize(Oid relationId, SizeQueryType sizeQueryType,
 									bool failOnError, uint64 *relationSize);
-static bool DistributedRelationSizeOnWorker(WorkerNode *workerNode,
-											Oid relationId, Oid indexId,
-											SizeQueryType sizeQueryType,
-											bool failOnError,
+static bool DistributedRelationSizeOnWorker(WorkerNode *workerNode, Oid relationId,
+											SizeQueryType sizeQueryType, bool failOnError,
 											uint64 *relationSize);
 static List * ShardIntervalsOnWorkerGroup(WorkerNode *workerNode, Oid relationId);
 static char * GenerateShardIdNameValuesForShardList(List *shardIntervalList,
@@ -522,11 +520,6 @@ DistributedRelationSize(Oid relationId, SizeQueryType sizeQueryType,
 {
 	int logLevel = WARNING;
 
-	/*
-	 * By default we suppose we examine a table, not an index.
-	 */
-	Oid tableId = relationId;
-
 	if (failOnError)
 	{
 		logLevel = ERROR;
@@ -554,16 +547,14 @@ DistributedRelationSize(Oid relationId, SizeQueryType sizeQueryType,
 		return false;
 	}
 
-	/*
-	 * If the relation is an index, update tableId and define indexId
-	 */
+	Oid checkRelId = relationId;
 	if (relation->rd_rel->relkind == RELKIND_INDEX)
 	{
-		indexId = relationId;
-		tableId = IndexGetRelation(relation->rd_id, false);
+		bool missingOk = false;
+		checkRelId = IndexGetRelation(relation->rd_id, missingOk);
 	}
 
-	ErrorIfNotSuitableToGetSize(tableId);
+	ErrorIfNotSuitableToGetSize(checkRelId);
 
 	table_close(relation, AccessShareLock);
 
@@ -573,8 +564,8 @@ DistributedRelationSize(Oid relationId, SizeQueryType sizeQueryType,
 	{
 		uint64 relationSizeOnNode = 0;
 
-		bool gotSize = DistributedRelationSizeOnWorker(workerNode, tableId,
-													   indexId, sizeQueryType,
+		bool gotSize = DistributedRelationSizeOnWorker(workerNode, relationId,
+													   sizeQueryType,
 													   failOnError, &relationSizeOnNode);
 		if (!gotSize)
 		{
@@ -597,7 +588,7 @@ DistributedRelationSize(Oid relationId, SizeQueryType sizeQueryType,
  */
 static bool
 DistributedRelationSizeOnWorker(WorkerNode *workerNode, Oid relationId,
-								Oid indexId, SizeQueryType sizeQueryType,
+								SizeQueryType sizeQueryType,
 								bool failOnError, uint64 *relationSize)
 {
 	int logLevel = WARNING;
@@ -611,6 +602,16 @@ DistributedRelationSizeOnWorker(WorkerNode *workerNode, Oid relationId,
 	uint32 workerNodePort = workerNode->workerPort;
 	uint32 connectionFlag = 0;
 	PGresult *result = NULL;
+
+	/* if the relation is an index, update relationId and define indexId */
+    Oid indexId = InvalidOid;
+	if (get_rel_relkind(relationId) == RELKIND_INDEX)
+	{
+		indexId = relationId;
+
+        bool missingOk = false;
+		relationId = IndexGetRelation(indexId, missingOk);
+	}
 
 	List *shardIntervalsOnNode = ShardIntervalsOnWorkerGroup(workerNode, relationId);
 
@@ -629,15 +630,6 @@ DistributedRelationSizeOnWorker(WorkerNode *workerNode, Oid relationId,
 													workerNodePort);
 	int queryResult = ExecuteOptionalRemoteCommand(connection, relationSizeQuery->data,
 												   &result);
-
-	/*
-	 * After this point, we don't need to keep relationId pointing to the table.
-	 * So we swap with indexId if relevant, only for error log...
-	 */
-	if (indexId != InvalidOid)
-	{
-		relationId = indexId;
-	}
 
 	if (queryResult != 0)
 	{
@@ -771,6 +763,9 @@ ShardIntervalsOnWorkerGroup(WorkerNode *workerNode, Oid relationId)
  * This function uses UDFs named worker_partitioned_*_size for partitioned tables,
  * if the parameter optimizePartitionCalculations is true. The UDF to be called is
  * determined by the parameter sizeQueryType.
+ *
+ * indexId is provided if we're interested in the size of an index, not the whole
+ * table.
  */
 StringInfo
 GenerateSizeQueryOnMultiplePlacements(List *shardIntervalList,
@@ -802,11 +797,7 @@ GenerateSizeQueryOnMultiplePlacements(List *shardIntervalList,
 		/*
 		 * We need to build the shard relation name, being an index or table ...
 		 */
-		Oid objectId = shardInterval->relationId;
-		if (indexId != InvalidOid)
-		{
-			objectId = indexId;
-		}
+		Oid objectId = OidIsValid(indexId) ? indexId : shardInterval->relationId;
 
 		uint64 shardId = shardInterval->shardId;
 		Oid schemaId = get_rel_namespace(objectId);
