@@ -4,6 +4,7 @@
 # in main_db yet.
 def test_set_maindb(coord):
     with coord.cur() as cur1:
+        cur1.execute("DROP DATABASE IF EXISTS mymaindb;")
         cur1.execute("CREATE DATABASE mymaindb;")
         coord.configure("citus.main_db='mymaindb'")
         coord.restart()
