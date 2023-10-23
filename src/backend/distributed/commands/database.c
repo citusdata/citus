@@ -357,7 +357,7 @@ static char * GetUnmarkDatabaseDistributedSql(char* dbName){
 	StringInfoData pg_dist_object_delete = { 0 };
 	initStringInfo(&pg_dist_object_delete);
 	appendStringInfo(&pg_dist_object_delete, "delete from pg_dist_object where "
-								  "object_id in (select oid from pg_database where datname = '%s')",dbName);
+								  "objid in (select oid from pg_database where datname = '%s')",dbName);
 	return pg_dist_object_delete.data;
 }
 
