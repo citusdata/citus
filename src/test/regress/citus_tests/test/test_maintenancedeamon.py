@@ -4,7 +4,6 @@
 # in main_db yet.
 def test_set_maindb(coord):
     with coord.cur() as cur1:
-        cur1.execute("DROP DATABASE IF EXISTS mymaindb;")
         cur1.execute("CREATE DATABASE mymaindb;")
         cur1.execute("ALTER SYSTEM SET citus.main_db='mymaindb'")
         cur1.execute("SELECT pg_reload_conf();")
@@ -25,3 +24,5 @@ def test_set_maindb(coord):
             )
             == 1
         )
+
+        coord.cleanup_schemas()
