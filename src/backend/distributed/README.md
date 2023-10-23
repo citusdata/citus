@@ -1281,8 +1281,7 @@ Correlated or LATERAL subqueries have special behavior in Citus. They can often 
  **Key Code Details**:
  For more information on the code, check the following functions:
  `DeferErrorIfCannotPushdownSubquery()` ->
- `ContainsReferencesToOuterQuery()` ->
- `DeferredErrorIfUnsupportedLateralSubquery()`.
+ `ContainsReferencesToOuterQuery()`, `DeferErrorIfSubqueryRequiresMerge()`, `DeferredErrorIfUnsupportedLateralSubquery()`. LATERAL queries are different/unique: even if the subquery requires a merge step such as a `LIMIT`, if the correlation is on the distribution column, we can push it down. See [#4385](https://github.com/citusdata/citus/pull/4385).
 
 
 
