@@ -154,7 +154,7 @@ GeneratePlaceHolderPlannedStmt(Query *parse)
  * being a fast path router query.
  * The requirements for the fast path query can be listed below:
  *
- *   - SELECT query without CTES, sublinks-subqueries, set operations
+ *   - SELECT/UPDATE/DELETE query without CTES, sublinks-subqueries, set operations
  *   - The query should touch only a single hash distributed or reference table
  *   - The distribution with equality operator should be in the WHERE clause
  *      and it should be ANDed with any other filters. Also, the distribution
