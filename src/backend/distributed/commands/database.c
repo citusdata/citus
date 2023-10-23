@@ -241,7 +241,6 @@ PreprocessAlterDatabaseSetStmt(Node *node, const char *queryString,
 	}
 
 
-
 	AlterDatabaseSetStmt *stmt = castNode(AlterDatabaseSetStmt, node);
 
 	EnsureCoordinator();
@@ -353,13 +352,18 @@ citus_internal_database_command(PG_FUNCTION_ARGS)
 	PG_RETURN_VOID();
 }
 
-static char * GetUnmarkDatabaseDistributedSql(char* dbName){
+
+static char *
+GetUnmarkDatabaseDistributedSql(char *dbName)
+{
 	StringInfoData pg_dist_object_delete = { 0 };
 	initStringInfo(&pg_dist_object_delete);
 	appendStringInfo(&pg_dist_object_delete, "delete from pg_dist_object where "
-								  "objid in (select oid from pg_database where datname = '%s')",dbName);
+											 "objid in (select oid from pg_database where datname = '%s')",
+					 dbName);
 	return pg_dist_object_delete.data;
 }
+
 
 List *
 PreprocessDropDatabaseStmt(Node *node, const char *queryString,
@@ -381,7 +385,6 @@ PreprocessDropDatabaseStmt(Node *node, const char *queryString,
 		/* let regular ProcessUtility deal with IF NOT EXISTS */
 		return NIL;
 	}
-
 
 
 	ObjectAddress dbAddress = { 0 };
