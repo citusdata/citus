@@ -25,4 +25,4 @@ def test_set_maindb(coord):
             == 1
         )
 
-        coord.cleanup_schemas()
+        coord.sql("DROP DATABASE mymaindb;")
