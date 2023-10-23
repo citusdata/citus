@@ -21,11 +21,11 @@ ERROR:  cannot calculate the size because relation 'non_distributed_table' is no
 SELECT citus_total_relation_size('non_distributed_table');
 ERROR:  cannot calculate the size because relation 'non_distributed_table' is not distributed
 SELECT citus_table_size('non_distributed_table_pkey');
-ERROR:  cannot calculate the size because relation 'non_distributed_table' is not distributed
+ERROR:  cannot calculate the size because table 'non_distributed_table' for index 'non_distributed_table_pkey' is not distributed
 SELECT citus_relation_size('non_distributed_table_pkey');
-ERROR:  cannot calculate the size because relation 'non_distributed_table' is not distributed
+ERROR:  cannot calculate the size because table 'non_distributed_table' for index 'non_distributed_table_pkey' is not distributed
 SELECT citus_total_relation_size('non_distributed_table_pkey');
-ERROR:  cannot calculate the size because relation 'non_distributed_table' is not distributed
+ERROR:  cannot calculate the size because table 'non_distributed_table' for index 'non_distributed_table_pkey' is not distributed
 DROP TABLE non_distributed_table;
 -- fix broken placements via disabling the node
 SET client_min_messages TO ERROR;

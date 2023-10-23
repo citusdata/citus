@@ -547,14 +547,7 @@ DistributedRelationSize(Oid relationId, SizeQueryType sizeQueryType,
 		return false;
 	}
 
-	Oid checkRelId = relationId;
-	if (relation->rd_rel->relkind == RELKIND_INDEX)
-	{
-		bool missingOk = false;
-		checkRelId = IndexGetRelation(relation->rd_id, missingOk);
-	}
-
-	ErrorIfNotSuitableToGetSize(checkRelId);
+	ErrorIfNotSuitableToGetSize(relationId);
 
 	table_close(relation, AccessShareLock);
 
@@ -584,7 +577,7 @@ DistributedRelationSize(Oid relationId, SizeQueryType sizeQueryType,
 /*
  * DistributedRelationSizeOnWorker gets the workerNode and relationId to calculate
  * size of that relation on the given workerNode by summing up the size of each
- * shard placement. If indexId is defined then the relation is an index.
+ * shard placement.
  */
 static bool
 DistributedRelationSizeOnWorker(WorkerNode *workerNode, Oid relationId,
@@ -604,12 +597,12 @@ DistributedRelationSizeOnWorker(WorkerNode *workerNode, Oid relationId,
 	PGresult *result = NULL;
 
 	/* if the relation is an index, update relationId and define indexId */
-    Oid indexId = InvalidOid;
+	Oid indexId = InvalidOid;
 	if (get_rel_relkind(relationId) == RELKIND_INDEX)
 	{
 		indexId = relationId;
 
-        bool missingOk = false;
+		bool missingOk = false;
 		relationId = IndexGetRelation(indexId, missingOk);
 	}
 
@@ -1051,11 +1044,31 @@ ErrorIfNotSuitableToGetSize(Oid relationId)
 {
 	if (!IsCitusTable(relationId))
 	{
-		char *relationName = get_rel_name(relationId);
-		char *escapedQueryString = quote_literal_cstr(relationName);
-		ereport(ERROR, (errcode(ERRCODE_INVALID_TABLE_DEFINITION),
-						errmsg("cannot calculate the size because relation %s is not "
-							   "distributed", escapedQueryString)));
+		if (get_rel_relkind(relationId) != RELKIND_INDEX)
+		{
+			char *relationName = get_rel_name(relationId);
+			char *escapedQueryString = quote_literal_cstr(relationName);
+			ereport(ERROR, (errcode(ERRCODE_INVALID_TABLE_DEFINITION),
+							errmsg(
+								"cannot calculate the size because relation %s "
+								"is not distributed",
+								escapedQueryString)));
+		}
+		bool missingOk = false;
+		Oid indexId = relationId;
+		relationId = IndexGetRelation(relationId, missingOk);
+		if (!IsCitusTable(relationId))
+		{
+			char *tableName = get_rel_name(relationId);
+			char *escapedTableName = quote_literal_cstr(tableName);
+			char *indexName = get_rel_name(indexId);
+			char *escapedIndexName = quote_literal_cstr(indexName);
+			ereport(ERROR, (errcode(ERRCODE_INVALID_OBJECT_DEFINITION),
+							errmsg(
+								"cannot calculate the size because table %s for "
+								"index %s is not distributed",
+								escapedTableName, escapedIndexName)));
+		}
 	}
 }
 
