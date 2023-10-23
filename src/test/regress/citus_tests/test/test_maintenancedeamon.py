@@ -3,8 +3,9 @@
 # is launched. This should happen even if there is no query run
 # in main_db yet.
 def test_set_maindb(coord):
+    coord.create_database("mymaindb")
+
     with coord.cur() as cur1:
-        cur1.execute("CREATE DATABASE mymaindb;")
         cur1.execute("ALTER SYSTEM SET citus.main_db='mymaindb'")
         cur1.execute("SELECT pg_reload_conf();")
         coord.restart()
@@ -25,4 +26,4 @@ def test_set_maindb(coord):
             == 1
         )
 
-        coord.sql("DROP DATABASE mymaindb;")
+    coord.cleanup_databases()
