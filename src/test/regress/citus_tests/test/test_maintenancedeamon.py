@@ -6,7 +6,8 @@ def test_set_maindb(coord):
     with coord.cur() as cur1:
         cur1.execute("DROP DATABASE IF EXISTS mymaindb;")
         cur1.execute("CREATE DATABASE mymaindb;")
-        coord.configure("citus.main_db='mymaindb'")
+        cur1.execute("ALTER SYSTEM SET citus.main_db='mymaindb'")
+        cur1.execute("SELECT pg_reload_conf();")
         coord.restart()
 
         assert coord.sql_value("SHOW citus.main_db;") == "mymaindb"
