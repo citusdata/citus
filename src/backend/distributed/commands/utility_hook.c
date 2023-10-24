@@ -1265,9 +1265,10 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 			{
 				ereport(WARNING,
 						(errmsg(
-							 "CONCURRENTLY-enabled index commands can fail partially, "
-							 "leaving behind an INVALID index.\n Use DROP INDEX "
-							 "CONCURRENTLY IF EXISTS to remove the invalid index.")));
+							 "Commands that are not transaction-safe may result in partial failure"
+							 ", potentially leading to an inconsistent state. If the problematic command"
+							 " is a CREATE operation, consider using the 'IF EXISTS' syntax to drop the "
+							 "object, if applicable, and then reattempt the original command.")));
 				PG_RE_THROW();
 			}
 		}
