@@ -2,28 +2,38 @@
 # server is restarted. A Citus Maintenance Daemon for the main_db
 # is launched. This should happen even if there is no query run
 # in main_db yet.
-def test_set_maindb(coord):
-    coord.create_database("mymaindb")
+def test_set_maindb(cluster_factory):
+    cluster = cluster_factory(0)
 
-    with coord.cur() as cur1:
-        cur1.execute("ALTER SYSTEM SET citus.main_db='mymaindb'")
-        cur1.execute("SELECT pg_reload_conf();")
-        coord.restart()
+    cluster.coordinator.create_database("mymaindb")
+    cluster.coordinator.configure("citus.main_db='mymaindb'")
+    cluster.coordinator.restart()
 
-        assert coord.sql_value("SHOW citus.main_db;") == "mymaindb"
+    assert cluster.coordinator.sql_value("SHOW citus.main_db;") == "mymaindb"
 
-        assert (
-            coord.sql_value(
-                "SELECT count(*) FROM pg_stat_activity WHERE application_name = 'Citus Maintenance Daemon';"
-            )
-            == 2
+    assert (
+        cluster.coordinator.sql_value(
+            "SELECT count(*) FROM pg_stat_activity WHERE application_name = 'Citus Maintenance Daemon';"
         )
+        == 2
+    )
 
-        assert (
-            coord.sql_value(
-                "SELECT count(*) FROM pg_stat_activity WHERE application_name = 'Citus Maintenance Daemon' AND datname='mymaindb';"
-            )
-            == 1
+    assert (
+        cluster.coordinator.sql_value(
+            "SELECT count(*) FROM pg_stat_activity WHERE application_name = 'Citus Maintenance Daemon' AND datname='mymaindb';"
         )
+        == 1
+    )
 
-    coord.cleanup_databases()
+    cluster.coordinator.configure("citus.main_db=''")
+    cluster.coordinator.restart()
+    assert cluster.coordinator.sql_value("SHOW citus.main_db;") == ""
+    assert (
+        cluster.coordinator.sql_value(
+            "SELECT count(*) FROM pg_stat_activity WHERE application_name = 'Citus Maintenance Daemon';"
+        )
+        == 1
+    )
+
+    
+    cluster.coordinator.cleanup_databases()
