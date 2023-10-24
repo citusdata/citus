@@ -365,6 +365,20 @@ GetUnmarkDatabaseDistributedSql(char *dbName)
 }
 
 
+static void
+UnmarkObjectDistributedForDropDb(const ObjectAddress *distAddress, char *dbName)
+{
+	UnmarkObjectDistributed(distAddress);
+
+	if (EnableMetadataSync)
+	{
+		char *workerPgDistObjectUpdateCommand =
+			GetUnmarkDatabaseDistributedSql(dbName);
+		SendCommandToWorkersWithMetadata(workerPgDistObjectUpdateCommand);
+	}
+}
+
+
 List *
 PreprocessDropDatabaseStmt(Node *node, const char *queryString,
 						   ProcessUtilityContext processUtilityContext)
@@ -394,7 +408,7 @@ PreprocessDropDatabaseStmt(Node *node, const char *queryString,
 		return NIL;
 	}
 
-	UnmarkObjectDistributed(&dbAddress);
+	UnmarkObjectDistributedForDropDb(&dbAddress, stmt->dbname);
 	char *unmarkDatabaseDistributedSql = GetUnmarkDatabaseDistributedSql(stmt->dbname);
 
 	char *dropDatabaseCommand = DeparseTreeNode(node);
