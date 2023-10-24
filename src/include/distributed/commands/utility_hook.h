@@ -79,7 +79,7 @@ typedef struct DDLJob
 
 extern ProcessUtility_hook_type PrevProcessUtility;
 
-extern void multi_ProcessUtility(PlannedStmt *pstmt, const char *queryString,
+extern void citus_ProcessUtility(PlannedStmt *pstmt, const char *queryString,
 								 bool readOnlyTree,
 								 ProcessUtilityContext context, ParamListInfo params,
 								 struct QueryEnvironment *queryEnv, DestReceiver *dest,

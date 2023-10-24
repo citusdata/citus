@@ -96,13 +96,13 @@ int UtilityHookLevel = 0;
 
 
 /* Local functions forward declarations for helper functions */
-static void ProcessUtilityInternal(PlannedStmt *pstmt,
-								   const char *queryString,
-								   ProcessUtilityContext context,
-								   ParamListInfo params,
-								   struct QueryEnvironment *queryEnv,
-								   DestReceiver *dest,
-								   QueryCompletion *completionTag);
+static void citus_ProcessUtilityInternal(PlannedStmt *pstmt,
+										 const char *queryString,
+										 ProcessUtilityContext context,
+										 ParamListInfo params,
+										 struct QueryEnvironment *queryEnv,
+										 DestReceiver *dest,
+										 QueryCompletion *completionTag);
 static void set_indexsafe_procflags(void);
 static char * CurrentSearchPath(void);
 static void IncrementUtilityHookCountersIfNecessary(Node *parsetree);
@@ -131,7 +131,7 @@ ProcessUtilityParseTree(Node *node, const char *queryString, ProcessUtilityConte
 
 
 /*
- * multi_ProcessUtility is the main entry hook for implementing Citus-specific
+ * citus_ProcessUtility is the main entry hook for implementing Citus-specific
  * utility behavior. Its primary responsibilities are intercepting COPY and DDL
  * commands and augmenting the coordinator's command with corresponding tasks
  * to be run on worker nodes, after suitably ensuring said commands' options
@@ -140,7 +140,7 @@ ProcessUtilityParseTree(Node *node, const char *queryString, ProcessUtilityConte
  * TRUNCATE and VACUUM are also supported.
  */
 void
-multi_ProcessUtility(PlannedStmt *pstmt,
+citus_ProcessUtility(PlannedStmt *pstmt,
 					 const char *queryString,
 					 bool readOnlyTree,
 					 ProcessUtilityContext context,
@@ -330,8 +330,8 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 
 	PG_TRY();
 	{
-		ProcessUtilityInternal(pstmt, queryString, context, params, queryEnv, dest,
-							   completionTag);
+		citus_ProcessUtilityInternal(pstmt, queryString, context, params, queryEnv, dest,
+									 completionTag);
 
 		if (UtilityHookLevel == 1)
 		{
@@ -405,7 +405,7 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 
 
 /*
- * ProcessUtilityInternal is a helper function for multi_ProcessUtility where majority
+ * citus_ProcessUtilityInternal is a helper function for citus_ProcessUtility where majority
  * of the Citus specific utility statements are handled here. The distinction between
  * both functions is that Citus_ProcessUtility does not handle CALL and DO statements.
  * The reason for the distinction is implemented to be able to find the "top-level" DDL
@@ -413,13 +413,13 @@ multi_ProcessUtility(PlannedStmt *pstmt,
  * this goal.
  */
 static void
-ProcessUtilityInternal(PlannedStmt *pstmt,
-					   const char *queryString,
-					   ProcessUtilityContext context,
-					   ParamListInfo params,
-					   struct QueryEnvironment *queryEnv,
-					   DestReceiver *dest,
-					   QueryCompletion *completionTag)
+citus_ProcessUtilityInternal(PlannedStmt *pstmt,
+							 const char *queryString,
+							 ProcessUtilityContext context,
+							 ParamListInfo params,
+							 struct QueryEnvironment *queryEnv,
+							 DestReceiver *dest,
+							 QueryCompletion *completionTag)
 {
 	Node *parsetree = pstmt->utilityStmt;
 	List *ddlJobs = NIL;
@@ -1378,7 +1378,7 @@ PostStandardProcessUtility(Node *parsetree)
 	 * on the local table first. However, in order to decide whether the
 	 * command leads to an invalidation, we need to check before the command
 	 * is being executed since we read pg_constraint table. Thus, we maintain a
-	 * local flag and do the invalidation after multi_ProcessUtility,
+	 * local flag and do the invalidation after citus_ProcessUtility,
 	 * before ExecuteDistributedDDLJob().
 	 */
 	InvalidateForeignKeyGraphForDDL();
