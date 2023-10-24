@@ -521,8 +521,7 @@ IsCitusTableTypeCacheEntry(CitusTableCacheEntry *tableEntry, CitusTableType tabl
 
 
 /*
- * HasDistributionKey returs true if given Citus table doesn't have a
- * distribution key.
+ * HasDistributionKey returns true if given Citus table has a distribution key.
  */
 bool
 HasDistributionKey(Oid relationId)
@@ -538,8 +537,8 @@ HasDistributionKey(Oid relationId)
 
 
 /*
- * HasDistributionKey returs true if given cache entry identifies a Citus
- * table that doesn't have a distribution key.
+ * HasDistributionKeyCacheEntry returns true if given cache entry identifies a
+ * Citus table that has a distribution key.
  */
 bool
 HasDistributionKeyCacheEntry(CitusTableCacheEntry *tableEntry)
