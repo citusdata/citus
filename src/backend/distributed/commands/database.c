@@ -401,7 +401,7 @@ List *
 DropDatabaseStmtObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
 {
 	DropdbStmt *stmt = castNode(DropdbStmt, node);
-	ObjectAddress *dbAddress = GetDatabaseAddressFromDatabaseName(stmt->dbname, stmt->missing_ok);
+	ObjectAddress *dbAddress = GetDatabaseAddressFromDatabaseName(stmt->dbname, missing_ok);
 	return list_make1(dbAddress);
 }
 
