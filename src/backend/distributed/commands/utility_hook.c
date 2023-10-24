@@ -1483,7 +1483,7 @@ DDLTaskList(Oid relationId, const char *commandString)
 
 /*
  * NontransactionalNodeDDLTask builds a list of tasks to execute a DDL command on a
- * given target set of nodes with cannotBeExecutedInTransction is set to make sure
+ * given target set of nodes with cannotBeExecutedInTransaction is set to make sure
  * that list is being executed without a transaction.
  */
 List *
@@ -1496,7 +1496,7 @@ NontransactionalNodeDDLTask(TargetWorkerSet targets, List *commands)
 		Task *task = NULL;
 		foreach_ptr(task, ddlJob->taskList)
 		{
-			task->cannotBeExecutedInTransction = true;
+			task->cannotBeExecutedInTransaction = true;
 		}
 	}
 	return ddlJobs;
