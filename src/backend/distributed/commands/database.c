@@ -273,16 +273,11 @@ PostprocessCreateDatabaseStmt(Node *node, const char *queryString)
 
 	char *createDatabaseCommand = DeparseTreeNode(node);
 
-	StringInfo internalCreateCommand = makeStringInfo();
-	appendStringInfo(internalCreateCommand,
-					 "SELECT pg_catalog.citus_internal_database_command(%s)",
-					 quote_literal_cstr(createDatabaseCommand));
-
 	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
-								(void *) internalCreateCommand->data,
+								(void *) createDatabaseCommand,
 								ENABLE_DDL_PROPAGATION);
 
-	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
+	return NontransactionalNodeDDLTask(NON_COORDINATOR_NODES, commands);
 }
 
 
@@ -356,55 +351,59 @@ List *
 PreprocessDropDatabaseStmt(Node *node, const char *queryString,
 						   ProcessUtilityContext processUtilityContext)
 {
+	bool isPostProcess = false;
 	if (!EnableCreateDatabasePropagation || !ShouldPropagate())
 	{
 		return NIL;
 	}
 
 	EnsureCoordinator();
-	EnsureSequentialModeForRoleDDL();
 
 	DropdbStmt *stmt = (DropdbStmt *) node;
 
-	Oid databaseOid = get_database_oid(stmt->dbname, stmt->missing_ok);
+	List *addresses = GetObjectAddressListFromParseTree(node, stmt->missing_ok, isPostProcess);
 
-	if (databaseOid == InvalidOid)
+	if (list_length(addresses) == 0)
 	{
-		/* let regular ProcessUtility deal with IF NOT EXISTS */
 		return NIL;
 	}
 
-
-	ObjectAddress dbAddress = { 0 };
-	ObjectAddressSet(dbAddress, DatabaseRelationId, databaseOid);
-	if (!IsObjectDistributed(&dbAddress))
+	ObjectAddress *address = (ObjectAddress *) linitial(addresses);
+	if (address->objectId == InvalidOid ||!IsObjectDistributed(address))
 	{
 		return NIL;
 	}
 
 	char *dropDatabaseCommand = DeparseTreeNode(node);
 
-	StringInfo internalDropCommand = makeStringInfo();
-	appendStringInfo(internalDropCommand,
-					 "SELECT pg_catalog.citus_internal_database_command(%s)",
-					 quote_literal_cstr(dropDatabaseCommand));
-
 
 	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
-								(void *) internalDropCommand->data,
+								(void *) dropDatabaseCommand,
 								ENABLE_DDL_PROPAGATION);
 
-	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
+	return NontransactionalNodeDDLTask(NON_COORDINATOR_NODES, commands);
 }
 
+static ObjectAddress *GetDatabaseAddressFromDatabaseName(char *databaseName)
+{
+	Oid databaseOid = get_database_oid(databaseName, false);
+	ObjectAddress *dbAddress = palloc0(sizeof(ObjectAddress));
+	ObjectAddressSet(*dbAddress, DatabaseRelationId, databaseOid);
+	return dbAddress;
+}
+
+List *
+DropDatabaseStmtObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
+{
+	DropdbStmt *stmt = castNode(DropdbStmt, node);
+	ObjectAddress *dbAddress = GetDatabaseAddressFromDatabaseName(stmt->dbname);
+	return list_make1(dbAddress);
+}
 
 List *
 CreateDatabaseStmtObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
 {
 	CreatedbStmt *stmt = castNode(CreatedbStmt, node);
-	Oid databaseOid = get_database_oid(stmt->dbname, missing_ok);
-	ObjectAddress *dbAddress = palloc0(sizeof(ObjectAddress));
-	ObjectAddressSet(*dbAddress, DatabaseRelationId, databaseOid);
-
+	ObjectAddress *dbAddress = GetDatabaseAddressFromDatabaseName(stmt->dbname);
 	return list_make1(dbAddress);
 }

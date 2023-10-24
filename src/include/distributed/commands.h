@@ -193,7 +193,6 @@ extern List * DropTextSearchConfigObjectAddress(Node *node, bool missing_ok, boo
 												isPostprocess);
 extern List * DropTextSearchDictObjectAddress(Node *node, bool missing_ok, bool
 											  isPostprocess);
-extern void UnmarkRolesAndDatabaseDistributed(Node *node);
 
 /* index.c */
 typedef void (*PGIndexProcessor)(Form_pg_index, List **, int);
@@ -241,6 +240,8 @@ extern List * PreprocessAlterDatabaseSetStmt(Node *node, const char *queryString
 extern List * PostprocessCreateDatabaseStmt(Node *node, const char *queryString);
 extern List * PreprocessDropDatabaseStmt(Node *node, const char *queryString,
 										 ProcessUtilityContext processUtilityContext);
+extern List * DropDatabaseStmtObjectAddress(Node *node, bool missing_ok, bool isPostprocess);
+extern List * CreateDatabaseStmtObjectAddress(Node *node, bool missing_ok, bool isPostprocess);
 
 
 /* domain.c - forward declarations */

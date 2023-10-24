@@ -342,30 +342,3 @@ DropTextSearchConfigObjectAddress(Node *node, bool missing_ok, bool isPostproces
 	return objectAddresses;
 }
 
-void UnmarkRolesAndDatabaseDistributed(Node *node)
-{
-	if (IsA(node, DropRoleStmt))
-	{
-		DropRoleStmt *stmt = castNode(DropRoleStmt, node);
-		List *allDropRoles = stmt->roles;
-
-		List *distributedDropRoles = FilterDistributedRoles(allDropRoles);
-		if (list_length(distributedDropRoles) > 0)
-		{
-			UnmarkRolesDistributed(distributedDropRoles);
-		}
-
-	}
-	else if (IsA(node, DropdbStmt))
-	{
-		elog(LOG, "Unmarking database1 as distributed");
-		DropdbStmt *stmt = castNode(DropdbStmt, node);
- 		char *dbName = stmt->dbname;
-
-		Oid dbOid = get_database_oid(dbName, stmt->missing_ok);
-		ObjectAddress *dbAddress = palloc0(sizeof(ObjectAddress));
-		ObjectAddressSet(*dbAddress, DatabaseRelationId, dbOid);
-		UnmarkObjectDistributed(dbAddress);
-		elog(LOG, "Unmarking database %s as distributed", dbName);
-	}
-}

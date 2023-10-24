@@ -729,7 +729,7 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 
 	/*
 	 * Make sure that dropping the role and database deletes the pg_dist_object entries. There is a
-	 * separate logic for roles and database, since roles database are not included as dropped objects in the
+	 * separate logic for roles and database, since roles and database are not included as dropped objects in the
 	 * drop event trigger. To handle it both on worker and coordinator nodes, it is not
 	 * implemented as a part of process functions but here.
 	 */
@@ -1482,13 +1482,31 @@ DDLTaskList(Oid relationId, const char *commandString)
 	return taskList;
 }
 
+/*
+ * NontransactionalNodeDDLTask builds a list of tasks to execute a DDL command on a
+ * given target set of nodes with cannotBeExecutedInTransction is set to make sure
+ * that list is being executed without a transaction.
+ */
+List * NontransactionalNodeDDLTask(TargetWorkerSet targets, List *commands ){
+	List *ddlJobs = NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
+    DDLJob *ddlJob = NULL;
+    foreach_ptr(ddlJob, ddlJobs)
+    {
+        Task *task = NULL;
+        foreach_ptr(task, ddlJob->taskList)
+        {
+            task->cannotBeExecutedInTransction = true;
+        }
+    }
+	return ddlJobs;
+}
 
 /*
  * NodeDDLTaskList builds a list of tasks to execute a DDL command on a
  * given target set of nodes.
  */
 List *
-NodeDDLTaskList(TargetWorkerSet targets, List *commands)
+NodeDDLTaskList(TargetWorkerSet targets, List *commands )
 {
 	DDLJob *ddlJob = palloc0(sizeof(DDLJob));
 	ddlJob->targetObjectAddress = InvalidObjectAddress;
