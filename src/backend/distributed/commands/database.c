@@ -388,9 +388,9 @@ PreprocessDropDatabaseStmt(Node *node, const char *queryString,
 
 
 static ObjectAddress *
-GetDatabaseAddressFromDatabaseName(char *databaseName)
+GetDatabaseAddressFromDatabaseName(char *databaseName, bool missingOk)
 {
-	Oid databaseOid = get_database_oid(databaseName, false);
+	Oid databaseOid = get_database_oid(databaseName, missingOk);
 	ObjectAddress *dbAddress = palloc0(sizeof(ObjectAddress));
 	ObjectAddressSet(*dbAddress, DatabaseRelationId, databaseOid);
 	return dbAddress;
@@ -401,7 +401,7 @@ List *
 DropDatabaseStmtObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
 {
 	DropdbStmt *stmt = castNode(DropdbStmt, node);
-	ObjectAddress *dbAddress = GetDatabaseAddressFromDatabaseName(stmt->dbname);
+	ObjectAddress *dbAddress = GetDatabaseAddressFromDatabaseName(stmt->dbname, stmt->missing_ok);
 	return list_make1(dbAddress);
 }
 
@@ -410,6 +410,6 @@ List *
 CreateDatabaseStmtObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
 {
 	CreatedbStmt *stmt = castNode(CreatedbStmt, node);
-	ObjectAddress *dbAddress = GetDatabaseAddressFromDatabaseName(stmt->dbname);
+	ObjectAddress *dbAddress = GetDatabaseAddressFromDatabaseName(stmt->dbname,stmt->missing_ok);
 	return list_make1(dbAddress);
 }
