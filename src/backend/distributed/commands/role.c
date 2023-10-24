@@ -1079,7 +1079,6 @@ UnmarkRolesDistributed(List *roles)
 		}
 
 		ObjectAddressSet(roleAddress, AuthIdRelationId, roleOid);
-		elog(LOG, "Unmarking role %s as distributed", role->rolename);
 		UnmarkObjectDistributed(&roleAddress);
 	}
 }
