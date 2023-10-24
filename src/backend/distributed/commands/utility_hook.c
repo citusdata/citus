@@ -1266,9 +1266,9 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 				ereport(WARNING,
 						(errmsg(
 							 "Commands that are not transaction-safe may result in partial failure"
-							 ", potentially leading to an inconsistent state. If the problematic command"
+							 ", potentially leading to an inconsistent state.\nIf the problematic command"
 							 " is a CREATE operation, consider using the 'IF EXISTS' syntax to drop the "
-							 "object, if applicable, and then reattempt the original command.")));
+							 "object,\nif applicable, and then reattempt the original command.")));
 				PG_RE_THROW();
 			}
 		}
