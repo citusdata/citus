@@ -99,7 +99,6 @@ static bool TryAssignPlacementGroupToNodeGroup(
 
 /* other helpers */
 static List * PlacementListGetUniqueNodeGroupIds(List *placementList);
-static int WorkerNodeListGetNodeWithGroupId(List *workerNodeList, int32 nodeGroupId);
 
 
 /*
@@ -222,7 +221,6 @@ TryAssignPlacementGroupsToNodeGroups(RebalancerPlacementSeparationContext *conte
 									 List *rebalancePlacementList,
 									 FmgrInfo *shardAllowedOnNodeUDF)
 {
-	List *availableWorkerList = list_copy(activeWorkerNodeList);
 	List *unassignedPlacementList = NIL;
 
 	/*
@@ -239,23 +237,10 @@ TryAssignPlacementGroupsToNodeGroups(RebalancerPlacementSeparationContext *conte
 		}
 
 		int32 currentNodeGroupId = shardPlacement->groupId;
-		if (TryAssignPlacementGroupToNodeGroup(context,
-											   currentNodeGroupId,
-											   shardPlacement,
-											   shardAllowedOnNodeUDF))
-		{
-			/*
-			 * TryAssignPlacementGroupToNodeGroup() succeeds for each worker node
-			 * once, hence we must not have removed the worker node from the list
-			 * yet, and WorkerNodeListGetNodeWithGroupId() ensures that already.
-			 */
-			int currentPlacementNodeIdx =
-				WorkerNodeListGetNodeWithGroupId(availableWorkerList,
-												 currentNodeGroupId);
-			availableWorkerList = list_delete_nth_cell(availableWorkerList,
-													   currentPlacementNodeIdx);
-		}
-		else
+		if (!TryAssignPlacementGroupToNodeGroup(context,
+												currentNodeGroupId,
+												shardPlacement,
+												shardAllowedOnNodeUDF))
 		{
 			unassignedPlacementList =
 				lappend(unassignedPlacementList, shardPlacement);
@@ -274,7 +259,7 @@ TryAssignPlacementGroupsToNodeGroups(RebalancerPlacementSeparationContext *conte
 		bool separated = false;
 
 		WorkerNode *availableWorkerNode = NULL;
-		foreach_ptr(availableWorkerNode, availableWorkerList)
+		foreach_ptr(availableWorkerNode, activeWorkerNodeList)
 		{
 			if (TryAssignPlacementGroupToNodeGroup(context,
 												   availableWorkerNode->groupId,
@@ -429,29 +414,4 @@ PlacementListGetUniqueNodeGroupIds(List *placementList)
 	}
 
 	return placementListUniqueNodeGroupIds;
-}
-
-
-/*
- * WorkerNodeListGetNodeWithGroupId returns the index of worker node with given id
- * in given worker node list.
- *
- * Throws an error if no such node is found.
- */
-static int
-WorkerNodeListGetNodeWithGroupId(List *workerNodeList, int32 nodeGroupId)
-{
-	int workerNodeIndex = 0;
-	WorkerNode *workerNode = NULL;
-	foreach_ptr(workerNode, workerNodeList)
-	{
-		if (workerNode->groupId == nodeGroupId)
-		{
-			return workerNodeIndex;
-		}
-
-		workerNodeIndex++;
-	}
-
-	ereport(ERROR, (errmsg("no such node is found")));
 }
