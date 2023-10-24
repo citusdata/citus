@@ -347,6 +347,7 @@ citus_internal_database_command(PG_FUNCTION_ARGS)
 	PG_RETURN_VOID();
 }
 
+
 List *
 PreprocessDropDatabaseStmt(Node *node, const char *queryString,
 						   ProcessUtilityContext processUtilityContext)
@@ -361,7 +362,8 @@ PreprocessDropDatabaseStmt(Node *node, const char *queryString,
 
 	DropdbStmt *stmt = (DropdbStmt *) node;
 
-	List *addresses = GetObjectAddressListFromParseTree(node, stmt->missing_ok, isPostProcess);
+	List *addresses = GetObjectAddressListFromParseTree(node, stmt->missing_ok,
+														isPostProcess);
 
 	if (list_length(addresses) == 0)
 	{
@@ -369,7 +371,7 @@ PreprocessDropDatabaseStmt(Node *node, const char *queryString,
 	}
 
 	ObjectAddress *address = (ObjectAddress *) linitial(addresses);
-	if (address->objectId == InvalidOid ||!IsObjectDistributed(address))
+	if (address->objectId == InvalidOid || !IsObjectDistributed(address))
 	{
 		return NIL;
 	}
@@ -384,13 +386,16 @@ PreprocessDropDatabaseStmt(Node *node, const char *queryString,
 	return NontransactionalNodeDDLTask(NON_COORDINATOR_NODES, commands);
 }
 
-static ObjectAddress *GetDatabaseAddressFromDatabaseName(char *databaseName)
+
+static ObjectAddress *
+GetDatabaseAddressFromDatabaseName(char *databaseName)
 {
 	Oid databaseOid = get_database_oid(databaseName, false);
 	ObjectAddress *dbAddress = palloc0(sizeof(ObjectAddress));
 	ObjectAddressSet(*dbAddress, DatabaseRelationId, databaseOid);
 	return dbAddress;
 }
+
 
 List *
 DropDatabaseStmtObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
@@ -399,6 +404,7 @@ DropDatabaseStmtObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
 	ObjectAddress *dbAddress = GetDatabaseAddressFromDatabaseName(stmt->dbname);
 	return list_make1(dbAddress);
 }
+
 
 List *
 CreateDatabaseStmtObjectAddress(Node *node, bool missing_ok, bool isPostprocess)

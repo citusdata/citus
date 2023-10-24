@@ -581,7 +581,6 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 	}
 
 
-
 	/*
 	 * We only process ALTER TABLE ... ATTACH PARTITION commands in the function below
 	 * and distribute the partition if necessary.
@@ -1482,31 +1481,35 @@ DDLTaskList(Oid relationId, const char *commandString)
 	return taskList;
 }
 
+
 /*
  * NontransactionalNodeDDLTask builds a list of tasks to execute a DDL command on a
  * given target set of nodes with cannotBeExecutedInTransction is set to make sure
  * that list is being executed without a transaction.
  */
-List * NontransactionalNodeDDLTask(TargetWorkerSet targets, List *commands ){
+List *
+NontransactionalNodeDDLTask(TargetWorkerSet targets, List *commands)
+{
 	List *ddlJobs = NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
-    DDLJob *ddlJob = NULL;
-    foreach_ptr(ddlJob, ddlJobs)
-    {
-        Task *task = NULL;
-        foreach_ptr(task, ddlJob->taskList)
-        {
-            task->cannotBeExecutedInTransction = true;
-        }
-    }
+	DDLJob *ddlJob = NULL;
+	foreach_ptr(ddlJob, ddlJobs)
+	{
+		Task *task = NULL;
+		foreach_ptr(task, ddlJob->taskList)
+		{
+			task->cannotBeExecutedInTransction = true;
+		}
+	}
 	return ddlJobs;
 }
+
 
 /*
  * NodeDDLTaskList builds a list of tasks to execute a DDL command on a
  * given target set of nodes.
  */
 List *
-NodeDDLTaskList(TargetWorkerSet targets, List *commands )
+NodeDDLTaskList(TargetWorkerSet targets, List *commands)
 {
 	DDLJob *ddlJob = palloc0(sizeof(DDLJob));
 	ddlJob->targetObjectAddress = InvalidObjectAddress;

@@ -341,4 +341,3 @@ DropTextSearchConfigObjectAddress(Node *node, bool missing_ok, bool isPostproces
 
 	return objectAddresses;
 }
-

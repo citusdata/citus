@@ -357,7 +357,9 @@ ExecuteCommandAsSuperuser(char *query, int paramCount, Oid *paramTypes,
 	return spiStatus;
 }
 
-void UnmarkRolesAndDatabaseDistributed(Node *node)
+
+void
+UnmarkRolesAndDatabaseDistributed(Node *node)
 {
 	if (IsA(node, DropRoleStmt))
 	{
@@ -369,12 +371,11 @@ void UnmarkRolesAndDatabaseDistributed(Node *node)
 		{
 			UnmarkRolesDistributed(distributedDropRoles);
 		}
-
 	}
 	else if (IsA(node, DropdbStmt))
 	{
 		DropdbStmt *stmt = castNode(DropdbStmt, node);
- 		char *dbName = stmt->dbname;
+		char *dbName = stmt->dbname;
 
 		Oid dbOid = get_database_oid(dbName, stmt->missing_ok);
 		ObjectAddress *dbAddress = palloc0(sizeof(ObjectAddress));
@@ -382,6 +383,7 @@ void UnmarkRolesAndDatabaseDistributed(Node *node)
 		UnmarkObjectDistributed(dbAddress);
 	}
 }
+
 
 /*
  * UnmarkObjectDistributed removes the entry from pg_dist_object that marks this object as
