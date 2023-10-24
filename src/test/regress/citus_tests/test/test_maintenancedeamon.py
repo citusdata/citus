@@ -2,6 +2,27 @@
 # server is restarted. A Citus Maintenance Daemon for the main_db
 # is launched. This should happen even if there is no query run
 # in main_db yet.
+import time
+
+
+def wait_until_deamons_start(deamoncount, cluster):
+    i = 0
+    n = 0
+
+    while i < 10:
+        i += 1
+        n = cluster.coordinator.sql_value(
+            "SELECT count(*) FROM pg_stat_activity WHERE application_name = 'Citus Maintenance Daemon';"
+        )
+
+        if n == deamoncount:
+            break
+
+        time.sleep(0.1)
+
+    assert n == deamoncount
+
+
 def test_set_maindb(cluster_factory):
     cluster = cluster_factory(0)
 
@@ -11,12 +32,7 @@ def test_set_maindb(cluster_factory):
 
     assert cluster.coordinator.sql_value("SHOW citus.main_db;") == "mymaindb"
 
-    assert (
-        cluster.coordinator.sql_value(
-            "SELECT count(*) FROM pg_stat_activity WHERE application_name = 'Citus Maintenance Daemon';"
-        )
-        == 2
-    )
+    wait_until_deamons_start(2, cluster)
 
     assert (
         cluster.coordinator.sql_value(
@@ -28,11 +44,7 @@ def test_set_maindb(cluster_factory):
     cluster.coordinator.configure("citus.main_db=''")
     cluster.coordinator.restart()
     assert cluster.coordinator.sql_value("SHOW citus.main_db;") == ""
-    assert (
-        cluster.coordinator.sql_value(
-            "SELECT count(*) FROM pg_stat_activity WHERE application_name = 'Citus Maintenance Daemon';"
-        )
-        == 1
-    )
+
+    wait_until_deamons_start(1, cluster)
 
     cluster.coordinator.cleanup_databases()
