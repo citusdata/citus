@@ -80,6 +80,7 @@
 #include "utils/inval.h"
 #include "utils/lsyscache.h"
 #include "utils/syscache.h"
+#include "catalog/pg_database.h"
 
 
 bool EnableDDLPropagation = true; /* ddl propagation is enabled */
@@ -148,6 +149,7 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 					 DestReceiver *dest,
 					 QueryCompletion *completionTag)
 {
+	elog(LOG, "multi_ProcessUtility called");
 	if (readOnlyTree)
 	{
 		pstmt = copyObject(pstmt);
@@ -578,6 +580,8 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 		PreprocessLockStatement((LockStmt *) parsetree, context);
 	}
 
+
+
 	/*
 	 * We only process ALTER TABLE ... ATTACH PARTITION commands in the function below
 	 * and distribute the partition if necessary.
@@ -724,22 +728,12 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 	}
 
 	/*
-	 * Make sure that dropping the role deletes the pg_dist_object entries. There is a
-	 * separate logic for roles, since roles are not included as dropped objects in the
+	 * Make sure that dropping the role and database deletes the pg_dist_object entries. There is a
+	 * separate logic for roles and database, since roles database are not included as dropped objects in the
 	 * drop event trigger. To handle it both on worker and coordinator nodes, it is not
 	 * implemented as a part of process functions but here.
 	 */
-	if (IsA(parsetree, DropRoleStmt))
-	{
-		DropRoleStmt *stmt = castNode(DropRoleStmt, parsetree);
-		List *allDropRoles = stmt->roles;
-
-		List *distributedDropRoles = FilterDistributedRoles(allDropRoles);
-		if (list_length(distributedDropRoles) > 0)
-		{
-			UnmarkRolesDistributed(distributedDropRoles);
-		}
-	}
+	UnmarkRolesAndDatabaseDistributed(parsetree);
 
 	pstmt->utilityStmt = parsetree;
 
