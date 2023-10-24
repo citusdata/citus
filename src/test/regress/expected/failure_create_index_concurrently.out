@@ -26,8 +26,9 @@ SELECT citus.mitmproxy('conn.onQuery(query="CREATE").kill()');
 (1 row)
 
 CREATE INDEX CONCURRENTLY idx_index_test ON index_test(id, value_1);
-WARNING:  CONCURRENTLY-enabled index commands can fail partially, leaving behind an INVALID index.
-Use DROP INDEX CONCURRENTLY IF EXISTS to remove the invalid index.
+WARNING:  Commands that are not transaction-safe may result in partial failure, potentially leading to an inconsistent state.
+If the problematic command is a CREATE operation, consider using the 'IF EXISTS' syntax to drop the object,
+if applicable, and then reattempt the original command.
 ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
@@ -59,8 +60,9 @@ SELECT citus.mitmproxy('conn.onQuery(query="CREATE").kill()');
 (1 row)
 
 CREATE INDEX CONCURRENTLY idx_index_test ON index_test(id, value_1);
-WARNING:  CONCURRENTLY-enabled index commands can fail partially, leaving behind an INVALID index.
-Use DROP INDEX CONCURRENTLY IF EXISTS to remove the invalid index.
+WARNING:  Commands that are not transaction-safe may result in partial failure, potentially leading to an inconsistent state.
+If the problematic command is a CREATE operation, consider using the 'IF EXISTS' syntax to drop the object,
+if applicable, and then reattempt the original command.
 ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
@@ -86,8 +88,9 @@ SELECT citus.mitmproxy('conn.onQuery(query="CREATE").cancel(' || pg_backend_pid(
 (1 row)
 
 CREATE INDEX CONCURRENTLY idx_index_test ON index_test(id, value_1);
-WARNING:  CONCURRENTLY-enabled index commands can fail partially, leaving behind an INVALID index.
-Use DROP INDEX CONCURRENTLY IF EXISTS to remove the invalid index.
+WARNING:  Commands that are not transaction-safe may result in partial failure, potentially leading to an inconsistent state.
+If the problematic command is a CREATE operation, consider using the 'IF EXISTS' syntax to drop the object,
+if applicable, and then reattempt the original command.
 ERROR:  canceling statement due to user request
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
@@ -111,8 +114,9 @@ SELECT citus.mitmproxy('conn.onQuery(query="CREATE").cancel(' || pg_backend_pid(
 (1 row)
 
 CREATE INDEX CONCURRENTLY idx_index_test ON index_test(id, value_1);
-WARNING:  CONCURRENTLY-enabled index commands can fail partially, leaving behind an INVALID index.
-Use DROP INDEX CONCURRENTLY IF EXISTS to remove the invalid index.
+WARNING:  Commands that are not transaction-safe may result in partial failure, potentially leading to an inconsistent state.
+If the problematic command is a CREATE operation, consider using the 'IF EXISTS' syntax to drop the object,
+if applicable, and then reattempt the original command.
 ERROR:  canceling statement due to user request
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
@@ -137,8 +141,9 @@ SELECT citus.mitmproxy('conn.onQuery(query="DROP INDEX CONCURRENTLY").kill()');
 (1 row)
 
 DROP INDEX CONCURRENTLY IF EXISTS idx_index_test;
-WARNING:  CONCURRENTLY-enabled index commands can fail partially, leaving behind an INVALID index.
-Use DROP INDEX CONCURRENTLY IF EXISTS to remove the invalid index.
+WARNING:  Commands that are not transaction-safe may result in partial failure, potentially leading to an inconsistent state.
+If the problematic command is a CREATE operation, consider using the 'IF EXISTS' syntax to drop the object,
+if applicable, and then reattempt the original command.
 ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
@@ -164,8 +169,9 @@ SELECT create_distributed_table('index_test_2', 'a');
 
 INSERT INTO index_test_2 VALUES (1, 1), (1, 2);
 CREATE UNIQUE INDEX CONCURRENTLY index_test_2_a_idx ON index_test_2(a);
-WARNING:  CONCURRENTLY-enabled index commands can fail partially, leaving behind an INVALID index.
-Use DROP INDEX CONCURRENTLY IF EXISTS to remove the invalid index.
+WARNING:  Commands that are not transaction-safe may result in partial failure, potentially leading to an inconsistent state.
+If the problematic command is a CREATE operation, consider using the 'IF EXISTS' syntax to drop the object,
+if applicable, and then reattempt the original command.
 ERROR:  could not create unique index "index_test_2_a_idx_1880019"
 DETAIL:  Key (a)=(1) is duplicated.
 CONTEXT:  while executing command on localhost:xxxxx
