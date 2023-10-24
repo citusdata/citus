@@ -149,7 +149,6 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 					 DestReceiver *dest,
 					 QueryCompletion *completionTag)
 {
-	elog(LOG, "multi_ProcessUtility called");
 	if (readOnlyTree)
 	{
 		pstmt = copyObject(pstmt);
