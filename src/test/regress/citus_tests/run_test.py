@@ -152,6 +152,7 @@ DEPS = {
         worker_count=6,
     ),
     "function_propagation": TestDeps("minimal_schedule"),
+    "citus_shards": TestDeps("minimal_schedule"),
     "grant_on_foreign_server_propagation": TestDeps("minimal_schedule"),
     "multi_modifying_xacts": TestDeps("minimal_schedule"),
     "multi_mx_modifying_xacts": TestDeps(None, ["multi_mx_create_table"]),
