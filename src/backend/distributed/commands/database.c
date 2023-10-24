@@ -273,16 +273,11 @@ PostprocessCreateDatabaseStmt(Node *node, const char *queryString)
 
 	char *createDatabaseCommand = DeparseTreeNode(node);
 
-	StringInfo internalCreateCommand = makeStringInfo();
-	appendStringInfo(internalCreateCommand,
-					 "SELECT pg_catalog.citus_internal_database_command(%s)",
-					 quote_literal_cstr(createDatabaseCommand));
-
 	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
-								(void *) internalCreateCommand->data,
+								(void *) createDatabaseCommand,
 								ENABLE_DDL_PROPAGATION);
 
-	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
+	return NontransactionalNodeDDLTask(NON_COORDINATOR_NODES, commands);
 }
 
 
@@ -352,37 +347,11 @@ citus_internal_database_command(PG_FUNCTION_ARGS)
 	PG_RETURN_VOID();
 }
 
-
-static char *
-GetUnmarkDatabaseDistributedSql(char *dbName)
-{
-	StringInfoData pg_dist_object_delete = { 0 };
-	initStringInfo(&pg_dist_object_delete);
-	appendStringInfo(&pg_dist_object_delete, "delete from pg_dist_object where "
-											 "objid in (select oid from pg_database where datname = '%s')",
-					 dbName);
-	return pg_dist_object_delete.data;
-}
-
-
-static void
-UnmarkObjectDistributedForDropDb(const ObjectAddress *distAddress, char *dbName)
-{
-	UnmarkObjectDistributed(distAddress);
-
-	if (EnableMetadataSync)
-	{
-		char *workerPgDistObjectUpdateCommand =
-			GetUnmarkDatabaseDistributedSql(dbName);
-		SendCommandToWorkersWithMetadata(workerPgDistObjectUpdateCommand);
-	}
-}
-
-
 List *
 PreprocessDropDatabaseStmt(Node *node, const char *queryString,
 						   ProcessUtilityContext processUtilityContext)
 {
+	bool isPostProcess = false;
 	if (!EnableCreateDatabasePropagation || !ShouldPropagate())
 	{
 		return NIL;
@@ -392,49 +361,49 @@ PreprocessDropDatabaseStmt(Node *node, const char *queryString,
 
 	DropdbStmt *stmt = (DropdbStmt *) node;
 
-	Oid databaseOid = get_database_oid(stmt->dbname, stmt->missing_ok);
+	List *addresses = GetObjectAddressListFromParseTree(node, stmt->missing_ok, isPostProcess);
 
-	if (databaseOid == InvalidOid)
-	{
-		/* let regular ProcessUtility deal with IF NOT EXISTS */
-		return NIL;
-	}
-
-
-	ObjectAddress dbAddress = { 0 };
-	ObjectAddressSet(dbAddress, DatabaseRelationId, databaseOid);
-	if (!IsObjectDistributed(&dbAddress))
+	if (list_length(addresses) == 0)
 	{
 		return NIL;
 	}
 
-	UnmarkObjectDistributedForDropDb(&dbAddress, stmt->dbname);
-	char *unmarkDatabaseDistributedSql = GetUnmarkDatabaseDistributedSql(stmt->dbname);
+	ObjectAddress *address = (ObjectAddress *) linitial(addresses);
+	if (address->objectId == InvalidOid ||!IsObjectDistributed(address))
+	{
+		return NIL;
+	}
 
 	char *dropDatabaseCommand = DeparseTreeNode(node);
 
-	StringInfo internalDropCommand = makeStringInfo();
-	appendStringInfo(internalDropCommand,
-					 "SELECT pg_catalog.citus_internal_database_command(%s)",
-					 quote_literal_cstr(dropDatabaseCommand));
 
-
-	List *commands = list_make4(DISABLE_DDL_PROPAGATION,
-								unmarkDatabaseDistributedSql,
-								(void *) internalDropCommand->data,
+	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
+								(void *) dropDatabaseCommand,
 								ENABLE_DDL_PROPAGATION);
 
-	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
+	return NontransactionalNodeDDLTask(NON_COORDINATOR_NODES, commands);
 }
 
+static ObjectAddress *GetDatabaseAddressFromDatabaseName(char *databaseName)
+{
+	Oid databaseOid = get_database_oid(databaseName, false);
+	ObjectAddress *dbAddress = palloc0(sizeof(ObjectAddress));
+	ObjectAddressSet(*dbAddress, DatabaseRelationId, databaseOid);
+	return dbAddress;
+}
+
+List *
+DropDatabaseStmtObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
+{
+	DropdbStmt *stmt = castNode(DropdbStmt, node);
+	ObjectAddress *dbAddress = GetDatabaseAddressFromDatabaseName(stmt->dbname);
+	return list_make1(dbAddress);
+}
 
 List *
 CreateDatabaseStmtObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
 {
 	CreatedbStmt *stmt = castNode(CreatedbStmt, node);
-	Oid databaseOid = get_database_oid(stmt->dbname, missing_ok);
-	ObjectAddress *dbAddress = palloc0(sizeof(ObjectAddress));
-	ObjectAddressSet(*dbAddress, DatabaseRelationId, databaseOid);
-
+	ObjectAddress *dbAddress = GetDatabaseAddressFromDatabaseName(stmt->dbname);
 	return list_make1(dbAddress);
 }

@@ -484,7 +484,7 @@ static DistributeObjectOps Database_Drop = {
 	.postprocess = NULL,
 	.objectType = OBJECT_DATABASE,
 	.operationType = DIST_OPS_DROP,
-	.address = NULL,
+	.address = DropDatabaseStmtObjectAddress,
 	.markDistributed = false,
 };
 

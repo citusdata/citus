@@ -48,6 +48,8 @@
 #include "utils/lsyscache.h"
 #include "utils/regproc.h"
 #include "utils/rel.h"
+#include "catalog/pg_database.h"
+#include "commands/dbcommands.h"
 
 
 static char * CreatePgDistObjectEntryCommand(const ObjectAddress *objectAddress);
@@ -355,6 +357,31 @@ ExecuteCommandAsSuperuser(char *query, int paramCount, Oid *paramTypes,
 	return spiStatus;
 }
 
+void UnmarkRolesAndDatabaseDistributed(Node *node)
+{
+	if (IsA(node, DropRoleStmt))
+	{
+		DropRoleStmt *stmt = castNode(DropRoleStmt, node);
+		List *allDropRoles = stmt->roles;
+
+		List *distributedDropRoles = FilterDistributedRoles(allDropRoles);
+		if (list_length(distributedDropRoles) > 0)
+		{
+			UnmarkRolesDistributed(distributedDropRoles);
+		}
+
+	}
+	else if (IsA(node, DropdbStmt))
+	{
+		DropdbStmt *stmt = castNode(DropdbStmt, node);
+ 		char *dbName = stmt->dbname;
+
+		Oid dbOid = get_database_oid(dbName, stmt->missing_ok);
+		ObjectAddress *dbAddress = palloc0(sizeof(ObjectAddress));
+		ObjectAddressSet(*dbAddress, DatabaseRelationId, dbOid);
+		UnmarkObjectDistributed(dbAddress);
+	}
+}
 
 /*
  * UnmarkObjectDistributed removes the entry from pg_dist_object that marks this object as
