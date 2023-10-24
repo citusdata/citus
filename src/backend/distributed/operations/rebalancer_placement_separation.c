@@ -251,18 +251,18 @@ TryAssignPlacementGroupsToNodeGroups(RebalancerPlacementSeparationContext *conte
 
 	/*
 	 * For the shardgroup placements that could not be assigned to their
-	 * current node, assign them to any other node that is available.
+	 * current node, assign them to any other node.
 	 */
 	ShardPlacement *unassignedShardPlacement = NULL;
 	foreach_ptr(unassignedShardPlacement, unassignedPlacementList)
 	{
 		bool separated = false;
 
-		WorkerNode *availableWorkerNode = NULL;
-		foreach_ptr(availableWorkerNode, activeWorkerNodeList)
+		WorkerNode *activeWorkerNode = NULL;
+		foreach_ptr(activeWorkerNode, activeWorkerNodeList)
 		{
 			if (TryAssignPlacementGroupToNodeGroup(context,
-												   availableWorkerNode->groupId,
+												   activeWorkerNode->groupId,
 												   unassignedShardPlacement,
 												   shardAllowedOnNodeUDF))
 			{
