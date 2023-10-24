@@ -38,21 +38,14 @@ typedef struct ListCellAndListWrapper
  *	  a convenience macro which loops through a pointer list without needing a
  *	  ListCell, just a declared pointer variable to store the pointer of the
  *	  cell in.
- *
- *   How it works:
- *	  - A ListCell is declared with the name {var}CellDoNotUse and used
- *	    throughout the for loop using ## to concat.
- *	  - To assign to var it needs to be done in the condition of the for loop,
- *	    because we cannot use the initializer since a ListCell* variable is
- *	    declared there.
- *	  - || true is used to always enter the loop when cell is not null even if
- *	    var is NULL.
  */
-#define foreach_ptr(var, l) \
-	for (ListCell *(var ## CellDoNotUse) = list_head(l); \
-		 (var ## CellDoNotUse) != NULL && \
-		 (((var) = lfirst(var ## CellDoNotUse)) || true); \
-		 var ## CellDoNotUse = lnext(l, var ## CellDoNotUse))
+#define foreach_ptr(var, lst) \
+	for (ForEachState var ## __state = { (lst), 0 }; \
+		 (var ## __state.l != NIL && \
+		  var ## __state.i < var ## __state.l->length) ? \
+		 (var = lfirst(&var ## __state.l->elements [var ## __state.i]), true) : \
+		 (var = NULL, false); \
+		 var ## __state.i ++)
 
 
 /*
@@ -61,11 +54,13 @@ typedef struct ListCellAndListWrapper
  *	  ListCell, just a declared int variable to store the int of the cell in.
  *	  For explanation of how it works see foreach_ptr.
  */
-#define foreach_int(var, l) \
-	for (ListCell *(var ## CellDoNotUse) = list_head(l); \
-		 (var ## CellDoNotUse) != NULL && \
-		 (((var) = lfirst_int(var ## CellDoNotUse)) || true); \
-		 var ## CellDoNotUse = lnext(l, var ## CellDoNotUse))
+#define foreach_int(var, lst) \
+	for (ForEachState var ## __state = { (lst), 0 }; \
+		 (var ## __state.l != NIL && \
+		  var ## __state.i < var ## __state.l->length) ? \
+		 (var = lfirst_int(&var ## __state.l->elements [var ## __state.i]), true) : \
+		 (var = 0, false); \
+		 var ## __state.i ++)
 
 
 /*
@@ -74,11 +69,13 @@ typedef struct ListCellAndListWrapper
  *	  ListCell, just a declared Oid variable to store the oid of the cell in.
  *	  For explanation of how it works see foreach_ptr.
  */
-#define foreach_oid(var, l) \
-	for (ListCell *(var ## CellDoNotUse) = list_head(l); \
-		 (var ## CellDoNotUse) != NULL && \
-		 (((var) = lfirst_oid(var ## CellDoNotUse)) || true); \
-		 var ## CellDoNotUse = lnext(l, var ## CellDoNotUse))
+#define foreach_oid(var, lst) \
+	for (ForEachState var ## __state = { (lst), 0 }; \
+		 (var ## __state.l != NIL && \
+		  var ## __state.i < var ## __state.l->length) ? \
+		 (var = lfirst_oid(&var ## __state.l->elements [var ## __state.i]), true) : \
+		 (var = 0, false); \
+		 var ## __state.i ++)
 
 /*
  * forboth_ptr -
@@ -138,13 +135,6 @@ typedef struct ListCellAndListWrapper
  *	  a convenience macro which loops through a pointer List and can append list
  *	  elements without needing a ListCell or and index variable, just a declared
  *	  pointer variable to store the iterated values.
- *
- *	  PostgreSQL 13 changed the representation of Lists to expansible arrays,
- *	  not chains of cons-cells. This changes the costs for accessing and
- *	  mutating List contents. Therefore different implementations are provided.
- *
- *	  For more information, see postgres commit with sha
- *	  1cff1b95ab6ddae32faa3efe0d95a820dbfdc164
  *
  *	  How it works:
  *	  - An index is declared with the name {var}PositionDoNotUse and used
