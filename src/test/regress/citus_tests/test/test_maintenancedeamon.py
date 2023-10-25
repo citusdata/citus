@@ -72,5 +72,3 @@ def test_set_maindb(cluster_factory):
         )
         == 0
     )
-
-    cluster.coordinator.cleanup_databases()

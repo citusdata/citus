@@ -454,6 +454,9 @@ def cleanup_test_leftovers(nodes):
         node.cleanup_schemas()
 
     for node in nodes:
+        node.cleanup_databases()
+
+    for node in nodes:
         node.cleanup_users()
 
 
