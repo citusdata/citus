@@ -11,11 +11,11 @@ source ci/ci_helpers.sh
 ci_scripts=$(
     find ci/ -iname "*.sh" |
     sed -E 's#^ci/##g' |
-    grep -v -E '^(ci_helpers.sh|fix_style.sh)$'
+    grep -v -E '^(ci_helpers.sh|fix_style.sh|check_enterprise_merge.sh)$'
 )
 for script in $ci_scripts; do
-    if ! grep "\\bci/$script\\b" .circleci/config.yml > /dev/null; then
-        echo "ERROR: CI script with name \"$script\" is not actually used in .circleci/config.yml"
+    if ! grep "\\bci/$script\\b" -r .github > /dev/null; then
+        echo "ERROR: CI script with name \"$script\" is not actually used in .github folder"
         exit 1
     fi
     if ! grep "^## \`$script\`\$" ci/README.md > /dev/null; then
