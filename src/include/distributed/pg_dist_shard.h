@@ -16,6 +16,8 @@
 #ifndef PG_DIST_SHARD_H
 #define PG_DIST_SHARD_H
 
+#include "distributed/shardgroup.h"
+
 /* ----------------
  *		pg_dist_shard definition.
  * ----------------
@@ -30,6 +32,7 @@ typedef struct FormData_pg_dist_shard
 	text shardminvalue;        /* partition key's minimum value in shard */
 	text shardmaxvalue;        /* partition key's maximum value in shard */
 #endif
+	ShardgroupID shardgroupid;
 } FormData_pg_dist_shard;
 
 /* ----------------
@@ -43,13 +46,14 @@ typedef FormData_pg_dist_shard *Form_pg_dist_shard;
  *      compiler constants for pg_dist_shards
  * ----------------
  */
-#define Natts_pg_dist_shard 6
+#define Natts_pg_dist_shard 7
 #define Anum_pg_dist_shard_logicalrelid 1
 #define Anum_pg_dist_shard_shardid 2
 #define Anum_pg_dist_shard_shardstorage 3
 #define Anum_pg_dist_shard_shardalias_DROPPED 4
 #define Anum_pg_dist_shard_shardminvalue 5
 #define Anum_pg_dist_shard_shardmaxvalue 6
+#define Anum_pg_dist_shard_shardgroupid 7
 
 /*
  * Valid values for shard storage types include foreign table, (standard) table

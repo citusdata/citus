@@ -84,6 +84,7 @@
 #include "distributed/relation_access_tracking.h"
 #include "distributed/remote_commands.h"
 #include "distributed/resource_lock.h"
+#include "distributed/shardgroup.h"
 #include "distributed/tenant_schema_metadata.h"
 #include "distributed/utils/array_type.h"
 #include "distributed/utils/function.h"
@@ -149,6 +150,8 @@ static char * ColocationGroupCreateCommand(uint32 colocationId, int shardCount,
 										   int replicationFactor,
 										   Oid distributionColumnType,
 										   Oid distributionColumnCollation);
+static char * ShardgroupsCreateCommand(ShardgroupID *shardgroupIDs, int shardCount,
+									   uint32 colocationId);
 static char * ColocationGroupDeleteCommand(uint32 colocationId);
 static char * RemoteSchemaIdExpressionById(Oid schemaId);
 static char * RemoteSchemaIdExpressionByName(char *schemaName);
@@ -171,6 +174,7 @@ PG_FUNCTION_INFO_V1(worker_record_sequence_dependency);
 PG_FUNCTION_INFO_V1(citus_internal_add_partition_metadata);
 PG_FUNCTION_INFO_V1(citus_internal_delete_partition_metadata);
 PG_FUNCTION_INFO_V1(citus_internal_add_shard_metadata);
+PG_FUNCTION_INFO_V1(citus_internal_add_shardgroup_metadata);
 PG_FUNCTION_INFO_V1(citus_internal_add_placement_metadata);
 PG_FUNCTION_INFO_V1(citus_internal_delete_placement_metadata);
 PG_FUNCTION_INFO_V1(citus_internal_add_placement_metadata_legacy);
@@ -1249,7 +1253,7 @@ ShardListInsertCommand(List *shardIntervalList)
 	StringInfo insertShardCommand = makeStringInfo();
 	appendStringInfo(insertShardCommand,
 					 "WITH shard_data(relationname, shardid, storagetype, "
-					 "shardminvalue, shardmaxvalue)  AS (VALUES ");
+					 "shardminvalue, shardmaxvalue, shardgroupid)  AS (VALUES ");
 
 	foreach_ptr(shardInterval, shardIntervalList)
 	{
@@ -1281,12 +1285,13 @@ ShardListInsertCommand(List *shardIntervalList)
 		}
 
 		appendStringInfo(insertShardCommand,
-						 "(%s::regclass, %ld, '%c'::\"char\", %s, %s)",
+						 "(%s::regclass, %ld, '%c'::\"char\", %s, %s, %ld::bigint)",
 						 quote_literal_cstr(qualifiedRelationName),
 						 shardId,
 						 shardInterval->storageType,
 						 minHashToken->data,
-						 maxHashToken->data);
+						 maxHashToken->data,
+						 shardInterval->shardgroupId);
 
 		if (llast(shardIntervalList) != shardInterval)
 		{
@@ -1298,7 +1303,7 @@ ShardListInsertCommand(List *shardIntervalList)
 
 	appendStringInfo(insertShardCommand,
 					 "SELECT citus_internal_add_shard_metadata(relationname, shardid, "
-					 "storagetype, shardminvalue, shardmaxvalue) "
+					 "storagetype, shardminvalue, shardmaxvalue, shardgroupid) "
 					 "FROM shard_data;");
 
 	/*
@@ -3341,6 +3346,9 @@ citus_internal_add_shard_metadata(PG_FUNCTION_ARGS)
 		shardMaxValue = PG_GETARG_TEXT_P(4);
 	}
 
+	PG_ENSURE_ARGNOTNULL(5, "shardgroup id");
+	ShardgroupID shardgroupID = PG_GETARG_SHARDGROUPID(5);
+
 	/* only owner of the table (or superuser) is allowed to add the Citus metadata */
 	EnsureTableOwner(relationId);
 
@@ -3361,7 +3369,31 @@ citus_internal_add_shard_metadata(PG_FUNCTION_ARGS)
 								  shardMaxValue);
 	}
 
-	InsertShardRow(relationId, shardId, storageType, shardMinValue, shardMaxValue);
+	InsertShardRow(relationId, shardId, storageType, shardMinValue, shardMaxValue, shardgroupID);
+
+	PG_RETURN_VOID();
+}
+
+
+Datum
+citus_internal_add_shardgroup_metadata(PG_FUNCTION_ARGS)
+{
+	CheckCitusVersion(ERROR);
+	EnsureSuperUser();
+
+	PG_ENSURE_ARGNOTNULL(0, "shardgroupid");
+	ShardgroupID shardgroupID = PG_GETARG_SHARDGROUPID(0);
+
+	PG_ENSURE_ARGNOTNULL(1, "colocationid");
+	uint32 colocationId = PG_GETARG_UINT32(1);
+
+	if (!ShouldSkipMetadataChecks())
+	{
+		/* this UDF is not allowed allowed for executing as a separate command */
+		EnsureCoordinatorInitiatedOperation();
+	}
+
+	InsertShardgroupRow(shardgroupID, colocationId);
 
 	PG_RETURN_VOID();
 }
@@ -4088,6 +4120,50 @@ ColocationGroupCreateCommand(uint32 colocationId, int shardCount, int replicatio
 					 RemoteCollationIdExpression(distributionColumnCollation));
 
 	return insertColocationCommand->data;
+}
+
+
+void
+SyncNewShardgoupsToNodes(ShardgroupID *shardgroupIDs, int shardCount, uint32 colocationId)
+{
+	char *command = ShardgroupsCreateCommand(shardgroupIDs, shardCount, colocationId);
+
+	/*
+	 * We require superuser for all pg_dist_shardgroups operations because we have
+	 * no reasonable way of restricting access.
+	 */
+	SendCommandToWorkersWithMetadataViaSuperUser(command);
+}
+
+
+static char *
+ShardgroupsCreateCommand(ShardgroupID *shardgroupIDs, int shardCount, uint32 colocationId)
+{
+	StringInfoData buf = {0};
+	initStringInfo(&buf);
+	/* now add shards to insertShardCommand */
+	appendStringInfo(&buf, 
+					 "WITH shardgroup_data(shardgroupid, colocationid)  AS (VALUES ");
+	for (int i=0; i<shardCount; i++)
+	{
+		if (i > 0)
+		{
+			appendStringInfo(&buf, ", ");
+		}
+
+		ShardgroupID shardgroupId = shardgroupIDs[i];
+		appendStringInfo(&buf, "(%ld::bigint, %u)",
+						 shardgroupId,
+						 colocationId);
+	}
+
+	appendStringInfo(&buf, ") ");
+
+	appendStringInfo(&buf,
+					 "SELECT pg_catalog.citus_internal_add_shardgroup_metadata(shardgroupid, "
+					 "colocationid) FROM shardgroup_data;");
+
+	return buf.data;
 }
 
 

@@ -50,6 +50,7 @@
 #include "distributed/pg_dist_shard.h"
 #include "distributed/reference_table_utils.h"
 #include "distributed/resource_lock.h"
+#include "distributed/shardgroup.h"
 #include "distributed/shardinterval_utils.h"
 #include "distributed/transaction_management.h"
 #include "distributed/worker_manager.h"
@@ -80,8 +81,9 @@ master_create_worker_shards(PG_FUNCTION_ARGS)
  * worker nodes.
  */
 void
-CreateShardsWithRoundRobinPolicy(Oid distributedTableId, int32 shardCount,
-								 int32 replicationFactor, bool useExclusiveConnections)
+CreateShardsWithRoundRobinPolicy(Oid distributedTableId, uint32 colocationId,
+								 int32 shardCount, int32 replicationFactor,
+								 bool useExclusiveConnections)
 {
 	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(distributedTableId);
 	List *insertedShardPlacements = NIL;
@@ -163,6 +165,7 @@ CreateShardsWithRoundRobinPolicy(Oid distributedTableId, int32 shardCount,
 	/* set shard storage type according to relation type */
 	char shardStorageType = ShardStorageType(distributedTableId);
 
+	ShardgroupID *shardgroupIDs = palloc0(sizeof(ShardgroupID) * shardCount);
 	for (int64 shardIndex = 0; shardIndex < shardCount; shardIndex++)
 	{
 		uint32 roundRobinNodeIndex = shardIndex % workerNodeCount;
@@ -184,8 +187,12 @@ CreateShardsWithRoundRobinPolicy(Oid distributedTableId, int32 shardCount,
 		text *minHashTokenText = IntegerToText(shardMinHashToken);
 		text *maxHashTokenText = IntegerToText(shardMaxHashToken);
 
+		ShardgroupID shardgroupId = GetNextShardgroupId();
+		InsertShardgroupRow(shardgroupId, colocationId);
+		shardgroupIDs[shardIndex] = shardgroupId;
+
 		InsertShardRow(distributedTableId, *shardIdPtr, shardStorageType,
-					   minHashTokenText, maxHashTokenText);
+					   minHashTokenText, maxHashTokenText, shardgroupId);
 
 		InsertShardPlacementRows(distributedTableId,
 								 *shardIdPtr,
@@ -193,6 +200,9 @@ CreateShardsWithRoundRobinPolicy(Oid distributedTableId, int32 shardCount,
 								 roundRobinNodeIndex,
 								 replicationFactor);
 	}
+
+	// TODO guess we should check if metadatasync is on
+	SyncNewShardgoupsToNodes(shardgroupIDs, shardCount, colocationId);
 
 	/*
 	 * load shard placements for the shard at once after all placement insertions
@@ -283,7 +293,8 @@ CreateColocatedShards(Oid targetRelationId, Oid sourceRelationId, bool
 			sourceShardId);
 
 		InsertShardRow(targetRelationId, *newShardIdPtr, targetShardStorageType,
-					   shardMinValueText, shardMaxValueText);
+					   shardMinValueText, shardMaxValueText,
+					   sourceShardInterval->shardgroupId);
 
 		ShardPlacement *sourcePlacement = NULL;
 		foreach_ptr(sourcePlacement, sourceShardPlacementList)
@@ -366,7 +377,7 @@ CreateReferenceTableShard(Oid distributedTableId)
 	uint64 shardId = GetNextShardId();
 
 	InsertShardRow(distributedTableId, shardId, shardStorageType, shardMinValue,
-				   shardMaxValue);
+				   shardMaxValue, InvalidShardgroupID);
 
 	InsertShardPlacementRows(distributedTableId,
 							 shardId,
@@ -421,8 +432,11 @@ CreateSingleShardTableShardWithRoundRobinPolicy(Oid relationId, uint32 colocatio
 	text *minHashTokenText = NULL;
 	text *maxHashTokenText = NULL;
 	uint64 shardId = GetNextShardId();
+
+	ShardgroupID shardgroupId = GetNextShardgroupId();
+	InsertShardgroupRow(shardgroupId, colocationId);
 	InsertShardRow(relationId, shardId, shardStorageType,
-				   minHashTokenText, maxHashTokenText);
+				   minHashTokenText, maxHashTokenText, shardgroupId);
 
 	int replicationFactor = 1;
 	InsertShardPlacementRows(relationId,

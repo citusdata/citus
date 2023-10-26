@@ -23,6 +23,7 @@
 
 #include "distributed/connection_management.h"
 #include "distributed/metadata_utility.h"
+#include "distributed/shardgroup.h"
 #include "distributed/shardinterval_utils.h"
 
 /*
@@ -55,6 +56,7 @@
 #define TRANSFER_MODE_BLOCK_WRITES 'b'
 
 #define SHARDID_SEQUENCE_NAME "pg_dist_shardid_seq"
+#define SHARDGROUPID_SEQUENCE_NAME "pg_dist_shardgroupid_seq"
 #define PLACEMENTID_SEQUENCE_NAME "pg_dist_placement_placementid_seq"
 
 /* Remote call definitions to help with data staging and deletion */
@@ -222,6 +224,7 @@ extern bool IsCoordinator(void);
 
 /* Function declarations local to the distributed module */
 extern uint64 GetNextShardId(void);
+extern ShardgroupID GetNextShardgroupId(void);
 extern uint64 GetNextPlacementId(void);
 extern Oid ResolveRelationId(text *relationName, bool missingOk);
 extern List * GetFullTableCreationCommands(Oid relationId,
@@ -257,7 +260,9 @@ extern void InsertShardPlacementRows(Oid relationId, int64 shardId,
 									 List *workerNodeList, int workerStartIndex,
 									 int replicationFactor);
 extern uint64 UpdateShardStatistics(int64 shardId);
-extern void CreateShardsWithRoundRobinPolicy(Oid distributedTableId, int32 shardCount,
+extern void CreateShardsWithRoundRobinPolicy(Oid distributedTableId,
+											 uint32 colocationId,
+											 int32 shardCount,
 											 int32 replicationFactor,
 											 bool useExclusiveConnections);
 extern void CreateColocatedShards(Oid targetRelationId, Oid sourceRelationId,

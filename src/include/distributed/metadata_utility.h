@@ -28,6 +28,7 @@
 #include "distributed/connection_management.h"
 #include "distributed/errormessage.h"
 #include "distributed/relay_utility.h"
+#include "distributed/shardgroup.h"
 #include "distributed/worker_manager.h"
 
 
@@ -68,6 +69,7 @@ typedef struct ShardInterval
 	Datum maxValue;     /* a shard's typed max value datum */
 	uint64 shardId;
 	int shardIndex;
+	ShardgroupID shardgroupId;
 } ShardInterval;
 
 
@@ -350,7 +352,9 @@ extern List * RemoveCoordinatorPlacementIfNotSingleNode(List *placementList);
 
 /* Function declarations to modify shard and shard placement data */
 extern void InsertShardRow(Oid relationId, uint64 shardId, char storageType,
-						   text *shardMinValue, text *shardMaxValue);
+						   text *shardMinValue, text *shardMaxValue,
+						   ShardgroupID shardgroupId);
+extern void InsertShardgroupRow(ShardgroupID shardgroupId, uint32 colocationId);
 extern void DeleteShardRow(uint64 shardId);
 extern ShardPlacement * InsertShardPlacementRowGlobally(uint64 shardId,
 														uint64 placementId,

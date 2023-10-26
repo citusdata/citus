@@ -70,11 +70,13 @@
 #include "distributed/pg_dist_partition.h"
 #include "distributed/pg_dist_placement.h"
 #include "distributed/pg_dist_shard.h"
+#include "distributed/pg_dist_shardgroup.h"
 #include "distributed/reference_table_utils.h"
 #include "distributed/relay_utility.h"
 #include "distributed/remote_commands.h"
 #include "distributed/resource_lock.h"
 #include "distributed/shard_rebalancer.h"
+#include "distributed/shardgroup.h"
 #include "distributed/tuplestore.h"
 #include "distributed/utils/array_type.h"
 #include "distributed/version_compat.h"
@@ -1350,6 +1352,7 @@ CopyShardInterval(ShardInterval *srcInterval)
 	destInterval->maxValueExists = srcInterval->maxValueExists;
 	destInterval->shardId = srcInterval->shardId;
 	destInterval->shardIndex = srcInterval->shardIndex;
+	destInterval->shardgroupId = srcInterval->shardgroupId;
 
 	destInterval->minValue = 0;
 	if (destInterval->minValueExists)
@@ -1796,6 +1799,32 @@ IsDummyPlacement(ShardPlacement *taskPlacement)
 }
 
 
+void
+InsertShardgroupRow(ShardgroupID shardgroupId, uint32 colocationId)
+{
+	Datum values[Natts_pg_dist_shardgroup];
+	bool isNulls[Natts_pg_dist_shardgroup];
+
+	/* form new shard tuple */
+	memset(values, 0, sizeof(values));
+	memset(isNulls, false, sizeof(isNulls));
+
+	values[Anum_pg_dist_shardgroup_shardgroupid - 1] = ShardgroupIDGetDatum(shardgroupId);
+	values[Anum_pg_dist_shardgroup_colocationid - 1] = Int32GetDatum(colocationId);
+
+	/* open shard relation and insert new tuple */
+	Relation pgDistShardgroup = table_open(DistShardgroupRelationId(), RowExclusiveLock);
+
+	TupleDesc tupleDescriptor = RelationGetDescr(pgDistShardgroup);
+	HeapTuple heapTuple = heap_form_tuple(tupleDescriptor, values, isNulls);
+
+	CatalogTupleInsert(pgDistShardgroup, heapTuple);
+
+	CommandCounterIncrement();
+	table_close(pgDistShardgroup, NoLock);
+}
+
+
 /*
  * InsertShardRow opens the shard system catalog, and inserts a new row with the
  * given values into that system catalog. Note that we allow the user to pass in
@@ -1803,7 +1832,7 @@ IsDummyPlacement(ShardPlacement *taskPlacement)
  */
 void
 InsertShardRow(Oid relationId, uint64 shardId, char storageType,
-			   text *shardMinValue, text *shardMaxValue)
+			   text *shardMinValue, text *shardMaxValue, ShardgroupID shardgroupId)
 {
 	Datum values[Natts_pg_dist_shard];
 	bool isNulls[Natts_pg_dist_shard];
@@ -1830,6 +1859,8 @@ InsertShardRow(Oid relationId, uint64 shardId, char storageType,
 		isNulls[Anum_pg_dist_shard_shardminvalue - 1] = true;
 		isNulls[Anum_pg_dist_shard_shardmaxvalue - 1] = true;
 	}
+
+	values[Anum_pg_dist_shard_shardgroupid - 1] = ShardgroupIDGetDatum(shardgroupId);
 
 	/* open shard relation and insert new tuple */
 	Relation pgDistShard = table_open(DistShardRelationId(), RowExclusiveLock);

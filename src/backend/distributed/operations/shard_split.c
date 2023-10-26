@@ -1177,7 +1177,8 @@ InsertSplitChildrenShardMetadata(List *shardGroupSplitIntervalListList,
 				shardInterval->shardId,
 				shardInterval->storageType,
 				IntegerToText(DatumGetInt32(shardInterval->minValue)),
-				IntegerToText(DatumGetInt32(shardInterval->maxValue)));
+				IntegerToText(DatumGetInt32(shardInterval->maxValue)),
+				InvalidShardgroupID);
 
 			InsertShardPlacementRow(
 				shardInterval->shardId,

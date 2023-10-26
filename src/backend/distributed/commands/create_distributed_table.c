@@ -146,7 +146,8 @@ static void ConvertCitusLocalTableToTableType(Oid relationId,
 											  DistributedTableParams *
 											  distributedTableParams);
 static void CreateHashDistributedTableShards(Oid relationId, int shardCount,
-											 Oid colocatedTableId, bool localTableEmpty);
+											 uint32 colocationId, Oid colocatedTableId,
+											 bool localTableEmpty);
 static void CreateSingleShardTableShard(Oid relationId, Oid colocatedTableId,
 										uint32 colocationId);
 static uint32 ColocationIdForNewTable(Oid relationId, CitusTableType tableType,
@@ -1289,7 +1290,7 @@ CreateCitusTable(Oid relationId, CitusTableType tableType,
 	{
 		/* create shards for hash distributed table */
 		CreateHashDistributedTableShards(relationId, distributedTableParams->shardCount,
-										 colocatedTableId,
+										 colocationId, colocatedTableId,
 										 localTableEmpty);
 	}
 	else if (tableType == REFERENCE_TABLE)
@@ -1880,7 +1881,7 @@ DecideDistTableReplicationModel(char distributionMethod, char *colocateWithTable
  * CreateHashDistributedTableShards creates shards of given hash distributed table.
  */
 static void
-CreateHashDistributedTableShards(Oid relationId, int shardCount,
+CreateHashDistributedTableShards(Oid relationId, int shardCount, uint32 colocationId,
 								 Oid colocatedTableId, bool localTableEmpty)
 {
 	bool useExclusiveConnection = false;
@@ -1919,7 +1920,10 @@ CreateHashDistributedTableShards(Oid relationId, int shardCount,
 		 * tables which will not be part of an existing colocation group. Therefore,
 		 * we can directly use ShardReplicationFactor global variable here.
 		 */
-		CreateShardsWithRoundRobinPolicy(relationId, shardCount, ShardReplicationFactor,
+		CreateShardsWithRoundRobinPolicy(relationId,
+										 colocationId,
+										 shardCount, 
+										 ShardReplicationFactor,
 										 useExclusiveConnection);
 	}
 }
