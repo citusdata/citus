@@ -4501,6 +4501,13 @@ PropagateNodeWideObjectsCommandList(void)
 	/* collect all commands */
 	List *ddlCommands = NIL;
 
+	if (EnableCreateDatabasePropagation)
+	{
+		/* Get commands for database creation */
+		List *createDatabaseCommands = GenerateCreateDatabaseCommandList();
+		ddlCommands = list_concat(ddlCommands, createDatabaseCommands);
+	}
+
 	if (EnableAlterRoleSetPropagation)
 	{
 		/*
