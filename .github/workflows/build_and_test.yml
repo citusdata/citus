@@ -30,7 +30,7 @@ jobs:
       pg11_version: "11.9"
       pg12_version: "12.4"
       pg13_version: "13.0"
-      upgrade_pg_versions: "14.9-15.4-16.0"
+      upgrade_pg_versions: "latest"
     steps:
       # Since GHA jobs needs at least one step we use a noop step here.
       - name: Set up parameters
@@ -247,12 +247,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - old_pg_major: 14
-            new_pg_major: 15
-          - old_pg_major: 15
-            new_pg_major: 16
-          - old_pg_major: 14
-            new_pg_major: 16
+          - old_pg_major: 11
+            new_pg_major: 12
+          - old_pg_major: 12
+            new_pg_major: 13
     env:
       old_pg_major: ${{ matrix.old_pg_major }}
       new_pg_major: ${{ matrix.new_pg_major }}
