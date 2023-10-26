@@ -340,10 +340,12 @@ WarnMaintenanceDaemonNotStarted(void)
 
 /*
  * ConnectToDatabase connects to the database for the given databaseOid.
- * if databaseOid is 0, it connects to MainDb. It returns the hash entry
- * for the database. If there hash entry already has a valid workerPid,
- * it exits the process. If a hash entry cannot be created it exists the
- * process requesting a restart.
+ * if databaseOid is 0, connects to MainDb and then creates a hash entry.
+ * If a hash entry cannot be created for MainDb it exists the process requesting a restart.
+ * However for regular databases, it exits without requesting a restart since another
+ * subsequent backend should be starting the Maintenance Deamon.
+ * If a hash entry found has a valid workerPid, it exits
+ * without requesting a restart since there is already a deamon running.
  */
 static MaintenanceDaemonDBData *
 ConnectToDatabase(Oid databaseOid)
@@ -1072,7 +1074,7 @@ MaintenanceDaemonShmemExit(int code, Datum arg)
 }
 
 
-/* MaintenanceDaemonSigTermHandler calls proc_exit(0) */
+/* MaintenanceDaemonSigTermHandler sets the got_SIGTERM flag.*/
 static void
 MaintenanceDaemonSigTermHandler(SIGNAL_ARGS)
 {
