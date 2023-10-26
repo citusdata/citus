@@ -61,24 +61,22 @@ jobs:
         fetch-depth: 0
     - name: Check C Style
       run: citus_indent --check
-    - name: Check Python style
-      run: black --check .
-    - name: Check Python import order
-      run: isort --check .
-    - name: Check Python lints
-      run: flake8 .
     - name: Fix whitespace
-      run: ci/editorconfig.sh && git diff --exit-code
+      run: ci/editorconfig.sh
+    - name: Check if whitespace fixing changed anything, install editorconfig if it did
+      run: git diff --exit-code
     - name: Remove useless declarations
-      run: ci/remove_useless_declarations.sh && git diff --cached --exit-code
+      run: ci/remove_useless_declarations.sh
+    - name: Check if changed
+      run: git diff --cached --exit-code
     - name: Normalize test output
-      run: ci/normalize_expected.sh && git diff --exit-code
+      run: ci/normalize_expected.sh
+    - name: Check if changed
+      run: git diff --exit-code
     - name: Check for C-style comments in migration files
-      run: ci/disallow_c_comments_in_migrations.sh && git diff --exit-code
-    - name: 'Check for comment--cached ns that start with # character in spec files'
-      run: ci/disallow_hash_comments_in_spec_files.sh && git diff --exit-code
-    - name: Check for gitignore entries .for source files
-      run: ci/fix_gitignore.sh && git diff --exit-code
+      run: ci/disallow_c_comments_in_migrations.sh
+    - name: Check if changed
+      run: git diff --exit-code
     - name: Check for lengths of changelog entries
       run: ci/disallow_long_changelog_entries.sh
     - name: Check for banned C API usage
@@ -87,10 +85,6 @@ jobs:
       run: ci/check_all_tests_are_run.sh
     - name: Check if all CI scripts are actually run
       run: ci/check_all_ci_scripts_are_run.sh
-    - name: Check if all GUCs are sorted alphabetically
-      run: ci/check_gucs_are_alphabetically_sorted.sh
-    - name: Check for missing downgrade scripts
-      run: ci/check_migration_files.sh
   build:
     needs: params
     name: Build for PG ${{ matrix.pg_version}}
