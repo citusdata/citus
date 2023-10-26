@@ -13,10 +13,33 @@ on:
   pull_request:
     types: [opened, reopened,synchronize]
 jobs:
+  # Since GHA does not interpolate env varibles in matrix context, we need to
+  # define them in a separate job and use them in other jobs.
+  params:
+    runs-on: ubuntu-latest
+    name: Initialize parameters
+    outputs:
+      build_image_name: "citus/extbuilder"
+      test_image_name: "citus/exttester"
+      citusupgrade_image_name: "citus/citusupgradetester"
+      fail_test_image_name: "citus/failtester"
+      pgupgrade_image_name: "citus/pgupgradetester"
+      style_checker_image_name: "citus/stylechecker"
+      style_checker_tools_version: "0.8.18"
+      image_suffix: "-v9d71045"
+      pg14_version: "14.9"
+      pg15_version: "15.4"
+      pg16_version: "16.0"
+      upgrade_pg_versions: "14.9-15.4-16.0"
+    steps:
+      # Since GHA jobs needs at least one step we use a noop step here.
+      - name: Set up parameters
+        run: echo 'noop'
   check-sql-snapshots:
+    needs: params
     runs-on: ubuntu-20.04
     container:
-      image: ${{ vars.build_image_name }}:latest
+      image: ${{ needs.params.outputs.build_image_name }}:latest
       options: --user root
     steps:
     - uses: actions/checkout@v3.5.0
@@ -25,9 +48,10 @@ jobs:
         git config --global --add safe.directory ${GITHUB_WORKSPACE}
         ci/check_sql_snapshots.sh
   check-style:
+    needs: params
     runs-on: ubuntu-20.04
     container:
-      image: ${{ vars.style_checker_image_name }}:${{ vars.style_checker_tools_version }}${{ vars.image_suffix }}
+      image: ${{ needs.params.outputs.style_checker_image_name }}:${{ needs.params.outputs.style_checker_tools_version }}${{ needs.params.outputs.image_suffix }}
     steps:
     - name: Check Snapshots
       run: |
@@ -68,18 +92,19 @@ jobs:
     - name: Check for missing downgrade scripts
       run: ci/check_migration_files.sh
   build:
+    needs: params
     name: Build for PG ${{ matrix.pg_version}}
     strategy:
       fail-fast: false
       matrix:
         image_name:
-          - ${{ vars.build_image_name }}
+          - ${{ needs.params.outputs.build_image_name }}
         image_suffix:
-          - ${{ vars.image_suffix}}
+          - ${{ needs.params.outputs.image_suffix}}
         pg_version:
-          - ${{ vars.pg14_version }}
-          - ${{ vars.pg15_version }}
-          - ${{ vars.pg16_version }}
+          - ${{ needs.params.outputs.pg14_version }}
+          - ${{ needs.params.outputs.pg15_version }}
+          - ${{ needs.params.outputs.pg16_version }}
     runs-on: ubuntu-20.04
     container:
       image: "${{ matrix.image_name }}:${{ matrix.pg_version  }}${{ matrix.image_suffix }}"
@@ -106,11 +131,11 @@ jobs:
         suite:
           - regress
         image_name:
-          - ${{ vars.test_image_name }}
+          - ${{ needs.params.outputs.test_image_name }}
         pg_version:
-          - ${{ vars.pg14_version }}
-          - ${{ vars.pg15_version }}
-          - ${{ vars.pg16_version }}
+          - ${{ needs.params.outputs.pg14_version }}
+          - ${{ needs.params.outputs.pg15_version }}
+          - ${{ needs.params.outputs.pg16_version }}
         make:
           - check-split
           - check-multi
@@ -129,69 +154,70 @@ jobs:
           - check-enterprise-isolation-logicalrep-3
         include:
           - make: check-failure
-            pg_version: ${{ vars.pg14_version }}
+            pg_version: ${{ needs.params.outputs.pg14_version }}
             suite: regress
-            image_name: ${{ vars.fail_test_image_name }}
+            image_name: ${{ needs.params.outputs.fail_test_image_name }}
           - make: check-failure
-            pg_version: ${{ vars.pg15_version }}
+            pg_version: ${{ needs.params.outputs.pg15_version }}
             suite: regress
-            image_name: ${{ vars.fail_test_image_name }}
+            image_name: ${{ needs.params.outputs.fail_test_image_name }}
           - make: check-failure
-            pg_version: ${{ vars.pg16_version }}
+            pg_version: ${{ needs.params.outputs.pg16_version }}
             suite: regress
-            image_name: ${{ vars.fail_test_image_name }}
+            image_name: ${{ needs.params.outputs.fail_test_image_name }}
           - make: check-enterprise-failure
-            pg_version: ${{ vars.pg14_version }}
+            pg_version: ${{ needs.params.outputs.pg14_version }}
             suite: regress
-            image_name: ${{ vars.fail_test_image_name }}
+            image_name: ${{ needs.params.outputs.fail_test_image_name }}
           - make: check-enterprise-failure
-            pg_version: ${{ vars.pg15_version }}
+            pg_version: ${{ needs.params.outputs.pg15_version }}
             suite: regress
-            image_name: ${{ vars.fail_test_image_name }}
+            image_name: ${{ needs.params.outputs.fail_test_image_name }}
           - make: check-enterprise-failure
-            pg_version: ${{ vars.pg16_version }}
+            pg_version: ${{ needs.params.outputs.pg16_version }}
             suite: regress
-            image_name: ${{ vars.fail_test_image_name }}
+            image_name: ${{ needs.params.outputs.fail_test_image_name }}
           - make: check-pytest
-            pg_version: ${{ vars.pg14_version }}
+            pg_version: ${{ needs.params.outputs.pg14_version }}
             suite: regress
-            image_name: ${{ vars.fail_test_image_name }}
+            image_name: ${{ needs.params.outputs.fail_test_image_name }}
           - make: check-pytest
-            pg_version: ${{ vars.pg15_version }}
+            pg_version: ${{ needs.params.outputs.pg15_version }}
             suite: regress
-            image_name: ${{ vars.fail_test_image_name }}
+            image_name: ${{ needs.params.outputs.fail_test_image_name }}
           - make: check-pytest
-            pg_version: ${{ vars.pg16_version }}
+            pg_version: ${{ needs.params.outputs.pg16_version }}
             suite: regress
-            image_name: ${{ vars.fail_test_image_name }}
+            image_name: ${{ needs.params.outputs.fail_test_image_name }}
           - make: installcheck
             suite: cdc
-            image_name: ${{ vars.test_image_name }}
-            pg_version: ${{ vars.pg15_version }}
+            image_name: ${{ needs.params.outputs.test_image_name }}
+            pg_version: ${{ needs.params.outputs.pg15_version }}
           - make: installcheck
             suite: cdc
-            image_name: ${{ vars.test_image_name }}
-            pg_version: ${{ vars.pg16_version }}
+            image_name: ${{ needs.params.outputs.test_image_name }}
+            pg_version: ${{ needs.params.outputs.pg16_version }}
           - make: check-query-generator
-            pg_version: ${{ vars.pg14_version }}
+            pg_version: ${{ needs.params.outputs.pg14_version }}
             suite: regress
-            image_name: ${{ vars.fail_test_image_name }}
+            image_name: ${{ needs.params.outputs.fail_test_image_name }}
           - make: check-query-generator
-            pg_version: ${{ vars.pg15_version }}
+            pg_version: ${{ needs.params.outputs.pg15_version }}
             suite: regress
-            image_name: ${{ vars.fail_test_image_name }}
+            image_name: ${{ needs.params.outputs.fail_test_image_name }}
           - make: check-query-generator
-            pg_version: ${{ vars.pg16_version }}
+            pg_version: ${{ needs.params.outputs.pg16_version }}
             suite: regress
-            image_name: ${{ vars.fail_test_image_name }}
+            image_name: ${{ needs.params.outputs.fail_test_image_name }}
     runs-on: ubuntu-20.04
     container:
-      image: "${{ matrix.image_name }}:${{ matrix.pg_version }}${{ vars.image_suffix }}"
+      image: "${{ matrix.image_name }}:${{ matrix.pg_version }}${{ needs.params.outputs.image_suffix }}"
       options: --user root --dns=8.8.8.8
       # Due to Github creates a default network for each job, we need to use
       # --dns= to have similar DNS settings as our other CI systems or local
       # machines. Otherwise, we may see different results.
     needs:
+    - params
     - build
     steps:
     - uses: actions/checkout@v3.5.0
@@ -212,19 +238,20 @@ jobs:
     name: PG${{ matrix.pg_version }} - check-arbitrary-configs-${{ matrix.parallel }}
     runs-on: ["self-hosted", "1ES.Pool=1es-gha-citusdata-pool"]
     container:
-      image: "${{ matrix.image_name }}:${{ matrix.pg_version }}${{ vars.image_suffix }}"
+      image: "${{ matrix.image_name }}:${{ matrix.pg_version }}${{ needs.params.outputs.image_suffix }}"
       options: --user root
     needs:
+      - params
       - build
     strategy:
       fail-fast: false
       matrix:
         image_name:
-          - ${{ vars.fail_test_image_name }}
+          - ${{ needs.params.outputs.fail_test_image_name }}
         pg_version:
-          - ${{ vars.pg14_version }}
-          - ${{ vars.pg15_version }}
-          - ${{ vars.pg16_version }}
+          - ${{ needs.params.outputs.pg14_version }}
+          - ${{ needs.params.outputs.pg15_version }}
+          - ${{ needs.params.outputs.pg16_version }}
         parallel: [0,1,2,3,4,5] # workaround for running 6 parallel jobs
     steps:
     - uses: actions/checkout@v3.5.0
@@ -258,9 +285,10 @@ jobs:
     name: PG${{ matrix.old_pg_major }}-PG${{ matrix.new_pg_major }} - check-pg-upgrade
     runs-on: ubuntu-20.04
     container:
-      image: "${{ vars.pgupgrade_image_name }}:${{ vars.upgrade_pg_versions }}${{ vars.image_suffix }}"
+      image: "${{ needs.params.outputs.pgupgrade_image_name }}:${{ needs.params.outputs.upgrade_pg_versions }}${{ needs.params.outputs.image_suffix }}"
       options: --user root
     needs:
+    - params
     - build
     strategy:
       fail-fast: false
@@ -305,12 +333,13 @@ jobs:
         flags: ${{ env.old_pg_major }}_${{ env.new_pg_major }}_upgrade
         codecov_token: ${{ secrets.CODECOV_TOKEN }}
   test-citus-upgrade:
-    name: PG${{ vars.pg14_version }} - check-citus-upgrade
+    name: PG${{ needs.params.outputs.pg14_version }} - check-citus-upgrade
     runs-on: ubuntu-20.04
     container:
-      image: "${{ vars.citusupgrade_image_name }}:${{ vars.pg14_version }}${{ vars.image_suffix }}"
+      image: "${{ needs.params.outputs.citusupgrade_image_name }}:${{ needs.params.outputs.pg14_version }}${{ needs.params.outputs.image_suffix }}"
       options: --user root
     needs:
+    - params
     - build
     steps:
     - uses: actions/checkout@v3.5.0
@@ -354,8 +383,9 @@ jobs:
       CC_TEST_REPORTER_ID: ${{ secrets.CC_TEST_REPORTER_ID }}
     runs-on: ubuntu-20.04
     container:
-      image: ${{ vars.test_image_name }}:${{ vars.pg16_version }}${{ vars.image_suffix }}
+      image: ${{ needs.params.outputs.test_image_name }}:${{ needs.params.outputs.pg16_version }}${{ needs.params.outputs.image_suffix }}
     needs:
+      - params
       - test-citus
       - test-arbitrary-configs
       - test-citus-upgrade
@@ -445,11 +475,12 @@ jobs:
     name: Test flakyness
     runs-on: ubuntu-20.04
     container:
-      image: ${{ vars.fail_test_image_name }}:${{ vars.pg16_version }}${{ vars.image_suffix }}
+      image: ${{ needs.params.outputs.fail_test_image_name }}:${{ needs.params.outputs.pg16_version }}${{ needs.params.outputs.image_suffix }}
       options: --user root
     env:
       runs: 8
     needs:
+    - params
     - build
     - test-flakyness-pre
     - prepare_parallelization_matrix_32
