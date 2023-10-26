@@ -32,7 +32,9 @@ jobs:
       pg16_version: "16.0"
       upgrade_pg_versions: "14.9-15.4-16.0"
     steps:
-      - uses: actions/checkout@v3.5.0
+      # Since GHA jobs needs at least one step we use a noop step here.
+      - name: Set up parameters
+        run: echo 'noop'
   check-sql-snapshots:
     needs: params
     runs-on: ubuntu-20.04
