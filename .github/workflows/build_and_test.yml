@@ -25,11 +25,11 @@ jobs:
       fail_test_image_name: "citus/failtester"
       pgupgrade_image_name: "citus/pgupgradetester"
       style_checker_image_name: "citus/stylechecker"
-      style_checker_tools_version: "0.8.18"
-      image_suffix: "-v9d71045"
-      pg14_version: "14.9"
-      pg15_version: "15.4"
-      pg16_version: "16.0"
+      style_checker_tools_version: "latest"
+      image_suffix: ""
+      pg11_version: "11.9"
+      pg12_version: "12.4"
+      pg13_version: "13.0"
       upgrade_pg_versions: "14.9-15.4-16.0"
     steps:
       # Since GHA jobs needs at least one step we use a noop step here.
@@ -102,9 +102,9 @@ jobs:
         image_suffix:
           - ${{ needs.params.outputs.image_suffix}}
         pg_version:
-          - ${{ needs.params.outputs.pg14_version }}
-          - ${{ needs.params.outputs.pg15_version }}
-          - ${{ needs.params.outputs.pg16_version }}
+          - ${{ needs.params.outputs.pg11_version }}
+          - ${{ needs.params.outputs.pg12_version }}
+          - ${{ needs.params.outputs.pg13_version }}
     runs-on: ubuntu-20.04
     container:
       image: "${{ matrix.image_name }}:${{ matrix.pg_version  }}${{ matrix.image_suffix }}"
@@ -133,9 +133,9 @@ jobs:
         image_name:
           - ${{ needs.params.outputs.test_image_name }}
         pg_version:
-          - ${{ needs.params.outputs.pg14_version }}
-          - ${{ needs.params.outputs.pg15_version }}
-          - ${{ needs.params.outputs.pg16_version }}
+          - ${{ needs.params.outputs.pg11_version }}
+          - ${{ needs.params.outputs.pg12_version }}
+          - ${{ needs.params.outputs.pg13_version }}
         make:
           - check-split
           - check-multi
@@ -154,59 +154,59 @@ jobs:
           - check-enterprise-isolation-logicalrep-3
         include:
           - make: check-failure
-            pg_version: ${{ needs.params.outputs.pg14_version }}
+            pg_version: ${{ needs.params.outputs.pg11_version }}
             suite: regress
             image_name: ${{ needs.params.outputs.fail_test_image_name }}
           - make: check-failure
-            pg_version: ${{ needs.params.outputs.pg15_version }}
+            pg_version: ${{ needs.params.outputs.pg12_version }}
             suite: regress
             image_name: ${{ needs.params.outputs.fail_test_image_name }}
           - make: check-failure
-            pg_version: ${{ needs.params.outputs.pg16_version }}
+            pg_version: ${{ needs.params.outputs.pg13_version }}
             suite: regress
             image_name: ${{ needs.params.outputs.fail_test_image_name }}
           - make: check-enterprise-failure
-            pg_version: ${{ needs.params.outputs.pg14_version }}
+            pg_version: ${{ needs.params.outputs.pg11_version }}
             suite: regress
             image_name: ${{ needs.params.outputs.fail_test_image_name }}
           - make: check-enterprise-failure
-            pg_version: ${{ needs.params.outputs.pg15_version }}
+            pg_version: ${{ needs.params.outputs.pg12_version }}
             suite: regress
             image_name: ${{ needs.params.outputs.fail_test_image_name }}
           - make: check-enterprise-failure
-            pg_version: ${{ needs.params.outputs.pg16_version }}
+            pg_version: ${{ needs.params.outputs.pg13_version }}
             suite: regress
             image_name: ${{ needs.params.outputs.fail_test_image_name }}
           - make: check-pytest
-            pg_version: ${{ needs.params.outputs.pg14_version }}
+            pg_version: ${{ needs.params.outputs.pg11_version }}
             suite: regress
             image_name: ${{ needs.params.outputs.fail_test_image_name }}
           - make: check-pytest
-            pg_version: ${{ needs.params.outputs.pg15_version }}
+            pg_version: ${{ needs.params.outputs.pg12_version }}
             suite: regress
             image_name: ${{ needs.params.outputs.fail_test_image_name }}
           - make: check-pytest
-            pg_version: ${{ needs.params.outputs.pg16_version }}
+            pg_version: ${{ needs.params.outputs.pg13_version }}
             suite: regress
             image_name: ${{ needs.params.outputs.fail_test_image_name }}
           - make: installcheck
             suite: cdc
             image_name: ${{ needs.params.outputs.test_image_name }}
-            pg_version: ${{ needs.params.outputs.pg15_version }}
+            pg_version: ${{ needs.params.outputs.pg12_version }}
           - make: installcheck
             suite: cdc
             image_name: ${{ needs.params.outputs.test_image_name }}
-            pg_version: ${{ needs.params.outputs.pg16_version }}
+            pg_version: ${{ needs.params.outputs.pg13_version }}
           - make: check-query-generator
-            pg_version: ${{ needs.params.outputs.pg14_version }}
+            pg_version: ${{ needs.params.outputs.pg11_version }}
             suite: regress
             image_name: ${{ needs.params.outputs.fail_test_image_name }}
           - make: check-query-generator
-            pg_version: ${{ needs.params.outputs.pg15_version }}
+            pg_version: ${{ needs.params.outputs.pg12_version }}
             suite: regress
             image_name: ${{ needs.params.outputs.fail_test_image_name }}
           - make: check-query-generator
-            pg_version: ${{ needs.params.outputs.pg16_version }}
+            pg_version: ${{ needs.params.outputs.pg13_version }}
             suite: regress
             image_name: ${{ needs.params.outputs.fail_test_image_name }}
     runs-on: ubuntu-20.04
@@ -249,9 +249,9 @@ jobs:
         image_name:
           - ${{ needs.params.outputs.fail_test_image_name }}
         pg_version:
-          - ${{ needs.params.outputs.pg14_version }}
-          - ${{ needs.params.outputs.pg15_version }}
-          - ${{ needs.params.outputs.pg16_version }}
+          - ${{ needs.params.outputs.pg11_version }}
+          - ${{ needs.params.outputs.pg12_version }}
+          - ${{ needs.params.outputs.pg13_version }}
         parallel: [0,1,2,3,4,5] # workaround for running 6 parallel jobs
     steps:
     - uses: actions/checkout@v3.5.0
@@ -333,10 +333,10 @@ jobs:
         flags: ${{ env.old_pg_major }}_${{ env.new_pg_major }}_upgrade
         codecov_token: ${{ secrets.CODECOV_TOKEN }}
   test-citus-upgrade:
-    name: PG${{ needs.params.outputs.pg14_version }} - check-citus-upgrade
+    name: PG${{ needs.params.outputs.pg11_version }} - check-citus-upgrade
     runs-on: ubuntu-20.04
     container:
-      image: "${{ needs.params.outputs.citusupgrade_image_name }}:${{ needs.params.outputs.pg14_version }}${{ needs.params.outputs.image_suffix }}"
+      image: "${{ needs.params.outputs.citusupgrade_image_name }}:${{ needs.params.outputs.pg11_version }}${{ needs.params.outputs.image_suffix }}"
       options: --user root
     needs:
     - params
@@ -383,7 +383,7 @@ jobs:
       CC_TEST_REPORTER_ID: ${{ secrets.CC_TEST_REPORTER_ID }}
     runs-on: ubuntu-20.04
     container:
-      image: ${{ needs.params.outputs.test_image_name }}:${{ needs.params.outputs.pg16_version }}${{ needs.params.outputs.image_suffix }}
+      image: ${{ needs.params.outputs.test_image_name }}:${{ needs.params.outputs.pg13_version }}${{ needs.params.outputs.image_suffix }}
     needs:
       - params
       - test-citus
@@ -475,7 +475,7 @@ jobs:
     name: Test flakyness
     runs-on: ubuntu-20.04
     container:
-      image: ${{ needs.params.outputs.fail_test_image_name }}:${{ needs.params.outputs.pg16_version }}${{ needs.params.outputs.image_suffix }}
+      image: ${{ needs.params.outputs.fail_test_image_name }}:${{ needs.params.outputs.pg13_version }}${{ needs.params.outputs.image_suffix }}
       options: --user root
     env:
       runs: 8
