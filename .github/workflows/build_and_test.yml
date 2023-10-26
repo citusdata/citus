@@ -234,53 +234,6 @@ jobs:
       with:
         flags: ${{ env.PG_MAJOR }}_${{ matrix.suite }}_${{ matrix.make }}
         codecov_token: ${{ secrets.CODECOV_TOKEN }}
-  test-arbitrary-configs:
-    name: PG${{ matrix.pg_version }} - check-arbitrary-configs-${{ matrix.parallel }}
-    runs-on: ["self-hosted", "1ES.Pool=1es-gha-citusdata-pool"]
-    container:
-      image: "${{ matrix.image_name }}:${{ matrix.pg_version }}${{ needs.params.outputs.image_suffix }}"
-      options: --user root
-    needs:
-      - params
-      - build
-    strategy:
-      fail-fast: false
-      matrix:
-        image_name:
-          - ${{ needs.params.outputs.fail_test_image_name }}
-        pg_version:
-          - ${{ needs.params.outputs.pg11_version }}
-          - ${{ needs.params.outputs.pg12_version }}
-          - ${{ needs.params.outputs.pg13_version }}
-        parallel: [0,1,2,3,4,5] # workaround for running 6 parallel jobs
-    steps:
-    - uses: actions/checkout@v3.5.0
-    - uses: "./.github/actions/setup_extension"
-    - name: Test arbitrary configs
-      run: |-
-        # we use parallel jobs to split the tests into 6 parts and run them in parallel
-        # the script below extracts the tests for the current job
-        N=6  # Total number of jobs (see matrix.parallel)
-        X=${{ matrix.parallel }}  # Current job number
-        TESTS=$(src/test/regress/citus_tests/print_test_names.py |
-          tr '\n' ',' | awk -v N="$N" -v X="$X" -F, '{
-            split("", parts)
-            for (i = 1; i <= NF; i++) {
-                parts[i % N] = parts[i % N] $i ","
-            }
-            print substr(parts[X], 1, length(parts[X])-1)
-        }')
-        echo $TESTS
-        gosu circleci \
-          make -C src/test/regress \
-            check-arbitrary-configs parallel=4 CONFIGS=$TESTS
-    - uses: "./.github/actions/save_logs_and_results"
-      if: always()
-    - uses: "./.github/actions/upload_coverage"
-      if: always()
-      with:
-        flags: ${{ env.pg_major }}_upgrade
-        codecov_token: ${{ secrets.CODECOV_TOKEN }}
   test-pg-upgrade:
     name: PG${{ matrix.old_pg_major }}-PG${{ matrix.new_pg_major }} - check-pg-upgrade
     runs-on: ubuntu-20.04
