@@ -335,6 +335,8 @@ citus_table_size(PG_FUNCTION_ARGS)
 /*
  * citus_relation_size accept a relation name and returns a relation's 'main'
  * fork's size.
+ *
+ * Input relation is allowed to be an index on a distributed table too.
  */
 Datum
 citus_relation_size(PG_FUNCTION_ARGS)
@@ -513,7 +515,8 @@ ReceiveShardIdAndSizeResults(List *connectionList, Tuplestorestate *tupleStore,
  * index belonging to a distributed table and size query can be run on it.
  * Connection to each node has to be established to get the size of the
  * relation.
- */
+  * Input relation is allowed to be an index on a distributed table too.
+  */
 static bool
 DistributedRelationSize(Oid relationId, SizeQueryType sizeQueryType,
 						bool failOnError, uint64 *relationSize)
@@ -578,7 +581,8 @@ DistributedRelationSize(Oid relationId, SizeQueryType sizeQueryType,
  * DistributedRelationSizeOnWorker gets the workerNode and relationId to calculate
  * size of that relation on the given workerNode by summing up the size of each
  * shard placement.
- */
+  * Input relation is allowed to be an index on a distributed table too.
+  */
 static bool
 DistributedRelationSizeOnWorker(WorkerNode *workerNode, Oid relationId,
 								SizeQueryType sizeQueryType,
@@ -787,9 +791,7 @@ GenerateSizeQueryOnMultiplePlacements(List *shardIntervalList,
 			continue;
 		}
 
-		/*
-		 * We need to build the shard relation name, being an index or table ...
-		 */
+		/* we need to build the shard relation name, being an index or table */
 		Oid objectId = OidIsValid(indexId) ? indexId : shardInterval->relationId;
 
 		uint64 shardId = shardInterval->shardId;
