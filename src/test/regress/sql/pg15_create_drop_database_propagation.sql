@@ -7,6 +7,7 @@ SELECT substring(:'server_version', '\d+')::int >= 15 AS server_version_ge_15
 \if :server_version_ge_15
 \else
 \q
+\endif
 
 -- create/drop database for pg > 15
 
