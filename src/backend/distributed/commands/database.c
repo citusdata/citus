@@ -476,7 +476,8 @@ GetDatabaseCollation(Oid db_oid)
 	}
 
 	TupleDesc tupdesc = RelationGetDescr(rel);
-	Datum collationDatum = heap_getattr(tup, Anum_pg_database_datcollate, tupdesc, &isNull);
+	Datum collationDatum = heap_getattr(tup, Anum_pg_database_datcollate, tupdesc,
+										&isNull);
 	if (isNull)
 	{
 		info.collation = NULL;
@@ -498,7 +499,8 @@ GetDatabaseCollation(Oid db_oid)
 
 	#if PG_VERSION_NUM >= PG_VERSION_15
 
-	Datum icuLocaleDatum = heap_getattr(tup, Anum_pg_database_daticulocale, tupdesc, &isNull);
+	Datum icuLocaleDatum = heap_getattr(tup, Anum_pg_database_daticulocale, tupdesc,
+										&isNull);
 	if (isNull)
 	{
 		info.icu_locale = NULL;
@@ -508,7 +510,8 @@ GetDatabaseCollation(Oid db_oid)
 		info.icu_locale = TextDatumGetCString(icuLocaleDatum);
 	}
 
-	Datum collverDatum = heap_getattr(tup, Anum_pg_database_datcollversion, tupdesc, &isNull);
+	Datum collverDatum = heap_getattr(tup, Anum_pg_database_datcollversion, tupdesc,
+									  &isNull);
 	if (isNull)
 	{
 		info.collversion = NULL;
@@ -546,6 +549,7 @@ FreeDatabaseCollationInfo(DatabaseCollationInfo collInfo)
 	#endif
 }
 
+
 #if PG_VERSION_NUM >= PG_VERSION_15
 static char *
 get_locale_provider_string(char datlocprovider)
@@ -571,6 +575,8 @@ get_locale_provider_string(char datlocprovider)
 			return "";
 	}
 }
+
+
 #endif
 
 
