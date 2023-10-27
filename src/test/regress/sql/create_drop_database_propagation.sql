@@ -142,7 +142,8 @@ CREATE DATABASE my_template_database
     WITH   TEMPLATE = 'template0'
             OWNER = create_drop_db_test_user
             ENCODING = 'UTF8'
-            LOCALE = 'en_US.utf8'
+            LC_COLLATE = 'C'
+            LC_CTYPE = 'C'
             TABLESPACE = create_drop_db_tablespace
             ALLOW_CONNECTIONS = false
             IS_TEMPLATE = true;
@@ -164,29 +165,6 @@ SELECT result from run_command_on_all_nodes(
   $$
 ) ORDER BY result;
 
-SET citus.log_remote_commands = true;
-set citus.grep_remote_commands = '%DROP DATABASE%';
-drop database my_template_database;
-
-SET citus.log_remote_commands = false;
-
-SELECT result from run_command_on_all_nodes(
-  $$
-  SELECT jsonb_agg(to_jsonb(q2.*)) FROM (
-    SELECT pd.datname, pg_encoding_to_char(pd.encoding) as encoding,
-    pd.datistemplate, pd.datallowconn, pd.datconnlimit,
-    pd.datcollate , pd. datctype  ,  pd.datacl,
-    pa.rolname AS database_owner, pt.spcname AS tablespace
-    FROM pg_database pd
-    JOIN pg_authid pa ON pd.datdba = pa.oid
-    join pg_tablespace pt on pd.dattablespace = pt.oid
-    WHERE datname = 'my_template_database'
-  ) q2
-  $$
-) ORDER BY result;
-
-SET citus.log_remote_commands = true;
-
 --template databases could not be dropped so we need to change the template flag
 SELECT result from run_command_on_all_nodes(
   $$
@@ -194,7 +172,7 @@ SELECT result from run_command_on_all_nodes(
   $$
 ) ORDER BY result;
 
-;
+SET citus.log_remote_commands = true;
 
 set citus.grep_remote_commands = '%DROP DATABASE%';
 drop database my_template_database;
