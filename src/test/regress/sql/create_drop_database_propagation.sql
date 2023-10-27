@@ -67,7 +67,7 @@ SELECT result from run_command_on_all_nodes(
 
 -- test database syncing after node addition
 
-select citus_remove_node('localhost', :worker_2_port);
+select 1 from citus_remove_node('localhost', :worker_2_port);
 
 --test with is_template true and allow connections false
 CREATE DATABASE mydatabase
@@ -97,7 +97,7 @@ SELECT result from run_command_on_all_nodes(
   $$
 ) ORDER BY result;
 
-select citus_add_node('localhost', :worker_2_port);
+select 1 from citus_add_node('localhost', :worker_2_port);
 
 SELECT result from run_command_on_all_nodes(
   $$

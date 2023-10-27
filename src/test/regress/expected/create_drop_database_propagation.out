@@ -63,10 +63,10 @@ SELECT result from run_command_on_all_nodes(
 (3 rows)
 
 -- test database syncing after node addition
-select citus_remove_node('localhost', :worker_2_port);
- citus_remove_node
+select 1 from citus_remove_node('localhost', :worker_2_port);
+ ?column?
 ---------------------------------------------------------------------
-
+        1
 (1 row)
 
 --test with is_template true and allow connections false
@@ -100,10 +100,10 @@ SELECT result from run_command_on_all_nodes(
  [{"datacl": null, "datname": "mydatabase", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "create_drop_db_tablespace", "datallowconn": false, "datconnlimit": 10, "datistemplate": false, "database_owner": "create_drop_db_test_user"}]
 (2 rows)
 
-select citus_add_node('localhost', :worker_2_port);
- citus_add_node
+select 1 from citus_add_node('localhost', :worker_2_port);
+ ?column?
 ---------------------------------------------------------------------
-             30
+        1
 (1 row)
 
 SELECT result from run_command_on_all_nodes(

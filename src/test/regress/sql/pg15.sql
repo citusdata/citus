@@ -1048,7 +1048,7 @@ SELECT result from run_command_on_all_nodes(
 ) ORDER BY result;
 
 
-select citus_remove_node('localhost', :worker_2_port);
+select 1 from citus_remove_node('localhost', :worker_2_port);
 
 
 SET citus.log_remote_commands = true;
@@ -1085,7 +1085,7 @@ SELECT result from run_command_on_all_nodes(
 
 
 SET citus.log_remote_commands = true;
-select citus_add_node('localhost', :worker_2_port);
+select 1 from citus_add_node('localhost', :worker_2_port);
 
 SET citus.log_remote_commands = false;
 SELECT result from run_command_on_all_nodes(
