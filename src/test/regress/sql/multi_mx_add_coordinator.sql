@@ -67,7 +67,7 @@ SET client_min_messages TO DEBUG;
 SELECT count(*) FROM ref;
 SELECT count(*) FROM ref;
 
--- test that distributed functions also use local execution
+-- test that distributed functions also use sequential execution
 CREATE OR REPLACE FUNCTION my_group_id()
 RETURNS void
 LANGUAGE plpgsql
@@ -190,5 +190,6 @@ SELECT verify_metadata('localhost', :worker_1_port),
 
 SET client_min_messages TO error;
 DROP SCHEMA mx_add_coordinator CASCADE;
+DROP USER reprefuser;
 SET search_path TO DEFAULT;
 RESET client_min_messages;
