@@ -45,6 +45,8 @@ CREATE DATABASE mydatabase
             IS_TEMPLATE = false
             OID = 966345;
 
+SET citus.log_remote_commands = false;
+
 SELECT result from run_command_on_all_nodes(
   $$
   SELECT jsonb_agg(to_jsonb(q2.*)) FROM (
@@ -60,9 +62,11 @@ SELECT result from run_command_on_all_nodes(
   $$
 ) ORDER BY result;
 
-
+SET citus.log_remote_commands = true;
+set citus.grep_remote_commands = '%DROP DATABASE%';
 drop database mydatabase;
 
+SET citus.log_remote_commands = false;
 SELECT result from run_command_on_all_nodes(
   $$
   SELECT jsonb_agg(to_jsonb(q2.*)) FROM (
@@ -114,10 +118,8 @@ SELECT result from run_command_on_all_nodes(
 ) ORDER BY result;
 
 
-SET citus.log_remote_commands = true;
 select 1 from citus_add_node('localhost', :worker_2_port);
 
-SET citus.log_remote_commands = false;
 SELECT result from run_command_on_all_nodes(
   $$
   SELECT jsonb_agg(to_jsonb(q2.*)) FROM (
@@ -190,7 +192,26 @@ SELECT result from run_command_on_all_nodes(
   $$
 ) ORDER BY result;
 
+SET citus.log_remote_commands = true;
+set citus.grep_remote_commands = '%DROP DATABASE%';
+drop database my_template_database;
 
+SET citus.log_remote_commands = false;
+
+SELECT result from run_command_on_all_nodes(
+  $$
+  SELECT jsonb_agg(to_jsonb(q2.*)) FROM (
+    SELECT pd.datname, pg_encoding_to_char(pd.encoding) as encoding,
+    pd.datistemplate, pd.datallowconn, pd.datconnlimit,
+    pd.datcollate , pd. datctype  ,  pd.datacl,
+    pa.rolname AS database_owner, pt.spcname AS tablespace
+    FROM pg_database pd
+    JOIN pg_authid pa ON pd.datdba = pa.oid
+    join pg_tablespace pt on pd.dattablespace = pt.oid
+    WHERE datname = 'my_template_database'
+  ) q2
+  $$
+) ORDER BY result;
 
 SET citus.log_remote_commands = true;
 
@@ -222,6 +243,16 @@ SELECT result from run_command_on_all_nodes(
   $$
 ) ORDER BY result;
 
+
+--tests for special characters in database name
+set citus.enable_create_database_propagation=on;
+SET citus.log_remote_commands = true;
+set citus.grep_remote_commands = '%CREATE DATABASE%';
+
+create database "mydatabase#1'2";
+
+set citus.grep_remote_commands = '%DROP DATABASE%';
+drop database if exists "mydatabase#1'2";
 
 \c - - - :master_port
 drop tablespace create_drop_db_tablespace;
