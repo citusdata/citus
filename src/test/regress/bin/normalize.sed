@@ -222,7 +222,7 @@ s/(CONTEXT:  PL\/pgSQL function .* line )([0-9]+)/\1XX/g
 s/^(PL\/pgSQL function .* line) [0-9]+ (.*)/\1 XX \2/g
 
 # normalize a test difference in multi_move_mx
-s/ connection to server at "\w+" \(127\.0\.0\.1\), port [0-9]+ failed://g
+s/ connection to server at "\w+" (\(127\.0\.0\.1\)|\(::1\)), port [0-9]+ failed://g
 
 # normalize differences in tablespace of new index
 s/pg14\.idx.*/pg14\.xxxxx/g
