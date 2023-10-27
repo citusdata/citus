@@ -140,15 +140,11 @@ SELECT result from run_command_on_all_nodes(
 -- create a template database with all options set and allow connections false
 CREATE DATABASE my_template_database
     WITH   TEMPLATE = 'template0'
-    OWNER = create_drop_db_test_user
+            OWNER = create_drop_db_test_user
             ENCODING = 'UTF8'
-            STRATEGY = 'wal_log'
             LOCALE = 'en_US.utf8'
             LC_COLLATE = 'POSIX'
             LC_CTYPE = 'POSIX'
-            ICU_LOCALE = 'en-US'
-            LOCALE_PROVIDER = 'icu'
-            COLLATION_VERSION = '1.0'
             TABLESPACE = create_drop_db_tablespace
             ALLOW_CONNECTIONS = false
             IS_TEMPLATE = true;
