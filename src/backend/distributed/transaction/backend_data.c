@@ -86,7 +86,6 @@ typedef struct BackendManagementShmemData
 typedef enum CitusBackendType
 {
 	CITUS_BACKEND_NOT_ASSIGNED,
-    CITUS_MAINTENANCE_DAEMON_BACKEND,
 	CITUS_INTERNAL_BACKEND,
 	CITUS_REBALANCER_BACKEND,
 	CITUS_RUN_COMMAND_BACKEND,
@@ -97,7 +96,6 @@ static const char *CitusBackendPrefixes[] = {
 	CITUS_APPLICATION_NAME_PREFIX,
 	CITUS_REBALANCER_APPLICATION_NAME_PREFIX,
 	CITUS_RUN_COMMAND_APPLICATION_NAME_PREFIX,
-    CITUS_MAINTENANCE_DAEMON_APPLICATION_NAME_PREFIX,
 };
 
 static const CitusBackendType CitusBackendTypes[] = {
@@ -1445,18 +1443,6 @@ IsCitusShardTransferBackend(void)
 				   CITUS_SHARD_TRANSFER_APPLICATION_NAME_PREFIX,
 				   prefixLength) == 0;
 }
-
-bool
-IsCitusMaintenanceDaemonBackend(void)
-{
-    if (CurrentBackendType == CITUS_BACKEND_NOT_ASSIGNED)
-    {
-        DetermineCitusBackendType(application_name);
-    }
-
-    return CurrentBackendType == CITUS_MAINTENANCE_DAEMON_BACKEND;
-}
-
 
 
 /*

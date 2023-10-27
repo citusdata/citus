@@ -151,7 +151,7 @@ static SharedWorkerNodeDatabaseConnStatsHashKey PrepareWorkerNodeDatabaseHashKey
                                                                                  int port,
                                                                                  Oid database);
 static void
-DecrementSharedConnectionCounterInternal(uint32 externalFlags, const char *hostname, int port);
+DecrementSharedConnectionCounterInternal(uint32 externalFlags, const char *hostname, int port, Oid database);
 
 
 PG_FUNCTION_INFO_V1(citus_remote_connection_stats);
@@ -478,7 +478,23 @@ IncrementSharedConnectionCounterInternal(uint32 externalFlags,
         workerNodeDatabaseEntry->count += 1;
     }
 
+    if (IsLoggableLevel(DEBUG4))
+    {
+        ereport(DEBUG4, errmsg(
+                "Incrementing connection counter. "
+                "Current regular connections: %i, maintenance connections: %i. "
+                "Connection slot to %s:%i database %i is %s",
+                workerNodeConnectionEntry->regularConnectionsCount,
+                workerNodeConnectionEntry->maintenanceConnectionsCount,
+                hostname,
+                port,
+                database,
+                connectionSlotAvailable ? "available" : "not available"
+        ));
+    }
+
     UnLockConnectionSharedMemory();
+
 
     return connectionSlotAvailable;
 }
@@ -498,18 +514,21 @@ DecrementSharedConnectionCounter(uint32 externalFlags, const char *hostname, int
 
     LockConnectionSharedMemory(LW_EXCLUSIVE);
 
-    DecrementSharedConnectionCounterInternal(externalFlags, hostname, port);
+    DecrementSharedConnectionCounterInternal(externalFlags, hostname, port, MyDatabaseId);
 
     UnLockConnectionSharedMemory();
     WakeupWaiterBackendsForSharedConnection();
 }
 
 static void
-DecrementSharedConnectionCounterInternal(uint32 externalFlags, const char *hostname, int port)
+DecrementSharedConnectionCounterInternal(uint32 externalFlags,
+                                         const char *hostname,
+                                         int port,
+                                         Oid database)
 {
     bool workerNodeEntryFound = false;
     SharedWorkerNodeConnStatsHashKey workerNodeKey = PrepareWorkerNodeHashKey(hostname, port);
-    SharedWorkerNodeConnStatsHashEntry *workerNodeEntry =
+    SharedWorkerNodeConnStatsHashEntry *workerNodeConnectionEntry =
             hash_search(SharedWorkerNodeConnStatsHash, &workerNodeKey, HASH_FIND, &workerNodeEntryFound);
 
     /* this worker node is removed or updated, no need to care */
@@ -521,18 +540,32 @@ DecrementSharedConnectionCounterInternal(uint32 externalFlags, const char *hostn
     }
 
     /* we should never go below 0 */
-    Assert(workerNodeEntry->regularConnectionsCount > 0 || workerNodeEntry->maintenanceConnectionsCount > 0);
+    Assert(workerNodeConnectionEntry->regularConnectionsCount > 0 ||
+           workerNodeConnectionEntry->maintenanceConnectionsCount > 0);
 
     /* When GetSharedPoolSizeMaintenanceQuota() == 0, treat maintenance connections as regular */
     if ((GetSharedPoolSizeMaintenanceQuota() > 0 && (externalFlags & MAINTENANCE_CONNECTION)))
     {
-        workerNodeEntry->maintenanceConnectionsCount -= 1;
+        workerNodeConnectionEntry->maintenanceConnectionsCount -= 1;
     }
     else
     {
-        workerNodeEntry->regularConnectionsCount -= 1;
+        workerNodeConnectionEntry->regularConnectionsCount -= 1;
     }
 
+    if (IsLoggableLevel(DEBUG4))
+    {
+        ereport(DEBUG4, errmsg(
+                "Decrementing connection counter. "
+                "Current regular connections: %i, maintenance connections: %i. "
+                "Connection slot to %s:%i database %i is released",
+                workerNodeConnectionEntry->regularConnectionsCount,
+                workerNodeConnectionEntry->maintenanceConnectionsCount,
+                hostname,
+                port,
+                database
+        ));
+    }
 
     /*
      * We don't have to remove at this point as the node might be still active
@@ -541,7 +574,8 @@ DecrementSharedConnectionCounterInternal(uint32 externalFlags, const char *hostn
      * not busy, and given the default value of MaxCachedConnectionsPerWorker = 1,
      * we're unlikely to trigger this often.
      */
-    if (workerNodeEntry->regularConnectionsCount == 0 && workerNodeEntry->maintenanceConnectionsCount == 0)
+    if (workerNodeConnectionEntry->regularConnectionsCount == 0 &&
+        workerNodeConnectionEntry->maintenanceConnectionsCount == 0)
     {
         hash_search(SharedWorkerNodeConnStatsHash, &workerNodeKey, HASH_REMOVE, NULL);
     }

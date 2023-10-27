@@ -360,6 +360,13 @@ StartNodeUserDatabaseConnection(uint32 flags, const char *hostname, int32 port,
 		MultiConnection *connection = FindAvailableConnection(entry->connections, flags);
 		if (connection)
 		{
+            if ((flags & REQUIRE_MAINTENANCE_CONNECTION) &&
+                IsMaintenanceDaemon &&
+                !IsMaintenanceManagementDatabase(MyDatabaseId))
+            {
+                // Maintenance database may have changed, so cached connection should be closed
+                connection->forceCloseAtTransactionEnd = true;
+            }
 			return connection;
 		}
 	}
@@ -432,7 +439,6 @@ StartNodeUserDatabaseConnection(uint32 flags, const char *hostname, int32 port,
 
 	ResetShardPlacementAssociation(connection);
 
-
     if (flags & REQUIRE_METADATA_CONNECTION)
 	{
 		connection->useForMetadataOperations = true;
@@ -440,6 +446,10 @@ StartNodeUserDatabaseConnection(uint32 flags, const char *hostname, int32 port,
     else if (flags & REQUIRE_MAINTENANCE_CONNECTION)
     {
         connection->useForMaintenanceOperations = true;
+        if (IsMaintenanceDaemon && !IsMaintenanceManagementDatabase(MyDatabaseId))
+        {
+            connection->forceCloseAtTransactionEnd = true;
+        }
     }
 
 	/* fully initialized the connection, record it */
@@ -1510,9 +1520,7 @@ ShouldShutdownConnection(MultiConnection *connection, const int cachedConnection
 	 * escalating the number of cached connections. We can recognize such backends
 	 * from their application name.
 	 */
-    return ((IsCitusMaintenanceDaemonBackend() && !IsMaintenanceManagementDatabase(MyDatabaseId)) ||
-            IsCitusInternalBackend() ||
-            IsRebalancerInternalBackend()) ||
+    return (IsCitusInternalBackend() || IsRebalancerInternalBackend()) ||
 		   connection->initializationState != POOL_STATE_INITIALIZED ||
 		   cachedConnectionCount >= MaxCachedConnectionsPerWorker ||
            connection->forceCloseAtTransactionEnd ||

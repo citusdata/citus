@@ -120,7 +120,7 @@ static volatile sig_atomic_t got_SIGHUP = false;
 static volatile sig_atomic_t got_SIGTERM = false;
 
 /* set to true when becoming a maintenance daemon */
-static bool IsMaintenanceDaemon = false;
+bool IsMaintenanceDaemon = false;
 
 static void MaintenanceDaemonSigTermHandler(SIGNAL_ARGS);
 static void MaintenanceDaemonSigHupHandler(SIGNAL_ARGS);
@@ -508,7 +508,7 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 	MaintenanceDaemonDBData *myDbData = ConnectToDatabase(databaseOid);
 
 	/* make worker recognizable in pg_stat_activity */
-	pgstat_report_appname(CITUS_MAINTENANCE_DAEMON_APPLICATION_NAME_PREFIX);
+	pgstat_report_appname("Citus Maintenance Daemon");
 
 	/*
 	 * Terminate orphaned metadata sync daemons spawned from previously terminated
@@ -1248,7 +1248,8 @@ char
         if (!maintenanceDatabaseOid)
         {
             ereport(WARNING, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-                    errmsg("Database %s doesn't exists, please check the citus.maintenance_management_database parameter.",
+                    errmsg("Database \"%s\" doesn't exists, please check the citus.maintenance_management_database parameter. "
+                           "Applying a default value instead.",
                            MaintenanceManagementDatabase)));
             result = "";
         }

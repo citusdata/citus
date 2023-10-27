@@ -44,8 +44,6 @@
 /* application name used for connections made by run_command_on_* */
 #define CITUS_RUN_COMMAND_APPLICATION_NAME_PREFIX "citus_run_command gpid="
 
-#define CITUS_MAINTENANCE_DAEMON_APPLICATION_NAME_PREFIX "Citus Maintenance Daemon"
-
 /*
  * application name prefix for move/split replication connections.
  *

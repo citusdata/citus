@@ -1995,12 +1995,11 @@ RegisterCitusConfigVariables(void)
 
     DefineCustomRealVariable(
             "citus.shared_pool_size_maintenance_quota",
-            gettext_noop("Sets the maximum number of connections allowed per worker node "
-                         "across all the backends from this node. Setting to -1 disables "
-                         "connections throttling. Setting to 0 makes it auto-adjust, meaning "
-                         "equal to max_connections on the coordinator."),
-            gettext_noop("As a rule of thumb, the value should be at most equal to the "
-                         "max_connections on the remote nodes."),
+            gettext_noop("Sets the fraction of citus.max_shared_pool_size reserved "
+                         "for maintenance operations only. "
+                         "Setting it to 0 disables the quota. "
+                         "This way the maintenance and regular connections will share the same pool"),
+            NULL,
             &SharedPoolSizeMaintenanceQuota,
             0.1, 0, 1,
             PGC_SIGHUP,
@@ -2030,7 +2029,7 @@ RegisterCitusConfigVariables(void)
             "citus.max_databases_per_worker_tracked",
             gettext_noop("Sets the amount of databases per worker tracked."),
             gettext_noop(
-                    "This configuration value compliments the citus.max_worker_nodes_tracked."
+                    "This configuration value complements the citus.max_worker_nodes_tracked."
                     "It should be used when there are more then one database with Citus in cluster,"
                     "and, effectively, limits the size of the hash table with connections per worker + database."
                     "Currently, it does not affect the connection management logic and serves only statistical purposes."),
@@ -2709,7 +2708,8 @@ RegisterCitusConfigVariables(void)
     DefineCustomStringVariable(
             "citus.maintenance_management_database",
             gettext_noop("Database for cluster-wide maintenance operations across all databases"),
-            NULL,
+            gettext_noop("It should be enabled when there are more than "
+                         "one database with Citus in a cluster."),
             &MaintenanceManagementDatabase,
             "",
             PGC_SIGHUP,

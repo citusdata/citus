@@ -153,7 +153,7 @@ BuildGlobalWaitGraph(bool onlyDistributedTx)
 	{
 		const char *nodeName = workerNode->workerName;
 		int nodePort = workerNode->workerPort;
-		int connectionFlags = 0;
+		int connectionFlags = WAIT_FOR_CONNECTION | REQUIRE_MAINTENANCE_CONNECTION;
 
 		if (workerNode->groupId == localGroupId)
 		{
