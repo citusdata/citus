@@ -16,10 +16,18 @@ source /root/gdbpg.py
 # ERROR symbol so we hardcode this to the value of ERROR. It is very unlikely
 # this value will ever change in postgres, but if it does we might need to
 # find a way to conditionally load the correct breakpoint.
-# Lastly the breakpoint doesn't show up in vscode :(, to remove the breakpoint
-# you can use the command `-exec delete <id>` in the vscode debug console. The
-# id is the number in the first column of the breakpoint list which you can
-# show with the command `-exec info break`.
 set breakpoint pending on
 break elog.c:errfinish if errordata[errordata_stack_depth].elevel == 21
 set breakpoint pending auto
+
+echo \n
+echo ----------------------------------------------------------------------------------\n
+echo when attaching to a postgres backend a breakpoint will be set on elog.c:errfinish \n
+echo it will only break on errors being raised in postgres \n
+echo \n
+echo to disable this breakpoint from vscode run `-exec disable 1` in the debug console \n
+echo this assumes it's the first breakpoint loaded as it is loaded from .gdbinit \n
+echo this can be verified with `-exec info break`, enabling can be done with \n
+echo `-exec enable 1` \n
+echo ----------------------------------------------------------------------------------\n
+echo \n
