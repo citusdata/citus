@@ -465,7 +465,6 @@ static DatabaseCollationInfo
 GetDatabaseCollation(Oid db_oid)
 {
 	DatabaseCollationInfo info;
-	Datum collationDatum, ctypeDatum, icuLocaleDatum, collverDatum;
 	bool isNull;
 
 	Snapshot snapshot = RegisterSnapshot(GetLatestSnapshot());
@@ -477,7 +476,7 @@ GetDatabaseCollation(Oid db_oid)
 	}
 
 	TupleDesc tupdesc = RelationGetDescr(rel);
-	collationDatum = heap_getattr(tup, Anum_pg_database_datcollate, tupdesc, &isNull);
+	Datum collationDatum = heap_getattr(tup, Anum_pg_database_datcollate, tupdesc, &isNull);
 	if (isNull)
 	{
 		info.collation = NULL;
@@ -487,7 +486,7 @@ GetDatabaseCollation(Oid db_oid)
 		info.collation = TextDatumGetCString(collationDatum);
 	}
 
-	ctypeDatum = heap_getattr(tup, Anum_pg_database_datctype, tupdesc, &isNull);
+	Datum ctypeDatum = heap_getattr(tup, Anum_pg_database_datctype, tupdesc, &isNull);
 	if (isNull)
 	{
 		info.ctype = NULL;
@@ -499,7 +498,7 @@ GetDatabaseCollation(Oid db_oid)
 
 	#if PG_VERSION_NUM >= PG_VERSION_15
 
-	icuLocaleDatum = heap_getattr(tup, Anum_pg_database_daticulocale, tupdesc, &isNull);
+	Datum icuLocaleDatum = heap_getattr(tup, Anum_pg_database_daticulocale, tupdesc, &isNull);
 	if (isNull)
 	{
 		info.icu_locale = NULL;
@@ -509,7 +508,7 @@ GetDatabaseCollation(Oid db_oid)
 		info.icu_locale = TextDatumGetCString(icuLocaleDatum);
 	}
 
-	collverDatum = heap_getattr(tup, Anum_pg_database_datcollversion, tupdesc, &isNull);
+	Datum collverDatum = heap_getattr(tup, Anum_pg_database_datcollversion, tupdesc, &isNull);
 	if (isNull)
 	{
 		info.collversion = NULL;
@@ -539,13 +538,15 @@ FreeDatabaseCollationInfo(DatabaseCollationInfo collInfo)
 	{
 		pfree(collInfo.ctype);
 	}
+	#if PG_VERSION_NUM >= PG_VERSION_15
 	if (collInfo.icu_locale != NULL)
 	{
 		pfree(collInfo.icu_locale);
 	}
+	#endif
 }
 
-
+#if PG_VERSION_NUM >= PG_VERSION_15
 static char *
 get_locale_provider_string(char datlocprovider)
 {
@@ -570,6 +571,7 @@ get_locale_provider_string(char datlocprovider)
 			return "";
 	}
 }
+#endif
 
 
 /*
