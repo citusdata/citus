@@ -451,8 +451,10 @@ typedef struct DatabaseCollationInfo
 {
 	char *collation;
 	char *ctype;
+	#if PG_VERSION_NUM >= PG_VERSION_15
 	char *icu_locale;
 	char *collversion;
+	#endif
 } DatabaseCollationInfo;
 
 /*
@@ -462,17 +464,15 @@ typedef struct DatabaseCollationInfo
 static DatabaseCollationInfo
 GetDatabaseCollation(Oid db_oid)
 {
-	HeapTuple tup;
 	DatabaseCollationInfo info;
 	Datum collationDatum, ctypeDatum, icuLocaleDatum, collverDatum;
 	bool isNull;
-	Relation rel;
 	TupleDesc tupdesc;
 	Snapshot snapshot;
 
 	snapshot = RegisterSnapshot(GetLatestSnapshot());
-	rel = table_open(DatabaseRelationId, AccessShareLock);
-	tup = get_catalog_object_by_oid(rel, Anum_pg_database_oid, db_oid);
+	Relation rel = table_open(DatabaseRelationId, AccessShareLock);
+	HeapTuple tup = get_catalog_object_by_oid(rel, Anum_pg_database_oid, db_oid);
 	if (!HeapTupleIsValid(tup))
 	{
 		elog(ERROR, "cache lookup failed for database %u", db_oid);
@@ -499,6 +499,8 @@ GetDatabaseCollation(Oid db_oid)
 		info.ctype = TextDatumGetCString(ctypeDatum);
 	}
 
+	#if PG_VERSION_NUM >= PG_VERSION_15
+
 	icuLocaleDatum = heap_getattr(tup, Anum_pg_database_daticulocale, tupdesc, &isNull);
 	if (isNull)
 	{
@@ -518,6 +520,7 @@ GetDatabaseCollation(Oid db_oid)
 	{
 		info.collversion = TextDatumGetCString(collverDatum);
 	}
+	#endif
 
 	table_close(rel, AccessShareLock);
 	UnregisterSnapshot(snapshot);
@@ -607,6 +610,7 @@ GenerateCreateDatabaseStatementFromPgDatabase(Form_pg_database databaseForm)
 		appendStringInfo(&str, " LC_CTYPE = '%s'", collInfo.ctype);
 	}
 
+	#if PG_VERSION_NUM >= PG_VERSION_15
 	if (collInfo.icu_locale != NULL)
 	{
 		appendStringInfo(&str, " ICU_LOCALE = '%s'", collInfo.icu_locale);
@@ -622,6 +626,7 @@ GenerateCreateDatabaseStatementFromPgDatabase(Form_pg_database databaseForm)
 	{
 		appendStringInfo(&str, " COLLATION_VERSION = '%s'", collInfo.collversion);
 	}
+	#endif
 
 	if (databaseForm->dattablespace != InvalidOid)
 	{
@@ -658,11 +663,9 @@ GenerateCreateDatabaseCommandList(void)
 {
 	List *commands = NIL;
 	HeapTuple tuple;
-	Relation pgDatabaseRel;
-	TableScanDesc scan;
 
-	pgDatabaseRel = table_open(DatabaseRelationId, AccessShareLock);
-	scan = table_beginscan_catalog(pgDatabaseRel, 0, NULL);
+	Relation pgDatabaseRel = table_open(DatabaseRelationId, AccessShareLock);
+	TableScanDesc scan = table_beginscan_catalog(pgDatabaseRel, 0, NULL);
 
 	while ((tuple = heap_getnext(scan, ForwardScanDirection)) != NULL)
 	{
@@ -671,8 +674,7 @@ GenerateCreateDatabaseCommandList(void)
 		char *createStmt = GenerateCreateDatabaseStatementFromPgDatabase(databaseForm);
 
 
-		StringInfo outerDbStmt;
-		outerDbStmt = makeStringInfo();
+		StringInfo outerDbStmt = makeStringInfo();
 
 		/* Generate the CREATE DATABASE statement */
 		appendStringInfo(outerDbStmt,
