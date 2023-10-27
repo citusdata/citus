@@ -165,8 +165,6 @@ CREATE DATABASE my_template_database
             OWNER = create_drop_db_test_user
             ENCODING = 'UTF8'
             LOCALE = 'en_US.utf8'
-            LC_COLLATE = 'POSIX'
-            LC_CTYPE = 'POSIX'
             TABLESPACE = create_drop_db_tablespace
             ALLOW_CONNECTIONS = false
             IS_TEMPLATE = true;
@@ -185,11 +183,11 @@ SELECT result from run_command_on_all_nodes(
   ) q2
   $$
 ) ORDER BY result;
-                                                                                                                                  result
+                                                                                                                                           result
 ---------------------------------------------------------------------
- [{"datacl": null, "datname": "my_template_database", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "create_drop_db_tablespace", "datallowconn": false, "datconnlimit": -1, "datistemplate": true, "database_owner": "create_drop_db_test_user"}]
- [{"datacl": null, "datname": "my_template_database", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "create_drop_db_tablespace", "datallowconn": false, "datconnlimit": -1, "datistemplate": true, "database_owner": "create_drop_db_test_user"}]
- [{"datacl": null, "datname": "my_template_database", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "create_drop_db_tablespace", "datallowconn": false, "datconnlimit": -1, "datistemplate": true, "database_owner": "create_drop_db_test_user"}]
+ [{"datacl": null, "datname": "my_template_database", "datctype": "en_US.utf8", "encoding": "UTF8", "datcollate": "en_US.utf8", "tablespace": "create_drop_db_tablespace", "datallowconn": false, "datconnlimit": -1, "datistemplate": true, "database_owner": "create_drop_db_test_user"}]
+ [{"datacl": null, "datname": "my_template_database", "datctype": "en_US.utf8", "encoding": "UTF8", "datcollate": "en_US.utf8", "tablespace": "create_drop_db_tablespace", "datallowconn": false, "datconnlimit": -1, "datistemplate": true, "database_owner": "create_drop_db_test_user"}]
+ [{"datacl": null, "datname": "my_template_database", "datctype": "en_US.utf8", "encoding": "UTF8", "datcollate": "en_US.utf8", "tablespace": "create_drop_db_tablespace", "datallowconn": false, "datconnlimit": -1, "datistemplate": true, "database_owner": "create_drop_db_test_user"}]
 (3 rows)
 
 SET citus.log_remote_commands = true;
@@ -211,11 +209,11 @@ SELECT result from run_command_on_all_nodes(
   ) q2
   $$
 ) ORDER BY result;
-                                                                                                                                  result
+                                                                                                                                           result
 ---------------------------------------------------------------------
- [{"datacl": null, "datname": "my_template_database", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "create_drop_db_tablespace", "datallowconn": false, "datconnlimit": -1, "datistemplate": true, "database_owner": "create_drop_db_test_user"}]
- [{"datacl": null, "datname": "my_template_database", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "create_drop_db_tablespace", "datallowconn": false, "datconnlimit": -1, "datistemplate": true, "database_owner": "create_drop_db_test_user"}]
- [{"datacl": null, "datname": "my_template_database", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "create_drop_db_tablespace", "datallowconn": false, "datconnlimit": -1, "datistemplate": true, "database_owner": "create_drop_db_test_user"}]
+ [{"datacl": null, "datname": "my_template_database", "datctype": "en_US.utf8", "encoding": "UTF8", "datcollate": "en_US.utf8", "tablespace": "create_drop_db_tablespace", "datallowconn": false, "datconnlimit": -1, "datistemplate": true, "database_owner": "create_drop_db_test_user"}]
+ [{"datacl": null, "datname": "my_template_database", "datctype": "en_US.utf8", "encoding": "UTF8", "datcollate": "en_US.utf8", "tablespace": "create_drop_db_tablespace", "datallowconn": false, "datconnlimit": -1, "datistemplate": true, "database_owner": "create_drop_db_test_user"}]
+ [{"datacl": null, "datname": "my_template_database", "datctype": "en_US.utf8", "encoding": "UTF8", "datcollate": "en_US.utf8", "tablespace": "create_drop_db_tablespace", "datallowconn": false, "datconnlimit": -1, "datistemplate": true, "database_owner": "create_drop_db_test_user"}]
 (3 rows)
 
 SET citus.log_remote_commands = true;

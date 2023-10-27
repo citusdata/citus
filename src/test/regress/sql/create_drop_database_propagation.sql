@@ -143,8 +143,6 @@ CREATE DATABASE my_template_database
             OWNER = create_drop_db_test_user
             ENCODING = 'UTF8'
             LOCALE = 'en_US.utf8'
-            LC_COLLATE = 'POSIX'
-            LC_CTYPE = 'POSIX'
             TABLESPACE = create_drop_db_tablespace
             ALLOW_CONNECTIONS = false
             IS_TEMPLATE = true;
