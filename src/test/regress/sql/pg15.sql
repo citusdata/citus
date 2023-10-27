@@ -1047,10 +1047,6 @@ SELECT result from run_command_on_all_nodes(
   $$
 ) ORDER BY result;
 
-select * from pg_dist_partition;
-select * from pg_dist_placement;
-select * from pg_dist_shard;
-
 select citus_remove_node('localhost', :worker_2_port);
 
 
