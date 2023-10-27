@@ -545,6 +545,23 @@ FreeDatabaseCollationInfo(DatabaseCollationInfo collInfo)
 }
 
 
+
+static char *get_locale_provider_string(char datlocprovider)
+{
+    switch (datlocprovider)
+    {
+        case 'c':
+            return "libc";
+        case 'i':
+            return "icu";
+        case 'l':
+            return "locale";
+        default:
+            return "";
+    }
+}
+
+
 /*
  * GenerateCreateDatabaseStatementFromPgDatabase is gets the pg_database tuple and returns the CREATE DATABASE statement
  */
@@ -552,8 +569,6 @@ static char *
 GenerateCreateDatabaseStatementFromPgDatabase(Form_pg_database databaseForm)
 {
 	DatabaseCollationInfo collInfo = GetDatabaseCollation(databaseForm->oid);
-	elog(LOG, "collInfo: %s %s %s %s", collInfo.collation, collInfo.ctype,
-		 collInfo.icu_locale, collInfo.collversion);
 
 	StringInfoData str;
 	initStringInfo(&str);
@@ -590,7 +605,7 @@ GenerateCreateDatabaseStatementFromPgDatabase(Form_pg_database databaseForm)
 
 	if (databaseForm->datlocprovider != 0)
 	{
-		appendStringInfo(&str, " LOCALE_PROVIDER = '%c'", databaseForm->datlocprovider);
+		appendStringInfo(&str, " LOCALE_PROVIDER = '%s'", get_locale_provider_string(databaseForm->datlocprovider));
 	}
 
 	if (collInfo.collversion != NULL)

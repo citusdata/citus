@@ -1490,7 +1490,7 @@ DDLTaskList(Oid relationId, const char *commandString)
 List *
 NontransactionalNodeDDLTask(TargetWorkerSet targets, List *commands)
 {
-	List *ddlJobs = NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
+	List *ddlJobs = NodeDDLTaskList(targets, commands);
 	DDLJob *ddlJob = NULL;
 	foreach_ptr(ddlJob, ddlJobs)
 	{

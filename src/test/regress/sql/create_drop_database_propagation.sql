@@ -16,6 +16,60 @@ create user create_drop_db_test_user;
 
 set citus.enable_create_database_propagation=on;
 
+
+CREATE DATABASE mydatabase
+    WITH OWNER = create_drop_db_test_user
+    TEMPLATE = 'template0'
+            ENCODING = 'UTF8'
+            CONNECTION LIMIT = 10
+            LC_COLLATE = 'C'
+            LC_CTYPE = 'C'
+            TABLESPACE = create_drop_db_tablespace
+            ALLOW_CONNECTIONS = true
+            IS_TEMPLATE = false;
+
+
+
+SELECT result from run_command_on_all_nodes(
+  $$
+  SELECT jsonb_agg(to_jsonb(q2.*)) FROM (
+    SELECT pd.datname, pg_encoding_to_char(pd.encoding) as encoding,
+    pd.datistemplate, pd.datallowconn, pd.datconnlimit,
+    pd.datcollate , pd. datctype  ,  pd.datacl,
+    pa.rolname AS database_owner, pt.spcname AS tablespace
+    FROM pg_database pd
+    JOIN pg_authid pa ON pd.datdba = pa.oid
+    join pg_tablespace pt on pd.dattablespace = pt.oid
+    WHERE datname = 'mydatabase'
+  ) q2
+  $$
+) ORDER BY result;
+
+
+drop database mydatabase;
+
+
+
+SELECT result from run_command_on_all_nodes(
+  $$
+  SELECT jsonb_agg(to_jsonb(q2.*)) FROM (
+    SELECT pd.datname, pg_encoding_to_char(pd.encoding) as encoding,
+    pd.datistemplate, pd.datallowconn, pd.datconnlimit,
+    pd.datcollate , pd. datctype  ,  pd.datacl,
+    pa.rolname AS database_owner, pt.spcname AS tablespace
+    FROM pg_database pd
+    JOIN pg_authid pa ON pd.datdba = pa.oid
+    join pg_tablespace pt on pd.dattablespace = pt.oid
+    WHERE datname = 'mydatabase'
+  ) q2
+  $$
+) ORDER BY result;
+
+-- test database syncing after node addition
+
+select citus_remove_node('localhost', :worker_2_port);
+
+--test with is_template true and allow connections false
 CREATE DATABASE mydatabase
     WITH TEMPLATE = 'template0'
             OWNER = create_drop_db_test_user
@@ -24,75 +78,62 @@ CREATE DATABASE mydatabase
             LC_COLLATE = 'C'
             LC_CTYPE = 'C'
             TABLESPACE = create_drop_db_tablespace
-            ALLOW_CONNECTIONS = true
+            ALLOW_CONNECTIONS = false
             IS_TEMPLATE = false;
 
-SELECT pd.datname, pd.encoding,
-pd.datistemplate, pd.datallowconn, pd.datconnlimit,
-pd.datcollate , pd. datctype  ,  pd.datacl,
-pa.rolname AS database_owner, pt.spcname AS tablespace
-FROM pg_database pd
-JOIN pg_authid pa ON pd.datdba = pa.oid
-join pg_tablespace pt on pd.dattablespace = pt.oid
-WHERE datname = 'mydatabase';
 
-\c - - - :worker_1_port
+SELECT result from run_command_on_all_nodes(
+  $$
+  SELECT jsonb_agg(to_jsonb(q2.*)) FROM (
+    SELECT pd.datname, pg_encoding_to_char(pd.encoding) as encoding,
+    pd.datistemplate, pd.datallowconn, pd.datconnlimit,
+    pd.datcollate , pd. datctype  ,  pd.datacl,
+    pa.rolname AS database_owner, pt.spcname AS tablespace
+    FROM pg_database pd
+    JOIN pg_authid pa ON pd.datdba = pa.oid
+    join pg_tablespace pt on pd.dattablespace = pt.oid
+    WHERE datname = 'mydatabase'
+  ) q2
+  $$
+) ORDER BY result;
 
-SELECT pd.datname, pd.encoding,
-pd.datistemplate, pd.datallowconn, pd.datconnlimit,
-pd.datcollate , pd. datctype  ,  pd.datacl, rolname AS database_owner,
-pa.rolname AS database_owner, pt.spcname AS tablespace
-FROM pg_database pd
-JOIN pg_authid pa ON pd.datdba = pa.oid
-join pg_tablespace pt on pd.dattablespace = pt.oid
-WHERE datname = 'mydatabase';
-\c - - - :worker_2_port
+select citus_add_node('localhost', :worker_2_port);
 
-SELECT pd.datname, pd.encoding,
-pd.datistemplate, pd.datallowconn, pd.datconnlimit,
-pd.datcollate , pd. datctype  ,  pd.datacl, rolname AS database_owner,
-pa.rolname AS database_owner, pt.spcname AS tablespace
-FROM pg_database pd
-JOIN pg_authid pa ON pd.datdba = pa.oid
-join pg_tablespace pt on pd.dattablespace = pt.oid
-WHERE datname = 'mydatabase';
+SELECT result from run_command_on_all_nodes(
+  $$
+  SELECT jsonb_agg(to_jsonb(q2.*)) FROM (
+    SELECT pd.datname, pg_encoding_to_char(pd.encoding) as encoding,
+    pd.datistemplate, pd.datallowconn, pd.datconnlimit,
+    pd.datcollate , pd. datctype  ,  pd.datacl,
+    pa.rolname AS database_owner, pt.spcname AS tablespace
+    FROM pg_database pd
+    JOIN pg_authid pa ON pd.datdba = pa.oid
+    join pg_tablespace pt on pd.dattablespace = pt.oid
+    WHERE datname = 'mydatabase'
+  ) q2
+  $$
+) ORDER BY result;
 
-\c - - - :master_port
-set citus.enable_create_database_propagation=on;
+SET citus.log_remote_commands = true;
+set citus.grep_remote_commands = '%DROP DATABASE%';
 drop database mydatabase;
 
-SELECT pd.datname, pd.encoding,
-pd.datistemplate, pd.datallowconn, pd.datconnlimit,
-pd.datcollate , pd. datctype  ,  pd.datacl, rolname AS database_owner,
-pa.rolname AS database_owner, pt.spcname AS tablespace
-FROM pg_database pd
-JOIN pg_authid pa ON pd.datdba = pa.oid
-join pg_tablespace pt on pd.dattablespace = pt.oid
-WHERE datname = 'mydatabase';
+SET citus.log_remote_commands = false;
 
-\c - - - :worker_1_port
-
-SELECT pd.datname, pd.encoding,
-pd.datistemplate, pd.datallowconn, pd.datconnlimit,
-pd.datcollate , pd. datctype  ,  pd.datacl, rolname AS database_owner,
-pa.rolname AS database_owner, pt.spcname AS tablespace
-FROM pg_database pd
-JOIN pg_authid pa ON pd.datdba = pa.oid
-join pg_tablespace pt on pd.dattablespace = pt.oid
-WHERE datname = 'mydatabase';
-
-\c - - - :worker_2_port
-
-SELECT pd.datname, pd.encoding,
-pd.datistemplate, pd.datallowconn, pd.datconnlimit,
-pd.datcollate , pd. datctype  ,  pd.datacl, rolname AS database_owner,
-pa.rolname AS database_owner, pt.spcname AS tablespace
-FROM pg_database pd
-JOIN pg_authid pa ON pd.datdba = pa.oid
-join pg_tablespace pt on pd.dattablespace = pt.oid
-WHERE datname = 'mydatabase';
-
-\c - - - :master_port
+SELECT result from run_command_on_all_nodes(
+  $$
+  SELECT jsonb_agg(to_jsonb(q2.*)) FROM (
+    SELECT pd.datname, pg_encoding_to_char(pd.encoding) as encoding,
+    pd.datistemplate, pd.datallowconn, pd.datconnlimit,
+    pd.datcollate , pd. datctype  ,  pd.datacl,
+    pa.rolname AS database_owner, pt.spcname AS tablespace
+    FROM pg_database pd
+    JOIN pg_authid pa ON pd.datdba = pa.oid
+    join pg_tablespace pt on pd.dattablespace = pt.oid
+    WHERE datname = 'mydatabase'
+  ) q2
+  $$
+) ORDER BY result;
 
 --tests for special characters in database name
 set citus.enable_create_database_propagation=on;
