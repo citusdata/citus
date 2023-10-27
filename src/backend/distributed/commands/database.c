@@ -545,20 +545,29 @@ FreeDatabaseCollationInfo(DatabaseCollationInfo collInfo)
 }
 
 
-
-static char *get_locale_provider_string(char datlocprovider)
+static char *
+get_locale_provider_string(char datlocprovider)
 {
-    switch (datlocprovider)
-    {
-        case 'c':
-            return "libc";
-        case 'i':
-            return "icu";
-        case 'l':
-            return "locale";
-        default:
-            return "";
-    }
+	switch (datlocprovider)
+	{
+		case 'c':
+		{
+			return "libc";
+		}
+
+		case 'i':
+		{
+			return "icu";
+		}
+
+		case 'l':
+		{
+			return "locale";
+		}
+
+		default:
+			return "";
+	}
 }
 
 
@@ -605,7 +614,8 @@ GenerateCreateDatabaseStatementFromPgDatabase(Form_pg_database databaseForm)
 
 	if (databaseForm->datlocprovider != 0)
 	{
-		appendStringInfo(&str, " LOCALE_PROVIDER = '%s'", get_locale_provider_string(databaseForm->datlocprovider));
+		appendStringInfo(&str, " LOCALE_PROVIDER = '%s'", get_locale_provider_string(
+							 databaseForm->datlocprovider));
 	}
 
 	if (collInfo.collversion != NULL)

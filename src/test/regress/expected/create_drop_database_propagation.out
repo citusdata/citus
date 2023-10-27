@@ -10,10 +10,10 @@ CREATE TABLESPACE create_drop_db_tablespace LOCATION :'create_drop_db_tablespace
 create user create_drop_db_test_user;
 set citus.enable_create_database_propagation=on;
 CREATE DATABASE mydatabase
-    WITH TEMPLATE = 'template0'
-            OWNER = create_drop_db_test_user
-            CONNECTION LIMIT = 10
+    WITH OWNER = create_drop_db_test_user
+    TEMPLATE = 'template0'
             ENCODING = 'UTF8'
+            CONNECTION LIMIT = 10
             LC_COLLATE = 'C'
             LC_CTYPE = 'C'
             TABLESPACE = create_drop_db_tablespace
