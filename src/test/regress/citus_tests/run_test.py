@@ -135,7 +135,6 @@ DEPS = {
         "minimal_schedule", ["multi_behavioral_analytics_create_table"]
     ),
     "alter_role_propagation": TestDeps("minimal_schedule"),
-
     "background_rebalance": TestDeps(
         None,
         [
