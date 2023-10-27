@@ -174,12 +174,13 @@ PG_FUNCTION_INFO_V1(worker_record_sequence_dependency);
 PG_FUNCTION_INFO_V1(citus_internal_add_partition_metadata);
 PG_FUNCTION_INFO_V1(citus_internal_delete_partition_metadata);
 PG_FUNCTION_INFO_V1(citus_internal_add_shard_metadata);
+PG_FUNCTION_INFO_V1(citus_internal_delete_shard_metadata);
 PG_FUNCTION_INFO_V1(citus_internal_add_shardgroup_metadata);
+PG_FUNCTION_INFO_V1(citus_internal_delete_shardgroup_metadata);
 PG_FUNCTION_INFO_V1(citus_internal_add_placement_metadata);
 PG_FUNCTION_INFO_V1(citus_internal_delete_placement_metadata);
 PG_FUNCTION_INFO_V1(citus_internal_add_placement_metadata_legacy);
 PG_FUNCTION_INFO_V1(citus_internal_update_placement_metadata);
-PG_FUNCTION_INFO_V1(citus_internal_delete_shard_metadata);
 PG_FUNCTION_INFO_V1(citus_internal_update_relation_colocation);
 PG_FUNCTION_INFO_V1(citus_internal_add_object_metadata);
 PG_FUNCTION_INFO_V1(citus_internal_add_colocation_metadata);
@@ -1189,6 +1190,72 @@ TableOwnerResetCommand(Oid relationId)
 }
 
 
+List *
+ShardgroupListInsertCommand(uint32 colocationId, List *shardIntervals)
+{
+	StringInfo insertShardgroupsCommand = makeStringInfo();
+
+	appendStringInfo(insertShardgroupsCommand,
+					 "WITH shardgroup_data(shardgroupid, colocationid) AS (VALUES ");
+
+	ShardInterval *shardInterval = NULL;
+	foreach_ptr(shardInterval, shardIntervals)
+	{
+		appendStringInfo(insertShardgroupsCommand,
+						 "(" SHARDGROUPID_FORMAT "::bigint, %u)",
+						 shardInterval->shardgroupId, colocationId);
+
+		if (llast(shardIntervals) != shardInterval)
+		{
+			appendStringInfo(insertShardgroupsCommand, ", ");
+		}
+	}
+
+	appendStringInfo(insertShardgroupsCommand, ") ");
+
+	appendStringInfo(insertShardgroupsCommand,
+					 "SELECT pg_catalog.citus_internal_add_shardgroup_metadata(shardgroupid, "
+					 "colocationid) FROM shardgroup_data;");
+
+	return list_make1(insertShardgroupsCommand->data);
+}
+
+
+List *
+ShardgroupListDeleteCommand(List *shardIntervalList)
+{
+	if (list_length(shardIntervalList) == 0)
+	{
+		return NIL;
+	}
+
+	StringInfo deleteShardgroupsCommand = makeStringInfo();
+
+	appendStringInfo(deleteShardgroupsCommand,
+					 "WITH shardgroup_data(shardgroupid) AS (VALUES ");
+
+	ShardInterval *shardInterval = NULL;
+	foreach_ptr(shardInterval, shardIntervalList)
+	{
+		appendStringInfo(deleteShardgroupsCommand,
+						 "(" SHARDGROUPID_FORMAT "::bigint)",
+						 shardInterval->shardgroupId);
+
+		if (llast(shardIntervalList) != shardInterval)
+		{
+			appendStringInfo(deleteShardgroupsCommand, ", ");
+		}
+	}
+
+	appendStringInfo(deleteShardgroupsCommand, ") ");
+
+	appendStringInfo(deleteShardgroupsCommand,
+					 "SELECT pg_catalog.citus_internal_delete_shardgroup_metadata("
+					 "shardgroupid) FROM shardgroup_data;");
+
+	return list_make1(deleteShardgroupsCommand->data);
+}
+
 /*
  * ShardListInsertCommand generates a single command that can be
  * executed to replicate shard and shard placement metadata for the
@@ -1285,7 +1352,8 @@ ShardListInsertCommand(List *shardIntervalList)
 		}
 
 		appendStringInfo(insertShardCommand,
-						 "(%s::regclass, %ld, '%c'::\"char\", %s, %s, %ld::bigint)",
+						 "(%s::regclass, %ld, '%c'::\"char\", %s, %s, "
+						 SHARDGROUPID_FORMAT "::bigint)",
 						 quote_literal_cstr(qualifiedRelationName),
 						 shardId,
 						 shardInterval->storageType,
@@ -3382,7 +3450,7 @@ citus_internal_add_shardgroup_metadata(PG_FUNCTION_ARGS)
 	EnsureSuperUser();
 
 	PG_ENSURE_ARGNOTNULL(0, "shardgroupid");
-	ShardgroupID shardgroupID = PG_GETARG_SHARDGROUPID(0);
+	ShardgroupID shardgroupId = PG_GETARG_SHARDGROUPID(0);
 
 	PG_ENSURE_ARGNOTNULL(1, "colocationid");
 	uint32 colocationId = PG_GETARG_UINT32(1);
@@ -3393,7 +3461,28 @@ citus_internal_add_shardgroup_metadata(PG_FUNCTION_ARGS)
 		EnsureCoordinatorInitiatedOperation();
 	}
 
-	InsertShardgroupRow(shardgroupID, colocationId);
+	InsertShardgroupRow(shardgroupId, colocationId);
+
+	PG_RETURN_VOID();
+}
+
+
+Datum
+citus_internal_delete_shardgroup_metadata(PG_FUNCTION_ARGS)
+{
+	CheckCitusVersion(ERROR);
+	EnsureSuperUser();
+
+	PG_ENSURE_ARGNOTNULL(0, "shardgroupid");
+	ShardgroupID shardgroupId = PG_GETARG_SHARDGROUPID(0);
+
+	if (!ShouldSkipMetadataChecks())
+	{
+		/* this UDF is not allowed allowed for executing as a separate command */
+		EnsureCoordinatorInitiatedOperation();
+	}
+
+	DeleteShardgroupRow(shardgroupId);
 
 	PG_RETURN_VOID();
 }
@@ -4152,7 +4241,7 @@ ShardgroupsCreateCommand(ShardgroupID *shardgroupIDs, int shardCount, uint32 col
 		}
 
 		ShardgroupID shardgroupId = shardgroupIDs[i];
-		appendStringInfo(&buf, "(%ld::bigint, %u)",
+		appendStringInfo(&buf, "(" SHARDGROUPID_FORMAT "::bigint, %u)",
 						 shardgroupId,
 						 colocationId);
 	}

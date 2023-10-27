@@ -22,6 +22,7 @@
 #include "fmgr.h"
 
 typedef int64 ShardgroupID;
+#define SHARDGROUPID_FORMAT INT64_FORMAT
 #define InvalidShardgroupID ((ShardgroupID) 0)
 #define IsShardgroupIDValid(shardgroupID) ((shardgroupID) != InvalidShardgroupID)
 

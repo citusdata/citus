@@ -1802,6 +1802,11 @@ IsDummyPlacement(ShardPlacement *taskPlacement)
 void
 InsertShardgroupRow(ShardgroupID shardgroupId, uint32 colocationId)
 {
+	if (!IsShardgroupIDValid(shardgroupId))
+	{
+		elog(ERROR, "cannot insert invalid shardgroupid: " SHARDGROUPID_FORMAT, shardgroupId);
+	}
+
 	Datum values[Natts_pg_dist_shardgroup];
 	bool isNulls[Natts_pg_dist_shardgroup];
 
@@ -2067,6 +2072,40 @@ DeletePartitionRow(Oid distributedRelationId)
 	CommandCounterIncrement();
 
 	table_close(pgDistPartition, NoLock);
+}
+
+
+void
+DeleteShardgroupRow(ShardgroupID shardgroupId)
+{
+	ScanKeyData scanKey[1];
+	bool indexOK = true;
+
+	Relation pgDistShardgroup = table_open(DistShardgroupRelationId(), RowExclusiveLock);
+
+	ScanKeyInit(&scanKey[0], Anum_pg_dist_shardgroup_shardgroupid,
+				BTEqualStrategyNumber, F_INT8EQ, ShardgroupIDGetDatum(shardgroupId));
+
+	SysScanDesc scanDescriptor = systable_beginscan(pgDistShardgroup,
+													DistShardgroupShardgroupIdIndexId(),
+													indexOK,
+													NULL,
+													lengthof(scanKey),
+													scanKey);
+
+	HeapTuple heapTuple = systable_getnext(scanDescriptor);
+	if (!HeapTupleIsValid(heapTuple))
+	{
+		ereport(ERROR, (errmsg("could not find valid entry for shardgroup "
+							   SHARDGROUPID_FORMAT, shardgroupId)));
+	}
+
+	simple_heap_delete(pgDistShardgroup, &heapTuple->t_self);
+
+	systable_endscan(scanDescriptor);
+
+	CommandCounterIncrement();
+	table_close(pgDistShardgroup, NoLock);
 }
 
 

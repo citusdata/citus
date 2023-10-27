@@ -356,6 +356,7 @@ extern void InsertShardRow(Oid relationId, uint64 shardId, char storageType,
 						   ShardgroupID shardgroupId);
 extern void InsertShardgroupRow(ShardgroupID shardgroupId, uint32 colocationId);
 extern void DeleteShardRow(uint64 shardId);
+extern void DeleteShardgroupRow(ShardgroupID shardgroupId);
 extern ShardPlacement * InsertShardPlacementRowGlobally(uint64 shardId,
 														uint64 placementId,
 														uint64 shardLength,
@@ -375,7 +376,6 @@ extern void UpdateNoneDistTableMetadataGlobally(Oid relationId, char replication
 												uint32 colocationId, bool autoConverted);
 extern void UpdateNoneDistTableMetadata(Oid relationId, char replicationModel,
 										uint32 colocationId, bool autoConverted);
-extern void DeleteShardRow(uint64 shardId);
 extern void UpdatePlacementGroupId(uint64 placementId, int groupId);
 extern void DeleteShardPlacementRowGlobally(uint64 placementId);
 extern void DeleteShardPlacementRow(uint64 placementId);

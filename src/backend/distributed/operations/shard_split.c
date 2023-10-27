@@ -129,6 +129,8 @@ static void UpdateDistributionColumnsForShardGroup(List *colocatedShardList,
 												   char distributionMethod,
 												   int shardCount,
 												   uint32 colocationId);
+static void PopulateShardgroupIds(List *shardGroupSplitIntervalListList);
+static void InsertSplitChildrenShardgroupMetadata(List *shardGroupSplitIntervalListList);
 static void InsertSplitChildrenShardMetadata(List *shardGroupSplitIntervalListList,
 											 List *workersForPlacementList);
 static void CreatePartitioningHierarchyForBlockingSplit(
@@ -157,6 +159,7 @@ static void AddDummyShardEntryInMap(HTAB *mapOfPlacementToDummyShardList, uint32
 static uint64 GetNextShardIdForSplitChild(void);
 static void AcquireNonblockingSplitLock(Oid relationId);
 static List * GetWorkerNodesFromWorkerIds(List *nodeIdsForPlacementList);
+static void DropShardgroupListMetadata(List *shardIntervalList);
 static void DropShardListMetadata(List *shardIntervalList);
 
 /* Customize error message strings based on operation type */
@@ -613,7 +616,14 @@ BlockingShardSplit(SplitOperation splitOperation,
 
 	InsertDeferredDropCleanupRecordsForShards(sourceColocatedShardIntervalList);
 
+	DropShardgroupListMetadata(sourceColocatedShardIntervalList);
+
 	DropShardListMetadata(sourceColocatedShardIntervalList);
+
+	/* allocate and assign new shardgroups to newly created shardIntervals */
+	PopulateShardgroupIds(shardGroupSplitIntervalListList);
+
+	InsertSplitChildrenShardgroupMetadata(shardGroupSplitIntervalListList);
 
 	/* Insert new shard and placement metdata */
 	InsertSplitChildrenShardMetadata(shardGroupSplitIntervalListList,
@@ -1073,6 +1083,13 @@ CreateSplitIntervalsForShard(ShardInterval *sourceShard,
 	for (int index = 0; index < shardIntervalCount; index++)
 	{
 		ShardInterval *splitChildShardInterval = CopyShardInterval(sourceShard);
+		/* 
+		 * This will get populated later when we have a list of all new colocated 
+		 * shardIntervals as to make sure that all colocated shardIntervals get the same
+		 * shardgroupId.
+		 */
+		splitChildShardInterval->shardgroupId = InvalidShardgroupID;
+
 		splitChildShardInterval->shardIndex = -1;
 		splitChildShardInterval->shardId = GetNextShardIdForSplitChild();
 
@@ -1148,6 +1165,74 @@ UpdateDistributionColumnsForShardGroup(List *colocatedShardList,
 }
 
 
+static void
+PopulateShardgroupIds(List *shardGroupSplitIntervalListList)
+{
+	List *firstShardIntervals = NULL;
+	List *currentShardIntervals = NULL;
+	foreach_ptr(currentShardIntervals, shardGroupSplitIntervalListList)
+	{
+		if (!firstShardIntervals)
+		{
+			/* on the first loop we assign new shardgroupId's */
+			firstShardIntervals = currentShardIntervals;
+			ShardInterval *shardInterval = NULL;
+			foreach_ptr(shardInterval, firstShardIntervals)
+			{
+				ShardgroupID newShardgroupId = GetNextShardgroupId();
+				shardInterval->shardgroupId = newShardgroupId;
+			}
+		}
+		else
+		{
+			/* on subsequent loops we assign the same shardgroupId for colocation */
+			ShardInterval *firstShardInterval = NULL;
+			ShardInterval *currentShardInterval = NULL;
+			forboth_ptr(firstShardInterval, firstShardIntervals, currentShardInterval, currentShardIntervals)
+			{
+				currentShardInterval->shardgroupId = firstShardInterval->shardgroupId;
+			}
+		}
+	}
+}
+
+
+static void
+InsertSplitChildrenShardgroupMetadata(List *shardGroupSplitIntervalListList)
+{
+	if (list_length(shardGroupSplitIntervalListList) == 0)
+	{
+		/* no shardintervals means no shardgroups to insert */
+		return;
+	}
+
+	/* take the first list of shardintervals to get to a table */
+	List *shardGroupSplitIntervalList = linitial(shardGroupSplitIntervalListList);
+	if (list_length(shardGroupSplitIntervalList) == 0)
+	{
+		/* no shardintervals means no shardgroups to insert */
+		return;
+	}
+
+	ShardInterval *shardInterval = linitial(shardGroupSplitIntervalList);
+
+	uint32 colocationId = TableColocationId(shardInterval->relationId);
+
+	foreach_ptr(shardInterval, shardGroupSplitIntervalList)
+	{
+		InsertShardgroupRow(shardInterval->shardgroupId, colocationId);
+	}	
+
+	/* send commands to synced nodes one by one */
+	List *splitOffShardMetadataCommandList = ShardgroupListInsertCommand(colocationId, shardGroupSplitIntervalList);
+	char *command = NULL;
+	foreach_ptr(command, splitOffShardMetadataCommandList)
+	{
+		SendCommandToWorkersWithMetadataViaSuperUser(command);
+	}
+}
+
+
 /*
  * Insert new shard and placement metadata.
  * Sync the Metadata with all nodes if enabled.
@@ -1178,7 +1263,7 @@ InsertSplitChildrenShardMetadata(List *shardGroupSplitIntervalListList,
 				shardInterval->storageType,
 				IntegerToText(DatumGetInt32(shardInterval->minValue)),
 				IntegerToText(DatumGetInt32(shardInterval->maxValue)),
-				InvalidShardgroupID);
+				shardInterval->shardgroupId);
 
 			InsertShardPlacementRow(
 				shardInterval->shardId,
@@ -1290,6 +1375,34 @@ CreateForeignKeyConstraints(List *shardGroupSplitIntervalListList,
 					constraintCommand);
 			}
 		}
+	}
+}
+
+
+static void
+DropShardgroupListMetadata(List *shardIntervalList)
+{
+	List *syncedShardIntervalList = NIL;
+
+	ShardInterval *shardInterval = NULL;
+	foreach_ptr(shardInterval, shardIntervalList)
+	{
+		DeleteShardgroupRow(shardInterval->shardgroupId);
+
+		Oid relationId = shardInterval->relationId;
+		/* delete metadata from synced nodes */
+		if (ShouldSyncTableMetadata(relationId))
+		{
+			syncedShardIntervalList = lappend(syncedShardIntervalList, shardInterval);
+		}
+	}
+
+	/* delete metadata from all workers with metadata available */
+	List *commands = ShardgroupListDeleteCommand(syncedShardIntervalList);
+	char *command = NULL;
+	foreach_ptr(command, commands)
+	{
+		SendCommandToWorkersWithMetadataViaSuperUser(command);
 	}
 }
 
@@ -1567,6 +1680,8 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 
 	DropShardListMetadata(sourceColocatedShardIntervalList);
 
+	DropShardgroupListMetadata(sourceColocatedShardIntervalList);
+
 	/*
 	 * 11) In case of create_distributed_table_concurrently, which converts
 	 * a Citus local table to a distributed table, update the distributed
@@ -1599,6 +1714,11 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 											   shardCount,
 											   targetColocationId);
 	}
+
+	/* allocate and assign new shardgroups to newly created shardIntervals */
+	PopulateShardgroupIds(shardGroupSplitIntervalListList);
+
+	InsertSplitChildrenShardgroupMetadata(shardGroupSplitIntervalListList);
 
 	/* 12) Insert new shard and placement metdata */
 	InsertSplitChildrenShardMetadata(shardGroupSplitIntervalListList,

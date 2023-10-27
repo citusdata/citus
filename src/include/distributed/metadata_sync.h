@@ -99,6 +99,8 @@ extern char * DistributionDeleteMetadataCommand(Oid relationId);
 extern char * TableOwnerResetCommand(Oid distributedRelationId);
 extern char * NodeListInsertCommand(List *workerNodeList);
 char * NodeListIdempotentInsertCommand(List *workerNodeList);
+extern List * ShardgroupListInsertCommand(uint32 colocationId, List *shardIntervals);
+extern List * ShardgroupListDeleteCommand(List *shardIntervalList);
 extern List * ShardListInsertCommand(List *shardIntervalList);
 extern List * ShardDeleteCommandList(ShardInterval *shardInterval);
 extern char * NodeDeleteCommand(uint32 nodeId);

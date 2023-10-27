@@ -12,4 +12,4 @@ ALTER SEQUENCE  citus.pg_dist_shardgroupid_seq SET SCHEMA pg_catalog;
 DROP FUNCTION pg_catalog.citus_internal_add_shard_metadata(regclass, bigint, "char", text, text);
 #include "../../udfs/citus_internal_add_shard_metadata/12.2-1.sql"
 #include "../../udfs/citus_internal_add_shardgroup_metadata/12.2-1.sql"
-
+#include "../../udfs/citus_internal_delete_shardgroup_metadata/12.2-1.sql"
