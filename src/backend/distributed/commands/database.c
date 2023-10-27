@@ -467,10 +467,8 @@ GetDatabaseCollation(Oid db_oid)
 	DatabaseCollationInfo info;
 	Datum collationDatum, ctypeDatum, icuLocaleDatum, collverDatum;
 	bool isNull;
-	TupleDesc tupdesc;
-	Snapshot snapshot;
 
-	snapshot = RegisterSnapshot(GetLatestSnapshot());
+	Snapshot snapshot = RegisterSnapshot(GetLatestSnapshot());
 	Relation rel = table_open(DatabaseRelationId, AccessShareLock);
 	HeapTuple tup = get_catalog_object_by_oid(rel, Anum_pg_database_oid, db_oid);
 	if (!HeapTupleIsValid(tup))
@@ -478,7 +476,7 @@ GetDatabaseCollation(Oid db_oid)
 		elog(ERROR, "cache lookup failed for database %u", db_oid);
 	}
 
-	tupdesc = RelationGetDescr(rel);
+	TupleDesc tupdesc = RelationGetDescr(rel);
 	collationDatum = heap_getattr(tup, Anum_pg_database_datcollate, tupdesc, &isNull);
 	if (isNull)
 	{
