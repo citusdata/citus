@@ -135,6 +135,7 @@ DEPS = {
         "minimal_schedule", ["multi_behavioral_analytics_create_table"]
     ),
     "alter_role_propagation": TestDeps("minimal_schedule"),
+
     "background_rebalance": TestDeps(
         None,
         [
@@ -151,6 +152,7 @@ DEPS = {
         ],
         worker_count=6,
     ),
+    "create_drop_database_propagation": TestDeps("minimal_schedule"),
     "function_propagation": TestDeps("minimal_schedule"),
     "citus_shards": TestDeps("minimal_schedule"),
     "grant_on_foreign_server_propagation": TestDeps("minimal_schedule"),
