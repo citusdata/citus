@@ -152,6 +152,7 @@ DEPS = {
         worker_count=6,
     ),
     "create_drop_database_propagation": TestDeps("minimal_schedule"),
+    "pg_15_create_drop_database_propagation": TestDeps("minimal_schedule"),
     "function_propagation": TestDeps("minimal_schedule"),
     "citus_shards": TestDeps("minimal_schedule"),
     "grant_on_foreign_server_propagation": TestDeps("minimal_schedule"),
