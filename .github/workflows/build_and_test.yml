@@ -39,7 +39,7 @@ jobs:
     needs: params
     runs-on: ubuntu-20.04
     container:
-      image: ${{ needs.params.outputs.build_image_name }}:latest
+      image: "${{ needs.params.outputs.build_image_name }}:${{ needs.params.outputs.pg16_version }}${{ needs.params.outputs.image_suffix }}"
       options: --user root
     steps:
     - uses: actions/checkout@v4
