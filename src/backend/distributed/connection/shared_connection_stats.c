@@ -425,8 +425,7 @@ IncrementSharedConnectionCounterInternal(uint32 externalFlags,
     /* Increment counter if a slot available */
     bool connectionSlotAvailable = true;
 
-    /* When GetSharedPoolSizeMaintenanceQuota() == 0, treat maintenance connections as regular */
-    bool maintenanceConnection = (GetSharedPoolSizeMaintenanceQuota() > 0 && (externalFlags & MAINTENANCE_CONNECTION));
+    bool maintenanceConnection = externalFlags & MAINTENANCE_CONNECTION;
     if (checkLimits)
     {
         WorkerNode *workerNode = FindWorkerNode(hostname, port);
@@ -434,15 +433,28 @@ IncrementSharedConnectionCounterInternal(uint32 externalFlags,
         int currentConnectionsLimit = connectionToLocalNode
                                       ? GetLocalSharedPoolSize()
                                       : GetMaxSharedPoolSize();
-        int maintenanceQuota = (int) ceil((double) currentConnectionsLimit * GetSharedPoolSizeMaintenanceQuota());
-        /* Connections limit should never go below 1 */
-        currentConnectionsLimit = Max(maintenanceConnection
-                                      ? maintenanceQuota
-                                      : currentConnectionsLimit - maintenanceQuota, 1);
-        int currentConnectionsCount = maintenanceConnection
+        int currentConnectionsCount;
+
+        if (GetSharedPoolSizeMaintenanceQuota() > 0)
+        {
+            int maintenanceQuota = (int) ceil((double) currentConnectionsLimit * GetSharedPoolSizeMaintenanceQuota());
+            /* Connections limit should never go below 1 */
+            currentConnectionsLimit = Max(maintenanceConnection
+                                          ? maintenanceQuota
+                                          : currentConnectionsLimit - maintenanceQuota, 1);
+            currentConnectionsCount = maintenanceConnection
                                       ? workerNodeConnectionEntry->maintenanceConnectionsCount
                                       : workerNodeConnectionEntry->regularConnectionsCount;
+
+        }
+        else
+        {
+            /* When maintenance quota disabled, all connections treated equally*/
+            currentConnectionsCount = (workerNodeConnectionEntry->maintenanceConnectionsCount +
+                                       workerNodeConnectionEntry->regularConnectionsCount);
+        }
         bool remoteNodeLimitExceeded = currentConnectionsCount + 1 > currentConnectionsLimit;
+
         /*
           * For local nodes, solely relying on citus.max_shared_pool_size or
           * max_connections might not be sufficient. The former gives us
@@ -543,8 +555,7 @@ DecrementSharedConnectionCounterInternal(uint32 externalFlags,
     Assert(workerNodeConnectionEntry->regularConnectionsCount > 0 ||
            workerNodeConnectionEntry->maintenanceConnectionsCount > 0);
 
-    /* When GetSharedPoolSizeMaintenanceQuota() == 0, treat maintenance connections as regular */
-    if ((GetSharedPoolSizeMaintenanceQuota() > 0 && (externalFlags & MAINTENANCE_CONNECTION)))
+    if (externalFlags & MAINTENANCE_CONNECTION)
     {
         workerNodeConnectionEntry->maintenanceConnectionsCount -= 1;
     }
