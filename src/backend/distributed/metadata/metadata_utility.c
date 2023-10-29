@@ -283,7 +283,7 @@ citus_shard_sizes(PG_FUNCTION_ARGS)
 
 
 /*
- * citus_total_relation_size accepts a table name and returns a distributed table
+ * citus_total_relation_size accepts a distributed table name and returns a distributed table
  * and its indexes' total relation size.
  */
 Datum
@@ -308,7 +308,7 @@ citus_total_relation_size(PG_FUNCTION_ARGS)
 
 
 /*
- * citus_table_size accepts a table name and returns a distributed table's total
+ * citus_table_size accepts a distributed table name and returns a distributed table's total
  * relation size.
  */
 Datum
@@ -333,7 +333,7 @@ citus_table_size(PG_FUNCTION_ARGS)
 
 
 /*
- * citus_relation_size accept a relation name and returns a relation's 'main'
+ * citus_relation_size accept a distributed relation name and returns a relation's 'main'
  * fork's size.
  *
  * Input relation is allowed to be an index on a distributed table too.
@@ -515,8 +515,8 @@ ReceiveShardIdAndSizeResults(List *connectionList, Tuplestorestate *tupleStore,
  * index belonging to a distributed table and size query can be run on it.
  * Connection to each node has to be established to get the size of the
  * relation.
-  * Input relation is allowed to be an index on a distributed table too.
-  */
+ * Input relation is allowed to be an index on a distributed table too.
+ */
 static bool
 DistributedRelationSize(Oid relationId, SizeQueryType sizeQueryType,
 						bool failOnError, uint64 *relationSize)
@@ -581,8 +581,8 @@ DistributedRelationSize(Oid relationId, SizeQueryType sizeQueryType,
  * DistributedRelationSizeOnWorker gets the workerNode and relationId to calculate
  * size of that relation on the given workerNode by summing up the size of each
  * shard placement.
-  * Input relation is allowed to be an index on a distributed table too.
-  */
+ * Input relation is allowed to be an index on a distributed table too.
+ */
 static bool
 DistributedRelationSizeOnWorker(WorkerNode *workerNode, Oid relationId,
 								SizeQueryType sizeQueryType,
@@ -1051,12 +1051,12 @@ ErrorIfNotSuitableToGetSize(Oid relationId)
 		if (relKind != RELKIND_INDEX && relKind != RELKIND_PARTITIONED_INDEX)
 		{
 			char *relationName = get_rel_name(relationId);
-			char *escapedQueryString = quote_literal_cstr(relationName);
+			char *escapedRelationName = quote_literal_cstr(relationName);
 			ereport(ERROR, (errcode(ERRCODE_INVALID_TABLE_DEFINITION),
 							errmsg(
 								"cannot calculate the size because relation %s "
 								"is not distributed",
-								escapedQueryString)));
+								escapedRelationName)));
 		}
 		bool missingOk = false;
 		Oid indexId = relationId;
