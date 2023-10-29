@@ -602,7 +602,8 @@ DistributedRelationSizeOnWorker(WorkerNode *workerNode, Oid relationId,
 
 	/* if the relation is an index, update relationId and define indexId */
 	Oid indexId = InvalidOid;
-	if (get_rel_relkind(relationId) == RELKIND_INDEX)
+	Oid relKind = get_rel_relkind(relationId);
+	if (relKind == RELKIND_INDEX || relKind == RELKIND_PARTITIONED_INDEX)
 	{
 		indexId = relationId;
 
@@ -1046,7 +1047,8 @@ ErrorIfNotSuitableToGetSize(Oid relationId)
 {
 	if (!IsCitusTable(relationId))
 	{
-		if (get_rel_relkind(relationId) != RELKIND_INDEX)
+		Oid relKind = get_rel_relkind(relationId);
+		if (relKind != RELKIND_INDEX && relKind != RELKIND_PARTITIONED_INDEX)
 		{
 			char *relationName = get_rel_name(relationId);
 			char *escapedQueryString = quote_literal_cstr(relationName);
