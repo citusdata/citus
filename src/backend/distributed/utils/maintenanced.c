@@ -341,11 +341,11 @@ WarnMaintenanceDaemonNotStarted(void)
 /*
  * ConnectToDatabase connects to the database for the given databaseOid.
  * if databaseOid is 0, connects to MainDb and then creates a hash entry.
- * If a hash entry cannot be created for MainDb it exists the process requesting a restart.
+ * If a hash entry cannot be created for MainDb it exits the process requesting a restart.
  * However for regular databases, it exits without requesting a restart since another
- * subsequent backend should be starting the Maintenance Deamon.
- * If a hash entry found has a valid workerPid, it exits
- * without requesting a restart since there is already a deamon running.
+ * subsequent backend is expected to start the Maintenance Daemon.
+ * If the found hash entry has a valid workerPid, it exits
+ * without requesting a restart since there is already a daemon running.
  */
 static MaintenanceDaemonDBData *
 ConnectToDatabase(Oid databaseOid)
