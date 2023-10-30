@@ -58,7 +58,7 @@ SELECT citus_total_relation_size('customer_copy_hash');
 -- Make sure we can get multiple sizes in a single query
 SELECT citus_table_size('customer_copy_hash'),
        citus_table_size('customer_copy_hash'),
-       citus_table_size('supplier');
+       citus_table_size('customer_copy_hash');
 
 CREATE INDEX index_1 on customer_copy_hash(c_custkey);
 VACUUM (FULL) customer_copy_hash;
