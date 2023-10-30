@@ -109,6 +109,8 @@ SELECT citus_relation_size('split_me_dist_col_idx')
     + citus_relation_size('m_dist_col_idx')
     + citus_relation_size('e_dist_col_idx');
 
+DROP TABLE split_me;
+
 -- Test inside the transaction
 BEGIN;
 ALTER TABLE supplier ALTER COLUMN s_suppkey SET NOT NULL;
