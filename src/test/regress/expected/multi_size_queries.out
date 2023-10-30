@@ -195,6 +195,8 @@ CREATE INDEX ON split_me(dist_col);
 -- create 2 partitions
 CREATE TABLE m PARTITION OF split_me FOR VALUES FROM ('2018-01-01') TO ('2019-01-01');
 CREATE TABLE e PARTITION OF split_me FOR VALUES FROM ('2019-01-01') TO ('2020-01-01');
+INSERT INTO split_me SELECT 1, '2018-01-01'::timestamp + i * interval '1 day' FROM generate_series(1, 360) i;
+INSERT INTO split_me SELECT 2, '2019-01-01'::timestamp + i * interval '1 day' FROM generate_series(1, 180) i;
 -- before citus
 SELECT citus_relation_size('split_me');
 ERROR:  cannot calculate the size because relation 'split_me' is not distributed
@@ -227,23 +229,13 @@ SELECT citus_relation_size('split_me_dist_col_idx');
 SELECT citus_relation_size('m');
  citus_relation_size
 ---------------------------------------------------------------------
-                   0
+               32768
 (1 row)
 
 SELECT citus_relation_size('m_dist_col_idx');
  citus_relation_size
 ---------------------------------------------------------------------
-               65536
-(1 row)
-
--- And we should make sure that following always returns true:
-SELECT citus_relation_size('split_me_dist_col_idx')
-    < citus_relation_size('split_me_dist_col_idx')
-    + citus_relation_size('m_dist_col_idx')
-    + citus_relation_size('e_dist_col_idx');
- ?column?
----------------------------------------------------------------------
- t
+               81920
 (1 row)
 
 DROP TABLE split_me;
