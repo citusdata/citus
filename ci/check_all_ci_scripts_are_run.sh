@@ -11,7 +11,7 @@ source ci/ci_helpers.sh
 ci_scripts=$(
     find ci/ -iname "*.sh" |
     sed -E 's#^ci/##g' |
-    grep -v -E '^(ci_helpers.sh|fix_style.sh|check_enterprise_merge.sh)$'
+    grep -v -E '^(ci_helpers.sh|fix_style.sh)$'
 )
 for script in $ci_scripts; do
     if ! grep "\\bci/$script\\b" -r .github > /dev/null; then
