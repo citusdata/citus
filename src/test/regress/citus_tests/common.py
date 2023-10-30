@@ -454,6 +454,9 @@ def cleanup_test_leftovers(nodes):
         node.cleanup_schemas()
 
     for node in nodes:
+        node.cleanup_databases()
+
+    for node in nodes:
         node.cleanup_users()
 
 
@@ -753,6 +756,7 @@ class Postgres(QueryRunner):
         self.subscriptions = set()
         self.publications = set()
         self.replication_slots = set()
+        self.databases = set()
         self.schemas = set()
         self.users = set()
 
@@ -993,6 +997,10 @@ class Postgres(QueryRunner):
             args = sql.SQL("")
         self.sql(sql.SQL("CREATE USER {} {}").format(sql.Identifier(name), args))
 
+    def create_database(self, name):
+        self.databases.add(name)
+        self.sql(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(name)))
+
     def create_schema(self, name):
         self.schemas.add(name)
         self.sql(sql.SQL("CREATE SCHEMA {}").format(sql.Identifier(name)))
@@ -1019,6 +1027,12 @@ class Postgres(QueryRunner):
     def cleanup_users(self):
         for user in self.users:
             self.sql(sql.SQL("DROP USER IF EXISTS {}").format(sql.Identifier(user)))
+
+    def cleanup_databases(self):
+        for database in self.databases:
+            self.sql(
+                sql.SQL("DROP DATABASE IF EXISTS {}").format(sql.Identifier(database))
+            )
 
     def cleanup_schemas(self):
         for schema in self.schemas:
