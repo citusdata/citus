@@ -30,7 +30,7 @@ jobs:
       pg11_version: "11.9"
       pg12_version: "12.4"
       pg13_version: "13.0"
-      upgrade_pg_versions: "latest"
+      upgrade_pg_versions: "11-12-13"
     steps:
       # Since GHA jobs needs at least one step we use a noop step here.
       - name: Set up parameters
