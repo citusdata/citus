@@ -501,7 +501,7 @@ jobs:
         for test in "${tests_array[@]}"
         do
             test_name=$(echo "$test" | sed -r "s/.+\/(.+)\..+/\1/")
-            gosu circleci src/test/regress/citus_tests/run_test.py $test_name --repeat ${{ env.runs }} --use-base-schedule --use-whole-schedule-line
+            gosu circleci src/test/regress/citus_tests/run_test.py $test_name --repeat ${{ env.runs }} --use-whole-schedule-line
         done
       shell: bash
     - uses: "./.github/actions/save_logs_and_results"
