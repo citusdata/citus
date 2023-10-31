@@ -88,3 +88,36 @@ PreprocessDropOwnedStmt(Node *node, const char *queryString,
 
 	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
 }
+
+
+List *
+PreprocessReassignOwnedStmt(Node *node, const char *queryString,
+							ProcessUtilityContext processUtilityContext)
+{
+	ReassignOwnedStmt *stmt = castNode(ReassignOwnedStmt, node);
+	List *allReassignRoles = stmt->roles;
+
+	List *distributedReassignRoles = FilterDistributedRoles(allReassignRoles);
+
+	if (list_length(distributedReassignRoles) <= 0)
+	{
+		return NIL;
+	}
+
+	if (!ShouldPropagate())
+	{
+		return NIL;
+	}
+
+	EnsureCoordinator();
+
+	stmt->roles = distributedReassignRoles;
+	char *sql = DeparseTreeNode((Node *) stmt);
+	stmt->roles = allReassignRoles;
+
+	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
+								sql,
+								ENABLE_DDL_PROPAGATION);
+
+	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
+}

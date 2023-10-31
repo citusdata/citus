@@ -82,3 +82,27 @@ AppendRoleList(StringInfo buf, List *roleList)
 		}
 	}
 }
+
+
+static void
+AppendReassignOwnedStmt(StringInfo buf, ReassignOwnedStmt *stmt)
+{
+	appendStringInfo(buf, "REASSIGN OWNED BY ");
+
+	AppendRoleList(buf, stmt->roles);
+	char const *newRoleName = RoleSpecString(stmt->newrole, true);
+	appendStringInfo(buf, " TO %s", quote_identifier(newRoleName));
+}
+
+
+char *
+DeparseReassignOwnedStmt(Node *node)
+{
+	ReassignOwnedStmt *stmt = castNode(ReassignOwnedStmt, node);
+	StringInfoData buf = { 0 };
+	initStringInfo(&buf);
+
+	AppendReassignOwnedStmt(&buf, stmt);
+
+	return buf.data;
+}

@@ -54,6 +54,7 @@ test: grant_on_database_propagation
 test: alter_database_propagation
 
 test: citus_shards
+test: reassure_owned
 
 # ----------
 # multi_citus_tools tests utility functions written for citus tools
