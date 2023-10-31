@@ -263,9 +263,10 @@ PreprocessAlterDatabaseSetStmt(Node *node, const char *queryString,
 	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
 }
 
+
 List *
 PreprocessCreateDatabaseStmt(Node *node, const char *queryString,
-							   ProcessUtilityContext processUtilityContext)
+							 ProcessUtilityContext processUtilityContext)
 {
 	if (!EnableCreateDatabasePropagation || !ShouldPropagate())
 	{
@@ -274,7 +275,7 @@ PreprocessCreateDatabaseStmt(Node *node, const char *queryString,
 
 	EnsureCoordinator();
 
-	//Validate the statement
+	/*Validate the statement */
 	DeparseTreeNode(node);
 
 	return NIL;

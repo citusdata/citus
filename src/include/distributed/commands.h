@@ -238,7 +238,7 @@ extern List * PreprocessAlterDatabaseSetStmt(Node *node, const char *queryString
 											 ProcessUtilityContext processUtilityContext);
 
 extern List * PreprocessCreateDatabaseStmt(Node *node, const char *queryString,
-							   ProcessUtilityContext processUtilityContext);
+										   ProcessUtilityContext processUtilityContext);
 extern List * PostprocessCreateDatabaseStmt(Node *node, const char *queryString);
 extern List * PreprocessDropDatabaseStmt(Node *node, const char *queryString,
 										 ProcessUtilityContext processUtilityContext);
