@@ -55,7 +55,7 @@ List * PreprocessGrantOnDatabaseStmt(Node *node, const char *queryString,
 									 ProcessUtilityContext processUtilityContext);
 
 /* controlled via GUC */
-bool EnableCreateDatabasePropagation = true;
+bool EnableCreateDatabasePropagation = false;
 bool EnableAlterDatabaseOwner = true;
 
 /*
