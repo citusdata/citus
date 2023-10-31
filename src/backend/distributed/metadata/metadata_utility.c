@@ -115,9 +115,7 @@ static void AppendShardIdNameValues(StringInfo selectQuery, ShardInterval *shard
 static HeapTuple CreateDiskSpaceTuple(TupleDesc tupleDesc, uint64 availableBytes,
 									  uint64 totalBytes);
 static bool GetLocalDiskSpaceStats(uint64 *availableBytes, uint64 *totalBytes);
-static void CitusShardPropertySetAntiAffinity(uint64 shardId, bool enabled);
-static void ShardGroupSetNeedsSeparateNodeGlobally(uint64 shardId, bool enabled);
-static void ShardSetNeedsSeparateNode(uint64 shardId, bool enabled);
+static void ShardgroupSetPropertyGlobally(uint64 shardId, bool *needsSeparateNodePtr);
 static BackgroundTask * DeformBackgroundTaskHeapTuple(TupleDesc tupleDescriptor,
 													  HeapTuple taskTuple);
 
@@ -386,101 +384,87 @@ citus_shard_property_set(PG_FUNCTION_ARGS)
 	Oid colocatedTableId = InvalidOid;
 	foreach_oid(colocatedTableId, colocatedTableList)
 	{
-		LockRelationOid(colocatedTableId, ShareUpdateExclusiveLock);
+		/*
+		 * Prevent relations from being dropped while we are setting the
+		 * property.
+		 */
+		LockRelationOid(colocatedTableId, AccessShareLock);
 	}
+
+	bool *needsSeparateNodePtr = NULL;
 
 	if (!PG_ARGISNULL(1))
 	{
-		bool antiAffinity = PG_GETARG_BOOL(1);
-		CitusShardPropertySetAntiAffinity(shardId, antiAffinity);
+		Oid distributedRelationId = RelationIdForShard(shardId);
+		if (!IsCitusTableType(distributedRelationId, HASH_DISTRIBUTED) &&
+			!IsCitusTableType(distributedRelationId, SINGLE_SHARD_DISTRIBUTED))
+		{
+			ereport(ERROR, (errmsg("setting anti-affinity property is only "
+								   "supported for hash distributed tables")));
+		}
+
+		needsSeparateNodePtr = palloc(sizeof(bool));
+		*needsSeparateNodePtr = PG_GETARG_BOOL(1);
 	}
+
+	ShardgroupSetPropertyGlobally(shardId, needsSeparateNodePtr);
 
 	PG_RETURN_VOID();
 }
 
 
 /*
- * CitusShardPropertySetAntiAffinity is an helper function for
- * citus_shard_property_set UDF to set anti_affinity property for given
- * shard.
- */
-static void
-CitusShardPropertySetAntiAffinity(uint64 shardId, bool enabled)
-{
-	Oid distributedRelationId = RelationIdForShard(shardId);
-	if (!IsCitusTableType(distributedRelationId, HASH_DISTRIBUTED) &&
-		!IsCitusTableType(distributedRelationId, SINGLE_SHARD_DISTRIBUTED))
-	{
-		ereport(ERROR, (errmsg("setting anti-affinity property is only "
-							   "supported for hash distributed tables")));
-	}
-
-	ShardGroupSetNeedsSeparateNodeGlobally(shardId, enabled);
-}
-
-
-/*
- * ShardGroupSetNeedsSeparateNodeGlobally calls ShardGroupSetNeedsSeparateNode
+ * ShardgroupSetPropertyGlobally calls ShardgroupSetProperty
  * on all nodes.
  */
 static void
-ShardGroupSetNeedsSeparateNodeGlobally(uint64 shardId, bool enabled)
+ShardgroupSetPropertyGlobally(uint64 shardId, bool *needsSeparateNodePtr)
 {
-	ShardGroupSetNeedsSeparateNode(shardId, enabled);
+	ShardgroupSetProperty(shardId, needsSeparateNodePtr);
 
 	char *metadataCommand =
-		ShardGroupSetNeedsSeparateNodeCommand(shardId, enabled);
+		ShardgroupSetPropertyCommand(shardId, needsSeparateNodePtr);
 	SendCommandToWorkersWithMetadata(metadataCommand);
 }
 
 
 /*
- * ShardGroupSetNeedsSeparateNode sets the needsseparatenode flag to desired
- * value for all the shards within the shard group that given shard belongs
- * to.
+ * ShardgroupSetProperty sets shard properties for all the shards within
+ * the shard group that given shard belongs to.
  */
 void
-ShardGroupSetNeedsSeparateNode(uint64 shardId, bool enabled)
+ShardgroupSetProperty(uint64 shardId, bool *needsSeparateNodePtr)
 {
 	ShardInterval *shardInterval = LoadShardInterval(shardId);
 	List *colocatedShardIntervalList = ColocatedShardIntervalList(shardInterval);
 
+	int nShardInterval = list_length(colocatedShardIntervalList);
+	Datum *shardIdDatumArray = (Datum *) palloc(nShardInterval * sizeof(Datum));
+
+	int shardIndex = 0;
 	ShardInterval *colocatedShardInterval = NULL;
 	foreach_ptr(colocatedShardInterval, colocatedShardIntervalList)
 	{
-		ShardSetNeedsSeparateNode(colocatedShardInterval->shardId,
-								  enabled);
+		shardIdDatumArray[shardIndex] = UInt64GetDatum(colocatedShardInterval->shardId);
+		shardIndex++;
 	}
-}
 
+	ArrayType *shardIdArrayDatum = DatumArrayToArrayType(shardIdDatumArray,
+														 nShardInterval, INT8OID);
 
-/*
- * ShardSetNeedsSeparateNode sets the needsseparatenode flag to desired
- * value for the given shard.
- */
-static void
-ShardSetNeedsSeparateNode(uint64 shardId, bool enabled)
-{
 	Relation pgDistShard = table_open(DistShardRelationId(), RowExclusiveLock);
 
 	ScanKeyData scanKey[1];
 	int scanKeyCount = 1;
 	ScanKeyInit(&scanKey[0], Anum_pg_dist_shard_shardid,
-				BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(shardId));
+				BTEqualStrategyNumber, F_INT8EQ, PointerGetDatum(shardIdArrayDatum));
+	scanKey[0].sk_flags |= SK_SEARCHARRAY;
 
 	bool indexOK = true;
 	Oid indexId = DistShardShardidIndexId();
 	SysScanDesc scanDescriptor = systable_beginscan(pgDistShard,
 													indexId, indexOK, NULL,
 													scanKeyCount, scanKey);
-
-	HeapTuple heapTuple = systable_getnext(scanDescriptor);
-	if (!HeapTupleIsValid(heapTuple))
-	{
-		ereport(ERROR, (errmsg("could not find valid entry for shard "
-							   UINT64_FORMAT,
-							   shardId)));
-	}
 
 	Datum values[Natts_pg_dist_shard];
 	bool isnull[Natts_pg_dist_shard];
@@ -490,16 +474,46 @@ ShardSetNeedsSeparateNode(uint64 shardId, bool enabled)
 	memset(isnull, false, sizeof(isnull));
 	memset(replace, false, sizeof(replace));
 
-	values[Anum_pg_dist_shard_needsseparatenode - 1] = BoolGetDatum(enabled);
-	isnull[Anum_pg_dist_shard_needsseparatenode - 1] = false;
-	replace[Anum_pg_dist_shard_needsseparatenode - 1] = true;
+	if (needsSeparateNodePtr)
+	{
+		values[Anum_pg_dist_shard_needsseparatenode - 1] = BoolGetDatum(
+			*needsSeparateNodePtr);
+		isnull[Anum_pg_dist_shard_needsseparatenode - 1] = false;
+		replace[Anum_pg_dist_shard_needsseparatenode - 1] = true;
+	}
 
-	TupleDesc tupleDescriptor = RelationGetDescr(pgDistShard);
-	heapTuple = heap_modify_tuple(heapTuple, tupleDescriptor, values, isnull, replace);
+	bool updatedAny = false;
 
-	CatalogTupleUpdate(pgDistShard, &heapTuple->t_self, heapTuple);
+	CatalogIndexState indexState = CatalogOpenIndexes(pgDistShard);
 
-	CitusInvalidateRelcacheByShardId(shardId);
+	HeapTuple heapTuple = NULL;
+	while (HeapTupleIsValid(heapTuple = systable_getnext(scanDescriptor)))
+	{
+		TupleDesc tupleDescriptor = RelationGetDescr(pgDistShard);
+		heapTuple = heap_modify_tuple(heapTuple, tupleDescriptor, values, isnull,
+									  replace);
+
+		CatalogTupleUpdateWithInfo(pgDistShard, &heapTuple->t_self, heapTuple,
+								   indexState);
+
+		updatedAny = true;
+	}
+
+	if (!updatedAny)
+	{
+		ereport(ERROR, (errmsg("could not find valid entry for shard "
+							   UINT64_FORMAT,
+							   shardId)));
+	}
+
+	CatalogCloseIndexes(indexState);
+
+	/*
+	 * We don't need to send invalidations for all the shards as
+	 * CitusInvalidateRelcacheByShardId() will send the invalidation based on
+	 * id of the belonging distributed table, not just for the input shard.
+	 */
+	CitusInvalidateRelcacheByShardId(shardInterval->shardId);
 
 	CommandCounterIncrement();
 

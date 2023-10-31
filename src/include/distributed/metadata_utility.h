@@ -447,7 +447,7 @@ extern List * SendShardStatisticsQueriesInParallel(List *citusTableIds,
 extern bool GetNodeDiskSpaceStatsForConnection(MultiConnection *connection,
 											   uint64 *availableBytes,
 											   uint64 *totalBytes);
-extern void ShardGroupSetNeedsSeparateNode(uint64 shardId, bool enabled);
+extern void ShardgroupSetProperty(uint64 shardId, bool *needsSeparateNodePtr);
 extern void ExecuteQueryViaSPI(char *query, int SPIOK);
 extern void ExecuteAndLogQueryViaSPI(char *query, int SPIOK, int logLevel);
 extern void EnsureSequenceTypeSupported(Oid seqOid, Oid attributeTypeId, Oid

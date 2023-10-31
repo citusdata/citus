@@ -7,32 +7,10 @@
 SET client_min_messages TO WARNING;
 CALL citus_cleanup_orphaned_resources();
 RESET client_min_messages;
--- Returns true if all placement groups within given shard group are isolated.
---
--- Not created in isolate_placement schema because it's dropped a few times during the test.
-CREATE OR REPLACE FUNCTION verify_placements_in_shard_group_isolated(
-    qualified_table_name text,
-    shard_group_index bigint)
-RETURNS boolean
-AS $func$
-DECLARE
-    v_result boolean;
-  BEGIN
-    SELECT bool_and(has_separate_node) INTO v_result
-    FROM citus_shards
-    JOIN (
-        SELECT shardids FROM public.get_enumerated_shard_groups(qualified_table_name) WHERE shardgroupindex = shard_group_index
-    ) q
-    ON (shardid = ANY(q.shardids));
-    RETURN v_result;
-  END;
-$func$ LANGUAGE plpgsql;
 CREATE SCHEMA isolate_placement;
 SET search_path TO isolate_placement;
 -- test null input
-SELECT citus_internal_shard_group_set_needsseparatenode(0, NULL);
-ERROR:  enabled cannot be NULL
-SELECT citus_internal_shard_group_set_needsseparatenode(NULL, false);
+SELECT citus_internal_shard_property_set(NULL, false);
 ERROR:  shard_id cannot be NULL
 SET citus.shard_replication_factor TO 1;
 SET citus.next_shard_id TO 2000000;
@@ -44,7 +22,7 @@ SELECT create_distributed_table('single_shard_1', null, colocate_with=>'none');
 (1 row)
 
 -- test with user that doesn't have permission to execute the function
-SELECT citus_internal_shard_group_set_needsseparatenode(shardid, true) FROM pg_dist_shard WHERE logicalrelid = 'isolate_placement.single_shard_1'::regclass;
+SELECT citus_internal_shard_property_set(shardid, true) FROM pg_dist_shard WHERE logicalrelid = 'isolate_placement.single_shard_1'::regclass;
 ERROR:  This is an internal Citus function can only be used in a distributed transaction
 DROP TABLE single_shard_1;
 CREATE ROLE test_user_isolate_placement WITH LOGIN;
@@ -64,7 +42,7 @@ SELECT pg_sleep(0.1);
 
 SET ROLE test_user_isolate_placement;
 -- test invalid shard id
-SELECT citus_internal_shard_group_set_needsseparatenode(0, true);
+SELECT citus_internal_shard_property_set(0, true);
 ERROR:  could not find valid entry for shard xxxxx
 -- test null needs_separate_node
 SELECT citus_internal_add_shard_metadata(
@@ -124,7 +102,7 @@ SELECT citus_shard_property_set(shardid) FROM pg_dist_shard WHERE logicalrelid =
 ERROR:  must be owner of table single_shard_1
 SELECT citus_shard_property_set(shardid, anti_affinity=>true) FROM pg_dist_shard WHERE logicalrelid = 'isolate_placement.single_shard_1'::regclass;
 ERROR:  must be owner of table single_shard_1
-SELECT citus_internal_shard_group_set_needsseparatenode(shardid, true) FROM pg_dist_shard WHERE logicalrelid = 'isolate_placement.single_shard_1'::regclass;
+SELECT citus_internal_shard_property_set(shardid, true) FROM pg_dist_shard WHERE logicalrelid = 'isolate_placement.single_shard_1'::regclass;
 ERROR:  must be owner of table single_shard_1
 -- assign all tables to regularuser
 RESET ROLE;
@@ -154,8 +132,8 @@ ORDER BY result;
  [{"1": [{"isolate_placement.single_shard_1": true}]}]
 (3 rows)
 
-SELECT citus_internal_shard_group_set_needsseparatenode(shardid, false) FROM pg_dist_shard WHERE logicalrelid = 'isolate_placement.single_shard_1'::regclass;
- citus_internal_shard_group_set_needsseparatenode
+SELECT citus_internal_shard_property_set(shardid, false) FROM pg_dist_shard WHERE logicalrelid = 'isolate_placement.single_shard_1'::regclass;
+ citus_internal_shard_property_set
 ---------------------------------------------------------------------
 
 (1 row)
@@ -171,8 +149,8 @@ ORDER BY result;
  {}
 (3 rows)
 
-SELECT citus_internal_shard_group_set_needsseparatenode(shardid, true) FROM pg_dist_shard WHERE logicalrelid = 'isolate_placement.single_shard_1'::regclass;
- citus_internal_shard_group_set_needsseparatenode
+SELECT citus_internal_shard_property_set(shardid, true) FROM pg_dist_shard WHERE logicalrelid = 'isolate_placement.single_shard_1'::regclass;
+ citus_internal_shard_property_set
 ---------------------------------------------------------------------
 
 (1 row)
@@ -244,6 +222,70 @@ ORDER BY result;
 SELECT shardids[2] AS shardgroup_5_shardid
 FROM public.get_enumerated_shard_groups('isolate_placement.dist_1')
 WHERE shardgroupindex = 5 \gset
+-- no-op ..
+SELECT citus_shard_property_set(:shardgroup_5_shardid, NULL);
+ citus_shard_property_set
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE ROLE test_user_isolate_placement WITH LOGIN;
+GRANT ALL ON SCHEMA isolate_placement TO test_user_isolate_placement;
+ALTER TABLE dist_1 OWNER TO test_user_isolate_placement;
+ALTER TABLE dist_2 OWNER TO test_user_isolate_placement;
+ALTER TABLE dist_3 OWNER TO test_user_isolate_placement;
+ALTER SYSTEM SET citus.enable_manual_metadata_changes_for_user TO 'test_user_isolate_placement';
+SELECT pg_reload_conf();
+ pg_reload_conf
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT pg_sleep(0.1);
+ pg_sleep
+---------------------------------------------------------------------
+
+(1 row)
+
+SET ROLE test_user_isolate_placement;
+-- no-op ..
+SELECT citus_internal_shard_property_set(:shardgroup_5_shardid, NULL);
+ citus_internal_shard_property_set
+---------------------------------------------------------------------
+
+(1 row)
+
+RESET ROLE;
+ALTER TABLE dist_1 OWNER TO current_user;
+ALTER TABLE dist_2 OWNER TO current_user;
+ALTER TABLE dist_3 OWNER TO current_user;
+REVOKE ALL ON SCHEMA isolate_placement FROM test_user_isolate_placement;
+DROP USER test_user_isolate_placement;
+ALTER SYSTEM RESET citus.enable_manual_metadata_changes_for_user;
+SELECT pg_reload_conf();
+ pg_reload_conf
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT pg_sleep(0.1);
+ pg_sleep
+---------------------------------------------------------------------
+
+(1 row)
+
+-- .. hence returns empty objects
+SELECT result FROM run_command_on_all_nodes($$
+    SELECT * FROM public.get_colocated_shards_needisolatednode('isolate_placement.dist_1')
+$$)
+ORDER BY result;
+ result
+---------------------------------------------------------------------
+ {}
+ {}
+ {}
+(3 rows)
+
 SELECT citus_shard_property_set(:shardgroup_5_shardid, anti_affinity=>true);
  citus_shard_property_set
 ---------------------------------------------------------------------

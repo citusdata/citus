@@ -179,7 +179,7 @@ PG_FUNCTION_INFO_V1(citus_internal_delete_colocation_metadata);
 PG_FUNCTION_INFO_V1(citus_internal_add_tenant_schema);
 PG_FUNCTION_INFO_V1(citus_internal_delete_tenant_schema);
 PG_FUNCTION_INFO_V1(citus_internal_update_none_dist_table_metadata);
-PG_FUNCTION_INFO_V1(citus_internal_shard_group_set_needsseparatenode);
+PG_FUNCTION_INFO_V1(citus_internal_shard_property_set);
 
 
 static bool got_SIGTERM = false;
@@ -3902,20 +3902,17 @@ citus_internal_update_none_dist_table_metadata(PG_FUNCTION_ARGS)
 
 
 /*
- * citus_internal_shard_group_set_needsseparatenode is an internal UDF to
- * set needsseparatenode flag for all the shards within the shard group
+ * citus_internal_shard_property_set is an internal UDF to
+ * set shard properties for all the shards within the shard group
  * that given shard belongs to.
  */
 Datum
-citus_internal_shard_group_set_needsseparatenode(PG_FUNCTION_ARGS)
+citus_internal_shard_property_set(PG_FUNCTION_ARGS)
 {
 	CheckCitusVersion(ERROR);
 
 	PG_ENSURE_ARGNOTNULL(0, "shard_id");
 	uint64 shardId = PG_GETARG_INT64(0);
-
-	PG_ENSURE_ARGNOTNULL(1, "enabled");
-	bool enabled = PG_GETARG_BOOL(1);
 
 	/* only owner of the table (or superuser) is allowed to modify the Citus metadata */
 	Oid distributedRelationId = RelationIdForShard(shardId);
@@ -3929,7 +3926,15 @@ citus_internal_shard_group_set_needsseparatenode(PG_FUNCTION_ARGS)
 		EnsureCoordinatorInitiatedOperation();
 	}
 
-	ShardGroupSetNeedsSeparateNode(shardId, enabled);
+	bool *needsSeparateNodePtr = NULL;
+
+	if (!PG_ARGISNULL(1))
+	{
+		needsSeparateNodePtr = palloc(sizeof(bool));
+		*needsSeparateNodePtr = PG_GETARG_BOOL(1);
+	}
+
+	ShardgroupSetProperty(shardId, needsSeparateNodePtr);
 
 	PG_RETURN_VOID();
 }
@@ -4135,16 +4140,18 @@ UpdateNoneDistTableMetadataCommand(Oid relationId, char replicationModel,
 
 
 /*
- * ShardGroupSetNeedsSeparateNodeCommand returns a command to call
- * citus_internal_shard_group_set_needsseparatenode().
+ * ShardgroupSetPropertyCommand returns a command to call
+ * citus_internal_shard_property_set().
  */
 char *
-ShardGroupSetNeedsSeparateNodeCommand(uint64 shardId, bool enabled)
+ShardgroupSetPropertyCommand(uint64 shardId, bool *needsSeparateNodePtr)
 {
+	char *needsSeparateNodeStr = !needsSeparateNodePtr ? "null" :
+								 (*needsSeparateNodePtr ? "true" : "false");
 	StringInfo command = makeStringInfo();
 	appendStringInfo(command,
-					 "SELECT pg_catalog.citus_internal_shard_group_set_needsseparatenode(%lu, %s)",
-					 shardId, enabled ? "true" : "false");
+					 "SELECT pg_catalog.citus_internal_shard_property_set(%lu, %s)",
+					 shardId, needsSeparateNodeStr);
 
 	return command->data;
 }

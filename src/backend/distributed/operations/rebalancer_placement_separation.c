@@ -25,7 +25,7 @@
 #include "distributed/shard_rebalancer.h"
 
 
-struct RebalancerPlacementSeparationContext
+typedef struct RebalancerPlacementSeparationContext
 {
 	/*
 	 * Hash table where each entry is of the form NodeToPlacementGroupHashEntry,
@@ -33,7 +33,7 @@ struct RebalancerPlacementSeparationContext
 	 * a NodeToPlacementGroupHashEntry.
 	 */
 	HTAB *nodePlacementGroupHash;
-};
+} RebalancerPlacementSeparationContext;
 
 
 /*
@@ -73,7 +73,7 @@ typedef struct NodeToPlacementGroupHashEntry
 	 * Shardgroup placement that is assigned to this node to be separated
 	 * from others in the cluster.
 	 *
-	 * NULL if no shardgroup placement is assigned yet.
+	 * NULL if no shardgroup placement is not assigned yet.
 	 */
 	ShardgroupPlacement *assignedPlacementGroup;
 } NodeToPlacementGroupHashEntry;
@@ -89,12 +89,12 @@ static void TryAssignPlacementGroupsToNodeGroups(
 	RebalancerPlacementSeparationContext *context,
 	List *activeWorkerNodeList,
 	List *rebalancePlacementList,
-	FmgrInfo *shardAllowedOnNodeUDF);
+	FmgrInfo shardAllowedOnNodeUDF);
 static bool TryAssignPlacementGroupToNodeGroup(
 	RebalancerPlacementSeparationContext *context,
 	int32 candidateNodeGroupId,
 	ShardPlacement *shardPlacement,
-	FmgrInfo *shardAllowedOnNodeUDF);
+	FmgrInfo shardAllowedOnNodeUDF);
 
 
 /* other helpers */
@@ -109,15 +109,15 @@ static List * PlacementListGetUniqueNodeGroupIds(List *placementList);
 RebalancerPlacementSeparationContext *
 PrepareRebalancerPlacementSeparationContext(List *activeWorkerNodeList,
 											List *rebalancePlacementList,
-											FmgrInfo *shardAllowedOnNodeUDF)
+											FmgrInfo shardAllowedOnNodeUDF)
 {
 	HTAB *nodePlacementGroupHash =
-		CreateSimpleHashWithNameAndSize(uint32, NodeToPlacementGroupHashEntry,
+		CreateSimpleHashWithNameAndSize(int32, NodeToPlacementGroupHashEntry,
 										"NodeToPlacementGroupHash",
 										list_length(activeWorkerNodeList));
 
 	RebalancerPlacementSeparationContext *context =
-		palloc(sizeof(RebalancerPlacementSeparationContext));
+		palloc0(sizeof(RebalancerPlacementSeparationContext));
 	context->nodePlacementGroupHash = nodePlacementGroupHash;
 
 	activeWorkerNodeList = SortList(activeWorkerNodeList, CompareWorkerNodes);
@@ -158,8 +158,7 @@ InitRebalancerPlacementSeparationContext(RebalancerPlacementSeparationContext *c
 			hash_search(nodePlacementGroupHash, &workerNode->groupId, HASH_ENTER,
 						NULL);
 
-		nodePlacementGroupHashEntry->shouldHaveShards =
-			workerNode->shouldHaveShards;
+		nodePlacementGroupHashEntry->shouldHaveShards = workerNode->shouldHaveShards;
 		nodePlacementGroupHashEntry->hasPlacementsThatCannotBeMovedAway = false;
 		nodePlacementGroupHashEntry->assignedPlacementGroup = NULL;
 
@@ -219,7 +218,7 @@ static void
 TryAssignPlacementGroupsToNodeGroups(RebalancerPlacementSeparationContext *context,
 									 List *activeWorkerNodeList,
 									 List *rebalancePlacementList,
-									 FmgrInfo *shardAllowedOnNodeUDF)
+									 FmgrInfo shardAllowedOnNodeUDF)
 {
 	List *unassignedPlacementList = NIL;
 
@@ -294,7 +293,7 @@ static bool
 TryAssignPlacementGroupToNodeGroup(RebalancerPlacementSeparationContext *context,
 								   int32 candidateNodeGroupId,
 								   ShardPlacement *shardPlacement,
-								   FmgrInfo *shardAllowedOnNodeUDF)
+								   FmgrInfo shardAllowedOnNodeUDF)
 {
 	HTAB *nodePlacementGroupHash = context->nodePlacementGroupHash;
 
@@ -330,7 +329,7 @@ TryAssignPlacementGroupToNodeGroup(RebalancerPlacementSeparationContext *context
 	}
 
 	WorkerNode *workerNode = PrimaryNodeForGroup(candidateNodeGroupId, NULL);
-	Datum allowed = FunctionCall2(shardAllowedOnNodeUDF, shardPlacement->shardId,
+	Datum allowed = FunctionCall2(&shardAllowedOnNodeUDF, shardPlacement->shardId,
 								  workerNode->nodeId);
 	if (!DatumGetBool(allowed))
 	{

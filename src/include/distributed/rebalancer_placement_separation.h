@@ -27,7 +27,6 @@ extern RebalancerPlacementSeparationContext * PrepareRebalancerPlacementSeparati
 	*
 	activeShardPlacementList,
 	FmgrInfo
-	*
 	shardAllowedOnNodeUDF);
 extern bool RebalancerPlacementSeparationContextPlacementIsAllowedOnWorker(
 	RebalancerPlacementSeparationContext *context,
