@@ -79,7 +79,7 @@ typedef struct DDLJob
 
 extern ProcessUtility_hook_type PrevProcessUtility;
 
-extern void multi_ProcessUtility(PlannedStmt *pstmt, const char *queryString,
+extern void citus_ProcessUtility(PlannedStmt *pstmt, const char *queryString,
 								 bool readOnlyTree,
 								 ProcessUtilityContext context, ParamListInfo params,
 								 struct QueryEnvironment *queryEnv, DestReceiver *dest,
@@ -94,6 +94,7 @@ extern void ProcessUtilityParseTree(Node *node, const char *queryString,
 extern void MarkInvalidateForeignKeyGraph(void);
 extern void InvalidateForeignKeyGraphForDDL(void);
 extern List * DDLTaskList(Oid relationId, const char *commandString);
+extern List * NontransactionalNodeDDLTask(TargetWorkerSet targets, List *commands);
 extern List * NodeDDLTaskList(TargetWorkerSet targets, List *commands);
 extern bool AlterTableInProgress(void);
 extern bool DropSchemaOrDBInProgress(void);

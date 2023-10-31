@@ -136,22 +136,34 @@ CREATE TEMPORARY TABLE columnar_temp(i int) USING columnar;
 -- reserve some chunks and a stripe
 INSERT INTO columnar_temp SELECT i FROM generate_series(1,5) i;
 
-SELECT columnar.get_storage_id(oid) AS columnar_temp_storage_id
-FROM pg_class WHERE relname='columnar_temp' \gset
-
-SELECT pg_backend_pid() AS val INTO old_backend_pid;
+SELECT columnar.get_storage_id(oid) as oid INTO columnar_temp_storage_id
+FROM pg_class WHERE relname='columnar_temp';
 
 \c - - - :master_port
 SET search_path TO columnar_create;
 
--- wait until old backend to expire to make sure that temp table cleanup is complete
-SELECT columnar_test_helpers.pg_waitpid(val) FROM old_backend_pid;
+-- wait until temporary table and its metadata is removed
+DO $$
+DECLARE
+  loop_wait_count integer := 0;
+BEGIN
+  WHILE (
+    (SELECT COUNT(*) > 0 FROM pg_class WHERE relname='columnar_temp') OR
+    (SELECT columnar_test_helpers.columnar_metadata_has_storage_id(oid) FROM columnar_temp_storage_id)
+  )
+  LOOP
+    IF loop_wait_count > 1000 THEN
+      RAISE EXCEPTION 'Timeout while waiting for temporary table to be dropped';
+    END IF;
 
-DROP TABLE old_backend_pid;
+    PERFORM pg_sleep(0.001);
 
--- show that temporary table itself and its metadata is removed
-SELECT COUNT(*)=0 FROM pg_class WHERE relname='columnar_temp';
-SELECT columnar_test_helpers.columnar_metadata_has_storage_id(:columnar_temp_storage_id);
+    loop_wait_count := loop_wait_count + 1;
+  END LOOP;
+END;
+$$ language plpgsql;
+
+DROP TABLE columnar_temp_storage_id;
 
 -- connect to another session and create a temp table with same name
 CREATE TEMPORARY TABLE columnar_temp(i int) USING columnar;

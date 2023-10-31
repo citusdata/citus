@@ -28,6 +28,8 @@
 #include "distributed/metadata/distobject.h"
 #include "distributed/multi_executor.h"
 #include "distributed/worker_transaction.h"
+#include "catalog/pg_database.h"
+#include "commands/dbcommands.h"
 
 
 /*

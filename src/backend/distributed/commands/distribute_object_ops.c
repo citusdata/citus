@@ -469,7 +469,7 @@ static DistributeObjectOps Database_Alter = {
 static DistributeObjectOps Database_Create = {
 	.deparse = DeparseCreateDatabaseStmt,
 	.qualify = NULL,
-	.preprocess = NULL,
+	.preprocess = PreprocessCreateDatabaseStmt,
 	.postprocess = PostprocessCreateDatabaseStmt,
 	.objectType = OBJECT_DATABASE,
 	.operationType = DIST_OPS_CREATE,
@@ -484,7 +484,7 @@ static DistributeObjectOps Database_Drop = {
 	.postprocess = NULL,
 	.objectType = OBJECT_DATABASE,
 	.operationType = DIST_OPS_DROP,
-	.address = NULL,
+	.address = DropDatabaseStmtObjectAddress,
 	.markDistributed = false,
 };
 

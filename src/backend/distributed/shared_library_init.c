@@ -481,6 +481,7 @@ _PG_init(void)
 #endif
 
 	InitializeMaintenanceDaemon();
+	InitializeMaintenanceDaemonForMainDb();
 
 	/* initialize coordinated transaction management */
 	InitializeTransactionManagement();
@@ -543,7 +544,7 @@ _PG_init(void)
 	 */
 	PrevProcessUtility = (ProcessUtility_hook != NULL) ?
 						 ProcessUtility_hook : standard_ProcessUtility;
-	ProcessUtility_hook = multi_ProcessUtility;
+	ProcessUtility_hook = citus_ProcessUtility;
 
 	/*
 	 * Acquire symbols for columnar functions that citus calls.
@@ -1829,6 +1830,16 @@ RegisterCitusConfigVariables(void)
 		2 * 60 * 60 * 1000, 0, 7 * 24 * 3600 * 1000,
 		PGC_SIGHUP,
 		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE | GUC_UNIT_MS,
+		NULL, NULL, NULL);
+
+	DefineCustomStringVariable(
+		"citus.main_db",
+		gettext_noop("Which database is designated as the main_db"),
+		NULL,
+		&MainDb,
+		"",
+		PGC_POSTMASTER,
+		GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(

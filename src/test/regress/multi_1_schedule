@@ -33,6 +33,9 @@ test: ref_citus_local_fkeys
 test: alter_database_owner
 test: distributed_triggers
 test: create_single_shard_table
+test: create_drop_database_propagation
+test: create_drop_database_propagation_pg15
+
 # don't parallelize single_shard_table_udfs to make sure colocation ids are sequential
 test: single_shard_table_udfs
 test: schema_based_sharding
@@ -52,7 +55,6 @@ test: multi_read_from_secondaries
 
 test: grant_on_database_propagation
 test: alter_database_propagation
-test: create_drop_database_propagation
 
 test: citus_shards
 

@@ -80,6 +80,7 @@
 #include "utils/inval.h"
 #include "utils/lsyscache.h"
 #include "utils/syscache.h"
+#include "catalog/pg_database.h"
 
 
 bool EnableDDLPropagation = true; /* ddl propagation is enabled */
@@ -95,13 +96,13 @@ int UtilityHookLevel = 0;
 
 
 /* Local functions forward declarations for helper functions */
-static void ProcessUtilityInternal(PlannedStmt *pstmt,
-								   const char *queryString,
-								   ProcessUtilityContext context,
-								   ParamListInfo params,
-								   struct QueryEnvironment *queryEnv,
-								   DestReceiver *dest,
-								   QueryCompletion *completionTag);
+static void citus_ProcessUtilityInternal(PlannedStmt *pstmt,
+										 const char *queryString,
+										 ProcessUtilityContext context,
+										 ParamListInfo params,
+										 struct QueryEnvironment *queryEnv,
+										 DestReceiver *dest,
+										 QueryCompletion *completionTag);
 static void set_indexsafe_procflags(void);
 static char * CurrentSearchPath(void);
 static void IncrementUtilityHookCountersIfNecessary(Node *parsetree);
@@ -130,7 +131,7 @@ ProcessUtilityParseTree(Node *node, const char *queryString, ProcessUtilityConte
 
 
 /*
- * multi_ProcessUtility is the main entry hook for implementing Citus-specific
+ * citus_ProcessUtility is the main entry hook for implementing Citus-specific
  * utility behavior. Its primary responsibilities are intercepting COPY and DDL
  * commands and augmenting the coordinator's command with corresponding tasks
  * to be run on worker nodes, after suitably ensuring said commands' options
@@ -139,7 +140,7 @@ ProcessUtilityParseTree(Node *node, const char *queryString, ProcessUtilityConte
  * TRUNCATE and VACUUM are also supported.
  */
 void
-multi_ProcessUtility(PlannedStmt *pstmt,
+citus_ProcessUtility(PlannedStmt *pstmt,
 					 const char *queryString,
 					 bool readOnlyTree,
 					 ProcessUtilityContext context,
@@ -329,8 +330,8 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 
 	PG_TRY();
 	{
-		ProcessUtilityInternal(pstmt, queryString, context, params, queryEnv, dest,
-							   completionTag);
+		citus_ProcessUtilityInternal(pstmt, queryString, context, params, queryEnv, dest,
+									 completionTag);
 
 		if (UtilityHookLevel == 1)
 		{
@@ -404,7 +405,7 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 
 
 /*
- * ProcessUtilityInternal is a helper function for multi_ProcessUtility where majority
+ * citus_ProcessUtilityInternal is a helper function for citus_ProcessUtility where majority
  * of the Citus specific utility statements are handled here. The distinction between
  * both functions is that Citus_ProcessUtility does not handle CALL and DO statements.
  * The reason for the distinction is implemented to be able to find the "top-level" DDL
@@ -412,13 +413,13 @@ multi_ProcessUtility(PlannedStmt *pstmt,
  * this goal.
  */
 static void
-ProcessUtilityInternal(PlannedStmt *pstmt,
-					   const char *queryString,
-					   ProcessUtilityContext context,
-					   ParamListInfo params,
-					   struct QueryEnvironment *queryEnv,
-					   DestReceiver *dest,
-					   QueryCompletion *completionTag)
+citus_ProcessUtilityInternal(PlannedStmt *pstmt,
+							 const char *queryString,
+							 ProcessUtilityContext context,
+							 ParamListInfo params,
+							 struct QueryEnvironment *queryEnv,
+							 DestReceiver *dest,
+							 QueryCompletion *completionTag)
 {
 	Node *parsetree = pstmt->utilityStmt;
 	List *ddlJobs = NIL;
@@ -578,6 +579,7 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 		PreprocessLockStatement((LockStmt *) parsetree, context);
 	}
 
+
 	/*
 	 * We only process ALTER TABLE ... ATTACH PARTITION commands in the function below
 	 * and distribute the partition if necessary.
@@ -724,22 +726,12 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 	}
 
 	/*
-	 * Make sure that dropping the role deletes the pg_dist_object entries. There is a
-	 * separate logic for roles, since roles are not included as dropped objects in the
+	 * Make sure that dropping the role and database deletes the pg_dist_object entries. There is a
+	 * separate logic for roles and database, since roles and database are not included as dropped objects in the
 	 * drop event trigger. To handle it both on worker and coordinator nodes, it is not
 	 * implemented as a part of process functions but here.
 	 */
-	if (IsA(parsetree, DropRoleStmt))
-	{
-		DropRoleStmt *stmt = castNode(DropRoleStmt, parsetree);
-		List *allDropRoles = stmt->roles;
-
-		List *distributedDropRoles = FilterDistributedRoles(allDropRoles);
-		if (list_length(distributedDropRoles) > 0)
-		{
-			UnmarkRolesDistributed(distributedDropRoles);
-		}
-	}
+	UnmarkRolesAndDatabaseDistributed(parsetree);
 
 	pstmt->utilityStmt = parsetree;
 
@@ -1273,9 +1265,10 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 			{
 				ereport(WARNING,
 						(errmsg(
-							 "CONCURRENTLY-enabled index commands can fail partially, "
-							 "leaving behind an INVALID index.\n Use DROP INDEX "
-							 "CONCURRENTLY IF EXISTS to remove the invalid index.")));
+							 "Commands that are not transaction-safe may result in partial failure"
+							 ", potentially leading to an inconsistent state.\nIf the problematic command"
+							 " is a CREATE operation, consider using the 'IF EXISTS' syntax to drop the "
+							 "object,\nif applicable, and then reattempt the original command.")));
 				PG_RE_THROW();
 			}
 		}
@@ -1386,7 +1379,7 @@ PostStandardProcessUtility(Node *parsetree)
 	 * on the local table first. However, in order to decide whether the
 	 * command leads to an invalidation, we need to check before the command
 	 * is being executed since we read pg_constraint table. Thus, we maintain a
-	 * local flag and do the invalidation after multi_ProcessUtility,
+	 * local flag and do the invalidation after citus_ProcessUtility,
 	 * before ExecuteDistributedDDLJob().
 	 */
 	InvalidateForeignKeyGraphForDDL();
@@ -1486,6 +1479,28 @@ DDLTaskList(Oid relationId, const char *commandString)
 	}
 
 	return taskList;
+}
+
+
+/*
+ * NontransactionalNodeDDLTask builds a list of tasks to execute a DDL command on a
+ * given target set of nodes with cannotBeExecutedInTransaction is set to make sure
+ * that list is being executed without a transaction.
+ */
+List *
+NontransactionalNodeDDLTask(TargetWorkerSet targets, List *commands)
+{
+	List *ddlJobs = NodeDDLTaskList(targets, commands);
+	DDLJob *ddlJob = NULL;
+	foreach_ptr(ddlJob, ddlJobs)
+	{
+		Task *task = NULL;
+		foreach_ptr(task, ddlJob->taskList)
+		{
+			task->cannotBeExecutedInTransaction = true;
+		}
+	}
+	return ddlJobs;
 }
 
 

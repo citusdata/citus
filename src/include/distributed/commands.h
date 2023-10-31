@@ -237,9 +237,17 @@ extern List * CreateDatabaseStmtObjectAddress(Node *node, bool missing_ok, bool
 extern List * PreprocessAlterDatabaseSetStmt(Node *node, const char *queryString,
 											 ProcessUtilityContext processUtilityContext);
 
+extern List * PreprocessCreateDatabaseStmt(Node *node, const char *queryString,
+										   ProcessUtilityContext processUtilityContext);
 extern List * PostprocessCreateDatabaseStmt(Node *node, const char *queryString);
 extern List * PreprocessDropDatabaseStmt(Node *node, const char *queryString,
 										 ProcessUtilityContext processUtilityContext);
+extern List * DropDatabaseStmtObjectAddress(Node *node, bool missing_ok, bool
+											isPostprocess);
+extern List * CreateDatabaseStmtObjectAddress(Node *node, bool missing_ok, bool
+											  isPostprocess);
+extern List * GenerateCreateDatabaseCommandList(void);
+
 
 extern List * PreprocessAlterDatabaseRenameStmt(Node *node, const char *queryString,
 												ProcessUtilityContext
@@ -515,6 +523,7 @@ extern List * RenameRoleStmtObjectAddress(Node *stmt, bool missing_ok, bool
 
 extern void UnmarkRolesDistributed(List *roles);
 extern List * FilterDistributedRoles(List *roles);
+extern void EnsureSequentialModeForRoleDDL(void);
 
 /* schema.c - forward declarations */
 extern List * PostprocessCreateSchemaStmt(Node *node, const char *queryString);

@@ -2324,27 +2324,11 @@ PlanRouterQuery(Query *originalQuery,
 			TargetShardIntervalForFastPathQuery(originalQuery, &isMultiShardQuery,
 												distributionKeyValue,
 												partitionValueConst);
-
-		/*
-		 * This could only happen when there is a parameter on the distribution key.
-		 * We defer error here, later the planner is forced to use a generic plan
-		 * by assigning arbitrarily high cost to the plan.
-		 */
-		if (UpdateOrDeleteOrMergeQuery(originalQuery) && isMultiShardQuery)
-		{
-			planningError = DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-										  "Router planner cannot handle multi-shard "
-										  "modify queries", NULL, NULL);
-			return planningError;
-		}
+		Assert(!isMultiShardQuery);
 
 		*prunedShardIntervalListList = shardIntervalList;
-
-		if (!isMultiShardQuery)
-		{
-			ereport(DEBUG2, (errmsg("Distributed planning for a fast-path router "
-									"query")));
-		}
+		ereport(DEBUG2, (errmsg("Distributed planning for a fast-path router "
+								"query")));
 	}
 	else
 	{

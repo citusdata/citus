@@ -35,6 +35,15 @@
 #include "distributed/deparse_shard_query.h"
 #include "distributed/listutils.h"
 #include "distributed/adaptive_executor.h"
+#include "access/htup_details.h"
+#include "catalog/pg_tablespace.h"
+#include "access/heapam.h"
+#include "utils/relcache.h"
+#include "utils/rel.h"
+#include "utils/lsyscache.h"
+#include "catalog/pg_collation.h"
+#include "utils/relcache.h"
+#include "catalog/pg_database_d.h"
 
 
 static AlterOwnerStmt * RecreateAlterDatabaseOwnerStmt(Oid databaseOid);
@@ -296,6 +305,7 @@ PreprocessAlterDatabaseSetStmt(Node *node, const char *queryString,
 		return NIL;
 	}
 
+
 	AlterDatabaseSetStmt *stmt = castNode(AlterDatabaseSetStmt, node);
 
 	EnsureCoordinator();
@@ -307,6 +317,24 @@ PreprocessAlterDatabaseSetStmt(Node *node, const char *queryString,
 								ENABLE_DDL_PROPAGATION);
 
 	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
+}
+
+
+List *
+PreprocessCreateDatabaseStmt(Node *node, const char *queryString,
+							 ProcessUtilityContext processUtilityContext)
+{
+	if (!EnableCreateDatabasePropagation || !ShouldPropagate())
+	{
+		return NIL;
+	}
+
+	EnsureCoordinator();
+
+	/*Validate the statement */
+	DeparseTreeNode(node);
+
+	return NIL;
 }
 
 
@@ -328,16 +356,11 @@ PostprocessCreateDatabaseStmt(Node *node, const char *queryString)
 
 	char *createDatabaseCommand = DeparseTreeNode(node);
 
-	StringInfo internalCreateCommand = makeStringInfo();
-	appendStringInfo(internalCreateCommand,
-					 "SELECT pg_catalog.citus_internal_database_command(%s)",
-					 quote_literal_cstr(createDatabaseCommand));
-
 	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
-								(void *) internalCreateCommand->data,
+								(void *) createDatabaseCommand,
 								ENABLE_DDL_PROPAGATION);
 
-	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
+	return NontransactionalNodeDDLTask(NON_COORDINATOR_NODES, commands);
 }
 
 
@@ -412,6 +435,7 @@ List *
 PreprocessDropDatabaseStmt(Node *node, const char *queryString,
 						   ProcessUtilityContext processUtilityContext)
 {
+	bool isPostProcess = false;
 	if (!EnableCreateDatabasePropagation || !ShouldPropagate())
 	{
 		return NIL;
@@ -421,36 +445,48 @@ PreprocessDropDatabaseStmt(Node *node, const char *queryString,
 
 	DropdbStmt *stmt = (DropdbStmt *) node;
 
-	Oid databaseOid = get_database_oid(stmt->dbname, stmt->missing_ok);
+	List *addresses = GetObjectAddressListFromParseTree(node, stmt->missing_ok,
+														isPostProcess);
 
-	if (databaseOid == InvalidOid)
-	{
-		/* let regular ProcessUtility deal with IF NOT EXISTS */
-		return NIL;
-	}
-
-	ObjectAddress dbAddress = { 0 };
-	ObjectAddressSet(dbAddress, DatabaseRelationId, databaseOid);
-	if (!IsObjectDistributed(&dbAddress))
+	if (list_length(addresses) == 0)
 	{
 		return NIL;
 	}
 
-	UnmarkObjectDistributed(&dbAddress);
+	ObjectAddress *address = (ObjectAddress *) linitial(addresses);
+	if (address->objectId == InvalidOid || !IsObjectDistributed(address))
+	{
+		return NIL;
+	}
 
 	char *dropDatabaseCommand = DeparseTreeNode(node);
 
-	StringInfo internalDropCommand = makeStringInfo();
-	appendStringInfo(internalDropCommand,
-					 "SELECT pg_catalog.citus_internal_database_command(%s)",
-					 quote_literal_cstr(dropDatabaseCommand));
-
 
 	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
-								(void *) internalDropCommand->data,
+								(void *) dropDatabaseCommand,
 								ENABLE_DDL_PROPAGATION);
 
-	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
+	return NontransactionalNodeDDLTask(NON_COORDINATOR_NODES, commands);
+}
+
+
+static ObjectAddress *
+GetDatabaseAddressFromDatabaseName(char *databaseName, bool missingOk)
+{
+	Oid databaseOid = get_database_oid(databaseName, missingOk);
+	ObjectAddress *dbAddress = palloc0(sizeof(ObjectAddress));
+	ObjectAddressSet(*dbAddress, DatabaseRelationId, databaseOid);
+	return dbAddress;
+}
+
+
+List *
+DropDatabaseStmtObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
+{
+	DropdbStmt *stmt = castNode(DropdbStmt, node);
+	ObjectAddress *dbAddress = GetDatabaseAddressFromDatabaseName(stmt->dbname,
+																  missing_ok);
+	return list_make1(dbAddress);
 }
 
 
@@ -458,9 +494,282 @@ List *
 CreateDatabaseStmtObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
 {
 	CreatedbStmt *stmt = castNode(CreatedbStmt, node);
-	Oid databaseOid = get_database_oid(stmt->dbname, missing_ok);
-	ObjectAddress *dbAddress = palloc0(sizeof(ObjectAddress));
-	ObjectAddressSet(*dbAddress, DatabaseRelationId, databaseOid);
-
+	ObjectAddress *dbAddress = GetDatabaseAddressFromDatabaseName(stmt->dbname,
+																  missing_ok);
 	return list_make1(dbAddress);
+}
+
+
+static char *
+GetTablespaceName(Oid tablespaceOid)
+{
+	HeapTuple tuple = SearchSysCache1(TABLESPACEOID, ObjectIdGetDatum(tablespaceOid));
+	if (!HeapTupleIsValid(tuple))
+	{
+		return NULL;
+	}
+
+	Form_pg_tablespace tablespaceForm = (Form_pg_tablespace) GETSTRUCT(tuple);
+	char *tablespaceName = NameStr(tablespaceForm->spcname);
+
+	ReleaseSysCache(tuple);
+
+	return tablespaceName;
+}
+
+
+/*
+ * DatabaseCollationInfo is used to store collation related information of a database
+ */
+typedef struct DatabaseCollationInfo
+{
+	char *collation;
+	char *ctype;
+	#if PG_VERSION_NUM >= PG_VERSION_15
+	char *icu_locale;
+	char *collversion;
+	#endif
+} DatabaseCollationInfo;
+
+/*
+ * GetDatabaseCollation gets oid of a database and returns all the collation related information
+ * We need this method since collation related info in Form_pg_database is not accessible
+ */
+static DatabaseCollationInfo
+GetDatabaseCollation(Oid db_oid)
+{
+	DatabaseCollationInfo info;
+	bool isNull;
+
+	Snapshot snapshot = RegisterSnapshot(GetLatestSnapshot());
+	Relation rel = table_open(DatabaseRelationId, AccessShareLock);
+	HeapTuple tup = get_catalog_object_by_oid(rel, Anum_pg_database_oid, db_oid);
+	if (!HeapTupleIsValid(tup))
+	{
+		elog(ERROR, "cache lookup failed for database %u", db_oid);
+	}
+
+	TupleDesc tupdesc = RelationGetDescr(rel);
+	Datum collationDatum = heap_getattr(tup, Anum_pg_database_datcollate, tupdesc,
+										&isNull);
+	if (isNull)
+	{
+		info.collation = NULL;
+	}
+	else
+	{
+		info.collation = TextDatumGetCString(collationDatum);
+	}
+
+	Datum ctypeDatum = heap_getattr(tup, Anum_pg_database_datctype, tupdesc, &isNull);
+	if (isNull)
+	{
+		info.ctype = NULL;
+	}
+	else
+	{
+		info.ctype = TextDatumGetCString(ctypeDatum);
+	}
+
+	#if PG_VERSION_NUM >= PG_VERSION_15
+
+	Datum icuLocaleDatum = heap_getattr(tup, Anum_pg_database_daticulocale, tupdesc,
+										&isNull);
+	if (isNull)
+	{
+		info.icu_locale = NULL;
+	}
+	else
+	{
+		info.icu_locale = TextDatumGetCString(icuLocaleDatum);
+	}
+
+	Datum collverDatum = heap_getattr(tup, Anum_pg_database_datcollversion, tupdesc,
+									  &isNull);
+	if (isNull)
+	{
+		info.collversion = NULL;
+	}
+	else
+	{
+		info.collversion = TextDatumGetCString(collverDatum);
+	}
+	#endif
+
+	table_close(rel, AccessShareLock);
+	UnregisterSnapshot(snapshot);
+	heap_freetuple(tup);
+
+	return info;
+}
+
+
+static void
+FreeDatabaseCollationInfo(DatabaseCollationInfo collInfo)
+{
+	if (collInfo.collation != NULL)
+	{
+		pfree(collInfo.collation);
+	}
+	if (collInfo.ctype != NULL)
+	{
+		pfree(collInfo.ctype);
+	}
+	#if PG_VERSION_NUM >= PG_VERSION_15
+	if (collInfo.icu_locale != NULL)
+	{
+		pfree(collInfo.icu_locale);
+	}
+	#endif
+}
+
+
+#if PG_VERSION_NUM >= PG_VERSION_15
+static char *
+get_locale_provider_string(char datlocprovider)
+{
+	switch (datlocprovider)
+	{
+		case 'c':
+		{
+			return "libc";
+		}
+
+		case 'i':
+		{
+			return "icu";
+		}
+
+		case 'l':
+		{
+			return "locale";
+		}
+
+		default:
+			return "";
+	}
+}
+
+
+#endif
+
+
+/*
+ * GenerateCreateDatabaseStatementFromPgDatabase is gets the pg_database tuple and returns the CREATE DATABASE statement
+ */
+static char *
+GenerateCreateDatabaseStatementFromPgDatabase(Form_pg_database databaseForm)
+{
+	DatabaseCollationInfo collInfo = GetDatabaseCollation(databaseForm->oid);
+
+	StringInfoData str;
+	initStringInfo(&str);
+
+	appendStringInfo(&str, "CREATE DATABASE %s", quote_identifier(NameStr(
+																	  databaseForm->
+																	  datname)));
+
+	if (databaseForm->datdba != InvalidOid)
+	{
+		appendStringInfo(&str, " OWNER = %s", GetUserNameFromId(databaseForm->datdba,
+																false));
+	}
+
+	if (databaseForm->encoding != -1)
+	{
+		appendStringInfo(&str, " ENCODING = '%s'", pg_encoding_to_char(
+							 databaseForm->encoding));
+	}
+
+	if (collInfo.collation != NULL)
+	{
+		appendStringInfo(&str, " LC_COLLATE = '%s'", collInfo.collation);
+	}
+	if (collInfo.ctype != NULL)
+	{
+		appendStringInfo(&str, " LC_CTYPE = '%s'", collInfo.ctype);
+	}
+
+	#if PG_VERSION_NUM >= PG_VERSION_15
+	if (collInfo.icu_locale != NULL)
+	{
+		appendStringInfo(&str, " ICU_LOCALE = '%s'", collInfo.icu_locale);
+	}
+
+	if (databaseForm->datlocprovider != 0)
+	{
+		appendStringInfo(&str, " LOCALE_PROVIDER = '%s'", get_locale_provider_string(
+							 databaseForm->datlocprovider));
+	}
+
+	if (collInfo.collversion != NULL)
+	{
+		appendStringInfo(&str, " COLLATION_VERSION = '%s'", collInfo.collversion);
+	}
+	#endif
+
+	if (databaseForm->dattablespace != InvalidOid)
+	{
+		appendStringInfo(&str, " TABLESPACE = %s", quote_identifier(GetTablespaceName(
+																		databaseForm->
+																		dattablespace)));
+	}
+
+	appendStringInfo(&str, " ALLOW_CONNECTIONS = '%s'", databaseForm->datallowconn ?
+					 "true" : "false");
+
+	if (databaseForm->datconnlimit >= 0)
+	{
+		appendStringInfo(&str, " CONNECTION LIMIT %d", databaseForm->datconnlimit);
+	}
+
+	appendStringInfo(&str, " IS_TEMPLATE = '%s'", databaseForm->datistemplate ? "true" :
+					 "false");
+
+	FreeDatabaseCollationInfo(collInfo);
+
+
+	return str.data;
+}
+
+
+/*
+ * GenerateCreateDatabaseCommandList is gets the pg_database tuples and returns the CREATE DATABASE statement list
+ * for all the databases in the cluster.citus_internal_database_command UDF is used to send the CREATE DATABASE
+ * statement to the workers since the CREATE DATABASE statement gives error in transaction context.
+ */
+List *
+GenerateCreateDatabaseCommandList(void)
+{
+	List *commands = NIL;
+	HeapTuple tuple;
+
+	Relation pgDatabaseRel = table_open(DatabaseRelationId, AccessShareLock);
+	TableScanDesc scan = table_beginscan_catalog(pgDatabaseRel, 0, NULL);
+
+	while ((tuple = heap_getnext(scan, ForwardScanDirection)) != NULL)
+	{
+		Form_pg_database databaseForm = (Form_pg_database) GETSTRUCT(tuple);
+
+		char *createStmt = GenerateCreateDatabaseStatementFromPgDatabase(databaseForm);
+
+
+		StringInfo outerDbStmt = makeStringInfo();
+
+		/* Generate the CREATE DATABASE statement */
+		appendStringInfo(outerDbStmt,
+						 "select pg_catalog.citus_internal_database_command( %s)",
+						 quote_literal_cstr(
+							 createStmt));
+
+		elog(LOG, "outerDbStmt: %s", outerDbStmt->data);
+
+		/* Add the statement to the list of commands */
+		commands = lappend(commands, outerDbStmt->data);
+	}
+
+	heap_endscan(scan);
+	table_close(pgDatabaseRel, AccessShareLock);
+
+	return commands;
 }

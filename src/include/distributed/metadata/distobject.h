@@ -27,6 +27,7 @@ extern void MarkObjectDistributed(const ObjectAddress *distAddress);
 extern void MarkObjectDistributedViaSuperUser(const ObjectAddress *distAddress);
 extern void MarkObjectDistributedLocally(const ObjectAddress *distAddress);
 extern void UnmarkObjectDistributed(const ObjectAddress *address);
+extern void UnmarkRolesAndDatabaseDistributed(Node *node);
 extern bool IsTableOwnedByExtension(Oid relationId);
 extern bool ObjectAddressDependsOnExtension(const ObjectAddress *target);
 extern bool IsAnyObjectAddressOwnedByExtension(const List *targets,
