@@ -395,7 +395,6 @@ citus_shard_property_set(PG_FUNCTION_ARGS)
 
 	if (!PG_ARGISNULL(1))
 	{
-		Oid distributedRelationId = RelationIdForShard(shardId);
 		if (!IsCitusTableType(distributedRelationId, HASH_DISTRIBUTED) &&
 			!IsCitusTableType(distributedRelationId, SINGLE_SHARD_DISTRIBUTED))
 		{
