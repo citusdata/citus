@@ -526,7 +526,10 @@ ShardPlacementForFunctionColocatedWithDistTable(DistObjectCacheEntry *procedure,
 		if (partitionParam->paramkind == PARAM_EXTERN)
 		{
 			/* Don't log a message, we should end up here again without a parameter */
-			DissuadePlannerFromUsingPlan(plan);
+			if (plan)
+			{
+				DissuadePlannerFromUsingPlan(plan);
+			}
 			return NULL;
 		}
 	}
