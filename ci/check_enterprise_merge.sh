@@ -2,7 +2,7 @@
 
 # Testing this script locally requires you to set the following environment
 # variables:
-# CIRCLE_BRANCH, and GIT_TOKEN
+# CIRCLE_BRANCH, GIT_USERNAME and GIT_TOKEN
 
 # fail if trying to reference a variable that is not set.
 set -u
@@ -12,7 +12,7 @@ set -e
 set -o pipefail
 
 PR_BRANCH="${CIRCLE_BRANCH}"
-ENTERPRISE_REMOTE="https://oauth2:${GIT_TOKEN}@github.com/citusdata/citus-enterprise"
+ENTERPRISE_REMOTE="https://${GIT_USERNAME}:${GIT_TOKEN}@github.com/citusdata/citus-enterprise"
 
 # shellcheck disable=SC1091
 source ci/ci_helpers.sh

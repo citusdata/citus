@@ -324,34 +324,3 @@ jobs:
           cd ./src/test/hammerdb
           chmod +x run_hammerdb.sh
           run_hammerdb.sh citusbot_tpcc_benchmark_rg
-  check_merge_to_enterprise:
-    name: Check Merge to Enterprise
-    runs-on: ubuntu-20.04
-    needs: params
-    container:
-      image: ${{ needs.params.outputs.build_image_name }}:${{ needs.params.outputs.pg13_version }}
-      options: --user root
-    if: ${{ !startsWith(github.HEAD_REF, 'release') }}
-    steps:
-      - name: Install dependencies
-        run: |-
-          # update stretch repositories
-          sed -i -e 's/deb.debian.org/archive.debian.org/g' -e 's|security.debian.org|archive.debian.org/|g' -e '/stretch-updates/d' /etc/apt/sources.list
-          apt update || true
-          apt install git -y
-      # The action/checkout action uses the GitHub REST API to download the repository,
-      # and it doesn't include the .git folder required by `check_enterprise_merge.sh`.
-      # Therefore, we manually check out Citus to obtain the .git folder.
-      - name: Checkout citus manually to get .git folder
-        run: |-
-          git clone https://oauth2:${{ secrets.GITHUB_TOKEN }}@github.com/citusdata/citus.git
-      - name: Check if its mergable to citus-enterprise
-        run: |-
-          cd citus
-          git checkout ${{ github.HEAD_REF }}
-          ci/check_enterprise_merge.sh
-        env:
-          GIT_TOKEN: ${{ secrets.CITUS_ENTERPRISE_GHA_TOKEN }}
-          CIRCLE_BRANCH: ${{ github.HEAD_REF }}
-        shell:
-          bash
