@@ -131,21 +131,17 @@ jobs:
           - ${{ needs.params.outputs.pg12_version }}
           - ${{ needs.params.outputs.pg13_version }}
         make:
-          - check-split
           - check-multi
-          - check-multi-1
           - check-multi-mx
           - check-vanilla
           - check-isolation
+          - check-worker
           - check-operations
           - check-follower-cluster
+
           - check-columnar
           - check-columnar-isolation
-          - check-enterprise
-          - check-enterprise-isolation
-          - check-enterprise-isolation-logicalrep-1
-          - check-enterprise-isolation-logicalrep-2
-          - check-enterprise-isolation-logicalrep-3
+
         include:
           - make: check-failure
             pg_version: ${{ needs.params.outputs.pg11_version }}
@@ -159,50 +155,27 @@ jobs:
             pg_version: ${{ needs.params.outputs.pg13_version }}
             suite: regress
             image_name: ${{ needs.params.outputs.fail_test_image_name }}
-          - make: check-enterprise-failure
-            pg_version: ${{ needs.params.outputs.pg11_version }}
-            suite: regress
-            image_name: ${{ needs.params.outputs.fail_test_image_name }}
-          - make: check-enterprise-failure
-            pg_version: ${{ needs.params.outputs.pg12_version }}
-            suite: regress
-            image_name: ${{ needs.params.outputs.fail_test_image_name }}
-          - make: check-enterprise-failure
-            pg_version: ${{ needs.params.outputs.pg13_version }}
-            suite: regress
-            image_name: ${{ needs.params.outputs.fail_test_image_name }}
-          - make: check-pytest
-            pg_version: ${{ needs.params.outputs.pg11_version }}
-            suite: regress
-            image_name: ${{ needs.params.outputs.fail_test_image_name }}
-          - make: check-pytest
-            pg_version: ${{ needs.params.outputs.pg12_version }}
-            suite: regress
-            image_name: ${{ needs.params.outputs.fail_test_image_name }}
-          - make: check-pytest
-            pg_version: ${{ needs.params.outputs.pg13_version }}
-            suite: regress
-            image_name: ${{ needs.params.outputs.fail_test_image_name }}
           - make: installcheck
-            suite: cdc
+            suite: recovery
             image_name: ${{ needs.params.outputs.test_image_name }}
             pg_version: ${{ needs.params.outputs.pg12_version }}
           - make: installcheck
-            suite: cdc
+            suite: recovery
             image_name: ${{ needs.params.outputs.test_image_name }}
             pg_version: ${{ needs.params.outputs.pg13_version }}
-          - make: check-query-generator
-            pg_version: ${{ needs.params.outputs.pg11_version }}
-            suite: regress
-            image_name: ${{ needs.params.outputs.fail_test_image_name }}
-          - make: check-query-generator
+          - make: installcheck
+            suite: columnar_freezing
+            image_name: ${{ needs.params.outputs.test_image_name }}
             pg_version: ${{ needs.params.outputs.pg12_version }}
-            suite: regress
-            image_name: ${{ needs.params.outputs.fail_test_image_name }}
-          - make: check-query-generator
+          - make: installcheck
+            suite: columnar_freezing
+            image_name: ${{ needs.params.outputs.test_image_name }}
             pg_version: ${{ needs.params.outputs.pg13_version }}
-            suite: regress
-            image_name: ${{ needs.params.outputs.fail_test_image_name }}
+        exclude:
+          - make: check-columnar
+            pg_version: ${{ needs.params.outputs.pg11_version }}
+          - make: check-columnar-isolation
+            pg_version: ${{ needs.params.outputs.pg11_version }}
     runs-on: ubuntu-20.04
     container:
       image: "${{ matrix.image_name }}:${{ matrix.pg_version }}${{ needs.params.outputs.image_suffix }}"
