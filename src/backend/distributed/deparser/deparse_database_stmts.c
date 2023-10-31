@@ -52,7 +52,7 @@ const struct option_format create_database_option_formats[] = {
 const struct option_format alter_database_option_formats[] = {
 	{ "is_template", " IS_TEMPLATE %s", OPTION_FORMAT_BOOLEAN },
 	{ "allow_connections", " ALLOW_CONNECTIONS %s", OPTION_FORMAT_BOOLEAN },
-	{ "connection_limit", " CONNECTION_LIMIT %d", OPTION_FORMAT_INTEGER },
+	{ "connection_limit", " CONNECTION LIMIT %d", OPTION_FORMAT_INTEGER },
 };
 
 char *
@@ -119,7 +119,7 @@ AppendBasicAlterDatabaseOptions(StringInfo buf, DefElem *def, bool
 {
 	if (!prefix_appended_for_basic_options)
 	{
-		appendStringInfo(buf, "ALTER DATABASE %s WITH ", quote_identifier(dbname));
+		appendStringInfo(buf, "ALTER DATABASE %s WITH", quote_identifier(dbname));
 		prefix_appended_for_basic_options = true;
 	}
 	optionToStatement(buf, def, alter_database_option_formats, lengthof(

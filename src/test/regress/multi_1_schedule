@@ -58,7 +58,6 @@ test: alter_database_propagation
 
 test: citus_shards
 
-
 # ----------
 # multi_citus_tools tests utility functions written for citus tools
 # ----------

@@ -214,20 +214,20 @@ PreprocessAlterDatabaseStmt(Node *node, const char *queryString,
 		/*Set tablespace does not work inside a transaction.Therefore, we close the transaction before set tablespace
 		 * and open it again after set tablespace.
 		 */
-		commands = list_make5(DISABLE_DDL_PROPAGATION,
-							  COMMIT_TRANSACTION,
+		commands = list_make3(DISABLE_DDL_PROPAGATION,
 							  sql,
-							  BEGIN_TRANSACTION,
 							  ENABLE_DDL_PROPAGATION);
+		return NontransactionalNodeDDLTask(NON_COORDINATOR_NODES, commands);
 	}
 	else
 	{
 		commands = list_make3(DISABLE_DDL_PROPAGATION,
 							  (void *) sql,
 							  ENABLE_DDL_PROPAGATION);
+		return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
 	}
 
-	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
+	return NIL;
 }
 
 
