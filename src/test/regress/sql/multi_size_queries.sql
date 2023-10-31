@@ -31,20 +31,29 @@ SELECT replicate_table_shards('lineitem_hash_part', shard_replication_factor:=2,
 -- Tests on distributed table with replication factor > 1
 VACUUM (FULL) lineitem_hash_part;
 
-SELECT citus_table_size('lineitem_hash_part');
-SELECT citus_relation_size('lineitem_hash_part');
-SELECT citus_total_relation_size('lineitem_hash_part');
+-- citus_table_size, citus_relation_size and citus_total_relation_size should return the same value
+-- and that value should be greater than 0
+SELECT citus_table_size('lineitem_hash_part') = citus_relation_size('lineitem_hash_part');
+SELECT citus_relation_size('lineitem_hash_part') = citus_total_relation_size('lineitem_hash_part');
+SELECT citus_table_size('lineitem_hash_part') > 0;
 
 CREATE INDEX lineitem_hash_part_idx ON lineitem_hash_part(l_orderkey);
 VACUUM (FULL) lineitem_hash_part;
 
-SELECT citus_table_size('lineitem_hash_part');
-SELECT citus_relation_size('lineitem_hash_part');
-SELECT citus_total_relation_size('lineitem_hash_part');
+-- citus_table_size and citus_relation_size should return the same value
+-- and that value should be greater than 0
+SELECT citus_table_size('lineitem_hash_part') = citus_relation_size('lineitem_hash_part');
+SELECT citus_table_size('lineitem_hash_part') > 0;
 
-SELECT citus_table_size('lineitem_hash_part_idx');
-SELECT citus_relation_size('lineitem_hash_part_idx');
-SELECT citus_total_relation_size('lineitem_hash_part_idx');
+-- citus_table_size, citus_relation_size and citus_total_relation_size should return the same value
+-- and that value should be greater than 0
+SELECT citus_table_size('lineitem_hash_part_idx') = citus_relation_size('lineitem_hash_part_idx');
+SELECT citus_table_size('lineitem_hash_part_idx') = citus_total_relation_size('lineitem_hash_part_idx');
+SELECT citus_table_size('lineitem_hash_part_idx') > 0;
+
+-- citus_total_relation_size should return the sum of table & index size
+SELECT citus_total_relation_size('lineitem_hash_part') =
+       citus_table_size('lineitem_hash_part') + citus_table_size('lineitem_hash_part_idx');
 
 DROP INDEX lineitem_hash_part_idx;
 
