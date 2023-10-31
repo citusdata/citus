@@ -263,6 +263,23 @@ PreprocessAlterDatabaseSetStmt(Node *node, const char *queryString,
 	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
 }
 
+List *
+PreprocessCreateDatabaseStmt(Node *node, const char *queryString,
+							   ProcessUtilityContext processUtilityContext)
+{
+	if (!EnableCreateDatabasePropagation || !ShouldPropagate())
+	{
+		return NIL;
+	}
+
+	EnsureCoordinator();
+
+	//Validate the statement
+	DeparseTreeNode(node);
+
+	return NIL;
+}
+
 
 /*
  * PostprocessCreatedbStmt is executed after the statement is applied to the local

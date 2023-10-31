@@ -29,17 +29,10 @@ set citus.enable_create_database_propagation=on;
 SET citus.log_remote_commands = true;
 set citus.grep_remote_commands = '%CREATE DATABASE%';
 CREATE DATABASE mydatabase
-    WITH TEMPLATE = 'template0'
+    WITH
             OWNER = create_drop_db_test_user
             CONNECTION LIMIT = 10
             ENCODING = 'UTF8'
-            STRATEGY = 'wal_log'
-            LOCALE = ''
-            LC_COLLATE = 'POSIX'
-            LC_CTYPE = 'POSIX'
-            ICU_LOCALE = 'und'
-            LOCALE_PROVIDER = 'icu'
-            COLLATION_VERSION = '1.0'
             TABLESPACE = create_drop_db_tablespace
             ALLOW_CONNECTIONS = true
             IS_TEMPLATE = false
@@ -91,11 +84,6 @@ set citus.grep_remote_commands = '%CREATE DATABASE%';
 CREATE DATABASE mydatabase2
     WITH OWNER = create_drop_db_test_user
             ENCODING = 'UTF8'
-            STRATEGY = 'wal_log'
-            LOCALE = 'en_US.utf8'
-            LC_COLLATE = 'POSIX'
-            LC_CTYPE = 'POSIX'
-            COLLATION_VERSION = '1.0'
             TABLESPACE = create_drop_db_tablespace
             ALLOW_CONNECTIONS = true
             IS_TEMPLATE = false
@@ -161,15 +149,8 @@ set citus.grep_remote_commands = '%CREATE DATABASE%';
 
 -- create a template database with all options set and allow connections false
 CREATE DATABASE my_template_database
-    WITH   TEMPLATE = 'template0'
-    OWNER = create_drop_db_test_user
+    WITH OWNER = create_drop_db_test_user
             ENCODING = 'UTF8'
-            STRATEGY = 'wal_log'
-            LOCALE = 'en_US.utf8'
-            LC_COLLATE = 'POSIX'
-            LC_CTYPE = 'POSIX'
-            ICU_LOCALE = 'en-US'
-            LOCALE_PROVIDER = 'icu'
             COLLATION_VERSION = '1.0'
             TABLESPACE = create_drop_db_tablespace
             ALLOW_CONNECTIONS = false
@@ -192,9 +173,6 @@ SELECT result from run_command_on_all_nodes(
   $$
 ) ORDER BY result;
 
-SET citus.log_remote_commands = true;
-set citus.grep_remote_commands = '%DROP DATABASE%';
-drop database my_template_database;
 
 SET citus.log_remote_commands = false;
 
@@ -222,7 +200,6 @@ SELECT result from run_command_on_all_nodes(
   $$
 ) ORDER BY result;
 
-;
 
 set citus.grep_remote_commands = '%DROP DATABASE%';
 drop database my_template_database;

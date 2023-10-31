@@ -237,6 +237,21 @@ AppendCreateDatabaseStmt(StringInfo buf, CreatedbStmt *stmt)
 
 	foreach_ptr(option, stmt->options)
 	{
+		//If option is template, lc_type, locale or lc_collate, propagation will not be supportted
+		// since template database is not stored in the catalog
+		if (strcmp(option->defname, "template") == 0 ||
+			strcmp(option->defname, "strategy") == 0 ||
+			strcmp(option->defname, "lc_ctype") == 0 ||
+			strcmp(option->defname, "locale") == 0 ||
+			strcmp(option->defname, "lc_collate") == 0 ||
+			strcmp(option->defname, "icu_locale") == 0 ||
+			strcmp(option->defname, "locale_provider") == 0 )
+		{
+			ereport(ERROR,
+					errmsg("CREATE DATABASE option \"%s\" is not supported",
+						   option->defname));
+		}
+
 		optionToStatement(buf, option, create_database_option_formats, lengthof(
 							  create_database_option_formats));
 	}
