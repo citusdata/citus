@@ -1,6 +1,7 @@
 import psycopg
 import pytest
 
+
 def test_call_param(cluster):
     # create a distributed table and an associated distributed procedure
     # to ensure parameterized CALL succeed, even when the param is the
@@ -21,7 +22,9 @@ def test_call_param(cluster):
     coord.sql_prepared(sql, (1,))
 
     coord.sql("SELECT create_distributed_table('test', 'i')")
-    coord.sql("SELECT create_distributed_function('p(int)', distribution_arg_name := '_i', colocate_with := 'test')")
+    coord.sql(
+        "SELECT create_distributed_function('p(int)', distribution_arg_name := '_i', colocate_with := 'test')"
+    )
 
     # prepare/exec after distribution
     coord.sql_prepared(sql, (2,))
