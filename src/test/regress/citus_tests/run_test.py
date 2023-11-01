@@ -177,6 +177,7 @@ DEPS = {
     ),
     "grant_on_schema_propagation": TestDeps("minimal_schedule"),
     "propagate_extension_commands": TestDeps("minimal_schedule"),
+    "multi_size_queries": TestDeps("base_schedule", ["multi_copy"]),
 }
 
 
