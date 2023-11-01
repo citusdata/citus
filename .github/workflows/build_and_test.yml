@@ -26,11 +26,10 @@ jobs:
       pgupgrade_image_name: "citus/pgupgradetester"
       style_checker_image_name: "citus/stylechecker"
       style_checker_tools_version: "0.8.18"
-      image_suffix: "-v9d71045"
-      pg14_version: '{ "major": "14", "full": "14.9" }'
-      pg15_version: '{ "major": "15", "full": "15.4" }'
-      pg16_version: '{ "major": "16", "full": "16.0" }'
-      upgrade_pg_versions: "14.9-15.4-16.0"
+      image_suffix: "-vbab548a"
+      pg14_version: '{ "major": "14", "full": "14.8" }'
+      pg15_version: '{ "major": "15", "full": "15.3" }'
+      upgrade_pg_versions: "14.8-15.3"
     steps:
       # Since GHA jobs needs at least one step we use a noop step here.
       - name: Set up parameters
@@ -104,7 +103,6 @@ jobs:
         pg_version:
           - ${{ needs.params.outputs.pg14_version }}
           - ${{ needs.params.outputs.pg15_version }}
-          - ${{ needs.params.outputs.pg16_version }}
     runs-on: ubuntu-20.04
     container:
       image: "${{ matrix.image_name }}:${{ fromJson(matrix.pg_version).full }}${{ matrix.image_suffix }}"
@@ -135,7 +133,6 @@ jobs:
         pg_version:
           - ${{ needs.params.outputs.pg14_version }}
           - ${{ needs.params.outputs.pg15_version }}
-          - ${{ needs.params.outputs.pg16_version }}
         make:
           - check-split
           - check-multi
@@ -161,10 +158,6 @@ jobs:
             pg_version: ${{ needs.params.outputs.pg15_version }}
             suite: regress
             image_name: ${{ needs.params.outputs.fail_test_image_name }}
-          - make: check-failure
-            pg_version: ${{ needs.params.outputs.pg16_version }}
-            suite: regress
-            image_name: ${{ needs.params.outputs.fail_test_image_name }}
           - make: check-enterprise-failure
             pg_version: ${{ needs.params.outputs.pg14_version }}
             suite: regress
@@ -173,40 +166,24 @@ jobs:
             pg_version: ${{ needs.params.outputs.pg15_version }}
             suite: regress
             image_name: ${{ needs.params.outputs.fail_test_image_name }}
-          - make: check-enterprise-failure
-            pg_version: ${{ needs.params.outputs.pg16_version }}
-            suite: regress
-            image_name: ${{ needs.params.outputs.fail_test_image_name }}
           - make: check-pytest
             pg_version: ${{ needs.params.outputs.pg14_version }}
             suite: regress
             image_name: ${{ needs.params.outputs.fail_test_image_name }}
           - make: check-pytest
             pg_version: ${{ needs.params.outputs.pg15_version }}
-            suite: regress
-            image_name: ${{ needs.params.outputs.fail_test_image_name }}
-          - make: check-pytest
-            pg_version: ${{ needs.params.outputs.pg16_version }}
             suite: regress
             image_name: ${{ needs.params.outputs.fail_test_image_name }}
           - make: installcheck
             suite: cdc
             image_name: ${{ needs.params.outputs.test_image_name }}
             pg_version: ${{ needs.params.outputs.pg15_version }}
-          - make: installcheck
-            suite: cdc
-            image_name: ${{ needs.params.outputs.test_image_name }}
-            pg_version: ${{ needs.params.outputs.pg16_version }}
           - make: check-query-generator
             pg_version: ${{ needs.params.outputs.pg14_version }}
             suite: regress
             image_name: ${{ needs.params.outputs.fail_test_image_name }}
           - make: check-query-generator
             pg_version: ${{ needs.params.outputs.pg15_version }}
-            suite: regress
-            image_name: ${{ needs.params.outputs.fail_test_image_name }}
-          - make: check-query-generator
-            pg_version: ${{ needs.params.outputs.pg16_version }}
             suite: regress
             image_name: ${{ needs.params.outputs.fail_test_image_name }}
     runs-on: ubuntu-20.04
@@ -251,7 +228,6 @@ jobs:
         pg_version:
           - ${{ needs.params.outputs.pg14_version }}
           - ${{ needs.params.outputs.pg15_version }}
-          - ${{ needs.params.outputs.pg16_version }}
         parallel: [0,1,2,3,4,5] # workaround for running 6 parallel jobs
     steps:
     - uses: actions/checkout@v3.5.0
@@ -296,10 +272,6 @@ jobs:
         include:
           - old_pg_major: 14
             new_pg_major: 15
-          - old_pg_major: 15
-            new_pg_major: 16
-          - old_pg_major: 14
-            new_pg_major: 16
     env:
       old_pg_major: ${{ matrix.old_pg_major }}
       new_pg_major: ${{ matrix.new_pg_major }}
@@ -383,7 +355,7 @@ jobs:
       CC_TEST_REPORTER_ID: ${{ secrets.CC_TEST_REPORTER_ID }}
     runs-on: ubuntu-20.04
     container:
-      image: ${{ needs.params.outputs.test_image_name }}:${{ fromJson(needs.params.outputs.pg16_version).full }}${{ needs.params.outputs.image_suffix }}
+      image: ${{ needs.params.outputs.test_image_name }}:${{ fromJson(needs.params.outputs.pg15_version).full }}${{ needs.params.outputs.image_suffix }}
     needs:
       - params
       - test-citus
@@ -462,7 +434,7 @@ jobs:
     - name: Detect regression tests need to be ran
       id: detect-regression-tests
       run: |-
-        detected_changes=$(git diff origin/main... --name-only --diff-filter=AM | (grep 'src/test/regress/sql/.*\.sql\|src/test/regress/spec/.*\.spec\|src/test/regress/citus_tests/test/test_.*\.py' || true))
+        detected_changes=$(git diff origin/12.0... --name-only --diff-filter=AM | (grep 'src/test/regress/sql/.*\.sql\|src/test/regress/spec/.*\.spec\|src/test/regress/citus_tests/test/test_.*\.py' || true))
         tests=${detected_changes}
         if [ -z "$tests" ]; then
             echo "No test found."
@@ -475,7 +447,7 @@ jobs:
     name: Test flakyness
     runs-on: ubuntu-20.04
     container:
-      image: ${{ needs.params.outputs.fail_test_image_name }}:${{ needs.params.outputs.pg16_version }}${{ needs.params.outputs.image_suffix }}
+      image: ${{ needs.params.outputs.fail_test_image_name }}:${{ needs.params.outputs.pg15_version }}${{ needs.params.outputs.image_suffix }}
       options: --user root
     env:
       runs: 8
