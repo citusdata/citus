@@ -71,7 +71,7 @@ jobs:
     - uses: "./.github/actions/setup_extension"
     - name: Run minimal tests
       run: |-
-          gosu circleci src/test/regress/citus_tests/run_test.py ${{ env.test }} --repeat ${{ env.runs }} --use-base-schedule --use-whole-schedule-line
+          gosu circleci src/test/regress/citus_tests/run_test.py ${{ env.test }} --repeat ${{ env.runs }} --use-whole-schedule-line
       shell: bash
     - uses: "./.github/actions/save_logs_and_results"
       if: always()

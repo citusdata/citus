@@ -79,6 +79,8 @@ SELECT pg_catalog.citus_split_shard_by_split_points(
     ARRAY[:worker_2_node, :worker_2_node, :worker_2_node],
     'force_logical');
 
+SELECT public.wait_for_resource_cleanup();
+
 \c - - - :worker_2_port
 SET search_path TO "citus_split_test_schema";
 -- Replication slots should be cleaned up
