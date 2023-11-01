@@ -105,7 +105,7 @@ jobs:
           - ${{ needs.params.outputs.pg14_version }}
           - ${{ needs.params.outputs.pg15_version }}
           - ${{ needs.params.outputs.pg16_version }}
-    runs-on: ubuntu-20.04
+    runs-on: ["self-hosted", "1ES.Pool=1es-gha-citusdata-pool"]
     container:
       image: "${{ matrix.image_name }}:${{ fromJson(matrix.pg_version).full }}${{ matrix.image_suffix }}"
       options: --user root
@@ -209,7 +209,7 @@ jobs:
             pg_version: ${{ needs.params.outputs.pg16_version }}
             suite: regress
             image_name: ${{ needs.params.outputs.fail_test_image_name }}
-    runs-on: ubuntu-20.04
+    runs-on: ["self-hosted", "1ES.Pool=1es-gha-citusdata-pool"]
     container:
       image: "${{ matrix.image_name }}:${{ fromJson(matrix.pg_version).full }}${{ needs.params.outputs.image_suffix }}"
       options: --user root --dns=8.8.8.8
@@ -283,7 +283,7 @@ jobs:
         codecov_token: ${{ secrets.CODECOV_TOKEN }}
   test-pg-upgrade:
     name: PG${{ matrix.old_pg_major }}-PG${{ matrix.new_pg_major }} - check-pg-upgrade
-    runs-on: ubuntu-20.04
+    runs-on: ["self-hosted", "1ES.Pool=1es-gha-citusdata-pool"]
     container:
       image: "${{ needs.params.outputs.pgupgrade_image_name }}:${{ needs.params.outputs.upgrade_pg_versions }}${{ needs.params.outputs.image_suffix }}"
       options: --user root
@@ -334,7 +334,7 @@ jobs:
         codecov_token: ${{ secrets.CODECOV_TOKEN }}
   test-citus-upgrade:
     name: PG${{ fromJson(needs.params.outputs.pg14_version).major }} - check-citus-upgrade
-    runs-on: ubuntu-20.04
+    runs-on: ["self-hosted", "1ES.Pool=1es-gha-citusdata-pool"]
     container:
       image: "${{ needs.params.outputs.citusupgrade_image_name }}:${{ fromJson(needs.params.outputs.pg14_version).full }}${{ needs.params.outputs.image_suffix }}"
       options: --user root
@@ -439,7 +439,7 @@ jobs:
     name: Parallel 32
     if: ${{ needs.test-flakyness-pre.outputs.tests != ''}}
     needs: test-flakyness-pre
-    runs-on: ubuntu-20.04
+    runs-on: ["self-hosted", "1ES.Pool=1es-gha-citusdata-pool"]
     outputs:
       json: ${{ steps.parallelization.outputs.json }}
     steps:
@@ -476,7 +476,7 @@ jobs:
   test-flakyness:
     if: ${{ needs.test-flakyness-pre.outputs.tests != ''}}
     name: Test flakyness
-    runs-on: ubuntu-20.04
+    runs-on: ["self-hosted", "1ES.Pool=1es-gha-citusdata-pool"]
     container:
       image: ${{ needs.params.outputs.fail_test_image_name }}:${{ fromJson(needs.params.outputs.pg16_version).full }}${{ needs.params.outputs.image_suffix }}
       options: --user root
