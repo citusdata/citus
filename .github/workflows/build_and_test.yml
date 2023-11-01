@@ -10,6 +10,10 @@ on:
         required: false
         default: false
         type: boolean
+  push:
+    branches:
+      - "main"
+      - "release-*"
   pull_request:
     types: [opened, reopened,synchronize]
 jobs:
@@ -27,9 +31,9 @@ jobs:
       style_checker_image_name: "citus/stylechecker"
       style_checker_tools_version: "0.8.18"
       image_suffix: "-v9d71045"
-      pg14_version: "14.9"
-      pg15_version: "15.4"
-      pg16_version: "16.0"
+      pg14_version: '{ "major": "14", "full": "14.9" }'
+      pg15_version: '{ "major": "15", "full": "15.4" }'
+      pg16_version: '{ "major": "16", "full": "16.0" }'
       upgrade_pg_versions: "14.9-15.4-16.0"
     steps:
       # Since GHA jobs needs at least one step we use a noop step here.
@@ -93,7 +97,7 @@ jobs:
       run: ci/check_migration_files.sh
   build:
     needs: params
-    name: Build for PG ${{ matrix.pg_version}}
+    name: Build for PG${{ fromJson(matrix.pg_version).major }}
     strategy:
       fail-fast: false
       matrix:
@@ -107,7 +111,7 @@ jobs:
           - ${{ needs.params.outputs.pg16_version }}
     runs-on: ubuntu-20.04
     container:
-      image: "${{ matrix.image_name }}:${{ matrix.pg_version  }}${{ matrix.image_suffix }}"
+      image: "${{ matrix.image_name }}:${{ fromJson(matrix.pg_version).full }}${{ matrix.image_suffix }}"
       options: --user root
     steps:
     - uses: actions/checkout@v3.5.0
@@ -124,7 +128,7 @@ jobs:
           ./build-${{ env.PG_MAJOR }}/*
           ./install-${{ env.PG_MAJOR }}.tar
   test-citus:
-    name: PG${{ matrix.pg_version }} - ${{ matrix.make }}
+    name: PG${{ fromJson(matrix.pg_version).major }} - ${{ matrix.make }}
     strategy:
       fail-fast: false
       matrix:
@@ -211,7 +215,7 @@ jobs:
             image_name: ${{ needs.params.outputs.fail_test_image_name }}
     runs-on: ubuntu-20.04
     container:
-      image: "${{ matrix.image_name }}:${{ matrix.pg_version }}${{ needs.params.outputs.image_suffix }}"
+      image: "${{ matrix.image_name }}:${{ fromJson(matrix.pg_version).full }}${{ needs.params.outputs.image_suffix }}"
       options: --user root --dns=8.8.8.8
       # Due to Github creates a default network for each job, we need to use
       # --dns= to have similar DNS settings as our other CI systems or local
@@ -228,17 +232,17 @@ jobs:
     - uses: "./.github/actions/save_logs_and_results"
       if: always()
       with:
-        folder: ${{ matrix.pg_version }}_${{ matrix.make }}
+        folder: ${{ fromJson(matrix.pg_version).major }}_${{ matrix.make }}
     - uses: "./.github/actions/upload_coverage"
       if: always()
       with:
         flags: ${{ env.PG_MAJOR }}_${{ matrix.suite }}_${{ matrix.make }}
         codecov_token: ${{ secrets.CODECOV_TOKEN }}
   test-arbitrary-configs:
-    name: PG${{ matrix.pg_version }} - check-arbitrary-configs-${{ matrix.parallel }}
+    name: PG${{ fromJson(matrix.pg_version).major }} - check-arbitrary-configs-${{ matrix.parallel }}
     runs-on: ["self-hosted", "1ES.Pool=1es-gha-citusdata-pool"]
     container:
-      image: "${{ matrix.image_name }}:${{ matrix.pg_version }}${{ needs.params.outputs.image_suffix }}"
+      image: "${{ matrix.image_name }}:${{ fromJson(matrix.pg_version).full }}${{ needs.params.outputs.image_suffix }}"
       options: --user root
     needs:
       - params
@@ -333,10 +337,10 @@ jobs:
         flags: ${{ env.old_pg_major }}_${{ env.new_pg_major }}_upgrade
         codecov_token: ${{ secrets.CODECOV_TOKEN }}
   test-citus-upgrade:
-    name: PG${{ needs.params.outputs.pg14_version }} - check-citus-upgrade
+    name: PG${{ fromJson(needs.params.outputs.pg14_version).major }} - check-citus-upgrade
     runs-on: ubuntu-20.04
     container:
-      image: "${{ needs.params.outputs.citusupgrade_image_name }}:${{ needs.params.outputs.pg14_version }}${{ needs.params.outputs.image_suffix }}"
+      image: "${{ needs.params.outputs.citusupgrade_image_name }}:${{ fromJson(needs.params.outputs.pg14_version).full }}${{ needs.params.outputs.image_suffix }}"
       options: --user root
     needs:
     - params
@@ -383,7 +387,7 @@ jobs:
       CC_TEST_REPORTER_ID: ${{ secrets.CC_TEST_REPORTER_ID }}
     runs-on: ubuntu-20.04
     container:
-      image: ${{ needs.params.outputs.test_image_name }}:${{ needs.params.outputs.pg16_version }}${{ needs.params.outputs.image_suffix }}
+      image: ${{ needs.params.outputs.test_image_name }}:${{ fromJson(needs.params.outputs.pg16_version).full }}${{ needs.params.outputs.image_suffix }}
     needs:
       - params
       - test-citus
@@ -478,7 +482,7 @@ jobs:
     name: Test flakyness
     runs-on: ubuntu-20.04
     container:
-      image: ${{ needs.params.outputs.fail_test_image_name }}:${{ needs.params.outputs.pg16_version }}${{ needs.params.outputs.image_suffix }}
+      image: ${{ needs.params.outputs.fail_test_image_name }}:${{ fromJson(needs.params.outputs.pg16_version).full }}${{ needs.params.outputs.image_suffix }}
       options: --user root
     env:
       runs: 8
