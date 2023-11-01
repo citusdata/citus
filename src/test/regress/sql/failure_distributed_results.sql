@@ -15,6 +15,8 @@ SET client_min_messages TO WARNING;
 SELECT citus.mitmproxy('conn.allow()');
 
 SET citus.next_shard_id TO 100800;
+-- Needed because of issue #7306
+SET citus.force_max_query_parallelization TO true;
 
 -- always try the 1st replica before the 2nd replica.
 SET citus.task_assignment_policy TO 'first-replica';
