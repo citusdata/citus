@@ -149,7 +149,7 @@ wait_until_metadata_sync(PG_FUNCTION_ARGS)
 	{
 		ClearResults(connection, true);
 	}
-	else if (waitResult & WL_TIMEOUT && IsMetadataSynced())
+	else if (waitResult & WL_TIMEOUT && !IsMetadataSynced())
 	{
 		elog(WARNING, "waiting for metadata sync timed out");
 	}
