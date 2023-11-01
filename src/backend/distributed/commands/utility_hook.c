@@ -708,9 +708,9 @@ citus_ProcessUtilityInternal(PlannedStmt *pstmt,
 	}
 	else if (IsA(parsetree, CreateRoleStmt) && !EnableCreateRolePropagation)
 	{
-		ereport(NOTICE, (errmsg("not propagating CREATE ROLE/USER commands to worker"
+		ereport(NOTICE, (errmsg("not propagating CREATE ROLE/USER commands to other"
 								" nodes"),
-						 errhint("Connect to worker nodes directly to manually create all"
+						 errhint("Connect to other nodes directly to manually create all"
 								 " necessary users and roles.")));
 	}
 
@@ -1106,16 +1106,17 @@ IsDropSchemaOrDB(Node *parsetree)
  * each shard placement and COMMIT/ROLLBACK is handled by
  * CoordinatedTransactionCallback function.
  *
- * The function errors out if the node is not the coordinator or if the DDL is on
- * a partitioned table which has replication factor > 1.
- *
+ * The function errors out if the DDL is on a partitioned table which has replication
+ * factor > 1 or if the the coordinator is not added into metadata and we're on a
+ * worker node because we want to make sure that distributed DDL jobs are executed
+ * on the coordinator node too. See EnsurePropagationToCoordinator() for more details.
  */
 void
 ExecuteDistributedDDLJob(DDLJob *ddlJob)
 {
 	bool shouldSyncMetadata = false;
 
-	EnsureCoordinator();
+	EnsurePropagationToCoordinator();
 
 	ObjectAddress targetObjectAddress = ddlJob->targetObjectAddress;
 
@@ -1139,23 +1140,24 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 	{
 		if (shouldSyncMetadata)
 		{
-			SendCommandToWorkersWithMetadata(DISABLE_DDL_PROPAGATION);
+			SendCommandToOtherNodesWithMetadata(DISABLE_DDL_PROPAGATION);
 
 			char *currentSearchPath = CurrentSearchPath();
 
 			/*
-			 * Given that we're relaying the query to the worker nodes directly,
+			 * Given that we're relaying the query to the other nodes directly,
 			 * we should set the search path exactly the same when necessary.
 			 */
 			if (currentSearchPath != NULL)
 			{
-				SendCommandToWorkersWithMetadata(
+				SendCommandToOtherNodesWithMetadata(
 					psprintf("SET LOCAL search_path TO %s;", currentSearchPath));
 			}
 
 			if (ddlJob->metadataSyncCommand != NULL)
 			{
-				SendCommandToWorkersWithMetadata((char *) ddlJob->metadataSyncCommand);
+				SendCommandToOtherNodesWithMetadata(
+					(char *) ddlJob->metadataSyncCommand);
 			}
 		}
 
@@ -1234,7 +1236,7 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 				char *currentSearchPath = CurrentSearchPath();
 
 				/*
-				 * Given that we're relaying the query to the worker nodes directly,
+				 * Given that we're relaying the query to the other nodes directly,
 				 * we should set the search path exactly the same when necessary.
 				 */
 				if (currentSearchPath != NULL)
@@ -1246,7 +1248,7 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 
 				commandList = lappend(commandList, (char *) ddlJob->metadataSyncCommand);
 
-				SendBareCommandListToMetadataWorkers(commandList);
+				SendBareCommandListToOtherMetadataNodes(commandList);
 			}
 		}
 		PG_CATCH();

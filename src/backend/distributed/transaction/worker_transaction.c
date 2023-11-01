@@ -34,6 +34,12 @@
 #include "utils/memutils.h"
 #include "utils/builtins.h"
 
+static void SendCommandToOtherMetadataNodesParams(const char *command,
+												  const char *user, int parameterCount,
+												  const Oid *parameterTypes,
+												  const char *const *parameterValues);
+static void SendBareCommandListToMetadataNodesInternal(List *commandList,
+													   TargetWorkerSet targetWorkerSet);
 static void SendCommandToMetadataWorkersParams(const char *command,
 											   const char *user, int parameterCount,
 											   const Oid *parameterTypes,
@@ -151,6 +157,74 @@ SendCommandListToWorkersWithMetadata(List *commands)
 
 
 /*
+ * SendCommandToOtherNodesWithMetadata sends a command to other nodes in
+ * parallel. Commands are committed on the nodes when the local transaction
+ * commits.
+ */
+void
+SendCommandToOtherNodesWithMetadata(const char *command)
+{
+	SendCommandToOtherMetadataNodesParams(command, CurrentUserName(),
+										  0, NULL, NULL);
+}
+
+
+/*
+ * SendCommandToOtherNodesWithMetadataViaSuperUser sends a command to other
+ * nodes in parallel by opening a super user connection. Commands are committed
+ * on the nodes when the local transaction commits. The connection are made as
+ * the extension owner to ensure write access to the Citus metadata tables.
+ *
+ * Since we prevent to open superuser connections for metadata tables, it is
+ * discouraged to use it. Consider using it only for propagating pg_dist_object
+ * tuples for dependent objects.
+ */
+void
+SendCommandToOtherNodesWithMetadataViaSuperUser(const char *command)
+{
+	SendCommandToOtherMetadataNodesParams(command, CitusExtensionOwnerName(),
+										  0, NULL, NULL);
+}
+
+
+/*
+ * SendCommandListToOtherNodesWithMetadata sends all commands to other nodes
+ * with the current user. See `SendCommandToOtherNodesWithMetadata`for details.
+ */
+void
+SendCommandListToOtherNodesWithMetadata(List *commands)
+{
+	char *command = NULL;
+	foreach_ptr(command, commands)
+	{
+		SendCommandToOtherNodesWithMetadata(command);
+	}
+}
+
+
+/*
+ * SendCommandToOtherMetadataNodesParams is a wrapper around
+ * SendCommandToWorkersParamsInternal() that can be used to send commands
+ * to other metadata nodes.
+ */
+static void
+SendCommandToOtherMetadataNodesParams(const char *command,
+									  const char *user, int parameterCount,
+									  const Oid *parameterTypes,
+									  const char *const *parameterValues)
+{
+	/* use METADATA_NODES so that ErrorIfAnyMetadataNodeOutOfSync checks local node as well */
+	List *workerNodeList = TargetWorkerSetNodeList(METADATA_NODES,
+												   RowShareLock);
+
+	ErrorIfAnyMetadataNodeOutOfSync(workerNodeList);
+
+	SendCommandToWorkersParamsInternal(OTHER_METADATA_NODES, command, user,
+									   parameterCount, parameterTypes, parameterValues);
+}
+
+
+/*
  * TargetWorkerSetNodeList returns a list of WorkerNode's that satisfies the
  * TargetWorkerSet.
  */
@@ -162,17 +236,29 @@ TargetWorkerSetNodeList(TargetWorkerSet targetWorkerSet, LOCKMODE lockMode)
 	{
 		workerNodeList = ActivePrimaryNodeList(lockMode);
 	}
-	else
+	else if (targetWorkerSet == OTHER_NODES || targetWorkerSet == OTHER_METADATA_NODES)
+	{
+		workerNodeList = ActivePrimaryOtherNodesList(lockMode);
+	}
+	else if (targetWorkerSet == NON_COORDINATOR_METADATA_NODES ||
+			 targetWorkerSet == NON_COORDINATOR_NODES)
 	{
 		workerNodeList = ActivePrimaryNonCoordinatorNodeList(lockMode);
 	}
+	else
+	{
+		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+						errmsg("invalid target worker set: %d", targetWorkerSet)));
+	}
+
 	List *result = NIL;
 
 	WorkerNode *workerNode = NULL;
 	foreach_ptr(workerNode, workerNodeList)
 	{
-		if ((targetWorkerSet == NON_COORDINATOR_METADATA_NODES || targetWorkerSet ==
-			 METADATA_NODES) &&
+		if ((targetWorkerSet == NON_COORDINATOR_METADATA_NODES ||
+			 targetWorkerSet == OTHER_METADATA_NODES ||
+			 targetWorkerSet == METADATA_NODES) &&
 			!workerNode->hasMetadata)
 		{
 			continue;
@@ -186,16 +272,42 @@ TargetWorkerSetNodeList(TargetWorkerSet targetWorkerSet, LOCKMODE lockMode)
 
 
 /*
- * SendBareCommandListToMetadataWorkers sends a list of commands to metadata
- * workers in serial. Commands are committed immediately: new connections are
- * always used and no transaction block is used (hence "bare"). The connections
- * are made as the extension owner to ensure write access to the Citus metadata
- * tables. Primarly useful for INDEX commands using CONCURRENTLY.
+ * SendBareCommandListToOtherMetadataNodes is a wrapper around
+ * SendBareCommandListToMetadataNodesInternal() that can be used to send
+ * bare commands to other metadata nodes.
+ */
+void
+SendBareCommandListToOtherMetadataNodes(List *commandList)
+{
+	SendBareCommandListToMetadataNodesInternal(commandList,
+											   OTHER_METADATA_NODES);
+}
+
+
+/*
+ * SendBareCommandListToMetadataWorkers is a wrapper around
+ * SendBareCommandListToMetadataNodesInternal() that can be used to send
+ * bare commands to metadata workers.
  */
 void
 SendBareCommandListToMetadataWorkers(List *commandList)
 {
-	TargetWorkerSet targetWorkerSet = NON_COORDINATOR_METADATA_NODES;
+	SendBareCommandListToMetadataNodesInternal(commandList,
+											   NON_COORDINATOR_METADATA_NODES);
+}
+
+
+/*
+ * SendBareCommandListToMetadataNodesInternal sends a list of commands to given
+ * target worker set in serial. Commands are committed immediately: new connections
+ * are always used and no transaction block is used (hence "bare"). The connections
+ * are made as the extension owner to ensure write access to the Citus metadata
+ * tables. Primarly useful for INDEX commands using CONCURRENTLY.
+ */
+static void
+SendBareCommandListToMetadataNodesInternal(List *commandList,
+										   TargetWorkerSet targetWorkerSet)
+{
 	List *workerNodeList = TargetWorkerSetNodeList(targetWorkerSet, RowShareLock);
 	char *nodeUser = CurrentUserName();
 

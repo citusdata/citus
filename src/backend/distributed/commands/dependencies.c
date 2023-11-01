@@ -40,14 +40,14 @@ static char * DropTableIfExistsCommand(Oid relationId);
 
 /*
  * EnsureDependenciesExistOnAllNodes finds all the dependencies that we support and makes
- * sure these are available on all workers. If not available they will be created on the
- * workers via a separate session that will be committed directly so that the objects are
+ * sure these are available on all nodes. If not available they will be created on the
+ * nodes via a separate session that will be committed directly so that the objects are
  * visible to potentially multiple sessions creating the shards.
  *
  * Note; only the actual objects are created via a separate session, the records to
  * pg_dist_object are created in this session. As a side effect the objects could be
- * created on the workers without a catalog entry. Updates to the objects on the coordinator
- * are not propagated to the workers until the record is visible on the coordinator.
+ * created on the nodes without a catalog entry. Updates to the objects on local node
+ * are not propagated to the other nodes until the record is visible on local node.
  *
  * This is solved by creating the dependencies in an idempotent manner, either via
  * postgres native CREATE IF NOT EXISTS, or citus helper functions.
@@ -95,7 +95,7 @@ EnsureDependenciesExistOnAllNodes(const ObjectAddress *target)
 	 * either get it now, or get it in citus_add_node after this transaction finishes and
 	 * the pg_dist_object record becomes visible.
 	 */
-	List *workerNodeList = ActivePrimaryNonCoordinatorNodeList(RowShareLock);
+	List *otherNodes = ActivePrimaryOtherNodesList(RowShareLock);
 
 	/*
 	 * Lock dependent objects explicitly to make sure same DDL command won't be sent
@@ -127,12 +127,12 @@ EnsureDependenciesExistOnAllNodes(const ObjectAddress *target)
 	 */
 	if (HasAnyDependencyInPropagatedObjects(target))
 	{
-		SendCommandListToWorkersWithMetadata(ddlCommands);
+		SendCommandListToOtherNodesWithMetadata(ddlCommands);
 	}
 	else
 	{
 		WorkerNode *workerNode = NULL;
-		foreach_ptr(workerNode, workerNodeList)
+		foreach_ptr(workerNode, otherNodes)
 		{
 			const char *nodeName = workerNode->workerName;
 			uint32 nodePort = workerNode->workerPort;
@@ -144,8 +144,8 @@ EnsureDependenciesExistOnAllNodes(const ObjectAddress *target)
 	}
 
 	/*
-	 * We do this after creating the objects on the workers, we make sure
-	 * that objects have been created on worker nodes before marking them
+	 * We do this after creating the objects on other nodes, we make sure
+	 * that objects have been created on other nodes before marking them
 	 * distributed, so MarkObjectDistributed wouldn't fail.
 	 */
 	foreach_ptr(dependency, dependenciesWithCommands)

@@ -180,6 +180,8 @@ PreprocessIndexStmt(Node *node, const char *createIndexCommand,
 		return NIL;
 	}
 
+	EnsureCoordinator();
+
 	if (createIndexStatement->idxname == NULL)
 	{
 		/*

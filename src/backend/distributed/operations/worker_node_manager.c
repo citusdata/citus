@@ -179,11 +179,11 @@ ActivePrimaryNodeList(LOCKMODE lockMode)
 
 
 /*
- * ActivePrimaryRemoteNodeList returns a list of all active primary nodes in
- * workerNodeHash.
+ * ActivePrimaryOtherNodesList returns a list of all active primary nodes in
+ * workerNodeHash except the local one.
  */
 List *
-ActivePrimaryRemoteNodeList(LOCKMODE lockMode)
+ActivePrimaryOtherNodesList(LOCKMODE lockMode)
 {
 	EnsureModificationsCanRun();
 	return FilterActiveNodeListFunc(lockMode, NodeIsPrimaryAndRemote);

@@ -302,8 +302,8 @@ EnsureConnectionPossibilityForRemotePrimaryNodes(void)
 	 * seem to cause any problems as none of the placements that we are
 	 * going to access would be on the new node.
 	 */
-	List *primaryNodeList = ActivePrimaryRemoteNodeList(NoLock);
-	EnsureConnectionPossibilityForNodeList(primaryNodeList);
+	List *otherNodes = ActivePrimaryOtherNodesList(NoLock);
+	EnsureConnectionPossibilityForNodeList(otherNodes);
 }
 
 
