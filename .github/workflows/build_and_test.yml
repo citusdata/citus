@@ -29,7 +29,7 @@ jobs:
       image_suffix: "-vb4dd087"
       pg13_version: '{ "major": "13", "full": "13.4" }'
       pg14_version: '{ "major": "14", "full": "14.0" }'
-      upgrade_pg_versions: "12-13"
+      upgrade_pg_versions: "13.4-14.0"
     steps:
       # Since GHA jobs needs at least one step we use a noop step here.
       - name: Set up parameters
@@ -249,7 +249,7 @@ jobs:
     name: PG${{ matrix.old_pg_major }}-PG${{ matrix.new_pg_major }} - check-pg-upgrade
     runs-on: ubuntu-20.04
     container:
-      image: "${{ needs.params.outputs.pgupgrade_image_name }}:${{ needs.params.outputs.upgrade_pg_versions }}${{ needs.params.outputs.image_suffix }}"
+      image: "${{ needs.params.outputs.pgupgrade_image_name }}:${{ needs.params.outputs.upgrade_pg_versions }}-vabaecad"
       options: --user root
     needs:
     - params
