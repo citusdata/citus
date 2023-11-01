@@ -133,12 +133,6 @@ ORDER BY 1, 2;
  validatable_constraint_8000016 | t
 (10 rows)
 
-DROP TABLE constrained_table;
-DROP TABLE referenced_table CASCADE;
-DROP TABLE referencing_table;
+SET client_min_messages TO WARNING;
 DROP SCHEMA validate_constraint CASCADE;
-NOTICE:  drop cascades to 3 other objects
-DETAIL:  drop cascades to type constraint_validity
-drop cascades to view constraint_validations_in_workers
-drop cascades to view constraint_validations
 SET search_path TO DEFAULT;
