@@ -530,3 +530,10 @@ RESET citus.metadata_sync_mode;
 
 -- verify that at the end of this file, all primary nodes have metadata synced
 SELECT bool_and(hasmetadata) AND bool_and(metadatasynced) FROM pg_dist_node WHERE isactive = 't' and noderole = 'primary';
+
+-- Grant all on public schema to public
+--
+-- That's the default on Postgres versions < 15 and we want to
+-- keep permissions compatible accross versions, in regression
+-- tests.
+GRANT ALL ON SCHEMA public TO PUBLIC;
