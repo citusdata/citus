@@ -342,6 +342,7 @@ extern void LookupTaskPlacementHostAndPort(ShardPlacement *taskPlacement, char *
 										   int *nodePort);
 extern bool IsDummyPlacement(ShardPlacement *taskPlacement);
 extern StringInfo GenerateSizeQueryOnMultiplePlacements(List *shardIntervalList,
+														Oid indexId,
 														SizeQueryType sizeQueryType,
 														bool optimizePartitionCalculations);
 extern List * RemoveCoordinatorPlacementIfNotSingleNode(List *placementList);

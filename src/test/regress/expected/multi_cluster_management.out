@@ -1258,3 +1258,9 @@ SELECT bool_and(hasmetadata) AND bool_and(metadatasynced) FROM pg_dist_node WHER
  t
 (1 row)
 
+-- Grant all on public schema to public
+--
+-- That's the default on Postgres versions < 15 and we want to
+-- keep permissions compatible accross versions, in regression
+-- tests.
+GRANT ALL ON SCHEMA public TO PUBLIC;
