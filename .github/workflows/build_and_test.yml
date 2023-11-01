@@ -26,7 +26,7 @@ jobs:
       pgupgrade_image_name: "citus/pgupgradetester"
       style_checker_image_name: "citus/stylechecker"
       style_checker_tools_version: "0.8.18"
-      image_suffix: "-v9d71045"
+      image_suffix: "-v87fd773"
       pg14_version: '{ "major": "14", "full": "14.9" }'
       pg15_version: '{ "major": "15", "full": "15.4" }'
       pg16_version: '{ "major": "16", "full": "16.0" }'
@@ -462,7 +462,7 @@ jobs:
     - name: Detect regression tests need to be ran
       id: detect-regression-tests
       run: |-
-        detected_changes=$(git diff origin/main... --name-only --diff-filter=AM | (grep 'src/test/regress/sql/.*\.sql\|src/test/regress/spec/.*\.spec\|src/test/regress/citus_tests/test/test_.*\.py' || true))
+        detected_changes=$(git diff origin/release-12.1... --name-only --diff-filter=AM | (grep 'src/test/regress/sql/.*\.sql\|src/test/regress/spec/.*\.spec\|src/test/regress/citus_tests/test/test_.*\.py' || true))
         tests=${detected_changes}
         if [ -z "$tests" ]; then
             echo "No test found."
