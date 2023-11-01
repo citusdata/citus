@@ -1772,7 +1772,7 @@ Each field in the struct is documented in the comments within the `DistributeObj
 
 - **Returning tasks for `preprocess` and `postprocess`**: Ensure that either `preprocess` or `postprocess` returns a list of "DDLJob"s. If both functions return non-empty lists, then you would get an assertion failure.
 
-- **Generic `preprocess` and `postprocess` methods**: ``PreprocessAlterDistributedObjectStmt`` and ``PostprocessAlterDistributedObjectStmt`` are generic post and pre methods that is being used for some statements. Both of them are being used for distributed object operations.
+- **Generic `preprocess` and `postprocess` methods**: ``PreprocessAlterDistributedObjectStmt`` and ``PostprocessAlterDistributedObjectStmt`` are generic post and pre methods that are used for some statements. Both of them are being used for distributed object operations.
 
 	- PreprocessAlterDistributedObjectStmt perform below operations perform qualify operation, deparse the statement and generate a task list. PostprocessAlterDistributedObjectStmt - calls ``EnsureAllObjectDependenciesExistOnAllNodes`` to propagate missing dependencies both on coordinator and worker.
 
