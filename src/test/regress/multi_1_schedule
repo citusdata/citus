@@ -201,7 +201,8 @@ test: citus_copy_shard_placement
 # multi_utilities cannot be run in parallel with other tests because it checks
 # global locks
 test: multi_utilities
-test: foreign_key_to_reference_table validate_constraint
+test: foreign_key_to_reference_table
+test: validate_constraint
 test: multi_repartition_udt multi_repartitioned_subquery_udf multi_subtransactions
 
 test: multi_modifying_xacts
@@ -297,7 +298,8 @@ test: replicate_reference_tables_to_coordinator
 test: citus_local_tables
 test: mixed_relkind_tests
 test: multi_row_router_insert create_distributed_table_concurrently
-test: multi_reference_table citus_local_tables_queries
+test: multi_reference_table
+test: citus_local_tables_queries
 test: citus_local_table_triggers
 test: coordinator_shouldhaveshards
 test: local_shard_utility_command_execution
