@@ -26,11 +26,11 @@ jobs:
       pgupgrade_image_name: "citus/pgupgradetester"
       style_checker_image_name: "citus/stylechecker"
       style_checker_tools_version: "0.8.18"
-      image_suffix: "-v9d71045"
-      pg14_version: '{ "major": "14", "full": "14.9" }'
-      pg15_version: '{ "major": "15", "full": "15.4" }'
-      pg16_version: '{ "major": "16", "full": "16.0" }'
-      upgrade_pg_versions: "14.9-15.4-16.0"
+      image_suffix: "-vc4b1573"
+      pg13_version: '{ "major": "13", "full": "13.10" }'
+      pg14_version: '{ "major": "14", "full": "14.7" }'
+      pg15_version: '{ "major": "15", "full": "15.2" }'
+      upgrade_pg_versions: "13.10-14.7-15.2"
     steps:
       # Since GHA jobs needs at least one step we use a noop step here.
       - name: Set up parameters
@@ -61,12 +61,6 @@ jobs:
         fetch-depth: 0
     - name: Check C Style
       run: citus_indent --check
-    - name: Check Python style
-      run: black --check .
-    - name: Check Python import order
-      run: isort --check .
-    - name: Check Python lints
-      run: flake8 .
     - name: Fix whitespace
       run: ci/editorconfig.sh && git diff --exit-code
     - name: Remove useless declarations
@@ -89,8 +83,6 @@ jobs:
       run: ci/check_all_ci_scripts_are_run.sh
     - name: Check if all GUCs are sorted alphabetically
       run: ci/check_gucs_are_alphabetically_sorted.sh
-    - name: Check for missing downgrade scripts
-      run: ci/check_migration_files.sh
   build:
     needs: params
     name: Build for PG${{ fromJson(matrix.pg_version).major }}
@@ -102,9 +94,9 @@ jobs:
         image_suffix:
           - ${{ needs.params.outputs.image_suffix}}
         pg_version:
+          - ${{ needs.params.outputs.pg13_version }}
           - ${{ needs.params.outputs.pg14_version }}
           - ${{ needs.params.outputs.pg15_version }}
-          - ${{ needs.params.outputs.pg16_version }}
     runs-on: ubuntu-20.04
     container:
       image: "${{ matrix.image_name }}:${{ fromJson(matrix.pg_version).full }}${{ matrix.image_suffix }}"
@@ -133,9 +125,9 @@ jobs:
         image_name:
           - ${{ needs.params.outputs.test_image_name }}
         pg_version:
+          - ${{ needs.params.outputs.pg13_version }}
           - ${{ needs.params.outputs.pg14_version }}
           - ${{ needs.params.outputs.pg15_version }}
-          - ${{ needs.params.outputs.pg16_version }}
         make:
           - check-split
           - check-multi
@@ -154,6 +146,10 @@ jobs:
           - check-enterprise-isolation-logicalrep-3
         include:
           - make: check-failure
+            pg_version: ${{ needs.params.outputs.pg13_version }}
+            suite: regress
+            image_name: ${{ needs.params.outputs.fail_test_image_name }}
+          - make: check-failure
             pg_version: ${{ needs.params.outputs.pg14_version }}
             suite: regress
             image_name: ${{ needs.params.outputs.fail_test_image_name }}
@@ -161,8 +157,8 @@ jobs:
             pg_version: ${{ needs.params.outputs.pg15_version }}
             suite: regress
             image_name: ${{ needs.params.outputs.fail_test_image_name }}
-          - make: check-failure
-            pg_version: ${{ needs.params.outputs.pg16_version }}
+          - make: check-enterprise-failure
+            pg_version: ${{ needs.params.outputs.pg13_version }}
             suite: regress
             image_name: ${{ needs.params.outputs.fail_test_image_name }}
           - make: check-enterprise-failure
@@ -171,44 +167,32 @@ jobs:
             image_name: ${{ needs.params.outputs.fail_test_image_name }}
           - make: check-enterprise-failure
             pg_version: ${{ needs.params.outputs.pg15_version }}
-            suite: regress
-            image_name: ${{ needs.params.outputs.fail_test_image_name }}
-          - make: check-enterprise-failure
-            pg_version: ${{ needs.params.outputs.pg16_version }}
-            suite: regress
-            image_name: ${{ needs.params.outputs.fail_test_image_name }}
-          - make: check-pytest
-            pg_version: ${{ needs.params.outputs.pg14_version }}
-            suite: regress
-            image_name: ${{ needs.params.outputs.fail_test_image_name }}
-          - make: check-pytest
-            pg_version: ${{ needs.params.outputs.pg15_version }}
-            suite: regress
-            image_name: ${{ needs.params.outputs.fail_test_image_name }}
-          - make: check-pytest
-            pg_version: ${{ needs.params.outputs.pg16_version }}
             suite: regress
             image_name: ${{ needs.params.outputs.fail_test_image_name }}
           - make: installcheck
-            suite: cdc
+            suite: recovery
+            image_name: ${{ needs.params.outputs.test_image_name }}
+            pg_version: ${{ needs.params.outputs.pg13_version }}
+          - make: installcheck
+            suite: recovery
+            image_name: ${{ needs.params.outputs.test_image_name }}
+            pg_version: ${{ needs.params.outputs.pg14_version }}
+          - make: installcheck
+            suite: recovery
             image_name: ${{ needs.params.outputs.test_image_name }}
             pg_version: ${{ needs.params.outputs.pg15_version }}
           - make: installcheck
-            suite: cdc
+            suite: columnar_freezing
             image_name: ${{ needs.params.outputs.test_image_name }}
-            pg_version: ${{ needs.params.outputs.pg16_version }}
-          - make: check-query-generator
+            pg_version: ${{ needs.params.outputs.pg13_version }}
+          - make: installcheck
+            suite: columnar_freezing
+            image_name: ${{ needs.params.outputs.test_image_name }}
             pg_version: ${{ needs.params.outputs.pg14_version }}
-            suite: regress
-            image_name: ${{ needs.params.outputs.fail_test_image_name }}
-          - make: check-query-generator
+          - make: installcheck
+            suite: columnar_freezing
+            image_name: ${{ needs.params.outputs.test_image_name }}
             pg_version: ${{ needs.params.outputs.pg15_version }}
-            suite: regress
-            image_name: ${{ needs.params.outputs.fail_test_image_name }}
-          - make: check-query-generator
-            pg_version: ${{ needs.params.outputs.pg16_version }}
-            suite: regress
-            image_name: ${{ needs.params.outputs.fail_test_image_name }}
     runs-on: ubuntu-20.04
     container:
       image: "${{ matrix.image_name }}:${{ fromJson(matrix.pg_version).full }}${{ needs.params.outputs.image_suffix }}"
@@ -249,9 +233,9 @@ jobs:
         image_name:
           - ${{ needs.params.outputs.fail_test_image_name }}
         pg_version:
+          - ${{ needs.params.outputs.pg13_version }}
           - ${{ needs.params.outputs.pg14_version }}
           - ${{ needs.params.outputs.pg15_version }}
-          - ${{ needs.params.outputs.pg16_version }}
         parallel: [0,1,2,3,4,5] # workaround for running 6 parallel jobs
     steps:
     - uses: actions/checkout@v3.5.0
@@ -294,12 +278,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          - old_pg_major: 13
+            new_pg_major: 14
           - old_pg_major: 14
             new_pg_major: 15
-          - old_pg_major: 15
-            new_pg_major: 16
-          - old_pg_major: 14
-            new_pg_major: 16
     env:
       old_pg_major: ${{ matrix.old_pg_major }}
       new_pg_major: ${{ matrix.new_pg_major }}
@@ -333,10 +315,10 @@ jobs:
         flags: ${{ env.old_pg_major }}_${{ env.new_pg_major }}_upgrade
         codecov_token: ${{ secrets.CODECOV_TOKEN }}
   test-citus-upgrade:
-    name: PG${{ fromJson(needs.params.outputs.pg14_version).major }} - check-citus-upgrade
+    name: PG${{ fromJson(needs.params.outputs.pg13_version).major }} - check-citus-upgrade
     runs-on: ubuntu-20.04
     container:
-      image: "${{ needs.params.outputs.citusupgrade_image_name }}:${{ fromJson(needs.params.outputs.pg14_version).full }}${{ needs.params.outputs.image_suffix }}"
+      image: "${{ needs.params.outputs.citusupgrade_image_name }}:${{ fromJson(needs.params.outputs.pg13_version).full }}${{ needs.params.outputs.image_suffix }}"
       options: --user root
     needs:
     - params
@@ -440,7 +422,7 @@ jobs:
     - name: Detect regression tests need to be ran
       id: detect-regression-tests
       run: |-
-        detected_changes=$(git diff origin/main... --name-only --diff-filter=AM | (grep 'src/test/regress/sql/.*\.sql\|src/test/regress/spec/.*\.spec\|src/test/regress/citus_tests/test/test_.*\.py' || true))
+        detected_changes=$(git diff origin/release-11.1... --name-only --diff-filter=AM | (grep 'src/test/regress/sql/.*\.sql\|src/test/regress/spec/.*\.spec\|src/test/regress/citus_tests/test/test_.*\.py' || true))
         tests=${detected_changes}
         if [ -z "$tests" ]; then
             echo "No test found."
@@ -453,7 +435,7 @@ jobs:
     name: Test flakyness
     runs-on: ubuntu-20.04
     container:
-      image: ${{ needs.params.outputs.fail_test_image_name }}:${{ needs.params.outputs.pg16_version }}${{ needs.params.outputs.image_suffix }}
+      image: ${{ needs.params.outputs.fail_test_image_name }}:${{ needs.params.outputs.pg13_version }}${{ needs.params.outputs.image_suffix }}
       options: --user root
     env:
       runs: 8
