@@ -3,6 +3,7 @@ name: Build tests in packaging images
 on:
   pull_request:
     types: [opened, reopened,synchronize]
+  merge_group:
 
   workflow_dispatch:
 
