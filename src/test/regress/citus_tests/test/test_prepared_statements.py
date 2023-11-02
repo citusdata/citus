@@ -1,6 +1,3 @@
-import psycopg
-import pytest
-
 
 def test_call_param(cluster):
     # create a distributed table and an associated distributed procedure
