@@ -471,6 +471,8 @@ FullShardPlacementList(Oid relationId, ArrayType *excludedShardArray)
 			placement->shardId = groupPlacement->shardId;
 			placement->shardLength = groupPlacement->shardLength;
 			placement->groupId = groupPlacement->groupId;
+			placement->colocationGroupId = citusTableCacheEntry->colocationId;
+			placement->shardIndex = shardInterval->shardIndex;
 			placement->nodeId = worker->nodeId;
 			placement->nodeName = pstrdup(worker->workerName);
 			placement->nodePort = worker->workerPort;

@@ -100,6 +100,7 @@ typedef struct ShardPlacement
 	uint32 nodeId;
 	char partitionMethod;
 	uint32 colocationGroupId;
+	int shardIndex;
 	uint32 representativeValue;
 } ShardPlacement;
 
