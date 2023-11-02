@@ -277,3 +277,5 @@ SELECT rolname FROM pg_authid WHERE rolname LIKE '%existing%' ORDER BY 1;
 \c - - - :worker_1_port
 SELECT rolname FROM pg_authid WHERE rolname LIKE '%existing%' ORDER BY 1;
 \c - - - :master_port
+
+DROP ROLE nondist_cascade_1, nondist_cascade_2, nondist_cascade_3, dist_cascade;
