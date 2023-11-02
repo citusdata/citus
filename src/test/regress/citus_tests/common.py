@@ -581,6 +581,14 @@ class QueryRunner(ABC):
         with self.cur(**kwargs) as cur:
             cur.execute(query, params=params)
 
+    def sql_prepared(self, query, params=None, **kwargs):
+        """Run an SQL query, with prepare=True
+
+        This opens a new connection and closes it once the query is done
+        """
+        with self.cur(**kwargs) as cur:
+            cur.execute(query, params=params, prepare=True)
+
     def sql_row(self, query, params=None, allow_empty_result=False, **kwargs):
         """Run an SQL query that returns a single row and returns this row
 
