@@ -12,6 +12,7 @@
 
 #include "distributed/deparser.h"
 #include "nodes/parsenodes.h"
+#include "utils/builtins.h"
 
 static void AppendSecLabelStmt(StringInfo buf, SecLabelStmt *stmt);
 
@@ -41,10 +42,10 @@ AppendSecLabelStmt(StringInfo buf, SecLabelStmt *stmt)
 {
 	appendStringInfoString(buf, "SECURITY LABEL ");
 
-		if (stmt->provider != NULL)
-		{
-			appendStringInfo(buf, "FOR %s ", stmt->provider);
-		}
+	if (stmt->provider != NULL)
+	{
+		appendStringInfo(buf, "FOR %s ", stmt->provider);
+	}
 
 	appendStringInfoString(buf, "ON ");
 
@@ -52,7 +53,7 @@ AppendSecLabelStmt(StringInfo buf, SecLabelStmt *stmt)
 	{
 		case OBJECT_ROLE:
 		{
-			appendStringInfo(buf, "ROLE %s ", strVal(castNode(String, stmt->object)));
+			appendStringInfo(buf, "ROLE %s ", strVal(stmt->object));
 			break;
 		}
 
@@ -67,7 +68,7 @@ AppendSecLabelStmt(StringInfo buf, SecLabelStmt *stmt)
 
 	if (stmt->label != NULL)
 	{
-		appendStringInfo(buf, "%s", stmt->label);
+		appendStringInfo(buf, "%s", quote_literal_cstr(stmt->label));
 	}
 	else
 	{

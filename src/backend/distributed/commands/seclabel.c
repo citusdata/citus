@@ -28,7 +28,7 @@
  */
 List *
 PreprocessSecLabelStmt(Node *node, const char *queryString,
-							  ProcessUtilityContext processUtilityContext)
+					   ProcessUtilityContext processUtilityContext)
 {
 	if (!IsCoordinator() || !ShouldPropagate())
 	{
@@ -37,8 +37,8 @@ PreprocessSecLabelStmt(Node *node, const char *queryString,
 
 	SecLabelStmt *secLabelStmt = castNode(SecLabelStmt, node);
 
-	List * objectAddresses = GetObjectAddressListFromParseTree(node, false, false);
-	if(!IsAnyObjectDistributed(objectAddresses))
+	List *objectAddresses = GetObjectAddressListFromParseTree(node, false, false);
+	if (!IsAnyObjectDistributed(objectAddresses))
 	{
 		return NIL;
 	}
@@ -70,6 +70,7 @@ PreprocessSecLabelStmt(Node *node, const char *queryString,
 	return NodeDDLTaskList(NON_COORDINATOR_NODES, commandList);
 }
 
+
 /*
  * PostprocessSecLabelStmt
  */
@@ -88,8 +89,8 @@ PostprocessSecLabelStmt(Node *node, const char *queryString)
 		return NIL;
 	}
 
-	List * objectAddresses = GetObjectAddressListFromParseTree(node, false, false);
-	if(IsAnyObjectDistributed(objectAddresses))
+	List *objectAddresses = GetObjectAddressListFromParseTree(node, false, false);
+	if (IsAnyObjectDistributed(objectAddresses))
 	{
 		EnsureAllObjectDependenciesExistOnAllNodes(objectAddresses);
 	}
@@ -107,10 +108,30 @@ SecLabelStmtObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
 	SecLabelStmt *secLabelStmt = castNode(SecLabelStmt, node);
 
 	Relation rel = NULL; /* not used, but required to pass to get_object_address */
-	ObjectAddress address = get_object_address(secLabelStmt->objtype, secLabelStmt->object, &rel,
-												   AccessShareLock, missing_ok);
+	ObjectAddress address = get_object_address(secLabelStmt->objtype,
+											   secLabelStmt->object, &rel,
+											   AccessShareLock, missing_ok);
 
 	ObjectAddress *addressPtr = palloc0(sizeof(ObjectAddress));
 	*addressPtr = address;
 	return list_make1(addressPtr);
+}
+
+
+/*
+ * citus_test_object_relabel
+ */
+void
+citus_test_object_relabel(const ObjectAddress *object, const char *seclabel)
+{
+	if (seclabel == NULL ||
+		strcmp(seclabel, "citus_unclassified") == 0 ||
+		strcmp(seclabel, "citus_classified") == 0)
+	{
+		return;
+	}
+
+	ereport(ERROR,
+			(errcode(ERRCODE_INVALID_NAME),
+			 errmsg("'%s' is not a valid security label for Citus tests.", seclabel)));
 }
