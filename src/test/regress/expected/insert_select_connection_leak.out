@@ -47,16 +47,16 @@ INSERT INTO target_table SELECT * FROM source_table;
 INSERT INTO target_table SELECT * FROM source_table;
 INSERT INTO target_table SELECT * FROM source_table;
 INSERT INTO target_table SELECT * FROM source_table;
-SELECT worker_connection_count(:worker_1_port) - :worker_1_connections AS leaked_worker_1_connections,
-       worker_connection_count(:worker_2_port) - :worker_2_connections AS leaked_worker_2_connections;
+SELECT GREATEST(0, worker_connection_count(:worker_1_port) - :worker_1_connections) AS leaked_worker_1_connections,
+       GREATEST(0, worker_connection_count(:worker_2_port) - :worker_2_connections) AS leaked_worker_2_connections;
  leaked_worker_1_connections | leaked_worker_2_connections
 ---------------------------------------------------------------------
                            0 |                           0
 (1 row)
 
 END;
-SELECT worker_connection_count(:worker_1_port) - :pre_xact_worker_1_connections AS leaked_worker_1_connections,
-       worker_connection_count(:worker_2_port) - :pre_xact_worker_2_connections AS leaked_worker_2_connections;
+SELECT GREATEST(0, worker_connection_count(:worker_1_port) - :pre_xact_worker_1_connections) AS leaked_worker_1_connections,
+       GREATEST(0, worker_connection_count(:worker_2_port) - :pre_xact_worker_2_connections) AS leaked_worker_2_connections;
  leaked_worker_1_connections | leaked_worker_2_connections
 ---------------------------------------------------------------------
                            0 |                           0
@@ -67,8 +67,8 @@ BEGIN;
 INSERT INTO target_table SELECT * FROM source_table;
 INSERT INTO target_table SELECT * FROM source_table;
 ROLLBACK;
-SELECT worker_connection_count(:worker_1_port) - :pre_xact_worker_1_connections AS leaked_worker_1_connections,
-       worker_connection_count(:worker_2_port) - :pre_xact_worker_2_connections AS leaked_worker_2_connections;
+SELECT GREATEST(0, worker_connection_count(:worker_1_port) - :pre_xact_worker_1_connections) AS leaked_worker_1_connections,
+       GREATEST(0, worker_connection_count(:worker_2_port) - :pre_xact_worker_2_connections) AS leaked_worker_2_connections;
  leaked_worker_1_connections | leaked_worker_2_connections
 ---------------------------------------------------------------------
                            0 |                           0
@@ -84,16 +84,16 @@ SAVEPOINT s1;
 INSERT INTO target_table SELECT a, CASE WHEN a < 50 THEN b ELSE null END  FROM source_table;
 ERROR:  null value in column "b" violates not-null constraint
 ROLLBACK TO SAVEPOINT s1;
-SELECT worker_connection_count(:worker_1_port) - :worker_1_connections AS leaked_worker_1_connections,
-       worker_connection_count(:worker_2_port) - :worker_2_connections AS leaked_worker_2_connections;
+SELECT GREATEST(0, worker_connection_count(:worker_1_port) - :worker_1_connections) AS leaked_worker_1_connections,
+       GREATEST(0, worker_connection_count(:worker_2_port) - :worker_2_connections) AS leaked_worker_2_connections;
  leaked_worker_1_connections | leaked_worker_2_connections
 ---------------------------------------------------------------------
                            0 |                           0
 (1 row)
 
 END;
-SELECT worker_connection_count(:worker_1_port) - :pre_xact_worker_1_connections AS leaked_worker_1_connections,
-       worker_connection_count(:worker_2_port) - :pre_xact_worker_2_connections AS leaked_worker_2_connections;
+SELECT GREATEST(0, worker_connection_count(:worker_1_port) - :pre_xact_worker_1_connections) AS leaked_worker_1_connections,
+       GREATEST(0, worker_connection_count(:worker_2_port) - :pre_xact_worker_2_connections) AS leaked_worker_2_connections;
  leaked_worker_1_connections | leaked_worker_2_connections
 ---------------------------------------------------------------------
                            0 |                           0

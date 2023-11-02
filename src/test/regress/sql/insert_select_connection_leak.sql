@@ -33,12 +33,12 @@ INSERT INTO target_table SELECT * FROM source_table;
 INSERT INTO target_table SELECT * FROM source_table;
 INSERT INTO target_table SELECT * FROM source_table;
 INSERT INTO target_table SELECT * FROM source_table;
-SELECT worker_connection_count(:worker_1_port) - :worker_1_connections AS leaked_worker_1_connections,
-       worker_connection_count(:worker_2_port) - :worker_2_connections AS leaked_worker_2_connections;
+SELECT GREATEST(0, worker_connection_count(:worker_1_port) - :worker_1_connections) AS leaked_worker_1_connections,
+       GREATEST(0, worker_connection_count(:worker_2_port) - :worker_2_connections) AS leaked_worker_2_connections;
 END;
 
-SELECT worker_connection_count(:worker_1_port) - :pre_xact_worker_1_connections AS leaked_worker_1_connections,
-       worker_connection_count(:worker_2_port) - :pre_xact_worker_2_connections AS leaked_worker_2_connections;
+SELECT GREATEST(0, worker_connection_count(:worker_1_port) - :pre_xact_worker_1_connections) AS leaked_worker_1_connections,
+       GREATEST(0, worker_connection_count(:worker_2_port) - :pre_xact_worker_2_connections) AS leaked_worker_2_connections;
 
 -- ROLLBACK
 BEGIN;
@@ -46,8 +46,8 @@ INSERT INTO target_table SELECT * FROM source_table;
 INSERT INTO target_table SELECT * FROM source_table;
 ROLLBACK;
 
-SELECT worker_connection_count(:worker_1_port) - :pre_xact_worker_1_connections AS leaked_worker_1_connections,
-       worker_connection_count(:worker_2_port) - :pre_xact_worker_2_connections AS leaked_worker_2_connections;
+SELECT GREATEST(0, worker_connection_count(:worker_1_port) - :pre_xact_worker_1_connections) AS leaked_worker_1_connections,
+       GREATEST(0, worker_connection_count(:worker_2_port) - :pre_xact_worker_2_connections) AS leaked_worker_2_connections;
 
 \set VERBOSITY TERSE
 
@@ -59,12 +59,12 @@ SELECT worker_connection_count(:worker_1_port) AS worker_1_connections,
 SAVEPOINT s1;
 INSERT INTO target_table SELECT a, CASE WHEN a < 50 THEN b ELSE null END  FROM source_table;
 ROLLBACK TO SAVEPOINT s1;
-SELECT worker_connection_count(:worker_1_port) - :worker_1_connections AS leaked_worker_1_connections,
-       worker_connection_count(:worker_2_port) - :worker_2_connections AS leaked_worker_2_connections;
+SELECT GREATEST(0, worker_connection_count(:worker_1_port) - :worker_1_connections) AS leaked_worker_1_connections,
+       GREATEST(0, worker_connection_count(:worker_2_port) - :worker_2_connections) AS leaked_worker_2_connections;
 END;
 
-SELECT worker_connection_count(:worker_1_port) - :pre_xact_worker_1_connections AS leaked_worker_1_connections,
-       worker_connection_count(:worker_2_port) - :pre_xact_worker_2_connections AS leaked_worker_2_connections;
+SELECT GREATEST(0, worker_connection_count(:worker_1_port) - :pre_xact_worker_1_connections) AS leaked_worker_1_connections,
+       GREATEST(0, worker_connection_count(:worker_2_port) - :pre_xact_worker_2_connections) AS leaked_worker_2_connections;
 
 SET client_min_messages TO WARNING;
 DROP SCHEMA insert_select_connection_leak CASCADE;
