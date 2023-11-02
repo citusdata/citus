@@ -94,7 +94,7 @@ step s2-commit:
 	COMMIT;
 
 
-starting permutation: s4-record-pid s3-show-activity s5-kill s3-show-activity
+starting permutation: s4-record-pid s3-show-activity s5-kill s3-wait-backend-termination
 step s4-record-pid:
 	SELECT pg_backend_pid() INTO selected_pid;
 
@@ -109,18 +109,34 @@ count
 
 step s5-kill:
 	SELECT pg_terminate_backend(pg_backend_pid) FROM selected_pid;
+	SELECT pg_sleep(1); -- sleep for a while to make sure that backend is terminated
 
 pg_terminate_backend
 ---------------------------------------------------------------------
 t
 (1 row)
 
-step s3-show-activity:
-	SET ROLE postgres;
-	select count(*) from get_all_active_transactions() where process_id IN (SELECT * FROM selected_pid);
-
-count
+pg_sleep
 ---------------------------------------------------------------------
-    0
+
 (1 row)
+
+step s3-wait-backend-termination:
+	SET ROLE postgres;
+	DO $$
+	DECLARE
+		i int;
+	BEGIN
+		i := 0;
+		-- try for 5 sec then timeout
+		WHILE (select count(*) > 0 from get_all_active_transactions() where process_id IN (SELECT * FROM selected_pid))
+		LOOP
+			PERFORM pg_sleep(0.1);
+			i := i + 1;
+			IF i > 50 THEN
+				RAISE EXCEPTION 'Timeout while waiting for backend to terminate';
+			END IF;
+		END LOOP;
+	END;
+	$$;
 
