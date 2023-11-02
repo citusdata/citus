@@ -142,7 +142,6 @@ session "s5"
 step "s5-kill"
 {
 	SELECT pg_terminate_backend(pg_backend_pid) FROM selected_pid;
-	SELECT pg_sleep(1); -- sleep for a while to make sure that backend is terminated
 }
 
 
