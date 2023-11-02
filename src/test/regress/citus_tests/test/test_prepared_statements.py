@@ -1,4 +1,3 @@
-
 def test_call_param(cluster):
     # create a distributed table and an associated distributed procedure
     # to ensure parameterized CALL succeed, even when the param is the
