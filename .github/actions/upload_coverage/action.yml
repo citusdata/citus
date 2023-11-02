@@ -1,0 +1,15 @@
+name: coverage
+inputs:
+  flags:
+    required: false
+  codecov_token:
+    required: true
+runs:
+  using: composite
+  steps:
+  - uses: codecov/codecov-action@v3
+    with:
+      flags: ${{ inputs.flags }}
+      token: ${{ inputs.codecov_token }}
+      verbose: true
+      gcov: true
