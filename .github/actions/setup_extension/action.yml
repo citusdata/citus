@@ -28,6 +28,7 @@ runs:
     run: |-
       chown -R circleci .
       git config --global --add safe.directory ${GITHUB_WORKSPACE}
+      PG_CONFIG=/usr/lib/postgresql/${{ inputs.pg_major }} >>/bin/pg_config
       gosu circleci ./configure --without-pg-version-check
     shell: bash
   - name: Enable core dumps
