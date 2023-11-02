@@ -703,6 +703,7 @@ DissuadePlannerFromUsingPlan(PlannedStmt *plan)
 	 * Arbitrarily high cost, but low enough that it can be added up
 	 * without overflowing by choose_custom_plan().
 	 */
+	Assert(plan != NULL);
 	plan->planTree->total_cost = FLT_MAX / 100000000;
 }
 
