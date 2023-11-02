@@ -1723,11 +1723,11 @@ Merge command the same principles as INSERT .. SELECT processing. However, due t
 
 # DDL
 
-DDL commands are primarily handled via the ProcessUtility hook, which gets the parse tree of the DDL command. For supported DDL commands, we always follow the same sequence of steps:
+DDL commands are primarily handled via the citus_ProcessUtility hook, which gets the parse tree of the DDL command. For supported DDL commands, we always follow the same sequence of steps:
 
 1. Qualify the table names in the parse tree (simplifies deparsing, avoids sensitivity to search_path changes)
 2. Pre-process logic
-3. Call original ProcessUtility to execute the command on the local shell table
+3. Call original previous ProcessUtility to execute the command on the local shell table
 4. Post-process logic
 5. Execute command on all other nodes
 6. Execute command on shards (in case of table DDL)
@@ -1749,6 +1749,66 @@ The reason for handling dependencies and deparsing in post-process step is that 
 
 Not all table DDL is currently deparsed. In that case, the original command sent by the client is used. That is a shortcoming in our DDL logic that causes user-facing issues and should be addressed. We do not directly construct a separate DDL command for each shard. Instead, we call the `worker_apply_shard_ddl_command(shardid bigint, ddl_command text)` function which parses the DDL command, replaces the table names with shard names in the parse tree according to the shard ID, and then executes the command. That also has some shortcomings, because we cannot support more complex DDL commands in this manner (e.g. adding multiple foreign keys). Ideally, all DDL would be deparsed, and for table DDL the deparsed query string would have shard names, similar to regular queries.
 
+`markDistributed` is used to indicate whether we add a record to `pg_dist_object` to mark the object as "distributed".
+
+## Defining a new DDL command
+
+All commands that are propagated by Citus should be defined in DistributeObjectOps struct. Below is a sample DistributeObjectOps for ALTER DATABASE command that is defined in [distribute_object_ops.c](commands/distribute_object_ops.c) file.
+
+```c
+static DistributeObjectOps Database_Alter = {
+	.deparse = DeparseAlterDatabaseStmt,
+	.qualify = NULL,
+	.preprocess = PreprocessAlterDatabaseStmt,
+	.postprocess = NULL,
+	.objectType = OBJECT_DATABASE,
+	.operationType = DIST_OPS_ALTER,
+	.address = NULL,
+	.markDistributed = false,
+};
+```
+
+Each field in the struct is documented in the comments within the `DistributeObjectOps`. When defining a new DDL command, follow these guidelines:
+
+- **Returning tasks for `preprocess` and `postprocess`**: Ensure that either `preprocess` or `postprocess` returns a list of "DDLJob"s. If both functions return non-empty lists, then you would get an assertion failure.
+
+- **Generic `preprocess` and `postprocess` methods**: The generic methods, `PreprocessAlterDistributedObjectStmt` and `PostprocessAlterDistributedObjectStmt`, serve as generic pre and post methods utilized for various statements. Both of these methods find application in distributed object operations.
+
+  - The `PreprocessAlterDistributedObjectStmt` method carries out the following operations:
+    - Performs a qualification operation.
+    - Deparses the statement and generates a task list.
+
+  - As for the `PostprocessAlterDistributedObjectStmt` method, it:
+    - Invokes the `EnsureAllObjectDependenciesExistOnAllNodes` function to propagate missing dependencies, both on the coordinator and the worker.
+
+  - Before defining new `preprocess` or `postprocess` methods, it is advisable to assess whether the generic methods can be employed in your specific case.
+
+
+- **`deparse`**: When propagating the command to worker nodes, make sure to define `deparse`. This is necessary because it generates a query string for each worker node.
+
+- **`markDistributed`**: Set this flag to true if you want to add a record to the `pg_dist_object` table. This is particularly important for `CREATE` statements when introducing a new object to the system.
+
+- **`address`**: If `markDistributed` is set to true, you must define the `address`. Failure to do so will result in a runtime error. The `address` is required to identify the fields that will be stored in the `pg_dist_object` table.
+
+- **`markDistributed` usage in `DROP` Statements**: Please note that `markDistributed` does not apply to `DROP` statements. For `DROP` statements, instead you need to call `UnmarkObjectDistributed()` for the object either in `preprocess` or `postprocess`. Otherwise, state records in ``pg_dist_object`` table will cause errors in UDF calls such as ``citus_add_node()``, which will try to copy the non-existent db object.
+
+- **`qualify`**: The `qualify` function is used to qualify the objects based on their schemas in the parse tree. It is employed to prevent sensitivity to changes in the `search_path` on worker nodes. Note that it is not mandatory to define this function for all DDL commands. It is only required for commands that involve objects that are bound to schemas, such as; tables, types, functions and so on.
+
+After defining the `DistributeObjectOps` structure, this structure should be implemented in the `GetDistributeObjectOps()` function as shown below:
+
+```c
+// Example implementation in C code
+const DistributeObjectOps *
+GetDistributeObjectOps(Node *node)
+{
+	switch (nodeTag(node))
+	{
+		case T_AlterDatabaseStmt:
+		{
+			return &Database_Alter;
+		}
+...
+```
 
 ## Object & dependency propagation
 
