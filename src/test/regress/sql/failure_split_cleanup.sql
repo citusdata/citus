@@ -136,7 +136,7 @@ SELECT create_distributed_table('table_to_split', 'id');
         ARRAY[:worker_1_node, :worker_2_node],
         'force_logical');
     SELECT operation_id, object_type, object_name, node_group_id, policy_type
-    FROM pg_dist_cleanup where operation_id = 777 ORDER BY object_name;
+    FROM pg_dist_cleanup where operation_id = 777 ORDER BY object_name, node_group_id;
     -- we need to allow connection so that we can connect to proxy
     SELECT citus.mitmproxy('conn.allow()');
 
@@ -155,7 +155,7 @@ SELECT create_distributed_table('table_to_split', 'id');
     \c - postgres - :master_port
     SELECT public.wait_for_resource_cleanup();
     SELECT operation_id, object_type, object_name, node_group_id, policy_type
-    FROM pg_dist_cleanup where operation_id = 777 ORDER BY object_name;
+    FROM pg_dist_cleanup where operation_id = 777 ORDER BY object_name, node_group_id;
 
     \c - - - :worker_2_proxy_port
     SET search_path TO "citus_failure_split_cleanup_schema", public, pg_catalog;
@@ -182,7 +182,7 @@ SELECT create_distributed_table('table_to_split', 'id');
         ARRAY[:worker_1_node, :worker_2_node],
         'force_logical');
     SELECT operation_id, object_type, object_name, node_group_id, policy_type
-    FROM pg_dist_cleanup where operation_id = 777 ORDER BY object_name;
+    FROM pg_dist_cleanup where operation_id = 777 ORDER BY object_name, node_group_id;
     -- we need to allow connection so that we can connect to proxy
     SELECT citus.mitmproxy('conn.allow()');
 
@@ -201,7 +201,7 @@ SELECT create_distributed_table('table_to_split', 'id');
     \c - postgres - :master_port
     SELECT public.wait_for_resource_cleanup();
     SELECT operation_id, object_type, object_name, node_group_id, policy_type
-    FROM pg_dist_cleanup where operation_id = 777 ORDER BY object_name;
+    FROM pg_dist_cleanup where operation_id = 777 ORDER BY object_name, node_group_id;
 
     \c - - - :worker_2_proxy_port
     SET search_path TO "citus_failure_split_cleanup_schema", public, pg_catalog;
@@ -228,7 +228,7 @@ SELECT create_distributed_table('table_to_split', 'id');
         ARRAY[:worker_1_node, :worker_2_node],
         'force_logical');
     SELECT operation_id, object_type, object_name, node_group_id, policy_type
-    FROM pg_dist_cleanup where operation_id = 777 ORDER BY object_name;
+    FROM pg_dist_cleanup where operation_id = 777 ORDER BY object_name, node_group_id;
     -- we need to allow connection so that we can connect to proxy
     SELECT citus.mitmproxy('conn.allow()');
 
@@ -247,7 +247,7 @@ SELECT create_distributed_table('table_to_split', 'id');
     \c - postgres - :master_port
     SELECT public.wait_for_resource_cleanup();
     SELECT operation_id, object_type, object_name, node_group_id, policy_type
-    FROM pg_dist_cleanup where operation_id = 777 ORDER BY object_name;
+    FROM pg_dist_cleanup where operation_id = 777 ORDER BY object_name, node_group_id;
 
     \c - - - :worker_2_proxy_port
     SET search_path TO "citus_failure_split_cleanup_schema", public, pg_catalog;
@@ -275,7 +275,7 @@ SELECT create_distributed_table('table_to_split', 'id');
         'force_logical');
 
     SELECT operation_id, object_type, object_name, node_group_id, policy_type
-    FROM pg_dist_cleanup where operation_id = 777 ORDER BY object_name;
+    FROM pg_dist_cleanup where operation_id = 777 ORDER BY object_name, node_group_id;
     SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r' order by relname;
     -- we need to allow connection so that we can connect to proxy
     SELECT citus.mitmproxy('conn.allow()');
@@ -295,7 +295,7 @@ SELECT create_distributed_table('table_to_split', 'id');
     \c - postgres - :master_port
     SELECT public.wait_for_resource_cleanup();
     SELECT operation_id, object_type, object_name, node_group_id, policy_type
-    FROM pg_dist_cleanup where operation_id = 777 ORDER BY object_name;
+    FROM pg_dist_cleanup where operation_id = 777 ORDER BY object_name, node_group_id;
 
     \c - - - :worker_2_proxy_port
     SET search_path TO "citus_failure_split_cleanup_schema", public, pg_catalog;
