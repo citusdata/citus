@@ -175,7 +175,6 @@ BuildCreatePublicationStmt(Oid publicationId)
 												PUBLICATION_PART_ROOT :
 												PUBLICATION_PART_LEAF);
 	Oid relationId = InvalidOid;
-	int citusTableCount PG_USED_FOR_ASSERTS_ONLY = 0;
 
 	/* mainly for consistent ordering in test output */
 	relationIds = SortList(relationIds, CompareOids);
@@ -199,11 +198,6 @@ BuildCreatePublicationStmt(Oid publicationId)
 
 		createPubStmt->tables = lappend(createPubStmt->tables, rangeVar);
 #endif
-
-		if (IsCitusTable(relationId))
-		{
-			citusTableCount++;
-		}
 	}
 
 	/* WITH (publish_via_partition_root = true) option */
