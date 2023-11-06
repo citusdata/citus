@@ -29,7 +29,6 @@
 #include "citus_version.h"
 #include "commands/explain.h"
 #include "commands/extension.h"
-#include "commands/seclabel.h"
 #include "common/string.h"
 #include "executor/executor.h"
 #include "distributed/backend_data.h"
@@ -575,8 +574,6 @@ _PG_init(void)
 	INIT_COLUMNAR_SYMBOL(PGFunction, columnar_storage_info);
 	INIT_COLUMNAR_SYMBOL(PGFunction, columnar_store_memory_stats);
 	INIT_COLUMNAR_SYMBOL(PGFunction, test_columnar_storage_write_new_page);
-
-	register_label_provider("citus_tests_label_provider", citus_test_object_relabel);
 }
 
 

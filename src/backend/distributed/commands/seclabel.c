@@ -11,6 +11,7 @@
 
 #include "postgres.h"
 
+#include "commands/seclabel.h"
 #include "distributed/commands.h"
 #include "distributed/commands/utility_hook.h"
 #include "distributed/coordinator_protocol.h"
@@ -18,6 +19,17 @@
 #include "distributed/log_utils.h"
 #include "distributed/metadata_sync.h"
 #include "distributed/metadata/distobject.h"
+
+
+PG_FUNCTION_INFO_V1(citus_test_register_label_provider);
+
+Datum
+citus_test_register_label_provider(PG_FUNCTION_ARGS)
+{
+	register_label_provider("citus_tests_label_provider", citus_test_object_relabel);
+	PG_RETURN_VOID();
+}
+
 
 /*
  * PreprocessSecLabelStmt is executed before the statement is applied to the local
