@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# easy command line to run against all citus-style checked files
+# $ git ls-files | git check-attr --stdin citus-style | grep 'citus-style: set' | awk '{print $1}' | cut -d':' -f1 | xargs -n1 ./ci/include-grouping.py
+
 
 import os
 import sys
@@ -93,9 +96,18 @@ def print_sorted_includes(includes, file=sys.stdout):
 
     matches.sort(key=lambda x: x["priority"])
 
+    common_system_include_error_prefixes = ['<nodes/', '<distributed/']
+
     for include in includes:
         # extract the group key from the include
         include_content = include.split(' ')[1]
+
+        # fix common system includes which are secretly postgres or citus includes
+        for common_prefix in common_system_include_error_prefixes:
+            if include_content.startswith(common_prefix):
+                include_content = '"' + include_content.strip()[1:-1] + '"'
+                include = include.split(' ')[0] + ' ' + include_content + '\n'
+                break
 
         group_key = default_group_key
         for matcher in matches:
