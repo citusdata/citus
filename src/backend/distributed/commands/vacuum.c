@@ -184,7 +184,6 @@ ExecuteVacuumOnDistributedTables(VacuumStmt *vacuumStmt, List *relationIdList,
 								 CitusVacuumParams vacuumParams)
 {
 	int relationIndex = 0;
-	int executedVacuumCount = 0;
 
 	Oid relationId = InvalidOid;
 	foreach_oid(relationId, relationIdList)
@@ -197,7 +196,6 @@ ExecuteVacuumOnDistributedTables(VacuumStmt *vacuumStmt, List *relationIdList,
 			/* local execution is not implemented for VACUUM commands */
 			bool localExecutionSupported = false;
 			ExecuteUtilityTaskList(taskList, localExecutionSupported);
-			executedVacuumCount++;
 		}
 		relationIndex++;
 	}
