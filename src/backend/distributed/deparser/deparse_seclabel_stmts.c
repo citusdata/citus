@@ -57,6 +57,7 @@ AppendSecLabelStmt(StringInfo buf, SecLabelStmt *stmt)
 			break;
 		}
 
+		/* normally, we shouldn't reach this */
 		default:
 		{
 			ereport(ERROR, (errmsg("unsupported security label statement for"

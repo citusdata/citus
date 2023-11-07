@@ -23,6 +23,11 @@
 
 PG_FUNCTION_INFO_V1(citus_test_register_label_provider);
 
+
+/*
+ * citus_test_register_label_provider registers a dummy label provider
+ * named 'citus_tests_label_provider'. This is aimed to be used for testing.
+ */
 Datum
 citus_test_register_label_provider(PG_FUNCTION_ARGS)
 {
@@ -84,7 +89,9 @@ PreprocessSecLabelStmt(Node *node, const char *queryString,
 
 
 /*
- * PostprocessSecLabelStmt
+ * PostprocessSecLabelStmt ensures that all object dependencies exist on all
+ * nodes for the object in the SecLabelStmt. Currently, we only support SecLabelStmts
+ * operating on a ROLE object.
  */
 List *
 PostprocessSecLabelStmt(Node *node, const char *queryString)
@@ -112,17 +119,25 @@ PostprocessSecLabelStmt(Node *node, const char *queryString)
 
 
 /*
- * SecLabelStmtObjectAddress
+ * SecLabelStmtObjectAddress returns the object address of the object on
+ * which this statement operates (secLabelStmt->object). Note that it has no limitation
+ * on the object type being OBJECT_ROLE. This is intentionally implemented like this
+ * since it is fairly simple to implement and we might extend SECURITY LABEL propagation
+ * in the future to include more object types.
  */
 List *
 SecLabelStmtObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
 {
 	SecLabelStmt *secLabelStmt = castNode(SecLabelStmt, node);
 
-	Relation rel = NULL; /* not used, but required to pass to get_object_address */
+	Relation rel = NULL;
 	ObjectAddress address = get_object_address(secLabelStmt->objtype,
 											   secLabelStmt->object, &rel,
 											   AccessShareLock, missing_ok);
+	if (rel != NULL)
+	{
+		relation_close(rel, AccessShareLock);
+	}
 
 	ObjectAddress *addressPtr = palloc0(sizeof(ObjectAddress));
 	*addressPtr = address;
@@ -131,7 +146,8 @@ SecLabelStmtObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
 
 
 /*
- * citus_test_object_relabel
+ * citus_test_object_relabel is a dummy function for check_object_relabel_type hook.
+ * It is meant to be used in tests combined with citus_test_register_label_provider
  */
 void
 citus_test_object_relabel(const ObjectAddress *object, const char *seclabel)
