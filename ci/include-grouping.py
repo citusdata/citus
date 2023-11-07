@@ -6,18 +6,19 @@
 import os
 import sys
 
+
 def main(args):
     if len(args) < 2:
         print("Usage: include-grouping.py <file>")
         return
-    
+
     file = args[1]
     if not os.path.isfile(file):
         print("File does not exist", file=sys.stderr)
         return sys.exit(1)
 
-    with open(file, 'r') as f:
-        with open(file + ".tmp", 'w') as out_file:
+    with open(file, "r") as f:
+        with open(file + ".tmp", "w") as out_file:
             lines = f.readlines()
             includes = []
             skipped_lines = []
@@ -36,77 +37,79 @@ def main(args):
 
                     # print skipped lines
                     for skipped_line in skipped_lines:
-                        print(skipped_line, end='', file=out_file)
+                        print(skipped_line, end="", file=out_file)
                     skipped_lines = []
 
-                    print(line, end='', file=out_file)
+                    print(line, end="", file=out_file)
 
     # move out_file to file
     os.rename(file + ".tmp", file)
 
     pass
 
+
 def print_sorted_includes(includes, file=sys.stdout):
     default_group_key = 1
     groups = {}
 
     matches = [
-    {
-        "name": "system includes",
-        "matcher": lambda x: x.startswith('<'),
-        "group_key": -2,
-        "priority": 0
-    },
-    {
-        "name": "naked postgres includes",
-        "matcher": lambda x: not '/' in x,
-        "group_key": 0,
-        "priority": 9
-    },
-    {
-        "name": "postgres.h",
-        "list": ['"postgres.h"'],
-        "group_key": -1,
-        "priority": -1
-    },
-    {
-        "name": "naked citus inlcudes",
-        "list": ['"citus_version.h"', '"pg_version_compat.h"'],
-        "group_key": 3,
-        "priority": 0
-    },
-    {
-        "name": "positional citus includes",
-        "list": ['"distributed/pg_version_constants.h"'],
-        "group_key": 4,
-        "priority": 0
-    },
-    {
-        "name": "columnar includes",
-        "matcher": lambda x: x.startswith('"columnar/'),
-        "group_key": 5,
-        "priority": 1
-    },
-    {
-        "name": "distributed includes",
-        "matcher": lambda x: x.startswith('"distributed/'),
-        "group_key": 6,
-        "priority": 1
-    }]
+        {
+            "name": "system includes",
+            "matcher": lambda x: x.startswith("<"),
+            "group_key": -2,
+            "priority": 0,
+        },
+        {
+            "name": "naked postgres includes",
+            "matcher": lambda x: not "/" in x,
+            "group_key": 0,
+            "priority": 9,
+        },
+        {
+            "name": "postgres.h",
+            "list": ['"postgres.h"'],
+            "group_key": -1,
+            "priority": -1,
+        },
+        {
+            "name": "naked citus inlcudes",
+            "list": ['"citus_version.h"', '"pg_version_compat.h"'],
+            "group_key": 3,
+            "priority": 0,
+        },
+        {
+            "name": "positional citus includes",
+            "list": ['"distributed/pg_version_constants.h"'],
+            "group_key": 4,
+            "priority": 0,
+        },
+        {
+            "name": "columnar includes",
+            "matcher": lambda x: x.startswith('"columnar/'),
+            "group_key": 5,
+            "priority": 1,
+        },
+        {
+            "name": "distributed includes",
+            "matcher": lambda x: x.startswith('"distributed/'),
+            "group_key": 6,
+            "priority": 1,
+        },
+    ]
 
     matches.sort(key=lambda x: x["priority"])
 
-    common_system_include_error_prefixes = ['<nodes/', '<distributed/']
+    common_system_include_error_prefixes = ["<nodes/", "<distributed/"]
 
     for include in includes:
         # extract the group key from the include
-        include_content = include.split(' ')[1]
+        include_content = include.split(" ")[1]
 
         # fix common system includes which are secretly postgres or citus includes
         for common_prefix in common_system_include_error_prefixes:
             if include_content.startswith(common_prefix):
                 include_content = '"' + include_content.strip()[1:-1] + '"'
-                include = include.split(' ')[0] + ' ' + include_content + '\n'
+                include = include.split(" ")[0] + " " + include_content + "\n"
                 break
 
         group_key = default_group_key
@@ -140,8 +143,9 @@ def print_sorted_includes(includes, file=sys.stdout):
             # remove duplicates
             if prev == include:
                 continue
-            print(include, end='', file=file)
+            print(include, end="", file=file)
             prev = include
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main(sys.argv)
