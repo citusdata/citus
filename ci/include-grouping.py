@@ -1,6 +1,14 @@
 #!/usr/bin/env python3
-# easy command line to run against all citus-style checked files
-# $ git ls-files | git check-attr --stdin citus-style | grep 'citus-style: set' | awk '{print $1}' | cut -d':' -f1 | xargs -n1 ./ci/include-grouping.py
+"""
+easy command line to run against all citus-style checked files:
+
+$ git ls-files \
+  | git check-attr --stdin citus-style \
+  | grep 'citus-style: set' \
+  | awk '{print $1}' \
+  | cut -d':' -f1 \
+  | xargs -n1 ./ci/include-grouping.py
+"""
 
 
 import os
@@ -61,7 +69,7 @@ def print_sorted_includes(includes, file=sys.stdout):
         },
         {
             "name": "naked postgres includes",
-            "matcher": lambda x: not "/" in x,
+            "matcher": lambda x: "/" not in x,
             "group_key": 0,
             "priority": 9,
         },
