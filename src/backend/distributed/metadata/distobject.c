@@ -55,6 +55,7 @@
 static char * CreatePgDistObjectEntryCommand(const ObjectAddress *objectAddress);
 static int ExecuteCommandAsSuperuser(char *query, int paramCount, Oid *paramTypes,
 									 Datum *paramValues);
+static bool IsObjectDistributed(const ObjectAddress *address);
 
 PG_FUNCTION_INFO_V1(citus_unmark_object_distributed);
 PG_FUNCTION_INFO_V1(master_unmark_object_distributed);
@@ -358,8 +359,12 @@ ExecuteCommandAsSuperuser(char *query, int paramCount, Oid *paramTypes,
 }
 
 
+/*
+ * Deletes all pg_dist_object records for distributed roles in `DROP ROLE` statement a
+ * and for all databases in `DROP DATABASE` statement
+ */
 void
-UnmarkRolesAndDatabaseDistributed(Node *node)
+UnmarkNodeWideObjectsDistributed(Node *node)
 {
 	if (IsA(node, DropRoleStmt))
 	{
@@ -378,9 +383,9 @@ UnmarkRolesAndDatabaseDistributed(Node *node)
 		char *dbName = stmt->dbname;
 
 		Oid dbOid = get_database_oid(dbName, stmt->missing_ok);
-		ObjectAddress *dbAddress = palloc0(sizeof(ObjectAddress));
-		ObjectAddressSet(*dbAddress, DatabaseRelationId, dbOid);
-		UnmarkObjectDistributed(dbAddress);
+		ObjectAddress *dbObjectAddress = palloc0(sizeof(ObjectAddress));
+		ObjectAddressSet(*dbObjectAddress, DatabaseRelationId, dbOid);
+		UnmarkObjectDistributed(dbObjectAddress);
 	}
 }
 
@@ -420,7 +425,7 @@ UnmarkObjectDistributed(const ObjectAddress *address)
  * IsObjectDistributed returns if the object addressed is already distributed in the
  * cluster. This performs a local indexed lookup in pg_dist_object.
  */
-bool
+static bool
 IsObjectDistributed(const ObjectAddress *address)
 {
 	ScanKeyData key[3];

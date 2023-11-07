@@ -21,13 +21,12 @@
 extern bool ObjectExists(const ObjectAddress *address);
 extern bool CitusExtensionObject(const ObjectAddress *objectAddress);
 extern bool IsAnyObjectDistributed(const List *addresses);
-extern bool IsObjectDistributed(const ObjectAddress *address);
 extern bool ClusterHasDistributedFunctionWithDistArgument(void);
 extern void MarkObjectDistributed(const ObjectAddress *distAddress);
 extern void MarkObjectDistributedViaSuperUser(const ObjectAddress *distAddress);
 extern void MarkObjectDistributedLocally(const ObjectAddress *distAddress);
 extern void UnmarkObjectDistributed(const ObjectAddress *address);
-extern void UnmarkRolesAndDatabaseDistributed(Node *node);
+extern void UnmarkNodeWideObjectsDistributed(Node *node);
 extern bool IsTableOwnedByExtension(Oid relationId);
 extern bool ObjectAddressDependsOnExtension(const ObjectAddress *target);
 extern bool IsAnyObjectAddressOwnedByExtension(const List *targets,

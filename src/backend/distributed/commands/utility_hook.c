@@ -25,7 +25,6 @@
  *-------------------------------------------------------------------------
  */
 
-#include "distributed/pg_version_constants.h"
 
 #include "postgres.h"
 #include "miscadmin.h"
@@ -35,6 +34,7 @@
 #include "access/htup_details.h"
 #include "catalog/catalog.h"
 #include "catalog/dependency.h"
+#include "catalog/pg_database.h"
 #include "citus_version.h"
 #include "commands/dbcommands.h"
 #include "commands/defrem.h"
@@ -62,6 +62,7 @@
 #include "distributed/multi_executor.h"
 #include "distributed/multi_explain.h"
 #include "distributed/multi_physical_planner.h"
+#include "distributed/pg_version_constants.h"
 #include "distributed/reference_table_utils.h"
 #include "distributed/resource_lock.h"
 #include "distributed/string_utils.h"
@@ -80,7 +81,6 @@
 #include "utils/inval.h"
 #include "utils/lsyscache.h"
 #include "utils/syscache.h"
-#include "catalog/pg_database.h"
 
 
 bool EnableDDLPropagation = true; /* ddl propagation is enabled */
@@ -579,7 +579,6 @@ citus_ProcessUtilityInternal(PlannedStmt *pstmt,
 		PreprocessLockStatement((LockStmt *) parsetree, context);
 	}
 
-
 	/*
 	 * We only process ALTER TABLE ... ATTACH PARTITION commands in the function below
 	 * and distribute the partition if necessary.
@@ -726,12 +725,13 @@ citus_ProcessUtilityInternal(PlannedStmt *pstmt,
 	}
 
 	/*
-	 * Make sure that dropping the role and database deletes the pg_dist_object entries. There is a
-	 * separate logic for roles and database, since roles and database are not included as dropped objects in the
-	 * drop event trigger. To handle it both on worker and coordinator nodes, it is not
-	 * implemented as a part of process functions but here.
+	 * Make sure that dropping node-wide objects deletes the pg_dist_object
+	 * entries. There is a separate logic for node-wide objects (such as role
+	 * and databases), since they are not included as dropped objects in the
+	 * drop event trigger. To handle it both on worker and coordinator nodes,
+	 * it is not implemented as a part of process functions but here.
 	 */
-	UnmarkRolesAndDatabaseDistributed(parsetree);
+	UnmarkNodeWideObjectsDistributed(parsetree);
 
 	pstmt->utilityStmt = parsetree;
 
@@ -1265,10 +1265,12 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 			{
 				ereport(WARNING,
 						(errmsg(
-							 "Commands that are not transaction-safe may result in partial failure"
-							 ", potentially leading to an inconsistent state.\nIf the problematic command"
-							 " is a CREATE operation, consider using the 'IF EXISTS' syntax to drop the "
-							 "object,\nif applicable, and then reattempt the original command.")));
+							 "Commands that are not transaction-safe may result in "
+							 "partial failure, potentially leading to an inconsistent "
+							 "state.\nIf the problematic command is a CREATE operation, "
+							 "consider using the 'IF EXISTS' syntax to drop the object,"
+							 "\nif applicable, and then re-attempt the original command.")));
+
 				PG_RE_THROW();
 			}
 		}
@@ -1483,12 +1485,12 @@ DDLTaskList(Oid relationId, const char *commandString)
 
 
 /*
- * NontransactionalNodeDDLTask builds a list of tasks to execute a DDL command on a
+ * NontransactionalNodeDDLTaskList builds a list of tasks to execute a DDL command on a
  * given target set of nodes with cannotBeExecutedInTransaction is set to make sure
- * that list is being executed without a transaction.
+ * that task list is executed outside a transaction block.
  */
 List *
-NontransactionalNodeDDLTask(TargetWorkerSet targets, List *commands)
+NontransactionalNodeDDLTaskList(TargetWorkerSet targets, List *commands)
 {
 	List *ddlJobs = NodeDDLTaskList(targets, commands);
 	DDLJob *ddlJob = NULL;

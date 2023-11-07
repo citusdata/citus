@@ -10,46 +10,53 @@
  */
 
 #include "postgres.h"
+#include "miscadmin.h"
 
+#include "access/heapam.h"
 #include "access/htup_details.h"
 #include "access/xact.h"
 #include "catalog/objectaddress.h"
+#include "catalog/pg_collation.h"
 #include "catalog/pg_database.h"
+#include "catalog/pg_database_d.h"
+#include "catalog/pg_tablespace.h"
 #include "commands/dbcommands.h"
-#include "miscadmin.h"
 #include "nodes/parsenodes.h"
-#include "utils/syscache.h"
 #include "utils/builtins.h"
+#include "utils/lsyscache.h"
+#include "utils/rel.h"
+#include "utils/relcache.h"
+#include "utils/syscache.h"
 
+#include "distributed/adaptive_executor.h"
 #include "distributed/commands.h"
 #include "distributed/commands/utility_hook.h"
+#include "distributed/deparse_shard_query.h"
 #include "distributed/deparser.h"
+#include "distributed/listutils.h"
+#include "distributed/metadata/distobject.h"
 #include "distributed/metadata_sync.h"
 #include "distributed/metadata_utility.h"
 #include "distributed/multi_executor.h"
 #include "distributed/relation_access_tracking.h"
-#include "distributed/worker_transaction.h"
-#include "distributed/deparser.h"
 #include "distributed/worker_protocol.h"
-#include "distributed/metadata/distobject.h"
-#include "distributed/deparse_shard_query.h"
-#include "distributed/listutils.h"
-#include "distributed/adaptive_executor.h"
-#include "access/htup_details.h"
-#include "catalog/pg_tablespace.h"
-#include "access/heapam.h"
-#include "utils/relcache.h"
-#include "utils/rel.h"
-#include "utils/lsyscache.h"
-#include "catalog/pg_collation.h"
-#include "utils/relcache.h"
-#include "catalog/pg_database_d.h"
+#include "distributed/worker_transaction.h"
 
+
+/*
+ * DatabaseCollationInfo is used to store collation related information of a database
+ */
+typedef struct DatabaseCollationInfo
+{
+	char *collation;
+	char *ctype;
+	#if PG_VERSION_NUM >= PG_VERSION_15
+	char *icu_locale;
+	char *collversion;
+	#endif
+} DatabaseCollationInfo;
 
 static AlterOwnerStmt * RecreateAlterDatabaseOwnerStmt(Oid databaseOid);
-
-
-PG_FUNCTION_INFO_V1(citus_internal_database_command);
 static Oid get_database_owner(Oid db_oid);
 List * PreprocessGrantOnDatabaseStmt(Node *node, const char *queryString,
 									 ProcessUtilityContext processUtilityContext);
@@ -264,6 +271,13 @@ PreprocessAlterDatabaseSetStmt(Node *node, const char *queryString,
 }
 
 
+/*
+ * PostprocessAlterDatabaseStmt is executed before the statement is applied to the local
+ * postgres instance.
+ *
+ * In this stage, we can perform validations and prepare the commands that need to
+ * be run on all workers to grant.
+ */
 List *
 PreprocessCreateDatabaseStmt(Node *node, const char *queryString,
 							 ProcessUtilityContext processUtilityContext)
@@ -304,82 +318,21 @@ PostprocessCreateDatabaseStmt(Node *node, const char *queryString)
 								(void *) createDatabaseCommand,
 								ENABLE_DDL_PROPAGATION);
 
-	return NontransactionalNodeDDLTask(NON_COORDINATOR_NODES, commands);
+	return NontransactionalNodeDDLTaskList(NON_COORDINATOR_NODES, commands);
 }
 
 
 /*
- * citus_internal_database_command is an internal UDF to
- * create/drop a database in an idempotent maner without
- * transaction block restrictions.
+ * PostprocessAlterDatabaseStmt is executed after the statement is applied to the local
+ * postgres instance. In this stage we can prepare the commands that need to be run on
+ * all workers to drop the database. Since the DROP DATABASE statement gives error in
+ * transaction context, we need to use NontransactionalNodeDDLTaskList to send the
+ * DROP DATABASE statement to the workers.
  */
-Datum
-citus_internal_database_command(PG_FUNCTION_ARGS)
-{
-	int saveNestLevel = NewGUCNestLevel();
-	text *commandText = PG_GETARG_TEXT_P(0);
-	char *command = text_to_cstring(commandText);
-	Node *parseTree = ParseTreeNode(command);
-
-	set_config_option("citus.enable_ddl_propagation", "off",
-					  (superuser() ? PGC_SUSET : PGC_USERSET), PGC_S_SESSION,
-					  GUC_ACTION_LOCAL, true, 0, false);
-
-	set_config_option("citus.enable_create_database_propagation", "off",
-					  (superuser() ? PGC_SUSET : PGC_USERSET), PGC_S_SESSION,
-					  GUC_ACTION_LOCAL, true, 0, false);
-
-	/*
-	 * createdb() / DropDatabase() uses ParseState to report the error position for the
-	 * input command and the position is reported to be 0 when it's provided as NULL.
-	 * We're okay with that because we don't expect this UDF to be called with an incorrect
-	 * DDL command.
-	 *
-	 */
-	ParseState *pstate = NULL;
-
-	if (IsA(parseTree, CreatedbStmt))
-	{
-		CreatedbStmt *stmt = castNode(CreatedbStmt, parseTree);
-
-		bool missingOk = true;
-		Oid databaseOid = get_database_oid(stmt->dbname, missingOk);
-
-		if (!OidIsValid(databaseOid))
-		{
-			createdb(pstate, (CreatedbStmt *) parseTree);
-		}
-	}
-	else if (IsA(parseTree, DropdbStmt))
-	{
-		DropdbStmt *stmt = castNode(DropdbStmt, parseTree);
-
-		bool missingOk = false;
-		Oid databaseOid = get_database_oid(stmt->dbname, missingOk);
-
-
-		if (OidIsValid(databaseOid))
-		{
-			DropDatabase(pstate, (DropdbStmt *) parseTree);
-		}
-	}
-	else
-	{
-		ereport(ERROR, (errmsg("unsupported command type %d", nodeTag(parseTree))));
-	}
-
-	/* Below command rollbacks flags to the state before this session*/
-	AtEOXact_GUC(true, saveNestLevel);
-
-	PG_RETURN_VOID();
-}
-
-
 List *
 PreprocessDropDatabaseStmt(Node *node, const char *queryString,
 						   ProcessUtilityContext processUtilityContext)
 {
-	bool isPostProcess = false;
 	if (!EnableCreateDatabasePropagation || !ShouldPropagate())
 	{
 		return NIL;
@@ -389,41 +342,50 @@ PreprocessDropDatabaseStmt(Node *node, const char *queryString,
 
 	DropdbStmt *stmt = (DropdbStmt *) node;
 
+	bool isPostProcess = false;
 	List *addresses = GetObjectAddressListFromParseTree(node, stmt->missing_ok,
 														isPostProcess);
 
-	if (list_length(addresses) == 0)
+	if (list_length(addresses) != 1)
 	{
-		return NIL;
+		ereport(ERROR, (errmsg("unexpected number of objects found when "
+							   "executing DROP DATABASE command")));
 	}
 
 	ObjectAddress *address = (ObjectAddress *) linitial(addresses);
-	if (address->objectId == InvalidOid || !IsObjectDistributed(address))
+	if (address->objectId == InvalidOid || !IsAnyObjectDistributed(list_make1(address)))
 	{
 		return NIL;
 	}
 
 	char *dropDatabaseCommand = DeparseTreeNode(node);
 
-
 	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
 								(void *) dropDatabaseCommand,
 								ENABLE_DDL_PROPAGATION);
 
-	return NontransactionalNodeDDLTask(NON_COORDINATOR_NODES, commands);
+	return NontransactionalNodeDDLTaskList(NON_COORDINATOR_NODES, commands);
 }
 
 
+/*
+ * GetDatabaseAddressFromDatabaseName gets the database name and returns the ObjectAddress
+ * of the database.
+ */
 static ObjectAddress *
 GetDatabaseAddressFromDatabaseName(char *databaseName, bool missingOk)
 {
 	Oid databaseOid = get_database_oid(databaseName, missingOk);
-	ObjectAddress *dbAddress = palloc0(sizeof(ObjectAddress));
-	ObjectAddressSet(*dbAddress, DatabaseRelationId, databaseOid);
-	return dbAddress;
+	ObjectAddress *dbObjectAddress = palloc0(sizeof(ObjectAddress));
+	ObjectAddressSet(*dbObjectAddress, DatabaseRelationId, databaseOid);
+	return dbObjectAddress;
 }
 
 
+/*
+ * DropDatabaseStmtObjectAddress gets the ObjectAddress of the database that is the
+ * object of the DropdbStmt.
+ */
 List *
 DropDatabaseStmtObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
 {
@@ -434,6 +396,10 @@ DropDatabaseStmtObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
 }
 
 
+/*
+ * CreateDatabaseStmtObjectAddress gets the ObjectAddress of the database that is the
+ * object of the CreatedbStmt.
+ */
 List *
 CreateDatabaseStmtObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
 {
@@ -444,6 +410,9 @@ CreateDatabaseStmtObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
 }
 
 
+/*
+ * GetTablespaceName gets the tablespace oid and returns the tablespace name.
+ */
 static char *
 GetTablespaceName(Oid tablespaceOid)
 {
@@ -461,19 +430,6 @@ GetTablespaceName(Oid tablespaceOid)
 	return tablespaceName;
 }
 
-
-/*
- * DatabaseCollationInfo is used to store collation related information of a database
- */
-typedef struct DatabaseCollationInfo
-{
-	char *collation;
-	char *ctype;
-	#if PG_VERSION_NUM >= PG_VERSION_15
-	char *icu_locale;
-	char *collversion;
-	#endif
-} DatabaseCollationInfo;
 
 /*
  * GetDatabaseCollation gets oid of a database and returns all the collation related information
@@ -548,6 +504,9 @@ GetDatabaseCollation(Oid db_oid)
 }
 
 
+/*
+ * FreeDatabaseCollationInfo frees the memory allocated for DatabaseCollationInfo
+ */
 static void
 FreeDatabaseCollationInfo(DatabaseCollationInfo collInfo)
 {
@@ -569,8 +528,13 @@ FreeDatabaseCollationInfo(DatabaseCollationInfo collInfo)
 
 
 #if PG_VERSION_NUM >= PG_VERSION_15
+
+/*
+ * GetLocaleProviderString gets the datlocprovider stored in pg_database
+ * and returns the string representation of the datlocprovider
+ */
 static char *
-get_locale_provider_string(char datlocprovider)
+GetLocaleProviderString(char datlocprovider)
 {
 	switch (datlocprovider)
 	{
@@ -599,7 +563,8 @@ get_locale_provider_string(char datlocprovider)
 
 
 /*
- * GenerateCreateDatabaseStatementFromPgDatabase is gets the pg_database tuple and returns the CREATE DATABASE statement
+ * GenerateCreateDatabaseStatementFromPgDatabase gets the pg_database tuple and returns the
+ * CREATE DATABASE statement that can be used to create given database.
  */
 static char *
 GenerateCreateDatabaseStatementFromPgDatabase(Form_pg_database databaseForm)
@@ -642,7 +607,7 @@ GenerateCreateDatabaseStatementFromPgDatabase(Form_pg_database databaseForm)
 
 	if (databaseForm->datlocprovider != 0)
 	{
-		appendStringInfo(&str, " LOCALE_PROVIDER = '%s'", get_locale_provider_string(
+		appendStringInfo(&str, " LOCALE_PROVIDER = '%s'", GetLocaleProviderString(
 							 databaseForm->datlocprovider));
 	}
 
@@ -678,19 +643,21 @@ GenerateCreateDatabaseStatementFromPgDatabase(Form_pg_database databaseForm)
 
 
 /*
- * GenerateCreateDatabaseCommandList is gets the pg_database tuples and returns the CREATE DATABASE statement list
- * for all the databases in the cluster.citus_internal_database_command UDF is used to send the CREATE DATABASE
- * statement to the workers since the CREATE DATABASE statement gives error in transaction context.
+ * GenerateCreateDatabaseCommandList gets a list of pg_database tuples and returns
+ * a list of CREATE DATABASE statements for all the databases.
+ *
+ * Commands in the list are wrapped by citus_internal_database_command() UDF
+ * to avoid from transaction block restrictions that apply to database commands
  */
 List *
 GenerateCreateDatabaseCommandList(void)
 {
 	List *commands = NIL;
-	HeapTuple tuple;
 
 	Relation pgDatabaseRel = table_open(DatabaseRelationId, AccessShareLock);
 	TableScanDesc scan = table_beginscan_catalog(pgDatabaseRel, 0, NULL);
 
+	HeapTuple tuple = NULL;
 	while ((tuple = heap_getnext(scan, ForwardScanDirection)) != NULL)
 	{
 		Form_pg_database databaseForm = (Form_pg_database) GETSTRUCT(tuple);
@@ -702,7 +669,7 @@ GenerateCreateDatabaseCommandList(void)
 
 		/* Generate the CREATE DATABASE statement */
 		appendStringInfo(outerDbStmt,
-						 "select pg_catalog.citus_internal_database_command( %s)",
+						 "SELECT pg_catalog.citus_internal_database_command( %s)",
 						 quote_literal_cstr(
 							 createStmt));
 

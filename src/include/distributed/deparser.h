@@ -123,12 +123,12 @@ extern void AppendGrantSharedSuffix(StringInfo buf, GrantStmt *stmt);
 
 /* Common deparser utils */
 
-struct option_format
+typedef struct DefElemOptionFormat
 {
-	const char *name;
-	const char *format;
-	const int type;
-};
+	char *name;
+	char *format;
+	int type;
+} DefElemOptionFormat;
 
 typedef enum OptionFormatType
 {
@@ -140,9 +140,9 @@ typedef enum OptionFormatType
 } OptionFormatType;
 
 
-extern void optionToStatement(StringInfo buf, DefElem *option, const struct
-							  option_format *opt_formats, int
-							  opt_formats_len);
+extern void DefElemOptionToStatement(StringInfo buf, DefElem *option, const
+									 DefElemOptionFormat *opt_formats, int
+									 opt_formats_len);
 
 
 /* forward declarations for deparse_statistics_stmts.c */
