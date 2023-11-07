@@ -1,0 +1,35 @@
+name: setup_extension
+inputs:
+  pg_major:
+    required: false
+  skip_installation:
+    required: false
+    default: false
+    type: boolean
+runs:
+  using: composite
+  steps:
+  - name: Expose $PG_MAJOR to Github Env
+    run: |-
+        if [ -z "${{ inputs.pg_major }}" ]; then
+          echo "PG_MAJOR=${PG_MAJOR}" >> $GITHUB_ENV
+        else
+          echo "PG_MAJOR=${{ inputs.pg_major }}" >> $GITHUB_ENV
+        fi
+    shell: bash
+  - uses: actions/download-artifact@v3.0.1
+    with:
+      name: build-${{ env.PG_MAJOR }}
+  - name: Install Extension
+    if: ${{ inputs.skip_installation == 'false' }}
+    run: tar xfv "install-$PG_MAJOR.tar" --directory /
+    shell: bash
+  - name: Configure
+    run: |-
+      chown -R circleci .
+      git config --global --add safe.directory ${GITHUB_WORKSPACE}
+      gosu circleci ./configure --without-pg-version-check
+    shell: bash
+  - name: Enable core dumps
+    run: ulimit -c unlimited
+    shell: bash
