@@ -669,7 +669,7 @@ GenerateCreateDatabaseCommandList(void)
 
 		/* Generate the CREATE DATABASE statement */
 		appendStringInfo(outerDbStmt,
-						 "SELECT pg_catalog.citus_internal_database_command( %s)",
+						 "SELECT pg_catalog.citus_internal_database_command(%s)",
 						 quote_literal_cstr(
 							 createStmt));
 
