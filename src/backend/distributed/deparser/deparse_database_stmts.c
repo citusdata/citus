@@ -252,7 +252,7 @@ DeparseAlterDatabaseSetStmt(Node *node)
 
 
 /*
- *  Validates for if option is template, lc_type, locale or lc_collate, propagation will
+ * Validates for if option is template, lc_type, locale or lc_collate, propagation will
  * not be supported since template and strategy options are not stored in the catalog
  * and lc_type, locale and lc_collate options depends on template parameter.
  */

@@ -256,7 +256,6 @@ PreprocessAlterDatabaseSetStmt(Node *node, const char *queryString,
 		return NIL;
 	}
 
-
 	AlterDatabaseSetStmt *stmt = castNode(AlterDatabaseSetStmt, node);
 
 	EnsureCoordinator();
