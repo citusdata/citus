@@ -90,7 +90,7 @@ SELECT create_distributed_table('failover_to_local', 'a', shard_count=>32);
 CREATE INDEX CONCURRENTLY ON failover_to_local(a);
 WARNING:  Commands that are not transaction-safe may result in partial failure, potentially leading to an inconsistent state.
 If the problematic command is a CREATE operation, consider using the 'IF EXISTS' syntax to drop the object,
-if applicable, and then reattempt the original command.
+if applicable, and then re-attempt the original command.
 ERROR:  the total number of connections on the server is more than max_connections(100)
 HINT:  Consider using a higher value for max_connections
 -- reset global GUC changes
