@@ -45,6 +45,8 @@ SET citus.log_local_commands to on;
 -- INSERT .. SELECT via repartitioning with local execution
 BEGIN;
     select count(*) from source_table WHERE a = 1;
+    -- we omit the "SELECT bytes FROM fetch_intermediate_results..." line since it is flaky
+    SET LOCAL citus.grep_remote_commands TO '%multi_mx_insert_select_repartition%';
     insert into target_table SELECT a*2 FROM source_table RETURNING a;
 ROLLBACK;
 
