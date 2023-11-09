@@ -11,17 +11,6 @@ SELECT citus_remove_node('localhost', :worker_2_port);
 
 (1 row)
 
--- now we register a label provider
-CREATE FUNCTION citus_test_register_label_provider()
-  RETURNS void
-  LANGUAGE C
-  AS 'citus', $$citus_test_register_label_provider$$;
-SELECT citus_test_register_label_provider();
- citus_test_register_label_provider
----------------------------------------------------------------------
-
-(1 row)
-
 CREATE ROLE user1;
 -- check an invalid label for our current dummy hook citus_test_object_relabel
 SECURITY LABEL ON ROLE user1 IS 'invalid_label';
@@ -29,25 +18,14 @@ ERROR:  'invalid_label' is not a valid security label for Citus tests.
 -- if we disable metadata_sync, the command will not be propagated
 SET citus.enable_metadata_sync TO off;
 SECURITY LABEL ON ROLE user1 IS 'citus_unclassified';
-SELECT objtype, objname, provider, label FROM pg_seclabels;
- objtype | objname |          provider          |       label
+SELECT node_type, result FROM get_citus_tests_label_provider_labels('user1');
+  node_type  |                       result
 ---------------------------------------------------------------------
- role    | user1   | citus_tests_label_provider | citus_unclassified
-(1 row)
+ coordinator | {"label": "citus_unclassified", "objtype": "role"}
+ worker_1    |
+(2 rows)
 
-\c - - - :worker_1_port
-SELECT objtype, objname, provider, label FROM pg_seclabels;
- objtype | objname | provider | label
----------------------------------------------------------------------
-(0 rows)
-
-\c - - - :master_port
-SELECT citus_test_register_label_provider();
- citus_test_register_label_provider
----------------------------------------------------------------------
-
-(1 row)
-
+RESET citus.enable_metadata_sync;
 -- check that we only support propagating for roles
 SET citus.shard_replication_factor to 1;
 CREATE TABLE a (a int);
@@ -60,52 +38,14 @@ SELECT create_distributed_table('a', 'a');
 SECURITY LABEL ON TABLE a IS 'citus_classified';
 NOTICE:  not propagating SECURITY LABEL commands whose object type is not role
 HINT:  Connect to worker nodes directly to manually run the same SECURITY LABEL command after disabling DDL propagation.
+SELECT node_type, result FROM get_citus_tests_label_provider_labels('a');
+  node_type  |                      result
+---------------------------------------------------------------------
+ coordinator | {"label": "citus_classified", "objtype": "table"}
+ worker_1    |
+(2 rows)
+
 DROP TABLE a;
--- the registered label provider is per session only
--- this means that we need to maintain the same connection to the worker node
--- in order for the label provider to be visible there
--- hence here we create the necessary session_level_connection_to_node functions
-SET citus.enable_metadata_sync TO off;
-CREATE OR REPLACE FUNCTION start_session_level_connection_to_node(text, integer)
-        RETURNS void
-        LANGUAGE C STRICT VOLATILE
-        AS 'citus', $$start_session_level_connection_to_node$$;
-CREATE OR REPLACE FUNCTION override_backend_data_gpid(bigint)
-        RETURNS void
-        LANGUAGE C STRICT IMMUTABLE
-        AS 'citus', $$override_backend_data_gpid$$;
-SELECT run_command_on_workers($$SET citus.enable_metadata_sync TO off;CREATE OR REPLACE FUNCTION override_backend_data_gpid(bigint)
-        RETURNS void
-        LANGUAGE C STRICT IMMUTABLE
-        AS 'citus'$$);
- run_command_on_workers
----------------------------------------------------------------------
- (localhost,57637,t,SET)
-(1 row)
-
-CREATE OR REPLACE FUNCTION run_commands_on_session_level_connection_to_node(text)
-        RETURNS void
-        LANGUAGE C STRICT VOLATILE
-        AS 'citus', $$run_commands_on_session_level_connection_to_node$$;
-CREATE OR REPLACE FUNCTION stop_session_level_connection_to_node()
-        RETURNS void
-        LANGUAGE C STRICT VOLATILE
-        AS 'citus', $$stop_session_level_connection_to_node$$;
-RESET citus.enable_metadata_sync;
--- now we establish a connection to the worker node
-SELECT start_session_level_connection_to_node('localhost', :worker_1_port);
- start_session_level_connection_to_node
----------------------------------------------------------------------
-
-(1 row)
-
--- with that same connection, we register the label provider in the worker node
-SELECT run_commands_on_session_level_connection_to_node('SELECT citus_test_register_label_provider()');
- run_commands_on_session_level_connection_to_node
----------------------------------------------------------------------
-
-(1 row)
-
 SET citus.log_remote_commands TO on;
 SET citus.grep_remote_commands = '%SECURITY LABEL%';
 -- then we run a security label statement which will use the same connection to the worker node
@@ -120,20 +60,13 @@ SECURITY LABEL for citus_tests_label_provider ON ROLE user1 IS 'citus_unclassifi
 NOTICE:  issuing SECURITY LABEL FOR citus_tests_label_provider ON ROLE user1 IS 'citus_unclassified'
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 RESET citus.log_remote_commands;
-SELECT stop_session_level_connection_to_node();
- stop_session_level_connection_to_node
+SELECT node_type, result FROM get_citus_tests_label_provider_labels('user1');
+  node_type  |                       result
 ---------------------------------------------------------------------
+ coordinator | {"label": "citus_unclassified", "objtype": "role"}
+ worker_1    | {"label": "citus_unclassified", "objtype": "role"}
+(2 rows)
 
-(1 row)
-
-\c - - - :worker_1_port
-SELECT objtype, objname, provider, label FROM pg_seclabels;
- objtype | objname |          provider          |       label
----------------------------------------------------------------------
- role    | user1   | citus_tests_label_provider | citus_unclassified
-(1 row)
-
-\c - - - :master_port
 -- adding a new node will fail because the label provider is not there
 -- however, this is enough for testing as we can see that the SECURITY LABEL commands
 -- will be propagated when adding a new node
@@ -142,24 +75,19 @@ SET citus.grep_remote_commands = '%SECURITY LABEL%';
 SELECT 1 FROM citus_add_node('localhost', :worker_2_port);
 NOTICE:  issuing SELECT worker_create_or_alter_role('user1', 'CREATE ROLE user1 NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT NOLOGIN NOREPLICATION NOBYPASSRLS CONNECTION LIMIT -1 PASSWORD NULL VALID UNTIL ''infinity''', 'ALTER ROLE user1 NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT NOLOGIN NOREPLICATION NOBYPASSRLS CONNECTION LIMIT -1 PASSWORD NULL VALID UNTIL ''infinity''');SECURITY LABEL FOR citus_tests_label_provider ON ROLE user1 IS 'citus_unclassified'
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-WARNING:  security label provider "citus_tests_label_provider" is not loaded
-CONTEXT:  while executing command on localhost:xxxxx
-ERROR:  failure on connection marked as essential: localhost:xxxxx
--- cleanup
-RESET citus.log_remote_commands;
-DROP FUNCTION stop_session_level_connection_to_node, run_commands_on_session_level_connection_to_node,
-              override_backend_data_gpid, start_session_level_connection_to_node;
-SELECT run_command_on_workers($$ DROP FUNCTION override_backend_data_gpid $$);
-       run_command_on_workers
----------------------------------------------------------------------
- (localhost,57637,t,"DROP FUNCTION")
-(1 row)
-
-DROP FUNCTION citus_test_register_label_provider;
-DROP ROLE user1;
-SELECT 1 FROM citus_add_node('localhost', :worker_2_port);
  ?column?
 ---------------------------------------------------------------------
         1
 (1 row)
 
+SELECT node_type, result FROM get_citus_tests_label_provider_labels('user1');
+  node_type  |                       result
+---------------------------------------------------------------------
+ coordinator | {"label": "citus_unclassified", "objtype": "role"}
+ worker_1    | {"label": "citus_unclassified", "objtype": "role"}
+ worker_2    | {"label": "citus_unclassified", "objtype": "role"}
+(3 rows)
+
+-- cleanup
+RESET citus.log_remote_commands;
+DROP ROLE user1;

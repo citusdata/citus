@@ -11,7 +11,6 @@
 
 #include "postgres.h"
 
-#include "commands/seclabel.h"
 #include "distributed/commands.h"
 #include "distributed/commands/utility_hook.h"
 #include "distributed/coordinator_protocol.h"
@@ -19,22 +18,6 @@
 #include "distributed/log_utils.h"
 #include "distributed/metadata_sync.h"
 #include "distributed/metadata/distobject.h"
-
-
-PG_FUNCTION_INFO_V1(citus_test_register_label_provider);
-
-
-/*
- * citus_test_register_label_provider registers a dummy label provider
- * named 'citus_tests_label_provider'. This is aimed to be used for testing.
- */
-Datum
-citus_test_register_label_provider(PG_FUNCTION_ARGS)
-{
-	register_label_provider("citus_tests_label_provider", citus_test_object_relabel);
-	PG_RETURN_VOID();
-}
-
 
 /*
  * PreprocessSecLabelStmt is executed before the statement is applied to the local
@@ -54,7 +37,7 @@ PreprocessSecLabelStmt(Node *node, const char *queryString,
 
 	SecLabelStmt *secLabelStmt = castNode(SecLabelStmt, node);
 
-	List *objectAddresses = GetObjectAddressListFromParseTree(node, false, false);
+	List *objectAddresses = GetObjectAddressListFromParseTree(node, false, true);
 	if (!IsAnyObjectDistributed(objectAddresses))
 	{
 		return NIL;
@@ -64,11 +47,11 @@ PreprocessSecLabelStmt(Node *node, const char *queryString,
 	{
 		if (EnableUnsupportedFeatureMessages)
 		{
-			ereport(NOTICE, (errmsg("not propagating SECURITY LABEL commands whose"
-									" object type is not role"),
-							 errhint(
-								 "Connect to worker nodes directly to manually run the same"
-								 " SECURITY LABEL command after disabling DDL propagation.")));
+			ereport(NOTICE, (errmsg("not propagating SECURITY LABEL commands whose "
+									"object type is not role"),
+							 errhint("Connect to worker nodes directly to manually "
+									 "run the same SECURITY LABEL command after "
+									 "disabling DDL propagation.")));
 		}
 		return NIL;
 	}

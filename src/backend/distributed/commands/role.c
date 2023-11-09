@@ -570,7 +570,13 @@ GenerateCreateOrAlterRoleCommand(Oid roleOid)
 			completeRoleList = lappend(completeRoleList, DeparseTreeNode(stmt));
 		}
 
-		/* append SECURITY LABEL ON ROLE commands fot this specific user */
+		/*
+		 * append SECURITY LABEL ON ROLE commands for this specific user
+		 * When we propagate user creation, we also want to make sure that we propagate
+		 * all the security labels it has been given. For this, we check pg_shseclabel
+		 * for the ROLE entry corresponding to roleOid, and generate the relevant
+		 * SecLabel stmts to be run in the new node.
+		 */
 		List *secLabelOnRoleStmts = GenerateSecLabelOnRoleStmts(roleOid, rolename);
 		stmt = NULL;
 		foreach_ptr(stmt, secLabelOnRoleStmts)
@@ -913,8 +919,6 @@ GenerateGrantRoleStmtsOfRole(Oid roleid)
 static List *
 GenerateSecLabelOnRoleStmts(Oid roleid, char *rolename)
 {
-	ScanKeyData skey[1];
-	HeapTuple tuple = NULL;
 	List *secLabelStmts = NIL;
 
 	/*
@@ -922,11 +926,13 @@ GenerateSecLabelOnRoleStmts(Oid roleid, char *rolename)
 	 * security labels are stored in pg_shseclabel instead of pg_seclabel.
 	 */
 	Relation pg_shseclabel = table_open(SharedSecLabelRelationId, AccessShareLock);
+	ScanKeyData skey[1];
 	ScanKeyInit(&skey[0], Anum_pg_shseclabel_objoid, BTEqualStrategyNumber, F_OIDEQ,
 				ObjectIdGetDatum(roleid));
 	SysScanDesc scan = systable_beginscan(pg_shseclabel, SharedSecLabelObjectIndexId,
 										  true, NULL, 1, &skey[0]);
 
+	HeapTuple tuple = NULL;
 	while (HeapTupleIsValid(tuple = systable_getnext(scan)))
 	{
 		SecLabelStmt *secLabelStmt = makeNode(SecLabelStmt);
