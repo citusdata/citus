@@ -393,9 +393,9 @@ This script checks and fixes issues with include grouping and sorting in C files
 Includes are grouped in the following groups:
  - System includes (eg. `#include <math>`)
  - Postgres.h include (eg. `#include "postgres.h"`)
- - Naked postgres includes (includes not in a directory eg. `#include "miscadmin.h`)
+ - Toplevel postgres includes (includes not in a directory eg. `#include "miscadmin.h`)
  - Postgres includes in a directory (eg. `#include "catalog/pg_type.h"`)
- - Naked citus includes (eg. `#include "pg_version_constants.h"`)
+ - Toplevel citus includes (includes not in a directory eg. `#include "pg_version_constants.h"`)
  - Columnar includes (eg. `#include "columnar/columnar.h"`)
  - Distributed includes (eg. `#include "distributed/maintenanced.h"`)
 

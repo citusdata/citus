@@ -68,7 +68,7 @@ def print_sorted_includes(includes, file=sys.stdout):
             "priority": 0,
         },
         {
-            "name": "naked postgres includes",
+            "name": "toplevel postgres includes",
             "matcher": lambda x: "/" not in x,
             "group_key": 0,
             "priority": 9,
@@ -80,7 +80,7 @@ def print_sorted_includes(includes, file=sys.stdout):
             "priority": -1,
         },
         {
-            "name": "naked citus inlcudes",
+            "name": "toplevel citus inlcudes",
             "list": [
                 '"citus_version.h"',
                 '"pg_version_compat.h"',
