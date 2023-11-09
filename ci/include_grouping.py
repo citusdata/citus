@@ -81,7 +81,11 @@ def print_sorted_includes(includes, file=sys.stdout):
         },
         {
             "name": "naked citus inlcudes",
-            "list": ['"citus_version.h"', '"pg_version_compat.h"', '"pg_version_constants.h"'],
+            "list": [
+                '"citus_version.h"',
+                '"pg_version_compat.h"',
+                '"pg_version_constants.h"',
+            ],
             "group_key": 3,
             "priority": 0,
         },
