@@ -10,7 +10,7 @@
  */
 #include "postgres.h"
 
-#include "distributed/pg_version_constants.h"
+#include "pg_version_constants.h"
 
 #include "distributed/colocation_utils.h"
 #include "distributed/distributed_planner.h"

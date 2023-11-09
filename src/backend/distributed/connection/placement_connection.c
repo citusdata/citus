@@ -11,7 +11,7 @@
 
 #include "postgres.h"
 
-#include "distributed/pg_version_constants.h"
+#include "pg_version_constants.h"
 
 #include "access/hash.h"
 #include "distributed/colocation_utils.h"

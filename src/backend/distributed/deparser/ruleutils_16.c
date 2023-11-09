@@ -14,7 +14,7 @@
  * This needs to be closely in sync with the core code.
  *-------------------------------------------------------------------------
  */
-#include "distributed/pg_version_constants.h"
+#include "pg_version_constants.h"
 
 #include "pg_config.h"
 

@@ -52,7 +52,7 @@
 #include <netinet/in.h> /* for htons */
 #include <string.h>
 
-#include "distributed/pg_version_constants.h"
+#include "pg_version_constants.h"
 
 #include "access/htup_details.h"
 #include "access/htup.h"

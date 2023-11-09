@@ -18,7 +18,7 @@
  * it otherwise we get warnings about redefining this value. This needs to be
  * done before including libpq.h.
  */
-#include "distributed/pg_version_constants.h"
+#include "pg_version_constants.h"
 
 #include "distributed/connection_management.h"
 #include "distributed/memutils.h"
