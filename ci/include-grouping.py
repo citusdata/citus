@@ -81,26 +81,20 @@ def print_sorted_includes(includes, file=sys.stdout):
         },
         {
             "name": "naked citus inlcudes",
-            "list": ['"citus_version.h"', '"pg_version_compat.h"'],
+            "list": ['"citus_version.h"', '"pg_version_compat.h"', '"pg_version_constants.h"'],
             "group_key": 3,
-            "priority": 0,
-        },
-        {
-            "name": "positional citus includes",
-            "list": ['"distributed/pg_version_constants.h"'],
-            "group_key": 4,
             "priority": 0,
         },
         {
             "name": "columnar includes",
             "matcher": lambda x: x.startswith('"columnar/'),
-            "group_key": 5,
+            "group_key": 4,
             "priority": 1,
         },
         {
             "name": "distributed includes",
             "matcher": lambda x: x.startswith('"distributed/'),
-            "group_key": 6,
+            "group_key": 5,
             "priority": 1,
         },
     ]
