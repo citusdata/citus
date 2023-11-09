@@ -10,7 +10,7 @@
 #ifndef RECURSIVE_PLANNING_H
 #define RECURSIVE_PLANNING_H
 
-#include "distributed/pg_version_constants.h"
+#include "pg_version_constants.h"
 #include "distributed/errormessage.h"
 #include "distributed/log_utils.h"
 #include "distributed/relation_restriction_equivalence.h"

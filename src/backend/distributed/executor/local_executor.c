@@ -78,7 +78,7 @@
 #include "postgres.h"
 #include "miscadmin.h"
 
-#include "distributed/pg_version_constants.h"
+#include "pg_version_constants.h"
 
 #include "distributed/adaptive_executor.h"
 #include "distributed/commands/utility_hook.h"

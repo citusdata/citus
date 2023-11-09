@@ -17,7 +17,7 @@
 #include "commands/defrem.h"
 #include "distributed/commands.h"
 #include "distributed/connection_management.h"
-#include "distributed/pg_version_constants.h"
+#include "pg_version_constants.h"
 #include "distributed/version_compat.h"
 #include "libpq-fe.h"
 #include "nodes/parsenodes.h"
