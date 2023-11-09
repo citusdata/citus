@@ -1,6 +1,6 @@
 ### citus v12.1.1 (November 9, 2023) ###
 
-* Fixes leaking of memory and memory contexts in Foreign Constraint Graphs
+* Fixes leaking of memory and memory contexts in Citus foreign key cache
   (#7219)
 
 * Makes sure to disallow creating a replicated distributed table concurrently
