@@ -231,7 +231,7 @@ delete from local_vacuum_table;
 VACUUM local_vacuum_table;
 VACUUM local_vacuum_table;
 VACUUM local_vacuum_table;
-SELECT CASE WHEN s BETWEEN 20000000 AND 49999999 THEN 35000000 ELSE s END size
+SELECT CASE WHEN s BETWEEN 20000000 AND 25000000 THEN 22500000 ELSE s END
 FROM pg_total_relation_size('local_vacuum_table') s ;
 
 -- vacuum full deallocates pages of dead tuples whereas normal vacuum only marks dead tuples on visibility map
