@@ -7,6 +7,7 @@
  *
  *-------------------------------------------------------------------------
  */
+#include "postgres.h"
 
 #include "distributed/replication_origin_session_utils.h"
 #include "distributed/remote_commands.h"

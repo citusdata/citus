@@ -11,6 +11,7 @@
  *
  *-------------------------------------------------------------------------
  */
+#include "postgres.h"
 
 #include "distributed/citus_custom_scan.h"
 #include "distributed/citus_ruleutils.h"
