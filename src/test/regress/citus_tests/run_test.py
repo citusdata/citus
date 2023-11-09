@@ -125,7 +125,6 @@ DEPS = {
     "multi_mx_create_table": TestDeps(
         None,
         [
-            "multi_test_helpers_superuser",
             "multi_mx_node_metadata",
             "multi_cluster_management",
             "multi_mx_function_table_reference",
@@ -176,6 +175,38 @@ DEPS = {
     "grant_on_schema_propagation": TestDeps("minimal_schedule"),
     "propagate_extension_commands": TestDeps("minimal_schedule"),
     "multi_size_queries": TestDeps("base_schedule", ["multi_copy"]),
+    "multi_mx_node_metadata": TestDeps(
+        None,
+        [
+            "multi_extension",
+            "multi_test_helpers",
+            "multi_test_helpers_superuser",
+        ],
+    ),
+    "multi_mx_function_table_reference": TestDeps(
+        None,
+        [
+            "multi_cluster_management",
+            "remove_coordinator_from_metadata",
+        ],
+        # because it queries node group id and it changes as we add / remove nodes
+        repeatable=False,
+    ),
+    "multi_mx_add_coordinator": TestDeps(
+        None,
+        [
+            "multi_cluster_management",
+            "remove_coordinator_from_metadata",
+            "multi_mx_function_table_reference",
+        ],
+    ),
+    "metadata_sync_helpers": TestDeps(
+        None,
+        [
+            "multi_mx_node_metadata",
+            "multi_cluster_management",
+        ],
+    ),
 }
 
 

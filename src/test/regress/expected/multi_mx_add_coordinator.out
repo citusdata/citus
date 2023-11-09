@@ -124,7 +124,7 @@ NOTICE:  executing the command locally: SELECT count(*) AS count FROM mx_add_coo
      0
 (1 row)
 
--- test that distributed functions also use local execution
+-- test that distributed functions also use sequential execution
 CREATE OR REPLACE FUNCTION my_group_id()
 RETURNS void
 LANGUAGE plpgsql
@@ -365,5 +365,6 @@ SELECT verify_metadata('localhost', :worker_1_port),
 
 SET client_min_messages TO error;
 DROP SCHEMA mx_add_coordinator CASCADE;
+DROP USER reprefuser;
 SET search_path TO DEFAULT;
 RESET client_min_messages;

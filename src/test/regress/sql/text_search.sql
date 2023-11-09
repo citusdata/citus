@@ -199,9 +199,9 @@ SELECT * FROM run_command_on_workers($$ SELECT 'text_search.config1'::regconfig;
 SELECT * FROM run_command_on_workers($$ SELECT 'text_search.config2'::regconfig; $$) ORDER BY 1,2;
 SELECT * FROM run_command_on_workers($$ SELECT 'text_search.config3'::regconfig; $$) ORDER BY 1,2;
 -- verify they are all removed locally
-SELECT 'text_search.config1'::regconfig;
-SELECT 'text_search.config2'::regconfig;
-SELECT 'text_search.config3'::regconfig;
+SELECT 1 FROM pg_ts_config WHERE cfgname = 'config1' AND cfgnamespace = 'text_search'::regnamespace;
+SELECT 1 FROM pg_ts_config WHERE cfgname = 'config2' AND cfgnamespace = 'text_search'::regnamespace;
+SELECT 1 FROM pg_ts_config WHERE cfgname = 'config3' AND cfgnamespace = 'text_search'::regnamespace;
 
 -- verify that indexes created concurrently that would propagate a TEXT SEARCH CONFIGURATION object
 SET citus.enable_ddl_propagation TO off;
@@ -235,7 +235,7 @@ CREATE TEXT SEARCH CONFIGURATION text_search.manually_created_wrongly ( copy = f
 
 -- now we expect manually_created_wrongly(citus_backup_XXX) to show up when querying the configurations
 SELECT * FROM run_command_on_workers($$
-    SELECT array_agg(cfgname) FROM pg_ts_config WHERE cfgname LIKE 'manually_created_wrongly%';
+    SELECT array_agg(cfgname ORDER BY cfgname) FROM pg_ts_config WHERE cfgname LIKE 'manually_created_wrongly%';
 $$) ORDER BY 1,2;
 
 -- verify the objects get reused appropriately when the specification is the same
@@ -249,7 +249,7 @@ CREATE TEXT SEARCH CONFIGURATION text_search.manually_created_correct ( copy = f
 -- now we don't expect manually_created_correct(citus_backup_XXX) to show up when querying the configurations as the
 -- original one is reused
 SELECT * FROM run_command_on_workers($$
-    SELECT array_agg(cfgname) FROM pg_ts_config WHERE cfgname LIKE 'manually_created_correct%';
+    SELECT array_agg(cfgname ORDER BY cfgname) FROM pg_ts_config WHERE cfgname LIKE 'manually_created_correct%';
 $$) ORDER BY 1,2;
 
 CREATE SCHEMA "Text Search Requiring Quote's";

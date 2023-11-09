@@ -567,7 +567,7 @@ LogLocalCommand(Task *task)
  *
  * One slightly different case is modifications to replicated tables
  * (e.g., reference tables) where a single task ends in two separate tasks
- * and the local task is added to localTaskList and the remaning ones to
+ * and the local task is added to localTaskList and the remaining ones to
  * the remoteTaskList.
  */
 void
