@@ -21,7 +21,7 @@
 #include "miscadmin.h"
 #include "funcapi.h"
 
-#include "distributed/pg_version_constants.h"
+#include "pg_version_constants.h"
 
 #include "access/genam.h"
 #include "access/htup_details.h"

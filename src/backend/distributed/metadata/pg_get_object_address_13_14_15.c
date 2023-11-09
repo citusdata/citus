@@ -24,7 +24,7 @@
 #include "distributed/citus_safe_lib.h"
 #include "distributed/metadata/dependency.h"
 #include "distributed/metadata/distobject.h"
-#include "distributed/pg_version_constants.h"
+#include "pg_version_constants.h"
 #include "distributed/version_compat.h"
 #include "nodes/value.h"
 #include "utils/array.h"

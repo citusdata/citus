@@ -11,7 +11,7 @@
 #include "postgres.h"
 
 #include "distributed/commands.h"
-#include "distributed/pg_version_constants.h"
+#include "pg_version_constants.h"
 
 #include "access/genam.h"
 #include "access/heapam.h"

@@ -13,7 +13,7 @@
 
 #include "postgres.h"
 
-#include "distributed/pg_version_constants.h"
+#include "pg_version_constants.h"
 #if PG_VERSION_NUM >= PG_VERSION_16
 #include "parser/parse_relation.h"
 #endif

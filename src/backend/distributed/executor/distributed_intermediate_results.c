@@ -8,7 +8,7 @@
  *-------------------------------------------------------------------------
  */
 
-#include "distributed/pg_version_constants.h"
+#include "pg_version_constants.h"
 
 #include <sys/stat.h>
 #include <unistd.h>

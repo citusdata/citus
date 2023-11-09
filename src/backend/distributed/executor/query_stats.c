@@ -15,7 +15,7 @@
 
 #include "miscadmin.h"
 
-#include "distributed/pg_version_constants.h"
+#include "pg_version_constants.h"
 
 #include "access/hash.h"
 #include "catalog/pg_authid.h"

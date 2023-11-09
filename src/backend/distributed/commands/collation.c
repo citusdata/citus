@@ -27,7 +27,7 @@
 #include "distributed/multi_executor.h"
 #include "distributed/relation_access_tracking.h"
 #include "distributed/worker_create_or_replace.h"
-#include "distributed/pg_version_constants.h"
+#include "pg_version_constants.h"
 #include "distributed/worker_manager.h"
 #include "parser/parse_type.h"
 #include "utils/builtins.h"
