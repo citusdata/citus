@@ -434,7 +434,7 @@ jobs:
     - name: Detect regression tests need to be ran
       id: detect-regression-tests
       run: |-
-        detected_changes=$(git diff origin/12.0... --name-only --diff-filter=AM | (grep 'src/test/regress/sql/.*\.sql\|src/test/regress/spec/.*\.spec\|src/test/regress/citus_tests/test/test_.*\.py' || true))
+        detected_changes=$(git diff origin/release-12.0... --name-only --diff-filter=AM | (grep 'src/test/regress/sql/.*\.sql\|src/test/regress/spec/.*\.spec\|src/test/regress/citus_tests/test/test_.*\.py' || true))
         tests=${detected_changes}
         if [ -z "$tests" ]; then
             echo "No test found."
