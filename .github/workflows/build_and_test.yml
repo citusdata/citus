@@ -31,11 +31,11 @@ jobs:
       pgupgrade_image_name: "citus/pgupgradetester"
       style_checker_image_name: "citus/stylechecker"
       style_checker_tools_version: "0.8.18"
-      image_suffix: "-v9d71045"
-      pg14_version: '{ "major": "14", "full": "14.9" }'
-      pg15_version: '{ "major": "15", "full": "15.4" }'
-      pg16_version: '{ "major": "16", "full": "16.0" }'
-      upgrade_pg_versions: "14.9-15.4-16.0"
+      image_suffix: "-dev-2831cc2"
+      pg14_version: '{ "major": "14", "full": "14.10" }'
+      pg15_version: '{ "major": "15", "full": "15.5" }'
+      pg16_version: '{ "major": "16", "full": "16.1" }'
+      upgrade_pg_versions: "14.10-15.5-16.1"
     steps:
       # Since GHA jobs needs at least one step we use a noop step here.
       - name: Set up parameters
