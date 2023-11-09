@@ -10,7 +10,7 @@
 #ifndef MULTI_UTILITY_H
 #define MULTI_UTILITY_H
 
-#include "distributed/pg_version_constants.h"
+#include "pg_version_constants.h"
 
 #include "postgres.h"
 

@@ -25,7 +25,7 @@
  *-------------------------------------------------------------------------
  */
 
-#include "distributed/pg_version_constants.h"
+#include "pg_version_constants.h"
 
 #include "postgres.h"
 #include "miscadmin.h"

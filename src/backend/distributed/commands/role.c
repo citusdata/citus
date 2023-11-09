@@ -12,7 +12,7 @@
 
 #include "pg_version_compat.h"
 
-#include "distributed/pg_version_constants.h"
+#include "pg_version_constants.h"
 
 #include "access/heapam.h"
 #include "access/htup_details.h"

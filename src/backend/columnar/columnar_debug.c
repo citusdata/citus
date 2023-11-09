@@ -15,7 +15,7 @@
 #include "access/table.h"
 #include "catalog/pg_am.h"
 #include "catalog/pg_type.h"
-#include "distributed/pg_version_constants.h"
+#include "pg_version_constants.h"
 #include "miscadmin.h"
 #include "storage/fd.h"
 #include "storage/smgr.h"

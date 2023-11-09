@@ -21,7 +21,7 @@
 
 #include "postgres.h"
 
-#include "distributed/pg_version_constants.h"
+#include "pg_version_constants.h"
 
 #include "access/relation.h"
 #include "distributed/multi_logical_planner.h"
