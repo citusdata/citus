@@ -228,9 +228,24 @@ VACUUM;
 -- should not propagate because no distributed table is specified
 insert into local_vacuum_table select i from generate_series(1,1000000) i;
 delete from local_vacuum_table;
+
+-- sometimes the vacuum doesn't clean up as expected and results in a flaky result
+-- for our tests. For this reason, we re-run the vacuum command once if size of
+-- the table before and after the VACUUM is not as expected
+SELECT pg_total_relation_size('local_vacuum_table') AS size_before_vacuum \gset
 VACUUM local_vacuum_table;
-SELECT CASE WHEN s BETWEEN 20000000 AND 25000000 THEN 22500000 ELSE s END
-FROM pg_total_relation_size('local_vacuum_table') s ;
+SELECT pg_total_relation_size('local_vacuum_table') AS size_after_vacuum \gset
+
+SELECT :size_before_vacuum <= :size_after_vacuum AS re_vacuum_needed \gset
+\if :re_vacuum_needed
+SELECT pg_total_relation_size('local_vacuum_table') AS size_before_vacuum \gset
+VACUUM local_vacuum_table;
+VACUUM local_vacuum_table;
+VACUUM local_vacuum_table;
+SELECT pg_total_relation_size('local_vacuum_table') AS size_after_vacuum \gset
+\endif
+
+SELECT :size_before_vacuum > :size_after_vacuum AS vacuum_successful;
 
 -- vacuum full deallocates pages of dead tuples whereas normal vacuum only marks dead tuples on visibility map
 VACUUM FULL local_vacuum_table;
