@@ -65,7 +65,7 @@ jobs:
             POSTGRES_VERSION: 15
 
     container:
-      image: citus/packaging:${{ matrix.packaging_docker_image }}-pg${{ matrix.POSTGRES_VERSION }}
+      image: citus/packaging-test:${{ matrix.packaging_docker_image }}-pg${{ matrix.POSTGRES_VERSION }}
       options: --user root
 
     steps:
@@ -114,7 +114,6 @@ jobs:
           echo "Postgres version: ${POSTGRES_VERSION}"
 
           ## Install required packages to execute packaging tools for rpm based distros
-          yum install python3-pip python3-devel postgresql-devel -y
           python3 -m pip install wheel
 
           ./.github/packaging/validate_build_output.sh "rpm"
@@ -142,7 +141,7 @@ jobs:
         POSTGRES_VERSION: ${{ fromJson(needs.get_postgres_versions_from_file.outputs.pg_versions) }}
 
     container:
-      image: citus/packaging:${{ matrix.packaging_docker_image }}
+      image: citus/packaging-test:${{ matrix.packaging_docker_image }}
       options: --user root
 
     steps:
@@ -195,6 +194,5 @@ jobs:
 
           apt-get update -y
           ## Install required packages to execute packaging tools for deb based distros
-          apt-get install python3-dev python3-pip -y
           apt-get purge -y python3-yaml
           ./.github/packaging/validate_build_output.sh "deb"
