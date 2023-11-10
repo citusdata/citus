@@ -116,9 +116,6 @@ SELECT *
 FROM constraint_validations_in_workers
 ORDER BY 1, 2;
 
-DROP TABLE constrained_table;
-DROP TABLE referenced_table CASCADE;
-DROP TABLE referencing_table;
-
+SET client_min_messages TO WARNING;
 DROP SCHEMA validate_constraint CASCADE;
 SET search_path TO DEFAULT;

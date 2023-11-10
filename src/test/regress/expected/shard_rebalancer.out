@@ -328,8 +328,8 @@ RESET citus.shard_replication_factor;
 -- test some more error handling. We create them later there.
 SET citus.enable_create_role_propagation TO OFF;
 CREATE USER testrole;
-NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
-HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
+NOTICE:  not propagating CREATE ROLE/USER commands to other nodes
+HINT:  Connect to other nodes directly to manually create all necessary users and roles.
 GRANT ALL ON SCHEMA public TO testrole;
 ERROR:  role "testrole" does not exist
 CONTEXT:  while executing command on localhost:xxxxx
@@ -731,8 +731,8 @@ ERROR:  target node localhost:xxxxx is not responsive
 \c - - - :worker_1_port
 SET citus.enable_create_role_propagation TO OFF;
 CREATE USER testrole;
-NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
-HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
+NOTICE:  not propagating CREATE ROLE/USER commands to other nodes
+HINT:  Connect to other nodes directly to manually create all necessary users and roles.
 GRANT ALL ON SCHEMA public TO testrole;
 ERROR:  operation is not allowed on this node
 HINT:  Connect to the coordinator and run it again.
@@ -745,8 +745,8 @@ ERROR:  source node localhost:xxxxx is not responsive
 \c - - - :worker_2_port
 SET citus.enable_create_role_propagation TO OFF;
 CREATE USER testrole;
-NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
-HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
+NOTICE:  not propagating CREATE ROLE/USER commands to other nodes
+HINT:  Connect to other nodes directly to manually create all necessary users and roles.
 GRANT ALL ON SCHEMA public TO testrole;
 ERROR:  operation is not allowed on this node
 HINT:  Connect to the coordinator and run it again.

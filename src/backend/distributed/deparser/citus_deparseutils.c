@@ -1,56 +1,66 @@
-
+/*
+ * citus_deparseutils.c
+ * ---------------------
+ *
+ * This file contains common functions used for deparsing PostgreSQL statements
+ * to their equivalent SQL representation.
+ *
+ */
 #include "postgres.h"
-#include "utils/builtins.h"
+
 #include "commands/defrem.h"
+#include "distributed/deparser.h"
+#include "distributed/pg_version_constants.h"
+#include "utils/builtins.h"
 #include "utils/elog.h"
 #include "utils/rel.h"
 #include "utils/relcache.h"
 #include "utils/syscache.h"
 #include "utils/typcache.h"
-#include "distributed/deparser.h"
-#include "distributed/pg_version_constants.h"
 
 
 /**
- * Convert a DefElem option to a SQL statement and append it to the given StringInfo buffer.
+ * DefElemOptionToStatement converts a DefElem option to a SQL statement and
+ * appends it to the given StringInfo buffer.
  *
  * @param buf The StringInfo buffer to append the SQL statement to.
  * @param option The DefElem option to convert to a SQL statement.
- * @param opt_formats The option format specification to use for the conversion.
- * @param num_opt_formats The number of option formats in the opt_formats array.
+ * @param optionFormats The option format specification to use for the conversion.
+ * @param optionFormatsLen The number of option formats in the opt_formats array.
  */
 void
-optionToStatement(StringInfo buf, DefElem *option, const struct
-				  option_format *opt_formats, int
-				  opt_formats_len)
+DefElemOptionToStatement(StringInfo buf, DefElem *option, const
+						 DefElemOptionFormat *optionFormats, int
+						 optionFormatsLen)
 {
 	const char *name = option->defname;
 	int i;
 
-	for (i = 0; i < opt_formats_len; i++)
+	for (i = 0; i < optionFormatsLen; i++)
 	{
-		if (strcmp(name, opt_formats[i].name) == 0)
+		if (strcmp(name, optionFormats[i].name) == 0)
 		{
-			switch (opt_formats[i].type)
+			switch (optionFormats[i].type)
 			{
 				case OPTION_FORMAT_STRING:
 				{
 					char *value = defGetString(option);
-					appendStringInfo(buf, opt_formats[i].format, quote_identifier(value));
+					appendStringInfo(buf, optionFormats[i].format, quote_identifier(
+										 value));
 					break;
 				}
 
 				case OPTION_FORMAT_INTEGER:
 				{
 					int32 value = defGetInt32(option);
-					appendStringInfo(buf, opt_formats[i].format, value);
+					appendStringInfo(buf, optionFormats[i].format, value);
 					break;
 				}
 
 				case OPTION_FORMAT_BOOLEAN:
 				{
 					bool value = defGetBoolean(option);
-					appendStringInfo(buf, opt_formats[i].format, value ? "true" :
+					appendStringInfo(buf, optionFormats[i].format, value ? "true" :
 									 "false");
 					break;
 				}
@@ -59,7 +69,7 @@ optionToStatement(StringInfo buf, DefElem *option, const struct
 				case OPTION_FORMAT_OBJECT_ID:
 				{
 					Oid value = defGetObjectId(option);
-					appendStringInfo(buf, opt_formats[i].format, value);
+					appendStringInfo(buf, optionFormats[i].format, value);
 					break;
 				}
 
@@ -67,14 +77,14 @@ optionToStatement(StringInfo buf, DefElem *option, const struct
 				case OPTION_FORMAT_LITERAL_CSTR:
 				{
 					char *value = defGetString(option);
-					appendStringInfo(buf, opt_formats[i].format, quote_literal_cstr(
+					appendStringInfo(buf, optionFormats[i].format, quote_literal_cstr(
 										 value));
 					break;
 				}
 
 				default:
 				{
-					elog(ERROR, "unrecognized option type: %d", opt_formats[i].type);
+					elog(ERROR, "unrecognized option type: %d", optionFormats[i].type);
 					break;
 				}
 			}

@@ -229,6 +229,8 @@ VACUUM;
 insert into local_vacuum_table select i from generate_series(1,1000000) i;
 delete from local_vacuum_table;
 VACUUM local_vacuum_table;
+VACUUM local_vacuum_table;
+VACUUM local_vacuum_table;
 SELECT CASE WHEN s BETWEEN 20000000 AND 25000000 THEN 22500000 ELSE s END
 FROM pg_total_relation_size('local_vacuum_table') s ;
 
@@ -257,11 +259,15 @@ VACUUM (DISABLE_PAGE_SKIPPING false) local_vacuum_table;
 insert into local_vacuum_table select i from generate_series(1,1000000) i;
 delete from local_vacuum_table;
 VACUUM (INDEX_CLEANUP OFF, PARALLEL 1) local_vacuum_table;
+VACUUM (INDEX_CLEANUP OFF, PARALLEL 1) local_vacuum_table;
+VACUUM (INDEX_CLEANUP OFF, PARALLEL 1) local_vacuum_table;
 SELECT CASE WHEN s BETWEEN 50000000 AND 70000000 THEN 60000000 ELSE s END size
 FROM pg_total_relation_size('local_vacuum_table') s ;
 
 insert into local_vacuum_table select i from generate_series(1,1000000) i;
 delete from local_vacuum_table;
+VACUUM (INDEX_CLEANUP ON, PARALLEL 1) local_vacuum_table;
+VACUUM (INDEX_CLEANUP ON, PARALLEL 1) local_vacuum_table;
 VACUUM (INDEX_CLEANUP ON, PARALLEL 1) local_vacuum_table;
 SELECT CASE WHEN s BETWEEN 20000000 AND 49999999 THEN 35000000 ELSE s END size
 FROM pg_total_relation_size('local_vacuum_table') s ;
@@ -270,10 +276,14 @@ FROM pg_total_relation_size('local_vacuum_table') s ;
 insert into local_vacuum_table select i from generate_series(1,1000000) i;
 delete from local_vacuum_table;
 vacuum (TRUNCATE false) local_vacuum_table;
+vacuum (TRUNCATE false) local_vacuum_table;
+vacuum (TRUNCATE false) local_vacuum_table;
 SELECT pg_total_relation_size('local_vacuum_table') as size1 \gset
 
 insert into local_vacuum_table select i from generate_series(1,1000000) i;
 delete from local_vacuum_table;
+vacuum (TRUNCATE true) local_vacuum_table;
+vacuum (TRUNCATE true) local_vacuum_table;
 vacuum (TRUNCATE true) local_vacuum_table;
 SELECT pg_total_relation_size('local_vacuum_table') as size2 \gset
 

@@ -349,10 +349,7 @@ SELECT * FROM use_age_invalid ORDER BY 1;
 ALTER DOMAIN age_invalid VALIDATE CONSTRAINT check_age_positive;
 
 -- test changing the owner of a domain
-SET client_min_messages TO error;
-SELECT 1 FROM run_command_on_workers($$ CREATE ROLE domain_owner; $$);
 CREATE ROLE domain_owner;
-RESET client_min_messages;
 
 CREATE DOMAIN alter_domain_owner AS int;
 ALTER DOMAIN alter_domain_owner OWNER TO domain_owner;

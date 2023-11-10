@@ -12,24 +12,24 @@
 #include "postgres.h"
 
 #include "pg_version_compat.h"
-
 #include "catalog/namespace.h"
 #include "lib/stringinfo.h"
 #include "nodes/parsenodes.h"
 #include "utils/builtins.h"
 
-#include "distributed/deparser.h"
-#include "distributed/citus_ruleutils.h"
 #include "commands/defrem.h"
 #include "distributed/deparser.h"
+#include "distributed/citus_ruleutils.h"
+#include "distributed/deparser.h"
+#include "distributed/listutils.h"
 #include "distributed/log_utils.h"
 #include "parser/parse_type.h"
-#include "distributed/listutils.h"
+
 
 static void AppendAlterDatabaseOwnerStmt(StringInfo buf, AlterOwnerStmt *stmt);
 static void AppendAlterDatabaseStmt(StringInfo buf, AlterDatabaseStmt *stmt);
 
-const struct option_format create_database_option_formats[] = {
+const DefElemOptionFormat create_database_option_formats[] = {
 	{ "owner", " OWNER %s", OPTION_FORMAT_STRING },
 	{ "template", " TEMPLATE %s", OPTION_FORMAT_STRING },
 	{ "encoding", " ENCODING %s", OPTION_FORMAT_LITERAL_CSTR },
@@ -49,12 +49,29 @@ const struct option_format create_database_option_formats[] = {
 };
 
 
-const struct option_format alter_database_option_formats[] = {
+const DefElemOptionFormat alter_database_option_formats[] = {
 	{ "is_template", " IS_TEMPLATE %s", OPTION_FORMAT_BOOLEAN },
 	{ "allow_connections", " ALLOW_CONNECTIONS %s", OPTION_FORMAT_BOOLEAN },
 	{ "connection_limit", " CONNECTION LIMIT %d", OPTION_FORMAT_INTEGER },
 };
 
+
+/*
+ * DeparseAlterDatabaseOwnerStmt
+ *      Deparse an AlterDatabaseOwnerStmt node
+ *
+ * This function is responsible for producing a string representation of an
+ * AlterDatabaseOwnerStmt node, which represents an ALTER DATABASE statement
+ * that changes the owner of a database. The output string includes the ALTER
+ * DATABASE keyword, the name of the database being altered, and the new owner
+ * of the database.
+ *
+ * Parameters:
+ *  - node: a pointer to the AlterDatabaseOwnerStmt node to be deparsed
+ *
+ * Returns:
+ *  - a string representation of the ALTER DATABASE statement
+ */
 char *
 DeparseAlterDatabaseOwnerStmt(Node *node)
 {
@@ -70,6 +87,15 @@ DeparseAlterDatabaseOwnerStmt(Node *node)
 }
 
 
+/*
+ *
+ * AppendAlterDatabaseOwnerStmt
+ * Append an ALTER DATABASE statement for changing the owner of a database to the given StringInfo buffer.
+ *
+ * Parameters:
+ *  - buf: The StringInfo buffer to append the statement to.
+ *  - stmt: The AlterOwnerStmt representing the ALTER DATABASE statement to append.
+ */
 static void
 AppendAlterDatabaseOwnerStmt(StringInfo buf, AlterOwnerStmt *stmt)
 {
@@ -256,6 +282,34 @@ DeparseAlterDatabaseSetStmt(Node *node)
 }
 
 
+/*
+ * Validates for if option is template, lc_type, locale or lc_collate, propagation will
+ * not be supported since template and strategy options are not stored in the catalog
+ * and lc_type, locale and lc_collate options depends on template parameter.
+ */
+static void
+ValidateCreateDatabaseOptions(DefElem *option)
+{
+	if (strcmp(option->defname, "strategy") == 0){
+		ereport(ERROR,
+				errmsg("CREATE DATABASE option \"%s\" is not supported",
+					   option->defname));
+	}
+
+	char *optionValue = defGetString(option);
+	if (strcmp(option->defname,"template") == 0 && strcmp(optionValue, "template1") != 0)
+	{
+
+		ereport(ERROR,errmsg("Only template1 is supported as template parameter for CREATE DATABASE"));
+
+	}
+
+}
+
+
+/*
+ * Prepares a CREATE DATABASE statement with given empty StringInfo buffer and CreatedbStmt node.
+ */
 static void
 AppendCreateDatabaseStmt(StringInfo buf, CreatedbStmt *stmt)
 {
@@ -267,27 +321,18 @@ AppendCreateDatabaseStmt(StringInfo buf, CreatedbStmt *stmt)
 
 	foreach_ptr(option, stmt->options)
 	{
-		/*If option is template, lc_type, locale or lc_collate, propagation will not be supportted */
-		/* since template database is not stored in the catalog */
-		if (strcmp(option->defname, "template") == 0 ||
-			strcmp(option->defname, "strategy") == 0 ||
-			strcmp(option->defname, "lc_ctype") == 0 ||
-			strcmp(option->defname, "locale") == 0 ||
-			strcmp(option->defname, "lc_collate") == 0 ||
-			strcmp(option->defname, "icu_locale") == 0 ||
-			strcmp(option->defname, "locale_provider") == 0)
-		{
-			ereport(ERROR,
-					errmsg("CREATE DATABASE option \"%s\" is not supported",
-						   option->defname));
-		}
+		ValidateCreateDatabaseOptions(option);
 
-		optionToStatement(buf, option, create_database_option_formats, lengthof(
-							  create_database_option_formats));
+		DefElemOptionToStatement(buf, option, create_database_option_formats,
+								 lengthof(create_database_option_formats));
 	}
 }
 
 
+/*
+ * Converts a CreatedbStmt structure into a SQL command string.
+ * Used in the deparsing of Create database statement.
+ */
 char *
 DeparseCreateDatabaseStmt(Node *node)
 {
@@ -301,13 +346,16 @@ DeparseCreateDatabaseStmt(Node *node)
 }
 
 
+/*
+ * Prepares a DROP  DATABASE statement with given empty StringInfo buffer and DropdbStmt node.
+ */
 static void
 AppendDropDatabaseStmt(StringInfo buf, DropdbStmt *stmt)
 {
-	char *if_exists_statement = stmt->missing_ok ? "IF EXISTS" : "";
+	char *ifExistsStatement = stmt->missing_ok ? "IF EXISTS" : "";
 	appendStringInfo(buf,
 					 "DROP DATABASE %s %s",
-					 if_exists_statement,
+					 ifExistsStatement,
 					 quote_identifier(stmt->dbname));
 
 	DefElem *option = NULL;
@@ -328,6 +376,10 @@ AppendDropDatabaseStmt(StringInfo buf, DropdbStmt *stmt)
 }
 
 
+/*
+ * Converts a DropdbStmt structure into a SQL command string.
+ * Used in the deparsing of drop database statement.
+ */
 char *
 DeparseDropDatabaseStmt(Node *node)
 {

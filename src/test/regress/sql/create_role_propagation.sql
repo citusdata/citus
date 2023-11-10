@@ -25,15 +25,10 @@ SELECT master_remove_node('localhost', :worker_2_port);
 CREATE ROLE create_role_with_everything SUPERUSER CREATEDB CREATEROLE INHERIT LOGIN REPLICATION BYPASSRLS CONNECTION LIMIT 105 PASSWORD 'strong_password123^' VALID UNTIL '2045-05-05 00:00:00.00+00' IN ROLE create_role, create_group ROLE create_user, create_group_2 ADMIN create_role_2, create_user_2;
 CREATE ROLE create_role_with_nothing NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOLOGIN NOREPLICATION NOBYPASSRLS CONNECTION LIMIT 3 PASSWORD 'weakpassword' VALID UNTIL '2015-05-05 00:00:00.00+00';
 
--- show that creating role from worker node is only allowed when create role
--- propagation is off
+-- show that creating role from worker node is allowed
 \c - - - :worker_1_port
 CREATE ROLE role_on_worker;
-
-BEGIN;
-SET citus.enable_create_role_propagation TO off;
-CREATE ROLE role_on_worker;
-ROLLBACK;
+DROP ROLE role_on_worker;
 
 \c - - - :master_port
 
@@ -277,3 +272,5 @@ SELECT rolname FROM pg_authid WHERE rolname LIKE '%existing%' ORDER BY 1;
 \c - - - :worker_1_port
 SELECT rolname FROM pg_authid WHERE rolname LIKE '%existing%' ORDER BY 1;
 \c - - - :master_port
+
+DROP ROLE nondist_cascade_1, nondist_cascade_2, nondist_cascade_3, dist_cascade;

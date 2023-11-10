@@ -70,38 +70,43 @@ SELECT create_reference_table('ref');
 (1 row)
 
 \c - - - :worker_1_port
--- alter role from mx worker isn't allowed when alter role propagation is on
-SET citus.enable_alter_role_propagation TO ON;
-ALTER ROLE reprefuser WITH CREATEROLE;
-ERROR:  operation is not allowed on this node
-HINT:  Connect to the coordinator and run it again.
--- to alter role locally disable alter role propagation first
+-- to alter role locally, disable alter role propagation first
 SET citus.enable_alter_role_propagation TO OFF;
 ALTER ROLE reprefuser WITH CREATEROLE;
-SELECT rolcreatedb, rolcreaterole FROM pg_roles WHERE rolname = 'reprefuser';
- rolcreatedb | rolcreaterole
+SELECT result from run_command_on_all_nodes(
+  $$
+  SELECT to_jsonb(q2.*) FROM (
+    SELECT rolcreatedb, rolcreaterole FROM pg_roles WHERE rolname = 'reprefuser'
+  ) q2
+  $$
+) ORDER BY result;
+                    result
 ---------------------------------------------------------------------
- t           | t
-(1 row)
+ {"rolcreatedb": true, "rolcreaterole": false}
+ {"rolcreatedb": true, "rolcreaterole": false}
+ {"rolcreatedb": true, "rolcreaterole": true}
+(3 rows)
 
-RESET citus.enable_alter_role_propagation;
-\c - - - :worker_2_port
--- show that altering role locally on worker doesn't propagated to other worker
-SELECT rolcreatedb, rolcreaterole FROM pg_roles WHERE rolname = 'reprefuser';
- rolcreatedb | rolcreaterole
+-- alter role from mx worker is allowed
+SET citus.enable_alter_role_propagation TO ON;
+ALTER ROLE reprefuser WITH CREATEROLE;
+-- show that altering role locally on worker is propagated to coordinator and to other workers too
+SELECT result from run_command_on_all_nodes(
+  $$
+  SELECT to_jsonb(q2.*) FROM (
+    SELECT rolcreatedb, rolcreaterole FROM pg_roles WHERE rolname = 'reprefuser'
+  ) q2
+  $$
+) ORDER BY result;
+                    result
 ---------------------------------------------------------------------
- t           | f
-(1 row)
+ {"rolcreatedb": true, "rolcreaterole": true}
+ {"rolcreatedb": true, "rolcreaterole": true}
+ {"rolcreatedb": true, "rolcreaterole": true}
+(3 rows)
 
 \c - - - :master_port
 SET search_path TO mx_add_coordinator,public;
--- show that altering role locally on worker doesn't propagated to coordinator
-SELECT rolcreatedb, rolcreaterole FROM pg_roles WHERE rolname = 'reprefuser';
- rolcreatedb | rolcreaterole
----------------------------------------------------------------------
- t           | f
-(1 row)
-
 SET citus.log_local_commands TO ON;
 SET client_min_messages TO DEBUG;
 -- if the placement policy is not round-robin, SELECTs on the reference
@@ -124,7 +129,7 @@ NOTICE:  executing the command locally: SELECT count(*) AS count FROM mx_add_coo
      0
 (1 row)
 
--- test that distributed functions also use local execution
+-- test that distributed functions also use sequential execution
 CREATE OR REPLACE FUNCTION my_group_id()
 RETURNS void
 LANGUAGE plpgsql
@@ -365,5 +370,6 @@ SELECT verify_metadata('localhost', :worker_1_port),
 
 SET client_min_messages TO error;
 DROP SCHEMA mx_add_coordinator CASCADE;
+DROP USER reprefuser;
 SET search_path TO DEFAULT;
 RESET client_min_messages;

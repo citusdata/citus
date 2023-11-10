@@ -1266,7 +1266,7 @@ RegisterCitusConfigVariables(void)
 	DefineCustomBoolVariable(
 		"citus.enable_create_database_propagation",
 		gettext_noop("Enables propagating CREATE DATABASE "
-					 "and DROP DATABASE statements to workers"),
+					 "and DROP DATABASE statements to workers."),
 		NULL,
 		&EnableCreateDatabasePropagation,
 		false,

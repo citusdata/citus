@@ -3,6 +3,7 @@
 --
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1220000;
 ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 1220000;
+SET client_min_messages TO WARNING;
 SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
  start_metadata_sync_to_node
 ---------------------------------------------------------------------
@@ -15,6 +16,9 @@ SELECT start_metadata_sync_to_node('localhost', :worker_2_port);
 
 (1 row)
 
+-- cannot drop them at the end of the test file as other tests depend on them
+DROP SCHEMA IF EXISTS citus_mx_test_schema, citus_mx_test_schema_join_1, citus_mx_test_schema_join_2 CASCADE;
+DROP TABLE IF EXISTS nation_hash, lineitem_mx, orders_mx, customer_mx, nation_mx, part_mx, supplier_mx, mx_ddl_table, limit_orders_mx, multiple_hash_mx, app_analytics_events_mx, researchers_mx, labs_mx, objects_mx, articles_hash_mx, articles_single_shard_hash_mx, company_employees_mx;
 -- create schema to test schema support
 CREATE SCHEMA citus_mx_test_schema;
 CREATE SCHEMA citus_mx_test_schema_join_1;
@@ -42,7 +46,7 @@ BEGIN
 END;
 $$
 LANGUAGE 'plpgsql' IMMUTABLE;
-CREATE FUNCTION public.immutable_append_mx(old_values int[], new_value int)
+CREATE OR REPLACE FUNCTION public.immutable_append_mx(old_values int[], new_value int)
 RETURNS int[] AS $$ SELECT old_values || new_value $$ LANGUAGE SQL IMMUTABLE;
 CREATE OPERATOR citus_mx_test_schema.=== (
     LEFTARG = int,
@@ -65,14 +69,16 @@ SELECT quote_ident(current_setting('lc_collate')) as current_locale \gset
 \endif
 CREATE COLLATION citus_mx_test_schema.english (LOCALE=:current_locale);
 CREATE TYPE citus_mx_test_schema.new_composite_type as (key1 text, key2 text);
-CREATE TYPE order_side_mx AS ENUM ('buy', 'sell');
+CREATE TYPE citus_mx_test_schema.order_side_mx AS ENUM ('buy', 'sell');
 -- now create required stuff in the worker 1
 \c - - - :worker_1_port
+SET client_min_messages TO WARNING;
 -- show that we do not support creating citus local tables from mx workers for now
 CREATE TABLE citus_local_table(a int);
 SELECT citus_add_local_table_to_metadata('citus_local_table');
 ERROR:  operation is not allowed on this node
 HINT:  Connect to the coordinator and run it again.
+DROP TABLE citus_local_table;
 SET search_path TO citus_mx_test_schema;
 -- create operator
 CREATE OPERATOR citus_mx_test_schema.=== (
@@ -85,6 +91,7 @@ CREATE OPERATOR citus_mx_test_schema.=== (
 );
 -- now create required stuff in the worker 2
 \c - - - :worker_2_port
+SET client_min_messages TO WARNING;
 SET search_path TO citus_mx_test_schema;
 -- create operator
 CREATE OPERATOR citus_mx_test_schema.=== (
@@ -97,6 +104,7 @@ CREATE OPERATOR citus_mx_test_schema.=== (
 );
 -- connect back to the master, and do some more tests
 \c - - - :master_port
+SET client_min_messages TO WARNING;
 SET citus.shard_replication_factor TO 1;
 SET search_path TO public;
 CREATE TABLE nation_hash(
@@ -315,7 +323,7 @@ CREATE TABLE limit_orders_mx (
     symbol text NOT NULL,
     bidder_id bigint NOT NULL,
     placed_at timestamp NOT NULL,
-    kind order_side_mx NOT NULL,
+    kind citus_mx_test_schema.order_side_mx NOT NULL,
     limit_price decimal NOT NULL DEFAULT 0.00 CHECK (limit_price >= 0.00)
 );
 SET citus.shard_count TO 2;
@@ -473,6 +481,7 @@ ORDER BY table_name::text;
 (23 rows)
 
 \c - - - :worker_1_port
+SET client_min_messages TO WARNING;
 SELECT table_name, citus_table_type, distribution_column, shard_count, table_owner
 FROM citus_tables
 ORDER BY table_name::text;
@@ -978,6 +987,6 @@ SELECT shard_name, table_name, citus_table_type, shard_size FROM citus_shards OR
 (469 rows)
 
 -- Show that altering type name is not supported from worker node
-ALTER TYPE order_side_mx RENAME TO temp_order_side_mx;
+ALTER TYPE citus_mx_test_schema.order_side_mx RENAME TO temp_order_side_mx;
 ERROR:  operation is not allowed on this node
 HINT:  Connect to the coordinator and run it again.

@@ -30,12 +30,15 @@
 #include "catalog/pg_attrdef.h"
 #include "catalog/pg_collation.h"
 #include "catalog/pg_constraint.h"
+#include "catalog/pg_database.h"
+#include "catalog/pg_database_d.h"
 #include "catalog/pg_depend.h"
 #include "catalog/pg_foreign_server.h"
 #include "catalog/pg_namespace.h"
 #include "catalog/pg_proc.h"
 #include "catalog/pg_type.h"
 #include "commands/async.h"
+#include "commands/dbcommands.h"
 #include "distributed/argutils.h"
 #include "distributed/backend_data.h"
 #include "distributed/citus_ruleutils.h"
@@ -134,7 +137,7 @@ static bool ShouldSkipMetadataChecks(void);
 static void EnsurePartitionMetadataIsSane(Oid relationId, char distributionMethod,
 										  int colocationId, char replicationModel,
 										  Var *distributionKey);
-static void EnsureCoordinatorInitiatedOperation(void);
+static void EnsureCitusInitiatedOperation(void);
 static void EnsureShardMetadataIsSane(Oid relationId, int64 shardId, char storageType,
 									  text *shardMinValue,
 									  text *shardMaxValue);
@@ -179,6 +182,7 @@ PG_FUNCTION_INFO_V1(citus_internal_delete_colocation_metadata);
 PG_FUNCTION_INFO_V1(citus_internal_add_tenant_schema);
 PG_FUNCTION_INFO_V1(citus_internal_delete_tenant_schema);
 PG_FUNCTION_INFO_V1(citus_internal_update_none_dist_table_metadata);
+PG_FUNCTION_INFO_V1(citus_internal_database_command);
 
 
 static bool got_SIGTERM = false;
@@ -1001,7 +1005,7 @@ citus_internal_add_object_metadata(PG_FUNCTION_ARGS)
 	if (!ShouldSkipMetadataChecks())
 	{
 		/* this UDF is not allowed for executing as a separate command */
-		EnsureCoordinatorInitiatedOperation();
+		EnsureCitusInitiatedOperation();
 
 		/*
 		 * Ensure given distributionArgumentIndex and colocationId values are
@@ -3090,7 +3094,7 @@ citus_internal_add_partition_metadata(PG_FUNCTION_ARGS)
 	if (!ShouldSkipMetadataChecks())
 	{
 		/* this UDF is not allowed allowed for executing as a separate command */
-		EnsureCoordinatorInitiatedOperation();
+		EnsureCitusInitiatedOperation();
 
 		if (distributionMethod == DISTRIBUTE_BY_NONE && distributionColumnVar != NULL)
 		{
@@ -3206,7 +3210,7 @@ citus_internal_delete_partition_metadata(PG_FUNCTION_ARGS)
 
 	if (!ShouldSkipMetadataChecks())
 	{
-		EnsureCoordinatorInitiatedOperation();
+		EnsureCitusInitiatedOperation();
 	}
 
 	DeletePartitionRow(relationId);
@@ -3254,7 +3258,7 @@ citus_internal_add_shard_metadata(PG_FUNCTION_ARGS)
 	if (!ShouldSkipMetadataChecks())
 	{
 		/* this UDF is not allowed allowed for executing as a separate command */
-		EnsureCoordinatorInitiatedOperation();
+		EnsureCitusInitiatedOperation();
 
 		/*
 		 * Even if the table owner is a malicious user and the shard metadata is
@@ -3272,19 +3276,13 @@ citus_internal_add_shard_metadata(PG_FUNCTION_ARGS)
 
 
 /*
- * EnsureCoordinatorInitiatedOperation is a helper function which ensures that
- * the execution is initiated by the coordinator on a worker node.
+ * EnsureCitusInitiatedOperation is a helper function which ensures that
+ * the execution is initiated by Citus.
  */
 static void
-EnsureCoordinatorInitiatedOperation(void)
+EnsureCitusInitiatedOperation(void)
 {
-	/*
-	 * We are restricting the operation to only MX workers with the local group id
-	 * check. The other two checks are to ensure that the operation is initiated
-	 * by the coordinator.
-	 */
-	if (!(IsCitusInternalBackend() || IsRebalancerInternalBackend()) ||
-		GetLocalGroupId() == COORDINATOR_GROUP_ID)
+	if (!(IsCitusInternalBackend() || IsRebalancerInternalBackend()))
 	{
 		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
 						errmsg("This is an internal Citus function can only be "
@@ -3465,7 +3463,7 @@ citus_internal_delete_placement_metadata(PG_FUNCTION_ARGS)
 	if (!ShouldSkipMetadataChecks())
 	{
 		/* this UDF is not allowed allowed for executing as a separate command */
-		EnsureCoordinatorInitiatedOperation();
+		EnsureCitusInitiatedOperation();
 	}
 
 	DeleteShardPlacementRow(placementId);
@@ -3513,7 +3511,7 @@ citus_internal_add_placement_metadata_internal(int64 shardId, int64 shardLength,
 	if (!ShouldSkipMetadataChecks())
 	{
 		/* this UDF is not allowed allowed for executing as a separate command */
-		EnsureCoordinatorInitiatedOperation();
+		EnsureCitusInitiatedOperation();
 
 		/*
 		 * Even if the table owner is a malicious user, as long as the shard placements
@@ -3608,7 +3606,7 @@ citus_internal_update_placement_metadata(PG_FUNCTION_ARGS)
 	if (!ShouldSkipMetadataChecks())
 	{
 		/* this UDF is not allowed allowed for executing as a separate command */
-		EnsureCoordinatorInitiatedOperation();
+		EnsureCitusInitiatedOperation();
 
 		if (!ShardExists(shardId))
 		{
@@ -3672,7 +3670,7 @@ citus_internal_delete_shard_metadata(PG_FUNCTION_ARGS)
 	if (!ShouldSkipMetadataChecks())
 	{
 		/* this UDF is not allowed allowed for executing as a separate command */
-		EnsureCoordinatorInitiatedOperation();
+		EnsureCitusInitiatedOperation();
 
 		if (!ShardExists(shardId))
 		{
@@ -3715,7 +3713,7 @@ citus_internal_update_relation_colocation(PG_FUNCTION_ARGS)
 	if (!ShouldSkipMetadataChecks())
 	{
 		/* this UDF is not allowed allowed for executing as a separate command */
-		EnsureCoordinatorInitiatedOperation();
+		EnsureCitusInitiatedOperation();
 
 		/* ensure that the table is in pg_dist_partition */
 		char partitionMethod = PartitionMethodViaCatalog(relationId);
@@ -3781,7 +3779,7 @@ citus_internal_add_colocation_metadata(PG_FUNCTION_ARGS)
 	if (!ShouldSkipMetadataChecks())
 	{
 		/* this UDF is not allowed allowed for executing as a separate command */
-		EnsureCoordinatorInitiatedOperation();
+		EnsureCitusInitiatedOperation();
 	}
 
 	InsertColocationGroupLocally(colocationId, shardCount, replicationFactor,
@@ -3806,7 +3804,7 @@ citus_internal_delete_colocation_metadata(PG_FUNCTION_ARGS)
 	if (!ShouldSkipMetadataChecks())
 	{
 		/* this UDF is not allowed allowed for executing as a separate command */
-		EnsureCoordinatorInitiatedOperation();
+		EnsureCitusInitiatedOperation();
 	}
 
 	DeleteColocationGroupLocally(colocationId);
@@ -3885,11 +3883,85 @@ citus_internal_update_none_dist_table_metadata(PG_FUNCTION_ARGS)
 
 	if (!ShouldSkipMetadataChecks())
 	{
-		EnsureCoordinatorInitiatedOperation();
+		EnsureCitusInitiatedOperation();
 	}
 
 	UpdateNoneDistTableMetadata(relationId, replicationModel,
 								colocationId, autoConverted);
+
+	PG_RETURN_VOID();
+}
+
+
+/*
+ * citus_internal_database_command is an internal UDF to
+ * create/drop a database in an idempotent maner without
+ * transaction block restrictions.
+ */
+Datum
+citus_internal_database_command(PG_FUNCTION_ARGS)
+{
+	CheckCitusVersion(ERROR);
+	if (!ShouldSkipMetadataChecks())
+	{
+		EnsureCoordinatorInitiatedOperation();
+	}
+	PG_ENSURE_ARGNOTNULL(0, "database command");
+
+	text *commandText = PG_GETARG_TEXT_P(0);
+	char *command = text_to_cstring(commandText);
+	Node *parseTree = ParseTreeNode(command);
+
+	int saveNestLevel = NewGUCNestLevel();
+
+	set_config_option("citus.enable_ddl_propagation", "off",
+					  (superuser() ? PGC_SUSET : PGC_USERSET), PGC_S_SESSION,
+					  GUC_ACTION_LOCAL, true, 0, false);
+
+	set_config_option("citus.enable_create_database_propagation", "off",
+					  (superuser() ? PGC_SUSET : PGC_USERSET), PGC_S_SESSION,
+					  GUC_ACTION_LOCAL, true, 0, false);
+
+	/*
+	 * createdb() / DropDatabase() uses ParseState to report the error position for the
+	 * input command and the position is reported to be 0 when it's provided as NULL.
+	 * We're okay with that because we don't expect this UDF to be called with an incorrect
+	 * DDL command.
+	 */
+	ParseState *pstate = NULL;
+
+	if (IsA(parseTree, CreatedbStmt))
+	{
+		CreatedbStmt *stmt = castNode(CreatedbStmt, parseTree);
+
+		bool missingOk = true;
+		Oid databaseOid = get_database_oid(stmt->dbname, missingOk);
+
+		if (!OidIsValid(databaseOid))
+		{
+			createdb(pstate, (CreatedbStmt *) parseTree);
+		}
+	}
+	else if (IsA(parseTree, DropdbStmt))
+	{
+		DropdbStmt *stmt = castNode(DropdbStmt, parseTree);
+
+		bool missingOk = false;
+		Oid databaseOid = get_database_oid(stmt->dbname, missingOk);
+
+
+		if (OidIsValid(databaseOid))
+		{
+			DropDatabase(pstate, (DropdbStmt *) parseTree);
+		}
+	}
+	else
+	{
+		ereport(ERROR, (errmsg("unsupported command type %d", nodeTag(parseTree))));
+	}
+
+	/* Rollbacks GUCs to the state before this session */
+	AtEOXact_GUC(true, saveNestLevel);
 
 	PG_RETURN_VOID();
 }
@@ -4503,7 +4575,7 @@ PropagateNodeWideObjectsCommandList(void)
 
 	if (EnableCreateDatabasePropagation)
 	{
-		/* Get commands for database creation */
+		/* get commands for database creation */
 		List *createDatabaseCommands = GenerateCreateDatabaseCommandList();
 		ddlCommands = list_concat(ddlCommands, createDatabaseCommands);
 	}

@@ -10,7 +10,7 @@
 
 #include "postgres.h"
 
-#include "distributed/pg_version_constants.h"
+#include "pg_version_constants.h"
 
 #include "miscadmin.h"
 
@@ -55,6 +55,7 @@
 static char * CreatePgDistObjectEntryCommand(const ObjectAddress *objectAddress);
 static int ExecuteCommandAsSuperuser(char *query, int paramCount, Oid *paramTypes,
 									 Datum *paramValues);
+static bool IsObjectDistributed(const ObjectAddress *address);
 
 PG_FUNCTION_INFO_V1(citus_unmark_object_distributed);
 PG_FUNCTION_INFO_V1(master_unmark_object_distributed);
@@ -150,7 +151,7 @@ ObjectExists(const ObjectAddress *address)
 /*
  * MarkObjectDistributed marks an object as a distributed object. Marking is done
  * by adding appropriate entries to citus.pg_dist_object and also marking the object
- * as distributed by opening a connection using current user to all of the workers
+ * as distributed by opening a connection using current user to all remote nodes
  * with metadata if object propagation is on.
  *
  * This function should be used if the user creating the given object. If you want
@@ -165,7 +166,7 @@ MarkObjectDistributed(const ObjectAddress *distAddress)
 	{
 		char *workerPgDistObjectUpdateCommand =
 			CreatePgDistObjectEntryCommand(distAddress);
-		SendCommandToWorkersWithMetadata(workerPgDistObjectUpdateCommand);
+		SendCommandToRemoteNodesWithMetadata(workerPgDistObjectUpdateCommand);
 	}
 }
 
@@ -173,7 +174,7 @@ MarkObjectDistributed(const ObjectAddress *distAddress)
 /*
  * MarkObjectDistributedViaSuperUser marks an object as a distributed object. Marking
  * is done by adding appropriate entries to citus.pg_dist_object and also marking the
- * object as distributed by opening a connection using super user to all of the workers
+ * object as distributed by opening a connection using super user to all remote nodes
  * with metadata if object propagation is on.
  *
  * This function should be used to mark dependent object as distributed. If you want
@@ -188,7 +189,7 @@ MarkObjectDistributedViaSuperUser(const ObjectAddress *distAddress)
 	{
 		char *workerPgDistObjectUpdateCommand =
 			CreatePgDistObjectEntryCommand(distAddress);
-		SendCommandToWorkersWithMetadataViaSuperUser(workerPgDistObjectUpdateCommand);
+		SendCommandToRemoteNodesWithMetadataViaSuperUser(workerPgDistObjectUpdateCommand);
 	}
 }
 
@@ -358,8 +359,12 @@ ExecuteCommandAsSuperuser(char *query, int paramCount, Oid *paramTypes,
 }
 
 
+/*
+ * Deletes all pg_dist_object records for distributed roles in `DROP ROLE` statement a
+ * and for all databases in `DROP DATABASE` statement
+ */
 void
-UnmarkRolesAndDatabaseDistributed(Node *node)
+UnmarkNodeWideObjectsDistributed(Node *node)
 {
 	if (IsA(node, DropRoleStmt))
 	{
@@ -378,9 +383,9 @@ UnmarkRolesAndDatabaseDistributed(Node *node)
 		char *dbName = stmt->dbname;
 
 		Oid dbOid = get_database_oid(dbName, stmt->missing_ok);
-		ObjectAddress *dbAddress = palloc0(sizeof(ObjectAddress));
-		ObjectAddressSet(*dbAddress, DatabaseRelationId, dbOid);
-		UnmarkObjectDistributed(dbAddress);
+		ObjectAddress *dbObjectAddress = palloc0(sizeof(ObjectAddress));
+		ObjectAddressSet(*dbObjectAddress, DatabaseRelationId, dbOid);
+		UnmarkObjectDistributed(dbObjectAddress);
 	}
 }
 
@@ -420,7 +425,7 @@ UnmarkObjectDistributed(const ObjectAddress *address)
  * IsObjectDistributed returns if the object addressed is already distributed in the
  * cluster. This performs a local indexed lookup in pg_dist_object.
  */
-bool
+static bool
 IsObjectDistributed(const ObjectAddress *address)
 {
 	ScanKeyData key[3];

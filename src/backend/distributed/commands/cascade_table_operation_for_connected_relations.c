@@ -12,7 +12,7 @@
 
 #include "postgres.h"
 
-#include "distributed/pg_version_constants.h"
+#include "pg_version_constants.h"
 
 #include "access/xact.h"
 #include "catalog/pg_constraint.h"

@@ -180,7 +180,7 @@ ActivePrimaryNodeList(LOCKMODE lockMode)
 
 /*
  * ActivePrimaryRemoteNodeList returns a list of all active primary nodes in
- * workerNodeHash.
+ * workerNodeHash except the local one.
  */
 List *
 ActivePrimaryRemoteNodeList(LOCKMODE lockMode)

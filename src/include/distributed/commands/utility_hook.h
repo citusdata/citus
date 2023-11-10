@@ -10,7 +10,7 @@
 #ifndef MULTI_UTILITY_H
 #define MULTI_UTILITY_H
 
-#include "distributed/pg_version_constants.h"
+#include "pg_version_constants.h"
 
 #include "postgres.h"
 
@@ -94,7 +94,7 @@ extern void ProcessUtilityParseTree(Node *node, const char *queryString,
 extern void MarkInvalidateForeignKeyGraph(void);
 extern void InvalidateForeignKeyGraphForDDL(void);
 extern List * DDLTaskList(Oid relationId, const char *commandString);
-extern List * NontransactionalNodeDDLTask(TargetWorkerSet targets, List *commands);
+extern List * NontransactionalNodeDDLTaskList(TargetWorkerSet targets, List *commands);
 extern List * NodeDDLTaskList(TargetWorkerSet targets, List *commands);
 extern bool AlterTableInProgress(void);
 extern bool DropSchemaOrDBInProgress(void);

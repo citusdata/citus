@@ -12,8 +12,19 @@ CREATE TABLESPACE create_drop_db_tablespace LOCATION :'create_drop_db_tablespace
 \c - - - :master_port
 create user create_drop_db_test_user;
 set citus.enable_create_database_propagation=on;
+-- Tests for create database propagation with template0 which should fail
 CREATE DATABASE mydatabase
     WITH OWNER = create_drop_db_test_user
+    TEMPLATE = 'template0'
+            ENCODING = 'UTF8'
+            CONNECTION LIMIT = 10
+            TABLESPACE = create_drop_db_tablespace
+            ALLOW_CONNECTIONS = true
+            IS_TEMPLATE = false;
+ERROR:  Only template1 is supported as template parameter for CREATE DATABASE
+CREATE DATABASE mydatabase
+    WITH template=template1
+    OWNER = create_drop_db_test_user
             ENCODING = 'UTF8'
             CONNECTION LIMIT = 10
             TABLESPACE = create_drop_db_tablespace
@@ -239,35 +250,6 @@ NOTICE:  issuing DROP DATABASE IF EXISTS "mydatabase#1'2"
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing DROP DATABASE IF EXISTS "mydatabase#1'2"
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
---test for unsupported options
-CREATE DATABASE mydatabase
-    with    CONNECTION LIMIT = 10
-            ENCODING = 'UTF8'
-            LC_CTYPE = 'C.UTF-8'
-            ALLOW_CONNECTIONS = false
-            IS_TEMPLATE = false;
-ERROR:  CREATE DATABASE option "lc_ctype" is not supported
-CREATE DATABASE mydatabase
-    with    CONNECTION LIMIT = 10
-            ENCODING = 'UTF8'
-            LC_CTYPE = 'C.UTF-8'
-            ALLOW_CONNECTIONS = false
-            IS_TEMPLATE = false;
-ERROR:  CREATE DATABASE option "lc_ctype" is not supported
-CREATE DATABASE mydatabase
-    with CONNECTION LIMIT = 10
-            ENCODING = 'UTF8'
-            LC_COLLATE = 'C.UTF-8'
-            ALLOW_CONNECTIONS = false
-            IS_TEMPLATE = false;
-ERROR:  CREATE DATABASE option "lc_collate" is not supported
-CREATE DATABASE mydatabase
-    with CONNECTION LIMIT = 10
-            ENCODING = 'UTF8'
-            LOCALE = 'C.UTF-8'
-            ALLOW_CONNECTIONS = false
-            IS_TEMPLATE = false;
-ERROR:  CREATE DATABASE option "locale" is not supported
 --clean up resources created by this test
 drop tablespace create_drop_db_tablespace;
 \c - - - :worker_1_port

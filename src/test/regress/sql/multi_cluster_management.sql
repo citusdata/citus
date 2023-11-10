@@ -39,7 +39,7 @@ SELECT master_get_active_worker_nodes();
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 
 SELECT citus_disable_node('localhost', :worker_2_port);
-SELECT public.wait_until_metadata_sync(60000);
+SELECT public.wait_until_metadata_sync(20000);
 SELECT master_get_active_worker_nodes();
 
 -- add some shard placements to the cluster
@@ -328,7 +328,7 @@ SELECT 1 FROM master_add_inactive_node('localhost', 9996, groupid => :worker_2_g
 SELECT master_add_inactive_node('localhost', 9999, groupid => :worker_2_group, nodecluster => 'olap', noderole => 'secondary');
 SELECT master_activate_node('localhost', 9999);
 SELECT citus_disable_node('localhost', 9999);
-SELECT public.wait_until_metadata_sync(60000);
+SELECT public.wait_until_metadata_sync(20000);
 SELECT master_remove_node('localhost', 9999);
 
 -- check that you can't manually add two primaries to a group
@@ -530,3 +530,10 @@ RESET citus.metadata_sync_mode;
 
 -- verify that at the end of this file, all primary nodes have metadata synced
 SELECT bool_and(hasmetadata) AND bool_and(metadatasynced) FROM pg_dist_node WHERE isactive = 't' and noderole = 'primary';
+
+-- Grant all on public schema to public
+--
+-- That's the default on Postgres versions < 15 and we want to
+-- keep permissions compatible accross versions, in regression
+-- tests.
+GRANT ALL ON SCHEMA public TO PUBLIC;

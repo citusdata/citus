@@ -21,7 +21,7 @@
 #include "miscadmin.h"
 #include "funcapi.h"
 
-#include "distributed/pg_version_constants.h"
+#include "pg_version_constants.h"
 
 #include "access/genam.h"
 #include "access/htup_details.h"
@@ -978,7 +978,6 @@ GetAggregateDDLCommand(const RegProcedure funcOid, bool useCreateOrReplace)
 	char *argmodes = NULL;
 	int insertorderbyat = -1;
 	int argsprinted = 0;
-	int inputargno = 0;
 
 	HeapTuple proctup = SearchSysCache1(PROCOID, funcOid);
 	if (!HeapTupleIsValid(proctup))
@@ -1058,7 +1057,6 @@ GetAggregateDDLCommand(const RegProcedure funcOid, bool useCreateOrReplace)
 			}
 		}
 
-		inputargno++;       /* this is a 1-based counter */
 		if (argsprinted == insertorderbyat)
 		{
 			appendStringInfoString(&buf, " ORDER BY ");

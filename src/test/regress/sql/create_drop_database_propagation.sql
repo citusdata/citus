@@ -18,9 +18,19 @@ create user create_drop_db_test_user;
 
 set citus.enable_create_database_propagation=on;
 
-
+-- Tests for create database propagation with template0 which should fail
 CREATE DATABASE mydatabase
     WITH OWNER = create_drop_db_test_user
+    TEMPLATE = 'template0'
+            ENCODING = 'UTF8'
+            CONNECTION LIMIT = 10
+            TABLESPACE = create_drop_db_tablespace
+            ALLOW_CONNECTIONS = true
+            IS_TEMPLATE = false;
+
+CREATE DATABASE mydatabase
+    WITH template=template1
+    OWNER = create_drop_db_test_user
             ENCODING = 'UTF8'
             CONNECTION LIMIT = 10
             TABLESPACE = create_drop_db_tablespace
@@ -191,36 +201,6 @@ create database "mydatabase#1'2";
 
 set citus.grep_remote_commands = '%DROP DATABASE%';
 drop database if exists "mydatabase#1'2";
-
---test for unsupported options
-
-CREATE DATABASE mydatabase
-    with    CONNECTION LIMIT = 10
-            ENCODING = 'UTF8'
-            LC_CTYPE = 'C.UTF-8'
-            ALLOW_CONNECTIONS = false
-            IS_TEMPLATE = false;
-
-CREATE DATABASE mydatabase
-    with    CONNECTION LIMIT = 10
-            ENCODING = 'UTF8'
-            LC_CTYPE = 'C.UTF-8'
-            ALLOW_CONNECTIONS = false
-            IS_TEMPLATE = false;
-
-CREATE DATABASE mydatabase
-    with CONNECTION LIMIT = 10
-            ENCODING = 'UTF8'
-            LC_COLLATE = 'C.UTF-8'
-            ALLOW_CONNECTIONS = false
-            IS_TEMPLATE = false;
-
-CREATE DATABASE mydatabase
-    with CONNECTION LIMIT = 10
-            ENCODING = 'UTF8'
-            LOCALE = 'C.UTF-8'
-            ALLOW_CONNECTIONS = false
-            IS_TEMPLATE = false;
 
 
 --clean up resources created by this test
