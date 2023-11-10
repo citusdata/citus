@@ -3902,11 +3902,13 @@ Datum
 citus_internal_database_command(PG_FUNCTION_ARGS)
 {
 	CheckCitusVersion(ERROR);
+
 	if (!ShouldSkipMetadataChecks())
 	{
 		EnsureCitusInitiatedOperation();
 	}
-	PG_ENSURE_ARGNOTNULL(0, "database command");
+
+	PG_ENSURE_ARGNOTNULL(0, "command");
 
 	text *commandText = PG_GETARG_TEXT_P(0);
 	char *command = text_to_cstring(commandText);
@@ -3960,7 +3962,7 @@ citus_internal_database_command(PG_FUNCTION_ARGS)
 		ereport(ERROR, (errmsg("unsupported command type %d", nodeTag(parseTree))));
 	}
 
-	/* Rollbacks GUCs to the state before this session */
+	/* rollback GUCs to the state before this session */
 	AtEOXact_GUC(true, saveNestLevel);
 
 	PG_RETURN_VOID();

@@ -275,7 +275,7 @@ PreprocessAlterDatabaseSetStmt(Node *node, const char *queryString,
  * postgres instance.
  *
  * In this stage, we can perform validations and prepare the commands that need to
- * be run on all workers to grant.
+ * be run on all workers to create the database.
  */
 List *
 PreprocessCreateDatabaseStmt(Node *node, const char *queryString,
@@ -298,7 +298,9 @@ PreprocessCreateDatabaseStmt(Node *node, const char *queryString,
 /*
  * PostprocessCreatedbStmt is executed after the statement is applied to the local
  * postgres instance. In this stage we can prepare the commands that need to be run on
- * all workers to create the database.
+ * all workers to create the database. Since the CREATE DATABASE statement gives error 
+ * in a transaction block, we need to use NontransactionalNodeDDLTaskList to send the
+ * CREATE DATABASE statement to the workers.
  *
  */
 List *

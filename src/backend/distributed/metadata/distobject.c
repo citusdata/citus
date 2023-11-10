@@ -360,8 +360,10 @@ ExecuteCommandAsSuperuser(char *query, int paramCount, Oid *paramTypes,
 
 
 /*
- * Deletes all pg_dist_object records for distributed roles in `DROP ROLE` statement a
- * and for all databases in `DROP DATABASE` statement
+ * UnmarkNodeWideObjectsDistributed deletes pg_dist_object records
+ * for all distributed objects in given Drop stmt node.
+ *
+ * Today we only expect DropRoleStmt and DropdbStmt to get here.
  */
 void
 UnmarkNodeWideObjectsDistributed(Node *node)

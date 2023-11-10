@@ -140,9 +140,9 @@ typedef enum OptionFormatType
 } OptionFormatType;
 
 
-extern void DefElemOptionToStatement(StringInfo buf, DefElem *option, const
-									 DefElemOptionFormat *opt_formats, int
-									 opt_formats_len);
+extern void DefElemOptionToStatement(StringInfo buf, DefElem *option,
+									 const DefElemOptionFormat *opt_formats,
+									 int opt_formats_len);
 
 
 /* forward declarations for deparse_statistics_stmts.c */
