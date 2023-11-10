@@ -6,11 +6,13 @@
  * to their equivalent SQL representation.
  *
  */
+#include "pg_version_constants.h"
+
 #include "postgres.h"
+
 
 #include "commands/defrem.h"
 #include "distributed/deparser.h"
-#include "distributed/pg_version_constants.h"
 #include "utils/builtins.h"
 #include "utils/elog.h"
 #include "utils/rel.h"
