@@ -207,6 +207,10 @@ DEPS = {
             "multi_cluster_management",
         ],
     ),
+    "multi_utilities": TestDeps(
+        "minimal_schedule",
+        ["multi_data_types"],
+    ),
 }
 
 

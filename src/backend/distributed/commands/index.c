@@ -10,7 +10,7 @@
 
 #include "postgres.h"
 
-#include "distributed/pg_version_constants.h"
+#include "pg_version_constants.h"
 #include "access/genam.h"
 #include "access/htup_details.h"
 #include "access/xact.h"
@@ -179,6 +179,8 @@ PreprocessIndexStmt(Node *node, const char *createIndexCommand,
 	{
 		return NIL;
 	}
+
+	EnsureCoordinator();
 
 	if (createIndexStatement->idxname == NULL)
 	{

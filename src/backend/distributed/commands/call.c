@@ -13,7 +13,7 @@
 #include "postgres.h"
 #include "funcapi.h"
 
-#include "distributed/pg_version_constants.h"
+#include "pg_version_constants.h"
 
 #include "catalog/pg_proc.h"
 #include "commands/defrem.h"

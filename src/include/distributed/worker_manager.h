@@ -87,6 +87,7 @@ extern WorkerNode * FindNodeWithNodeId(int nodeId, bool missingOk);
 extern WorkerNode * ModifiableWorkerNode(const char *nodeName, int32 nodePort);
 extern List * ReadDistNode(bool includeNodesFromOtherClusters);
 extern void EnsureCoordinator(void);
+extern void EnsurePropagationToCoordinator(void);
 extern void EnsureCoordinatorIsInMetadata(void);
 extern void InsertCoordinatorIfClusterEmpty(void);
 extern uint32 GroupForNode(char *nodeName, int32 nodePort);

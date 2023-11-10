@@ -2743,6 +2743,25 @@ EnsureCoordinator(void)
 
 
 /*
+ * EnsurePropagationToCoordinator checks whether the coordinator is added to the
+ * metadata if we're not on the coordinator.
+ *
+ * Given that metadata syncing skips syncing metadata to the coordinator, we need
+ * too make sure that the coordinator is added to the metadata before propagating
+ * a command from a worker. For this reason, today we use this only for the commands
+ * that we support propagating from workers.
+ */
+void
+EnsurePropagationToCoordinator(void)
+{
+	if (!IsCoordinator())
+	{
+		EnsureCoordinatorIsInMetadata();
+	}
+}
+
+
+/*
  * EnsureCoordinatorIsInMetadata checks whether the coordinator is added to the
  * metadata, which is required for many operations.
  */

@@ -11,7 +11,7 @@
 #ifndef PG_VERSION_COMPAT_H
 #define PG_VERSION_COMPAT_H
 
-#include "distributed/pg_version_constants.h"
+#include "pg_version_constants.h"
 
 #if PG_VERSION_NUM >= PG_VERSION_16
 
