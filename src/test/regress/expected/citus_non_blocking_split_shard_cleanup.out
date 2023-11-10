@@ -113,6 +113,18 @@ SELECT public.wait_for_resource_cleanup();
 
 (1 row)
 
+SELECT public.wait_for_resource_cleanup();
+ wait_for_resource_cleanup
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT public.wait_for_resource_cleanup();
+ wait_for_resource_cleanup
+---------------------------------------------------------------------
+
+(1 row)
+
 \c - - - :worker_2_port
 SET search_path TO "citus_split_test_schema";
 -- Replication slots should be cleaned up

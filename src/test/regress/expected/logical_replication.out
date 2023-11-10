@@ -93,6 +93,18 @@ SELECT public.wait_for_resource_cleanup();
 
 (1 row)
 
+SELECT public.wait_for_resource_cleanup();
+ wait_for_resource_cleanup
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT public.wait_for_resource_cleanup();
+ wait_for_resource_cleanup
+---------------------------------------------------------------------
+
+(1 row)
+
 -- the subscription is still there, as there is no cleanup record for it
 -- we have created it manually
 SELECT subname from pg_subscription;
