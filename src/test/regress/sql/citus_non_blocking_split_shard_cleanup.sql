@@ -80,8 +80,6 @@ SELECT pg_catalog.citus_split_shard_by_split_points(
     'force_logical');
 
 SELECT public.wait_for_resource_cleanup();
--- try to get flaky result
-SET search_path TO "citus_split_test_schema";
 
 \c - - - :worker_2_port
 SET search_path TO "citus_split_test_schema";

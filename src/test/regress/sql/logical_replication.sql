@@ -54,8 +54,6 @@ SET search_path TO logical_replication;
 select citus_move_shard_placement(6830002, 'localhost', :worker_1_port, 'localhost', :worker_2_port, 'force_logical');
 
 SELECT public.wait_for_resource_cleanup();
--- try to get flaky result
-SET search_path TO logical_replication;
 
 -- the subscription is still there, as there is no cleanup record for it
 -- we have created it manually

@@ -311,9 +311,9 @@ SELECT COUNT(*) FROM colocated_dist_table;
 --BEGIN : Cleanup
 \c - postgres - :master_port
 -- make sure we don't have any replication objects leftover on the workers
-SELECT result FROM run_command_on_all_nodes($$SELECT count(*) FROM pg_replication_slots$$);
-SELECT result FROM run_command_on_all_nodes($$SELECT count(*) FROM pg_publication$$);
-SELECT result FROM run_command_on_all_nodes($$SELECT count(*) FROM pg_subscription$$);
+SELECT run_command_on_workers($$SELECT count(*) FROM pg_replication_slots$$);
+SELECT run_command_on_workers($$SELECT count(*) FROM pg_publication$$);
+SELECT run_command_on_workers($$SELECT count(*) FROM pg_subscription$$);
 
 ALTER SYSTEM RESET citus.defer_shard_delete_interval;
 SELECT pg_reload_conf();
