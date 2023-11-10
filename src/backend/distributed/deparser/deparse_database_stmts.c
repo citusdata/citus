@@ -148,7 +148,7 @@ AppendBasicAlterDatabaseOptions(StringInfo buf, DefElem *def, bool
 		appendStringInfo(buf, "ALTER DATABASE %s WITH", quote_identifier(dbname));
 		prefix_appended_for_basic_options = true;
 	}
-	optionToStatement(buf, def, alter_database_option_formats, lengthof(
+	DefElemOptionToStatement(buf, def, alter_database_option_formats, lengthof(
 						  alter_database_option_formats));
 	return prefix_appended_for_basic_options;
 }

@@ -225,7 +225,7 @@ PreprocessAlterDatabaseStmt(Node *node, const char *queryString,
 		 * the transaction block.
 		 */
 
-		return NontransactionalNodeDDLTask(NON_COORDINATOR_NODES, commands);
+		return NontransactionalNodeDDLTaskList(NON_COORDINATOR_NODES, commands);
 	}
 	else
 	{
