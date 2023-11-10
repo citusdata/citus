@@ -21,8 +21,6 @@ GITHUB_HOME="${HOME}"
 export HOME="/root"
 
 eval "$(pyenv init -)"
-pyenv versions
-pyenv virtualenv ${PACKAGING_PYTHON_VERSION} packaging_env
 pyenv activate packaging_env
 
 echo "Package type: ${package_type}"
