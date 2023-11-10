@@ -1,0 +1,294 @@
+Parsed test spec with 4 sessions
+
+starting permutation: w1-start-session-level-connection w1-begin-on-worker w2-start-session-level-connection w2-begin-on-worker w1-create-named-index w2-create-named-index w1-commit-worker w2-commit-worker w1-stop-connection w2-stop-connection coord-print-index-count
+citus_set_coordinator_host
+---------------------------------------------------------------------
+
+(1 row)
+
+step w1-start-session-level-connection:
+ SELECT start_session_level_connection_to_node('localhost', 57637);
+
+start_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step w1-begin-on-worker:
+ SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+
+run_commands_on_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step w2-start-session-level-connection:
+ SELECT start_session_level_connection_to_node('localhost', 57638);
+
+start_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step w2-begin-on-worker:
+ SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+
+run_commands_on_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step w1-create-named-index:
+ SELECT run_commands_on_session_level_connection_to_node('CREATE INDEX dist_table_index ON dist_table(id)');
+
+run_commands_on_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step w2-create-named-index:
+ SELECT run_commands_on_session_level_connection_to_node('CREATE INDEX dist_table_index_2 ON dist_table(id)');
+
+run_commands_on_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step w1-commit-worker:
+ SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+
+run_commands_on_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step w2-commit-worker:
+ SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+
+run_commands_on_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step w1-stop-connection:
+ SELECT stop_session_level_connection_to_node();
+
+stop_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step w2-stop-connection:
+ SELECT stop_session_level_connection_to_node();
+
+stop_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step coord-print-index-count:
+ SELECT
+  result
+ FROM
+  run_command_on_placements('dist_table', 'select count(*) from pg_indexes WHERE tablename = ''%s''')
+ ORDER BY
+  nodeport;
+
+result
+---------------------------------------------------------------------
+     2
+     2
+     2
+     2
+(4 rows)
+
+citus_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
+
+starting permutation: w1-start-session-level-connection w1-begin-on-worker w2-start-session-level-connection w2-begin-on-worker w1-create-unnamed-index w2-create-unnamed-index w1-commit-worker w1-stop-connection w2-stop-connection coord-print-index-count
+citus_set_coordinator_host
+---------------------------------------------------------------------
+
+(1 row)
+
+step w1-start-session-level-connection:
+ SELECT start_session_level_connection_to_node('localhost', 57637);
+
+start_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step w1-begin-on-worker:
+ SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+
+run_commands_on_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step w2-start-session-level-connection:
+ SELECT start_session_level_connection_to_node('localhost', 57638);
+
+start_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step w2-begin-on-worker:
+ SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+
+run_commands_on_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step w1-create-unnamed-index:
+ SELECT run_commands_on_session_level_connection_to_node('CREATE INDEX ON dist_table(id,data)');
+
+run_commands_on_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step w2-create-unnamed-index:
+ SELECT run_commands_on_session_level_connection_to_node('CREATE INDEX ON dist_table(id,data)');
+ <waiting ...>
+step w1-commit-worker: 
+ SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+
+run_commands_on_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step w2-create-unnamed-index: <... completed>
+ERROR:  duplicate key value violates unique constraint "pg_class_relname_nsp_index"
+step w1-stop-connection:
+ SELECT stop_session_level_connection_to_node();
+
+stop_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step w2-stop-connection:
+ SELECT stop_session_level_connection_to_node();
+
+stop_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step coord-print-index-count:
+ SELECT
+  result
+ FROM
+  run_command_on_placements('dist_table', 'select count(*) from pg_indexes WHERE tablename = ''%s''')
+ ORDER BY
+  nodeport;
+
+result
+---------------------------------------------------------------------
+     1
+     1
+     1
+     1
+(4 rows)
+
+citus_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
+
+starting permutation: w1-start-session-level-connection w1-create-named-index w1-begin-on-worker w1-delete coord-begin coord-take-lock w1-reindex deadlock-checker-call coord-rollback w1-commit-worker w1-stop-connection
+citus_set_coordinator_host
+---------------------------------------------------------------------
+
+(1 row)
+
+step w1-start-session-level-connection:
+ SELECT start_session_level_connection_to_node('localhost', 57637);
+
+start_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step w1-create-named-index:
+ SELECT run_commands_on_session_level_connection_to_node('CREATE INDEX dist_table_index ON dist_table(id)');
+
+run_commands_on_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step w1-begin-on-worker:
+ SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+
+run_commands_on_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step w1-delete:
+ SELECT run_commands_on_session_level_connection_to_node('DELETE FROM dist_table');
+
+run_commands_on_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step coord-begin:
+ BEGIN;
+
+step coord-take-lock:
+ LOCK TABLE dist_table IN ACCESS EXCLUSIVE MODE;
+ <waiting ...>
+step w1-reindex: 
+ SELECT run_commands_on_session_level_connection_to_node('REINDEX INDEX dist_table_index');
+ <waiting ...>
+step deadlock-checker-call: 
+  SELECT check_distributed_deadlocks();
+
+check_distributed_deadlocks
+---------------------------------------------------------------------
+t
+(1 row)
+
+step coord-take-lock: <... completed>
+ERROR:  canceling the transaction since it was involved in a distributed deadlock
+step w1-reindex: <... completed>
+run_commands_on_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step coord-rollback:
+ ROLLBACK;
+
+step w1-commit-worker:
+ SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+
+run_commands_on_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step w1-stop-connection:
+ SELECT stop_session_level_connection_to_node();
+
+stop_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+citus_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+

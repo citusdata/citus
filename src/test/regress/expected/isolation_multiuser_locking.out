@@ -140,7 +140,7 @@ step s2-begin:
 step s2-index:
 	CREATE INDEX test_index ON test_table(column1);
 
-ERROR:  must be owner of table test_table
+ERROR:  permission denied for table test_table
 step s1-insert:
 	UPDATE test_table SET column2 = 1;
 

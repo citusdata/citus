@@ -154,6 +154,17 @@ PreprocessIndexStmt(Node *node, const char *createIndexCommand,
 	 * index statements.
 	 */
 	LOCKMODE lockMode = GetCreateIndexRelationLockMode(createIndexStatement);
+
+	/*
+	 * Acquire global lock to prevent concurrent writes or DDL. However,
+	 * we do not bother for CREATE INDEX CONCURRENTLY, since we'll have
+	 * to release the lock.
+	 */
+	if (!createIndexStatement->concurrent)
+	{
+		AcquireDistributedLockOnRelations(list_make1(relationRangeVar), lockMode, 0);
+	}
+
 	Relation relation = table_openrv(relationRangeVar, lockMode);
 
 	/*
@@ -234,6 +245,10 @@ PreprocessIndexStmt(Node *node, const char *createIndexCommand,
 	SwitchToSequentialAndLocalExecutionIfIndexNameTooLong(createIndexStatement);
 
 	DDLJob *ddlJob = GenerateCreateIndexDDLJob(createIndexStatement, createIndexCommand);
+
+	/* we have taken appropriate locks */
+	ddlJob->allowedOnWorkerNode = true;
+
 	return list_make1(ddlJob);
 }
 
@@ -541,11 +556,9 @@ ReindexStmtFindRelationOid(ReindexStmt *reindexStmt, bool missingOk)
 
 	Oid relationId = InvalidOid;
 
-	LOCKMODE lockmode = IsReindexWithParam_compat(reindexStmt, "concurrently") ?
-						ShareUpdateExclusiveLock : AccessExclusiveLock;
-
 	if (reindexStmt->kind == REINDEX_OBJECT_INDEX)
 	{
+		LOCKMODE lockmode = GetReindexIndexRelationLockMode(reindexStmt);
 		struct ReindexIndexCallbackState state;
 		state.concurrent = IsReindexWithParam_compat(reindexStmt,
 													 "concurrently");
@@ -559,12 +572,42 @@ ReindexStmtFindRelationOid(ReindexStmt *reindexStmt, bool missingOk)
 	}
 	else
 	{
+		LOCKMODE lockmode = GetReindexTableRelationLockMode(reindexStmt);
 		relationId = RangeVarGetRelidExtended(reindexStmt->relation, lockmode,
 											  (missingOk) ? RVR_MISSING_OK : 0,
 											  RangeVarCallbackOwnsTable, NULL);
 	}
 
 	return relationId;
+}
+
+
+/*
+ * GetReindexRelationLockMode returns required lock mode to open the
+ * index that given REINDEX INDEX command operates on.
+ */
+LOCKMODE
+GetReindexIndexRelationLockMode(ReindexStmt *reindexStmt)
+{
+	if (IsReindexWithParam_compat(reindexStmt, "concurrently"))
+	{
+		return ShareUpdateExclusiveLock;
+	}
+	else
+	{
+		return AccessExclusiveLock;
+	}
+}
+
+
+/*
+ * GetReindexTableLockMode returns required lock mode to open the
+ * relation that given REINDEX TABLE command operates on.
+ */
+LOCKMODE
+GetReindexTableRelationLockMode(ReindexStmt *reindexStmt)
+{
+	return ShareLock;
 }
 
 
@@ -593,13 +636,32 @@ PreprocessReindexStmt(Node *node, const char *reindexCommand,
 		Oid relationId = ReindexStmtFindRelationOid(reindexStatement, false);
 		MemoryContext relationContext = NULL;
 		Relation relation = NULL;
+
 		if (reindexStatement->kind == REINDEX_OBJECT_INDEX)
 		{
+			LOCKMODE lockmode = GetReindexIndexRelationLockMode(reindexStatement);
+
+			/*
+			 * Acquire global lock to prevent concurrent writes or DDL. However,
+			 * we do not bother for REINDEX CONCURRENTLY, since we'll have
+			 * to release the lock.
+			 */
+			if (!IsReindexWithParam_compat(reindexStatement, "concurrently"))
+			{
+				AcquireDistributedLockOnRelations(list_make1(reindexStatement->relation),
+												  lockmode, 0);
+			}
+
 			Oid indOid = RangeVarGetRelid(reindexStatement->relation, NoLock, 0);
 			relation = index_open(indOid, NoLock);
 		}
 		else
 		{
+			LOCKMODE lockmode = GetReindexTableRelationLockMode(reindexStatement);
+
+			AcquireDistributedLockOnRelations(list_make1(reindexStatement->relation),
+											  lockmode, 0);
+
 			relation = table_openrv(reindexStatement->relation, NoLock);
 		}
 
@@ -646,6 +708,7 @@ PreprocessReindexStmt(Node *node, const char *reindexCommand,
 																	"concurrently");
 			ddlJob->metadataSyncCommand = reindexCommand;
 			ddlJob->taskList = CreateReindexTaskList(relationId, reindexStatement);
+			ddlJob->allowedOnWorkerNode = true;
 
 			ddlJobs = list_make1(ddlJob);
 		}
@@ -741,6 +804,16 @@ PreprocessDropIndexStmt(Node *node, const char *dropIndexCommand,
 			continue;
 		}
 
+		/*
+		 * Acquire global lock to prevent concurrent writes or DDL. However,
+		 * we do not bother for DROP INDEX CONCURRENTLY, since we'll have
+		 * to release the lock.
+		 */
+		if (!dropIndexStatement->concurrent)
+		{
+			AcquireDistributedLockOnRelations(list_make1(rangeVar), lockmode, 0);
+		}
+
 		Oid relationId = IndexGetRelation(indexId, false);
 		bool isCitusRelation = IsCitusTable(relationId);
 		if (isCitusRelation)
@@ -774,6 +847,7 @@ PreprocessDropIndexStmt(Node *node, const char *dropIndexCommand,
 		ddlJob->metadataSyncCommand = dropIndexCommand;
 		ddlJob->taskList = DropIndexTaskList(distributedRelationId, distributedIndexId,
 											 dropIndexStatement);
+		ddlJob->allowedOnWorkerNode = true;
 
 		ddlJobs = list_make1(ddlJob);
 	}
@@ -792,12 +866,6 @@ List *
 PostprocessIndexStmt(Node *node, const char *queryString)
 {
 	IndexStmt *indexStmt = castNode(IndexStmt, node);
-
-	/* this logic only applies to the coordinator */
-	if (!IsCoordinator())
-	{
-		return NIL;
-	}
 
 	/*
 	 * We make sure schema name is not null in the PreprocessIndexStmt
@@ -1330,7 +1398,6 @@ void
 MarkIndexValid(IndexStmt *indexStmt)
 {
 	Assert(indexStmt->concurrent);
-	Assert(IsCoordinator());
 
 	/*
 	 * We make sure schema name is not null in the PreprocessIndexStmt

@@ -83,6 +83,11 @@ step "s2-coordinator-create-index-concurrently"
 	CREATE INDEX CONCURRENTLY copy_table_index ON copy_table(id);
 }
 
+step "s2-worker-create-index-concurrently"
+{
+	SELECT run_commands_on_session_level_connection_to_node('CREATE INDEX CONCURRENTLY copy_table_index ON copy_table(id)');
+}
+
 step "s2-commit-worker"
 {
         SELECT run_commands_on_session_level_connection_to_node('COMMIT');
@@ -116,3 +121,4 @@ permutation "s1-start-session-level-connection" "s1-begin-on-worker" "s1-copy" "
 permutation "s1-start-session-level-connection" "s1-begin-on-worker" "s1-copy" "s2-begin" "s2-coordinator-drop" "s1-commit-worker" "s2-commit" "s1-stop-connection" "s3-select-count"
 permutation "s1-start-session-level-connection" "s1-begin-on-worker" "s1-copy" "s2-start-session-level-connection" "s2-begin-on-worker" "s2-select-for-update" "s1-commit-worker" "s2-commit-worker" "s1-stop-connection" "s2-stop-connection" "s3-select-count"
 permutation "s1-start-session-level-connection" "s1-begin-on-worker" "s1-copy" "s2-coordinator-create-index-concurrently" "s1-commit-worker" "s2-empty" "s3-select-count" "s1-stop-connection"
+permutation "s1-start-session-level-connection" "s1-begin-on-worker" "s1-copy" "s2-start-session-level-connection" "s2-worker-create-index-concurrently" "s1-commit-worker" "s2-stop-connection" "s3-select-count" "s1-stop-connection"

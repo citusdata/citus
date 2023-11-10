@@ -72,11 +72,9 @@ SELECT * from master_set_node_property('localhost', 8888, 'shouldhaveshards', tr
 
 -- DDL commands
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.mx_table'::regclass;
-CREATE INDEX mx_test_index ON mx_table(col_2);
 ALTER TABLE mx_table ADD COLUMN col_4 int;
 ALTER TABLE mx_table_2 ADD CONSTRAINT mx_fk_constraint FOREIGN KEY(col_1) REFERENCES mx_table(col_1);
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.mx_table'::regclass;
-\d mx_test_index
 
 -- citus_drop_all_shards
 SELECT citus_drop_all_shards('mx_table'::regclass, 'public', 'mx_table');
@@ -98,6 +96,7 @@ SELECT count(1) FROM pg_dist_node WHERE nodename='localhost' AND nodeport=5432;
 
 \c - - - :master_port
 SELECT master_remove_node('localhost', 5432);
+SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);
 
 \c - - - :worker_1_port
 
