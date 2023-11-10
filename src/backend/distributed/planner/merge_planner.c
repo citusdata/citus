@@ -29,7 +29,7 @@
 #include "distributed/multi_logical_optimizer.h"
 #include "distributed/multi_router_planner.h"
 #include "distributed/pg_dist_node_metadata.h"
-#include "distributed/pg_version_constants.h"
+#include "pg_version_constants.h"
 #include "distributed/query_pushdown_planning.h"
 #include "distributed/query_colocation_checker.h"
 #include "distributed/repartition_executor.h"

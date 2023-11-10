@@ -12,7 +12,7 @@
 
 #include "postgres.h"
 
-#include "distributed/pg_version_constants.h"
+#include "pg_version_constants.h"
 
 #include "catalog/pg_proc.h"
 #include "catalog/pg_type.h"
@@ -525,8 +525,16 @@ ShardPlacementForFunctionColocatedWithDistTable(DistObjectCacheEntry *procedure,
 
 		if (partitionParam->paramkind == PARAM_EXTERN)
 		{
-			/* Don't log a message, we should end up here again without a parameter */
-			DissuadePlannerFromUsingPlan(plan);
+			/*
+			 * Don't log a message, we should end up here again without a
+			 * parameter.
+			 * Note that "plan" can be null, for example when a CALL statement
+			 * is prepared.
+			 */
+			if (plan)
+			{
+				DissuadePlannerFromUsingPlan(plan);
+			}
 			return NULL;
 		}
 	}

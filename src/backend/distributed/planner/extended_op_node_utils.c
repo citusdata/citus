@@ -9,7 +9,7 @@
  */
 
 #include "postgres.h"
-#include "distributed/pg_version_constants.h"
+#include "pg_version_constants.h"
 
 #include "distributed/extended_op_node_utils.h"
 #include "distributed/listutils.h"

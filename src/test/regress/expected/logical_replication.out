@@ -32,23 +32,21 @@ CREATE SUBSCRIPTION citus_shard_move_subscription_:postgres_oid
     PUBLICATION citus_shard_move_publication_:postgres_oid
     WITH (enabled=false, slot_name=citus_shard_move_slot_:postgres_oid);
 NOTICE:  created replication slot "citus_shard_move_slot_10" on publisher
-SELECT count(*) from pg_subscription;
- count
+SELECT subname from pg_subscription;
+             subname
 ---------------------------------------------------------------------
-     1
+ citus_shard_move_subscription_10
 (1 row)
 
-SELECT count(*) from pg_publication;
- count
+SELECT pubname from pg_publication;
+ pubname
 ---------------------------------------------------------------------
-     0
-(1 row)
+(0 rows)
 
-SELECT count(*) from pg_replication_slots;
- count
+SELECT slot_name from pg_replication_slots;
+ slot_name
 ---------------------------------------------------------------------
-     0
-(1 row)
+(0 rows)
 
 SELECT count(*) FROM dist;
  count
@@ -58,22 +56,21 @@ SELECT count(*) FROM dist;
 
 \c - - - :worker_1_port
 SET search_path TO logical_replication;
-SELECT count(*) from pg_subscription;
- count
+SELECT subname from pg_subscription;
+ subname
 ---------------------------------------------------------------------
-     0
+(0 rows)
+
+SELECT pubname from pg_publication;
+             pubname
+---------------------------------------------------------------------
+ citus_shard_move_publication_10
 (1 row)
 
-SELECT count(*) from pg_publication;
- count
+SELECT slot_name from pg_replication_slots;
+        slot_name
 ---------------------------------------------------------------------
-     1
-(1 row)
-
-SELECT count(*) from pg_replication_slots;
- count
----------------------------------------------------------------------
-     1
+ citus_shard_move_slot_10
 (1 row)
 
 SELECT count(*) FROM dist;
@@ -90,25 +87,29 @@ select citus_move_shard_placement(6830002, 'localhost', :worker_1_port, 'localho
 
 (1 row)
 
+SELECT public.wait_for_resource_cleanup();
+ wait_for_resource_cleanup
+---------------------------------------------------------------------
+
+(1 row)
+
 -- the subscription is still there, as there is no cleanup record for it
 -- we have created it manually
-SELECT count(*) from pg_subscription;
- count
+SELECT subname from pg_subscription;
+             subname
 ---------------------------------------------------------------------
-     1
+ citus_shard_move_subscription_10
 (1 row)
 
-SELECT count(*) from pg_publication;
- count
+SELECT pubname from pg_publication;
+ pubname
 ---------------------------------------------------------------------
-     0
-(1 row)
+(0 rows)
 
-SELECT count(*) from pg_replication_slots;
- count
+SELECT slot_name from pg_replication_slots;
+ slot_name
 ---------------------------------------------------------------------
-     0
-(1 row)
+(0 rows)
 
 SELECT count(*) from dist;
  count
@@ -120,22 +121,21 @@ SELECT count(*) from dist;
 SET search_path TO logical_replication;
 -- the publication and repslot are still there, as there are no cleanup records for them
 -- we have created them manually
-SELECT count(*) from pg_subscription;
- count
+SELECT subname from pg_subscription;
+ subname
 ---------------------------------------------------------------------
-     0
+(0 rows)
+
+SELECT pubname from pg_publication;
+             pubname
+---------------------------------------------------------------------
+ citus_shard_move_publication_10
 (1 row)
 
-SELECT count(*) from pg_publication;
- count
+SELECT slot_name from pg_replication_slots;
+        slot_name
 ---------------------------------------------------------------------
-     1
-(1 row)
-
-SELECT count(*) from pg_replication_slots;
- count
----------------------------------------------------------------------
-     1
+ citus_shard_move_slot_10
 (1 row)
 
 SELECT count(*) from dist;
@@ -153,23 +153,20 @@ SELECT pg_drop_replication_slot('citus_shard_move_slot_' || :postgres_oid);
 
 \c - - - :worker_2_port
 SET search_path TO logical_replication;
-SELECT count(*) from pg_subscription;
- count
+SELECT subname from pg_subscription;
+ subname
 ---------------------------------------------------------------------
-     0
-(1 row)
+(0 rows)
 
-SELECT count(*) from pg_publication;
- count
+SELECT pubname from pg_publication;
+ pubname
 ---------------------------------------------------------------------
-     0
-(1 row)
+(0 rows)
 
-SELECT count(*) from pg_replication_slots;
- count
+SELECT slot_name from pg_replication_slots;
+ slot_name
 ---------------------------------------------------------------------
-     0
-(1 row)
+(0 rows)
 
 SELECT count(*) from dist;
  count

@@ -134,7 +134,7 @@ static bool ShouldSkipMetadataChecks(void);
 static void EnsurePartitionMetadataIsSane(Oid relationId, char distributionMethod,
 										  int colocationId, char replicationModel,
 										  Var *distributionKey);
-static void EnsureCoordinatorInitiatedOperation(void);
+static void EnsureCitusInitiatedOperation(void);
 static void EnsureShardMetadataIsSane(Oid relationId, int64 shardId, char storageType,
 									  text *shardMinValue,
 									  text *shardMaxValue);
@@ -1001,7 +1001,7 @@ citus_internal_add_object_metadata(PG_FUNCTION_ARGS)
 	if (!ShouldSkipMetadataChecks())
 	{
 		/* this UDF is not allowed for executing as a separate command */
-		EnsureCoordinatorInitiatedOperation();
+		EnsureCitusInitiatedOperation();
 
 		/*
 		 * Ensure given distributionArgumentIndex and colocationId values are
@@ -3090,7 +3090,7 @@ citus_internal_add_partition_metadata(PG_FUNCTION_ARGS)
 	if (!ShouldSkipMetadataChecks())
 	{
 		/* this UDF is not allowed allowed for executing as a separate command */
-		EnsureCoordinatorInitiatedOperation();
+		EnsureCitusInitiatedOperation();
 
 		if (distributionMethod == DISTRIBUTE_BY_NONE && distributionColumnVar != NULL)
 		{
@@ -3206,7 +3206,7 @@ citus_internal_delete_partition_metadata(PG_FUNCTION_ARGS)
 
 	if (!ShouldSkipMetadataChecks())
 	{
-		EnsureCoordinatorInitiatedOperation();
+		EnsureCitusInitiatedOperation();
 	}
 
 	DeletePartitionRow(relationId);
@@ -3254,7 +3254,7 @@ citus_internal_add_shard_metadata(PG_FUNCTION_ARGS)
 	if (!ShouldSkipMetadataChecks())
 	{
 		/* this UDF is not allowed allowed for executing as a separate command */
-		EnsureCoordinatorInitiatedOperation();
+		EnsureCitusInitiatedOperation();
 
 		/*
 		 * Even if the table owner is a malicious user and the shard metadata is
@@ -3272,19 +3272,13 @@ citus_internal_add_shard_metadata(PG_FUNCTION_ARGS)
 
 
 /*
- * EnsureCoordinatorInitiatedOperation is a helper function which ensures that
- * the execution is initiated by the coordinator on a worker node.
+ * EnsureCitusInitiatedOperation is a helper function which ensures that
+ * the execution is initiated by Citus.
  */
 static void
-EnsureCoordinatorInitiatedOperation(void)
+EnsureCitusInitiatedOperation(void)
 {
-	/*
-	 * We are restricting the operation to only MX workers with the local group id
-	 * check. The other two checks are to ensure that the operation is initiated
-	 * by the coordinator.
-	 */
-	if (!(IsCitusInternalBackend() || IsRebalancerInternalBackend()) ||
-		GetLocalGroupId() == COORDINATOR_GROUP_ID)
+	if (!(IsCitusInternalBackend() || IsRebalancerInternalBackend()))
 	{
 		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
 						errmsg("This is an internal Citus function can only be "
@@ -3465,7 +3459,7 @@ citus_internal_delete_placement_metadata(PG_FUNCTION_ARGS)
 	if (!ShouldSkipMetadataChecks())
 	{
 		/* this UDF is not allowed allowed for executing as a separate command */
-		EnsureCoordinatorInitiatedOperation();
+		EnsureCitusInitiatedOperation();
 	}
 
 	DeleteShardPlacementRow(placementId);
@@ -3513,7 +3507,7 @@ citus_internal_add_placement_metadata_internal(int64 shardId, int64 shardLength,
 	if (!ShouldSkipMetadataChecks())
 	{
 		/* this UDF is not allowed allowed for executing as a separate command */
-		EnsureCoordinatorInitiatedOperation();
+		EnsureCitusInitiatedOperation();
 
 		/*
 		 * Even if the table owner is a malicious user, as long as the shard placements
@@ -3608,7 +3602,7 @@ citus_internal_update_placement_metadata(PG_FUNCTION_ARGS)
 	if (!ShouldSkipMetadataChecks())
 	{
 		/* this UDF is not allowed allowed for executing as a separate command */
-		EnsureCoordinatorInitiatedOperation();
+		EnsureCitusInitiatedOperation();
 
 		if (!ShardExists(shardId))
 		{
@@ -3672,7 +3666,7 @@ citus_internal_delete_shard_metadata(PG_FUNCTION_ARGS)
 	if (!ShouldSkipMetadataChecks())
 	{
 		/* this UDF is not allowed allowed for executing as a separate command */
-		EnsureCoordinatorInitiatedOperation();
+		EnsureCitusInitiatedOperation();
 
 		if (!ShardExists(shardId))
 		{
@@ -3715,7 +3709,7 @@ citus_internal_update_relation_colocation(PG_FUNCTION_ARGS)
 	if (!ShouldSkipMetadataChecks())
 	{
 		/* this UDF is not allowed allowed for executing as a separate command */
-		EnsureCoordinatorInitiatedOperation();
+		EnsureCitusInitiatedOperation();
 
 		/* ensure that the table is in pg_dist_partition */
 		char partitionMethod = PartitionMethodViaCatalog(relationId);
@@ -3781,7 +3775,7 @@ citus_internal_add_colocation_metadata(PG_FUNCTION_ARGS)
 	if (!ShouldSkipMetadataChecks())
 	{
 		/* this UDF is not allowed allowed for executing as a separate command */
-		EnsureCoordinatorInitiatedOperation();
+		EnsureCitusInitiatedOperation();
 	}
 
 	InsertColocationGroupLocally(colocationId, shardCount, replicationFactor,
@@ -3806,7 +3800,7 @@ citus_internal_delete_colocation_metadata(PG_FUNCTION_ARGS)
 	if (!ShouldSkipMetadataChecks())
 	{
 		/* this UDF is not allowed allowed for executing as a separate command */
-		EnsureCoordinatorInitiatedOperation();
+		EnsureCitusInitiatedOperation();
 	}
 
 	DeleteColocationGroupLocally(colocationId);
@@ -3885,7 +3879,7 @@ citus_internal_update_none_dist_table_metadata(PG_FUNCTION_ARGS)
 
 	if (!ShouldSkipMetadataChecks())
 	{
-		EnsureCoordinatorInitiatedOperation();
+		EnsureCitusInitiatedOperation();
 	}
 
 	UpdateNoneDistTableMetadata(relationId, replicationModel,

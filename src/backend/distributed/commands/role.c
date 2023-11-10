@@ -12,7 +12,7 @@
 
 #include "pg_version_compat.h"
 
-#include "distributed/pg_version_constants.h"
+#include "pg_version_constants.h"
 
 #include "access/heapam.h"
 #include "access/htup_details.h"
@@ -156,7 +156,7 @@ PostprocessAlterRoleStmt(Node *node, const char *queryString)
 		return NIL;
 	}
 
-	EnsureCoordinator();
+	EnsurePropagationToCoordinator();
 
 	AlterRoleStmt *stmt = castNode(AlterRoleStmt, node);
 
@@ -185,7 +185,7 @@ PostprocessAlterRoleStmt(Node *node, const char *queryString)
 								(void *) CreateAlterRoleIfExistsCommand(stmt),
 								ENABLE_DDL_PROPAGATION);
 
-	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
+	return NodeDDLTaskList(REMOTE_NODES, commands);
 }
 
 
@@ -231,7 +231,7 @@ PreprocessAlterRoleSetStmt(Node *node, const char *queryString,
 		return NIL;
 	}
 
-	EnsureCoordinator();
+	EnsurePropagationToCoordinator();
 
 	QualifyTreeNode((Node *) stmt);
 	const char *sql = DeparseTreeNode((Node *) stmt);
@@ -240,7 +240,7 @@ PreprocessAlterRoleSetStmt(Node *node, const char *queryString,
 								   (void *) sql,
 								   ENABLE_DDL_PROPAGATION);
 
-	return NodeDDLTaskList(NON_COORDINATOR_NODES, commandList);
+	return NodeDDLTaskList(REMOTE_NODES, commandList);
 }
 
 
@@ -910,7 +910,8 @@ PreprocessCreateRoleStmt(Node *node, const char *queryString,
 		return NIL;
 	}
 
-	EnsureCoordinator();
+	EnsurePropagationToCoordinator();
+
 	EnsureSequentialModeForRoleDDL();
 
 	LockRelationOid(DistNodeRelationId(), RowShareLock);
@@ -945,7 +946,7 @@ PreprocessCreateRoleStmt(Node *node, const char *queryString,
 
 	commands = lappend(commands, ENABLE_DDL_PROPAGATION);
 
-	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
+	return NodeDDLTaskList(REMOTE_NODES, commands);
 }
 
 
@@ -1041,7 +1042,8 @@ PreprocessDropRoleStmt(Node *node, const char *queryString,
 		return NIL;
 	}
 
-	EnsureCoordinator();
+	EnsurePropagationToCoordinator();
+
 	EnsureSequentialModeForRoleDDL();
 
 
@@ -1053,7 +1055,7 @@ PreprocessDropRoleStmt(Node *node, const char *queryString,
 								sql,
 								ENABLE_DDL_PROPAGATION);
 
-	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
+	return NodeDDLTaskList(REMOTE_NODES, commands);
 }
 
 
@@ -1130,7 +1132,7 @@ PreprocessGrantRoleStmt(Node *node, const char *queryString,
 		return NIL;
 	}
 
-	EnsureCoordinator();
+	EnsurePropagationToCoordinator();
 
 	GrantRoleStmt *stmt = castNode(GrantRoleStmt, node);
 	List *allGranteeRoles = stmt->grantee_roles;
@@ -1170,7 +1172,7 @@ PreprocessGrantRoleStmt(Node *node, const char *queryString,
 								sql,
 								ENABLE_DDL_PROPAGATION);
 
-	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
+	return NodeDDLTaskList(REMOTE_NODES, commands);
 }
 
 
@@ -1181,10 +1183,12 @@ PreprocessGrantRoleStmt(Node *node, const char *queryString,
 List *
 PostprocessGrantRoleStmt(Node *node, const char *queryString)
 {
-	if (!EnableCreateRolePropagation || !IsCoordinator() || !ShouldPropagate())
+	if (!EnableCreateRolePropagation || !ShouldPropagate())
 	{
 		return NIL;
 	}
+
+	EnsurePropagationToCoordinator();
 
 	GrantRoleStmt *stmt = castNode(GrantRoleStmt, node);
 
@@ -1333,7 +1337,7 @@ PreprocessAlterRoleRenameStmt(Node *node, const char *queryString,
 	Assert(stmt->renameType == OBJECT_ROLE);
 
 
-	EnsureCoordinator();
+	EnsurePropagationToCoordinator();
 
 	char *sql = DeparseTreeNode((Node *) stmt);
 
@@ -1341,7 +1345,7 @@ PreprocessAlterRoleRenameStmt(Node *node, const char *queryString,
 								(void *) sql,
 								ENABLE_DDL_PROPAGATION);
 
-	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
+	return NodeDDLTaskList(REMOTE_NODES, commands);
 }
 
 

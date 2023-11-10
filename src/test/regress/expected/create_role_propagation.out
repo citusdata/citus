@@ -40,18 +40,10 @@ SELECT master_remove_node('localhost', :worker_2_port);
 
 CREATE ROLE create_role_with_everything SUPERUSER CREATEDB CREATEROLE INHERIT LOGIN REPLICATION BYPASSRLS CONNECTION LIMIT 105 PASSWORD 'strong_password123^' VALID UNTIL '2045-05-05 00:00:00.00+00' IN ROLE create_role, create_group ROLE create_user, create_group_2 ADMIN create_role_2, create_user_2;
 CREATE ROLE create_role_with_nothing NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOLOGIN NOREPLICATION NOBYPASSRLS CONNECTION LIMIT 3 PASSWORD 'weakpassword' VALID UNTIL '2015-05-05 00:00:00.00+00';
--- show that creating role from worker node is only allowed when create role
--- propagation is off
+-- show that creating role from worker node is allowed
 \c - - - :worker_1_port
 CREATE ROLE role_on_worker;
-ERROR:  operation is not allowed on this node
-HINT:  Connect to the coordinator and run it again.
-BEGIN;
-SET citus.enable_create_role_propagation TO off;
-CREATE ROLE role_on_worker;
-NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
-HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
-ROLLBACK;
+DROP ROLE role_on_worker;
 \c - - - :master_port
 -- edge case role names
 CREATE ROLE "create_role'edge";
@@ -217,17 +209,17 @@ CREATE ROLE dist_role_3;
 CREATE ROLE dist_role_4;
 SET citus.enable_create_role_propagation TO OFF;
 CREATE ROLE non_dist_role_1 SUPERUSER;
-NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
-HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
+NOTICE:  not propagating CREATE ROLE/USER commands to other nodes
+HINT:  Connect to other nodes directly to manually create all necessary users and roles.
 CREATE ROLE non_dist_role_2;
-NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
-HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
+NOTICE:  not propagating CREATE ROLE/USER commands to other nodes
+HINT:  Connect to other nodes directly to manually create all necessary users and roles.
 CREATE ROLE non_dist_role_3;
-NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
-HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
+NOTICE:  not propagating CREATE ROLE/USER commands to other nodes
+HINT:  Connect to other nodes directly to manually create all necessary users and roles.
 CREATE ROLE non_dist_role_4;
-NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
-HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
+NOTICE:  not propagating CREATE ROLE/USER commands to other nodes
+HINT:  Connect to other nodes directly to manually create all necessary users and roles.
 SET citus.enable_create_role_propagation TO ON;
 SET ROLE dist_role_1;
 GRANT non_dist_role_1 TO non_dist_role_2;
@@ -307,11 +299,11 @@ CREATE ROLE dist_mixed_3;
 CREATE ROLE dist_mixed_4;
 SET citus.enable_create_role_propagation TO OFF;
 CREATE ROLE nondist_mixed_1;
-NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
-HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
+NOTICE:  not propagating CREATE ROLE/USER commands to other nodes
+HINT:  Connect to other nodes directly to manually create all necessary users and roles.
 CREATE ROLE nondist_mixed_2;
-NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
-HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
+NOTICE:  not propagating CREATE ROLE/USER commands to other nodes
+HINT:  Connect to other nodes directly to manually create all necessary users and roles.
 SELECT roleid::regrole::text AS role, member::regrole::text, grantor::regrole::text, admin_option FROM pg_auth_members WHERE roleid::regrole::text LIKE '%dist\_mixed%' ORDER BY 1, 2;
  role | member | grantor | admin_option
 ---------------------------------------------------------------------
@@ -506,14 +498,14 @@ SELECT rolname, rolcanlogin FROM pg_authid WHERE rolname = 'create_role' OR roln
 -- test cascading grants
 SET citus.enable_create_role_propagation TO OFF;
 CREATE ROLE nondist_cascade_1;
-NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
-HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
+NOTICE:  not propagating CREATE ROLE/USER commands to other nodes
+HINT:  Connect to other nodes directly to manually create all necessary users and roles.
 CREATE ROLE nondist_cascade_2;
-NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
-HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
+NOTICE:  not propagating CREATE ROLE/USER commands to other nodes
+HINT:  Connect to other nodes directly to manually create all necessary users and roles.
 CREATE ROLE nondist_cascade_3;
-NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
-HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
+NOTICE:  not propagating CREATE ROLE/USER commands to other nodes
+HINT:  Connect to other nodes directly to manually create all necessary users and roles.
 SET citus.enable_create_role_propagation TO ON;
 CREATE ROLE dist_cascade;
 GRANT nondist_cascade_1 TO nondist_cascade_2;
@@ -696,3 +688,4 @@ SELECT rolname FROM pg_authid WHERE rolname LIKE '%existing%' ORDER BY 1;
 (0 rows)
 
 \c - - - :master_port
+DROP ROLE nondist_cascade_1, nondist_cascade_2, nondist_cascade_3, dist_cascade;

@@ -11,7 +11,7 @@
 
 #include "postgres.h"
 
-#include "distributed/pg_version_constants.h"
+#include "pg_version_constants.h"
 
 #include "distributed/backend_data.h"
 #include "distributed/metadata_cache.h"

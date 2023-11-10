@@ -34,7 +34,7 @@
  */
 #include "postgres.h"
 
-#include "distributed/pg_version_constants.h"
+#include "pg_version_constants.h"
 
 #include "distributed/distributed_planner.h"
 #include "distributed/insert_select_planner.h"

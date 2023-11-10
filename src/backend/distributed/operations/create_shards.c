@@ -158,13 +158,6 @@ CreateShardsWithRoundRobinPolicy(Oid distributedTableId, int32 shardCount,
 								"replication factor.")));
 	}
 
-	/* if we have enough nodes, add an extra placement attempt for backup */
-	uint32 placementAttemptCount = (uint32) replicationFactor;
-	if (workerNodeCount > replicationFactor)
-	{
-		placementAttemptCount++;
-	}
-
 	/* set shard storage type according to relation type */
 	char shardStorageType = ShardStorageType(distributedTableId);
 

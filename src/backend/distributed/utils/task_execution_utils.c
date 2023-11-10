@@ -6,7 +6,7 @@
 #include <unistd.h>
 #include <math.h>
 
-#include "distributed/pg_version_constants.h"
+#include "pg_version_constants.h"
 
 #include "common/hashfn.h"
 

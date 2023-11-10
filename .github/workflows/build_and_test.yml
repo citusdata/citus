@@ -16,6 +16,7 @@ on:
       - "release-*"
   pull_request:
     types: [opened, reopened,synchronize]
+  merge_group:
 jobs:
   # Since GHA does not interpolate env varibles in matrix context, we need to
   # define them in a separate job and use them in other jobs.
@@ -496,7 +497,6 @@ jobs:
       matrix: ${{ fromJson(needs.prepare_parallelization_matrix_32.outputs.json) }}
     steps:
     - uses: actions/checkout@v3.5.0
-    - uses: actions/download-artifact@v3.0.1
     - uses: "./.github/actions/setup_extension"
     - name: Run minimal tests
       run: |-
