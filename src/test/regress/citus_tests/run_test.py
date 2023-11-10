@@ -198,6 +198,10 @@ DEPS = {
         ["multi_create_table", "multi_create_users", "multi_multiuser_load_data"],
         repeatable=False,
     ),
+    "multi_tenant_isolation_nonblocking": TestDeps(
+        "minimal_schedule",
+        ["multi_data_types"],
+    ),
 }
 
 

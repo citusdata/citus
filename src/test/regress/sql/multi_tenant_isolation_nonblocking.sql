@@ -16,6 +16,9 @@ SET search_path to "Tenant Isolation";
 CREATE ROLE mx_isolation_role_ent WITH LOGIN;
 GRANT ALL ON SCHEMA "Tenant Isolation", public TO mx_isolation_role_ent;
 
+\c - postgres - :master_port
+SELECT 1 FROM master_remove_node('localhost', :master_port);
+
 -- connect with this new role
 \c - mx_isolation_role_ent - :master_port
 SET search_path to "Tenant Isolation";
@@ -607,3 +610,7 @@ TRUNCATE TABLE pg_catalog.pg_dist_colocation;
 ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 100;
 
 ALTER SEQUENCE pg_catalog.pg_dist_placement_placementid_seq RESTART :last_placement_id;
+
+SELECT result FROM run_command_on_all_nodes($$SELECT count(*) FROM pg_replication_slots$$);
+SELECT result FROM run_command_on_all_nodes($$SELECT count(*) FROM pg_publication$$);
+SELECT result FROM run_command_on_all_nodes($$SELECT count(*) FROM pg_subscription$$);
