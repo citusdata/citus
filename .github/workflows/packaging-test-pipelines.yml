@@ -185,6 +185,4 @@ jobs:
           PACKAGING_DOCKER_IMAGE: ${{ matrix.packaging_docker_image }}
         run: |
           echo "Postgres version: ${POSTGRES_VERSION}"
-          ## Install required packages to execute packaging tools for deb based distros
-          apt-get purge -y python3-yaml
           ./.github/packaging/validate_build_output.sh "deb"
