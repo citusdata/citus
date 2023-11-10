@@ -3904,7 +3904,7 @@ citus_internal_database_command(PG_FUNCTION_ARGS)
 	CheckCitusVersion(ERROR);
 	if (!ShouldSkipMetadataChecks())
 	{
-		EnsureCoordinatorInitiatedOperation();
+		EnsureCitusInitiatedOperation();
 	}
 	PG_ENSURE_ARGNOTNULL(0, "database command");
 
