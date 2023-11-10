@@ -3951,7 +3951,6 @@ citus_internal_database_command(PG_FUNCTION_ARGS)
 		bool missingOk = false;
 		Oid databaseOid = get_database_oid(stmt->dbname, missingOk);
 
-
 		if (OidIsValid(databaseOid))
 		{
 			DropDatabase(pstate, (DropdbStmt *) parseTree);

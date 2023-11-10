@@ -275,9 +275,6 @@ ValidateCreateDatabaseOptions(DefElem *option)
 }
 
 
-/*
- * Prepares a CREATE DATABASE statement with given empty StringInfo buffer and CreatedbStmt node.
- */
 static void
 AppendCreateDatabaseStmt(StringInfo buf, CreatedbStmt *stmt)
 {
@@ -314,9 +311,6 @@ DeparseCreateDatabaseStmt(Node *node)
 }
 
 
-/*
- * Prepares a DROP  DATABASE statement with given empty StringInfo buffer and DropdbStmt node.
- */
 static void
 AppendDropDatabaseStmt(StringInfo buf, DropdbStmt *stmt)
 {

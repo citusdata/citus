@@ -22,11 +22,13 @@
 #include "catalog/dependency.h"
 #include "catalog/namespace.h"
 #include "catalog/objectaddress.h"
+#include "catalog/pg_database.h"
 #include "catalog/pg_extension_d.h"
 #include "catalog/pg_namespace.h"
 #include "catalog/pg_proc.h"
 #include "catalog/pg_type.h"
 #include "citus_version.h"
+#include "commands/dbcommands.h"
 #include "commands/extension.h"
 #include "distributed/listutils.h"
 #include "distributed/colocation_utils.h"
@@ -48,9 +50,6 @@
 #include "utils/lsyscache.h"
 #include "utils/regproc.h"
 #include "utils/rel.h"
-#include "catalog/pg_database.h"
-#include "commands/dbcommands.h"
-
 
 static char * CreatePgDistObjectEntryCommand(const ObjectAddress *objectAddress);
 static int ExecuteCommandAsSuperuser(char *query, int paramCount, Oid *paramTypes,

@@ -14,7 +14,6 @@
 
 #include "postgres.h"
 
-
 #include "commands/defrem.h"
 #include "distributed/deparser.h"
 #include "utils/builtins.h"

@@ -298,7 +298,7 @@ PreprocessCreateDatabaseStmt(Node *node, const char *queryString,
 /*
  * PostprocessCreatedbStmt is executed after the statement is applied to the local
  * postgres instance. In this stage we can prepare the commands that need to be run on
- * all workers to create the database. Since the CREATE DATABASE statement gives error 
+ * all workers to create the database. Since the CREATE DATABASE statement gives error
  * in a transaction block, we need to use NontransactionalNodeDDLTaskList to send the
  * CREATE DATABASE statement to the workers.
  *
@@ -388,11 +388,11 @@ GetDatabaseAddressFromDatabaseName(char *databaseName, bool missingOk)
  * object of the DropdbStmt.
  */
 List *
-DropDatabaseStmtObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
+DropDatabaseStmtObjectAddress(Node *node, bool missingOk, bool isPostprocess)
 {
 	DropdbStmt *stmt = castNode(DropdbStmt, node);
 	ObjectAddress *dbAddress = GetDatabaseAddressFromDatabaseName(stmt->dbname,
-																  missing_ok);
+																  missingOk);
 	return list_make1(dbAddress);
 }
 
@@ -402,11 +402,11 @@ DropDatabaseStmtObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
  * object of the CreatedbStmt.
  */
 List *
-CreateDatabaseStmtObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
+CreateDatabaseStmtObjectAddress(Node *node, bool missingOk, bool isPostprocess)
 {
 	CreatedbStmt *stmt = castNode(CreatedbStmt, node);
 	ObjectAddress *dbAddress = GetDatabaseAddressFromDatabaseName(stmt->dbname,
-																  missing_ok);
+																  missingOk);
 	return list_make1(dbAddress);
 }
 
@@ -424,7 +424,7 @@ GetTablespaceName(Oid tablespaceOid)
 	}
 
 	Form_pg_tablespace tablespaceForm = (Form_pg_tablespace) GETSTRUCT(tuple);
-	char *tablespaceName = NameStr(tablespaceForm->spcname);
+	char *tablespaceName = pstrdup(NameStr(tablespaceForm->spcname));
 
 	ReleaseSysCache(tuple);
 
@@ -437,17 +437,17 @@ GetTablespaceName(Oid tablespaceOid)
  * We need this method since collation related info in Form_pg_database is not accessible
  */
 static DatabaseCollationInfo
-GetDatabaseCollation(Oid db_oid)
+GetDatabaseCollation(Oid dbOid)
 {
 	DatabaseCollationInfo info;
 	bool isNull;
 
 	Snapshot snapshot = RegisterSnapshot(GetLatestSnapshot());
 	Relation rel = table_open(DatabaseRelationId, AccessShareLock);
-	HeapTuple tup = get_catalog_object_by_oid(rel, Anum_pg_database_oid, db_oid);
+	HeapTuple tup = get_catalog_object_by_oid(rel, Anum_pg_database_oid, dbOid);
 	if (!HeapTupleIsValid(tup))
 	{
-		elog(ERROR, "cache lookup failed for database %u", db_oid);
+		elog(ERROR, "cache lookup failed for database %u", dbOid);
 	}
 
 	TupleDesc tupdesc = RelationGetDescr(rel);
@@ -502,29 +502,6 @@ GetDatabaseCollation(Oid db_oid)
 	heap_freetuple(tup);
 
 	return info;
-}
-
-
-/*
- * FreeDatabaseCollationInfo frees the memory allocated for DatabaseCollationInfo
- */
-static void
-FreeDatabaseCollationInfo(DatabaseCollationInfo collInfo)
-{
-	if (collInfo.collation != NULL)
-	{
-		pfree(collInfo.collation);
-	}
-	if (collInfo.ctype != NULL)
-	{
-		pfree(collInfo.ctype);
-	}
-	#if PG_VERSION_NUM >= PG_VERSION_15
-	if (collInfo.icu_locale != NULL)
-	{
-		pfree(collInfo.icu_locale);
-	}
-	#endif
 }
 
 
@@ -640,8 +617,6 @@ GenerateCreateDatabaseStatementFromPgDatabase(Form_pg_database databaseForm)
 	appendStringInfo(&str, " IS_TEMPLATE = %s",
 					 quote_literal_cstr(databaseForm->datistemplate ? "true" : "false"));
 
-	FreeDatabaseCollationInfo(collInfo);
-
 
 	return str.data;
 }
@@ -669,7 +644,6 @@ GenerateCreateDatabaseCommandList(void)
 
 		char *createStmt = GenerateCreateDatabaseStatementFromPgDatabase(databaseForm);
 
-
 		StringInfo outerDbStmt = makeStringInfo();
 
 		/* Generate the CREATE DATABASE statement */
@@ -677,8 +651,6 @@ GenerateCreateDatabaseCommandList(void)
 						 "SELECT pg_catalog.citus_internal_database_command(%s)",
 						 quote_literal_cstr(
 							 createStmt));
-
-		elog(LOG, "outerDbStmt: %s", outerDbStmt->data);
 
 		/* Add the statement to the list of commands */
 		commands = lappend(commands, outerDbStmt->data);
