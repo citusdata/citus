@@ -1,6 +1,58 @@
--- test for create/drop database propagation
--- This test is only executes for Postgres 14
--- For postgres 15 tests, pg15_create_drop_database_propagation.sql is used
+-- Test for create/drop database propagation.
+-- This test is only executes for Postgres versions < 15.
+-- For versions >= 15, pg15_create_drop_database_propagation.sql is used.
+-- For versions >= 16, pg16_create_drop_database_propagation.sql is used.
+-- Test the UDF that we use to issue database command during metadata sync.
+SELECT pg_catalog.citus_internal_database_command(null);
+ERROR:  This is an internal Citus function can only be used in a distributed transaction
+CREATE ROLE test_db_commands WITH LOGIN;
+ALTER SYSTEM SET citus.enable_manual_metadata_changes_for_user TO 'test_db_commands';
+SELECT pg_reload_conf();
+ pg_reload_conf
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT pg_sleep(0.1);
+ pg_sleep
+---------------------------------------------------------------------
+
+(1 row)
+
+SET ROLE test_db_commands;
+-- fails on null input
+SELECT pg_catalog.citus_internal_database_command(null);
+ERROR:  command cannot be NULL
+-- fails on non create / drop db command
+SELECT pg_catalog.citus_internal_database_command('CREATE TABLE foo_bar(a int)');
+ERROR:  unsupported command type 255
+SELECT pg_catalog.citus_internal_database_command('SELECT 1');
+ERROR:  unsupported command type 242
+SELECT pg_catalog.citus_internal_database_command('asfsfdsg');
+ERROR:  syntax error at or near "asfsfdsg"
+SELECT pg_catalog.citus_internal_database_command('');
+ERROR:  cannot execute multiple utility events
+RESET ROLE;
+ALTER ROLE test_db_commands nocreatedb;
+SET ROLE test_db_commands;
+-- make sure that pg_catalog.citus_internal_database_command doesn't cause privilege escalation
+SELECT pg_catalog.citus_internal_database_command('CREATE DATABASE no_permissions');
+ERROR:  permission denied to create database
+RESET ROLE;
+DROP USER test_db_commands;
+ALTER SYSTEM RESET citus.enable_manual_metadata_changes_for_user;
+SELECT pg_reload_conf();
+ pg_reload_conf
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT pg_sleep(0.1);
+ pg_sleep
+---------------------------------------------------------------------
+
+(1 row)
+
 \set create_drop_db_tablespace :abs_srcdir '/tmp_check/ts3'
 CREATE TABLESPACE create_drop_db_tablespace LOCATION :'create_drop_db_tablespace';
 \c - - - :worker_1_port
@@ -9,6 +61,54 @@ CREATE TABLESPACE create_drop_db_tablespace LOCATION :'create_drop_db_tablespace
 \c - - - :worker_2_port
 \set create_drop_db_tablespace :abs_srcdir '/tmp_check/ts5'
 CREATE TABLESPACE create_drop_db_tablespace LOCATION :'create_drop_db_tablespace';
+\c - - - :master_port
+CREATE DATABASE local_database;
+NOTICE:  Citus partially supports CREATE DATABASE for distributed databases
+DETAIL:  Citus does not propagate CREATE DATABASE command to workers
+HINT:  You can manually create a database and its extensions on workers.
+-- check that it's only created for coordinator
+SELECT * FROM public.check_database_on_all_nodes('local_database') ORDER BY node_type;
+      node_type       |                                                                                                                                                                                                               result
+---------------------------------------------------------------------
+ coordinator (local)  | {"database_properties": {"datacl": null, "datname": "local_database", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "pg_default", "datallowconn": true, "datconnlimit": -1, "daticulocale": null, "datistemplate": false, "database_owner": "postgres", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": false, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": null, "pg_dist_object_record_for_db_exists": false, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": null, "pg_dist_object_record_for_db_exists": false, "stale_pg_dist_object_record_for_a_db_exists": false}
+(3 rows)
+
+DROP DATABASE local_database;
+-- and is dropped
+SELECT * FROM public.check_database_on_all_nodes('local_database') ORDER BY node_type;
+      node_type       |                                                              result
+---------------------------------------------------------------------
+ coordinator (local)  | {"database_properties": null, "pg_dist_object_record_for_db_exists": false, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": null, "pg_dist_object_record_for_db_exists": false, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": null, "pg_dist_object_record_for_db_exists": false, "stale_pg_dist_object_record_for_a_db_exists": false}
+(3 rows)
+
+\c - - - :worker_1_port
+CREATE DATABASE local_database;
+NOTICE:  Citus partially supports CREATE DATABASE for distributed databases
+DETAIL:  Citus does not propagate CREATE DATABASE command to workers
+HINT:  You can manually create a database and its extensions on workers.
+-- check that it's only created for coordinator
+SELECT * FROM public.check_database_on_all_nodes('local_database') ORDER BY node_type;
+      node_type       |                                                                                                                                                                                                               result
+---------------------------------------------------------------------
+ coordinator (remote) | {"database_properties": null, "pg_dist_object_record_for_db_exists": false, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (local)  | {"database_properties": {"datacl": null, "datname": "local_database", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "pg_default", "datallowconn": true, "datconnlimit": -1, "daticulocale": null, "datistemplate": false, "database_owner": "postgres", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": false, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": null, "pg_dist_object_record_for_db_exists": false, "stale_pg_dist_object_record_for_a_db_exists": false}
+(3 rows)
+
+DROP DATABASE local_database;
+-- and is dropped
+SELECT * FROM public.check_database_on_all_nodes('local_database') ORDER BY node_type;
+      node_type       |                                                              result
+---------------------------------------------------------------------
+ coordinator (remote) | {"database_properties": null, "pg_dist_object_record_for_db_exists": false, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (local)  | {"database_properties": null, "pg_dist_object_record_for_db_exists": false, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": null, "pg_dist_object_record_for_db_exists": false, "stale_pg_dist_object_record_for_a_db_exists": false}
+(3 rows)
+
 \c - - - :master_port
 create user create_drop_db_test_user;
 set citus.enable_create_database_propagation=on;
@@ -22,7 +122,7 @@ CREATE DATABASE mydatabase
             ALLOW_CONNECTIONS = true
             IS_TEMPLATE = false;
 ERROR:  Only template1 is supported as template parameter for CREATE DATABASE
-CREATE DATABASE mydatabase
+CREATE DATABASE mydatabase_1
     WITH template=template1
     OWNER = create_drop_db_test_user
             ENCODING = 'UTF8'
@@ -30,47 +130,104 @@ CREATE DATABASE mydatabase
             TABLESPACE = create_drop_db_tablespace
             ALLOW_CONNECTIONS = true
             IS_TEMPLATE = false;
-SELECT result from run_command_on_all_nodes(
-  $$
-  SELECT jsonb_agg(to_jsonb(q2.*)) FROM (
-    SELECT pd.datname, pg_encoding_to_char(pd.encoding) as encoding,
-    pd.datistemplate, pd.datallowconn, pd.datconnlimit,
-    pd.datcollate , pd. datctype  ,  pd.datacl,
-    pa.rolname AS database_owner, pt.spcname AS tablespace
-    FROM pg_database pd
-    JOIN pg_authid pa ON pd.datdba = pa.oid
-    join pg_tablespace pt on pd.dattablespace = pt.oid
-    WHERE datname = 'mydatabase'
-  ) q2
-  $$
-) ORDER BY result;
-                                                                                                                             result
+SELECT * FROM public.check_database_on_all_nodes('mydatabase_1') ORDER BY node_type;
+      node_type       |                                                                                                                                                                                                                             result
 ---------------------------------------------------------------------
- [{"datacl": null, "datname": "mydatabase", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "create_drop_db_tablespace", "datallowconn": true, "datconnlimit": 10, "datistemplate": false, "database_owner": "create_drop_db_test_user"}]
- [{"datacl": null, "datname": "mydatabase", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "create_drop_db_tablespace", "datallowconn": true, "datconnlimit": 10, "datistemplate": false, "database_owner": "create_drop_db_test_user"}]
- [{"datacl": null, "datname": "mydatabase", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "create_drop_db_tablespace", "datallowconn": true, "datconnlimit": 10, "datistemplate": false, "database_owner": "create_drop_db_test_user"}]
+ coordinator (local)  | {"database_properties": {"datacl": null, "datname": "mydatabase_1", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "create_drop_db_tablespace", "datallowconn": true, "datconnlimit": 10, "daticulocale": null, "datistemplate": false, "database_owner": "create_drop_db_test_user", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": {"datacl": null, "datname": "mydatabase_1", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "create_drop_db_tablespace", "datallowconn": true, "datconnlimit": 10, "daticulocale": null, "datistemplate": false, "database_owner": "create_drop_db_test_user", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": {"datacl": null, "datname": "mydatabase_1", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "create_drop_db_tablespace", "datallowconn": true, "datconnlimit": 10, "daticulocale": null, "datistemplate": false, "database_owner": "create_drop_db_test_user", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
 (3 rows)
 
-drop database mydatabase;
-SELECT result from run_command_on_all_nodes(
-  $$
-  SELECT jsonb_agg(to_jsonb(q2.*)) FROM (
-    SELECT pd.datname, pg_encoding_to_char(pd.encoding) as encoding,
-    pd.datistemplate, pd.datallowconn, pd.datconnlimit,
-    pd.datcollate , pd. datctype  ,  pd.datacl,
-    pa.rolname AS database_owner, pt.spcname AS tablespace
-    FROM pg_database pd
-    JOIN pg_authid pa ON pd.datdba = pa.oid
-    join pg_tablespace pt on pd.dattablespace = pt.oid
-    WHERE datname = 'mydatabase'
-  ) q2
-  $$
-) ORDER BY result;
- result
+-- Test LC / LOCALE settings that don't match the ones provided in template db.
+-- All should throw an error on the coordinator.
+CREATE DATABASE lc_collate_test LC_COLLATE = 'en_US.UTF-8';
+ERROR:  new collation (en_US.UTF-8) is incompatible with the collation of the template database (C)
+HINT:  Use the same collation as in the template database, or use template0 as template.
+CREATE DATABASE lc_ctype_test LC_CTYPE = 'en_US.UTF-8';
+ERROR:  new LC_CTYPE (en_US.UTF-8) is incompatible with the LC_CTYPE of the template database (C)
+HINT:  Use the same LC_CTYPE as in the template database, or use template0 as template.
+CREATE DATABASE locale_test LOCALE = 'en_US.UTF-8';
+ERROR:  new collation (en_US.UTF-8) is incompatible with the collation of the template database (C)
+HINT:  Use the same collation as in the template database, or use template0 as template.
+CREATE DATABASE lc_collate_lc_ctype_test LC_COLLATE = 'en_US.UTF-8' LC_CTYPE = 'en_US.UTF-8';
+ERROR:  new collation (en_US.UTF-8) is incompatible with the collation of the template database (C)
+HINT:  Use the same collation as in the template database, or use template0 as template.
+-- Test LC / LOCALE settings that match the ones provided in template db.
+CREATE DATABASE lc_collate_test LC_COLLATE = 'C';
+CREATE DATABASE lc_ctype_test LC_CTYPE = 'C';
+CREATE DATABASE locale_test LOCALE = 'C';
+CREATE DATABASE lc_collate_lc_ctype_test LC_COLLATE = 'C' LC_CTYPE = 'C';
+SELECT * FROM public.check_database_on_all_nodes('lc_collate_test') ORDER BY node_type;
+      node_type       |                                                                                                                                                                                                               result
 ---------------------------------------------------------------------
+ coordinator (local)  | {"database_properties": {"datacl": null, "datname": "lc_collate_test", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "pg_default", "datallowconn": true, "datconnlimit": -1, "daticulocale": null, "datistemplate": false, "database_owner": "postgres", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": {"datacl": null, "datname": "lc_collate_test", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "pg_default", "datallowconn": true, "datconnlimit": -1, "daticulocale": null, "datistemplate": false, "database_owner": "postgres", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": {"datacl": null, "datname": "lc_collate_test", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "pg_default", "datallowconn": true, "datconnlimit": -1, "daticulocale": null, "datistemplate": false, "database_owner": "postgres", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+(3 rows)
 
+SELECT * FROM public.check_database_on_all_nodes('lc_ctype_test') ORDER BY node_type;
+      node_type       |                                                                                                                                                                                                              result
+---------------------------------------------------------------------
+ coordinator (local)  | {"database_properties": {"datacl": null, "datname": "lc_ctype_test", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "pg_default", "datallowconn": true, "datconnlimit": -1, "daticulocale": null, "datistemplate": false, "database_owner": "postgres", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": {"datacl": null, "datname": "lc_ctype_test", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "pg_default", "datallowconn": true, "datconnlimit": -1, "daticulocale": null, "datistemplate": false, "database_owner": "postgres", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": {"datacl": null, "datname": "lc_ctype_test", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "pg_default", "datallowconn": true, "datconnlimit": -1, "daticulocale": null, "datistemplate": false, "database_owner": "postgres", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+(3 rows)
 
+SELECT * FROM public.check_database_on_all_nodes('locale_test') ORDER BY node_type;
+      node_type       |                                                                                                                                                                                                             result
+---------------------------------------------------------------------
+ coordinator (local)  | {"database_properties": {"datacl": null, "datname": "locale_test", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "pg_default", "datallowconn": true, "datconnlimit": -1, "daticulocale": null, "datistemplate": false, "database_owner": "postgres", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": {"datacl": null, "datname": "locale_test", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "pg_default", "datallowconn": true, "datconnlimit": -1, "daticulocale": null, "datistemplate": false, "database_owner": "postgres", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": {"datacl": null, "datname": "locale_test", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "pg_default", "datallowconn": true, "datconnlimit": -1, "daticulocale": null, "datistemplate": false, "database_owner": "postgres", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+(3 rows)
 
+SELECT * FROM public.check_database_on_all_nodes('lc_collate_lc_ctype_test') ORDER BY node_type;
+      node_type       |                                                                                                                                                                                                                    result
+---------------------------------------------------------------------
+ coordinator (local)  | {"database_properties": {"datacl": null, "datname": "lc_collate_lc_ctype_test", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "pg_default", "datallowconn": true, "datconnlimit": -1, "daticulocale": null, "datistemplate": false, "database_owner": "postgres", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": {"datacl": null, "datname": "lc_collate_lc_ctype_test", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "pg_default", "datallowconn": true, "datconnlimit": -1, "daticulocale": null, "datistemplate": false, "database_owner": "postgres", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": {"datacl": null, "datname": "lc_collate_lc_ctype_test", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "pg_default", "datallowconn": true, "datconnlimit": -1, "daticulocale": null, "datistemplate": false, "database_owner": "postgres", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+(3 rows)
+
+DROP DATABASE lc_collate_test;
+DROP DATABASE lc_ctype_test;
+DROP DATABASE locale_test;
+DROP DATABASE lc_collate_lc_ctype_test;
+-- ALTER TABLESPACE .. RENAME TO .. is not supported, so we need to rename it manually.
+SELECT result FROM run_command_on_all_nodes(
+  $$
+  ALTER TABLESPACE create_drop_db_tablespace RENAME TO "ts-needs\!escape"
+  $$
+);
+      result
+---------------------------------------------------------------------
+ ALTER TABLESPACE
+ ALTER TABLESPACE
+ ALTER TABLESPACE
+(3 rows)
+
+CREATE USER "role-needs\!escape";
+CREATE DATABASE "db-needs\!escape" owner "role-needs\!escape" tablespace "ts-needs\!escape";
+-- Rename it to make check_database_on_all_nodes happy.
+-- Today we don't support ALTER DATABASE .. RENAME TO .., so need to propagate it manually.
+SELECT result FROM run_command_on_all_nodes(
+  $$
+  ALTER DATABASE "db-needs\!escape" RENAME TO db_needs_escape
+  $$
+);
+     result
+---------------------------------------------------------------------
+ ALTER DATABASE
+ ALTER DATABASE
+ ALTER DATABASE
+(3 rows)
+
+SELECT * FROM public.check_database_on_all_nodes('db_needs_escape') ORDER BY node_type;
+      node_type       |                                                                                                                                                                                                                        result
+---------------------------------------------------------------------
+ coordinator (local)  | {"database_properties": {"datacl": null, "datname": "db_needs_escape", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "ts-needs\\!escape", "datallowconn": true, "datconnlimit": -1, "daticulocale": null, "datistemplate": false, "database_owner": "role-needs\\!escape", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": {"datacl": null, "datname": "db_needs_escape", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "ts-needs\\!escape", "datallowconn": true, "datconnlimit": -1, "daticulocale": null, "datistemplate": false, "database_owner": "role-needs\\!escape", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": {"datacl": null, "datname": "db_needs_escape", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "ts-needs\\!escape", "datallowconn": true, "datconnlimit": -1, "daticulocale": null, "datistemplate": false, "database_owner": "role-needs\\!escape", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
 (3 rows)
 
 -- test database syncing after node addition
@@ -85,56 +242,128 @@ CREATE DATABASE mydatabase
             OWNER = create_drop_db_test_user
             CONNECTION LIMIT = 10
             ENCODING = 'UTF8'
-            TABLESPACE = create_drop_db_tablespace
+            TABLESPACE = "ts-needs\!escape"
             ALLOW_CONNECTIONS = false
             IS_TEMPLATE = false;
-SELECT result from run_command_on_all_nodes(
-  $$
-  SELECT jsonb_agg(to_jsonb(q2.*)) FROM (
-    SELECT pd.datname, pg_encoding_to_char(pd.encoding) as encoding,
-    pd.datistemplate, pd.datallowconn, pd.datconnlimit,
-    pd.datcollate , pd. datctype  ,  pd.datacl,
-    pa.rolname AS database_owner, pt.spcname AS tablespace
-    FROM pg_database pd
-    JOIN pg_authid pa ON pd.datdba = pa.oid
-    join pg_tablespace pt on pd.dattablespace = pt.oid
-    WHERE datname = 'mydatabase'
-  ) q2
-  $$
-) ORDER BY result;
-                                                                                                                             result
+SELECT * FROM public.check_database_on_all_nodes('mydatabase') ORDER BY node_type;
+      node_type       |                                                                                                                                                                                                                         result
 ---------------------------------------------------------------------
- [{"datacl": null, "datname": "mydatabase", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "create_drop_db_tablespace", "datallowconn": false, "datconnlimit": 10, "datistemplate": false, "database_owner": "create_drop_db_test_user"}]
- [{"datacl": null, "datname": "mydatabase", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "create_drop_db_tablespace", "datallowconn": false, "datconnlimit": 10, "datistemplate": false, "database_owner": "create_drop_db_test_user"}]
+ coordinator (local)  | {"database_properties": {"datacl": null, "datname": "mydatabase", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "ts-needs\\!escape", "datallowconn": false, "datconnlimit": 10, "daticulocale": null, "datistemplate": false, "database_owner": "create_drop_db_test_user", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": {"datacl": null, "datname": "mydatabase", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "ts-needs\\!escape", "datallowconn": false, "datconnlimit": 10, "daticulocale": null, "datistemplate": false, "database_owner": "create_drop_db_test_user", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
 (2 rows)
 
+SET citus.metadata_sync_mode to 'transactional';
 select 1 from citus_add_node('localhost', :worker_2_port);
  ?column?
 ---------------------------------------------------------------------
         1
 (1 row)
 
-SET citus.log_remote_commands = true;
-set citus.grep_remote_commands = '%CREATE DATABASE%';
-SELECT result from run_command_on_all_nodes(
-  $$
-  SELECT jsonb_agg(to_jsonb(q2.*)) FROM (
-    SELECT pd.datname, pg_encoding_to_char(pd.encoding) as encoding,
-    pd.datistemplate, pd.datallowconn, pd.datconnlimit,
-    pd.datcollate , pd. datctype  ,  pd.datacl,
-    pa.rolname AS database_owner, pt.spcname AS tablespace
-    FROM pg_database pd
-    JOIN pg_authid pa ON pd.datdba = pa.oid
-    join pg_tablespace pt on pd.dattablespace = pt.oid
-    WHERE datname = 'mydatabase'
-  ) q2
-  $$
-) ORDER BY result;
-                                                                                                                             result
+SELECT * FROM public.check_database_on_all_nodes('mydatabase') ORDER BY node_type;
+      node_type       |                                                                                                                                                                                                                         result
 ---------------------------------------------------------------------
- [{"datacl": null, "datname": "mydatabase", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "create_drop_db_tablespace", "datallowconn": false, "datconnlimit": 10, "datistemplate": false, "database_owner": "create_drop_db_test_user"}]
- [{"datacl": null, "datname": "mydatabase", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "create_drop_db_tablespace", "datallowconn": false, "datconnlimit": 10, "datistemplate": false, "database_owner": "create_drop_db_test_user"}]
- [{"datacl": null, "datname": "mydatabase", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "create_drop_db_tablespace", "datallowconn": false, "datconnlimit": 10, "datistemplate": false, "database_owner": "create_drop_db_test_user"}]
+ coordinator (local)  | {"database_properties": {"datacl": null, "datname": "mydatabase", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "ts-needs\\!escape", "datallowconn": false, "datconnlimit": 10, "daticulocale": null, "datistemplate": false, "database_owner": "create_drop_db_test_user", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": {"datacl": null, "datname": "mydatabase", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "ts-needs\\!escape", "datallowconn": false, "datconnlimit": 10, "daticulocale": null, "datistemplate": false, "database_owner": "create_drop_db_test_user", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": {"datacl": null, "datname": "mydatabase", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "ts-needs\\!escape", "datallowconn": false, "datconnlimit": 10, "daticulocale": null, "datistemplate": false, "database_owner": "create_drop_db_test_user", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+(3 rows)
+
+SELECT * FROM public.check_database_on_all_nodes('mydatabase_1') ORDER BY node_type;
+      node_type       |                                                                                                                                                                                                                         result
+---------------------------------------------------------------------
+ coordinator (local)  | {"database_properties": {"datacl": null, "datname": "mydatabase_1", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "ts-needs\\!escape", "datallowconn": true, "datconnlimit": 10, "daticulocale": null, "datistemplate": false, "database_owner": "create_drop_db_test_user", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": {"datacl": null, "datname": "mydatabase_1", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "ts-needs\\!escape", "datallowconn": true, "datconnlimit": 10, "daticulocale": null, "datistemplate": false, "database_owner": "create_drop_db_test_user", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": {"datacl": null, "datname": "mydatabase_1", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "ts-needs\\!escape", "datallowconn": true, "datconnlimit": 10, "daticulocale": null, "datistemplate": false, "database_owner": "create_drop_db_test_user", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+(3 rows)
+
+SELECT * FROM public.check_database_on_all_nodes('db_needs_escape') ORDER BY node_type;
+      node_type       |                                                                                                                                                                                                                        result
+---------------------------------------------------------------------
+ coordinator (local)  | {"database_properties": {"datacl": null, "datname": "db_needs_escape", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "ts-needs\\!escape", "datallowconn": true, "datconnlimit": -1, "daticulocale": null, "datistemplate": false, "database_owner": "role-needs\\!escape", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": {"datacl": null, "datname": "db_needs_escape", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "ts-needs\\!escape", "datallowconn": true, "datconnlimit": -1, "daticulocale": null, "datistemplate": false, "database_owner": "role-needs\\!escape", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": {"datacl": null, "datname": "db_needs_escape", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "ts-needs\\!escape", "datallowconn": true, "datconnlimit": -1, "daticulocale": null, "datistemplate": false, "database_owner": "role-needs\\!escape", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+(3 rows)
+
+select 1 from citus_remove_node('localhost', :worker_2_port);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+SET citus.metadata_sync_mode to 'nontransactional';
+select 1 from citus_add_node('localhost', :worker_2_port);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+RESET citus.metadata_sync_mode;
+SELECT * FROM public.check_database_on_all_nodes('mydatabase') ORDER BY node_type;
+      node_type       |                                                                                                                                                                                                                         result
+---------------------------------------------------------------------
+ coordinator (local)  | {"database_properties": {"datacl": null, "datname": "mydatabase", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "ts-needs\\!escape", "datallowconn": false, "datconnlimit": 10, "daticulocale": null, "datistemplate": false, "database_owner": "create_drop_db_test_user", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": {"datacl": null, "datname": "mydatabase", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "ts-needs\\!escape", "datallowconn": false, "datconnlimit": 10, "daticulocale": null, "datistemplate": false, "database_owner": "create_drop_db_test_user", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": {"datacl": null, "datname": "mydatabase", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "ts-needs\\!escape", "datallowconn": false, "datconnlimit": 10, "daticulocale": null, "datistemplate": false, "database_owner": "create_drop_db_test_user", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+(3 rows)
+
+SELECT * FROM public.check_database_on_all_nodes('mydatabase_1') ORDER BY node_type;
+      node_type       |                                                                                                                                                                                                                         result
+---------------------------------------------------------------------
+ coordinator (local)  | {"database_properties": {"datacl": null, "datname": "mydatabase_1", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "ts-needs\\!escape", "datallowconn": true, "datconnlimit": 10, "daticulocale": null, "datistemplate": false, "database_owner": "create_drop_db_test_user", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": {"datacl": null, "datname": "mydatabase_1", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "ts-needs\\!escape", "datallowconn": true, "datconnlimit": 10, "daticulocale": null, "datistemplate": false, "database_owner": "create_drop_db_test_user", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": {"datacl": null, "datname": "mydatabase_1", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "ts-needs\\!escape", "datallowconn": true, "datconnlimit": 10, "daticulocale": null, "datistemplate": false, "database_owner": "create_drop_db_test_user", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+(3 rows)
+
+SELECT * FROM public.check_database_on_all_nodes('db_needs_escape') ORDER BY node_type;
+      node_type       |                                                                                                                                                                                                                        result
+---------------------------------------------------------------------
+ coordinator (local)  | {"database_properties": {"datacl": null, "datname": "db_needs_escape", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "ts-needs\\!escape", "datallowconn": true, "datconnlimit": -1, "daticulocale": null, "datistemplate": false, "database_owner": "role-needs\\!escape", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": {"datacl": null, "datname": "db_needs_escape", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "ts-needs\\!escape", "datallowconn": true, "datconnlimit": -1, "daticulocale": null, "datistemplate": false, "database_owner": "role-needs\\!escape", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": {"datacl": null, "datname": "db_needs_escape", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "ts-needs\\!escape", "datallowconn": true, "datconnlimit": -1, "daticulocale": null, "datistemplate": false, "database_owner": "role-needs\\!escape", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+(3 rows)
+
+SELECT citus_disable_node_and_wait('localhost', :worker_1_port, true);
+ citus_disable_node_and_wait
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE DATABASE test_node_activation;
+SELECT 1 FROM citus_activate_node('localhost', :worker_1_port);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+SELECT * FROM public.check_database_on_all_nodes('mydatabase') ORDER BY node_type;
+      node_type       |                                                                                                                                                                                                                         result
+---------------------------------------------------------------------
+ coordinator (local)  | {"database_properties": {"datacl": null, "datname": "mydatabase", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "ts-needs\\!escape", "datallowconn": false, "datconnlimit": 10, "daticulocale": null, "datistemplate": false, "database_owner": "create_drop_db_test_user", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": {"datacl": null, "datname": "mydatabase", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "ts-needs\\!escape", "datallowconn": false, "datconnlimit": 10, "daticulocale": null, "datistemplate": false, "database_owner": "create_drop_db_test_user", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": {"datacl": null, "datname": "mydatabase", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "ts-needs\\!escape", "datallowconn": false, "datconnlimit": 10, "daticulocale": null, "datistemplate": false, "database_owner": "create_drop_db_test_user", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+(3 rows)
+
+SELECT * FROM public.check_database_on_all_nodes('mydatabase_1') ORDER BY node_type;
+      node_type       |                                                                                                                                                                                                                         result
+---------------------------------------------------------------------
+ coordinator (local)  | {"database_properties": {"datacl": null, "datname": "mydatabase_1", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "ts-needs\\!escape", "datallowconn": true, "datconnlimit": 10, "daticulocale": null, "datistemplate": false, "database_owner": "create_drop_db_test_user", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": {"datacl": null, "datname": "mydatabase_1", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "ts-needs\\!escape", "datallowconn": true, "datconnlimit": 10, "daticulocale": null, "datistemplate": false, "database_owner": "create_drop_db_test_user", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": {"datacl": null, "datname": "mydatabase_1", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "ts-needs\\!escape", "datallowconn": true, "datconnlimit": 10, "daticulocale": null, "datistemplate": false, "database_owner": "create_drop_db_test_user", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+(3 rows)
+
+SELECT * FROM public.check_database_on_all_nodes('db_needs_escape') ORDER BY node_type;
+      node_type       |                                                                                                                                                                                                                        result
+---------------------------------------------------------------------
+ coordinator (local)  | {"database_properties": {"datacl": null, "datname": "db_needs_escape", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "ts-needs\\!escape", "datallowconn": true, "datconnlimit": -1, "daticulocale": null, "datistemplate": false, "database_owner": "role-needs\\!escape", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": {"datacl": null, "datname": "db_needs_escape", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "ts-needs\\!escape", "datallowconn": true, "datconnlimit": -1, "daticulocale": null, "datistemplate": false, "database_owner": "role-needs\\!escape", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": {"datacl": null, "datname": "db_needs_escape", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "ts-needs\\!escape", "datallowconn": true, "datconnlimit": -1, "daticulocale": null, "datistemplate": false, "database_owner": "role-needs\\!escape", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+(3 rows)
+
+SELECT * FROM public.check_database_on_all_nodes('test_node_activation') ORDER BY node_type;
+      node_type       |                                                                                                                                                                                                                  result
+---------------------------------------------------------------------
+ coordinator (local)  | {"database_properties": {"datacl": null, "datname": "test_node_activation", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "pg_default", "datallowconn": true, "datconnlimit": -1, "daticulocale": null, "datistemplate": false, "database_owner": "postgres", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": {"datacl": null, "datname": "test_node_activation", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "pg_default", "datallowconn": true, "datconnlimit": -1, "daticulocale": null, "datistemplate": false, "database_owner": "postgres", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": {"datacl": null, "datname": "test_node_activation", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "pg_default", "datallowconn": true, "datconnlimit": -1, "daticulocale": null, "datistemplate": false, "database_owner": "postgres", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
 (3 rows)
 
 SET citus.log_remote_commands = true;
@@ -145,54 +374,37 @@ DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing DROP DATABASE  mydatabase
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 SET citus.log_remote_commands = false;
-SELECT result from run_command_on_all_nodes(
-  $$
-  SELECT jsonb_agg(to_jsonb(q2.*)) FROM (
-    SELECT pd.datname, pg_encoding_to_char(pd.encoding) as encoding,
-    pd.datistemplate, pd.datallowconn, pd.datconnlimit,
-    pd.datcollate , pd. datctype  ,  pd.datacl,
-    pa.rolname AS database_owner, pt.spcname AS tablespace
-    FROM pg_database pd
-    JOIN pg_authid pa ON pd.datdba = pa.oid
-    join pg_tablespace pt on pd.dattablespace = pt.oid
-    WHERE datname = 'mydatabase'
-  ) q2
-  $$
-) ORDER BY result;
- result
+-- check that we actually drop the database
+drop database mydatabase_1;
+SELECT * FROM public.check_database_on_all_nodes('mydatabase_1') ORDER BY node_type;
+      node_type       |                                                              result
 ---------------------------------------------------------------------
+ coordinator (local)  | {"database_properties": null, "pg_dist_object_record_for_db_exists": false, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": null, "pg_dist_object_record_for_db_exists": false, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": null, "pg_dist_object_record_for_db_exists": false, "stale_pg_dist_object_record_for_a_db_exists": false}
+(3 rows)
 
-
-
+SELECT * FROM public.check_database_on_all_nodes('mydatabase') ORDER BY node_type;
+      node_type       |                                                              result
+---------------------------------------------------------------------
+ coordinator (local)  | {"database_properties": null, "pg_dist_object_record_for_db_exists": false, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": null, "pg_dist_object_record_for_db_exists": false, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": null, "pg_dist_object_record_for_db_exists": false, "stale_pg_dist_object_record_for_a_db_exists": false}
 (3 rows)
 
 -- create a template database with all options set and allow connections false
 CREATE DATABASE my_template_database
     WITH    OWNER = create_drop_db_test_user
             ENCODING = 'UTF8'
-            TABLESPACE = create_drop_db_tablespace
+            TABLESPACE = "ts-needs\!escape"
             ALLOW_CONNECTIONS = false
             IS_TEMPLATE = true;
-SET citus.log_remote_commands = false;
-SELECT result from run_command_on_all_nodes(
-  $$
-  SELECT jsonb_agg(to_jsonb(q2.*)) FROM (
-    SELECT pd.datname, pg_encoding_to_char(pd.encoding) as encoding,
-    pd.datistemplate, pd.datallowconn, pd.datconnlimit,
-    pd.datcollate , pd. datctype  ,  pd.datacl,
-    pa.rolname AS database_owner, pt.spcname AS tablespace
-    FROM pg_database pd
-    JOIN pg_authid pa ON pd.datdba = pa.oid
-    join pg_tablespace pt on pd.dattablespace = pt.oid
-    WHERE datname = 'my_template_database'
-  ) q2
-  $$
-) ORDER BY result;
-                                                                                                                                  result
+SELECT * FROM public.check_database_on_all_nodes('my_template_database') ORDER BY node_type;
+      node_type       |                                                                                                                                                                                                                             result
 ---------------------------------------------------------------------
- [{"datacl": null, "datname": "my_template_database", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "create_drop_db_tablespace", "datallowconn": false, "datconnlimit": -1, "datistemplate": true, "database_owner": "create_drop_db_test_user"}]
- [{"datacl": null, "datname": "my_template_database", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "create_drop_db_tablespace", "datallowconn": false, "datconnlimit": -1, "datistemplate": true, "database_owner": "create_drop_db_test_user"}]
- [{"datacl": null, "datname": "my_template_database", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "create_drop_db_tablespace", "datallowconn": false, "datconnlimit": -1, "datistemplate": true, "database_owner": "create_drop_db_test_user"}]
+ coordinator (local)  | {"database_properties": {"datacl": null, "datname": "my_template_database", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "ts-needs\\!escape", "datallowconn": false, "datconnlimit": -1, "daticulocale": null, "datistemplate": true, "database_owner": "create_drop_db_test_user", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": {"datacl": null, "datname": "my_template_database", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "ts-needs\\!escape", "datallowconn": false, "datconnlimit": -1, "daticulocale": null, "datistemplate": true, "database_owner": "create_drop_db_test_user", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": {"datacl": null, "datname": "my_template_database", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "ts-needs\\!escape", "datallowconn": false, "datconnlimit": -1, "daticulocale": null, "datistemplate": true, "database_owner": "create_drop_db_test_user", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
 (3 rows)
 
 --template databases could not be dropped so we need to change the template flag
@@ -216,25 +428,12 @@ DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing DROP DATABASE  my_template_database
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 SET citus.log_remote_commands = false;
-SELECT result from run_command_on_all_nodes(
-  $$
-  SELECT jsonb_agg(to_jsonb(q2.*)) FROM (
-    SELECT pd.datname, pg_encoding_to_char(pd.encoding) as encoding,
-    pd.datistemplate, pd.datallowconn, pd.datconnlimit,
-    pd.datcollate , pd. datctype  ,  pd.datacl,
-    pa.rolname AS database_owner, pt.spcname AS tablespace
-    FROM pg_database pd
-    JOIN pg_authid pa ON pd.datdba = pa.oid
-    join pg_tablespace pt on pd.dattablespace = pt.oid
-    WHERE datname = 'my_template_database'
-  ) q2
-  $$
-) ORDER BY result;
- result
+SELECT * FROM public.check_database_on_all_nodes('my_template_database') ORDER BY node_type;
+      node_type       |                                                              result
 ---------------------------------------------------------------------
-
-
-
+ coordinator (local)  | {"database_properties": null, "pg_dist_object_record_for_db_exists": false, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": null, "pg_dist_object_record_for_db_exists": false, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": null, "pg_dist_object_record_for_db_exists": false, "stale_pg_dist_object_record_for_a_db_exists": false}
 (3 rows)
 
 --tests for special characters in database name
@@ -252,11 +451,44 @@ NOTICE:  issuing DROP DATABASE IF EXISTS "mydatabase#1'2"
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing DROP DATABASE IF EXISTS "mydatabase#1'2"
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
---clean up resources created by this test
-drop tablespace create_drop_db_tablespace;
+reset citus.grep_remote_commands;
+reset citus.log_remote_commands;
+-- it doesn't fail thanks to "if exists"
+drop database if exists "mydatabase#1'2";
+NOTICE:  database "mydatabase#1'2" does not exist, skipping
+-- recreate it to verify that it's actually dropped
+create database "mydatabase#1'2";
+drop database "mydatabase#1'2";
+-- second time we try to drop it, it fails due to lack of "if exists"
+drop database "mydatabase#1'2";
+ERROR:  database "mydatabase#1'2" does not exist
 \c - - - :worker_1_port
-drop tablespace create_drop_db_tablespace;
-\c - - - :worker_2_port
-drop tablespace create_drop_db_tablespace;
+SET citus.enable_create_database_propagation TO ON;
+-- show that dropping the database from workers is not allowed when citus.enable_create_database_propagation is on
+DROP DATABASE db_needs_escape;
+ERROR:  operation is not allowed on this node
+HINT:  Connect to the coordinator and run it again.
+-- and the same applies to create database too
+create database error_test;
+ERROR:  operation is not allowed on this node
+HINT:  Connect to the coordinator and run it again.
 \c - - - :master_port
+SET citus.enable_create_database_propagation TO ON;
+DROP DATABASE test_node_activation;
+DROP DATABASE db_needs_escape;
+DROP USER "role-needs\!escape";
+--clean up resources created by this test
+-- DROP TABLESPACE is not supported, so we need to drop it manually.
+SELECT result FROM run_command_on_all_nodes(
+  $$
+  drop tablespace "ts-needs\!escape"
+  $$
+);
+     result
+---------------------------------------------------------------------
+ DROP TABLESPACE
+ DROP TABLESPACE
+ DROP TABLESPACE
+(3 rows)
+
 drop user create_drop_db_test_user;
