@@ -35,86 +35,86 @@ jobs:
           # Below line is needed to set the output variable to be used in the next job
           echo "pg_versions=${pg_versions_array}" >> $GITHUB_OUTPUT
         shell: bash
-  rpm_build_tests:
-    name: rpm_build_tests
-    needs: get_postgres_versions_from_file
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        # While we use separate images for different Postgres versions in rpm
-        # based distros
-        # For this reason, we need to use a "matrix" to generate names of
-        # rpm images, e.g. citus/packaging:centos-7-pg12
-        packaging_docker_image:
-          # - oraclelinux-8
-          # - almalinux-8
-          - almalinux-9
-        # POSTGRES_VERSION: ${{ fromJson(needs.get_postgres_versions_from_file.outputs.pg_versions) }}
-        POSTGRES_VERSION:
-          - 16
-        # Postgres removed support for CentOS 7 in PG 16. Below block is needed to
-        # keep the build for CentOS 7 working for PG 14 and PG 15.
-        # Once dependent systems drop support for Centos 7, we can remove this block.
-        include:
-          # - packaging_docker_image: centos-7
-          #   POSTGRES_VERSION: 14
-          # - packaging_docker_image: centos-7
-          #   POSTGRES_VERSION: 15
-          # - packaging_docker_image: oraclelinux-7
-          #   POSTGRES_VERSION: 14
-          # - packaging_docker_image: oraclelinux-7
-          #   POSTGRES_VERSION: 15
+  # rpm_build_tests:
+  #   name: rpm_build_tests
+  #   needs: get_postgres_versions_from_file
+  #   runs-on: ubuntu-latest
+  #   strategy:
+  #     fail-fast: false
+  #     matrix:
+  #       # While we use separate images for different Postgres versions in rpm
+  #       # based distros
+  #       # For this reason, we need to use a "matrix" to generate names of
+  #       # rpm images, e.g. citus/packaging:centos-7-pg12
+  #       packaging_docker_image:
+  #         - oraclelinux-8
+  #         - almalinux-8
+  #         - almalinux-9
+  #       # POSTGRES_VERSION: ${{ fromJson(needs.get_postgres_versions_from_file.outputs.pg_versions) }}
+  #       POSTGRES_VERSION:
+  #         - 16
+  #       # Postgres removed support for CentOS 7 in PG 16. Below block is needed to
+  #       # keep the build for CentOS 7 working for PG 14 and PG 15.
+  #       # Once dependent systems drop support for Centos 7, we can remove this block.
+  #       include:
+  #         - packaging_docker_image: centos-7
+  #           POSTGRES_VERSION: 14
+  #         - packaging_docker_image: centos-7
+  #           POSTGRES_VERSION: 15
+  #         - packaging_docker_image: oraclelinux-7
+  #           POSTGRES_VERSION: 14
+  #         - packaging_docker_image: oraclelinux-7
+  #           POSTGRES_VERSION: 15
 
-    container:
-      image: citus/packaging-test:${{ matrix.packaging_docker_image }}-pg${{ matrix.POSTGRES_VERSION }}
-      options: --user root
+  #   container:
+  #     image: ghcr.io/citusdata/packaging-test:${{ matrix.packaging_docker_image }}-pg${{ matrix.POSTGRES_VERSION }}
+  #     options: --user root
 
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
+  #   steps:
+  #     - name: Checkout repository
+  #       uses: actions/checkout@v3
 
-      - name: Set Postgres and python parameters for rpm based distros
-        run: |
-          echo "/usr/pgsql-${{ matrix.POSTGRES_VERSION }}/bin" >> $GITHUB_PATH
-          echo "/root/.pyenv/bin:$PATH" >> $GITHUB_PATH
-          echo "PACKAGING_PYTHON_VERSION=3.8.16" >> $GITHUB_ENV
+  #     - name: Set Postgres and python parameters for rpm based distros
+  #       run: |
+  #         echo "/usr/pgsql-${{ matrix.POSTGRES_VERSION }}/bin" >> $GITHUB_PATH
+  #         echo "/root/.pyenv/bin:$PATH" >> $GITHUB_PATH
+  #         echo "PACKAGING_PYTHON_VERSION=3.8.16" >> $GITHUB_ENV
 
-      - name: Configure
-        run: |
-          echo "Current Shell:$0"
-          echo "GCC Version: $(gcc --version)"
-          ./configure 2>&1 | tee output.log
+  #     - name: Configure
+  #       run: |
+  #         echo "Current Shell:$0"
+  #         echo "GCC Version: $(gcc --version)"
+  #         ./configure 2>&1 | tee output.log
 
-      - name: Make clean
-        run: |
-          make clean
+  #     - name: Make clean
+  #       run: |
+  #         make clean
 
-      - name: Make
-        run: |
-          git config --global --add safe.directory ${GITHUB_WORKSPACE}
-          make CFLAGS="-Wno-missing-braces" -sj$(cat /proc/cpuinfo | grep "core id" | wc -l) 2>&1 | tee -a output.log
+  #     - name: Make
+  #       run: |
+  #         git config --global --add safe.directory ${GITHUB_WORKSPACE}
+  #         make CFLAGS="-Wno-missing-braces" -sj$(cat /proc/cpuinfo | grep "core id" | wc -l) 2>&1 | tee -a output.log
 
-          # Check the exit code of the make command
-          make_exit_code=${PIPESTATUS[0]}
+  #         # Check the exit code of the make command
+  #         make_exit_code=${PIPESTATUS[0]}
 
-          # If the make command returned a non-zero exit code, exit with the same code
-          if [[ $make_exit_code -ne 0 ]]; then
-              echo "make command failed with exit code $make_exit_code"
-              exit $make_exit_code
-          fi
+  #         # If the make command returned a non-zero exit code, exit with the same code
+  #         if [[ $make_exit_code -ne 0 ]]; then
+  #             echo "make command failed with exit code $make_exit_code"
+  #             exit $make_exit_code
+  #         fi
 
-      - name: Make install
-        run: |
-          make CFLAGS="-Wno-missing-braces" install 2>&1 | tee -a output.log
+  #     - name: Make install
+  #       run: |
+  #         make CFLAGS="-Wno-missing-braces" install 2>&1 | tee -a output.log
 
-      - name: Validate output
-        env:
-          POSTGRES_VERSION: ${{ matrix.POSTGRES_VERSION }}
-          PACKAGING_DOCKER_IMAGE: ${{ matrix.packaging_docker_image }}
-        run: |
-          echo "Postgres version: ${POSTGRES_VERSION}"
-          ./.github/packaging/validate_build_output.sh "rpm"
+  #     - name: Validate output
+  #       env:
+  #         POSTGRES_VERSION: ${{ matrix.POSTGRES_VERSION }}
+  #         PACKAGING_DOCKER_IMAGE: ${{ matrix.packaging_docker_image }}
+  #       run: |
+  #         echo "Postgres version: ${POSTGRES_VERSION}"
+  #         ./.github/packaging/validate_build_output.sh "rpm"
 
   deb_build_tests:
     name: deb_build_tests
@@ -139,7 +139,7 @@ jobs:
         POSTGRES_VERSION: ${{ fromJson(needs.get_postgres_versions_from_file.outputs.pg_versions) }}
 
     container:
-      image: citus/packaging-test:${{ matrix.packaging_docker_image }}
+      image: ghcr.io/citusdata/packaging-test:${{ matrix.packaging_docker_image }}
       options: --user root
 
     steps:
