@@ -149,7 +149,7 @@ ObjectExists(const ObjectAddress *address)
 /*
  * MarkObjectDistributed marks an object as a distributed object. Marking is done
  * by adding appropriate entries to citus.pg_dist_object and also marking the object
- * as distributed by opening a connection using current user to all of the workers
+ * as distributed by opening a connection using current user to all remote nodes
  * with metadata if object propagation is on.
  *
  * This function should be used if the user creating the given object. If you want
@@ -164,7 +164,7 @@ MarkObjectDistributed(const ObjectAddress *distAddress)
 	{
 		char *workerPgDistObjectUpdateCommand =
 			CreatePgDistObjectEntryCommand(distAddress);
-		SendCommandToWorkersWithMetadata(workerPgDistObjectUpdateCommand);
+		SendCommandToRemoteNodesWithMetadata(workerPgDistObjectUpdateCommand);
 	}
 }
 
@@ -172,7 +172,7 @@ MarkObjectDistributed(const ObjectAddress *distAddress)
 /*
  * MarkObjectDistributedViaSuperUser marks an object as a distributed object. Marking
  * is done by adding appropriate entries to citus.pg_dist_object and also marking the
- * object as distributed by opening a connection using super user to all of the workers
+ * object as distributed by opening a connection using super user to all remote nodes
  * with metadata if object propagation is on.
  *
  * This function should be used to mark dependent object as distributed. If you want
@@ -187,7 +187,7 @@ MarkObjectDistributedViaSuperUser(const ObjectAddress *distAddress)
 	{
 		char *workerPgDistObjectUpdateCommand =
 			CreatePgDistObjectEntryCommand(distAddress);
-		SendCommandToWorkersWithMetadataViaSuperUser(workerPgDistObjectUpdateCommand);
+		SendCommandToRemoteNodesWithMetadataViaSuperUser(workerPgDistObjectUpdateCommand);
 	}
 }
 
