@@ -27,8 +27,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 	SELECT citus_internal_add_partition_metadata ('test'::regclass, 'h', 'col_1', 0, 's');
 ERROR:  This is an internal Citus function can only be used in a distributed transaction
 ROLLBACK;
--- in a distributed transaction and the application name is Citus
--- but we are on the coordinator, so still not allowed
+-- in a distributed transaction and the application name is Citus, allowed.
 BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 	SELECT assign_distributed_transaction_id(0, 8, '2021-07-09 15:41:55.542377+02');
  assign_distributed_transaction_id
@@ -38,7 +37,11 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 
 	SET application_name to 'citus_internal gpid=10000000001';
 	SELECT citus_internal_add_partition_metadata ('test'::regclass, 'h', 'col_1', 0, 's');
-ERROR:  This is an internal Citus function can only be used in a distributed transaction
+ citus_internal_add_partition_metadata
+---------------------------------------------------------------------
+
+(1 row)
+
 ROLLBACK;
 \c - postgres -
 \c - - - :worker_1_port
