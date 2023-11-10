@@ -207,27 +207,24 @@ PreprocessAlterDatabaseStmt(Node *node, const char *queryString,
 
 	char *sql = DeparseTreeNode((Node *) stmt);
 
-	List *commands = NULL;
+	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
+							  sql,
+							  ENABLE_DDL_PROPAGATION);
 
 	if (isSetTablespaceStatement(stmt))
 	{
-		/*Set tablespace does not work inside a transaction.Therefore, we close the transaction before set tablespace
-		 * and open it again after set tablespace.
+		/* Set tablespace does not work inside a transaction.Therefore, we need to use
+		 * NontransactionalNodeDDLTask to run the command on the workers outside
+		 * the transaction block.
 		 */
-		commands = list_make3(DISABLE_DDL_PROPAGATION,
-							  sql,
-							  ENABLE_DDL_PROPAGATION);
+
 		return NontransactionalNodeDDLTask(NON_COORDINATOR_NODES, commands);
 	}
 	else
 	{
-		commands = list_make3(DISABLE_DDL_PROPAGATION,
-							  (void *) sql,
-							  ENABLE_DDL_PROPAGATION);
 		return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
 	}
 
-	return NIL;
 }
 
 
@@ -265,7 +262,11 @@ PreprocessAlterDatabaseRefreshCollStmt(Node *node, const char *queryString,
 
 #endif
 
-
+/*
+ * PreprocessAlterDatabaseRenameStmt is executed before the statement is applied to the local
+ * postgres instance. In this stage we prepare ALTER DATABASE RENAME statement to be run on
+ * all workers.
+*/
 List *
 PreprocessAlterDatabaseRenameStmt(Node *node, const char *queryString,
 								  ProcessUtilityContext processUtilityContext)
