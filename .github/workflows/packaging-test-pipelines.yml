@@ -46,25 +46,21 @@ jobs:
         # based distros
         # For this reason, we need to use a "matrix" to generate names of
         # rpm images, e.g. citus/packaging:centos-7-pg12
-        # packaging_docker_image:
-        #   - oraclelinux-8
-        #   - almalinux-8
-        #   - almalinux-9
-        # POSTGRES_VERSION: ${{ fromJson(needs.get_postgres_versions_from_file.outputs.pg_versions) }}
-        # POSTGRES_VERSION:
-        #   - 16
+        packaging_docker_image:
+          - centos-7
+          - oraclelinux-7
+          - oraclelinux-8
+          - almalinux-8
+          - almalinux-9
+        POSTGRES_VERSION: ${{ fromJson(needs.get_postgres_versions_from_file.outputs.pg_versions) }}
         # Postgres removed support for CentOS 7 in PG 16. Below block is needed to
         # keep the build for CentOS 7 working for PG 14 and PG 15.
         # Once dependent systems drop support for Centos 7, we can remove this block.
-        include:
-          # - packaging_docker_image: centos-7
-          #   POSTGRES_VERSION: 14
-          # - packaging_docker_image: centos-7
-          #   POSTGRES_VERSION: 15
-          # - packaging_docker_image: oraclelinux-7
-          #   POSTGRES_VERSION: 14
+        exclude:
+          - packaging_docker_image: centos-7
+            POSTGRES_VERSION: 16
           - packaging_docker_image: oraclelinux-7
-            POSTGRES_VERSION: 15
+            POSTGRES_VERSION: 16          
 
     container:
       image: ghcr.io/citusdata/packaging-test:${{ matrix.packaging_docker_image }}-pg${{ matrix.POSTGRES_VERSION }}
@@ -130,10 +126,10 @@ jobs:
         # for each deb based image and we use POSTGRES_VERSION to set
         # PG_CONFIG variable in each of those runs.
         packaging_docker_image:
-          # - debian-buster-all
-          # - debian-bookworm-all
-          # - debian-bullseye-all
-          # - ubuntu-focal-all
+          - debian-buster-all
+          - debian-bookworm-all
+          - debian-bullseye-all
+          - ubuntu-focal-all
           - ubuntu-jammy-all
 
         POSTGRES_VERSION: ${{ fromJson(needs.get_postgres_versions_from_file.outputs.pg_versions) }}
