@@ -34,10 +34,10 @@
 #include "utils/memutils.h"
 #include "utils/builtins.h"
 
-static void SendCommandToOtherMetadataNodesParams(const char *command,
-												  const char *user, int parameterCount,
-												  const Oid *parameterTypes,
-												  const char *const *parameterValues);
+static void SendCommandToRemoteMetadataNodesParams(const char *command,
+												   const char *user, int parameterCount,
+												   const Oid *parameterTypes,
+												   const char *const *parameterValues);
 static void SendBareCommandListToMetadataNodesInternal(List *commandList,
 													   TargetWorkerSet targetWorkerSet);
 static void SendCommandToMetadataWorkersParams(const char *command,
@@ -157,20 +157,20 @@ SendCommandListToWorkersWithMetadata(List *commands)
 
 
 /*
- * SendCommandToOtherNodesWithMetadata sends a command to other nodes in
+ * SendCommandToRemoteNodesWithMetadata sends a command to remote nodes in
  * parallel. Commands are committed on the nodes when the local transaction
  * commits.
  */
 void
-SendCommandToOtherNodesWithMetadata(const char *command)
+SendCommandToRemoteNodesWithMetadata(const char *command)
 {
-	SendCommandToOtherMetadataNodesParams(command, CurrentUserName(),
-										  0, NULL, NULL);
+	SendCommandToRemoteMetadataNodesParams(command, CurrentUserName(),
+										   0, NULL, NULL);
 }
 
 
 /*
- * SendCommandToOtherNodesWithMetadataViaSuperUser sends a command to other
+ * SendCommandToRemoteNodesWithMetadataViaSuperUser sends a command to remote
  * nodes in parallel by opening a super user connection. Commands are committed
  * on the nodes when the local transaction commits. The connection are made as
  * the extension owner to ensure write access to the Citus metadata tables.
@@ -180,38 +180,38 @@ SendCommandToOtherNodesWithMetadata(const char *command)
  * tuples for dependent objects.
  */
 void
-SendCommandToOtherNodesWithMetadataViaSuperUser(const char *command)
+SendCommandToRemoteNodesWithMetadataViaSuperUser(const char *command)
 {
-	SendCommandToOtherMetadataNodesParams(command, CitusExtensionOwnerName(),
-										  0, NULL, NULL);
+	SendCommandToRemoteMetadataNodesParams(command, CitusExtensionOwnerName(),
+										   0, NULL, NULL);
 }
 
 
 /*
- * SendCommandListToOtherNodesWithMetadata sends all commands to other nodes
- * with the current user. See `SendCommandToOtherNodesWithMetadata`for details.
+ * SendCommandListToRemoteNodesWithMetadata sends all commands to remote nodes
+ * with the current user. See `SendCommandToRemoteNodesWithMetadata`for details.
  */
 void
-SendCommandListToOtherNodesWithMetadata(List *commands)
+SendCommandListToRemoteNodesWithMetadata(List *commands)
 {
 	char *command = NULL;
 	foreach_ptr(command, commands)
 	{
-		SendCommandToOtherNodesWithMetadata(command);
+		SendCommandToRemoteNodesWithMetadata(command);
 	}
 }
 
 
 /*
- * SendCommandToOtherMetadataNodesParams is a wrapper around
+ * SendCommandToRemoteMetadataNodesParams is a wrapper around
  * SendCommandToWorkersParamsInternal() that can be used to send commands
- * to other metadata nodes.
+ * to remote metadata nodes.
  */
 static void
-SendCommandToOtherMetadataNodesParams(const char *command,
-									  const char *user, int parameterCount,
-									  const Oid *parameterTypes,
-									  const char *const *parameterValues)
+SendCommandToRemoteMetadataNodesParams(const char *command,
+									   const char *user, int parameterCount,
+									   const Oid *parameterTypes,
+									   const char *const *parameterValues)
 {
 	/* use METADATA_NODES so that ErrorIfAnyMetadataNodeOutOfSync checks local node as well */
 	List *workerNodeList = TargetWorkerSetNodeList(METADATA_NODES,
@@ -219,7 +219,7 @@ SendCommandToOtherMetadataNodesParams(const char *command,
 
 	ErrorIfAnyMetadataNodeOutOfSync(workerNodeList);
 
-	SendCommandToWorkersParamsInternal(OTHER_METADATA_NODES, command, user,
+	SendCommandToWorkersParamsInternal(REMOTE_METADATA_NODES, command, user,
 									   parameterCount, parameterTypes, parameterValues);
 }
 
@@ -236,9 +236,9 @@ TargetWorkerSetNodeList(TargetWorkerSet targetWorkerSet, LOCKMODE lockMode)
 	{
 		workerNodeList = ActivePrimaryNodeList(lockMode);
 	}
-	else if (targetWorkerSet == OTHER_NODES || targetWorkerSet == OTHER_METADATA_NODES)
+	else if (targetWorkerSet == REMOTE_NODES || targetWorkerSet == REMOTE_METADATA_NODES)
 	{
-		workerNodeList = ActivePrimaryOtherNodesList(lockMode);
+		workerNodeList = ActivePrimaryRemoteNodeList(lockMode);
 	}
 	else if (targetWorkerSet == NON_COORDINATOR_METADATA_NODES ||
 			 targetWorkerSet == NON_COORDINATOR_NODES)
@@ -257,7 +257,7 @@ TargetWorkerSetNodeList(TargetWorkerSet targetWorkerSet, LOCKMODE lockMode)
 	foreach_ptr(workerNode, workerNodeList)
 	{
 		if ((targetWorkerSet == NON_COORDINATOR_METADATA_NODES ||
-			 targetWorkerSet == OTHER_METADATA_NODES ||
+			 targetWorkerSet == REMOTE_METADATA_NODES ||
 			 targetWorkerSet == METADATA_NODES) &&
 			!workerNode->hasMetadata)
 		{
@@ -272,15 +272,15 @@ TargetWorkerSetNodeList(TargetWorkerSet targetWorkerSet, LOCKMODE lockMode)
 
 
 /*
- * SendBareCommandListToOtherMetadataNodes is a wrapper around
+ * SendBareCommandListToRemoteMetadataNodes is a wrapper around
  * SendBareCommandListToMetadataNodesInternal() that can be used to send
- * bare commands to other metadata nodes.
+ * bare commands to remote metadata nodes.
  */
 void
-SendBareCommandListToOtherMetadataNodes(List *commandList)
+SendBareCommandListToRemoteMetadataNodes(List *commandList)
 {
 	SendBareCommandListToMetadataNodesInternal(commandList,
-											   OTHER_METADATA_NODES);
+											   REMOTE_METADATA_NODES);
 }
 
 

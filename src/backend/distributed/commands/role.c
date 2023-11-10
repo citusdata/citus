@@ -185,7 +185,7 @@ PostprocessAlterRoleStmt(Node *node, const char *queryString)
 								(void *) CreateAlterRoleIfExistsCommand(stmt),
 								ENABLE_DDL_PROPAGATION);
 
-	return NodeDDLTaskList(OTHER_NODES, commands);
+	return NodeDDLTaskList(REMOTE_NODES, commands);
 }
 
 
@@ -240,7 +240,7 @@ PreprocessAlterRoleSetStmt(Node *node, const char *queryString,
 								   (void *) sql,
 								   ENABLE_DDL_PROPAGATION);
 
-	return NodeDDLTaskList(OTHER_NODES, commandList);
+	return NodeDDLTaskList(REMOTE_NODES, commandList);
 }
 
 
@@ -946,7 +946,7 @@ PreprocessCreateRoleStmt(Node *node, const char *queryString,
 
 	commands = lappend(commands, ENABLE_DDL_PROPAGATION);
 
-	return NodeDDLTaskList(OTHER_NODES, commands);
+	return NodeDDLTaskList(REMOTE_NODES, commands);
 }
 
 
@@ -1055,7 +1055,7 @@ PreprocessDropRoleStmt(Node *node, const char *queryString,
 								sql,
 								ENABLE_DDL_PROPAGATION);
 
-	return NodeDDLTaskList(OTHER_NODES, commands);
+	return NodeDDLTaskList(REMOTE_NODES, commands);
 }
 
 
@@ -1172,7 +1172,7 @@ PreprocessGrantRoleStmt(Node *node, const char *queryString,
 								sql,
 								ENABLE_DDL_PROPAGATION);
 
-	return NodeDDLTaskList(OTHER_NODES, commands);
+	return NodeDDLTaskList(REMOTE_NODES, commands);
 }
 
 
@@ -1345,7 +1345,7 @@ PreprocessAlterRoleRenameStmt(Node *node, const char *queryString,
 								(void *) sql,
 								ENABLE_DDL_PROPAGATION);
 
-	return NodeDDLTaskList(OTHER_NODES, commands);
+	return NodeDDLTaskList(REMOTE_NODES, commands);
 }
 
 

@@ -1107,7 +1107,7 @@ IsDropSchemaOrDB(Node *parsetree)
  * CoordinatedTransactionCallback function.
  *
  * The function errors out if the DDL is on a partitioned table which has replication
- * factor > 1 or if the the coordinator is not added into metadata and we're on a
+ * factor > 1, or if the the coordinator is not added into metadata and we're on a
  * worker node because we want to make sure that distributed DDL jobs are executed
  * on the coordinator node too. See EnsurePropagationToCoordinator() for more details.
  */
@@ -1140,23 +1140,23 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 	{
 		if (shouldSyncMetadata)
 		{
-			SendCommandToOtherNodesWithMetadata(DISABLE_DDL_PROPAGATION);
+			SendCommandToRemoteNodesWithMetadata(DISABLE_DDL_PROPAGATION);
 
 			char *currentSearchPath = CurrentSearchPath();
 
 			/*
-			 * Given that we're relaying the query to the other nodes directly,
+			 * Given that we're relaying the query to the remote nodes directly,
 			 * we should set the search path exactly the same when necessary.
 			 */
 			if (currentSearchPath != NULL)
 			{
-				SendCommandToOtherNodesWithMetadata(
+				SendCommandToRemoteNodesWithMetadata(
 					psprintf("SET LOCAL search_path TO %s;", currentSearchPath));
 			}
 
 			if (ddlJob->metadataSyncCommand != NULL)
 			{
-				SendCommandToOtherNodesWithMetadata(
+				SendCommandToRemoteNodesWithMetadata(
 					(char *) ddlJob->metadataSyncCommand);
 			}
 		}
@@ -1236,7 +1236,7 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 				char *currentSearchPath = CurrentSearchPath();
 
 				/*
-				 * Given that we're relaying the query to the other nodes directly,
+				 * Given that we're relaying the query to the remote nodes directly,
 				 * we should set the search path exactly the same when necessary.
 				 */
 				if (currentSearchPath != NULL)
@@ -1248,7 +1248,7 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 
 				commandList = lappend(commandList, (char *) ddlJob->metadataSyncCommand);
 
-				SendBareCommandListToOtherMetadataNodes(commandList);
+				SendBareCommandListToRemoteMetadataNodes(commandList);
 			}
 		}
 		PG_CATCH();

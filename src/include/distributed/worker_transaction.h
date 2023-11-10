@@ -33,7 +33,7 @@ typedef enum TargetWorkerSet
 	 * All the active primary nodes in the metadata which have metadata
 	 * except the local node
 	 */
-	OTHER_METADATA_NODES,
+	REMOTE_METADATA_NODES,
 
 	/*
 	 * All the active primary nodes in the metadata except the coordinator
@@ -43,7 +43,7 @@ typedef enum TargetWorkerSet
 	/*
 	 * All the active primary nodes in the metadata except the local node
 	 */
-	OTHER_NODES,
+	REMOTE_NODES,
 
 	/*
 	 * All active primary nodes in the metadata
@@ -85,10 +85,10 @@ extern bool SendOptionalMetadataCommandListToWorkerInCoordinatedTransaction(cons
 extern void SendCommandToWorkersWithMetadata(const char *command);
 extern void SendCommandToWorkersWithMetadataViaSuperUser(const char *command);
 extern void SendCommandListToWorkersWithMetadata(List *commands);
-extern void SendCommandToOtherNodesWithMetadata(const char *command);
-extern void SendCommandToOtherNodesWithMetadataViaSuperUser(const char *command);
-extern void SendCommandListToOtherNodesWithMetadata(List *commands);
-extern void SendBareCommandListToOtherMetadataNodes(List *commandList);
+extern void SendCommandToRemoteNodesWithMetadata(const char *command);
+extern void SendCommandToRemoteNodesWithMetadataViaSuperUser(const char *command);
+extern void SendCommandListToRemoteNodesWithMetadata(List *commands);
+extern void SendBareCommandListToRemoteMetadataNodes(List *commandList);
 extern void SendBareCommandListToMetadataWorkers(List *commandList);
 extern void EnsureNoModificationsHaveBeenDone(void);
 extern void SendCommandListToWorkerOutsideTransaction(const char *nodeName,

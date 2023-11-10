@@ -71,7 +71,7 @@ extern uint32 ActivePrimaryNonCoordinatorNodeCount(void);
 extern uint32 ActiveReadableNodeCount(void);
 extern List * ActivePrimaryNonCoordinatorNodeList(LOCKMODE lockMode);
 extern List * ActivePrimaryNodeList(LOCKMODE lockMode);
-extern List * ActivePrimaryOtherNodesList(LOCKMODE lockMode);
+extern List * ActivePrimaryRemoteNodeList(LOCKMODE lockMode);
 extern bool CoordinatorAddedAsWorkerNode(void);
 extern List * ReferenceTablePlacementNodeList(LOCKMODE lockMode);
 extern WorkerNode * CoordinatorNodeIfAddedAsWorkerOrError(void);

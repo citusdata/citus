@@ -47,7 +47,7 @@ static char * DropTableIfExistsCommand(Oid relationId);
  * Note; only the actual objects are created via a separate session, the records to
  * pg_dist_object are created in this session. As a side effect the objects could be
  * created on the nodes without a catalog entry. Updates to the objects on local node
- * are not propagated to the other nodes until the record is visible on local node.
+ * are not propagated to the remote nodes until the record is visible on local node.
  *
  * This is solved by creating the dependencies in an idempotent manner, either via
  * postgres native CREATE IF NOT EXISTS, or citus helper functions.
@@ -95,7 +95,7 @@ EnsureDependenciesExistOnAllNodes(const ObjectAddress *target)
 	 * either get it now, or get it in citus_add_node after this transaction finishes and
 	 * the pg_dist_object record becomes visible.
 	 */
-	List *otherNodes = ActivePrimaryOtherNodesList(RowShareLock);
+	List *remoteNodeList = ActivePrimaryRemoteNodeList(RowShareLock);
 
 	/*
 	 * Lock dependent objects explicitly to make sure same DDL command won't be sent
@@ -127,12 +127,12 @@ EnsureDependenciesExistOnAllNodes(const ObjectAddress *target)
 	 */
 	if (HasAnyDependencyInPropagatedObjects(target))
 	{
-		SendCommandListToOtherNodesWithMetadata(ddlCommands);
+		SendCommandListToRemoteNodesWithMetadata(ddlCommands);
 	}
 	else
 	{
 		WorkerNode *workerNode = NULL;
-		foreach_ptr(workerNode, otherNodes)
+		foreach_ptr(workerNode, remoteNodeList)
 		{
 			const char *nodeName = workerNode->workerName;
 			uint32 nodePort = workerNode->workerPort;
@@ -144,8 +144,8 @@ EnsureDependenciesExistOnAllNodes(const ObjectAddress *target)
 	}
 
 	/*
-	 * We do this after creating the objects on other nodes, we make sure
-	 * that objects have been created on other nodes before marking them
+	 * We do this after creating the objects on remote nodes, we make sure
+	 * that objects have been created on remote nodes before marking them
 	 * distributed, so MarkObjectDistributed wouldn't fail.
 	 */
 	foreach_ptr(dependency, dependenciesWithCommands)
