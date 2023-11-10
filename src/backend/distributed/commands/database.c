@@ -574,55 +574,61 @@ GenerateCreateDatabaseStatementFromPgDatabase(Form_pg_database databaseForm)
 	initStringInfo(&str);
 
 	appendStringInfo(&str, "CREATE DATABASE %s",
-						quote_identifier(NameStr(databaseForm->datname)));
+					 quote_identifier(NameStr(databaseForm->datname)));
 
 	if (databaseForm->datdba != InvalidOid)
 	{
 		appendStringInfo(&str, " OWNER = %s",
-						quote_literal_cstr(GetUserNameFromId(databaseForm->datdba,false)));
+						 quote_literal_cstr(GetUserNameFromId(databaseForm->datdba,
+															  false)));
 	}
 
 	if (databaseForm->encoding != -1)
 	{
 		appendStringInfo(&str, " ENCODING = %s",
-						quote_literal_cstr(pg_encoding_to_char(databaseForm->encoding)));
+						 quote_literal_cstr(pg_encoding_to_char(databaseForm->encoding)));
 	}
 
 	if (collInfo.collation != NULL)
 	{
-		appendStringInfo(&str, " LC_COLLATE = %s",  quote_literal_cstr(collInfo.collation));
+		appendStringInfo(&str, " LC_COLLATE = %s", quote_literal_cstr(
+							 collInfo.collation));
 	}
 	if (collInfo.ctype != NULL)
 	{
-		appendStringInfo(&str, " LC_CTYPE = %s",  quote_literal_cstr(collInfo.ctype));
+		appendStringInfo(&str, " LC_CTYPE = %s", quote_literal_cstr(collInfo.ctype));
 	}
 
 	#if PG_VERSION_NUM >= PG_VERSION_15
 	if (collInfo.icu_locale != NULL)
 	{
-		appendStringInfo(&str, " ICU_LOCALE = %s",  quote_literal_cstr(collInfo.icu_locale));
+		appendStringInfo(&str, " ICU_LOCALE = %s", quote_literal_cstr(
+							 collInfo.icu_locale));
 	}
 
 	if (databaseForm->datlocprovider != 0)
 	{
 		appendStringInfo(&str, " LOCALE_PROVIDER = %s",
-		 				quote_literal_cstr(GetLocaleProviderString(databaseForm->datlocprovider)));
+						 quote_literal_cstr(GetLocaleProviderString(
+												databaseForm->datlocprovider)));
 	}
 
 	if (collInfo.collversion != NULL)
 	{
-		appendStringInfo(&str, " COLLATION_VERSION = %s",  quote_literal_cstr(collInfo.collversion));
+		appendStringInfo(&str, " COLLATION_VERSION = %s", quote_literal_cstr(
+							 collInfo.collversion));
 	}
 	#endif
 
 	if (databaseForm->dattablespace != InvalidOid)
 	{
 		appendStringInfo(&str, " TABLESPACE = %s",
-						quote_identifier(GetTablespaceName(databaseForm->dattablespace)));
+						 quote_identifier(GetTablespaceName(
+											  databaseForm->dattablespace)));
 	}
 
 	appendStringInfo(&str, " ALLOW_CONNECTIONS = %s",
-					quote_literal_cstr(databaseForm->datallowconn ?"true" : "false"));
+					 quote_literal_cstr(databaseForm->datallowconn ? "true" : "false"));
 
 	if (databaseForm->datconnlimit >= 0)
 	{
@@ -630,7 +636,7 @@ GenerateCreateDatabaseStatementFromPgDatabase(Form_pg_database databaseForm)
 	}
 
 	appendStringInfo(&str, " IS_TEMPLATE = %s",
-					quote_literal_cstr(databaseForm->datistemplate ? "true" :"false"));
+					 quote_literal_cstr(databaseForm->datistemplate ? "true" : "false"));
 
 	FreeDatabaseCollationInfo(collInfo);
 
