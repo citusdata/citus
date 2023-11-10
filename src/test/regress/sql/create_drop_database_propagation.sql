@@ -55,8 +55,6 @@ SELECT result from run_command_on_all_nodes(
 
 drop database mydatabase;
 
-
-
 SELECT result from run_command_on_all_nodes(
   $$
   SELECT jsonb_agg(to_jsonb(q2.*)) FROM (
@@ -102,6 +100,9 @@ SELECT result from run_command_on_all_nodes(
 ) ORDER BY result;
 
 select 1 from citus_add_node('localhost', :worker_2_port);
+
+SET citus.log_remote_commands = true;
+set citus.grep_remote_commands = '%CREATE DATABASE%';
 
 SELECT result from run_command_on_all_nodes(
   $$
