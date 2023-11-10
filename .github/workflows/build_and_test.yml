@@ -1,0 +1,477 @@
+name: Build & Test
+run-name: Build & Test - ${{ github.event.pull_request.title || github.ref_name }}
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+on:
+  workflow_dispatch:
+    inputs:
+      skip_test_flakyness:
+        required: false
+        default: false
+        type: boolean
+  pull_request:
+    types: [opened, reopened,synchronize]
+jobs:
+  # Since GHA does not interpolate env varibles in matrix context, we need to
+  # define them in a separate job and use them in other jobs.
+  params:
+    runs-on: ubuntu-latest
+    name: Initialize parameters
+    outputs:
+      build_image_name: "citus/extbuilder"
+      test_image_name: "citus/exttester"
+      citusupgrade_image_name: "citus/citusupgradetester"
+      fail_test_image_name: "citus/failtester"
+      pgupgrade_image_name: "citus/pgupgradetester"
+      style_checker_image_name: "citus/stylechecker"
+      style_checker_tools_version: "0.8.18"
+      image_suffix: "-vbab548a"
+      pg14_version: '{ "major": "14", "full": "14.8" }'
+      pg15_version: '{ "major": "15", "full": "15.3" }'
+      upgrade_pg_versions: "14.8-15.3"
+    steps:
+      # Since GHA jobs needs at least one step we use a noop step here.
+      - name: Set up parameters
+        run: echo 'noop'
+  check-sql-snapshots:
+    needs: params
+    runs-on: ubuntu-20.04
+    container:
+      image: ${{ needs.params.outputs.build_image_name }}:latest
+      options: --user root
+    steps:
+    - uses: actions/checkout@v3.5.0
+    - name: Check Snapshots
+      run: |
+        git config --global --add safe.directory ${GITHUB_WORKSPACE}
+        ci/check_sql_snapshots.sh
+  check-style:
+    needs: params
+    runs-on: ubuntu-20.04
+    container:
+      image: ${{ needs.params.outputs.style_checker_image_name }}:${{ needs.params.outputs.style_checker_tools_version }}${{ needs.params.outputs.image_suffix }}
+    steps:
+    - name: Check Snapshots
+      run: |
+        git config --global --add safe.directory ${GITHUB_WORKSPACE}
+    - uses: actions/checkout@v3.5.0
+      with:
+        fetch-depth: 0
+    - name: Check C Style
+      run: citus_indent --check
+    - name: Check Python style
+      run: black --check .
+    - name: Check Python import order
+      run: isort --check .
+    - name: Check Python lints
+      run: flake8 .
+    - name: Fix whitespace
+      run: ci/editorconfig.sh && git diff --exit-code
+    - name: Remove useless declarations
+      run: ci/remove_useless_declarations.sh && git diff --cached --exit-code
+    - name: Normalize test output
+      run: ci/normalize_expected.sh && git diff --exit-code
+    - name: Check for C-style comments in migration files
+      run: ci/disallow_c_comments_in_migrations.sh && git diff --exit-code
+    - name: 'Check for comment--cached ns that start with # character in spec files'
+      run: ci/disallow_hash_comments_in_spec_files.sh && git diff --exit-code
+    - name: Check for gitignore entries .for source files
+      run: ci/fix_gitignore.sh && git diff --exit-code
+    - name: Check for lengths of changelog entries
+      run: ci/disallow_long_changelog_entries.sh
+    - name: Check for banned C API usage
+      run: ci/banned.h.sh
+    - name: Check for tests missing in schedules
+      run: ci/check_all_tests_are_run.sh
+    - name: Check if all CI scripts are actually run
+      run: ci/check_all_ci_scripts_are_run.sh
+    - name: Check if all GUCs are sorted alphabetically
+      run: ci/check_gucs_are_alphabetically_sorted.sh
+    - name: Check for missing downgrade scripts
+      run: ci/check_migration_files.sh
+  build:
+    needs: params
+    name: Build for PG${{ fromJson(matrix.pg_version).major }}
+    strategy:
+      fail-fast: false
+      matrix:
+        image_name:
+          - ${{ needs.params.outputs.build_image_name }}
+        image_suffix:
+          - ${{ needs.params.outputs.image_suffix}}
+        pg_version:
+          - ${{ needs.params.outputs.pg14_version }}
+          - ${{ needs.params.outputs.pg15_version }}
+    runs-on: ubuntu-20.04
+    container:
+      image: "${{ matrix.image_name }}:${{ fromJson(matrix.pg_version).full }}${{ matrix.image_suffix }}"
+      options: --user root
+    steps:
+    - uses: actions/checkout@v3.5.0
+    - name: Expose $PG_MAJOR to Github Env
+      run: echo "PG_MAJOR=${PG_MAJOR}" >> $GITHUB_ENV
+      shell: bash
+    - name: Build
+      run: "./ci/build-citus.sh"
+      shell: bash
+    - uses: actions/upload-artifact@v3.1.1
+      with:
+        name: build-${{ env.PG_MAJOR }}
+        path: |-
+          ./build-${{ env.PG_MAJOR }}/*
+          ./install-${{ env.PG_MAJOR }}.tar
+  test-citus:
+    name: PG${{ fromJson(matrix.pg_version).major }} - ${{ matrix.make }}
+    strategy:
+      fail-fast: false
+      matrix:
+        suite:
+          - regress
+        image_name:
+          - ${{ needs.params.outputs.test_image_name }}
+        pg_version:
+          - ${{ needs.params.outputs.pg14_version }}
+          - ${{ needs.params.outputs.pg15_version }}
+        make:
+          - check-split
+          - check-multi
+          - check-multi-1
+          - check-multi-mx
+          - check-vanilla
+          - check-isolation
+          - check-operations
+          - check-follower-cluster
+          - check-columnar
+          - check-columnar-isolation
+          - check-enterprise
+          - check-enterprise-isolation
+          - check-enterprise-isolation-logicalrep-1
+          - check-enterprise-isolation-logicalrep-2
+          - check-enterprise-isolation-logicalrep-3
+        include:
+          - make: check-failure
+            pg_version: ${{ needs.params.outputs.pg14_version }}
+            suite: regress
+            image_name: ${{ needs.params.outputs.fail_test_image_name }}
+          - make: check-failure
+            pg_version: ${{ needs.params.outputs.pg15_version }}
+            suite: regress
+            image_name: ${{ needs.params.outputs.fail_test_image_name }}
+          - make: check-enterprise-failure
+            pg_version: ${{ needs.params.outputs.pg14_version }}
+            suite: regress
+            image_name: ${{ needs.params.outputs.fail_test_image_name }}
+          - make: check-enterprise-failure
+            pg_version: ${{ needs.params.outputs.pg15_version }}
+            suite: regress
+            image_name: ${{ needs.params.outputs.fail_test_image_name }}
+          - make: check-pytest
+            pg_version: ${{ needs.params.outputs.pg14_version }}
+            suite: regress
+            image_name: ${{ needs.params.outputs.fail_test_image_name }}
+          - make: check-pytest
+            pg_version: ${{ needs.params.outputs.pg15_version }}
+            suite: regress
+            image_name: ${{ needs.params.outputs.fail_test_image_name }}
+          - make: installcheck
+            suite: cdc
+            image_name: ${{ needs.params.outputs.test_image_name }}
+            pg_version: ${{ needs.params.outputs.pg15_version }}
+          - make: check-query-generator
+            pg_version: ${{ needs.params.outputs.pg14_version }}
+            suite: regress
+            image_name: ${{ needs.params.outputs.fail_test_image_name }}
+          - make: check-query-generator
+            pg_version: ${{ needs.params.outputs.pg15_version }}
+            suite: regress
+            image_name: ${{ needs.params.outputs.fail_test_image_name }}
+    runs-on: ubuntu-20.04
+    container:
+      image: "${{ matrix.image_name }}:${{ fromJson(matrix.pg_version).full }}${{ needs.params.outputs.image_suffix }}"
+      options: --user root --dns=8.8.8.8
+      # Due to Github creates a default network for each job, we need to use
+      # --dns= to have similar DNS settings as our other CI systems or local
+      # machines. Otherwise, we may see different results.
+    needs:
+    - params
+    - build
+    steps:
+    - uses: actions/checkout@v3.5.0
+    - uses: "./.github/actions/setup_extension"
+    - name: Run Test
+      run: gosu circleci make -C src/test/${{ matrix.suite }} ${{ matrix.make }}
+      timeout-minutes: 20
+    - uses: "./.github/actions/save_logs_and_results"
+      if: always()
+      with:
+        folder: ${{ fromJson(matrix.pg_version).major }}_${{ matrix.make }}
+    - uses: "./.github/actions/upload_coverage"
+      if: always()
+      with:
+        flags: ${{ env.PG_MAJOR }}_${{ matrix.suite }}_${{ matrix.make }}
+        codecov_token: ${{ secrets.CODECOV_TOKEN }}
+  test-arbitrary-configs:
+    name: PG${{ fromJson(matrix.pg_version).major }} - check-arbitrary-configs-${{ matrix.parallel }}
+    runs-on: ["self-hosted", "1ES.Pool=1es-gha-citusdata-pool"]
+    container:
+      image: "${{ matrix.image_name }}:${{ fromJson(matrix.pg_version).full }}${{ needs.params.outputs.image_suffix }}"
+      options: --user root
+    needs:
+      - params
+      - build
+    strategy:
+      fail-fast: false
+      matrix:
+        image_name:
+          - ${{ needs.params.outputs.fail_test_image_name }}
+        pg_version:
+          - ${{ needs.params.outputs.pg14_version }}
+          - ${{ needs.params.outputs.pg15_version }}
+        parallel: [0,1,2,3,4,5] # workaround for running 6 parallel jobs
+    steps:
+    - uses: actions/checkout@v3.5.0
+    - uses: "./.github/actions/setup_extension"
+    - name: Test arbitrary configs
+      run: |-
+        # we use parallel jobs to split the tests into 6 parts and run them in parallel
+        # the script below extracts the tests for the current job
+        N=6  # Total number of jobs (see matrix.parallel)
+        X=${{ matrix.parallel }}  # Current job number
+        TESTS=$(src/test/regress/citus_tests/print_test_names.py |
+          tr '\n' ',' | awk -v N="$N" -v X="$X" -F, '{
+            split("", parts)
+            for (i = 1; i <= NF; i++) {
+                parts[i % N] = parts[i % N] $i ","
+            }
+            print substr(parts[X], 1, length(parts[X])-1)
+        }')
+        echo $TESTS
+        gosu circleci \
+          make -C src/test/regress \
+            check-arbitrary-configs parallel=4 CONFIGS=$TESTS
+    - uses: "./.github/actions/save_logs_and_results"
+      if: always()
+    - uses: "./.github/actions/upload_coverage"
+      if: always()
+      with:
+        flags: ${{ env.pg_major }}_upgrade
+        codecov_token: ${{ secrets.CODECOV_TOKEN }}
+  test-pg-upgrade:
+    name: PG${{ matrix.old_pg_major }}-PG${{ matrix.new_pg_major }} - check-pg-upgrade
+    runs-on: ubuntu-20.04
+    container:
+      image: "${{ needs.params.outputs.pgupgrade_image_name }}:${{ needs.params.outputs.upgrade_pg_versions }}${{ needs.params.outputs.image_suffix }}"
+      options: --user root
+    needs:
+    - params
+    - build
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - old_pg_major: 14
+            new_pg_major: 15
+    env:
+      old_pg_major: ${{ matrix.old_pg_major }}
+      new_pg_major: ${{ matrix.new_pg_major }}
+    steps:
+    - uses: actions/checkout@v3.5.0
+    - uses: "./.github/actions/setup_extension"
+      with:
+        pg_major: "${{ env.old_pg_major }}"
+    - uses: "./.github/actions/setup_extension"
+      with:
+        pg_major: "${{ env.new_pg_major }}"
+    - name: Install and test postgres upgrade
+      run: |-
+        gosu circleci \
+          make -C src/test/regress \
+            check-pg-upgrade \
+            old-bindir=/usr/lib/postgresql/${{ env.old_pg_major }}/bin \
+            new-bindir=/usr/lib/postgresql/${{ env.new_pg_major }}/bin
+    - name: Copy pg_upgrade logs for newData dir
+      run: |-
+        mkdir -p /tmp/pg_upgrade_newData_logs
+        if ls src/test/regress/tmp_upgrade/newData/*.log 1> /dev/null 2>&1; then
+            cp src/test/regress/tmp_upgrade/newData/*.log /tmp/pg_upgrade_newData_logs
+        fi
+      if: failure()
+    - uses: "./.github/actions/save_logs_and_results"
+      if: always()
+    - uses: "./.github/actions/upload_coverage"
+      if: always()
+      with:
+        flags: ${{ env.old_pg_major }}_${{ env.new_pg_major }}_upgrade
+        codecov_token: ${{ secrets.CODECOV_TOKEN }}
+  test-citus-upgrade:
+    name: PG${{ fromJson(needs.params.outputs.pg14_version).major }} - check-citus-upgrade
+    runs-on: ubuntu-20.04
+    container:
+      image: "${{ needs.params.outputs.citusupgrade_image_name }}:${{ fromJson(needs.params.outputs.pg14_version).full }}${{ needs.params.outputs.image_suffix }}"
+      options: --user root
+    needs:
+    - params
+    - build
+    steps:
+    - uses: actions/checkout@v3.5.0
+    - uses: "./.github/actions/setup_extension"
+      with:
+        skip_installation: true
+    - name: Install and test citus upgrade
+      run: |-
+        # run make check-citus-upgrade for all citus versions
+        # the image has ${CITUS_VERSIONS} set with all verions it contains the binaries of
+        for citus_version in ${CITUS_VERSIONS}; do \
+          gosu circleci \
+            make -C src/test/regress \
+              check-citus-upgrade \
+              bindir=/usr/lib/postgresql/${PG_MAJOR}/bin \
+              citus-old-version=${citus_version} \
+              citus-pre-tar=/install-pg${PG_MAJOR}-citus${citus_version}.tar \
+              citus-post-tar=${GITHUB_WORKSPACE}/install-$PG_MAJOR.tar; \
+        done;
+        # run make check-citus-upgrade-mixed for all citus versions
+        # the image has ${CITUS_VERSIONS} set with all verions it contains the binaries of
+        for citus_version in ${CITUS_VERSIONS}; do \
+          gosu circleci \
+            make -C src/test/regress \
+              check-citus-upgrade-mixed \
+              citus-old-version=${citus_version} \
+              bindir=/usr/lib/postgresql/${PG_MAJOR}/bin \
+              citus-pre-tar=/install-pg${PG_MAJOR}-citus${citus_version}.tar \
+              citus-post-tar=${GITHUB_WORKSPACE}/install-$PG_MAJOR.tar; \
+        done;
+    - uses: "./.github/actions/save_logs_and_results"
+      if: always()
+    - uses: "./.github/actions/upload_coverage"
+      if: always()
+      with:
+        flags: ${{ env.pg_major }}_upgrade
+        codecov_token: ${{ secrets.CODECOV_TOKEN }}
+  upload-coverage:
+    if: always()
+    env:
+      CC_TEST_REPORTER_ID: ${{ secrets.CC_TEST_REPORTER_ID }}
+    runs-on: ubuntu-20.04
+    container:
+      image: ${{ needs.params.outputs.test_image_name }}:${{ fromJson(needs.params.outputs.pg15_version).full }}${{ needs.params.outputs.image_suffix }}
+    needs:
+      - params
+      - test-citus
+      - test-arbitrary-configs
+      - test-citus-upgrade
+      - test-pg-upgrade
+    steps:
+      - uses: actions/download-artifact@v3.0.1
+        with:
+          name: "codeclimate"
+          path: "codeclimate"
+      - name: Upload coverage results to Code Climate
+        run: |-
+          cc-test-reporter sum-coverage codeclimate/*.json -o total.json
+          cc-test-reporter upload-coverage -i total.json
+  ch_benchmark:
+    name: CH Benchmark
+    if: startsWith(github.ref, 'refs/heads/ch_benchmark/')
+    runs-on: ubuntu-20.04
+    needs:
+    - build
+    steps:
+    - uses: actions/checkout@v3.5.0
+    - uses: azure/login@v1
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+    - name: install dependencies and run ch_benchmark tests
+      uses: azure/CLI@v1
+      with:
+        inlineScript: |
+          cd ./src/test/hammerdb
+          chmod +x run_hammerdb.sh
+          run_hammerdb.sh citusbot_ch_benchmark_rg
+  tpcc_benchmark:
+    name: TPCC Benchmark
+    if: startsWith(github.ref, 'refs/heads/tpcc_benchmark/')
+    runs-on: ubuntu-20.04
+    needs:
+    - build
+    steps:
+    - uses: actions/checkout@v3.5.0
+    - uses: azure/login@v1
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+    - name: install dependencies and run tpcc_benchmark tests
+      uses: azure/CLI@v1
+      with:
+        inlineScript: |
+          cd ./src/test/hammerdb
+          chmod +x run_hammerdb.sh
+          run_hammerdb.sh citusbot_tpcc_benchmark_rg
+  prepare_parallelization_matrix_32:
+    name: Parallel 32
+    if: ${{ needs.test-flakyness-pre.outputs.tests != ''}}
+    needs: test-flakyness-pre
+    runs-on: ubuntu-20.04
+    outputs:
+      json: ${{ steps.parallelization.outputs.json }}
+    steps:
+      - uses: actions/checkout@v3.5.0
+      - uses: "./.github/actions/parallelization"
+        id: parallelization
+        with:
+          count: 32
+  test-flakyness-pre:
+    name: Detect regression tests need to be ran
+    if: ${{ !inputs.skip_test_flakyness }}}
+    runs-on: ubuntu-20.04
+    needs: build
+    outputs:
+      tests: ${{ steps.detect-regression-tests.outputs.tests }}
+    steps:
+    - uses: actions/checkout@v3.5.0
+      with:
+        fetch-depth: 0
+    - name: Detect regression tests need to be ran
+      id: detect-regression-tests
+      run: |-
+        detected_changes=$(git diff origin/release-12.0... --name-only --diff-filter=AM | (grep 'src/test/regress/sql/.*\.sql\|src/test/regress/spec/.*\.spec\|src/test/regress/citus_tests/test/test_.*\.py' || true))
+        tests=${detected_changes}
+        if [ -z "$tests" ]; then
+            echo "No test found."
+        else
+          echo "Detected tests " $tests
+        fi
+        echo tests="$tests" >> "$GITHUB_OUTPUT"
+  test-flakyness:
+    if: ${{ needs.test-flakyness-pre.outputs.tests != ''}}
+    name: Test flakyness
+    runs-on: ubuntu-20.04
+    container:
+      image: ${{ needs.params.outputs.fail_test_image_name }}:${{ needs.params.outputs.pg15_version }}${{ needs.params.outputs.image_suffix }}
+      options: --user root
+    env:
+      runs: 8
+    needs:
+    - params
+    - build
+    - test-flakyness-pre
+    - prepare_parallelization_matrix_32
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.prepare_parallelization_matrix_32.outputs.json) }}
+    steps:
+    - uses: actions/checkout@v3.5.0
+    - uses: actions/download-artifact@v3.0.1
+    - uses: "./.github/actions/setup_extension"
+    - name: Run minimal tests
+      run: |-
+        tests="${{ needs.test-flakyness-pre.outputs.tests }}"
+        tests_array=($tests)
+        for test in "${tests_array[@]}"
+        do
+            test_name=$(echo "$test" | sed -r "s/.+\/(.+)\..+/\1/")
+            gosu circleci src/test/regress/citus_tests/run_test.py $test_name --repeat ${{ env.runs }} --use-base-schedule --use-whole-schedule-line
+        done
+      shell: bash
+    - uses: "./.github/actions/save_logs_and_results"
+      if: always()
