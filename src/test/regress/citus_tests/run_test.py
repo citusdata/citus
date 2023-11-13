@@ -198,6 +198,9 @@ DEPS = {
         ["multi_create_table", "multi_create_users", "multi_multiuser_load_data"],
         repeatable=False,
     ),
+    "remove_cluster_management_nodes": TestDeps(
+        None, ["multi_mx_node_metadata", "multi_cluster_management"], repeatable=False,
+    ),
     "multi_tenant_isolation_nonblocking": TestDeps(
         "minimal_schedule",
         ["multi_data_types"],
