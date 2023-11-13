@@ -21,6 +21,7 @@
 #include "catalog/pg_database_d.h"
 #include "catalog/pg_tablespace.h"
 #include "commands/dbcommands.h"
+#include "commands/defrem.h"
 #include "nodes/parsenodes.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
@@ -271,6 +272,55 @@ PreprocessAlterDatabaseSetStmt(Node *node, const char *queryString,
 
 
 /*
+ * This function validates the options provided for the CREATE DATABASE command.
+ * It iterates over each option in the stmt->options list and checks if it's supported.
+ * If an unsupported option is found, or if a supported option has an invalid value,
+ * it raises an error.
+ *
+ * Parameters:
+ * stmt: A CreatedbStmt struct representing a CREATE DATABASE command.
+ *       The options field is a list of DefElem structs, each representing an option.
+ *
+ * Currently, this function checks for the following:
+ * - The "oid" option is not supported.
+ * - The "template" option is only supported with the value "template1".
+ * - The "strategy" option is only supported with the value "wal_log".
+ *
+ * If any of these checks fail, the function calls ereport to raise an error.
+ */
+static void
+EnsureSupportedCreateDatabaseCommand(CreatedbStmt *stmt)
+{
+	DefElem *option = NULL;
+	foreach_ptr(option, stmt->options)
+	{
+		if (strcmp(option->defname, "oid") == 0)
+		{
+			ereport(ERROR,
+					errmsg("CREATE DATABASE option \"%s\" is not supported",
+						   option->defname));
+		}
+
+		char *optionValue = defGetString(option);
+
+		if (strcmp(option->defname, "template") == 0 && strcmp(optionValue,
+															   "template1") != 0)
+		{
+			ereport(ERROR, errmsg("Only template1 is supported as template "
+								  "parameter for CREATE DATABASE"));
+		}
+
+		if (strcmp(option->defname, "strategy") == 0 && strcmp(optionValue, "wal_log") !=
+			0)
+		{
+			ereport(ERROR, errmsg("Only wal_log is supported as strategy "
+								  "parameter for CREATE DATABASE"));
+		}
+	}
+}
+
+
+/*
  * PostprocessAlterDatabaseStmt is executed before the statement is applied to the local
  * postgres instance.
  *
@@ -288,8 +338,9 @@ PreprocessCreateDatabaseStmt(Node *node, const char *queryString,
 
 	EnsureCoordinator();
 
-	/*Validate the statement */
-	DeparseTreeNode(node);
+	/*validate the statement*/
+	CreatedbStmt *stmt = castNode(CreatedbStmt, node);
+	EnsureSupportedCreateDatabaseCommand(stmt);
 
 	return NIL;
 }

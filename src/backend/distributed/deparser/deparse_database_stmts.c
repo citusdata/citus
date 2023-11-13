@@ -251,37 +251,6 @@ DeparseAlterDatabaseSetStmt(Node *node)
 }
 
 
-/*
- * Validates for if option is template, lc_type, locale or lc_collate, propagation will
- * not be supported since template and strategy options are not stored in the catalog
- * and lc_type, locale and lc_collate options depends on template parameter.
- */
-static void
-ValidateCreateDatabaseOptions(DefElem *option)
-{
-	if (strcmp(option->defname, "oid") == 0)
-	{
-		ereport(ERROR,
-				errmsg("CREATE DATABASE option \"%s\" is not supported",
-					   option->defname));
-	}
-
-	char *optionValue = defGetString(option);
-
-	if (strcmp(option->defname, "template") == 0 && strcmp(optionValue, "template1") != 0)
-	{
-		ereport(ERROR, errmsg("Only template1 is supported as template "
-							  "parameter for CREATE DATABASE"));
-	}
-
-	if (strcmp(option->defname, "strategy") == 0 && strcmp(optionValue, "wal_log") != 0)
-	{
-		ereport(ERROR, errmsg("Only wal_log is supported as strategy "
-							  "parameter for CREATE DATABASE"));
-	}
-}
-
-
 static void
 AppendCreateDatabaseStmt(StringInfo buf, CreatedbStmt *stmt)
 {
@@ -293,7 +262,7 @@ AppendCreateDatabaseStmt(StringInfo buf, CreatedbStmt *stmt)
 
 	foreach_ptr(option, stmt->options)
 	{
-		ValidateCreateDatabaseOptions(option);
+		/*ValidateCreateDatabaseOptions(option); */
 
 		DefElemOptionToStatement(buf, option, create_database_option_formats,
 								 lengthof(create_database_option_formats));
