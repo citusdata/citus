@@ -1371,7 +1371,7 @@ CreateTableConversion(TableConversionParameters *params)
 			ereport(ERROR, (errmsg("cache lookup failed for access method %d",
 								   relation->rd_rel->relam)));
 		}
-		Form_pg_am amForm = (Form_pg_am) GETSTRUCT(amTuple);
+		Form_pg_amx amForm = (Form_pg_am) GETSTRUCT(amTuple);
 		con->originalAccessMethod = NameStr(amForm->amname);
 		ReleaseSysCache(amTuple);
 	}
