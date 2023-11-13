@@ -329,11 +329,22 @@ AppendDropDatabaseStmt(StringInfo buf, DropdbStmt *stmt)
 
 	DefElem *option = NULL;
 
+
 	foreach_ptr(option, stmt->options)
 	{
+		//if it is the first option then append with "WITH" else append with ","
+		if (option == linitial(stmt->options))
+		{
+			appendStringInfo(buf, " WITH ( ");
+		}
+		else
+		{
+			appendStringInfo(buf, ", ");
+		}
+
 		if (strcmp(option->defname, "force") == 0)
 		{
-			appendStringInfo(buf, " FORCE");
+			appendStringInfo(buf, "FORCE");
 		}
 		else
 		{
@@ -341,6 +352,13 @@ AppendDropDatabaseStmt(StringInfo buf, DropdbStmt *stmt)
 							errmsg("unrecognized DROP DATABASE option \"%s\"",
 								   option->defname)));
 		}
+
+		//if it is the last  option then append with ")"
+		if (option == llast(stmt->options))
+		{
+			appendStringInfo(buf, " )");
+		}
+
 	}
 }
 

@@ -261,6 +261,20 @@ DROP DATABASE test_node_activation;
 DROP DATABASE db_needs_escape;
 DROP USER "role-needs\!escape";
 
+-- drop database with force options test
+
+create database db_force_test;
+
+SET citus.log_remote_commands = true;
+set citus.grep_remote_commands = '%DROP DATABASE%';
+
+drop database db_force_test with (force);
+
+reset citus.log_remote_commands;
+
+SELECT * FROM public.check_database_on_all_nodes('db_force_test') ORDER BY node_type;
+
+
 --clean up resources created by this test
 
 -- DROP TABLESPACE is not supported, so we need to drop it manually.

@@ -477,6 +477,24 @@ SET citus.enable_create_database_propagation TO ON;
 DROP DATABASE test_node_activation;
 DROP DATABASE db_needs_escape;
 DROP USER "role-needs\!escape";
+-- drop database with force options test
+create database db_force_test;
+SET citus.log_remote_commands = true;
+set citus.grep_remote_commands = '%DROP DATABASE%';
+drop database db_force_test with (force);
+NOTICE:  issuing DROP DATABASE  db_force_test WITH ( FORCE )
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing DROP DATABASE  db_force_test WITH ( FORCE )
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+reset citus.log_remote_commands;
+SELECT * FROM public.check_database_on_all_nodes('db_force_test') ORDER BY node_type;
+      node_type       |                                                              result
+---------------------------------------------------------------------
+ coordinator (local)  | {"database_properties": null, "pg_dist_object_record_for_db_exists": false, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": null, "pg_dist_object_record_for_db_exists": false, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": null, "pg_dist_object_record_for_db_exists": false, "stale_pg_dist_object_record_for_a_db_exists": false}
+(3 rows)
+
 --clean up resources created by this test
 -- DROP TABLESPACE is not supported, so we need to drop it manually.
 SELECT result FROM run_command_on_all_nodes(
