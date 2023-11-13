@@ -1,0 +1,37 @@
+-- When needed in some tests, GetLocalNodeId() does not behave correctly.
+SELECT citus_remove_node('localhost', 8887);
+ citus_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT citus_remove_node('localhost', 9995);
+ citus_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT citus_remove_node('localhost', 9992);
+ citus_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT citus_remove_node('localhost', 9998);
+ citus_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT citus_remove_node('localhost', 9997);
+ citus_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT citus_remove_node('localhost', 8888);
+ citus_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+

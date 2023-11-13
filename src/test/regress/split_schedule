@@ -10,6 +10,7 @@ test: foreign_key_to_reference_table
 # Split tests go here.
 test: split_shard
 test: worker_split_copy_test
+test: remove_cluster_management_nodes
 test: worker_split_binary_copy_test
 test: worker_split_text_copy_test
 test: citus_split_shard_by_split_points_negative
