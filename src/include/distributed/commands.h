@@ -239,9 +239,9 @@ extern List * PreprocessCreateDatabaseStmt(Node *node, const char *queryString,
 extern List * PostprocessCreateDatabaseStmt(Node *node, const char *queryString);
 extern List * PreprocessDropDatabaseStmt(Node *node, const char *queryString,
 										 ProcessUtilityContext processUtilityContext);
-extern List * DropDatabaseStmtObjectAddress(Node *node, bool missing_ok,
+extern List * DropDatabaseStmtObjectAddress(Node *node, bool missingOk,
 											bool isPostprocess);
-extern List * CreateDatabaseStmtObjectAddress(Node *node, bool missing_ok,
+extern List * CreateDatabaseStmtObjectAddress(Node *node, bool missingOk,
 											  bool isPostprocess);
 extern List * GenerateCreateDatabaseCommandList(void);
 
