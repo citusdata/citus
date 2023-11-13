@@ -10,7 +10,7 @@ $ git ls-files \
   | xargs -n1 ./ci/include-grouping.py
 """
 
-
+import collections
 import os
 import sys
 
@@ -30,25 +30,39 @@ def main(args):
             lines = f.readlines()
             includes = []
             skipped_lines = []
+
+            # This calls print_sorted_includes on a set of consecutive #include lines.
+            # This implicitly keeps separation of any #include lines that are contained in
+            # an #ifdef, because it will order the #include lines inside and after the
+            # #ifdef completely separately.
             for line in lines:
+                # if a line starts with #include we don't want to print it yet, instead we
+                # want to collect all consecutive #include lines
                 if line.startswith("#include"):
                     includes.append(line)
                     skipped_lines = []
-                else:
-                    if len(includes) > 0:
-                        # regroup all includes by skipping all empty lines while scanning
-                        if len(line.strip()) == 0:
-                            skipped_lines.append(line)
-                            continue
-                        print_sorted_includes(includes, file=out_file)
-                        includes = []
+                    continue
 
-                    # print skipped lines
-                    for skipped_line in skipped_lines:
-                        print(skipped_line, end="", file=out_file)
-                    skipped_lines = []
+                # if we have collected any #include lines, we want to print them sorted
+                # before printing the current line. However, if the current line is empty
+                # we want to perform a lookahead to see if the next line is an #include.
+                # To maintain any separation between #include lines and their subsequent
+                # lines we keep track of all lines we have skipped inbetween.
+                if len(includes) > 0:
+                    if len(line.strip()) == 0:
+                        skipped_lines.append(line)
+                        continue
 
-                    print(line, end="", file=out_file)
+                    # we have includes that need to be grouped before printing the current
+                    # line.
+                    print_sorted_includes(includes, file=out_file)
+                    includes = []
+
+                # print any skipped lines
+                print("".join(skipped_lines), end="", file=out_file)
+                skipped_lines = []
+
+                print(line, end="", file=out_file)
 
     # move out_file to file
     os.rename(file + ".tmp", file)
@@ -58,9 +72,13 @@ def main(args):
 
 def print_sorted_includes(includes, file=sys.stdout):
     default_group_key = 1
-    groups = {}
+    groups = collections.defaultdict(set)
 
-    matches = [
+    # define the groups that we separate correctly. The matchers are tested in the order
+    # of their priority field. The first matcher that matches the include is used to
+    # assign the include to a group.
+    # The groups are printed in the order of their group_key.
+    matchers = [
         {
             "name": "system includes",
             "matcher": lambda x: x.startswith("<"),
@@ -75,13 +93,14 @@ def print_sorted_includes(includes, file=sys.stdout):
         },
         {
             "name": "postgres.h",
-            "list": ['"postgres.h"'],
+            "matcher": lambda x: x.strip() in ['"postgres.h"'],
             "group_key": -1,
             "priority": -1,
         },
         {
             "name": "toplevel citus inlcudes",
-            "list": [
+            "matcher": lambda x: x.strip()
+            in [
                 '"citus_version.h"',
                 '"pg_version_compat.h"',
                 '"pg_version_constants.h"',
@@ -102,11 +121,15 @@ def print_sorted_includes(includes, file=sys.stdout):
             "priority": 1,
         },
     ]
+    matchers.sort(key=lambda x: x["priority"])
 
-    matches.sort(key=lambda x: x["priority"])
-
+    # throughout our codebase we have some includes where either postgres or citus
+    # includes are wrongfully included with the syntax for system includes. Before we
+    # try to match those we will change the <> to "" to make them match our system. This
+    # will also rewrite the include to the correct syntax.
     common_system_include_error_prefixes = ["<nodes/", "<distributed/"]
 
+    # assign every include to a group
     for include in includes:
         # extract the group key from the include
         include_content = include.split(" ")[1]
@@ -119,38 +142,19 @@ def print_sorted_includes(includes, file=sys.stdout):
                 break
 
         group_key = default_group_key
-        for matcher in matches:
-            if "list" in matcher:
-                if include_content.strip() in matcher["list"]:
-                    group_key = matcher["group_key"]
-                    break
+        for matcher in matchers:
+            if matcher["matcher"](include_content):
+                group_key = matcher["group_key"]
+                break
 
-            if "matcher" in matcher:
-                if matcher["matcher"](include_content):
-                    group_key = matcher["group_key"]
-                    break
-
-        if group_key not in groups.keys():
-            groups[group_key] = []
-        groups[group_key].append(include)
+        groups[group_key].add(include)
 
     # iterate over all groups in the natural order of its keys
-    first = True
-    for group_key in sorted(groups.keys()):
-        if not first:
+    for i, group in enumerate(sorted(groups.items())):
+        if i > 0:
             print(file=file)
-
-        first = False
-        includes = groups[group_key]
-        includes.sort()
-
-        prev = ""
-        for include in includes:
-            # remove duplicates
-            if prev == include:
-                continue
-            print(include, end="", file=file)
-            prev = include
+        includes = group[1]
+        print("".join(sorted(includes)), end="", file=file)
 
 
 if __name__ == "__main__":
