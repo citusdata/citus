@@ -113,10 +113,6 @@ jobs:
         run: |
           echo "Postgres version: ${POSTGRES_VERSION}"
 
-          ## Install required packages to execute packaging tools for rpm based distros
-          yum install python3-pip python3-devel postgresql-devel -y
-          python3 -m pip install wheel
-
           ./.github/packaging/validate_build_output.sh "rpm"
 
   deb_build_tests:
