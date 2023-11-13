@@ -654,8 +654,8 @@ GenerateCreateDatabaseStatementFromPgDatabase(Form_pg_database databaseForm)
 
 
 /*
- * GenerateCreateDatabaseCommandList gets a list of pg_database tuples and returns
- * a list of CREATE DATABASE statements for all the databases.
+ * GenerateCreateDatabaseCommandList returns a list of CREATE DATABASE statements
+ * for all the databases.
  *
  * Commands in the list are wrapped by citus_internal_database_command() UDF
  * to avoid from transaction block restrictions that apply to database commands
