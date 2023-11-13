@@ -296,7 +296,7 @@ PreprocessCreateDatabaseStmt(Node *node, const char *queryString,
 
 
 /*
- * PostprocessCreatedbStmt is executed after the statement is applied to the local
+ * PostprocessCreateDatabaseStmt is executed after the statement is applied to the local
  * postgres instance. In this stage we can prepare the commands that need to be run on
  * all workers to create the database. Since the CREATE DATABASE statement gives error
  * in a transaction block, we need to use NontransactionalNodeDDLTaskList to send the
@@ -324,7 +324,7 @@ PostprocessCreateDatabaseStmt(Node *node, const char *queryString)
 
 
 /*
- * PostprocessAlterDatabaseStmt is executed after the statement is applied to the local
+ * PreprocessDropDatabaseStmt is executed after the statement is applied to the local
  * postgres instance. In this stage we can prepare the commands that need to be run on
  * all workers to drop the database. Since the DROP DATABASE statement gives error in
  * transaction context, we need to use NontransactionalNodeDDLTaskList to send the
