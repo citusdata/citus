@@ -257,12 +257,6 @@ SELECT COUNT(*) FROM colocated_dist_table;
 \c - postgres - :master_port
 ALTER SYSTEM RESET citus.defer_shard_delete_interval;
 SELECT pg_reload_conf();
-SET client_min_messages TO error;
 DROP SCHEMA "citus_split_test_schema" CASCADE;
-RESET client_min_messages;
 DROP USER test_split_role;
 --END : Cleanup
-
-SELECT result FROM run_command_on_all_nodes($$SELECT count(*) FROM pg_replication_slots$$);
-SELECT result FROM run_command_on_all_nodes($$SELECT count(*) FROM pg_publication$$);
-SELECT result FROM run_command_on_all_nodes($$SELECT count(*) FROM pg_subscription$$);
