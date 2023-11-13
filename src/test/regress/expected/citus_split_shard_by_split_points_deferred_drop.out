@@ -124,3 +124,27 @@ SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind 
 SET client_min_messages TO WARNING;
 DROP SCHEMA "citus_split_shard_by_split_points_deferred_schema" CASCADE;
 DROP USER test_split_role;
+SELECT result FROM run_command_on_all_nodes($$SELECT count(*) FROM pg_replication_slots$$);
+ result
+---------------------------------------------------------------------
+ 0
+ 0
+ 0
+(3 rows)
+
+SELECT result FROM run_command_on_all_nodes($$SELECT count(*) FROM pg_publication$$);
+ result
+---------------------------------------------------------------------
+ 0
+ 0
+ 0
+(3 rows)
+
+SELECT result FROM run_command_on_all_nodes($$SELECT count(*) FROM pg_subscription$$);
+ result
+---------------------------------------------------------------------
+ 0
+ 0
+ 0
+(3 rows)
+
