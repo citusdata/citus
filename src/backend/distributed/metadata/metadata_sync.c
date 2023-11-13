@@ -3959,8 +3959,8 @@ citus_internal_database_command(PG_FUNCTION_ARGS)
 	else
 	{
 		ereport(ERROR, (errmsg("citus_internal_database_command() can only be used "
-                               "for CREATE DATABASE and DROP DATABASE commands by "
-                               "Citus.")));
+							   "for CREATE DATABASE and DROP DATABASE commands by "
+							   "Citus.")));
 	}
 
 	/* rollback GUCs to the state before this session */
