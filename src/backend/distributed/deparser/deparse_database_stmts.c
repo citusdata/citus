@@ -259,7 +259,7 @@ DeparseAlterDatabaseSetStmt(Node *node)
 static void
 ValidateCreateDatabaseOptions(DefElem *option)
 {
-	if (strcmp(option->defname, "strategy") == 0)
+	if (strcmp(option->defname, "strategy") == 0 || strcmp(option->defname, "oid") == 0)
 	{
 		ereport(ERROR,
 				errmsg("CREATE DATABASE option \"%s\" is not supported",
