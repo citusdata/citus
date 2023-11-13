@@ -190,7 +190,4 @@ jobs:
           echo "Postgres version: ${POSTGRES_VERSION}"
 
           apt-get update -y
-          ## Install required packages to execute packaging tools for deb based distros
-          apt-get install python3-dev python3-pip -y
-          apt-get purge -y python3-yaml
           ./.github/packaging/validate_build_output.sh "deb"
