@@ -198,23 +198,6 @@ DEPS = {
         ["multi_create_table", "multi_create_users", "multi_multiuser_load_data"],
         repeatable=False,
     ),
-    "remove_cluster_management_nodes": TestDeps(
-        None, ["multi_mx_node_metadata", "multi_cluster_management"], repeatable=False,
-    ),
-    "multi_tenant_isolation_nonblocking": TestDeps(
-        "minimal_schedule",
-        ["multi_data_types", "remove_coordinator_from_metadata"],
-    ),
-    "citus_split_shard_columnar_partitioned": TestDeps(
-        "minimal_schedule",
-        ["remove_coordinator_from_metadata"],
-    ),
-    "add_coordinator": TestDeps(
-        "minimal_schedule", ["remove_coordinator_from_metadata"], repeatable=False
-    ),
-    "multi_multiuser_auth": TestDeps(
-        "minimal_schedule", ["multi_create_table", "multi_create_users", "multi_multiuser_load_data"], repeatable=False
-    ),
 }
 
 
