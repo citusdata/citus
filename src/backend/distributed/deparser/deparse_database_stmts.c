@@ -149,7 +149,7 @@ AppendBasicAlterDatabaseOptions(StringInfo buf, DefElem *def, bool
 		prefix_appended_for_basic_options = true;
 	}
 	DefElemOptionToStatement(buf, def, alter_database_option_formats, lengthof(
-						  alter_database_option_formats));
+								 alter_database_option_formats));
 	return prefix_appended_for_basic_options;
 }
 
@@ -290,20 +290,19 @@ DeparseAlterDatabaseSetStmt(Node *node)
 static void
 ValidateCreateDatabaseOptions(DefElem *option)
 {
-	if (strcmp(option->defname, "strategy") == 0){
+	if (strcmp(option->defname, "strategy") == 0)
+	{
 		ereport(ERROR,
 				errmsg("CREATE DATABASE option \"%s\" is not supported",
 					   option->defname));
 	}
 
 	char *optionValue = defGetString(option);
-	if (strcmp(option->defname,"template") == 0 && strcmp(optionValue, "template1") != 0)
+	if (strcmp(option->defname, "template") == 0 && strcmp(optionValue, "template1") != 0)
 	{
-
-		ereport(ERROR,errmsg("Only template1 is supported as template parameter for CREATE DATABASE"));
-
+		ereport(ERROR, errmsg(
+					"Only template1 is supported as template parameter for CREATE DATABASE"));
 	}
-
 }
 
 

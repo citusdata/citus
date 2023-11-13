@@ -196,8 +196,6 @@ extern void SendInterTableRelationshipCommands(MetadataSyncContext *context);
 	"SELECT pg_catalog.worker_drop_sequence_dependency(%s);"
 
 #define DISABLE_DDL_PROPAGATION "SET citus.enable_ddl_propagation TO 'off'"
-#define BEGIN_TRANSACTION "BEGIN"
-#define COMMIT_TRANSACTION "COMMIT"
 #define ENABLE_DDL_PROPAGATION "SET citus.enable_ddl_propagation TO 'on'"
 #define DISABLE_METADATA_SYNC "SET citus.enable_metadata_sync TO 'off'"
 #define ENABLE_METADATA_SYNC "SET citus.enable_metadata_sync TO 'on'"
