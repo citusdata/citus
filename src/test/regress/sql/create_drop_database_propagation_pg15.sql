@@ -9,236 +9,57 @@ SELECT substring(:'server_version', '\d+')::int >= 15 AS server_version_ge_15
 \q
 \endif
 
--- create/drop database for pg > 15
+-- create/drop database for pg >= 15
 
-
-\set create_drop_db_tablespace :abs_srcdir '/tmp_check/ts3'
-CREATE TABLESPACE create_drop_db_tablespace LOCATION :'create_drop_db_tablespace';
-
-\c - - - :worker_1_port
-\set create_drop_db_tablespace :abs_srcdir '/tmp_check/ts4'
-CREATE TABLESPACE create_drop_db_tablespace LOCATION :'create_drop_db_tablespace';
-
-\c - - - :worker_2_port
-\set create_drop_db_tablespace :abs_srcdir '/tmp_check/ts5'
-CREATE TABLESPACE create_drop_db_tablespace LOCATION :'create_drop_db_tablespace';
-
-\c - - - :master_port
-create user create_drop_db_test_user;
 set citus.enable_create_database_propagation=on;
-SET citus.log_remote_commands = true;
-set citus.grep_remote_commands = '%CREATE DATABASE%';
+
 CREATE DATABASE mydatabase
-    WITH
-            OWNER = create_drop_db_test_user
-            CONNECTION LIMIT = 10
-            ENCODING = 'UTF8'
-            TABLESPACE = create_drop_db_tablespace
-            ALLOW_CONNECTIONS = true
-            IS_TEMPLATE = false
-            OID = 966345;
+    WITH OID = 966345;
 
-SET citus.log_remote_commands = false;
+CREATE DATABASE mydatabase
+    WITH strategy file_copy;
 
-SELECT result from run_command_on_all_nodes(
-  $$
-  SELECT jsonb_agg(to_jsonb(q2.*)) FROM (
-    SELECT pd.datname, pg_encoding_to_char(pd.encoding) as encoding,
-    pd.datistemplate, pd.datallowconn, pd.datconnlimit,
-    pd.datcollate , pd. datctype  ,  pd.datacl,
-    pa.rolname AS database_owner, pt.spcname AS tablespace
-    FROM pg_database pd
-    JOIN pg_authid pa ON pd.datdba = pa.oid
-    join pg_tablespace pt on pd.dattablespace = pt.oid
-    WHERE datname = 'mydatabase'
-  ) q2
-  $$
-) ORDER BY result;
+CREATE DATABASE st_wal_log
+    WITH strategy WaL_LoG;
 
-SET citus.log_remote_commands = true;
-set citus.grep_remote_commands = '%DROP DATABASE%';
-drop database mydatabase;
+SELECT * FROM public.check_database_on_all_nodes('st_wal_log') ORDER BY node_type;
 
-SET citus.log_remote_commands = false;
-SELECT result from run_command_on_all_nodes(
-  $$
-  SELECT jsonb_agg(to_jsonb(q2.*)) FROM (
-    SELECT pd.datname, pg_encoding_to_char(pd.encoding) as encoding,
-    pd.datistemplate, pd.datallowconn, pd.datconnlimit,
-    pd.datcollate , pd. datctype  ,  pd.datacl,
-    pa.rolname AS database_owner, pt.spcname AS tablespace
-    FROM pg_database pd
-    JOIN pg_authid pa ON pd.datdba = pa.oid
-    join pg_tablespace pt on pd.dattablespace = pt.oid
-    WHERE datname = 'mydatabase'
-  ) q2
-  $$
-) ORDER BY result;
+drop database st_wal_log;
 
-select citus_remove_node('localhost', :worker_2_port);
+select 1 from citus_remove_node('localhost', :worker_2_port);
 
+-- test COLLATION_VERSION
 
-SET citus.log_remote_commands = true;
-set citus.grep_remote_commands = '%CREATE DATABASE%';
-
-CREATE DATABASE mydatabase2
-    WITH OWNER = create_drop_db_test_user
-            ENCODING = 'UTF8'
-            TABLESPACE = create_drop_db_tablespace
-            ALLOW_CONNECTIONS = true
-            IS_TEMPLATE = false
-            OID = 966345;
-
-SET citus.log_remote_commands = false;
-SELECT result from run_command_on_all_nodes(
-  $$
-  SELECT jsonb_agg(to_jsonb(q2.*)) FROM (
-    SELECT pd.datname, pg_encoding_to_char(pd.encoding) as encoding,
-    pd.datistemplate, pd.datallowconn, pd.datconnlimit,
-    pd.datcollate , pd. datctype  ,  pd.datacl,
-    pa.rolname AS database_owner, pt.spcname AS tablespace
-    FROM pg_database pd
-    JOIN pg_authid pa ON pd.datdba = pa.oid
-    join pg_tablespace pt on pd.dattablespace = pt.oid
-    WHERE datname = 'mydatabase2'
-  ) q2
-  $$
-) ORDER BY result;
-
+CREATE DATABASE test_collation_version
+    WITH ENCODING = 'UTF8'
+            COLLATION_VERSION = '1.0'
+            ALLOW_CONNECTIONS = false;
 
 select 1 from citus_add_node('localhost', :worker_2_port);
 
-SELECT result from run_command_on_all_nodes(
-  $$
-  SELECT jsonb_agg(to_jsonb(q2.*)) FROM (
-    SELECT pd.datname, pg_encoding_to_char(pd.encoding) as encoding,
-    pd.datistemplate, pd.datallowconn, pd.datconnlimit,
-    pd.datcollate , pd. datctype  ,  pd.datacl,
-    pa.rolname AS database_owner, pt.spcname AS tablespace
-    FROM pg_database pd
-    JOIN pg_authid pa ON pd.datdba = pa.oid
-    join pg_tablespace pt on pd.dattablespace = pt.oid
-    WHERE datname = 'mydatabase2'
-  ) q2
-  $$
-) ORDER BY result;
+SELECT * FROM public.check_database_on_all_nodes('test_collation_version') ORDER BY node_type;
 
-SET citus.log_remote_commands = true;
-set citus.grep_remote_commands = '%DROP DATABASE%';
-drop database mydatabase2;
+drop database test_collation_version;
 
-SET citus.log_remote_commands = false;
+SET client_min_messages TO WARNING;
+-- test LOCALE_PROVIDER & ICU_LOCALE
+CREATE DATABASE test_locale_provider
+    WITH ENCODING = 'UTF8'
+         LOCALE_PROVIDER = 'icu'
+         ICU_LOCALE = 'en_US';
+RESET client_min_messages;
 
-SELECT result from run_command_on_all_nodes(
-  $$
-  SELECT jsonb_agg(to_jsonb(q2.*)) FROM (
-    SELECT pd.datname, pg_encoding_to_char(pd.encoding) as encoding,
-    pd.datistemplate, pd.datallowconn, pd.datconnlimit,
-    pd.datcollate , pd. datctype  ,  pd.datacl,
-    pa.rolname AS database_owner, pt.spcname AS tablespace
-    FROM pg_database pd
-    JOIN pg_authid pa ON pd.datdba = pa.oid
-    join pg_tablespace pt on pd.dattablespace = pt.oid
-    WHERE datname = 'mydatabase'
-  ) q2
-  $$
-) ORDER BY result;
+CREATE DATABASE test_locale_provider
+    WITH ENCODING = 'UTF8'
+         LOCALE_PROVIDER = 'libc'
+         ICU_LOCALE = 'en_US';
 
-SET citus.log_remote_commands = true;
-set citus.grep_remote_commands = '%CREATE DATABASE%';
+CREATE DATABASE test_locale_provider
+    WITH ENCODING = 'UTF8'
+         LOCALE_PROVIDER = 'libc';
 
--- create a template database with all options set and allow connections false
-CREATE DATABASE my_template_database
-    WITH OWNER = create_drop_db_test_user
-            ENCODING = 'UTF8'
-            COLLATION_VERSION = '1.0'
-            TABLESPACE = create_drop_db_tablespace
-            ALLOW_CONNECTIONS = false
-            IS_TEMPLATE = true;
+SELECT * FROM public.check_database_on_all_nodes('test_locale_provider') ORDER BY node_type;
 
-SET citus.log_remote_commands = false;
-
-SELECT result from run_command_on_all_nodes(
-  $$
-  SELECT jsonb_agg(to_jsonb(q2.*)) FROM (
-    SELECT pd.datname, pg_encoding_to_char(pd.encoding) as encoding,
-    pd.datistemplate, pd.datallowconn, pd.datconnlimit,
-    pd.datcollate , pd. datctype  ,  pd.datacl,
-    pa.rolname AS database_owner, pt.spcname AS tablespace
-    FROM pg_database pd
-    JOIN pg_authid pa ON pd.datdba = pa.oid
-    join pg_tablespace pt on pd.dattablespace = pt.oid
-    WHERE datname = 'my_template_database'
-  ) q2
-  $$
-) ORDER BY result;
-
-
-SET citus.log_remote_commands = false;
-
-SELECT result from run_command_on_all_nodes(
-  $$
-  SELECT jsonb_agg(to_jsonb(q2.*)) FROM (
-    SELECT pd.datname, pg_encoding_to_char(pd.encoding) as encoding,
-    pd.datistemplate, pd.datallowconn, pd.datconnlimit,
-    pd.datcollate , pd. datctype  ,  pd.datacl,
-    pa.rolname AS database_owner, pt.spcname AS tablespace
-    FROM pg_database pd
-    JOIN pg_authid pa ON pd.datdba = pa.oid
-    join pg_tablespace pt on pd.dattablespace = pt.oid
-    WHERE datname = 'my_template_database'
-  ) q2
-  $$
-) ORDER BY result;
-
-SET citus.log_remote_commands = true;
-
---template databases could not be dropped so we need to change the template flag
-SELECT result from run_command_on_all_nodes(
-  $$
-  UPDATE pg_database SET datistemplate = false WHERE datname = 'my_template_database'
-  $$
-) ORDER BY result;
-
-
-set citus.grep_remote_commands = '%DROP DATABASE%';
-drop database my_template_database;
-
-SET citus.log_remote_commands = false;
-SELECT result from run_command_on_all_nodes(
-  $$
-  SELECT jsonb_agg(to_jsonb(q2.*)) FROM (
-    SELECT pd.datname, pg_encoding_to_char(pd.encoding) as encoding,
-    pd.datistemplate, pd.datallowconn, pd.datconnlimit,
-    pd.datcollate , pd. datctype  ,  pd.datacl,
-    pa.rolname AS database_owner, pt.spcname AS tablespace
-    FROM pg_database pd
-    JOIN pg_authid pa ON pd.datdba = pa.oid
-    join pg_tablespace pt on pd.dattablespace = pt.oid
-    WHERE datname = 'my_template_database'
-  ) q2
-  $$
-) ORDER BY result;
-
-
---tests for special characters in database name
-set citus.enable_create_database_propagation=on;
-SET citus.log_remote_commands = true;
-set citus.grep_remote_commands = '%CREATE DATABASE%';
-
-create database "mydatabase#1'2";
-
-set citus.grep_remote_commands = '%DROP DATABASE%';
-drop database if exists "mydatabase#1'2";
+drop database test_locale_provider;
 
 \c - - - :master_port
-drop tablespace create_drop_db_tablespace;
-
-\c - - - :worker_1_port
-drop tablespace create_drop_db_tablespace;
-
-\c - - - :worker_2_port
-drop tablespace create_drop_db_tablespace;
-
-\c - - - :master_port
-drop user create_drop_db_test_user;

@@ -36,6 +36,7 @@ test: distributed_triggers
 test: create_single_shard_table
 test: create_drop_database_propagation
 test: create_drop_database_propagation_pg15
+test: create_drop_database_propagation_pg16
 
 # don't parallelize single_shard_table_udfs to make sure colocation ids are sequential
 test: single_shard_table_udfs
