@@ -25,9 +25,9 @@ SELECT pg_catalog.citus_internal_database_command(null);
 ERROR:  command cannot be NULL
 -- fails on non create / drop db command
 SELECT pg_catalog.citus_internal_database_command('CREATE TABLE foo_bar(a int)');
-ERROR:  citus_internal_database_command() can only be used for CREATE DATABASE and DROP DATABASE commands by Citus.
+ERROR:  citus_internal_database_command() can only be used for CREATE DATABASE command by Citus.
 SELECT pg_catalog.citus_internal_database_command('SELECT 1');
-ERROR:  citus_internal_database_command() can only be used for CREATE DATABASE and DROP DATABASE commands by Citus.
+ERROR:  citus_internal_database_command() can only be used for CREATE DATABASE command by Citus.
 SELECT pg_catalog.citus_internal_database_command('asfsfdsg');
 ERROR:  syntax error at or near "asfsfdsg"
 SELECT pg_catalog.citus_internal_database_command('');

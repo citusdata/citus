@@ -3895,7 +3895,7 @@ citus_internal_update_none_dist_table_metadata(PG_FUNCTION_ARGS)
 
 /*
  * citus_internal_database_command is an internal UDF to
- * create/drop a database in an idempotent maner without
+ * create a database in an idempotent maner without
  * transaction block restrictions.
  */
 Datum
@@ -3925,7 +3925,7 @@ citus_internal_database_command(PG_FUNCTION_ARGS)
 					  GUC_ACTION_LOCAL, true, 0, false);
 
 	/*
-	 * createdb() / DropDatabase() uses ParseState to report the error position for the
+	 * createdb()  uses ParseState to report the error position for the
 	 * input command and the position is reported to be 0 when it's provided as NULL.
 	 * We're okay with that because we don't expect this UDF to be called with an incorrect
 	 * DDL command.
@@ -3944,22 +3944,10 @@ citus_internal_database_command(PG_FUNCTION_ARGS)
 			createdb(pstate, (CreatedbStmt *) parseTree);
 		}
 	}
-	else if (IsA(parseTree, DropdbStmt))
-	{
-		DropdbStmt *stmt = castNode(DropdbStmt, parseTree);
-
-		bool missingOk = false;
-		Oid databaseOid = get_database_oid(stmt->dbname, missingOk);
-
-		if (OidIsValid(databaseOid))
-		{
-			DropDatabase(pstate, (DropdbStmt *) parseTree);
-		}
-	}
 	else
 	{
 		ereport(ERROR, (errmsg("citus_internal_database_command() can only be used "
-							   "for CREATE DATABASE and DROP DATABASE commands by "
+							   "for CREATE DATABASE command by "
 							   "Citus.")));
 	}
 
