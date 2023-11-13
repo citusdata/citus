@@ -212,6 +212,9 @@ DEPS = {
     "add_coordinator": TestDeps(
         "minimal_schedule", ["remove_coordinator_from_metadata"], repeatable=False
     ),
+    "multi_multiuser_auth": TestDeps(
+        "minimal_schedule", ["multi_create_table", "multi_create_users", "multi_multiuser_load_data"], repeatable=False
+    ),
 }
 
 
