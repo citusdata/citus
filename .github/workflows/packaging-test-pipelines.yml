@@ -112,7 +112,6 @@ jobs:
           PACKAGING_DOCKER_IMAGE: ${{ matrix.packaging_docker_image }}
         run: |
           echo "Postgres version: ${POSTGRES_VERSION}"
-
           ./.github/packaging/validate_build_output.sh "rpm"
 
   deb_build_tests:
@@ -188,6 +187,4 @@ jobs:
           PACKAGING_DOCKER_IMAGE: ${{ matrix.packaging_docker_image }}
         run: |
           echo "Postgres version: ${POSTGRES_VERSION}"
-
-          apt-get update -y
           ./.github/packaging/validate_build_output.sh "deb"
