@@ -52,8 +52,9 @@ typedef struct DatabaseCollationInfo
 	char *collation;
 	char *ctype;
 	#if PG_VERSION_NUM >= PG_VERSION_15
-	char *icu_locale;
+	char *icuLocale;
 	char *collversion;
+	char *icuRules;
 	#endif
 } DatabaseCollationInfo;
 
@@ -529,11 +530,11 @@ GetDatabaseCollation(Oid dbOid)
 										&isNull);
 	if (isNull)
 	{
-		info.icu_locale = NULL;
+		info.icuLocale = NULL;
 	}
 	else
 	{
-		info.icu_locale = TextDatumGetCString(icuLocaleDatum);
+		info.icuLocale = TextDatumGetCString(icuLocaleDatum);
 	}
 
 	Datum collverDatum = heap_getattr(tup, Anum_pg_database_datcollversion, tupdesc,
@@ -545,6 +546,20 @@ GetDatabaseCollation(Oid dbOid)
 	else
 	{
 		info.collversion = TextDatumGetCString(collverDatum);
+	}
+	#endif
+
+	#if PG_VERSION_NUM >= PG_VERSION_16
+	Datum icuRulesDatum = heap_getattr(tup, Anum_pg_database_daticurules, tupdesc,
+										&isNull);
+
+	if (isNull)
+	{
+		info.icuRules = NULL;
+	}
+	else
+	{
+		info.icuRules = TextDatumGetCString(icuRulesDatum);
 	}
 	#endif
 
@@ -630,10 +645,10 @@ GenerateCreateDatabaseStatementFromPgDatabase(Form_pg_database databaseForm)
 	}
 
 	#if PG_VERSION_NUM >= PG_VERSION_15
-	if (collInfo.icu_locale != NULL)
+	if (collInfo.icuLocale != NULL)
 	{
 		appendStringInfo(&str, " ICU_LOCALE = %s", quote_literal_cstr(
-							 collInfo.icu_locale));
+							 collInfo.icuLocale));
 	}
 
 	if (databaseForm->datlocprovider != 0)
@@ -663,6 +678,11 @@ GenerateCreateDatabaseStatementFromPgDatabase(Form_pg_database databaseForm)
 	if (databaseForm->datconnlimit >= 0)
 	{
 		appendStringInfo(&str, " CONNECTION LIMIT %d", databaseForm->datconnlimit);
+	}
+
+	if(collInfo.icuRules != NULL){
+		appendStringInfo(&str, " ICU_RULES = %s",
+						 quote_literal_cstr(collInfo.icuRules));
 	}
 
 	appendStringInfo(&str, " IS_TEMPLATE = %s",
