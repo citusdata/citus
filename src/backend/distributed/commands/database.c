@@ -594,6 +594,10 @@ GetLocaleProviderString(char datlocprovider)
 /*
  * GenerateCreateDatabaseStatementFromPgDatabase gets the pg_database tuple and returns the
  * CREATE DATABASE statement that can be used to create given database.
+ *
+ * Note that this doesn't deparse OID of the database and this is not a
+ * problem as we anyway don't allow specifying custom OIDs for databases
+ * when creating them.
  */
 static char *
 GenerateCreateDatabaseStatementFromPgDatabase(Form_pg_database databaseForm)
