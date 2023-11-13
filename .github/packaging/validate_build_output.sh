@@ -32,6 +32,14 @@ python3 -m pip install -r tools/packaging_automation/requirements.txt
 echo "Package type: ${package_type}"
 echo "OS version: $(get_rpm_os_version)"
 
+ # For RHEL 7, we need to install urllib3<2 due to below execution error
+ # ImportError: urllib3 v2.0 only supports OpenSSL 1.1.1+, currently the 'ssl'
+ # module is compiled with 'OpenSSL 1.0.2k-fips  26 Jan 2017'.
+ # See: https://github.com/urllib3/urllib3/issues/2168
+if [[ ${package_type} == "rpm" && $(get_rpm_os_version) == 7* ]]; then
+    python3 -m pip uninstall -y urllib3
+    python3 -m pip install 'urllib3<2'
+fi
 
 python3 -m tools.packaging_automation.validate_build_output --output_file output.log \
                                                             --ignore_file .github/packaging/packaging_ignore.yml \
