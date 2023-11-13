@@ -203,7 +203,14 @@ DEPS = {
     ),
     "multi_tenant_isolation_nonblocking": TestDeps(
         "minimal_schedule",
-        ["multi_data_types"],
+        ["multi_data_types", "remove_coordinator_from_metadata"],
+    ),
+    "citus_split_shard_columnar_partitioned": TestDeps(
+        "minimal_schedule",
+        ["remove_coordinator_from_metadata"],
+    ),
+    "add_coordinator": TestDeps(
+        "minimal_schedule", ["remove_coordinator_from_metadata"], repeatable=False
     ),
 }
 
