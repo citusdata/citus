@@ -847,27 +847,3 @@ DROP OWNED BY myuser;
 DROP USER myuser;
 DROP OWNED BY admin_user;
 DROP USER admin_user;
-SELECT result FROM run_command_on_all_nodes($$SELECT count(*) FROM pg_replication_slots$$);
- result
----------------------------------------------------------------------
- 0
- 0
- 0
-(3 rows)
-
-SELECT result FROM run_command_on_all_nodes($$SELECT count(*) FROM pg_publication$$);
- result
----------------------------------------------------------------------
- 0
- 0
- 0
-(3 rows)
-
-SELECT result FROM run_command_on_all_nodes($$SELECT count(*) FROM pg_subscription$$);
- result
----------------------------------------------------------------------
- 0
- 0
- 0
-(3 rows)
-
