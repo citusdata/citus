@@ -229,3 +229,27 @@ SET client_min_messages TO WARNING;
 CALL citus_cleanup_orphaned_resources();
 DROP SCHEMA worker_split_copy_test CASCADE;
 -- END: CLEANUP.
+SELECT result FROM run_command_on_all_nodes($$SELECT count(*) FROM pg_replication_slots$$);
+ result
+---------------------------------------------------------------------
+ 0
+ 0
+ 0
+(3 rows)
+
+SELECT result FROM run_command_on_all_nodes($$SELECT count(*) FROM pg_publication$$);
+ result
+---------------------------------------------------------------------
+ 0
+ 0
+ 0
+(3 rows)
+
+SELECT result FROM run_command_on_all_nodes($$SELECT count(*) FROM pg_subscription$$);
+ result
+---------------------------------------------------------------------
+ 0
+ 0
+ 0
+(3 rows)
+
