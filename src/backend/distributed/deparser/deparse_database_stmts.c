@@ -301,7 +301,7 @@ AppendDropDatabaseStmt(StringInfo buf, DropdbStmt *stmt)
 
 	foreach_ptr(option, stmt->options)
 	{
-		/*if it is the first option then append with "WITH" else append with "," */
+		/* if it is the first option then append with "WITH" else append with "," */
 		if (option == linitial(stmt->options))
 		{
 			appendStringInfo(buf, " WITH ( ");
