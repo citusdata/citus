@@ -386,7 +386,7 @@ UnmarkNodeWideObjectsDistributed(Node *node)
 		Oid dbOid = get_database_oid(dbName, stmt->missing_ok);
 		ObjectAddress *dbObjectAddress = palloc0(sizeof(ObjectAddress));
 		ObjectAddressSet(*dbObjectAddress, DatabaseRelationId, dbOid);
-		if(IsAnyObjectDistributed(list_make1(dbObjectAddress)))
+		if (IsAnyObjectDistributed(list_make1(dbObjectAddress)))
 		{
 			UnmarkObjectDistributed(dbObjectAddress);
 		}
