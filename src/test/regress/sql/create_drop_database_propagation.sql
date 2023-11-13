@@ -96,10 +96,10 @@ SELECT * FROM public.check_database_on_all_nodes('mydatabase_1') ORDER BY node_t
 
 -- Test LC / LOCALE settings that don't match the ones provided in template db.
 -- All should throw an error on the coordinator.
-CREATE DATABASE lc_collate_test LC_COLLATE = 'en_US.UTF-8';
-CREATE DATABASE lc_ctype_test LC_CTYPE = 'en_US.UTF-8';
-CREATE DATABASE locale_test LOCALE = 'en_US.UTF-8';
-CREATE DATABASE lc_collate_lc_ctype_test LC_COLLATE = 'en_US.UTF-8' LC_CTYPE = 'en_US.UTF-8';
+CREATE DATABASE lc_collate_test LC_COLLATE = 'C.UTF-8';
+CREATE DATABASE lc_ctype_test LC_CTYPE = 'C.UTF-8';
+CREATE DATABASE locale_test LOCALE = 'C.UTF-8';
+CREATE DATABASE lc_collate_lc_ctype_test LC_COLLATE = 'C.UTF-8' LC_CTYPE = 'C.UTF-8';
 
 -- Test LC / LOCALE settings that match the ones provided in template db.
 CREATE DATABASE lc_collate_test LC_COLLATE = 'C';
