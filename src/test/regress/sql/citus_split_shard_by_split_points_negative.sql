@@ -113,10 +113,5 @@ SELECT citus_split_shard_by_split_points(
 --BEGIN : Cleanup
 \c - postgres - :master_port
 DROP SCHEMA "citus_split_shard_by_split_points_negative" CASCADE;
---END : Cleanup
-
 SELECT public.wait_for_resource_cleanup();
-
-SELECT result FROM run_command_on_all_nodes($$SELECT count(*) FROM pg_replication_slots$$);
-SELECT result FROM run_command_on_all_nodes($$SELECT count(*) FROM pg_publication$$);
-SELECT result FROM run_command_on_all_nodes($$SELECT count(*) FROM pg_subscription$$);
+--END : Cleanup

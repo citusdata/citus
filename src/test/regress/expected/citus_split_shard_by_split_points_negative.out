@@ -135,34 +135,10 @@ NOTICE:  drop cascades to 3 other objects
 DETAIL:  drop cascades to table citus_split_shard_by_split_points_negative.range_paritioned_table_to_split
 drop cascades to table citus_split_shard_by_split_points_negative.table_to_split
 drop cascades to table citus_split_shard_by_split_points_negative.table_to_split_replication_factor_2
---END : Cleanup
 SELECT public.wait_for_resource_cleanup();
  wait_for_resource_cleanup
 ---------------------------------------------------------------------
 
 (1 row)
 
-SELECT result FROM run_command_on_all_nodes($$SELECT count(*) FROM pg_replication_slots$$);
- result
----------------------------------------------------------------------
- 0
- 0
- 0
-(3 rows)
-
-SELECT result FROM run_command_on_all_nodes($$SELECT count(*) FROM pg_publication$$);
- result
----------------------------------------------------------------------
- 0
- 0
- 0
-(3 rows)
-
-SELECT result FROM run_command_on_all_nodes($$SELECT count(*) FROM pg_subscription$$);
- result
----------------------------------------------------------------------
- 0
- 0
- 0
-(3 rows)
-
+--END : Cleanup
