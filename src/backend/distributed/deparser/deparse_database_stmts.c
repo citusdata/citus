@@ -322,7 +322,7 @@ AppendDropDatabaseStmt(StringInfo buf, DropdbStmt *stmt)
 								   option->defname)));
 		}
 
-		/*if it is the last  option then append with ")" */
+		/* if it is the last  option then append with ")" */
 		if (option == llast(stmt->options))
 		{
 			appendStringInfo(buf, " )");
