@@ -306,3 +306,7 @@ SELECT public.wait_for_resource_cleanup();
     SELECT pg_reload_conf();
     DROP SCHEMA "citus_split_test_schema_columnar_partitioned" CASCADE;
 --END : Cleanup
+
+SELECT result FROM run_command_on_all_nodes($$SELECT count(*) FROM pg_replication_slots$$);
+SELECT result FROM run_command_on_all_nodes($$SELECT count(*) FROM pg_publication$$);
+SELECT result FROM run_command_on_all_nodes($$SELECT count(*) FROM pg_subscription$$);
