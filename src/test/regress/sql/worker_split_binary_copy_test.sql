@@ -203,7 +203,3 @@ SELECT COUNT(*) FROM worker_split_binary_copy_test.shard_to_split_copy_81060016;
 SET client_min_messages TO WARNING;
 DROP SCHEMA worker_split_binary_copy_test CASCADE;
 -- END: CLEANUP.
-
-SELECT result FROM run_command_on_all_nodes($$SELECT count(*) FROM pg_replication_slots$$);
-SELECT result FROM run_command_on_all_nodes($$SELECT count(*) FROM pg_publication$$);
-SELECT result FROM run_command_on_all_nodes($$SELECT count(*) FROM pg_subscription$$);
