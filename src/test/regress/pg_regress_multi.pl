@@ -492,9 +492,6 @@ push(@pgOptions, "citus.enable_change_data_capture=on");
 push(@pgOptions, "citus.stat_tenants_limit = 2");
 push(@pgOptions, "citus.stat_tenants_track = 'ALL'");
 
-# We currently need this config for isolation tests and security label tests
-push(@pgOptions, "citus.running_under_citus_test_suite=true");
-
 # Some tests look at shards in pg_class, make sure we can usually see them:
 push(@pgOptions, "citus.show_shards_for_app_name_prefixes='pg_regress'");
 
@@ -512,6 +509,12 @@ if($vanillatest)
 
     # we disable some restrictions for local objects like local views to not break postgres vanilla test behaviour.
     push(@pgOptions, "citus.enforce_object_restrictions_for_local_objects=false");
+}
+else
+{
+	# We currently need this config for isolation tests and security label tests
+	# this option loads a security label provider, which we don't want in vanilla tests
+	push(@pgOptions, "citus.running_under_citus_test_suite=true");
 }
 
 if ($useMitmproxy)
