@@ -192,7 +192,9 @@ RUN git clone --branch citus_load https://github.com/citusdata/tools.git citus-t
  && ln -s ~/citus-tools/citus_dev/bash_completion ~/.local/share/bash-completion/completions/citus_dev \
  && ln -s ~/citus-tools/citus_load/bash_completion ~/.local/share/bash-completion/completions/citus_load
 
-RUN citus_load add repo github.com/citusdata/public-schemas
+# this is ran without a login shell, causing .profile not to be sources, meaning the .bin
+# directory in our home dir is not on the path. Running citus_load by its relative path
+RUN .bin/citus_load add repo github.com/citusdata/public-schemas
 
 # TODO some LC_ALL errors, possibly solved by locale-gen
 RUN git clone https://github.com/so-fancy/diff-so-fancy.git \
