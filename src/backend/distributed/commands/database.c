@@ -673,6 +673,15 @@ GenerateCreateDatabaseCommandList(void)
 	{
 		Form_pg_database databaseForm = (Form_pg_database) GETSTRUCT(tuple);
 
+		ObjectAddress *dbAddress = GetDatabaseAddressFromDatabaseName(
+			NameStr(databaseForm->datname), false);
+
+		/* skip databases that are not distributed */
+		if (!IsAnyObjectDistributed(list_make1(dbAddress)))
+		{
+			continue;
+		}
+
 		char *createStmt = GenerateCreateDatabaseStatementFromPgDatabase(databaseForm);
 
 		StringInfo outerDbStmt = makeStringInfo();

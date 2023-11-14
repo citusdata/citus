@@ -495,6 +495,48 @@ SELECT * FROM public.check_database_on_all_nodes('db_force_test') ORDER BY node_
  worker node (remote) | {"database_properties": null, "pg_dist_object_record_for_db_exists": false, "stale_pg_dist_object_record_for_a_db_exists": false}
 (3 rows)
 
+-- test that we won't propagate non-distributed databases in citus_add_node
+select 1 from citus_remove_node('localhost', :worker_2_port);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+SET citus.enable_create_database_propagation TO off;
+CREATE DATABASE non_distributed_db;
+NOTICE:  Citus partially supports CREATE DATABASE for distributed databases
+DETAIL:  Citus does not propagate CREATE DATABASE command to workers
+HINT:  You can manually create a database and its extensions on workers.
+SET citus.enable_create_database_propagation TO on;
+create database distributed_db;
+select 1 from citus_add_node('localhost', :worker_2_port);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+--non_distributed_db should not be propagated to worker_2
+SELECT * FROM public.check_database_on_all_nodes('non_distributed_db') ORDER BY node_type;
+      node_type       |                                                                                                                                                                                                                            result
+---------------------------------------------------------------------
+ coordinator (local)  | {"database_properties": {"datacl": null, "datname": "non_distributed_db", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "pg_default", "daticurules": null, "datallowconn": true, "datconnlimit": -1, "daticulocale": null, "datistemplate": false, "database_owner": "postgres", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": false, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": null, "pg_dist_object_record_for_db_exists": false, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": null, "pg_dist_object_record_for_db_exists": false, "stale_pg_dist_object_record_for_a_db_exists": false}
+(3 rows)
+
+--distributed_db should be propagated to worker_2
+SELECT * FROM public.check_database_on_all_nodes('distributed_db') ORDER BY node_type;
+      node_type       |                                                                                                                                                                                                                         result
+---------------------------------------------------------------------
+ coordinator (local)  | {"database_properties": {"datacl": null, "datname": "distributed_db", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "pg_default", "daticurules": null, "datallowconn": true, "datconnlimit": -1, "daticulocale": null, "datistemplate": false, "database_owner": "postgres", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": {"datacl": null, "datname": "distributed_db", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "pg_default", "daticurules": null, "datallowconn": true, "datconnlimit": -1, "daticulocale": null, "datistemplate": false, "database_owner": "postgres", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": {"datacl": null, "datname": "distributed_db", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "pg_default", "daticurules": null, "datallowconn": true, "datconnlimit": -1, "daticulocale": null, "datistemplate": false, "database_owner": "postgres", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+(3 rows)
+
+--clean up resources created by this test
+drop database distributed_db;
+set citus.enable_create_database_propagation TO off;
+drop database non_distributed_db;
 --clean up resources created by this test
 -- DROP TABLESPACE is not supported, so we need to drop it manually.
 SELECT result FROM run_command_on_all_nodes(

@@ -274,6 +274,27 @@ reset citus.log_remote_commands;
 
 SELECT * FROM public.check_database_on_all_nodes('db_force_test') ORDER BY node_type;
 
+-- test that we won't propagate non-distributed databases in citus_add_node
+
+select 1 from citus_remove_node('localhost', :worker_2_port);
+SET citus.enable_create_database_propagation TO off;
+CREATE DATABASE non_distributed_db;
+SET citus.enable_create_database_propagation TO on;
+create database distributed_db;
+
+select 1 from citus_add_node('localhost', :worker_2_port);
+
+--non_distributed_db should not be propagated to worker_2
+SELECT * FROM public.check_database_on_all_nodes('non_distributed_db') ORDER BY node_type;
+--distributed_db should be propagated to worker_2
+SELECT * FROM public.check_database_on_all_nodes('distributed_db') ORDER BY node_type;
+
+--clean up resources created by this test
+drop database distributed_db;
+
+set citus.enable_create_database_propagation TO off;
+drop database non_distributed_db;
+
 
 --clean up resources created by this test
 
