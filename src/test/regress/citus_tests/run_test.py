@@ -184,7 +184,7 @@ DEPS = {
     "multi_tenant_isolation_nonblocking": TestDeps(
         "minimal_schedule", ["multi_data_types", "remove_coordinator_from_metadata"]
     ),
-    "remove_cluster_management_nodes": TestDeps(
+    "remove_non_default_nodes": TestDeps(
         None, ["multi_mx_node_metadata", "multi_cluster_management"], repeatable=False
     ),
     "citus_split_shard_columnar_partitioned": TestDeps(
