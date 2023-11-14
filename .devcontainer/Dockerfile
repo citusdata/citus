@@ -178,6 +178,7 @@ RUN sudo install -d -o citus -g citus /commandhistory \
 
 # install citus-dev
 RUN git clone --branch citus_load https://github.com/citusdata/tools.git citus-tools \
+ && echo "cache buster 1" \
  && ( cd citus-tools/citus_dev && pipenv install ) \
 <<<<<<< HEAD
  && mkdir -p ~/.local/bin \
@@ -192,9 +193,8 @@ RUN git clone --branch citus_load https://github.com/citusdata/tools.git citus-t
  && ln -s ~/citus-tools/citus_dev/bash_completion ~/.local/share/bash-completion/completions/citus_dev \
  && ln -s ~/citus-tools/citus_load/bash_completion ~/.local/share/bash-completion/completions/citus_load
 
-# this is ran without a login shell, causing .profile not to be sources, meaning the .bin
-# directory in our home dir is not on the path. Running citus_load by its relative path
-RUN .bin/citus_load add repo github.com/citusdata/public-schemas
+# preload citus_load with standard repositories
+RUN citus_load repo add github.com/citusdata/public-schemas
 
 # TODO some LC_ALL errors, possibly solved by locale-gen
 RUN git clone https://github.com/so-fancy/diff-so-fancy.git \
