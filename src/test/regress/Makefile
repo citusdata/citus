@@ -101,7 +101,7 @@ check-base: all
 
 # check-minimal only sets up the cluster
 check-minimal: all
-	$(pg_regress_multi_check) --load-extension=citus --seclabel \
+	$(pg_regress_multi_check) --load-extension=citus \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/minimal_schedule $(EXTRA_TESTS)
 
 check-base-vg: all
@@ -118,7 +118,7 @@ check-minimal-mx: all
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/mx_minimal_schedule $(EXTRA_TESTS)
 
 check-custom-schedule: all
-	$(pg_regress_multi_check) --load-extension=citus --seclabel-test --worker-count=$(WORKERCOUNT) \
+	$(pg_regress_multi_check) --load-extension=citus --worker-count=$(WORKERCOUNT) \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/$(SCHEDULE) $(EXTRA_TESTS)
 
 check-failure-custom-schedule: all
@@ -159,7 +159,7 @@ check-enterprise: all
 	$(pg_regress_multi_check) --load-extension=citus \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/enterprise_schedule $(EXTRA_TESTS)
 check-multi-1: all
-	$(pg_regress_multi_check) --load-extension=citus --seclabel-test \
+	$(pg_regress_multi_check) --load-extension=citus \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/multi_1_schedule $(EXTRA_TESTS)
 
 check-multi-hyperscale: all

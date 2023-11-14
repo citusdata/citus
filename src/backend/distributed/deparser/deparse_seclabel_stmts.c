@@ -44,7 +44,7 @@ AppendSecLabelStmt(StringInfo buf, SecLabelStmt *stmt)
 
 	if (stmt->provider != NULL)
 	{
-		appendStringInfo(buf, "FOR %s ", stmt->provider);
+		appendStringInfo(buf, "FOR %s ", quote_identifier(stmt->provider));
 	}
 
 	appendStringInfoString(buf, "ON ");
@@ -53,7 +53,7 @@ AppendSecLabelStmt(StringInfo buf, SecLabelStmt *stmt)
 	{
 		case OBJECT_ROLE:
 		{
-			appendStringInfo(buf, "ROLE %s ", strVal(stmt->object));
+			appendStringInfo(buf, "ROLE %s ", quote_identifier(strVal(stmt->object)));
 			break;
 		}
 

@@ -50,7 +50,6 @@ sub Usage()
     print "  --connection-timeout	Timeout for connecting to worker nodes\n";
     print "  --mitmproxy        	Start a mitmproxy for one of the workers\n";
     print "  --worker-count         Number of workers in Citus cluster (default: 2)\n";
-	print "  --seclabel-test        This test runs seclabel propagation tests";
     exit 1;
 }
 
@@ -87,7 +86,6 @@ my $conninfo = "";
 my $publicWorker1Host = "localhost";
 my $publicWorker2Host = "localhost";
 my $workerCount = 2;
-my $seclabelTest = 0;
 
 my $serversAreShutdown = "TRUE";
 my $usingWindows = 0;
@@ -122,7 +120,6 @@ GetOptions(
     'worker-1-public-hostname=s' => \$publicWorker1Host,
     'worker-2-public-hostname=s' => \$publicWorker2Host,
     'worker-count=i' => \$workerCount,
-	'seclabel-test' => \$seclabelTest,
     'help' => sub { Usage() });
 
 my $fixopen = "$bindir/postgres.fixopen";
@@ -495,6 +492,9 @@ push(@pgOptions, "citus.enable_change_data_capture=on");
 push(@pgOptions, "citus.stat_tenants_limit = 2");
 push(@pgOptions, "citus.stat_tenants_track = 'ALL'");
 
+# We currently need this config for isolation tests and security label tests
+push(@pgOptions, "citus.running_under_citus_test_suite=true");
+
 # Some tests look at shards in pg_class, make sure we can usually see them:
 push(@pgOptions, "citus.show_shards_for_app_name_prefixes='pg_regress'");
 
@@ -563,7 +563,6 @@ if($isolationtester)
    push(@pgOptions, "citus.metadata_sync_interval=1000");
    push(@pgOptions, "citus.metadata_sync_retry_interval=100");
    push(@pgOptions, "client_min_messages='warning'"); # pg12 introduced notice showing during isolation tests
-   push(@pgOptions, "citus.running_under_citus_test_suite=true");
 
    # Disable all features of the maintenance daemon. Otherwise queries might
    # randomly show temporarily as "waiting..." because they are waiting for the
@@ -574,14 +573,6 @@ if($isolationtester)
    push(@pgOptions, "citus.defer_shard_delete_interval=-1");
    push(@pgOptions, "citus.stat_statements_purge_interval=-1");
    push(@pgOptions, "citus.background_task_queue_interval=-1");
-}
-
-# if the security label propagation tests are running in the suite
-# we need to load the label provider in PG_init by setting
-# running_under_citus_test_suite GUC to true
-if($seclabelTest)
-{
-	push(@pgOptions, "citus.running_under_citus_test_suite=true");
 }
 
 # Add externally added options last, so they overwrite the default ones above

@@ -19,18 +19,17 @@
 #include "distributed/metadata_sync.h"
 #include "distributed/metadata/distobject.h"
 
+
 /*
- * PreprocessSecLabelStmt is executed before the statement is applied to the local
- * postgres instance.
- *
- * In this stage we can prepare the commands that need to be run on all workers to assign
+ * PostprocessSecLabelStmt prepares the commands that need to be run on all workers to assign
  * security labels on distributed objects, currently supporting just Role objects.
+ * It also ensures that all object dependencies exist on all
+ * nodes for the object in the SecLabelStmt.
  */
 List *
-PreprocessSecLabelStmt(Node *node, const char *queryString,
-					   ProcessUtilityContext processUtilityContext)
+PostprocessSecLabelStmt(Node *node, const char *queryString)
 {
-	if (!IsCoordinator() || !ShouldPropagate())
+	if (!ShouldPropagate())
 	{
 		return NIL;
 	}
@@ -45,13 +44,17 @@ PreprocessSecLabelStmt(Node *node, const char *queryString,
 
 	if (secLabelStmt->objtype != OBJECT_ROLE)
 	{
-		if (EnableUnsupportedFeatureMessages)
+		/*
+		 * If we are not in the coordinator, we don't want to interrupt the security
+		 * label command with notices, the user expects that from the worker node
+		 * the command will not be propagated
+		 */
+		if (EnableUnsupportedFeatureMessages && IsCoordinator())
 		{
 			ereport(NOTICE, (errmsg("not propagating SECURITY LABEL commands whose "
 									"object type is not role"),
 							 errhint("Connect to worker nodes directly to manually "
-									 "run the same SECURITY LABEL command after "
-									 "disabling DDL propagation.")));
+									 "run the same SECURITY LABEL command.")));
 		}
 		return NIL;
 	}
@@ -61,6 +64,9 @@ PreprocessSecLabelStmt(Node *node, const char *queryString,
 		return NIL;
 	}
 
+	EnsureCoordinator();
+	EnsureAllObjectDependenciesExistOnAllNodes(objectAddresses);
+
 	const char *sql = DeparseTreeNode((Node *) secLabelStmt);
 
 	List *commandList = list_make3(DISABLE_DDL_PROPAGATION,
@@ -68,36 +74,6 @@ PreprocessSecLabelStmt(Node *node, const char *queryString,
 								   ENABLE_DDL_PROPAGATION);
 
 	return NodeDDLTaskList(NON_COORDINATOR_NODES, commandList);
-}
-
-
-/*
- * PostprocessSecLabelStmt ensures that all object dependencies exist on all
- * nodes for the object in the SecLabelStmt. Currently, we only support SecLabelStmts
- * operating on a ROLE object.
- */
-List *
-PostprocessSecLabelStmt(Node *node, const char *queryString)
-{
-	if (!EnableCreateRolePropagation || !IsCoordinator() || !ShouldPropagate())
-	{
-		return NIL;
-	}
-
-	SecLabelStmt *secLabelStmt = castNode(SecLabelStmt, node);
-
-	if (secLabelStmt->objtype != OBJECT_ROLE)
-	{
-		return NIL;
-	}
-
-	List *objectAddresses = GetObjectAddressListFromParseTree(node, false, false);
-	if (IsAnyObjectDistributed(objectAddresses))
-	{
-		EnsureAllObjectDependenciesExistOnAllNodes(objectAddresses);
-	}
-
-	return NIL;
 }
 
 
@@ -136,8 +112,8 @@ void
 citus_test_object_relabel(const ObjectAddress *object, const char *seclabel)
 {
 	if (seclabel == NULL ||
-		strcmp(seclabel, "citus_unclassified") == 0 ||
-		strcmp(seclabel, "citus_classified") == 0)
+		strcmp(seclabel, "citus unclassified") == 0 ||
+		strcmp(seclabel, "citus classified") == 0)
 	{
 		return;
 	}

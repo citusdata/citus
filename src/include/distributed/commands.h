@@ -522,8 +522,6 @@ extern List * AlterSchemaRenameStmtObjectAddress(Node *node, bool missing_ok, bo
 												 isPostprocess);
 
 /* seclabel.c - forward declarations*/
-extern List * PreprocessSecLabelStmt(Node *node, const char *queryString,
-									 ProcessUtilityContext processUtilityContext);
 extern List * PostprocessSecLabelStmt(Node *node, const char *queryString);
 extern List * SecLabelStmtObjectAddress(Node *node, bool missing_ok, bool isPostprocess);
 extern void citus_test_object_relabel(const ObjectAddress *object, const char *seclabel);

@@ -937,7 +937,7 @@ GenerateSecLabelOnRoleStmts(Oid roleid, char *rolename)
 	{
 		SecLabelStmt *secLabelStmt = makeNode(SecLabelStmt);
 		secLabelStmt->objtype = OBJECT_ROLE;
-		secLabelStmt->object = (Node *) makeString(rolename);
+		secLabelStmt->object = (Node *) makeString(pstrdup(rolename));
 
 		Datum datumArray[Natts_pg_shseclabel];
 		bool isNullArray[Natts_pg_shseclabel];
