@@ -177,13 +177,22 @@ RUN sudo install -d -o citus -g citus /commandhistory \
  && echo "export PROMPT_COMMAND='history -a' && export HISTFILE=/commandhistory/.bash_history" >> "/home/citus/.bashrc"
 
 # install citus-dev
-RUN git clone --branch develop https://github.com/citusdata/tools.git citus-tools \
+RUN git clone --branch citus_load https://github.com/citusdata/tools.git citus-tools \
  && ( cd citus-tools/citus_dev && pipenv install ) \
+<<<<<<< HEAD
  && mkdir -p ~/.local/bin \
  && ln -s /home/citus/citus-tools/citus_dev/citus_dev-pipenv .local/bin/citus_dev \
+=======
+ && ( cd citus-tools/citus_load && pipenv install ) \
+ && ln -s /home/citus/citus-tools/citus_dev/citus_dev-pipenv .bin/citus_dev \
+ && ln -s /home/citus/citus-tools/citus_load/citus_load-pipenv .bin/citus_load \
+>>>>>>> d2345921f (add citus_load to devcontainer)
  && sudo make -C citus-tools/uncrustify install bindir=/usr/local/bin pkgsysconfdir=/usr/local/etc/ \
  && mkdir -p ~/.local/share/bash-completion/completions/ \
- && ln -s ~/citus-tools/citus_dev/bash_completion ~/.local/share/bash-completion/completions/citus_dev
+ && ln -s ~/citus-tools/citus_dev/bash_completion ~/.local/share/bash-completion/completions/citus_dev \
+ && ln -s ~/citus-tools/citus_load/bash_completion ~/.local/share/bash-completion/completions/citus_load
+
+RUN citus_load add repo github.com/citusdata/public-schemas
 
 # TODO some LC_ALL errors, possibly solved by locale-gen
 RUN git clone https://github.com/so-fancy/diff-so-fancy.git \
