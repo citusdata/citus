@@ -62,10 +62,16 @@ typedef struct DatabaseCollationInfo
 #endif
 } DatabaseCollationInfo;
 
+static void EnsureSupportedCreateDatabaseCommand(CreatedbStmt *stmt);
+static char * GenerateCreateDatabaseStatementFromPgDatabase(Form_pg_database databaseForm);
+static DatabaseCollationInfo GetDatabaseCollation(Oid dbOid);
 static AlterOwnerStmt * RecreateAlterDatabaseOwnerStmt(Oid databaseOid);
+static char * GetLocaleProviderString(char datlocprovider);
+static char * GetTablespaceName(Oid tablespaceOid);
+static ObjectAddress * GetDatabaseAddressFromDatabaseName(char *databaseName,bool missingOk);
+
 static Oid get_database_owner(Oid db_oid);
-List * PreprocessGrantOnDatabaseStmt(Node *node, const char *queryString,
-									 ProcessUtilityContext processUtilityContext);
+
 
 /* controlled via GUC */
 bool EnableCreateDatabasePropagation = false;

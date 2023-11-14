@@ -27,8 +27,12 @@
 
 
 static void AppendAlterDatabaseOwnerStmt(StringInfo buf, AlterOwnerStmt *stmt);
+static void AppendAlterDatabaseSetStmt(StringInfo buf, AlterDatabaseSetStmt *stmt);
 static void AppendAlterDatabaseStmt(StringInfo buf, AlterDatabaseStmt *stmt);
 static void AppendDefElemConnLimit(StringInfo buf, DefElem *def);
+static void AppendCreateDatabaseStmt(StringInfo buf, CreatedbStmt *stmt);
+static void AppendDropDatabaseStmt(StringInfo buf, DropdbStmt *stmt);
+static void AppendGrantOnDatabaseStmt(StringInfo buf, GrantStmt *stmt);
 
 const DefElemOptionFormat create_database_option_formats[] = {
 	{ "owner", " OWNER %s", OPTION_FORMAT_STRING },
